@@ -17,6 +17,7 @@ import { onboardCommand } from './commands/onboard.js';
 import { cronCommand } from './commands/cron.js';
 import { migrateCommand } from './commands/migrate.js';
 import { sendCommand } from './commands/send.js';
+import { watchCommand } from './commands/watch.js';
 
 const program = new Command();
 
@@ -45,5 +46,6 @@ program.addCommand(onboardCommand);
 program.addCommand(cronCommand);
 program.addCommand(migrateCommand);
 program.addCommand(sendCommand);
+program.addCommand(watchCommand);
 
 program.parse(); 

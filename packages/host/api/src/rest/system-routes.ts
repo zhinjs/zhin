@@ -1,12 +1,19 @@
+import os from "node:os";
 import {
   registerFetchRoute,
   type Router,
   type RouterContext,
 } from "@zhin.js/host-router/router";
 
+export type SystemOsMemory = {
+  freeMem: number;
+  totalMem: number;
+};
+
 export type SystemStatusData = {
   uptime: number;
   memory: Record<string, number> | NodeJS.MemoryUsage;
+  osMemory?: SystemOsMemory;
   cpu?: { user: number; system: number };
   platform: string;
   nodeVersion?: string;
@@ -31,12 +38,24 @@ function safeProcessCpu(): { user: number; system: number } | undefined {
   }
 }
 
+function safeOsMemory(): SystemOsMemory | undefined {
+  try {
+    return {
+      freeMem: os.freemem(),
+      totalMem: os.totalmem(),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 /** Host (Node) 系统状态快照 */
 export function getSystemStatusData(): SystemStatusData {
   if (typeof process !== "undefined" && process.versions?.node) {
     return {
       uptime: process.uptime(),
       memory: safeProcessMemory(),
+      osMemory: safeOsMemory(),
       cpu: safeProcessCpu(),
       platform: process.platform,
       nodeVersion: process.version,

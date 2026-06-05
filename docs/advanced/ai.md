@@ -714,16 +714,16 @@ ai:
 
 ### Bot Owner 私聊指令（approve） {#owner-approve-commands}
 
-仅 **Bot Owner** 在**私聊**中可用（支持 `#`、`/` 前缀或无前缀，与消息命令注册一致）：
+仅 **Bot Owner** 在**私聊**中可用（指令以 `/` 开头）：
 
 | 指令 | 作用 |
 |------|------|
-| `approve always bash` | 对本 Bot **永久**跳过 bash 链路上的 Owner 硬编排确认；写入 `data/owner-approve-always.json` |
-| `approve always` | 同上，但须在近期 bash 待确认窗口内，否则应使用上一行 |
-| `approve rule <正则>` | 增加一条**子命令级**放行：用 `RegExp(正则)` 匹配整条待检子命令（常用于敏感 icqq 的「整类放行」） |
-| `approve list` | 列出 bash 永久放行状态与各条规则的 id |
-| `approve revoke rule <id>` | 按 id（或前 8 位前缀）删除一条正则规则 |
-| `approve revoke` | 撤销 bash **永久**放行；**不**删除已保存的正则规则 |
+| `/approve always bash` | 对本 Bot **永久**跳过 bash 链路上的 Owner 硬编排确认；写入 `data/owner-approve-always.json` |
+| `/approve always` | 同上，但须在近期 bash 待确认窗口内，否则应使用上一行 |
+| `/approve rule <正则>` | 增加一条**子命令级**放行：用 `RegExp(正则)` 匹配整条待检子命令（常用于敏感 icqq 的「整类放行」） |
+| `/approve list` | 列出 bash 永久放行状态与各条规则的 id |
+| `/approve revoke rule <id>` | 按 id（或前 8 位前缀）删除一条正则规则 |
+| `/approve revoke` | 撤销 bash **永久**放行；**不**删除已保存的正则规则 |
 
 持久化结构为 JSON **v2**（`bashAlways`、`bashRules[]`），文件路径：**`data/owner-approve-always.json`**（与数据目录配置一致）。
 

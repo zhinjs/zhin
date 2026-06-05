@@ -546,6 +546,19 @@ zhin send 123456 --scene group --adapter icqq 群发一条
 echo "长内容" | zhin send 1659488338 --adapter sandbox
 ```
 
+### watch - 监视运行中实例
+
+连接 Host API，展示 runtime / bots / assistant jobs（需 `zhin dev` 或 `zhin start` 且启用 host-router + host-api）。
+
+```bash
+zhin watch              # TTY 下每 3 秒刷新
+zhin watch --once       # 单次快照
+zhin watch --json       # JSON（脚本友好，默认单次）
+zhin watch -i 5         # 5 秒刷新间隔
+```
+
+数据来源：`GET /api/stats`、`GET /api/system/status`（进程 rss/heap + 主机 freeMem/totalMem）、`/api/bots`、`/api/assistant/jobs`。
+
 ### migrate - 项目升级
 
 将老版本 Zhin 项目依赖与结构升级到最新（`src/commands/migrate.ts`）。

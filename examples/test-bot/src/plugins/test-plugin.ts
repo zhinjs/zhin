@@ -327,19 +327,6 @@ addCommand(
     })
 );
 
-
-addCommand(new MessageCommand("我才是[...content:text]")
-  .action(async (m, { params }) => {
-    return `好好好，你是${params.content.join(" ").replace(/[你|我]/g, (match: string) => {
-      return match === "你" ? "我" : "你"
-    })}`;
-  }));
-addComponent(async function foo(
-  props: { face: number },
-) {
-  return "这是父组件" + props.face;
-});
-
 // ============================================
 // 自动清理功能测试
 // ============================================
@@ -347,76 +334,6 @@ addComponent(async function foo(
 // 存储动态添加的 dispose 函数
 const dynamicDisposes: (() => void)[] = [];
 
-addCommand(
-  new MessageCommand("test-add")
-    .desc("测试动态添加命令", "添加一个临时命令，用于测试自动清理功能")
-    .usage("test-add [name]")
-    .examples("test-add hello")
-    .action((_, result) => {
-      const name = (result.remaining as any[])?.[0]?.data?.text || `temp-${Date.now()}`;
-
-      // 动态添加一个命令
-      const dispose = plugin.addCommand(
-        new MessageCommand(name).action(() => `我是动态命令: ${name}`)
-      );
-      dynamicDisposes.push(dispose);
-
-      const commandService = plugin.inject('command');
-      const count = commandService?.items?.length || 0;
-
-      return [
-        `✅ 已添加命令: ${name}`,
-        `📊 当前命令总数: ${count}`,
-        "",
-        "💡 提示:",
-        "• 使用 'test-list' 查看所有命令",
-        "• 使用 'test-remove' 手动移除最后添加的命令",
-        "• 热重载此插件后，动态命令会自动移除"
-      ].join("\n");
-    })
-);
-
-addCommand(
-  new MessageCommand("test-list")
-    .desc("列出命令统计", "显示当前注册的命令数量和动态命令数")
-    .usage("test-list")
-    .action(() => {
-      const commandService = plugin.inject('command');
-      const count = commandService?.items.length || 0;
-
-      return [
-        "╔═══════════ 命令统计 ═══════════╗",
-        "",
-        `📋 已注册命令总数: ${count}`,
-        `🔄 本插件动态添加: ${dynamicDisposes.length}`,
-        "",
-        "╚════════════════════════════════╝"
-      ].join("\n");
-    })
-);
-
-addCommand(
-  new MessageCommand("test-remove")
-    .desc("移除动态命令", "手动移除最后一个动态添加的命令")
-    .usage("test-remove")
-    .action(() => {
-      if (dynamicDisposes.length === 0) {
-        return "❌ 没有可移除的动态命令";
-      }
-
-      const dispose = dynamicDisposes.pop()!;
-      dispose();
-
-      const commandService = plugin.inject('command');
-      const count = commandService?.items.length || 0;
-
-      return [
-        "✅ 已移除最后添加的动态命令",
-        `📊 当前命令总数: ${count}`,
-        `🔄 剩余动态命令: ${dynamicDisposes.length}`
-      ].join("\n");
-    })
-);
 
 addCommand(
   new MessageCommand("test-component")
@@ -440,64 +357,6 @@ addCommand(
     })
 );
 
-addCommand(
-  new MessageCommand("test-middleware")
-    .desc("测试动态中间件", "添加一个临时中间件")
-    .usage("test-middleware")
-    .action(() => {
-      // 添加一个计数中间件
-      let count = 0;
-      plugin.addMiddleware(async (message, next) => {
-        count++;
-        console.log(`[Test Middleware] 消息计数: ${count}`);
-        return next();
-      });
-
-      return [
-        "✅ 已添加测试中间件",
-        "📊 中间件会在每条消息时打印计数",
-        "",
-        "💡 热重载插件后，此中间件会自动移除"
-      ].join("\n");
-    })
-);
-
-addCommand(
-  new MessageCommand("test-cron")
-    .desc("测试动态定时任务", "添加一个每10秒执行一次的定时任务")
-    .usage("test-cron")
-    .action(() => {
-      // 每10秒执行一次
-      const cron = new Cron("*/10 * * * * *", () => {
-        console.log(`[Test Cron] 定时任务执行: ${new Date().toLocaleTimeString()}`);
-      });
-      const cronService = plugin.inject('cron');
-      if (cronService) {
-        const dispose = cronService.add(cron, plugin.name);
-        plugin.onDispose(dispose);
-      }
-      const count = cronService?.items.length
-
-      return [
-        "✅ 已添加测试定时任务",
-        `📊 当前定时任务总数: ${count}`,
-        "",
-        "💡 每10秒会在控制台打印一次",
-        "💡 热重载插件后，此任务会自动停止"
-      ].join("\n");
-    })
-);
-addCommand(
-  new MessageCommand("cron-stop[name:text]")
-    .desc("停止测试定时任务")
-    .usage("cron-stop <name>")
-    .action((_, { params }) => {
-      const name = params.name;
-      const crons = plugin.inject('cron');
-      crons?.remove(name);
-      return `已停止定时任务: ${name}`;
-    })
-)
 addCommand(
   new MessageCommand("cron-list")
     .desc("查看定时任务状态", "显示所有定时任务的状态")

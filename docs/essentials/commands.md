@@ -143,12 +143,4 @@ addCommand(
     })
 )
 
-// 剩余参数
-addCommand(
-  new MessageCommand('我才是[...content:text]')
-    .action((_, result) => {
-      const text = result.params.content.join(' ')
-      return `好好好，你是${text.replace(/[你|我]/g, m => m === '你' ? '我' : '你')}`
-    })
-)
 ```

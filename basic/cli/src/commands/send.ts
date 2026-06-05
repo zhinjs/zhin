@@ -7,71 +7,21 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
-import fs from 'fs-extra';
-import path from 'path';
-import yaml from 'yaml';
 import { logger } from '../utils/logger.js';
+import { hostGet, loadHostHttpConfig } from '../utils/host-http.js';
 
-const cwd = process.cwd();
-
-const CONFIG_CANDIDATES = ['zhin.config.yml', 'zhin.config.yaml', 'zhin.config.json'];
-
-function findConfigFile(dir: string): string | null {
-  return CONFIG_CANDIDATES.find((f) => fs.existsSync(path.join(dir, f))) ?? null;
-}
-
-async function readConfig(filePath: string): Promise<any> {
-  const content = await fs.readFile(filePath, 'utf-8');
-  const ext = path.extname(filePath).toLowerCase();
-  return ext === '.json' ? JSON.parse(content) : yaml.parse(content);
-}
-
-function parseEnv(content: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const line of content.split('\n')) {
-    const t = line.trim();
-    if (!t || t.startsWith('#')) continue;
-    const eq = t.indexOf('=');
-    if (eq <= 0) continue;
-    out[t.slice(0, eq).trim()] = t.slice(eq + 1).trim().replace(/^["']|["']$/g, '');
-  }
-  return out;
-}
-
-async function loadHttpOptions(): Promise<{ baseUrl: string; token: string } | null> {
-  const configFile = findConfigFile(cwd);
-  if (!configFile) return null;
-  const config = await readConfig(path.join(cwd, configFile));
-  const http = config?.http || {};
-  const port = http.port ?? 8086;
-  const host = http.host ?? '127.0.0.1';
-  const base = (http.base ?? '/api').replace(/^\/+|\/+$/g, '') || 'api';
-  const baseUrl = `http://${host}:${port}/${base}`;
-
-  const envPath = path.join(cwd, '.env');
-  const env = fs.existsSync(envPath) ? parseEnv(await fs.readFile(envPath, 'utf-8')) : {};
-
-  let token = http.token ?? '';
-  if (typeof token === 'string' && token.startsWith('${') && token.endsWith('}')) {
-    const key = token.slice(2, -1).trim();
-    token = env[key] ?? process.env[key] ?? '';
-  }
-
-  return { baseUrl, token: String(token) };
-}
-
-async function getFirstBotForAdapter(baseUrl: string, token: string, adapter: string): Promise<string | null> {
-  try {
-    const res = await fetch(`${baseUrl}/bots`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return null;
-    const json = (await res.json()) as { data?: { name: string; adapter: string }[] };
-    const bot = json.data?.find((b) => b.adapter === adapter);
-    return bot?.name ?? null;
-  } catch {
-    return null;
-  }
+async function getFirstBotForAdapter(
+  baseUrl: string,
+  token: string,
+  adapter: string,
+): Promise<string | null> {
+  const res = await hostGet<{ name: string; adapter: string }[]>(
+    { baseUrl, token },
+    '/bots',
+  );
+  if (!res.ok || !Array.isArray(res.data)) return null;
+  const bot = res.data.find((b) => b.adapter === adapter);
+  return bot?.name ?? null;
 }
 
 export const sendCommand = new Command('send')
@@ -103,21 +53,21 @@ export const sendCommand = new Command('send')
       process.exit(1);
     }
 
-    const httpOpts = await loadHttpOptions();
+    const httpOpts = await loadHostHttpConfig();
     if (!httpOpts) {
       logger.error('未找到 zhin 配置文件，无法确定 HTTP 地址');
       process.exit(1);
     }
 
     const token = httpOpts.token;
-    let bot_id   = botId;
+    let bot_id = botId;
     if (!bot_id) {
       const bot = await getFirstBotForAdapter(httpOpts.baseUrl, token, adapterName);
       if (!bot) {
         logger.error(`未找到适配器 "${adapterName}" 下的 Bot，请使用 --bot <id> 指定`);
         process.exit(1);
       }
-      bot_id = bot
+      bot_id = bot;
     }
 
     const body = {
@@ -150,8 +100,9 @@ export const sendCommand = new Command('send')
       if (data.data?.messageId) {
         console.log(chalk.gray('  messageId: ' + data.data.messageId));
       }
-    } catch (e: any) {
-      logger.error(e?.message || String(e));
+    } catch (e: unknown) {
+      const err = e as Error;
+      logger.error(err?.message || String(e));
       process.exit(1);
     }
   });

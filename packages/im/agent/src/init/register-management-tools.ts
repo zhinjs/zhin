@@ -1,5 +1,5 @@
 /**
- * Register AI management tools (ai.models, ai.clear, ai.health).
+ * Register AI management tools (/models, ai.clear, ai.health).
  */
 import './types.js';
 import { getPlugin, Message, ZhinTool, MessageCommand } from '@zhin.js/core';
@@ -48,7 +48,7 @@ export function registerManagementTools(refs: AIServiceRefs): void {
     // 注册对应的用户命令（指令线）
     const commandService = root.inject('command');
     if (commandService) {
-      const modelsCmd = new MessageCommand('ai.models').desc('列出所有可用的 AI 模型');
+      const modelsCmd = new MessageCommand('/models').desc('列出所有可用的 AI 模型');
       modelsCmd.action(async () => {
         const models = await ai.listModels();
         let r = '🤖 可用模型:\n';

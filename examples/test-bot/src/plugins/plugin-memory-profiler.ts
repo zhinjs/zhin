@@ -1,4 +1,4 @@
-import { usePlugin, MessageCommand } from "zhin.js";
+import { usePlugin, MessageCommand, type Plugin } from "zhin.js";
 import { writeHeapSnapshot } from "node:v8";
 import * as path from "node:path";
 
@@ -87,7 +87,7 @@ addCommand(
 
       for (const p of plugins) {
         const analysis = analyzePluginModules(p.name);
-        const features = p.getFeatures();
+        const features = (p as Plugin).getFeatures();
         
         // 从 FeatureJSON 数组中提取各类计数
         const featureCounts: Record<string, number> = {};
@@ -153,7 +153,7 @@ addCommand(
 
       // 获取插件信息
       const analysis = analyzePluginModules(pluginName);
-      const features = targetPlugin.getFeatures();
+      const features = (targetPlugin as Plugin).getFeatures();
       const currentMem = process.memoryUsage();
 
       let output = `📊 插件内存分析: ${pluginName}\n\n`;

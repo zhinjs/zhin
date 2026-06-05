@@ -52,7 +52,7 @@ export function isPolicyDenialToolResult(result: string): boolean {
 }
 
 export const POLICY_DENIAL_TOOL_HINT =
-  '此为安全/权限策略的硬性拒绝，无法通过换参数、换工具或 ask_user 口头确认绕过。请直接向用户说明限制与可行替代（如 Owner 在配置中加入 execAllowlist 或 #approve），不要继续尝试同类操作。';
+  '此为安全/权限策略的硬性拒绝，无法通过换参数、换工具或 ask_user 口头确认绕过。请直接向用户说明限制与可行替代（如 Owner 在配置中加入 execAllowlist 或 /approve），不要继续尝试同类操作。';
 
 export const SYSTEM_POLICY_DENIAL_STOP =
   'Multiple security policy blocks occurred in this turn. Reply to the user now in natural language: explain what is blocked, that ask_user cannot change exec/file policy, and what the Owner must do in config. Do not call more tools.';
