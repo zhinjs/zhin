@@ -1,5 +1,15 @@
 # @zhin.js/core
 
+## 1.1.32
+
+### Patch Changes
+
+- 3735e96: fix: 智能家居控制
+- Updated dependencies [3735e96]
+- Updated dependencies [238de62]
+  - @zhin.js/kernel@0.0.49
+  - @zhin.js/ai@1.1.30
+
 ## 1.1.31
 
 ### Patch Changes

@@ -1,5 +1,18 @@
 # @zhin.js/adapter-icqq
 
+## 3.0.10
+
+### Patch Changes
+
+- 3735e96: fix: 智能家居控制
+- Updated dependencies [3735e96]
+- Updated dependencies [238de62]
+  - @zhin.js/host-api@0.0.4
+  - @zhin.js/agent@0.1.30
+  - @zhin.js/core@1.1.32
+  - zhin.js@1.0.91
+  - @zhin.js/host-router@0.0.3
+
 ## 3.0.9
 
 ### Patch Changes

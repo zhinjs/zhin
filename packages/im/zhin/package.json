@@ -1,6 +1,6 @@
 {
   "name": "zhin.js",
-  "version": "1.0.90",
+  "version": "1.0.91",
   "description": "Zhin.js 主入口 — IM 核心与 Agent API；HTTP/Remote Console 请安装 @zhin.js/host-router、@zhin.js/host-api 插件",
   "type": "module",
   "main": "./lib/index.js",
