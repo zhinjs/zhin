@@ -8,6 +8,7 @@ import { WebSocketServer as WSS } from "ws";
 import type { ListedRoute } from "./openapi.js";
 import { toKoaRouterPath } from "./path-pattern.js";
 import { isRouteMeta, type RouteMeta } from "./route-meta.js";
+import { timingSafeEqualString } from "./timing-safe-equal.js";
 
 /** Koa 上下文；`koa-body` 解析后 `request.body` 可用。 */
 export type RouterContext = Context & {
@@ -67,12 +68,24 @@ export class Router extends KoaRouter {
   whiteList: Path[] = [];
   private listedRoutes: ListedRoute[] = [];
   private _upgradeListenerInstalled = false;
+  private _authToken: string | undefined;
+  /** WebSocket paths that skip the global auth token (they provide their own verifyClient). */
+  private _wsAuthExempt = new Set<string>();
 
   constructor(
     public readonly server: Server,
     prefix = "",
   ) {
     super({ prefix: prefix || undefined });
+  }
+
+  /**
+   * Set the Bearer token used to authenticate WebSocket upgrade requests.
+   * Must be called before the first upgrade arrives (typically right after
+   * the HTTP auth middleware is registered).
+   */
+  setAuthToken(token: string): void {
+    this._authToken = token;
   }
 
   listRoutes(): ListedRoute[] {
@@ -198,6 +211,32 @@ export class Router extends KoaRouter {
     remove(this.wsStack, wsServer);
   }
 
+  /**
+   * Verify the Bearer token on a WebSocket upgrade request.
+   * Returns `true` if the request is authenticated (or no token is configured).
+   */
+  private _verifyUpgradeToken(request: import("node:http").IncomingMessage): boolean {
+    const token = this._authToken;
+    if (!token) return true; // no token configured — allow (same as HTTP middleware)
+
+    // Extract token from Authorization header
+    const authHeader = request.headers["authorization"] ?? "";
+    if (authHeader.startsWith("Bearer ") && timingSafeEqualString(token, authHeader.slice(7))) {
+      return true;
+    }
+
+    // Fall back to query string ?token= or ?access_token=
+    const { query } = parse(request.url ?? "", true);
+    const queryToken =
+      (typeof query.access_token === "string" ? query.access_token : "") ||
+      (typeof query.token === "string" ? query.token : "");
+    if (queryToken && timingSafeEqualString(token, queryToken)) {
+      return true;
+    }
+
+    return false;
+  }
+
   private _ensureUpgradeListener(): void {
     if (this._upgradeListenerInstalled) return;
     this._upgradeListenerInstalled = true;
@@ -206,6 +245,14 @@ export class Router extends KoaRouter {
       const { pathname } = parse(request.url ?? "");
       const target = this.wsStack.find((wss) => wss.options.path === pathname);
       if (!target) return;
+
+      // Authenticate the upgrade unless the path is exempt (has its own verifyClient)
+      if (!this._wsAuthExempt.has(pathname ?? "") && !this._verifyUpgradeToken(request)) {
+        socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+        socket.destroy();
+        return;
+      }
+
       (socket as { _wsRouterHandled?: boolean })._wsRouterHandled = true;
       try {
         target.handleUpgrade(request, socket as import("net").Socket, head, (ws) => {
@@ -222,6 +269,11 @@ export class Router extends KoaRouter {
     if (existing) return existing;
     const wsServer = new WSS({ noServer: true, path, ...options });
     this.wsStack.push(wsServer);
+    // If the caller provides its own verifyClient, exempt this path from
+    // the global auth token check (the caller is responsible for auth).
+    if (options.verifyClient) {
+      this._wsAuthExempt.add(path);
+    }
     this._ensureUpgradeListener();
     return wsServer;
   }

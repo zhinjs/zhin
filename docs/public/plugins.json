@@ -1,14 +1,14 @@
 {
   "plugins": [
     {
-      "name": "@zhin.js/host-router",
-      "displayName": "host-router",
-      "description": "Zhin Host HTTP runtime (Koa, Bearer auth, CORS, health/OpenAPI)",
+      "name": "@zhin.js/http",
+      "displayName": "http",
+      "description": "HTTP server service for Zhin.js with routing and WebSocket support",
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "service",
-      "version": "0.0.0",
-      "npm": "https://www.npmjs.com/package/@zhin.js/host-router",
+      "version": "1.0.79",
+      "npm": "https://www.npmjs.com/package/@zhin.js/http",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
@@ -22,27 +22,27 @@
         "websocket",
         "api"
       ],
-      "lastUpdate": "2026-05-29T08:40:12.249Z",
+      "lastUpdate": "2026-06-02T01:39:15.145Z",
       "downloads": {
-        "weekly": 1210,
-        "monthly": 2988
+        "weekly": 1651,
+        "monthly": 3468
       },
-      "readme": "Zhin Host HTTP 运行时（Koa）：监听端口、Bearer 鉴权、CORS、`/pub/health` 与 `/pub/openapi.json`。管理面 REST/Console 协议由 @zhin.js/host-api 注册到同一 router。",
+      "readme": "基于 Koa 的 HTTP 服务器插件，为 Zhin 机器人框架提供 HTTP API 和 WebSocket 支持。\n- 🌐 基于 Koa.js 的 HTTP 服务器\n- 🔐 Token 身份验证\n- 🛠️ RESTful API 支持\n- 📡 WebSocket 实时通信\n- 🔄 请求体解析 (JSON)\n- 🌍 可配置的服务器设置\n- 📊 路由管理和中间件支持\n- 📋 内置 ",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "zhin.js": "1.0.85"
+        "zhin.js": "1.0.86"
       }
     },
     {
-      "name": "@zhin.js/host-api",
-      "displayName": "host-api",
-      "description": "Zhin Host management API (REST, Console RPC/SSE, PageManager entries)",
+      "name": "@zhin.js/console",
+      "displayName": "console",
+      "description": "Web console service for Zhin.js with real-time monitoring",
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "service",
-      "version": "0.0.0",
-      "npm": "https://www.npmjs.com/package/@zhin.js/host-api",
+      "version": "3.0.5",
+      "npm": "https://www.npmjs.com/package/@zhin.js/console",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
@@ -56,22 +56,23 @@
         "monitoring",
         "admin"
       ],
-      "lastUpdate": "2026-05-29T08:40:10.175Z",
+      "lastUpdate": "2026-06-02T01:39:12.169Z",
       "downloads": {
-        "weekly": 1160,
-        "monthly": 2764
+        "weekly": 1585,
+        "monthly": 3195
       },
-      "readme": "Zhin Host 管理面 API：Console RPC/SSE、/entries、系统与插件 REST、市场与日志 API。UI 使用 Remote Console（zhin-console），本包不向 Host 提供静态前端。",
+      "readme": "Zhin Host 上的 Console API 插件：PageManager、POST /api/console/request、SSE /api/events、GET /entries 等。聊天与管理 UI 不在本 Host 提供（serveClientHost: false），请使用 Remote Console（仓库 zhin-console）。说明见 docs/console-remot",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
         "@types/ws": "^8.18.1",
         "koa": "^3.1.1",
-        "@zhin.js/agent": "^0.1.25",
-        "@zhin.js/client": "^1.1.3",
-        "@zhin.js/core": "^1.1.27",
-        "@zhin.js/host-router": "^0.0.0",
-        "zhin.js": "1.0.85"
+        "@zhin.js/agent": "^0.1.26",
+        "@zhin.js/client": "^1.1.4",
+        "@zhin.js/core": "^1.1.28",
+        "zhin.js": "1.0.86",
+        "@zhin.js/http": "^1.0.79",
+        "@zhin.js/http-host": "^0.1.4"
       }
     },
     {
@@ -81,7 +82,7 @@
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "adapter",
-      "version": "3.0.4",
+      "version": "3.0.8",
       "npm": "https://www.npmjs.com/package/@zhin.js/adapter-sandbox",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -95,20 +96,128 @@
         "development",
         "local"
       ],
-      "lastUpdate": "2026-05-29T08:40:08.618Z",
+      "lastUpdate": "2026-06-04T02:13:55.428Z",
       "downloads": {
-        "weekly": 1130,
-        "monthly": 2224
+        "weekly": 1681,
+        "monthly": 2819
       },
-      "readme": "Zhin.js Sandbox 适配器，基于 WebSocket 的本地测试适配器，配合 Web 控制台提供浏览器端聊天窗口进行调试。\n- Node Host：WebSocket /sandbox\n- Edge（Vercel 等）：transport: http-sse — POST /sandbox/message + GET /sandbox/events\n- 浏览器端 React 聊天 UI",
+      "readme": "Zhin.js Sandbox 适配器，基于 WebSocket 的本地测试适配器；浏览器端聊天 UI 在 Remote Console（Host 仅 Console API）中打开 Sandbox 窗口调试。\n- Node Host：WebSocket /sandbox\n- 浏览器端 React 聊天 UI\n- 支持多客户端同时连接\n- 无需第三方平台账号，即开即用\n- 适合本地开发和插件调试\n",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "@zhin.js/core": "1.1.27",
-        "@zhin.js/client": "1.1.3",
-        "@zhin.js/host-router": "0.0.0",
-        "@zhin.js/host-api": "0.0.0",
-        "zhin.js": "1.0.85"
+        "@zhin.js/core": "1.1.31",
+        "@zhin.js/client": "2.0.2",
+        "@zhin.js/host-router": "0.0.3",
+        "@zhin.js/host-api": "0.0.3",
+        "@zhin.js/contract": "1.0.1"
+      }
+    },
+    {
+      "name": "@zhin.js/adapter-icqq",
+      "displayName": "icqq",
+      "description": "Zhin.js adapter for ICQQ (QQ Bot)",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": "adapter",
+      "version": "3.0.9",
+      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-icqq",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "zhin.js",
+        "bot",
+        "adapter",
+        "icqq",
+        "qq",
+        "tencent",
+        "chatbot"
+      ],
+      "lastUpdate": "2026-06-04T02:13:50.436Z",
+      "downloads": {
+        "weekly": 855,
+        "monthly": 2569
+      },
+      "readme": "Zhin.js ICQQ 适配器，通过 @icqqjs/cli 守护进程 IPC 连接已登录的 QQ 账号，支持群聊和私聊消息。协议与登录由 CLI 负责，Zhin 侧只配置 QQ 号并连接本地/远程守护进程。\n- 🤖 支持 QQ 群聊和私聊消息处理\n- 🔐 登录由 icqq login 完成（短信/二维码/滑块等由 CLI 处理）\n- 🖥️ Web 控制台登录辅助：与 @zhin.js/h",
+      "license": "MIT",
+      "engines": {},
+      "peerDependencies": {
+        "@zhin.js/agent": "0.1.29",
+        "@zhin.js/client": "2.0.2",
+        "@zhin.js/host-api": "0.0.3",
+        "@zhin.js/contract": "1.0.1",
+        "@zhin.js/core": "1.1.31",
+        "@zhin.js/host-router": "0.0.3",
+        "zhin.js": "1.0.90"
+      }
+    },
+    {
+      "name": "@zhin.js/adapter-lark",
+      "displayName": "lark",
+      "description": "Zhin.js adapter for Lark/Feishu (飞书)",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": "adapter",
+      "version": "1.0.94",
+      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-lark",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "zhin.js",
+        "bot",
+        "adapter",
+        "lark",
+        "feishu",
+        "飞书",
+        "chatbot"
+      ],
+      "lastUpdate": "2026-06-04T02:13:50.802Z",
+      "downloads": {
+        "weekly": 861,
+        "monthly": 2548
+      },
+      "readme": "Zhin.js 飞书 / Lark 适配器，支持飞书机器人的消息收发和群管理。\n- 支持飞书和 Lark 国际版\n- Webhook 事件接收（HTTP 回调）\n- Bearer Token 自动刷新\n- 消息加密和签名验证（可选）\n- URL 验证自动处理\n- 群管理 AI 工具（通过包内 skills/lark/SKILL.md 与 addTool 暴露给 AI）\nbash\npnpm add ",
+      "license": "MIT",
+      "engines": {},
+      "peerDependencies": {
+        "@zhin.js/host-router": "0.0.3",
+        "zhin.js": "1.0.90"
+      }
+    },
+    {
+      "name": "@zhin.js/adapter-discord",
+      "displayName": "discord",
+      "description": "Zhin.js adapter for Discord",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": "adapter",
+      "version": "2.0.9",
+      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-discord",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "zhin.js",
+        "bot",
+        "adapter",
+        "discord",
+        "chatbot"
+      ],
+      "lastUpdate": "2026-06-04T02:13:44.454Z",
+      "downloads": {
+        "weekly": 910,
+        "monthly": 2540
+      },
+      "readme": "Zhin.js Discord 适配器，支持 Discord 机器人的消息收发和服务器管理。\n- 📦 单一适配器：context: discord，通过 connection 选择连接方式\n- 🌐 Gateway（connection: gateway）：WebSocket 网关，支持群管、消息、斜杠命令等\n- 📮 Interactions（connection: interactions）",
+      "license": "MIT",
+      "engines": {},
+      "peerDependencies": {
+        "@zhin.js/client": "2.0.2",
+        "@zhin.js/host-api": "0.0.3",
+        "@zhin.js/contract": "1.0.1",
+        "@zhin.js/host-router": "0.0.3",
+        "zhin.js": "1.0.90"
       }
     },
     {
@@ -118,7 +227,7 @@
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "util",
-      "version": "2.0.4",
+      "version": "2.0.9",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-music",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -133,122 +242,17 @@
         "search",
         "share"
       ],
-      "lastUpdate": "2026-05-29T08:40:16.144Z",
+      "lastUpdate": "2026-06-04T02:14:00.604Z",
       "downloads": {
-        "weekly": 431,
-        "monthly": 2212
+        "weekly": 780,
+        "monthly": 2523
       },
       "readme": "为 Zhin.js 提供音乐搜索和分享功能。支持多个音乐平台：QQ 音乐、网易云音乐。\n- 🎵 多平台搜索：支持 QQ 音乐、网易云音乐\n- 🎯 智能选择：交互式选择搜索结果\n- 🔗 音频直链：获取音乐播放链接\n- 📝 歌词获取：获取音乐歌词文本\n- 📱 多适配器支持：\n  - ICQQ: 发送音乐分享卡片\n  - 其他平台: 发送格式化的文本消息\n- 🎨 美观展示：格式化的音乐信息展",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "@zhin.js/adapter-icqq": "3.0.4",
-        "zhin.js": "1.0.85"
-      }
-    },
-    {
-      "name": "@zhin.js/adapter-lark",
-      "displayName": "lark",
-      "description": "Zhin.js adapter for Lark/Feishu (飞书)",
-      "author": "GitHub Actions",
-      "isOfficial": true,
-      "category": "adapter",
-      "version": "1.0.89",
-      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-lark",
-      "github": "git+https://github.com/zhinjs/zhin.git",
-      "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
-        "lark",
-        "feishu",
-        "飞书",
-        "chatbot"
-      ],
-      "lastUpdate": "2026-05-29T08:40:03.824Z",
-      "downloads": {
-        "weekly": 494,
-        "monthly": 2196
-      },
-      "readme": "Zhin.js 飞书 / Lark 适配器，支持飞书机器人的消息收发和群管理。\n- 支持飞书和 Lark 国际版\n- Webhook 事件接收（HTTP 回调）\n- Bearer Token 自动刷新\n- 消息加密和签名验证（可选）\n- URL 验证自动处理\n- 群管理 AI 工具（通过包内 skills/lark/SKILL.md 与 addTool 暴露给 AI）\nbash\npnpm add ",
-      "license": "MIT",
-      "engines": {},
-      "peerDependencies": {
-        "@zhin.js/host-router": "0.0.0",
-        "zhin.js": "1.0.85"
-      }
-    },
-    {
-      "name": "@zhin.js/adapter-icqq",
-      "displayName": "icqq",
-      "description": "Zhin.js adapter for ICQQ (QQ Bot)",
-      "author": "GitHub Actions",
-      "isOfficial": true,
-      "category": "adapter",
-      "version": "3.0.4",
-      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-icqq",
-      "github": "git+https://github.com/zhinjs/zhin.git",
-      "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
-        "icqq",
-        "qq",
-        "tencent",
-        "chatbot"
-      ],
-      "lastUpdate": "2026-05-29T08:40:03.732Z",
-      "downloads": {
-        "weekly": 495,
-        "monthly": 2188
-      },
-      "readme": "Zhin.js ICQQ 适配器，基于 ICQQ 库实现的 QQ 机器人适配器，支持 QQ 群聊和私聊消息。\n- 🤖 支持 QQ 群聊和私聊消息处理\n- 🔐 完整的登录验证支持（短信验证、二维码、滑块验证）\n- 🖥️ Web 控制台登录辅助：与 @zhin.js/host-api 同时启用时，在 /icqq 页面提供「概览 + 登录辅助」；HTTP 接口为 GET /api/login-ass",
-      "license": "MIT",
-      "engines": {},
-      "peerDependencies": {
-        "@zhin.js/client": "1.1.3",
-        "@zhin.js/host-api": "0.0.0",
-        "@zhin.js/core": "1.1.27",
-        "@zhin.js/host-router": "0.0.0",
-        "zhin.js": "1.0.85"
-      }
-    },
-    {
-      "name": "@zhin.js/adapter-discord",
-      "displayName": "discord",
-      "description": "Zhin.js adapter for Discord",
-      "author": "GitHub Actions",
-      "isOfficial": true,
-      "category": "adapter",
-      "version": "2.0.4",
-      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-discord",
-      "github": "git+https://github.com/zhinjs/zhin.git",
-      "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
-        "discord",
-        "chatbot"
-      ],
-      "lastUpdate": "2026-05-29T08:40:02.731Z",
-      "downloads": {
-        "weekly": 490,
-        "monthly": 2064
-      },
-      "readme": "Zhin.js Discord 适配器，支持 Discord 机器人的消息收发和服务器管理。\n- 📦 单一适配器：context: discord，通过 connection 选择连接方式\n- 🌐 Gateway（connection: gateway）：WebSocket 网关，支持群管、消息、斜杠命令等\n- 📮 Interactions（connection: interactions）",
-      "license": "MIT",
-      "engines": {},
-      "peerDependencies": {
-        "@zhin.js/client": "1.1.3",
-        "@zhin.js/host-api": "0.0.0",
-        "@zhin.js/host-router": "0.0.0",
-        "zhin.js": "1.0.85"
+        "@zhin.js/adapter-icqq": "3.0.9",
+        "zhin.js": "1.0.90"
       }
     },
     {
@@ -258,7 +262,7 @@
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "adapter",
-      "version": "1.0.73",
+      "version": "1.0.78",
       "npm": "https://www.npmjs.com/package/@zhin.js/adapter-dingtalk",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -271,17 +275,17 @@
         "钉钉",
         "chatbot"
       ],
-      "lastUpdate": "2026-05-29T08:40:01.967Z",
+      "lastUpdate": "2026-06-04T02:13:43.733Z",
       "downloads": {
-        "weekly": 487,
-        "monthly": 2035
+        "weekly": 818,
+        "monthly": 2380
       },
       "readme": "Zhin.js 钉钉适配器，支持企业内部机器人和钉钉开放平台机器人开发。\nbash\npnpm add @zhin.js/adapter-dingtalk\ntypescript\nimport { DingTalkBotConfig } from '@zhin.js/adapter-dingtalk';\nconst config: DingTalkBotConfig = {\n  context: 'd",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "@zhin.js/host-router": "0.0.0",
-        "zhin.js": "1.0.85"
+        "@zhin.js/host-router": "0.0.3",
+        "zhin.js": "1.0.90"
       }
     },
     {
@@ -291,7 +295,7 @@
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "adapter",
-      "version": "1.0.90",
+      "version": "1.0.95",
       "npm": "https://www.npmjs.com/package/@zhin.js/adapter-onebot11",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -305,17 +309,17 @@
         "qq",
         "chatbot"
       ],
-      "lastUpdate": "2026-05-29T08:40:07.466Z",
+      "lastUpdate": "2026-06-04T02:13:51.844Z",
       "downloads": {
-        "weekly": 449,
-        "monthly": 1805
+        "weekly": 931,
+        "monthly": 2328
       },
       "readme": "Zhin.js OneBot v11 协议适配器，通过 WebSocket 连接各种支持 OneBot 协议的 QQ 机器人实现（如 go-cqhttp、Shamrock、LagrangeGo 等）。\n- 🔌 完整 OneBot v11 协议兼容\n- 📦 单一适配器：context: onebot11，通过 connection 选择连接方式\n- 🌐 正向 WebSocket（connect",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "@zhin.js/host-router": "0.0.0",
-        "zhin.js": "1.0.85"
+        "@zhin.js/host-router": "0.0.3",
+        "zhin.js": "1.0.90"
       }
     },
     {
@@ -325,7 +329,7 @@
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "adapter",
-      "version": "0.1.73",
+      "version": "0.1.78",
       "npm": "https://www.npmjs.com/package/@zhin.js/adapter-wechat-mp",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -341,17 +345,17 @@
         "mp",
         "chatbot"
       ],
-      "lastUpdate": "2026-05-29T08:40:09.940Z",
+      "lastUpdate": "2026-06-04T02:13:56.858Z",
       "downloads": {
-        "weekly": 433,
-        "monthly": 1763
+        "weekly": 794,
+        "monthly": 2162
       },
-      "readme": "Zhin.js 微信公众号适配器，支持微信公众号的消息收发。\n- Webhook 事件接收（HTTP 回调）\n- 签名验证\n- Access Token 自动刷新\n- XML 消息解析\n- 可选消息加密（AES）\nbash\npnpm add @zhin.js/adapter-wechat-mp\n- @zhin.js/host-router — HTTP 服务（提供 Webhook 路由）\nyaml\nbots:\n",
+      "readme": "Zhin.js 微信公众号适配器，支持微信公众号的消息收发。\n- Webhook 事件接收（HTTP 回调）\n- 签名验证\n- Access Token 自动刷新\n- XML 消息解析\n- 可选消息加密（AES）\nbash\npnpm add @zhin.js/adapter-wechat-mp\n| 要求 | 说明 |\n|------|------|\n| 公众号 | 已注册微信公众号，并在 微信公众",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "zhin.js": "1.0.85",
-        "@zhin.js/host-router": "0.0.0"
+        "zhin.js": "1.0.90",
+        "@zhin.js/host-router": "0.0.3"
       }
     },
     {
@@ -361,7 +365,7 @@
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "adapter",
-      "version": "2.0.4",
+      "version": "2.0.9",
       "npm": "https://www.npmjs.com/package/@zhin.js/adapter-telegram",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -373,20 +377,21 @@
         "telegram",
         "chatbot"
       ],
-      "lastUpdate": "2026-05-29T08:40:09.996Z",
+      "lastUpdate": "2026-06-04T02:13:56.990Z",
       "downloads": {
-        "weekly": 474,
-        "monthly": 1676
+        "weekly": 820,
+        "monthly": 2067
       },
-      "readme": "Telegram adapter for zhin.js framework.\nbash\npnpm add @zhin.js/adapter-telegram\ntypescript\nimport { defineConfig } from 'zhin.js'\nexport default defineConfig({\n  bots: [\n    {\n      name: 'my-telegram",
+      "readme": "Telegram adapter for zhin.js framework.\nbash\npnpm add @zhin.js/adapter-telegram\n| 要求 | 说明 |\n|------|------|\n| Bot Token | 通过 @BotFather 创建 Bot 并获取 Token |\n| Polling（默认） | 本地开发无需公网 IP；polling: true（默认）",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "@zhin.js/client": "1.1.3",
-        "@zhin.js/host-api": "0.0.0",
-        "@zhin.js/host-router": "0.0.0",
-        "@zhin.js/logger": "0.1.67",
-        "zhin.js": "1.0.85"
+        "@zhin.js/client": "2.0.2",
+        "@zhin.js/host-api": "0.0.3",
+        "@zhin.js/contract": "1.0.1",
+        "@zhin.js/host-router": "0.0.3",
+        "@zhin.js/logger": "0.1.70",
+        "zhin.js": "1.0.90"
       }
     },
     {
@@ -396,7 +401,7 @@
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "adapter",
-      "version": "2.0.4",
+      "version": "2.0.9",
       "npm": "https://www.npmjs.com/package/@zhin.js/adapter-qq",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -410,20 +415,21 @@
         "official",
         "chatbot"
       ],
-      "lastUpdate": "2026-05-29T08:40:08.787Z",
+      "lastUpdate": "2026-06-04T02:13:54.321Z",
       "downloads": {
-        "weekly": 457,
-        "monthly": 1667
+        "weekly": 815,
+        "monthly": 2065
       },
       "readme": "Zhin.js QQ 官方机器人适配器，基于 QQ 官方机器人 API 开发，支持频道、群聊和私聊消息。\nbash\npnpm add @zhin.js/adapter-qq\ntypescript\nimport { defineConfig } from 'zhin.js';\nexport default defineConfig({\n  bots: [\n    {\n      context: '",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "@zhin.js/host-api": "0.0.0",
-        "@zhin.js/client": "1.1.3",
-        "@zhin.js/logger": "0.1.67",
-        "@zhin.js/host-router": "0.0.0",
-        "zhin.js": "1.0.85"
+        "@zhin.js/client": "2.0.2",
+        "@zhin.js/contract": "1.0.1",
+        "@zhin.js/host-api": "0.0.3",
+        "@zhin.js/host-router": "0.0.3",
+        "@zhin.js/logger": "0.1.70",
+        "zhin.js": "1.0.90"
       }
     },
     {
@@ -433,7 +439,7 @@
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "adapter",
-      "version": "2.0.4",
+      "version": "2.0.9",
       "npm": "https://www.npmjs.com/package/@zhin.js/adapter-kook",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -446,20 +452,21 @@
         "开黑啦",
         "chatbot"
       ],
-      "lastUpdate": "2026-05-29T08:40:03.047Z",
+      "lastUpdate": "2026-06-04T02:13:50.001Z",
       "downloads": {
-        "weekly": 452,
-        "monthly": 1648
+        "weekly": 824,
+        "monthly": 2058
       },
-      "readme": "Zhin.js KOOK（开黑啦）适配器，基于 KOOK 官方 API 开发，支持频道和私聊消息。\n- 🗣️ 支持 KOOK 频道和私聊消息处理\n- 📨 消息发送和接收处理\n- 🔄 消息格式转换和适配\n- 📁 自动数据目录管理\n- ⚡ 基于 WebSocket 的实时通信\n- 🎯 支持 Webhook 和 WebSocket 双模式\n- 📝 支持 Markdown 消息格式\nbash\n",
+      "readme": "Zhin.js KOOK（开黑啦）适配器，基于 KOOK 官方 API 开发，支持频道和私聊消息。\n- 🗣️ 支持 KOOK 频道和私聊消息处理\n- 📨 消息发送和接收处理\n- 🔄 消息格式转换和适配\n- 📁 自动数据目录管理\n- ⚡ 基于 WebSocket 的实时通信\n- 📝 支持 Markdown 消息格式\nbash\npnpm add @zhin.js/adapter-kook\n|",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "@zhin.js/client": "1.1.3",
-        "@zhin.js/host-api": "0.0.0",
-        "@zhin.js/host-router": "0.0.0",
-        "@zhin.js/logger": "0.1.67",
-        "zhin.js": "1.0.85"
+        "@zhin.js/client": "2.0.2",
+        "@zhin.js/host-api": "0.0.3",
+        "@zhin.js/contract": "1.0.1",
+        "@zhin.js/host-router": "0.0.3",
+        "@zhin.js/logger": "0.1.70",
+        "zhin.js": "1.0.90"
       }
     },
     {
@@ -469,7 +476,7 @@
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "adapter",
-      "version": "0.0.35",
+      "version": "0.0.40",
       "npm": "https://www.npmjs.com/package/@zhin.js/adapter-milky",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -482,17 +489,17 @@
         "qq",
         "chatbot"
       ],
-      "lastUpdate": "2026-05-29T08:40:03.636Z",
+      "lastUpdate": "2026-06-04T02:13:50.949Z",
       "downloads": {
-        "weekly": 351,
-        "monthly": 1593
+        "weekly": 736,
+        "monthly": 1998
       },
       "readme": "Zhin.js Milky 协议适配器，一个适配器支持 WebSocket 正向/反向、SSE、Webhook 四种连接方式，由配置项 connection 区分；支持 HTTP API 调用与 accesstoken 鉴权。\n- 🔌 Milky 协议兼容（通信说明）\n- 📦 单一适配器：context: milky，通过 connection 选择连接方式\n- 🌐 WebSocket 正向",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "@zhin.js/host-router": "0.0.0",
-        "zhin.js": "1.0.85"
+        "@zhin.js/host-router": "0.0.3",
+        "zhin.js": "1.0.90"
       }
     },
     {
@@ -502,7 +509,7 @@
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "adapter",
-      "version": "0.0.35",
+      "version": "0.0.40",
       "npm": "https://www.npmjs.com/package/@zhin.js/adapter-satori",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -514,17 +521,17 @@
         "satori",
         "chatbot"
       ],
-      "lastUpdate": "2026-05-29T08:40:08.810Z",
+      "lastUpdate": "2026-06-04T02:13:56.133Z",
       "downloads": {
-        "weekly": 358,
-        "monthly": 1573
+        "weekly": 762,
+        "monthly": 1989
       },
-      "readme": "Zhin.js Satori 聊天协议适配器，一个适配器支持 WebSocket 正向与 Webhook 两种连接方式，由配置项 connection 区分；支持 HTTP API 与 Bearer Token 鉴权。\n> 勿与本仓库的 @zhin.js/satori 混淆：后者是 Vercel satori 的 SVG 图片渲染工具包（packages/satori），用于把 HTML/Reac",
+      "readme": "Zhin.js Satori 聊天协议适配器，一个适配器支持 WebSocket 正向与 Webhook 两种连接方式，由配置项 connection 区分；支持 HTTP API 与 Bearer Token 鉴权。\n> 勿与本仓库的 @zhin.js/satori 混淆：后者是 Vercel satori 的 SVG 图片渲染工具包（packages/toolkit/satori），用于把 H",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "zhin.js": "1.0.85",
-        "@zhin.js/host-router": "0.0.0"
+        "zhin.js": "1.0.90",
+        "@zhin.js/host-router": "0.0.3"
       }
     },
     {
@@ -534,7 +541,7 @@
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "adapter",
-      "version": "0.0.35",
+      "version": "0.0.40",
       "npm": "https://www.npmjs.com/package/@zhin.js/adapter-onebot12",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -547,17 +554,17 @@
         "onebot12",
         "chatbot"
       ],
-      "lastUpdate": "2026-05-29T08:40:07.765Z",
+      "lastUpdate": "2026-06-04T02:13:54.856Z",
       "downloads": {
-        "weekly": 343,
-        "monthly": 1561
+        "weekly": 720,
+        "monthly": 1950
       },
       "readme": "Zhin.js OneBot 12 协议适配器，一个适配器支持正向 WebSocket、HTTP Webhook、反向 WebSocket 三种连接方式，由配置项 connection 区分。\n- 🔌 OneBot 12 标准 兼容（OneBot Connect + 接口定义）\n- 📦 单一适配器：context: onebot12，通过 connection 选择连接方式\n- 🌐 正向 W",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "zhin.js": "1.0.85",
-        "@zhin.js/host-router": "0.0.0"
+        "zhin.js": "1.0.90",
+        "@zhin.js/host-router": "0.0.3"
       }
     },
     {
@@ -567,7 +574,7 @@
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "adapter",
-      "version": "1.0.70",
+      "version": "1.0.75",
       "npm": "https://www.npmjs.com/package/@zhin.js/adapter-slack",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -579,16 +586,16 @@
         "slack",
         "chatbot"
       ],
-      "lastUpdate": "2026-05-29T08:40:09.366Z",
+      "lastUpdate": "2026-06-04T02:13:57.030Z",
       "downloads": {
-        "weekly": 445,
-        "monthly": 1455
+        "weekly": 798,
+        "monthly": 1865
       },
-      "readme": "Slack adapter for zhin.js framework.\nbash\npnpm add @zhin.js/adapter-slack\ntypescript\nimport { defineConfig } from 'zhin.js'\nexport default defineConfig({\n  bots: [\n    {\n      name: 'my-slack-bot',\n  ",
+      "readme": "Slack adapter for zhin.js framework.\nbash\npnpm add @zhin.js/adapter-slack\n通过 socketMode 选择连接方式（默认 true 时为 Socket Mode）。\n| 模式 | socketMode | 适用场景 | 额外字段 |\n|------|--------------|----------|----------|\n",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "zhin.js": "1.0.85"
+        "zhin.js": "1.0.90"
       }
     },
     {
@@ -598,7 +605,7 @@
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "adapter",
-      "version": "0.1.72",
+      "version": "0.1.77",
       "npm": "https://www.npmjs.com/package/@zhin.js/adapter-email",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -612,16 +619,16 @@
         "imap",
         "mail"
       ],
-      "lastUpdate": "2026-05-29T08:40:02.550Z",
+      "lastUpdate": "2026-06-04T02:13:49.018Z",
       "downloads": {
-        "weekly": 430,
-        "monthly": 1304
+        "weekly": 775,
+        "monthly": 1693
       },
-      "readme": "Zhin.js 邮件适配器，通过 SMTP 发送和 IMAP 接收邮件，将邮箱作为聊天平台接入。\n- SMTP 邮件发送（基于 nodemailer）\n- IMAP 邮件接收（基于 imap + mailparser）\n- 支持附件处理\n- 定时轮询新邮件\n- TLS/SSL 加密连接\nbash\npnpm add @zhin.js/adapter-email\nyaml\nbots:\n  - cont",
+      "readme": "Zhin.js 邮件适配器，通过 SMTP 发送和 IMAP 接收邮件，将邮箱作为聊天平台接入。\n- SMTP 邮件发送（基于 nodemailer）\n- IMAP 邮件接收（基于 imap + mailparser）\n- 支持附件处理\n- 定时轮询新邮件\n- TLS/SSL 加密连接\nbash\npnpm add @zhin.js/adapter-email\n| 要求 | 说明 |\n|------",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "zhin.js": "1.0.85"
+        "zhin.js": "1.0.90"
       }
     },
     {
@@ -631,7 +638,7 @@
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "util",
-      "version": "0.0.70",
+      "version": "0.0.75",
       "npm": "https://www.npmjs.com/package/@zhin.js/sensitive-filter",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -646,16 +653,16 @@
         "content",
         "security"
       ],
-      "lastUpdate": "2026-05-29T08:40:19.030Z",
+      "lastUpdate": "2026-06-04T02:14:02.716Z",
       "downloads": {
-        "weekly": 412,
-        "monthly": 1204
+        "weekly": 775,
+        "monthly": 1611
       },
       "readme": "敏感词过滤插件，用于过滤不符合中国国情的敏感内容。\n- ✅ 多类别敏感词库：政治、暴力、色情、违禁品、诈骗、违法违规等多个类别\n- ✅ 智能过滤：自动检测并替换敏感词为  字符\n- ✅ 拦截模式：可选择直接拦截包含敏感词的消息\n- ✅ 日志记录：自动记录检测到的敏感词和过滤结果\n- ✅ 自定义词库：支持添加自定义敏感词\n- ✅ 灵活配置：可按类别启用/禁用敏感词过滤\nbash\npnpm add @",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "zhin.js": "1.0.85"
+        "zhin.js": "1.0.90"
       }
     },
     {
@@ -665,7 +672,7 @@
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "service",
-      "version": "1.0.67",
+      "version": "1.0.72",
       "npm": "https://www.npmjs.com/package/@zhin.js/mcp",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -680,16 +687,16 @@
         "assistant",
         "llm"
       ],
-      "lastUpdate": "2026-05-29T08:40:12.428Z",
+      "lastUpdate": "2026-06-04T02:13:36.442Z",
       "downloads": {
-        "weekly": 341,
-        "monthly": 1161
+        "weekly": 689,
+        "monthly": 1547
       },
       "readme": "> Zhin MCP Server - 让 AI 助手能够理解和生成 Zhin 插件\n这是一个基于 Model Context Protocol (MCP) 的服务插件，为 AI 助手（如 Claude、ChatGPT 等）提供 Zhin 框架的深度集成能力，让开发者能够通过 AI 对话更高效地开发 Zhin 插件。\n- 🤖 完整的 MCP 支持: 实现 Tools、Resources、Prom",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "zhin.js": "1.0.85"
+        "zhin.js": "1.0.90"
       }
     },
     {
@@ -699,7 +706,7 @@
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "util",
-      "version": "0.0.63",
+      "version": "0.0.68",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-html-renderer",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -715,7 +722,7 @@
         "svg",
         "png"
       ],
-      "lastUpdate": "2026-05-29T08:40:15.998Z",
+      "lastUpdate": "2026-06-04T02:13:59.562Z",
       "downloads": {
         "weekly": 0,
         "monthly": 0
@@ -724,7 +731,46 @@
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "zhin.js": "1.0.85"
+        "zhin.js": "1.0.90"
+      }
+    },
+    {
+      "name": "@zhin.js/adapter-napcat",
+      "displayName": "napcat",
+      "description": "Zhin.js adapter for NapCatQQ (OneBot11 superset with go-cqhttp & NapCat extensions)",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": "adapter",
+      "version": "0.1.18",
+      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-napcat",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "zhin.js",
+        "bot",
+        "adapter",
+        "napcat",
+        "napneko",
+        "onebot",
+        "onebot11",
+        "qq",
+        "chatbot"
+      ],
+      "lastUpdate": "2026-06-04T02:13:50.983Z",
+      "downloads": {
+        "weekly": 0,
+        "monthly": 0
+      },
+      "readme": "Zhin.js NapCatQQ 适配器，支持 OneBot11 标准 + go-cqhttp 扩展 + NapCat 独有 API。\n- 完整 OneBot v11 协议兼容 + go-cqhttp 扩展 + NapCat 独有 API（92+ 接口）\n- 单一适配器：context: napcat，通过 connection 选择连接方式\n- 正向 WebSocket（connection: ",
+      "license": "MIT",
+      "engines": {},
+      "peerDependencies": {
+        "@zhin.js/agent": "0.1.29",
+        "@zhin.js/host-api": "0.0.3",
+        "@zhin.js/contract": "1.0.1",
+        "@zhin.js/host-router": "0.0.3",
+        "zhin.js": "1.0.90"
       }
     },
     {
@@ -734,7 +780,7 @@
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "util",
-      "version": "0.0.20",
+      "version": "0.0.25",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-repeater",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -749,7 +795,7 @@
         "chatbot",
         "im"
       ],
-      "lastUpdate": "2026-05-29T08:40:17.700Z",
+      "lastUpdate": "2026-06-04T02:14:02.296Z",
       "downloads": {
         "weekly": 0,
         "monthly": 0
@@ -758,7 +804,44 @@
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "zhin.js": "1.0.85"
+        "zhin.js": "1.0.90"
+      }
+    },
+    {
+      "name": "@zhin.js/plugin-rss",
+      "displayName": "plugin-rss",
+      "description": "RSS/Atom feed subscription & push plugin for Zhin.js — subscribe feeds, auto-poll, push new items to groups",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": "util",
+      "version": "0.0.26",
+      "npm": "https://www.npmjs.com/package/@zhin.js/plugin-rss",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "zhin.js",
+        "bot",
+        "plugin",
+        "rss",
+        "atom",
+        "feed",
+        "subscription",
+        "push",
+        "notify",
+        "chatbot",
+        "im"
+      ],
+      "lastUpdate": "2026-06-04T02:14:02.575Z",
+      "downloads": {
+        "weekly": 0,
+        "monthly": 0
+      },
+      "readme": "RSS/Atom 订阅推送插件 —— 订阅 feed 源，自动轮询并推送新内容到群聊或私聊。\nbash\nnpm install @zhin.js/plugin-rss\n在 zhin.config.yml 中添加：\nyaml\nplugins:\n  - \"@zhin.js/plugin-rss\"\nrss:\n  pollCron: \"/5    \"   # 轮询频率，Cron 表达式（默认每 5 分钟）",
+      "license": "MIT",
+      "engines": {},
+      "peerDependencies": {
+        "zhin.js": "1.0.90"
       }
     },
     {
@@ -768,7 +851,7 @@
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "util",
-      "version": "0.0.23",
+      "version": "0.0.28",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-60s",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -788,7 +871,7 @@
         "api",
         "chatbot"
       ],
-      "lastUpdate": "2026-05-29T08:40:14.264Z",
+      "lastUpdate": "2026-06-04T02:13:57.144Z",
       "downloads": {
         "weekly": 0,
         "monthly": 0
@@ -797,7 +880,7 @@
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "zhin.js": "1.0.85"
+        "zhin.js": "1.0.90"
       }
     },
     {
@@ -807,7 +890,7 @@
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "util",
-      "version": "0.0.17",
+      "version": "0.0.22",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-qrcode",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -819,7 +902,7 @@
         "qrcode",
         "qr"
       ],
-      "lastUpdate": "2026-05-29T08:40:17.248Z",
+      "lastUpdate": "2026-06-04T02:14:01.735Z",
       "downloads": {
         "weekly": 0,
         "monthly": 0
@@ -828,79 +911,7 @@
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "zhin.js": "1.0.85"
-      }
-    },
-    {
-      "name": "@zhin.js/plugin-rss",
-      "displayName": "plugin-rss",
-      "description": "RSS/Atom feed subscription & push plugin for Zhin.js — subscribe feeds, auto-poll, push new items to groups",
-      "author": "GitHub Actions",
-      "isOfficial": true,
-      "category": "util",
-      "version": "0.0.21",
-      "npm": "https://www.npmjs.com/package/@zhin.js/plugin-rss",
-      "github": "git+https://github.com/zhinjs/zhin.git",
-      "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "plugin",
-        "rss",
-        "atom",
-        "feed",
-        "subscription",
-        "push",
-        "notify",
-        "chatbot",
-        "im"
-      ],
-      "lastUpdate": "2026-05-29T08:40:19.017Z",
-      "downloads": {
-        "weekly": 0,
-        "monthly": 0
-      },
-      "readme": "RSS/Atom 订阅推送插件 —— 订阅 feed 源，自动轮询并推送新内容到群聊或私聊。\nbash\nnpm install @zhin.js/plugin-rss\n在 zhin.config.yml 中添加：\nyaml\nplugins:\n  - \"@zhin.js/plugin-rss\"\nrss:\n  pollCron: \"/5    \"   # 轮询频率，Cron 表达式（默认每 5 分钟）",
-      "license": "MIT",
-      "engines": {},
-      "peerDependencies": {
-        "zhin.js": "1.0.85"
-      }
-    },
-    {
-      "name": "@zhin.js/adapter-github",
-      "displayName": "github",
-      "description": "Zhin.js adapter for GitHub (gh CLI) — treat issues/PRs as chat channels, full repo management, webhook notifications",
-      "author": "GitHub Actions",
-      "isOfficial": true,
-      "category": "adapter",
-      "version": "0.1.56",
-      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-github",
-      "github": "git+https://github.com/zhinjs/zhin.git",
-      "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "adapter",
-        "github",
-        "issue",
-        "pull-request",
-        "webhook",
-        "chatbot"
-      ],
-      "lastUpdate": "2026-05-29T08:40:03.092Z",
-      "downloads": {
-        "weekly": 0,
-        "monthly": 0
-      },
-      "readme": "把 GitHub 当聊天通道 — Issue/PR 评论区即群聊，通过 GitHub App 认证，纯 REST API 对接，零 CLI 依赖。\n查询 · 管理 · 通知 · OAuth 用户绑定 四合一。\n- ✅ 聊天通道：Issue/PR 评论区映射为群聊，支持收发消息\n- ✅ 仓库管理：PR 合并/创建/Review/关闭、Issue 创建/关闭/评论\n- ✅ 信息查询：Star、Bran",
-      "license": "MIT",
-      "engines": {},
-      "peerDependencies": {
-        "@zhin.js/host-router": "0.0.0",
-        "zhin.js": "1.0.85"
+        "zhin.js": "1.0.90"
       }
     },
     {
@@ -910,7 +921,7 @@
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "util",
-      "version": "0.0.23",
+      "version": "0.0.28",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-voice",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -926,7 +937,7 @@
         "edge-tts",
         "speech"
       ],
-      "lastUpdate": "2026-05-29T08:40:20.178Z",
+      "lastUpdate": "2026-06-04T02:14:02.775Z",
       "downloads": {
         "weekly": 0,
         "monthly": 0
@@ -935,7 +946,42 @@
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "zhin.js": "1.0.85"
+        "zhin.js": "1.0.90"
+      }
+    },
+    {
+      "name": "@zhin.js/adapter-github",
+      "displayName": "github",
+      "description": "Zhin.js adapter for GitHub (gh CLI) — treat issues/PRs as chat channels, full repo management, webhook notifications",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": "adapter",
+      "version": "0.1.61",
+      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-github",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "zhin.js",
+        "bot",
+        "adapter",
+        "github",
+        "issue",
+        "pull-request",
+        "webhook",
+        "chatbot"
+      ],
+      "lastUpdate": "2026-06-04T02:13:49.439Z",
+      "downloads": {
+        "weekly": 0,
+        "monthly": 0
+      },
+      "readme": "把 GitHub 当聊天通道 — Issue/PR 评论区即群聊，通过 GitHub App 认证，纯 REST API 对接，零 CLI 依赖。\n查询 · 管理 · 通知 · OAuth 用户绑定 四合一。\n- ✅ 聊天通道：Issue/PR 评论区映射为群聊，支持收发消息\n- ✅ 仓库管理：PR 合并/创建/Review/关闭、Issue 创建/关闭/评论\n- ✅ 信息查询：Star、Bran",
+      "license": "MIT",
+      "engines": {},
+      "peerDependencies": {
+        "@zhin.js/host-router": "0.0.3",
+        "zhin.js": "1.0.90"
       }
     },
     {
@@ -945,7 +991,7 @@
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "util",
-      "version": "0.0.17",
+      "version": "0.0.22",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-short-url",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -957,7 +1003,7 @@
         "short-url",
         "url-shortener"
       ],
-      "lastUpdate": "2026-05-29T08:40:19.652Z",
+      "lastUpdate": "2026-06-04T02:14:02.465Z",
       "downloads": {
         "weekly": 0,
         "monthly": 0
@@ -966,33 +1012,30 @@
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "zhin.js": "1.0.85"
+        "zhin.js": "1.0.90"
       }
     },
     {
-      "name": "@zhin.js/adapter-napcat",
-      "displayName": "napcat",
-      "description": "Zhin.js adapter for NapCatQQ (OneBot11 superset with go-cqhttp & NapCat extensions)",
+      "name": "@zhin.js/plugin-code-runner",
+      "displayName": "plugin-code-runner",
+      "description": "Sandboxed code execution plugin for Zhin.js — run code snippets via AI or command",
       "author": "GitHub Actions",
       "isOfficial": true,
-      "category": "adapter",
-      "version": "0.1.13",
-      "npm": "https://www.npmjs.com/package/@zhin.js/adapter-napcat",
+      "category": "util",
+      "version": "0.0.22",
+      "npm": "https://www.npmjs.com/package/@zhin.js/plugin-code-runner",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
         "zhin",
         "zhin.js",
         "bot",
-        "adapter",
-        "napcat",
-        "napneko",
-        "onebot",
-        "onebot11",
-        "qq",
-        "chatbot"
+        "plugin",
+        "code-runner",
+        "sandbox",
+        "execute"
       ],
-      "lastUpdate": "2026-05-29T08:40:03.929Z",
+      "lastUpdate": "2026-06-04T02:13:56.873Z",
       "downloads": {
         "weekly": 0,
         "monthly": 0
@@ -1001,8 +1044,7 @@
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "zhin.js": "1.0.85",
-        "@zhin.js/host-router": "0.0.0"
+        "zhin.js": "1.0.90"
       }
     },
     {
@@ -1035,30 +1077,22 @@
       "engines": {},
       "peerDependencies": {
         "zhin.js": "1.0.35",
-        "@zhin.js/host-router": "1.0.28"
+        "@zhin.js/http": "1.0.28"
       }
     },
     {
-      "name": "@zhin.js/plugin-code-runner",
-      "displayName": "plugin-code-runner",
-      "description": "Sandboxed code execution plugin for Zhin.js — run code snippets via AI or command",
+      "name": "@zhin.js/pagemanager",
+      "displayName": "pagemanager",
+      "description": "Zhin PageManager Host runtime: entries, esbuild pipeline (no UI; contract in @zhin.js/contract)",
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "util",
-      "version": "0.0.17",
-      "npm": "https://www.npmjs.com/package/@zhin.js/plugin-code-runner",
+      "version": "2.0.1",
+      "npm": "https://www.npmjs.com/package/@zhin.js/pagemanager",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "plugin",
-        "code-runner",
-        "sandbox",
-        "execute"
-      ],
-      "lastUpdate": "2026-05-29T08:40:14.112Z",
+      "tags": [],
+      "lastUpdate": "2026-06-04T02:13:35.934Z",
       "downloads": {
         "weekly": 0,
         "monthly": 0
@@ -1066,9 +1100,64 @@
       "readme": "ERROR: No README data found!",
       "license": "MIT",
       "engines": {},
+      "peerDependencies": {}
+    },
+    {
+      "name": "@zhin.js/plugin-group-suite",
+      "displayName": "plugin-group-suite",
+      "description": "Zhin.js 群运营套件 — 群管、签到、统计、日常分析、问答（合并原 5 个插件）",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": "util",
+      "version": "0.1.5",
+      "npm": "https://www.npmjs.com/package/@zhin.js/plugin-group-suite",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "zhin.js",
+        "bot",
+        "plugin",
+        "group",
+        "checkin",
+        "stats",
+        "teach",
+        "welcome"
+      ],
+      "lastUpdate": "2026-06-04T02:13:59.015Z",
+      "downloads": {
+        "weekly": 0,
+        "monthly": 0
+      },
+      "readme": "群运营一体化插件（破坏性合并，替代以下独立包，不再维护）：\n- @zhin.js/plugin-group-admin\n- @zhin.js/plugin-checkin\n- @zhin.js/plugin-stats\n- @zhin.js/plugin-group-daily-analysis\n- @zhin.js/plugin-teach\nbash\npnpm add @zhin.js/plug",
+      "license": "MIT",
+      "engines": {},
       "peerDependencies": {
-        "zhin.js": "1.0.85"
+        "zhin.js": "1.0.90",
+        "@zhin.js/plugin-html-renderer": "0.0.68"
       }
+    },
+    {
+      "name": "@zhin.js/contract",
+      "displayName": "contract",
+      "description": "Zhin console / PageManager shared contract (entries, PluginRegisterHostApi)",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": "util",
+      "version": "1.0.1",
+      "npm": "https://www.npmjs.com/package/@zhin.js/contract",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [],
+      "lastUpdate": "2026-06-04T02:13:35.642Z",
+      "downloads": {
+        "weekly": 0,
+        "monthly": 0
+      },
+      "readme": "Remote Console 与 PageManager 的共享契约：Console Entry 形状、PluginRegisterHostApi、ConsoleClientEntry、ConsoleEntriesResponse、路径常量等。无运行时逻辑，供 @zhin.js/pagemanager、@zhin.js/client 与插件 client/ 共用。\n领域术语与关系图见 ../pag",
+      "license": "MIT",
+      "engines": {},
+      "peerDependencies": {}
     },
     {
       "name": "@zhin.js/process-monitor",
@@ -1077,7 +1166,7 @@
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "feature",
-      "version": "0.0.47",
+      "version": "0.0.52",
       "npm": "https://www.npmjs.com/package/@zhin.js/process-monitor",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -1089,7 +1178,7 @@
         "process",
         "notification"
       ],
-      "lastUpdate": "2026-05-29T08:40:10.354Z",
+      "lastUpdate": "2026-06-04T02:13:56.784Z",
       "downloads": {
         "weekly": 0,
         "monthly": 0
@@ -1098,22 +1187,22 @@
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "zhin.js": "1.0.85"
+        "zhin.js": "1.0.90"
       }
     },
     {
-      "name": "@zhin.js/contract",
-      "displayName": "contract",
-      "description": "Zhin console / PageManager shared contract (PluginRegisterHostApi, ConsoleEntry)",
+      "name": "@zhin.js/console-core",
+      "displayName": "console-core",
+      "description": "Zhin console Host runtime: PageManager + esbuild pipeline for adapter entries (no UI)",
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "util",
-      "version": "1.0.0",
-      "npm": "https://www.npmjs.com/package/@zhin.js/contract",
+      "version": "1.0.4",
+      "npm": "https://www.npmjs.com/package/@zhin.js/console-core",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [],
-      "lastUpdate": "2026-06-02T00:00:00.000Z",
+      "lastUpdate": "2026-06-02T01:38:52.024Z",
       "downloads": {
         "weekly": 0,
         "monthly": 0
@@ -1124,18 +1213,40 @@
       "peerDependencies": {}
     },
     {
-      "name": "@zhin.js/pagemanager",
-      "displayName": "pagemanager",
-      "description": "Zhin PageManager Host runtime (entries, esbuild pipeline; no UI)",
+      "name": "@zhin.js/http-host",
+      "displayName": "http-host",
+      "description": "Fetch-based HTTP host: routing, auth, CORS, Node serve adapter",
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "util",
-      "version": "2.0.0",
-      "npm": "https://www.npmjs.com/package/@zhin.js/pagemanager",
+      "version": "0.1.4",
+      "npm": "https://www.npmjs.com/package/@zhin.js/http-host",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [],
-      "lastUpdate": "2026-05-29T02:36:39.681Z",
+      "lastUpdate": "2026-06-02T01:38:57.898Z",
+      "downloads": {
+        "weekly": 0,
+        "monthly": 0
+      },
+      "readme": "ERROR: No README data found!",
+      "license": "",
+      "engines": {},
+      "peerDependencies": {}
+    },
+    {
+      "name": "@zhin.js/console-types",
+      "displayName": "console-types",
+      "description": "Zhin console / page-manager 对齐的共享类型（对标 @page-manager/types）",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": "util",
+      "version": "0.1.5",
+      "npm": "https://www.npmjs.com/package/@zhin.js/console-types",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [],
+      "lastUpdate": "2026-06-02T01:38:53.163Z",
       "downloads": {
         "weekly": 0,
         "monthly": 0
@@ -1144,32 +1255,6 @@
       "license": "MIT",
       "engines": {},
       "peerDependencies": {}
-    },
-    {
-      "name": "@zhin.js/console-app",
-      "displayName": "console-app",
-      "description": "Zhin console Farm + React shell (aligned with @page-manager/app)",
-      "author": "GitHub Actions",
-      "isOfficial": true,
-      "category": "util",
-      "version": "0.1.3",
-      "npm": "https://www.npmjs.com/package/@zhin.js/console-app",
-      "github": "git+https://github.com/zhinjs/zhin.git",
-      "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [],
-      "lastUpdate": "2026-04-28T07:01:38.481Z",
-      "downloads": {
-        "weekly": 0,
-        "monthly": 0
-      },
-      "readme": "ERROR: No README data found!",
-      "license": "MIT",
-      "engines": {},
-      "peerDependencies": {
-        "react": ">=18",
-        "react-dom": ">=18",
-        "react-router-dom": ">=6.0.0"
-      }
     },
     {
       "name": "@zhin.js/plugin-link-poster",
@@ -1178,7 +1263,7 @@
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "util",
-      "version": "0.0.17",
+      "version": "0.0.22",
       "npm": "https://www.npmjs.com/package/@zhin.js/plugin-link-poster",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
@@ -1193,7 +1278,7 @@
         "douyin",
         "xiaohongshu"
       ],
-      "lastUpdate": "2026-05-29T08:40:15.433Z",
+      "lastUpdate": "2026-06-04T02:14:00.076Z",
       "downloads": {
         "weekly": 0,
         "monthly": 0
@@ -1202,7 +1287,7 @@
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "zhin.js": "1.0.85"
+        "zhin.js": "1.0.90"
       }
     },
     {
@@ -1239,50 +1324,65 @@
       }
     },
     {
-      "name": "@zhin.js/plugin-group-suite",
-      "displayName": "plugin-group-suite",
-      "description": "Zhin.js 群运营套件 — 群管、签到、统计、日常分析、问答（合并原 5 个插件）",
-      "author": "lc_cn",
+      "name": "@zhin.js/console-app",
+      "displayName": "console-app",
+      "description": "Zhin console Farm + React shell (aligned with @page-manager/app)",
+      "author": "GitHub Actions",
       "isOfficial": true,
       "category": "util",
-      "version": "0.1.0",
-      "npm": "https://www.npmjs.com/package/@zhin.js/plugin-group-suite",
+      "version": "0.1.3",
+      "npm": "https://www.npmjs.com/package/@zhin.js/console-app",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "plugin",
-        "group",
-        "checkin",
-        "stats",
-        "teach",
-        "welcome"
-      ],
-      "lastUpdate": "2026-05-29T10:57:02.509Z",
+      "tags": [],
+      "lastUpdate": "2026-04-28T07:01:38.481Z",
       "downloads": {
         "weekly": 0,
         "monthly": 0
       },
-      "readme": "群运营一体化插件（破坏性合并，替代以下独立包，不再维护）：\n- @zhin.js/plugin-group-admin\n- @zhin.js/plugin-checkin\n- @zhin.js/plugin-stats\n- @zhin.js/plugin-group-daily-analysis\n- @zhin.js/plugin-teach\nbash\npnpm add @zhin.js/plug",
+      "readme": "ERROR: No README data found!",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "@zhin.js/plugin-html-renderer": "0.0.63",
-        "zhin.js": "1.0.85"
+        "react": ">=18",
+        "react-dom": ">=18",
+        "react-router-dom": ">=6.0.0"
       }
+    },
+    {
+      "name": "@zhin.js/scaffold-wizard",
+      "displayName": "scaffold-wizard",
+      "description": "Shared interactive scaffold wizard for create-zhin-app and @zhin.js/cli",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": "util",
+      "version": "0.1.1",
+      "npm": "https://www.npmjs.com/package/@zhin.js/scaffold-wizard",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [],
+      "lastUpdate": "2026-06-04T02:13:47.630Z",
+      "downloads": {
+        "weekly": 0,
+        "monthly": 0
+      },
+      "readme": "Zhin 项目脚手架的共享交互向导库。适配器、AI、数据库的分步引导与配置合并逻辑集中在此，供 create-zhin-app 与 @zhin.js/cli 的 zhin setup 共用，避免两套实现漂移。\n| 包 / 命令 | 用途 |\n|-----------|------|\n| create-zhin-app (pnpm create zhin-app) | 新建 workspace 时运",
+      "license": "MIT",
+      "engines": {
+        "node": "^20.19.0 || >=22.12.0"
+      },
+      "peerDependencies": {}
     }
   ],
   "stats": {
-    "total": 38,
-    "official": 41,
+    "total": 42,
+    "official": 42,
     "community": 0,
     "adapters": 17,
     "services": 4,
-    "utils": 19,
+    "utils": 20,
     "games": 0,
     "features": 1
   },
-  "updatedAt": "2026-06-03T01:46:59.737Z"
+  "updatedAt": "2026-06-04T09:39:52.785Z"
 }

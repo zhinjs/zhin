@@ -103,6 +103,9 @@ useContext("config", (configService) => {
 
   app.proxy = trustProxy;
 
+  // Share the auth token with the Router so WebSocket upgrades are also protected
+  router.setAuthToken(token);
+
   router.get('/pub/health', async (ctx) => {
     ctx.body = {
       success: true,
