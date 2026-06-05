@@ -110,6 +110,31 @@ export class TaskQueue {
   }
 
   /**
+   * 添加任务并等待完成（含重试后的最终结果）
+   */
+  async enqueueAndWait<T>(
+    task: Omit<Task<T>, 'id' | 'status' | 'createdAt' | 'retryCount'>,
+  ): Promise<T> {
+    const fullTask = this.addTask(task);
+    return new Promise<T>((resolve, reject) => {
+      const handler = (event: string, t: Task) => {
+        if (t.id !== fullTask.id) return;
+        const idx = this.listeners.indexOf(handler);
+        if (idx >= 0) this.listeners.splice(idx, 1);
+        if (event === 'task:completed') {
+          resolve(t.result as T);
+          return;
+        }
+        if (event === 'task:failed' || event === 'task:timeout') {
+          reject(t.error ?? new Error(`Task ${event}`));
+        }
+      };
+      this.listeners.push(handler);
+      void this.start();
+    });
+  }
+
+  /**
    * 添加任务
    */
   addTask<T>(task: Omit<Task<T>, 'id' | 'status' | 'createdAt' | 'retryCount'>): Task<T> {

@@ -1208,7 +1208,7 @@
     {
       "name": "@zhin.js/devteam",
       "displayName": "devteam",
-      "description": "多Agent协同开发插件 - 基于GitHub Project看板的自动化研发流程",
+      "description": "[DEPRECATED] 原 GitHub Project 看板协同，已不再维护。",
       "author": "GitHub Actions",
       "isOfficial": true,
       "category": "util",
@@ -1231,7 +1231,7 @@
         "weekly": 0,
         "monthly": 0
       },
-      "readme": "多 Agent 协同开发插件 - 基于 GitHub Project 看板驱动的自动化研发流程。\n一个主 Agent（项目总监）管理五个子 Agent：\n| 角色 | 职责 |\n|------|------|\n| 📋 项目经理 | 需求整理、评审协调、验收确认 |\n| 🎨 设计师 | 设计稿产出、评审参与、走查验收 |\n| 💻 开发人员 | 需求评审、编码开发、Bug修复、自测 |\n| 🧪",
+      "readme": "DEPRECATED：原 GitHub Project 看板协同插件，已不再维护。",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {

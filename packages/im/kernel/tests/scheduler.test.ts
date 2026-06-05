@@ -21,7 +21,7 @@ describe('Scheduler', () => {
 
   beforeEach(() => {
     storePath = createTempStorePath()
-    scheduler = new Scheduler({ storePath, workspace: '/test' })
+    scheduler = new Scheduler({ storePath, workspace: '/test', heartbeatEnabled: false })
   })
 
   afterEach(() => {
@@ -164,12 +164,12 @@ describe('Scheduler', () => {
         schedule: { kind: 'every', everyMs: 60000 },
         payload: { kind: 'system_event', message: 'persisted', deliver: false },
       }
-      const s1 = new Scheduler({ storePath, workspace: '/test' })
+      const s1 = new Scheduler({ storePath, workspace: '/test', heartbeatEnabled: false })
       await s1.start()
       const job = s1.addJob(jobOptions)
       s1.stop()
 
-      const s2 = new Scheduler({ storePath, workspace: '/test' })
+      const s2 = new Scheduler({ storePath, workspace: '/test', heartbeatEnabled: false })
       await s2.start()
       const jobs = s2.listJobs()
       expect(jobs).toHaveLength(1)
@@ -195,6 +195,7 @@ describe('Scheduler', () => {
         storePath,
         workspace: '/test',
         onJob,
+        heartbeatEnabled: false,
       })
       await s.start()
       s.addJob({
@@ -212,7 +213,7 @@ describe('Scheduler', () => {
 
     it('does not call onJob for disabled jobs', async () => {
       const onJob = vi.fn().mockResolvedValue(undefined)
-      const s = new Scheduler({ storePath, workspace: '/test', onJob })
+      const s = new Scheduler({ storePath, workspace: '/test', onJob, heartbeatEnabled: false })
       await s.start()
       const job = s.addJob({
         name: 'disabled-exec',
@@ -237,7 +238,7 @@ describe('Scheduler', () => {
 
     it('removes job after execution when deleteAfterRun is true', async () => {
       const onJob = vi.fn().mockResolvedValue(undefined)
-      const s = new Scheduler({ storePath, workspace: '/test', onJob })
+      const s = new Scheduler({ storePath, workspace: '/test', onJob, heartbeatEnabled: false })
       vi.setSystemTime(new Date('2024-01-01T00:00:00.000Z'))
       await s.start()
       const job = s.addJob({
@@ -264,7 +265,7 @@ describe('Scheduler', () => {
 
     it('disables at job when deleteAfterRun is false', async () => {
       const onJob = vi.fn().mockResolvedValue(undefined)
-      const s = new Scheduler({ storePath, workspace: '/test', onJob })
+      const s = new Scheduler({ storePath, workspace: '/test', onJob, heartbeatEnabled: false })
       vi.setSystemTime(new Date('2024-01-01T00:00:00.000Z'))
       await s.start()
       const job = s.addJob({
@@ -303,6 +304,23 @@ describe('Scheduler', () => {
     })
   })
 
+  describe('heartbeat', () => {
+    it('skips heartbeat job when heartbeatEnabled is false', async () => {
+      const s = new Scheduler({ storePath, workspace: '/test', heartbeatEnabled: false })
+      await s.start()
+      expect(s.listJobs()).toHaveLength(0)
+      s.stop()
+    })
+
+    it('adds internal heartbeat job when enabled', async () => {
+      const s = new Scheduler({ storePath, workspace: '/test', heartbeatEnabled: true })
+      await s.start()
+      expect(s.listJobs()).toHaveLength(0)
+      expect(s.status().nextWakeAt).toBeDefined()
+      s.stop()
+    })
+  })
+
   describe('Legacy data migration', () => {
     it('maps old channel field to target', async () => {
       const dir = path.dirname(storePath)
@@ -331,7 +349,7 @@ describe('Scheduler', () => {
         })
       )
 
-      const s = new Scheduler({ storePath: legacyPath, workspace: '/test' })
+      const s = new Scheduler({ storePath: legacyPath, workspace: '/test', heartbeatEnabled: false })
       await s.start()
       const jobs = s.listJobs()
       expect(jobs).toHaveLength(1)

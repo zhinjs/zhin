@@ -79,7 +79,7 @@ describe('Harness inbound → tool/policy boundary', () => {
     const ids = d.map((x) => x.id);
     expect(d.length).toBeGreaterThan(0);
     expect(d[0]?.id).toBe('§1_runtime');
-    expect(ids).toContain('§2_style');
+    expect(ids).not.toContain('§2_style');
     expect(ids).toContain('§3_tools');
     expect(ids).toContain('§4_security');
     expect(ids).not.toContain('§1_context');

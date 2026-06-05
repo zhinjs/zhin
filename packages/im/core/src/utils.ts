@@ -101,6 +101,7 @@ export namespace segment {
     const toString = (template: string | MessageElement) => {
       if (typeof template !== "string") return [template];
 
+      /** ReDoS 防护：仅约束 segment.from 的字符串模板解析，不是附件大小上限；MessageElement[] 出站应走 renderComponents 快路径避免往返 */
       const MAX_TEMPLATE_LENGTH = 400000;
       if (template.length > MAX_TEMPLATE_LENGTH) {
         throw new Error(`Template too large: ${template.length} > ${MAX_TEMPLATE_LENGTH}`);
@@ -212,7 +213,13 @@ export namespace segment {
         let { type, data } = item;
         if (typeof type === "function") type = type.name;
         if (type === "text") return data.text;
-        return `<${type} ${Object.keys(data)
+        const keys = Object.keys(data).filter((key) => {
+          if (key === "url" && typeof data.url === "string" && data.url.startsWith("data:") && data.base64) {
+            return false;
+          }
+          return true;
+        });
+        return `<${type} ${keys
           .map((key) => `${key}='${escape(JSON.stringify(data[key]))}'`)
           .join(" ")}/>`;
       })

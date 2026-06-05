@@ -103,13 +103,15 @@ export class ReactionTypingIndicator implements TypingIndicator {
       return;
     }
 
+    this.active = true;
     try {
       this.reactionId = await this.addReaction(
         this.options.messageId,
         this.config.emoji || '⏳',
       );
-      this.active = true;
     } catch (error) {
+      this.active = false;
+      this.reactionId = null;
       console.error('[TypingIndicator] Failed to add reaction:', error);
     }
   }
@@ -163,13 +165,15 @@ export class MessageTypingIndicator implements TypingIndicator {
       return;
     }
 
+    this.active = true;
     try {
       this.messageId = await this.sendMessage(
         this.options,
         this.config.message || '正在处理中...',
       );
-      this.active = true;
     } catch (error) {
+      this.active = false;
+      this.messageId = null;
       console.error('[TypingIndicator] Failed to send message:', error);
     }
   }
@@ -282,12 +286,20 @@ export class TypingIndicatorManager {
     options: TypingIndicatorOptions,
     config?: Partial<TypingIndicatorConfig>,
   ): Promise<TypingIndicator> {
-    const indicator = this.createIndicator(options, config);
-    await indicator.start();
-
-    // 存储活跃的指示器
     const key = this.getIndicatorKey(options);
+    const existing = this.activeIndicators.get(key);
+    if (existing) {
+      return existing;
+    }
+
+    const indicator = this.createIndicator(options, config);
     this.activeIndicators.set(key, indicator);
+    try {
+      await indicator.start();
+    } catch (error) {
+      this.activeIndicators.delete(key);
+      throw error;
+    }
 
     return indicator;
   }

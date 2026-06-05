@@ -434,9 +434,68 @@ Zhin 可作为 **MCP Client** 消费外部工具（`ai.mcpServers`、`ai.memoryM
 
 **安全**：子 agent 的 `bash` 工具同样受 `execSecurity` 策略约束，不会绕过安全检查；icqq 相关放行规则与主会话一致（见 [icqq 与 bash](/advanced/ai#icqq-bash-exec)）。
 
-### 触发关键词
+### 主编排常驻
 
-当用户消息包含"后台"、"子任务"、"spawn"、"异步"、"background"、"并行"、"独立处理"时，`spawn_task` 工具会被注入。
+`spawn_task` 为主 Agent 默认常驻编排工具之一（与 `tool_search`、`run_deferred_task`、`ask_user` 并列），无需关键词触发即可指派后台子 agent。文生图请使用 **`agent: draw`**（`agents/draw.agent.md`）；**`vision`** 仅用于入站识图，不要用于画图。
+
+## 文生图 (generate_image)
+
+主编排**不常驻** `generate_image`（控制 prompt 体积）；通过 deferred 或子 agent 调用。
+
+### 调用路径
+
+| 场景 | 路径 |
+|------|------|
+| 当场出图 | 主 agent → `tool_search` → `run_deferred_task`（Worker 目录含 `generate_image`） |
+| 后台出图 | `spawn_task(task, label, agent: "draw")` + `ai.agents.draw` + `agents/draw.agent.md` |
+
+子 agent 任务含「画/生图」等关键词时，会优先载入 `generate_image`（见 `resolve-subagent-tools`）。
+
+### Provider 与 driver
+
+| driver | 默认模型 | 说明 |
+|--------|----------|------|
+| `zhipu` | `cogview-3-flash` | 智谱 Flash 系列免费文生图；`cogview-4` 按次付费 |
+| `cloudflare` | `@cf/black-forest-labs/flux-1-schnell` | Workers AI 配额 |
+| `openai` | `gpt-image-2` | OpenAI Images API；需账号开通与计费 |
+| `google` / `gemini` | `gemini-2.5-flash-image` | Nano Banana；`generateContent` + IMAGE；**不支持 chat**，仅作 `generate_image` 的 provider |
+
+### 配置
+
+```yaml
+ai:
+  imageGeneration:          # 全局默认
+    watermarkEnabled: false # 智谱去水印须先在开放平台签署声明
+  providers:
+    zhipu-vl:
+      driver: zhipu
+      apiKey: ${BIG_MODEL_API_KEY}
+      imageGeneration:
+        defaultModel: cogview-3-flash
+        defaultSize: 1024x1024
+        promptSuffix: "写实摄影..."  # 可选，追加到 prompt
+    # openai-image:
+    #   driver: openai
+    #   imageGeneration: { defaultModel: gpt-image-2, quality: medium }
+    # gemini-image:
+    #   driver: google
+    #   imageGeneration: { defaultModel: gemini-2.5-flash-image, aspectRatio: "1:1", imageSize: "1K" }
+  agents:
+    draw:
+      provider: zhipu-vl
+      model: glm-4.7-flash   # 工具循环；生图走 generate_image API
+```
+
+### 工具参数
+
+`generate_image` 必填：`provider_alias`（`ai.providers` 中的实例名）、`prompt`。可选：`model`、`size`（OpenAI/智谱）、`quality`（GPT Image）、`aspect_ratio` / `image_size`（Gemini）、`watermark_enabled`（智谱）。
+
+### ICQQ 出站大图
+
+- **同机**：默认 `outboundMedia: file`（本机临时路径 → CQ `[image:...]`）。
+- **异机 / 异进程 / 配置 `rpc`**：设置 `outboundMedia: base64`（或依赖 rpc 自动默认），经 `[image:base64://...]` 交给守护进程解码。
+
+详见仓库内 [plugins/adapters/icqq/README.md](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/icqq/README.md#发送图片)「发送图片」一节。
 
 ## 定时消息 (Follow-up)
 

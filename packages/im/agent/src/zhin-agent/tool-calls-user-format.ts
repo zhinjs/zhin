@@ -2,7 +2,12 @@
  * Format orchestrator tool-call history for end users (IM reply).
  * Avoids dumping raw JSON / internal meta-tool noise.
  */
-import { isOmittedToolSummary, sanitizeToolResult } from '@zhin.js/ai';
+import {
+  compactMediaToolJsonForModel,
+  isMediaToolWithBinaryPayload,
+  isOmittedToolSummary,
+  sanitizeToolResult,
+} from '@zhin.js/ai';
 
 export interface ToolCallRecord {
   tool: string;
@@ -70,6 +75,10 @@ function formatRunDeferredTaskResult(result: unknown): string | undefined {
 
 function formatGenericToolResult(tool: string, result: unknown): string {
   const raw = asString(result);
+  if (isMediaToolWithBinaryPayload(tool) && raw.trim().startsWith('{')) {
+    const compact = compactMediaToolJsonForModel(tool, raw);
+    return compact.length > 2000 ? `${compact.slice(0, 2000)}…` : compact;
+  }
   const cleaned = sanitizeToolResult(raw, { maxChars: 2000 });
   if (!cleaned) return '';
   if (INTERNAL_META_TOOLS.has(tool)) return cleaned;

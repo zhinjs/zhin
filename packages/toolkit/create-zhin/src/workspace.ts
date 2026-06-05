@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { InitOptions, DATABASE_PACKAGES, generateAdapterEnvVars, generateAIEnvVars, getAdapterDependencies, getAIDependencies } from '@zhin.js/scaffold-wizard';
 import { createConfigFile, generateDatabaseEnvVars } from './config.js';
-import { SOUL_MD_TEMPLATE, TOOLS_MD_TEMPLATE, AGENTS_MD_TEMPLATE } from './templates/bootstrap.js';
+import { SOUL_MD_TEMPLATE, TOOLS_MD_TEMPLATE, AGENTS_MD_TEMPLATE, ASSISTANT_PROFILE_YML_EXAMPLE } from './templates/bootstrap.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -129,6 +129,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
   await fs.writeFile(path.join(projectPath, 'SOUL.md'), SOUL_MD_TEMPLATE);
   await fs.writeFile(path.join(projectPath, 'TOOLS.md'), TOOLS_MD_TEMPLATE);
   await fs.writeFile(path.join(projectPath, 'AGENTS.md'), AGENTS_MD_TEMPLATE);
+  await fs.writeFile(path.join(projectPath, 'assistant.profile.yml.example'), ASSISTANT_PROFILE_YML_EXAMPLE);
 
   // 创建内置技能
   for (const skillName of BASE_SKILL_NAMES) {

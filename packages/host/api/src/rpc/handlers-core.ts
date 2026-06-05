@@ -78,6 +78,22 @@ async function withPersistentCronEngine(
   return true;
 }
 
+type CronJobNotify =
+  | { channel: "im"; platform?: string; botId?: string; sceneId?: string; scope?: string }
+  | { channel: "silent" }
+  | { channel: "log" };
+
+function parseCronNotify(message: Record<string, unknown>): CronJobNotify {
+  const raw = message.notify;
+  if (raw && typeof raw === "object" && raw !== null && "channel" in raw) {
+    return raw as CronJobNotify;
+  }
+  const ch = String(message.notifyChannel ?? message.notify_channel ?? "silent").toLowerCase();
+  if (ch === "im") return { channel: "im" };
+  if (ch === "log") return { channel: "log" };
+  return { channel: "silent" };
+}
+
 /** Console RPC（返回是否已处理）。 */
 export async function handleCoreRpc(
   message: Record<string, unknown>,
@@ -436,13 +452,14 @@ export async function handleCoreRpc(
         }
         return await withPersistentCronEngine(requestId, ctx, async (engine) => {
           const { generateCronJobId } = await import("@zhin.js/agent");
+          const notify = parseCronNotify(message);
           const record = await engine.addJob({
             id: generateCronJobId(),
             cronExpression,
             prompt,
             label: (message.label as string) || undefined,
             enabled: true,
-            context: (message.context as string) || undefined,
+            notify,
           });
           reply(ctx, { requestId, data: record });
         });

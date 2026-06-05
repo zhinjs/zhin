@@ -35,7 +35,7 @@ describe('config documentation alignment', () => {
   });
 
   it('minimal-bot 与 Stable 文档契约一致', () => {
-    expect(minimalConfig).toMatch(/toolSearch:\s*false/);
+    expect(minimalConfig).not.toMatch(/toolSearch:/);
     expect(minimalConfig).toMatch(/bots:\s*\[\]/);
   });
 });

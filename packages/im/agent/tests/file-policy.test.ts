@@ -58,7 +58,7 @@ describe('file-policy', () => {
         '/home/user/.gcloud/properties',
         '/home/user/.kube/config',
         '/root/.ssh/authorized_keys',
-        'data/memory/notes.md', // data 目录为敏感目录，禁止访问
+        'data/other/secret.txt', // data 目录（非 memory 子树）仍禁止
       ];
 
       for (const p of blockedPaths) {
@@ -67,6 +67,17 @@ describe('file-policy', () => {
           expect(result.allowed).toBe(false);
         });
       }
+
+      it('允许 data/memory 三层记忆路径', () => {
+        expect(checkFileAccess('data/memory/global/MEMORY.md').allowed).toBe(true);
+        expect(checkFileAccess('data/memory/platforms/icqq/RULES.md').allowed).toBe(true);
+        expect(checkFileAccess('data/memory/sessions/abc/MEMORY.md').allowed).toBe(true);
+      });
+
+      it('允许 data/media 入站/出站缓存路径', () => {
+        expect(checkFileAccess('data/media/inbound/tmp.png').allowed).toBe(true);
+        expect(checkFileAccess('data/media/outbound/voice.mp3').allowed).toBe(true);
+      });
     });
 
     describe('应阻止系统敏感路径', () => {

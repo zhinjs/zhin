@@ -443,6 +443,13 @@ describe('AI Trigger 工具函数', () => {
       expect(result.roles).toContain('master');
       expect(result.roles).toContain('group_admin');
     });
+
+    it('process 适配器发送者应恒为 master', () => {
+      const message = createMockMessage({ content: 'hi', senderId: 'cli-user' });
+      (message as { $adapter: string }).$adapter = 'process';
+      const result = resolveSenderRoles(message as any, {});
+      expect(result.roles).toEqual(['master']);
+    });
   });
 
   describe('resolveIMSessionIdFromMessage', () => {

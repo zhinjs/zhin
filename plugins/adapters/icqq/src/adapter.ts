@@ -11,6 +11,16 @@ export class IcqqAdapter extends Adapter<IcqqBot> {
     super(plugin, "icqq", []);
   }
 
+  getOutboundMediaCapabilities() {
+    return {
+      image: true,
+      audio: true,
+      video: true,
+      file: true,
+      maxAttachmentBytes: 20 * 1024 * 1024,
+    };
+  }
+
   createBot(config: IcqqBotConfig): IcqqBot {
     return new IcqqBot(this, config);
   }

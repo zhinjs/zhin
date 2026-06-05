@@ -13,10 +13,10 @@ const configText = fs.readFileSync(path.join(botRoot, 'zhin.config.yml'), 'utf8'
 
 describe('minimal-bot Stable 配置契约', () => {
 
-  it('启用 AI 且关闭 toolSearch（Advanced 能力不在 Stable）', () => {
+  it('启用 AI（无 toolSearch 配置项，编排为默认）', () => {
     expect(configText).toMatch(/ai:\s*\n/);
     expect(configText).toMatch(/enabled:\s*true/);
-    expect(configText).toMatch(/toolSearch:\s*false/);
+    expect(configText).not.toMatch(/toolSearch:/);
   });
 
   it('bots 为空（Sandbox 由 Console 沙盒页连接时自动创建）', () => {
@@ -29,7 +29,7 @@ describe('minimal-bot Stable 配置契约', () => {
     expect(configText).toContain('@zhin.js/host-router');
     expect(configText).toContain('@zhin.js/host-api');
     expect(configText).toContain('hello');
-    expect(configText).not.toContain('toolSearch: true');
+    expect(configText).toMatch(/agents:\s*\n\s+zhin:/);
   });
 
   it('README 链到 ACCEPTANCE Stable 段', () => {

@@ -86,6 +86,11 @@ export interface IcqqBotConfig {
    * 用于在 AI 处理消息时提示用户正在处理中
    */
   typingIndicator?: TypingIndicatorConfig;
+  /**
+   * 出站图片/语音/视频：file=本机临时文件路径（需与 icqq 守护进程同机可读）；
+   * base64=经 CQ `base64://` 交给守护进程解码（Zhin 与 icqq 异进程/异机时用，配置 rpc 时默认 base64）。
+   */
+  outboundMedia?: "file" | "base64";
 }
 
 /** IPC 返回的好友信息 */

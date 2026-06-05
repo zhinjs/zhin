@@ -18,13 +18,11 @@ describe('icqq AgentPromptContributor', () => {
     expect(contributor.matchesDeferredTask?.({
       slot: 'deferred_worker',
       toolContext: { platform: 'icqq' },
-      toolSearch: true,
       deferred: { goal: '为 1659488338 点赞 10 次', toolQuery: 'icqq friend like' },
     })).toBe(true);
     expect(contributor.matchesDeferredTask?.({
       slot: 'deferred_worker',
       toolContext: { platform: 'icqq' },
-      toolSearch: true,
       deferred: { goal: '成都天气', toolQuery: 'weather' },
     })).toBe(false);
   });
@@ -46,11 +44,10 @@ describe('icqq AgentPromptContributor', () => {
     expect(loaded!.some(x => x.name.startsWith('mcp_filesystem_'))).toBe(false);
   });
 
-  it('buildSections orchestrator when toolSearch', async () => {
+  it('buildSections orchestrator', async () => {
     const sections = await contributor.buildSections({
       slot: 'orchestrator',
       toolContext: { platform: 'icqq' },
-      toolSearch: true,
     });
     expect(sections?.[0].body).toMatch(/mcp_icqq/);
   });

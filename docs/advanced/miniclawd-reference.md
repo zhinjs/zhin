@@ -27,13 +27,11 @@ maintainer: true
 
 这样模型既能看到「长期记忆 + 今天笔记」，又知道该往哪里写。
 
-### zhin 现状与可借鉴点
+### zhin 现状
 
-- zhin 已有**会话记忆**（ConversationMemory、可选 DB）和 **read_memory / write_memory**（当前指向 AGENTS.md 等）。
-- **可借鉴**：
-  1. **增加文件制长期记忆**：在数据目录或工作区下增加 `memory/MEMORY.md` + `memory/YYYY-MM-DD.md`，与 miniclawd 一致。
-  2. **统一注入**：在 `buildRichSystemPrompt()` 中增加可选「Memory」段：若存在 `memory/MEMORY.md` 或当日笔记，则读取并拼成「Long-term / Today's Notes」注入，并在 SOUL/AGENTS 中说明「重要事项请写入 memory/MEMORY.md」。
-  3. **read_memory / write_memory**：可扩展为同时支持「AGENTS 相关记忆」与「memory/MEMORY.md」；或保留现有语义，另增「长期记忆」路径，由引导文案说明用途。
+- **会话记忆**：`ConversationMemory` + 可选 DB（`session_key` / `session_id`）。
+- **三层文件记忆**（已实现）：`data/memory/global`、`platforms/{platform}/`、`sessions/{safeSessionKey}/`，经 `buildRichSystemPrompt` 的 `# Memory` 段注入；`write_file` 写入（全局/平台仅 master）。
+- 旧版根目录 `data/memory/MEMORY.md` 会自动迁移到 `global/MEMORY.md`。
 
 ---
 

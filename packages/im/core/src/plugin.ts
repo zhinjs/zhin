@@ -848,7 +848,7 @@ export namespace Plugin {
 
   export interface AIEventPayload {
     sessionId: string;
-    source: 'zhin-agent' | 'ai-hook' | 'orchestrator-hook';
+    source: 'zhin-agent' | 'subagent' | 'ai-hook' | 'orchestrator-hook';
     mode?: 'text' | 'multimodal';
     path?: 'chat' | 'fast' | 'agent' | 'multimodal' | 'rate_limited';
     userId?: string;
@@ -881,6 +881,8 @@ export namespace Plugin {
     savedTokens?: number;
     totalTokensBefore?: number;
     totalTokensAfter?: number;
+    /** 为 true 时 processing.finish 不撤回 typing（route 子 agent → 主 agent 摘要续接） */
+    keepTyping?: boolean;
   }
 
   /**

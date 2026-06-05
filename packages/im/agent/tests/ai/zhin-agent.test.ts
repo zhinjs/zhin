@@ -76,8 +76,8 @@ function createToolCallProvider(): AIProvider {
               id: 'call-1',
               type: 'function' as const,
               function: {
-                name: 'read_current_time',
-                arguments: '{}',
+                name: 'tool_search',
+                arguments: '{"query":"read_current_time"}',
               },
             }],
           },
@@ -236,7 +236,7 @@ describe('ZhinAgent', () => {
 
       try {
         await busAgent.process(
-          '请调用 read_current_time 工具读取当前时间并告诉我结果',
+          '请调用 tool_search 查找 read_current_time 相关工具',
           makeToolContext(),
           [makeTool('read_current_time', '读取当前时间并返回当前时刻', {
             keywords: ['read_current_time', '读取当前时间', '当前时间', '时间'],
@@ -255,7 +255,7 @@ describe('ZhinAgent', () => {
       expect(received).toContain('ai.processing.finish');
 
       expect(received.indexOf('ai.processing.start')).toBeLessThan(received.indexOf('ai.processing.finish'));
-      expect(payloads.find(item => item.event === 'ai.tool.call')?.payload.toolName).toBe('read_current_time');
+      expect(payloads.find(item => item.event === 'ai.tool.call')?.payload.toolName).toBe('tool_search');
       expect(payloads.find(item => item.event === 'ai.response')?.payload.reply).toContain('工具执行完成');
     });
 
@@ -277,13 +277,19 @@ describe('ZhinAgent', () => {
       hostPlugin.on('ai.deferred.start', record('ai.deferred.start'));
       hostPlugin.on('ai.deferred.finish', record('ai.deferred.finish'));
       bridgeAgent.setHostPlugin(hostPlugin);
+      bridgeAgent.setActiveBinding({
+        name: 'zhin',
+        providerAlias: 'test',
+        model: 'gpt-test',
+        mcpServers: ['fs'],
+      });
       bridgeAgent.setOrchestrator({
         mcps: {
+          getAll: () => [{ name: 'fs' }],
+          isConnected: () => false,
+          connect: async () => undefined,
+          getToolsFromServer: () => [],
           getAllMcpTools: () => [],
-          ensureConnected: async (onEvent?: (event: any) => Promise<void> | void) => {
-            await onEvent?.({ phase: 'start', serverName: 'fs' });
-            await onEvent?.({ phase: 'finish', serverName: 'fs', connected: true, toolNames: ['mcp_fs_read'] });
-          },
         },
       } as any);
       (bridgeAgent as any).deferredWorkerRunner.runSync = vi.fn(async (options: any) => {

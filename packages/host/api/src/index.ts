@@ -17,9 +17,13 @@ export { createNodeProjectFs } from "./rpc/project-fs.js";
 export { registerHostRestRoutes } from "./rest/host-rest-api.js";
 export { registerMarketplaceRoutes } from "./rest/marketplace-rest-api.js";
 export { registerLogsRoutes } from "./rest/logs-rest-api.js";
+export { registerAssistantEventsRoute } from "./rest/assistant-events-rest-api.js";
+export { registerAssistantJobsRoute } from "./rest/assistant-jobs-rest-api.js";
 import { registerHostRestRoutes } from "./rest/host-rest-api.js";
 import { registerMarketplaceRoutes } from "./rest/marketplace-rest-api.js";
 import { registerLogsRoutes } from "./rest/logs-rest-api.js";
+import { registerAssistantEventsRoute } from "./rest/assistant-events-rest-api.js";
+import { registerAssistantJobsRoute } from "./rest/assistant-jobs-rest-api.js";
 import { registerBotModels } from "./bot-db-models.js";
 import { initBotPersistence } from "./bot-persistence.js";
 
@@ -110,6 +114,8 @@ if (enabled) {
     const apiBase = httpCfg?.base ?? "/api";
 
     registerHostRestRoutes(router, apiBase, () => root);
+    registerAssistantEventsRoute(router, apiBase);
+    registerAssistantJobsRoute(router, apiBase);
     registerMarketplaceRoutes(router, apiBase, () => root);
 
     const webServer: ConsoleWebServer = {

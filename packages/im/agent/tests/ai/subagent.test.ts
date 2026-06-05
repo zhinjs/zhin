@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { SubagentManager } from '@zhin.js/agent';
+import type { ZhinAgentEventEmitter } from '../../src/zhin-agent/event-emitter.js';
 import type { SubagentOrigin, SpawnOptions } from '@zhin.js/agent';
 import type { AgentTool, ChatCompletionResponse } from '@zhin.js/core';
 
@@ -186,17 +187,23 @@ describe('SubagentManager', () => {
       }
     });
 
-    it('显式 subagentTools 配置应允许额外工具', async () => {
+    it('子 agent 经 toolSearch 按任务 TF-IDF 载入工具', async () => {
+      const extraTool = {
+        name: 'todo_write',
+        description: 'todo list',
+        parameters: { type: 'object', properties: {} },
+        keywords: ['todo', '任务', '清单'],
+        execute: async () => 'ok',
+      };
       const customManager = new SubagentManager({
         provider: provider as any,
         workspace: '/tmp/test-workspace',
-        createTools: () => mockTools,
-        subagentTools: ['todo_write'],
+        createTools: () => [...mockTools, extraTool],
       });
       const sender = vi.fn();
       customManager.setSender(sender);
 
-      await customManager.spawn({ task: '测试扩展工具', origin: baseOrigin });
+      await customManager.spawn({ task: '帮我列一份 todo 任务清单', origin: baseOrigin });
       await vi.waitFor(() => expect(sender).toHaveBeenCalled(), { timeout: 2000 });
 
       const request = provider.chat.mock.calls[0]?.[0] as any;
@@ -219,10 +226,10 @@ describe('SubagentManager', () => {
       await vi.waitFor(() => expect(sender).toHaveBeenCalled(), { timeout: 2000 });
 
       expect(sender).toHaveBeenCalledTimes(1);
-      const [origin, content] = sender.mock.calls[0];
+      const [origin, delivery] = sender.mock.calls[0];
       expect(origin).toEqual(baseOrigin);
-      expect(content).toContain('读README');
-      expect(content).toContain('已完成');
+      expect(delivery.text).toContain('读README');
+      expect(delivery.text).toContain('完成');
     });
 
     it('provider 错误时 Agent 内部兜底，结果仍应送达', async () => {
@@ -234,10 +241,10 @@ describe('SubagentManager', () => {
 
       await vi.waitFor(() => expect(sender).toHaveBeenCalled(), { timeout: 2000 });
 
-      const [_origin, content] = sender.mock.calls[0];
+      const [_origin, delivery] = sender.mock.calls[0];
       // Agent.run() 内部兜底返回友好文本，SubagentManager 视为成功完成
-      expect(content).toContain('失败测试');
-      expect(content).toContain('API 调用失败');
+      expect(delivery.text).toContain('失败测试');
+      expect(delivery.text).toContain('API 调用失败');
     });
 
     it('无 sender 时不应崩溃', async () => {
@@ -281,11 +288,81 @@ describe('SubagentManager', () => {
       manager.dispose();
       expect(manager.getRunningCount()).toBe(0);
     });
+
+    it('应上报与主 agent 同类的 AI 处理事件（source=subagent）', async () => {
+      const dispatched: string[] = [];
+      const emitted: string[] = [];
+      const emitter = {
+        createPayload: (_sid: string, _ctx: unknown, _mode: string, extra: Record<string, unknown> = {}) => ({
+          sessionId: 'test-session',
+          source: extra.source ?? 'zhin-agent',
+          ...extra,
+        }),
+        dispatch: vi.fn(async (name: string) => {
+          dispatched.push(name);
+        }),
+        emit: vi.fn((name: string) => {
+          emitted.push(name);
+        }),
+      } as unknown as ZhinAgentEventEmitter;
+
+      const mgr = new SubagentManager({
+        provider: provider as any,
+        workspace: '/tmp/test-workspace',
+        createTools: () => mockTools,
+        maxIterations: 5,
+        eventEmitter: emitter,
+      });
+
+      await mgr.spawnSync({
+        task: '分析图片',
+        label: 'vision',
+        agent: 'vision',
+        origin: baseOrigin,
+      });
+
+      expect(dispatched).toContain('ai.processing.start');
+      expect(dispatched).toContain('ai.agent.start');
+      expect(dispatched).toContain('ai.agent.finish');
+      expect(dispatched).toContain('ai.response');
+      expect(dispatched).toContain('ai.processing.finish');
+      // typing 由 ai.processing.start 统一驱动，子 agent 不再重复 emit typing.start
+      expect(emitted).not.toContain('ai.typing.start');
+      expect(emitted).not.toContain('ai.typing.stop');
+    });
+
+    it('异步 spawn 结束时应停止 typing', async () => {
+      const dispatched: string[] = [];
+      const emitted: string[] = [];
+      const emitter = {
+        createPayload: (_sid: string, _ctx: unknown, _mode: string, extra: Record<string, unknown> = {}) => ({
+          sessionId: 'test-session',
+          source: extra.source ?? 'zhin-agent',
+          messageId: 'msg-1',
+          ...extra,
+        }),
+        dispatch: vi.fn(async (name: string) => { dispatched.push(name); }),
+        emit: vi.fn((name: string) => { emitted.push(name); }),
+      } as unknown as import('../../src/zhin-agent/event-emitter.js').ZhinAgentEventEmitter;
+
+      const mgr = new SubagentManager({
+        provider: provider as any,
+        workspace: '/tmp/test-workspace',
+        createTools: () => mockTools,
+        maxIterations: 5,
+        eventEmitter: emitter,
+      });
+
+      await mgr.spawn({ task: 'hi', origin: { ...baseOrigin, messageId: 'msg-1' } });
+      await vi.waitFor(() => expect(dispatched).toContain('ai.processing.finish'), { timeout: 2000 });
+
+      expect(emitted).toContain('ai.typing.stop');
+    });
   });
 });
 
 describe('ZhinAgent spawn_task 集成', () => {
-  it('spawn_task 工具应在关键词匹配时被注入', async () => {
+  it('spawn_task 历史关键词正则（现为主编排序列化常驻）', async () => {
     // 这部分在 zhin-agent.test.ts 中已有 process 的集成测试框架
     // 此处仅验证关键词正则匹配逻辑
     const patterns = [

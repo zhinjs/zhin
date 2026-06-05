@@ -79,7 +79,6 @@ export function createIcqqAgentPromptContributor(): AgentPromptContributor {
 
     async buildSections(ctx: AgentPromptBuildContext): Promise<AgentPromptSection[] | null> {
       if (ctx.slot === 'orchestrator') {
-        if (!ctx.toolSearch) return null;
         return [{
           id: 'platform.icqq.orchestrator',
           title: '## icqq / QQ',

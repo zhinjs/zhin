@@ -260,6 +260,15 @@ export function resolveSenderRoles<T extends object>(
   botConfig?: BotConfigRoles | Record<string, unknown> | null,
 ): SenderRolesResult {
   const scope: ToolScope = (message.$channel?.type as ToolScope) || 'private';
+
+  // process 适配器（stdin/本机 CLI）：操作者即宿主用户，恒为 master
+  if (message.$adapter === 'process') {
+    return {
+      scope,
+      roles: normalizeSenderRoles(['master']),
+    };
+  }
+
   const senderId = String(message.$sender.id);
   const senderPermissions = message.$sender.permissions || [];
   const roles: SenderRole[] = [];

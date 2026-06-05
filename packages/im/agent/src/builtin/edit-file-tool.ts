@@ -12,6 +12,7 @@ import {
 import { checkFilePermission, formatFilePermissionMessage, toolRequesterRoleToFileRole } from '../security/file-role-policy.js';
 import { checkFileToolAccess, checkSensitiveFilePathAccess, checkDangerousToolAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
 import { expandHome, nodeErrToFileMessage } from '../discovery/utils.js';
+import { checkMemoryWritePath } from '../memory-layers.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import {
   findActualStringInFile,
@@ -90,9 +91,13 @@ export class EditFileBuiltinTool extends BuiltinBaseTool {
     const confirmMsg = formatFilePermissionMessage(permResult, 'edit_file');
     if (confirmMsg) return confirmMsg;
 
-    // 第 3 层：路径安全 + 文件操作
     try {
       const fp = expandHome(filePathArg);
+      const memoryDecision = checkMemoryWritePath(fp, context);
+      if (!memoryDecision.allowed) {
+        return `Error: ${memoryDecision.reason}`;
+      }
+
       const sensitiveDecision = checkSensitiveFilePathAccess('edit_file', fp, context);
       if (!sensitiveDecision.allowed) {
         if (sensitiveDecision.needsOwnerApproval) return toOwnerSignal(sensitiveDecision);

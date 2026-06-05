@@ -45,6 +45,9 @@ export interface AudioElement {
 export interface VideoElement {
   type: 'video';
   url: string;
+  /** base64 载荷（出站优先；url 可为空或 data URI） */
+  base64?: string;
+  mimeType?: string;
   coverUrl?: string;
   duration?: number;
   fallbackText?: string;

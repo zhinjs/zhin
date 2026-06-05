@@ -10,6 +10,7 @@ import type {
   AgentTool,
   AgentResult,
   ChatMessage,
+  ContentPart,
   ToolDefinition as ChatToolDefinition,
   ToolCall,
   ToolFilterOptions,
@@ -24,7 +25,12 @@ import {
   microCompactMessages,
 } from '../compaction/index.js';
 import type { AutoCompactTrackingState } from '../compaction/index.js';
-import { sanitizeToolResult } from './tool-result-sanitizer.js';
+import {
+  compactMediaToolJsonForModel,
+  isMediaToolWithBinaryPayload,
+  parseMediaToolResultForOutbound,
+  sanitizeToolResult,
+} from './tool-result-sanitizer.js';
 import {
   DEFAULT_POLICY_DENIAL_STOP_AFTER,
   isPolicyDenialMessage,
@@ -357,6 +363,15 @@ export class Agent {
     }
   }
 
+  /** 从 multimodal user 消息提取用于 tool filter 的纯文本 */
+  static userMessageToFilterText(message: string | ContentPart[]): string {
+    if (typeof message === 'string') return message;
+    return message
+      .filter((p): p is ContentPart & { type: 'text'; text: string } => p.type === 'text' && Boolean(p.text?.trim()))
+      .map(p => p.text)
+      .join('\n');
+  }
+
   /**
    * 程序化工具过滤 —— TF-IDF 加权的相关性评分
    */
@@ -483,14 +498,21 @@ export class Agent {
           result,
         });
       }
-      result = sanitizeToolResult(result);
+      const toolName = tc.function.name;
+      const rawForOutbound = result;
+      const forModel = isMediaToolWithBinaryPayload(toolName)
+        ? compactMediaToolJsonForModel(toolName, rawForOutbound)
+        : rawForOutbound;
+      result = sanitizeToolResult(forModel);
       const args = Agent.safeParse(tc.function.arguments);
-      const parsedResult = Agent.safeParse(result);
+      const parsedResult = isMediaToolWithBinaryPayload(toolName)
+        ? parseMediaToolResultForOutbound(toolName, rawForOutbound)
+        : Agent.safeParse(result);
 
-      const key = Agent.toolCallKey(tc.function.name, tc.function.arguments);
+      const key = Agent.toolCallKey(toolName, tc.function.arguments);
       seenKeys.add(key);
       state.toolCalls.push({
-        tool: tc.function.name,
+        tool: toolName,
         args: typeof args === 'object' ? args : { raw: args },
         result: parsedResult,
       });
@@ -550,7 +572,11 @@ export class Agent {
    * @param context        对话上下文
    * @param filterOptions  工具过滤选项 —— 启用后在 AI 调用之前程序化筛选工具，省去额外的 AI 意图分析往返
    */
-  async run(userMessage: string, context?: ChatMessage[], filterOptions?: ToolFilterOptions): Promise<AgentResult> {
+  async run(
+    userMessage: string | ContentPart[],
+    context?: ChatMessage[],
+    filterOptions?: ToolFilterOptions,
+  ): Promise<AgentResult> {
     const startedAt = Date.now();
     let lastUsedModel = this.config.model;
     const state: AgentState = {
@@ -568,7 +594,11 @@ export class Agent {
     let toolDefinitions: ChatToolDefinition[];
     if (filterOptions) {
       const allTools = Array.from(this.tools.values());
-      const filtered = Agent.filterTools(userMessage, allTools, filterOptions);
+      const filtered = Agent.filterTools(
+        Agent.userMessageToFilterText(userMessage),
+        allTools,
+        filterOptions,
+      );
       logger.debug(formatCompact( { tools: `${allTools.length}→${filtered.length}` }));
       toolDefinitions = filtered.map(tool => ({
         type: 'function' as const,
@@ -858,7 +888,11 @@ export class Agent {
    * @param context        对话上下文
    * @param filterOptions  工具过滤选项 —— 启用后在 AI 调用之前程序化筛选工具
    */
-  async *runStream(userMessage: string, context?: ChatMessage[], filterOptions?: ToolFilterOptions): AsyncIterable<{
+  async *runStream(
+    userMessage: string | ContentPart[],
+    context?: ChatMessage[],
+    filterOptions?: ToolFilterOptions,
+  ): AsyncIterable<{
     type: 'content' | 'tool_call' | 'tool_result' | 'compaction' | 'done';
     data: any;
   }> {
@@ -873,7 +907,11 @@ export class Agent {
     let toolDefinitions: ChatToolDefinition[];
     if (filterOptions) {
       const allTools = Array.from(this.tools.values());
-      const filtered = Agent.filterTools(userMessage, allTools, filterOptions);
+      const filtered = Agent.filterTools(
+        Agent.userMessageToFilterText(userMessage),
+        allTools,
+        filterOptions,
+      );
       logger.debug(formatCompact( { tools: `${allTools.length}→${filtered.length}` }));
       toolDefinitions = filtered.map(tool => ({
         type: 'function' as const,

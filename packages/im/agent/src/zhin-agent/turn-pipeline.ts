@@ -5,12 +5,19 @@ import { createAgent } from '@zhin.js/ai';
 import { resolveIMSessionIdFromToolContext } from '@zhin.js/ai';
 import { parseOutput } from '@zhin.js/ai';
 import { detectTone } from '@zhin.js/ai';
-import { ensureMcpConnections } from '../orchestrator/mcp-lifecycle.js';
+import {
+  ensureMcpConnectionsForBinding,
+  getMcpToolsForBinding,
+} from '../orchestrator/mcp-lifecycle.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
 import { runWithBashToolContext } from '../security/bash-tool-context.js';
 import { triggerAIHook, createAIHookEvent } from '../hooks.js';
 import { resolveModelCandidates } from './model-resolver.js';
-import { streamChatWithHistory } from './llm-runner.js';
+import { streamChatWithHistory, streamChatWithVisionMedia } from './llm-runner.js';
+import { INBOUND_MEDIA_PARTS_EXTRA_KEY } from '../media/constants.js';
+import { mergeToolOutboundElements } from '../media/media-tool-bridge.js';
+import { providerSupportsVision } from '../media/vision-capability.js';
+import type { ToolCallRecord } from './tool-calls-user-format.js';
 import {
   buildSessionCreateInput,
   touchSession,
@@ -97,7 +104,7 @@ export async function processTextTurn(
     }));
     logPhase(host.phaseConfig, 'turn.start', sessionId, {
       mode: 'text',
-      provider: host.provider.name,
+      provider: host.getTurnProvider().name,
     });
 
     // 0. Rate limit
@@ -130,9 +137,12 @@ export async function processTextTurn(
       platform: platform || '',
     })).catch(() => {});
 
-    // 0.9 Lazy-connect configured MCP servers before tool collection
-    if (host.orchestrator) {
-      await ensureMcpConnections(host.orchestrator.mcps, (event) => {
+    const turnBinding = host.activeBinding;
+    const mcpServerNames = turnBinding?.mcpServers ?? [];
+
+    // 0.9 Lazy-connect MCP servers listed on active agent binding
+    if (host.orchestrator && mcpServerNames.length > 0) {
+      await ensureMcpConnectionsForBinding(host.orchestrator.mcps, mcpServerNames, (event) => {
         const payload = host.emitter.createPayload(sessionId, contextForTools, 'text', {
           path: 'agent',
           serverName: event.serverName,
@@ -152,8 +162,10 @@ export async function processTextTurn(
 
     // 1. Collect tools
     const tFilter = now();
-    const mcpTools = host.orchestrator?.mcps.getAllMcpTools() ?? [];
-    const allTools = collectRuntimeTools({
+    const mcpTools = host.orchestrator && mcpServerNames.length > 0
+      ? getMcpToolsForBinding(host.orchestrator.mcps, mcpServerNames)
+      : [];
+    let allTools = collectRuntimeTools({
       content,
       context: contextForTools,
       externalTools,
@@ -164,7 +176,6 @@ export async function processTextTurn(
       userId,
       chatHistory: host.chatHistory,
       userProfiles: host.userProfiles,
-      subagentManager: host.subagentManager,
       mcpTools,
     });
 
@@ -179,7 +190,7 @@ export async function processTextTurn(
 
     logger.debug(formatCompact( {
       tools: resolvedTools.length,
-      tool_search: host.config.toolSearch || undefined,
+      tool_search: true,
       names: resolvedTools.map(t => t.name).join(',') || '(none)',
     }));
 
@@ -190,7 +201,7 @@ export async function processTextTurn(
       host.userProfiles.buildProfileSummary(userId),
     ]);
 
-    const chatCandidates = resolveModelCandidates(host.provider.models, host.modelRegistry, host.provider.name, host.config, 'chat');
+    const chatCandidates = resolveModelCandidates(host.getTurnProvider().models, host.modelRegistry, host.getTurnProvider().name, host.config, 'chat');
     const {
       messages: historyMessages,
       result: pruneResult,
@@ -198,7 +209,7 @@ export async function processTextTurn(
     } = pruneHistoryWithBudget({
       messages: rawHistoryMessages,
       config: host.config,
-      provider: host.provider,
+      provider: host.getTurnProvider(),
       modelRegistry: host.modelRegistry,
       model: chatCandidates[0],
     });
@@ -225,10 +236,21 @@ export async function processTextTurn(
       }));
       const tLLM = now();
       logPhase(host.phaseConfig, 'chat.llm.start', sessionId, { model: liteModel || chatCandidates[0] || '' });
-      const chatResult = await streamChatWithHistory(
-        { provider: host.provider, modelRegistry: host.modelRegistry, config: host.config },
-        sessionUserContent, chatSystemPrompt, historyMessages, onChunk, liteModel,
-      );
+      const inboundVision = contextForTools.extra?.[INBOUND_MEDIA_PARTS_EXTRA_KEY] as ContentPart[] | undefined;
+      const chatResult = inboundVision?.length
+        ? await streamChatWithVisionMedia(
+            { provider: host.getTurnProvider(), modelRegistry: host.modelRegistry, config: host.config },
+            sessionUserContent,
+            inboundVision,
+            chatSystemPrompt,
+            historyMessages,
+            onChunk,
+            liteModel || host.config.visionModel,
+          )
+        : await streamChatWithHistory(
+            { provider: host.getTurnProvider(), modelRegistry: host.modelRegistry, config: host.config },
+            sessionUserContent, chatSystemPrompt, historyMessages, onChunk, liteModel,
+          );
       let reply = sanitizeAssistantReply(chatResult.content);
       await host.emitter.dispatch('ai.response', host.emitter.createPayload(sessionId, context, 'text', {
         path: 'chat',
@@ -289,6 +311,7 @@ export async function processTextTurn(
 
     // 6. Path selection
     let reply: string;
+    let agentToolCalls: ToolCallRecord[] = [];
 
     if (toolRun.mode === 'pre-exec-fast-path') {
       logPhase(host.phaseConfig, 'path.pre_exec_fast', sessionId, { toolCount: allTools.length });
@@ -298,7 +321,7 @@ export async function processTextTurn(
       logger.debug(formatCompact( { mode: 'fast', prompt_chars: prompt.length }));
       logPhase(host.phaseConfig, 'fast.llm.start', sessionId, { model: chatCandidates[0] || '' });
       const fastResult = await streamChatWithHistory(
-        { provider: host.provider, modelRegistry: host.modelRegistry, config: host.config },
+        { provider: host.getTurnProvider(), modelRegistry: host.modelRegistry, config: host.config },
         sessionUserContent, prompt, historyMessages, onChunk,
       );
       reply = sanitizeAssistantReply(fastResult.content);
@@ -335,7 +358,7 @@ export async function processTextTurn(
       // Adaptive maxIterations: boost when skills are active (multi-step skill flows)
       const SKILL_ITERATION_BOOST = 3;
       const hasSkillActivation = agentTools.some(t => t.name === 'activate_skill' || t.name === 'install_skill');
-      const harness = resolveModelHarness(host.provider.name, chatCandidates[0] || '', host.config.modelHarness);
+      const harness = resolveModelHarness(host.getTurnProvider().name, chatCandidates[0] || '', host.config.modelHarness);
       const baseIterations = harness.maxIterations ?? host.config.maxIterations;
       const effectiveMaxIterations = hasSkillActivation
         ? baseIterations + SKILL_ITERATION_BOOST
@@ -355,7 +378,7 @@ export async function processTextTurn(
         }
       }
 
-      const llmAgent = createAgent(host.provider, {
+      const llmAgent = createAgent(host.getTurnProvider(), {
         model: chatCandidates[0],
         modelFallbacks: chatCandidates.slice(1),
         systemPrompt,
@@ -428,9 +451,26 @@ export async function processTextTurn(
       } finally {
         llmAgent.dispose();
       }
-      reply = sanitizeAssistantReply(result.content, {
-        toolSummary: formatToolCallsForUser(result.toolCalls),
-      });
+      agentToolCalls = result.toolCalls;
+      const spawnedSubagent = result.toolCalls.some(tc => tc.tool === 'spawn_task');
+      if (spawnedSubagent) {
+        await host.turnTracker.waitForPendingSubagents();
+      }
+      const delegatedOnly = spawnedSubagent
+        && !result.toolCalls.some(tc => tc.tool === 'run_deferred_task')
+        && !result.toolCalls.some(tc =>
+          tc.tool === 'generate_image'
+          && tc.result
+          && typeof tc.result === 'object'
+          && typeof (tc.result as Record<string, unknown>).image === 'string',
+        );
+      if (delegatedOnly) {
+        reply = '';
+      } else {
+        reply = sanitizeAssistantReply(result.content, {
+          toolSummary: formatToolCallsForUser(result.toolCalls),
+        });
+      }
       await host.emitter.dispatch('ai.response', host.emitter.createPayload(sessionId, contextForTools, 'text', {
         path: 'agent',
         model: result.model ?? (chatCandidates[0] || undefined),
@@ -445,12 +485,10 @@ export async function processTextTurn(
           : {}),
       }));
       for (const tc of result.toolCalls) {
+        const preview = toolCallResultDebugPreview(tc);
         logger.debug(formatCompact( {
           tool_result: tc.tool,
-          preview: truncatePreview(
-            typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result),
-            480,
-          ),
+          preview: truncatePreview(preview, 480),
         }));
       }
       logger.debug(
@@ -486,7 +524,23 @@ export async function processTextTurn(
       reason: 'processing_complete',
     }));
 
-    return parseOutput(reply);
+    const outbound = mergeToolOutboundElements(parseOutput(reply), agentToolCalls);
+    if (!reply.trim() && outbound.length === 0) return [];
+    return outbound;
+}
+
+function toolCallResultDebugPreview(tc: ToolCallRecord): string {
+  if (tc.tool === 'generate_image' && tc.result && typeof tc.result === 'object' && !Array.isArray(tc.result)) {
+    const image = (tc.result as Record<string, unknown>).image;
+    const len = typeof image === 'string' ? image.length : 0;
+    return len > 0 ? `[image generated, ${len} b64 chars]` : '[generate_image: no image field]';
+  }
+  if (tc.tool === 'voice_tts' && tc.result && typeof tc.result === 'object' && !Array.isArray(tc.result)) {
+    const audio = (tc.result as Record<string, unknown>).audio;
+    const len = typeof audio === 'string' ? audio.length : 0;
+    return len > 0 ? `[audio generated, ${len} b64 chars]` : '[voice_tts: no audio field]';
+  }
+  return typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result);
 }
 
 /** Full multimodal ContentPart union (core/ai may export a narrower type in some builds) */
@@ -556,6 +610,7 @@ export async function processMultimodalTurn(
 
   const textFragments: string[] = [];
   const llmParts: ContentPart[] = [];
+  const supportsVision = providerSupportsVision(host.getTurnProvider());
 
   for (const p of parts as MultimodalPart[]) {
     switch (p.type) {
@@ -565,7 +620,8 @@ export async function processMultimodalTurn(
         break;
       case 'image_url':
         textFragments.push('[图片]');
-        llmParts.push(p);
+        if (supportsVision) llmParts.push(p);
+        else llmParts.push({ type: 'text', text: '[用户发送了一张图片]' });
         break;
       case 'video_url':
         textFragments.push('[视频]');
@@ -573,7 +629,8 @@ export async function processMultimodalTurn(
         break;
       case 'audio':
         textFragments.push('[音频]');
-        llmParts.push(p);
+        if (supportsVision) llmParts.push(p);
+        else llmParts.push({ type: 'text', text: '[用户发送了一段音频]' });
         break;
       case 'face':
         textFragments.push(p.face.text || `[表情:${p.face.id}]`);
@@ -594,16 +651,16 @@ export async function processMultimodalTurn(
     personaEnhanced,
   });
   const visionCandidates = resolveModelCandidates(
-    host.provider.models,
+    host.getTurnProvider().models,
     host.modelRegistry,
-    host.provider.name,
+    host.getTurnProvider().name,
     host.config,
     'vision',
   );
   const { messages: historyMessages, result: pruneResult } = pruneHistoryWithBudget({
     messages: rawHistoryMessages,
     config: host.config,
-    provider: host.provider,
+    provider: host.getTurnProvider(),
     modelRegistry: host.modelRegistry,
     model: visionCandidates[0],
   });
@@ -627,7 +684,7 @@ export async function processMultimodalTurn(
     usedVisionModel = visionModel;
     try {
       reply = '';
-      for await (const chunk of host.provider.chatStream({ model: visionModel, messages })) {
+      for await (const chunk of host.getTurnProvider().chatStream({ model: visionModel, messages })) {
         if (chunk.usage) lastUsage = chunk.usage;
         const delta = chunk.choices?.[0]?.delta;
         if (!delta) continue;
@@ -640,7 +697,7 @@ export async function processMultimodalTurn(
       reply = stripThinkBlocks(reply);
       if (!reply) {
         logger.warn(formatCompact({ mode: 'multimodal', fallback: visionModel, reason: 'empty_stream' }));
-        const response = await host.provider.chat({ model: visionModel, messages });
+        const response = await host.getTurnProvider().chat({ model: visionModel, messages });
         if (response.usage) lastUsage = response.usage;
         const msg = response.choices[0]?.message?.content;
         reply = stripThinkBlocks(typeof msg === 'string' ? msg : '');
@@ -650,7 +707,7 @@ export async function processMultimodalTurn(
       const isLast = i === visionCandidates.length - 1;
       if (isLast) {
         try {
-          const response = await host.provider.chat({ model: visionModel, messages });
+          const response = await host.getTurnProvider().chat({ model: visionModel, messages });
           if (response.usage) lastUsage = response.usage;
           const msg = response.choices[0]?.message?.content;
           reply = stripThinkBlocks(typeof msg === 'string' ? msg : '');

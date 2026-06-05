@@ -70,6 +70,34 @@ test-bot/
 
 演示了 Tool 注册和 Skill 声明，让 AI 智能体调用工具。
 
+### AI 配置（agents / routes）
+
+`zhin.config.yml` 使用新格式：
+
+| 旧字段 | 新位置 |
+|--------|--------|
+| `defaultProvider` | `ai.agents.zhin.provider`（指向 `ai.providers.<别名>`） |
+| `agent.chatModel` | `ai.agents.zhin.model` |
+| `agent.allowedTools` / `disabledTools` / `agents.*.tools` | 已移除；工具由运行时发现 + `orchestratorTools` / TF-IDF |
+| `agent.toolSearch` | 已移除；编排为默认 |
+
+- 入站默认走 **`agents.zhin`**；带图且命中 `agents.vision` 时走 `agents/vision.agent.md`（识图）。文生图经 **`tool_search` + `run_deferred_task`** 或 **`spawn_task`**（**`agent: draw`**）+ `agents/draw.agent.md`，工具为 **`generate_image`**。
+- 插件/MCP 工具在连接后进入运行时工具池，由 **`tool_search` / TF-IDF** 按任务选用。
+- 子 agent 需 `agents/<name>.agent.md`（persona）；**不要**添加 `zhin.agent.md`。
+
+### 多模态（Advanced）
+
+在 `zhin.config.yml` 的 `ai.multimodal` 中可开启入站预处理与出站 base64 发布；Sandbox 发图 + `ai:` 触发识图（`vision` 路由），或调用 `analyze_media` 分析本地媒体。文生图：deferred Worker 或 **`spawn_task` + `agent: draw`** 调用 `generate_image`（默认智谱 `cogview-3-flash` / 可选 Cloudflare Flux）并由 IM 发出图片。操作指引见 [TOOLS.md](./TOOLS.md)。
+
+### 文生图 / ICQQ 部署检查清单
+
+1. `icqq login` 完成，且 `bots[].name` 与 QQ 号一致。
+2. `.env` 中至少配置 `BIG_MODEL_API_KEY`（或启用的其它文生图 provider）。
+3. `ai.providers.zhipu-vl.imageGeneration` 已设（test-bot 默认 `cogview-3-flash`）。
+4. **Zhin 与 icqq 守护进程不在同一可访问文件系统时**：在 icqq bot 下取消注释 `outboundMedia: base64`（见 `zhin.config.yml` 与 [ICQQ 适配器 README](../../plugins/adapters/icqq/README.md)）。
+5. 修改配置后重启 `pnpm start` / `pnpm dev`。
+6. 验收：私聊 `ai: 画一只橘猫` → 日志有 `generate_image` → 收到图片段（非纯文字「已生成」）。
+
 ### 消息处理
 
 演示了以下功能：

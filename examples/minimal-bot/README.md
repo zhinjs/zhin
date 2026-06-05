@@ -41,6 +41,19 @@ pnpm dev
 | Plugins | `@zhin.js/adapter-sandbox`、`@zhin.js/host-router`、`@zhin.js/host-api`、`hello` |
 | `ai.agent.toolSearch` | `false`（Advanced 能力在 test-bot 验证） |
 
+### 三层记忆目录（可选）
+
+首次运行后可在 `data/memory/` 下维护 Markdown（见 [配置 — 三层文件记忆](../../docs/essentials/configuration.md)）：
+
+```
+data/memory/
+  global/MEMORY.md
+  platforms/sandbox/RULES.md
+  sessions/<safeSessionKey>/MEMORY.md
+```
+
+会话笔记绑定 `session_key`（`platform:botId:scope:sceneId`），与 Console 沙盒私聊/群聊各自独立。
+
 ## 验收
 
 ```bash

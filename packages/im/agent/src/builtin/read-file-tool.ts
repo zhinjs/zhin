@@ -37,7 +37,7 @@ export const READ_FILE_PARAMETERS: ToolParametersSchema = {
 export class ReadFileBuiltinTool extends BuiltinBaseTool {
   readonly name = 'read_file';
   readonly description =
-    '读取指定路径的文件内容。用于查看、打开或读取任意文本文件。图片文件返回 Base64 数据。';
+    '读取指定路径的文本文件内容。图片/音频/视频请使用 analyze_media，不要用 read_file。';
   readonly parameters = READ_FILE_PARAMETERS;
   readonly kind = 'file';
 
@@ -95,12 +95,7 @@ export class ReadFileBuiltinTool extends BuiltinBaseTool {
       }
 
       if (isImageFile(fp)) {
-        const buffer = await fs.readFile(fp);
-        const ext = path.extname(fp).toLowerCase().replace('.', '');
-        const mimeType = ext === 'jpg' ? 'jpeg' : ext === 'svg' ? 'svg+xml' : ext;
-        const b64 = buffer.toString('base64');
-        const sizeKb = (buffer.length / 1024).toFixed(1);
-        return `[Image: ${path.basename(fp)}, ${sizeKb} KB, type: image/${mimeType}]\ndata:image/${mimeType};base64,${b64.slice(0, 200)}...(total ${b64.length} chars)`;
+        return `Error: 请使用 analyze_media 分析图片文件: ${fp}`;
       }
 
       const content = await fs.readFile(fp, 'utf-8');

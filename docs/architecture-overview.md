@@ -111,7 +111,8 @@ graph TB
 |------|------|
 | `SessionManager` | 会话管理（内存 / 数据库持久化），统一工厂 `createSessionManager` |
 | `ContextManager` | 按场景落库、读历史与总结的多平台上下文管理 |
-| `ConversationMemory` | 话题切换 + 链式摘要的长期记忆 |
+| `ConversationMemory` | 话题切换 + 链式摘要的会话记忆 |
+| Agent `memory-layers` | 三层 Markdown：`global` / `platforms/{platform}` / `sessions/{session_key}` |
 
 #### `compaction/` — 上下文压缩
 
@@ -330,6 +331,38 @@ flowchart TD
   class K routeNode
   class B,C,D,G,L,M,N,O process
 ```
+
+## 主动路径（Assistant Runtime，规划中）
+
+IM 主路径解决 **用户发消息 → 回复**。个人助手还需要 **定时 / 外部事件 → 执行 → 通知**，该能力将收敛到 **Assistant Runtime**（路线 A，见 [ADR 0008](./adr/0008-introduce-assistant-runtime.md) 与 [演进路线图](./architecture/assistant-runtime.md)）。
+
+```mermaid
+flowchart LR
+  subgraph ingress [Ingress]
+    IM2[IM 对话]
+    CRON[定时]
+    EVT[Webhook / HA]
+  end
+  subgraph runtime [Assistant Runtime]
+    JS[JobStore]
+    JW[JobWorker]
+    JS --> JW
+  end
+  subgraph exec [执行]
+    JW --> ZA2[ZhinAgent]
+  end
+  subgraph egress [投递]
+    JW --> NR[NotificationRouter]
+    NR --> SEND[Adapter.sendMessage]
+  end
+  IM2 --> JS
+  CRON --> JS
+  EVT --> JS
+```
+
+**现状（迁移前）**：`PersistentCronEngine`、`Scheduler`、`TaskExecutor` 已能「到点跑 Agent 并投递」，但存储与调度分散。**目标**：统一 `JobStore`，出站仍走下文发送链（不得绕过 Adapter）。
+
+**Stable 承诺**：`assistant.enabled` 默认 `false`；未启用时行为与现网一致。
 
 ## 出站消息（发送链）
 

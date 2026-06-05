@@ -8,18 +8,16 @@ import fs from 'fs-extra';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import { logger } from '../utils/logger.js';
+import {
+  type CronJobRecordCli,
+  parseNotifyChannel,
+  readCronJobsUnified,
+  shouldUseAssistantJobStore,
+  writeCronJobsUnified,
+} from '../utils/assistant-jobs.js';
 
 const CRON_JOBS_FILENAME = 'cron-jobs.json';
 const SCHEDULER_JOBS_FILENAME = 'scheduler-jobs.json';
-
-interface CronJobRecord {
-  id: string;
-  cronExpression: string;
-  prompt: string;
-  label?: string;
-  enabled: boolean;
-  createdAt: number;
-}
 
 /** 解析 --every 间隔字符串为毫秒，如 "30m" "1h" "1d" */
 function parseEveryMs(s: string): number {
@@ -42,22 +40,21 @@ function getSchedulerJobsPath(): string {
   return path.join(process.cwd(), 'data', SCHEDULER_JOBS_FILENAME);
 }
 
-async function readJobs(): Promise<CronJobRecord[]> {
-  const filePath = getCronJobsPath();
-  try {
-    const raw = await fs.readFile(filePath, 'utf-8');
-    const data = JSON.parse(raw);
-    return Array.isArray(data) ? data : [];
-  } catch (e: any) {
-    if (e?.code === 'ENOENT') return [];
-    throw e;
-  }
+async function readJobs(): Promise<CronJobRecordCli[]> {
+  return readCronJobsUnified(process.cwd());
 }
 
-async function writeJobs(jobs: CronJobRecord[]): Promise<void> {
-  const filePath = getCronJobsPath();
-  await fs.ensureDir(path.dirname(filePath));
-  await fs.writeFile(filePath, JSON.stringify(jobs, null, 2), 'utf-8');
+async function writeJobs(jobs: CronJobRecordCli[]): Promise<void> {
+  await writeCronJobsUnified(process.cwd(), jobs);
+}
+
+function notifySummary(notify: CronJobRecordCli['notify']): string {
+  if (notify.channel === 'silent') return 'silent';
+  if (notify.channel === 'log') return 'log';
+  const parts: string[] = [notify.channel];
+  if (notify.platform) parts.push(notify.platform);
+  if (notify.sceneId) parts.push(`scene:${notify.sceneId}`);
+  return parts.join('/');
 }
 
 interface SchedulerJobRecord {
@@ -126,6 +123,11 @@ const listCommand = new Command('list')
       return;
     }
 
+    const useAssistant = await shouldUseAssistantJobStore();
+    if (useAssistant) {
+      logger.log('\n（Assistant Runtime：Cron 任务读写 data/assistant-jobs.json）\n');
+    }
+
     if (cronJobs.length > 0) {
       logger.log('\nCron 任务（修改后需重启应用生效）\n');
       for (const j of cronJobs) {
@@ -133,6 +135,7 @@ const listCommand = new Command('list')
         const label = j.label ? ` (${j.label})` : '';
         logger.log(`  ${j.id}${label}  [${status}]`);
         logger.log(`    表达式: ${j.cronExpression}`);
+        logger.log(`    投递:   ${notifySummary(j.notify)}`);
         logger.log(`    内容:   ${j.prompt}`);
       }
     }
@@ -159,9 +162,10 @@ const addCommand = new Command('add')
   .argument('[cronExpression]', 'Cron 表达式，如 "0 9 * * *"（与 --at/--every 二选一）')
   .argument('<prompt>', '到点触发时发给 AI 的提示词')
   .option('-l, --label <label>', '可选标签')
+  .option('--notify-channel <channel>', '结果投递：im | silent | log（默认 silent）', 'silent')
   .option('--at <iso8601>', '单次执行时间，ISO8601 如 2025-12-31T09:00:00')
   .option('--every <interval>', '固定间隔，如 30m, 1h, 1d')
-  .action(async (cronExpression: string, prompt: string, opts: { label?: string; at?: string; every?: string }) => {
+  .action(async (cronExpression: string, prompt: string, opts: { label?: string; notifyChannel?: string; at?: string; every?: string }) => {
     const now = Date.now();
     const label = opts.label ?? 'scheduled';
 
@@ -215,6 +219,13 @@ const addCommand = new Command('add')
       logger.error('请提供 Cron 表达式，或使用 --at / --every');
       process.exit(1);
     }
+    let notify;
+    try {
+      notify = parseNotifyChannel(opts.notifyChannel ?? 'silent');
+    } catch (e) {
+      logger.error((e as Error).message);
+      process.exit(1);
+    }
     const jobs = await readJobs();
     const id = generateId();
     jobs.push({
@@ -223,6 +234,7 @@ const addCommand = new Command('add')
       prompt,
       label: opts.label,
       enabled: true,
+      notify,
       createdAt: now,
     });
     await writeJobs(jobs);

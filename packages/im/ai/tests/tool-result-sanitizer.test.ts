@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import path from 'node:path';
 import {
+  compactMediaToolJsonForModel,
+  parseMediaToolResultForOutbound,
   relativizeCwdPaths,
   sanitizeToolResult,
   stripHallucinatedToolCalls,
@@ -63,6 +65,28 @@ describe('sanitizeToolResult', () => {
     const out = sanitizeToolResult(input, { maxChars: 120 });
     expect(out.length).toBeLessThanOrEqual(140);
     expect(out).toContain('[truncated]');
+  });
+
+  it('compactMediaToolJsonForModel omits generate_image base64 but keeps metadata', () => {
+    const raw = JSON.stringify({
+      image: 'A'.repeat(5000),
+      mime: 'image/png',
+      model: 'cogview-3-flash',
+      provider: 'zhipu-vl',
+    });
+    const compact = compactMediaToolJsonForModel('generate_image', raw);
+    const parsed = JSON.parse(compact) as Record<string, unknown>;
+    expect(parsed.mime).toBe('image/png');
+    expect(String(parsed.image)).toContain('omitted');
+    expect(String(parsed.image)).not.toContain('AAAA');
+    const sanitized = sanitizeToolResult(compact);
+    expect(() => JSON.parse(sanitized)).not.toThrow();
+  });
+
+  it('parseMediaToolResultForOutbound preserves full generate_image payload', () => {
+    const raw = JSON.stringify({ image: 'YmFzZTY0', mime: 'image/png' });
+    const out = parseMediaToolResultForOutbound('generate_image', raw);
+    expect(out).toEqual({ image: 'YmFzZTY0', mime: 'image/png' });
   });
 });
 

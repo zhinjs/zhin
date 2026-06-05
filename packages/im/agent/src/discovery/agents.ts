@@ -143,3 +143,9 @@ export async function discoverWorkspaceAgents(root?: Plugin | null): Promise<Age
   }
   return agents;
 }
+
+/** 读取 *.agent.md 正文（去掉 frontmatter），供 subagent / route 使用 */
+export async function loadAgentMarkdownBody(filePath: string): Promise<string> {
+  const content = await fs.promises.readFile(filePath, 'utf-8');
+  return content.replace(/^---\s*\n[\s\S]*?\n---\s*(?:\n|$)/, '').trim();
+}

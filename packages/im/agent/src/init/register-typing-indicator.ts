@@ -88,145 +88,152 @@ function resolveTypingManager(
   return enableTypingIndicatorForBot(bot, platform, config, adapter);
 }
 
+async function startTypingForPayload(
+  root: Plugin,
+  logger: Plugin['logger'],
+  payload: AIEventPayload,
+  reason: string,
+): Promise<void> {
+  const { platform, botId, sessionId, messageId } = payload;
+  if (!platform || !botId) return;
+
+  try {
+    const adapter = root.injectAdapter(platform);
+    const bot = adapter?.bots?.get(botId) as BotWithTypingIndicator | undefined;
+    if (!bot) {
+      logger.debug(`[TypingIndicator] Bot not found for platform: ${platform}, botId: ${botId}`);
+      return;
+    }
+
+    const botConfig = (bot.$config || {}) as Record<string, unknown>;
+    const config = (botConfig.typingIndicator || {}) as Record<string, unknown>;
+    if (config.enabled === false) {
+      return;
+    }
+
+    const manager = resolveTypingManager(bot, platform, config, adapter!);
+    const sceneType = resolveSceneType(payload);
+    const targets = resolveTypingTargets(payload, sceneType);
+    const sceneConfig = resolveTypingSceneConfig(config, sceneType);
+
+    logger.debug(
+      `[TypingIndicator] Starting indicator (${reason}) session=${sessionId} messageId=${messageId ?? ''} source=${payload.source ?? ''}`,
+    );
+
+    if (isGenericTypingManager(manager)) {
+      const indicatorOpts = {
+        platform,
+        botId,
+        sessionId,
+        messageId,
+        sceneType,
+        userId: targets.userId,
+        groupId: targets.groupId,
+      };
+      const existing = manager.getActiveIndicator(indicatorOpts);
+      if (existing) {
+        return;
+      }
+      await manager.start(
+        {
+          platform,
+          botId,
+          sessionId,
+          messageId,
+          sceneType,
+          userId: targets.userId,
+          groupId: targets.groupId,
+        },
+        sceneConfig,
+      );
+    } else {
+      await manager.start({
+        messageId,
+        sessionId,
+        userId: targets.userId,
+        groupId: targets.groupId,
+        sceneType: sceneType === 'channel' ? 'group' : sceneType,
+      });
+    }
+  } catch (error) {
+    logger.error(`[TypingIndicator] Error starting indicator (${reason}):`, error);
+  }
+}
+
+async function stopTypingForPayload(
+  root: Plugin,
+  logger: Plugin['logger'],
+  payload: AIEventPayload,
+  reason: string,
+): Promise<void> {
+  const { platform, botId, sessionId, messageId } = payload;
+  if (!platform || !botId) return;
+
+  try {
+    const adapter = root.injectAdapter(platform);
+    const bot = adapter?.bots?.get(botId) as BotWithTypingIndicator | undefined;
+    if (!bot?.$typingIndicator) return;
+
+    const sceneType = resolveSceneType(payload);
+    const targets = resolveTypingTargets(payload, sceneType);
+    const manager = bot.$typingIndicator;
+
+    logger.debug(
+      `[TypingIndicator] Stopping indicator (${reason}) session=${sessionId}`,
+    );
+
+    if (isGenericTypingManager(manager)) {
+      await manager.stop({
+        platform,
+        botId,
+        sessionId,
+        messageId,
+        sceneType,
+        userId: targets.userId,
+        groupId: targets.groupId,
+      });
+    } else {
+      await manager.stop({
+        sessionId,
+        userId: targets.userId,
+        groupId: targets.groupId,
+      });
+    }
+  } catch (error) {
+    logger.error(`[TypingIndicator] Error stopping indicator (${reason}):`, error);
+  }
+}
+
 export function registerTypingIndicator(_refs: AIServiceRefs): void {
   const plugin = getPlugin();
   const { root, logger } = plugin;
 
   const dispose = subscribeAIEvents(root, {
     onProcessingStart: async (payload) => {
-      const { platform, botId, sessionId, messageId, sceneId } = payload;
-      if (!platform || !botId) return;
+      await startTypingForPayload(root, logger, payload, 'processing.start');
+    },
 
-      try {
-        const adapter = root.injectAdapter(platform);
-        const bot = adapter?.bots?.get(botId) as BotWithTypingIndicator | undefined;
-        if (!bot) {
-          logger.debug(`[TypingIndicator] Bot not found for platform: ${platform}, botId: ${botId}`);
-          return;
-        }
-
-        const botConfig = (bot.$config || {}) as Record<string, unknown>;
-        const config = (botConfig.typingIndicator || {}) as Record<string, unknown>;
-        if (config.enabled === false) {
-          return;
-        }
-
-        const manager = resolveTypingManager(bot, platform, config, adapter!);
-        const sceneType = resolveSceneType(payload);
-        const targets = resolveTypingTargets(payload, sceneType);
-        const sceneConfig = resolveTypingSceneConfig(config, sceneType);
-
-        logger.debug(
-          `[TypingIndicator] Auto starting indicator on event: processing.start for session: ${sessionId}`,
-        );
-
-        if (isGenericTypingManager(manager)) {
-          await manager.start(
-            {
-              platform,
-              botId,
-              sessionId,
-              messageId,
-              sceneType,
-              userId: targets.userId,
-              groupId: targets.groupId,
-            },
-            sceneConfig,
-          );
-        } else {
-          await manager.start({
-            messageId,
-            sessionId,
-            userId: targets.userId,
-            groupId: targets.groupId,
-            sceneType: sceneType === 'channel' ? 'group' : sceneType,
-          });
-        }
-      } catch (error) {
-        logger.error('[TypingIndicator] Error handling processing.start event:', error);
-      }
+    onTypingStart: async (_payload) => {
+      // typing 由 processing.start 统一拉起，避免与 onProcessingStart 并发重复发消息
     },
 
     onProcessingFinish: async (payload) => {
-      const { platform, botId, sessionId, messageId, sceneId } = payload;
-      if (!platform || !botId) return;
-
-      try {
-        const adapter = root.injectAdapter(platform);
-        const bot = adapter?.bots?.get(botId) as BotWithTypingIndicator | undefined;
-        if (!bot?.$typingIndicator) return;
-
-        const sceneType = resolveSceneType(payload);
-        const targets = resolveTypingTargets(payload, sceneType);
-        const manager = bot.$typingIndicator;
-
-        logger.debug(
-          `[TypingIndicator] Auto stopping indicator on event: processing.finish for session: ${sessionId}`,
-        );
-
-        if (isGenericTypingManager(manager)) {
-          await manager.stop({
-            platform,
-            botId,
-            sessionId,
-            messageId,
-            sceneType,
-            userId: targets.userId,
-            groupId: targets.groupId,
-          });
-        } else {
-          await manager.stop({
-            sessionId,
-            userId: targets.userId,
-            groupId: targets.groupId,
-          });
-        }
-      } catch (error) {
-        logger.error('[TypingIndicator] Error handling processing.finish event:', error);
+      if (payload.keepTyping) {
+        return;
       }
+      await stopTypingForPayload(root, logger, payload, 'processing.finish');
     },
 
     onProcessingError: async (payload) => {
-      const { platform, botId, sessionId, messageId, sceneId } = payload;
-      if (!platform || !botId) return;
+      await stopTypingForPayload(root, logger, payload, 'processing.error');
+    },
 
-      try {
-        const adapter = root.injectAdapter(platform);
-        const bot = adapter?.bots?.get(botId) as BotWithTypingIndicator | undefined;
-        if (!bot?.$typingIndicator) return;
-
-        const sceneType = resolveSceneType(payload);
-        const targets = resolveTypingTargets(payload, sceneType);
-        const manager = bot.$typingIndicator;
-
-        logger.debug(
-          `[TypingIndicator] Auto stopping indicator on event: processing.error for session: ${sessionId}`,
-        );
-
-        if (isGenericTypingManager(manager)) {
-          await manager.stop({
-            platform,
-            botId,
-            sessionId,
-            messageId,
-            sceneType,
-            userId: targets.userId,
-            groupId: targets.groupId,
-          });
-        } else {
-          await manager.stop({
-            sessionId,
-            userId: targets.userId,
-            groupId: targets.groupId,
-          });
-        }
-      } catch (error) {
-        logger.error('[TypingIndicator] Error handling processing.error event:', error);
-      }
+    onTypingStop: async (payload) => {
+      await stopTypingForPayload(root, logger, payload, 'typing.stop');
     },
 
     onThinking: async (payload) => {
-      const { platform, botId, sessionId, messageId, sceneId, thinking } = payload;
+      const { platform, botId, sessionId, messageId, thinking } = payload;
       if (!platform || !botId || !thinking) return;
 
       try {
@@ -256,14 +263,16 @@ export function registerTypingIndicator(_refs: AIServiceRefs): void {
     },
 
     onSubagentStart: async (payload) => {
-      const { platform, botId, sessionId, messageId, sceneId, label } = payload;
+      const { platform, botId, sessionId, messageId, label } = payload;
       if (!platform || !botId) return;
 
       try {
         const adapter = root.injectAdapter(platform);
         const bot = adapter?.bots?.get(botId) as BotWithTypingIndicator | undefined;
         const manager = bot?.$typingIndicator;
-        if (!manager || !isGenericTypingManager(manager)) return;
+        if (!manager || !isGenericTypingManager(manager)) {
+          return;
+        }
 
         const sceneType = resolveSceneType(payload);
         const targets = resolveTypingTargets(payload, sceneType);
@@ -278,7 +287,7 @@ export function registerTypingIndicator(_refs: AIServiceRefs): void {
         });
 
         if (indicator && typeof indicator.update === 'function') {
-          const updateText = label ? `🔍 子任务执行里: ${label}...` : '🔍 正在调度和思考子代理处理...';
+          const updateText = label ? `🔍 子任务执行中: ${label}...` : '🔍 子 agent 处理中...';
           await indicator.update(updateText);
         }
       } catch (error) {
@@ -287,7 +296,7 @@ export function registerTypingIndicator(_refs: AIServiceRefs): void {
     },
 
     onSubagentFinish: async (payload) => {
-      const { platform, botId, sessionId, messageId, sceneId } = payload;
+      const { platform, botId, sessionId, messageId } = payload;
       if (!platform || !botId) return;
 
       try {

@@ -79,7 +79,6 @@ export function createNapCatAgentPromptContributor(): AgentPromptContributor {
 
     async buildSections(ctx: AgentPromptBuildContext): Promise<AgentPromptSection[] | null> {
       if (ctx.slot === 'orchestrator') {
-        if (!ctx.toolSearch) return null;
         return [{
           id: 'platform.napcat.orchestrator',
           title: '## napcat / QQ',

@@ -34,6 +34,10 @@ import {
   toCqString as toCqStringImpl,
 } from "./cq-message.js";
 import {
+  materializeOutboundBase64,
+  resolveIcqqOutboundMediaMode,
+} from "./outbound-media.js";
+import {
   formatIcqqMetaLog,
   formatIcqqNotice,
   formatIcqqRequest,
@@ -636,7 +640,9 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
   // ── 发送消息 ───────────────────────────────────────────────────────
 
   async $sendMessage(options: SendOptions): Promise<string> {
-    const message = buildIcqqIpcMessageImpl(options.content);
+    const outboundMedia = resolveIcqqOutboundMediaMode(this.$config);
+    const content = materializeOutboundBase64(options.content, outboundMedia);
+    const message = buildIcqqIpcMessageImpl(content);
 
     let action: string;
     let params: Record<string, unknown>;

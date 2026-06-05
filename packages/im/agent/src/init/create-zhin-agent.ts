@@ -3,18 +3,34 @@
  * (follow-up sender, subagent manager, cron engine, scheduler).
  */
 import * as path from 'node:path';
-import { formatCompact, getPlugin, getScheduler, isZhinTool, Scheduler, setScheduler, type MessageType, type SendOptions } from '@zhin.js/core';
+import { formatCompact, getPlugin, getScheduler, isZhinTool, Scheduler, setScheduler, type SendOptions } from '@zhin.js/core';
+import { deliverSubagentResult } from '../media/deliver-subagent-result.js';
 import { ModelRegistry, computeTierScore } from '@zhin.js/ai';
 import { ZhinAgent } from '../zhin-agent/index.js';
 import { createBuiltinTools } from '../builtin-tools.js';
+import { createGenerateImageTool } from '../builtin/generate-image-tool.js';
 import { collectPluginSkillSearchRoots } from '../discovery/utils.js';
-import { resolveSkillInstructionMaxChars, DEFAULT_CONFIG } from '../zhin-agent/config.js';
+import { resolveSkillInstructionMaxChars, DEFAULT_CONFIG, type ZhinAgentConfig } from '../zhin-agent/config.js';
 import { PersistentCronEngine, setCronManager } from '../cron-engine.js';
 import { createTaskExecutor } from '../task-executor.js';
+import {
+  AssistantEventIngress,
+  AssistantJobEngine,
+  JobWorker,
+  createAssistantJobStore,
+  createNotificationRouter,
+  loadAssistantProfileFile,
+  syncProfileHeartbeatToStore,
+  syncProfileCronRoutinesToStore,
+  validateAssistantProfile,
+  resolveAssistantConfig,
+  resolveAssistantDefaultsConfig,
+  setAssistantRuntime,
+  type AssistantConfig,
+} from '../assistant/index.js';
 import type { AIConfig, Plugin } from '@zhin.js/core';
 import type { AIServiceRefs } from './shared-refs.js';
 import { activateAiDatabaseStorage } from './activate-ai-database-storage.js';
-
 export function createZhinAgentContext(refs: AIServiceRefs): void {
   const plugin = getPlugin();
   const { useContext, root, logger } = plugin;
@@ -25,14 +41,25 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
       return;
     }
 
-    const provider = ai.getProvider();
+    const zhinBinding = ai.getBindingRegistry().requireZhinBinding();
+    const provider = ai.getProvider(zhinBinding.providerAlias);
     const agentConfig = ai.getAgentConfig();
-    const agent = new ZhinAgent(provider, agentConfig);
+    const zhinAgentCfg: ZhinAgentConfig = {
+      ...(agentConfig as ZhinAgentConfig | undefined),
+      chatModel: zhinBinding.model,
+    };
+    const agent = new ZhinAgent(provider, zhinAgentCfg);
     refs.zhinAgent = agent;
     agent.setHostPlugin(root);
+    agent.setProviderResolver((alias) => ai.getProvider(alias));
+    agent.setActiveBinding(zhinBinding);
 
     const configService = root.inject('config');
-    const appConfig = configService?.getPrimary<{ ai?: AIConfig }>() || {};
+    const appConfig = (configService?.primaryFile
+      ? configService.getRaw<{ ai?: AIConfig; assistant?: AssistantConfig }>(configService.primaryFile)
+      : configService?.getPrimary<{ ai?: AIConfig; assistant?: AssistantConfig }>())
+      ?? {};
+    const assistantCfg = resolveAssistantConfig(appConfig.assistant);
     const useDb = appConfig.ai?.sessions?.useDatabase !== false;
     const db = root.inject('database' as keyof Plugin.Contexts) as
       | { models?: Map<string, unknown> }
@@ -62,32 +89,43 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     // Discover models in background (don't block startup)
     (async () => {
       try {
-        const discovered = await modelRegistry.discover(provider);
+        for (const alias of ai.listProviders()) {
+          const p = ai.getProvider(alias);
+          const discovered = await modelRegistry.discover(p);
+          if (discovered.length > 0) {
+            p.models = discovered
+              .sort((a, b) => computeTierScore(b.id) - computeTierScore(a.id))
+              .map(m => m.id);
+          }
+          if (hadCache) {
+            logger.debug(`ModelRegistry: refreshed ${discovered.length} models from ${alias}`);
+          } else {
+            logger.debug(formatCompact({ provider: alias, models: discovered.length }));
+          }
+        }
         modelRegistry.saveCache();
-        if (discovered.length > 0) {
-          provider.models = discovered
-            .sort((a, b) => computeTierScore(b.id) - computeTierScore(a.id))
-            .map(m => m.id);
-        }
-        if (hadCache) {
-          logger.debug(`ModelRegistry: refreshed ${discovered.length} models from ${provider.name}`);
-        } else {
-          logger.debug(formatCompact( { provider: provider.name, models: discovered.length }));
-        }
       } catch (e) {
-        logger.warn(formatCompact( { provider: provider.name, error: (e as Error).message }));
+        logger.warn(formatCompact({ error: (e as Error).message }));
       }
     })();
 
     // Subagent manager for background tasks
+    const orchestratorEarly = root.inject('agent');
     agent.initSubagentManager(() => {
-      const modelName = provider.models[0] || '';
+      const modelName = zhinBinding.model || provider.models[0] || '';
       const fullConfig = { ...DEFAULT_CONFIG, ...agentConfig } as Required<import('../zhin-agent/config.js').ZhinAgentConfig>;
-      const zhinTools = createBuiltinTools({
-        plugin,
-        skillInstructionMaxChars: resolveSkillInstructionMaxChars(fullConfig, modelName),
-        pluginSkillRootsResolver: () => collectPluginSkillSearchRoots(root),
-      });
+      const zhinTools = [
+        ...createBuiltinTools({
+          plugin,
+          skillInstructionMaxChars: resolveSkillInstructionMaxChars(fullConfig, modelName),
+          pluginSkillRootsResolver: () => collectPluginSkillSearchRoots(root),
+        }),
+        // 与 registerBuiltinTools 一致：子 agent 须能 TF-IDF 载入 generate_image
+        createGenerateImageTool(
+          (alias) => ai.getProvider(alias),
+          (alias) => ai.getImageGenerationDefaults(alias),
+        ),
+      ];
       return zhinTools.map(item => {
         const t = isZhinTool(item) ? item.toTool() : item;
         return {
@@ -101,75 +139,150 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
         };
       });
     });
+    agent.getSubagentManager()?.configureRouting({
+      getProvider: (alias) => ai.getProvider(alias),
+      resolveBinding: (name) => ai.getBindingRegistry().getBinding(name),
+      getMcpRegistry: () => orchestratorEarly?.mcps ?? null,
+    });
     // Unified task executor — single execution+delivery path for cron/scheduler/subagent
     const resolveAdapter = (platform: string) => {
       const adapter = root.inject(platform) as { sendMessage?: (opts: SendOptions) => Promise<string> } | undefined;
       if (adapter && typeof adapter.sendMessage === 'function') return adapter as { sendMessage: (opts: SendOptions) => Promise<string> };
       return undefined;
     };
-    const executor = createTaskExecutor({ agent, resolveAdapter });
+    const defaultNotifyCfg = assistantCfg.enabled
+      ? resolveAssistantDefaultsConfig(assistantCfg.defaults)
+      : { notify: undefined, notifyOnFailure: false };
+    const notificationRouter = createNotificationRouter({ resolveAdapter });
+    const executor = createTaskExecutor({
+      agent,
+      resolveAdapter,
+      defaultNotify: defaultNotifyCfg.notify,
+      router: notificationRouter,
+    });
 
-    agent.setSubagentSender(async (origin, content) => {
+    agent.setSubagentSender(async (origin, delivery) => {
       const adapter = resolveAdapter(origin.platform);
       if (!adapter) {
         logger.warn(formatCompact( { error: 'adapter_not_found', platform: origin.platform }));
         return;
       }
-      await adapter.sendMessage({
-        context: origin.platform,
-        bot: origin.botId,
-        id: origin.sceneId,
-        type: origin.sceneType as MessageType,
-        content,
+      await deliverSubagentResult({
+        origin,
+        delivery,
+        send: (opts) => adapter.sendMessage(opts),
       });
     });
 
-    // Persistent cron engine
-    let cronEngine: PersistentCronEngine | null = null;
+    let jobEngine: import('../cron-engine.js').IPersistentJobEngine | null = null;
+    let jobWorker: JobWorker | null = null;
     const cronFeature = root.inject('cron') as import('@zhin.js/core').CronFeature | undefined;
     if (cronFeature && typeof cronFeature.add === 'function') {
       const addCron: import('../cron-engine.js').AddCronFn = (c) => cronFeature.add(c, 'cron-engine');
-      const runner = async (prompt: string, jobId: string, jobContext?: import('../cron-engine.js').CronJobContext) => {
-        if (!refs.zhinAgent) return;
-        const result = await executor.executeTask({
-          prompt,
-          context: jobContext || {},
-          timeContext: true,
+
+      if (assistantCfg.enabled) {
+        const store = createAssistantJobStore(dataDir, assistantCfg);
+        jobWorker = new JobWorker({
+          executor,
+          queue: assistantCfg.queue,
+          assistantEnabled: true,
         });
-        if (cronEngine) {
-          await cronEngine.updateJobStatus(jobId, result.success ? 'ok' : 'error', result.error);
-        }
-      };
-      cronEngine = new PersistentCronEngine({ dataDir, addCron, runner });
-      cronEngine.load();
-      setCronManager({ cronFeature, engine: cronEngine });
+        const assistantEngine = new AssistantJobEngine({
+          store,
+          addCron,
+          worker: jobWorker,
+          notifyOnFailure: defaultNotifyCfg.notifyOnFailure,
+          router: notificationRouter,
+          defaultNotify: defaultNotifyCfg.notify,
+        });
+        jobEngine = assistantEngine;
+
+        void store.migrateLegacyIfNeeded()
+          .then(() => store.syncSchedulerJobsFromLegacy())
+          .then(async () => {
+            const profile = await loadAssistantProfileFile(process.cwd(), assistantCfg.profile);
+            if (profile) {
+              for (const err of validateAssistantProfile(profile)) {
+                logger.warn(formatCompact({ assistant_profile: err }));
+              }
+            }
+            await syncProfileHeartbeatToStore(store, profile);
+            await syncProfileCronRoutinesToStore(store, profile);
+            assistantEngine.load();
+          }).catch((e) => {
+            logger.warn('Assistant load failed: ' + ((e as Error)?.message || String(e)));
+            assistantEngine.load();
+          });
+        const ingress = new AssistantEventIngress({
+          store,
+          engine: assistantEngine,
+          eventsConfig: assistantCfg.events,
+        });
+        setAssistantRuntime({
+          config: assistantCfg,
+          store,
+          engine: assistantEngine,
+          ingress,
+        });
+        logger.info(formatCompact({
+          assistant_runtime: true,
+          legacyDualWrite: assistantCfg.legacyDualWrite,
+          events: ingress.isEnabled(),
+          profile: assistantCfg.profile?.enabled === true,
+        }));
+      } else {
+        const runner = async (prompt: string, jobId: string, notify?: import('../assistant/types.js').JobNotify) => {
+          if (!refs.zhinAgent) return;
+          const result = await executor.executeTask({
+            prompt,
+            notify,
+            timeContext: true,
+          });
+          if (jobEngine) {
+            await jobEngine.updateJobStatus(jobId, result.success ? 'ok' : 'error', result.error);
+          }
+        };
+        jobEngine = new PersistentCronEngine({ dataDir, addCron, runner });
+        jobEngine.load();
+      }
+
+      setCronManager({ cronFeature, engine: jobEngine });
     }
 
-    // Unified scheduler (at/every/cron)
-    const scheduler = new Scheduler({
-      storePath: path.join(dataDir, 'scheduler-jobs.json'),
-      workspace: process.cwd(),
-      onJob: async (job) => {
-        if (!refs.zhinAgent) return;
-        await executor.executeTask({
-          prompt: job.payload.message,
-          context: {
-            platform: 'cron',
-            senderId: 'system',
-            sceneId: job.payload.target || 'scheduler',
-          },
-        });
-      },
-    });
-    setScheduler(scheduler);
-    scheduler.start().catch((e) => logger.warn(formatCompact( { error: (e as Error).message })));
+    // Legacy Scheduler：assistant.enabled 时由 JobStore 统一调度
+    if (!assistantCfg.enabled) {
+      const scheduler = new Scheduler({
+        storePath: path.join(dataDir, 'scheduler-jobs.json'),
+        workspace: process.cwd(),
+        heartbeatEnabled: true,
+        onJob: async (job) => {
+          if (!refs.zhinAgent) return;
+          const target = job.payload.target;
+          await executor.executeTask({
+            prompt: job.payload.message,
+            notify: job.payload.deliver && target
+              ? { channel: 'im', platform: target, sceneId: job.payload.to }
+              : { channel: 'silent' },
+          });
+        },
+      });
+      setScheduler(scheduler);
+      scheduler.start().catch((e) => logger.warn(formatCompact({ error: (e as Error).message })));
+    } else {
+      setScheduler(null);
+    }
 
     logger.debug('ZhinAgent created');
     return () => {
       setCronManager(null);
-      if (cronEngine) {
-        cronEngine.unload();
-        cronEngine = null;
+      setAssistantRuntime(null);
+      if (jobEngine) {
+        jobEngine.unload();
+        jobEngine = null;
+      }
+      if (jobWorker) {
+        jobWorker.stop();
+        jobWorker = null;
       }
       const s = getScheduler();
       if (s) {

@@ -41,6 +41,61 @@ export interface AppConfig<T extends keyof Databases = keyof Databases> {
     /** 是否启用统一收件箱存储，默认 false */
     enabled?: boolean;
   };
+  /**
+   * Assistant Runtime（Advanced / opt-in）：统一 JobStore，合并 cron-jobs 与 scheduler-jobs。
+   * 见 docs/architecture/assistant-runtime.md
+   */
+  assistant?: {
+    /** 启用 assistant-jobs.json 作为定时任务 SSOT，默认 false */
+    enabled?: boolean;
+    /** 双写 legacy cron-jobs.json，默认 true（M1 迁移期） */
+    legacyDualWrite?: boolean;
+    jobsFile?: string;
+    /** M3：默认 notify（未显式指定时用于 Job 投递） */
+    defaults?: {
+      notify?: {
+        channel: 'im' | 'silent' | 'log' | 'ha';
+        platform?: string;
+        botId?: string;
+        senderId?: string;
+        sceneId?: string;
+        scope?: string;
+        service?: string;
+        target?: string;
+      };
+    };
+    /** M4：Home Assistant 领域层 */
+    home?: {
+      enabled?: boolean;
+      restUrl?: string;
+      restToken?: string;
+      mcpServer?: string;
+      aliases?: Record<string, string>;
+      policy?: {
+        requireMaster?: boolean;
+        confirmServices?: string[];
+      };
+    };
+    /** M2：外部事件入口 POST /api/assistant/events，默认关闭 */
+    events?: {
+      enabled?: boolean;
+      token?: string;
+      allowedSources?: string[];
+      rateLimitPerMinute?: number;
+    };
+    /** M5：Assistant Profile（persona / routines / defaults） */
+    profile?: {
+      enabled?: boolean;
+      file?: string;
+    };
+    /** TaskQueue：Job 重试 / 并发（assistant.enabled 时默认开启） */
+    queue?: {
+      enabled?: boolean;
+      maxConcurrency?: number;
+      maxRetries?: number;
+      defaultTimeoutMs?: number;
+    };
+  };
   /** 插件配置（键为插件名，值为配置对象） */
   [key: string]: any;
 }

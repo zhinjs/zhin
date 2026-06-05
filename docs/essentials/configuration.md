@@ -120,6 +120,7 @@ bots:
 - `context` 必须与适配器名称匹配（如 `icqq`、`qq`、`kook`、`discord`）
 - 使用 `${VAR}` 引用 `.env` 文件中的环境变量
 - 一个适配器可以配置多个 bot（不同账号）
+- **ICQQ 文生图出站**：Zhin 与 icqq 守护进程异机/异进程时，在 icqq bot 下设置 `outboundMedia: base64`（配置 `rpc` 时默认 `base64`）；同机可省略。见 `plugins/adapters/icqq/README.md` 与 [文生图](/advanced/ai#文生图-generate_image)
 
 ## 数据库配置
 
@@ -160,18 +161,49 @@ database:
 
 ```yaml
 ai:
-  enabled: true                 # 是否启用 AI
-  defaultProvider: ollama        # 默认 AI 提供者
+  enabled: true
 
-  # AI 提供者配置
+  # 命名 provider 实例（driver + 连接参数；可多个 openai 兼容端点）
   providers:
-    ollama:
-      host: "http://127.0.0.1:11434"
-      # models 可省略 — ModelRegistry 自动发现并按 Tier 评分排序
-    openai:
-      apiKey: "${OPENAI_API_KEY}"
-      baseURL: "https://api.openai.com/v1"
-      # models 可省略 — 自动通过 /v1/models 发现
+    ds-main:
+      driver: deepseek
+      apiKey: "${DEEP_SEEK_API_KEY}"
+    zhipu-vl:
+      driver: zhipu
+      apiKey: "${BIG_MODEL_API_KEY}"
+      baseUrl: "https://open.bigmodel.cn/api/paas/v4"
+      imageGeneration:
+        defaultModel: cogview-3-flash
+        watermarkEnabled: false
+
+  # 入站/子 agent 绑定：模型 + MCP 子集（persona 在 agents/*.agent.md；工具由编排 + TF-IDF 选用）
+  agents:
+    zhin:
+      provider: ds-main
+      model: deepseek-chat
+      mcpServers: [icqq]
+    vision:
+      provider: zhipu-vl
+      model: glm-4.6v
+      priority: 100
+      match:
+        hasMedia: [image]
+    draw:
+      provider: zhipu-vl
+      model: glm-4.7-flash
+
+  # 入站识图：agents.vision + agents/vision.agent.md
+  # 文生图：run_deferred_task 或 spawn_task(agent: draw) + generate_image（provider_alias 如 zhipu-vl）
+  imageGeneration:
+    watermarkEnabled: false
+
+  # 可选文生图 provider 见 docs/advanced/ai.md#文生图-generate_image
+
+  # 全局 MCP 注册表（懒连接；谁用哪些由 agents.<name>.mcpServers 决定）
+  mcpServers:
+    - name: icqq
+      transport: streamable-http
+      url: "${ICQQ_MCP_URL}"
 
   # 会话配置（省略时使用框架默认：DB 模式 maxHistory 200 / expireMs 7 天；内存模式 100 / 24 小时）
   sessions:
@@ -203,8 +235,7 @@ AI Agent 的行为控制在 `ai.agent` 下配置：
 ```yaml
 ai:
   agent:
-    chatModel: ''               # 留空自动选择最优
-    visionModel: ''
+    # 模型与工具白名单已迁至 ai.agents.<name>（zhin 为默认入站统筹）
     execSecurity: allowlist     # deny / allowlist / full（默认 deny，示例为 allowlist）
     execPreset: custom          # readonly / network / development / custom（默认 custom）
     execAllowlist: ["docker"]   # 与 preset 合并
@@ -234,7 +265,16 @@ ai:
 
 ```yaml
 ai:
-  # 本地知识图谱 memory MCP（默认 false）
+  # 三层 Markdown 文件记忆（默认启用；见下方 memory 段）
+  memory:
+    enabled: true
+    budgets:
+      session: 8000
+      platform: 4000
+      global: 4000
+      daily: 2000
+
+  # @deprecated 请用 ai.memory 文件三层；仍为 true 时注册 MCP 图谱并打警告
   memoryMcp: false
 
   # 外部 MCP Server 列表（默认 []）
@@ -252,16 +292,51 @@ ai:
     # deferred Worker 工具编排（Stable 默认 false）
     toolSearch: false
     phaseTrace: false   # Agent 阶段日志，排障时可开 true
+
+  # 多模态入站/出站（base64 契约；平台 Adapter 负责编解码发送）
+  multimodal:
+    enabled: true
+    maxFileBytes: 26214400
+    inboundDir: data/media/inbound
+    outboundDir: data/media/outbound
+    image:
+      maxDimension: 2048
+      preferNativeVision: true
+    audio:
+      strategy: mcp          # mcp | plugin-voice | text-only
+      mcpServer: whisper     # 可选，STT MCP 名称
+    video:
+      strategy: mcp          # mcp | text-only
+      mcpServer: ffmpeg
+      maxFrames: 8
+    outbound:
+      splitMessages: auto    # auto | single | always_split
 ```
 
+### 三层文件记忆（Stable 默认启用）
+
+目录在运行目录下的 `data/memory/`：
+
+| 层级 | 路径 | 内容 | 写入 |
+|------|------|------|------|
+| 全局 | `global/MEMORY.md`、`global/YYYY-MM-DD.md` | 部署级长期事实与每日笔记 | 仅 master |
+| 平台 | `platforms/{platform}/RULES.md`、`ADAPTER.md` | 平台规则与适配器手册 | 仅 master |
+| 会话 | `sessions/{safeSessionKey}/MEMORY.md` | 绑定 `session_key` 的笔记 | 有 `write_file` 权限的用户 |
+
+旧版 `data/memory/MEMORY.md` 会在首次加载时自动复制到 `global/MEMORY.md`。注入 system prompt 时优先级：会话 → 平台 → 全局 → 每日笔记（窗口紧时先裁每日）。
+
 ::: tip SDK 依赖
-使用 `mcpServers` 或 `memoryMcp: true` 前请安装：`pnpm add @modelcontextprotocol/sdk`
+使用 `mcpServers` 或已弃用的 `memoryMcp: true` 前请安装：`pnpm add @modelcontextprotocol/sdk`
 :::
 
 **说明**：
-- AI 模块需要配置至少一个 provider 才能工作
-- `models` 列表现在是可选的 — 框架通过 ModelRegistry 自动发现可用模型并按 Tier 评分排序
-- `chatModel` / `visionModel` 可指定首选模型，留空则自动选择最优模型
+- AI 模块需要 `ai.providers` 至少一个实例，且 **`ai.agents.zhin`** 为必填绑定
+- 旧版 `defaultProvider`、`ai.agent.chatModel` / `visionModel`、`allowedTools` / `disabledTools` 已移除，请迁移到 `ai.agents.<name>`
+- 入站路由写在 `agents.<name>.priority` + `agents.<name>.match`（无 `route` 嵌套层）；`zhin` 不可写这两项
+- 非 `zhin` 且带 `match` 的 agent 须存在 `agents/<name>.agent.md`；`zhin` 永不读 `zhin.agent.md`
+- 旧版顶层 `ai.routes` 启动时自动合并进同名 `agents.*`（已废弃，请迁走）
+- `tools[]` 为唯一工具白名单（内置、插件、`mcp_{server}_{tool}` 均须按名写出）
+- `models` 列表可选 — ModelRegistry 自动发现并按 Tier 排序；`agents.<name>.model` 为首选
 - 当首选模型不可用时，系统自动降级到次优模型
 - `modelHarness` 会在 TypeScript 默认 harness 之上做 deep merge：对象按字段合并，数组（如后续扩展字段）显式写出时完整覆盖默认数组
 - `phaseTrace`（或环境变量 `ZHIN_AGENT_PHASE_TRACE=1`）可输出稳定的 `[AGENT_PHASE]` 阶段日志，便于排障与回归对照
@@ -521,6 +596,46 @@ plugins:
   - "@zhin.js/host-router"
   # - "@zhin.js/plugin-music"  # 已禁用
 ```
+
+## Assistant Runtime（Advanced / opt-in）
+
+个人助手主动能力：统一 JobStore、事件入口、通知路由。默认 **关闭**，Stable 路径（minimal-bot）不受影响。详见 [Assistant Runtime 路线图](/architecture/assistant-runtime)。
+
+```yaml
+assistant:
+  enabled: true
+  legacyDualWrite: false   # 默认；迁移期可 true 双写 cron-jobs.json
+  queue:                   # TaskQueue 并发 / 重试（默认 enabled 随 assistant.enabled）
+    enabled: true
+    maxConcurrency: 3
+    maxRetries: 2
+  defaults:
+    notify:               # 运行时未指定 notify 的 Job 默认 IM 投递目标
+      channel: im
+      platform: icqq
+      botId: "8596238"
+      sceneId: "1659488338"
+      scope: private
+  profile:                # 单文件 Profile，见 assistant-profile
+    enabled: false
+    file: assistant.profile.yml
+  events:                 # POST /api/assistant/events
+    enabled: false
+    allowedSources: [homeassistant]
+    rateLimitPerMinute: 60
+```
+
+| 字段 | 说明 |
+|------|------|
+| `enabled` | 启用 `data/assistant-jobs.json` 作为定时任务 SSOT |
+| `legacyDualWrite` | 写入 assistant-jobs 后是否镜像 `cron-jobs.json`（默认 false） |
+| `queue` | JobWorker → TaskQueue：`maxConcurrency`、`maxRetries`、`defaultTimeoutMs` |
+| `defaults.notify` | 执行阶段合并的默认 IM 目标；**持久化 JSON 中每条 Job 仍须显式 `notify`** |
+| `home` | Home Assistant 别名与 `home_*` 工具，见 [assistant-home](/advanced/assistant-home) |
+| `profile` | 单文件 Profile 合并 SOUL/AGENTS/TOOLS，见 [assistant-profile](/advanced/assistant-profile) |
+| `events` | 外部 HTTP 事件触发 Job，见 [assistant-events](/advanced/assistant-events) |
+
+持久化任务（`cron-jobs.json` / `assistant-jobs.json`）**必须**含 `notify`；缺字段启动或 CLI 读取时会报错。旧 `context` 已移除。
 
 ## 热重载
 

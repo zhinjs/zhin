@@ -150,7 +150,7 @@ describe('AI Providers', () => {
         fetchSpy.mockResolvedValueOnce({
           ok: true,
           json: () => Promise.resolve(mockResponse),
-          text: () => Promise.resolve(''),
+          text: () => Promise.resolve(JSON.stringify(mockResponse)),
         } as Response);
 
         const provider = new OpenAIProvider({ apiKey: 'sk-test' });
@@ -169,6 +169,39 @@ describe('AI Providers', () => {
             method: 'POST',
           })
         );
+      });
+
+      it('should aggregate SSE body when proxy returns stream format for stream:false', async () => {
+        const chunk1 = JSON.stringify({
+          id: 'chatcmpl-sse',
+          object: 'chat.completion.chunk',
+          created: 1234567890,
+          model: 'gpt-5.5',
+          choices: [{ index: 0, delta: { role: 'assistant', content: '我是 ' }, finish_reason: null }],
+        });
+        const chunk2 = JSON.stringify({
+          id: 'chatcmpl-sse',
+          object: 'chat.completion.chunk',
+          created: 1234567890,
+          model: 'gpt-5.5',
+          choices: [{ index: 0, delta: { content: 'GPT-5.5' }, finish_reason: 'stop' }],
+        });
+        const sseBody = `data: ${chunk1}\ndata: ${chunk2}\ndata: [DONE]\n`;
+
+        fetchSpy.mockResolvedValueOnce({
+          ok: true,
+          text: () => Promise.resolve(sseBody),
+        } as Response);
+
+        const provider = new OpenAIProvider({ apiKey: 'sk-test', baseUrl: 'https://proxy.example/v1' });
+        const result = await provider.chat({
+          model: 'gpt-5.5',
+          messages: [{ role: 'user', content: '你是什么模型' }],
+        });
+
+        expect(result.choices[0].message.content).toBe('我是 GPT-5.5');
+        expect(result.choices[0].finish_reason).toBe('stop');
+        expect(result.model).toBe('gpt-5.5');
       });
     });
 

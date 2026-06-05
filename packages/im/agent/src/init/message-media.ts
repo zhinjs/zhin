@@ -15,11 +15,23 @@ export function extractMediaParts(message: Message<any>): ContentPart[] {
       const { type, data } = seg;
       switch (type) {
         case 'image': {
+          const b64 = data?.base64 || data?.data;
+          if (b64 && typeof b64 === 'string') {
+            const mime = data?.mime || data?.mimeType || 'image/jpeg';
+            parts.push({ type: 'image_url', image_url: { url: `data:${mime};base64,${b64}` } });
+            break;
+          }
           const url = data?.url || data?.file || data?.src;
           if (url) parts.push({ type: 'image_url', image_url: { url } });
           break;
         }
         case 'video': {
+          const b64 = data?.base64;
+          if (b64 && typeof b64 === 'string') {
+            const mime = data?.mime || data?.mimeType || 'video/mp4';
+            parts.push({ type: 'video_url', video_url: { url: `data:${mime};base64,${b64}` } } as ContentPart);
+            break;
+          }
           const url = data?.url || data?.file || data?.src;
           if (url) parts.push({ type: 'video_url', video_url: { url } } as ContentPart);
           break;

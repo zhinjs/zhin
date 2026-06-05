@@ -9,6 +9,8 @@ export default defineConfig({
     'rest/host-rest-api': 'src/rest/host-rest-api.ts',
     'rest/marketplace-rest-api': 'src/rest/marketplace-rest-api.ts',
     'rest/logs-rest-api': 'src/rest/logs-rest-api.ts',
+    'rest/assistant-events-rest-api': 'src/rest/assistant-events-rest-api.ts',
+    'rest/assistant-jobs-rest-api': 'src/rest/assistant-jobs-rest-api.ts',
   },
   format: ['esm'],
   dts: { compilerOptions: { skipLibCheck: true } },

@@ -157,6 +157,8 @@ export interface ProviderConfig {
   contextWindow?: number;
   /** Provider 能力声明 */
   capabilities?: ProviderCapabilities;
+  /** 文生图默认（zhipu / cloudflare 等支持 generateImage 的 driver） */
+  imageGeneration?: import('./image-generation.js').ImageGenerationDefaults;
 }
 
 /** Provider 接口 */
@@ -361,20 +363,57 @@ export interface OllamaProviderConfig extends ProviderConfig {
   num_ctx?: number;
 }
 
+/** 命名 provider 实例（driver + 连接参数） */
+export interface ProviderInstanceConfig extends ProviderConfig {
+  driver: string;
+}
+
+export interface RouteMatchConfig {
+  adapter?: string;
+  bot?: string;
+  scene?: string;
+  hasMedia?: string[];
+  contentContains?: string;
+}
+
+export interface AgentBindingConfig {
+  provider: string;
+  model: string;
+  mcpServers?: string[];
+  /** 入站路由优先级（须与 match 同时配置；zhin 不可配置） */
+  priority?: number;
+  /** 入站路由匹配条件（无则仅 spawn_task / 绑定，不参与入站竞争） */
+  match?: RouteMatchConfig;
+}
+
+/** @deprecated 已并入 ai.agents.<name>.priority / match */
+export interface RouteEntryConfig {
+  priority: number;
+  match: RouteMatchConfig;
+}
+
 /** AI 服务配置 */
 export interface AIConfig {
   enabled?: boolean;
+  /** @deprecated 使用 ai.agents.zhin.provider */
   defaultProvider?: string;
-  providers?: {
+  /** 命名 provider 实例；或旧版固定键（由 @zhin.js/agent 归一化） */
+  providers?: Record<string, ProviderInstanceConfig> | {
     openai?: ProviderConfig;
     anthropic?: ProviderConfig;
     deepseek?: ProviderConfig;
     moonshot?: ProviderConfig;
     zhipu?: ProviderConfig;
+    google?: ProviderConfig;
+    gemini?: ProviderConfig;
     ollama?: OllamaProviderConfig;
     cloudflare?: ProviderConfig & { accountId: string };
     custom?: ProviderConfig[];
   };
+  /** per-agent 绑定 + 可选入站 priority/match */
+  agents?: Record<string, AgentBindingConfig>;
+  /** @deprecated 使用 ai.agents.<name>.priority / match */
+  routes?: Record<string, RouteEntryConfig>;
   sessions?: {
     /** 最大历史消息数（数据库模式默认200，内存模式默认100） */
     maxHistory?: number;
@@ -404,8 +443,36 @@ export interface AIConfig {
     summaryPrompt?: string;
   };
   /**
-   * Opt-in: register @modelcontextprotocol/server-memory (knowledge graph in data/knowledge-graph.jsonl).
-   * Default off. Set true to enable; or add a server named "memory" under ai.mcpServers.
+   * 文生图全局默认（可被 `providers.<alias>.imageGeneration` 覆盖）。
+   * 智谱：`watermarkEnabled: false` 需先在智谱开放平台签署去水印免责声明。
+   */
+  imageGeneration?: import('./image-generation.js').ImageGenerationDefaults;
+  /** 入站/出站多模态（base64 契约；平台 adapter 负责编解码与发送） */
+  multimodal?: {
+    enabled?: boolean;
+    maxFileBytes?: number;
+    inboundDir?: string;
+    outboundDir?: string;
+    image?: { maxDimension?: number; preferNativeVision?: boolean };
+    audio?: { strategy?: 'mcp' | 'plugin-voice' | 'text-only' };
+    video?: { strategy?: 'mcp' | 'text-only'; mcpServer?: string; maxFrames?: number };
+    outbound?: { splitMessages?: 'auto' | 'single' | 'always_split' };
+  };
+  /**
+   * 三层 Markdown 文件记忆（global / platform / session）。
+   * 默认启用；设 enabled: false 可关闭注入。
+   */
+  memory?: {
+    enabled?: boolean;
+    budgets?: {
+      session?: number;
+      platform?: number;
+      global?: number;
+      daily?: number;
+    };
+  };
+  /**
+   * @deprecated 请使用 ai.memory 文件三层；仍为 true 时注册 MCP 图谱并打弃用警告。
    */
   memoryMcp?: boolean;
   /** PAT for adapter-github auto-registered server-github MCP (overrides env when set). */
@@ -427,9 +494,9 @@ export interface AIConfig {
   }>;
   /** Agent 工具开关与执行安全 */
   agent?: {
-    /** 禁用的工具名列表，这些工具不会下发给 AI */
+    /** @deprecated 使用 ai.agents.<name>.tools 白名单 */
     disabledTools?: string[];
-    /** 仅允许的工具名列表；若设置则只下发列表中的工具（与 disabledTools 二选一，allowedTools 优先） */
+    /** @deprecated 使用 ai.agents.<name>.tools 白名单 */
     allowedTools?: string[];
     /** bash 执行策略：deny=禁止执行，allowlist=仅允许列表内命令，full=不限制 */
     execSecurity?: 'deny' | 'allowlist' | 'full';
@@ -448,11 +515,12 @@ export interface AIConfig {
       /** provider 模式覆盖（支持 * 通配符） */
       providerPatterns?: Record<string, { maxIterations?: number }>;
     };
-    /** 启用 deferred + 同步 Worker 编排模式 */
-    toolSearch?: boolean;
-    toolSearchMaxResults?: number;
-    toolSearchOrchestratorTools?: string[];
-    toolSearchWorkerBaseTools?: string[];
+    /** Worker 侧 TF-IDF 载入 deferred 工具数量上限 */
+    deferredToolMaxResults?: number;
+    /** 主 Agent 常驻编排工具名 */
+    orchestratorTools?: string[];
+    /** Deferred Worker 基础工具 */
+    workerBaseTools?: string[];
   };
   /** AI 触发配置 */
   trigger?: {

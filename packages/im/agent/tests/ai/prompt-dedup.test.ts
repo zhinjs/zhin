@@ -9,7 +9,7 @@ function countSection(prompt: string, heading: string): number {
 describe('buildRichSystemPrompt section dedup', () => {
   it('toolSearch 下只注入一次 Runtime / Security / Orchestration 段', () => {
     const prompt = buildRichSystemPrompt({
-      config: { ...DEFAULT_CONFIG, toolSearch: true },
+      config: DEFAULT_CONFIG,
       skillRegistry: null,
       skillsSummaryXML: '',
       activeSkillsContext: '',

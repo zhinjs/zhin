@@ -37,6 +37,7 @@ describe('PersistentCronEngine (Advanced cron_add)', () => {
       cronExpression: '*/1 * * * * *',
       prompt: 'echo acceptance',
       enabled: true,
+      notify: { channel: 'silent' },
     });
 
     const jobs = await readCronJobsFile(dataDir);
@@ -44,6 +45,6 @@ describe('PersistentCronEngine (Advanced cron_add)', () => {
     expect(jobs[0]?.prompt).toBe('echo acceptance');
 
     await vi.advanceTimersByTimeAsync(2_500);
-    expect(runner).toHaveBeenCalledWith('echo acceptance', 'acceptance-echo', undefined);
+    expect(runner).toHaveBeenCalledWith('echo acceptance', 'acceptance-echo', { channel: 'silent' });
   });
 });

@@ -56,7 +56,6 @@ export async function resolveAgentPromptSections(
   const hookEvent = createAIHookEvent('agent', 'prompt', sessionId, {
     slot: ctx.slot,
     toolContext: ctx.toolContext,
-    toolSearch: ctx.toolSearch,
     userMessagePreview: ctx.userMessagePreview,
     deferred: ctx.deferred,
     sections,

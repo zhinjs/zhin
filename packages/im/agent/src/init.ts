@@ -27,6 +27,7 @@ import { registerDbUpgrade } from './init/register-db-upgrade.js';
 import { registerManagementTools } from './init/register-management-tools.js';
 import { registerOwnerApproveCommands } from './init/register-owner-approve-commands.js';
 import { registerBuiltinTools } from './init/register-builtin-tools.js';
+import { registerHomeTools } from './init/register-home-tools.js';
 import { registerTypingIndicator } from './init/register-typing-indicator.js';
 
 /**
@@ -53,5 +54,6 @@ export function initAgentModule(): void {
   registerManagementTools(refs);
   registerOwnerApproveCommands();
   registerBuiltinTools(refs);
+  registerHomeTools();
   registerTypingIndicator(refs);
 }

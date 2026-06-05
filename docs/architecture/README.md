@@ -14,6 +14,7 @@
 | [Agent 上下文块](agent-context-blocks.md) | 系统提示词分段与贡献者约定 |
 | [Agent 提示词贡献者](agent-prompt-contributors.md) | 平台专属 `AgentPromptContributor` |
 | [HTTP 路由编写](fetch-router-authoring.md) | Koa `Router` / `registerFetchRoute` 兼容 API |
+| [Assistant Runtime 演进路线图](assistant-runtime.md) | 个人助手（路线 A）：JobStore、Event Ingress、通知与 Home Domain |
 
 根目录 [AGENTS.md](https://github.com/zhinjs/zhin/blob/main/AGENTS.md) 为 AI 编码代理的最小入口。
 

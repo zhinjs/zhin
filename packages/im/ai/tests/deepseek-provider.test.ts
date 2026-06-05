@@ -97,6 +97,25 @@ describe('DeepSeekProvider', () => {
     expect(explicit.thinking).toEqual({ type: 'enabled' });
   });
 
+  it('无 vision 时应将 image_url 压平为纯文本 content', () => {
+    const provider = new DeepSeekProvider({ apiKey: 'sk-test' });
+    const body = bodyFor(provider, {
+      model: 'deepseek-v4-flash',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: '看图' },
+            { type: 'image_url', image_url: { url: 'data:image/png;base64,abc' } },
+          ],
+        },
+      ],
+    });
+    const messages = body.messages as { role: string; content: string }[];
+    expect(messages[0].content).toBe('看图\n[图片]');
+    expect(typeof messages[0].content).toBe('string');
+  });
+
   it('think:false 时关闭 thinking（工具轮次）', () => {
     const provider = new DeepSeekProvider({ apiKey: 'sk-test' });
     const body = bodyFor(provider, {

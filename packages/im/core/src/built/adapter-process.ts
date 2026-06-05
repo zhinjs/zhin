@@ -29,6 +29,7 @@ export class ProcessBot implements Bot<{ owner?: string },{content:string,ts:num
             $sender: {
                 id: runtimeUser(),
                 name: runtimeUser(),
+                role: 'master',
             },
             $channel: {
                 id: runtimeUser(),

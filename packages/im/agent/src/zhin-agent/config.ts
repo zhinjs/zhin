@@ -56,7 +56,6 @@ const TRUE_VALUES = new Set(['1', 'true', 'yes', 'on']);
 export const KEYWORD_TRIGGERS = {
   chatHistory: /之前|上次|历史|回忆|聊过|记录|还记得|曾经/i,
   userProfile: /偏好|设置|配置|档案|资料|时区|timezone|profile|喜好|我叫|叫我|记住我/i,
-  spawnTask: /后台|子任务|spawn|异步|background|并行|独立处理/i,
 } as const;
 
 export interface ZhinAgentConfig {
@@ -112,14 +111,12 @@ export interface ZhinAgentConfig {
     sessionId: string;
     extra: Record<string, unknown>;
   }) => void;
-  /** 启用 deferred + 同步 Worker（主 Agent 仅编排） */
-  toolSearch?: boolean;
   /** Worker 侧 TF-IDF 载入 deferred 工具数量上限 */
-  toolSearchMaxResults?: number;
-  /** toolSearch 模式下主 Agent 常驻工具名 */
-  toolSearchOrchestratorTools?: string[];
-  /** toolSearch 模式下 Worker 基础工具（另加 TF-IDF 载入的 deferred） */
-  toolSearchWorkerBaseTools?: string[];
+  deferredToolMaxResults?: number;
+  /** 主 Agent 常驻编排工具名 */
+  orchestratorTools?: string[];
+  /** Deferred Worker 基础工具（另加 TF-IDF 载入的 deferred） */
+  workerBaseTools?: string[];
   /** 单轮平台 prompt 段 body 上限（字符） */
   platformPromptSectionMaxChars?: number;
   /** 单 slot 平台 prompt 合计上限（字符） */
@@ -131,21 +128,31 @@ export interface ZhinAgentConfig {
   policyDenialStopAfter?: number;
 }
 
-/** toolSearch 主 Agent 默认常驻（不含 activate_skill：执行一律经 Worker） */
-export const DEFAULT_TOOL_SEARCH_ORCHESTRATOR_TOOLS = [
+/** 主 Agent 默认常驻编排工具（不含 activate_skill：执行一律经 Worker；文生图走 deferred） */
+export const DEFAULT_ORCHESTRATOR_TOOLS = [
   'tool_search',
   'run_deferred_task',
   'ask_user',
+  'spawn_task',
 ] as const;
 
-/** toolSearch 模式下不进入主编排也不进入 deferred 目录 */
-export const TOOL_SEARCH_EXCLUDED_TOOLS = ['activate_skill', 'install_skill'] as const;
+/** 不进入主编排也不进入 deferred 目录 */
+export const DEFERRED_CATALOG_EXCLUDED_TOOLS = ['activate_skill', 'install_skill'] as const;
 
-/** toolSearch Worker 默认基础工具 */
-export const DEFAULT_TOOL_SEARCH_WORKER_BASE_TOOLS = [
+/** @deprecated 使用 DEFERRED_CATALOG_EXCLUDED_TOOLS */
+export const TOOL_SEARCH_EXCLUDED_TOOLS = DEFERRED_CATALOG_EXCLUDED_TOOLS;
+
+/** Deferred Worker 默认基础工具 */
+export const DEFAULT_WORKER_BASE_TOOLS = [
   'bash',
   'read_file',
 ] as const;
+
+/** @deprecated 使用 DEFAULT_ORCHESTRATOR_TOOLS */
+export const DEFAULT_TOOL_SEARCH_ORCHESTRATOR_TOOLS = DEFAULT_ORCHESTRATOR_TOOLS;
+
+/** @deprecated 使用 DEFAULT_WORKER_BASE_TOOLS */
+export const DEFAULT_TOOL_SEARCH_WORKER_BASE_TOOLS = DEFAULT_WORKER_BASE_TOOLS;
 
 export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   persona: 'You are Zhin, an intelligent IM assistant running in Zhin.js. Answer clearly, act through available tools when needed, and never claim actions or results unless confirmed by tool output.',
@@ -181,10 +188,9 @@ export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   modelHarness: {},
   phaseTrace: false,
   onPhaseTrace: () => {},
-  toolSearch: false,
-  toolSearchMaxResults: 8,  // 增加工具搜索结果数量
-  toolSearchOrchestratorTools: [...DEFAULT_TOOL_SEARCH_ORCHESTRATOR_TOOLS],
-  toolSearchWorkerBaseTools: [...DEFAULT_TOOL_SEARCH_WORKER_BASE_TOOLS],
+  deferredToolMaxResults: 8,
+  orchestratorTools: [...DEFAULT_ORCHESTRATOR_TOOLS],
+  workerBaseTools: [...DEFAULT_WORKER_BASE_TOOLS],
   platformPromptSectionMaxChars: 2048,
   platformPromptMaxChars: 4096,
   policyDenialStopAfter: 2,

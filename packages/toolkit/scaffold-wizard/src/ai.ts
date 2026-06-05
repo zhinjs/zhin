@@ -12,7 +12,6 @@ export interface AISetupConfig {
     execPreset: 'readonly' | 'network' | 'development' | 'custom';
     execAllowlist: string[];
     phaseTrace: boolean;
-    toolSearch: boolean;
   };
   trigger?: {
     respondToAt: boolean;
@@ -77,6 +76,11 @@ const PROVIDERS = [
   },
 ] as const;
 
+function defaultModelForProvider(driver: string): string {
+  const entry = PROVIDERS.find(p => p.value === driver);
+  return entry?.defaultModel ?? '';
+}
+
 export const RECOMMENDED_AI_DEFAULTS = {
   sessions: {
     useDatabase: true,
@@ -94,7 +98,6 @@ export const RECOMMENDED_AI_DEFAULTS = {
     execPreset: 'custom' as const,
     execAllowlist: [] as string[],
     phaseTrace: false,
-    toolSearch: false,
   },
   trigger: {
     ignorePrefixes: ['/', '!', '！'],
@@ -256,12 +259,6 @@ export async function configureAI(): Promise<AISetupConfig> {
     },
     {
       type: 'confirm',
-      name: 'toolSearch',
-      message: '启用 deferred + Worker 工具编排（toolSearch，Advanced）？',
-      default: false,
-    },
-    {
-      type: 'confirm',
       name: 'phaseTrace',
       message: '输出 Agent 阶段日志（便于排障）？',
       default: false,
@@ -287,7 +284,6 @@ export async function configureAI(): Promise<AISetupConfig> {
       execPreset,
       execAllowlist: [],
       phaseTrace: agentConfig.phaseTrace,
-      toolSearch: agentConfig.toolSearch,
     },
     trigger: {
       respondToAt: triggerConfig.respondToAt,
@@ -325,16 +321,18 @@ export function generateAIEnvVars(config: AISetupConfig): string {
 export function generateAIConfigYaml(config: AISetupConfig): string {
   if (!config.enabled) return '';
 
+  const providerAlias = config.defaultProvider || Object.keys(config.providers ?? {})[0] || 'openai';
+
   const lines: string[] = [
     '',
     'ai:',
-    `  defaultProvider: ${config.defaultProvider}`,
     '  providers:',
   ];
 
   if (config.providers) {
     for (const [name, providerConfig] of Object.entries(config.providers)) {
       lines.push(`    ${name}:`);
+      lines.push(`      driver: ${name}`);
       if (providerConfig.apiKey) {
         lines.push(`      apiKey: ${providerConfig.apiKey}`);
       }
@@ -353,6 +351,15 @@ export function generateAIConfigYaml(config: AISetupConfig): string {
     }
   }
 
+  const zhinModel = defaultModelForProvider(providerAlias)
+    || config.providers?.[providerAlias]?.models?.[0]
+    || '';
+  lines.push('  agents:');
+  lines.push('    zhin:');
+  lines.push(`      provider: ${providerAlias}`);
+  if (zhinModel) {
+    lines.push(`      model: ${zhinModel}`);
+  }
   if (config.trigger) {
     lines.push('  trigger:');
     lines.push(`    respondToAt: ${config.trigger.respondToAt}`);
@@ -390,7 +397,6 @@ export function generateAIConfigYaml(config: AISetupConfig): string {
     lines.push(`    execSecurity: ${config.agent.execSecurity}`);
     lines.push(`    execPreset: ${config.agent.execPreset}`);
     lines.push(`    phaseTrace: ${config.agent.phaseTrace}`);
-    lines.push(`    toolSearch: ${config.agent.toolSearch}`);
     lines.push('    execAllowlist:');
     for (const command of config.agent.execAllowlist) {
       lines.push(`      - "${command}"`);
@@ -457,7 +463,6 @@ export function generateAIConfigToml(config: AISetupConfig): string {
     lines.push(`execPreset = "${config.agent.execPreset}"`);
     lines.push(`execAllowlist = ${JSON.stringify(config.agent.execAllowlist)}`);
     lines.push(`phaseTrace = ${config.agent.phaseTrace}`);
-    lines.push(`toolSearch = ${config.agent.toolSearch}`);
   }
 
   return lines.join('\n');

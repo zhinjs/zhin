@@ -14,6 +14,7 @@
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { getAuditLogger } from './audit-logger.js';
+import { getMemoryRoot } from '../memory-layers.js';
 
 // ── 设备路径阻止──────────────
 
@@ -154,14 +155,42 @@ function getPolicyPathCandidates(filePath: string): string[] {
 }
 
 /**
+ * 是否为项目 data/memory 下的三层记忆路径（允许读写，仍受敏感文件名规则约束）。
+ */
+export function isMemoryDataPath(filePath: string, workspaceDir?: string): boolean {
+  const cwd = workspaceDir || process.cwd();
+  const memoryRoot = path.resolve(getMemoryRoot(cwd));
+  const resolved = path.resolve(expandHome(filePath));
+  if (resolved === memoryRoot || resolved.startsWith(memoryRoot + path.sep)) {
+    return true;
+  }
+  const normalized = resolved.split(path.sep).join('/');
+  return normalized.includes('/data/memory/');
+}
+
+/** data/media 下 inbound/outbound 媒体缓存（允许读写，仍受敏感文件名规则约束） */
+export function isMediaDataPath(filePath: string, workspaceDir?: string): boolean {
+  const cwd = workspaceDir || process.cwd();
+  const resolved = path.resolve(expandHome(filePath));
+  const normalized = resolved.split(path.sep).join('/');
+  const mediaRoot = path.resolve(cwd, 'data', 'media');
+  if (resolved === mediaRoot || resolved.startsWith(mediaRoot + path.sep)) {
+    return true;
+  }
+  return normalized.includes('/data/media/');
+}
+
+/**
  * 检查文件路径是否允许被 AI Agent 访问。
  * 该函数只做「阻止明确敏感文件」的检查，不做正向白名单。
  */
-export function checkFileAccess(filePath: string): FileAccessCheckResult {
+export function checkFileAccess(filePath: string, workspaceDir?: string): FileAccessCheckResult {
   // 解析为绝对路径
   const resolved = path.resolve(expandHome(filePath));
   const basename = path.basename(resolved);
   const normalizedCandidates = getPolicyPathCandidates(filePath);
+  const underMemoryData = isMemoryDataPath(resolved, workspaceDir);
+  const underMediaData = isMediaDataPath(resolved, workspaceDir);
 
   // 1. 检查敏感路径前缀
   for (const prefix of SENSITIVE_PATH_PREFIXES) {
@@ -183,6 +212,12 @@ export function checkFileAccess(filePath: string): FileAccessCheckResult {
   // 2. 检查敏感目录
   const parts = normalizePathSeparators(resolved).split('/');
   for (let i = 0; i < parts.length; i++) {
+    if (underMemoryData && parts[i] === 'data' && parts[i + 1] === 'memory') {
+      continue;
+    }
+    if (underMediaData && parts[i] === 'data' && parts[i + 1] === 'media') {
+      continue;
+    }
     if (SENSITIVE_DIR_NAMES.has(parts[i])) {
       const result = { allowed: false, reason: `拒绝访问敏感目录: ${parts[i]}` };
 

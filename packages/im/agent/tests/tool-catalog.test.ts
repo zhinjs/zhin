@@ -27,6 +27,7 @@ describe('tool-catalog', () => {
     const all = [
       t('tool_search'),
       t('run_deferred_task'),
+      t('spawn_task'),
       t('activate_skill'),
       t('install_skill'),
       t('ask_user'),

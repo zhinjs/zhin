@@ -148,7 +148,7 @@ ai:
 框架已提供 **SubagentManager**：主 ZhinAgent 通过工具 `spawn_task` 把复杂/耗时任务派给**后台子 Agent** 异步执行，子 Agent 默认仅用受限工具集（文件、Shell、网络搜索等），完成后通过回调把结果发回主会话。
 
 - 主对话不阻塞，用户可继续聊天。
-- 子 Agent 由 `ZhinAgent.initSubagentManager(createTools)` 在 init 时挂好，主 Agent 在回复里提到「后台 / 子任务 / spawn」时会注入 `spawn_task` 工具。
+- 子 Agent 由 `ZhinAgent.initSubagentManager(createTools)` 在 init 时挂好；`spawn_task` 为主编排序列化常驻工具（见 `orchestratorTools` / `DEFAULT_ORCHESTRATOR_TOOLS`）。
 - 用户说「后台帮我整理这份文档」时，主 Agent 可调用 `spawn_task({ task: '...', label: '...' })`，子任务在后台跑完后再通知用户。
 
 无需额外配置即可使用；若需放宽子 Agent 的工具范围，使用 `ai.agent.subagentTools` 显式追加白名单（不会自动继承主会话全部 skill/tool）。

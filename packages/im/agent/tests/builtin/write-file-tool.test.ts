@@ -126,6 +126,38 @@ describe('WriteFileBuiltinTool', () => {
     expect(fs.readFileSync(fp, 'utf-8')).toBe('owner-ok');
   });
 
+  it('非 master 写入 global 记忆路径被拒绝', async () => {
+    mockPlugin('owner1', ['admin1'], ['write_file']);
+    const memRoot = path.join(tmpDir, 'data', 'memory', 'global', 'MEMORY.md');
+    const inst = new WriteFileBuiltinTool();
+    const ctx = {
+      platform: 'icqq',
+      botId: 'bot1',
+      senderId: 'admin1',
+      roles: ['trusted'],
+      extra: { execAllowlist: ['write_file'] },
+    } as ToolContext;
+    const out = String(await inst.run({ file_path: memRoot, content: 'nope' }, ctx));
+    expect(out).toMatch(/^Error:/);
+    expect(out).toMatch(/master|Owner|全局/i);
+    expect(fs.existsSync(memRoot)).toBe(false);
+  });
+
+  it('master 可写入 global 记忆路径', async () => {
+    mockPlugin('owner1', ['admin1'], []);
+    const memRoot = path.join(tmpDir, 'data', 'memory', 'global', 'MEMORY.md');
+    const inst = new WriteFileBuiltinTool();
+    const ctx = {
+      platform: 'icqq',
+      botId: 'bot1',
+      senderId: 'owner1',
+      roles: ['master'],
+    } as ToolContext;
+    const out = String(await inst.run({ file_path: memRoot, content: 'owner-memory' }, ctx));
+    expect(out).toContain('Wrote');
+    expect(fs.readFileSync(memRoot, 'utf-8')).toBe('owner-memory');
+  });
+
   it('admin 且 write_file 在 execAllowlist 时可直接执行', async () => {
     mockPlugin('owner1', ['admin1'], ['write_file']);
     const fp = path.join(tmpDir, 'admin-allowlisted.txt');

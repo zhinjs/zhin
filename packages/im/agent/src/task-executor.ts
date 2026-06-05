@@ -2,19 +2,21 @@
  * Unified task execution + delivery layer.
  *
  * Inspired by metabot's MessageBridge.executeApiTask():
- * - Accepts a prompt + context
+ * - Accepts a prompt + notify
  * - Calls ZhinAgent.process()
  * - Converts OutputElement[] → text
- * - Delivers via Adapter.sendMessage()
+ * - Delivers via NotificationRouter (M3)
  * - Returns structured result with timing
  * - Per-sceneId mutex lock to prevent concurrent execution
  */
-import type { MessageType, SendOptions } from '@zhin.js/core';
 import type { OutputElement } from '@zhin.js/ai';
 import type { ZhinAgent } from './zhin-agent/index.js';
-import type { CronJobContext } from './cron-engine.js';
 import { Logger } from '@zhin.js/core';
-import { toSendOptions, type NormalizedQueueOutboundDetail } from '@zhin.js/core/queue-im-field-contract';
+import {
+  createNotificationRouter,
+  type NotificationRouter,
+} from './assistant/notification-router.js';
+import type { JobNotify } from './assistant/types.js';
 
 const logger = new Logger(null, 'task-executor');
 
@@ -25,8 +27,8 @@ const logger = new Logger(null, 'task-executor');
 export interface TaskExecutionOptions {
   /** The prompt to send to ZhinAgent */
   prompt: string;
-  /** Delivery & routing context */
-  context: CronJobContext;
+  /** 投递通道 */
+  notify?: JobNotify;
   /** Whether to prepend current time info (default: false) */
   timeContext?: boolean;
 }
@@ -44,7 +46,11 @@ export interface TaskExecutionResult {
 export interface TaskExecutorDeps {
   agent: ZhinAgent;
   /** Resolve an adapter by platform name. Returns object with sendMessage if found. */
-  resolveAdapter: (platform: string) => { sendMessage: (opts: SendOptions) => Promise<string> } | undefined;
+  resolveAdapter: (platform: string) => { sendMessage: (opts: import('@zhin.js/core').SendOptions) => Promise<string> } | undefined;
+  /** M3：可选注入；未提供时按 resolveAdapter 创建 */
+  router?: NotificationRouter;
+  /** assistant.defaults.notify */
+  defaultNotify?: JobNotify;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -74,30 +80,20 @@ function elementsToText(elements: OutputElement[]): string {
   }).join('\n').trim();
 }
 
-export function cronContextToSendOptions(context: CronJobContext, content: string): SendOptions {
-  if (!context.botId) throw new Error('Missing cron delivery field: botId');
-  const sceneType = (context.scope || 'private') as MessageType;
-  const outboundDetail: NormalizedQueueOutboundDetail = {
-    context: context.platform || 'cron',
-    bot: context.botId,
-    channelId: context.sceneId || 'cron',
-    channelType: sceneType,
-    content,
-  };
-  return toSendOptions(outboundDetail);
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Factory
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function createTaskExecutor(deps: TaskExecutorDeps) {
+  const router = deps.router ?? createNotificationRouter({ resolveAdapter: deps.resolveAdapter });
+
   async function executeTask(options: TaskExecutionOptions): Promise<TaskExecutionResult> {
-    const { prompt, context, timeContext } = options;
+    const { prompt, notify, timeContext } = options;
     const t0 = Date.now();
 
+    const effectiveNotify = router.resolveEffectiveNotify(notify, deps.defaultNotify);
+
     try {
-      // 1. Build final prompt with execution instructions
       let finalPrompt = prompt;
       if (timeContext) {
         const now = new Date();
@@ -115,34 +111,24 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
         ].join('\n');
       }
 
-      // 2. Call agent.process() with per-sceneId lock
-      //    senderId = 'system' for cron tasks to avoid addressing a specific user
-      const sceneId = context.sceneId || 'default';
+      const im = effectiveNotify.channel === 'im' ? effectiveNotify : undefined;
+      const sceneId = im?.sceneId || 'default';
       const elements = await withLock(sceneId, () =>
         deps.agent.process(finalPrompt, {
-          platform: context.platform || 'cron',
+          platform: im?.platform || 'cron',
           senderId: 'system',
-          botId: context.botId,
-          sceneId: context.sceneId || 'cron',
-          scope: (context.scope as any) || undefined,
+          botId: im?.botId,
+          sceneId: im?.sceneId || 'cron',
+          scope: (im?.scope as 'private' | 'group' | 'channel' | undefined) || undefined,
         }),
       );
 
-      // 3. Convert to text
       const text = elementsToText(elements);
       if (!text) {
         return { success: true, responseText: '', durationMs: Date.now() - t0 };
       }
 
-      // 4. Deliver via adapter if context has enough routing info
-      if (context.platform && context.botId && context.sceneId) {
-        const adapter = deps.resolveAdapter(context.platform);
-        if (adapter) {
-          await adapter.sendMessage(cronContextToSendOptions(context, text));
-        } else {
-          logger.warn(`[TaskExecutor] 找不到适配器: ${context.platform}`);
-        }
-      }
+      await router.deliver({ notify: effectiveNotify, content: text });
 
       return { success: true, responseText: text, durationMs: Date.now() - t0 };
     } catch (e) {

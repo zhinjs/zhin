@@ -80,6 +80,8 @@ export const DEFAULT_SUBAGENT_TOOL_NAMES = [
   'bash',
   'web_search',
   'web_fetch',
+  'generate_image',
+  'analyze_media',
 ] as const;
 
 export interface RestrictedToolViewOptions {

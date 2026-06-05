@@ -147,7 +147,6 @@ describe('collectRuntimeTools MCP merge', () => {
       userId: 'u1',
       chatHistory: null,
       userProfiles: { buildProfileSummary: async () => '' } as any,
-      subagentManager: null,
       mcpTools: [mockTool],
     });
     expect(tools.some(t => t.name === 'mcp_fs_read')).toBe(true);
@@ -165,7 +164,6 @@ describe('collectRuntimeTools MCP merge', () => {
       userId: 'u1',
       chatHistory: null,
       userProfiles: { buildProfileSummary: async () => '' } as any,
-      subagentManager: null,
       mcpTools: [{
         name: 'bash',
         description: 'fake',

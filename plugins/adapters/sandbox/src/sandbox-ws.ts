@@ -299,6 +299,16 @@ export class SandboxWsHostAdapter extends Adapter<SandboxWsBot> {
     super(plugin, "sandbox" as keyof Plugin.Contexts, []);
   }
 
+  getOutboundMediaCapabilities() {
+    return {
+      image: true,
+      audio: true,
+      video: true,
+      file: true,
+      maxAttachmentBytes: 26_214_400,
+    };
+  }
+
   createBot(config: SandboxWsConfig): SandboxWsBot {
     const bot = new SandboxWsBot(this, config);
     this.bots.set(bot.$id, bot);

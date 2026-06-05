@@ -53,6 +53,8 @@ import { DeferredWorkerRunner } from '../deferred-worker-runner.js';
 import { processTextTurn, processMultimodalTurn } from './turn-pipeline.js';
 import { formatUserContentForSession } from './session-io.js';
 import { asPrivate } from './zhin-agent-private.js';
+import type { ResolvedAgentBinding } from '../config/types.js';
+import { bindingToModelConfig } from '../routing/runtime-binding.js';
 import { buildDisciplinedPrompt as assembleDisciplinedPrompt } from './prompt-assembly.js';
 import {
   resolveAgentToolsForTurn as resolveToolsForTurn,
@@ -74,6 +76,8 @@ const logger = new Logger(null, 'ZhinAgent');
 
 export class ZhinAgent {
   private provider: AIProvider;
+  private providerResolver: ((alias: string) => AIProvider) | null = null;
+  private activeBinding: ResolvedAgentBinding | null = null;
   private config: Required<ZhinAgentConfig>;
   private skillRegistry: SkillRegistry | null = null;
   private orchestrator: AgentOrchestrator | null = null;
@@ -158,6 +162,38 @@ export class ZhinAgent {
     this.emitter.setHostPlugin(plugin);
   }
 
+  setProviderResolver(resolver: (alias: string) => AIProvider): void {
+    this.providerResolver = resolver;
+  }
+
+  /** 入站回合注入 ai.agents.<name> 绑定（zhin 或其它 route 摘要路径） */
+  setActiveBinding(binding: ResolvedAgentBinding | null): void {
+    this.activeBinding = binding;
+    if (binding) {
+      const patch = bindingToModelConfig(binding);
+      this.config = {
+        ...this.config,
+        ...patch,
+      };
+    }
+  }
+
+  getActiveBinding(): ResolvedAgentBinding | null {
+    return this.activeBinding;
+  }
+
+  getTurnProvider(): AIProvider {
+    const alias = this.activeBinding?.providerAlias;
+    if (alias && this.providerResolver) {
+      try {
+        return this.providerResolver(alias);
+      } catch {
+        return this.provider;
+      }
+    }
+    return this.provider;
+  }
+
   /** @deprecated 消息事实源已迁至 chat_messages，保留空实现以兼容旧 bootstrap */
   async upgradeMemoryToDatabase(_msgModel: unknown, _sumModel: unknown): Promise<void> {
     return;
@@ -204,6 +240,7 @@ export class ZhinAgent {
       modelRegistry: this.modelRegistry,
       onSubagentUsage: (usage) => this.turnTracker.addSubagentUsage(usage),
       registerSubagentTask: (done) => this.turnTracker.trackSubagent(done),
+      eventEmitter: this.emitter,
       onEvent: (event) => {
         const sessionId = resolveIMSessionIdFromToolContext({
           platform: event.origin.platform,
@@ -219,8 +256,10 @@ export class ZhinAgent {
           botId: event.origin.botId,
           sceneId: event.origin.sceneId,
           senderId: event.origin.senderId,
+          messageId: event.origin.messageId,
           scope: event.origin.sceneType === 'group' ? 'group' : 'private',
         }, 'text', {
+          source: 'subagent',
           path: 'agent',
           taskId: event.taskId,
           label: event.label,
@@ -228,6 +267,10 @@ export class ZhinAgent {
           status: event.status,
           error: event.error,
           reply: event.result,
+          agentId: event.agent,
+          hookContext: {
+            subagentAgent: event.agent,
+          },
         });
         if (event.phase === 'spawn') {
           this.emitter.emit('ai.subagent.spawn', payload);
@@ -249,6 +292,10 @@ export class ZhinAgent {
 
   getSubagentManager(): SubagentManager | null {
     return this.subagentManager;
+  }
+
+  getEventEmitter(): ZhinAgentEventEmitter {
+    return this.emitter;
   }
 
   getUserProfiles(): UserProfileStore {

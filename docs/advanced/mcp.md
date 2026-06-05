@@ -35,18 +35,37 @@ pnpm add @modelcontextprotocol/sdk
 
 ## MCP Client：接入外部工具
 
-### 1. 启用记忆 MCP（可选）
+### 1. 长期记忆（推荐：三层 Markdown）
 
-内置的 `read_memory` / `write_memory` 工具已移除。长期记忆改走 MCP 知识图谱：
+默认使用 `ai.memory` 文件三层（`data/memory/global`、`platforms/`、`sessions/`），由 system prompt 注入；Agent 通过 `write_file` 写入（全局/平台仅 master）。详见 [配置参考 — 三层文件记忆](/essentials/configuration#三层文件记忆-stable-默认启用)。
+
+### 1b. 记忆 MCP（已弃用）
+
+`ai.memoryMcp: true` 仍会注册 `@modelcontextprotocol/server-memory` 并打弃用警告；新部署请改用文件三层，勿再依赖 `data/knowledge-graph.jsonl`。
+
+### 2. 多模态媒体 MCP（可选）
+
+入站音视频混合路由可在 `ai.multimodal` 中启用 `audio.strategy: mcp` / `video.strategy: mcp`，由 Zhin 将 base64 载荷按需落盘到 `data/media/inbound/` 后调用外部 MCP（例如 Whisper 转写、ffmpeg 抽帧）。出站仍走 **base64 + Adapter** 发送链，不要求公网图床。
 
 ```yaml
 ai:
-  memoryMcp: true   # 默认 false，显式开启
+  multimodal:
+    enabled: true
+    audio:
+      strategy: mcp
+    video:
+      strategy: mcp
+      maxFrames: 8
+  mcpServers:
+    - name: whisper
+      transport: stdio
+      command: npx
+      args: ["-y", "@your-org/mcp-whisper"]
 ```
 
-数据写入 `data/knowledge-graph.jsonl`。Agent 可用 `mcp_memory_read_graph`、`mcp_memory_create_entities` 等工具。工作区 `AGENTS.md` 仍由 Bootstrap 注入，与 memory MCP 互补。
+本地文件分析请用内置 `analyze_media`（勿对图片使用 `read_file`）。
 
-### 2. 注册外部 MCP Server
+### 3. 注册外部 MCP Server
 
 在 `zhin.config.yml` 的 `ai.mcpServers` 中声明（也可在插件里 `ctx.agent.addMcp`）：
 

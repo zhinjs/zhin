@@ -9,7 +9,19 @@ import type {
   ChatCompletionRequest,
   ChatCompletionResponse,
   ChatCompletionChunk,
+  ChatMessage,
+  ContentPart,
 } from '../types.js';
+import {
+  OPENAI_DEFAULT_IMAGE_MODEL,
+  resolveOpenAIImagesGenerationItem,
+  ZHIPU_DEFAULT_IMAGE_MODEL,
+  type ImageGenerationDefaults,
+  type ImageGenerateRequest,
+  type ImageGenerateResult,
+  type OpenAIImagesGenerationItem,
+} from '../image-generation.js';
+import { parseOpenAIChatCompletionBody } from './openai-sse.js';
 
 export interface OpenAIConfig extends ProviderConfig {
   organization?: string;
@@ -17,6 +29,7 @@ export interface OpenAIConfig extends ProviderConfig {
 
 export class OpenAIProvider extends BaseProvider {
   name = 'openai';
+  protected readonly imageGenerationDefaults: ImageGenerationDefaults;
   models = [
     'gpt-4o',
     'gpt-4o-mini',
@@ -38,6 +51,7 @@ export class OpenAIProvider extends BaseProvider {
     this.contextWindow = config.contextWindow ?? 128000;
     this.baseUrl = config.baseUrl || 'https://api.openai.com/v1';
     if (config.models?.length) this.models = config.models;
+    this.imageGenerationDefaults = config.imageGeneration ?? {};
 
     if (config.organization) {
       this.config.headers = {
@@ -49,18 +63,17 @@ export class OpenAIProvider extends BaseProvider {
 
   async chat(request: ChatCompletionRequest): Promise<ChatCompletionResponse> {
     const body = this.buildRequestBody(request);
+    const url = `${this.baseUrl}/chat/completions`;
+    const post = async (payload: Record<string, unknown>) => {
+      const text = await this.fetchText(url, { method: 'POST', json: { ...payload, stream: false } });
+      return parseOpenAIChatCompletionBody(text);
+    };
     try {
-      return await this.fetch<ChatCompletionResponse>(
-        `${this.baseUrl}/chat/completions`,
-        { method: 'POST', json: { ...body, stream: false } },
-      );
+      return await post(body);
     } catch (err) {
       const stripped = OpenAIProvider.stripUnsupportedParam(err, body);
       if (!stripped) throw err;
-      return this.fetch<ChatCompletionResponse>(
-        `${this.baseUrl}/chat/completions`,
-        { method: 'POST', json: { ...stripped, stream: false } },
-      );
+      return post(stripped);
     }
   }
 
@@ -103,6 +116,28 @@ export class OpenAIProvider extends BaseProvider {
     }
   }
 
+  /** OpenAI Images API（gpt-image-2 / gpt-image-1.5 / gpt-image-1 等） */
+  async generateImage(request: ImageGenerateRequest): Promise<ImageGenerateResult> {
+    const model = request.model
+      ?? this.imageGenerationDefaults.defaultModel
+      ?? OPENAI_DEFAULT_IMAGE_MODEL;
+    const size = request.size ?? this.imageGenerationDefaults.defaultSize;
+    const quality = request.quality ?? this.imageGenerationDefaults.quality;
+    const body: Record<string, unknown> = {
+      model,
+      prompt: request.prompt,
+    };
+    if (size) body.size = size;
+    if (quality) body.quality = quality;
+
+    const res = await this.fetch<{ data?: OpenAIImagesGenerationItem[] }>(
+      `${this.baseUrl}/images/generations`,
+      { method: 'POST', json: body },
+    );
+
+    return resolveOpenAIImagesGenerationItem(res.data?.[0], model, 'OpenAI image generation');
+  }
+
   async listModels(): Promise<string[]> {
     interface ModelList {
       data: { id: string }[];
@@ -129,15 +164,47 @@ export class OpenAIProvider extends BaseProvider {
     });
   }
 
+  /** 无 vision 能力的 API（如 DeepSeek）仅接受纯文本 content */
+  static flattenMultimodalContent(content: string | ContentPart[]): string {
+    if (typeof content === 'string') return content;
+    return content
+      .map((part) => {
+        if (part.type === 'text') return part.text;
+        if (part.type === 'image_url') return '[图片]';
+        if (part.type === 'audio') return '[音频]';
+        if (part.type === 'video_url') return '[视频]';
+        if (part.type === 'face') return part.face.text ? `[表情: ${part.face.text}]` : '[表情]';
+        return '';
+      })
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  static stripVisionFromMessages(messages: ChatMessage[]): ChatMessage[] {
+    return messages.map((msg) => {
+      if (typeof msg.content === 'string') return msg;
+      if (!Array.isArray(msg.content)) return msg;
+      const hasNonText = msg.content.some((p) => p.type !== 'text');
+      if (!hasNonText) {
+        return { ...msg, content: OpenAIProvider.flattenMultimodalContent(msg.content) };
+      }
+      return { ...msg, content: OpenAIProvider.flattenMultimodalContent(msg.content) };
+    });
+  }
+
   /**
    * Build a clean request body with only standard OpenAI-compatible parameters.
    * Drops non-standard fields (think, etc.) and optional fields that are undefined,
    * so strict APIs won't reject unknown parameters.
    */
   protected buildRequestBody(request: ChatCompletionRequest): Record<string, unknown> {
+    let messages = OpenAIProvider.normalizeMessages(request.messages);
+    if (this.capabilities?.vision === false) {
+      messages = OpenAIProvider.stripVisionFromMessages(messages);
+    }
     const clean: Record<string, unknown> = {
       model: request.model,
-      messages: OpenAIProvider.normalizeMessages(request.messages),
+      messages,
     };
     if (request.tools) clean.tools = request.tools;
     if (request.tool_choice) clean.tool_choice = request.tool_choice;
@@ -217,5 +284,29 @@ export class ZhipuProvider extends OpenAIProvider {
 
   async listModels(): Promise<string[]> {
     return this.models;
+  }
+
+  /** 智谱文生图（OpenAI 兼容 /images/generations） */
+  async generateImage(request: ImageGenerateRequest): Promise<ImageGenerateResult> {
+    const model = request.model
+      ?? this.imageGenerationDefaults.defaultModel
+      ?? ZHIPU_DEFAULT_IMAGE_MODEL;
+    const size = request.size ?? this.imageGenerationDefaults.defaultSize;
+    const watermarkEnabled = request.watermarkEnabled
+      ?? this.imageGenerationDefaults.watermarkEnabled
+      ?? true;
+    const body: Record<string, unknown> = {
+      model,
+      prompt: request.prompt,
+      watermark_enabled: watermarkEnabled,
+    };
+    if (size) body.size = size;
+
+    const res = await this.fetch<{ data?: OpenAIImagesGenerationItem[] }>(
+      `${this.baseUrl}/images/generations`,
+      { method: 'POST', json: body },
+    );
+
+    return resolveOpenAIImagesGenerationItem(res.data?.[0], model, 'Zhipu image generation');
   }
 }

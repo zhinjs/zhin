@@ -31,12 +31,30 @@ const response = await provider.chat({
 
 | Provider | 说明 |
 |----------|------|
-| `OpenAIProvider` | OpenAI 及兼容 API |
+| `OpenAIProvider` | OpenAI 及兼容 API；`generateImage()` GPT Image（默认 `gpt-image-2`） |
 | `DeepSeekProvider` | DeepSeek（继承 OpenAI） |
 | `MoonshotProvider` | Moonshot / Kimi（继承 OpenAI） |
-| `ZhipuProvider` | 智谱 GLM（继承 OpenAI） |
+| `ZhipuProvider` | 智谱 GLM（继承 OpenAI）；`generateImage()` 文生图（默认 `cogview-3-flash`） |
+| `GoogleProvider` | Gemini Nano Banana 文生图（`generateContent` + IMAGE；默认 `gemini-2.5-flash-image`）；不支持 chat |
+| `CloudflareProvider` | Workers AI 聊天 + `generateImage()`（默认 `@cf/black-forest-labs/flux-1-schnell`） |
 | `AnthropicProvider` | Anthropic Claude |
 | `OllamaProvider` | Ollama 本地模型 |
+
+文生图（Provider 方法，由 `@zhin.js/agent` 的 `generate_image` 工具调用）：
+
+```typescript
+import { ZhipuProvider, hasGenerateImage } from '@zhin.js/ai'
+
+const zhipu = new ZhipuProvider({ apiKey: '...' })
+if (hasGenerateImage(zhipu)) {
+  const { base64, mimeType, model } = await zhipu.generateImage({
+    prompt: 'a cat on a windowsill',
+    watermarkEnabled: false, // 智谱：须在开放平台签署去水印声明后生效
+  })
+}
+```
+
+`zhin.config.yml` 可在 `ai.imageGeneration` 或 `ai.providers.<alias>.imageGeneration` 配置默认项（`watermarkEnabled`、`defaultModel`、`defaultSize`；Cloudflare 另有 `numSteps`）。
 
 ### Agent（Agent 引擎）
 

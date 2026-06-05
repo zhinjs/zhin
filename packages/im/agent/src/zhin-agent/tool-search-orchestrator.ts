@@ -3,8 +3,10 @@
  */
 import type { AgentTool } from '@zhin.js/ai';
 import { createRunDeferredTaskTool } from '../builtin/run-deferred-task-tool.js';
+import { createSpawnTaskTool } from '../builtin/spawn-task-tool.js';
 import { createToolSearchTool } from '../builtin/tool-search-tool.js';
 import { normalizeTool } from '../orchestrator/tool-selection.js';
+import type { SubagentManager } from '../subagent.js';
 import type { ToolContext } from '../orchestrator/types.js';
 import type { ZhinAgentConfig } from './config.js';
 import { resolveDeferredTaskToolTimeout } from './config.js';
@@ -67,6 +69,8 @@ export interface BuildOrchestratorToolsParams {
   context: ToolContext;
   getDeferredCatalog: () => AgentTool[];
   runWorker: (goal: string, toolQuery?: string) => Promise<string>;
+  /** 注入常驻 `spawn_task`；未初始化 SubagentManager 时跳过 */
+  subagentManager?: SubagentManager | null;
 }
 
 export interface BuildOrchestratorToolsResult {
@@ -78,7 +82,7 @@ export interface BuildOrchestratorToolsResult {
 export function buildOrchestratorAgentTools(params: BuildOrchestratorToolsParams): BuildOrchestratorToolsResult {
   const { allTools, config, context, getDeferredCatalog, runWorker } = params;
   const catalog = filterToolsForToolSearchCatalog(allTools);
-  const part = partitionToolsForToolSearch(catalog, config.toolSearchOrchestratorTools);
+  const part = partitionToolsForToolSearch(catalog, config.orchestratorTools);
   const byName = new Map<string, AgentTool>();
 
   for (const tool of part.orchestrator) {
@@ -90,7 +94,7 @@ export function buildOrchestratorAgentTools(params: BuildOrchestratorToolsParams
     normalizeTool(
       createToolSearchTool({
         getDeferredCatalog,
-        maxResults: config.toolSearchMaxResults,
+        maxResults: config.deferredToolMaxResults,
       }),
       context,
     ),
@@ -104,8 +108,18 @@ export function buildOrchestratorAgentTools(params: BuildOrchestratorToolsParams
   );
   byName.set('run_deferred_task', runDeferred);
 
+  if (
+    params.subagentManager
+    && params.config.orchestratorTools.includes('spawn_task')
+  ) {
+    byName.set(
+      'spawn_task',
+      normalizeTool(createSpawnTaskTool(context, params.subagentManager), context),
+    );
+  }
+
   const orchestratorTools: AgentTool[] = [];
-  for (const name of config.toolSearchOrchestratorTools) {
+  for (const name of config.orchestratorTools) {
     let tool = byName.get(name);
     if (!tool) continue;
     if (name === 'activate_skill') {

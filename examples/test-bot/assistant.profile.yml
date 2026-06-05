@@ -1,0 +1,37 @@
+# Assistant Profile — 仅运行时（Job / 默认 notify / HA 别名）
+# 不填 persona/agents/tools：Bootstrap 回退 SOUL.md / AGENTS.md / TOOLS.md（项目增量，勿重复 Orchestration）
+version: 1
+
+defaults:
+  notify:
+    channel: im
+    platform: icqq
+    botId: "8596238"
+    sceneId: "1659488338"
+    scope: private
+  notifyOnFailure: false
+
+routines:
+  heartbeat:
+    enabled: true
+    everyMs: 1800000
+    notify:
+      channel: silent
+  morningBrief:
+    enabled: true
+    cron: "0 8 * * *"
+    prompt: |
+      汇总今日待办、日历与未读提醒，生成简短早报；若无内容回复「今日无待办」。
+    notify:
+      channel: im
+  bedtimeCheck:
+    enabled: true
+    cron: "0 22 * * *"
+    prompt: |
+      睡前巡检：检查未完成任务、明日首个提醒、门窗/设备异常（若有 home 工具）；简要汇报。
+    notify:
+      channel: im
+
+# 需 assistant.home.enabled + HA 凭证
+devices:
+  客厅灯: light.living_room

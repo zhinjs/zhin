@@ -15,8 +15,10 @@ import { discoverWorkspaceAgents } from '../discovery/agents.js';
 import { discoverWorkspaceTools, buildToolFromMeta } from '../discovery/tools.js';
 import { resolveSkillInstructionMaxChars, DEFAULT_CONFIG } from '../zhin-agent/config.js';
 import { loadBootstrapFiles, buildContextFiles, buildBootstrapContextSection } from '../bootstrap.js';
+import { loadBootstrapWithProfile, resolveAssistantConfig } from '../assistant/index.js';
 import { triggerAIHook, createAIHookEvent } from '../hooks.js';
 import { createCronTools } from '../cron-engine.js';
+import { createGenerateImageTool } from '../builtin/generate-image-tool.js';
 import type { AIServiceRefs } from './shared-refs.js';
 
 export function registerBuiltinTools(refs: AIServiceRefs): void {
@@ -40,6 +42,10 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
         return orchestrator?.skills.getByName(name)?.filePath;
       },
     });
+    builtinTools.push(createGenerateImageTool(
+      (alias) => ai.getProvider(alias),
+      (alias) => ai.getImageGenerationDefaults(alias),
+    ));
     const disposers: (() => void)[] = [];
     for (const tool of builtinTools) {
       const plain = isZhinTool(tool) ? tool.toTool() : tool;
@@ -174,6 +180,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       }
 
       const agentMetas = await discoverWorkspaceAgents(root);
+      ai.setDiscoveredAgents(agentMetas);
       if (agentMetas.length === 0) return 0;
 
       const allRegisteredTools = toolService.getAll();
@@ -242,10 +249,16 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       const loadedFiles: string[] = [];
       try {
         const workspaceDir = process.cwd();
-        const bootstrapFiles = await loadBootstrapFiles(workspaceDir);
+        const configService = root.inject('config');
+        const appConfig = (configService?.primaryFile
+          ? configService.getRaw<{ assistant?: { profile?: import('../assistant/profile-types.js').AssistantProfileConfig } }>(configService.primaryFile)
+          : configService?.getPrimary<{ assistant?: { profile?: import('../assistant/profile-types.js').AssistantProfileConfig } }>())
+          ?? {};
+        const assistantCfg = resolveAssistantConfig(appConfig.assistant as import('../assistant/config.js').AssistantConfig | undefined);
+        const { files: bootstrapFiles, profile } = await loadBootstrapWithProfile(workspaceDir, assistantCfg.profile);
         const contextFiles = buildContextFiles(bootstrapFiles);
 
-        logger.debug(`Bootstrap files loaded (cwd: ${workspaceDir}): ${bootstrapFiles.map(f => f.name + (f.missing ? ' (missing)' : '')).join(', ')}`);
+        logger.debug(`Bootstrap files loaded (cwd: ${workspaceDir}, profile: ${profile ? 'yes' : 'no'}): ${bootstrapFiles.map(f => f.name + (f.missing ? ' (missing)' : '')).join(', ')}`);
 
         const soulFile = contextFiles.find(f => f.path === 'SOUL.md');
         if (soulFile && refs.zhinAgent) loadedFiles.push('SOUL.md');

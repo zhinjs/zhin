@@ -77,3 +77,25 @@ Long-term memory for conversation history, user preferences, and system state.
 
 *(Track pending work here)*
 `;
+
+/** Advanced：可选 Assistant Profile 示例（见 docs/advanced/assistant-profile.md） */
+export const ASSISTANT_PROFILE_YML_EXAMPLE = `# Assistant Profile (optional, Advanced)
+# Runtime only: Job routines + default notify. Persona/tools → SOUL.md / AGENTS.md / TOOLS.md
+# Enable: zhin.config.yml → assistant.profile.enabled: true
+version: 1
+
+defaults:
+  notify:
+    channel: im
+    platform: icqq
+    botId: "<bot_id>"
+    sceneId: "<master_user_id>"
+    scope: private
+
+routines:
+  heartbeat:
+    enabled: false
+    everyMs: 1800000
+    notify:
+      channel: silent
+`;

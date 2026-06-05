@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildRichSystemPrompt, FIXED_DISCIPLINE_RULES } from '../../src/zhin-agent/prompt.js';
+import { buildRichSystemPrompt } from '../../src/zhin-agent/prompt.js';
 import { DEFAULT_CONFIG } from '../../src/zhin-agent/config.js';
 
 describe('Prompt discipline block', () => {
@@ -11,9 +11,9 @@ describe('Prompt discipline block', () => {
       activeSkillsContext: '',
       bootstrapContext: '',
     });
-    for (const rule of FIXED_DISCIPLINE_RULES) {
-      expect(prompt).toContain(rule);
-    }
+    // 首条纪律已并入 DEFAULT_CONFIG.persona（措辞略短）；其余两条仅在直连 # Tools 段出现
+    expect(prompt.toLowerCase()).toContain('never claim actions');
+    expect(prompt).toContain('Never disclose implementation');
   });
 
   it('常驻段应保持精简结构', () => {
@@ -26,8 +26,7 @@ describe('Prompt discipline block', () => {
     });
     expect(prompt).toContain('# Runtime');
     expect(prompt).toContain('Host:');
-    expect(prompt).toContain('# Style');
-    expect(prompt).toContain('# Tools');
+    expect(prompt).toContain('# Orchestration');
     expect(prompt).toContain('# Security');
     expect(prompt).toContain('Never disclose implementation');
     expect(prompt).not.toContain('# Context');
@@ -40,7 +39,7 @@ describe('Prompt discipline block', () => {
 
   it('toolSearch 通用段不含平台硬编码', () => {
     const prompt = buildRichSystemPrompt({
-      config: { ...DEFAULT_CONFIG, toolSearch: true },
+      config: DEFAULT_CONFIG,
       skillRegistry: null,
       skillsSummaryXML: '',
       activeSkillsContext: '',
@@ -55,7 +54,7 @@ describe('Prompt discipline block', () => {
 
   it('platformSections 注入 §6c', () => {
     const prompt = buildRichSystemPrompt({
-      config: { ...DEFAULT_CONFIG, toolSearch: true },
+      config: DEFAULT_CONFIG,
       skillRegistry: null,
       skillsSummaryXML: '',
       activeSkillsContext: '',

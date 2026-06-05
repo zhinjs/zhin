@@ -20,9 +20,10 @@ export class ZhinAgentEventEmitter {
     mode: Plugin.AIEventPayload['mode'],
     extra: Partial<Plugin.AIEventPayload> = {},
   ): Plugin.AIEventPayload {
+    const { source = 'zhin-agent', ...rest } = extra;
     return {
       sessionId,
-      source: 'zhin-agent',
+      source,
       mode,
       userId: context.senderId,
       platform: context.platform,
@@ -30,7 +31,7 @@ export class ZhinAgentEventEmitter {
       sceneId: context.sceneId,
       messageId: context.messageId,
       scope: context.scope,
-      ...extra,
+      ...rest,
     };
   }
 

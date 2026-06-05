@@ -14,6 +14,8 @@ import * as path from 'node:path';
 import { Cron, ZhinTool, Logger } from '@zhin.js/core';
 import type { ToolContext } from '@zhin.js/core';
 import { formatCompact } from '@zhin.js/logger';
+import type { JobNotify } from './assistant/types.js';
+import { toolContextToImNotify } from './assistant/legacy-convert.js';
 
 const logger = new Logger(null, 'cron-engine');
 
@@ -22,20 +24,6 @@ const logger = new Logger(null, 'cron-engine');
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const CRON_JOBS_FILENAME = 'cron-jobs.json';
-
-/** 定时任务执行时的上下文信息 */
-export interface CronJobContext {
-  /** 来源平台（adapter name），如 'icqq', 'discord' */
-  platform?: string;
-  /** Bot ID */
-  botId?: string;
-  /** 发送者 ID（创建者） */
-  senderId?: string;
-  /** 场景 ID（群号/频道ID/私聊用户ID） */
-  sceneId?: string;
-  /** 场景类型: private | group | channel */
-  scope?: string;
-}
 
 export interface CronJobRecord {
   id: string;
@@ -47,8 +35,8 @@ export interface CronJobRecord {
   label?: string;
   /** 是否启用（暂停的任务不加载） */
   enabled: boolean;
-  /** 执行时的上下文（缺省为 system/cron） */
-  context?: CronJobContext;
+  /** 投递通道（必填；旧版 context 字段不再读取） */
+  notify: JobNotify;
   createdAt: number;
   /** 上次执行时间戳 */
   lastExecutedAt?: number;
@@ -68,12 +56,31 @@ export async function readCronJobsFile(dataDir: string): Promise<CronJobRecord[]
     const raw = await fs.promises.readFile(filePath, 'utf-8');
     const data = JSON.parse(raw);
     if (!Array.isArray(data)) return [];
-    return data;
-  } catch (e: any) {
-    if (e?.code === 'ENOENT') return [];
-    logger.warn('读取定时任务文件失败: ' + (e?.message || String(e)));
-    return [];
+    return data.map(normalizeCronJobRecord);
+  } catch (e: unknown) {
+    const err = e as NodeJS.ErrnoException;
+    if (err?.code === 'ENOENT') return [];
+    throw e;
   }
+}
+
+function normalizeCronJobRecord(raw: Record<string, unknown>): CronJobRecord {
+  const notify = raw.notify as JobNotify | undefined;
+  if (!notify || typeof notify !== 'object' || !('channel' in notify)) {
+    throw new Error(`cron-jobs.json: job "${String(raw.id)}" 缺少 notify 字段（破坏性更新：context 已移除）`);
+  }
+  return {
+    id: String(raw.id),
+    cronExpression: String(raw.cronExpression),
+    prompt: String(raw.prompt),
+    label: raw.label != null ? String(raw.label) : undefined,
+    enabled: raw.enabled !== false,
+    notify,
+    createdAt: Number(raw.createdAt) || Date.now(),
+    lastExecutedAt: raw.lastExecutedAt != null ? Number(raw.lastExecutedAt) : undefined,
+    lastStatus: raw.lastStatus === 'ok' || raw.lastStatus === 'error' ? raw.lastStatus : undefined,
+    lastError: raw.lastError != null ? String(raw.lastError) : undefined,
+  };
 }
 
 export async function writeCronJobsFile(dataDir: string, jobs: CronJobRecord[]): Promise<void> {
@@ -86,7 +93,7 @@ export async function writeCronJobsFile(dataDir: string, jobs: CronJobRecord[]):
 // 持久化引擎：加载文件并注册到 CronFeature
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type CronRunner = (prompt: string, jobId: string, context?: CronJobContext) => void | Promise<void>;
+export type CronRunner = (prompt: string, jobId: string, notify?: JobNotify) => void | Promise<void>;
 
 export type AddCronFn = (cron: Cron) => () => void;
 
@@ -96,7 +103,7 @@ export interface PersistentCronEngineOptions {
   runner: CronRunner;
 }
 
-export class PersistentCronEngine {
+export class PersistentCronEngine implements IPersistentJobEngine {
   private options: PersistentCronEngineOptions;
   /** jobId -> dispose */
   private disposes = new Map<string, () => void>();
@@ -132,10 +139,10 @@ export class PersistentCronEngine {
     addCron: AddCronFn,
     runner: CronRunner,
   ): void {
-    const { prompt, id: jobId, cronExpression, context } = job;
+    const { prompt, id: jobId, cronExpression, notify } = job;
     try {
       const cron = new Cron(cronExpression, async () => {
-        await runner(prompt, jobId, context);
+        await runner(prompt, jobId, notify);
       });
       cron.id = jobId;
       const dispose = addCron(cron);
@@ -255,9 +262,22 @@ export function generateCronJobId(): string {
 // 供 AI 工具使用的 Cron 管理器引用（init 中设置）
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** 持久化任务引擎契约（PersistentCronEngine / AssistantJobEngine） */
+export interface IPersistentJobEngine {
+  getDataDir(): string;
+  load(): void;
+  unload(): void;
+  listJobs(): Promise<CronJobRecord[]>;
+  addJob(record: Omit<CronJobRecord, 'createdAt'> & { createdAt?: number }): Promise<CronJobRecord>;
+  removeJob(id: string): Promise<boolean>;
+  pauseJob(id: string): Promise<boolean>;
+  resumeJob(id: string): Promise<boolean>;
+  updateJobStatus(id: string, status: 'ok' | 'error', error?: string): Promise<void>;
+}
+
 export interface CronManager {
   cronFeature: { getStatus(): Array<{ expression: string; running: boolean; nextExecution: Date | null; plugin: string }> };
-  engine: PersistentCronEngine | null;
+  engine: IPersistentJobEngine | null;
 }
 
 let cronManager: CronManager | null = null;
@@ -301,7 +321,7 @@ export function createCronTools(options?: { optimizePrompt?: PromptOptimizer }):
             prompt: j.prompt,
             label: j.label,
             enabled: j.enabled,
-            context: j.context,
+            notify: j.notify,
             createdAt: j.createdAt,
             lastExecutedAt: j.lastExecutedAt,
             lastStatus: j.lastStatus,
@@ -319,6 +339,7 @@ export function createCronTools(options?: { optimizePrompt?: PromptOptimizer }):
     .param('delay_minutes', { type: 'number', description: '一次性延迟(分钟)，如 30 表示30分钟后执行一次。与 cron_expression 二选一' })
     .param('prompt', { type: 'string', description: '到点触发时发给 AI 的提示词（如"查询今日金价"）。如果只是简单提醒，可写提醒内容' }, true)
     .param('label', { type: 'string', description: '可选标签，便于识别' })
+    .param('notify_channel', { type: 'string', description: '结果投递通道：im（默认，发到当前会话）、silent（仅写 Job 状态）、log（仅日志）。推荐显式指定' })
     .execute(async (args, toolContext) => {
       const m = getCronManager();
       if (!m?.engine) {
@@ -352,23 +373,25 @@ export function createCronTools(options?: { optimizePrompt?: PromptOptimizer }):
           logger.warn('Prompt optimization failed, using original: ' + (e as Error).message);
         }
       }
-      // 从调用者的 ToolContext 自动捕获上下文
-      const jobContext: CronJobContext | undefined = toolContext
-        ? {
-            platform: toolContext.platform,
-            botId: toolContext.botId,
-            senderId: toolContext.senderId,
-            sceneId: toolContext.sceneId,
-            scope: toolContext.scope,
-          }
-        : undefined;
+      const notifyChannel = String(args.notify_channel || 'im').toLowerCase();
+      let notify: JobNotify;
+      if (notifyChannel === 'silent') {
+        notify = { channel: 'silent' };
+      } else if (notifyChannel === 'log') {
+        notify = { channel: 'log' };
+      } else if (notifyChannel !== 'im') {
+        return { error: `notify_channel 无效: ${notifyChannel}，可选 im | silent | log` };
+      } else {
+        notify = toolContext ? toolContextToImNotify(toolContext) : { channel: 'silent' };
+      }
+
       const job = await m.engine.addJob({
         id,
         cronExpression: finalCron,
         prompt: finalPrompt,
         label: args.label as string || (isOneShot ? `一次性提醒 (${delayMin}分钟后)` : undefined),
         enabled: true,
-        context: jobContext,
+        notify,
       });
 
       if (isOneShot) {

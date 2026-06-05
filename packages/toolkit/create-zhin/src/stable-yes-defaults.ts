@@ -25,7 +25,6 @@ export function applyStableYesDefaults(options: InitOptions): void {
     },
     agent: {
       ...RECOMMENDED_AI_DEFAULTS.agent,
-      toolSearch: false,
       execSecurity: 'allowlist',
       execPreset: 'readonly',
     },

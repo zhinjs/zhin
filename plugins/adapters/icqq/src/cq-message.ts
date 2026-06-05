@@ -97,8 +97,16 @@ export function toCqString(content: SendContent): string {
           return data.text ?? "";
         case "face":
           return `[face:${data.id}]`;
-        case "image":
+        case "image": {
+          const b64 =
+            typeof data.base64 === "string"
+              ? data.base64
+              : typeof data.data === "string"
+                ? data.data
+                : undefined;
+          if (b64) return `[image:base64://${b64}]`;
           return `[image:${data.file || data.url || data.src}]`;
+        }
         case "at":
           return `[at:${data.qq ?? data.id}]`;
         case "dice":
@@ -106,10 +114,21 @@ export function toCqString(content: SendContent): string {
         case "rps":
           return "[rps]";
         case "record":
-        case "audio":
+        case "audio": {
+          const b64 =
+            typeof data.base64 === "string"
+              ? data.base64
+              : typeof data.data === "string"
+                ? data.data
+                : undefined;
+          if (b64) return `[record:base64://${b64}]`;
           return `[record:${data.file || data.url}]`;
-        case "video":
+        }
+        case "video": {
+          const b64 = typeof data.base64 === "string" ? data.base64 : undefined;
+          if (b64) return `[video:base64://${b64}]`;
           return `[video:${data.file || data.url}]`;
+        }
         case "reply":
           return `[reply:${data.id}]`;
         default:

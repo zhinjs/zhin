@@ -22,10 +22,13 @@ import type { DeferredWorkerRunner } from '../deferred-worker-runner.js';
 import type { ZhinAgentConfig, OnChunkCallback } from './config.js';
 import type { PhaseTraceConfig } from './phase-trace.js';
 import type { ZhinAgentTurnMetrics } from './turn-metrics.js';
+import type { ResolvedAgentBinding } from '../config/types.js';
 
 export interface ZhinAgentPrivate {
   readonly config: Required<ZhinAgentConfig>;
   readonly provider: AIProvider;
+  readonly activeBinding: ResolvedAgentBinding | null;
+  getTurnProvider(): AIProvider;
   readonly skillRegistry: SkillRegistry | null;
   readonly orchestrator: AgentOrchestrator | null;
   readonly sessions: SessionManager;
@@ -83,8 +86,11 @@ export interface ZhinAgentPrivate {
   ): Promise<string>;
 }
 
-export function asPrivate(agent: unknown): ZhinAgentPrivate {
-  return agent as ZhinAgentPrivate;
+export function asPrivate(agent: {
+  getTurnProvider(): AIProvider;
+  getActiveBinding(): ResolvedAgentBinding | null;
+}): ZhinAgentPrivate {
+  return agent as unknown as ZhinAgentPrivate;
 }
 
 export type { OnChunkCallback, OutputElement, Tool, ToolContext, Plugin, ContentPart };

@@ -20,6 +20,12 @@ import { formatCompact, Logger } from '@zhin.js/logger';
 
 const logger = new Logger(null, 'scheduler');
 
+const DEFAULT_HEARTBEAT_INTERVAL_MS = 30 * 60 * 1000;
+
+const HEARTBEAT_PROMPT = `Read HEARTBEAT.md in your workspace (if it exists).
+Follow any instructions or tasks listed there.
+If nothing needs attention, reply with just: HEARTBEAT_OK`;
+
 function nowMs(): number {
   return Date.now();
 }
@@ -49,10 +55,23 @@ function createStore(): JobStore {
   return { version: 1, jobs: [] };
 }
 
+function isHeartbeatEmpty(content: string | null): boolean {
+  if (!content) return true;
+  const skipPatterns = new Set(['- [ ]', '* [ ]', '- [x]', '* [x]']);
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('<!--') || skipPatterns.has(trimmed)) continue;
+    return false;
+  }
+  return true;
+}
+
 export interface SchedulerOptions {
   storePath: string;
   workspace: string;
   onJob?: JobCallback;
+  heartbeatEnabled?: boolean;
+  heartbeatIntervalMs?: number;
 }
 
 export class Scheduler implements IScheduler {
@@ -62,11 +81,16 @@ export class Scheduler implements IScheduler {
   private store: JobStore | null = null;
   private timerTimeout: ReturnType<typeof setTimeout> | null = null;
   private _running = false;
+  private heartbeatEnabled: boolean;
+  private heartbeatIntervalMs: number;
+  private heartbeatJobId: string | null = null;
 
   constructor(options: SchedulerOptions) {
     this.storePath = options.storePath;
     this.workspace = options.workspace;
     this.onJob = options.onJob ?? null;
+    this.heartbeatEnabled = options.heartbeatEnabled ?? true;
+    this.heartbeatIntervalMs = options.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS;
   }
 
   private loadStore(): JobStore {
@@ -117,9 +141,10 @@ export class Scheduler implements IScheduler {
     if (!this.store) return;
     const dir = path.dirname(this.storePath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const persistJobs = this.store.jobs.filter(j => j.id !== this.heartbeatJobId);
     const data = {
       version: this.store.version,
-      jobs: this.store.jobs.map(j => ({
+      jobs: persistJobs.map(j => ({
         id: j.id,
         name: j.name,
         enabled: j.enabled,
@@ -137,6 +162,7 @@ export class Scheduler implements IScheduler {
   async start(): Promise<void> {
     this._running = true;
     this.loadStore();
+    if (this.heartbeatEnabled) this.addHeartbeatJob();
     this.recomputeNextRuns();
     this.saveStore();
     this.armTimer();
@@ -149,6 +175,30 @@ export class Scheduler implements IScheduler {
       clearTimeout(this.timerTimeout);
       this.timerTimeout = null;
     }
+  }
+
+  private addHeartbeatJob(): void {
+    if (!this.store) return;
+    const existing = this.store.jobs.find(j => j.payload.kind === 'heartbeat');
+    if (existing) {
+      this.heartbeatJobId = existing.id;
+      return;
+    }
+    const now = nowMs();
+    const job: ScheduledJob = {
+      id: `heartbeat-${randomUUID().slice(0, 8)}`,
+      name: 'Heartbeat',
+      enabled: true,
+      schedule: { kind: 'every', everyMs: this.heartbeatIntervalMs },
+      payload: { kind: 'heartbeat', message: HEARTBEAT_PROMPT, deliver: false },
+      state: { nextRunAtMs: now + this.heartbeatIntervalMs },
+      createdAtMs: now,
+      updatedAtMs: now,
+      deleteAfterRun: false,
+    };
+    this.heartbeatJobId = job.id;
+    this.store.jobs.push(job);
+    logger.debug({ intervalMs: this.heartbeatIntervalMs }, 'Heartbeat job added');
   }
 
   private recomputeNextRuns(): void {
@@ -193,6 +243,16 @@ export class Scheduler implements IScheduler {
 
   private async executeJob(job: ScheduledJob): Promise<void> {
     const startMs = nowMs();
+    if (job.payload.kind === 'heartbeat') {
+      const shouldRun = this.checkHeartbeatFile();
+      if (!shouldRun) {
+        job.state.lastStatus = 'skipped';
+        job.state.lastRunAtMs = startMs;
+        job.updatedAtMs = nowMs();
+        job.state.nextRunAtMs = computeNextRun(job.schedule, nowMs());
+        return;
+      }
+    }
     logger.info(formatCompact( { job: job.name, job_id: job.id }));
     try {
       if (this.onJob) await this.onJob(job);
@@ -218,9 +278,21 @@ export class Scheduler implements IScheduler {
     }
   }
 
+  private checkHeartbeatFile(): boolean {
+    const heartbeatPath = path.join(this.workspace, 'HEARTBEAT.md');
+    if (!fs.existsSync(heartbeatPath)) return false;
+    try {
+      const content = fs.readFileSync(heartbeatPath, 'utf-8');
+      return !isHeartbeatEmpty(content);
+    } catch {
+      return false;
+    }
+  }
+
   listJobs(): ScheduledJob[] {
     const store = this.loadStore();
     return store.jobs
+      .filter(j => j.id !== this.heartbeatJobId)
       .sort((a, b) => (a.state.nextRunAtMs ?? Infinity) - (b.state.nextRunAtMs ?? Infinity));
   }
 
@@ -284,8 +356,15 @@ export class Scheduler implements IScheduler {
     const store = this.loadStore();
     return {
       running: this._running,
-      jobCount: store.jobs.length,
+      jobCount: store.jobs.filter(j => j.id !== this.heartbeatJobId).length,
       nextWakeAt: this.getNextWakeMs(),
     };
+  }
+
+  async triggerHeartbeat(): Promise<void> {
+    if (this.heartbeatJobId && this.store) {
+      const job = this.store.jobs.find(j => j.id === this.heartbeatJobId);
+      if (job && this.onJob) await this.onJob(job);
+    }
   }
 }

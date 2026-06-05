@@ -1,7 +1,8 @@
+import { randomUUID } from 'node:crypto';
 import { formatCompact, Logger } from '@zhin.js/logger';
 import type { AgentTool } from '@zhin.js/ai';
 import type { ToolContext } from '../orchestrator/types.js';
-import { notifySubagentGoal } from '../subagent-goal-notify.js';
+import { notifySubagentGoal, resolveSubagentDisplayLabel } from '../subagent-goal-notify.js';
 import { resolveIMSessionIdFromToolContext } from '@zhin.js/ai';
 import { buildOrchestratorAgentTools } from './tool-search-orchestrator.js';
 import { filterToolsForToolSearchCatalog } from './tool-catalog.js';
@@ -14,14 +15,12 @@ export function resolveAgentToolsForTurn(
   allTools: AgentTool[],
   context: ToolContext,
 ): { tools: AgentTool[]; deferredStats?: string } {
-  if (!agent.config.toolSearch) {
-    return { tools: allTools };
-  }
   const toolSearchPool = filterToolsForToolSearchCatalog(allTools);
   const built = buildOrchestratorAgentTools({
     allTools: toolSearchPool,
     config: agent.config,
     context,
+    subagentManager: agent.subagentManager,
     getDeferredCatalog: () => agent.deferredCatalog,
     runWorker: (goal, toolQuery) =>
       runDeferredWorker(agent, goal, toolQuery, context, toolSearchPool),
@@ -41,10 +40,14 @@ export async function runDeferredWorker(
   context: ToolContext,
   allTools: AgentTool[],
 ): Promise<string> {
-  await notifySubagentGoal(context, goal);
+  await notifySubagentGoal(context, {
+    taskId: randomUUID().slice(0, 8),
+    kind: 'deferred',
+    label: resolveSubagentDisplayLabel(undefined, goal),
+  });
   const allByName = new Map(allTools.map(t => [t.name, t]));
   const workerBase: AgentTool[] = [];
-  for (const name of agent.config.toolSearchWorkerBaseTools) {
+  for (const name of agent.config.workerBaseTools) {
     const t = allByName.get(name);
     if (t) workerBase.push(t);
   }
@@ -55,7 +58,7 @@ export async function runDeferredWorker(
     workerBaseTools: workerBase,
     allToolsByName: allByName,
     origin: context,
-    maxToolResults: agent.config.toolSearchMaxResults,
+    maxToolResults: agent.config.deferredToolMaxResults,
     execPolicyConfig: agent.config,
     execApprovalMode: agent.config.taskExecApprovalMode,
     modelRegistry: agent.modelRegistry,

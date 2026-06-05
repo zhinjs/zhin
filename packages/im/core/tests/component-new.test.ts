@@ -256,6 +256,30 @@ describe('函数式组件系统测试', () => {
       expect(contentStr).toContain('{42}')
     })
 
+    it('纯 MessageElement 出站（如图片 base64）应跳过组件管线，避免 segment 往返超 400KB', async () => {
+      const TestComponent = defineComponent(async function TestComponent() {
+        return 'should-not-run'
+      }, 'test')
+
+      const componentMap = new Map([['test', TestComponent]])
+      const hugeB64 = 'A'.repeat(500_000)
+      const options: SendOptions = {
+        content: {
+          type: 'image',
+          data: { base64: hugeB64, mime: 'image/jpeg' },
+        },
+        type: 'group',
+        context: 'icqq',
+        bot: 'test',
+        id: '123',
+      }
+
+      const result = await renderComponents(componentMap, options)
+      const arr = Array.isArray(result.content) ? result.content : [result.content]
+      expect(arr[0]).toMatchObject({ type: 'image' })
+      expect((arr[0] as { data: { base64: string } }).data.base64).toBe(hugeB64)
+    })
+
     it('应该正确处理嵌套组件', async () => {
       const OuterComponent = defineComponent(async function OuterComponent(props: { title: string }, context: ComponentContext) {
         return `标题: ${props.title}`

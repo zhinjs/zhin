@@ -14,7 +14,6 @@ export interface AgentPromptBuildContext {
   slot: AgentPromptSlot;
   /** 含 platform / botId / scope（场景类型）/ sceneId（群号或私聊对端 ID）/ senderId / roles */
   toolContext: ToolContext;
-  toolSearch: boolean;
   /** Truncated user message for intent hints (~500 chars). */
   userMessagePreview?: string;
   deferred?: {

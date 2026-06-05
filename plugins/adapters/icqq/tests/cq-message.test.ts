@@ -44,4 +44,10 @@ describe("toCqString (legacy)", () => {
       ]),
     ).toBe("[reply:x/y]hi");
   });
+
+  it("image base64 编码为 base64://（异机 icqq 守护进程可解码）", () => {
+    expect(
+      toCqString([{ type: "image", data: { base64: "aGVsbG8=" } }]),
+    ).toBe("[image:base64://aGVsbG8=]");
+  });
 });

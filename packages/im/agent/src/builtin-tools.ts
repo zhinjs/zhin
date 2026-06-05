@@ -28,6 +28,7 @@ import { createTodoWriteTool } from './builtin/todo-write-tool.js';
 import { createActivateSkillTool } from './builtin/activate-skill-tool.js';
 import { createInstallSkillTool } from './builtin/install-skill-tool.js';
 import { createAskUserTool } from './builtin/ask-user-tool.js';
+import { createAnalyzeMediaTool } from './builtin/analyze-media-tool.js';
 
 export interface BuiltinToolsOptions {
   /** 插件实例，用于 ask_user 工具创建 Prompt 交互 */
@@ -58,6 +59,7 @@ export function createBuiltinTools(options: BuiltinToolsOptions): ToolInput[] {
   const tools: ToolInput[] = [];
 
   tools.push(createReadFileTool());
+  tools.push(createAnalyzeMediaTool());
   tools.push(createWriteFileTool());
   tools.push(createEditFileTool());
   tools.push(createListDirTool());

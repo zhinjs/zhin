@@ -42,7 +42,6 @@ export async function buildAgentPathSystemPrompt(
     ctx: {
       slot: 'orchestrator',
       toolContext: context,
-      toolSearch: !!agent.config.toolSearch,
       userMessagePreview: content.slice(0, 500),
       deferred: deferredStats ? { goal: content, domainStats: deferredStats } : undefined,
     },
@@ -104,7 +103,6 @@ export async function buildMultimodalVisionSystemPrompt(
     ctx: {
       slot: 'orchestrator',
       toolContext: context,
-      toolSearch: !!agent.config.toolSearch,
       userMessagePreview: textContent.slice(0, 500),
     },
     config: agent.config,

@@ -1,5 +1,22 @@
 # @zhin.js/agent
 
+## Unreleased
+
+### Minor Changes
+
+- **Assistant Runtime（路线 A）**：M1–M5 统一 JobStore、Event Ingress、NotificationRouter、Home Domain、Assistant Profile
+  - `assistant.enabled` opt-in；`assistant-jobs.json` SSOT
+  - `POST /api/assistant/events`、`GET /api/assistant/jobs`
+  - `home_*` 工具、`assistant.profile.yml` Bootstrap 合并
+  - `notify.channel` 多通道；`cron_add notify_channel` 参数
+  - Profile `morningBrief` / `bedtimeCheck` cron routines → JobStore
+  - `assistant.queue` TaskQueue（重试 / 并发 / 死信）
+  - `syncSchedulerJobsFromLegacy`；assistant.enabled 时关闭 legacy Scheduler
+  - `assistant.home.mcpServer` 与 `ai.mcpServers` 校验；Profile 设备别名合并
+  - `CronJobContext` / `context` 已移除（破坏性）；`cron-jobs.json` / `assistant-jobs.json` 必须含 `notify`
+  - `zhin cron add --notify-channel`；Console RPC `cron:add` 使用 `notify` / `notifyChannel`（默认 silent）
+  - `legacyDualWrite` 默认 false
+
 ## 0.1.29
 
 ### Patch Changes

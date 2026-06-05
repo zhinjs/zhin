@@ -69,7 +69,8 @@ describe('AI Service 集成测试', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     aiService = new AIService({
-      defaultProvider: 'mock',
+      providers: { mock: { driver: 'openai', apiKey: 'sk-test' } },
+      agents: { zhin: { provider: 'mock', model: 'gpt-4o-mini' } },
       sessions: { maxHistory: 10 },
     });
   });
@@ -84,12 +85,12 @@ describe('AI Service 集成测试', () => {
       expect(aiService.sessions).toBeDefined();
     });
 
-    it('没有配置提供商时 isReady 应返回 false', () => {
-      expect(aiService.isReady()).toBe(false);
+    it('配置了 provider 与 agents.zhin 时 isReady 为 true', () => {
+      expect(aiService.isReady()).toBe(true);
     });
 
-    it('应该返回空的提供商列表', () => {
-      expect(aiService.listProviders()).toEqual([]);
+    it('应该返回已注册的 provider 别名', () => {
+      expect(aiService.listProviders()).toEqual(['mock']);
     });
 
     it('获取不存在的提供商应抛出错误', () => {
@@ -99,12 +100,15 @@ describe('AI Service 集成测试', () => {
     it('应该根据配置初始化所有 Provider', () => {
       const fullService = new AIService({
         providers: {
-          openai: { apiKey: 'sk-test' },
-          anthropic: { apiKey: 'sk-ant-test' },
-          deepseek: { apiKey: 'sk-deepseek' },
-          moonshot: { apiKey: 'sk-moonshot' },
-          zhipu: { apiKey: 'sk-zhipu' },
-          ollama: { baseUrl: 'http://localhost:11434' },
+          openai: { driver: 'openai', apiKey: 'sk-test' },
+          anthropic: { driver: 'anthropic', apiKey: 'sk-ant-test' },
+          deepseek: { driver: 'deepseek', apiKey: 'sk-deepseek' },
+          moonshot: { driver: 'moonshot', apiKey: 'sk-moonshot' },
+          zhipu: { driver: 'zhipu', apiKey: 'sk-zhipu' },
+          ollama: { driver: 'ollama', host: 'http://localhost:11434' },
+        },
+        agents: {
+          zhin: { provider: 'openai', model: 'gpt-4o-mini' },
         },
       });
 
@@ -123,9 +127,12 @@ describe('AI Service 集成测试', () => {
     it('应该只初始化有 apiKey 的 Provider', () => {
       const partialService = new AIService({
         providers: {
-          openai: { apiKey: 'sk-test' },
-          deepseek: {}, // 没有 apiKey
-          moonshot: { apiKey: 'sk-moonshot' },
+          openai: { driver: 'openai', apiKey: 'sk-test' },
+          deepseek: { driver: 'deepseek' },
+          moonshot: { driver: 'moonshot', apiKey: 'sk-moonshot' },
+        },
+        agents: {
+          zhin: { provider: 'openai', model: 'gpt-4o-mini' },
         },
       });
 

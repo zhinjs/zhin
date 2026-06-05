@@ -14,12 +14,15 @@ hostApi:
 
 ai:
   enabled: true
-  defaultProvider: ollama
   providers:
     ollama:
+      driver: ollama
       host: http://127.0.0.1:11434
+  agents:
+    zhin:
+      provider: ollama
+      model: qwen3:8b
   agent:
-    toolSearch: false
     execSecurity: allowlist
     execPreset: readonly
   trigger:
@@ -30,3 +33,4 @@ ai:
 
 http:
   token: ${HTTP_TOKEN:-minimal-dev-token}
+  port: 8068

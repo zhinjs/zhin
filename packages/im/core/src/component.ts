@@ -1,5 +1,5 @@
 import { getValueWithRuntime, compiler, segment } from './utils.js';
-import { Dict, SendContent, SendOptions, MessageElement } from './types.js';
+import { Dict, SendContent, SendOptions, MessageElement, MaybeArray } from './types.js';
 
 // 组件匹配符号
 export const CapWithChild = Symbol('CapWithChild');
@@ -471,11 +471,65 @@ export async function renderComponent<P = any>(component: Component<P>, template
     return component(props, context);
 }
 // 渲染函数 - 支持新的组件系统；无组件时仍对内容执行 ${...} 模板编译，与有组件时行为一致
+function messageElementsNeedCompile(content: MaybeArray<string | MessageElement>): boolean {
+    if (typeof content === 'string') {
+        return content.includes('${');
+    }
+    const arr = Array.isArray(content) ? content : [content];
+    for (const item of arr) {
+        if (typeof item === 'string') {
+            if (item.includes('${')) return true;
+            continue;
+        }
+        if (item.type === 'text') {
+            const text = (item.data as { text?: string })?.text;
+            if (typeof text === 'string' && text.includes('${')) return true;
+        }
+    }
+    return false;
+}
+
+function contentParts(content: MaybeArray<string | MessageElement>): (string | MessageElement)[] {
+    if (typeof content === 'string') return [content];
+    return Array.isArray(content) ? content : [content];
+}
+
+/** 纯 MessageElement（如出站图片 base64）勿走 segment.toString→from，否则会超 400KB 模板上限 */
+function contentNeedsComponentPipeline(
+    content: MaybeArray<string | MessageElement>,
+    componentMap: Map<string, Component>,
+): boolean {
+    if (messageElementsNeedCompile(content)) return true;
+    if (componentMap.size === 0) return false;
+    for (const item of contentParts(content)) {
+        if (typeof item === 'string') {
+            for (const name of componentMap.keys()) {
+                if (item.includes(`<${name}`)) return true;
+            }
+            continue;
+        }
+        if (item.type === 'text') {
+            const text = (item.data as { text?: string })?.text;
+            if (typeof text !== 'string') continue;
+            for (const name of componentMap.keys()) {
+                if (text.includes(`<${name}`)) return true;
+            }
+        }
+    }
+    return false;
+}
+
 export async function renderComponents(
     componentMap: Map<string, Component>,
     options: SendOptions,
     customContext?: ComponentContext
 ): Promise<SendOptions> {
+    if (typeof options.content !== 'string'
+        && !contentNeedsComponentPipeline(options.content, componentMap)) {
+        const arr = Array.isArray(options.content) ? options.content : [options.content];
+        return { ...options, content: arr };
+    }
+
     const template = typeof options.content === 'string'
         ? options.content
         : segment.toString(options.content as MessageElement);

@@ -33,29 +33,31 @@ const mockProvider = {
 } as any;
 
 describe('Advanced ACCEPTANCE (automated)', () => {
-  it('toolSearch 主编排仅 3 个常驻工具', () => {
+  it('主编排常驻含 spawn_task，generate_image 在 deferred', () => {
     const built = buildOrchestratorAgentTools({
       allTools: [
         makeTool('ask_user'),
+        makeTool('generate_image'),
         makeTool('github_star'),
         makeTool('bash'),
         makeTool('weather'),
       ],
-      config: { ...DEFAULT_CONFIG, toolSearch: true } as Required<typeof DEFAULT_CONFIG>,
+      config: DEFAULT_CONFIG,
       context: { platform: 'test' } as any,
+      subagentManager: { spawn: async () => 'queued' } as any,
       getDeferredCatalog: () => [],
       runWorker: async () => '{"summary":"ok"}',
     });
     expect(built.orchestratorTools.map(t => t.name)).toEqual([
       ...DEFAULT_TOOL_SEARCH_ORCHESTRATOR_TOOLS,
     ]);
-    expect(built.deferred.length).toBeGreaterThan(0);
+    expect(built.orchestratorTools.map(t => t.name)).not.toContain('generate_image');
+    expect(built.deferred.some(t => t.name === 'generate_image')).toBe(true);
   });
 
-  it('toolSearch 主编排 system prompt 估算 token < 20k', async () => {
+  it('主编排 system prompt 估算 token < 20k', async () => {
     const agent = new ZhinAgent(mockProvider, {
       ...DEFAULT_CONFIG,
-      toolSearch: true,
       persona: '测试',
     });
     const host = asPrivate(agent);
@@ -70,9 +72,9 @@ describe('Advanced ACCEPTANCE (automated)', () => {
     expect(tokens).toBeLessThan(20_000);
   });
 
-  it('toolSearch 通用 rich prompt 无 mcp_icqq 硬编码', () => {
+  it('通用 rich prompt 无 mcp_icqq 硬编码', () => {
     const prompt = buildRichSystemPrompt({
-      config: { ...DEFAULT_CONFIG, toolSearch: true },
+      config: DEFAULT_CONFIG,
       skillRegistry: null,
       skillsSummaryXML: '',
       activeSkillsContext: '',
@@ -87,11 +89,10 @@ describe('Advanced ACCEPTANCE (automated)', () => {
     const sections = await contributor.buildSections({
       slot: 'orchestrator',
       toolContext: { platform: 'icqq' },
-      toolSearch: true,
     });
     expect(sections?.[0].body).toMatch(/# Platform|mcp_icqq/);
     const rich = buildRichSystemPrompt({
-      config: { ...DEFAULT_CONFIG, toolSearch: true },
+      config: DEFAULT_CONFIG,
       skillRegistry: null,
       skillsSummaryXML: '',
       activeSkillsContext: '',

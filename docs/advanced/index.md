@@ -26,6 +26,11 @@ AI 原生能力的分层说明与 Advanced 开关：
 - [Agent 概念入门](./agent-concepts) — `ctx.ai` / `ctx.agent`、Subagent、toolSearch
 - [MCP 集成](./mcp) — Client 接外部工具 / Server 供 IDE 开发插件
 - [Agent 安全与角色](./agent-harness-engineering) — 执行策略与七种编排角色
+- [Assistant Runtime 路线图](../architecture/assistant-runtime) — 个人助手（路线 A）：JobStore、事件入口、通知与智能家居领域层（Advanced / opt-in）
+- [Assistant Event Ingress](./assistant-events) — `POST /api/assistant/events`：HA / 脚本触发 Agent Job（M2）
+- [Assistant Home Domain](./assistant-home) — `home_*` 别名控灯、master 策略（M4）
+- [HA × Zhin 接入清单](./assistant-home-setup) — 长期令牌、别名、第一次控灯（M4 验收）
+- [Assistant Profile](./assistant-profile) — 单文件人格 / routines / 默认 notify（M5）
 
 ## Feature 系统
 

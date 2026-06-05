@@ -27,7 +27,6 @@ describe('resolveAgentPromptSections', () => {
       ctx: {
         slot: 'orchestrator',
         toolContext: { platform: 'mock' },
-        toolSearch: true,
       },
     });
     expect(sections).toHaveLength(1);
@@ -47,7 +46,6 @@ describe('resolveAgentPromptSections', () => {
       ctx: {
         slot: 'orchestrator',
         toolContext: { platform: 'mock' },
-        toolSearch: true,
       },
     });
     expect(sections.map(s => s.id)).toContain('hook.extra');
@@ -64,7 +62,6 @@ describe('resolveAgentPromptSections', () => {
         ctx: {
           slot: 'orchestrator',
           toolContext: { platform: 'mock', senderId: 'user1', sceneId: 'scene1' },
-          toolSearch: true,
         },
       });
     });
@@ -88,7 +85,6 @@ describe('resolveAgentPromptSections', () => {
       ctx: {
         slot: 'orchestrator',
         toolContext: { platform: 'bad' },
-        toolSearch: true,
       },
     });
     expect(sections).toHaveLength(0);

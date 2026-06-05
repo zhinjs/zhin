@@ -124,6 +124,68 @@ export function isOmittedToolSummary(text: string): boolean {
   return !t || t === TOOL_RESULT_OMITTED_PLAIN;
 }
 
+/** 出站需保留完整 base64 JSON，但喂给模型的结果须去掉大二进制字段 */
+export const MEDIA_TOOL_NAMES_WITH_BINARY_JSON = new Set([
+  'generate_image',
+  'voice_tts',
+]);
+
+export function isMediaToolWithBinaryPayload(toolName: string): boolean {
+  return MEDIA_TOOL_NAMES_WITH_BINARY_JSON.has(toolName);
+}
+
+/**
+ * 将 generate_image / voice_tts 等工具返回的巨型 base64 JSON 压缩为模型可读摘要，
+ * 避免 sanitizeToolResult 截断破坏 JSON，同时不把二进制塞进上下文。
+ */
+export function compactMediaToolJsonForModel(toolName: string, raw: string): string {
+  let obj: Record<string, unknown>;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return raw;
+    obj = parsed as Record<string, unknown>;
+  } catch {
+    return raw;
+  }
+
+  if (toolName === 'generate_image' && typeof obj.image === 'string') {
+    const len = obj.image.length;
+    return JSON.stringify({
+      ...obj,
+      image: `[omitted ${len} base64 chars; image will be sent to the user as attachment]`,
+      sent_to_user: true,
+    });
+  }
+
+  if (toolName === 'voice_tts' && typeof obj.audio === 'string') {
+    const len = obj.audio.length;
+    return JSON.stringify({
+      ...obj,
+      audio: `[omitted ${len} base64 chars; audio will be sent to the user]`,
+      sent_to_user: true,
+    });
+  }
+
+  return raw;
+}
+
+/** 解析媒体工具原始 JSON，供 IM 出站合并（勿经 sanitize） */
+export function parseMediaToolResultForOutbound(
+  toolName: string,
+  raw: string,
+): Record<string, unknown> | string {
+  if (!isMediaToolWithBinaryPayload(toolName)) return raw;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    /* fall through */
+  }
+  return raw;
+}
+
 function compactLine(line: string): string {
   const compact = line.trim().replace(/\s+/g, ' ');
   return compact.length > 280 ? `${compact.slice(0, 280)} …` : compact;

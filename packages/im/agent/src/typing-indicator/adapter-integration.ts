@@ -69,7 +69,10 @@ function createOutboundSendMessage(
       if (outbound) {
         return await outbound.sendMessage(sendOptions);
       }
-      return await bot.$sendMessage(sendOptions);
+      const typedBot = bot as BotWithEditing & {
+        $sendMessage?(options: SendOptions): Promise<string | null>;
+      };
+      return await typedBot.$sendMessage?.(sendOptions) ?? null;
     } catch (error) {
       console.error(`[${platform}] Failed to send message:`, error);
       return null;

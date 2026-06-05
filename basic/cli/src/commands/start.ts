@@ -47,9 +47,14 @@ export const startCommand = new Command('start')
           if (/^npm_/i.test(key)) continue;
           cleanEnv[key] = value;
         }
+        // monorepo：workspace 包带 development 导出时走 src，避免改 agent 后未 tsc 导致 start 仍用旧 lib
+        const devSourcesAvailable = fs.existsSync(path.join(cwd, 'node_modules/zhin.js/src'));
+        const nodeOptions = (cleanEnv.NODE_OPTIONS || '')
+          + (devSourcesAvailable ? ' --conditions=development' : '');
         const env = {
           ...cleanEnv,
-          NODE_ENV: 'production'
+          NODE_ENV: 'production',
+          ...(nodeOptions.trim() ? { NODE_OPTIONS: nodeOptions.trim() } : {}),
         };
         // 配置stdio
         let stdio: any = 'inherit';

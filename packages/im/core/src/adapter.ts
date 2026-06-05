@@ -113,6 +113,26 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
   binding(plugin: Plugin) {
     this.plugin = plugin;
   }
+
+  /**
+   * 出站富媒体能力（Publisher 按此过滤/降级；各 adapter 可覆盖）。
+   */
+  getOutboundMediaCapabilities(): {
+    image?: boolean;
+    audio?: boolean;
+    video?: boolean;
+    file?: boolean;
+    maxAttachmentBytes?: number;
+  } {
+    return {
+      image: true,
+      audio: true,
+      video: true,
+      file: true,
+      maxAttachmentBytes: 26_214_400,
+    };
+  }
+
   private async renderSendMessage(options:SendOptions):Promise<SendOptions>{
     const fns=this.plugin.root.listeners('before.sendMessage') as BeforeSendHandler[];
     for(const fn of fns){

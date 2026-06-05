@@ -47,6 +47,7 @@ export {
   AnthropicProvider,
   OllamaProvider,
   CloudflareProvider,
+  GoogleProvider,
 } from './providers/index.js';
 export type {
   OpenAIConfig,
@@ -54,13 +55,32 @@ export type {
   AnthropicConfig,
   OllamaConfig,
   CloudflareConfig,
+  GoogleConfig,
 } from './providers/index.js';
+
+export {
+  ZHIPU_DEFAULT_IMAGE_MODEL,
+  CLOUDFLARE_DEFAULT_IMAGE_MODEL,
+  OPENAI_DEFAULT_IMAGE_MODEL,
+  GOOGLE_DEFAULT_IMAGE_MODEL,
+  hasGenerateImage,
+} from './image-generation.js';
+export type {
+  ImageGenerateRequest,
+  ImageGenerateResult,
+  ImageGenerationCapable,
+  ImageGenerationDefaults,
+} from './image-generation.js';
 
 // ── Agent Engine ──
 export { Agent, createAgent, formatToolTitle } from './agent/index.js';
 export type { AgentState, AgentEvents } from './agent/index.js';
 export {
   sanitizeToolResult,
+  compactMediaToolJsonForModel,
+  isMediaToolWithBinaryPayload,
+  parseMediaToolResultForOutbound,
+  MEDIA_TOOL_NAMES_WITH_BINARY_JSON,
   relativizeCwdPaths,
   stripHallucinatedToolCalls,
   isOmittedToolSummary,

@@ -8,7 +8,6 @@ import {
   isAtBot,
   mergeAITriggerConfig,
   Message,
-  parseRichMediaContent,
   prependQuoteContext,
   QUOTE_CONTEXT_SYSTEM_EXTRA_KEY,
   QUOTE_CONTEXT_SYSTEM_HINT,
@@ -22,7 +21,20 @@ import type { Plugin, Tool, ToolContext } from '@zhin.js/core';
 import type { ContentPart } from '@zhin.js/core';
 import type { OutputElement } from '@zhin.js/ai';
 import type { AIServiceRefs } from './shared-refs.js';
-import { renderOutput } from './output-renderer.js';
+import {
+  preprocessInboundMedia,
+  publishOutboundElements,
+  resolveMultimodalConfig,
+  INBOUND_MEDIA_PARTS_EXTRA_KEY,
+  buildSubagentInboundTask,
+} from '../media/index.js';
+import { providerSupportsVision } from '../media/vision-capability.js';
+import { resolveRoutedAgentName } from '../routing/route-matcher.js';
+import { DEFAULT_ZHIN_AGENT_NAME } from '../config/types.js';
+import { discoverWorkspaceAgents, loadAgentMarkdownBody } from '../discovery/agents.js';
+import { summarizeSubagentResultForUser } from '../routing/subagent-summarize.js';
+import { originFromToolContext } from '../builtin/spawn-task-tool.js';
+import { parseOutput, resolveIMSessionIdFromToolContext } from '@zhin.js/ai';
 import { canAccessTool } from '../orchestrator/tool-selection.js';
 import { inferFileRole } from '../security/file-role-policy.js';
 import { formatCompactLog, truncatePreview } from '@zhin.js/logger';
@@ -30,6 +42,7 @@ import { formatAiHandlerCompleteLog } from '../zhin-agent/turn-metrics.js';
 import {
   formatSubagentProcessingMessage,
   SUBAGENT_GOAL_NOTIFY_EXTRA_KEY,
+  type SubagentProcessingNotice,
 } from '../subagent-goal-notify.js';
 
 function resolveBotAtIds(message: Message<any>, root: Plugin): string[] {
@@ -116,8 +129,8 @@ export function registerAITrigger(refs: AIServiceRefs): void {
         roles,
         fileRole: inferFileRole({ roles }),
         extra: {
-          [SUBAGENT_GOAL_NOTIFY_EXTRA_KEY]: async (goal: string) => {
-            await replyOutbound(formatSubagentProcessingMessage(goal));
+          [SUBAGENT_GOAL_NOTIFY_EXTRA_KEY]: async (notice: SubagentProcessingNotice) => {
+            await replyOutbound(formatSubagentProcessingMessage(notice));
           },
         },
       };
@@ -172,7 +185,153 @@ export function registerAITrigger(refs: AIServiceRefs): void {
             [QUOTE_CONTEXT_SYSTEM_EXTRA_KEY]: QUOTE_CONTEXT_SYSTEM_HINT,
           };
         }
-        if (mediaParts.length > 0) {
+
+        const routing = refs.aiService?.getRoutingConfig();
+        const bindingRegistry = refs.aiService?.getBindingRegistry();
+        let routedAgent = DEFAULT_ZHIN_AGENT_NAME;
+        if (refs.aiService && routing && bindingRegistry) {
+          const agentMetas = await discoverWorkspaceAgents(root);
+          refs.aiService.setDiscoveredAgents(agentMetas);
+          routedAgent = resolveRoutedAgentName(routing.agents, {
+            message,
+            contentText: aiContent,
+            discoveredAgentNames: bindingRegistry.getDiscoveredAgentNames(),
+          });
+        }
+
+        if (
+          routedAgent !== DEFAULT_ZHIN_AGENT_NAME
+          && refs.aiService
+          && bindingRegistry
+          && refs.zhinAgent
+        ) {
+          const routeBinding = bindingRegistry.getBinding(routedAgent);
+          const subMgr = refs.zhinAgent.getSubagentManager();
+          const meta = (await discoverWorkspaceAgents(root)).find(m => m.name === routedAgent);
+          if (routeBinding && subMgr && meta) {
+            const systemBody = await loadAgentMarkdownBody(meta.filePath);
+            const origin = originFromToolContext(toolContext);
+            const routeProvider = refs.aiService?.getProvider(routeBinding.providerAlias);
+            const workspaceDir = process.cwd();
+            const inbound = await buildSubagentInboundTask(aiContent, mediaParts, {
+              workspaceDir,
+              provider: routeProvider ?? undefined,
+            });
+            logger.info(formatCompactLog('AI Handler', {
+              route: routedAgent,
+              subagent_media_parts: inbound.mediaPartCount,
+              subagent_payloads: inbound.payloadCount,
+              subagent_spooled: inbound.spooledPaths.join(';') || 'none',
+              subagent_native_vision: inbound.useNativeVision,
+              subagent_vision_parts: inbound.visionPartCount,
+            }));
+            if (inbound.mediaPartCount > 0 && inbound.payloadCount === 0) {
+              logger.warn(formatCompactLog('AI Handler', {
+                route: routedAgent,
+                warn: 'subagent_media_no_payload',
+                media_parts: inbound.mediaPartCount,
+              }));
+            }
+            const subResult = await subMgr.spawnSync({
+              task: aiContent,
+              runInput: inbound.runInput,
+              label: routedAgent,
+              origin,
+              agent: routedAgent,
+              binding: routeBinding,
+              systemPrompt: systemBody || undefined,
+              notifyContext: toolContext,
+            });
+
+            const sessionId = resolveIMSessionIdFromToolContext({
+              platform: toolContext.platform,
+              botId: toolContext.botId,
+              scope: toolContext.scope,
+              sceneId: toolContext.sceneId,
+              senderId: toolContext.senderId,
+            });
+            const emitter = refs.zhinAgent.getEventEmitter();
+            let summary = '';
+            try {
+              await emitter.dispatch('ai.processing.start', emitter.createPayload(sessionId, toolContext, 'text', {
+                content: aiContent,
+                agentId: DEFAULT_ZHIN_AGENT_NAME,
+                label: 'summarize',
+              }));
+              summary = await summarizeSubagentResultForUser(
+                refs.aiService,
+                routedAgent,
+                aiContent,
+                subResult,
+              );
+              await emitter.dispatch('ai.response', emitter.createPayload(sessionId, toolContext, 'text', {
+                path: 'agent',
+                agentId: DEFAULT_ZHIN_AGENT_NAME,
+                reply: summary,
+              }));
+            } catch (summarizeErr) {
+              const msg = summarizeErr instanceof Error ? summarizeErr.message : String(summarizeErr);
+              await emitter.dispatch('ai.processing.error', emitter.createPayload(sessionId, toolContext, 'text', {
+                error: msg,
+                agentId: DEFAULT_ZHIN_AGENT_NAME,
+              }));
+              throw summarizeErr;
+            } finally {
+              await emitter.dispatch('ai.processing.finish', emitter.createPayload(sessionId, toolContext, 'text', {
+                reply: summary,
+                agentId: DEFAULT_ZHIN_AGENT_NAME,
+              }));
+              emitter.emit('ai.typing.stop', emitter.createPayload(sessionId, toolContext, 'text', {
+                reason: 'route_done',
+              }));
+            }
+
+            const elements = parseOutput(summary);
+            const outboundSegments = await publishOutboundElements(elements, message.$adapter);
+            if (outboundSegments.length) await replyOutbound(outboundSegments);
+            logger.info(formatCompactLog('AI Handler', {
+              route: routedAgent,
+              path: 'spawn_sync',
+              total_ms: Math.round(performance.now() - t0),
+            }));
+            return;
+          }
+        }
+
+        const zhinBinding = bindingRegistry?.getBinding(DEFAULT_ZHIN_AGENT_NAME)
+          ?? bindingRegistry?.requireZhinBinding();
+        if (zhinBinding) refs.zhinAgent?.setActiveBinding(zhinBinding);
+
+        const mmConfig = resolveMultimodalConfig();
+        if (mediaParts.length > 0 && mmConfig.enabled) {
+          const pre = await preprocessInboundMedia(mediaParts, mmConfig);
+          const fullContent = [aiContent, pre.textAppend].filter(Boolean).join('\n\n');
+          const visionProvider = zhinBinding && refs.aiService?.isReady()
+            ? refs.aiService.getProvider(zhinBinding.providerAlias)
+            : refs.aiService?.getProvider();
+          const canInjectVision = pre.visionParts.length > 0
+            && refs.aiService?.isReady()
+            && visionProvider
+            && providerSupportsVision(visionProvider);
+          if (canInjectVision) {
+            toolContext.extra = {
+              ...toolContext.extra,
+              [INBOUND_MEDIA_PARTS_EXTRA_KEY]: pre.visionParts,
+            };
+          }
+          try {
+            elements = await refs.zhinAgent.process(fullContent, toolContext, externalTools, onChunk);
+          } catch (procErr) {
+            logger.warn(formatCompactLog('AI Handler', {
+              multimodal_fallback: true,
+              error: truncatePreview(procErr instanceof Error ? procErr.message : String(procErr)),
+            }));
+            const parts: ContentPart[] = [];
+            if (aiContent) parts.push({ type: 'text', text: aiContent });
+            parts.push(...mediaParts);
+            elements = await refs.zhinAgent.processMultimodal(parts, toolContext, onChunk);
+          }
+        } else if (mediaParts.length > 0) {
           const parts: ContentPart[] = [];
           if (aiContent) parts.push({ type: 'text', text: aiContent });
           parts.push(...mediaParts);
@@ -180,9 +339,8 @@ export function registerAITrigger(refs: AIServiceRefs): void {
         } else {
           elements = await refs.zhinAgent.process(aiContent, toolContext, externalTools, onChunk);
         }
-        const responseText = renderOutput(elements);
-
-        if (responseText) await replyOutbound(parseRichMediaContent(responseText));
+        const outboundSegments = await publishOutboundElements(elements, message.$adapter);
+        if (outboundSegments.length) await replyOutbound(outboundSegments);
         const totalMs = performance.now() - t0;
         const turnMetrics = refs.zhinAgent.getLastTurnMetrics();
         if (turnMetrics) {

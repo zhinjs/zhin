@@ -259,3 +259,58 @@ if (violations.length) {
 }
 
 console.log('Harness architecture layer check: OK (no layer violations found).');
+
+// ── Assistant 反向依赖：低层不得 import @zhin.js/agent / assistant/ ──
+const assistantForbiddenLayers = ['packages/im/kernel', 'packages/im/ai', 'packages/im/core'];
+const assistantImportRe = /@zhin\.js\/agent(?:\/|$)/;
+const assistantPathRe = /\/assistant\//;
+const reverseViolations = [];
+
+for (const layerPath of assistantForbiddenLayers) {
+  const absPath = path.join(repoRoot, layerPath);
+  const files = [];
+  walkTs(absPath, files);
+  for (const file of files) {
+    const content = fs.readFileSync(file, 'utf8');
+    for (const importPath of parseImports(content)) {
+      if (assistantImportRe.test(importPath) || assistantPathRe.test(importPath)) {
+        reverseViolations.push({
+          file: path.relative(repoRoot, file),
+          import: importPath,
+          reason: `Layer "${layerPath}" must not import Assistant Runtime (${importPath})`,
+        });
+      }
+    }
+  }
+}
+
+// agent 层不得依赖 host 包（Host API 应单向依赖 agent）
+const agentRoot = path.join(repoRoot, 'packages/im/agent/src');
+const agentFiles = [];
+walkTs(agentRoot, agentFiles);
+const hostImportRe = /@zhin\.js\/host-|packages\/host\//;
+
+for (const file of agentFiles) {
+  const content = fs.readFileSync(file, 'utf8');
+  for (const importPath of parseImports(content)) {
+    if (hostImportRe.test(importPath)) {
+      reverseViolations.push({
+        file: path.relative(repoRoot, file),
+        import: importPath,
+        reason: `packages/im/agent must not import host packages (${importPath})`,
+      });
+    }
+  }
+}
+
+if (reverseViolations.length) {
+  console.error('\nHarness assistant reverse-dependency check: FAILED\n');
+  for (const v of reverseViolations) {
+    console.error(`  ${v.file}:`);
+    console.error(`    Import: ${v.import}`);
+    console.error(`    Reason: ${v.reason}\n`);
+  }
+  process.exit(1);
+}
+
+console.log('Harness assistant reverse-dependency check: OK.');

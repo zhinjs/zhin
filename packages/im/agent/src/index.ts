@@ -87,7 +87,11 @@ export { AIService } from './service.js';
 export { ZhinAgent } from './zhin-agent/index.js';
 export type { ZhinAgentConfig, OnChunkCallback } from './zhin-agent/index.js';
 
-export { DEFAULT_CONFIG as ZHIN_AGENT_DEFAULT_CONFIG, SECTION_SEP } from './zhin-agent/config.js';
+export {
+  DEFAULT_CONFIG as ZHIN_AGENT_DEFAULT_CONFIG,
+  DEFAULT_ORCHESTRATOR_TOOLS,
+  SECTION_SEP,
+} from './zhin-agent/config.js';
 export { MODEL_HARNESS_DEFAULTS, resolveModelHarness, mergeModelHarnessValues } from './zhin-agent/model-harness.js';
 export type { ModelHarnessRow, ResolvedModelHarness, ModelHarnessConfig } from './zhin-agent/model-harness.js';
 export {
@@ -130,7 +134,7 @@ export { UserProfileStore, AI_USER_PROFILE_MODEL } from './user-profile.js';
 
 export { SubagentManager } from './subagent.js';
 export type {
-  SubagentOrigin, SubagentResultSender, SpawnOptions, SubagentManagerOptions,
+  SubagentOrigin, SubagentResultDelivery, SubagentResultSender, SpawnOptions, SubagentManagerOptions,
 } from './subagent.js';
 export { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from './reserved-tools.js';
 
@@ -232,15 +236,96 @@ export {
   createCronTools, setCronManager, getCronManager, CRON_JOBS_FILENAME,
 } from './cron-engine.js';
 export type {
-  CronJobRecord, CronJobContext, CronRunner, AddCronFn,
-  PersistentCronEngineOptions, CronManager, PromptOptimizer,
+  CronJobRecord, CronRunner, AddCronFn,
+  PersistentCronEngineOptions, CronManager, PromptOptimizer, IPersistentJobEngine,
 } from './cron-engine.js';
+
+export {
+  AssistantJobEngine,
+  AssistantJobStore,
+  AssistantEventIngress,
+  JobWorker,
+  createAssistantJobStore,
+  getAssistantJobsPath,
+  resolveAssistantConfig,
+  resolveAssistantDefaultsConfig,
+  resolveAssistantEventsConfig,
+  isAssistantEventsActive,
+  createNotificationRouter,
+  notifyToSendOptions,
+  setAssistantRuntime,
+  getAssistantRuntime,
+  isAssistantEventsEndpointActive,
+  getAssistantEventsTokenFallback,
+  ASSISTANT_JOBS_FILENAME,
+  cronRecordToAssistant,
+  assistantToCronRecord,
+} from './assistant/index.js';
+export type {
+  AssistantConfig,
+  AssistantDefaultsConfig,
+  AssistantEventsConfig,
+  AssistantProfileConfig,
+  AssistantProfile,
+  NotificationRouter,
+  AssistantJob,
+  AssistantJobFile,
+  AssistantEventRequest,
+  AssistantEventResult,
+  AssistantRuntimeHandle,
+  MigrationResult,
+} from './assistant/index.js';
+export {
+  loadAssistantProfileFile,
+  loadBootstrapWithProfile,
+  syncProfileHeartbeatToStore,
+  syncProfileCronRoutinesToStore,
+  mergeProfileDeviceAliases,
+  validateAssistantProfile,
+  resolveAssistantProfileConfig,
+  ASSISTANT_PROFILE_VERSION,
+  DEFAULT_PROFILE_FILENAME,
+  PROFILE_HEARTBEAT_JOB_ID,
+  PROFILE_MORNING_BRIEF_JOB_ID,
+  PROFILE_BEDTIME_CHECK_JOB_ID,
+} from './assistant/index.js';
 
 export {
   loadBootstrapFiles, buildContextFiles, buildBootstrapContextSection,
   loadSoulPersona, loadToolsGuide, loadAgentsMemory, clearBootstrapCache,
+  getFileMemoryContext,
 } from './bootstrap.js';
 export type { BootstrapFile, ContextFile } from './bootstrap.js';
+
+export {
+  preprocessInboundMedia,
+  publishOutboundElements,
+  resolveMultimodalConfig,
+  resolveOutboundCapabilities,
+  INBOUND_MEDIA_PARTS_EXTRA_KEY,
+} from './media/index.js';
+export type { MediaBinaryPayload, MultimodalConfig, OutboundMediaCapabilities } from './media/index.js';
+
+export {
+  loadMemoryLayers,
+  buildMemoryPrompt,
+  safeSessionKey,
+  getMemoryRoot,
+  checkMemoryWritePath,
+  classifyMemoryWritePath,
+  formatMemoryPathsHint,
+  resolveMemoryPromptOptions,
+  DEFAULT_MEMORY_BUDGETS,
+  migrateLegacyMemoryFiles,
+} from './memory-layers.js';
+export type {
+  MemoryLayerBudgets,
+  MemoryPromptOptions,
+  MemoryLayersInput,
+  LoadedMemoryLayers,
+  MemoryWriteScope,
+  MemoryWriteDecision,
+} from './memory-layers.js';
 
 export {
   registerAIHook, unregisterAIHook, triggerAIHook,
@@ -269,6 +354,7 @@ export {
   AI_EVENT_NAMES,
   subscribeAIEvents,
 } from './ai-event-subscriber.js';
+export { originFromToolContext } from './builtin/spawn-task-tool.js';
 export type {
   AIEventName,
   AIEventFilter,

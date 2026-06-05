@@ -1,14 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createTaskExecutor, cronContextToSendOptions } from '../src/task-executor.js';
+import { createTaskExecutor } from '../src/task-executor.js';
+import { notifyToSendOptions } from '../src/assistant/notification-router.js';
 
 describe('task executor outbound seam', () => {
-  it('converts cron context through the queue IM field contract shape', () => {
-    expect(cronContextToSendOptions({
+  it('converts im notify through the queue IM field contract shape', () => {
+    expect(notifyToSendOptions({
+      channel: 'im',
       platform: 'qq',
       botId: 'bot1',
       sceneId: 'group1',
       scope: 'group',
-    } as any, 'hello')).toEqual({
+    }, 'hello')).toEqual({
       context: 'qq',
       bot: 'bot1',
       id: 'group1',
@@ -28,12 +30,13 @@ describe('task executor outbound seam', () => {
 
     const result = await executor.executeTask({
       prompt: 'say hello',
-      context: {
+      notify: {
+        channel: 'im',
         platform: 'qq',
         botId: 'bot1',
         sceneId: 'group1',
         scope: 'group',
-      } as any,
+      },
     });
 
     expect(result.success).toBe(true);
@@ -46,4 +49,3 @@ describe('task executor outbound seam', () => {
     });
   });
 });
-

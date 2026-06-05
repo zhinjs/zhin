@@ -77,6 +77,49 @@ export abstract class BaseProvider implements AIProvider {
   }
 
   /**
+   * 读取响应正文（用于需自行解析 JSON / SSE 的场景）
+   */
+  protected async fetchText(
+    url: string,
+    options: RequestInit & { json?: unknown } = {},
+  ): Promise<string> {
+    const { json, ...fetchOptions } = options;
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...this.config.headers,
+      ...(options.headers as Record<string, string>),
+    };
+
+    if (this.config.apiKey) {
+      const scheme = this.config.authScheme !== undefined ? this.config.authScheme : 'Bearer ';
+      headers['Authorization'] = scheme + this.config.apiKey;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
+
+    try {
+      const response = await fetch(url, {
+        ...fetchOptions,
+        headers,
+        body: json ? JSON.stringify(json) : fetchOptions.body,
+        signal: controller.signal,
+        keepalive: true,
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`API Error (${response.status}): ${error}`);
+      }
+
+      return response.text();
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  /**
    * 发送流式请求
    */
   protected async *fetchStream(

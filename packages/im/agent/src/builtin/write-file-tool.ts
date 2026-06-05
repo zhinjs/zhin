@@ -5,6 +5,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type { Tool, ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import { checkFileAccess, isBlockedDevicePath } from '../security/file-policy.js';
+import { checkMemoryWritePath } from '../memory-layers.js';
 import { checkFilePermission, formatFilePermissionMessage, toolRequesterRoleToFileRole } from '../security/file-role-policy.js';
 import { checkFileToolAccess, checkSensitiveFilePathAccess, checkDangerousToolAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
 import { expandHome, nodeErrToFileMessage } from '../discovery/utils.js';
@@ -74,9 +75,14 @@ export class WriteFileBuiltinTool extends BuiltinBaseTool {
     const confirmMsg = formatFilePermissionMessage(permResult, 'write_file');
     if (confirmMsg) return confirmMsg;
 
-    // 第 3 层：敏感路径检测（dangerous-tool-policy + file-policy）
     try {
       const fp = expandHome(filePathArg);
+      const memoryDecision = checkMemoryWritePath(fp, context);
+      if (!memoryDecision.allowed) {
+        return `Error: ${memoryDecision.reason}`;
+      }
+
+      // 第 3 层：敏感路径检测（dangerous-tool-policy + file-policy）
       const sensitiveDecision = checkSensitiveFilePathAccess('write_file', fp, context);
       if (!sensitiveDecision.allowed) {
         if (sensitiveDecision.needsOwnerApproval) return toOwnerSignal(sensitiveDecision);

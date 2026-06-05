@@ -115,40 +115,7 @@ export function getMemoryDir(workspaceDir?: string): string {
   return dir;
 }
 
-function todayDate(): string {
-  return new Date().toISOString().split('T')[0];
-}
-
-/**
- * 读取文件制长期记忆 + 当日笔记，拼成注入 system prompt 的字符串（与 miniclawd 一致）
- * 同步读取，供 buildRichSystemPrompt 等同步调用
- */
-export function getFileMemoryContext(workspaceDir?: string): string {
-  const memoryDir = getMemoryDir(workspaceDir);
-  const parts: string[] = [];
-
-  const memoryFile = path.join(memoryDir, 'MEMORY.md');
-  if (fs.existsSync(memoryFile)) {
-    try {
-      const longTerm = fs.readFileSync(memoryFile, 'utf-8').trim();
-      if (longTerm) parts.push('## Long-term Memory\n' + longTerm);
-    } catch {
-      // ignore read errors
-    }
-  }
-
-  const todayFile = path.join(memoryDir, `${todayDate()}.md`);
-  if (fs.existsSync(todayFile)) {
-    try {
-      const today = fs.readFileSync(todayFile, 'utf-8').trim();
-      if (today) parts.push("## Today's Notes\n" + today);
-    } catch {
-      // ignore read errors
-    }
-  }
-
-  return parts.length > 0 ? parts.join('\n\n') : '';
-}
+export { getFileMemoryContext } from './memory-layers.js';
 
 /**
  * 加载工作区引导文件

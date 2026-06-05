@@ -13,7 +13,8 @@ import type { ToolContext } from '../orchestrator/types.js';
 import type { ZhinAgentConfig } from './config.js';
 import { SECTION_SEP, HISTORY_CONTEXT_MARKER, CURRENT_MESSAGE_MARKER } from './config.js';
 import type { ChatMessage } from '@zhin.js/ai';
-import { getFileMemoryContext } from '../bootstrap.js';
+import { resolveIMSessionIdFromToolContext } from '@zhin.js/ai';
+import { getFileMemoryContext, formatMemoryPathsHint } from '../memory-layers.js';
 import { PromptBuilder } from './prompt-builder.js';
 import {
   buildSenderRolesFilePermissionsPrompt,
@@ -203,13 +204,22 @@ function buildContextSection(
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const timeStr = now.toLocaleString('zh-CN', { timeZone: tz });
   const cwd = process.cwd();
-  const todayStr = now.toISOString().split('T')[0];
+  const sessionKey = toolContext
+    ? resolveIMSessionIdFromToolContext({
+        platform: toolContext.platform,
+        botId: toolContext.botId,
+        scope: toolContext.scope,
+        sceneId: toolContext.sceneId,
+        senderId: toolContext.senderId,
+      })
+    : undefined;
+  const memoryPaths = formatMemoryPathsHint(toolContext?.platform, sessionKey);
 
   const envItems = [
     `CWD: ${cwd}`,
     `Host: ${os.platform()} | Node ${process.version} | Shell: ${process.env.SHELL || 'unknown'}`,
     `Time: ${timeStr} (${tz})`,
-    `Memory: data/memory/MEMORY.md, data/memory/${todayStr}.md`,
+    `Memory: ${memoryPaths}`,
   ];
   const sessionLine = toolContext ? formatSessionContextLine(toolContext) : null;
   if (sessionLine) envItems.push(sessionLine);
@@ -324,12 +334,27 @@ function buildActiveSkillsSection(activeSkillsContext: string): string | null {
 }
 
 /**
- * §9 Memory
+ * §9 Memory（全局 / 平台 / 会话三层）
  */
-function buildMemorySection(): string | null {
-  const fileMemory = getFileMemoryContext();
+function buildMemorySection(toolContext?: ToolContext): string | null {
+  const sessionKey = toolContext
+    ? resolveIMSessionIdFromToolContext({
+        platform: toolContext.platform,
+        botId: toolContext.botId,
+        scope: toolContext.scope,
+        sceneId: toolContext.sceneId,
+        senderId: toolContext.senderId,
+      })
+    : undefined;
+  const fileMemory = getFileMemoryContext(undefined, toolContext?.platform, sessionKey);
   if (!fileMemory) return null;
-  return '# Memory\n\n' + fileMemory;
+  return [
+    '# Memory',
+    '',
+    fileMemory,
+    '',
+    'Persist: session → data/memory/sessions/…/MEMORY.md (any user with write_file); global/platform → master only.',
+  ].join('\n');
 }
 
 /** 单段字符数统计（日志 / Harness debug；与 buildRichSystemPrompt 分段一致） */
@@ -347,7 +372,7 @@ export function describePromptSectionsForDebug(ctx: RichSystemPromptContext): Pr
     config, skillRegistry, skillsSummaryXML, activeSkillsContext, bootstrapContext,
     toolSearchDeferredStats, platformSections,
   } = ctx;
-  const toolSearchActive = !!config.toolSearch;
+  const toolSearchActive = true;
   const boot = bootstrapContext?.trim() ? bootstrapContext : null;
   const pairs: [string, string | null][] = [
     ['§1_runtime', buildContextSection(config, ctx.toolContext, bootstrapContext)],
@@ -357,7 +382,7 @@ export function describePromptSectionsForDebug(ctx: RichSystemPromptContext): Pr
     ['§6c_platform', buildPlatformSection(platformSections, toolSearchActive)],
     ['§8_skills', buildSkillsSection(skillRegistry, skillsSummaryXML, toolSearchActive)],
     ['§9_active_skills', buildActiveSkillsSection(activeSkillsContext)],
-    ['§10_memory', buildMemorySection()],
+    ['§10_memory', buildMemorySection(ctx.toolContext)],
     ['§11_bootstrap', boot],
   ];
   return pairs
@@ -370,7 +395,7 @@ export function buildRichSystemPrompt(ctx: RichSystemPromptContext): string {
     config, skillRegistry, skillsSummaryXML, activeSkillsContext, bootstrapContext,
     toolSearchDeferredStats, platformSections,
   } = ctx;
-  const toolSearchActive = !!config.toolSearch;
+  const toolSearchActive = true;
 
   const sections: (string | null)[] = [
     buildContextSection(config, ctx.toolContext, bootstrapContext),
@@ -382,7 +407,7 @@ export function buildRichSystemPrompt(ctx: RichSystemPromptContext): string {
     buildPlatformSection(platformSections, toolSearchActive),
     buildSkillsSection(skillRegistry, skillsSummaryXML, toolSearchActive),
     buildActiveSkillsSection(activeSkillsContext),
-    buildMemorySection(),
+    buildMemorySection(ctx.toolContext),
     bootstrapContext || null,
   ];
 
@@ -403,7 +428,7 @@ export function buildRichSystemPromptWithBuilder(ctx: RichSystemPromptContext): 
     config, skillRegistry, skillsSummaryXML, activeSkillsContext, bootstrapContext,
     toolSearchDeferredStats, platformSections,
   } = ctx;
-  const toolSearchActive = !!config.toolSearch;
+  const toolSearchActive = true;
 
   const builder = new PromptBuilder({
     maxTotalChars: 100000,
@@ -419,7 +444,15 @@ export function buildRichSystemPromptWithBuilder(ctx: RichSystemPromptContext): 
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const timeStr = now.toLocaleString('zh-CN', { timeZone: tz });
   const cwd = process.cwd();
-  const todayStr = now.toISOString().split('T')[0];
+  const sessionKey = ctx.toolContext
+    ? resolveIMSessionIdFromToolContext({
+        platform: ctx.toolContext.platform,
+        botId: ctx.toolContext.botId,
+        scope: ctx.toolContext.scope,
+        sceneId: ctx.toolContext.sceneId,
+        senderId: ctx.toolContext.senderId,
+      })
+    : undefined;
 
   builder.addContext({
     cwd,
@@ -427,7 +460,7 @@ export function buildRichSystemPromptWithBuilder(ctx: RichSystemPromptContext): 
     nodeVersion: process.version,
     shell: process.env.SHELL || 'unknown',
     timestamp: `${timeStr} (${tz})`,
-    memoryPath: `data/memory/MEMORY.md, data/memory/${todayStr}.md`,
+    memoryPath: formatMemoryPathsHint(ctx.toolContext?.platform, sessionKey),
   });
 
   if (!toolSearchActive) {
@@ -505,7 +538,7 @@ export function buildRichSystemPromptWithBuilder(ctx: RichSystemPromptContext): 
   }
 
   // 9. 记忆上下文
-  const fileMemory = getFileMemoryContext();
+  const fileMemory = getFileMemoryContext(undefined, ctx.toolContext?.platform, sessionKey);
   if (fileMemory) {
     builder.addMemory({
       longTerm: [fileMemory],

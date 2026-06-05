@@ -8,39 +8,41 @@ bots: []
 #     master: '你的用户ID'      # ⚠️ Bot Master（ask_user 安全确认目标）
 plugins: []
 
-# AI 服务配置（可选）
+# AI 服务配置（可选）— 新格式：命名 providers + agents.zhin 绑定
 # ai:
 #   enabled: true
-#   defaultProvider: openai  # 默认提供商: openai, anthropic, deepseek, ollama
 #   providers:
-#     openai:
-#       apiKey: sk-xxx  # OpenAI API Key
-#       # baseUrl: https://api.openai.com/v1  # 可选，自定义 API 地址
-#     anthropic:
-#       apiKey: sk-ant-xxx  # Anthropic API Key
-#     deepseek:
-#       apiKey: sk-xxx  # https://platform.deepseek.com/api_keys
-#       # baseUrl: https://api.deepseek.com  # 默认；strictTools 时用 /beta
-#       defaultModel: deepseek-v4-flash
-#       # reasoningEffort: medium  # 思考模式：low | medium | high
-#     ollama:
-#       host: http://localhost:11434  # Ollama 本地地址
-#       models:
-#         - qwen3:14b
+#     ds-main:
+#       driver: deepseek
+#       apiKey: ${DEEP_SEEK_API_KEY}
+#     ollama-local:
+#       driver: ollama
+#       host: http://127.0.0.1:11434
+#   agents:
+#     zhin:
+#       provider: ds-main
+#       model: deepseek-chat
+#       toolSearch: false
+#       tools:
+#         - bash
+#         - read_file
+#         - write_file
+#         - web_search
+#         - activate_skill
 #   sessions:
-#     maxHistory: 200  # 最大历史消息数（数据库模式）
-#     expireMs: 604800000  # 会话过期时间（7天）
-#     useDatabase: true  # 使用数据库持久化存储（默认开启）
+#     maxHistory: 200
+#     expireMs: 604800000
+#     useDatabase: true
 #   context:
-#     enabled: true  # 启用消息记录和智能上下文
-#     maxRecentMessages: 100  # 读取最近消息数量
-#     summaryThreshold: 50  # 触发自动总结的消息数量
-#     keepAfterSummary: 10  # 总结后保留的最近消息数
-#     maxContextTokens: 4000  # 上下文最大 token 估算
+#     enabled: true
+#     maxRecentMessages: 100
+#     summaryThreshold: 50
+#     keepAfterSummary: 10
+#     maxContextTokens: 4000
 #   agent:
-#     execSecurity: allowlist  # bash 执行策略: deny(禁止) / allowlist(白名单) / full(不限制)
-#     execPreset: network      # 预设白名单: readonly / network / development / custom
-#     execApprovalMode: ask    # 未知命令向 Owner 私聊审批
+#     execSecurity: allowlist
+#     execPreset: network
+#     execApprovalMode: ask
 #   trigger:
 #     prefixes: ['#', 'AI:', 'ai:']
 #     respondToAt: true

@@ -64,7 +64,6 @@ export function createGithubAgentPromptContributor(): AgentPromptContributor {
 
     async buildSections(ctx: AgentPromptBuildContext): Promise<AgentPromptSection[] | null> {
       if (ctx.slot === 'orchestrator') {
-        if (!ctx.toolSearch) return null;
         return [{
           id: 'platform.github.orchestrator',
           title: '## GitHub',

@@ -66,8 +66,28 @@ describe('SpawnTaskBuiltinTool / createSpawnTaskTool', () => {
         sceneId: 's1',
         sceneType: 'group',
       },
+      agent: undefined,
+      notifyContext: ctx,
     });
     expect(out).toBe('子任务已启动');
+  });
+
+  it('wait: true calls spawnSync and returns completed result', async () => {
+    const spawnSync = vi.fn().mockResolvedValue('架构 Artifact 已创建');
+    const spawn = vi.fn();
+    const manager = { spawn, spawnSync } as unknown as SubagentManager;
+    const ctx = { platform: 'sandbox', botId: 'b1', senderId: 'u1', sceneId: 's1' } as ToolContext;
+    const tool = createSpawnTaskTool(ctx, manager);
+    const out = await tool.execute({
+      task: '设计 wi-1',
+      agent: 'architect',
+      wait: true,
+      label: '架构',
+    });
+    expect(spawnSync).toHaveBeenCalledTimes(1);
+    expect(spawn).not.toHaveBeenCalled();
+    expect(String(out)).toContain('架构 Artifact 已创建');
+    expect(String(out)).toContain('已完成');
   });
 
   it('run rejects empty task without calling spawn', async () => {

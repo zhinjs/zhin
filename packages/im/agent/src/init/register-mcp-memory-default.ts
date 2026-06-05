@@ -22,6 +22,10 @@ export function registerMcpMemoryDefault(): void {
     const appConfig = configService?.getPrimary<{ ai?: AIConfig }>() || {};
     if (appConfig.ai?.memoryMcp !== true) return;
 
+    logger.warn(
+      'ai.memoryMcp is deprecated; use three-layer file memory (data/memory/global, platforms/, sessions/). See docs/essentials/configuration.md',
+    );
+
     if (orchestrator.mcps.has('memory')) return;
 
     const memoryPath = path.join(getDataDir(), 'knowledge-graph.jsonl');

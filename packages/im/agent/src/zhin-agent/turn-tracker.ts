@@ -26,15 +26,20 @@ export class TurnTracker {
     this.activeWaits.push(done);
   }
 
+  /** 主回合在生成最终回复前等待本轮 spawn 的子 agent（与 finalize 内逻辑相同） */
+  async waitForPendingSubagents(): Promise<void> {
+    if (this.activeWaits.length === 0 || this.waitMs <= 0) return;
+    await Promise.race([
+      Promise.allSettled(this.activeWaits),
+      new Promise<void>(resolve => setTimeout(resolve, this.waitMs)),
+    ]);
+    this.activeWaits = [];
+  }
+
   async finalize(
     partial: Omit<ZhinAgentTurnMetrics, 'usage' | 'mainUsage' | 'subagentUsage'> & { usage: Usage },
   ): Promise<void> {
-    if (this.activeWaits.length > 0 && this.waitMs > 0) {
-      await Promise.race([
-        Promise.allSettled(this.activeWaits),
-        new Promise<void>(resolve => setTimeout(resolve, this.waitMs)),
-      ]);
-    }
+    await this.waitForPendingSubagents();
 
     const mainUsage = { ...partial.usage };
     const subagentUsage = this.activeUsage
