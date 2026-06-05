@@ -1,5 +1,16 @@
 # @zhin.js/agent
 
+## 0.1.30
+
+### Patch Changes
+
+- 3735e96: fix: 智能家居控制
+- 238de62: fix: 内置命令优化
+- Updated dependencies [3735e96]
+- Updated dependencies [238de62]
+  - @zhin.js/core@1.1.32
+  - @zhin.js/ai@1.1.30
+
 ## Unreleased
 
 ### Minor Changes

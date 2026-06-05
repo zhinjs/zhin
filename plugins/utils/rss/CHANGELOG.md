@@ -1,5 +1,12 @@
 # @zhin.js/plugin-rss
 
+## 0.0.27
+
+### Patch Changes
+
+- Updated dependencies [3735e96]
+  - zhin.js@1.0.91
+
 ## 0.0.26
 
 ### Patch Changes

@@ -1,5 +1,18 @@
 # minimal-bot
 
+## 0.0.5
+
+### Patch Changes
+
+- 3735e96: fix: 智能家居控制
+- Updated dependencies [3735e96]
+- Updated dependencies [238de62]
+  - @zhin.js/adapter-sandbox@3.0.9
+  - @zhin.js/host-api@0.0.4
+  - zhin.js@1.0.91
+  - @zhin.js/cli@1.0.87
+  - @zhin.js/host-router@0.0.3
+
 ## 0.0.4
 
 ### Patch Changes

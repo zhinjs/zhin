@@ -1,5 +1,14 @@
 # @zhin.js/cli
 
+## 1.0.87
+
+### Patch Changes
+
+- 3735e96: fix: 智能家居控制
+- 238de62: fix: 内置命令优化
+- Updated dependencies [3735e96]
+  - @zhin.js/scaffold-wizard@0.1.2
+
 ## 1.0.86
 
 ### Patch Changes

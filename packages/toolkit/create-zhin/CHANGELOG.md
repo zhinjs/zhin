@@ -1,5 +1,13 @@
 # create-zhin-app
 
+## 1.0.49
+
+### Patch Changes
+
+- 3735e96: fix: 智能家居控制
+- Updated dependencies [3735e96]
+  - @zhin.js/scaffold-wizard@0.1.2
+
 ## 1.0.48
 
 ### Patch Changes

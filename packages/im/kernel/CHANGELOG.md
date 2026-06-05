@@ -1,5 +1,11 @@
 # @zhin.js/kernel
 
+## 0.0.49
+
+### Patch Changes
+
+- 3735e96: fix: 智能家居控制
+
 ## 0.0.48
 
 ### Patch Changes
