@@ -286,7 +286,7 @@ IM 特有逻辑保留在 agent 包，注入 loop 钩子：
 ## 完成定义
 
 - [ ] `pnpm build` && `pnpm test` 全绿
-- [ ] [`examples/test-bot`](../../examples/test-bot)：@ agent 路径、无工具单轮、subagent、MCP、vision、`/models` introspection、session 归档、steer 非 master 拒绝
+- [ ] [`examples/test-bot`](https://github.com/zhinjs/zhin/tree/main/examples/test-bot)：@ agent 路径、无工具单轮、subagent、MCP、vision、`/models` introspection、session 归档、steer 非 master 拒绝
 - [ ] 仓库内无生产代码引用 `AIProvider`、`ChatCompletionRequest`、`Agent.run`、`chatLiteModel`
 - [ ] [`docs/advanced/ai.md`](../advanced/ai.md) 重写 Context/stream/agentLoop 章节
 - [ ] Changeset：major bump `@zhin.js/ai`、`@zhin.js/agent`
