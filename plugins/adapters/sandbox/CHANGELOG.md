@@ -1,5 +1,16 @@
 # @zhin.js/adapter-process
 
+## 3.0.9
+
+### Patch Changes
+
+- 3735e96: fix: 智能家居控制
+- Updated dependencies [3735e96]
+- Updated dependencies [238de62]
+  - @zhin.js/host-api@0.0.4
+  - @zhin.js/core@1.1.32
+  - @zhin.js/host-router@0.0.3
+
 ## 3.0.8
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @zhin.js/plugin-repeater
 
+## 0.0.26
+
+### Patch Changes
+
+- Updated dependencies [3735e96]
+  - zhin.js@1.0.91
+
 ## 0.0.25
 
 ### Patch Changes

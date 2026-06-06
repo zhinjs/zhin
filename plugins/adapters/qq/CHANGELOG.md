@@ -1,5 +1,15 @@
 # @zhin.js/adapter-qq
 
+## 2.0.10
+
+### Patch Changes
+
+- Updated dependencies [3735e96]
+- Updated dependencies [238de62]
+  - @zhin.js/host-api@0.0.4
+  - zhin.js@1.0.91
+  - @zhin.js/host-router@0.0.3
+
 ## 2.0.9
 
 ### Patch Changes

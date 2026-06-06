@@ -1,5 +1,12 @@
 # @zhin.js/ai
 
+## 1.1.30
+
+### Patch Changes
+
+- 3735e96: fix: 智能家居控制
+- 238de62: fix: 内置命令优化
+
 ## 1.1.29
 
 ### Patch Changes

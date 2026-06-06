@@ -1,5 +1,12 @@
 # @zhin.js/docs
 
+## 1.0.37
+
+### Patch Changes
+
+- 3735e96: fix: 智能家居控制
+- 238de62: fix: 内置命令优化
+
 ## 1.0.36
 
 ### Patch Changes
