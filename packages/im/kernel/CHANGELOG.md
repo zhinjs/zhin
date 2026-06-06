@@ -1,5 +1,11 @@
 # @zhin.js/kernel
 
+## 0.0.50
+
+### Patch Changes
+
+- d8547d2: fix: ai 串行改并行
+
 ## 0.0.49
 
 ### Patch Changes

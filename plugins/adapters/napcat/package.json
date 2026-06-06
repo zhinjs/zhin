@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-napcat",
-  "version": "0.1.19",
+  "version": "0.1.20",
   "description": "Zhin.js adapter for NapCatQQ (OneBot11 superset with go-cqhttp & NapCat extensions)",
   "type": "module",
   "main": "./lib/index.js",

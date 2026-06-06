@@ -1,5 +1,13 @@
 # @zhin.js/adapter-onebot11
 
+## 1.0.97
+
+### Patch Changes
+
+- Updated dependencies [d8547d2]
+  - zhin.js@1.0.92
+  - @zhin.js/host-router@0.0.3
+
 ## 1.0.96
 
 ### Patch Changes

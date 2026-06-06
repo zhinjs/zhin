@@ -1,5 +1,12 @@
 # @zhin.js/plugin-voice
 
+## 0.0.30
+
+### Patch Changes
+
+- Updated dependencies [d8547d2]
+  - zhin.js@1.0.92
+
 ## 0.0.29
 
 ### Patch Changes
