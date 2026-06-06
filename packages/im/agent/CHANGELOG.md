@@ -1,5 +1,14 @@
 # @zhin.js/agent
 
+## 0.1.31
+
+### Patch Changes
+
+- d8547d2: fix: ai 串行改并行
+- Updated dependencies [d8547d2]
+  - @zhin.js/core@1.1.33
+  - @zhin.js/ai@1.1.31
+
 ## 0.1.30
 
 ### Patch Changes
