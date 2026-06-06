@@ -76,8 +76,6 @@ export interface ZhinAgentConfig {
   toneAwareness?: boolean;
   /** 聊天任务使用的模型（覆盖自动选择） */
   chatModel?: string;
-  /** 纯闲聊(0工具)使用的轻量模型，留空则复用 chatModel */
-  chatLiteModel?: string;
   visionModel?: string;
   contextTokens?: number;
   maxHistoryShare?: number;
@@ -163,7 +161,6 @@ export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   rateLimit: {},
   toneAwareness: true,
   chatModel: '',
-  chatLiteModel: '',
   visionModel: '',
   contextTokens: DEFAULT_CONTEXT_TOKENS,
   maxHistoryShare: 0.5,

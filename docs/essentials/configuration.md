@@ -163,13 +163,14 @@ database:
 ai:
   enabled: true
 
-  # 命名 provider 实例（driver + 连接参数；可多个 openai 兼容端点）
+  # 命名 provider 实例（api + 连接参数；`driver` 为遗留别名，会归一化为 api）
   providers:
     ds-main:
-      driver: deepseek
+      api: openai-completions
       apiKey: "${DEEP_SEEK_API_KEY}"
+      baseUrl: "https://api.deepseek.com"
     zhipu-vl:
-      driver: zhipu
+      api: openai-completions
       apiKey: "${BIG_MODEL_API_KEY}"
       baseUrl: "https://open.bigmodel.cn/api/paas/v4"
       imageGeneration:
@@ -211,7 +212,7 @@ ai:
     maxHistory: 50
     expireMs: 3600000
 
-  # 上下文管理（@zhin.js/ai ContextManager）
+  # 场景摘要（辅助；LLM 主历史见 ContextRepository / agent_messages）
   context:
     enabled: true
     maxRecentMessages: 100
@@ -336,7 +337,7 @@ ai:
 - 非 `zhin` 且带 `match` 的 agent 须存在 `agents/<name>.agent.md`；`zhin` 永不读 `zhin.agent.md`
 - 旧版顶层 `ai.routes` 启动时自动合并进同名 `agents.*`（已废弃，请迁走）
 - `tools[]` 为唯一工具白名单（内置、插件、`mcp_{server}_{tool}` 均须按名写出）
-- `models` 列表可选 — ModelRegistry 自动发现并按 Tier 排序；`agents.<name>.model` 为首选
+- `providers.*.models` 可省略 — `ModelRegistry` + `GET /v1/models`（或 Ollama `/api/tags`）发现；`getModel()` 用发现结果校验；`agents.<name>.model` 为首选绑定
 - 当首选模型不可用时，系统自动降级到次优模型
 - `modelHarness` 会在 TypeScript 默认 harness 之上做 deep merge：对象按字段合并，数组（如后续扩展字段）显式写出时完整覆盖默认数组
 - `phaseTrace`（或环境变量 `ZHIN_AGENT_PHASE_TRACE=1`）可输出稳定的 `[AGENT_PHASE]` 阶段日志，便于排障与回归对照
@@ -695,11 +696,14 @@ hostApi:
   lazyLoad: false
 
 ai:
-  enabled: true
-  defaultProvider: ollama
   providers:
     ollama:
+      api: ollama-chat
       host: "http://127.0.0.1:11434"
+  agents:
+    zhin:
+      provider: ollama
+      model: qwen3:8b
   trigger:
     respondToAt: true
     respondToPrivate: true

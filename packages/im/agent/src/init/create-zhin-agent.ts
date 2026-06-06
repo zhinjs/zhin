@@ -30,7 +30,20 @@ import {
 } from '../assistant/index.js';
 import type { AIConfig, Plugin } from '@zhin.js/core';
 import type { AIServiceRefs } from './shared-refs.js';
+import type { AIService } from '../service.js';
 import { activateAiDatabaseStorage } from './activate-ai-database-storage.js';
+
+function seedProviderModelsFromRegistry(ai: AIService, modelRegistry: ModelRegistry): void {
+  for (const alias of ai.listProviders()) {
+    if (ai.hasExplicitModelList(alias)) continue;
+    const cached = modelRegistry.getModels(alias);
+    if (cached.length === 0) continue;
+    ai.getProvider(alias).models = cached
+      .sort((a, b) => computeTierScore(b.id) - computeTierScore(a.id))
+      .map(m => m.id);
+  }
+}
+
 export function createZhinAgentContext(refs: AIServiceRefs): void {
   const plugin = getPlugin();
   const { useContext, root, logger } = plugin;
@@ -86,6 +99,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     const hadCache = modelRegistry.loadCache();
     agent.setModelRegistry(modelRegistry);
     ai.setModelRegistry(modelRegistry);
+    seedProviderModelsFromRegistry(ai, modelRegistry);
     // Discover models in background (don't block startup)
     (async () => {
       try {
@@ -161,7 +175,10 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
       router: notificationRouter,
     });
 
-    agent.setSubagentSender(async (origin, delivery) => {
+    const deliverOutbound = async (
+      origin: Parameters<typeof deliverSubagentResult>[0]['origin'],
+      delivery: Parameters<typeof deliverSubagentResult>[0]['delivery'],
+    ) => {
       const adapter = resolveAdapter(origin.platform);
       if (!adapter) {
         logger.warn(formatCompact( { error: 'adapter_not_found', platform: origin.platform }));
@@ -172,7 +189,9 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
         delivery,
         send: (opts) => adapter.sendMessage(opts),
       });
-    });
+    };
+    agent.setSubagentSender(deliverOutbound);
+    agent.setDeferredResultSender(deliverOutbound);
 
     let jobEngine: import('../cron-engine.js').IPersistentJobEngine | null = null;
     let jobWorker: JobWorker | null = null;

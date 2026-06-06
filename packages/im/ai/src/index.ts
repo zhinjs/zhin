@@ -6,6 +6,70 @@
  * Can be used in any Node.js application.
  */
 
+// ── LLM engine core (ADR 0009) ──
+export {
+  registerApiProvider,
+  registerProviderInstance,
+  getApiProvider,
+  getProviderConfig,
+  getModel,
+  stream,
+  complete,
+  streamSimple,
+  completeSimple,
+  createAssistantMessageEventStream,
+  createContext,
+  createUserMessage,
+  validateToolCall,
+  toolCallFromContentBlock,
+  stringParamTool,
+  ToolCallValidationError,
+  isLlmAgentMessage,
+  EMPTY_TOKEN_USAGE,
+  DEFAULT_STEERING_MODE,
+  DEFAULT_FOLLOW_UP_MODE,
+  Type,
+  Value,
+  agentLoop,
+  agentContextFrom,
+  assistantText,
+  registerLlmApiFromProviders,
+  resetLlmApiRegistryForTests,
+  setLegacyProviderResolver,
+  driverToModelApi,
+  convertLegacyTools,
+  agentMessagesToOpenAi,
+} from './llm/index.js';
+export type {
+  Context,
+  Model,
+  ModelApi,
+  ProviderInstanceConfig,
+  AgentMessage,
+  UserMessage,
+  AssistantMessage,
+  ToolResultMessage,
+  CustomAgentMessage,
+  ContentBlock,
+  ImageContent,
+  LlmTool,
+  ParsedToolCall,
+  AgentEvent,
+  ThinkingLevel,
+  ToolExecutionMode,
+  QueueMode,
+  StreamOptions,
+  AssistantStreamEvent,
+  AssistantMessageEventStream,
+  ApiProviderRegistration,
+  AgentLoopConfig,
+  AgentContext,
+  BeforeToolCallContext,
+  BeforeToolCallResult,
+  AfterToolCallContext,
+  TokenUsage,
+} from './llm/index.js';
+
 // ── Core AI Types ──
 export type {
   AIConfig,
@@ -114,6 +178,7 @@ export {
 } from './memory/session.js';
 export type { ISessionManager, IMSessionScope, ResolveIMSessionIdInput, AISessionStatus } from './memory/session.js';
 
+/** @deprecated ADR 0009 — 使用 ContextRepository + ImTranscriptStore */
 export {
   ChatHistoryContext,
 } from './memory/chat-history-context.js';
@@ -221,6 +286,52 @@ export {
   AI_SUMMARY_MODEL,
 } from './memory/conversation-memory.js';
 export type { ConversationMemoryConfig, SaveRoundMeta } from './memory/conversation-memory.js';
+
+// ── ADR 0009 persistence (agent_* + im_transcripts) ──
+export {
+  IM_TRANSCRIPT_MODEL,
+  AGENT_SESSION_MODEL,
+  AGENT_MESSAGE_MODEL,
+  AGENT_SUMMARY_MODEL,
+  serializeAgentMessage,
+  parseAgentMessageRow,
+} from './memory/agent-db-models.js';
+export type {
+  ImTranscriptRecord,
+  ImTranscriptWriteInput,
+  ImTranscriptDirection,
+  AgentSessionRecord,
+  AgentSessionStatus,
+  CreateAgentSessionInput,
+  AgentMessageRow,
+  AgentSummaryRecord,
+} from './memory/agent-db-models.js';
+
+export {
+  AgentSessionStore,
+  MemoryAgentSessionStore,
+  createAgentSessionEpochId,
+} from './memory/agent-session-store.js';
+export type { AgentSessionStoreConfig } from './memory/agent-session-store.js';
+
+export {
+  DatabaseContextRepository,
+  MemoryContextRepository,
+  createMemoryContextRepository,
+} from './memory/context-repository.js';
+export type { ContextRepository, ContextRepositoryConfig } from './memory/context-repository.js';
+
+export {
+  DatabaseImTranscriptStore,
+  MemoryImTranscriptStore,
+} from './memory/im-transcript-store.js';
+export type {
+  ImTranscriptStore,
+  ImTranscriptQuery,
+  ImTranscriptSearchHit,
+  ImTranscriptSearchResult,
+  ImTranscriptStoreConfig,
+} from './memory/im-transcript-store.js';
 
 // ── Output Parsing ──
 export { parseOutput, renderToPlainText, renderToSatori } from './output.js';

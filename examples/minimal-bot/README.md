@@ -31,7 +31,7 @@ pnpm dev
 
 ### 无 Ollama 时
 
-仅验证 IM Stable 路径：步骤 2 即可。AI 需 Ollama 或配置 `OPENAI_API_KEY` 并将 `zhin.config.yml` 中 `ai.defaultProvider` 改为 `openai` 且补充 `providers.openai`。
+仅验证 IM Stable 路径：步骤 2 即可。AI 需 Ollama，或配置 `OPENAI_API_KEY` 并在 `zhin.config.yml` 增加 `ai.providers` + `ai.agents.zhin`（`provider` / `model` 指向该实例；`models` 可省略，由 `/v1/models` 发现）。
 
 ## 配置说明
 

@@ -233,11 +233,14 @@ http:
     - "https://console.zhin.dev"
 
 ai:
-  enabled: true
-  defaultProvider: ollama
   providers:
     ollama:
+      api: ollama-chat
       host: http://127.0.0.1:11434
+  agents:
+    zhin:
+      provider: ollama
+      model: qwen3:14b
   agent:
     toolSearch: false
     execSecurity: allowlist

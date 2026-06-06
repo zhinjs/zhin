@@ -4,14 +4,14 @@
 import { Logger } from '@zhin.js/core';
 import { formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
 import type { AIProvider, AgentTool } from '@zhin.js/core';
-import { createAgent } from '@zhin.js/ai';
 import {
   isOmittedToolSummary,
   sanitizeToolResult,
   stripHallucinatedToolCalls,
 } from '@zhin.js/ai';
-import type { AgentResult } from '@zhin.js/ai';
 import { stripThinkBlocks } from './zhin-agent/text-sanitize.js';
+import { runAgentLoopStandaloneTurn } from './zhin-agent/agent-loop-standalone.js';
+import type { ToolCallRecord } from './zhin-agent/tool-calls-user-format.js';
 import { selectDeferredToolsForWorker } from './deferred-worker-tool-load.js';
 import {
   resolveAgentPromptMarkdown,
@@ -19,13 +19,10 @@ import {
 } from './agent-prompt/index.js';
 import type { AgentPromptBuildContext } from '@zhin.js/core';
 import type { ModelRegistry } from '@zhin.js/ai';
-import type { ZhinAgentConfig, ExecApprovalMode } from './zhin-agent/config.js';
 import { resolveWorkerSlowToolTimeout } from './zhin-agent/config.js';
-import { applyExecPolicyToTools } from './security/exec-policy.js';
-import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from './reserved-tools.js';
-import { resolveContextBudget } from './zhin-agent/context-budget.js';
+import type { ZhinAgentConfig, ExecApprovalMode } from './zhin-agent/config.js';
 import { createOwnerOrchestratedToolResultTransform } from './orchestrator/owner-confirm-orchestration.js';
-import { runWithDirectAgentExecution } from './security/bash-tool-context.js';
+import { applyExecPolicyToTools } from './security/exec-policy.js';
 import type { ToolContext } from '@zhin.js/core';
 import { DEFAULT_TOOL_SEARCH_ORCHESTRATOR_TOOLS } from './zhin-agent/config.js';
 
@@ -67,6 +64,7 @@ export interface DeferredWorkerResult {
   loadedToolNames: string[];
   iterations: number;
   status: 'ok' | 'partial' | 'error';
+  toolCalls?: ToolCallRecord[];
 }
 
 export class DeferredWorkerRunner {
@@ -152,14 +150,6 @@ export class DeferredWorkerRunner {
     }
 
     const model = provider.models[0];
-    const contextBudget = execPolicyConfig
-      ? resolveContextBudget({
-          config: execPolicyConfig,
-          provider,
-          modelRegistry: modelRegistry ?? null,
-          model,
-        })
-      : null;
 
     const platformBody = await resolveAgentPromptMarkdown({
       ctx: promptCtx,
@@ -197,25 +187,20 @@ ${goal}${platformBlock}
       loadedToolNames,
     });
 
-    const agent = createAgent(provider, {
-      model,
-      systemPrompt,
-      tools,
-      maxIterations,
-      turnTimeout: execPolicyConfig?.timeout ?? 60_000,
-      // Worker 须能注册 bash/read_file 等内置名；仅保留编排类元工具不可被插件覆盖
-      reservedToolNames: [...ORCHESTRATOR_TOOL_SET],
-      reservedToolNamePrefixes: RESERVED_TOOL_NAME_PREFIXES,
-      contextWindow: contextBudget?.contextWindow ?? provider.contextWindow,
-      forceMicroCompactEachTurn: true,
-      transformToolResult: createOwnerOrchestratedToolResultTransform({
-        toolContext: origin,
-        disableHardOrchestration: true,
-      }),
-    });
-
     try {
-      const result = await runWithDirectAgentExecution(origin, () => agent.run(goal));
+      const result = await runAgentLoopStandaloneTurn({
+        provider,
+        model,
+        systemPrompt,
+        tools,
+        userInput: goal,
+        maxIterations,
+        toolContext: origin,
+        transformToolResult: createOwnerOrchestratedToolResultTransform({
+          toolContext: origin,
+          disableHardOrchestration: true,
+        }),
+      });
       const hitMaxIter = result.iterations >= maxIterations;
       const summary = buildWorkerSummary(result, summaryMaxChars, hitMaxIter);
       logger.info(formatCompact( {
@@ -245,6 +230,7 @@ ${goal}${platformBlock}
         loadedToolNames,
         iterations: result.iterations,
         status: hitMaxIter ? 'partial' : 'ok',
+        toolCalls: result.toolCalls,
       };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -272,18 +258,16 @@ ${goal}${platformBlock}
         iterations: 0,
         status: 'error',
       };
-    } finally {
-      agent.dispose();
     }
   }
 }
 
 function buildWorkerSummary(
-  result: AgentResult,
+  result: { content: string; toolCalls: ToolCallRecord[] },
   maxChars: number,
   hitMaxIter: boolean,
 ): string {
-  const raw = result.content?.trim() || '';
+  const raw = result.content.trim() || '';
   let cleaned = sanitizeToolResult(
     stripHallucinatedToolCalls(stripThinkBlocks(raw)),
     { maxChars },
@@ -302,7 +286,7 @@ function buildWorkerSummary(
 }
 
 function summarizeWorkerToolCalls(
-  toolCalls: AgentResult['toolCalls'],
+  toolCalls: ToolCallRecord[],
   maxChars: number,
 ): string {
   if (!toolCalls?.length) {

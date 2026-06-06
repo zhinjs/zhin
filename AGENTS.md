@@ -50,9 +50,9 @@
 ## 任务路由
 
 - 框架核心、Plugin/Adapter/Dispatcher：看 packages/im/core。
-- AI 引擎、Session、Compaction、Provider：看 packages/im/ai。
-- AI 编排、工具发现、安全策略、MCP client：看 packages/im/agent。
-- 应用入口和聚合导出：看 packages/zhin。
+- AI 引擎、Session、Compaction、Provider、ModelRegistry、`getModel`：看 [packages/im/ai](packages/im/ai/README.md) 与 [docs/advanced/ai.md](docs/advanced/ai.md)。
+- AI 编排、工具发现、安全策略、MCP client：看 [packages/im/agent](packages/im/agent/README.md)。
+- 应用入口和聚合导出：看 [packages/im/zhin](packages/im/zhin/README.md)（含 `im_transcripts` 落库）。
 - Host 运行时（router / api / mcp）：看 packages/host。
 - 可选服务插件：看 plugins/services。
 - 平台适配器：看 plugins/adapters。
@@ -68,6 +68,9 @@
 - packages/im/agent/src/security/
 - packages/im/agent/src/bootstrap.ts
 - packages/im/zhin/src/index.ts
+- packages/im/zhin/src/setup/register-chat-message-store.ts
+- packages/im/ai/src/llm/api-registry.ts
+- packages/im/agent/src/service.ts（`refreshLlmApiRegistry` / `hasExplicitModelList`）
 - packages/toolkit/scaffold-wizard/src/（`adapter.ts`、`ai.ts`、`apply.ts` — 改向导时优先改这里）
 - packages/toolkit/create-zhin/src/workspace.ts（生成项目文件树，不含向导逻辑）
 - basic/cli/src/commands/setup.ts（已有项目增量向导入口）

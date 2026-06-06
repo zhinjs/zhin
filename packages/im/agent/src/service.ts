@@ -13,25 +13,56 @@ import type {
   ChatCompletionChunk,
   AgentTool,
   Tool,
+  ContentPart,
+  Usage,
 } from '@zhin.js/core';
 import {
   SessionManager,
   createMemorySessionManager,
   type ImageGenerationDefaults,
 } from '@zhin.js/ai';
-import { Agent, createAgent } from '@zhin.js/ai';
 import type { ModelRegistry } from '@zhin.js/ai';
 import type { ContextManager, ContextConfig } from '@zhin.js/ai';
 import { DEFAULT_CONFIG } from './zhin-agent/config.js';
-import { resolveContextBudget } from './zhin-agent/context-budget.js';
 import { normalizeTool } from './orchestrator/tool-selection.js';
 import { createWebSearchTool } from './builtin/web-search-tool.js';
 import { createAskUserTool } from './builtin/ask-user-tool.js';
 import { registerProviderInstances } from './config/provider-instance.js';
 import { normalizeAiRoutingConfig, type NormalizedAiRoutingConfig } from './config/normalize-ai-config.js';
 import { validateAiRoutingConfig } from './config/validate-ai-config.js';
+import { registerLlmApiFromProviders } from '@zhin.js/ai';
 import { AgentBindingRegistry } from './config/agent-binding-registry.js';
 import { DEFAULT_ZHIN_AGENT_NAME } from './config/types.js';
+import {
+  runAgentLoopStandaloneTurn,
+  type AgentLoopStandaloneResult,
+} from './zhin-agent/agent-loop-standalone.js';
+import type { ToolCallRecord } from './zhin-agent/tool-calls-user-format.js';
+
+/** AIService 程序化 Agent 句柄（agentLoop 隔离上下文，非 legacy `Agent` 类） */
+export interface ServiceAgent {
+  run(userInput: string | ContentPart[]): Promise<ServiceAgentResult>;
+  dispose(): void;
+}
+
+export interface ServiceAgentResult {
+  content: string;
+  toolCalls: ToolCallRecord[];
+  usage: Usage;
+  iterations: number;
+  model: string;
+}
+
+export interface CreateServiceAgentOptions {
+  provider?: string;
+  model?: string;
+  systemPrompt?: string;
+  tools?: AgentTool[];
+  useBuiltinTools?: boolean;
+  collectExternalTools?: boolean;
+  maxIterations?: number;
+  contextWindow?: number;
+}
 
 export class AIService {
   private providers: Map<string, AIProvider> = new Map();
@@ -58,6 +89,7 @@ export class AIService {
     }
 
     this.providers = registerProviderInstances(this.routing.providers);
+    this.refreshLlmApiRegistry();
     const zhinProvider = this.routing.agents[DEFAULT_ZHIN_AGENT_NAME]?.provider;
     this.defaultProvider =
       zhinProvider
@@ -152,6 +184,25 @@ export class AIService {
   }
   listProviders(): string[] { return Array.from(this.providers.keys()); }
 
+  /** yaml 中显式配置了 models 列表（非空） */
+  hasExplicitModelList(alias: string): boolean {
+    const models = this.routing.providers[alias]?.models;
+    return Array.isArray(models) && models.length > 0;
+  }
+
+  /** 同步 api-registry 白名单：显式 models 用配置，否则留空并由 /v1/models 发现填充 provider.models */
+  refreshLlmApiRegistry(): void {
+    registerLlmApiFromProviders(
+      [...this.providers.entries()].map(([alias, provider]) => ({
+        alias,
+        provider,
+        config: this.routing.providers[alias] ?? {},
+        models: this.hasExplicitModelList(alias) ? provider.models : [],
+      })),
+      (alias: string) => this.providers.get(alias),
+    );
+  }
+
   getProviderCapabilities(name?: string): { contextWindow?: number; capabilities?: import('@zhin.js/core').ProviderCapabilities } {
     const provider = this.getProvider(name);
     return {
@@ -198,42 +249,41 @@ export class AIService {
     return typeof content === 'string' ? content : '';
   }
 
-  createAgent(options: {
-    provider?: string;
-    model?: string;
-    systemPrompt?: string;
-    tools?: AgentTool[];
-    useBuiltinTools?: boolean;
-    collectExternalTools?: boolean;
-    maxIterations?: number;
-    contextWindow?: number;
-  } = {}): Agent {
-    const provider = this.getProvider(options.provider);
+  private resolveServiceAgentTools(options: CreateServiceAgentOptions): AgentTool[] {
     let tools: AgentTool[] = [];
     if (options.useBuiltinTools !== false) tools.push(...this.builtinTools);
-    if (options.collectExternalTools !== false) { tools.push(...this.customTools.values()); }
+    if (options.collectExternalTools !== false) tools.push(...this.customTools.values());
     if (options.tools?.length) tools.push(...options.tools);
+    return tools;
+  }
+
+  createAgent(options: CreateServiceAgentOptions = {}): ServiceAgent {
+    const provider = this.getProvider(options.provider);
+    const tools = this.resolveServiceAgentTools(options);
     const config = { ...DEFAULT_CONFIG, ...(this.agentConfig ?? {}) } as typeof DEFAULT_CONFIG;
     const model = options.model ?? provider.models[0];
-    const contextWindow = options.contextWindow ?? resolveContextBudget({
-      config,
-      provider,
-      modelRegistry: this._modelRegistry,
-      model,
-    }).contextWindow;
-    return createAgent(provider, {
-      model,
-      systemPrompt: options.systemPrompt,
-      tools,
-      maxIterations: options.maxIterations,
-      contextWindow,
-    });
+    const systemPrompt = options.systemPrompt ?? '';
+    const maxIterations = options.maxIterations ?? config.maxIterations;
+
+    return {
+      run: (userInput) => runAgentLoopStandaloneTurn({
+        provider,
+        resolveProvider: (alias) => this.providers.get(alias),
+        model,
+        systemPrompt,
+        tools,
+        userInput,
+        maxIterations,
+        toolContext: { platform: 'service', senderId: 'system' },
+      }).then(toServiceAgentResult),
+      dispose: () => undefined,
+    };
   }
 
   async runAgent(
-    task: string,
-    options: { provider?: string; model?: string; tools?: AgentTool[]; systemPrompt?: string } = {},
-  ): Promise<{ content: string; toolCalls: any[]; usage: any }> {
+    task: string | ContentPart[],
+    options: CreateServiceAgentOptions = {},
+  ): Promise<ServiceAgentResult> {
     const agent = this.createAgent(options);
     try {
       return await agent.run(task);
@@ -251,4 +301,14 @@ export class AIService {
   }
 
   dispose(): void { this.sessions.dispose(); this.providers.clear(); }
+}
+
+function toServiceAgentResult(result: AgentLoopStandaloneResult): ServiceAgentResult {
+  return {
+    content: result.content,
+    toolCalls: result.toolCalls,
+    usage: result.usage,
+    iterations: result.iterations,
+    model: result.model,
+  };
 }

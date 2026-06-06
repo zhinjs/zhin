@@ -76,6 +76,22 @@ const PROVIDERS = [
   },
 ] as const;
 
+function providerApiFor(name: string): string {
+  switch (name) {
+    case 'anthropic':
+      return 'anthropic-messages';
+    case 'google':
+    case 'gemini':
+      return 'google-generative-ai';
+    case 'ollama':
+      return 'ollama-chat';
+    case 'cloudflare':
+      return 'cloudflare-workers-ai';
+    default:
+      return 'openai-completions';
+  }
+}
+
 function defaultModelForProvider(driver: string): string {
   const entry = PROVIDERS.find(p => p.value === driver);
   return entry?.defaultModel ?? '';
@@ -332,7 +348,7 @@ export function generateAIConfigYaml(config: AISetupConfig): string {
   if (config.providers) {
     for (const [name, providerConfig] of Object.entries(config.providers)) {
       lines.push(`    ${name}:`);
-      lines.push(`      driver: ${name}`);
+      lines.push(`      api: ${providerApiFor(name)}`);
       if (providerConfig.apiKey) {
         lines.push(`      apiKey: ${providerConfig.apiKey}`);
       }

@@ -1,4 +1,7 @@
 /**
+ * @deprecated ADR 0009：LLM 历史改由 {@link ContextRepository} + `agent_messages`；
+ * IM 旁听检索改由 {@link ImTranscriptStore} + `chat_history` 工具。仅保留供旧代码只读兼容。
+ *
  * 只读：从 chat_messages + ai_summaries 构建 LLM 历史（AI 包不写 chat_messages）。
  */
 
@@ -119,6 +122,7 @@ function sortAndTail(rows: MessageRecord[], limit?: number): MessageRecord[] {
   return rows;
 }
 
+/** @deprecated ADR 0009 — 使用 ContextRepository + ImTranscriptStore 代替 */
 export class ChatHistoryContext {
   private readonly messageModel: DbModel;
   private readonly summaryModel: SummaryDbModel;

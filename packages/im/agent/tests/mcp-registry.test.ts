@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AgentTool } from '@zhin.js/ai';
+import { MemoryImTranscriptStore } from '@zhin.js/ai';
 import { collectRuntimeTools } from '../src/zhin-agent/tool-runtime.js';
 import { DEFAULT_CONFIG } from '../src/zhin-agent/config.js';
 
@@ -145,7 +146,7 @@ describe('collectRuntimeTools MCP merge', () => {
       externalRegistered: new Map(),
       sessionId: 's1',
       userId: 'u1',
-      chatHistory: null,
+      imTranscriptStore: new MemoryImTranscriptStore(),
       userProfiles: { buildProfileSummary: async () => '' } as any,
       mcpTools: [mockTool],
     });
@@ -162,7 +163,7 @@ describe('collectRuntimeTools MCP merge', () => {
       externalRegistered: new Map(),
       sessionId: 's1',
       userId: 'u1',
-      chatHistory: null,
+      imTranscriptStore: new MemoryImTranscriptStore(),
       userProfiles: { buildProfileSummary: async () => '' } as any,
       mcpTools: [{
         name: 'bash',

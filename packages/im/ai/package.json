@@ -21,6 +21,7 @@
     "test": "vitest run --config ../../vitest.config.ts"
   },
   "dependencies": {
+    "@sinclair/typebox": "^0.34.0",
     "@zhin.js/logger": "workspace:*"
   },
   "devDependencies": {

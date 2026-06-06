@@ -8,17 +8,36 @@
 flowchart TB
   IM["@zhin.js/core — Plugin / Adapter / MessageDispatcher"]
   Agent["@zhin.js/agent — ZhinAgent / Orchestrator / AIService"]
-  AI["@zhin.js/ai — Provider / Agent 循环 / Session / Memory"]
+  AI["@zhin.js/ai — Provider / agentLoop / Session / Memory"]
   IM --> Agent --> AI
+```
+
+```mermaid
+flowchart LR
+  subgraph agent_pkg ["@zhin.js/agent — LLM 入口"]
+    ZA["ZhinAgent"]
+    SM["SubagentManager"]
+    DW["DeferredWorkerRunner"]
+    AS["AIService"]
+  end
+  subgraph turns ["Turn 执行器"]
+    RT["runAgentLoopTextTurn / VisionTurn"]
+    RS["runAgentLoopStandaloneTurn"]
+  end
+  AL["agentLoop\n@zhin.js/ai"]
+  ZA --> RT --> AL
+  SM --> RS --> AL
+  DW --> RS
+  AS --> RS
 ```
 
 | 包 | 有无 IM 概念 | 职责 |
 |----|--------------|------|
-| `@zhin.js/ai` | 无 | LLM 调用、工具循环、会话压缩 |
+| `@zhin.js/ai` | 无 | LLM 调用（**agentLoop**）、会话压缩、Provider 抽象 |
 | `@zhin.js/agent` | 有 | 把 AI 接到消息流：ZhinAgent、工具收集、安全策略 |
 | `@zhin.js/core` | 有 | 插件、适配器、入站/出站消息链 |
 
-用户发消息后，[MessageDispatcher](/essentials/message-flow) 判定是否走 AI → 调用 **ZhinAgent** → 底层 **Agent.run()** 完成多轮 tool-calling → 回复经统一发送链发出。
+用户发消息后，[MessageDispatcher](/essentials/message-flow) 判定是否走 AI → 调用 **ZhinAgent** → 底层 **`agentLoop`** 完成 LLM 回合（无工具单轮或有工具多轮）→ 回复经统一发送链发出。
 
 ## 两个 Context：`ctx.ai` 与 `ctx.agent`
 
@@ -26,7 +45,7 @@ flowchart TB
 
 | Context | 典型用途 | 示例 API |
 |---------|----------|----------|
-| **`ctx.ai`（AIService）** | 业务侧 AI：会话、单次/多实例 Agent | `ai.sessions.get()`、`ai.createAgent()`、`ai.runAgent()` |
+| **`ctx.ai`（AIService）** | 业务侧 AI：会话、程序化 Agent | `ai.sessions.get()`、`ai.createAgent()` → **`ServiceAgent`**、`ai.runAgent()` |
 | **`ctx.agent`（AgentOrchestrator）** | 扩展编排资源：注册表 | `agent.addTool()`、`agent.addSkill()`、`agent.addMcp()` |
 
 **记忆口诀**：`ctx.ai` 用来**跑对话**；`ctx.agent` 用来**挂能力**（工具、技能、MCP 条目）。
@@ -46,7 +65,7 @@ useContext('agent', async (agent) => {
 1. **触发** — @机器人、私聊或 `ai:` 前缀等（见 [触发条件](/advanced/ai#触发条件)）
 2. **收集工具** — Skill 粗筛 → Tool 细筛；若启用 MCP，合并 `mcp_*` 工具
 3. **构建上下文** — 历史、用户画像、Bootstrap 文件（SOUL / AGENTS / TOOLS）
-4. **Agent.run()** — 多轮 LLM + 工具调用，受 `maxIterations`、exec 安全策略约束
+4. **agentLoop** — 从 `ContextRepository` 加载历史 → LLM + 工具调用，受 `maxIterations`、exec 安全策略约束；同 session 并发走 steer / followUp 队列
 5. **出站** — `Message.$reply` → 统一发送链（不可绕过 Adapter）
 
 完整流程图见 [AI 模块 — 消息处理流程](/advanced/ai#消息处理流程)。
@@ -56,7 +75,7 @@ useContext('agent', async (agent) => {
 | 模式 | 机制 | 何时用 |
 |------|------|--------|
 | **Subagent（`spawn_task`）** | 主 ZhinAgent 派后台子任务，完成后回调通知 | 耗时任务不阻塞主对话；**默认即可用** |
-| **多实例（`ai.createAgent`）** | 不同 provider/model/systemPrompt 的独立 Agent | 代码审查、翻译等**专用角色** |
+| **多实例（`ai.createAgent` / `runAgent`）** | `ServiceAgent` + 隔离 context；不同 provider/model/systemPrompt | 代码审查、翻译等**专用角色** |
 | **AgentDispatcher 角色** | harness 层 7 种预定义角色（main / worker / …） | **toolSearch + Worker** 编排；见 [Agent 安全与角色](/advanced/agent-harness-engineering) |
 
 ::: warning 与 IM「平台角色」区分

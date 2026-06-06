@@ -38,7 +38,9 @@
 |------|------|------|
 | **ZhinAgent** | L3 | IM 场景主 Agent：收集工具、构建上下文、调用 `@zhin.js/ai` 引擎完成回合。 |
 | **AgentOrchestrator** | L3 | `ctx.agent` 背后的编排中枢：Tool / Skill / SubAgent / MCP / Hook 注册表。 |
-| **`ctx.ai`（AIService）** | L3 | 业务侧 AI 服务：会话、`createAgent`、`runAgent`。 |
+| **`ctx.ai`（AIService）** | L3 | 业务侧 AI 服务：会话、`createAgent`（→ `ServiceAgent`）、`runAgent`（均经 agentLoop）。 |
+| **`agentLoop`** | L2 | `@zhin.js/ai` 唯一 LLM 回合引擎；IM 生产路径均经此入口。 |
+| **`ServiceAgent`** | L3 | `AIService.createAgent()` 返回值；`run()` 调用 `runAgentLoopStandaloneTurn`。 |
 | **`ctx.agent`** | L3 | 扩展编排： `addTool`、`addSkill`、`addMcp` 等注册 API。 |
 | **Subagent（`spawn_task`）** | L3 | 主 Agent 派发的后台子任务，默认即可用，与 harness「角色」不同。 |
 | **toolSearch** | L3+ | Advanced：`ai.agent.toolSearch: true` 启用 deferred Worker 编排，控制 prompt 体积。 |

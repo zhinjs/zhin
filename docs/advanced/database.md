@@ -98,16 +98,21 @@ defineModel('example', {
 
 ## AI 相关模型
 
-当 AI 模块启用并配置 `sessions.useDatabase: true` 时，框架会自动注册以下模型：
+当 AI 模块启用并配置 `sessions.useDatabase: true` 时，框架会自动注册以下模型（[ADR 0009](/adr/0009-pi-aligned-ai-agent-core)）：
 
 | 模型名 | 说明 |
 |--------|------|
-| `ai_sessions` | AI 会话记录（按场景隔离） |
-| `ai_context_summaries` | 对话摘要（长对话压缩） |
-| `ai_user_profiles` | 用户画像（AI 对用户的理解） |
-| `ai_follow_ups` | 定时跟进提醒（AI 设置的回访） |
+| `im_transcripts` | IM 入站/出站扁平静态行（旁听审计、`chat_history` 工具查询） |
+| `agent_sessions` | 活跃/归档会话纪元（`session_key` → `session_id`） |
+| `agent_messages` | epoch 内 LLM `AgentMessage[]`（`ContextRepository`） |
+| `agent_summaries` | epoch 级链式摘要 |
+| `ai_user_profiles` | 用户画像（跨会话个性化） |
 
-这些模型由 AI 模块自动管理，无需手动操作。
+由 `initAgentModule` / `registerDbModels` 注册；`zhin.js` 另在 `message.receive` / `message.send` 链路写入 `im_transcripts`。
+
+> 旧表 `chat_messages` / `ai_messages` / `ai_sessions` / `ai_summaries` 已不再读写；删库重建后仅创建上表。
+
+这些模型由框架自动管理，插件一般无需 `defineModel` 重复声明。
 
 ## 完整示例
 

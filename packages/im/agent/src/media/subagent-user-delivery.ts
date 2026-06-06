@@ -5,7 +5,7 @@
  * image 段（与 `{reply}` 同类），不是未替换的占位符。正文里若模型重复写了 `{image}`，
  * 且 toolCalls 已含 generate_image，则从文字中去掉以免与图片段重复。
  */
-import { compactMediaToolJsonForModel, type AgentResult } from '@zhin.js/ai';
+import { compactMediaToolJsonForModel } from '@zhin.js/ai';
 import type { ToolCallRecord } from '../zhin-agent/tool-calls-user-format.js';
 import { extractMediaElementsFromToolCalls } from './media-tool-bridge.js';
 import type { SubagentOutboundDelivery } from './deliver-subagent-result.js';
@@ -44,13 +44,13 @@ export interface BuildSubagentUserDeliveryParams {
   label: string;
   status: 'ok' | 'error';
   result: string;
-  toolCalls: AgentResult['toolCalls'];
+  toolCalls: ToolCallRecord[];
 }
 
 export function buildSubagentUserDelivery(
   params: BuildSubagentUserDeliveryParams,
 ): SubagentOutboundDelivery {
-  const toolCalls = params.toolCalls as ToolCallRecord[];
+  const toolCalls = params.toolCalls;
   const media = extractMediaElementsFromToolCalls(toolCalls);
   const hasImage = media.some(e => e.type === 'image');
   const hasAudio = media.some(e => e.type === 'audio');

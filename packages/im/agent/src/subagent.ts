@@ -18,15 +18,13 @@ import {
   getMcpToolsForBinding,
 } from './orchestrator/mcp-lifecycle.js';
 import type { McpRegistry } from './orchestrator/mcp-registry.js';
-import { Agent, createAgent } from '@zhin.js/ai';
+import { Agent } from '@zhin.js/ai';
 import type { AgentResult, ContentPart, ModelRegistry } from '@zhin.js/ai';
+import { runAgentLoopStandaloneTurn } from './zhin-agent/agent-loop-standalone.js';
 import { DEFAULT_CONFIG, type ZhinAgentConfig } from './zhin-agent/config.js';
 import { applyExecPolicyToTools } from './security/exec-policy.js';
-import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from './reserved-tools.js';
-import { resolveContextBudget } from './zhin-agent/context-budget.js';
 import { resolveSubagentAgentTools } from './orchestrator/resolve-subagent-tools.js';
 import { createOwnerOrchestratedToolResultTransform } from './orchestrator/owner-confirm-orchestration.js';
-import { runWithDirectAgentExecution } from './security/bash-tool-context.js';
 import type { ToolContext } from '@zhin.js/core';
 import type { FileRole } from './security/file-role-policy.js';
 import { AgentDispatcher, type AgentRole } from './orchestrator/agent-dispatcher.js';
@@ -383,14 +381,6 @@ export class SubagentManager {
         }
       }
       const model = binding?.model || provider.models[0];
-      const contextBudget = this.execPolicyConfig
-        ? resolveContextBudget({
-            config: this.execPolicyConfig,
-            provider,
-            modelRegistry: this.modelRegistry,
-            model,
-          })
-        : null;
       const bashToolContext: ToolContext = {
         platform: origin.platform,
         botId: origin.botId,
@@ -399,65 +389,57 @@ export class SubagentManager {
         fileRole: origin.fileRole,
       };
 
-      const agent = createAgent(provider, {
+      await aiEvents?.agentStart(model);
+      const result = await runAgentLoopStandaloneTurn({
+        provider,
+        resolveProvider: this.getProviderFn ?? undefined,
         model,
         systemPrompt,
         tools,
+        userInput: agentUserInput,
         maxIterations: this.maxIterations,
-        reservedToolNames: RESERVED_TOOL_NAMES,
-        reservedToolNamePrefixes: RESERVED_TOOL_NAME_PREFIXES,
-        contextWindow: contextBudget?.contextWindow ?? provider.contextWindow,
+        toolContext: bashToolContext,
         transformToolResult: createOwnerOrchestratedToolResultTransform({
           toolContext: bashToolContext,
           disableHardOrchestration: true,
         }),
+        callbacks: aiEvents?.createAgentLoopCallbacks(model),
       });
-      aiEvents?.wireAgentRun(agent, model);
+      this.onSubagentUsage?.(result.usage);
+      const finalResult = result.content || '任务已完成，但未生成最终响应。';
+      await aiEvents?.agentFinish(result.model ?? model, result.iterations);
+      await aiEvents?.response(finalResult, result.model ?? model, result.iterations);
 
-      try {
-        await aiEvents?.agentStart(model);
-        const result = await runWithDirectAgentExecution(
-          bashToolContext,
-          () => agent.run(agentUserInput),
-        );
-        this.onSubagentUsage?.(result.usage);
-        const finalResult = result.content || '任务已完成，但未生成最终响应。';
-        await aiEvents?.agentFinish(result.model ?? model, result.iterations);
-        await aiEvents?.response(finalResult, result.model ?? model, result.iterations);
-
-        logger.info(formatCompact({
-          subagent: 'done',
-          task_id: taskId,
-          label,
-          agent: resolveSubagentAgentLabel(opts?.presetName),
-          total_ms: Date.now() - startedAt,
-          usage: formatCompactUsage(result.usage),
-          iter: result.iterations,
-          model,
-          result: truncatePreview(finalResult, 480),
-        }));
-        await this.onEvent?.({
-          phase: 'finish',
-          taskId,
-          label,
-          task,
-          origin,
-          role,
-          agent: opts?.presetName,
-          status: 'ok',
-          result: finalResult,
-        });
-        await aiEvents?.processingFinish(finalResult, {
-          model: result.model ?? model,
-          iterations: result.iterations,
-          status: 'ok',
-        });
-        if (opts?.sync) return finalResult;
-        await this.announceResult(taskId, label, task, finalResult, origin, 'ok', result.toolCalls);
-        return;
-      } finally {
-        agent.dispose();
-      }
+      logger.info(formatCompact({
+        subagent: 'done',
+        task_id: taskId,
+        label,
+        agent: resolveSubagentAgentLabel(opts?.presetName),
+        total_ms: Date.now() - startedAt,
+        usage: formatCompactUsage(result.usage),
+        iter: result.iterations,
+        model,
+        result: truncatePreview(finalResult, 480),
+      }));
+      await this.onEvent?.({
+        phase: 'finish',
+        taskId,
+        label,
+        task,
+        origin,
+        role,
+        agent: opts?.presetName,
+        status: 'ok',
+        result: finalResult,
+      });
+      await aiEvents?.processingFinish(finalResult, {
+        model: result.model ?? model,
+        iterations: result.iterations,
+        status: 'ok',
+      });
+      if (opts?.sync) return finalResult;
+      await this.announceResult(taskId, label, task, finalResult, origin, 'ok', result.toolCalls);
+      return;
     } catch (error) {
       const errorMsg = `Error: ${error instanceof Error ? error.message : String(error)}`;
       await aiEvents?.processingError(errorMsg);
@@ -498,7 +480,7 @@ export class SubagentManager {
     result: string,
     origin: SubagentOrigin,
     status: 'ok' | 'error',
-    toolCalls: AgentResult['toolCalls'] = [],
+    toolCalls: ToolCallRecord[] = [],
   ): Promise<void> {
     if (!this.resultSender) {
       logger.warn(formatCompact( { task_id: taskId, error: 'no_sender' }));

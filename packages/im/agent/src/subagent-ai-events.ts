@@ -1,5 +1,5 @@
-import type { Agent } from '@zhin.js/ai';
 import { resolveIMSessionIdFromToolContext } from '@zhin.js/ai';
+import type { AgentLoopStandaloneCallbacks } from './zhin-agent/agent-loop-standalone.js';
 import type { ToolContext } from '@zhin.js/core';
 import type { McpRegistry } from './orchestrator/mcp-registry.js';
 import { ensureMcpConnectionsForBinding } from './orchestrator/mcp-lifecycle.js';
@@ -98,27 +98,23 @@ export class SubagentAiEventReporter {
     });
   }
 
-  wireAgentRun(agent: Agent, model: string): void {
-    agent.on('thinking', (message) => {
-      this.emitter.emit('ai.thinking', this.payload({
-        thinking: typeof message === 'string' ? message : String(message),
-        model,
-      }));
-    });
-    agent.on('tool_call', (toolName, args) => {
-      this.emitter.emit('ai.tool.call', this.payload({
-        toolName,
-        args: args as Record<string, unknown>,
-        model,
-      }));
-    });
-    agent.on('tool_result', (toolName, result) => {
-      this.emitter.emit('ai.tool.result', this.payload({
-        toolName,
-        result,
-        model,
-      }));
-    });
+  createAgentLoopCallbacks(model: string): AgentLoopStandaloneCallbacks {
+    return {
+      onToolCall: (toolName, args) => {
+        this.emitter.emit('ai.tool.call', this.payload({
+          toolName,
+          args,
+          model,
+        }));
+      },
+      onToolResult: (toolName, result) => {
+        this.emitter.emit('ai.tool.result', this.payload({
+          toolName,
+          result,
+          model,
+        }));
+      },
+    };
   }
 
   async agentStart(model: string): Promise<void> {

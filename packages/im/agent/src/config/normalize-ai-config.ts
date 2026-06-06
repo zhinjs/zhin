@@ -1,4 +1,5 @@
 import type { AIConfig, ProviderConfig } from '@zhin.js/core';
+import { driverToModelApi } from '@zhin.js/ai';
 import type {
   AgentBindingConfig,
   ProviderInstanceConfig,
@@ -10,12 +11,24 @@ const LEGACY_DRIVER_KEYS = new Set([
   'openai', 'anthropic', 'deepseek', 'moonshot', 'zhipu', 'google', 'gemini', 'ollama', 'cloudflare',
 ]);
 
-function isNewProviderShape(
+function isNamedProviderShape(
   providers: AIConfig['providers'],
-): providers is Record<string, ProviderInstanceConfig> {
+): providers is Record<string, ProviderInstanceConfig & { driver?: string }> {
   if (!providers || typeof providers !== 'object' || Array.isArray(providers)) return false;
-  const first = Object.values(providers)[0] as ProviderInstanceConfig | undefined;
-  return Boolean(first && typeof first === 'object' && 'driver' in first);
+  const first = Object.values(providers)[0] as (ProviderInstanceConfig & { driver?: string }) | undefined;
+  if (!first || typeof first !== 'object') return false;
+  return 'api' in first || 'driver' in first;
+}
+
+/** Normalize legacy `driver` → required `api` (ADR 0009 D1). */
+export function normalizeProviderEntry(
+  alias: string,
+  cfg: ProviderInstanceConfig & { driver?: string },
+): ProviderInstanceConfig {
+  const legacyDriver = cfg.driver?.trim().toLowerCase();
+  const api = cfg.api?.trim() || (legacyDriver ? driverToModelApi(legacyDriver) : driverToModelApi(alias));
+  const { driver: _driver, ...rest } = cfg;
+  return { ...rest, api };
 }
 
 function normalizeLegacyProviders(
@@ -25,7 +38,7 @@ function normalizeLegacyProviders(
   for (const [key, cfg] of Object.entries(legacy)) {
     if (key === 'custom' || !cfg || typeof cfg !== 'object') continue;
     if (LEGACY_DRIVER_KEYS.has(key)) {
-      out[key] = { driver: key, ...(cfg as ProviderConfig) };
+      out[key] = normalizeProviderEntry(key, { ...(cfg as ProviderConfig), api: driverToModelApi(key) });
     }
   }
   return out;
@@ -55,9 +68,16 @@ export interface NormalizedAiRoutingConfig {
  * 解析 ai.providers / agents；兼容旧版 providers.<driver> 与顶层 ai.routes。
  */
 export function normalizeAiRoutingConfig(ai: AIConfig | undefined): NormalizedAiRoutingConfig {
-  const providers = isNewProviderShape(ai?.providers)
-    ? (ai!.providers as Record<string, ProviderInstanceConfig>)
-    : normalizeLegacyProviders(ai?.providers ?? {});
+  let providers: Record<string, ProviderInstanceConfig>;
+
+  if (isNamedProviderShape(ai?.providers)) {
+    providers = {};
+    for (const [alias, cfg] of Object.entries(ai!.providers as Record<string, ProviderInstanceConfig & { driver?: string }>)) {
+      providers[alias] = normalizeProviderEntry(alias, cfg);
+    }
+  } else {
+    providers = normalizeLegacyProviders(ai?.providers ?? {});
+  }
 
   const agents = { ...((ai as AIConfig & { agents?: Record<string, AgentBindingConfig> })?.agents ?? {}) };
   const legacyRoutes = (ai as AIConfig & { routes?: Record<string, RouteEntryConfig> })?.routes ?? {};

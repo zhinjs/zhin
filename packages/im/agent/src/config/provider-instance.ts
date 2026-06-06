@@ -14,7 +14,7 @@ import type { ProviderInstanceConfig } from './types.js';
 
 type ProviderFactory = new (config: ProviderConfig) => AIProvider;
 
-const DRIVER_FACTORIES: Record<
+const VENDOR_FACTORIES: Record<
   string,
   { factory: ProviderFactory; requireApiKey: boolean }
 > = {
@@ -28,16 +28,36 @@ const DRIVER_FACTORIES: Record<
   ollama: { factory: OllamaProvider as ProviderFactory, requireApiKey: false },
 };
 
+function resolveVendorAlias(alias: string, api: string): string {
+  const lower = alias.trim().toLowerCase();
+  if (VENDOR_FACTORIES[lower] || lower === 'cloudflare') return lower;
+
+  const head = lower.split(/[-_/]/)[0];
+  if (head && (VENDOR_FACTORIES[head] || head === 'cloudflare')) return head;
+
+  switch (api) {
+    case 'anthropic-messages':
+      return 'anthropic';
+    case 'google-generative-ai':
+      return 'google';
+    case 'ollama-chat':
+      return 'ollama';
+    case 'cloudflare-workers-ai':
+      return 'cloudflare';
+    case 'openai-completions':
+    default:
+      return 'openai';
+  }
+}
+
 export function createProviderInstance(
   alias: string,
   raw: ProviderInstanceConfig,
 ): AIProvider | null {
-  const driver = raw.driver?.trim().toLowerCase();
-  if (!driver) return null;
+  const vendor = resolveVendorAlias(alias, raw.api?.trim() || 'openai-completions');
+  const { api: _api, ...rest } = raw;
 
-  const { driver: _d, ...rest } = raw;
-
-  if (driver === 'cloudflare') {
+  if (vendor === 'cloudflare') {
     const cfg = rest as CloudflareConfig;
     if (!cfg.apiKey || !cfg.accountId) return null;
     const provider = new CloudflareProvider(cfg);
@@ -45,7 +65,7 @@ export function createProviderInstance(
     return provider;
   }
 
-  const entry = DRIVER_FACTORIES[driver];
+  const entry = VENDOR_FACTORIES[vendor];
   if (!entry) return null;
 
   const cfg = { ...rest } as ProviderConfig & OllamaProviderConfig;

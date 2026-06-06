@@ -28,10 +28,10 @@ graph TB
     end
     subgraph L3B["🧠 @zhin.js/ai — AI 引擎"]
       direction TB
-      A1("Provider · Agent · Session")
+      A1("Provider · agentLoop · Session")
       A2("Memory · Compaction")
       A3("Output · RateLimiter")
-      A4("Storage · ContextManager")
+      A4("ContextRepository · ImTranscriptStore")
     end
   end
 
@@ -97,22 +97,35 @@ graph TB
 
 **与 IM 无关的通用 AI 引擎**，可独立用于任何需要 LLM 集成的应用。按三个子模块组织：
 
-#### `agent/` — Agent 引擎
+#### `agent/` — 遗留 Agent 类
 
 | 模块 | 说明 |
 |------|------|
-| `Agent` | 无状态 Agent 引擎，执行多轮 tool-calling 循环 |
-| `CostTracker` | Token 用量与成本追踪，支持按模型/Provider|
-| `ToolFilter` / `CachedToolFilter` | TF-IDF 工具相关性过滤与带缓存的过滤器 |
+| `Agent` / `createAgent` | **遗留**有状态 tool-calling 循环；IM 生产路径已改走 `agentLoop`，保留供单测与直接 import |
 
-#### `memory/` — 会话与上下文
+#### `llm/` — LLM 统一栈（ADR 0009）
 
 | 模块 | 说明 |
 |------|------|
-| `SessionManager` | 会话管理（内存 / 数据库持久化），统一工厂 `createSessionManager` |
-| `ContextManager` | 按场景落库、读历史与总结的多平台上下文管理 |
-| `ConversationMemory` | 话题切换 + 链式摘要的会话记忆 |
+| `agentLoop` | 唯一 LLM 回合引擎：工具循环、`maxIterations`、steer / followUp 钩子 |
+| `agent-loop.ts` | `agentLoop(prompts, context, config)` → `AsyncIterable<AgentEvent>` |
+| `api-registry` | `registerLlmApiFromProviders`、`getModel`（发现列表白名单）、`complete` / `stream`；OpenAI bridge 调 `provider.chat` |
+| `convert/` | `AgentMessage` ↔ Chat Completions 请求/响应 |
+| `types` | `Model`、`Context`、`ParsedToolCall`、TypeBox 工具 schema |
+
+#### `memory/` — 会话与上下文（ADR 0009 主路径）
+
+| 模块 | 说明 |
+|------|------|
+| `ContextRepository` | 可序列化 `AgentMessage[]` 读写（内存 / DB `agent_messages` + `agent_summaries`） |
+| `AgentSessionStore` | `agent_sessions` 活跃/归档（`session_key` → epoch `session_id`） |
+| `ImTranscriptStore` | `im_transcripts` 扁平静态 IM 消息（旁听、`chat_history` 工具） |
+| `SessionManager` | 遗留 API；IM 主路径见上两项 + `ContextRepository` |
+| `ContextManager` | 场景级摘要（`context_summaries`，非 IM 主路径） |
+| `ConversationMemory` | 话题检测 + 链式摘要（辅助） |
 | Agent `memory-layers` | 三层 Markdown：`global` / `platforms/{platform}` / `sessions/{session_key}` |
+| `CostTracker` | Token 用量与成本追踪 |
+| `ToolFilter` / `CachedToolFilter` | TF-IDF 工具相关性过滤与带缓存的过滤器 |
 
 #### `compaction/` — 上下文压缩
 
@@ -127,7 +140,7 @@ graph TB
 | 模块 | 说明 |
 |------|------|
 | `AIProvider` | LLM 提供者统一接口（OpenAI、Anthropic、Ollama、DeepSeek、Moonshot、Zhipu 等） |
-| `ModelRegistry` | 模型自动发现、Tier 评分、缓存与智能选择（支持自动降级） |
+| `ModelRegistry` | `listModels` 发现（`/v1/models`、`/api/tags`）、Tier 评分、缓存；与 `getModel` 白名单协作 |
 | `FileStateCache` | 文件状态缓存，减少重复磁盘读取 |
 | `output` | AI 文本解析为结构化 `OutputElement[]`（文本/图片/音频/卡片等） |
 | `RateLimiter` | 请求速率限制 |
@@ -194,9 +207,10 @@ ZhinAgent 在 AI 回合前 `ensureConnected`，`collectRuntimeTools` 合并 MCP 
 
 | 模块 | 说明 |
 |------|------|
-| `ZhinAgent` | AI 全局大脑，编排工具选择、多轮对话、引导文件注入 |
-| `AIService` | AI 服务管理器，Provider 注册与路由 |
-| `SubagentManager` | 后台子任务管理 |
+| `ZhinAgent` | IM 主对话大脑：`promptController` → `runAgentLoopTextTurn` / `runAgentLoopVisionTurn` |
+| `AIService` | Provider 注册与路由；`createAgent()` 返回 `ServiceAgent`（agentLoop 隔离上下文） |
+| `SubagentManager` | 后台子任务 → `runAgentLoopStandaloneTurn` |
+| `DeferredWorkerRunner` | toolSearch Worker → `runAgentLoopStandaloneTurn` |
 | `UserProfileStore` | 用户画像管理（跨会话个性化） |
 | `PersistentCronEngine` | AI 感知的持久化 cron 引擎 |
 | `BootstrapLoader` | 引导文件加载（SOUL.md / AGENTS.md / TOOLS.md） |
@@ -216,7 +230,7 @@ ZhinAgent 在 AI 回合前 `ensureConnected`，`collectRuntimeTools` 合并 MCP 
 | 项目根锁定 | `setZhinProjectRoot` 防止后续 chdir 导致插件路径偏移 |
 | 插件加载 | 基于锁定的项目根自动发现和加载插件（支持热重载） |
 | Bot 连接 | 按配置连接各平台适配器的 Bot |
-| AI 注册 | 初始化 AI Provider、Agent、SessionManager |
+| AI 注册 | `initAgentModule`、ModelRegistry 发现、`registerChatMessageStore`（`im_transcripts`） |
 | 信号处理 | 优雅关闭（SIGINT/SIGTERM） |
 | 重新导出 | 直接 `export * from '@zhin.js/core'`，选择性 re-export `@zhin.js/agent`（不再使用 `re-exports/` 垫片文件） |
 
@@ -298,17 +312,11 @@ flowchart TD
   F -->|" 🤖 AI 触发 "| H["ZhinAgent"]
 
   H --> I["🎯 工具收集\nSkill粗筛 → Tool细筛"]
-  I --> J["📋 构建上下文"]
-  J --> K{" Agent 路由 "}
-
-  K -->|" 💬 闲聊 "| L["纯对话\n1次LLM"]
-  K -->|" ⚡ 预执行 "| M["快速路径"]
-  K -->|" 🔧 工具调用 "| N["多轮tool_calling"]
+  I --> J["📋 ContextRepository\n+ system prompt 注入"]
+  J --> K["🔄 agentLoop\n无工具 maxIter=1\n有工具多轮 + preExecutable"]
 
   G --> O
-  L --> O
-  M --> O
-  N --> O
+  K --> O
   O([" 📤 Dispatcher内处理与回复 "])
   O --> P[" 根Plugin_message_receive_生命周期"]
   P --> Q[" adapter_on观察者可选"]
@@ -319,8 +327,8 @@ flowchart TD
   classDef guard fill:#d32f2f,stroke:#b71c1c,color:#fff
   classDef route fill:#f57c00,stroke:#e65100,color:#fff
   classDef aiNode fill:#1565c0,stroke:#0d47a1,color:#fff,rx:8
+  classDef engineNode fill:#6a1b9a,stroke:#4a148c,color:#fff,rx:8
   classDef process fill:#f5f5f5,stroke:#bdbdbd,color:#424242,rx:6
-  classDef routeNode fill:#7b1fa2,stroke:#4a148c,color:#fff
 
   class A input
   class P,Q output
@@ -328,8 +336,8 @@ flowchart TD
   class E guard
   class F route
   class H,I,J aiNode
-  class K routeNode
-  class B,C,D,G,L,M,N,O process
+  class K engineNode
+  class B,C,D,G,O process
 ```
 
 ## 主动路径（Assistant Runtime，规划中）

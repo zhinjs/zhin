@@ -78,6 +78,7 @@ test-bot/
 |--------|--------|
 | `defaultProvider` | `ai.agents.zhin.provider`（指向 `ai.providers.<别名>`） |
 | `agent.chatModel` | `ai.agents.zhin.model` |
+| `providers.*.models`（可选） | 省略时 `ModelRegistry` + `GET /v1/models` 自动发现；显式列表用于锁定白名单（如 Cloudflare Workers AI） |
 | `agent.allowedTools` / `disabledTools` / `agents.*.tools` | 已移除；工具由运行时发现 + `orchestratorTools` / TF-IDF |
 | `agent.toolSearch` | 已移除；编排为默认 |
 

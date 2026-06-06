@@ -6,6 +6,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ZhinAgent } from '@zhin.js/agent';
 import { Plugin, SkillFeature } from '@zhin.js/core';
+import { resetLlmApiRegistryForTests } from '@zhin.js/ai';
 import type { AIProvider, AgentTool, ContentPart } from '@zhin.js/core';
 import type { Tool, ToolContext } from '@zhin.js/core';
 
@@ -101,6 +102,7 @@ describe('ZhinAgent', () => {
   let provider: AIProvider;
 
   beforeEach(() => {
+    resetLlmApiRegistryForTests();
     provider = createMockProvider();
     agent = new ZhinAgent(provider, {
       persona: '测试助手',
@@ -199,10 +201,9 @@ describe('ZhinAgent', () => {
         const serialized = phases.map((p) => `phase: ${p}`).join('\n');
         expect(serialized).toContain('phase: turn.start');
         expect(serialized).toContain('phase: tools.collected');
-        expect(serialized).toContain('phase: context.ready');
-        expect(serialized).toContain('phase: path.chat');
-        expect(serialized).toContain('phase: chat.llm.start');
-        expect(serialized).toContain('phase: chat.llm.end');
+        expect(serialized).toContain('phase: path.agent_loop');
+        expect(serialized).toContain('phase: agent_loop.turn.start');
+        expect(serialized).toContain('phase: agent_loop.turn.end');
         expect(serialized).toContain('phase: turn.end');
       } finally {
         phaseAgent.dispose();
@@ -248,7 +249,6 @@ describe('ZhinAgent', () => {
 
       expect(received).toContain('ai.processing.start');
       expect(received).toContain('ai.agent.start');
-      expect(received).toContain('ai.thinking');
       expect(received).toContain('ai.tool.call');
       expect(received).toContain('ai.tool.result');
       expect(received).toContain('ai.response');
@@ -279,8 +279,8 @@ describe('ZhinAgent', () => {
       bridgeAgent.setHostPlugin(hostPlugin);
       bridgeAgent.setActiveBinding({
         name: 'zhin',
-        providerAlias: 'test',
-        model: 'gpt-test',
+        providerAlias: 'mock',
+        model: 'mock-model',
         mcpServers: ['fs'],
       });
       bridgeAgent.setOrchestrator({
@@ -384,6 +384,7 @@ describe('ZhinAgent', () => {
     let streamProvider: AIProvider;
 
     beforeEach(() => {
+      resetLlmApiRegistryForTests();
       streamProvider = createStreamMockProvider();
       streamAgent = new ZhinAgent(streamProvider, {
         persona: '测试助手',

@@ -37,7 +37,7 @@ describe('create-zhin ai config', () => {
     expect(yaml).toContain('execSecurity: deny')
     expect(yaml).toContain('agents:')
     expect(yaml).toContain('provider: openai')
-    expect(yaml).toContain('driver: openai')
+    expect(yaml).toContain('api: openai-completions')
     expect(yaml).not.toContain('toolSearch:')
     expect(yaml).not.toContain('defaultProvider:')
     expect(yaml).toContain('ignorePrefixes:')

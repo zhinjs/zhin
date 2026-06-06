@@ -4,6 +4,12 @@ import type { NormalizedAiRoutingConfig } from './normalize-ai-config.js';
 export function validateAiRoutingConfig(cfg: NormalizedAiRoutingConfig): string[] {
   const errors: string[] = [];
 
+  for (const [alias, prov] of Object.entries(cfg.providers)) {
+    if (!prov.api?.trim()) {
+      errors.push(`ai.providers.${alias}: api is required`);
+    }
+  }
+
   if (!cfg.agents[DEFAULT_ZHIN_AGENT_NAME]) {
     errors.push(`ai.agents.${DEFAULT_ZHIN_AGENT_NAME} is required`);
   }

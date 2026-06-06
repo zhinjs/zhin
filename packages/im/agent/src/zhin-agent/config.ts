@@ -3,7 +3,7 @@
  */
 
 import type { RateLimitConfig } from '@zhin.js/ai';
-import { DEFAULT_CONTEXT_TOKENS } from '@zhin.js/ai';
+import { DEFAULT_CONTEXT_TOKENS, DEFAULT_FOLLOW_UP_MODE, DEFAULT_STEERING_MODE, type QueueMode } from '@zhin.js/ai';
 import type { ModelHarnessConfig } from './model-harness.js';
 
 export type ModelSizeHint = 'small' | 'medium' | 'large';
@@ -72,8 +72,6 @@ export interface ZhinAgentConfig {
   toneAwareness?: boolean;
   /** 聊天任务使用的模型（覆盖自动选择） */
   chatModel?: string;
-  /** 纯闲聊(0工具)使用的轻量模型，留空则复用 chatModel */
-  chatLiteModel?: string;
   visionModel?: string;
   contextTokens?: number;
   maxHistoryShare?: number;
@@ -121,6 +119,10 @@ export interface ZhinAgentConfig {
   platformPromptSectionMaxChars?: number;
   /** 单 slot 平台 prompt 合计上限（字符） */
   platformPromptMaxChars?: number;
+  /** steer 队列 drain 模式（ADR 0009 Grill #13） */
+  steeringMode?: QueueMode;
+  /** followUp 队列 drain 模式（ADR 0009 Grill #13） */
+  followUpMode?: QueueMode;
   /**
    * 同一轮对话内累计多少次策略/安全拒绝后强制结束工具循环（默认 2，传给 Agent）。
    * 设为 0 禁用熔断。
@@ -167,7 +169,6 @@ export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   rateLimit: {},
   toneAwareness: true,
   chatModel: '',
-  chatLiteModel: '',
   visionModel: '',
   contextTokens: DEFAULT_CONTEXT_TOKENS,
   maxHistoryShare: 0.5,
@@ -193,6 +194,8 @@ export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   workerBaseTools: [...DEFAULT_WORKER_BASE_TOOLS],
   platformPromptSectionMaxChars: 2048,
   platformPromptMaxChars: 4096,
+  steeringMode: DEFAULT_STEERING_MODE,
+  followUpMode: DEFAULT_FOLLOW_UP_MODE,
   policyDenialStopAfter: 2,
 };
 

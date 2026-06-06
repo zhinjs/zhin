@@ -1,5 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AgentTool, AIProvider } from '@zhin.js/ai';
+import { resetLlmApiRegistryForTests } from '@zhin.js/ai';
 import { DeferredWorkerRunner } from '../src/deferred-worker-runner.js';
 
 function makeTool(name: string, description = 'test'): AgentTool {
@@ -12,6 +13,10 @@ function makeTool(name: string, description = 'test'): AgentTool {
 }
 
 describe('DeferredWorkerRunner', () => {
+  beforeEach(() => {
+    resetLlmApiRegistryForTests();
+  });
+
   it('loads deferred tools and returns summary', async () => {
     const chat = vi.fn().mockResolvedValue({
       choices: [{

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { formatCompact, Logger } from '@zhin.js/logger';
+import { formatCompact, Logger, truncatePreview } from '@zhin.js/logger';
 import type { AgentTool } from '@zhin.js/ai';
 import type { ToolContext } from '../orchestrator/types.js';
 import { notifySubagentGoal, resolveSubagentDisplayLabel } from '../subagent-goal-notify.js';
@@ -7,6 +7,7 @@ import { resolveIMSessionIdFromToolContext } from '@zhin.js/ai';
 import { buildOrchestratorAgentTools } from './tool-search-orchestrator.js';
 import { filterToolsForToolSearchCatalog } from './tool-catalog.js';
 import type { ZhinAgentPrivate } from './zhin-agent-private.js';
+import { deliverDeferredWorkerResult } from './deferred-delivery.js';
 
 const logger = new Logger(null, 'ZhinAgent');
 
@@ -40,18 +41,22 @@ export async function runDeferredWorker(
   context: ToolContext,
   allTools: AgentTool[],
 ): Promise<string> {
+  const taskId = randomUUID().slice(0, 8);
+  const label = resolveSubagentDisplayLabel(undefined, goal);
   await notifySubagentGoal(context, {
-    taskId: randomUUID().slice(0, 8),
+    taskId,
     kind: 'deferred',
-    label: resolveSubagentDisplayLabel(undefined, goal),
+    label,
   });
+
   const allByName = new Map(allTools.map(t => [t.name, t]));
   const workerBase: AgentTool[] = [];
   for (const name of agent.config.workerBaseTools) {
     const t = allByName.get(name);
     if (t) workerBase.push(t);
   }
-  const result = await agent.deferredWorkerRunner.runSync({
+
+  const runOptions = {
     goal,
     toolQuery,
     deferredCatalog: agent.deferredCatalog,
@@ -64,7 +69,15 @@ export async function runDeferredWorker(
     modelRegistry: agent.modelRegistry,
     provider: agent.provider,
     maxIterations: agent.config.maxSubagentIterations,
-    onEvent: (event) => {
+    onEvent: (event: {
+      phase: 'start' | 'finish';
+      goal: string;
+      toolQuery?: string;
+      loadedToolNames?: string[];
+      status?: 'ok' | 'partial' | 'error';
+      iterations?: number;
+      error?: string;
+    }) => {
       const sessionId = resolveIMSessionIdFromToolContext({
         platform: context.platform,
         botId: context.botId,
@@ -79,6 +92,7 @@ export async function runDeferredWorker(
         status: event.status,
         iterations: event.iterations,
         error: event.error,
+        taskId,
       });
       if (event.phase === 'start') {
         agent.emitter.emit('ai.deferred.start', payload);
@@ -86,6 +100,33 @@ export async function runDeferredWorker(
         agent.emitter.emit('ai.deferred.finish', payload);
       }
     },
+  };
+
+  void agent.deferredWorkerRunner.runSync(runOptions).then(async (result) => {
+    const sender = agent.getDeferredResultSender?.();
+    if (sender) {
+      try {
+        await deliverDeferredWorkerResult(sender, context, goal, taskId, result);
+      } catch (err) {
+        logger.error(formatCompact({
+          deferred: 'delivery_failed',
+          task_id: taskId,
+          error: truncatePreview(err instanceof Error ? err.message : String(err), 200),
+        }));
+      }
+    }
+  }).catch((err) => {
+    logger.error(formatCompact({
+      deferred: 'worker_failed',
+      task_id: taskId,
+      error: truncatePreview(err instanceof Error ? err.message : String(err), 200),
+    }));
   });
-  return result.summary;
+
+  return JSON.stringify({
+    status: 'delegated',
+    task_id: taskId,
+    goal: truncatePreview(goal, 200),
+    message: '子任务已在后台执行，完成后将单独推送结果。',
+  });
 }

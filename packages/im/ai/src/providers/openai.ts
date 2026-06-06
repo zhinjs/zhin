@@ -269,6 +269,7 @@ export class ZhipuProvider extends OpenAIProvider {
   models = [
     'glm-4.7',
     'glm-4.7-flash',
+    'glm-4-flash',
     'glm-4.5-air',
     'glm-4.1v-thinking',
     'glm-4.6v',
@@ -280,10 +281,6 @@ export class ZhipuProvider extends OpenAIProvider {
       baseUrl: config.baseUrl || 'https://open.bigmodel.cn/api/paas/v4',
     });
     if (config.models?.length) this.models = config.models;
-  }
-
-  async listModels(): Promise<string[]> {
-    return this.models;
   }
 
   /** 智谱文生图（OpenAI 兼容 /images/generations） */

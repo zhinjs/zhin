@@ -16,9 +16,19 @@
  *  12. 多模态输入：图片/音频直接传给视觉模型
  */
 
+import { randomUUID } from 'node:crypto';
 import type { Plugin } from '@zhin.js/core';
+import { getPlugin } from '@zhin.js/core';
 import { Logger } from '@zhin.js/logger';
-import type { AIProvider, AgentTool, ContentPart, Usage } from '@zhin.js/ai';
+import type {
+  AIProvider,
+  AgentTool,
+  AgentMessage,
+  ContentPart,
+  ImageContent,
+  Usage,
+  UserMessage,
+} from '@zhin.js/ai';
 import type { Tool, ToolContext } from '../orchestrator/types.js';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { AgentOrchestrator } from '../orchestrator/index.js';
@@ -27,11 +37,18 @@ import {
   resolveIMSessionIdFromToolContext,
   type SessionManager,
 } from '@zhin.js/ai';
-import type { ChatHistoryContext } from '@zhin.js/ai';
 import {
   ConversationMemory,
+  createMemoryContextRepository,
+  MemoryAgentSessionStore,
   MemoryIMSessionStore,
+  MemoryImTranscriptStore,
+  registerLlmApiFromProviders,
+  setLegacyProviderResolver,
+  type AgentSessionStore,
+  type ContextRepository,
   type IMSessionStore,
+  type ImTranscriptStore,
 } from '@zhin.js/ai';
 import type { OutputElement } from '@zhin.js/ai';
 import { type ZhinAgentTurnMetrics } from './turn-metrics.js';
@@ -53,6 +70,10 @@ import { DeferredWorkerRunner } from '../deferred-worker-runner.js';
 import { processTextTurn, processMultimodalTurn } from './turn-pipeline.js';
 import { formatUserContentForSession } from './session-io.js';
 import { asPrivate } from './zhin-agent-private.js';
+import { PromptController } from './prompt-controller.js';
+import { getActiveTurnTracker, runInTurnContext as runInTurnContextAls } from './turn-context.js';
+import { normalizePromptMessages } from './prompt-input.js';
+import { resolveToolRequesterRole } from '../security/owner-approve-always-store.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import { bindingToModelConfig } from '../routing/runtime-binding.js';
 import { buildDisciplinedPrompt as assembleDisciplinedPrompt } from './prompt-assembly.js';
@@ -63,6 +84,7 @@ import {
 
 export type { ZhinAgentConfig, OnChunkCallback } from './config.js';
 export type { ZhinAgentTurnMetrics, ZhinAgentTurnPath } from './turn-metrics.js';
+export { PromptAccessDeniedError } from './prompt-access.js';
 export { formatAiHandlerCompleteLog, formatZhinAgentTurnUsage } from './turn-metrics.js';
 export * from './prompt-builder.js';
 export * from './prompt-templates.js';
@@ -74,6 +96,8 @@ const logger = new Logger(null, 'ZhinAgent');
 // ZhinAgent
 // ============================================================================
 
+import { PromptAccessDeniedError } from './prompt-access.js';
+
 export class ZhinAgent {
   private provider: AIProvider;
   private providerResolver: ((alias: string) => AIProvider) | null = null;
@@ -82,8 +106,10 @@ export class ZhinAgent {
   private skillRegistry: SkillRegistry | null = null;
   private orchestrator: AgentOrchestrator | null = null;
   private sessions: SessionManager;
-  private chatHistory: ChatHistoryContext | null = null;
   private imSessionStore: IMSessionStore | MemoryIMSessionStore = new MemoryIMSessionStore();
+  private agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
+  private contextRepository: ContextRepository;
+  private imTranscriptStore: ImTranscriptStore;
   private memory: ConversationMemory;
   private externalTools: Map<string, AgentTool> = new Map();
   private userProfiles: UserProfileStore;
@@ -98,7 +124,9 @@ export class ZhinAgent {
   private deferredCatalog: AgentTool[] = [];
   private readonly deferredWorkerRunner = new DeferredWorkerRunner();
   private lastToolSearchDeferredStats?: string;
-  private readonly turnTracker: TurnTracker;
+  private readonly promptController: PromptController;
+  private deferredResultSender: SubagentResultSender | null = null;
+  private lastTurnMetrics: ZhinAgentTurnMetrics | null = null;
   private memoryPersistenceReady: Promise<void>;
   private resolveMemoryPersistenceReady!: () => void;
   private memoryPersistenceDone = false;
@@ -118,12 +146,22 @@ export class ZhinAgent {
       minTopicRounds: this.config.minTopicRounds,
       slidingWindowSize: this.config.slidingWindowSize,
       topicChangeThreshold: this.config.topicChangeThreshold,
-      topicDetectModel: this.config.chatLiteModel || undefined,
+      topicDetectModel: this.config.chatModel || undefined,
     });
     this.memory.setProvider(provider);
     this.userProfiles = new UserProfileStore();
     this.rateLimiter = new RateLimiter(this.config.rateLimit);
-    this.turnTracker = new TurnTracker(this.config.subagentTurnWaitMs);
+    this.promptController = new PromptController(
+      this.config.steeringMode,
+      this.config.followUpMode,
+    );
+    const memoryStack = createMemoryContextRepository({
+      tailMessageLimit: this.config.slidingWindowSize,
+    });
+    this.agentSessionStore = memoryStack.sessionStore;
+    this.contextRepository = memoryStack.repository;
+    this.imTranscriptStore = new MemoryImTranscriptStore();
+    this.wireLlmApiLayer();
     // 默认可用内存会话；DB 注入后由 bootstrap 覆盖 store，不阻塞单测与首条消息
     this.markMemoryPersistenceReady();
   }
@@ -145,12 +183,32 @@ export class ZhinAgent {
     this.sessions = manager;
   }
 
-  setChatHistory(history: ChatHistoryContext): void {
-    this.chatHistory = history;
-  }
-
   setIMSessionStore(store: IMSessionStore): void {
     this.imSessionStore = store;
+  }
+
+  setAgentSessionStore(store: AgentSessionStore | MemoryAgentSessionStore): void {
+    this.agentSessionStore = store;
+  }
+
+  setContextRepository(repo: ContextRepository): void {
+    this.contextRepository = repo;
+  }
+
+  setImTranscriptStore(store: ImTranscriptStore): void {
+    this.imTranscriptStore = store;
+  }
+
+  getContextRepository(): ContextRepository {
+    return this.contextRepository;
+  }
+
+  getAgentSessionStore(): AgentSessionStore | MemoryAgentSessionStore {
+    return this.agentSessionStore;
+  }
+
+  getImTranscriptStore(): ImTranscriptStore {
+    return this.imTranscriptStore;
   }
 
   setModelRegistry(registry: ModelRegistry): void {
@@ -164,6 +222,24 @@ export class ZhinAgent {
 
   setProviderResolver(resolver: (alias: string) => AIProvider): void {
     this.providerResolver = resolver;
+    this.wireLlmApiLayer();
+  }
+
+  private wireLlmApiLayer(): void {
+    const resolve = (alias: string) => {
+      if (alias === this.provider.name) return this.provider;
+      return this.providerResolver?.(alias);
+    };
+    setLegacyProviderResolver(resolve);
+    registerLlmApiFromProviders(
+      [{
+        alias: this.provider.name,
+        provider: this.provider,
+        config: { api: 'openai-completions' },
+        models: [],
+      }],
+      resolve,
+    );
   }
 
   /** 入站回合注入 ai.agents.<name> 绑定（zhin 或其它 route 摘要路径） */
@@ -194,7 +270,7 @@ export class ZhinAgent {
     return this.provider;
   }
 
-  /** @deprecated 消息事实源已迁至 chat_messages，保留空实现以兼容旧 bootstrap */
+  /** @deprecated 消息事实源已迁至 im_transcripts / agent_messages，保留空实现以兼容旧 bootstrap */
   async upgradeMemoryToDatabase(_msgModel: unknown, _sumModel: unknown): Promise<void> {
     return;
   }
@@ -238,8 +314,8 @@ export class ZhinAgent {
       maxIterations: this.config.maxSubagentIterations,
       execPolicyConfig: this.config,
       modelRegistry: this.modelRegistry,
-      onSubagentUsage: (usage) => this.turnTracker.addSubagentUsage(usage),
-      registerSubagentTask: (done) => this.turnTracker.trackSubagent(done),
+      onSubagentUsage: (usage) => getActiveTurnTracker()?.addSubagentUsage(usage),
+      registerSubagentTask: (done) => getActiveTurnTracker()?.trackSubagent(done),
       eventEmitter: this.emitter,
       onEvent: (event) => {
         const sessionId = resolveIMSessionIdFromToolContext({
@@ -290,6 +366,23 @@ export class ZhinAgent {
     }
   }
 
+  setDeferredResultSender(sender: SubagentResultSender): void {
+    this.deferredResultSender = sender;
+  }
+
+  getDeferredResultSender(): SubagentResultSender | null {
+    return this.deferredResultSender;
+  }
+
+  getActiveTurnTracker(): TurnTracker | undefined {
+    return getActiveTurnTracker();
+  }
+
+  runInTurnContext<T>(turnId: string, fn: () => Promise<T>): Promise<T> {
+    const tracker = new TurnTracker(this.config.subagentTurnWaitMs);
+    return runInTurnContextAls(turnId, tracker, fn);
+  }
+
   getSubagentManager(): SubagentManager | null {
     return this.subagentManager;
   }
@@ -321,17 +414,22 @@ export class ZhinAgent {
   }
 
   getLastTurnMetrics(): ZhinAgentTurnMetrics | null {
-    return this.turnTracker.lastMetrics;
+    return this.lastTurnMetrics;
   }
 
   private beginActiveTurn(): void {
-    this.turnTracker.begin();
+    const tracker = getActiveTurnTracker();
+    if (!tracker) return;
+    tracker.begin();
   }
 
   private async finalizeActiveTurn(
     partial: Omit<ZhinAgentTurnMetrics, 'usage' | 'mainUsage' | 'subagentUsage'> & { usage: Usage },
   ): Promise<void> {
-    await this.turnTracker.finalize(partial);
+    const tracker = getActiveTurnTracker();
+    if (!tracker) return;
+    await tracker.finalize(partial);
+    this.lastTurnMetrics = tracker.lastMetrics;
   }
 
   private emitSessionNewEvent(
@@ -369,9 +467,99 @@ export class ZhinAgent {
     }));
   }
 
+  // ── prompt() / steer / followUp (ADR 0009 D6) ─────────────────────
+
+  private assertMasterForPromptControl(context: ToolContext): void {
+    try {
+      const plugin = getPlugin().root ?? getPlugin();
+      const role = resolveToolRequesterRole(plugin, context);
+      if (role !== 'master') {
+        throw new PromptAccessDeniedError('steer/followUp 仅 master 可用');
+      }
+    } catch (error) {
+      if (error instanceof PromptAccessDeniedError) throw error;
+      throw new PromptAccessDeniedError('steer/followUp 需要有效的 master 上下文');
+    }
+  }
+
+  subscribe(listener: (event: import('@zhin.js/ai').AgentEvent, signal: AbortSignal) => void | Promise<void>): () => void {
+    return this.promptController.subscribe(listener);
+  }
+
+  abort(): void {
+    this.promptController.abort();
+  }
+
+  waitForIdle(): Promise<void> {
+    return this.promptController.waitForIdle();
+  }
+
+  isPromptBusy(): boolean {
+    return this.promptController.isBusy();
+  }
+
+  clearSteeringQueue(sessionKey?: string): void {
+    this.promptController.clearSteeringQueue(sessionKey);
+  }
+
+  clearFollowUpQueue(sessionKey?: string): void {
+    this.promptController.clearFollowUpQueue(sessionKey);
+  }
+
+  steer(message: AgentMessage, context: ToolContext): void {
+    this.assertMasterForPromptControl(context);
+    const sessionKey = resolveIMSessionIdFromToolContext({
+      platform: context.platform,
+      botId: context.botId,
+      scope: context.scope,
+      sceneId: context.sceneId,
+      senderId: context.senderId,
+    });
+    this.promptController.steer(sessionKey, message);
+  }
+
+  followUp(message: AgentMessage, context: ToolContext): void {
+    this.assertMasterForPromptControl(context);
+    const sessionKey = resolveIMSessionIdFromToolContext({
+      platform: context.platform,
+      botId: context.botId,
+      scope: context.scope,
+      sceneId: context.sceneId,
+      senderId: context.senderId,
+    });
+    this.promptController.followUp(sessionKey, message);
+  }
+
+  /**
+   * 对齐 Agent.prompt：入队并执行 LLM turn（需 IM ToolContext）。
+   * process() / processMultimodal() 在 agentLoop 路径下内部委托此方法。
+   */
+  async prompt(
+    input: string | AgentMessage | AgentMessage[],
+    context: ToolContext,
+    options?: { images?: ImageContent[]; onChunk?: OnChunkCallback },
+  ): Promise<void> {
+    const messages = normalizePromptMessages(input, options?.images);
+    const text = messages
+      .flatMap((message) => {
+        if (message.role !== 'user') return [] as string[];
+        const user = message as UserMessage;
+        return user.content
+          .filter((block) => block.type === 'text')
+          .map((block) => block.text);
+      })
+      .join('\n')
+      .trim();
+    await this.runInTurnContext(randomUUID(), () =>
+      processTextTurn(asPrivate(this), text, context, [], options?.onChunk, {
+        prebuiltMessages: messages,
+      }),
+    );
+  }
+
   // ── Core processing ─────────────────────────────────────────────────
 
-  /** 旁听由 zhin `message.receive` 写入 chat_messages，此处保留空实现 */
+  /** 旁听由 zhin `message.receive` 写入 im_transcripts，此处保留空实现 */
   async appendPassiveGroupChatter(_context: ToolContext, _rawContent: string): Promise<void> {
     return;
   }
@@ -394,7 +582,9 @@ export class ZhinAgent {
     externalTools: Tool[] = [],
     onChunk?: OnChunkCallback,
   ): Promise<OutputElement[]> {
-    return processTextTurn(asPrivate(this), content, context, externalTools, onChunk);
+    return this.runInTurnContext(randomUUID(), () =>
+      processTextTurn(asPrivate(this), content, context, externalTools, onChunk),
+    );
   }
   private resolveAgentToolsForTurn(
     allTools: AgentTool[],
@@ -421,7 +611,9 @@ export class ZhinAgent {
     context: ToolContext,
     onChunk?: OnChunkCallback,
   ): Promise<OutputElement[]> {
-    return processMultimodalTurn(asPrivate(this), parts, context, onChunk);
+    return this.runInTurnContext(randomUUID(), () =>
+      processMultimodalTurn(asPrivate(this), parts, context, onChunk),
+    );
   }
 
   // ── Internal helpers ────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 /**
  * 多 Agent 编排（zhin.js 层）
  *
- * 基于 AIService.createAgent() 提供：
+ * 基于 AIService.runAgent / createAgent（agentLoop）提供：
  * - runPipeline：多步串联（上一步输出作为下一步输入）
  * - runParallel：多 Agent 并行执行
  * - route：按条件路由到不同专业 Agent
@@ -54,7 +54,8 @@ export async function runPipeline(
   if (steps.length === 0) return initialInput;
   let currentInput = initialInput;
   for (const step of steps) {
-    const agent = ai.createAgent({
+    const promptText = step.prompt.replace(/\{input\}/g, currentInput);
+    const result = await ai.runAgent(promptText, {
       provider: step.provider,
       model: step.model,
       systemPrompt: step.systemPrompt,
@@ -62,8 +63,6 @@ export async function runPipeline(
       collectExternalTools: step.collectExternalTools,
       maxIterations: step.maxIterations,
     });
-    const promptText = step.prompt.replace(/\{input\}/g, currentInput);
-    const result = await agent.run(promptText);
     currentInput = result.content ?? '';
   }
   return currentInput;
@@ -81,7 +80,7 @@ export async function runParallel(
 ): Promise<Record<string, string>> {
   const entries = await Promise.all(
     tasks.map(async (task) => {
-      const agent = ai.createAgent({
+      const result = await ai.runAgent(task.prompt, {
         provider: task.provider,
         model: task.model,
         systemPrompt: task.systemPrompt,
@@ -89,7 +88,6 @@ export async function runParallel(
         collectExternalTools: task.collectExternalTools,
         maxIterations: task.maxIterations,
       });
-      const result = await agent.run(task.prompt);
       return [task.key, result.content ?? ''] as const;
     }),
   );
@@ -112,7 +110,8 @@ export async function route(
 ): Promise<string> {
   for (const rule of rules) {
     if (!rule.when(content)) continue;
-    const agent = ai.createAgent({
+    const prompt = rule.prompt != null ? rule.prompt.replace(/\{content\}/g, content) : content;
+    const result = await ai.runAgent(prompt, {
       provider: rule.provider,
       model: rule.model,
       systemPrompt: rule.systemPrompt,
@@ -120,13 +119,10 @@ export async function route(
       collectExternalTools: rule.collectExternalTools,
       maxIterations: rule.maxIterations,
     });
-    const prompt = rule.prompt != null ? rule.prompt.replace(/\{content\}/g, content) : content;
-    const result = await agent.run(prompt);
     return result.content ?? '';
   }
   if (defaultOptions) {
-    const agent = ai.createAgent(defaultOptions);
-    const result = await agent.run(content);
+    const result = await ai.runAgent(content, defaultOptions);
     return result.content ?? content;
   }
   return content;

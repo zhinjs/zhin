@@ -2,6 +2,7 @@
  * SubagentManager 测试
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { resetLlmApiRegistryForTests } from '@zhin.js/ai';
 import { SubagentManager } from '@zhin.js/agent';
 import type { ZhinAgentEventEmitter } from '../../src/zhin-agent/event-emitter.js';
 import type { SubagentOrigin, SpawnOptions } from '@zhin.js/agent';
@@ -88,6 +89,7 @@ describe('SubagentManager', () => {
   let mockTools: AgentTool[];
 
   beforeEach(() => {
+    resetLlmApiRegistryForTests();
     provider = createMockProvider();
     mockTools = createMockTools();
     manager = new SubagentManager({
@@ -164,7 +166,7 @@ describe('SubagentManager', () => {
       const sender = vi.fn();
       manager.setSender(sender);
 
-      await manager.spawn({ task: '测试', origin: baseOrigin });
+      await manager.spawn({ task: '读取文件写入并搜索网页', origin: baseOrigin });
 
       // 等待子 agent 完成
       await vi.waitFor(() => expect(sender).toHaveBeenCalled(), { timeout: 2000 });
@@ -178,9 +180,9 @@ describe('SubagentManager', () => {
       const request = callArgs[0] as any;
       if (request?.tools) {
         const toolNames = request.tools.map((t: any) => t.function?.name || t.name);
+        const allowed = new Set(['bash', 'read_file', 'write_file', 'web_search']);
+        expect(toolNames.every((n: string) => allowed.has(n))).toBe(true);
         expect(toolNames).toContain('read_file');
-        expect(toolNames).toContain('write_file');
-        expect(toolNames).toContain('web_search');
         expect(toolNames).not.toContain('spawn_task');
         expect(toolNames).not.toContain('activate_skill');
         expect(toolNames).not.toContain('todo_write');

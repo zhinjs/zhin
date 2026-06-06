@@ -6,18 +6,18 @@ Zhin AI Agent 组合层：在 `@zhin.js/core` 的类型与 Provider 之上，提
 
 ## 功能特性
 
-- 🤖 **Agent 循环**：`Agent` / `createAgent`，支持工具调用、迭代与事件
+- 🤖 **agentLoop 统一路径**：ZhinAgent、Subagent、Deferred Worker、AIService 均经 `agentLoop`（legacy `Agent.run` 仅保留在 `@zhin.js/ai` 供单测）
 - 📝 **会话管理**：`SessionManager`、内存/数据库会话、`SessionManager.generateId`
 - 🧠 **ZhinAgent**：与 Zhin 消息流集成的智能体（SOUL/TOOLS/AGENTS、工具收集、执行策略）
-- 🔍 **模型自动发现**：通过 `@zhin.js/ai` 的 `ModelRegistry`（本包 re-export AI 原语，不单独导出 Registry）
-- 🔄 **模型自动降级**：首选模型失败时自动切换到次优模型，支持 Chat / Vision / Agent 三条路径
+- 🔍 **模型自动发现**：`ModelRegistry` 调用 `listModels()`（OpenAI 兼容 `/v1/models`、Ollama `/api/tags`）；结果写入 `provider.models` 并供 `getModel()` 校验；yaml 显式 `models` 时以配置为准
+- 🔄 **模型自动降级**：首选模型失败时按 `resolveModelCandidates` 候选链 fallback（文本 / 多模态 / standalone 均走 agentLoop）
 - 🛡️ **6 层 Bash 安全**：`ExecPolicy` 纵深防御（危险黑名单、环境变量剥离、wrapper 剥离、复合命令拆分、只读放行、交互式审批）
 - 📂 **文件访问安全**：`FilePolicy` 路径检查、设备路径拦截、命令读写分类
 - 📋 **精简系统提示词**：`PromptBuilder` 组装 Context、Style、Tools、Safety，并按需注入 Platform、Skills、Memory、Bootstrap
 - 🔌 **框架挂载**：`initAgentModule()` 注册 `ctx.ai`、`ctx.agent`、定时任务、DB 模型等
-- 📦 **上下文与记忆**：`ContextManager`、`ConversationMemory`、`UserProfileStore`
+- 📦 **上下文与记忆**：`ContextRepository`（`agent_messages`）、`AgentSessionStore`、`ImTranscriptStore`（`im_transcripts` + `chat_history`）；辅助：`ContextManager`、`ConversationMemory`、`UserProfileStore`
 - ⏰ **跟进与定时**：`FollowUpManager`、`PersistentCronEngine`、cron 工具
-- 🔧 **内置工具**：bash、read_file、write_file、ask_user、web_search、chat_history 等
+- 🔧 **内置工具**：bash、read_file、write_file、ask_user、web_search、`chat_history`（按关键词/最近条数查 `im_transcripts`）等
 - 📐 **会话压缩**：`compactSession`、token 估算、总结与裁剪
 - 🪝 **Hook 系统**：`registerAIHook`、`triggerAIHook` 等
 
@@ -44,8 +44,6 @@ npm install zhin.js
 import {
   initAgentModule,
   ZhinAgent,
-  Agent,
-  createAgent,
   AIService,
   SessionManager,
   registerAIHook,
@@ -64,16 +62,19 @@ useContext('ai', async (ai) => {
 仅在需要单独集成 Agent 能力时使用：
 
 ```javascript
-import { initAgentModule, createAgent, AIService } from '@zhin.js/agent'
+import { initAgentModule, AIService } from '@zhin.js/agent'
 import { OllamaProvider } from '@zhin.js/core'
 
-// 初始化（需先有 DatabaseFeature 等）
 initAgentModule()
 
-// 低层 Agent
-const provider = new OllamaProvider({ baseUrl: 'http://localhost:11434' })
-const agent = createAgent(provider, { tools: [], systemPrompt: '你是一个助手' })
-const result = await agent.run('你好')
+// 程序化 Agent（agentLoop 隔离 context）
+useContext('ai', async (ai) => {
+  const result = await ai.runAgent('你好', {
+    provider: 'ollama',
+    systemPrompt: '你是一个助手',
+  })
+  console.log(result.content)
+})
 ```
 
 ## 核心导出
@@ -81,13 +82,13 @@ const result = await agent.run('你好')
 | 类别 | 导出 |
 |------|------|
 | 初始化 | `initAgentModule` |
-| Agent | `Agent`, `createAgent`, `formatToolTitle` |
+| Agent | `ServiceAgent`、`CreateServiceAgentOptions`（`AIService.createAgent`）；legacy `Agent` / `createAgent` re-export 自 `@zhin.js/ai` |
 | Model harness | `MODEL_HARNESS_DEFAULTS`, `resolveModelHarness`, `mergeModelHarnessValues` |
 | 服务与会话 | `AIService`, `SessionManager`, `MemorySessionManager`, `DatabaseSessionManager`, `createMemorySessionManager`, `createDatabaseSessionManager` |
 | ZhinAgent | `ZhinAgent`，以及 config / exec-policy / file-policy / tool-runtime / prompt / builtin-tools 等子模块 |
 | 安全策略 | `checkExecPolicy`, `applyExecPolicyToTools`, `isDangerousCommand`, `stripEnvVarPrefix`, `stripSafeWrappers`, `splitCompoundCommand`, `extractCommandName`, `ExecPolicyResult`, `checkFileAccess`, `classifyBashCommand`, `isBlockedDevicePath` |
 | 提示词构建 | `buildRichSystemPrompt`, `buildEnhancedPersona`, `buildUserMessageWithHistory`, `buildContextHint` |
-| 上下文与记忆 | `ContextManager`, `createContextManager`, `ConversationMemory`, `UserProfileStore` |
+| 上下文与记忆 | `ContextRepository`, `AgentSessionStore`, `ImTranscriptStore`（经 ZhinAgent 注入）；`ContextManager`, `ConversationMemory`, `UserProfileStore` |
 | 跟进与定时 | `FollowUpManager`, `PersistentCronEngine`, `createCronTools`, `setCronManager`, `getCronManager` |
 | 压缩与 Bootstrap | `compactSession`, `estimateTokens`, `loadBootstrapFiles`, `loadSoulPersona`, `loadToolsGuide`, `loadAgentsMemory` |
 | Hook | `registerAIHook`, `unregisterAIHook`, `triggerAIHook`, `createAIHookEvent` |
@@ -118,7 +119,7 @@ declare module '@zhin.js/core' {
 
 | Context | 用途 |
 |---------|------|
-| `ctx.ai` | 业务侧 AI 服务：会话、`createAgent` / `runAgent`、全局 ZhinAgent |
+| `ctx.ai` | 业务侧 AI 服务：会话、`createAgent`（→ `ServiceAgent`）/ `runAgent`、全局 ZhinAgent |
 | `ctx.agent` | 扩展编排资源：`orchestrator.addTool`、`addSkill`、`addMcp` 等；内置注册走 `root.inject('agent')` |
 
 主包 `zhin.js` 的 `Plugin.Contexts` 类型已包含上述两项。
@@ -155,23 +156,20 @@ ai:
 
 ### 2. 用 AIService 创建多个不同配置的 Agent
 
-`ctx.ai`（AIService）可以按需创建**多个互不共享状态的 Agent**，每个可指定不同 provider、model、systemPrompt、tools：
+`ctx.ai`（AIService）可以按需创建**多个互不共享状态的 Agent**（`ServiceAgent`），每个可指定不同 provider、model、systemPrompt、tools；底层均为 **`runAgentLoopStandaloneTurn`**：
 
 ```javascript
 import { useContext } from 'zhin.js'
 
 useContext('ai', async (ai) => {
-  // 专用「代码助手」Agent
   const codeAgent = ai.createAgent({
     provider: 'openai',
     model: 'gpt-4o',
     systemPrompt: '你只负责代码审查与建议，不闲聊。',
     useBuiltinTools: true,
-    tools: [/* 可选：额外工具 */],
   })
   const codeResult = await codeAgent.run('审查这段 TypeScript 的类型安全')
 
-  // 专用「翻译」Agent，不用内置工具
   const translateAgent = ai.createAgent({
     provider: 'ollama',
     model: 'qwen2.5',
@@ -201,13 +199,40 @@ useContext('ai', async (ai) => {
 
 ### 4. 多 Agent 协作/编排（由 zhin.js 层实现）
 
-本包只提供基础能力：`createAgent`、`ZhinAgent`、`ai.createAgent` 等。**多 Agent 串联/并联编排**（例如 A 的输出作为 B 的输入、按条件路由到不同专业 Agent）以及**按 bot / 按群组配置多个 ZhinAgent** 的调度与路由，将在 **zhin.js 主包**实现；插件侧通过 zhin.js 暴露的 API 使用即可，无需在业务里手写多实例维护与路由逻辑。
+本包只提供基础能力：`ZhinAgent`、`ai.createAgent`（`ServiceAgent`）、`ai.runAgent` 等。**多 Agent 串联/并联编排**（例如 A 的输出作为 B 的输入、按条件路由到不同专业 Agent）在 **zhin.js 主包** `runPipeline` / `runParallel` / `route` 实现；插件侧通过 zhin.js 暴露的 API 使用即可。
 
 ## 工具命名策略
 
 - 保留/内置工具名（如 `bash`、`read_file`、`spawn_task`）不可被插件或文件化工具覆盖。
 - 非保留工具同名时采用 **后注册覆盖前注册**。
 - 冲突统一以 warn 记录：包含 `name`、`source`、`action`（`ignored`/`overridden`）。
+
+## Provider 与模型列表
+
+`AIService` 构造时：
+
+1. 按 `ai.providers.<别名>` 实例化 Provider（须配置 `api`，如 `openai-completions`）。
+2. `registerLlmApiFromProviders`：**未写 `models` 的 provider** 在 ApiRegistry 注册为空白名单，由后台 `ModelRegistry.discover()` 填充 `provider.models`；**写了 `models`** 则用 yaml 白名单。
+3. `createZhinAgent` 启动时 `loadCache()` 先恢复上次发现结果，再异步刷新 `/v1/models`。
+
+`agents.<name>.model`（如 `mimo-v2.5-pro`）须在发现列表中，或在中转 API 的 `/v1/models` 响应里出现；无需为每个模型手写 yaml，除非要锁定白名单。
+
+```yaml
+ai:
+  providers:
+    openai-main:
+      api: openai-completions
+      baseUrl: ${OPENAI_BASE_URL}
+      apiKey: ${OPENAI_API_KEY}
+      # models 省略 → 自动 GET /v1/models
+    cloudflare-flash:
+      api: cloudflare-workers-ai
+      models: ["@cf/zai-org/glm-4.7-flash"]  # 显式列表
+  agents:
+    zhin:
+      provider: openai-main
+      model: mimo-v2.5-pro
+```
 
 ## Model harness
 
@@ -267,7 +292,7 @@ src/
 │   ├── config.ts
 │   ├── prompt.ts
 │   ├── tool-runtime.ts              # 运行时工具收集与执行路径规划
-│   └── context-tools.ts             # chat_history, user_profile, spawn_task
+│   └── builtin-tools.ts             # chat_history（im_transcripts）, user_profile, spawn_task
 │
 ├── discovery/                       # ★ 文件化资源发现
 │   ├── index.ts

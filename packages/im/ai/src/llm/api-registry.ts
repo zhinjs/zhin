@@ -1,0 +1,245 @@
+import type { AIProvider } from '../types.js';
+import type { Context } from './types/context.js';
+import type { Model, ModelApi, ProviderInstanceConfig } from './types/model.js';
+import type { ThinkingLevel } from './types/agent-event.js';
+import type { AssistantMessage } from './types/agent-message.js';
+
+export interface StreamOptions {
+  signal?: AbortSignal;
+  temperature?: number;
+  maxTokens?: number;
+  sessionId?: string;
+  thinkingLevel?: ThinkingLevel;
+  onPayload?: (payload: unknown) => void;
+  onResponse?: (response: unknown) => void;
+}
+
+export type StreamFn = (
+  model: Model,
+  context: Context,
+  options?: StreamOptions,
+) => AssistantMessageEventStream;
+
+export type StreamSimpleFn = StreamFn;
+
+export interface ApiProviderRegistration {
+  api: ModelApi;
+  stream: StreamFn;
+  streamSimple?: StreamSimpleFn;
+}
+
+export interface AssistantStreamEvent {
+  type: 'text_delta' | 'thinking_delta' | 'toolcall_delta' | 'done' | 'error';
+  text?: string;
+  thinking?: string;
+  toolCall?: { id?: string; name?: string; arguments?: Record<string, unknown> };
+  message?: AssistantMessage;
+  error?: Error;
+}
+
+/** Async iterable + push subscription for assistant stream events. */
+export interface AssistantMessageEventStream extends AsyncIterable<AssistantStreamEvent> {
+  subscribe(listener: (event: AssistantStreamEvent) => void): () => void;
+}
+
+export interface RegisteredProvider {
+  config: ProviderInstanceConfig;
+  models: string[];
+}
+
+const apiProviders = new Map<ModelApi, ApiProviderRegistration>();
+const providerConfigs = new Map<string, RegisteredProvider>();
+
+let legacyProviderResolver: ((alias: string) => AIProvider | undefined) | undefined;
+
+/** @internal wired by register-api-layer */
+export function setLegacyProviderResolver(
+  resolver: ((alias: string) => AIProvider | undefined) | undefined,
+): void {
+  legacyProviderResolver = resolver;
+}
+
+export function getLegacyProviderResolver(): typeof legacyProviderResolver {
+  return legacyProviderResolver;
+}
+
+export function registerApiProvider(registration: ApiProviderRegistration): void {
+  apiProviders.set(registration.api, registration);
+}
+
+export function registerProviderInstance(
+  alias: string,
+  config: ProviderInstanceConfig,
+  models: string[] = [],
+): void {
+  providerConfigs.set(alias, { config, models });
+}
+
+export function getApiProvider(api: ModelApi): ApiProviderRegistration | undefined {
+  return apiProviders.get(api);
+}
+
+export function getProviderConfig(alias: string): RegisteredProvider | undefined {
+  return providerConfigs.get(alias);
+}
+
+export function getModel(providerAlias: string, modelId: string): Model {
+  const entry = providerConfigs.get(providerAlias);
+  if (!entry) {
+    throw new Error(`Unknown provider alias: ${providerAlias}`);
+  }
+  const { config, models: registered } = entry;
+  const live = legacyProviderResolver?.(providerAlias)?.models ?? [];
+  // 显式 models 配置 → 用注册表白名单；否则用 provider.listModels(/v1/models) 发现结果
+  const allowlist = registered.length > 0 ? registered : live;
+  if (allowlist.length > 0 && !allowlist.includes(modelId)) {
+    throw new Error(`Model ${modelId} not registered for provider ${providerAlias}`);
+  }
+  return {
+    id: modelId,
+    provider: providerAlias,
+    api: config.api,
+    baseUrl: config.baseUrl,
+    compat: config.compat,
+    reasoning: false,
+    input: ['text'],
+    contextWindow: 128_000,
+    maxTokens: 8_192,
+  };
+}
+
+export function clearApiRegistryForTests(): void {
+  apiProviders.clear();
+  providerConfigs.clear();
+  legacyProviderResolver = undefined;
+}
+
+export async function complete(
+  model: Model,
+  context: Context,
+  options?: StreamOptions,
+): Promise<AssistantMessage> {
+  const eventStream = stream(model, context, options);
+  let lastMessage: AssistantMessage | undefined;
+  for await (const event of eventStream) {
+    if (event.type === 'done' && event.message) {
+      lastMessage = event.message;
+    }
+    if (event.type === 'error') {
+      throw event.error ?? new Error('Stream failed');
+    }
+  }
+  if (!lastMessage) {
+    throw new Error('Stream ended without assistant message');
+  }
+  return lastMessage;
+}
+
+export function stream(
+  model: Model,
+  context: Context,
+  options?: StreamOptions,
+): AssistantMessageEventStream {
+  const registration = apiProviders.get(model.api);
+  if (!registration) {
+    throw new Error(`No ApiProvider registered for api: ${model.api}`);
+  }
+  return registration.stream(model, context, options);
+}
+
+export function streamSimple(
+  model: Model,
+  context: Context,
+  options?: StreamOptions,
+): AssistantMessageEventStream {
+  const registration = apiProviders.get(model.api);
+  if (!registration) {
+    throw new Error(`No ApiProvider registered for api: ${model.api}`);
+  }
+  const fn = registration.streamSimple ?? registration.stream;
+  return fn(model, context, options);
+}
+
+export async function completeSimple(
+  model: Model,
+  context: Context,
+  options?: StreamOptions,
+): Promise<AssistantMessage> {
+  const eventStream = streamSimple(model, context, options);
+  let lastMessage: AssistantMessage | undefined;
+  for await (const event of eventStream) {
+    if (event.type === 'done' && event.message) {
+      lastMessage = event.message;
+    }
+    if (event.type === 'error') {
+      throw event.error ?? new Error('Stream failed');
+    }
+  }
+  if (!lastMessage) {
+    throw new Error('Stream ended without assistant message');
+  }
+  return lastMessage;
+}
+
+/** Build a push-based event stream from an async producer. */
+export function createAssistantMessageEventStream(
+  producer: (push: (event: AssistantStreamEvent) => void) => Promise<AssistantMessage>,
+): AssistantMessageEventStream {
+  const listeners = new Set<(event: AssistantStreamEvent) => void>();
+  let done = false;
+  let error: Error | undefined;
+  let finalMessage: AssistantMessage | undefined;
+  const queue: AssistantStreamEvent[] = [];
+  let notify: (() => void) | undefined;
+
+  const push = (event: AssistantStreamEvent) => {
+    queue.push(event);
+    for (const listener of listeners) {
+      listener(event);
+    }
+    notify?.();
+  };
+
+  const promise = producer(push)
+    .then((message) => {
+      finalMessage = message;
+      push({ type: 'done', message });
+      done = true;
+      return message;
+    })
+    .catch((err: unknown) => {
+      error = err instanceof Error ? err : new Error(String(err));
+      push({ type: 'error', error });
+      done = true;
+    });
+
+  void promise;
+
+  return {
+    subscribe(listener) {
+      listeners.add(listener);
+      for (const event of queue) {
+        listener(event);
+      }
+      return () => listeners.delete(listener);
+    },
+    async *[Symbol.asyncIterator]() {
+      let index = 0;
+      while (true) {
+        while (index < queue.length) {
+          yield queue[index++]!;
+        }
+        if (done) {
+          if (error) throw error;
+          return;
+        }
+        await new Promise<void>((resolve) => {
+          notify = resolve;
+        });
+        notify = undefined;
+      }
+    },
+  };
+}
+
+export type { AssistantMessage };

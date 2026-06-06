@@ -1,20 +1,24 @@
 import type {
   ChatMessage,
-  ChatHistoryContext,
-  ChatHistoryQuery,
   MemoryIMSessionStore,
   IMSessionStore,
+  MemoryAgentSessionStore,
+  AgentSessionStore,
+  ContextRepository,
   CreateIMSessionInput,
+  CreateAgentSessionInput,
 } from '@zhin.js/ai';
-import type { ToolContext, SenderRole } from '@zhin.js/core';
+import { agentMessagesToOpenAi } from '@zhin.js/ai';
+import type { ToolContext } from '@zhin.js/core';
 import {
   formatSenderRolesForLabel,
   stripUserSpoofedSenderPrefix,
 } from '@zhin.js/core';
 
 export interface SessionIODeps {
-  chatHistory: ChatHistoryContext | null;
   imSessionStore: IMSessionStore | MemoryIMSessionStore;
+  agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
+  contextRepository: ContextRepository;
 }
 
 function sanitizeSenderAttr(value: string): string {
@@ -50,7 +54,7 @@ export function formatUserContentForSession(
 export function buildSessionCreateInput(
   sessionKey: string,
   context: Pick<ToolContext, 'platform' | 'botId' | 'scope' | 'sceneId'>,
-): CreateIMSessionInput {
+): CreateIMSessionInput & CreateAgentSessionInput {
   return {
     session_key: sessionKey,
     platform: context.platform || '',
@@ -60,53 +64,58 @@ export function buildSessionCreateInput(
   };
 }
 
-export function buildChatHistoryQuery(
-  sessionId: string,
+export function buildImTranscriptQuery(
   context: Pick<ToolContext, 'platform' | 'botId' | 'sceneId'>,
-): ChatHistoryQuery {
+): import('@zhin.js/ai').ImTranscriptQuery {
   return {
-    sessionId,
     platform: context.platform || '',
     botId: context.botId || '',
     sceneId: context.sceneId || '',
   };
 }
 
-export async function buildHistoryMessages(
+export async function buildHistoryMessagesFromContext(
   deps: SessionIODeps,
   sessionId: string,
-  context: Pick<ToolContext, 'platform' | 'botId' | 'sceneId'>,
   currentUserContent: string,
 ): Promise<ChatMessage[]> {
-  const history =
-    deps.chatHistory != null
-      ? await deps.chatHistory.buildHistoryMessages(
-          buildChatHistoryQuery(sessionId, context),
-        )
-      : [];
+  const loaded = await deps.contextRepository.loadContext(sessionId);
+  const history = agentMessagesToOpenAi(loaded.messages);
   return [...history, { role: 'user', content: currentUserContent }];
 }
 
 /**
  * 在 `getOrCreateActive` 之前调用：是否视为新会话纪元（用于 ai.session.new）。
- * 须在 beginTurnSession 之前判定，否则同轮创建会令 hasAnySession 恒为 true。
  */
 export async function resolveSessionIsNewBeforeCreate(
   deps: SessionIODeps,
   sessionKey: string,
-  context: Pick<ToolContext, 'platform' | 'botId' | 'sceneId'>,
 ): Promise<boolean> {
-  if (await deps.imSessionStore.hasAnySession(sessionKey)) return false;
-  if (!deps.chatHistory) return true;
-  const hasMessages = await deps.chatHistory.hasStoredMessages(
-    buildChatHistoryQuery('new-check', context),
-  );
-  return !hasMessages;
+  const active = await deps.agentSessionStore.findActive(sessionKey);
+  return !active;
+}
+
+export async function beginTurnSession(
+  deps: SessionIODeps,
+  sessionKey: string,
+  context: Pick<ToolContext, 'platform' | 'botId' | 'scope' | 'sceneId'>,
+): Promise<{ sessionKey: string; sessionId: string }> {
+  const input = buildSessionCreateInput(sessionKey, context);
+  const record = await deps.agentSessionStore.getOrCreateActive(input);
+  return { sessionKey, sessionId: record.session_id };
 }
 
 export async function touchSession(
   deps: SessionIODeps,
   sessionId: string,
 ): Promise<void> {
-  await deps.imSessionStore.touch(sessionId);
+  await deps.agentSessionStore.touch(sessionId);
+}
+
+export async function archiveSessionByKey(
+  deps: SessionIODeps,
+  sessionKey: string,
+): Promise<boolean> {
+  await deps.contextRepository.archiveSession(sessionKey);
+  return deps.agentSessionStore.archiveByKey(sessionKey);
 }

@@ -39,7 +39,7 @@ describe('create-zhin -y Stable 默认值', () => {
     expect(config).not.toContain('toolSearch:');
     expect(config).toContain('agents:');
     expect(config).toContain('provider: ollama');
-    expect(config).toContain('driver: ollama');
+    expect(config).toContain('api: ollama-chat');
     expect(config).not.toContain('defaultProvider:');
     expect(config).not.toContain('inbox:');
     expect(config).not.toContain('database:');

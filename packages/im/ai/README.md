@@ -56,7 +56,52 @@ if (hasGenerateImage(zhipu)) {
 
 `zhin.config.yml` 可在 `ai.imageGeneration` 或 `ai.providers.<alias>.imageGeneration` 配置默认项（`watermarkEnabled`、`defaultModel`、`defaultSize`；Cloudflare 另有 `numSteps`）。
 
-### Agent（Agent 引擎）
+### agentLoop（推荐 — LLM 统一入口）
+
+IM 栈与 `@zhin.js/agent` 的生产路径均经 **`agentLoop`**（ADR 0009）。Provider 须配置 **`api`**（如 `openai-completions`），由 `registerLlmApiFromProviders` 注册到 ApiRegistry。
+
+```typescript
+import {
+  agentLoop,
+  agentContextFrom,
+  createUserMessage,
+  convertLegacyTools,
+  getModel,
+  registerLlmApiFromProviders,
+} from '@zhin.js/ai'
+
+// 未在 yaml 配置 models 时传 []；白名单由 ModelRegistry 发现后写入 provider.models，
+// getModel() 会读取实时列表（OpenAI 兼容：GET /v1/models）
+registerLlmApiFromProviders([{
+  alias: provider.name,
+  provider,
+  config: { api: 'openai-completions' },
+  models: [],
+}], (alias) => provider)
+
+const model = getModel(provider.name, 'gpt-4o')
+const context = agentContextFrom({
+  systemPrompt: '你是一个助手',
+  messages: [],
+  tools: convertLegacyTools([weatherTool]),
+})
+
+for await (const event of agentLoop(
+  [createUserMessage('今天北京天气怎么样？')],
+  context,
+  { model, maxIterations: 5, executeTool: async (tc) => { /* ... */ } },
+)) {
+  if (event.type === 'agent_end') console.log(event.messages)
+}
+```
+
+业务插件通常不直接调用 `agentLoop`，而是通过 **`ZhinAgent`**、**`AIService.runAgent`** 或 **`@zhin.js/agent` 的 turn runner**。
+
+### Agent（遗留 — 单测 / 直接 import）
+
+::: warning 遗留 API
+`createAgent` / `Agent.run()` 仍保留在 `@zhin.js/ai`，供包内单测与历史代码直接 import。**新代码请使用 `agentLoop` 或 `@zhin.js/agent` 的封装。**
+:::
 
 无状态的多轮 tool-calling 循环引擎：
 
@@ -89,32 +134,35 @@ const result = await agent.run('今天北京天气怎么样？')
 
 `createAgent(provider, config)` 的 `config` 为 `Omit<AgentConfig, 'provider'>`；`agent.run()` 接受用户字符串与可选历史 `ChatMessage[]`。Agent 支持自动模型降级：主模型失败时依次尝试 `modelFallbacks`。
 
-### ModelRegistry（模型注册表）
+### ModelRegistry 与 ApiRegistry（模型发现 + agentLoop 白名单）
 
-自动发现、缓存和智能选择 Provider 上的可用模型：
+**两层协作**（IM 主路径由 `@zhin.js/agent` 的 `AIService` / `createZhinAgent` 接线）：
+
+| 层 | 职责 |
+|----|------|
+| **ModelRegistry** | 启动时 `discover()` → `provider.listModels()`；缓存到 `data/model-registry-cache.json`；Tier 评分与 `selectModel` |
+| **ApiRegistry**（`getModel`） | `agentLoop` 校验模型是否可用；**未配置 yaml `models` 时**白名单来自发现后的 `provider.models`，而非 Provider 类内硬编码默认列表 |
 
 ```typescript
 import { ModelRegistry } from '@zhin.js/ai'
 
-const registry = new ModelRegistry() // 可选 dataDir，默认 data/model-registry-cache.json
+const registry = new ModelRegistry() // 默认 data/model-registry-cache.json
 
-// 自动发现可用模型
-const models = await registry.discover(provider)
+registry.loadCache() // 二次启动可先灌入 provider.models
 
-// 智能选择（按 Tier 评分 0-100）
+const models = await registry.discover(provider) // 写回 provider.models 并 saveCache
+
 const best = registry.selectModel(provider.name, 'chat')
-const vision = registry.selectModel(provider.name, 'vision')
-
-// 获取候选列表（用于降级）
 const candidates = registry.selectModels(provider.name, 'chat', 5)
 ```
 
-特性：
-- 调用 Provider 的 `listModels()` 自动发现模型
-- Ollama: `/api/show` 获取详细参数量和量化信息
-- OpenAI 兼容 API: 启发式推断（支持 `prefix/model-name` 中转格式）
-- Tier 评分（0-100）实现智能排序（claude-opus 96, gpt-4o 88, deepseek-r1 85...）
-- 本地缓存 `data/model-registry-cache.json` 避免重复 API 调用
+发现来源：
+
+- **Ollama**：`/api/tags`；详情 `/api/show`（参数量、量化）
+- **OpenAI 兼容**（含中转/聚合）：`GET {baseUrl}/models`；名称启发式推断能力
+- **显式 yaml `models`**：跳过自动发现，直接作为 ApiRegistry 白名单（如 Cloudflare Workers AI）
+
+冷启动：发现完成前若注册表白名单为空，`getModel` 不拦截；发现完成后按 `provider.models` 校验。
 
 ### SessionManager（会话管理）
 
@@ -136,41 +184,32 @@ const dbSessionManager = createDatabaseSessionManager(databaseModel, {
 })
 ```
 
-### ContextManager（上下文管理）
+### 持久化与上下文（ADR 0009）
 
-管理消息记录和上下文摘要：
+IM 主路径数据模型（见 [docs/advanced/ai.md](../../docs/advanced/ai.md)）：
+
+| 模块 | 表 / 存储 | 用途 |
+|------|-----------|------|
+| `ImTranscriptStore` | `im_transcripts` | 入站/出站 IM 扁平静态行；`chat_history` 工具按需查询 |
+| `ContextRepository` | `agent_messages` | epoch 内 LLM `AgentMessage[]`（含 tool 轮） |
+| `AgentSessionStore` | `agent_sessions` | `session_key` → 活跃 `session_id`；`/new` 归档 |
+| `SessionManager` | — | **遗留** API；新代码用 `AgentSessionStore` + `ContextRepository` |
 
 ```typescript
 import {
-  createContextManager,
-  CHAT_MESSAGE_MODEL,
-  CONTEXT_SUMMARY_MODEL,
+  createMemoryContextRepository,
+  MemoryImTranscriptStore,
+  type ContextRepository,
+  type ImTranscriptStore,
 } from '@zhin.js/ai'
 
-// 需先通过 DatabaseFeature 注册 CHAT_MESSAGE_MODEL / CONTEXT_SUMMARY_MODEL
-const contextManager = createContextManager(messageModel, summaryModel, {
-  enabled: true,
-  maxRecentMessages: 100,
-  summaryThreshold: 50,
-  keepAfterSummary: 10,
-  maxContextTokens: 4000,
-})
+const { repository, sessionStore } = createMemoryContextRepository({ tailMessageLimit: 200 })
+const transcripts = new MemoryImTranscriptStore()
 ```
 
-### ConversationMemory（对话记忆）
+### ContextManager / ConversationMemory（辅助）
 
-双层记忆系统：短期滑动窗口 + 长期链式摘要。
-
-```typescript
-import { ConversationMemory } from '@zhin.js/ai'
-
-const memory = new ConversationMemory({
-  slidingWindowSize: 5,
-  minTopicRounds: 3,
-  topicChangeThreshold: 0.5,
-})
-memory.setProvider(provider) // 摘要生成需要 Provider
-```
+`ContextManager`（`context_summaries`）与 `ConversationMemory`（话题检测 + 链式摘要）仍可用于场景级摘要或实验路径；**ZhinAgent 生产回合的历史以 `ContextRepository` 为准**，不再双写旧 `chat_messages` / `ai_messages` 表。
 
 ### Compaction（上下文压缩）
 
@@ -301,12 +340,13 @@ const tools = cache.filter('天气查询', allTools, { maxTools: 10 })
 
 | 导出 | 说明 |
 |------|------|
+| `agentLoop` / `agentContextFrom` / `getModel` | LLM 统一回合引擎（推荐） |
+| `registerLlmApiFromProviders` / `ModelRegistry` | ApiRegistry 注册 + `/v1/models` 发现与白名单 |
+| `ContextRepository` / `AgentSessionStore` / `ImTranscriptStore` | ADR 0009 持久化原语 |
 | `OpenAIProvider` / `AnthropicProvider` / `OllamaProvider` | LLM 提供者 |
-| `Agent` / `createAgent` | Agent 引擎 |
-| `ModelRegistry` | 模型发现与 Tier 选择 |
-| `SessionManager` | 会话管理 |
-| `ContextManager` / `createContextManager` | 上下文管理 |
-| `ConversationMemory` | 对话记忆 |
+| `Agent` / `createAgent` | **遗留** Agent 引擎（单测 / 直接 import） |
+| `SessionManager` | 会话管理（遗留） |
+| `ContextManager` / `ConversationMemory` | 场景摘要 / 话题记忆（辅助） |
 | `compactSession` / `pruneHistoryForContext` / `microCompactMessages` | 上下文压缩 |
 | `CostTracker` | Token 用量与成本追踪 |
 | `FileStateCache` | 文件状态缓存 |

@@ -5,12 +5,12 @@ import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { ZhinAgentConfig } from './config.js';
 import { KEYWORD_TRIGGERS } from './config.js';
 import {
-  createChatHistoryTool,
+  createImTranscriptHistoryTool,
   createUserProfileTool,
 } from './builtin-tools.js';
-import type { ChatHistoryContext } from '@zhin.js/ai';
+import type { ImTranscriptStore, MemoryImTranscriptStore } from '@zhin.js/ai';
 import type { UserProfileStore } from '../user-profile.js';
-import { buildChatHistoryQuery } from './session-io.js';
+import { buildImTranscriptQuery } from './session-io.js';
 import { runPreExecutableTools, type PreExecuteResult } from './pre-exec.js';
 import { sharedToolSelection } from '../orchestrator/tool-selection.js';
 import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from '../reserved-tools.js';
@@ -26,7 +26,7 @@ export interface CollectRuntimeToolsOptions {
   externalRegistered: Map<string, AgentTool>;
   sessionId: string;
   userId: string;
-  chatHistory: ChatHistoryContext | null;
+  imTranscriptStore: ImTranscriptStore | MemoryImTranscriptStore;
   userProfiles: UserProfileStore;
   /** MCP tools from connected servers (merged after skill/tool selection). */
   mcpTools?: AgentTool[];
@@ -45,11 +45,11 @@ export function collectRuntimeTools(options: CollectRuntimeToolsOptions): AgentT
     names.add(tool.name);
   };
 
-  if (KEYWORD_TRIGGERS.chatHistory.test(options.content) && options.chatHistory) {
+  if (KEYWORD_TRIGGERS.chatHistory.test(options.content)) {
     add(
-      createChatHistoryTool(
-        options.chatHistory,
-        buildChatHistoryQuery(options.sessionId, options.context),
+      createImTranscriptHistoryTool(
+        options.imTranscriptStore,
+        buildImTranscriptQuery(options.context),
       ),
     );
   }

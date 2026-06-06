@@ -9,6 +9,9 @@
 | 文档 | 说明 |
 |------|------|
 | [架构概览](/architecture-overview) | 分层（basic → kernel → ai → core → agent → zhin）、消息流程图 |
+| [ADR 0009 — agentLoop 统一栈](/adr/0009-pi-aligned-ai-agent-core) | `im_transcripts` / `agent_messages`、agentLoop 迁移 |
+| [AI 模块](/advanced/ai) | `agents` 配置、ModelRegistry + `getModel`、工具与记忆 |
+| [packages 子包 README](https://github.com/zhinjs/zhin/tree/main/packages/README.md) | 各 npm 包 README 索引 |
 | [仓库结构](/contributing/repo-structure) | pnpm workspace、`src→lib` / `client→dist` |
 | [Harness 工程](/contributing/harness-engineering) | 发送链路、层级依赖、CI 检查 |
 | [Agent 上下文块](/architecture/agent-context-blocks) | 系统提示词分段与贡献者约定 |
@@ -27,7 +30,8 @@
 | 出站字段规范化（cron 等） | `packages/im/core/src/built/queue-im-field-contract.ts` |
 | Agent 编排 | `packages/im/agent/src/orchestrator/` |
 | 安全策略 | `packages/im/agent/src/security/` |
-| AI 引擎 | `packages/im/ai/src/agent/` |
+| LLM 统一栈 | `packages/im/ai/src/llm/`（`agentLoop`、`api-registry`） |
+| IM 落库 | `packages/im/zhin/src/setup/register-chat-message-store.ts` |
 | Host Router | `packages/host/router/src/` |
 | Host API | `packages/host/api/src/` |
 

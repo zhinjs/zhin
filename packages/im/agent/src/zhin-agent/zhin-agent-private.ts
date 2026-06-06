@@ -4,8 +4,14 @@
  */
 import type { AIProvider, AgentTool, ContentPart, Usage } from '@zhin.js/ai';
 import type { OutputElement } from '@zhin.js/ai';
-import type { ChatHistoryContext } from '@zhin.js/ai';
-import type { IMSessionStore, MemoryIMSessionStore } from '@zhin.js/ai';
+import type {
+  AgentSessionStore,
+  ContextRepository,
+  IMSessionStore,
+  ImTranscriptStore,
+  MemoryAgentSessionStore,
+  MemoryIMSessionStore,
+} from '@zhin.js/ai';
 import type { ModelRegistry } from '@zhin.js/ai';
 import type { Plugin } from '@zhin.js/core';
 import type { Tool, ToolContext } from '../orchestrator/types.js';
@@ -18,11 +24,13 @@ import type { SessionManager } from '@zhin.js/ai';
 import type { RateLimiter } from '@zhin.js/ai';
 import type { ZhinAgentEventEmitter } from './event-emitter.js';
 import type { TurnTracker } from './turn-tracker.js';
+import type { SubagentResultSender } from '../subagent.js';
 import type { DeferredWorkerRunner } from '../deferred-worker-runner.js';
 import type { ZhinAgentConfig, OnChunkCallback } from './config.js';
 import type { PhaseTraceConfig } from './phase-trace.js';
 import type { ZhinAgentTurnMetrics } from './turn-metrics.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
+import type { PromptController } from './prompt-controller.js';
 
 export interface ZhinAgentPrivate {
   readonly config: Required<ZhinAgentConfig>;
@@ -32,8 +40,10 @@ export interface ZhinAgentPrivate {
   readonly skillRegistry: SkillRegistry | null;
   readonly orchestrator: AgentOrchestrator | null;
   readonly sessions: SessionManager;
-  readonly chatHistory: ChatHistoryContext | null;
   readonly imSessionStore: IMSessionStore | MemoryIMSessionStore;
+  readonly agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
+  readonly contextRepository: ContextRepository;
+  readonly imTranscriptStore: ImTranscriptStore;
   readonly memory: ConversationMemory;
   readonly externalTools: Map<string, AgentTool>;
   readonly userProfiles: UserProfileStore;
@@ -48,7 +58,11 @@ export interface ZhinAgentPrivate {
   deferredCatalog: AgentTool[];
   readonly deferredWorkerRunner: DeferredWorkerRunner;
   lastToolSearchDeferredStats?: string;
-  readonly turnTracker: TurnTracker;
+  readonly promptController: PromptController;
+  getActiveTurnTracker(): TurnTracker | undefined;
+  runInTurnContext<T>(turnId: string, fn: () => Promise<T>): Promise<T>;
+  setDeferredResultSender(sender: SubagentResultSender): void;
+  getDeferredResultSender(): SubagentResultSender | null;
 
   waitForMemoryPersistence(): Promise<void>;
   beginActiveTurn(): void;

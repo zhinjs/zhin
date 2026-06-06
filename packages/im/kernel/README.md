@@ -22,7 +22,7 @@ basic/ (@zhin.js/logger, schema, database, cli)
 zhin.js
 ```
 
-详见 [架构文档索引](../../docs/architecture/README.md) 与 [架构概览](../../docs/architecture-overview.md)。
+详见 [架构文档索引](../../docs/architecture/README.md)、[架构概览](../../docs/architecture-overview.md) 与上层包 README（[`packages/README.md`](../../README.md)）。
 
 ## 核心模块
 

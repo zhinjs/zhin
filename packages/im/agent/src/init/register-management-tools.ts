@@ -22,7 +22,7 @@ export function registerManagementTools(refs: AIServiceRefs): void {
       });
 
     const clearSessionTool = new ZhinTool('ai_clear')
-      .desc('归档当前对话会话（保留 chat_messages 审计；下次 @ 开新纪元）')
+      .desc('归档当前对话会话（保留 im_transcripts 审计；下次 @ 开新纪元）')
       .keyword('清除', '清空', '重置', 'clear', 'reset', 'new')
       .tag('ai', 'session')
       .execute(async (_args, context) => {

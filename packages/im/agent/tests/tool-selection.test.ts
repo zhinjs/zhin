@@ -25,7 +25,6 @@ function makeConfig(overrides: Partial<ZhinAgentConfig> = {}): Required<ZhinAgen
     rateLimit: {},
     toneAwareness: true,
     chatModel: '',
-    chatLiteModel: '',
     visionModel: '',
     contextTokens: 4096,
     maxHistoryShare: 0.5,

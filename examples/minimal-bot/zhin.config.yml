@@ -16,7 +16,7 @@ ai:
   enabled: true
   providers:
     ollama:
-      driver: ollama
+      api: ollama-chat
       host: http://127.0.0.1:11434
   agents:
     zhin:

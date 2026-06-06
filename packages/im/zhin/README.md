@@ -30,14 +30,16 @@ plugins:
   - "@zhin.js/host-api"
 
 ai:
-  enabled: true
-  defaultProvider: ollama
   providers:
     ollama:
+      api: ollama-chat
       host: "http://127.0.0.1:11434"
-      # models 可省略 — 自动发现
+      # models 可省略 — ModelRegistry 自动 listModels
+  agents:
+    zhin:
+      provider: ollama
+      model: qwen3:14b   # 或省略由 Tier 选择；须出现在发现列表中
   agent:
-    chatModel: ''
     execSecurity: allowlist
     execPreset: custom
     execApprovalMode: ask
@@ -77,11 +79,22 @@ addTool(
 | 来源 | 内容 |
 |------|------|
 | `@zhin.js/core` | `export *` — Plugin、Adapter、MessageDispatcher、Feature、Provider re-export 等 **全部 Core API** |
-| `@zhin.js/agent` | **部分** re-export：`initAgentModule`（`initAIModule` 别名）、`ZhinAgent`、`AIService`、`createAgent`、`SessionManager`、Hook、Bootstrap、压缩/输出 helper 等（见源码列表，非 `export *`） |
+| `@zhin.js/agent` | **部分** re-export：`initAgentModule`（`initAIModule` 别名）、`ZhinAgent`、`AIService`、`ServiceAgent` 类型、`SessionManager`、Hook、Bootstrap、压缩/输出 helper 等（legacy `createAgent` 仍 re-export 自 `@zhin.js/ai`） |
 | `./agent-orchestrator.js` | `runPipeline`、`runParallel`、`route` 及对应类型 |
 | `@zhin.js/logger` | `logger` 默认导出与 `formatCompact` 等 |
 
 未从本包导出的 Agent 能力（如 `AgentOrchestrator`、完整 builtin 工具工厂、`ExecPolicy` 细节）请直接 `import` **`@zhin.js/agent`**。Host 路由/API 来自可选插件 **`@zhin.js/host-router`** / **`@zhin.js/host-api`**，不在 `zhin.js` 包体内。
+
+## 运行时挂载（本包特有）
+
+Node 运行时（`src/runtime/node.ts`）在 IM 栈之上额外注册：
+
+| 能力 | 说明 |
+|------|------|
+| `registerChatMessageStore` | `message.receive` / `message.send` → `im_transcripts`（ADR 0009）；LLM 历史由 `@zhin.js/agent` 写 `agent_messages` |
+| `initAgentModule` | 挂载 `ctx.ai`、`ctx.agent`、DB 模型（`agent_*` + `im_transcripts`） |
+
+详见 [AI 模块文档](https://zhin.js.org/advanced/ai) 与 [架构概览](../../docs/architecture-overview.md)。
 
 ## 核心概念
 
@@ -95,7 +108,7 @@ addTool(
 
 ## AI 与多 Agent
 
-本包在此层提供 **多 Agent 编排** API（基于 `ctx.ai.createAgent()`）：
+本包在此层提供 **多 Agent 编排** API（内部调用 `ai.runAgent` → **agentLoop**）：
 
 - **runPipeline(ai, steps, initialInput)** — 多步串联，每步输出作为下一步输入
 - **runParallel(ai, tasks)** — 多 Agent 并行执行，返回 `Record<key, 输出>`

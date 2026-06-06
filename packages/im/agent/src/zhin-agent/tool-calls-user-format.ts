@@ -50,6 +50,9 @@ function formatRunDeferredTaskResult(result: unknown): string | undefined {
   const raw = asString(result);
   const parsed = parseRunDeferredPayload(raw);
   if (parsed) {
+    if (parsed.status === 'delegated') {
+      return undefined;
+    }
     if (parsed.status === 'error') {
       return parsed.error || '子任务执行失败。';
     }

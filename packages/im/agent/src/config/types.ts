@@ -13,7 +13,8 @@ export type ProviderDriver =
   | 'cloudflare';
 
 export interface ProviderInstanceConfig extends ProviderConfig {
-  driver: ProviderDriver | string;
+  /** LLM protocol id (ADR 0009 D1), e.g. openai-completions */
+  api: string;
 }
 
 export interface RouteMatchConfig {

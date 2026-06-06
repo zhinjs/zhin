@@ -1,8 +1,12 @@
 /**
- * 将 chat_messages / ai_sessions / ai_summaries 注入 ZhinAgent（可重复调用）。
+ * Wire agent_* / im_transcripts stores into ZhinAgent (ADR 0009).
  */
 import type { AIConfig } from '@zhin.js/core';
-import { ChatHistoryContext, IMSessionStore } from '@zhin.js/ai';
+import {
+  AgentSessionStore,
+  DatabaseContextRepository,
+  DatabaseImTranscriptStore,
+} from '@zhin.js/ai';
 import type { AIServiceRefs } from './shared-refs.js';
 
 export async function activateAiDatabaseStorage(
@@ -13,23 +17,34 @@ export async function activateAiDatabaseStorage(
   if (!refs.zhinAgent) return;
   if (config.sessions?.useDatabase === false) return;
 
-  const sessionModel = db.models?.get('ai_sessions');
-  const chatModel = db.models?.get('chat_messages');
-  const sumModel = db.models?.get('ai_summaries');
+  const agentSessionModel = db.models?.get('agent_sessions');
+  const agentMessageModel = db.models?.get('agent_messages');
+  const agentSummaryModel = db.models?.get('agent_summaries');
+  const imTranscriptModel = db.models?.get('im_transcripts');
 
-  if (sessionModel) {
-    const imStore = new IMSessionStore(sessionModel, {
+  let agentSessionStore: AgentSessionStore | undefined;
+  if (agentSessionModel) {
+    agentSessionStore = new AgentSessionStore(agentSessionModel, {
       sessionIdleArchiveMs: config.sessions?.sessionIdleArchiveMs,
     });
-    refs.zhinAgent.setIMSessionStore(imStore);
+    refs.zhinAgent.setAgentSessionStore(agentSessionStore);
   }
 
-  if (chatModel && sumModel) {
-    const history = new ChatHistoryContext(chatModel, sumModel, {
-      coldStartMaxMessages: config.sessions?.coldStartMaxMessages,
-      coldStartMaxAgeMs: config.sessions?.coldStartMaxAgeMs,
-    });
-    refs.zhinAgent.setChatHistory(history);
+  if (agentMessageModel && agentSummaryModel && agentSessionStore) {
+    refs.zhinAgent.setContextRepository(
+      new DatabaseContextRepository(
+        agentMessageModel,
+        agentSummaryModel,
+        agentSessionStore,
+        { tailMessageLimit: config.sessions?.coldStartMaxMessages },
+      ),
+    );
+  }
+
+  if (imTranscriptModel) {
+    refs.zhinAgent.setImTranscriptStore(new DatabaseImTranscriptStore(imTranscriptModel, {
+      searchMaxAgeMs: config.sessions?.coldStartMaxAgeMs,
+    }));
   }
 
   const profileModel = db.models?.get('ai_user_profiles');

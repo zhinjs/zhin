@@ -5,45 +5,43 @@
  * 由 ZhinAgent.process() 按需创建并注入到工具列表中。
  */
 
-import type { ToolContext } from '@zhin.js/core';
-import type { AgentTool } from '@zhin.js/core';
-import type { ChatHistoryContext, ChatHistoryQuery, ChatHistorySearchHit } from '@zhin.js/ai';
+import type { AgentTool, ToolContext } from '@zhin.js/core';
+import type { ImTranscriptQuery, ImTranscriptSearchHit, ImTranscriptStore, MemoryImTranscriptStore } from '@zhin.js/ai';
 import type { UserProfileStore } from '../user-profile.js';
 
 export { createSpawnTaskTool } from '../builtin/spawn-task-tool.js';
 
-function formatHitLine(hit: ChatHistorySearchHit): string {
-  const role = hit.role === 'user' ? '用户' : '助手';
+function formatTranscriptHitLine(hit: ImTranscriptSearchHit): string {
+  const role = hit.direction === 'inbound' ? '用户' : '助手';
   const time = new Date(hit.time).toLocaleString('zh-CN');
-  const who = hit.senderName && hit.role === 'user' ? ` (${hit.senderName})` : '';
-  return `[${time}] ${role}${who}: ${hit.content}`;
+  const who = hit.senderName && hit.direction === 'inbound' ? ` (${hit.senderName})` : '';
+  return `[${time}] ${role}${who}: ${hit.body}`;
 }
 
-function formatToolResult(
-  result: { summary: string | null; messages: ChatHistorySearchHit[] },
+function formatTranscriptToolResult(
+  result: { messages: ImTranscriptSearchHit[] },
   header: string,
 ): string {
   let output = header;
-  if (result.summary) {
-    output += `\n\n📋 对话摘要：\n${result.summary}`;
-  }
   if (result.messages.length > 0) {
-    output += `\n\n💬 聊天记录：\n${result.messages.map(formatHitLine).join('\n')}`;
+    output += `\n\n💬 聊天记录：\n${result.messages.map(formatTranscriptHitLine).join('\n')}`;
   } else {
     output += '\n\n未找到相关聊天记录。';
   }
   return output;
 }
 
-export function createChatHistoryTool(
-  chatHistory: ChatHistoryContext,
-  query: ChatHistoryQuery,
+type TranscriptHistoryReader = Pick<ImTranscriptStore, 'search' | 'listRecent'> | Pick<MemoryImTranscriptStore, 'search' | 'listRecent'>;
+
+export function createImTranscriptHistoryTool(
+  store: TranscriptHistoryReader,
+  query: ImTranscriptQuery,
 ): AgentTool {
   return {
     name: 'chat_history',
     source: 'builtin:context',
     description:
-      '从数据库按需查询本场景历史聊天（platform+bot+群/私聊）。支持关键词模糊搜索；keyword 留空则返回最近若干条。当用户问「之前聊过什么」「我们讨论过什么」时使用。',
+      '从 im_transcripts 按需查询本场景历史聊天（platform+bot+群/私聊）。支持关键词模糊搜索 body；keyword 留空则返回最近若干条。当用户问「之前聊过什么」「我们讨论过什么」时使用。',
     parameters: {
       type: 'object',
       properties: {
@@ -67,15 +65,15 @@ export function createChatHistoryTool(
           : 10;
 
       if (keyword.trim()) {
-        const result = await chatHistory.searchMessages(query, keyword, limit);
-        return formatToolResult(
+        const result = await store.search(query, keyword, limit);
+        return formatTranscriptToolResult(
           result,
           `关键词「${keyword.trim()}」的搜索结果（最多 ${limit} 条）：`,
         );
       }
 
-      const result = await chatHistory.listRecentMessages(query, limit);
-      return formatToolResult(result, `最近 ${limit} 条聊天记录：`);
+      const result = await store.listRecent(query, limit);
+      return formatTranscriptToolResult(result, `最近 ${limit} 条聊天记录：`);
     },
   };
 }
@@ -106,8 +104,10 @@ export function createUserProfileTool(userId: string, profiles: UserProfileStore
     },
     tags: ['profile', '偏好', '用户', '个性化', '记住'],
     keywords: ['我叫', '我的名字', '记住我', '我喜欢', '我偏好', '我习惯', '叫我', '我是'],
-    async execute(args: Record<string, any>) {
-      const { action, key, value } = args;
+    async execute(args: Record<string, unknown>) {
+      const action = typeof args.action === 'string' ? args.action : '';
+      const key = typeof args.key === 'string' ? args.key : '';
+      const value = typeof args.value === 'string' ? args.value : '';
 
       switch (action) {
         case 'get': {

@@ -9,12 +9,15 @@
 ```yaml
 # zhin.config.yml 中启用 AI
 ai:
-  enabled: true
-  defaultProvider: ollama
   providers:
     ollama:
-      baseURL: "http://localhost:11434"
-      model: "qwen2.5:7b"
+      api: ollama-chat
+      host: "http://127.0.0.1:11434"
+      # models 可省略 — 自动 listModels
+  agents:
+    zhin:
+      provider: ollama
+      model: qwen3:8b
 ```
 
 [了解更多 →](./ai)

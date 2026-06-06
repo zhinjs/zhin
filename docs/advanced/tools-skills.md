@@ -300,7 +300,7 @@ parameters:
 | `web_search` | 网页搜索 |
 | `web_fetch` | 抓取网页内容 |
 | `ask_user` | 向用户提问并等待回答 |
-| `chat_history` | 查询对话历史（关键词触发） |
+| `chat_history` | 按需查 `im_transcripts`（`keyword` + `limit`；关键词触发注入） |
 | `user_profile` | 读写用户偏好（关键词触发） |
 | `schedule_followup` | 安排定时跟进提醒（关键词触发） |
 | `spawn_task` | 创建后台子任务（关键词触发） |

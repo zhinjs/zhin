@@ -1,5 +1,5 @@
 /**
- * Upgrade AI components when DB becomes ready (chat_messages + ai_sessions + ai_summaries).
+ * Upgrade AI components when DB becomes ready (agent_* + im_transcripts).
  */
 import './types.js';
 import { getPlugin } from '@zhin.js/core';
@@ -38,7 +38,7 @@ export function registerDbUpgrade(refs: AIServiceRefs): void {
       if (config.sessions?.useDatabase === false) return;
 
       await activateAiDatabaseStorage(db, refs, config);
-      logger.debug('AI database storage activated (chat_messages, ai_sessions, ai_summaries)');
+      logger.debug('AI database storage activated (agent_sessions, agent_messages, im_transcripts)');
     } catch (e) {
       logger.error('AI Session: database setup failed:', e);
     } finally {

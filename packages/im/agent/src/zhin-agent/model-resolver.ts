@@ -3,7 +3,6 @@ import type { ModelRegistry } from '@zhin.js/ai';
 export interface ModelResolverConfig {
   chatModel?: string;
   visionModel?: string;
-  chatLiteModel?: string;
 }
 
 export function resolveModel(

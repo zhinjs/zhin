@@ -34,4 +34,15 @@ packages/
 
 IM 主链：`kernel` → `ai` → `core` → `agent` → `zhin`
 
+各子包 README 摘要：
+
+| 包 | 要点 |
+|----|------|
+| [`im/ai`](im/ai/README.md) | Provider、`agentLoop`、`ModelRegistry` + `getModel` 白名单、`ContextRepository` / `im_transcripts` |
+| [`im/core`](im/core/README.md) | Plugin、Adapter、MessageDispatcher、出站 `before.sendMessage` 链 |
+| [`im/agent`](im/agent/README.md) | ZhinAgent、`AIService`、工具与安全策略、模型 `/v1/models` 发现 |
+| [`im/zhin`](im/zhin/README.md) | 主入口 re-export、`registerChatMessageStore` |
+
+持久化与模型发现细节见 [docs/advanced/ai.md](../docs/advanced/ai.md)、[架构概览](../docs/architecture-overview.md)。
+
 详见 [docs/contributing/repo-structure.md](../docs/contributing/repo-structure.md)。

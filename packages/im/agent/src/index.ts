@@ -83,6 +83,7 @@ export type { ContextWindowSource, ContextWindowInfo, ContextWindowGuardResult, 
 // ── Agent-specific modules ──
 
 export { AIService } from './service.js';
+export type { ServiceAgent, ServiceAgentResult, CreateServiceAgentOptions } from './service.js';
 
 export { ZhinAgent } from './zhin-agent/index.js';
 export type { ZhinAgentConfig, OnChunkCallback } from './zhin-agent/index.js';
@@ -128,7 +129,7 @@ export {
   formatAgentPromptSectionsMarkdown,
 } from './agent-prompt/index.js';
 export type { ResolveAgentPromptOptions } from './agent-prompt/index.js';
-export { createChatHistoryTool, createUserProfileTool, createSpawnTaskTool } from './zhin-agent/builtin-tools.js';
+export { createImTranscriptHistoryTool, createUserProfileTool, createSpawnTaskTool } from './zhin-agent/builtin-tools.js';
 
 export { UserProfileStore, AI_USER_PROFILE_MODEL } from './user-profile.js';
 
