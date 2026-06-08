@@ -31,6 +31,7 @@
  */
 
 import { formatCompact, Logger } from '@zhin.js/logger';
+import { formatAuxiliaryUserContentForLlm } from './sender-extra.js';
 import type { AIProvider, ChatMessage } from '../types.js';
 
 const logger = new Logger(null, 'ConvMemory');
@@ -796,7 +797,10 @@ export class ConversationMemory {
       const dedupStart = latest.to_round + 1;
       const dedupMessages = windowMessages.filter(m => m.round >= dedupStart);
       for (const msg of dedupMessages) {
-        result.push({ role: msg.role as 'user' | 'assistant', content: msg.content });
+        const body = msg.role === 'user'
+          ? formatAuxiliaryUserContentForLlm(msg.content, msg.sender_id, msg.sender_roles)
+          : msg.content;
+        result.push({ role: msg.role as 'user' | 'assistant', content: body });
       }
       logger.debug(
         `[上下文] summary(${latest.from_round}-${latest.to_round}) + ` +
@@ -810,7 +814,10 @@ export class ConversationMemory {
       }
       // 无 summary 或不连续 → 仅窗口
       for (const msg of windowMessages) {
-        result.push({ role: msg.role as 'user' | 'assistant', content: msg.content });
+        const body = msg.role === 'user'
+          ? formatAuxiliaryUserContentForLlm(msg.content, msg.sender_id, msg.sender_roles)
+          : msg.content;
+        result.push({ role: msg.role as 'user' | 'assistant', content: body });
       }
     }
 

@@ -27,8 +27,21 @@ import { resolveSubagentAgentTools } from './orchestrator/resolve-subagent-tools
 import { createOwnerOrchestratedToolResultTransform } from './orchestrator/owner-confirm-orchestration.js';
 import type { ToolContext } from '@zhin.js/core';
 import type { FileRole } from './security/file-role-policy.js';
-import { AgentDispatcher, type AgentRole } from './orchestrator/agent-dispatcher.js';
+import {
+  AgentDispatcher,
+  type AgentRole,
+  type AgentResult as DispatcherAgentResult,
+} from './orchestrator/agent-dispatcher.js';
 import { buildSubagentUserDelivery } from './media/subagent-user-delivery.js';
+import type { AgentMeta } from './discovery/agents.js';
+import { loadAgentMarkdownBody } from './discovery/agents.js';
+import {
+  resolveSubagentContextMode,
+  resolveSubagentRole,
+  type SubagentContextMode,
+} from './subagent-preset.js';
+import { packageSubagentResult } from './subagent-artifact.js';
+import { buildSubagentRolePrompt, sanitizeSubagentSystemPrompt } from './subagent-prompt.js';
 import type { ToolCallRecord } from './zhin-agent/tool-calls-user-format.js';
 import {
   notifySubagentGoal,
@@ -68,12 +81,18 @@ export interface SpawnOptions {
   systemPrompt?: string;
   /** Agent 角色（可选，默认为 'subtask'） */
   role?: AgentRole;
+  /** fork | fresh；缺省由预设或角色决定 */
+  contextMode?: SubagentContextMode;
+  /** fork 时由 SubagentManager 注入的主会话快照（内部） */
+  contextPreamble?: string;
   /** 任务上下文（可选） */
   context?: Record<string, unknown>;
   /** 首条 user 消息（含 vision parts）；缺省则用 task 字符串 */
   runInput?: string | ContentPart[];
   /** 用于向用户发送「任务【id】:执行通道 => label」进度提示 */
   notifyContext?: ToolContext;
+  /** 硬编排任务 ID（AgentDispatcher SSOT） */
+  orchestrationTaskId?: string;
 }
 
 export interface SubagentLifecycleEvent {
@@ -93,6 +112,8 @@ export interface SubagentLifecycleEvent {
 export interface SubagentResultDelivery {
   text: string;
   toolCalls?: AgentResult['toolCalls'] | ToolCallRecord[];
+  /** 主 Agent deferred auto-continue turn 的完整出站元素（优先于 text+toolCalls） */
+  elements?: import('@zhin.js/ai').OutputElement[];
 }
 
 export type SubagentResultSender = (
@@ -122,6 +143,10 @@ export interface SubagentManagerOptions {
   onEvent?: (event: SubagentLifecycleEvent) => void | Promise<void>;
   /** 与主 ZhinAgent 相同的 AI 处理事件总线（processing / tool / mcp 等） */
   eventEmitter?: ZhinAgentEventEmitter | null;
+  /** 解析 *.agent.md 元数据 */
+  resolveAgentMeta?: (agentName: string) => Promise<AgentMeta | null>;
+  /** fork 模式：主会话 active_leaf 快照 */
+  getParentContextSnapshot?: (origin: SubagentOrigin) => Promise<string | undefined>;
 }
 
 // ============================================================================
@@ -146,6 +171,8 @@ export class SubagentManager {
   private agentDispatcher: AgentDispatcher | null;
   private onEvent: ((event: SubagentLifecycleEvent) => void | Promise<void>) | null;
   private eventEmitter: ZhinAgentEventEmitter | null;
+  private resolveAgentMetaFn: ((agentName: string) => Promise<AgentMeta | null>) | null;
+  private getParentContextSnapshotFn: ((origin: SubagentOrigin) => Promise<string | undefined>) | null;
 
   constructor(options: SubagentManagerOptions) {
     this.provider = options.provider;
@@ -163,6 +190,8 @@ export class SubagentManager {
     this.agentDispatcher = options.agentDispatcher ?? null;
     this.onEvent = options.onEvent ?? null;
     this.eventEmitter = options.eventEmitter ?? null;
+    this.resolveAgentMetaFn = options.resolveAgentMeta ?? null;
+    this.getParentContextSnapshotFn = options.getParentContextSnapshot ?? null;
   }
 
   setEventEmitter(emitter: ZhinAgentEventEmitter | null): void {
@@ -181,66 +210,104 @@ export class SubagentManager {
     getProvider?: (alias: string) => AIProvider;
     resolveBinding?: (agentName: string) => ResolvedAgentBinding | null;
     getMcpRegistry?: () => McpRegistry | null;
+    resolveAgentMeta?: (agentName: string) => Promise<AgentMeta | null>;
+    getParentContextSnapshot?: (origin: SubagentOrigin) => Promise<string | undefined>;
   }): void {
     if (deps.getProvider) this.getProviderFn = deps.getProvider;
     if (deps.resolveBinding) this.resolveBindingFn = deps.resolveBinding;
     if (deps.getMcpRegistry) this.getMcpRegistryFn = deps.getMcpRegistry;
+    if (deps.resolveAgentMeta) this.resolveAgentMetaFn = deps.resolveAgentMeta;
+    if (deps.getParentContextSnapshot) this.getParentContextSnapshotFn = deps.getParentContextSnapshot;
+  }
+
+  private async enrichSpawnOptions(options: SpawnOptions): Promise<SpawnOptions> {
+    const agentName = options.agent?.trim();
+    const meta = agentName && this.resolveAgentMetaFn
+      ? await this.resolveAgentMetaFn(agentName)
+      : null;
+    const role = options.role ?? resolveSubagentRole(meta, agentName);
+    const contextMode = resolveSubagentContextMode(meta, role, options.contextMode);
+    let systemPrompt = options.systemPrompt;
+    if (!systemPrompt && meta?.filePath) {
+      try {
+        systemPrompt = await loadAgentMarkdownBody(meta.filePath);
+      } catch {
+        // ignore missing body
+      }
+    }
+    let contextPreamble = options.contextPreamble;
+    if (contextMode === 'fork' && !contextPreamble && this.getParentContextSnapshotFn) {
+      contextPreamble = await this.getParentContextSnapshotFn(options.origin);
+    }
+    return {
+      ...options,
+      role,
+      contextMode,
+      systemPrompt,
+      contextPreamble,
+    };
   }
 
   /** 同步执行子 agent（入站 route 用）；返回最终文本，不经过 resultSender */
   async spawnSync(options: SpawnOptions): Promise<string> {
-    const role = options.role || 'subtask';
-    const displayLabel = resolveSubagentDisplayLabel(options.label, options.task);
+    const enriched = await this.enrichSpawnOptions(options);
+    const role = enriched.role || 'subtask';
+    const displayLabel = resolveSubagentDisplayLabel(enriched.label, enriched.task);
     const taskId = randomUUID().slice(0, 8);
-    if (options.notifyContext) {
-      await notifySubagentGoal(options.notifyContext, {
+    if (enriched.notifyContext) {
+      await notifySubagentGoal(enriched.notifyContext, {
         taskId,
-        kind: resolveSpawnExecutionKind({ sync: true, agent: options.agent }),
+        kind: resolveSpawnExecutionKind({ sync: true, agent: enriched.agent }),
         label: displayLabel,
-        agent: options.agent,
+        agent: enriched.agent,
       });
     }
     const result = await this.runSubagent(
       taskId,
-      options.task,
+      enriched.task,
       displayLabel,
-      options.origin,
+      enriched.origin,
       role,
-      options.context,
+      enriched.context,
       {
-        binding: options.binding ?? (options.agent ? this.resolveBindingFn?.(options.agent) ?? null : null),
-        systemPrompt: options.systemPrompt,
+        binding: enriched.binding ?? (enriched.agent ? this.resolveBindingFn?.(enriched.agent) ?? null : null),
+        systemPrompt: enriched.systemPrompt,
+        contextPreamble: enriched.contextPreamble,
         sync: true,
-        presetName: options.agent ?? options.label,
+        presetName: enriched.agent ?? enriched.label,
         keepTypingUntilUpstreamFinish: true,
-        runInput: options.runInput,
+        runInput: enriched.runInput,
+        orchestrationTaskId: enriched.orchestrationTaskId,
       },
     );
     return result ?? '任务已完成，但未生成最终响应。';
   }
 
   async spawn(options: SpawnOptions): Promise<string> {
+    const enriched = await this.enrichSpawnOptions(options);
     const taskId = randomUUID().slice(0, 8);
-    const role = options.role || 'subtask';
-    const displayLabel = resolveSubagentDisplayLabel(options.label, options.task);
+    const role = enriched.role || 'subtask';
+    const displayLabel = resolveSubagentDisplayLabel(enriched.label, enriched.task);
 
-    if (options.notifyContext) {
-      await notifySubagentGoal(options.notifyContext, {
+    if (enriched.notifyContext) {
+      await notifySubagentGoal(enriched.notifyContext, {
         taskId,
-        kind: resolveSpawnExecutionKind({ sync: false, agent: options.agent }),
+        kind: resolveSpawnExecutionKind({ sync: false, agent: enriched.agent }),
         label: displayLabel,
-        agent: options.agent,
+        agent: enriched.agent,
       });
     }
 
     const abortController = new AbortController();
     this.runningTasks.set(taskId, abortController);
 
-    const binding = options.binding ?? (options.agent ? this.resolveBindingFn?.(options.agent) ?? null : null);
-    const done = this.runSubagent(taskId, options.task, displayLabel, options.origin, role, options.context, {
+    const binding = enriched.binding ?? (enriched.agent ? this.resolveBindingFn?.(enriched.agent) ?? null : null);
+    const done = this.runSubagent(taskId, enriched.task, displayLabel, enriched.origin, role, enriched.context, {
       binding,
-      systemPrompt: options.systemPrompt,
-      presetName: options.agent ?? options.label,
+      systemPrompt: enriched.systemPrompt,
+      contextPreamble: enriched.contextPreamble,
+      presetName: enriched.agent ?? enriched.label,
+      orchestrationTaskId: enriched.orchestrationTaskId,
     })
       .then(() => undefined)
       .catch((error) => {
@@ -255,18 +322,18 @@ export class SubagentManager {
       subagent: 'spawn',
       task_id: taskId,
       label: displayLabel,
-      agent: resolveSubagentAgentLabel(options.agent),
+      agent: resolveSubagentAgentLabel(enriched.agent),
       role,
-      task: truncatePreview(options.task, 300),
+      task: truncatePreview(enriched.task, 300),
     }));
     void this.onEvent?.({
       phase: 'spawn',
       taskId,
       label: displayLabel,
-      task: options.task,
-      origin: options.origin,
+      task: enriched.task,
+      origin: enriched.origin,
       role,
-      agent: options.agent,
+      agent: enriched.agent,
     });
     return `子任务 [${displayLabel}] 已启动 (id: ${taskId})，完成后会自动通知你。`;
   }
@@ -292,6 +359,8 @@ export class SubagentManager {
       /** 为 true 时 processing.finish 不停止 typing（由上层在最终回复前统一 stop） */
       keepTypingUntilUpstreamFinish?: boolean;
       runInput?: string | ContentPart[];
+      contextPreamble?: string;
+      orchestrationTaskId?: string;
     },
   ): Promise<string | void> {
     const startedAt = Date.now();
@@ -331,7 +400,9 @@ export class SubagentManager {
       agent: opts?.presetName,
     });
 
-    let dispatcherTaskId: string | undefined;
+    let dispatcherTaskId: string | undefined = opts?.orchestrationTaskId;
+    const isOrchestrationTask = !!opts?.orchestrationTaskId;
+    let resolveOrchestrationRunning: ((r: DispatcherAgentResult) => void) | undefined;
     const binding = opts?.binding ?? null;
     const provider = binding && this.getProviderFn
       ? this.getProviderFn(binding.providerAlias)
@@ -362,10 +433,15 @@ export class SubagentManager {
         });
       }
 
-      // 使用 Agent 调度器构建提示词（如果可用）
       let systemPrompt = opts?.systemPrompt;
       if (!systemPrompt) {
-        if (this.agentDispatcher) {
+        if (this.agentDispatcher && isOrchestrationTask && dispatcherTaskId) {
+          const taskDef = this.agentDispatcher.getTask(dispatcherTaskId);
+          if (taskDef) {
+            systemPrompt = buildSubagentRolePrompt(this.agentDispatcher, taskDef.role, taskDef);
+          }
+        }
+        if (!systemPrompt && this.agentDispatcher) {
           const taskDef = this.agentDispatcher.createTask({
             name: label,
             description: task,
@@ -374,11 +450,23 @@ export class SubagentManager {
             priority: 'medium',
             context,
           });
-          dispatcherTaskId = taskDef.id;
-          systemPrompt = this.agentDispatcher.buildRolePrompt(role, taskDef);
-        } else {
+          if (!isOrchestrationTask) dispatcherTaskId = taskDef.id;
+          systemPrompt = buildSubagentRolePrompt(this.agentDispatcher, role, taskDef);
+        } else if (!systemPrompt) {
           systemPrompt = this.buildSubagentPrompt(task);
         }
+      } else {
+        systemPrompt = sanitizeSubagentSystemPrompt(systemPrompt);
+      }
+
+      if (isOrchestrationTask && dispatcherTaskId && this.agentDispatcher) {
+        const runningPromise = new Promise<DispatcherAgentResult>((resolve) => {
+          resolveOrchestrationRunning = resolve;
+        });
+        this.agentDispatcher.markRunning(dispatcherTaskId, runningPromise);
+      }
+      if (opts?.contextPreamble?.trim()) {
+        systemPrompt = `${systemPrompt}\n\n## Parent session context (fork)\n${opts.contextPreamble.trim()}`;
       }
       const model = binding?.model || provider.models[0];
       const bashToolContext: ToolContext = {
@@ -406,7 +494,9 @@ export class SubagentManager {
         callbacks: aiEvents?.createAgentLoopCallbacks(model),
       });
       this.onSubagentUsage?.(result.usage);
-      const finalResult = result.content || '任务已完成，但未生成最终响应。';
+      const rawResult = result.content || '任务已完成，但未生成最终响应。';
+      const packaged = packageSubagentResult(rawResult, taskId);
+      const finalResult = packaged.text;
       await aiEvents?.agentFinish(result.model ?? model, result.iterations);
       await aiEvents?.response(finalResult, result.model ?? model, result.iterations);
 
@@ -437,6 +527,24 @@ export class SubagentManager {
         iterations: result.iterations,
         status: 'ok',
       });
+      if (isOrchestrationTask && dispatcherTaskId && this.agentDispatcher) {
+        const agentResult: DispatcherAgentResult = {
+          taskId: dispatcherTaskId,
+          role,
+          success: true,
+          summary: finalResult.slice(0, 4000),
+          duration: Date.now() - startedAt,
+          tokenUsage: result.usage
+            ? {
+                input: result.usage.prompt_tokens ?? 0,
+                output: result.usage.completion_tokens ?? 0,
+                total: result.usage.total_tokens ?? 0,
+              }
+            : undefined,
+        };
+        this.agentDispatcher.recordResult(agentResult);
+        resolveOrchestrationRunning?.(agentResult);
+      }
       if (opts?.sync) return finalResult;
       await this.announceResult(taskId, label, task, finalResult, origin, 'ok', result.toolCalls);
       return;
@@ -463,10 +571,22 @@ export class SubagentManager {
         status: 'error',
         error: errorMsg,
       });
+      if (isOrchestrationTask && dispatcherTaskId && this.agentDispatcher) {
+        const failResult: DispatcherAgentResult = {
+          taskId: dispatcherTaskId,
+          role,
+          success: false,
+          summary: errorMsg,
+          error: errorMsg,
+          duration: Date.now() - startedAt,
+        };
+        this.agentDispatcher.recordResult(failResult);
+        resolveOrchestrationRunning?.(failResult);
+      }
       if (opts?.sync) return errorMsg;
       await this.announceResult(taskId, label, task, errorMsg, origin, 'error', []);
     } finally {
-      if (this.agentDispatcher && dispatcherTaskId) {
+      if (this.agentDispatcher && dispatcherTaskId && !isOrchestrationTask) {
         this.agentDispatcher.releaseTask(dispatcherTaskId);
       }
     }
@@ -526,8 +646,8 @@ ${task}
 
 ## You must not
 - Send messages directly to the user
-- Spawn further sub-tasks
-- Access the main agent's conversation history
+- Spawn further sub-tasks or delegate to other agents
+- Use orchestration tools (spawn_task, tool_search, run_deferred_task)
 
 ## Workspace
 Workspace path: ${this.workspace}

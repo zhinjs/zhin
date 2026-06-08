@@ -7,12 +7,30 @@ import type {} from "@zhin.js/host-router";
 import { formatCompact, type Tool, type ToolFeature, usePlugin } from 'zhin.js';
 import { z } from "zod";
 import { registerTools } from "./tools.js";
+import {
+  mcpAuthRequired,
+  verifyMcpBearer,
+} from "./mesh-auth.js";
 import { registerResources } from "./resources.js";
 import { registerPrompts } from "./prompts.js";
+import { applyAgentMeshTools, AGENT_MESH_TOOL_NAMES } from "./mesh-registrar.js";
+
+export { setAgentMeshToolsRegistrar, AGENT_MESH_TOOL_NAMES } from "./mesh-registrar.js";
+export {
+  mcpAuthRequired,
+  verifyMcpBearer,
+  extractMcpToolName,
+  isLocalhost,
+  timingSafeEqualString,
+} from "./mesh-auth.js";
 
 export interface McpConfig {
   enabled?: boolean;
   path?: string;
+  /** MCP Bearer token；缺省回退 http.token */
+  token?: string;
+  /** 非 production 下 localhost 是否允许无 token 调用非 agent.* 工具 */
+  allowUnauthenticatedLocalhost?: boolean;
 }
 
 // ============================================================================
@@ -86,6 +104,7 @@ function createMcpServer(toolFeature: ToolFeature | null): McpServer {
   registerTools(server);
   registerResources(server);
   registerPrompts(server);
+  applyAgentMeshTools(server);
 
   // 从 ToolFeature 读取所有注册的工具，暴露给外部 MCP 客户端（按 name 去重）
   if (toolFeature) {
@@ -150,8 +169,11 @@ useContext("tool", (toolService: ToolFeature) => {
 
 useContext("server", (server: Server) => {
   const configService = root.inject("config")!;
-  const appConfig = configService.get<{ mcp?: McpConfig }>("zhin.config.yml");
-  const { enabled = true, path: mcpPath = "/mcp" } = appConfig.mcp || {};
+  const appConfig = configService.get<{ mcp?: McpConfig; http?: { token?: string } }>("zhin.config.yml");
+  const mcpCfg = appConfig.mcp || {};
+  const { enabled = true, path: mcpPath = "/mcp" } = mcpCfg;
+  const mcpToken = mcpCfg.token || appConfig.http?.token || "";
+  const isProduction = process.env.NODE_ENV === "production";
 
   if (!enabled) {
     logger.info(formatCompact({ enabled: false }));
@@ -162,6 +184,15 @@ useContext("server", (server: Server) => {
     try {
       if (req.method === "POST") {
         const body = await parseJsonBody(req);
+        if (mcpAuthRequired(body, req, mcpCfg, isProduction) && !verifyMcpBearer(req, mcpToken)) {
+          res.writeHead(401, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({
+            jsonrpc: "2.0",
+            error: { code: -32001, message: "Unauthorized — Bearer token required" },
+            id: (body as { id?: unknown })?.id ?? null,
+          }));
+          return;
+        }
         const mcpServer = createMcpServer(toolFeatureRef);
         const transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: undefined,

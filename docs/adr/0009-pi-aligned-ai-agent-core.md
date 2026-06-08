@@ -197,7 +197,7 @@ packages/im/ai/src/agent/
 
 - `loadContext(sessionId): Promise<Context>` — **epoch-only**（Grill #15）：只读当前 `session_id` 的 summaries + tail messages；**不**从 `im_transcripts` 冷启动；与现 CHC 按 scene 冷启动行为不同，属 intentional break
 - `appendMessages(sessionId, messages[])` — turn 结束 commit
-- `archiveSession(sessionKey)` — `/new`、`/clear` 等价
+- `archiveSession(sessionKey)` — `/reset` 等价
 
 删除或 stub：`ConversationMemory`、`ChatHistoryContext`、`SessionManager` 持久化路径、`ContextManager` 双写 LLM 历史逻辑。
 
@@ -279,7 +279,7 @@ IM 特有逻辑保留在 agent 包，注入 loop 钩子：
 
 - **Major break**：所有直接 import `AIProvider` / `ChatMessage` / `Agent.run` / `driver` / `chatLiteModel` 的插件与示例必须改。
 - **历史对话丢失**：不迁移旧 DB；用户需删库重建（文档与 CHANGELOG 明确）。
-- **epoch-only LLM 历史**：`/new` 后 LLM 上下文为零；旁听检索仍走 `im_transcripts` + `chat_history` 工具，不自动灌 context。
+- **epoch-only LLM 历史**：`/reset` 后 LLM 上下文为零；旁听检索仍走 `im_transcripts` + `chat_history` 工具，不自动灌 context。
 - **单 PR 体积大**：必须先合本 ADR，PR 按 commit 分块 review。
 - **`*.tool.md` 转换器**：JSON Schema 全特性无法 100% 映射 TypeBox；不支持的 frontmatter 在加载时报错。
 
@@ -299,6 +299,7 @@ IM 特有逻辑保留在 agent 包，注入 loop 钩子：
 | 0003 | 工具选择与 context budget 仍 centralized；消费改为 `Context` + `transformContext` |
 | 0007 | `modelHarness` 仍作用于 loop 的 `maxIterations` 等；配置键保留 |
 | 0008 | Job 执行仍可调 ZhinAgent；ZhinAgent 内部 API 变 `prompt()`，Job 侧无破坏性 |
+| 0010 | 本 ADR 的 Harness 延伸：compaction 接线（#14 落地）、会话树、Skills/Packages — 见 [0010](./0010-pi-coding-agent-harness-alignment.md) |
 
 ## 已定稿决策（Grill 2026-06-05，#1–#21）
 

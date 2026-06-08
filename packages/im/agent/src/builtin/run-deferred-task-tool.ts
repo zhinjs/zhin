@@ -28,7 +28,7 @@ export interface RunDeferredTaskToolOptions {
 export class RunDeferredTaskBuiltinTool extends BuiltinBaseTool {
   readonly name = 'run_deferred_task';
   readonly description =
-    '在隔离的 Worker 子 Agent 中异步执行 deferred 工具任务（github/mcp/插件等）。立即返回委派态，完成后单独推送结果。这是调用 deferred 能力的唯一入口';
+    '在隔离的 Worker 子 Agent 中同步执行 deferred 工具任务（github/mcp/插件等）。Worker 完成后将结果作为工具返回值交还主 Agent，由主 Agent 在同一轮对话中继续编排或总结回复用户。这是调用 deferred 能力的唯一入口';
   readonly parameters = RUN_DEFERRED_TASK_PARAMETERS;
   readonly kind = 'meta';
   readonly executionTimeoutMs: number;

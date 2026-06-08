@@ -249,6 +249,11 @@ ai:
     skillInstructionMaxChars: 0 # 0 = 按 modelSizeHint 自动推断
     maxSubagentIterations: 25   # 默认 25
     phaseTrace: false           # 输出 Agent 回合 phase 日志（也可用 ZHIN_AGENT_PHASE_TRACE=1）
+    compaction:               # ADR 0010 — L1 micro + L2 LLM；IM /compact 手动触发
+      enabled: true
+      auto: true
+      keepRecentTokens: 20000
+      minKeepCount: 2
     modelHarness:               # 按 provider 模式 / model id 覆盖 harness（与 TS 默认 deep merge）
       providerPatterns:
         "open*":

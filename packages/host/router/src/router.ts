@@ -6,4 +6,5 @@ export {
 } from "./koa-router.js";
 export type { ListedRoute } from "./openapi.js";
 export { buildOpenApiDocument, patternToOpenApiPath, routeRequiresBearerAuth } from "./openapi.js";
+export { introspectionRouteMeta, INTROSPECTION_OPENAPI_SCHEMAS } from "./introspection-openapi.js";
 export { firstQuery, firstHeader, paramPath } from "./http-ctx.js";

@@ -2,6 +2,46 @@
 
 命令是用户与机器人交互的主要方式。使用 `MessageCommand` 创建命令，由 `CommandFeature` 统一管理。
 
+::: tip 与 AI 触发前缀区分
+群/频道里以 `/` 开头的消息默认走 **CommandFeature**（`ai.trigger.ignorePrefixes` 含 `/`），**不会**触发 @ Agent。内置运维命令同样以 `/` 开头，需 **master** 或配置中的 **trusted** 用户方可执行。
+:::
+
+## 内置 IM 运维命令（ADR 0010）
+
+`@zhin.js/agent` 在启用 AI 时注册一批 **斜杠命令**，供维护者在 IM 里运维会话与内省运行时状态（实现见 `register-management-tools.ts`、`register-introspection-commands.ts`）。完整行为说明见 [AI 模块 — IM 运维与内省](/advanced/ai#im-运维与内省命令)。
+
+### 会话
+
+| 命令 | 说明 |
+|------|------|
+| `/compact` | 手动 L2 压缩当前 epoch（yaml：`ai.agent.compaction`） |
+| `/tree` | 列出当前会话树分支点 |
+| `/tree N` | 跳转到第 N 个分支点并从此继续 |
+| `/reset` | 归档当前 epoch；下次 @ 新上下文（`im_transcripts` 旁听行保留） |
+
+### 运维
+
+| 命令 | 说明 |
+|------|------|
+| `/models` | 列出已发现/配置的可用模型 |
+| `/health` | AI Provider 健康检查 |
+
+### 内省
+
+| 命令 | 说明 |
+|------|------|
+| `/cmd` | 已注册 IM 命令列表 |
+| `/bots` | Bot 与在线状态（含 adapter 列） |
+| `/bindings` | `ai.agents` 绑定 |
+| `/tools` | 已注册 ZhinTool |
+| `/mcp` | MCP Client 连接状态 |
+
+内省命令支持 **`[filter] [page]`**（例：`/tools github 2`）；单页仍过长时按行拆成多条 IM 消息。完整列表：`GET /api/introspection/{commands|bots|bindings|tools|mcp}`（Bearer，query：`page`、`filter`、`pageSize`）。
+
+Console 亦可查询会话树：`GET /api/agent/sessions/:sessionKey/tree`、`POST .../leaf`（Bearer Token）。示例项目清单见 [test-bot TOOLS.md](https://github.com/zhinjs/zhin/blob/main/examples/test-bot/TOOLS.md)。
+
+zhin-package 管理：`zhin packages` — 见 [CLI 命令参考](/reference/cli)。
+
 ## 基础命令
 
 ```typescript

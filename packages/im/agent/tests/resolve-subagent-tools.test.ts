@@ -17,6 +17,7 @@ function makeTool(name: string, keywords: string[] = []): AgentTool {
 describe('resolveSubagentAgentTools', () => {
   const catalog = [
     makeTool('read_file'),
+    makeTool('write_file'),
     makeTool('bash'),
     makeTool('generate_image', ['画', 'draw', 'image', 'picture']),
     makeTool('analyze_media', ['vision', 'image', '识图']),
@@ -37,6 +38,20 @@ describe('resolveSubagentAgentTools', () => {
     expect(names).toContain('generate_image');
     expect(names).not.toContain('spawn_task');
     expect(names).not.toContain('tool_search');
+  });
+
+  it('reviewer 角色不含 write_file / bash', () => {
+    const tools = resolveSubagentAgentTools({
+      allTools: catalog,
+      task: '审查 packages/im/agent/src/subagent.ts 并写回修复',
+      role: 'reviewer',
+      config: DEFAULT_CONFIG,
+      agentDispatcher: dispatcher,
+    });
+    const names = tools.map(t => t.name);
+    expect(names).not.toContain('write_file');
+    expect(names).not.toContain('bash');
+    expect(names).not.toContain('spawn_task');
   });
 
   it('researcher 角色不含 bash（角色限制优先于 TF-IDF）', () => {

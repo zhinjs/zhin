@@ -29,6 +29,7 @@ describe('Prompt discipline block', () => {
     expect(prompt).toContain('# Orchestration');
     expect(prompt).toContain('# Security');
     expect(prompt).toContain('Never disclose implementation');
+    expect(prompt).toContain('Never disclose implementation');
     expect(prompt).not.toContain('# Context');
     expect(prompt).not.toContain('# Safety');
     expect(prompt).not.toContain('# File Permissions');

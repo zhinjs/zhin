@@ -6,7 +6,19 @@ import {
   AgentSessionStore,
   DatabaseContextRepository,
   DatabaseImTranscriptStore,
+  DatabaseMemoryEntryRepository,
+  InMemoryMemoryEntryRepository,
 } from '@zhin.js/ai';
+import { setMemoryEntryRepository } from '../memory-entry-registry.js';
+import {
+  DatabaseOrchestrationRepository,
+  MemoryOrchestrationRepository,
+} from '../orchestrator/orchestration-repository.js';
+import { initOrchestrationService } from '../orchestrator/orchestration-service.js';
+import {
+  createOrchestrationRuntimeFromService,
+  setOrchestrationRuntime,
+} from '../orchestration-runtime-registry.js';
 import type { AIServiceRefs } from './shared-refs.js';
 
 export async function activateAiDatabaseStorage(
@@ -50,5 +62,24 @@ export async function activateAiDatabaseStorage(
   const profileModel = db.models?.get('ai_user_profiles');
   if (profileModel) {
     refs.zhinAgent.upgradeProfilesToDatabase(profileModel);
+  }
+
+  const runModel = db.models?.get('orchestration_runs');
+  const taskModel = db.models?.get('orchestration_tasks');
+  const orchRepo = runModel && taskModel
+    ? new DatabaseOrchestrationRepository(runModel, taskModel)
+    : new MemoryOrchestrationRepository();
+  const orchService = initOrchestrationService(orchRepo);
+  setOrchestrationRuntime(createOrchestrationRuntimeFromService(orchService));
+
+  const semanticEnabled = config.memory?.semantic?.enabled === true;
+  if (semanticEnabled) {
+    const memoryModel = db.models?.get('memory_entries');
+    const memoryRepo = memoryModel
+      ? new DatabaseMemoryEntryRepository(memoryModel as ConstructorParameters<typeof DatabaseMemoryEntryRepository>[0])
+      : new InMemoryMemoryEntryRepository();
+    setMemoryEntryRepository(memoryRepo);
+  } else {
+    setMemoryEntryRepository(null);
   }
 }

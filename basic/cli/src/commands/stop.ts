@@ -2,12 +2,14 @@ import { Command } from 'commander';
 import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
 import { stopProcess, getProcessStatus } from '../utils/process.js';
+import { requireZhinInstance } from '../utils/zhin-instance.js';
 
 export const stopCommand = new Command('stop')
   .description('停止机器人')
   .action(async () => {
     try {
-      const cwd = process.cwd();
+      const instance = await requireZhinInstance({ initGlobal: false });
+      const cwd = instance.root;
       
       // 检查是否有运行中的进程
       const status = await getProcessStatus(cwd);

@@ -11,6 +11,12 @@ import * as path from 'node:path';
 import { Logger, type Plugin } from '@zhin.js/core';
 import { getDataDir } from './utils.js';
 
+export type SubagentContextMode = 'fork' | 'fresh';
+
+const KNOWN_AGENT_ROLES = new Set([
+  'main', 'subtask', 'worker', 'researcher', 'executor', 'reviewer', 'planner',
+]);
+
 const logger = new Logger(null, 'builtin-tools');
 
 // ============================================================================
@@ -34,6 +40,10 @@ export interface AgentMeta {
   maxIterations?: number;
   /** 所属插件名（从 agents/ 目录归属推断） */
   ownerPlugin?: string;
+  /** spawn_task 使用的 AgentRole（默认 subtask 或按预设名推断） */
+  role?: string;
+  /** fork：注入主会话快照；fresh：空 standalone 上下文 */
+  contextMode?: SubagentContextMode;
 }
 
 // ============================================================================
@@ -123,6 +133,8 @@ export async function discoverWorkspaceAgents(root?: Plugin | null): Promise<Age
         }
         seenNames.add(metadata.name);
 
+        const roleRaw = typeof metadata.role === 'string' ? metadata.role.trim() : undefined;
+        const contextRaw = typeof metadata.contextMode === 'string' ? metadata.contextMode.trim() : undefined;
         agents.push({
           name: metadata.name,
           description: metadata.description,
@@ -134,6 +146,8 @@ export async function discoverWorkspaceAgents(root?: Plugin | null): Promise<Age
           provider: metadata.provider,
           maxIterations: typeof metadata.maxIterations === 'number' ? metadata.maxIterations : undefined,
           ownerPlugin: dirToPlugin.get(agentsDir),
+          role: roleRaw && KNOWN_AGENT_ROLES.has(roleRaw) ? roleRaw : undefined,
+          contextMode: contextRaw === 'fork' || contextRaw === 'fresh' ? contextRaw : undefined,
         });
         logger.debug(`Agent发现成功: ${metadata.name}`);
       } catch (e) {

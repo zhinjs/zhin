@@ -38,6 +38,12 @@ import {
   type AgentLoopStandaloneResult,
 } from './zhin-agent/agent-loop-standalone.js';
 import type { ToolCallRecord } from './zhin-agent/tool-calls-user-format.js';
+import {
+  PluginAILoopHookRegistry,
+  type PluginAfterToolCallHandler,
+  type PluginBeforeToolCallHandler,
+  type PluginTransformContextHandler,
+} from './plugin-loop-hooks.js';
 
 /** AIService 程序化 Agent 句柄（agentLoop 隔离上下文，非 legacy `Agent` 类） */
 export interface ServiceAgent {
@@ -80,6 +86,7 @@ export class AIService {
   private plugin?: Plugin;
   private customTools: Map<string, AgentTool> = new Map();
   private _modelRegistry: ModelRegistry | null = null;
+  readonly loopHooks = new PluginAILoopHookRegistry();
 
   constructor(config: AIConfig = {}) {
     this.routing = normalizeAiRoutingConfig(config);
@@ -138,6 +145,20 @@ export class AIService {
   getModelRegistry(): ModelRegistry | null { return this._modelRegistry; }
   registerTool(tool: AgentTool): () => void { this.customTools.set(tool.name, tool); return () => { this.customTools.delete(tool.name); }; }
 
+  /** ADR 0010 — bridge plugin beforeToolCall hooks to agentLoop. */
+  onBeforeToolCall(handler: PluginBeforeToolCallHandler): () => void {
+    return this.loopHooks.onBeforeToolCall(handler);
+  }
+
+  onAfterToolCall(handler: PluginAfterToolCallHandler): () => void {
+    return this.loopHooks.onAfterToolCall(handler);
+  }
+
+  /** Run after built-in compaction in transformContext chain. */
+  onTransformContext(handler: PluginTransformContextHandler): () => void {
+    return this.loopHooks.onTransformContext(handler);
+  }
+
   collectAllTools(): AgentTool[] {
     const tools: AgentTool[] = [...this.builtinTools, ...this.customTools.values()];
     return tools;
@@ -182,7 +203,7 @@ export class AIService {
     }
     return provider;
   }
-  listProviders(): string[] { return Array.from(this.providers.keys()); }
+  listProviders(): string[] { return Array.from(this.providers.keys());   }
 
   /** yaml 中显式配置了 models 列表（非空） */
   hasExplicitModelList(alias: string): boolean {

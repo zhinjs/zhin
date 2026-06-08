@@ -6,6 +6,7 @@ import { EventEmitter } from 'events';
 import {
   Bot,
   Message,
+  SendContent,
   SendOptions,
   segment,
   Notice,
@@ -59,7 +60,8 @@ export abstract class NapCatBotBase extends EventEmitter implements Bot<NapCatBo
       $raw: ev.raw_message,
       $timestamp: ev.time,
       $recall: async () => { await this.deleteMsg(ev.message_id); },
-      $reply: async (content: any[], quote?: boolean | string): Promise<string> => {
+      $reply: async (content: SendContent, quote?: boolean | string): Promise<string> => {
+        if (!Array.isArray(content)) content = [content];
         if (quote) content.unshift({ type: 'reply', data: { message_id: ev.message_id.toString() } });
         return await this.adapter.sendMessage({
           id: (ev.group_id || ev.user_id).toString(),

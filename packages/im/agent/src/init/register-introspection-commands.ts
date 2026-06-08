@@ -1,5 +1,5 @@
 /**
- * IM 内省指令：/commands、/bots、/adapters、/agents、/tools、/mcp-servers
+ * IM 内省指令：/cmd、/bots、/bindings、/tools、/mcp
  */
 import {
   Adapter,
@@ -11,7 +11,6 @@ import type { AgentOrchestrator } from '../orchestrator/index.js';
 import type { AIServiceRefs } from './shared-refs.js';
 import {
   commandRowsFromService,
-  formatAdaptersList,
   formatAgentsList,
   formatBotsList,
   formatCommandsList,
@@ -78,18 +77,9 @@ export function registerIntrospectionCommands(_refs: AIServiceRefs): void {
       commandService,
       root.name,
       disposers,
-      '/commands',
+      '/cmd',
       '列出已注册的 IM 命令',
       listCommands,
-    );
-
-    registerIntrospectionCommand(
-      commandService,
-      root.name,
-      disposers,
-      '/adapters',
-      '列出已注册的适配器',
-      () => formatAdaptersList([...root.adapters]),
     );
 
     registerIntrospectionCommand(
@@ -105,7 +95,7 @@ export function registerIntrospectionCommands(_refs: AIServiceRefs): void {
       commandService,
       root.name,
       disposers,
-      '/agents',
+      '/bindings',
       '列出 ai.agents 绑定（provider / model / mcp）',
       () => {
         const ai = root.inject('ai') as import('../service.js').AIService | undefined;
@@ -147,7 +137,7 @@ export function registerIntrospectionCommands(_refs: AIServiceRefs): void {
       commandService,
       root.name,
       disposers,
-      '/mcp-servers',
+      '/mcp',
       '列出已注册的 MCP Server 及连接状态',
       () => {
         const orchestrator = root.inject('agent') as AgentOrchestrator | undefined;

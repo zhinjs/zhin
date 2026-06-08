@@ -1,7 +1,7 @@
 /**
  * 技能发现（SKILL.md 文件扫描与加载）
  *
- * 加载顺序：Workspace（cwd/skills）> Local（~/.zhin/skills）> data/skills > 已加载插件包 skills/
+ * 加载顺序：Workspace（cwd/skills）> Local（~/.zhin/skills）> .agents/skills（向上至 git root）> 已加载插件包 skills/
  * 同名先发现者优先，支持平台/依赖兼容性过滤
  */
 
@@ -10,7 +10,7 @@ import * as path from 'node:path';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import { Logger, type Plugin } from '@zhin.js/core';
-import { getSkillSearchDirectories, getDataDir } from './utils.js';
+import { getSkillSearchDirectories } from './utils.js';
 
 const execAsync = promisify(exec);
 const logger = new Logger(null, 'builtin-tools');
@@ -50,7 +50,6 @@ export interface SkillMeta {
 export async function discoverWorkspaceSkills(root?: Plugin | null): Promise<SkillMeta[]> {
   const skills: SkillMeta[] = [];
   const seenNames = new Set<string>();
-  const dataDir = getDataDir();
   const skillDirs = getSkillSearchDirectories(root ?? undefined);
 
   // Build dir → pluginName mapping for attribution
@@ -67,13 +66,6 @@ export async function discoverWorkspaceSkills(root?: Plugin | null): Promise<Ski
     };
     mapPlugin(root);
     for (const child of (root.children || []) as Plugin[]) mapPlugin(child);
-  }
-
-  // 确保 data/skills 目录存在
-  const defaultSkillDir = path.join(dataDir, 'skills');
-  if (!fs.existsSync(defaultSkillDir)) {
-    fs.mkdirSync(defaultSkillDir, { recursive: true });
-    logger.debug(`Created skill directory: ${defaultSkillDir}`);
   }
 
   for (const skillsDir of skillDirs) {

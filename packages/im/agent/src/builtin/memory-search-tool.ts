@@ -1,0 +1,71 @@
+/**
+ * memory_search — semantic memory recall (L4, text match v1).
+ */
+import type { ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import { resolveIMSessionIdFromToolContext } from '@zhin.js/ai';
+import { parseMemoryTags } from '@zhin.js/ai';
+import { BuiltinBaseTool } from './builtin-base-tool.js';
+import { getMemoryEntryRepository } from '../memory-entry-registry.js';
+
+const PARAMS: ToolParametersSchema = {
+  type: 'object',
+  properties: {
+    query: { type: 'string', description: '检索关键词或短语' },
+    scope: {
+      type: 'string',
+      enum: ['global', 'platform', 'session', 'user'],
+      description: '可选：限定记忆范围',
+    },
+    limit: { type: 'integer', description: '最多返回条数（默认 5）' },
+  },
+  required: ['query'],
+};
+
+function sessionScopeKey(ctx: ToolContext): string {
+  return resolveIMSessionIdFromToolContext({
+    platform: ctx.platform || '',
+    botId: ctx.botId || '',
+    scope: ctx.scope,
+    sceneId: ctx.sceneId || '',
+    senderId: ctx.senderId || '',
+  });
+}
+
+class MemorySearchTool extends BuiltinBaseTool {
+  readonly name = 'memory_search';
+  readonly description = '在语义记忆库中检索与 query 相关的事实条目（memory_entries）。';
+  readonly parameters = PARAMS;
+  readonly keywords = ['memory', 'recall', 'remember', '记忆', '回忆'];
+
+  async run(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
+    const repo = getMemoryEntryRepository();
+    if (!repo) return '语义记忆未启用（ai.memory.semantic.enabled）或未初始化数据库。';
+
+    const query = String(args.query ?? '').trim();
+    if (!query) return '请提供 query';
+
+    const scope = typeof args.scope === 'string' ? args.scope : undefined;
+    const limit = typeof args.limit === 'number' ? args.limit : 5;
+    const scopeKey = scope === 'session' && context ? sessionScopeKey(context) : undefined;
+
+    const hits = await repo.search({
+      query,
+      scope: scope as 'global' | 'platform' | 'session' | 'user' | undefined,
+      scope_key: scopeKey,
+      limit,
+    });
+
+    if (!hits.length) return `未找到与 "${query}" 相关的记忆条目。`;
+
+    const lines = hits.map((e) => {
+      const tags = parseMemoryTags(e.tags);
+      return `- [${e.scope}${e.scope_key ? `:${e.scope_key}` : ''}] ${e.key}=${e.content}`
+        + (tags.length ? ` (tags: ${tags.join(', ')})` : '');
+    });
+    return `找到 ${hits.length} 条记忆：\n${lines.join('\n')}`;
+  }
+}
+
+export function createMemorySearchTool(): MemorySearchTool {
+  return new MemorySearchTool();
+}

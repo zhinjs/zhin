@@ -2,7 +2,7 @@
  * 子 agent 完成回告：文本 + 工具媒体（generate_image / voice_tts）走统一出站链。
  * 日志 preview 中的 `{image}` 表示本条含 image MessageElement（见 core segment.raw），不是未发送的占位符。
  */
-import { parseOutput } from '@zhin.js/ai';
+import { parseOutput, type OutputElement } from '@zhin.js/ai';
 import type { MessageElement, MessageType, SendOptions } from '@zhin.js/core';
 import type { SubagentOrigin } from '../subagent.js';
 import type { ToolCallRecord } from '../zhin-agent/tool-calls-user-format.js';
@@ -13,6 +13,8 @@ export interface SubagentOutboundDelivery {
   /** 面向用户的说明文本（含任务摘要时由调用方组装） */
   text: string;
   toolCalls?: ToolCallRecord[];
+  /** 主 Agent deferred auto-continue turn 的完整出站元素（优先于 text+toolCalls） */
+  elements?: OutputElement[];
 }
 
 export interface DeliverSubagentResultParams {
@@ -30,10 +32,12 @@ export async function deliverSubagentResult(params: DeliverSubagentResultParams)
     type: origin.sceneType as MessageType,
   };
 
-  const elements = mergeToolOutboundElements(
-    parseOutput(delivery.text),
-    delivery.toolCalls ?? [],
-  );
+  const elements = delivery.elements?.length
+    ? delivery.elements
+    : mergeToolOutboundElements(
+      parseOutput(delivery.text),
+      delivery.toolCalls ?? [],
+    );
   const segments = await publishOutboundElements(elements, origin.platform);
   if (!segments.length) {
     await send({ ...base, content: delivery.text });

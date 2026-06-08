@@ -464,6 +464,11 @@ export interface AIConfig {
    */
   memory?: {
     enabled?: boolean;
+    /** L4 语义记忆：memory_entries 表 + memory_search/upsert 工具 */
+    semantic?: {
+      enabled?: boolean;
+      autoConsolidate?: boolean;
+    };
     budgets?: {
       session?: number;
       platform?: number;
@@ -492,6 +497,19 @@ export interface AIConfig {
     env?: Record<string, string>;
     headers?: Record<string, string>;
   }>;
+  /** Agent Mesh — 远程 Agent 静态注册表 */
+  remoteAgents?: Array<{
+    id: string;
+    name?: string;
+    url: string;
+    token?: string;
+    roles?: string[];
+    description?: string;
+  }>;
+  /** 硬编排 v1 配置 */
+  orchestration?: {
+    hardMode?: boolean;
+  };
   /** Agent 工具开关与执行安全 */
   agent?: {
     /** @deprecated 使用 ai.agents.<name>.tools 白名单 */

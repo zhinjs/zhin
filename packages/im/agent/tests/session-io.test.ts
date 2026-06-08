@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { formatUserContentForSession } from '../src/zhin-agent/session-io.js';
+import {
+  formatUserContentForSession,
+  prepareUserContentForSession,
+} from '../src/zhin-agent/session-io.js';
 import type { ToolContext } from '@zhin.js/core';
 
 describe('formatUserContentForSession', () => {
@@ -23,6 +26,22 @@ describe('formatUserContentForSession', () => {
     };
     const out = formatUserContentForSession(ctx, '你好');
     expect(out).toBe('[sender:id=12345 name=Alice roles=group_admin] 你好');
+  });
+
+  it('prepareUserContentForSession 返回干净正文与 extra', () => {
+    const ctx: Pick<ToolContext, 'scope' | 'senderId' | 'roles' | 'message'> = {
+      scope: 'group',
+      senderId: '12345',
+      roles: ['group_admin'],
+      message: {
+        $sender: { id: '12345', nickname: 'Alice' },
+      } as ToolContext['message'],
+    };
+    const prepared = prepareUserContentForSession(ctx, '你好');
+    expect(prepared.content).toBe('你好');
+    expect(prepared.extra?.sender?.id).toBe('12345');
+    expect(prepared.extra?.sender?.name).toBe('Alice');
+    expect(prepared.extra?.sender?.roles).toContain('group_admin');
   });
 
   it('剥离用户自造 roles 前缀', () => {

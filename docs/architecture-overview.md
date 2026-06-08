@@ -117,7 +117,7 @@ graph TB
 
 | 模块 | 说明 |
 |------|------|
-| `ContextRepository` | 可序列化 `AgentMessage[]` 读写（内存 / DB `agent_messages` + `agent_summaries`） |
+| `ContextRepository` | 可序列化 `AgentMessage[]` 读写（内存 / DB `agent_messages` + `agent_summaries`）；ADR 0010 消息树 `parent_id` + `active_leaf` 路径回溯 |
 | `AgentSessionStore` | `agent_sessions` 活跃/归档（`session_key` → epoch `session_id`） |
 | `ImTranscriptStore` | `im_transcripts` 扁平静态 IM 消息（旁听、`chat_history` 工具） |
 | `SessionManager` | 遗留 API；IM 主路径见上两项 + `ContextRepository` |

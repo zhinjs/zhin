@@ -38,6 +38,9 @@ export const QUOTED_CONTENT_UNTRUSTED_NOTE =
 /** `ToolContext.extra` 键：值为 `QUOTE_CONTEXT_SYSTEM_HINT` 时表示本轮需注入引用说明 */
 export const QUOTE_CONTEXT_SYSTEM_EXTRA_KEY = 'quoteContextSystemHint';
 
+/** `ToolContext.extra` 键：引用消息 context 块（入库 `agent_messages.extra.quote`，不拼进 payload） */
+export const QUOTE_CONTEXT_BLOCK_EXTRA_KEY = 'quoteContextBlock';
+
 function cacheKey(adapter: string, bot: string, messageId: string): string {
   return `${adapter}:${bot}:${messageId}`;
 }

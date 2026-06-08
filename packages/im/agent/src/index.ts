@@ -84,6 +84,14 @@ export type { ContextWindowSource, ContextWindowInfo, ContextWindowGuardResult, 
 
 export { AIService } from './service.js';
 export type { ServiceAgent, ServiceAgentResult, CreateServiceAgentOptions } from './service.js';
+export { createAgentSession } from './create-agent-session.js';
+export type { AgentSessionHandle, CreateAgentSessionOptions } from './create-agent-session.js';
+export { PluginAILoopHookRegistry } from './plugin-loop-hooks.js';
+export type {
+  PluginBeforeToolCallHandler,
+  PluginAfterToolCallHandler,
+  PluginTransformContextHandler,
+} from './plugin-loop-hooks.js';
 
 export { ZhinAgent } from './zhin-agent/index.js';
 export type { ZhinAgentConfig, OnChunkCallback } from './zhin-agent/index.js';
@@ -290,6 +298,61 @@ export {
   PROFILE_MORNING_BRIEF_JOB_ID,
   PROFILE_BEDTIME_CHECK_JOB_ID,
 } from './assistant/index.js';
+
+export {
+  setSessionTreeRuntime,
+  getSessionTreeRuntime,
+  createSessionTreeRuntimeFromAgent,
+} from './session-tree-runtime-registry.js';
+export type { SessionTreeRuntimeHandle } from './session-tree-runtime-registry.js';
+
+export {
+  setOrchestrationRuntime,
+  getOrchestrationRuntime,
+  createOrchestrationRuntimeFromService,
+} from './orchestration-runtime-registry.js';
+export type { OrchestrationRuntimeHandle } from './orchestration-runtime-registry.js';
+
+export {
+  getOrchestrationService,
+  initOrchestrationService,
+  OrchestrationService,
+  PLAN_DEV_REVIEW_TEMPLATE,
+} from './orchestrator/orchestration-service.js';
+
+export {
+  getAgentDispatcher,
+  initAgentDispatcher,
+} from './orchestrator/agent-dispatcher.js';
+export type {
+  AgentRole,
+  AgentTask,
+  AgentResult as DispatcherAgentResult,
+} from './orchestrator/agent-dispatcher.js';
+
+export {
+  initDelegationProcessor,
+  getDelegationProcessor,
+} from './orchestrator/delegation-processor.js';
+
+export {
+  getRemoteAgentRegistry,
+  initRemoteAgentRegistry,
+} from './orchestrator/remote-agent-registry.js';
+
+export {
+  getRemoteTaskPoller,
+  startRemoteTaskPoller,
+} from './orchestrator/remote-task-poller.js';
+
+export {
+  introspectionRestBindings,
+  introspectionRestBots,
+  introspectionRestCommands,
+  introspectionRestMcp,
+  introspectionRestTools,
+} from './init/introspection-rest.js';
+export type { IntrospectionJsonResponse } from './init/introspection-rest.js';
 
 export {
   loadBootstrapFiles, buildContextFiles, buildBootstrapContextSection,

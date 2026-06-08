@@ -226,6 +226,17 @@ export {
   createAutoCompactTracking,
   shouldAutoCompact,
   autoCompactIfNeeded,
+  // ── AgentMessage compaction (ADR 0010) ──
+  estimateAgentMessageTokens,
+  estimateAgentMessagesTokens,
+  findKeepRecentStartIndex,
+  microCompactAgentMessages,
+  autoCompactAgentMessagesIfNeeded,
+  compactAgentMessages,
+  createAgentCompactionState,
+  isContextOverflowError,
+  summaryAsAgentUserMessage,
+  shouldAutoCompactAgentMessages,
 } from './compaction/index.js';
 export type {
   ContextWindowSource,
@@ -234,6 +245,11 @@ export type {
   PruneResult,
   AutoCompactTrackingState,
   AutoCompactResult,
+  AgentCompactionConfig,
+  AgentCompactionState,
+  AgentCompactResult,
+  AgentMicroCompactResult,
+  AgentMicroCompactOptions,
 } from './compaction/index.js';
 
 // ── Micro-Compact ──
@@ -295,6 +311,7 @@ export {
   AGENT_SUMMARY_MODEL,
   serializeAgentMessage,
   parseAgentMessageRow,
+  agentMessageRowToLlm,
 } from './memory/agent-db-models.js';
 export type {
   ImTranscriptRecord,
@@ -305,7 +322,55 @@ export type {
   CreateAgentSessionInput,
   AgentMessageRow,
   AgentSummaryRecord,
+  AgentMessageExtra,
+  AgentMessageSenderExtra,
+  SenderScope,
 } from './memory/agent-db-models.js';
+export {
+  ORCHESTRATION_RUN_MODEL,
+  ORCHESTRATION_TASK_MODEL,
+  parseDependsOn,
+  serializeDependsOn,
+} from './memory/orchestration-db-models.js';
+export {
+  MEMORY_ENTRY_MODEL,
+  parseMemoryTags,
+  serializeMemoryTags,
+} from './memory/memory-entry-models.js';
+export type {
+  MemoryEntryScope,
+  MemoryEntryRecord,
+  MemoryEntryUpsertInput,
+  MemoryEntrySearchInput,
+} from './memory/memory-entry-models.js';
+export {
+  InMemoryMemoryEntryRepository,
+  DatabaseMemoryEntryRepository,
+} from './memory/memory-entry-repository.js';
+export type { MemoryEntryRepository } from './memory/memory-entry-repository.js';
+export type {
+  OrchestrationAgentRole,
+  OrchestrationRunStatus,
+  OrchestrationTaskStatus,
+  OrchestrationExecutorKind,
+  OrchestrationRunRecord,
+  OrchestrationTaskRecord,
+  CreateOrchestrationRunInput,
+  CreateOrchestrationTaskInput,
+} from './memory/orchestration-db-models.js';
+export {
+  buildSenderPrefix,
+  parseAgentMessageExtra,
+  applySenderExtraToUserMessage,
+  renderUserMessageForLlm,
+  normalizeUserMessageForStorage,
+  stripSenderPrefixFromText,
+  splitQuoteFromUserText,
+  formatAuxiliaryUserContentForLlm,
+  userMessagePlainText,
+  type AgentMessageQuoteExtra,
+} from './memory/sender-extra.js';
+export type { AppendMessagesOptions } from './memory/context-repository.js';
 
 export {
   AgentSessionStore,
@@ -319,7 +384,22 @@ export {
   MemoryContextRepository,
   createMemoryContextRepository,
 } from './memory/context-repository.js';
-export type { ContextRepository, ContextRepositoryConfig } from './memory/context-repository.js';
+export type {
+  ContextRepository,
+  ContextRepositoryConfig,
+  SaveSummaryOptions,
+} from './memory/context-repository.js';
+export type { SessionBranchPoint } from './memory/session-tree.js';
+export {
+  collectAbandonedPathRows,
+  abandonedRowsToMessages,
+  branchSummaryAsUserMessage,
+  BRANCH_SUMMARY_PREFIX,
+} from './memory/branch-summarization.js';
+export {
+  buildActivePathRows,
+  listUserBranchPoints,
+} from './memory/session-tree.js';
 
 export {
   DatabaseImTranscriptStore,

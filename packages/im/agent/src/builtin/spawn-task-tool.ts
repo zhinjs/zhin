@@ -3,6 +3,10 @@
  */
 import type { AgentTool, Tool, ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import type { SubagentManager, SubagentOrigin } from '../subagent.js';
+import type { SubagentContextMode } from '../subagent-preset.js';
+import { getAgentDispatcher } from '../orchestrator/agent-dispatcher.js';
+import { getOrchestrationService } from '../orchestrator/orchestration-service.js';
+import { executeRemoteOrchestrationTask } from '../orchestrator/remote-task-executor.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 
 export const SPAWN_TASK_PARAMETERS: ToolParametersSchema = {
@@ -25,6 +29,20 @@ export const SPAWN_TASK_PARAMETERS: ToolParametersSchema = {
       description:
         '为 true 时同步等待子 agent 完成并将结果返回给你',
     },
+    context: {
+      type: 'string',
+      enum: ['fork', 'fresh'],
+      description:
+        '上下文模式：fork 注入主会话最近消息快照；fresh 空上下文。缺省按 *.agent.md 或角色默认',
+    },
+    run_id: {
+      type: 'string',
+      description: '硬编排 run ID（与 task_id 配合使用）',
+    },
+    task_id: {
+      type: 'string',
+      description: '硬编排任务 ID（须先 orchestration_add_task 或 template 预置）',
+    },
   },
   required: ['task'],
 };
@@ -40,15 +58,20 @@ export function originFromToolContext(context: ToolContext): SubagentOrigin {
   };
 }
 
+export interface SpawnTaskToolOptions {
+  hardOrchestration?: boolean;
+}
+
 export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
   readonly name = 'spawn_task';
   readonly description =
-    '将复杂或耗时的任务交给子 agent。默认异步（完成后另条推送）；需同步等待结果时设 wait=true。文生图用 draw，识图用 vision。含图结果日志 preview 为 {image}；wait=true 时勿再发「稍等」。';
+    '将复杂或耗时的任务交给子 agent。默认异步（完成后另条推送）；需同步等待结果时设 wait=true。硬编排模式下须传 run_id+task_id。文生图用 draw，识图用 vision。含图结果日志 preview 为 {image}；wait=true 时勿再发「稍等」。';
   readonly parameters = SPAWN_TASK_PARAMETERS;
 
   constructor(
     private readonly sessionContext: ToolContext,
     private readonly manager: SubagentManager,
+    private readonly options: SpawnTaskToolOptions = {},
   ) {
     super();
     this.tags.push('agent', 'async', 'task', '后台', '子任务');
@@ -69,15 +92,46 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
       return '请提供任务描述';
     }
 
+    const runId = typeof args.run_id === 'string' ? args.run_id.trim() : '';
+    const orchestrationTaskId = typeof args.task_id === 'string' ? args.task_id.trim() : '';
+
+    if (this.options.hardOrchestration && runId && !orchestrationTaskId) {
+      return '硬编排模式下 spawn_task 须同时提供 run_id 与 task_id';
+    }
+
+    if (orchestrationTaskId) {
+      const dispatcher = getAgentDispatcher();
+      const orch = getOrchestrationService();
+      if (orch && runId) {
+        await dispatcher.hydrateRun(runId);
+      }
+      const gate = dispatcher.canExecute(orchestrationTaskId);
+      if (!gate.canExecute) {
+        return `无法执行 task ${orchestrationTaskId}：${gate.reason ?? '门禁未通过'}`;
+      }
+      const agentTask = dispatcher.getTask(orchestrationTaskId);
+      if (agentTask?.executorKind === 'remote') {
+        const remoteResult = await executeRemoteOrchestrationTask(orchestrationTaskId);
+        if (args.wait === true) {
+          return remoteResult.message;
+        }
+        return remoteResult.message;
+      }
+    }
+
     const origin = originFromToolContext(this.sessionContext);
     const labelStr = typeof label === 'string' ? label : undefined;
     const agentOpt = typeof agentName === 'string' && agentName.trim() ? agentName.trim() : undefined;
+    const contextMode: SubagentContextMode | undefined =
+      args.context === 'fork' || args.context === 'fresh' ? args.context : undefined;
     const opts = {
       task,
       label: labelStr,
       origin,
       agent: agentOpt,
       notifyContext: this.sessionContext,
+      contextMode,
+      orchestrationTaskId: orchestrationTaskId || undefined,
     };
 
     if (args.wait === true) {
@@ -92,6 +146,10 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
   }
 }
 
-export function createSpawnTaskTool(context: ToolContext, manager: SubagentManager): AgentTool {
-  return new SpawnTaskBuiltinTool(context, manager).toTool() as AgentTool;
+export function createSpawnTaskTool(
+  context: ToolContext,
+  manager: SubagentManager,
+  options?: SpawnTaskToolOptions,
+): AgentTool {
+  return new SpawnTaskBuiltinTool(context, manager, options).toTool() as AgentTool;
 }

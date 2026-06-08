@@ -25,6 +25,7 @@ import type { RateLimiter } from '@zhin.js/ai';
 import type { ZhinAgentEventEmitter } from './event-emitter.js';
 import type { TurnTracker } from './turn-tracker.js';
 import type { SubagentResultSender } from '../subagent.js';
+import type { DeferredWorkerResult } from '../deferred-worker-runner.js';
 import type { DeferredWorkerRunner } from '../deferred-worker-runner.js';
 import type { ZhinAgentConfig, OnChunkCallback } from './config.js';
 import type { PhaseTraceConfig } from './phase-trace.js';
@@ -63,7 +64,9 @@ export interface ZhinAgentPrivate {
   runInTurnContext<T>(turnId: string, fn: () => Promise<T>): Promise<T>;
   setDeferredResultSender(sender: SubagentResultSender): void;
   getDeferredResultSender(): SubagentResultSender | null;
+  getDeferredResultSender(): SubagentResultSender | null;
 
+  waitForMemoryPersistence(): Promise<void>;
   waitForMemoryPersistence(): Promise<void>;
   beginActiveTurn(): void;
   finalizeActiveTurn(
@@ -98,6 +101,14 @@ export interface ZhinAgentPrivate {
     context: ToolContext,
     allTools: AgentTool[],
   ): Promise<string>;
+  getDeferredAutoContinueDepth(sessionKey: string): number;
+  resetDeferredAutoContinueDepth(sessionKey: string): void;
+  continueAfterDeferredWorker(
+    context: ToolContext,
+    taskId: string,
+    goal: string,
+    result: DeferredWorkerResult,
+  ): Promise<void>;
 }
 
 export function asPrivate(agent: {

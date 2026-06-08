@@ -276,6 +276,37 @@ describe('Enhanced Agent Features', () => {
       vi.useRealTimers();
     });
 
+    it('releaseTask 应移除任务元数据', () => {
+      const task = dispatcher.createTask({
+        name: 'Ephemeral',
+        description: 'tmp',
+        role: 'subtask',
+        goal: 'x',
+        priority: 'low',
+      });
+      dispatcher.releaseTask(task.id);
+      expect(dispatcher.getTask(task.id)).toBeUndefined();
+    });
+
+    it('cleanup 应淘汰超过 TTL 的未完成任务', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+      const stale = new AgentDispatcher();
+      const task = stale.createTask({
+        name: 'Stale',
+        description: 'old',
+        role: 'subtask',
+        goal: 'x',
+        priority: 'low',
+      });
+      vi.setSystemTime(new Date('2026-01-02T12:00:00Z'));
+      const cleaned = stale.cleanup();
+      expect(cleaned).toBeGreaterThanOrEqual(1);
+      expect(stale.getTask(task.id)).toBeUndefined();
+      stale.dispose();
+      vi.useRealTimers();
+    });
+
     it('should get stats', () => {
       dispatcher.createTask({
         name: 'Task 1',

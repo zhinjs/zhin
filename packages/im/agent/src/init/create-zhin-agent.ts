@@ -5,12 +5,20 @@
 import * as path from 'node:path';
 import { formatCompact, getPlugin, getScheduler, isZhinTool, Scheduler, setScheduler, type SendOptions } from '@zhin.js/core';
 import { deliverSubagentResult } from '../media/deliver-subagent-result.js';
-import { ModelRegistry, computeTierScore } from '@zhin.js/ai';
+import { ModelRegistry, computeTierScore, InMemoryMemoryEntryRepository } from '@zhin.js/ai';
+import { setMemoryEntryRepository } from '../memory-entry-registry.js';
 import { ZhinAgent } from '../zhin-agent/index.js';
 import { createBuiltinTools } from '../builtin-tools.js';
 import { createGenerateImageTool } from '../builtin/generate-image-tool.js';
 import { collectPluginSkillSearchRoots } from '../discovery/utils.js';
-import { resolveSkillInstructionMaxChars, DEFAULT_CONFIG, type ZhinAgentConfig } from '../zhin-agent/config.js';
+import { discoverWorkspaceAgents } from '../discovery/agents.js';
+
+import {
+  resolveSkillInstructionMaxChars,
+  DEFAULT_CONFIG,
+  DEFAULT_HARD_ORCHESTRATOR_TOOLS,
+  type ZhinAgentConfig,
+} from '../zhin-agent/config.js';
 import { PersistentCronEngine, setCronManager } from '../cron-engine.js';
 import { createTaskExecutor } from '../task-executor.js';
 import {
@@ -30,8 +38,22 @@ import {
 } from '../assistant/index.js';
 import type { AIConfig, Plugin } from '@zhin.js/core';
 import type { AIServiceRefs } from './shared-refs.js';
-import type { AIService } from '../service.js';
 import { activateAiDatabaseStorage } from './activate-ai-database-storage.js';
+import {
+  createSessionTreeRuntimeFromAgent,
+  setSessionTreeRuntime,
+} from '../session-tree-runtime-registry.js';
+import { MemoryOrchestrationRepository } from '../orchestrator/orchestration-repository.js';
+import { initOrchestrationService } from '../orchestrator/orchestration-service.js';
+import {
+  createOrchestrationRuntimeFromService,
+  setOrchestrationRuntime,
+} from '../orchestration-runtime-registry.js';
+import { initDelegationProcessor } from '../orchestrator/delegation-processor.js';
+import { initRemoteAgentRegistry } from '../orchestrator/remote-agent-registry.js';
+import { startRemoteTaskPoller } from '../orchestrator/remote-task-poller.js';
+import { asPrivate } from '../zhin-agent/zhin-agent-private.js';
+import type { AIService } from '../service.js';
 
 function seedProviderModelsFromRegistry(ai: AIService, modelRegistry: ModelRegistry): void {
   for (const alias of ai.listProviders()) {
@@ -56,28 +78,51 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
 
     const zhinBinding = ai.getBindingRegistry().requireZhinBinding();
     const provider = ai.getProvider(zhinBinding.providerAlias);
-    const agentConfig = ai.getAgentConfig();
-    const zhinAgentCfg: ZhinAgentConfig = {
-      ...(agentConfig as ZhinAgentConfig | undefined),
-      chatModel: zhinBinding.model,
-    };
-    const agent = new ZhinAgent(provider, zhinAgentCfg);
-    refs.zhinAgent = agent;
-    agent.setHostPlugin(root);
-    agent.setProviderResolver((alias) => ai.getProvider(alias));
-    agent.setActiveBinding(zhinBinding);
-
     const configService = root.inject('config');
     const appConfig = (configService?.primaryFile
       ? configService.getRaw<{ ai?: AIConfig; assistant?: AssistantConfig }>(configService.primaryFile)
       : configService?.getPrimary<{ ai?: AIConfig; assistant?: AssistantConfig }>())
       ?? {};
+    const agentConfig = ai.getAgentConfig();
+    const hardOrchestration = appConfig.ai?.orchestration?.hardMode === true;
+    const semanticMemory = appConfig.ai?.memory?.semantic?.enabled === true;
+    let orchestratorTools = hardOrchestration
+      ? [...DEFAULT_HARD_ORCHESTRATOR_TOOLS]
+      : (agentConfig as ZhinAgentConfig | undefined)?.orchestratorTools
+        ?? appConfig.ai?.agent?.orchestratorTools;
+    if (semanticMemory && orchestratorTools) {
+      for (const name of ['memory_search', 'memory_upsert'] as const) {
+        if (!orchestratorTools.includes(name)) {
+          orchestratorTools = [...orchestratorTools, name];
+        }
+      }
+    }
+    const zhinAgentCfg: ZhinAgentConfig = {
+      ...(agentConfig as ZhinAgentConfig | undefined),
+      chatModel: zhinBinding.model,
+      hardOrchestration,
+      orchestratorTools,
+    };
+    const agent = new ZhinAgent(provider, zhinAgentCfg);
+    refs.zhinAgent = agent;
+    setSessionTreeRuntime(createSessionTreeRuntimeFromAgent(asPrivate(agent)));
+    void initRemoteAgentRegistry(appConfig.ai).healthCheckAll();
+    initDelegationProcessor({ zhinAgent: agent });
+    startRemoteTaskPoller({ intervalMs: 15_000 });
+    agent.setHostPlugin(root);
+    agent.setProviderResolver((alias) => ai.getProvider(alias));
+    agent.setActiveBinding(zhinBinding);
     const assistantCfg = resolveAssistantConfig(appConfig.assistant);
     const useDb = appConfig.ai?.sessions?.useDatabase !== false;
     const db = root.inject('database' as keyof Plugin.Contexts) as
       | { models?: Map<string, unknown> }
       | undefined;
     if (!useDb) {
+      const orchService = initOrchestrationService(new MemoryOrchestrationRepository());
+      setOrchestrationRuntime(createOrchestrationRuntimeFromService(orchService));
+      if (semanticMemory) {
+        setMemoryEntryRepository(new InMemoryMemoryEntryRepository());
+      }
       agent.markMemoryPersistenceReady();
     } else if (db) {
       void activateAiDatabaseStorage(db, refs, appConfig.ai || {})
@@ -131,6 +176,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
       const zhinTools = [
         ...createBuiltinTools({
           plugin,
+          semanticMemory,
           skillInstructionMaxChars: resolveSkillInstructionMaxChars(fullConfig, modelName),
           pluginSkillRootsResolver: () => collectPluginSkillSearchRoots(root),
         }),
@@ -157,6 +203,11 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
       getProvider: (alias) => ai.getProvider(alias),
       resolveBinding: (name) => ai.getBindingRegistry().getBinding(name),
       getMcpRegistry: () => orchestratorEarly?.mcps ?? null,
+      resolveAgentMeta: async (name) => {
+        const metas = await discoverWorkspaceAgents(root);
+        return metas.find((m) => m.name === name) ?? null;
+      },
+      getParentContextSnapshot: (origin) => agent.buildParentContextSnapshotForSubagent(origin),
     });
     // Unified task executor — single execution+delivery path for cron/scheduler/subagent
     const resolveAdapter = (platform: string) => {
@@ -293,6 +344,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
 
     logger.debug('ZhinAgent created');
     return () => {
+      setSessionTreeRuntime(null);
       setCronManager(null);
       setAssistantRuntime(null);
       if (jobEngine) {

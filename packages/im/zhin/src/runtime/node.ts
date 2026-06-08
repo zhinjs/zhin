@@ -35,8 +35,10 @@ function registerStdinLoginAssist(plugin: Plugin): void {
  * Node / Bun Host 启动（与 legacy setup.ts 同序）；`registerSignalHandlers` 内调用 `plugin.start()`。
  */
 export async function bootstrapNode(options: BootstrapOptions = {}): Promise<BootstrapNodeResult> {
-  if (options.projectRoot) {
-    chdirToProjectRoot(options.projectRoot);
+  const envRoot = process.env.ZHIN_PROJECT_ROOT?.trim();
+  const root = options.projectRoot ?? envRoot;
+  if (root) {
+    chdirToProjectRoot(root);
   }
 
   const plugin = usePlugin();

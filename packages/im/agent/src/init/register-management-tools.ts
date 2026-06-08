@@ -1,8 +1,13 @@
 /**
- * Register AI management tools (/models, ai.clear, ai.health).
+ * Register AI management tools (/models, /reset, ai.health).
  */
 import './types.js';
 import { getPlugin, Message, ZhinTool, MessageCommand } from '@zhin.js/core';
+import { asPrivate } from '../zhin-agent/zhin-agent-private.js';
+import {
+  jumpSessionTreeForContext,
+  listSessionTreeForContext,
+} from '../zhin-agent/session-tree-commands.js';
 import type { AIServiceRefs } from './shared-refs.js';
 
 export function registerManagementTools(refs: AIServiceRefs): void {
@@ -21,17 +26,6 @@ export function registerManagementTools(refs: AIServiceRefs): void {
         return { providers: models.map(({ provider, models: ml }) => ({ name: provider, models: ml.slice(0, 10), total: ml.length })) };
       });
 
-    const clearSessionTool = new ZhinTool('ai_clear')
-      .desc('归档当前对话会话（保留 im_transcripts 审计；下次 @ 开新纪元）')
-      .keyword('清除', '清空', '重置', 'clear', 'reset', 'new')
-      .tag('ai', 'session')
-      .execute(async (_args, context) => {
-        if (!context?.message) return { success: false, error: '无消息上下文' };
-        if (!refs.zhinAgent) return { success: false, error: 'Agent 未就绪' };
-        const ok = await refs.zhinAgent.archiveSessionForContext(context);
-        return { success: ok, message: ok ? '会话已归档，下次对话将开启新上下文' : '无活跃会话可归档' };
-      });
-
     const healthCheckTool = new ZhinTool('ai_health')
       .desc('检查 AI 服务的健康状态')
       .keyword('健康', '状态', '检查', 'health', 'status')
@@ -41,7 +35,7 @@ export function registerManagementTools(refs: AIServiceRefs): void {
         return { providers: Object.entries(h).map(([n, ok]) => ({ name: n, healthy: ok })) };
       });
 
-    const tools = [listModelsTool, clearSessionTool, healthCheckTool];
+    const tools = [listModelsTool, healthCheckTool];
     const disposers: (() => void)[] = [];
     for (const tool of tools) disposers.push(toolService.addTool(tool, root.name));
 
@@ -61,29 +55,50 @@ export function registerManagementTools(refs: AIServiceRefs): void {
       commandService.add(modelsCmd, root.name);
       disposers.push(() => commandService.remove(modelsCmd));
 
-      const clearCmd = new MessageCommand('ai.clear').desc('归档当前对话会话');
-      clearCmd.action(async (message: Message) => {
-        if (!refs.zhinAgent) return '❌ Agent 未就绪';
-        const ok = await refs.zhinAgent.archiveSessionForContext({
-          platform: message.$adapter,
-          botId: message.$bot,
-          messageId: message.$id,
-          sceneId: message.$channel?.id || message.$sender.id,
-          senderId: message.$sender.id,
-          message,
-          scope: (message.$channel?.type === 'group' || message.$channel?.type === 'channel'
-            ? message.$channel.type
-            : 'private') as 'private' | 'group' | 'channel',
-        });
-        return ok ? '✅ 会话已归档，下次 @ 将使用新上下文' : 'ℹ️ 无活跃会话可归档';
+      const treeContextFrom = (message: Message) => ({
+        platform: message.$adapter,
+        botId: message.$bot,
+        messageId: message.$id,
+        sceneId: message.$channel?.id || message.$sender.id,
+        senderId: message.$sender.id,
+        message,
+        scope: (message.$channel?.type === 'group' || message.$channel?.type === 'channel'
+          ? message.$channel.type
+          : 'private') as 'private' | 'group' | 'channel',
       });
-      commandService.add(clearCmd, root.name);
-      disposers.push(() => commandService.remove(clearCmd));
 
-      const newCmd = new MessageCommand('new').desc('开启新对话（归档当前 active 会话）');
-      newCmd.action(async (message: Message) => {
+      const treeListCmd = new MessageCommand('/tree').desc('列出会话分支点');
+      treeListCmd.action(async (message: Message) => {
         if (!refs.zhinAgent) return '❌ Agent 未就绪';
-        const ok = await refs.zhinAgent.archiveSessionForContext({
+        return await listSessionTreeForContext(asPrivate(refs.zhinAgent), treeContextFrom(message));
+      });
+      commandService.add(treeListCmd, root.name);
+      disposers.push(() => commandService.remove(treeListCmd));
+
+      const treeJumpCmd = new MessageCommand('/tree <index:int>').desc('跳转到第 N 个 user 消息分支点');
+      treeJumpCmd.action(async (message: Message, matched) => {
+        if (!refs.zhinAgent) return '❌ Agent 未就绪';
+        const n = Number.parseInt(String(matched.params?.index ?? ''), 10);
+        if (!Number.isFinite(n) || n < 1) return 'ℹ️ 用法：/tree 2';
+        return await jumpSessionTreeForContext(asPrivate(refs.zhinAgent), treeContextFrom(message), n);
+      });
+      commandService.add(treeJumpCmd, root.name);
+      disposers.push(() => commandService.remove(treeJumpCmd));
+
+      const forkCmd = new MessageCommand('/fork <index:int>').desc('从第 N 个 user 消息创建分支');
+      forkCmd.action(async (message: Message, matched) => {
+        if (!refs.zhinAgent) return '❌ Agent 未就绪';
+        const n = Number.parseInt(String(matched.params?.index ?? ''), 10);
+        if (!Number.isFinite(n) || n < 1) return 'ℹ️ 用法：/fork 2';
+        return await jumpSessionTreeForContext(asPrivate(refs.zhinAgent), treeContextFrom(message), n);
+      });
+      commandService.add(forkCmd, root.name);
+      disposers.push(() => commandService.remove(forkCmd));
+
+      const compactCmd = new MessageCommand('/compact').desc('压缩当前对话上下文（保留最近 ~20k tokens）');
+      compactCmd.action(async (message: Message) => {
+        if (!refs.zhinAgent) return '❌ Agent 未就绪';
+        const result = await refs.zhinAgent.compactSessionForContext({
           platform: message.$adapter,
           botId: message.$bot,
           messageId: message.$id,
@@ -94,10 +109,19 @@ export function registerManagementTools(refs: AIServiceRefs): void {
             ? message.$channel.type
             : 'private') as 'private' | 'group' | 'channel',
         });
-        return ok ? '✅ 已开启新对话上下文' : 'ℹ️ 无活跃会话可归档';
+        return result.ok ? `✅ ${result.message}` : `ℹ️ ${result.message}`;
       });
-      commandService.add(newCmd, root.name);
-      disposers.push(() => commandService.remove(newCmd));
+      commandService.add(compactCmd, root.name);
+      disposers.push(() => commandService.remove(compactCmd));
+
+      const resetCmd = new MessageCommand('/reset').desc('归档当前 epoch，下次 @ 开启新上下文');
+      resetCmd.action(async (message: Message) => {
+        if (!refs.zhinAgent) return '❌ Agent 未就绪';
+        const ok = await refs.zhinAgent.archiveSessionForContext(treeContextFrom(message));
+        return ok ? '✅ 已归档当前会话，下次 @ 将使用新上下文' : 'ℹ️ 无活跃会话可归档';
+      });
+      commandService.add(resetCmd, root.name);
+      disposers.push(() => commandService.remove(resetCmd));
 
       const healthCmd = new MessageCommand('ai.health').desc('检查 AI 服务的健康状态');
       healthCmd.action(async () => {

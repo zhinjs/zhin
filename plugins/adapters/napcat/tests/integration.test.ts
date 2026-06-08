@@ -287,5 +287,17 @@ describe('NapCat 适配器特定测试', () => {
       expect(result).toBe('reply-123');
       sendSpy.mockRestore();
     });
+
+    it('字符串 content + quote 不应抛错（AI 未就绪等场景）', async () => {
+      const sendSpy = vi.spyOn(adapter, 'sendMessage').mockResolvedValue('reply-456');
+
+      const msg = bot.$formatMessage(createNapCatRawEvent());
+      await expect(msg.$reply('AI 服务未就绪', true)).resolves.toBe('reply-456');
+
+      const sent = sendSpy.mock.calls[0][0].content as unknown[];
+      expect(sent[0]).toMatchObject({ type: 'reply' });
+      expect(sent[1]).toBe('AI 服务未就绪');
+      sendSpy.mockRestore();
+    });
   });
 });

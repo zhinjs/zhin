@@ -15,9 +15,15 @@ export function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+/** 机器人项目根（`ZHIN_PROJECT_ROOT` 或 cwd） */
+export function workspaceRoot(): string {
+  const env = process.env.ZHIN_PROJECT_ROOT?.trim();
+  return env ? path.resolve(env) : process.cwd();
+}
+
 /** 获取 data/ 目录路径，自动创建 */
 export function getDataDir(): string {
-  const dir = path.join(process.cwd(), 'data');
+  const dir = path.join(workspaceRoot(), 'data');
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
@@ -29,13 +35,39 @@ export function expandHome(p: string): string {
   return p;
 }
 
-/** Workspace / ~/.zhin / data 下 skills 根目录（与 activate_skill 扫描顺序一致的前缀） */
+function findGitRoot(start = process.cwd()): string | null {
+  let dir = start;
+  for (;;) {
+    if (fs.existsSync(path.join(dir, '.git'))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+/** `.agents/skills` 从 cwd 向上遍历至 git root（ADR 0010） */
+export function collectAgentsSkillsDirs(start = process.cwd()): string[] {
+  const dirs: string[] = [];
+  const gitRoot = findGitRoot(start);
+  let dir = start;
+  for (;;) {
+    dirs.push(path.join(dir, '.agents', 'skills'));
+    if (gitRoot && dir === gitRoot) break;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return dirs;
+}
+
+/** Workspace / ~/.zhin / .agents/skills 根目录（与 activate_skill 扫描顺序一致的前缀） */
 export function buildStandardSkillDirs(): string[] {
-  return [
-    path.join(process.cwd(), 'skills'),
+  const list = [
+    path.join(workspaceRoot(), 'skills'),
     path.join(os.homedir(), '.zhin', 'skills'),
-    path.join(getDataDir(), 'skills'),
+    ...collectAgentsSkillsDirs(workspaceRoot()),
   ];
+  return [...new Set(list)];
 }
 
 /**
@@ -73,8 +105,32 @@ export function collectPluginSkillSearchRoots(root: Plugin | null | undefined): 
 /**
  * 技能发现与 activate_skill 查找共用：标准目录 + 已加载插件包 skills/
  */
+/** zhin-package 安装目录下的 skills 路径 */
+export function collectZhinPackageSkillRoots(): string[] {
+  const roots: string[] = [];
+  const bases = [
+    path.join(os.homedir(), '.zhin', 'packages'),
+    path.join(workspaceRoot(), '.zhin', 'packages'),
+  ];
+  for (const base of bases) {
+    if (!fs.existsSync(base)) continue;
+    for (const entry of fs.readdirSync(base, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const dir = path.join(base, entry.name);
+      const skills = path.join(dir, 'skills');
+      const repoSkills = path.join(dir, 'repo', 'skills');
+      if (fs.existsSync(skills)) roots.push(skills);
+      if (fs.existsSync(repoSkills)) roots.push(repoSkills);
+    }
+  }
+  return roots;
+}
+
 export function getSkillSearchDirectories(root?: Plugin | null): string[] {
   const list = [...buildStandardSkillDirs()];
+  for (const d of collectZhinPackageSkillRoots()) {
+    if (!list.includes(d)) list.push(d);
+  }
   for (const d of collectPluginSkillSearchRoots(root ?? undefined)) {
     if (!list.includes(d)) list.push(d);
   }

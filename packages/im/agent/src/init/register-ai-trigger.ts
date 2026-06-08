@@ -8,7 +8,8 @@ import {
   isAtBot,
   mergeAITriggerConfig,
   Message,
-  prependQuoteContext,
+  resolveQuoteContextBlock,
+  QUOTE_CONTEXT_BLOCK_EXTRA_KEY,
   QUOTE_CONTEXT_SYSTEM_EXTRA_KEY,
   QUOTE_CONTEXT_SYSTEM_HINT,
   QUOTED_MESSAGE_CONTEXT_MARKER,
@@ -176,15 +177,17 @@ export function registerAITrigger(refs: AIServiceRefs): void {
             logger.debug(formatCompactLog('AI Handler', { first_token_ms: Math.round(firstChunkMs) }));
           }
         };
-        const aiContent = await prependQuoteContext(message, root, content, {
+        const quoteBlock = await resolveQuoteContextBlock(message, root, {
           enabled: triggerConfig.resolveQuotedMessages,
         });
-        if (aiContent.includes(QUOTED_MESSAGE_CONTEXT_MARKER)) {
+        if (quoteBlock?.includes(QUOTED_MESSAGE_CONTEXT_MARKER)) {
           toolContext.extra = {
             ...toolContext.extra,
+            [QUOTE_CONTEXT_BLOCK_EXTRA_KEY]: quoteBlock,
             [QUOTE_CONTEXT_SYSTEM_EXTRA_KEY]: QUOTE_CONTEXT_SYSTEM_HINT,
           };
         }
+        const aiContent = content;
 
         const routing = refs.aiService?.getRoutingConfig();
         const bindingRegistry = refs.aiService?.getBindingRegistry();
@@ -305,7 +308,7 @@ export function registerAITrigger(refs: AIServiceRefs): void {
         const mmConfig = resolveMultimodalConfig();
         if (mediaParts.length > 0 && mmConfig.enabled) {
           const pre = await preprocessInboundMedia(mediaParts, mmConfig);
-          const fullContent = [aiContent, pre.textAppend].filter(Boolean).join('\n\n');
+          const fullContent = [content, pre.textAppend].filter(Boolean).join('\n\n');
           const visionProvider = zhinBinding && refs.aiService?.isReady()
             ? refs.aiService.getProvider(zhinBinding.providerAlias)
             : refs.aiService?.getProvider();

@@ -19,7 +19,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Plugin } from '@zhin.js/core';
 import { getPlugin } from '@zhin.js/core';
-import { Logger } from '@zhin.js/logger';
+import { formatCompact, Logger } from '@zhin.js/logger';
 import type {
   AIProvider,
   AgentTool,
@@ -43,6 +43,7 @@ import {
   MemoryAgentSessionStore,
   MemoryIMSessionStore,
   MemoryImTranscriptStore,
+  getModel,
   registerLlmApiFromProviders,
   setLegacyProviderResolver,
   type AgentSessionStore,
@@ -59,7 +60,9 @@ import { type PhaseTraceConfig } from './phase-trace.js';
 import type { ModelRegistry } from '@zhin.js/ai';
 import { UserProfileStore } from '../user-profile.js';
 import { RateLimiter } from '@zhin.js/ai';
-import { SubagentManager, type SubagentResultSender } from '../subagent.js';
+import { SubagentManager, type SubagentOrigin, type SubagentResultSender } from '../subagent.js';
+import { buildParentContextPreamble } from '../subagent-parent-context.js';
+import { getAgentDispatcher } from '../orchestrator/agent-dispatcher.js';
 import {
   type ZhinAgentConfig,
   type OnChunkCallback,
@@ -67,8 +70,14 @@ import {
   isPhaseTraceEnabled,
 } from './config.js';
 import { DeferredWorkerRunner } from '../deferred-worker-runner.js';
+import { deliverDeferredAutoContinueReply } from './deferred-delivery.js';
 import { processTextTurn, processMultimodalTurn } from './turn-pipeline.js';
-import { formatUserContentForSession } from './session-io.js';
+import { manualCompactSession } from './compaction-runtime.js';
+import {
+  archiveSessionByKey,
+  beginTurnSession,
+  formatUserContentForSession,
+} from './session-io.js';
 import { asPrivate } from './zhin-agent-private.js';
 import { PromptController } from './prompt-controller.js';
 import { getActiveTurnTracker, runInTurnContext as runInTurnContextAls } from './turn-context.js';
@@ -81,6 +90,8 @@ import {
   resolveAgentToolsForTurn as resolveToolsForTurn,
   runDeferredWorker as runDeferredWorkerTurn,
 } from './tool-orchestration.js';
+import { buildDeferredAutoContinueUserMessage } from './deferred-auto-continue.js';
+import type { DeferredWorkerResult } from '../deferred-worker-runner.js';
 
 export type { ZhinAgentConfig, OnChunkCallback } from './config.js';
 export type { ZhinAgentTurnMetrics, ZhinAgentTurnPath } from './turn-metrics.js';
@@ -126,6 +137,7 @@ export class ZhinAgent {
   private lastToolSearchDeferredStats?: string;
   private readonly promptController: PromptController;
   private deferredResultSender: SubagentResultSender | null = null;
+  private deferredAutoContinueDepthBySession = new Map<string, number>();
   private lastTurnMetrics: ZhinAgentTurnMetrics | null = null;
   private memoryPersistenceReady: Promise<void>;
   private resolveMemoryPersistenceReady!: () => void;
@@ -162,8 +174,7 @@ export class ZhinAgent {
     this.contextRepository = memoryStack.repository;
     this.imTranscriptStore = new MemoryImTranscriptStore();
     this.wireLlmApiLayer();
-    // 默认可用内存会话；DB 注入后由 bootstrap 覆盖 store，不阻塞单测与首条消息
-    this.markMemoryPersistenceReady();
+    // DB 注入完成前由 waitForMemoryPersistence 等待；useDatabase:false 时由 bootstrap 立即 mark
   }
 
   // ── DI setters ──────────────────────────────────────────────────────
@@ -314,6 +325,7 @@ export class ZhinAgent {
       maxIterations: this.config.maxSubagentIterations,
       execPolicyConfig: this.config,
       modelRegistry: this.modelRegistry,
+      agentDispatcher: getAgentDispatcher(),
       onSubagentUsage: (usage) => getActiveTurnTracker()?.addSubagentUsage(usage),
       registerSubagentTask: (done) => getActiveTurnTracker()?.trackSubagent(done),
       eventEmitter: this.emitter,
@@ -374,6 +386,59 @@ export class ZhinAgent {
     return this.deferredResultSender;
   }
 
+  getDeferredAutoContinueDepth(sessionKey: string): number {
+    return this.deferredAutoContinueDepthBySession.get(sessionKey) ?? 0;
+  }
+
+  resetDeferredAutoContinueDepth(sessionKey: string): void {
+    this.deferredAutoContinueDepthBySession.delete(sessionKey);
+  }
+
+  async continueAfterDeferredWorker(
+    context: ToolContext,
+    taskId: string,
+    goal: string,
+    result: DeferredWorkerResult,
+  ): Promise<void> {
+    const sessionKey = resolveIMSessionIdFromToolContext({
+      platform: context.platform,
+      botId: context.botId,
+      scope: context.scope,
+      sceneId: context.sceneId,
+      senderId: context.senderId,
+    });
+    const depth = this.getDeferredAutoContinueDepth(sessionKey);
+    this.deferredAutoContinueDepthBySession.set(sessionKey, depth + 1);
+
+    await this.promptController.waitForIdle();
+
+    logger.info(formatCompact({
+      deferred: 'auto_continue',
+      task_id: taskId,
+      depth: depth + 1,
+    }));
+
+    const message = buildDeferredAutoContinueUserMessage(taskId, goal, result.status);
+    const elements = await this.runInTurnContext(randomUUID(), () =>
+      processTextTurn(asPrivate(this), '', context, [], undefined, {
+        prebuiltMessages: [message],
+        deferredAutoContinue: true,
+      }),
+    );
+
+    const sender = this.getDeferredResultSender();
+    if (sender && elements.length > 0) {
+      await deliverDeferredAutoContinueReply(sender, context, elements);
+    }
+
+    logger.info(formatCompact({
+      deferred: 'auto_continue_done',
+      task_id: taskId,
+      depth: depth + 1,
+      outbound: elements.length,
+    }));
+  }
+
   getActiveTurnTracker(): TurnTracker | undefined {
     return getActiveTurnTracker();
   }
@@ -385,6 +450,25 @@ export class ZhinAgent {
 
   getSubagentManager(): SubagentManager | null {
     return this.subagentManager;
+  }
+
+  /** fork 模式：主会话 active_leaf 链快照（不含 spawn_task / tool_search 编排噪声） */
+  async buildParentContextSnapshotForSubagent(origin: SubagentOrigin): Promise<string | undefined> {
+    const scope = origin.sceneType === 'group' || origin.sceneType === 'channel'
+      ? origin.sceneType
+      : 'private';
+    const sessionKey = resolveIMSessionIdFromToolContext({
+      platform: origin.platform,
+      botId: origin.botId,
+      scope,
+      sceneId: origin.sceneId,
+      senderId: origin.senderId,
+    });
+    const active = await this.agentSessionStore.findActive(sessionKey);
+    if (!active) return undefined;
+    const ctx = await this.contextRepository.loadContext(active.session_id);
+    const preamble = buildParentContextPreamble(ctx.messages);
+    return preamble || undefined;
   }
 
   getEventEmitter(): ZhinAgentEventEmitter {
@@ -446,7 +530,7 @@ export class ZhinAgent {
     }));
   }
 
-  private emitSessionCompactEvent(
+  emitSessionCompactEvent(
     sessionId: string,
     context: ToolContext,
     mode: 'text' | 'multimodal',
@@ -564,7 +648,7 @@ export class ZhinAgent {
     return;
   }
 
-  /** 归档当前场景 active 会话（/new、ai.clear）；下次 @ 将创建新 session 纪元 */
+  /** 归档当前场景 active 会话（/reset）；下次 @ 将创建新 session 纪元 */
   async archiveSessionForContext(context: ToolContext): Promise<boolean> {
     const sessionKey = resolveIMSessionIdFromToolContext({
       platform: context.platform,
@@ -573,7 +657,44 @@ export class ZhinAgent {
       sceneId: context.sceneId,
       senderId: context.senderId,
     });
-    return this.imSessionStore.archiveByKey(sessionKey);
+    return archiveSessionByKey(
+      {
+        imSessionStore: this.imSessionStore,
+        agentSessionStore: this.agentSessionStore,
+        contextRepository: this.contextRepository,
+      },
+      sessionKey,
+    );
+  }
+
+  /** 手动压缩当前 session epoch（/compact） */
+  async compactSessionForContext(context: ToolContext): Promise<{ ok: boolean; message: string }> {
+    const sessionKey = resolveIMSessionIdFromToolContext({
+      platform: context.platform,
+      botId: context.botId,
+      scope: context.scope,
+      sceneId: context.sceneId,
+      senderId: context.senderId,
+    });
+    const deps = {
+      imSessionStore: this.imSessionStore,
+      agentSessionStore: this.agentSessionStore,
+      contextRepository: this.contextRepository,
+    };
+    const { sessionId } = await beginTurnSession(deps, sessionKey, context);
+    const provider = this.getTurnProvider();
+    const modelId = this.config.chatModel || provider.models[0] || '';
+    const llmModel = getModel(provider.name, modelId);
+    const contextWindow = llmModel.contextWindow ?? this.config.contextTokens;
+    return manualCompactSession(this.contextRepository, {
+      host: asPrivate(this),
+      sessionId,
+      context,
+      model: llmModel,
+      compactionConfig: this.config.compaction,
+      contextWindow,
+      mode: 'text',
+    });
   }
 
   async process(

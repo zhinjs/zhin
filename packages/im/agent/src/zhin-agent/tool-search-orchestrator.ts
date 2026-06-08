@@ -4,6 +4,10 @@
 import type { AgentTool } from '@zhin.js/ai';
 import { createRunDeferredTaskTool } from '../builtin/run-deferred-task-tool.js';
 import { createSpawnTaskTool } from '../builtin/spawn-task-tool.js';
+import {
+  createOrchestrationTools,
+  ORCHESTRATION_TOOL_NAMES,
+} from '../builtin/orchestration-tools.js';
 import { createToolSearchTool } from '../builtin/tool-search-tool.js';
 import { normalizeTool } from '../orchestrator/tool-selection.js';
 import type { SubagentManager } from '../subagent.js';
@@ -114,8 +118,27 @@ export function buildOrchestratorAgentTools(params: BuildOrchestratorToolsParams
   ) {
     byName.set(
       'spawn_task',
-      normalizeTool(createSpawnTaskTool(context, params.subagentManager), context),
+      normalizeTool(
+        createSpawnTaskTool(context, params.subagentManager, {
+          hardOrchestration: params.config.hardOrchestration,
+        }),
+        context,
+      ),
     );
+  }
+
+  if (params.config.hardOrchestration) {
+    for (const tool of createOrchestrationTools(context)) {
+      if (params.config.orchestratorTools.includes(tool.name)) {
+        byName.set(tool.name, normalizeTool(tool, context));
+      }
+    }
+    for (const name of ORCHESTRATION_TOOL_NAMES) {
+      if (params.config.orchestratorTools.includes(name) && !byName.has(name)) {
+        const found = createOrchestrationTools(context).find((t) => t.name === name);
+        if (found) byName.set(name, normalizeTool(found, context));
+      }
+    }
   }
 
   const orchestratorTools: AgentTool[] = [];

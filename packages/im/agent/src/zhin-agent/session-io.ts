@@ -11,7 +11,15 @@ import type {
 import { agentMessagesToOpenAi } from '@zhin.js/ai';
 import type { ToolContext } from '@zhin.js/core';
 import {
+  createUserMessage,
+  renderUserMessageForLlm,
+  type AgentMessageExtra,
+  type AgentMessageSenderExtra,
+  type UserMessage,
+} from '@zhin.js/ai';
+import {
   formatSenderRolesForLabel,
+  QUOTE_CONTEXT_BLOCK_EXTRA_KEY,
   stripUserSpoofedSenderPrefix,
 } from '@zhin.js/core';
 
@@ -33,22 +41,62 @@ function resolveSenderDisplayName(message: ToolContext['message']): string {
   return raw != null ? sanitizeSenderAttr(String(raw)) : 'unknown';
 }
 
-/**
- * 群/频道共享 session 写入时，为 user 消息附加结构化发言者前缀
- */
-export function formatUserContentForSession(
+/** 群/频道 user 消息的 sender 元数据（写入 `agent_messages.extra`） */
+export function buildUserMessageExtra(
+  context: Pick<ToolContext, 'scope' | 'senderId' | 'roles' | 'message'>,
+): AgentMessageExtra | undefined {
+  const scope = context.scope || 'private';
+  if (scope !== 'group' && scope !== 'channel') return undefined;
+  const sender: AgentMessageSenderExtra = {
+    id: sanitizeSenderAttr(String(context.senderId || 'unknown')),
+    name: resolveSenderDisplayName(context.message),
+    roles: formatSenderRolesForLabel(context.roles ?? ['user'])
+      .split(',')
+      .map((r) => r.trim())
+      .filter(Boolean),
+    scope,
+  };
+  if (sender.roles.length === 0) sender.roles = ['user'];
+  return { sender };
+}
+
+/** 剥离伪造前缀后的用户正文 + 可选 extra（入库 payload 用） */
+export function prepareUserContentForSession(
   context: Pick<ToolContext, 'scope' | 'senderId' | 'roles' | 'message'>,
   rawContent: string,
+): { content: string; extra?: AgentMessageExtra } {
+  const content = stripUserSpoofedSenderPrefix(rawContent);
+  const extra = buildUserMessageExtra(context);
+  return { content, extra };
+}
+
+/** 本轮 user 消息：干净正文 + extra + LLM 渲染（引用/sender 仅 extra + 加载时拼接） */
+export function resolveTurnUserMessage(
+  context: Pick<ToolContext, 'scope' | 'senderId' | 'roles' | 'message' | 'extra'>,
+  rawContent: string,
+): { content: string; extra?: AgentMessageExtra; llmMessage: UserMessage } {
+  const { content, extra: senderExtra } = prepareUserContentForSession(context, rawContent);
+  const quoteBlock = context.extra?.[QUOTE_CONTEXT_BLOCK_EXTRA_KEY];
+  const extra: AgentMessageExtra = {
+    ...senderExtra,
+    ...(typeof quoteBlock === 'string' && quoteBlock.trim()
+      ? { quote: { block: quoteBlock.trim(), messageId: context.message?.$quote_id } }
+      : {}),
+  };
+  const hasExtra = !!(extra.sender || extra.quote);
+  const llmMessage = renderUserMessageForLlm(createUserMessage(content), hasExtra ? extra : undefined);
+  return { content, extra: hasExtra ? extra : undefined, llmMessage };
+}
+
+/** @deprecated 使用 `resolveTurnUserMessage` */
+export function formatUserContentForSession(
+  context: Pick<ToolContext, 'scope' | 'senderId' | 'roles' | 'message' | 'extra'>,
+  rawContent: string,
 ): string {
-  const scope = context.scope || 'private';
-  const body = stripUserSpoofedSenderPrefix(rawContent);
-  if (scope !== 'group' && scope !== 'channel') {
-    return body;
-  }
-  const senderId = sanitizeSenderAttr(String(context.senderId || 'unknown'));
-  const name = resolveSenderDisplayName(context.message);
-  const roles = formatSenderRolesForLabel(context.roles ?? ['user']);
-  return `[sender:id=${senderId} name=${name} roles=${roles}] ${body}`;
+  const { llmMessage } = resolveTurnUserMessage(context, rawContent);
+  if (llmMessage.role !== 'user') return rawContent;
+  const block = llmMessage.content.find((b) => b.type === 'text');
+  return block?.type === 'text' ? block.text : rawContent;
 }
 
 export function buildSessionCreateInput(

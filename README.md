@@ -23,7 +23,7 @@
 | **Advanced** | Feature 体系 | 命令、工具、技能、cron、数据库等组合 |
 | **Advanced** | toolSearch / MCP | 编排工具、deferred worker、MCP Client/Server |
 
-> **推荐首跑**：克隆仓库后进入 [`examples/minimal-bot`](./examples/minimal-bot/)（Sandbox + 最少插件）。[`examples/test-bot`](./examples/test-bot/) 为维护者**厨房水槽**配置，勿当作默认模板。
+> **推荐首跑**：克隆仓库后进入 [`examples/minimal-bot`](./examples/minimal-bot/)（Sandbox + 最少插件）。**L4 参考**：[`examples/full-bot`](./examples/full-bot/)（硬编排 + 语义记忆 + MCP Mesh）。[`examples/test-bot`](./examples/test-bot/) 为维护者**厨房水槽**配置，勿当作默认模板。
 
 ## 快速开始
 
@@ -222,9 +222,36 @@ tools: [web_search]
 
 #### 发现顺序
 
-框架按 **`./tools`（或 `./skills` / `./agents`）→ `~/.zhin/<kind>/` → `data/<kind>/` → 已加载插件包内对应目录** 的顺序扫描（实现见 `packages/im/agent/src/discovery/`），同名先发现者优先；插件模块变更可通过 `Plugin.watch` **热重载**。
+框架按 **`./tools`（或 `./skills` / `./agents`）→ `~/.zhin/<kind>/` → `.agents/skills/`（向上至 git 根）→ 已加载插件包内对应目录 → `~/.zhin/packages/` / `.zhin/packages/`** 的顺序扫描（实现见 `packages/im/agent/src/discovery/`），同名先发现者优先；插件模块变更可通过 `Plugin.watch` **热重载**。
 
-📖 详见：[AI 模块](./docs/advanced/ai.md) · [工具与技能](./docs/advanced/tools-skills.md)
+### IM 会话与 Harness（[ADR 0010](./docs/adr/0010-pi-coding-agent-harness-alignment.md)）
+
+长对话自动 **Compaction**（L1 micro + L2 LLM）、**消息级会话树**（`/tree`）、epoch 归档（`/reset`）。`zhin.config.yml` 示例：
+
+```yaml
+ai:
+  agent:
+    compaction:
+      enabled: true
+      auto: true
+      keepRecentTokens: 20000
+```
+
+| 类别 | IM 命令 |
+|------|---------|
+| 会话 | `/compact` · `/tree` · `/tree N` · `/reset` |
+| 运维 | `/models` · `/health` |
+| 内省 | `/cmd` · `/bots` · `/bindings` · `/tools` · `/mcp` |
+
+zhin-package 安装：
+
+```bash
+zhin packages install npm:@scope/pkg
+```
+
+Console 可查询会话树：`GET /api/agent/sessions/:sessionKey/tree`、`POST .../leaf`。
+
+📖 详见：[AI 模块](./docs/advanced/ai.md) · [工具与技能](./docs/advanced/tools-skills.md) · [pi 映射表](./docs/advanced/pi-coding-agent-mapping.md)
 
 ### 安全模型
 
@@ -499,6 +526,10 @@ npx zhin pub                  # 发布插件到 npm
 npx zhin search <keyword>     # 搜索 npm 上的 Zhin 插件
 npx zhin install <name>       # 安装插件
 
+# zhin-package（ADR 0010）
+npx zhin packages list        # 已安装的 zhin-package
+npx zhin packages install npm:@scope/pkg
+
 # 诊断
 npx zhin doctor               # 检查环境和配置
 npx zhin setup                # 交互式配置向导
@@ -511,7 +542,7 @@ npx zhin setup                # 交互式配置向导
 | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **入门** | [快速开始](./docs/getting-started/index.md) · [Docker 部署](./docs/getting-started/docker.md) · [Windows 环境](./docs/essentials/windows-setup.md)                        |
 | **基础** | [核心概念](./docs/essentials/index.md) · [配置文件](./docs/essentials/configuration.md) · [命令系统](./docs/essentials/commands.md) · [插件系统](./docs/essentials/plugins.md)    |
-| **进阶** | [AI 模块](./docs/advanced/ai.md) · [Feature 系统](./docs/advanced/features.md) · [工具与技能](./docs/advanced/tools-skills.md) · [消息流转](./docs/essentials/message-flow.md) |
+| **进阶** | [AI 模块](./docs/advanced/ai.md) · [ADR 0010 Harness](./docs/adr/0010-pi-coding-agent-harness-alignment.md) · [Feature 系统](./docs/advanced/features.md) · [工具与技能](./docs/advanced/tools-skills.md) · [消息流转](./docs/essentials/message-flow.md) |
 | **开发** | [插件开发指南](./docs/guide/plugin-development.md) · [贡献指南](./docs/contributing.md) · [架构概览](./docs/architecture-overview.md) · [API 参考](./docs/api/index.md)           |
 
 

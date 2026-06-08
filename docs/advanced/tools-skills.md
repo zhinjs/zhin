@@ -403,8 +403,11 @@ console.log(plugin.manifest)
 
 1. 工作区 `cwd/skills/<name>/SKILL.md`
 2. `~/.zhin/skills/<name>/SKILL.md`
-3. `data/skills/<name>/SKILL.md`（框架默认数据目录）
+3. `.agents/skills/<name>/SKILL.md`（从 cwd 向上至 git 根，[ADR 0010](../adr/0010-pi-coding-agent-harness-alignment.md)）
 4. **已加载插件**：根插件与**直接子插件**包目录下的 `skills/<name>/SKILL.md`（插件根 = `path.dirname(plugin.filePath)`）
+5. `zhin packages install` 安装目录：`~/.zhin/packages/` 或项目 `.zhin/packages/`（`zhin packages list` 查看）
+
+> **已移除** `data/skills/` 发现路径；请迁移到 `skills/`、`.agents/skills/` 或 `zhin packages`。
 
 `install_skill` 默认仍安装到工作区 `skills/`。工作区 `skills/` 支持热重载（见下文及 AI 文档）。
 

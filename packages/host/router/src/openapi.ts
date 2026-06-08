@@ -1,3 +1,4 @@
+import { INTROSPECTION_OPENAPI_SCHEMAS } from "./introspection-openapi.js";
 import type { RouteMeta } from "./route-meta.js";
 
 export type ListedRoute = {
@@ -13,6 +14,8 @@ export type BuildOpenApiOptions = {
   apiBase?: string;
   /** e.g. `http://127.0.0.1:8086` */
   serverUrl?: string;
+  /** Extra `components.schemas` merged into the document */
+  componentsSchemas?: Record<string, Record<string, unknown>>;
 };
 
 export function patternToOpenApiPath(pattern: string): string {
@@ -86,13 +89,22 @@ function buildOperation(
     };
   }
 
-  const params = [...pattern.matchAll(/:([A-Za-z0-9_]+)/g)].map((m) => ({
+  const pathParams = [...pattern.matchAll(/:([A-Za-z0-9_]+)/g)].map((m) => ({
     name: m[1],
     in: "path" as const,
     required: true,
     schema: { type: "string" },
   }));
-  if (params.length) op.parameters = params;
+  const queryParams = meta?.parameters ?? [];
+  const allParams = [...pathParams, ...queryParams];
+  if (allParams.length) op.parameters = allParams;
+
+  if (meta?.responses) {
+    op.responses = meta.responses;
+  }
+  if (meta?.requestBody) {
+    op.requestBody = meta.requestBody;
+  }
 
   if (pattern.endsWith("/events") && method === "GET") {
     op.summary = meta?.summary ?? "Server-Sent Events stream";
@@ -184,6 +196,10 @@ export function buildOpenApiDocument(
           scheme: "bearer",
           description: "Set `Authorization: Bearer <http.token>` for paths under the configured API base.",
         },
+      },
+      schemas: {
+        ...INTROSPECTION_OPENAPI_SCHEMAS,
+        ...(options.componentsSchemas ?? {}),
       },
     },
   };

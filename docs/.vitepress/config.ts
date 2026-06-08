@@ -9,6 +9,7 @@ const aiSidebar = [
   { text: 'Feature 系统', link: '/advanced/features' },
   { text: 'Agent 安全与角色', link: '/advanced/agent-harness-engineering' },
   { text: 'Agent 最佳实践', link: '/advanced/agent-best-practices' },
+  { text: 'pi coding-agent 映射', link: '/advanced/pi-coding-agent-mapping' },
 ]
 
 /** 高级特性 + AI 智能（合并侧栏，避免两套导航） */
@@ -184,6 +185,9 @@ export default withMermaid(defineConfig({
             { text: '0005 Console EntryStore', link: '/adr/0005-use-instance-scoped-console-entry-stores' },
             { text: '0006 约定优先默认值', link: '/adr/0006-use-convention-first-config-defaults' },
             { text: '0007 modelHarness YAML', link: '/adr/0007-ai-agent-model-harness-yaml-overrides' },
+            { text: '0008 Assistant Runtime', link: '/adr/0008-introduce-assistant-runtime' },
+            { text: '0009 pi AI/Agent 核心', link: '/adr/0009-pi-aligned-ai-agent-core' },
+            { text: '0010 pi Harness 对齐', link: '/adr/0010-pi-coding-agent-harness-alignment' },
           ],
         },
       ],
@@ -200,6 +204,7 @@ export default withMermaid(defineConfig({
       '/advanced/cron': [{ text: '高级特性', items: advancedSidebar }],
       '/advanced/database': [{ text: '高级特性', items: advancedSidebar }],
       '/advanced/hot-reload': [{ text: '高级特性', items: advancedSidebar }],
+      '/advanced/pi-coding-agent-mapping': [{ text: '高级特性', items: advancedSidebar }],
 
       '/architecture/': [
         {

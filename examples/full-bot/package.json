@@ -1,0 +1,29 @@
+{
+  "name": "full-bot",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Zhin.js L4 全维度参考实例（Sandbox + NapCat + KOOK + 硬编排 + 语义记忆）",
+  "type": "module",
+  "scripts": {
+    "dev": "zhin dev",
+    "start": "zhin start",
+    "build": "zhin build"
+  },
+  "dependencies": {
+    "@zhin.js/adapter-kook": "workspace:*",
+    "@zhin.js/adapter-napcat": "workspace:*",
+    "@zhin.js/adapter-sandbox": "workspace:*",
+    "@zhin.js/cli": "workspace:*",
+    "@zhin.js/host-api": "workspace:*",
+    "@zhin.js/host-router": "workspace:*",
+    "@zhin.js/mcp": "workspace:*",
+    "zhin.js": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  }
+}

@@ -39,6 +39,13 @@ export interface ImTranscriptStore {
   listRecent(query: ImTranscriptQuery, limit?: number): Promise<ImTranscriptSearchResult>;
 }
 
+/** DB / 内存实现的统一契约 */
+export interface ImTranscriptStore {
+  record(input: ImTranscriptWriteInput): Promise<void>;
+  search(query: ImTranscriptQuery, keyword: string, limit?: number): Promise<ImTranscriptSearchResult>;
+  listRecent(query: ImTranscriptQuery, limit?: number): Promise<ImTranscriptSearchResult>;
+}
+
 type WhereResult =
   | PromiseLike<ImTranscriptRecord[]>
   | {

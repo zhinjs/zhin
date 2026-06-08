@@ -2,6 +2,8 @@
 
 Zhin Host **不提供** `/console` 静态页，仅提供 Console API。官方 UI 在独立仓库 **[zhinjs/console](https://github.com/zhinjs/console)** 维护并部署（如 `console.zhin.dev`），与 VitePress 文档站（`zhin.pages.dev`）分离。
 
+**Console 功能需求（给 zhin-console 项目）**：[console/requirements.md](./console/requirements.md)
+
 本 monorepo 可选以 **git submodule** 挂载在 **`zhin-console/`**（`git clone --recurse-submodules` 或 `git submodule update --init zhin-console`），便于与 Host 联调；发布仍以独立仓库为准。
 
 ## 使用方式

@@ -285,12 +285,14 @@ export function registerFetchRoute(
   method: string,
   path: string,
   handler: RouteHandler,
+  meta?: RouteMeta,
 ): void {
   const m = method.toUpperCase();
-  if (m === "GET") router.get(path, handler);
-  else if (m === "POST") router.post(path, handler);
-  else if (m === "PUT") router.put(path, handler);
-  else if (m === "DELETE") router.delete(path, handler);
+  const args: (RouteHandler | RouteMeta)[] = meta ? [meta, handler] : [handler];
+  if (m === "GET") router.get(path, ...args);
+  else if (m === "POST") router.post(path, ...args);
+  else if (m === "PUT") router.put(path, ...args);
+  else if (m === "DELETE") router.delete(path, ...args);
   else throw new Error(`Unsupported HTTP method: ${method}`);
 }
 

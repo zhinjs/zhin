@@ -13,6 +13,7 @@
 | [0007](./0007-ai-agent-model-harness-yaml-overrides.md) | AI Agent modelHarness YAML 覆盖与合并边界 |
 | [0008](./0008-introduce-assistant-runtime.md) | 引入 Assistant Runtime（个人助手 / 路线 A） |
 | [0009](./0009-pi-aligned-ai-agent-core.md) | 对齐 pi 的 AI/Agent 核心（Context + stream + agentLoop） |
+| [0010](./0010-pi-coding-agent-harness-alignment.md) | 对齐 pi coding-agent Harness（Compaction / 会话树 / 生态） |
 
 ## 相关
 

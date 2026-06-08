@@ -7,8 +7,6 @@ import { resolveIMSessionIdFromToolContext } from '@zhin.js/ai';
 import { buildOrchestratorAgentTools } from './tool-search-orchestrator.js';
 import { filterToolsForToolSearchCatalog } from './tool-catalog.js';
 import type { ZhinAgentPrivate } from './zhin-agent-private.js';
-import { deliverDeferredWorkerResult } from './deferred-delivery.js';
-
 const logger = new Logger(null, 'ZhinAgent');
 
 export function resolveAgentToolsForTurn(
@@ -102,31 +100,20 @@ export async function runDeferredWorker(
     },
   };
 
-  void agent.deferredWorkerRunner.runSync(runOptions).then(async (result) => {
-    const sender = agent.getDeferredResultSender?.();
-    if (sender) {
-      try {
-        await deliverDeferredWorkerResult(sender, context, goal, taskId, result);
-      } catch (err) {
-        logger.error(formatCompact({
-          deferred: 'delivery_failed',
-          task_id: taskId,
-          error: truncatePreview(err instanceof Error ? err.message : String(err), 200),
-        }));
-      }
-    }
-  }).catch((err) => {
+  try {
+    const result = await agent.deferredWorkerRunner.runSync(runOptions);
+    return result.summary;
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
     logger.error(formatCompact({
       deferred: 'worker_failed',
       task_id: taskId,
-      error: truncatePreview(err instanceof Error ? err.message : String(err), 200),
+      error: truncatePreview(errorMsg, 200),
     }));
-  });
-
-  return JSON.stringify({
-    status: 'delegated',
-    task_id: taskId,
-    goal: truncatePreview(goal, 200),
-    message: '子任务已在后台执行，完成后将单独推送结果。',
-  });
+    return JSON.stringify({
+      status: 'error',
+      task_id: taskId,
+      error: errorMsg,
+    });
+  }
 }

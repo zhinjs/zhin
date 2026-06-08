@@ -96,6 +96,17 @@ Node 运行时（`src/runtime/node.ts`）在 IM 栈之上额外注册：
 
 详见 [AI 模块文档](https://zhin.js.org/advanced/ai) 与 [架构概览](../../docs/architecture-overview.md)。
 
+## 运行时挂载（本包特有）
+
+Node 运行时（`src/runtime/node.ts`）在 IM 栈之上额外注册：
+
+| 能力 | 说明 |
+|------|------|
+| `registerChatMessageStore` | `message.receive` / `message.send` → `im_transcripts`（ADR 0009）；LLM 历史由 `@zhin.js/agent` 写 `agent_messages` |
+| `initAgentModule` | 挂载 `ctx.ai`、`ctx.agent`、DB 模型（`agent_*` + `im_transcripts`） |
+
+详见 [AI 模块文档](https://zhin.js.org/advanced/ai) 与 [架构概览](../../docs/architecture-overview.md)。
+
 ## 核心概念
 
 - **Plugin** — 基本组织单位，通过 `usePlugin()` Hook 访问框架 API

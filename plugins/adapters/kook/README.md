@@ -380,6 +380,16 @@ await bot.sendChannelMsg(channelId, [
 - [KOOK 开发文档](https://developer.kookapp.cn/doc/)
 - [kook-client](https://github.com/zhinjs/kook-client)
 
+## full-bot L4 参考
+
+[`examples/full-bot`](../../../examples/full-bot/) 默认加载本适配器（`bots` 段需填写 `KOOK_TOKEN` 后取消注释）。
+
+- 入站 → `ZhinAgent` → 出站走 `Adapter.sendMessage` 统一链路
+- 契约测试：`plugins/adapters/kook/tests/l4-contract.test.ts` + `integration.test.ts`
+- CI：`L4_SKIP_PLATFORM=1` 跳过实机；本地验证配置 `KOOK_TOKEN` 后可跑 optional smoke
+
+详见 [full-bot ACCEPTANCE.md](../../../examples/full-bot/ACCEPTANCE.md)。
+
 ## 依赖项
 
 - `kook-client` - KOOK 客户端库

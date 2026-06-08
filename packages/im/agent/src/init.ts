@@ -23,6 +23,7 @@ import { registerDbModels } from './init/register-db-models.js';
 import { registerAIService } from './init/register-ai-service.js';
 import { createZhinAgentContext } from './init/create-zhin-agent.js';
 import { registerAITrigger } from './init/register-ai-trigger.js';
+import { registerGroupSessionPassive } from './init/register-group-session-passive.js';
 import { registerDbUpgrade } from './init/register-db-upgrade.js';
 import { registerManagementTools } from './init/register-management-tools.js';
 import { registerOwnerApproveCommands } from './init/register-owner-approve-commands.js';
@@ -30,6 +31,7 @@ import { registerIntrospectionCommands } from './init/register-introspection-com
 import { registerBuiltinTools } from './init/register-builtin-tools.js';
 import { registerHomeTools } from './init/register-home-tools.js';
 import { registerTypingIndicator } from './init/register-typing-indicator.js';
+import { registerAgentMeshMcp } from './init/register-agent-mesh-mcp.js';
 
 /**
  * 初始化 AI 模块
@@ -44,6 +46,7 @@ export function initAgentModule(): void {
   const refs = createRefs();
 
   registerOrchestrator();
+  registerAgentMeshMcp();
   registerMcpFromConfig();
   registerMcpMemoryDefault();
   registerToolService();
@@ -51,6 +54,7 @@ export function initAgentModule(): void {
   registerAIService(refs);
   createZhinAgentContext(refs);
   registerAITrigger(refs);
+  registerGroupSessionPassive(refs);
   registerDbUpgrade(refs);
   registerManagementTools(refs);
   registerOwnerApproveCommands();

@@ -31,10 +31,14 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
 
     const provider = ai.getProvider();
     const agentCfg = ai.getAgentConfig();
+    const configService = root.inject('config');
+    const appConfig = configService?.getPrimary<{ ai?: { memory?: { semantic?: { enabled?: boolean } } } }>() ?? {};
+    const semanticMemory = appConfig.ai?.memory?.semantic?.enabled === true;
     const fullCfg = { ...DEFAULT_CONFIG, ...agentCfg } as Required<import('../zhin-agent/config.js').ZhinAgentConfig>;
     const modelName = provider.models[0] || '';
     const builtinTools = createBuiltinTools({
       plugin,
+      semanticMemory,
       skillInstructionMaxChars: resolveSkillInstructionMaxChars(fullCfg, modelName),
       pluginSkillRootsResolver: () => collectPluginSkillSearchRoots(root),
       skillFileLookup: (name: string) => {

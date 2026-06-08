@@ -87,6 +87,26 @@ export class AgentSessionStore {
     }
   }
 
+  async getBySessionId(sessionId: string): Promise<AgentSessionRecord | null> {
+    try {
+      const rows = await this.model.select().where({ session_id: sessionId });
+      return rows?.[0] ?? null;
+    } catch (err) {
+      logger.debug('getBySessionId failed:', err);
+      return null;
+    }
+  }
+
+  async setActiveLeafMessageId(sessionId: string, messageId: number | null): Promise<void> {
+    try {
+      await this.model
+        .update({ active_leaf_message_id: messageId, updated_at: Date.now() })
+        .where({ session_id: sessionId });
+    } catch (err) {
+      logger.debug('setActiveLeafMessageId failed:', err);
+    }
+  }
+
   async archiveByKey(sessionKey: string): Promise<boolean> {
     try {
       const rows = await this.model
@@ -163,6 +183,18 @@ export class MemoryAgentSessionStore {
   async touch(sessionId: string): Promise<void> {
     const s = this.sessions.get(sessionId);
     if (s) s.updated_at = Date.now();
+  }
+
+  async getBySessionId(sessionId: string): Promise<AgentSessionRecord | null> {
+    return this.sessions.get(sessionId) ?? null;
+  }
+
+  async setActiveLeafMessageId(sessionId: string, messageId: number | null): Promise<void> {
+    const s = this.sessions.get(sessionId);
+    if (s) {
+      s.active_leaf_message_id = messageId;
+      s.updated_at = Date.now();
+    }
   }
 
   async archiveByKey(sessionKey: string): Promise<boolean> {

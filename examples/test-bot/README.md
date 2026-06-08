@@ -79,12 +79,17 @@ test-bot/
 | `defaultProvider` | `ai.agents.zhin.provider`（指向 `ai.providers.<别名>`） |
 | `agent.chatModel` | `ai.agents.zhin.model` |
 | `providers.*.models`（可选） | 省略时 `ModelRegistry` + `GET /v1/models` 自动发现；显式列表用于锁定白名单（如 Cloudflare Workers AI） |
+| `providers.*.models`（可选） | 省略时 `ModelRegistry` + `GET /v1/models` 自动发现；显式列表用于锁定白名单（如 Cloudflare Workers AI） |
 | `agent.allowedTools` / `disabledTools` / `agents.*.tools` | 已移除；工具由运行时发现 + `orchestratorTools` / TF-IDF |
 | `agent.toolSearch` | 已移除；编排为默认 |
 
 - 入站默认走 **`agents.zhin`**；带图且命中 `agents.vision` 时走 `agents/vision.agent.md`（识图）。文生图经 **`tool_search` + `run_deferred_task`** 或 **`spawn_task`**（**`agent: draw`**）+ `agents/draw.agent.md`，工具为 **`generate_image`**。
 - 插件/MCP 工具在连接后进入运行时工具池，由 **`tool_search` / TF-IDF** 按任务选用。
 - 子 agent 需 `agents/<name>.agent.md`（persona）；**不要**添加 `zhin.agent.md`。
+
+### 会话树与 Compaction（ADR 0010）
+
+`zhin.config.yml` 已启用 `ai.agent.compaction`（见配置段 `agent.compaction`）。IM 手测命令见 [TOOLS.md](./TOOLS.md)：`/compact`、`/tree`、`/reset` 等。
 
 ### 多模态（Advanced）
 

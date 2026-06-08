@@ -4,6 +4,7 @@ import type { AgentEvent, ThinkingLevel, ToolExecutionMode } from './types/agent
 import type { Model } from './types/model.js';
 import type { LlmTool, ParsedToolCall } from './types/tool.js';
 import { EMPTY_TOKEN_USAGE, isLlmAgentMessage } from './types/agent-message.js';
+import { isContextOverflowError } from '../compaction/agent-message-compaction.js';
 import { complete, type StreamOptions } from './api-registry.js';
 import { validateToolCall } from './validate-tool-call.js';
 
@@ -46,6 +47,10 @@ export interface AgentLoopConfig {
   ) => Promise<AgentMessage>;
   getSteeringMessages?: () => Promise<AgentMessage[]>;
   getFollowUpMessages?: () => Promise<AgentMessage[]>;
+  onContextOverflow?: (
+    messages: AgentMessage[],
+    signal?: AbortSignal,
+  ) => Promise<AgentMessage[] | null | undefined>;
   streamOptions?: Omit<StreamOptions, 'signal'>;
 }
 
@@ -121,33 +126,53 @@ export async function* agentLoop(
       : messages;
     messages.splice(0, messages.length, ...transformed);
 
-    const llmMessages = await convertToLlm(messages);
-    const context: Context = {
-      systemPrompt: initialContext.systemPrompt,
-      messages: llmMessages,
-      tools: tools.length > 0 ? tools : undefined,
+    const buildLlmContext = async (): Promise<Context> => {
+      const llmMessages = await convertToLlm(messages);
+      return {
+        systemPrompt: initialContext.systemPrompt,
+        messages: llmMessages,
+        tools: tools.length > 0 ? tools : undefined,
+      };
     };
 
     let assistant: AssistantMessage;
     try {
-      assistant = await complete(config.model, context, {
+      assistant = await complete(config.model, await buildLlmContext(), {
         ...config.streamOptions,
         signal,
         sessionId: config.sessionId,
         thinkingLevel: config.reasoning,
       });
     } catch (error) {
-      assistant = {
-        role: 'assistant',
-        content: [{ type: 'text', text: '' }],
-        api: config.model.api,
-        provider: config.model.provider,
-        model: config.model.id,
-        usage: EMPTY_TOKEN_USAGE,
-        stopReason: signal?.aborted ? 'aborted' : 'error',
-        errorMessage: error instanceof Error ? error.message : String(error),
-        timestamp: Date.now(),
-      };
+      if (config.onContextOverflow && isContextOverflowError(error)) {
+        try {
+          const compacted = await config.onContextOverflow(messages, signal);
+          if (compacted?.length) {
+            messages.splice(0, messages.length, ...compacted);
+          }
+          assistant = await complete(config.model, await buildLlmContext(), {
+            ...config.streamOptions,
+            signal,
+            sessionId: config.sessionId,
+            thinkingLevel: config.reasoning,
+          });
+        } catch (retryError) {
+          error = retryError;
+        }
+      }
+      if (!assistant!) {
+        assistant = {
+          role: 'assistant',
+          content: [{ type: 'text', text: '' }],
+          api: config.model.api,
+          provider: config.model.provider,
+          model: config.model.id,
+          usage: EMPTY_TOKEN_USAGE,
+          stopReason: signal?.aborted ? 'aborted' : 'error',
+          errorMessage: error instanceof Error ? error.message : String(error),
+          timestamp: Date.now(),
+        };
+      }
     }
 
     yield { type: 'message_start', message: assistant };

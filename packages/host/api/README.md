@@ -2,7 +2,7 @@
 
 Zhin Host 上的 **官方管理面 API**（路线 A：`@zhin.js/host-router` 仅传输，本包注册 REST / Console 协议 / entries）。
 
-包含：`PageManager`、`POST /api/console/request`、SSE `/api/events`、`GET /entries`、系统/插件/Bot REST、市场与日志 API 等。**聊天与管理 UI 不在本 Host 提供**（`serveClientHost: false`），请使用 **[Remote Console](https://console.zhin.dev)**（仓库 [zhin-console](https://github.com/zhinjs/zhin-console)）。说明见 [docs/console-remote.md](../../../docs/console-remote.md)。
+包含：`PageManager`、`POST /api/console/request`、SSE `/api/events`、`GET /entries`、系统/插件/Bot REST、市场与日志 API 等。**聊天与管理 UI 不在本 Host 提供**（`serveClientHost: false`），请使用 **[Remote Console](https://console.zhin.dev)**（仓库 [zhin-console](https://github.com/zhinjs/zhin-console)）。说明见 [docs/console-remote.md](../../../docs/console-remote.md)；完整 Console 需求见 [docs/console/requirements.md](../../../docs/console/requirements.md)。
 
 ## 功能特性（Host 侧）
 
@@ -11,6 +11,8 @@ Zhin Host 上的 **官方管理面 API**（路线 A：`@zhin.js/host-router` 仅
 - 📊 运行时状态经 API 暴露
 - 🔧 插件与 Feature 调试数据
 - 📝 日志与 OpenAPI（`GET /pub/openapi.json`）
+- 🌳 Agent 会话树（ADR 0010）：`GET /api/agent/sessions/:sessionKey/tree`、`POST .../leaf`（`messageId` 或 `index`）
+- 🔍 内省列表（分页）：`GET /api/introspection/{commands|bots|bindings|tools|mcp}`（query：`page`、`filter`、`pageSize`）；完整请求/响应字段见 `GET /pub/openapi.json` → `components.schemas.Introspection*`
 
 ### ICQQ 登录辅助（不在 Console 提供）
 

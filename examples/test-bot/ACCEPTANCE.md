@@ -60,6 +60,8 @@ pnpm vitest run packages/agent/tests/advanced-acceptance.test.ts \
 
 - [x] **cron_add** 端到端：`PersistentCronEngine` 持久化 + 调度触发 runner — `packages/agent/tests/cron-engine.test.ts`（手测：`AI: 用 cron_add 创建 1 分钟后 echo acceptance`）
 - [x] **记忆 MCP**：默认关；`ai.memoryMcp: true` 才注册 `server-memory`
+- [ ] **ADR 0010 Harness**（手测，见 [TOOLS.md](./TOOLS.md)）：`/compact` 压缩长对话；`/tree` + `/tree N` 分支跳转；`/reset` epoch 归档；`/cmd` `/bindings` `/mcp` 内省
+- [ ] **Sub-agent 增量对齐**（手测，见 [TOOLS.md § Sub-agent](./TOOLS.md#sub-agent-编排)）：`spawn_task({ agent: "reviewer", wait: true })` 无 write/bash；fork 子任务能引用主会话最近意图；fresh reviewer system 不含主会话 tool 链；超长结果写入 `data/artifacts/subagent/{taskId}.md`
 
 ### MCP Client
 

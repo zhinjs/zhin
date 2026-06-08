@@ -20,7 +20,9 @@
 - Node 版本要求是 ^20.19.0 或 >=22.12.0；包管理器是 pnpm 9。
 - 主要分层：basic → kernel → ai → core → agent → zhin。
 - **推荐首跑**： [examples/minimal-bot](examples/minimal-bot/)（Stable 黄金路径）。
+- **L4 参考**： [examples/full-bot](examples/full-bot/)（分维度 L4 DoD；`pnpm check:l4`）。
 - [examples/test-bot](examples/test-bot/) 为维护者厨房水槽（多 bot / Advanced 能力），非默认模板。
+- 进阶路径：**Stable（minimal-bot）→ L4（full-bot）→ 厨房水槽（test-bot）**。
 - **项目脚手架**：新建 workspace 用 `pnpm create zhin-app`（`create-zhin-app`）；已有项目增量配置用 `zhin setup`。二者共用 [`@zhin.js/scaffold-wizard`](packages/toolkit/scaffold-wizard/)。
 
 ## 常用命令
@@ -34,7 +36,9 @@
 - `pnpm check:doc-links`：检查文档相对链接是否断裂。
 - `pnpm sync:adapter-docs` / `pnpm check:adapter-docs`：平台适配器文档与 `plugins/adapters/*/README.md` 同步。
 - `pnpm --filter <pkg> build|test`：只验证单个包。
+- `pnpm check:l4`：L4 全维度验收（编排 + 语义记忆 + full-bot 契约 + MCP 鉴权；实机 IM 项 `L4_SKIP_PLATFORM=1` 跳过）。
 - 改 **CLI** 或 **create-zhin-app** 前，若报找不到 `@zhin.js/scaffold-wizard`，先执行 `pnpm --filter @zhin.js/scaffold-wizard build`（或 `pnpm prepare:cli` / 全量 `pnpm build`）。该包产物在 `lib/`，未构建时 Node 无法解析。
+- **ADR 0010 Harness**：IM 会话命令见 [examples/test-bot/TOOLS.md](examples/test-bot/TOOLS.md)；`zhin packages` 见 [docs/adr/0010-pi-coding-agent-harness-alignment.md](docs/adr/0010-pi-coding-agent-harness-alignment.md)。
 
 优先做最小范围验证，不要默认跑全量构建。
 
@@ -56,7 +60,7 @@
 - Host 运行时（router / api / mcp）：看 packages/host。
 - 可选服务插件：看 plugins/services。
 - 平台适配器：看 plugins/adapters。
-- 插件开发样例和本地验证：优先 examples/minimal-bot；全量见 examples/test-bot。
+- 插件开发样例和本地验证：优先 examples/minimal-bot；L4 全维度见 examples/full-bot；全量见 examples/test-bot。
 - **项目创建 / 配置向导**（适配器、AI、database 交互与写配置）：看 `packages/toolkit/scaffold-wizard/`；`create-zhin-app` 与 `basic/cli` 的 `setup` 均依赖它。
 
 ## 高价值路径
@@ -68,6 +72,9 @@
 - packages/im/agent/src/security/
 - packages/im/agent/src/bootstrap.ts
 - packages/im/zhin/src/index.ts
+- packages/im/zhin/src/setup/register-chat-message-store.ts
+- packages/im/ai/src/llm/api-registry.ts
+- packages/im/agent/src/service.ts（`refreshLlmApiRegistry` / `hasExplicitModelList`）
 - packages/im/zhin/src/setup/register-chat-message-store.ts
 - packages/im/ai/src/llm/api-registry.ts
 - packages/im/agent/src/service.ts（`refreshLlmApiRegistry` / `hasExplicitModelList`）

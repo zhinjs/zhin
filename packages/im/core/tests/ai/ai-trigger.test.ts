@@ -138,6 +138,33 @@ describe('AI Trigger 工具函数', () => {
     });
   });
 
+  describe('shouldTriggerAI - 群/频道仅 @ 触发', () => {
+    it('群聊 # 前缀不触发 AI（旁听由 session 被动写入）', () => {
+      const message = createMockMessage({
+        content: '# 你好',
+        channelType: 'group',
+        channelId: 'g1',
+      });
+      const result = shouldTriggerAI(message as any, { prefixes: ['#'], respondToAt: true });
+      expect(result.triggered).toBe(false);
+    });
+
+    it('群聊 @ 仍触发 AI', () => {
+      const message = createMockMessage({
+        content: [
+          { type: 'at', data: { user_id: 'bot123' } },
+          { type: 'text', data: { text: ' 问题' } },
+        ],
+        bot: 'bot123',
+        channelType: 'group',
+        channelId: 'g1',
+      });
+      const result = shouldTriggerAI(message as any, { prefixes: ['#'], respondToAt: true });
+      expect(result.triggered).toBe(true);
+      expect(result.content).toBe('问题');
+    });
+  });
+
   describe('shouldTriggerAI - @机器人触发', () => {
     it('应该检测 @机器人', () => {
       const message = createMockMessage({

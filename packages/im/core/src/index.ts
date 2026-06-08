@@ -17,6 +17,7 @@ export {
   CURRENT_USER_MESSAGE_MARKER,
   QUOTE_CONTEXT_SYSTEM_HINT,
   QUOTE_CONTEXT_SYSTEM_EXTRA_KEY,
+  QUOTE_CONTEXT_BLOCK_EXTRA_KEY,
   QUOTED_CONTENT_UNTRUSTED_NOTE,
   sanitizeQuotedBodyForPrompt,
 } from './built/prepend-quote-context.js'

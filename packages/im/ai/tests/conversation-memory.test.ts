@@ -78,13 +78,60 @@ describe('ConversationMemory（内存模式）', () => {
     it('appendPassiveGroupUserMessage 仅写入 user 行供后续 @ 带入', async () => {
       await memory.appendPassiveGroupUserMessage(
         'g1',
-        '[sender:id=u2 name=Bob roles=user] 旁听一句',
+        '旁听一句',
         { senderId: 'u2', senderRoles: ['user'] },
       );
-      await memory.saveRound('g1', '[sender:id=u1 roles=master] @bot 继续', '好的');
+      await memory.saveRound('g1', '@bot 继续', '好的', { senderId: 'u1', senderRoles: ['master'] });
 
       const context = await memory.buildContext('g1');
       expect(context.some(m => m.content.includes('旁听一句'))).toBe(true);
+      expect(context.some(m => m.content.includes('[sender:id=u1'))).toBe(true);
+      expect(context.some(m => m.content === '好的')).toBe(true);
+      expect(await memory.getCurrentRound('g1')).toBe(2);
+    });
+
+    it('upgradeToDatabase 迁移内存中的消息', async () => {
+      const mem = new ConversationMemory({ slidingWindowSize: 5, minTopicRounds: 5, topicChangeThreshold: 0.15 });
+      await mem.appendPassiveGroupUserMessage('s-migrate', '旁听', { senderId: 'u1' });
+      const rows: Array<{ session_id: string; round: number; role: string; content: string; created_at: number }> = [];
+      const msgModel = {
+        create: async (r: typeof rows[0]) => {
+          rows.push(r);
+          return r;
+        },
+        select: async () => rows,
+        aggregate: () => ({
+          where: (q: { session_id?: string }) => ({
+            max: async (_col: string, alias: string) => {
+              const sid = q.session_id;
+              const matched = sid ? rows.filter((r) => r.session_id === sid) : rows;
+              const max = matched.length ? Math.max(...matched.map((r) => r.round)) : 0;
+              return [{ [alias]: max }];
+            },
+          }),
+        }),
+      };
+      const sumModel = {
+        create: async () => ({}),
+        select: async () => [],
+      };
+      await mem.upgradeToDatabase(msgModel as any, sumModel as any);
+      expect(await mem.hasStoredMessages('s-migrate')).toBe(true);
+      expect(rows.some((r) => r.content === '旁听')).toBe(true);
+      mem.dispose();
+    });
+
+    it('appendPassiveGroupUserMessage 仅写入 user 行供后续 @ 带入', async () => {
+      await memory.appendPassiveGroupUserMessage(
+        'g1',
+        '旁听一句',
+        { senderId: 'u2', senderRoles: ['user'] },
+      );
+      await memory.saveRound('g1', '@bot 继续', '好的', { senderId: 'u1', senderRoles: ['master'] });
+
+      const context = await memory.buildContext('g1');
+      expect(context.some(m => m.content.includes('旁听一句'))).toBe(true);
+      expect(context.some(m => m.content.includes('[sender:id=u1'))).toBe(true);
       expect(context.some(m => m.content === '好的')).toBe(true);
       expect(await memory.getCurrentRound('g1')).toBe(2);
     });
@@ -158,6 +205,25 @@ describe('ConversationMemory（内存模式）', () => {
       expect(ctx1.some(m => m.content === '会话1')).toBe(true);
       expect(ctx1.some(m => m.content === '会话2')).toBe(false);
       expect(ctx2.some(m => m.content === '会话2')).toBe(true);
+    });
+  });
+
+  describe('session 内存缓存淘汰', () => {
+    it('定时器应淘汰 24h 未访问的 lastAccess', async () => {
+      vi.useFakeTimers();
+      const mem = new ConversationMemory({
+        minTopicRounds: 5,
+        slidingWindowSize: 3,
+        topicChangeThreshold: 0.15,
+      });
+      await mem.saveRound('stale-cache', 'u', 'a');
+      const access = (mem as unknown as { lastAccess: Map<string, number> }).lastAccess;
+      access.set('stale-cache', Date.now() - 25 * 60 * 60 * 1000);
+
+      vi.advanceTimersByTime(5 * 60 * 1000);
+      expect(access.has('stale-cache')).toBe(false);
+      mem.dispose();
+      vi.useRealTimers();
     });
   });
 

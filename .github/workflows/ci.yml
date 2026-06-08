@@ -87,6 +87,11 @@ jobs:
       - name: stable path smoke
         run: pnpm check:stable
 
+      - name: L4 full-dimension check
+        run: pnpm check:l4
+        env:
+          L4_SKIP_PLATFORM: "1"
+
       - name: usePlugin top-level check
         run: pnpm check:use-plugin-top-level
       

@@ -180,3 +180,4 @@ export default defineConfig({
 - [AI 模块 — MCP 集成摘要](/advanced/ai#mcp-集成)
 - [配置文件 — Advanced AI 开关](/essentials/configuration#advanced-ai-开关)
 - [Agent 安全与角色](/advanced/agent-harness-engineering)
+- [Agent Mesh 硬编排 v1](/advanced/agent-mesh) — `agent.*` 四工具、总监 DAG、`ai.remoteAgents`

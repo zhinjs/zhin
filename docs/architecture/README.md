@@ -14,6 +14,8 @@
 | [Harness 工程](../contributing/harness-engineering.md) | 发送链路、层级依赖、CI 检查 |
 | [AI 模块](../advanced/ai.md) | `agents` 绑定、模型发现、`im_transcripts` / `agent_messages` |
 | [packages 子包 README](https://github.com/zhinjs/zhin/blob/main/packages/README.md) | `im/ai`、`im/agent`、`im/core`、`im/zhin` 包内说明 |
+| [AI 模块](../advanced/ai.md) | `agents` 绑定、模型发现、`im_transcripts` / `agent_messages` |
+| [packages 子包 README](https://github.com/zhinjs/zhin/blob/main/packages/README.md) | `im/ai`、`im/agent`、`im/core`、`im/zhin` 包内说明 |
 | [Agent 上下文块](agent-context-blocks.md) | 系统提示词分段与贡献者约定 |
 | [Agent 提示词贡献者](agent-prompt-contributors.md) | 平台专属 `AgentPromptContributor` |
 | [HTTP 路由编写](fetch-router-authoring.md) | Koa `Router` / `registerFetchRoute` 兼容 API |
@@ -34,6 +36,8 @@
 | Turn 执行器 | `packages/im/agent/src/zhin-agent/agent-loop-turn.ts`、`agent-loop-standalone.ts` |
 | 安全策略 | `packages/im/agent/src/security/` |
 | 遗留 Agent 类 | `packages/im/ai/src/agent/`（单测 / 直接 import） |
+| IM 落库 | `packages/im/zhin/src/setup/register-chat-message-store.ts` |
+| ApiRegistry / getModel | `packages/im/ai/src/llm/api-registry.ts` |
 | IM 落库 | `packages/im/zhin/src/setup/register-chat-message-store.ts` |
 | ApiRegistry / getModel | `packages/im/ai/src/llm/api-registry.ts` |
 | Host Router | `packages/host/router/src/` |

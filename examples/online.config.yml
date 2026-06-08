@@ -1,0 +1,99 @@
+database:
+  dialect: sqlite
+  filename: ./data/bot.db
+  mode: wal
+
+bots:
+  - context: icqq
+    name: ${ICQQ_ACCOUNT}
+    master: 1659488338
+    typingIndicator:
+      enabled: true
+      defaultEmoji: "60"
+      privateConfig:
+        type: "message"
+        message: "正在思考中..."
+      groupConfig:
+        type: "reaction"
+        emoji: "60"
+  - context: github
+    name: zhin-ai
+    app_id: ${GITHUB_APP_ID}
+    private_key: ${GITHUB_PRIVATE_KEY}
+    webhook_secret: ${GITHUB_WEBHOOK_SECRET}
+    webhook_path: /pub/github/webhook
+
+plugins:
+  - example
+  - "@zhin.js/http"
+  - "@zhin.js/console"
+  - "@zhin.js/adapter-sandbox"
+  - "@zhin.js/adapter-icqq"
+  - "@zhin.js/adapter-github"
+
+hostApi:
+  lazyLoad: true
+inbox:
+  enabled: true
+
+# AI：providers（命名实例）+ agents（绑定 + 可选 priority/match 入站路由）
+# 已移除 defaultProvider、agent.chatModel、ai.agent.toolSearch（编排默认走 tool_search + run_deferred_task）
+ai:
+  providers:
+    openai-main:
+      api: openai-completions
+      apiKey: ${AI_API_KEY}
+      baseUrl: ${AI_API_BASE}
+  agents:
+    zhin:
+      provider: openai-main
+      model: mimo-v2.5-pro
+      mcpServers: [icqq]
+  sessions:
+    maxHistory: 200
+    expireMs: 604800000
+    useDatabase: true
+  context:
+    enabled: true
+    maxRecentMessages: 100
+    summaryThreshold: 50
+    keepAfterSummary: 10
+    maxContextTokens: 4000
+  mcpServers:
+    # icqq 守护进程 MCP（地址/令牌：icqq service status / icqq config get mcp）
+    - name: icqq
+      transport: streamable-http
+      url: ${ICQQ_MCP_URL}
+      headers:
+        Authorization: "Bearer ${ICQQ_MCP_TOKEN}"
+  agent:
+    deferredToolMaxResults: 5
+    execSecurity: allowlist
+    execPreset: custom
+    execApprovalMode: ask
+    subagentExecApprovalMode: deny
+    workerExecApprovalMode: deny
+    taskExecApprovalMode: deny
+    execAllowlist:
+      - echo
+      - sort
+      - uniq
+      - jq
+      - icqq
+      - du
+      - df
+      - uname
+      - which
+  trigger:
+    prefixes:
+      - "AI:"
+    respondToAt: true
+    respondToPrivate: true
+    timeout: 60000
+
+60s:
+  apiBase: https://services.zhin.dev
+
+http:
+  token: ${HTTP_TOKEN}
+  base: /api

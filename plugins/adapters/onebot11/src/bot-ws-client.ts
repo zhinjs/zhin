@@ -4,7 +4,7 @@
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { clearInterval } from 'node:timers';
-import { formatCompact, Bot, Message, Notice, Request, segment, SendOptions, type QuotedMessagePayload } from 'zhin.js';
+import { formatCompact, Bot, Message, Notice, Request, segment, SendContent, SendOptions, type QuotedMessagePayload } from 'zhin.js';
 import { parseOneBotGetMsgResponse } from './onebot-get-msg.js';
 import type {
   OneBot11WsClientConfig,
@@ -139,7 +139,8 @@ export class OneBot11WsClient extends EventEmitter implements Bot<OneBot11WsClie
       $recall: async () => {
         await this.$recallMessage(message.$id);
       },
-      $reply: async (content: any[], quote?: boolean | string): Promise<string> => {
+      $reply: async (content: SendContent, quote?: boolean | string): Promise<string> => {
+        if (!Array.isArray(content)) content = [content];
         if (quote) content.unshift({ type: 'reply', data: { message_id: message.$id } });
         return await this.adapter.sendMessage({
           ...message.$channel,

@@ -12,6 +12,9 @@
 | [ADR 0009 — agentLoop 统一栈](/adr/0009-pi-aligned-ai-agent-core) | `im_transcripts` / `agent_messages`、agentLoop 迁移 |
 | [AI 模块](/advanced/ai) | `agents` 配置、ModelRegistry + `getModel`、工具与记忆 |
 | [packages 子包 README](https://github.com/zhinjs/zhin/tree/main/packages/README.md) | 各 npm 包 README 索引 |
+| [ADR 0009 — agentLoop 统一栈](/adr/0009-pi-aligned-ai-agent-core) | `im_transcripts` / `agent_messages`、agentLoop 迁移 |
+| [AI 模块](/advanced/ai) | `agents` 配置、ModelRegistry + `getModel`、工具与记忆 |
+| [packages 子包 README](https://github.com/zhinjs/zhin/tree/main/packages/README.md) | 各 npm 包 README 索引 |
 | [仓库结构](/contributing/repo-structure) | pnpm workspace、`src→lib` / `client→dist` |
 | [Harness 工程](/contributing/harness-engineering) | 发送链路、层级依赖、CI 检查 |
 | [Agent 上下文块](/architecture/agent-context-blocks) | 系统提示词分段与贡献者约定 |

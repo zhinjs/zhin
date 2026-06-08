@@ -61,6 +61,20 @@ Zhin.js 文档按三条跑道组织，对应不同目标。
 
 **验证环境**：[examples/test-bot](https://github.com/zhinjs/zhin/tree/main/examples/test-bot)（厨房水槽，非默认模板）。
 
+## L4 — 全维度参考
+
+**目标**：在 Stable 之上验收硬编排、语义记忆、MCP Agent Mesh、多适配器（Sandbox + NapCat + KOOK）。
+
+**建议阅读**：
+
+1. [Agent Mesh 硬编排](/advanced/agent-mesh)
+2. [MCP 集成](/advanced/mcp)
+3. [examples/full-bot](https://github.com/zhinjs/zhin/tree/main/examples/full-bot) README 与 ACCEPTANCE.md
+
+**验证**：`pnpm check:l4`（仓库根）；Stable 仍用 `pnpm check:stable`（仅 minimal-bot）。
+
+**进阶路径**：**Stable（minimal-bot）→ L4（full-bot）→ 厨房水槽（test-bot）**。
+
 ## 我现在该读哪篇？
 
 ```mermaid

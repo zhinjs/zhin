@@ -198,7 +198,17 @@ pnpm install
 | `agents/` | `*.agent.md`（扁平）或 `<name>/<name>.agent.md`（嵌套） | 文件化 Agent 预设：frontmatter + body 作为 systemPrompt |
 | 包根 | `plugin.yml` | 插件元数据清单（`name`、`description`、`version`），通过 `plugin.manifest` 访问 |
 
-**发现优先级**：工作区 `cwd/` > `~/.zhin/` > `data/` > 已加载插件包根。同名先发现者优先；程序化注册的同名 Tool 优先于文件化版本。
+**发现优先级**（各 kind 独立，实现见 `packages/im/agent/src/discovery/`）：
+
+| kind | 顺序（先发现者优先） |
+|------|----------------------|
+| `tools` | `cwd/tools/` → `~/.zhin/tools/` → `data/tools/` → 插件包 `tools/` |
+| `skills` | `cwd/skills/` → `~/.zhin/skills/` → `.agents/skills/`（cwd 向上至 git 根）→ 插件包 `skills/` → `~/.zhin/packages/` / `.zhin/packages/` |
+| `agents` | `cwd/agents/` → `~/.zhin/agents/` → `data/agents/` → 插件包 `agents/` |
+
+> **`data/skills/` 已删除**（ADR 0010）；请用 `skills/`、`.agents/skills/` 或 `zhin packages install`。
+
+程序化注册的同名 Tool 优先于文件化版本。
 
 ---
 

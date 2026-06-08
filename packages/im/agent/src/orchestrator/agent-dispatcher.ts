@@ -9,6 +9,8 @@
 
 import { randomUUID } from 'node:crypto';
 import type { AgentTool } from '@zhin.js/core';
+import type { OrchestrationTaskRecord, OrchestrationTaskStatus } from '@zhin.js/ai';
+import { taskRecordToAgentTaskShape, type OrchestrationRepository } from './orchestration-repository.js';
 
 // ── Agent 角色定义 ────────────────────────────────────────────────────
 
@@ -185,6 +187,8 @@ export const AGENT_ROLE_CONFIGS: Record<AgentRole, AgentRoleConfig> = {
 export interface AgentTask {
   /** 任务 ID */
   id: string;
+  /** 所属编排 run（硬编排模式） */
+  runId?: string;
   /** 任务名称 */
   name: string;
   /** 任务描述 */
@@ -199,6 +203,12 @@ export interface AgentTask {
   priority: 'low' | 'medium' | 'high' | 'critical';
   /** 依赖的任务 ID */
   dependencies?: string[];
+  /** 持久化任务状态 */
+  status?: OrchestrationTaskStatus;
+  /** 执行器：local 子 agent / remote MCP delegate */
+  executorKind?: 'local' | 'remote';
+  remoteAgentId?: string;
+  remoteTaskId?: string;
   /** 超时时间（毫秒） */
   timeout?: number;
   /** 最大重试次数 */
@@ -245,6 +255,7 @@ export class AgentDispatcher {
   private running: Map<string, Promise<AgentResult>> = new Map();
   private taskTimestamps = new Map<string, number>();
   private cleanupTimer?: ReturnType<typeof setInterval>;
+  private repository: OrchestrationRepository | null = null;
 
   private static readonly MAX_STORED_TASKS = 500;
   private static readonly TASK_TTL_MS = 24 * 60 * 60 * 1000;
@@ -257,22 +268,87 @@ export class AgentDispatcher {
     }
   }
 
+  setRepository(repository: OrchestrationRepository | null): void {
+    this.repository = repository;
+  }
+
+  /** 从 DB 记录同步到内存（硬编排 SSOT 写穿缓存） */
+  syncTaskFromRecord(record: OrchestrationTaskRecord): void {
+    const shape = taskRecordToAgentTaskShape(record);
+    const task: AgentTask = {
+      id: shape.id,
+      runId: shape.runId,
+      name: shape.name,
+      description: shape.description,
+      role: shape.role as AgentRole,
+      goal: shape.goal,
+      dependencies: shape.dependencies,
+      priority: shape.priority,
+      context: shape.context,
+      status: shape.status,
+      executorKind: shape.executorKind,
+      remoteAgentId: shape.remoteAgentId,
+      remoteTaskId: shape.remoteTaskId,
+    };
+    this.tasks.set(task.id, task);
+    this.taskTimestamps.set(task.id, record.updated_at || Date.now());
+
+    if (record.status === 'completed') {
+      this.results.set(task.id, {
+        taskId: task.id,
+        role: task.role,
+        success: true,
+        summary: record.result_summary || 'completed',
+        duration: (record.finished_at ?? record.updated_at) - (record.started_at ?? record.created_at),
+      });
+      this.running.delete(task.id);
+    } else if (record.status === 'failed') {
+      this.results.set(task.id, {
+        taskId: task.id,
+        role: task.role,
+        success: false,
+        summary: record.result_summary || 'failed',
+        error: record.error,
+        duration: (record.finished_at ?? record.updated_at) - (record.started_at ?? record.created_at),
+      });
+      this.running.delete(task.id);
+    } else if (record.status === 'skipped') {
+      this.results.set(task.id, {
+        taskId: task.id,
+        role: task.role,
+        success: true,
+        summary: record.error || 'skipped',
+        duration: 0,
+      });
+      this.running.delete(task.id);
+    } else if (record.status === 'running') {
+      this.results.delete(task.id);
+    } else {
+      this.results.delete(task.id);
+      this.running.delete(task.id);
+    }
+  }
+
   /**
    * 创建任务
    */
-  createTask(task: Omit<AgentTask, 'id'>): AgentTask {
-    const id = randomUUID().slice(0, 8);
-    const fullTask: AgentTask = { ...task, id };
+  createTask(task: Omit<AgentTask, 'id'> & { id?: string }): AgentTask {
+    const id = task.id ?? randomUUID().slice(0, 8);
+    const fullTask: AgentTask = { ...task, id, status: task.status ?? 'pending' };
     this.tasks.set(id, fullTask);
     this.taskTimestamps.set(id, Date.now());
-    this.evictIfOverCapacity();
+    if (!fullTask.runId) {
+      this.evictIfOverCapacity();
+    }
     return fullTask;
   }
 
   /**
-   * 释放任务元数据（子 Agent 仅借用调度器生成 prompt 时应在 finally 中调用）
+   * 释放任务元数据（仅用于无 runId 的临时 prompt 任务）
    */
   releaseTask(taskId: string): void {
+    const task = this.tasks.get(taskId);
+    if (task?.runId) return;
     this.tasks.delete(taskId);
     this.results.delete(taskId);
     this.running.delete(taskId);
@@ -397,12 +473,16 @@ export class AgentDispatcher {
         return { valid: false, reason: `依赖任务 ${depId} 不存在` };
       }
 
+      if (depTask.status === 'failed') {
+        return { valid: false, reason: `依赖任务 ${depId} 已失败，需 retry 或 skip 后才能继续` };
+      }
+
       const depResult = this.results.get(depId);
       if (!depResult) {
         return { valid: false, reason: `依赖任务 ${depId} 尚未完成` };
       }
 
-      if (!depResult.success) {
+      if (!depResult.success && depTask.status !== 'skipped') {
         return { valid: false, reason: `依赖任务 ${depId} 执行失败` };
       }
     }
@@ -444,6 +524,21 @@ export class AgentDispatcher {
   recordResult(result: AgentResult): void {
     this.results.set(result.taskId, result);
     this.running.delete(result.taskId);
+    const task = this.tasks.get(result.taskId);
+    if (task) {
+      task.status = result.success ? 'completed' : 'failed';
+    }
+    if (this.repository && task?.runId) {
+      void this.repository.updateTaskStatus(
+        result.taskId,
+        result.success ? 'completed' : 'failed',
+        {
+          result_summary: result.summary,
+          error: result.error ?? '',
+          finished_at: Date.now(),
+        },
+      );
+    }
   }
 
   /**
@@ -451,6 +546,17 @@ export class AgentDispatcher {
    */
   markRunning(taskId: string, promise: Promise<AgentResult>): void {
     this.running.set(taskId, promise);
+    const task = this.tasks.get(taskId);
+    if (task) task.status = 'running';
+    if (this.repository && task?.runId) {
+      void this.repository.updateTaskStatus(taskId, 'running', { started_at: Date.now() });
+    }
+  }
+
+  async hydrateRun(runId: string): Promise<void> {
+    if (!this.repository) return;
+    const tasks = await this.repository.listTasksByRun(runId);
+    for (const t of tasks) this.syncTaskFromRecord(t);
   }
 
   /**
@@ -496,6 +602,8 @@ export class AgentDispatcher {
     let cleaned = 0;
 
     for (const [taskId, result] of this.results.entries()) {
+      const task = this.tasks.get(taskId);
+      if (task?.runId) continue;
       if (result.success) {
         this.releaseTask(taskId);
         cleaned++;
@@ -503,6 +611,8 @@ export class AgentDispatcher {
     }
 
     for (const [taskId, createdAt] of this.taskTimestamps.entries()) {
+      const task = this.tasks.get(taskId);
+      if (task?.runId) continue;
       if (now - createdAt > AgentDispatcher.TASK_TTL_MS) {
         this.releaseTask(taskId);
         cleaned++;
@@ -515,13 +625,23 @@ export class AgentDispatcher {
 
   private evictIfOverCapacity(): number {
     let cleaned = 0;
-    while (this.tasks.size > AgentDispatcher.MAX_STORED_TASKS) {
-      const oldest = [...this.taskTimestamps.entries()].sort((a, b) => a[1] - b[1])[0];
-      if (!oldest) break;
-      this.releaseTask(oldest[0]);
+    while (this.countEphemeralTasks() > AgentDispatcher.MAX_STORED_TASKS) {
+      const ephemeral = [...this.taskTimestamps.entries()]
+        .filter(([id]) => !this.tasks.get(id)?.runId)
+        .sort((a, b) => a[1] - b[1])[0];
+      if (!ephemeral) break;
+      this.releaseTask(ephemeral[0]);
       cleaned++;
     }
     return cleaned;
+  }
+
+  private countEphemeralTasks(): number {
+    let n = 0;
+    for (const task of this.tasks.values()) {
+      if (!task.runId) n += 1;
+    }
+    return n;
   }
 
   dispose(): void {

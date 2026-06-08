@@ -132,7 +132,7 @@ flowchart TD
 | `message.receive` | MessageDispatcher 处理完成后 | `im_transcripts`（direction=inbound，`body` + `media_json`） |
 | `message.send` | `Adapter.sendMessage` 平台发送成功后 | `im_transcripts`（direction=outbound） |
 
-**LLM 对话历史**（epoch 内多轮 tool-calling）由 `ContextRepository` 读写 `agent_messages`；turn 结束 `appendMessages`。归档会话：`/new` 或 `ai.clear`（归档 `agent_sessions`，保留 `im_transcripts` 审计行）。
+**LLM 对话历史**（epoch 内多轮 tool-calling）由 `ContextRepository` 读写 `agent_messages`；turn 结束 `appendMessages`。归档会话：`/reset`（归档 `agent_sessions`，保留 `im_transcripts` 审计行）。
 
 > 旧表 `chat_messages` / `ai_sessions` / `ai_summaries` 已不再注册或读写；删库重建后仅创建 ADR 0009 五表。
 
@@ -242,6 +242,10 @@ ai:
 | `phaseTrace` | boolean | false | 开启后输出稳定 `[AGENT_PHASE]` 回合阶段日志（或 `ZHIN_AGENT_PHASE_TRACE=1`） |
 | `modelHarness.providerPatterns` | object | {} | 按 provider 模式（支持 `*`）覆盖 harness |
 | `modelHarness.models` | object | {} | 按 model id 覆盖 harness；支持 `model` 或 `provider:model` 精确键 |
+| `compaction.enabled` | boolean | true | 是否启用 L1+L2 压缩 |
+| `compaction.auto` | boolean | true | 接近窗口时自动 L2 |
+| `compaction.keepRecentTokens` | number | 20000 | L2 后保留最近消息 token 预算 |
+| `compaction.minKeepCount` | number | 2 | L2 后至少保留消息条数 |
 
 `modelHarness` 与 TypeScript 默认表（`packages/im/agent/src/zhin-agent/model-harness.ts`）按 **ADR 0006** 规则合并：对象 deep merge，数组显式写出时完整覆盖默认数组。
 
@@ -584,8 +588,8 @@ AI 模块提供事件钩子，允许插件监听和响应 AI 行为。
 |------|---------|
 | `message:received` | AI 收到用户消息时 |
 | `message:sent` | AI 发送回复时 |
-| `session:compact` | 会话压缩时 |
-| `session:new` | 新会话创建时 |
+| `ai.session.compact` | 会话压缩时（L2 compaction 或 `/compact`） |
+| `ai.session.new` | 新 epoch 创建时（`/reset` 后下次 @） |
 | `agent:bootstrap` | Agent 初始化时 |
 | `tool:call` | 工具被调用时 |
 
@@ -601,25 +605,29 @@ registerAIHook('message:received', async (event) => {
 
 ## 会话压缩
 
-`compactSession` 模块管理上下文窗口，防止 token 超限。
+生产路径（ADR 0010）：`ZhinAgent` → `agentLoop` 的 **`transformContext`** 钩子依次执行 **L1 micro**（旧 tool 结果占位）与 **L2 LLM** 摘要（`agent_summaries`）。溢出时 `onContextOverflow` 触发压缩并重试一次。
 
-### 策略
-
-1. **Token 预算**：`contextTokens`（默认 128000）定义总上下文窗口大小
-2. **历史占比**：`maxHistoryShare`（默认 0.5）限制历史消息最多占用 50% 的窗口
-3. **自动修剪**：`pruneHistoryForContext` 从最旧的消息开始丢弃，直到符合预算
-4. **分阶段摘要**：`summarizeInStages` 对超长历史进行分块摘要
-
-### 上下文窗口守卫
-
-```typescript
-const guard = evaluateContextWindowGuard({
-  messages: historyMessages,
-  maxContextTokens: 128000,
-  maxHistoryShare: 0.5,
-})
-// guard.status: 'ok' | 'warning' | 'critical'
+```yaml
+ai:
+  agent:
+    compaction:
+      enabled: true      # 默认 true
+      auto: true         # 接近 contextWindow 时自动 L2
+      keepRecentTokens: 20000
+      minKeepCount: 2
 ```
+
+| IM 命令 | 说明 |
+|---------|------|
+| `/compact` | 手动 L2 压缩当前 epoch（master / trusted） |
+| `/tree` · `/tree N` | 查看会话树、切换 `active_leaf` 分支 |
+| `/reset` | 归档当前 epoch；`im_transcripts` 保留 |
+
+`loadContext` 沿 `parent_id` 从 `active_leaf_message_id` 回溯；切换分支时可能触发 **branch summarization**（`agent_summaries.branch_anchor_message_id`）。Console：`GET/POST /api/agent/sessions/:sessionKey/tree|leaf`。
+
+插件可在内置压缩之后链式扩展：`ctx.ai.onTransformContext(...)`。事件：`plugin.on('ai.session.compact', ...)`。
+
+> 库级 API（`compactSession`、`pruneHistoryForContext`、`evaluateContextWindowGuard`）仍可从 `@zhin.js/ai` 导入，供单测与程序化调用；IM 主路径以上述 `transformContext` 为准。映射见 [pi-coding-agent-mapping](./pi-coding-agent-mapping.md)。
 
 ## Bootstrap 引导文件
 
@@ -1222,3 +1230,15 @@ interface ProviderCapabilities {
   thinking?: boolean    // 思考模式
 }
 ```
+
+## IM 运维与内省命令
+
+由 `@zhin.js/agent` 注册（master / 有权限用户），完整表见各项目 `TOOLS.md` 或 [test-bot TOOLS.md](https://github.com/zhinjs/zhin/blob/main/examples/test-bot/TOOLS.md)：
+
+| 类别 | 命令 |
+|------|------|
+| 会话 | `/compact` · `/tree` · `/tree N` · `/reset` |
+| 运维 | `/models` · `/health` |
+| 内省 | `/cmd` · `/bots` · `/bindings` · `/tools` · `/mcp`（支持 `[filter] [page]`，REST：`GET /api/introspection/*`） |
+
+zhin-package：`zhin packages install`。详见 [CLI 参考](/reference/cli) 与 [ADR 0010](../adr/0010-pi-coding-agent-harness-alignment.md)。

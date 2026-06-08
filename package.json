@@ -47,6 +47,7 @@
     "check:adapter-docs": "node scripts/sync-adapter-docs.mjs --check",
     "sync:adapter-docs": "node scripts/sync-adapter-docs.mjs",
     "check:stable": "node scripts/run-stable-smoke.mjs",
+    "check:l4": "node scripts/run-l4-check.mjs",
     "check:use-plugin-top-level": "node scripts/check-use-plugin-top-level.mjs",
     "check:all": "node scripts/check-all-harness.mjs",
     "type-check": "tsc --noEmit",

@@ -1,5 +1,5 @@
 /**
- * IM 内省指令格式化（/commands、/bots、/tools 等）
+ * IM 内省指令格式化（/cmd、/bots、/tools 等）
  */
 import type { MessageCommand } from '@zhin.js/core';
 
@@ -45,7 +45,7 @@ export function formatCommandsList(commands: CommandRow[], max = commands.length
     lines.push(`  • ${c.pattern}${desc}`);
   }
   if (sorted.length > max) {
-    lines.push('', `… 还有 ${sorted.length - max} 条，可用 /commands 查看完整列表（当前截断 ${max}）`);
+    lines.push('', `… 还有 ${sorted.length - max} 条，可用 /cmd 查看完整列表（当前截断 ${max}）`);
   }
   return lines.join('\n');
 }
@@ -70,8 +70,8 @@ export function formatBotsList(bots: BotRow[]): string {
 }
 
 export function formatAgentsList(agents: AgentRow[]): string {
-  if (agents.length === 0) return '🧠 暂无 ai.agents 配置';
-  const lines = ['🧠 Agent 绑定 (' + agents.length + ')', ''];
+  if (agents.length === 0) return '🧠 暂无 ai.agents 绑定';
+  const lines = ['🧠 ai.agents 绑定 (' + agents.length + ')', ''];
   for (const a of agents) {
     const mcp = a.mcpServers.length ? a.mcpServers.join(', ') : '-';
     const file = a.hasAgentFile ? 'agent.md ✓' : 'agent.md -';
@@ -127,6 +127,6 @@ function truncate(text: string, max: number): string {
 export function introspectionHelpFooter(): string {
   return [
     '',
-    '💡 内省指令：/commands · /adapters · /bots · /agents · /tools · /mcp-servers',
+    '💡 内省指令：/cmd · /bots · /bindings · /tools · /mcp',
   ].join('\n');
 }

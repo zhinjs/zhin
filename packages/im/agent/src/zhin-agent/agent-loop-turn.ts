@@ -3,6 +3,7 @@
  */
 
 import { getPlugin, type Plugin } from '@zhin.js/core';
+import type { AIService } from '../service.js';
 import { formatCompact, Logger } from '@zhin.js/logger';
 import type { AgentTool, Usage } from '@zhin.js/ai';
 import {
@@ -25,11 +26,21 @@ import { buildAgentPathSystemPrompt, buildChatPathSystemPrompt } from './prompt-
 import { planToolRun } from './tool-runtime.js';
 import { sanitizeAssistantReply } from './text-sanitize.js';
 import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-format.js';
+import { transformContextWithCompaction } from './compaction-runtime.js';
 import { logPhase, usageLogFields } from './phase-trace.js';
 import type { PromptTurnHooks } from './prompt-controller.js';
 import type { ZhinAgentPrivate, OnChunkCallback, ToolContext } from './zhin-agent-private.js';
 
 const logger = new Logger(null, 'ZhinAgent:AgentLoopTurn');
+
+function resolveAIService(plugin?: Plugin): AIService | undefined {
+  if (!plugin) return undefined;
+  try {
+    return plugin.inject?.('ai') as AIService | undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 function tokenUsageToLegacy(usage: TokenUsage): Usage {
   return {
@@ -63,7 +74,8 @@ function toolResultToAgentMessage(
 export interface AgentLoopTurnInput {
   host: ZhinAgentPrivate;
   sessionId: string;
-  sessionUserContent: string;
+  /** 本轮 user 消息 extra（入库 agent_messages.extra） */
+  userMessageExtra?: import('@zhin.js/ai').AgentMessageExtra;
   rawContent: string;
   context: ToolContext;
   contextForTools: ToolContext;
@@ -202,7 +214,7 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
   const {
     host,
     sessionId,
-    sessionUserContent,
+    userMessageExtra,
     context,
     contextForTools,
     allTools,
@@ -221,7 +233,7 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
   const loaded = await repo.loadContext(sessionId);
   const promptMessages = input.initialMessages?.length
     ? input.initialMessages
-    : [createUserMessage(sessionUserContent)];
+    : [createUserMessage(input.rawContent)];
 
   const toolRun = allTools.length > 0
     ? await planToolRun(resolvedTools, host.config.preExecTimeout)
@@ -292,10 +304,38 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
     tools: llmTools,
   });
 
+  const contextWindow = llmModel.contextWindow ?? host.config.contextTokens;
+  const aiService = resolveAIService(orchestrationPlugin);
+  const loopHooks = aiService?.loopHooks;
+
   const loopConfig = {
     model: llmModel,
     maxIterations,
+    sessionId,
     convertToLlm: (messages: AgentMessage[]) => messages,
+    transformContext: async (messages: AgentMessage[], ctxSignal?: AbortSignal) =>
+      transformContextWithCompaction(messages, ctxSignal, {
+        host,
+        sessionId,
+        context: contextForTools,
+        model: llmModel,
+        compactionConfig: host.config.compaction,
+        contextWindow,
+        mode: 'text',
+        loopHooks,
+      }),
+    onContextOverflow: async (messages: AgentMessage[], ctxSignal?: AbortSignal) =>
+      transformContextWithCompaction(messages, ctxSignal, {
+        host,
+        sessionId,
+        context: contextForTools,
+        model: llmModel,
+        compactionConfig: host.config.compaction,
+        contextWindow,
+        mode: 'text',
+        force: true,
+        loopHooks,
+      }),
     getSteeringMessages: promptHooks?.getSteeringMessages,
     getFollowUpMessages: promptHooks?.getFollowUpMessages,
     executeTool: async (toolCall: ParsedToolCall, _tools: typeof llmTools, toolSignal?: AbortSignal) => {
@@ -334,7 +374,10 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
         toolName: toolCall.name,
         args: toolCall.arguments,
       }));
-      return undefined;
+      return loopHooks?.runBeforeToolCall({ toolCall, sessionId });
+    },
+    afterToolCall: async ({ toolCall, result }: { toolCall: ParsedToolCall; result: AgentMessage }) => {
+      await loopHooks?.runAfterToolCall({ toolCall, result, sessionId });
     },
   };
 
@@ -353,7 +396,11 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
     }
     if (event.type === 'agent_end') {
       const userBatch = event.userMessages ?? promptMessages;
-      await repo.appendMessages(sessionId, [...userBatch, ...event.messages]);
+      const batch = [...userBatch, ...event.messages];
+      const messageExtras = batch.map((msg, i) => (
+        msg.role === 'user' && i < userBatch.length ? userMessageExtra : undefined
+      ));
+      await repo.appendMessages(sessionId, batch, { messageExtras });
     }
   }
 

@@ -50,6 +50,14 @@ export const HISTORY_CONTEXT_MARKER = '[Chat messages since your last reply - fo
 export const CURRENT_MESSAGE_MARKER = '[Current message - respond to this]';
 
 export type OnChunkCallback = (chunk: string, full: string) => void;
+
+/** ADR 0010 — session compaction config. */
+export interface CompactionConfig {
+  enabled?: boolean;
+  auto?: boolean;
+  keepRecentTokens?: number;
+  minKeepCount?: number;
+}
 const TRUE_VALUES = new Set(['1', 'true', 'yes', 'on']);
 
 /** 上下文感知内置工具的关键词触发正则 */
@@ -75,6 +83,7 @@ export interface ZhinAgentConfig {
   visionModel?: string;
   contextTokens?: number;
   maxHistoryShare?: number;
+  compaction?: CompactionConfig;
   disabledTools?: string[];
   allowedTools?: string[];
   execSecurity?: 'deny' | 'allowlist' | 'full';
@@ -113,6 +122,8 @@ export interface ZhinAgentConfig {
   deferredToolMaxResults?: number;
   /** 主 Agent 常驻编排工具名 */
   orchestratorTools?: string[];
+  /** 硬编排 v1：spawn_task 需 run_id+task_id，启用总监 DAG 工具 */
+  hardOrchestration?: boolean;
   /** Deferred Worker 基础工具（另加 TF-IDF 载入的 deferred） */
   workerBaseTools?: string[];
   /** 单轮平台 prompt 段 body 上限（字符） */
@@ -128,6 +139,12 @@ export interface ZhinAgentConfig {
    * 设为 0 禁用熔断。
    */
   policyDenialStopAfter?: number;
+  /**
+   * @deprecated Worker 结果经 run_deferred_task 同步回传主 Agent，不再使用独立 auto_continue 回合。
+   */
+  deferredAutoContinue?: boolean;
+  /** @deprecated 见 deferredAutoContinue */
+  deferredAutoContinueMaxDepth?: number;
 }
 
 /** 主 Agent 默认常驻编排工具（不含 activate_skill：执行一律经 Worker；文生图走 deferred） */
@@ -136,6 +153,21 @@ export const DEFAULT_ORCHESTRATOR_TOOLS = [
   'run_deferred_task',
   'ask_user',
   'spawn_task',
+] as const;
+
+/** 硬编排 v1 追加的总监工具 */
+export const HARD_ORCHESTRATION_TOOLS = [
+  'orchestration_start',
+  'orchestration_add_task',
+  'orchestration_status',
+  'orchestration_complete',
+  'orchestration_retry_task',
+  'orchestration_skip_task',
+] as const;
+
+export const DEFAULT_HARD_ORCHESTRATOR_TOOLS = [
+  ...DEFAULT_ORCHESTRATOR_TOOLS,
+  ...HARD_ORCHESTRATION_TOOLS,
 ] as const;
 
 /** 不进入主编排也不进入 deferred 目录 */
@@ -172,6 +204,12 @@ export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   visionModel: '',
   contextTokens: DEFAULT_CONTEXT_TOKENS,
   maxHistoryShare: 0.5,
+  compaction: {
+    enabled: true,
+    auto: true,
+    keepRecentTokens: 20_000,
+    minKeepCount: 2,
+  },
   disabledTools: [],
   allowedTools: [],
   execSecurity: 'deny',
@@ -191,12 +229,15 @@ export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   onPhaseTrace: () => {},
   deferredToolMaxResults: 8,
   orchestratorTools: [...DEFAULT_ORCHESTRATOR_TOOLS],
+  hardOrchestration: false,
   workerBaseTools: [...DEFAULT_WORKER_BASE_TOOLS],
   platformPromptSectionMaxChars: 2048,
   platformPromptMaxChars: 4096,
   steeringMode: DEFAULT_STEERING_MODE,
   followUpMode: DEFAULT_FOLLOW_UP_MODE,
   policyDenialStopAfter: 2,
+  deferredAutoContinue: false,
+  deferredAutoContinueMaxDepth: 8,
 };
 
 /** `env` 参数主要用于测试注入，运行时默认读取 `process.env`。 */

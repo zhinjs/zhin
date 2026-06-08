@@ -18,7 +18,8 @@ Zhin AI Agent 组合层：在 `@zhin.js/core` 的类型与 Provider 之上，提
 - 📦 **上下文与记忆**：`ContextRepository`（`agent_messages`）、`AgentSessionStore`、`ImTranscriptStore`（`im_transcripts` + `chat_history`）；辅助：`ContextManager`、`ConversationMemory`、`UserProfileStore`
 - ⏰ **跟进与定时**：`FollowUpManager`、`PersistentCronEngine`、cron 工具
 - 🔧 **内置工具**：bash、read_file、write_file、ask_user、web_search、`chat_history`（按关键词/最近条数查 `im_transcripts`）等
-- 📐 **会话压缩**：`compactSession`、token 估算、总结与裁剪
+- 📐 **Compaction（ADR 0010）**：生产 `agentLoop` 接线 L1 micro + L2 LLM；IM `/compact`；yaml `ai.agent.compaction`
+- 🌳 **会话树**：`parent_id` + `active_leaf`；IM `/tree`、`/reset`；branch summarization；Console `GET/POST /api/agent/sessions/...`
 - 🪝 **Hook 系统**：`registerAIHook`、`triggerAIHook` 等
 
 ## 依赖关系
@@ -128,7 +129,7 @@ declare module '@zhin.js/core' {
 
 默认**不**注册 `@modelcontextprotocol/server-memory`；设 `ai.memoryMcp: true` 启用（`data/knowledge-graph.jsonl`）。另可通过 `ai.mcpServers`（或 `ctx.agent.addMcp`）注册更多 Server；每次 AI 回合前懒连接，`mcp_{server}_{tool}` 并入 ZhinAgent 工具池。需可选安装 `@modelcontextprotocol/sdk`（peer dependency）。
 
-**记忆**：内置 `read_memory` / `write_memory` 已移除，请使用 `mcp_memory_read_graph`、`mcp_memory_create_entities` 等。工作区 `AGENTS.md` 仍由 bootstrap 注入。
+**记忆**：默认 **文件三层**（`ai.memory` → `data/memory/`）；内置 `read_memory` / `write_memory` 已移除。`ai.memoryMcp: true` 时另注册 MCP 图谱（弃用路径）。工作区 `AGENTS.md` / `TOOLS.md` 由 bootstrap 注入。
 
 ```yaml
 ai:
@@ -234,6 +235,33 @@ ai:
       model: mimo-v2.5-pro
 ```
 
+## Provider 与模型列表
+
+`AIService` 构造时：
+
+1. 按 `ai.providers.<别名>` 实例化 Provider（须配置 `api`，如 `openai-completions`）。
+2. `registerLlmApiFromProviders`：**未写 `models` 的 provider** 在 ApiRegistry 注册为空白名单，由后台 `ModelRegistry.discover()` 填充 `provider.models`；**写了 `models`** 则用 yaml 白名单。
+3. `createZhinAgent` 启动时 `loadCache()` 先恢复上次发现结果，再异步刷新 `/v1/models`。
+
+`agents.<name>.model`（如 `mimo-v2.5-pro`）须在发现列表中，或在中转 API 的 `/v1/models` 响应里出现；无需为每个模型手写 yaml，除非要锁定白名单。
+
+```yaml
+ai:
+  providers:
+    openai-main:
+      api: openai-completions
+      baseUrl: ${OPENAI_BASE_URL}
+      apiKey: ${OPENAI_API_KEY}
+      # models 省略 → 自动 GET /v1/models
+    cloudflare-flash:
+      api: cloudflare-workers-ai
+      models: ["@cf/zai-org/glm-4.7-flash"]  # 显式列表
+  agents:
+    zhin:
+      provider: openai-main
+      model: mimo-v2.5-pro
+```
+
 ## Model harness
 
 按 provider / model 覆盖 Agent 循环默认参数（当前主要为 **`maxIterations`**）。
@@ -261,6 +289,18 @@ ai:
 运行时由 `resolveModelHarness(providerName, modelName, config?.modelHarness)` 解析；包入口导出 `MODEL_HARNESS_DEFAULTS`、`resolveModelHarness`、`mergeModelHarnessValues` 与 `ModelHarnessConfig` 类型。未命中任何规则时回退 TS 默认行或空对象；当前仅消费 `maxIterations`，未知 YAML 字段会被忽略。
 
 增补内置默认值：在 `model-harness.ts` 增加 `ModelHarnessRow` 并附测试；YAML 只做覆盖，不替代 TS 约定层。
+
+## IM 管理命令
+
+由 `register-management-tools.ts` / `register-introspection-commands.ts` 注册（master / 有权限用户）：
+
+| 类别 | 命令 |
+|------|------|
+| 会话 | `/compact` · `/tree` · `/tree N` · `/reset` |
+| 运维 | `/models` · `/health` |
+| 内省 | `/cmd` · `/bots` · `/bindings` · `/tools` · `/mcp` |
+
+zhin-package CLI：`zhin packages`（`basic/cli`）。详见 [ADR 0010](../../docs/adr/0010-pi-coding-agent-harness-alignment.md)。
 
 ## 开发
 

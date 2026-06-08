@@ -5,6 +5,8 @@ import fs from 'fs-extra';
 import path from 'path';
 import yaml from 'yaml';
 import { CREATE_PROJECT_COMMAND } from '../utils/create-project.js';
+import { ensureGlobalHome, installGlobalHomeDeps } from '../utils/global-home-init.js';
+import { globalZhinHome } from '../utils/zhin-home.js';
 import { logger } from '../utils/logger.js';
 import {
   configureDatabaseOptions,
@@ -178,17 +180,28 @@ async function saveConfig(filePath: string, config: any): Promise<void> {
 
 export const setupCommand = new Command('setup')
   .description('交互式配置向导')
+  .option('--global', '在 ~/.zhin 初始化并配置全局实例')
   .option('--bootstrap', '仅配置引导文件')
   .option('--database', '仅配置数据库')
   .option('--adapters', '仅配置适配器')
   .option('--ai', '仅配置 AI')
   .action(async (options) => {
-    const cwd = process.cwd();
+    const cwd = options.global
+      ? await ensureGlobalHome({ install: false })
+      : process.cwd();
     const pkgPath = path.join(cwd, 'package.json');
-    
+
     if (!fs.existsSync(pkgPath)) {
-      logger.error(`当前目录不是有效的 Zhin 项目，请先使用 ${CREATE_PROJECT_COMMAND} 创建项目`);
+      if (options.global) {
+        logger.error(`无法初始化全局实例目录 ${globalZhinHome()}`);
+      } else {
+        logger.error(`当前目录不是有效的 Zhin 项目，请先使用 ${CREATE_PROJECT_COMMAND} 创建项目，或 zhin setup --global`);
+      }
       process.exit(1);
+    }
+
+    if (options.global) {
+      console.log(chalk.bold.cyan(`\n🌐 Zhin 全局实例（${globalZhinHome()}）\n`));
     }
 
     console.log(chalk.bold.cyan('\n🚀 Zhin 配置向导\n'));
@@ -259,8 +272,16 @@ export const setupCommand = new Command('setup')
         console.log(chalk.gray(`配置文件: ${configPath}`));
       }
 
+      if (options.global) {
+        console.log('');
+        console.log(chalk.gray('正在安装全局实例依赖…'));
+        installGlobalHomeDeps(cwd);
+      }
+
       console.log('');
-      console.log(chalk.cyan('💡 提示: 运行 "zhin dev" 启动开发服务器'));
+      console.log(chalk.cyan(options.global
+        ? '💡 提示: 任意目录运行 "zhin start" 或 "zhin dev" 启动全局实例'
+        : '💡 提示: 运行 "zhin dev" 启动开发服务器'));
     } catch (error: any) {
       logger.error(`配置失败: ${error.message}`);
       process.exit(1);

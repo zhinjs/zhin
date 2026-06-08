@@ -168,6 +168,7 @@ always: false
 - `tools` 声明关联的工具名，框架自动与 `addTool()` 注册的工具匹配
 - `always: true` 时技能指令常驻注入 system prompt，无需 `activate_skill` 激活
 - `keywords` 用于 AI 粗筛匹配，命中时自动注入 `activate_skill` 工具
+- 发现顺序：`cwd/skills/` → `~/.zhin/skills/` → `.agents/skills/`（向上至 git 根）→ 插件包 `skills/` → `zhin packages` 目录（**无** `data/skills/`）
 
 ### Agent 预设（标准 *.agent.md 文件，框架自动发现）
 

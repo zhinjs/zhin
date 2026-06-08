@@ -53,6 +53,29 @@ describe('checkDangerousToolAccess', () => {
     expect(d.role).toBe('trusted');
   });
 
+  it('trusted 且 execAllowlist 含工具名时直接放行', () => {
+    const plugin = {
+      inject: (name: string) => {
+        if (name === 'ai') {
+          return { getAgentConfig: () => ({ execAllowlist: ['write_file'] }) };
+        }
+        return undefined;
+      },
+      root: undefined as unknown,
+    } as unknown as ReturnType<typeof core.getPlugin>;
+    (plugin as { root: typeof plugin }).root = plugin;
+    vi.spyOn(core, 'getPlugin').mockImplementation(() => plugin);
+    const ctx = {
+      platform: 'icqq',
+      botId: 'b1',
+      senderId: 'admin1',
+      roles: ['trusted'],
+    } as ToolContext;
+    const d = checkDangerousToolAccess('write_file', ctx);
+    expect(d.allowed).toBe(true);
+    expect(d.role).toBe('trusted');
+  });
+
   it('有身份且 trusted 时未入 allowlist 需 Master 确认', () => {
     vi.spyOn(core, 'getPlugin').mockImplementation(() => {
       throw new Error('no ALS');

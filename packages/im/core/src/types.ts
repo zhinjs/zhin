@@ -156,6 +156,17 @@ export interface MessageSendPayload {
   replyMessage?: Message;
 }
 
+/** `Adapter.sendMessage` 成功发出后由 core 分发的载荷 */
+export interface MessageSendPayload {
+  adapter: string;
+  options: SendOptions;
+  messageId: string;
+  /** 经 `replyWithPolish` 发出时由 dispatcher 填入 */
+  replySource?: OutboundReplySource;
+  /** 触发回复的入站消息（replyWithPolish 时可用） */
+  replyMessage?: Message;
+}
+
 // export type PermissionChecker<T extends RegisteredAdapter = RegisteredAdapter> = (name: string, message: Message<AdapterMessage<T>>) => MaybePromise<boolean>
 // export type PermissionItem<T extends RegisteredAdapter = RegisteredAdapter> = {
 //    name: string | RegExp

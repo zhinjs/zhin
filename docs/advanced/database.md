@@ -103,9 +103,9 @@ defineModel('example', {
 | 模型名 | 说明 |
 |--------|------|
 | `im_transcripts` | IM 入站/出站扁平静态行（旁听审计、`chat_history` 工具查询） |
-| `agent_sessions` | 活跃/归档会话纪元（`session_key` → `session_id`） |
-| `agent_messages` | epoch 内 LLM `AgentMessage[]`（`ContextRepository`） |
-| `agent_summaries` | epoch 级链式摘要 |
+| `agent_sessions` | 活跃/归档会话纪元（`session_key` → `session_id`）；含 `active_leaf_message_id`（ADR 0010 当前分支叶节点） |
+| `agent_messages` | epoch 内 LLM `AgentMessage[]`（`ContextRepository`）；含 `parent_id` 构成消息级会话树 |
+| `agent_summaries` | epoch 级链式摘要；可选 `branch_anchor_message_id`（分支切换时的 branch summarization） |
 | `ai_user_profiles` | 用户画像（跨会话个性化） |
 
 由 `initAgentModule` / `registerDbModels` 注册；`zhin.js` 另在 `message.receive` / `message.send` 链路写入 `im_transcripts`。

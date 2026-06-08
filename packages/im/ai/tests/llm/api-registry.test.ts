@@ -65,6 +65,39 @@ describe('llm api-registry', () => {
     expect(() => getModel('cloudflare-flash', 'other-model')).toThrow(/not registered/);
   });
 
+  it('getModel uses live provider models when registry allowlist is empty', () => {
+    registerProviderInstance('openai-main', { api: 'openai-completions' }, []);
+    setLegacyProviderResolver(() => ({
+      name: 'openai-main',
+      models: ['mimo-v2.5-pro'],
+    }));
+
+    const model = getModel('openai-main', 'mimo-v2.5-pro');
+    expect(model.id).toBe('mimo-v2.5-pro');
+  });
+
+  it('getModel rejects model not in live discovery list', () => {
+    registerProviderInstance('openai-main', { api: 'openai-completions' }, []);
+    setLegacyProviderResolver(() => ({
+      name: 'openai-main',
+      models: ['gpt-4o'],
+    }));
+
+    expect(() => getModel('openai-main', 'mimo-v2.5-pro')).toThrow(/not registered/);
+  });
+
+  it('getModel prefers explicit registry allowlist over live provider', () => {
+    registerProviderInstance('cloudflare-flash', { api: 'cloudflare-workers-ai' }, ['@cf/zai-org/glm-4.7-flash']);
+    setLegacyProviderResolver(() => ({
+      name: 'cloudflare-flash',
+      models: ['other-model'],
+    }));
+
+    const model = getModel('cloudflare-flash', '@cf/zai-org/glm-4.7-flash');
+    expect(model.id).toBe('@cf/zai-org/glm-4.7-flash');
+    expect(() => getModel('cloudflare-flash', 'other-model')).toThrow(/not registered/);
+  });
+
   it('getModel resolves registered provider', () => {
     registerProviderInstance('openai', {
       api: 'openai-completions',

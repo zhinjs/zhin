@@ -1,12 +1,13 @@
 import { Command } from 'commander';
 import { formatCompact } from '@zhin.js/logger';
-import { CREATE_PROJECT_COMMAND } from '../utils/create-project.js';
 import { logger } from '../utils/logger.js';
 import { loadEnvFiles } from '../utils/env.js';
 import { ChildProcess } from 'child_process';
 import fs from 'fs-extra';
 import path from 'path';
 import { startProcess } from '../utils/process.js';
+import { requireZhinInstance } from '../utils/zhin-instance.js';
+import { buildSpawnEnv } from '../utils/zhin-home.js';
 
 export const startCommand = new Command('start')
   .description('生产模式启动机器人')
@@ -15,47 +16,14 @@ export const startCommand = new Command('start')
   .option('--bun', '使用 bun 运行（默认使用 tsx）', false)
   .action(async (options: { daemon: boolean; logFile?: string; bun: boolean }) => {
     try {
-      const cwd = process.cwd();
-      
-      // 检查是否是Zhin项目
-      if (!isZhinProject(cwd)) {
-        logger.error('❌ 当前目录不是Zhin项目');
-        logger.info(formatCompact( {
-          cmd: 'start',
-          op: 'hint',
-          hint: `在项目根目录运行，或使用 ${CREATE_PROJECT_COMMAND} 创建项目、zhin new 创建插件`,
-        }));
-        process.exit(1);
-      }
+      const instance = await requireZhinInstance({ initGlobal: true });
+      const cwd = instance.root;
 
-      // 检查依赖是否完整
-      const nodeModulesPath = path.join(cwd, 'node_modules');
-      if (!fs.existsSync(nodeModulesPath)) {
-        logger.error('❌ 依赖未安装或不完整');
-        logger.info(formatCompact( { cmd: 'start', op: 'hint', hint: 'pnpm install' }));
-        process.exit(1);
-      }
-      
       loadEnvFiles(cwd, 'production');
       
       // 启动机器人的函数
       const startBot = async (): Promise<ChildProcess> => {
-        // 构建干净的环境变量：剔除 pnpm 注入的 npm_config_* 以免子进程中
-        // npm 读到不认识的配置项而报 warn 甚至阻塞
-        const cleanEnv: Record<string, string | undefined> = {};
-        for (const [key, value] of Object.entries(process.env)) {
-          if (/^npm_/i.test(key)) continue;
-          cleanEnv[key] = value;
-        }
-        // monorepo：workspace 包带 development 导出时走 src，避免改 agent 后未 tsc 导致 start 仍用旧 lib
-        const devSourcesAvailable = fs.existsSync(path.join(cwd, 'node_modules/zhin.js/src'));
-        const nodeOptions = (cleanEnv.NODE_OPTIONS || '')
-          + (devSourcesAvailable ? ' --conditions=development' : '');
-        const env = {
-          ...cleanEnv,
-          NODE_ENV: 'production',
-          ...(nodeOptions.trim() ? { NODE_OPTIONS: nodeOptions.trim() } : {}),
-        };
+        const env = buildSpawnEnv(cwd, { NODE_ENV: 'production' });
         // 配置stdio
         let stdio: any = 'inherit';
         if (options.daemon) {
@@ -276,7 +244,8 @@ export const restartCommand = new Command('restart')
   .description('重启生产模式的机器人进程')
   .action(async () => {
     try {
-      const cwd = process.cwd();
+      const instance = await requireZhinInstance({ initGlobal: false });
+      const cwd = instance.root;
       const pidFile = path.join(cwd, '.zhin.pid');
       
       // 检查PID文件是否存在
@@ -317,20 +286,3 @@ export const restartCommand = new Command('restart')
       process.exit(1);
     }
   });
-
-function isZhinProject(cwd: string): boolean {
-  const packageJsonPath = path.join(cwd, 'package.json');
-  if (!fs.existsSync(packageJsonPath)) {
-    return false;
-  }
-  
-  try {
-    const packageJson = fs.readJsonSync(packageJsonPath);
-    return packageJson.dependencies && (
-      packageJson.dependencies['zhin.js'] ||
-      packageJson.devDependencies?.['zhin.js']
-    );
-  } catch {
-    return false;
-  }
-} 

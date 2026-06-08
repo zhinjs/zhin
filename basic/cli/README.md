@@ -128,6 +128,22 @@ zhin start --daemon --log-file ./logs/bot.log
 zhin start --bun
 ```
 
+### 全局实例（`~/.zhin`）
+
+全局安装 CLI 后，可在任意目录启动机器人；配置、`data/`、`.env` 集中在 `~/.zhin`：
+
+```bash
+# 首次：交互式配置并安装依赖
+zhin setup --global
+
+# 任意目录启动（无本地项目时自动使用 ~/.zhin；首次 start 也会自动初始化）
+zhin start
+zhin dev
+zhin stop
+```
+
+当前目录已是 Zhin 项目时仍优先使用本地项目。`skills/`、`tools/`、`agents/`、`~/.zhin/packages/` 作为发现链的第二优先级与项目内路径并存。
+
 ### restart - 重启服务
 
 重启生产模式下运行的机器人：
@@ -462,6 +478,7 @@ zhin setup [options]
 ```
 
 **选项：**
+- `--global`: 在 `~/.zhin` 初始化并配置全局实例（任意目录 `zhin start` 可用）
 - `--bootstrap`: 仅配置引导文件（SOUL.md、TOOLS.md、AGENTS.md）
 - `--database`: 仅配置数据库（SQLite / MySQL / PostgreSQL 等）
 - `--adapters`: 仅配置适配器（Sandbox、Telegram、Discord、GitHub 等）
@@ -558,6 +575,18 @@ zhin watch -i 5         # 5 秒刷新间隔
 ```
 
 数据来源：`GET /api/stats`、`GET /api/system/status`（进程 rss/heap + 主机 freeMem/totalMem）、`/api/bots`、`/api/assistant/jobs`。
+
+### packages - zhin-package 包管理（ADR 0010）
+
+```bash
+zhin packages install npm:@scope/pkg   # 全局 ~/.zhin/packages/
+zhin packages install git:user/repo -l # 项目 .zhin/packages/
+zhin packages list
+zhin packages remove <name>
+zhin packages update [name]
+```
+
+安装的技能目录纳入 Agent 发现链（与 `.agents/skills` 并列）。
 
 ### migrate - 项目升级
 
