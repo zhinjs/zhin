@@ -20,7 +20,7 @@
     "src"
   ],
   "devDependencies": {
-    "@types/react": "^19.2.15",
+    "@types/react": "^19.2.17",
     "rimraf": "^6.0.1",
     "typescript": "^6.0.2"
   },
