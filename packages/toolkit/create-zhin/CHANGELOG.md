@@ -1,5 +1,13 @@
 # create-zhin-app
 
+## 1.0.50
+
+### Patch Changes
+
+- d8547d2: fix: ai 串行改并行
+- Updated dependencies [d8547d2]
+  - @zhin.js/scaffold-wizard@0.1.3
+
 ## 1.0.49
 
 ### Patch Changes

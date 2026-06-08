@@ -1,5 +1,16 @@
 # minimal-bot
 
+## 0.0.6
+
+### Patch Changes
+
+- d8547d2: fix: ai 串行改并行
+- Updated dependencies [d8547d2]
+  - zhin.js@1.0.92
+  - @zhin.js/cli@1.0.88
+  - @zhin.js/host-router@0.0.3
+  - @zhin.js/adapter-sandbox@3.0.10
+
 ## 0.0.5
 
 ### Patch Changes

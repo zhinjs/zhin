@@ -1,5 +1,41 @@
 # test-bot
 
+## 0.1.105
+
+### Patch Changes
+
+- d8547d2: fix: ai 串行改并行
+- Updated dependencies [d8547d2]
+  - @zhin.js/kernel@0.0.50
+  - zhin.js@1.0.92
+  - @zhin.js/cli@1.0.88
+  - @zhin.js/adapter-icqq@3.0.11
+  - @zhin.js/adapter-napcat@0.1.20
+  - @zhin.js/host-router@0.0.3
+  - @zhin.js/adapter-sandbox@3.0.10
+  - @zhin.js/mcp@1.0.74
+  - @zhin.js/adapter-dingtalk@1.0.80
+  - @zhin.js/adapter-discord@2.0.11
+  - @zhin.js/adapter-email@0.1.79
+  - @zhin.js/adapter-github@0.1.63
+  - @zhin.js/adapter-kook@2.0.11
+  - @zhin.js/adapter-lark@1.0.96
+  - @zhin.js/adapter-milky@0.0.42
+  - @zhin.js/adapter-onebot11@1.0.97
+  - @zhin.js/adapter-onebot12@0.0.42
+  - @zhin.js/adapter-qq@2.0.11
+  - @zhin.js/adapter-satori@0.0.42
+  - @zhin.js/adapter-slack@1.0.77
+  - @zhin.js/adapter-telegram@2.0.11
+  - @zhin.js/adapter-wechat-mp@0.1.80
+  - @zhin.js/plugin-60s@0.0.30
+  - @zhin.js/plugin-group-suite@0.1.7
+  - @zhin.js/plugin-html-renderer@0.0.70
+  - @zhin.js/plugin-music@2.0.11
+  - @zhin.js/plugin-repeater@0.0.27
+  - @zhin.js/plugin-rss@0.0.28
+  - @zhin.js/sensitive-filter@0.0.77
+
 ## 0.1.104
 
 ### Patch Changes

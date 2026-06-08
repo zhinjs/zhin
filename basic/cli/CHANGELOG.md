@@ -1,5 +1,12 @@
 # @zhin.js/cli
 
+## 1.0.88
+
+### Patch Changes
+
+- Updated dependencies [d8547d2]
+  - @zhin.js/scaffold-wizard@0.1.3
+
 ## 1.0.87
 
 ### Patch Changes

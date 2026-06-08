@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.38
+
+### Patch Changes
+
+- d8547d2: fix: ai 串行改并行
+
 ## 1.0.37
 
 ### Patch Changes
