@@ -1,13 +1,5 @@
 # @zhin.js/adapter-process
 
-## 3.0.11
-
-### Patch Changes
-
-- Updated dependencies [acf5e0e]
-  - @zhin.js/core@1.1.34
-  - @zhin.js/host-router@0.0.3
-
 ## 3.0.10
 
 ### Patch Changes

@@ -25,6 +25,7 @@ jobs:
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version: 24
+          cache: 'pnpm'
       
       - name: checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4.2.2
@@ -53,6 +54,12 @@ jobs:
       
       - name: build packages
         run: pnpm build
+
+      - name: type check
+        run: pnpm type-check
+
+      - name: lint
+        run: pnpm lint
 
       - name: harness IM send-path check
         run: pnpm check:harness-paths
@@ -95,11 +102,8 @@ jobs:
       - name: usePlugin top-level check
         run: pnpm check:use-plugin-top-level
       
-      - name: run tests
-        run: pnpm test:reporter
-      
-      - name: generate coverage reports
-        run: pnpm test:coverage
+      - name: run tests with coverage
+        run: pnpm vitest run --reporter=verbose --coverage
       
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v6.0.1

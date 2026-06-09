@@ -85,16 +85,34 @@ Context/DI: `provide()` registers, `inject()` / `useContext()` consumes. Return 
 - Dual exports: `./lib/index.js` (production) + `./src/index.ts` (development condition)
 - Module resolution uses `conditions: ['development']` in tests to resolve `src/` directly
 
+### TypeScript configuration
+
+All packages extend `tsconfig.base.json`（根目录），只需设置 `outDir`、`rootDir`、`types`：
+
+```json
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "outDir": "./lib",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["lib", "node_modules"]
+}
+```
+
 ## Testing
 
-**Vitest 3.2.4** with globals enabled (no need to import `describe`, `it`, `expect`).
+**Vitest 4.1.8** with globals enabled (no need to import `describe`, `it`, `expect`).
 
 Key config (`vitest.config.ts`):
 - Environment: `node`
-- Isolation: `false` (shared state for performance)
+- Isolation: `false` locally, `true` in CI (avoids `vi.spyOn` leakage)
 - Timeout: 10s
 - Test pattern: `**/*.test.ts`
 - Excludes: `**/lib/**`, `**/packages/toolkit/satori/**`
+- Coverage thresholds: lines 50%, branches 40%
 - Setup file sets `process.env.NODE_ENV = 'test'`
 
 ## Key Conventions
@@ -107,9 +125,9 @@ Key config (`vitest.config.ts`):
 
 ## CI
 
-GitHub Actions (`ci.yml`): Install → changeset check → build → harness checks → test → coverage. Runs on PR to `main`, Node.js 24, ubuntu-latest, 15-min timeout.
+GitHub Actions (`ci.yml`): Install (pnpm cache) → changeset check → build → type-check → lint → harness checks → test+coverage. Runs on PR to `main`, Node.js 24, ubuntu-latest, 15-min timeout.
 
-Publish workflow (`publish.yml`): On push to `main`, auto-bumps versions via Changesets and publishes to npm.
+Publish workflow (`publish.yml`): On push to `main`, auto-bumps versions via Changesets and publishes to npm. Includes pnpm cache and type-check.
 
 ## Harness Engineering
 

@@ -1,11 +1,5 @@
 # @zhin.js/plugin-short-url
 
-## 0.0.25
-
-### Patch Changes
-
-- zhin.js@1.0.93
-
 ## 0.0.24
 
 ### Patch Changes

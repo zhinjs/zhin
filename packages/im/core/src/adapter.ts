@@ -27,9 +27,9 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
 
   get maxConcurrentMessages(): number {
     try {
-      const configService = this.plugin?.root?.inject('config') as any;
-      const appConfig = configService?.getPrimary?.();
-      return appConfig?.max_concurrent_messages ?? Adapter.DEFAULT_MAX_CONCURRENT_MESSAGES;
+      const configService = this.plugin?.root?.inject('config');
+      const appConfig = configService?.getPrimary?.<Record<string, unknown>>();
+      return (appConfig?.max_concurrent_messages as number | undefined) ?? Adapter.DEFAULT_MAX_CONCURRENT_MESSAGES;
     } catch {
       return Adapter.DEFAULT_MAX_CONCURRENT_MESSAGES;
     }

@@ -50,7 +50,8 @@ export interface PropertySchema {
 
 /**
  * IM-facing tool definition.
- * Richer than AgentTool — includes platform/scope/permission constraints.
+ * Mirrors @zhin.js/core Tool but with orchestrator-specific ToolParametersSchema.
+ * @see {@link import('@zhin.js/core').Tool} for the canonical definition
  */
 export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
   name: string;
@@ -59,7 +60,7 @@ export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
   execute: (args: TArgs, context?: ToolContext) => unknown | Promise<unknown>;
   platforms?: string[];
   scopes?: ToolScope[];
-  requiredAnyRole?: readonly import('@zhin.js/core').SenderRole[];
+  requiredAnyRole?: readonly SenderRole[];
   permissions?: string[];
   tags?: string[];
   keywords?: string[];

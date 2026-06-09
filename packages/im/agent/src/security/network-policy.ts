@@ -371,6 +371,11 @@ export function initNetworkPolicy(config: Partial<NetworkPolicyConfig>): Network
   return globalNetworkPolicy;
 }
 
+/** 重置全局网络策略（用于测试隔离） */
+export function resetNetworkPolicy(): void {
+  globalNetworkPolicy = null;
+}
+
 /**
  * 检查 URL 是否允许访问
  */

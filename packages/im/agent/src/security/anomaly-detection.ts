@@ -400,3 +400,8 @@ export function initAnomalyDetector(): AnomalyDetector {
 
   return globalAnomalyDetector;
 }
+
+/** 重置全局异常检测器（用于测试隔离） */
+export function resetAnomalyDetector(): void {
+  globalAnomalyDetector = null;
+}

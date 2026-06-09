@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import WebSocket from "ws";
 import { formatCompact, Adapter, Plugin, usePlugin } from '@zhin.js/core';
-import type { SchemaFeature, ConfigFeature, DatabaseFeature } from "@zhin.js/core";
+import type { ConfigFeature, DatabaseFeature } from "@zhin.js/core";
 export interface ConsoleWebServer {
   ws: import("ws").WebSocketServer;
   entries?: Record<string, string>;
@@ -137,12 +137,12 @@ function isPathAllowed(relativePath: string): boolean {
 }
 
 function resolveConfigKey(pluginName: string): string {
-  const schemaService = root.inject('schema' as any) as SchemaFeature | null;
+  const schemaService = root.inject('schema');
   return schemaService?.resolveConfigKey(pluginName) ?? pluginName;
 }
 
 function getPluginKeys(): string[] {
-  const schemaService = root.inject('schema' as any) as SchemaFeature | null;
+  const schemaService = root.inject('schema');
   if (!schemaService) return [];
   const keys = new Set<string>();
   for (const [, configKey] of schemaService.getPluginKeyMap()) {
@@ -181,14 +181,14 @@ export function setupWebSocket(webServer: WebServer) {
     }));
     ws.send(JSON.stringify({ type: "init-data", timestamp: Date.now() }));
     void sendCatchUpToClient(ws).catch((e) =>
-      logger.warn(formatCompact( { op: "bot_catchup", ok: false, error: (e as Error).message }))
+      logger.warn(formatCompact( { op: "bot_catchup", ok: false, error: e instanceof Error ? e.message : String(e) }))
     );
 
     ws.on("message", async (data) => {
       try {
         const message = JSON.parse(data.toString());
         await handleWebSocketMessage(ws, message, webServer);
-      } catch (error) {
+      } catch (error: unknown) {
         logger.error("WebSocket 消息处理错误:", error);
         ws.send(JSON.stringify({ error: "Invalid message format" }));
       }
@@ -226,8 +226,8 @@ export async function handleWebSocketMessage(
         const cwd = process.cwd();
         const tree = buildFileTree(cwd, "", FILE_MANAGER_ALLOWED);
         ws.send(JSON.stringify({ requestId, data: { tree } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: `Failed to build file tree: ${(error as Error).message}` }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: `Failed to build file tree: ${error instanceof Error ? error.message : String(error)}` }));
       }
       break;
 
@@ -255,8 +255,8 @@ export async function handleWebSocketMessage(
         }
         const fileContent = fs.readFileSync(absPath, 'utf-8');
         ws.send(JSON.stringify({ requestId, data: { content: fileContent, size: stat.size } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: `Failed to read file: ${(error as Error).message}` }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: `Failed to read file: ${error instanceof Error ? error.message : String(error)}` }));
       }
       break;
 
@@ -278,8 +278,8 @@ export async function handleWebSocketMessage(
         }
         fs.writeFileSync(absPath, fileContent, 'utf-8');
         ws.send(JSON.stringify({ requestId, data: { success: true, message: `文件已保存: ${fp}` } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: `Failed to save file: ${(error as Error).message}` }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: `Failed to save file: ${error instanceof Error ? error.message : String(error)}` }));
       }
       break;
 
@@ -291,8 +291,8 @@ export async function handleWebSocketMessage(
       try {
         const dbInfo = getDatabaseInfo();
         ws.send(JSON.stringify({ requestId, data: dbInfo }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: `Failed to get db info: ${(error as Error).message}` }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: `Failed to get db info: ${error instanceof Error ? error.message : String(error)}` }));
       }
       break;
 
@@ -300,8 +300,8 @@ export async function handleWebSocketMessage(
       try {
         const tables = getDatabaseTables();
         ws.send(JSON.stringify({ requestId, data: { tables } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: `Failed to list tables: ${(error as Error).message}` }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: `Failed to list tables: ${error instanceof Error ? error.message : String(error)}` }));
       }
       break;
 
@@ -311,8 +311,8 @@ export async function handleWebSocketMessage(
         if (!table) { ws.send(JSON.stringify({ requestId, error: 'table is required' })); break; }
         const selectResult = await dbSelect(table, page, pageSize, where);
         ws.send(JSON.stringify({ requestId, data: selectResult }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: `Failed to select: ${(error as Error).message}` }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: `Failed to select: ${error instanceof Error ? error.message : String(error)}` }));
       }
       break;
 
@@ -322,8 +322,8 @@ export async function handleWebSocketMessage(
         if (!table || !row) { ws.send(JSON.stringify({ requestId, error: 'table and row are required' })); break; }
         await dbInsert(table, row);
         ws.send(JSON.stringify({ requestId, data: { success: true } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: `Failed to insert: ${(error as Error).message}` }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: `Failed to insert: ${error instanceof Error ? error.message : String(error)}` }));
       }
       break;
 
@@ -333,8 +333,8 @@ export async function handleWebSocketMessage(
         if (!table || !row || !updateWhere) { ws.send(JSON.stringify({ requestId, error: 'table, row, and where are required' })); break; }
         const affected = await dbUpdate(table, row, updateWhere);
         ws.send(JSON.stringify({ requestId, data: { success: true, affected } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: `Failed to update: ${(error as Error).message}` }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: `Failed to update: ${error instanceof Error ? error.message : String(error)}` }));
       }
       break;
 
@@ -344,8 +344,8 @@ export async function handleWebSocketMessage(
         if (!table || !deleteWhere) { ws.send(JSON.stringify({ requestId, error: 'table and where are required' })); break; }
         const deleted = await dbDelete(table, deleteWhere);
         ws.send(JSON.stringify({ requestId, data: { success: true, deleted } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: `Failed to delete: ${(error as Error).message}` }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: `Failed to delete: ${error instanceof Error ? error.message : String(error)}` }));
       }
       break;
 
@@ -355,8 +355,8 @@ export async function handleWebSocketMessage(
         if (!dropTableName) { ws.send(JSON.stringify({ requestId, error: 'table is required' })); break; }
         await dbDropTable(dropTableName);
         ws.send(JSON.stringify({ requestId, data: { success: true } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: `Failed to drop table: ${(error as Error).message}` }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: `Failed to drop table: ${error instanceof Error ? error.message : String(error)}` }));
       }
       break;
 
@@ -367,8 +367,8 @@ export async function handleWebSocketMessage(
         if (!table || !key) { ws.send(JSON.stringify({ requestId, error: 'table and key are required' })); break; }
         const kvValue = await kvGet(table, key);
         ws.send(JSON.stringify({ requestId, data: { key, value: kvValue } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: `Failed to get kv: ${(error as Error).message}` }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: `Failed to get kv: ${error instanceof Error ? error.message : String(error)}` }));
       }
       break;
 
@@ -378,8 +378,8 @@ export async function handleWebSocketMessage(
         if (!table || !key) { ws.send(JSON.stringify({ requestId, error: 'table and key are required' })); break; }
         await kvSet(table, key, value, ttl);
         ws.send(JSON.stringify({ requestId, data: { success: true } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: `Failed to set kv: ${(error as Error).message}` }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: `Failed to set kv: ${error instanceof Error ? error.message : String(error)}` }));
       }
       break;
 
@@ -389,8 +389,8 @@ export async function handleWebSocketMessage(
         if (!table || !key) { ws.send(JSON.stringify({ requestId, error: 'table and key are required' })); break; }
         await kvDelete(table, key);
         ws.send(JSON.stringify({ requestId, data: { success: true } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: `Failed to delete kv: ${(error as Error).message}` }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: `Failed to delete kv: ${error instanceof Error ? error.message : String(error)}` }));
       }
       break;
 
@@ -400,8 +400,8 @@ export async function handleWebSocketMessage(
         if (!table) { ws.send(JSON.stringify({ requestId, error: 'table is required' })); break; }
         const kvEntries = await kvGetEntries(table);
         ws.send(JSON.stringify({ requestId, data: { entries: kvEntries } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: `Failed to get entries: ${(error as Error).message}` }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: `Failed to get entries: ${error instanceof Error ? error.message : String(error)}` }));
       }
       break;
 
@@ -420,30 +420,31 @@ export async function handleWebSocketMessage(
           ws.send(JSON.stringify({ requestId, error: "not supported for this adapter" }));
           break;
         }
-        const ad = root.inject("icqq" as keyof Plugin.Contexts) as any;
-        const bot = ad?.bots?.get?.(botId);
+        const ad = root.inject("icqq");
+        const bot = ad instanceof Adapter ? ad.bots.get(botId) : undefined;
         if (!bot) {
           ws.send(JSON.stringify({ requestId, error: "bot not found" }));
           break;
         }
+        const botAny = bot as Record<string, unknown>;
         if (type === "bot:friends") {
-          const fl = bot.fl;
-          const friends = Array.from((fl || new Map()).values()).map((f: any) => ({
+          const fl = botAny.fl as Map<string, Record<string, unknown>> | undefined;
+          const friends = Array.from((fl || new Map()).values()).map((f) => ({
             user_id: f.user_id,
             nickname: f.nickname,
             remark: f.remark,
           }));
           ws.send(JSON.stringify({ requestId, data: { friends, count: friends.length } }));
         } else {
-          const gl = bot.gl;
-          const groups = Array.from((gl || new Map()).values()).map((g: any) => ({
+          const gl = botAny.gl as Map<string, Record<string, unknown>> | undefined;
+          const groups = Array.from((gl || new Map()).values()).map((g) => ({
             group_id: g.group_id,
             name: g.name,
           }));
           ws.send(JSON.stringify({ requestId, data: { groups, count: groups.length } }));
         }
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: error instanceof Error ? error.message : String(error) }));
       }
       break;
     }
@@ -460,18 +461,21 @@ export async function handleWebSocketMessage(
           ws.send(JSON.stringify({ requestId, error: "channels not supported for icqq" }));
           break;
         }
-        const ad = root.inject(adapter as keyof Plugin.Contexts) as any;
-        const bot = ad?.bots?.get?.(botId);
+        const ad = root.inject(adapter as keyof Plugin.Contexts);
+        const bot = ad instanceof Adapter ? ad.bots.get(botId) : undefined;
         if (!bot) {
           ws.send(JSON.stringify({ requestId, error: "bot not found" }));
           break;
         }
         const channels: Array<{ id: string; name: string }> = [];
-        if (adapter === "qq" && typeof bot.getGuilds === "function" && typeof bot.getChannels === "function") {
-          const guilds = (await bot.getGuilds()) || [];
+        const botMethods = bot as Record<string, unknown>;
+        if (adapter === "qq" && typeof botMethods.getGuilds === "function" && typeof botMethods.getChannels === "function") {
+          const getGuilds = botMethods.getGuilds as () => Promise<Array<Record<string, unknown>>>;
+          const getChannels = botMethods.getChannels as (guildId: string) => Promise<Array<Record<string, unknown>>>;
+          const guilds = (await getGuilds()) || [];
           for (const g of guilds) {
             const gid = g?.id ?? g?.guild_id ?? String(g);
-            const chs = (await bot.getChannels(gid)) || [];
+            const chs = (await getChannels(gid)) || [];
             for (const c of chs) {
               channels.push({
                 id: String(c?.id ?? c?.channel_id ?? c),
@@ -479,14 +483,15 @@ export async function handleWebSocketMessage(
               });
             }
           }
-        } else if (typeof (ad as any)?.listChannels === "function") {
-          const result = await (ad as any).listChannels(botId);
-          if (Array.isArray(result)) channels.push(...result.map((c: any) => ({ id: String(c?.id ?? c), name: String(c?.name ?? c?.id ?? "") })));
-          else if (result?.channels) channels.push(...result.channels.map((c: any) => ({ id: String(c?.id ?? c), name: String(c?.name ?? c?.id ?? "") })));
+        } else if (ad && typeof (ad as Record<string, unknown>).listChannels === "function") {
+          const adMethods = ad as Record<string, (...args: unknown[]) => unknown>;
+          const result = await adMethods.listChannels(botId) as Record<string, unknown> | unknown[];
+          if (Array.isArray(result)) channels.push(...result.map((c: Record<string, unknown>) => ({ id: String(c?.id ?? c), name: String(c?.name ?? c?.id ?? "") })));
+          else if (result && typeof result === 'object' && 'channels' in result) channels.push(...((result as Record<string, unknown>).channels as Array<Record<string, unknown>>).map((c) => ({ id: String(c?.id ?? c), name: String(c?.name ?? c?.id ?? "") })));
         }
         ws.send(JSON.stringify({ requestId, data: { channels, count: channels.length } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: error instanceof Error ? error.message : String(error) }));
       }
       break;
     }
@@ -499,23 +504,24 @@ export async function handleWebSocketMessage(
           ws.send(JSON.stringify({ requestId, error: "adapter, botId, userId required" }));
           break;
         }
-        const ad = root.inject(adapter as keyof Plugin.Contexts) as any;
-        const bot = ad?.bots?.get?.(botId);
+        const ad = root.inject(adapter as keyof Plugin.Contexts);
+        const bot = ad instanceof Adapter ? ad.bots.get(botId) : undefined;
         if (!bot) {
           ws.send(JSON.stringify({ requestId, error: "bot not found" }));
           break;
         }
-        if (adapter === "icqq" && typeof bot.deleteFriend === "function") {
-          await bot.deleteFriend(Number(userId));
+        const botAny = bot as Record<string, unknown>;
+        if (adapter === "icqq" && typeof botAny.deleteFriend === "function") {
+          await (botAny.deleteFriend as (id: number) => Promise<void>)(Number(userId));
           ws.send(JSON.stringify({ requestId, data: { success: true } }));
-        } else if (adapter === "icqq" && typeof bot.delete_friend === "function") {
-          await bot.delete_friend(Number(userId));
+        } else if (adapter === "icqq" && typeof botAny.delete_friend === "function") {
+          await (botAny.delete_friend as (id: number) => Promise<void>)(Number(userId));
           ws.send(JSON.stringify({ requestId, data: { success: true } }));
         } else {
           ws.send(JSON.stringify({ requestId, error: "当前适配器暂不支持删除好友" }));
         }
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: error instanceof Error ? error.message : String(error) }));
       }
       break;
     }
@@ -545,8 +551,8 @@ export async function handleWebSocketMessage(
             },
           })
         );
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: error instanceof Error ? error.message : String(error) }));
       }
       break;
     }
@@ -580,8 +586,8 @@ export async function handleWebSocketMessage(
         else await req.$reject(reason);
         await markRequestConsumedByPlatformId(String(adapter), String(botId), String(platformReqId));
         ws.send(JSON.stringify({ requestId, data: { success: true } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: error instanceof Error ? error.message : String(error) }));
       }
       break;
     }
@@ -603,8 +609,8 @@ export async function handleWebSocketMessage(
         }
         await markRequestsConsumed(numIds);
         ws.send(JSON.stringify({ requestId, data: { success: true } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: error instanceof Error ? error.message : String(error) }));
       }
       break;
     }
@@ -619,8 +625,8 @@ export async function handleWebSocketMessage(
         }
         await markNoticesConsumed(ids.map(Number));
         ws.send(JSON.stringify({ requestId, data: { success: true } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: error instanceof Error ? error.message : String(error) }));
       }
       break;
     }
@@ -640,7 +646,7 @@ export async function handleWebSocketMessage(
           ws.send(JSON.stringify({ requestId, data: { messages: [], inboxEnabled: false } }));
           break;
         }
-        const MessageModel = db?.models?.get("unified_inbox_message") as any;
+        const MessageModel = db?.models?.get("unified_inbox_message");
         if (!MessageModel) {
           ws.send(JSON.stringify({ requestId, data: { messages: [], inboxEnabled: false } }));
           break;
@@ -665,8 +671,8 @@ export async function handleWebSocketMessage(
           created_at: r.created_at,
         }));
         ws.send(JSON.stringify({ requestId, data: { messages, inboxEnabled: true } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: error instanceof Error ? error.message : String(error) }));
       }
       break;
     }
@@ -686,7 +692,7 @@ export async function handleWebSocketMessage(
           ws.send(JSON.stringify({ requestId, data: { requests: [], inboxEnabled: false } }));
           break;
         }
-        const RequestModel = db?.models?.get("unified_inbox_request") as any;
+        const RequestModel = db?.models?.get("unified_inbox_request");
         if (!RequestModel) {
           ws.send(JSON.stringify({ requestId, data: { requests: [], inboxEnabled: false } }));
           break;
@@ -711,8 +717,8 @@ export async function handleWebSocketMessage(
           resolved_at: r.resolved_at,
         }));
         ws.send(JSON.stringify({ requestId, data: { requests, inboxEnabled: true } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: error instanceof Error ? error.message : String(error) }));
       }
       break;
     }
@@ -732,7 +738,7 @@ export async function handleWebSocketMessage(
           ws.send(JSON.stringify({ requestId, data: { notices: [], inboxEnabled: false } }));
           break;
         }
-        const NoticeModel = db?.models?.get("unified_inbox_notice") as any;
+        const NoticeModel = db?.models?.get("unified_inbox_notice");
         if (!NoticeModel) {
           ws.send(JSON.stringify({ requestId, data: { notices: [], inboxEnabled: false } }));
           break;
@@ -757,8 +763,8 @@ export async function handleWebSocketMessage(
           created_at: r.created_at,
         }));
         ws.send(JSON.stringify({ requestId, data: { notices, inboxEnabled: true } }));
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: error instanceof Error ? error.message : String(error) }));
       }
       break;
     }
@@ -776,55 +782,56 @@ export async function handleWebSocketMessage(
           );
           break;
         }
-        const ad = root.inject(adapter as keyof Plugin.Contexts) as any;
+        const ad = root.inject(adapter as keyof Plugin.Contexts);
         if (!ad) {
           ws.send(JSON.stringify({ requestId, error: "adapter not found" }));
           break;
         }
+        const adMethods = ad as Record<string, ((...args: unknown[]) => unknown) | undefined>;
         const gid = String(groupId);
         if (type === "bot:groupMembers") {
-          if (typeof ad.listMembers !== "function") {
+          if (typeof adMethods.listMembers !== "function") {
             ws.send(JSON.stringify({ requestId, error: "adapter does not support listMembers" }));
             break;
           }
-          const r = await ad.listMembers(botId, gid);
+          const r = await adMethods.listMembers(botId, gid);
           ws.send(JSON.stringify({ requestId, data: r }));
         } else if (type === "bot:groupKick") {
           if (!userId) {
             ws.send(JSON.stringify({ requestId, error: "userId required" }));
             break;
           }
-          if (typeof ad.kickMember !== "function") {
+          if (typeof adMethods.kickMember !== "function") {
             ws.send(JSON.stringify({ requestId, error: "adapter does not support kickMember" }));
             break;
           }
-          await ad.kickMember(botId, gid, String(userId));
+          await adMethods.kickMember(botId, gid, String(userId));
           ws.send(JSON.stringify({ requestId, data: { success: true } }));
         } else if (type === "bot:groupMute") {
           if (!userId) {
             ws.send(JSON.stringify({ requestId, error: "userId required" }));
             break;
           }
-          if (typeof ad.muteMember !== "function") {
+          if (typeof adMethods.muteMember !== "function") {
             ws.send(JSON.stringify({ requestId, error: "adapter does not support muteMember" }));
             break;
           }
-          await ad.muteMember(botId, gid, String(userId), duration ?? 600);
+          await adMethods.muteMember(botId, gid, String(userId), duration ?? 600);
           ws.send(JSON.stringify({ requestId, data: { success: true } }));
         } else {
           if (!userId) {
             ws.send(JSON.stringify({ requestId, error: "userId required" }));
             break;
           }
-          if (typeof ad.setAdmin !== "function") {
+          if (typeof adMethods.setAdmin !== "function") {
             ws.send(JSON.stringify({ requestId, error: "adapter does not support setAdmin" }));
             break;
           }
-          await ad.setAdmin(botId, gid, String(userId), enable !== false);
+          await adMethods.setAdmin(botId, gid, String(userId), enable !== false);
           ws.send(JSON.stringify({ requestId, data: { success: true } }));
         }
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: error instanceof Error ? error.message : String(error) }));
       }
       break;
     }
@@ -843,8 +850,8 @@ export async function handleWebSocketMessage(
         setTimeout(() => {
           process.exit(51);
         }, 500);
-      } catch (error) {
-        ws.send(JSON.stringify({ requestId, error: (error as Error).message }));
+      } catch (error: unknown) {
+        ws.send(JSON.stringify({ requestId, error: error instanceof Error ? error.message : String(error) }));
       }
       break;
     }
@@ -900,7 +907,7 @@ async function dbSelect(table: string, page: number, pageSize: number, where?: a
   const dbFeature = getDb();
   const db = dbFeature.db;
   const dbType = getDbType();
-  const model = db.models.get(table as any);
+  const model = db.models.get(table);
   if (!model) throw new Error(`Table '${table}' not found`);
 
   if (dbType === 'keyvalue') {
@@ -941,7 +948,7 @@ async function dbInsert(table: string, row: any) {
   const dbFeature = getDb();
   const db = dbFeature.db;
   const dbType = getDbType();
-  const model = db.models.get(table as any);
+  const model = db.models.get(table);
   if (!model) throw new Error(`Table '${table}' not found`);
 
   if (dbType === 'keyvalue') {
@@ -963,7 +970,7 @@ async function dbUpdate(table: string, row: any, where: any) {
   const dbFeature = getDb();
   const db = dbFeature.db;
   const dbType = getDbType();
-  const model = db.models.get(table as any);
+  const model = db.models.get(table);
   if (!model) throw new Error(`Table '${table}' not found`);
 
   if (dbType === 'keyvalue') {
@@ -986,7 +993,7 @@ async function dbDelete(table: string, where: any) {
   const dbFeature = getDb();
   const db = dbFeature.db;
   const dbType = getDbType();
-  const model = db.models.get(table as any);
+  const model = db.models.get(table);
   if (!model) throw new Error(`Table '${table}' not found`);
 
   if (dbType === 'keyvalue') {
@@ -1008,39 +1015,39 @@ async function dbDelete(table: string, where: any) {
 async function dbDropTable(table: string) {
   const dbFeature = getDb();
   const db = dbFeature.db;
-  const model = db.models.get(table as any);
+  const model = db.models.get(table);
   if (!model) throw new Error(`Table '${table}' not found`);
   const sql = db.dialect.formatDropTable(table, true);
   await db.query(sql);
-  db.models.delete(table as any);
-  db.definitions.delete(table as any);
+  db.models.delete(table);
+  db.definitions.delete(table);
 }
 
 // KV 专用操作
 async function kvGet(table: string, key: string) {
   const dbFeature = getDb();
-  const model = dbFeature.db.models.get(table as any) as any;
+  const model = dbFeature.db.models.get(table) as any;
   if (!model) throw new Error(`Bucket '${table}' not found`);
   return await model.get(key);
 }
 
 async function kvSet(table: string, key: string, value: any, ttl?: number) {
   const dbFeature = getDb();
-  const model = dbFeature.db.models.get(table as any) as any;
+  const model = dbFeature.db.models.get(table) as any;
   if (!model) throw new Error(`Bucket '${table}' not found`);
   await model.set(key, value, ttl);
 }
 
 async function kvDelete(table: string, key: string) {
   const dbFeature = getDb();
-  const model = dbFeature.db.models.get(table as any) as any;
+  const model = dbFeature.db.models.get(table) as any;
   if (!model) throw new Error(`Bucket '${table}' not found`);
   await model.deleteByKey(key);
 }
 
 async function kvGetEntries(table: string) {
   const dbFeature = getDb();
-  const model = dbFeature.db.models.get(table as any) as any;
+  const model = dbFeature.db.models.get(table) as any;
   if (!model) throw new Error(`Bucket '${table}' not found`);
   const entries: Array<[string, any]> = await model.entries();
   return entries.map(([k, v]) => ({ key: k, value: v }));

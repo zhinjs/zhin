@@ -7,7 +7,5 @@ packages:
   - 'plugins/adapters/*'
   - 'plugins/features/*'
   - 'plugins/utils/*'
-  - 'plugins/services/*'
   - 'examples/*'
-  - 'zhin-console'
   - 'docs'

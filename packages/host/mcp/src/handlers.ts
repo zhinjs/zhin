@@ -31,8 +31,8 @@ export async function createPlugin(args: {
     await fs.mkdir(path.dirname(fullPath), { recursive: true });
     await fs.writeFile(fullPath, pluginCode, "utf-8");
     return `✅ 插件 ${name} 已创建: ${fullPath}`;
-  } catch (error) {
-    throw new Error(`创建插件失败: ${(error as Error).message}`);
+  } catch (error: unknown) {
+    throw new Error(`创建插件失败: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -236,22 +236,21 @@ export default ${name};
 export function queryPlugin(args: { pluginName: string }): any {
   const { pluginName } = args;
   // 在子插件树中查找
-  const targetPlugin = root.children.find((p: any) => p.name === pluginName || p.$filename?.includes(pluginName));
-  
+  const targetPlugin = root.children.find((p) => p.name === pluginName || p.filePath?.includes(pluginName));
+
   if (!targetPlugin) {
     throw new Error(`插件 ${pluginName} 不存在`);
   }
-  
-  const p = targetPlugin as any;
+
   return {
-    name: p.name,
-    filename: p.$filename || p.filename,
-    status: p.$mounted ? "active" : "inactive",
-    commands: Array.from(p.$commands || []),
-    components: Array.from(p.$components || []),
-    middlewares: p.$middlewares?.size || 0,
-    contexts: Array.from(p.contexts?.keys() || []),
-    crons: p.$crons?.size || 0,
+    name: targetPlugin.name,
+    filename: targetPlugin.filePath,
+    status: targetPlugin.started ? "active" : "inactive",
+    commands: Array.from((targetPlugin as any).$commands || []),
+    components: Array.from((targetPlugin as any).$components || []),
+    middlewares: (targetPlugin as any).$middlewares?.size || 0,
+    contexts: Array.from(targetPlugin.contexts?.keys() || []),
+    crons: (targetPlugin as any).$crons?.size || 0,
   };
 }
 
@@ -259,10 +258,10 @@ export function queryPlugin(args: { pluginName: string }): any {
  * 列出所有插件
  */
 export function listPlugins(): any {
-  return root.children.map((dep: any) => ({
+  return root.children.map((dep) => ({
     name: dep.name,
     status: "active",
-    features: dep.getFeatures?.() || [],
+    features: (dep as any).getFeatures?.() || [],
   }));
 }
 
@@ -610,9 +609,9 @@ export function listBots(): any[] {
   const { Adapter } = require("zhin.js");
   const bots: any[] = [];
   for (const adapterName of root.adapters) {
-    const adapter = root.inject(adapterName as any);
+    const adapter = root.inject(adapterName);
     if (adapter instanceof Adapter) {
-      for (const [botName, bot] of (adapter as any).bots.entries()) {
+      for (const [botName, bot] of adapter.bots.entries()) {
         bots.push({
           name: botName,
           adapter: adapterName,
@@ -629,9 +628,9 @@ export function listBots(): any[] {
  * 列出所有注册的命令
  */
 export function listCommands(): any[] {
-  const commandService = root.inject("command" as any) as any;
+  const commandService = root.inject("command");
   if (!commandService?.items) return [];
-  return commandService.items.map((cmd: any) => ({
+  return commandService.items.map((cmd) => ({
     pattern: cmd.pattern || cmd.helpInfo?.pattern || String(cmd),
     description: cmd.helpInfo?.desc?.join(" ") || "",
     usage: cmd.helpInfo?.usage || [],
@@ -650,11 +649,11 @@ export async function sendMessage(args: {
   content: string;
 }): Promise<string> {
   const { Adapter } = require("zhin.js");
-  const adapterInstance = root.inject(args.adapter as any);
+  const adapterInstance = root.inject(args.adapter);
   if (!adapterInstance || !(adapterInstance instanceof Adapter)) {
     throw new Error(`Adapter "${args.adapter}" not found`);
   }
-  const msgId = await (adapterInstance as any).sendMessage({
+  const msgId = await adapterInstance.sendMessage({
     context: args.adapter,
     bot: args.bot,
     id: args.target_id,
@@ -673,11 +672,11 @@ export async function recallMessage(args: {
   message_id: string;
 }): Promise<string> {
   const { Adapter } = require("zhin.js");
-  const adapterInstance = root.inject(args.adapter as any);
+  const adapterInstance = root.inject(args.adapter);
   if (!adapterInstance || !(adapterInstance instanceof Adapter)) {
     throw new Error(`Adapter "${args.adapter}" not found`);
   }
-  const bot = (adapterInstance as any).bots.get(args.bot);
+  const bot = adapterInstance.bots.get(args.bot);
   if (!bot) {
     throw new Error(`Bot "${args.bot}" not found in adapter "${args.adapter}"`);
   }
@@ -692,7 +691,7 @@ export async function getLogs(args: {
   limit?: number;
   level?: string;
 }): Promise<any[]> {
-  const database = root.inject("database" as any) as any;
+  const database = root.inject("database");
   if (!database) throw new Error("Database service not available");
 
   const LogModel = database.models?.get("SystemLog");
@@ -721,7 +720,7 @@ export async function getLogs(args: {
  * 获取当前运行配置
  */
 export function getConfig(args?: { plugin_name?: string }): any {
-  const configService = root.inject("config" as any) as any;
+  const configService = root.inject("config");
   if (!configService) throw new Error("Config service not available");
 
   const appConfig = configService.getPrimary();
@@ -735,11 +734,11 @@ export function getConfig(args?: { plugin_name?: string }): any {
  * 热重载指定插件
  */
 export async function reloadPlugin(args: { name: string }): Promise<string> {
-  const target = root.children.find((p: any) => p.name === args.name);
+  const target = root.children.find((p) => p.name === args.name);
   if (!target) {
     throw new Error(`Plugin "${args.name}" not found`);
   }
-  await root.reload(target as any);
+  await root.reload(target);
   return `Plugin "${args.name}" reloaded successfully`;
 }
 
@@ -768,14 +767,14 @@ export function listServices(): any[] {
  * 列出所有已注册的 ZhinTool
  */
 export function listTools(args?: { plugin_name?: string }): any[] {
-  const toolService = root.inject("tool" as any) as any;
+  const toolService = root.inject("tool");
 
-  if (args?.plugin_name && toolService?.getToolsByPlugin) {
+  if (args?.plugin_name && toolService) {
     const tools = toolService.getToolsByPlugin(args.plugin_name);
     return tools.map(formatTool);
   }
 
-  if (toolService?.getAll) {
+  if (toolService) {
     const tools = toolService.getAll();
     return tools.map(formatTool);
   }
@@ -783,13 +782,13 @@ export function listTools(args?: { plugin_name?: string }): any[] {
   return [];
 }
 
-function formatTool(tool: any): any {
+function formatTool(tool: any): Record<string, unknown> {
   return {
     name: tool.name,
     description: tool.description || "",
     source: tool.source || "",
     tags: tool.tags || [],
-    params: tool.params?.map((p: any) => ({
+    params: tool.params?.map((p: Record<string, unknown>) => ({
       name: p.name,
       type: p.type,
       description: p.description || "",
@@ -845,7 +844,7 @@ export async function simulateMessage(args: {
 
   try {
     const { Adapter } = require("zhin.js");
-    const adapterInstance = root.inject(adapterName as any);
+    const adapterInstance = root.inject(adapterName);
     if (!adapterInstance || !(adapterInstance instanceof Adapter)) {
       return `❌ 适配器 "${adapterName}" 不可用。可用的适配器: ${Array.from(root.contexts.keys()).filter((k: string) => {
         const v = root.contexts.get(k)?.value;
@@ -853,12 +852,12 @@ export async function simulateMessage(args: {
       }).join(", ") || "(无)"}`;
     }
 
-    const bots = Array.from((adapterInstance as any).bots.entries());
+    const bots = Array.from(adapterInstance.bots.entries());
     if (bots.length === 0) {
       return `❌ 适配器 "${adapterName}" 没有在线的 Bot`;
     }
 
-    const [botName, bot] = bots[0] as [string, any];
+    const [botName, bot] = bots[0];
 
     // 构造模拟消息
     const { Message } = require("zhin.js");
@@ -875,7 +874,7 @@ export async function simulateMessage(args: {
     });
 
     // 通过根插件的 middleware chain 处理
-    const middleware = (root as any).middleware;
+    const middleware = root.middleware;
     if (typeof middleware === "function") {
       await middleware(fakeMessage, async () => {});
     }
@@ -883,7 +882,7 @@ export async function simulateMessage(args: {
     return reply
       ? `✅ Bot 回复:\n${reply}`
       : `⚠️ 命令 "${args.content}" 未产生回复（可能命令不存在或无匹配）`;
-  } catch (error) {
+  } catch (error: unknown) {
     return `❌ 模拟失败: ${error instanceof Error ? error.message : String(error)}`;
   }
 }
@@ -893,14 +892,14 @@ export async function simulateMessage(args: {
  */
 export async function getPluginSource(args: { pluginName: string }): Promise<string> {
   const target = root.children.find(
-    (p: any) => p.name === args.pluginName || p.filePath?.includes(args.pluginName),
+    (p) => p.name === args.pluginName || p.filePath?.includes(args.pluginName),
   );
 
   if (!target) {
-    throw new Error(`插件 "${args.pluginName}" 不存在。可用插件: ${root.children.map((p: any) => p.name).join(", ")}`);
+    throw new Error(`插件 "${args.pluginName}" 不存在。可用插件: ${root.children.map((p) => p.name).join(", ")}`);
   }
 
-  const filePath = (target as any).filePath;
+  const filePath = target.filePath;
   if (!filePath) {
     throw new Error(`插件 "${args.pluginName}" 没有文件路径信息`);
   }

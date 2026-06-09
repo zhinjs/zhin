@@ -476,6 +476,7 @@ export function getAuditLogger(): AuditLogger {
   if (!globalAuditLogger) {
     try {
       const plugin = getPlugin();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const config = (plugin.root?.inject('config') as any)?.ai?.agent?.audit;
       globalAuditLogger = new AuditLogger(config);
     } catch {

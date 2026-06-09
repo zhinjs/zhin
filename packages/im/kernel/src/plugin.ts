@@ -219,18 +219,41 @@ export class PluginBase extends EventEmitter<PluginBaseLifecycle> implements Plu
     if (this.started) return;
     this.started = true;
 
-    for (const ctx of this.$contexts.values()) {
-      if (typeof ctx.mounted === "function") {
-        const result = await ctx.mounted(this);
-        if (!ctx.value) ctx.value = result;
-      }
-      this.emit("context.mounted", ctx.name);
-    }
+    await this.mountAllContexts();
+
     await this.broadcast("mounted");
     for (const child of this.children) {
       await child.start(t);
     }
     this.logger.debug(`Plugin "${this.name}" ${t ? `reloaded in ${Date.now() - t}ms` : "started"}`);
+  }
+
+  /**
+   * 挂载所有 Context。子类可覆盖以添加回滚等行为。
+   */
+  protected async mountAllContexts(): Promise<void> {
+    for (const ctx of this.$contexts.values()) {
+      await this.mountContext(ctx);
+    }
+  }
+
+  /**
+   * 挂载单个 Context。子类可覆盖以添加错误处理。
+   */
+  protected async mountContext(ctx: BaseContext): Promise<void> {
+    if (typeof ctx.mounted === "function") {
+      const result = await ctx.mounted(this);
+      if (!ctx.value) ctx.value = result;
+    }
+    if (ctx.extensions) {
+      installExtensionProxy(PluginBase.prototype);
+      for (const [name, fn] of Object.entries(ctx.extensions)) {
+        if (typeof fn === "function") {
+          registerExtension(name, fn);
+        }
+      }
+    }
+    this.emit("context.mounted", ctx.name);
   }
 
   async stop(): Promise<void> {

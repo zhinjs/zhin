@@ -491,6 +491,11 @@ export function initSandbox(config: Partial<SandboxConfig>): Sandbox {
   return globalSandbox;
 }
 
+/** 重置全局沙箱（用于测试隔离） */
+export function resetSandbox(): void {
+  globalSandbox = null;
+}
+
 /**
  * 在沙箱中执行命令
  */

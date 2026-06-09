@@ -843,6 +843,11 @@ export function initEnhancedSandbox(config: Partial<EnhancedSandboxConfig>): Enh
   return globalEnhancedSandbox;
 }
 
+/** 重置全局增强沙箱（用于测试隔离） */
+export function resetEnhancedSandbox(): void {
+  globalEnhancedSandbox = null;
+}
+
 /**
  * 在增强沙箱中执行命令
  */

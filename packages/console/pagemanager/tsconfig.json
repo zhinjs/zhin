@@ -1,17 +1,9 @@
 {
+  "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "strict": true,
-    "skipLibCheck": true,
-    "ignoreDeprecations": "6.0",
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "outDir": "lib",
-    "rootDir": "src",
-    "esModuleInterop": true
+    "outDir": "./lib",
+    "rootDir": "./src",
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src/node/**/*"],
   "exclude": ["**/*.test.ts"]

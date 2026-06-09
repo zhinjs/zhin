@@ -1,10 +1,27 @@
 {
-  "extends": "../../tsconfig.json",
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "src",
-    "outDir": "lib",
+    "types": [
+      "@types/node",
+      "@types/bun",
+      "zhin.js",
+      "@zhin.js/adapter-icqq",
+      "@zhin.js/host-api",
+      "@zhin.js/client",
+      "@zhin.js/host-router",
+      "@zhin.js/adapter-kook",
+      "@zhin.js/adapter-onebot11",
+      "@zhin.js/adapter-qq",
+      "@zhin.js/adapter-discord",
+      "@zhin.js/mcp",
+      "@zhin.js/adapter-github",
+      "@zhin.js/sensitive-filter"
+    ],
+    "outDir": "./lib",
+    "rootDir": "./src",
     "jsx": "react-jsx",
     "jsxImportSource": "zhin.js"
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "exclude": ["lib", "node_modules"]
 }

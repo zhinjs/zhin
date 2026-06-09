@@ -104,8 +104,8 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
 
   /** 获取指定用户绑定的 GhClient；未绑定则返回 null */
   async getUserAPI(platform: string, platformUid: string): Promise<GhClient | null> {
-    const db = this.plugin.root?.inject('database') as any;
-    const model = db?.models?.get('github_oauth_users');
+    const db = this.plugin.root?.inject('database');
+    const model = (db as Record<string, unknown>)?.models?.get('github_oauth_users');
     if (!model) return null;
     const [record] = await model.select().where({ platform, platform_uid: platformUid });
     if (!record?.access_token) return null;
@@ -214,7 +214,7 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
 
     // 记录事件到数据库
     if (repo) {
-      const db = this.plugin.root?.inject('database') as any;
+      const db = this.plugin.root?.inject('database');
       const eventsModel = db?.models?.get('github_events');
       if (eventsModel) {
         await eventsModel.insert({ id: Date.now(), repo, event_type: event, payload }).catch(() => {});
@@ -292,7 +292,7 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
 
   /** 轮询所有已订阅仓库的事件 */
   private async pollAllRepos(): Promise<void> {
-    const db = this.plugin.root?.inject('database') as any;
+    const db = this.plugin.root?.inject('database');
     const model = db?.models?.get('github_subscriptions');
     if (!model) return;
 
@@ -359,7 +359,7 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
       };
 
       // 记录事件到数据库
-      const db = this.plugin.root?.inject('database') as any;
+      const db = this.plugin.root?.inject('database');
       const eventsModel = db?.models?.get('github_events');
       if (eventsModel) {
         await eventsModel.insert({ id: Date.now(), repo, event_type: eventName, payload: ev.payload }).catch(() => {});
@@ -411,7 +411,7 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
     }
 
     const repo = payload.repository.full_name;
-    const db = this.plugin.root?.inject('database') as any;
+    const db = this.plugin.root?.inject('database');
     const model = db?.models?.get('github_subscriptions');
     if (!model) {
       this.plugin.logger.warn(formatCompact( { op: 'notify', ok: false, error: 'subscriptions model not ready' }));
@@ -431,7 +431,7 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
         continue;
       }
       try {
-        const adapter = this.plugin.root?.inject(s.adapter as any) as any;
+        const adapter = this.plugin.root?.inject(s.adapter as keyof Plugin.Contexts);
         if (!adapter?.sendMessage) {
           this.plugin.logger.warn(formatCompact( { op: 'notify', ok: false, adapter: s.adapter, error: 'no sendMessage' }));
           continue;

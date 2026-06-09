@@ -16,9 +16,16 @@ export default defineConfig({
     testTimeout: 10000,
     hookTimeout: 10000,
     isolate: isCi,
-    fileParallelism: isCi ? false : undefined,
     sequence: {
       hooks: 'list',
+    },
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'lcov', 'json-summary'],
+      thresholds: {
+        lines: 50,
+        branches: 40,
+      },
     },
   },
   server: {

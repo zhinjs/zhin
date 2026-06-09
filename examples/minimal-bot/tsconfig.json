@@ -1,16 +1,11 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    "types": ["node"],
     "outDir": "./lib",
-    "rootDir": "src",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "isolatedModules": true,
-    "types": ["@types/node", "zhin.js", "@zhin.js/adapter-sandbox", "@zhin.js/host-api", "@zhin.js/host-router"]
+    "rootDir": "./src",
+    "jsx": "react-jsx"
   },
   "include": ["src/**/*"],
-  "exclude": ["lib", "node_modules"]
+  "exclude": ["lib", "node_modules", "**/*.test.ts"]
 }

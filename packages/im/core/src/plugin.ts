@@ -169,21 +169,8 @@ export class Plugin extends PluginBase implements PluginLike {
   };
   #middlewares: MessageMiddleware<RegisteredAdapter>[] = [this.#messageMiddleware];
 
-  // Feature 贡献追踪
-  #featureContributions = new Map<string, Set<string>>();
-  
-  // 统一的清理函数集合
-  #disposables: Set<() => void | Promise<void>> = new Set();
-  
   get middleware(): MessageMiddleware<RegisteredAdapter> {
     return compose<RegisteredAdapter>(this.#middlewares);
-  }
-
-  recordFeatureContribution(featureName: string, itemName: string): void {
-    if (!this.#featureContributions.has(featureName)) {
-      this.#featureContributions.set(featureName, new Set());
-    }
-    this.#featureContributions.get(featureName)!.add(itemName);
   }
   /**
    * 构造函数
@@ -208,11 +195,8 @@ export class Plugin extends PluginBase implements PluginLike {
    */
   addMiddleware<T extends RegisteredAdapter>(middleware: MessageMiddleware<T>, name?: string) {
     this.#middlewares.push(middleware as MessageMiddleware<RegisteredAdapter>);
-    const dispose = () => {
-      remove(this.#middlewares, middleware);
-      this.#disposables.delete(dispose);
-    };
-    this.#disposables.add(dispose);
+    const dispose = () => remove(this.#middlewares, middleware);
+    this.onDispose(dispose);
     return dispose;
   }
 
@@ -350,43 +334,39 @@ export class Plugin extends PluginBase implements PluginLike {
 
   /**
    * 启动插件
+   * 覆盖 PluginBase.start() 以支持 Context 挂载失败回滚
    */
-  override async start(t?:number): Promise<void> {
+  override async start(t?: number): Promise<void> {
     if (this.started) return;
-    
-    // 挂载所有 Context，支持部分失败回滚
-    const mountedContexts: Array<{ name: string; context: any }> = [];
+    // 先挂载所有 Context（带回滚），再标记 started
+    await this.mountAllContexts();
+    this.started = true;
+
+    await this.broadcast("mounted");
+    for (const child of this.children) {
+      await child.start(t);
+    }
+    if (t) {
+      this.logger.debug(formatCompact({ name: this.name, reload_ms: Date.now() - t }));
+    }
+  }
+
+  /**
+   * 覆盖 mountAllContexts：支持部分失败回滚
+   */
+  protected override async mountAllContexts(): Promise<void> {
+    const mountedContexts: Array<{ name: string; context: BaseContext }> = [];
     for (const [name, context] of this.$contexts) {
       try {
-        if (typeof context.mounted === "function") {
-          const result = await context.mounted(this as PluginBase);
-          // 仅在没有预设 value 时才用 mounted 返回值赋值
-          if (!context.value) {
-            context.value = result;
-          }
-        }
-        // 注册扩展方法到共享 registry
-        if (context.extensions) {
-          installExtensionProxy(Plugin.prototype);
-          for (const [extName, fn] of Object.entries(context.extensions)) {
-            if (typeof fn === 'function') {
-              registerExtension(extName, fn);
-            }
-          }
-        }
+        await this.mountContext(context);
         mountedContexts.push({ name, context });
       } catch (e) {
-        // 回滚已挂载的 Context（逆序 dispose）
         this.logger.warn(`Context "${name}" mount failed: ${e}, rolling back ${mountedContexts.length} mounted contexts`);
         for (let i = mountedContexts.length - 1; i >= 0; i--) {
           const { name: mName, context: mCtx } = mountedContexts[i];
           try {
-            if (mCtx.extensions) {
-              unregisterExtensions(Object.keys(mCtx.extensions));
-            }
-            if (typeof mCtx.dispose === 'function') {
-              await mCtx.dispose(mCtx.value);
-            }
+            if (mCtx.extensions) unregisterExtensions(Object.keys(mCtx.extensions));
+            if (typeof mCtx.dispose === 'function') await mCtx.dispose(mCtx.value);
           } catch (disposeErr) {
             this.logger.warn(`Rollback dispose for "${mName}" failed: ${disposeErr}`);
           }
@@ -394,23 +374,8 @@ export class Plugin extends PluginBase implements PluginLike {
         throw e;
       }
     }
-    
-    // 所有 Context 成功挂载后，才标记为已启动
-    this.started = true;
-    
     for (const { name } of mountedContexts) {
       this.dispatch('context.mounted', name as keyof Plugin.Contexts);
-    }
-    await this.broadcast("mounted");
-    // 先启动子插件，再打印当前插件启动日志
-    for (const child of this.children) {
-      await child.start(t);
-    }
-    if (t) {
-      this.logger.debug(formatCompact({
-        name: this.name,
-        reload_ms: Date.now() - t,
-      }));
     }
   }
   /**
@@ -458,70 +423,17 @@ export class Plugin extends PluginBase implements PluginLike {
 
   /**
    * 停止插件
+   * 委托 PluginBase.stop() 处理通用清理，仅补充 IM 特化逻辑
    */
   override async stop(): Promise<void> {
     if (!this.started) return;
     this.logger.debug(`Stopping plugin "${this.name}"`);
-    this.started = false;
 
-    // 停止子插件
-    for (const child of this.children) {
-      await child.stop();
-    }
-    this.children = [];
+    // 通用清理（子插件、contexts、disposables、loadedModules 等）
+    await super.stop();
 
-    // 停止服务
-    for (const [name, context] of this.$contexts) {
-      remove(Plugin[contextsKey], name);
-      // 从共享 registry 注销扩展方法（引用计数，不影响其他提供者）
-      if (context.extensions) {
-        unregisterExtensions(Object.keys(context.extensions));
-      }
-      if (typeof context.dispose === "function") {
-        await context.dispose(context.value);
-      }
-    }
-    // 清理 contexts Map
-    this.$contexts.clear();
-
-// 清空缓存的名称
-    this.#cachedName = undefined;
-
-    // 触发 dispose 事件
-    this.emit("dispose");
-    
-    // 执行所有清理函数
-    for (const dispose of this.#disposables) {
-      try {
-        await dispose();
-      } catch (e) {
-        this.logger.warn(`Dispose callback failed: ${e}`);
-      }
-    }
-    this.#disposables.clear();
-    
-    // 清空 middlewares 数组（保留默认的消息中间件）
+    // IM 特化：重置中间件（保留默认消息中间件）
     this.#middlewares.length = 1;
-
-    // 清理 feature 贡献记录
-    this.#featureContributions.clear();
-    
-    if (this.parent) {
-      remove(this.parent?.children, this);
-    }
-    
-    // 从全局 loadedModules Map 中移除，防止内存泄漏
-    if (this.filePath) {
-      try {
-        const realPath = fs.realpathSync(this.filePath);
-        loadedModules.delete(realPath);
-      } catch {
-        // 文件可能已不存在，忽略错误
-      }
-    }
-    
-    this.removeAllListeners();
-    this.logger.debug(`Plugin "${this.name}" stopped`);
   }
 
   // ============================================================================
@@ -532,12 +444,7 @@ export class Plugin extends PluginBase implements PluginLike {
     this.on("mounted", callback);
   }
 
-  onDispose(callback: () => void | Promise<void>): () => void {
-    this.#disposables.add(callback);
-    return () => {
-      this.#disposables.delete(callback);
-    };
-  }
+  // onDispose 继承自 PluginBase
 
   // ============================================================================
   // 事件广播
@@ -818,10 +725,10 @@ export namespace Plugin {
     "call.recallMessage": [string, string, string];
     'before.sendMessage': [SendOptions];
     'message.send': [MessageSendPayload];
-    "message.receive": [any];
+    "message.receive": [import('./message.js').Message];
     "bot.login.pending": [import('./built/login-assist.js').PendingLoginTask];
-    "request.receive": [any];
-    "notice.receive": [any];
+    "request.receive": [import('./request.js').Request];
+    "notice.receive": [import('./notice.js').Notice];
     "ai.processing.start": [Plugin.AIEventPayload];
     "ai.processing.finish": [Plugin.AIEventPayload];
     "ai.processing.error": [Plugin.AIEventPayload];

@@ -76,9 +76,15 @@
     "@types/ws": "^8.18.1",
     "@zhin.js/agent": "workspace:^",
     "@zhin.js/client": "workspace:^",
+    "@zhin.js/database": "workspace:^",
     "@zhin.js/core": "workspace:^",
     "@zhin.js/host-router": "workspace:^",
     "koa": "^3.1.1"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/database": {
+      "optional": true
+    }
   },
   "files": [
     "src",

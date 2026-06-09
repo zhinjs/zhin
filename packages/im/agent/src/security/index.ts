@@ -30,11 +30,11 @@ export * from './dangerous-tool-policy.js';
 // ── 安全策略工厂 ──────────────────────────────────────────────────────
 
 import type { AuditLoggerConfig } from './audit-logger.js';
-import { AuditLogger, initAuditLogger, getAuditLogger } from './audit-logger.js';
+import { AuditLogger, initAuditLogger, getAuditLogger, closeAuditLogger } from './audit-logger.js';
 import type { NetworkPolicyConfig } from './network-policy.js';
-import { NetworkPolicy, initNetworkPolicy, getNetworkPolicy } from './network-policy.js';
+import { NetworkPolicy, initNetworkPolicy, getNetworkPolicy, resetNetworkPolicy } from './network-policy.js';
 import type { BudgetConfig } from './budget-limiter.js';
-import { BudgetLimiter, initBudgetLimiter, getBudgetLimiter } from './budget-limiter.js';
+import { BudgetLimiter, initBudgetLimiter, getBudgetLimiter, resetBudgetLimiter } from './budget-limiter.js';
 
 export interface SecurityPolicyConfig {
   audit?: Partial<AuditLoggerConfig>;
@@ -55,6 +55,15 @@ export function initSecurityPolicies(config: SecurityPolicyConfig = {}): {
   const budgetLimiter = initBudgetLimiter(config.budget || {});
 
   return { auditLogger, networkPolicy, budgetLimiter };
+}
+
+/**
+ * 重置所有安全策略（用于测试隔离）
+ */
+export function resetSecurityPolicies(): void {
+  try { closeAuditLogger(); } catch { /* ignore */ }
+  try { resetNetworkPolicy(); } catch { /* ignore */ }
+  try { resetBudgetLimiter(); } catch { /* ignore */ }
 }
 
 /**

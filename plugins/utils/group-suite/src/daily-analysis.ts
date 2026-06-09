@@ -33,7 +33,7 @@ let _settingsModel: any = null;
 
 function getInboxModel(): any {
   if (!_db) {
-    const database = root.inject("database" as any) as any;
+    const database = root.inject("database");
     if (database) _db = database;
   }
   return _db?.models?.get(INBOX_TABLE) ?? null;

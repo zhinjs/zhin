@@ -231,22 +231,22 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
         const skillsResult = await syncWorkspaceSkills();
         skillCount = skillsResult.count;
         pluginTools = skillsResult.pluginTools;
-      } catch (e: any) {
-        logger.warn(formatCompact( { error: e.message }));
+      } catch (e: unknown) {
+        logger.warn(formatCompact( { error: e instanceof Error ? e.message : String(e) }));
       }
 
       // Step 1b: discover *.tool.md file-based tools
       try {
         toolCount = await syncWorkspaceTools();
-      } catch (e: any) {
-        logger.warn(formatCompact( { error: e.message }));
+      } catch (e: unknown) {
+        logger.warn(formatCompact( { error: e instanceof Error ? e.message : String(e) }));
       }
 
       // Step 1c: discover *.agent.md agent presets
       try {
         agentCount = await syncWorkspaceAgents();
-      } catch (e: any) {
-        logger.debug(`Failed to discover workspace agents: ${e.message}`);
+      } catch (e: unknown) {
+        logger.debug(`Failed to discover workspace agents: ${e instanceof Error ? e.message : String(e)}`);
       }
 
       // Step 2: load bootstrap files
@@ -277,8 +277,8 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
           const contextSection = buildBootstrapContextSection(contextFiles);
           refs.zhinAgent.setBootstrapContext(contextSection);
         }
-      } catch (e: any) {
-        logger.debug(`Bootstrap files not loaded: ${e.message}`);
+      } catch (e: unknown) {
+        logger.debug(`Bootstrap files not loaded: ${e instanceof Error ? e.message : String(e)}`);
       }
 
       logger.info(formatCompact( {
@@ -292,7 +292,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       }));
 
       // Trigger agent:bootstrap hook
-      const orchestrator2 = root.inject?.('agent') as AgentOrchestrator | undefined;
+      const orchestrator2 = root.inject?.('agent');
       await triggerAIHook(createAIHookEvent('agent', 'bootstrap', undefined, {
         workspaceDir: process.cwd(),
         toolCount: builtinTools.length,
@@ -312,8 +312,8 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
           try {
             const count = await syncWorkspaceTools();
             if (count >= 0) logger.debug(formatCompact( { reload: count }));
-          } catch (e: any) {
-            logger.warn(formatCompact( { reload: 'fail', error: e.message }));
+          } catch (e: unknown) {
+            logger.warn(formatCompact( { reload: 'fail', error: e instanceof Error ? e.message : String(e) }));
           }
         }, 400);
       };
@@ -322,8 +322,8 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
           const w = fs.watch(workspaceToolDir, { recursive: true }, onToolDirChange);
           skillWatchers.push(w);
           logger.debug(`[Tool热重载] 监听目录: ${workspaceToolDir}`);
-        } catch (e: any) {
-          logger.debug(`[Tool热重载] 无法监听 ${workspaceToolDir}: ${e.message}`);
+        } catch (e: unknown) {
+          logger.debug(`[Tool热重载] 无法监听 ${workspaceToolDir}: ${e instanceof Error ? e.message : String(e)}`);
         }
       }
 
@@ -338,8 +338,8 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
             const skills = await syncWorkspaceSkills();
             await triggerAIHook(createAIHookEvent('agent', 'skills-reloaded', undefined, { skillCount: skills.count }));
             if (skills.count >= 0) logger.debug(formatCompact( { skills: skills.count }));
-          } catch (e: any) {
-            logger.warn(formatCompact( { reload: 'fail', error: e.message }));
+          } catch (e: unknown) {
+            logger.warn(formatCompact( { reload: 'fail', error: e instanceof Error ? e.message : String(e) }));
           }
         }, 400);
       };
@@ -349,8 +349,8 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
             const w = fs.watch(dir, { recursive: true }, onSkillDirChange);
             skillWatchers.push(w);
             logger.debug(`[技能热重载] 监听目录: ${dir}`);
-          } catch (e: any) {
-            logger.debug(`[技能热重载] 无法监听 ${dir}: ${e.message}`);
+          } catch (e: unknown) {
+            logger.debug(`[技能热重载] 无法监听 ${dir}: ${e instanceof Error ? e.message : String(e)}`);
           }
         }
       }

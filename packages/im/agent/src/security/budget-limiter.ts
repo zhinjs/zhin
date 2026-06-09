@@ -479,6 +479,7 @@ export function getBudgetLimiter(): BudgetLimiter {
   if (!globalBudgetLimiter) {
     try {
       const plugin = getPlugin();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const config = (plugin.root?.inject('config') as any)?.ai?.agent?.budget;
       globalBudgetLimiter = new BudgetLimiter(config);
     } catch {
@@ -494,6 +495,11 @@ export function getBudgetLimiter(): BudgetLimiter {
 export function initBudgetLimiter(config: Partial<BudgetConfig>): BudgetLimiter {
   globalBudgetLimiter = new BudgetLimiter(config);
   return globalBudgetLimiter;
+}
+
+/** 重置全局预算限制器（用于测试隔离） */
+export function resetBudgetLimiter(): void {
+  globalBudgetLimiter = null;
 }
 
 /**

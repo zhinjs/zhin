@@ -1,47 +1,10 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    "types": ["@types/node", "zhin.js", "@zhin.js/adapter-sandbox", "@zhin.js/host-api", "@zhin.js/host-router"],
     "outDir": "./lib",
-    "rootDir": "src",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "allowSyntheticDefaultImports": true,
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "verbatimModuleSyntax": false,
-    "jsx": "react-jsx",
-    "jsxImportSource": "zhin.js",
-    "types": [
-      "@types/node",
-      "@types/bun",
-      "zhin.js",
-      "@zhin.js/adapter-icqq",
-      "@zhin.js/host-api",
-      "@zhin.js/client",
-      "@zhin.js/host-router",
-      "@zhin.js/adapter-kook",
-      "@zhin.js/adapter-onebot11",
-      "@zhin.js/adapter-qq",
-      "@zhin.js/adapter-discord",
-      "@zhin.js/mcp",
-      "@zhin.js/adapter-github",
-      "@zhin.js/sensitive-filter"
-    ]
+    "rootDir": "./src"
   },
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "lib",
-    "node_modules"
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["lib", "node_modules"]
 }

@@ -88,7 +88,7 @@ let _db: any = null;
 
 function getSubs(): any {
   if (!_db) {
-    const database = root.inject("database" as any) as any;
+    const database = root.inject("database");
     if (database) _db = database;
   }
   return _db?.models?.get("rss_subscriptions") ?? null;

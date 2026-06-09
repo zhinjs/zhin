@@ -1,12 +1,5 @@
 # @zhin.js/adapter-github
 
-## 0.1.64
-
-### Patch Changes
-
-- zhin.js@1.0.93
-- @zhin.js/host-router@0.0.3
-
 ## 0.1.63
 
 ### Patch Changes

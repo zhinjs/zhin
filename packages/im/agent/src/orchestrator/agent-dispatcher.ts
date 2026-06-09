@@ -808,3 +808,8 @@ export function initAgentDispatcher(): AgentDispatcher {
   globalDispatcher = new AgentDispatcher();
   return globalDispatcher;
 }
+
+/** 重置全局调度器（用于测试隔离） */
+export function resetAgentDispatcher(): void {
+  globalDispatcher = null;
+}

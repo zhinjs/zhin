@@ -1,5 +1,6 @@
 import type { DatabaseFeature, Plugin } from "@zhin.js/core";
 import type { ConsoleRpcContext } from "./context.js";
+import type { KeyValueModel,DocumentModel,RelatedModel } from "@zhin.js/database";
 
 type DbType = "related" | "document" | "keyvalue";
 
@@ -8,8 +9,8 @@ function reply(ctx: ConsoleRpcContext, payload: Record<string, unknown>) {
 }
 
 function getDb(root: Plugin): DatabaseFeature | null {
-  const db = root.inject("database" as never);
-  return db ? (db as DatabaseFeature) : null;
+  const db = root.inject("database");
+  return db ?? null;
 }
 
 function requireDb(root: Plugin): DatabaseFeature {
@@ -25,6 +26,11 @@ function getDbType(dbFeature: DatabaseFeature): DbType {
   return "related";
 }
 
+function getModel(dbFeature: DatabaseFeature, table: string): KeyValueModel | DocumentModel | RelatedModel | undefined {
+  const model = dbFeature.db.models.get(table) as KeyValueModel | DocumentModel | RelatedModel | undefined;
+  if (!model) throw new Error(`Table '${table}' not found`);
+  return model as KeyValueModel | DocumentModel | RelatedModel;
+}
 export function getDatabaseInfo(root: Plugin) {
   const dbFeature = getDb(root);
   if (!dbFeature) {
@@ -73,13 +79,11 @@ async function dbSelect(
   const dbFeature = requireDb(root);
   const db = dbFeature.db;
   const dbType = getDbType(dbFeature);
-  const model = db.models.get(table as never);
+  const model = db.models.get(table);
   if (!model) throw new Error(`Table '${table}' not found`);
 
   if (dbType === "keyvalue") {
-    const kvModel = model as {
-      entries: () => Promise<Array<[string, unknown]>>;
-    };
+    const kvModel = model as unknown as KeyValueModel;
     const allEntries = await kvModel.entries();
     const total = allEntries.length;
     const start = (page - 1) * pageSize;
@@ -115,17 +119,17 @@ async function dbSelect(
 async function dbInsert(root: Plugin, table: string, row: Record<string, unknown>) {
   const dbFeature = requireDb(root);
   const dbType = getDbType(dbFeature);
-  const model = dbFeature.db.models.get(table as never);
+  const model = dbFeature.db.models.get(table);
   if (!model) throw new Error(`Table '${table}' not found`);
 
   if (dbType === "keyvalue") {
-    const kvModel = model as { set: (k: string, v: unknown) => Promise<void> };
+    const kvModel = model as unknown as KeyValueModel;
     if (!row.key) throw new Error("key is required for KV insert");
     await kvModel.set(String(row.key), row.value);
     return;
   }
   if (dbType === "document") {
-    await (model as { create: (r: Record<string, unknown>) => Promise<void> }).create(row);
+    await (model as unknown as DocumentModel).create(row);
     return;
   }
   await model.insert(row);
@@ -139,18 +143,17 @@ async function dbUpdate(
 ) {
   const dbFeature = requireDb(root);
   const dbType = getDbType(dbFeature);
-  const model = dbFeature.db.models.get(table as never);
+  const model = dbFeature.db.models.get(table);
   if (!model) throw new Error(`Table '${table}' not found`);
 
   if (dbType === "keyvalue") {
-    const kvModel = model as { set: (k: string, v: unknown) => Promise<void> };
+    const kvModel = model as unknown as KeyValueModel;
     if (!where.key) throw new Error("key is required for KV update");
     await kvModel.set(String(where.key), row.value);
     return 1;
   }
   if (dbType === "document" && where._id) {
-    return await (model as { updateById: (id: unknown, r: Record<string, unknown>) => Promise<number> })
-      .updateById(where._id, row);
+    return await (model as unknown as DocumentModel).updateById(String(where._id), row);
   }
   return await model.update(row).where(where);
 }
@@ -158,17 +161,17 @@ async function dbUpdate(
 async function dbDelete(root: Plugin, table: string, where: Record<string, unknown>) {
   const dbFeature = requireDb(root);
   const dbType = getDbType(dbFeature);
-  const model = dbFeature.db.models.get(table as never);
+  const model = dbFeature.db.models.get(table);
   if (!model) throw new Error(`Table '${table}' not found`);
 
   if (dbType === "keyvalue") {
-    const kvModel = model as { deleteByKey: (k: string) => Promise<void> };
+    const kvModel = model as unknown as KeyValueModel;
     if (!where.key) throw new Error("key is required for KV delete");
     await kvModel.deleteByKey(String(where.key));
     return 1;
   }
   if (dbType === "document" && where._id) {
-    return await (model as { deleteById: (id: unknown) => Promise<number> }).deleteById(where._id);
+    return await (model as unknown as DocumentModel).deleteById(String(where._id));
   }
   return await model.delete(where);
 }
@@ -176,16 +179,16 @@ async function dbDelete(root: Plugin, table: string, where: Record<string, unkno
 async function dbDropTable(root: Plugin, table: string) {
   const dbFeature = requireDb(root);
   const db = dbFeature.db;
-  const model = db.models.get(table as never);
+  const model = db.models.get(table);
   if (!model) throw new Error(`Table '${table}' not found`);
   const sql = db.dialect.formatDropTable(table, true);
   await db.query(sql);
-  db.models.delete(table as never);
-  db.definitions.delete(table as never);
+  db.models.delete(table);
+  db.definitions.delete(table);
 }
 
 async function kvGet(root: Plugin, table: string, key: string) {
-  const model = requireDb(root).db.models.get(table as never) as {
+  const model = requireDb(root).db.models.get(table) as {
     get: (k: string) => Promise<unknown>;
   } | undefined;
   if (!model) throw new Error(`Bucket '${table}' not found`);
@@ -199,7 +202,7 @@ async function kvSet(
   value: unknown,
   ttl?: number,
 ) {
-  const model = requireDb(root).db.models.get(table as never) as {
+  const model = requireDb(root).db.models.get(table) as {
     set: (k: string, v: unknown, ttl?: number) => Promise<void>;
   } | undefined;
   if (!model) throw new Error(`Bucket '${table}' not found`);
@@ -207,7 +210,7 @@ async function kvSet(
 }
 
 async function kvDelete(root: Plugin, table: string, key: string) {
-  const model = requireDb(root).db.models.get(table as never) as {
+  const model = requireDb(root).db.models.get(table) as {
     deleteByKey: (k: string) => Promise<void>;
   } | undefined;
   if (!model) throw new Error(`Bucket '${table}' not found`);
@@ -215,7 +218,7 @@ async function kvDelete(root: Plugin, table: string, key: string) {
 }
 
 async function kvGetEntries(root: Plugin, table: string) {
-  const model = requireDb(root).db.models.get(table as never) as {
+  const model = requireDb(root).db.models.get(table) as {
     entries: () => Promise<Array<[string, unknown]>>;
   } | undefined;
   if (!model) throw new Error(`Bucket '${table}' not found`);
@@ -238,16 +241,16 @@ export async function handleDbRpc(
     case "db:info":
       try {
         reply(ctx, { requestId, data: getDatabaseInfo(root) });
-      } catch (error) {
-        reply(ctx, { requestId, error: `Failed to get db info: ${(error as Error).message}` });
+      } catch (error: unknown) {
+        reply(ctx, { requestId, error: `Failed to get db info: ${error instanceof Error ? error.message : String(error)}` });
       }
       return true;
 
     case "db:tables":
       try {
         reply(ctx, { requestId, data: { tables: getDatabaseTables(root) } });
-      } catch (error) {
-        reply(ctx, { requestId, error: `Failed to list tables: ${(error as Error).message}` });
+      } catch (error: unknown) {
+        reply(ctx, { requestId, error: `Failed to list tables: ${error instanceof Error ? error.message : String(error)}` });
       }
       return true;
 
@@ -270,8 +273,8 @@ export async function handleDbRpc(
         }
         const selectResult = await dbSelect(root, table, page, pageSize, where);
         reply(ctx, { requestId, data: selectResult });
-      } catch (error) {
-        reply(ctx, { requestId, error: `Failed to select: ${(error as Error).message}` });
+      } catch (error: unknown) {
+        reply(ctx, { requestId, error: `Failed to select: ${error instanceof Error ? error.message : String(error)}` });
       }
       return true;
 
@@ -285,8 +288,8 @@ export async function handleDbRpc(
         }
         await dbInsert(root, table, row);
         reply(ctx, { requestId, data: { success: true } });
-      } catch (error) {
-        reply(ctx, { requestId, error: `Failed to insert: ${(error as Error).message}` });
+      } catch (error: unknown) {
+        reply(ctx, { requestId, error: `Failed to insert: ${error instanceof Error ? error.message : String(error)}` });
       }
       return true;
 
@@ -301,8 +304,8 @@ export async function handleDbRpc(
         }
         const affected = await dbUpdate(root, table, row, updateWhere);
         reply(ctx, { requestId, data: { success: true, affected } });
-      } catch (error) {
-        reply(ctx, { requestId, error: `Failed to update: ${(error as Error).message}` });
+      } catch (error: unknown) {
+        reply(ctx, { requestId, error: `Failed to update: ${error instanceof Error ? error.message : String(error)}` });
       }
       return true;
 
@@ -316,8 +319,8 @@ export async function handleDbRpc(
         }
         const deleted = await dbDelete(root, table, deleteWhere);
         reply(ctx, { requestId, data: { success: true, deleted } });
-      } catch (error) {
-        reply(ctx, { requestId, error: `Failed to delete: ${(error as Error).message}` });
+      } catch (error: unknown) {
+        reply(ctx, { requestId, error: `Failed to delete: ${error instanceof Error ? error.message : String(error)}` });
       }
       return true;
 
@@ -330,8 +333,8 @@ export async function handleDbRpc(
         }
         await dbDropTable(root, dropTableName);
         reply(ctx, { requestId, data: { success: true } });
-      } catch (error) {
-        reply(ctx, { requestId, error: `Failed to drop table: ${(error as Error).message}` });
+      } catch (error: unknown) {
+        reply(ctx, { requestId, error: `Failed to drop table: ${error instanceof Error ? error.message : String(error)}` });
       }
       return true;
 
@@ -349,8 +352,8 @@ export async function handleDbRpc(
         }
         const kvValue = await kvGet(root, table, key);
         reply(ctx, { requestId, data: { key, value: kvValue } });
-      } catch (error) {
-        reply(ctx, { requestId, error: `Failed to get kv: ${(error as Error).message}` });
+      } catch (error: unknown) {
+        reply(ctx, { requestId, error: `Failed to get kv: ${error instanceof Error ? error.message : String(error)}` });
       }
       return true;
 
@@ -366,8 +369,8 @@ export async function handleDbRpc(
         }
         await kvSet(root, table, key, value, ttl);
         reply(ctx, { requestId, data: { success: true } });
-      } catch (error) {
-        reply(ctx, { requestId, error: `Failed to set kv: ${(error as Error).message}` });
+      } catch (error: unknown) {
+        reply(ctx, { requestId, error: `Failed to set kv: ${error instanceof Error ? error.message : String(error)}` });
       }
       return true;
 
@@ -381,8 +384,8 @@ export async function handleDbRpc(
         }
         await kvDelete(root, table, key);
         reply(ctx, { requestId, data: { success: true } });
-      } catch (error) {
-        reply(ctx, { requestId, error: `Failed to delete kv: ${(error as Error).message}` });
+      } catch (error: unknown) {
+        reply(ctx, { requestId, error: `Failed to delete kv: ${error instanceof Error ? error.message : String(error)}` });
       }
       return true;
 
@@ -399,8 +402,8 @@ export async function handleDbRpc(
         }
         const kvEntries = await kvGetEntries(root, table);
         reply(ctx, { requestId, data: { entries: kvEntries } });
-      } catch (error) {
-        reply(ctx, { requestId, error: `Failed to get entries: ${(error as Error).message}` });
+      } catch (error: unknown) {
+        reply(ctx, { requestId, error: `Failed to get entries: ${error instanceof Error ? error.message : String(error)}` });
       }
       return true;
 

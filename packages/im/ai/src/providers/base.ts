@@ -34,34 +34,40 @@ export abstract class BaseProvider implements AIProvider {
   abstract chatStream(request: ChatCompletionRequest): AsyncIterable<ChatCompletionChunk>;
 
   /**
-   * 发送 HTTP 请求
+   * 构建请求头（公共逻辑）
    */
-  protected async fetch<T>(
-    url: string,
-    options: RequestInit & { json?: any } = {}
-  ): Promise<T> {
-    const { json, ...fetchOptions } = options;
-    
+  private buildHeaders(extra?: HeadersInit): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...this.config.headers,
-      ...(options.headers as Record<string, string>),
+      ...(extra as Record<string, string>),
     };
-
     if (this.config.apiKey) {
       const scheme = this.config.authScheme !== undefined ? this.config.authScheme : 'Bearer ';
       headers['Authorization'] = scheme + this.config.apiKey;
     }
+    return headers;
+  }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
+  /**
+   * 发起请求并返回 Response（公共逻辑）
+   */
+  protected async request(
+    url: string,
+    options: RequestInit & { json?: unknown } = {},
+    controller?: AbortController,
+  ): Promise<Response> {
+    const { json, ...fetchOptions } = options;
+    const ownController = !controller;
+    const ctrl = controller ?? new AbortController();
+    const timeoutId = ownController ? setTimeout(() => ctrl.abort(), this.config.timeout) : undefined;
 
     try {
       const response = await fetch(url, {
         ...fetchOptions,
-        headers,
+        headers: this.buildHeaders(options.headers),
         body: json ? JSON.stringify(json) : fetchOptions.body,
-        signal: controller.signal,
+        signal: ctrl.signal,
         keepalive: true,
       });
 
@@ -70,10 +76,21 @@ export abstract class BaseProvider implements AIProvider {
         throw new Error(`API Error (${response.status}): ${error}`);
       }
 
-      return response.json() as Promise<T>;
+      return response;
     } finally {
-      clearTimeout(timeoutId);
+      if (timeoutId) clearTimeout(timeoutId);
     }
+  }
+
+  /**
+   * 发送 HTTP 请求并解析 JSON
+   */
+  protected async fetch<T>(
+    url: string,
+    options: RequestInit & { json?: unknown } = {}
+  ): Promise<T> {
+    const response = await this.request(url, options);
+    return response.json() as Promise<T>;
   }
 
   /**
@@ -83,40 +100,8 @@ export abstract class BaseProvider implements AIProvider {
     url: string,
     options: RequestInit & { json?: unknown } = {},
   ): Promise<string> {
-    const { json, ...fetchOptions } = options;
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...this.config.headers,
-      ...(options.headers as Record<string, string>),
-    };
-
-    if (this.config.apiKey) {
-      const scheme = this.config.authScheme !== undefined ? this.config.authScheme : 'Bearer ';
-      headers['Authorization'] = scheme + this.config.apiKey;
-    }
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
-
-    try {
-      const response = await fetch(url, {
-        ...fetchOptions,
-        headers,
-        body: json ? JSON.stringify(json) : fetchOptions.body,
-        signal: controller.signal,
-        keepalive: true,
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`API Error (${response.status}): ${error}`);
-      }
-
-      return response.text();
-    } finally {
-      clearTimeout(timeoutId);
-    }
+    const response = await this.request(url, options);
+    return response.text();
   }
 
   /**
@@ -124,39 +109,14 @@ export abstract class BaseProvider implements AIProvider {
    */
   protected async *fetchStream(
     url: string,
-    options: RequestInit & { json?: any } = {}
+    options: RequestInit & { json?: unknown } = {}
   ): AsyncIterable<string> {
-    const { json, ...fetchOptions } = options;
-    
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      Accept: 'text/event-stream',
-      ...this.config.headers,
-      ...(options.headers as Record<string, string>),
-    };
-
-    if (this.config.apiKey) {
-      const scheme = this.config.authScheme !== undefined ? this.config.authScheme : 'Bearer ';
-      headers['Authorization'] = scheme + this.config.apiKey;
-    }
-
     const controller = new AbortController();
     const requestId = Math.random().toString(36).slice(2);
     this.abortControllers.set(requestId, controller);
 
     try {
-      const response = await fetch(url, {
-        ...fetchOptions,
-        headers,
-        body: json ? JSON.stringify(json) : fetchOptions.body,
-        signal: controller.signal,
-        keepalive: true,
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`API Error (${response.status}): ${error}`);
-      }
+      const response = await this.request(url, { ...options, headers: { Accept: 'text/event-stream', ...(options.headers as Record<string, string>) } }, controller);
 
       if (!response.body) {
         throw new Error('Response body is empty');
