@@ -14,8 +14,7 @@
     "build": "pnpm --filter @zhin.js/scaffold-wizard build && tsc",
     "dev": "tsc --watch",
     "clean": "rimraf lib",
-    "test": "vitest run --root ../../.. packages/toolkit/create-zhin/tests",
-    "prepublishOnly": "pnpm build"
+    "test": "vitest run --root ../../.. packages/toolkit/create-zhin/tests"
   },
   "dependencies": {
     "@zhin.js/scaffold-wizard": "workspace:*",
