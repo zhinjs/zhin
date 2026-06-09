@@ -13,9 +13,13 @@ import {
 } from "./mesh-auth.js";
 import { registerResources } from "./resources.js";
 import { registerPrompts } from "./prompts.js";
-import { applyAgentMeshTools, AGENT_MESH_TOOL_NAMES } from "./mesh-registrar.js";
+import {
+  applyAgentMeshTools,
+  AGENT_MESH_TOOL_NAMES,
+  setAgentMeshToolsRegistrar,
+} from "@zhin.js/core";
 
-export { setAgentMeshToolsRegistrar, AGENT_MESH_TOOL_NAMES } from "./mesh-registrar.js";
+export { setAgentMeshToolsRegistrar, AGENT_MESH_TOOL_NAMES } from "@zhin.js/core";
 export {
   mcpAuthRequired,
   verifyMcpBearer,

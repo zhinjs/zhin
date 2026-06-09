@@ -9,6 +9,11 @@ export { quoteIdFromContent, quoteIdFromRaw, syncQuoteId, alignReplySegments } f
 export { htmlToPlainText, htmlToPlainTextWithBlockBreaks, htmlToFallbackText } from './built/html-to-text.js'
 export { registerHtmlSegmentFallback, coerceHtmlSegmentsToText } from './built/html-segment-fallback.js'
 export {
+  AGENT_MESH_TOOL_NAMES,
+  setAgentMeshToolsRegistrar,
+  applyAgentMeshTools,
+} from './built/mcp-mesh-registrar.js'
+export {
   prependQuoteContext,
   resolveQuotedMessagePayload,
   resolveQuoteContextBlock,

@@ -581,6 +581,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(zod@4.4.3)
+      '@zhin.js/core':
+        specifier: workspace:*
+        version: link:../../im/core
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -640,9 +643,6 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
-      '@zhin.js/mcp':
-        specifier: workspace:*
-        version: link:../../host/mcp
       he:
         specifier: ^1.2.0
         version: 1.2.0

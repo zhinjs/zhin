@@ -1,13 +1,13 @@
 /**
- * Register Agent Mesh MCP tools via @zhin.js/mcp mesh registrar hook.
+ * Register Agent Mesh MCP tools via core mesh registrar hook.
  */
-import { getPlugin } from '@zhin.js/core';
-import { setAgentMeshToolsRegistrar } from '@zhin.js/mcp';
+import { getPlugin, setAgentMeshToolsRegistrar } from '@zhin.js/core';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerAgentMeshTools } from '../mcp-server/agent-mesh-tools.js';
 
 export function registerAgentMeshMcp(): void {
   const plugin = getPlugin();
-  setAgentMeshToolsRegistrar(registerAgentMeshTools);
+  setAgentMeshToolsRegistrar((server) => registerAgentMeshTools(server as McpServer));
   plugin.onDispose(() => {
     setAgentMeshToolsRegistrar(null);
   });

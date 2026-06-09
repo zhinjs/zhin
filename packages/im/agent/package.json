@@ -23,7 +23,6 @@
     "@zhin.js/ai": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/logger": "workspace:*",
-    "@zhin.js/mcp": "workspace:*",
     "he": "^1.2.0",
     "zod": "^4.4.3",
     "js-yaml": "^4.2.0"

@@ -2,23 +2,19 @@
  * Agent Mesh MCP tools — agent.delegate_task / query_status / get_result / cancel_task
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { AGENT_MESH_TOOL_NAMES } from '@zhin.js/core';
 import { z } from 'zod';
 import { getAgentDispatcher } from '../orchestrator/agent-dispatcher.js';
 import { getDelegationProcessor } from '../orchestrator/delegation-processor.js';
 import { getOrchestrationRuntime } from '../orchestration-runtime-registry.js';
+
+export { AGENT_MESH_TOOL_NAMES };
 
 const artifactSchema = z.object({
   name: z.string().optional(),
   content: z.string().optional(),
   mime: z.string().optional(),
 });
-
-export const AGENT_MESH_TOOL_NAMES = [
-  'agent.delegate_task',
-  'agent.query_status',
-  'agent.get_result',
-  'agent.cancel_task',
-] as const;
 
 export function registerAgentMeshTools(server: McpServer): void {
   server.registerTool(

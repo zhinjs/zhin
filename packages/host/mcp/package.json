@@ -45,6 +45,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@zhin.js/core": "workspace:*",
     "zod": "^4.4.3"
   },
   "peerDependencies": {

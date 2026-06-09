@@ -3,7 +3,7 @@
  */
 import type { IncomingMessage } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
-import { AGENT_MESH_TOOL_NAMES } from './mesh-registrar.js';
+import { AGENT_MESH_TOOL_NAMES } from '@zhin.js/core';
 
 export interface McpAuthConfig {
   allowUnauthenticatedLocalhost?: boolean;
