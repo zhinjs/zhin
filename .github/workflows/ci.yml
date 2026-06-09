@@ -20,17 +20,17 @@ jobs:
         uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v4
         with:
           version: 9.0.2
-      
+
+      - name: checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4.2.2
+        with:
+          fetch-depth: 0
+
       - name: setup node.js
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version: 24
           cache: 'pnpm'
-      
-      - name: checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4.2.2
-        with:
-          fetch-depth: 0
 
       # changesets `baseBranch: main` compares against a **local** `main` ref; PR checkouts
       # often only have `origin/main`, which makes `pnpm changeset status` fail.
