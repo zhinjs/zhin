@@ -1,5 +1,12 @@
 # @zhin.js/adapter-onebot11
 
+## 1.0.98
+
+### Patch Changes
+
+- zhin.js@1.0.93
+- @zhin.js/host-router@0.0.3
+
 ## 1.0.97
 
 ### Patch Changes
