@@ -41,7 +41,7 @@
     "@types/cross-spawn": "^6.0.6",
     "@types/fs-extra": "^11.0.4",
     "@types/inquirer": "^9.0.7",
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.2",
     "typescript": "^6.0.3"
   },
   "repository": {

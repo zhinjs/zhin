@@ -42,7 +42,7 @@
   },
   "devDependencies": {
     "@zhin.js/cli": "workspace:*",
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.2",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@zhin.js/host-api": "workspace:*",

@@ -56,7 +56,7 @@
     "@zhin.js/cli": "workspace:*",
     "@zhin.js/host-api": "workspace:*",
     "@zhin.js/contract": "workspace:*",
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.2",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@types/ws": "^8.18.1",
