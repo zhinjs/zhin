@@ -1,5 +1,12 @@
 # @zhin.js/adapter-dingtalk
 
+## 1.0.81
+
+### Patch Changes
+
+- zhin.js@1.0.93
+- @zhin.js/host-router@0.0.3
+
 ## 1.0.80
 
 ### Patch Changes

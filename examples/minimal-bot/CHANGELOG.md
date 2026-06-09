@@ -1,5 +1,13 @@
 # minimal-bot
 
+## 0.0.7
+
+### Patch Changes
+
+- zhin.js@1.0.93
+- @zhin.js/host-router@0.0.3
+- @zhin.js/adapter-sandbox@3.0.11
+
 ## 0.0.6
 
 ### Patch Changes

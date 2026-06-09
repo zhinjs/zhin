@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-weixin-ilink",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "Zhin.js adapter for WeChat personal account via Tencent iLink Bot API (ClawBot)",
   "main": "./lib/index.js",
@@ -74,10 +74,18 @@
     "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {
-    "@zhin.js/agent": { "optional": true },
-    "@zhin.js/client": { "optional": true },
-    "@zhin.js/host-api": { "optional": true },
-    "@zhin.js/host-router": { "optional": true }
+    "@zhin.js/agent": {
+      "optional": true
+    },
+    "@zhin.js/client": {
+      "optional": true
+    },
+    "@zhin.js/host-api": {
+      "optional": true
+    },
+    "@zhin.js/host-router": {
+      "optional": true
+    }
   },
   "ilink_appid": "bot"
 }
