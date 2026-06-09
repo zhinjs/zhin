@@ -1,0 +1,60 @@
+log_level: 1
+
+# Sandbox：Console 沙盒页连接时自动创建；NapCat/KOOK 按需取消注释 bots 段
+bots: []
+#  - context: napcat
+#    name: "YOUR_QQ"
+#    access_token: ${ONEBOT11_ACCESS_TOKEN}
+#    connection: ws
+#    url: ${ONEBOT11_WS_URL}
+#  - context: kook
+#    name: main
+#    token: ${KOOK_TOKEN}
+
+plugins:
+  - "@zhin.js/adapter-sandbox"
+  - "@zhin.js/adapter-napcat"
+  - "@zhin.js/adapter-kook"
+  - "@zhin.js/host-router"
+  - "@zhin.js/host-api"
+  - "@zhin.js/mcp"
+  - hello
+
+hostApi:
+  lazyLoad: true
+
+http:
+  token: ${HTTP_TOKEN:-full-bot-dev-token}
+  port: 8069
+
+mcp:
+  enabled: true
+  path: /mcp
+  token: ${HTTP_TOKEN:-full-bot-dev-token}
+
+ai:
+  enabled: true
+  memory:
+    semantic:
+      enabled: true
+      autoConsolidate: false
+  remoteAgents:
+    - id: local
+      url: http://127.0.0.1:8069/mcp
+      token: ${HTTP_TOKEN:-full-bot-dev-token}
+  providers:
+    ollama:
+      api: ollama-chat
+      host: http://127.0.0.1:11434
+  agents:
+    zhin:
+      provider: ollama
+      model: qwen3:8b
+  agent:
+    execSecurity: allowlist
+    execPreset: readonly
+  trigger:
+    prefixes:
+      - "ai:"
+    respondToAt: true
+    respondToPrivate: true
