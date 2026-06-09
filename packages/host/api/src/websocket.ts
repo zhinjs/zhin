@@ -426,7 +426,7 @@ export async function handleWebSocketMessage(
           ws.send(JSON.stringify({ requestId, error: "bot not found" }));
           break;
         }
-        const botAny = bot as Record<string, unknown>;
+        const botAny = bot as unknown as Record<string, unknown>;
         if (type === "bot:friends") {
           const fl = botAny.fl as Map<string, Record<string, unknown>> | undefined;
           const friends = Array.from((fl || new Map()).values()).map((f) => ({
@@ -468,13 +468,13 @@ export async function handleWebSocketMessage(
           break;
         }
         const channels: Array<{ id: string; name: string }> = [];
-        const botMethods = bot as Record<string, unknown>;
+        const botMethods = bot as unknown as Record<string, unknown>;
         if (adapter === "qq" && typeof botMethods.getGuilds === "function" && typeof botMethods.getChannels === "function") {
           const getGuilds = botMethods.getGuilds as () => Promise<Array<Record<string, unknown>>>;
           const getChannels = botMethods.getChannels as (guildId: string) => Promise<Array<Record<string, unknown>>>;
           const guilds = (await getGuilds()) || [];
           for (const g of guilds) {
-            const gid = g?.id ?? g?.guild_id ?? String(g);
+            const gid = String(g?.id ?? g?.guild_id ?? g);
             const chs = (await getChannels(gid)) || [];
             for (const c of chs) {
               channels.push({
@@ -486,7 +486,10 @@ export async function handleWebSocketMessage(
         } else if (ad && typeof (ad as Record<string, unknown>).listChannels === "function") {
           const adMethods = ad as Record<string, (...args: unknown[]) => unknown>;
           const result = await adMethods.listChannels(botId) as Record<string, unknown> | unknown[];
-          if (Array.isArray(result)) channels.push(...result.map((c: Record<string, unknown>) => ({ id: String(c?.id ?? c), name: String(c?.name ?? c?.id ?? "") })));
+          if (Array.isArray(result)) channels.push(...result.map((c) => {
+            const row = c as Record<string, unknown>;
+            return { id: String(row?.id ?? c), name: String(row?.name ?? row?.id ?? "") };
+          }));
           else if (result && typeof result === 'object' && 'channels' in result) channels.push(...((result as Record<string, unknown>).channels as Array<Record<string, unknown>>).map((c) => ({ id: String(c?.id ?? c), name: String(c?.name ?? c?.id ?? "") })));
         }
         ws.send(JSON.stringify({ requestId, data: { channels, count: channels.length } }));
@@ -510,7 +513,7 @@ export async function handleWebSocketMessage(
           ws.send(JSON.stringify({ requestId, error: "bot not found" }));
           break;
         }
-        const botAny = bot as Record<string, unknown>;
+        const botAny = bot as unknown as Record<string, unknown>;
         if (adapter === "icqq" && typeof botAny.deleteFriend === "function") {
           await (botAny.deleteFriend as (id: number) => Promise<void>)(Number(userId));
           ws.send(JSON.stringify({ requestId, data: { success: true } }));
@@ -646,7 +649,13 @@ export async function handleWebSocketMessage(
           ws.send(JSON.stringify({ requestId, data: { messages: [], inboxEnabled: false } }));
           break;
         }
-        const MessageModel = db?.models?.get("unified_inbox_message");
+        const MessageModel = db?.models?.get("unified_inbox_message") as {
+          select: () => {
+            where: (w: Record<string, unknown>) => {
+              orderBy: (field: string, dir: 'ASC' | 'DESC') => { limit: (n: number) => Promise<unknown[]> };
+            };
+          };
+        } | undefined;
         if (!MessageModel) {
           ws.send(JSON.stringify({ requestId, data: { messages: [], inboxEnabled: false } }));
           break;
@@ -692,7 +701,15 @@ export async function handleWebSocketMessage(
           ws.send(JSON.stringify({ requestId, data: { requests: [], inboxEnabled: false } }));
           break;
         }
-        const RequestModel = db?.models?.get("unified_inbox_request");
+        const RequestModel = db?.models?.get("unified_inbox_request") as {
+          select: () => {
+            where: (w: Record<string, unknown>) => {
+              orderBy: (field: string, dir: 'ASC' | 'DESC') => {
+                limit: (n: number) => { offset: (n: number) => Promise<unknown[]> };
+              };
+            };
+          };
+        } | undefined;
         if (!RequestModel) {
           ws.send(JSON.stringify({ requestId, data: { requests: [], inboxEnabled: false } }));
           break;
@@ -738,7 +755,15 @@ export async function handleWebSocketMessage(
           ws.send(JSON.stringify({ requestId, data: { notices: [], inboxEnabled: false } }));
           break;
         }
-        const NoticeModel = db?.models?.get("unified_inbox_notice");
+        const NoticeModel = db?.models?.get("unified_inbox_notice") as {
+          select: () => {
+            where: (w: Record<string, unknown>) => {
+              orderBy: (field: string, dir: 'ASC' | 'DESC') => {
+                limit: (n: number) => { offset: (n: number) => Promise<unknown[]> };
+              };
+            };
+          };
+        } | undefined;
         if (!NoticeModel) {
           ws.send(JSON.stringify({ requestId, data: { notices: [], inboxEnabled: false } }));
           break;

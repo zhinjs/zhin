@@ -13,7 +13,7 @@ export default defineConfig({
     'rest/assistant-jobs-rest-api': 'src/rest/assistant-jobs-rest-api.ts',
   },
   format: ['esm'],
-  dts: { compilerOptions: { skipLibCheck: true } },
+  dts: { compilerOptions: { skipLibCheck: true, ignoreDeprecations: '6.0' } },
   clean: true,
   treeshake: true,
   splitting: false,
