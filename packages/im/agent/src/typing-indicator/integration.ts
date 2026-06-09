@@ -83,7 +83,11 @@ interface ICQQBot extends Bot {
  * 这里提供的是示例实现框架
  */
 export function createICQQAdapterFromBot(bot: ICQQBot, outbound?: OutboundAdapter): ReactionTypingIndicatorAdapter {
-  const addReaction = async (messageId: string, emoji: string): Promise<string | null> => {
+  const addReaction = async (
+    messageId: string,
+    emoji: string,
+    _options: TypingIndicatorOptions,
+  ): Promise<string | null> => {
     try {
       if (bot.$addReaction) {
         return await bot.$addReaction(messageId, emoji);
@@ -141,6 +145,7 @@ export function createICQQAdapterFromBot(bot: ICQQBot, outbound?: OutboundAdapte
   };
 
   return new ReactionTypingIndicatorAdapter(
+    'icqq',
     addReaction,
     removeReaction,
     sendMessage,
@@ -290,6 +295,11 @@ export function resolveTypingIndicatorConfig(
     telegram: {
       type: 'typing',
       autoRemove: true,
+    },
+    'weixin-ilink': {
+      type: 'typing',
+      autoRemove: true,
+      platformConfig: { keepaliveIntervalMs: 5_000 },
     },
     discord: {
       type: 'typing',

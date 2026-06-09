@@ -64,6 +64,8 @@ export default withMermaid(defineConfig({
   ignoreDeadLinks: [
     /^https?:\/\/localhost/,
     /^https?:\/\/github\.com/,
+    // Monorepo 源码 / 示例（链出 docs/ 根目录；VitePress 校验时会去掉 .md 后缀）
+    /\.\.\/\.\.\/(examples|packages|basic)\//,
   ],
   
   themeConfig: {

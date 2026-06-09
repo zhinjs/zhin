@@ -6,10 +6,36 @@ import * as xml2js from "xml2js";
 import { createHash, createDecipheriv, createCipheriv, randomBytes } from "crypto";
 import { EventEmitter } from "events";
 import FormData from "form-data";
-import { formatCompact, Bot, Message, MessageSegment, segment, SendContent, SendOptions } from 'zhin.js';
+import {
+    formatCompact,
+    Bot,
+    Message,
+    MessageSegment,
+    segment,
+    SendContent,
+    SendOptions,
+    runInboundMessage,
+    truncatePreview,
+} from 'zhin.js';
 import { registerFetchRoute, type Router, type RouterContext } from "@zhin.js/host-router/router";
 import type { WeChatMPConfig, WeChatMessage, WeChatAPIResponse, TokenResponse } from "./types.js";
 import type { WeChatMPAdapter } from "./adapter.js";
+import {
+    getPassiveReplyCapture,
+    recordPassiveReplyText,
+    runWithPassiveReplyCapture,
+} from "./passive-reply.js";
+
+function queryParam(value: unknown): string {
+    if (typeof value === "string") return value;
+    if (Array.isArray(value) && typeof value[0] === "string") return value[0];
+    return "";
+}
+
+/** URL 查询里的 Base64 可能把 `+` 解码成空格 */
+function normalizeEchostrParam(echostr: string): string {
+    return echostr.replace(/ /g, "+");
+}
 
 export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeChatMessage> {
     $config: WeChatMPConfig;
@@ -44,9 +70,9 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
             this.handleVerification(ctx);
         });
         
-        // 接收微信消息 (POST) 
-        registerFetchRoute(this.router, "POST", path, (ctx: RouterContext) => {
-            void this.handleMessage(ctx);
+        // 接收微信消息 (POST)；必须 await，否则 Koa 会在被动回复写入 ctx.body 前就结束响应
+        registerFetchRoute(this.router, "POST", path, async (ctx: RouterContext) => {
+            await this.handleMessage(ctx);
         });
     }
 
@@ -80,32 +106,129 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
     }
 
     private handleVerification(ctx: RouterContext): void {
-        const { signature, timestamp, nonce, echostr } = ctx.query;
-        
-        if (this.verifySignature(
-            signature as string, 
-            timestamp as string, 
-            nonce as string
-        )) {
-            this.logger.info(formatCompact( { op: "verify" }));
-            ctx.body = echostr;
-        } else {
-            this.logger.error('WeChat verification failed');
+        const signature = queryParam(ctx.query.signature);
+        const msgSignature = queryParam(ctx.query.msg_signature);
+        const timestamp = queryParam(ctx.query.timestamp);
+        const nonce = queryParam(ctx.query.nonce);
+        const echostr = normalizeEchostrParam(queryParam(ctx.query.echostr));
+
+        const secureMode = !!(this.$config.encrypt && this.$config.encodingAESKey);
+        // GET 验证：signature 始终为 3 参数；msg_signature（若存在）为 4 参数含 echostr
+        const signMode = msgSignature ? "msg_signature" : "signature";
+        const signToCheck = msgSignature || signature;
+        const signPayload = msgSignature
+            ? { signature: msgSignature, timestamp, nonce, echostr }
+            : { signature, timestamp, nonce };
+        const signFields = msgSignature ? 4 : 3;
+
+        this.logger.info(formatCompact({
+            op: "verify",
+            stage: "recv",
+            path: ctx.path,
+            secureMode,
+            signMode,
+            hasSignature: !!signature,
+            hasMsgSignature: !!msgSignature,
+            hasEchostr: !!echostr,
+            timestamp,
+            nonce,
+            echostrLen: echostr.length,
+            tokenLen: this.$config.token.length,
+        }));
+
+        if (!signToCheck || !timestamp || !nonce) {
+            this.logger.error(formatCompact({
+                op: "verify",
+                stage: "sign",
+                ok: false,
+                error: "missing_query_params",
+            }));
             ctx.status = 403;
-            ctx.body = 'Forbidden';
+            ctx.body = "Forbidden";
+            return;
         }
+
+        if (!this.verifySignature(signPayload)) {
+            const expected = this.computeSignatureHash(signPayload);
+            this.logger.error(formatCompact({
+                op: "verify",
+                stage: "sign",
+                ok: false,
+                secureMode,
+                signMode,
+                signFields,
+                expectedPrefix: expected.slice(0, 8),
+                gotPrefix: signToCheck.slice(0, 8),
+            }));
+            ctx.status = 403;
+            ctx.body = "Forbidden";
+            return;
+        }
+
+        this.logger.info(formatCompact({
+            op: "verify",
+            stage: "sign",
+            ok: true,
+            signMode,
+            signFields,
+        }));
+
+        let body = echostr;
+        if (secureMode && echostr && this.isEncryptedEchostr(echostr)) {
+            try {
+                body = this.decryptEchostr(echostr);
+                this.logger.info(formatCompact({
+                    op: "verify",
+                    stage: "decrypt",
+                    ok: true,
+                    mode: "aes",
+                    plainLen: body.length,
+                }));
+            } catch (error) {
+                this.logger.error(formatCompact({
+                    op: "verify",
+                    stage: "decrypt",
+                    ok: false,
+                    mode: "aes",
+                    error: error instanceof Error ? error.message : String(error),
+                }));
+                ctx.status = 403;
+                ctx.body = "Forbidden";
+                return;
+            }
+        } else if (secureMode && echostr) {
+            this.logger.info(formatCompact({
+                op: "verify",
+                stage: "decrypt",
+                ok: true,
+                mode: "plain_echostr",
+                plainLen: body.length,
+            }));
+        }
+
+        this.logger.info(formatCompact({
+            op: "verify",
+            stage: "done",
+            ok: true,
+            replyLen: body.length,
+        }));
+        ctx.body = body;
     }
 
     private async handleMessage(ctx: RouterContext): Promise<void> {
         try {
-            const { signature, timestamp, nonce, msg_signature, encrypt_type } = ctx.query;
+            const signature = queryParam(ctx.query.signature);
+            const timestamp = queryParam(ctx.query.timestamp);
+            const nonce = queryParam(ctx.query.nonce);
+            const msg_signature = queryParam(ctx.query.msg_signature);
+            const encrypt_type = queryParam(ctx.query.encrypt_type);
             
             // 验证签名
-            if (!this.verifySignature(
-                signature as string,
-                timestamp as string, 
-                nonce as string
-            )) {
+            if (!this.verifySignature({
+                signature,
+                timestamp,
+                nonce,
+            })) {
                 this.logger.error('Invalid signature');
                 ctx.status = 403;
                 ctx.body = 'Forbidden';
@@ -129,18 +252,45 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
             
             if (wechatMessage) {
                 const message = this.$formatMessage(wechatMessage);
-                this.adapter.emit('message.receive', message);
-                
-                // 处理被动回复
+                this.logger.info(formatCompact({
+                    recv: `private(${message.$channel.id})`,
+                    bot: message.$bot,
+                    preview: truncatePreview(segment.raw(message.$content)),
+                    replyMode: this.getReplyMode(),
+                    encryptMode: this.getEncryptMode(),
+                    encryptType: encrypt_type || "plain",
+                }));
+
                 let replyXML = await this.handlePassiveReply(wechatMessage, message);
 
-                // AES 加密模式：加密回复
-                if (replyXML && this.$config.encrypt && this.$config.encodingAESKey) {
-                    replyXML = this.encryptMessage(replyXML);
+                if (!replyXML && this.usesPassiveReply()) {
+                    replyXML = await this.collectPassiveReplyXml(wechatMessage, message);
+                } else if (!replyXML) {
+                    this.adapter.emit("message.receive", message);
                 }
 
-                ctx.set('Content-Type', 'text/xml');
-                ctx.body = replyXML || 'success';
+                // 仅安全模式加密被动回复；兼容模式可明文回包（微信官方允许）
+                const encryptReply = !!(
+                    replyXML &&
+                    this.$config.encodingAESKey &&
+                    encrypt_type === "aes" &&
+                    this.getEncryptMode() === "secure"
+                );
+                if (encryptReply) {
+                    replyXML = this.encryptMessage(replyXML, timestamp);
+                }
+
+                ctx.set("Content-Type", "text/xml");
+                ctx.body = replyXML || "success";
+                if (replyXML) {
+                    this.logger.info(formatCompact({
+                        op: "passive_reply",
+                        stage: "sent",
+                        encrypted: encryptReply,
+                        encryptMode: this.getEncryptMode(),
+                        bodyLen: replyXML.length,
+                    }));
+                }
             } else {
                 ctx.body = 'success';
             }
@@ -150,12 +300,29 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
         }
     }
 
-    private verifySignature(signature: string, timestamp: string, nonce: string): boolean {
+    private computeSignatureHash(params: {
+        timestamp: string;
+        nonce: string;
+        echostr?: string;
+    }): string {
+        const { timestamp, nonce, echostr } = params;
         const token = this.$config.token;
-        const arr = [token, timestamp, nonce].sort();
-        const str = arr.join('');
-        const hash = createHash('sha1').update(str).digest('hex');
-        return hash === signature;
+        const arr = echostr
+            ? [token, timestamp, nonce, echostr]
+            : [token, timestamp, nonce];
+        arr.sort();
+        return createHash("sha1").update(arr.join("")).digest("hex");
+    }
+
+    private verifySignature(params: {
+        signature: string;
+        timestamp: string;
+        nonce: string;
+        echostr?: string;
+    }): boolean {
+        const { signature, timestamp, nonce, echostr } = params;
+        if (!signature || !timestamp || !nonce) return false;
+        return this.computeSignatureHash({ timestamp, nonce, echostr }) === signature;
     }
 
     private async parseXMLMessage(xmlString: string): Promise<WeChatMessage | null> {
@@ -273,14 +440,27 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
     }
 
     async $sendMessage(options: SendOptions): Promise<string> {
-        try {
-            // 公众号主动发送消息需要通过客服消息API
-            const msgId = await this.sendCustomerServiceMessage(options);
-            return msgId;
-        } catch (error) {
-            this.logger.error('Failed to send WeChat message:', error);
-            throw error;
+        if (getPassiveReplyCapture()) {
+            const text = this.extractSendText(options);
+            recordPassiveReplyText(text);
+            return `passive_${Date.now()}`;
         }
+
+        if (!this.usesPassiveReply()) {
+            try {
+                return await this.sendCustomerServiceMessage(options);
+            } catch (error) {
+                this.logger.error("Failed to send WeChat message:", error);
+                throw error;
+            }
+        }
+
+        this.logger.warn(formatCompact({
+            op: "send",
+            skip: "passive_outside_webhook",
+            bot: this.$config.name,
+        }));
+        return `passive_skipped_${Date.now()}`;
     }
     async $recallMessage(id: string): Promise<void> {
         // 公众号不支持撤回消息
@@ -373,6 +553,69 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
         return messageData;
     }
 
+    private getReplyMode(): "passive" | "customer_service" {
+        return this.$config.replyMode ?? "passive";
+    }
+
+    private getEncryptMode(): "plain" | "compatible" | "secure" {
+        if (!this.$config.encrypt || !this.$config.encodingAESKey) {
+            return "plain";
+        }
+        return this.$config.encryptMode ?? "compatible";
+    }
+
+    private usesPassiveReply(): boolean {
+        return this.getReplyMode() === "passive";
+    }
+
+    private extractSendText(options: SendOptions): string {
+        if (typeof options.content === "string") {
+            return options.content;
+        }
+        return segment.raw(options.content as MessageSegment[]);
+    }
+
+    private async collectPassiveReplyXml(
+        wechatMsg: WeChatMessage,
+        message: Message<WeChatMessage>,
+    ): Promise<string> {
+        const timeoutMs = this.$config.passiveReplyTimeoutMs ?? 4500;
+
+        const text = await runWithPassiveReplyCapture(async () => {
+            await Promise.race([
+                runInboundMessage({
+                    plugin: this.adapter.plugin,
+                    message,
+                    emitAdapterObservers: () => {
+                        EventEmitter.prototype.emit.call(
+                            this.adapter,
+                            "message.receive",
+                            message,
+                        );
+                    },
+                }),
+                new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
+            ]);
+            return getPassiveReplyCapture()?.text ?? null;
+        });
+        if (!text) {
+            this.logger.warn(formatCompact({
+                op: "passive_reply",
+                ok: false,
+                reason: "timeout_or_empty",
+                timeoutMs,
+            }));
+            return "";
+        }
+
+        this.logger.info(formatCompact({
+            op: "passive_reply",
+            ok: true,
+            plainLen: text.length,
+        }));
+        return this.buildTextReply(wechatMsg, text);
+    }
+
     private async handlePassiveReply(wechatMsg: WeChatMessage, message: Message<WeChatMessage>): Promise<string> {
         // 事件类型消息的自动回复
         if (wechatMsg.MsgType === 'event') {
@@ -402,18 +645,18 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
     }
 
     private buildTextReply(wechatMsg: WeChatMessage, content: string): string {
-        const replyMsg = {
-            xml: {
-                ToUserName: wechatMsg.FromUserName,
-                FromUserName: wechatMsg.ToUserName,
-                CreateTime: Math.floor(Date.now() / 1000),
-                MsgType: 'text',
-                Content: content
-            }
-        };
-        
-        const builder = new xml2js.Builder({ rootName: 'xml', headless: true });
-        return builder.buildObject(replyMsg);
+        const cdata = (value: string) =>
+            value.replace(/]]>/g, "]]]]><![CDATA[>");
+        const createTime = Math.floor(Date.now() / 1000);
+        return [
+            "<xml>",
+            `<ToUserName><![CDATA[${cdata(wechatMsg.FromUserName)}]]></ToUserName>`,
+            `<FromUserName><![CDATA[${cdata(wechatMsg.ToUserName)}]]></FromUserName>`,
+            `<CreateTime>${createTime}</CreateTime>`,
+            `<MsgType><![CDATA[text]]></MsgType>`,
+            `<Content><![CDATA[${cdata(content)}]]></Content>`,
+            "</xml>",
+        ].join("");
     }
 
     private async refreshAccessToken(): Promise<void> {
@@ -559,6 +802,40 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
         return Buffer.from(key + '=', 'base64');
     }
 
+    /** 微信安全模式加密 echostr 为较长 Base64；明文/兼容模式多为短字符串 */
+    private isEncryptedEchostr(echostr: string): boolean {
+        if (echostr.length < 32) return false;
+        return /^[A-Za-z0-9+/]+={0,2}$/.test(echostr);
+    }
+
+    /**
+     * 解密安全模式 URL 验证中的 echostr
+     */
+    private decryptEchostr(encrypted: string): string {
+        const aesKey = this.getAESKey();
+        const iv = aesKey.subarray(0, 16);
+        const decipher = createDecipheriv("aes-256-cbc", aesKey, iv);
+        decipher.setAutoPadding(false);
+
+        const decrypted = Buffer.concat([
+            decipher.update(Buffer.from(encrypted, "base64")),
+            decipher.final(),
+        ]);
+
+        const pad = decrypted[decrypted.length - 1];
+        const content = decrypted.subarray(0, decrypted.length - pad);
+
+        const msgLen = content.readUInt32BE(16);
+        const plain = content.subarray(20, 20 + msgLen).toString("utf8");
+        const appId = content.subarray(20 + msgLen).toString("utf8");
+
+        if (appId !== this.$config.appId) {
+            throw new Error(`AppID mismatch: expected ${this.$config.appId}, got ${appId}`);
+        }
+
+        return plain;
+    }
+
     /**
      * 解密微信推送的加密消息
      */
@@ -611,7 +888,7 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
     /**
      * 加密被动回复消息
      */
-    private encryptMessage(replyXml: string): string {
+    private encryptMessage(replyXml: string, requestTimestamp?: string): string {
         const aesKey = this.getAESKey();
         const iv = aesKey.subarray(0, 16);
 
@@ -636,8 +913,8 @@ export class WeChatMPBot extends EventEmitter implements Bot<WeChatMPConfig, WeC
         const encrypted = Buffer.concat([cipher.update(padded), cipher.final()]);
         const encryptStr = encrypted.toString('base64');
 
-        // 签名
-        const timestamp = Math.floor(Date.now() / 1000).toString();
+        // 签名（TimeStamp 优先复用入站请求值，与微信官方示例一致）
+        const timestamp = requestTimestamp || Math.floor(Date.now() / 1000).toString();
         const nonce = randomBytes(8).toString('hex');
         const signature = createHash('sha1')
             .update([this.$config.token, timestamp, nonce, encryptStr].sort().join(''))

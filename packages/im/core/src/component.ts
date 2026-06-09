@@ -1,5 +1,7 @@
 import { getValueWithRuntime, compiler, segment } from './utils.js';
 import { Dict, SendContent, SendOptions, MessageElement, MaybeArray } from './types.js';
+import { MessageComponent } from './message.js';
+import { renderJSX } from './jsx.js';
 
 // 组件匹配符号
 export const CapWithChild = Symbol('CapWithChild');
@@ -494,6 +496,38 @@ function contentParts(content: MaybeArray<string | MessageElement>): (string | M
     return Array.isArray(content) ? content : [content];
 }
 
+function isJsxElement(item: string | MessageElement): item is MessageComponent<any> {
+    return typeof item !== 'string' && typeof item.type === 'function';
+}
+
+function contentHasJsxElement(content: MaybeArray<string | MessageElement>): boolean {
+    return contentParts(content).some(isJsxElement);
+}
+
+async function resolveJsxInContent(
+    content: MaybeArray<string | MessageElement>,
+    context?: ComponentContext,
+): Promise<SendContent> {
+    const parts = contentParts(content);
+    const out: (string | MessageElement)[] = [];
+    for (const item of parts) {
+        if (!isJsxElement(item)) {
+            out.push(item);
+            continue;
+        }
+        const rendered = await renderJSX(item, context);
+        if (typeof rendered === 'string') {
+            out.push(rendered);
+        } else if (Array.isArray(rendered)) {
+            out.push(...rendered);
+        } else {
+            out.push(rendered);
+        }
+    }
+    if (out.length === 1) return out[0];
+    return out;
+}
+
 /** 纯 MessageElement（如出站图片 base64）勿走 segment.toString→from，否则会超 400KB 模板上限 */
 function contentNeedsComponentPipeline(
     content: MaybeArray<string | MessageElement>,
@@ -524,6 +558,18 @@ export async function renderComponents(
     options: SendOptions,
     customContext?: ComponentContext
 ): Promise<SendOptions> {
+    if (contentHasJsxElement(options.content)) {
+        const jsxContext = customContext || createComponentContext(
+            options,
+            undefined,
+            '',
+        );
+        options = {
+            ...options,
+            content: await resolveJsxInContent(options.content, jsxContext),
+        };
+    }
+
     if (typeof options.content !== 'string'
         && !contentNeedsComponentPipeline(options.content, componentMap)) {
         const arr = Array.isArray(options.content) ? options.content : [options.content];

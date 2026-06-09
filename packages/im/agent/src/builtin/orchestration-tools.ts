@@ -7,10 +7,10 @@ import { BuiltinBaseTool } from './builtin-base-tool.js';
 import type { AgentRole } from '../orchestrator/agent-dispatcher.js';
 import {
   getOrchestrationService,
-  PLAN_DEV_REVIEW_TEMPLATE,
   type OrchestrationAddTaskInput,
 } from '../orchestrator/orchestration-service.js';
 import { writeOrchestrationRunSummaryToMemory } from '../orchestration-memory-hook.js';
+import type { MissionState } from '../orchestrator/mission-state.js';
 
 function sessionKeyFromContext(ctx: ToolContext): string {
   return resolveIMSessionIdFromToolContext({
@@ -48,6 +48,21 @@ function formatRunStatus(runId: string, snapshot: Awaited<ReturnType<ReturnType<
     if (t.result_summary) lines.push(`  result: ${t.result_summary.slice(0, 200)}`);
     if (t.error) lines.push(`  error: ${t.error.slice(0, 200)}`);
   }
+  if (snapshot.run.mission_state_json?.trim()) {
+    try {
+      const ms = JSON.parse(snapshot.run.mission_state_json) as MissionState;
+      lines.push('', '## Mission State');
+      lines.push(`phase: ${ms.phase}`);
+      if (ms.validation_spec_paths?.length) {
+        lines.push(`spec_paths: ${ms.validation_spec_paths.join(', ')}`);
+      }
+      if (ms.last_validation) {
+        lines.push(`last_validation: passed=${ms.last_validation.passed} failed=${ms.last_validation.failed}`);
+      }
+    } catch {
+      // ignore invalid mission state
+    }
+  }
   return lines.join('\n');
 }
 
@@ -55,10 +70,9 @@ const START_PARAMS: ToolParametersSchema = {
   type: 'object',
   properties: {
     title: { type: 'string', description: 'Run 标题' },
-    template: {
+    remote_validator: {
       type: 'string',
-      enum: [PLAN_DEV_REVIEW_TEMPLATE],
-      description: '可选模板：plan-dev-review 预置 planner→dev→review 三节点',
+      description: '可选：Validate 跑在 remote:<agentId>',
     },
   },
 };
@@ -71,7 +85,7 @@ const ADD_TASK_PARAMS: ToolParametersSchema = {
     description: { type: 'string', description: '任务描述' },
     role: {
       type: 'string',
-      enum: ['planner', 'subtask', 'reviewer', 'researcher', 'executor', 'worker'],
+      enum: ['planner', 'subtask', 'reviewer', 'researcher', 'executor', 'worker', 'validator'],
       description: 'Agent 角色',
     },
     goal: { type: 'string', description: '任务目标' },
@@ -107,9 +121,39 @@ const TASK_ID_PARAMS: ToolParametersSchema = {
   required: ['task_id'],
 };
 
+const PATCH_STATE_PARAMS: ToolParametersSchema = {
+  type: 'object',
+  properties: {
+    run_id: { type: 'string', description: '编排 run ID' },
+    patch: { type: 'object', description: 'Mission State 部分更新（JSON）' },
+  },
+  required: ['run_id', 'patch'],
+};
+
+class OrchestrationPatchStateTool extends BuiltinBaseTool {
+  readonly name = 'orchestration_patch_state';
+  readonly description = '更新 Mission State（missions Broadcast 共享状态；按 phase ACL 校验）。';
+  readonly parameters = PATCH_STATE_PARAMS;
+
+  async run(args: Record<string, unknown>): Promise<ToolResult> {
+    const svc = requireService();
+    const runId = String(args.run_id ?? '');
+    if (!runId) return '请提供 run_id';
+    const patch = args.patch;
+    if (!patch || typeof patch !== 'object') return '请提供 patch 对象';
+    try {
+      const next = await svc.patchMissionState(runId, patch as Partial<MissionState>);
+      if (!next) return `Run ${runId} 不存在`;
+      return `Mission State 已更新：phase=${next.phase} spec_paths=${next.validation_spec_paths.length}`;
+    } catch (err) {
+      return err instanceof Error ? err.message : String(err);
+    }
+  }
+}
+
 class OrchestrationStartTool extends BuiltinBaseTool {
   readonly name = 'orchestration_start';
-  readonly description = '创建编排 run（项目总监接手一次工程）。可选 template=plan-dev-review 预置三阶段 DAG。';
+  readonly description = '创建 Mission 编排 run（missions 五阶段 DAG）；MissionRunner 自动推进。';
   readonly parameters = START_PARAMS;
 
   constructor(private readonly sessionContext: ToolContext) {
@@ -121,13 +165,28 @@ class OrchestrationStartTool extends BuiltinBaseTool {
     const svc = requireService();
     const sessionKey = sessionKeyFromContext(this.sessionContext);
     const title = typeof args.title === 'string' ? args.title : undefined;
-    const template = typeof args.template === 'string' ? args.template : undefined;
-    const snapshot = await svc.startRun({ sessionKey, title, template });
+    const remoteValidator = typeof args.remote_validator === 'string'
+      ? args.remote_validator.replace(/^remote:/, '')
+      : undefined;
+    const snapshot = await svc.startRun({ sessionKey, title, remoteValidator });
+    const { isMissionsTemplate } = await import('../orchestrator/mission-state.js');
+    if (isMissionsTemplate({ template: snapshot.run.template })) {
+      const { getMissionRunner } = await import('../orchestrator/mission-runner.js');
+      const runner = getMissionRunner();
+      if (runner) {
+        void runner.notifyRunStarted(snapshot.run.id, sessionKey);
+        void runner.advanceRun(snapshot.run.id);
+      }
+    }
+    const tpl = snapshot.run.template || '(custom)';
     return (
       `编排 run 已创建：${snapshot.run.id}\n`
+      + `template: ${tpl}\n`
       + `session: ${sessionKey}\n`
       + `tasks: ${snapshot.tasks.map((t) => `${t.id}(${t.role})`).join(', ') || '(empty)'}\n`
-      + '使用 orchestration_add_task 添加节点，spawn_task 时传 run_id + task_id 执行。'
+      + (snapshot.tasks.length
+        ? 'MissionRunner 将自动推进；无需手动 spawn_task。'
+        : '使用 orchestration_add_task 添加节点。')
     );
   }
 }
@@ -231,6 +290,7 @@ export function createOrchestrationTools(context: ToolContext): AgentTool[] {
     new OrchestrationCompleteTool().toTool(),
     new OrchestrationRetryTaskTool().toTool(),
     new OrchestrationSkipTaskTool().toTool(),
+    new OrchestrationPatchStateTool().toTool(),
   ] as AgentTool[];
 }
 
@@ -241,4 +301,5 @@ export const ORCHESTRATION_TOOL_NAMES = [
   'orchestration_complete',
   'orchestration_retry_task',
   'orchestration_skip_task',
+  'orchestration_patch_state',
 ] as const;

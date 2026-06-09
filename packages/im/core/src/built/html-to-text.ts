@@ -4,7 +4,7 @@
 
 const DEFAULT_MAX_INPUT = 2 * 1024 * 1024;
 
-const BLOCK_TAGS = ['script', 'style', 'nav', 'footer', 'header', 'form'] as const;
+const BLOCK_TAGS = ['script', 'style', 'svg', 'nav', 'footer', 'header', 'form'] as const;
 
 function findTagClose(html: string, from: number): number {
   const gt = html.indexOf('>', from);
@@ -131,6 +131,38 @@ export function htmlToPlainTextWithBlockBreaks(html: string, options?: HtmlToPla
   let work = html.length > maxLen ? html.slice(0, maxLen) : html;
   work = work
     .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<\/tr>/gi, '\n')
+    .replace(/<\/h[1-6]>/gi, '\n\n');
+  for (const tag of BLOCK_TAGS) {
+    work = removeBalancedBlocks(work, tag);
+  }
+  work = removeHtmlComments(work);
+  work = stripRemainingTags(work);
+  work = decodeCommonEntities(work);
+  return work
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
+ * HTML 卡片出站回退：块级换行 + 语义标题轻量 markdown 前缀。
+ */
+export function htmlToFallbackText(html: string, options?: HtmlToPlainTextOptions): string {
+  const maxLen = options?.maxInputLength ?? DEFAULT_MAX_INPUT;
+  let work = html.length > maxLen ? html.slice(0, maxLen) : html;
+  work = work
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<h1[^>]*>/gi, '\n# ')
+    .replace(/<h2[^>]*>/gi, '\n## ')
+    .replace(/<h3[^>]*>/gi, '\n### ')
+    .replace(/<h4[^>]*>/gi, '\n#### ')
+    .replace(/<h5[^>]*>/gi, '\n##### ')
+    .replace(/<h6[^>]*>/gi, '\n###### ')
+    .replace(/<li[^>]*>/gi, '\n- ')
     .replace(/<\/p>/gi, '\n\n')
     .replace(/<\/div>/gi, '\n')
     .replace(/<\/li>/gi, '\n')

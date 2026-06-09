@@ -84,6 +84,31 @@ htmlRenderer:
       weight: 400
 ```
 
+### HTML 卡片出站（`cardOutbound`，默认开启）
+
+业务插件返回 `segment.html({ html })` 即可；本插件在 **`before.sendMessage`** 将 `html` 段转为 PNG。未安装本插件时，框架在 `renderSendMessage` 链尾自动从 HTML 剥离纯文本发出（`htmlToFallbackText`，由 `@zhin.js/core` 提供）。
+
+**与 `aiTextAsImage` 的区别：** `cardOutbound` 只处理 `type: 'html'` 段；`aiTextAsImage` 只处理纯 `text` 段。二者互不干扰。
+
+```yaml
+htmlRenderer:
+  cardOutbound: true
+  # cardOutbound:
+  #   enabled: true
+  #   onlyAdapters: ["icqq", "kook"]
+```
+
+```ts
+import { segment } from 'zhin.js';
+
+return segment.html({
+  html: buildMyCardHtml(data),
+  width: 540,
+  backgroundColor: '#d8dce3',
+  fileName: 'card.png',
+});
+```
+
 ### 纯文本自动转图片（`aiTextAsImage`）
 
 通过框架的 **`before.sendMessage`**，在消息真正发给用户前，把**仅含纯文本**的内容渲染成一张 PNG，再以图片消息发出。适合希望 AI 长文、公告等以「卡片图」展示的场景。

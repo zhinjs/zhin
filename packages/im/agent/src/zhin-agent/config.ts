@@ -122,8 +122,6 @@ export interface ZhinAgentConfig {
   deferredToolMaxResults?: number;
   /** 主 Agent 常驻编排工具名 */
   orchestratorTools?: string[];
-  /** 硬编排 v1：spawn_task 需 run_id+task_id，启用总监 DAG 工具 */
-  hardOrchestration?: boolean;
   /** Deferred Worker 基础工具（另加 TF-IDF 载入的 deferred） */
   workerBaseTools?: string[];
   /** 单轮平台 prompt 段 body 上限（字符） */
@@ -163,6 +161,7 @@ export const HARD_ORCHESTRATION_TOOLS = [
   'orchestration_complete',
   'orchestration_retry_task',
   'orchestration_skip_task',
+  'orchestration_patch_state',
 ] as const;
 
 export const DEFAULT_HARD_ORCHESTRATOR_TOOLS = [
@@ -229,7 +228,6 @@ export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   onPhaseTrace: () => {},
   deferredToolMaxResults: 8,
   orchestratorTools: [...DEFAULT_ORCHESTRATOR_TOOLS],
-  hardOrchestration: false,
   workerBaseTools: [...DEFAULT_WORKER_BASE_TOOLS],
   platformPromptSectionMaxChars: 2048,
   platformPromptMaxChars: 4096,

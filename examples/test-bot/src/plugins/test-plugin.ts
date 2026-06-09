@@ -8,7 +8,6 @@ import {
 import path from "node:path";
 import * as os from "node:os";
 import { writeHeapSnapshot } from "node:v8";
-
 declare module "zhin.js" {
   interface Models {
     test_model: {
@@ -19,12 +18,11 @@ declare module "zhin.js" {
   }
 }
 const plugin = usePlugin();
-const { addCommand, addComponent, root, useContext } = plugin;
+const { addCommand, addComponent, useContext } = plugin;
 // 全局内存历史记录
 declare global {
   var _memoryHistory: Array<{ time: number; rss: number; heapUsed: number }> | undefined;
 }
-const isBun = typeof Bun !== 'undefined'
 function formatMemoSize(size: number) {
   const sizes = ["B", "KB", "MB", "GB", "TB"];
   while (size > 1024) {
@@ -37,58 +35,6 @@ addCommand(
   new MessageCommand("send").action(
     (_, result) => result.remaining as MessageElement[]
   )
-);
-addCommand(
-  new MessageCommand("zt")
-    .desc("查看系统状态", "显示操作系统、CPU、内存、运行时和框架的完整状态信息")
-    .usage("zt")
-    .examples("zt")
-    .action(() => {
-      // ============================================
-      // 系统信息
-      // ============================================
-
-      // 系统内存
-      const totalmem = os.totalmem();
-      const freemem = os.freemem();
-      const usedSystemMem = totalmem - freemem;
-
-      // 进程真实内存使用（heapUsed 是 V8 堆内存，rss 是真实物理内存）
-      const memUsage = process.memoryUsage();
-      const processRealMem = memUsage.rss;           // 真实物理内存（Resident Set Size）
-      const processHeapTotal = memUsage.heapTotal;   // V8 堆总大小
-      const processHeapUsed = memUsage.heapUsed;     // V8 堆已使用
-
-      const processMemPercent = ((processRealMem / totalmem) * 100).toFixed(2);
-      const isHighMemoryPressure = parseFloat(processMemPercent) > 80;
-
-      // ============================================
-      // 进程信息
-      // ============================================
-
-      // 运行环境
-      const runtime = isBun
-        ? `Bun ${Bun.version}`
-        : `Node.js ${process.version}`;
-
-      // 进程运行时长（秒）
-      const processUptime = process.uptime();
-
-
-      // ============================================
-      // 格式化输出
-      // ============================================
-
-      return [
-        `运行时：${runtime} | 架构：${process.arch} | PID：${process.pid}`,
-        `运行时长：${Time.formatTime(processUptime * 1000)}`,
-        "",
-        `物理内存：${formatMemoSize(processRealMem)} (${processMemPercent}%) ${isHighMemoryPressure ? '⚠️' : '✅'}`,
-        `堆内存：${formatMemoSize(processHeapUsed)} / ${formatMemoSize(processHeapTotal)}`,
-        "",
-        `适配器：${root.adapters.length} 个 | 插件：${root.children.length} 个`,
-      ].join("\n");
-    })
 );
 // ============================================
 // 内存分析命令

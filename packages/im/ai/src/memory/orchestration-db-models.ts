@@ -9,7 +9,17 @@ export type OrchestrationAgentRole =
   | 'researcher'
   | 'executor'
   | 'reviewer'
-  | 'planner';
+  | 'planner'
+  | 'validator';
+
+export type OrchestrationTaskPhase =
+  | 'plan'
+  | 'spec'
+  | 'develop'
+  | 'validate'
+  | 'negotiate'
+  | 'done'
+  | '';
 
 export type OrchestrationRunStatus = 'active' | 'completed' | 'cancelled' | 'failed';
 
@@ -28,6 +38,8 @@ export const ORCHESTRATION_RUN_MODEL = {
   status: { type: 'text' as const, default: 'active' },
   title: { type: 'text' as const, default: '' },
   template: { type: 'text' as const, default: '' },
+  mission_state_json: { type: 'text' as const, default: '' },
+  state_version: { type: 'integer' as const, default: 0 },
   created_at: { type: 'integer' as const, default: 0 },
   updated_at: { type: 'integer' as const, default: 0 },
 };
@@ -46,6 +58,8 @@ export const ORCHESTRATION_TASK_MODEL = {
   remote_task_id: { type: 'text' as const, default: '' },
   priority: { type: 'text' as const, default: 'medium' },
   context_json: { type: 'text' as const, default: '' },
+  is_writer: { type: 'integer' as const, default: 0 },
+  phase: { type: 'text' as const, default: '' },
   result_summary: { type: 'text' as const, default: '' },
   error: { type: 'text' as const, default: '' },
   created_at: { type: 'integer' as const, default: 0 },
@@ -60,6 +74,8 @@ export interface OrchestrationRunRecord {
   status: OrchestrationRunStatus;
   title: string;
   template: string;
+  mission_state_json: string;
+  state_version: number;
   created_at: number;
   updated_at: number;
 }
@@ -78,6 +94,8 @@ export interface OrchestrationTaskRecord {
   remote_task_id: string;
   priority: string;
   context_json: string;
+  is_writer: number;
+  phase: OrchestrationTaskPhase;
   result_summary: string;
   error: string;
   created_at: number;
@@ -103,6 +121,8 @@ export interface CreateOrchestrationTaskInput {
   remote_agent_id?: string;
   priority?: 'low' | 'medium' | 'high' | 'critical';
   context?: Record<string, unknown>;
+  is_writer?: boolean;
+  phase?: OrchestrationTaskPhase;
 }
 
 export function parseDependsOn(json: string): string[] {

@@ -61,7 +61,8 @@ export class NapCatTypingIndicatorManager {
 
   private registerAdapter(): void {
     const adapter = new ReactionTypingIndicatorAdapter(
-      async (messageId: string, emoji: string) => {
+      'napcat',
+      async (messageId: string, emoji: string, _options) => {
         return await this.bot.$addReaction(messageId, emoji);
       },
       async (messageId: string, reactionId: string) => {

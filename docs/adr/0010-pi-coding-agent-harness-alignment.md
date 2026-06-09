@@ -127,7 +127,7 @@ ai:
 | plugin `skills/` | 保留 |
 | `data/skills/` | **删除**（破坏性；文档与 CHANGELOG 说明迁移到 `skills/` 或 `.agents/skills/`） |
 
-**包管理**（[`basic/cli`](../../basic/cli)）：
+**包管理**（[`basic/cli`](../../basic/cli/README.md)）：
 
 ```bash
 zhin packages install npm:@foo/zhin-tools

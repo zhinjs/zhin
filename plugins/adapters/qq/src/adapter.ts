@@ -5,12 +5,20 @@ import {
   Adapter,
   Plugin,
 } from "zhin.js";
+import type { Router } from "@zhin.js/host-router";
 import { QQBot } from "./bot.js";
 import type { QQBotConfig, ReceiverMode } from "./types.js";
 
 export class QQAdapter extends Adapter<QQBot<ReceiverMode>> {
-  constructor(plugin: Plugin) {
+  #router?: Router;
+
+  constructor(plugin: Plugin, router?: Router) {
     super(plugin, "qq", []);
+    this.#router = router;
+  }
+
+  getRouter(): Router | undefined {
+    return this.#router;
   }
 
   createBot(config: QQBotConfig<ReceiverMode>): QQBot<ReceiverMode> {
@@ -52,6 +60,15 @@ export class QQAdapter extends Adapter<QQBot<ReceiverMode>> {
   // ── 生命周期 ───────────────────────────────────────────────────────
 
   async start(): Promise<void> {
+    if (!this.#router) {
+      this.#router = (this.plugin.inject as (key: string) => Router | undefined)("router");
+    }
+    (this.plugin.useContext as (key: string, fn: (router: Router) => void) => void)(
+      "router",
+      (router) => {
+        this.#router = router;
+      },
+    );
     await super.start();
   }
 

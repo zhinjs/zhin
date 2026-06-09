@@ -58,10 +58,6 @@ export function originFromToolContext(context: ToolContext): SubagentOrigin {
   };
 }
 
-export interface SpawnTaskToolOptions {
-  hardOrchestration?: boolean;
-}
-
 export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
   readonly name = 'spawn_task';
   readonly description =
@@ -71,7 +67,6 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
   constructor(
     private readonly sessionContext: ToolContext,
     private readonly manager: SubagentManager,
-    private readonly options: SpawnTaskToolOptions = {},
   ) {
     super();
     this.tags.push('agent', 'async', 'task', '后台', '子任务');
@@ -95,8 +90,8 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
     const runId = typeof args.run_id === 'string' ? args.run_id.trim() : '';
     const orchestrationTaskId = typeof args.task_id === 'string' ? args.task_id.trim() : '';
 
-    if (this.options.hardOrchestration && runId && !orchestrationTaskId) {
-      return '硬编排模式下 spawn_task 须同时提供 run_id 与 task_id';
+    if (runId && !orchestrationTaskId) {
+      return 'spawn_task 须同时提供 run_id 与 task_id';
     }
 
     if (orchestrationTaskId) {
@@ -104,8 +99,13 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
       const orch = getOrchestrationService();
       if (orch && runId) {
         await dispatcher.hydrateRun(runId);
+        const run = await orch.repositoryHandle.getRun(runId);
+        const { isMissionsTemplate } = await import('../orchestrator/mission-state.js');
+        if (run && isMissionsTemplate(run)) {
+          return `${run.template} 由 MissionRunner 自动推进，请勿手动 spawn_task`;
+        }
       }
-      const gate = dispatcher.canExecute(orchestrationTaskId);
+      const gate = await dispatcher.canExecuteMissions(orchestrationTaskId);
       if (!gate.canExecute) {
         return `无法执行 task ${orchestrationTaskId}：${gate.reason ?? '门禁未通过'}`;
       }
@@ -124,11 +124,15 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
     const agentOpt = typeof agentName === 'string' && agentName.trim() ? agentName.trim() : undefined;
     const contextMode: SubagentContextMode | undefined =
       args.context === 'fork' || args.context === 'fresh' ? args.context : undefined;
+    const orchestrationRole = orchestrationTaskId
+      ? getAgentDispatcher().getTask(orchestrationTaskId)?.role
+      : undefined;
     const opts = {
       task,
       label: labelStr,
       origin,
       agent: agentOpt,
+      role: orchestrationRole,
       notifyContext: this.sessionContext,
       contextMode,
       orchestrationTaskId: orchestrationTaskId || undefined,
@@ -149,7 +153,6 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
 export function createSpawnTaskTool(
   context: ToolContext,
   manager: SubagentManager,
-  options?: SpawnTaskToolOptions,
 ): AgentTool {
-  return new SpawnTaskBuiltinTool(context, manager, options).toTool() as AgentTool;
+  return new SpawnTaskBuiltinTool(context, manager).toTool() as AgentTool;
 }

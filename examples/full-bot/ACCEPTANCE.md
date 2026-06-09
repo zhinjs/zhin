@@ -13,11 +13,13 @@ pnpm check:l4
 
 ## 手工验收
 
-### 1. Sandbox + 硬编排门禁
+### 1. Sandbox + Mission 编排
 
 1. `cd examples/full-bot && cp .env.example .env && pnpm dev`
-2. Remote Console 连接 Host（端口默认 `8069`），沙盒发 `ai: 启动 plan-dev-review 编排测试`
-3. 主 Agent 应能 `orchestration_start(template=plan-dev-review)`；在 planner 完成前 `spawn_task` 指向 dev 节点应被门禁拒绝。
+2. Remote Console 连接 Host（端口默认 `8069`），沙盒发 `ai: 启动 Mission 编排测试`
+3. 主 Agent 应 `orchestration_start`；MissionRunner 自动推进 Plan 任务
+4. 手动 `spawn_task` 指向 missions run 应被拒绝
+5. `orchestration_status` 应显示 Mission State（phase、spec_paths）
 
 ### 2. 语义记忆
 

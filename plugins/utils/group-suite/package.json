@@ -42,7 +42,9 @@
     "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
-  "dependencies": {},
+  "dependencies": {
+    "@zhin.js/satori": "workspace:*"
+  },
   "devDependencies": {
     "typescript": "^6.0.3",
     "zhin.js": "workspace:*",

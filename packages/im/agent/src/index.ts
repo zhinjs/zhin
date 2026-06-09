@@ -317,7 +317,7 @@ export {
   getOrchestrationService,
   initOrchestrationService,
   OrchestrationService,
-  PLAN_DEV_REVIEW_TEMPLATE,
+  MISSIONS_TEMPLATE,
 } from './orchestrator/orchestration-service.js';
 
 export {
@@ -434,6 +434,8 @@ export {
   MessageTypingIndicator,
   NoneTypingIndicator,
   ReactionTypingIndicatorAdapter,
+  NativeTypingIndicatorAdapter,
+  NativeTypingIndicator,
   GenericTypingIndicatorAdapter,
   getTypingIndicatorManager,
   initTypingIndicatorManager,

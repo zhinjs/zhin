@@ -39,6 +39,7 @@ import { parseOutput, resolveIMSessionIdFromToolContext } from '@zhin.js/ai';
 import { canAccessTool } from '../orchestrator/tool-selection.js';
 import { inferFileRole } from '../security/file-role-policy.js';
 import { formatCompactLog, truncatePreview } from '@zhin.js/logger';
+import { formatRedactedJson } from '@zhin.js/ai';
 import { formatAiHandlerCompleteLog } from '../zhin-agent/turn-metrics.js';
 import {
   formatSubagentProcessingMessage,
@@ -155,6 +156,12 @@ export function registerAITrigger(refs: AIServiceRefs): void {
         // 这里不再设置全局超时，避免多轮工具调用被不合理地截断。
 
         let mediaParts = extractMediaParts(message);
+        logger.info(formatCompactLog('AI Context', {
+          stage: 'extract_media',
+          content_preview: truncatePreview(content, 200),
+          media_parts: formatRedactedJson(mediaParts),
+          raw_content_type: Array.isArray(message.$content) ? 'array' : typeof message.$content,
+        }));
         if (message.$quote_id && triggerConfig.resolveQuotedMessages) {
           const quoted = await resolveQuotedMessagePayload(message, root, {
             enabled: true,
@@ -220,6 +227,11 @@ export function registerAITrigger(refs: AIServiceRefs): void {
               workspaceDir,
               provider: routeProvider ?? undefined,
             });
+            logger.info(formatCompactLog('AI Context', {
+              stage: 'subagent_run_input',
+              route: routedAgent,
+              run_input: formatRedactedJson(inbound.runInput),
+            }));
             logger.info(formatCompactLog('AI Handler', {
               route: routedAgent,
               subagent_media_parts: inbound.mediaPartCount,
@@ -322,6 +334,13 @@ export function registerAITrigger(refs: AIServiceRefs): void {
               [INBOUND_MEDIA_PARTS_EXTRA_KEY]: pre.visionParts,
             };
           }
+          logger.info(formatCompactLog('AI Context', {
+            stage: 'main_multimodal',
+            full_content_preview: truncatePreview(fullContent, 300),
+            vision_parts: formatRedactedJson(pre.visionParts),
+            can_inject_vision: canInjectVision,
+            text_append_preview: truncatePreview(pre.textAppend, 200),
+          }));
           try {
             elements = await refs.zhinAgent.process(fullContent, toolContext, externalTools, onChunk);
           } catch (procErr) {
@@ -338,6 +357,10 @@ export function registerAITrigger(refs: AIServiceRefs): void {
           const parts: ContentPart[] = [];
           if (aiContent) parts.push({ type: 'text', text: aiContent });
           parts.push(...mediaParts);
+          logger.info(formatCompactLog('AI Context', {
+            stage: 'process_multimodal',
+            parts: formatRedactedJson(parts),
+          }));
           elements = await refs.zhinAgent.processMultimodal(parts, toolContext, onChunk);
         } else {
           elements = await refs.zhinAgent.process(aiContent, toolContext, externalTools, onChunk);

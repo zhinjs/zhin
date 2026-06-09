@@ -15,8 +15,10 @@ describe('KOOK L4 adapter contract', () => {
     expect(true).toBe(true);
   });
 
-  it.skipIf(process.env.L4_SKIP_PLATFORM === '1')(
-    'real KOOK machine smoke (set KOOK_TOKEN to run)',
+  it.skipIf(
+    process.env.L4_SKIP_PLATFORM === '1' || !process.env.KOOK_TOKEN?.trim(),
+  )(
+    'real KOOK machine smoke (KOOK_TOKEN + L4_SKIP_PLATFORM=0)',
     () => {
       expect(process.env.KOOK_TOKEN).toBeTruthy();
     },

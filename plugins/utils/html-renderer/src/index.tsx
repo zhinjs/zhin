@@ -3,7 +3,8 @@
  */
 
 import { formatCompact, defineComponent, usePlugin, ZhinTool } from 'zhin.js';
-import { htmlToSvg, getAllBuiltinFonts } from '@zhin.js/satori';
+import { htmlToSvg, getAllBuiltinFonts, h } from '@zhin.js/satori';
+import type { HtmlComponent } from '@zhin.js/satori';
 import { Resvg } from '@resvg/resvg-js';
 import type {
   HtmlRendererConfig,
@@ -14,6 +15,7 @@ import type {
   OutputFormat,
 } from './types.js';
 import { registerAiTextAsImageOutput } from './ai-text-as-image.js';
+import { registerHtmlCardOutbound } from './html-card-outbound.js';
 
 const plugin = usePlugin();
 const { logger, provide, addComponent, root } = plugin;
@@ -25,6 +27,7 @@ const DEFAULT_CONFIG: Required<HtmlRendererConfig> = {
   cacheFonts: true,
   fontUrls: [],
   aiTextAsImage: false,
+  cardOutbound: true,
 };
 
 const fontCache: Map<string, FontConfig> = new Map();
@@ -255,6 +258,14 @@ function createHtmlRendererService(config: HtmlRendererConfig = {}): HtmlRendere
       return this.render(serializeJsxToHtml(element), options);
     },
 
+    async renderComponent<P>(
+      component: HtmlComponent<P>,
+      props: P,
+      options: RenderOptions = {},
+    ): Promise<RenderResult> {
+      return this.render(h(component, props), options);
+    },
+
     registerFont(font: FontConfig): void {
       const key = `${font.name}-${font.weight || 400}`;
       fontCache.set(key, font);
@@ -335,6 +346,16 @@ const disposeAiTextAsImage = registerAiTextAsImageOutput({
 });
 if (disposeAiTextAsImage) {
   plugin.onDispose(disposeAiTextAsImage);
+}
+
+const disposeCardOutbound = registerHtmlCardOutbound({
+  root,
+  logger,
+  fullConfig: mergedHtmlRendererConfig,
+  getRenderer: () => rendererService,
+});
+if (disposeCardOutbound) {
+  plugin.onDispose(disposeCardOutbound);
 }
 
 (provide as any)({

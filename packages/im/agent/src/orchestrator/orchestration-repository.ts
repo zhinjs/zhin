@@ -15,6 +15,13 @@ import {
   parseDependsOn,
   serializeDependsOn,
 } from '@zhin.js/ai';
+import {
+  createDefaultMissionState,
+  mergeMissionStatePatch,
+  parseMissionState,
+  serializeMissionState,
+  type MissionState,
+} from '../orchestrator/mission-state.js';
 
 const logger = new Logger(null, 'OrchestrationRepository');
 
@@ -49,15 +56,19 @@ export interface OrchestrationRepository {
   ): Promise<boolean>;
   getRunWithTasks(runId: string): Promise<OrchestrationRunWithTasks | null>;
   listActiveRemoteTasks(): Promise<OrchestrationTaskRecord[]>;
+  getMissionState(runId: string): Promise<MissionState | null>;
+  patchMissionState(runId: string, patch: Partial<MissionState>): Promise<MissionState | null>;
 }
 
 function rowToRun(row: Record<string, unknown>): OrchestrationRunRecord {
   return {
     id: String(row.id ?? ''),
     session_key: String(row.session_key ?? ''),
-    status: (row.status as OrchestrationRunStatus) ?? 'active',
+    status: (row.status as OrchestrationRunRecord['status']) ?? 'active',
     title: String(row.title ?? ''),
     template: String(row.template ?? ''),
+    mission_state_json: String(row.mission_state_json ?? ''),
+    state_version: Number(row.state_version ?? 0),
     created_at: Number(row.created_at ?? 0),
     updated_at: Number(row.updated_at ?? 0),
   };
@@ -78,6 +89,8 @@ function rowToTask(row: Record<string, unknown>): OrchestrationTaskRecord {
     remote_task_id: String(row.remote_task_id ?? ''),
     priority: String(row.priority ?? 'medium'),
     context_json: String(row.context_json ?? ''),
+    is_writer: Number(row.is_writer ?? 0),
+    phase: (row.phase as OrchestrationTaskRecord['phase']) ?? '',
     result_summary: String(row.result_summary ?? ''),
     error: String(row.error ?? ''),
     created_at: Number(row.created_at ?? 0),
@@ -101,6 +114,8 @@ export class DatabaseOrchestrationRepository implements OrchestrationRepository 
       status: 'active',
       title: input.title ?? '',
       template: input.template ?? '',
+      mission_state_json: serializeMissionState(createDefaultMissionState()),
+      state_version: 0,
       created_at: now,
       updated_at: now,
     };
@@ -147,6 +162,8 @@ export class DatabaseOrchestrationRepository implements OrchestrationRepository 
       remote_task_id: '',
       priority: input.priority ?? 'medium',
       context_json: input.context ? JSON.stringify(input.context) : '',
+      is_writer: input.is_writer ? 1 : 0,
+      phase: input.phase ?? '',
       result_summary: '',
       error: '',
       created_at: now,
@@ -196,6 +213,26 @@ export class DatabaseOrchestrationRepository implements OrchestrationRepository 
       .map(rowToTask)
       .filter((t) => t.status === 'pending' || t.status === 'running');
   }
+
+  async getMissionState(runId: string): Promise<MissionState | null> {
+    const run = await this.getRun(runId);
+    if (!run) return null;
+    return parseMissionState(run.mission_state_json);
+  }
+
+  async patchMissionState(runId: string, patch: Partial<MissionState>): Promise<MissionState | null> {
+    const run = await this.getRun(runId);
+    if (!run) return null;
+    const current = parseMissionState(run.mission_state_json);
+    const next = mergeMissionStatePatch(current, patch);
+    const stateVersion = run.state_version + 1;
+    await this.runModel.update({
+      mission_state_json: serializeMissionState(next),
+      state_version: stateVersion,
+      updated_at: Date.now(),
+    }).where({ id: runId });
+    return next;
+  }
 }
 
 /** In-memory fallback when DB models are unavailable. */
@@ -211,6 +248,8 @@ export class MemoryOrchestrationRepository implements OrchestrationRepository {
       status: 'active',
       title: input.title ?? '',
       template: input.template ?? '',
+      mission_state_json: serializeMissionState(createDefaultMissionState()),
+      state_version: 0,
       created_at: now,
       updated_at: now,
     };
@@ -258,6 +297,8 @@ export class MemoryOrchestrationRepository implements OrchestrationRepository {
       remote_task_id: '',
       priority: input.priority ?? 'medium',
       context_json: input.context ? JSON.stringify(input.context) : '',
+      is_writer: input.is_writer ? 1 : 0,
+      phase: input.phase ?? '',
       result_summary: '',
       error: '',
       created_at: now,
@@ -311,6 +352,23 @@ export class MemoryOrchestrationRepository implements OrchestrationRepository {
       (t) => t.executor_kind === 'remote' && (t.status === 'pending' || t.status === 'running'),
     );
   }
+
+  async getMissionState(runId: string): Promise<MissionState | null> {
+    const run = await this.getRun(runId);
+    if (!run) return null;
+    return parseMissionState(run.mission_state_json);
+  }
+
+  async patchMissionState(runId: string, patch: Partial<MissionState>): Promise<MissionState | null> {
+    const run = this.runs.get(runId);
+    if (!run) return null;
+    const current = parseMissionState(run.mission_state_json);
+    const next = mergeMissionStatePatch(current, patch);
+    run.mission_state_json = serializeMissionState(next);
+    run.state_version += 1;
+    run.updated_at = Date.now();
+    return next;
+  }
 }
 
 export function taskRecordToAgentTaskShape(task: OrchestrationTaskRecord): {
@@ -327,6 +385,8 @@ export function taskRecordToAgentTaskShape(task: OrchestrationTaskRecord): {
   executorKind: OrchestrationTaskRecord['executor_kind'];
   remoteAgentId: string;
   remoteTaskId: string;
+  isWriter: boolean;
+  phase: OrchestrationTaskRecord['phase'];
 } {
   let context: Record<string, unknown> | undefined;
   if (task.context_json?.trim()) {
@@ -350,5 +410,7 @@ export function taskRecordToAgentTaskShape(task: OrchestrationTaskRecord): {
     executorKind: task.executor_kind,
     remoteAgentId: task.remote_agent_id,
     remoteTaskId: task.remote_task_id,
+    isWriter: task.is_writer === 1,
+    phase: task.phase,
   };
 }

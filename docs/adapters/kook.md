@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/kook/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/kook/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=fc65981b5ca0696e -->
+<!-- sync-adapter-docs:sha256=26f5c6718c2fa463 -->
 
 # @zhin.js/adapter-kook
 
@@ -22,6 +22,7 @@ Zhin.js KOOK（开黑啦）适配器，基于 KOOK 官方 API 开发，支持频
 - 📁 自动数据目录管理
 - ⚡ 基于 WebSocket 的实时通信
 - 📝 支持 Markdown 消息格式
+- ⏳ AI 处理中表情回应（Typing Indicator / reaction，频道与私聊）
 
 ## 安装
 
@@ -54,7 +55,7 @@ bots:
 
 ## 配置
 
-可选字段（见 `KookBotConfig`）：`data_dir`、`timeout`、`max_retry`、`ignore`、`logLevel`。
+可选字段（见 `KookBotConfig`）：`data_dir`、`timeout`、`max_retry`、`ignore`、`logLevel`、`typingIndicator`。
 
 ```yaml
 bots:
@@ -62,7 +63,20 @@ bots:
     name: my-kook-bot
     token: "${KOOK_TOKEN}"
     data_dir: ./data/kook
+    # AI 处理中：频道/私聊贴表情回应（不打「正在思考」消息）
+    typingIndicator:
+      enabled: true
+      defaultEmoji: "⏳"
+      autoRemove: true
+      privateConfig:
+        type: reaction
+        emoji: "⏳"
+      groupConfig:
+        type: reaction
+        emoji: "⏳"
 ```
+
+`emoji` 可用 Unicode（如 `⏳`）或 KOOK 自定义表情 ID；处理完成后会自动 `delete-reaction` 移除。
 
 TypeScript 等价写法：
 
@@ -137,6 +151,49 @@ import { onPrivateMessage } from 'zhin.js'
 
 onPrivateMessage(async (message) => {
   await message.$reply('收到你的私信了！')
+})
+```
+
+### 系统通知（notice）
+
+KOOK 的入群、退群、消息删除、表情回应、频道变更等 **系统消息**（`type: 255`）由适配器在 gateway 层拦截并转为标准 `Notice`，与 ICQQ / NapCat 一样可通过插件生命周期订阅：
+
+```typescript
+import { usePlugin } from 'zhin.js'
+
+const plugin = usePlugin()
+
+// 入群欢迎（与 group-suite 等插件兼容）
+plugin.on('notice.receive', async (notice) => {
+  if (notice.$adapter !== 'kook') return
+  if (notice.$type === 'group_member_increase') {
+    console.log('新成员', notice.$target?.id, '加入服务器', notice.$channel.id)
+  }
+})
+```
+
+常见映射（`extra.type` → `$type`）：
+
+| KOOK `extra.type` | Zhin `$type` |
+|---|---|
+| `joined_guild` | `group_member_increase` |
+| `exited_guild` | `group_member_decrease` |
+| `deleted_message` | `group_recall` |
+| `deleted_private_message` | `friend_recall` |
+| `added_reaction` / `deleted_reaction` | `group_emoji_reaction` |
+| 其它系统事件 | 保留原始类型名（如 `updated_channel`） |
+
+需要原始 gateway 载荷时，可监听适配器上的 `kook.gateway`（含 `post_type` / `notice_type` 增强字段）：
+
+```typescript
+import { usePlugin } from 'zhin.js'
+
+usePlugin().useContext('kook', (kook) => {
+  kook.on('kook.gateway', (raw) => {
+    if (raw.post_type === 'notice') {
+      console.log('KOOK 系统事件', raw.notice_type, raw.extra?.body)
+    }
+  })
 })
 ```
 
@@ -219,8 +276,24 @@ await bot.sendChannelMsg(channelId, '消息内容')
 // 发送私聊消息
 await bot.sendPrivateMsg(userId, '消息内容')
 
-// 撤回消息
-await bot.$recallMessage(messageId)
+// 统一发送（出站返回带路由的 msg ref，见「消息 ID 与路由」）
+const msgRef = await bot.$sendMessage({
+  context: 'kook',
+  bot: 'my-kook-bot',
+  type: 'group', // 或 'private'
+  id: channelOrUserId,
+  content: [{ type: 'text', data: { text: '你好' } }],
+})
+
+// 撤回：支持出站 ref，或入站 plain msg_id + 路由由适配器推断
+await bot.$recallMessage(msgRef)
+await bot.$recallMessage(message.$id, { route: 'direct' }) // 入站私聊
+
+// Typing Indicator：在用户消息上贴/删表情回应
+const reactionId = await bot.$addReaction(message.$id, '⏳', {
+  sceneType: message.$channel.type === 'private' ? 'private' : 'channel',
+})
+await bot.$removeReaction(message.$id, reactionId)
 ```
 
 ## 🔧 频道管理工具（AI 可调用）
@@ -333,12 +406,21 @@ onMessage(async (message) => {
 
 本适配器固定使用 **WebSocket** 与 KOOK 通信（由 `kook-client` 实现），无需配置 Webhook 回调地址。
 
-## 消息 ID 格式
+## 消息 ID 与路由
 
-本适配器使用特殊的消息 ID 格式：
+KOOK 频道与私聊的删除 / 表情 API 路径不同（`/v3/message/*` vs `/v3/direct-message/*`）。适配器在出站返回值与 reaction 句柄里编码路由，避免撤回或删表情时误打另一套 API。
 
-- 频道消息：`channel-{channelId}:{messageId}`
-- 私聊消息：`private-{userId}:{messageId}`
+| 场景 | ID 形式 | 说明 |
+|------|---------|------|
+| 入站消息 | plain `msg_id` | `message.$id` 为 KOOK 原始 UUID；`message.$recall()` 会按频道/私聊自动选路由 |
+| 出站 `$sendMessage` 返回值 | `kook:channel:{msgId}` 或 `kook:direct:{msgId}` | 供 `$recallMessage`、Typing Indicator message 模式删除 |
+| 出站 `$addReaction` 返回值 | `reaction:channel:{msgId}:{emoji}` 或 `reaction:direct:...` | 供 `$removeReaction` 精确删表情 |
+
+实现细节见 `plugins/adapters/kook/src/kook-msg-route.ts`。
+
+### @ 提及与 AI 触发
+
+入站 `(met)userId(met)` / `at` 段会规范为带 `user_id` 的 `at` 元素；连接后日志会输出 `platform_user_id`，用于配置 AI 的 `@bot` 触发匹配。
 
 ## 注意事项
 
@@ -391,6 +473,16 @@ await bot.sendChannelMsg(channelId, [
 - [KOOK 开发者平台](https://developer.kookapp.cn/)
 - [KOOK 开发文档](https://developer.kookapp.cn/doc/)
 - [kook-client](https://github.com/zhinjs/kook-client)
+
+## full-bot L4 参考
+
+[`examples/full-bot`](https://github.com/zhinjs/zhin/tree/main/examples/full-bot/) 默认加载本适配器（`bots` 段需填写 `KOOK_TOKEN` 后取消注释）。
+
+- 入站 → `ZhinAgent` → 出站走 `Adapter.sendMessage` 统一链路
+- 契约测试：`plugins/adapters/kook/tests/l4-contract.test.ts` + `integration.test.ts`
+- CI：`L4_SKIP_PLATFORM=1` 跳过实机；本地验证配置 `KOOK_TOKEN` 后可跑 optional smoke
+
+详见 [full-bot ACCEPTANCE.md](https://github.com/zhinjs/zhin/tree/main/examples/full-bot/ACCEPTANCE.md)。
 
 ## 依赖项
 

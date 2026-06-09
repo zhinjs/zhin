@@ -25,6 +25,7 @@ export default defineConfig({
     deps: {
       moduleDirectories: [
         'node_modules',
+        'examples/test-bot/node_modules',
         'basic/cli/node_modules',
         'basic/logger/node_modules',
         'basic/schema/node_modules',

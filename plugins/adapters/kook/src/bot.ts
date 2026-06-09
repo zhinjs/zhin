@@ -11,6 +11,7 @@ import {
   GuildMember,
   parseGroupId,
 } from "kook-client";
+import { EventEmitter } from "node:events";
 import path from "path";
 import {
   Bot,
@@ -24,10 +25,45 @@ import {
 import type { KookBotConfig, KookSenderInfo, KookRawMessage } from "./types.js";
 import { KookPermission } from "./types.js";
 import type { KookAdapter } from "./adapter.js";
+import { InboundMessageDeduper } from "./kook-inbound.js";
+import {
+  enrichKookGatewayForPlugins,
+  formatKookNotice,
+  formatKookNoticeLog,
+  isKookNoticeGatewayEvent,
+  resolveKookSideEventDedupeKey,
+  type KookGatewayEvent,
+} from "./kook-side-events.js";
+import {
+  encodeKookMsgRef,
+  encodeKookReactionId,
+  isKookApiGoneResult,
+  isKookApiSuccess,
+  isKookMsgGoneError,
+  shouldStopDeleteAfterResponse,
+  kookDeleteApiPath,
+  kookReactionApiPath,
+  parseKookMsgRef,
+  parseKookReactionId,
+  plainKookMsgId,
+  resolveKookRoutes,
+  routeFromSceneType,
+  routeFromSendType,
+  type KookMsgRoute,
+} from "./kook-msg-route.js";
+import { materializeOutboundMedia } from "./outbound-media.js";
+import { uploadKookAsset } from "./kook-asset-upload.js";
+import { convertToKookSendable } from "./outbound-sendable.js";
 
 export class KookBot extends Client implements Bot<KookBotConfig, KookRawMessage> {
   $connected: boolean = false;
+  /** KOOK 平台 user_id，用于 @ 触发匹配（resolveBotAtIds） */
+  $platformUserId?: string;
   adapter: KookAdapter;
+  private readonly inboundDeduper = new InboundMessageDeduper();
+  private readonly onGatewayEvent = (raw: KookGatewayEvent) => {
+    this.handleGatewayEvent(raw);
+  };
 
   get $id(): string {
     return this.$config.name;
@@ -49,6 +85,41 @@ export class KookBot extends Client implements Bot<KookBotConfig, KookRawMessage
     });
     this.adapter = adapter;
     this.setupEventListeners();
+    this.hookGatewayReceiver();
+  }
+
+  /**
+   * 在 kook-client Receiver transform 之前拦截原始 gateway 事件（SDK 未实现 notice transform）
+   */
+  private hookGatewayReceiver(): void {
+    const receiver = this.receiver as import("node:events").EventEmitter;
+    receiver.prependListener("event", this.onGatewayEvent);
+  }
+
+  private handleGatewayEvent(raw: KookGatewayEvent): void {
+    try {
+      const enriched = enrichKookGatewayForPlugins(raw);
+      EventEmitter.prototype.emit.call(this.adapter, "kook.gateway", enriched);
+
+      if (!isKookNoticeGatewayEvent(raw)) return;
+
+      const dedupeKey = resolveKookSideEventDedupeKey(raw, "notice");
+      if (!this.inboundDeduper.shouldProcess(dedupeKey)) return;
+
+      const notice = formatKookNotice(raw, this.$config.name);
+      this.emitSideEvent("notice.receive", notice);
+      this.pluginLogger.info(formatKookNoticeLog(notice));
+    } catch (error) {
+      this.pluginLogger.error("处理 KOOK gateway 事件失败:", error);
+    }
+  }
+
+  private emitSideEvent(
+    event: "notice.receive" | "request.receive",
+    payload: unknown,
+  ): void {
+    this.adapter.emit(event, payload as never);
+    void this.adapter.plugin.dispatch(event, payload as never);
   }
 
   /**
@@ -59,6 +130,14 @@ export class KookBot extends Client implements Bot<KookBotConfig, KookRawMessage
     this.on("message", (msg: KookRawMessage) => {
       try {
         const message = this.$formatMessage(msg);
+        const atSegs = message.$content.filter((s) => s.type === 'at');
+        if (atSegs.length > 0) {
+          this.pluginLogger.debug(
+            `KOOK @解析: self_id=${this.$platformUserId ?? (this as { self_id?: string }).self_id ?? '?'}`
+            + ` at=${JSON.stringify(atSegs.map((s) => s.data))}`
+            + ` preview=${segment.raw(message.$content)}`,
+          );
+        }
         this.pluginLogger.debug(`KOOK 格式化消息: $content=${JSON.stringify(message.$content)}, $raw=${message.$raw}`);
         this.adapter.emit("message.receive", message);
         
@@ -139,7 +218,9 @@ export class KookBot extends Client implements Bot<KookBotConfig, KookRawMessage
       $timestamp: msg.timestamp,
       
       $recall: async () => {
-        await this.$recallMessage(message.$id);
+        await this.$recallMessage(message.$id, {
+          route: msg.message_type === 'channel' ? 'channel' : 'direct',
+        });
       },
       
       $reply: async (content: SendContent, quote?: string | boolean): Promise<string> => {
@@ -389,6 +470,16 @@ export class KookBot extends Client implements Bot<KookBotConfig, KookRawMessage
       throw error;
     }
   }
+  private buildAtElement(userId: string | number): MessageElement {
+    const id = String(userId);
+    return { type: 'at', data: { id, user_id: id, qq: id } };
+  }
+
+  private resolveAtUserId(data: Record<string, unknown>): string {
+    const raw = data.user_id ?? data.qq ?? data.id;
+    return raw == null ? '' : String(raw);
+  }
+
   private parseMarkdown(content: string): MessageElement[] {
     const elements: MessageElement[] = [];
     
@@ -420,7 +511,7 @@ export class KookBot extends Client implements Bot<KookBotConfig, KookRawMessage
       matches.push({
         index: match.index,
         length: match[0].length,
-        element: { type: "at", data: { id: userId } }
+        element: this.buildAtElement(userId),
       });
     }
 
@@ -497,7 +588,7 @@ export class KookBot extends Client implements Bot<KookBotConfig, KookRawMessage
           break;
           
         case "at":
-          elements.push({ type: "at", data: { id: segment.user_id } });
+          elements.push(this.buildAtElement(segment.user_id));
           break;
           
         case "image":
@@ -554,7 +645,14 @@ export class KookBot extends Client implements Bot<KookBotConfig, KookRawMessage
     try {
       await this.connect();
       this.$connected = true;
-      this.pluginLogger.info(`KOOK Bot ${this.$id} 连接成功`);
+      const selfId = (this as { self_id?: string | number }).self_id;
+      if (selfId != null) {
+        this.$platformUserId = String(selfId);
+      }
+      this.pluginLogger.info(
+        `KOOK Bot ${this.$id} 连接成功`
+        + (this.$platformUserId ? ` (platform_user_id=${this.$platformUserId})` : ''),
+      );
     } catch (error) {
       this.pluginLogger.error(`KOOK Bot ${this.$id} 连接失败:`, error);
       throw error;
@@ -566,6 +664,9 @@ export class KookBot extends Client implements Bot<KookBotConfig, KookRawMessage
  */
   async $disconnect(): Promise<void> {
     try {
+      const receiver = this.receiver as import("node:events").EventEmitter;
+      receiver.off("event", this.onGatewayEvent);
+      this.inboundDeduper.clear();
       (this as unknown as import('node:events').EventEmitter).removeAllListeners();
       await this.disconnect();
       this.$connected = false;
@@ -577,18 +678,24 @@ export class KookBot extends Client implements Bot<KookBotConfig, KookRawMessage
   }
 
   /**
+   * 上传媒体（覆盖 kook-client：其 FormData.append 不接受 Node Buffer）
+   */
+  override async uploadMedia(data: string | Buffer): Promise<string> {
+    return uploadKookAsset(this.request, data);
+  }
+
+  /**
  * 发送消息
  */
   async $sendMessage(options: SendOptions): Promise<string> {
     try {
       const { id, type, content } = options;
 
-      // 将消息段转换为 KOOK 格式
-      const elements: MessageElement[] = Array.isArray(content)
-        ? content.map(el => typeof el === 'string' ? { type: 'text' as const, data: { text: el } } : el)
-        : [typeof content === 'string' ? { type: 'text' as const, data: { text: content } } : content];
-
-      const kookContent = this.convertToKookFormat(elements);
+      const elements = await materializeOutboundMedia(this, content);
+      const kookContent = convertToKookSendable(
+        elements,
+        (els) => this.convertToKookFormat(els),
+      );
 
       // 根据消息类型发送
       let result: any;
@@ -598,7 +705,8 @@ export class KookBot extends Client implements Bot<KookBotConfig, KookRawMessage
         result = await (this as any).sendChannelMsg(id, kookContent);
       }
 
-      return result?.msg_id || "";
+      const route = routeFromSendType(type);
+      return encodeKookMsgRef(route, String(result?.msg_id ?? ''));
     } catch (error) {
       this.pluginLogger.error(`KOOK Bot ${this.$id} 发送消息失败:`, error);
       throw error;
@@ -606,16 +714,120 @@ export class KookBot extends Client implements Bot<KookBotConfig, KookRawMessage
   }
 
   /**
- * 撤回消息
+   * 撤回消息。支持 `kook:channel:msgId` 出站 ref，或入站 plain msgId + route/sceneType 提示。
    */
-  async $recallMessage(messageId: string): Promise<void> {
+  async $recallMessage(
+    messageIdOrRef: string,
+    hint?: { route?: KookMsgRoute; sceneType?: 'private' | 'group' | 'channel' },
+  ): Promise<void> {
+    const { route: encodedRoute, msgId } = parseKookMsgRef(messageIdOrRef);
+    const routeHint = encodedRoute ?? hint?.route ?? routeFromSceneType(hint?.sceneType);
     try {
-      await (this as any).deleteMsg(messageId);
-      this.pluginLogger.debug(`KOOK Bot ${this.$id} 撤回消息: ${messageId}`);
+      await this.deleteKookMsg(msgId, routeHint);
+      this.pluginLogger.debug(
+        `KOOK Bot ${this.$id} 撤回消息 (${routeHint ?? 'auto'}): ${msgId}`,
+      );
     } catch (error) {
       this.pluginLogger.error(`KOOK Bot ${this.$id} 撤回消息失败:`, error);
       throw error;
     }
+  }
+
+  private async deleteKookMsg(msgId: string, routeHint?: KookMsgRoute): Promise<void> {
+    const routes = resolveKookRoutes('delete', routeHint);
+    let lastError: unknown;
+
+    for (const route of routes) {
+      try {
+        const result = await this.request.post(
+          kookDeleteApiPath(route),
+          { msg_id: msgId },
+        ) as { code?: number };
+        if (shouldStopDeleteAfterResponse(result, routes.length)) return;
+      } catch (err) {
+        if (isKookMsgGoneError(err)) return;
+        lastError = err;
+      }
+    }
+
+    return;
+  }
+
+  /**
+   * 为消息添加表情回应（TypingIndicator reaction 模式）
+   * @returns reactionId（含 channel/direct 路由），供 $removeReaction 使用
+   */
+  async $addReaction(
+    messageId: string,
+    emoji: string,
+    hint?: { sceneType?: 'private' | 'group' | 'channel' },
+  ): Promise<string> {
+    const msgId = plainKookMsgId(messageId);
+    const route = await this.mutateMsgReaction(
+      msgId,
+      emoji,
+      'add',
+      routeFromSceneType(hint?.sceneType),
+    );
+    return encodeKookReactionId(route, msgId, emoji);
+  }
+
+  /** 移除本 Bot 在消息上的表情回应 */
+  async $removeReaction(messageId: string, reactionId: string): Promise<void> {
+    const { route, emoji } = parseKookReactionId(reactionId);
+    await this.mutateMsgReaction(plainKookMsgId(messageId), emoji, 'delete', route);
+  }
+
+  private async mutateMsgReaction(
+    msgId: string,
+    emoji: string,
+    action: 'add' | 'delete',
+    routeHint?: KookMsgRoute,
+  ): Promise<KookMsgRoute> {
+    const routes = resolveKookRoutes(action, routeHint);
+    const body = { msg_id: msgId, emoji };
+    let lastError: unknown;
+
+    for (const route of routes) {
+      try {
+        const result = await this.request.post(
+          kookReactionApiPath(route, action),
+          body,
+        ) as { code?: number };
+        if (isKookApiSuccess(result)) {
+          this.pluginLogger.debug(
+            `KOOK Bot ${this.$id} ${action} reaction (${route}) on ${msgId}`,
+          );
+          return route;
+        }
+        if (action === 'delete' && shouldStopDeleteAfterResponse(result, routes.length)) {
+          const label = isKookApiGoneResult(result) ? 'already gone' : 'done';
+          this.pluginLogger.debug(
+            `KOOK Bot ${this.$id} delete reaction ${label} (${route}) on ${msgId}`,
+          );
+          return route;
+        }
+      } catch (err) {
+        if (action === 'delete' && isKookMsgGoneError(err)) {
+          this.pluginLogger.debug(
+            `KOOK Bot ${this.$id} delete reaction already gone (${route}) on ${msgId}`,
+          );
+          return route;
+        }
+        lastError = err;
+      }
+    }
+
+    if (action === 'delete') {
+      this.pluginLogger.debug(
+        `KOOK Bot ${this.$id} delete reaction noop on ${msgId}`,
+      );
+      return routeHint ?? 'channel';
+    }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error(`KOOK ${action} reaction failed (msg_id=${msgId})`);
   }
 
   /**
@@ -634,12 +846,13 @@ export class KookBot extends Client implements Bot<KookBotConfig, KookRawMessage
             // 图片：![alt](url)
             return `![${el.data.alt || '图片'}](${el.data.url || el.data.file})`;
 
-          case "at":
-            // @提及：(met)userId(met) 或 @all
-            if (el.data.id === "all") {
-              return "(met)all(met)";
+          case "at": {
+            const atId = this.resolveAtUserId(el.data as Record<string, unknown>);
+            if (atId === 'all') {
+              return '(met)all(met)';
             }
-            return `(met)${el.data.id}(met)`;
+            return `(met)${atId}(met)`;
+          }
 
           case "face":
             // 表情：(emj)表情名(emj)[表情ID]

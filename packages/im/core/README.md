@@ -76,6 +76,26 @@ toolFeature.on('remove', (tool) => {
 })
 ```
 
+### 出站消息段：`segment.html`
+
+业务插件可返回 **`html` 消息段**，由出站链统一处理转图或文本回退：
+
+```typescript
+import { segment } from '@zhin.js/core'
+
+return segment.html({
+  html: '<div>…</div>',  // 必填：Satori 可渲染的 HTML
+  text: undefined,        // 可选：显式回退文本（覆盖自动剥离）
+  width: 540,
+  backgroundColor: '#d8dce3',
+  fileName: 'card.png',
+})
+```
+
+- 安装 **`@zhin.js/plugin-html-renderer`** 时，`before.sendMessage` 自动将 `html` 转为 PNG。
+- 未安装或转图失败时，`Adapter.renderSendMessage` 链尾调用 **`coerceHtmlSegmentsToText`**，用 **`htmlToFallbackText`** 剥离纯文本。
+- 日志预览为 `[html-card]` + 自动剥离摘要（前 80 字），不 dump 完整 HTML。
+
 ### Adapter（适配器）
 
 适配器将不同聊天平台接入 Zhin.js，统一消息收发接口。
@@ -153,7 +173,10 @@ export { CommandFeature, ToolFeature, SkillFeature, CronFeature, DatabaseFeature
 export { createMessageDispatcher } from './built/dispatcher.js'
 
 // 适配器与消息
-export { Adapter, Message, MessageCommand, Bot, ... } from './'
+export { Adapter, Message, MessageCommand, Bot, segment, ... } from './'
+
+// HTML 出站回退
+export { htmlToFallbackText, coerceHtmlSegmentsToText, registerHtmlSegmentFallback } from './built/*.js'
 
 // AI 原语（来自 @zhin.js/ai，非 ZhinAgent）
 export {

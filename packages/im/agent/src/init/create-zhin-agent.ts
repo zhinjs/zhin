@@ -10,6 +10,8 @@ import { setMemoryEntryRepository } from '../memory-entry-registry.js';
 import { ZhinAgent } from '../zhin-agent/index.js';
 import { createBuiltinTools } from '../builtin-tools.js';
 import { createGenerateImageTool } from '../builtin/generate-image-tool.js';
+import { createRunValidationSpecTool } from '../builtin/run-validation-spec-tool.js';
+import { createRunSpecDryRunTool } from '../builtin/run-spec-dry-run-tool.js';
 import { collectPluginSkillSearchRoots } from '../discovery/utils.js';
 import { discoverWorkspaceAgents } from '../discovery/agents.js';
 
@@ -52,6 +54,8 @@ import {
 import { initDelegationProcessor } from '../orchestrator/delegation-processor.js';
 import { initRemoteAgentRegistry } from '../orchestrator/remote-agent-registry.js';
 import { startRemoteTaskPoller } from '../orchestrator/remote-task-poller.js';
+import { initMissionRunner } from '../orchestrator/mission-runner.js';
+import type { ToolContext } from '@zhin.js/core';
 import { asPrivate } from '../zhin-agent/zhin-agent-private.js';
 import type { AIService } from '../service.js';
 
@@ -84,12 +88,10 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
       : configService?.getPrimary<{ ai?: AIConfig; assistant?: AssistantConfig }>())
       ?? {};
     const agentConfig = ai.getAgentConfig();
-    const hardOrchestration = appConfig.ai?.orchestration?.hardMode === true;
     const semanticMemory = appConfig.ai?.memory?.semantic?.enabled === true;
-    let orchestratorTools = hardOrchestration
-      ? [...DEFAULT_HARD_ORCHESTRATOR_TOOLS]
-      : (agentConfig as ZhinAgentConfig | undefined)?.orchestratorTools
-        ?? appConfig.ai?.agent?.orchestratorTools;
+    let orchestratorTools = (agentConfig as ZhinAgentConfig | undefined)?.orchestratorTools
+      ?? appConfig.ai?.agent?.orchestratorTools
+      ?? [...DEFAULT_HARD_ORCHESTRATOR_TOOLS];
     if (semanticMemory && orchestratorTools) {
       for (const name of ['memory_search', 'memory_upsert'] as const) {
         if (!orchestratorTools.includes(name)) {
@@ -100,7 +102,6 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     const zhinAgentCfg: ZhinAgentConfig = {
       ...(agentConfig as ZhinAgentConfig | undefined),
       chatModel: zhinBinding.model,
-      hardOrchestration,
       orchestratorTools,
     };
     const agent = new ZhinAgent(provider, zhinAgentCfg);
@@ -185,6 +186,8 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
           (alias) => ai.getProvider(alias),
           (alias) => ai.getImageGenerationDefaults(alias),
         ),
+        createRunValidationSpecTool(),
+        createRunSpecDryRunTool(),
       ];
       return zhinTools.map(item => {
         const t = isZhinTool(item) ? item.toTool() : item;
@@ -243,6 +246,25 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     };
     agent.setSubagentSender(deliverOutbound);
     agent.setDeferredResultSender(deliverOutbound);
+
+    const subagentManager = agent.getSubagentManager();
+    if (subagentManager) {
+      initMissionRunner({
+        subagentManager,
+        resolveSessionContext: (sessionKey: string): ToolContext => ({
+          platform: 'orchestration',
+          botId: 'mission-runner',
+          sceneId: sessionKey,
+          senderId: 'mission-runner',
+          scope: 'private',
+        }),
+        sendImMessage: async (options) => {
+          const adapter = resolveAdapter(options.context);
+          if (!adapter) throw new Error(`adapter not found: ${options.context}`);
+          return adapter.sendMessage(options);
+        },
+      });
+    }
 
     let jobEngine: import('../cron-engine.js').IPersistentJobEngine | null = null;
     let jobWorker: JobWorker | null = null;

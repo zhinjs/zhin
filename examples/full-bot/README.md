@@ -27,7 +27,7 @@ pnpm dev
 
 ## L4 配置要点
 
-- `ai.orchestration.hardMode: true`
+- Missions 硬编排内置（无 `ai.orchestration` 配置项）
 - `ai.memory.semantic.enabled: true`（`autoConsolidate: false`，由 skill 触发）
 - `ai.remoteAgents` loopback 指向本机 `/mcp`
 - `@zhin.js/mcp` 插件 + Bearer 鉴权

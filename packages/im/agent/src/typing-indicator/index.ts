@@ -94,7 +94,11 @@ export class ReactionTypingIndicator implements TypingIndicator {
   constructor(
     private options: TypingIndicatorOptions,
     private config: TypingIndicatorConfig,
-    private addReaction: (messageId: string, emoji: string) => Promise<string | null>,
+    private addReaction: (
+      messageId: string,
+      emoji: string,
+      options: TypingIndicatorOptions,
+    ) => Promise<string | null>,
     private removeReaction: (messageId: string, reactionId: string) => Promise<void>,
   ) {}
 
@@ -108,6 +112,7 @@ export class ReactionTypingIndicator implements TypingIndicator {
       this.reactionId = await this.addReaction(
         this.options.messageId,
         this.config.emoji || '⏳',
+        this.options,
       );
     } catch (error) {
       this.active = false;
@@ -121,10 +126,13 @@ export class ReactionTypingIndicator implements TypingIndicator {
       return;
     }
 
+    const messageId = this.options.messageId;
+    const reactionId = this.reactionId;
+    this.active = false;
+    this.reactionId = null;
+
     try {
-      await this.removeReaction(this.options.messageId, this.reactionId);
-      this.active = false;
-      this.reactionId = null;
+      await this.removeReaction(messageId, reactionId);
     } catch (error) {
       console.error('[TypingIndicator] Failed to remove reaction:', error);
     }
@@ -171,6 +179,9 @@ export class MessageTypingIndicator implements TypingIndicator {
         this.options,
         this.config.message || '正在处理中...',
       );
+      if (!this.messageId) {
+        this.active = false;
+      }
     } catch (error) {
       this.active = false;
       this.messageId = null;
@@ -205,6 +216,65 @@ export class MessageTypingIndicator implements TypingIndicator {
       this.messageId = null;
     } catch (error) {
       console.error('[TypingIndicator] Failed to delete message:', error);
+    }
+  }
+
+  isActive(): boolean {
+    return this.active;
+  }
+}
+
+// ── 原生输入状态（平台 sendTyping / setTyping 等） ─────────────────────
+
+export class NativeTypingIndicator implements TypingIndicator {
+  private active = false;
+  private keepaliveTimer?: ReturnType<typeof setInterval>;
+
+  constructor(
+    private options: TypingIndicatorOptions,
+    private config: TypingIndicatorConfig,
+    private startTyping: (options: TypingIndicatorOptions) => Promise<void>,
+    private stopTyping: (options: TypingIndicatorOptions) => Promise<void>,
+  ) {}
+
+  async start(): Promise<void> {
+    if (this.active || !hasTypingSendTarget(this.options)) {
+      return;
+    }
+    this.active = true;
+    try {
+      await this.startTyping(this.options);
+      const raw = this.config.platformConfig?.keepaliveIntervalMs;
+      const intervalMs = typeof raw === 'number' && raw > 0 ? raw : 5_000;
+      this.keepaliveTimer = setInterval(() => {
+        void this.startTyping(this.options).catch((error) => {
+          console.error('[TypingIndicator] keepalive failed:', error);
+        });
+      }, intervalMs);
+    } catch (error) {
+      this.active = false;
+      if (this.keepaliveTimer) {
+        clearInterval(this.keepaliveTimer);
+        this.keepaliveTimer = undefined;
+      }
+      console.error('[TypingIndicator] Failed to start native typing:', error);
+    }
+  }
+
+  async stop(): Promise<void> {
+    if (!this.active) {
+      return;
+    }
+    if (this.keepaliveTimer) {
+      clearInterval(this.keepaliveTimer);
+      this.keepaliveTimer = undefined;
+    }
+    try {
+      await this.stopTyping(this.options);
+    } catch (error) {
+      console.error('[TypingIndicator] Failed to stop native typing:', error);
+    } finally {
+      this.active = false;
     }
   }
 
@@ -353,16 +423,23 @@ export class TypingIndicatorManager {
  * ICQQ 适配器（使用消息回应）
  */
 export class ReactionTypingIndicatorAdapter implements TypingIndicatorAdapter {
-  readonly platform = 'icqq';
+  readonly platform: string;
   readonly supportedTypes: TypingIndicatorType[] = ['reaction', 'message'];
 
   constructor(
-    private addReaction: (messageId: string, emoji: string) => Promise<string | null>,
+    platform: string,
+    private addReaction: (
+      messageId: string,
+      emoji: string,
+      options: TypingIndicatorOptions,
+    ) => Promise<string | null>,
     private removeReaction: (messageId: string, reactionId: string) => Promise<void>,
     private sendMessage: (options: TypingIndicatorOptions, content: string) => Promise<string | null>,
     private deleteMessage: (messageId: string) => Promise<void>,
     private editMessage?: (messageId: string, content: string) => Promise<void>,
-  ) {}
+  ) {
+    this.platform = platform;
+  }
 
   createIndicator(
     options: TypingIndicatorOptions,
@@ -383,6 +460,39 @@ export class ReactionTypingIndicatorAdapter implements TypingIndicatorAdapter {
           this.sendMessage,
           this.deleteMessage,
           this.editMessage,
+        );
+      default:
+        return new NoneTypingIndicator();
+    }
+  }
+}
+
+/**
+ * 原生输入状态适配器（sendTyping / setTyping 等）
+ */
+export class NativeTypingIndicatorAdapter implements TypingIndicatorAdapter {
+  readonly platform: string;
+  readonly supportedTypes: TypingIndicatorType[] = ['typing', 'none'];
+
+  constructor(
+    platform: string,
+    private startTyping: (options: TypingIndicatorOptions) => Promise<void>,
+    private stopTyping: (options: TypingIndicatorOptions) => Promise<void>,
+  ) {
+    this.platform = platform;
+  }
+
+  createIndicator(
+    options: TypingIndicatorOptions,
+    config: TypingIndicatorConfig,
+  ): TypingIndicator {
+    switch (config.type) {
+      case 'typing':
+        return new NativeTypingIndicator(
+          options,
+          config,
+          this.startTyping,
+          this.stopTyping,
         );
       default:
         return new NoneTypingIndicator();

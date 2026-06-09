@@ -30,6 +30,7 @@ import {
   SendContent,
 } from "./types.js";
 import { Message } from "./message.js";
+import { htmlToFallbackText } from "./built/html-to-text.js";
 
 /**
  * 组合中间件,洋葱模型
@@ -96,6 +97,20 @@ export namespace segment {
   export function face(id: string, text?: string) {
     return segment("face", { id, text });
   }
+
+  /** 出站 HTML 卡片段（html-renderer 转图；未安装时 core 自动剥离为 text） */
+  export function htmlCard(options: {
+    html: string;
+    text?: string;
+    width?: number;
+    backgroundColor?: string;
+    fileName?: string;
+  }) {
+    return segment("html", options);
+  }
+
+  /** @alias htmlCard */
+  export const html = htmlCard;
   export function from(content: SendContent): SendContent {
     if (!Array.isArray(content)) content = [content];
     const toString = (template: string | MessageElement) => {
@@ -199,8 +214,21 @@ export namespace segment {
       .map((item) => {
         if (typeof item === "string") return item;
         const { type, data } = item;
+        if (typeof type === "function") {
+          return `{${type.name || "Component"}}`;
+        }
         if (type === "text") return data.text;
-        if (type === "at") return `@${data.user_id||data.qq}`;
+        if (type === "at") return `@${data.user_id || data.qq || data.id || data.name || ""}`;
+        if (type === "html") {
+          if (typeof data.text === "string" && data.text) {
+            return data.text.slice(0, 80);
+          }
+          if (typeof data.html === "string") {
+            const stripped = htmlToFallbackText(data.html);
+            return stripped ? `[html-card] ${stripped.slice(0, 80)}` : "[html-card]";
+          }
+          return "[html-card]";
+        }
         return data.text ? `{${type}}(${data.text})` : `{${type}}`;
       })
       .join("");

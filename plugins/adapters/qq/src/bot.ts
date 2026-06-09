@@ -7,6 +7,8 @@ import {
   GroupMessageEvent,
 } from "qq-official-bot";
 import path from "path";
+import { formatCompact } from "@zhin.js/logger";
+import { registerFetchRoute, type RouterContext } from "@zhin.js/host-router/router";
 import {
   Bot as ZhinBot,
   Message,
@@ -14,8 +16,15 @@ import {
   SendContent,
   segment,
 } from "zhin.js";
-import type { QQBotConfig, ReceiverMode, ApplicationPlatform } from "./types.js";
+import type { MessageElement } from "zhin.js";
+import { ReceiverMode, type QQBotConfig, type ApplicationPlatform } from "./types.js";
 import type { QQAdapter } from "./adapter.js";
+import { normalizeQqInboundWsPayload, type QqWsPacket } from "./inbound-normalize.js";
+import { normalizeGroupAtPrefix } from "./group-at-normalize.js";
+import { SDK_VERSION, SDK_VERSION_HEADER } from "./sdk-version.js";
+import { applyCustomAuthEndpoints } from "./gateway-config.js";
+import { normalizeOutboundMarkdown } from "./outbound-markdown.js";
+import { normalizeOutboundMedia } from "./outbound-media.js";
 
 
 export class QQBot<T extends ReceiverMode, M extends ApplicationPlatform = ApplicationPlatform>
@@ -37,21 +46,74 @@ export class QQBot<T extends ReceiverMode, M extends ApplicationPlatform = Appli
 
   constructor(public adapter: QQAdapter, config: QQBotConfig<T, M>) {
     if (!config.data_dir) config.data_dir = path.join(process.cwd(), "data");
+    if (config.mode === ReceiverMode.MIDDLEWARE) {
+      const mw = config as QQBotConfig<ReceiverMode.MIDDLEWARE, M> & {
+        platform?: ApplicationPlatform;
+      };
+      if (!mw.platform) {
+        mw.platform = (mw.application ?? "koa") as ApplicationPlatform;
+      }
+    }
     super(config);
     this.$config = config;
+    this.attachSdkVersionHeader();
+    applyCustomAuthEndpoints(this, config, this.pluginLogger);
+  }
+
+  /** 出站 QQ API 请求附带 SDK 版本，便于平台侧日志排查 */
+  private attachSdkVersionHeader(): void {
+    this.request.interceptors.request.use((reqConfig) => {
+      reqConfig.headers[SDK_VERSION_HEADER] = SDK_VERSION;
+      return reqConfig;
+    });
+  }
+
+  /** 归一化 QQ API v2 群聊字段后再交给 qq-official-bot 解析 */
+  dispatchEvent(event: string, wsRes: QqWsPacket): void {
+    this.pluginLogger.debug({
+      op: 'inbound_ws',
+      event,
+      group: String(wsRes.d?.group_openid ?? wsRes.d?.group_id ?? '?'),
+    });
+    if (event === 'GROUP_AT_MESSAGE_CREATE' || event === 'GROUP_MESSAGE_CREATE') {
+      this.pluginLogger.info(
+        `qq inbound ws: ${event} group=${String(wsRes.d?.group_openid ?? wsRes.d?.group_id ?? '?')}`,
+      );
+    }
+    normalizeQqInboundWsPayload(event, wsRes);
+    super.dispatchEvent(event, wsRes);
   }
 
   private handleQQMessage(msg: PrivateMessageEvent | GroupMessageEvent): void {
-    const message = this.$formatMessage(msg);
-    this.adapter.emit("message.receive", message);
-    this.pluginLogger.debug(`${this.$config.name} recv  ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`);
+    try {
+      const message = this.$formatMessage(msg);
+      this.adapter.emit("message.receive", message);
+      this.pluginLogger.debug(
+        `${this.$config.name} recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}`,
+      );
+    } catch (err) {
+      this.pluginLogger.warn(
+        `qq format inbound failed (${msg.message_type}): ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  private handleGroupNotice(event: string, payload: { group_id?: string; operator_id?: string }): void {
+    this.pluginLogger.info(
+      `qq notice ${event}: group=${payload.group_id ?? '?'} operator=${payload.operator_id ?? '?'}`,
+    );
   }
 
   async $connect(): Promise<void> {
     this.on("message.group", this.handleQQMessage.bind(this));
     this.on("message.guild", this.handleQQMessage.bind(this));
     this.on("message.private", this.handleQQMessage.bind(this));
+    this.on("notice.group.increase", (e) => this.handleGroupNotice('group.add_robot', e));
+    this.on("notice.group.decrease", (e) => this.handleGroupNotice('group.del_robot', e));
+    this.on("notice.group.receive_open", (e) => this.handleGroupNotice('group.msg_receive_open', e));
+    this.on("notice.group.receive_close", (e) => this.handleGroupNotice('group.msg_receive_close', e));
     await this.start();
+    this.mountWebhookReceiver();
     this.$connected = true;
     try {
       const self = await this.getSelfInfo();
@@ -72,11 +134,81 @@ export class QQBot<T extends ReceiverMode, M extends ApplicationPlatform = Appli
     this.$connected = false;
   }
 
+  private resolveWebhookPath(): string {
+    const raw = this.$config.webhookPath ?? "/qq/webhook";
+    return raw.startsWith("/") ? raw : `/${raw}`;
+  }
+
+  /**
+   * Webhook 入站：middleware（挂 host-router）或独立 HTTP 端口（qq-official-bot 内置服务）。
+   */
+  private mountWebhookReceiver(): void {
+    const mode = this.$config.mode;
+    if (mode === ReceiverMode.MIDDLEWARE) {
+      const router = this.adapter.getRouter();
+      if (!router) {
+        throw new Error("QQ mode=middleware 需要启用 @zhin.js/host-router 插件");
+      }
+      const webhookPath = this.resolveWebhookPath();
+      const mw = this.middleware as (
+        ctx: RouterContext,
+        next: () => Promise<void>,
+      ) => Promise<unknown>;
+      router.post(webhookPath, async (ctx: RouterContext) => {
+        this.pluginLogger.debug(ctx.body);
+        await mw(ctx, async () => {});
+      });
+      this.pluginLogger.info(formatCompact({
+        op: "webhook",
+        mode: "middleware",
+        path: webhookPath,
+        url: `POST ${webhookPath}`,
+        note: "无 /api 前缀；Host API 才走 /api/*",
+      }));
+      return;
+    }
+    if (mode === ReceiverMode.WEBHOOK) {
+      const cfg = this.$config as QQBotConfig<ReceiverMode.WEBHOOK>;
+      this.pluginLogger.info(formatCompact({
+        op: "webhook",
+        mode: "standalone",
+        port: cfg.port,
+        path: cfg.path,
+        url: `http://127.0.0.1:${cfg.port}${cfg.path}`,
+      }));
+    }
+  }
+
   $formatMessage(msg: PrivateMessageEvent | GroupMessageEvent) {
+    const raw = msg as PrivateMessageEvent & GroupMessageEvent & {
+      group_openid?: string;
+      author?: { member_openid?: string; user_openid?: string; id?: string; username?: string };
+      __zhin_group_at?: boolean;
+    };
+
+    if (msg.message_type === "group") {
+      if (!raw.group_id && raw.group_openid) {
+        raw.group_id = raw.group_openid;
+      }
+      if (!msg.user_id && raw.author) {
+        const uid = raw.author.member_openid ?? raw.author.user_openid ?? raw.author.id;
+        if (uid) msg.user_id = String(uid);
+      }
+    }
+
     let target_id = msg.user_id;
     if (msg.message_type === "guild") target_id = msg.channel_id!;
-    if (msg.message_type === "group") target_id = msg.group_id!;
+    if (msg.message_type === "group") target_id = raw.group_id ?? msg.group_id ?? "";
     if (msg.sub_type === "direct") target_id = `direct:${msg.guild_id}`;
+
+    let content = msg.message;
+    if (msg.message_type === "group" && Array.isArray(content)) {
+      const botAtIds = [this.$platformUserId, this.$config.appid]
+        .filter((id): id is string => Boolean(id))
+        .map(String);
+      content = normalizeGroupAtPrefix(content, botAtIds, raw.__zhin_group_at === true);
+    }
+
     const result = Message.from(msg, {
       $id: msg.message_id?.toString(),
       $adapter: "qq" as const,
@@ -89,7 +221,7 @@ export class QQBot<T extends ReceiverMode, M extends ApplicationPlatform = Appli
         id: target_id,
         type: msg.message_type === "guild" ? "channel" : msg.message_type,
       },
-      $content: msg.message,
+      $content: content,
       $raw: msg.raw_message,
       $timestamp: Date.now(),
       $recall: async () => {
@@ -110,27 +242,31 @@ export class QQBot<T extends ReceiverMode, M extends ApplicationPlatform = Appli
   }
 
   async $sendMessage(options: SendOptions): Promise<string> {
+    const content = normalizeOutboundMarkdown(
+      normalizeOutboundMedia(options.content),
+      this.$config.outboundMarkdown,
+    );
     switch (options.type) {
       case "private": {
         if (options.id.startsWith("direct:")) {
           const id = options.id.replace("direct:", "");
-          const result = await this.sendDirectMessage(id, options.content);
-          this.pluginLogger.debug(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`);
+          const result = await this.sendDirectMessage(id, content);
+          this.pluginLogger.debug(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(content)}`);
           return `direct-${options.id}:${result.id.toString()}`;
         } else {
-          const result = await this.sendPrivateMessage(options.id, options.content);
-          this.pluginLogger.debug(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`);
+          const result = await this.sendPrivateMessage(options.id, content);
+          this.pluginLogger.debug(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(content)}`);
           return `private-${options.id}:${result.id.toString()}`;
         }
       }
       case "group": {
-        const result = await this.sendGroupMessage(options.id, options.content);
-        this.pluginLogger.debug(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`);
+        const result = await this.sendGroupMessage(options.id, content);
+        this.pluginLogger.debug(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(content)}`);
         return `group-${options.id}:${result.id.toString()}`;
       }
       case "channel": {
-        const result = await this.sendGuildMessage(options.id, options.content);
-        this.pluginLogger.debug(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(options.content)}`);
+        const result = await this.sendGuildMessage(options.id, content);
+        this.pluginLogger.debug(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(content)}`);
         return `channel-${options.id}:${result.id.toString()}`;
       }
       default:

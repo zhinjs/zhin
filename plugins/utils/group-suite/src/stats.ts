@@ -1,6 +1,8 @@
-import { formatCompact, MessageCommand, type Plugin } from "zhin.js";
+import { formatCompact, MessageCommand, segment, type Plugin } from "zhin.js";
 import type { GroupSuiteConfig } from "./config.js";
-import { getMessageContextKey, todayStr, ts } from "./shared.js";
+import { todayStr, ts } from "./shared.js";
+import { buildStatsRankReportData, type MyStatsReportData } from "./stats-data.js";
+import { buildMyStatsHtml, buildStatsRankHtml, STATS_REPORT_CANVAS } from "./stats-card.js";
 
 export function weekStartStr(): string {
   const d = new Date();
@@ -105,29 +107,22 @@ export async function queryStats(
   return result;
 }
 
-function formatRank(
-  stats: Map<string, { name: string; count: number }>,
-  title: string,
-  size: number,
-  myUserId?: string,
-): string {
-  const sorted = [...stats.entries()].sort((a, b) => b[1].count - a[1].count);
-  const total = sorted.reduce((s, [, v]) => s + v.count, 0);
-  const top = sorted.slice(0, size);
-  if (top.length === 0) return `${title}\n暂无数据`;
-  const medals = ["🥇", "🥈", "🥉"];
-  const lines = top.map(([, v], i) => {
-    const prefix = i < 3 ? medals[i] : `${i + 1}.`;
-    return `${prefix} ${v.name} — ${v.count}条`;
+function statsRankReply(data: ReturnType<typeof buildStatsRankReportData>) {
+  return segment.html({
+    html: buildStatsRankHtml(data),
+    width: 540,
+    backgroundColor: STATS_REPORT_CANVAS,
+    fileName: "message-stats-rank.png",
   });
-  let footer = `\n共 ${stats.size} 人, ${total} 条消息`;
-  if (myUserId) {
-    const myRank = sorted.findIndex(([uid]) => uid === myUserId);
-    if (myRank >= 0) {
-      footer += ` | 你第${myRank + 1}名 (${sorted[myRank][1].count}条)`;
-    }
-  }
-  return `${title}\n${lines.join("\n")}${footer}`;
+}
+
+function myStatsReply(data: MyStatsReportData) {
+  return segment.html({
+    html: buildMyStatsHtml(data),
+    width: 540,
+    backgroundColor: STATS_REPORT_CANVAS,
+    fileName: "my-message-stats.png",
+  });
 }
 
 export function registerStats(plugin: Plugin, cfg: GroupSuiteConfig): void {
@@ -181,12 +176,13 @@ export function registerStats(plugin: Plugin, cfg: GroupSuiteConfig): void {
         const groupId = getGroupId(message);
         const stats = await queryStats(groupId, todayStr());
         const title = groupId ? "今日本群消息统计" : "今日全局消息统计";
-        return formatRank(
+        const data = buildStatsRankReportData(
           stats,
           title,
           cfg.rankSize,
           String(message.$sender?.id || ""),
         );
+        return statsRankReply(data);
       }),
   );
 
@@ -198,12 +194,13 @@ export function registerStats(plugin: Plugin, cfg: GroupSuiteConfig): void {
         const groupId = getGroupId(message);
         const stats = await queryStats(groupId, weekStartStr());
         const title = groupId ? "本周本群消息统计" : "本周全局消息统计";
-        return formatRank(
+        const data = buildStatsRankReportData(
           stats,
           title,
           cfg.rankSize,
           String(message.$sender?.id || ""),
         );
+        return statsRankReply(data);
       }),
   );
 
@@ -215,12 +212,13 @@ export function registerStats(plugin: Plugin, cfg: GroupSuiteConfig): void {
         const groupId = getGroupId(message);
         const stats = await queryStats(groupId, monthStartStr());
         const title = groupId ? "本月话唠排行" : "全局话唠排行";
-        return formatRank(
+        const data = buildStatsRankReportData(
           stats,
           title,
           cfg.rankSize,
           String(message.$sender?.id || ""),
         );
+        return statsRankReply(data);
       }),
   );
 
@@ -253,14 +251,16 @@ export function registerStats(plugin: Plugin, cfg: GroupSuiteConfig): void {
           if (row.date === today) todayCount += c;
         }
         const scope = groupId ? "本群" : "全局";
-        return [
-          `${message.$sender?.name || "你"} 的${scope}消息统计`,
-          `今日: ${todayCount} 条`,
-          `本周: ${weekCount} 条`,
-          `本月: ${monthCount} 条`,
-          `总计: ${totalCount} 条`,
-          `活跃天数: ${rows.length} 天`,
-        ].join("\n");
+        const data: MyStatsReportData = {
+          userName: String(message.$sender?.name || "你"),
+          scope,
+          todayCount,
+          weekCount,
+          monthCount,
+          totalCount,
+          activeDays: rows.length,
+        };
+        return myStatsReply(data);
       }),
   );
 

@@ -3,15 +3,17 @@
  */
 import { formatCompact, Cron, MessageCommand, segment, type Plugin } from "zhin.js";
 import type { InboxMessageRow } from "./analysis.js";
-import type {} from "@zhin.js/plugin-html-renderer";
 import {
+  buildAnalysisReportData,
   computeBasicStats,
   formatTextReport,
   appendLLMReport,
   parseLLMResponse,
   extractText,
   type AnalysisResult,
+  type LLMAnalysis,
 } from "./analysis.js";
+import { buildAnalysisReportHtml, ANALYSIS_REPORT_CANVAS } from "./analysis-card.js";
 
 const INBOX_TABLE = "unified_inbox_message";
 const SETTINGS_TABLE = "group_daily_analysis_settings";
@@ -227,12 +229,14 @@ async function runAnalysis(
     return `在 ${startStr} 至 ${endStr} 区间内没有找到本群消息记录，请确认收件箱已启用并有过群消息。`;
   }
   const stats = computeBasicStats(rows);
-  let textReport = formatTextReport(stats, {
+  const meta = {
     channelName: channelName || undefined,
     days,
     startDate: startStr,
     endDate: endStr,
-  });
+  };
+  let textReport = formatTextReport(stats, meta);
+  let llm: LLMAnalysis | undefined;
 
   // 可选：LLM 话题/金句/用户画像（灵感来自 astrbot_plugin_qq_group_daily_analysis）
   const ai = root.inject("ai" as any) as
@@ -261,12 +265,13 @@ async function runAnalysis(
         { systemPrompt },
       );
       if (answer && answer.trim()) {
-        const llm = parseLLMResponse(answer);
+        const parsed = parseLLMResponse(answer);
         if (
-          llm.topics?.length ||
-          llm.quotes?.length ||
-          llm.userTitles?.length
+          parsed.topics?.length ||
+          parsed.quotes?.length ||
+          parsed.userTitles?.length
         ) {
+          llm = parsed;
           textReport = appendLLMReport(textReport, llm);
         }
       }
@@ -275,7 +280,16 @@ async function runAnalysis(
     }
   }
 
-  return { stats, textReport };
+  return { stats, textReport, llm, meta };
+}
+
+function analysisReportReply(report: AnalysisResult) {
+  return segment.html({
+    html: buildAnalysisReportHtml(buildAnalysisReportData(report.stats, report.meta, report.llm)),
+    width: 540,
+    backgroundColor: ANALYSIS_REPORT_CANVAS,
+    fileName: "group-daily-analysis.png",
+  });
 }
 
 // ─── 命令：群分析 ─────────────────────────────────────────────────────────────
@@ -301,31 +315,7 @@ addCommand(
         days,
       );
       if (typeof report === "string") return report;
-      if (config.analysisFormat === "image") {
-        const renderer = root.inject("html-renderer");
-        if (renderer) {
-          try {
-            const escaped = report.textReport
-              .replace(/&/g, "&amp;")
-              .replace(/</g, "&lt;")
-              .replace(/>/g, "&gt;")
-              .replace(/\n/g, "<br/>");
-            const html = `<div style="padding:20px;font-size:14px;line-height:1.5;white-space:pre-wrap;background:#fafafa;border-radius:8px;">${escaped}</div>`;
-            const resultImg = await renderer.render(html);
-            const base64 = (resultImg.data as Buffer).toString("base64");
-            const dataUrl = `base64://${base64}`;
-            return [
-              segment("image", {
-                url: dataUrl,
-                name: "group-daily-analysis.png",
-              }),
-            ];
-          } catch (e) {
-            logger.debug("图片渲染失败，回退文本", (e as Error)?.message);
-          }
-        }
-      }
-      return report.textReport;
+      return analysisReportReply(report);
     }),
 );
 
@@ -437,13 +427,14 @@ useContext("database", () => {
                 const first = adapter.bots.values().next().value;
                 botId = first?.$id ?? first?.selfId ?? "";
               }
+              const content = analysisReportReply(report);
               await adapter
                 .sendMessage({
                   context: t.adapter,
                   bot: botId,
                   type: "group",
                   id: t.channelId,
-                  content: report.textReport,
+                  content,
                 })
                 .catch(() => {});
             }

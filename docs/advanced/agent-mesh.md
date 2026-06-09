@@ -1,23 +1,37 @@
-# Agent Mesh 硬编排 v1
+# Agent Mesh 硬编排
 
 基于项目总监模型：本地 **硬编排 DAG** + **MCP Agent Mesh** 跨实例委托。
 
-## 本地硬编排
+Missions Harness 见 [ADR 0011](../adr/0011-missions-harness-alignment.md)。
 
-启用 `ai.orchestration.hardMode: true` 后，主 Agent 获得总监工具：
+## 本地硬编排（始终开启）
+
+主 Agent 自带总监工具，**无配置开关**：
 
 | 工具 | 说明 |
 |------|------|
-| `orchestration_start` | 创建 run；可选 `template: plan-dev-review` |
-| `orchestration_add_task` | 添加 DAG 节点（`depends_on`、`executor: remote:<id>`） |
-| `orchestration_status` | 查询 run + 任务状态 |
+| `orchestration_start` | 创建 Mission run（`missions` 五阶段 DAG） |
+| `orchestration_add_task` | 自定义 DAG 节点（`depends_on`、`executor: remote:<id>`） |
+| `orchestration_status` | 查询 run + 任务状态 + Mission State 摘要 |
+| `orchestration_patch_state` | 更新 Mission State（按 phase ACL） |
 | `orchestration_complete` | 关闭 run |
 | `orchestration_retry_task` | 重置 failed 任务 |
 | `orchestration_skip_task` | 跳过任务并解锁下游 |
 
-`spawn_task` 在硬编排模式下须传 `run_id` + `task_id`；执行前经 `AgentDispatcher.canExecute` 门禁。
+`spawn_task` 须传 `run_id` + `task_id`；`missions` run 由 **MissionRunner** 自动推进，禁止手动 `spawn_task`。
 
-状态持久化在 Agent SQLite：`orchestration_runs`、`orchestration_tasks`。
+### missions 模板
+
+| 阶段 | 角色 | 说明 |
+|------|------|------|
+| Plan / WriteSpec | planner | 产出 Plan + Validation Spec（manifest + spec.test.ts） |
+| Develop | subtask（单 Writer） | Spec gate 通过后执行 |
+| Validate | validator | 仅 `run_validation_spec`，禁读源码；可 `remote:<id>` |
+| Negotiate | planner | Validate 失败时重评估 |
+
+MissionRunner 自动推进并跑 spec dry-run。远程 Validate：启动时传 `remote_validator: <agentId>`（对应 `ai.remoteAgents[].id`）。
+
+状态持久化在 Agent SQLite：`orchestration_runs`（含 `mission_state_json`）、`orchestration_tasks`（含 `is_writer`、`phase`）。
 
 ## MCP Agent Mesh
 
@@ -56,24 +70,10 @@ ai:
 ## REST 可观测
 
 - `GET /api/agent/orchestration/runs?sessionKey=`
-- `GET /api/agent/orchestration/runs/:runId`
+- Console 编排视图与 `orchestration_status` 同源
 
-与 `orchestration_status` 共用同一数据源。
+## L4 验收（full-bot）
 
-## full-bot L4 验收
-
-[`examples/full-bot`](../../examples/full-bot/) 为 L4 参考实例（非 Stable / 非 test-bot 厨房水槽）：
-
-1. `cd examples/full-bot && cp .env.example .env && pnpm dev`
-2. 确认 `ai.orchestration.hardMode: true` 与 `ai.remoteAgents[].id: local` loopback
-3. Sandbox 触发 `plan-dev-review` 编排，验证 dev 在 planner 完成前被门禁拒绝
-4. `curl` 无 Bearer 调 `/mcp` 的 `agent.delegate_task` → 401
-5. 自动化：`pnpm check:l4`（仓库根）
-
-手工步骤见 [full-bot ACCEPTANCE.md](../../examples/full-bot/ACCEPTANCE.md)。
-
-## 参考
-
-- [MCP 集成](./mcp.md)
-- [Console 需求](../console/requirements.md)
-- [full-bot README](../../examples/full-bot/README.md)
+1. 启动 full-bot，`pnpm check:l4`
+2. 确认 `ai.remoteAgents[].id: local` loopback
+3. 沙盒：`orchestration_start`（无需 template）→ MissionRunner 自动推进 Plan

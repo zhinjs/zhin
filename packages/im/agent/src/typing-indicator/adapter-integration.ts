@@ -5,7 +5,7 @@
  * 支持自动初始化和配置管理。
  */
 
-import type { Adapter, Bot, SendOptions } from '@zhin.js/core';
+import type { Adapter, Bot, SendContent, SendOptions } from '@zhin.js/core';
 import {
   TypingIndicatorManager,
   ReactionTypingIndicatorAdapter,
@@ -51,6 +51,22 @@ function resolveTypingSendTarget(options: TypingIndicatorOptions): {
   return { type: 'private', id: options.sessionId ?? '' };
 }
 
+/** QQ 群聊禁止无引用的主动消息（40034105），需 reply 触发消息 */
+export function buildTypingSendContent(
+  platform: string,
+  options: TypingIndicatorOptions,
+  text: string,
+): SendContent | null {
+  if (platform === 'qq' && options.sceneType === 'group') {
+    if (!options.messageId) return null;
+    return [
+      { type: 'reply', data: { id: options.messageId } },
+      { type: 'text', data: { text } },
+    ];
+  }
+  return [{ type: 'text', data: { text } }];
+}
+
 function createOutboundSendMessage(
   bot: Bot,
   platform: string,
@@ -58,13 +74,16 @@ function createOutboundSendMessage(
 ): (options: TypingIndicatorOptions, content: string) => Promise<string | null> {
   return async (options: TypingIndicatorOptions, content: string) => {
     try {
+      const segments = buildTypingSendContent(platform, options, content);
+      if (!segments) return null;
+
       const { type, id } = resolveTypingSendTarget(options);
       const sendOptions: SendOptions = {
         type,
         id,
         context: platform,
         bot: bot.$id,
-        content: [{ type: 'text' as const, data: { text: content } }],
+        content: segments,
       };
       if (outbound) {
         return await outbound.sendMessage(sendOptions);
@@ -145,9 +164,17 @@ export const PLATFORM_FEATURES: Record<string, PlatformFeatures> = {
   },
   kook: {
     platform: 'kook',
-    supportsReaction: false,
+    supportsReaction: true,
     supportsEdit: true,
     supportsDelete: true,
+    supportsTyping: false,
+    defaultType: 'reaction',
+  },
+  'weixin-ilink': {
+    platform: 'weixin-ilink',
+    supportsReaction: false,
+    supportsEdit: false,
+    supportsDelete: false,
     supportsTyping: true,
     defaultType: 'typing',
   },
@@ -237,7 +264,7 @@ export const PLATFORM_FEATURES: Record<string, PlatformFeatures> = {
     supportsEdit: false,
     supportsDelete: false,
     supportsTyping: false,
-    defaultType: 'message',
+    defaultType: 'none',
   },
   milky: {
     platform: 'milky',
@@ -279,7 +306,11 @@ export type BotTypingIndicatorManager = TypingIndicatorManager | PlatformTypingI
 
 export interface BotWithTypingIndicator extends Bot {
   $typingIndicator?: BotTypingIndicatorManager;
-  $addReaction?(messageId: string, emoji: string): Promise<string | null>;
+  $addReaction?(
+    messageId: string,
+    emoji: string,
+    hint?: { sceneType?: 'private' | 'group' | 'channel' },
+  ): Promise<string | null>;
   $removeReaction?(messageId: string, reactionId: string): Promise<void>;
 }
 
@@ -369,10 +400,12 @@ export class AdapterTypingIndicatorManager {
     if (features.supportsReaction && bot.$addReaction && bot.$removeReaction) {
       // 支持 reaction 的平台使用 ReactionTypingIndicatorAdapter
       const adapter = new ReactionTypingIndicatorAdapter(
+        platform,
         // addReaction
-        async (messageId: string, emoji: string) => {
+        async (messageId: string, emoji: string, options: TypingIndicatorOptions) => {
           try {
-            return await bot.$addReaction!(messageId, emoji);
+            // 必须在 bot 上调用，避免类方法 this 丢失（如 KookBot.$addReaction）
+            return await bot.$addReaction!(messageId, emoji, { sceneType: options.sceneType });
           } catch (error) {
             console.error(`[${platform}] Failed to add reaction:`, error);
             return null;

@@ -7,7 +7,7 @@ import type { AgentRole } from './orchestrator/agent-dispatcher.js';
 export type SubagentContextMode = 'fork' | 'fresh';
 
 const KNOWN_ROLES: ReadonlySet<string> = new Set([
-  'main', 'subtask', 'worker', 'researcher', 'executor', 'reviewer', 'planner',
+  'main', 'subtask', 'worker', 'researcher', 'executor', 'reviewer', 'planner', 'validator',
 ]);
 
 const PRESET_ROLE_BY_NAME: Record<string, AgentRole> = {
@@ -27,6 +27,7 @@ const DEFAULT_CONTEXT_MODE_BY_ROLE: Record<AgentRole, SubagentContextMode> = {
   researcher: 'fork',
   executor: 'fork',
   reviewer: 'fresh',
+  validator: 'fresh',
   planner: 'fresh',
 };
 

@@ -3,6 +3,7 @@
  */
 import path from "node:path";
 import { usePlugin, type Plugin, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
+import type { Router } from "@zhin.js/host-router";
 import { QQAdapter } from "./adapter.js";
 import { PageManager } from "@zhin.js/host-api";
 
@@ -10,6 +11,7 @@ declare module "zhin.js" {
   namespace Plugin {
     interface Contexts {
       web: PageManager;
+      router: Router;
     }
   }
 }
@@ -27,17 +29,19 @@ export { QQAdapter } from "./adapter.js";
 const plugin = usePlugin();
 const { provide, useContext } = plugin;
 
-provide({
-  name: "qq",
-  description: "QQ Official Bot Adapter",
-  mounted: async (p: Plugin) => {
-    const adapter = new QQAdapter(p);
-    await adapter.start();
-    return adapter;
-  },
-  dispose: async (adapter: QQAdapter) => {
-    await adapter.stop();
-  },
+useContext("router", (router: Router) => {
+  provide({
+    name: "qq",
+    description: "QQ Official Bot Adapter",
+    mounted: async (p: Plugin) => {
+      const adapter = new QQAdapter(p, router);
+      await adapter.start();
+      return adapter;
+    },
+    dispose: async (adapter: QQAdapter) => {
+      await adapter.stop();
+    },
+  });
 });
 
 useContext('tool', 'qq', (toolService: ToolFeature, qq: QQAdapter) => {

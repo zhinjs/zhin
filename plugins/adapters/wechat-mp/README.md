@@ -24,7 +24,8 @@ pnpm add @zhin.js/adapter-wechat-mp
 | **服务器配置** | 配置 Token（与 `token` 字段一致）；服务器 URL 须公网可访问 |
 | **host-router** | **必需** — 适配器在 `path` 上注册 GET/POST Webhook 路由 |
 | **响应时限** | 微信要求 **5 秒内**响应；超时会导致接入失败 |
-| **消息加密** | 可选；启用时配置 `encodingAESKey` 与 `encrypt: true` |
+| **回复模式** | 默认 `replyMode: passive`（订阅号被动回复，在 webhook 响应里返回 XML）；服务号可设 `customer_service` 走客服 API |
+| **消息加密** | 可选；`encrypt: true` + `encodingAESKey`；`encryptMode: compatible`（默认，被动回复明文）或 `secure`（被动回复也加密） |
 
 必填字段见 `WeChatMPConfig`：`context`、`name`、`appId`、`appSecret`、`token`、`path`。
 
@@ -119,7 +120,7 @@ addMiddleware(async (message, next) => {
 
 1. 登录 [微信公众平台](https://mp.weixin.qq.com/)
 2. 在「开发 → 基本配置」中获取 `AppID` 和 `AppSecret`
-3. 配置服务器地址（URL）：`http://your-server:8086/api/wechat/webhook`
+3. 配置服务器地址（URL）：`https://your-server/wechat/webhook`（无 `/api` 前缀；经反向代理时自行映射）
 4. 设置 Token（与配置文件中的 `token` 一致）
 5. 如需消息加解密，设置 EncodingAESKey
 
@@ -127,9 +128,10 @@ addMiddleware(async (message, next) => {
 
 | 现象 | 排查 |
 |------|------|
-| 服务器配置验证失败 | `token` 与公众平台一致；URL 为 `http(s)://<host>/api<path>`（Host 默认前缀 `/api`）；Host 已启动且公网可达 |
+| 服务器配置验证失败 | `token` 与公众平台一致；URL 为 `https://<host>/wechat/webhook`；Host 已启动且公网可达 |
 | 收不到用户消息 | 公众号类型是否支持消息接口；用户是否已关注；`path` 与公众平台 URL 一致 |
-| 回复超时 | 业务逻辑须在 5 秒内返回；耗时操作应异步处理后再调用客服接口 |
+| 回复超时 / 无回复 | 默认被动回复须在 **~4.5s** 内完成；AI 过慢会返回 `success` 无正文，可改 `replyMode: customer_service`（需客服接口权限） |
+| `48001 api unauthorized` | 未认证订阅号无客服 API；保持默认 `replyMode: passive` |
 | 加密模式报错 | `encodingAESKey`、`encrypt` 与公众平台「安全模式」设置一致 |
 
 ## 文档链接

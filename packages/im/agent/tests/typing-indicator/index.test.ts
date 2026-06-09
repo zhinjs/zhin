@@ -300,7 +300,11 @@ describe('ReactionTypingIndicator', () => {
 
     await indicator.start();
 
-    expect(addReaction).toHaveBeenCalledWith('123456', '⏳');
+    expect(addReaction).toHaveBeenCalledWith('123456', '⏳', expect.objectContaining({
+      platform: 'icqq',
+      messageId: '123456',
+      sceneType: 'private',
+    }));
     expect(indicator.isActive()).toBe(true);
   });
 
@@ -328,6 +332,29 @@ describe('ReactionTypingIndicator', () => {
 
     expect(removeReaction).toHaveBeenCalledWith('123456', 'reaction-123');
     expect(indicator.isActive()).toBe(false);
+  });
+
+  it('并发 stop 只应 remove 一次', async () => {
+    const addReaction = vi.fn().mockResolvedValue('reaction-123');
+    const removeReaction = vi.fn().mockImplementation(
+      () => new Promise((resolve) => setTimeout(resolve, 20)),
+    );
+
+    const indicator = new ReactionTypingIndicator(
+      {
+        platform: 'icqq',
+        botId: '75318',
+        messageId: '123456',
+        sceneType: 'private',
+      },
+      { type: 'reaction', emoji: '⏳' },
+      addReaction,
+      removeReaction,
+    );
+
+    await indicator.start();
+    await Promise.all([indicator.stop(), indicator.stop()]);
+    expect(removeReaction).toHaveBeenCalledTimes(1);
   });
 
   it('应该处理没有 messageId 的情况', async () => {
@@ -479,6 +506,7 @@ describe('NoneTypingIndicator', () => {
 describe('ReactionTypingIndicatorAdapter', () => {
   it('应该创建适配器', () => {
     const adapter = new ReactionTypingIndicatorAdapter(
+      'icqq',
       vi.fn(),
       vi.fn(),
       vi.fn(),
@@ -492,6 +520,7 @@ describe('ReactionTypingIndicatorAdapter', () => {
 
   it('应该创建 ReactionTypingIndicator', () => {
     const adapter = new ReactionTypingIndicatorAdapter(
+      'icqq',
       vi.fn(),
       vi.fn(),
       vi.fn(),
@@ -516,6 +545,7 @@ describe('ReactionTypingIndicatorAdapter', () => {
 
   it('应该创建 MessageTypingIndicator', () => {
     const adapter = new ReactionTypingIndicatorAdapter(
+      'icqq',
       vi.fn(),
       vi.fn(),
       vi.fn(),

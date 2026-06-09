@@ -17,8 +17,10 @@ describe('NapCat L4 adapter contract', () => {
     expect(true).toBe(true);
   });
 
-  it.skipIf(process.env.L4_SKIP_PLATFORM === '1')(
-    'real NapCat machine smoke (set ONEBOT11_WS_URL to run)',
+  it.skipIf(
+    process.env.L4_SKIP_PLATFORM === '1' || !process.env.ONEBOT11_WS_URL?.trim(),
+  )(
+    'real NapCat machine smoke (ONEBOT11_WS_URL + L4_SKIP_PLATFORM=0)',
     () => {
       expect(process.env.ONEBOT11_WS_URL).toBeTruthy();
     },

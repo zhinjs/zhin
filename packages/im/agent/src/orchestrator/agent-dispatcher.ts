@@ -21,7 +21,8 @@ export type AgentRole =
   | 'researcher'     // 研究 Agent（只读）
   | 'executor'       // 执行 Agent（写操作）
   | 'reviewer'       // 审查 Agent（只读+分析）
-  | 'planner';       // 规划 Agent（只读+规划）
+  | 'planner'        // 规划 Agent（只读+规划）
+  | 'validator';     // 验收 Agent（仅跑 Validation Spec）
 
 export interface AgentRoleConfig {
   /** 角色名称 */
@@ -168,7 +169,10 @@ export const AGENT_ROLE_CONFIGS: Record<AgentRole, AgentRoleConfig> = {
     description: '规划 Agent，只读规划',
     allowedTools: [
       'read_file', 'list_dir', 'glob', 'grep',
+      'write_file',
       'web_search', 'web_fetch',
+      'orchestration_patch_state',
+      'run_spec_dry_run',
     ],
     blockedTools: ['write_file', 'edit_file', 'bash', 'send_message', 'spawn_subagent'],
     canSendMessage: false,
@@ -179,6 +183,24 @@ export const AGENT_ROLE_CONFIGS: Record<AgentRole, AgentRoleConfig> = {
     maxIterations: 5,
     maxToolCalls: 20,
     timeout: 120000,
+  },
+
+  validator: {
+    role: 'validator',
+    description: '验收 Agent，仅执行 Validation Spec，不得阅读实现源码',
+    allowedTools: ['run_validation_spec', 'orchestration_patch_state'],
+    blockedTools: [
+      'read_file', 'write_file', 'edit_file', 'list_dir', 'glob', 'grep',
+      'bash', 'web_search', 'web_fetch', 'send_message', 'spawn_subagent',
+    ],
+    canSendMessage: false,
+    canSpawnSubagents: false,
+    canAccessMainHistory: false,
+    canWrite: false,
+    canExecuteDangerous: false,
+    maxIterations: 5,
+    maxToolCalls: 10,
+    timeout: 180000,
   },
 };
 
@@ -209,6 +231,10 @@ export interface AgentTask {
   executorKind?: 'local' | 'remote';
   remoteAgentId?: string;
   remoteTaskId?: string;
+  /** missions-v1：参与 Run 级 Writer 互斥 */
+  isWriter?: boolean;
+  /** missions-v1 阶段 */
+  phase?: string;
   /** 超时时间（毫秒） */
   timeout?: number;
   /** 最大重试次数 */
@@ -249,11 +275,14 @@ export interface AgentResult {
 
 // ── Agent 调度器类 ────────────────────────────────────────────────────
 
+export type AgentResultListener = (result: AgentResult) => void;
+
 export class AgentDispatcher {
   private tasks: Map<string, AgentTask> = new Map();
   private results: Map<string, AgentResult> = new Map();
   private running: Map<string, Promise<AgentResult>> = new Map();
   private taskTimestamps = new Map<string, number>();
+  private resultListeners: AgentResultListener[] = [];
   private cleanupTimer?: ReturnType<typeof setInterval>;
   private repository: OrchestrationRepository | null = null;
 
@@ -270,6 +299,13 @@ export class AgentDispatcher {
 
   setRepository(repository: OrchestrationRepository | null): void {
     this.repository = repository;
+  }
+
+  onResult(listener: AgentResultListener): () => void {
+    this.resultListeners.push(listener);
+    return () => {
+      this.resultListeners = this.resultListeners.filter((l) => l !== listener);
+    };
   }
 
   /** 从 DB 记录同步到内存（硬编排 SSOT 写穿缓存） */
@@ -289,6 +325,8 @@ export class AgentDispatcher {
       executorKind: shape.executorKind,
       remoteAgentId: shape.remoteAgentId,
       remoteTaskId: shape.remoteTaskId,
+      isWriter: shape.isWriter,
+      phase: shape.phase,
     };
     this.tasks.set(task.id, task);
     this.taskTimestamps.set(task.id, record.updated_at || Date.now());
@@ -499,23 +537,68 @@ export class AgentDispatcher {
       return { canExecute: false, reason: '任务不存在' };
     }
 
-    // 检查是否已在运行
     if (this.running.has(taskId)) {
       return { canExecute: false, reason: '任务已在运行中' };
     }
 
-    // 检查是否已完成
     if (this.results.has(taskId)) {
       return { canExecute: false, reason: '任务已完成' };
     }
 
-    // 检查依赖
     const depValidation = this.validateDependencies(task);
     if (!depValidation.valid) {
       return { canExecute: false, reason: depValidation.reason };
     }
 
+    if (task.isWriter && task.runId && this.runHasRunningWriter(task.runId, taskId)) {
+      return { canExecute: false, reason: 'Run 内已有 Writer 任务运行中' };
+    }
+
     return { canExecute: true };
+  }
+
+  private runHasRunningWriter(runId: string, excludeTaskId: string): boolean {
+    for (const [id, t] of this.tasks.entries()) {
+      if (id === excludeTaskId || t.runId !== runId || !t.isWriter) continue;
+      if (this.running.has(id) || t.status === 'running') return true;
+    }
+    return false;
+  }
+
+  /**
+   * Async missions gate check (call before spawn).
+   */
+  async canExecuteMissions(taskId: string): Promise<{ canExecute: boolean; reason?: string }> {
+    const base = this.canExecute(taskId);
+    if (!base.canExecute) return base;
+
+    const task = this.tasks.get(taskId);
+    if (!task?.runId || !this.repository) return base;
+
+    const run = await this.repository.getRun(task.runId);
+    if (!run) return base;
+
+    const { isMissionsTemplate } = await import('./mission-state.js');
+    if (!isMissionsTemplate(run)) return base;
+
+    const state = await this.repository.getMissionState(task.runId);
+    if (!state) return base;
+
+    if (task.phase === 'develop' || task.isWriter) {
+      const { missionSpecGateSatisfied } = await import('./mission-state.js');
+      if (!missionSpecGateSatisfied(state)) {
+        return { canExecute: false, reason: 'Validation Spec 门禁未通过（需 spec 路径 + dry-run + assertion_count）' };
+      }
+    }
+
+    if (task.phase === 'negotiate') {
+      const failed = state.last_validation && state.last_validation.failed > 0;
+      if (!failed && task.role === 'planner') {
+        return { canExecute: false, reason: 'Validate 已通过，Negotiate 无需执行' };
+      }
+    }
+
+    return base;
   }
 
   /**
@@ -538,6 +621,13 @@ export class AgentDispatcher {
           finished_at: Date.now(),
         },
       );
+    }
+    for (const listener of this.resultListeners) {
+      try {
+        listener(result);
+      } catch {
+        // ignore listener errors
+      }
     }
   }
 

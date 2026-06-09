@@ -6,7 +6,8 @@ export * from './component.js'
 export * from './adapter.js'
 export * from './message.js'
 export { quoteIdFromContent, quoteIdFromRaw, syncQuoteId, alignReplySegments } from './message-quote.js'
-export { htmlToPlainText, htmlToPlainTextWithBlockBreaks } from './built/html-to-text.js'
+export { htmlToPlainText, htmlToPlainTextWithBlockBreaks, htmlToFallbackText } from './built/html-to-text.js'
+export { registerHtmlSegmentFallback, coerceHtmlSegmentsToText } from './built/html-segment-fallback.js'
 export {
   prependQuoteContext,
   resolveQuotedMessagePayload,
@@ -53,6 +54,8 @@ export * from './built/roles.js'
 export * from './built/ai-trigger.js'
 // MessageDispatcher (消息调度器)
 export * from './built/dispatcher.js'
+export { runInboundMessage } from './built/inbound-runner.js'
+export type { RunInboundMessageOptions, InboundRunResult } from './built/inbound-runner.js'
 // Schema 注册表 (插件配置声明)
 export * from './built/schema-feature.js'
 // Login assist (producer-consumer for QR / SMS / slider etc.)

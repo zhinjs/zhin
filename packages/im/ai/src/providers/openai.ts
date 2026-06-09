@@ -21,7 +21,11 @@ import {
   type ImageGenerateResult,
   type OpenAIImagesGenerationItem,
 } from '../image-generation.js';
+import { formatCompact, Logger } from '@zhin.js/logger';
+import { formatRedactedJson } from '../llm/redact-request-body.js';
 import { parseOpenAIChatCompletionBody } from './openai-sse.js';
+
+const llmRequestLogger = new Logger(null, 'LLM');
 
 export interface OpenAIConfig extends ProviderConfig {
   organization?: string;
@@ -63,6 +67,13 @@ export class OpenAIProvider extends BaseProvider {
 
   async chat(request: ChatCompletionRequest): Promise<ChatCompletionResponse> {
     const body = this.buildRequestBody(request);
+    llmRequestLogger.debug(formatCompact({
+      op: 'request_body',
+      provider: this.name,
+      model: request.model,
+      url: `${this.baseUrl}/chat/completions`,
+      body: formatRedactedJson(body),
+    }));
     const url = `${this.baseUrl}/chat/completions`;
     const post = async (payload: Record<string, unknown>) => {
       const text = await this.fetchText(url, { method: 'POST', json: { ...payload, stream: false } });

@@ -26,6 +26,8 @@ node scripts/deprecate-group-legacy-packages.mjs
 ```yaml
 plugins:
   - "@zhin.js/plugin-group-suite"
+  # 可选：stats / 群分析 等自动出图；未安装则框架自动发纯文本
+  - "@zhin.js/plugin-html-renderer"
 
 database:
   dialect: sqlite
@@ -57,6 +59,15 @@ groupSuite:
 | `analysisGroupsBlock` | `[]` | 日报黑名单 |
 | `teachMaxPerGroup` | 200 | 每群问答上限 |
 | `teachCooldownMs` | 3000 | 问答冷却（毫秒） |
+
+## 统计与群分析出图
+
+`stats`、`mystats`、`群分析` 等命令返回 **`segment.html({ html })`**，由出站链统一处理：
+
+- 安装 **`@zhin.js/plugin-html-renderer`** → 自动渲染为 PNG 卡片
+- 未安装 → core 从 HTML 自动剥离纯文本（零业务侧 detect）
+
+卡片 HTML 在 `stats-card.ts` / `analysis-card.ts` 中用 **`@zhin.js/satori`** 的 `h()` 与内置组件构建，视觉对齐 test-bot 的 `zt-report-card`。
 
 ## 命令
 

@@ -78,8 +78,9 @@ export class ICQQTypingIndicatorManager {
    */
   private registerAdapter(): void {
     const adapter = new ReactionTypingIndicatorAdapter(
+      'icqq',
       // addReaction
-      async (messageId: string, emoji: string) => {
+      async (messageId: string, emoji: string, _options) => {
         return await this.bot.$addReaction(messageId, emoji);
       },
       // removeReaction

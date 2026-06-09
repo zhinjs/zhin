@@ -18,10 +18,34 @@
 业务与框架应统一走：
 
 1. **`message.$reply(...)`**，或 **`adapter.sendMessage(options)`**。
-2. **`Adapter.sendMessage`** 内先 **`renderSendMessage`**：依次执行根插件上所有 **`before.sendMessage`**（可改写即将发出的内容）。
+2. **`Adapter.sendMessage`** 内先 **`renderSendMessage`**：
+   - 依次执行根插件上所有 **`before.sendMessage`**（可改写即将发出的内容）。
+   - 链尾将仍未转换的 **`html` 消息段**自动剥离为 **`text` 段**（`htmlToFallbackText`）。
 3. 再调用具体 **`bot.$sendMessage`** 发到平台。
 
 由 Dispatcher 发起的润色会通过 **`replyWithPolish`** 与异步上下文配合 **`before.sendMessage`**，与手写 `$reply` 共用同一管道；细节见 [AI 模块 - 出站润色](/advanced/ai.html#messagedispatcher-指令与-ai-路由)。
+
+### HTML 卡片出站（可选出图）
+
+业务插件只需返回 **`segment.html({ html })`**，不必手写文本回退：
+
+```ts
+import { segment } from 'zhin.js';
+
+return segment.html({
+  html: buildMyCardHtml(data),
+  width: 540,
+  backgroundColor: '#d8dce3',
+});
+```
+
+| 场景 | 行为 |
+|------|------|
+| 已安装 **`@zhin.js/plugin-html-renderer`** | `before.sendMessage` 将 `html` 段转为 PNG `image` 段 |
+| 未安装或转图失败 | `renderSendMessage` 链尾自动从 HTML 剥离可读纯文本发出 |
+| 需要高质量回退 | 可选传 `text` 覆盖自动剥离（高级用法） |
+
+卡片 HTML 建议用 **`@zhin.js/satori`** 的 `h()` 与内置组件构建（与 IM 的 zhin.js JSX 分离）。详见 [`plugin-html-renderer` README](https://github.com/zhinjs/zhin/tree/main/plugins/utils/html-renderer) 与 [`plugin-group-suite` README](https://github.com/zhinjs/zhin/tree/main/plugins/utils/group-suite)。
 
 ## 相关链接
 

@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { MemoryOrchestrationRepository } from '../src/orchestrator/orchestration-repository.js';
-import { OrchestrationService, PLAN_DEV_REVIEW_TEMPLATE } from '../src/orchestrator/orchestration-service.js';
-import { initOrchestrationService } from '../src/orchestrator/orchestration-service.js';
+import {
+  OrchestrationService,
+  MISSIONS_TEMPLATE,
+  initOrchestrationService,
+} from '../src/orchestrator/orchestration-service.js';
 import { getAgentDispatcher } from '../src/orchestrator/agent-dispatcher.js';
 
 describe('OrchestrationRepository + Service', () => {
@@ -14,31 +17,29 @@ describe('OrchestrationRepository + Service', () => {
     getAgentDispatcher().setRepository(repo);
   });
 
-  it('creates run with plan-dev-review template', async () => {
+  it('creates run with missions template', async () => {
     const snapshot = await service.startRun({
       sessionKey: 'private:test',
       title: 'Feature X',
-      template: PLAN_DEV_REVIEW_TEMPLATE,
     });
     expect(snapshot.run.status).toBe('active');
-    expect(snapshot.tasks).toHaveLength(3);
-    expect(snapshot.tasks.map((t) => t.role)).toEqual(['planner', 'subtask', 'reviewer']);
+    expect(snapshot.run.template).toBe(MISSIONS_TEMPLATE);
+    expect(snapshot.tasks).toHaveLength(5);
+    expect(snapshot.tasks.map((t) => t.phase)).toEqual([
+      'plan', 'spec', 'develop', 'validate', 'negotiate',
+    ]);
   });
 
-  it('blocks spawn when dependency not met', async () => {
-    const snapshot = await service.startRun({
-      sessionKey: 'private:test',
-      template: PLAN_DEV_REVIEW_TEMPLATE,
-    });
-    const devTask = snapshot.tasks.find((t) => t.role === 'subtask')!;
-    const gate = getAgentDispatcher().canExecute(devTask.id);
+  it('blocks develop when dependency not met', async () => {
+    const snapshot = await service.startRun({ sessionKey: 'private:test' });
+    const develop = snapshot.tasks.find((t) => t.phase === 'develop')!;
+    const gate = await getAgentDispatcher().canExecuteMissions(develop.id);
     expect(gate.canExecute).toBe(false);
-    expect(gate.reason).toContain('依赖');
   });
 
   it('retry and skip failed task', async () => {
-    const run = await service.startRun({ sessionKey: 's1', title: 't' });
-    const task = await service.addTask({ runId: run.run.id, name: 'solo', role: 'subtask' });
+    const snapshot = await service.startRun({ sessionKey: 's1', title: 't' });
+    const task = snapshot.tasks.find((t) => t.phase === 'plan')!;
     await repo.updateTaskStatus(task.id, 'failed', { error: 'boom' });
     getAgentDispatcher().syncTaskFromRecord((await repo.getTask(task.id))!);
 

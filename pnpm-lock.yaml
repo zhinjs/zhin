@@ -243,6 +243,40 @@ importers:
         specifier: ^2.9.0
         version: 2.9.0
 
+  examples/full-bot:
+    dependencies:
+      '@zhin.js/adapter-kook':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/kook
+      '@zhin.js/adapter-napcat':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/napcat
+      '@zhin.js/adapter-sandbox':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/sandbox
+      '@zhin.js/cli':
+        specifier: workspace:*
+        version: link:../../basic/cli
+      '@zhin.js/host-api':
+        specifier: workspace:*
+        version: link:../../packages/host/api
+      '@zhin.js/host-router':
+        specifier: workspace:*
+        version: link:../../packages/host/router
+      '@zhin.js/mcp':
+        specifier: workspace:*
+        version: link:../../packages/host/mcp
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../packages/im/zhin
+    devDependencies:
+      tsx:
+        specifier: ^4.22.4
+        version: 4.22.4
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   examples/minimal-bot:
     dependencies:
       '@zhin.js/adapter-sandbox':
@@ -270,6 +304,9 @@ importers:
 
   examples/test-bot:
     dependencies:
+      '@puniyu/system-info':
+        specifier: 1.5.6
+        version: 1.5.6
       '@zhin.js/adapter-dingtalk':
         specifier: workspace:*
         version: link:../../plugins/adapters/dingtalk
@@ -321,6 +358,9 @@ importers:
       '@zhin.js/adapter-wechat-mp':
         specifier: workspace:*
         version: link:../../plugins/adapters/wechat-mp
+      '@zhin.js/adapter-weixin-ilink':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/weixin-ilink
       '@zhin.js/cli':
         specifier: workspace:*
         version: link:../../basic/cli
@@ -360,9 +400,18 @@ importers:
       '@zhin.js/plugin-rss':
         specifier: workspace:*
         version: link:../../plugins/utils/rss
+      '@zhin.js/satori':
+        specifier: workspace:*
+        version: link:../../packages/toolkit/satori
       '@zhin.js/sensitive-filter':
         specifier: workspace:*
         version: link:../../plugins/utils/sensitive-filter
+      react:
+        specifier: ^19.2.6
+        version: 19.2.6
+      react-dom:
+        specifier: ^19.2.6
+        version: 19.2.6(react@19.2.6)
       sqlite3:
         specifier: latest
         version: 6.0.1
@@ -1187,8 +1236,8 @@ importers:
         specifier: workspace:*
         version: link:../../../basic/logger
       qq-official-bot:
-        specifier: ^1.2.1
-        version: 1.2.1
+        specifier: ^1.2.2
+        version: 1.2.2
     devDependencies:
       '@types/react':
         specifier: ^19.2.15
@@ -1370,6 +1419,52 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
 
+  plugins/adapters/weixin-ilink:
+    dependencies:
+      '@zhin.js/agent':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent
+      '@zhin.js/client':
+        specifier: workspace:*
+        version: link:../../../packages/console/client
+      '@zhin.js/core':
+        specifier: workspace:*
+        version: link:../../../packages/im/core
+      '@zhin.js/host-router':
+        specifier: workspace:*
+        version: link:../../../packages/host/router
+    devDependencies:
+      '@radix-ui/themes':
+        specifier: ^3.2.1
+        version: 3.3.0(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      '@types/react':
+        specifier: ^19.2.15
+        version: 19.2.15
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.15)
+      '@zhin.js/cli':
+        specifier: workspace:*
+        version: link:../../../basic/cli
+      '@zhin.js/contract':
+        specifier: workspace:*
+        version: link:../../../packages/console/contract
+      '@zhin.js/host-api':
+        specifier: workspace:*
+        version: link:../../../packages/host/api
+      lucide-react:
+        specifier: ^1.17.0
+        version: 1.17.0(react@19.2.6)
+      radix-ui:
+        specifier: ^1.4.3
+        version: 1.4.3(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
+
   plugins/features/process-monitor:
     dependencies:
       zhin.js:
@@ -1402,6 +1497,10 @@ importers:
         version: link:../../../packages/im/zhin
 
   plugins/utils/group-suite:
+    dependencies:
+      '@zhin.js/satori':
+        specifier: workspace:*
+        version: link:../../../packages/toolkit/satori
     devDependencies:
       '@zhin.js/plugin-html-renderer':
         specifier: workspace:*
@@ -2579,6 +2678,40 @@ packages:
 
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
+
+  '@puniyu/system-info-darwin-arm64@1.5.6':
+    resolution: {integrity: sha512-/lZrsbszsWxs+GNTxiqkK5jYjpTVgo/slWg6EVNQi0PcU9ku7Ch0ByoctU8W7aiyTeQ5bffTMMqaadJA4bZB4w==}
+    engines: {node: '>= 12.22.0 < 13 || >= 14.17.0 < 15 || >= 15.12.0 < 16 || >= 16.0.0'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@puniyu/system-info-darwin-x64@1.5.6':
+    resolution: {integrity: sha512-Sq2vG7/dJmB8eiJxalCTBY2DNpa9vJ2LbHEoyctF9PC1a7jaS5a1Te6PjPy3P3LGsmHSIsGchYyP1qaYxh3iRw==}
+    engines: {node: '>= 12.22.0 < 13 || >= 14.17.0 < 15 || >= 15.12.0 < 16 || >= 16.0.0'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@puniyu/system-info-linux-arm64-gnu@1.5.6':
+    resolution: {integrity: sha512-ihS3sHmDaXyZ74egQ9EOeH+NcK7CdP3IvY6HEivqiqjYew2rLKVAlb6WS2pW6yX2pnGl3bNbX2zEO4Z1qJdADg==}
+    engines: {node: '>= 12.22.0 < 13 || >= 14.17.0 < 15 || >= 15.12.0 < 16 || >= 16.0.0'}
+    cpu: [arm64]
+    os: [linux]
+
+  '@puniyu/system-info-linux-x64-gnu@1.5.6':
+    resolution: {integrity: sha512-Pks9rpx5NJvTkqJB7jPOCEl61IURCGFoUKdpPZsd4J0QV9Id4vvC0NogjKUlVRXLUcOchw2l9AZwEQ5iy4Wmjw==}
+    engines: {node: '>= 12.22.0 < 13 || >= 14.17.0 < 15 || >= 15.12.0 < 16 || >= 16.0.0'}
+    cpu: [x64]
+    os: [linux]
+
+  '@puniyu/system-info-win32-x64-msvc@1.5.6':
+    resolution: {integrity: sha512-MgiBCt69DHEpQYrVQSRiHiyEvBcKXb+jyTSvOkAVe4PoNgkMceVUAFHMA6+SY4lCIO8FW7Pi0DNbIi3qp0Te1Q==}
+    engines: {node: '>= 12.22.0 < 13 || >= 14.17.0 < 15 || >= 15.12.0 < 16 || >= 16.0.0'}
+    cpu: [x64]
+    os: [win32]
+
+  '@puniyu/system-info@1.5.6':
+    resolution: {integrity: sha512-3tv6rx1Lw4/7zQJr7Hd1XtdqNxBBG71aeoplZbyui510QaDeF75+w1AwvAMcY31K3cotZC/yl7lOaiUyzvIe2w==}
+    engines: {node: '>= 12.22.0 < 13 || >= 14.17.0 < 15 || >= 15.12.0 < 16 || >= 16.0.0'}
 
   '@radix-ui/colors@3.0.0':
     resolution: {integrity: sha512-FUOsGBkHrYJwCSEtWRCIfQbZG7q1e6DgxCIOe1SUQzDe/7rXXeA47s8yCn6fuTNQAj1Zq4oTFi9Yjp3wzElcxg==}
@@ -6359,8 +6492,8 @@ packages:
     resolution: {integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==}
     engines: {node: '>=6'}
 
-  qq-official-bot@1.2.1:
-    resolution: {integrity: sha512-sD//FQnh1UePFGiC3McUiP2svQtyJU8AX5zIwc/tbQS1phoWvhg8POz04M43Q3K7VyYsEUJ9ZFCB5vlL7V6ikQ==}
+  qq-official-bot@1.2.2:
+    resolution: {integrity: sha512-joNli1+26156hgB5vtIBiU+mtZMTNcR4N9gQ5Ye+B+ravVtVy1LKV8uZoBHtWJr5SW6NpNNdG1mQLb5N3hDuLw==}
     engines: {node: '>=16'}
 
   qs@6.15.1:
@@ -8374,6 +8507,29 @@ snapshots:
       '@noble/hashes': 1.8.0
 
   '@polka/url@1.0.0-next.29': {}
+
+  '@puniyu/system-info-darwin-arm64@1.5.6':
+    optional: true
+
+  '@puniyu/system-info-darwin-x64@1.5.6':
+    optional: true
+
+  '@puniyu/system-info-linux-arm64-gnu@1.5.6':
+    optional: true
+
+  '@puniyu/system-info-linux-x64-gnu@1.5.6':
+    optional: true
+
+  '@puniyu/system-info-win32-x64-msvc@1.5.6':
+    optional: true
+
+  '@puniyu/system-info@1.5.6':
+    optionalDependencies:
+      '@puniyu/system-info-darwin-arm64': 1.5.6
+      '@puniyu/system-info-darwin-x64': 1.5.6
+      '@puniyu/system-info-linux-arm64-gnu': 1.5.6
+      '@puniyu/system-info-linux-x64-gnu': 1.5.6
+      '@puniyu/system-info-win32-x64-msvc': 1.5.6
 
   '@radix-ui/colors@3.0.0': {}
 
@@ -12452,7 +12608,7 @@ snapshots:
 
   punycode@2.3.1: {}
 
-  qq-official-bot@1.2.1:
+  qq-official-bot@1.2.2:
     dependencies:
       '@noble/curves': 1.9.7
       axios: 1.16.1

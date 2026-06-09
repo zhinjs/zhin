@@ -2,7 +2,14 @@ import {
   usePlugin,
   MessageCommand,
 } from "zhin.js";
-const {addCommand,addComponent}=usePlugin()
+import {
+  collectZtFallbackData,
+  collectZtReportData,
+  ztReportReply,
+} from "./zt-report.js";
+
+const plugin = usePlugin();
+const { addCommand, addComponent, root } = plugin;
 const Test=async function Test(){
   return new Promise<string>((resolve,reject)=>{
     setTimeout(() => {
@@ -15,7 +22,26 @@ const Test=async function Test(){
 }
 addComponent(Test);
 addCommand(
-  new MessageCommand("test-err").action(async (message, result) => {
+  new MessageCommand("test-err").action(async () => {
     return <Test/>;
   })
+);
+
+addCommand(
+  new MessageCommand("zt")
+    .desc("查看系统状态", "以 Satori 渲染卡片图展示主机、CPU、内存与 Bot 运行状态")
+    .usage("zt")
+    .examples("zt")
+    .action(async () => {
+      let data;
+      try {
+        data = collectZtReportData(root);
+      } catch (err) {
+        plugin.logger.warn(
+          `zt: @puniyu/system-info failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        data = collectZtFallbackData(root);
+      }
+      return ztReportReply(data);
+    })
 );

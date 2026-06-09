@@ -1,6 +1,7 @@
 /**
  * HTML 渲染器类型定义
  */
+import type { HtmlComponent } from '@zhin.js/satori';
 
 /**
  * 输出格式
@@ -110,6 +111,16 @@ export interface HtmlRendererConfig {
    * 适用于希望 AI/机器人长文以卡片图展示的场景；富媒体消息会自动跳过。
    */
   aiTextAsImage?: boolean | HtmlRendererAiTextAsImageConfig;
+  /**
+   * 将出站 `html` 消息段转为 PNG（通过 before.sendMessage）。
+   * 默认开启；设为 false 则仅保留 core 自动文本回退。
+   */
+  cardOutbound?: boolean | HtmlCardOutboundConfig;
+}
+
+export interface HtmlCardOutboundConfig {
+  enabled?: boolean;
+  onlyAdapters?: string[];
 }
 
 /**
@@ -121,6 +132,9 @@ export interface HtmlRendererService {
   
   /** 渲染 JSX 元素为图片 */
   renderJsx(element: JSX.Element, options?: RenderOptions): Promise<RenderResult>;
+
+  /** 渲染 @zhin.js/satori HtmlComponent（函数式 HTML 组件）为图片 */
+  renderComponent<P>(component: HtmlComponent<P>, props: P, options?: RenderOptions): Promise<RenderResult>;
   
   /** 注册字体 */
   registerFont(font: FontConfig): void;

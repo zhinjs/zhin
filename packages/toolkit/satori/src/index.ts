@@ -1,14 +1,76 @@
 /**
  * @zhin.js/satori — HTML/CSS to SVG via official satori
- *
- * - Directly depends on the official "satori" package; no internal reimplementation.
- * - Supports HTML input via html-react-parser (depends on react, same as html-react-parser).
- * - Provides built-in font files (Noto Sans SC/JP/KR, etc.) from the fonts/ directory.
  */
 
 export { default as satori, default } from 'satori';
 export { htmlToSvg, sanitizeHtml } from './html-to-svg.js';
 export type { HtmlToSvgOptions } from './html-to-svg.js';
+export { escapeHtml, e, html, htmlSafe, tightHtml, wrapCardHtml } from './html-template.js';
+export {
+  h,
+  flattenChildren,
+  renderHtmlComponent,
+  DEFAULT_CARD_THEME,
+  LABEL_W,
+  LABEL_W_HALF,
+  formatCount,
+  barTone,
+  tint,
+  Raw,
+  CardCanvas,
+  Card,
+  Surface,
+  CardHeader,
+  Row,
+  Col,
+  Divider,
+  Section,
+  KvRow,
+  KvTable,
+  UsageBar,
+  MetricBlock,
+  DualSection,
+  Badge,
+  StatChip,
+  BarRow,
+  BarChart,
+  RadarChart,
+  Sparkline,
+  TopicItem,
+  QuoteCard,
+  ProfileRow,
+  EmptyState,
+  composeCard,
+} from './html-components.js';
+export type {
+  HtmlChild,
+  HtmlChildNode,
+  HtmlComponent,
+  RawProps,
+  CardCanvasProps,
+  CardProps,
+  SurfaceProps,
+  CardHeaderProps,
+  RowProps,
+  ColProps,
+  DividerProps,
+  SectionProps,
+  KvRowProps,
+  KvTableProps,
+  UsageBarProps,
+  MetricBlockProps,
+  DualSectionProps,
+  BadgeProps,
+  StatChipProps,
+  BarRowProps,
+  BarChartProps,
+  RadarChartProps,
+  SparklineProps,
+  TopicItemProps,
+  QuoteCardProps,
+  ProfileRowProps,
+  EmptyStateProps,
+} from './html-components.js';
 
 export type { BuiltinFont, Weight, FontStyle } from './fonts.js';
 export {

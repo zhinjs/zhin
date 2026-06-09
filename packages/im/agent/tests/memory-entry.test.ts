@@ -32,14 +32,14 @@ describe('MemoryEntryRepository', () => {
     const upsert = createMemoryUpsertTool();
     const search = createMemorySearchTool();
 
-    const writeResult = await upsert.run({
+    const writeResult = await upsert.execute({
       key: 'capability:hard_orchestration_v1',
       content: 'shipped',
       scope: 'global',
     });
     expect(String(writeResult)).toContain('已写入记忆');
 
-    const readResult = await search.run({ query: 'hard_orchestration_v1' });
+    const readResult = await search.execute({ query: 'hard_orchestration_v1' });
     expect(String(readResult)).toContain('shipped');
   });
 });

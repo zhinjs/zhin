@@ -80,6 +80,6 @@ class MemoryUpsertTool extends BuiltinBaseTool {
   }
 }
 
-export function createMemoryUpsertTool(): MemoryUpsertTool {
-  return new MemoryUpsertTool();
+export function createMemoryUpsertTool() {
+  return new MemoryUpsertTool().toTool();
 }

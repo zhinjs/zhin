@@ -36,9 +36,6 @@ export const groupSuiteSchema = Schema.object({
   analysisGroupsBlock: Schema.list(Schema.string())
     .default([])
     .description("禁用群日报的群 ID"),
-  analysisFormat: Schema.string()
-    .default("text")
-    .description("日报格式 text | image"),
   analysisMaxMessages: Schema.number().default(500).min(100).max(5000),
 
   teachMaxPerGroup: Schema.number().default(200).min(1).max(1000),
@@ -63,7 +60,6 @@ export type GroupSuiteConfig = {
   autoAnalysisCron: string;
   analysisGroups: string[];
   analysisGroupsBlock: string[];
-  analysisFormat: string;
   analysisMaxMessages: number;
   teachMaxPerGroup: number;
   teachCooldownMs: number;

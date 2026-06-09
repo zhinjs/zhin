@@ -1,7 +1,7 @@
 /**
- * OrchestrationService — project director run/task lifecycle (Agent Mesh v1).
+ * OrchestrationService — Mission 编排 run/task lifecycle。
  */
-import type { OrchestrationTaskRecord } from '@zhin.js/ai';
+import type { OrchestrationTaskPhase, OrchestrationTaskRecord } from '@zhin.js/ai';
 import type { AgentRole, AgentTask } from './agent-dispatcher.js';
 import { getAgentDispatcher } from './agent-dispatcher.js';
 import {
@@ -9,13 +9,24 @@ import {
   type OrchestrationRunWithTasks,
   taskRecordToAgentTaskShape,
 } from './orchestration-repository.js';
+import {
+  MISSIONS_TEMPLATE,
+  createDefaultMissionState,
+  type MissionState,
+} from './mission-state.js';
+import { validateMissionStatePatch } from './mission-patch-acl.js';
 
-export const PLAN_DEV_REVIEW_TEMPLATE = 'plan-dev-review';
+export { MISSIONS_TEMPLATE };
 
 export interface OrchestrationStartInput {
   sessionKey: string;
   title?: string;
-  template?: string;
+  /** 可选：Validate 跑在 remote:<id> */
+  remoteValidator?: string;
+}
+
+export interface PatchMissionStateOptions {
+  skipAcl?: boolean;
 }
 
 export interface OrchestrationAddTaskInput {
@@ -28,6 +39,8 @@ export interface OrchestrationAddTaskInput {
   executor?: 'local' | `remote:${string}`;
   context?: Record<string, unknown>;
   priority?: 'low' | 'medium' | 'high' | 'critical';
+  is_writer?: boolean;
+  phase?: OrchestrationTaskPhase;
 }
 
 export class OrchestrationService {
@@ -38,40 +51,16 @@ export class OrchestrationService {
   }
 
   async startRun(input: OrchestrationStartInput): Promise<OrchestrationRunWithTasks> {
+    const remoteValidator = input.remoteValidator?.trim();
+
     const run = await this.repository.createRun({
       session_key: input.sessionKey,
       title: input.title ?? 'Orchestration run',
-      template: input.template ?? '',
+      template: MISSIONS_TEMPLATE,
     });
 
-    if (input.template === PLAN_DEV_REVIEW_TEMPLATE) {
-      const planner = await this.addTask({
-        runId: run.id,
-        name: 'Plan',
-        role: 'planner',
-        goal: 'Produce implementation plan and task breakdown',
-        description: 'Planning phase',
-      });
-      const dev = await this.addTask({
-        runId: run.id,
-        name: 'Develop',
-        role: 'subtask',
-        goal: 'Implement according to the plan',
-        description: 'Development phase',
-        dependsOn: [planner.id],
-      });
-      await this.addTask({
-        runId: run.id,
-        name: 'Review',
-        role: 'reviewer',
-        goal: 'Review and validate deliverables',
-        description: 'Review phase',
-        dependsOn: [dev.id],
-      });
-      return { run, tasks: await this.repository.listTasksByRun(run.id) };
-    }
-
-    return { run, tasks: [] };
+    await this.installMissionsTemplate(run.id, { remoteValidatorId: remoteValidator });
+    return { run, tasks: await this.repository.listTasksByRun(run.id) };
   }
 
   async addTask(input: OrchestrationAddTaskInput): Promise<OrchestrationTaskRecord> {
@@ -93,6 +82,8 @@ export class OrchestrationService {
       remote_agent_id,
       priority: input.priority,
       context: input.context,
+      is_writer: input.is_writer,
+      phase: input.phase,
     });
 
     const dispatcher = getAgentDispatcher();
@@ -190,7 +181,91 @@ export class OrchestrationService {
       executorKind: shape.executorKind,
       remoteAgentId: shape.remoteAgentId,
       remoteTaskId: shape.remoteTaskId,
+      isWriter: shape.isWriter,
+      phase: shape.phase,
     };
+  }
+
+  private async installMissionsTemplate(
+    runId: string,
+    options: { remoteValidatorId?: string },
+  ): Promise<void> {
+    const initial: MissionState = createDefaultMissionState('plan');
+    if (options.remoteValidatorId?.trim()) {
+      initial.remote_validator_id = options.remoteValidatorId.trim();
+    }
+    await this.patchMissionState(runId, initial, { skipAcl: true });
+
+    const plan = await this.addTask({
+      runId,
+      name: 'Plan',
+      role: 'planner',
+      phase: 'plan',
+      goal: 'Produce implementation plan (plan.md)',
+      description: 'Missions planning phase',
+    });
+    const writeSpec = await this.addTask({
+      runId,
+      name: 'WriteSpec',
+      role: 'planner',
+      phase: 'spec',
+      goal: 'Write Validation Spec under .zhin/missions/<runId>/ (spec.test.ts + manifest.json)',
+      description: 'Validation Spec phase',
+      dependsOn: [plan.id],
+    });
+    const develop = await this.addTask({
+      runId,
+      name: 'Develop',
+      role: 'subtask',
+      phase: 'develop',
+      is_writer: true,
+      goal: 'Implement to satisfy Validation Spec only',
+      description: 'Single writer development phase',
+      dependsOn: [writeSpec.id],
+    });
+    const validateExecutor = options.remoteValidatorId?.trim()
+      ? (`remote:${options.remoteValidatorId.trim()}` as const)
+      : undefined;
+    const validate = await this.addTask({
+      runId,
+      name: 'Validate',
+      role: 'validator',
+      phase: 'validate',
+      goal: 'Run run_validation_spec until all assertions pass',
+      description: options.remoteValidatorId ? 'Remote behavior validation' : 'Behavior validation phase',
+      dependsOn: [develop.id],
+      executor: validateExecutor,
+    });
+    await this.addTask({
+      runId,
+      name: 'Negotiate',
+      role: 'planner',
+      phase: 'negotiate',
+      goal: 'Re-evaluate mission direction on validation failure',
+      description: 'Negotiation phase',
+      dependsOn: [validate.id],
+    });
+  }
+
+  async patchMissionState(
+    runId: string,
+    patch: Partial<MissionState>,
+    options?: PatchMissionStateOptions,
+  ): Promise<MissionState | null> {
+    if (!options?.skipAcl) {
+      const current = await this.repository.getMissionState(runId);
+      if (current) {
+        const check = validateMissionStatePatch(current.phase, patch);
+        if (!check.ok) {
+          throw new Error(check.reason ?? 'Mission State patch 被拒绝');
+        }
+      }
+    }
+    return this.repository.patchMissionState(runId, patch);
+  }
+
+  async getMissionState(runId: string) {
+    return this.repository.getMissionState(runId);
   }
 }
 

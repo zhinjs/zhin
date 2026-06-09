@@ -5,7 +5,7 @@
  * 测试 Bot 接口合规性、消息格式化、发送/接收链路、生命周期的完整性。
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { Plugin, type SendOptions } from 'zhin.js';
+import { Plugin, segment, type SendOptions } from 'zhin.js';
 import { createAdapterTestSuite } from '../../../../packages/im/core/tests/adapter-harness.js';
 import { KookAdapter } from '../src/adapter.js';
 import { KookBot } from '../src/bot.js';
@@ -158,19 +158,71 @@ describe('Kook 适配器特定测试', () => {
       const msg = bot.$formatMessage(raw);
       expect(msg.$timestamp).toBe(FIXED_TS);
     });
+
+    it('(met)userId(met) @ 提及应解析为 user_id 而非 @undefined', () => {
+      const raw = createKookRawEvent({
+        message: [{ type: 'markdown', text: '(met)970972780(met) 你好' }],
+        raw_message: '(met)970972780(met) 你好',
+      });
+      const msg = bot.$formatMessage(raw);
+      const atSeg = msg.$content.find((s) => s.type === 'at');
+      expect(atSeg?.data?.user_id).toBe('970972780');
+      expect(segment.raw(msg.$content)).toBe('@970972780 你好');
+    });
+
+    it('at 消息段应带 user_id 供预览与 @bot 匹配', () => {
+      const raw = createKookRawEvent({
+        message: [{ type: 'at', user_id: '970972780' }, { type: 'text', text: ' 你好' }],
+      });
+      const msg = bot.$formatMessage(raw);
+      expect(segment.raw(msg.$content)).toBe('@970972780 你好');
+    });
   });
 
   describe('消息发送', () => {
-    it('sendMessage 应返回字符串 ID', async () => {
-      const result = await adapter.sendMessage({
+    it('sendMessage 应返回带路由的 kook:channel: msg ref', async () => {
+      const realBot = new KookBot(adapter, {
         context: 'kook',
-        bot: 'test-bot',
+        name: 'send-ref',
+        token: 'mock-token',
+      });
+      vi.spyOn(realBot as unknown as { sendChannelMsg: (...args: unknown[]) => Promise<{ msg_id: string }> }, 'sendChannelMsg')
+        .mockResolvedValue({ msg_id: 'out-99' });
+
+      const result = await realBot.$sendMessage({
+        context: 'kook',
+        bot: 'send-ref',
         id: 'ch-001',
-        type: 'channel',
+        type: 'group',
         content: [{ type: 'text', data: { text: 'hello' } }],
       });
-      expect(typeof result).toBe('string');
-      expect(result.length).toBeGreaterThan(0);
+      expect(result).toBe('kook:channel:out-99');
+    });
+
+    it('base64 图片应先 uploadMedia 再以 image 段发送', async () => {
+      const realBot = new KookBot(adapter, {
+        context: 'kook',
+        name: 'send-img',
+        token: 'mock-token',
+      });
+      vi.spyOn(realBot, 'uploadMedia').mockResolvedValue('https://img.kookapp.cn/assets/zt.png');
+      const sendSpy = vi.spyOn(
+        realBot as unknown as { sendChannelMsg: (...args: unknown[]) => Promise<{ msg_id: string }> },
+        'sendChannelMsg',
+      ).mockResolvedValue({ msg_id: 'out-img' });
+
+      await realBot.$sendMessage({
+        context: 'kook',
+        bot: 'send-img',
+        id: 'ch-001',
+        type: 'group',
+        content: [{ type: 'image', data: { url: 'base64://YQ==' } }],
+      });
+
+      expect(realBot.uploadMedia).toHaveBeenCalledWith(expect.any(Buffer));
+      expect(sendSpy).toHaveBeenCalledWith('ch-001', [
+        { type: 'image', url: 'https://img.kookapp.cn/assets/zt.png' },
+      ]);
     });
   });
 
@@ -187,6 +239,162 @@ describe('Kook 适配器特定测试', () => {
         'message.receive',
         expect.objectContaining({ $adapter: 'kook' }),
       );
+    });
+  });
+
+  describe('$addReaction / $removeReaction', () => {
+    it('应走 KOOK add/delete-reaction API 并在 reactionId 记录路由', async () => {
+      const realBot = new KookBot(adapter, {
+        context: 'kook',
+        name: 'reaction-test',
+        token: 'mock-token',
+      });
+      const postSpy = vi.spyOn(realBot.request, 'post')
+        .mockResolvedValueOnce({ code: 0 })
+        .mockResolvedValueOnce({ code: 0 });
+
+      const rid = await realBot.$addReaction('msg-1', '⏳', { sceneType: 'channel' });
+      expect(rid).toBe('reaction:channel:msg-1:⏳');
+      expect(postSpy).toHaveBeenCalledWith('/v3/message/add-reaction', { msg_id: 'msg-1', emoji: '⏳' });
+
+      await realBot.$removeReaction('msg-1', rid);
+      expect(postSpy).toHaveBeenCalledWith('/v3/message/delete-reaction', { msg_id: 'msg-1', emoji: '⏳' });
+      expect(postSpy).not.toHaveBeenCalledWith('/v3/direct-message/delete-reaction', expect.anything());
+      postSpy.mockRestore();
+    });
+
+    it('delete 已移除的 reaction 时不应抛错（404 异常）', async () => {
+      const realBot = new KookBot(adapter, {
+        context: 'kook',
+        name: 'reaction-gone',
+        token: 'mock-token',
+      });
+      const postSpy = vi.spyOn(realBot.request, 'post')
+        .mockRejectedValueOnce(new Error('request "/v3/message/delete-reaction" error with code(404): 该数据不存在'));
+
+      await expect(
+        realBot.$removeReaction('msg-1', 'reaction:channel:msg-1:⏳'),
+      ).resolves.toBeUndefined();
+      expect(postSpy).toHaveBeenCalledTimes(1);
+      postSpy.mockRestore();
+    });
+
+    it('delete 已移除的 reaction 时不应抛错（非 0 响应体）', async () => {
+      const realBot = new KookBot(adapter, {
+        context: 'kook',
+        name: 'reaction-gone-body',
+        token: 'mock-token',
+      });
+      const postSpy = vi.spyOn(realBot.request, 'post')
+        .mockResolvedValueOnce({ code: 404, message: '该数据不存在或者你没有权限操作' });
+
+      await expect(
+        realBot.$removeReaction('msg-1', 'reaction:direct:msg-1:⏳'),
+      ).resolves.toBeUndefined();
+      postSpy.mockRestore();
+    });
+  });
+
+  describe('$recallMessage', () => {
+    it('出站 kook:channel: ref 应只打频道删除 API', async () => {
+      const realBot = new KookBot(adapter, {
+        context: 'kook',
+        name: 'recall-test',
+        token: 'mock-token',
+      });
+      const postSpy = vi.spyOn(realBot.request, 'post').mockResolvedValueOnce({ code: 0 });
+
+      await realBot.$recallMessage('kook:channel:ch-msg-1');
+      expect(postSpy).toHaveBeenCalledWith('/v3/message/delete', { msg_id: 'ch-msg-1' });
+      expect(postSpy).not.toHaveBeenCalledWith('/v3/direct-message/delete', expect.anything());
+      postSpy.mockRestore();
+    });
+
+    it('入站 plain msgId + route 提示应只打对应 API', async () => {
+      const realBot = new KookBot(adapter, {
+        context: 'kook',
+        name: 'recall-dm',
+        token: 'mock-token',
+      });
+      const postSpy = vi.spyOn(realBot.request, 'post').mockResolvedValueOnce({ code: 0 });
+
+      await realBot.$recallMessage('dm-001', { route: 'direct' });
+      expect(postSpy).toHaveBeenCalledWith('/v3/direct-message/delete', { msg_id: 'dm-001' });
+      postSpy.mockRestore();
+    });
+
+    it('双路由时第一次删除已成功（无 code）不应再打第二条', async () => {
+      const realBot = new KookBot(adapter, {
+        context: 'kook',
+        name: 'recall-no-double',
+        token: 'mock-token',
+      });
+      const postSpy = vi.spyOn(realBot.request, 'post').mockResolvedValueOnce({});
+
+      await realBot.$removeReaction('msg-1', 'reaction:msg-1:⏳');
+      expect(postSpy).toHaveBeenCalledTimes(1);
+      expect(postSpy).toHaveBeenCalledWith('/v3/message/delete-reaction', { msg_id: 'msg-1', emoji: '⏳' });
+      postSpy.mockRestore();
+    });
+
+    it('无路由信息时双路由尝试', async () => {
+      const realBot = new KookBot(adapter, {
+        context: 'kook',
+        name: 'recall-fallback',
+        token: 'mock-token',
+      });
+      const postSpy = vi.spyOn(realBot.request, 'post')
+        .mockResolvedValueOnce({ code: 1 })
+        .mockResolvedValueOnce({ code: 0 });
+
+      await realBot.$recallMessage('unknown-001');
+      expect(postSpy).toHaveBeenCalledWith('/v3/message/delete', { msg_id: 'unknown-001' });
+      expect(postSpy).toHaveBeenCalledWith('/v3/direct-message/delete', { msg_id: 'unknown-001' });
+      postSpy.mockRestore();
+    });
+  });
+
+  describe('gateway notice 事件', () => {
+    it('receiver 系统消息应触发 notice.receive', async () => {
+      const dispatchSpy = vi.spyOn(plugin, 'dispatch');
+      const adapterEmitSpy = vi.spyOn(adapter, 'emit');
+
+      const realBot = new KookBot(adapter, {
+        context: 'kook',
+        name: 'notice-test',
+        token: 'mock-token',
+      });
+
+      const receiver = realBot.receiver as import('node:events').EventEmitter;
+      receiver.emit('event', {
+        channel_type: 'GROUP',
+        type: 255,
+        target_id: 'guild-100',
+        msg_id: 'sys-msg-1',
+        msg_timestamp: FIXED_TS,
+        extra: {
+          type: 'joined_guild',
+          body: { user_id: 'new-user-1' },
+        },
+      });
+
+      await new Promise((r) => setTimeout(r, 20));
+
+      expect(adapterEmitSpy).toHaveBeenCalledWith(
+        'notice.receive',
+        expect.objectContaining({
+          $adapter: 'kook',
+          $type: 'group_member_increase',
+          $target: expect.objectContaining({ id: 'new-user-1' }),
+        }),
+      );
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        'notice.receive',
+        expect.objectContaining({ $type: 'group_member_increase' }),
+      );
+
+      dispatchSpy.mockRestore();
+      adapterEmitSpy.mockRestore();
     });
   });
 

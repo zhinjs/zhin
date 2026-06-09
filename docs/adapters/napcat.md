@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/napcat/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/napcat/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=be6130e92a03164e -->
+<!-- sync-adapter-docs:sha256=dd267fa3473ca027 -->
 
 # @zhin.js/adapter-napcat
 
@@ -131,3 +131,13 @@ bots:
 ## AI 工具
 
 适配器自动注册 41 个 AI 工具（7 个群管理标准工具 + 34 个 NapCat 扩展工具），详见 `skills/napcat/SKILL.md`。
+
+## full-bot L4 参考
+
+[`examples/full-bot`](https://github.com/zhinjs/zhin/tree/main/examples/full-bot/) 默认加载本适配器（`bots` 段需自行填写 `ONEBOT11_*` 后取消注释）。
+
+- 入站 → `ZhinAgent` → 出站走 `Adapter.sendMessage` 统一链路
+- 契约测试：`plugins/adapters/napcat/tests/l4-contract.test.ts` + `integration.test.ts`（adapter-harness）
+- CI：`L4_SKIP_PLATFORM=1` 跳过实机；本地验证不设该变量并可配置 `ONEBOT11_WS_URL`
+
+详见 [full-bot ACCEPTANCE.md](https://github.com/zhinjs/zhin/tree/main/examples/full-bot/ACCEPTANCE.md)。

@@ -39,6 +39,7 @@ export {
   driverToModelApi,
   convertLegacyTools,
   agentMessagesToOpenAi,
+  formatRedactedJson,
 } from './llm/index.js';
 export type {
   Context,
@@ -350,6 +351,7 @@ export {
 export type { MemoryEntryRepository } from './memory/memory-entry-repository.js';
 export type {
   OrchestrationAgentRole,
+  OrchestrationTaskPhase,
   OrchestrationRunStatus,
   OrchestrationTaskStatus,
   OrchestrationExecutorKind,

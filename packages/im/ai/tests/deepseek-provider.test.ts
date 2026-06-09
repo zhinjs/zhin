@@ -2,6 +2,22 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { DeepSeekProvider } from '../src/providers/deepseek.js';
 import type { ChatCompletionRequest } from '../src/types.js';
 
+type FetchSpy = ReturnType<typeof vi.spyOn<typeof globalThis, 'fetch'>>;
+
+/** 并行测试共享 global fetch 时，仅拦截目标 URL，避免 mock.calls[0] 被其它用例污染 */
+function stubFetchForUrl(
+  fetchSpy: FetchSpy,
+  url: string,
+  handler: (input: RequestInfo | URL, init?: RequestInit) => Response | Promise<Response>,
+): void {
+  fetchSpy.mockImplementation(async (input, init) => {
+    if (String(input) === url) {
+      return handler(input, init);
+    }
+    return new Response('{}', { status: 200 });
+  });
+}
+
 function bodyFor(
   provider: DeepSeekProvider,
   request: ChatCompletionRequest,
@@ -22,7 +38,7 @@ describe('DeepSeekProvider', () => {
   });
 
   it('listModels 应请求 GET /models 并同步 provider.models', async () => {
-    fetchSpy.mockResolvedValueOnce({
+    stubFetchForUrl(fetchSpy, 'https://api.deepseek.com/models', () => ({
       ok: true,
       json: () =>
         Promise.resolve({
@@ -33,22 +49,27 @@ describe('DeepSeekProvider', () => {
           ],
         }),
       text: () => Promise.resolve(''),
-    } as Response);
+    } as Response));
 
     const provider = new DeepSeekProvider({ apiKey: 'sk-test' });
     const ids = await provider.listModels();
 
-    const [url, init] = fetchSpy.mock.calls[0]!;
-    expect(url).toBe('https://api.deepseek.com/models');
-    expect((init as RequestInit).headers).toMatchObject({
-      Authorization: 'Bearer sk-test',
-    });
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://api.deepseek.com/models',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer sk-test',
+        }),
+      }),
+    );
     expect(ids).toEqual(['deepseek-v4-flash', 'deepseek-v4-pro']);
     expect(provider.models).toEqual(['deepseek-v4-flash', 'deepseek-v4-pro']);
   });
 
   it('listModels API 失败时回退静态列表', async () => {
-    fetchSpy.mockRejectedValueOnce(new Error('Network error'));
+    stubFetchForUrl(fetchSpy, 'https://api.deepseek.com/models', () => {
+      throw new Error('Network error');
+    });
 
     const provider = new DeepSeekProvider({ apiKey: 'sk-test' });
     const ids = await provider.listModels();

@@ -119,25 +119,21 @@ export function buildOrchestratorAgentTools(params: BuildOrchestratorToolsParams
     byName.set(
       'spawn_task',
       normalizeTool(
-        createSpawnTaskTool(context, params.subagentManager, {
-          hardOrchestration: params.config.hardOrchestration,
-        }),
+        createSpawnTaskTool(context, params.subagentManager),
         context,
       ),
     );
   }
 
-  if (params.config.hardOrchestration) {
-    for (const tool of createOrchestrationTools(context)) {
-      if (params.config.orchestratorTools.includes(tool.name)) {
-        byName.set(tool.name, normalizeTool(tool, context));
-      }
+  for (const tool of createOrchestrationTools(context)) {
+    if (params.config.orchestratorTools.includes(tool.name)) {
+      byName.set(tool.name, normalizeTool(tool, context));
     }
-    for (const name of ORCHESTRATION_TOOL_NAMES) {
-      if (params.config.orchestratorTools.includes(name) && !byName.has(name)) {
-        const found = createOrchestrationTools(context).find((t) => t.name === name);
-        if (found) byName.set(name, normalizeTool(found, context));
-      }
+  }
+  for (const name of ORCHESTRATION_TOOL_NAMES) {
+    if (params.config.orchestratorTools.includes(name) && !byName.has(name)) {
+      const found = createOrchestrationTools(context).find((t) => t.name === name);
+      if (found) byName.set(name, normalizeTool(found, context));
     }
   }
 

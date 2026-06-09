@@ -65,7 +65,29 @@ const svg = await htmlToSvg(html, {
 
 内联 `style` 会被解析为对象并传给 satori；支持的 HTML/CSS 以 [官方 satori 文档](https://github.com/vercel/satori) 为准。
 
-### 3. 内置字体
+### 3. 卡片组件与 `h()`（推荐）
+
+出图卡片建议用 **纯 `.ts` + `h()`**，与 IM 的 zhin.js JSX 分离：
+
+```ts
+import { h, Card, CardHeader, StatChip, Row, wrapCardHtml } from '@zhin.js/satori'
+
+const fragment = [
+  h(Card, { children: [
+    h(CardHeader, { title: '今日本群消息统计' }),
+    h(Row, { children: h(StatChip, { label: '消息', value: '120' }) }),
+  ].join('') }),
+].join('')
+
+const html = wrapCardHtml(fragment, '#d8dce3')
+```
+
+内置组件包括 `Card`、`Surface`、`Section`、`KvTable`、`UsageBar`、`StatChip` 等。产出 HTML 后：
+
+- 测试：直接 `htmlToSvg(wrapCardHtml(...))`
+- IM 出站：`segment.html({ html })` + 可选 `@zhin.js/plugin-html-renderer` 自动转 PNG
+
+### 4. 内置字体
 
 从包内 `fonts/` 读取，与 satori 的 `fonts` 选项格式一致：
 

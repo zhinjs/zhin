@@ -6,6 +6,7 @@ import { Notice } from "./notice.js";
 import { Request } from "./request.js";
 import { BeforeSendHandler, SendOptions } from "./types.js";
 import { getOutboundReplyStore } from "./built/dispatcher.js";
+import { coerceHtmlSegmentsToText } from "./built/html-segment-fallback.js";
 import { segment } from "./utils.js";
 import { runInboundMessage } from "./built/inbound-runner.js";
 import { formatCompact, truncatePreview } from '@zhin.js/logger';
@@ -138,6 +139,9 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
     for(const fn of fns){
       const result=await fn(options);
       if(result) options=result;
+    }
+    if (options.content != null) {
+      options = { ...options, content: coerceHtmlSegmentsToText(options.content) };
     }
     return options;
   }

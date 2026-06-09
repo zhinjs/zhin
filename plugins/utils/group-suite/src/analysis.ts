@@ -55,10 +55,31 @@ export interface LLMAnalysis {
   userTitles: UserTitle[];
 }
 
+export interface AnalysisReportMeta {
+  channelName?: string;
+  days: number;
+  startDate: string;
+  endDate: string;
+}
+
+export interface AnalysisReportData extends AnalysisReportMeta {
+  stats: BasicStats;
+  llm?: LLMAnalysis;
+}
+
 export interface AnalysisResult {
   stats: BasicStats;
   textReport: string;
   llm?: LLMAnalysis;
+  meta: AnalysisReportMeta;
+}
+
+export function buildAnalysisReportData(
+  stats: BasicStats,
+  meta: AnalysisReportMeta,
+  llm?: LLMAnalysis,
+): AnalysisReportData {
+  return { ...meta, stats, llm };
 }
 
 /**

@@ -191,6 +191,11 @@ const ROLE_TEMPLATES: Record<AgentRole, {
     communicationStyle: 'Be strategic and thorough. Consider all aspects.',
     toolUsage: 'Use read-only tools to understand the codebase. Create detailed plans.',
   },
+  validator: {
+    systemPrompt: 'You are a validator agent. Run Validation Spec only; do not read implementation source.',
+    communicationStyle: 'Report pass/fail with assertion IDs only.',
+    toolUsage: 'Use run_validation_spec only. Never read files or grep source code.',
+  },
 };
 
 // ── 提示词构建器类 ────────────────────────────────────────────────────

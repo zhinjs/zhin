@@ -16,7 +16,7 @@ const PARAMS: ToolParametersSchema = {
       enum: ['global', 'platform', 'session', 'user'],
       description: '可选：限定记忆范围',
     },
-    limit: { type: 'integer', description: '最多返回条数（默认 5）' },
+    limit: { type: 'number', description: '最多返回条数（默认 5）' },
   },
   required: ['query'],
 };
@@ -66,6 +66,6 @@ class MemorySearchTool extends BuiltinBaseTool {
   }
 }
 
-export function createMemorySearchTool(): MemorySearchTool {
-  return new MemorySearchTool();
+export function createMemorySearchTool() {
+  return new MemorySearchTool().toTool();
 }

@@ -22,6 +22,24 @@ export interface KookSenderInfo {
   isAdmin?: boolean;
 }
 
+export interface KookTypingIndicatorConfig {
+  enabled?: boolean;
+  defaultEmoji?: string;
+  autoRemove?: boolean;
+  removeDelay?: number;
+  privateConfig?: {
+    type?: 'reaction' | 'message' | 'typing' | 'none';
+    emoji?: string;
+    message?: string;
+  };
+  /** 频道/群聊（KOOK channel 走 groupConfig 合并逻辑） */
+  groupConfig?: {
+    type?: 'reaction' | 'message' | 'typing' | 'none';
+    emoji?: string;
+    message?: string;
+  };
+}
+
 export interface KookBotConfig {
   context: "kook";
   name: string;
@@ -31,6 +49,8 @@ export interface KookBotConfig {
   max_retry?: number;
   ignore?: "bot" | "self";
   logLevel?: LogLevel;
+  /** AI 处理中提示（reaction 推荐：不打断会话） */
+  typingIndicator?: KookTypingIndicatorConfig;
 }
 
 export type KookRawMessage = PrivateMessageEvent | ChannelMessageEvent;

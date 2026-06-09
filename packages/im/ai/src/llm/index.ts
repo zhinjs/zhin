@@ -114,3 +114,5 @@ export {
   convertLegacyTool,
   convertLegacyTools,
 } from './legacy-tool-bridge.js';
+
+export { formatRedactedJson, redactValueForLog } from './redact-request-body.js';

@@ -7,6 +7,7 @@ import {
   enableTypingIndicatorForBot,
   startTypingForBot,
   stopTypingForBot,
+  buildTypingSendContent,
 } from '../../src/typing-indicator/adapter-integration.js';
 
 // Mock Bot
@@ -16,9 +17,41 @@ const createMockBot = (platform: string) => ({
   $connected: true,
   $sendMessage: vi.fn().mockResolvedValue('message-123'),
   $recallMessage: vi.fn().mockResolvedValue(undefined),
-  $addReaction: platform === 'icqq' || platform === 'telegram' ? vi.fn().mockResolvedValue('reaction-123') : undefined,
-  $removeReaction: platform === 'icqq' || platform === 'telegram' ? vi.fn().mockResolvedValue(undefined) : undefined,
+  $addReaction: platform === 'icqq' || platform === 'telegram' || platform === 'kook'
+    ? vi.fn().mockResolvedValue('reaction-123')
+    : undefined,
+  $removeReaction: platform === 'icqq' || platform === 'telegram' || platform === 'kook'
+    ? vi.fn().mockResolvedValue(undefined)
+    : undefined,
   $typingIndicator: undefined as any,
+});
+
+describe('buildTypingSendContent', () => {
+  it('QQ 群聊应附带 reply 引用', () => {
+    const content = buildTypingSendContent('qq', {
+      platform: 'qq',
+      botId: 'zhin',
+      sessionId: 'qq:zhin:group:g1#u1',
+      messageId: 'msg-trigger',
+      sceneType: 'group',
+      groupId: 'g1',
+    }, '正在处理中...');
+
+    expect(content).toEqual([
+      { type: 'reply', data: { id: 'msg-trigger' } },
+      { type: 'text', data: { text: '正在处理中...' } },
+    ]);
+  });
+
+  it('QQ 群聊无 messageId 时应跳过发送', () => {
+    expect(buildTypingSendContent('qq', {
+      platform: 'qq',
+      botId: 'zhin',
+      sessionId: 'qq:zhin:group:g1#u1',
+      sceneType: 'group',
+      groupId: 'g1',
+    }, '正在处理中...')).toBeNull();
+  });
 });
 
 describe('AdapterTypingIndicatorManager', () => {
@@ -83,6 +116,41 @@ describe('AdapterTypingIndicatorManager', () => {
       expect(bot.$typingIndicator).toBe(typingManager);
     });
 
+    it('应该为 KOOK Bot 注册 kook 平台适配器（非硬编码 icqq）', () => {
+      const bot = createMockBot('kook');
+      const typingManager = manager.enableForBot(bot as any, 'kook');
+
+      expect(typingManager).toBeDefined();
+      expect(typingManager.getAdapter('kook')).toBeDefined();
+      expect(typingManager.getAdapter('icqq')).toBeUndefined();
+    });
+
+    it('addReaction 应在 bot 实例上调用以保留 this', async () => {
+      const bot = createMockBot('kook');
+      let capturedThis: unknown;
+      bot.$addReaction = vi.fn(async function (this: unknown) {
+        capturedThis = this;
+        return 'reaction:direct:msg-1:⏳';
+      });
+
+      const typingManager = manager.enableForBot(bot as any, 'kook');
+      await typingManager.start({
+        platform: 'kook',
+        botId: '75318',
+        sessionId: 'private:user-1',
+        messageId: 'msg-1',
+        sceneType: 'private',
+        userId: 'user-1',
+      });
+
+      expect(capturedThis).toBe(bot);
+      expect(bot.$addReaction).toHaveBeenCalledWith(
+        'msg-1',
+        '⏳',
+        { sceneType: 'private' },
+      );
+    });
+
     it('应该复用已有的管理器', () => {
       const bot = createMockBot('icqq');
       const typingManager1 = manager.enableForBot(bot as any, 'icqq');
@@ -111,6 +179,30 @@ describe('AdapterTypingIndicatorManager', () => {
       });
 
       expect(typingManager).toBeDefined();
+    });
+
+    it('QQ 群聊 typing 应通过 reply 被动发送', async () => {
+      const bot = createMockBot('qq');
+      const sendMessage = vi.fn().mockResolvedValue('group-g1:sent-1');
+      const typingManager = manager.enableForBot(bot as any, 'qq', undefined, { sendMessage });
+
+      await typingManager.start({
+        platform: 'qq',
+        botId: '75318',
+        sessionId: 'qq:75318:group:g1#u1',
+        messageId: 'msg-trigger',
+        sceneType: 'group',
+        groupId: 'g1',
+      });
+
+      expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'group',
+        id: 'g1',
+        content: [
+          { type: 'reply', data: { id: 'msg-trigger' } },
+          { type: 'text', data: { text: '正在处理中...' } },
+        ],
+      }));
     });
   });
 

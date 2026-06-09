@@ -506,10 +506,6 @@ export interface AIConfig {
     roles?: string[];
     description?: string;
   }>;
-  /** 硬编排 v1 配置 */
-  orchestration?: {
-    hardMode?: boolean;
-  };
   /** Agent 工具开关与执行安全 */
   agent?: {
     /** @deprecated 使用 ai.agents.<name>.tools 白名单 */

@@ -1,0 +1,83 @@
+{
+  "name": "@zhin.js/adapter-weixin-ilink",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Zhin.js adapter for WeChat personal account via Tencent iLink Bot API (ClawBot)",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "scripts": {
+    "build": "zhin build",
+    "build:node": "tsc",
+    "clean": "rimraf lib dist"
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "bot",
+    "adapter",
+    "wechat",
+    "weixin",
+    "ilink",
+    "clawbot"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "type": "git",
+    "directory": "plugins/adapters/weixin-ilink"
+  },
+  "files": [
+    "src",
+    "lib",
+    "client",
+    "dist",
+    "skills",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@radix-ui/themes": "^3.2.1",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "@zhin.js/cli": "workspace:*",
+    "@zhin.js/contract": "workspace:*",
+    "@zhin.js/host-api": "workspace:*",
+    "lucide-react": "^1.17.0",
+    "radix-ui": "^1.4.3",
+    "typescript": "^6.0.3",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependencies": {
+    "@zhin.js/agent": "workspace:*",
+    "@zhin.js/client": "workspace:*",
+    "@zhin.js/contract": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/host-api": "workspace:*",
+    "@zhin.js/host-router": "workspace:*",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/agent": { "optional": true },
+    "@zhin.js/client": { "optional": true },
+    "@zhin.js/host-api": { "optional": true },
+    "@zhin.js/host-router": { "optional": true }
+  },
+  "ilink_appid": "bot"
+}
