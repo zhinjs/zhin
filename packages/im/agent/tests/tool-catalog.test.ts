@@ -26,6 +26,7 @@ describe('tool-catalog', () => {
   it('partitionToolsForToolSearch splits orchestrator vs deferred', () => {
     const all = [
       t('tool_search'),
+      t('web_search'),
       t('run_deferred_task'),
       t('spawn_task'),
       t('activate_skill'),
