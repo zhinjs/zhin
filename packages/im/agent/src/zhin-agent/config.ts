@@ -148,6 +148,7 @@ export interface ZhinAgentConfig {
 /** 主 Agent 默认常驻编排工具（不含 activate_skill：执行一律经 Worker；文生图走 deferred） */
 export const DEFAULT_ORCHESTRATOR_TOOLS = [
   'tool_search',
+  'web_search',
   'run_deferred_task',
   'ask_user',
   'spawn_task',
@@ -179,6 +180,7 @@ export const TOOL_SEARCH_EXCLUDED_TOOLS = DEFERRED_CATALOG_EXCLUDED_TOOLS;
 export const DEFAULT_WORKER_BASE_TOOLS = [
   'bash',
   'read_file',
+  'web_search',
 ] as const;
 
 /** @deprecated 使用 DEFAULT_ORCHESTRATOR_TOOLS */

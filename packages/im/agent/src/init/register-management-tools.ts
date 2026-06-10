@@ -9,6 +9,20 @@ import {
   listSessionTreeForContext,
 } from '../zhin-agent/session-tree-commands.js';
 import type { AIServiceRefs } from './shared-refs.js';
+import {
+  rejectUnlessManagementOperator,
+} from './management-command-guard.js';
+
+function guardManagementCommand(
+  root: ReturnType<typeof getPlugin>['root'],
+  message: Message,
+  ai: { getTriggerConfig?: () => import('@zhin.js/core').AITriggerConfig },
+  run: () => Promise<string | undefined> | string | undefined,
+): Promise<string | undefined> | string | undefined {
+  const denied = rejectUnlessManagementOperator(message, root, ai.getTriggerConfig?.());
+  if (denied) return denied;
+  return run();
+}
 
 export function registerManagementTools(refs: AIServiceRefs): void {
   const plugin = getPlugin();
@@ -21,6 +35,7 @@ export function registerManagementTools(refs: AIServiceRefs): void {
       .desc('列出所有可用的 AI 模型')
       .keyword('模型', '可用模型', 'ai模型', 'model', 'models')
       .tag('ai', 'management')
+      .requireAnyRole('trusted')
       .execute(async () => {
         const models = await ai.listModels();
         return { providers: models.map(({ provider, models: ml }) => ({ name: provider, models: ml.slice(0, 10), total: ml.length })) };
@@ -30,6 +45,7 @@ export function registerManagementTools(refs: AIServiceRefs): void {
       .desc('检查 AI 服务的健康状态')
       .keyword('健康', '状态', '检查', 'health', 'status')
       .tag('ai', 'management')
+      .requireAnyRole('trusted')
       .execute(async () => {
         const h = await ai.healthCheck();
         return { providers: Object.entries(h).map(([n, ok]) => ({ name: n, healthy: ok })) };
@@ -43,7 +59,7 @@ export function registerManagementTools(refs: AIServiceRefs): void {
     const commandService = root.inject('command');
     if (commandService) {
       const modelsCmd = new MessageCommand('/models').desc('列出所有可用的 AI 模型');
-      modelsCmd.action(async () => {
+      modelsCmd.action(async (message: Message) => guardManagementCommand(root, message, ai, async () => {
         const models = await ai.listModels();
         let r = '🤖 可用模型:\n';
         for (const { provider, models: ml } of models) {
@@ -51,7 +67,7 @@ export function registerManagementTools(refs: AIServiceRefs): void {
           if (ml.length > 5) r += `\n  ... 还有 ${ml.length - 5} 个`;
         }
         return r;
-      });
+      }));
       commandService.add(modelsCmd, root.name);
       disposers.push(() => commandService.remove(modelsCmd));
 
@@ -68,35 +84,35 @@ export function registerManagementTools(refs: AIServiceRefs): void {
       });
 
       const treeListCmd = new MessageCommand('/tree').desc('列出会话分支点');
-      treeListCmd.action(async (message: Message) => {
+      treeListCmd.action(async (message: Message) => guardManagementCommand(root, message, ai, async () => {
         if (!refs.zhinAgent) return '❌ Agent 未就绪';
         return await listSessionTreeForContext(asPrivate(refs.zhinAgent), treeContextFrom(message));
-      });
+      }));
       commandService.add(treeListCmd, root.name);
       disposers.push(() => commandService.remove(treeListCmd));
 
       const treeJumpCmd = new MessageCommand('/tree <index:int>').desc('跳转到第 N 个 user 消息分支点');
-      treeJumpCmd.action(async (message: Message, matched) => {
+      treeJumpCmd.action(async (message: Message, matched) => guardManagementCommand(root, message, ai, async () => {
         if (!refs.zhinAgent) return '❌ Agent 未就绪';
         const n = Number.parseInt(String(matched.params?.index ?? ''), 10);
         if (!Number.isFinite(n) || n < 1) return 'ℹ️ 用法：/tree 2';
         return await jumpSessionTreeForContext(asPrivate(refs.zhinAgent), treeContextFrom(message), n);
-      });
+      }));
       commandService.add(treeJumpCmd, root.name);
       disposers.push(() => commandService.remove(treeJumpCmd));
 
       const forkCmd = new MessageCommand('/fork <index:int>').desc('从第 N 个 user 消息创建分支');
-      forkCmd.action(async (message: Message, matched) => {
+      forkCmd.action(async (message: Message, matched) => guardManagementCommand(root, message, ai, async () => {
         if (!refs.zhinAgent) return '❌ Agent 未就绪';
         const n = Number.parseInt(String(matched.params?.index ?? ''), 10);
         if (!Number.isFinite(n) || n < 1) return 'ℹ️ 用法：/fork 2';
         return await jumpSessionTreeForContext(asPrivate(refs.zhinAgent), treeContextFrom(message), n);
-      });
+      }));
       commandService.add(forkCmd, root.name);
       disposers.push(() => commandService.remove(forkCmd));
 
       const compactCmd = new MessageCommand('/compact').desc('压缩当前对话上下文（保留最近 ~20k tokens）');
-      compactCmd.action(async (message: Message) => {
+      compactCmd.action(async (message: Message) => guardManagementCommand(root, message, ai, async () => {
         if (!refs.zhinAgent) return '❌ Agent 未就绪';
         const result = await refs.zhinAgent.compactSessionForContext({
           platform: message.$adapter,
@@ -110,26 +126,26 @@ export function registerManagementTools(refs: AIServiceRefs): void {
             : 'private') as 'private' | 'group' | 'channel',
         });
         return result.ok ? `✅ ${result.message}` : `ℹ️ ${result.message}`;
-      });
+      }));
       commandService.add(compactCmd, root.name);
       disposers.push(() => commandService.remove(compactCmd));
 
       const resetCmd = new MessageCommand('/reset').desc('归档当前 epoch，下次 @ 开启新上下文');
-      resetCmd.action(async (message: Message) => {
+      resetCmd.action(async (message: Message) => guardManagementCommand(root, message, ai, async () => {
         if (!refs.zhinAgent) return '❌ Agent 未就绪';
         const ok = await refs.zhinAgent.archiveSessionForContext(treeContextFrom(message));
         return ok ? '✅ 已归档当前会话，下次 @ 将使用新上下文' : 'ℹ️ 无活跃会话可归档';
-      });
+      }));
       commandService.add(resetCmd, root.name);
       disposers.push(() => commandService.remove(resetCmd));
 
       const healthCmd = new MessageCommand('ai.health').desc('检查 AI 服务的健康状态');
-      healthCmd.action(async () => {
-        const h = await ai.healthCheck();
-        return ['🏥 AI 服务健康状态:'].concat(
-          Object.entries(h).map(([p, ok]) => `  ${ok ? '✅' : '❌'} ${p}`),
-        ).join('\n');
-      });
+      healthCmd.action(async (message: Message) => guardManagementCommand(root, message, ai, () => {
+        const h = ai.healthCheck();
+        return h.then((health) => ['🏥 AI 服务健康状态:'].concat(
+          Object.entries(health).map(([p, ok]) => `  ${ok ? '✅' : '❌'} ${p}`),
+        ).join('\n'));
+      }));
       commandService.add(healthCmd, root.name);
       disposers.push(() => commandService.remove(healthCmd));
     }

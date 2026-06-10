@@ -105,7 +105,7 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
   /** 获取指定用户绑定的 GhClient；未绑定则返回 null */
   async getUserAPI(platform: string, platformUid: string): Promise<GhClient | null> {
     const db = this.plugin.root?.inject('database');
-    const model = (db as Record<string, unknown>)?.models?.get('github_oauth_users');
+    const model = db?.models?.get('github_oauth_users');
     if (!model) return null;
     const [record] = await model.select().where({ platform, platform_uid: platformUid });
     if (!record?.access_token) return null;
@@ -431,13 +431,13 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
         continue;
       }
       try {
-        const adapter = this.plugin.root?.inject(s.adapter as keyof Plugin.Contexts);
-        if (!adapter?.sendMessage) {
+        const targetAdapter = this.plugin.root?.inject(s.adapter as keyof Plugin.Contexts);
+        if (!(targetAdapter instanceof Adapter)) {
           this.plugin.logger.warn(formatCompact( { op: 'notify', ok: false, adapter: s.adapter, error: 'no sendMessage' }));
           continue;
         }
         this.plugin.logger.debug(formatCompact( { op: 'notify', event: eventType, adapter: s.adapter, bot: s.bot, target: s.target_id }));
-        await adapter.sendMessage({ context: s.adapter, bot: s.bot, id: s.target_id, type: s.target_type, content: text });
+        await targetAdapter.sendMessage({ context: s.adapter, bot: s.bot, id: s.target_id, type: s.target_type, content: text });
       } catch (e) {
         this.plugin.logger.error(`通知推送失败 → ${s.adapter}:${s.target_id}`, e);
       }

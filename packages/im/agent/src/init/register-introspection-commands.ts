@@ -4,11 +4,13 @@
 import {
   Adapter,
   getPlugin,
+  Message,
   MessageCommand,
   type CommandFeature,
 } from '@zhin.js/core';
 import type { AgentOrchestrator } from '../orchestrator/index.js';
 import type { AIServiceRefs } from './shared-refs.js';
+import { rejectUnlessManagementOperator } from './management-command-guard.js';
 import {
   commandRowsFromService,
   formatAgentsList,
@@ -31,7 +33,17 @@ function registerIntrospectionCommand(
 ): void {
   const cmd = new MessageCommand(pattern)
     .desc(desc)
-    .action(async () => handler());
+    .action(async (message: Message) => {
+      const plugin = getPlugin();
+      const ai = plugin.root.inject('ai') as { getTriggerConfig?: () => import('@zhin.js/core').AITriggerConfig } | undefined;
+      const denied = rejectUnlessManagementOperator(
+        message,
+        plugin.root,
+        ai?.getTriggerConfig?.(),
+      );
+      if (denied) return denied;
+      return handler();
+    });
   commandService.add(cmd, pluginName);
   disposers.push(() => commandService.remove(cmd));
 }
