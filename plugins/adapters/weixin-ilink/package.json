@@ -60,7 +60,7 @@
     "@zhin.js/contract": "workspace:*",
     "@zhin.js/host-api": "workspace:*",
     "lucide-react": "^1.17.0",
-    "radix-ui": "^1.4.3",
+    "radix-ui": "^1.5.0",
     "typescript": "^6.0.3",
     "zhin.js": "workspace:*"
   },

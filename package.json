@@ -65,7 +65,7 @@
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
     "@eslint/js": "^10.0.1",
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.2",
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^4.1.0",
     "@vitest/ui": "^4.1.0",
@@ -78,7 +78,7 @@
     "ora": "^9.4.0",
     "rimraf": "^6.1.2",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.60.0",
+    "typescript-eslint": "^8.61.0",
     "vitest": "^4.1.0",
     "zhin.js": "workspace:*"
   },
