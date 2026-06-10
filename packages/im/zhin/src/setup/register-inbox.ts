@@ -67,9 +67,9 @@ function safeJson(obj: unknown): string {
   }
 }
 
-function getModel(plugin: Plugin, name: string): any {
+function getModel(plugin: Plugin, name: string): { create: (data: Record<string, unknown>) => Promise<unknown> } | null {
   const db = plugin.inject('database' as keyof Plugin.Contexts) as { models?: Map<string, unknown> } | undefined;
-  return db?.models?.get(name) ?? null;
+  return (db?.models?.get(name) as { create: (data: Record<string, unknown>) => Promise<unknown> }) ?? null;
 }
 
 function persistMessage(plugin: Plugin, msg: Message): void {
@@ -180,8 +180,8 @@ export function registerUnifiedInbox(plugin: Plugin, appConfig: AppConfig): void
   defineModel(TABLE_REQUEST, RequestDefinition);
   defineModel(TABLE_NOTICE, NoticeDefinition);
 
-  const onRequest = (req: any) => persistRequest(plugin, req);
-  const onNotice = (notice: any) => persistNotice(plugin, notice);
+  const onRequest = (req: Request) => persistRequest(plugin, req);
+  const onNotice = (notice: Notice) => persistNotice(plugin, notice);
 
   plugin.root.on('request.receive', onRequest);
   plugin.root.on('notice.receive', onNotice);
