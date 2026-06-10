@@ -1,6 +1,7 @@
 import path from "node:path";
 import fs from "node:fs/promises";
-import { usePlugin } from "zhin.js";
+import { Adapter, Message, segment, usePlugin, type SendContent } from "zhin.js";
+import type { ConfigFeature } from "@zhin.js/core";
 
 const plugin = usePlugin();
 const root = plugin.root;
@@ -606,12 +607,11 @@ ${paramLines}
  * 列出所有连接的 Bot 及状态
  */
 export function listBots(): any[] {
-  const { Adapter } = require("zhin.js");
   const bots: any[] = [];
   for (const adapterName of root.adapters) {
     const adapter = root.inject(adapterName);
-    if (adapter instanceof Adapter) {
-      for (const [botName, bot] of adapter.bots.entries()) {
+    if (!(adapter instanceof Adapter)) continue;
+    for (const [botName, bot] of adapter.bots.entries()) {
         bots.push({
           name: botName,
           adapter: adapterName,
@@ -619,7 +619,6 @@ export function listBots(): any[] {
           status: bot.$connected ? "online" : "offline",
         });
       }
-    }
   }
   return bots;
 }
@@ -648,9 +647,8 @@ export async function sendMessage(args: {
   target_type: "private" | "group" | "channel";
   content: string;
 }): Promise<string> {
-  const { Adapter } = require("zhin.js");
   const adapterInstance = root.inject(args.adapter);
-  if (!adapterInstance || !(adapterInstance instanceof Adapter)) {
+  if (!(adapterInstance instanceof Adapter)) {
     throw new Error(`Adapter "${args.adapter}" not found`);
   }
   const msgId = await adapterInstance.sendMessage({
@@ -671,9 +669,8 @@ export async function recallMessage(args: {
   bot: string;
   message_id: string;
 }): Promise<string> {
-  const { Adapter } = require("zhin.js");
   const adapterInstance = root.inject(args.adapter);
-  if (!adapterInstance || !(adapterInstance instanceof Adapter)) {
+  if (!(adapterInstance instanceof Adapter)) {
     throw new Error(`Adapter "${args.adapter}" not found`);
   }
   const bot = adapterInstance.bots.get(args.bot);
@@ -720,12 +717,12 @@ export async function getLogs(args: {
  * 获取当前运行配置
  */
 export function getConfig(args?: { plugin_name?: string }): any {
-  const configService = root.inject("config");
+  const configService = root.inject("config") as ConfigFeature | undefined;
   if (!configService) throw new Error("Config service not available");
 
-  const appConfig = configService.getPrimary();
+  const appConfig = configService.getPrimary() as Record<string, unknown>;
   if (args?.plugin_name) {
-    return appConfig[args.plugin_name] || null;
+    return appConfig[args.plugin_name] ?? null;
   }
   return appConfig;
 }
@@ -843,9 +840,8 @@ export async function simulateMessage(args: {
   const adapterName = args.adapter || "sandbox";
 
   try {
-    const { Adapter } = require("zhin.js");
     const adapterInstance = root.inject(adapterName);
-    if (!adapterInstance || !(adapterInstance instanceof Adapter)) {
+    if (!(adapterInstance instanceof Adapter)) {
       return `❌ 适配器 "${adapterName}" 不可用。可用的适配器: ${Array.from(root.contexts.keys()).filter((k: string) => {
         const v = root.contexts.get(k)?.value;
         return v && typeof v === "object" && "bots" in v;
@@ -857,21 +853,33 @@ export async function simulateMessage(args: {
       return `❌ 适配器 "${adapterName}" 没有在线的 Bot`;
     }
 
-    const [botName, bot] = bots[0];
+    const firstBot = bots[0];
+    if (!firstBot) {
+      return `❌ 适配器 "${adapterName}" 没有在线的 Bot`;
+    }
+    const [botName] = firstBot;
 
     // 构造模拟消息
-    const { Message } = require("zhin.js");
     let reply = "";
-    const fakeMessage = Message.from({
-      id: `simulate-${Date.now()}`,
-      type: "private" as const,
-      content: args.content,
-      $sender: { id: "mcp-tester", name: "MCP Tester" },
-      $reply: async (content: string) => {
-        reply = content;
-        return `simulated-reply-${Date.now()}`;
+    const ts = Date.now();
+    const fakeMessage = Message.from(
+      { content: args.content },
+      {
+        $id: `simulate-${ts}`,
+        $adapter: adapterName as never,
+        $bot: botName,
+        $sender: { id: "mcp-tester", name: "MCP Tester" },
+        $channel: { id: "mcp-tester", type: "private" },
+        $content: [segment.text(args.content)],
+        $raw: args.content,
+        $timestamp: ts,
+        $recall: async () => {},
+        $reply: async (content: SendContent) => {
+          reply = typeof content === "string" ? content : segment.raw(content);
+          return `simulated-reply-${Date.now()}`;
+        },
       },
-    });
+    );
 
     // 通过根插件的 middleware chain 处理
     const middleware = root.middleware;
