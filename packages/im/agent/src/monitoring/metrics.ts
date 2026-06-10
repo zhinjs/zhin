@@ -35,6 +35,8 @@ export class MetricsCollector {
   private metrics: Map<string, MetricDefinition> = new Map();
   private values: Map<string, MetricValue[]> = new Map();
   private static readonly MAX_HISTOGRAM_SAMPLES = 500;
+  private static readonly MAX_LABEL_COMBOS = 200;
+  private static readonly MAX_COUNTER_VALUES = 500;
 
   /**
    * 注册指标
@@ -63,6 +65,9 @@ export class MetricsCollector {
       existing.value += value;
       existing.timestamp = Date.now();
     } else {
+      if (values.length >= MetricsCollector.MAX_COUNTER_VALUES) {
+        values.shift();
+      }
       values.push({
         value,
         labels,
@@ -90,6 +95,9 @@ export class MetricsCollector {
       existing.value = value;
       existing.timestamp = Date.now();
     } else {
+      if (values.length >= MetricsCollector.MAX_LABEL_COMBOS) {
+        values.shift();
+      }
       values.push({
         value,
         labels,
@@ -180,6 +188,14 @@ export class MetricsCollector {
       .map(([key, val]) => `${key}=${val}`)
       .join(',');
     return labelStr ? `${name}{${labelStr}}` : name;
+  }
+
+  /**
+   * 释放所有指标数据
+   */
+  dispose(): void {
+    this.metrics.clear();
+    this.values.clear();
   }
 }
 
@@ -458,6 +474,11 @@ export class TraceCollector {
       Math.floor(Math.random() * 16).toString(16)
     ).join('');
   }
+
+  dispose(): void {
+    this.spans.clear();
+    this.activeSpans.clear();
+  }
 }
 
 // ── 告警规则 ──────────────────────────────────────────────────────────
@@ -480,6 +501,7 @@ export class AlertManager {
     message: string;
     severity: string;
   }> = [];
+  private static readonly MAX_ALERTS = 500;
 
   /**
    * 添加告警规则
@@ -526,6 +548,9 @@ export class AlertManager {
           };
 
           this.alerts.push(alert);
+          if (this.alerts.length > AlertManager.MAX_ALERTS) {
+            this.alerts.splice(0, this.alerts.length - AlertManager.MAX_ALERTS);
+          }
           newAlerts.push(alert);
         }
       } catch (error) {
@@ -552,6 +577,14 @@ export class AlertManager {
    * 清除告警
    */
   clearAlerts(): void {
+    this.alerts = [];
+  }
+
+  /**
+   * 释放所有规则和告警
+   */
+  dispose(): void {
+    this.rules.clear();
     this.alerts = [];
   }
 }
@@ -659,4 +692,22 @@ export function initMonitoring(): {
     traces: getTraceCollector(),
     alerts: getAlertManager(),
   };
+}
+
+/**
+ * 释放所有全局监控实例
+ */
+export function disposeMonitoring(): void {
+  if (globalMetricsCollector) {
+    globalMetricsCollector.dispose();
+    globalMetricsCollector = null;
+  }
+  if (globalTraceCollector) {
+    globalTraceCollector.dispose();
+    globalTraceCollector = null;
+  }
+  if (globalAlertManager) {
+    globalAlertManager.dispose();
+    globalAlertManager = null;
+  }
 }

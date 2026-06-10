@@ -382,49 +382,68 @@ export class AnthropicProvider extends BaseProvider {
       'anthropic-version': this.anthropicVersion,
     };
 
-    const response = await globalThis.fetch(`${this.baseUrl}/v1/messages`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(anthropicRequest),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
+    let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Anthropic API Error (${response.status}): ${error}`);
-    }
+    try {
+      const response = await globalThis.fetch(`${this.baseUrl}/v1/messages`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(anthropicRequest),
+        signal: controller.signal,
+      });
 
-    if (!response.body) {
-      throw new Error('Response body is empty');
-    }
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Anthropic API Error (${response.status}): ${error}`);
+      }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let messageId = '';
-    let model = request.model;
+      if (!response.body) {
+        throw new Error('Response body is empty');
+      }
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+      reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let messageId = '';
+      let model = request.model;
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed.startsWith('data: ')) {
-          const data = trimmed.slice(6);
-          if (data === '[DONE]') continue;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
 
-          try {
-            const event: AnthropicStreamEvent = JSON.parse(data);
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('data: ')) {
+            const data = trimmed.slice(6);
+            if (data === '[DONE]') continue;
 
-            if (event.type === 'message_start') {
-              messageId = event.message?.id || '';
-              model = event.message?.model || model;
-            } else if (event.type === 'content_block_delta') {
-              if (event.delta?.type === 'text_delta') {
+            try {
+              const event: AnthropicStreamEvent = JSON.parse(data);
+
+              if (event.type === 'message_start') {
+                messageId = event.message?.id || '';
+                model = event.message?.model || model;
+              } else if (event.type === 'content_block_delta') {
+                if (event.delta?.type === 'text_delta') {
+                  yield {
+                    id: messageId,
+                    object: 'chat.completion.chunk',
+                    created: Date.now(),
+                    model,
+                    choices: [{
+                      index: 0,
+                      delta: { content: event.delta.text },
+                      finish_reason: null,
+                    }],
+                  };
+                }
+              } else if (event.type === 'message_delta') {
                 yield {
                   id: messageId,
                   object: 'chat.completion.chunk',
@@ -432,34 +451,27 @@ export class AnthropicProvider extends BaseProvider {
                   model,
                   choices: [{
                     index: 0,
-                    delta: { content: event.delta.text },
-                    finish_reason: null,
+                    delta: {},
+                    finish_reason: event.delta?.stop_reason === 'tool_use' ? 'tool_calls' : 'stop',
                   }],
+                  usage: event.usage ? {
+                    prompt_tokens: event.usage.input_tokens || 0,
+                    completion_tokens: event.usage.output_tokens || 0,
+                    total_tokens: (event.usage.input_tokens || 0) + (event.usage.output_tokens || 0),
+                  } : undefined,
                 };
               }
-            } else if (event.type === 'message_delta') {
-              yield {
-                id: messageId,
-                object: 'chat.completion.chunk',
-                created: Date.now(),
-                model,
-                choices: [{
-                  index: 0,
-                  delta: {},
-                  finish_reason: event.delta?.stop_reason === 'tool_use' ? 'tool_calls' : 'stop',
-                }],
-                usage: event.usage ? {
-                  prompt_tokens: event.usage.input_tokens || 0,
-                  completion_tokens: event.usage.output_tokens || 0,
-                  total_tokens: (event.usage.input_tokens || 0) + (event.usage.output_tokens || 0),
-                } : undefined,
-              };
+            } catch {
+              // 忽略解析错误
             }
-          } catch {
-            // 忽略解析错误
           }
         }
       }
+    } finally {
+      if (reader) {
+        try { reader.releaseLock(); } catch { /* already released */ }
+      }
+      clearTimeout(timeoutId);
     }
   }
 

@@ -115,6 +115,7 @@ export abstract class BaseProvider implements AIProvider {
     const requestId = Math.random().toString(36).slice(2);
     this.abortControllers.set(requestId, controller);
 
+    let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
     try {
       const response = await this.request(url, { ...options, headers: { Accept: 'text/event-stream', ...(options.headers as Record<string, string>) } }, controller);
 
@@ -122,7 +123,7 @@ export abstract class BaseProvider implements AIProvider {
         throw new Error('Response body is empty');
       }
 
-      const reader = response.body.getReader();
+      reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
 
@@ -145,6 +146,9 @@ export abstract class BaseProvider implements AIProvider {
         }
       }
     } finally {
+      if (reader) {
+        try { reader.releaseLock(); } catch { /* already released */ }
+      }
       this.abortControllers.delete(requestId);
     }
   }
@@ -157,6 +161,13 @@ export abstract class BaseProvider implements AIProvider {
       controller.abort();
     }
     this.abortControllers.clear();
+  }
+
+  /**
+   * 释放所有进行中的请求和资源
+   */
+  dispose(): void {
+    this.cancelAll();
   }
 
   /**

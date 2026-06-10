@@ -20,8 +20,13 @@ export class McpClientManager {
     }
 
     conn = new McpClientConnection(entry);
+    try {
+      await conn.connect();
+    } catch (err) {
+      this.connections.delete(entry.name);
+      throw err;
+    }
     this.connections.set(entry.name, conn);
-    await conn.connect();
     return conn;
   }
 

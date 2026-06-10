@@ -755,5 +755,27 @@ export class ZhinAgent {
       this.subagentManager.dispose();
       this.subagentManager = null;
     }
+    if (this.promptController) {
+      this.promptController.abort();
+    }
+    if (this.imSessionStore && typeof (this.imSessionStore as any).dispose === 'function') {
+      (this.imSessionStore as any).dispose();
+    }
+    if (this.agentSessionStore && typeof (this.agentSessionStore as any).dispose === 'function') {
+      (this.agentSessionStore as any).dispose();
+    }
+    if (this.contextRepository && typeof (this.contextRepository as any).dispose === 'function') {
+      (this.contextRepository as any).dispose();
+    }
+    if (this.imTranscriptStore && typeof (this.imTranscriptStore as any).dispose === 'function') {
+      (this.imTranscriptStore as any).dispose();
+    }
+    this.deferredAutoContinueDepthBySession.clear();
+    this.deferredCatalog = [];
+    this.lastTurnMetrics = null;
+    this.provider = null as any;
+    this.providerResolver = null as any;
+    this.skillRegistry = null as any;
+    this.orchestrator = null as any;
   }
 }

@@ -1,0 +1,33 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM"],
+    "paths": {
+      "@zhin.js/logger": ["./basic/logger/src/index.ts"],
+      "@zhin.js/schema": ["./basic/schema/src/index.ts"],
+      "@zhin.js/database": ["./basic/database/src/index.ts"],
+      "@zhin.js/kernel": ["./packages/im/kernel/src/index.ts"],
+      "@zhin.js/ai": ["./packages/im/ai/src/index.ts"],
+      "@zhin.js/core": ["./packages/im/core/src/index.ts"],
+      "@zhin.js/agent": ["./packages/im/agent/src/index.ts"],
+      "zhin.js": ["./packages/im/zhin/src/index.ts"]
+    },
+    "types": []
+  },
+  "include": [
+    "basic/*/src/**/*",
+    "packages/im/ai/src/**/*",
+    "packages/im/kernel/src/**/*",
+    "packages/im/core/src/**/*",
+    "packages/im/agent/src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/lib/**",
+    "**/dist/**",
+    "**/client/**",
+    "**/*.js"
+  ]
+}

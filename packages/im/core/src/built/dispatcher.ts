@@ -210,6 +210,7 @@ export function createMessageDispatcher(
   const guardrails: GuardrailMiddleware[] = [];
   /** mounted 前注册的润色，在 mounted 时挂到 root.before.sendMessage */
   const pendingOutboundPolish: OutboundPolishMiddleware[] = [];
+  const flushedOutboundPolish: Map<OutboundPolishMiddleware, BeforeSendHandler> = new Map();
   let aiHandler: AIHandler | null = null;
   let aiTriggerMatcher: AITriggerMatcher | null = null;
   let groupPassiveContextHandler: GroupPassiveContextHandler | null = null;
@@ -353,6 +354,7 @@ export function createMessageDispatcher(
     for (const mw of pendingOutboundPolish) {
       const fn = wrapPolishAsBeforeSend(mw);
       root.on('before.sendMessage', fn);
+      flushedOutboundPolish.set(mw, fn);
     }
     pendingOutboundPolish.length = 0;
   }
@@ -494,6 +496,11 @@ export function createMessageDispatcher(
       return () => {
         const i = pendingOutboundPolish.indexOf(handler);
         if (i !== -1) pendingOutboundPolish.splice(i, 1);
+        const flushed = flushedOutboundPolish.get(handler);
+        if (flushed && rootPlugin) {
+          rootPlugin.root.off('before.sendMessage', flushed);
+          flushedOutboundPolish.delete(handler);
+        }
       };
     },
 

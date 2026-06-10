@@ -77,3 +77,10 @@ export function startRemoteTaskPoller(config?: RemoteTaskPollerConfig): RemoteTa
   globalPoller.start();
   return globalPoller;
 }
+
+export function stopRemoteTaskPoller(): void {
+  if (globalPoller) {
+    globalPoller.stop();
+    globalPoller = null;
+  }
+}

@@ -60,6 +60,7 @@ export class McpClientConnection {
       this.state.error = undefined;
     } catch (err: any) {
       this.state.error = err.message;
+      await this.disconnect();
       throw err;
     }
 

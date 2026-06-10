@@ -38,7 +38,17 @@ function requestMemoryKey(adapter: string, botId: string, platformId: string) {
   return `${adapter}:${botId}:${platformId}`;
 }
 
-const pendingRequestObjects = new Map<string, ZhinRequest>();
+const pendingRequestObjects = new Map<string, { req: ZhinRequest; createdAt: number }>();
+const PENDING_REQUEST_TTL_MS = 30 * 60 * 1000;
+
+function evictStalePendingRequests(): void {
+  const now = Date.now();
+  for (const [key, entry] of pendingRequestObjects) {
+    if (now - entry.createdAt > PENDING_REQUEST_TTL_MS) {
+      pendingRequestObjects.delete(key);
+    }
+  }
+}
 
 export async function storePendingRequest(
   adapter: string,
@@ -47,7 +57,8 @@ export async function storePendingRequest(
 ): Promise<StoredRequestRow> {
   const platformId = req.$id;
   const key = requestMemoryKey(adapter, botId, platformId);
-  pendingRequestObjects.set(key, req);
+  evictStalePendingRequests();
+  pendingRequestObjects.set(key, { req, createdAt: Date.now() });
   const row = await insertRequest({
     adapter,
     bot_id: botId,
@@ -135,7 +146,7 @@ export function getPendingRequest(
   botId: string,
   platformRequestId: string
 ): ZhinRequest | undefined {
-  return pendingRequestObjects.get(requestMemoryKey(adapter, botId, platformRequestId));
+  return pendingRequestObjects.get(requestMemoryKey(adapter, botId, platformRequestId))?.req;
 }
 
 export function removePendingRequest(adapter: string, botId: string, platformRequestId: string) {
@@ -251,6 +262,7 @@ export function initBotHub(root: {
     for (const { adapter, handler } of adapterListeners) {
       adapter.off?.("message.receive", handler);
     }
+    pendingRequestObjects.clear();
     hubInited = false;
   };
 }

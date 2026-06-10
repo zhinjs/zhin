@@ -324,6 +324,7 @@ export class CostTracker {
    */
   reset(): void {
     this.modelUsage.clear();
+    this.customPricing.clear();
     this.startedAt = Date.now();
     this.updatedAt = Date.now();
   }

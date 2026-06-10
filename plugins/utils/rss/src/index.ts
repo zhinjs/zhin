@@ -152,7 +152,7 @@ async function pushToChannel(
   content: string,
 ): Promise<boolean> {
   try {
-    const adapter = root.inject(adapterName as any) as Adapter | null;
+    const adapter = root.inject(adapterName) as Adapter | null;
     if (!adapter) return false;
     await adapter.sendMessage({
       context: adapterName,

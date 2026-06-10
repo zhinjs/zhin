@@ -49,7 +49,7 @@
     "check:l4": "node scripts/run-l4-check.mjs",
     "check:use-plugin-top-level": "node scripts/check-use-plugin-top-level.mjs",
     "check:all": "node scripts/check-all-harness.mjs",
-    "type-check": "tsc --noEmit",
+    "type-check": "tsc --noEmit -p tsconfig.typecheck.json",
     "link": "pnpm --filter @zhin.js/cli exec npm link",
     "test": "vitest run",
     "test:reporter": "vitest run --reporter=verbose",

@@ -171,6 +171,7 @@ export class ModelRegistry {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: modelId }),
+        signal: AbortSignal.timeout(15_000),
       });
       if (!response.ok) return base;
       const data = await response.json() as any;

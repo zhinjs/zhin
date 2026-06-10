@@ -636,20 +636,25 @@ export class EnhancedSandbox {
         timeout,
       });
 
-      let stdout = '';
-      let stderr = '';
+      const maxOutput = this.config.maxOutputSize || 10 * 1024 * 1024;
+      const stdoutChunks: string[] = [];
+      let stdoutLen = 0;
+      const stderrChunks: string[] = [];
+      let stderrLen = 0;
 
       child.stdout?.on('data', (data) => {
         const chunk = data.toString();
-        if (stdout.length + chunk.length <= (this.config.maxOutputSize || 10 * 1024 * 1024)) {
-          stdout += chunk;
+        if (stdoutLen + chunk.length <= maxOutput) {
+          stdoutChunks.push(chunk);
+          stdoutLen += chunk.length;
         }
       });
 
       child.stderr?.on('data', (data) => {
         const chunk = data.toString();
-        if (stderr.length + chunk.length <= (this.config.maxOutputSize || 10 * 1024 * 1024)) {
-          stderr += chunk;
+        if (stderrLen + chunk.length <= maxOutput) {
+          stderrChunks.push(chunk);
+          stderrLen += chunk.length;
         }
       });
 
@@ -664,10 +669,13 @@ export class EnhancedSandbox {
         const monitorWarnings = monitor.getWarnings();
         warnings.push(...monitorWarnings);
 
+        const stdout = stdoutChunks.join('').slice(0, maxOutput);
+        const stderr = stderrChunks.join('').slice(0, maxOutput);
+
         resolve({
           success: exitCode === 0 && !timedOut,
-          stdout: stdout.slice(0, this.config.maxOutputSize),
-          stderr: stderr.slice(0, this.config.maxOutputSize),
+          stdout,
+          stderr,
           exitCode,
           duration: Date.now() - startTime,
           timedOut,
@@ -683,7 +691,7 @@ export class EnhancedSandbox {
 
         resolve({
           success: false,
-          stdout,
+          stdout: stdoutChunks.join(''),
           stderr: error.message,
           exitCode: 1,
           duration: Date.now() - startTime,
@@ -715,15 +723,26 @@ export class EnhancedSandbox {
         timeout,
       });
 
-      let stdout = '';
-      let stderr = '';
+      const maxOutput = this.config.maxOutputSize || 10 * 1024 * 1024;
+      const stdoutChunks: string[] = [];
+      let stdoutLen = 0;
+      const stderrChunks: string[] = [];
+      let stderrLen = 0;
 
       child.stdout?.on('data', (data) => {
-        stdout += data.toString();
+        const chunk = data.toString();
+        if (stdoutLen + chunk.length <= maxOutput) {
+          stdoutChunks.push(chunk);
+          stdoutLen += chunk.length;
+        }
       });
 
       child.stderr?.on('data', (data) => {
-        stderr += data.toString();
+        const chunk = data.toString();
+        if (stderrLen + chunk.length <= maxOutput) {
+          stderrChunks.push(chunk);
+          stderrLen += chunk.length;
+        }
       });
 
       const timer = setTimeout(() => {
@@ -736,8 +755,8 @@ export class EnhancedSandbox {
 
         resolve({
           success: exitCode === 0 && !timedOut,
-          stdout,
-          stderr,
+          stdout: stdoutChunks.join('').slice(0, maxOutput),
+          stderr: stderrChunks.join('').slice(0, maxOutput),
           exitCode,
           duration: Date.now() - startTime,
           timedOut,
@@ -750,7 +769,7 @@ export class EnhancedSandbox {
 
         resolve({
           success: false,
-          stdout,
+          stdout: stdoutChunks.join(''),
           stderr: error.message,
           exitCode: 1,
           duration: Date.now() - startTime,
@@ -818,6 +837,10 @@ export class EnhancedSandbox {
       safe: validation.valid,
       reason: validation.reason,
     };
+  }
+
+  dispose(): void {
+    this.configListeners.length = 0;
   }
 }
 

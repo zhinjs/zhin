@@ -239,7 +239,7 @@ async function runAnalysis(
   let llm: LLMAnalysis | undefined;
 
   // 可选：LLM 话题/金句/用户画像（灵感来自 astrbot_plugin_qq_group_daily_analysis）
-  const ai = root.inject("ai" as any) as
+  const ai = root.inject("ai") as
     | { ask?: (q: string, opts?: { systemPrompt?: string }) => Promise<string> }
     | undefined;
   if (ai?.ask) {

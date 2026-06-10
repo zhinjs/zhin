@@ -656,6 +656,9 @@ When done, provide a clear summary of findings or actions.`;
   }
 
   dispose(): void {
+    for (const [taskId, controller] of this.runningTasks.entries()) {
+      try { controller.abort(); } catch { /* ignore */ }
+    }
     this.runningTasks.clear();
   }
 }

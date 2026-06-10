@@ -201,8 +201,13 @@ useContext("server", (server: Server) => {
         const transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: undefined,
         });
-        await mcpServer.connect(transport);
-        await transport.handleRequest(req, res, body);
+        try {
+          await mcpServer.connect(transport);
+          await transport.handleRequest(req, res, body);
+        } finally {
+          try { await transport.close(); } catch { /* ignore */ }
+          try { await mcpServer.close(); } catch { /* ignore */ }
+        }
         return;
       }
 

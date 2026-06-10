@@ -661,5 +661,5 @@ export const Fragment = defineComponent(async (props: { children?: SendContent }
     return String(children);
 }, 'Fragment');
 export const Fetch = defineComponent(async ({ url }) => {
-    return await fetch(url).then((r) => r.text());
+    return await fetch(url, { signal: AbortSignal.timeout(30_000) }).then((r) => r.text());
 }, 'fetch');

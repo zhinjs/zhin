@@ -116,6 +116,7 @@ export class BudgetLimiter {
   private sessions: Map<string, SessionBudget> = new Map();
   private dailyUsage: Map<string, TokenUsage> = new Map(); // userId -> usage
   private cleanupTimer?: ReturnType<typeof setInterval>;
+  private static readonly MAX_DAILY_ENTRIES = 10000;
 
   constructor(config: Partial<BudgetConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -401,6 +402,17 @@ export class BudgetLimiter {
     for (const key of this.dailyUsage.keys()) {
       if (!key.endsWith(today)) {
         this.dailyUsage.delete(key);
+      }
+    }
+
+    // 防止当日条目无限增长
+    if (this.dailyUsage.size > BudgetLimiter.MAX_DAILY_ENTRIES) {
+      const excess = this.dailyUsage.size - BudgetLimiter.MAX_DAILY_ENTRIES;
+      let removed = 0;
+      for (const key of this.dailyUsage.keys()) {
+        if (removed >= excess) break;
+        this.dailyUsage.delete(key);
+        removed++;
       }
     }
   }

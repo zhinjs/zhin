@@ -192,8 +192,12 @@ export function createAssistantMessageEventStream(
   const queue: AssistantStreamEvent[] = [];
   let notify: (() => void) | undefined;
 
+  const MAX_QUEUE_SIZE = 10_000;
+
   const push = (event: AssistantStreamEvent) => {
-    queue.push(event);
+    if (queue.length < MAX_QUEUE_SIZE) {
+      queue.push(event);
+    }
     for (const listener of listeners) {
       listener(event);
     }

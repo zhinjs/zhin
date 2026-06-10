@@ -71,6 +71,7 @@ export class PromptTemplateManager {
   private versions: Map<string, TemplateVersion[]> = new Map();
   private i18nMessages: Map<string, I18nMessages> = new Map();
   private currentLanguage: string = 'en';
+  private static readonly MAX_VERSIONS_PER_TEMPLATE = 20;
 
   /**
    * 添加模板
@@ -90,6 +91,12 @@ export class PromptTemplateManager {
       createdAt: Date.now(),
       author: template.author,
     });
+
+    // 修剪版本历史
+    const versionList = this.versions.get(template.id)!;
+    if (versionList.length > PromptTemplateManager.MAX_VERSIONS_PER_TEMPLATE) {
+      versionList.splice(0, versionList.length - PromptTemplateManager.MAX_VERSIONS_PER_TEMPLATE);
+    }
   }
 
   /**
@@ -422,6 +429,12 @@ export class PromptTemplateManager {
 
     this.addTemplate(template);
     return template;
+  }
+
+  dispose(): void {
+    this.templates.clear();
+    this.versions.clear();
+    this.i18nMessages.clear();
   }
 }
 

@@ -128,12 +128,20 @@ function recordOutbound(plugin: Plugin, payload: MessageSendPayload): void {
 export function registerChatMessageStore(plugin: Plugin, appConfig: AppConfig): void {
   if (!appConfig.database) return;
 
-  plugin.on('message.receive', (msg: Message) => {
+  const onReceive = (msg: Message) => {
     if (!hasInboundContent(msg)) return;
     recordInbound(plugin, msg);
-  });
+  };
 
-  plugin.on('message.send', (payload: MessageSendPayload) => {
+  const onSend = (payload: MessageSendPayload) => {
     recordOutbound(plugin, payload);
+  };
+
+  plugin.on('message.receive', onReceive);
+  plugin.on('message.send', onSend);
+
+  plugin.onDispose(() => {
+    plugin.off('message.receive', onReceive);
+    plugin.off('message.send', onSend);
   });
 }

@@ -49,4 +49,9 @@ export async function registerSignalHandlers(plugin: Plugin): Promise<void> {
   process.once('SIGINT', handleSIGINT);
   process.on('uncaughtException', handleUncaughtException);
   process.on('unhandledRejection', handleUnhandledRejection);
+
+  plugin.onDispose(() => {
+    process.removeListener('uncaughtException', handleUncaughtException);
+    process.removeListener('unhandledRejection', handleUnhandledRejection);
+  });
 }

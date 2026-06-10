@@ -14,7 +14,9 @@ const CACHE_TTL = 5 * 60 * 1000;
 
 async function fetchPluginRegistry(): Promise<unknown[]> {
   if (pluginsCache && Date.now() - pluginsCache.ts < CACHE_TTL) return pluginsCache.data;
-  const resp = await fetch("https://zhin.js.org/plugins.json");
+  const resp = await fetch("https://zhin.js.org/plugins.json", {
+    signal: AbortSignal.timeout(30_000),
+  });
   if (!resp.ok) throw new Error(`plugins.json fetch failed: ${resp.status}`);
   const json = (await resp.json()) as { plugins?: unknown[] };
   const list = json.plugins || [];
@@ -93,6 +95,7 @@ export function registerMarketplacePubRoutes(router: Router): void {
 
       const metaResp = await fetch(
         `https://registry.npmmirror.com/${encodeURIComponent(pkgName)}`,
+        { signal: AbortSignal.timeout(30_000) },
       );
       if (!metaResp.ok) throw new Error(`Package not found: ${metaResp.status}`);
       const meta = (await metaResp.json()) as Record<string, unknown>;
@@ -154,6 +157,7 @@ export function registerMarketplaceUpdatesRoute(
           try {
             const resp = await fetch(
               `https://registry.npmmirror.com/${encodeURIComponent(name)}/latest`,
+              { signal: AbortSignal.timeout(15_000) },
             );
             if (!resp.ok) return null;
             const pkg = (await resp.json()) as { version?: string; description?: string };

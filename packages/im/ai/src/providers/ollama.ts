@@ -211,62 +211,74 @@ export class OllamaProvider extends BaseProvider {
       ollamaRequest.options.top_p = request.top_p;
     }
 
-    const response = await globalThis.fetch(`${this.host}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(ollamaRequest),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
+    let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Ollama API Error (${response.status}): ${error}`);
-    }
+    try {
+      const response = await globalThis.fetch(`${this.host}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ollamaRequest),
+        signal: controller.signal,
+      });
 
-    if (!response.body) {
-      throw new Error('Response body is empty');
-    }
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Ollama API Error (${response.status}): ${error}`);
+      }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    const id = `ollama-${Date.now()}`;
+      if (!response.body) {
+        throw new Error('Response body is empty');
+      }
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+      reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      const id = `ollama-${Date.now()}`;
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      for (const line of lines) {
-        if (!line.trim()) continue;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
 
-        try {
-          const data = JSON.parse(line);
-          
-          yield {
-            id,
-            object: 'chat.completion.chunk',
-            created: Date.now(),
-            model: data.model || request.model,
-            choices: [{
-              index: 0,
-              delta: data.done 
-                ? {} 
-                : { content: data.message?.content || '' },
-              finish_reason: data.done ? 'stop' : null,
-            }],
-            usage: data.done ? {
-              prompt_tokens: data.prompt_eval_count || 0,
-              completion_tokens: data.eval_count || 0,
-              total_tokens: (data.prompt_eval_count || 0) + (data.eval_count || 0),
-            } : undefined,
-          };
-        } catch {
-          // 忽略解析错误
+        for (const line of lines) {
+          if (!line.trim()) continue;
+
+          try {
+            const data = JSON.parse(line);
+            
+            yield {
+              id,
+              object: 'chat.completion.chunk',
+              created: Date.now(),
+              model: data.model || request.model,
+              choices: [{
+                index: 0,
+                delta: data.done 
+                  ? {} 
+                  : { content: data.message?.content || '' },
+                finish_reason: data.done ? 'stop' : null,
+              }],
+              usage: data.done ? {
+                prompt_tokens: data.prompt_eval_count || 0,
+                completion_tokens: data.eval_count || 0,
+                total_tokens: (data.prompt_eval_count || 0) + (data.eval_count || 0),
+              } : undefined,
+            };
+          } catch {
+            // 忽略解析错误
+          }
         }
       }
+    } finally {
+      if (reader) {
+        try { reader.releaseLock(); } catch { /* already released */ }
+      }
+      clearTimeout(timeoutId);
     }
   }
 
@@ -293,7 +305,9 @@ export class OllamaProvider extends BaseProvider {
 
   async healthCheck(): Promise<boolean> {
     try {
-      await globalThis.fetch(`${this.host}/api/tags`);
+      await globalThis.fetch(`${this.host}/api/tags`, {
+        signal: AbortSignal.timeout(10_000),
+      });
       return true;
     } catch {
       return false;

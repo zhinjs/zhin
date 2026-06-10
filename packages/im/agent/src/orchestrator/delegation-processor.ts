@@ -164,3 +164,10 @@ export function initDelegationProcessor(options: DelegationProcessorOptions): De
 export function getDelegationProcessor(): DelegationProcessor | null {
   return globalProcessor;
 }
+
+export function stopDelegationProcessor(): void {
+  if (globalProcessor) {
+    globalProcessor.stop();
+    globalProcessor = null;
+  }
+}

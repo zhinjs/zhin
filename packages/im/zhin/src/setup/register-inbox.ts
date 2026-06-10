@@ -180,8 +180,16 @@ export function registerUnifiedInbox(plugin: Plugin, appConfig: AppConfig): void
   defineModel(TABLE_REQUEST, RequestDefinition);
   defineModel(TABLE_NOTICE, NoticeDefinition);
 
-  plugin.root.on('request.receive', (req: any) => persistRequest(plugin, req));
-  plugin.root.on('notice.receive', (notice: any) => persistNotice(plugin, notice));
+  const onRequest = (req: any) => persistRequest(plugin, req);
+  const onNotice = (notice: any) => persistNotice(plugin, notice);
+
+  plugin.root.on('request.receive', onRequest);
+  plugin.root.on('notice.receive', onNotice);
+
+  plugin.onDispose(() => {
+    plugin.root.off('request.receive', onRequest);
+    plugin.root.off('notice.receive', onNotice);
+  });
 }
 
 /**
@@ -192,5 +200,9 @@ export function registerUnifiedInboxMessageListeners(plugin: Plugin, appConfig: 
   const enabled = !!appConfig?.inbox?.enabled;
   if (!enabled || !appConfig.database) return;
 
-  plugin.on('message.receive', (msg) => persistMessage(plugin, msg));
+  const onMessage = (msg: Message) => persistMessage(plugin, msg);
+  plugin.on('message.receive', onMessage);
+  plugin.onDispose(() => {
+    plugin.off('message.receive', onMessage);
+  });
 }

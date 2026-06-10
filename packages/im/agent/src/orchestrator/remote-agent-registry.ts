@@ -85,14 +85,33 @@ export class RemoteAgentRegistry {
     const agent = this.entries.get(agentId);
     if (!agent) throw new Error(`Remote agent "${agentId}" not registered`);
     let conn = this.connections.get(agentId);
-    if (!conn) {
-      conn = new McpClientConnection(this.toMcpEntry(agent));
-      this.connections.set(agentId, conn);
+    if (conn && conn.isConnected) return conn;
+    if (conn) {
+      try { await conn.disconnect(); } catch { /* ignore */ }
+      this.connections.delete(agentId);
     }
-    if (!conn.isConnected) {
+    conn = new McpClientConnection(this.toMcpEntry(agent));
+    try {
       await conn.connect();
+    } catch (err) {
+      this.connections.delete(agentId);
+      throw err;
     }
+    this.connections.set(agentId, conn);
     return conn;
+  }
+
+  async dispose(): Promise<void> {
+    for (const [agentId, conn] of this.connections.entries()) {
+      try {
+        await conn.disconnect();
+      } catch (err) {
+        logger.debug(`Failed to disconnect remote agent ${agentId}:`, err);
+      }
+    }
+    this.connections.clear();
+    this.entries.clear();
+    this.health.clear();
   }
 
   async healthCheckAll(): Promise<RemoteAgentHealth[]> {
@@ -143,4 +162,11 @@ export function initRemoteAgentRegistry(config: AIConfig | undefined): RemoteAge
   const registry = getRemoteAgentRegistry();
   registry.loadFromConfig(config);
   return registry;
+}
+
+export async function disposeRemoteAgentRegistry(): Promise<void> {
+  if (globalRegistry) {
+    await globalRegistry.dispose();
+    globalRegistry = null;
+  }
 }

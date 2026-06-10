@@ -415,6 +415,11 @@ export class TypingIndicatorManager {
   private getIndicatorKey(options: TypingIndicatorOptions): string {
     return `${options.platform}:${options.botId}:${options.sessionId || options.messageId}`;
   }
+
+  async dispose(): Promise<void> {
+    await this.stopAll();
+    this.adapters.clear();
+  }
 }
 
 // ── 预定义适配器 ──────────────────────────────────────────────────────
@@ -557,6 +562,13 @@ export function initTypingIndicatorManager(
 ): TypingIndicatorManager {
   globalManager = new TypingIndicatorManager(defaultConfig);
   return globalManager;
+}
+
+export async function disposeTypingIndicatorManager(): Promise<void> {
+  if (globalManager) {
+    await globalManager.dispose();
+    globalManager = null;
+  }
 }
 
 // ── 便捷函数 ──────────────────────────────────────────────────────────

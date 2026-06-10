@@ -17,8 +17,8 @@ import { formatCompact, truncatePreview } from '@zhin.js/logger';
  * 适配器可以提供 AI 工具，供 AI 服务调用。
  */
 export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.Lifecycle> {
-  /** 当前适配器下所有Bot实例，key为bot名称 */
   public bots: Map<string, R> = new Map<string, R>();
+  private recallMessageHandler: (...args: any[]) => Promise<void>;
 
   /** 入站消息并发计数 */
   #pendingMessages = 0;
@@ -51,12 +51,13 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
     public config: Adapter.BotConfig<R>[]
   ) {
     super();
-    this.on('call.recallMessage', async(bot_id, id) => {
+    this.recallMessageHandler = async(bot_id: string, id: string) => {
       const bot = this.bots.get(bot_id);
       if(!bot) throw new Error(`Bot ${bot_id} not found`);
       this.logger.debug(formatCompact( { recall: id, bot: bot_id }));
       await bot.$recallMessage(id);
-    })
+    };
+    this.on('call.recallMessage', this.recallMessageHandler);
   }
 
   /**
@@ -166,6 +167,9 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
     return messageId;
   }
   async start() {
+    if (this.bots.size > 0) {
+      await this.stop();
+    }
     const rootAdapters = this.plugin.root.adapters;
     if (!rootAdapters.some((n) => String(n) === String(this.name))) {
       rootAdapters.push(this.name);
@@ -206,6 +210,13 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
     
     // 移除所有事件监听器
     this.removeAllListeners();
+    this.recallMessageHandler = async(bot_id: string, id: string) => {
+      const bot = this.bots.get(bot_id);
+      if(!bot) throw new Error(`Bot ${bot_id} not found`);
+      this.logger.debug(formatCompact( { recall: id, bot: bot_id }));
+      await bot.$recallMessage(id);
+    };
+    this.on('call.recallMessage', this.recallMessageHandler);
     
     this.logger.debug(formatCompact( { stop: this.name }));
     

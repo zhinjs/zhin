@@ -13,7 +13,6 @@ import { createIcqqAgentPromptContributor } from "./agent-prompt.js";
 import type { Router } from "@zhin.js/host-router";
 import { PageManager } from "@zhin.js/host-api";
 import { IcqqAdapter } from "./adapter.js";
-import { registerCommands } from "./commands/index.js";
 import { registerTools } from "./tools/index.js";
 import { registerRoutes } from "./routes.js";
 
@@ -59,11 +58,6 @@ provide({
     await adapter.stop();
   },
 } as any);
-
-// ── 命令注册 ───────────────────────────────────────────────────────
-useContext("icqq", (icqq: IcqqAdapter) => {
-  registerCommands(addCommand, icqq);
-});
 
 // ── AI 工具注册 ────────────────────────────────────────────────────
 useContext("tool", "icqq", (toolService: ToolFeature, icqq: IcqqAdapter) => {
