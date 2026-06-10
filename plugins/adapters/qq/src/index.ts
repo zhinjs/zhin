@@ -300,28 +300,46 @@ useContext("router", "qq", (router: any, qq: QQAdapter) => {
     }
   });
 
-  // 频道列表
+  // 频道列表（QQ 官方 API 返回 guild_id/guild_name，归一化为控制台用的 id/name）
   router.get("/api/qq/bots/:name/guilds", async (ctx: any) => {
     try {
       const bot = qq.bots.get(ctx.params.name);
       if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
       if (!bot.$connected) { ctx.status = 400; ctx.body = { success: false, error: "Bot 未连接" }; return; }
-      const guilds = await bot.getGuilds();
-      ctx.body = { success: true, data: guilds || [] };
+      const raw = await bot.getGuilds();
+      const guilds = (raw || []).map((g: any) => ({
+        id: g.guild_id ?? g.id,
+        name: g.guild_name ?? g.name,
+        icon: g.icon,
+        description: g.description,
+        memberCount: g.member_count,
+        ownerId: g.owner_id,
+        owner: g.owner,
+        joinTime: g.join_time,
+      }));
+      ctx.body = { success: true, data: guilds };
     } catch (e: any) {
       ctx.status = 500;
       ctx.body = { success: false, error: e?.message || "获取频道失败" };
     }
   });
 
-  // 子频道列表
+  // 子频道列表（QQ 官方 API 返回 channel_id/channel_name，归一化为 id/name）
   router.get("/api/qq/bots/:name/guilds/:guildId/channels", async (ctx: any) => {
     try {
       const bot = qq.bots.get(ctx.params.name);
       if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
       if (!bot.$connected) { ctx.status = 400; ctx.body = { success: false, error: "Bot 未连接" }; return; }
-      const channels = await bot.getChannels(ctx.params.guildId);
-      ctx.body = { success: true, data: channels || [] };
+      const raw = await bot.getChannels(ctx.params.guildId);
+      const channels = (raw || []).map((ch: any) => ({
+        id: ch.channel_id ?? ch.id,
+        name: ch.channel_name ?? ch.name,
+        type: ch.type,
+        subType: ch.sub_type,
+        position: ch.position,
+        parentId: ch.parent_id,
+      }));
+      ctx.body = { success: true, data: channels };
     } catch (e: any) {
       ctx.status = 500;
       ctx.body = { success: false, error: e?.message || "获取子频道失败" };

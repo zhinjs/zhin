@@ -55,11 +55,15 @@ export class RateLimiter {
   private config: Required<RateLimitConfig>;
   private buckets: Map<string, UserBucket> = new Map();
   private cleanupTimer?: ReturnType<typeof setInterval>;
+  private disposed = false;
 
   constructor(config?: RateLimitConfig) {
     this.config = { ...DEFAULTS, ...config };
     // 定期清理过期的 bucket（每 5 分钟）
     this.cleanupTimer = setInterval(() => this.cleanup(), 5 * 60 * 1000);
+    if (this.cleanupTimer && typeof this.cleanupTimer === 'object' && 'unref' in this.cleanupTimer) {
+      this.cleanupTimer.unref();
+    }
   }
 
   /**
@@ -106,20 +110,28 @@ export class RateLimiter {
   }
 
   /**
-   * 清理长期不活跃的 bucket
+   * 清理长期不活跃的 bucket。
+   * 即使 bucket 处于冷却期，如果最后一次请求距今超过 30 分钟，也将其清理。
    */
   private cleanup(): void {
+    if (this.disposed) return;
     const now = Date.now();
     const staleThreshold = 10 * 60 * 1000; // 10 分钟
+    const forceCleanThreshold = 30 * 60 * 1000; // 30 分钟强制清理
     for (const [userId, bucket] of this.buckets) {
       const latest = bucket.timestamps[bucket.timestamps.length - 1] ?? 0;
-      if (now - latest > staleThreshold && bucket.cooldownUntil < now) {
+      const canClean =
+        (now - latest > staleThreshold && bucket.cooldownUntil < now) ||
+        (now - latest > forceCleanThreshold);
+      if (canClean) {
         this.buckets.delete(userId);
       }
     }
   }
 
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
     if (this.cleanupTimer) {
       clearInterval(this.cleanupTimer);
       this.cleanupTimer = undefined;

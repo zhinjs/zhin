@@ -26,6 +26,28 @@ import { applyCustomAuthEndpoints } from "./gateway-config.js";
 import { normalizeOutboundMarkdown } from "./outbound-markdown.js";
 import { normalizeOutboundMedia } from "./outbound-media.js";
 
+/** 从 qq-official-bot SendResult / 审核回包中解析出站消息 ID */
+export function resolveOutboundMessageId(result: unknown): string {
+  if (!result || typeof result !== "object") {
+    throw new Error("QQ 发送消息失败：响应为空");
+  }
+  const row = result as Record<string, unknown>;
+  const nested = row.data && typeof row.data === "object"
+    ? row.data as Record<string, unknown>
+    : undefined;
+  const audit = (row.message_audit ?? nested?.message_audit) as Record<string, unknown> | undefined;
+  const id = row.id ?? row.message_id ?? audit?.audit_id;
+  if (id == null || id === "") {
+    const code = row.code;
+    const msg = row.message;
+    throw new Error(
+      code != null
+        ? `QQ 发送消息失败（${String(code)}）${msg ? `: ${String(msg)}` : ""}`
+        : "QQ 发送消息失败：响应缺少消息 ID",
+    );
+  }
+  return String(id);
+}
 
 export class QQBot<T extends ReceiverMode, M extends ApplicationPlatform = ApplicationPlatform>
   extends Bot
@@ -252,22 +274,22 @@ export class QQBot<T extends ReceiverMode, M extends ApplicationPlatform = Appli
           const id = options.id.replace("direct:", "");
           const result = await this.sendDirectMessage(id, content);
           this.pluginLogger.debug(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(content)}`);
-          return `direct-${options.id}:${result.id.toString()}`;
+          return `direct-${options.id}:${resolveOutboundMessageId(result)}`;
         } else {
           const result = await this.sendPrivateMessage(options.id, content);
           this.pluginLogger.debug(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(content)}`);
-          return `private-${options.id}:${result.id.toString()}`;
+          return `private-${options.id}:${resolveOutboundMessageId(result)}`;
         }
       }
       case "group": {
         const result = await this.sendGroupMessage(options.id, content);
         this.pluginLogger.debug(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(content)}`);
-        return `group-${options.id}:${result.id.toString()}`;
+        return `group-${options.id}:${resolveOutboundMessageId(result)}`;
       }
       case "channel": {
         const result = await this.sendGuildMessage(options.id, content);
         this.pluginLogger.debug(`${this.$config.name} send ${options.type}(${options.id}):${segment.raw(content)}`);
-        return `channel-${options.id}:${result.id.toString()}`;
+        return `channel-${options.id}:${resolveOutboundMessageId(result)}`;
       }
       default:
         throw new Error(`unsupported channel type ${options.type}`);

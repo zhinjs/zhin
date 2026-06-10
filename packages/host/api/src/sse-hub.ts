@@ -15,10 +15,22 @@ type Subscriber = {
 };
 
 const MAX_REPLAY = 200;
-let subscribers = new Map<string, Subscriber>();
+const SSE_STALE_MS = 5 * 60 * 1000;
+let subscribers = new Map<string, Subscriber & { lastActive: number }>();
 let nextSubId = 0;
 let nextEventId = 0;
 const eventHistory: StoredEvent[] = [];
+
+const staleCheckInterval = setInterval(() => {
+  const now = Date.now();
+  for (const [id, sub] of subscribers) {
+    if (now - sub.lastActive > SSE_STALE_MS) {
+      sub.close();
+      subscribers.delete(id);
+    }
+  }
+}, 60_000);
+staleCheckInterval.unref?.();
 
 function pushHistory(event: ConsoleSseEvent): StoredEvent {
   const stored: StoredEvent = {
@@ -71,9 +83,11 @@ export function subscribeSse(
       }, 15000);
       subscribers.set(id, {
         id,
+        lastActive: Date.now(),
         enqueue: (chunk) => {
           try {
             controller.enqueue(encoder.encode(chunk));
+            (subscribers.get(id) as any)!.lastActive = Date.now();
           } catch {
             /* closed */
           }
@@ -106,6 +120,7 @@ export function broadcastSse(event: ConsoleSseEvent): void {
   const chunk = formatSse(stored, stored.id);
   for (const sub of subscribers.values()) {
     sub.enqueue(chunk);
+    sub.lastActive = Date.now();
   }
 }
 
@@ -115,6 +130,7 @@ export function sseSubscriberCount(): number {
 
 /** @internal test helper */
 export function resetSseHubForTests(): void {
+  for (const sub of subscribers.values()) sub.close();
   subscribers.clear();
   eventHistory.length = 0;
   nextSubId = 0;

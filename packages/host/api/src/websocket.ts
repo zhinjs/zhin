@@ -33,6 +33,10 @@ import { handleCoreRpc } from "./rpc/handlers-core.js";
 const plugin = usePlugin();
 const { root, logger } = plugin;
 
+function isIcqqAdapterKey(adapter: string): boolean {
+  return adapter === "icqq" || adapter.endsWith("/icqq") || adapter.includes("adapter-icqq");
+}
+
 function collectBotsList(): Array<{
   name: string;
   adapter: string;
@@ -183,6 +187,18 @@ export function setupWebSocket(webServer: WebServer) {
     void sendCatchUpToClient(ws).catch((e) =>
       logger.warn(formatCompact( { op: "bot_catchup", ok: false, error: e instanceof Error ? e.message : String(e) }))
     );
+
+    let alive = true;
+    const pingInterval = setInterval(() => {
+      if (!alive) {
+        ws.terminate();
+        return;
+      }
+      alive = false;
+      ws.ping();
+    }, 30_000).unref?.();
+    ws.on("pong", () => { alive = true; });
+    ws.on("close", () => { clearInterval(pingInterval); });
 
     ws.on("message", async (data) => {
       try {
@@ -416,11 +432,7 @@ export async function handleWebSocketMessage(
           ws.send(JSON.stringify({ requestId, error: "adapter and botId required" }));
           break;
         }
-        if (adapter !== "icqq") {
-          ws.send(JSON.stringify({ requestId, error: "not supported for this adapter" }));
-          break;
-        }
-        const ad = root.inject("icqq");
+        const ad = root.inject(adapter as keyof Plugin.Contexts);
         const bot = ad instanceof Adapter ? ad.bots.get(botId) : undefined;
         if (!bot) {
           ws.send(JSON.stringify({ requestId, error: "bot not found" }));
@@ -428,19 +440,70 @@ export async function handleWebSocketMessage(
         }
         const botAny = bot as unknown as Record<string, unknown>;
         if (type === "bot:friends") {
-          const fl = botAny.fl as Map<string, Record<string, unknown>> | undefined;
-          const friends = Array.from((fl || new Map()).values()).map((f) => ({
-            user_id: f.user_id,
-            nickname: f.nickname,
-            remark: f.remark,
-          }));
+          let friends: Array<{ user_id: number; nickname: string; remark: string }> = [];
+          if (isIcqqAdapterKey(adapter)) {
+            const map = (botAny.friends ?? botAny.fl) as
+              | Map<number | string, Record<string, unknown>>
+              | undefined;
+            friends = Array.from((map || new Map()).values()).map((f) => ({
+              user_id: Number(f.user_id),
+              nickname: String(f.nickname ?? ""),
+              remark: String(f.remark ?? ""),
+            }));
+          } else if (typeof botAny.getFriendList === "function") {
+            const raw = await (botAny.getFriendList as () => Promise<unknown>)();
+            const arr = Array.isArray(raw)
+              ? raw
+              : raw && typeof raw === "object" && "data" in raw
+                ? (raw as { data: unknown }).data
+                : [];
+            friends = (Array.isArray(arr) ? arr : []).map((f) => {
+              const row = f as Record<string, unknown>;
+              return {
+                user_id: Number(row.user_id ?? row.userId ?? row.id ?? 0),
+                nickname: String(row.nickname ?? row.name ?? row.user_id ?? ""),
+                remark: String(row.remark ?? ""),
+              };
+            });
+          } else {
+            ws.send(JSON.stringify({
+              requestId,
+              error: `当前适配器（${adapter}）不支持好友列表`,
+            }));
+            break;
+          }
           ws.send(JSON.stringify({ requestId, data: { friends, count: friends.length } }));
         } else {
-          const gl = botAny.gl as Map<string, Record<string, unknown>> | undefined;
-          const groups = Array.from((gl || new Map()).values()).map((g) => ({
-            group_id: g.group_id,
-            name: g.name,
-          }));
+          let groups: Array<{ group_id: number; name: string }> = [];
+          if (isIcqqAdapterKey(adapter)) {
+            const map = (botAny.groups ?? botAny.gl) as
+              | Map<number | string, Record<string, unknown>>
+              | undefined;
+            groups = Array.from((map || new Map()).values()).map((g) => ({
+              group_id: Number(g.group_id),
+              name: String(g.name ?? g.group_id ?? ""),
+            }));
+          } else if (typeof botAny.getGroupList === "function") {
+            const raw = await (botAny.getGroupList as () => Promise<unknown>)();
+            const arr = Array.isArray(raw)
+              ? raw
+              : raw && typeof raw === "object" && "data" in raw
+                ? (raw as { data: unknown }).data
+                : [];
+            groups = (Array.isArray(arr) ? arr : []).map((g) => {
+              const row = g as Record<string, unknown>;
+              return {
+                group_id: Number(row.group_id ?? row.groupId ?? row.id ?? 0),
+                name: String(row.name ?? row.group_name ?? row.group_id ?? ""),
+              };
+            });
+          } else {
+            ws.send(JSON.stringify({
+              requestId,
+              error: `当前适配器（${adapter}）不支持群列表`,
+            }));
+            break;
+          }
           ws.send(JSON.stringify({ requestId, data: { groups, count: groups.length } }));
         }
       } catch (error: unknown) {
@@ -457,7 +520,7 @@ export async function handleWebSocketMessage(
           ws.send(JSON.stringify({ requestId, error: "adapter and botId required" }));
           break;
         }
-        if (adapter === "icqq") {
+        if (isIcqqAdapterKey(adapter)) {
           ws.send(JSON.stringify({ requestId, error: "channels not supported for icqq" }));
           break;
         }
@@ -470,12 +533,14 @@ export async function handleWebSocketMessage(
         const channels: Array<{ id: string; name: string }> = [];
         const botMethods = bot as unknown as Record<string, unknown>;
         if (adapter === "qq" && typeof botMethods.getGuilds === "function" && typeof botMethods.getChannels === "function") {
-          const getGuilds = botMethods.getGuilds as () => Promise<Array<Record<string, unknown>>>;
-          const getChannels = botMethods.getChannels as (guildId: string) => Promise<Array<Record<string, unknown>>>;
-          const guilds = (await getGuilds()) || [];
+          const qqBot = bot as unknown as {
+            getGuilds(): Promise<Array<Record<string, unknown>>>;
+            getChannels(guildId: string): Promise<Array<Record<string, unknown>>>;
+          };
+          const guilds = (await qqBot.getGuilds()) || [];
           for (const g of guilds) {
             const gid = String(g?.id ?? g?.guild_id ?? g);
-            const chs = (await getChannels(gid)) || [];
+            const chs = (await qqBot.getChannels(gid)) || [];
             for (const c of chs) {
               channels.push({
                 id: String(c?.id ?? c?.channel_id ?? c),

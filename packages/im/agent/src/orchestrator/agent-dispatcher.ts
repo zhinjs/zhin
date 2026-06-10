@@ -739,6 +739,7 @@ export class AgentDispatcher {
       clearInterval(this.cleanupTimer);
       this.cleanupTimer = undefined;
     }
+    this.resultListeners.length = 0;
     this.tasks.clear();
     this.results.clear();
     this.running.clear();
@@ -805,6 +806,7 @@ export function getAgentDispatcher(): AgentDispatcher {
  * 初始化调度器
  */
 export function initAgentDispatcher(): AgentDispatcher {
+  globalDispatcher?.dispose();
   globalDispatcher = new AgentDispatcher();
   return globalDispatcher;
 }

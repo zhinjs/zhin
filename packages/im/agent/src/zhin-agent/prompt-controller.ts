@@ -214,4 +214,16 @@ export class PromptController {
       this.notifyIdle();
     }
   }
+
+  dispose(): void {
+    for (const turn of this.activeTurns.values()) {
+      turn.abortController.abort();
+    }
+    this.activeTurns.clear();
+    this.latestTurnBySession.clear();
+    this.subscribers.clear();
+    const waiters = this.idleWaiters.splice(0);
+    for (const resolve of waiters) resolve();
+    this.lastResult = null;
+  }
 }

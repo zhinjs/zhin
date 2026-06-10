@@ -149,6 +149,19 @@ export class AgentSessionStore {
 
 export class MemoryAgentSessionStore {
   private sessions = new Map<string, AgentSessionRecord>();
+  private static readonly MAX_SESSIONS = 2000;
+  private static readonly IDLE_ARCHIVE_MS = 7 * 24 * 60 * 60 * 1000;
+
+  private evictIfNeeded(): void {
+    if (this.sessions.size <= MemoryAgentSessionStore.MAX_SESSIONS) return;
+    const cutoff = Date.now() - MemoryAgentSessionStore.IDLE_ARCHIVE_MS;
+    for (const [id, s] of this.sessions) {
+      if (s.status !== 'active' || s.updated_at < cutoff) {
+        this.sessions.delete(id);
+        if (this.sessions.size <= MemoryAgentSessionStore.MAX_SESSIONS * 0.8) break;
+      }
+    }
+  }
 
   async findActive(sessionKey: string): Promise<AgentSessionRecord | null> {
     for (const s of this.sessions.values()) {
@@ -177,6 +190,7 @@ export class MemoryAgentSessionStore {
       updated_at: now,
     };
     this.sessions.set(record.session_id, record);
+    this.evictIfNeeded();
     return record;
   }
 
@@ -209,7 +223,20 @@ export class MemoryAgentSessionStore {
     return ok;
   }
 
-  async archiveIdleForKey(_sessionKey: string): Promise<number> {
-    return 0;
+  async archiveIdleForKey(sessionKey: string): Promise<number> {
+    const cutoff = Date.now() - MemoryAgentSessionStore.IDLE_ARCHIVE_MS;
+    let n = 0;
+    for (const [id, s] of this.sessions) {
+      if (s.session_key === sessionKey && s.status === 'active' && s.updated_at < cutoff) {
+        s.status = 'archived';
+        s.updated_at = Date.now();
+        n++;
+      }
+    }
+    return n;
+  }
+
+  dispose(): void {
+    this.sessions.clear();
   }
 }

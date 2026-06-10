@@ -902,6 +902,10 @@ export class Agent {
       ...(context || []),
       { role: 'user', content: userMessage },
     ];
+    const toolCallHistory: { tool: string; args: any; result: any }[] = [];
+    const seenToolKeys = new Set<string>();
+
+    try {
 
     // 程序化工具预过滤
     let toolDefinitions: ChatToolDefinition[];
@@ -926,9 +930,7 @@ export class Agent {
     }
     const hasTools = toolDefinitions.length > 0;
     let iterations = 0;
-    const toolCallHistory: { tool: string; args: any; result: any }[] = [];
     const usage: Usage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
-    const seenToolKeys = new Set<string>();
     let consecutiveDuplicateRounds = 0;
     let policyDenialCount = 0;
     const policyDenialStopAfter = this.config.policyDenialStopAfter ?? DEFAULT_POLICY_DENIAL_STOP_AFTER;
@@ -1177,6 +1179,11 @@ export class Agent {
     };
     this.logTaskComplete(startedAt, maxIterData, { model: this.config.model, stream: true });
     yield { type: 'done', data: maxIterData };
+    } finally {
+      messages.length = 0;
+      seenToolKeys.clear();
+      toolCallHistory.length = 0;
+    }
   }
 }
 

@@ -61,11 +61,18 @@ const locks = new Map<string, Promise<unknown>>();
 
 async function withLock<T>(sceneId: string, fn: () => Promise<T>): Promise<T> {
   const prev = locks.get(sceneId) ?? Promise.resolve();
-  const next = prev.then(fn, fn);
+  let resolve!: () => void;
+  const gate = new Promise<void>((r) => { resolve = r; });
+  const next = prev.then(() => gate, () => gate);
   locks.set(sceneId, next.finally(() => {
     if (locks.get(sceneId) === next) locks.delete(sceneId);
   }));
-  return next;
+  await prev.catch(() => {});
+  try {
+    return await fn();
+  } finally {
+    resolve();
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

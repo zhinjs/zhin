@@ -129,6 +129,10 @@ export class MemorySessionManager implements ISessionManager {
   private sessions: Map<string, Session> = new Map();
   private config: Required<Pick<SessionConfig, 'maxHistory' | 'expireMs'>>;
   private cleanupTimer?: ReturnType<typeof setInterval>;
+  private disposed = false;
+
+  /** 内存会话上限，超出时淘汰最久未访问的条目 */
+  private static readonly MAX_SESSIONS = 5000;
 
   constructor(config: { maxHistory?: number; expireMs?: number } = {}) {
     this.config = {
@@ -138,12 +142,16 @@ export class MemorySessionManager implements ISessionManager {
 
     // 定期清理过期会话
     this.cleanupTimer = setInterval(() => this.cleanup(), 5 * 60 * 1000);
+    if (this.cleanupTimer && typeof this.cleanupTimer === 'object' && 'unref' in this.cleanupTimer) {
+      this.cleanupTimer.unref();
+    }
   }
 
   get(sessionId: string, config?: SessionConfig): Session {
     let session = this.sessions.get(sessionId);
 
     if (!session) {
+      this.evictIfOverLimit();
       session = {
         id: sessionId,
         config: config || { provider: 'openai' },
@@ -153,10 +161,35 @@ export class MemorySessionManager implements ISessionManager {
       };
       this.sessions.set(sessionId, session);
     } else {
+      // LRU: 重新插入以更新 Map 迭代顺序
+      this.sessions.delete(sessionId);
+      this.sessions.set(sessionId, session);
       session.updatedAt = Date.now();
     }
 
     return session;
+  }
+
+  /**
+   * 当会话数超过上限时，淘汰最久未访问的条目。
+   * 利用 Map 的插入顺序（最旧的在前），优先淘汰已过期的会话。
+   */
+  private evictIfOverLimit(): void {
+    if (this.sessions.size < MemorySessionManager.MAX_SESSIONS) return;
+    const now = Date.now();
+    // 先尝试淘汰过期会话
+    for (const [id, s] of this.sessions) {
+      const expireMs = s.config.expireMs ?? this.config.expireMs;
+      if (now - s.updatedAt > expireMs) {
+        this.sessions.delete(id);
+        return; // 只淘汰一个，下次 get 时继续
+      }
+    }
+    // 没有过期会话，淘汰最旧的
+    const oldest = this.sessions.keys().next().value;
+    if (oldest !== undefined) {
+      this.sessions.delete(oldest);
+    }
   }
 
   has(sessionId: string): boolean {
@@ -225,6 +258,7 @@ export class MemorySessionManager implements ISessionManager {
   }
 
   cleanup(): number {
+    if (this.disposed) return 0;
     const now = Date.now();
     let cleaned = 0;
 
@@ -240,6 +274,8 @@ export class MemorySessionManager implements ISessionManager {
   }
 
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
     if (this.cleanupTimer) {
       clearInterval(this.cleanupTimer);
       this.cleanupTimer = undefined;
@@ -259,6 +295,7 @@ export class DatabaseSessionManager implements ISessionManager {
   private saveQueue: Map<string, Session> = new Map();
   private saveTimer?: ReturnType<typeof setTimeout>;
   private model: any; // 数据库模型
+  private disposed = false;
 
   /** 内存缓存上限，超出时淘汰最久未访问的条目 */
   private static readonly MAX_CACHE_SIZE = 2000;
@@ -557,6 +594,8 @@ export class DatabaseSessionManager implements ISessionManager {
   }
 
   async dispose(): Promise<void> {
+    if (this.disposed) return;
+    this.disposed = true;
     // 保存所有待保存的会话
     if (this.saveTimer) {
       clearTimeout(this.saveTimer);

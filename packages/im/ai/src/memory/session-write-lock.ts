@@ -10,9 +10,9 @@ export class SessionWriteLock {
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
-    const next = prev.then(() => gate);
+    const next = prev.then(() => gate, () => gate);
     this.tails.set(sessionId, next);
-    await prev;
+    await prev.catch(() => {});
     try {
       return await fn();
     } finally {

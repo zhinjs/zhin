@@ -170,6 +170,8 @@ class MemoryStore implements IStore {
   private messages: Map<string, MessageRecord[]> = new Map();
   private summaries: Map<string, SummaryRecord[]> = new Map();
   private nextSummaryId = 1;
+  private static readonly MAX_MESSAGES_PER_SESSION = 500;
+  private static readonly MAX_SESSIONS = 1000;
 
   async getMessages(sessionId: string): Promise<MessageRecord[]> {
     return this.messages.get(sessionId) || [];
@@ -178,7 +180,18 @@ class MemoryStore implements IStore {
   async addMessage(record: MessageRecord): Promise<void> {
     const list = this.messages.get(record.session_id) || [];
     list.push(record);
+    if (list.length > MemoryStore.MAX_MESSAGES_PER_SESSION) {
+      list.splice(0, list.length - MemoryStore.MAX_MESSAGES_PER_SESSION);
+    }
     this.messages.set(record.session_id, list);
+    if (this.messages.size > MemoryStore.MAX_SESSIONS) {
+      const oldest = [...this.messages.entries()]
+        .sort((a, b) => a[1][0]?.created_at ?? 0 - (b[1][0]?.created_at ?? 0));
+      const excess = this.messages.size - MemoryStore.MAX_SESSIONS;
+      for (let i = 0; i < excess && i < oldest.length; i++) {
+        this.messages.delete(oldest[i][0]);
+      }
+    }
   }
 
   async getMaxRound(sessionId: string): Promise<number> {
@@ -723,7 +736,6 @@ export class ConversationMemory {
           messages,
         );
 
-        // 质量兜底：字数异常的摘要丢弃
         if (summaryText && summaryText.length >= 20 && summaryText.length <= 1000) {
           const created = await this.store.addSummary({
             session_id: sessionId,
@@ -749,6 +761,9 @@ export class ConversationMemory {
       } finally {
         this.summarizing.delete(sessionId);
       }
+    }).catch((err) => {
+      this.summarizing.delete(sessionId);
+      logger.warn(`[摘要] getLatestSummary 失败: session=${sessionId}`, err);
     });
   }
 

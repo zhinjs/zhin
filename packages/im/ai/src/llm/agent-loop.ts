@@ -114,6 +114,7 @@ export async function* agentLoop(
   const executeTool = config.executeTool ?? defaultExecuteTool;
   const emitted: AgentMessage[] = [];
 
+  try {
   yield { type: 'agent_start' };
 
   for (let iteration = 0; iteration < maxIterations; iteration++) {
@@ -270,6 +271,10 @@ export async function* agentLoop(
   }
 
   yield { type: 'agent_end', messages: emitted, userMessages: promptBatch };
+  } finally {
+    emitted.length = 0;
+    messages.length = 0;
+  }
 }
 
 export function agentContextFrom(context: Context): AgentContext {

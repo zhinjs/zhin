@@ -104,9 +104,17 @@ export class TaskQueue {
   private running: Set<string> = new Set();
   private completed: Set<string> = new Set();
   private listeners: Array<(event: string, task: Task) => void> = [];
+  private cleanupTimer?: ReturnType<typeof setInterval>;
+  private disposed = false;
+
+  private static readonly AUTO_CLEANUP_INTERVAL_MS = 10 * 60 * 1000; // 10 分钟
 
   constructor(config: Partial<TaskQueueConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.cleanupTimer = setInterval(() => this.cleanup(), TaskQueue.AUTO_CLEANUP_INTERVAL_MS);
+    if (this.cleanupTimer && typeof this.cleanupTimer === 'object' && 'unref' in this.cleanupTimer) {
+      this.cleanupTimer.unref();
+    }
   }
 
   /**
@@ -119,8 +127,7 @@ export class TaskQueue {
     return new Promise<T>((resolve, reject) => {
       const handler = (event: string, t: Task) => {
         if (t.id !== fullTask.id) return;
-        const idx = this.listeners.indexOf(handler);
-        if (idx >= 0) this.listeners.splice(idx, 1);
+        this.off(handler);
         if (event === 'task:completed') {
           resolve(t.result as T);
           return;
@@ -265,22 +272,44 @@ export class TaskQueue {
   }
 
   /**
-   * 添加事件监听器
+   * 添加事件监听器，返回 dispose 函数用于移除
    */
-  on(event: string, listener: (task: Task) => void): void {
-    this.listeners.push((e, task) => {
+  on(event: string, listener: (task: Task) => void): () => void {
+    const wrapper = (e: string, task: Task) => {
       if (e === event) {
         listener(task);
       }
-    });
+    };
+    this.listeners.push(wrapper);
+    return () => {
+      this.off(wrapper);
+    };
+  }
+
+  /**
+   * 移除事件监听器
+   */
+  off(listener: (event: string, task: Task) => void): void {
+    const idx = this.listeners.indexOf(listener);
+    if (idx >= 0) {
+      this.listeners.splice(idx, 1);
+    }
+  }
+
+  /**
+   * 移除所有事件监听器
+   */
+  removeAllListeners(): void {
+    this.listeners.length = 0;
   }
 
   /**
    * 清理已完成的任务
    */
-  cleanup(): void {
+  cleanup(): number {
     const now = Date.now();
     const expiration = this.config.taskExpiration || 24 * 60 * 60 * 1000; // 24 hours
+    let cleaned = 0;
 
     for (const [taskId, task] of this.tasks.entries()) {
       if (
@@ -291,9 +320,30 @@ export class TaskQueue {
         if (task.completedAt && now - task.completedAt > expiration) {
           this.tasks.delete(taskId);
           this.completed.delete(taskId);
+          cleaned++;
         }
       }
     }
+
+    return cleaned;
+  }
+
+  /**
+   * 销毁队列，释放所有资源
+   */
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = undefined;
+    }
+    this.stop();
+    this.tasks.clear();
+    this.queue.length = 0;
+    this.running.clear();
+    this.completed.clear();
+    this.removeAllListeners();
   }
 
   /**
@@ -497,6 +547,7 @@ export function getTaskQueue(): TaskQueue {
  * 初始化任务队列
  */
 export function initTaskQueue(config: Partial<TaskQueueConfig>): TaskQueue {
+  globalTaskQueue?.dispose();
   globalTaskQueue = new TaskQueue(config);
   return globalTaskQueue;
 }

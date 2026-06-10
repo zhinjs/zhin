@@ -264,6 +264,7 @@ export class PluginBase extends EventEmitter<PluginBaseLifecycle> implements Plu
     this.children = [];
 
     for (const [name, ctx] of this.$contexts) {
+      this.emit("context.dispose", name);
       remove(PluginBase[contextsKey], name);
       if (ctx.extensions) {
         unregisterExtensions(Object.keys(ctx.extensions));
