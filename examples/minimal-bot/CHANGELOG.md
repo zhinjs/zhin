@@ -1,5 +1,15 @@
 # minimal-bot
 
+## 0.0.7
+
+### Patch Changes
+
+- Updated dependencies [65f4b0a]
+  - @zhin.js/host-api@1.0.0
+  - zhin.js@2.0.0
+  - @zhin.js/host-router@1.0.0
+  - @zhin.js/adapter-sandbox@4.0.0
+
 ## 0.0.6
 
 ### Patch Changes

@@ -1,5 +1,44 @@
 # @zhin.js/agent
 
+## 0.2.0
+
+### Minor Changes
+
+- 65f4b0a: 架构优化、类型安全提升与构建系统清理
+
+  **kernel** (minor)
+
+  - PluginBase.start() 提取 `mountAllContexts()` / `mountContext()` 可覆盖钩子
+
+  **core** (minor)
+
+  - Plugin.start() 覆盖 `mountAllContexts()` 支持 Context 挂载失败回滚
+  - Plugin.stop() 委托 `super.stop()` 消除重复代码
+  - Lifecycle 事件类型化：message.receive → Message, request.receive → Request, notice.receive → Notice
+
+  **ai** (minor)
+
+  - BaseProvider 提取 `request()` 公共方法，消除 fetch/fetchText/fetchStream 80% 重复代码
+  - 修复 fetch/fetchText 的 AbortController 泄漏
+
+  **agent** (minor)
+
+  - 为 7 个模块级单例添加 reset() 函数支持测试隔离
+  - 修复 8 处 `catch (e: any)` → `catch (e: unknown)`
+
+  **host-api / plugins** (patch)
+
+  - handlers-db.ts 移除 11 处 `as never` cast，修复 11 处 catch 类型标注
+  - adapter-github / plugin-group-suite / plugin-rss 移除 inject() 的 `as any` cast
+
+### Patch Changes
+
+- e62c23a: fix: update pnpm-lock.yaml and vitest configurations- Added new dependencies for the full-bot example, including multiple Zhin.js adapters and TypeScript.- Updated the test-bot example to include '@puniyu/system-info' and other necessary packages.- Modified vitest configuration to include additional module directories for better dependency resolution.- Enhanced documentation for the KOOK adapter, including new features like typing indicators and system notifications.- Removed unused test assets and scripts from the test-bot example to streamline the project.
+- Updated dependencies [65f4b0a]
+- Updated dependencies [e62c23a]
+  - @zhin.js/core@1.2.0
+  - @zhin.js/ai@1.2.0
+
 ## 0.1.31
 
 ### Patch Changes

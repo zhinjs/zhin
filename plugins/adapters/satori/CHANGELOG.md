@@ -1,5 +1,12 @@
 # @zhin.js/adapter-satori
 
+## 1.0.0
+
+### Patch Changes
+
+- zhin.js@2.0.0
+- @zhin.js/host-router@1.0.0
+
 ## 0.0.42
 
 ### Patch Changes
