@@ -1,5 +1,12 @@
 # @zhin.js/adapter-lark
 
+## 2.0.0
+
+### Patch Changes
+
+- zhin.js@2.0.0
+- @zhin.js/host-router@1.0.0
+
 ## 1.0.96
 
 ### Patch Changes

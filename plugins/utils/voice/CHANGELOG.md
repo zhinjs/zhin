@@ -1,5 +1,11 @@
 # @zhin.js/plugin-voice
 
+## 1.0.0
+
+### Patch Changes
+
+- zhin.js@2.0.0
+
 ## 0.0.30
 
 ### Patch Changes

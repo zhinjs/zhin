@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.0.0
+
+### Patch Changes
+
+- Updated dependencies [65f4b0a]
+  - @zhin.js/host-api@1.0.0
+  - zhin.js@2.0.0
+  - @zhin.js/host-router@1.0.0
+
 ## 2.0.11
 
 ### Patch Changes
