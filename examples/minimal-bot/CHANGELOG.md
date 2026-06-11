@@ -1,5 +1,18 @@
 # minimal-bot
 
+## 0.0.8
+
+### Patch Changes
+
+- 2ef4896: fix: 更新概念 Bot=>Endpoint,已适配后续更多的业务场景;统一角色权限
+- Updated dependencies [d8def69]
+- Updated dependencies [2ef4896]
+  - @zhin.js/adapter-sandbox@4.0.1
+  - @zhin.js/host-router@1.0.1
+  - @zhin.js/host-api@1.0.1
+  - zhin.js@2.0.1
+  - @zhin.js/cli@1.0.89
+
 ## 0.0.7
 
 ### Patch Changes

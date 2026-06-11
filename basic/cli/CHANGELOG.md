@@ -1,5 +1,16 @@
 # @zhin.js/cli
 
+## 1.0.89
+
+### Patch Changes
+
+- d8def69: fix: 性能优化
+- 2ef4896: fix: 更新概念 Bot=>Endpoint,已适配后续更多的业务场景;统一角色权限
+- Updated dependencies [d8def69]
+- Updated dependencies [2ef4896]
+  - @zhin.js/logger@0.1.71
+  - @zhin.js/scaffold-wizard@0.1.4
+
 ## 1.0.88
 
 ### Patch Changes

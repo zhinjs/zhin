@@ -1,5 +1,11 @@
 # @zhin.js/scaffold-wizard
 
+## 0.1.4
+
+### Patch Changes
+
+- 2ef4896: fix: 更新概念 Bot=>Endpoint,已适配后续更多的业务场景;统一角色权限
+
 ## 0.1.3
 
 ### Patch Changes

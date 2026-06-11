@@ -1,5 +1,11 @@
 # @zhin.js/client
 
+## 2.0.3
+
+### Patch Changes
+
+- 2ef4896: fix: 更新概念 Bot=>Endpoint,已适配后续更多的业务场景;统一角色权限
+
 ## 2.0.2
 
 ### Patch Changes

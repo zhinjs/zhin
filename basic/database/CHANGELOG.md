@@ -1,5 +1,11 @@
 # @zhin.js/database
 
+## 1.0.74
+
+### Patch Changes
+
+- d8def69: fix: 性能优化
+
 ## 1.0.73
 
 ### Patch Changes

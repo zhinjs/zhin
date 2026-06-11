@@ -1,5 +1,14 @@
 # @zhin.js/plugin-short-url
 
+## 1.0.1
+
+### Patch Changes
+
+- d8def69: fix: 性能优化
+- Updated dependencies [d8def69]
+- Updated dependencies [2ef4896]
+  - zhin.js@2.0.1
+
 ## 1.0.0
 
 ### Patch Changes

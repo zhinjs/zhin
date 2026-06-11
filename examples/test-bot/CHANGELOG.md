@@ -1,5 +1,45 @@
 # test-bot
 
+## 0.1.107
+
+### Patch Changes
+
+- 2ef4896: fix: 更新概念 Bot=>Endpoint,已适配后续更多的业务场景;统一角色权限
+- Updated dependencies [d8def69]
+- Updated dependencies [2ef4896]
+  - @zhin.js/adapter-weixin-ilink@1.0.1
+  - @zhin.js/adapter-wechat-mp@1.0.1
+  - @zhin.js/adapter-dingtalk@2.0.1
+  - @zhin.js/adapter-onebot11@2.0.1
+  - @zhin.js/adapter-onebot12@1.0.1
+  - @zhin.js/adapter-telegram@3.0.1
+  - @zhin.js/adapter-discord@3.0.1
+  - @zhin.js/adapter-sandbox@4.0.1
+  - @zhin.js/adapter-github@1.0.1
+  - @zhin.js/adapter-napcat@1.0.1
+  - @zhin.js/adapter-satori@1.0.1
+  - @zhin.js/adapter-milky@1.0.1
+  - @zhin.js/adapter-icqq@4.0.1
+  - @zhin.js/adapter-kook@3.0.1
+  - @zhin.js/adapter-lark@2.0.1
+  - @zhin.js/host-router@1.0.1
+  - @zhin.js/adapter-qq@3.0.1
+  - @zhin.js/host-api@1.0.1
+  - zhin.js@2.0.1
+  - @zhin.js/cli@1.0.89
+  - @zhin.js/plugin-html-renderer@1.0.1
+  - @zhin.js/plugin-group-suite@1.0.1
+  - @zhin.js/client@2.0.3
+  - @zhin.js/adapter-email@1.0.1
+  - @zhin.js/adapter-slack@2.0.1
+  - @zhin.js/plugin-repeater@1.0.1
+  - @zhin.js/kernel@0.1.1
+  - @zhin.js/mcp@2.0.1
+  - @zhin.js/plugin-rss@1.0.1
+  - @zhin.js/plugin-music@3.0.1
+  - @zhin.js/plugin-60s@1.0.1
+  - @zhin.js/sensitive-filter@1.0.1
+
 ## 0.1.106
 
 ### Patch Changes
