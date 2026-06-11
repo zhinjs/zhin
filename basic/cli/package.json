@@ -5,7 +5,7 @@
   "type": "module",
   "main": "./lib/index.js",
   "bin": {
-    "zhin": "./lib/cli.js"
+    "zhin": "./bin/zhin.js"
   },
   "exports": {
     ".": {
@@ -15,6 +15,7 @@
     }
   },
   "files": [
+    "bin",
     "lib"
   ],
   "scripts": {
