@@ -42,11 +42,14 @@
     "qq-official-bot": "^1.2.2"
   },
   "devDependencies": {
-    "@zhin.js/cli": "workspace:*",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
-    "@zhin.js/host-api": "workspace:*",
+    "@zhin.js/cli": "workspace:*",
+    "@zhin.js/client": "workspace:*",
     "@zhin.js/contract": "workspace:*",
+    "@zhin.js/host-api": "workspace:*",
+    "@zhin.js/host-router": "workspace:*",
+    "@zhin.js/logger": "workspace:*",
     "lucide-react": "^1.17.0",
     "typescript": "^6.0.3",
     "zhin.js": "workspace:*"

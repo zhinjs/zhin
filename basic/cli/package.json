@@ -18,7 +18,7 @@
     "lib"
   ],
   "scripts": {
-    "build": "pnpm --filter @zhin.js/scaffold-wizard build && tsc",
+    "build": "tsc",
     "clean": "rimraf lib"
   },
   "dependencies": {
@@ -35,6 +35,7 @@
     "inquirer": "^14.0.2",
     "open": "^11.0.0",
     "ora": "^9.4.0",
+    "smol-toml": "^1.5.2",
     "yaml": "^2.9.0"
   },
   "devDependencies": {

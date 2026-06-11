@@ -107,7 +107,7 @@ export const startCommand = new Command('start')
         if (options.daemon) {
           // 后台运行 - 父进程作为守护进程监督子进程
           childProcess.on('error', (error) => {
-            logger.error(`❌ 子进程启动失败: ${error.message}`);
+            logger.error(`❌ 子进程启动失败: ${error instanceof Error ? error.message : String(error)}`);
             if (!isRestarting) {
               restartBot();
             }
@@ -146,7 +146,7 @@ export const startCommand = new Command('start')
           // 前台运行
           childProcess.on('error', (error) => {
             if (!isRestarting) {
-              logger.error(`❌ 启动失败: ${error.message}`);
+              logger.error(`❌ 启动失败: ${error instanceof Error ? error.message : String(error)}`);
               process.exit(1);
             }
           });
@@ -271,12 +271,13 @@ export const restartCommand = new Command('restart')
         process.kill(pid, 51);
         logger.info(formatCompact( { cmd: 'restart', op: 'signal_sent', pid }));
         
-      } catch (error: any) {
-        if (error.code === 'ESRCH') {
+      } catch (error: unknown) {
+        const err = error as NodeJS.ErrnoException;
+        if (err.code === 'ESRCH') {
           logger.error('进程不存在，清理PID文件');
           fs.removeSync(pidFile);
         } else {
-          logger.error(`发送信号失败: ${error.message}`);
+          logger.error(`发送信号失败: ${error instanceof Error ? error.message : String(error)}`);
         }
         process.exit(1);
       }

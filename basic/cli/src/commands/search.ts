@@ -140,8 +140,8 @@ export const searchCommand = new Command('search')
         throw error;
       }
 
-    } catch (error: any) {
-      logger.error(`搜索插件失败: ${error.message}`);
+    } catch (error: unknown) {
+      logger.error(`搜索插件失败: ${error instanceof Error ? error.message : String(error)}`);
       process.exit(1);
     }
   });
@@ -234,8 +234,8 @@ export const infoCommand = new Command('info')
         throw error;
       }
 
-    } catch (error: any) {
-      logger.error(`获取插件信息失败: ${error.message}`);
+    } catch (error: unknown) {
+      logger.error(`获取插件信息失败: ${error instanceof Error ? error.message : String(error)}`);
       process.exit(1);
     }
   });

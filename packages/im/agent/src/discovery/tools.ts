@@ -261,8 +261,8 @@ async function loadToolHandler(handlerPath: string, toolMdPath: string): Promise
           child.stdin.end();
         });
         return result;
-      } catch (e: any) {
-        return `Error running Python handler: ${e.message ?? String(e)}`;
+      } catch (e: unknown) {
+        return `Error running Python handler: ${e instanceof Error ? e.message : String(e)}`;
       }
     };
   }

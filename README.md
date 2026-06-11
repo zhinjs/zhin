@@ -23,7 +23,7 @@
 | **Advanced** | Feature 体系 | 命令、工具、技能、cron、数据库等组合 |
 | **Advanced** | toolSearch / MCP | 编排工具、deferred worker、MCP Client/Server |
 
-> **推荐首跑**：克隆仓库后进入 [`examples/minimal-bot`](./examples/minimal-bot/)（Sandbox + 最少插件）。**L4 参考**：[`examples/full-bot`](./examples/full-bot/)（硬编排 + 语义记忆 + MCP Mesh）。[`examples/test-bot`](./examples/test-bot/) 为维护者**厨房水槽**配置，勿当作默认模板。
+> **推荐首跑**：克隆仓库后进入 [`examples/minimal-bot`](./examples/minimal-bot/)（Sandbox + 最少插件）。**零安装先试**：[**demo.zhin.dev**](https://demo.zhin.dev)（官方在线 Sandbox）。**L4 参考**：[`examples/full-bot`](./examples/full-bot/)。[`examples/test-bot`](./examples/test-bot/) 为维护者**厨房水槽**配置，勿当作默认模板。
 
 ## 快速开始
 

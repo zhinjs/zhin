@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MessageSegment, cn, resolveMediaSrc, pickMediaRawUrl } from '@zhin.js/client';
 import {
-    getSandboxApiBase,
+    buildSandboxWebSocketUrl,
 } from './sandboxTransport';
 import { User, Users, Trash2, Send, Hash, MessageSquare, Wifi, WifiOff, Smile, Image, X, Check, Info, Search, Bot, UserPlus, Bell, Video, Music } from 'lucide-react';
 import RichTextEditor, { RichTextEditorRef } from './RichTextEditor';
@@ -84,10 +84,8 @@ export default function Sandbox() {
     }
 
     useEffect(() => {
-        const base = getSandboxApiBase()
-        const wsUrl = new URL('/sandbox', `${base}/`)
-        wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:'
-        wsRef.current = new WebSocket(wsUrl.href)
+        const wsUrl = buildSandboxWebSocketUrl()
+        wsRef.current = new WebSocket(wsUrl)
         wsRef.current.onopen = () => setConnected(true)
         wsRef.current.onmessage = (event) => {
             try { handleInboundPayload(JSON.parse(event.data)) }

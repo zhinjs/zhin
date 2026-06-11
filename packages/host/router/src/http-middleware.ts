@@ -1,5 +1,12 @@
 import type { Middleware } from "koa";
 import { timingSafeEqualString } from "./timing-safe-equal.js";
+import type { TokenRegistry } from "./demo-scope.js";
+import {
+  AUTH_SCOPE_STATE_KEY,
+  checkDemoHttpAccess,
+  extractBearerToken,
+  setAuthScopeOnContext,
+} from "./token-auth.js";
 
 function corsMatch(origin: string | undefined, allowed: string[]): boolean {
   if (!origin || allowed.length === 0) return false;
@@ -48,6 +55,8 @@ function requiresAuth(
 ): boolean {
   if (authExempt.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return false;
   if (pathname.startsWith("/pub/") || pathname === "/pub") return false;
+  // Paths outside the API base are intentionally public (no auth required).
+  // Only paths under {base}/ require authentication.
   if (!pathname.startsWith(base + "/") && pathname !== base) {
     const wl = whiteList.some(
       (p) => typeof p === "string" && !p.startsWith(base) && pathname.startsWith(p),
@@ -59,29 +68,53 @@ function requiresAuth(
 }
 
 export type AuthMiddlewareOptions = {
-  token: string;
+  /** @deprecated Use tokenRegistry */
+  token?: string;
+  tokenRegistry?: TokenRegistry;
   base: string;
   whiteList: (string | RegExp)[];
   authExemptPaths?: string[];
 };
 
 export function createAuthMiddleware(options: AuthMiddlewareOptions): Middleware {
-  const { token, base, whiteList, authExemptPaths = [] } = options;
+  const { token, tokenRegistry, base, whiteList, authExemptPaths = [] } = options;
   return async (ctx, next) => {
-    if (!requiresAuth(ctx.path, base, whiteList, authExemptPaths) || !token) {
+    const needsAuth = requiresAuth(ctx.path, base, whiteList, authExemptPaths);
+    const registry = tokenRegistry;
+
+    if (!needsAuth) {
+      setAuthScopeOnContext(ctx, "full");
       await next();
       return;
     }
-    const auth = ctx.get("Authorization");
-    const queryToken =
-      (typeof ctx.query.access_token === "string" ? ctx.query.access_token : "") ||
-      (typeof ctx.query.token === "string" ? ctx.query.token : "");
-    const reqToken = auth?.startsWith("Bearer ") ? auth.slice(7) : queryToken;
-    if (!timingSafeEqualString(token, reqToken)) {
+
+    if (!registry?.hasAnyToken() && !token) {
+      setAuthScopeOnContext(ctx, "full");
+      await next();
+      return;
+    }
+
+    const reqToken = extractBearerToken(ctx);
+    let scope = registry?.resolve(reqToken) ?? null;
+
+    if (scope == null && token && timingSafeEqualString(token, reqToken)) {
+      scope = "full";
+    }
+
+    if (scope == null) {
       ctx.status = 401;
       ctx.body = { success: false, error: "Invalid or missing token" };
       return;
     }
+
+    setAuthScopeOnContext(ctx, scope);
+
+    if (!checkDemoHttpAccess(ctx, scope, base)) {
+      return;
+    }
+
     await next();
   };
 }
+
+export { AUTH_SCOPE_STATE_KEY };

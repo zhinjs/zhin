@@ -22,4 +22,8 @@ export class SessionWriteLock {
       }
     }
   }
+
+  dispose(): void {
+    this.tails.clear();
+  }
 }

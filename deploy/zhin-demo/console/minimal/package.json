@@ -1,0 +1,12 @@
+{
+  "name": "@zhin/demo-console-minimal",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite"
+  },
+  "devDependencies": {
+    "vite": "^6.3.5"
+  }
+}

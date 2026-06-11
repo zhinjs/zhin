@@ -282,9 +282,9 @@ useContext("router", "discord", (router: Router, discord: DiscordAdapter) => {
       if (bot.$connected) { ctx.body = { success: true, message: "已经在线" }; return; }
       await bot.$connect();
       ctx.body = { success: true, message: "连接成功" };
-    } catch (e: any) {
+    } catch (e: unknown) {
       ctx.status = 500;
-      ctx.body = { success: false, error: e?.message || "连接失败" };
+      ctx.body = { success: false, error: e instanceof Error ? e.message : "连接失败" };
     }
   });
 
@@ -295,9 +295,9 @@ useContext("router", "discord", (router: Router, discord: DiscordAdapter) => {
       if (!bot.$connected) { ctx.body = { success: true, message: "已经离线" }; return; }
       await bot.$disconnect();
       ctx.body = { success: true, message: "已断开" };
-    } catch (e: any) {
+    } catch (e: unknown) {
       ctx.status = 500;
-      ctx.body = { success: false, error: e?.message || "断开失败" };
+      ctx.body = { success: false, error: e instanceof Error ? e.message : "断开失败" };
     }
   });
 
@@ -315,9 +315,9 @@ useContext("router", "discord", (router: Router, discord: DiscordAdapter) => {
         icon: g.iconURL({ size: 64 }),
       })) || [];
       ctx.body = { success: true, data: guilds };
-    } catch (e: any) {
+    } catch (e: unknown) {
       ctx.status = 500;
-      ctx.body = { success: false, error: e?.message || "获取服务器列表失败" };
+      ctx.body = { success: false, error: e instanceof Error ? e.message : "获取服务器列表失败" };
     }
   });
 });

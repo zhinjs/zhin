@@ -100,7 +100,7 @@ export function createToolFromZod<T extends Record<string, any>>(
     execute: async (args: Record<string, any>, context?: ToolContext) => {
       const parsed = schema.safeParse(args);
       if (!parsed.success) {
-        const msg = parsed.error.errors?.map((e: any) => `${e.path?.join('.') ?? 'root'}: ${e.message}`).join('; ') ?? 'Invalid arguments';
+        const msg = parsed.error.errors?.map((e: any) => `${e.path?.join('.') ?? 'root'}: ${e instanceof Error ? e.message : String(e)}`).join('; ') ?? 'Invalid arguments';
         return `Error: ${msg}`;
       }
       return execute(parsed.data as T, context);

@@ -249,9 +249,9 @@ useContext("router", "kook", (router: any, kook: KookAdapter) => {
       if (bot.$connected) { ctx.body = { success: true, message: "已经在线" }; return; }
       await bot.$connect();
       ctx.body = { success: true, message: "连接成功" };
-    } catch (e: any) {
+    } catch (e: unknown) {
       ctx.status = 500;
-      ctx.body = { success: false, error: e?.message || "连接失败" };
+      ctx.body = { success: false, error: e instanceof Error ? e.message : "连接失败" };
     }
   });
 
@@ -262,9 +262,9 @@ useContext("router", "kook", (router: any, kook: KookAdapter) => {
       if (!bot.$connected) { ctx.body = { success: true, message: "已经离线" }; return; }
       await bot.$disconnect();
       ctx.body = { success: true, message: "已断开" };
-    } catch (e: any) {
+    } catch (e: unknown) {
       ctx.status = 500;
-      ctx.body = { success: false, error: e?.message || "断开失败" };
+      ctx.body = { success: false, error: e instanceof Error ? e.message : "断开失败" };
     }
   });
 
@@ -284,9 +284,9 @@ useContext("router", "kook", (router: any, kook: KookAdapter) => {
           position: r.position,
         })),
       };
-    } catch (e: any) {
+    } catch (e: unknown) {
       ctx.status = 500;
-      ctx.body = { success: false, error: e?.message || "获取角色列表失败" };
+      ctx.body = { success: false, error: e instanceof Error ? e.message : "获取角色列表失败" };
     }
   });
 
@@ -300,9 +300,9 @@ useContext("router", "kook", (router: any, kook: KookAdapter) => {
       if (!name) { ctx.status = 400; ctx.body = { success: false, error: "缺少角色名称" }; return; }
       const role = await bot.createRole(ctx.params.guildId, name);
       ctx.body = { success: true, data: { id: role.role_id, name: role.name } };
-    } catch (e: any) {
+    } catch (e: unknown) {
       ctx.status = 500;
-      ctx.body = { success: false, error: e?.message || "创建角色失败" };
+      ctx.body = { success: false, error: e instanceof Error ? e.message : "创建角色失败" };
     }
   });
 
@@ -314,9 +314,9 @@ useContext("router", "kook", (router: any, kook: KookAdapter) => {
       if (!bot.$connected) { ctx.status = 400; ctx.body = { success: false, error: "Bot 未连接" }; return; }
       const success = await bot.deleteRole(ctx.params.guildId, ctx.params.roleId);
       ctx.body = { success, message: success ? "角色已删除" : "删除失败" };
-    } catch (e: any) {
+    } catch (e: unknown) {
       ctx.status = 500;
-      ctx.body = { success: false, error: e?.message || "删除角色失败" };
+      ctx.body = { success: false, error: e instanceof Error ? e.message : "删除角色失败" };
     }
   });
 });

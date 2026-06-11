@@ -2,38 +2,27 @@ import chalk from 'chalk'
 import { performance } from 'node:perf_hooks'
 import { format } from 'node:util'
 import { WriteStream } from 'node:fs'
+import {
+  LogLevel,
+  LOG_LEVEL_NAMES,
+  parseLogLevel,
+  isLogLevelEnabled,
+  type LogLevel as LogLevelType,
+  type LogLevelInput,
+} from './log-level.js'
 
-/**
- * 日志级别枚举
- */
-export enum LogLevel {
-  DEBUG = 0,
-  INFO = 1,
-  WARN = 2,
-  ERROR = 3,
-  SILENT = 4
-}
-
-/**
- * 日志级别名称映射
- */
-export const LOG_LEVEL_NAMES: Record<LogLevel, string> = {
-  [LogLevel.DEBUG]: 'DEBUG',
-  [LogLevel.INFO]: 'INFO',
-  [LogLevel.WARN]: 'WARN',
-  [LogLevel.ERROR]: 'ERROR',
-  [LogLevel.SILENT]: 'SILENT'
-}
+export { LogLevel, LOG_LEVEL_NAMES } from './log-level.js'
+export type { LogLevelInput } from './log-level.js'
 
 /**
  * 日志级别颜色映射
  */
-export const LOG_LEVEL_COLORS: Record<LogLevel, (text: string) => string> = {
-  [LogLevel.DEBUG]: chalk.gray,
-  [LogLevel.INFO]: chalk.blue,
-  [LogLevel.WARN]: chalk.yellow,
-  [LogLevel.ERROR]: chalk.red,
-  [LogLevel.SILENT]: chalk.gray
+export const LOG_LEVEL_COLORS: Record<LogLevelType, (text: string) => string> = {
+  debug: chalk.gray,
+  info: chalk.blue,
+  warn: chalk.yellow,
+  error: chalk.red,
+  silent: chalk.gray,
 }
 
 /**
@@ -52,7 +41,7 @@ const NAME_COLORS = [
  * 日志条目接口
  */
 export interface LogEntry {
-  level: LogLevel
+  level: LogLevelType
   name: string
   message: string
   timestamp: Date
@@ -94,7 +83,7 @@ export type ColorFunction = (text: string) => string
  */
 export interface LoggerColorOptions {
   /** 日志级别颜色映射（覆盖默认级别颜色） */
-  levelColors?: Partial<Record<LogLevel, ColorFunction>>
+  levelColors?: Partial<Record<LogLevelType, ColorFunction>>
   /** Logger名称颜色（可以是单个颜色或颜色数组） */
   nameColor?: ColorFunction | ColorFunction[]
   /** 日期时间颜色 */
@@ -106,7 +95,7 @@ export interface LoggerColorOptions {
  */
 export interface LoggerOptions {
   /** 日志级别 */
-  level?: LogLevel
+  level?: LogLevelInput
   /** 自定义格式化器 */
   formatter?: LogFormatter
   /** 输出器列表 */
@@ -169,7 +158,7 @@ export class DefaultFormatter implements LogFormatter {
   private readonly maxCacheSize = 1000
   
   // 可自定义的颜色配置
-  private levelColors: Record<LogLevel, ColorFunction>
+  private levelColors: Record<LogLevelType, ColorFunction>
   private nameColors: ColorFunction[]
   private dateColor: ColorFunction
 
@@ -212,7 +201,8 @@ export class DefaultFormatter implements LogFormatter {
   }
 
   format(entry: LogEntry): string {
-    const { level, name, message, timestamp, error } = entry
+    const { name, message, timestamp, error } = entry
+    const level = parseLogLevel(entry.level)
 
     // 格式化时间：MM-dd HH:MM:ss.SSS（使用自定义颜色）
     const date = timestamp.toISOString().slice(5, 23).replace('T', ' ')
@@ -331,7 +321,7 @@ export interface Timer {
  * Logger 类 - 自管理子 Logger
  */
 export class Logger {
-  private level: LogLevel=LogLevel.INFO
+  private level: LogLevelType = LogLevel.INFO
   private formatter: LogFormatter=new DefaultFormatter()
   private transports: LogTransport[]=[new ConsoleTransport()]
   private timers = new Map<string, number>()
@@ -367,20 +357,20 @@ export class Logger {
    * @param level
    * @param recursive 是否同时设置所有子 Logger 的级别
    */
-  setLevel(level: LogLevel, recursive: boolean = false): void {
-    this.level = level
+  setLevel(level: LogLevelInput, recursive: boolean = false): void {
+    this.level = parseLogLevel(level)
     
     if (recursive) {
       // 🔧 防止递归过深
       const maxDepth = 50
-      this.setLevelRecursive(level, 0, maxDepth)
+      this.setLevelRecursive(this.level, 0, maxDepth)
     }
   }
 
   /**
    * 递归设置级别，带深度检查
    */
-  private setLevelRecursive(level: LogLevel, currentDepth: number, maxDepth: number): void {
+  private setLevelRecursive(level: LogLevelType, currentDepth: number, maxDepth: number): void {
     if (currentDepth >= maxDepth) {
       console.warn(`[Logger] 递归深度超过${maxDepth}，停止递归设置`)
       return
@@ -395,15 +385,15 @@ export class Logger {
   /**
    * 获取当前日志级别
    */
-  getLevel(): LogLevel {
+  getLevel(): LogLevelType {
     return this.level
   }
 
   /**
    * 检查指定级别是否启用
    */
-  isLevelEnabled(level: LogLevel): boolean {
-    return level >= this.level
+  isLevelEnabled(level: LogLevelInput): boolean {
+    return isLogLevelEnabled(parseLogLevel(level), this.level)
   }
 
   /**
@@ -501,11 +491,11 @@ export class Logger {
   setOptions(options: LoggerOptions={}): void {
     // 如果有父 Logger，默认继承父级配置，然后应用自定义选项
     if (this.#parent) {
-      this.level = options.level ?? this.#parent?.level??LogLevel.INFO
+      this.level = parseLogLevel(options.level ?? this.#parent?.level ?? LogLevel.INFO)
       this.formatter = options.formatter ?? this.#parent?.formatter??new DefaultFormatter(options.colors) 
       this.transports = options.transports ?? [...this.#parent?.transports??[]]
     } else {
-      this.level = options.level ?? LogLevel.INFO
+      this.level = parseLogLevel(options.level ?? LogLevel.INFO)
       this.formatter = options.formatter ?? new DefaultFormatter(options.colors)
       this.transports = options.transports ?? [new ConsoleTransport()]
     }
@@ -539,7 +529,7 @@ export class Logger {
   /**
    * 记录日志的通用方法
    */
-  private log(level: LogLevel, ...args: any[]): void {
+  private log(level: LogLevelType, ...args: any[]): void {
     if (!this.isLevelEnabled(level)) {
       return
     }
@@ -692,7 +682,7 @@ export class Logger {
   /**
    * 条件日志
    */
-  logIf(condition: boolean, level: LogLevel, message: string, ...args: any[]): void {
+  logIf(condition: boolean, level: LogLevelType, message: string, ...args: any[]): void {
     if (condition) {
       this.log(level, message, ...args)
     }
@@ -724,13 +714,13 @@ export function removeTransport(transport: LogTransport,logger:Logger=defaultLog
 export function setFormatter(formatter: LogFormatter,logger:Logger=defaultLogger) {
   return logger.setFormatter(formatter)
 }
-export function setLevel(level: LogLevel,logger:Logger=defaultLogger) {
+export function setLevel(level: LogLevelInput, logger: Logger = defaultLogger) {
   return logger.setLevel(level)
 }
-export function getLevel(logger:Logger=defaultLogger) {
+export function getLevel(logger: Logger = defaultLogger) {
   return logger.getLevel()
 }
-export function isLevelEnabled(level: LogLevel,logger:Logger=defaultLogger) {
+export function isLevelEnabled(level: LogLevelInput, logger: Logger = defaultLogger) {
   return logger.isLevelEnabled(level)
 }
 export function setName(name:string,logger:Logger=defaultLogger) {

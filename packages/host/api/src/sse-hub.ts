@@ -129,6 +129,12 @@ export function sseSubscriberCount(): number {
 }
 
 /** @internal test helper */
+export function stopSseHub(): void {
+  for (const sub of subscribers.values()) sub.close();
+  subscribers.clear();
+  eventHistory.length = 0;
+}
+
 export function resetSseHubForTests(): void {
   for (const sub of subscribers.values()) sub.close();
   subscribers.clear();

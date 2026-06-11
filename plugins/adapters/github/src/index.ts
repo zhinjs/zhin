@@ -225,8 +225,8 @@ useContext('tool', 'github', (toolService: ToolFeature, adapter: GitHubAdapter) 
           });
 
           return replyMsg;
-        } catch (e: any) {
-          return `❌ Device Flow 启动失败: ${e.message}`;
+        } catch (e: unknown) {
+          return `❌ Device Flow 启动失败: ${e instanceof Error ? e.message : String(e)}`;
         }
       },
     },

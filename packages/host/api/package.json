@@ -67,6 +67,11 @@
   },
   "devDependencies": {
     "@types/koa": "^3.0.3",
+    "@zhin.js/agent": "workspace:*",
+    "@zhin.js/client": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/database": "workspace:*",
+    "@zhin.js/host-router": "workspace:*",
     "esbuild": "^0.28.0",
     "lucide-react": "^1.17.0",
     "tsup": "^8.5.1",

@@ -43,10 +43,11 @@
     "ws": "^8.21.0"
   },
   "devDependencies": {
-    "@zhin.js/cli": "workspace:*",
     "@types/node": "^25.9.2",
     "@types/ws": "^8.18.1",
+    "@zhin.js/cli": "workspace:*",
     "@zhin.js/client": "workspace:*",
+    "@zhin.js/host-router": "workspace:*",
     "typescript": "^6.0.3",
     "zhin.js": "workspace:*"
   },

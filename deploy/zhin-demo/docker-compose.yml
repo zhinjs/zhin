@@ -1,0 +1,45 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  host:
+    build:
+      context: ../..
+      dockerfile: deploy/zhin-demo/host/Dockerfile
+    restart: unless-stopped
+    environment:
+      ADMIN_TOKEN: ${ADMIN_TOKEN}
+      DEMO_TOKEN: ${DEMO_TOKEN}
+      OLLAMA_HOST: http://ollama:11434
+      NODE_ENV: production
+    depends_on:
+      - ollama
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./console/dist:/usr/share/nginx/demo-console:ro
+      - ${SSL_CERT:-./certs/origin.pem}:/etc/nginx/certs/origin.pem:ro
+      - ${SSL_KEY:-./certs/origin-key.pem}:/etc/nginx/certs/origin-key.pem:ro
+    depends_on:
+      - host
+
+volumes:
+  ollama_data:

@@ -162,12 +162,13 @@ export class GhClient {
       let data: any;
       try { data = raw ? JSON.parse(raw) : null; } catch { data = raw; }
       return { ok: true, status: 200, data };
-    } catch (err: any) {
+    } catch (err: unknown) {
       let data: any;
-      try { data = err.stdout ? JSON.parse(err.stdout) : { message: err.message }; } catch {
-        data = { message: err.stderr?.trim() || err.message };
+      const errObj = err instanceof Error ? err : new Error(String(err));
+      try { data = (err as any).stdout ? JSON.parse((err as any).stdout) : { message: errObj.message }; } catch {
+        data = { message: (err as any).stderr?.trim() || errObj.message };
       }
-      return { ok: false, status: err.exitCode || 0, data };
+      return { ok: false, status: (err as any).exitCode || 0, data };
     }
   }
 
@@ -205,8 +206,8 @@ export class GhClient {
         }
         const errBody = await appRes.text();
         return { ok: false, user: '', message: `App Token 验证失败 (${appRes.status}): ${errBody}` };
-      } catch (e: any) {
-        return { ok: false, user: '', message: e.message || 'App 认证失败' };
+      } catch (e: unknown) {
+        return { ok: false, user: '', message: (e instanceof Error ? e.message : String(e)) || 'App 认证失败' };
       }
     }
     // Token 模式（用户绑定）或 gh CLI 默认模式
@@ -225,8 +226,8 @@ export class GhClient {
       const login = raw.trim();
       this._user = login;
       return { ok: true, user: login, message: `gh CLI: ${login}` };
-    } catch (e: any) {
-      return { ok: false, user: '', message: e.message || 'gh 认证检查失败' };
+    } catch (e: unknown) {
+      return { ok: false, user: '', message: (e instanceof Error ? e.message : String(e)) || 'gh 认证检查失败' };
     }
   }
 
@@ -469,9 +470,10 @@ export class GhClient {
       let events: any[];
       try { events = JSON.parse(bodyPart); } catch { events = []; }
       return { events: Array.isArray(events) ? events : [], etag: newEtag };
-    } catch (err: any) {
+    } catch (err: unknown) {
       // 304 Not Modified — gh 会以非 0 退出码返回
-      if (err.stderr?.includes('304') || err.exitCode === 1) {
+      const ghErr = err instanceof Error ? (err as Error & { stderr?: string; exitCode?: number }) : null;
+      if (ghErr?.stderr?.includes('304') || (ghErr as { exitCode?: number } | null)?.exitCode === 1) {
         return { events: [], etag: etag || null };
       }
       throw err;
@@ -506,9 +508,11 @@ export class GhClient {
         body: JSON.stringify({ client_id: clientId }),
         signal: AbortSignal.timeout(15_000),
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      const errCause = e instanceof Error ? (e as any).cause?.code : undefined;
       throw new Error(
-        `Device Flow 请求失败: 无法连接 ${baseUrl} (${e.cause?.code || e.message})。` +
+        `Device Flow 请求失败: 无法连接 ${baseUrl} (${errCause || errMsg})。` +
         `Device Flow 需要访问 github.com（非 api.github.com），请检查网络/代理设置。`,
       );
     }

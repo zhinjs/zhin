@@ -36,6 +36,7 @@ export function resolveModelCandidates(
 
   if (modelRegistry) {
     for (const id of modelRegistry.selectModels(providerName, task, 5)) {
+      if (providerModels.length > 0 && !providerModels.includes(id)) continue;
       if (!candidates.includes(id)) candidates.push(id);
     }
   }

@@ -199,8 +199,9 @@ async function statusSystemd(projectName: string, userMode: boolean): Promise<vo
       ? ['--user', 'status', `${projectName}.service`]
       : ['status', `${projectName}.service`];
     execFileSync('systemctl', args, { stdio: 'inherit' });
-  } catch (e: any) {
-    if (e.status !== 0) logger.warn(formatCompact( { cmd: 'service', op: 'not_running' }));
+  } catch (e: unknown) {
+    const err = e as { status?: number | null };
+    if (err.status !== 0) logger.warn(formatCompact( { cmd: 'service', op: 'not_running' }));
   }
 }
 

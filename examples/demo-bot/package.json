@@ -1,0 +1,26 @@
+{
+  "name": "demo-bot",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Zhin.js 官方 demo-api.zhin.dev 托管配置（Sandbox + Demo scoped token）",
+  "type": "module",
+  "scripts": {
+    "dev": "zhin dev",
+    "start": "zhin start",
+    "build": "zhin build"
+  },
+  "dependencies": {
+    "@zhin.js/adapter-sandbox": "workspace:*",
+    "@zhin.js/cli": "workspace:*",
+    "@zhin.js/host-api": "workspace:*",
+    "@zhin.js/host-router": "workspace:*",
+    "zhin.js": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  }
+}

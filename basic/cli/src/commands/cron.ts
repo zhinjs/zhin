@@ -75,8 +75,9 @@ async function readSchedulerStore(): Promise<{ version: number; jobs: SchedulerJ
     const raw = await fs.readFile(filePath, 'utf-8');
     const data = JSON.parse(raw);
     return { version: data.version ?? 1, jobs: data.jobs ?? [] };
-  } catch (e: any) {
-    if (e?.code === 'ENOENT') return { version: 1, jobs: [] };
+  } catch (e: unknown) {
+    const err = e as NodeJS.ErrnoException;
+    if (err?.code === 'ENOENT') return { version: 1, jobs: [] };
     throw e;
   }
 }

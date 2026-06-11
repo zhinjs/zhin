@@ -239,6 +239,8 @@ export class DatabaseOrchestrationRepository implements OrchestrationRepository 
 export class MemoryOrchestrationRepository implements OrchestrationRepository {
   private runs = new Map<string, OrchestrationRunRecord>();
   private tasks = new Map<string, OrchestrationTaskRecord>();
+  private static readonly MAX_RUNS = 1000;
+  private static readonly MAX_TASKS = 5000;
 
   async createRun(input: CreateOrchestrationRunInput): Promise<OrchestrationRunRecord> {
     const now = Date.now();
@@ -254,6 +256,7 @@ export class MemoryOrchestrationRepository implements OrchestrationRepository {
       updated_at: now,
     };
     this.runs.set(record.id, record);
+    this.evictIfNeeded();
     return record;
   }
 
@@ -307,6 +310,7 @@ export class MemoryOrchestrationRepository implements OrchestrationRepository {
       finished_at: null,
     };
     this.tasks.set(record.id, record);
+    this.evictIfNeeded();
     const run = this.runs.get(input.run_id);
     if (run) run.updated_at = now;
     return record;
@@ -368,6 +372,36 @@ export class MemoryOrchestrationRepository implements OrchestrationRepository {
     run.state_version += 1;
     run.updated_at = Date.now();
     return next;
+  }
+
+  private evictIfNeeded(): void {
+    if (this.runs.size > MemoryOrchestrationRepository.MAX_RUNS) {
+      const sorted = [...this.runs.entries()].sort((a, b) => a[1].updated_at - b[1].updated_at);
+      const excess = this.runs.size - Math.floor(MemoryOrchestrationRepository.MAX_RUNS * 0.8);
+      for (let i = 0; i < excess && i < sorted.length; i++) {
+        this.runs.delete(sorted[i][0]);
+      }
+    }
+    if (this.tasks.size > MemoryOrchestrationRepository.MAX_TASKS) {
+      const sorted = [...this.tasks.entries()].sort((a, b) => a[1].updated_at - b[1].updated_at);
+      const excess = this.tasks.size - Math.floor(MemoryOrchestrationRepository.MAX_TASKS * 0.8);
+      for (let i = 0; i < excess && i < sorted.length; i++) {
+        this.tasks.delete(sorted[i][0]);
+      }
+    }
+  }
+
+  dispose(): void {
+    this.runs.clear();
+    this.tasks.clear();
+  }
+
+  runCount(): number {
+    return this.runs.size;
+  }
+
+  taskCount(): number {
+    return this.tasks.size;
   }
 }
 

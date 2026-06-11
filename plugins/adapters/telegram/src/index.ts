@@ -346,9 +346,9 @@ useContext("router", "telegram", (router: any, telegram: TelegramAdapter) => {
       if (bot.$connected) { ctx.body = { success: true, message: "已经在线" }; return; }
       await bot.$connect();
       ctx.body = { success: true, message: "连接成功" };
-    } catch (e: any) {
+    } catch (e: unknown) {
       ctx.status = 500;
-      ctx.body = { success: false, error: e?.message || "连接失败" };
+      ctx.body = { success: false, error: e instanceof Error ? e.message : "连接失败" };
     }
   });
 
@@ -359,9 +359,9 @@ useContext("router", "telegram", (router: any, telegram: TelegramAdapter) => {
       if (!bot.$connected) { ctx.body = { success: true, message: "已经离线" }; return; }
       await bot.$disconnect();
       ctx.body = { success: true, message: "已断开" };
-    } catch (e: any) {
+    } catch (e: unknown) {
       ctx.status = 500;
-      ctx.body = { success: false, error: e?.message || "断开失败" };
+      ctx.body = { success: false, error: e instanceof Error ? e.message : "断开失败" };
     }
   });
 
@@ -375,9 +375,9 @@ useContext("router", "telegram", (router: any, telegram: TelegramAdapter) => {
       if (!chat_id) { ctx.status = 400; ctx.body = { success: false, error: "缺少 chat_id" }; return; }
       const link = await bot.createInviteLink(Number(chat_id));
       ctx.body = { success: true, data: { invite_link: link } };
-    } catch (e: any) {
+    } catch (e: unknown) {
       ctx.status = 500;
-      ctx.body = { success: false, error: e?.message || "创建邀请链接失败" };
+      ctx.body = { success: false, error: e instanceof Error ? e.message : "创建邀请链接失败" };
     }
   });
 
@@ -394,9 +394,9 @@ useContext("router", "telegram", (router: any, telegram: TelegramAdapter) => {
       if (options.length < 2) { ctx.status = 400; ctx.body = { success: false, error: "至少需要 2 个选项" }; return; }
       const result = await bot.sendPoll(Number(chat_id), question, options, is_anonymous ?? true, allows_multiple ?? false);
       ctx.body = { success: true, data: { message_id: result.message_id } };
-    } catch (e: any) {
+    } catch (e: unknown) {
       ctx.status = 500;
-      ctx.body = { success: false, error: e?.message || "发起投票失败" };
+      ctx.body = { success: false, error: e instanceof Error ? e.message : "发起投票失败" };
     }
   });
 
@@ -418,9 +418,9 @@ useContext("router", "telegram", (router: any, telegram: TelegramAdapter) => {
           status: a.status,
         })),
       };
-    } catch (e: any) {
+    } catch (e: unknown) {
       ctx.status = 500;
-      ctx.body = { success: false, error: e?.message || "获取管理员失败" };
+      ctx.body = { success: false, error: e instanceof Error ? e.message : "获取管理员失败" };
     }
   });
 });

@@ -227,12 +227,12 @@ export class IcqqBot implements Bot<IcqqBotConfig, IcqqIpcMessageEvent> {
             groups: this.groups.size,
           }));
           break;
-        } catch (e: any) {
+        } catch (e: unknown) {
           this.logger.warn(formatCompact( {
             op: "reconnect",
             bot: this.$id,
             ok: false,
-            error: e?.message ?? String(e),
+            error: e instanceof Error ? e.message : String(e),
           }));
         }
       }

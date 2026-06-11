@@ -89,8 +89,9 @@ async function runCode(language: string, code: string): Promise<RunResult> {
       stderr: data.stderr || '',
       error: data.error || '',
     }
-  } catch (e: any) {
-    const msg = e?.name === 'TimeoutError' ? '请求超时（30s）' : e?.message || '未知错误'
+  } catch (e: unknown) {
+    const err = e as Error;
+    const msg = err.name === 'TimeoutError' ? '请求超时（30s）' : err.message || '未知错误'
     return { stdout: '', stderr: '', error: msg }
   }
 }

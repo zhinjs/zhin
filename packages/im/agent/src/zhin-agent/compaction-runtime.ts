@@ -39,6 +39,7 @@ function resolveAgentCompactionConfig(
 }
 
 const compactionStateBySession = new Map<string, AgentCompactionState>();
+const MAX_COMPACTION_SESSIONS = 5000;
 
 function getCompactionState(sessionId: string): AgentCompactionState {
   let state = compactionStateBySession.get(sessionId);
@@ -47,6 +48,33 @@ function getCompactionState(sessionId: string): AgentCompactionState {
     compactionStateBySession.set(sessionId, state);
   }
   return state;
+}
+
+export function getCompactionStateCount(): number {
+  return compactionStateBySession.size;
+}
+
+export function evictCompactionStatesIfOverPressure(): number {
+  let removed = 0;
+  if (compactionStateBySession.size > MAX_COMPACTION_SESSIONS * 0.8) {
+    const keys = [...compactionStateBySession.keys()];
+    const excess = compactionStateBySession.size - Math.floor(MAX_COMPACTION_SESSIONS * 0.6);
+    for (let i = 0; i < excess && i < keys.length; i++) {
+      compactionStateBySession.delete(keys[i]);
+      removed++;
+    }
+  }
+  return removed;
+}
+
+export function clearCompactionStates(): void {
+  compactionStateBySession.clear();
+}
+
+export function touchCompactionState(sessionId: string): void {
+  if (compactionStateBySession.has(sessionId)) {
+    getCompactionState(sessionId);
+  }
 }
 
 export async function transformContextWithCompaction(

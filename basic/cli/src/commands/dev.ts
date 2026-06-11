@@ -93,7 +93,7 @@ export const devCommand = new Command('dev')
       const setupChildHandlers = (childProcess: ChildProcess) => {
         childProcess.on('error', (error) => {
           if (!isRestarting) {
-            logger.error(`❌ 启动失败: ${error.message}`);
+            logger.error(`❌ 启动失败: ${error instanceof Error ? error.message : String(error)}`);
             // 提供常见问题的解决建议
             if (error.message.includes('ENOENT')) {
               if (options.bun) {

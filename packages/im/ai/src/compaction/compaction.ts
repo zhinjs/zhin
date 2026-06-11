@@ -239,8 +239,8 @@ The summary should be brief but informative so that later turns can quickly reco
     });
     const result = response.choices?.[0]?.message?.content;
     return typeof result === 'string' ? result : DEFAULT_SUMMARY_FALLBACK;
-  } catch (e: any) {
-    logger.warn(formatCompact( { summarize: 'fail', error: truncatePreview(e.message) }));
+  } catch (e: unknown) {
+    logger.warn(formatCompact( { summarize: 'fail', error: truncatePreview(e instanceof Error ? e.message : String(e)) }));
     return DEFAULT_SUMMARY_FALLBACK;
   }
 }
@@ -295,8 +295,8 @@ export async function summarizeWithFallback(params: {
   // 尝试完整摘要
   try {
     return await summarizeChunks(params);
-  } catch (fullError: any) {
-    logger.warn(formatCompact( { summarize: 'partial_fail', error: truncatePreview(fullError.message) }));
+  } catch (fullError: unknown) {
+    logger.warn(formatCompact( { summarize: 'partial_fail', error: truncatePreview(fullError instanceof Error ? fullError.message : String(fullError)) }));
   }
 
   // 降级：排除超大消息
@@ -319,8 +319,8 @@ export async function summarizeWithFallback(params: {
       const partial = await summarizeChunks({ ...params, messages: smallMessages });
       const notes = oversizedNotes.length > 0 ? `\n\n${oversizedNotes.join('\n')}` : '';
       return partial + notes;
-    } catch (partialError: any) {
-      logger.warn(formatCompact( { summarize: 'fail', error: truncatePreview(partialError.message) }));
+    } catch (partialError: unknown) {
+      logger.warn(formatCompact( { summarize: 'fail', error: truncatePreview(partialError instanceof Error ? partialError.message : String(partialError)) }));
     }
   }
 
@@ -663,12 +663,12 @@ export async function autoCompactIfNeeded(params: {
       autoSavedTokens,
       summary: result.summary,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     // 断路器记录
     if (tracking) {
       tracking.consecutiveFailures++;
     }
-    logger.error(`Auto-compact 失败: ${error.message}`);
+    logger.error(`Auto-compact 失败: ${error instanceof Error ? error.message : String(error)}`);
 
     // 返回 micro-compact 的结果（至少不丢失轻量级清理的收益）
     return {

@@ -78,7 +78,7 @@ export async function startProcess(command: string, args: string[], options:Spaw
         logger.error(`❌ 启动失败: 缺失必要的依赖模块（可能是 tsx）`);
         logger.info(formatCompact( { op: 'hint', hint: 'pnpm install' }));
       } else {
-        logger.error(`❌ 启动失败: ${error.message}`);
+        logger.error(`❌ 启动失败: ${error instanceof Error ? error.message : String(error)}`);
       }
       reject(error);
     });

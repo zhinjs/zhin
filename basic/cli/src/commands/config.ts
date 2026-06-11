@@ -5,6 +5,7 @@ import path from 'path';
 import yaml from 'yaml';
 import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
+import { configCheckCommand } from './config-check.js';
 
 function findConfigFile(cwd: string): string | null {
   const candidates = ['zhin.config.yml', 'zhin.config.yaml', 'zhin.config.json', 'zhin.config.toml', 'zhin.config.ts'];
@@ -227,6 +228,7 @@ const pathCommand = new Command('path')
 
 export const configCommand = new Command('config')
   .description('管理配置文件')
+  .addCommand(configCheckCommand)
   .addCommand(listCommand)
   .addCommand(getCommand)
   .addCommand(setCommand)

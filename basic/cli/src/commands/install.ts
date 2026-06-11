@@ -84,8 +84,8 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
       throw error;
     }
 
-  } catch (error: any) {
-    logger.error(`安装插件失败: ${error.message}`);
+  } catch (error: unknown) {
+    logger.error(`安装插件失败: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
   }
 }

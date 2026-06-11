@@ -41,9 +41,9 @@ addCommand(
       try {
         const short = await shortenUrl(url)
         return `短链接: ${short}`
-      } catch (e: any) {
+      } catch (e: unknown) {
         logger.warn(formatCompact( { op: 'shorten', ok: false, error: e instanceof Error ? e.message : String(e) }))
-        return `缩短失败: ${e.message}`
+        return `缩短失败: ${e instanceof Error ? e.message : String(e)}`
       }
     }),
 )
@@ -57,9 +57,9 @@ addCommand(
       try {
         const original = await expandUrl(url)
         return `原始链接: ${original}`
-      } catch (e: any) {
+      } catch (e: unknown) {
         logger.warn(formatCompact( { op: 'expand', ok: false, error: e instanceof Error ? e.message : String(e) }))
-        return `展开失败: ${e.message}`
+        return `展开失败: ${e instanceof Error ? e.message : String(e)}`
       }
     }),
 )
@@ -76,8 +76,8 @@ addTool(
       if (!isValidUrl(url)) return '无效的 URL，需要 http:// 或 https:// 开头'
       try {
         return await shortenUrl(url)
-      } catch (e: any) {
-        return `缩短失败: ${e.message}`
+      } catch (e: unknown) {
+        return `缩短失败: ${e instanceof Error ? e.message : String(e)}`
       }
     })
     .toTool(),

@@ -73,6 +73,18 @@ Console 壳层应依赖 `@zhin.js/client` 与 `@zhin.js/contract`，不重复实
 - 登录成功后持久化到 localStorage，刷新免重复登录
 - 支持修改已保存的 API Base / Token（重新登录）
 
+### 2.2 Demo Console 变体（demo.zhin.dev）
+
+公开在线 Demo 使用 **独立 Console 构建**（非 console.zhin.dev 登录流）：
+
+| 项 | 规范 |
+|----|------|
+| 站点 | `https://demo.zhin.dev` → 预填 `zhin_api_base` = `https://demo-api.zhin.dev` |
+| Token | 构建时注入 `VITE_API_TOKEN`（**demo scope**，见 [ADR 0016](/adr/0016-demo-host-token-scopes)） |
+| UI | 默认路由仅 **沙盒**；隐藏配置/文件/cron 写操作 |
+| CORS | Host `http.corsOrigins` 含 `https://demo.zhin.dev` |
+| 部署 | [deploy/zhin-demo](https://github.com/zhinjs/zhin/blob/main/deploy/zhin-demo/README.md) |
+
 ---
 
 ## 3. API 契约总览

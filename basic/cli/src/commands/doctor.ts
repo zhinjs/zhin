@@ -125,11 +125,11 @@ export const doctorCommand = new Command('doctor')
           message: hasZhin ? '已配置 zhin.js' : '未安装 zhin.js',
           fix: hasZhin ? undefined : 'pnpm install zhin.js'
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
         results.push({
           name: 'package.json',
           status: 'error',
-          message: `解析失败: ${err.message}`
+          message: `解析失败: ${err instanceof Error ? err.message : String(err)}`
         });
       }
     } else {

@@ -239,4 +239,8 @@ export class MemoryAgentSessionStore {
   dispose(): void {
     this.sessions.clear();
   }
+
+  get sessionCount(): number {
+    return this.sessions.size;
+  }
 }

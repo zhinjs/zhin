@@ -213,8 +213,8 @@ export async function triggerAIHook(event: AIHookEvent): Promise<void> {
   for (const handler of allHandlers) {
     try {
       await handler(event);
-    } catch (err: any) {
-      logger.error(`Hook 错误 [${event.type}:${event.action}]: ${err.message}`);
+    } catch (err: unknown) {
+      logger.error(`Hook 错误 [${event.type}:${event.action}]: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 }

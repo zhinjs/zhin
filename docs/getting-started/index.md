@@ -24,6 +24,10 @@ pnpm -v   # 应该显示 9.0.2 或更高
 npm install -g pnpm
 ```
 
+## 零安装体验（在线 Demo）
+
+若尚未安装 Node.js，可先在浏览器打开 **[demo.zhin.dev](https://demo.zhin.dev)**：官方托管 Sandbox，可发 `hello` 与 `ai:`（需服务端 Ollama）。满意后再按下文本地首跑或 `npm create zhin-app`。
+
 ## 推荐首跑（Stable）
 
 若你已克隆 [Zhin.js monorepo](https://github.com/zhinjs/zhin)，优先使用黄金路径示例（单 Sandbox、最少插件）：

@@ -63,8 +63,8 @@ async function uninstallLinuxService(serviceName: string): Promise<void> {
     execSync('sudo systemctl daemon-reload', { stdio: 'inherit' });
     
     logger.success('服务已卸载');
-  } catch (error: any) {
-    logger.error(`卸载服务失败: ${error.message}`);
+  } catch (error: unknown) {
+    logger.error(`卸载服务失败: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
   }
 }
@@ -84,8 +84,8 @@ async function uninstallMacService(serviceName: string): Promise<void> {
     await fs.remove(plistFile);
     
     logger.success('服务已卸载');
-  } catch (error: any) {
-    logger.error(`卸载服务失败: ${error.message}`);
+  } catch (error: unknown) {
+    logger.error(`卸载服务失败: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
   }
 }
@@ -105,8 +105,8 @@ async function uninstallWindowsService(serviceName: string): Promise<void> {
     execSync(`sc delete ${serviceName}`, { stdio: 'inherit' });
     
     logger.success('服务已卸载');
-  } catch (error: any) {
-    logger.error(`卸载服务失败: ${error.message}`);
+  } catch (error: unknown) {
+    logger.error(`卸载服务失败: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
   }
 }

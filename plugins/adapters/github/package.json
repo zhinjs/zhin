@@ -49,6 +49,7 @@
   },
   "license": "MIT",
   "devDependencies": {
+    "@zhin.js/host-router": "workspace:*",
     "typescript": "^6.0.3",
     "zhin.js": "workspace:*"
   },

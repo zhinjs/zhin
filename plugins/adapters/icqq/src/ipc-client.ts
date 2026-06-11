@@ -162,7 +162,7 @@ export class IpcClient {
       sock.on("error", (err) =>
         reject(
           new Error(
-            `无法连接 icqq 守护进程 (${getSocketPath(uin)}): ${err.message}。请先执行: icqq login`,
+            `无法连接 icqq 守护进程 (${getSocketPath(uin)}): ${err instanceof Error ? err.message : String(err)}。请先执行: icqq login`,
           ),
         ),
       );
@@ -204,7 +204,7 @@ export class IpcClient {
       sock.on("connect", () => resolve(new IpcClient(sock, true)));
       sock.on("error", (err) =>
         reject(
-          new Error(`无法连接 icqq RPC 服务 (${host}:${port}): ${err.message}`),
+          new Error(`无法连接 icqq RPC 服务 (${host}:${port}): ${err instanceof Error ? err.message : String(err)}`),
         ),
       );
     });

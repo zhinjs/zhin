@@ -241,8 +241,8 @@ export const pubCommand = new Command('pub')
         throw error;
       }
 
-    } catch (error: any) {
-      logger.error(`发布失败: ${error.message}`);
+    } catch (error: unknown) {
+      logger.error(`发布失败: ${error instanceof Error ? error.message : String(error)}`);
       process.exit(1);
     }
   });

@@ -147,8 +147,8 @@ export class PersistentCronEngine implements IPersistentJobEngine {
       cron.id = jobId;
       const dispose = addCron(cron);
       this.disposes.set(jobId, dispose);
-    } catch (e: any) {
-      logger.warn(`定时任务加载失败 [${jobId}]: ${e?.message || String(e)}`);
+    } catch (e: unknown) {
+      logger.warn(`定时任务加载失败 [${jobId}]: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 

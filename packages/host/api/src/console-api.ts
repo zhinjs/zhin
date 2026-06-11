@@ -1,4 +1,4 @@
-import { firstQuery, type Router, type RouterContext } from "@zhin.js/host-router/router";
+import { firstQuery, getAuthScope, type Router, type RouterContext } from "@zhin.js/host-router/router";
 import { Readable } from "node:stream";
 import { subscribeSse } from "./sse-hub.js";
 import type { ConsoleApiOptions } from "./console-api-types.js";
@@ -21,9 +21,13 @@ export function registerConsoleRoutes(
 
   router.post(`${apiBase}/request`, async (ctx: RouterContext) => {
     const message = (ctx.request.body ?? {}) as Record<string, unknown>;
+    const authScope = getAuthScope(ctx);
 
     try {
-      const payloads = await dispatchConsoleRpc(message, getWebServer, options);
+      const payloads = await dispatchConsoleRpc(message, getWebServer, {
+        ...options,
+        authScope,
+      });
       const match = pickRpcReply(message, payloads);
       if (!match) {
         ctx.status = 500;

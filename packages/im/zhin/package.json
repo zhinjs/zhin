@@ -66,9 +66,10 @@
     }
   },
   "devDependencies": {
-    "@zhin.js/adapter-sandbox": "workspace:*",
-    "typescript": "^6.0.3",
-    "@types/node": "^25.9.2"
+    "@types/node": "^25.9.2",
+    "@zhin.js/host-api": "workspace:*",
+    "@zhin.js/host-router": "workspace:*",
+    "typescript": "^6.0.3"
   },
   "repository": {
     "type": "git",

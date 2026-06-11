@@ -347,6 +347,18 @@ export class ModelRegistry {
     return this.models.get(providerName) || [];
   }
 
+  /** 用配置白名单覆盖某 provider 的模型缓存（yaml 显式 models 列表时用） */
+  seedProviderModels(providerName: string, modelIds: string[]): void {
+    this.models.set(
+      providerName,
+      modelIds.map((id) => ({
+        id,
+        provider: providerName,
+        cachedAt: Date.now(),
+      })),
+    );
+  }
+
   /** 获取所有 provider 的模型信息 */
   getAllModels(): Map<string, AIModelInfo[]> {
     return new Map(this.models);

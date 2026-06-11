@@ -382,6 +382,22 @@ function pendingKey(adapter: string, botId: string, ownerId: string): string {
   return `${adapter}|${botId}|${ownerId}`;
 }
 
+export function getPendingOrchestrationCount(): number {
+  return pendingOrchestration.size;
+}
+
+export function evictPendingOrchestrationIfOverPressure(): number {
+  const now = Date.now();
+  let removed = 0;
+  for (const [key, value] of pendingOrchestration) {
+    if (now > value.expiresAt) {
+      pendingOrchestration.delete(key);
+      removed++;
+    }
+  }
+  return removed;
+}
+
 export function setPendingOrchestrationTool(plugin: Plugin, ctx: ToolContext, toolName: string): void {
   if (toolName !== OWNER_APPROVE_ALWAYS_TOOL) return;
   if (!ctx.platform || !ctx.botId) return;

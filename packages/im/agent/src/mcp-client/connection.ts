@@ -58,8 +58,8 @@ export class McpClientConnection {
       await this.discoverCapabilities();
       this.state.connected = true;
       this.state.error = undefined;
-    } catch (err: any) {
-      this.state.error = err.message;
+    } catch (err: unknown) {
+      this.state.error = err instanceof Error ? err.message : String(err);
       await this.disconnect();
       throw err;
     }

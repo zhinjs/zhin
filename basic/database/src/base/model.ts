@@ -311,7 +311,7 @@ export abstract class Model<C=any,S extends Record<string,object>=Record<string,
    * 处理错误
    */
   protected handleError(error: Error, operation: string): never {
-    const message = `Model ${String(this.name)} ${operation} failed: ${error.message}`;
+    const message = `Model ${String(this.name)} ${operation} failed: ${error instanceof Error ? error.message : String(error)}`;
     throw new Error(message);
   }
 }

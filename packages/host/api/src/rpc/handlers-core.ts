@@ -16,6 +16,7 @@ import {
   saveProjectFile,
 } from "./project-files.js";
 import { handleDbRpc } from "./handlers-db.js";
+import { assertDemoRpcAllowed } from "@zhin.js/host-router/router";
 
 function reply(ctx: ConsoleRpcContext, payload: Record<string, unknown>) {
   ctx.emit(payload);
@@ -102,7 +103,15 @@ export async function handleCoreRpc(
   const type = String(message.type ?? "");
   const requestId = message.requestId as number | undefined;
   const pluginName = message.pluginName as string | undefined;
-  const { root, webServer } = ctx;
+  const { root, webServer, authScope = "full" } = ctx;
+
+  if (authScope === "demo") {
+    const denied = assertDemoRpcAllowed(type);
+    if (denied) {
+      reply(ctx, { requestId, error: denied });
+      return true;
+    }
+  }
 
   if (type.startsWith("db:")) {
     return handleDbRpc(message, ctx);

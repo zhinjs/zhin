@@ -59,6 +59,17 @@ import type { ToolContext } from '@zhin.js/core';
 import { asPrivate } from '../zhin-agent/zhin-agent-private.js';
 import type { AIService } from '../service.js';
 
+/** yaml 中显式 models 列表：覆盖 provider.models 与 ModelRegistry 缓存，避免 /v1/models 发现结果污染白名单 */
+function applyExplicitModelLists(ai: AIService, modelRegistry: ModelRegistry): void {
+  for (const alias of ai.listProviders()) {
+    if (!ai.hasExplicitModelList(alias)) continue;
+    const ids = ai.getRoutingConfig().providers[alias]?.models ?? [];
+    if (ids.length === 0) continue;
+    ai.getProvider(alias).models = [...ids];
+    modelRegistry.seedProviderModels(alias, ids);
+  }
+}
+
 function seedProviderModelsFromRegistry(ai: AIService, modelRegistry: ModelRegistry): void {
   for (const alias of ai.listProviders()) {
     if (ai.hasExplicitModelList(alias)) continue;
@@ -143,13 +154,16 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     const dataDir = path.join(process.cwd(), 'data');
     const modelRegistry = new ModelRegistry(dataDir);
     const hadCache = modelRegistry.loadCache();
+    applyExplicitModelLists(ai, modelRegistry);
     agent.setModelRegistry(modelRegistry);
     ai.setModelRegistry(modelRegistry);
     seedProviderModelsFromRegistry(ai, modelRegistry);
+    ai.refreshLlmApiRegistry();
     // Discover models in background (don't block startup)
     (async () => {
       try {
         for (const alias of ai.listProviders()) {
+          if (ai.hasExplicitModelList(alias)) continue;
           const p = ai.getProvider(alias);
           const discovered = await modelRegistry.discover(p);
           if (discovered.length > 0) {

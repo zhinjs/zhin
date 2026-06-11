@@ -22,6 +22,7 @@ export { registerAssistantJobsRoute } from "./rest/assistant-jobs-rest-api.js";
 export { registerAgentSessionsRoutes } from "./rest/agent-sessions-rest-api.js";
 export { registerOrchestrationRoutes } from "./rest/orchestration-rest-api.js";
 export { registerIntrospectionRoutes } from "./rest/introspection-rest-api.js";
+export { stopSseHub } from "./sse-hub.js";
 import { registerHostRestRoutes } from "./rest/host-rest-api.js";
 import { registerMarketplaceRoutes } from "./rest/marketplace-rest-api.js";
 import { registerLogsRoutes } from "./rest/logs-rest-api.js";

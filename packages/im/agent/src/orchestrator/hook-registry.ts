@@ -28,7 +28,7 @@ export class HookRegistry extends ResourceRegistry<AIHook> {
     for (const hook of matching) {
       try {
         await hook.handler(event);
-      } catch (err: any) {
+      } catch (err: unknown) {
         // Swallow individual hook errors to not break the pipeline
       }
     }

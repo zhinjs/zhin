@@ -15,6 +15,7 @@
 | [0009](./0009-pi-aligned-ai-agent-core.md) | 对齐 pi 的 AI/Agent 核心（Context + stream + agentLoop） |
 | [0010](./0010-pi-coding-agent-harness-alignment.md) | 对齐 pi coding-agent Harness（Compaction / 会话树 / 生态） |
 | [0011](./0011-missions-harness-alignment.md) | 对齐 Missions Multi-Agent Harness（missions / MissionRunner） |
+| [0016](./0016-demo-host-token-scopes.md) | Demo Host Token 作用域（demo.zhin.dev） |
 
 ## 相关
 

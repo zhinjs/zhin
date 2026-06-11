@@ -148,4 +148,12 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
   return { executeTask, resolveAdapter: deps.resolveAdapter };
 }
 
+export async function drainTaskExecutorLocks(timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (locks.size > 0 && Date.now() < deadline) {
+    await Promise.allSettled([...locks.values()]);
+  }
+  locks.clear();
+}
+
 export type TaskExecutor = ReturnType<typeof createTaskExecutor>;

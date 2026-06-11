@@ -18,6 +18,7 @@ function resolveRpcRoot(options: DispatchConsoleRpcOptions): Plugin {
 export type DispatchConsoleRpcOptions = {
   root?: ReturnType<typeof usePlugin>;
   projectFs?: ProjectFs;
+  authScope?: "full" | "demo";
 };
 
 export function buildConsoleRpcContext(
@@ -29,6 +30,7 @@ export function buildConsoleRpcContext(
     root: resolveRpcRoot(options),
     webServer: getWebServer(),
     projectFs: options.projectFs ?? createNodeProjectFs(),
+    authScope: options.authScope,
     emit,
   };
 }

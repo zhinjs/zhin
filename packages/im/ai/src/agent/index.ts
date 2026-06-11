@@ -842,7 +842,7 @@ export class Agent {
 
         // 没有任何工具结果，提供友好的错误消息
         const fallbackResult: AgentResult = {
-          content: `Something went wrong: ${err.message}. Please try again or rephrase your request.`,
+          content: `Something went wrong: ${err instanceof Error ? err.message : String(err)}. Please try again or rephrase your request.`,
           toolCalls: [],
           usage: state.usage,
           iterations: state.iterations,

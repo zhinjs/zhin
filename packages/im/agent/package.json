@@ -10,6 +10,16 @@
       "types": "./lib/index.d.ts",
       "development": "./src/index.ts",
       "import": "./lib/index.js"
+    },
+    "./config": {
+      "types": "./lib/config/index.d.ts",
+      "development": "./src/config/index.ts",
+      "import": "./lib/config/index.js"
+    },
+    "./task-executor": {
+      "types": "./lib/task-executor.d.ts",
+      "development": "./src/task-executor.ts",
+      "import": "./lib/task-executor.js"
     }
   },
   "files": [

@@ -19,7 +19,7 @@ export type QueryLogger = (info: {
  */
 const defaultLogger: QueryLogger = ({ sql, params, duration, error }) => {
   const paramStr = params?.length ? ` [${JSON.stringify(params)}]` : '';
-  const status = error ? `❌ ERROR: ${error.message}` : `✅ ${duration}ms`;
+  const status = error ? `❌ ERROR: ${error instanceof Error ? error.message : String(error)}` : `✅ ${duration}ms`;
   console.log(`[SQL] ${sql}${paramStr} → ${status}`);
 };
 

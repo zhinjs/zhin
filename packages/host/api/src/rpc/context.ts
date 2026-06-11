@@ -31,4 +31,5 @@ export type ConsoleRpcContext = {
   webServer: ConsoleWebServer;
   projectFs: ProjectFs;
   emit: (payload: Record<string, unknown>) => void;
+  authScope?: "full" | "demo";
 };

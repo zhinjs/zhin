@@ -1,7 +1,5 @@
 // 导入所有内容从 logger.ts
 export {
-  LogLevel,
-  LOG_LEVEL_NAMES,
   LOG_LEVEL_COLORS,
   Logger,
   DefaultFormatter,
@@ -42,6 +40,19 @@ export {
   EMPTY_COMPACT_USAGE,
 } from './compact-log.js'
 export type { CompactFieldValue, CompactUsage } from './compact-log.js'
+
+export {
+  toLogLevelName,
+  isValidLogLevelInput,
+  parseLogLevel,
+  toLog4jsLevel,
+  isLogLevel,
+  isLogLevelEnabled,
+  logLevelFromLog4js,
+  LogLevel,
+  LOG_LEVEL_NAMES,
+} from './log-level.js'
+export type { LogLevelInput, Log4jsLevel, LogLevelName } from './log-level.js'
 
 // 导入默认logger和便捷方法
 import defaultLogger from './logger.js'

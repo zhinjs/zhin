@@ -33,8 +33,10 @@
     "init": "pnpm --filter test-bot initial && pnpm install",
     "prepare:logger": "pnpm --filter @zhin.js/logger build && pnpm --filter @zhin.js/cli install",
     "prepare:cli": "pnpm --filter @zhin.js/scaffold-wizard build && pnpm --filter @zhin.js/cli build && pnpm install",
-    "build": "pnpm --filter @zhin.js/scaffold-wizard build && pnpm -r --filter \"./basic/**\" build && pnpm install && pnpm -r --filter \"./packages/im/*\" --filter \"!zhin.js\" build && pnpm -r --filter \"./packages/console/*\" build && pnpm --filter @zhin.js/host-router build && pnpm --filter @zhin.js/host-api build && pnpm --filter zhin.js build && pnpm -r --filter \"./packages/toolkit/*\" --filter \"!@zhin.js/scaffold-wizard\" build && pnpm --filter @zhin.js/mcp build && pnpm -r --filter \"./plugins/adapters/**\" build && pnpm -r --filter \"./plugins/utils/**\" build",
-    "clean": "pnpm -r clean",
+    "build": "turbo run build --filter=./basic/** --filter=./packages/** --filter=./plugins/**",
+    "build:all": "turbo run build",
+    "build:force": "turbo run build --filter=./basic/** --filter=./packages/** --filter=./plugins/** --filter=./docs --force",
+    "clean": "turbo run clean && rimraf node_modules/.cache/turbo",
     "lint": "eslint .",
     "check:harness-paths": "node scripts/check-im-send-bypass.mjs",
     "check:no-koa": "node scripts/check-no-koa-imports.mjs",
@@ -77,12 +79,12 @@
     "inquirer": "^14.0.2",
     "ora": "^9.4.0",
     "rimraf": "^6.1.2",
+    "turbo": "^2.9.18",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.61.0",
     "vitest": "^4.1.0",
     "zhin.js": "workspace:*"
   },
-  "dependencies": {},
   "pnpm": {
     "overrides": {
       "zhin.js": "workspace:*",
