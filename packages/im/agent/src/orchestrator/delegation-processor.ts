@@ -4,7 +4,7 @@
 import { randomUUID } from 'node:crypto';
 import { Logger } from '@zhin.js/logger';
 import type { ZhinAgent } from '../zhin-agent/index.js';
-import type { ToolContext } from '@zhin.js/core';
+import { createSyntheticMessage } from '@zhin.js/core';
 import { getOrchestrationService } from './orchestration-service.js';
 import { getAgentDispatcher } from './agent-dispatcher.js';
 
@@ -119,15 +119,14 @@ export class DelegationProcessor {
       await orch?.repositoryHandle.updateTaskStatus(taskId, 'running', { started_at: Date.now() });
       dispatcher.syncTaskFromRecord((await orch!.repositoryHandle.getTask(taskId))!);
 
-      const context: ToolContext = {
-        platform: 'mesh',
-        botId: 'delegation',
-        sceneId: sessionKey,
-        senderId: 'remote-delegate',
-        scope: 'private',
-      };
+      const commMessage = createSyntheticMessage({
+        adapter: 'mesh',
+        endpoint: 'delegation',
+        sender: { id: 'remote-delegate', isMaster: true },
+        channel: { type: 'private', id: sessionKey },
+      });
 
-      await this.options.zhinAgent.prompt(prompt, context);
+      await this.options.zhinAgent.prompt(prompt, commMessage);
       const resultText = 'Delegation completed via main agent turn';
 
       dispatcher.recordResult({

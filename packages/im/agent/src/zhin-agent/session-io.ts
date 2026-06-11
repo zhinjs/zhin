@@ -9,7 +9,7 @@ import type {
   CreateAgentSessionInput,
 } from '@zhin.js/ai';
 import { agentMessagesToOpenAi } from '@zhin.js/ai';
-import type { ToolContext } from '@zhin.js/core';
+import type { AgentTurnMessage, Message } from '@zhin.js/core';
 import {
   createUserMessage,
   renderUserMessageForLlm,
@@ -20,6 +20,7 @@ import {
 import {
   formatSenderRolesForLabel,
   QUOTE_CONTEXT_BLOCK_EXTRA_KEY,
+  senderRolesFromMessage,
   stripUserSpoofedSenderPrefix,
 } from '@zhin.js/core';
 
@@ -34,53 +35,65 @@ function sanitizeSenderAttr(value: string): string {
   return trimmed.length > 0 ? trimmed.slice(0, 64) : 'unknown';
 }
 
-function resolveSenderDisplayName(message: ToolContext['message']): string {
+function resolveSenderDisplayName(message: Message): string {
   if (!message?.$sender) return 'unknown';
   const sender = message.$sender as { nickname?: string; name?: string; id?: string };
   const raw = sender.nickname || sender.name || sender.id;
   return raw != null ? sanitizeSenderAttr(String(raw)) : 'unknown';
 }
 
+function mapPlatformRoleForLabel(role?: string): string | undefined {
+  if (!role || role === 'member') return undefined;
+  if (role === 'owner') return 'group_owner';
+  if (role === 'admin') return 'group_admin';
+  return role;
+}
+
+function resolveSenderRoleLabels(commMessage: Message): string[] {
+  const labels = formatSenderRolesForLabel([...senderRolesFromMessage(commMessage)])
+    .split(',')
+    .map((r) => r.trim())
+    .filter((r) => r && r !== 'user');
+  const platform = mapPlatformRoleForLabel(commMessage.$sender.role);
+  if (platform && !labels.includes(platform)) labels.push(platform);
+  return labels.length > 0 ? labels : ['user'];
+}
+
 /** 群/频道 user 消息的 sender 元数据（写入 `agent_messages.extra`） */
-export function buildUserMessageExtra(
-  context: Pick<ToolContext, 'scope' | 'senderId' | 'roles' | 'message'>,
-): AgentMessageExtra | undefined {
-  const scope = context.scope || 'private';
+export function buildUserMessageExtra(commMessage: Message): AgentMessageExtra | undefined {
+  const scope = commMessage.$channel?.type || 'private';
   if (scope !== 'group' && scope !== 'channel') return undefined;
+  const roleLabels = resolveSenderRoleLabels(commMessage);
   const sender: AgentMessageSenderExtra = {
-    id: sanitizeSenderAttr(String(context.senderId || 'unknown')),
-    name: resolveSenderDisplayName(context.message),
-    roles: formatSenderRolesForLabel(context.roles ?? ['user'])
-      .split(',')
-      .map((r) => r.trim())
-      .filter(Boolean),
+    id: sanitizeSenderAttr(String(commMessage.$sender.id || 'unknown')),
+    name: resolveSenderDisplayName(commMessage),
+    roles: roleLabels.length > 0 ? roleLabels : ['user'],
     scope,
   };
-  if (sender.roles.length === 0) sender.roles = ['user'];
   return { sender };
 }
 
 /** 剥离伪造前缀后的用户正文 + 可选 extra（入库 payload 用） */
 export function prepareUserContentForSession(
-  context: Pick<ToolContext, 'scope' | 'senderId' | 'roles' | 'message'>,
+  commMessage: Message,
   rawContent: string,
 ): { content: string; extra?: AgentMessageExtra } {
   const content = stripUserSpoofedSenderPrefix(rawContent);
-  const extra = buildUserMessageExtra(context);
+  const extra = buildUserMessageExtra(commMessage);
   return { content, extra };
 }
 
 /** 本轮 user 消息：干净正文 + extra + LLM 渲染（引用/sender 仅 extra + 加载时拼接） */
 export function resolveTurnUserMessage(
-  context: Pick<ToolContext, 'scope' | 'senderId' | 'roles' | 'message' | 'extra'>,
+  commMessage: AgentTurnMessage,
   rawContent: string,
 ): { content: string; extra?: AgentMessageExtra; llmMessage: UserMessage } {
-  const { content, extra: senderExtra } = prepareUserContentForSession(context, rawContent);
-  const quoteBlock = context.extra?.[QUOTE_CONTEXT_BLOCK_EXTRA_KEY];
+  const { content, extra: senderExtra } = prepareUserContentForSession(commMessage, rawContent);
+  const quoteBlock = (commMessage as import('@zhin.js/core').AgentTurnMessage).extra?.[QUOTE_CONTEXT_BLOCK_EXTRA_KEY];
   const extra: AgentMessageExtra = {
     ...senderExtra,
     ...(typeof quoteBlock === 'string' && quoteBlock.trim()
-      ? { quote: { block: quoteBlock.trim(), messageId: context.message?.$quote_id } }
+      ? { quote: { block: quoteBlock.trim(), messageId: commMessage.$quote_id } }
       : {}),
   };
   const hasExtra = !!(extra.sender || extra.quote);
@@ -90,10 +103,10 @@ export function resolveTurnUserMessage(
 
 /** @deprecated 使用 `resolveTurnUserMessage` */
 export function formatUserContentForSession(
-  context: Pick<ToolContext, 'scope' | 'senderId' | 'roles' | 'message' | 'extra'>,
+  commMessage: AgentTurnMessage,
   rawContent: string,
 ): string {
-  const { llmMessage } = resolveTurnUserMessage(context, rawContent);
+  const { llmMessage } = resolveTurnUserMessage(commMessage, rawContent);
   if (llmMessage.role !== 'user') return rawContent;
   const block = llmMessage.content.find((b) => b.type === 'text');
   return block?.type === 'text' ? block.text : rawContent;
@@ -101,24 +114,24 @@ export function formatUserContentForSession(
 
 export function buildSessionCreateInput(
   sessionKey: string,
-  context: Pick<ToolContext, 'platform' | 'botId' | 'scope' | 'sceneId'>,
+  commMessage: Message,
 ): CreateIMSessionInput & CreateAgentSessionInput {
   return {
     session_key: sessionKey,
-    platform: context.platform || '',
-    bot_id: context.botId || '',
-    scene_id: context.sceneId || '',
-    scene_type: context.scope || 'private',
+    platform: String(commMessage.$adapter || ''),
+    endpoint_id: commMessage.$endpoint || '',
+    scene_id: commMessage.$channel?.id ?? commMessage.$sender.id ?? '',
+    scene_type: commMessage.$channel?.type || 'private',
   };
 }
 
 export function buildImTranscriptQuery(
-  context: Pick<ToolContext, 'platform' | 'botId' | 'sceneId'>,
+  commMessage: Message,
 ): import('@zhin.js/ai').ImTranscriptQuery {
   return {
-    platform: context.platform || '',
-    botId: context.botId || '',
-    sceneId: context.sceneId || '',
+    platform: String(commMessage.$adapter || ''),
+    endpointId: commMessage.$endpoint || '',
+    sceneId: commMessage.$channel?.id ?? commMessage.$sender.id ?? '',
   };
 }
 
@@ -146,9 +159,9 @@ export async function resolveSessionIsNewBeforeCreate(
 export async function beginTurnSession(
   deps: SessionIODeps,
   sessionKey: string,
-  context: Pick<ToolContext, 'platform' | 'botId' | 'scope' | 'sceneId'>,
+  commMessage: Message,
 ): Promise<{ sessionKey: string; sessionId: string }> {
-  const input = buildSessionCreateInput(sessionKey, context);
+  const input = buildSessionCreateInput(sessionKey, commMessage);
   const record = await deps.agentSessionStore.getOrCreateActive(input);
   return { sessionKey, sessionId: record.session_id };
 }

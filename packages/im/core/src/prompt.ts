@@ -20,7 +20,7 @@ export class Prompt<P extends RegisteredAdapter> {
      * 获取当前会话唯一标识（适配器-机器人-频道-用户）
      */
     private getChannelAddress<P2 extends RegisteredAdapter>(event: Message<AdapterMessage<P2>>) {
-        return `${event.$adapter}-${event.$bot}-${event.$channel.type}:${event.$channel.id}-${event.$sender.id}`;
+        return `${event.$adapter}-${event.$endpoint}-${event.$channel.type}:${event.$channel.id}-${event.$sender.id}`;
     }
     /**
      * 通用提问方法，支持自定义格式化、超时、默认值等
@@ -28,17 +28,21 @@ export class Prompt<P extends RegisteredAdapter> {
      */
     private prompt<T = any>(config: Prompt.Config<T>) {
         return new Promise<T>(async (resolve, reject) => {
+            if (!this.event.$reply) {
+                reject(new Error('Prompt requires outbound capability on the current endpoint'));
+                return;
+            }
             const id = await this.event.$reply(config.tips);
             this.middleware(
                 input => {
                     if (input instanceof Error) {
-                        this.event.$reply(input.message);
+                        void this.event.$reply?.(input.message);
                         if (config.defaultValue) resolve(config.defaultValue);
                         else reject(input);
                         return;
                     }
                     const adapter = this.plugin.inject(this.event.$adapter) as Adapter;
-                    adapter.emit('call.recallMessage',this.event.$bot, id);
+                    adapter.emit('call.recallMessage',this.event.$endpoint, id);
                     resolve(config.format(input));
                 },
                 config.timeout,
@@ -222,7 +226,7 @@ export class Prompt<P extends RegisteredAdapter> {
             case 'boolean':
                 return (await this.confirm(schema.meta.description || schema.meta.key || 'Confirm')) as Schema.Types<T>;
             case 'object':
-                if (schema.meta.description) await this.event.$reply(schema.meta.description);
+                if (schema.meta.description) await this.event.$reply?.(schema.meta.description);
                 if (!schema.options.object) throw new Error('Object schema missing object definition');
                 return (await this.getValueWithSchemas(schema.options.object)) as Schema.Types<T>;
             case 'date':

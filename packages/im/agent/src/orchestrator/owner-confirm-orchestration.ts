@@ -5,7 +5,7 @@
  * 阶段 B：白名单工具 + 信号 + 非子 Agent 时由本模块同步调用 ask_user(type=confirm)。
  */
 import { getPlugin } from '@zhin.js/core';
-import type { Plugin, ToolContext } from '@zhin.js/core';
+import type { Plugin, Message } from '@zhin.js/core';
 import type { ToolResultTransform } from '@zhin.js/ai';
 import { AskUserBuiltinTool } from '../builtin/ask-user-tool.js';
 import { errMsg } from '../discovery/utils.js';
@@ -26,7 +26,7 @@ const WHITELIST = new Set<string>(OWNER_HARD_ORCHESTRATION_TOOLS);
 const DEFAULT_MAX_AUTO_ASK = 3;
 
 export interface OwnerOrchestrationOptions {
-  toolContext: ToolContext;
+  commMessage: Message;
   /**
    * 子 Agent / Worker 内为 true：不自动 ask_user（阶段 B）。
    * 须配合 {@link runWithDirectAgentExecution}，否则 bash 仍可能只返回 `ZHIN_NEEDS_OWNER` 而不执行。
@@ -35,7 +35,7 @@ export interface OwnerOrchestrationOptions {
   /** 每根任务自动 ask_user 上限，默认 3 */
   maxAutoOwnerAsk?: number;
   /**
-   * 当前 Bot 插件实例。生产路径可由 {@link ZhinAgent} 传入 `getPlugin()`；
+   * 当前 Endpoint 插件实例。生产路径可由 {@link ZhinAgent} 传入 `getPlugin()`；
    * 单测注入桩对象，避免依赖对 `@zhin.js/core` 的全局 mock（与 Vitest 模块缓存冲突）。
    */
   plugin?: Plugin;
@@ -64,7 +64,7 @@ function appendOrchestratedOwnerAnswer(originalToolText: string, ownerAnswer: st
 }
 
 function appendUnavailableNote(originalToolText: string, note: string): string {
-  return `${originalToolText.trimEnd()}\n\n---\n⚠️ 无法自动收集 Owner 在线确认：${note}\n请 Bot Owner 配置 owner 与私聊通道，或由助手向用户说明下一步。`;
+  return `${originalToolText.trimEnd()}\n\n---\n⚠️ 无法自动收集 Owner 在线确认：${note}\n请 Endpoint Owner 配置 owner 与私聊通道，或由助手向用户说明下一步。`;
 }
 
 function appendLimitNote(originalToolText: string, maxAsk: number): string {
@@ -109,17 +109,17 @@ export function createOwnerOrchestratedToolResultTransform(
     const { body } = parseNeedsOwnerSignal(result);
     const question = buildConfirmQuestion(toolName, body);
 
-    if (toolName === 'bash' && hasOwnerApproveAlways(plugin, options.toolContext, toolName)) {
+    if (toolName === 'bash' && hasOwnerApproveAlways(plugin, options.commMessage, toolName)) {
       return appendOrchestratedOwnerAnswer(result, 'yes');
     }
 
     if (toolName === 'bash') {
-      setPendingOrchestrationTool(plugin, options.toolContext, toolName);
+      setPendingOrchestrationTool(plugin, options.commMessage, toolName);
     }
     try {
       const ownerRaw = await askTool.run(
         { question, type: 'confirm', timeout: 120 },
-        options.toolContext,
+        options.commMessage,
       );
       const ownerStr = typeof ownerRaw === 'string' ? ownerRaw : String(ownerRaw);
 
@@ -131,7 +131,7 @@ export function createOwnerOrchestratedToolResultTransform(
       return appendOrchestratedOwnerAnswer(result, ownerStr.trim());
     } finally {
       if (toolName === 'bash') {
-        clearPendingOrchestrationTool(plugin, options.toolContext);
+        clearPendingOrchestrationTool(plugin, options.commMessage);
       }
     }
   };

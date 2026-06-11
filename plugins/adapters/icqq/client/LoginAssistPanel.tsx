@@ -14,7 +14,7 @@ import { apiFetch } from "./utils/api";
 interface PendingLoginTask {
   id: string;
   adapter: string;
-  botId: string;
+  endpointId: string;
   type: string;
   payload?: {
     message?: string;
@@ -164,7 +164,7 @@ export default function LoginAssistPanel() {
                   </div>
                   <div className="flex gap-1 text-xs">
                     <span className="px-2 py-0.5 rounded border">{task.adapter}</span>
-                    <span className="px-2 py-0.5 rounded bg-muted">{task.botId}</span>
+                    <span className="px-2 py-0.5 rounded bg-muted">{task.endpointId}</span>
                   </div>
                 </div>
 

@@ -13,12 +13,12 @@ describe('Adapter Module', () => {
   })
 })
 
-describe('EmailBot.htmlToText', () => {
+describe('EmailEndpoint.htmlToText', () => {
   let htmlToText: (html: string) => string
 
   beforeAll(async () => {
-    const { EmailBot } = await import('../src/bot')
-    htmlToText = EmailBot.htmlToText
+    const { EmailEndpoint } = await import('../src/endpoint')
+    htmlToText = EmailEndpoint.htmlToText
   })
 
   it('should strip simple HTML tags', () => {
@@ -67,12 +67,12 @@ describe('EmailBot.htmlToText', () => {
   })
 })
 
-describe('EmailBot.parseEmailContent', () => {
+describe('EmailEndpoint.parseEmailContent', () => {
   let parseEmailContent: (email: any) => any[]
 
   beforeAll(async () => {
-    const { EmailBot } = await import('../src/bot')
-    parseEmailContent = EmailBot.parseEmailContent
+    const { EmailEndpoint } = await import('../src/endpoint')
+    parseEmailContent = EmailEndpoint.parseEmailContent
   })
 
   it('should parse text-only email', () => {

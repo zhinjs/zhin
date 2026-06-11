@@ -4,7 +4,7 @@
 import type { Plugin } from '@zhin.js/core';
 import {
   introspectionRestBindings,
-  introspectionRestBots,
+  introspectionRestEndpoints,
   introspectionRestCommands,
   introspectionRestMcp,
   introspectionRestTools,
@@ -41,7 +41,7 @@ export function registerIntrospectionRoutes(
     handler: (root: Plugin, q: Record<string, string | undefined>) => IntrospectionJsonResponse<unknown>;
   }> = [
     { path: 'commands', handler: introspectionRestCommands },
-    { path: 'bots', handler: introspectionRestBots },
+    { path: 'endpoints', handler: introspectionRestEndpoints },
     { path: 'bindings', handler: introspectionRestBindings },
     { path: 'tools', handler: introspectionRestTools },
     { path: 'mcp', handler: introspectionRestMcp },

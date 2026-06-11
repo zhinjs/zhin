@@ -2,54 +2,40 @@
  * spawn_task 内置工具单测（issue #396）
  */
 import { describe, it, expect, vi } from 'vitest';
-import type { ToolContext } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 import {
   createSpawnTaskTool,
-  originFromToolContext,
+  originFromMessage,
   SpawnTaskBuiltinTool,
 } from '../../src/builtin/spawn-task-tool.js';
 import type { SubagentManager } from '../../src/subagent.js';
 
-describe('SpawnTaskBuiltinTool / createSpawnTaskTool', () => {
-  it('originFromToolContext maps context fields and default sceneType', () => {
-    const full = {
-      platform: 'qq',
-      botId: 'b1',
-      senderId: 'u1',
-      sceneId: 's1',
-      message: { $channel: { type: 'group' } },
-    } as ToolContext;
-    expect(originFromToolContext(full)).toEqual({
-      platform: 'qq',
-      botId: 'b1',
-      senderId: 'u1',
-      sceneId: 's1',
-      sceneType: 'group',
-    });
+function mockMessage(overrides: Partial<Message<any>> = {}): Message<any> {
+  return {
+    $adapter: 'qq',
+    $endpoint: 'b1',
+    $sender: { id: 'u1' },
+    $channel: { type: 'group', id: 's1' },
+    ...overrides,
+  } as Message<any>;
+}
 
-    const minimal = {} as ToolContext;
-    expect(originFromToolContext(minimal)).toEqual({
-      platform: '',
-      botId: '',
-      senderId: '',
-      sceneId: '',
-      sceneType: 'private',
-    });
+describe('SpawnTaskBuiltinTool / createSpawnTaskTool', () => {
+  it('originFromMessage wraps the comm message', () => {
+    const full = mockMessage();
+    expect(originFromMessage(full)).toEqual({ message: full });
+
+    const minimal = {} as Message<any>;
+    expect(originFromMessage(minimal)).toEqual({ message: minimal });
   });
 
   it('createSpawnTaskTool calls manager.spawn with origin from session context', async () => {
     const spawn = vi.fn().mockResolvedValue('子任务已启动');
     const manager = { spawn } as unknown as SubagentManager;
 
-    const ctx = {
-      platform: 'qq',
-      botId: 'b1',
-      senderId: 'u1',
-      sceneId: 's1',
-      message: { $channel: { type: 'group' } },
-    } as ToolContext;
+    const commMessage = mockMessage();
 
-    const tool = createSpawnTaskTool(ctx, manager);
+    const tool = createSpawnTaskTool(commMessage, manager);
     expect(tool.name).toBe('spawn_task');
     expect(tool.source).toBe('builtin:context');
 
@@ -59,15 +45,9 @@ describe('SpawnTaskBuiltinTool / createSpawnTaskTool', () => {
     expect(spawn).toHaveBeenCalledWith({
       task: '整理文档',
       label: 'doc',
-      origin: {
-        platform: 'qq',
-        botId: 'b1',
-        senderId: 'u1',
-        sceneId: 's1',
-        sceneType: 'group',
-      },
+      origin: { message: commMessage },
       agent: undefined,
-      notifyContext: ctx,
+      notifyContext: commMessage,
     });
     expect(out).toBe('子任务已启动');
   });
@@ -76,8 +56,8 @@ describe('SpawnTaskBuiltinTool / createSpawnTaskTool', () => {
     const spawnSync = vi.fn().mockResolvedValue('架构 Artifact 已创建');
     const spawn = vi.fn();
     const manager = { spawn, spawnSync } as unknown as SubagentManager;
-    const ctx = { platform: 'sandbox', botId: 'b1', senderId: 'u1', sceneId: 's1' } as ToolContext;
-    const tool = createSpawnTaskTool(ctx, manager);
+    const commMessage = mockMessage({ $adapter: 'sandbox' });
+    const tool = createSpawnTaskTool(commMessage, manager);
     const out = await tool.execute({
       task: '设计 wi-1',
       agent: 'architect',
@@ -93,7 +73,7 @@ describe('SpawnTaskBuiltinTool / createSpawnTaskTool', () => {
   it('run rejects empty task without calling spawn', async () => {
     const spawn = vi.fn();
     const manager = { spawn } as unknown as SubagentManager;
-    const inst = new SpawnTaskBuiltinTool({} as ToolContext, manager);
+    const inst = new SpawnTaskBuiltinTool({} as Message<any>, manager);
     const out = await inst.run({ task: '' });
     expect(out).toBe('请提供任务描述');
     expect(spawn).not.toHaveBeenCalled();

@@ -10,12 +10,12 @@ describe('NotificationRouter', () => {
   it('notifyToSendOptions 构建 IM 发送选项', () => {
     expect(
       notifyToSendOptions(
-        { channel: 'im', platform: 'qq', botId: 'bot1', sceneId: 'group1', scope: 'group' },
+        { channel: 'im', platform: 'qq', endpointId: 'bot1', sceneId: 'group1', scope: 'group' },
         'hello',
       ),
     ).toEqual({
       context: 'qq',
-      bot: 'bot1',
+      endpoint: 'bot1',
       id: 'group1',
       type: 'group',
       content: 'hello',
@@ -24,13 +24,13 @@ describe('NotificationRouter', () => {
 
   it('resolveEffectiveNotify 优先 notify 并合并 defaults', () => {
     const notify = resolveEffectiveNotify(
-      { channel: 'im', platform: 'icqq', botId: '1' },
-      { channel: 'im', platform: 'qq', botId: '2', sceneId: 's2', scope: 'private' },
+      { channel: 'im', platform: 'icqq', endpointId: '1' },
+      { channel: 'im', platform: 'qq', endpointId: '2', sceneId: 's2', scope: 'private' },
     );
     expect(notify).toEqual({
       channel: 'im',
       platform: 'icqq',
-      botId: '1',
+      endpointId: '1',
       sceneId: 's2',
       scope: 'private',
     });
@@ -59,7 +59,7 @@ describe('NotificationRouter', () => {
       notify: {
         channel: 'im',
         platform: 'icqq',
-        botId: '8596238',
+        endpointId: '8596238',
         sceneId: '1659488338',
         scope: 'private',
       },
@@ -68,7 +68,7 @@ describe('NotificationRouter', () => {
     expect(result.delivered).toBe(true);
     expect(sendMessage).toHaveBeenCalledWith({
       context: 'icqq',
-      bot: '8596238',
+      endpoint: '8596238',
       id: '1659488338',
       type: 'private',
       content: '早报内容',
@@ -78,7 +78,7 @@ describe('NotificationRouter', () => {
   it('mergeImNotify 与完整 im notify 投递一致', async () => {
     const routing = {
       platform: 'icqq',
-      botId: '8596238',
+      endpointId: '8596238',
       sceneId: '1659488338',
       scope: 'private',
     };

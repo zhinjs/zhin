@@ -29,10 +29,10 @@ pnpm add @zhin.js/adapter-onebot11 ws
 |------|------|
 | **OneBot 实现** | 已运行 go-cqhttp、Lagrange、Shamrock 等，并开启 WS 服务 |
 | **正向 WS（`connection: ws`）** | 配置 OneBot 实现的 WS 地址；应用主动连接 |
-| **反向 WS（`connection: wss`）** | 需 `@zhin.js/host-router`；OneBot 实现连到本 Bot 的 `path` |
+| **反向 WS（`connection: wss`）** | 需 `@zhin.js/host-router`；OneBot 实现连到本 Endpoint 的 `path` |
 | **access_token** | 可选；须与 OneBot 实现侧配置一致 |
 
-必填字段见 `OneBot11BotConfig`：`context`、`name`、`connection`；`ws` 需 `url`，`wss` 需 `path`。
+必填字段见 `OneBot11EndpointConfig`：`context`、`name`、`connection`；`ws` 需 `url`，`wss` 需 `path`。
 
 ## 最小配置
 
@@ -42,7 +42,7 @@ pnpm add @zhin.js/adapter-onebot11 ws
 plugins:
   - "@zhin.js/adapter-onebot11"
 
-bots:
+endpoints:
   - context: onebot11
     connection: ws
     name: my-bot
@@ -52,7 +52,7 @@ bots:
 
 ## 配置
 
-所有 Bot 使用 **同一 context：`onebot11`**，通过 **`connection`** 区分连接方式。
+所有 Endpoint 使用 **同一 context：`onebot11`**，通过 **`connection`** 区分连接方式。
 
 ### 正向 WebSocket（connection: ws）
 
@@ -60,7 +60,7 @@ bots:
 plugins:
   - "@zhin.js/adapter-onebot11"
 
-bots:
+endpoints:
   - context: onebot11
     connection: ws
     name: my-bot
@@ -77,7 +77,7 @@ plugins:
   - "@zhin.js/host-router"
   - "@zhin.js/adapter-onebot11"
 
-bots:
+endpoints:
   - context: onebot11
     connection: wss
     name: my-bot
@@ -216,22 +216,22 @@ addCommand(new MessageCommand('cq')
 ### 消息相关
 
 ```typescript
-const bot = app.adapters.get('onebot11')?.bots.get('my-bot')
+const endpoint = app.adapters.get('onebot11')?.endpoints.get('my-bot')
 
 // 发送群消息
-await bot.callApi('send_group_msg', {
+await endpoint.callApi('send_group_msg', {
   group_id: 123456,
   message: '消息内容'
 })
 
 // 发送私聊消息
-await bot.callApi('send_private_msg', {
+await endpoint.callApi('send_private_msg', {
   user_id: 123456,
   message: '消息内容'
 })
 
 // 撤回消息
-await bot.callApi('delete_msg', {
+await endpoint.callApi('delete_msg', {
   message_id: 123456
 })
 ```
@@ -240,20 +240,20 @@ await bot.callApi('delete_msg', {
 
 ```typescript
 // 获取登录信息
-const loginInfo = await bot.callApi('get_login_info')
+const loginInfo = await endpoint.callApi('get_login_info')
 
 // 获取用户信息
-const userInfo = await bot.callApi('get_stranger_info', {
+const userInfo = await endpoint.callApi('get_stranger_info', {
   user_id: 123456
 })
 
 // 获取群信息
-const groupInfo = await bot.callApi('get_group_info', {
+const groupInfo = await endpoint.callApi('get_group_info', {
   group_id: 123456
 })
 
 // 获取群成员列表
-const memberList = await bot.callApi('get_group_member_list', {
+const memberList = await endpoint.callApi('get_group_member_list', {
   group_id: 123456
 })
 ```
@@ -262,20 +262,20 @@ const memberList = await bot.callApi('get_group_member_list', {
 
 ```typescript
 // 踢出群成员
-await bot.callApi('set_group_kick', {
+await endpoint.callApi('set_group_kick', {
   group_id: 123456,
   user_id: 654321
 })
 
 // 禁言群成员
-await bot.callApi('set_group_ban', {
+await endpoint.callApi('set_group_ban', {
   group_id: 123456,
   user_id: 654321,
   duration: 600 // 秒
 })
 
 // 设置群名片
-await bot.callApi('set_group_card', {
+await endpoint.callApi('set_group_card', {
   group_id: 123456,
   user_id: 654321,
   card: '新名片'

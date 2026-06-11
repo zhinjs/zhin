@@ -1,7 +1,7 @@
 import { formatCompact, Logger } from '@zhin.js/logger';
 import type { ContentPart } from '@zhin.js/ai';
 import { userMessagePlainText } from '@zhin.js/ai';
-import { resolveIMSessionIdFromToolContext } from '@zhin.js/ai';
+import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
 import { parseOutput } from '@zhin.js/ai';
 import { detectTone } from '@zhin.js/ai';
 import {
@@ -34,8 +34,8 @@ import type {
   OnChunkCallback,
   OutputElement,
   Tool,
-  ToolContext,
 } from './zhin-agent-private.js';
+import type { Message } from '@zhin.js/core';
 
 const logger = new Logger(null, 'ZhinAgent');
 const now = () => performance.now();
@@ -54,36 +54,23 @@ function sessionDeps(host: ZhinAgentPrivate): SessionIODeps {
   };
 }
 
-async function beginTurnSession(host: ZhinAgentPrivate, context: ToolContext) {
-  const sessionKey = resolveIMSessionIdFromToolContext({
-    platform: context.platform,
-    botId: context.botId,
-    scope: context.scope,
-    sceneId: context.sceneId,
-    senderId: context.senderId,
-  });
-  return beginTurnSessionIO(sessionDeps(host), sessionKey, context);
+async function beginTurnSession(host: ZhinAgentPrivate, commMessage: Message) {
+  const sessionKey = resolveIMSessionIdFromMessage(commMessage);
+  return beginTurnSessionIO(sessionDeps(host), sessionKey, commMessage);
 }
 
 export async function processTextTurn(
   host: ZhinAgentPrivate,
   content: string,
-  context: ToolContext,
+  commMessage: Message,
   externalTools: Tool[] = [],
   onChunk?: OnChunkCallback,
   extras?: ProcessTextTurnOptions,
 ): Promise<OutputElement[]> {
     const t0 = now();
-    const { senderId, platform, botId } = context;
-    const turnUser = buildTurnUserMessages(context, content);
-    const userId = senderId || 'unknown';
-    const sessionKey = resolveIMSessionIdFromToolContext({
-      platform,
-      botId,
-      scope: context.scope,
-      sceneId: context.sceneId,
-      senderId,
-    });
+    const userId = commMessage.$sender.id || 'unknown';
+    const turnUser = buildTurnUserMessages(commMessage, content);
+    const sessionKey = resolveIMSessionIdFromMessage(commMessage);
     const isNewSession = await resolveSessionIsNewBeforeCreate(
       sessionDeps(host),
       sessionKey,
@@ -94,8 +81,8 @@ export async function processTextTurn(
       host.resetDeferredAutoContinueDepth(sessionKey);
     }
     await host.waitForMemoryPersistence();
-    const { sessionId } = await beginTurnSession(host, context);
-    await host.emitter.dispatch('ai.processing.start', host.emitter.createPayload(sessionId, context, 'text', {
+    const { sessionId } = await beginTurnSession(host, commMessage);
+    await host.emitter.dispatch('ai.processing.start', host.emitter.createPayload(sessionId, commMessage, 'text', {
       content,
     }));
     logPhase(host.phaseConfig, 'turn.start', sessionId, {
@@ -108,7 +95,7 @@ export async function processTextTurn(
       if (!rateCheck.allowed) {
         logPhase(host.phaseConfig, 'turn.rate_limited', sessionId, { userId });
         logger.debug(`[速率限制] 用户 ${userId} 被限制: ${rateCheck.message}`);
-        await host.emitter.dispatch('ai.processing.finish', host.emitter.createPayload(sessionId, context, 'text', {
+        await host.emitter.dispatch('ai.processing.finish', host.emitter.createPayload(sessionId, commMessage, 'text', {
           path: 'rate_limited',
           reply: rateCheck.message || '请稍后再试',
           reason: 'rate_limited',
@@ -118,18 +105,17 @@ export async function processTextTurn(
       }
     }
 
-    host.emitter.emit('ai.typing.start', host.emitter.createPayload(sessionId, context, 'text', {
+    host.emitter.emit('ai.typing.start', host.emitter.createPayload(sessionId, commMessage, 'text', {
       reason: 'processing',
     }));
 
     host.beginActiveTurn();
 
-    const contextForTools = await attachWebSearchLocale(context, userId, host.userProfiles);
+    const contextForTools = await attachWebSearchLocale(commMessage, userId, host.userProfiles);
 
     triggerAIHook(createAIHookEvent('message', 'received', sessionId, {
-      userId,
+      commMessage: contextForTools,
       content,
-      platform: platform || '',
     })).catch(() => {});
 
     const turnBinding = host.activeBinding;
@@ -160,7 +146,7 @@ export async function processTextTurn(
       : [];
     const allTools = collectRuntimeTools({
       content,
-      context: contextForTools,
+      commMessage: contextForTools,
       externalTools,
       config: host.config,
       skillRegistry: host.skillRegistry,
@@ -207,14 +193,14 @@ export async function processTextTurn(
       sessionKey,
       sessionId,
       userMessages,
-      context,
+      commMessage,
       onChunk,
       execute: (initialMessages, hooks, signal, _turnId) => runAgentLoopTextTurn({
         host,
         sessionId,
         userMessageExtra: turnUser.userMessageExtra,
         rawContent: turnUser.rawContent,
-        context,
+        commMessage,
         contextForTools,
         allTools,
         resolvedTools,
@@ -230,7 +216,7 @@ export async function processTextTurn(
     });
     const reply = loopResult.reply;
 
-    await host.emitter.dispatch('ai.response', host.emitter.createPayload(sessionId, context, 'text', {
+    await host.emitter.dispatch('ai.response', host.emitter.createPayload(sessionId, commMessage, 'text', {
       path: loopResult.path,
       model: loopResult.model,
       iterations: loopResult.iterations,
@@ -238,7 +224,7 @@ export async function processTextTurn(
     }));
     await touchSession(sessionDeps(host), sessionId);
     if (isNewSession) {
-      host.emitSessionNewEvent(sessionId, context, 'text', turnUser.rawContent, reply);
+      host.emitSessionNewEvent(sessionId, commMessage, 'text', turnUser.rawContent, reply);
     }
     await host.finalizeActiveTurn({
       usage: loopResult.usage,
@@ -248,17 +234,16 @@ export async function processTextTurn(
     });
 
     triggerAIHook(createAIHookEvent('message', 'sent', sessionId, {
-      userId,
+      commMessage,
       content: reply,
-      platform: platform || '',
     })).catch(() => {});
 
-    await host.emitter.dispatch('ai.processing.finish', host.emitter.createPayload(sessionId, context, 'text', {
+    await host.emitter.dispatch('ai.processing.finish', host.emitter.createPayload(sessionId, commMessage, 'text', {
       path: loopResult.path,
       model: loopResult.model,
       reply,
     }));
-    host.emitter.emit('ai.typing.stop', host.emitter.createPayload(sessionId, context, 'text', {
+    host.emitter.emit('ai.typing.stop', host.emitter.createPayload(sessionId, commMessage, 'text', {
       reason: 'processing_complete',
     }));
     logPhase(host.phaseConfig, 'turn.end', sessionId, {
@@ -277,29 +262,22 @@ export async function processTextTurn(
 export async function processMultimodalTurn(
   host: ZhinAgentPrivate,
   parts: ContentPart[],
-  context: ToolContext,
+  commMessage: Message,
   onChunk?: OnChunkCallback,
 ): Promise<OutputElement[]> {
-  const { senderId, platform, botId } = context;
-  const userId = senderId || 'unknown';
-  const sessionKey = resolveIMSessionIdFromToolContext({
-    platform,
-    botId,
-    scope: context.scope,
-    sceneId: context.sceneId,
-    senderId,
-  });
+  const userId = commMessage.$sender?.id || 'unknown';
+  const sessionKey = resolveIMSessionIdFromMessage(commMessage);
   const isNewSession = await resolveSessionIsNewBeforeCreate(
     sessionDeps(host),
     sessionKey,
   );
   await host.waitForMemoryPersistence();
-  const { sessionId } = await beginTurnSession(host, context);
-  await host.emitter.dispatch('ai.processing.start', host.emitter.createPayload(sessionId, context, 'multimodal'));
+  const { sessionId } = await beginTurnSession(host, commMessage);
+  await host.emitter.dispatch('ai.processing.start', host.emitter.createPayload(sessionId, commMessage, 'multimodal'));
 
   const rateCheck = host.rateLimiter.check(userId);
   if (!rateCheck.allowed) {
-    await host.emitter.dispatch('ai.processing.finish', host.emitter.createPayload(sessionId, context, 'multimodal', {
+    await host.emitter.dispatch('ai.processing.finish', host.emitter.createPayload(sessionId, commMessage, 'multimodal', {
       path: 'rate_limited',
       reply: rateCheck.message || '请稍后再试',
       reason: 'rate_limited',
@@ -308,7 +286,7 @@ export async function processMultimodalTurn(
     return parseOutput(rateCheck.message || '请稍后再试');
   }
 
-  host.emitter.emit('ai.typing.start', host.emitter.createPayload(sessionId, context, 'multimodal', {
+  host.emitter.emit('ai.typing.start', host.emitter.createPayload(sessionId, commMessage, 'multimodal', {
     reason: 'processing',
   }));
 
@@ -316,13 +294,13 @@ export async function processMultimodalTurn(
 
   const supportsVision = providerSupportsVision(host.getTurnProvider());
   const textContent = summarizeMultimodalParts(parts, supportsVision);
-  const turnUser = buildTurnUserMessages(context, textContent);
+  const turnUser = buildTurnUserMessages(commMessage, textContent);
   const profileSummary = await host.userProfiles.buildProfileSummary(userId);
   const personaEnhanced = host.buildDisciplinedPrompt(
     buildEnhancedPersona(host.config, profileSummary, ''),
   );
   const visionSystemPrompt = await buildMultimodalVisionSystemPrompt(host, {
-    context,
+    commMessage,
     sessionId,
     textContent,
     personaEnhanced,
@@ -350,12 +328,12 @@ export async function processMultimodalTurn(
       sessionKey,
       sessionId,
       userMessages: [userMessage],
-      context,
+      commMessage,
       onChunk,
       execute: (initialMessages, hooks, signal, _turnId) => runAgentLoopVisionTurn({
         host,
         sessionId,
-        context,
+        commMessage,
         visionSystemPrompt,
         userMessages: initialMessages,
         modelCandidates: visionCandidates,
@@ -376,14 +354,14 @@ export async function processMultimodalTurn(
   }
 
   const reply = loopResult.reply;
-  await host.emitter.dispatch('ai.response', host.emitter.createPayload(sessionId, context, 'multimodal', {
+  await host.emitter.dispatch('ai.response', host.emitter.createPayload(sessionId, commMessage, 'multimodal', {
     path: 'multimodal',
     model: loopResult.model,
     reply,
   }));
   await touchSession(sessionDeps(host), sessionId);
   if (isNewSession) {
-    host.emitSessionNewEvent(sessionId, context, 'multimodal', turnUser.rawContent, reply);
+    host.emitSessionNewEvent(sessionId, commMessage, 'multimodal', turnUser.rawContent, reply);
   }
   await host.finalizeActiveTurn({
     usage: loopResult.usage,
@@ -391,13 +369,13 @@ export async function processMultimodalTurn(
     model: loopResult.model,
     iterations: loopResult.iterations,
   });
-  await host.emitter.dispatch('ai.processing.finish', host.emitter.createPayload(sessionId, context, 'multimodal', {
+  await host.emitter.dispatch('ai.processing.finish', host.emitter.createPayload(sessionId, commMessage, 'multimodal', {
     path: 'multimodal',
     model: loopResult.model,
     reply,
   }));
 
-  host.emitter.emit('ai.typing.stop', host.emitter.createPayload(sessionId, context, 'multimodal', {
+  host.emitter.emit('ai.typing.stop', host.emitter.createPayload(sessionId, commMessage, 'multimodal', {
     reason: 'processing_complete',
   }));
 

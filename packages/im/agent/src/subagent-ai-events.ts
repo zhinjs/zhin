@@ -1,6 +1,6 @@
-import { resolveIMSessionIdFromToolContext } from '@zhin.js/ai';
+import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import type { AgentLoopStandaloneCallbacks } from './zhin-agent/agent-loop-standalone.js';
-import type { ToolContext } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 import type { McpRegistry } from './orchestrator/mcp-registry.js';
 import { ensureMcpConnectionsForBinding } from './orchestrator/mcp-lifecycle.js';
 import type { SubagentOrigin } from './subagent.js';
@@ -17,35 +17,18 @@ export interface SubagentAiEventContext {
 
 export class SubagentAiEventReporter {
   readonly sessionId: string;
-  readonly toolContext: ToolContext;
+  readonly commMessage: Message;
 
   constructor(
     private readonly emitter: ZhinAgentEventEmitter,
     private readonly ctx: SubagentAiEventContext,
   ) {
-    const scope = ctx.origin.sceneType === 'group' || ctx.origin.sceneType === 'channel'
-      ? ctx.origin.sceneType
-      : 'private';
-    this.toolContext = {
-      platform: ctx.origin.platform,
-      botId: ctx.origin.botId,
-      sceneId: ctx.origin.sceneId,
-      senderId: ctx.origin.senderId,
-      messageId: ctx.origin.messageId,
-      scope,
-      fileRole: ctx.origin.fileRole,
-    };
-    this.sessionId = resolveIMSessionIdFromToolContext({
-      platform: ctx.origin.platform,
-      botId: ctx.origin.botId,
-      scope,
-      sceneId: ctx.origin.sceneId,
-      senderId: ctx.origin.senderId,
-    });
+    this.commMessage = ctx.origin.message;
+    this.sessionId = resolveIMSessionIdFromMessage(this.commMessage);
   }
 
   private payload(extra: Partial<import('@zhin.js/core').Plugin.AIEventPayload> = {}) {
-    return this.emitter.createPayload(this.sessionId, this.toolContext, 'text', {
+    return this.emitter.createPayload(this.sessionId, this.commMessage, 'text', {
       source: 'subagent',
       path: 'agent',
       taskId: this.ctx.taskId,

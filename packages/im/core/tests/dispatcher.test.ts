@@ -19,7 +19,7 @@ function makeMessage(text: string, overrides: Partial<Message<any>> = {}): Messa
     $sender: { id: 'user1', name: 'User' },
     $channel: { id: 'ch1', type: 'group' },
     $adapter: 'test',
-    $bot: 'bot1',
+    $endpoint: 'bot1',
     $timestamp: Date.now(),
     $reply: vi.fn(),
     $recall: vi.fn(),
@@ -49,7 +49,7 @@ function wireMessageReplyThroughBeforeSend(msg: Message<any>, root: EventEmitter
   msg.$reply = vi.fn(async (content: any) => {
     let options = {
       content,
-      bot: msg.$bot,
+      endpoint: msg.$endpoint,
       id: msg.$channel.id,
       type: msg.$channel.type,
       context: 'test',

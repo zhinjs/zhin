@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { AgentPromptContributor } from '@zhin.js/core';
 import { Plugin, storage } from '@zhin.js/core';
+import { mockCommMessage } from './helpers/mock-comm-message.js';
 import {
   clearAgentPromptContributors,
   registerAgentPromptContributor,
@@ -26,7 +27,7 @@ describe('resolveAgentPromptSections', () => {
     const sections = await resolveAgentPromptSections({
       ctx: {
         slot: 'orchestrator',
-        toolContext: { platform: 'mock' },
+        commMessage: mockCommMessage({ adapter: 'mock' }),
       },
     });
     expect(sections).toHaveLength(1);
@@ -45,7 +46,7 @@ describe('resolveAgentPromptSections', () => {
     const sections = await resolveAgentPromptSections({
       ctx: {
         slot: 'orchestrator',
-        toolContext: { platform: 'mock' },
+        commMessage: mockCommMessage({ adapter: 'mock' }),
       },
     });
     expect(sections.map(s => s.id)).toContain('hook.extra');
@@ -61,7 +62,7 @@ describe('resolveAgentPromptSections', () => {
         sessionId: 'test:scene1:user1',
         ctx: {
           slot: 'orchestrator',
-          toolContext: { platform: 'mock', senderId: 'user1', sceneId: 'scene1' },
+          commMessage: mockCommMessage({ adapter: 'mock', senderId: 'user1', sceneId: 'scene1' }),
         },
       });
     });
@@ -84,7 +85,7 @@ describe('resolveAgentPromptSections', () => {
     const sections = await resolveAgentPromptSections({
       ctx: {
         slot: 'orchestrator',
-        toolContext: { platform: 'bad' },
+        commMessage: mockCommMessage({ adapter: 'bad' }),
       },
     });
     expect(sections).toHaveLength(0);

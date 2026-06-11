@@ -8,7 +8,7 @@ import { ZhinAgent } from '@zhin.js/agent';
 import { Plugin, SkillFeature } from '@zhin.js/core';
 import { resetLlmApiRegistryForTests } from '@zhin.js/ai';
 import type { AIProvider, AgentTool, ContentPart } from '@zhin.js/core';
-import type { Tool, ToolContext } from '@zhin.js/core';
+import type { Tool, Message } from '@zhin.js/core';
 
 // Mock AIProvider
 function createMockProvider(response: string = '你好！'): AIProvider {
@@ -43,14 +43,28 @@ function createStreamMockProvider(response: string = '你好！'): AIProvider {
   };
 }
 
-function makeToolContext(overrides: Partial<ToolContext> = {}): ToolContext {
+function makeCommMessage(overrides: {
+  adapter?: string;
+  endpoint?: string;
+  senderId?: string;
+  scope?: 'private' | 'group' | 'channel';
+  sceneId?: string;
+  extra?: Record<string, unknown>;
+  message?: import('@zhin.js/core').Message<any>;
+} = {}): import('@zhin.js/core').Message<any> {
+  if (overrides.message) return overrides.message;
+  const adapter = overrides.adapter ?? 'test';
+  const endpoint = overrides.endpoint ?? 'bot1';
+  const senderId = overrides.senderId ?? 'user1';
+  const scope = overrides.scope ?? 'private';
+  const sceneId = overrides.sceneId ?? 'scene1';
   return {
-    platform: 'test',
-    botId: 'bot1',
-    sceneId: 'scene1',
-    senderId: 'user1',
-    ...overrides,
-  };
+    $adapter: adapter,
+    $endpoint: endpoint,
+    $sender: { id: senderId },
+    $channel: { type: scope, id: sceneId },
+    extra: overrides.extra,
+  } as import('@zhin.js/core').Message<any>;
 }
 
 function makeTool(name: string, desc: string = '', opts: Partial<Tool> = {}): Tool {
@@ -144,11 +158,11 @@ describe('ZhinAgent', () => {
 
   describe('process', () => {
     it('应处理简单文本消息并返回 OutputElement[]', async () => {
-      const context = makeToolContext();
+      const commMessage = makeCommMessage();
 
       const result = await agent.process(
         '你好',
-        context,
+        commMessage,
         [],
       );
 
@@ -160,9 +174,9 @@ describe('ZhinAgent', () => {
 
     it('应传递工具列表', async () => {
       const tools: Tool[] = [makeTool('clock_read', '读取当前时间')];
-      const context = makeToolContext();
+      const commMessage = makeCommMessage();
 
-      await agent.process('现在几点', context, tools);
+      await agent.process('现在几点', commMessage, tools);
 
       // provider.chat 应被调用
       expect(provider.chat).toHaveBeenCalled();
@@ -174,13 +188,13 @@ describe('ZhinAgent', () => {
         rateLimit: { maxRequestsPerMinute: 1, cooldownSeconds: 5 },
       });
 
-      const context = makeToolContext();
+      const commMessage = makeCommMessage();
 
       // 第一次请求
-      await strictAgent.process('hello', context, []);
+      await strictAgent.process('hello', commMessage, []);
 
       // 第二次应被限制
-      const result = await strictAgent.process('hello again', context, []);
+      const result = await strictAgent.process('hello again', commMessage, []);
       
       // 被限制时应返回友好提示（OutputElement[]）
       expect(result).toBeDefined();
@@ -195,9 +209,9 @@ describe('ZhinAgent', () => {
         phaseTrace: true,
         onPhaseTrace: ({ phase }) => phases.push(phase),
       });
-      const context = makeToolContext();
+      const commMessage = makeCommMessage();
       try {
-        await phaseAgent.process('phase trace', context, []);
+        await phaseAgent.process('phase trace', commMessage, []);
         const serialized = phases.map((p) => `phase: ${p}`).join('\n');
         expect(serialized).toContain('phase: turn.start');
         expect(serialized).toContain('phase: tools.collected');
@@ -238,7 +252,7 @@ describe('ZhinAgent', () => {
       try {
         await busAgent.process(
           '请调用 tool_search 查找 read_current_time 相关工具',
-          makeToolContext(),
+          makeCommMessage(),
           [makeTool('read_current_time', '读取当前时间并返回当前时刻', {
             keywords: ['read_current_time', '读取当前时间', '当前时间', '时间'],
           })],
@@ -299,8 +313,8 @@ describe('ZhinAgent', () => {
       });
 
       try {
-        await bridgeAgent.process('hello', makeToolContext(), []);
-        await (bridgeAgent as any).runDeferredWorker('Check stars', 'github star', makeToolContext(), [makeTool('bash'), makeTool('github_star')]);
+        await bridgeAgent.process('hello', makeCommMessage(), []);
+        await (bridgeAgent as any).runDeferredWorker('Check stars', 'github star', makeCommMessage(), [makeTool('bash'), makeTool('github_star')]);
       } finally {
         bridgeAgent.dispose();
       }
@@ -324,8 +338,8 @@ describe('ZhinAgent', () => {
       sessionAgent.setHostPlugin(hostPlugin);
 
       try {
-        await sessionAgent.process('你好', makeToolContext(), []);
-        await sessionAgent.process('再来一次', makeToolContext(), []);
+        await sessionAgent.process('你好', makeCommMessage(), []);
+        await sessionAgent.process('再来一次', makeCommMessage(), []);
       } finally {
         sessionAgent.dispose();
       }
@@ -354,10 +368,10 @@ describe('ZhinAgent', () => {
 
       // 外部也传入 tool_a（同名）
       const externalTools = [makeTool('tool_a', '来自外部的工具')];
-      const context = makeToolContext();
+      const commMessage = makeCommMessage();
 
       // 调用 process，两个同名工具应该只保留一个
-      await agent.process('查看天气', context, externalTools);
+      await agent.process('查看天气', commMessage, externalTools);
 
       // provider.chat 应被调用（正常处理）
       expect(provider.chat).toHaveBeenCalled();
@@ -397,13 +411,13 @@ describe('ZhinAgent', () => {
     });
 
     it('应处理图片+文本的多模态消息', async () => {
-      const context = makeToolContext();
+      const commMessage = makeCommMessage();
       const parts: ContentPart[] = [
         { type: 'text', text: '这是什么？' },
         { type: 'image_url', image_url: { url: 'https://example.com/cat.jpg' } },
       ];
 
-      const result = await streamAgent.processMultimodal(parts, context);
+      const result = await streamAgent.processMultimodal(parts, commMessage);
 
       expect(result).toBeDefined();
       expect(Array.isArray(result)).toBe(true);
@@ -411,13 +425,13 @@ describe('ZhinAgent', () => {
     });
 
     it('应处理视频类型的多模态消息', async () => {
-      const context = makeToolContext();
+      const commMessage = makeCommMessage();
       const parts: ContentPart[] = [
         { type: 'text', text: '这个视频讲的是什么？' },
         { type: 'video_url', video_url: { url: 'https://example.com/video.mp4' } },
       ];
 
-      const result = await streamAgent.processMultimodal(parts, context);
+      const result = await streamAgent.processMultimodal(parts, commMessage);
 
       expect(result).toBeDefined();
       expect(Array.isArray(result)).toBe(true);
@@ -425,13 +439,13 @@ describe('ZhinAgent', () => {
     });
 
     it('应处理表情类型的多模态消息', async () => {
-      const context = makeToolContext();
+      const commMessage = makeCommMessage();
       const parts: ContentPart[] = [
         { type: 'text', text: '你好' },
         { type: 'face', face: { id: '178', text: '笑哭' } },
       ];
 
-      const result = await streamAgent.processMultimodal(parts, context);
+      const result = await streamAgent.processMultimodal(parts, commMessage);
 
       expect(result).toBeDefined();
       expect(Array.isArray(result)).toBe(true);
@@ -439,7 +453,7 @@ describe('ZhinAgent', () => {
     });
 
     it('应处理混合多种媒体类型的多模态消息', async () => {
-      const context = makeToolContext();
+      const commMessage = makeCommMessage();
       const parts: ContentPart[] = [
         { type: 'text', text: '看看这些' },
         { type: 'image_url', image_url: { url: 'https://example.com/pic.jpg' } },
@@ -447,19 +461,19 @@ describe('ZhinAgent', () => {
         { type: 'face', face: { id: '1', text: '微笑' } },
       ];
 
-      const result = await streamAgent.processMultimodal(parts, context);
+      const result = await streamAgent.processMultimodal(parts, commMessage);
 
       expect(result).toBeDefined();
       expect(Array.isArray(result)).toBe(true);
     });
 
     it('无文本时应使用默认描述', async () => {
-      const context = makeToolContext();
+      const commMessage = makeCommMessage();
       const parts: ContentPart[] = [
         { type: 'image_url', image_url: { url: 'https://example.com/img.jpg' } },
       ];
 
-      const result = await streamAgent.processMultimodal(parts, context);
+      const result = await streamAgent.processMultimodal(parts, commMessage);
 
       expect(result).toBeDefined();
       expect(Array.isArray(result)).toBe(true);
@@ -470,17 +484,17 @@ describe('ZhinAgent', () => {
         rateLimit: { maxRequestsPerMinute: 1, cooldownSeconds: 5 },
       });
 
-      const context = makeToolContext();
+      const commMessage = makeCommMessage();
       const parts: ContentPart[] = [
         { type: 'text', text: '第一次' },
         { type: 'image_url', image_url: { url: 'https://example.com/1.jpg' } },
       ];
 
       // 第一次
-      await strictAgent.processMultimodal(parts, context);
+      await strictAgent.processMultimodal(parts, commMessage);
 
       // 第二次应被限制
-      const result = await strictAgent.processMultimodal(parts, context);
+      const result = await strictAgent.processMultimodal(parts, commMessage);
       expect(result).toBeDefined();
       expect(Array.isArray(result)).toBe(true);
 

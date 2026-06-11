@@ -2,15 +2,17 @@
  * Email 适配器
  */
 import { Adapter, Plugin } from "zhin.js";
-import { EmailBot } from "./bot.js";
-import type { EmailBotConfig } from "./types.js";
+import { EmailEndpoint } from "./endpoint.js";
+import type { EmailEndpointConfig } from "./types.js";
 
-export class EmailAdapter extends Adapter<EmailBot> {
+export class EmailAdapter extends Adapter<EmailEndpoint> {
+  static override readonly capabilities = ['inbound', 'outbound'] as const;
+
     constructor(plugin: Plugin) {
         super(plugin, 'email', []);
     }
 
-    createBot(config: EmailBotConfig): EmailBot {
-        return new EmailBot(this, config);
+    createEndpoint(config: EmailEndpointConfig): EmailEndpoint {
+        return new EmailEndpoint(this, config);
     }
 }

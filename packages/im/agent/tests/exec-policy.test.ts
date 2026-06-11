@@ -15,6 +15,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { mockCommMessage } from './helpers/mock-comm-message.js';
 import type { Plugin } from '@zhin.js/core';
 import * as core from '@zhin.js/core';
 import * as utils from '../src/discovery/utils.js';
@@ -33,7 +34,7 @@ import {
 } from '../src/security/exec-policy.js';
 import type { ZhinAgentConfig } from '../src/zhin-agent/config.js';
 import { addBashApproveRule } from '../src/security/owner-approve-always-store.js';
-import { runWithBashToolContext } from '../src/security/bash-tool-context.js';
+import { runWithCommMessage } from '../src/security/comm-message-context.js';
 import type { AgentTool } from '@zhin.js/ai';
 
 // ── Helpers ──
@@ -72,10 +73,10 @@ function makeConfig(overrides: Partial<ZhinAgentConfig> = {}): Required<ZhinAgen
 }
 
 function makeRootPluginForIcqqExec(adapterName: string): Plugin {
-  const bots = new Map([['bot1', { $config: { master: 'owner99' } }]]);
+  const endpoints = new Map([['bot1', { $config: { master: 'owner99' } }]]);
   const p = {
     inject: vi.fn((name: string) => {
-      if (name === adapterName) return { bots };
+      if (name === adapterName) return { endpoints };
       return undefined;
     }),
   } as unknown as Plugin;
@@ -84,10 +85,10 @@ function makeRootPluginForIcqqExec(adapterName: string): Plugin {
 }
 
 function makeRootPluginWithOwnerAdmins(adapterName: string, master = 'owner99', trusted: string[] = ['admin42']): Plugin {
-  const bots = new Map([['bot1', { $config: { master, trusted } }]]);
+  const endpoints = new Map([['bot1', { $config: { master, trusted } }]]);
   const p = {
     inject: vi.fn((name: string) => {
-      if (name === adapterName) return { bots };
+      if (name === adapterName) return { endpoints };
       return undefined;
     }),
   } as unknown as Plugin;
@@ -429,12 +430,12 @@ describe('checkExecPolicy', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-exec-icqq-'));
     const getDataSpy = vi.spyOn(utils, 'getDataDir').mockReturnValue(tmpDir);
     const plugin = makeRootPluginForIcqqExec('icqq');
-    const ctx = { platform: 'icqq', botId: 'bot1' };
+    const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1' });
     expect(addBashApproveRule(plugin, ctx, '^icqq\\s+group\\s+kick\\b').ok).toBe(true);
     const getPluginSpy = vi.spyOn(core, 'getPlugin').mockReturnValue(plugin as never);
     const config = makeConfig({ execAllowlist: [], execApprovalMode: 'ask' });
     try {
-      const r = runWithBashToolContext(ctx, () => checkExecPolicy(config, 'icqq group kick 1 2'));
+      const r = runWithCommMessage(ctx, () => checkExecPolicy(config, 'icqq group kick 1 2'));
       expect(r.allowed).toBe(true);
     } finally {
       getPluginSpy.mockRestore();
@@ -495,10 +496,10 @@ describe('checkExecPolicy', () => {
     const plugin = makeRootPluginWithOwnerAdmins('icqq', 'owner99', ['admin42']);
     const getPluginSpy = vi.spyOn(core, 'getPlugin').mockReturnValue(plugin as never);
     const config = makeConfig({ execAllowlist: ['ls'], execApprovalMode: 'ask' });
-    const ctx = { platform: 'icqq', botId: 'bot1', senderId: 'owner99' };
+    const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'owner99', sender_roles: ['master'] });
 
     try {
-      const r = runWithBashToolContext(ctx, () => checkExecPolicy(config, 'npm install'));
+      const r = runWithCommMessage(ctx, () => checkExecPolicy(config, 'npm install'));
       expect(r.allowed).toBe(true);
       expect(r.needsApproval).toBeUndefined();
     } finally {
@@ -510,10 +511,10 @@ describe('checkExecPolicy', () => {
     const plugin = makeRootPluginWithOwnerAdmins('icqq', 'owner99', ['admin42']);
     const getPluginSpy = vi.spyOn(core, 'getPlugin').mockReturnValue(plugin as never);
     const config = makeConfig({ execAllowlist: ['ls'], execApprovalMode: 'deny' });
-    const ctx = { platform: 'icqq', botId: 'bot1', senderId: 'admin42' };
+    const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'admin42', sender_roles: ['trusted'] });
 
     try {
-      const r = runWithBashToolContext(ctx, () => checkExecPolicy(config, 'npm install'));
+      const r = runWithCommMessage(ctx, () => checkExecPolicy(config, 'npm install'));
       expect(r.allowed).toBe(false);
       expect(r.needsApproval).toBe(true);
       expect(r.reason).toContain('Owner');
@@ -526,10 +527,10 @@ describe('checkExecPolicy', () => {
     const plugin = makeRootPluginWithOwnerAdmins('icqq', 'owner99', ['admin42']);
     const getPluginSpy = vi.spyOn(core, 'getPlugin').mockReturnValue(plugin as never);
     const config = makeConfig({ execAllowlist: ['ls'], execApprovalMode: 'ask' });
-    const ctx = { platform: 'icqq', botId: 'bot1', senderId: 'user777' };
+    const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'user777', sender_roles: ['user'] });
 
     try {
-      const r = runWithBashToolContext(ctx, () => checkExecPolicy(config, 'npm install'));
+      const r = runWithCommMessage(ctx, () => checkExecPolicy(config, 'npm install'));
       expect(r.allowed).toBe(false);
       expect(r.needsApproval).toBeUndefined();
       expect(r.reason).toContain('owner/admin');

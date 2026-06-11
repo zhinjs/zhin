@@ -29,7 +29,7 @@ tools: []
 
 - **WS 正向**：Bot 主动连接 OneBot 12 服务端
 - **Webhook**：OneBot 12 向配置的 URL 推送事件
-- **WS 反向**：OneBot 12 主动连接 Bot 的 WS 服务端
+- **WS 反向**：OneBot 12 主动连接 Endpoint 的 WS 服务端
 
 ## 与 OneBot11 的区别
 

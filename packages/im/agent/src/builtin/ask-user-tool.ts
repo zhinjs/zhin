@@ -1,14 +1,14 @@
 /**
- * ask_user — 基于 Prompt / 私聊 向 Bot Owner 确认或提问
+ * ask_user — 基于 Prompt / 私聊 向 Endpoint Owner 确认或提问
  */
 import {
   Prompt,
   Adapter,
   type Plugin,
+  type Message,
   type MessageMiddleware,
   type SendOptions,
   type Tool,
-  type ToolContext,
   type ToolParametersSchema,
   type ToolResult,
 } from '@zhin.js/core';
@@ -116,7 +116,7 @@ export function createAskUserTool(plugin: Plugin): Tool {
 export class AskUserBuiltinTool extends BuiltinBaseTool {
   readonly name = 'ask_user';
   readonly description =
-    '向 Bot Owner 发送问题并等待回复；群聊场景下通过私聊确认。bash/icqq：Owner 私聊可用「/approve always bash」「/approve rule <正则>」（匹配整段 shell 子命令，如点赞类 icqq 不必固化解参数）、「/approve list」「/approve revoke rule <id>」「/approve revoke」。write_file / edit_file / web_fetch 的硬编排仍须逐次确认。';
+    '向 Endpoint Owner 发送问题并等待回复；群聊场景下通过私聊确认。bash/icqq：Owner 私聊可用「/approve always bash」「/approve rule <正则>」（匹配整段 shell 子命令，如点赞类 icqq 不必固化解参数）、「/approve list」「/approve revoke rule <id>」「/approve revoke」。write_file / edit_file / web_fetch 的硬编排仍须逐次确认。';
   readonly parameters = ASK_USER_PARAMETERS;
   readonly kind = 'interaction';
   /** 默认等待 Owner 120s，须大于 Agent 默认 30s 工具超时 */
@@ -138,8 +138,8 @@ export class AskUserBuiltinTool extends BuiltinBaseTool {
     );
   }
 
-  async run(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
-    if (!context?.message) {
+  async run(args: Record<string, unknown>, commMessage?: Message): Promise<ToolResult> {
+    if (!commMessage) {
       return 'Error: 当前上下文没有消息来源，无法向 Owner 提问。请改为在回复中直接询问。';
     }
     if (!this.plugin) {
@@ -150,29 +150,29 @@ export class AskUserBuiltinTool extends BuiltinBaseTool {
     const questionType = (args.type as string) || 'text';
     const recordArgs = args as Record<string, any>;
 
-    const platform = context.platform!;
-    const botId = context.botId!;
+    const platform = commMessage.$adapter!;
+    const endpointId = commMessage.$endpoint!;
     const adapter = this.plugin.inject(platform) as Adapter | undefined;
-    const bot = adapter?.bots?.get(botId);
+    const bot = adapter?.endpoints?.get(endpointId);
     const botMaster: string | undefined = (bot?.$config as { master?: string })?.master;
-    const isPrivateMaster = context.scope === 'private'
-      && botMaster != null && String(context.senderId) === String(botMaster);
+    const isPrivateMaster = commMessage.$channel?.type === 'private'
+      && botMaster != null && String(commMessage.$sender.id) === String(botMaster);
 
     if (isPrivateMaster) {
-      return askViaPrompt(this.plugin, context.message, recordArgs, questionType, timeoutMs);
+      return askViaPrompt(this.plugin, commMessage, recordArgs, questionType, timeoutMs);
     }
 
     if (!botMaster) {
-      return 'Error: 当前 Bot 未配置 master，无法进行安全确认。请在 bots 配置中设置 master 字段。';
+      return 'Error: 当前 Endpoint 未配置 master，无法进行安全确认。请在 endpoints 配置中设置 master 字段。';
     }
 
     if (!adapter || typeof adapter.sendMessage !== 'function') {
       return `Error: 无法获取适配器 ${platform}，无法向 Owner 发送私聊确认。`;
     }
 
-    const sourceInfo = context.scope !== 'private'
-      ? `来源: ${context.scope}(${context.sceneId}) 用户: ${context.senderId}`
-      : `来源: 私聊 用户: ${context.senderId}`;
+    const sourceInfo = commMessage.$channel?.type !== 'private'
+      ? `来源: ${commMessage.$channel?.type}(${commMessage.$channel?.id}) 用户: ${commMessage.$sender.id}`
+      : `来源: 私聊 用户: ${commMessage.$sender.id}`;
     let questionText = `🔐 AI 安全确认\n${sourceInfo}\n\n${args.question}`;
     if (questionType === 'confirm') {
       questionText += '\n输入"yes"以确认';
@@ -185,7 +185,7 @@ export class AskUserBuiltinTool extends BuiltinBaseTool {
     try {
       await adapter.sendMessage({
         context: platform,
-        bot: botId,
+        endpoint: endpointId,
         id: botMaster,
         type: 'private',
         content: questionText,
@@ -200,7 +200,7 @@ export class AskUserBuiltinTool extends BuiltinBaseTool {
       const middleware: MessageMiddleware = async (message, next) => {
         if (message.$channel?.type !== 'private') return next();
         if (String(message.$sender.id) !== String(botMaster)) return next();
-        if (String(message.$bot) !== String(botId)) return next();
+        if (String(message.$endpoint) !== String(endpointId)) return next();
         dispose();
         clearTimeout(timer);
         const raw = message.$raw;

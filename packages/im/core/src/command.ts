@@ -1,4 +1,5 @@
 import {MatchResult, SegmentMatcher} from "segment-matcher";
+import logger, { formatCompact } from "@zhin.js/logger";
 import {AdapterMessage, SendContent} from "./types.js";
 import {RegisteredAdapter} from "./types.js";
 import type {Message} from "./message.js";
@@ -64,8 +65,17 @@ export class MessageCommand<T extends RegisteredAdapter=RegisteredAdapter> exten
     async handle(message:Message<AdapterMessage<T>>,plugin:Plugin):Promise<SendContent|undefined>{
         const auth = plugin.contextIsReady('permission') ? plugin.inject('permission') : null
         for(const permit of this.#permissions){
-            const passed=await auth?.check(permit,message)
-            if(!passed) return;
+            const passed = auth ? await auth.check(permit, message) : false
+            if(!passed) {
+                logger.debug(formatCompact({
+                    op: 'permit_denied',
+                    permit,
+                    senderId: message.$sender.id,
+                    adapter: message.$adapter,
+                    endpoint: message.$endpoint,
+                }));
+                return;
+            }
         }
         const matched=this.match(message.$content);
         if(!matched) return

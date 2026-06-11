@@ -34,7 +34,7 @@ describe('Setup - Default Configuration', () => {
     const config = parseYaml(content)
 
     expect(config.log_level).toBe(LogLevel.INFO)
-    expect(config.bots).toEqual([])
+    expect(config.endpoints).toEqual([])
     expect(config.database).toEqual({
       dialect: 'sqlite',
       filename: './data/bot.db',
@@ -120,7 +120,7 @@ describe('Setup - Default Configuration', () => {
     const config = parseYaml(content)
 
     expect(config).toHaveProperty('log_level')
-    expect(config).toHaveProperty('bots')
+    expect(config).toHaveProperty('endpoints')
     expect(config).toHaveProperty('database')
     expect(config).toHaveProperty('plugin_dirs')
     expect(config).toHaveProperty('plugins')

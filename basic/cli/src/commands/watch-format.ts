@@ -26,14 +26,14 @@ export interface WatchSystemInfo {
 export interface WatchStats {
   uptime?: number;
   memory?: number;
-  bots?: { total?: number; online?: number };
+  endpoints?: { total?: number; online?: number };
   plugins?: { total?: number; active?: number };
   commands?: number;
   components?: number;
   runtime?: string;
 }
 
-export interface WatchBotRow {
+export interface WatchEndpointRow {
   name: string;
   adapter: string;
   status: 'online' | 'offline';
@@ -189,7 +189,7 @@ export function renderWatchText(options: {
   fetchedAt: Date;
   stats?: WatchStats;
   system?: WatchSystemInfo;
-  bots?: WatchBotRow[];
+  endpoints?: WatchEndpointRow[];
   assistantEnabled?: boolean;
   eventsActive?: boolean;
   jobs?: WatchJobRow[];
@@ -210,7 +210,7 @@ export function renderWatchText(options: {
   const st = options.stats ?? {};
   const sys = options.system;
   const uptime = sys?.uptime ?? st.uptime;
-  const bots = st.bots ?? {};
+  const bots = st.endpoints ?? {};
   const runtimeBits = [
     `uptime ${formatUptime(uptime)}`,
     sys?.pid != null ? `pid ${sys.pid}` : null,
@@ -225,7 +225,7 @@ export function renderWatchText(options: {
   lines.push(...renderMemorySection(sys));
   lines.push('');
 
-  const botList = options.bots ?? [];
+  const botList = options.endpoints ?? [];
   if (botList.length === 0) {
     lines.push('Bots     (none registered)');
   } else {

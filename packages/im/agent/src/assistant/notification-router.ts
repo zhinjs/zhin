@@ -34,7 +34,7 @@ export function mergeImNotify(notify: ImJobNotify, defaults?: JobNotify): ImJobN
   return {
     channel: 'im',
     platform: notify.platform ?? def?.platform,
-    botId: notify.botId ?? def?.botId,
+    endpointId: notify.endpointId ?? def?.endpointId,
     senderId: notify.senderId ?? def?.senderId,
     sceneId: notify.sceneId ?? def?.sceneId,
     scope: notify.scope ?? def?.scope,
@@ -56,11 +56,11 @@ export function resolveEffectiveNotify(
 }
 
 export function notifyToSendOptions(notify: ImJobNotify, content: string): SendOptions {
-  if (!notify.botId) throw new Error('Missing notify field: botId');
+  if (!notify.endpointId) throw new Error('Missing notify field: endpointId');
   const sceneType = (notify.scope || 'private') as MessageType;
   const outboundDetail: NormalizedQueueOutboundDetail = {
     context: notify.platform || 'cron',
-    bot: notify.botId,
+    endpoint: notify.endpointId,
     channelId: notify.sceneId || 'cron',
     channelType: sceneType,
     content,
@@ -71,12 +71,12 @@ export function notifyToSendOptions(notify: ImJobNotify, content: string): SendO
 
 export function createNotificationRouter(deps: NotificationRouterDeps) {
   async function deliverIm(notify: ImJobNotify, content: string): Promise<DeliverResult> {
-    if (!notify.platform || !notify.botId || !notify.sceneId) {
+    if (!notify.platform || !notify.endpointId || !notify.sceneId) {
       logger.warn(formatCompact({
         op: 'notify_im_skip',
         reason: 'missing_routing',
         platform: notify.platform,
-        botId: notify.botId,
+        endpointId: notify.endpointId,
         sceneId: notify.sceneId,
       }));
       return { delivered: false, channel: 'im' };

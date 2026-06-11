@@ -13,7 +13,7 @@ import { Logger, type Plugin, type ToolParametersSchema, type ToolScope, type Se
 import { getDataDir } from './utils.js';
 
 const VALID_TOOL_SCOPES: readonly ToolScope[] = ['private', 'group', 'channel'];
-const VALID_SENDER_ROLES: readonly SenderRole[] = ['group_admin', 'group_owner', 'trusted', 'master'];
+const VALID_SENDER_ROLES: readonly SenderRole[] = ['user', 'trusted', 'master'];
 
 function parseScopes(raw?: string[]): ToolScope[] | undefined {
   if (!raw || raw.length === 0) return undefined;
@@ -21,10 +21,27 @@ function parseScopes(raw?: string[]): ToolScope[] | undefined {
   return filtered.length > 0 ? filtered : undefined;
 }
 
-function parseRequiredAnyRole(raw?: string | string[]): SenderRole[] | undefined {
+function parsePermit(raw?: string | string[]): string[] | undefined {
   const items = raw == null ? [] : Array.isArray(raw) ? raw : [raw];
-  const roles = items.filter((r): r is SenderRole => (VALID_SENDER_ROLES as readonly string[]).includes(r));
-  return roles.length > 0 ? roles : undefined;
+  const permits = items.map((v) => String(v).trim()).filter(Boolean);
+  return permits.length > 0 ? permits : undefined;
+}
+
+/** 兼容旧 requiredAnyRole frontmatter，转为 role(...) permit */
+function parsePermissionsFromMetadata(metadata: {
+  permit?: string | string[];
+  requiredAnyRole?: string | string[];
+}): string[] | undefined {
+  const direct = parsePermit(metadata.permit);
+  if (direct?.length) return direct;
+  const items = metadata.requiredAnyRole == null
+    ? []
+    : Array.isArray(metadata.requiredAnyRole)
+      ? metadata.requiredAnyRole
+      : [metadata.requiredAnyRole];
+  const roles = items.filter((r): r is SenderRole => (VALID_SENDER_ROLES as readonly string[]).includes(r as SenderRole));
+  if (roles.length === 0) return undefined;
+  return roles.map((r) => `role(${r})`);
 }
 
 const logger = new Logger(null, 'builtin-tools');
@@ -48,7 +65,7 @@ export interface ToolMeta {
   parameters?: Record<string, ToolParamShorthand>;
   platforms?: string[];
   scopes?: string[];
-  requiredAnyRole?: string | string[];
+  permit?: string[];
   tags?: string[];
   keywords?: string[];
   kind?: string;
@@ -189,7 +206,7 @@ export async function discoverWorkspaceTools(root?: Plugin | null): Promise<Tool
           parameters: metadata.parameters || undefined,
           platforms: metadata.platforms,
           scopes: metadata.scopes,
-          requiredAnyRole: metadata.requiredAnyRole,
+          permit: parsePermissionsFromMetadata(metadata),
           tags: metadata.tags || [],
           keywords: metadata.keywords || [],
           kind: metadata.kind,
@@ -319,7 +336,7 @@ export async function buildToolFromMeta(meta: ToolMeta): Promise<import('@zhin.j
     keywords: meta.keywords,
     platforms: meta.platforms,
     scopes: parseScopes(meta.scopes),
-    requiredAnyRole: parseRequiredAnyRole(meta.requiredAnyRole),
+    permissions: meta.permit,
     hidden: meta.hidden,
     preExecutable: meta.preExecutable,
     kind: meta.kind,

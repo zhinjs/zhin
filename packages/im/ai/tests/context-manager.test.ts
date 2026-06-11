@@ -264,7 +264,7 @@ describe('ContextManager', () => {
           scene_type: 'group',
           scene_name: '',
           sender_id: 'bot-123',
-          sender_name: 'MyBot',
+          sender_name: 'MyEndpoint',
           message: '我是机器人',
           time: Date.now(),
         },

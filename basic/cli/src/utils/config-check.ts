@@ -75,61 +75,61 @@ function collectEnvRefs(
   }
 }
 
-function checkBots(
+function checkEndpoints(
   config: Record<string, unknown>,
   plugins: string[],
   issues: ConfigIssue[],
 ): void {
-  const bots = config.bots;
-  if (!bots) return;
-  if (!Array.isArray(bots)) {
+  const endpoints = config.endpoints;
+  if (!endpoints) return;
+  if (!Array.isArray(endpoints)) {
     pushIssue(issues, {
       severity: 'error',
-      code: 'bots.invalid',
-      path: 'bots',
-      message: 'bots 必须是数组',
+      code: 'endpoints.invalid',
+      path: 'endpoints',
+      message: 'endpoints 必须是数组',
     });
     return;
   }
-  if (bots.length === 0) {
+  if (endpoints.length === 0) {
     pushIssue(issues, {
       severity: 'warn',
-      code: 'bots.empty',
-      path: 'bots',
-      message: '未配置任何 bot 实例',
+      code: 'endpoints.empty',
+      path: 'endpoints',
+      message: '未配置任何 Endpoint 实例',
       fixHint: 'zhin setup --adapters',
     });
   }
 
   const pluginSet = new Set(plugins);
-  bots.forEach((bot, index) => {
-    const base = `bots[${index}]`;
-    if (!bot || typeof bot !== 'object') {
+  endpoints.forEach((entry, index) => {
+    const base = `endpoints[${index}]`;
+    if (!entry || typeof entry !== 'object') {
       pushIssue(issues, {
         severity: 'error',
-        code: 'bot.invalid',
+        code: 'endpoint.invalid',
         path: base,
-        message: 'bot 配置必须是对象',
+        message: 'Endpoint 配置必须是对象',
       });
       return;
     }
-    const row = bot as Record<string, unknown>;
+    const row = entry as Record<string, unknown>;
     const context = typeof row.context === 'string' ? row.context : '';
     const name = typeof row.name === 'string' ? row.name : '';
     if (!context) {
       pushIssue(issues, {
         severity: 'error',
-        code: 'bot.context_missing',
+        code: 'endpoint.context_missing',
         path: `${base}.context`,
-        message: 'bot 缺少 context',
+        message: 'Endpoint 缺少 context',
       });
     }
     if (!name) {
       pushIssue(issues, {
         severity: 'error',
-        code: 'bot.name_missing',
+        code: 'endpoint.name_missing',
         path: `${base}.name`,
-        message: 'bot 缺少 name',
+        message: 'Endpoint 缺少 name',
       });
     }
     if (context === 'icqq' && (row.password != null || row.platform != null)) {
@@ -147,9 +147,9 @@ function checkBots(
       if (!pluginSet.has(expected)) {
         pushIssue(issues, {
           severity: 'error',
-          code: 'bot.adapter_plugin_missing',
+          code: 'endpoint.adapter_plugin_missing',
           path: 'plugins',
-          message: `bots[].context=${context} 需要插件 ${expected}`,
+          message: `endpoints[].context=${context} 需要插件 ${expected}`,
           fixable: true,
           fixHint: `zhin config check --fix 将把 ${expected} 加入 plugins`,
         });
@@ -176,9 +176,9 @@ function checkPlugins(config: Record<string, unknown>, issues: ConfigIssue[]): s
     }
   }
 
-  const bots = Array.isArray(config.bots) ? config.bots : [];
-  const needsHttp = bots.some((bot) => {
-    const context = bot && typeof bot === 'object' ? String((bot as Record<string, unknown>).context ?? '') : '';
+  const endpoints = Array.isArray(config.endpoints) ? config.endpoints : [];
+  const needsHttp = endpoints.some((entry) => {
+    const context = entry && typeof entry === 'object' ? String((entry as Record<string, unknown>).context ?? '') : '';
     return context === 'sandbox' || context === 'wechat-mp';
   }) || config.http != null || config.hostApi != null;
 
@@ -370,7 +370,7 @@ export async function runConfigCheck(
   const plugins = checkPlugins(config, issues);
   checkLogLevel(config, issues);
   checkDatabase(config, issues);
-  checkBots(config, plugins, issues);
+  checkEndpoints(config, plugins, issues);
   checkAi(config, issues, aiUtils);
   collectEnvRefs(config, '', env, issues);
 
@@ -400,9 +400,9 @@ export function applyConfigFixes(
         changed = true;
       }
     }
-    const bots = Array.isArray(next.bots) ? next.bots : [];
-    const needsHttp = bots.some((bot) => {
-      const context = bot && typeof bot === 'object' ? String((bot as Record<string, unknown>).context ?? '') : '';
+    const endpoints = Array.isArray(next.endpoints) ? next.endpoints : [];
+    const needsHttp = endpoints.some((entry) => {
+      const context = entry && typeof entry === 'object' ? String((entry as Record<string, unknown>).context ?? '') : '';
       return context === 'sandbox' || context === 'wechat-mp';
     }) || next.http != null || next.hostApi != null;
     if (needsHttp) {
@@ -414,14 +414,14 @@ export function applyConfigFixes(
         }
       }
     }
-    for (const bot of bots) {
-      if (!bot || typeof bot !== 'object') continue;
-      const context = String((bot as Record<string, unknown>).context ?? '');
+    for (const entry of endpoints) {
+      if (!entry || typeof entry !== 'object') continue;
+      const context = String((entry as Record<string, unknown>).context ?? '');
       if (!context) continue;
       const expected = adapterPluginForContext(context);
       if (!plugins.includes(expected)) {
         plugins.push(expected);
-        fixes.push(`added ${expected} for bots[].context=${context}`);
+        fixes.push(`added ${expected} for endpoints[].context=${context}`);
         changed = true;
       }
     }
@@ -437,10 +437,10 @@ export function applyConfigFixes(
     }
   }
 
-  if (Array.isArray(next.bots)) {
-    next.bots = next.bots.map((bot) => {
-      if (!bot || typeof bot !== 'object') return bot;
-      const row = { ...(bot as Record<string, unknown>) };
+  if (Array.isArray(next.endpoints)) {
+    next.endpoints = next.endpoints.map((entry) => {
+      if (!entry || typeof entry !== 'object') return entry;
+      const row = { ...(entry as Record<string, unknown>) };
       if (row.context === 'icqq') {
         let changed = false;
         if ('password' in row) {
@@ -451,7 +451,7 @@ export function applyConfigFixes(
           delete row.platform;
           changed = true;
         }
-        if (changed) fixes.push('removed legacy icqq password/platform fields from bots[]');
+        if (changed) fixes.push('removed legacy icqq password/platform fields from endpoints[]');
       }
       return row;
     });

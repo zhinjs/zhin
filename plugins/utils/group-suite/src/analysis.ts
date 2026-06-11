@@ -9,7 +9,7 @@
 export interface InboxMessageRow {
   id?: number;
   adapter: string;
-  bot_id: string;
+  endpoint_id: string;
   channel_id: string;
   channel_type: string;
   sender_id: string;

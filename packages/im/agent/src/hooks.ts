@@ -109,7 +109,7 @@ export interface AgentPromptHookEvent extends AIHookEvent {
   action: 'prompt';
   context: {
     slot: import('@zhin.js/core').AgentPromptSlot;
-    toolContext: import('@zhin.js/core').ToolContext;
+    commMessage: import('@zhin.js/core').Message<any>;
     userMessagePreview?: string;
     deferred?: import('@zhin.js/core').AgentPromptBuildContext['deferred'];
     sections: import('@zhin.js/core').AgentPromptSection[];

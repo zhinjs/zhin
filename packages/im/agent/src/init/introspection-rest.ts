@@ -10,14 +10,14 @@ import {
 import { filterByFields, paginateItems } from './introspection-pagination.js';
 import {
   collectIntrospectionBindings,
-  collectIntrospectionBots,
+  collectIntrospectionEndpoints,
   collectIntrospectionCommands,
   collectIntrospectionMcpWithConfigFallback,
   collectIntrospectionTools,
 } from './introspection-collectors.js';
 import type {
   AgentRow,
-  BotRow,
+  EndpointRow,
   CommandRow,
   McpServerRow,
   ToolRow,
@@ -90,17 +90,17 @@ export function introspectionRestCommands(
   return sliceResponse('cmd', all, query);
 }
 
-export function introspectionRestBots(
+export function introspectionRestEndpoints(
   root: Plugin,
   query: Record<string, string | undefined>,
-): IntrospectionJsonResponse<BotRow> {
+): IntrospectionJsonResponse<EndpointRow> {
   const parsed = parseIntrospectionQuery(query);
   const all = filterByFields(
-    collectIntrospectionBots(root),
+    collectIntrospectionEndpoints(root),
     parsed.filter,
     [(b) => b.adapter, (b) => b.name],
   );
-  return sliceResponse('bots', all, query);
+  return sliceResponse('endpoints', all, query);
 }
 
 export function introspectionRestBindings(

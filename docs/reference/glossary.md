@@ -2,6 +2,15 @@
 
 > 每项标注 **L1 / L2 / L3**：你大概在哪个学习阶段会遇到。
 
+## 运行时与通道
+
+| 术语 | 级别 | 简述 |
+|------|------|------|
+| **Adapter** | L1～L2 | 平台协议运行时（icqq、discord、email…），把外部事件规范为 Core `Message`。 |
+| **Endpoint** | L1～L2 | Adapter 下的账号/连接实例（配置 `endpoints[].name`）；IM 号、邮箱、Sandbox 会话等均为 Endpoint。Console RPC：`endpoint:list` / `endpoint:info`。 |
+| **Endpoint Capability** | L3 | `inbound` / `outbound`：声明 Endpoint 是否接收入站、能否主动出站。 |
+| **ZhinAgent** | L2～L3 | 理解 Endpoint 上下文的 Agent 编排运行时（工具、技能、安全、Compaction）。 |
+
 ## 消息与调度
 
 | 术语 | 级别 | 简述 |
@@ -36,7 +45,7 @@
 
 | 术语 | 级别 | 简述 |
 |------|------|------|
-| **ZhinAgent** | L3 | IM 场景主 Agent：收集工具、构建上下文、调用 `@zhin.js/ai` 引擎完成回合。 |
+| **ZhinAgent**（编排细节） | L3 | 收集工具、构建上下文、调用 `@zhin.js/ai` 的 `agentLoop` 完成回合；见上表「运行时与通道」。 |
 | **AgentOrchestrator** | L3 | `ctx.agent` 背后的编排中枢：Tool / Skill / SubAgent / MCP / Hook 注册表。 |
 | **`ctx.ai`（AIService）** | L3 | 业务侧 AI 服务：会话、`createAgent`（→ `ServiceAgent`）、`runAgent`（均经 agentLoop）。 |
 | **`agentLoop`** | L2 | `@zhin.js/ai` 唯一 LLM 回合引擎；IM 生产路径均经此入口。 |

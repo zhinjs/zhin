@@ -4,7 +4,7 @@ import { Plugin } from '../src/plugin.js';
 
 function makeMessage(): any {
   return {
-    $bot: 'bot1',
+    $endpoint: 'bot1',
     $adapter: 'test',
     $channel: { id: 'channel-id', type: 'private' },
     $content: [{ type: 'text', data: { text: 'hello' } }],

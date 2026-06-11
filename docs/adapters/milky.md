@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/milky/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/milky/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=cfff19f155b0372e -->
+<!-- sync-adapter-docs:sha256=bed3062419687205 -->
 
 # @zhin.js/adapter-milky
 
@@ -40,7 +40,7 @@ pnpm add @zhin.js/host-router
 
 ## 配置
 
-所有 Bot 使用 **同一 context：`milky`**，通过 **`connection`** 区分连接方式。
+所有 Endpoint 使用 **同一 context：`milky`**，通过 **`connection`** 区分连接方式。
 
 ### WebSocket 正向
 
@@ -49,7 +49,7 @@ plugins:
   - "@zhin.js/host-router"
   - "@zhin.js/adapter-milky"
 
-bots:
+endpoints:
   - context: milky
     connection: ws
     name: milky-bot
@@ -62,7 +62,7 @@ bots:
 ### SSE
 
 ```yaml
-bots:
+endpoints:
   - context: milky
     connection: sse
     name: milky-sse-bot
@@ -73,7 +73,7 @@ bots:
 ### Webhook
 
 ```yaml
-bots:
+endpoints:
   - context: milky
     connection: webhook
     name: milky-webhook-bot
@@ -85,7 +85,7 @@ bots:
 ### WebSocket 反向
 
 ```yaml
-bots:
+endpoints:
   - context: milky
     connection: wss
     name: milky-wss-bot

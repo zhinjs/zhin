@@ -35,7 +35,7 @@ export interface OneBot11WsServerConfig extends OneBot11ConfigBase {
   heartbeat_interval?: number;
 }
 
-export type OneBot11BotConfig = OneBot11WsClientConfig | OneBot11WsServerConfig;
+export type OneBot11EndpointConfig = OneBot11WsClientConfig | OneBot11WsServerConfig;
 
 export interface OneBot11Message {
   post_type: string;
@@ -45,6 +45,8 @@ export interface OneBot11Message {
   message_id: number;
   user_id: number;
   group_id?: number;
+  /** go-cqhttp / NapCat 等实现提供的群成员信息 */
+  sender?: { role?: string; nickname?: string; card?: string; title?: string };
   message: Array<{ type: string; data: Record<string, any> }>;
   raw_message: string;
   time: number;

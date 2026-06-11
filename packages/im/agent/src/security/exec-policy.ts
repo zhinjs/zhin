@@ -13,7 +13,7 @@ import type { AgentTool } from '@zhin.js/core';
 import { getPlugin } from '@zhin.js/core';
 import type { ZhinAgentConfig, ExecApprovalMode } from '../zhin-agent/config.js';
 import { classifyBashCommand } from './file-policy.js';
-import { getCurrentBashToolContext } from './bash-tool-context.js';
+import { getCurrentCommMessage } from './comm-message-context.js';
 import {
   isIcqqSensitiveSubcommand,
   matchesBashOwnerExecBypass,
@@ -221,12 +221,12 @@ export interface CheckExecPolicyOptions {
 }
 
 function resolveRequesterRole(): ToolRequesterRole {
-  const ctx = getCurrentBashToolContext();
-  if (!ctx?.platform || !ctx?.botId || !ctx?.senderId) return 'unknown';
+  const commMessage = getCurrentCommMessage();
+  if (!commMessage?.$adapter || !commMessage?.$endpoint || !commMessage?.$sender?.id) return 'unknown';
 
   try {
     const plugin = getPlugin().root ?? getPlugin();
-    return resolveToolRequesterRole(plugin, ctx);
+    return resolveToolRequesterRole(plugin, commMessage);
   } catch {
     return 'unknown';
   }
@@ -246,11 +246,11 @@ export function resolveExecAllowlist(config: Required<ZhinAgentConfig>): string[
 }
 
 function tryExecBypassForSensitiveIcqq(normalizedSubCommand: string): boolean {
-  const ctx = getCurrentBashToolContext();
-  if (!ctx?.platform || !ctx?.botId) return false;
+  const commMessage = getCurrentCommMessage();
+  if (!commMessage?.$adapter || !commMessage?.$endpoint) return false;
   try {
     const plugin = getPlugin().root ?? getPlugin();
-    return matchesBashOwnerExecBypass(plugin, ctx, normalizedSubCommand);
+    return matchesBashOwnerExecBypass(plugin, commMessage, normalizedSubCommand);
   } catch {
     return false;
   }
@@ -321,7 +321,7 @@ function checkSingleCommand(
       return {
         allowed: false,
         needsApproval: true,
-        reason: `icqq 敏感操作需 Bot Owner 确认：${norm.slice(0, 280)}`,
+        reason: `icqq 敏感操作需 Endpoint Owner 确认：${norm.slice(0, 280)}`,
       };
     }
     return {
@@ -503,7 +503,7 @@ export function applyExecPolicyToTools(
         if (!result.allowed) {
           if (result.needsApproval) {
             // 权威首行 + 正文：硬编排识别；与旧「请使用 ask_user」话术合并为单套
-            return `ZHIN_NEEDS_OWNER:\n⚠️ ${result.reason}\n\n此 shell 命令需 Bot Owner 审批后方可执行。`;
+            return `ZHIN_NEEDS_OWNER:\n⚠️ ${result.reason}\n\n此 shell 命令需 Endpoint Owner 审批后方可执行。`;
           }
           throw new Error(result.reason!);
         }

@@ -98,7 +98,7 @@ user-invocable: true
 
 1. **分层违规 [高]**
    - 依赖方向必须单向：`basic/ → kernel → ai → core → agent → zhin`
-   - `kernel` 和 `ai` **禁止**依赖 IM 概念（Adapter, Bot, Message）
+   - `kernel` 和 `ai` **禁止**依赖 IM 概念（Adapter, Endpoint, Message）
    - 检查 `package.json` 中 `dependencies` 是否存在反向依赖
 
 2. **AsyncLocalStorage 安全 [高]**

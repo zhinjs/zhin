@@ -52,7 +52,7 @@ export interface MockMessageOptions {
   senderId?: string;
   senderPermissions?: string[];
   senderRole?: string;
-  botId?: string;
+  endpointId?: string;
 }
 
 export const createMockMessage = (options: MockMessageOptions = {}): Partial<Message> => {
@@ -65,7 +65,7 @@ export const createMockMessage = (options: MockMessageOptions = {}): Partial<Mes
     senderId = 'user-1',
     senderPermissions = [],
     senderRole,
-    botId = 'bot-1',
+    endpointId = 'bot-1',
   } = options;
 
   const $content: MessageElement[] = elements || [
@@ -74,7 +74,7 @@ export const createMockMessage = (options: MockMessageOptions = {}): Partial<Mes
 
   return {
     $content,
-    $bot: botId,
+    $endpoint: endpointId,
     $adapter: platform,
     $channel: {
       type: channelType,

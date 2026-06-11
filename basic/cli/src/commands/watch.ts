@@ -7,7 +7,7 @@ import {
   jobRowsFromApi,
   renderWatchText,
   systemInfoFromApi,
-  type WatchBotRow,
+  type WatchEndpointRow,
   type WatchStats,
   type WatchSystemInfo,
 } from './watch-format.js';
@@ -15,7 +15,7 @@ import {
 interface StatsApiData {
   uptime?: number;
   memory?: number;
-  bots?: { total?: number; online?: number };
+  endpoints?: { total?: number; online?: number };
   plugins?: { total?: number; active?: number };
   commands?: number;
   components?: number;
@@ -32,7 +32,7 @@ interface SystemStatusApiData {
   runtime?: string;
 }
 
-interface BotsApiData {
+interface EndpointsApiData {
   name: string;
   adapter: string;
   status: 'online' | 'offline';
@@ -50,7 +50,7 @@ export interface WatchSnapshot {
   error?: string;
   stats?: WatchStats;
   system?: WatchSystemInfo;
-  bots?: WatchBotRow[];
+  endpoints?: WatchEndpointRow[];
   assistant?: {
     enabled: boolean;
     eventsActive?: boolean;
@@ -80,9 +80,9 @@ export async function fetchWatchSnapshot(http: { baseUrl: string; token: string 
       : undefined,
   );
 
-  const botsRes = await hostGet<BotsApiData[]>(http, '/bots');
-  const bots: WatchBotRow[] = Array.isArray(botsRes.data)
-    ? botsRes.data.map((b) => ({
+  const endpointsRes = await hostGet<EndpointsApiData[]>(http, '/endpoints');
+  const endpoints: WatchEndpointRow[] = Array.isArray(endpointsRes.data)
+    ? endpointsRes.data.map((b) => ({
         name: b.name,
         adapter: b.adapter,
         status: b.status,
@@ -107,7 +107,7 @@ export async function fetchWatchSnapshot(http: { baseUrl: string; token: string 
     ok: true,
     stats: statsRes.data,
     system,
-    bots,
+    endpoints,
     assistant,
   };
 }
@@ -118,7 +118,7 @@ function snapshotToScreen(snapshot: WatchSnapshot): string {
     fetchedAt: new Date(snapshot.fetchedAt),
     stats: snapshot.stats,
     system: snapshot.system,
-    bots: snapshot.bots,
+    endpoints: snapshot.endpoints,
     assistantEnabled: snapshot.assistant?.enabled,
     eventsActive: snapshot.assistant?.eventsActive,
     jobs: snapshot.assistant?.jobs,

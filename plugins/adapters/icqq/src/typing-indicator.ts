@@ -5,7 +5,7 @@
  * 使用消息回应（表情）来提示用户"AI 正在处理"。
  */
 
-import type { IcqqBot } from './bot.js';
+import type { IcqqEndpoint } from './endpoint.js';
 import {
   TypingIndicatorManager,
   ReactionTypingIndicatorAdapter,
@@ -55,10 +55,10 @@ const DEFAULT_ICQQ_CONFIG: ICQQTypingIndicatorConfig = {
 export class ICQQTypingIndicatorManager {
   private manager: TypingIndicatorManager;
   private config: ICQQTypingIndicatorConfig;
-  private bot: IcqqBot;
+  private endpoint: IcqqEndpoint;
 
-  constructor(bot: IcqqBot, config: Partial<ICQQTypingIndicatorConfig> = {}) {
-    this.bot = bot;
+  constructor(endpoint: IcqqEndpoint, config: Partial<ICQQTypingIndicatorConfig> = {}) {
+    this.endpoint = endpoint;
     this.config = { ...DEFAULT_ICQQ_CONFIG, ...config };
 
     // 创建 Typing Indicator 管理器
@@ -81,16 +81,16 @@ export class ICQQTypingIndicatorManager {
       'icqq',
       // addReaction
       async (messageId: string, emoji: string, _options) => {
-        return await this.bot.$addReaction(messageId, emoji);
+        return await this.endpoint.$addReaction(messageId, emoji);
       },
       // removeReaction
       async (messageId: string, reactionId: string) => {
-        await this.bot.$removeReaction(messageId, reactionId);
+        await this.endpoint.$removeReaction(messageId, reactionId);
       },
       // sendMessage
       async (options: TypingIndicatorOptions, content: string) => {
         try {
-          this.bot.logger.debug('[ICQQ:TypingIndicator] sendMessage called', {
+          this.endpoint.logger.debug('[ICQQ:TypingIndicator] sendMessage called', {
             sessionId: options.sessionId,
             content,
             sceneType: options.sceneType,
@@ -100,46 +100,46 @@ export class ICQQTypingIndicatorManager {
 
           // 根据场景类型发送消息
           if (options.sceneType === 'group' && options.groupId) {
-            this.bot.logger.debug('[ICQQ:TypingIndicator] sending group message', {
+            this.endpoint.logger.debug('[ICQQ:TypingIndicator] sending group message', {
               groupId: options.groupId,
             });
-            return await this.bot.$sendMessage({
+            return await this.endpoint.$sendMessage({
               type: 'group',
               id: options.groupId,
               context: 'icqq',
-              bot: this.bot.$id,
+              endpoint: this.endpoint.$id,
               content: [{ type: 'text', data: { text: content } }],
             });
           } else if (options.userId) {
-            this.bot.logger.debug('[ICQQ:TypingIndicator] sending private message', {
+            this.endpoint.logger.debug('[ICQQ:TypingIndicator] sending private message', {
               userId: options.userId,
             });
-            return await this.bot.$sendMessage({
+            return await this.endpoint.$sendMessage({
               type: 'private',
               id: options.userId,
               context: 'icqq',
-              bot: this.bot.$id,
+              endpoint: this.endpoint.$id,
               content: [{ type: 'text', data: { text: content } }],
             });
           }
 
-          this.bot.logger.debug('[ICQQ:TypingIndicator] no valid target', {
+          this.endpoint.logger.debug('[ICQQ:TypingIndicator] no valid target', {
             sceneType: options.sceneType,
             groupId: options.groupId,
             userId: options.userId,
           });
           return null;
         } catch (error) {
-          this.bot.logger.error('[ICQQ:TypingIndicator] Failed to send typing message:', error);
+          this.endpoint.logger.error('[ICQQ:TypingIndicator] Failed to send typing message:', error);
           return null;
         }
       },
       // deleteMessage
       async (messageId: string) => {
         try {
-          await this.bot.$recallMessage(messageId);
+          await this.endpoint.$recallMessage(messageId);
         } catch (error) {
-          this.bot.logger.error('[ICQQ:TypingIndicator] Failed to delete typing message:', error);
+          this.endpoint.logger.error('[ICQQ:TypingIndicator] Failed to delete typing message:', error);
         }
       },
     );
@@ -157,7 +157,7 @@ export class ICQQTypingIndicatorManager {
     groupId?: string;
     sceneType: 'private' | 'group';
   }): Promise<TypingIndicator> {
-    this.bot.logger.debug('[ICQQ:TypingIndicator] start called', {
+    this.endpoint.logger.debug('[ICQQ:TypingIndicator] start called', {
       enabled: this.config.enabled,
       sceneType: options.sceneType,
       messageId: options.messageId,
@@ -167,7 +167,7 @@ export class ICQQTypingIndicatorManager {
     });
 
     if (!this.config.enabled) {
-      this.bot.logger.debug('[ICQQ:TypingIndicator] disabled, returning noop');
+      this.endpoint.logger.debug('[ICQQ:TypingIndicator] disabled, returning noop');
       return {
         start: async () => {},
         stop: async () => {},
@@ -180,7 +180,7 @@ export class ICQQTypingIndicatorManager {
       ? this.config.groupConfig
       : this.config.privateConfig;
 
-    this.bot.logger.debug('[ICQQ:TypingIndicator] using config', {
+    this.endpoint.logger.debug('[ICQQ:TypingIndicator] using config', {
       sceneType: options.sceneType,
       configType: config?.type,
       configEmoji: config?.emoji,
@@ -193,15 +193,15 @@ export class ICQQTypingIndicatorManager {
       userId: options.userId,
       groupId: options.groupId,
       platform: 'icqq',
-      botId: this.bot.$id,
+      endpointId: this.endpoint.$id,
       sceneType: options.sceneType,
     };
 
-    this.bot.logger.debug('[ICQQ:TypingIndicator] starting manager', typingOptions);
+    this.endpoint.logger.debug('[ICQQ:TypingIndicator] starting manager', typingOptions);
 
     const result = await this.manager.start(typingOptions, config);
 
-    this.bot.logger.debug('[ICQQ:TypingIndicator] started', {
+    this.endpoint.logger.debug('[ICQQ:TypingIndicator] started', {
       isActive: result.isActive(),
     });
 
@@ -216,7 +216,7 @@ export class ICQQTypingIndicatorManager {
     userId?: string;
     groupId?: string;
   }): Promise<void> {
-    this.bot.logger.debug('[ICQQ:TypingIndicator] stop called', {
+    this.endpoint.logger.debug('[ICQQ:TypingIndicator] stop called', {
       sessionId: options.sessionId,
       userId: options.userId,
       groupId: options.groupId,
@@ -227,22 +227,22 @@ export class ICQQTypingIndicatorManager {
       userId: options.userId,
       groupId: options.groupId,
       platform: 'icqq',
-      botId: this.bot.$id,
+      endpointId: this.endpoint.$id,
       sceneType: 'private', // 默认值，实际会根据 sessionId 判断
     };
 
     await this.manager.stop(typingOptions);
 
-    this.bot.logger.debug('[ICQQ:TypingIndicator] stopped');
+    this.endpoint.logger.debug('[ICQQ:TypingIndicator] stopped');
   }
 
   /**
    * 停止所有提示
    */
   async stopAll(): Promise<void> {
-    this.bot.logger.debug('[ICQQ:TypingIndicator] stopAll called');
+    this.endpoint.logger.debug('[ICQQ:TypingIndicator] stopAll called');
     await this.manager.stopAll();
-    this.bot.logger.debug('[ICQQ:TypingIndicator] stopAll completed');
+    this.endpoint.logger.debug('[ICQQ:TypingIndicator] stopAll completed');
   }
 
   /**
@@ -263,20 +263,20 @@ export class ICQQTypingIndicatorManager {
 // ── 便捷函数 ──────────────────────────────────────────────────────────
 
 /**
- * 为 ICQQ Bot 创建 Typing Indicator 管理器
+ * 为 ICQQ Endpoint 创建 Typing Indicator 管理器
  */
 export function createICQQTypingIndicatorManager(
-  bot: IcqqBot,
+  endpoint: IcqqEndpoint,
   config?: Partial<ICQQTypingIndicatorConfig>,
 ): ICQQTypingIndicatorManager {
-  return new ICQQTypingIndicatorManager(bot, config);
+  return new ICQQTypingIndicatorManager(endpoint, config);
 }
 
 /**
  * 快速开始提示
  */
 export async function startICQQTypingIndicator(
-  bot: IcqqBot,
+  endpoint: IcqqEndpoint,
   options: {
     messageId?: string;
     sessionId: string;
@@ -286,28 +286,28 @@ export async function startICQQTypingIndicator(
   },
   config?: Partial<ICQQTypingIndicatorConfig>,
 ): Promise<TypingIndicator> {
-  const manager = createICQQTypingIndicatorManager(bot, config);
+  const manager = createICQQTypingIndicatorManager(endpoint, config);
   return await manager.start(options);
 }
 
 // ── 类型扩展 ──────────────────────────────────────────────────────────
 
-declare module './bot.js' {
-  interface IcqqBot {
+declare module './endpoint.js' {
+  interface IcqqEndpoint {
     /** Typing Indicator 管理器 */
     $typingIndicator?: ICQQTypingIndicatorManager;
   }
 }
 
 /**
- * 为 IcqqBot 添加 Typing Indicator 支持
+ * 为 IcqqEndpoint 添加 Typing Indicator 支持
  */
 export function enableTypingIndicator(
-  bot: IcqqBot,
+  endpoint: IcqqEndpoint,
   config?: Partial<ICQQTypingIndicatorConfig>,
 ): ICQQTypingIndicatorManager {
-  if (!bot.$typingIndicator) {
-    bot.$typingIndicator = createICQQTypingIndicatorManager(bot, config);
+  if (!endpoint.$typingIndicator) {
+    endpoint.$typingIndicator = createICQQTypingIndicatorManager(endpoint, config);
   }
-  return bot.$typingIndicator;
+  return endpoint.$typingIndicator;
 }

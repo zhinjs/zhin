@@ -163,8 +163,8 @@ addCommand(
   if (hasPermission) {
     code += `
     .permit((message) => {
-      // 权限检查逻辑
-      return message.$sender.role === "admin";
+      // 框架层：master/trusted；平台群管用 platform(adapter,group_admin) + checker
+      return message.$sender.isMaster === true;
     })`;
   }
 
@@ -284,7 +284,7 @@ export function createAdapterCode(args: {
  * ${description}
  */
 import {
-  Bot,
+  Endpoint,
   Adapter,
   registerAdapter,
   Message,
@@ -295,17 +295,17 @@ import {
 
 declare module "zhin.js" {
   interface RegisteredAdapters {
-    "${name}": Adapter<${className}Bot>;
+    "${name}": Adapter<${className}Endpoint>;
   }
 }
 
-export interface ${className}Config extends Bot.Config {
+export interface ${className}Config extends Endpoint.Config {
   context: "${name}";
   name: string;
   apiKey?: string;
 }
 
-export class ${className}Bot implements Bot<any, ${className}Config> {
+export class ${className}Endpoint implements Endpoint< ${className}Config> {
   $config: ${className}Config;
   $connected: boolean = false;
 
@@ -333,7 +333,7 @@ export class ${className}Bot implements Bot<any, ${className}Config> {
       $reply: async (content) => {
         return await this.$sendMessage({
           context: this.$config.context,
-          bot: this.$config.name,
+          endpoint: this.$config.name,
           id: raw.userId,
           type: "private",
           content,
@@ -359,7 +359,7 @@ export class ${className}Bot implements Bot<any, ${className}Config> {
 useContext("router", (router) => {
   registerAdapter(
     new Adapter("${name}", (config: ${className}Config) => {
-      const bot = new ${className}Bot(config);
+      const bot = new ${className}Endpoint(config);
       
       router.post("/webhook/${name}", async (ctx) => {
         const raw = ctx.request.body;
@@ -375,7 +375,7 @@ useContext("router", (router) => {
 `;
   } else {
     code += `registerAdapter(
-  new Adapter("${name}", (config: ${className}Config) => new ${className}Bot(config))
+  new Adapter("${name}", (config: ${className}Config) => new ${className}Endpoint(config))
 );
 `;
   }
@@ -604,23 +604,23 @@ ${paramLines}
 // ============================================================================
 
 /**
- * 列出所有连接的 Bot 及状态
+ * 列出所有连接的 Endpoint 及状态
  */
 export function listBots(): any[] {
-  const bots: any[] = [];
+  const endpoints: any[] = [];
   for (const adapterName of root.adapters) {
     const adapter = root.inject(adapterName);
     if (!(adapter instanceof Adapter)) continue;
-    for (const [botName, bot] of adapter.bots.entries()) {
-        bots.push({
-          name: botName,
+    for (const [endpointId, endpoint] of adapter.endpoints.entries()) {
+        endpoints.push({
+          name: endpointId,
           adapter: adapterName,
-          connected: bot.$connected || false,
-          status: bot.$connected ? "online" : "offline",
+          connected: endpoint.$connected || false,
+          status: endpoint.$connected ? "online" : "offline",
         });
       }
   }
-  return bots;
+  return endpoints;
 }
 
 /**
@@ -638,11 +638,11 @@ export function listCommands(): any[] {
 }
 
 /**
- * 通过指定 Bot 发送消息
+ * 通过指定 Endpoint 发送消息
  */
 export async function sendMessage(args: {
   adapter: string;
-  bot: string;
+  endpoint: string;
   target_id: string;
   target_type: "private" | "group" | "channel";
   content: string;
@@ -653,7 +653,7 @@ export async function sendMessage(args: {
   }
   const msgId = await adapterInstance.sendMessage({
     context: args.adapter,
-    bot: args.bot,
+    endpoint: args.endpoint,
     id: args.target_id,
     type: args.target_type,
     content: args.content,
@@ -666,18 +666,18 @@ export async function sendMessage(args: {
  */
 export async function recallMessage(args: {
   adapter: string;
-  bot: string;
+  endpoint: string;
   message_id: string;
 }): Promise<string> {
   const adapterInstance = root.inject(args.adapter);
   if (!(adapterInstance instanceof Adapter)) {
     throw new Error(`Adapter "${args.adapter}" not found`);
   }
-  const bot = adapterInstance.bots.get(args.bot);
-  if (!bot) {
-    throw new Error(`Bot "${args.bot}" not found in adapter "${args.adapter}"`);
+  const endpoint = adapterInstance.endpoints.get(args.endpoint);
+  if (!endpoint) {
+    throw new Error(`Endpoint "${args.endpoint}" not found in adapter "${args.adapter}"`);
   }
-  await bot.$recallMessage(args.message_id);
+  await endpoint.$recallMessage(args.message_id);
   return `Message recalled (id: ${args.message_id})`;
 }
 
@@ -844,20 +844,20 @@ export async function simulateMessage(args: {
     if (!(adapterInstance instanceof Adapter)) {
       return `❌ 适配器 "${adapterName}" 不可用。可用的适配器: ${Array.from(root.contexts.keys()).filter((k: string) => {
         const v = root.contexts.get(k)?.value;
-        return v && typeof v === "object" && "bots" in v;
+        return v && typeof v === "object" && "endpoints" in v;
       }).join(", ") || "(无)"}`;
     }
 
-    const bots = Array.from(adapterInstance.bots.entries());
-    if (bots.length === 0) {
-      return `❌ 适配器 "${adapterName}" 没有在线的 Bot`;
+    const endpoints = Array.from(adapterInstance.endpoints.entries());
+    if (endpoints.length === 0) {
+      return `❌ 适配器 "${adapterName}" 没有在线的 Endpoint`;
     }
 
-    const firstBot = bots[0];
-    if (!firstBot) {
-      return `❌ 适配器 "${adapterName}" 没有在线的 Bot`;
+    const firstEndpoint = endpoints[0];
+    if (!firstEndpoint) {
+      return `❌ 适配器 "${adapterName}" 没有在线的 Endpoint`;
     }
-    const [botName] = firstBot;
+    const [endpointId] = firstEndpoint;
 
     // 构造模拟消息
     let reply = "";
@@ -867,7 +867,7 @@ export async function simulateMessage(args: {
       {
         $id: `simulate-${ts}`,
         $adapter: adapterName as never,
-        $bot: botName,
+        $endpoint: endpointId,
         $sender: { id: "mcp-tester", name: "MCP Tester" },
         $channel: { id: "mcp-tester", type: "private" },
         $content: [segment.text(args.content)],
@@ -888,7 +888,7 @@ export async function simulateMessage(args: {
     }
 
     return reply
-      ? `✅ Bot 回复:\n${reply}`
+      ? `✅ Endpoint 回复:\n${reply}`
       : `⚠️ 命令 "${args.content}" 未产生回复（可能命令不存在或无匹配）`;
   } catch (error: unknown) {
     return `❌ 模拟失败: ${error instanceof Error ? error.message : String(error)}`;

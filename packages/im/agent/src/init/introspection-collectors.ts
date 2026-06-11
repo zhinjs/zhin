@@ -7,22 +7,22 @@ import type { AIService } from '../service.js';
 import {
   commandRowsFromService,
   type AgentRow,
-  type BotRow,
+  type EndpointRow,
   type CommandRow,
   type McpServerRow,
   type ToolRow,
 } from './introspection-commands-format.js';
 
-export function collectIntrospectionBots(root: Plugin): BotRow[] {
-  const rows: BotRow[] = [];
+export function collectIntrospectionEndpoints(root: Plugin): EndpointRow[] {
+  const rows: EndpointRow[] = [];
   for (const adapterName of root.adapters) {
     const adapter = root.inject(adapterName);
     if (!(adapter instanceof Adapter)) continue;
-    for (const [botName, bot] of adapter.bots.entries()) {
+    for (const [endpointId, endpoint] of adapter.endpoints.entries()) {
       rows.push({
         adapter: String(adapterName),
-        name: botName,
-        online: !!(bot as { $connected?: boolean }).$connected,
+        name: endpointId,
+        online: !!(endpoint as { $connected?: boolean }).$connected,
       });
     }
   }

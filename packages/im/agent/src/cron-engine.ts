@@ -12,10 +12,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Cron, ZhinTool, Logger } from '@zhin.js/core';
-import type { ToolContext } from '@zhin.js/core';
 import { formatCompact } from '@zhin.js/logger';
 import type { JobNotify } from './assistant/types.js';
-import { toolContextToImNotify } from './assistant/legacy-convert.js';
+import { commMessageToImNotify } from './assistant/legacy-convert.js';
 
 const logger = new Logger(null, 'cron-engine');
 
@@ -340,7 +339,7 @@ export function createCronTools(options?: { optimizePrompt?: PromptOptimizer }):
     .param('prompt', { type: 'string', description: '到点触发时发给 AI 的提示词（如"查询今日金价"）。如果只是简单提醒，可写提醒内容' }, true)
     .param('label', { type: 'string', description: '可选标签，便于识别' })
     .param('notify_channel', { type: 'string', description: '结果投递通道：im（默认，发到当前会话）、silent（仅写 Job 状态）、log（仅日志）。推荐显式指定' })
-    .execute(async (args, toolContext) => {
+    .execute(async (args, commMessage) => {
       const m = getCronManager();
       if (!m?.engine) {
         return { error: '持久化定时任务引擎不可用' };
@@ -382,7 +381,7 @@ export function createCronTools(options?: { optimizePrompt?: PromptOptimizer }):
       } else if (notifyChannel !== 'im') {
         return { error: `notify_channel 无效: ${notifyChannel}，可选 im | silent | log` };
       } else {
-        notify = toolContext ? toolContextToImNotify(toolContext) : { channel: 'silent' };
+        notify = commMessage ? commMessageToImNotify(commMessage) : { channel: 'silent' };
       }
 
       const job = await m.engine.addJob({

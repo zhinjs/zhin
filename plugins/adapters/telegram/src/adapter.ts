@@ -5,54 +5,56 @@ import {
   Adapter,
   Plugin,
 } from "zhin.js";
-import { TelegramBot } from "./bot.js";
-import type { TelegramBotConfig } from "./types.js";
+import { TelegramEndpoint } from "./endpoint.js";
+import type { TelegramEndpointConfig } from "./types.js";
 
-export class TelegramAdapter extends Adapter<TelegramBot> {
+export class TelegramAdapter extends Adapter<TelegramEndpoint> {
+  static override readonly capabilities = ['inbound', 'outbound'] as const;
+
   constructor(plugin: Plugin) {
     super(plugin, "telegram", []);
   }
 
-  createBot(config: TelegramBotConfig): TelegramBot {
-    return new TelegramBot(this, config);
+  createEndpoint(config: TelegramEndpointConfig): TelegramEndpoint {
+    return new TelegramEndpoint(this, config);
   }
 
   // ── IGroupManagement 标准群管方法 ──────────────────────────────────
 
-  async kickMember(botId: string, sceneId: string, userId: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.kickMember(Number(sceneId), Number(userId));
+  async kickMember(endpointId: string, sceneId: string, userId: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.kickMember(Number(sceneId), Number(userId));
   }
 
-  async unbanMember(botId: string, sceneId: string, userId: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.unbanMember(Number(sceneId), Number(userId));
+  async unbanMember(endpointId: string, sceneId: string, userId: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.unbanMember(Number(sceneId), Number(userId));
   }
 
-  async muteMember(botId: string, sceneId: string, userId: string, duration = 600) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.muteMember(Number(sceneId), Number(userId), duration);
+  async muteMember(endpointId: string, sceneId: string, userId: string, duration = 600) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.muteMember(Number(sceneId), Number(userId), duration);
   }
 
-  async setAdmin(botId: string, sceneId: string, userId: string, enable = true) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.setAdmin(Number(sceneId), Number(userId), enable);
+  async setAdmin(endpointId: string, sceneId: string, userId: string, enable = true) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.setAdmin(Number(sceneId), Number(userId), enable);
   }
 
-  async setGroupName(botId: string, sceneId: string, name: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.setChatTitle(Number(sceneId), name);
+  async setGroupName(endpointId: string, sceneId: string, name: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.setChatTitle(Number(sceneId), name);
   }
 
-  async getGroupInfo(botId: string, sceneId: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.getChatInfo(Number(sceneId));
+  async getGroupInfo(endpointId: string, sceneId: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.getChatInfo(Number(sceneId));
   }
 
   // ── 生命周期 ───────────────────────────────────────────────────────

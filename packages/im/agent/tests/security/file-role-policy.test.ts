@@ -103,9 +103,8 @@ describe('inferFileRole', () => {
     expect(inferFileRole({ roles: ['trusted'] })).toBe('admin');
   });
 
-  it('group_owner / group_admin → admin', () => {
-    expect(inferFileRole({ roles: ['group_owner'] })).toBe('admin');
-    expect(inferFileRole({ roles: ['group_admin'] })).toBe('admin');
+  it('平台群管角色不升格文件档（仅 trusted/master）', () => {
+    expect(inferFileRole({ roles: ['user'] })).toBe('user');
   });
 
   it('无角色或仅 user → user', () => {

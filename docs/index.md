@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: "Zhin.js"
-  text: "AI 驱动的 TypeScript 机器人框架"
-  tagline: AI 驱动 · 插件化 · 热重载 · TypeScript · 多平台
+  text: "AI Agent 运行时 · 多通道 Endpoint"
+  tagline: ZhinAgent 编排 · Harness 安全 · 插件热重载 · TypeScript · IM / 邮件 / Webhook
   image:
     src: /logo.svg
     alt: Zhin
@@ -50,7 +50,7 @@ features:
     details: 完整的类型推导和提示，提供极佳的开发体验。100% 类型覆盖。
 
   - icon: "\uD83C\uDF10"
-    title: 多平台生态
-    details: 支持 QQ、Discord、Telegram、KOOK、Slack、钉钉、飞书、OneBot 11/12、Milky、Satori 等 14+ 平台。统一 API 接口，适配器自动暴露 AI 能力。
+    title: 多通道 Endpoint
+    details: 通过 Adapter 接入 QQ、Discord、Telegram、邮件、GitHub、Sandbox 等 17+ 通道。统一 Endpoint 契约与出站链路，ZhinAgent 在各通道上复用同一套工具与安全策略。
 
 ---

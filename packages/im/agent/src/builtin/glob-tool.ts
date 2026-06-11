@@ -3,7 +3,7 @@
  */
 import { exec, type ExecOptions } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { Tool, ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import type { Tool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import { shellEscape } from '../security/file-policy.js';
 import { checkFileToolAccess, checkSensitiveFilePathAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
 import { errMsg } from '../discovery/utils.js';
@@ -39,7 +39,7 @@ export class GlobBuiltinTool extends BuiltinBaseTool {
     this.keywords.push('glob', '查找文件', '按模式找文件', 'find', '匹配文件');
   }
 
-  async run(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
+  async run(args: Record<string, unknown>, commMessage?: Message): Promise<ToolResult> {
     const patternArg = args.pattern;
     if (typeof patternArg !== 'string' || !patternArg.trim()) {
       return 'Error: pattern is required';
@@ -47,12 +47,12 @@ export class GlobBuiltinTool extends BuiltinBaseTool {
     try {
       const cwdRaw = args.cwd;
       const cwd = typeof cwdRaw === 'string' && cwdRaw.trim() ? cwdRaw : process.cwd();
-      const roleDecision = checkFileToolAccess('glob', context);
+      const roleDecision = checkFileToolAccess('glob', commMessage);
       if (!roleDecision.allowed) {
         if (roleDecision.needsOwnerApproval) return toOwnerSignal(roleDecision);
         return toDenyError(roleDecision);
       }
-      const sensitiveDecision = checkSensitiveFilePathAccess('glob', cwd, context);
+      const sensitiveDecision = checkSensitiveFilePathAccess('glob', cwd, commMessage);
       if (!sensitiveDecision.allowed) {
         if (sensitiveDecision.needsOwnerApproval) return toOwnerSignal(sensitiveDecision);
         return toDenyError(sensitiveDecision);

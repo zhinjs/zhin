@@ -3,6 +3,7 @@ import type { AgentTool } from '@zhin.js/ai';
 import { MemoryImTranscriptStore } from '@zhin.js/ai';
 import { collectRuntimeTools } from '../src/zhin-agent/tool-runtime.js';
 import { DEFAULT_CONFIG } from '../src/zhin-agent/config.js';
+import { mockCommMessage } from './helpers/mock-comm-message.js';
 
 const mockTool: AgentTool = {
   name: 'mcp_fs_read',
@@ -139,7 +140,7 @@ describe('collectRuntimeTools MCP merge', () => {
   it('merges mcpTools into runtime tool list', () => {
     const tools = collectRuntimeTools({
       content: 'hello',
-      context: { userId: 'u1', platform: 'test' },
+      commMessage: mockCommMessage({ adapter: 'test', senderId: 'u1' }),
       externalTools: [],
       config: DEFAULT_CONFIG as Required<typeof DEFAULT_CONFIG>,
       skillRegistry: null,
@@ -156,7 +157,7 @@ describe('collectRuntimeTools MCP merge', () => {
   it('skips MCP tools that conflict with reserved names', () => {
     const tools = collectRuntimeTools({
       content: 'hello',
-      context: { userId: 'u1', platform: 'test' },
+      commMessage: mockCommMessage({ adapter: 'test', senderId: 'u1' }),
       externalTools: [],
       config: DEFAULT_CONFIG as Required<typeof DEFAULT_CONFIG>,
       skillRegistry: null,

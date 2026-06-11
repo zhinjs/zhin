@@ -51,7 +51,7 @@ export const INTROSPECTION_OPENAPI_SCHEMAS: Record<string, Record<string, unknow
     required: ["adapter", "name", "online"],
     properties: {
       adapter: { type: "string", description: "适配器名" },
-      name: { type: "string", description: "Bot 实例名（配置 bots[].name）" },
+      name: { type: "string", description: "Endpoint 实例名（配置 endpoints[].name）" },
       online: { type: "boolean", description: "是否已连接/在线" },
     },
   },
@@ -179,7 +179,7 @@ function pagedResponseRef(
 }
 
 export function introspectionRouteMeta(
-  kind: "commands" | "bots" | "bindings" | "tools" | "mcp",
+  kind: "commands" | "endpoints" | "bindings" | "tools" | "mcp",
 ): RouteMeta {
   const common = {
     tags: ["introspection"],
@@ -199,13 +199,13 @@ export function introspectionRouteMeta(
           "命令列表（分页）",
         ),
       };
-    case "bots":
+    case "endpoints":
       return {
         ...common,
         operationId: "getIntrospectionBots",
-        summary: "分页列出 Bot 实例及在线状态",
+        summary: "分页列出 Endpoint 实例及在线状态",
         description:
-          "与 IM `/bots [filter] [page]` 同源。filter 匹配：adapter、bot name。默认 pageSize=30。",
+          "与 IM `/endpoints [filter] [page]` 同源。filter 匹配：adapter、endpoint name。默认 pageSize=30。",
         responses: pagedResponseRef("IntrospectionBotItem", "Bot 列表（分页）"),
       };
     case "bindings":

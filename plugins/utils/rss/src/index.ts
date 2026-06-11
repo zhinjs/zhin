@@ -104,7 +104,7 @@ useContext("database", (db: any) => {
     url: { type: "text", nullable: false },
     feed_title: { type: "text", default: "" },
     adapter_name: { type: "text", default: "" },
-    bot_id: { type: "text", default: "" },
+    endpoint_id: { type: "text", default: "" },
     channel_type: { type: "text", default: "group" },
     channel_id: { type: "text", default: "" },
     creator_id: { type: "text", default: "" },
@@ -128,7 +128,7 @@ function ts(): string {
 
 function extractChannelInfo(message: any): {
   adapterName: string;
-  botId: string;
+  endpointId: string;
   channelType: string;
   channelId: string;
 } {
@@ -136,7 +136,7 @@ function extractChannelInfo(message: any): {
   const channelId = String(message.$channel?.id || message.$group?.id || message.$target?.id || message.$sender?.id || "");
   return {
     adapterName: String(message.$adapter || ""),
-    botId: String(message.$bot || ""),
+    endpointId: String(message.$endpoint || ""),
     channelType,
     channelId,
   };
@@ -146,7 +146,7 @@ function extractChannelInfo(message: any): {
 
 async function pushToChannel(
   adapterName: string,
-  botId: string,
+  endpointId: string,
   channelType: string,
   channelId: string,
   content: string,
@@ -156,7 +156,7 @@ async function pushToChannel(
     if (!adapter) return false;
     await adapter.sendMessage({
       context: adapterName,
-      bot: botId,
+      endpoint: endpointId,
       type: channelType as "group" | "private" | "channel",
       id: channelId,
       content,
@@ -167,7 +167,7 @@ async function pushToChannel(
       op: "push",
       ok: false,
       adapter: adapterName,
-      bot: botId,
+      endpoint: endpointId,
       channel: `${channelType}:${channelId}`,
       error: (e as Error).message,
     }));
@@ -230,7 +230,7 @@ async function pollAllFeeds(): Promise<void> {
         const subscribers = allSubs.filter((s: any) => s.url === url);
 
         for (const sub of subscribers) {
-          await pushToChannel(sub.adapter_name, sub.bot_id, sub.channel_type, sub.channel_id, message);
+          await pushToChannel(sub.adapter_name, sub.endpoint_id, sub.channel_type, sub.channel_id, message);
         }
 
         // 更新 feed 标题
@@ -290,7 +290,7 @@ addCommand(
       if (!url) return "请提供 RSS 源地址，格式：rss-add <URL>";
       if (!/^https?:\/\//i.test(url)) return "请提供有效的 HTTP/HTTPS 地址";
 
-      const { adapterName, botId, channelType, channelId } = extractChannelInfo(message);
+      const { adapterName, endpointId, channelType, channelId } = extractChannelInfo(message);
       if (!channelId) return "无法确定当前会话，请在群聊或私聊中使用";
 
       // 检查是否已订阅
@@ -325,7 +325,7 @@ addCommand(
         url,
         feed_title: feedTitle,
         adapter_name: adapterName,
-        bot_id: botId,
+        endpoint_id: endpointId,
         channel_type: channelType,
         channel_id: channelId,
         creator_id: String(message.$sender?.id || ""),
@@ -457,7 +457,7 @@ addCommand(
             }
             totalNew += newItems.length;
             const msg = formatItems(title, newItems);
-            await pushToChannel(adapterName, subs[0].bot_id, channelType, channelId, msg);
+            await pushToChannel(adapterName, subs[0].endpoint_id, channelType, channelId, msg);
           }
         } catch (e) {
           await message.$reply(`检查 ${url} 失败: ${(e as Error).message}`);

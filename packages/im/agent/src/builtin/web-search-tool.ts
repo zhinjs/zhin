@@ -3,7 +3,7 @@
  * （DuckDuckGo HTML 接口已易触发人机验证，故改用 Bing；解析逻辑对齐
  * claude-code bingAdapter）
  */
-import type { Tool, ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import type { Tool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import { errMsg } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import {
@@ -75,7 +75,7 @@ function filterByDomains(
 export class WebSearchBuiltinTool extends BuiltinBaseTool {
   readonly name = 'web_search';
   readonly description =
-    '在互联网上搜索（Bing），返回匹配的标题、URL 和摘要片段。用于查资料、找网页。支持域名过滤。默认中文结果；用户可在 user_profile 中设置 language 或 preferred_language 覆盖；也可由集成方设置 ToolContext.extra.web_search_locale。';
+    '在互联网上搜索（Bing），返回匹配的标题、URL 和摘要片段。用于查资料、找网页。支持域名过滤。默认中文结果；用户可在 user_profile 中设置 language 或 preferred_language 覆盖；也可由集成方设置 Message.extra.web_search_locale。';
   readonly parameters = WEB_SEARCH_PARAMETERS;
   readonly kind = 'web';
 
@@ -98,7 +98,7 @@ export class WebSearchBuiltinTool extends BuiltinBaseTool {
     );
   }
 
-  async run(args: Record<string, unknown>, _context?: ToolContext): Promise<ToolResult> {
+  async run(args: Record<string, unknown>, _commMessage?: Message): Promise<ToolResult> {
     try {
       this.searchCount++;
       if (this.searchCount > MAX_WEB_SEARCH_COUNT) {
@@ -110,7 +110,7 @@ export class WebSearchBuiltinTool extends BuiltinBaseTool {
       const query = String(args.query ?? '').trim();
       if (!query) return 'Error: query is required';
 
-      const market = resolveWebSearchMarketFromContext(_context);
+      const market = resolveWebSearchMarketFromContext(_commMessage);
       const url = buildBingSearchUrl(query, market);
       const res = await fetch(url, {
         headers: bingSearchFetchHeaders(market),

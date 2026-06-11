@@ -280,7 +280,7 @@
         "weekly": 818,
         "monthly": 2380
       },
-      "readme": "Zhin.js 钉钉适配器，支持企业内部机器人和钉钉开放平台机器人开发。\nbash\npnpm add @zhin.js/adapter-dingtalk\ntypescript\nimport { DingTalkBotConfig } from '@zhin.js/adapter-dingtalk';\nconst config: DingTalkBotConfig = {\n  context: 'd",
+      "readme": "Zhin.js 钉钉适配器，支持企业内部机器人和钉钉开放平台机器人开发。\nbash\npnpm add @zhin.js/adapter-dingtalk\ntypescript\nimport { DingTalkEndpointConfig } from '@zhin.js/adapter-dingtalk';\nconst config: DingTalkEndpointConfig = {\n  context: 'd",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
@@ -417,7 +417,7 @@
         "weekly": 820,
         "monthly": 2067
       },
-      "readme": "Telegram adapter for zhin.js framework.\nbash\npnpm add @zhin.js/adapter-telegram\n| 要求 | 说明 |\n|------|------|\n| Bot Token | 通过 @BotFather 创建 Bot 并获取 Token |\n| Polling（默认） | 本地开发无需公网 IP；polling: true（默认）",
+      "readme": "Telegram adapter for zhin.js framework.\nbash\npnpm add @zhin.js/adapter-telegram\n| 要求 | 说明 |\n|------|------|\n| Endpoint Token | 通过 @BotFather 创建 Endpoint 并获取 Token |\n| Polling（默认） | 本地开发无需公网 IP；polling: true（默认）",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
@@ -455,7 +455,7 @@
         "weekly": 815,
         "monthly": 2065
       },
-      "readme": "Zhin.js QQ 官方机器人适配器，基于 QQ 官方机器人 API 开发，支持频道、群聊和私聊消息。\nbash\npnpm add @zhin.js/adapter-qq\ntypescript\nimport { defineConfig } from 'zhin.js';\nexport default defineConfig({\n  bots: [\n    {\n      context: '",
+      "readme": "Zhin.js QQ 官方机器人适配器，基于 QQ 官方机器人 API 开发，支持频道、群聊和私聊消息。\nbash\npnpm add @zhin.js/adapter-qq\ntypescript\nimport { defineConfig } from 'zhin.js';\nexport default defineConfig({\n  endpoints: [\n    {\n      context: '",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {

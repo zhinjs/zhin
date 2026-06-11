@@ -4,7 +4,7 @@
  * 展示如何在 ICQQ 适配器中集成消息处理状态提示
  */
 
-import type { IcqqBot } from './bot.js';
+import type { IcqqEndpoint } from './endpoint.js';
 import type { IcqqAdapter } from './adapter.js';
 import {
   ICQQTypingIndicatorManager,
@@ -19,9 +19,9 @@ import {
  * 在 ICQQ 适配器初始化时启用 Typing Indicator
  */
 export function enableTypingIndicatorForAdapter(adapter: IcqqAdapter): void {
-  // 遍历所有 Bot 实例
-  for (const [botId, bot] of adapter.bots.entries()) {
-    const manager = enableTypingIndicator(bot, {
+  // 遍历所有 Endpoint 实例
+  for (const [endpointId, endpoint] of adapter.endpoints.entries()) {
+    const manager = enableTypingIndicator(endpoint, {
       enabled: true,
       defaultEmoji: '⏳',
       autoRemove: true,
@@ -42,7 +42,7 @@ export function enableTypingIndicatorForAdapter(adapter: IcqqAdapter): void {
       },
     });
 
-    console.log(`[ICQQ] Typing indicator enabled for bot: ${botId}`);
+    console.log(`[ICQQ] Typing indicator enabled for endpoint: ${endpointId}`);
   }
 }
 
@@ -54,7 +54,7 @@ export function enableTypingIndicatorForAdapter(adapter: IcqqAdapter): void {
  * 使用示例：
  * ```typescript
  * // 在消息处理开始时
- * const indicator = await startTypingIndicator(bot, {
+ * const indicator = await startTypingIndicator(endpoint, {
  *   messageId: message.$id,
  *   sessionId: `${message.$channel.type}:${message.$channel.id}`,
  *   userId: message.$sender.id,
@@ -73,7 +73,7 @@ export function enableTypingIndicatorForAdapter(adapter: IcqqAdapter): void {
  * ```
  */
 export async function withTypingIndicator<T>(
-  bot: IcqqBot,
+  endpoint: IcqqEndpoint,
   options: {
     messageId?: string;
     sessionId: string;
@@ -84,9 +84,9 @@ export async function withTypingIndicator<T>(
   fn: () => Promise<T>,
 ): Promise<T> {
   // 获取或创建 Typing Indicator 管理器
-  let manager = bot.$typingIndicator;
+  let manager = endpoint.$typingIndicator;
   if (!manager) {
-    manager = enableTypingIndicator(bot);
+    manager = enableTypingIndicator(endpoint);
   }
 
   // 开始提示
@@ -183,13 +183,13 @@ export const customConfigs: Record<string, Partial<ICQQTypingIndicatorConfig>> =
 export function setupTypingIndicatorHooks(adapter: IcqqAdapter): void {
   // 监听消息接收事件
   adapter.on('message.receive', async (message) => {
-    const bot = adapter.bots.get(message.$bot);
-    if (!bot) return;
+    const endpoint = adapter.endpoints.get(message.$endpoint);
+    if (!endpoint) return;
 
     // 获取或创建 Typing Indicator 管理器
-    let manager = bot.$typingIndicator;
+    let manager = endpoint.$typingIndicator;
     if (!manager) {
-      manager = enableTypingIndicator(bot);
+      manager = enableTypingIndicator(endpoint);
     }
 
     // 开始提示
@@ -209,24 +209,24 @@ export function setupTypingIndicatorHooks(adapter: IcqqAdapter): void {
 // ── 示例 6: 批量操作 ──────────────────────────────────────────────────
 
 /**
- * 批量管理多个 Bot 的 Typing Indicator
+ * 批量管理多个 Endpoint 的 Typing Indicator
  */
 export class BatchTypingIndicatorManager {
   private managers: Map<string, ICQQTypingIndicatorManager> = new Map();
 
   /**
-   * 注册 Bot
+   * 注册 Endpoint
    */
-  registerBot(bot: IcqqBot, config?: Partial<ICQQTypingIndicatorConfig>): void {
-    const manager = enableTypingIndicator(bot, config);
-    this.managers.set(bot.$id, manager);
+  registerEndpoint(endpoint: IcqqEndpoint, config?: Partial<ICQQTypingIndicatorConfig>): void {
+    const manager = enableTypingIndicator(endpoint, config);
+    this.managers.set(endpoint.$id, manager);
   }
 
   /**
    * 开始提示
    */
   async start(
-    botId: string,
+    endpointId: string,
     options: {
       messageId?: string;
       sessionId: string;
@@ -235,7 +235,7 @@ export class BatchTypingIndicatorManager {
       sceneType: 'private' | 'group';
     },
   ): Promise<void> {
-    const manager = this.managers.get(botId);
+    const manager = this.managers.get(endpointId);
     if (manager) {
       await manager.start(options);
     }
@@ -244,8 +244,8 @@ export class BatchTypingIndicatorManager {
   /**
    * 停止提示
    */
-  async stop(botId: string, options: { sessionId: string }): Promise<void> {
-    const manager = this.managers.get(botId);
+  async stop(endpointId: string, options: { sessionId: string }): Promise<void> {
+    const manager = this.managers.get(endpointId);
     if (manager) {
       await manager.stop(options);
     }
@@ -261,9 +261,9 @@ export class BatchTypingIndicatorManager {
   }
 
   /**
-   * 获取 Bot 的管理器
+   * 获取 Endpoint 的管理器
    */
-  getManager(botId: string): ICQQTypingIndicatorManager | undefined {
-    return this.managers.get(botId);
+  getManager(endpointId: string): ICQQTypingIndicatorManager | undefined {
+    return this.managers.get(endpointId);
   }
 }

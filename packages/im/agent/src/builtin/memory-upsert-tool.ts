@@ -1,8 +1,8 @@
 /**
  * memory_upsert — write semantic memory entries (L4).
  */
-import type { ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
-import { resolveIMSessionIdFromToolContext } from '@zhin.js/ai';
+import type { Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import { getMemoryEntryRepository } from '../memory-entry-registry.js';
 import type { MemoryEntryScope } from '@zhin.js/ai';
@@ -28,14 +28,8 @@ const PARAMS: ToolParametersSchema = {
   required: ['key', 'content'],
 };
 
-function sessionScopeKey(ctx: ToolContext): string {
-  return resolveIMSessionIdFromToolContext({
-    platform: ctx.platform || '',
-    botId: ctx.botId || '',
-    scope: ctx.scope,
-    sceneId: ctx.sceneId || '',
-    senderId: ctx.senderId || '',
-  });
+function sessionScopeKey(commMessage: Message): string {
+  return resolveIMSessionIdFromMessage(commMessage);
 }
 
 class MemoryUpsertTool extends BuiltinBaseTool {
@@ -44,7 +38,7 @@ class MemoryUpsertTool extends BuiltinBaseTool {
   readonly parameters = PARAMS;
   readonly keywords = ['memory', 'remember', 'store', '记忆', '记住'];
 
-  async run(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
+  async run(args: Record<string, unknown>, commMessage?: Message): Promise<ToolResult> {
     const repo = getMemoryEntryRepository();
     if (!repo) return '语义记忆未启用（ai.memory.semantic.enabled）或未初始化数据库。';
 
@@ -54,12 +48,12 @@ class MemoryUpsertTool extends BuiltinBaseTool {
 
     const scope = (typeof args.scope === 'string' ? args.scope : 'global') as MemoryEntryScope;
     let scopeKey = '';
-    if (scope === 'session' && context) {
-      scopeKey = sessionScopeKey(context);
-    } else if (scope === 'platform' && context?.platform) {
-      scopeKey = context.platform;
-    } else if (scope === 'user' && context?.senderId) {
-      scopeKey = context.senderId;
+    if (scope === 'session' && commMessage) {
+      scopeKey = sessionScopeKey(commMessage);
+    } else if (scope === 'platform' && commMessage?.$adapter) {
+      scopeKey = String(commMessage.$adapter);
+    } else if (scope === 'user' && commMessage?.$sender?.id) {
+      scopeKey = commMessage.$sender.id;
     }
 
     const tags = Array.isArray(args.tags) ? args.tags.map(String) : undefined;

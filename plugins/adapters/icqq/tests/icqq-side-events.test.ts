@@ -52,7 +52,7 @@ describe("formatIcqqNotice", () => {
         user_id: 2,
         time: 1,
       },
-      "bot",
+      "endpoint",
     );
     expect(n.$type).toBe("group_poke");
   });
@@ -99,7 +99,7 @@ describe("formatIcqqRequest", () => {
         flag: "f1",
         time: 1,
       },
-      "bot",
+      "endpoint",
       { request: vi.fn() } as any,
     );
     expect(req.$type).toBe("group_invite");

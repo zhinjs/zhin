@@ -4,7 +4,7 @@ platforms:
   - milky
 description: >-
   Milky 协议群管理能力。当用户在 Milky 协议的 QQ 群中请求踢人、禁言、设管理员、
-  改名片/群名或查成员/群信息时使用。即使用户没有提到 Milky，只要 Bot 平台是
+  改名片/群名或查成员/群信息时使用。即使用户没有提到 Milky，只要 Endpoint 平台是
   Milky 协议且涉及群管理操作，就应触发。仅有昵称时必须先查成员列表获取 user_id。
 keywords:
   - milky

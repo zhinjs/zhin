@@ -223,7 +223,7 @@ export async function configureAI(): Promise<AISetupConfig> {
 
   console.log('');
   console.log(chalk.blue('⚡ 配置 AI 触发方式'));
-  console.log(chalk.gray('  决定 Bot 何时自动调用大模型；命令（/ 开头）不会被 AI 拦截。'));
+  console.log(chalk.gray('  决定 Endpoint 何时自动调用大模型；命令（/ 开头）不会被 AI 拦截。'));
 
   const triggerConfig = await inquirer.prompt([
     {

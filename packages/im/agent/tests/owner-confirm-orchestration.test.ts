@@ -16,6 +16,8 @@ import {
 } from '../src/orchestrator/owner-confirm-orchestration.js';
 import { AskUserBuiltinTool } from '../src/builtin/ask-user-tool.js';
 
+import { mockCommMessage } from './helpers/mock-comm-message.js';
+
 /** 满足 AskUserBuiltinTool 构造即可；真实 `run` 由 spy 拦截 */
 const stubPlugin = {
   inject: vi.fn(() => undefined),
@@ -57,7 +59,7 @@ describe('owner-confirm-orchestration', () => {
   it('子 Agent 禁用 B 时不调用 ask_user', async () => {
     const spy = vi.spyOn(AskUserBuiltinTool.prototype, 'run').mockResolvedValue('yes');
     const t = createOwnerOrchestratedToolResultTransform({
-      toolContext: { platform: 'test' },
+      commMessage: mockCommMessage({ adapter: 'test' }),
       plugin: stubPlugin,
       disableHardOrchestration: true,
     });
@@ -70,7 +72,7 @@ describe('owner-confirm-orchestration', () => {
   it('硬编排成功时附加 Owner 答复块', async () => {
     vi.spyOn(AskUserBuiltinTool.prototype, 'run').mockResolvedValue('yes');
     const t = createOwnerOrchestratedToolResultTransform({
-      toolContext: { platform: 'test', message: {} },
+      commMessage: mockCommMessage({ adapter: 'test' }),
       plugin: stubPlugin,
     });
     const raw = `${ZHIN_NEEDS_OWNER_FIRST_LINE}\nreason`;
@@ -80,9 +82,9 @@ describe('owner-confirm-orchestration', () => {
   });
 
   it('ask_user 返回 Error 时软降级且不消耗自动确认次数', async () => {
-    const spy = vi.spyOn(AskUserBuiltinTool.prototype, 'run').mockResolvedValue('Error: 当前 Bot 未配置 owner');
+    const spy = vi.spyOn(AskUserBuiltinTool.prototype, 'run').mockResolvedValue('Error: 当前 Endpoint 未配置 owner');
     const t = createOwnerOrchestratedToolResultTransform({
-      toolContext: { platform: 'test', message: {} },
+      commMessage: mockCommMessage({ adapter: 'test' }),
       plugin: stubPlugin,
       maxAutoOwnerAsk: 1,
     });
@@ -99,7 +101,7 @@ describe('owner-confirm-orchestration', () => {
   it('达到 maxAutoOwnerAsk 后不再调用 ask', async () => {
     const spy = vi.spyOn(AskUserBuiltinTool.prototype, 'run').mockResolvedValue('yes');
     const t = createOwnerOrchestratedToolResultTransform({
-      toolContext: { platform: 'test', message: {} },
+      commMessage: mockCommMessage({ adapter: 'test' }),
       plugin: stubPlugin,
       maxAutoOwnerAsk: 2,
     });
@@ -112,20 +114,20 @@ describe('owner-confirm-orchestration', () => {
   });
 
   it('approve-always 白名单命中时不再调用 ask_user', async () => {
-    const bots = new Map([['bot1', { $config: { master: 'O1' } }]]);
+    const endpoints = new Map([['bot1', { $config: { master: 'O1' } }]]);
     const pluginWithAdapter = {
       inject: vi.fn((name: string) => {
-        if (name === 'icqq') return { bots };
+        if (name === 'icqq') return { endpoints };
         return undefined;
       }),
     } as unknown as Plugin;
     (pluginWithAdapter as unknown as { root: Plugin }).root = pluginWithAdapter;
 
-    addOwnerApproveAlways(pluginWithAdapter, { platform: 'icqq', botId: 'bot1' }, 'bash');
+    addOwnerApproveAlways(pluginWithAdapter, mockCommMessage({ adapter: 'icqq', endpoint: 'bot1' }) as import('@zhin.js/core').Message<any>, 'bash');
 
     const spy = vi.spyOn(AskUserBuiltinTool.prototype, 'run');
     const t = createOwnerOrchestratedToolResultTransform({
-      toolContext: { platform: 'icqq', botId: 'bot1', message: {} },
+      commMessage: mockCommMessage({ adapter: 'icqq', endpoint: 'bot1' }),
       plugin: pluginWithAdapter,
     });
     const raw = `${ZHIN_NEEDS_OWNER_FIRST_LINE}\nreason`;

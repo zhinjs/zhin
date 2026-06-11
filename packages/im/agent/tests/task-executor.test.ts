@@ -7,12 +7,12 @@ describe('task executor outbound seam', () => {
     expect(notifyToSendOptions({
       channel: 'im',
       platform: 'qq',
-      botId: 'bot1',
+      endpointId: 'bot1',
       sceneId: 'group1',
       scope: 'group',
     }, 'hello')).toEqual({
       context: 'qq',
-      bot: 'bot1',
+      endpoint: 'bot1',
       id: 'group1',
       type: 'group',
       content: 'hello',
@@ -33,7 +33,7 @@ describe('task executor outbound seam', () => {
       notify: {
         channel: 'im',
         platform: 'qq',
-        botId: 'bot1',
+        endpointId: 'bot1',
         sceneId: 'group1',
         scope: 'group',
       },
@@ -42,7 +42,7 @@ describe('task executor outbound seam', () => {
     expect(result.success).toBe(true);
     expect(sendMessage).toHaveBeenCalledWith({
       context: 'qq',
-      bot: 'bot1',
+      endpoint: 'bot1',
       id: 'group1',
       type: 'group',
       content: 'hello',

@@ -6,7 +6,7 @@ import { Message as MessageNs } from '@zhin.js/core';
  * Handles image, video, audio, and face/sticker types.
  * Falls back to raw string parsing for image URLs when $content has no media segments.
  */
-export function extractMediaParts(message: Message<any>): ContentPart[] {
+export function extractMediaParts(message: Message): ContentPart[] {
   const parts: ContentPart[] = [];
 
   if (Array.isArray(message.$content)) {
@@ -89,7 +89,7 @@ export function extractMediaParts(message: Message<any>): ContentPart[] {
 /** 从已拉取的引用消息 payload 提取多模态部分（如被引消息里的图片） */
 export function extractMediaPartsFromQuotedPayload(
   payload: QuotedMessagePayload,
-  adapter: Message<any>['$adapter'] = 'process',
+  adapter: Message['$adapter'] = 'process',
 ): ContentPart[] {
   if (!payload.content || !Array.isArray(payload.content) || !payload.content.length) {
     return [];
@@ -99,7 +99,7 @@ export function extractMediaPartsFromQuotedPayload(
     {
       $id: payload.messageId,
       $adapter: adapter,
-      $bot: '',
+      $endpoint: '',
       $content: payload.content,
       $sender: { id: payload.sender?.id ?? '' },
       $reply: async () => payload.messageId,

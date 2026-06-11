@@ -142,7 +142,7 @@ describe('CLI new command integration', () => {
     expect(await fs.pathExists(testFilePath)).toBe(true)
     const testFile = await fs.readFile(testFilePath, 'utf-8')
     
-    // Service test：工厂 + ping（不依赖 Bot 运行时）
+    // Service test：工厂 + ping（不依赖 Endpoint 运行时）
     expect(testFile).toContain('createTestServiceService')
     expect(testFile).toContain('ping returns pong')
     expect(testFile).toContain('TestService service')
@@ -171,13 +171,13 @@ describe('CLI new command integration', () => {
     expect(await fs.pathExists(testFilePath)).toBe(true)
     const testFile = await fs.readFile(testFilePath, 'utf-8')
     
-    // Adapter test：真实 Adapter/Bot 构造与 createBot
+    // Adapter test：真实 Adapter/Endpoint 构造与 createEndpoint
     expect(testFile).toContain('TestAdapterAdapter')
-    expect(testFile).toContain('TestAdapterBot')
+    expect(testFile).toContain('TestAdapterEndpoint')
     expect(testFile).toContain('TestAdapter adapter')
     expect(testFile).toContain('constructs with empty config')
-    expect(testFile).toContain('createBot wires')
-    expect(testFile).toContain('unit-test-bot')
+    expect(testFile).toContain('createEndpoint wires')
+    expect(testFile).toContain('unit-test-endpoint')
   }, 30000)
 
   it('should create official plugin with @zhin.js scope', async () => {

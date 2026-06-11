@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   formatAdaptersList,
   formatAgentsList,
-  formatBotsList,
+  formatEndpointsList,
   formatCommandsList,
   formatMcpServersList,
   formatToolsList,
@@ -11,15 +11,15 @@ import {
 describe('introspection command formatters', () => {
   it('formatCommandsList', () => {
     const text = formatCommandsList([
-      { pattern: '/bots', desc: 'Bot 列表' },
+      { pattern: '/endpoints', desc: 'Endpoint 列表' },
       { pattern: 'hello', desc: '打招呼' },
     ]);
-    expect(text).toContain('/bots');
+    expect(text).toContain('/endpoints');
     expect(text).toContain('hello');
   });
 
-  it('formatBotsList', () => {
-    const text = formatBotsList([
+  it('formatEndpointsList', () => {
+    const text = formatEndpointsList([
       { adapter: 'icqq', name: '8596238', online: true },
       { adapter: 'qq', name: 'zhin2', online: false },
     ]);

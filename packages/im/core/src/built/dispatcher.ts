@@ -366,6 +366,11 @@ export function createMessageDispatcher(
     options?: ReplyWithPolishOptions,
   ): Promise<unknown> {
     const quote = options?.quote;
+    if (!message.$reply) {
+      throw new Error(
+        `Cannot reply: endpoint ${message.$endpoint} on adapter ${String(message.$adapter)} has no outbound capability`,
+      );
+    }
     if (!rootPlugin) {
       return quote ? message.$reply(content, quote) : message.$reply(content);
     }

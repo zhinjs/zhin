@@ -2,6 +2,8 @@
  * activate_skill 内置工具单测
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mockCommMessage } from '../helpers/mock-comm-message.js';
+
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -10,7 +12,7 @@ import {
   createActivateSkillTool,
 } from '../../src/builtin/activate-skill-tool.js';
 import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
-import type { ToolContext } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 
 const SKILL_BODY = `---
 name: ninja
@@ -73,7 +75,7 @@ describe('ActivateSkillBuiltinTool', () => {
       skillDirList: () => [skillRoot],
       skillMaxChars: 4000,
     });
-    const agentTool = normalizeTool(tool, { platform: 't' } as ToolContext);
+    const agentTool = normalizeTool(tool, mockCommMessage({ adapter: 't' }));
     const out = String(await agentTool.execute({ name: 'ninja' }));
     expect(out).toContain('activated');
   });

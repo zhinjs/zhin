@@ -24,7 +24,7 @@ export interface ImapConfig {
   markSeen?: boolean;
 }
 
-export interface EmailBotConfig {
+export interface EmailEndpointConfig {
   context: "email";
   name: string;
   smtp: SmtpConfig;

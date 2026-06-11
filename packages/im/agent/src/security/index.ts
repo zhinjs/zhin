@@ -19,7 +19,7 @@ export * from './exec-policy.js';
 export * from './network-policy.js';
 export * from './budget-limiter.js';
 export * from './audit-logger.js';
-export * from './bash-tool-context.js';
+export * from './comm-message-context.js';
 export * from './owner-approve-always-store.js';
 export * from './sandbox.js';
 export * from './sandbox-enhanced.js';

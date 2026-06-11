@@ -114,14 +114,14 @@ npm create zhin-app my-bot --yes
 - 包管理器: pnpm（自动安装）
 - 数据库: 无（内存会话；需持久化请交互式创建或手动加 SQLite）
 - HTTP Token: 随机生成
-- 适配器: `@zhin.js/adapter-sandbox`；`bots: []`（与 minimal-bot 一致，沙盒 bot 由 Console 连接时自动创建）
+- 适配器: `@zhin.js/adapter-sandbox`；`endpoints: []`（与 minimal-bot 一致，沙盒 bot 由 Console 连接时自动创建）
 - AI: 启用 Ollama（`http://127.0.0.1:11434`）；`toolSearch: false`；`execSecurity: allowlist` / `execPreset: readonly`；`memoryMcp: false`
 - Remote Console: `https://console.zhin.dev`；API Base `http://127.0.0.1:8086`（见 [docs/console-remote.md](../../docs/console-remote.md)）
 - MCP SDK: 启用 AI 时预装 `@modelcontextprotocol/sdk`
 - 统一收件箱: 未启用（无 `database:` 块）
 - 插件开发技能模板: 未安装（`devSkills: false`）
 
-**与 [examples/minimal-bot](../../examples/minimal-bot/) 对齐：** `-y` 同样使用 `bots: []`、Sandbox + Host 插件与 `toolSearch: false`；首跑步骤见 minimal-bot README 与生成项目 README。
+**与 [examples/minimal-bot](../../examples/minimal-bot/) 对齐：** `-y` 同样使用 `endpoints: []`、Sandbox + Host 插件与 `toolSearch: false`；首跑步骤见 minimal-bot README 与生成项目 README。
 
 ## 与 @zhin.js/cli 的分工
 
@@ -219,7 +219,7 @@ packages:
 脚手架当前支持 YAML、JSON、TOML。`-y` 默认生成 `zhin.config.yml`（节选）：
 
 ```yaml
-bots: []
+endpoints: []
 
 plugins:
   - "@zhin.js/adapter-sandbox"
@@ -376,7 +376,7 @@ pnpm stop
 | 零配置创建 | ✅ | ✅ | ✅ |
 | 多配置格式 | ✅ | ❌ | ✅ |  
 | 多运行时支持 | ✅ | ❌ | ❌ |
-| 机器人框架 | ✅ | ❌ | ❌ |
+| AI Agent 运行时（Endpoint） | ✅ | ❌ | ❌ |
 | 热重载开发 | ✅ | ✅ | ✅ |
 
 ## 高级用法
@@ -404,7 +404,7 @@ done
 
 ```yaml
 # GitHub Actions 示例
-- name: create zhin-app Bot Project
+- name: create zhin-app Endpoint Project
   run: |
     npm create zhin-app test-bot -- --yes
     cd test-bot

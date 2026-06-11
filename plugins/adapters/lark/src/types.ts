@@ -1,7 +1,7 @@
 /**
  * 飞书/Lark 适配器类型定义
  */
-export interface LarkBotConfig {
+export interface LarkEndpointConfig {
   context: "lark";
   name: string;
   appId: string;
@@ -53,6 +53,6 @@ export interface AccessToken {
   timestamp: number;
 }
 
-export interface LarkBot {
-  $config: LarkBotConfig;
+export interface LarkEndpoint {
+  $config: LarkEndpointConfig;
 }

@@ -1,24 +1,24 @@
 /**
  * DingTalk 适配器集成测试
  *
- * 策略：Mock 掉 HTTP 传输层（refreshAccessToken / request），测试 Bot 接口合规性、
+ * 策略：Mock 掉 HTTP 传输层（refreshAccessToken / request），测试 Endpoint 接口合规性、
  * 消息格式化、发送/接收链路、生命周期的完整性。
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Plugin, type SendOptions } from 'zhin.js';
 import { createAdapterTestSuite } from '../../../../packages/im/core/tests/adapter-harness.js';
 import { DingTalkAdapter } from '../src/adapter.js';
-import { DingTalkBot } from '../src/bot.js';
-import type { DingTalkBotConfig, DingTalkMessage } from '../src/types.js';
+import { DingTalkEndpoint } from '../src/endpoint.js';
+import type { DingTalkEndpointConfig, DingTalkMessage } from '../src/types.js';
 
 const FIXED_TS = 1700000000000;
 
 // ── Mock Bot：重写 $connect/$disconnect/$sendMessage/$recallMessage ──
 
-class MockDingTalkBot extends DingTalkBot {
+class MockDingTalkEndpoint extends DingTalkEndpoint {
   sendMock = vi.fn();
 
-  constructor(adapter: DingTalkAdapter, router: any, config: DingTalkBotConfig) {
+  constructor(adapter: DingTalkAdapter, router: any, config: DingTalkEndpointConfig) {
     super(adapter, router, config);
   }
 
@@ -43,11 +43,11 @@ class MockDingTalkBot extends DingTalkBot {
 // ── Mock Adapter ──
 
 class MockDingTalkAdapter extends DingTalkAdapter {
-  createBot(config: DingTalkBotConfig): DingTalkBot {
+  createEndpoint(config: DingTalkEndpointConfig): DingTalkEndpoint {
     const mockRouter = { post: vi.fn(), get: vi.fn() };
-    return new MockDingTalkBot(this, mockRouter, {
+    return new MockDingTalkEndpoint(this, mockRouter, {
       context: 'dingtalk',
-      name: config.name || 'test-bot',
+      name: config.name || 'test-endpoint',
       appKey: 'mock-key',
       appSecret: 'mock-secret',
       webhookPath: '/dingtalk/webhook',
@@ -75,11 +75,11 @@ function createDingTalkRawEvent(overrides: Partial<DingTalkMessage> = {}): DingT
 
 createAdapterTestSuite<MockDingTalkAdapter, DingTalkMessage>({
   adapterName: 'dingtalk',
-  botId: 'test-bot',
+  endpointId: 'test-endpoint',
   createAdapter: (plugin) => {
     const adapter = new MockDingTalkAdapter(plugin, { post: vi.fn(), get: vi.fn() });
     (adapter as any).config = [{
-      context: 'dingtalk' as const, name: 'test-bot',
+      context: 'dingtalk' as const, name: 'test-endpoint',
       appKey: 'mock-key', appSecret: 'mock-secret', webhookPath: '/dingtalk/webhook',
     }];
     return adapter;
@@ -92,62 +92,62 @@ createAdapterTestSuite<MockDingTalkAdapter, DingTalkMessage>({
 describe('DingTalk 适配器特定测试', () => {
   let plugin: Plugin;
   let adapter: MockDingTalkAdapter;
-  let bot: MockDingTalkBot;
+  let endpoint: MockDingTalkEndpoint;
 
   beforeEach(async () => {
     plugin = new Plugin('/test/dingtalk-integration.ts');
     adapter = new MockDingTalkAdapter(plugin, { post: vi.fn(), get: vi.fn() });
-    (adapter as any).config = [{ name: 'test-bot', context: 'dingtalk', appKey: 'k', appSecret: 's', webhookPath: '/wh' }];
+    (adapter as any).config = [{ name: 'test-endpoint', context: 'dingtalk', appKey: 'k', appSecret: 's', webhookPath: '/wh' }];
     await adapter.start();
-    bot = adapter.bots.get('test-bot') as MockDingTalkBot;
+    endpoint = adapter.endpoints.get('test-endpoint') as MockDingTalkEndpoint;
   });
 
   afterEach(async () => {
     try { await adapter.stop(); } catch { /* ignore */ }
   });
 
-  describe('Bot 接口合规性', () => {
+  describe('Endpoint 接口合规性', () => {
     it('$id 应为配置的 name', () => {
-      expect(bot.$id).toBe('test-bot');
+      expect(endpoint.$id).toBe('test-endpoint');
     });
 
     it('$connected 启动后应为 true', () => {
-      expect(bot.$connected).toBe(true);
+      expect(endpoint.$connected).toBe(true);
     });
 
-    it('应实现所有 Bot 接口方法', () => {
-      expect(typeof bot.$formatMessage).toBe('function');
-      expect(typeof bot.$connect).toBe('function');
-      expect(typeof bot.$disconnect).toBe('function');
-      expect(typeof bot.$sendMessage).toBe('function');
-      expect(typeof bot.$recallMessage).toBe('function');
+    it('应实现所有 Endpoint 接口方法', () => {
+      expect(typeof endpoint.$formatMessage).toBe('function');
+      expect(typeof endpoint.$connect).toBe('function');
+      expect(typeof endpoint.$disconnect).toBe('function');
+      expect(typeof endpoint.$sendMessage).toBe('function');
+      expect(typeof endpoint.$recallMessage).toBe('function');
     });
   });
 
   describe('生命周期', () => {
-    it('start() 应注册 bot', () => {
-      expect(adapter.bots.has('test-bot')).toBe(true);
+    it('start() 应注册 endpoint', () => {
+      expect(adapter.endpoints.has('test-endpoint')).toBe(true);
     });
 
-    it('stop() 应清空 bots', async () => {
+    it('stop() 应清空 endpoints', async () => {
       await adapter.stop();
-      expect(adapter.bots.size).toBe(0);
+      expect(adapter.endpoints.size).toBe(0);
     });
 
-    it('stop() 后 bot 应 disconnected', async () => {
+    it('stop() 后 endpoint 应 disconnected', async () => {
       await adapter.stop();
-      expect(bot.$connected).toBe(false);
+      expect(endpoint.$connected).toBe(false);
     });
   });
 
   describe('$formatMessage 消息格式化', () => {
     it('群消息应正确格式化', () => {
       const raw = createDingTalkRawEvent();
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
 
       expect(msg.$id).toBe('dt-msg-001');
       expect(msg.$adapter).toBe('dingtalk');
-      expect(msg.$bot).toBe('test-bot');
+      expect(msg.$endpoint).toBe('test-endpoint');
       expect(msg.$sender.id).toBe('sender-001');
       expect(msg.$channel.id).toBe('conv-001');
       expect(msg.$channel.type).toBe('group');
@@ -157,13 +157,13 @@ describe('DingTalk 适配器特定测试', () => {
 
     it('私聊消息应正确格式化', () => {
       const raw = createDingTalkRawEvent({ conversationType: '1' });
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
       expect(msg.$channel.type).toBe('private');
     });
 
     it('$timestamp 应精确匹配 createAt', () => {
       const raw = createDingTalkRawEvent();
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
       expect(msg.$timestamp).toBe(FIXED_TS);
     });
   });
@@ -172,7 +172,7 @@ describe('DingTalk 适配器特定测试', () => {
     it('sendMessage 应返回字符串 ID', async () => {
       const result = await adapter.sendMessage({
         context: 'dingtalk',
-        bot: 'test-bot',
+        endpoint: 'test-endpoint',
         id: 'conv-001',
         type: 'group',
         content: [{ type: 'text', data: { text: 'hello' } }],
@@ -186,7 +186,7 @@ describe('DingTalk 适配器特定测试', () => {
     it('emit message.receive 应触发 plugin.dispatch', async () => {
       const dispatchSpy = vi.spyOn(plugin, 'dispatch');
       const raw = createDingTalkRawEvent();
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
 
       adapter.emit('message.receive', msg);
       await new Promise(r => setTimeout(r, 50));
@@ -202,7 +202,7 @@ describe('DingTalk 适配器特定测试', () => {
     it('$reply 应走 adapter.sendMessage', async () => {
       const sendMessageSpy = vi.spyOn(adapter, 'sendMessage');
       const raw = createDingTalkRawEvent();
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
 
       sendMessageSpy.mockResolvedValue('reply-id');
       const result = await msg.$reply('hi');

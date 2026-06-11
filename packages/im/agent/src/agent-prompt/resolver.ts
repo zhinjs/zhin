@@ -35,7 +35,7 @@ export async function resolveAgentPromptSections(
       ?? DEFAULT_CONFIG.platformPromptMaxChars,
   };
 
-  const platform = ctx.toolContext.platform;
+  const platform = String(ctx.commMessage.$adapter);
   const contributor = getAgentPromptContributor(platform);
   let sections: AgentPromptSection[] = [];
 
@@ -55,7 +55,7 @@ export async function resolveAgentPromptSections(
 
   const hookEvent = createAIHookEvent('agent', 'prompt', sessionId, {
     slot: ctx.slot,
-    toolContext: ctx.toolContext,
+    commMessage: ctx.commMessage,
     userMessagePreview: ctx.userMessagePreview,
     deferred: ctx.deferred,
     sections,
@@ -84,7 +84,7 @@ export function resolveDeferredToolsForPlatform(
   maxTools: number,
   defaultSelect: (query: string, goal: string, catalog: import('@zhin.js/ai').AgentTool[], maxTools: number) => import('@zhin.js/ai').AgentTool[],
 ): import('@zhin.js/ai').AgentTool[] {
-  const contributor = getAgentPromptContributor(ctx.toolContext.platform);
+  const contributor = getAgentPromptContributor(String(ctx.commMessage.$adapter));
   if (contributor?.matchesDeferredTask?.(ctx)) {
     const selected = contributor.selectDeferredTools?.(query, goal, catalog, maxTools);
     if (selected) return selected;
@@ -97,7 +97,7 @@ export function platformMatchesDeferredTask(
   query: string,
   goal: string,
 ): boolean {
-  const contributor = getAgentPromptContributor(ctx.toolContext.platform);
+  const contributor = getAgentPromptContributor(String(ctx.commMessage.$adapter));
   if (contributor?.matchesDeferredTask) {
     try {
       return contributor.matchesDeferredTask(ctx);

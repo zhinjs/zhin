@@ -2,28 +2,28 @@ import type { Router } from '@zhin.js/host-router';
 import type { NapCatAdapter } from './adapter.js';
 
 export function registerRoutes(router: Router, napcat: NapCatAdapter): void {
-  router.get('/api/napcat/bots', async (ctx) => {
+  router.get('/api/napcat/endpoints', async (ctx) => {
     try {
-      const bots = Array.from(napcat.bots.values());
-      if (bots.length === 0) {
-        ctx.body = { success: true, data: [], message: '暂无 NapCat 机器人实例' };
+      const endpoints = Array.from(napcat.endpoints.values());
+      if (endpoints.length === 0) {
+        ctx.body = { success: true, data: [], message: '暂无 NapCat Endpoint 实例' };
         return;
       }
       const result = await Promise.all(
-        bots.map(async (bot) => {
+        endpoints.map(async (endpoint) => {
           try {
-            const connection = (bot.$config as any).connection ?? 'ws';
+            const connection = (endpoint.$config as any).connection ?? 'ws';
             const base: Record<string, unknown> = {
-              name: bot.$config.name,
-              connected: bot.$connected || false,
+              name: endpoint.$config.name,
+              connected: endpoint.$connected || false,
               connection,
-              status: bot.$connected ? 'online' : 'offline',
+              status: endpoint.$connected ? 'online' : 'offline',
               lastActivity: new Date().toISOString(),
             };
-            if (bot.$connected) {
+            if (endpoint.$connected) {
               try {
-                const friends = await bot.getFriendList();
-                const groups = await bot.getGroupList();
+                const friends = await endpoint.getFriendList();
+                const groups = await endpoint.getGroupList();
                 base.friendCount = Array.isArray(friends) ? friends.length : 0;
                 base.groupCount = Array.isArray(groups) ? groups.length : 0;
               } catch {
@@ -37,7 +37,7 @@ export function registerRoutes(router: Router, napcat: NapCatAdapter): void {
             return base;
           } catch {
             return {
-              name: bot.$config.name,
+              name: endpoint.$config.name,
               connected: false,
               connection: 'unknown',
               status: 'error',
@@ -53,7 +53,7 @@ export function registerRoutes(router: Router, napcat: NapCatAdapter): void {
       ctx.body = {
         success: false,
         error: 'NAPCAT_API_ERROR',
-        message: '获取机器人数据失败',
+        message: '获取 Endpoint 数据失败',
         details: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined,
       };
     }

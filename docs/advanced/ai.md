@@ -573,7 +573,7 @@ ai:
 
 当用户消息包含「之前」「上次」「历史」「回忆」等关键词时，`chat_history` 工具被注入，**按需从 `im_transcripts` 查询**（不在进程内缓存全量历史）：
 
-- `keyword`：模糊匹配 `im_transcripts.body`（同 `platform` + `bot_id` + `scene_id`）
+- `keyword`：模糊匹配 `im_transcripts.body`（同 `platform` + `endpoint_id` + `scene_id`）
 - `keyword` 留空：返回最近 N 条（`limit`，默认 10）
 
 LLM 上下文仍只读当前 epoch 的 `agent_messages`；`chat_history` 工具用于跨 epoch 旁听检索，不自动灌入 context。
@@ -675,7 +675,7 @@ ai:
 
 工具通过 `requiredAnyRole` 声明所需角色；`ToolContext.roles` 为发送者角色集合（`user`、`group_admin`、`group_owner`、`trusted`、`master`）。详见 [工具与技能](/advanced/tools-skills#权限控制senderrole-集合)。
 
-**Breaking**：阶梯 `permissionLevel` 已移除；trigger 配置使用 `masters` / `trusted`，bot 配置使用 `bots[].master` / `bots[].trusted`。
+**Breaking**：阶梯 `permissionLevel` 已移除；trigger 配置使用 `masters` / `trusted`，bot 配置使用 `endpoints[].master` / `endpoints[].trusted`。
 
 ## 执行安全 (execSecurity)
 
@@ -743,13 +743,13 @@ ai:
 
 > **说明**：旧文档中的 `execAsk` 已废弃；配置请使用 `execApprovalMode`（实现见 `packages/im/agent/src/zhin-agent/config.ts`）。
 
-### Bot Owner 私聊指令（approve） {#owner-approve-commands}
+### Endpoint Owner 私聊指令（approve） {#owner-approve-commands}
 
 仅 **Bot Owner** 在**私聊**中可用（指令以 `/` 开头）：
 
 | 指令 | 作用 |
 |------|------|
-| `/approve always bash` | 对本 Bot **永久**跳过 bash 链路上的 Owner 硬编排确认；写入 `data/owner-approve-always.json` |
+| `/approve always bash` | 对本 Endpoint **永久**跳过 bash 链路上的 Owner 硬编排确认；写入 `data/owner-approve-always.json` |
 | `/approve always` | 同上，但须在近期 bash 待确认窗口内，否则应使用上一行 |
 | `/approve rule <正则>` | 增加一条**子命令级**放行：用 `RegExp(正则)` 匹配整条待检子命令（常用于敏感 icqq 的「整类放行」） |
 | `/approve list` | 列出 bash 永久放行状态与各条规则的 id |
@@ -760,7 +760,7 @@ ai:
 
 ### 子任务安全
 
-SubagentManager 的 `bash` 工具受同一 `execSecurity` 策略约束。子 agent 运行时会挂载与 `origin` 一致的会话上下文（含 `platform`、`botId` 等），以便 **icqq 敏感放行规则** 与主会话一致生效，不存在「子任务绕过 icqq Owner 规则」的路径。
+SubagentManager 的 `bash` 工具受同一 `execSecurity` 策略约束。子 agent 运行时会挂载与 `origin` 一致的会话上下文（含 `platform`、`endpointId` 等），以便 **icqq 敏感放行规则** 与主会话一致生效，不存在「子任务绕过 icqq Owner 规则」的路径。
 
 ## Provider 统一抽象
 
@@ -1239,6 +1239,6 @@ interface ProviderCapabilities {
 |------|------|
 | 会话 | `/compact` · `/tree` · `/tree N` · `/reset` |
 | 运维 | `/models` · `/health` |
-| 内省 | `/cmd` · `/bots` · `/bindings` · `/tools` · `/mcp`（支持 `[filter] [page]`，REST：`GET /api/introspection/*`） |
+| 内省 | `/cmd` · `/endpoints` · `/bindings` · `/tools` · `/mcp`（支持 `[filter] [page]`，REST：`GET /api/introspection/*`） |
 
 zhin-package：`zhin packages install`。详见 [CLI 参考](/reference/cli) 与 [ADR 0010](../adr/0010-pi-coding-agent-harness-alignment.md)。

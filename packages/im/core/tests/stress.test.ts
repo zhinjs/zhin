@@ -12,7 +12,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Plugin } from '../src/plugin.js';
 import { Adapter } from '../src/adapter.js';
-import { Bot } from '../src/bot.js';
+import { Endpoint } from '../src/endpoint.js';
 import { Message, MessageBase } from '../src/message.js';
 import { compose } from '../src/utils.js';
 import { createMessageDispatcher, type MessageDispatcherService } from '../src/built/dispatcher.js';
@@ -20,7 +20,7 @@ import type { MessageMiddleware, SendOptions } from '../src/types.js';
 
 // ────────────────────────── helpers ──────────────────────────
 
-class StressBot implements Bot<any, any> {
+class StressEndpoint implements Endpoint< any> {
   $id: string;
   $config: any;
   $connected = false;
@@ -35,7 +35,7 @@ class StressBot implements Bot<any, any> {
     const base: MessageBase = {
       $id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       $adapter: 'test' as any,
-      $bot: this.$id,
+      $endpoint: this.$id,
       $content: [{ type: 'text', data: { text: event.text ?? '' } }],
       $sender: { id: event.senderId ?? 'user-1', name: 'StressUser' },
       $channel: { id: event.channelId ?? 'ch-1', type: 'group' },
@@ -56,9 +56,9 @@ class StressBot implements Bot<any, any> {
   async $recallMessage() {}
 }
 
-class StressAdapter extends Adapter<StressBot> {
-  createBot(config: any): StressBot {
-    return new StressBot(this, config);
+class StressAdapter extends Adapter<StressEndpoint> {
+  createEndpoint(config: any): StressEndpoint {
+    return new StressEndpoint(this, config);
   }
 }
 
@@ -70,7 +70,7 @@ function makeMsg(text: string, overrides: Partial<Message<any>> = {}): Message<a
     $sender: { id: 'u1', name: 'U' },
     $channel: { id: 'ch1', type: 'group' },
     $adapter: 'test',
-    $bot: 'bot1',
+    $endpoint: 'bot1',
     $timestamp: Date.now(),
     $reply: vi.fn(async () => 'ok'),
     $recall: vi.fn(async () => {}),
@@ -170,7 +170,7 @@ describe('Stress: Adapter 消息洪水', () => {
       received.push(msg.$id);
     });
 
-    const bot = adapter.bots.get('flood-bot')!;
+    const bot = adapter.endpoints.get('flood-bot')!;
     const messages: Message<any>[] = [];
     for (let i = 0; i < 500; i++) {
       messages.push(bot.$formatMessage({ text: `flood-${i}`, id: `flood-${i}` }));
@@ -189,14 +189,14 @@ describe('Stress: Adapter 消息洪水', () => {
   });
 
   it('并发 sendMessage 不应丢失或串台', async () => {
-    const bot = adapter.bots.get('flood-bot')! as StressBot;
+    const bot = adapter.endpoints.get('flood-bot')! as StressEndpoint;
     const promises: Promise<string>[] = [];
 
     for (let i = 0; i < 200; i++) {
       promises.push(
         adapter.sendMessage({
           context: 'test',
-          bot: 'flood-bot',
+          endpoint: 'flood-bot',
           content: [{ type: 'text', data: { text: `send-${i}` } }],
           id: 'ch-1',
           type: 'group',
@@ -524,10 +524,10 @@ describe('Stress: 边界场景', () => {
     const adapter = new StressAdapter(plugin, 'test' as any, configs);
 
     await adapter.start();
-    expect(adapter.bots.size).toBe(50);
+    expect(adapter.endpoints.size).toBe(50);
 
     await adapter.stop();
-    expect(adapter.bots.size).toBe(0);
+    expect(adapter.endpoints.size).toBe(0);
   });
 
   it('Dispatcher dispatch 空消息不应崩溃', async () => {
@@ -564,7 +564,7 @@ describe('Stress: 边界场景', () => {
     // 显式启用背压限制
     Adapter.DEFAULT_MAX_CONCURRENT_MESSAGES = 5;
 
-    const bot = adapter.bots.get('bp-bot')!;
+    const bot = adapter.endpoints.get('bp-bot')!;
     const received: string[] = [];
     adapter.on('message.receive', (msg: Message<any>) => {
       received.push(msg.$id);
@@ -606,7 +606,7 @@ describe('Stress: 边界场景', () => {
     // 默认 limit=0，不限制
     expect(Adapter.DEFAULT_MAX_CONCURRENT_MESSAGES).toBe(0);
 
-    const bot = adapter.bots.get('nl-bot')!;
+    const bot = adapter.endpoints.get('nl-bot')!;
     let accepted = 0;
     for (let i = 0; i < 50; i++) {
       if (adapter.emit('message.receive', bot.$formatMessage({ text: `nl-${i}`, id: `nl-${i}` }))) {

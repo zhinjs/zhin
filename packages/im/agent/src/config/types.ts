@@ -19,7 +19,7 @@ export interface ProviderInstanceConfig extends ProviderConfig {
 
 export interface RouteMatchConfig {
   adapter?: string;
-  bot?: string;
+  endpoint?: string;
   scene?: string;
   /** image | audio | video | text（纯文本无媒体 segment） */
   hasMedia?: string[];

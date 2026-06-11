@@ -1,11 +1,11 @@
-import { Bot, DatabaseConfig, Databases, MessageFilterConfig, type DualRouteConfig } from "@zhin.js/core";
+import { Endpoint, DatabaseConfig, Databases, MessageFilterConfig, type DualRouteConfig } from "@zhin.js/core";
 import { LogLevel } from "@zhin.js/logger";
 
 /**
  * App配置类型，涵盖机器人、数据库、插件、调试等
  */
 export interface AppConfig<T extends keyof Databases = keyof Databases> {
-  bots?: Bot.Config[];
+  endpoints?: Endpoint.Config[];
   log_level: LogLevel;
   /** 数据库配置列表 */
   database?: DatabaseConfig<T>;
@@ -56,7 +56,7 @@ export interface AppConfig<T extends keyof Databases = keyof Databases> {
       notify?: {
         channel: 'im' | 'silent' | 'log' | 'ha';
         platform?: string;
-        botId?: string;
+        endpointId?: string;
         senderId?: string;
         sceneId?: string;
         scope?: string;

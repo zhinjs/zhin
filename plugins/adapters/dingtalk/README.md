@@ -13,9 +13,9 @@ pnpm add @zhin.js/adapter-dingtalk
 ### 基础配置
 
 ```typescript
-import { DingTalkBotConfig } from '@zhin.js/adapter-dingtalk';
+import { DingTalkEndpointConfig } from '@zhin.js/adapter-dingtalk';
 
-const config: DingTalkBotConfig = {
+const config: DingTalkEndpointConfig = {
   context: 'dingtalk',
   name: 'my-dingtalk-bot',
   appKey: 'YOUR_APP_KEY',           // 钉钉应用 AppKey
@@ -28,7 +28,7 @@ const config: DingTalkBotConfig = {
 ### 完整配置
 
 ```typescript
-const config: DingTalkBotConfig = {
+const config: DingTalkEndpointConfig = {
   context: 'dingtalk',
   name: 'my-dingtalk-bot',
   appKey: 'YOUR_APP_KEY',
@@ -117,7 +117,7 @@ const config: DingTalkBotConfig = {
 import { defineConfig } from 'zhin.js'
 
 export default defineConfig({
-  bots: [
+  endpoints: [
     {
       name: 'dingtalk-bot',
       context: 'dingtalk',
@@ -232,9 +232,9 @@ addCommand(new MessageCommand('info')
 ### 获取用户信息
 
 ```typescript
-const bot = app.adapters.get('dingtalk')?.bots.get('dingtalk-bot')
+const endpoint = app.adapters.get('dingtalk')?.endpoints.get('dingtalk-bot')
 if (bot) {
-  const userInfo = await bot.getUserInfo('user-id')
+  const userInfo = await endpoint.getUserInfo('user-id')
   console.log(userInfo)
 }
 ```
@@ -242,14 +242,14 @@ if (bot) {
 ### 获取部门用户列表
 
 ```typescript
-const users = await bot.getDepartmentUsers(1) // 部门 ID
+const users = await endpoint.getDepartmentUsers(1) // 部门 ID
 console.log(users)
 ```
 
 ### 发送工作通知
 
 ```typescript
-await bot.sendWorkNotice(
+await endpoint.sendWorkNotice(
   ['user1', 'user2'], // 用户 ID 列表
   {
     msgtype: 'text',
@@ -283,7 +283,7 @@ await bot.sendWorkNotice(
 
 ```typescript
 export default defineConfig({
-  bots: [{
+  endpoints: [{
     name: 'dingtalk-bot',
     context: 'dingtalk',
     appKey: process.env.DINGTALK_APP_KEY!,

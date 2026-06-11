@@ -35,6 +35,11 @@ vi.mock('@zhin.js/core', async (importOriginal) => {
       warn = vi.fn();
       error = vi.fn();
     },
+    getPlugin: vi.fn(() => ({ root: {} })),
+    resolveSubjectRoles: vi.fn((_plugin: unknown, message: { _roles?: string[] }) => ({
+      scope: 'private',
+      roles: message?._roles ?? ['user'],
+    })),
     segment: {
       toString: (elements: any[]) => {
         if (!Array.isArray(elements)) return String(elements);
@@ -56,8 +61,9 @@ vi.mock('@zhin.js/core', async (importOriginal) => {
 
 // Import after mocking — AIService + builtin tools from agent; Tool/trigger from core
 import { AIService } from '@zhin.js/agent';
+import * as core from '@zhin.js/core';
 import { ToolFeature, ZhinTool, shouldTriggerAI, resolveSenderRoles } from '@zhin.js/core';
-import type { Tool, ToolContext, AgentTool } from '@zhin.js/core';
+import type { Tool, Message, AgentTool } from '@zhin.js/core';
 
 // ============================================================================
 // AI Service 测试
@@ -350,8 +356,8 @@ describe('Tool Service 集成测试', () => {
         execute: async () => '',
       }, 'test', false);
 
-      const qqContext: ToolContext = { platform: 'qq' };
-      const telegramContext: ToolContext = { platform: 'telegram' };
+      const qqContext = { $adapter: 'qq', $endpoint: 'b1', $sender: { id: 'u1' }, $channel: { type: 'group', id: 'g1' } } as import('@zhin.js/core').Message<any>;
+      const telegramContext = { $adapter: 'telegram', $endpoint: 'b1', $sender: { id: 'u1' }, $channel: { type: 'group', id: 'g1' } } as import('@zhin.js/core').Message<any>;
       
       const allTools = service.getAll();
       
@@ -369,14 +375,24 @@ describe('Tool Service 集成测试', () => {
         name: 'admin_tool',
         description: '',
         parameters: { type: 'object', properties: {} },
-        requiredAnyRole: ['trusted'],
+        permissions: ['role(master)'],
         execute: async () => '',
       }, 'test', false);
 
       const allTools = service.getAll();
       
-      const userContext: ToolContext = {};
-      const adminContext: ToolContext = { roles: ['trusted'] };
+      const userContext = {
+        $adapter: 'qq',
+        $endpoint: 'b1',
+        $sender: { id: 'user1', isMaster: false, isTrusted: false },
+        $channel: { type: 'private', id: 'user1' },
+      } as import('@zhin.js/core').Message<any>;
+      const adminContext = {
+        $adapter: 'process',
+        $endpoint: 'b1',
+        $sender: { id: 'admin1', isMaster: true },
+        $channel: { type: 'private', id: 'admin1' },
+      } as import('@zhin.js/core').Message<any>;
       
       const userFiltered = service.filterByContext(allTools, userContext);
       expect(userFiltered.some(t => t.name === 'admin_tool')).toBe(false);
@@ -394,7 +410,7 @@ describe('Tool Service 集成测试', () => {
 describe('AI Trigger 工具函数测试', () => {
   function createMockMessage(options: {
     content: string | any[];
-    bot?: string;
+    endpoint?: string;
     channelType?: 'private' | 'group' | 'channel';
     senderId?: string;
     senderPermissions?: string[];
@@ -405,7 +421,7 @@ describe('AI Trigger 工具函数测试', () => {
     
     return {
       $content: content,
-      $bot: options.bot || 'bot123',
+      $endpoint: options.endpoint || 'bot123',
       $channel: options.channelType ? { type: options.channelType, id: 'channel1' } : null,
       $sender: { 
         id: options.senderId || 'user1', 
@@ -475,10 +491,10 @@ describe('ZhinTool 完整流程', () => {
       .platform('qq', 'telegram')
       .scope('group', 'private')
       .tag('test', 'example')
-      .execute(async (args, ctx) => {
+      .execute(async (args, message) => {
         return {
           received: args,
-          platform: ctx?.platform,
+          platform: message?.$adapter,
         };
       });
 
@@ -499,9 +515,15 @@ describe('ZhinTool 完整流程', () => {
     expect(toolObj.parameters.required).toContain('required_param');
     
     // 验证执行
+    const commMessage = {
+      $adapter: 'qq',
+      $endpoint: 'bot1',
+      $sender: { id: 'user1' },
+      $channel: { type: 'group' as const, id: 'g1' },
+    } as import('@zhin.js/core').Message<any>;
     const result = await toolObj.execute(
       { required_param: 'test', optional_param: 42 },
-      { platform: 'qq' }
+      commMessage,
     );
     
     expect(result.received.required_param).toBe('test');

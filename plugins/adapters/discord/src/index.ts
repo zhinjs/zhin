@@ -5,7 +5,12 @@ import path from "node:path";
 import { usePlugin, type Plugin, type Context, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
 import type { Router } from "@zhin.js/host-router";
 import { PageManager } from "@zhin.js/host-api";
-import { DiscordAdapter, type DiscordBotLike } from "./adapter.js";
+import { DiscordAdapter, type DiscordEndpointLike } from "./adapter.js";
+import {
+  discordGroupPermitResolver,
+  platformPermit,
+  registerDiscordPlatformPermitChecker,
+} from "./platform-permit.js";
 
 declare module "zhin.js" {
   namespace Plugin {
@@ -20,9 +25,9 @@ declare module "zhin.js" {
 }
 
 export * from "./types.js";
-export { DiscordBot } from "./bot.js";
-export { DiscordInteractionsBot } from "./bot-interactions.js";
-export { DiscordAdapter, type DiscordBotLike } from "./adapter.js";
+export { DiscordEndpoint } from "./endpoint.js";
+export { DiscordInteractionsEndpoint } from "./endpoint-interactions.js";
+export { DiscordAdapter, type DiscordEndpointLike } from "./adapter.js";
 
 const plugin = usePlugin();
 const { provide, useContext } = plugin;
@@ -40,19 +45,22 @@ provide({
 });
 
 useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter) => {
+  const disposers: (() => void)[] = [];
+  disposers.push(registerDiscordPlatformPermitChecker());
   const groupTools = createGroupManagementTools(
     discord as unknown as IGroupManagement,
     'discord',
+    { permitResolver: discordGroupPermitResolver, registerChecker: false },
   );
-  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, plugin.name));
+  disposers.push(...groupTools.map(t => toolService.addTool(t, plugin.name)));
 
-  function getGatewayBot(botId: string): DiscordBotLike {
-    const bot = discord.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    if ((bot.$config as { connection?: string }).connection !== 'gateway') {
+  function getGatewayBot(endpointId: string): DiscordEndpointLike {
+    const endpoint = discord.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    if ((endpoint.$config as { connection?: string }).connection !== 'gateway') {
       throw new Error('此工具仅支持 connection: gateway');
     }
-    return bot;
+    return endpoint;
   }
 
   disposers.push(toolService.addTool({
@@ -61,18 +69,19 @@ useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         guild_id: { type: 'string', description: '服务器 ID' },
         user_id: { type: 'string', description: '用户 ID' },
         role_id: { type: 'string', description: '角色 ID' },
       },
-      required: ['bot', 'guild_id', 'user_id', 'role_id'],
+      required: ['endpoint_id', 'guild_id', 'user_id', 'role_id'],
     },
     platforms: ['discord'],
     tags: ['discord'],
+    permissions: [platformPermit('manage_roles')],
     execute: async (args: Record<string, any>) => {
-      const bot = getGatewayBot(args.bot) as any;
-      const success = await bot.addRole(args.guild_id, args.user_id, args.role_id);
+      const endpoint = getGatewayBot(args.endpoint_id) as any;
+      const success = await endpoint.addRole(args.guild_id, args.user_id, args.role_id);
       return { success, message: success ? `已给用户 ${args.user_id} 添加角色` : '操作失败' };
     },
   }, plugin.name));
@@ -83,18 +92,19 @@ useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         guild_id: { type: 'string', description: '服务器 ID' },
         user_id: { type: 'string', description: '用户 ID' },
         role_id: { type: 'string', description: '角色 ID' },
       },
-      required: ['bot', 'guild_id', 'user_id', 'role_id'],
+      required: ['endpoint_id', 'guild_id', 'user_id', 'role_id'],
     },
     platforms: ['discord'],
     tags: ['discord'],
+    permissions: [platformPermit('manage_roles')],
     execute: async (args: Record<string, any>) => {
-      const bot = getGatewayBot(args.bot) as any;
-      const success = await bot.removeRole(args.guild_id, args.user_id, args.role_id);
+      const endpoint = getGatewayBot(args.endpoint_id) as any;
+      const success = await endpoint.removeRole(args.guild_id, args.user_id, args.role_id);
       return { success, message: success ? `已移除用户 ${args.user_id} 的角色` : '操作失败' };
     },
   }, plugin.name));
@@ -105,16 +115,17 @@ useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         guild_id: { type: 'string', description: '服务器 ID' },
       },
-      required: ['bot', 'guild_id'],
+      required: ['endpoint_id', 'guild_id'],
     },
     platforms: ['discord'],
     tags: ['discord'],
+    permissions: [platformPermit('manage_roles')],
     execute: async (args: Record<string, any>) => {
-      const bot = getGatewayBot(args.bot) as any;
-      const roles = await bot.getRoles(args.guild_id);
+      const endpoint = getGatewayBot(args.endpoint_id) as any;
+      const roles = await endpoint.getRoles(args.guild_id);
       return { roles, count: roles.length };
     },
   }, plugin.name));
@@ -125,7 +136,7 @@ useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         channel_id: { type: 'string', description: '频道 ID' },
         name: { type: 'string', description: '帖子标题' },
         message_id: { type: 'string', description: '基于某条消息创建（可选）' },
@@ -134,13 +145,14 @@ useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter
           description: '自动归档时间（分钟：60/1440/4320/10080）',
         },
       },
-      required: ['bot', 'channel_id', 'name'],
+      required: ['endpoint_id', 'channel_id', 'name'],
     },
     platforms: ['discord'],
     tags: ['discord'],
+    permissions: [platformPermit('manage_channels')],
     execute: async (args: Record<string, any>) => {
-      const bot = getGatewayBot(args.bot) as any;
-      const thread = await bot.createThread(args.channel_id, args.name, args.message_id, args.auto_archive_duration);
+      const endpoint = getGatewayBot(args.endpoint_id) as any;
+      const thread = await endpoint.createThread(args.channel_id, args.name, args.message_id, args.auto_archive_duration);
       return { success: true, thread_id: thread.id, message: `帖子 "${args.name}" 已创建` };
     },
   }, plugin.name));
@@ -151,7 +163,7 @@ useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         channel_id: { type: 'string', description: '频道 ID' },
         message_id: { type: 'string', description: '消息 ID' },
         emoji: {
@@ -159,13 +171,13 @@ useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter
           description: '表情（Unicode 表情或自定义表情如 <:name:id>）',
         },
       },
-      required: ['bot', 'channel_id', 'message_id', 'emoji'],
+      required: ['endpoint_id', 'channel_id', 'message_id', 'emoji'],
     },
     platforms: ['discord'],
     tags: ['discord'],
     execute: async (args: Record<string, any>) => {
-      const bot = getGatewayBot(args.bot) as any;
-      await bot.addReaction(args.channel_id, args.message_id, args.emoji);
+      const endpoint = getGatewayBot(args.endpoint_id) as any;
+      await endpoint.addReaction(args.channel_id, args.message_id, args.emoji);
       return { success: true, message: `已添加反应 ${args.emoji}` };
     },
   }, plugin.name));
@@ -176,7 +188,7 @@ useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         channel_id: { type: 'string', description: '频道 ID' },
         title: { type: 'string', description: 'Embed 标题' },
         description: { type: 'string', description: 'Embed 描述' },
@@ -187,12 +199,12 @@ useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter
           description: '字段，JSON 格式: [{"name":"k","value":"v","inline":false}]',
         },
       },
-      required: ['bot', 'channel_id'],
+      required: ['endpoint_id', 'channel_id'],
     },
     platforms: ['discord'],
     tags: ['discord'],
     execute: async (args: Record<string, any>) => {
-      const bot = getGatewayBot(args.bot) as any;
+      const endpoint = getGatewayBot(args.endpoint_id) as any;
       const embedData: any = {};
       if (args.title) embedData.title = args.title;
       if (args.description) embedData.description = args.description;
@@ -205,7 +217,7 @@ useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter
           return { success: false, message: 'fields 格式错误，应为 JSON 数组' };
         }
       }
-      const msg = await bot.sendEmbed(args.channel_id, embedData);
+      const msg = await endpoint.sendEmbed(args.channel_id, embedData);
       return { success: true, message_id: msg.id, message: 'Embed 已发送' };
     },
   }, plugin.name));
@@ -216,20 +228,20 @@ useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         channel_id: { type: 'string', description: '论坛频道 ID' },
         name: { type: 'string', description: '帖子标题' },
         content: { type: 'string', description: '帖子内容' },
         tags: { type: 'string', description: '标签名，逗号分隔（可选）' },
       },
-      required: ['bot', 'channel_id', 'name', 'content'],
+      required: ['endpoint_id', 'channel_id', 'name', 'content'],
     },
     platforms: ['discord'],
     tags: ['discord'],
     execute: async (args: Record<string, any>) => {
-      const bot = getGatewayBot(args.bot) as any;
+      const endpoint = getGatewayBot(args.endpoint_id) as any;
       const tagList = args.tags ? args.tags.split(',').map((t: string) => t.trim()) : undefined;
-      const thread = await bot.createForumPost(args.channel_id, args.name, args.content, tagList);
+      const thread = await endpoint.createForumPost(args.channel_id, args.name, args.content, tagList);
       return { success: true, thread_id: thread.id, message: `论坛帖 "${args.name}" 已创建` };
     },
   }, plugin.name));
@@ -248,39 +260,39 @@ useContext("web", (pageManager) => {
 });
 
 useContext("router", "discord", (router: Router, discord: DiscordAdapter) => {
-  router.get("/api/discord/bots", async (ctx: any) => {
+  router.get("/api/discord/endpoints", async (ctx: any) => {
     try {
-      const bots = Array.from(discord.bots.values());
-      const result = bots.map((bot: any) => {
+      const endpoints = Array.from(discord.endpoints.values());
+      const result = endpoints.map((endpoint: any) => {
         try {
-          const client = bot.client || bot;
+          const client = endpoint.client || endpoint;
           return {
-            name: bot.$config.name,
-            connected: bot.$connected || false,
-            mode: bot.$config.connection || "gateway",
+            name: endpoint.$config.name,
+            connected: endpoint.$connected || false,
+            mode: endpoint.$config.connection || "gateway",
             guildCount: client.guilds?.cache?.size || 0,
             channelCount: client.channels?.cache?.size || 0,
-            status: bot.$connected ? "online" : "offline",
+            status: endpoint.$connected ? "online" : "offline",
             user: client.user ? { tag: client.user.tag, id: client.user.id } : null,
           };
         } catch {
-          return { name: bot.$config.name, connected: false, mode: "unknown", guildCount: 0, channelCount: 0, status: "error", user: null };
+          return { name: endpoint.$config.name, connected: false, mode: "unknown", guildCount: 0, channelCount: 0, status: "error", user: null };
         }
       });
       ctx.body = { success: true, data: result };
     } catch {
       ctx.status = 500;
-      ctx.body = { success: false, error: "获取机器人数据失败" };
+      ctx.body = { success: false, error: "获取 Endpoint 数据失败" };
     }
   });
 
-  // Bot 连接/断开
-  router.post("/api/discord/bots/:name/connect", async (ctx: any) => {
+  // Endpoint 连接/断开
+  router.post("/api/discord/endpoints/:name/connect", async (ctx: any) => {
     try {
-      const bot = discord.bots.get(ctx.params.name);
-      if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
-      if (bot.$connected) { ctx.body = { success: true, message: "已经在线" }; return; }
-      await bot.$connect();
+      const endpoint = discord.endpoints.get(ctx.params.name);
+      if (!endpoint) { ctx.status = 404; ctx.body = { success: false, error: "Endpoint 不存在" }; return; }
+      if (endpoint.$connected) { ctx.body = { success: true, message: "已经在线" }; return; }
+      await endpoint.$connect();
       ctx.body = { success: true, message: "连接成功" };
     } catch (e: unknown) {
       ctx.status = 500;
@@ -288,12 +300,12 @@ useContext("router", "discord", (router: Router, discord: DiscordAdapter) => {
     }
   });
 
-  router.post("/api/discord/bots/:name/disconnect", async (ctx: any) => {
+  router.post("/api/discord/endpoints/:name/disconnect", async (ctx: any) => {
     try {
-      const bot = discord.bots.get(ctx.params.name);
-      if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
-      if (!bot.$connected) { ctx.body = { success: true, message: "已经离线" }; return; }
-      await bot.$disconnect();
+      const endpoint = discord.endpoints.get(ctx.params.name);
+      if (!endpoint) { ctx.status = 404; ctx.body = { success: false, error: "Endpoint 不存在" }; return; }
+      if (!endpoint.$connected) { ctx.body = { success: true, message: "已经离线" }; return; }
+      await endpoint.$disconnect();
       ctx.body = { success: true, message: "已断开" };
     } catch (e: unknown) {
       ctx.status = 500;
@@ -302,12 +314,12 @@ useContext("router", "discord", (router: Router, discord: DiscordAdapter) => {
   });
 
   // 服务器列表（仅 Gateway 模式）
-  router.get("/api/discord/bots/:name/guilds", async (ctx: any) => {
+  router.get("/api/discord/endpoints/:name/guilds", async (ctx: any) => {
     try {
-      const bot: any = discord.bots.get(ctx.params.name);
-      if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
-      if (!bot.$connected) { ctx.status = 400; ctx.body = { success: false, error: "Bot 未连接" }; return; }
-      const client = bot.client || bot;
+      const endpoint: any = discord.endpoints.get(ctx.params.name);
+      if (!endpoint) { ctx.status = 404; ctx.body = { success: false, error: "Endpoint 不存在" }; return; }
+      if (!endpoint.$connected) { ctx.status = 400; ctx.body = { success: false, error: "Endpoint 未连接" }; return; }
+      const client = endpoint.client || endpoint;
       const guilds = client.guilds?.cache?.map((g: any) => ({
         id: g.id,
         name: g.name,

@@ -17,12 +17,12 @@ export function resolveStateDir(): string {
     : DEFAULT_DATA_DIR;
 }
 
-export function credentialsPath(botName: string): string {
-  return path.join(resolveStateDir(), `${botName}.json`);
+export function credentialsPath(endpointName: string): string {
+  return path.join(resolveStateDir(), `${endpointName}.json`);
 }
 
-export function loadCredentials(botName: string): WeixinIlinkCredentials | null {
-  const file = credentialsPath(botName);
+export function loadCredentials(endpointName: string): WeixinIlinkCredentials | null {
+  const file = credentialsPath(endpointName);
   try {
     if (!fs.existsSync(file)) return null;
     const raw = fs.readFileSync(file, "utf-8");
@@ -34,8 +34,8 @@ export function loadCredentials(botName: string): WeixinIlinkCredentials | null 
   }
 }
 
-export function saveCredentials(botName: string, creds: WeixinIlinkCredentials): void {
-  const file = credentialsPath(botName);
+export function saveCredentials(endpointName: string, creds: WeixinIlinkCredentials): void {
+  const file = credentialsPath(endpointName);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(
     file,
@@ -44,12 +44,12 @@ export function saveCredentials(botName: string, creds: WeixinIlinkCredentials):
   );
 }
 
-export function syncBufPath(botName: string): string {
-  return path.join(resolveStateDir(), `${botName}.sync-buf`);
+export function syncBufPath(endpointName: string): string {
+  return path.join(resolveStateDir(), `${endpointName}.sync-buf`);
 }
 
-export function loadSyncBuf(botName: string): string {
-  const file = syncBufPath(botName);
+export function loadSyncBuf(endpointName: string): string {
+  const file = syncBufPath(endpointName);
   try {
     return fs.existsSync(file) ? fs.readFileSync(file, "utf-8") : "";
   } catch {
@@ -57,8 +57,8 @@ export function loadSyncBuf(botName: string): string {
   }
 }
 
-export function saveSyncBuf(botName: string, buf: string): void {
-  const file = syncBufPath(botName);
+export function saveSyncBuf(endpointName: string, buf: string): void {
+  const file = syncBufPath(endpointName);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, buf, "utf-8");
 }

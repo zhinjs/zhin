@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=d5150abcc2b08f90 -->
+<!-- sync-adapter-docs:sha256=e8f41d9fd0512cdd -->
 
 # @zhin.js/adapter-icqq
 
@@ -45,7 +45,7 @@ pnpm add -g @icqqjs/cli
 在 `zhin.config.yml` 中声明 bot（**不在此填写 QQ 密码**）：
 
 ```yaml
-bots:
+endpoints:
   - context: icqq
     name: "${ICQQ_ACCOUNT}"   # QQ 号，须与 icqq login 的账号一致
     autoReconnect: true         # IPC 断开后自动重连，默认 true
@@ -70,7 +70,7 @@ TypeScript 配置等价写法：
 import { defineConfig } from 'zhin.js'
 
 export default defineConfig({
-  bots: [
+  endpoints: [
     {
       context: 'icqq',
       name: process.env.ICQQ_ACCOUNT!,
@@ -91,7 +91,7 @@ export default defineConfig({
 
 - `autoReconnect`: IPC/RPC 意外断开时是否指数退避重连（默认 `true`）
 - `rpc`: 远程守护进程连接（`host` / `port` / `token`）；不配置则使用本地 Unix socket `~/.icqq/<uin>/daemon.sock`
-- `typingIndicator`: AI 处理中的 reaction 或临时消息提示（见 `IcqqBotConfig` 类型）
+- `typingIndicator`: AI 处理中的 reaction 或临时消息提示（见 `IcqqEndpointConfig` 类型）
 
 ## 使用示例
 
@@ -148,7 +148,7 @@ addCommand(new MessageCommand('pic <url:text>')
 Agent **`generate_image` 文生图**出站的大图同样依赖上述配置；同机默认可用本机临时文件路径（`outboundMedia: file`）。详见 [文生图 (generate_image)](https://github.com/zhinjs/zhin/blob/main/docs/advanced/ai.md#文生图-generate_image)。
 
 ```yaml
-bots:
+endpoints:
   - context: icqq
     name: "123456"
     outboundMedia: base64   # 异机 / 远程 RPC
@@ -184,7 +184,7 @@ addCommand(new MessageCommand('at <user:at>')
 ## 登录流程
 
 1. **先登录 QQ**：在终端执行 `icqq login`，按 CLI 提示完成密码/扫码/滑块/设备锁等验证；会话由 `@icqqjs/cli` 守护进程维护。
-2. **再启动 Zhin**：`zhin.config.yml` 中 `bots[].name` 与上一步 QQ 号一致，启动 `zhin dev` / `zhin start`；适配器连接守护进程并开始收发消息。
+2. **再启动 Zhin**：`zhin.config.yml` 中 `endpoints[].name` 与上一步 QQ 号一致，启动 `zhin dev` / `zhin start`；适配器连接守护进程并开始收发消息。
 3. 若守护进程未运行或账号未登录，适配器会保持未连接状态，日志中会提示检查 `icqq` 守护进程。
 
 ### Web 控制台登录辅助（可选）
@@ -222,25 +222,25 @@ addCommand(new MessageCommand('at <user:at>')
 ## API 方法
 
 ```typescript
-const bot = app.adapters.get('icqq')?.bots.get('你的QQ号')
+const endpoint = app.adapters.get('icqq')?.endpoints.get('你的QQ号')
 
 // 发送群消息
-await bot.sendGroupMsg(groupId, '消息内容')
+await endpoint.sendGroupMsg(groupId, '消息内容')
 
 // 发送私聊消息
-await bot.sendPrivateMsg(userId, '消息内容')
+await endpoint.sendPrivateMsg(userId, '消息内容')
 
 // 撤回消息
-await bot.$recallMessage(messageId)
+await endpoint.$recallMessage(messageId)
 
 // 获取群列表
-const groupList = bot.getGroupList()
+const groupList = endpoint.getGroupList()
 
 // 获取好友列表
-const friendList = bot.getFriendList()
+const friendList = endpoint.getFriendList()
 
 // 获取群成员信息
-const memberInfo = bot.getGroupMemberInfo(groupId, userId)
+const memberInfo = endpoint.getGroupMemberInfo(groupId, userId)
 ```
 
 ## 🔧 群管理工具（AI 可调用）
@@ -295,48 +295,48 @@ AI：已戳了戳 朋友。
 #### 编程调用
 
 ```typescript
-// 获取 ICQQ Bot 实例
+// 获取 ICQQ Endpoint 实例
 const icqqAdapter = app.adapters.get('icqq')
-const bot = icqqAdapter?.bots.get('你的QQ号')
+const endpoint = icqqAdapter?.endpoints.get('你的QQ号')
 
 // 踢出成员
-await bot.kickMember(groupId, userId, true) // 第三个参数为是否拉黑
+await endpoint.kickMember(groupId, userId, true) // 第三个参数为是否拉黑
 
 // 禁言成员（单位：秒）
-await bot.muteMember(groupId, userId, 600) // 禁言 10 分钟
-await bot.muteMember(groupId, userId, 0)   // 解除禁言
+await endpoint.muteMember(groupId, userId, 600) // 禁言 10 分钟
+await endpoint.muteMember(groupId, userId, 0)   // 解除禁言
 
 // 全员禁言
-await bot.muteAll(groupId, true)  // 开启
-await bot.muteAll(groupId, false) // 关闭
+await endpoint.muteAll(groupId, true)  // 开启
+await endpoint.muteAll(groupId, false) // 关闭
 
 // 设置管理员
-await bot.setAdmin(groupId, userId, true)  // 设为管理员
-await bot.setAdmin(groupId, userId, false) // 取消管理员
+await endpoint.setAdmin(groupId, userId, true)  // 设为管理员
+await endpoint.setAdmin(groupId, userId, false) // 取消管理员
 
 // 设置群名片
-await bot.setCard(groupId, userId, '新名片')
+await endpoint.setCard(groupId, userId, '新名片')
 
 // 设置专属头衔
-await bot.setTitle(groupId, userId, '大佬', -1) // -1 表示永久
+await endpoint.setTitle(groupId, userId, '大佬', -1) // -1 表示永久
 
 // 修改群名
-await bot.setGroupName(groupId, '新群名')
+await endpoint.setGroupName(groupId, '新群名')
 
 // 发送群公告
-await bot.sendAnnounce(groupId, '公告内容')
+await endpoint.sendAnnounce(groupId, '公告内容')
 
 // 戳一戳
-await bot.pokeMember(groupId, userId)
+await endpoint.pokeMember(groupId, userId)
 
 // 获取群成员列表
-const members = await bot.getMemberList(groupId)
+const members = await endpoint.getMemberList(groupId)
 
 // 获取被禁言成员列表
-const mutedList = await bot.getMutedMembers(groupId)
+const mutedList = await endpoint.getMutedMembers(groupId)
 
 // 开启/关闭匿名
-await bot.setAnonymous(groupId, true)
+await endpoint.setAnonymous(groupId, true)
 ```
 
 ### 发送者权限信息
@@ -401,7 +401,7 @@ onGroupMessage(async (message) => {
 
 A:
 1. 确认已对该 QQ 号执行过 `icqq login` 且守护进程在运行
-2. 确认 `bots[].name` 与登录 QQ 号一致
+2. 确认 `endpoints[].name` 与登录 QQ 号一致
 3. 远程部署时检查 `rpc.host` / `rpc.port` / `rpc.token`
 
 ### Q: 还需要在 zhin.config 里写 password / platform 吗？

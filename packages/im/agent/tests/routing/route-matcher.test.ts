@@ -5,7 +5,7 @@ import { DEFAULT_ZHIN_AGENT_NAME } from '../../src/config/types.js';
 function makeMessage(overrides: Record<string, unknown> = {}) {
   return {
     $adapter: 'sandbox',
-    $bot: 'b1',
+    $endpoint: 'b1',
     $sender: { id: 'u1' },
     $channel: { id: 'c1', type: 'private' },
     $content: [{ type: 'text', data: { text: 'hi' } }],

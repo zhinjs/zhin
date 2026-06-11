@@ -35,7 +35,7 @@ describe('Message系统测试', () => {
       const messageBase: MessageBase = {
         $id: 'msg-123',
         $adapter: 'test-adapter',
-        $bot: 'test-bot',
+        $endpoint: 'test-bot',
         $content: [
           { type: 'text', data: { text: 'Hello World' } }
         ],
@@ -48,7 +48,7 @@ describe('Message系统测试', () => {
 
       expect(messageBase.$id).toBe('msg-123')
       expect(messageBase.$adapter).toBe('test-adapter')
-      expect(messageBase.$bot).toBe('test-bot')
+      expect(messageBase.$endpoint).toBe('test-bot')
       expect(messageBase.$content).toHaveLength(1)
       expect(messageBase.$content[0].type).toBe('text')
       expect(messageBase.$sender.id).toBe('user-123')
@@ -71,7 +71,7 @@ describe('Message系统测试', () => {
       const messageBase: MessageBase = {
         $id: 'msg-123',
         $adapter: 'discord',
-        $bot: 'discord-bot',
+        $endpoint: 'discord-bot',
         $content: [
           { type: 'text', data: { text: 'Hello from Discord' } }
         ],
@@ -108,7 +108,7 @@ describe('Message系统测试', () => {
       const messageBase: MessageBase = {
         $id: 'msg-456',
         $adapter: 'test',
-        $bot: 'test-bot',
+        $endpoint: 'test-bot',
         $content: [],
         $sender: { id: 'user', name: 'User' },
         $reply: mockReply,
@@ -140,7 +140,7 @@ describe('Message系统测试', () => {
       const messageBase: MessageBase = {
         $id: 'msg-789',
         $adapter: 'discord',
-        $bot: 'discord-bot',
+        $endpoint: 'discord-bot',
         $content: [
           { type: 'text', data: { text: 'Discord message' } }
         ],
@@ -171,7 +171,7 @@ describe('Message系统测试', () => {
       const messageBase: MessageBase = {
         $id: 'text-msg',
         $adapter: 'test',
-        $bot: 'test-bot',
+        $endpoint: 'test-bot',
         $content: [textSegment],
         $sender: { id: 'user', name: 'User' },
         $reply: vi.fn(),
@@ -194,7 +194,7 @@ describe('Message系统测试', () => {
       const messageBase: MessageBase = {
         $id: 'multi-msg',
         $adapter: 'test',
-        $bot: 'test-bot',
+        $endpoint: 'test-bot',
         $content: multiSegments,
         $sender: { id: 'user', name: 'User' },
         $reply: vi.fn(),
@@ -220,7 +220,7 @@ describe('Message系统测试', () => {
       const messageBase: MessageBase = {
         $id: 'special-msg',
         $adapter: 'test',
-        $bot: 'test-bot',
+        $endpoint: 'test-bot',
         $content: specialSegments,
         $sender: { id: 'user', name: 'User' },
         $reply: vi.fn(),
@@ -245,7 +245,7 @@ describe('Message系统测试', () => {
       const message: Message = {
         $id: 'reply-test',
         $adapter: 'test',
-        $bot: 'test-bot',
+        $endpoint: 'test-bot',
         $content: [{ type: 'text', data: { text: 'hello' } }],
         $sender: { id: 'user', name: 'User' },
         $reply: mockReply,
@@ -265,7 +265,7 @@ describe('Message系统测试', () => {
       const message: Message = {
         $id: 'quote-test',
         $adapter: 'test',
-        $bot: 'test-bot',
+        $endpoint: 'test-bot',
         $content: [{ type: 'text', data: { text: 'original message' } }],
         $sender: { id: 'user', name: 'User' },
         $reply: mockReply,
@@ -287,7 +287,7 @@ describe('Message系统测试', () => {
       const message: Message = {
         $id: 'fail-test',
         $adapter: 'test',
-        $bot: 'test-bot',
+        $endpoint: 'test-bot',
         $content: [{ type: 'text', data: { text: 'test' } }],
         $sender: { id: 'user', name: 'User' },
         $reply: mockReply,
@@ -310,7 +310,7 @@ describe('Message系统测试', () => {
       const message: Message = {
         $id: 'sender-test',
         $adapter: 'test',
-        $bot: 'test-bot',
+        $endpoint: 'test-bot',
         $content: [],
         $sender: sender,
         $reply: vi.fn(),
@@ -336,7 +336,7 @@ describe('Message系统测试', () => {
       const message: Message = {
         $id: 'full-sender-test',
         $adapter: 'test',
-        $bot: 'test-bot',
+        $endpoint: 'test-bot',
         $content: [],
         $sender: sender,
         $reply: vi.fn(),
@@ -358,7 +358,7 @@ describe('Message系统测试', () => {
       const message: Message = {
         $id: 'timestamp-test',
         $adapter: 'test',
-        $bot: 'test-bot',
+        $endpoint: 'test-bot',
         $content: [],
         $sender: { id: 'user', name: 'User' },
         $reply: vi.fn(),
@@ -380,7 +380,7 @@ describe('Message系统测试', () => {
       const message: Message = {
         $id: 'raw-test',
         $adapter: 'test',
-        $bot: 'test-bot',
+        $endpoint: 'test-bot',
         $content: [
           { type: 'text', data: { text: 'This is the raw message content with emojis ' } },
           { type: 'emoji', data: { name: '😀' } },

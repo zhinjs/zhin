@@ -88,7 +88,7 @@ defaults:
   notify:
     channel: im
     platform: icqq
-    botId: "<bot_id>"
+    endpointId: "<endpoint_id>"
     sceneId: "<master_user_id>"
     scope: private
 

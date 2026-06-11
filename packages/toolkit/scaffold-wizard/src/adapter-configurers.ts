@@ -13,19 +13,19 @@ export const ADAPTERS_ESSENTIALS_URL = 'https://zhin.js.org/essentials/adapters'
 /** 各适配器文档页（与 docs/adapters/*.md 同步） */
 export const adapterDocsUrl = (slug: string) => `https://zhin.js.org/adapters/${slug}`;
 
-export interface BotConfigureContext {
+export interface EndpointConfigureContext {
   envVars: Record<string, string>;
   markRequiresDatabase: () => void;
 }
 
-export async function configureTelegramBot(ctx: BotConfigureContext): Promise<Record<string, unknown>> {
+export async function configureTelegramEndpoint(ctx: EndpointConfigureContext): Promise<Record<string, unknown>> {
   console.log(chalk.gray('     文档: ' + adapterDocsUrl('telegram')));
 
-  const { botName } = await inquirer.prompt([
+  const { endpointName } = await inquirer.prompt([
     {
       type: 'input',
-      name: 'botName',
-      message: '  Bot 标识名称:',
+      name: 'endpointName',
+      message: '  Endpoint 标识名称:',
       default: 'telegram-bot',
       validate: (v: string) => (v.trim() ? true : '名称不能为空'),
     },
@@ -35,7 +35,7 @@ export async function configureTelegramBot(ctx: BotConfigureContext): Promise<Re
     {
       type: 'password',
       name: 'token',
-      message: '  Telegram Bot Token（@BotFather 获取）:',
+      message: '  Telegram Endpoint Token（@BotFather 获取）:',
       validate: (v: string) => (v.trim() ? true : 'Token 不能为空'),
     },
   ]);
@@ -60,9 +60,9 @@ export async function configureTelegramBot(ctx: BotConfigureContext): Promise<Re
     },
   ]);
 
-  const botConfig: Record<string, unknown> = {
+  const endpointConfig: Record<string, unknown> = {
     context: 'telegram',
-    name: botName.trim(),
+    name: endpointName.trim(),
     token: '${TELEGRAM_TOKEN}',
     polling: transport === 'polling',
   };
@@ -70,7 +70,7 @@ export async function configureTelegramBot(ctx: BotConfigureContext): Promise<Re
   if (transport === 'webhook') {
     console.log('');
     console.log(chalk.yellow('     Webhook 前置条件：'));
-    console.log(chalk.gray('     • Bot 进程需绑定可被 Telegram 访问的 HTTPS 域名（有效 TLS 证书）'));
+    console.log(chalk.gray('     • Endpoint 进程需绑定可被 Telegram 访问的 HTTPS 域名（有效 TLS 证书）'));
     console.log(chalk.gray('     • 在 @BotFather 可配合 setWebhook，或由 Telegraf 在 launch 时注册'));
     console.log(chalk.gray('     • 防火墙/反向代理需放行 webhook.port（默认由 Telegraf 监听）'));
 
@@ -104,26 +104,26 @@ export async function configureTelegramBot(ctx: BotConfigureContext): Promise<Re
       },
     ]);
 
-    botConfig.polling = false;
-    botConfig.webhook = {
+    endpointConfig.polling = false;
+    endpointConfig.webhook = {
       domain: webhook.domain.trim(),
       path: webhook.path.trim(),
       port: parseInt(webhook.port, 10),
     };
   }
 
-  return botConfig;
+  return endpointConfig;
 }
 
-export async function configureGitHubBot(ctx: BotConfigureContext): Promise<Record<string, unknown>> {
+export async function configureGitHubEndpoint(ctx: EndpointConfigureContext): Promise<Record<string, unknown>> {
   console.log(chalk.gray('     文档: ' + adapterDocsUrl('github')));
   ctx.markRequiresDatabase();
 
-  const { botName } = await inquirer.prompt([
+  const { endpointName } = await inquirer.prompt([
     {
       type: 'input',
-      name: 'botName',
-      message: '  Bot 标识名称:',
+      name: 'endpointName',
+      message: '  Endpoint 标识名称:',
       default: 'github-bot',
       validate: (v: string) => (v.trim() ? true : '名称不能为空'),
     },
@@ -148,9 +148,9 @@ export async function configureGitHubBot(ctx: BotConfigureContext): Promise<Reco
     },
   ]);
 
-  const botConfig: Record<string, unknown> = {
+  const endpointConfig: Record<string, unknown> = {
     context: 'github',
-    name: botName.trim(),
+    name: endpointName.trim(),
   };
 
   if (authMode === 'github_app') {
@@ -173,8 +173,8 @@ export async function configureGitHubBot(ctx: BotConfigureContext): Promise<Reco
     ]);
 
     ctx.envVars.GITHUB_APP_ID = appConfig.app_id.trim();
-    botConfig.app_id = '${GITHUB_APP_ID}';
-    botConfig.private_key = appConfig.private_key.trim();
+    endpointConfig.app_id = '${GITHUB_APP_ID}';
+    endpointConfig.private_key = appConfig.private_key.trim();
   } else {
     console.log(chalk.gray('     请确保已执行 gh auth login，且 gh 在 PATH 中'));
   }
@@ -221,8 +221,8 @@ export async function configureGitHubBot(ctx: BotConfigureContext): Promise<Reco
     ]);
 
     ctx.envVars.GITHUB_WEBHOOK_SECRET = webhook.webhook_secret;
-    botConfig.webhook_secret = '${GITHUB_WEBHOOK_SECRET}';
-    botConfig.webhook_path = webhook.webhook_path.trim();
+    endpointConfig.webhook_secret = '${GITHUB_WEBHOOK_SECRET}';
+    endpointConfig.webhook_path = webhook.webhook_path.trim();
   } else {
     const { poll_interval } = await inquirer.prompt([
       {
@@ -237,7 +237,7 @@ export async function configureGitHubBot(ctx: BotConfigureContext): Promise<Reco
         },
       },
     ]);
-    botConfig.poll_interval = parseInt(poll_interval, 10);
+    endpointConfig.poll_interval = parseInt(poll_interval, 10);
   }
 
   const { enableMcp } = await inquirer.prompt([
@@ -261,10 +261,10 @@ export async function configureGitHubBot(ctx: BotConfigureContext): Promise<Reco
     ctx.envVars.GITHUB_PERSONAL_ACCESS_TOKEN = pat;
   }
 
-  return botConfig;
+  return endpointConfig;
 }
 
-export async function configureOneBot11Bot(ctx: BotConfigureContext): Promise<Record<string, unknown>> {
+export async function configureOneBot11Bot(ctx: EndpointConfigureContext): Promise<Record<string, unknown>> {
   console.log(chalk.gray('     文档: ' + adapterDocsUrl('onebot11')));
 
   const { connection } = await inquirer.prompt([
@@ -273,27 +273,27 @@ export async function configureOneBot11Bot(ctx: BotConfigureContext): Promise<Re
       name: 'connection',
       message: '  连接方式:',
       choices: [
-        { name: '正向 WebSocket (ws) — 本 Bot 连接 OneBot 实现', value: 'ws' },
+        { name: '正向 WebSocket (ws) — 本 Endpoint 连接 OneBot 实现', value: 'ws' },
         { name: '反向 WebSocket (wss) — OneBot 实现连本 Bot（需 host-router）', value: 'wss' },
       ],
       default: 'ws',
     },
   ]);
 
-  const { botName } = await inquirer.prompt([
+  const { endpointName } = await inquirer.prompt([
     {
       type: 'input',
-      name: 'botName',
-      message: '  Bot 标识名称:',
+      name: 'endpointName',
+      message: '  Endpoint 标识名称:',
       default: 'onebot-bot',
       validate: (v: string) => (v.trim() ? true : '名称不能为空'),
     },
   ]);
 
-  const botConfig: Record<string, unknown> = {
+  const endpointConfig: Record<string, unknown> = {
     context: 'onebot11',
     connection,
-    name: botName.trim(),
+    name: endpointName.trim(),
   };
 
   if (connection === 'ws') {
@@ -306,7 +306,7 @@ export async function configureOneBot11Bot(ctx: BotConfigureContext): Promise<Re
         validate: (v: string) => (v.trim() ? true : '地址不能为空'),
       },
     ]);
-    botConfig.url = url.trim();
+    endpointConfig.url = url.trim();
   } else {
     console.log(chalk.gray('     反向 WS 需启用 @zhin.js/host-router，OneBot 实现配置连接到此 Bot'));
     const { path: wsPath } = await inquirer.prompt([
@@ -318,7 +318,7 @@ export async function configureOneBot11Bot(ctx: BotConfigureContext): Promise<Re
         validate: (v: string) => (v.trim() ? true : '路径不能为空'),
       },
     ]);
-    botConfig.path = wsPath.trim();
+    endpointConfig.path = wsPath.trim();
   }
 
   const { accessToken } = await inquirer.prompt([
@@ -331,20 +331,20 @@ export async function configureOneBot11Bot(ctx: BotConfigureContext): Promise<Re
   ]);
   if (accessToken?.trim()) {
     ctx.envVars.ONEBOT11_ACCESS_TOKEN = accessToken.trim();
-    botConfig.access_token = '${ONEBOT11_ACCESS_TOKEN}';
+    endpointConfig.access_token = '${ONEBOT11_ACCESS_TOKEN}';
   }
 
-  return botConfig;
+  return endpointConfig;
 }
 
-export async function configureQQBot(ctx: BotConfigureContext): Promise<Record<string, unknown>> {
+export async function configureQQBot(ctx: EndpointConfigureContext): Promise<Record<string, unknown>> {
   console.log(chalk.gray('     文档: ' + adapterDocsUrl('qq')));
 
   const credentials = await inquirer.prompt([
     {
       type: 'input',
       name: 'name',
-      message: '  Bot 标识名称:',
+      message: '  Endpoint 标识名称:',
       default: 'qq-bot',
       validate: (v: string) => (v.trim() ? true : '名称不能为空'),
     },
@@ -403,7 +403,7 @@ export async function configureQQBot(ctx: BotConfigureContext): Promise<Record<s
   };
 }
 
-export async function configureDiscordBot(ctx: BotConfigureContext): Promise<Record<string, unknown>> {
+export async function configureDiscordEndpoint(ctx: EndpointConfigureContext): Promise<Record<string, unknown>> {
   console.log(chalk.gray('     文档: ' + adapterDocsUrl('discord')));
 
   const { connection } = await inquirer.prompt([
@@ -419,27 +419,27 @@ export async function configureDiscordBot(ctx: BotConfigureContext): Promise<Rec
     },
   ]);
 
-  const { botName, token } = await inquirer.prompt([
+  const { endpointName, token } = await inquirer.prompt([
     {
       type: 'input',
-      name: 'botName',
-      message: '  Bot 标识名称:',
+      name: 'endpointName',
+      message: '  Endpoint 标识名称:',
       default: 'discord-bot',
       validate: (v: string) => (v.trim() ? true : '名称不能为空'),
     },
     {
       type: 'password',
       name: 'token',
-      message: '  Bot Token:',
+      message: '  Endpoint Token:',
       validate: (v: string) => (v.trim() ? true : 'Token 不能为空'),
     },
   ]);
   ctx.envVars.DISCORD_TOKEN = token;
 
-  const botConfig: Record<string, unknown> = {
+  const endpointConfig: Record<string, unknown> = {
     context: 'discord',
     connection,
-    name: botName.trim(),
+    name: endpointName.trim(),
     token: '${DISCORD_TOKEN}',
   };
 
@@ -465,15 +465,15 @@ export async function configureDiscordBot(ctx: BotConfigureContext): Promise<Rec
         default: '/discord/interactions',
       },
     ]);
-    botConfig.applicationId = interactions.applicationId.trim();
-    botConfig.publicKey = interactions.publicKey.trim();
-    botConfig.interactionsPath = interactions.interactionsPath.trim();
+    endpointConfig.applicationId = interactions.applicationId.trim();
+    endpointConfig.publicKey = interactions.publicKey.trim();
+    endpointConfig.interactionsPath = interactions.interactionsPath.trim();
   }
 
-  return botConfig;
+  return endpointConfig;
 }
 
-export async function configureSlackBot(ctx: BotConfigureContext): Promise<Record<string, unknown>> {
+export async function configureSlackEndpoint(ctx: EndpointConfigureContext): Promise<Record<string, unknown>> {
   console.log(chalk.gray('     文档: ' + adapterDocsUrl('slack')));
 
   const { socketMode } = await inquirer.prompt([
@@ -489,18 +489,18 @@ export async function configureSlackBot(ctx: BotConfigureContext): Promise<Recor
     },
   ]);
 
-  const { botName, token, signingSecret } = await inquirer.prompt([
+  const { endpointName, token, signingSecret } = await inquirer.prompt([
     {
       type: 'input',
-      name: 'botName',
-      message: '  Bot 标识名称:',
+      name: 'endpointName',
+      message: '  Endpoint 标识名称:',
       default: 'slack-bot',
       validate: (v: string) => (v.trim() ? true : '名称不能为空'),
     },
     {
       type: 'password',
       name: 'token',
-      message: '  Bot Token (xoxb-...):',
+      message: '  Endpoint Token (xoxb-...):',
       validate: (v: string) => (v.trim() ? true : '不能为空'),
     },
     {
@@ -514,9 +514,9 @@ export async function configureSlackBot(ctx: BotConfigureContext): Promise<Recor
   ctx.envVars.SLACK_BOT_TOKEN = token;
   ctx.envVars.SLACK_SIGNING_SECRET = signingSecret;
 
-  const botConfig: Record<string, unknown> = {
+  const endpointConfig: Record<string, unknown> = {
     context: 'slack',
-    name: botName.trim(),
+    name: endpointName.trim(),
     token: '${SLACK_BOT_TOKEN}',
     signingSecret: '${SLACK_SIGNING_SECRET}',
     socketMode: socketMode === 'true',
@@ -532,7 +532,7 @@ export async function configureSlackBot(ctx: BotConfigureContext): Promise<Recor
       },
     ]);
     ctx.envVars.SLACK_APP_TOKEN = appToken;
-    botConfig.appToken = '${SLACK_APP_TOKEN}';
+    endpointConfig.appToken = '${SLACK_APP_TOKEN}';
   } else {
     console.log(chalk.yellow('     HTTP 模式需公网可达并配置 Slack Event Subscriptions URL'));
     const { port } = await inquirer.prompt([
@@ -543,8 +543,8 @@ export async function configureSlackBot(ctx: BotConfigureContext): Promise<Recor
         default: '3000',
       },
     ]);
-    botConfig.port = parseInt(port, 10);
+    endpointConfig.port = parseInt(port, 10);
   }
 
-  return botConfig;
+  return endpointConfig;
 }

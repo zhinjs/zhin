@@ -176,7 +176,7 @@ describe('create-zhin config', () => {
           adapters: {
             packages: ['@zhin.js/adapter-sandbox'],
             plugins: ['@zhin.js/adapter-sandbox'],
-            bots: [],
+            endpoints: [],
             envVars: {}
           },
           ai: { enabled: false }

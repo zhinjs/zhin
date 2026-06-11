@@ -21,7 +21,7 @@
 - 主要分层：basic → kernel → ai → core → agent → zhin。
 - **推荐首跑**： [examples/minimal-bot](examples/minimal-bot/)（Stable 黄金路径）。
 - **L4 参考**： [examples/full-bot](examples/full-bot/)（分维度 L4 DoD；`pnpm check:l4`）。
-- [examples/test-bot](examples/test-bot/) 为维护者厨房水槽（多 bot / Advanced 能力），非默认模板。
+- [examples/test-bot](examples/test-bot/) 为维护者厨房水槽（多 Endpoint / Advanced 能力），非默认模板。
 - 进阶路径：**Stable（minimal-bot）→ L4（full-bot）→ 厨房水槽（test-bot）**。
 - **项目脚手架**：新建 workspace 用 `pnpm create zhin-app`（`create-zhin-app`）；已有项目增量配置用 `zhin setup`。二者共用 [`@zhin.js/scaffold-wizard`](packages/toolkit/scaffold-wizard/)。
 
@@ -46,7 +46,8 @@
 
 - TypeScript 本地导入通常必须使用 .js 扩展名。
 - usePlugin() 应在模块顶层调用，不要放进异步函数、回调工厂或延迟执行路径。
-- 发送消息不能绕过统一链路：Message.$reply 或 Adapter.sendMessage → renderSendMessage → before.sendMessage → 平台 Bot。
+- 发送消息不能绕过统一链路：Message.$reply 或 Adapter.sendMessage → renderSendMessage → before.sendMessage → 平台 Endpoint。
+- Endpoint 可按 `capabilities`（`inbound` / `outbound`）拆分 IO；跨平台出站用 `inject(adapter).sendMessage`，见 `docs/essentials/message-flow.md`。
 - 保持依赖方向单向：basic → kernel → ai → core → agent → zhin；不要让低层依赖 IM 概念。
 - Node 侧源码放 src/，产物放 lib/；浏览器侧源码放 client/，产物放 dist/。
 - 新增 workspace 包必须落在 pnpm-workspace.yaml 覆盖的目录里，并带独立 package.json。

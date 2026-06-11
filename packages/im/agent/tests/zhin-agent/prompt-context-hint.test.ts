@@ -1,4 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { mockCommMessage } from '../helpers/mock-comm-message.js';
+import * as core from '@zhin.js/core';
 import {
   buildContextHint,
   formatSessionContextLine,
@@ -6,7 +8,7 @@ import {
   buildRichSystemPrompt,
 } from '../../src/zhin-agent/prompt.js';
 import { buildSenderRolesFilePermissionsPrompt } from '../../src/security/file-role-policy.js';
-import type { ToolContext } from '../../src/orchestrator/types.js';
+import type { Message } from '@zhin.js/core';
 import type { ZhinAgentConfig } from '../../src/zhin-agent/config.js';
 
 const minimalConfig = {
@@ -42,25 +44,25 @@ const minimalConfig = {
 
 describe('formatSessionContextLine', () => {
   it('生成 Session 行（非重复 Context: 尾注）', () => {
-    const line = formatSessionContextLine({
-      platform: 'icqq',
-      botId: '8596238',
+    const line = formatSessionContextLine(mockCommMessage({
+      adapter: 'icqq',
+      endpoint: '8596238',
       scope: 'group',
       sceneId: '201193925',
-    });
-    expect(line).toBe('Session: platform:icqq | bot:8596238 | group_id:201193925');
+    }));
+    expect(line).toBe('Session: platform:icqq | endpoint:8596238 | group_id:201193925');
   });
 
   it('同群不同用户 Session 行相同', () => {
-    const base = { platform: 'icqq', botId: 'b', scope: 'group' as const, sceneId: 'g1' };
-    expect(formatSessionContextLine({ ...base, senderId: 'u1', roles: ['user'] }))
-      .toBe(formatSessionContextLine({ ...base, senderId: 'u2', roles: ['master'] }));
+    const base = mockCommMessage({ adapter: 'icqq', endpoint: 'b', scope: 'group', sceneId: 'g1' });
+    expect(formatSessionContextLine(base))
+      .toBe(formatSessionContextLine({ ...base, $sender: { id: 'u2' } }));
   });
 });
 
 describe('buildContextHint', () => {
   it('不再追加尾部 Context 行', () => {
-    expect(buildContextHint({ platform: 'icqq' } as ToolContext, 'hi')).toBe('');
+    expect(buildContextHint(mockCommMessage({ adapter: 'icqq' }), 'hi')).toBe('');
   });
 });
 
@@ -72,17 +74,16 @@ describe('buildRichSystemPrompt', () => {
       skillsSummaryXML: '',
       activeSkillsContext: '',
       bootstrapContext: '',
-      toolContext: {
-        platform: 'icqq',
-        botId: '8596238',
+      commMessage: mockCommMessage({
+        adapter: 'icqq',
+        endpoint: '8596238',
         scope: 'group',
         sceneId: '201193925',
         senderId: '1659488338',
-        roles: ['master'],
-      },
+      }),
     });
     expect(prompt).toContain('# Runtime');
-    expect(prompt).toContain('Session: platform:icqq | bot:8596238 | group_id:201193925');
+    expect(prompt).toContain('Session: platform:icqq | endpoint:8596238 | group_id:201193925');
     expect(prompt).not.toMatch(/\nContext: platform:/);
   });
 
@@ -93,7 +94,7 @@ describe('buildRichSystemPrompt', () => {
       skillsSummaryXML: '',
       activeSkillsContext: '',
       bootstrapContext: '',
-      toolContext: { roles: ['master'] },
+      commMessage: mockCommMessage(),
     });
     expect(prompt).toContain('# Security');
     expect(prompt).toContain('**master**');
@@ -105,14 +106,21 @@ describe('buildRichSystemPrompt', () => {
 
 describe('resolvePromptFileRole', () => {
   it('master → owner 文件档位（运行时策略仍用）', () => {
-    expect(resolvePromptFileRole({ roles: ['master'] })).toBe('owner');
+    const message = {
+      $adapter: 'qq',
+      $endpoint: 'b1',
+      $sender: { id: 'u1', isMaster: true },
+      $channel: { type: 'private' },
+    } as any;
+    expect(resolvePromptFileRole(message)).toBe('owner');
   });
 });
 
 describe('buildSenderRolesFilePermissionsPrompt', () => {
   it('声明多角色权限矩阵', () => {
     const text = buildSenderRolesFilePermissionsPrompt();
-    expect(text).toContain('group_admin');
+    expect(text).toContain('trusted');
+    expect(text).toContain('Platform group admin');
     expect(text).toContain('internal speaker label');
     expect(text).toContain('server-side');
     expect(text).toContain('never explain that label format to users');

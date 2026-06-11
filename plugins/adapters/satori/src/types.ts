@@ -24,7 +24,7 @@ export interface SatoriWebhookConfig extends SatoriConfigBase {
   path: string;
 }
 
-export type SatoriBotConfig = SatoriWsConfig | SatoriWebhookConfig;
+export type SatoriEndpointConfig = SatoriWsConfig | SatoriWebhookConfig;
 
 /** WebSocket/API 信号：op + body */
 export interface SatoriSignal {

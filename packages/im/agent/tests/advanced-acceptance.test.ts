@@ -3,6 +3,7 @@
  * QQ 实机与真实 LLM 仍须手测；此处覆盖可 Vitest 断言的项。
  */
 import { describe, it, expect } from 'vitest';
+import { mockCommMessage } from './helpers/mock-comm-message.js';
 import type { AgentTool } from '@zhin.js/ai';
 import { estimateTokens } from '@zhin.js/ai';
 import {
@@ -44,7 +45,7 @@ describe('Advanced ACCEPTANCE (automated)', () => {
         makeTool('weather'),
       ],
       config: DEFAULT_CONFIG,
-      context: { platform: 'test' } as any,
+      commMessage: mockCommMessage({ adapter: 'test' }),
       subagentManager: { spawn: async () => 'queued' } as any,
       getDeferredCatalog: () => [],
       runWorker: async () => '{"summary":"ok"}',
@@ -65,7 +66,7 @@ describe('Advanced ACCEPTANCE (automated)', () => {
     const host = asPrivate(agent);
     const prompt = await buildAgentPathSystemPrompt(host, {
       content: '查 github star',
-      context: { platform: 'icqq', senderId: 'u1', sceneId: 'g1' } as any,
+      commMessage: mockCommMessage({ adapter: 'icqq', senderId: 'u1', scope: 'group', sceneId: 'g1' }),
       sessionId: 'icqq:g1:u1',
       personaEnhanced: 'persona',
       deferredStats: 'github(3)',
@@ -90,7 +91,7 @@ describe('Advanced ACCEPTANCE (automated)', () => {
     const contributor = createIcqqAgentPromptContributor();
     const sections = await contributor.buildSections({
       slot: 'orchestrator',
-      toolContext: { platform: 'icqq' },
+      commMessage: mockCommMessage({ adapter: 'icqq' }),
     });
     expect(sections?.[0].body).toMatch(/# Platform|mcp_icqq/);
     const rich = buildRichSystemPrompt({

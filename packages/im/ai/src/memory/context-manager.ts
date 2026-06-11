@@ -24,7 +24,7 @@ const logger = new Logger(null, 'ContextManager');
 export const CHAT_MESSAGE_MODEL = {
   message_id: { type: 'text' as const, default: '' },
   platform: { type: 'text' as const, nullable: false },
-  bot_id: { type: 'text' as const, nullable: false },
+  endpoint_id: { type: 'text' as const, nullable: false },
   scene_id: { type: 'text' as const, nullable: false },
   scene_type: { type: 'text' as const, nullable: false },
   scene_name: { type: 'text' as const, default: '' },
@@ -61,7 +61,7 @@ export interface MessageRecord {
   id?: number;
   message_id?: string;
   platform: string;
-  bot_id: string;
+  endpoint_id: string;
   scene_id: string;
   scene_type: 'group' | 'private' | 'channel' | string;
   scene_name: string;

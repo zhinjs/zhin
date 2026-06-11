@@ -6,6 +6,11 @@ import { usePlugin, type Plugin, type IGroupManagement, createGroupManagementToo
 import type { Router } from "@zhin.js/host-router";
 import { QQAdapter } from "./adapter.js";
 import { PageManager } from "@zhin.js/host-api";
+import {
+  platformPermit,
+  qqGuildPermitResolver,
+  registerQqPlatformPermitChecker,
+} from "./platform-permit.js";
 
 declare module "zhin.js" {
   namespace Plugin {
@@ -23,7 +28,7 @@ declare module "zhin.js" {
 }
 
 export * from "./types.js";
-export { QQBot } from "./bot.js";
+export { QQEndpoint } from "./endpoint.js";
 export { QQAdapter } from "./adapter.js";
 
 const plugin = usePlugin();
@@ -32,7 +37,7 @@ const { provide, useContext } = plugin;
 useContext("router", (router: Router) => {
   provide({
     name: "qq",
-    description: "QQ Official Bot Adapter",
+    description: "QQ Official Endpoint Adapter",
     mounted: async (p: Plugin) => {
       const adapter = new QQAdapter(p, router);
       await adapter.start();
@@ -45,11 +50,14 @@ useContext("router", (router: Router) => {
 });
 
 useContext('tool', 'qq', (toolService: ToolFeature, qq: QQAdapter) => {
+  const disposers: (() => void)[] = [];
+  disposers.push(registerQqPlatformPermitChecker());
   const groupTools = createGroupManagementTools(
     qq as unknown as IGroupManagement,
     'qq',
+    { permitResolver: qqGuildPermitResolver, registerChecker: false },
   );
-  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, plugin.name));
+  disposers.push(...groupTools.map(t => toolService.addTool(t, plugin.name)));
 
   // 获取频道列表
   disposers.push(toolService.addTool({
@@ -58,16 +66,16 @@ useContext('tool', 'qq', (toolService: ToolFeature, qq: QQAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
       },
-      required: ['bot'],
+      required: ['endpoint_id'],
     },
     platforms: ['qq'],
     tags: ['qq'],
     execute: async (args: Record<string, any>) => {
-      const bot = qq.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      const guilds = await bot.getGuilds();
+      const endpoint = qq.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      const guilds = await endpoint.getGuilds();
       return { guilds, count: guilds.length };
     },
   }, plugin.name));
@@ -79,17 +87,18 @@ useContext('tool', 'qq', (toolService: ToolFeature, qq: QQAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         guild_id: { type: 'string', description: '频道 ID' },
       },
-      required: ['bot', 'guild_id'],
+      required: ['endpoint_id', 'guild_id'],
     },
     platforms: ['qq'],
     tags: ['qq'],
+    permissions: [platformPermit('manage_channels')],
     execute: async (args: Record<string, any>) => {
-      const bot = qq.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      const channels = await bot.getChannels(args.guild_id);
+      const endpoint = qq.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      const channels = await endpoint.getChannels(args.guild_id);
       return { channels, count: channels.length };
     },
   }, plugin.name));
@@ -101,17 +110,18 @@ useContext('tool', 'qq', (toolService: ToolFeature, qq: QQAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         guild_id: { type: 'string', description: '频道 ID' },
       },
-      required: ['bot', 'guild_id'],
+      required: ['endpoint_id', 'guild_id'],
     },
     platforms: ['qq'],
     tags: ['qq'],
+    permissions: [platformPermit('manage_roles')],
     execute: async (args: Record<string, any>) => {
-      const bot = qq.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      const roles = await bot.getGuildRoles(args.guild_id);
+      const endpoint = qq.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      const roles = await endpoint.getGuildRoles(args.guild_id);
       return { roles, count: roles.length };
     },
   }, plugin.name));
@@ -123,19 +133,20 @@ useContext('tool', 'qq', (toolService: ToolFeature, qq: QQAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         guild_id: { type: 'string', description: '频道 ID' },
         name: { type: 'string', description: '角色名称' },
         color: { type: 'number', description: '颜色（RGB 十进制数值）' },
       },
-      required: ['bot', 'guild_id', 'name'],
+      required: ['endpoint_id', 'guild_id', 'name'],
     },
     platforms: ['qq'],
     tags: ['qq'],
+    permissions: [platformPermit('guild_owner')],
     execute: async (args: Record<string, any>) => {
-      const bot = qq.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      const role = await bot.createGuildRole(args.guild_id, args.name, args.color);
+      const endpoint = qq.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      const role = await endpoint.createGuildRole(args.guild_id, args.name, args.color);
       return { success: !!role, role, message: role ? `角色 "${args.name}" 创建成功` : '创建失败' };
     },
   }, plugin.name));
@@ -147,20 +158,21 @@ useContext('tool', 'qq', (toolService: ToolFeature, qq: QQAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         guild_id: { type: 'string', description: '频道 ID' },
         channel_id: { type: 'string', description: '子频道 ID' },
         user_id: { type: 'string', description: '用户 ID' },
         role_id: { type: 'string', description: '角色 ID' },
       },
-      required: ['bot', 'guild_id', 'channel_id', 'user_id', 'role_id'],
+      required: ['endpoint_id', 'guild_id', 'channel_id', 'user_id', 'role_id'],
     },
     platforms: ['qq'],
     tags: ['qq'],
+    permissions: [platformPermit('manage_roles')],
     execute: async (args: Record<string, any>) => {
-      const bot = qq.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      const success = await bot.addMemberRole(args.guild_id, args.channel_id, args.user_id, args.role_id);
+      const endpoint = qq.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      const success = await endpoint.addMemberRole(args.guild_id, args.channel_id, args.user_id, args.role_id);
       return { success, message: success ? '已给成员添加角色' : '操作失败' };
     },
   }, plugin.name));
@@ -172,20 +184,21 @@ useContext('tool', 'qq', (toolService: ToolFeature, qq: QQAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         guild_id: { type: 'string', description: '频道 ID' },
         channel_id: { type: 'string', description: '子频道 ID' },
         user_id: { type: 'string', description: '用户 ID' },
         role_id: { type: 'string', description: '角色 ID' },
       },
-      required: ['bot', 'guild_id', 'channel_id', 'user_id', 'role_id'],
+      required: ['endpoint_id', 'guild_id', 'channel_id', 'user_id', 'role_id'],
     },
     platforms: ['qq'],
     tags: ['qq'],
+    permissions: [platformPermit('manage_roles')],
     execute: async (args: Record<string, any>) => {
-      const bot = qq.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      const success = await bot.removeMemberRole(args.guild_id, args.channel_id, args.user_id, args.role_id);
+      const endpoint = qq.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      const success = await endpoint.removeMemberRole(args.guild_id, args.channel_id, args.user_id, args.role_id);
       return { success, message: success ? '已移除成员的角色' : '操作失败' };
     },
   }, plugin.name));
@@ -197,17 +210,18 @@ useContext('tool', 'qq', (toolService: ToolFeature, qq: QQAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         channel_id: { type: 'string', description: '子频道 ID' },
       },
-      required: ['bot', 'channel_id'],
+      required: ['endpoint_id', 'channel_id'],
     },
     platforms: ['qq'],
     tags: ['qq'],
+    permissions: [platformPermit('guild_admin')],
     execute: async (args: Record<string, any>) => {
-      const bot = qq.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      const info = await bot.getChannelInfo(args.channel_id);
+      const endpoint = qq.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      const info = await endpoint.getChannelInfo(args.channel_id);
       return info;
     },
   }, plugin.name));
@@ -219,18 +233,19 @@ useContext('tool', 'qq', (toolService: ToolFeature, qq: QQAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         guild_id: { type: 'string', description: '频道 ID' },
         user_id: { type: 'string', description: '用户 ID' },
       },
-      required: ['bot', 'guild_id', 'user_id'],
+      required: ['endpoint_id', 'guild_id', 'user_id'],
     },
     platforms: ['qq'],
     tags: ['qq'],
+    permissions: [platformPermit('guild_admin')],
     execute: async (args: Record<string, any>) => {
-      const bot = qq.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      const member = await bot.getGuildMember(args.guild_id, args.user_id);
+      const endpoint = qq.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      const member = await endpoint.getGuildMember(args.guild_id, args.user_id);
       return member;
     },
   }, plugin.name));
@@ -249,37 +264,37 @@ useContext("web", (pageManager) => {
 });
 
 useContext("router", "qq", (router: any, qq: QQAdapter) => {
-  router.get("/api/qq/bots", async (ctx: any) => {
+  router.get("/api/qq/endpoints", async (ctx: any) => {
     try {
-      const bots = Array.from(qq.bots.values());
-      const result = await Promise.all(bots.map(async (bot) => {
+      const endpoints = Array.from(qq.endpoints.values());
+      const result = await Promise.all(endpoints.map(async (endpoint) => {
         try {
           let guildCount = 0;
-          try { const guilds = await bot.getGuilds(); guildCount = guilds?.length || 0; } catch {}
+          try { const guilds = await endpoint.getGuilds(); guildCount = guilds?.length || 0; } catch {}
           return {
-            name: bot.$config.name,
-            connected: bot.$connected || false,
+            name: endpoint.$config.name,
+            connected: endpoint.$connected || false,
             guildCount,
-            status: bot.$connected ? "online" : "offline",
+            status: endpoint.$connected ? "online" : "offline",
           };
         } catch {
-          return { name: bot.$config.name, connected: false, guildCount: 0, status: "error" };
+          return { name: endpoint.$config.name, connected: false, guildCount: 0, status: "error" };
         }
       }));
       ctx.body = { success: true, data: result };
     } catch {
       ctx.status = 500;
-      ctx.body = { success: false, error: "获取机器人数据失败" };
+      ctx.body = { success: false, error: "获取 Endpoint 数据失败" };
     }
   });
 
-  // Bot 连接/断开
-  router.post("/api/qq/bots/:name/connect", async (ctx: any) => {
+  // Endpoint 连接/断开
+  router.post("/api/qq/endpoints/:name/connect", async (ctx: any) => {
     try {
-      const bot = qq.bots.get(ctx.params.name);
-      if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
-      if (bot.$connected) { ctx.body = { success: true, message: "已经在线" }; return; }
-      await bot.$connect();
+      const endpoint = qq.endpoints.get(ctx.params.name);
+      if (!endpoint) { ctx.status = 404; ctx.body = { success: false, error: "Endpoint 不存在" }; return; }
+      if (endpoint.$connected) { ctx.body = { success: true, message: "已经在线" }; return; }
+      await endpoint.$connect();
       ctx.body = { success: true, message: "连接成功" };
     } catch (e: unknown) {
       ctx.status = 500;
@@ -287,12 +302,12 @@ useContext("router", "qq", (router: any, qq: QQAdapter) => {
     }
   });
 
-  router.post("/api/qq/bots/:name/disconnect", async (ctx: any) => {
+  router.post("/api/qq/endpoints/:name/disconnect", async (ctx: any) => {
     try {
-      const bot = qq.bots.get(ctx.params.name);
-      if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
-      if (!bot.$connected) { ctx.body = { success: true, message: "已经离线" }; return; }
-      await bot.$disconnect();
+      const endpoint = qq.endpoints.get(ctx.params.name);
+      if (!endpoint) { ctx.status = 404; ctx.body = { success: false, error: "Endpoint 不存在" }; return; }
+      if (!endpoint.$connected) { ctx.body = { success: true, message: "已经离线" }; return; }
+      await endpoint.$disconnect();
       ctx.body = { success: true, message: "已断开" };
     } catch (e: unknown) {
       ctx.status = 500;
@@ -301,12 +316,12 @@ useContext("router", "qq", (router: any, qq: QQAdapter) => {
   });
 
   // 频道列表（QQ 官方 API 返回 guild_id/guild_name，归一化为控制台用的 id/name）
-  router.get("/api/qq/bots/:name/guilds", async (ctx: any) => {
+  router.get("/api/qq/endpoints/:name/guilds", async (ctx: any) => {
     try {
-      const bot = qq.bots.get(ctx.params.name);
-      if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
-      if (!bot.$connected) { ctx.status = 400; ctx.body = { success: false, error: "Bot 未连接" }; return; }
-      const raw = await bot.getGuilds();
+      const endpoint = qq.endpoints.get(ctx.params.name);
+      if (!endpoint) { ctx.status = 404; ctx.body = { success: false, error: "Endpoint 不存在" }; return; }
+      if (!endpoint.$connected) { ctx.status = 400; ctx.body = { success: false, error: "Endpoint 未连接" }; return; }
+      const raw = await endpoint.getGuilds();
       const guilds = (raw || []).map((g: any) => ({
         id: g.guild_id ?? g.id,
         name: g.guild_name ?? g.name,
@@ -325,12 +340,12 @@ useContext("router", "qq", (router: any, qq: QQAdapter) => {
   });
 
   // 子频道列表（QQ 官方 API 返回 channel_id/channel_name，归一化为 id/name）
-  router.get("/api/qq/bots/:name/guilds/:guildId/channels", async (ctx: any) => {
+  router.get("/api/qq/endpoints/:name/guilds/:guildId/channels", async (ctx: any) => {
     try {
-      const bot = qq.bots.get(ctx.params.name);
-      if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
-      if (!bot.$connected) { ctx.status = 400; ctx.body = { success: false, error: "Bot 未连接" }; return; }
-      const raw = await bot.getChannels(ctx.params.guildId);
+      const endpoint = qq.endpoints.get(ctx.params.name);
+      if (!endpoint) { ctx.status = 404; ctx.body = { success: false, error: "Endpoint 不存在" }; return; }
+      if (!endpoint.$connected) { ctx.status = 400; ctx.body = { success: false, error: "Endpoint 未连接" }; return; }
+      const raw = await endpoint.getChannels(ctx.params.guildId);
       const channels = (raw || []).map((ch: any) => ({
         id: ch.channel_id ?? ch.id,
         name: ch.channel_name ?? ch.name,

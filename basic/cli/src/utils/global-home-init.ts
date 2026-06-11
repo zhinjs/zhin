@@ -35,7 +35,7 @@ const GLOBAL_PACKAGE_JSON = {
 
 const GLOBAL_CONFIG_YML = `log_level: 1
 
-bots: []
+endpoints: []
 
 plugins:
   - "@zhin.js/adapter-sandbox"

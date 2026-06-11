@@ -1,6 +1,6 @@
 # @zhin.js/core
 
-Zhin.js IM 核心框架包，提供插件系统、Feature 架构、适配器、消息路由与出站发送链。**AI 编排（ZhinAgent、工具安全、MCP）在 [`@zhin.js/agent`](../agent/README.md)**；本包仅 selective re-export `@zhin.js/ai` 的 Provider / Agent 原语供插件直接使用。
+Zhin.js **IM/多通道运行时**包：Plugin、Adapter、**Endpoint**、MessageDispatcher 与统一出站链。**AI 编排（ZhinAgent、工具安全、MCP）在 [`@zhin.js/agent`](../agent/README.md)**；本包仅 selective re-export `@zhin.js/ai` 的 Provider / Agent 原语供插件直接使用。
 
 领域词汇见 [CONTEXT.md](./CONTEXT.md)；入站/出站流程见 [消息如何流转](../../docs/essentials/message-flow.md)。
 
@@ -110,15 +110,15 @@ Adapter.register('my-platform', MyAdapter)
 **群管理能力自动检测：** 适配器基类声明了 `IGroupManagement` 接口中的可选方法（`kickMember`、`muteMember`、`banMember` 等），子类只需覆写自己平台支持的方法，`start()` 会自动检测哪些方法已实现，生成对应的 Tool 并注册为"群聊管理"Skill。目前所有 9 个 IM 适配器（ICQQ、OneBot11、QQ 官方、Telegram、Discord、KOOK、Slack、钉钉、飞书）均已采用此模式：
 
 ```typescript
-class IcqqAdapter extends Adapter<IcqqBot> {
+class IcqqAdapter extends Adapter<IcqqEndpoint> {
   // 覆写标准群管方法
-  async kickMember(botId: string, sceneId: string, userId: string) {
-    const bot = this.bots.get(botId)
-    if (!bot) throw new Error(`Bot ${botId} 不存在`)
-    return bot.kickMember(Number(sceneId), Number(userId), false)
+  async kickMember(endpointId: string, sceneId: string, userId: string) {
+    const endpoint = this.endpoints.get(endpointId)
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`)
+    return endpoint.kickMember(Number(sceneId), Number(userId), false)
   }
-  async muteMember(botId: string, sceneId: string, userId: string, duration = 600) { /* ... */ }
-  async setAdmin(botId: string, sceneId: string, userId: string, enable = true) { /* ... */ }
+  async muteMember(endpointId: string, sceneId: string, userId: string, duration = 600) { /* ... */ }
+  async setAdmin(endpointId: string, sceneId: string, userId: string, enable = true) { /* ... */ }
   // ...共覆写 7 个标准方法
 
   async start() {
@@ -173,7 +173,7 @@ export { CommandFeature, ToolFeature, SkillFeature, CronFeature, DatabaseFeature
 export { createMessageDispatcher } from './built/dispatcher.js'
 
 // 适配器与消息
-export { Adapter, Message, MessageCommand, Bot, segment, ... } from './'
+export { Adapter, Message, MessageCommand, Endpoint, segment, ... } from './'
 
 // HTML 出站回退
 export { htmlToFallbackText, coerceHtmlSegmentsToText, registerHtmlSegmentFallback } from './built/*.js'

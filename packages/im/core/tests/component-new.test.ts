@@ -61,7 +61,7 @@ describe('函数式组件系统测试', () => {
     mockMessage = {
       $id: '1',
       $adapter: 'test',
-      $bot: 'test-bot',
+      $endpoint: 'test-bot',
       $content: [],
       $sender: { id: 'user1', name: 'User' },
       $reply: vi.fn(),
@@ -222,7 +222,7 @@ describe('函数式组件系统测试', () => {
         content: '<test name="John" />',
         type: 'text',
         context: 'test',
-        bot: 'test'
+        endpoint: 'test'
       }
 
       const result = await renderComponents(componentMap, options)
@@ -247,7 +247,7 @@ describe('函数式组件系统测试', () => {
         content: '<comp1 text="Hello" /> <comp2 number={42} />',
         type: 'text',
         context: 'test',
-        bot: 'test'
+        endpoint: 'test'
       }
 
       const result = await renderComponents(componentMap, options)
@@ -270,7 +270,7 @@ describe('函数式组件系统测试', () => {
         },
         type: 'group',
         context: 'icqq',
-        bot: 'test',
+        endpoint: 'test',
         id: '123',
       }
 
@@ -298,7 +298,7 @@ describe('函数式组件系统测试', () => {
         content: '<outer title="Test"><inner content="Nested" /></outer>',
         type: 'text',
         context: 'test',
-        bot: 'test'
+        endpoint: 'test'
       }
 
       const result = await renderComponents(componentMap, options)
@@ -378,7 +378,7 @@ describe('函数式组件系统测试', () => {
         content: '<error />',
         type: 'text',
         context: 'test',
-        bot: 'test'
+        endpoint: 'test'
       }
 
       const result = await renderComponents(componentMap, options)

@@ -5,7 +5,7 @@
  * 由 ZhinAgent.process() 按需创建并注入到工具列表中。
  */
 
-import type { AgentTool, ToolContext } from '@zhin.js/core';
+import type { AgentTool } from '@zhin.js/core';
 import type { ImTranscriptQuery, ImTranscriptSearchHit, ImTranscriptStore, MemoryImTranscriptStore } from '@zhin.js/ai';
 import type { UserProfileStore } from '../user-profile.js';
 

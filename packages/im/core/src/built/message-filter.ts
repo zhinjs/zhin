@@ -7,7 +7,7 @@
  *
  * 核心特性：
  *   - 基于优先级的规则引擎（first-match-wins，类似防火墙规则）
- *   - 多维匹配：scope / adapter / bot / channel / sender
+ *   - 多维匹配：scope / adapter / endpoint / channel / sender
  *   - 支持精确匹配、通配符 `*`、正则 `/pattern/`
  *   - 通过 Dispatcher Guardrail 集成，在消息调度第一阶段拦截
  *   - 插件通过 `addFilterRule()` 动态注册规则，卸载时自动清理
@@ -62,8 +62,8 @@ export interface FilterRule {
   scopes?: FilterScope[];
   /** 匹配的适配器名称 */
   adapters?: FilterPattern[];
-  /** 匹配的 Bot 名称 */
-  bots?: FilterPattern[];
+  /** 匹配的 Endpoint 名称 */
+  endpoints?: FilterPattern[];
   /** 匹配的频道/群/会话 ID */
   channels?: FilterPattern[];
   /** 匹配的发送者 ID */
@@ -91,7 +91,7 @@ export interface FilterRuleConfig {
   enabled?: boolean;
   scopes?: FilterScope[];
   adapters?: string[];
-  bots?: string[];
+  endpoints?: string[];
   channels?: string[];
   senders?: string[];
 }
@@ -293,7 +293,7 @@ export class MessageFilterFeature extends Feature<FilterRule> {
         enabled: r.enabled !== false,
         scopes: r.scopes,
         adapters: r.adapters?.map(p => p instanceof RegExp ? p.source : p),
-        bots: r.bots?.map(p => p instanceof RegExp ? p.source : p),
+        endpoints: r.endpoints?.map(p => p instanceof RegExp ? p.source : p),
         channels: r.channels?.map(p => p instanceof RegExp ? p.source : p),
         senders: r.senders?.map(p => p instanceof RegExp ? p.source : p),
       })),
@@ -350,7 +350,7 @@ export class MessageFilterFeature extends Feature<FilterRule> {
       enabled: rc.enabled,
       scopes: rc.scopes,
       adapters: rc.adapters?.map(p => this.#parsePattern(p)),
-      bots: rc.bots?.map(p => this.#parsePattern(p)),
+      endpoints: rc.endpoints?.map(p => this.#parsePattern(p)),
       channels: rc.channels?.map(p => this.#parsePattern(p)),
       senders: rc.senders?.map(p => this.#parsePattern(p)),
     };
@@ -373,7 +373,7 @@ export class MessageFilterFeature extends Feature<FilterRule> {
     if (rule.adapters?.length && !this.#matchAny(rule.adapters, String(message.$adapter))) {
       return false;
     }
-    if (rule.bots?.length && !this.#matchAny(rule.bots, String(message.$bot))) {
+    if (rule.endpoints?.length && !this.#matchAny(rule.endpoints, String(message.$endpoint))) {
       return false;
     }
     if (rule.channels?.length && !this.#matchAny(rule.channels, String(message.$channel.id))) {

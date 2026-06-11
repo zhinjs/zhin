@@ -30,11 +30,11 @@ export type MessageType = 'group' | 'private' | 'channel'
 export interface MessageBase {
     $id: string;
     $adapter:keyof Adapters
-    $bot:string
+    $endpoint:string
     $content: MessageElement[];
     $sender: MessageSender;
-    $reply(content:SendContent,quote?:boolean|string):Promise<string>
-    $recall():Promise<void>
+    $reply?(content:SendContent,quote?:boolean|string):Promise<string>
+    $recall?():Promise<void>
     $channel: MessageChannel;
     $timestamp: number;
     $raw: string;

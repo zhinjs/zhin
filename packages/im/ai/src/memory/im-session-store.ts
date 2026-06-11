@@ -12,7 +12,7 @@ export interface IMSessionRecord {
   session_id: string;
   session_key: string;
   platform: string;
-  bot_id: string;
+  endpoint_id: string;
   scene_id: string;
   scene_type: string;
   model: string;
@@ -24,7 +24,7 @@ export interface IMSessionRecord {
 export interface CreateIMSessionInput {
   session_key: string;
   platform: string;
-  bot_id: string;
+  endpoint_id: string;
   scene_id: string;
   scene_type: string;
   model?: string;
@@ -87,7 +87,7 @@ export class IMSessionStore {
       session_id: createSessionEpochId(input.session_key),
       session_key: input.session_key,
       platform: input.platform,
-      bot_id: input.bot_id,
+      endpoint_id: input.endpoint_id,
       scene_id: input.scene_id,
       scene_type: input.scene_type,
       model: input.model ?? '',
@@ -200,7 +200,7 @@ export class MemoryIMSessionStore {
       session_id: createSessionEpochId(input.session_key),
       session_key: input.session_key,
       platform: input.platform,
-      bot_id: input.bot_id,
+      endpoint_id: input.endpoint_id,
       scene_id: input.scene_id,
       scene_type: input.scene_type,
       model: input.model ?? '',

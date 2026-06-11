@@ -43,7 +43,7 @@ flowchart LR
 ### 1.2 控制台职责
 
 - 连接用户 Host（API Base + Bearer Token）
-- 渲染内置管理页面（插件、Bot、配置、日志等）
+- 渲染内置管理页面（插件、Endpoint、配置、日志等）
 - 订阅 SSE 实时事件
 - 通过 `GET /entries` 动态加载插件 Console Entry 并注册路由/工具
 - **不在** Host 端口（如 `:8086`）提供静态 Console 站点
@@ -157,7 +157,7 @@ GET {API_BASE}/pub/openapi.json
 | 方法 | 路径 | 响应 `data` 要点 |
 |------|------|------------------|
 | GET | `/api/system/status` | `uptime`, `memory`, `osMemory`, `cpu`, `platform`, `nodeVersion`, `runtime`, `pid`, `timestamp` |
-| GET | `/api/stats` | `plugins.{total,active}`, `bots.{total,online}`, `commands`, `components`, `uptime`, `memory`（MB）, `runtime` |
+| GET | `/api/stats` | `plugins.{total,active}`, `endpoints.{total,online}`, `commands`, `components`, `uptime`, `memory`（MB）, `runtime` |
 
 #### 插件
 
@@ -166,11 +166,11 @@ GET {API_BASE}/pub/openapi.json
 | GET | `/api/plugins` | 数组：`name`, `status`（active/inactive）, `description`, `features[]` |
 | GET | `/api/plugins/:name` | 单插件：`filename`, `filePath`, `status`, `features`, `contexts[]` |
 
-#### Bot
+#### Endpoint
 
 | 方法 | 路径 | 响应 `data` 要点 |
 |------|------|------------------|
-| GET | `/api/bots` | 数组：`name`, `adapter`, `connected`, `status`（online/offline） |
+| GET | `/api/endpoints` | 数组：`name`, `adapter`, `connected`, `status`（online/offline） |
 
 #### 配置与 Schema
 
@@ -186,7 +186,7 @@ GET {API_BASE}/pub/openapi.json
 
 | 方法 | 路径 | Body |
 |------|------|------|
-| POST | `/api/message/send` | `{ context, bot, id, type, content }` — `type` 为 `private` \| `group` \| `channel` |
+| POST | `/api/message/send` | `{ context, endpoint, id, type, content }` — `type` 为 `private` \| `group` \| `channel` |
 
 成功响应含 `data.messageId`、`data.timestamp`。
 
@@ -212,7 +212,7 @@ GET {API_BASE}/pub/openapi.json
 | 方法 | 路径 |
 |------|------|
 | GET | `/api/introspection/commands` |
-| GET | `/api/introspection/bots` |
+| GET | `/api/introspection/endpoints` |
 | GET | `/api/introspection/bindings` |
 | GET | `/api/introspection/tools` |
 | GET | `/api/introspection/mcp` |
@@ -288,9 +288,9 @@ GET {API_BASE}/pub/openapi.json
 | `env:list` | — | `{ files: string[] }` |
 | `env:get` | `filename` | `{ content }` |
 | `env:save` | `filename`, `content` | `{ success }` |
-| `bot:list` | — | `{ bots: BotRow[] }`（含 pending 状态） |
-| `bot:info` | `data: { adapter, botId }` | Bot 详情 |
-| `bot:sendMessage` | `data: { adapter, botId, id, type, content }` | `{ messageId }` |
+| `endpoint:list` | — | `{ endpoints: EndpointRow[] }`（含 pending 状态） |
+| `endpoint:info` | `data: { adapter, endpointId }` | Endpoint 详情 |
+| `endpoint:sendMessage` | `data: { adapter, endpointId, id, type, content }` | `{ messageId }` |
 | `cron:list` | — | `{ memory[], persistent[] }` |
 | `cron:add` | `cronExpression`, `prompt`, `label?`, `notify?` | 新建 persistent 任务记录 |
 | `cron:remove` | `id` | `{ success }` |
@@ -317,25 +317,25 @@ GET {API_BASE}/pub/openapi.json
 
 `type` 为 `related` \| `document` \| `keyvalue`，UI 应按类型展示不同编辑器。
 
-#### Bot 社交 / Inbox RPC（websocket 回落）
+#### Endpoint 社交 / Inbox RPC（websocket 回落）
 
 以下方法通过同一 `POST /api/console/request` 调用，`data` 字段承载参数：
 
 | type | 用途 |
 |------|------|
-| `bot:friends` | 好友列表 |
-| `bot:groups` | 群列表 |
-| `bot:channels` | 频道列表 |
-| `bot:requests` | 好友/群请求 |
-| `bot:requestApprove` / `bot:requestReject` | 处理请求 |
-| `bot:requestConsumed` | 标记请求已读 |
-| `bot:noticeConsumed` | 标记通知已读 |
-| `bot:inboxMessages` | 收件箱消息 |
-| `bot:inboxRequests` | 收件箱请求 |
-| `bot:inboxNotices` | 收件箱通知 |
-| `bot:deleteFriend` | 删除好友 |
-| `bot:groupMembers` | 群成员 |
-| `bot:groupKick` / `bot:groupMute` / `bot:groupAdmin` | 群管理 |
+| `endpoint:friends` | 好友列表 |
+| `endpoint:groups` | 群列表 |
+| `endpoint:channels` | 频道列表 |
+| `endpoint:requests` | 好友/群请求 |
+| `endpoint:requestApprove` / `endpoint:requestReject` | 处理请求 |
+| `endpoint:requestConsumed` | 标记请求已读 |
+| `endpoint:noticeConsumed` | 标记通知已读 |
+| `endpoint:inboxMessages` | 收件箱消息 |
+| `endpoint:inboxRequests` | 收件箱请求 |
+| `endpoint:inboxNotices` | 收件箱通知 |
+| `endpoint:deleteFriend` | 删除好友 |
+| `endpoint:groupMembers` | 群成员 |
+| `endpoint:groupKick` / `endpoint:groupMute` / `endpoint:groupAdmin` | 群管理 |
 | `system:restart` | 触发 Host 重启 |
 
 具体 `data` 字段因适配器而异；Console 应按 adapter 能力降级展示。
@@ -362,9 +362,9 @@ GET {API_BASE}/pub/openapi.json
 | type | 说明 | data 形状（概要） |
 |------|------|-------------------|
 | `config:updated` | 配置变更 | `{ pluginName, config }` |
-| `bot:message` | 新收件消息 | 消息行字段（adapter, bot_id, sender, channel 等） |
-| `bot:request` | 好友/群请求 | 请求行 + `canAct` |
-| `bot:notice` | 平台通知 | notice 行 |
+| `endpoint:message` | 新收件消息 | 消息行字段（adapter, endpoint_id, sender, channel 等） |
+| `endpoint:request` | 好友/群请求 | 请求行 + `canAct` |
+| `endpoint:notice` | 平台通知 | notice 行 |
 | `system:restarting` | 即将重启 | — |
 | `data-update` | 通用刷新信号 | `{ timestamp }` |
 
@@ -439,7 +439,7 @@ GET /entries
 
 - **路由建议**：`/dashboard` 或 `/`
 - **数据**：`GET /api/stats`、`GET /api/system/status`
-- **展示**：插件数、Bot 在线数、命令/组件数、运行时间、内存
+- **展示**：插件数、Endpoint 在线数、命令/组件数、运行时间、内存
 - **刷新**：手动 + 可选定时；`data-update` SSE 触发刷新
 
 ### 4.3 插件
@@ -449,20 +449,20 @@ GET /entries
 - **展示**：插件列表、Feature 统计、contexts、关联 Schema
 - **空态**：无子插件时提示
 
-### 4.4 Bot 管理
+### 4.4 Endpoint 管理
 
-- **路由建议**：`/bots`、`/bots/:adapter/:botId`
-- **数据**：`GET /api/bots`、RPC `bot:list` / `bot:info` / `bot:sendMessage`、`POST /api/message/send`
+- **路由建议**：`/endpoints`、`/endpoints/:adapter/:endpointId`
+- **数据**：`GET /api/endpoints`、RPC `endpoint:list` / `endpoint:info` / `endpoint:sendMessage`、`POST /api/message/send`
 - **展示**：在线状态、发消息表单（私聊/群/频道）
-- **实时**：SSE `bot:message`
+- **实时**：SSE `endpoint:message`
 
 ### 4.5 收件箱
 
-- **路由建议**：`/inbox` 或 Bot 详情子 Tab
-- **数据**：RPC `bot:inboxMessages` / `bot:inboxRequests` / `bot:inboxNotices` 及消费/审批方法
+- **路由建议**：`/inbox` 或 Endpoint 详情子 Tab
+- **数据**：RPC `endpoint:inboxMessages` / `endpoint:inboxRequests` / `endpoint:inboxNotices` 及消费/审批方法
 - **展示**：消息、好友请求、通知分栏；未读标记
 - **持久化**：IndexedDB 缓存列表，刷新后仍可浏览（见验收 §8）
-- **实时**：SSE `bot:message` / `bot:request` / `bot:notice`
+- **实时**：SSE `endpoint:message` / `endpoint:request` / `endpoint:notice`
 
 ### 4.6 配置编辑器
 
@@ -528,14 +528,14 @@ GET /entries
 
 ## 5. 运行时内省模块
 
-与 IM 命令 `/cmd`、`/bots`、`/bindings`、`/tools`、`/mcp` **数据同源**。
+与 IM 命令 `/cmd`、`/endpoints`、`/bindings`、`/tools`、`/mcp` **数据同源**。
 
 ### 5.1 端点与 Query
 
 | 资源 | 路径 | 默认 pageSize | filter 匹配字段 |
 |------|------|---------------|-----------------|
 | 命令 | `/api/introspection/commands` | 25 | pattern, desc, plugin |
-| Bot | `/api/introspection/bots` | 30 | adapter, name |
+| Endpoint | `/api/introspection/endpoints` | 30 | adapter, name |
 | Agent 绑定 | `/api/introspection/bindings` | 30 | name, provider, model |
 | 工具 | `/api/introspection/tools` | 15 | name, source, description |
 | MCP | `/api/introspection/mcp` | 30 | name |
@@ -622,7 +622,7 @@ Authorization: Bearer <token>
 
 ### 5.5 Console UI 要求
 
-- **布局**：单页五 Tab 或侧栏子菜单（命令 / Bot / 绑定 / 工具 / MCP）
+- **布局**：单页五 Tab 或侧栏子菜单（命令 / Endpoint / 绑定 / 工具 / MCP）
 - **搜索框**：输入 debounce 后更新 `filter` 并重置 `page=1`
 - **表格列**：与 OpenAPI item 字段一一对应
 - **分页器**：展示 `page/totalPages/total`；切换页码重新请求
@@ -760,7 +760,7 @@ cd zhin-console && pnpm install && pnpm dev
 - [ ] 登录成功，Token 持久化，401 跳转登录
 - [ ] 仪表盘展示 stats / system status
 - [ ] 插件列表与详情可访问
-- [ ] Bot 列表、发消息成功
+- [ ] Endpoint 列表、发消息成功
 - [ ] 收件箱加载，刷新后 IndexedDB 数据仍在
 - [ ] 配置页读写，保存后 SSE `config:updated` 触发刷新
 - [ ] 日志列表、筛选、清理

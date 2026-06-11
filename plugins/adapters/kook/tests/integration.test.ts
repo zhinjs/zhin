@@ -2,23 +2,23 @@
  * Kook 适配器集成测试
  *
  * 策略：Mock 掉 kook-client 的 Client 层（$connect/$disconnect/$sendMessage），
- * 测试 Bot 接口合规性、消息格式化、发送/接收链路、生命周期的完整性。
+ * 测试 Endpoint 接口合规性、消息格式化、发送/接收链路、生命周期的完整性。
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Plugin, segment, type SendOptions } from 'zhin.js';
 import { createAdapterTestSuite } from '../../../../packages/im/core/tests/adapter-harness.js';
 import { KookAdapter } from '../src/adapter.js';
-import { KookBot } from '../src/bot.js';
-import type { KookBotConfig } from '../src/types.js';
+import { KookEndpoint } from '../src/endpoint.js';
+import type { KookEndpointConfig } from '../src/types.js';
 
 const FIXED_TS = 1700000000000;
 
-// ── Mock Bot ──
+// ── Mock Endpoint ──
 
-class MockKookBot extends KookBot {
+class MockKookEndpoint extends KookEndpoint {
   sendMock = vi.fn();
 
-  constructor(adapter: KookAdapter, config: KookBotConfig) {
+  constructor(adapter: KookAdapter, config: KookEndpointConfig) {
     super(adapter, config);
   }
 
@@ -41,10 +41,10 @@ class MockKookBot extends KookBot {
 // ── Mock Adapter ──
 
 class MockKookAdapter extends KookAdapter {
-  createBot(config: KookBotConfig): MockKookBot {
-    return new MockKookBot(this, {
+  createEndpoint(config: KookEndpointConfig): MockKookEndpoint {
+    return new MockKookEndpoint(this, {
       context: 'kook',
-      name: config.name || 'test-bot',
+      name: config.name || 'test-endpoint',
       token: 'mock-token',
       ...config,
     });
@@ -70,10 +70,10 @@ function createKookRawEvent(overrides: any = {}): any {
 
 createAdapterTestSuite<MockKookAdapter, any>({
   adapterName: 'kook',
-  botId: 'test-bot',
+  endpointId: 'test-endpoint',
   createAdapter: (plugin) => {
     const adapter = new MockKookAdapter(plugin);
-    (adapter as any).config = [{ name: 'test-bot', context: 'kook', token: 'mock-token' }];
+    (adapter as any).config = [{ name: 'test-endpoint', context: 'kook', token: 'mock-token' }];
     return adapter;
   },
   createRawEvent: () => createKookRawEvent(),
@@ -84,62 +84,62 @@ createAdapterTestSuite<MockKookAdapter, any>({
 describe('Kook 适配器特定测试', () => {
   let plugin: Plugin;
   let adapter: MockKookAdapter;
-  let bot: MockKookBot;
+  let endpoint: MockKookEndpoint;
 
   beforeEach(async () => {
     plugin = new Plugin('/test/kook-integration.ts');
     adapter = new MockKookAdapter(plugin);
-    (adapter as any).config = [{ name: 'test-bot', context: 'kook', token: 'mock-token' }];
+    (adapter as any).config = [{ name: 'test-endpoint', context: 'kook', token: 'mock-token' }];
     await adapter.start();
-    bot = adapter.bots.get('test-bot') as MockKookBot;
+    endpoint = adapter.endpoints.get('test-endpoint') as MockKookEndpoint;
   });
 
   afterEach(async () => {
     try { await adapter.stop(); } catch { /* ignore */ }
   });
 
-  describe('Bot 接口合规性', () => {
+  describe('Endpoint 接口合规性', () => {
     it('$id 应为配置的 name', () => {
-      expect(bot.$id).toBe('test-bot');
+      expect(endpoint.$id).toBe('test-endpoint');
     });
 
     it('$connected 启动后应为 true', () => {
-      expect(bot.$connected).toBe(true);
+      expect(endpoint.$connected).toBe(true);
     });
 
-    it('应实现所有 Bot 接口方法', () => {
-      expect(typeof bot.$formatMessage).toBe('function');
-      expect(typeof bot.$connect).toBe('function');
-      expect(typeof bot.$disconnect).toBe('function');
-      expect(typeof bot.$sendMessage).toBe('function');
-      expect(typeof bot.$recallMessage).toBe('function');
+    it('应实现所有 Endpoint 接口方法', () => {
+      expect(typeof endpoint.$formatMessage).toBe('function');
+      expect(typeof endpoint.$connect).toBe('function');
+      expect(typeof endpoint.$disconnect).toBe('function');
+      expect(typeof endpoint.$sendMessage).toBe('function');
+      expect(typeof endpoint.$recallMessage).toBe('function');
     });
   });
 
   describe('生命周期', () => {
-    it('start() 应注册 bot', () => {
-      expect(adapter.bots.has('test-bot')).toBe(true);
+    it('start() 应注册 endpoint', () => {
+      expect(adapter.endpoints.has('test-endpoint')).toBe(true);
     });
 
-    it('stop() 应清空 bots', async () => {
+    it('stop() 应清空 endpoints', async () => {
       await adapter.stop();
-      expect(adapter.bots.size).toBe(0);
+      expect(adapter.endpoints.size).toBe(0);
     });
 
-    it('stop() 后 bot 应 disconnected', async () => {
+    it('stop() 后 endpoint 应 disconnected', async () => {
       await adapter.stop();
-      expect(bot.$connected).toBe(false);
+      expect(endpoint.$connected).toBe(false);
     });
   });
 
   describe('$formatMessage 消息格式化', () => {
     it('频道消息应正确格式化', () => {
       const raw = createKookRawEvent();
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
 
       expect(msg.$id).toBeDefined();
       expect(msg.$adapter).toBe('kook');
-      expect(msg.$bot).toBe('test-bot');
+      expect(msg.$endpoint).toBe('test-endpoint');
       expect(msg.$sender.id).toBeDefined();
       expect(msg.$channel.id).toBe('ch-001');
       expect(msg.$channel.type).toBe('channel');
@@ -149,13 +149,13 @@ describe('Kook 适配器特定测试', () => {
 
     it('私聊消息应格式化为 private', () => {
       const raw = createKookRawEvent({ message_type: 'private', channel_id: undefined });
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
       expect(msg.$channel.type).toBe('private');
     });
 
     it('$timestamp 应为正整数', () => {
       const raw = createKookRawEvent();
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
       expect(msg.$timestamp).toBe(FIXED_TS);
     });
 
@@ -164,24 +164,24 @@ describe('Kook 适配器特定测试', () => {
         message: [{ type: 'markdown', text: '(met)970972780(met) 你好' }],
         raw_message: '(met)970972780(met) 你好',
       });
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
       const atSeg = msg.$content.find((s) => s.type === 'at');
       expect(atSeg?.data?.user_id).toBe('970972780');
       expect(segment.raw(msg.$content)).toBe('@970972780 你好');
     });
 
-    it('at 消息段应带 user_id 供预览与 @bot 匹配', () => {
+    it('at 消息段应带 user_id 供预览与 @endpoint 匹配', () => {
       const raw = createKookRawEvent({
         message: [{ type: 'at', user_id: '970972780' }, { type: 'text', text: ' 你好' }],
       });
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
       expect(segment.raw(msg.$content)).toBe('@970972780 你好');
     });
   });
 
   describe('消息发送', () => {
     it('sendMessage 应返回带路由的 kook:channel: msg ref', async () => {
-      const realBot = new KookBot(adapter, {
+      const realBot = new KookEndpoint(adapter, {
         context: 'kook',
         name: 'send-ref',
         token: 'mock-token',
@@ -191,7 +191,7 @@ describe('Kook 适配器特定测试', () => {
 
       const result = await realBot.$sendMessage({
         context: 'kook',
-        bot: 'send-ref',
+        endpoint: 'send-ref',
         id: 'ch-001',
         type: 'group',
         content: [{ type: 'text', data: { text: 'hello' } }],
@@ -200,7 +200,7 @@ describe('Kook 适配器特定测试', () => {
     });
 
     it('base64 图片应先 uploadMedia 再以 image 段发送', async () => {
-      const realBot = new KookBot(adapter, {
+      const realBot = new KookEndpoint(adapter, {
         context: 'kook',
         name: 'send-img',
         token: 'mock-token',
@@ -213,7 +213,7 @@ describe('Kook 适配器特定测试', () => {
 
       await realBot.$sendMessage({
         context: 'kook',
-        bot: 'send-img',
+        endpoint: 'send-img',
         id: 'ch-001',
         type: 'group',
         content: [{ type: 'image', data: { url: 'base64://YQ==' } }],
@@ -230,7 +230,7 @@ describe('Kook 适配器特定测试', () => {
     it('emit message.receive 应触发 plugin.dispatch', async () => {
       const dispatchSpy = vi.spyOn(plugin, 'dispatch');
       const raw = createKookRawEvent();
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
 
       adapter.emit('message.receive', msg);
       await new Promise(r => setTimeout(r, 50));
@@ -244,7 +244,7 @@ describe('Kook 适配器特定测试', () => {
 
   describe('$addReaction / $removeReaction', () => {
     it('应走 KOOK add/delete-reaction API 并在 reactionId 记录路由', async () => {
-      const realBot = new KookBot(adapter, {
+      const realBot = new KookEndpoint(adapter, {
         context: 'kook',
         name: 'reaction-test',
         token: 'mock-token',
@@ -264,7 +264,7 @@ describe('Kook 适配器特定测试', () => {
     });
 
     it('delete 已移除的 reaction 时不应抛错（404 异常）', async () => {
-      const realBot = new KookBot(adapter, {
+      const realBot = new KookEndpoint(adapter, {
         context: 'kook',
         name: 'reaction-gone',
         token: 'mock-token',
@@ -280,7 +280,7 @@ describe('Kook 适配器特定测试', () => {
     });
 
     it('delete 已移除的 reaction 时不应抛错（非 0 响应体）', async () => {
-      const realBot = new KookBot(adapter, {
+      const realBot = new KookEndpoint(adapter, {
         context: 'kook',
         name: 'reaction-gone-body',
         token: 'mock-token',
@@ -297,7 +297,7 @@ describe('Kook 适配器特定测试', () => {
 
   describe('$recallMessage', () => {
     it('出站 kook:channel: ref 应只打频道删除 API', async () => {
-      const realBot = new KookBot(adapter, {
+      const realBot = new KookEndpoint(adapter, {
         context: 'kook',
         name: 'recall-test',
         token: 'mock-token',
@@ -311,7 +311,7 @@ describe('Kook 适配器特定测试', () => {
     });
 
     it('入站 plain msgId + route 提示应只打对应 API', async () => {
-      const realBot = new KookBot(adapter, {
+      const realBot = new KookEndpoint(adapter, {
         context: 'kook',
         name: 'recall-dm',
         token: 'mock-token',
@@ -324,7 +324,7 @@ describe('Kook 适配器特定测试', () => {
     });
 
     it('双路由时第一次删除已成功（无 code）不应再打第二条', async () => {
-      const realBot = new KookBot(adapter, {
+      const realBot = new KookEndpoint(adapter, {
         context: 'kook',
         name: 'recall-no-double',
         token: 'mock-token',
@@ -338,7 +338,7 @@ describe('Kook 适配器特定测试', () => {
     });
 
     it('无路由信息时双路由尝试', async () => {
-      const realBot = new KookBot(adapter, {
+      const realBot = new KookEndpoint(adapter, {
         context: 'kook',
         name: 'recall-fallback',
         token: 'mock-token',
@@ -359,7 +359,7 @@ describe('Kook 适配器特定测试', () => {
       const dispatchSpy = vi.spyOn(plugin, 'dispatch');
       const adapterEmitSpy = vi.spyOn(adapter, 'emit');
 
-      const realBot = new KookBot(adapter, {
+      const realBot = new KookEndpoint(adapter, {
         context: 'kook',
         name: 'notice-test',
         token: 'mock-token',
@@ -402,7 +402,7 @@ describe('Kook 适配器特定测试', () => {
     it('$reply 应走 adapter.sendMessage', async () => {
       const sendMessageSpy = vi.spyOn(adapter, 'sendMessage');
       const raw = createKookRawEvent();
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
 
       sendMessageSpy.mockResolvedValue('reply-id');
       const result = await msg.$reply('hi');

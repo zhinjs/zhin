@@ -4,7 +4,7 @@
  * 通用 AI mocks 从 @zhin.js/ai 测试 setup 导入
  */
 import { vi } from 'vitest';
-import type { Message, MessageElement, Tool, ToolContext } from '@zhin.js/core';
+import type { Message, MessageElement, Tool } from '@zhin.js/core';
 import type { AIConfig } from '@zhin.js/core';
 
 // Import and re-export generic AI mocks from ai package tests
@@ -48,7 +48,7 @@ export interface MockMessageOptions {
   senderId?: string;
   senderPermissions?: string[];
   senderRole?: string;
-  botId?: string;
+  endpointId?: string;
 }
 
 export const createMockMessage = (options: MockMessageOptions = {}): Partial<Message> => {
@@ -61,7 +61,7 @@ export const createMockMessage = (options: MockMessageOptions = {}): Partial<Mes
     senderId = 'user-1',
     senderPermissions = [],
     senderRole,
-    botId = 'bot-1',
+    endpointId = 'bot-1',
   } = options;
 
   const $content: MessageElement[] = elements || [
@@ -70,7 +70,7 @@ export const createMockMessage = (options: MockMessageOptions = {}): Partial<Mes
 
   return {
     $content,
-    $bot: botId,
+    $endpoint: endpointId,
     $adapter: platform,
     $channel: {
       type: channelType,
@@ -145,12 +145,24 @@ export const createMockTool = (options: MockToolOptions): Tool => {
   return tool;
 };
 
-export const createToolContext = (options: Partial<ToolContext> = {}): ToolContext => ({
-  platform: 'test',
-  scope: 'group',
-  roles: ['user'],
-  ...options,
-});
+import { mockCommMessage } from '../helpers/mock-comm-message.js';
+
+export const createMockCommMessage = (options: {
+  adapter?: string;
+  endpoint?: string;
+  senderId?: string;
+  scope?: 'private' | 'group' | 'channel';
+  sceneId?: string;
+  sender_roles?: import('@zhin.js/core').SenderRole[];
+  isMaster?: boolean;
+  isTrusted?: boolean;
+  role?: string;
+  extra?: Record<string, unknown>;
+  message?: Message<any>;
+} = {}): Message<any> => {
+  if (options.message) return options.message;
+  return mockCommMessage(options);
+};
 
 export const createMockAIConfig = (overrides: Partial<AIConfig> = {}): AIConfig => ({
   defaultProvider: 'mock',

@@ -3,6 +3,11 @@
  */
 import { usePlugin, type Plugin, type Context, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
 import { LarkAdapter } from "./adapter.js";
+import {
+  larkGroupPermitResolver,
+  platformPermit,
+  registerLarkPlatformPermitChecker,
+} from "./platform-permit.js";
 
 declare module "zhin.js" {
   namespace Plugin {
@@ -16,7 +21,7 @@ declare module "zhin.js" {
 }
 
 export * from "./types.js";
-export { LarkBot } from "./bot.js";
+export { LarkEndpoint } from "./endpoint.js";
 export { LarkAdapter } from "./adapter.js";
 
 const plugin = usePlugin();
@@ -25,7 +30,7 @@ const { provide, useContext } = plugin;
 (useContext as (key: string, fn: (router: any) => void) => void)("router", (router) => {
   provide({
     name: "lark",
-    description: "Lark/Feishu Bot Adapter",
+    description: "Lark/Feishu Endpoint Adapter",
     mounted: async (p: Plugin) => {
       const adapter = new LarkAdapter(p, router);
       await adapter.start();
@@ -38,11 +43,14 @@ const { provide, useContext } = plugin;
 });
 
 useContext('tool', 'lark', (toolService: ToolFeature, lark: LarkAdapter) => {
+  const disposers: (() => void)[] = [];
+  disposers.push(registerLarkPlatformPermitChecker());
   const groupTools = createGroupManagementTools(
     lark as unknown as IGroupManagement,
     'lark',
+    { permitResolver: larkGroupPermitResolver, registerChecker: false },
   );
-  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, plugin.name));
+  disposers.push(...groupTools.map(t => toolService.addTool(t, plugin.name)));
 
   disposers.push(toolService.addTool({
     name: 'lark_get_user',
@@ -50,17 +58,17 @@ useContext('tool', 'lark', (toolService: ToolFeature, lark: LarkAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         user_id: { type: 'string', description: '用户 ID (open_id)' },
       },
-      required: ['bot', 'user_id'],
+      required: ['endpoint_id', 'user_id'],
     },
     platforms: ['lark'],
     tags: ['lark'],
     execute: async (args: Record<string, any>) => {
-      const bot = lark.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      return await bot.getUserInfo(args.user_id);
+      const endpoint = lark.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      return await endpoint.getUserInfo(args.user_id);
     },
   }, plugin.name));
 
@@ -70,19 +78,19 @@ useContext('tool', 'lark', (toolService: ToolFeature, lark: LarkAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         name: { type: 'string', description: '群名' },
         members: { type: 'string', description: '成员 open_id 列表，逗号分隔' },
         owner: { type: 'string', description: '群主 open_id（可选）' },
       },
-      required: ['bot', 'name', 'members'],
+      required: ['endpoint_id', 'name', 'members'],
     },
     platforms: ['lark'],
     tags: ['lark'],
     execute: async (args: Record<string, any>) => {
-      const bot = lark.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      const chatId = await bot.createChat(args.name, args.members.split(','), args.owner);
+      const endpoint = lark.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      const chatId = await endpoint.createChat(args.name, args.members.split(','), args.owner);
       return { success: !!chatId, chat_id: chatId, message: chatId ? `群聊创建成功: ${chatId}` : '创建失败' };
     },
   }, plugin.name));
@@ -93,19 +101,20 @@ useContext('tool', 'lark', (toolService: ToolFeature, lark: LarkAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         chat_id: { type: 'string', description: '群聊 ID' },
         name: { type: 'string', description: '新群名（可选）' },
         description: { type: 'string', description: '新描述（可选）' },
       },
-      required: ['bot', 'chat_id'],
+      required: ['endpoint_id', 'chat_id'],
     },
     platforms: ['lark'],
     tags: ['lark'],
+    permissions: [platformPermit('chat_admin')],
     execute: async (args: Record<string, any>) => {
-      const bot = lark.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      const success = await bot.updateChatInfo(args.chat_id, { name: args.name, description: args.description });
+      const endpoint = lark.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      const success = await endpoint.updateChatInfo(args.chat_id, { name: args.name, description: args.description });
       return { success, message: success ? '群信息更新成功' : '更新失败' };
     },
   }, plugin.name));
@@ -116,18 +125,19 @@ useContext('tool', 'lark', (toolService: ToolFeature, lark: LarkAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         chat_id: { type: 'string', description: '群聊 ID' },
         user_ids: { type: 'string', description: '用户 open_id 列表，逗号分隔' },
       },
-      required: ['bot', 'chat_id', 'user_ids'],
+      required: ['endpoint_id', 'chat_id', 'user_ids'],
     },
     platforms: ['lark'],
     tags: ['lark'],
+    permissions: [platformPermit('chat_admin')],
     execute: async (args: Record<string, any>) => {
-      const bot = lark.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      const success = await bot.addChatMembers(args.chat_id, args.user_ids.split(','));
+      const endpoint = lark.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      const success = await endpoint.addChatMembers(args.chat_id, args.user_ids.split(','));
       return { success, message: success ? '成员添加成功' : '添加失败' };
     },
   }, plugin.name));
@@ -138,18 +148,19 @@ useContext('tool', 'lark', (toolService: ToolFeature, lark: LarkAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         chat_id: { type: 'string', description: '群聊 ID' },
         user_ids: { type: 'string', description: '用户 open_id 列表，逗号分隔' },
       },
-      required: ['bot', 'chat_id', 'user_ids'],
+      required: ['endpoint_id', 'chat_id', 'user_ids'],
     },
     platforms: ['lark'],
     tags: ['lark'],
+    permissions: [platformPermit('manage_managers')],
     execute: async (args: Record<string, any>) => {
-      const bot = lark.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      const success = await bot.setChatManagers(args.chat_id, args.user_ids.split(','));
+      const endpoint = lark.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      const success = await endpoint.setChatManagers(args.chat_id, args.user_ids.split(','));
       return { success, message: success ? '管理员设置成功' : '设置失败' };
     },
   }, plugin.name));
@@ -160,18 +171,19 @@ useContext('tool', 'lark', (toolService: ToolFeature, lark: LarkAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         chat_id: { type: 'string', description: '群聊 ID' },
         user_ids: { type: 'string', description: '用户 open_id 列表，逗号分隔' },
       },
-      required: ['bot', 'chat_id', 'user_ids'],
+      required: ['endpoint_id', 'chat_id', 'user_ids'],
     },
     platforms: ['lark'],
     tags: ['lark'],
+    permissions: [platformPermit('manage_managers')],
     execute: async (args: Record<string, any>) => {
-      const bot = lark.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      const success = await bot.removeChatManagers(args.chat_id, args.user_ids.split(','));
+      const endpoint = lark.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      const success = await endpoint.removeChatManagers(args.chat_id, args.user_ids.split(','));
       return { success, message: success ? '管理员移除成功' : '移除失败' };
     },
   }, plugin.name));
@@ -182,17 +194,17 @@ useContext('tool', 'lark', (toolService: ToolFeature, lark: LarkAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         chat_id: { type: 'string', description: '群聊 ID' },
       },
-      required: ['bot', 'chat_id'],
+      required: ['endpoint_id', 'chat_id'],
     },
     platforms: ['lark'],
     tags: ['lark'],
     execute: async (args: Record<string, any>) => {
-      const bot = lark.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      const success = await bot.dissolveChat(args.chat_id);
+      const endpoint = lark.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      const success = await endpoint.dissolveChat(args.chat_id);
       return { success, message: success ? '群聊已解散' : '解散失败' };
     },
   }, plugin.name));
@@ -203,11 +215,11 @@ useContext('tool', 'lark', (toolService: ToolFeature, lark: LarkAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         file_path: { type: 'string', description: '本地文件路径' },
         file_type: { type: 'string', description: '文件类型', enum: ['opus', 'mp4', 'pdf', 'doc', 'xls', 'ppt', 'stream'] },
       },
-      required: ['bot', 'file_path', 'file_type'],
+      required: ['endpoint_id', 'file_path', 'file_type'],
     },
     platforms: ['lark'],
     tags: ['lark'],
@@ -216,9 +228,9 @@ useContext('tool', 'lark', (toolService: ToolFeature, lark: LarkAdapter) => {
       if (!validTypes.includes(args.file_type)) {
         throw new Error(`不支持的文件类型: ${args.file_type}，支持: ${validTypes.join(', ')}`);
       }
-      const bot = lark.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      const result = await bot.uploadFile(args.file_path, args.file_type);
+      const endpoint = lark.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      const result = await endpoint.uploadFile(args.file_path, args.file_type);
       return { success: true, file_key: result, message: `文件已上传，file_key: ${result}` };
     },
   }, plugin.name));

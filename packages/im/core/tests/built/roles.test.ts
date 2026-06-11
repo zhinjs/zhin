@@ -13,23 +13,18 @@ describe('roleSatisfies', () => {
     expect(roleSatisfies([], undefined)).toBe(true);
   });
 
-  it('group_owner 隐含满足 group_admin 要求', () => {
-    expect(roleSatisfies(['group_owner'], ['group_admin'])).toBe(true);
-    expect(roleSatisfies(['group_admin'], ['group_owner'])).toBe(false);
-  });
-
   it('master 隐含满足 trusted 要求', () => {
     expect(roleSatisfies(['master'], ['trusted'])).toBe(true);
     expect(roleSatisfies(['trusted'], ['master'])).toBe(false);
   });
 
-  it('master 不满足 group_admin 专用工具', () => {
-    expect(roleSatisfies(['master'], ['group_admin'])).toBe(false);
+  it('user 无法满足 trusted 要求', () => {
+    expect(roleSatisfies(['user'], ['trusted'])).toBe(false);
   });
 
-  it('双身份 group_admin+trusted 满足各自要求', () => {
-    expect(roleSatisfies(['group_admin', 'trusted'], ['group_admin'])).toBe(true);
-    expect(roleSatisfies(['group_admin', 'trusted'], ['trusted'])).toBe(true);
+  it('双身份 trusted+master 满足各自要求', () => {
+    expect(roleSatisfies(['master', 'trusted'], ['trusted'])).toBe(true);
+    expect(roleSatisfies(['master', 'trusted'], ['master'])).toBe(true);
   });
 });
 
@@ -61,6 +56,6 @@ describe('formatSenderRolesForLabel', () => {
   });
 
   it('多角色逗号连接', () => {
-    expect(formatSenderRolesForLabel(['group_admin', 'trusted'])).toBe('group_admin,trusted');
+    expect(formatSenderRolesForLabel(['trusted', 'master'])).toBe('trusted,master');
   });
 });

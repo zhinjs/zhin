@@ -4,6 +4,7 @@
 import path from "node:path";
 import { usePlugin, type Plugin, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
 import { KookAdapter } from "./adapter.js";
+import { kookGroupPermitResolver, platformPermit, registerKookPlatformPermitChecker } from "./platform-permit.js";
 import { PageManager } from "@zhin.js/host-api";
 
 declare module "zhin.js" {
@@ -21,7 +22,7 @@ declare module "zhin.js" {
 }
 
 export * from "./types.js";
-export { KookBot } from "./bot.js";
+export { KookEndpoint } from "./endpoint.js";
 export { KookAdapter } from "./adapter.js";
 
 const plugin = usePlugin();
@@ -41,11 +42,14 @@ provide({
 });
 
 useContext('tool', 'kook', (toolService: ToolFeature, kook: KookAdapter) => {
+  const disposers: (() => void)[] = [];
+  disposers.push(registerKookPlatformPermitChecker());
   const groupTools = createGroupManagementTools(
     kook as unknown as IGroupManagement,
     'kook',
+    { permitResolver: kookGroupPermitResolver, registerChecker: false },
   );
-  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, plugin.name));
+  disposers.push(...groupTools.map(t => toolService.addTool(t, plugin.name)));
 
   disposers.push(toolService.addTool({
     name: 'kook_grant_role',
@@ -53,19 +57,20 @@ useContext('tool', 'kook', (toolService: ToolFeature, kook: KookAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         guild_id: { type: 'string', description: '服务器 ID' },
         user_id: { type: 'string', description: '用户 ID' },
         role_id: { type: 'string', description: '角色 ID' },
       },
-      required: ['bot', 'guild_id', 'user_id', 'role_id'],
+      required: ['endpoint_id', 'guild_id', 'user_id', 'role_id'],
     },
     platforms: ['kook'],
     tags: ['kook'],
+    permissions: [platformPermit('manage_roles')],
     execute: async (args: Record<string, any>) => {
-      const bot = kook.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      const success = await bot.grantRole(args.guild_id, args.user_id, args.role_id);
+      const endpoint = kook.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      const success = await endpoint.grantRole(args.guild_id, args.user_id, args.role_id);
       return { success, message: success ? `已授予用户 ${args.user_id} 角色 ${args.role_id}` : '授予角色失败' };
     },
   }, plugin.name));
@@ -76,19 +81,20 @@ useContext('tool', 'kook', (toolService: ToolFeature, kook: KookAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         guild_id: { type: 'string', description: '服务器 ID' },
         user_id: { type: 'string', description: '用户 ID' },
         role_id: { type: 'string', description: '角色 ID' },
       },
-      required: ['bot', 'guild_id', 'user_id', 'role_id'],
+      required: ['endpoint_id', 'guild_id', 'user_id', 'role_id'],
     },
     platforms: ['kook'],
     tags: ['kook'],
+    permissions: [platformPermit('manage_roles')],
     execute: async (args: Record<string, any>) => {
-      const bot = kook.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      const success = await bot.revokeRole(args.guild_id, args.user_id, args.role_id);
+      const endpoint = kook.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      const success = await endpoint.revokeRole(args.guild_id, args.user_id, args.role_id);
       return { success, message: success ? `已撤销用户 ${args.user_id} 的角色 ${args.role_id}` : '撤销角色失败' };
     },
   }, plugin.name));
@@ -99,17 +105,17 @@ useContext('tool', 'kook', (toolService: ToolFeature, kook: KookAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         guild_id: { type: 'string', description: '服务器 ID' },
       },
-      required: ['bot', 'guild_id'],
+      required: ['endpoint_id', 'guild_id'],
     },
     platforms: ['kook'],
     tags: ['kook'],
     execute: async (args: Record<string, any>) => {
-      const bot = kook.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      const roles = await bot.getRoleList(args.guild_id);
+      const endpoint = kook.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      const roles = await endpoint.getRoleList(args.guild_id);
       return {
         roles: roles.map((r: any) => ({
           id: r.role_id,
@@ -129,18 +135,19 @@ useContext('tool', 'kook', (toolService: ToolFeature, kook: KookAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         guild_id: { type: 'string', description: '服务器 ID' },
         name: { type: 'string', description: '角色名称' },
       },
-      required: ['bot', 'guild_id', 'name'],
+      required: ['endpoint_id', 'guild_id', 'name'],
     },
     platforms: ['kook'],
     tags: ['kook'],
+    permissions: [platformPermit('guild_owner')],
     execute: async (args: Record<string, any>) => {
-      const bot = kook.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      const role = await bot.createRole(args.guild_id, args.name);
+      const endpoint = kook.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      const role = await endpoint.createRole(args.guild_id, args.name);
       return {
         success: true,
         message: `已创建角色 "${args.name}"`,
@@ -155,18 +162,19 @@ useContext('tool', 'kook', (toolService: ToolFeature, kook: KookAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         guild_id: { type: 'string', description: '服务器 ID' },
         role_id: { type: 'string', description: '角色 ID' },
       },
-      required: ['bot', 'guild_id', 'role_id'],
+      required: ['endpoint_id', 'guild_id', 'role_id'],
     },
     platforms: ['kook'],
     tags: ['kook'],
+    permissions: [platformPermit('guild_owner')],
     execute: async (args: Record<string, any>) => {
-      const bot = kook.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      const success = await bot.deleteRole(args.guild_id, args.role_id);
+      const endpoint = kook.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      const success = await endpoint.deleteRole(args.guild_id, args.role_id);
       return { success, message: success ? `已删除角色 ${args.role_id}` : '删除角色失败' };
     },
   }, plugin.name));
@@ -177,26 +185,27 @@ useContext('tool', 'kook', (toolService: ToolFeature, kook: KookAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         guild_id: { type: 'string', description: '服务器 ID' },
         action: { type: 'string', description: 'add|remove', enum: ['add', 'remove'] },
         user_id: { type: 'string', description: '用户 ID' },
         remark: { type: 'string', description: '备注（add 可选）' },
       },
-      required: ['bot', 'guild_id', 'action', 'user_id'],
+      required: ['endpoint_id', 'guild_id', 'action', 'user_id'],
     },
     platforms: ['kook'],
     tags: ['kook'],
+    permissions: [platformPermit('guild_admin')],
     execute: async (args: Record<string, any>) => {
-      const bot = kook.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
+      const endpoint = kook.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
       switch (args.action) {
         case 'add': {
-          const success = await bot.addToBlacklist(args.guild_id, args.user_id, args.remark);
+          const success = await endpoint.addToBlacklist(args.guild_id, args.user_id, args.remark);
           return { success, message: success ? `已将 ${args.user_id} 加入黑名单` : '操作失败' };
         }
         case 'remove': {
-          const success = await bot.removeFromBlacklist(args.guild_id, args.user_id);
+          const success = await endpoint.removeFromBlacklist(args.guild_id, args.user_id);
           return { success, message: success ? `已将 ${args.user_id} 从黑名单移除` : '操作失败' };
         }
         default:
@@ -219,35 +228,35 @@ useContext("web", (pageManager) => {
 });
 
 useContext("router", "kook", (router: any, kook: KookAdapter) => {
-  router.get("/api/kook/bots", async (ctx: any) => {
+  router.get("/api/kook/endpoints", async (ctx: any) => {
     try {
-      const bots = Array.from(kook.bots.values());
-      const result = bots.map((bot: any) => {
+      const endpoints = Array.from(kook.endpoints.values());
+      const result = endpoints.map((endpoint: any) => {
         try {
           return {
-            name: bot.$config.name,
-            connected: bot.$connected || false,
-            guildCount: bot.guilds?.size || 0,
-            status: bot.$connected ? "online" : "offline",
+            name: endpoint.$config.name,
+            connected: endpoint.$connected || false,
+            guildCount: endpoint.guilds?.size || 0,
+            status: endpoint.$connected ? "online" : "offline",
           };
         } catch {
-          return { name: bot.$config.name, connected: false, guildCount: 0, status: "error" };
+          return { name: endpoint.$config.name, connected: false, guildCount: 0, status: "error" };
         }
       });
       ctx.body = { success: true, data: result };
     } catch {
       ctx.status = 500;
-      ctx.body = { success: false, error: "获取机器人数据失败" };
+      ctx.body = { success: false, error: "获取 Endpoint 数据失败" };
     }
   });
 
-  // Bot 连接/断开
-  router.post("/api/kook/bots/:name/connect", async (ctx: any) => {
+  // Endpoint 连接/断开
+  router.post("/api/kook/endpoints/:name/connect", async (ctx: any) => {
     try {
-      const bot = kook.bots.get(ctx.params.name);
-      if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
-      if (bot.$connected) { ctx.body = { success: true, message: "已经在线" }; return; }
-      await bot.$connect();
+      const endpoint = kook.endpoints.get(ctx.params.name);
+      if (!endpoint) { ctx.status = 404; ctx.body = { success: false, error: "Endpoint 不存在" }; return; }
+      if (endpoint.$connected) { ctx.body = { success: true, message: "已经在线" }; return; }
+      await endpoint.$connect();
       ctx.body = { success: true, message: "连接成功" };
     } catch (e: unknown) {
       ctx.status = 500;
@@ -255,12 +264,12 @@ useContext("router", "kook", (router: any, kook: KookAdapter) => {
     }
   });
 
-  router.post("/api/kook/bots/:name/disconnect", async (ctx: any) => {
+  router.post("/api/kook/endpoints/:name/disconnect", async (ctx: any) => {
     try {
-      const bot = kook.bots.get(ctx.params.name);
-      if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
-      if (!bot.$connected) { ctx.body = { success: true, message: "已经离线" }; return; }
-      await bot.$disconnect();
+      const endpoint = kook.endpoints.get(ctx.params.name);
+      if (!endpoint) { ctx.status = 404; ctx.body = { success: false, error: "Endpoint 不存在" }; return; }
+      if (!endpoint.$connected) { ctx.body = { success: true, message: "已经离线" }; return; }
+      await endpoint.$disconnect();
       ctx.body = { success: true, message: "已断开" };
     } catch (e: unknown) {
       ctx.status = 500;
@@ -269,12 +278,12 @@ useContext("router", "kook", (router: any, kook: KookAdapter) => {
   });
 
   // 角色列表
-  router.get("/api/kook/bots/:name/guilds/:guildId/roles", async (ctx: any) => {
+  router.get("/api/kook/endpoints/:name/guilds/:guildId/roles", async (ctx: any) => {
     try {
-      const bot: any = kook.bots.get(ctx.params.name);
-      if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
-      if (!bot.$connected) { ctx.status = 400; ctx.body = { success: false, error: "Bot 未连接" }; return; }
-      const roles = await bot.getRoleList(ctx.params.guildId);
+      const endpoint: any = kook.endpoints.get(ctx.params.name);
+      if (!endpoint) { ctx.status = 404; ctx.body = { success: false, error: "Endpoint 不存在" }; return; }
+      if (!endpoint.$connected) { ctx.status = 400; ctx.body = { success: false, error: "Endpoint 未连接" }; return; }
+      const roles = await endpoint.getRoleList(ctx.params.guildId);
       ctx.body = {
         success: true,
         data: roles.map((r: any) => ({
@@ -291,14 +300,14 @@ useContext("router", "kook", (router: any, kook: KookAdapter) => {
   });
 
   // 创建角色
-  router.post("/api/kook/bots/:name/guilds/:guildId/roles", async (ctx: any) => {
+  router.post("/api/kook/endpoints/:name/guilds/:guildId/roles", async (ctx: any) => {
     try {
-      const bot: any = kook.bots.get(ctx.params.name);
-      if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
-      if (!bot.$connected) { ctx.status = 400; ctx.body = { success: false, error: "Bot 未连接" }; return; }
+      const endpoint: any = kook.endpoints.get(ctx.params.name);
+      if (!endpoint) { ctx.status = 404; ctx.body = { success: false, error: "Endpoint 不存在" }; return; }
+      if (!endpoint.$connected) { ctx.status = 400; ctx.body = { success: false, error: "Endpoint 未连接" }; return; }
       const { name } = ctx.request.body || {};
       if (!name) { ctx.status = 400; ctx.body = { success: false, error: "缺少角色名称" }; return; }
-      const role = await bot.createRole(ctx.params.guildId, name);
+      const role = await endpoint.createRole(ctx.params.guildId, name);
       ctx.body = { success: true, data: { id: role.role_id, name: role.name } };
     } catch (e: unknown) {
       ctx.status = 500;
@@ -307,12 +316,12 @@ useContext("router", "kook", (router: any, kook: KookAdapter) => {
   });
 
   // 删除角色
-  router.delete("/api/kook/bots/:name/guilds/:guildId/roles/:roleId", async (ctx: any) => {
+  router.delete("/api/kook/endpoints/:name/guilds/:guildId/roles/:roleId", async (ctx: any) => {
     try {
-      const bot: any = kook.bots.get(ctx.params.name);
-      if (!bot) { ctx.status = 404; ctx.body = { success: false, error: "Bot 不存在" }; return; }
-      if (!bot.$connected) { ctx.status = 400; ctx.body = { success: false, error: "Bot 未连接" }; return; }
-      const success = await bot.deleteRole(ctx.params.guildId, ctx.params.roleId);
+      const endpoint: any = kook.endpoints.get(ctx.params.name);
+      if (!endpoint) { ctx.status = 404; ctx.body = { success: false, error: "Endpoint 不存在" }; return; }
+      if (!endpoint.$connected) { ctx.status = 400; ctx.body = { success: false, error: "Endpoint 未连接" }; return; }
+      const success = await endpoint.deleteRole(ctx.params.guildId, ctx.params.roleId);
       ctx.body = { success, message: success ? "角色已删除" : "删除失败" };
     } catch (e: unknown) {
       ctx.status = 500;

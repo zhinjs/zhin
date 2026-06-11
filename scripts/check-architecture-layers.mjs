@@ -6,7 +6,7 @@
  * 1. basic/ (logger, schema, database, cli)
  * 2. packages/im/kernel (无 IM 概念)
  * 3. packages/im/ai (providers, agents, memory)
- * 4. packages/im/core (Plugin, Adapter, Bot, Command)
+ * 4. packages/im/core (Plugin, Adapter, Endpoint, Command)
  * 5. packages/im/agent (ZhinAgent, security policies)
  * 6. packages/im/zhin (主入口)
  *
@@ -247,7 +247,7 @@ if (violations.length) {
   console.error('  1. basic/ (logger, schema, database, cli)');
   console.error('  2. packages/im/kernel (no IM concepts)');
   console.error('  3. packages/im/ai (providers, agents, memory)');
-  console.error('  4. packages/im/core (Plugin, Adapter, Bot, Command)');
+  console.error('  4. packages/im/core (Plugin, Adapter, Endpoint, Command)');
   console.error('  5. packages/im/agent (ZhinAgent, security policies)');
   console.error('  6. packages/im/zhin (main entry)');
   console.error('  (parallel) packages/console/{contract,pagemanager,client}\n');

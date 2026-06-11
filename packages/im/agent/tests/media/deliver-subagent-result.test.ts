@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { mockCommMessage } from '../helpers/mock-comm-message.js';
 import { deliverSubagentResult } from '../../src/media/deliver-subagent-result.js';
 
 describe('deliverSubagentResult', () => {
@@ -6,11 +7,13 @@ describe('deliverSubagentResult', () => {
     const send = vi.fn(async () => 'msg-1');
     await deliverSubagentResult({
       origin: {
-        platform: 'sandbox',
-        botId: 'b1',
-        sceneId: 's1',
-        senderId: 'u1',
-        sceneType: 'group',
+        message: mockCommMessage({
+          adapter: 'sandbox',
+          endpoint: 'b1',
+          senderId: 'u1',
+          scope: 'group',
+          sceneId: 's1',
+        }),
       },
       delivery: {
         text: '[后台任务完成]\n\n结果:\n已生成图片',

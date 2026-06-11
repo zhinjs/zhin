@@ -11,24 +11,24 @@ import {
 } from '@zhin.js/core';
 
 export const MANAGEMENT_COMMAND_DENIED =
-  '⚠️ 该命令仅 Bot Owner（master）或 trusted 操作员可用。';
+  '⚠️ 该命令仅 Endpoint Owner（master）或 trusted 操作员可用。';
 
 export function resolveManagementCommandRoles(
-  message: Message<any>,
+  message: Message,
   root: Plugin,
   triggerConfig?: AITriggerConfig,
 ): ReturnType<typeof resolveSenderRoles>['roles'] {
   const cfg = mergeAITriggerConfig(triggerConfig ?? {});
   const adapterInstance = root.inject(message.$adapter) as
-    | { bots?: Map<string, { $config?: Record<string, unknown> }> }
+    | { endpoints?: Map<string, { $config?: Record<string, unknown> }> }
     | undefined;
-  const botConfig = adapterInstance?.bots?.get(message.$bot)?.$config;
-  return resolveSenderRoles(message, cfg, botConfig).roles;
+  const endpointConfig = adapterInstance?.endpoints?.get(message.$endpoint)?.$config;
+  return resolveSenderRoles(message, cfg, endpointConfig).roles;
 }
 
 /** 通过返回 null；拒绝返回用户可见提示文案 */
 export function rejectUnlessManagementOperator(
-  message: Message<any>,
+  message: Message,
   root: Plugin,
   triggerConfig?: AITriggerConfig,
 ): string | null {

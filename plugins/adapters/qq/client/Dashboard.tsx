@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { apiFetch } from './utils/api'
 import { RefreshCw, Server, Wifi, WifiOff, Power, PowerOff, ChevronRight, ChevronDown, Hash, Loader2 } from 'lucide-react'
 
-interface BotInfo {
+interface EndpointRow {
   name: string
   connected: boolean
   guildCount: number
@@ -25,14 +25,14 @@ interface Channel {
 type Tab = 'overview' | 'guilds'
 
 export default function QQDashboard() {
-  const [bots, setBots] = useState<BotInfo[]>([])
+  const [endpoints, setEndpoints] = useState<EndpointRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [tab, setTab] = useState<Tab>('overview')
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({})
 
   // Guild browser state
-  const [selectedBot, setSelectedBot] = useState('')
+  const [selectedEndpoint, setSelectedEndpoint] = useState('')
   const [guilds, setGuilds] = useState<Guild[]>([])
   const [guildsLoading, setGuildsLoading] = useState(false)
   const [expandedGuild, setExpandedGuild] = useState<string | null>(null)
@@ -43,9 +43,9 @@ export default function QQDashboard() {
     setLoading(true)
     setError('')
     try {
-      const res = await apiFetch('/api/qq/bots')
+      const res = await apiFetch('/api/qq/endpoints')
       const json = await res.json()
-      if (json.success) setBots(json.data)
+      if (json.success) setEndpoints(json.data)
       else setError(json.error || '获取数据失败')
     } catch {
       setError('无法连接服务器')
@@ -60,7 +60,7 @@ export default function QQDashboard() {
     setActionLoading(prev => ({ ...prev, [name]: true }))
     try {
       const endpoint = connected ? 'disconnect' : 'connect'
-      const res = await apiFetch(`/api/qq/bots/${encodeURIComponent(name)}/${endpoint}`, { method: 'POST' })
+      const res = await apiFetch(`/api/qq/endpoints/${encodeURIComponent(name)}/${endpoint}`, { method: 'POST' })
       const json = await res.json()
       if (!json.success) setError(json.error || '操作失败')
       await fetchData()
@@ -71,14 +71,14 @@ export default function QQDashboard() {
     }
   }
 
-  const loadGuilds = async (botName: string) => {
-    setSelectedBot(botName)
+  const loadGuilds = async (endpointName: string) => {
+    setSelectedEndpoint(endpointName)
     setGuildsLoading(true)
     setGuilds([])
     setExpandedGuild(null)
     setChannels({})
     try {
-      const res = await apiFetch(`/api/qq/bots/${encodeURIComponent(botName)}/guilds`)
+      const res = await apiFetch(`/api/qq/endpoints/${encodeURIComponent(endpointName)}/guilds`)
       const json = await res.json()
       if (json.success) setGuilds(json.data)
       else setError(json.error || '获取频道失败')
@@ -95,7 +95,7 @@ export default function QQDashboard() {
     if (channels[guildId]) return
     setChannelsLoading(guildId)
     try {
-      const res = await apiFetch(`/api/qq/bots/${encodeURIComponent(selectedBot)}/guilds/${encodeURIComponent(guildId)}/channels`)
+      const res = await apiFetch(`/api/qq/endpoints/${encodeURIComponent(selectedEndpoint)}/guilds/${encodeURIComponent(guildId)}/channels`)
       const json = await res.json()
       if (json.success) setChannels(prev => ({ ...prev, [guildId]: json.data }))
     } catch { /* ignore */ } finally {
@@ -103,7 +103,7 @@ export default function QQDashboard() {
     }
   }
 
-  const onlineBots = bots.filter(b => b.connected)
+  const onlineEndpoints = endpoints.filter((e) => e.connected)
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -135,33 +135,33 @@ export default function QQDashboard() {
       {/* Overview Tab */}
       {tab === 'overview' && (
         <>
-          {!loading && !bots.length && !error && (
-            <div className="text-center text-gray-500 py-12">暂无 QQ 机器人实例</div>
+          {!loading && !endpoints.length && !error && (
+            <div className="text-center text-gray-500 py-12">暂无 QQ Endpoint 实例</div>
           )}
           <div className="grid gap-4 md:grid-cols-2">
-            {bots.map((bot) => (
-              <div key={bot.name} className="border rounded-lg p-4 bg-card shadow-sm">
+            {endpoints.map((endpoint) => (
+              <div key={endpoint.name} className="border rounded-lg p-4 bg-card shadow-sm">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="font-medium text-lg">{bot.name}</span>
-                  {bot.connected
+                  <span className="font-medium text-lg">{endpoint.name}</span>
+                  {endpoint.connected
                     ? <span className="flex items-center gap-1 text-green-600 text-sm"><Wifi className="w-4 h-4" /> 在线</span>
                     : <span className="flex items-center gap-1 text-gray-400 text-sm"><WifiOff className="w-4 h-4" /> 离线</span>}
                 </div>
                 <div className="grid grid-cols-1 gap-2 text-sm text-gray-600 mb-3">
-                  <div className="flex justify-between"><span>频道数</span><span className="font-mono">{bot.guildCount}</span></div>
+                  <div className="flex justify-between"><span>频道数</span><span className="font-mono">{endpoint.guildCount}</span></div>
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => toggleConnect(bot.name, bot.connected)}
-                    disabled={actionLoading[bot.name]}
-                    className={`flex items-center gap-1 px-3 py-1.5 rounded text-sm text-white ${bot.connected ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'} disabled:opacity-50`}>
-                    {actionLoading[bot.name]
+                    onClick={() => toggleConnect(endpoint.name, endpoint.connected)}
+                    disabled={actionLoading[endpoint.name]}
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded text-sm text-white ${endpoint.connected ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'} disabled:opacity-50`}>
+                    {actionLoading[endpoint.name]
                       ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      : bot.connected ? <PowerOff className="w-3.5 h-3.5" /> : <Power className="w-3.5 h-3.5" />}
-                    {bot.connected ? '断开' : '连接'}
+                      : endpoint.connected ? <PowerOff className="w-3.5 h-3.5" /> : <Power className="w-3.5 h-3.5" />}
+                    {endpoint.connected ? '断开' : '连接'}
                   </button>
-                  {bot.connected && (
-                    <button onClick={() => { setTab('guilds'); loadGuilds(bot.name) }}
+                  {endpoint.connected && (
+                    <button onClick={() => { setTab('guilds'); loadGuilds(endpoint.name) }}
                       className="flex items-center gap-1 px-3 py-1.5 rounded text-sm bg-gray-100 hover:bg-gray-200 text-gray-700">
                       <Hash className="w-3.5 h-3.5" /> 浏览频道
                     </button>
@@ -176,18 +176,18 @@ export default function QQDashboard() {
       {/* Guilds Tab */}
       {tab === 'guilds' && (
         <div>
-          {/* Bot selector */}
-          {onlineBots.length > 0 && (
+          {/* Endpoint selector */}
+          {onlineEndpoints.length > 0 && (
             <div className="mb-4 flex items-center gap-2">
               <label className="text-sm text-gray-500">选择机器人：</label>
-              <select value={selectedBot} onChange={(e) => loadGuilds(e.target.value)}
+              <select value={selectedEndpoint} onChange={(e) => loadGuilds(e.target.value)}
                 className="border rounded px-2 py-1 text-sm">
                 <option value="">--</option>
-                {onlineBots.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
+                {onlineEndpoints.map((e) => <option key={e.name} value={e.name}>{e.name}</option>)}
               </select>
             </div>
           )}
-          {!onlineBots.length && <div className="text-center text-gray-500 py-8">暂无在线机器人</div>}
+          {!onlineEndpoints.length && <div className="text-center text-gray-500 py-8">暂无在线 Endpoint</div>}
           {guildsLoading && <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>}
 
           {/* Guild → Channel tree */}
@@ -222,7 +222,7 @@ export default function QQDashboard() {
               ))}
             </div>
           )}
-          {!guildsLoading && selectedBot && !guilds.length && <div className="text-center text-gray-400 py-8">该机器人未加入任何频道</div>}
+          {!guildsLoading && selectedEndpoint && !guilds.length && <div className="text-center text-gray-400 py-8">该机器人未加入任何频道</div>}
         </div>
       )}
     </div>

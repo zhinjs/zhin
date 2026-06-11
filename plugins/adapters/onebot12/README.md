@@ -26,7 +26,7 @@ pnpm add @zhin.js/host-router
 
 ## 配置
 
-所有 Bot 使用 **同一 context：`onebot12`**，通过 **`connection`** 区分连接方式。
+所有 Endpoint 使用 **同一 context：`onebot12`**，通过 **`connection`** 区分连接方式。
 
 ### 正向 WebSocket
 
@@ -34,7 +34,7 @@ pnpm add @zhin.js/host-router
 plugins:
   - "@zhin.js/adapter-onebot12"
 
-bots:
+endpoints:
   - context: onebot12
     connection: ws
     name: ob12-bot
@@ -53,7 +53,7 @@ plugins:
   - "@zhin.js/host-router"
   - "@zhin.js/adapter-onebot12"
 
-bots:
+endpoints:
   - context: onebot12
     connection: webhook
     name: ob12-webhook-bot
@@ -69,7 +69,7 @@ plugins:
   - "@zhin.js/host-router"
   - "@zhin.js/adapter-onebot12"
 
-bots:
+endpoints:
   - context: onebot12
     connection: wss
     name: ob12-wss-bot

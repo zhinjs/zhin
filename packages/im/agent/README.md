@@ -298,7 +298,7 @@ ai:
 |------|------|
 | 会话 | `/compact` · `/tree` · `/tree N` · `/reset` |
 | 运维 | `/models` · `/health` |
-| 内省 | `/cmd` · `/bots` · `/bindings` · `/tools` · `/mcp` |
+| 内省 | `/cmd` · `/endpoints` · `/bindings` · `/tools` · `/mcp` |
 
 zhin-package CLI：`zhin packages`（`basic/cli`）。详见 [ADR 0010](../../docs/adr/0010-pi-coding-agent-harness-alignment.md)。
 

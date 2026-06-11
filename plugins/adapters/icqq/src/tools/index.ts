@@ -29,20 +29,21 @@ export function registerTools(
         parameters: {
           type: "object",
           properties: {
-            bot: { type: "string", description: "Bot QQ号" },
+            endpoint_id: { type: "string", description: "Endpoint QQ号", contextKey: 'endpointId' },
             group_id: { type: "number", description: "目标群号" },
             user_id: { type: "number", description: "目标成员 QQ号" },
             title: { type: "string", description: "头衔文字" },
             duration: { type: "number", description: "持续时间(秒)，-1永久" },
           },
-          required: ["bot", "group_id", "user_id", "title"],
+          required: ["endpoint_id", "group_id", "user_id", "title"],
         },
         platforms: ["icqq"],
         tags: ["icqq"],
+        permissions: ["platform(icqq,group_owner)"],
         execute: async (args: Record<string, any>) => {
-          const bot = icqq.bots.get(args.bot);
-          if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-          const resp = await bot.ipc.request(Actions.SET_GROUP_TITLE, {
+          const endpoint = icqq.endpoints.get(args.endpoint_id);
+          if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+          const resp = await endpoint.ipc.request(Actions.SET_GROUP_TITLE, {
             group_id: args.group_id,
             user_id: args.user_id,
             title: args.title,
@@ -64,18 +65,19 @@ export function registerTools(
         parameters: {
           type: "object",
           properties: {
-            bot: { type: "string", description: "Bot QQ号" },
+            endpoint_id: { type: "string", description: "Endpoint QQ号", contextKey: 'endpointId' },
             group_id: { type: "number", description: "目标群号" },
             content: { type: "string", description: "公告内容" },
           },
-          required: ["bot", "group_id", "content"],
+          required: ["endpoint_id", "group_id", "content"],
         },
         platforms: ["icqq"],
         tags: ["icqq"],
+        permissions: ["platform(icqq,group_admin)"],
         execute: async (args: Record<string, any>) => {
-          const bot = icqq.bots.get(args.bot);
-          if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-          const resp = await bot.ipc.request(Actions.GROUP_ANNOUNCE, {
+          const endpoint = icqq.endpoints.get(args.endpoint_id);
+          if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+          const resp = await endpoint.ipc.request(Actions.GROUP_ANNOUNCE, {
             group_id: args.group_id,
             content: args.content,
           });
@@ -95,18 +97,18 @@ export function registerTools(
         parameters: {
           type: "object",
           properties: {
-            bot: { type: "string", description: "Bot QQ号" },
+            endpoint_id: { type: "string", description: "Endpoint QQ号", contextKey: 'endpointId' },
             group_id: { type: "number", description: "目标群号" },
             user_id: { type: "number", description: "要戳的目标成员 QQ号" },
           },
-          required: ["bot", "group_id", "user_id"],
+          required: ["endpoint_id", "group_id", "user_id"],
         },
         platforms: ["icqq"],
         tags: ["icqq"],
         execute: async (args: Record<string, any>) => {
-          const bot = icqq.bots.get(args.bot);
-          if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-          const resp = await bot.ipc.request(Actions.GROUP_POKE, {
+          const endpoint = icqq.endpoints.get(args.endpoint_id);
+          if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+          const resp = await endpoint.ipc.request(Actions.GROUP_POKE, {
             group_id: args.group_id,
             user_id: args.user_id,
           });
@@ -126,17 +128,18 @@ export function registerTools(
         parameters: {
           type: "object",
           properties: {
-            bot: { type: "string", description: "Bot QQ号" },
+            endpoint_id: { type: "string", description: "Endpoint QQ号", contextKey: 'endpointId' },
             group_id: { type: "number", description: "目标群号" },
           },
-          required: ["bot", "group_id"],
+          required: ["endpoint_id", "group_id"],
         },
         platforms: ["icqq"],
         tags: ["icqq"],
+        permissions: ["platform(icqq,group_admin)"],
         execute: async (args: Record<string, any>) => {
-          const bot = icqq.bots.get(args.bot);
-          if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-          const resp = await bot.ipc.request(Actions.GROUP_MUTED_LIST, {
+          const endpoint = icqq.endpoints.get(args.endpoint_id);
+          if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+          const resp = await endpoint.ipc.request(Actions.GROUP_MUTED_LIST, {
             group_id: args.group_id,
           });
           if (!resp.ok) throw new Error(resp.error ?? "获取禁言列表失败");
@@ -157,18 +160,18 @@ export function registerTools(
         parameters: {
           type: "object",
           properties: {
-            bot: { type: "string", description: "Bot QQ号" },
+            endpoint_id: { type: "string", description: "Endpoint QQ号", contextKey: 'endpointId' },
             user_id: { type: "number", description: "要点赞的目标用户 QQ号" },
             times: { type: "number", description: "点赞次数（1-20），默认 1" },
           },
-          required: ["bot", "user_id"],
+          required: ["endpoint_id", "user_id"],
         },
         platforms: ["icqq"],
         tags: ["icqq"],
         execute: async (args: Record<string, any>) => {
-          const bot = icqq.bots.get(args.bot);
-          if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-          const resp = await bot.ipc.request(Actions.FRIEND_LIKE, {
+          const endpoint = icqq.endpoints.get(args.endpoint_id);
+          if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+          const resp = await endpoint.ipc.request(Actions.FRIEND_LIKE, {
             user_id: args.user_id,
             times: Math.min(args.times ?? 1, 20),
           });
@@ -188,19 +191,20 @@ export function registerTools(
         parameters: {
           type: "object",
           properties: {
-            bot: { type: "string", description: "Bot QQ号" },
+            endpoint_id: { type: "string", description: "Endpoint QQ号", contextKey: 'endpointId' },
             group_id: { type: "number", description: "目标群号" },
             enable: { type: "boolean", description: "true=开启，false=关闭，默认 true" },
           },
-          required: ["bot", "group_id"],
+          required: ["endpoint_id", "group_id"],
         },
         platforms: ["icqq"],
         tags: ["icqq"],
+        permissions: ["platform(icqq,group_owner)"],
         execute: async (args: Record<string, any>) => {
-          const bot = icqq.bots.get(args.bot);
-          if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
+          const endpoint = icqq.endpoints.get(args.endpoint_id);
+          if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
           const enable = args.enable ?? true;
-          const resp = await bot.ipc.request(Actions.GROUP_ALLOW_ANONY, {
+          const resp = await endpoint.ipc.request(Actions.GROUP_ALLOW_ANONY, {
             group_id: args.group_id,
             enable,
           });
@@ -220,17 +224,17 @@ export function registerTools(
         parameters: {
           type: "object",
           properties: {
-            bot: { type: "string", description: "Bot 名称" },
+            endpoint_id: { type: "string", description: "Endpoint 名称", contextKey: 'endpointId' },
             group_id: { type: "number", description: "群号" },
           },
-          required: ["bot", "group_id"],
+          required: ["endpoint_id", "group_id"],
         },
         platforms: ["icqq"],
         tags: ["icqq"],
         execute: async (args: Record<string, any>) => {
-          const bot = icqq.bots.get(args.bot);
-          if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-          const resp = await bot.ipc.request(Actions.GFS_LIST, {
+          const endpoint = icqq.endpoints.get(args.endpoint_id);
+          if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+          const resp = await endpoint.ipc.request(Actions.GFS_LIST, {
             group_id: args.group_id,
           });
           if (!resp.ok) throw new Error(resp.error ?? "获取群文件失败");
@@ -260,21 +264,21 @@ export function registerTools(
         parameters: {
           type: "object",
           properties: {
-            bot: { type: "string", description: "Bot 名称" },
+            endpoint_id: { type: "string", description: "Endpoint 名称", contextKey: 'endpointId' },
           },
-          required: ["bot"],
+          required: ["endpoint_id"],
         },
         platforms: ["icqq"],
         tags: ["icqq"],
         execute: async (args: Record<string, any>) => {
-          const bot = icqq.bots.get(args.bot);
-          if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-          const friends = Array.from(bot.friends.values()).map((f) => ({
+          const endpoint = icqq.endpoints.get(args.endpoint_id);
+          if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+          const friends = Array.from(endpoint.friends.values()).map((f) => ({
             user_id: f.user_id,
             nickname: f.nickname,
             remark: f.remark,
           }));
-          return { friends: friends.slice(0, 50), count: bot.friends.size };
+          return { friends: friends.slice(0, 50), count: endpoint.friends.size };
         },
       },
       pluginName,
@@ -286,26 +290,26 @@ export function registerTools(
     toolService.addTool(
       {
         name: "icqq_group_list",
-        description: "获取 Bot 的 QQ 群列表",
+        description: "获取 Endpoint 的 QQ 群列表",
         parameters: {
           type: "object",
           properties: {
-            bot: { type: "string", description: "Bot 名称" },
+            endpoint_id: { type: "string", description: "Endpoint 名称", contextKey: 'endpointId' },
           },
-          required: ["bot"],
+          required: ["endpoint_id"],
         },
         platforms: ["icqq"],
         tags: ["icqq"],
         execute: async (args: Record<string, any>) => {
-          const bot = icqq.bots.get(args.bot);
-          if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-          const groups = Array.from(bot.groups.values()).map((g) => ({
+          const endpoint = icqq.endpoints.get(args.endpoint_id);
+          if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+          const groups = Array.from(endpoint.groups.values()).map((g) => ({
             group_id: g.group_id,
             group_name: g.group_name,
             member_count: g.member_count,
             max_member_count: g.max_member_count,
           }));
-          return { groups: groups.slice(0, 50), count: bot.groups.size };
+          return { groups: groups.slice(0, 50), count: endpoint.groups.size };
         },
       },
       pluginName,
@@ -321,17 +325,17 @@ export function registerTools(
         parameters: {
           type: "object",
           properties: {
-            bot: { type: "string", description: "Bot QQ号" },
+            endpoint_id: { type: "string", description: "Endpoint QQ号", contextKey: 'endpointId' },
             group_id: { type: "number", description: "目标群号" },
           },
-          required: ["bot", "group_id"],
+          required: ["endpoint_id", "group_id"],
         },
         platforms: ["icqq"],
         tags: ["icqq"],
         execute: async (args: Record<string, any>) => {
-          const bot = icqq.bots.get(args.bot);
-          if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-          const resp = await bot.ipc.request(Actions.GROUP_SIGN, {
+          const endpoint = icqq.endpoints.get(args.endpoint_id);
+          if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+          const resp = await endpoint.ipc.request(Actions.GROUP_SIGN, {
             group_id: args.group_id,
           });
           return { success: resp.ok, message: resp.ok ? "群签到成功" : (resp.error ?? "签到失败") };
@@ -350,18 +354,18 @@ export function registerTools(
         parameters: {
           type: "object",
           properties: {
-            bot: { type: "string", description: "Bot QQ号" },
+            endpoint_id: { type: "string", description: "Endpoint QQ号", contextKey: 'endpointId' },
             group_id: { type: "number", description: "目标群号" },
             user_id: { type: "number", description: "要邀请的 QQ号" },
           },
-          required: ["bot", "group_id", "user_id"],
+          required: ["endpoint_id", "group_id", "user_id"],
         },
         platforms: ["icqq"],
         tags: ["icqq"],
         execute: async (args: Record<string, any>) => {
-          const bot = icqq.bots.get(args.bot);
-          if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-          const resp = await bot.ipc.request(Actions.GROUP_INVITE, {
+          const endpoint = icqq.endpoints.get(args.endpoint_id);
+          if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+          const resp = await endpoint.ipc.request(Actions.GROUP_INVITE, {
             group_id: args.group_id,
             user_id: args.user_id,
           });
@@ -381,19 +385,20 @@ export function registerTools(
         parameters: {
           type: "object",
           properties: {
-            bot: { type: "string", description: "Bot QQ号" },
+            endpoint_id: { type: "string", description: "Endpoint QQ号", contextKey: 'endpointId' },
             message_id: { type: "string", description: "消息 ID" },
             action: { type: "string", description: "add=设为精华, remove=移除精华" },
           },
-          required: ["bot", "message_id", "action"],
+          required: ["endpoint_id", "message_id", "action"],
         },
         platforms: ["icqq"],
         tags: ["icqq"],
+        permissions: ["platform(icqq,group_admin)"],
         execute: async (args: Record<string, any>) => {
-          const bot = icqq.bots.get(args.bot);
-          if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
+          const endpoint = icqq.endpoints.get(args.endpoint_id);
+          if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
           const action = args.action === "add" ? Actions.GROUP_ESSENCE_ADD : Actions.GROUP_ESSENCE_REMOVE;
-          const resp = await bot.ipc.request(action, {
+          const resp = await endpoint.ipc.request(action, {
             message_id: args.message_id,
           });
           return { success: resp.ok, message: resp.ok ? (args.action === "add" ? "已设为精华" : "已移除精华") : (resp.error ?? "操作失败") };

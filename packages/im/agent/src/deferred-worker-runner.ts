@@ -23,7 +23,7 @@ import { resolveWorkerSlowToolTimeout } from './zhin-agent/config.js';
 import type { ZhinAgentConfig, ExecApprovalMode } from './zhin-agent/config.js';
 import { createOwnerOrchestratedToolResultTransform } from './orchestrator/owner-confirm-orchestration.js';
 import { applyExecPolicyToTools } from './security/exec-policy.js';
-import type { ToolContext } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 import { DEFAULT_TOOL_SEARCH_ORCHESTRATOR_TOOLS } from './zhin-agent/config.js';
 
 const logger = new Logger(null, 'DeferredWorker');
@@ -38,7 +38,7 @@ export interface DeferredWorkerRunOptions {
   deferredCatalog: AgentTool[];
   workerBaseTools: AgentTool[];
   allToolsByName: Map<string, AgentTool>;
-  origin: ToolContext;
+  origin: Message;
   maxToolResults: number;
   maxIterations?: number;
   execPolicyConfig?: Required<ZhinAgentConfig>;
@@ -88,7 +88,7 @@ export class DeferredWorkerRunner {
     const query = (toolQuery?.trim() || goal).trim();
     const promptCtx: AgentPromptBuildContext = {
       slot: 'deferred_worker',
-      toolContext: origin,
+      commMessage: origin,
       deferred: { goal, toolQuery: query },
     };
     const loaded = resolveDeferredToolsForPlatform(
@@ -195,9 +195,9 @@ ${goal}${platformBlock}
         tools,
         userInput: goal,
         maxIterations,
-        toolContext: origin,
+        commMessage: origin,
         transformToolResult: createOwnerOrchestratedToolResultTransform({
-          toolContext: origin,
+          commMessage: origin,
           disableHardOrchestration: true,
         }),
       });

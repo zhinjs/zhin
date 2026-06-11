@@ -79,7 +79,7 @@ type JobAction =
   | { kind: 'handler'; handler: string; args?: Record<string, unknown> };
 
 type JobNotify =
-  | { channel: 'im'; platform: string; botId: string; sceneId: string; scope?: string }
+  | { channel: 'im'; platform: string; endpointId: string; sceneId: string; scope?: string }
   | { channel: 'ha'; service: string; target?: string }
   | { channel: 'silent' }
   | { channel: 'log' };
@@ -202,7 +202,7 @@ interface AssistantJob {
   "type": "state_changed",
   "payload": { "entity_id": "binary_sensor.door", "state": "on" },
   "action": { "kind": "agent", "prompt": "门开了，按 profile 规则处理" },
-  "notify": { "channel": "im", "platform": "icqq", "botId": "...", "sceneId": "..." }
+  "notify": { "channel": "im", "platform": "icqq", "endpointId": "...", "sceneId": "..." }
 }
 ```
 
@@ -245,7 +245,7 @@ assistant:
     notify:
       channel: im
       platform: icqq
-      botId: "8596238"
+      endpointId: "8596238"
       sceneId: "<master_private_scene>"
       scope: private
 ```

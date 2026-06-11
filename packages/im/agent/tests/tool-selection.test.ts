@@ -1,4 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+
+vi.mock('../../core/src/plugin.js', () => ({
+  getPlugin: () => ({ root: {} }),
+}));
+
+vi.mock('@zhin.js/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@zhin.js/core')>();
+  return {
+    ...actual,
+    resolveSubjectRoles: vi.fn((_plugin: unknown, message: { _roles?: string[] }) => ({
+      scope: 'group',
+      roles: message?._roles ?? ['user'],
+    })),
+  };
+});
 import type { AgentTool } from '@zhin.js/ai';
 import {
   ToolSelection,
@@ -7,8 +22,13 @@ import {
   createRestrictedToolView,
   normalizeTool,
 } from '../src/orchestrator/tool-selection.js';
+import {
+  registerDefaultGroupPlatformPermitChecker,
+  clearPlatformPermitCheckers,
+} from '@zhin.js/core';
 import { planToolRun } from '../src/zhin-agent/tool-runtime.js';
-import type { Tool, ToolContext } from '../src/orchestrator/types.js';
+import { mockCommMessage } from './helpers/mock-comm-message.js';
+import type { Tool } from '../src/orchestrator/types.js';
 import type { ZhinAgentConfig } from '../src/zhin-agent/config.js';
 
 function makeConfig(overrides: Partial<ZhinAgentConfig> = {}): Required<ZhinAgentConfig> {
@@ -62,16 +82,30 @@ function makeTool(overrides: Partial<Tool> = {}): Tool {
 }
 
 describe('tool-selection permissions', () => {
-  it('checks platform, scope and requiredAnyRole in one place', () => {
+  beforeEach(() => {
+    registerDefaultGroupPlatformPermitChecker('qq');
+  });
+
+  afterEach(() => {
+    clearPlatformPermitCheckers();
+  });
+
+  it('checks platform, scope and platform permit in one place', () => {
     const tool = makeTool({
       platforms: ['qq'],
       scopes: ['group'],
-      requiredAnyRole: ['group_admin'],
+      permissions: ['platform(qq,group_admin)'],
     });
+    const msg = {
+      $adapter: 'qq',
+      $endpoint: 'b1',
+      $sender: { id: 'u1', role: 'admin' },
+      $channel: { type: 'group', id: 'g1' },
+    } as any;
 
-    expect(canAccessTool(tool, { platform: 'qq', scope: 'group', roles: ['group_admin'] })).toBe(true);
-    expect(canAccessTool(tool, { platform: 'qq', scope: 'private', roles: ['group_admin'] })).toBe(false);
-    expect(canAccessTool(tool, { platform: 'qq', scope: 'group' })).toBe(false);
+    expect(canAccessTool(tool, msg)).toBe(true);
+    expect(canAccessTool(tool, { ...msg, $channel: { type: 'private', id: 'u1' } })).toBe(false);
+    expect(canAccessTool(tool, mockCommMessage({ adapter: 'qq', scope: 'group', senderId: undefined }))).toBe(false);
   });
 
   it('canAccessToolFromSkill ignores platform but keeps scope and permission', () => {
@@ -80,25 +114,25 @@ describe('tool-selection permissions', () => {
       scopes: ['private'],
     });
 
-    expect(canAccessToolFromSkill(tool, { platform: 'qq', scope: 'private' })).toBe(true);
-    expect(canAccessToolFromSkill(tool, { platform: 'qq', scope: 'group' })).toBe(false);
-    expect(canAccessTool(tool, { platform: 'qq', scope: 'private' })).toBe(false);
+    expect(canAccessToolFromSkill(tool, mockCommMessage({ scope: 'private' }))).toBe(true);
+    expect(canAccessToolFromSkill(tool, mockCommMessage({ scope: 'group' }))).toBe(false);
+    expect(canAccessTool(tool, mockCommMessage({ scope: 'private' }))).toBe(false);
   });
 });
 
 describe('normalizeTool', () => {
-  it('preserves agent metadata and requiredAnyRole', () => {
+  it('preserves agent metadata and permissions', () => {
     const agentTool = normalizeTool(makeTool({
       tags: ['files'],
       keywords: ['read'],
-      requiredAnyRole: ['trusted'],
+      permissions: ['role(trusted)'],
       preExecutable: true,
       kind: 'builtin',
     }));
 
     expect(agentTool.tags).toEqual(['files']);
     expect(agentTool.keywords).toEqual(['read']);
-    expect(agentTool.requiredAnyRole).toEqual(['trusted']);
+    expect(agentTool.permissions).toEqual(['role(trusted)']);
     expect(agentTool.preExecutable).toBe(true);
     expect(agentTool.kind).toBe('builtin');
   });
@@ -116,7 +150,10 @@ describe('normalizeTool', () => {
       },
       execute: async args => args,
     });
-    const agentTool = normalizeTool(tool, { sceneId: 'room-1', count: '2' } as ToolContext);
+    const agentTool = normalizeTool(tool, {
+      ...mockCommMessage({ sceneId: 'room-1' }),
+      extra: { count: '2' },
+    } as import('@zhin.js/core').AgentTurnMessage);
 
     expect(agentTool.parameters.properties).toEqual({ query: { type: 'string' } });
     expect(agentTool.parameters.required).toEqual(['query']);
@@ -129,9 +166,9 @@ describe('normalizeTool', () => {
 
   it('passes context to tools even when no contextKey parameters are declared', async () => {
     const tool = makeTool({
-      execute: async (_args, context) => context?.senderId,
+      execute: async (_args, commMessage) => commMessage?.$sender?.id,
     });
-    const agentTool = normalizeTool(tool, { senderId: 'u1' });
+    const agentTool = normalizeTool(tool, mockCommMessage({ senderId: 'u1' }));
 
     await expect(agentTool.execute({ path: 'a.txt' })).resolves.toBe('u1');
   });
@@ -161,12 +198,12 @@ describe('ToolSelection', () => {
 
   it('collects tools with skill priority, support tools and allow filtering', () => {
     const selection = new ToolSelection();
-    const context: ToolContext = { platform: 'qq', scope: 'group' };
+    const context = mockCommMessage({ scope: 'group' });
     const externalTools = [
       makeTool({ name: 'activate_skill', description: 'activate skill', keywords: ['deploy'] }),
       makeTool({ name: 'bash', description: 'run shell command', keywords: ['shell'] }),
       makeTool({ name: 'web_search', description: 'search web', keywords: ['search'] }),
-      makeTool({ name: 'blocked', description: 'blocked tool', requiredAnyRole: ['master'], keywords: ['blocked'] }),
+      makeTool({ name: 'blocked', description: 'blocked tool', permissions: ['role(master)'], keywords: ['blocked'] }),
     ];
     const skillTool = makeTool({ name: 'deploy_tool', description: 'deploy app', keywords: ['deploy'] });
     const deploySkill = { name: 'deploy', description: 'deploy', tools: [skillTool], pluginName: 'test', keywords: ['deploy'] };
@@ -189,7 +226,7 @@ describe('ToolSelection', () => {
 
   it('消息命中技能关键词时注入该技能工具（跨 IM 平台，如 QQ 上用 github_star）', () => {
     const selection = new ToolSelection();
-    const context: ToolContext = { platform: 'qq', scope: 'private' };
+    const context = mockCommMessage({ scope: 'private' });
     const externalTools = [
       makeTool({ name: 'activate_skill', description: 'activate a skill by name', keywords: [] }),
       makeTool({ name: 'bash', description: 'run shell', keywords: [] }),
@@ -229,7 +266,7 @@ describe('ToolSelection', () => {
 
   it('当 context.platform 命中技能 platforms 时自动注入 activate_skill（消息无需含技能名）', () => {
     const selection = new ToolSelection();
-    const context: ToolContext = { platform: 'icqq' };
+    const context = mockCommMessage({ adapter: 'icqq' });
     const externalTools = [
       makeTool({ name: 'activate_skill', description: 'activate a skill by name', keywords: [] }),
       makeTool({ name: 'bash', description: 'run shell', keywords: [] }),
@@ -265,7 +302,7 @@ describe('ToolSelection', () => {
 
   it('retains web_search after relevance filter for messages without search keywords', () => {
     const selection = new ToolSelection();
-    const context: ToolContext = { platform: 'qq' };
+    const context = mockCommMessage();
     const externalTools = [
       makeTool({ name: 'web_search', description: 'Bing HTML search', keywords: ['search', 'bing'] }),
     ];
@@ -279,7 +316,7 @@ describe('ToolSelection', () => {
 
   it('retains ask_user after relevance filter for messages without interaction keywords', () => {
     const selection = new ToolSelection();
-    const context: ToolContext = { platform: 'qq' };
+    const context = mockCommMessage();
     const externalTools = [
       makeTool({ name: 'ask_user', description: 'Ask bot owner', keywords: ['owner', 'confirm'] }),
     ];

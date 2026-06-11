@@ -10,7 +10,7 @@ const webServer = (): ConsoleWebServer => ({
 describe("dispatchConsoleRpc demo scope", () => {
   it("blocks config:save-yaml for demo scope", async () => {
     const payloads = await dispatchConsoleRpc(
-      { type: "config:save-yaml", requestId: 1, yaml: "bots: []" },
+      { type: "config:save-yaml", requestId: 1, yaml: "endpoints: []" },
       webServer,
       { authScope: "demo" },
     );

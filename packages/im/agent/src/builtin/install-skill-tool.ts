@@ -3,7 +3,7 @@
  */
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { Logger, type Tool, type ToolContext, type ToolParametersSchema, type ToolResult } from '@zhin.js/core';
+import { Logger, type Tool, type Message, type ToolParametersSchema, type ToolResult } from '@zhin.js/core';
 import { errMsg } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 
@@ -57,7 +57,7 @@ export class InstallSkillBuiltinTool extends BuiltinBaseTool {
     return this.opts.skillsInstallRoot ?? path.join(process.cwd(), 'skills');
   }
 
-  async run(args: Record<string, unknown>, _context?: ToolContext): Promise<ToolResult> {
+  async run(args: Record<string, unknown>, _commMessage?: Message): Promise<ToolResult> {
     const fetchFn = this.opts.fetchImpl ?? globalThis.fetch.bind(globalThis);
     try {
       const response = await fetchFn(args.url as string, {

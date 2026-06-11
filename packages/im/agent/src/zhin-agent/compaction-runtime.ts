@@ -10,12 +10,12 @@ import {
 import type { AgentMessage } from '@zhin.js/ai';
 import type { CompactionConfig } from './config.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
-import type { ZhinAgentPrivate, ToolContext } from './zhin-agent-private.js';
+import type { ZhinAgentPrivate, Message } from './zhin-agent-private.js';
 
 export interface CompactionRuntimeOptions {
   host: ZhinAgentPrivate;
   sessionId: string;
-  context: ToolContext;
+  commMessage: Message;
   model: Model;
   compactionConfig?: CompactionConfig;
   contextWindow: number;
@@ -113,7 +113,7 @@ export async function transformContextWithCompaction(
 
   if (result.wasCompacted) {
     const afterTokens = estimateAgentMessagesTokens(result.messages);
-    options.host.emitSessionCompactEvent(options.sessionId, options.context, options.mode ?? 'text', {
+    options.host.emitSessionCompactEvent(options.sessionId, options.commMessage, options.mode ?? 'text', {
       microSavedTokens: result.microSavedTokens,
       autoSavedTokens: result.autoSavedTokens,
       totalTokensBefore: beforeTokens,

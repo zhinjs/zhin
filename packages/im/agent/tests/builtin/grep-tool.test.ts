@@ -2,13 +2,15 @@
  * grep 内置工具（BuiltinBaseTool）单测（注入 exec，避免依赖本机 rg/grep）
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mockCommMessage } from '../helpers/mock-comm-message.js';
+
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { GrepExecAsync } from '../../src/builtin/grep-tool.js';
 import { createGrepTool, GrepBuiltinTool } from '../../src/builtin/grep-tool.js';
 import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
-import type { ToolContext } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 
 describe('GrepBuiltinTool', () => {
   let tmpDir: string;
@@ -98,7 +100,7 @@ describe('GrepBuiltinTool', () => {
       return { stdout: 'c.ts:1:foo\n', stderr: '' };
     };
     const tool = new GrepBuiltinTool(mockExec).toTool();
-    const ctx = { platform: 'test' } as ToolContext;
+    const ctx = mockCommMessage({ adapter: 'test' });
     const agentTool = normalizeTool(tool, ctx);
     const result = await agentTool.execute({ pattern: 'foo', path: tmpDir });
     expect(String(result)).toContain('foo');

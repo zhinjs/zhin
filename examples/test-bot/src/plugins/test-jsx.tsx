@@ -29,7 +29,7 @@ addCommand(
 
 addCommand(
   new MessageCommand("zt")
-    .desc("查看系统状态", "以 Satori 渲染卡片图展示主机、CPU、内存与 Bot 运行状态")
+    .desc("查看系统状态", "以 Satori 渲染卡片图展示主机、CPU、内存与 Endpoint 运行状态")
     .usage("zt")
     .examples("zt")
     .action(async () => {

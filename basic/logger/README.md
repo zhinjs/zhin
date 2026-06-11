@@ -1,6 +1,6 @@
 # @zhin.js/logger
 
-轻量级、高性能的日志库，为 Zhin Bot Framework 提供完整的日志记录功能。
+轻量级、高性能的日志库，为 Zhin Endpoint Framework 提供完整的日志记录功能。
 
 ## ✨ 特性
 
@@ -499,4 +499,4 @@ MIT
 
 ---
 
-一个专为 Zhin Bot Framework 设计的轻量级、高性能日志库。🚀
+一个专为 Zhin Endpoint Framework 设计的轻量级、高性能日志库。🚀

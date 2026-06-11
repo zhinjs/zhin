@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { mockCommMessage } from './helpers/mock-comm-message.js';
 import type { AgentTool } from '@zhin.js/ai';
 import {
   compactActivateSkillResultForToolSearch,
@@ -53,7 +54,7 @@ Use weather for cities.`;
     const built = buildOrchestratorAgentTools({
       allTools: [],
       config: DEFAULT_CONFIG,
-      context: { platform: 't' } as any,
+      commMessage: mockCommMessage({ adapter: 't' }),
       getDeferredCatalog: () => [],
       runWorker: async () => '{}',
     });

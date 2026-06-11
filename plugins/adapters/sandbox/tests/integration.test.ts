@@ -3,11 +3,11 @@
  *
  * 策略：使用框架基础 Adapter + 内联 Bot（模拟 SandboxBot 行为），
  * 因为 sandbox/src/index.ts 顶层调用 usePlugin() 无法在测试中导入。
- * 测试 Bot 接口合规性、消息格式化、发送/接收链路、生命周期的完整性。
+ * 测试 Endpoint 接口合规性、消息格式化、发送/接收链路、生命周期的完整性。
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { EventEmitter } from 'events';
-import { Adapter, Bot, Message, Plugin, segment, SendOptions, SendContent, MessageElement, MessageType } from 'zhin.js';
+import { Adapter, Endpoint, Message, Plugin, segment, SendOptions, SendContent, MessageElement, MessageType } from 'zhin.js';
 import { createAdapterTestSuite } from '../../../../packages/im/core/tests/adapter-harness.js';
 
 const FIXED_TS = 1700000000000;
@@ -32,7 +32,7 @@ interface SandboxConfig {
   owner?: string;
 }
 
-class TestSandboxBot extends EventEmitter implements Bot<SandboxConfig, { content: MessageElement[]; ts: number }> {
+class TestSandboxEndpoint extends EventEmitter implements Endpoint<SandboxConfig, { content: MessageElement[]; ts: number }> {
   $connected = false;
   get $id() { return this.$config.name; }
 
@@ -50,7 +50,7 @@ class TestSandboxBot extends EventEmitter implements Bot<SandboxConfig, { conten
       {
         $id: `${ts}`,
         $adapter: 'sandbox' as any,
-        $bot: `${this.$config.name}`,
+        $endpoint: `${this.$config.name}`,
         $sender: { id: `${id}`, name: 'mock' },
         $channel: { id: `${id}`, type },
         $content: content,
@@ -63,7 +63,7 @@ class TestSandboxBot extends EventEmitter implements Bot<SandboxConfig, { conten
           return await this.adapter.sendMessage({
             ...message.$channel,
             context: 'sandbox',
-            bot: `${this.$config.name}`,
+            endpoint: `${this.$config.name}`,
             content,
           });
         },
@@ -81,12 +81,12 @@ class TestSandboxBot extends EventEmitter implements Bot<SandboxConfig, { conten
   async $recallMessage(_id: string): Promise<void> {}
 }
 
-class TestSandboxAdapter extends Adapter<TestSandboxBot> {
+class TestSandboxAdapter extends Adapter<TestSandboxEndpoint> {
   constructor(plugin: Plugin) { super(plugin, 'sandbox', []); }
-  createBot(config: SandboxConfig): TestSandboxBot {
-    const bot = new TestSandboxBot(this, config);
-    this.bots.set(bot.$id, bot);
-    return bot;
+  createEndpoint(config: SandboxConfig): TestSandboxEndpoint {
+    const endpoint = new TestSandboxEndpoint(this, config);
+    this.endpoints.set(endpoint.$id, endpoint);
+    return endpoint;
   }
   async start(): Promise<void> {
     this.plugin.root.adapters.push(this.name);
@@ -97,12 +97,12 @@ class TestSandboxAdapter extends Adapter<TestSandboxBot> {
 
 createAdapterTestSuite<TestSandboxAdapter, { content: MessageElement[]; id: string; type: MessageType; ts: number }>({
   adapterName: 'sandbox',
-  botId: 'test-bot',
+  endpointId: 'test-endpoint',
   createAdapter: (plugin) => {
     const adapter = new TestSandboxAdapter(plugin);
     const mockWs = new MockWebSocket();
-    const bot = adapter.createBot({ context: 'sandbox', ws: mockWs as any, name: 'test-bot' });
-    bot.$connected = true;
+    const endpoint = adapter.createEndpoint({ context: 'sandbox', ws: mockWs as any, name: 'test-endpoint' });
+    endpoint.$connected = true;
     return adapter;
   },
   createRawEvent: () => ({
@@ -118,7 +118,7 @@ createAdapterTestSuite<TestSandboxAdapter, { content: MessageElement[]; id: stri
 describe('Sandbox 适配器特定测试', () => {
   let plugin: Plugin;
   let adapter: TestSandboxAdapter;
-  let bot: TestSandboxBot;
+  let endpoint: TestSandboxEndpoint;
   let mockWs: MockWebSocket;
 
   beforeEach(async () => {
@@ -127,47 +127,47 @@ describe('Sandbox 适配器特定测试', () => {
     await adapter.start();
 
     mockWs = new MockWebSocket();
-    bot = adapter.createBot({ context: 'sandbox', ws: mockWs as any, name: 'test-bot' });
-    await bot.$connect();
+    endpoint = adapter.createEndpoint({ context: 'sandbox', ws: mockWs as any, name: 'test-endpoint' });
+    await endpoint.$connect();
   });
 
   afterEach(async () => {
     try { await adapter.stop(); } catch { /* ignore */ }
   });
 
-  describe('Bot 接口合规性', () => {
+  describe('Endpoint 接口合规性', () => {
     it('$id 应为配置的 name', () => {
-      expect(bot.$id).toBe('test-bot');
+      expect(endpoint.$id).toBe('test-endpoint');
     });
 
     it('$connected 启动后应为 true', () => {
-      expect(bot.$connected).toBe(true);
+      expect(endpoint.$connected).toBe(true);
     });
 
-    it('应实现所有 Bot 接口方法', () => {
-      expect(typeof bot.$formatMessage).toBe('function');
-      expect(typeof bot.$connect).toBe('function');
-      expect(typeof bot.$disconnect).toBe('function');
-      expect(typeof bot.$sendMessage).toBe('function');
-      expect(typeof bot.$recallMessage).toBe('function');
+    it('应实现所有 Endpoint 接口方法', () => {
+      expect(typeof endpoint.$formatMessage).toBe('function');
+      expect(typeof endpoint.$connect).toBe('function');
+      expect(typeof endpoint.$disconnect).toBe('function');
+      expect(typeof endpoint.$sendMessage).toBe('function');
+      expect(typeof endpoint.$recallMessage).toBe('function');
     });
   });
 
   describe('生命周期', () => {
-    it('createBot 应注册 bot 到 bots Map', () => {
-      expect(adapter.bots.has('test-bot')).toBe(true);
+    it('createEndpoint 应注册 endpoint 到 endpoints Map', () => {
+      expect(adapter.endpoints.has('test-endpoint')).toBe(true);
     });
 
     it('$disconnect 应关闭 WebSocket', async () => {
-      await bot.$disconnect();
+      await endpoint.$disconnect();
       expect(mockWs.close).toHaveBeenCalled();
-      expect(bot.$connected).toBe(false);
+      expect(endpoint.$connected).toBe(false);
     });
   });
 
   describe('$formatMessage 消息格式化', () => {
     it('私聊消息应正确格式化', () => {
-      const msg = bot.$formatMessage({
+      const msg = endpoint.$formatMessage({
         content: [{ type: 'text', data: { text: '你好' } }],
         type: 'private',
         id: 'user-001',
@@ -176,7 +176,7 @@ describe('Sandbox 适配器特定测试', () => {
 
       expect(msg.$id).toBe('1700000000000');
       expect(msg.$adapter).toBe('sandbox');
-      expect(msg.$bot).toBe('test-bot');
+      expect(msg.$endpoint).toBe('test-endpoint');
       expect(msg.$sender.id).toBe('user-001');
       expect(msg.$channel.id).toBe('user-001');
       expect(msg.$channel.type).toBe('private');
@@ -186,7 +186,7 @@ describe('Sandbox 适配器特定测试', () => {
     });
 
     it('群聊消息应正确格式化', () => {
-      const msg = bot.$formatMessage({
+      const msg = endpoint.$formatMessage({
         content: [{ type: 'text', data: { text: 'hi' } }],
         type: 'group',
         id: 'group-001',
@@ -198,7 +198,7 @@ describe('Sandbox 适配器特定测试', () => {
     });
 
     it('$timestamp 应为正整数', () => {
-      const msg = bot.$formatMessage({
+      const msg = endpoint.$formatMessage({
         content: [{ type: 'text', data: { text: 'test' } }],
         type: 'private',
         id: 'user-001',
@@ -210,9 +210,9 @@ describe('Sandbox 适配器特定测试', () => {
 
   describe('消息发送', () => {
     it('$sendMessage 应通过 WebSocket 发送', async () => {
-      await bot.$sendMessage({
+      await endpoint.$sendMessage({
         context: 'sandbox',
-        bot: 'test-bot',
+        endpoint: 'test-endpoint',
         id: 'user-001',
         type: 'private',
         content: [{ type: 'text', data: { text: 'hello' } }],
@@ -221,10 +221,10 @@ describe('Sandbox 适配器特定测试', () => {
     });
 
     it('未连接时 $sendMessage 应返回空字符串', async () => {
-      bot.$connected = false;
-      const result = await bot.$sendMessage({
+      endpoint.$connected = false;
+      const result = await endpoint.$sendMessage({
         context: 'sandbox',
-        bot: 'test-bot',
+        endpoint: 'test-endpoint',
         id: 'user-001',
         type: 'private',
         content: [{ type: 'text', data: { text: 'hello' } }],
@@ -236,7 +236,7 @@ describe('Sandbox 适配器特定测试', () => {
   describe('消息接收链路', () => {
     it('emit message.receive 应触发 plugin.dispatch', async () => {
       const dispatchSpy = vi.spyOn(plugin, 'dispatch');
-      const msg = bot.$formatMessage({
+      const msg = endpoint.$formatMessage({
         content: [{ type: 'text', data: { text: '你好' } }],
         type: 'private',
         id: 'user-001',
@@ -256,7 +256,7 @@ describe('Sandbox 适配器特定测试', () => {
   describe('$reply 路由', () => {
     it('$reply 应走 adapter.sendMessage', async () => {
       const sendMessageSpy = vi.spyOn(adapter, 'sendMessage');
-      const msg = bot.$formatMessage({
+      const msg = endpoint.$formatMessage({
         content: [{ type: 'text', data: { text: '你好' } }],
         type: 'private',
         id: 'user-001',

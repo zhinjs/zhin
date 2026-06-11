@@ -10,18 +10,18 @@ import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { hostGet, loadHostHttpConfig } from '../utils/host-http.js';
 
-async function getFirstBotForAdapter(
+async function getFirstEndpointForAdapter(
   baseUrl: string,
   token: string,
   adapter: string,
 ): Promise<string | null> {
   const res = await hostGet<{ name: string; adapter: string }[]>(
     { baseUrl, token },
-    '/bots',
+    '/endpoints',
   );
   if (!res.ok || !Array.isArray(res.data)) return null;
-  const bot = res.data.find((b) => b.adapter === adapter);
-  return bot?.name ?? null;
+  const ep = res.data.find((b) => b.adapter === adapter);
+  return ep?.name ?? null;
 }
 
 export const sendCommand = new Command('send')
@@ -30,12 +30,12 @@ export const sendCommand = new Command('send')
   .argument('[content...]', '消息内容（可多词，用空格连接）；不传则从 stdin 读取一行')
   .option('-s, --scene <type>', '场景类型：private | group | channel', 'private')
   .option('-a, --adapter <name>', '适配器名称（icqq、discord、process 等），默认 process', 'process')
-  .option('-b, --bot <id>', '指定 Bot ID，不传则使用该适配器下第一个在线 Bot')
+  .option('-e, --endpoint <id>', '指定 Endpoint ID，不传则使用该适配器下第一个在线 Endpoint')
   .action(async (sceneId: string, contentParts: string[]) => {
     const opts = sendCommand.opts();
     const sceneType = (opts.scene as string) || 'private';
     const adapterName = (opts.adapter as string) || 'process';
-    const botId = opts.bot as string | undefined;
+    const endpointId = opts.endpoint as string | undefined;
 
     let content: string;
     if (Array.isArray(contentParts) && contentParts.length > 0) {
@@ -60,19 +60,19 @@ export const sendCommand = new Command('send')
     }
 
     const token = httpOpts.token;
-    let bot_id = botId;
-    if (!bot_id) {
-      const bot = await getFirstBotForAdapter(httpOpts.baseUrl, token, adapterName);
-      if (!bot) {
-        logger.error(`未找到适配器 "${adapterName}" 下的 Bot，请使用 --bot <id> 指定`);
+    let endpoint_id = endpointId;
+    if (!endpoint_id) {
+      const ep = await getFirstEndpointForAdapter(httpOpts.baseUrl, token, adapterName);
+      if (!ep) {
+        logger.error(`未找到适配器 "${adapterName}" 下的 Endpoint，请使用 --endpoint <id> 指定`);
         process.exit(1);
       }
-      bot_id = bot;
+      endpoint_id = ep;
     }
 
     const body = {
       context: adapterName,
-      bot: bot_id,
+      endpoint: endpoint_id,
       id: sceneId,
       type: sceneType,
       content,

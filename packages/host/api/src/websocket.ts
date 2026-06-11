@@ -9,12 +9,12 @@ export interface ConsoleWebServer {
 }
 export type WebServer = ConsoleWebServer;
 import {
-  initBotHub,
-  setBotHubWss,
+  initEndpointHub,
+  setEndpointHubWss,
   sendCatchUpToClient,
   getPendingRequest,
   markRequestConsumedByPlatformId,
-} from "./bot-hub.js";
+} from "./endpoint-hub.js";
 import { broadcastSse } from "./sse-hub.js";
 import {
   markRequestsConsumed,
@@ -23,8 +23,8 @@ import {
   listUnconsumedRequests,
   listUnconsumedNotices,
   getRequestRowById,
-} from "./bot-persistence.js";
-import { removePendingRequest } from "./bot-hub.js";
+} from "./endpoint-persistence.js";
+import { removePendingRequest } from "./endpoint-hub.js";
 import { getCronManager, generateCronJobId } from "@zhin.js/agent";
 import type { CronJobRecord } from "@zhin.js/agent";
 import { createNodeProjectFs } from "./rpc/project-fs.js";
@@ -37,7 +37,7 @@ function isIcqqAdapterKey(adapter: string): boolean {
   return adapter === "icqq" || adapter.endsWith("/icqq") || adapter.includes("adapter-icqq");
 }
 
-function collectBotsList(): Array<{
+function collectEndpointsList(): Array<{
   name: string;
   adapter: string;
   connected: boolean;
@@ -45,7 +45,7 @@ function collectBotsList(): Array<{
   pendingRequestCount?: number;
   pendingNoticeCount?: number;
 }> {
-  const bots: Array<{
+  const endpoints: Array<{
     name: string;
     adapter: string;
     connected: boolean;
@@ -58,20 +58,20 @@ function collectBotsList(): Array<{
     seenAdapterNames.add(key);
     const adapter = root.inject(name as keyof Plugin.Contexts);
     if (adapter instanceof Adapter) {
-      for (const [botName, bot] of adapter.bots.entries()) {
-        bots.push({
-          name: botName,
+      for (const [endpointId, endpoint] of adapter.endpoints.entries()) {
+        endpoints.push({
+          name: endpointId,
           adapter: key,
-          connected: !!(bot as { $connected?: boolean }).$connected,
-          status: (bot as { $connected?: boolean }).$connected ? "online" : "offline",
+          connected: !!(endpoint as { $connected?: boolean }).$connected,
+          status: (endpoint as { $connected?: boolean }).$connected ? "online" : "offline",
         });
       }
     }
   }
-  return bots;
+  return endpoints;
 }
 
-async function collectBotsListWithPending(): Promise<
+async function collectEndpointsListWithPending(): Promise<
   Array<{
     name: string;
     adapter: string;
@@ -81,7 +81,7 @@ async function collectBotsListWithPending(): Promise<
     pendingNoticeCount: number;
   }>
 > {
-  const bots = collectBotsList();
+  const endpoints = collectEndpointsList();
   let reqs: Awaited<ReturnType<typeof listUnconsumedRequests>> = [];
   let notices: Awaited<ReturnType<typeof listUnconsumedNotices>> = [];
   try {
@@ -89,15 +89,15 @@ async function collectBotsListWithPending(): Promise<
   } catch {
     // ignore
   }
-  return bots.map((bot) => {
+  return endpoints.map((ep) => {
     const pendingRequestCount = reqs.filter(
-      (r) => r.adapter === bot.adapter && r.bot_id === bot.name
+      (r) => r.adapter === ep.adapter && r.endpoint_id === ep.name
     ).length;
     const pendingNoticeCount = notices.filter(
-      (n) => n.adapter === bot.adapter && n.bot_id === bot.name
+      (n) => n.adapter === ep.adapter && n.endpoint_id === ep.name
     ).length;
     return {
-      ...bot,
+      ...ep,
       pendingRequestCount,
       pendingNoticeCount,
     };
@@ -161,10 +161,10 @@ function getConfigFilePath(): string {
   return path.resolve(process.cwd(), primaryFile);
 }
 
-/** Bot hub + persistence hooks without binding /server WebSocket. */
+/** Endpoint hub + persistence hooks without binding /server WebSocket. */
 export function initConsoleHub(webServer: WebServer) {
-  setBotHubWss(webServer.ws);
-  const disposeBotHub = initBotHub(root as {
+  setEndpointHubWss(webServer.ws);
+  const disposeBotHub = initEndpointHub(root as {
     on: (ev: string, fn: (...a: unknown[]) => void) => void;
     off?: (ev: string, fn: (...a: unknown[]) => void) => void;
     adapters?: Iterable<string>;
@@ -421,28 +421,28 @@ export async function handleWebSocketMessage(
       }
       break;
 
-    // bot:list / bot:info / bot:sendMessage → rpc/handlers-core.ts
+    // endpoint:list / endpoint:info / endpoint:sendMessage → rpc/handlers-core.ts
 
-    case "bot:friends":
-    case "bot:groups": {
+    case "endpoint:friends":
+    case "endpoint:groups": {
       try {
         const d = message.data || {};
-        const { adapter, botId } = d;
-        if (!adapter || !botId) {
-          ws.send(JSON.stringify({ requestId, error: "adapter and botId required" }));
+        const { adapter, endpointId } = d;
+        if (!adapter || !endpointId) {
+          ws.send(JSON.stringify({ requestId, error: "adapter and endpointId required" }));
           break;
         }
         const ad = root.inject(adapter as keyof Plugin.Contexts);
-        const bot = ad instanceof Adapter ? ad.bots.get(botId) : undefined;
-        if (!bot) {
-          ws.send(JSON.stringify({ requestId, error: "bot not found" }));
+        const endpoint = ad instanceof Adapter ? ad.endpoints.get(endpointId) : undefined;
+        if (!endpoint) {
+          ws.send(JSON.stringify({ requestId, error: "endpoint not found" }));
           break;
         }
-        const botAny = bot as unknown as Record<string, unknown>;
-        if (type === "bot:friends") {
+        const endpointAny = endpoint as unknown as Record<string, unknown>;
+        if (type === "endpoint:friends") {
           let friends: Array<{ user_id: number; nickname: string; remark: string }> = [];
           if (isIcqqAdapterKey(adapter)) {
-            const map = (botAny.friends ?? botAny.fl) as
+            const map = (endpointAny.friends ?? endpointAny.fl) as
               | Map<number | string, Record<string, unknown>>
               | undefined;
             friends = Array.from((map || new Map()).values()).map((f) => ({
@@ -450,8 +450,8 @@ export async function handleWebSocketMessage(
               nickname: String(f.nickname ?? ""),
               remark: String(f.remark ?? ""),
             }));
-          } else if (typeof botAny.getFriendList === "function") {
-            const raw = await (botAny.getFriendList as () => Promise<unknown>)();
+          } else if (typeof endpointAny.getFriendList === "function") {
+            const raw = await (endpointAny.getFriendList as () => Promise<unknown>)();
             const arr = Array.isArray(raw)
               ? raw
               : raw && typeof raw === "object" && "data" in raw
@@ -476,15 +476,15 @@ export async function handleWebSocketMessage(
         } else {
           let groups: Array<{ group_id: number; name: string }> = [];
           if (isIcqqAdapterKey(adapter)) {
-            const map = (botAny.groups ?? botAny.gl) as
+            const map = (endpointAny.groups ?? endpointAny.gl) as
               | Map<number | string, Record<string, unknown>>
               | undefined;
             groups = Array.from((map || new Map()).values()).map((g) => ({
               group_id: Number(g.group_id),
               name: String(g.name ?? g.group_id ?? ""),
             }));
-          } else if (typeof botAny.getGroupList === "function") {
-            const raw = await (botAny.getGroupList as () => Promise<unknown>)();
+          } else if (typeof endpointAny.getGroupList === "function") {
+            const raw = await (endpointAny.getGroupList as () => Promise<unknown>)();
             const arr = Array.isArray(raw)
               ? raw
               : raw && typeof raw === "object" && "data" in raw
@@ -512,12 +512,12 @@ export async function handleWebSocketMessage(
       break;
     }
 
-    case "bot:channels": {
+    case "endpoint:channels": {
       try {
         const d = message.data || {};
-        const { adapter, botId } = d;
-        if (!adapter || !botId) {
-          ws.send(JSON.stringify({ requestId, error: "adapter and botId required" }));
+        const { adapter, endpointId } = d;
+        if (!adapter || !endpointId) {
+          ws.send(JSON.stringify({ requestId, error: "adapter and endpointId required" }));
           break;
         }
         if (isIcqqAdapterKey(adapter)) {
@@ -525,22 +525,22 @@ export async function handleWebSocketMessage(
           break;
         }
         const ad = root.inject(adapter as keyof Plugin.Contexts);
-        const bot = ad instanceof Adapter ? ad.bots.get(botId) : undefined;
-        if (!bot) {
-          ws.send(JSON.stringify({ requestId, error: "bot not found" }));
+        const endpoint = ad instanceof Adapter ? ad.endpoints.get(endpointId) : undefined;
+        if (!endpoint) {
+          ws.send(JSON.stringify({ requestId, error: "endpoint not found" }));
           break;
         }
         const channels: Array<{ id: string; name: string }> = [];
-        const botMethods = bot as unknown as Record<string, unknown>;
-        if (adapter === "qq" && typeof botMethods.getGuilds === "function" && typeof botMethods.getChannels === "function") {
-          const qqBot = bot as unknown as {
+        const endpointMethods = endpoint as unknown as Record<string, unknown>;
+        if (adapter === "qq" && typeof endpointMethods.getGuilds === "function" && typeof endpointMethods.getChannels === "function") {
+          const qqEndpoint = endpoint as unknown as {
             getGuilds(): Promise<Array<Record<string, unknown>>>;
             getChannels(guildId: string): Promise<Array<Record<string, unknown>>>;
           };
-          const guilds = (await qqBot.getGuilds()) || [];
+          const guilds = (await qqEndpoint.getGuilds()) || [];
           for (const g of guilds) {
             const gid = String(g?.id ?? g?.guild_id ?? g);
-            const chs = (await qqBot.getChannels(gid)) || [];
+            const chs = (await qqEndpoint.getChannels(gid)) || [];
             for (const c of chs) {
               channels.push({
                 id: String(c?.id ?? c?.channel_id ?? c),
@@ -550,7 +550,7 @@ export async function handleWebSocketMessage(
           }
         } else if (ad && typeof (ad as Record<string, unknown>).listChannels === "function") {
           const adMethods = ad as Record<string, (...args: unknown[]) => unknown>;
-          const result = await adMethods.listChannels(botId) as Record<string, unknown> | unknown[];
+          const result = await adMethods.listChannels(endpointId) as Record<string, unknown> | unknown[];
           if (Array.isArray(result)) channels.push(...result.map((c) => {
             const row = c as Record<string, unknown>;
             return { id: String(row?.id ?? c), name: String(row?.name ?? row?.id ?? "") };
@@ -564,26 +564,26 @@ export async function handleWebSocketMessage(
       break;
     }
 
-    case "bot:deleteFriend": {
+    case "endpoint:deleteFriend": {
       try {
         const d = message.data || {};
-        const { adapter, botId, userId } = d;
-        if (!adapter || !botId || !userId) {
-          ws.send(JSON.stringify({ requestId, error: "adapter, botId, userId required" }));
+        const { adapter, endpointId, userId } = d;
+        if (!adapter || !endpointId || !userId) {
+          ws.send(JSON.stringify({ requestId, error: "adapter, endpointId, userId required" }));
           break;
         }
         const ad = root.inject(adapter as keyof Plugin.Contexts);
-        const bot = ad instanceof Adapter ? ad.bots.get(botId) : undefined;
-        if (!bot) {
-          ws.send(JSON.stringify({ requestId, error: "bot not found" }));
+        const endpoint = ad instanceof Adapter ? ad.endpoints.get(endpointId) : undefined;
+        if (!endpoint) {
+          ws.send(JSON.stringify({ requestId, error: "endpoint not found" }));
           break;
         }
-        const botAny = bot as unknown as Record<string, unknown>;
-        if (adapter === "icqq" && typeof botAny.deleteFriend === "function") {
-          await (botAny.deleteFriend as (id: number) => Promise<void>)(Number(userId));
+        const endpointAny = endpoint as unknown as Record<string, unknown>;
+        if (adapter === "icqq" && typeof endpointAny.deleteFriend === "function") {
+          await (endpointAny.deleteFriend as (id: number) => Promise<void>)(Number(userId));
           ws.send(JSON.stringify({ requestId, data: { success: true } }));
-        } else if (adapter === "icqq" && typeof botAny.delete_friend === "function") {
-          await (botAny.delete_friend as (id: number) => Promise<void>)(Number(userId));
+        } else if (adapter === "icqq" && typeof endpointAny.delete_friend === "function") {
+          await (endpointAny.delete_friend as (id: number) => Promise<void>)(Number(userId));
           ws.send(JSON.stringify({ requestId, data: { success: true } }));
         } else {
           ws.send(JSON.stringify({ requestId, error: "当前适配器暂不支持删除好友" }));
@@ -594,15 +594,15 @@ export async function handleWebSocketMessage(
       break;
     }
 
-    case "bot:requests": {
+    case "endpoint:requests": {
       try {
         const d = message.data || {};
-        const { adapter, botId } = d;
-        if (!adapter || !botId) {
-          ws.send(JSON.stringify({ requestId, error: "adapter and botId required" }));
+        const { adapter, endpointId } = d;
+        if (!adapter || !endpointId) {
+          ws.send(JSON.stringify({ requestId, error: "adapter and endpointId required" }));
           break;
         }
-        const rows = await listRequestsForBot(String(adapter), String(botId));
+        const rows = await listRequestsForBot(String(adapter), String(endpointId));
         ws.send(
           JSON.stringify({
             requestId,
@@ -625,34 +625,34 @@ export async function handleWebSocketMessage(
       break;
     }
 
-    case "bot:requestApprove":
-    case "bot:requestReject": {
+    case "endpoint:requestApprove":
+    case "endpoint:requestReject": {
       try {
         const d = message.data || {};
-        const { adapter, botId, requestId: platformReqId, remark, reason } = d;
-        if (!adapter || !botId || !platformReqId) {
+        const { adapter, endpointId, requestId: platformReqId, remark, reason } = d;
+        if (!adapter || !endpointId || !platformReqId) {
           ws.send(
             JSON.stringify({
               requestId,
-              error: "adapter, botId, requestId required",
+              error: "adapter, endpointId, requestId required",
             })
           );
           break;
         }
-        const req = getPendingRequest(String(adapter), String(botId), String(platformReqId));
+        const req = getPendingRequest(String(adapter), String(endpointId), String(platformReqId));
         if (!req) {
           ws.send(
             JSON.stringify({
               requestId,
               error:
-                "request not in memory (restart?) — use bot:requestConsumed to dismiss",
+                "request not in memory (restart?) — use endpoint:requestConsumed to dismiss",
             })
           );
           break;
         }
-        if (type === "bot:requestApprove") await req.$approve(remark);
+        if (type === "endpoint:requestApprove") await req.$approve(remark);
         else await req.$reject(reason);
-        await markRequestConsumedByPlatformId(String(adapter), String(botId), String(platformReqId));
+        await markRequestConsumedByPlatformId(String(adapter), String(endpointId), String(platformReqId));
         ws.send(JSON.stringify({ requestId, data: { success: true } }));
       } catch (error: unknown) {
         ws.send(JSON.stringify({ requestId, error: error instanceof Error ? error.message : String(error) }));
@@ -660,7 +660,7 @@ export async function handleWebSocketMessage(
       break;
     }
 
-    case "bot:requestConsumed": {
+    case "endpoint:requestConsumed": {
       try {
         const d = message.data || {};
         const ids = d.ids ?? (d.id != null ? [d.id] : []);
@@ -672,7 +672,7 @@ export async function handleWebSocketMessage(
         for (const id of numIds) {
           const row = await getRequestRowById(id);
           if (row && row.consumed === 0) {
-            removePendingRequest(row.adapter, row.bot_id, row.platform_request_id);
+            removePendingRequest(row.adapter, row.endpoint_id, row.platform_request_id);
           }
         }
         await markRequestsConsumed(numIds);
@@ -683,7 +683,7 @@ export async function handleWebSocketMessage(
       break;
     }
 
-    case "bot:noticeConsumed": {
+    case "endpoint:noticeConsumed": {
       try {
         const d = message.data || {};
         const ids = d.ids ?? (d.id != null ? [d.id] : []);
@@ -699,12 +699,12 @@ export async function handleWebSocketMessage(
       break;
     }
 
-    case "bot:inboxMessages": {
+    case "endpoint:inboxMessages": {
       try {
         const d = message.data || {};
-        const { adapter, botId, channelId, channelType, limit = 50, beforeId, beforeTs } = d;
-        if (!adapter || !botId || !channelId || !channelType) {
-          ws.send(JSON.stringify({ requestId, error: "adapter, botId, channelId, channelType required" }));
+        const { adapter, endpointId, channelId, channelType, limit = 50, beforeId, beforeTs } = d;
+        if (!adapter || !endpointId || !channelId || !channelType) {
+          ws.send(JSON.stringify({ requestId, error: "adapter, endpointId, channelId, channelType required" }));
           break;
         }
         let db: DatabaseFeature;
@@ -727,7 +727,7 @@ export async function handleWebSocketMessage(
         }
         const where: Record<string, unknown> = {
           adapter: String(adapter),
-          bot_id: String(botId),
+          endpoint_id: String(endpointId),
           channel_id: String(channelId),
           channel_type: String(channelType),
         };
@@ -751,12 +751,12 @@ export async function handleWebSocketMessage(
       break;
     }
 
-    case "bot:inboxRequests": {
+    case "endpoint:inboxRequests": {
       try {
         const d = message.data || {};
-        const { adapter, botId, limit = 30, offset = 0 } = d;
-        if (!adapter || !botId) {
-          ws.send(JSON.stringify({ requestId, error: "adapter and botId required" }));
+        const { adapter, endpointId, limit = 30, offset = 0 } = d;
+        if (!adapter || !endpointId) {
+          ws.send(JSON.stringify({ requestId, error: "adapter and endpointId required" }));
           break;
         }
         let db: DatabaseFeature;
@@ -779,7 +779,7 @@ export async function handleWebSocketMessage(
           ws.send(JSON.stringify({ requestId, data: { requests: [], inboxEnabled: false } }));
           break;
         }
-        const where = { adapter: String(adapter), bot_id: String(botId) };
+        const where = { adapter: String(adapter), endpoint_id: String(endpointId) };
         const limitNum = Math.min(Number(limit) || 30, 100);
         const offsetNum = Math.max(0, Number(offset) || 0);
         let q = RequestModel.select().where(where).orderBy("created_at", "DESC").limit(limitNum).offset(offsetNum);
@@ -805,12 +805,12 @@ export async function handleWebSocketMessage(
       break;
     }
 
-    case "bot:inboxNotices": {
+    case "endpoint:inboxNotices": {
       try {
         const d = message.data || {};
-        const { adapter, botId, limit = 30, offset = 0 } = d;
-        if (!adapter || !botId) {
-          ws.send(JSON.stringify({ requestId, error: "adapter and botId required" }));
+        const { adapter, endpointId, limit = 30, offset = 0 } = d;
+        if (!adapter || !endpointId) {
+          ws.send(JSON.stringify({ requestId, error: "adapter and endpointId required" }));
           break;
         }
         let db: DatabaseFeature;
@@ -833,7 +833,7 @@ export async function handleWebSocketMessage(
           ws.send(JSON.stringify({ requestId, data: { notices: [], inboxEnabled: false } }));
           break;
         }
-        const where = { adapter: String(adapter), bot_id: String(botId) };
+        const where = { adapter: String(adapter), endpoint_id: String(endpointId) };
         const limitNum = Math.min(Number(limit) || 30, 100);
         const offsetNum = Math.max(0, Number(offset) || 0);
         let q = NoticeModel.select().where(where).orderBy("created_at", "DESC").limit(limitNum).offset(offsetNum);
@@ -859,16 +859,16 @@ export async function handleWebSocketMessage(
       break;
     }
 
-    case "bot:groupMembers":
-    case "bot:groupKick":
-    case "bot:groupMute":
-    case "bot:groupAdmin": {
+    case "endpoint:groupMembers":
+    case "endpoint:groupKick":
+    case "endpoint:groupMute":
+    case "endpoint:groupAdmin": {
       try {
         const d = message.data || {};
-        const { adapter, botId, groupId, userId, duration, enable } = d;
-        if (!adapter || !botId || !groupId) {
+        const { adapter, endpointId, groupId, userId, duration, enable } = d;
+        if (!adapter || !endpointId || !groupId) {
           ws.send(
-            JSON.stringify({ requestId, error: "adapter, botId, groupId required" })
+            JSON.stringify({ requestId, error: "adapter, endpointId, groupId required" })
           );
           break;
         }
@@ -879,14 +879,14 @@ export async function handleWebSocketMessage(
         }
         const adMethods = ad as Record<string, ((...args: unknown[]) => unknown) | undefined>;
         const gid = String(groupId);
-        if (type === "bot:groupMembers") {
+        if (type === "endpoint:groupMembers") {
           if (typeof adMethods.listMembers !== "function") {
             ws.send(JSON.stringify({ requestId, error: "adapter does not support listMembers" }));
             break;
           }
-          const r = await adMethods.listMembers(botId, gid);
+          const r = await adMethods.listMembers(endpointId, gid);
           ws.send(JSON.stringify({ requestId, data: r }));
-        } else if (type === "bot:groupKick") {
+        } else if (type === "endpoint:groupKick") {
           if (!userId) {
             ws.send(JSON.stringify({ requestId, error: "userId required" }));
             break;
@@ -895,9 +895,9 @@ export async function handleWebSocketMessage(
             ws.send(JSON.stringify({ requestId, error: "adapter does not support kickMember" }));
             break;
           }
-          await adMethods.kickMember(botId, gid, String(userId));
+          await adMethods.kickMember(endpointId, gid, String(userId));
           ws.send(JSON.stringify({ requestId, data: { success: true } }));
-        } else if (type === "bot:groupMute") {
+        } else if (type === "endpoint:groupMute") {
           if (!userId) {
             ws.send(JSON.stringify({ requestId, error: "userId required" }));
             break;
@@ -906,7 +906,7 @@ export async function handleWebSocketMessage(
             ws.send(JSON.stringify({ requestId, error: "adapter does not support muteMember" }));
             break;
           }
-          await adMethods.muteMember(botId, gid, String(userId), duration ?? 600);
+          await adMethods.muteMember(endpointId, gid, String(userId), duration ?? 600);
           ws.send(JSON.stringify({ requestId, data: { success: true } }));
         } else {
           if (!userId) {
@@ -917,7 +917,7 @@ export async function handleWebSocketMessage(
             ws.send(JSON.stringify({ requestId, error: "adapter does not support setAdmin" }));
             break;
           }
-          await adMethods.setAdmin(botId, gid, String(userId), enable !== false);
+          await adMethods.setAdmin(endpointId, gid, String(userId), enable !== false);
           ws.send(JSON.stringify({ requestId, data: { success: true } }));
         }
       } catch (error: unknown) {

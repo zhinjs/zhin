@@ -3,7 +3,7 @@ import { usePlugin, type Plugin } from "zhin.js";
 import type { WebSocket } from "ws";
 import {
   SandboxWsHostAdapter,
-  resolveSandboxBot,
+  resolveSandboxEndpoint,
   type SandboxWsSocket,
 } from "./sandbox-ws.js";
 import { PageManager } from "@zhin.js/host-api";
@@ -27,7 +27,7 @@ export class SandboxAdapter extends SandboxWsHostAdapter {
 
   constructor(plugin: ReturnType<typeof usePlugin>) {
     const appConfig = (plugin.inject("config")?.getPrimary() ?? {}) as Record<string, unknown>;
-    super(plugin, resolveSandboxBot(appConfig));
+    super(plugin, resolveSandboxEndpoint(appConfig));
   }
 
   override async start(): Promise<void> {
@@ -48,13 +48,13 @@ export class SandboxAdapter extends SandboxWsHostAdapter {
       logger.debug(
         `New sandbox connection from ${req.socket?.remoteAddress ?? "unknown"}`,
       );
-      const bot = this.acceptWebSocket(ws as SandboxWsSocket);
+      const endpoint = this.acceptWebSocket(ws as SandboxWsSocket);
       ws.on("close", () => {
-        logger.debug(`Sandbox connection closed: ${bot.$config.name}`);
-        this.bots.delete(bot.$id);
+        logger.debug(`Sandbox connection closed: ${endpoint.$config.name}`);
+        this.endpoints.delete(endpoint.$id);
       });
       ws.on("error", (error) => {
-        logger.error(`Sandbox WebSocket error for ${bot.$config.name}:`, error);
+        logger.error(`Sandbox WebSocket error for ${endpoint.$config.name}:`, error);
       });
     });
 
@@ -73,8 +73,8 @@ provide({
     return adapter;
   },
   dispose: async (adapter: SandboxAdapter) => {
-    for (const bot of adapter.bots.values()) {
-      await bot.$disconnect();
+    for (const endpoint of adapter.endpoints.values()) {
+      await endpoint.$disconnect();
     }
     adapter.wss?.close();
     await adapter.stop();
@@ -95,9 +95,9 @@ plugin.useContext("web", (pageManager) => {
 });
 
 export {
-  SandboxWsBot,
+  SandboxWsEndpoint,
   SandboxWsHostAdapter,
-  resolveSandboxBot,
+  resolveSandboxEndpoint,
   bindSandboxWsSocket,
   parseSandboxWsPayload,
   type ResolvedSandboxBot,

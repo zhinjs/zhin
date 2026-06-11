@@ -20,7 +20,7 @@ describe('minimal-bot Stable 配置契约', () => {
   });
 
   it('bots 为空（Sandbox 由 Console 沙盒页连接时自动创建）', () => {
-    expect(configText).toMatch(/bots:\s*\[\]/);
+    expect(configText).toMatch(/endpoints:\s*\[\]/);
     expect(configText).not.toMatch(/context:\s*sandbox/);
   });
 

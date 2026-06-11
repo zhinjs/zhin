@@ -1,14 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { Plugin } from "zhin.js";
 import { WeChatMPAdapter } from "../src/adapter.js";
-import { WeChatMPBot } from "../src/bot.js";
+import { WeChatMPEndpoint } from "../src/endpoint.js";
 
 describe("WeChat MP passive reply XML", () => {
   it("buildTextReply 不应出现双层 <xml> 嵌套", () => {
     const plugin = new Plugin("/test/wechat-reply-xml.ts");
     const mockRouter = { post: () => {}, get: () => {} };
     const adapter = new WeChatMPAdapter(plugin, mockRouter as never);
-    const bot = new WeChatMPBot(adapter, mockRouter as never, {
+    const endpoint = new WeChatMPEndpoint(adapter, mockRouter as never, {
       context: "wechat-mp",
       name: "t",
       appId: "aid",
@@ -18,7 +18,7 @@ describe("WeChat MP passive reply XML", () => {
     });
 
     const xml = (
-      bot as unknown as {
+      endpoint as unknown as {
         buildTextReply: (
           msg: { FromUserName: string; ToUserName: string },
           text: string,

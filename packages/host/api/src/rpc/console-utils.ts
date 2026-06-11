@@ -35,13 +35,13 @@ export function findPluginByConfigKey(rootPlugin: Plugin, configKey: string): Pl
   return null;
 }
 
-export function collectBotsList(root: Plugin): Array<{
+export function collectEndpointsList(root: Plugin): Array<{
   name: string;
   adapter: string;
   connected: boolean;
   status: "online" | "offline";
 }> {
-  const bots: Array<{
+  const endpoints: Array<{
     name: string;
     adapter: string;
     connected: boolean;
@@ -54,25 +54,25 @@ export function collectBotsList(root: Plugin): Array<{
     seenAdapterNames.add(key);
     const adapter = root.inject(name as keyof Plugin.Contexts);
     if (adapter instanceof Adapter) {
-      for (const [botName, bot] of adapter.bots.entries()) {
-        bots.push({
-          name: botName,
+      for (const [endpointId, endpoint] of adapter.endpoints.entries()) {
+        endpoints.push({
+          name: endpointId,
           adapter: key,
-          connected: !!(bot as { $connected?: boolean }).$connected,
-          status: (bot as { $connected?: boolean }).$connected ? "online" : "offline",
+          connected: !!(endpoint as { $connected?: boolean }).$connected,
+          status: (endpoint as { $connected?: boolean }).$connected ? "online" : "offline",
         });
       }
     }
   }
-  return bots;
+  return endpoints;
 }
 
-export async function collectBotsListWithPending(root: Plugin) {
-  const bots = collectBotsList(root);
+export async function collectEndpointsListWithPending(root: Plugin) {
+  const endpoints = collectEndpointsList(root);
   let reqs: Awaited<ReturnType<typeof listUnconsumedRequests>> = [];
   let notices: Awaited<ReturnType<typeof listUnconsumedNotices>> = [];
   try {
-    const persistence = await import("../bot-persistence.js");
+    const persistence = await import("../endpoint-persistence.js");
     [reqs, notices] = await Promise.all([
       persistence.listUnconsumedRequests(),
       persistence.listUnconsumedNotices(),
@@ -80,13 +80,13 @@ export async function collectBotsListWithPending(root: Plugin) {
   } catch {
     // 无 DB 时忽略
   }
-  return bots.map((bot) => ({
-    ...bot,
+  return endpoints.map((ep) => ({
+    ...ep,
     pendingRequestCount: reqs.filter(
-      (r) => r.adapter === bot.adapter && r.bot_id === bot.name,
+      (r) => r.adapter === ep.adapter && r.endpoint_id === ep.name,
     ).length,
     pendingNoticeCount: notices.filter(
-      (n) => n.adapter === bot.adapter && n.bot_id === bot.name,
+      (n) => n.adapter === ep.adapter && n.endpoint_id === ep.name,
     ).length,
   }));
 }

@@ -2,12 +2,12 @@
  * QQ 官方机器人适配器集成测试
  *
  * 策略：使用框架基础 Adapter + 内联 Bot（复刻 QQBot 核心逻辑），
- * 因为 QQBot 继承 qq-official-bot SDK 的 Bot 类，其构造器校验 receiver_type 会崩溃。
- * 测试 Bot 接口合规性、消息格式化、发送/接收链路、生命周期的完整性。
+ * 因为 QQBot 继承 qq-official-endpoint SDK 的 Endpoint 类，其构造器校验 receiver_type 会崩溃。
+ * 测试 Endpoint 接口合规性、消息格式化、发送/接收链路、生命周期的完整性。
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { EventEmitter } from 'events';
-import { Adapter, Bot, Message, Plugin, segment, SendOptions, SendContent, MessageType } from 'zhin.js';
+import { Adapter, Endpoint, Message, Plugin, segment, SendOptions, SendContent, MessageType } from 'zhin.js';
 import { createAdapterTestSuite } from '../../../../packages/im/core/tests/adapter-harness.js';
 
 const FIXED_TS = 1700000000000;
@@ -34,7 +34,7 @@ interface QQRawMessage {
   sender: { user_id: string; user_name: string };
 }
 
-class TestQQBot extends EventEmitter implements Bot<QQConfig, QQRawMessage> {
+class TestQQEndpoint extends EventEmitter implements Endpoint<QQConfig, QQRawMessage> {
   $connected = false;
   get $id() { return this.$config.name; }
 
@@ -54,7 +54,7 @@ class TestQQBot extends EventEmitter implements Bot<QQConfig, QQRawMessage> {
     const result = Message.from(msg, {
       $id: msg.message_id?.toString(),
       $adapter: 'qq' as any,
-      $bot: this.$config.name,
+      $endpoint: this.$config.name,
       $sender: {
         id: msg.sender.user_id?.toString(),
         name: msg.sender.user_name?.toString(),
@@ -75,7 +75,7 @@ class TestQQBot extends EventEmitter implements Bot<QQConfig, QQRawMessage> {
         return await this.adapter.sendMessage({
           ...result.$channel,
           context: 'qq',
-          bot: this.$config.name,
+          endpoint: this.$config.name,
           content,
         });
       },
@@ -90,12 +90,12 @@ class TestQQBot extends EventEmitter implements Bot<QQConfig, QQRawMessage> {
   async $recallMessage(_id: string): Promise<void> {}
 }
 
-class TestQQAdapter extends Adapter<TestQQBot> {
+class TestQQAdapter extends Adapter<TestQQEndpoint> {
   constructor(plugin: Plugin) { super(plugin, 'qq', []); }
-  createBot(config: QQConfig): TestQQBot {
-    const bot = new TestQQBot(this, config);
-    this.bots.set(bot.$id, bot);
-    return bot;
+  createEndpoint(config: QQConfig): TestQQEndpoint {
+    const endpoint = new TestQQEndpoint(this, config);
+    this.endpoints.set(endpoint.$id, endpoint);
+    return endpoint;
   }
   async start(): Promise<void> {
     this.plugin.root.adapters.push(this.name);
@@ -125,11 +125,11 @@ function createQQRawEvent(overrides: any = {}): QQRawMessage {
 
 createAdapterTestSuite<TestQQAdapter, QQRawMessage>({
   adapterName: 'qq',
-  botId: 'test-bot',
+  endpointId: 'test-endpoint',
   createAdapter: (plugin) => {
     const adapter = new TestQQAdapter(plugin);
-    const bot = adapter.createBot({ context: 'qq', name: 'test-bot', appid: 'mock', secret: 'mock' });
-    bot.$connected = true;
+    const endpoint = adapter.createEndpoint({ context: 'qq', name: 'test-endpoint', appid: 'mock', secret: 'mock' });
+    endpoint.$connected = true;
     return adapter;
   },
   createRawEvent: () => createQQRawEvent(),
@@ -140,62 +140,62 @@ createAdapterTestSuite<TestQQAdapter, QQRawMessage>({
 describe('QQ 适配器特定测试', () => {
   let plugin: Plugin;
   let adapter: TestQQAdapter;
-  let bot: TestQQBot;
+  let endpoint: TestQQEndpoint;
 
   beforeEach(async () => {
     plugin = new Plugin('/test/qq-integration.ts');
     adapter = new TestQQAdapter(plugin);
     await adapter.start();
 
-    bot = adapter.createBot({ context: 'qq', name: 'test-bot', appid: 'mock', secret: 'mock' });
-    await bot.$connect();
+    endpoint = adapter.createEndpoint({ context: 'qq', name: 'test-endpoint', appid: 'mock', secret: 'mock' });
+    await endpoint.$connect();
   });
 
   afterEach(async () => {
     try { await adapter.stop(); } catch { /* ignore */ }
   });
 
-  describe('Bot 接口合规性', () => {
+  describe('Endpoint 接口合规性', () => {
     it('$id 应为配置的 name', () => {
-      expect(bot.$id).toBe('test-bot');
+      expect(endpoint.$id).toBe('test-endpoint');
     });
 
     it('$connected 启动后应为 true', () => {
-      expect(bot.$connected).toBe(true);
+      expect(endpoint.$connected).toBe(true);
     });
 
-    it('应实现所有 Bot 接口方法', () => {
-      expect(typeof bot.$formatMessage).toBe('function');
-      expect(typeof bot.$connect).toBe('function');
-      expect(typeof bot.$disconnect).toBe('function');
-      expect(typeof bot.$sendMessage).toBe('function');
-      expect(typeof bot.$recallMessage).toBe('function');
+    it('应实现所有 Endpoint 接口方法', () => {
+      expect(typeof endpoint.$formatMessage).toBe('function');
+      expect(typeof endpoint.$connect).toBe('function');
+      expect(typeof endpoint.$disconnect).toBe('function');
+      expect(typeof endpoint.$sendMessage).toBe('function');
+      expect(typeof endpoint.$recallMessage).toBe('function');
     });
   });
 
   describe('生命周期', () => {
-    it('start() 应注册 bot', () => {
-      expect(adapter.bots.has('test-bot')).toBe(true);
+    it('start() 应注册 endpoint', () => {
+      expect(adapter.endpoints.has('test-endpoint')).toBe(true);
     });
 
-    it('stop() 应清空 bots', async () => {
+    it('stop() 应清空 endpoints', async () => {
       await adapter.stop();
-      expect(adapter.bots.size).toBe(0);
+      expect(adapter.endpoints.size).toBe(0);
     });
 
-    it('stop() 后 bot 应 disconnected', async () => {
+    it('stop() 后 endpoint 应 disconnected', async () => {
       await adapter.stop();
-      expect(bot.$connected).toBe(false);
+      expect(endpoint.$connected).toBe(false);
     });
   });
 
   describe('$formatMessage 消息格式化', () => {
     it('群消息应正确格式化', () => {
       const raw = createQQRawEvent();
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
 
       expect(msg.$adapter).toBe('qq');
-      expect(msg.$bot).toBe('test-bot');
+      expect(msg.$endpoint).toBe('test-endpoint');
       expect(msg.$sender.id).toBe('99999');
       expect(msg.$channel.id).toBe('88888');
       expect(msg.$channel.type).toBe('group');
@@ -210,7 +210,7 @@ describe('QQ 适配器特定测试', () => {
         group_id: undefined,
         user_id: '77777',
       });
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
       expect(msg.$channel.type).toBe('private');
     });
 
@@ -220,13 +220,13 @@ describe('QQ 适配器特定测试', () => {
         group_id: undefined,
         channel_id: 'guild-ch-001',
       });
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
       expect(msg.$channel.type).toBe('channel');
     });
 
     it('$timestamp 应为正整数', () => {
       const raw = createQQRawEvent();
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
       expect(msg.$timestamp).toBe(FIXED_TS);
     });
   });
@@ -235,7 +235,7 @@ describe('QQ 适配器特定测试', () => {
     it('sendMessage 应返回字符串 ID', async () => {
       const result = await adapter.sendMessage({
         context: 'qq',
-        bot: 'test-bot',
+        endpoint: 'test-endpoint',
         id: '88888',
         type: 'group',
         content: [{ type: 'text', data: { text: 'hello' } }],
@@ -249,7 +249,7 @@ describe('QQ 适配器特定测试', () => {
     it('emit message.receive 应触发 plugin.dispatch', async () => {
       const dispatchSpy = vi.spyOn(plugin, 'dispatch');
       const raw = createQQRawEvent();
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
 
       adapter.emit('message.receive', msg);
       await new Promise(r => setTimeout(r, 50));
@@ -265,7 +265,7 @@ describe('QQ 适配器特定测试', () => {
     it('$reply 应走 adapter.sendMessage', async () => {
       const sendMessageSpy = vi.spyOn(adapter, 'sendMessage');
       const raw = createQQRawEvent();
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
 
       sendMessageSpy.mockResolvedValue('reply-id');
       const result = await msg.$reply('hi');

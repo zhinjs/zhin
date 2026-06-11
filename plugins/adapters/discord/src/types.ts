@@ -47,13 +47,13 @@ export interface DiscordInteractionsConfig extends DiscordConfigBase {
   };
 }
 
-export type DiscordBotConfig = DiscordGatewayConfig | DiscordInteractionsConfig;
+export type DiscordEndpointConfig = DiscordGatewayConfig | DiscordInteractionsConfig;
 
-export interface DiscordBot {
+export interface DiscordEndpoint {
   $config: DiscordGatewayConfig;
 }
 
-export interface DiscordInteractionsBot {
+export interface DiscordInteractionsEndpoint {
   $config: DiscordInteractionsConfig;
 }
 

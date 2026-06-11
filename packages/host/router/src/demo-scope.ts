@@ -18,9 +18,9 @@ export type TokenRegistryConfig = {
 export const DEMO_RPC_ALLOWLIST = new Set([
   "ping",
   "entries:get",
-  "bot:list",
-  "bot:info",
-  "bot:sendMessage",
+  "endpoint:list",
+  "endpoint:info",
+  "endpoint:sendMessage",
 ]);
 
 const DEMO_HTTP_GET_PREFIXES = [

@@ -10,10 +10,13 @@ import {
   upgradeAgentSessionTreeData,
   type AgentDbQueryable,
 } from './upgrade-agent-db-schema.js';
+import { registerEndpointIdColumnMigrationHook } from './upgrade-endpoint-id-schema.js';
 
 export function registerDbUpgrade(refs: AIServiceRefs): void {
   const plugin = getPlugin();
   const { useContext, root, logger } = plugin;
+
+  registerEndpointIdColumnMigrationHook(logger);
 
   useContext('ai', (ai) => {
     const configService = root.inject('config');

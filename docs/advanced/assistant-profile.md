@@ -33,7 +33,7 @@ defaults:
   notify:
     channel: im
     platform: icqq
-    botId: "8596238"
+    endpointId: "8596238"
     sceneId: "1659488338"
     scope: private
   notifyOnFailure: false

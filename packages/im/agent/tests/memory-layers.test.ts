@@ -12,6 +12,7 @@ import {
   resetMemoryMigrationForTests,
   getSessionMemoryDir,
 } from '../src/memory-layers.js';
+import { mockCommMessage } from './helpers/mock-comm-message.js';
 
 describe('memory-layers', () => {
   let tmpDir: string;
@@ -98,26 +99,26 @@ describe('memory-layers', () => {
     expect(classifyMemoryWritePath(globalPath, tmpDir)).toBe('global');
     expect(classifyMemoryWritePath(sessionPath, tmpDir)).toBe('session');
 
-    const denied = checkMemoryWritePath(globalPath, {
-      platform: 'icqq',
-      botId: 'b',
+    const denied = checkMemoryWritePath(globalPath, mockCommMessage({
+      adapter: 'icqq',
+      endpoint: 'b',
       senderId: 'user1',
-      roles: ['other'],
-    } as never, tmpDir);
+      sender_roles: ['user'],
+    }), tmpDir);
     expect(denied.allowed).toBe(false);
 
-    const ok = checkMemoryWritePath(globalPath, {
-      platform: 'icqq',
-      botId: 'b',
+    const ok = checkMemoryWritePath(globalPath, mockCommMessage({
+      adapter: 'icqq',
+      endpoint: 'b',
       senderId: 'owner1',
-      roles: ['master'],
-    } as never, tmpDir);
+      sender_roles: ['master'],
+    }), tmpDir);
     expect(ok.allowed).toBe(true);
 
-    const sessionOk = checkMemoryWritePath(sessionPath, {
+    const sessionOk = checkMemoryWritePath(sessionPath, mockCommMessage({
       senderId: 'user1',
-      roles: ['other'],
-    } as never, tmpDir);
+      sender_roles: ['user'],
+    }), tmpDir);
     expect(sessionOk.allowed).toBe(true);
   });
 });

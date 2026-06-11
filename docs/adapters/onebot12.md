@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/onebot12/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/onebot12/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=f771580be41e7b18 -->
+<!-- sync-adapter-docs:sha256=b234c9c66a924b23 -->
 
 # @zhin.js/adapter-onebot12
 
@@ -38,7 +38,7 @@ pnpm add @zhin.js/host-router
 
 ## 配置
 
-所有 Bot 使用 **同一 context：`onebot12`**，通过 **`connection`** 区分连接方式。
+所有 Endpoint 使用 **同一 context：`onebot12`**，通过 **`connection`** 区分连接方式。
 
 ### 正向 WebSocket
 
@@ -46,7 +46,7 @@ pnpm add @zhin.js/host-router
 plugins:
   - "@zhin.js/adapter-onebot12"
 
-bots:
+endpoints:
   - context: onebot12
     connection: ws
     name: ob12-bot
@@ -65,7 +65,7 @@ plugins:
   - "@zhin.js/host-router"
   - "@zhin.js/adapter-onebot12"
 
-bots:
+endpoints:
   - context: onebot12
     connection: webhook
     name: ob12-webhook-bot
@@ -81,7 +81,7 @@ plugins:
   - "@zhin.js/host-router"
   - "@zhin.js/adapter-onebot12"
 
-bots:
+endpoints:
   - context: onebot12
     connection: wss
     name: ob12-wss-bot

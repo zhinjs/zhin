@@ -34,7 +34,7 @@ describe('DatabaseContextRepository (sqlite)', () => {
     const session = await sessionStore.getOrCreateActive({
       session_key: 'test:private:u1',
       platform: 'test',
-      bot_id: 'b1',
+      endpoint_id: 'b1',
       scene_id: 'u1',
       scene_type: 'private',
     });

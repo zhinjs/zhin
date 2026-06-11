@@ -62,7 +62,7 @@
 
 **核心接口**:
 ```typescript
-interface Bot<C extends Bot.Config = Bot.Config, M = any> {
+interface Bot<C extends Endpoint.Config = Endpoint.Config, M = any> {
   config: C
   connected: boolean
   $connect(): Promise<void>

@@ -5,8 +5,8 @@ import {
   enableTypingIndicator,
 } from '../src/typing-indicator.js';
 
-// Mock IcqqBot
-const createMockBot = () => ({
+// Mock IcqqEndpoint
+const createMockEndpoint = () => ({
   $id: '75318',
   logger: {
     debug: vi.fn(),
@@ -23,10 +23,10 @@ const createMockBot = () => ({
 
 describe('ICQQTypingIndicatorManager', () => {
   let manager: ICQQTypingIndicatorManager;
-  let mockBot: ReturnType<typeof createMockBot>;
+  let mockBot: ReturnType<typeof createMockEndpoint>;
 
   beforeEach(() => {
-    mockBot = createMockBot();
+    mockBot = createMockEndpoint();
     manager = new ICQQTypingIndicatorManager(mockBot as any);
   });
 
@@ -166,14 +166,14 @@ describe('ICQQTypingIndicatorManager', () => {
 
 describe('createICQQTypingIndicatorManager', () => {
   it('应该创建管理器', () => {
-    const mockBot = createMockBot();
+    const mockBot = createMockEndpoint();
     const manager = createICQQTypingIndicatorManager(mockBot as any);
 
     expect(manager).toBeDefined();
   });
 
   it('应该支持自定义配置', () => {
-    const mockBot = createMockBot();
+    const mockBot = createMockEndpoint();
     const manager = createICQQTypingIndicatorManager(mockBot as any, {
       defaultEmoji: '👍',
     });
@@ -184,8 +184,8 @@ describe('createICQQTypingIndicatorManager', () => {
 });
 
 describe('enableTypingIndicator', () => {
-  it('应该为 Bot 启用 Typing Indicator', () => {
-    const mockBot = createMockBot();
+  it('应该为 Endpoint 启用 Typing Indicator', () => {
+    const mockBot = createMockEndpoint();
     const manager = enableTypingIndicator(mockBot as any);
 
     expect(manager).toBeDefined();
@@ -193,7 +193,7 @@ describe('enableTypingIndicator', () => {
   });
 
   it('应该复用已有的管理器', () => {
-    const mockBot = createMockBot();
+    const mockBot = createMockEndpoint();
     const manager1 = enableTypingIndicator(mockBot as any);
     const manager2 = enableTypingIndicator(mockBot as any);
 
@@ -201,7 +201,7 @@ describe('enableTypingIndicator', () => {
   });
 
   it('应该支持自定义配置', () => {
-    const mockBot = createMockBot();
+    const mockBot = createMockEndpoint();
     const manager = enableTypingIndicator(mockBot as any, {
       defaultEmoji: '👍',
     });

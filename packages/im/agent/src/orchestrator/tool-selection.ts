@@ -9,10 +9,13 @@ import { CachedToolFilter } from '@zhin.js/ai';
 import type { SkillRegistry } from './skill-registry.js';
 import {
   canAccessTool as coreCanAccessTool,
-  roleSatisfies,
-  resolveRolesFromContext,
+  checkBuiltinPermitList,
+  isBuiltinPermit,
+  resolveContextKey,
+  senderRolesFromMessage,
+  type Message,
 } from '@zhin.js/core';
-import type { Skill, Tool, ToolContext } from './types.js';
+import type { Skill, Tool } from './types.js';
 import type { ZhinAgentConfig } from '../zhin-agent/config.js';
 
 const logger = new Logger(null, 'ZhinAgent:ToolSelection');
@@ -89,14 +92,21 @@ export interface RestrictedToolViewOptions {
   disabledNames?: readonly string[];
 }
 
-export function canAccessTool(tool: Tool, context: ToolContext): boolean {
-  return coreCanAccessTool(tool as import('@zhin.js/core').Tool, context);
+export function canAccessTool(tool: Tool, message?: Message): boolean {
+  return coreCanAccessTool(tool as import('@zhin.js/core').Tool, message);
 }
 
 /** 技能关联工具：跨 IM 平台可用（如 QQ 上 star 仓库），仅校验 scope/权限。 */
-export function canAccessToolFromSkill(tool: Tool, context: ToolContext): boolean {
-  if (tool.scopes?.length && (!context.scope || !tool.scopes.includes(context.scope))) return false;
-  return roleSatisfies(resolveRolesFromContext(context), tool.requiredAnyRole);
+export function canAccessToolFromSkill(tool: Tool, message?: Message): boolean {
+  const scope = (message?.$channel?.type || 'private') as import('./types.js').ToolScope;
+  if (tool.scopes?.length && !tool.scopes.includes(scope)) return false;
+  if (!tool.permissions?.length) return true;
+  if (!message) return false;
+  const roles = senderRolesFromMessage(message);
+  if (tool.permissions.every((p) => isBuiltinPermit(p))) {
+    return checkBuiltinPermitList(tool.permissions, message, roles);
+  }
+  return tool.permissions.every((p) => checkBuiltinPermitList([p], message, roles));
 }
 
 export function createRestrictedToolView(
@@ -136,20 +146,19 @@ function isIMTool(input: unknown): input is Tool {
   const obj = input as Partial<Tool>;
   return 'platforms' in obj
     || 'scopes' in obj
-    || Array.isArray(obj.requiredAnyRole)
     || 'permissions' in obj
     || 'hidden' in obj
     || 'source' in obj;
 }
 
-function stripContextParameters(tool: Tool, context?: ToolContext): {
+function stripContextParameters(tool: Tool, message?: Message): {
   parameters: AgentTool['parameters'];
   injections: Array<{ paramName: string; contextKey: string; paramType: string }>;
 } {
   const injections: Array<{ paramName: string; contextKey: string; paramType: string }> = [];
   let parameters: AgentTool['parameters'] = tool.parameters;
 
-  if (!context || !tool.parameters?.properties) {
+  if (!message || !tool.parameters?.properties) {
     return { parameters, injections };
   }
 
@@ -158,7 +167,7 @@ function stripContextParameters(tool: Tool, context?: ToolContext): {
   const filteredRequired: string[] = [];
 
   for (const [key, schema] of Object.entries(props)) {
-    if (schema.contextKey && (context as Record<string, unknown>)[schema.contextKey] != null) {
+    if (schema.contextKey && resolveContextKey(message, schema.contextKey) != null) {
       injections.push({
         paramName: key,
         contextKey: schema.contextKey,
@@ -183,28 +192,28 @@ function stripContextParameters(tool: Tool, context?: ToolContext): {
   return { parameters, injections };
 }
 
-export function normalizeTool(input: NormalizableTool, context?: ToolContext): AgentTool {
+export function normalizeTool(input: NormalizableTool, message?: Message): AgentTool {
   if (isToolLike(input)) {
-    return normalizeTool(input.toTool(), context);
+    return normalizeTool(input.toTool(), message);
   }
 
-  if (!isIMTool(input) && !(context && hasToolShape(input))) {
+  if (!isIMTool(input) && !(message && hasToolShape(input))) {
     return input as AgentTool;
   }
 
   const tool = input;
   const originalExecute = tool.execute;
-  const { parameters, injections } = stripContextParameters(tool, context);
+  const { parameters, injections } = stripContextParameters(tool, message);
 
   const agentTool: AgentTool = {
     name: tool.name,
     description: tool.description,
     parameters,
-    execute: context
+    execute: message
       ? async (args: Record<string, any>) => {
           const enrichedArgs = { ...args };
           for (const { paramName, contextKey, paramType } of injections) {
-            let value = (context as Record<string, unknown>)[contextKey];
+            let value = resolveContextKey(message, contextKey);
             if (paramType === 'number' && typeof value === 'string') {
               value = Number(value);
             } else if (paramType === 'string' && typeof value !== 'string') {
@@ -212,14 +221,14 @@ export function normalizeTool(input: NormalizableTool, context?: ToolContext): A
             }
             enrichedArgs[paramName] = value;
           }
-          return originalExecute(enrichedArgs, context);
+          return originalExecute(enrichedArgs, message);
         }
       : async (args: Record<string, any>) => originalExecute(args),
   };
 
   if (tool.tags?.length) agentTool.tags = tool.tags;
   if (tool.keywords?.length) agentTool.keywords = tool.keywords;
-  if (tool.requiredAnyRole?.length) agentTool.requiredAnyRole = [...tool.requiredAnyRole];
+  if (tool.permissions?.length) agentTool.permissions = [...tool.permissions];
   if (tool.preExecutable) agentTool.preExecutable = true;
   if (tool.kind) agentTool.kind = tool.kind;
   if (tool.source) agentTool.source = tool.source;
@@ -231,8 +240,8 @@ export function normalizeTool(input: NormalizableTool, context?: ToolContext): A
 export class ToolSelection {
   private readonly cachedFilter = new CachedToolFilter();
 
-  normalize(input: NormalizableTool, context?: ToolContext): AgentTool {
-    return normalizeTool(input, context);
+  normalize(input: NormalizableTool, message?: Message): AgentTool {
+    return normalizeTool(input, message);
   }
 
   filterByRelevance(message: string, tools: AgentTool[], options?: ToolFilterOptions): AgentTool[] {
@@ -248,8 +257,8 @@ export class ToolSelection {
   }
 
   collectRelevantTools(
-    message: string,
-    context: ToolContext,
+    userMessage: string,
+    commMessage: Message,
     externalTools: Tool[],
     ctx: CollectToolsContext,
   ): AgentTool[] {
@@ -258,10 +267,11 @@ export class ToolSelection {
     const collectedNames = new Set<string>();
     const platformOnlySkillToolNames = new Set<string>();
     const mentionedSkillToolNames = new Set<string>();
+    const platform = String(commMessage.$adapter);
 
     let mentionedSkill: string | null = null;
     if (skillRegistry && skillRegistry.size > 0) {
-      const msgLower = message.toLowerCase();
+      const msgLower = userMessage.toLowerCase();
       outer: for (const skill of skillRegistry.getAll()) {
         if (msgLower.includes(skill.name.toLowerCase())) {
           mentionedSkill = skill.name;
@@ -277,10 +287,10 @@ export class ToolSelection {
         }
       }
       if (!mentionedSkill) {
-        mentionedSkill = pickPlatformTriggeredSkillName(skillRegistry.getAll(), context.platform);
+        mentionedSkill = pickPlatformTriggeredSkillName(skillRegistry.getAll(), platform);
         if (mentionedSkill) {
           logger.debug(
-            `[技能检测] 消息来源平台自动关联技能: ${mentionedSkill} (platform=${context.platform})`,
+            `[技能检测] 消息来源平台自动关联技能: ${mentionedSkill} (platform=${platform})`,
           );
         }
       }
@@ -288,8 +298,8 @@ export class ToolSelection {
 
     if (mentionedSkill) {
       const activateSkillTool = externalTools.find(t => t.name === 'activate_skill');
-      if (activateSkillTool && canAccessTool(activateSkillTool, context)) {
-        collected.push(this.normalize(activateSkillTool, context));
+      if (activateSkillTool && canAccessTool(activateSkillTool, commMessage)) {
+        collected.push(this.normalize(activateSkillTool, commMessage));
         collectedNames.add('activate_skill');
         logger.debug(`[技能激活] 已提前加入 activate_skill 工具（优先级最高）`);
       }
@@ -298,9 +308,9 @@ export class ToolSelection {
         : undefined;
       if (skillByName) {
         for (const tool of skillByName.tools) {
-          if (!canAccessToolFromSkill(tool, context)) continue;
+          if (!canAccessToolFromSkill(tool, commMessage)) continue;
           if (collectedNames.has(tool.name)) continue;
-          collected.push(this.normalize(tool, context));
+          collected.push(this.normalize(tool, commMessage));
           collectedNames.add(tool.name);
           mentionedSkillToolNames.add(tool.name);
         }
@@ -313,24 +323,24 @@ export class ToolSelection {
     }
 
     if (skillRegistry) {
-      const searched = skillRegistry.search(message, { maxResults: config.maxSkills, platform: context.platform });
+      const searched = skillRegistry.search(userMessage, { maxResults: config.maxSkills, platform });
       const fromSearch = new Set(searched.map(s => s.name));
-      const skills = mergeSkillsWithPlatformAffinity(searched, skillRegistry, context.platform, config.maxSkills);
+      const skills = mergeSkillsWithPlatformAffinity(searched, skillRegistry, platform, config.maxSkills);
       for (const s of skills) {
-        if (!fromSearch.has(s.name) && skillDeclaresPlatform(s, context.platform)) {
+        if (!fromSearch.has(s.name) && skillDeclaresPlatform(s, platform)) {
           for (const t of s.tools) platformOnlySkillToolNames.add(t.name);
         }
       }
       const skillStr = skills.length > 0
         ? skills.map(s => `${s.name}(${s.tools?.length || 0}工具)`).join(', ')
         : '(无匹配技能)';
-      logger.debug(`[Skill 匹配] ${skillStr}` + (context.platform ? ` (平台: ${context.platform})` : ''));
+      logger.debug(`[Skill 匹配] ${skillStr}` + (platform ? ` (平台: ${platform})` : ''));
 
       for (const skill of skills) {
         for (const tool of skill.tools) {
-          if (!canAccessToolFromSkill(tool, context)) continue;
+          if (!canAccessToolFromSkill(tool, commMessage)) continue;
           if (collectedNames.has(tool.name)) continue;
-          collected.push(this.normalize(tool, context));
+          collected.push(this.normalize(tool, commMessage));
           collectedNames.add(tool.name);
         }
       }
@@ -338,12 +348,12 @@ export class ToolSelection {
 
     let deduped = 0;
     for (const tool of externalTools) {
-      if (!canAccessTool(tool, context)) continue;
+      if (!canAccessTool(tool, commMessage)) continue;
       if (collectedNames.has(tool.name)) {
         deduped++;
         continue;
       }
-      collected.push(this.normalize(tool, context));
+      collected.push(this.normalize(tool, commMessage));
       collectedNames.add(tool.name);
     }
     if (deduped > 0) {
@@ -356,7 +366,7 @@ export class ToolSelection {
       collectedNames.add(tool.name);
     }
 
-    const filtered = this.filterByRelevance(message, collected, {
+    const filtered = this.filterByRelevance(userMessage, collected, {
       maxTools: config.maxTools,
       minScore: 0.3,
     });

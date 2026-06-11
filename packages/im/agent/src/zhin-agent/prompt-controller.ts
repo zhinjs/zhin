@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { AgentEvent, AgentMessage, QueueMode } from '@zhin.js/ai';
-import type { ToolContext } from '../orchestrator/types.js';
+import type { Message } from '../orchestrator/types.js';
 import type { OnChunkCallback } from './config.js';
 import type { AgentLoopTurnResult } from './agent-loop-turn.js';
 import { SessionMessageQueue } from './session-message-queue.js';
@@ -14,7 +14,7 @@ export interface PromptTurnRequest {
   sessionKey: string;
   sessionId: string;
   userMessages: AgentMessage[];
-  context: ToolContext;
+  commMessage: Message;
   onChunk?: OnChunkCallback;
   execute: (
     initialMessages: AgentMessage[],
@@ -29,7 +29,7 @@ type PromptSubscriber = (event: AgentEvent, signal: AbortSignal) => void | Promi
 interface ActiveTurn {
   turnId: string;
   sessionKey: string;
-  context: ToolContext;
+  commMessage: Message;
   queue: SessionMessageQueue;
   abortController: AbortController;
 }
@@ -63,10 +63,10 @@ export class PromptController {
     return latest?.[0] ?? null;
   }
 
-  getActiveContext(): ToolContext | null {
+  getActiveContext(): Message | null {
     const turnId = [...this.latestTurnBySession.values()].at(-1);
     if (!turnId) return null;
-    return this.activeTurns.get(turnId)?.context ?? null;
+    return this.activeTurns.get(turnId)?.commMessage ?? null;
   }
 
   getLastResult(): AgentLoopTurnResult | null {
@@ -176,7 +176,7 @@ export class PromptController {
     const activeTurn: ActiveTurn = {
       turnId,
       sessionKey: request.sessionKey,
-      context: request.context,
+      commMessage: request.commMessage,
       queue,
       abortController,
     };

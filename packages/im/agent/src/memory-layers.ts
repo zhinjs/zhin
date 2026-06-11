@@ -4,9 +4,9 @@
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { getPlugin } from '@zhin.js/core';
+import { getPlugin, senderRolesFromMessage } from '@zhin.js/core';
 import type { AIConfig } from '@zhin.js/ai';
-import type { ToolContext } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 import { Logger } from '@zhin.js/core';
 import { getMemoryDir } from './bootstrap.js';
 import { resolveToolRequesterRole } from './security/owner-approve-always-store.js';
@@ -345,7 +345,7 @@ export interface MemoryWriteDecision {
 
 export function checkMemoryWritePath(
   filePath: string,
-  context?: ToolContext,
+  context?: Message<any>,
   workspaceDir?: string,
 ): MemoryWriteDecision {
   const scope = classifyMemoryWritePath(filePath, workspaceDir);
@@ -364,7 +364,7 @@ export function checkMemoryWritePath(
       role = resolveToolRequesterRole(plugin, context);
     }
   } catch {
-    if (context?.roles?.includes('master')) role = 'master';
+    if (context && senderRolesFromMessage(context).includes('master')) role = 'master';
   }
   if (role === 'master') {
     return { allowed: true, scope };
@@ -374,14 +374,14 @@ export function checkMemoryWritePath(
   return {
     allowed: false,
     scope,
-    reason: `${layerLabel}记忆仅 Bot Owner（master）可写入；请将会话相关笔记写入 data/memory/sessions/<session>/MEMORY.md。`,
+    reason: `${layerLabel}记忆仅 Endpoint Owner（master）可写入；请将会话相关笔记写入 data/memory/sessions/<session>/MEMORY.md。`,
   };
 }
 
 /** @deprecated 使用 checkMemoryWritePath */
 export function assertMemoryWritePath(
   filePath: string,
-  context?: ToolContext,
+  context?: Message<any>,
   workspaceDir?: string,
 ): MemoryWriteDecision {
   return checkMemoryWritePath(filePath, context, workspaceDir);

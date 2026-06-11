@@ -14,7 +14,7 @@ import type {
 } from '@zhin.js/ai';
 import type { ModelRegistry } from '@zhin.js/ai';
 import type { Plugin } from '@zhin.js/core';
-import type { Tool, ToolContext } from '../orchestrator/types.js';
+import type { Tool, Message } from '../orchestrator/types.js';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { AgentOrchestrator } from '../orchestrator/index.js';
 import type { SubagentManager } from '../subagent.js';
@@ -74,14 +74,14 @@ export interface ZhinAgentPrivate {
   ): Promise<void>;
   emitSessionNewEvent(
     sessionId: string,
-    context: ToolContext,
+    commMessage: Message,
     mode: 'text' | 'multimodal',
     content: string,
     reply: string,
   ): void;
   emitSessionCompactEvent(
     sessionId: string,
-    context: ToolContext,
+    commMessage: Message,
     mode: 'text' | 'multimodal',
     info: {
       microSavedTokens: number;
@@ -93,18 +93,18 @@ export interface ZhinAgentPrivate {
   buildDisciplinedPrompt(basePrompt: string): string;
   resolveAgentToolsForTurn(
     allTools: AgentTool[],
-    context: ToolContext,
+    commMessage: Message,
   ): { tools: AgentTool[]; deferredStats?: string };
   runDeferredWorker(
     goal: string,
     toolQuery: string | undefined,
-    context: ToolContext,
+    commMessage: Message,
     allTools: AgentTool[],
   ): Promise<string>;
   getDeferredAutoContinueDepth(sessionKey: string): number;
   resetDeferredAutoContinueDepth(sessionKey: string): void;
   continueAfterDeferredWorker(
-    context: ToolContext,
+    commMessage: Message,
     taskId: string,
     goal: string,
     result: DeferredWorkerResult,
@@ -118,4 +118,4 @@ export function asPrivate(agent: {
   return agent as unknown as ZhinAgentPrivate;
 }
 
-export type { OnChunkCallback, OutputElement, Tool, ToolContext, Plugin, ContentPart };
+export type { OnChunkCallback, OutputElement, Tool, Message, Plugin, ContentPart };

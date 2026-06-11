@@ -1,6 +1,6 @@
 # Zhin.js
 
-现代 TypeScript 聊天机器人框架 —— AI 驱动、插件化、热重载、多平台
+现代 TypeScript **AI Agent 运行时** —— 多通道 **Endpoint** 接入、Harness 安全编排、插件热重载
 
 [文档](https://zhin.js.org)
 [CI](https://github.com/zhinjs/zhin/actions/workflows/ci.yml)
@@ -9,7 +9,9 @@
 
 ## 核心特性
 
-能力按成熟度分档：**Stable**（推荐首跑与对外默认承诺）、**Advanced**（多 bot / toolSearch / MCP 等）。完整分档见下表。
+能力按成熟度分档：**Stable**（推荐首跑与对外默认承诺）、**Advanced**（多 Endpoint / toolSearch / MCP 等）。完整分档见下表。
+
+**核心词汇**：**Adapter** 承载平台协议；**Endpoint** 是 Adapter 下的账号/连接实例（QQ 号、Discord Bot、邮箱、Sandbox 会话等）；**ZhinAgent** 在 Endpoint 入站消息上编排大模型、工具与安全策略。IM 是 Endpoint 最常见的一类通道，不是产品边界。
 
 | Tier | 特性 | 说明 |
 |------|------|------|
@@ -19,7 +21,7 @@
 | **Stable** | Remote Console | Host 仅 API（`:8086`）；UI 在 [console.zhin.dev](https://console.zhin.dev)（Sandbox 聊天） |
 | **Stable** | TypeScript | 完整类型推导 |
 | **Stable** | 安全（基础） | Bash allowlist、文件策略、交互式审批（见 [Agent 安全文档](./docs/advanced/agent-harness-engineering.md)） |
-| **Advanced** | 多平台 IM | 适配器见 [plugins/adapters](./plugins/adapters) 与 [适配器文档](./docs/essentials/adapters.md)（成熟度因平台而异） |
+| **Advanced** | 多通道 Endpoint | IM / 邮件 / GitHub / Webhook 等适配器见 [plugins/adapters](./plugins/adapters) 与 [适配器文档](./docs/essentials/adapters.md) |
 | **Advanced** | Feature 体系 | 命令、工具、技能、cron、数据库等组合 |
 | **Advanced** | toolSearch / MCP | 编排工具、deferred worker、MCP Client/Server |
 
@@ -116,7 +118,7 @@ npx zhin info <name>          # 查看插件信息
 
 ## AI 智能体
 
-Zhin.js 内置 AI 智能体系统，让机器人具备大模型对话和工具调用能力：
+Zhin.js 内置 **ZhinAgent** 编排层，让各 Endpoint 上的会话具备大模型对话、工具调用与 Harness 安全能力：
 
 ```yaml
 # zhin.config.yml
@@ -241,7 +243,7 @@ ai:
 |------|---------|
 | 会话 | `/compact` · `/tree` · `/tree N` · `/reset` |
 | 运维 | `/models` · `/health` |
-| 内省 | `/cmd` · `/bots` · `/bindings` · `/tools` · `/mcp` |
+| 内省 | `/cmd` · `/endpoints` · `/bindings` · `/tools` · `/mcp` |
 
 zhin-package 安装：
 
@@ -292,7 +294,7 @@ graph TB
 
   subgraph L3["核心能力双子星 (IM 层 + AI 引擎层)"]
     subgraph L3A["💬 @zhin.js/core (IM 核心模块)"]
-      C1("Plugin & Adapter & Bot 契约")
+      C1("Plugin & Adapter & Endpoint 契约")
       C2("Command & Middleware 中间件")
       C3("MessageDispatcher 分发器")
     end
@@ -343,7 +345,7 @@ graph TB
 
 
 - **[packages/im/kernel](packages/im/kernel)** 剥离了一切 IM 交互要素，只负责插件和 Feature 开发契约，能作为独立任务框架。
-- **[packages/im/ai](packages/im/ai)** 不包含聊天机器人特有逻辑，仅专注多轮 AI 交互及上下文管理，可在任意 Web 服务内单用。
+- **[packages/im/ai](packages/im/ai)** 不含 IM/Endpoint 概念，仅专注多轮 AI 交互及上下文管理，可在任意 Web 服务内单用。
 
 ---
 
@@ -375,7 +377,7 @@ sequenceDiagram
         Agent->>Agent: 工具收集 / 提示词 / Agent.run 循环
     end
     Handle->>Disp: 经 replyWithPolish → $reply → sendMessage
-    Disp->>User: 统一出站（before.sendMessage → Bot）
+    Disp->>User: 统一出站（before.sendMessage → Endpoint）
 ```
 
 
@@ -469,8 +471,8 @@ graph TD
 
         SendAPI -->|1. 经过模板渲染与组件自解析| Render["renderSendMessage (JSX 动态解析)"]
         Render -->|2. before.sendMessage 终层防线拦截| BeforeHook["Root Plugin 挂载的拦截钩子"]
-        BeforeHook -->|3. 送达底层平台容器发送| BotSend["Bot.$sendMessage"]
-        BotSend -->|4. 分发到客户端| Client["QQ / Discord / Slack IM 界面"]
+        BeforeHook -->|3. 送达底层平台容器发送| EndpointSend["Endpoint.$sendMessage"]
+        EndpointSend -->|4. 分发到客户端| Client["QQ / Discord / Slack 等通道"]
     end
 
     %% 事件流到绑定的连动
@@ -486,12 +488,12 @@ graph TD
 
     class Evt_Start,Evt_Think,Evt_SubStart,Evt_SubFinish,Evt_Finish stream
     class RegIndicator,TIM,ActiveInd binding
-    class SendAPI,ZhinAgentAns,Render,BeforeHook,BotSend,Client pipeline
+    class SendAPI,ZhinAgentAns,Render,BeforeHook,EndpointSend,Client pipeline
 ```
 
 
 
-- **不允许直发绕过**：指示器和最终答案均触发统一的 [packages/im/core/src/adapter.ts](packages/im/core/src/adapter.ts) 中的发送生命周期，拒绝 `Bot.$sendMessage` 被业务层直接旁路调用。
+- **不允许直发绕过**：指示器和最终答案均触发统一的 [packages/im/core/src/adapter.ts](packages/im/core/src/adapter.ts) 中的发送生命周期，拒绝 `Endpoint.$sendMessage` 被业务层直接旁路调用。
 
 ## 多平台适配器
 

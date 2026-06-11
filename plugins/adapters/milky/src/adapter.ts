@@ -3,28 +3,30 @@
  */
 import { formatCompact, Adapter, Plugin, type IGroupManagement } from 'zhin.js';
 import type { Router } from '@zhin.js/host-router';
-import { MilkyWsClient } from './bot-ws.js';
-import { MilkySseClient } from './bot-sse.js';
-import { MilkyWebhookBot } from './bot-webhook.js';
-import { MilkyWssServer } from './bot-wss.js';
+import { MilkyWsClient } from './endpoint-ws.js';
+import { MilkySseClient } from './endpoint-sse.js';
+import { MilkyWebhookEndpoint } from './endpoint-webhook.js';
+import { MilkyWssServer } from './endpoint-wss.js';
 import type {
-  MilkyBotConfig,
+  MilkyEndpointConfig,
   MilkyWsConfig,
   MilkySseConfig,
   MilkyWebhookConfig,
   MilkyWssConfig,
 } from './types.js';
 
-export type MilkyBot = MilkyWsClient | MilkySseClient | MilkyWebhookBot | MilkyWssServer;
+export type MilkyBot = MilkyWsClient | MilkySseClient | MilkyWebhookEndpoint | MilkyWssServer;
 
 export class MilkyAdapter extends Adapter<MilkyBot> {
+  static override readonly capabilities = ['inbound', 'outbound'] as const;
+
   #router?: Router;
 
   constructor(plugin: Plugin) {
     super(plugin, 'milky', []);
   }
 
-  createBot(config: MilkyBotConfig): MilkyBot {
+  createEndpoint(config: MilkyEndpointConfig): MilkyBot {
     switch (config.connection) {
       case 'ws':
         return new MilkyWsClient(this, config as MilkyWsConfig);
@@ -32,62 +34,62 @@ export class MilkyAdapter extends Adapter<MilkyBot> {
         return new MilkySseClient(this, config as MilkySseConfig);
       case 'webhook':
         if (!this.#router) throw new Error('Milky connection: webhook 需要 router，请安装并在配置中启用 @zhin.js/host-router');
-        return new MilkyWebhookBot(this, this.#router, config as MilkyWebhookConfig);
+        return new MilkyWebhookEndpoint(this, this.#router, config as MilkyWebhookConfig);
       case 'wss':
         if (!this.#router) throw new Error('Milky connection: wss 需要 router，请安装并在配置中启用 @zhin.js/host-router');
         return new MilkyWssServer(this, this.#router, config as MilkyWssConfig);
       default:
-        throw new Error(`Unknown Milky connection: ${(config as MilkyBotConfig).connection}`);
+        throw new Error(`Unknown Milky connection: ${(config as MilkyEndpointConfig).connection}`);
     }
   }
 
-  async kickMember(botId: string, sceneId: string, userId: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.kickMember(Number(sceneId), Number(userId), false);
+  async kickMember(endpointId: string, sceneId: string, userId: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.kickMember(Number(sceneId), Number(userId), false);
   }
 
-  async muteMember(botId: string, sceneId: string, userId: string, duration = 600) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.muteMember(Number(sceneId), Number(userId), duration);
+  async muteMember(endpointId: string, sceneId: string, userId: string, duration = 600) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.muteMember(Number(sceneId), Number(userId), duration);
   }
 
-  async muteAll(botId: string, sceneId: string, enable = true) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.muteAll(Number(sceneId), enable);
+  async muteAll(endpointId: string, sceneId: string, enable = true) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.muteAll(Number(sceneId), enable);
   }
 
-  async setAdmin(botId: string, sceneId: string, userId: string, enable = true) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.setAdmin(Number(sceneId), Number(userId), enable);
+  async setAdmin(endpointId: string, sceneId: string, userId: string, enable = true) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.setAdmin(Number(sceneId), Number(userId), enable);
   }
 
-  async setMemberNickname(botId: string, sceneId: string, userId: string, nickname: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.setCard(Number(sceneId), Number(userId), nickname);
+  async setMemberNickname(endpointId: string, sceneId: string, userId: string, nickname: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.setCard(Number(sceneId), Number(userId), nickname);
   }
 
-  async setGroupName(botId: string, sceneId: string, name: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.setGroupName(Number(sceneId), name);
+  async setGroupName(endpointId: string, sceneId: string, name: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.setGroupName(Number(sceneId), name);
   }
 
-  async listMembers(botId: string, sceneId: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    const members = await bot.getMemberList(Number(sceneId));
+  async listMembers(endpointId: string, sceneId: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    const members = await endpoint.getMemberList(Number(sceneId));
     return { members: Array.isArray(members) ? members : [], count: Array.isArray(members) ? members.length : 0 };
   }
 
-  async getGroupInfo(botId: string, sceneId: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.getGroupInfo(Number(sceneId));
+  async getGroupInfo(endpointId: string, sceneId: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.getGroupInfo(Number(sceneId));
   }
 
   async start(): Promise<void> {

@@ -71,7 +71,7 @@ export {
   assistantToCronRecord,
   cronRecordToAssistant,
   schedulerRecordToAssistant,
-  toolContextToImNotify,
+  commMessageToImNotify,
   isCronSchedulable,
   jobPrompt,
 } from './legacy-convert.js';

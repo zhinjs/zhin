@@ -1,6 +1,6 @@
 # 快速开始
 
-欢迎使用 Zhin.js！这个教程将带你从零开始创建一个机器人。
+欢迎使用 Zhin.js！本教程带你从零跑通 **AI Agent 运行时**：配置 Endpoint（先从 Sandbox 开始）、启用 ZhinAgent，并在 Remote Console 里对话。
 
 > **读完本页后**：若希望按难度选课，打开 [学习路径](/essentials/learning-paths)；需要一页搞清消息进出，看 [消息如何流转](/essentials/message-flow)。
 
@@ -111,7 +111,7 @@ Token 会保存在 `.env` 文件中，用于访问本地 API 或在 Remote Conso
   ...
 ```
 
-选择需要的聊天平台，Sandbox 为必选项。选择后会逐个引导你配置 Bot 的连接信息（如 Token、API Key 等），敏感信息会保存在 `.env` 文件中。
+选择需要的聊天平台，Sandbox 为必选项。选择后会逐个引导你配置 Endpoint 的连接信息（如 Token、API Key 等），敏感信息会保存在 `.env` 文件中。
 
 ::: tip ICQQ (QQ)
 需先在终端执行 `icqq login`（`@icqqjs/cli`），再在配置里填写与登录一致的 QQ 号（`ICQQ_ACCOUNT`）。**不要**在 `zhin.config` 的 bot 段填写 QQ 密码或 `platform`。
@@ -130,7 +130,7 @@ Token 会保存在 `.env` 文件中，用于访问本地 API 或在 Remote Conso
     Ollama (本地部署)
 ```
 
-选择 AI 提供商后，会引导你配置 API Key 和触发方式（@机器人、私聊、前缀触发等）。
+选择 AI 提供商后，会引导你配置 API Key 和触发方式（@Endpoint、私聊、前缀触发等）。
 
 ### 7. 等待安装
 
@@ -200,7 +200,7 @@ pnpm start -- -d
 # 等价于
 npx zhin start --daemon
 
-# 停止后台运行的机器人
+# 停止后台运行的实例
 npx zhin stop
 ```
 
@@ -208,14 +208,14 @@ npx zhin stop
 
 Stable 路径常用：`pnpm dev`（等价 `zhin dev`）、`pnpm start`、`npx zhin stop`。完整命令表见 **[CLI 命令参考](/reference/cli)** 与仓库 [`@zhin.js/cli`](https://github.com/zhinjs/zhin/tree/main/basic/cli) README。
 
-## 测试机器人（Stable：Remote Console 沙盒）
+## 测试 Agent（Stable：Remote Console 沙盒）
 
 Stable 路径下 **Sandbox 不走终端 stdin**。启动 `pnpm dev` 后：
 
 1. 打开 **[console.zhin.dev](https://console.zhin.dev)**，API Base 与日志中的 Host 一致（如 `http://127.0.0.1:8086`），Token 与 `.env` 的 `HTTP_TOKEN` 一致
 2. 进入 **沙盒** 页连接 WebSocket，发送 `hello` 或 `ai: …` 验证
 
-这与 [minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot) 一致：`bots: []` 时 Console 打开沙盒页会自动创建 bot。
+这与 [minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot) 一致：`endpoints: []` 时 Console 打开沙盒页会自动创建 bot。
 
 ::: info 终端里的 `> hello` 是什么？
 那是 **`process` 核心服务**（stdin/stdout），不是 Sandbox。默认启用但仅在 TTY 下绑定 stdin；Stable 调试请用 Console 沙盒。详见 [适配器 — Process](/essentials/adapters#process进程适配器)。
@@ -241,7 +241,7 @@ http://127.0.0.1:8086
 
 ### 控制台功能
 
-- **仪表盘** - 查看机器人运行状态、内存使用、消息统计
+- **仪表盘** - 查看运行时状态、Endpoint 在线情况、内存与消息统计
 - **插件管理** - 查看插件列表和 Feature 统计
 - **日志查看** - 实时查看日志输出
 
@@ -309,7 +309,7 @@ plugins:
 
 ### 3. 测试插件
 
-保存文件后，机器人会自动热重载。在 **Remote Console 沙盒** 中发送：
+保存文件后，运行时会自动热重载。在 **Remote Console 沙盒** 中发送：
 
 ```text
 hello
@@ -387,7 +387,7 @@ http:
 
 ## 下一步
 
-恭喜！你已经成功创建了第一个 Zhin.js 机器人。接下来可以：
+恭喜！你已经跑通了第一个 Zhin.js Agent 实例（Sandbox Endpoint）。接下来可以：
 
 - **[插件开发、测试与发布](/guide/plugin-development)** - 完整的插件生命周期（创建 → 测试 → 构建 → 发布）
 - **[配置文件](/essentials/configuration)** - 了解更多配置选项

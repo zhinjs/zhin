@@ -69,7 +69,7 @@ describe('stability lifecycle (ADR 0014 P2-2)', () => {
       await store.getOrCreateActive({
         session_key: 'k',
         platform: 'p',
-        bot_id: 'b',
+        endpoint_id: 'b',
         scene_id: 's',
         scene_type: 'private',
       });

@@ -10,8 +10,8 @@ import {
   buildTypingSendContent,
 } from '../../src/typing-indicator/adapter-integration.js';
 
-// Mock Bot
-const createMockBot = (platform: string) => ({
+// Mock Endpoint
+const createMockEndpoint = (platform: string) => ({
   $id: '75318',
   $config: { name: '75318' },
   $connected: true,
@@ -30,7 +30,7 @@ describe('buildTypingSendContent', () => {
   it('QQ 群聊应附带 reply 引用', () => {
     const content = buildTypingSendContent('qq', {
       platform: 'qq',
-      botId: 'zhin',
+      endpointId: 'zhin',
       sessionId: 'qq:zhin:group:g1#u1',
       messageId: 'msg-trigger',
       sceneType: 'group',
@@ -46,7 +46,7 @@ describe('buildTypingSendContent', () => {
   it('QQ 群聊无 messageId 时应跳过发送', () => {
     expect(buildTypingSendContent('qq', {
       platform: 'qq',
-      botId: 'zhin',
+      endpointId: 'zhin',
       sessionId: 'qq:zhin:group:g1#u1',
       sceneType: 'group',
       groupId: 'g1',
@@ -91,52 +91,52 @@ describe('AdapterTypingIndicatorManager', () => {
     });
   });
 
-  describe('为 Bot 启用', () => {
-    it('应该为 ICQQ Bot 启用', () => {
-      const bot = createMockBot('icqq');
-      const typingManager = manager.enableForBot(bot as any, 'icqq');
+  describe('为 Endpoint 启用', () => {
+    it('应该为 ICQQ Endpoint 启用', () => {
+      const bot = createMockEndpoint('icqq');
+      const typingManager = manager.enableForEndpoint(bot as any, 'icqq');
 
       expect(typingManager).toBeDefined();
       expect(bot.$typingIndicator).toBe(typingManager);
     });
 
-    it('应该为 Telegram Bot 启用', () => {
-      const bot = createMockBot('telegram');
-      const typingManager = manager.enableForBot(bot as any, 'telegram');
+    it('应该为 Telegram Endpoint 启用', () => {
+      const bot = createMockEndpoint('telegram');
+      const typingManager = manager.enableForEndpoint(bot as any, 'telegram');
 
       expect(typingManager).toBeDefined();
       expect(bot.$typingIndicator).toBe(typingManager);
     });
 
-    it('应该为 DingTalk Bot 启用', () => {
-      const bot = createMockBot('dingtalk');
-      const typingManager = manager.enableForBot(bot as any, 'dingtalk');
+    it('应该为 DingTalk Endpoint 启用', () => {
+      const bot = createMockEndpoint('dingtalk');
+      const typingManager = manager.enableForEndpoint(bot as any, 'dingtalk');
 
       expect(typingManager).toBeDefined();
       expect(bot.$typingIndicator).toBe(typingManager);
     });
 
-    it('应该为 KOOK Bot 注册 kook 平台适配器（非硬编码 icqq）', () => {
-      const bot = createMockBot('kook');
-      const typingManager = manager.enableForBot(bot as any, 'kook');
+    it('应该为 KOOK Endpoint 注册 kook 平台适配器（非硬编码 icqq）', () => {
+      const bot = createMockEndpoint('kook');
+      const typingManager = manager.enableForEndpoint(bot as any, 'kook');
 
       expect(typingManager).toBeDefined();
       expect(typingManager.getAdapter('kook')).toBeDefined();
       expect(typingManager.getAdapter('icqq')).toBeUndefined();
     });
 
-    it('addReaction 应在 bot 实例上调用以保留 this', async () => {
-      const bot = createMockBot('kook');
+    it('addReaction 应在 endpoint 实例上调用以保留 this', async () => {
+      const bot = createMockEndpoint('kook');
       let capturedThis: unknown;
       bot.$addReaction = vi.fn(async function (this: unknown) {
         capturedThis = this;
         return 'reaction:direct:msg-1:⏳';
       });
 
-      const typingManager = manager.enableForBot(bot as any, 'kook');
+      const typingManager = manager.enableForEndpoint(bot as any, 'kook');
       await typingManager.start({
         platform: 'kook',
-        botId: '75318',
+        endpointId: '75318',
         sessionId: 'private:user-1',
         messageId: 'msg-1',
         sceneType: 'private',
@@ -152,16 +152,16 @@ describe('AdapterTypingIndicatorManager', () => {
     });
 
     it('应该复用已有的管理器', () => {
-      const bot = createMockBot('icqq');
-      const typingManager1 = manager.enableForBot(bot as any, 'icqq');
-      const typingManager2 = manager.enableForBot(bot as any, 'icqq');
+      const bot = createMockEndpoint('icqq');
+      const typingManager1 = manager.enableForEndpoint(bot as any, 'icqq');
+      const typingManager2 = manager.enableForEndpoint(bot as any, 'icqq');
 
       expect(typingManager1).toBe(typingManager2);
     });
 
     it('应该支持自定义配置', () => {
-      const bot = createMockBot('icqq');
-      const typingManager = manager.enableForBot(bot as any, 'icqq', {
+      const bot = createMockEndpoint('icqq');
+      const typingManager = manager.enableForEndpoint(bot as any, 'icqq', {
         defaultEmoji: '👍',
         autoRemove: false,
       });
@@ -170,8 +170,8 @@ describe('AdapterTypingIndicatorManager', () => {
     });
 
     it('应该处理不支持 reaction 的平台', () => {
-      const bot = createMockBot('dingtalk');
-      const typingManager = manager.enableForBot(bot as any, 'dingtalk', {
+      const bot = createMockEndpoint('dingtalk');
+      const typingManager = manager.enableForEndpoint(bot as any, 'dingtalk', {
         groupConfig: {
           type: 'reaction',  // DingTalk 不支持 reaction
           emoji: '⏳',
@@ -182,13 +182,13 @@ describe('AdapterTypingIndicatorManager', () => {
     });
 
     it('QQ 群聊 typing 应通过 reply 被动发送', async () => {
-      const bot = createMockBot('qq');
+      const bot = createMockEndpoint('qq');
       const sendMessage = vi.fn().mockResolvedValue('group-g1:sent-1');
-      const typingManager = manager.enableForBot(bot as any, 'qq', undefined, { sendMessage });
+      const typingManager = manager.enableForEndpoint(bot as any, 'qq', undefined, { sendMessage });
 
       await typingManager.start({
         platform: 'qq',
-        botId: '75318',
+        endpointId: '75318',
         sessionId: 'qq:75318:group:g1#u1',
         messageId: 'msg-trigger',
         sceneType: 'group',
@@ -208,16 +208,16 @@ describe('AdapterTypingIndicatorManager', () => {
 
   describe('管理器操作', () => {
     it('应该获取管理器', () => {
-      const bot = createMockBot('icqq');
-      manager.enableForBot(bot as any, 'icqq');
+      const bot = createMockEndpoint('icqq');
+      manager.enableForEndpoint(bot as any, 'icqq');
 
       const typingManager = manager.getManager('icqq', '75318');
       expect(typingManager).toBeDefined();
     });
 
     it('应该获取配置', () => {
-      const bot = createMockBot('icqq');
-      manager.enableForBot(bot as any, 'icqq', {
+      const bot = createMockEndpoint('icqq');
+      manager.enableForEndpoint(bot as any, 'icqq', {
         defaultEmoji: '👍',
       });
 
@@ -227,22 +227,22 @@ describe('AdapterTypingIndicatorManager', () => {
     });
 
     it('应该获取所有已注册的 Bot', () => {
-      const bot1 = createMockBot('icqq');
-      const bot2 = createMockBot('telegram');
+      const bot1 = createMockEndpoint('icqq');
+      const bot2 = createMockEndpoint('telegram');
       bot2.$id = '123456';
 
-      manager.enableForBot(bot1 as any, 'icqq');
-      manager.enableForBot(bot2 as any, 'telegram');
+      manager.enableForEndpoint(bot1 as any, 'icqq');
+      manager.enableForEndpoint(bot2 as any, 'telegram');
 
-      const bots = manager.getRegisteredBots();
+      const bots = manager.getRegisteredEndpoints();
       expect(bots.length).toBe(2);
-      expect(bots).toContainEqual({ platform: 'icqq', botId: '75318' });
-      expect(bots).toContainEqual({ platform: 'telegram', botId: '123456' });
+      expect(bots).toContainEqual({ platform: 'icqq', endpointId: '75318' });
+      expect(bots).toContainEqual({ platform: 'telegram', endpointId: '123456' });
     });
 
     it('应该移除 Bot', () => {
-      const bot = createMockBot('icqq');
-      manager.enableForBot(bot as any, 'icqq');
+      const bot = createMockEndpoint('icqq');
+      manager.enableForEndpoint(bot as any, 'icqq');
 
       manager.removeBot('icqq', '75318');
 
@@ -251,16 +251,16 @@ describe('AdapterTypingIndicatorManager', () => {
     });
 
     it('应该清除所有管理器', () => {
-      const bot1 = createMockBot('icqq');
-      const bot2 = createMockBot('telegram');
+      const bot1 = createMockEndpoint('icqq');
+      const bot2 = createMockEndpoint('telegram');
       bot2.$id = '123456';
 
-      manager.enableForBot(bot1 as any, 'icqq');
-      manager.enableForBot(bot2 as any, 'telegram');
+      manager.enableForEndpoint(bot1 as any, 'icqq');
+      manager.enableForEndpoint(bot2 as any, 'telegram');
 
       manager.clearAll();
 
-      const bots = manager.getRegisteredBots();
+      const bots = manager.getRegisteredEndpoints();
       expect(bots.length).toBe(0);
     });
   });
@@ -311,8 +311,8 @@ describe('全局实例', () => {
 });
 
 describe('便捷函数', () => {
-  it('应该为 Bot 启用 Typing Indicator', () => {
-    const bot = createMockBot('icqq');
+  it('应该为 Endpoint 启用 Typing Indicator', () => {
+    const bot = createMockEndpoint('icqq');
     const typingManager = enableTypingIndicatorForBot(bot as any, 'icqq');
 
     expect(typingManager).toBeDefined();
@@ -320,7 +320,7 @@ describe('便捷函数', () => {
   });
 
   it('应该支持自定义配置', () => {
-    const bot = createMockBot('icqq');
+    const bot = createMockEndpoint('icqq');
     const typingManager = enableTypingIndicatorForBot(bot as any, 'icqq', {
       defaultEmoji: '👍',
     });

@@ -63,11 +63,11 @@ Zhin.js 采用 **五层抽象** + 插件生态的分层架构：
 ## 五层架构
 
 \`\`\`
-zhin.js          — 应用入口：配置解析、Bot 连接、插件加载、信号处理
+zhin.js          — 应用入口：配置解析、Endpoint 连接、插件加载、信号处理
   ↓
 @zhin.js/agent   — AI Agent 层：多模型编排、会话管理、工具调用、ZhinAgent
   ↓
-@zhin.js/core    — IM 核心：Adapter / Bot / Message / Plugin / 命令 / 组件 / 中间件
+@zhin.js/core    — IM 核心：Adapter / Endpoint / Message / Plugin / 命令 / 组件 / 中间件
   ↓
 @zhin.js/ai      — AI 引擎：Provider 抽象、流式补全、Agent 循环
   ↓
@@ -81,9 +81,9 @@ basic/           — 零依赖原子库：segment / segment-matcher / schema / l
 - **basic/** — 无外部依赖的原子包，提供 segment 解析、模式匹配、Schema 验证、Logger 等
 - **@zhin.js/kernel** — 通用插件基座，提供 \`PluginBase\`、HMR 热重载引擎、依赖注入 (\`provide\` / \`useContext\`)、事件广播
 - **@zhin.js/ai** — AI 引擎层，抽象 LLM Provider 接口 (OpenAI/Anthropic/Ollama/DeepSeek 等)、流式 chat、Agent 循环
-- **@zhin.js/core** — IM 核心层，继承 kernel 的 \`PluginBase\` 为 IM 特化的 \`Plugin\`，提供 Adapter/Bot/Message 抽象、命令系统、组件系统、中间件链
+- **@zhin.js/core** — IM 核心层，继承 kernel 的 \`PluginBase\` 为 IM 特化的 \`Plugin\`，提供 Adapter/Endpoint/Message 抽象、命令系统、组件系统、中间件链
 - **@zhin.js/agent** — AI Agent 编排层，组合 core + ai，提供 \`AIService\`、\`ZhinAgent\`、会话管理、上下文压缩、cron 引擎、子代理
-- **zhin.js** — 应用入口包，负责配置解析、Bot 连接、插件加载、信号处理等启动流程
+- **zhin.js** — 应用入口包，负责配置解析、Endpoint 连接、插件加载、信号处理等启动流程
 
 ## 核心 API 风格
 
@@ -252,7 +252,7 @@ addCommand(
 \`\`\`typescript
 addCommand(
   new MessageCommand('admin-cmd')
-    .permit((message) => message.$sender.role === 'admin')
+    .permit((message) => message.$sender.isMaster === true)
     .action(async () => '仅管理员可用')
 )
 \`\`\`
@@ -387,7 +387,7 @@ addCommand(
 `,
 
   "zhin://examples/adapter": `import {
-  Bot,
+  Endpoint,
   Adapter,
   registerAdapter,
   Message,
@@ -398,17 +398,17 @@ addCommand(
 
 const { logger } = usePlugin();
 
-export interface MyBotConfig extends Bot.Config {
+export interface MyEndpointConfig extends Endpoint.Config {
   context: "my-platform";
   name: string;
   token: string;
 }
 
-export class MyBot implements Bot<any, MyBotConfig> {
-  $config: MyBotConfig;
+export class MyEndpoint implements Endpoint< MyEndpointConfig> {
+  $config: MyEndpointConfig;
   $connected = false;
 
-  constructor(config: MyBotConfig) {
+  constructor(config: MyEndpointConfig) {
     this.$config = config;
   }
 
@@ -430,7 +430,7 @@ export class MyBot implements Bot<any, MyBotConfig> {
       $reply: async (content) => {
         return await this.$sendMessage({
           context: this.$config.context,
-          bot: this.$config.name,
+          endpoint: this.$config.name,
           id: raw.userId,
           type: "private",
           content,
@@ -447,7 +447,7 @@ export class MyBot implements Bot<any, MyBotConfig> {
 }
 
 registerAdapter(
-  new Adapter("my-platform", (config: MyBotConfig) => new MyBot(config))
+  new Adapter("my-platform", (config: MyEndpointConfig) => new MyEndpoint(config))
 );
 `,
 };

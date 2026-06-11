@@ -5,7 +5,7 @@
  * 私聊：set_input_status（输入状态）或短暂提示消息
  */
 
-import type { NapCatBotBase } from './bot-base.js';
+import type { NapCatEndpointBase } from './endpoint-base.js';
 import {
   TypingIndicatorManager,
   ReactionTypingIndicatorAdapter,
@@ -45,10 +45,10 @@ const DEFAULT_CONFIG: NapCatTypingIndicatorConfig = {
 export class NapCatTypingIndicatorManager {
   private manager: TypingIndicatorManager;
   private config: NapCatTypingIndicatorConfig;
-  private bot: NapCatBotBase;
+  private endpoint: NapCatEndpointBase;
 
-  constructor(bot: NapCatBotBase, config: Partial<NapCatTypingIndicatorConfig> = {}) {
-    this.bot = bot;
+  constructor(endpoint: NapCatEndpointBase, config: Partial<NapCatTypingIndicatorConfig> = {}) {
+    this.endpoint = endpoint;
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.manager = new TypingIndicatorManager({
       type: 'reaction',
@@ -63,27 +63,27 @@ export class NapCatTypingIndicatorManager {
     const adapter = new ReactionTypingIndicatorAdapter(
       'napcat',
       async (messageId: string, emoji: string, _options) => {
-        return await this.bot.$addReaction(messageId, emoji);
+        return await this.endpoint.$addReaction(messageId, emoji);
       },
       async (messageId: string, reactionId: string) => {
-        await this.bot.$removeReaction(messageId, reactionId);
+        await this.endpoint.$removeReaction(messageId, reactionId);
       },
       async (options: TypingIndicatorOptions, content: string) => {
         try {
           if (options.sceneType === 'group' && options.groupId) {
-            return await this.bot.$sendMessage({
+            return await this.endpoint.$sendMessage({
               type: 'group',
               id: options.groupId,
               context: 'napcat',
-              bot: this.bot.$id,
+              endpoint: this.endpoint.$id,
               content: [{ type: 'text', data: { text: content } }],
             });
           } else if (options.userId) {
-            return await this.bot.$sendMessage({
+            return await this.endpoint.$sendMessage({
               type: 'private',
               id: options.userId,
               context: 'napcat',
-              bot: this.bot.$id,
+              endpoint: this.endpoint.$id,
               content: [{ type: 'text', data: { text: content } }],
             });
           }
@@ -94,7 +94,7 @@ export class NapCatTypingIndicatorManager {
       },
       async (messageId: string) => {
         try {
-          await this.bot.$recallMessage(messageId);
+          await this.endpoint.$recallMessage(messageId);
         } catch { /* ignore */ }
       },
     );
@@ -108,7 +108,7 @@ export class NapCatTypingIndicatorManager {
     groupId?: string;
     sceneType: 'private' | 'group';
   }): Promise<TypingIndicator> {
-    this.bot.logger.debug('[NapCat:TypingIndicator] start called', {
+    this.endpoint.logger.debug('[NapCat:TypingIndicator] start called', {
       enabled: this.config.enabled,
       sceneType: options.sceneType,
     });
@@ -131,7 +131,7 @@ export class NapCatTypingIndicatorManager {
       userId: options.userId,
       groupId: options.groupId,
       platform: 'napcat',
-      botId: this.bot.$id,
+      endpointId: this.endpoint.$id,
       sceneType: options.sceneType,
     };
 
@@ -148,7 +148,7 @@ export class NapCatTypingIndicatorManager {
       userId: options.userId,
       groupId: options.groupId,
       platform: 'napcat',
-      botId: this.bot.$id,
+      endpointId: this.endpoint.$id,
       sceneType: 'private',
     };
     await this.manager.stop(typingOptions);
@@ -167,18 +167,18 @@ export class NapCatTypingIndicatorManager {
   }
 }
 
-declare module './bot-base.js' {
-  interface NapCatBotBase {
+declare module './endpoint-base.js' {
+  interface NapCatEndpointBase {
     $typingIndicator?: NapCatTypingIndicatorManager;
   }
 }
 
 export function enableTypingIndicator(
-  bot: NapCatBotBase,
+  endpoint: NapCatEndpointBase,
   config?: Partial<NapCatTypingIndicatorConfig>,
 ): NapCatTypingIndicatorManager {
-  if (!(bot as any).$typingIndicator) {
-    (bot as any).$typingIndicator = new NapCatTypingIndicatorManager(bot, config);
+  if (!(endpoint as any).$typingIndicator) {
+    (endpoint as any).$typingIndicator = new NapCatTypingIndicatorManager(endpoint, config);
   }
-  return (bot as any).$typingIndicator;
+  return (endpoint as any).$typingIndicator;
 }

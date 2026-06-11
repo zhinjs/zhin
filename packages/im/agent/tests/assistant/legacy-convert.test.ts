@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   cronRecordToAssistant,
   assistantToCronRecord,
-  toolContextToImNotify,
+  commMessageToImNotify,
 } from '../../src/assistant/legacy-convert.js';
+import { mockCommMessage } from '../helpers/mock-comm-message.js';
 
 describe('legacy-convert', () => {
   it('cron ↔ assistant 往返保持 prompt 与 notify', () => {
@@ -15,7 +16,7 @@ describe('legacy-convert', () => {
       notify: {
         channel: 'im' as const,
         platform: 'icqq',
-        botId: '8596238',
+        endpointId: '8596238',
         sceneId: '123',
         scope: 'private' as const,
       },
@@ -29,11 +30,11 @@ describe('legacy-convert', () => {
 
     const back = assistantToCronRecord(assistant);
     expect(back?.cronExpression).toBe('0 8 * * 1-5');
-    expect(back?.notify?.botId).toBe('8596238');
+    expect(back?.notify?.endpointId).toBe('8596238');
   });
 
-  it('toolContextToImNotify 从会话上下文构建 im notify', () => {
-    expect(toolContextToImNotify({})).toEqual({ channel: 'silent' });
-    expect(toolContextToImNotify({ botId: '1', sceneId: '2' }).channel).toBe('im');
+  it('commMessageToImNotify 从 Message 通讯上下文构建 im notify', () => {
+    expect(commMessageToImNotify({} as import('@zhin.js/core').Message<any>)).toEqual({ channel: 'silent' });
+    expect(commMessageToImNotify(mockCommMessage({ endpoint: '1', sceneId: '2' })).channel).toBe('im');
   });
 });

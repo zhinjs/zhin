@@ -1,6 +1,7 @@
 /**
  * Legacy cron-jobs / scheduler-jobs ↔ AssistantJob 转换
  */
+import type { Message } from '@zhin.js/core';
 import type { CronJobRecord } from '../cron-engine.js';
 import type { AssistantJob, JobAction, JobNotify, JobSchedule } from './types.js';
 
@@ -130,23 +131,17 @@ export function jobPrompt(job: AssistantJob): string {
   return job.action.prompt;
 }
 
-/** 从 ToolContext 构建 im notify（cron_add 等） */
-export function toolContextToImNotify(ctx: {
-  platform?: string;
-  botId?: string;
-  senderId?: string;
-  sceneId?: string;
-  scope?: string;
-}): JobNotify {
-  if (!ctx.platform && !ctx.botId && !ctx.sceneId) {
+/** 从 Message 通讯上下文构建 im notify（cron_add 等） */
+export function commMessageToImNotify(message: Message<any>): JobNotify {
+  if (!message.$adapter && !message.$endpoint && !message.$channel?.id) {
     return { channel: 'silent' };
   }
   return {
     channel: 'im',
-    platform: ctx.platform,
-    botId: ctx.botId,
-    senderId: ctx.senderId,
-    sceneId: ctx.sceneId,
-    scope: ctx.scope,
+    platform: String(message.$adapter),
+    endpointId: message.$endpoint,
+    senderId: message.$sender?.id,
+    sceneId: message.$channel?.id,
+    scope: message.$channel?.type,
   };
 }

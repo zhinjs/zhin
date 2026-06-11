@@ -3,10 +3,12 @@
  */
 import { Adapter, Plugin } from "zhin.js";
 import type { Router } from "@zhin.js/host-router";
-import { WeChatMPBot } from "./bot.js";
+import { WeChatMPEndpoint } from "./endpoint.js";
 import type { WeChatMPConfig } from "./types.js";
 
-export class WeChatMPAdapter extends Adapter<WeChatMPBot> {
+export class WeChatMPAdapter extends Adapter<WeChatMPEndpoint> {
+    static override readonly capabilities = ['inbound', 'outbound'] as const;
+
     #router: Router;
 
     constructor(plugin: Plugin, router: Router) {
@@ -14,7 +16,7 @@ export class WeChatMPAdapter extends Adapter<WeChatMPBot> {
         this.#router = router;
     }
 
-    createBot(config: WeChatMPConfig): WeChatMPBot {
-        return new WeChatMPBot(this, this.#router, config);
+    createEndpoint(config: WeChatMPConfig): WeChatMPEndpoint {
+        return new WeChatMPEndpoint(this, this.#router, config);
     }
 }

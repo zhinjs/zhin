@@ -5,8 +5,8 @@ import './types.js';
 import { getPlugin, Message, ZhinTool, MessageCommand } from '@zhin.js/core';
 import { asPrivate } from '../zhin-agent/zhin-agent-private.js';
 import {
-  jumpSessionTreeForContext,
-  listSessionTreeForContext,
+  jumpSessionTreeForCommMessage,
+  listSessionTreeForCommMessage,
 } from '../zhin-agent/session-tree-commands.js';
 import type { AIServiceRefs } from './shared-refs.js';
 import {
@@ -35,7 +35,7 @@ export function registerManagementTools(refs: AIServiceRefs): void {
       .desc('列出所有可用的 AI 模型')
       .keyword('模型', '可用模型', 'ai模型', 'model', 'models')
       .tag('ai', 'management')
-      .requireAnyRole('trusted')
+      .permit('role(trusted)')
       .execute(async () => {
         const models = await ai.listModels();
         return { providers: models.map(({ provider, models: ml }) => ({ name: provider, models: ml.slice(0, 10), total: ml.length })) };
@@ -45,7 +45,7 @@ export function registerManagementTools(refs: AIServiceRefs): void {
       .desc('检查 AI 服务的健康状态')
       .keyword('健康', '状态', '检查', 'health', 'status')
       .tag('ai', 'management')
-      .requireAnyRole('trusted')
+      .permit('role(trusted)')
       .execute(async () => {
         const h = await ai.healthCheck();
         return { providers: Object.entries(h).map(([n, ok]) => ({ name: n, healthy: ok })) };
@@ -71,22 +71,10 @@ export function registerManagementTools(refs: AIServiceRefs): void {
       commandService.add(modelsCmd, root.name);
       disposers.push(() => commandService.remove(modelsCmd));
 
-      const treeContextFrom = (message: Message) => ({
-        platform: message.$adapter,
-        botId: message.$bot,
-        messageId: message.$id,
-        sceneId: message.$channel?.id || message.$sender.id,
-        senderId: message.$sender.id,
-        message,
-        scope: (message.$channel?.type === 'group' || message.$channel?.type === 'channel'
-          ? message.$channel.type
-          : 'private') as 'private' | 'group' | 'channel',
-      });
-
       const treeListCmd = new MessageCommand('/tree').desc('列出会话分支点');
       treeListCmd.action(async (message: Message) => guardManagementCommand(root, message, ai, async () => {
         if (!refs.zhinAgent) return '❌ Agent 未就绪';
-        return await listSessionTreeForContext(asPrivate(refs.zhinAgent), treeContextFrom(message));
+        return await listSessionTreeForCommMessage(asPrivate(refs.zhinAgent), message);
       }));
       commandService.add(treeListCmd, root.name);
       disposers.push(() => commandService.remove(treeListCmd));
@@ -96,7 +84,7 @@ export function registerManagementTools(refs: AIServiceRefs): void {
         if (!refs.zhinAgent) return '❌ Agent 未就绪';
         const n = Number.parseInt(String(matched.params?.index ?? ''), 10);
         if (!Number.isFinite(n) || n < 1) return 'ℹ️ 用法：/tree 2';
-        return await jumpSessionTreeForContext(asPrivate(refs.zhinAgent), treeContextFrom(message), n);
+        return await jumpSessionTreeForCommMessage(asPrivate(refs.zhinAgent), message, n);
       }));
       commandService.add(treeJumpCmd, root.name);
       disposers.push(() => commandService.remove(treeJumpCmd));
@@ -106,7 +94,7 @@ export function registerManagementTools(refs: AIServiceRefs): void {
         if (!refs.zhinAgent) return '❌ Agent 未就绪';
         const n = Number.parseInt(String(matched.params?.index ?? ''), 10);
         if (!Number.isFinite(n) || n < 1) return 'ℹ️ 用法：/fork 2';
-        return await jumpSessionTreeForContext(asPrivate(refs.zhinAgent), treeContextFrom(message), n);
+        return await jumpSessionTreeForCommMessage(asPrivate(refs.zhinAgent), message, n);
       }));
       commandService.add(forkCmd, root.name);
       disposers.push(() => commandService.remove(forkCmd));
@@ -114,17 +102,7 @@ export function registerManagementTools(refs: AIServiceRefs): void {
       const compactCmd = new MessageCommand('/compact').desc('压缩当前对话上下文（保留最近 ~20k tokens）');
       compactCmd.action(async (message: Message) => guardManagementCommand(root, message, ai, async () => {
         if (!refs.zhinAgent) return '❌ Agent 未就绪';
-        const result = await refs.zhinAgent.compactSessionForContext({
-          platform: message.$adapter,
-          botId: message.$bot,
-          messageId: message.$id,
-          sceneId: message.$channel?.id || message.$sender.id,
-          senderId: message.$sender.id,
-          message,
-          scope: (message.$channel?.type === 'group' || message.$channel?.type === 'channel'
-            ? message.$channel.type
-            : 'private') as 'private' | 'group' | 'channel',
-        });
+        const result = await refs.zhinAgent.compactSessionForCommMessage(message);
         return result.ok ? `✅ ${result.message}` : `ℹ️ ${result.message}`;
       }));
       commandService.add(compactCmd, root.name);
@@ -133,7 +111,7 @@ export function registerManagementTools(refs: AIServiceRefs): void {
       const resetCmd = new MessageCommand('/reset').desc('归档当前 epoch，下次 @ 开启新上下文');
       resetCmd.action(async (message: Message) => guardManagementCommand(root, message, ai, async () => {
         if (!refs.zhinAgent) return '❌ Agent 未就绪';
-        const ok = await refs.zhinAgent.archiveSessionForContext(treeContextFrom(message));
+        const ok = await refs.zhinAgent.archiveSessionForCommMessage(message);
         return ok ? '✅ 已归档当前会话，下次 @ 将使用新上下文' : 'ℹ️ 无活跃会话可归档';
       }));
       commandService.add(resetCmd, root.name);

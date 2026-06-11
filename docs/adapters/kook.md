@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/kook/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/kook/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=26f5c6718c2fa463 -->
+<!-- sync-adapter-docs:sha256=16271d91e74418af -->
 
 # @zhin.js/adapter-kook
 
@@ -39,7 +39,7 @@ pnpm add @zhin.js/adapter-kook
 | **连接方式** | 当前适配器通过 **WebSocket** 连接 KOOK（`kook-client`）；无需公网 URL |
 | **host-router** | 不需要 |
 
-必填字段见 `KookBotConfig`：`context`、`name`、`token`。
+必填字段见 `KookEndpointConfig`：`context`、`name`、`token`。
 
 ## 最小配置
 
@@ -47,7 +47,7 @@ pnpm add @zhin.js/adapter-kook
 plugins:
   - "@zhin.js/adapter-kook"
 
-bots:
+endpoints:
   - context: kook
     name: my-kook-bot
     token: "${KOOK_TOKEN}"
@@ -55,10 +55,10 @@ bots:
 
 ## 配置
 
-可选字段（见 `KookBotConfig`）：`data_dir`、`timeout`、`max_retry`、`ignore`、`logLevel`、`typingIndicator`。
+可选字段（见 `KookEndpointConfig`）：`data_dir`、`timeout`、`max_retry`、`ignore`、`logLevel`、`typingIndicator`。
 
 ```yaml
-bots:
+endpoints:
   - context: kook
     name: my-kook-bot
     token: "${KOOK_TOKEN}"
@@ -84,7 +84,7 @@ TypeScript 等价写法：
 import { defineConfig } from 'zhin.js'
 
 export default defineConfig({
-  bots: [
+  endpoints: [
     {
       context: 'kook',
       name: 'my-kook-bot',
@@ -268,16 +268,16 @@ addCommand(new MessageCommand('card')
 ## API 方法
 
 ```typescript
-const bot = app.adapters.get('kook')?.bots.get('my-kook-bot')
+const endpoint = app.adapters.get('kook')?.endpoints.get('my-kook-bot')
 
 // 发送频道消息
-await bot.sendChannelMsg(channelId, '消息内容')
+await endpoint.sendChannelMsg(channelId, '消息内容')
 
 // 发送私聊消息
-await bot.sendPrivateMsg(userId, '消息内容')
+await endpoint.sendPrivateMsg(userId, '消息内容')
 
 // 统一发送（出站返回带路由的 msg ref，见「消息 ID 与路由」）
-const msgRef = await bot.$sendMessage({
+const msgRef = await endpoint.$sendMessage({
   context: 'kook',
   bot: 'my-kook-bot',
   type: 'group', // 或 'private'
@@ -286,14 +286,14 @@ const msgRef = await bot.$sendMessage({
 })
 
 // 撤回：支持出站 ref，或入站 plain msg_id + 路由由适配器推断
-await bot.$recallMessage(msgRef)
-await bot.$recallMessage(message.$id, { route: 'direct' }) // 入站私聊
+await endpoint.$recallMessage(msgRef)
+await endpoint.$recallMessage(message.$id, { route: 'direct' }) // 入站私聊
 
 // Typing Indicator：在用户消息上贴/删表情回应
-const reactionId = await bot.$addReaction(message.$id, '⏳', {
+const reactionId = await endpoint.$addReaction(message.$id, '⏳', {
   sceneType: message.$channel.type === 'private' ? 'private' : 'channel',
 })
-await bot.$removeReaction(message.$id, reactionId)
+await endpoint.$removeReaction(message.$id, reactionId)
 ```
 
 ## 🔧 频道管理工具（AI 可调用）
@@ -336,39 +336,39 @@ AI：当前服务器有以下角色：
 #### 编程调用
 
 ```typescript
-// 获取 KOOK Bot 实例
+// 获取 KOOK Endpoint 实例
 const kookAdapter = app.adapters.get('kook')
-const bot = kookAdapter?.bots.get('my-kook-bot')
+const endpoint = kookAdapter?.endpoints.get('my-kook-bot')
 
 // 踢出用户
-await bot.kickUser(guildId, userId)
+await endpoint.kickUser(guildId, userId)
 
 // 加入黑名单（封禁）
-await bot.addToBlacklist(guildId, userId, '违规发言', 7) // 删除7天内消息
+await endpoint.addToBlacklist(guildId, userId, '违规发言', 7) // 删除7天内消息
 
 // 解除封禁
-await bot.removeFromBlacklist(guildId, userId)
+await endpoint.removeFromBlacklist(guildId, userId)
 
 // 授予角色
-await bot.grantRole(guildId, userId, roleId)
+await endpoint.grantRole(guildId, userId, roleId)
 
 // 撤销角色
-await bot.revokeRole(guildId, userId, roleId)
+await endpoint.revokeRole(guildId, userId, roleId)
 
 // 设置昵称
-await bot.setNickname(guildId, userId, '新昵称')
+await endpoint.setNickname(guildId, userId, '新昵称')
 
 // 获取角色列表
-const roles = await bot.getRoleList(guildId)
+const roles = await endpoint.getRoleList(guildId)
 
 // 创建角色
-const newRole = await bot.createRole(guildId, '新角色')
+const newRole = await endpoint.createRole(guildId, '新角色')
 
 // 删除角色
-await bot.deleteRole(guildId, roleId)
+await endpoint.deleteRole(guildId, roleId)
 
 // 获取成员列表
-const members = await bot.getGuildMembers(guildId)
+const members = await endpoint.getGuildMembers(guildId)
 ```
 
 ### 发送者权限信息
@@ -456,7 +456,7 @@ KOOK 有发送频率限制（约每秒 5 条）；建议队列化发送并检查
 使用 KOOK 卡片消息格式：
 
 ```typescript
-await bot.sendChannelMsg(channelId, [
+await endpoint.sendChannelMsg(channelId, [
   {
     type: 'card',
     data: {
@@ -476,7 +476,7 @@ await bot.sendChannelMsg(channelId, [
 
 ## full-bot L4 参考
 
-[`examples/full-bot`](https://github.com/zhinjs/zhin/tree/main/examples/full-bot/) 默认加载本适配器（`bots` 段需填写 `KOOK_TOKEN` 后取消注释）。
+[`examples/full-bot`](https://github.com/zhinjs/zhin/tree/main/examples/full-bot/) 默认加载本适配器（`endpoints` 段需填写 `KOOK_TOKEN` 后取消注释）。
 
 - 入站 → `ZhinAgent` → 出站走 `Adapter.sendMessage` 统一链路
 - 契约测试：`plugins/adapters/kook/tests/l4-contract.test.ts` + `integration.test.ts`

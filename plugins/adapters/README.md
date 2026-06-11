@@ -6,7 +6,7 @@
 |--------|--------|------|------|
 | Sandbox | `@zhin.js/adapter-sandbox` | **Stable** | 本地 Web 控制台调试；[minimal-bot](../../examples/minimal-bot/) 默认 |
 | ICQQ | `@zhin.js/adapter-icqq` | Advanced | `@icqqjs/cli` 守护进程 IPC；先 `icqq login`，配置仅 QQ 号 |
-| QQ 官方 | `@zhin.js/adapter-qq` | Advanced | 官方 Bot API |
+| QQ 官方 | `@zhin.js/adapter-qq` | Advanced | 官方 Endpoint API |
 | NapCat | `@zhin.js/adapter-napcat` | Experimental | NapCat 桥接 |
 | OneBot v11 | `@zhin.js/adapter-onebot11` | Advanced | OneBot 11 |
 | OneBot v12 | `@zhin.js/adapter-onebot12` | Experimental | OneBot 12 |

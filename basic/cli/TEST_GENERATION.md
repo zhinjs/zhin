@@ -146,10 +146,10 @@ describe('MyService Service', () => {
 - ✅ 验证 logger 存在
 - ✅ 验证 bots 初始化
 
-#### Bot Management
-- ✅ 从配置创建 Bot
-- ✅ 验证 createBot 方法
-- ✅ 验证 Bot 属性
+#### Endpoint Management
+- ✅ 从配置创建 Endpoint
+- ✅ 验证 createEndpoint 方法
+- ✅ 验证 Endpoint 属性
 
 #### Adapter Lifecycle
 - ✅ 启动适配器
@@ -165,12 +165,12 @@ describe('MyService Service', () => {
 
 #### Message Sending
 - ✅ 处理 sendMessage 事件
-- ✅ Bot 不存在时抛出错误
+- ✅ Endpoint 不存在时抛出错误
 
 #### Message Receiving
 - ✅ 通过中间件处理接收的消息
 
-#### Bot Methods
+#### Endpoint Methods
 - ✅ connect 方法
 - ✅ disconnect 方法
 - ✅ sendMessage 方法
@@ -184,9 +184,9 @@ describe('MyService Service', () => {
 **示例：**
 
 ```typescript
-// Mock Bot 类（用于测试）
-class MockMyAdapterBot extends EventEmitter implements Bot {
-  // ... Bot 实现
+// Mock Endpoint 类（用于测试）
+class MockMyAdapterBot extends EventEmitter implements Endpoint {
+  // ... Endpoint 实现
 }
 
 // Mock Adapter 类（用于测试）
@@ -210,7 +210,7 @@ describe('MyAdapter Adapter', () => {
 ```
 
 **需要开发者完成的部分：**
-1. 将 Mock 类替换为实际的 Adapter 和 Bot 类
+1. 将 Mock 类替换为实际的 Adapter 和 Endpoint 类
 2. 添加平台特定的测试（如 webhook、polling 等）
 3. 测试平台特定的消息格式
 
@@ -383,8 +383,8 @@ pnpm build
 确保 Mock 类实现了正确的接口：
 
 ```typescript
-class MockBot extends EventEmitter implements Bot {
-  // 实现所有 Bot 接口方法
+class MockEndpoint extends EventEmitter implements Endpoint {
+  // 实现所有 Endpoint 接口方法
 }
 ```
 

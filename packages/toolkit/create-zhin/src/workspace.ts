@@ -150,7 +150,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
   // 创建 systemd service 配置（Linux）：当前目录用 npx 启动，不写死 nvm/node 路径
   await fs.writeFile(path.join(projectPath, `${projectName}.service`),
 `[Unit]
-Description=${projectName} - Zhin.js Bot
+Description=${projectName} - Zhin.js Endpoint
 After=network.target
 
 [Service]
@@ -266,7 +266,7 @@ nssm install $ServiceName npx $NpxArgs
 # 配置服务
 nssm set $ServiceName AppDirectory $ProjectPath
 nssm set $ServiceName AppEnvironmentExtra "NODE_ENV=production"
-nssm set $ServiceName DisplayName "Zhin.js Bot - $ServiceName"
+nssm set $ServiceName DisplayName "Zhin.js Endpoint - $ServiceName"
 nssm set $ServiceName Description "Zhin.js 聊天机器人服务"
 nssm set $ServiceName Start SERVICE_AUTO_START
 nssm set $ServiceName AppStdout "$ProjectPath\\logs\\nssm-stdout.log"
@@ -294,7 +294,7 @@ Write-Host "  nssm start $ServiceName" -ForegroundColor Cyan
 `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
-    <Description>Zhin.js Bot - ${projectName}</Description>
+    <Description>Zhin.js Endpoint - ${projectName}</Description>
     <URI>\\${projectName}</URI>
   </RegistrationInfo>
   <Triggers>
@@ -425,7 +425,7 @@ pnpm dev          # 开发模式（支持热重载）
 
 1. 确认终端里 Host 已启动（一般为 \`http://127.0.0.1:8086\`）。
 2. 打开 **[Remote Console](https://console.zhin.dev)**，API Base 与 Token（\`.env\` 的 \`HTTP_TOKEN\`）与日志一致。
-3. 在 **沙盒** 页连接后发送 \`hello\`（\`bots: []\` 时自动创建 Sandbox bot，如 \`sandbox-xxxx\`）。
+3. 在 **沙盒** 页连接后发送 \`hello\`（\`endpoints: []\` 时自动创建 Sandbox bot，如 \`sandbox-xxxx\`）。
 
 ### Remote Console（同上）
 

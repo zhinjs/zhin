@@ -37,7 +37,7 @@ describe('Message.quote helpers', () => {
       {
         $id: '1',
         $adapter: 'icqq',
-        $bot: 'b',
+        $endpoint: 'b',
         $content: [
           { type: 'at', data: { qq: '8596238' } },
           { type: 'text', data: { text: '这是什么' } },
@@ -60,7 +60,7 @@ describe('Message.quote helpers', () => {
       {
         $id: '1',
         $adapter: 'icqq',
-        $bot: 'b',
+        $endpoint: 'b',
         $content: [{ type: 'reply', data: { id: 'q1' } }],
         $sender: { id: 'u' },
         $reply: async () => '1',
@@ -132,7 +132,7 @@ describe('prependQuoteContext', () => {
   it('prepends quoted block when bot supports $getMsg', async () => {
     const root = {
       inject: () => ({
-        bots: new Map([
+        endpoints: new Map([
           [
             'b1',
             {
@@ -152,7 +152,7 @@ describe('prependQuoteContext', () => {
       {
         $id: '99',
         $adapter: 'icqq',
-        $bot: 'b1',
+        $endpoint: 'b1',
         $quote_id: '42',
         $content: [{ type: 'text', data: { text: 'question' } }],
         $sender: { id: 'u' },
@@ -178,7 +178,7 @@ describe('prependQuoteContext', () => {
       {
         $id: '1',
         $adapter: 'icqq',
-        $bot: 'b',
+        $endpoint: 'b',
         $quote_id: '42',
         $content: [],
         $sender: { id: 'u' },

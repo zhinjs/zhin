@@ -45,7 +45,7 @@ useContext('html-renderer', (renderer) => {
         if (result.format === 'png' && typeof result.data === 'object') {
           const base64 = Buffer.from(result.data as Buffer).toString('base64')
           const dataUrl = `data:${result.mimeType};base64,${base64}`
-          await message.$reply(segment('image', { url: dataUrl }))
+          await message.$reply?.(segment('image', { url: dataUrl }))
         }
       }
     } catch (e) {

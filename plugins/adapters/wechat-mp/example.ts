@@ -144,7 +144,7 @@ app.on('ready', () => {
   //   // 向特定用户发送消息
   //   await app.sendMessage({
   //     context: 'wechat-mp',
-  //     bot: 'my-wechat-bot',
+  //     endpoint: 'my-wechat-bot',
   //     id: 'user-openid',
   //     type: 'private', 
   //     content: '定期推送消息'

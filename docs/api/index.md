@@ -204,7 +204,7 @@ interface Tool {
 ```typescript
 interface ToolContext {
   platform?: string             // 平台名（如 'icqq'、'discord'）
-  botId?: string                // Bot ID
+  endpointId?: string                // Endpoint ID
   sceneId?: string              // 场景 ID（群号/频道 ID）
   senderId?: string             // 发送者 ID
   scope?: 'private' | 'group' | 'channel'
@@ -318,12 +318,12 @@ agent.setSkillRegistry(registry: SkillFeature): void
 
 ## Adapter
 
-适配器基类。平台 Bot 在收消息时应 **`emit('message.receive', message)`**：内部会 **串行** `await MessageDispatcher.dispatch`、再 `await` 根插件 `message.receive`、最后调用 **`adapter.on('message.receive')` 注册的观察者**（适合观测，不适合做主业务路由）。出站统一走 `sendMessage` / `renderSendMessage` / `before.sendMessage`。
+适配器基类。平台 Endpoint 在收消息时应 **`emit('message.receive', message)`**：内部会 **串行** `await MessageDispatcher.dispatch`、再 `await` 根插件 `message.receive`、最后调用 **`adapter.on('message.receive')` 注册的观察者**（适合观测，不适合做主业务路由）。出站统一走 `sendMessage` / `renderSendMessage` / `before.sendMessage`。
 
 ```typescript
-abstract class Adapter<R extends Bot> extends EventEmitter {
-  abstract createBot(config: Adapter.BotConfig<R>): R
-  bots: Map<string, R>
+abstract class Adapter<R extends Endpoint> extends EventEmitter {
+  abstract createEndpoint(config: Adapter.EndpointConfig<R>): R
+  endpoints: Map<string, R>
   tools: Map<string, Tool>
   emit<K extends keyof Adapter.Lifecycle>(eventName: K, ...args): boolean
   // message.receive 的 emit 见上文

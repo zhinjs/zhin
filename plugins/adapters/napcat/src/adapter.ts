@@ -3,21 +3,23 @@
  */
 import { formatCompact, Adapter, Plugin } from 'zhin.js';
 import type { Router } from '@zhin.js/host-router';
-import { NapCatWsClient } from './bot-ws-client.js';
-import { NapCatWsServer } from './bot-ws-server.js';
-import { NapCatHttpBot } from './bot-http.js';
-import type { NapCatBotConfig, NapCatWsClientConfig, NapCatWsServerConfig, NapCatHttpConfig } from './types.js';
+import { NapCatWsClient } from './endpoint-ws-client.js';
+import { NapCatWsServer } from './endpoint-ws-server.js';
+import { NapCatHttpEndpoint } from './endpoint-http.js';
+import type { NapCatEndpointConfig, NapCatWsClientConfig, NapCatWsServerConfig, NapCatHttpConfig } from './types.js';
 
-export type NapCatBot = NapCatWsClient | NapCatWsServer | NapCatHttpBot;
+export type NapCatEndpoint = NapCatWsClient | NapCatWsServer | NapCatHttpEndpoint;
 
-export class NapCatAdapter extends Adapter<NapCatBot> {
+export class NapCatAdapter extends Adapter<NapCatEndpoint> {
+  static override readonly capabilities = ['inbound', 'outbound'] as const;
+
   #router?: Router;
 
   constructor(plugin: Plugin) {
     super(plugin, 'napcat', []);
   }
 
-  createBot(config: NapCatBotConfig): NapCatBot {
+  createEndpoint(config: NapCatEndpointConfig): NapCatEndpoint {
     const connection = config.connection ?? 'ws';
     switch (connection) {
       case 'ws':
@@ -27,7 +29,7 @@ export class NapCatAdapter extends Adapter<NapCatBot> {
         return new NapCatWsServer(this, this.#router, config as NapCatWsServerConfig);
       case 'http':
         if (!this.#router) throw new Error('NapCat connection: http requires router. Enable @zhin.js/host-router first.');
-        return new NapCatHttpBot(this, this.#router, config as NapCatHttpConfig);
+        return new NapCatHttpEndpoint(this, this.#router, config as NapCatHttpConfig);
       default:
         throw new Error(`Unknown NapCat connection: ${connection}`);
     }
@@ -35,46 +37,46 @@ export class NapCatAdapter extends Adapter<NapCatBot> {
 
   // ── 群管理接口（IGroupManagement 适配）──────────────────────────
 
-  async kickMember(botId: string, sceneId: string, userId: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} not found`);
-    return bot.kickMember(Number(sceneId), Number(userId));
+  async kickMember(endpointId: string, sceneId: string, userId: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} not found`);
+    return endpoint.kickMember(Number(sceneId), Number(userId));
   }
 
-  async muteMember(botId: string, sceneId: string, userId: string, duration = 600) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} not found`);
-    return bot.muteMember(Number(sceneId), Number(userId), duration);
+  async muteMember(endpointId: string, sceneId: string, userId: string, duration = 600) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} not found`);
+    return endpoint.muteMember(Number(sceneId), Number(userId), duration);
   }
 
-  async muteAll(botId: string, sceneId: string, enable = true) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} not found`);
-    return bot.muteAll(Number(sceneId), enable);
+  async muteAll(endpointId: string, sceneId: string, enable = true) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} not found`);
+    return endpoint.muteAll(Number(sceneId), enable);
   }
 
-  async setAdmin(botId: string, sceneId: string, userId: string, enable = true) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} not found`);
-    return bot.setAdmin(Number(sceneId), Number(userId), enable);
+  async setAdmin(endpointId: string, sceneId: string, userId: string, enable = true) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} not found`);
+    return endpoint.setAdmin(Number(sceneId), Number(userId), enable);
   }
 
-  async setMemberNickname(botId: string, sceneId: string, userId: string, nickname: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} not found`);
-    return bot.setCard(Number(sceneId), Number(userId), nickname);
+  async setMemberNickname(endpointId: string, sceneId: string, userId: string, nickname: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} not found`);
+    return endpoint.setCard(Number(sceneId), Number(userId), nickname);
   }
 
-  async setGroupName(botId: string, sceneId: string, name: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} not found`);
-    return bot.setGroupName(Number(sceneId), name);
+  async setGroupName(endpointId: string, sceneId: string, name: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} not found`);
+    return endpoint.setGroupName(Number(sceneId), name);
   }
 
-  async listMembers(botId: string, sceneId: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} not found`);
-    const members = await bot.getMemberList(Number(sceneId));
+  async listMembers(endpointId: string, sceneId: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} not found`);
+    const members = await endpoint.getMemberList(Number(sceneId));
     return {
       members: members.map((m: any) => ({
         user_id: m.user_id, nickname: m.nickname, card: m.card, role: m.role, title: m.title,
@@ -83,10 +85,10 @@ export class NapCatAdapter extends Adapter<NapCatBot> {
     };
   }
 
-  async getGroupInfo(botId: string, sceneId: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} not found`);
-    return bot.getGroupInfo(Number(sceneId));
+  async getGroupInfo(endpointId: string, sceneId: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} not found`);
+    return endpoint.getGroupInfo(Number(sceneId));
   }
 
   async start(): Promise<void> {

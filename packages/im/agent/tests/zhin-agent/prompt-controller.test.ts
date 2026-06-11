@@ -1,15 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { createUserMessage } from '@zhin.js/ai';
 import { PromptController } from '../../src/zhin-agent/prompt-controller.js';
-import type { ToolContext } from '../../src/orchestrator/types.js';
+import { mockCommMessage } from '../helpers/mock-comm-message.js';
 
-const ctx: ToolContext = {
-  platform: 'sandbox',
-  botId: 'b1',
+const commMessage = mockCommMessage({
+  adapter: 'sandbox',
+  endpoint: 'b1',
   sceneId: 'private:u1',
   senderId: 'u1',
   scope: 'private',
-};
+});
 
 const makeResult = (reply: string) => ({
   reply,
@@ -30,7 +30,7 @@ describe('PromptController', () => {
         sessionKey,
         sessionId: `${sessionKey}#1`,
         userMessages: [createUserMessage(label)],
-        context: ctx,
+        commMessage,
         execute: async (_initial, _hooks, _signal, _turnId) => {
           order.push(`start:${label}`);
           await new Promise((r) => setTimeout(r, 20));
@@ -58,7 +58,7 @@ describe('PromptController', () => {
       sessionKey: 's1',
       sessionId: 's1#1',
       userMessages: [createUserMessage('first')],
-      context: ctx,
+      commMessage,
       execute: async (initialMessages) => {
         const block = initialMessages[0]?.content.find((b) => b.type === 'text');
         const text = block && block.type === 'text' ? block.text : '';
@@ -75,7 +75,7 @@ describe('PromptController', () => {
       sessionKey: 's1',
       sessionId: 's1#1',
       userMessages: [createUserMessage('second')],
-      context: ctx,
+      commMessage,
       execute: async () => makeResult('second'),
     });
 
@@ -106,7 +106,7 @@ describe('PromptController', () => {
       sessionKey: 's1',
       sessionId: 's1#1',
       userMessages: [createUserMessage('first')],
-      context: ctx,
+      commMessage,
       execute: async (_initial, hooks) => {
         await new Promise((r) => setTimeout(r, 10));
         await gate;
@@ -132,7 +132,7 @@ describe('PromptController', () => {
       sessionKey: 's1',
       sessionId: 's1#1',
       userMessages: [createUserMessage('x')],
-      context: ctx,
+      commMessage,
       execute: async () => makeResult('x'),
     });
     expect(controller.isBusy()).toBe(true);

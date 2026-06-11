@@ -3,7 +3,7 @@ database:
   filename: ./data/bot.db
   mode: wal
 
-bots:
+endpoints:
   - context: icqq
     name: ${ICQQ_ACCOUNT}
     master: 1659488338

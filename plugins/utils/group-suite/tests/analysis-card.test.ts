@@ -16,10 +16,10 @@ async function assertSatori(fragment: string) {
 function sampleRows(): InboxMessageRow[] {
   const base = Date.now() - 3 * 60 * 60 * 1000;
   return [
-    { adapter: "icqq", bot_id: "1", channel_id: "g1", channel_type: "group", sender_id: "u1", sender_name: "Alice", content: '[{"type":"text","data":{"text":"你好"}}]', raw: "", created_at: base },
-    { adapter: "icqq", bot_id: "1", channel_id: "g1", channel_type: "group", sender_id: "u2", sender_name: "Bob", content: '[{"type":"text","data":{"text":"今天天气不错"}}]', raw: "", created_at: base + 3600_000 },
-    { adapter: "icqq", bot_id: "1", channel_id: "g1", channel_type: "group", sender_id: "u1", sender_name: "Alice", content: '[{"type":"text","data":{"text":"周末去哪玩"}}]', raw: "", created_at: base + 7200_000 },
-    { adapter: "icqq", bot_id: "1", channel_id: "g1", channel_type: "group", sender_id: "u3", sender_name: "Carol", content: '[{"type":"text","data":{"text":"推荐去爬山"}}]', raw: "", created_at: base + 10_800_000 },
+    { adapter: "icqq", endpoint_id: "1", channel_id: "g1", channel_type: "group", sender_id: "u1", sender_name: "Alice", content: '[{"type":"text","data":{"text":"你好"}}]', raw: "", created_at: base },
+    { adapter: "icqq", endpoint_id: "1", channel_id: "g1", channel_type: "group", sender_id: "u2", sender_name: "Bob", content: '[{"type":"text","data":{"text":"今天天气不错"}}]', raw: "", created_at: base + 3600_000 },
+    { adapter: "icqq", endpoint_id: "1", channel_id: "g1", channel_type: "group", sender_id: "u1", sender_name: "Alice", content: '[{"type":"text","data":{"text":"周末去哪玩"}}]', raw: "", created_at: base + 7200_000 },
+    { adapter: "icqq", endpoint_id: "1", channel_id: "g1", channel_type: "group", sender_id: "u3", sender_name: "Carol", content: '[{"type":"text","data":{"text":"推荐去爬山"}}]', raw: "", created_at: base + 10_800_000 },
   ];
 }
 

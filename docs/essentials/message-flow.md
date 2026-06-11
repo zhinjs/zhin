@@ -2,9 +2,21 @@
 
 > **L1～L2 推荐阅读**。读完这一页即可理解「回复该写在哪、事件什么时候触发」，无需先读架构长文。
 
+## Endpoint 入站/出站能力
+
+每个 **Endpoint** 实例可声明 `capabilities: ['inbound']`、`['outbound']` 或两者（默认继承 Adapter 上限）。能力与方法的对应关系：
+
+| 能力 | 方法 |
+|------|------|
+| `inbound` | `$connect`、`$disconnect`、`$formatMessage` |
+| `outbound` | `$sendMessage`、`$recallMessage`；入站 `Message` 上可绑定 `$reply` |
+| 双向 | 全部 |
+
+纯入站 endpoint（如仅 webhook 的 IoT）不实现出站方法；跨平台回复请 **`inject(outboundAdapter).sendMessage(...)`**。纯出站 endpoint（如通知推送）跳过 `$connect`，启动后 `$connected` 默认为 `true`。Endpoint 连接状态变化会通过 Plugin `endpoint.connect` / `endpoint.disconnect` / `endpoint.error` 与 `Notice`（`endpoint.lifecycle`）双通道发出。
+
 ## 入站（用户 → 机器人）
 
-1. **平台 SDK / Bot** 收到原始事件，组装为框架的 `Message`，通常调用 **`adapter.emit('message.receive', message)`**。
+1. **平台 SDK / Endpoint** 收到原始事件，组装为框架的 `Message`，通常调用 **`adapter.emit('message.receive', message)`**。
 2. **`Adapter` 对 `message.receive` 的处理是串行的**：
    - 先 **`await`** 根插件注入的 **`MessageDispatcher.dispatch(message)`**（若未注册 `dispatch` 会记错误日志，命令/AI 主路由不会执行）。
    - 再 **`await` 根插件** `dispatch('message.receive', message)`，触发插件生命周期（例如你在根插件上的 `plugin.on('message.receive')`、统一收件箱等）。

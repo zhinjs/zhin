@@ -3,18 +3,18 @@ import chalk from 'chalk';
 import {
   ADAPTERS_DOCS_URL,
   adapterDocsUrl,
-  configureDiscordBot,
-  configureGitHubBot,
+  configureDiscordEndpoint,
+  configureGitHubEndpoint,
   configureOneBot11Bot,
   configureQQBot,
-  configureSlackBot,
-  configureTelegramBot,
+  configureSlackEndpoint,
+  configureTelegramEndpoint,
 } from './adapter-configurers.js';
 
 export interface AdapterSetupResult {
   packages: string[];
   plugins: string[];
-  bots: Array<Record<string, any>>;
+  endpoints: Array<Record<string, any>>;
   envVars: Record<string, string>;
   /** 所选适配器需要 database 插件（如 GitHub 订阅/OAuth 表） */
   requiresDatabase?: boolean;
@@ -33,7 +33,7 @@ interface AdapterDefinition {
   /** 文档：zhin.js.org/adapters/<slug>；索引见 ADAPTERS_DOCS_URL */
   docUrl?: string;
   requiresDatabase?: boolean;
-  configure?: (ctx: import('./adapter-configurers.js').BotConfigureContext) => Promise<Record<string, unknown>>;
+  configure?: (ctx: import('./adapter-configurers.js').EndpointConfigureContext) => Promise<Record<string, unknown>>;
   fields: AdapterField[];
 }
 
@@ -89,10 +89,10 @@ const ADAPTERS: AdapterDefinition[] = [
     package: '@zhin.js/adapter-kook',
     plugin: '@zhin.js/adapter-kook',
     needsHttp: true,
-    description: 'KOOK 语音平台 Bot',
-    setupHint: '在 KOOK 开发者中心创建 Bot 并复制 Token；需配置 Webhook 回调地址（公网或内网穿透）。',
+    description: 'KOOK 语音平台 Endpoint',
+    setupHint: '在 KOOK 开发者中心创建 Endpoint 并复制 Token；需配置 Webhook 回调地址（公网或内网穿透）。',
     fields: [
-      { key: 'token', message: 'KOOK Bot Token:', required: true, type: 'password', envKey: 'KOOK_TOKEN' },
+      { key: 'token', message: 'KOOK Endpoint Token:', required: true, type: 'password', envKey: 'KOOK_TOKEN' },
     ],
   },
   {
@@ -104,7 +104,7 @@ const ADAPTERS: AdapterDefinition[] = [
     description: 'Discord（Gateway 或 Interactions）',
     setupHint: 'Developer Portal 创建 Bot；Gateway 用 Token，Interactions 需 Application ID + Public Key。',
     docUrl: adapterDocsUrl('discord'),
-    configure: configureDiscordBot,
+    configure: configureDiscordEndpoint,
     fields: [],
   },
   {
@@ -116,7 +116,7 @@ const ADAPTERS: AdapterDefinition[] = [
     description: 'Telegram Bot（polling / webhook 可选）',
     setupHint: '@BotFather 获取 Token；polling 适合本地，webhook 需 HTTPS 公网域名。',
     docUrl: adapterDocsUrl('telegram'),
-    configure: configureTelegramBot,
+    configure: configureTelegramEndpoint,
     fields: [],
   },
   {
@@ -128,7 +128,7 @@ const ADAPTERS: AdapterDefinition[] = [
     description: 'Slack（Socket Mode 或 HTTP Events）',
     setupHint: 'Socket Mode 无需公网；HTTP 模式需配置 Event Subscriptions URL。',
     docUrl: adapterDocsUrl('slack'),
-    configure: configureSlackBot,
+    configure: configureSlackEndpoint,
     fields: [],
   },
   {
@@ -213,19 +213,19 @@ const ADAPTERS: AdapterDefinition[] = [
     setupHint: 'GitHub App 或 gh CLI；Webhook 用 /pub/github/webhook；需 database 存订阅与 OAuth。',
     docUrl: adapterDocsUrl('github'),
     requiresDatabase: true,
-    configure: configureGitHubBot,
+    configure: configureGitHubEndpoint,
     fields: [],
   },
 ];
 
 /**
- * 适配器选择与 Bot 配置引导向导
+ * 适配器选择与 Endpoint 配置引导向导
  */
 export async function configureAdapters(): Promise<AdapterSetupResult> {
   console.log('');
   console.log(chalk.blue('🔌 配置聊天适配器'));
   console.log(chalk.gray('  Sandbox 适合本地调试；生产环境请额外勾选目标 IM 平台。'));
-  console.log(chalk.gray('  带 Webhook 的适配器需要 Bot 可被公网访问（或使用内网穿透）。'));
+  console.log(chalk.gray('  带 Webhook 的适配器需要 Endpoint 可被公网访问（或使用内网穿透）。'));
 
   const { selectedAdapters } = await inquirer.prompt([
     {
@@ -266,7 +266,7 @@ export async function configureAdapters(): Promise<AdapterSetupResult> {
   const result: AdapterSetupResult = {
     packages: [],
     plugins: [],
-    bots: [],
+    endpoints: [],
     envVars: {},
     requiresDatabase: false,
   };
@@ -303,7 +303,7 @@ export async function configureAdapters(): Promise<AdapterSetupResult> {
 
     if (adapterDef.configure) {
       let markedDb = false;
-      const botConfig = await adapterDef.configure({
+      const endpointConfig = await adapterDef.configure({
         envVars: result.envVars,
         markRequiresDatabase: () => {
           markedDb = true;
@@ -311,11 +311,11 @@ export async function configureAdapters(): Promise<AdapterSetupResult> {
         },
       });
       if (markedDb) result.requiresDatabase = true;
-      result.bots.push(botConfig);
+      result.endpoints.push(endpointConfig);
       continue;
     }
 
-    const botConfig: Record<string, any> = {
+    const endpointConfig: Record<string, any> = {
       context: adapterDef.value,
     };
 
@@ -343,13 +343,13 @@ export async function configureAdapters(): Promise<AdapterSetupResult> {
       if (field.envKey) {
         // 敏感信息存 .env，配置引用环境变量
         result.envVars[field.envKey] = value || '';
-        botConfig[field.key] = `\${${field.envKey}}`;
+        endpointConfig[field.key] = `\${${field.envKey}}`;
       } else {
-        botConfig[field.key] = value;
+        endpointConfig[field.key] = value;
       }
     }
 
-    result.bots.push(botConfig);
+    result.endpoints.push(endpointConfig);
   }
 
   return result;
@@ -370,7 +370,7 @@ export function generateAdapterEnvVars(result: AdapterSetupResult): string {
 }
 
 /**
- * 将 bot 配置项格式化为 YAML 行
+ * 将 Endpoint 配置项格式化为 YAML 行
  */
 function appendYamlValue(lines: string[], key: string, value: unknown, indent: number): void {
   const pad = '  '.repeat(indent);
@@ -405,20 +405,20 @@ function appendYamlValue(lines: string[], key: string, value: unknown, indent: n
 }
 
 /**
- * 生成 YAML 格式的 bots 配置段
+ * 生成 YAML 格式的 endpoints 配置段
  */
-export function generateBotsConfigYaml(result: AdapterSetupResult): string {
-  if (result.bots.length === 0) {
+export function generateEndpointsConfigYaml(result: AdapterSetupResult): string {
+  if (result.endpoints.length === 0) {
     return `
 
-# Sandbox：Remote Console 打开「沙盒」页并通过 WebSocket 连接时自动创建 bot
-bots: []
+# Sandbox：Remote Console 打开「沙盒」页并通过 WebSocket 连接时自动创建 Endpoint
+endpoints: []
 `;
   }
 
-  const lines: string[] = ['', 'bots:'];
-  for (const bot of result.bots) {
-    const { context, ...config } = bot;
+  const lines: string[] = ['', 'endpoints:'];
+  for (const entry of result.endpoints) {
+    const { context, ...config } = entry;
     lines.push(`  - context: ${context}`);
     for (const [key, value] of Object.entries(config)) {
       appendYamlValue(lines, key, value, 2);
@@ -429,15 +429,15 @@ bots: []
 }
 
 /**
- * 生成 TOML 格式的 bots 配置段
+ * 生成 TOML 格式的 endpoints 配置段
  */
-export function generateBotsConfigToml(result: AdapterSetupResult): string {
-  if (result.bots.length === 0) return '';
+export function generateEndpointsConfigToml(result: AdapterSetupResult): string {
+  if (result.endpoints.length === 0) return '';
 
   const lines: string[] = [''];
-  for (const bot of result.bots) {
-    lines.push('[[bots]]');
-    for (const [key, value] of Object.entries(bot)) {
+  for (const entry of result.endpoints) {
+    lines.push('[[endpoints]]');
+    for (const [key, value] of Object.entries(entry)) {
       if (typeof value === 'string') {
         lines.push(`${key} = "${value.replace(/"/g, '\\"')}"`);
       } else {
@@ -450,11 +450,11 @@ export function generateBotsConfigToml(result: AdapterSetupResult): string {
 }
 
 /**
- * 生成 JSON 格式的 bots 配置段
+ * 生成 JSON 格式的 endpoints 配置段
  */
-export function generateBotsConfigJSON(result: AdapterSetupResult): string {
-  if (result.bots.length === 0) return '';
-  return `  "bots": ${JSON.stringify(result.bots, null, 4).replace(/^/gm, '  ').trimStart()},`;
+export function generateEndpointsConfigJSON(result: AdapterSetupResult): string {
+  if (result.endpoints.length === 0) return '';
+  return `  "endpoints": ${JSON.stringify(result.endpoints, null, 4).replace(/^/gm, '  ').trimStart()},`;
 }
 
 /**
@@ -462,21 +462,21 @@ export function generateBotsConfigJSON(result: AdapterSetupResult): string {
  */
 export function getAdapterSetupNotes(result: AdapterSetupResult): string[] {
   const notes: string[] = [];
-  for (const bot of result.bots) {
-    const context = bot.context as string;
-    if (context === 'telegram' && bot.polling === false) {
+  for (const entry of result.endpoints) {
+    const context = entry.context as string;
+    if (context === 'telegram' && entry.polling === false) {
       notes.push('Telegram Webhook: 确保 HTTPS 域名可从公网访问，且 webhook.port 已放行');
     }
-    if (context === 'telegram' && bot.polling !== false) {
+    if (context === 'telegram' && entry.polling !== false) {
       notes.push('Telegram polling: 本地开发可直接 pnpm dev，无需公网');
     }
     if (context === 'github') {
-      if (bot.webhook_secret) {
+      if (entry.webhook_secret) {
         notes.push('GitHub Webhook: App 设置 URL 为 https://<域名>/pub/github/webhook');
       } else {
         notes.push('GitHub polling: 无 Webhook 时将轮询 Events API（默认 60s）');
       }
-      if (bot.app_id) {
+      if (entry.app_id) {
         notes.push('GitHub App: 私钥路径需存在，且 App 已安装到目标仓库');
       } else {
         notes.push('GitHub gh CLI: 运行 gh auth login 完成认证');

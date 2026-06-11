@@ -18,7 +18,7 @@ import {
   type AssistantMessage,
   type TokenUsage,
 } from '@zhin.js/ai';
-import { runWithBashToolContext } from '../security/bash-tool-context.js';
+import { runWithCommMessage } from '../security/comm-message-context.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
 import { createOwnerOrchestratedToolResultTransform } from '../orchestrator/owner-confirm-orchestration.js';
 import { resolveModelHarness } from './model-harness.js';
@@ -29,7 +29,7 @@ import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-f
 import { transformContextWithCompaction } from './compaction-runtime.js';
 import { logPhase, usageLogFields } from './phase-trace.js';
 import type { PromptTurnHooks } from './prompt-controller.js';
-import type { ZhinAgentPrivate, OnChunkCallback, ToolContext } from './zhin-agent-private.js';
+import type { ZhinAgentPrivate, OnChunkCallback, Message } from './zhin-agent-private.js';
 
 const logger = new Logger(null, 'ZhinAgent:AgentLoopTurn');
 
@@ -77,8 +77,8 @@ export interface AgentLoopTurnInput {
   /** 本轮 user 消息 extra（入库 agent_messages.extra） */
   userMessageExtra?: import('@zhin.js/ai').AgentMessageExtra;
   rawContent: string;
-  context: ToolContext;
-  contextForTools: ToolContext;
+  commMessage: Message;
+  contextForTools: Message;
   allTools: AgentTool[];
   resolvedTools: AgentTool[];
   personaEnhanced: string;
@@ -103,7 +103,7 @@ export interface AgentLoopTurnResult {
 export interface AgentLoopVisionTurnInput {
   host: ZhinAgentPrivate;
   sessionId: string;
-  context: ToolContext;
+  commMessage: Message;
   visionSystemPrompt: string;
   userMessages: AgentMessage[];
   modelCandidates: string[];
@@ -117,7 +117,7 @@ export type AgentLoopVisionTurnResult = AgentLoopTurnResult & { path: 'multimoda
 async function runAgentLoopVisionTurnOnce(
   input: AgentLoopVisionTurnInput & { modelId: string },
 ): Promise<AgentLoopVisionTurnResult> {
-  const { host, sessionId, context, visionSystemPrompt, modelId, onChunk, promptHooks, signal } = input;
+  const { host, sessionId, commMessage, visionSystemPrompt, modelId, onChunk, promptHooks, signal } = input;
   const repo = host.contextRepository;
   const providerAlias = host.getTurnProvider().name;
   const llmModel = getModel(providerAlias, modelId);
@@ -215,7 +215,7 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
     host,
     sessionId,
     userMessageExtra,
-    context,
+    commMessage,
     contextForTools,
     allTools,
     resolvedTools,
@@ -244,7 +244,7 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
   const systemPrompt = hasTools
     ? await buildAgentPathSystemPrompt(host, {
         content: input.rawContent,
-        context: contextForTools,
+        commMessage: contextForTools,
         sessionId,
         personaEnhanced,
         preData,
@@ -273,7 +273,7 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
   }
 
   const transformToolResult = createOwnerOrchestratedToolResultTransform({
-    toolContext: contextForTools,
+    commMessage: contextForTools,
     disableHardOrchestration: false,
     plugin: orchestrationPlugin,
   });
@@ -317,7 +317,7 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
       transformContextWithCompaction(messages, ctxSignal, {
         host,
         sessionId,
-        context: contextForTools,
+        commMessage: contextForTools,
         model: llmModel,
         compactionConfig: host.config.compaction,
         contextWindow,
@@ -328,7 +328,7 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
       transformContextWithCompaction(messages, ctxSignal, {
         host,
         sessionId,
-        context: contextForTools,
+        commMessage: contextForTools,
         model: llmModel,
         compactionConfig: host.config.compaction,
         contextWindow,
@@ -344,7 +344,7 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
         return toolResultToAgentMessage(toolCall, `Unknown tool: ${toolCall.name}`, true);
       }
       try {
-        const raw = await runWithBashToolContext(contextForTools, () =>
+        const raw = await runWithCommMessage(contextForTools, () =>
           legacy.execute(toolCall.arguments),
         );
         const rawText = typeof raw === 'string' ? raw : JSON.stringify(raw ?? null);

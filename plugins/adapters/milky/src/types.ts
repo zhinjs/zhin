@@ -35,7 +35,7 @@ export interface MilkyWssConfig extends MilkyConfigBase {
   heartbeat_interval?: number;
 }
 
-export type MilkyBotConfig = MilkyWsConfig | MilkySseConfig | MilkyWebhookConfig | MilkyWssConfig;
+export type MilkyEndpointConfig = MilkyWsConfig | MilkySseConfig | MilkyWebhookConfig | MilkyWssConfig;
 
 /** 协议端 API 响应：status、retcode、data?、message? */
 export interface MilkyApiResponse<T = unknown> {

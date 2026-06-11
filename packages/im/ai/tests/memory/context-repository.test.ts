@@ -27,7 +27,7 @@ describe('ContextRepository', () => {
     const session = await sessionStore.getOrCreateActive({
       session_key: 'icqq:bot1:group:123',
       platform: 'icqq',
-      bot_id: 'bot1',
+      endpoint_id: 'bot1',
       scene_id: '123',
       scene_type: 'group',
     });
@@ -184,7 +184,7 @@ describe('ContextRepository', () => {
     const next = await sessionStore.getOrCreateActive({
       session_key: 'icqq:bot1:group:123',
       platform: 'icqq',
-      bot_id: 'bot1',
+      endpoint_id: 'bot1',
       scene_id: '123',
       scene_type: 'group',
     });
@@ -228,7 +228,7 @@ describe('DatabaseContextRepository parent_id chain', () => {
     const session = await sessionStore.getOrCreateActive({
       session_key: 'db:test',
       platform: 'test',
-      bot_id: 'b1',
+      endpoint_id: 'b1',
       scene_id: 'u1',
       scene_type: 'private',
     });

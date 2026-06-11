@@ -1,4 +1,11 @@
-import { Bot } from "./bot.js";
+import { Endpoint } from "./endpoint.js";
+import {
+  assertOutbound,
+  DEFAULT_ENDPOINT_CAPABILITIES,
+  hasInbound,
+  type EndpointCapability,
+} from "./endpoint-capabilities.js";
+import { connectEndpointInstance, disconnectEndpointInstance } from "./built/connect-endpoint-instance.js";
 import { Plugin } from "./plugin.js";
 import { EventEmitter } from "node:events";
 import { Message } from "./message.js";
@@ -16,9 +23,15 @@ import { formatCompact, truncatePreview } from '@zhin.js/logger';
  * 
  * 适配器可以提供 AI 工具，供 AI 服务调用。
  */
-export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.Lifecycle> {
-  public bots: Map<string, R> = new Map<string, R>();
+export abstract class Adapter<
+  R extends Endpoint = Endpoint,
+  const Caps extends readonly EndpointCapability[] = typeof DEFAULT_ENDPOINT_CAPABILITIES,
+> extends EventEmitter<Adapter.Lifecycle> {
+  public endpoints: Map<string, R> = new Map<string, R>();
   private recallMessageHandler: (...args: any[]) => Promise<void>;
+
+  /** Adapter 支持的能力上限（子类覆盖） */
+  static readonly capabilities: readonly EndpointCapability[] = DEFAULT_ENDPOINT_CAPABILITIES;
 
   /** 入站消息并发计数 */
   #pendingMessages = 0;
@@ -43,19 +56,20 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
   /**
    * 构造函数
    * @param name 适配器名称（如 'process'、'qq' 等）
-   * @param botFactory Bot工厂函数或构造器
+   * @param endpointFactory Bot工厂函数或构造器
    */
   constructor(
     public plugin: Plugin,
     public name: keyof Plugin.Contexts,
-    public config: Adapter.BotConfig<R>[]
+    public config: Adapter.EndpointConfig<R>[]
   ) {
     super();
-    this.recallMessageHandler = async(bot_id: string, id: string) => {
-      const bot = this.bots.get(bot_id);
-      if(!bot) throw new Error(`Bot ${bot_id} not found`);
-      this.logger.debug(formatCompact( { recall: id, bot: bot_id }));
-      await bot.$recallMessage(id);
+    this.recallMessageHandler = async(endpoint_id: string, id: string) => {
+      const endpoint = this.endpoints.get(endpoint_id);
+      if(!endpoint) throw new Error(`Endpoint ${endpoint_id} not found`);
+      assertOutbound(endpoint);
+      this.logger.debug(formatCompact( { recall: id, endpoint: endpoint_id }));
+      await endpoint.$recallMessage(id);
     };
     this.on('call.recallMessage', this.recallMessageHandler);
   }
@@ -70,13 +84,24 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
     event: string | symbol,
     ...args: unknown[]
   ): boolean => {
+    if (event === 'notice.receive' || event === 'request.receive') {
+      const bridged = EventEmitter.prototype.emit.call(this, event, ...args);
+      if (this.plugin) {
+        void this.plugin.dispatch(
+          event as 'notice.receive' | 'request.receive',
+          args[0] as never,
+        );
+      }
+      return bridged;
+    }
+
     if (event !== 'message.receive') {
       return EventEmitter.prototype.emit.call(this, event, ...args);
     }
     const message = args[0] as Message;
     this.logger.info(formatCompact( {
       recv: `${message.$channel.type}(${message.$channel.id})`,
-      bot: message.$bot,
+      endpoint: message.$endpoint,
       preview: truncatePreview(segment.raw(message.$content)),
       ...(message.$quote_id ? { quote_id: message.$quote_id } : {}),
     }));
@@ -107,7 +132,7 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
     });
     return true;
   }) as EventEmitter<Adapter.Lifecycle>['emit'];
-  abstract createBot(config: Adapter.BotConfig<R>): R;
+  abstract createEndpoint(config: Adapter.EndpointConfig<R>): R;
   get logger() {
     if(!this.plugin) throw new Error("Adapter is not associated with any plugin");
     return this.plugin.logger;
@@ -148,14 +173,15 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
   }
   async sendMessage(options:SendOptions):Promise<string>{
     options=await this.renderSendMessage(options);
-    const bot = this.bots.get(options.bot);
-    if(!bot) throw new Error(`Bot ${options.bot} not found`);
+    const endpoint = this.endpoints.get(options.endpoint);
+    if(!endpoint) throw new Error(`Endpoint ${options.endpoint} not found`);
+    assertOutbound(endpoint);
     this.logger.info(formatCompact( {
       send: `${options.type}(${options.id})`,
-      bot: options.bot,
+      endpoint: options.endpoint,
       preview: truncatePreview(segment.raw(options.content)),
     }));
-    const messageId = await bot.$sendMessage(options);
+    const messageId = await endpoint.$sendMessage(options);
     const replyStore = getOutboundReplyStore();
     this.plugin.root.dispatch('message.send', {
       adapter: this.name,
@@ -167,7 +193,7 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
     return messageId;
   }
   async start() {
-    if (this.bots.size > 0) {
+    if (this.endpoints.size > 0) {
       await this.stop();
     }
     const rootAdapters = this.plugin.root.adapters;
@@ -177,30 +203,34 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
     if (!this.config?.length) return;
 
     for (const config of this.config) {
-      const bot = this.createBot(config);
-      await bot.$connect();
-      this.logger.debug(formatCompact( { connect: bot.$id, adapter: this.name }));
-      this.bots.set(bot.$id, bot);
+      const endpoint = await connectEndpointInstance({
+        plugin: this.plugin,
+        adapter: this,
+        config: config as Record<string, unknown>,
+      });
+      this.logger.debug(formatCompact( { connect: endpoint.$id, adapter: this.name }));
+      this.endpoints.set(endpoint.$id, endpoint as R);
     }
     this.logger.debug(formatCompact( { adapter: this.name }));
   }
   /**
-   * 停止适配器，断开并移除所有Bot实例
-   * @param plugin 所属插件实例
+   * 停止适配器，断开并移除所有 Endpoint 实例
    */
   async stop() {
     const errors: Error[] = [];
-    for (const [id, bot] of this.bots) {
+    for (const [id, endpoint] of this.endpoints) {
       try {
-        await bot.$disconnect();
+        if (hasInbound(endpoint)) {
+          await disconnectEndpointInstance(this.plugin, this, endpoint);
+        }
         this.logger.debug(formatCompact( { disconnect: id, adapter: this.name }));
       } catch (error) {
         errors.push(error instanceof Error ? error : new Error(String(error)));
-        this.logger.error(`bot ${id} of adapter ${this.name} disconnect failed:`, error);
+        this.logger.error(`endpoint ${id} of adapter ${this.name} disconnect failed:`, error);
       }
     }
     // 无论是否有错误，始终完成清理
-    this.bots.clear();
+    this.endpoints.clear();
     
     // 从 adapters 数组中移除（可能因重复 start 出现多条同名，需全部删掉）
     const rootAdapters = this.plugin.root.adapters;
@@ -210,18 +240,19 @@ export abstract class Adapter<R extends Bot = Bot> extends EventEmitter<Adapter.
     
     // 移除所有事件监听器
     this.removeAllListeners();
-    this.recallMessageHandler = async(bot_id: string, id: string) => {
-      const bot = this.bots.get(bot_id);
-      if(!bot) throw new Error(`Bot ${bot_id} not found`);
-      this.logger.debug(formatCompact( { recall: id, bot: bot_id }));
-      await bot.$recallMessage(id);
+    this.recallMessageHandler = async(endpoint_id: string, id: string) => {
+      const endpoint = this.endpoints.get(endpoint_id);
+      if(!endpoint) throw new Error(`Endpoint ${endpoint_id} not found`);
+      assertOutbound(endpoint);
+      this.logger.debug(formatCompact( { recall: id, endpoint: endpoint_id }));
+      await endpoint.$recallMessage(id);
     };
     this.on('call.recallMessage', this.recallMessageHandler);
     
     this.logger.debug(formatCompact( { stop: this.name }));
     
     if (errors.length) {
-      throw new AggregateError(errors, `adapter ${this.name}: ${errors.length} bot(s) failed to disconnect`);
+      throw new AggregateError(errors, `adapter ${this.name}: ${errors.length} endpoint(s) failed to disconnect`);
     }
   }
 }
@@ -231,7 +262,7 @@ export namespace Adapter {
     new (
     plugin: Plugin,
     name: string,
-    config: Adapter.BotConfig<Adapter.InferBot<R>>[]
+    config: Adapter.EndpointConfig<Adapter.InferEndpoint<R>>[]
   ):R
   };
   export interface Lifecycle {
@@ -248,11 +279,11 @@ export namespace Adapter {
    * 灵感来源于 zhinjs/next 的 Adapter.Registry
    */
   export const Registry = new Map<string, Factory>();
-  export type InferBot<R extends Adapter=Adapter> = R extends Adapter<infer T>
+  export type InferEndpoint<R extends Adapter=Adapter> = R extends Adapter<infer T>
     ? T
     : never;
-  export type BotConfig<T extends Bot> = T extends Bot<infer R> ? R : never;
-  export type BotMessage<T extends Bot> = T extends Bot<infer _L, infer R>
+  export type EndpointConfig<T extends Endpoint> = T extends Endpoint<infer R> ? R : never;
+  export type EndpointMessage<T extends Endpoint> = T extends Endpoint<infer _L, infer R>
     ? R
     : never;
   /**

@@ -29,7 +29,7 @@ declare module "zhin.js" {
 }
 
 export * from "./types.js";
-export { IcqqBot } from "./bot.js";
+export { IcqqEndpoint } from "./endpoint.js";
 export { IcqqAdapter } from "./adapter.js";
 export {
   ICQQTypingIndicatorManager,

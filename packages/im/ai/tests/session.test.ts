@@ -22,7 +22,7 @@ import {
   SessionManager,
   createMemorySessionManager,
   resolveIMSessionId,
-  resolveIMSessionIdFromToolContext,
+  resolveIMSessionIdFromMessage,
 } from '@zhin.js/ai';
 
 describe('MemorySessionManager', () => {
@@ -201,13 +201,13 @@ describe('resolveIMSessionId', () => {
   it('群聊：同群不同用户 sessionId 相同', () => {
     const a = resolveIMSessionId({
       platform: 'icqq',
-      botId: '75318',
+      endpointId: '75318',
       scope: 'group',
       sceneId: '123456',
     });
     const b = resolveIMSessionId({
       platform: 'icqq',
-      botId: '75318',
+      endpointId: '75318',
       scope: 'group',
       sceneId: '123456',
     });
@@ -216,18 +216,27 @@ describe('resolveIMSessionId', () => {
   });
 
   it('私聊：按用户区分', () => {
-    expect(resolveIMSessionIdFromToolContext({
-      platform: 'icqq',
-      botId: '75318',
-      scope: 'private',
-      senderId: 'userA',
+    expect(resolveIMSessionIdFromMessage({
+      $adapter: 'icqq',
+      $endpoint: '75318',
+      $channel: { type: 'private' },
+      $sender: { id: 'userA' },
     })).toBe('icqq:75318:private:userA');
+  });
+
+  it('Message：从 $ 字段生成 sessionId', () => {
+    expect(resolveIMSessionIdFromMessage({
+      $adapter: 'icqq',
+      $endpoint: '75318',
+      $channel: { type: 'group', id: '123456' },
+      $sender: { id: 'userA' },
+    })).toBe('icqq:75318:group:123456');
   });
 
   it('频道：使用 channel scope', () => {
     expect(resolveIMSessionId({
       platform: 'discord',
-      botId: 'bot1',
+      endpointId: 'bot1',
       scope: 'channel',
       sceneId: 'ch99',
     })).toBe('discord:bot1:channel:ch99');
@@ -238,13 +247,13 @@ describe('resolveIMSessionId', () => {
   it('群聊：同群不同用户 sessionId 相同', () => {
     const a = resolveIMSessionId({
       platform: 'icqq',
-      botId: '75318',
+      endpointId: '75318',
       scope: 'group',
       sceneId: '123456',
     });
     const b = resolveIMSessionId({
       platform: 'icqq',
-      botId: '75318',
+      endpointId: '75318',
       scope: 'group',
       sceneId: '123456',
     });
@@ -253,18 +262,27 @@ describe('resolveIMSessionId', () => {
   });
 
   it('私聊：按用户区分', () => {
-    expect(resolveIMSessionIdFromToolContext({
-      platform: 'icqq',
-      botId: '75318',
-      scope: 'private',
-      senderId: 'userA',
+    expect(resolveIMSessionIdFromMessage({
+      $adapter: 'icqq',
+      $endpoint: '75318',
+      $channel: { type: 'private' },
+      $sender: { id: 'userA' },
     })).toBe('icqq:75318:private:userA');
+  });
+
+  it('Message：从 $ 字段生成 sessionId', () => {
+    expect(resolveIMSessionIdFromMessage({
+      $adapter: 'icqq',
+      $endpoint: '75318',
+      $channel: { type: 'group', id: '123456' },
+      $sender: { id: 'userA' },
+    })).toBe('icqq:75318:group:123456');
   });
 
   it('频道：使用 channel scope', () => {
     expect(resolveIMSessionId({
       platform: 'discord',
-      botId: 'bot1',
+      endpointId: 'bot1',
       scope: 'channel',
       sceneId: 'ch99',
     })).toBe('discord:bot1:channel:ch99');

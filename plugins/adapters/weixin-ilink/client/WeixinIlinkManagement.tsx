@@ -3,7 +3,7 @@ import { Bot, LogIn, RefreshCw, Wifi, WifiOff, Loader2 } from "lucide-react";
 import LoginAssistPanel from "./LoginAssistPanel";
 import { apiFetch } from "./utils/api";
 
-interface BotRow {
+interface EndpointRow {
   name: string;
   connected: boolean;
   status: string;
@@ -14,7 +14,7 @@ type Tab = "overview" | "login";
 
 export default function WeixinIlinkManagement() {
   const [tab, setTab] = useState<Tab>("overview");
-  const [bots, setBots] = useState<BotRow[]>([]);
+  const [endpoints, setEndpoints] = useState<EndpointRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
@@ -22,13 +22,13 @@ export default function WeixinIlinkManagement() {
     setLoading(true);
     setErr(null);
     try {
-      const res = await apiFetch("/api/weixin-ilink/bots");
-      const json = (await res.json()) as { success?: boolean; data?: BotRow[]; message?: string };
+      const res = await apiFetch("/api/weixin-ilink/endpoints");
+      const json = (await res.json()) as { success?: boolean; data?: EndpointRow[]; message?: string };
       if (!res.ok || !json.success) throw new Error(json.message || "加载失败");
-      setBots(Array.isArray(json.data) ? json.data : []);
+      setEndpoints(Array.isArray(json.data) ? json.data : []);
     } catch (e) {
       setErr((e as Error).message);
-      setBots([]);
+      setEndpoints([]);
     } finally {
       setLoading(false);
     }
@@ -99,22 +99,22 @@ export default function WeixinIlinkManagement() {
             <div className="flex justify-center py-12">
               <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
             </div>
-          ) : bots.length === 0 ? (
+          ) : endpoints.length === 0 ? (
             <div className="border rounded-lg p-8 text-center text-muted-foreground">
-              暂无 weixin-ilink 机器人实例
+              暂无 weixin-ilink Endpoint 实例
             </div>
           ) : (
             <div className="grid gap-3">
-              {bots.map((bot) => (
-                <div key={bot.name} className="border rounded-lg p-4 flex items-center justify-between">
+              {endpoints.map((endpoint) => (
+                <div key={endpoint.name} className="border rounded-lg p-4 flex items-center justify-between">
                   <div>
-                    <div className="font-semibold">{bot.name}</div>
+                    <div className="font-semibold">{endpoint.name}</div>
                     <div className="text-xs text-muted-foreground mt-1">
-                      凭证：{bot.hasCredentials ? "已保存" : "未登录"}
+                      凭证：{endpoint.hasCredentials ? "已保存" : "未登录"}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
-                    {bot.connected ? (
+                    {endpoint.connected ? (
                       <>
                         <Wifi className="w-4 h-4 text-green-500" />
                         <span className="text-green-600">在线</span>

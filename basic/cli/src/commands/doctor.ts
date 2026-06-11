@@ -259,7 +259,7 @@ export const doctorCommand = new Command('doctor')
   });
 
 async function createDefaultConfig(cwd: string): Promise<void> {
-  const configContent = `bots:
+  const configContent = `endpoints:
   - context: sandbox
     name: sandbox-bot
 plugins:

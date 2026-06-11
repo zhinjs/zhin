@@ -344,7 +344,7 @@ docs/
 ```
 Error: Message parsing failed
     at MessageParser.parse (src/parser.ts:45:12)
-    at Bot.sendMessage (src/bot.ts:123:8)
+    at Endpoint.sendMessage (src/endpoint.ts:123:8)
 ```
 ```
 

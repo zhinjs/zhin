@@ -14,13 +14,13 @@ export function isPrivateChannel(channel?: SatoriChannel): boolean {
 export function formatSatoriMessagePayload(
   body: SatoriEventBody,
   adapterName: 'satori',
-  botName: string,
+  endpointName: string,
   recallFn: (msgId: string) => Promise<void>,
   replyFn: (channel: { id: string; type: 'group' | 'private' }, content: (string | { type: string; data?: Record<string, unknown> })[], quote?: boolean | string) => Promise<string>,
 ): {
   $id: string;
   $adapter: 'satori';
-  $bot: string;
+  $endpoint: string;
   $channel: { id: string; type: 'group' | 'private' };
   $sender: { id: string; name: string };
   $content: Array<{ type: string; data: Record<string, unknown> }>;
@@ -42,7 +42,7 @@ export function formatSatoriMessagePayload(
   return {
     $id: `${channelId}:${msg.id}`,
     $adapter: 'satori',
-    $bot: botName,
+    $endpoint: endpointName,
     $channel: { id: channelId, type: isPrivate ? 'private' : 'group' },
     $sender: { id: senderId, name: senderName },
     $content: [{ type: 'text', data: { text: raw } }],

@@ -7,18 +7,18 @@ import { MessageItemType } from "../src/ilink-types.js";
 import type { WeixinMessage } from "../src/ilink-types.js";
 import { createAdapterTestSuite } from "../../../../packages/im/core/tests/adapter-harness.js";
 import { WeixinIlinkAdapter } from "../src/adapter.js";
-import { WeixinIlinkBot } from "../src/bot.js";
-import type { WeixinIlinkBotConfig } from "../src/types.js";
+import { WeixinIlinkEndpoint } from "../src/endpoint.js";
+import type { WeixinIlinkEndpointConfig } from "../src/types.js";
 import { setContextToken } from "../src/context-store.js";
 
 const FIXED_TS = 1700000000000;
 const BOT_NAME = "test-bot";
 const PEER_ID = "wx-user-001";
 
-class MockWeixinIlinkBot extends WeixinIlinkBot {
+class MockWeixinIlinkEndpoint extends WeixinIlinkEndpoint {
   sendMock = vi.fn();
 
-  constructor(adapter: WeixinIlinkAdapter, config: WeixinIlinkBotConfig) {
+  constructor(adapter: WeixinIlinkAdapter, config: WeixinIlinkEndpointConfig) {
     super(adapter, config);
   }
 
@@ -37,8 +37,8 @@ class MockWeixinIlinkBot extends WeixinIlinkBot {
 }
 
 class MockWeixinIlinkAdapter extends WeixinIlinkAdapter {
-  createBot(config: WeixinIlinkBotConfig): MockWeixinIlinkBot {
-    return new MockWeixinIlinkBot(this, {
+  createEndpoint(config: WeixinIlinkEndpointConfig): MockWeixinIlinkEndpoint {
+    return new MockWeixinIlinkEndpoint(this, {
       context: "weixin-ilink",
       name: config.name || BOT_NAME,
       botToken: "mock-token",
@@ -65,7 +65,7 @@ function createWeixinRawEvent(overrides: Partial<WeixinMessage> = {}): WeixinMes
 
 createAdapterTestSuite<MockWeixinIlinkAdapter, WeixinMessage>({
   adapterName: "weixin-ilink",
-  botId: BOT_NAME,
+  endpointId: BOT_NAME,
   createAdapter: (plugin) => {
     const adapter = new MockWeixinIlinkAdapter(plugin);
     adapter.config = [
@@ -78,21 +78,21 @@ createAdapterTestSuite<MockWeixinIlinkAdapter, WeixinMessage>({
     return adapter;
   },
   createRawEvent: () => createWeixinRawEvent(),
-  setupBot: (bot) => {
+  setupEndpoint: (endpoint) => {
     setContextToken(BOT_NAME, PEER_ID, "ctx-mock-token");
-    if (bot instanceof MockWeixinIlinkBot) {
-      vi.spyOn(bot, "$connect").mockResolvedValue(undefined);
-      vi.spyOn(bot, "$disconnect").mockResolvedValue(undefined);
+    if (endpoint instanceof MockWeixinIlinkEndpoint) {
+      vi.spyOn(endpoint, "$connect").mockResolvedValue(undefined);
+      vi.spyOn(endpoint, "$disconnect").mockResolvedValue(undefined);
     }
   },
 });
 
-describe("WeixinIlinkBot formatting", () => {
+describe("WeixinIlinkEndpoint formatting", () => {
   it("formats text inbound message", () => {
     const plugin = new Plugin("/test/weixin-ilink");
     const adapter = new MockWeixinIlinkAdapter(plugin);
-    const bot = adapter.createBot({ context: "weixin-ilink", name: BOT_NAME, botToken: "t" });
-    const msg = bot.$formatMessage(createWeixinRawEvent());
+    const endpoint = adapter.createEndpoint({ context: "weixin-ilink", name: BOT_NAME, botToken: "t" });
+    const msg = endpoint.$formatMessage(createWeixinRawEvent());
     expect(msg.$adapter).toBe("weixin-ilink");
     expect(msg.$channel.type).toBe("private");
     expect(msg.$channel.id).toBe(PEER_ID);
@@ -100,22 +100,22 @@ describe("WeixinIlinkBot formatting", () => {
   });
 });
 
-describe("WeixinIlinkBot send guard", () => {
+describe("WeixinIlinkEndpoint send guard", () => {
   it("refuses send without context_token", async () => {
     const plugin = new Plugin("/test/weixin-ilink");
     const adapter = new WeixinIlinkAdapter(plugin);
-    const bot = new WeixinIlinkBot(adapter, {
+    const endpoint = new WeixinIlinkEndpoint(adapter, {
       context: "weixin-ilink",
       name: "no-ctx-bot",
       botToken: "t",
     });
-    (bot as unknown as { creds: { botToken: string } }).creds = { botToken: "t" };
+    (endpoint as unknown as { creds: { botToken: string } }).creds = { botToken: "t" };
     await expect(
-      bot.$sendMessage({
+      endpoint.$sendMessage({
         type: "private",
         id: "unknown-peer",
         context: "weixin-ilink",
-        bot: "no-ctx-bot",
+        endpoint: "no-ctx-bot",
         content: [{ type: "text", data: { text: "hi" } }],
       }),
     ).rejects.toThrow(/context_token/);

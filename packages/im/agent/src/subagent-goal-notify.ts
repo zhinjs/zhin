@@ -4,9 +4,9 @@
  * 注意：`kind` 是用户可见的「执行通道」（异步/视觉/定时/同步/编排），
  * 与 AgentDispatcher 内部的 `AgentRole`（subtask/worker 等工具权限）不是同一概念。
  */
-import type { ToolContext } from '@zhin.js/core';
+import type { AgentTurnMessage, Message } from '@zhin.js/core';
 
-/** ToolContext.extra 中挂载的回调键 */
+/** AgentTurnMessage.extra 中挂载的回调键 */
 export const SUBAGENT_GOAL_NOTIFY_EXTRA_KEY = 'onSubagentGoal';
 
 /** 用户可见的执行通道（进度提示中间段） */
@@ -69,16 +69,17 @@ export function formatSubagentProcessingMessage(notice: SubagentProcessingNotice
   return `任务【${taskId}】:${channel} => ${label}`;
 }
 
-export function getSubagentGoalNotifier(ctx?: ToolContext): SubagentGoalNotifier | undefined {
-  const fn = ctx?.extra?.[SUBAGENT_GOAL_NOTIFY_EXTRA_KEY];
+export function getSubagentGoalNotifier(commMessage?: Message): SubagentGoalNotifier | undefined {
+  const extra = commMessage ? (commMessage as AgentTurnMessage).extra : undefined;
+  const fn = extra?.[SUBAGENT_GOAL_NOTIFY_EXTRA_KEY];
   return typeof fn === 'function' ? (fn as SubagentGoalNotifier) : undefined;
 }
 
 export async function notifySubagentGoal(
-  ctx: ToolContext | undefined,
+  commMessage: Message | undefined,
   notice: SubagentProcessingNotice,
 ): Promise<void> {
-  const notify = getSubagentGoalNotifier(ctx);
+  const notify = getSubagentGoalNotifier(commMessage);
   if (!notify) return;
   if (!notice.taskId.trim() || !notice.label.trim()) return;
   try {

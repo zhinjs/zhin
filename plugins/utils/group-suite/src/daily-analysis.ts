@@ -49,7 +49,7 @@ function getChannelFromMessage(
   channelId: string;
   channelType: string;
   adapter?: string;
-  botId?: string;
+  endpointId?: string;
 } | null {
   const ch = message?.$channel;
   if (!ch?.id) return null;
@@ -57,7 +57,7 @@ function getChannelFromMessage(
     channelId: String(ch.id),
     channelType: String(ch.type || "private"),
     adapter: message?.$adapter,
-    botId: message?.$bot,
+    endpointId: message?.$endpoint,
   };
 }
 
@@ -68,7 +68,7 @@ useContext("database", (db) => {
     channel_id: { type: "text", nullable: false },
     channel_type: { type: "text", nullable: false },
     adapter: { type: "text", default: "" },
-    bot_id: { type: "text", default: "" },
+    endpoint_id: { type: "text", default: "" },
     enabled: { type: "integer", default: 1 },
     updated_at: { type: "text", default: "" },
   });
@@ -115,7 +115,7 @@ async function setAnalysisEnabledForChannel(
   channelId: string,
   channelType: string,
   adapter: string,
-  botId: string,
+  endpointId: string,
   enabled: boolean,
 ): Promise<void> {
   const Settings = getSettingsModel();
@@ -130,14 +130,14 @@ async function setAnalysisEnabledForChannel(
     await Settings.update({
       enabled: enabled ? 1 : 0,
       updated_at: ts,
-      bot_id: botId || rows[0].bot_id || "",
+      endpoint_id: endpointId || rows[0].endpoint_id || "",
     }).where({ id: rows[0].id });
   } else {
     await Settings.insert({
       channel_id: channelId,
       channel_type: channelType,
       adapter: adapter || "",
-      bot_id: botId || "",
+      endpoint_id: endpointId || "",
       enabled: enabled ? 1 : 0,
       updated_at: ts,
     });
@@ -166,7 +166,7 @@ function getTimeRangeDays(days: number): {
 async function queryInboxMessages(
   channelId: string,
   adapter: string,
-  botId: string,
+  endpointId: string,
   startTs: number,
   endTs: number,
   limit: number,
@@ -181,7 +181,7 @@ async function queryInboxMessages(
           channel_id: channelId,
           channel_type: "group",
           adapter: adapter || "",
-          bot_id: botId || "",
+          endpoint_id: endpointId || "",
           created_at: { $gte: startTs, $lte: endTs },
         })
         .orderBy("created_at", "ASC")
@@ -191,7 +191,7 @@ async function queryInboxMessages(
         channel_id: channelId,
         channel_type: "group",
         adapter: adapter || "",
-        bot_id: botId || "",
+        endpoint_id: endpointId || "",
       });
       rows = (rows || [])
         .filter((r: any) => r.created_at >= startTs && r.created_at <= endTs)
@@ -209,7 +209,7 @@ async function runAnalysis(
   channelId: string,
   channelName: string,
   adapter: string,
-  botId: string,
+  endpointId: string,
   days: number,
 ): Promise<AnalysisResult | string> {
   const Inbox = getInboxModel();
@@ -220,7 +220,7 @@ async function runAnalysis(
   const rows = await queryInboxMessages(
     channelId,
     adapter,
-    botId,
+    endpointId,
     start,
     end,
     config.analysisMaxMessages,
@@ -311,7 +311,7 @@ addCommand(
         ch.channelId,
         channelName,
         ch.adapter || "",
-        ch.botId || "",
+        ch.endpointId || "",
         days,
       );
       if (typeof report === "string") return report;
@@ -331,13 +331,13 @@ addCommand(
       }
       const op = (result.params?.操作 || "status").trim().toLowerCase();
       const adapter = ch.adapter || "";
-      const botId = ch.botId || "";
+      const endpointId = ch.endpointId || "";
       if (op === "enable") {
         await setAnalysisEnabledForChannel(
           ch.channelId,
           ch.channelType,
           adapter,
-          botId,
+          endpointId,
           true,
         );
         return "已为本群启用日常分析。";
@@ -347,7 +347,7 @@ addCommand(
           ch.channelId,
           ch.channelType,
           adapter,
-          botId,
+          endpointId,
           false,
         );
         return "已为本群关闭日常分析。";
@@ -376,7 +376,7 @@ useContext("database", () => {
       new Cron(config.autoAnalysisCron, async () => {
         const inject = root.inject?.bind(root) as (key: string) => any;
         if (typeof inject !== "function") return;
-        const targets: { channelId: string; adapter: string; botId: string }[] =
+        const targets: { channelId: string; adapter: string; endpointId: string }[] =
           [];
         const Settings = getSettingsModel();
         if (Settings) {
@@ -389,7 +389,7 @@ useContext("database", () => {
               targets.push({
                 channelId: String(r.channel_id),
                 adapter: String(r.adapter),
-                botId: String(r.bot_id || ""),
+                endpointId: String(r.endpoint_id || ""),
               });
           }
         }
@@ -402,7 +402,7 @@ useContext("database", () => {
             targets.push({
               channelId: String(gid),
               adapter: adapterName,
-              botId: "",
+              endpointId: "",
             });
         }
         for (const t of targets) {
@@ -416,22 +416,22 @@ useContext("database", () => {
               t.channelId,
               "",
               t.adapter,
-              t.botId,
+              t.endpointId,
               config.analysisDays,
             );
             if (typeof report === "string") continue;
             const adapter = inject(t.adapter);
             if (adapter?.sendMessage) {
-              let botId = t.botId;
-              if (!botId && adapter.bots?.size) {
-                const first = adapter.bots.values().next().value;
-                botId = first?.$id ?? first?.selfId ?? "";
+              let endpointId = t.endpointId;
+              if (!endpointId && adapter.endpoints?.size) {
+                const first = adapter.endpoints.values().next().value;
+                endpointId = first?.$id ?? first?.selfId ?? "";
               }
               const content = analysisReportReply(report);
               await adapter
                 .sendMessage({
                   context: t.adapter,
-                  bot: botId,
+                  endpoint: endpointId,
                   type: "group",
                   id: t.channelId,
                   content,

@@ -4,7 +4,7 @@
 import type { LogLevel } from "@slack/bolt";
 import type { KnownEventFromType } from "@slack/bolt";
 
-export interface SlackBotConfig {
+export interface SlackEndpointConfig {
   context: "slack";
   token: string;
   name: string;

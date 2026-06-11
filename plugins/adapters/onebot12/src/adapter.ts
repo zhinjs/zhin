@@ -4,26 +4,28 @@
  */
 import { formatCompact, Adapter, Plugin } from 'zhin.js';
 import type { Router } from '@zhin.js/host-router';
-import { OneBot12WsClient } from './bot-ws.js';
-import { OneBot12WebhookBot } from './bot-webhook.js';
-import { OneBot12WssServer } from './bot-wss.js';
+import { OneBot12WsClient } from './endpoint-ws.js';
+import { OneBot12WebhookEndpoint } from './endpoint-webhook.js';
+import { OneBot12WssServer } from './endpoint-wss.js';
 import type {
-  OneBot12BotConfig,
+  OneBot12EndpointConfig,
   OneBot12WsConfig,
   OneBot12WebhookConfig,
   OneBot12WssConfig,
 } from './types.js';
 
-export type OneBot12Bot = OneBot12WsClient | OneBot12WebhookBot | OneBot12WssServer;
+export type OneBot12Bot = OneBot12WsClient | OneBot12WebhookEndpoint | OneBot12WssServer;
 
 export class OneBot12Adapter extends Adapter<OneBot12Bot> {
+  static override readonly capabilities = ['inbound', 'outbound'] as const;
+
   #router?: Router;
 
   constructor(plugin: Plugin) {
     super(plugin, 'onebot12', []);
   }
 
-  createBot(config: OneBot12BotConfig): OneBot12Bot {
+  createEndpoint(config: OneBot12EndpointConfig): OneBot12Bot {
     switch (config.connection) {
       case 'ws':
         return new OneBot12WsClient(this, config as OneBot12WsConfig);
@@ -31,14 +33,14 @@ export class OneBot12Adapter extends Adapter<OneBot12Bot> {
         if (!this.#router) {
           throw new Error('OneBot12 connection: webhook 需要 router，请安装并在配置中启用 @zhin.js/host-router');
         }
-        return new OneBot12WebhookBot(this, this.#router, config as OneBot12WebhookConfig);
+        return new OneBot12WebhookEndpoint(this, this.#router, config as OneBot12WebhookConfig);
       case 'wss':
         if (!this.#router) {
           throw new Error('OneBot12 connection: wss 需要 router，请安装并在配置中启用 @zhin.js/host-router');
         }
         return new OneBot12WssServer(this, this.#router, config as OneBot12WssConfig);
       default:
-        throw new Error(`Unknown OneBot12 connection: ${(config as OneBot12BotConfig).connection}`);
+        throw new Error(`Unknown OneBot12 connection: ${(config as OneBot12EndpointConfig).connection}`);
     }
   }
 

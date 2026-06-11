@@ -25,7 +25,7 @@ describe('config check', () => {
     await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
 plugins:
   - "@zhin.js/adapter-sandbox"
-bots:
+endpoints:
   - context: sandbox
     name: bot
 ai:
@@ -47,7 +47,7 @@ ai:
   it('--fix 应迁移旧版 ai 段', async () => {
     const config = {
       plugins: ['@zhin.js/adapter-process', '@zhin.js/host-router'],
-      bots: [{ context: 'sandbox', name: 'bot' }],
+      endpoints: [{ context: 'sandbox', name: 'bot' }],
       database: { dialect: 'postgres' },
       ai: {
         defaultProvider: 'openai',
@@ -72,13 +72,13 @@ ai:
     await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
 plugins:
   - "@zhin.js/adapter-sandbox"
-bots:
+endpoints:
   - context: qq
     name: zhin
 `);
 
     const result = await runConfigCheck(tmpDir);
-    expect(result.issues.some((i) => i.code === 'bot.adapter_plugin_missing')).toBe(true);
+    expect(result.issues.some((i) => i.code === 'endpoint.adapter_plugin_missing')).toBe(true);
 
     const raw = await readConfig(path.join(tmpDir, 'zhin.config.yml'));
     const { config: fixed } = applyConfigFixes(raw);
@@ -89,17 +89,17 @@ bots:
     await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
 plugins:
   - "@zhin.js/adapter-sandbox"
-bots:
+endpoints:
   - context: qq
     name: zhin
 `);
 
     const before = await inspectProjectConfig(tmpDir);
-    expect(before.issues.some((i) => i.code === 'bot.adapter_plugin_missing')).toBe(true);
+    expect(before.issues.some((i) => i.code === 'endpoint.adapter_plugin_missing')).toBe(true);
 
     const after = await inspectProjectConfig(tmpDir, { fix: true });
     expect(after.fixesApplied.length).toBeGreaterThan(0);
-    expect(after.issues.every((i) => i.code !== 'bot.adapter_plugin_missing')).toBe(true);
+    expect(after.issues.every((i) => i.code !== 'endpoint.adapter_plugin_missing')).toBe(true);
   });
 
   it('--fix 应将数字 log_level 规范为字符串', () => {

@@ -33,11 +33,12 @@ export function resolveAgentDbQuery(
 ): ((sql: string, params?: unknown[]) => Promise<unknown>) | undefined {
   const direct = dbFeature.query;
   if (typeof direct === 'function') {
-    return (sql, params) => direct(sql, params);
+    return direct.bind(dbFeature);
   }
-  const nested = dbFeature.db?.query;
-  if (typeof nested === 'function') {
-    return (sql, params) => nested(sql, params);
+  const db = dbFeature.db;
+  const nested = db?.query;
+  if (typeof nested === 'function' && db) {
+    return nested.bind(db);
   }
   return undefined;
 }

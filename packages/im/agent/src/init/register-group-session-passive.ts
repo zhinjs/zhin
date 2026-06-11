@@ -15,10 +15,10 @@ import { prepareUserContentForSession } from '../zhin-agent/session-io.js';
 import { asPrivate } from '../zhin-agent/zhin-agent-private.js';
 import type { AIServiceRefs } from './shared-refs.js';
 
-function isBotSelfMessage(message: Message<any>): boolean {
+function isBotSelfMessage(message: Message): boolean {
   const senderId = String(message.$sender?.id ?? '');
-  const botId = String(message.$bot ?? '');
-  return senderId !== '' && botId !== '' && senderId === botId;
+  const endpointId = String(message.$endpoint ?? '');
+  return senderId !== '' && endpointId !== '' && senderId === endpointId;
 }
 
 export function registerGroupSessionPassive(refs: AIServiceRefs): void {
@@ -27,7 +27,7 @@ export function registerGroupSessionPassive(refs: AIServiceRefs): void {
 
   plugin.useContext('ai', (ai) => {
     const dispatcher = root.inject('dispatcher') as
-      | { setGroupPassiveContextHandler?: (h: ((m: Message<any>) => Promise<void>) | null) => void }
+      | { setGroupPassiveContextHandler?: (h: ((m: Message) => Promise<void>) | null) => void }
       | undefined;
 
     if (!dispatcher?.setGroupPassiveContextHandler) {
@@ -40,25 +40,17 @@ export function registerGroupSessionPassive(refs: AIServiceRefs): void {
 
       const triggerConfig = mergeAITriggerConfig(ai.getTriggerConfig());
       const adapterInstance = root.inject(message.$adapter) as
-        | { bots?: Map<string, { $config?: Record<string, unknown> }> }
+        | { endpoints?: Map<string, { $config?: Record<string, unknown> }> }
         | undefined;
-      const botConfig = adapterInstance?.bots?.get(message.$bot)?.$config;
+      const endpointConfig = adapterInstance?.endpoints?.get(message.$endpoint)?.$config;
 
-      const { scope, roles } = resolveSenderRoles(message, triggerConfig, botConfig);
+      const { scope, roles } = resolveSenderRoles(message, triggerConfig, endpointConfig);
       const rawText = extractTextContent(message).trim();
       if (!rawText) return;
 
       const sessionId = resolveIMSessionIdFromMessage(message);
       const sceneId = message.$channel?.id || message.$sender.id;
-      const { content } = prepareUserContentForSession(
-        {
-          scope,
-          senderId: message.$sender.id,
-          roles,
-          message,
-        },
-        rawText,
-      );
+      const { content } = prepareUserContentForSession(message, rawText);
 
       const agent = asPrivate(refs.zhinAgent);
       await agent.memory.appendPassiveGroupUserMessage(sessionId, content, {

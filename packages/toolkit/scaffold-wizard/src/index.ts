@@ -5,9 +5,9 @@ export type { AdapterSetupResult } from './adapter.js';
 export {
   configureAdapters,
   generateAdapterEnvVars,
-  generateBotsConfigYaml,
-  generateBotsConfigJSON,
-  generateBotsConfigToml,
+  generateEndpointsConfigYaml,
+  generateEndpointsConfigJSON,
+  generateEndpointsConfigToml,
   getAdapterDependencies,
   getAdapterSetupNotes,
 } from './adapter.js';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateBotsConfigYaml, getAdapterSetupNotes } from '../src/adapter.js';
+import { generateEndpointsConfigYaml, getAdapterSetupNotes } from '../src/adapter.js';
 import type { AdapterSetupResult } from '../src/adapter.js';
 
 describe('adapter setup notes', () => {
@@ -7,7 +7,7 @@ describe('adapter setup notes', () => {
     const result: AdapterSetupResult = {
       packages: ['@zhin.js/adapter-telegram'],
       plugins: ['@zhin.js/adapter-telegram'],
-      bots: [{
+      endpoints: [{
         context: 'telegram',
         name: 'tg',
         token: '${TELEGRAM_TOKEN}',
@@ -25,7 +25,7 @@ describe('adapter setup notes', () => {
     const result: AdapterSetupResult = {
       packages: ['@zhin.js/adapter-github'],
       plugins: ['@zhin.js/adapter-github'],
-      bots: [{
+      endpoints: [{
         context: 'github',
         name: 'gh',
         app_id: '${GITHUB_APP_ID}',
@@ -43,24 +43,24 @@ describe('adapter setup notes', () => {
   });
 });
 
-describe('generateBotsConfigYaml', () => {
-  it('emits bots: [] when no bot entries (Sandbox-only)', () => {
-    const yaml = generateBotsConfigYaml({
+describe('generateEndpointsConfigYaml', () => {
+  it('emits endpoints: [] when no bot entries (Sandbox-only)', () => {
+    const yaml = generateEndpointsConfigYaml({
       packages: ['@zhin.js/adapter-sandbox'],
       plugins: ['@zhin.js/adapter-sandbox'],
       envVars: {},
-      bots: [],
+      endpoints: [],
     });
-    expect(yaml).toMatch(/bots:\s*\[\]/);
+    expect(yaml).toMatch(/endpoints:\s*\[\]/);
     expect(yaml).not.toContain('context:');
   });
 
   it('renders nested webhook object as YAML', () => {
-    const yaml = generateBotsConfigYaml({
+    const yaml = generateEndpointsConfigYaml({
       packages: [],
       plugins: [],
       envVars: {},
-      bots: [{
+      endpoints: [{
         context: 'telegram',
         name: 'tg',
         polling: false,

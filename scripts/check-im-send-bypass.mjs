@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Harness：检测插件/业务路径是否绕过 Adapter.sendMessage 链直调 bot.$sendMessage。
- * 适配器包内 Bot 实现中的 $sendMessage 定义不在扫描范围内。
+ * 适配器包内 Endpoint 实现中的 $sendMessage 定义不在扫描范围内。
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';

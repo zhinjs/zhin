@@ -9,7 +9,8 @@
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { Adapter, Message, Plugin, ToolContext } from '@zhin.js/core';
+import type { Adapter, Message, Plugin } from '@zhin.js/core';
+import { hasSenderRole, resolveSubjectRoles, senderRolesFromMessage } from '@zhin.js/core';
 import { getDataDir } from '../discovery/utils.js';
 
 export const OWNER_APPROVE_ALWAYS_TOOL = 'bash' as const;
@@ -55,7 +56,7 @@ export interface BashApprovalBotEntry {
 
 interface StoreV2 {
   version: typeof STORE_VERSION;
-  bots: Record<string, BashApprovalBotEntry>;
+  endpoints: Record<string, BashApprovalBotEntry>;
 }
 
 interface StoreV1 {
@@ -68,11 +69,11 @@ function storePath(): string {
 }
 
 function emptyV2(): StoreV2 {
-  return { version: STORE_VERSION, bots: {} };
+  return { version: STORE_VERSION, endpoints: {} };
 }
 
-function normalizeBotKey(adapter: string, botId: string, ownerId: string): string {
-  return `${adapter}|${botId}|${ownerId}`;
+function normalizeBotKey(adapter: string, endpointId: string, ownerId: string): string {
+  return `${adapter}|${endpointId}|${ownerId}`;
 }
 
 function migrateV1ToV2(data: StoreV1): StoreV2 {
@@ -81,11 +82,11 @@ function migrateV1ToV2(data: StoreV1): StoreV2 {
     if (typeof e !== 'string') continue;
     const parts = e.split('|');
     if (parts.length !== 4) continue;
-    const [adapter, botId, ownerId, scope] = parts;
+    const [adapter, endpointId, ownerId, scope] = parts;
     if (scope === 'orchestration:bash') {
-      const k = normalizeBotKey(adapter, botId, ownerId);
-      if (!out.bots[k]) out.bots[k] = { bashRules: [] };
-      out.bots[k].bashAlways = true;
+      const k = normalizeBotKey(adapter, endpointId, ownerId);
+      if (!out.endpoints[k]) out.endpoints[k] = { bashRules: [] };
+      out.endpoints[k].bashAlways = true;
     }
   }
   return out;
@@ -98,10 +99,10 @@ function readStore(): StoreV2 {
     const data = JSON.parse(raw) as StoreV2 | StoreV1;
     if (!data || typeof data !== 'object') return emptyV2();
 
-    if ((data as StoreV2).version === STORE_VERSION && (data as StoreV2).bots && typeof (data as StoreV2).bots === 'object') {
+    if ((data as StoreV2).version === STORE_VERSION && (data as StoreV2).endpoints && typeof (data as StoreV2).endpoints === 'object') {
       const v2 = data as StoreV2;
-      for (const k of Object.keys(v2.bots)) {
-        const ent = v2.bots[k];
+      for (const k of Object.keys(v2.endpoints)) {
+        const ent = v2.endpoints[k];
         if (!ent.bashRules) ent.bashRules = [];
       }
       return v2;
@@ -133,11 +134,11 @@ function writeStore(data: StoreV2): void {
   fs.renameSync(tmp, p);
 }
 
-export function getBotMaster(plugin: Plugin, ctx: ToolContext): string | undefined {
+export function getEndpointMaster(plugin: Plugin, commMessage: Message): string | undefined {
   const root = plugin.root ?? plugin;
-  const adapter = root.inject(ctx.platform!) as Adapter | undefined;
-  const bot = adapter?.bots?.get(ctx.botId!);
-  const master = (bot?.$config as Record<string, unknown> | undefined)?.master;
+  const adapter = root.inject(commMessage.$adapter) as Adapter | undefined;
+  const endpoint = adapter?.endpoints?.get(commMessage.$endpoint);
+  const master = (endpoint?.$config as Record<string, unknown> | undefined)?.master;
   return master != null ? String(master) : undefined;
 }
 
@@ -152,126 +153,124 @@ function normalizeIdList(input: unknown): string[] {
   return [];
 }
 
-function getBotTrustedIds(plugin: Plugin, ctx: ToolContext): string[] {
+function getEndpointTrustedIds(plugin: Plugin, commMessage: Message): string[] {
   const root = plugin.root ?? plugin;
-  const adapter = root.inject(ctx.platform!) as Adapter | undefined;
-  const bot = adapter?.bots?.get(ctx.botId!);
-  const botConfig = (bot?.$config as Record<string, unknown> | undefined) ?? {};
-  return normalizeIdList(botConfig.trusted);
+  const adapter = root.inject(commMessage.$adapter) as Adapter | undefined;
+  const endpoint = adapter?.endpoints?.get(commMessage.$endpoint);
+  const endpointConfig = (endpoint?.$config as Record<string, unknown> | undefined) ?? {};
+  return normalizeIdList(endpointConfig.trusted);
 }
 
-export function resolveToolRequesterRole(plugin: Plugin, ctx: ToolContext): ToolRequesterRole {
-  if (ctx.roles?.length) {
-    if (ctx.roles.includes('master')) return 'master';
-    if (ctx.roles.includes('trusted')) return 'trusted';
+export function resolveToolRequesterRole(plugin: Plugin, commMessage: Message): ToolRequesterRole {
+  const roles = senderRolesFromMessage(commMessage);
+  if (commMessage.$sender.isMaster !== undefined || commMessage.$sender.isTrusted !== undefined) {
+    if (hasSenderRole(roles, 'master')) return 'master';
+    if (hasSenderRole(roles, 'trusted')) return 'trusted';
     return 'other';
   }
-  if (!ctx.platform || !ctx.botId || !ctx.senderId) return 'unknown';
-  const senderId = String(ctx.senderId);
-  const masterId = getBotMaster(plugin, ctx);
-  if (masterId && senderId === String(masterId)) return 'master';
-  const trusted = getBotTrustedIds(plugin, ctx);
-  if (trusted.includes(senderId)) return 'trusted';
-  return 'other';
+  try {
+    const resolved = resolveSubjectRoles(plugin.root ?? plugin, commMessage);
+    if (hasSenderRole(resolved.roles, 'master')) return 'master';
+    if (hasSenderRole(resolved.roles, 'trusted')) return 'trusted';
+    return 'other';
+  } catch {
+    if (!commMessage.$adapter || !commMessage.$endpoint || !commMessage.$sender?.id) return 'unknown';
+    const senderId = String(commMessage.$sender.id);
+    const masterId = getEndpointMaster(plugin, commMessage);
+    if (masterId && senderId === String(masterId)) return 'master';
+    const trusted = getEndpointTrustedIds(plugin, commMessage);
+    if (trusted.includes(senderId)) return 'trusted';
+    return 'other';
+  }
 }
 
-function getEntry(plugin: Plugin, ctx: ToolContext): BashApprovalBotEntry | undefined {
-  if (!ctx.platform || !ctx.botId) return undefined;
-  const ownerId = getBotMaster(plugin, ctx);
+function getEntry(plugin: Plugin, commMessage: Message): BashApprovalBotEntry | undefined {
+  if (!commMessage.$adapter || !commMessage.$endpoint) return undefined;
+  const ownerId = getEndpointMaster(plugin, commMessage);
   if (ownerId == null) return undefined;
-  const key = normalizeBotKey(ctx.platform, ctx.botId, ownerId);
+  const key = normalizeBotKey(String(commMessage.$adapter), commMessage.$endpoint, ownerId);
   const data = readStore();
-  return data.bots[key];
+  return data.endpoints[key];
 }
 
-function ensureEntry(plugin: Plugin, ctx: ToolContext): BashApprovalBotEntry {
-  if (!ctx.platform || !ctx.botId) return { bashRules: [] };
-  const ownerId = getBotMaster(plugin, ctx);
+function ensureEntry(plugin: Plugin, commMessage: Message): BashApprovalBotEntry {
+  if (!commMessage.$adapter || !commMessage.$endpoint) return { bashRules: [] };
+  const ownerId = getEndpointMaster(plugin, commMessage);
   if (ownerId == null) return { bashRules: [] };
-  const key = normalizeBotKey(ctx.platform, ctx.botId, ownerId);
+  const key = normalizeBotKey(String(commMessage.$adapter), commMessage.$endpoint, ownerId);
   const data = readStore();
-  if (!data.bots[key]) {
-    data.bots[key] = { bashRules: [] };
+  if (!data.endpoints[key]) {
+    data.endpoints[key] = { bashRules: [] };
     writeStore(data);
   }
-  return data.bots[key]!;
+  return data.endpoints[key]!;
 }
 
-export function getOwnerToolContextOrUndefined(plugin: Plugin, message: Message<any>): ToolContext | undefined {
+export function getOwnerCommMessageOrUndefined(plugin: Plugin, message: Message): Message | undefined {
   if (message.$channel?.type !== 'private') return undefined;
-  const ctx: ToolContext = {
-    platform: message.$adapter,
-    botId: message.$bot,
-    sceneId: message.$channel?.id ?? message.$sender.id,
-    senderId: message.$sender.id,
-    message,
-    scope: 'private',
-    roles: ['master'],
-    fileRole: 'owner',
-  };
-  const ownerId = getBotMaster(plugin, ctx);
+  const ownerId = getEndpointMaster(plugin, message);
   if (ownerId == null || String(message.$sender.id) !== String(ownerId)) return undefined;
-  return ctx;
+  return message;
 }
 
 /** 编排层：是否已「永久放行」bash 的 Owner 硬确认（ZHIN_NEEDS_OWNER 路径） */
-export function hasOwnerApproveAlways(plugin: Plugin, ctx: ToolContext, toolName: string): boolean {
+export function hasOwnerApproveAlways(plugin: Plugin, commMessage: Message, toolName: string): boolean {
   if (toolName !== OWNER_APPROVE_ALWAYS_TOOL) return false;
-  if (!ctx.platform || !ctx.botId) return false;
-  const ent = getEntry(plugin, ctx);
+  if (!commMessage.$adapter || !commMessage.$endpoint) return false;
+  const ent = getEntry(plugin, commMessage);
   return !!ent?.bashAlways;
 }
 
-export function setBashAlways(plugin: Plugin, ctx: ToolContext, value: boolean): void {
-  if (!ctx.platform || !ctx.botId) return;
-  const ownerId = getBotMaster(plugin, ctx);
+export function setBashAlways(plugin: Plugin, commMessage: Message, value: boolean): void {
+  if (!commMessage.$adapter || !commMessage.$endpoint) return;
+  const ownerId = getEndpointMaster(plugin, commMessage);
   if (ownerId == null) return;
-  const key = normalizeBotKey(ctx.platform, ctx.botId, ownerId);
+  const key = normalizeBotKey(String(commMessage.$adapter), commMessage.$endpoint, ownerId);
   const data = readStore();
-  const prev = data.bots[key] ?? { bashRules: [] };
+  const prev = data.endpoints[key] ?? { bashRules: [] };
   const ent: BashApprovalBotEntry = { bashRules: prev.bashRules ?? [] };
   if (prev.bashAlways !== undefined) ent.bashAlways = prev.bashAlways;
   if (value) ent.bashAlways = true;
   else delete ent.bashAlways;
-  data.bots[key] = ent;
+  data.endpoints[key] = ent;
   writeStore(data);
 }
 
-export function addOwnerApproveAlways(plugin: Plugin, ctx: ToolContext, toolName: string): { ok: true } | { ok: false; error: string } {
-  if (!ctx.platform || !ctx.botId) {
-    return { ok: false, error: '缺少 platform / botId' };
+export function addOwnerApproveAlways(plugin: Plugin, commMessage: Message, toolName: string): { ok: true } | { ok: false; error: string } {
+  if (!commMessage.$adapter || !commMessage.$endpoint) {
+    return { ok: false, error: '缺少 platform / endpointId' };
   }
   if (toolName.trim().toLowerCase() !== OWNER_APPROVE_ALWAYS_TOOL) {
     return { ok: false, error: '永久放行仅支持 bash（shell 安全确认）。' };
   }
-  if (getBotMaster(plugin, ctx) == null) {
-    return { ok: false, error: '当前 Bot 未配置 owner' };
+  if (getEndpointMaster(plugin, commMessage) == null) {
+    return { ok: false, error: '当前 Endpoint 未配置 owner' };
   }
-  setBashAlways(plugin, ctx, true);
+  setBashAlways(plugin, commMessage, true);
   return { ok: true };
 }
 
-export function removeOwnerApproveAlways(plugin: Plugin, ctx: ToolContext, toolName: string): { ok: true } | { ok: false; error: string } {
-  if (!ctx.platform || !ctx.botId) {
-    return { ok: false, error: '缺少 platform / botId' };
+export function removeOwnerApproveAlways(plugin: Plugin, commMessage: Message, toolName: string): { ok: true } | { ok: false; error: string } {
+  if (!commMessage.$adapter || !commMessage.$endpoint) {
+    return { ok: false, error: '缺少 platform / endpointId' };
   }
   if (toolName.trim().toLowerCase() !== OWNER_APPROVE_ALWAYS_TOOL) {
     return { ok: false, error: '仅可撤销 bash 的永久放行。' };
   }
-  if (getBotMaster(plugin, ctx) == null) {
-    return { ok: false, error: '当前 Bot 未配置 owner' };
+  if (getEndpointMaster(plugin, commMessage) == null) {
+    return { ok: false, error: '当前 Endpoint 未配置 owner' };
   }
-  const ent = getEntry(plugin, ctx);
+  const ent = getEntry(plugin, commMessage);
   if (!ent?.bashAlways) {
     return { ok: false, error: '当前未对 bash 设置永久放行。' };
   }
-  setBashAlways(plugin, ctx, false);
+  setBashAlways(plugin, commMessage, false);
   return { ok: true };
 }
 
 export function addBashApproveRule(
   plugin: Plugin,
-  ctx: ToolContext,
+  commMessage: Message,
   pattern: string,
 ): { ok: true; id: string } | { ok: false; error: string } {
   const trimmed = pattern.trim();
@@ -284,50 +283,50 @@ export function addBashApproveRule(
   } catch (e) {
     return { ok: false, error: `无效正则: ${e instanceof Error ? e.message : String(e)}` };
   }
-  if (!ctx.platform || !ctx.botId || getBotMaster(plugin, ctx) == null) {
-    return { ok: false, error: '缺少 platform/botId 或未配置 owner。' };
+  if (!commMessage.$adapter || !commMessage.$endpoint || getEndpointMaster(plugin, commMessage) == null) {
+    return { ok: false, error: '缺少 platform/endpointId 或未配置 owner。' };
   }
-  const ownerId = getBotMaster(plugin, ctx)!;
-  const key = normalizeBotKey(ctx.platform, ctx.botId, ownerId);
+  const ownerId = getEndpointMaster(plugin, commMessage)!;
+  const key = normalizeBotKey(String(commMessage.$adapter), commMessage.$endpoint, ownerId);
   const data = readStore();
-  const ent: BashApprovalBotEntry = { ...(data.bots[key] ?? { bashRules: [] }), bashRules: [...(data.bots[key]?.bashRules ?? [])] };
-  if (data.bots[key]?.bashAlways) ent.bashAlways = true;
+  const ent: BashApprovalBotEntry = { ...(data.endpoints[key] ?? { bashRules: [] }), bashRules: [...(data.endpoints[key]?.bashRules ?? [])] };
+  if (data.endpoints[key]?.bashAlways) ent.bashAlways = true;
   const id = crypto.randomUUID();
   ent.bashRules.push({ id, pattern: trimmed, createdAt: Date.now() });
-  data.bots[key] = ent;
+  data.endpoints[key] = ent;
   writeStore(data);
   return { ok: true, id };
 }
 
 export function removeBashApproveRule(
   plugin: Plugin,
-  ctx: ToolContext,
+  commMessage: Message,
   ruleId: string,
 ): { ok: true } | { ok: false; error: string } {
   const id = ruleId.trim();
   if (!id) return { ok: false, error: '请提供规则 id。' };
-  if (!ctx.platform || !ctx.botId || getBotMaster(plugin, ctx) == null) {
-    return { ok: false, error: '缺少 platform/botId 或未配置 owner。' };
+  if (!commMessage.$adapter || !commMessage.$endpoint || getEndpointMaster(plugin, commMessage) == null) {
+    return { ok: false, error: '缺少 platform/endpointId 或未配置 owner。' };
   }
-  const ownerId = getBotMaster(plugin, ctx)!;
-  const key = normalizeBotKey(ctx.platform, ctx.botId, ownerId);
+  const ownerId = getEndpointMaster(plugin, commMessage)!;
+  const key = normalizeBotKey(String(commMessage.$adapter), commMessage.$endpoint, ownerId);
   const data = readStore();
-  const ent = data.bots[key];
+  const ent = data.endpoints[key];
   if (!ent?.bashRules?.length) return { ok: false, error: '当前无自定义规则。' };
   const next = ent.bashRules.filter((r) => r.id !== id && !r.id.startsWith(id));
   if (next.length === ent.bashRules.length) {
     return { ok: false, error: `未找到 id 前缀或全名为「${id}」的规则。` };
   }
   ent.bashRules = next;
-  data.bots[key] = ent;
+  data.endpoints[key] = ent;
   writeStore(data);
   return { ok: true };
 }
 
 /** exec 策略：bashAlways 或任一 bashRules 匹配 commandLine */
-export function matchesBashOwnerExecBypass(plugin: Plugin, ctx: ToolContext, commandLine: string): boolean {
-  if (!ctx.platform || !ctx.botId) return false;
-  const ent = getEntry(plugin, ctx);
+export function matchesBashOwnerExecBypass(plugin: Plugin, commMessage: Message, commandLine: string): boolean {
+  if (!commMessage.$adapter || !commMessage.$endpoint) return false;
+  const ent = getEntry(plugin, commMessage);
   if (!ent) return false;
   if (ent.bashAlways) return true;
   const line = commandLine.trim();
@@ -343,8 +342,8 @@ export function matchesBashOwnerExecBypass(plugin: Plugin, ctx: ToolContext, com
   return false;
 }
 
-export function formatBashApproveList(plugin: Plugin, ctx: ToolContext): string {
-  const ent = getEntry(plugin, ctx);
+export function formatBashApproveList(plugin: Plugin, commMessage: Message): string {
+  const ent = getEntry(plugin, commMessage);
   const always = ent?.bashAlways ? '是' : '否';
   const rules = ent?.bashRules ?? [];
   if (!ent || (!ent.bashAlways && rules.length === 0)) {
@@ -359,8 +358,8 @@ export function formatBashApproveList(plugin: Plugin, ctx: ToolContext): string 
 }
 
 /** 兼容旧单测：返回 bash 与 rule 摘要行 */
-export function listOwnerApproveAlways(plugin: Plugin, ctx: ToolContext): string[] {
-  const ent = getEntry(plugin, ctx);
+export function listOwnerApproveAlways(plugin: Plugin, commMessage: Message): string[] {
+  const ent = getEntry(plugin, commMessage);
   const out: string[] = [];
   if (ent?.bashAlways) out.push(OWNER_APPROVE_ALWAYS_TOOL);
   for (const r of ent?.bashRules ?? []) {
@@ -378,8 +377,8 @@ export function isIcqqSensitiveSubcommand(fullSubCommand: string): boolean {
 type Pending = { toolName: string; expiresAt: number };
 const pendingOrchestration = new Map<string, Pending>();
 
-function pendingKey(adapter: string, botId: string, ownerId: string): string {
-  return `${adapter}|${botId}|${ownerId}`;
+function pendingKey(adapter: string, endpointId: string, ownerId: string): string {
+  return `${adapter}|${endpointId}|${ownerId}`;
 }
 
 export function getPendingOrchestrationCount(): number {
@@ -398,29 +397,29 @@ export function evictPendingOrchestrationIfOverPressure(): number {
   return removed;
 }
 
-export function setPendingOrchestrationTool(plugin: Plugin, ctx: ToolContext, toolName: string): void {
+export function setPendingOrchestrationTool(plugin: Plugin, commMessage: Message, toolName: string): void {
   if (toolName !== OWNER_APPROVE_ALWAYS_TOOL) return;
-  if (!ctx.platform || !ctx.botId) return;
-  const ownerId = getBotMaster(plugin, ctx);
+  if (!commMessage.$adapter || !commMessage.$endpoint) return;
+  const ownerId = getEndpointMaster(plugin, commMessage);
   if (ownerId == null) return;
-  pendingOrchestration.set(pendingKey(ctx.platform, ctx.botId, ownerId), {
+  pendingOrchestration.set(pendingKey(String(commMessage.$adapter), commMessage.$endpoint, ownerId), {
     toolName: OWNER_APPROVE_ALWAYS_TOOL,
     expiresAt: Date.now() + 15 * 60 * 1000,
   });
 }
 
-export function clearPendingOrchestrationTool(plugin: Plugin, ctx: ToolContext): void {
-  if (!ctx.platform || !ctx.botId) return;
-  const ownerId = getBotMaster(plugin, ctx);
+export function clearPendingOrchestrationTool(plugin: Plugin, commMessage: Message): void {
+  if (!commMessage.$adapter || !commMessage.$endpoint) return;
+  const ownerId = getEndpointMaster(plugin, commMessage);
   if (ownerId == null) return;
-  pendingOrchestration.delete(pendingKey(ctx.platform, ctx.botId, ownerId));
+  pendingOrchestration.delete(pendingKey(String(commMessage.$adapter), commMessage.$endpoint, ownerId));
 }
 
-export function getPendingOrchestrationTool(plugin: Plugin, ctx: ToolContext): string | undefined {
-  if (!ctx.platform || !ctx.botId) return undefined;
-  const ownerId = getBotMaster(plugin, ctx);
+export function getPendingOrchestrationTool(plugin: Plugin, commMessage: Message): string | undefined {
+  if (!commMessage.$adapter || !commMessage.$endpoint) return undefined;
+  const ownerId = getEndpointMaster(plugin, commMessage);
   if (ownerId == null) return undefined;
-  const key = pendingKey(ctx.platform, ctx.botId, ownerId);
+  const key = pendingKey(String(commMessage.$adapter), commMessage.$endpoint, ownerId);
   const p = pendingOrchestration.get(key);
   if (!p || p.toolName !== OWNER_APPROVE_ALWAYS_TOOL) {
     if (p) pendingOrchestration.delete(key);

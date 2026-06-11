@@ -20,6 +20,9 @@ export interface KookSenderInfo {
   roles?: number[];
   isGuildOwner?: boolean;
   isAdmin?: boolean;
+  /** 归一化平台身份（供 platform checker） */
+  role?: string;
+  permissions?: string[];
 }
 
 export interface KookTypingIndicatorConfig {
@@ -40,7 +43,7 @@ export interface KookTypingIndicatorConfig {
   };
 }
 
-export interface KookBotConfig {
+export interface KookEndpointConfig {
   context: "kook";
   name: string;
   token: string;

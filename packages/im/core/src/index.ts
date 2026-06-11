@@ -1,5 +1,6 @@
 // Core exports
-export * from './bot.js'
+export * from './endpoint.js'
+export * from './endpoint-capabilities.js'
 export * from './plugin.js'
 export * from './command.js'
 export * from './component.js'
@@ -38,6 +39,18 @@ export * from './built/config.js'
 export * from './built/command.js'
 export * from './built/cron.js'
 export * from './built/permission.js'
+export * from './built/permit-parse.js'
+export * from './built/permit-check.js'
+export * from './built/platform-permit.js'
+export * from './built/authorization.js'
+export {
+  enrichMessageForAgent,
+  createSyntheticMessage,
+  senderRolesFromMessage,
+  resolveContextKey,
+  commMessageFromHookContext,
+} from './built/message-enrich.js'
+export type { AgentTurnMessage, SyntheticMessageInput } from './built/message-enrich.js'
 export * from './built/adapter-process.js'
 export {
   isDenoDeploy,
@@ -61,6 +74,10 @@ export * from './built/ai-trigger.js'
 export * from './built/dispatcher.js'
 export { runInboundMessage } from './built/inbound-runner.js'
 export type { RunInboundMessageOptions, InboundRunResult } from './built/inbound-runner.js'
+export { connectEndpointInstance, disconnectEndpointInstance } from './built/connect-endpoint-instance.js'
+export type { ConnectEndpointInstanceOptions } from './built/connect-endpoint-instance.js'
+export { emitEndpointLifecycle } from './built/endpoint-lifecycle.js'
+export type { EndpointLifecycleKind, EndpointLifecyclePayload } from './built/endpoint-lifecycle.js'
 // Schema 注册表 (插件配置声明)
 export * from './built/schema-feature.js'
 // Login assist (producer-consumer for QR / SMS / slider etc.)
@@ -74,7 +91,7 @@ export {
   SessionManager, MemorySessionManager, DatabaseSessionManager,
   createSessionManager, createMemorySessionManager, createDatabaseSessionManager,
   AI_SESSION_MODEL,
-  resolveIMSessionId, resolveIMSceneIdForSession, resolveIMSessionIdFromToolContext,
+  resolveIMSessionId, resolveIMSceneIdForSession, resolveIMSessionIdFromMessage,
   ContextManager, createContextManager, CHAT_MESSAGE_MODEL, CONTEXT_SUMMARY_MODEL,
   ConversationMemory, AI_MESSAGE_MODEL, AI_SUMMARY_MODEL,
   estimateTokens, estimateMessagesTokens,

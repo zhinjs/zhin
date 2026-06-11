@@ -202,16 +202,16 @@ function analyzeMemoryUsage(rss: number, heapUsed: number, heapTotal: number, ex
 function getMemoryOptimizationTips(rss: number, heapUsed: number, heapTotal: number, fragmentationPercent: string) {
   const tips = [];
 
-  // 内存使用评估（基于实际 Bot 框架对比）
+  // 内存使用评估（基于实际 Endpoint 框架对比）
   // Discord.js: ~150-300MB, Koishi: ~100-200MB, 你的框架: ~50-100MB (优秀！)
   if (rss < 100 * 1024 * 1024) {
-    tips.push("  ✅ 内存使用优秀 (<100MB) - 比大多数 Bot 框架更轻量");
+    tips.push("  ✅ 内存使用优秀 (<100MB) - 比大多数 Endpoint 框架更轻量");
     tips.push("     • Discord.js 通常需要 150-300MB");
     tips.push("     • Koishi 通常需要 100-200MB");
     tips.push("     • 你的应用仅需 " + (rss / 1024 / 1024).toFixed(1) + "MB，非常优秀！");
   } else if (rss < 200 * 1024 * 1024) {
     tips.push("  ✅ 内存使用良好 (100-200MB) - 属于正常范围");
-    tips.push("     • 与主流 Bot 框架相当");
+    tips.push("     • 与主流 Endpoint 框架相当");
   } else if (rss < 500 * 1024 * 1024) {
     tips.push("  💡 内存使用正常 (200-500MB) - 可考虑优化：");
     tips.push("     • 检查是否有大型对象常驻内存");

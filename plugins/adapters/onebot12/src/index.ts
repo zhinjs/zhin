@@ -9,9 +9,9 @@ import { OneBot12Adapter } from './adapter.js';
 export * from './types.js';
 export { callOneBot12Action } from './api.js';
 export * from './utils.js';
-export { OneBot12WsClient } from './bot-ws.js';
-export { OneBot12WebhookBot } from './bot-webhook.js';
-export { OneBot12WssServer } from './bot-wss.js';
+export { OneBot12WsClient } from './endpoint-ws.js';
+export { OneBot12WebhookEndpoint } from './endpoint-webhook.js';
+export { OneBot12WssServer } from './endpoint-wss.js';
 export { OneBot12Adapter, type OneBot12Bot } from './adapter.js';
 
 declare module 'zhin.js' {

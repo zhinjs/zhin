@@ -56,7 +56,7 @@ message_filter:
 | `enabled` | `boolean?` | 是否启用，默认 true |
 | `scopes` | `FilterScope[]?` | 限定消息类型：`private` / `group` / `channel` |
 | `adapters` | `string[]?` | 限定适配器（支持 `/regex/`） |
-| `bots` | `string[]?` | 限定 Bot 名称 |
+| `endpoints` | `string[]?` | 限定 Endpoint 名称 |
 | `channels` | `string[]?` | 限定频道/群/会话 ID（支持 `/regex/`） |
 | `senders` | `string[]?` | 限定发送者 ID（支持 `/regex/`） |
 
@@ -174,7 +174,7 @@ plugin.addFilterRule({
 plugin.addMiddleware(async (message, next) => {
   console.log({
     adapter: message.$adapter,
-    bot: message.$bot,
+    bot: message.$endpoint,
     scope: message.$channel.type,
     channel: message.$channel.id,
     sender: message.$sender.id,

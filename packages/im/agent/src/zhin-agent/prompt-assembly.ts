@@ -1,4 +1,4 @@
-import type { ToolContext } from '../orchestrator/types.js';
+import type { Message } from '../orchestrator/types.js';
 import { resolveAgentPromptMarkdown } from '../agent-prompt/index.js';
 import {
   buildEnhancedPersona,
@@ -29,19 +29,19 @@ export async function buildAgentPathSystemPrompt(
   agent: ZhinAgentPrivate,
   options: {
     content: string;
-    context: ToolContext;
+    commMessage: Message;
     sessionId: string;
     personaEnhanced: string;
     preData?: string;
     deferredStats?: string;
   },
 ): Promise<string> {
-  const { content, context, sessionId, personaEnhanced, preData, deferredStats } = options;
+  const { content, commMessage, sessionId, personaEnhanced, preData, deferredStats } = options;
 
   const platformMarkdown = await resolveAgentPromptMarkdown({
     ctx: {
       slot: 'orchestrator',
-      toolContext: context,
+      commMessage,
       userMessagePreview: content.slice(0, 500),
       deferred: deferredStats ? { goal: content, domainStats: deferredStats } : undefined,
     },
@@ -55,14 +55,14 @@ export async function buildAgentPathSystemPrompt(
     skillsSummaryXML: agent.skillsSummaryXML,
     activeSkillsContext: agent.activeSkillsContext,
     bootstrapContext: agent.bootstrapContext,
-    toolContext: context,
+    commMessage,
     toolSearchDeferredStats: deferredStats,
     platformSections: platformMarkdown,
   });
 
   return appendQuoteContextSystemHint(
     `${richPrompt}${preData ? `\n\nPre-fetched data:\n${preData}` : ''}`,
-    context,
+    commMessage as import('@zhin.js/core').AgentTurnMessage,
   );
 }
 
@@ -70,39 +70,39 @@ export function buildFastPathSystemPrompt(
   agent: ZhinAgentPrivate,
   personaEnhanced: string,
   preData: string | undefined,
-  context: ToolContext,
+  commMessage: Message,
 ): string {
   return appendQuoteContextSystemHint(
     buildDisciplinedPrompt(agent, buildPreExecFastPathPrompt(personaEnhanced, preData ?? '')),
-    context,
+    commMessage as import('@zhin.js/core').AgentTurnMessage,
   );
 }
 
 export function buildChatPathSystemPrompt(
   agent: ZhinAgentPrivate,
   personaEnhanced: string,
-  context: ToolContext,
+  commMessage: Message,
 ): string {
   return appendQuoteContextSystemHint(
     buildDisciplinedPrompt(agent, personaEnhanced),
-    context,
+    commMessage as import('@zhin.js/core').AgentTurnMessage,
   );
 }
 
 export async function buildMultimodalVisionSystemPrompt(
   agent: ZhinAgentPrivate,
   options: {
-    context: ToolContext;
+    commMessage: Message;
     sessionId: string;
     textContent: string;
     personaEnhanced: string;
   },
 ): Promise<string> {
-  const { context, sessionId, textContent, personaEnhanced } = options;
+  const { commMessage, sessionId, textContent, personaEnhanced } = options;
   const platformMarkdown = await resolveAgentPromptMarkdown({
     ctx: {
       slot: 'orchestrator',
-      toolContext: context,
+      commMessage,
       userMessagePreview: textContent.slice(0, 500),
     },
     config: agent.config,
@@ -112,9 +112,9 @@ export async function buildMultimodalVisionSystemPrompt(
     buildLiteSystemPromptWithPlatform(
       personaEnhanced,
       platformMarkdown,
-      formatSessionContextLine(context) ?? undefined,
+      formatSessionContextLine(commMessage) ?? undefined,
     ),
-    context,
+    commMessage as import('@zhin.js/core').AgentTurnMessage,
   );
 }
 

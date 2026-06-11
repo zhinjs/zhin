@@ -2,23 +2,23 @@
  * Lark (飞书) 适配器集成测试
  *
  * 策略：Mock 掉 HTTP 传输层（refreshAccessToken / axiosInstance），
- * 测试 Bot 接口合规性、消息格式化、发送/接收链路、生命周期的完整性。
+ * 测试 Endpoint 接口合规性、消息格式化、发送/接收链路、生命周期的完整性。
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Plugin, type SendOptions } from 'zhin.js';
 import { createAdapterTestSuite } from '../../../../packages/im/core/tests/adapter-harness.js';
 import { LarkAdapter } from '../src/adapter.js';
-import { LarkBot } from '../src/bot.js';
-import type { LarkBotConfig, LarkMessage } from '../src/types.js';
+import { LarkEndpoint } from '../src/endpoint.js';
+import type { LarkEndpointConfig, LarkMessage } from '../src/types.js';
 
 const FIXED_TS = 1700000000000;
 
-// ── Mock Bot ──
+// ── Mock Endpoint ──
 
-class MockLarkBot extends LarkBot {
+class MockLarkEndpoint extends LarkEndpoint {
   sendMock = vi.fn();
 
-  constructor(adapter: LarkAdapter, router: any, config: LarkBotConfig) {
+  constructor(adapter: LarkAdapter, router: any, config: LarkEndpointConfig) {
     super(adapter, router, config);
   }
 
@@ -41,11 +41,11 @@ class MockLarkBot extends LarkBot {
 // ── Mock Adapter ──
 
 class MockLarkAdapter extends LarkAdapter {
-  createBot(config: LarkBotConfig): MockLarkBot {
+  createEndpoint(config: LarkEndpointConfig): MockLarkEndpoint {
     const mockRouter = { post: vi.fn(), get: vi.fn() };
-    return new MockLarkBot(this, mockRouter, {
+    return new MockLarkEndpoint(this, mockRouter, {
       context: 'lark',
-      name: config.name || 'test-bot',
+      name: config.name || 'test-endpoint',
       appId: 'mock-app-id',
       appSecret: 'mock-app-secret',
       webhookPath: '/lark/webhook',
@@ -75,10 +75,10 @@ function createLarkRawEvent(overrides: Partial<LarkMessage> = {}): LarkMessage {
 
 createAdapterTestSuite<MockLarkAdapter, LarkMessage>({
   adapterName: 'lark',
-  botId: 'test-bot',
+  endpointId: 'test-endpoint',
   createAdapter: (plugin) => {
     const adapter = new MockLarkAdapter(plugin, { post: vi.fn(), get: vi.fn() });
-    (adapter as any).config = [{ name: 'test-bot', context: 'lark', appId: 'a', appSecret: 's', webhookPath: '/wh' }];
+    (adapter as any).config = [{ name: 'test-endpoint', context: 'lark', appId: 'a', appSecret: 's', webhookPath: '/wh' }];
     return adapter;
   },
   createRawEvent: () => createLarkRawEvent(),
@@ -89,57 +89,57 @@ createAdapterTestSuite<MockLarkAdapter, LarkMessage>({
 describe('Lark 适配器特定测试', () => {
   let plugin: Plugin;
   let adapter: MockLarkAdapter;
-  let bot: MockLarkBot;
+  let endpoint: MockLarkEndpoint;
 
   beforeEach(async () => {
     plugin = new Plugin('/test/lark-integration.ts');
     adapter = new MockLarkAdapter(plugin, { post: vi.fn(), get: vi.fn() });
-    (adapter as any).config = [{ name: 'test-bot', context: 'lark', appId: 'a', appSecret: 's', webhookPath: '/wh' }];
+    (adapter as any).config = [{ name: 'test-endpoint', context: 'lark', appId: 'a', appSecret: 's', webhookPath: '/wh' }];
     await adapter.start();
-    bot = adapter.bots.get('test-bot') as MockLarkBot;
+    endpoint = adapter.endpoints.get('test-endpoint') as MockLarkEndpoint;
   });
 
   afterEach(async () => {
     try { await adapter.stop(); } catch { /* ignore */ }
   });
 
-  describe('Bot 接口合规性', () => {
+  describe('Endpoint 接口合规性', () => {
     it('$id 应为配置的 name', () => {
-      expect(bot.$id).toBe('test-bot');
+      expect(endpoint.$id).toBe('test-endpoint');
     });
 
     it('$connected 启动后应为 true', () => {
-      expect(bot.$connected).toBe(true);
+      expect(endpoint.$connected).toBe(true);
     });
 
-    it('应实现所有 Bot 接口方法', () => {
-      expect(typeof bot.$formatMessage).toBe('function');
-      expect(typeof bot.$connect).toBe('function');
-      expect(typeof bot.$disconnect).toBe('function');
-      expect(typeof bot.$sendMessage).toBe('function');
-      expect(typeof bot.$recallMessage).toBe('function');
+    it('应实现所有 Endpoint 接口方法', () => {
+      expect(typeof endpoint.$formatMessage).toBe('function');
+      expect(typeof endpoint.$connect).toBe('function');
+      expect(typeof endpoint.$disconnect).toBe('function');
+      expect(typeof endpoint.$sendMessage).toBe('function');
+      expect(typeof endpoint.$recallMessage).toBe('function');
     });
   });
 
   describe('生命周期', () => {
-    it('start() 应注册 bot', () => {
-      expect(adapter.bots.has('test-bot')).toBe(true);
+    it('start() 应注册 endpoint', () => {
+      expect(adapter.endpoints.has('test-endpoint')).toBe(true);
     });
 
-    it('stop() 应清空 bots', async () => {
+    it('stop() 应清空 endpoints', async () => {
       await adapter.stop();
-      expect(adapter.bots.size).toBe(0);
+      expect(adapter.endpoints.size).toBe(0);
     });
   });
 
   describe('$formatMessage 消息格式化', () => {
     it('群消息应正确格式化 (chat_id 以 oc_ 开头)', () => {
       const raw = createLarkRawEvent();
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
 
       expect(msg.$id).toBe('om_msg001');
       expect(msg.$adapter).toBe('lark');
-      expect(msg.$bot).toBe('test-bot');
+      expect(msg.$endpoint).toBe('test-endpoint');
       expect(msg.$sender.id).toBe('ou_user001');
       expect(msg.$channel.id).toBe('oc_group001');
       expect(msg.$channel.type).toBe('group');
@@ -149,13 +149,13 @@ describe('Lark 适配器特定测试', () => {
 
     it('私聊消息应正确格式化 (chat_id 不以 oc_ 开头)', () => {
       const raw = createLarkRawEvent({ chat_id: 'p2p_private001' });
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
       expect(msg.$channel.type).toBe('private');
     });
 
     it('$timestamp 应为正整数', () => {
       const raw = createLarkRawEvent();
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
       expect(msg.$timestamp).toBe(FIXED_TS);
     });
   });
@@ -164,7 +164,7 @@ describe('Lark 适配器特定测试', () => {
     it('sendMessage 应返回字符串 ID', async () => {
       const result = await adapter.sendMessage({
         context: 'lark',
-        bot: 'test-bot',
+        endpoint: 'test-endpoint',
         id: 'oc_group001',
         type: 'group',
         content: [{ type: 'text', data: { text: 'hello' } }],
@@ -178,7 +178,7 @@ describe('Lark 适配器特定测试', () => {
     it('emit message.receive 应触发 plugin.dispatch', async () => {
       const dispatchSpy = vi.spyOn(plugin, 'dispatch');
       const raw = createLarkRawEvent();
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
 
       adapter.emit('message.receive', msg);
       await new Promise(r => setTimeout(r, 50));
@@ -194,7 +194,7 @@ describe('Lark 适配器特定测试', () => {
     it('$reply 应走 adapter.sendMessage', async () => {
       const sendMessageSpy = vi.spyOn(adapter, 'sendMessage');
       const raw = createLarkRawEvent();
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
 
       sendMessageSpy.mockResolvedValue('reply-id');
       const result = await msg.$reply('hi');

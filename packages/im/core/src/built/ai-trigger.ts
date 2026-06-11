@@ -80,8 +80,8 @@ export interface AITriggerResult {
 
 /** shouldTriggerAI 可选参数（如适配器提供的平台 @ ID） */
 export interface AITriggerOptions {
-  /** 用于 @ 匹配的 bot 标识符（默认仅 message.$bot） */
-  botAtIds?: string[];
+  /** 用于 @ 匹配的 Endpoint 标识符（默认仅 message.$endpoint） */
+  endpointAtIds?: string[];
 }
 
 /** 发送者角色解析结果 */
@@ -113,8 +113,8 @@ export const DEFAULT_AI_TRIGGER_CONFIG: Required<AITriggerConfig> = {
 // 工具函数
 // ============================================================================
 
-function normalizeAtIds(botAtIds?: string[]): string[] {
-  const ids = botAtIds?.length ? botAtIds : [];
+function normalizeAtIds(endpointAtIds?: string[]): string[] {
+  const ids = endpointAtIds?.length ? endpointAtIds : [];
   return [...new Set(ids.map((id) => String(id)).filter(Boolean))];
 }
 
@@ -126,23 +126,23 @@ function segmentAtUserId(seg: MessageElement): string {
   return raw == null ? '' : String(raw);
 }
 
-function isAtSegmentForBot(seg: MessageElement, botIds: string[]): boolean {
+function isAtSegmentForEndpoint(seg: MessageElement, endpointIds: string[]): boolean {
   if (seg.type !== 'at' && seg.type !== 'mention') return false;
   const uid = segmentAtUserId(seg);
-  return uid !== '' && botIds.includes(uid);
+  return uid !== '' && endpointIds.includes(uid);
 }
 
-function textMentionsBot(text: string, botIds: string[]): boolean {
-  for (const id of botIds) {
+function textMentionsEndpoint(text: string, endpointIds: string[]): boolean {
+  for (const id of endpointIds) {
     const re = new RegExp(`@${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s|$|[\\u200b\\uFEFF])`);
     if (re.test(text)) return true;
   }
   return false;
 }
 
-function stripTextAtBot(text: string, botIds: string[]): string {
+function stripTextAtEndpoint(text: string, endpointIds: string[]): string {
   let result = text;
-  for (const id of botIds) {
+  for (const id of endpointIds) {
     const re = new RegExp(`@${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s|[\\u200b\\uFEFF])?`, 'g');
     result = result.replace(re, '');
   }
@@ -150,13 +150,13 @@ function stripTextAtBot(text: string, botIds: string[]): string {
 }
 
 /**
- * 收集用于 @ 匹配的 bot 标识符
+ * 收集用于 @ 匹配的 Endpoint 标识符
  */
-export function collectBotAtIds<T extends object>(
+export function collectEndpointAtIds<T extends object>(
   message: Message<T>,
   extraIds?: string[],
 ): string[] {
-  const ids = new Set<string>([String(message.$bot)]);
+  const ids = new Set<string>([String(message.$endpoint)]);
   for (const id of extraIds ?? []) {
     if (id) ids.add(String(id));
   }
@@ -164,20 +164,20 @@ export function collectBotAtIds<T extends object>(
 }
 
 /**
- * 检查消息是否 @ 了机器人
+ * 检查消息是否 @ 了 Endpoint
  */
-export function isAtBot<T extends object>(
+export function isAtEndpoint<T extends object>(
   message: Message<T>,
-  botAtIds?: string[],
+  endpointAtIds?: string[],
 ): boolean {
-  const botIds = normalizeAtIds(
-    botAtIds?.length ? botAtIds : collectBotAtIds(message),
+  const endpointIds = normalizeAtIds(
+    endpointAtIds?.length ? endpointAtIds : collectEndpointAtIds(message),
   );
-  if (message.$content.some((seg) => isAtSegmentForBot(seg, botIds))) {
+  if (message.$content.some((seg) => isAtSegmentForEndpoint(seg, endpointIds))) {
     return true;
   }
   for (const seg of message.$content) {
-    if (seg.type === 'text' && seg.data?.text && textMentionsBot(seg.data.text, botIds)) {
+    if (seg.type === 'text' && seg.data?.text && textMentionsEndpoint(seg.data.text, endpointIds)) {
       return true;
     }
   }
@@ -212,27 +212,27 @@ export function parseRichMediaContent(content: string): MessageElement[] {
 }
 
 /**
- * 移除 @ 机器人的部分
+ * 移除 @ Endpoint 的部分
  */
-export function removeAtBot<T extends object>(
+export function removeAtEndpoint<T extends object>(
   message: Message<T>,
-  botAtIds?: string[],
+  endpointAtIds?: string[],
 ): MessageElement[] {
-  const botIds = normalizeAtIds(
-    botAtIds?.length ? botAtIds : collectBotAtIds(message),
+  const endpointIds = normalizeAtIds(
+    endpointAtIds?.length ? endpointAtIds : collectEndpointAtIds(message),
   );
   return message.$content
-    .filter((seg) => !isAtSegmentForBot(seg, botIds))
+    .filter((seg) => !isAtSegmentForEndpoint(seg, endpointIds))
     .map((seg) => {
       if (seg.type !== 'text' || !seg.data?.text) return seg;
-      const stripped = stripTextAtBot(seg.data.text, botIds).trim();
+      const stripped = stripTextAtEndpoint(seg.data.text, endpointIds).trim();
       if (!stripped) return null;
       return { ...seg, data: { ...seg.data, text: stripped } };
     })
     .filter((seg): seg is MessageElement => seg != null);
 }
 
-function normalizeBotIdList(input: unknown): string[] {
+function normalizeEndpointIdList(input: unknown): string[] {
   if (Array.isArray(input)) return input.map((v) => String(v)).filter(Boolean);
   if (typeof input === 'string') {
     return input.split(/[\s,]+/).map((v) => v.trim()).filter(Boolean);
@@ -240,24 +240,24 @@ function normalizeBotIdList(input: unknown): string[] {
   return [];
 }
 
-/** Bot 配置（adapter bots[].$config） */
-export interface BotConfigRoles {
+/** Endpoint 配置（adapter endpoints[].$config） */
+export interface EndpointConfigRoles {
   master?: unknown;
   trusted?: unknown;
 }
 
-function collectBotTrustedIds(botConfig?: BotConfigRoles | null): string[] {
-  if (!botConfig) return [];
-  return normalizeBotIdList(botConfig.trusted);
+function collectEndpointTrustedIds(endpointConfig?: EndpointConfigRoles | null): string[] {
+  if (!endpointConfig) return [];
+  return normalizeEndpointIdList(endpointConfig.trusted);
 }
 
 /**
- * 解析发送者角色集合（IM 群角色 + trigger + bots[].$config）
+ * 解析发送者角色集合（IM 群角色 + trigger + endpoints[].$config）
  */
 export function resolveSenderRoles<T extends object>(
   message: Message<T>,
   config: AITriggerConfig,
-  botConfig?: BotConfigRoles | Record<string, unknown> | null,
+  endpointConfig?: EndpointConfigRoles | Record<string, unknown> | null,
 ): SenderRolesResult {
   const scope: ToolScope = (message.$channel?.type as ToolScope) || 'private';
 
@@ -270,31 +270,19 @@ export function resolveSenderRoles<T extends object>(
   }
 
   const senderId = String(message.$sender.id);
-  const senderPermissions = message.$sender.permissions || [];
   const roles: SenderRole[] = [];
 
   const masters = config.masters || [];
   const globalTrusted = config.trusted || [];
-  const cfg = botConfig as BotConfigRoles | undefined;
-  const botMaster = cfg?.master != null ? String(cfg.master) : undefined;
-  const botTrustedIds = collectBotTrustedIds(cfg);
+  const cfg = endpointConfig as EndpointConfigRoles | undefined;
+  const endpointMaster = cfg?.master != null ? String(cfg.master) : undefined;
+  const endpointTrustedIds = collectEndpointTrustedIds(cfg);
 
-  if (masters.includes(senderId) || (botMaster != null && senderId === botMaster)) {
+  if (masters.includes(senderId) || (endpointMaster != null && senderId === endpointMaster)) {
     roles.push('master');
-  } else if (globalTrusted.includes(senderId) || botTrustedIds.includes(senderId)) {
+  } else if (globalTrusted.includes(senderId) || endpointTrustedIds.includes(senderId)) {
     roles.push('trusted');
   }
-
-  const isGroupOwner = senderPermissions.includes('owner')
-    || senderPermissions.includes('group_owner')
-    || message.$sender?.role === 'owner';
-  const isGroupAdmin = isGroupOwner
-    || senderPermissions.includes('admin')
-    || senderPermissions.includes('group_admin')
-    || message.$sender?.role === 'admin';
-
-  if (isGroupOwner) roles.push('group_owner');
-  else if (isGroupAdmin) roles.push('group_admin');
 
   return {
     scope,
@@ -302,7 +290,7 @@ export function resolveSenderRoles<T extends object>(
   };
 }
 
-/** 从 IM 消息生成 sessionId（platform:botId:type:sceneId） */
+/** 从 IM 消息生成 sessionId（platform:endpointId:type:sceneId） */
 export function resolveIMSessionIdFromMessage<T extends object>(message: Message<T>): string {
   const scope = (message.$channel?.type || 'private') as IMSessionScope;
   const sceneId = scope === 'private'
@@ -310,7 +298,7 @@ export function resolveIMSessionIdFromMessage<T extends object>(message: Message
     : String(message.$channel?.id || message.$sender.id);
   return resolveIMSessionId({
     platform: message.$adapter,
-    botId: message.$bot,
+    endpointId: message.$endpoint,
     scope,
     sceneId,
   });
@@ -325,7 +313,7 @@ export function shouldTriggerAI<T extends object>(
   options?: AITriggerOptions,
 ): AITriggerResult {
   const fullConfig = { ...DEFAULT_AI_TRIGGER_CONFIG, ...config };
-  const botAtIds = collectBotAtIds(message, options?.botAtIds);
+  const endpointAtIds = collectEndpointAtIds(message, options?.endpointAtIds);
   
   if (!fullConfig.enabled) {
     return { triggered: false, content: '' };
@@ -352,8 +340,8 @@ export function shouldTriggerAI<T extends object>(
   }
   
   // 2. 检查 @ 触发（群/频道主路径；仅 @ 无正文时也触发，由 Agent 处理空输入）
-  if (fullConfig.respondToAt && isAtBot(message, botAtIds)) {
-    const content = removeAtBot(message, botAtIds);
+  if (fullConfig.respondToAt && isAtEndpoint(message, endpointAtIds)) {
+    const content = removeAtEndpoint(message, endpointAtIds);
     return {
       triggered: true,
       content: content.length ? segment.toString(content).trim() : '',

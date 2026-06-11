@@ -2,12 +2,14 @@
  * read_file 内置工具（BuiltinBaseTool）单测
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mockCommMessage } from '../helpers/mock-comm-message.js';
+
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { createReadFileTool, ReadFileBuiltinTool } from '../../src/builtin/read-file-tool.js';
 import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
-import type { ToolContext } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 
 describe('ReadFileBuiltinTool', () => {
   let tmpDir: string;
@@ -47,7 +49,7 @@ describe('ReadFileBuiltinTool', () => {
     const tool = createReadFileTool();
     const fp = path.join(tmpDir, 'b.txt');
     fs.writeFileSync(fp, 'ok', 'utf-8');
-    const ctx = { platform: 'test' } as ToolContext;
+    const ctx = mockCommMessage({ adapter: 'test' });
     const agentTool = normalizeTool(tool, ctx);
     const result = await agentTool.execute({ file_path: fp });
     expect(String(result)).toContain('ok');

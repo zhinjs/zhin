@@ -3,7 +3,7 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { Tool, ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import type { Tool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import { errMsg } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 
@@ -30,7 +30,7 @@ export class TodoReadBuiltinTool extends BuiltinBaseTool {
     this.keywords.push('任务', '计划', '进度', 'todo', '待办');
   }
 
-  async run(args: Record<string, unknown>, _context?: ToolContext): Promise<ToolResult> {
+  async run(args: Record<string, unknown>, _commMessage?: Message): Promise<ToolResult> {
     try {
       const chatId = args.chat_id;
       const dir =

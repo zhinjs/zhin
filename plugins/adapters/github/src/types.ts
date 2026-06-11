@@ -1,10 +1,10 @@
-// ── Bot 配置 ─────────────────────────────────────────────────────────
+// ── Endpoint 配置 ─────────────────────────────────────────────────────────
 //  基于 gh CLI 认证：需要系统已安装并认证 gh CLI
 //  认证方式：gh auth login
 
-export interface GitHubBotConfig {
+export interface GitHubEndpointConfig {
   context: 'github';
-  /** Bot 标识名称 */
+  /** Endpoint 标识名称 */
   name: string;
   /** GitHub Enterprise 主机名（默认 github.com） */
   host?: string;
@@ -135,7 +135,7 @@ export interface Subscription {
   target_id: string;
   target_type: 'private' | 'group' | 'channel';
   adapter: string;
-  bot: string;
+  endpoint: string;
 }
 
 // ── Tool Action Types ────────────────────────────────────────────────

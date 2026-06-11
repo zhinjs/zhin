@@ -14,7 +14,7 @@ describe('Prompt', () => {
     // 创建模拟事件
     mockEvent = {
       $adapter: 'test-adapter',
-      $bot: 'test-bot',
+      $endpoint: 'test-bot',
       $channel: { type: 'text', id: 'test-channel' },
       $sender: { id: 'test-user' },
       $raw: 'test message',

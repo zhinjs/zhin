@@ -219,7 +219,7 @@ export function registerTools(server: McpServer) {
 
   server.registerTool(
     "list_bots",
-    { description: "列出所有连接的 Bot 及其状态（适配器、在线/离线）" },
+    { description: "列出所有连接的 Endpoint 及其状态（适配器、在线/离线）" },
     async () => ({
       content: [{ type: "text" as const, text: JSON.stringify(listBots(), null, 2) }],
     }),
@@ -245,7 +245,7 @@ export function registerTools(server: McpServer) {
   server.registerTool(
     "simulate_message",
     {
-      description: "模拟发送一条消息来测试命令，返回 Bot 的回复内容",
+      description: "模拟发送一条消息来测试命令，返回 Endpoint 的回复内容",
       inputSchema: z.object({
         content: z.string().describe("模拟的消息内容 (例如: 'ping' 或 'echo hello')"),
         adapter: z.string().optional().describe("适配器名称 (默认使用 sandbox)"),
@@ -259,10 +259,10 @@ export function registerTools(server: McpServer) {
   server.registerTool(
     "send_message",
     {
-      description: "通过指定 Bot 发送消息到群组或私聊",
+      description: "通过指定 Endpoint 发送消息到群组或私聊",
       inputSchema: z.object({
         adapter: z.string().describe("适配器名称 (如 icqq, discord)"),
-        bot: z.string().describe("Bot 名称/ID"),
+        endpoint: z.string().describe("Endpoint 名称/ID"),
         target_id: z.string().describe("目标 ID (群号或用户 ID)"),
         target_type: z.enum(["private", "group", "channel"]).describe("目标类型"),
         content: z.string().describe("消息内容"),
@@ -279,7 +279,7 @@ export function registerTools(server: McpServer) {
       description: "撤回/删除指定消息",
       inputSchema: z.object({
         adapter: z.string().describe("适配器名称 (如 icqq, discord)"),
-        bot: z.string().describe("Bot 名称/ID"),
+        endpoint: z.string().describe("Endpoint 名称/ID"),
         message_id: z.string().describe("要撤回的消息 ID"),
       }),
     },

@@ -8,7 +8,7 @@ tier: Stable
 本页由 [`plugins/adapters/sandbox/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=7e9552f46cd2c508 -->
+<!-- sync-adapter-docs:sha256=e3b11abe4905999f -->
 
 # @zhin.js/adapter-sandbox
 
@@ -38,11 +38,11 @@ Sandbox 适配器需要以下服务插件：
 
 ## 配置
 
-**推荐（与 [minimal-bot](/getting-started/) 一致）**：`bots: []`，在 Remote Console 打开「沙盒」页时经 `/sandbox` WebSocket **自动创建** bot（如 `sandbox-xxxx`），无需在 yaml 里写 `context: sandbox`。
+**推荐（与 [minimal-bot](/getting-started/) 一致）**：`endpoints: []`，在 Remote Console 打开「沙盒」页时经 `/sandbox` WebSocket **自动创建** bot（如 `sandbox-xxxx`），无需在 yaml 里写 `context: sandbox`。
 
 ```yaml
 # zhin.config.yml
-bots: []
+endpoints: []
 
 plugins:
   - "@zhin.js/adapter-sandbox"
@@ -53,14 +53,14 @@ plugins:
 可选：若需在启动时即在 bot 列表显示**固定名称**的离线占位 bot，可显式配置：
 
 ```yaml
-bots:
+endpoints:
   - context: sandbox
     name: sandbox-bot
 ```
 
 ## 使用方式
 
-1. 启动机器人：`pnpm dev`（终端会打印 Host 地址，一般为 `http://127.0.0.1:8086`）
+1. 启动 Zhin 实例：`pnpm dev`（终端会打印 Host 地址，一般为 `http://127.0.0.1:8086`）
 2. 打开 **[Remote Console](https://console.zhin.dev)**，API Base 与 Host 地址一致，Token 与 `http.token` / `HTTP_TOKEN` 一致
 3. 在 Console **沙盒** 页连接后发送消息进行测试
 

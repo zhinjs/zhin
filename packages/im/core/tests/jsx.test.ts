@@ -11,7 +11,7 @@ describe('JSX消息组件系统测试', () => {
       event: {
         $id: 'test-msg',
         $adapter: 'test',
-        $bot: 'test-bot',
+        $endpoint: 'test-bot',
         $content: [],
         $sender: { id: 'user123', name: 'testuser' },
         $reply: vi.fn().mockResolvedValue('reply123'),

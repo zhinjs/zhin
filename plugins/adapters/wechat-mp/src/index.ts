@@ -17,7 +17,7 @@ declare module "zhin.js" {
 }
 
 export * from "./types.js";
-export { WeChatMPBot } from "./bot.js";
+export { WeChatMPEndpoint } from "./endpoint.js";
 export { WeChatMPAdapter } from "./adapter.js";
 
 const plugin = usePlugin();
@@ -26,7 +26,7 @@ const { provide, useContext } = plugin;
 useContext("router", (router: Router) => {
   provide({
     name: "wechat-mp",
-    description: "WeChat MP Bot Adapter",
+    description: "WeChat MP Endpoint Adapter",
     mounted: async (p: Plugin) => {
       const adapter = new WeChatMPAdapter(p, router);
       await adapter.start();

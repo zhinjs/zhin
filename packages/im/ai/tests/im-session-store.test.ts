@@ -7,7 +7,7 @@ describe('MemoryIMSessionStore', () => {
     const input = {
       session_key: 'icqq:b1:group:g1',
       platform: 'icqq',
-      bot_id: 'b1',
+      endpoint_id: 'b1',
       scene_id: 'g1',
       scene_type: 'group',
     };
@@ -25,7 +25,7 @@ describe('MemoryIMSessionStore', () => {
     const input = {
       session_key: 'icqq:b1:private:u1',
       platform: 'icqq',
-      bot_id: 'b1',
+      endpoint_id: 'b1',
       scene_id: 'u1',
       scene_type: 'private',
     };

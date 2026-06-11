@@ -88,7 +88,7 @@ describe('Command系统测试', () => {
       const discordMessage: Message = {
         $id: '1',
         $adapter: 'discord',
-        $bot: 'discord-bot',
+        $endpoint: 'discord-bot',
         $content: [{ type: 'text', data: { text: 'hello world' } }],
         $sender: { id: 'user1', name: 'User' },
         $reply: vi.fn(),
@@ -101,7 +101,7 @@ describe('Command系统测试', () => {
       const telegramMessage: Message = {
         $id: '2',
         $adapter: 'telegram',
-        $bot: 'telegram-bot',
+        $endpoint: 'telegram-bot',
         $content: [{ type: 'text', data: { text: 'hello world' } }],
         $sender: { id: 'user2', name: 'User' },
         $reply: vi.fn(),
@@ -125,7 +125,7 @@ describe('Command系统测试', () => {
       const discordMessage: Message = {
         $id: '1',
         $adapter: 'discord',
-        $bot: 'discord-bot',
+        $endpoint: 'discord-bot',
         $content: [{ type: 'text', data: { text: 'hello' } }],
         $sender: { id: 'user1', name: 'User' },
         $reply: vi.fn(),
@@ -137,7 +137,7 @@ describe('Command系统测试', () => {
       const telegramMessage: Message = {
         $id: '2',
         $adapter: 'telegram',
-        $bot: 'telegram-bot',
+        $endpoint: 'telegram-bot',
         $content: [{ type: 'text', data: { text: 'hello' } }],
         $sender: { id: 'user2', name: 'User' },
         $reply: vi.fn(),
@@ -149,7 +149,7 @@ describe('Command系统测试', () => {
       const emailMessage: Message = {
         $id: '3',
         $adapter: 'email',
-        $bot: 'email-bot',
+        $endpoint: 'email-bot',
         $content: [{ type: 'text', data: { text: 'hello' } }],
         $sender: { id: 'user3', name: 'User' },
         $reply: vi.fn(),
@@ -178,7 +178,7 @@ describe('Command系统测试', () => {
       const message: Message = {
         $id: '1',
         $adapter: 'test',
-        $bot: 'test-bot',
+        $endpoint: 'test-bot',
         $content: [{ type: 'text', data: { text: 'test message' } }],
         $sender: { id: 'user1', name: 'User' },
         $reply: vi.fn(),
@@ -206,7 +206,7 @@ describe('Command系统测试', () => {
       const message: Message = {
         $id: '1',
         $adapter: 'test',
-        $bot: 'test-bot',
+        $endpoint: 'test-bot',
         $content: [{ type: 'text', data: { text: 'test' } }],
         $sender: { id: 'user1', name: 'User' },
         $reply: vi.fn(),
@@ -232,7 +232,7 @@ describe('Command系统测试', () => {
       const message: Message = {
         $id: '1',
         $adapter: 'test',
-        $bot: 'test-bot',
+        $endpoint: 'test-bot',
         $content: [{ type: 'text', data: { text: 'async test' } }],
         $sender: { id: 'user1', name: 'User' },
         $reply: vi.fn(),
@@ -256,7 +256,7 @@ describe('Command系统测试', () => {
       const message: Message = {
         $id: '1',
         $adapter: 'test',
-        $bot: 'test-bot',
+        $endpoint: 'test-bot',
         $content: [{ type: 'text', data: { text: 'echo hello world' } }],
         $sender: { id: 'user1', name: 'User' },
         $reply: vi.fn(),
@@ -286,7 +286,7 @@ describe('Command系统测试', () => {
       const message: Message = {
         $id: '1',
         $adapter: 'test',
-        $bot: 'test-bot',
+        $endpoint: 'test-bot',
         $content: [{ type: 'text', data: { text: 'goodbye' } }],
         $sender: { id: 'user1', name: 'User' },
         $reply: vi.fn(),
@@ -306,7 +306,7 @@ describe('Command系统测试', () => {
       const message: Message = {
         $id: '1',
         $adapter: 'test',
-        $bot: 'test-bot',
+        $endpoint: 'test-bot',
         $content: [],
         $sender: { id: 'user1', name: 'User' },
         $reply: vi.fn(),
@@ -326,7 +326,7 @@ describe('Command系统测试', () => {
       const message: Message = {
         $id: '1',
         $adapter: 'test',
-        $bot: 'test-bot',
+        $endpoint: 'test-bot',
         $content: [
           { type: 'image', data: { url: 'https://example.com/image.png' } }
         ],
@@ -352,7 +352,7 @@ describe('Command系统测试', () => {
       const validMessage: Message = {
         $id: '1',
         $adapter: 'discord',
-        $bot: 'discord-bot',
+        $endpoint: 'discord-bot',
         $content: [{ type: 'text', data: { text: 'admin panel' } }],
         $sender: { id: 'admin1', name: 'Admin' },
         $reply: vi.fn(),
@@ -365,7 +365,7 @@ describe('Command系统测试', () => {
       const wrongAdapterMessage: Message = {
         $id: '2',
         $adapter: 'telegram',
-        $bot: 'telegram-bot',
+        $endpoint: 'telegram-bot',
         $content: [{ type: 'text', data: { text: 'admin panel' } }],
         $sender: { id: 'admin2', name: 'Admin' },
         $reply: vi.fn(),
@@ -378,7 +378,7 @@ describe('Command系统测试', () => {
       const nonMatchingMessage: Message = {
         $id: '3',
         $adapter: 'discord',
-        $bot: 'discord-bot',
+        $endpoint: 'discord-bot',
         $content: [{ type: 'text', data: { text: 'hello world' } }],
         $sender: { id: 'user1', name: 'User' },
         $reply: vi.fn(),
@@ -409,7 +409,7 @@ describe('Command系统测试', () => {
       const message: Message = {
         $id: '1',
         $adapter: 'test',
-        $bot: 'test-bot',
+        $endpoint: 'test-bot',
         $content: [{ type: 'text', data: { text: 'error test' } }],
         $sender: { id: 'user1', name: 'User' },
         $reply: vi.fn(),
@@ -430,7 +430,7 @@ describe('Command系统测试', () => {
       const message: Message = {
         $id: '1',
         $adapter: 'test',
-        $bot: 'test-bot',
+        $endpoint: 'test-bot',
         $content: [{ type: 'text', data: { text: 'async-error test' } }],
         $sender: { id: 'user1', name: 'User' },
         $reply: vi.fn(),
@@ -468,7 +468,7 @@ describe('Command系统测试', () => {
       const messages: Message[] = Array.from({ length: 1000 }, (_, i) => ({
         $id: `msg-${i}`,
         $adapter: i % 2 === 0 ? 'test' : 'other',
-        $bot: 'test-bot',
+        $endpoint: 'test-bot',
         $content: [{ type: 'text', data: { text: i % 3 === 0 ? 'perf test' : 'other' } }],
         $sender: { id: `user${i}`, name: `User ${i}` },
         $reply: vi.fn(),
@@ -505,7 +505,7 @@ describe('Command系统测试', () => {
       const message: Message = {
         $id: '1',
         $adapter: 'test',
-        $bot: 'test-bot',
+        $endpoint: 'test-bot',
         $content: [{ type: 'text', data: { text: 'say hello world from bot' } }],
         $sender: { id: 'user1', name: 'User' },
         $reply: vi.fn(),
@@ -541,7 +541,7 @@ describe('Command系统测试', () => {
       const privateMessage: Message = {
         $id: '1',
         $adapter: 'discord',
-        $bot: 'discord-bot',
+        $endpoint: 'discord-bot',
         $content: [{ type: 'text', data: { text: 'multi test' } }],
         $sender: { id: 'user1', name: 'User' },
         $reply: vi.fn(),
@@ -553,7 +553,7 @@ describe('Command系统测试', () => {
       const groupMessage: Message = {
         $id: '2',
         $adapter: 'discord',
-        $bot: 'discord-bot',
+        $endpoint: 'discord-bot',
         $content: [{ type: 'text', data: { text: 'multi test' } }],
         $sender: { id: 'user2', name: 'User' },
         $reply: vi.fn(),
@@ -656,7 +656,7 @@ describe('Command系统测试', () => {
       const message: Message = {
         $id: '1',
         $adapter: 'telegram', // 不匹配的适配器
-        $bot: 'telegram-bot',
+        $endpoint: 'telegram-bot',
         $content: [{ type: 'text', data: { text: 'admin test' } }],
         $sender: { id: 'user1', name: 'User' },
         $reply: vi.fn(),
@@ -677,7 +677,7 @@ describe('Command系统测试', () => {
       const message: Message = {
         $id: '1',
         $adapter: 'discord', // 匹配的适配器
-        $bot: 'discord-bot',
+        $endpoint: 'discord-bot',
         $content: [{ type: 'text', data: { text: 'admin test' } }],
         $sender: { id: 'user1', name: 'User' },
         $reply: vi.fn(),

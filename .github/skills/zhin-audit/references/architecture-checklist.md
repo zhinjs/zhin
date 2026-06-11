@@ -23,8 +23,8 @@
   - 验证无反向依赖（如 kernel 依赖 core）
 
 - [ ] **IM 概念隔离**
-  - `packages/im/kernel/` 禁止引用：`Adapter`, `Bot`, `Message`, `Command`
-  - `packages/im/ai/` 禁止引用：`Adapter`, `Bot`, `Message`（IM 特有）
+  - `packages/im/kernel/` 禁止引用：`Adapter`, `Endpoint`, `Message`, `Command`
+  - `packages/im/ai/` 禁止引用：`Adapter`, `Endpoint`, `Message`（IM 特有）
   - 搜索：`import.*from.*@zhin.js/core` 出现在 kernel/ai 中
 
 - [ ] **类型定义位置**
@@ -108,8 +108,8 @@
   - 验证：所有发送路径经过 `before.sendMessage` 钩子
   - 验证：不直接调用 `bot.$sendMessage` 绕过钩子
 
-- [ ] **Bot 接口完整性**
-  - 每个适配器的 Bot 实现：
+- [ ] **Endpoint 接口完整性**
+  - 每个适配器的 Endpoint 实现：
     - `$connect()` / `$disconnect()`
     - `$sendMessage()` 返回消息 ID
     - `$recallMessage()` 

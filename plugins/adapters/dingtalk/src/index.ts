@@ -3,6 +3,11 @@
  */
 import { usePlugin, type Plugin, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
 import { DingTalkAdapter } from "./adapter.js";
+import {
+  dingtalkGroupPermitResolver,
+  platformPermit,
+  registerDingtalkPlatformPermitChecker,
+} from "./platform-permit.js";
 
 declare module "zhin.js" {
   namespace Plugin {
@@ -16,7 +21,7 @@ declare module "zhin.js" {
 }
 
 export * from "./types.js";
-export { DingTalkBot } from "./bot.js";
+export { DingTalkEndpoint } from "./endpoint.js";
 export { DingTalkAdapter } from "./adapter.js";
 
 const plugin = usePlugin();
@@ -25,7 +30,7 @@ const { provide, useContext } = plugin;
 useContext("router", (router: any) => {
   provide({
     name: "dingtalk",
-    description: "DingTalk Bot Adapter",
+    description: "DingTalk Endpoint Adapter",
     mounted: async (p: Plugin) => {
       const adapter = new DingTalkAdapter(p, router);
       await adapter.start();
@@ -38,11 +43,14 @@ useContext("router", (router: any) => {
 });
 
 useContext('tool', 'dingtalk', (toolService: ToolFeature, dingtalk: DingTalkAdapter) => {
+  const disposers: (() => void)[] = [];
+  disposers.push(registerDingtalkPlatformPermitChecker());
   const groupTools = createGroupManagementTools(
     dingtalk as unknown as IGroupManagement,
     'dingtalk',
+    { permitResolver: dingtalkGroupPermitResolver, registerChecker: false },
   );
-  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, plugin.name));
+  disposers.push(...groupTools.map(t => toolService.addTool(t, plugin.name)));
 
   disposers.push(toolService.addTool({
     name: 'dingtalk_get_user',
@@ -50,17 +58,17 @@ useContext('tool', 'dingtalk', (toolService: ToolFeature, dingtalk: DingTalkAdap
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         user_id: { type: 'string', description: '用户 ID' },
       },
-      required: ['bot', 'user_id'],
+      required: ['endpoint_id', 'user_id'],
     },
     platforms: ['dingtalk'],
     tags: ['dingtalk'],
     execute: async (args: Record<string, any>) => {
-      const bot = dingtalk.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      return await bot.getUserInfo(args.user_id);
+      const endpoint = dingtalk.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      return await endpoint.getUserInfo(args.user_id);
     },
   }, plugin.name));
 
@@ -70,17 +78,17 @@ useContext('tool', 'dingtalk', (toolService: ToolFeature, dingtalk: DingTalkAdap
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         dept_id: { type: 'string', description: '部门 ID' },
       },
-      required: ['bot', 'dept_id'],
+      required: ['endpoint_id', 'dept_id'],
     },
     platforms: ['dingtalk'],
     tags: ['dingtalk'],
     execute: async (args: Record<string, any>) => {
-      const bot = dingtalk.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      const users = await bot.getDepartmentUsers(args.dept_id);
+      const endpoint = dingtalk.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      const users = await endpoint.getDepartmentUsers(args.dept_id);
       return { users, count: users.length };
     },
   }, plugin.name));
@@ -91,17 +99,17 @@ useContext('tool', 'dingtalk', (toolService: ToolFeature, dingtalk: DingTalkAdap
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         dept_id: { type: 'string', description: '父部门 ID，默认 1（根部门）' },
       },
-      required: ['bot'],
+      required: ['endpoint_id'],
     },
     platforms: ['dingtalk'],
     tags: ['dingtalk'],
     execute: async (args: Record<string, any>) => {
-      const bot = dingtalk.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      const departments = await bot.getDepartmentList(args.dept_id || '1');
+      const endpoint = dingtalk.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      const departments = await endpoint.getDepartmentList(args.dept_id || '1');
       return { departments, count: departments.length };
     },
   }, plugin.name));
@@ -112,19 +120,19 @@ useContext('tool', 'dingtalk', (toolService: ToolFeature, dingtalk: DingTalkAdap
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         user_ids: { type: 'string', description: '用户 ID 列表，逗号分隔' },
         content: { type: 'string', description: '通知内容' },
       },
-      required: ['bot', 'user_ids', 'content'],
+      required: ['endpoint_id', 'user_ids', 'content'],
     },
     platforms: ['dingtalk'],
     tags: ['dingtalk'],
     execute: async (args: Record<string, any>) => {
-      const bot = dingtalk.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
+      const endpoint = dingtalk.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
       const msgContent = { msgtype: 'text', text: { content: args.content } };
-      const success = await bot.sendWorkNotice(args.user_ids.split(','), msgContent);
+      const success = await endpoint.sendWorkNotice(args.user_ids.split(','), msgContent);
       return { success, message: success ? '工作通知已发送' : '发送失败' };
     },
   }, plugin.name));
@@ -135,19 +143,20 @@ useContext('tool', 'dingtalk', (toolService: ToolFeature, dingtalk: DingTalkAdap
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         name: { type: 'string', description: '群名' },
         owner: { type: 'string', description: '群主用户 ID' },
         members: { type: 'string', description: '成员用户 ID 列表，逗号分隔' },
       },
-      required: ['bot', 'name', 'owner', 'members'],
+      required: ['endpoint_id', 'name', 'owner', 'members'],
     },
     platforms: ['dingtalk'],
     tags: ['dingtalk'],
+    permissions: [platformPermit('chat_owner')],
     execute: async (args: Record<string, any>) => {
-      const bot = dingtalk.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      const chatId = await bot.createChat(args.name, args.owner, args.members.split(','));
+      const endpoint = dingtalk.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      const chatId = await endpoint.createChat(args.name, args.owner, args.members.split(','));
       return { success: !!chatId, chat_id: chatId, message: chatId ? `群聊创建成功: ${chatId}` : '创建失败' };
     },
   }, plugin.name));
@@ -158,18 +167,19 @@ useContext('tool', 'dingtalk', (toolService: ToolFeature, dingtalk: DingTalkAdap
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         chat_id: { type: 'string', description: '群聊 ID' },
         user_ids: { type: 'string', description: '要添加的用户 ID 列表，逗号分隔' },
       },
-      required: ['bot', 'chat_id', 'user_ids'],
+      required: ['endpoint_id', 'chat_id', 'user_ids'],
     },
     platforms: ['dingtalk'],
     tags: ['dingtalk'],
+    permissions: [platformPermit('chat_admin')],
     execute: async (args: Record<string, any>) => {
-      const bot = dingtalk.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      const success = await bot.updateChat(args.chat_id, { add_useridlist: args.user_ids.split(',') });
+      const endpoint = dingtalk.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      const success = await endpoint.updateChat(args.chat_id, { add_useridlist: args.user_ids.split(',') });
       return { success, message: success ? '成员添加成功' : '添加失败' };
     },
   }, plugin.name));
@@ -180,17 +190,17 @@ useContext('tool', 'dingtalk', (toolService: ToolFeature, dingtalk: DingTalkAdap
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         dept_id: { type: 'string', description: '部门 ID' },
       },
-      required: ['bot', 'dept_id'],
+      required: ['endpoint_id', 'dept_id'],
     },
     platforms: ['dingtalk'],
     tags: ['dingtalk'],
     execute: async (args: Record<string, any>) => {
-      const bot = dingtalk.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
-      return await bot.getDepartmentInfo(Number(args.dept_id));
+      const endpoint = dingtalk.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
+      return await endpoint.getDepartmentInfo(Number(args.dept_id));
     },
   }, plugin.name));
 
@@ -200,26 +210,26 @@ useContext('tool', 'dingtalk', (toolService: ToolFeature, dingtalk: DingTalkAdap
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         chat_id: { type: 'string', description: '群聊 ID' },
         name: { type: 'string', description: '新群名（可选）' },
         owner: { type: 'string', description: '新群主 userId（可选）' },
         add_members: { type: 'string', description: '要添加的成员 userId，逗号分隔（可选）' },
         remove_members: { type: 'string', description: '要移除的成员 userId，逗号分隔（可选）' },
       },
-      required: ['bot', 'chat_id'],
+      required: ['endpoint_id', 'chat_id'],
     },
     platforms: ['dingtalk'],
     tags: ['dingtalk'],
     execute: async (args: Record<string, any>) => {
-      const bot = dingtalk.bots.get(args.bot);
-      if (!bot) throw new Error(`Bot ${args.bot} 不存在`);
+      const endpoint = dingtalk.endpoints.get(args.endpoint_id);
+      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
       const options: any = {};
       if (args.name) options.name = args.name;
       if (args.owner) options.owner = args.owner;
       if (args.add_members) options.add_useridlist = args.add_members.split(',').map((s: string) => s.trim());
       if (args.remove_members) options.del_useridlist = args.remove_members.split(',').map((s: string) => s.trim());
-      await bot.updateChat(args.chat_id, options);
+      await endpoint.updateChat(args.chat_id, options);
       return { success: true, message: '群聊设置已更新' };
     },
   }, plugin.name));

@@ -5,10 +5,12 @@ import {
   Adapter,
   Plugin,
 } from "zhin.js";
-import { LarkBot } from "./bot.js";
-import type { LarkBotConfig } from "./types.js";
+import { LarkEndpoint } from "./endpoint.js";
+import type { LarkEndpointConfig } from "./types.js";
 
-export class LarkAdapter extends Adapter<LarkBot> {
+export class LarkAdapter extends Adapter<LarkEndpoint> {
+  static override readonly capabilities = ['inbound', 'outbound'] as const;
+
     #router: any;
 
     constructor(plugin: Plugin, router: any) {
@@ -16,34 +18,34 @@ export class LarkAdapter extends Adapter<LarkBot> {
         this.#router = router;
     }
 
-    createBot(config: LarkBotConfig): LarkBot {
-        return new LarkBot(this, this.#router, config);
+    createEndpoint(config: LarkEndpointConfig): LarkEndpoint {
+        return new LarkEndpoint(this, this.#router, config);
     }
 
     // ── IGroupManagement 标准群管方法 ──────────────────────────────────
 
-    async kickMember(botId: string, sceneId: string, userId: string) {
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        return bot.removeChatMembers(sceneId, [userId]);
+    async kickMember(endpointId: string, sceneId: string, userId: string) {
+        const endpoint = this.endpoints.get(endpointId);
+        if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+        return endpoint.removeChatMembers(sceneId, [userId]);
     }
 
-    async listMembers(botId: string, sceneId: string) {
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        return bot.getChatMembers(sceneId);
+    async listMembers(endpointId: string, sceneId: string) {
+        const endpoint = this.endpoints.get(endpointId);
+        if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+        return endpoint.getChatMembers(sceneId);
     }
 
-    async getGroupInfo(botId: string, sceneId: string) {
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        return bot.getChatInfo(sceneId);
+    async getGroupInfo(endpointId: string, sceneId: string) {
+        const endpoint = this.endpoints.get(endpointId);
+        if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+        return endpoint.getChatInfo(sceneId);
     }
 
-    async setGroupName(botId: string, sceneId: string, name: string) {
-        const bot = this.bots.get(botId);
-        if (!bot) throw new Error(`Bot ${botId} 不存在`);
-        return bot.updateChatInfo(sceneId, { name });
+    async setGroupName(endpointId: string, sceneId: string, name: string) {
+        const endpoint = this.endpoints.get(endpointId);
+        if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+        return endpoint.updateChatInfo(sceneId, { name });
     }
 
     // ── 生命周期 ───────────────────────────────────────────────────────

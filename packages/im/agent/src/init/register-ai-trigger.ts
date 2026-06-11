@@ -4,8 +4,7 @@
 import './types.js';
 import {
   getPlugin,
-  resolveSenderRoles,
-  isAtBot,
+  isAtEndpoint,
   mergeAITriggerConfig,
   Message,
   resolveQuoteContextBlock,
@@ -16,9 +15,11 @@ import {
   resolveQuotedMessagePayload,
   segment,
   shouldTriggerAI,
+  enrichMessageForAgent,
+  type AgentTurnMessage,
 } from '@zhin.js/core';
 import { extractMediaParts, extractMediaPartsFromQuotedPayload } from './message-media.js';
-import type { Plugin, Tool, ToolContext } from '@zhin.js/core';
+import type { Plugin, Tool } from '@zhin.js/core';
 import type { ContentPart } from '@zhin.js/core';
 import type { OutputElement } from '@zhin.js/ai';
 import type { AIServiceRefs } from './shared-refs.js';
@@ -34,10 +35,9 @@ import { resolveRoutedAgentName } from '../routing/route-matcher.js';
 import { DEFAULT_ZHIN_AGENT_NAME } from '../config/types.js';
 import { discoverWorkspaceAgents, loadAgentMarkdownBody } from '../discovery/agents.js';
 import { summarizeSubagentResultForUser } from '../routing/subagent-summarize.js';
-import { originFromToolContext } from '../builtin/spawn-task-tool.js';
-import { parseOutput, resolveIMSessionIdFromToolContext } from '@zhin.js/ai';
+import { originFromMessage } from '../builtin/spawn-task-tool.js';
+import { parseOutput, resolveIMSessionIdFromMessage } from '@zhin.js/ai';
 import { canAccessTool } from '../orchestrator/tool-selection.js';
-import { inferFileRole } from '../security/file-role-policy.js';
 import { formatCompactLog, truncatePreview } from '@zhin.js/logger';
 import { formatRedactedJson } from '@zhin.js/ai';
 import { formatAiHandlerCompleteLog } from '../zhin-agent/turn-metrics.js';
@@ -47,19 +47,19 @@ import {
   type SubagentProcessingNotice,
 } from '../subagent-goal-notify.js';
 
-function resolveBotAtIds(message: Message<any>, root: Plugin): string[] {
-  const ids = new Set<string>([String(message.$bot)]);
+function resolveEndpointAtIds(message: Message, root: Plugin): string[] {
+  const ids = new Set<string>([String(message.$endpoint)]);
   try {
     const adapter = root.inject(message.$adapter) as
-      | { bots?: Map<string, { $config?: Record<string, unknown>; $platformUserId?: string }> }
+      | { endpoints?: Map<string, { $config?: Record<string, unknown>; $platformUserId?: string }> }
       | undefined;
-    const bot = adapter?.bots?.get(message.$bot);
-    const cfg = bot?.$config;
+    const endpoint = adapter?.endpoints?.get(message.$endpoint);
+    const cfg = endpoint?.$config;
     if (cfg?.name) ids.add(String(cfg.name));
     if (cfg?.appid) ids.add(String(cfg.appid));
-    if (bot?.$platformUserId) ids.add(String(bot.$platformUserId));
+    if (endpoint?.$platformUserId) ids.add(String(endpoint.$platformUserId));
   } catch {
-    // adapter 未就绪时仍用 message.$bot
+    // adapter 未就绪时仍用 message.$endpoint
   }
   return [...ids];
 }
@@ -79,7 +79,7 @@ export function registerAITrigger(refs: AIServiceRefs): void {
     const dispatcherSvc = root.inject('dispatcher') as
       | {
           replyWithPolish?: (
-            m: Message<any>,
+            m: Message,
             s: 'ai' | 'command',
             c: unknown,
             options?: { quote?: boolean | string },
@@ -88,7 +88,7 @@ export function registerAITrigger(refs: AIServiceRefs): void {
       | undefined;
 
     const handleAIMessage = async (
-      message: Message<any>,
+      message: Message,
       content: string,
     ) => {
       const replyOptions = { quote: true as const };
@@ -97,43 +97,34 @@ export function registerAITrigger(refs: AIServiceRefs): void {
         if (dispatcherSvc && typeof dispatcherSvc.replyWithPolish === 'function') {
           return dispatcherSvc.replyWithPolish(message, 'ai', payload as any, replyOptions);
         }
+        if (!message.$reply) {
+          throw new Error(
+            `Cannot reply: endpoint ${message.$endpoint} has no outbound capability`,
+          );
+        }
         return message.$reply(payload as any, true);
       };
 
       const t0 = performance.now();
       if (!ai.isReady()) {
-        logger.warn(formatCompactLog('AI Handler', { skip: 'not_ready', bot: message.$bot }));
+        logger.warn(formatCompactLog('AI Handler', { skip: 'not_ready', endpoint: message.$endpoint }));
         await replyOutbound('AI 服务未就绪，请检查 zhin.config.yml 中的 providers 配置。');
         return;
       }
       if (!refs.zhinAgent) {
-        logger.warn(formatCompactLog('AI Handler', { skip: 'no_zhin_agent', bot: message.$bot }));
+        logger.warn(formatCompactLog('AI Handler', { skip: 'no_zhin_agent', endpoint: message.$endpoint }));
         await replyOutbound('AI Agent 未初始化，请查看启动日志。');
         return;
       }
       if (triggerConfig.thinkingMessage)
         await replyOutbound(triggerConfig.thinkingMessage);
 
-      const adapterInstance = root.inject(message.$adapter) as
-        | { bots?: Map<string, { $config?: Record<string, any> }> }
-        | undefined;
-      const botConfig = adapterInstance?.bots?.get(message.$bot)?.$config as Record<string, any> | undefined;
-      const { scope, roles } = resolveSenderRoles(message, triggerConfig, botConfig);
-
-      const toolContext: ToolContext = {
-        platform: message.$adapter,
-        botId: message.$bot,
-        messageId: message.$id,
-        sceneId: message.$channel?.id || message.$sender.id,
-        senderId: message.$sender.id,
-        message,
-        scope,
-        roles,
-        fileRole: inferFileRole({ roles }),
-        extra: {
-          [SUBAGENT_GOAL_NOTIFY_EXTRA_KEY]: async (notice: SubagentProcessingNotice) => {
-            await replyOutbound(formatSubagentProcessingMessage(notice));
-          },
+      enrichMessageForAgent(root, message);
+      const commMessage = message as AgentTurnMessage;
+      (commMessage as import('@zhin.js/core').AgentTurnMessage).extra = {
+        ...((commMessage as import('@zhin.js/core').AgentTurnMessage).extra ?? {}),
+        [SUBAGENT_GOAL_NOTIFY_EXTRA_KEY]: async (notice: SubagentProcessingNotice) => {
+          await replyOutbound(formatSubagentProcessingMessage(notice));
         },
       };
 
@@ -142,9 +133,9 @@ export function registerAITrigger(refs: AIServiceRefs): void {
       let externalTools: Tool[] = [...ai.getResidentToolsAsTools()];
       if (toolService) {
         externalTools.push(...toolService.getAll());
-        externalTools = toolService.filterByContext(externalTools, toolContext);
+        externalTools = toolService.filterByContext(externalTools, commMessage);
       } else {
-        externalTools = externalTools.filter(t => canAccessTool(t, toolContext));
+        externalTools = externalTools.filter(t => canAccessTool(t, commMessage));
       }
       logger.debug(formatCompactLog('AI Handler', {
         tools: externalTools.length,
@@ -188,8 +179,8 @@ export function registerAITrigger(refs: AIServiceRefs): void {
           enabled: triggerConfig.resolveQuotedMessages,
         });
         if (quoteBlock?.includes(QUOTED_MESSAGE_CONTEXT_MARKER)) {
-          toolContext.extra = {
-            ...toolContext.extra,
+          (commMessage as import('@zhin.js/core').AgentTurnMessage).extra = {
+            ...(commMessage as import('@zhin.js/core').AgentTurnMessage).extra,
             [QUOTE_CONTEXT_BLOCK_EXTRA_KEY]: quoteBlock,
             [QUOTE_CONTEXT_SYSTEM_EXTRA_KEY]: QUOTE_CONTEXT_SYSTEM_HINT,
           };
@@ -220,7 +211,7 @@ export function registerAITrigger(refs: AIServiceRefs): void {
           const meta = (await discoverWorkspaceAgents(root)).find(m => m.name === routedAgent);
           if (routeBinding && subMgr && meta) {
             const systemBody = await loadAgentMarkdownBody(meta.filePath);
-            const origin = originFromToolContext(toolContext);
+            const origin = originFromMessage(commMessage);
             const routeProvider = refs.aiService?.getProvider(routeBinding.providerAlias);
             const workspaceDir = process.cwd();
             const inbound = await buildSubagentInboundTask(aiContent, mediaParts, {
@@ -255,20 +246,14 @@ export function registerAITrigger(refs: AIServiceRefs): void {
               agent: routedAgent,
               binding: routeBinding,
               systemPrompt: systemBody || undefined,
-              notifyContext: toolContext,
+              notifyContext: commMessage,
             });
 
-            const sessionId = resolveIMSessionIdFromToolContext({
-              platform: toolContext.platform,
-              botId: toolContext.botId,
-              scope: toolContext.scope,
-              sceneId: toolContext.sceneId,
-              senderId: toolContext.senderId,
-            });
+            const sessionId = resolveIMSessionIdFromMessage(commMessage);
             const emitter = refs.zhinAgent.getEventEmitter();
             let summary = '';
             try {
-              await emitter.dispatch('ai.processing.start', emitter.createPayload(sessionId, toolContext, 'text', {
+              await emitter.dispatch('ai.processing.start', emitter.createPayload(sessionId, commMessage, 'text', {
                 content: aiContent,
                 agentId: DEFAULT_ZHIN_AGENT_NAME,
                 label: 'summarize',
@@ -279,24 +264,24 @@ export function registerAITrigger(refs: AIServiceRefs): void {
                 aiContent,
                 subResult,
               );
-              await emitter.dispatch('ai.response', emitter.createPayload(sessionId, toolContext, 'text', {
+              await emitter.dispatch('ai.response', emitter.createPayload(sessionId, commMessage, 'text', {
                 path: 'agent',
                 agentId: DEFAULT_ZHIN_AGENT_NAME,
                 reply: summary,
               }));
             } catch (summarizeErr) {
               const msg = summarizeErr instanceof Error ? summarizeErr.message : String(summarizeErr);
-              await emitter.dispatch('ai.processing.error', emitter.createPayload(sessionId, toolContext, 'text', {
+              await emitter.dispatch('ai.processing.error', emitter.createPayload(sessionId, commMessage, 'text', {
                 error: msg,
                 agentId: DEFAULT_ZHIN_AGENT_NAME,
               }));
               throw summarizeErr;
             } finally {
-              await emitter.dispatch('ai.processing.finish', emitter.createPayload(sessionId, toolContext, 'text', {
+              await emitter.dispatch('ai.processing.finish', emitter.createPayload(sessionId, commMessage, 'text', {
                 reply: summary,
                 agentId: DEFAULT_ZHIN_AGENT_NAME,
               }));
-              emitter.emit('ai.typing.stop', emitter.createPayload(sessionId, toolContext, 'text', {
+              emitter.emit('ai.typing.stop', emitter.createPayload(sessionId, commMessage, 'text', {
                 reason: 'route_done',
               }));
             }
@@ -329,8 +314,8 @@ export function registerAITrigger(refs: AIServiceRefs): void {
             && visionProvider
             && providerSupportsVision(visionProvider);
           if (canInjectVision) {
-            toolContext.extra = {
-              ...toolContext.extra,
+            (commMessage as import('@zhin.js/core').AgentTurnMessage).extra = {
+              ...(commMessage as import('@zhin.js/core').AgentTurnMessage).extra,
               [INBOUND_MEDIA_PARTS_EXTRA_KEY]: pre.visionParts,
             };
           }
@@ -342,7 +327,7 @@ export function registerAITrigger(refs: AIServiceRefs): void {
             text_append_preview: truncatePreview(pre.textAppend, 200),
           }));
           try {
-            elements = await refs.zhinAgent.process(fullContent, toolContext, externalTools, onChunk);
+            elements = await refs.zhinAgent.process(fullContent, commMessage, externalTools, onChunk);
           } catch (procErr) {
             logger.warn(formatCompactLog('AI Handler', {
               multimodal_fallback: true,
@@ -351,7 +336,7 @@ export function registerAITrigger(refs: AIServiceRefs): void {
             const parts: ContentPart[] = [];
             if (aiContent) parts.push({ type: 'text', text: aiContent });
             parts.push(...mediaParts);
-            elements = await refs.zhinAgent.processMultimodal(parts, toolContext, onChunk);
+            elements = await refs.zhinAgent.processMultimodal(parts, commMessage, onChunk);
           }
         } else if (mediaParts.length > 0) {
           const parts: ContentPart[] = [];
@@ -361,9 +346,9 @@ export function registerAITrigger(refs: AIServiceRefs): void {
             stage: 'process_multimodal',
             parts: formatRedactedJson(parts),
           }));
-          elements = await refs.zhinAgent.processMultimodal(parts, toolContext, onChunk);
+          elements = await refs.zhinAgent.processMultimodal(parts, commMessage, onChunk);
         } else {
-          elements = await refs.zhinAgent.process(aiContent, toolContext, externalTools, onChunk);
+          elements = await refs.zhinAgent.process(aiContent, commMessage, externalTools, onChunk);
         }
         const outboundSegments = await publishOutboundElements(elements, message.$adapter);
         if (outboundSegments.length) await replyOutbound(outboundSegments);
@@ -392,13 +377,13 @@ export function registerAITrigger(refs: AIServiceRefs): void {
       return;
     }
 
-    dispatcher.setAITriggerMatcher((message: Message<any>) => {
-      const botAtIds = resolveBotAtIds(message, root);
-      const result = shouldTriggerAI(message, triggerConfig, { botAtIds });
+    dispatcher.setAITriggerMatcher((message: Message) => {
+      const endpointAtIds = resolveEndpointAtIds(message, root);
+      const result = shouldTriggerAI(message, triggerConfig, { endpointAtIds });
       logger.debug(formatCompactLog('AI Trigger', {
         adapter: message.$adapter,
-        bot: message.$bot,
-        at: isAtBot(message, botAtIds),
+        endpoint: message.$endpoint,
+        at: isAtEndpoint(message, endpointAtIds),
         triggered: result.triggered,
         preview: truncatePreview(segment.raw(message.$content)),
       }));

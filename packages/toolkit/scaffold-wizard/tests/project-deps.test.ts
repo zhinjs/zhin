@@ -44,7 +44,7 @@ describe('project-deps', () => {
   it('auto-adds SQLite when GitHub adapter requires database', () => {
     const options: InitOptions = {
       yes: false,
-      adapters: { packages: [], plugins: [], bots: [], envVars: {}, requiresDatabase: true },
+      adapters: { packages: [], plugins: [], endpoints: [], envVars: {}, requiresDatabase: true },
     };
 
     ensureDatabaseForAdapters(options);

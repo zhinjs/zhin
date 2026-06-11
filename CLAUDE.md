@@ -47,7 +47,7 @@ packages/im/kernel          # Runtime kernel (no IM concepts)
   ↓
 packages/im/ai              # AI engine (providers, agents, memory, compaction)
   ↓
-packages/im/core            # IM framework (Plugin, Adapter, Bot, Command, MessageDispatcher)
+packages/im/core            # IM framework (Plugin, Adapter, Endpoint, Command, MessageDispatcher)
   ↓
 packages/im/agent           # Agent orchestration (ZhinAgent, security policies, MCP client)
   ↓
@@ -63,14 +63,14 @@ packages/toolkit/{create-zhin,satori}         # 脚手架与渲染库
 |---------|------|------|
 | kernel | `packages/im/kernel/src/` | PluginBase, Feature, Cron, Scheduler, error hierarchy |
 | ai | `packages/im/ai/src/` | Provider abstraction, Agent, ModelRegistry, Memory, Compaction, CostTracker |
-| core | `packages/im/core/src/` | Plugin (AsyncLocalStorage), Adapter, Bot, Command, MessageDispatcher |
+| core | `packages/im/core/src/` | Plugin (AsyncLocalStorage), Adapter, Endpoint, Command, MessageDispatcher |
 | agent | `packages/im/agent/src/` | ZhinAgent orchestrator, security (ExecPolicy, FilePolicy), MCP client |
 | host-router | `packages/host/router/src/` | Koa 监听、Router、Bearer/CORS |
 | host-api | `packages/host/api/src/` | Host 管理面 REST、Console 协议、entries |
 
 ### Outbound send chain (do not bypass)
 
-IM stack: `Message.$reply` / `Adapter.sendMessage` → `renderSendMessage` → root plugin `before.sendMessage` → platform `Bot`. All outbound must go through this chain — no parallel `Plugin#sendMessage` bypass.
+IM stack: `Message.$reply` / `Adapter.sendMessage` → `renderSendMessage` → root plugin `before.sendMessage` → platform `Endpoint`. All outbound must go through this chain — no parallel `Plugin#sendMessage` bypass.
 
 ### Plugin system
 
@@ -228,7 +228,7 @@ manager.registerAdapter(new ICQQTypingIndicatorAdapter(...));
 // 使用
 const indicator = await manager.start({
   platform: 'icqq',
-  botId: '75318',
+  endpointId: '75318',
   sessionId: 'private:liuchunlang',
   messageId: '123456',
   sceneType: 'private',
@@ -249,7 +249,7 @@ packages/im/kernel (无 IM 概念)
   ↓
 packages/im/ai (providers, agents, memory)
   ↓
-packages/im/core (Plugin, Adapter, Bot, Command)
+packages/im/core (Plugin, Adapter, Endpoint, Command)
   ↓
 packages/im/agent (ZhinAgent, security policies)
   ↓
@@ -270,7 +270,7 @@ packages/im/zhin (主入口)
 Message.$reply / Adapter.sendMessage
   → renderSendMessage
   → root plugin before.sendMessage
-  → platform Bot.$sendMessage
+  → platform Endpoint.$sendMessage
 ```
 
 **禁止**：直接调用 `bot.$sendMessage()` 绕过中间件链
@@ -320,7 +320,7 @@ Message.$reply / Adapter.sendMessage
 
 These rules are non-negotiable — violating them will break the project:
 
-1. **Never bypass the send chain** — All outbound messages must flow through `Message.$reply` or `Adapter.sendMessage` → `renderSendMessage` → `before.sendMessage` → platform Bot.
+1. **Never bypass the send chain** — All outbound messages must flow through `Message.$reply` or `Adapter.sendMessage` → `renderSendMessage` → `before.sendMessage` → platform Endpoint.
 2. **Respect the dependency direction** — `basic → kernel → ai → core → agent → zhin`. Lower layers must never import from higher layers.
 3. **`usePlugin()` at module top-level only** — Never inside async functions, callbacks, or lazy init paths (AsyncLocalStorage context will be lost).
 4. **Use `.js` extensions in imports** — TypeScript local imports require `.js` suffix (`import { x } from './y.js'`).

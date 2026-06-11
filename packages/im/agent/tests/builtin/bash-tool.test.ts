@@ -1,14 +1,17 @@
 /**
  * bash 内置工具（BuiltinBaseTool）单测 — 注入 exec，避免在 CI 中执行真实 shell
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { mockCommMessage } from '../helpers/mock-comm-message.js';
+
+import * as core from '@zhin.js/core';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { BashExecAsync } from '../../src/builtin/bash-tool.js';
 import { createBashTool, BashBuiltinTool } from '../../src/builtin/bash-tool.js';
 import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
-import type { ToolContext } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 
 describe('BashBuiltinTool', () => {
   it('toTool 元数据与 schema 完整', () => {
@@ -69,9 +72,14 @@ describe('BashBuiltinTool', () => {
   });
 
   it('execute 与 normalizeTool 绑定 context 时可调用', async () => {
+    vi.spyOn(core, 'getPlugin').mockReturnValue({ root: { inject: () => undefined } } as ReturnType<typeof core.getPlugin>);
     const mockExec: BashExecAsync = async () => ({ stdout: 'via-tool\n', stderr: '' });
     const tool = new BashBuiltinTool(mockExec, { useSandbox: false }).toTool();
-    const ctx = { platform: 'test' } as ToolContext;
+    const ctx = mockCommMessage({
+      adapter: 'process',
+      senderId: '1',
+      scope: 'private',
+    });
     const agentTool = normalizeTool(tool, ctx);
     const result = await agentTool.execute({ command: 'echo hi' });
     expect(String(result)).toContain('via-tool');

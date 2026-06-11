@@ -25,7 +25,7 @@ pnpm add @zhin.js/adapter-lark
 
 ```yaml
 # zhin.config.yml
-bots:
+endpoints:
   - context: lark
     name: my-lark-bot
     appId: cli_xxxxxxxxxxxx
@@ -48,7 +48,7 @@ plugins:
 import { defineConfig } from 'zhin.js'
 
 export default defineConfig({
-  bots: [
+  endpoints: [
     {
       context: 'lark',
       name: 'my-lark-bot',

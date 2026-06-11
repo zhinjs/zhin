@@ -9,16 +9,19 @@ import {
   onAISessionNew,
 } from '../src/ai-event-bus.js';
 import { createAIHookEvent } from '../src/orchestrator/index.js';
+import { mockCommMessage } from './helpers/mock-comm-message.js';
 
 describe('ai-event-bus helpers', () => {
   it('builds hook payload with fallback session id', () => {
     const payload = createAIHookBusPayload(
       createAIHookEvent('tool', 'call', undefined, {
-        platform: 'mock',
-        botId: 'bot1',
-        scope: 'private',
-        senderId: 'user1',
-        sceneId: 'scene1',
+        commMessage: mockCommMessage({
+          adapter: 'mock',
+          endpoint: 'bot1',
+          scope: 'private',
+          senderId: 'user1',
+          sceneId: 'scene1',
+        }),
         toolName: 'read_file',
         args: { filePath: 'README.md' },
       }),

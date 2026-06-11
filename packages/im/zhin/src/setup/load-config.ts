@@ -9,7 +9,7 @@ export const DEFAULT_CORE_SERVICES = ['process', 'config', 'command', 'component
 
 export const DEFAULT_APP_CONFIG: AppConfig = {
   log_level: LogLevel.INFO,
-  bots: [],
+  endpoints: [],
   database: {
     dialect: 'sqlite' as const,
     filename: './data/bot.db',

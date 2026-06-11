@@ -34,7 +34,7 @@ describe('create-zhin -y Stable 默认值', () => {
     await createWorkspace(projectPath, 'stable-bot', stableYesOptions());
 
     const config = await fs.readFile(path.join(projectPath, 'zhin.config.yml'), 'utf8');
-    expect(config).toMatch(/bots:\s*\[\]/);
+    expect(config).toMatch(/endpoints:\s*\[\]/);
     expect(config).not.toMatch(/context:\s*sandbox/);
     expect(config).not.toContain('toolSearch:');
     expect(config).toContain('agents:');

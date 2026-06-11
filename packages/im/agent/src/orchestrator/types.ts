@@ -22,8 +22,8 @@ export interface ResourceEntry<T> {
 // Skill
 // ============================================================================
 
-import type { SenderRole, ToolContext } from '@zhin.js/core';
-export type { SenderRole, ToolContext };
+import type { SenderRole, Message } from '@zhin.js/core';
+export type { SenderRole, Message };
 
 /**
  * 文件操作角色 — 在 IM 场景中对文件操作的权限分级
@@ -57,10 +57,9 @@ export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
   name: string;
   description: string;
   parameters: ToolParametersSchema;
-  execute: (args: TArgs, context?: ToolContext) => unknown | Promise<unknown>;
+  execute: (args: TArgs, message?: Message) => unknown | Promise<unknown>;
   platforms?: string[];
   scopes?: ToolScope[];
-  requiredAnyRole?: readonly SenderRole[];
   permissions?: string[];
   tags?: string[];
   keywords?: string[];
@@ -80,9 +79,6 @@ export namespace Tool {
     enum?: unknown[];
   }
 }
-
-/** IM-aware tool execution context（与 @zhin.js/core ToolContext 一致） */
-export type IMToolContext = ToolContext;
 
 export interface ToolJsonSchema extends JsonSchema {
   type: 'object';

@@ -4,19 +4,19 @@
  */
 import {
   EMPTY_TOKEN_USAGE,
-  resolveIMSessionIdFromToolContext,
+  resolveIMSessionIdFromMessage,
   type AssistantMessage,
 } from '@zhin.js/ai';
 import type { DeferredWorkerResult } from '../deferred-worker-runner.js';
 import { resolveSubagentDisplayLabel } from '../subagent-goal-notify.js';
 import { packageSubagentResult } from '../subagent-artifact.js';
-import type { ToolContext } from '../orchestrator/types.js';
+import type { Message } from '../orchestrator/types.js';
 import type { ZhinAgentPrivate } from './zhin-agent-private.js';
 import { extractDeferredBody } from './deferred-delivery.js';
 
 export async function persistDeferredWorkerResultToContext(
   agent: ZhinAgentPrivate,
-  context: ToolContext,
+  commMessage: Message,
   taskId: string,
   goal: string,
   result: DeferredWorkerResult,
@@ -24,13 +24,7 @@ export async function persistDeferredWorkerResultToContext(
   const body = extractDeferredBody(result);
   if (!body.trim()) return false;
 
-  const sessionKey = resolveIMSessionIdFromToolContext({
-    platform: context.platform,
-    botId: context.botId,
-    scope: context.scope,
-    sceneId: context.sceneId,
-    senderId: context.senderId,
-  });
+  const sessionKey = resolveIMSessionIdFromMessage(commMessage);
   const active = await agent.agentSessionStore.findActive(sessionKey);
   const sessionId = active?.session_id;
   if (!sessionId) return false;

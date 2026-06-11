@@ -1,8 +1,14 @@
 /**
  * Home Domain 工具权限（M4）
  */
-import { getPlugin } from '@zhin.js/core';
-import type { ToolContext } from '@zhin.js/core';
+import {
+  getPlugin,
+  hasSenderRole,
+  mergeAITriggerConfig,
+  resolveSenderRoles,
+  senderRolesFromMessage,
+} from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 import {
   resolveToolRequesterRole,
   type ToolRequesterRole,
@@ -17,32 +23,49 @@ export interface HomeToolDecision {
   role: ToolRequesterRole;
 }
 
-function resolveRole(context?: ToolContext): ToolRequesterRole {
-  if (!context?.platform || !context?.botId || !context?.senderId) {
+function resolveRole(commMessage?: Message): ToolRequesterRole {
+  if (!commMessage?.$adapter || !commMessage?.$endpoint || !commMessage?.$sender?.id) {
     return 'unknown';
   }
+  if (commMessage.$adapter === 'process') return 'master';
   try {
-    return resolveToolRequesterRole(getPlugin(), context);
+    return resolveToolRequesterRole(getPlugin(), commMessage);
   } catch {
-    if (context.roles?.includes('master')) return 'master';
-    return 'other';
+    if (commMessage.$sender.isMaster !== undefined || commMessage.$sender.isTrusted !== undefined) {
+      const roles = senderRolesFromMessage(commMessage);
+      if (hasSenderRole(roles, 'master')) return 'master';
+      if (hasSenderRole(roles, 'trusted')) return 'trusted';
+      return 'other';
+    }
+    try {
+      const { roles } = resolveSenderRoles(
+        commMessage,
+        mergeAITriggerConfig({}),
+        undefined,
+      );
+      if (hasSenderRole(roles, 'master')) return 'master';
+      if (hasSenderRole(roles, 'trusted')) return 'trusted';
+      return 'other';
+    } catch {
+      return 'other';
+    }
   }
 }
 
 export function checkHomeToolAccess(
   operation: 'read' | 'write',
   entityId: string,
-  context: ToolContext | undefined,
+  commMessage: Message | undefined,
   policy: HomePolicyConfig & { requireMaster: boolean; confirmServices: string[] },
 ): HomeToolDecision {
-  const role = resolveRole(context);
+  const role = resolveRole(commMessage);
   const domain = parseEntityDomain(entityId);
 
   if (policy.requireMaster && role !== 'master') {
     return {
       allowed: false,
       role,
-      reason: '智能家居操作仅允许 Bot Owner（master）调用。',
+      reason: '智能家居操作仅允许 Endpoint Owner（master）调用。',
     };
   }
 

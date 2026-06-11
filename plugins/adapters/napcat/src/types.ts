@@ -50,7 +50,7 @@ export interface NapCatHttpConfig extends NapCatConfigBase {
   poll_interval?: number;
 }
 
-export type NapCatBotConfig = NapCatWsClientConfig | NapCatWsServerConfig | NapCatHttpConfig;
+export type NapCatEndpointConfig = NapCatWsClientConfig | NapCatWsServerConfig | NapCatHttpConfig;
 
 // ── API 响应 ─────────────────────────────────────────────────────────
 

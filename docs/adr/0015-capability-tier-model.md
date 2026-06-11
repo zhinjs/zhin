@@ -22,7 +22,7 @@
 |------|------|------------|
 | **Stable（Core）** | 黄金路径：Sandbox + Agent + Feature + MCP Client 契约 | `pnpm check:stable` Core 批次；[minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot) |
 | **Platform Stable** | 主流 IM 适配器；框架侧入站/出站 integration 有 CI | `pnpm check:stable` Platform 批次；档位权威来源 `ADAPTER_META` |
-| **Advanced** | opt-in 复杂度或未纳入 Stable smoke 的能力 | `toolSearch`、MCP Mesh、多 bot；[test-bot ACCEPTANCE](https://github.com/zhinjs/zhin/blob/main/examples/test-bot/ACCEPTANCE.md) |
+| **Advanced** | opt-in 复杂度或未纳入 Stable smoke 的能力 | `toolSearch`、MCP Mesh、多 Endpoint；[test-bot ACCEPTANCE](https://github.com/zhinjs/zhin/blob/main/examples/test-bot/ACCEPTANCE.md) |
 | **Experimental** | 协议/平台仍在变；无全量对外承诺 | OneBot12、Milky、Satori、Email、GitHub |
 
 **Platform Stable 边界**：框架保证 Adapter 契约（normalize、sendMessage 链路、integration）；**平台账号、风控、部署差异由用户自担**。实机 smoke 可选：`L4_SKIP_PLATFORM=0` + 环境变量。
@@ -60,7 +60,7 @@
 
 - `ai.agent.toolSearch`（deferred Worker）；
 - MCP Server / Agent Mesh / `remoteAgents`；
-- 多 bot 同进程厨房水槽配置；
+- 多 Endpoint 同进程厨房水槽配置；
 - Assistant Runtime（`assistant.enabled`）。
 
 ### D5 — GUI 边界

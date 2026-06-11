@@ -5,7 +5,7 @@
 ## 片名（备选）
 
 - 《10 分钟用 TypeScript 做出会聊天的机器人｜Zhin.js 首跑教程》
-- 《不用真机 QQ，Sandbox 里调试 IM 机器人｜Zhin.js 入门》
+- 《不用真机 QQ，Sandbox Endpoint 里调试 ZhinAgent｜Zhin.js 入门》
 
 **目标时长**：9～12 分钟  
 **演示路径**：`npm create zhin-app` → `pnpm dev` → [console.zhin.dev](https://console.zhin.dev) → `hello` →（可选）`ai: 你好` → 热重载改插件  
@@ -35,7 +35,7 @@
 |----|------|
 | **画面** | 快剪：**demo.zhin.dev** 沙盒 `hello` → 终端 `pnpm dev` → Console 对话 →（若有）`ai:` 有回复。 |
 | **旁白** | 「想做一个 QQ / Telegram 机器人，但不想折腾风控、也不想 Python 栈？今天用 **Zhin.js**——一个 **TypeScript 写的 IM 聊天助手框架**——从零跑到能对话。全程大约十分钟，跟着做就能复现。」 |
-| **字幕** | 大字：**TypeScript IM 机器人 · 命令 + AI · 热重载** |
+| **字幕** | 大字：**TypeScript AI Agent · Endpoint · 命令 + AI · 热重载** |
 | **备注** | 前 3 秒必须有「结果画面」，别先讲 PPT。 |
 
 ---
@@ -93,7 +93,7 @@
 | **画面** | 浏览器打开 https://console.zhin.dev |
 | **旁白** | 「打开官方 Remote Console。第一次要填两个东西：**API Base** 填刚才终端里的 Host 地址；**Token** 填 `.env` 里的 `HTTP_TOKEN`。」 |
 | **操作** | 登录页填写 → 主界面 → 左侧 **「沙盒」**。 |
-| **旁白** | 「进沙盒页时，框架会 **自动创建 Sandbox bot**——配置里 `bots: []` 是正常的。」 |
+| **旁白** | 「进沙盒页时，框架会 **自动创建 Sandbox bot**——配置里 `endpoints: []` 是正常的。」 |
 | **字幕** | API Base = 终端地址 · Token = .env 的 HTTP_TOKEN |
 
 ---
@@ -105,7 +105,7 @@
 | **画面** | 沙盒发送：`hello` |
 | **旁白** | 「先发一条普通命令，不走 AI。这是 Stable 路径的冒烟测试。」 |
 | **画面** | 收到回复 **`你好！`** |
-| **字幕** | `hello` = 命令 Bot · 不消耗模型 |
+| **字幕** | `hello` = 命令 Endpoint · 不消耗模型 |
 
 ---
 

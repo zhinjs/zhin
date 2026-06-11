@@ -15,7 +15,7 @@ describe('JSX 出站管线', () => {
       content: element,
       type: 'private',
       context: 'test',
-      bot: 'test',
+      endpoint: 'test',
       id: 'user-1',
     };
 
@@ -43,7 +43,7 @@ describe('JSX 出站管线', () => {
       content: element,
       type: 'private',
       context: 'test',
-      bot: 'test',
+      endpoint: 'test',
       id: 'user-1',
     });
 

@@ -5,7 +5,7 @@ platforms:
 description: >-
   QQ 官方机器人管理能力。当用户在 QQ 官方机器人（非 OneBot/NapCat）中请求群管（踢人、
   禁言、全员禁言）、频道/子频道管理、角色管理（创建/添加/移除角色）、
-  或查询成员详情时使用。即使用户没有明确提到 QQ 官方机器人，只要 Bot 平台是 qq
+  或查询成员详情时使用。即使用户没有明确提到 QQ 官方机器人，只要 Endpoint 平台是 qq
   （官方 API）且涉及上述操作，就应触发。仅有昵称时先 list_members 查 user_id。
 keywords:
   - qq

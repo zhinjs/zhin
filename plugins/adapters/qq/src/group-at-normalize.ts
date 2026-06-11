@@ -7,17 +7,17 @@ function segmentAtId(seg: MessageElement): string {
   return raw == null ? "" : String(raw);
 }
 
-function textMentionsBot(text: string, botIds: string[]): boolean {
-  for (const id of botIds) {
+function textMentionsEndpoint(text: string, endpointIds: string[]): boolean {
+  for (const id of endpointIds) {
     const re = new RegExp(`@${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`);
     if (re.test(text)) return true;
   }
   return false;
 }
 
-function stripInlineAtBot(text: string, botIds: string[]): string {
+function stripInlineAtEndpoint(text: string, endpointIds: string[]): string {
   let result = text;
-  for (const id of botIds) {
+  for (const id of endpointIds) {
     if (!id) continue;
     const re = new RegExp(`^@${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`);
     result = result.replace(re, "");
@@ -32,10 +32,10 @@ function stripInlineAtBot(text: string, botIds: string[]): string {
  */
 export function normalizeGroupAtPrefix(
   content: MessageElement[],
-  botAtIds: string[],
+  endpointAtIds: string[],
   forceAt: boolean,
 ): MessageElement[] {
-  const ids = [...new Set(botAtIds.map(String).filter(Boolean))];
+  const ids = [...new Set(endpointAtIds.map(String).filter(Boolean))];
   if (!ids.length || !Array.isArray(content)) return content;
 
   let mentioned = forceAt;
@@ -53,8 +53,8 @@ export function normalizeGroupAtPrefix(
     }
     if (seg.type === "text" && seg.data && typeof seg.data === "object") {
       const raw = String((seg.data as { text?: string }).text ?? "");
-      if (textMentionsBot(raw, ids)) mentioned = true;
-      const stripped = stripInlineAtBot(raw, ids);
+      if (textMentionsEndpoint(raw, ids)) mentioned = true;
+      const stripped = stripInlineAtEndpoint(raw, ids);
       if (stripped) {
         body.push({ ...seg, data: { ...(seg.data as object), text: stripped } });
       }

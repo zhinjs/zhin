@@ -2,9 +2,9 @@
 
 > 维护者决策记录见 [ADR 0015 — 能力分档模型](/adr/0015-capability-tier-model)。
 
-Zhin.js 是 **TypeScript IM 机器人框架**：同时支持 **传统命令 Bot**、**AI Agent Bot** 与 **二者混合**。
+Zhin.js 是 **TypeScript AI Agent 运行时**：通过 **Endpoint** 接入 IM、邮件、GitHub、Sandbox 等通道，同时支持 **传统命令交互**、**ZhinAgent 对话** 与 **二者混合**。
 
-**产品对标**：IM **聊天助手**、**生活助手**（私聊/群聊、记忆、cron、Home Assistant、通知）——不是 Cursor / Claude Code 类的 **写代码 Agent**，也不内置 **plan mode** 或以改仓库为主轴的 Harness。
+**产品对标**：多通道 **生活/工作助手**（私聊/群聊、记忆、cron、Home Assistant、通知）——不是 Cursor / Claude Code 类的 **写代码 Agent**，也不内置 **plan mode** 或以改仓库为主轴的 Harness。IM 是 Endpoint 的主场景之一，不是产品定义的全部。
 
 ## 产品边界（刻意不做 vs 计划中）
 
@@ -25,7 +25,7 @@ Zhin.js 是 **TypeScript IM 机器人框架**：同时支持 **传统命令 Bot*
 |------|--------|------|
 | **Stable（Core）** | 最少配置能跑：Sandbox + AI + 命令 + cron + MCP Client 契约 | `pnpm check:stable`（Core 批）· [minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot) |
 | **Platform Stable** | 主流 IM 适配器，框架侧 integration 有 CI | `pnpm check:stable`（Platform 批）· [适配器索引](/adapters/) |
-| **Advanced** | 编排增强：toolSearch、MCP Mesh、多 bot | [test-bot ACCEPTANCE](https://github.com/zhinjs/zhin/blob/main/examples/test-bot/ACCEPTANCE.md) |
+| **Advanced** | 编排增强：toolSearch、MCP Mesh、多 Endpoint 同进程 | [test-bot ACCEPTANCE](https://github.com/zhinjs/zhin/blob/main/examples/test-bot/ACCEPTANCE.md) |
 | **Experimental** | 协议试验，自行验证 | 无全量 CI 承诺 |
 
 **Platform Stable 说明**：我们保证 Adapter 与消息链路的集成测试；QQ 风控、公众号 HTTPS、NapCat 部署等 **平台侧问题由你自担**。
@@ -99,7 +99,7 @@ flowchart LR
 
 Host（`:8086`）**故意不提供**内嵌网页 UI；**[console.zhin.dev](https://console.zhin.dev)** 即为官方管理面板（独立仓库 [zhin-console](https://github.com/zhinjs/zhin-console)）。
 
-这不是「少做了一个 GUI」，而是 **UI 与 Bot 解耦**：
+这不是「少做了一个 GUI」，而是 **UI 与 Endpoint 解耦**：
 
 - 一个 Console 可管理多个 Host（换 API Base 即可）；
 - 改 Console 不用重启 Bot；
@@ -126,7 +126,7 @@ flowchart TD
 | 目标 | 起点 |
 |------|------|
 | 5 分钟首跑 | [快速开始](/getting-started/) → Console 沙盒 |
-| 纯命令 Bot | [命令系统](/essentials/commands) + 任选 Platform Stable 适配器 |
+| 纯命令 Endpoint | [命令系统](/essentials/commands) + 任选 Platform Stable 适配器 |
 | QQ / 微信系 | [qq](/adapters/qq)、[icqq](/adapters/icqq)、[wechat-mp](/adapters/wechat-mp)、[weixin-ilink](/adapters/weixin-ilink)、[napcat](/adapters/napcat) |
 | Agent + MCP | [Agent 概念](/advanced/agent-concepts) → [test-bot](https://github.com/zhinjs/zhin/tree/main/examples/test-bot) |
 | 硬编排 + 语义记忆 | [full-bot](https://github.com/zhinjs/zhin/tree/main/examples/full-bot) · `pnpm check:l4` |

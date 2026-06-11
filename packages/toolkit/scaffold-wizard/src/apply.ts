@@ -30,9 +30,9 @@ export function applyAdaptersToConfig(config: Record<string, unknown>, result: A
   }
   config.plugins = plugins;
 
-  const bots = Array.isArray(config.bots) ? [...config.bots as Record<string, unknown>[]] : [];
-  bots.push(...result.bots);
-  config.bots = bots;
+  const endpoints = Array.isArray(config.endpoints) ? [...config.endpoints as Record<string, unknown>[]] : [];
+  endpoints.push(...result.endpoints);
+  config.endpoints = endpoints;
 }
 
 export function applyAIToConfig(config: Record<string, unknown>, ai: AISetupConfig): void {

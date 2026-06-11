@@ -8,7 +8,7 @@ import {
   addOwnerApproveAlways,
   clearPendingOrchestrationTool,
   formatBashApproveList,
-  getOwnerToolContextOrUndefined,
+  getOwnerCommMessageOrUndefined,
   getPendingOrchestrationTool,
   removeBashApproveRule,
   removeOwnerApproveAlways,
@@ -37,8 +37,8 @@ function registerApproveCommands(
     .usage('/approve always bash')
     .action((message: Message) => {
       const plugin = getPlugin().root ?? getPlugin();
-      const ctx = getOwnerToolContextOrUndefined(plugin, message);
-      if (!ctx) return '⚠️ 仅 Bot Owner 可在私聊中使用此指令。';
+      const ctx = getOwnerCommMessageOrUndefined(plugin, message);
+      if (!ctx) return '⚠️ 仅 Endpoint Owner 可在私聊中使用此指令。';
       const r = addOwnerApproveAlways(plugin, ctx, OWNER_APPROVE_ALWAYS_TOOL);
       if (!r.ok) return `⚠️ ${r.error}\n${usageLines()}`;
       return '✅ 已对 bash 永久放行 Owner 硬确认（本 Bot）。后续 bash 需确认时将不再弹窗；若当前仍有一条待回复的 bash 确认，本轮仍需输入 yes。';
@@ -50,8 +50,8 @@ function registerApproveCommands(
     .desc('Owner：永久放行 bash（须在近期 bash 待确认窗口内）')
     .action((message: Message) => {
       const plugin = getPlugin().root ?? getPlugin();
-      const ctx = getOwnerToolContextOrUndefined(plugin, message);
-      if (!ctx) return '⚠️ 仅 Bot Owner 可在私聊中使用此指令。';
+      const ctx = getOwnerCommMessageOrUndefined(plugin, message);
+      if (!ctx) return '⚠️ 仅 Endpoint Owner 可在私聊中使用此指令。';
       const pending = getPendingOrchestrationTool(plugin, ctx);
       if (!pending) {
         return `⚠️ 无近期 bash 待确认上下文，请使用：/approve always bash。\n${usageLines()}`;
@@ -68,8 +68,8 @@ function registerApproveCommands(
     .desc('Owner：按 id（或前 8 位前缀）删除一条放行正则')
     .action((message: Message, match) => {
       const plugin = getPlugin().root ?? getPlugin();
-      const ctx = getOwnerToolContextOrUndefined(plugin, message);
-      if (!ctx) return '⚠️ 仅 Bot Owner 可在私聊中使用此指令。';
+      const ctx = getOwnerCommMessageOrUndefined(plugin, message);
+      if (!ctx) return '⚠️ 仅 Endpoint Owner 可在私聊中使用此指令。';
       const id = String(match.params?.id ?? '').trim();
       if (!id) return `⚠️ 请提供规则 id。\n${usageLines()}`;
       const r = removeBashApproveRule(plugin, ctx, id);
@@ -84,8 +84,8 @@ function registerApproveCommands(
     .usage('/approve rule ^icqq\\\\s+friend\\\\s+like\\\\b')
     .action((message: Message, match) => {
       const plugin = getPlugin().root ?? getPlugin();
-      const ctx = getOwnerToolContextOrUndefined(plugin, message);
-      if (!ctx) return '⚠️ 仅 Bot Owner 可在私聊中使用此指令。';
+      const ctx = getOwnerCommMessageOrUndefined(plugin, message);
+      if (!ctx) return '⚠️ 仅 Endpoint Owner 可在私聊中使用此指令。';
       const raw = String(match.params?.pattern ?? '').trim();
       if (!raw) return `⚠️ 请提供正则。\n${usageLines()}`;
       const r = addBashApproveRule(plugin, ctx, raw);
@@ -99,8 +99,8 @@ function registerApproveCommands(
     .desc('Owner：列出 bash 永久放行与正则规则')
     .action((message: Message) => {
       const plugin = getPlugin().root ?? getPlugin();
-      const ctx = getOwnerToolContextOrUndefined(plugin, message);
-      if (!ctx) return '⚠️ 仅 Bot Owner 可在私聊中使用此指令。';
+      const ctx = getOwnerCommMessageOrUndefined(plugin, message);
+      if (!ctx) return '⚠️ 仅 Endpoint Owner 可在私聊中使用此指令。';
       return formatBashApproveList(plugin, ctx);
     });
   commandService.add(listCmd, pluginName);
@@ -110,8 +110,8 @@ function registerApproveCommands(
     .desc('Owner：撤销 bash 永久放行（保留正则规则）')
     .action((message: Message) => {
       const plugin = getPlugin().root ?? getPlugin();
-      const ctx = getOwnerToolContextOrUndefined(plugin, message);
-      if (!ctx) return '⚠️ 仅 Bot Owner 可在私聊中使用此指令。';
+      const ctx = getOwnerCommMessageOrUndefined(plugin, message);
+      if (!ctx) return '⚠️ 仅 Endpoint Owner 可在私聊中使用此指令。';
       const r = removeOwnerApproveAlways(plugin, ctx, OWNER_APPROVE_ALWAYS_TOOL);
       if (!r.ok) return `⚠️ ${r.error}`;
       return '✅ 已撤销 bash 永久放行（正则规则仍保留，可用 /approve list 查看）。';

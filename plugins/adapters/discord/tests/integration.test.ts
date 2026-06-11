@@ -2,20 +2,20 @@
  * Discord 适配器集成测试
  *
  * 策略：Mock 掉 discord.js 的 Client 层（$connect/$disconnect/$sendMessage），
- * 测试 Bot 接口合规性、消息格式化、发送/接收链路、生命周期的完整性。
+ * 测试 Endpoint 接口合规性、消息格式化、发送/接收链路、生命周期的完整性。
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Plugin, type SendOptions } from 'zhin.js';
 import { createAdapterTestSuite } from '../../../../packages/im/core/tests/adapter-harness.js';
 import { DiscordAdapter } from '../src/adapter.js';
-import { DiscordBot } from '../src/bot.js';
+import { DiscordEndpoint } from '../src/endpoint.js';
 import type { DiscordGatewayConfig } from '../src/types.js';
 
 const FIXED_TS = 1700000000000;
 
-// ── Mock Bot：继承 DiscordBot 但完全覆盖 SDK 相关方法 ──
+// ── Mock Bot：继承 DiscordEndpoint 但完全覆盖 SDK 相关方法 ──
 
-class MockDiscordBot extends DiscordBot {
+class MockDiscordEndpoint extends DiscordEndpoint {
   sendMock = vi.fn();
 
   constructor(adapter: DiscordAdapter, config: DiscordGatewayConfig) {
@@ -41,10 +41,10 @@ class MockDiscordBot extends DiscordBot {
 // ── Mock Adapter ──
 
 class MockDiscordAdapter extends DiscordAdapter {
-  createBot(config: DiscordGatewayConfig): MockDiscordBot {
-    return new MockDiscordBot(this, {
+  createEndpoint(config: DiscordGatewayConfig): MockDiscordEndpoint {
+    return new MockDiscordEndpoint(this, {
       context: 'discord',
-      name: config.name || 'test-bot',
+      name: config.name || 'test-endpoint',
       token: 'mock-token',
       connection: 'gateway',
       ...config,
@@ -59,7 +59,7 @@ function createDiscordRawEvent(overrides: any = {}): any {
     id: 'discord-msg-001',
     content: '你好世界',
     createdTimestamp: FIXED_TS,
-    author: { id: 'user-001', displayName: 'TestUser', username: 'testuser', bot: false },
+    author: { id: 'user-001', displayName: 'TestUser', username: 'testuser', endpoint: false },
     member: { displayName: 'TestMember' },
     channel: {
       id: 'ch-001',
@@ -84,10 +84,10 @@ function createDiscordRawEvent(overrides: any = {}): any {
 
 createAdapterTestSuite<MockDiscordAdapter, any>({
   adapterName: 'discord',
-  botId: 'test-bot',
+  endpointId: 'test-endpoint',
   createAdapter: (plugin) => {
     const adapter = new MockDiscordAdapter(plugin);
-    (adapter as any).config = [{ name: 'test-bot', context: 'discord', token: 'mock-token', connection: 'gateway' }];
+    (adapter as any).config = [{ name: 'test-endpoint', context: 'discord', token: 'mock-token', connection: 'gateway' }];
     return adapter;
   },
   createRawEvent: () => createDiscordRawEvent(),
@@ -98,62 +98,62 @@ createAdapterTestSuite<MockDiscordAdapter, any>({
 describe('Discord 适配器特定测试', () => {
   let plugin: Plugin;
   let adapter: MockDiscordAdapter;
-  let bot: MockDiscordBot;
+  let endpoint: MockDiscordEndpoint;
 
   beforeEach(async () => {
     plugin = new Plugin('/test/discord-integration.ts');
     adapter = new MockDiscordAdapter(plugin);
-    (adapter as any).config = [{ name: 'test-bot', context: 'discord', token: 'mock-token', connection: 'gateway' }];
+    (adapter as any).config = [{ name: 'test-endpoint', context: 'discord', token: 'mock-token', connection: 'gateway' }];
     await adapter.start();
-    bot = adapter.bots.get('test-bot') as MockDiscordBot;
+    endpoint = adapter.endpoints.get('test-endpoint') as MockDiscordEndpoint;
   });
 
   afterEach(async () => {
     try { await adapter.stop(); } catch { /* ignore */ }
   });
 
-  describe('Bot 接口合规性', () => {
+  describe('Endpoint 接口合规性', () => {
     it('$id 应为配置的 name', () => {
-      expect(bot.$id).toBe('test-bot');
+      expect(endpoint.$id).toBe('test-endpoint');
     });
 
     it('$connected 启动后应为 true', () => {
-      expect(bot.$connected).toBe(true);
+      expect(endpoint.$connected).toBe(true);
     });
 
-    it('应实现所有 Bot 接口方法', () => {
-      expect(typeof bot.$formatMessage).toBe('function');
-      expect(typeof bot.$connect).toBe('function');
-      expect(typeof bot.$disconnect).toBe('function');
-      expect(typeof bot.$sendMessage).toBe('function');
-      expect(typeof bot.$recallMessage).toBe('function');
+    it('应实现所有 Endpoint 接口方法', () => {
+      expect(typeof endpoint.$formatMessage).toBe('function');
+      expect(typeof endpoint.$connect).toBe('function');
+      expect(typeof endpoint.$disconnect).toBe('function');
+      expect(typeof endpoint.$sendMessage).toBe('function');
+      expect(typeof endpoint.$recallMessage).toBe('function');
     });
   });
 
   describe('生命周期', () => {
-    it('start() 应注册 bot', () => {
-      expect(adapter.bots.has('test-bot')).toBe(true);
+    it('start() 应注册 endpoint', () => {
+      expect(adapter.endpoints.has('test-endpoint')).toBe(true);
     });
 
-    it('stop() 应清空 bots', async () => {
+    it('stop() 应清空 endpoints', async () => {
       await adapter.stop();
-      expect(adapter.bots.size).toBe(0);
+      expect(adapter.endpoints.size).toBe(0);
     });
 
-    it('stop() 后 bot 应 disconnected', async () => {
+    it('stop() 后 endpoint 应 disconnected', async () => {
       await adapter.stop();
-      expect(bot.$connected).toBe(false);
+      expect(endpoint.$connected).toBe(false);
     });
   });
 
   describe('$formatMessage 消息格式化', () => {
     it('DM 消息应格式化为 private', () => {
       const raw = createDiscordRawEvent();
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
 
       expect(msg.$id).toBe('discord-msg-001');
       expect(msg.$adapter).toBe('discord');
-      expect(msg.$bot).toBe('test-bot');
+      expect(msg.$endpoint).toBe('test-endpoint');
       expect(msg.$sender.id).toBe('user-001');
       expect(msg.$channel.id).toBe('ch-001');
       expect(msg.$channel.type).toBe('private');
@@ -164,19 +164,19 @@ describe('Discord 适配器特定测试', () => {
 
     it('GroupDM 消息应格式化为 group', () => {
       const raw = createDiscordRawEvent({ channel: { id: 'ch-002', type: 3, messages: { fetch: vi.fn() } } }); // GroupDM = 3
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
       expect(msg.$channel.type).toBe('group');
     });
 
     it('服务器频道消息应格式化为 channel', () => {
       const raw = createDiscordRawEvent({ channel: { id: 'ch-003', type: 0, messages: { fetch: vi.fn() } } }); // GuildText = 0
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
       expect(msg.$channel.type).toBe('channel');
     });
 
     it('$timestamp 应为正整数', () => {
       const raw = createDiscordRawEvent();
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
       expect(msg.$timestamp).toBe(FIXED_TS);
     });
   });
@@ -185,7 +185,7 @@ describe('Discord 适配器特定测试', () => {
     it('sendMessage 应返回字符串 ID', async () => {
       const result = await adapter.sendMessage({
         context: 'discord',
-        bot: 'test-bot',
+        endpoint: 'test-endpoint',
         id: 'ch-001',
         type: 'private',
         content: [{ type: 'text', data: { text: 'hello' } }],
@@ -199,7 +199,7 @@ describe('Discord 适配器特定测试', () => {
     it('emit message.receive 应触发 plugin.dispatch', async () => {
       const dispatchSpy = vi.spyOn(plugin, 'dispatch');
       const raw = createDiscordRawEvent();
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
 
       adapter.emit('message.receive', msg);
       await new Promise(r => setTimeout(r, 50));
@@ -215,7 +215,7 @@ describe('Discord 适配器特定测试', () => {
     it('$reply 应走 adapter.sendMessage', async () => {
       const sendMessageSpy = vi.spyOn(adapter, 'sendMessage');
       const raw = createDiscordRawEvent();
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
 
       sendMessageSpy.mockResolvedValue('reply-id');
       const result = await msg.$reply('hi');

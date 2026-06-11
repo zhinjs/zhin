@@ -3,9 +3,9 @@
  */
 import { formatCompact, Adapter, Message, Plugin } from 'zhin.js';
 import crypto from 'node:crypto';
-import { GitHubBot } from './bot.js';
+import { GitHubEndpoint } from './endpoint.js';
 import type { Router } from '@zhin.js/host-router';
-import type { GitHubBotConfig, EventType, GenericWebhookPayload, Subscription } from './types.js';
+import type { GitHubEndpointConfig, EventType, GenericWebhookPayload, Subscription } from './types.js';
 import type { GhClient } from './gh-client.js';
 import type { IssueCommentPayload, PRReviewCommentPayload, PRReviewPayload } from './types.js';
 
@@ -69,7 +69,9 @@ function formatNotification(event: string, p: GenericWebhookPayload): string {
   }
 }
 
-export class GitHubAdapter extends Adapter<GitHubBot> {
+export class GitHubAdapter extends Adapter<GitHubEndpoint> {
+  static override readonly capabilities = ['inbound', 'outbound'] as const;
+
   /** 轮询定时器 */
   private _pollTimer: ReturnType<typeof setInterval> | null = null;
   /** 每个 repo 的 ETag 缓存 */
@@ -83,8 +85,8 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
     super(plugin, 'github', []);
   }
 
-  createBot(config: GitHubBotConfig): GitHubBot {
-    return new GitHubBot(this, config);
+  createEndpoint(config: GitHubEndpointConfig): GitHubEndpoint {
+    return new GitHubEndpoint(this, config);
   }
 
   async start(): Promise<void> {
@@ -96,10 +98,10 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
     await super.stop();
   }
 
-  /** 获取第一个可用 bot 的 GhClient (工具用) */
+  /** 获取第一个可用 Endpoint 的 GhClient (工具用) */
   getAPI(): GhClient | null {
-    const bot = this.bots.values().next().value as GitHubBot | undefined;
-    return bot?.gh || null;
+    const endpoint = this.endpoints.values().next().value as GitHubEndpoint | undefined;
+    return endpoint?.gh || null;
   }
 
   /** 获取指定用户绑定的 GhClient；未绑定则返回 null */
@@ -114,7 +116,7 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
     return base.withToken(record.access_token);
   }
 
-  /** 获取用户 API，若未绑定则降级为 bot 默认的 API */
+  /** 获取用户 API，若未绑定则降级为 Endpoint 默认的 API */
   async getUserOrDefaultAPI(platform?: string, platformUid?: string): Promise<GhClient | null> {
     if (platform && platformUid) {
       const userApi = await this.getUserAPI(platform, platformUid);
@@ -123,34 +125,34 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
     return this.getAPI();
   }
 
-  /** 获取第一个 bot 的 client_id（App 认证时从 /app 自动获取） */
+  /** 获取第一个 Endpoint 的 client_id（App 认证时从 /app 自动获取） */
   getClientId(): string | null {
-    const bot = this.bots.values().next().value as GitHubBot | undefined;
-    return bot?.gh.clientId || null;
+    const endpoint = this.endpoints.values().next().value as GitHubEndpoint | undefined;
+    return endpoint?.gh.clientId || null;
   }
 
-  /** 获取第一个 bot 的 host 配置 */
+  /** 获取第一个 Endpoint 的 host 配置 */
   getHost(): string | undefined {
-    const bot = this.bots.values().next().value as GitHubBot | undefined;
-    return bot?.$config.host;
+    const endpoint = this.endpoints.values().next().value as GitHubEndpoint | undefined;
+    return endpoint?.$config.host;
   }
 
   /** 获取 App slug（用于生成安装链接） */
   getAppSlug(): string | null {
-    const bot = this.bots.values().next().value as GitHubBot | undefined;
-    return bot?.gh.appSlug || null;
+    const endpoint = this.endpoints.values().next().value as GitHubEndpoint | undefined;
+    return endpoint?.gh.appSlug || null;
   }
 
   /** 获取所有已发现的安装信息 */
   getInstallations() {
-    const bot = this.bots.values().next().value as GitHubBot | undefined;
-    return bot?.gh.installations || [];
+    const endpoint = this.endpoints.values().next().value as GitHubEndpoint | undefined;
+    return endpoint?.gh.installations || [];
   }
 
-  /** 第一个 bot 是否配置了 Webhook */
+  /** 第一个 Endpoint 是否配置了 Webhook */
   get hasWebhookConfig(): boolean {
-    const bot = this.bots.values().next().value as GitHubBot | undefined;
-    return !!bot?.$config.webhook_secret;
+    const endpoint = this.endpoints.values().next().value as GitHubEndpoint | undefined;
+    return !!endpoint?.$config.webhook_secret;
   }
 
   /** Webhook 是否已激活 */
@@ -162,13 +164,13 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
 
   /** 在 router 上挂载 Webhook 路由（生产环境推荐） */
   setupWebhook(router: Router): void {
-    const bot = this.bots.values().next().value as GitHubBot | undefined;
-    if (!bot?.$config.webhook_secret) {
+    const endpoint = this.endpoints.values().next().value as GitHubEndpoint | undefined;
+    if (!endpoint?.$config.webhook_secret) {
       this.plugin.logger.warn(formatCompact( { op: 'webhook', ok: false, error: 'missing webhook_secret' }));
       return;
     }
-    const secret = bot.$config.webhook_secret;
-    const path = bot.$config.webhook_path || '/github/webhook';
+    const secret = endpoint.$config.webhook_secret;
+    const path = endpoint.$config.webhook_path || '/github/webhook';
 
     router.post(path, async (ctx) => {
       const signature = ctx.get('x-hub-signature-256') as string;
@@ -207,7 +209,7 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
 
   /** 处理 Webhook 推送的事件 */
   async handleWebhookPayload(event: string, payload: any): Promise<void> {
-    const bot = this.bots.values().next().value as GitHubBot | undefined;
+    const endpoint = this.endpoints.values().next().value as GitHubEndpoint | undefined;
     const repo = payload.repository?.full_name;
 
     this.plugin.logger.debug(`Webhook: ${event}${payload.action ? `.${payload.action}` : ''} ${repo || ''}`);
@@ -222,26 +224,26 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
     }
 
     // 处理消息类事件（Issue/PR 评论）
-    if (bot && event === 'issue_comment' && payload.action === 'created' && payload.comment) {
-      const message = bot.$formatMessage(payload as IssueCommentPayload);
-      const botUser = bot.gh.authenticatedUser;
+    if (endpoint && event === 'issue_comment' && payload.action === 'created' && payload.comment) {
+      const message = endpoint.$formatMessage(payload as IssueCommentPayload);
+      const botUser = endpoint.gh.authenticatedUser;
       if (!(botUser && message.$sender.id === botUser)) {
         this.emit('message.receive', message);
       }
     }
 
-    if (bot && event === 'pull_request_review_comment' && payload.action === 'created' && payload.comment) {
-      const message = bot.formatPRReviewComment(payload as PRReviewCommentPayload);
-      const botUser = bot.gh.authenticatedUser;
+    if (endpoint && event === 'pull_request_review_comment' && payload.action === 'created' && payload.comment) {
+      const message = endpoint.formatPRReviewComment(payload as PRReviewCommentPayload);
+      const botUser = endpoint.gh.authenticatedUser;
       if (!(botUser && message.$sender.id === botUser)) {
         this.emit('message.receive', message);
       }
     }
 
-    if (bot && event === 'pull_request_review' && payload.action === 'submitted') {
-      const message = bot.formatPRReview(payload as PRReviewPayload);
+    if (endpoint && event === 'pull_request_review' && payload.action === 'submitted') {
+      const message = endpoint.formatPRReview(payload as PRReviewPayload);
       if (message) {
-        const botUser = bot.gh.authenticatedUser;
+        const botUser = endpoint.gh.authenticatedUser;
         if (!(botUser && message.$sender.id === botUser)) {
           this.emit('message.receive', message);
         }
@@ -269,8 +271,8 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
   /** 启动事件轮询 */
   startPolling(): void {
     if (this._pollTimer) return;
-    const bot = this.bots.values().next().value as GitHubBot | undefined;
-    const interval = (bot?.$config.poll_interval || 60) * 1000;
+    const endpoint = this.endpoints.values().next().value as GitHubEndpoint | undefined;
+    const interval = (endpoint?.$config.poll_interval || 60) * 1000;
     this.plugin.logger.debug(formatCompact( { op: 'poll', interval_s: interval / 1000 }));
 
     // 立即执行一次
@@ -339,7 +341,7 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
 
     this.plugin.logger.debug(`${repo}: ${newEvents.length} 条新事件`);
 
-    const bot = this.bots.values().next().value as GitHubBot | undefined;
+    const endpoint = this.endpoints.values().next().value as GitHubEndpoint | undefined;
 
     // 按时间正序处理（API 返回倒序）
     for (const ev of newEvents.reverse()) {
@@ -366,9 +368,9 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
       }
 
       // 处理消息类事件（Issue/PR 评论）
-      if (bot && eventName === 'issue_comment' && ev.payload?.action === 'created' && ev.payload?.comment) {
-        const message = bot.$formatMessage(ev.payload as IssueCommentPayload);
-        const botUser = bot.gh.authenticatedUser;
+      if (endpoint && eventName === 'issue_comment' && ev.payload?.action === 'created' && ev.payload?.comment) {
+        const message = endpoint.$formatMessage(ev.payload as IssueCommentPayload);
+        const botUser = endpoint.gh.authenticatedUser;
         if (!(botUser && message.$sender.id === botUser)) {
           this.emit('message.receive', message);
         }
@@ -436,8 +438,8 @@ export class GitHubAdapter extends Adapter<GitHubBot> {
           this.plugin.logger.warn(formatCompact( { op: 'notify', ok: false, adapter: s.adapter, error: 'no sendMessage' }));
           continue;
         }
-        this.plugin.logger.debug(formatCompact( { op: 'notify', event: eventType, adapter: s.adapter, bot: s.bot, target: s.target_id }));
-        await targetAdapter.sendMessage({ context: s.adapter, bot: s.bot, id: s.target_id, type: s.target_type, content: text });
+        this.plugin.logger.debug(formatCompact( { op: 'notify', event: eventType, adapter: s.adapter, endpoint: s.endpoint, target: s.target_id }));
+        await targetAdapter.sendMessage({ context: s.adapter, endpoint: s.endpoint, id: s.target_id, type: s.target_type, content: text });
       } catch (e) {
         this.plugin.logger.error(`通知推送失败 → ${s.adapter}:${s.target_id}`, e);
       }

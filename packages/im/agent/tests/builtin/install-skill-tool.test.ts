@@ -2,6 +2,8 @@
  * install_skill 内置工具单测（mock fetch）
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { mockCommMessage } from '../helpers/mock-comm-message.js';
+
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -10,7 +12,7 @@ import {
   createInstallSkillTool,
 } from '../../src/builtin/install-skill-tool.js';
 import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
-import type { ToolContext } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 
 const VALID_SKILL = `---
 name: fromurl
@@ -57,7 +59,7 @@ describe('InstallSkillBuiltinTool', () => {
   it('createInstallSkillTool execute', async () => {
     const fetchImpl = vi.fn(async () => new Response(VALID_SKILL, { status: 200 }));
     const tool = createInstallSkillTool({ skillsInstallRoot: tmp, fetchImpl });
-    const agentTool = normalizeTool(tool, { platform: 't' } as ToolContext);
+    const agentTool = normalizeTool(tool, mockCommMessage({ adapter: 't' }));
     const out = String(await agentTool.execute({ url: 'https://example.com/a.md' }));
     expect(out).toContain('已安装');
   });

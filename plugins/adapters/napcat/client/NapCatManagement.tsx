@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Bot, Users, RefreshCw, Wifi, WifiOff, Loader2, Activity } from "lucide-react";
 import { apiFetch } from "./utils/api";
 
-interface BotRow {
+interface EndpointRow {
   name: string;
   connected: boolean;
   connection: string;
@@ -12,7 +12,7 @@ interface BotRow {
 }
 
 export default function NapCatManagement() {
-  const [bots, setBots] = useState<BotRow[]>([]);
+  const [endpoints, setEndpoints] = useState<EndpointRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
@@ -20,13 +20,13 @@ export default function NapCatManagement() {
     setLoading(true);
     setErr(null);
     try {
-      const res = await apiFetch("/api/napcat/bots");
-      const json = (await res.json()) as { success?: boolean; data?: BotRow[]; message?: string };
+      const res = await apiFetch("/api/napcat/endpoints");
+      const json = (await res.json()) as { success?: boolean; data?: EndpointRow[]; message?: string };
       if (!res.ok || !json.success) throw new Error(json.message || "加载失败");
-      setBots(Array.isArray(json.data) ? json.data : []);
+      setEndpoints(Array.isArray(json.data) ? json.data : []);
     } catch (e) {
       setErr((e as Error).message);
-      setBots([]);
+      setEndpoints([]);
     } finally {
       setLoading(false);
     }
@@ -74,17 +74,17 @@ export default function NapCatManagement() {
         <div className="flex justify-center py-12">
           <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
         </div>
-      ) : bots.length === 0 ? (
+      ) : endpoints.length === 0 ? (
         <div className="text-center text-muted-foreground py-12">
-          暂无 NapCat 机器人实例
+          暂无 NapCat Endpoint 实例
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
-          {bots.map((b) => (
-            <div key={b.name} className="border rounded-lg p-4 bg-card shadow-sm">
+          {endpoints.map((endpoint) => (
+            <div key={endpoint.name} className="border rounded-lg p-4 bg-card shadow-sm">
               <div className="flex items-center justify-between mb-3">
-                <span className="font-medium text-lg">{b.name}</span>
-                {b.connected ? (
+                <span className="font-medium text-lg">{endpoint.name}</span>
+                {endpoint.connected ? (
                   <span className="flex items-center gap-1 text-green-600 text-sm">
                     <Wifi className="w-4 h-4" /> 在线
                   </span>
@@ -97,11 +97,11 @@ export default function NapCatManagement() {
               <div className="space-y-2 text-sm text-muted-foreground">
                 <div className="flex items-center gap-1.5">
                   <Users className="w-3.5 h-3.5" />
-                  群 {b.groupCount} · 好友 {b.friendCount}
+                  群 {endpoint.groupCount} · 好友 {endpoint.friendCount}
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Activity className="w-3.5 h-3.5" />
-                  连接方式 {connectionLabel(b.connection)} · {b.status}
+                  连接方式 {connectionLabel(endpoint.connection)} · {endpoint.status}
                 </div>
               </div>
             </div>

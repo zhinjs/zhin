@@ -160,7 +160,7 @@ export function enrichKookGatewayForPlugins(event: KookGatewayEvent): KookGatewa
 
 export function formatKookNotice(
   event: KookGatewayEvent,
-  botName: string,
+  endpointName: string,
 ): ReturnType<typeof Notice.from<KookGatewayEvent>> {
   const extra = event.extra ?? {};
   const body = extra.body ?? {};
@@ -182,7 +182,7 @@ export function formatKookNotice(
   return Notice.from(event, {
     $id: resolveKookSideEventDedupeKey(event, "notice"),
     $adapter: "kook",
-    $bot: botName,
+    $endpoint: endpointName,
     $type,
     $subType: mapped ? rawType : undefined,
     $channel: channel,
@@ -197,6 +197,6 @@ export function formatKookNoticeLog(notice: ReturnType<typeof formatKookNotice>)
     notice: notice.$type,
     kook_type: notice.$subType,
     channel: `${notice.$channel.type}(${notice.$channel.id})`,
-    bot: notice.$bot,
+    endpoint: notice.$endpoint,
   });
 }

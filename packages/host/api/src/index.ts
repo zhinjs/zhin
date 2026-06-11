@@ -31,8 +31,8 @@ import { registerAssistantJobsRoute } from "./rest/assistant-jobs-rest-api.js";
 import { registerAgentSessionsRoutes } from "./rest/agent-sessions-rest-api.js";
 import { registerOrchestrationRoutes } from "./rest/orchestration-rest-api.js";
 import { registerIntrospectionRoutes } from "./rest/introspection-rest-api.js";
-import { registerBotModels } from "./bot-db-models.js";
-import { initBotPersistence } from "./bot-persistence.js";
+import { registerBotModels } from "./endpoint-db-models.js";
+import { initBotPersistence } from "./endpoint-persistence.js";
 
 export interface HostApiConfig {
   enabled?: boolean;

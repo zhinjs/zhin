@@ -2,13 +2,15 @@
  * edit_file 内置工具（BuiltinBaseTool）单测
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { mockCommMessage } from '../helpers/mock-comm-message.js';
+
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as core from '@zhin.js/core';
 import { createEditFileTool, EditFileBuiltinTool } from '../../src/builtin/edit-file-tool.js';
 import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
-import type { ToolContext } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 
 describe('EditFileBuiltinTool', () => {
   let tmpDir: string;
@@ -24,7 +26,7 @@ describe('EditFileBuiltinTool', () => {
     const plugin = {
       inject: (name: string) => {
         if (name === 'icqq') {
-          return { bots: new Map([['bot1', { $config: { master, trusted } }]]) };
+          return { endpoints: new Map([['bot1', { $config: { master, trusted } }]]) };
         }
         if (name === 'ai') {
           return { getAgentConfig: () => ({ execAllowlist }) };
@@ -78,10 +80,11 @@ describe('EditFileBuiltinTool', () => {
   });
 
   it('execute 与 normalizeTool 绑定 context 时可调用', async () => {
+    mockPlugin('owner1', [], []);
     const tool = createEditFileTool();
     const fp = path.join(tmpDir, 'c.txt');
     fs.writeFileSync(fp, 'one two', 'utf-8');
-    const ctx = { platform: 'test' } as ToolContext;
+    const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'owner1', sender_roles: ['master'] });
     const agentTool = normalizeTool(tool, ctx);
     const result = await agentTool.execute({
       file_path: fp,
@@ -97,12 +100,7 @@ describe('EditFileBuiltinTool', () => {
     const fp = path.join(tmpDir, 'role-edit.txt');
     fs.writeFileSync(fp, 'before', 'utf-8');
     const inst = new EditFileBuiltinTool();
-    const ctx = {
-      platform: 'icqq',
-      botId: 'bot1',
-      senderId: 'admin1',
-      roles: ['trusted'],
-    } as ToolContext;
+    const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'admin1', sender_roles: ['trusted'] });
     const out = String(await inst.run({ file_path: fp, old_string: 'before', new_string: 'after' }, ctx));
     expect(out.startsWith('ZHIN_NEEDS_OWNER:\n')).toBe(true);
     expect(fs.readFileSync(fp, 'utf-8')).toBe('before');
@@ -113,12 +111,7 @@ describe('EditFileBuiltinTool', () => {
     const fp = path.join(tmpDir, 'role-edit-deny.txt');
     fs.writeFileSync(fp, 'before', 'utf-8');
     const inst = new EditFileBuiltinTool();
-    const ctx = {
-      platform: 'icqq',
-      botId: 'bot1',
-      senderId: 'user1',
-      fileRole: 'user',
-    } as ToolContext;
+    const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'user1', sender_roles: ['user'] });
     const out = String(await inst.run({ file_path: fp, old_string: 'before', new_string: 'after' }, ctx));
     expect(out).toMatch(/^Error:/);
     expect(fs.readFileSync(fp, 'utf-8')).toBe('before');

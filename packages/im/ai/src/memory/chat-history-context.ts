@@ -19,7 +19,7 @@ export interface ChatHistoryConfig {
 export interface ChatHistoryQuery {
   sessionId: string;
   platform: string;
-  botId: string;
+  endpointId: string;
   sceneId: string;
 }
 
@@ -267,7 +267,7 @@ export class ChatHistoryContext {
     try {
       const rows = await this.messageModel.select().where({
         platform: query.platform,
-        bot_id: query.botId,
+        endpoint_id: query.endpointId,
         scene_id: query.sceneId,
         message_id: anchorMessageId,
       });
@@ -290,7 +290,7 @@ export class ChatHistoryContext {
   private sceneKeysWhere(query: ChatHistoryQuery): Record<string, unknown> {
     return {
       platform: query.platform,
-      bot_id: query.botId,
+      endpoint_id: query.endpointId,
       scene_id: query.sceneId,
     };
   }

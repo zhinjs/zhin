@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { mockCommMessage } from '../helpers/mock-comm-message.js';
 import {
   DEFAULT_WEB_SEARCH_MARKET,
   WEB_SEARCH_LOCALE_EXTRA_KEY,
@@ -6,7 +7,7 @@ import {
   normalizeWebSearchLocaleHint,
   resolveWebSearchMarketFromContext,
 } from '../../src/builtin/web-search-locale.js';
-import type { ToolContext } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 
 describe('normalizeWebSearchLocaleHint', () => {
   it('默认空串回退中文', () => {
@@ -36,13 +37,13 @@ describe('acceptLanguageForMarket', () => {
 describe('resolveWebSearchMarketFromContext', () => {
   it('无 extra 时默认中文', () => {
     expect(resolveWebSearchMarketFromContext(undefined)).toBe('zh-CN');
-    expect(resolveWebSearchMarketFromContext({} as ToolContext)).toBe('zh-CN');
+    expect(resolveWebSearchMarketFromContext(mockCommMessage())).toBe('zh-CN');
   });
 
   it('extra.web_search_locale 优先', () => {
-    const ctx = {
+    const ctx = mockCommMessage({
       extra: { [WEB_SEARCH_LOCALE_EXTRA_KEY]: 'ja' },
-    } as ToolContext;
+    });
     expect(resolveWebSearchMarketFromContext(ctx)).toBe('ja-JP');
   });
 });

@@ -1,7 +1,7 @@
 /**
  * GitHub 适配器入口：类型扩展、模型、导出、注册
  */
-import { formatCompact, registerAgentPromptContributor, type Context, type Plugin, type Tool, type ToolContext, type ToolFeature, unregisterAgentPromptContributor, usePlugin } from 'zhin.js';
+import { formatCompact, registerAgentPromptContributor, type Context, type Message, type Plugin, type Tool, type ToolFeature, unregisterAgentPromptContributor, usePlugin } from 'zhin.js';
 import { createGithubAgentPromptContributor } from './agent-prompt.js';
 import { GitHubAdapter } from './adapter.js';
 import { GhClient } from './gh-client.js';
@@ -25,7 +25,7 @@ declare module 'zhin.js' {
       target_id: string;
       target_type: 'private' | 'group' | 'channel';
       adapter: string;
-      bot: string;
+      endpoint: string;
     };
     github_events: {
       id: number;
@@ -38,7 +38,7 @@ declare module 'zhin.js' {
 }
 
 export * from './types.js';
-export { GitHubBot, parseMarkdown, toMarkdown } from './bot.js';
+export { GitHubEndpoint, parseMarkdown, toMarkdown } from './endpoint.js';
 export { GitHubAdapter } from './adapter.js';
 export { GhClient } from './gh-client.js';
 
@@ -54,7 +54,7 @@ defineModel('github_subscriptions', {
   target_id: { type: 'text', nullable: false },
   target_type: { type: 'text', nullable: false },
   adapter: { type: 'text', nullable: false },
-  bot: { type: 'text', nullable: false },
+  endpoint: { type: 'text', nullable: false },
 });
 
 defineModel('github_events', {
@@ -118,7 +118,7 @@ useContext('tool', 'github', (toolService: ToolFeature, adapter: GitHubAdapter) 
     // --- Star ---
     {
       name: 'github_star',
-      description: 'Star 或取消 Star 一个 GitHub 仓库（使用你绑定的 GitHub 账号，未绑定则用 Bot 默认账号）',
+      description: 'Star 或取消 Star 一个 GitHub 仓库（使用你绑定的 GitHub 账号，未绑定则用 Endpoint 默认账号）',
       parameters: {
         type: 'object' as const,
         properties: {
@@ -128,8 +128,8 @@ useContext('tool', 'github', (toolService: ToolFeature, adapter: GitHubAdapter) 
         required: ['action', 'repo'],
       },
       tags: ['github'],
-      execute: async (args: Record<string, any>, context?: ToolContext) => {
-        const gh = await adapter.getUserOrDefaultAPI(context?.platform, context?.senderId);
+      execute: async (args: Record<string, any>, commMessage?: Message<any>) => {
+        const gh = await adapter.getUserOrDefaultAPI(commMessage?.$adapter, commMessage?.$sender.id);
         if (!gh) return '❌ 没有可用的 GitHub bot';
         const { action, repo } = args;
         switch (action) {
@@ -158,19 +158,19 @@ useContext('tool', 'github', (toolService: ToolFeature, adapter: GitHubAdapter) 
         properties: {},
       },
       tags: ['github'],
-      execute: async (_args: Record<string, any>, context?: ToolContext) => {
-        if (!context?.platform || !context?.senderId) {
+      execute: async (_args: Record<string, any>, commMessage?: Message<any>) => {
+        if (!commMessage?.$adapter || !commMessage?.$sender?.id) {
           return '❌ 无法获取当前用户信息';
         }
         const clientId = adapter.getClientId();
-        if (!clientId) return '❌ Bot 未配置 GitHub App 或 App 无 client_id，无法进行账号绑定';
+        if (!clientId) return '❌ Endpoint 未配置 GitHub App 或 App 无 client_id，无法进行账号绑定';
 
         const db = plugin.root?.inject('database') as any;
         const model = db?.models?.get('github_oauth_users');
         if (!model) return '❌ 数据库未就绪';
 
         // 检查是否已绑定
-        const [existing] = await model.select().where({ platform: context.platform, platform_uid: context.senderId });
+        const [existing] = await model.select().where({ platform: commMessage.$adapter, platform_uid: commMessage.$sender.id });
         if (existing) {
           return `⚠️ 你已绑定 GitHub 账号: ${existing.github_login}\n如需重新绑定，请先执行 github_unbind`;
         }
@@ -197,7 +197,7 @@ useContext('tool', 'github', (toolService: ToolFeature, adapter: GitHubAdapter) 
           tokenPromise.then(async (tokenData) => {
             if (!tokenData) {
               // 授权超时或被拒绝 — 由于 execute 已经返回了，这里只能通过日志记录
-              logger.warn(formatCompact( { op: 'device_flow', ok: false, platform: context.platform, sender: context.senderId }));
+              logger.warn(formatCompact( { op: 'device_flow', ok: false, platform: commMessage.$adapter, sender: commMessage.$sender.id }));
               return;
             }
 
@@ -208,17 +208,17 @@ useContext('tool', 'github', (toolService: ToolFeature, adapter: GitHubAdapter) 
 
             await model.insert({
               id: Date.now(),
-              platform: context.platform,
-              platform_uid: context.senderId,
+              platform: commMessage.$adapter,
+              platform_uid: commMessage.$sender.id,
               github_login: login,
               access_token: tokenData.access_token,
               created_at: Date.now(),
             });
-            logger.info(formatCompact( { op: 'bind', platform: context.platform, sender: context.senderId, login }));
+            logger.info(formatCompact( { op: 'bind', platform: commMessage.$adapter, sender: commMessage.$sender.id, login }));
 
             // 尝试回复绑定成功消息
-            if (context.message?.$reply) {
-              await context.message.$reply(`✅ GitHub 账号绑定成功！\n👤 ${login}`);
+            if (commMessage?.$reply) {
+              await commMessage.$reply(`✅ GitHub 账号绑定成功！\n👤 ${login}`);
             }
           }).catch(err => {
             logger.error('GitHub Device Flow 错误:', err);
@@ -239,15 +239,15 @@ useContext('tool', 'github', (toolService: ToolFeature, adapter: GitHubAdapter) 
         properties: {},
       },
       tags: ['github'],
-      execute: async (_args: Record<string, any>, context?: ToolContext) => {
-        if (!context?.platform || !context?.senderId) {
+      execute: async (_args: Record<string, any>, commMessage?: Message<any>) => {
+        if (!commMessage?.$adapter || !commMessage?.$sender?.id) {
           return '❌ 无法获取当前用户信息';
         }
         const db = plugin.root?.inject('database') as any;
         const model = db?.models?.get('github_oauth_users');
         if (!model) return '❌ 数据库未就绪';
 
-        const [existing] = await model.select().where({ platform: context.platform, platform_uid: context.senderId });
+        const [existing] = await model.select().where({ platform: commMessage.$adapter, platform_uid: commMessage.$sender.id });
         if (!existing) return '📭 你尚未绑定 GitHub 账号';
 
         await model.delete().where({ id: existing.id });
@@ -263,15 +263,15 @@ useContext('tool', 'github', (toolService: ToolFeature, adapter: GitHubAdapter) 
         properties: {},
       },
       tags: ['github'],
-      execute: async (_args: Record<string, any>, context?: ToolContext) => {
-        if (!context?.platform || !context?.senderId) {
+      execute: async (_args: Record<string, any>, commMessage?: Message<any>) => {
+        if (!commMessage?.$adapter || !commMessage?.$sender?.id) {
           return '❌ 无法获取当前用户信息';
         }
         const db = plugin.root?.inject('database') as any;
         const model = db?.models?.get('github_oauth_users');
         if (!model) return '❌ 数据库未就绪';
 
-        const [existing] = await model.select().where({ platform: context.platform, platform_uid: context.senderId });
+        const [existing] = await model.select().where({ platform: commMessage.$adapter, platform_uid: commMessage.$sender.id });
         if (!existing) return '📭 你尚未绑定 GitHub 账号\n🔗 使用 github_bind 绑定你的账号';
 
         // 验证 token 是否仍然有效
@@ -286,7 +286,7 @@ useContext('tool', 'github', (toolService: ToolFeature, adapter: GitHubAdapter) 
     // --- Install App ---
     {
       name: 'github_install',
-      description: '获取安装 GitHub App 的链接 — 安装后 Bot 可以访问你的仓库，你也可以使用更多功能',
+      description: '获取安装 GitHub App 的链接 — 安装后 Endpoint 可以访问你的仓库，你也可以使用更多功能',
       parameters: {
         type: 'object' as const,
         properties: {},
@@ -294,7 +294,7 @@ useContext('tool', 'github', (toolService: ToolFeature, adapter: GitHubAdapter) 
       tags: ['github'],
       execute: async () => {
         const slug = adapter.getAppSlug();
-        if (!slug) return '❌ Bot 未配置 GitHub App';
+        if (!slug) return '❌ Endpoint 未配置 GitHub App';
         const host = adapter.getHost() || 'github.com';
         const installations = adapter.getInstallations();
         let msg = `🔗 请点击以下链接安装 GitHub App 到你的仓库：\n   https://${host}/apps/${slug}/installations/new`;
@@ -321,8 +321,8 @@ useContext('tool', 'github', (toolService: ToolFeature, adapter: GitHubAdapter) 
       },
       platforms: ['github'],
       tags: ['github'],
-      execute: async (args: Record<string, any>, context?: ToolContext) => {
-        if (!context?.platform || !context?.senderId || !context?.sceneId || !context?.botId) {
+      execute: async (args: Record<string, any>, commMessage?: Message<any>) => {
+        if (!commMessage?.$adapter || !commMessage?.$sender.id || !commMessage?.$channel?.id || !commMessage?.$endpoint) {
           return '❌ 无法获取当前聊天通道信息';
         }
         const db = plugin.root?.inject('database') as any;
@@ -337,12 +337,12 @@ useContext('tool', 'github', (toolService: ToolFeature, adapter: GitHubAdapter) 
 
         const [existing] = await model.select().where({
           repo: args.repo,
-          target_id: context.sceneId,
-          adapter: context.platform,
-          bot: context.botId,
+          target_id: commMessage.$channel?.id,
+          adapter: commMessage.$adapter,
+          endpoint: commMessage.$endpoint,
         });
         if (existing) {
-          await model.update({ events, target_type: context.scope || 'private' }).where({ id: existing.id });
+          await model.update({ events, target_type: commMessage.$channel?.type || 'private' }).where({ id: existing.id });
           return `✅ 已更新订阅 ${args.repo}\n📡 事件: ${events.join(', ')}`;
         }
 
@@ -350,10 +350,10 @@ useContext('tool', 'github', (toolService: ToolFeature, adapter: GitHubAdapter) 
           id: Date.now(),
           repo: args.repo,
           events,
-          target_id: context.sceneId,
-          target_type: context.scope || 'private',
-          adapter: context.platform,
-          bot: context.botId,
+          target_id: commMessage.$channel?.id,
+          target_type: commMessage.$channel?.type || 'private',
+          adapter: commMessage.$adapter,
+          endpoint: commMessage.$endpoint,
         });
         return `✅ 已订阅 ${args.repo}\n📡 事件: ${events.join(', ')}\n📌 通知将推送到当前通道`;
       },
@@ -371,8 +371,8 @@ useContext('tool', 'github', (toolService: ToolFeature, adapter: GitHubAdapter) 
       },
       platforms: ['github'],
       tags: ['github'],
-      execute: async (args: Record<string, any>, context?: ToolContext) => {
-        if (!context?.platform || !context?.sceneId || !context?.botId) {
+      execute: async (args: Record<string, any>, commMessage?: Message<any>) => {
+        if (!commMessage?.$adapter || !commMessage?.$channel?.id || !commMessage?.$endpoint) {
           return '❌ 无法获取当前聊天通道信息';
         }
         const db = plugin.root?.inject('database') as any;
@@ -381,9 +381,9 @@ useContext('tool', 'github', (toolService: ToolFeature, adapter: GitHubAdapter) 
 
         const [existing] = await model.select().where({
           repo: args.repo,
-          target_id: context.sceneId,
-          adapter: context.platform,
-          bot: context.botId,
+          target_id: commMessage.$channel?.id,
+          adapter: commMessage.$adapter,
+          endpoint: commMessage.$endpoint,
         });
         if (!existing) return `📭 当前通道未订阅 ${args.repo}`;
 
@@ -401,8 +401,8 @@ useContext('tool', 'github', (toolService: ToolFeature, adapter: GitHubAdapter) 
       },
       platforms: ['github'],
       tags: ['github'],
-      execute: async (_args: Record<string, any>, context?: ToolContext) => {
-        if (!context?.platform || !context?.sceneId || !context?.botId) {
+      execute: async (_args: Record<string, any>, commMessage?: Message<any>) => {
+        if (!commMessage?.$adapter || !commMessage?.$channel?.id || !commMessage?.$endpoint) {
           return '❌ 无法获取当前聊天通道信息';
         }
         const db = plugin.root?.inject('database') as any;
@@ -410,9 +410,9 @@ useContext('tool', 'github', (toolService: ToolFeature, adapter: GitHubAdapter) 
         if (!model) return '❌ 数据库未就绪';
 
         const subs = await model.select().where({
-          target_id: context.sceneId,
-          adapter: context.platform,
-          bot: context.botId,
+          target_id: commMessage.$channel?.id,
+          adapter: commMessage.$adapter,
+          endpoint: commMessage.$endpoint,
         });
         if (!subs?.length) return '📭 当前通道没有任何 GitHub 订阅';
 

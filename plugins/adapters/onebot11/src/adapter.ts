@@ -3,24 +3,26 @@
  */
 import { formatCompact, Adapter, Plugin } from 'zhin.js';
 import type { Router } from '@zhin.js/host-router';
-import { OneBot11WsClient } from './bot-ws-client.js';
-import { OneBot11WsServer } from './bot-ws-server.js';
+import { OneBot11WsClient } from './endpoint-ws-client.js';
+import { OneBot11WsServer } from './endpoint-ws-server.js';
 import type {
   OneBot11WsClientConfig,
   OneBot11WsServerConfig,
-  OneBot11BotConfig,
+  OneBot11EndpointConfig,
 } from './types.js';
 
 export type OneBot11Bot = OneBot11WsClient | OneBot11WsServer;
 
 export class OneBot11Adapter extends Adapter<OneBot11Bot> {
+  static override readonly capabilities = ['inbound', 'outbound'] as const;
+
   #router?: Router;
 
   constructor(plugin: Plugin) {
     super(plugin, 'onebot11', []);
   }
 
-  createBot(config: OneBot11BotConfig): OneBot11Bot {
+  createEndpoint(config: OneBot11EndpointConfig): OneBot11Bot {
     const connection = config.connection ?? 'ws';
     switch (connection) {
       case 'ws':
@@ -35,46 +37,46 @@ export class OneBot11Adapter extends Adapter<OneBot11Bot> {
     }
   }
 
-  async kickMember(botId: string, sceneId: string, userId: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.kickMember(Number(sceneId), Number(userId), false);
+  async kickMember(endpointId: string, sceneId: string, userId: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.kickMember(Number(sceneId), Number(userId), false);
   }
 
-  async muteMember(botId: string, sceneId: string, userId: string, duration = 600) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.muteMember(Number(sceneId), Number(userId), duration);
+  async muteMember(endpointId: string, sceneId: string, userId: string, duration = 600) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.muteMember(Number(sceneId), Number(userId), duration);
   }
 
-  async muteAll(botId: string, sceneId: string, enable = true) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.muteAll(Number(sceneId), enable);
+  async muteAll(endpointId: string, sceneId: string, enable = true) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.muteAll(Number(sceneId), enable);
   }
 
-  async setAdmin(botId: string, sceneId: string, userId: string, enable = true) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.setAdmin(Number(sceneId), Number(userId), enable);
+  async setAdmin(endpointId: string, sceneId: string, userId: string, enable = true) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.setAdmin(Number(sceneId), Number(userId), enable);
   }
 
-  async setMemberNickname(botId: string, sceneId: string, userId: string, nickname: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.setCard(Number(sceneId), Number(userId), nickname);
+  async setMemberNickname(endpointId: string, sceneId: string, userId: string, nickname: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.setCard(Number(sceneId), Number(userId), nickname);
   }
 
-  async setGroupName(botId: string, sceneId: string, name: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.setGroupName(Number(sceneId), name);
+  async setGroupName(endpointId: string, sceneId: string, name: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.setGroupName(Number(sceneId), name);
   }
 
-  async listMembers(botId: string, sceneId: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    const members = await bot.getMemberList(Number(sceneId));
+  async listMembers(endpointId: string, sceneId: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    const members = await endpoint.getMemberList(Number(sceneId));
     return {
       members: members.map((m: any) => ({
         user_id: m.user_id,
@@ -87,10 +89,10 @@ export class OneBot11Adapter extends Adapter<OneBot11Bot> {
     };
   }
 
-  async getGroupInfo(botId: string, sceneId: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.getGroupInfo(Number(sceneId));
+  async getGroupInfo(endpointId: string, sceneId: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.getGroupInfo(Number(sceneId));
   }
 
   async start(): Promise<void> {

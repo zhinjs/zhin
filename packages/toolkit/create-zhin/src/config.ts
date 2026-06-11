@@ -5,9 +5,9 @@ import {
   generateAIConfigYaml,
   generateAIConfigJSON,
   generateAIConfigToml,
-  generateBotsConfigYaml,
-  generateBotsConfigJSON,
-  generateBotsConfigToml,
+  generateEndpointsConfigYaml,
+  generateEndpointsConfigJSON,
+  generateEndpointsConfigToml,
   CONSOLE_HOST_PLUGINS,
 } from '@zhin.js/scaffold-wizard';
 
@@ -194,9 +194,9 @@ export async function createConfigFile(appPath: string, format: string, options:
   const databaseConfig = options.database ? generateDatabaseConfig(options.database, configFormat) : '';
   const plugins = buildPluginsList(options);
 
-  const botsYaml = options.adapters ? generateBotsConfigYaml(options.adapters) : '';
-  const botsJSON = options.adapters ? generateBotsConfigJSON(options.adapters) : '';
-  const botsToml = options.adapters ? generateBotsConfigToml(options.adapters) : '';
+  const endpointsYaml = options.adapters ? generateEndpointsConfigYaml(options.adapters) : '';
+  const endpointsJSON = options.adapters ? generateEndpointsConfigJSON(options.adapters) : '';
+  const endpointsToml = options.adapters ? generateEndpointsConfigToml(options.adapters) : '';
   const aiYaml = options.ai ? generateAIConfigYaml(options.ai) : '';
   const aiJSON = options.ai ? generateAIConfigJSON(options.ai) : '';
   const aiToml = options.ai ? generateAIConfigToml(options.ai) : '';
@@ -208,7 +208,7 @@ export async function createConfigFile(appPath: string, format: string, options:
 
   let yamlExtraConfig = '';
   if (enableInbox) yamlExtraConfig += '\ninbox:\n  enabled: true\n';
-  if (botsYaml) yamlExtraConfig += botsYaml;
+  if (endpointsYaml) yamlExtraConfig += endpointsYaml;
   if (aiYaml) yamlExtraConfig += aiYaml;
 
   const jsonSections: string[] = [];
@@ -228,12 +228,12 @@ ${pluginsJsonLines}
     "enabled": true
   }`);
   }
-  if (botsJSON) jsonSections.push(botsJSON.trim().replace(/,$/, ''));
+  if (endpointsJSON) jsonSections.push(endpointsJSON.trim().replace(/,$/, ''));
   if (aiJSON) jsonSections.push(aiJSON.trim());
 
   let tomlExtraConfig = '';
   if (enableInbox) tomlExtraConfig += '\n[inbox]\nenabled = true\n';
-  if (botsToml) tomlExtraConfig += botsToml;
+  if (endpointsToml) tomlExtraConfig += endpointsToml;
   if (aiToml) tomlExtraConfig += aiToml;
 
   const configMap: Record<string, [string, string]> = {

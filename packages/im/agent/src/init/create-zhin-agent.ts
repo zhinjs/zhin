@@ -55,7 +55,8 @@ import { initDelegationProcessor } from '../orchestrator/delegation-processor.js
 import { initRemoteAgentRegistry } from '../orchestrator/remote-agent-registry.js';
 import { startRemoteTaskPoller } from '../orchestrator/remote-task-poller.js';
 import { initMissionRunner } from '../orchestrator/mission-runner.js';
-import type { ToolContext } from '@zhin.js/core';
+import { sessionKeyToSubagentOrigin } from '../orchestrator/mission-milestone-notify.js';
+import { createSyntheticMessage, type Message } from '@zhin.js/core';
 import { asPrivate } from '../zhin-agent/zhin-agent-private.js';
 import type { AIService } from '../service.js';
 
@@ -247,9 +248,9 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
       origin: Parameters<typeof deliverSubagentResult>[0]['origin'],
       delivery: Parameters<typeof deliverSubagentResult>[0]['delivery'],
     ) => {
-      const adapter = resolveAdapter(origin.platform);
+      const adapter = resolveAdapter(origin.message.$adapter);
       if (!adapter) {
-        logger.warn(formatCompact( { error: 'adapter_not_found', platform: origin.platform }));
+        logger.warn(formatCompact( { error: 'adapter_not_found', platform: origin.message.$adapter }));
         return;
       }
       await deliverSubagentResult({
@@ -265,13 +266,8 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     if (subagentManager) {
       initMissionRunner({
         subagentManager,
-        resolveSessionContext: (sessionKey: string): ToolContext => ({
-          platform: 'orchestration',
-          botId: 'mission-runner',
-          sceneId: sessionKey,
-          senderId: 'mission-runner',
-          scope: 'private',
-        }),
+        resolveSessionContext: (sessionKey: string): Message | null =>
+          sessionKeyToSubagentOrigin(sessionKey)?.message ?? null,
         sendImMessage: async (options) => {
           const adapter = resolveAdapter(options.context);
           if (!adapter) throw new Error(`adapter not found: ${options.context}`);

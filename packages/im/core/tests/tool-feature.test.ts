@@ -2,7 +2,7 @@
  * ToolFeature 测试
  * 测试 ToolFeature.add / filterByContext / ZhinTool / canAccessTool
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   extractParamInfo,
   canAccessTool,
@@ -10,7 +10,35 @@ import {
   isZhinTool,
   ToolFeature,
 } from '../src/built/tool.js';
-import type { Tool, ToolContext } from '../src/types.js';
+import {
+  registerDefaultGroupPlatformPermitChecker,
+  clearPlatformPermitCheckers,
+} from '../src/built/platform-permit.js';
+import type { Tool } from '../src/types.js';
+
+beforeEach(() => {
+  registerDefaultGroupPlatformPermitChecker('qq');
+});
+
+afterEach(() => {
+  clearPlatformPermitCheckers();
+});
+
+function mockCommMessage(overrides: Record<string, any> = {}) {
+  const scope = overrides.scope ?? 'private';
+  return {
+    $adapter: overrides.adapter ?? 'qq',
+    $endpoint: overrides.endpoint ?? 'bot1',
+    $sender: {
+      id: overrides.senderId ?? 'user1',
+      ...(overrides.sender ?? {}),
+      ...(overrides.role !== undefined ? { role: overrides.role } : {}),
+    },
+    $channel: { type: scope, id: overrides.sceneId ?? 'scene1' },
+  };
+}
+
+
 
 describe('extractParamInfo', () => {
   it('应从空 properties 返回空数组', () => {
@@ -40,33 +68,33 @@ describe('canAccessTool', () => {
     execute: async () => '',
   };
 
-  const baseContext: ToolContext = {
-    platform: 'qq',
-    botId: 'bot1',
-    sceneId: 'scene1',
-    senderId: 'user1',
-  };
 
   it('无限制的工具应始终可访问', () => {
-    expect(canAccessTool(baseTool, baseContext)).toBe(true);
+    expect(canAccessTool(baseTool, mockCommMessage({ adapter: 'qq', endpoint: 'bot1', senderId: 'user1', sceneId: 'scene1' }))).toBe(true);
   });
 
   it('应检查平台限制', () => {
     const tool = { ...baseTool, platforms: ['discord'] };
-    expect(canAccessTool(tool, { ...baseContext, platform: 'qq' })).toBe(false);
-    expect(canAccessTool(tool, { ...baseContext, platform: 'discord' })).toBe(true);
+    expect(canAccessTool(tool, mockCommMessage({ adapter: 'qq', endpoint: 'bot1', senderId: 'user1', sceneId: 'scene1' }))).toBe(false);
+    expect(canAccessTool(tool, mockCommMessage({ adapter: 'discord', endpoint: 'bot1', senderId: 'user1', sceneId: 'scene1' }))).toBe(true);
   });
 
   it('应检查场景限制', () => {
     const tool = { ...baseTool, scopes: ['group' as const] };
-    expect(canAccessTool(tool, { ...baseContext, scope: 'private' })).toBe(false);
-    expect(canAccessTool(tool, { ...baseContext, scope: 'group' })).toBe(true);
+    expect(canAccessTool(tool, mockCommMessage({ adapter: 'qq', scope: 'private', endpoint: 'bot1', senderId: 'user1', sceneId: 'scene1' }))).toBe(false);
+    expect(canAccessTool(tool, mockCommMessage({ adapter: 'qq', scope: 'group', endpoint: 'bot1', senderId: 'user1', sceneId: 'scene1' }))).toBe(true);
   });
 
-  it('应检查 requiredAnyRole', () => {
-    const tool = { ...baseTool, requiredAnyRole: ['group_admin'] as const };
-    expect(canAccessTool(tool, { ...baseContext })).toBe(false);
-    expect(canAccessTool(tool, { ...baseContext, roles: ['group_admin'] })).toBe(true);
+  it('应检查 platform(...) permit', () => {
+    const tool = { ...baseTool, permissions: ['platform(qq,group_admin)'] };
+    const msg = {
+      $adapter: 'qq',
+      $endpoint: 'b1',
+      $sender: { id: 'u1', role: 'admin' },
+      $channel: { type: 'group', id: 'g1' },
+    } as any;
+    expect(canAccessTool(tool, mockCommMessage({ adapter: 'qq', endpoint: 'bot1', senderId: 'user1', sceneId: 'scene1' }))).toBe(false);
+    expect(canAccessTool(tool, msg)).toBe(true);
   });
 });
 
@@ -118,10 +146,9 @@ describe('ToolFeature', () => {
     it('应过滤不符合权限的工具', () => {
       const tools: Tool[] = [
         { name: 'public', description: '公开', parameters: { type: 'object', properties: {} }, execute: async () => '' },
-        { name: 'admin', description: '管理', parameters: { type: 'object', properties: {} }, execute: async () => '', requiredAnyRole: ['trusted'] },
+        { name: 'admin', description: '管理', parameters: { type: 'object', properties: {} }, execute: async () => '', permissions: ['role(trusted)'] },
       ];
-      const context: ToolContext = { platform: 'qq', botId: 'b', sceneId: 's', senderId: 'u' };
-      const filtered = feature.filterByContext(tools, context);
+      const filtered = feature.filterByContext(tools, mockCommMessage({ adapter: 'qq', endpoint: 'b', senderId: 'u', sceneId: 's' }) as any);
       expect(filtered).toHaveLength(1);
       expect(filtered[0].name).toBe('public');
     });
@@ -131,8 +158,7 @@ describe('ToolFeature', () => {
         { name: 'all', description: '', parameters: { type: 'object', properties: {} }, execute: async () => '' },
         { name: 'discord-only', description: '', parameters: { type: 'object', properties: {} }, execute: async () => '', platforms: ['discord'] },
       ];
-      const context: ToolContext = { platform: 'qq', botId: 'b', sceneId: 's', senderId: 'u' };
-      const filtered = feature.filterByContext(tools, context);
+      const filtered = feature.filterByContext(tools, mockCommMessage({ adapter: 'qq', endpoint: 'b', senderId: 'u', sceneId: 's' }) as any);
       expect(filtered).toHaveLength(1);
       expect(filtered[0].name).toBe('all');
     });
@@ -171,7 +197,7 @@ describe('ZhinTool', () => {
       .param('a', { type: 'string' }, true)
       .tag('t1')
       .platform('qq')
-      .requireAnyRole('trusted')
+      .permit('role(trusted)')
       .execute(async () => '');
 
     const json = zt.toJSON();
@@ -179,6 +205,6 @@ describe('ZhinTool', () => {
     expect(json.description).toBe('描述');
     expect(json.tags).toEqual(['t1']);
     expect(json.platforms).toEqual(['qq']);
-    expect(json.requiredAnyRole).toEqual(['trusted']);
+    expect(json.permissions).toEqual(['role(trusted)']);
   });
 });

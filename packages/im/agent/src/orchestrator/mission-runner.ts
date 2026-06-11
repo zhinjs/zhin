@@ -2,9 +2,9 @@
  * MissionRunner — 始终自动推进 missions run（ADR 0011 D6）。
  */
 import { Logger } from '@zhin.js/logger';
-import type { ToolContext } from '@zhin.js/core';
+import { createSyntheticMessage, type Message, type SendOptions } from '@zhin.js/core';
 import type { SubagentManager } from '../subagent.js';
-import { originFromToolContext } from '../builtin/spawn-task-tool.js';
+import { originFromMessage } from '../builtin/spawn-task-tool.js';
 import {
   getAgentDispatcher,
   type AgentResult,
@@ -15,18 +15,14 @@ import {
   applyNegotiationOutcome,
   evaluateMissionNegotiation,
 } from './mission-negotiation.js';
-import { deliverMissionMilestoneIm } from './mission-milestone-notify.js';
-import {
-  defaultMissionSpecPaths,
-  validateMissionSpecBundle,
-} from './mission-spec.js';
-import type { SendOptions } from '@zhin.js/core';
+import { deliverMissionMilestoneIm, sessionKeyToSubagentOrigin } from './mission-milestone-notify.js';
+import { defaultMissionSpecPaths, validateMissionSpecBundle } from './mission-spec.js';
 
 const logger = new Logger(null, 'MissionRunner');
 
 export interface MissionRunnerDeps {
   subagentManager: SubagentManager;
-  resolveSessionContext: (sessionKey: string) => ToolContext | null;
+  resolveSessionContext: (sessionKey: string) => Message | null;
   sendImMessage?: (options: SendOptions) => Promise<string>;
 }
 
@@ -181,15 +177,16 @@ export class MissionRunner {
     const agentTask = dispatcher.getTask(taskId);
     if (!agentTask) return;
 
-    const ctx = this.deps.resolveSessionContext(sessionKey) ?? {
-      platform: 'orchestration',
-      botId: 'mission-runner',
-      sceneId: sessionKey,
-      senderId: 'mission-runner',
-      scope: 'private' as const,
-    };
+    const ctx = this.deps.resolveSessionContext(sessionKey)
+      ?? sessionKeyToSubagentOrigin(sessionKey)?.message
+      ?? createSyntheticMessage({
+        adapter: 'orchestration',
+        endpoint: 'mission-runner',
+        sender: { id: 'mission-runner' },
+        channel: { type: 'private', id: sessionKey },
+      });
 
-    const origin = originFromToolContext(ctx);
+    const origin = originFromMessage(ctx);
     dispatcher.markRunning(taskId, Promise.resolve({
       taskId,
       role: agentTask.role,

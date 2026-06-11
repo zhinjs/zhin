@@ -1,7 +1,7 @@
 
 import {MessageChannel,Message} from "./message.js";
 import {Adapter, Adapters} from "./adapter.js";
-import {Bot} from "./bot.js";
+import { Endpoint } from "./endpoint.js";
 import { SystemLog } from "./models/system-log.js";
 import { User } from "./models/user.js";
 import { Databases,Registry } from "@zhin.js/database";
@@ -36,19 +36,19 @@ export type RegisteredAdapter=Extract<keyof RegisteredAdapters, string>
 /**
  * 指定适配器的消息类型
  */
-export type AdapterMessage<T extends keyof RegisteredAdapters=keyof RegisteredAdapters>=RegisteredAdapters[T] extends Adapter<infer R>?BotMessage<R>:{}
+export type AdapterMessage<T extends keyof RegisteredAdapters=keyof RegisteredAdapters>=RegisteredAdapters[T] extends Adapter<infer R>?EndpointMessage<R>:{}
 /**
  * 指定适配器的配置类型
  */
-export type AdapterConfig<T extends keyof RegisteredAdapters=keyof RegisteredAdapters>=RegisteredAdapters[T] extends Adapter<infer R>?PlatformConfig<R>:Bot.Config
+export type AdapterConfig<T extends keyof RegisteredAdapters=keyof RegisteredAdapters>=RegisteredAdapters[T] extends Adapter<infer R>?PlatformConfig<R>:Endpoint.Config
 /**
  * Bot实例的配置类型
  */
-export type PlatformConfig<T>=T extends Bot<infer L,infer R>?R:Bot.Config
+export type PlatformConfig<T>=T extends Endpoint<infer L,infer R>?R:Endpoint.Config
 /**
  * Bot实例的消息类型
  */
-export type BotMessage<T extends Bot>=T extends Bot<infer R>?R:{}
+export type EndpointMessage<T extends Endpoint>=T extends Endpoint<infer R>?R:{}
 /**
  * 消息段结构，支持 text/image/at/face 等类型
  */
@@ -76,7 +76,7 @@ export interface QuotedMessagePayload {
 }
 
 /** 支持按 message_id 拉取历史消息的 Bot（可选实现） */
-export interface QuotableBot {
+export interface QuotableEndpoint {
   $getMsg(messageId: string): Promise<QuotedMessagePayload>;
 }
 
@@ -102,8 +102,12 @@ export interface MessageSender{
   id: string;
   name?: string;
   permissions?:string[]
-  /** 平台侧角色标识（owner / admin / member 等） */
+  /** 平台群成员身份（owner / admin / member）— 仅供 platform checker */
   role?: string;
+  /** enrich 快照：endpoint 实例 master */
+  isMaster?: boolean;
+  /** enrich 快照：endpoint 实例 trusted */
+  isTrusted?: boolean;
 }
 /**
  * 通用字典类型
@@ -141,7 +145,7 @@ export type DefineConfig<T> = T | ((env:Record<string,string>)=>MaybePromise<T>)
 
 export interface SendOptions extends MessageChannel{
   context:string
-  bot:string
+  endpoint:string
   content:SendContent
 }
 
@@ -191,8 +195,8 @@ export type BeforeSendHandler=(options:SendOptions)=>MaybePromise<SendOptions|vo
 /**
  * JSON Schema 定义，用于描述工具参数
  */
-/** ToolContext 中可自动注入的字段名 */
-export type ContextInjectableKey = 'platform' | 'botId' | 'sceneId' | 'senderId' | 'scope';
+/** Message 通讯上下文上可经 resolveContextKey 自动注入的字段名 */
+export type ContextInjectableKey = 'platform' | 'endpointId' | 'sceneId' | 'senderId' | 'scope';
 
 export interface ToolJsonSchema {
   type: string;
@@ -206,9 +210,9 @@ export interface ToolJsonSchema {
   description?: string;
   default?: any;
   /**
-   * 自动从 ToolContext 注入的字段名。
+   * 自动从 Message 通讯上下文注入的字段名（经 resolveContextKey 映射 $ 字段）。
    * 设置后该参数对 AI 隐藏，执行时自动从上下文填充。
-   * 例如: contextKey: 'botId' → 执行时自动填入 context.botId
+   * 例如: contextKey: 'endpointId' → 执行时自动填入 message.$endpoint
    */
   contextKey?: ContextInjectableKey;
   [key: string]: any;
@@ -238,7 +242,7 @@ export interface PropertySchema<T = any> extends ToolJsonSchema {
   default?: T;
   enum?: T extends string | number ? T[] : never;
   paramType?: 'text' | 'number' | 'boolean' | 'rest';
-  /** 自动从 ToolContext 注入的字段名（继承自 ToolJsonSchema） */
+  /** 自动从 Message 注入的字段名（继承自 ToolJsonSchema） */
   contextKey?: ContextInjectableKey;
 }
 
@@ -270,39 +274,6 @@ export interface ToolParametersSchema<TArgs extends Record<string, any> = Record
   required?: (keyof TArgs & string)[];
   /** 描述 */
   description?: string;
-}
-
-/**
- * 工具执行上下文
- * 包含消息来源、发送者等 IM 信息。
- * 通用（IM 无关）版本请使用 @zhin.js/ai 的 ToolContext。
- */
-export interface ToolContext {
-  /** 来源平台 */
-  platform?: string;
-  /** 来源 Bot */
-  botId?: string;
-  /** 消息 ID */
-  messageId?: string;
-  /** 场景 ID（群号/频道ID/私聊用户ID） */
-  sceneId?: string;
-  /** 发送者 ID */
-  senderId?: string;
-  /** 原始消息对象（如果从消息触发） */
-  message?: Message<any>;
-  /**
-   * 消息场景类型
-   * private: 私聊, group: 群聊, channel: 频道
-   */
-  scope?: ToolScope;
-  /** 发送者角色集合（群角色 + bot master/trusted 可并存） */
-  roles?: readonly SenderRole[];
-  /**
-   * 文件操作角色 — 用于文件工具的权限控制
-   */
-  fileRole?: FileRole;
-  /** 额外数据 */
-  extra?: Record<string, any>;
 }
 
 /**
@@ -396,10 +367,10 @@ export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
   /** 
    * 工具执行函数
    * @param args 解析后的参数
-   * @param context 执行上下文（包含消息、发送者等信息）
+   * @param message 通讯上下文（入站 Message 或合成 Message）
    * @returns 执行结果
    */
-  execute: (args: TArgs, context?: ToolContext) => MaybePromise<ToolResult>;
+  execute: (args: TArgs, message?: Message<any>) => MaybePromise<ToolResult>;
   
   /** 工具来源标识（自动填充：adapter:xxx / plugin:xxx） */
   source?: string;
@@ -429,12 +400,6 @@ export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
    * 不填则支持所有场景
    */
   scopes?: ToolScope[];
-  
-  /**
-   * 调用者需具备的角色之一（隐含升格见 roles.ts）
-   * 省略则仅需 user
-   */
-  requiredAnyRole?: readonly SenderRole[];
   
   /**
    * 是否隐藏
@@ -501,10 +466,3 @@ export interface PluginManifest {
 
 /** @deprecated 使用 Tool 替代 */
 export type AITool = Tool;
-
-/**
- * IMToolContext — ToolContext 的显式 IM 别名。
- * 当同时使用 @zhin.js/ai (通用 ToolContext) 和 @zhin.js/core (IM ToolContext) 时，
- * 用此类型消除歧义。
- */
-export type IMToolContext = ToolContext;

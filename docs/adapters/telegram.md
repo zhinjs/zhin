@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/telegram/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/telegram/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=36bed46fc7eae32c -->
+<!-- sync-adapter-docs:sha256=fa8901ffb863f6b2 -->
 
 # @zhin.js/adapter-telegram
 
@@ -24,12 +24,12 @@ pnpm add @zhin.js/adapter-telegram
 
 | 要求 | 说明 |
 |------|------|
-| **Bot Token** | 通过 [@BotFather](https://t.me/botfather) 创建 Bot 并获取 Token |
+| **Bot Token** | 通过 [@BotFather](https://t.me/botfather) 创建 Endpoint 并获取 Token |
 | **Polling（默认）** | 本地开发无需公网 IP；`polling: true`（默认） |
 | **Webhook（可选）** | 生产环境：`polling: false` + 公网 **HTTPS** 域名与有效 TLS；Telegraf 在 `webhook.port` 监听 |
 | **host-router** | 不需要；本适配器自行处理 polling / webhook |
 
-必填字段见 `TelegramBotConfig`：`context`、`name`、`token`；`polling` 默认为 `true`。
+必填字段见 `TelegramEndpointConfig`：`context`、`name`、`token`；`polling` 默认为 `true`。
 
 ## Minimal configuration
 
@@ -37,7 +37,7 @@ pnpm add @zhin.js/adapter-telegram
 plugins:
   - "@zhin.js/adapter-telegram"
 
-bots:
+endpoints:
   - context: telegram
     name: my-telegram-bot
     token: "${TELEGRAM_TOKEN}"
@@ -54,7 +54,7 @@ bots:
 plugins:
   - "@zhin.js/adapter-telegram"
 
-bots:
+endpoints:
   - context: telegram
     name: my-telegram-bot
     token: "${TELEGRAM_TOKEN}"
@@ -66,7 +66,7 @@ bots:
 设置 `polling: false` 并配置 `webhook` 对象；Telegraf 在 `webhook.port` 上启动 HTTPS 服务：
 
 ```yaml
-bots:
+endpoints:
   - context: telegram
     name: my-telegram-bot
     token: "${TELEGRAM_TOKEN}"
@@ -94,7 +94,7 @@ TypeScript 等价配置：
 import { defineConfig } from 'zhin.js'
 
 export default defineConfig({
-  bots: [
+  endpoints: [
     {
       name: 'my-telegram-bot',
       context: 'telegram',
@@ -119,7 +119,7 @@ export default defineConfig({
 - ✅ Long polling and webhook modes
 - ✅ Private and group chats
 
-## Getting Your Bot Token
+## Getting Your Endpoint Token
 
 1. Talk to [@BotFather](https://t.me/botfather) on Telegram
 2. Send `/newbot` and follow the instructions
@@ -182,10 +182,10 @@ You can send files using:
 
 | 现象 | 排查 |
 |------|------|
-| Bot 无响应 / 收不到消息 | 确认 Token 正确；进程已启动；私聊 Bot 或将其加入群组 |
+| Endpoint 无响应 / 收不到消息 | 确认 Token 正确；进程已启动；私聊 Endpoint 或将其加入群组 |
 | Polling 报错 | 检查网络能否访问 `api.telegram.org`；同一 Token 勿多进程同时 polling |
 | Webhook 不工作 | `webhook.domain` 须为 Telegram 可访问的 `https://`；放行 `webhook.port`；BotFather 或 launch 时注册 URL |
-| 发送失败 | Token  revoked 或 Bot 被限制；查看日志中的 Telegraf 错误 |
+| 发送失败 | Token  revoked 或 Endpoint 被限制；查看日志中的 Telegraf 错误 |
 
 ## Documentation
 

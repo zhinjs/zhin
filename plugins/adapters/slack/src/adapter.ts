@@ -5,42 +5,44 @@ import {
   Adapter,
   Plugin,
 } from "zhin.js";
-import { SlackBot } from "./bot.js";
-import type { SlackBotConfig } from "./types.js";
+import { SlackEndpoint } from "./endpoint.js";
+import type { SlackEndpointConfig } from "./types.js";
 
-export class SlackAdapter extends Adapter<SlackBot> {
+export class SlackAdapter extends Adapter<SlackEndpoint> {
+  static override readonly capabilities = ['inbound', 'outbound'] as const;
+
   constructor(plugin: Plugin) {
     super(plugin, "slack", []);
   }
 
-  createBot(config: SlackBotConfig): SlackBot {
-    return new SlackBot(this, config);
+  createEndpoint(config: SlackEndpointConfig): SlackEndpoint {
+    return new SlackEndpoint(this, config);
   }
 
   // ── IGroupManagement 标准群管方法 ──────────────────────────────────
 
-  async kickMember(botId: string, sceneId: string, userId: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.kickFromChannel(sceneId, userId);
+  async kickMember(endpointId: string, sceneId: string, userId: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.kickFromChannel(sceneId, userId);
   }
 
-  async setGroupName(botId: string, sceneId: string, name: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.renameChannel(sceneId, name);
+  async setGroupName(endpointId: string, sceneId: string, name: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.renameChannel(sceneId, name);
   }
 
-  async listMembers(botId: string, sceneId: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.getChannelMembers(sceneId);
+  async listMembers(endpointId: string, sceneId: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.getChannelMembers(sceneId);
   }
 
-  async getGroupInfo(botId: string, sceneId: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.getChannelInfo(sceneId);
+  async getGroupInfo(endpointId: string, sceneId: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.getChannelInfo(sceneId);
   }
 
   // ── 生命周期 ───────────────────────────────────────────────────────

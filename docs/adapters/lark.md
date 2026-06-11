@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/lark/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/lark/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=697589519aa4d911 -->
+<!-- sync-adapter-docs:sha256=4ef8cd84c499f79e -->
 
 # @zhin.js/adapter-lark
 
@@ -37,7 +37,7 @@ pnpm add @zhin.js/adapter-lark
 
 ```yaml
 # zhin.config.yml
-bots:
+endpoints:
   - context: lark
     name: my-lark-bot
     appId: cli_xxxxxxxxxxxx
@@ -60,7 +60,7 @@ plugins:
 import { defineConfig } from 'zhin.js'
 
 export default defineConfig({
-  bots: [
+  endpoints: [
     {
       context: 'lark',
       name: 'my-lark-bot',

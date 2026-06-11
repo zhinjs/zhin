@@ -11,7 +11,7 @@ declare module "zhin.js" {
 }
 
 export * from "./types.js";
-export { EmailBot } from "./bot.js";
+export { EmailEndpoint } from "./endpoint.js";
 export { EmailAdapter } from "./adapter.js";
 
 const plugin = usePlugin();
@@ -19,7 +19,7 @@ const { provide } = plugin;
 
 provide({
   name: "email",
-  description: "Email Bot Adapter",
+  description: "Email Endpoint Adapter",
   mounted: async (p: Plugin) => {
     const adapter = new EmailAdapter(p);
     await adapter.start();

@@ -13,7 +13,7 @@ describe('Request', () => {
       const base: RequestBase = {
         $id: 'req_001',
         $adapter: 'onebot11' as any,
-        $bot: 'bot1',
+        $endpoint: 'bot1',
         $type: 'friend_add',
         $channel: { id: '100', type: 'private' },
         $sender: { id: '200', name: '请求者' },
@@ -26,7 +26,7 @@ describe('Request', () => {
 
       expect(request.$id).toBe('req_001');
       expect(request.$adapter).toBe('onebot11');
-      expect(request.$bot).toBe('bot1');
+      expect(request.$endpoint).toBe('bot1');
       expect(request.$type).toBe('friend_add');
       expect(request.$channel.type).toBe('private');
       expect(request.$sender).toEqual({ id: '200', name: '请求者' });
@@ -41,7 +41,7 @@ describe('Request', () => {
       const request = Request.from({}, {
         $id: 'req_002',
         $adapter: 'icqq' as any,
-        $bot: 'bot1',
+        $endpoint: 'bot1',
         $type: 'group_add',
         $channel: { id: '300', type: 'group' },
         $sender: { id: '400', name: '申请者' },
@@ -65,7 +65,7 @@ describe('Request', () => {
       const request = Request.from({}, {
         $id: 'req_approve',
         $adapter: 'onebot11' as any,
-        $bot: 'bot1',
+        $endpoint: 'bot1',
         $type: 'friend_add',
         $channel: { id: '100', type: 'private' },
         $sender: { id: '200', name: '用户' },
@@ -88,7 +88,7 @@ describe('Request', () => {
       const request = Request.from({}, {
         $id: 'req_reject',
         $adapter: 'onebot11' as any,
-        $bot: 'bot1',
+        $endpoint: 'bot1',
         $type: 'group_invite',
         $channel: { id: '300', type: 'group' },
         $sender: { id: '400', name: '邀请者' },
@@ -110,7 +110,7 @@ describe('Request', () => {
       const request = Request.from({}, {
         $id: 'req_noarg',
         $adapter: 'onebot11' as any,
-        $bot: 'bot1',
+        $endpoint: 'bot1',
         $type: 'friend_add',
         $channel: { id: '1', type: 'private' },
         $sender: { id: '2', name: 'user' },
@@ -149,7 +149,7 @@ describe('Request', () => {
       const request = Request.from(raw, {
         $id: 'friend_flag_001',
         $adapter: 'onebot11' as any,
-        $bot: 'mybot',
+        $endpoint: 'mybot',
         $type: 'friend_add',
         $subType: 'add',
         $channel: { id: '12345', type: 'private' },
@@ -177,7 +177,7 @@ describe('Request', () => {
       const request = Request.from(raw, {
         $id: 'group_flag_001',
         $adapter: 'icqq' as any,
-        $bot: 'bot2',
+        $endpoint: 'bot2',
         $type: 'group_add',
         $subType: 'add',
         $channel: { id: '222', type: 'group' },
@@ -201,7 +201,7 @@ describe('Request', () => {
       const request = Request.from(raw, {
         $id: 'invite_001',
         $adapter: 'onebot11' as any,
-        $bot: 'bot1',
+        $endpoint: 'bot1',
         $type: 'group_invite',
         $subType: 'invite',
         $channel: { id: '444', type: 'group' },

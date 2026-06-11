@@ -3,7 +3,7 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { Tool, ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import type { Tool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import { checkSkillDeps, extractSkillInstructions } from '../discovery/skills.js';
 import { errMsg } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
@@ -37,7 +37,7 @@ export class ActivateSkillBuiltinTool extends BuiltinBaseTool {
     this.keywords.push('技能', '激活', '启用', '使用', 'skill', 'activate', 'use');
   }
 
-  async run(args: Record<string, unknown>, _context?: ToolContext): Promise<ToolResult> {
+  async run(args: Record<string, unknown>, _commMessage?: Message): Promise<ToolResult> {
     try {
       const name = String(args.name);
       const registeredPath = this.opts.skillFileLookup?.(name);

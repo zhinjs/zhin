@@ -1,6 +1,6 @@
 # 适配器
 
-适配器用于连接不同的聊天平台。每个适配器管理一个或多个 Bot 实例，负责消息收发和平台特定的 API 调用。
+适配器用于连接不同的聊天平台。每个适配器管理一个或多个 Endpoint 实例，负责消息收发和平台特定的 API 调用。
 
 ## 平台适配器文档
 
@@ -53,7 +53,7 @@
 | 项 | 说明 |
 |----|------|
 | 启用 | 默认在 `services` 中含 `process`；可从列表移除以关闭 |
-| `context` | `process`（自动注册 bot，**通常无需**写 `bots:` 条目） |
+| `context` | `process`（自动注册 bot，**通常无需**写 `endpoints:` 条目） |
 | 输入 | 仅当 stdin 为 **TTY** 或设置 `ZHIN_BIND_STDIN=1` 时绑定终端 |
 | 与 Sandbox | Sandbox = WebSocket + Remote Console；Process = 本机 stdin，**Stable 调试请用 Sandbox** |
 
@@ -72,7 +72,7 @@ plugins:
   - "@zhin.js/adapter-kook"
   - "@zhin.js/adapter-discord"
 
-bots:
+endpoints:
   # ICQQ：先 `icqq login`，name 与 QQ 号一致
   - context: icqq
     name: "${ICQQ_ACCOUNT}"
@@ -98,14 +98,14 @@ bots:
 群管理是 IM 系统的通用能力。Adapter 基类声明了 `IGroupManagement` 接口中的可选方法规范，适配器只需覆写自己平台支持的方法，`start()` 会自动检测并生成 Tool + 注册 Skill，无需任何手动调用：
 
 ```typescript
-class IcqqAdapter extends Adapter<IcqqBot> {
-  async kickMember(botId: string, sceneId: string, userId: string) {
-    const bot = this.bots.get(botId)
+class IcqqAdapter extends Adapter<IcqqEndpoint> {
+  async kickMember(endpointId: string, sceneId: string, userId: string) {
+    const bot = this.endpoints.get(endpointId)
     return bot!.kickMember(Number(sceneId), Number(userId), false)
   }
 
-  async muteMember(botId: string, sceneId: string, userId: string, duration = 600) {
-    const bot = this.bots.get(botId)
+  async muteMember(endpointId: string, sceneId: string, userId: string, duration = 600) {
+    const bot = this.endpoints.get(endpointId)
     return bot!.muteMember(Number(sceneId), Number(userId), duration)
   }
 

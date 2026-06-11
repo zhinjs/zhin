@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/satori/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/satori/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=d037ddb071e52491 -->
+<!-- sync-adapter-docs:sha256=562c4778b2b204af -->
 
 # @zhin.js/adapter-satori
 
@@ -39,7 +39,7 @@ pnpm add @zhin.js/host-router
 
 ## 配置
 
-所有 Bot 使用 **同一 context：`satori`**，通过 **`connection`** 区分连接方式。
+所有 Endpoint 使用 **同一 context：`satori`**，通过 **`connection`** 区分连接方式。
 
 ### WebSocket 正向
 
@@ -47,7 +47,7 @@ pnpm add @zhin.js/host-router
 plugins:
   - "@zhin.js/adapter-satori"
 
-bots:
+endpoints:
   - context: satori
     connection: ws
     name: satori-bot
@@ -63,7 +63,7 @@ plugins:
   - "@zhin.js/host-router"
   - "@zhin.js/adapter-satori"
 
-bots:
+endpoints:
   - context: satori
     connection: webhook
     name: satori-webhook-bot

@@ -49,7 +49,7 @@ curl -s -X POST http://127.0.0.1:8069/mcp \
 ### 5.（可选实机）NapCat 或 KOOK
 
 1. 填写 `.env` 中 `ONEBOT11_*` 或 `KOOK_TOKEN`
-2. 取消 `zhin.config.yml` 对应 `bots` 注释
+2. 取消 `zhin.config.yml` 对应 `endpoints` 注释
 3. 群 @bot 或私聊触发 AI 回合
 
 CI 不依赖实机；本地验证不设 `L4_SKIP_PLATFORM` 时可跑适配器 optional smoke。

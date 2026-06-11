@@ -172,7 +172,7 @@ export function registerTeach(plugin: Plugin, cfg: GroupSuiteConfig): void {
     } else {
       answer = processAnswer(answer, message);
     }
-    await message.$reply(answer);
+    await message.$reply?.(answer);
     return;
   });
 
@@ -262,7 +262,7 @@ export function registerTeach(plugin: Plugin, cfg: GroupSuiteConfig): void {
 
   addCommand(
     new MessageCommand("teach [...payload:text]")
-      .desc("教我问答", "教会 Bot 一个新的问答对")
+      .desc("教我问答", "教会 Endpoint 一个新的问答对")
       .usage("teach 关键词 回答", "teach 问题|答案")
       .action(async (message, result) => {
         const QA = getQA();

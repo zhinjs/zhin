@@ -15,7 +15,7 @@ import {
 export const IM_TRANSCRIPT_MODEL = {
   message_id: { type: 'text' as const, default: '' },
   platform: { type: 'text' as const, nullable: false },
-  bot_id: { type: 'text' as const, nullable: false },
+  endpoint_id: { type: 'text' as const, nullable: false },
   scene_id: { type: 'text' as const, nullable: false },
   scene_type: { type: 'text' as const, nullable: false },
   sender_id: { type: 'text' as const, nullable: false },
@@ -33,7 +33,7 @@ export interface ImTranscriptRecord {
   id?: number;
   message_id?: string;
   platform: string;
-  bot_id: string;
+  endpoint_id: string;
   scene_id: string;
   scene_type: string;
   sender_id: string;
@@ -48,7 +48,7 @@ export interface ImTranscriptRecord {
 export interface ImTranscriptWriteInput {
   message_id?: string;
   platform: string;
-  bot_id: string;
+  endpoint_id: string;
   scene_id: string;
   scene_type: string;
   sender_id: string;
@@ -68,7 +68,7 @@ export const AGENT_SESSION_MODEL = {
   session_id: { type: 'text' as const, nullable: false },
   session_key: { type: 'text' as const, nullable: false },
   platform: { type: 'text' as const, nullable: false },
-  bot_id: { type: 'text' as const, nullable: false },
+  endpoint_id: { type: 'text' as const, nullable: false },
   scene_id: { type: 'text' as const, nullable: false },
   scene_type: { type: 'text' as const, nullable: false },
   model: { type: 'text' as const, default: '' },
@@ -83,7 +83,7 @@ export interface AgentSessionRecord {
   session_id: string;
   session_key: string;
   platform: string;
-  bot_id: string;
+  endpoint_id: string;
   scene_id: string;
   scene_type: string;
   model: string;
@@ -96,7 +96,7 @@ export interface AgentSessionRecord {
 export interface CreateAgentSessionInput {
   session_key: string;
   platform: string;
-  bot_id: string;
+  endpoint_id: string;
   scene_id: string;
   scene_type: string;
   model?: string;

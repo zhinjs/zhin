@@ -2,11 +2,13 @@
  * write_file 内置工具（BuiltinBaseTool）单测
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { mockCommMessage } from '../helpers/mock-comm-message.js';
+
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as core from '@zhin.js/core';
-import type { Plugin, ToolContext } from '@zhin.js/core';
+import type { Plugin, Message } from '@zhin.js/core';
 import { createWriteFileTool, WriteFileBuiltinTool } from '../../src/builtin/write-file-tool.js';
 import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
 
@@ -24,7 +26,7 @@ describe('WriteFileBuiltinTool', () => {
     const plugin = {
       inject: (name: string) => {
         if (name === 'icqq') {
-          return { bots: new Map([['bot1', { $config: { master, trusted } }]]) };
+          return { endpoints: new Map([['bot1', { $config: { master, trusted } }]]) };
         }
         if (name === 'ai') {
           return { getAgentConfig: () => ({ execAllowlist: [...execAllowlist] }) };
@@ -72,9 +74,10 @@ describe('WriteFileBuiltinTool', () => {
   });
 
   it('execute 与 normalizeTool 绑定 context 时可调用', async () => {
+    mockPlugin('owner1', [], []);
     const tool = createWriteFileTool();
     const fp = path.join(tmpDir, 'via-tool.txt');
-    const ctx = { platform: 'test' } as ToolContext;
+    const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'owner1', sender_roles: ['master'] });
     const agentTool = normalizeTool(tool, ctx);
     const result = await agentTool.execute({ file_path: fp, content: 'ok' });
     expect(String(result)).toContain('Wrote');
@@ -85,12 +88,7 @@ describe('WriteFileBuiltinTool', () => {
     mockPlugin('owner1', ['admin1'], []);
     const fp = path.join(tmpDir, 'blocked-by-role.txt');
     const inst = new WriteFileBuiltinTool();
-    const ctx = {
-      platform: 'icqq',
-      botId: 'bot1',
-      senderId: 'admin1',
-      roles: ['trusted'],
-    } as ToolContext;
+    const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'admin1', sender_roles: ['trusted'] });
     const out = String(await inst.run({ file_path: fp, content: 'x' }, ctx));
     expect(out.startsWith('ZHIN_NEEDS_OWNER:\n')).toBe(true);
     expect(fs.existsSync(fp)).toBe(false);
@@ -100,12 +98,7 @@ describe('WriteFileBuiltinTool', () => {
     mockPlugin('owner1', ['admin1'], []);
     const fp = path.join(tmpDir, 'deny-by-role.txt');
     const inst = new WriteFileBuiltinTool();
-    const ctx = {
-      platform: 'icqq',
-      botId: 'bot1',
-      senderId: 'user1',
-      fileRole: 'user',
-    } as ToolContext;
+    const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'user1', sender_roles: ['user'] });
     const out = String(await inst.run({ file_path: fp, content: 'x' }, ctx));
     expect(out).toMatch(/^Error:/);
     expect(fs.existsSync(fp)).toBe(false);
@@ -115,12 +108,7 @@ describe('WriteFileBuiltinTool', () => {
     mockPlugin('owner1', ['admin1'], []);
     const fp = path.join(tmpDir, 'owner-allowed.txt');
     const inst = new WriteFileBuiltinTool();
-    const ctx = {
-      platform: 'icqq',
-      botId: 'bot1',
-      senderId: 'owner1',
-      roles: ['master'],
-    } as ToolContext;
+    const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'owner1', sender_roles: ['master'] });
     const out = String(await inst.run({ file_path: fp, content: 'owner-ok' }, ctx));
     expect(out).toContain('Wrote');
     expect(fs.readFileSync(fp, 'utf-8')).toBe('owner-ok');
@@ -130,13 +118,13 @@ describe('WriteFileBuiltinTool', () => {
     mockPlugin('owner1', ['admin1'], ['write_file']);
     const memRoot = path.join(tmpDir, 'data', 'memory', 'global', 'MEMORY.md');
     const inst = new WriteFileBuiltinTool();
-    const ctx = {
-      platform: 'icqq',
-      botId: 'bot1',
+    const ctx = mockCommMessage({
+      adapter: 'icqq',
+      endpoint: 'bot1',
       senderId: 'admin1',
-      roles: ['trusted'],
+      sender_roles: ['trusted'],
       extra: { execAllowlist: ['write_file'] },
-    } as ToolContext;
+    });
     const out = String(await inst.run({ file_path: memRoot, content: 'nope' }, ctx));
     expect(out).toMatch(/^Error:/);
     expect(out).toMatch(/master|Owner|全局/i);
@@ -147,12 +135,7 @@ describe('WriteFileBuiltinTool', () => {
     mockPlugin('owner1', ['admin1'], []);
     const memRoot = path.join(tmpDir, 'data', 'memory', 'global', 'MEMORY.md');
     const inst = new WriteFileBuiltinTool();
-    const ctx = {
-      platform: 'icqq',
-      botId: 'bot1',
-      senderId: 'owner1',
-      roles: ['master'],
-    } as ToolContext;
+    const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'owner1', sender_roles: ['master'] });
     const out = String(await inst.run({ file_path: memRoot, content: 'owner-memory' }, ctx));
     expect(out).toContain('Wrote');
     expect(fs.readFileSync(memRoot, 'utf-8')).toBe('owner-memory');
@@ -162,13 +145,13 @@ describe('WriteFileBuiltinTool', () => {
     mockPlugin('owner1', ['admin1'], ['write_file']);
     const fp = path.join(tmpDir, 'admin-allowlisted.txt');
     const inst = new WriteFileBuiltinTool();
-    const ctx = {
-      platform: 'icqq',
-      botId: 'bot1',
+    const ctx = mockCommMessage({
+      adapter: 'icqq',
+      endpoint: 'bot1',
       senderId: 'admin1',
-      roles: ['trusted'],
+      sender_roles: ['trusted'],
       extra: { execAllowlist: ['write_file'] },
-    } as ToolContext;
+    });
     const out = String(await inst.run({ file_path: fp, content: 'allowlisted' }, ctx));
     expect(out).toContain('Wrote');
     expect(fs.readFileSync(fp, 'utf-8')).toBe('allowlisted');

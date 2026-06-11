@@ -3,7 +3,7 @@
  */
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import type { Tool, ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import type { Tool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import { checkFileToolAccess, checkSensitiveFilePathAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
 import { expandHome, nodeErrToFileMessage } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
@@ -43,19 +43,19 @@ export class ListDirBuiltinTool extends BuiltinBaseTool {
     );
   }
 
-  async run(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
+  async run(args: Record<string, unknown>, commMessage?: Message): Promise<ToolResult> {
     const pathArg = args.path;
     if (typeof pathArg !== 'string' || !pathArg.trim()) {
       return 'Error: path is required';
     }
     try {
       const dirPath = path.resolve(process.cwd(), expandHome(pathArg));
-      const roleDecision = checkFileToolAccess('list_dir', context);
+      const roleDecision = checkFileToolAccess('list_dir', commMessage);
       if (!roleDecision.allowed) {
         if (roleDecision.needsOwnerApproval) return toOwnerSignal(roleDecision);
         return toDenyError(roleDecision);
       }
-      const sensitiveDecision = checkSensitiveFilePathAccess('list_dir', dirPath, context);
+      const sensitiveDecision = checkSensitiveFilePathAccess('list_dir', dirPath, commMessage);
       if (!sensitiveDecision.allowed) {
         if (sensitiveDecision.needsOwnerApproval) return toOwnerSignal(sensitiveDecision);
         return toDenyError(sensitiveDecision);

@@ -4,25 +4,27 @@
  */
 import { formatCompact, Adapter, Plugin } from 'zhin.js';
 import type { Router } from '@zhin.js/host-router';
-import { SatoriWsClient } from './bot-ws.js';
-import { SatoriWebhookBot } from './bot-webhook.js';
+import { SatoriWsClient } from './endpoint-ws.js';
+import { SatoriWebhookEndpoint } from './endpoint-webhook.js';
 import type {
-  SatoriBotConfig,
+  SatoriEndpointConfig,
   SatoriWsConfig,
   SatoriWebhookConfig,
 } from './types.js';
 import type { SatoriEventBody } from './types.js';
 
-export type SatoriBot = SatoriWsClient | SatoriWebhookBot;
+export type SatoriBot = SatoriWsClient | SatoriWebhookEndpoint;
 
 export class SatoriAdapter extends Adapter<SatoriBot> {
+  static override readonly capabilities = ['inbound', 'outbound'] as const;
+
   #router?: Router;
 
   constructor(plugin: Plugin) {
     super(plugin, 'satori', []);
   }
 
-  createBot(config: SatoriBotConfig): SatoriBot {
+  createEndpoint(config: SatoriEndpointConfig): SatoriBot {
     switch (config.connection) {
       case 'ws':
         return new SatoriWsClient(this, config as SatoriWsConfig);
@@ -30,9 +32,9 @@ export class SatoriAdapter extends Adapter<SatoriBot> {
         if (!this.#router) {
           throw new Error('Satori connection: webhook 需要 router，请安装并在配置中启用 @zhin.js/host-router');
         }
-        return new SatoriWebhookBot(this, this.#router, config as SatoriWebhookConfig);
+        return new SatoriWebhookEndpoint(this, this.#router, config as SatoriWebhookConfig);
       default:
-        throw new Error(`Unknown Satori connection: ${(config as SatoriBotConfig).connection}`);
+        throw new Error(`Unknown Satori connection: ${(config as SatoriEndpointConfig).connection}`);
     }
   }
 

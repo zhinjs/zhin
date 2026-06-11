@@ -2,23 +2,23 @@
  * Telegram 适配器集成测试
  *
  * 策略：Mock 掉 Telegraf SDK 层（$connect/$disconnect/$sendMessage），
- * 测试 Bot 接口合规性、消息格式化、发送/接收链路、生命周期的完整性。
+ * 测试 Endpoint 接口合规性、消息格式化、发送/接收链路、生命周期的完整性。
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Plugin, type SendOptions } from 'zhin.js';
 import { createAdapterTestSuite } from '../../../../packages/im/core/tests/adapter-harness.js';
 import { TelegramAdapter } from '../src/adapter.js';
-import { TelegramBot } from '../src/bot.js';
-import type { TelegramBotConfig } from '../src/types.js';
+import { TelegramEndpoint } from '../src/endpoint.js';
+import type { TelegramEndpointConfig } from '../src/types.js';
 
 const FIXED_TS = 1700000000000;
 
-// ── Mock Bot ──
+// ── Mock Endpoint ──
 
-class MockTelegramBot extends TelegramBot {
+class MockTelegramEndpoint extends TelegramEndpoint {
   sendMock = vi.fn();
 
-  constructor(adapter: TelegramAdapter, config: TelegramBotConfig) {
+  constructor(adapter: TelegramAdapter, config: TelegramEndpointConfig) {
     super(adapter, config);
   }
 
@@ -41,10 +41,10 @@ class MockTelegramBot extends TelegramBot {
 // ── Mock Adapter ──
 
 class MockTelegramAdapter extends TelegramAdapter {
-  createBot(config: TelegramBotConfig): MockTelegramBot {
-    return new MockTelegramBot(this, {
+  createEndpoint(config: TelegramEndpointConfig): MockTelegramEndpoint {
+    return new MockTelegramEndpoint(this, {
       context: 'telegram',
-      name: config.name || 'test-bot',
+      name: config.name || 'test-endpoint',
       token: 'mock:telegram-token',
       ...config,
     });
@@ -68,10 +68,10 @@ function createTelegramRawEvent(overrides: any = {}): any {
 
 createAdapterTestSuite<MockTelegramAdapter, any>({
   adapterName: 'telegram',
-  botId: 'test-bot',
+  endpointId: 'test-endpoint',
   createAdapter: (plugin) => {
     const adapter = new MockTelegramAdapter(plugin);
-    (adapter as any).config = [{ name: 'test-bot', context: 'telegram', token: 'mock:telegram-token' }];
+    (adapter as any).config = [{ name: 'test-endpoint', context: 'telegram', token: 'mock:telegram-token' }];
     return adapter;
   },
   createRawEvent: () => createTelegramRawEvent(),
@@ -82,62 +82,62 @@ createAdapterTestSuite<MockTelegramAdapter, any>({
 describe('Telegram 适配器特定测试', () => {
   let plugin: Plugin;
   let adapter: MockTelegramAdapter;
-  let bot: MockTelegramBot;
+  let endpoint: MockTelegramEndpoint;
 
   beforeEach(async () => {
     plugin = new Plugin('/test/telegram-integration.ts');
     adapter = new MockTelegramAdapter(plugin);
-    (adapter as any).config = [{ name: 'test-bot', context: 'telegram', token: 'mock:telegram-token' }];
+    (adapter as any).config = [{ name: 'test-endpoint', context: 'telegram', token: 'mock:telegram-token' }];
     await adapter.start();
-    bot = adapter.bots.get('test-bot') as MockTelegramBot;
+    endpoint = adapter.endpoints.get('test-endpoint') as MockTelegramEndpoint;
   });
 
   afterEach(async () => {
     try { await adapter.stop(); } catch { /* ignore */ }
   });
 
-  describe('Bot 接口合规性', () => {
+  describe('Endpoint 接口合规性', () => {
     it('$id 应为配置的 name', () => {
-      expect(bot.$id).toBe('test-bot');
+      expect(endpoint.$id).toBe('test-endpoint');
     });
 
     it('$connected 启动后应为 true', () => {
-      expect(bot.$connected).toBe(true);
+      expect(endpoint.$connected).toBe(true);
     });
 
-    it('应实现所有 Bot 接口方法', () => {
-      expect(typeof bot.$formatMessage).toBe('function');
-      expect(typeof bot.$connect).toBe('function');
-      expect(typeof bot.$disconnect).toBe('function');
-      expect(typeof bot.$sendMessage).toBe('function');
-      expect(typeof bot.$recallMessage).toBe('function');
+    it('应实现所有 Endpoint 接口方法', () => {
+      expect(typeof endpoint.$formatMessage).toBe('function');
+      expect(typeof endpoint.$connect).toBe('function');
+      expect(typeof endpoint.$disconnect).toBe('function');
+      expect(typeof endpoint.$sendMessage).toBe('function');
+      expect(typeof endpoint.$recallMessage).toBe('function');
     });
   });
 
   describe('生命周期', () => {
-    it('start() 应注册 bot', () => {
-      expect(adapter.bots.has('test-bot')).toBe(true);
+    it('start() 应注册 endpoint', () => {
+      expect(adapter.endpoints.has('test-endpoint')).toBe(true);
     });
 
-    it('stop() 应清空 bots', async () => {
+    it('stop() 应清空 endpoints', async () => {
       await adapter.stop();
-      expect(adapter.bots.size).toBe(0);
+      expect(adapter.endpoints.size).toBe(0);
     });
 
-    it('stop() 后 bot 应 disconnected', async () => {
+    it('stop() 后 endpoint 应 disconnected', async () => {
       await adapter.stop();
-      expect(bot.$connected).toBe(false);
+      expect(endpoint.$connected).toBe(false);
     });
   });
 
   describe('$formatMessage 消息格式化', () => {
     it('群消息应正确格式化', () => {
       const raw = createTelegramRawEvent();
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
 
       expect(msg.$id).toBe('12345');
       expect(msg.$adapter).toBe('telegram');
-      expect(msg.$bot).toBe('test-bot');
+      expect(msg.$endpoint).toBe('test-endpoint');
       expect(msg.$sender.id).toBe('99999');
       expect(msg.$channel.type).toBe('group');
       expect(msg.$raw).toBe('你好世界');
@@ -149,13 +149,13 @@ describe('Telegram 适配器特定测试', () => {
       const raw = createTelegramRawEvent({
         chat: { id: 77777, type: 'private' },
       });
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
       expect(msg.$channel.type).toBe('private');
     });
 
     it('$timestamp 应为毫秒级正整数', () => {
       const raw = createTelegramRawEvent();
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
       // Telegram uses date * 1000
       expect(msg.$timestamp).toBe(FIXED_TS);
     });
@@ -165,7 +165,7 @@ describe('Telegram 适配器特定测试', () => {
     it('sendMessage 应返回字符串 ID', async () => {
       const result = await adapter.sendMessage({
         context: 'telegram',
-        bot: 'test-bot',
+        endpoint: 'test-endpoint',
         id: '-100001',
         type: 'group',
         content: [{ type: 'text', data: { text: 'hello' } }],
@@ -179,7 +179,7 @@ describe('Telegram 适配器特定测试', () => {
     it('emit message.receive 应触发 plugin.dispatch', async () => {
       const dispatchSpy = vi.spyOn(plugin, 'dispatch');
       const raw = createTelegramRawEvent();
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
 
       adapter.emit('message.receive', msg);
       await new Promise(r => setTimeout(r, 50));
@@ -195,7 +195,7 @@ describe('Telegram 适配器特定测试', () => {
     it('$reply 应走 adapter.sendMessage', async () => {
       const sendMessageSpy = vi.spyOn(adapter, 'sendMessage');
       const raw = createTelegramRawEvent();
-      const msg = bot.$formatMessage(raw);
+      const msg = endpoint.$formatMessage(raw);
 
       sendMessageSpy.mockResolvedValue('reply-id');
       const result = await msg.$reply('hi');

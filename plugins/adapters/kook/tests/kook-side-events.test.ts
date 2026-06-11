@@ -76,7 +76,7 @@ describe("formatKookNotice", () => {
           body: { msg_id: "old-msg", user_id: "u9" },
         },
       },
-      "bot",
+      "endpoint",
     );
     expect(n.$type).toBe("group_recall");
     expect(n.$channel.type).toBe("channel");
@@ -95,7 +95,7 @@ describe("formatKookNotice", () => {
           body: { msg_id: "m1", emoji: "⏳" },
         },
       },
-      "bot",
+      "endpoint",
     );
     expect(n.$type).toBe("group_emoji_reaction");
     expect(n.$subType).toBe("added_reaction");

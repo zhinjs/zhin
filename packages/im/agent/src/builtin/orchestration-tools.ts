@@ -1,8 +1,8 @@
 /**
  * Project director orchestration tools — Agent Mesh hard orchestration v1.
  */
-import type { AgentTool, ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
-import { resolveIMSessionIdFromToolContext } from '@zhin.js/ai';
+import type { AgentTool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import type { AgentRole } from '../orchestrator/agent-dispatcher.js';
 import {
@@ -12,14 +12,8 @@ import {
 import { writeOrchestrationRunSummaryToMemory } from '../orchestration-memory-hook.js';
 import type { MissionState } from '../orchestrator/mission-state.js';
 
-function sessionKeyFromContext(ctx: ToolContext): string {
-  return resolveIMSessionIdFromToolContext({
-    platform: ctx.platform || '',
-    botId: ctx.botId || '',
-    scope: ctx.scope,
-    sceneId: ctx.sceneId || '',
-    senderId: ctx.senderId || '',
-  });
+function sessionKeyFromContext(commMessage: Message<any>): string {
+  return resolveIMSessionIdFromMessage(commMessage);
 }
 
 function requireService(): NonNullable<ReturnType<typeof getOrchestrationService>> {
@@ -156,7 +150,7 @@ class OrchestrationStartTool extends BuiltinBaseTool {
   readonly description = '创建 Mission 编排 run（missions 五阶段 DAG）；MissionRunner 自动推进。';
   readonly parameters = START_PARAMS;
 
-  constructor(private readonly sessionContext: ToolContext) {
+  constructor(private readonly sessionContext: Message<any>) {
     super();
     this.tags.push('orchestration', 'director');
   }
@@ -282,9 +276,9 @@ class OrchestrationSkipTaskTool extends BuiltinBaseTool {
   }
 }
 
-export function createOrchestrationTools(context: ToolContext): AgentTool[] {
+export function createOrchestrationTools(commMessage: Message): AgentTool[] {
   return [
-    new OrchestrationStartTool(context).toTool(),
+    new OrchestrationStartTool(commMessage).toTool(),
     new OrchestrationAddTaskTool().toTool(),
     new OrchestrationStatusTool().toTool(),
     new OrchestrationCompleteTool().toTool(),

@@ -3,7 +3,7 @@
  */
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import type { Tool, ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import type { Tool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import { checkFileToolAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
 import { checkFilePermission, formatFilePermissionMessage, toolRequesterRoleToFileRole } from '../security/file-role-policy.js';
 import { expandHome, nodeErrToFileMessage } from '../discovery/utils.js';
@@ -44,19 +44,19 @@ export class AnalyzeMediaBuiltinTool extends BuiltinBaseTool {
     this.keywords.push('分析图片', '分析视频', '分析音频', 'analyze media', 'vision', '媒体');
   }
 
-  async run(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
+  async run(args: Record<string, unknown>, commMessage?: Message): Promise<ToolResult> {
     const filePathArg = args.file_path;
     if (typeof filePathArg !== 'string' || !filePathArg.trim()) {
       return 'Error: file_path is required';
     }
 
-    const roleDecision = checkFileToolAccess('read_file', context);
+    const roleDecision = checkFileToolAccess('read_file', commMessage);
     if (!roleDecision.allowed) {
       if (roleDecision.needsOwnerApproval) return toOwnerSignal(roleDecision);
       return toDenyError(roleDecision);
     }
 
-    const fileRole = context?.fileRole ?? toolRequesterRoleToFileRole(roleDecision.role);
+    const fileRole = toolRequesterRoleToFileRole(roleDecision.role);
     const permResult = checkFilePermission(fileRole, 'read', filePathArg);
     if (!permResult.allowed) {
       return formatFilePermissionMessage(permResult, 'analyze_media');

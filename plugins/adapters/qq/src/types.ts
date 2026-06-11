@@ -1,16 +1,16 @@
 /**
  * QQ 官方机器人适配器类型定义
  */
-import type { Bot } from "qq-official-bot";
+import type { Bot as QQOfficialBot } from "qq-official-bot";
 import type { ReceiverMode, ApplicationPlatform } from "qq-official-bot";
 
 export { ReceiverMode } from "qq-official-bot";
 export type { ApplicationPlatform, Intent } from "qq-official-bot";
 
-export type QQBotConfig<
+export type QQEndpointConfig<
   T extends ReceiverMode,
   M extends ApplicationPlatform = ApplicationPlatform,
-> = Bot.Config<T, M> & {
+> = QQOfficialBot.Config<T, M> & {
   context: "qq";
   name: string;
   data_dir?: string;
@@ -38,9 +38,9 @@ export type QQBotConfig<
   outboundMarkdown?: boolean | "auto";
 };
 
-export interface QQBot<
+export interface QQEndpoint<
   T extends ReceiverMode,
   M extends ApplicationPlatform = ApplicationPlatform,
 > {
-  $config: QQBotConfig<T, M>;
+  $config: QQEndpointConfig<T, M>;
 }

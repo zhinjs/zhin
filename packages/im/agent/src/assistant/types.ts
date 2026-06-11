@@ -16,7 +16,7 @@ export type JobAction =
   | { kind: 'heartbeat'; prompt: string };
 
 export type JobNotify =
-  | { channel: 'im'; platform?: string; botId?: string; senderId?: string; sceneId?: string; scope?: string }
+  | { channel: 'im'; platform?: string; endpointId?: string; senderId?: string; sceneId?: string; scope?: string }
   | { channel: 'silent' }
   | { channel: 'log' }
   | { channel: 'ha'; service: string; target?: string; data?: Record<string, unknown> };

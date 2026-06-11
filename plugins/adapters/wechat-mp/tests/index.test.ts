@@ -14,12 +14,12 @@ describe('Adapter Module', () => {
   })
 })
 
-describe('WeChatMPBot.parseMessageContent', () => {
+describe('WeChatMPEndpoint.parseMessageContent', () => {
   let parseMessageContent: (msg: any) => any[]
 
   beforeAll(async () => {
-    const { WeChatMPBot } = await import('../src/bot')
-    parseMessageContent = WeChatMPBot.parseMessageContent
+    const { WeChatMPEndpoint } = await import('../src/endpoint')
+    parseMessageContent = WeChatMPEndpoint.parseMessageContent
   })
 
   it('should parse text message', () => {

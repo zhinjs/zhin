@@ -10,7 +10,7 @@ import { ProcessAdapter } from '../src/built/adapter-process';
 
 createAdapterTestSuite({
   adapterName: 'harness-test',
-  botId: 'bot-1',
+  endpointId: 'bot-1',
   createAdapter: (plugin) =>
     new HarnessTestAdapter(plugin, 'harness-test' as any, [{ name: 'bot-1' }]),
   createRawEvent: () => ({
@@ -24,14 +24,14 @@ createAdapterTestSuite({
 
 createAdapterTestSuite({
   adapterName: 'process',
-  botId: `${process.pid}`,
+  endpointId: `${process.pid}`,
   createAdapter: (plugin) => new ProcessAdapter(plugin),
   createRawEvent: () => ({
     content: 'hello from test',
     ts: Date.now(),
   }),
-  setupBot: (bot) => {
-    // ProcessBot.$connect 会绑定 stdin listener，测试中 stub 掉避免副作用
+  setupEndpoint: (endpoint) => {
+    // ProcessEndpoint.$connect 会绑定 stdin listener，测试中 stub 掉避免副作用
     // 但 start() 已经调了 $connect，所以这里只确保 $sendMessage 不依赖真实 IO
   },
 });

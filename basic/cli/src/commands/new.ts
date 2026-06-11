@@ -387,24 +387,24 @@ export type { ${capitalizedName}Service } from './service.js';
 `;
     await fs.writeFile(path.join(pluginDir, 'src', 'index.ts'), indexSvc, 'utf8');
   } else if (kind === 'adapter') {
-    const botSrc = `import type { Bot, Message, SendOptions } from 'zhin.js';
+    const endpointSrc = `import type { Endpoint, Message, SendOptions } from 'zhin.js';
 import type { ${capitalizedName}Adapter } from './adapter.js';
 
-export interface ${capitalizedName}BotConfig {
-  /** 与 zhin.config.yml 中 bots[].name 一致 */
+export interface ${capitalizedName}EndpointConfig {
+  /** 与 zhin.config.yml 中 endpoints[].name 一致 */
   name: string;
   /** 平台凭证等，按实际协议扩展 */
   token?: string;
 }
 
-export class ${capitalizedName}Bot implements Bot<${capitalizedName}BotConfig, Record<string, never>> {
+export class ${capitalizedName}Endpoint implements Endpoint<${capitalizedName}EndpointConfig, Record<string, never>> {
   $id: string;
-  $config: ${capitalizedName}BotConfig;
+  $config: ${capitalizedName}EndpointConfig;
   $connected = false;
 
   constructor(
     private readonly adapter: ${capitalizedName}Adapter,
-    config: ${capitalizedName}BotConfig,
+    config: ${capitalizedName}EndpointConfig,
   ) {
     this.$config = config;
     this.$id = config.name;
@@ -416,7 +416,7 @@ export class ${capitalizedName}Bot implements Bot<${capitalizedName}BotConfig, R
 
   async $connect(): Promise<void> {
     this.$connected = true;
-    this.adapter.logger.info(\`[${camelId}] bot \${this.$id} 已连接（占位）\`);
+    this.adapter.logger.info(\`[${camelId}] endpoint \${this.$id} 已连接（占位）\`);
   }
 
   async $disconnect(): Promise<void> {
@@ -431,19 +431,19 @@ export class ${capitalizedName}Bot implements Bot<${capitalizedName}BotConfig, R
   }
 }
 `;
-    await fs.writeFile(path.join(pluginDir, 'src', 'bot.ts'), botSrc, 'utf8');
+    await fs.writeFile(path.join(pluginDir, 'src', 'endpoint.ts'), endpointSrc, 'utf8');
 
     const adapterSrc = `import { formatCompact, Adapter, type Plugin } from 'zhin.js';
-import { ${capitalizedName}Bot } from './bot.js';
-import type { ${capitalizedName}BotConfig } from './bot.js';
+import { ${capitalizedName}Endpoint } from './endpoint.js';
+import type { ${capitalizedName}EndpointConfig } from './endpoint.js';
 
-export class ${capitalizedName}Adapter extends Adapter<${capitalizedName}Bot> {
-  constructor(plugin: Plugin, botConfigs: ${capitalizedName}BotConfig[]) {
-    super(plugin, '${camelId}' as keyof Plugin.Contexts, botConfigs);
+export class ${capitalizedName}Adapter extends Adapter<${capitalizedName}Endpoint> {
+  constructor(plugin: Plugin, endpointConfigs: ${capitalizedName}EndpointConfig[]) {
+    super(plugin, '${camelId}' as keyof Plugin.Contexts, endpointConfigs);
   }
 
-  createBot(config: ${capitalizedName}BotConfig): ${capitalizedName}Bot {
-    return new ${capitalizedName}Bot(this, config);
+  createEndpoint(config: ${capitalizedName}EndpointConfig): ${capitalizedName}Endpoint {
+    return new ${capitalizedName}Endpoint(this, config);
   }
 }
 `;
@@ -453,7 +453,7 @@ export class ${capitalizedName}Adapter extends Adapter<${capitalizedName}Bot> {
 import path from 'node:path';
 import { PageManager } from '@zhin.js/host-api';
 import { ${capitalizedName}Adapter } from './adapter.js';
-import type { ${capitalizedName}BotConfig } from './bot.js';
+import type { ${capitalizedName}EndpointConfig } from './endpoint.js';
 
 declare module 'zhin.js' {
   interface Adapters {
@@ -464,21 +464,21 @@ declare module 'zhin.js' {
 const plugin = usePlugin();
 const { provide, useContext, logger } = plugin;
 
-function loadBotConfigsFromApp(): ${capitalizedName}BotConfig[] {
+function loadEndpointConfigsFromApp(): ${capitalizedName}EndpointConfig[] {
   const cfg = plugin.root.inject('config') as { getPrimary?: () => unknown } | undefined;
-  const doc = cfg?.getPrimary?.() as { bots?: ${capitalizedName}BotConfig[] } | undefined;
-  const bots = doc?.bots ?? [];
-  return bots.filter((b) => (b as { context?: string }).context === '${camelId}');
+  const doc = cfg?.getPrimary?.() as { endpoints?: ${capitalizedName}EndpointConfig[] } | undefined;
+  const endpoints = doc?.endpoints ?? [];
+  return endpoints.filter((b) => (b as { context?: string }).context === '${camelId}');
 }
 
 provide({
   name: '${camelId}',
   description: '${capitalizedName} 适配器（占位，请接入真实协议）',
   mounted: async (p: Plugin) => {
-    const configs = loadBotConfigsFromApp();
+    const configs = loadEndpointConfigsFromApp();
     if (configs.length === 0) {
       p.logger.warn(
-        '[${camelId}] 未在 zhin.config.yml 的 bots 中找到 context: \"${camelId}\" 的项，将以 0 个 Bot 启动',
+        '[${camelId}] 未在 zhin.config.yml 的 endpoints 中找到 context: \"${camelId}\" 的项，将以 0 个 Endpoint 启动',
       );
     }
     const adapter = new ${capitalizedName}Adapter(p, configs);
@@ -506,8 +506,8 @@ onDispose(() => {
 logger.info('${capitalizedName} 适配器插件已加载');
 
 export { ${capitalizedName}Adapter } from './adapter.js';
-export { ${capitalizedName}Bot } from './bot.js';
-export type { ${capitalizedName}BotConfig } from './bot.js';
+export { ${capitalizedName}Endpoint } from './endpoint.js';
+export type { ${capitalizedName}EndpointConfig } from './endpoint.js';
 `;
     await fs.writeFile(path.join(pluginDir, 'src', 'index.ts'), indexAd, 'utf8');
   } else {
@@ -590,19 +590,19 @@ export default function ${capitalizedName}Page() {
 
   const readmeIntro =
     kind === 'adapter'
-      ? `${capitalizedName} 适配器（\`zhin new --type adapter\` 生成），含占位 Bot / Adapter 与控制台入口。`
+      ? `${capitalizedName} 适配器（\`zhin new --type adapter\` 生成），含占位 Endpoint / Adapter 与控制台入口。`
       : kind === 'service'
         ? `${capitalizedName} 服务插件（\`zhin new --type service\`），通过 \`provide\` 注册 \`${serviceCtxName}\` 上下文。`
         : `${capitalizedName} 普通插件（\`zhin new\` / \`--type normal\`），含命令、工具与控制台页示例。`;
 
   const readmeUse =
     kind === 'adapter'
-      ? `在 \`zhin.config.yml\` 的 \`plugins\` 中加入 \`${packageName}\`，并配置 bots（\`context\` 必须为适配器键 \`${camelId}\`）：
+      ? `在 \`zhin.config.yml\` 的 \`plugins\` 中加入 \`${packageName}\`，并配置 endpoints（\`context\` 必须为适配器键 \`${camelId}\`）：
 
 \`\`\`yaml
 plugins:
   - ${packageName}
-bots:
+endpoints:
   - context: ${camelId}
     name: demo-bot
     token: your-token-here
@@ -829,7 +829,7 @@ describe('${capitalizedName} Plugin', () => {
 
       const mockEvent = {
         $adapter: 'test',
-        $bot: 'test-bot',
+        $endpoint: 'test-bot',
         $content: [],
         $raw: 'test'
       } as any
@@ -853,7 +853,7 @@ describe('${capitalizedName} Plugin', () => {
 }
 
 /**
- * 生成服务测试（纯函数 + 工厂，不依赖完整 Bot 运行时）
+ * 生成服务测试（纯函数 + 工厂，不依赖完整 Endpoint 运行时）
  */
 async function generateServiceTest(testsDir: string, capitalizedName: string) {
   const testContent = `import { describe, it, expect } from 'vitest';
@@ -869,7 +869,7 @@ describe('${capitalizedName} service', () => {
   await fs.writeFile(path.join(testsDir, 'index.test.ts'), testContent);
 }
 
-/** 生成适配器测试（对接模板中的 Adapter / Bot） */
+/** 生成适配器测试（对接模板中的 Adapter / Endpoint） */
 async function generateAdapterTest(
   testsDir: string,
   pluginName: string,
@@ -879,7 +879,7 @@ async function generateAdapterTest(
   const testContent = `import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { formatCompact, Plugin } from 'zhin.js';
 import { ${capitalizedName}Adapter } from '../src/adapter.js';
-import { ${capitalizedName}Bot } from '../src/bot.js';
+import { ${capitalizedName}Endpoint } from '../src/endpoint.js';
 
 describe('${capitalizedName} adapter', () => {
   let root: Plugin;
@@ -896,15 +896,15 @@ describe('${capitalizedName} adapter', () => {
 
   it('constructs with empty config and correct adapter key', () => {
     const adapter = new ${capitalizedName}Adapter(plugin, []);
-    expect(adapter.bots.size).toBe(0);
+    expect(adapter.endpoints.size).toBe(0);
     expect(String(adapter.name)).toBe('${camelId}');
   });
 
-  it('createBot wires $id from config.name', () => {
+  it('createEndpoint wires $id from config.name', () => {
     const adapter = new ${capitalizedName}Adapter(plugin, []);
-    const bot = adapter.createBot({ name: 'unit-test-bot' });
-    expect(bot).toBeInstanceOf(${capitalizedName}Bot);
-    expect(bot.$id).toBe('unit-test-bot');
+    const endpoint = adapter.createEndpoint({ name: 'unit-test-endpoint' });
+    expect(endpoint).toBeInstanceOf(${capitalizedName}Endpoint);
+    expect(endpoint.$id).toBe('unit-test-endpoint');
   });
 });
 `;

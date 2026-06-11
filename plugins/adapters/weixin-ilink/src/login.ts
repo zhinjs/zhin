@@ -7,7 +7,7 @@ import {
   saveCredentials,
   type WeixinIlinkCredentials,
 } from "./credentials.js";
-import type { WeixinIlinkBotConfig } from "./types.js";
+import type { WeixinIlinkEndpointConfig } from "./types.js";
 
 const DEFAULT_ILINK_BOT_TYPE = "3";
 const QR_LONG_POLL_TIMEOUT_MS = 35_000;
@@ -29,7 +29,7 @@ interface StatusResponse {
     | "verify_code_blocked"
     | "binded_redirect";
   bot_token?: string;
-  ilink_bot_id?: string;
+  ilink_endpoint_id?: string;
   baseurl?: string;
   ilink_user_id?: string;
   redirect_host?: string;
@@ -73,7 +73,7 @@ async function pollQRStatus(
 
 export async function resolveCredentials(
   plugin: Plugin,
-  config: WeixinIlinkBotConfig,
+  config: WeixinIlinkEndpointConfig,
 ): Promise<WeixinIlinkCredentials> {
   const envToken = process.env.WEIXIN_ILINK_TOKEN?.trim() || config.botToken?.trim();
   if (envToken) {
@@ -99,7 +99,7 @@ export async function resolveCredentials(
 
 export async function loginWithQr(
   plugin: Plugin,
-  config: WeixinIlinkBotConfig,
+  config: WeixinIlinkEndpointConfig,
 ): Promise<WeixinIlinkCredentials> {
   const apiBaseUrl = config.baseUrl ?? DEFAULT_API_BASE_URL;
   const qr = await fetchQRCode(apiBaseUrl, DEFAULT_ILINK_BOT_TYPE);
@@ -117,7 +117,7 @@ export async function loginWithQr(
   });
   const assistTask = loginAssist
     .listPending()
-    .find((t) => t.adapter === "weixin-ilink" && t.botId === config.name);
+    .find((t) => t.adapter === "weixin-ilink" && t.endpointId === config.name);
 
   const deadline = Date.now() + LOGIN_TIMEOUT_MS;
   let currentBaseUrl = apiBaseUrl;
@@ -139,7 +139,7 @@ export async function loginWithQr(
         const creds: WeixinIlinkCredentials = {
           botToken: status.bot_token ?? loadCredentials(config.name)?.botToken ?? "",
           ilinkUserId: status.ilink_user_id,
-          ilinkBotId: status.ilink_bot_id,
+          ilinkBotId: status.ilink_endpoint_id,
           baseUrl: status.baseurl ?? currentBaseUrl,
         };
         if (!creds.botToken) {

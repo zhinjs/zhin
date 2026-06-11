@@ -17,7 +17,7 @@ assistant:
     notify:
       channel: im
       platform: icqq
-      botId: "8596238"
+      endpointId: "8596238"
       sceneId: "<master_user_id>"
       scope: private
 ```
@@ -30,7 +30,7 @@ assistant:
   "cronExpression": "0 8 * * *",
   "prompt": "早报摘要",
   "enabled": true,
-  "notify": { "channel": "im", "platform": "icqq", "botId": "8596238", "sceneId": "1659488338", "scope": "private" },
+  "notify": { "channel": "im", "platform": "icqq", "endpointId": "8596238", "sceneId": "1659488338", "scope": "private" },
   "createdAt": 1710000000000
 }
 ```

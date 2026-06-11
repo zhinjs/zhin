@@ -13,7 +13,7 @@ describe('Notice', () => {
       const base: NoticeBase = {
         $id: 'n_001',
         $adapter: 'onebot11' as any,
-        $bot: 'bot1',
+        $endpoint: 'bot1',
         $type: 'group_member_increase',
         $channel: { id: '12345', type: 'group' },
         $timestamp: 1000,
@@ -22,7 +22,7 @@ describe('Notice', () => {
 
       expect(notice.$id).toBe('n_001');
       expect(notice.$adapter).toBe('onebot11');
-      expect(notice.$bot).toBe('bot1');
+      expect(notice.$endpoint).toBe('bot1');
       expect(notice.$type).toBe('group_member_increase');
       expect(notice.$channel.id).toBe('12345');
       expect(notice.$channel.type).toBe('group');
@@ -37,7 +37,7 @@ describe('Notice', () => {
       const base: NoticeBase = {
         $id: 'n_002',
         $adapter: 'icqq' as any,
-        $bot: 'bot2',
+        $endpoint: 'bot2',
         $type: 'group_member_decrease',
         $subType: 'kick',
         $channel: { id: '67890', type: 'group' },
@@ -56,7 +56,7 @@ describe('Notice', () => {
       const notice = Notice.from({}, {
         $id: 'n_003',
         $adapter: 'onebot11' as any,
-        $bot: 'bot1',
+        $endpoint: 'bot1',
         $type: 'friend_add',
         $channel: { id: '100', type: 'private' },
         $timestamp: 3000,
@@ -102,7 +102,7 @@ describe('Notice', () => {
       const notice = Notice.from({}, {
         $id: '1',
         $adapter: 'onebot11' as any,
-        $bot: 'b',
+        $endpoint: 'b',
         $type: 'group_member_increase',
         $channel: { id: '123', type: 'group' },
         $timestamp: 0,
@@ -114,7 +114,7 @@ describe('Notice', () => {
       const notice = Notice.from({}, {
         $id: '2',
         $adapter: 'onebot11' as any,
-        $bot: 'b',
+        $endpoint: 'b',
         $type: 'friend_add',
         $channel: { id: '456', type: 'private' },
         $timestamp: 0,
@@ -126,7 +126,7 @@ describe('Notice', () => {
       const notice = Notice.from({}, {
         $id: '3',
         $adapter: 'kook' as any,
-        $bot: 'b',
+        $endpoint: 'b',
         $type: 'group_member_increase',
         $channel: { id: '789', type: 'channel' },
         $timestamp: 0,
@@ -144,7 +144,7 @@ describe('Notice', () => {
       const notice = Notice.from(raw, {
         $id: 'inc_001',
         $adapter: 'onebot11' as any,
-        $bot: 'mybot',
+        $endpoint: 'mybot',
         $type: 'group_member_increase',
         $subType: 'approve',
         $channel: { id: '12345', type: 'group' },
@@ -164,7 +164,7 @@ describe('Notice', () => {
       const notice = Notice.from(raw, {
         $id: 'recall_001',
         $adapter: 'icqq' as any,
-        $bot: 'bot1',
+        $endpoint: 'bot1',
         $type: 'group_recall',
         $subType: 'recall',
         $channel: { id: '100', type: 'group' },
@@ -182,7 +182,7 @@ describe('Notice', () => {
       const notice = Notice.from(raw, {
         $id: 'poke_001',
         $adapter: 'icqq' as any,
-        $bot: 'bot1',
+        $endpoint: 'bot1',
         $type: 'friend_poke',
         $subType: 'poke',
         $channel: { id: '100', type: 'private' },

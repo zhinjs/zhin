@@ -1,9 +1,9 @@
 /**
  * Typing Indicator AI Event Binder
  *
- * 订阅 root 上的 AI 生命周期事件，驱动各平台 Bot 已有的 Typing Indicator。
- * 平台适配器（如 ICQQ）应在 Bot 连接时自行挂载 `$typingIndicator`；
- * 仅对未挂载的 Bot 才用通用 enableTypingIndicatorForBot 兜底。
+ * 订阅 root 上的 AI 生命周期事件，驱动各平台 Endpoint 已有的 Typing Indicator。
+ * 平台适配器（如 ICQQ）应在 Endpoint 连接时自行挂载 `$typingIndicator`；
+ * 仅对未挂载的 Endpoint 才用通用 enableTypingIndicatorForBot 兜底。
  */
 
 import { getPlugin } from '@zhin.js/core';
@@ -12,13 +12,13 @@ import { subscribeAIEvents } from '../ai-event-subscriber.js';
 import {
   enableTypingIndicatorForBot,
   type BotTypingIndicatorManager,
-  type BotWithTypingIndicator,
+  type EndpointWithTypingIndicator,
 } from '../typing-indicator/adapter-integration.js';
 import type { TypingIndicatorManager } from '../typing-indicator/index.js';
 import type { AIServiceRefs } from './shared-refs.js';
 import type { AIEventPayload } from '../ai-event-subscriber.js';
 
-/** 与 ToolContext.scope / Message.$channel.type 一致（群聊 sceneId 通常只是群号，无 group: 前缀） */
+/** 与 Message.$channel.type 一致（群聊 sceneId 通常只是群号，无 group: 前缀） */
 function resolveSceneType(payload: AIEventPayload): 'private' | 'group' | 'channel' {
   const scope = payload.scope;
   if (scope === 'group' || scope === 'channel' || scope === 'private') {
@@ -77,15 +77,15 @@ function isGenericTypingManager(manager: BotTypingIndicatorManager): manager is 
 }
 
 function resolveTypingManager(
-  bot: BotWithTypingIndicator,
+  endpoint: EndpointWithTypingIndicator,
   platform: string,
   config: Record<string, unknown>,
   adapter: Adapter,
 ): BotTypingIndicatorManager {
-  if (bot.$typingIndicator) {
-    return bot.$typingIndicator;
+  if (endpoint.$typingIndicator) {
+    return endpoint.$typingIndicator;
   }
-  return enableTypingIndicatorForBot(bot, platform, config, adapter);
+  return enableTypingIndicatorForBot(endpoint, platform, config, adapter);
 }
 
 async function startTypingForPayload(
@@ -94,24 +94,24 @@ async function startTypingForPayload(
   payload: AIEventPayload,
   reason: string,
 ): Promise<void> {
-  const { platform, botId, sessionId, messageId } = payload;
-  if (!platform || !botId) return;
+  const { platform, endpointId, sessionId, messageId } = payload;
+  if (!platform || !endpointId) return;
 
   try {
     const adapter = root.injectAdapter(platform);
-    const bot = adapter?.bots?.get(botId) as BotWithTypingIndicator | undefined;
-    if (!bot) {
-      logger.debug(`[TypingIndicator] Bot not found for platform: ${platform}, botId: ${botId}`);
+    const endpoint = adapter?.endpoints?.get(endpointId) as EndpointWithTypingIndicator | undefined;
+    if (!endpoint) {
+      logger.debug(`[TypingIndicator] Endpoint not found for platform: ${platform}, endpointId: ${endpointId}`);
       return;
     }
 
-    const botConfig = (bot.$config || {}) as Record<string, unknown>;
-    const config = (botConfig.typingIndicator || {}) as Record<string, unknown>;
+    const endpointConfig = (endpoint.$config || {}) as Record<string, unknown>;
+    const config = (endpointConfig.typingIndicator || {}) as Record<string, unknown>;
     if (config.enabled === false) {
       return;
     }
 
-    const manager = resolveTypingManager(bot, platform, config, adapter!);
+    const manager = resolveTypingManager(endpoint, platform, config, adapter!);
     const sceneType = resolveSceneType(payload);
     const targets = resolveTypingTargets(payload, sceneType);
     const sceneConfig = resolveTypingSceneConfig(config, sceneType);
@@ -123,7 +123,7 @@ async function startTypingForPayload(
     if (isGenericTypingManager(manager)) {
       const indicatorOpts = {
         platform,
-        botId,
+        endpointId,
         sessionId,
         messageId,
         sceneType,
@@ -137,7 +137,7 @@ async function startTypingForPayload(
       await manager.start(
         {
           platform,
-          botId,
+          endpointId,
           sessionId,
           messageId,
           sceneType,
@@ -166,17 +166,17 @@ async function stopTypingForPayload(
   payload: AIEventPayload,
   reason: string,
 ): Promise<void> {
-  const { platform, botId, sessionId, messageId } = payload;
-  if (!platform || !botId) return;
+  const { platform, endpointId, sessionId, messageId } = payload;
+  if (!platform || !endpointId) return;
 
   try {
     const adapter = root.injectAdapter(platform);
-    const bot = adapter?.bots?.get(botId) as BotWithTypingIndicator | undefined;
-    if (!bot?.$typingIndicator) return;
+    const endpoint = adapter?.endpoints?.get(endpointId) as EndpointWithTypingIndicator | undefined;
+    if (!endpoint?.$typingIndicator) return;
 
     const sceneType = resolveSceneType(payload);
     const targets = resolveTypingTargets(payload, sceneType);
-    const manager = bot.$typingIndicator;
+    const manager = endpoint.$typingIndicator;
 
     logger.debug(
       `[TypingIndicator] Stopping indicator (${reason}) session=${sessionId}`,
@@ -185,7 +185,7 @@ async function stopTypingForPayload(
     if (isGenericTypingManager(manager)) {
       await manager.stop({
         platform,
-        botId,
+        endpointId,
         sessionId,
         messageId,
         sceneType,
@@ -233,20 +233,20 @@ export function registerTypingIndicator(_refs: AIServiceRefs): void {
     },
 
     onThinking: async (payload) => {
-      const { platform, botId, sessionId, messageId, thinking } = payload;
-      if (!platform || !botId || !thinking) return;
+      const { platform, endpointId, sessionId, messageId, thinking } = payload;
+      if (!platform || !endpointId || !thinking) return;
 
       try {
         const adapter = root.injectAdapter(platform);
-        const bot = adapter?.bots?.get(botId) as BotWithTypingIndicator | undefined;
-        const manager = bot?.$typingIndicator;
+        const endpoint = adapter?.endpoints?.get(endpointId) as EndpointWithTypingIndicator | undefined;
+        const manager = endpoint?.$typingIndicator;
         if (!manager || !isGenericTypingManager(manager)) return;
 
         const sceneType = resolveSceneType(payload);
         const targets = resolveTypingTargets(payload, sceneType);
         const indicator = manager.getActiveIndicator({
           platform,
-          botId,
+          endpointId,
           sessionId,
           messageId,
           sceneType,
@@ -263,13 +263,13 @@ export function registerTypingIndicator(_refs: AIServiceRefs): void {
     },
 
     onSubagentStart: async (payload) => {
-      const { platform, botId, sessionId, messageId, label } = payload;
-      if (!platform || !botId) return;
+      const { platform, endpointId, sessionId, messageId, label } = payload;
+      if (!platform || !endpointId) return;
 
       try {
         const adapter = root.injectAdapter(platform);
-        const bot = adapter?.bots?.get(botId) as BotWithTypingIndicator | undefined;
-        const manager = bot?.$typingIndicator;
+        const endpoint = adapter?.endpoints?.get(endpointId) as EndpointWithTypingIndicator | undefined;
+        const manager = endpoint?.$typingIndicator;
         if (!manager || !isGenericTypingManager(manager)) {
           return;
         }
@@ -278,7 +278,7 @@ export function registerTypingIndicator(_refs: AIServiceRefs): void {
         const targets = resolveTypingTargets(payload, sceneType);
         const indicator = manager.getActiveIndicator({
           platform,
-          botId,
+          endpointId,
           sessionId,
           messageId,
           sceneType,
@@ -296,20 +296,20 @@ export function registerTypingIndicator(_refs: AIServiceRefs): void {
     },
 
     onSubagentFinish: async (payload) => {
-      const { platform, botId, sessionId, messageId } = payload;
-      if (!platform || !botId) return;
+      const { platform, endpointId, sessionId, messageId } = payload;
+      if (!platform || !endpointId) return;
 
       try {
         const adapter = root.injectAdapter(platform);
-        const bot = adapter?.bots?.get(botId) as BotWithTypingIndicator | undefined;
-        const manager = bot?.$typingIndicator;
+        const endpoint = adapter?.endpoints?.get(endpointId) as EndpointWithTypingIndicator | undefined;
+        const manager = endpoint?.$typingIndicator;
         if (!manager || !isGenericTypingManager(manager)) return;
 
         const sceneType = resolveSceneType(payload);
         const targets = resolveTypingTargets(payload, sceneType);
         const indicator = manager.getActiveIndicator({
           platform,
-          botId,
+          endpointId,
           sessionId,
           messageId,
           sceneType,
@@ -318,8 +318,8 @@ export function registerTypingIndicator(_refs: AIServiceRefs): void {
         });
 
         if (indicator && typeof indicator.update === 'function') {
-          const botConfig = (bot?.$config || {}) as Record<string, unknown>;
-          const config = (botConfig.typingIndicator || {}) as Record<string, unknown>;
+          const endpointConfig = (endpoint?.$config || {}) as Record<string, unknown>;
+          const config = (endpointConfig.typingIndicator || {}) as Record<string, unknown>;
           const msg = String(config.message || '正在处理中...');
           await indicator.update(msg);
         }

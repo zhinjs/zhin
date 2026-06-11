@@ -10,25 +10,25 @@ describe('NapCat 适配器模块导出', () => {
     expect(typeof mod.NapCatAdapter).toBe('function');
   });
 
-  it('应导出 NapCatBotBase', async () => {
-    const mod = await import('../src/bot-base');
-    expect(mod.NapCatBotBase).toBeDefined();
-    expect(typeof mod.NapCatBotBase).toBe('function');
+  it('应导出 NapCatEndpointBase', async () => {
+    const mod = await import('../src/endpoint-base');
+    expect(mod.NapCatEndpointBase).toBeDefined();
+    expect(typeof mod.NapCatEndpointBase).toBe('function');
   });
 
   it('应导出 NapCatWsClient', async () => {
-    const mod = await import('../src/bot-ws-client');
+    const mod = await import('../src/endpoint-ws-client');
     expect(mod.NapCatWsClient).toBeDefined();
   });
 
   it('应导出 NapCatWsServer', async () => {
-    const mod = await import('../src/bot-ws-server');
+    const mod = await import('../src/endpoint-ws-server');
     expect(mod.NapCatWsServer).toBeDefined();
   });
 
-  it('应导出 NapCatHttpBot', async () => {
-    const mod = await import('../src/bot-http');
-    expect(mod.NapCatHttpBot).toBeDefined();
+  it('应导出 NapCatHttpEndpoint', async () => {
+    const mod = await import('../src/endpoint-http');
+    expect(mod.NapCatHttpEndpoint).toBeDefined();
   });
 
   it('应导出 createNapCatTools', async () => {

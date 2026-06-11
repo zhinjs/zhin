@@ -216,7 +216,7 @@ export function buildZtReportText(data: ZtReportData): string {
     `速率  ${data.networkSpeedLine}`,
     data.gpuLine ? ["", "**GPU**", data.gpuLine].join("\n") : null,
     "",
-    "**Bot**",
+    "**Endpoint**",
     `${data.botName} (${data.botPid}) · ${data.botUptime} · CPU ${formatCpuSample(data.botCpu, data.botRunTimeSec)} · ${data.botMemMb}`,
     `${data.botRuntime} · RSS ${data.botRss} · 堆 ${data.botHeap}`,
     data.frameworkLine,

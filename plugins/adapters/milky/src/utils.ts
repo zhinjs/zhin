@@ -2,7 +2,7 @@
  * Milky 事件/消息段与 zhin Message 的转换
  */
 import type { MessageBase, SendContent } from 'zhin.js';
-import { Message } from 'zhin.js';
+import { Message, applyQqSenderRoleToMessageSender } from 'zhin.js';
 import type { MilkyEvent, MilkyIncomingMessage, MilkyIncomingSegment } from './types.js';
 
 /** 将 Milky 接收消息段转为 zhin 的 $content（MessageSegment[]） */
@@ -59,14 +59,14 @@ export function formatMilkySegments(segments: MilkyIncomingSegment[]): Array<{ t
   });
 }
 
-/** message_receive 事件的 data 转为 zhin Message 的构造参数（含 $adapter、$bot） */
+/** message_receive 事件的 data 转为 zhin Message 的构造参数（含 $adapter、$endpoint） */
 export function formatMilkyMessagePayload(
   event: MilkyEvent,
   data: MilkyIncomingMessage,
   recallFn: (msgId: string) => Promise<void>,
   replyFn: (channel: { id: string; type: 'group' | 'private' }, content: (string | { type: string; data?: Record<string, unknown> })[], quote?: boolean | string) => Promise<string>,
   adapterName: 'milky',
-  botName: string,
+  endpointName: string,
 ): MessageBase {
   const scene = data.message_scene;
   const isGroup = scene === 'group';
@@ -82,9 +82,16 @@ export function formatMilkyMessagePayload(
   return {
     $id: msgId,
     $adapter: 'milky',
-    $bot: botName,
+    $endpoint: endpointName,
     $channel: channel,
-    $sender: { id: senderId, name: senderName },
+    $sender: (() => {
+      const sender: { id: string; name: string; role?: string; permissions?: string[] } = {
+        id: senderId,
+        name: senderName,
+      };
+      applyQqSenderRoleToMessageSender(sender, data.group_member?.role);
+      return sender;
+    })(),
     $content: content,
     $raw: raw,
     $timestamp: data.time,

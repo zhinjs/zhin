@@ -1,7 +1,7 @@
 /**
  * web_fetch — HTTP(S) 抓取、SSRF 防护、HTML 去标签与长度截断
  */
-import type { Tool, ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import type { Tool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import { htmlToPlainText } from '@zhin.js/core';
 import { errMsg } from '../discovery/utils.js';
 import { checkDangerousToolAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
@@ -60,9 +60,9 @@ export class WebFetchBuiltinTool extends BuiltinBaseTool {
     );
   }
 
-  async run(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
+  async run(args: Record<string, unknown>, commMessage?: Message): Promise<ToolResult> {
     try {
-      const accessDecision = checkDangerousToolAccess('web_fetch', context);
+      const accessDecision = checkDangerousToolAccess('web_fetch', commMessage);
       if (!accessDecision.allowed) {
         if (accessDecision.needsOwnerApproval) {
           return toOwnerSignal(accessDecision);

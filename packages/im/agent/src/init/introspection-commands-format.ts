@@ -1,5 +1,5 @@
 /**
- * IM 内省指令格式化（/cmd、/bots、/tools 等）
+ * IM 内省指令格式化（/cmd、/endpoints、/tools 等）
  */
 import type { MessageCommand } from '@zhin.js/core';
 
@@ -9,7 +9,7 @@ export interface CommandRow {
   plugin?: string;
 }
 
-export interface BotRow {
+export interface EndpointRow {
   adapter: string;
   name: string;
   online: boolean;
@@ -59,10 +59,10 @@ export function formatAdaptersList(adapters: string[]): string {
   return lines.join('\n');
 }
 
-export function formatBotsList(bots: BotRow[]): string {
-  if (bots.length === 0) return '🤖 暂无 Bot 实例';
-  const lines = ['🤖 Bot 列表 (' + bots.length + ')', ''];
-  for (const b of [...bots].sort((a, c) => a.adapter.localeCompare(c.adapter) || a.name.localeCompare(c.name))) {
+export function formatEndpointsList(endpoints: EndpointRow[]): string {
+  if (endpoints.length === 0) return '🤖 暂无 Endpoint 实例';
+  const lines = ['🤖 Endpoint 列表 (' + endpoints.length + ')', ''];
+  for (const b of [...endpoints].sort((a, c) => a.adapter.localeCompare(c.adapter) || a.name.localeCompare(c.name))) {
     const mark = b.online ? '● online' : '○ offline';
     lines.push(`  ${mark}  ${b.adapter}/${b.name}`);
   }
@@ -127,6 +127,6 @@ function truncate(text: string, max: number): string {
 export function introspectionHelpFooter(): string {
   return [
     '',
-    '💡 内省指令：/cmd · /bots · /bindings · /tools · /mcp',
+    '💡 内省指令：/cmd · /endpoints · /bindings · /tools · /mcp',
   ].join('\n');
 }

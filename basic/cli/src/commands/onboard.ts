@@ -141,7 +141,7 @@ function getMinimalConfig(): any {
     plugins: ['@zhin.js/adapter-sandbox'],
     http: { port: 8086, token: '${HTTP_TOKEN}', base: '/api' },
     hostApi: { enabled: true, lazyLoad: true },
-    bots: [],
+    endpoints: [],
   };
 }
 

@@ -1,12 +1,14 @@
 /**
- * ICQQ 适配器 — 通过 @icqqjs/cli 守护进程 IPC 管理 Bot 实例
+ * ICQQ 适配器 — 通过 @icqqjs/cli 守护进程 IPC 管理 Endpoint 实例
  */
 import { formatCompact, Adapter, Plugin } from 'zhin.js';
-import { IcqqBot } from "./bot.js";
-import type { IcqqBotConfig, IpcMemberInfo } from "./types.js";
+import { IcqqEndpoint } from "./endpoint.js";
+import type { IcqqEndpointConfig, IpcMemberInfo } from "./types.js";
 import { Actions } from "./protocol.js";
 
-export class IcqqAdapter extends Adapter<IcqqBot> {
+export class IcqqAdapter extends Adapter<IcqqEndpoint> {
+  static override readonly capabilities = ['inbound', 'outbound'] as const;
+
   constructor(plugin: Plugin) {
     super(plugin, "icqq", []);
   }
@@ -21,8 +23,8 @@ export class IcqqAdapter extends Adapter<IcqqBot> {
     };
   }
 
-  createBot(config: IcqqBotConfig): IcqqBot {
-    return new IcqqBot(this, config);
+  createEndpoint(config: IcqqEndpointConfig): IcqqEndpoint {
+    return new IcqqEndpoint(this, config);
   }
 
   async start(): Promise<void> {
@@ -36,15 +38,15 @@ export class IcqqAdapter extends Adapter<IcqqBot> {
 
   // ── IGroupManagement 标准群管方法（通过 IPC） ─────────────────────
 
-  private getBot(botId: string): IcqqBot {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot;
+  private getEndpoint(endpointId: string): IcqqEndpoint {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint;
   }
 
-  async kickMember(botId: string, sceneId: string, userId: string) {
-    const bot = this.getBot(botId);
-    const resp = await bot.ipc.request(Actions.GROUP_KICK, {
+  async kickMember(endpointId: string, sceneId: string, userId: string) {
+    const endpoint = this.getEndpoint(endpointId);
+    const resp = await endpoint.ipc.request(Actions.GROUP_KICK, {
       group_id: Number(sceneId),
       user_id: Number(userId),
       reject_add_request: false,
@@ -54,13 +56,13 @@ export class IcqqAdapter extends Adapter<IcqqBot> {
   }
 
   async muteMember(
-    botId: string,
+    endpointId: string,
     sceneId: string,
     userId: string,
     duration = 600,
   ) {
-    const bot = this.getBot(botId);
-    const resp = await bot.ipc.request(Actions.GROUP_MUTE, {
+    const endpoint = this.getEndpoint(endpointId);
+    const resp = await endpoint.ipc.request(Actions.GROUP_MUTE, {
       group_id: Number(sceneId),
       user_id: Number(userId),
       duration,
@@ -69,9 +71,9 @@ export class IcqqAdapter extends Adapter<IcqqBot> {
     return true;
   }
 
-  async muteAll(botId: string, sceneId: string, enable = true) {
-    const bot = this.getBot(botId);
-    const resp = await bot.ipc.request(Actions.GROUP_MUTE_ALL, {
+  async muteAll(endpointId: string, sceneId: string, enable = true) {
+    const endpoint = this.getEndpoint(endpointId);
+    const resp = await endpoint.ipc.request(Actions.GROUP_MUTE_ALL, {
       group_id: Number(sceneId),
       enable,
     });
@@ -80,13 +82,13 @@ export class IcqqAdapter extends Adapter<IcqqBot> {
   }
 
   async setAdmin(
-    botId: string,
+    endpointId: string,
     sceneId: string,
     userId: string,
     enable = true,
   ) {
-    const bot = this.getBot(botId);
-    const resp = await bot.ipc.request(Actions.SET_GROUP_ADMIN, {
+    const endpoint = this.getEndpoint(endpointId);
+    const resp = await endpoint.ipc.request(Actions.SET_GROUP_ADMIN, {
       group_id: Number(sceneId),
       user_id: Number(userId),
       enable,
@@ -96,13 +98,13 @@ export class IcqqAdapter extends Adapter<IcqqBot> {
   }
 
   async setMemberNickname(
-    botId: string,
+    endpointId: string,
     sceneId: string,
     userId: string,
     nickname: string,
   ) {
-    const bot = this.getBot(botId);
-    const resp = await bot.ipc.request(Actions.SET_GROUP_CARD, {
+    const endpoint = this.getEndpoint(endpointId);
+    const resp = await endpoint.ipc.request(Actions.SET_GROUP_CARD, {
       group_id: Number(sceneId),
       user_id: Number(userId),
       card: nickname,
@@ -111,9 +113,9 @@ export class IcqqAdapter extends Adapter<IcqqBot> {
     return true;
   }
 
-  async setGroupName(botId: string, sceneId: string, name: string) {
-    const bot = this.getBot(botId);
-    const resp = await bot.ipc.request(Actions.SET_GROUP_NAME, {
+  async setGroupName(endpointId: string, sceneId: string, name: string) {
+    const endpoint = this.getEndpoint(endpointId);
+    const resp = await endpoint.ipc.request(Actions.SET_GROUP_NAME, {
       group_id: Number(sceneId),
       name,
     });
@@ -121,9 +123,9 @@ export class IcqqAdapter extends Adapter<IcqqBot> {
     return true;
   }
 
-  async listMembers(botId: string, sceneId: string) {
-    const bot = this.getBot(botId);
-    const resp = await bot.ipc.request(Actions.LIST_GROUP_MEMBERS, {
+  async listMembers(endpointId: string, sceneId: string) {
+    const endpoint = this.getEndpoint(endpointId);
+    const resp = await endpoint.ipc.request(Actions.LIST_GROUP_MEMBERS, {
       group_id: Number(sceneId),
     });
     if (!resp.ok) throw new Error(resp.error ?? "获取成员列表失败");

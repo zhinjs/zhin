@@ -12,7 +12,7 @@ export interface IntrospectionArgs {
 export const INTROSPECTION_PAGE_SIZES = {
   cmd: 25,
   tools: 15,
-  bots: 30,
+  endpoints: 30,
   bindings: 30,
   mcp: 30,
 } as const;

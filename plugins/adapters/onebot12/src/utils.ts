@@ -28,13 +28,13 @@ export function getChannelType(ev: OneBot12Event): 'private' | 'group' {
 /** 将 OneBot 12 消息事件转为 zhin Message 的 MessageBase 所需字段 */
 export function formatOneBot12MessagePayload(
   ev: OneBot12Event,
-  botName: string,
+  endpointName: string,
   recallFn: (msgId: string) => Promise<void>,
   replyFn: (channel: { id: string; type: 'group' | 'private' }, content: (string | { type: string; data?: Record<string, unknown> })[], quote?: boolean | string) => Promise<string>,
 ): {
   $id: string;
   $adapter: 'onebot12';
-  $bot: string;
+  $endpoint: string;
   $channel: { id: string; type: 'group' | 'private' };
   $sender: { id: string; name: string };
   $content: Array<{ type: string; data: Record<string, unknown> }>;
@@ -55,7 +55,7 @@ export function formatOneBot12MessagePayload(
   return {
     $id: ev.message_id!,
     $adapter: 'onebot12',
-    $bot: botName,
+    $endpoint: endpointName,
     $channel: { id: channelId, type: channelType },
     $sender: { id: senderId, name: senderName },
     $content: content,

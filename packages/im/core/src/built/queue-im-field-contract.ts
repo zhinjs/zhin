@@ -10,7 +10,7 @@ export interface QueueEnvelope<TDetail extends Record<string, unknown> = Record<
 
 export interface NormalizedQueueOutboundDetail {
   context: string;
-  bot: string;
+  endpoint: string;
   channelId: string;
   channelType: MessageType;
   content: SendContent;
@@ -49,7 +49,7 @@ function requireContent(value: unknown): SendContent {
 /** Normalize queue outbound detail into the canonical queue-IM shape. */
 export function normalizeQueueOutboundDetail(record: Record<string, unknown>): NormalizedQueueOutboundDetail {
   const context = requireString(record.context, 'context');
-  const bot = requireString(record.bot, 'bot');
+  const endpoint = requireString(record.endpoint, 'endpoint');
   const channelId = requireString(record.channelId, 'channelId');
   const channelTypeValue = record.channelType;
   if (!isMessageType(channelTypeValue)) {
@@ -62,7 +62,7 @@ export function normalizeQueueOutboundDetail(record: Record<string, unknown>): N
 
   const normalized: NormalizedQueueOutboundDetail = {
     context,
-    bot,
+    endpoint,
     channelId,
     channelType: channelTypeValue,
     content: requireContent(record.content),
@@ -75,7 +75,7 @@ export function normalizeQueueOutboundDetail(record: Record<string, unknown>): N
 export function toSendOptions(detail: NormalizedQueueOutboundDetail): SendOptions {
   return {
     context: detail.context,
-    bot: detail.bot,
+    endpoint: detail.endpoint,
     id: detail.channelId,
     type: detail.channelType,
     content: detail.content,

@@ -14,7 +14,7 @@ export interface TelegramSenderInfo {
   status?: string;
 }
 
-export interface TelegramBotConfig {
+export interface TelegramEndpointConfig {
   context: "telegram";
   token: string;
   name: string;
@@ -27,6 +27,6 @@ export interface TelegramBotConfig {
   allowedUpdates?: string[];
 }
 
-export interface TelegramBot {
-  $config: TelegramBotConfig;
+export interface TelegramEndpoint {
+  $config: TelegramEndpointConfig;
 }

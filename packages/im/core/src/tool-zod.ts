@@ -11,7 +11,8 @@
  *   plugin.addTool(tool);
  */
 
-import type { Tool, ToolContext, ToolParametersSchema } from './types.js';
+import type { Tool, ToolParametersSchema } from './types.js';
+import type { Message } from './message.js';
 
 type MaybePromise<T> = T | Promise<T>;
 
@@ -86,7 +87,7 @@ export function createToolFromZod<T extends Record<string, any>>(
   name: string,
   description: string,
   schema: any,
-  execute: (args: T, context?: ToolContext) => MaybePromise<any>,
+  execute: (args: T, message?: Message<any>) => MaybePromise<any>,
   options?: CreateToolFromZodOptions
 ): Tool {
   if (!schema?.safeParse) {
@@ -97,13 +98,13 @@ export function createToolFromZod<T extends Record<string, any>>(
     name,
     description,
     parameters,
-    execute: async (args: Record<string, any>, context?: ToolContext) => {
+    execute: async (args: Record<string, any>, message?: Message<any>) => {
       const parsed = schema.safeParse(args);
       if (!parsed.success) {
         const msg = parsed.error.errors?.map((e: any) => `${e.path?.join('.') ?? 'root'}: ${e instanceof Error ? e.message : String(e)}`).join('; ') ?? 'Invalid arguments';
         return `Error: ${msg}`;
       }
-      return execute(parsed.data as T, context);
+      return execute(parsed.data as T, message);
     },
     tags: options?.tags,
     keywords: options?.keywords,

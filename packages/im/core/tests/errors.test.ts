@@ -9,7 +9,7 @@ describe('Core 特有错误类型', () => {
         const error = new AdapterError('适配器连接失败', 'icqq', 'bot-123')
         expect(error.code).toBe('ADAPTER_ERROR')
         expect(error.adapterName).toBe('icqq')
-        expect(error.botName).toBe('bot-123')
+        expect(error.endpointId).toBe('bot-123')
     })
 
     it('MessageError应该包含消息信息', () => {

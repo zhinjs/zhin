@@ -19,22 +19,22 @@ export type IMSessionScope = 'private' | 'group' | 'channel';
 
 export interface ResolveIMSessionIdInput {
   platform: string;
-  botId: string;
+  endpointId: string;
   scope: IMSessionScope;
   sceneId: string;
 }
 
 /**
- * 解析 IM 会话 ID：`platform:botId:type:sceneId`
+ * 解析 IM 会话 ID：`platform:endpointId:type:sceneId`
  * - 群/频道：sceneId 为群号或频道 ID（不含 senderId）
  * - 私聊：sceneId 为对方用户 ID
  */
 export function resolveIMSessionId(input: ResolveIMSessionIdInput): string {
   const platform = String(input.platform || 'unknown');
-  const botId = String(input.botId || 'default');
+  const endpointId = String(input.endpointId || 'default');
   const scope: IMSessionScope = input.scope || 'private';
   const sceneId = String(input.sceneId || 'unknown');
-  return `${platform}:${botId}:${scope}:${sceneId}`;
+  return `${platform}:${endpointId}:${scope}:${sceneId}`;
 }
 
 /** 按场景决定写入 sessionId 的 scene 段 */
@@ -49,19 +49,22 @@ export function resolveIMSceneIdForSession(
   return senderId || sceneId || 'unknown';
 }
 
-/** 从 ToolContext 字段生成 IM sessionId */
-export function resolveIMSessionIdFromToolContext(context: {
-  platform?: string;
-  botId?: string;
-  scope?: IMSessionScope;
-  sceneId?: string;
-  senderId?: string;
+/** 从 Message 通讯上下文生成 IM sessionId */
+export function resolveIMSessionIdFromMessage(message: {
+  $adapter?: string;
+  $endpoint?: string;
+  $channel?: { type?: IMSessionScope; id?: string };
+  $sender?: { id?: string };
 }): string {
-  const scope = (context.scope || 'private') as IMSessionScope;
-  const sceneId = resolveIMSceneIdForSession(scope, context.sceneId, context.senderId);
+  const scope = (message.$channel?.type || 'private') as IMSessionScope;
+  const sceneId = resolveIMSceneIdForSession(
+    scope,
+    message.$channel?.id,
+    message.$sender?.id,
+  );
   return resolveIMSessionId({
-    platform: context.platform || '',
-    botId: context.botId || '',
+    platform: String(message.$adapter || ''),
+    endpointId: String(message.$endpoint || ''),
     scope,
     sceneId,
   });
@@ -76,7 +79,7 @@ export const AI_SESSION_MODEL = {
   session_id: { type: 'text' as const, nullable: false },
   session_key: { type: 'text' as const, nullable: false },
   platform: { type: 'text' as const, nullable: false },
-  bot_id: { type: 'text' as const, nullable: false },
+  endpoint_id: { type: 'text' as const, nullable: false },
   scene_id: { type: 'text' as const, nullable: false },
   scene_type: { type: 'text' as const, nullable: false },
   model: { type: 'text' as const, default: '' },
@@ -93,7 +96,7 @@ interface SessionRecord {
   session_id: string;
   session_key?: string;
   platform?: string;
-  bot_id?: string;
+  endpoint_id?: string;
   scene_id?: string;
   scene_type?: string;
   model?: string;
@@ -392,7 +395,7 @@ export class DatabaseSessionManager implements ISessionManager {
           session_id: session.id,
           session_key: session.id,
           platform: '',
-          bot_id: '',
+          endpoint_id: '',
           scene_id: '',
           scene_type: 'private',
           status: 'active',
@@ -625,7 +628,7 @@ export class SessionManager implements ISessionManager {
 
   /**
    * 生成会话 ID（旧格式，per-user + channel）
-   * @deprecated 请使用 {@link resolveIMSessionId} / {@link resolveIMSessionIdFromToolContext}
+   * @deprecated 请使用 {@link resolveIMSessionId} / {@link resolveIMSessionIdFromMessage}
    */
   static generateId(platform: string, userId: string, channelId?: string): string {
     return channelId 

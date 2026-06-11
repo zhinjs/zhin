@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/slack/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/slack/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=5bd872f322ec626d -->
+<!-- sync-adapter-docs:sha256=72ca102200de478c -->
 
 # @zhin.js/adapter-slack
 
@@ -34,7 +34,7 @@ pnpm add @zhin.js/adapter-slack
 #### HTTP 模式前置条件
 
 - Slack App 中配置 **Event Subscriptions** 的 Request URL（须公网 HTTPS 可达）
-- 启用对应 Bot Events（`message.*`、`app_mention` 等）
+- 启用对应 Endpoint Events（`message.*`、`app_mention` 等）
 - 防火墙 / 反向代理放行 `port`
 - **不需要** `@zhin.js/host-router`（由 `@slack/bolt` 自行监听）
 
@@ -44,7 +44,7 @@ pnpm add @zhin.js/adapter-slack
 import { defineConfig } from 'zhin.js'
 
 export default defineConfig({
-  bots: [
+  endpoints: [
     {
       name: 'my-slack-bot',
       context: 'slack',
@@ -63,7 +63,7 @@ export default defineConfig({
 import { defineConfig } from 'zhin.js'
 
 export default defineConfig({
-  bots: [
+  endpoints: [
     {
       name: 'my-slack-bot',
       context: 'slack',
@@ -91,7 +91,7 @@ export default defineConfig({
 
 1. Go to [Slack API](https://api.slack.com/apps)
 2. Create a new app
-3. Add Bot Token Scopes:
+3. Add Endpoint Token Scopes:
    - `chat:write` - Send messages
    - `chat:write.public` - Send messages to public channels
    - `channels:read` - View basic channel info
@@ -116,7 +116,7 @@ export default defineConfig({
    - `message.mpim` - Group direct messages
    - `app_mention` - When the bot is mentioned
 6. Install the app to your workspace
-7. Copy the Bot User OAuth Token (`xoxb-...`)
+7. Copy the Endpoint User OAuth Token (`xoxb-...`)
 8. Copy the Signing Secret
 9. Copy the App-Level Token (`xapp-...`) if using Socket Mode
 

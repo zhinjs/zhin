@@ -11,29 +11,29 @@ export function registerRoutes(
   icqq: IcqqAdapter,
   _root: Plugin,
 ) {
-  router.get("/api/icqq/bots", async (ctx) => {
+  router.get("/api/icqq/endpoints", async (ctx) => {
     try {
-      const bots = Array.from(icqq.bots.values());
-      if (bots.length === 0) {
-        ctx.body = { success: true, data: [], message: "暂无ICQQ机器人实例" };
+      const endpoints = Array.from(icqq.endpoints.values());
+      if (endpoints.length === 0) {
+        ctx.body = { success: true, data: [], message: "暂无ICQQEndpoint 实例" };
         return;
       }
       const result = await Promise.all(
-        bots.map(async (bot) => {
+        endpoints.map(async (endpoint) => {
           try {
             const base: Record<string, unknown> = {
-              name: bot.$config.name,
-              connected: bot.$connected || false,
-              groupCount: bot.groups.size,
-              friendCount: bot.friends.size,
-              status: bot.$connected ? "online" : "offline",
+              name: endpoint.$config.name,
+              connected: endpoint.$connected || false,
+              groupCount: endpoint.groups.size,
+              friendCount: endpoint.friends.size,
+              status: endpoint.$connected ? "online" : "offline",
               lastActivity: new Date().toISOString(),
             };
 
             // 尝试从守护进程获取详细状态
-            if (bot.$connected && bot.ipc && !bot.ipc.closed) {
+            if (endpoint.$connected && endpoint.ipc && !endpoint.ipc.closed) {
               try {
-                const statusResp = await bot.ipc.request(
+                const statusResp = await endpoint.ipc.request(
                   Actions.GET_STATUS,
                   {},
                   5000,
@@ -51,7 +51,7 @@ export function registerRoutes(
             return base;
           } catch {
             return {
-              name: bot.$config.name,
+              name: endpoint.$config.name,
               connected: false,
               groupCount: 0,
               friendCount: 0,
@@ -71,7 +71,7 @@ export function registerRoutes(
       ctx.body = {
         success: false,
         error: "ICQQ_API_ERROR",
-        message: "获取机器人数据失败",
+        message: "获取 Endpoint 数据失败",
         details:
           process.env.NODE_ENV === "development"
             ? (error as Error).message

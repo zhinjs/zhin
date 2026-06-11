@@ -262,9 +262,9 @@ const adapterCommand = new Command('adapter')
       }
       
       // 移除 bot 配置
-      if (config.bots && Array.isArray(config.bots)) {
+      if (config.endpoints && Array.isArray(config.endpoints)) {
         const context = name.replace(/^adapter-/, '');
-        config.bots = config.bots.filter((bot: any) => bot.context !== context);
+        config.endpoints = config.endpoints.filter((endpoint: { context?: string }) => endpoint.context !== context);
         await saveConfig(configPath, config);
       }
     }

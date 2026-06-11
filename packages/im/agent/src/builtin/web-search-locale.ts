@@ -1,9 +1,9 @@
 /**
- * web_search 的 Bing 市场/语言：优先 ToolContext.extra，其次用户档案，默认中文。
+ * web_search 的 Bing 市场/语言：优先 Message.extra，其次用户档案，默认中文。
  */
-import type { ToolContext } from '@zhin.js/core';
+import type { AgentTurnMessage, Message } from '@zhin.js/core';
 
-/** 写入 ToolContext.extra 的键（集成方也可直接设置以覆盖档案） */
+/** 写入 AgentTurnMessage.extra 的键（集成方也可直接设置以覆盖档案） */
 export const WEB_SEARCH_LOCALE_EXTRA_KEY = 'web_search_locale' as const;
 
 /** 无用户设置时的 Bing setmkt / 界面语言 */
@@ -73,8 +73,9 @@ export function acceptLanguageForMarket(market: string): string {
   return `${m},${m};q=0.9,en;q=0.8`;
 }
 
-export function resolveWebSearchMarketFromContext(context?: ToolContext): string {
-  const raw = context?.extra?.[WEB_SEARCH_LOCALE_EXTRA_KEY];
+export function resolveWebSearchMarketFromContext(commMessage?: Message): string {
+  const extra = commMessage ? (commMessage as AgentTurnMessage).extra : undefined;
+  const raw = extra?.[WEB_SEARCH_LOCALE_EXTRA_KEY];
   if (typeof raw === 'string' && raw.trim()) {
     return normalizeWebSearchLocaleHint(raw);
   }

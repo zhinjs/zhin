@@ -192,7 +192,7 @@ export interface AIProvider {
 /**
  * 通用工具执行上下文。
  *
- * 定义了平台无关的字段，IM 应用通过 core 的 IMToolContext 扩展。
+ * 定义了平台无关的字段；IM 侧使用 @zhin.js/core 的 Message 通讯上下文。
  * 非 IM 应用可直接使用此接口。
  */
 export interface ToolContext {
@@ -222,8 +222,8 @@ export interface AgentTool {
   tags?: string[];
   /** 触发关键词，用户消息包含这些词时优先选择此工具 */
   keywords?: string[];
-  /** 调用者需具备的角色之一 */
-  requiredAnyRole?: readonly string[];
+  /** permit 门禁字符串（如 role(master)） */
+  permissions?: readonly string[];
   /** 是否允许预执行（opt-in），默认 false */
   preExecutable?: boolean;
   /** 工具执行超时时间（毫秒），默认 30000 */
@@ -370,7 +370,7 @@ export interface ProviderInstanceConfig extends ProviderConfig {
 
 export interface RouteMatchConfig {
   adapter?: string;
-  bot?: string;
+  endpoint?: string;
   scene?: string;
   hasMedia?: string[];
   contentContains?: string;

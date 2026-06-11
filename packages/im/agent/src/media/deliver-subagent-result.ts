@@ -25,11 +25,12 @@ export interface DeliverSubagentResultParams {
 
 export async function deliverSubagentResult(params: DeliverSubagentResultParams): Promise<void> {
   const { origin, delivery, send } = params;
+  const message = origin.message;
   const base: Omit<SendOptions, 'content'> = {
-    context: origin.platform,
-    bot: origin.botId,
-    id: origin.sceneId,
-    type: origin.sceneType as MessageType,
+    context: String(message.$adapter),
+    endpoint: message.$endpoint,
+    id: message.$channel?.id ?? message.$sender.id,
+    type: (message.$channel?.type ?? 'private') as MessageType,
   };
 
   const elements = delivery.elements?.length
@@ -38,7 +39,7 @@ export async function deliverSubagentResult(params: DeliverSubagentResultParams)
       parseOutput(delivery.text),
       delivery.toolCalls ?? [],
     );
-  const segments = await publishOutboundElements(elements, origin.platform);
+  const segments = await publishOutboundElements(elements, String(message.$adapter));
   if (!segments.length) {
     await send({ ...base, content: delivery.text });
     return;

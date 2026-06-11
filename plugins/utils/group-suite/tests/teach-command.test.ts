@@ -6,7 +6,7 @@ function msg(text: string): Message<any> {
   return {
     $id: '1',
     $adapter: 'icqq',
-    $bot: '79158',
+    $endpoint: '79158',
     $content: [{ type: 'text', data: { text } }],
     $raw: text,
     $sender: { id: 'u1', name: 'User' },

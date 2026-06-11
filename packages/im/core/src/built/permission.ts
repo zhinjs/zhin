@@ -3,9 +3,16 @@
  * 权限管理服务，继承自 Feature 抽象类
  */
 import { Feature, FeatureJSON } from "@zhin.js/kernel";
+import logger, { formatCompact } from "@zhin.js/logger";
 import { getPlugin } from "../plugin.js";
 import type { MaybePromise, RegisteredAdapter, AdapterMessage } from "../types.js";
 import { Message as MessageClass } from "../message.js";
+import { isBuiltinPermit, parsePermitName } from "./permit-parse.js";
+import { checkBuiltinPermit } from "./permit-check.js";
+import { resolveSubjectRoles } from "./authorization.js";
+import { senderRolesFromMessage } from "./message-enrich.js";
+
+export type PermissionSubject = MessageClass<AdapterMessage<RegisteredAdapter>>;
 
 export type PermissionItem<T extends RegisteredAdapter = RegisteredAdapter> = {
   name: string | RegExp;
@@ -33,6 +40,25 @@ declare module "../plugin.js" {
   }
 }
 
+function rolesForPermitCheck(message: MessageClass<AdapterMessage<RegisteredAdapter>>): readonly import('./roles.js').SenderRole[] {
+  return senderRolesFromMessage(message);
+}
+
+function auditPermitDenied(
+  permit: string,
+  message: PermissionSubject,
+  reason?: string,
+): void {
+  logger.debug(formatCompact({
+    op: 'permit_denied',
+    permit,
+    reason,
+    senderId: message.$sender.id,
+    adapter: message.$adapter,
+    endpoint: message.$endpoint,
+  }));
+}
+
 export class PermissionFeature extends Feature<PermissionItem> {
   readonly name = 'permission' as const;
   readonly icon = 'Shield';
@@ -40,65 +66,40 @@ export class PermissionFeature extends Feature<PermissionItem> {
 
   constructor() {
     super();
-    // 注册默认权限检查器（使用 'built-in' 作为插件名）
+    const builtinRe = /^(adapter|group|private|channel|user|role)\([^)]*\)$/;
     this.add(
-      Permissions.define(/^adapter\([^)]+\)$/, (name, message) => {
-        return message.$adapter === name.replace(/^adapter\(([^)]+)\)$/, '$1');
-      }),
-      '__built-in__',
-    );
-    this.add(
-      Permissions.define(/^group\([^)]+\)$/, (name, message) => {
-        const match = name.match(/^group\(([^)]+)\)$/);
-        if (!match) return false;
-        const id = match[1];
-        if (message.$channel.type !== 'group') return false;
-        if (id === '' || id === '*') return true;
-        return message.$channel.id === id;
-      }),
-      '__built-in__',
-    );
-    this.add(
-      Permissions.define(/^private\([^)]+\)$/, (name, message) => {
-        const match = name.match(/^private\(([^)]+)\)$/);
-        if (!match) return false;
-        const id = match[1];
-        if (message.$channel.type !== 'private') return false;
-        if (id === '' || id === '*') return true;
-        return message.$channel.id === id;
-      }),
-      '__built-in__',
-    );
-    this.add(
-      Permissions.define(/^channel\([^)]+\)$/, (name, message) => {
-        const match = name.match(/^channel\(([^)]+)\)$/);
-        if (!match) return false;
-        const id = match[1];
-        if (message.$channel.type !== 'channel') return false;
-        if (id === '' || id === '*') return true;
-        return message.$channel.id === id;
-      }),
-      '__built-in__',
-    );
-    this.add(
-      Permissions.define(/^user\([^)]+\)$/, (name, message) => {
-        const match = name.match(/^user\(([^)]+)\)$/);
-        if (!match) return false;
-        const id = match[1];
-        return message.$sender.id === id;
+      Permissions.define(builtinRe, (name, message) => {
+        const parsed = parsePermitName(name);
+        if (parsed && parsed.kind !== 'role') {
+          return checkBuiltinPermit(name, message, ['user']);
+        }
+        return checkBuiltinPermit(name, message, rolesForPermitCheck(message));
       }),
       '__built-in__',
     );
   }
 
   /**
-   * 检查权限
+   * 检查权限（subject 为 Message 通讯上下文）
    */
-  async check(name: string, message: MessageClass<AdapterMessage<RegisteredAdapter>>): Promise<boolean> {
+  async check(name: string, subject: PermissionSubject): Promise<boolean> {
+    const message = subject;
+
+    if (isBuiltinPermit(name)) {
+      const parsed = parsePermitName(name);
+      if (parsed && parsed.kind !== 'role') {
+        if (checkBuiltinPermit(name, message, ['user'])) return true;
+      } else if (checkBuiltinPermit(name, message, rolesForPermitCheck(message))) {
+        return true;
+      }
+    }
+
     for (const permission of this.items) {
       const passed = await permission.check(name, message);
       if (passed) return true;
     }
+
+    auditPermitDenied(name, message);
     return false;
   }
 

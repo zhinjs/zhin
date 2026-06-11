@@ -30,6 +30,15 @@ declare module "../plugin.js" {
   }
 }
 
+type DatabaseAfterStartHook = (db: Database<any, Models, any>) => void | Promise<void>;
+
+const databaseAfterStartHooks: DatabaseAfterStartHook[] = [];
+
+/** 在 `db.start()` 完成之后、`context.mounted` 发出之前执行（用于 schema 迁移） */
+export function onDatabaseAfterStart(hook: DatabaseAfterStartHook): void {
+  databaseAfterStartHooks.push(hook);
+}
+
 export class DatabaseFeature extends Feature<ModelRecord> {
   readonly name = 'database' as const;
   readonly icon = 'Database';
@@ -92,6 +101,9 @@ export class DatabaseFeature extends Feature<ModelRecord> {
   async mounted(plugin: PluginLike): Promise<void> {
     plugin.logger.debug(formatCompact({ ready: true }));
     await this.db.start();
+    for (const hook of databaseAfterStartHooks) {
+      await hook(this.db);
+    }
   }
 
   /**

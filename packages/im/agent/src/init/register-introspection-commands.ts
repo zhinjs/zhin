@@ -1,5 +1,5 @@
 /**
- * IM 内省指令：/cmd、/bots、/bindings、/tools、/mcp
+ * IM 内省指令：/cmd、/endpoints、/bindings、/tools、/mcp
  */
 import {
   Adapter,
@@ -14,12 +14,12 @@ import { rejectUnlessManagementOperator } from './management-command-guard.js';
 import {
   commandRowsFromService,
   formatAgentsList,
-  formatBotsList,
+  formatEndpointsList,
   formatCommandsList,
   formatMcpServersList,
   formatToolsList,
   introspectionHelpFooter,
-  type BotRow,
+  type EndpointRow,
   type McpServerRow,
 } from './introspection-commands-format.js';
 
@@ -48,16 +48,16 @@ function registerIntrospectionCommand(
   disposers.push(() => commandService.remove(cmd));
 }
 
-function collectBots(root: ReturnType<typeof getPlugin>['root']): BotRow[] {
-  const rows: BotRow[] = [];
+function collectEndpoints(root: ReturnType<typeof getPlugin>['root']): EndpointRow[] {
+  const rows: EndpointRow[] = [];
   for (const adapterName of root.adapters) {
     const adapter = root.inject(adapterName);
     if (!(adapter instanceof Adapter)) continue;
-    for (const [botName, bot] of adapter.bots.entries()) {
+    for (const [endpointId, endpoint] of adapter.endpoints.entries()) {
       rows.push({
         adapter: String(adapterName),
-        name: botName,
-        online: !!(bot as { $connected?: boolean }).$connected,
+        name: endpointId,
+        online: !!(endpoint as { $connected?: boolean }).$connected,
       });
     }
   }
@@ -98,9 +98,9 @@ export function registerIntrospectionCommands(_refs: AIServiceRefs): void {
       commandService,
       root.name,
       disposers,
-      '/bots',
-      '列出各适配器下的 Bot 及在线状态',
-      () => formatBotsList(collectBots(root)),
+      '/endpoints',
+      '列出各适配器下的 Endpoint 及在线状态',
+      () => formatEndpointsList(collectEndpoints(root)),
     );
 
     registerIntrospectionCommand(

@@ -12,7 +12,7 @@
 - 本仓库是 pnpm workspace monorepo，不使用 git submodule。
 - TypeScript 导入本地文件时通常必须带 .js 扩展名。
 - usePlugin() 应在模块顶层调用，不要放进异步函数或延迟初始化路径。
-- 任何 IM 出站发送都必须走统一链路：Message.$reply 或 Adapter.sendMessage → renderSendMessage → before.sendMessage → 平台 Bot；不要旁路发送。
+- 任何 IM 出站发送都必须走统一链路：Message.$reply 或 Adapter.sendMessage → renderSendMessage → before.sendMessage → 平台 Endpoint；不要旁路发送。
 - 修改架构或仓库结构前，先看 docs/architecture/README.md、docs/architecture-overview.md 和 docs/contributing/repo-structure.md，避免违反分层和目录约定。
 
 **关键要点**：
@@ -61,7 +61,7 @@ declare module 'zhin.js' {
     }
   }
   interface RegisteredAdapters {
-    myAdapter: Adapter<MyBot>
+    myAdapter: Adapter<MyEndpoint>
   }
   interface Models {
     my_model: { id: number; name: string }
@@ -681,7 +681,7 @@ declare module 'zhin.js' {
 - 公开路由：`GET /pub/health`、`GET /pub/openapi.json`
 
 ### Host API (`@zhin.js/host-api`)
-- 管理面 REST（plugins/bots/config 等）、Console RPC/SSE、`PageManager` / `GET /entries`
+- 管理面 REST（plugins/endpoints/config 等）、Console RPC/SSE、`PageManager` / `GET /entries`
 - Host **无内置 SPA**（`serveClientHost: false`）；UI 在 **Remote Console**（[console.zhin.dev](https://console.zhin.dev) / `zhin-console`）
 - 需与 `@zhin.js/host-router` 同启
 - 见 `docs/console-remote.md`
@@ -707,7 +707,7 @@ export default defineConfig(async (env) => {
       dialect: 'sqlite',
       filename: './data/bot.db'
     },
-    bots: [
+    endpoints: [
       { name: 'console-bot', context: 'process' }
     ],
     plugin_dirs: [

@@ -6,7 +6,7 @@ describe('ImTranscriptStore (memory)', () => {
     const store = new MemoryImTranscriptStore();
     await store.record({
       platform: 'icqq',
-      bot_id: 'b',
+      endpoint_id: 'b',
       scene_id: 'g',
       scene_type: 'group',
       sender_id: 'u',
@@ -21,7 +21,7 @@ describe('ImTranscriptStore (memory)', () => {
     const store = new MemoryImTranscriptStore();
     await store.record({
       platform: 'icqq',
-      bot_id: 'b',
+      endpoint_id: 'b',
       scene_id: 'g',
       scene_type: 'group',
       sender_id: 'u',
@@ -30,7 +30,7 @@ describe('ImTranscriptStore (memory)', () => {
     });
     await store.record({
       platform: 'icqq',
-      bot_id: 'b',
+      endpoint_id: 'b',
       scene_id: 'g',
       scene_type: 'group',
       sender_id: 'u',

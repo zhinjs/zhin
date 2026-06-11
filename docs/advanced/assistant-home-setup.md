@@ -10,7 +10,7 @@
 
 - [ ] Home Assistant 已运行，浏览器能打开 Web 界面（如 `http://192.168.x.x:8123`）
 - [ ] Zhin test-bot（或你的 bot）已启用 `assistant.enabled: true`
-- [ ] 你是 ICQQ（或其它平台）bot 的 **master**（`zhin.config.yml` → `bots[].master`）
+- [ ] 你是 ICQQ（或其它平台）bot 的 **master**（`zhin.config.yml` → `endpoints[].master`）
 - [ ] 已执行 `pnpm --filter @zhin.js/agent build`（改过 agent 包后）
 
 ---

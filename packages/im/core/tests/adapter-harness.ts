@@ -5,15 +5,15 @@
  *   - createAdapter: 创建 Adapter 实例的工厂
  *   - createRawEvent: 创建平台原始消息事件
  *   - adapterName: 适配器标识名
- *   - botId: 预期的 Bot ID
+ *   - endpointId: 预期的 Endpoint ID
  *
  * 即可自动获得：
- *   ✅ Bot 接口合规性验证
+ *   ✅ Endpoint 接口合规性验证
  *   ✅ 生命周期测试 (start → connect → stop → disconnect)
  *   ✅ 消息格式化正确性 ($formatMessage → MessageBase 字段完整)
- *   ✅ 消息发送链路 (sendMessage → bot.$sendMessage)
+ *   ✅ 消息发送链路 (sendMessage → endpoint.$sendMessage)
  *   ✅ 消息接收链路 (emit → plugin.dispatch)
- *   ✅ 撤回链路 (call.recallMessage → bot.$recallMessage)
+ *   ✅ 撤回链路 (call.recallMessage → endpoint.$recallMessage)
  *   ✅ $reply 路由正确性 (走 adapter.sendMessage，不绕过中间件)
  *
  * 用法：
@@ -22,7 +22,7 @@
  *
  * createAdapterTestSuite({
  *   adapterName: 'my-platform',
- *   botId: 'test-bot',
+ *   endpointId: 'test-bot',
  *   createAdapter: (plugin) => new MyAdapter(plugin, [{ name: 'test-bot', token: 'xxx' }]),
  *   createRawEvent: () => ({ id: '1', content: 'hello', author: { id: 'u1', name: 'User' } }),
  * })
@@ -31,7 +31,8 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Adapter } from '../src/adapter';
-import { Bot } from '../src/bot';
+import { Endpoint } from '../src/endpoint.js';
+import { getAdapterCapabilities } from '../src/endpoint-capabilities';
 import { Plugin } from '../src/plugin';
 import { Message, MessageBase } from '../src/message';
 import type { SendOptions } from '../src/types';
@@ -47,8 +48,8 @@ export interface AdapterTestSuiteOptions<
   /** 适配器标识名，用于测试描述和断言 */
   adapterName: string;
 
-  /** 预期的 Bot ID（start 后第一个 bot 的 $id） */
-  botId: string;
+  /** 预期的 Endpoint ID（start 后第一个 Endpoint 的 $id） */
+  endpointId: string;
 
   /**
    * 创建适配器实例。
@@ -59,20 +60,20 @@ export interface AdapterTestSuiteOptions<
 
   /**
    * 创建一个平台原始消息事件，用于测试 $formatMessage。
-   * 返回的对象应能直接传给 bot.$formatMessage(event)。
+   * 返回的对象应能直接传给 endpoint.$formatMessage(event)。
    */
   createRawEvent: () => E;
 
   /**
-   * 可选：创建后对 bot 做额外 mock（如 stub 掉真实网络调用）。
+   * 可选：创建后对 Endpoint 做额外 mock（如 stub 掉真实网络调用）。
    * 在 adapter.start() 之后、测试开始之前调用。
    */
-  setupBot?: (bot: Bot) => void;
+  setupEndpoint?: (endpoint: Endpoint) => void;
 
   /**
-   * 可选：如果 bot.$connect() 需要网络，在这里 mock 掉。
-   * 在 adapter.start() 之前调用，可以 vi.spyOn(bot, '$connect') 等。
-   * 注意：此时 bot 还未创建，请在 createAdapter 内部处理或使用 setupBot。
+   * 可选：如果 endpoint.$connect() 需要网络，在这里 mock 掉。
+   * 在 adapter.start() 之前调用，可以 vi.spyOn(endpoint, '$connect') 等。
+   * 注意：此时 Endpoint 还未创建，请在 createAdapter 内部处理或使用 setupEndpoint。
    */
   beforeStart?: (adapter: A) => void;
 
@@ -86,6 +87,8 @@ export interface AdapterTestSuiteOptions<
     recall?: boolean;
     /** 跳过 $reply 路由测试 */
     reply?: boolean;
+    /** 跳过入站连接测试 */
+    connect?: boolean;
   };
 }
 
@@ -99,18 +102,28 @@ export function createAdapterTestSuite<
 >(options: AdapterTestSuiteOptions<A, E>): void {
   const {
     adapterName,
-    botId,
+    endpointId,
     createAdapter,
     createRawEvent,
-    setupBot,
+    setupEndpoint,
     beforeStart,
     skip = {},
   } = options;
 
+  const probePlugin = new Plugin('/test/adapter-harness-probe.ts');
+  const probeAdapter = createAdapter(probePlugin);
+  const adapterCaps = getAdapterCapabilities(probeAdapter);
+  const effectiveSkip = {
+    send: skip.send ?? !adapterCaps.includes('outbound'),
+    recall: skip.recall ?? !adapterCaps.includes('outbound'),
+    reply: skip.reply ?? !adapterCaps.includes('outbound'),
+    connect: skip.connect ?? !adapterCaps.includes('inbound'),
+  };
+
   describe(`Adapter Integration: ${adapterName}`, () => {
     let plugin: Plugin;
     let adapter: A;
-    let bot: Bot;
+    let endpoint: Endpoint;
 
     beforeEach(async () => {
       plugin = new Plugin('/test/adapter-harness.ts');
@@ -122,12 +135,12 @@ export function createAdapterTestSuite<
 
       await adapter.start();
 
-      // 获取第一个 bot
-      bot = adapter.bots.get(botId)!;
-      expect(bot).toBeDefined();
+      // 获取第一个 endpoint
+      endpoint = adapter.endpoints.get(endpointId)!;
+      expect(endpoint).toBeDefined();
 
-      if (setupBot) {
-        setupBot(bot);
+      if (setupEndpoint) {
+        setupEndpoint(endpoint);
       }
     });
 
@@ -139,49 +152,53 @@ export function createAdapterTestSuite<
       }
     });
 
-    // ── Bot 接口合规性 ──
+    // ── Endpoint 接口合规性 ──
 
-    describe('Bot 接口合规性', () => {
+    describe('Endpoint 接口合规性', () => {
       it('$id 应为非空字符串', () => {
-        expect(typeof bot.$id).toBe('string');
-        expect(bot.$id.length).toBeGreaterThan(0);
+        expect(typeof endpoint.$id).toBe('string');
+        expect(endpoint.$id.length).toBeGreaterThan(0);
       });
 
       it('$id 应匹配预期值', () => {
-        expect(bot.$id).toBe(botId);
+        expect(endpoint.$id).toBe(endpointId);
       });
 
       it('$connected 启动后应为 true', () => {
-        expect(bot.$connected).toBe(true);
+        expect(endpoint.$connected).toBe(true);
       });
 
       it('$config 应存在', () => {
-        expect(bot.$config).toBeDefined();
+        expect(endpoint.$config).toBeDefined();
       });
 
-      it('应实现所有 Bot 接口方法', () => {
-        expect(typeof bot.$formatMessage).toBe('function');
-        expect(typeof bot.$connect).toBe('function');
-        expect(typeof bot.$disconnect).toBe('function');
-        expect(typeof bot.$sendMessage).toBe('function');
-        expect(typeof bot.$recallMessage).toBe('function');
+      it('应实现能力对应的 Endpoint 接口方法', () => {
+        if (adapterCaps.includes('inbound')) {
+          expect(typeof endpoint.$formatMessage).toBe('function');
+          expect(typeof endpoint.$connect).toBe('function');
+          expect(typeof endpoint.$disconnect).toBe('function');
+        }
+        if (adapterCaps.includes('outbound')) {
+          expect(typeof endpoint.$sendMessage).toBe('function');
+          expect(typeof endpoint.$recallMessage).toBe('function');
+        }
       });
     });
 
     // ── 生命周期 ──
 
     describe('生命周期', () => {
-      it('start() 应将 bot 注册到 bots Map', () => {
-        expect(adapter.bots.has(botId)).toBe(true);
+      it('start() 应将 Endpoint 注册到 endpoints Map', () => {
+        expect(adapter.endpoints.has(endpointId)).toBe(true);
       });
 
       it('start() 应将适配器名注册到 plugin.root.adapters', () => {
         expect(plugin.root.adapters).toContain(adapter.name);
       });
 
-      it('stop() 应断开所有 bot', async () => {
+      it('stop() 应断开所有 Endpoint', async () => {
         await adapter.stop();
-        expect(adapter.bots.size).toBe(0);
+        expect(adapter.endpoints.size).toBe(0);
       });
 
       it('stop() 应从 adapters 中移除', async () => {
@@ -195,9 +212,9 @@ export function createAdapterTestSuite<
         adapter = createAdapter(plugin);
         if (beforeStart) beforeStart(adapter);
         await adapter.start();
-        const newBot = adapter.bots.get(botId);
-        expect(newBot).toBeDefined();
-        expect(newBot!.$connected).toBe(true);
+        const newEndpoint = adapter.endpoints.get(endpointId);
+        expect(newEndpoint).toBeDefined();
+        expect(newEndpoint!.$connected).toBe(true);
       });
     });
 
@@ -208,7 +225,7 @@ export function createAdapterTestSuite<
 
       beforeEach(() => {
         const rawEvent = createRawEvent();
-        message = bot.$formatMessage(rawEvent);
+        message = endpoint.$formatMessage(rawEvent);
       });
 
       it('应返回包含 $id 的消息', () => {
@@ -220,8 +237,8 @@ export function createAdapterTestSuite<
         expect(message.$adapter).toBe(adapterName);
       });
 
-      it('$bot 应为字符串', () => {
-        expect(typeof message.$bot).toBe('string');
+      it('$endpoint 应为字符串', () => {
+        expect(typeof message.$endpoint).toBe('string');
       });
 
       it('$content 应为数组', () => {
@@ -253,13 +270,15 @@ export function createAdapterTestSuite<
         expect(typeof message.$raw).toBe('string');
       });
 
-      it('$reply 应为函数', () => {
-        expect(typeof message.$reply).toBe('function');
-      });
+      if (adapterCaps.includes('outbound')) {
+        it('$reply 应为函数', () => {
+          expect(typeof message.$reply).toBe('function');
+        });
 
-      it('$recall 应为函数', () => {
-        expect(typeof message.$recall).toBe('function');
-      });
+        it('$recall 应为函数', () => {
+          expect(typeof message.$recall).toBe('function');
+        });
+      }
     });
 
     // ── 消息接收链路 ──
@@ -268,7 +287,7 @@ export function createAdapterTestSuite<
       it('emit message.receive 应触发 plugin.dispatch', async () => {
         const dispatchSpy = vi.spyOn(plugin, 'dispatch');
         const rawEvent = createRawEvent();
-        const message = bot.$formatMessage(rawEvent);
+        const message = endpoint.$formatMessage(rawEvent);
 
         adapter.emit('message.receive', message);
         // 等待异步处理完成
@@ -286,7 +305,7 @@ export function createAdapterTestSuite<
         adapter.on('message.receive', observer);
 
         const rawEvent = createRawEvent();
-        const message = bot.$formatMessage(rawEvent);
+        const message = endpoint.$formatMessage(rawEvent);
         adapter.emit('message.receive', message);
         await new Promise(r => setTimeout(r, 50));
 
@@ -296,14 +315,14 @@ export function createAdapterTestSuite<
 
     // ── 消息发送链路 ──
 
-    if (!skip.send) {
+    if (!effectiveSkip.send) {
       describe('消息发送链路', () => {
-        it('sendMessage 应调用 bot.$sendMessage', async () => {
-          const sendSpy = vi.spyOn(bot, '$sendMessage');
+        it('sendMessage 应调用 endpoint.$sendMessage', async () => {
+          const sendSpy = vi.spyOn(endpoint, '$sendMessage');
 
           const options: SendOptions = {
             context: adapterName,
-            bot: botId,
+            endpoint: endpointId,
             id: 'target-1',
             type: 'private',
             content: [{ type: 'text', data: { text: 'hello' } }],
@@ -317,7 +336,7 @@ export function createAdapterTestSuite<
         it('sendMessage 应返回消息 ID 字符串', async () => {
           const options: SendOptions = {
             context: adapterName,
-            bot: botId,
+            endpoint: endpointId,
             id: 'target-1',
             type: 'private',
             content: [{ type: 'text', data: { text: 'hello' } }],
@@ -328,10 +347,10 @@ export function createAdapterTestSuite<
           expect(result.length).toBeGreaterThan(0);
         });
 
-        it('sendMessage bot 不存在应抛错', async () => {
+        it('sendMessage Endpoint 不存在应抛错', async () => {
           const options: SendOptions = {
             context: adapterName,
-            bot: 'non-existent-bot',
+            endpoint: 'non-existent-endpoint',
             id: 'target-1',
             type: 'private',
             content: [],
@@ -346,7 +365,7 @@ export function createAdapterTestSuite<
 
           const options: SendOptions = {
             context: adapterName,
-            bot: botId,
+            endpoint: endpointId,
             id: 'target-1',
             type: 'private',
             content: [{ type: 'text', data: { text: 'test' } }],
@@ -361,11 +380,11 @@ export function createAdapterTestSuite<
 
     // ── 消息撤回 ──
 
-    if (!skip.recall) {
+    if (!effectiveSkip.recall) {
       describe('消息撤回', () => {
-        it('call.recallMessage 应调用 bot.$recallMessage', async () => {
-          const recallSpy = vi.spyOn(bot, '$recallMessage');
-          adapter.emit('call.recallMessage', botId, 'msg-123');
+        it('call.recallMessage 应调用 endpoint.$recallMessage', async () => {
+          const recallSpy = vi.spyOn(endpoint, '$recallMessage');
+          adapter.emit('call.recallMessage', endpointId, 'msg-123');
           await new Promise(r => setTimeout(r, 50));
 
           expect(recallSpy).toHaveBeenCalledWith('msg-123');
@@ -376,17 +395,18 @@ export function createAdapterTestSuite<
 
     // ── $reply 路由正确性 ──
 
-    if (!skip.reply) {
+    if (!effectiveSkip.reply) {
       describe('$reply 路由', () => {
         it('$reply 应走 adapter.sendMessage 而非绕过', async () => {
           const sendMessageSpy = vi.spyOn(adapter, 'sendMessage');
           const rawEvent = createRawEvent();
-          const message = bot.$formatMessage(rawEvent);
+          const message = endpoint.$formatMessage(rawEvent);
+          expect(message.$reply).toBeTypeOf('function');
 
           // 用 spy 替代真实发送
           sendMessageSpy.mockResolvedValue('reply-id');
 
-          const result = await message.$reply('hi');
+          const result = await message.$reply!('hi');
           expect(sendMessageSpy).toHaveBeenCalledTimes(1);
           expect(result).toBe('reply-id');
           sendMessageSpy.mockRestore();
@@ -400,7 +420,7 @@ export function createAdapterTestSuite<
 // 辅助：快速创建 Mock 适配器用于测试 harness 本身
 // ============================================================================
 
-export class HarnessTestBot implements Bot<{ name: string }, { id: string; text: string; from: string }> {
+export class HarnessTestEndpoint implements Endpoint<{ name: string }, { id: string; text: string; from: string }> {
   $id: string;
   $connected = false;
 
@@ -415,7 +435,7 @@ export class HarnessTestBot implements Bot<{ name: string }, { id: string; text:
     const base: MessageBase = {
       $id: event.id,
       $adapter: this.adapter.name as any,
-      $bot: this.$id,
+      $endpoint: this.$id,
       $content: [{ type: 'text', data: { text: event.text } }],
       $sender: { id: event.from, name: event.from },
       $channel: { id: 'ch-1', type: 'private' },
@@ -424,7 +444,7 @@ export class HarnessTestBot implements Bot<{ name: string }, { id: string; text:
       $reply: async (content: any) => {
         return await this.adapter.sendMessage({
           context: this.adapter.name,
-          bot: this.$id,
+          endpoint: this.$id,
           content: Array.isArray(content) ? content : [{ type: 'text', data: { text: String(content) } }],
           id: 'ch-1',
           type: 'private',
@@ -443,8 +463,10 @@ export class HarnessTestBot implements Bot<{ name: string }, { id: string; text:
   async $recallMessage(_id: string) {}
 }
 
-export class HarnessTestAdapter extends Adapter<HarnessTestBot> {
-  createBot(config: { name: string }): HarnessTestBot {
-    return new HarnessTestBot(this, config);
+export class HarnessTestAdapter extends Adapter<HarnessTestEndpoint> {
+  static override readonly capabilities = ['inbound', 'outbound'] as const;
+
+  createEndpoint(config: { name: string }): HarnessTestEndpoint {
+    return new HarnessTestEndpoint(this, config);
   }
 }

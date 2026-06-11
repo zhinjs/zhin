@@ -5,7 +5,7 @@ platforms:
 description: >-
   GitHub 全功能适配器技能：内置工具处理 Star/绑定/订阅；MCP server-github 处理 Fork/PR/Issue 等 API；
   bash + gh CLI 覆盖其余仓库自动化。
-  Bot 操作使用 GitHub App 身份；Star 等可使用用户 OAuth 绑定。
+  Endpoint 操作使用 GitHub App 身份；Star 等可使用用户 OAuth 绑定。
   每个 Zhin 实例通过 GH_TOKEN 环境变量注入身份，支持多实例协同。
   channel ID 格式：owner/repo/issues/N 或 owner/repo/pull/N。
 keywords:
@@ -86,13 +86,13 @@ requires:
 | `github_bind` | 绑定用户的 GitHub 账号（Device Flow 授权，无需输入密码）。用户想 star/fork 或操作自己的账号时，先引导使用此工具 |
 | `github_unbind` | 解除用户绑定的 GitHub 账号 |
 | `github_whoami` | 查看用户已绑定的 GitHub 账号信息 |
-| `github_install` | 获取安装 GitHub App 的链接，安装后 Bot 可访问用户的仓库 |
+| `github_install` | 获取安装 GitHub App 的链接，安装后 Endpoint 可访问用户的仓库 |
 
 ### 用户操作（使用绑定账号）
 
 | 工具 | 说明 |
 |------|------|
-| `github_star` | Star 或取消 Star 一个仓库。优先使用用户绑定的 GitHub 账号，未绑定则降级为 Bot 默认账号 |
+| `github_star` | Star 或取消 Star 一个仓库。优先使用用户绑定的 GitHub 账号，未绑定则降级为 Endpoint 默认账号 |
 
 ### MCP（server-github，单一 PAT）
 
@@ -111,7 +111,7 @@ requires:
 
 ### 内置工具执行规则
 
-1. `github_star` 优先使用用户绑定的 GitHub 账号，未绑定则降级为 Bot 默认账号
+1. `github_star` 优先使用用户绑定的 GitHub 账号，未绑定则降级为 Endpoint 默认账号
 2. Fork 与通用 API 使用 `mcp_github_*`（Bot PAT，非 per-user OAuth）
 3. 当用户想操作自己的 GitHub 账号进行 Star 时，先引导用户使用 `github_bind` 绑定
 4. Webhook 订阅关联到当前聊天通道，仅在该通道接收事件通知

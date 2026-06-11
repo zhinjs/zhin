@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { formatCompact, Logger, truncatePreview } from '@zhin.js/logger';
 import type { AgentTool } from '@zhin.js/ai';
-import type { ToolContext } from '../orchestrator/types.js';
+import type { Message } from '../orchestrator/types.js';
 import { notifySubagentGoal, resolveSubagentDisplayLabel } from '../subagent-goal-notify.js';
-import { resolveIMSessionIdFromToolContext } from '@zhin.js/ai';
+import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
 import { buildOrchestratorAgentTools } from './tool-search-orchestrator.js';
 import { filterToolsForToolSearchCatalog } from './tool-catalog.js';
 import type { ZhinAgentPrivate } from './zhin-agent-private.js';
@@ -12,17 +12,17 @@ const logger = new Logger(null, 'ZhinAgent');
 export function resolveAgentToolsForTurn(
   agent: ZhinAgentPrivate,
   allTools: AgentTool[],
-  context: ToolContext,
+  commMessage: Message,
 ): { tools: AgentTool[]; deferredStats?: string } {
   const toolSearchPool = filterToolsForToolSearchCatalog(allTools);
   const built = buildOrchestratorAgentTools({
     allTools: toolSearchPool,
     config: agent.config,
-    context,
+    commMessage,
     subagentManager: agent.subagentManager,
     getDeferredCatalog: () => agent.deferredCatalog,
     runWorker: (goal, toolQuery) =>
-      runDeferredWorker(agent, goal, toolQuery, context, toolSearchPool),
+      runDeferredWorker(agent, goal, toolQuery, commMessage, toolSearchPool),
   });
   agent.deferredCatalog = built.deferred;
   logger.debug(formatCompact({
@@ -36,12 +36,12 @@ export async function runDeferredWorker(
   agent: ZhinAgentPrivate,
   goal: string,
   toolQuery: string | undefined,
-  context: ToolContext,
+  commMessage: Message,
   allTools: AgentTool[],
 ): Promise<string> {
   const taskId = randomUUID().slice(0, 8);
   const label = resolveSubagentDisplayLabel(undefined, goal);
-  await notifySubagentGoal(context, {
+  await notifySubagentGoal(commMessage, {
     taskId,
     kind: 'deferred',
     label,
@@ -60,7 +60,7 @@ export async function runDeferredWorker(
     deferredCatalog: agent.deferredCatalog,
     workerBaseTools: workerBase,
     allToolsByName: allByName,
-    origin: context,
+    origin: commMessage,
     maxToolResults: agent.config.deferredToolMaxResults,
     execPolicyConfig: agent.config,
     execApprovalMode: agent.config.taskExecApprovalMode,
@@ -76,14 +76,8 @@ export async function runDeferredWorker(
       iterations?: number;
       error?: string;
     }) => {
-      const sessionId = resolveIMSessionIdFromToolContext({
-        platform: context.platform,
-        botId: context.botId,
-        scope: context.scope,
-        sceneId: context.sceneId,
-        senderId: context.senderId,
-      });
-      const payload = agent.emitter.createPayload(sessionId, context, 'text', {
+      const sessionId = resolveIMSessionIdFromMessage(commMessage);
+      const payload = agent.emitter.createPayload(sessionId, commMessage, 'text', {
         path: 'agent',
         content: event.goal,
         loadedToolNames: event.loadedToolNames,

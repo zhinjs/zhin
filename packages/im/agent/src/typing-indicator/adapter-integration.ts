@@ -5,7 +5,7 @@
  * 支持自动初始化和配置管理。
  */
 
-import type { Adapter, Bot, SendContent, SendOptions } from '@zhin.js/core';
+import type { Adapter, Endpoint, SendContent, SendOptions } from '@zhin.js/core';
 import {
   TypingIndicatorManager,
   ReactionTypingIndicatorAdapter,
@@ -16,14 +16,14 @@ import {
 } from './index.js';
 
 /**
- * 平台 Bot 可能具备的扩展消息编辑能力
+ * 平台 Endpoint 可能具备的扩展消息编辑能力
  */
 interface MessageEditableBot {
   $editMessage?(messageId: string, content: string): Promise<void>;
   $updateMessage?(messageId: string, content: string): Promise<void>;
 }
 
-export type BotWithEditing = Bot & Partial<MessageEditableBot>;
+export type BotWithEditing = Endpoint & Partial<MessageEditableBot>;
 
 /** 出站发送：优先 Adapter.sendMessage（走 before.sendMessage 链） */
 type OutboundAdapter = Pick<Adapter, 'sendMessage'>;
@@ -68,7 +68,7 @@ export function buildTypingSendContent(
 }
 
 function createOutboundSendMessage(
-  bot: Bot,
+  endpoint: Endpoint,
   platform: string,
   outbound?: OutboundAdapter,
 ): (options: TypingIndicatorOptions, content: string) => Promise<string | null> {
@@ -82,13 +82,13 @@ function createOutboundSendMessage(
         type,
         id,
         context: platform,
-        bot: bot.$id,
+        endpoint: endpoint.$id,
         content: segments,
       };
       if (outbound) {
         return await outbound.sendMessage(sendOptions);
       }
-      const typedBot = bot as BotWithEditing & {
+      const typedBot = endpoint as BotWithEditing & {
         $sendMessage?(options: SendOptions): Promise<string | null>;
       };
       return await typedBot.$sendMessage?.(sendOptions) ?? null;
@@ -284,7 +284,7 @@ export const PLATFORM_FEATURES: Record<string, PlatformFeatures> = {
   },
 };
 
-// ── 通用 Bot 接口扩展 ────────────────────────────────────────────────
+// ── 通用 Endpoint 接口扩展 ────────────────────────────────────────────────
 
 /** 平台适配器自管的 Typing Indicator（如 ICQQ），与 agent 内置 TypingIndicatorManager 区分 */
 export interface PlatformTypingIndicatorManager {
@@ -304,7 +304,7 @@ export interface PlatformTypingIndicatorManager {
 
 export type BotTypingIndicatorManager = TypingIndicatorManager | PlatformTypingIndicatorManager;
 
-export interface BotWithTypingIndicator extends Bot {
+export interface EndpointWithTypingIndicator extends Endpoint {
   $typingIndicator?: BotTypingIndicatorManager;
   $addReaction?(
     messageId: string,
@@ -321,15 +321,15 @@ export class AdapterTypingIndicatorManager {
   private configs: Map<string, AdapterTypingIndicatorConfig> = new Map();
 
   /**
-   * 为 Bot 启用 Typing Indicator
+   * 为 Endpoint 启用 Typing Indicator
    */
-  enableForBot(
-    bot: BotWithTypingIndicator,
+  enableForEndpoint(
+    endpoint: EndpointWithTypingIndicator,
     platform: string,
     config?: Partial<AdapterTypingIndicatorConfig>,
     outbound?: OutboundAdapter,
   ): TypingIndicatorManager {
-    const botKey = `${platform}:${bot.$id}`;
+    const botKey = `${platform}:${endpoint.$id}`;
 
     // 如果已经启用，返回现有的管理器
     if (this.managers.has(botKey)) {
@@ -374,14 +374,14 @@ export class AdapterTypingIndicatorManager {
       removeDelay: mergedConfig.removeDelay,
     });
 
-    this.registerAdapter(manager, bot, platform, features, outbound);
+    this.registerAdapter(manager, endpoint, platform, features, outbound);
 
     // 存储管理器和配置
     this.managers.set(botKey, manager);
     this.configs.set(botKey, mergedConfig);
 
-    // 将管理器附加到 Bot
-    bot.$typingIndicator = manager;
+    // 将管理器附加到 Endpoint
+    endpoint.$typingIndicator = manager;
 
     return manager;
   }
@@ -391,21 +391,21 @@ export class AdapterTypingIndicatorManager {
    */
   private registerAdapter(
     manager: TypingIndicatorManager,
-    bot: BotWithTypingIndicator,
+    endpoint: EndpointWithTypingIndicator,
     platform: string,
     features: PlatformFeatures,
     outbound?: OutboundAdapter,
   ): void {
-    const sendMessage = createOutboundSendMessage(bot, platform, outbound);
-    if (features.supportsReaction && bot.$addReaction && bot.$removeReaction) {
+    const sendMessage = createOutboundSendMessage(endpoint, platform, outbound);
+    if (features.supportsReaction && endpoint.$addReaction && endpoint.$removeReaction) {
       // 支持 reaction 的平台使用 ReactionTypingIndicatorAdapter
       const adapter = new ReactionTypingIndicatorAdapter(
         platform,
         // addReaction
         async (messageId: string, emoji: string, options: TypingIndicatorOptions) => {
           try {
-            // 必须在 bot 上调用，避免类方法 this 丢失（如 KookBot.$addReaction）
-            return await bot.$addReaction!(messageId, emoji, { sceneType: options.sceneType });
+            // 必须在 bot 上调用，避免类方法 this 丢失（如 KookEndpoint.$addReaction）
+            return await endpoint.$addReaction!(messageId, emoji, { sceneType: options.sceneType });
           } catch (error) {
             console.error(`[${platform}] Failed to add reaction:`, error);
             return null;
@@ -414,7 +414,7 @@ export class AdapterTypingIndicatorManager {
         // removeReaction
         async (messageId: string, reactionId: string) => {
           try {
-            await bot.$removeReaction!(messageId, reactionId);
+            await endpoint.$removeReaction!(messageId, reactionId);
           } catch (error) {
             console.error(`[${platform}] Failed to remove reaction:`, error);
           }
@@ -423,7 +423,7 @@ export class AdapterTypingIndicatorManager {
         // deleteMessage
         async (messageId: string) => {
           try {
-            await bot.$recallMessage(messageId);
+            await endpoint.$recallMessage(messageId);
           } catch (error) {
             console.error(`[${platform}] Failed to delete message:`, error);
           }
@@ -431,7 +431,7 @@ export class AdapterTypingIndicatorManager {
         // editMessage
         async (messageId: string, content: string) => {
           try {
-            const editBot = bot as BotWithEditing;
+            const editBot = endpoint as BotWithEditing;
             if (typeof editBot.$editMessage === 'function') {
               await editBot.$editMessage!(messageId, content);
             } else if (typeof editBot.$updateMessage === 'function') {
@@ -452,7 +452,7 @@ export class AdapterTypingIndicatorManager {
         // deleteMessage
         async (messageId: string) => {
           try {
-            await bot.$recallMessage(messageId);
+            await endpoint.$recallMessage(messageId);
           } catch (error) {
             console.error(`[${platform}] Failed to delete message:`, error);
           }
@@ -460,7 +460,7 @@ export class AdapterTypingIndicatorManager {
         // editMessage
         async (messageId: string, content: string) => {
           try {
-            const editBot = bot as BotWithEditing;
+            const editBot = endpoint as BotWithEditing;
             if (typeof editBot.$editMessage === 'function') {
               await editBot.$editMessage!(messageId, content);
             } else if (typeof editBot.$updateMessage === 'function') {
@@ -488,31 +488,31 @@ export class AdapterTypingIndicatorManager {
   }
 
   /**
-   * 获取 Bot 的管理器
+   * 获取 Endpoint 的管理器
    */
-  getManager(platform: string, botId: string): TypingIndicatorManager | undefined {
-    return this.managers.get(`${platform}:${botId}`);
+  getManager(platform: string, endpointId: string): TypingIndicatorManager | undefined {
+    return this.managers.get(`${platform}:${endpointId}`);
   }
 
   /**
-   * 获取 Bot 的配置
+   * 获取 Endpoint 的配置
    */
-  getConfig(platform: string, botId: string): AdapterTypingIndicatorConfig | undefined {
-    return this.configs.get(`${platform}:${botId}`);
+  getConfig(platform: string, endpointId: string): AdapterTypingIndicatorConfig | undefined {
+    return this.configs.get(`${platform}:${endpointId}`);
   }
 
   /**
-   * 停止 Bot 的所有提示
+   * 停止 Endpoint 的所有提示
    */
-  async stopAll(platform: string, botId: string): Promise<void> {
-    const manager = this.managers.get(`${platform}:${botId}`);
+  async stopAll(platform: string, endpointId: string): Promise<void> {
+    const manager = this.managers.get(`${platform}:${endpointId}`);
     if (manager) {
       await manager.stopAll();
     }
   }
 
   /**
-   * 停止所有 Bot 的所有提示
+   * 停止所有 Endpoint 的所有提示
    */
   async stopAllBots(): Promise<void> {
     for (const manager of this.managers.values()) {
@@ -521,10 +521,10 @@ export class AdapterTypingIndicatorManager {
   }
 
   /**
-   * 移除 Bot 的管理器
+   * 移除 Endpoint 的管理器
    */
-  removeBot(platform: string, botId: string): void {
-    const botKey = `${platform}:${botId}`;
+  removeBot(platform: string, endpointId: string): void {
+    const botKey = `${platform}:${endpointId}`;
     this.managers.delete(botKey);
     this.configs.delete(botKey);
   }
@@ -538,15 +538,15 @@ export class AdapterTypingIndicatorManager {
   }
 
   /**
-   * 获取所有已注册的 Bot
+   * 获取所有已注册的 Endpoint
    */
-  getRegisteredBots(): Array<{ platform: string; botId: string }> {
-    const bots: Array<{ platform: string; botId: string }> = [];
+  getRegisteredEndpoints(): Array<{ platform: string; endpointId: string }> {
+    const endpoints: Array<{ platform: string; endpointId: string }> = [];
     for (const key of this.managers.keys()) {
-      const [platform, botId] = key.split(':');
-      bots.push({ platform, botId });
+      const [platform, endpointId] = key.split(':');
+      endpoints.push({ platform, endpointId });
     }
-    return bots;
+    return endpoints;
   }
 
   /**
@@ -604,22 +604,22 @@ function resolveTypingSceneType(options: {
 }
 
 /**
- * 为 Bot 启用 Typing Indicator
+ * 为 Endpoint 启用 Typing Indicator
  */
 export function enableTypingIndicatorForBot(
-  bot: BotWithTypingIndicator,
+  endpoint: EndpointWithTypingIndicator,
   platform: string,
   config?: Partial<AdapterTypingIndicatorConfig>,
   outbound?: OutboundAdapter,
 ): TypingIndicatorManager {
-  return getAdapterTypingIndicatorManager().enableForBot(bot, platform, config, outbound);
+  return getAdapterTypingIndicatorManager().enableForEndpoint(endpoint, platform, config, outbound);
 }
 
 /**
  * 快速开始提示
  */
 export async function startTypingForBot(
-  bot: BotWithTypingIndicator,
+  endpoint: EndpointWithTypingIndicator,
   platform: string,
   options: {
     messageId?: string;
@@ -631,11 +631,11 @@ export async function startTypingForBot(
   config?: Partial<AdapterTypingIndicatorConfig>,
   outbound?: OutboundAdapter,
 ): Promise<TypingIndicator> {
-  const manager = enableTypingIndicatorForBot(bot, platform, config, outbound);
+  const manager = enableTypingIndicatorForBot(endpoint, platform, config, outbound);
   return await manager.start({
     ...options,
     platform,
-    botId: bot.$id,
+    endpointId: endpoint.$id,
     sceneType: resolveTypingSceneType(options),
   });
 }
@@ -644,7 +644,7 @@ export async function startTypingForBot(
  * 快速停止提示
  */
 export async function stopTypingForBot(
-  bot: BotWithTypingIndicator,
+  endpoint: EndpointWithTypingIndicator,
   platform: string,
   options: {
     sessionId: string;
@@ -653,12 +653,12 @@ export async function stopTypingForBot(
     sceneType?: 'private' | 'group' | 'channel';
   },
 ): Promise<void> {
-  const manager = getAdapterTypingIndicatorManager().getManager(platform, bot.$id);
+  const manager = getAdapterTypingIndicatorManager().getManager(platform, endpoint.$id);
   if (manager) {
     await manager.stop({
       ...options,
       platform,
-      botId: bot.$id,
+      endpointId: endpoint.$id,
       sceneType: resolveTypingSceneType(options),
     });
   }

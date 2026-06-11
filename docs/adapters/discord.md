@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/discord/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/discord/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=a3a5dd8f5de80f13 -->
+<!-- sync-adapter-docs:sha256=cf1446954da41b25 -->
 
 # @zhin.js/adapter-discord
 
@@ -33,7 +33,7 @@ Interactions 模式需同时启用 `@zhin.js/host-router`。
 
 ## 配置
 
-所有 Bot 使用 **同一 context：`discord`**，通过 **`connection`** 区分连接方式。
+所有 Endpoint 使用 **同一 context：`discord`**，通过 **`connection`** 区分连接方式。
 
 ### Gateway（connection: gateway，默认）
 
@@ -41,7 +41,7 @@ Interactions 模式需同时启用 `@zhin.js/host-router`。
 plugins:
   - "@zhin.js/adapter-discord"
 
-bots:
+endpoints:
   - context: discord
     connection: gateway
     name: my-discord-bot
@@ -56,7 +56,7 @@ plugins:
   - "@zhin.js/host-router"
   - "@zhin.js/adapter-discord"
 
-bots:
+endpoints:
   - context: discord
     connection: interactions
     name: my-discord-bot
@@ -72,7 +72,7 @@ bots:
 
 | 模式 | 适用场景 | 依赖 |
 |------|----------|------|
-| **gateway** | 常规 Bot：读消息、群管、Gateway 事件 | Bot Token + Intents |
+| **gateway** | 常规 Bot：读消息、群管、Gateway 事件 | Endpoint Token + Intents |
 | **interactions** | 仅需斜杠命令 / 交互组件，或 Gateway 与 HTTP 并存 | `@zhin.js/host-router` + Application ID + Public Key |
 
 Gateway 需开启 **MESSAGE CONTENT INTENT**；Interactions 须在 Developer Portal 配置 **Interactions Endpoint URL**（指向 `interactionsPath`）。
@@ -117,9 +117,9 @@ addMiddleware(async (message, next) => {
 ## Discord 开发者配置
 
 1. 前往 [Discord Developer Portal](https://discord.com/developers/applications)
-2. 创建应用并获取 Bot Token
+2. 创建应用并获取 Endpoint Token
 3. 开启 **MESSAGE CONTENT INTENT**（需要读取消息内容）
-4. 通过 OAuth2 URL 邀请 Bot 加入服务器
+4. 通过 OAuth2 URL 邀请 Endpoint 加入服务器
 5. Interactions 模式还需配置 Interactions Endpoint URL
 
 ## 许可证

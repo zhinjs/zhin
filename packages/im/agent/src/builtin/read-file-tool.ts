@@ -3,7 +3,7 @@
  */
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import type { Tool, ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import type { Tool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import {
   isBlockedDevicePath,
   MAX_READ_FILE_SIZE,
@@ -58,21 +58,21 @@ export class ReadFileBuiltinTool extends BuiltinBaseTool {
     );
   }
 
-  async run(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
+  async run(args: Record<string, unknown>, commMessage?: Message): Promise<ToolResult> {
     const filePathArg = args.file_path;
     if (typeof filePathArg !== 'string' || !filePathArg.trim()) {
       return 'Error: file_path is required';
     }
 
     // 第 1 层：角色门控（所有角色均可读取，但需走统一流程）
-    const roleDecision = checkFileToolAccess('read_file', context);
+    const roleDecision = checkFileToolAccess('read_file', commMessage);
     if (!roleDecision.allowed) {
       if (roleDecision.needsOwnerApproval) return toOwnerSignal(roleDecision);
       return toDenyError(roleDecision);
     }
 
     // 第 2 层：文件角色权限矩阵（user 只有 read 权限，安全放行）
-    const fileRole = context?.fileRole ?? toolRequesterRoleToFileRole(roleDecision.role);
+    const fileRole = toolRequesterRoleToFileRole(roleDecision.role);
     const permResult = checkFilePermission(fileRole, 'read', filePathArg);
     if (!permResult.allowed) {
       return formatFilePermissionMessage(permResult, 'read_file');
@@ -81,7 +81,7 @@ export class ReadFileBuiltinTool extends BuiltinBaseTool {
     // 第 3 层：敏感路径检测 + 文件操作
     try {
       const fp = expandHome(filePathArg);
-      const sensitiveDecision = checkSensitiveFilePathAccess('read_file', fp, context);
+      const sensitiveDecision = checkSensitiveFilePathAccess('read_file', fp, commMessage);
       if (!sensitiveDecision.allowed) {
         if (sensitiveDecision.needsOwnerApproval) return toOwnerSignal(sensitiveDecision);
         return toDenyError(sensitiveDecision);

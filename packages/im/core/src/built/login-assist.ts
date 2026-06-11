@@ -6,7 +6,7 @@
  * 待办未消费前会一直保留，刷新页面后仍可继续消费。
  *
  * 事件：
- *   bot.login.pending — 有新待办时触发，payload: PendingLoginTask
+ *   endpoint.login.pending — 有新待办时触发，payload: PendingLoginTask
  */
 
 import type { Plugin } from '../plugin.js';
@@ -31,7 +31,7 @@ export interface PendingLoginTaskPayload {
 export interface PendingLoginTask {
   id: string;
   adapter: string;
-  botId: string;
+  endpointId: string;
   type: LoginAssistType;
   payload: PendingLoginTaskPayload;
   createdAt: number;
@@ -57,11 +57,11 @@ export class LoginAssist {
   }
 
   /**
-   * 生产者：等待用户输入后 resolve。会发出 bot.login.pending 事件，未消费前可被 listPending 拉取（刷新后可继续消费）。
+   * 生产者：等待用户输入后 resolve。会发出 endpoint.login.pending 事件，未消费前可被 listPending 拉取（刷新后可继续消费）。
    */
   waitForInput(
     adapter: string,
-    botId: string,
+    endpointId: string,
     type: LoginAssistType,
     payload: PendingLoginTaskPayload = {},
   ): Promise<string | Record<string, unknown>> {
@@ -69,14 +69,14 @@ export class LoginAssist {
     const task: PendingLoginTask = {
       id,
       adapter,
-      botId,
+      endpointId,
       type,
       payload: { message: payload.message ?? '', ...payload },
       createdAt: Date.now(),
     };
     const promise = new Promise<string | Record<string, unknown>>((resolve, reject) => {
       this.pending.set(id, { task, resolve, reject });
-      this.plugin.emit('bot.login.pending', task);
+      this.plugin.emit('endpoint.login.pending', task);
     });
     return promise;
   }

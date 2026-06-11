@@ -1,13 +1,17 @@
 /**
- * SenderRole — IM 群角色与 bot 实例角色集合（可多选并存）
+ * SenderRole — 框架层发送者角色（user / master / trusted）
+ * 平台群/频道身份见 platform(adapter,perm) 与适配器 checker
  */
-import type { ToolContext } from '../types.js';
+export type SenderRole = 'user' | 'trusted' | 'master';
 
-export type SenderRole = 'user' | 'group_admin' | 'group_owner' | 'trusted' | 'master';
+const FRAMEWORK_SENDER_ROLES = new Set<SenderRole>(['user', 'trusted', 'master']);
+
+export function isFrameworkSenderRole(role: string): role is SenderRole {
+  return FRAMEWORK_SENDER_ROLES.has(role as SenderRole);
+}
 
 /** 匹配工具要求时的隐含升格（不写入持久化 roles 集合） */
 const ROLE_IMPLIES: Partial<Record<SenderRole, readonly SenderRole[]>> = {
-  group_owner: ['group_admin'],
   master: ['trusted'],
 };
 
@@ -28,10 +32,6 @@ export function roleSatisfies(
   if (!requiredAnyRole?.length) return true;
   const expanded = expandImpliedRoles(callerRoles);
   return requiredAnyRole.some((req) => expanded.has(req));
-}
-
-export function resolveRolesFromContext(context: Pick<ToolContext, 'roles'>): readonly SenderRole[] {
-  return context.roles?.length ? context.roles : ['user'];
 }
 
 /** 去重；无其它角色时返回 ['user'] */

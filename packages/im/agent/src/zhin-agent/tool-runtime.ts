@@ -1,6 +1,6 @@
 import { isReservedToolName, type AgentTool } from '@zhin.js/ai';
 import { Logger } from '@zhin.js/core';
-import type { Tool, ToolContext } from '../orchestrator/types.js';
+import type { Tool, Message } from '../orchestrator/types.js';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { ZhinAgentConfig } from './config.js';
 import { KEYWORD_TRIGGERS } from './config.js';
@@ -19,7 +19,7 @@ const logger = new Logger(null, 'ToolRuntime');
 
 export interface CollectRuntimeToolsOptions {
   content: string;
-  context: ToolContext;
+  commMessage: Message;
   externalTools: Tool[];
   config: Required<ZhinAgentConfig>;
   skillRegistry: SkillRegistry | null;
@@ -33,7 +33,7 @@ export interface CollectRuntimeToolsOptions {
 }
 
 export function collectRuntimeTools(options: CollectRuntimeToolsOptions): AgentTool[] {
-  const tools = sharedToolSelection.collectRelevantTools(options.content, options.context, options.externalTools, {
+  const tools = sharedToolSelection.collectRelevantTools(options.content, options.commMessage, options.externalTools, {
     config: options.config,
     skillRegistry: options.skillRegistry,
     externalRegistered: options.externalRegistered,
@@ -49,7 +49,7 @@ export function collectRuntimeTools(options: CollectRuntimeToolsOptions): AgentT
     add(
       createImTranscriptHistoryTool(
         options.imTranscriptStore,
-        buildImTranscriptQuery(options.context),
+        buildImTranscriptQuery(options.commMessage),
       ),
     );
   }

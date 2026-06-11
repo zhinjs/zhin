@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { persistDeferredWorkerResultToContext } from '../../src/zhin-agent/persist-deferred-context.js';
 import type { ZhinAgentPrivate } from '../../src/zhin-agent/zhin-agent-private.js';
+import { mockCommMessage } from '../helpers/mock-comm-message.js';
 
 describe('persistDeferredWorkerResultToContext', () => {
   it('appends packaged worker summary to active session', async () => {
@@ -14,13 +15,13 @@ describe('persistDeferredWorkerResultToContext', () => {
 
     const ok = await persistDeferredWorkerResultToContext(
       agent,
-      {
-        platform: 'icqq',
-        botId: '8596238',
+      mockCommMessage({
+        adapter: 'icqq',
+        endpoint: '8596238',
         sceneId: '1659488338',
         senderId: '1659488338',
         scope: 'private',
-      },
+      }),
       'abc12345',
       'read skill.md',
       {
@@ -45,7 +46,7 @@ describe('persistDeferredWorkerResultToContext', () => {
 
     const ok = await persistDeferredWorkerResultToContext(
       agent,
-      { platform: 'x', botId: 'b', sceneId: 's', senderId: 'u', scope: 'private' },
+      mockCommMessage({ adapter: 'x', endpoint: 'b', sceneId: 's', senderId: 'u', scope: 'private' }),
       't1',
       'goal',
       { summary: '{"summary":"x"}', loadedToolNames: [], iterations: 0, status: 'ok' },

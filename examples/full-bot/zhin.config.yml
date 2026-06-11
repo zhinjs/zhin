@@ -1,7 +1,7 @@
 log_level: 1
 
 # Sandbox：Console 沙盒页连接时自动创建；NapCat/KOOK 按需取消注释 bots 段
-bots: []
+endpoints: []
 #  - context: napcat
 #    name: "YOUR_QQ"
 #    access_token: ${ONEBOT11_ACCESS_TOKEN}

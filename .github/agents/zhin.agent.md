@@ -27,7 +27,7 @@ user-invocable: true
 ## 何时委派
 
 - 涉及插件结构和命令组织时，优先考虑 `plugin-developer` 或 `Zhin Plugin Optimizer`
-- 涉及平台接入和 Bot 协议实现时，优先考虑 `adapter-developer`
+- 涉及平台接入和 Endpoint 协议实现时，优先考虑 `adapter-developer`
 - 涉及分层、依赖方向、消息链路时，优先考虑 `Zhin Architecture Optimizer`
 - 涉及控制台页面或 React 前端体验时，优先考虑 `Zhin Frontend Optimizer`
 - 涉及安全、性能或架构审计时，建议加载 `zhin-audit` skill

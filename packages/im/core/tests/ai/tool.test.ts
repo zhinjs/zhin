@@ -8,7 +8,7 @@
  * 4. 权限级别判断
  * 5. 命令模式生成
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { 
   ZhinTool, 
   defineTool, 
@@ -16,8 +16,64 @@ import {
   extractParamInfo,
   canAccessTool,
   roleSatisfies,
+  checkBuiltinPermitList,
+  registerDefaultGroupPlatformPermitChecker,
+  clearPlatformPermitCheckers,
 } from '@zhin.js/core';
-import type { Tool, ToolContext } from '@zhin.js/core';
+import type { Tool } from '@zhin.js/core';
+
+beforeEach(() => {
+  registerDefaultGroupPlatformPermitChecker('qq');
+});
+
+afterEach(() => {
+  clearPlatformPermitCheckers();
+});
+
+function mockCommMessage(overrides: Record<string, any> = {}) {
+  const scope = overrides.scope ?? 'private';
+  const sender_roles = overrides.sender_roles as string[] | undefined;
+  let isMaster = overrides.isMaster;
+  let isTrusted = overrides.isTrusted;
+  if (sender_roles?.includes('master')) isMaster = true;
+  else if (sender_roles?.includes('trusted')) isTrusted = true;
+  else if (sender_roles) {
+    isMaster = false;
+    isTrusted = false;
+  }
+  return {
+    $adapter: overrides.adapter ?? 'qq',
+    $endpoint: overrides.endpoint ?? 'bot1',
+    $sender: {
+      id: overrides.senderId ?? 'user1',
+      ...(overrides.sender ?? {}),
+      ...(overrides.role !== undefined ? { role: overrides.role } : {}),
+      ...(isMaster !== undefined ? { isMaster } : {}),
+      ...(isTrusted !== undefined ? { isTrusted } : {}),
+    },
+    $channel: { type: scope, id: overrides.sceneId ?? 'scene1' },
+  };
+}
+
+function mockMessage(role: 'user' | 'group_admin' | 'group_owner' | 'master' = 'user') {
+  const platformRole = role === 'group_admin'
+    ? 'admin'
+    : role === 'group_owner'
+      ? 'owner'
+      : undefined;
+  const adapter = role === 'master' ? 'process' : 'qq';
+  return {
+    $adapter: adapter,
+    $endpoint: 'b1',
+    $sender: {
+      id: 'u1',
+      ...(platformRole ? { role: platformRole } : {}),
+      ...(role === 'master' ? { isMaster: true } : { isMaster: false, isTrusted: false }),
+    },
+    $channel: { type: 'group', id: 'g1' },
+  } as any;
+}
+
 
 describe('ZhinTool 类', () => {
   it('应该能创建基本工具', () => {
@@ -56,14 +112,14 @@ describe('ZhinTool 类', () => {
     expect(toolObj.scopes).toEqual(['group']);
   });
 
-  it('应该能设置 requiredAnyRole', () => {
+  it('应该能设置 permit 角色门禁', () => {
     const tool = new ZhinTool('admin_tool')
       .desc('管理员工具')
-      .requireAnyRole('trusted')
+      .permit('role(trusted)')
       .execute(async () => '结果');
 
     const toolObj = tool.toTool();
-    expect(toolObj.requiredAnyRole).toEqual(['trusted']);
+    expect(toolObj.permissions).toEqual(['role(trusted)']);
   });
 
   it('应该能转换为 Tool 对象', () => {
@@ -92,7 +148,7 @@ describe('ZhinTool 类', () => {
     const tool = new ZhinTool('help_test')
       .desc('帮助测试')
       .param('name', { type: 'string', description: '名字' }, true)
-      .requireAnyRole('group_admin')
+      .permit('platform(qq,group_admin)')
       .platform('qq')
       .scope('group')
       .execute(async () => '');
@@ -201,8 +257,8 @@ describe('roleSatisfies', () => {
     expect(roleSatisfies(['master'], ['trusted'])).toBe(true);
   });
 
-  it('user 无法满足 group_admin 要求', () => {
-    expect(roleSatisfies(['user'], ['group_admin'])).toBe(false);
+  it('user 无法满足 trusted 要求', () => {
+    expect(roleSatisfies(['user'], ['trusted'])).toBe(false);
   });
 });
 
@@ -215,32 +271,35 @@ describe('canAccessTool 函数', () => {
   };
 
   it('无限制的工具应该对所有人可用', () => {
-    expect(canAccessTool(baseTool, {} as ToolContext)).toBe(true);
+    expect(canAccessTool(baseTool, undefined)).toBe(true);
   });
 
   it('应该正确检查平台限制', () => {
     const tool: Tool = { ...baseTool, platforms: ['qq', 'telegram'] };
     
-    expect(canAccessTool(tool, { platform: 'qq' } as ToolContext)).toBe(true);
-    expect(canAccessTool(tool, { platform: 'telegram' } as ToolContext)).toBe(true);
-    expect(canAccessTool(tool, { platform: 'discord' } as ToolContext)).toBe(false);
-    expect(canAccessTool(tool, {} as ToolContext)).toBe(false);
+    expect(canAccessTool(tool, mockCommMessage({ adapter: 'qq' }))).toBe(true);
+    expect(canAccessTool(tool, mockCommMessage({ adapter: 'telegram' }))).toBe(true);
+    expect(canAccessTool(tool, mockCommMessage({ adapter: 'discord' }))).toBe(false);
+    expect(canAccessTool(tool, undefined)).toBe(false);
   });
 
   it('应该正确检查场景限制', () => {
     const tool: Tool = { ...baseTool, scopes: ['group'] };
     
-    expect(canAccessTool(tool, { scope: 'group' } as ToolContext)).toBe(true);
-    expect(canAccessTool(tool, { scope: 'private' } as ToolContext)).toBe(false);
+    expect(canAccessTool(tool, mockCommMessage({ scope: 'group' }))).toBe(true);
+    expect(canAccessTool(tool, mockCommMessage({ scope: 'private' }))).toBe(false);
   });
 
-  it('应该正确检查 requiredAnyRole', () => {
-    const tool: Tool = { ...baseTool, requiredAnyRole: ['group_admin'] };
-    
-    expect(canAccessTool(tool, { roles: ['group_admin'] } as ToolContext)).toBe(true);
-    expect(canAccessTool(tool, { roles: ['group_owner'] } as ToolContext)).toBe(true);
-    expect(canAccessTool(tool, { roles: ['master'] } as ToolContext)).toBe(false);
-    expect(canAccessTool(tool, {} as ToolContext)).toBe(false);
+  it('应该正确检查 platform(...) permit', () => {
+    const tool: Tool = { ...baseTool, permissions: ['platform(qq,group_admin)'] };
+    const adminMsg = mockMessage('group_admin');
+    const ownerMsg = mockMessage('group_owner');
+    const masterMsg = mockMessage('master');
+
+    expect(canAccessTool(tool, adminMsg)).toBe(true);
+    expect(canAccessTool(tool, ownerMsg)).toBe(true);
+    expect(canAccessTool(tool, masterMsg)).toBe(false);
+    expect(canAccessTool(tool, undefined)).toBe(false);
   });
 
   it('应该组合检查所有条件', () => {
@@ -248,49 +307,40 @@ describe('canAccessTool 函数', () => {
       ...baseTool,
       platforms: ['qq'],
       scopes: ['group'],
-      requiredAnyRole: ['group_admin'],
+      permissions: ['platform(qq,group_admin)'],
     };
+    const okMsg = mockMessage('group_admin');
 
-    // 全部满足
-    expect(canAccessTool(tool, {
-      platform: 'qq',
-      scope: 'group',
-      roles: ['group_admin'],
-    } as ToolContext)).toBe(true);
+    expect(canAccessTool(tool, { ...okMsg, $adapter: 'qq', $channel: { type: 'group', id: 'g1' } })).toBe(true);
 
-    // 平台不满足
-    expect(canAccessTool(tool, {
-      platform: 'telegram',
-      scope: 'group',
-      roles: ['group_admin'],
-    } as ToolContext)).toBe(false);
+    expect(canAccessTool(tool, { ...okMsg, $adapter: 'telegram', $channel: { type: 'group', id: 'g1' } })).toBe(false);
 
-    // 场景不满足
-    expect(canAccessTool(tool, {
-      platform: 'qq',
-      scope: 'private',
-      roles: ['group_admin'],
-    } as ToolContext)).toBe(false);
+    expect(canAccessTool(tool, { ...okMsg, $adapter: 'qq', $channel: { type: 'private', id: 'u1' } })).toBe(false);
 
-    // 权限不满足
-    expect(canAccessTool(tool, {
-      platform: 'qq',
-      scope: 'group',
-    } as ToolContext)).toBe(false);
+    expect(canAccessTool(tool, mockCommMessage({ adapter: 'qq', scope: 'group' }))).toBe(false);
+  });
+
+  it('checkBuiltinPermitList 支持 AND 链', () => {
+    const msg = mockMessage('group_admin');
+    expect(checkBuiltinPermitList(
+      ['adapter(qq)', 'group(*)'],
+      msg,
+      ['user'],
+    )).toBe(true);
   });
 
   it('空平台数组应该允许所有平台', () => {
     const tool: Tool = { ...baseTool, platforms: [] };
     
-    expect(canAccessTool(tool, { platform: 'qq' } as ToolContext)).toBe(true);
-    expect(canAccessTool(tool, { platform: 'telegram' } as ToolContext)).toBe(true);
+    expect(canAccessTool(tool, mockCommMessage({ adapter: 'qq' }))).toBe(true);
+    expect(canAccessTool(tool, mockCommMessage({ adapter: 'telegram' }))).toBe(true);
   });
 
   it('空场景数组应该允许所有场景', () => {
     const tool: Tool = { ...baseTool, scopes: [] };
     
-    expect(canAccessTool(tool, { scope: 'group' } as ToolContext)).toBe(true);
-    expect(canAccessTool(tool, { scope: 'private' } as ToolContext)).toBe(true);
+    expect(canAccessTool(tool, mockCommMessage({ scope: 'group' }))).toBe(true);
+    expect(canAccessTool(tool, mockCommMessage({ scope: 'private' }))).toBe(true);
   });
 });
 
@@ -359,7 +409,7 @@ describe('ZhinTool 高级功能', () => {
       .param('city', { type: 'string', description: '城市' }, true)
       .platform('qq')
       .scope('group')
-      .requireAnyRole('group_admin')
+      .permit('platform(qq,group_admin)')
       .tag('test')
       .execute(async () => '');
 
@@ -370,7 +420,7 @@ describe('ZhinTool 高级功能', () => {
     expect(json.parameters.properties).toHaveProperty('city');
     expect(json.platforms).toContain('qq');
     expect(json.scopes).toContain('group');
-    expect(json.requiredAnyRole).toEqual(['group_admin']);
+    expect(json.permissions).toEqual(['platform(qq,group_admin)']);
     expect(json.tags).toContain('test');
     // execute 不应该在 JSON 中
     expect(json).not.toHaveProperty('execute');
@@ -407,13 +457,13 @@ describe('ZhinTool 高级功能', () => {
     expect(toolObj.platforms).toEqual(['qq', 'telegram', 'discord']);
   });
 
-  it('默认无 requiredAnyRole', () => {
+  it('默认无 permissions', () => {
     const tool = new ZhinTool('default_perm')
       .desc('默认权限')
       .execute(async () => '');
 
     const toolObj = tool.toTool();
-    expect(toolObj.requiredAnyRole).toBeUndefined();
+    expect(toolObj.permissions).toBeUndefined();
   });
 });
 
@@ -495,18 +545,15 @@ describe('ZhinTool execute 执行', () => {
     expect(result).toBe('Hello, World!');
   });
 
-  it('execute 应该接收 context 参数', async () => {
-    const mockContext: ToolContext = {
-      platform: 'test',
-      senderId: 'user1',
-    };
+  it('execute 应该接收 Message 通讯上下文', async () => {
+    const mockMessage = mockCommMessage({ adapter: 'test', senderId: 'user1' });
 
     const tool = new ZhinTool('ctx_test')
       .desc('上下文测试')
-      .execute(async (args, ctx) => ctx?.platform || 'no-platform');
+      .execute(async (_args, message) => message?.$adapter || 'no-platform');
 
     const toolObj = tool.toTool();
-    const result = await toolObj.execute({}, mockContext);
+    const result = await toolObj.execute({}, mockMessage);
     
     expect(result).toBe('test');
   });
@@ -530,13 +577,12 @@ describe('defineTool 高级用法', () => {
       name: 'with_perm',
       description: '带权限',
       parameters: { type: 'object', properties: {} },
-      permissions: ['admin'],
-      requiredAnyRole: ['trusted'],
+      permissions: ['admin', 'role(trusted)'],
       execute: async () => '',
     });
 
     expect(tool.permissions).toContain('admin');
-    expect(tool.requiredAnyRole).toEqual(['trusted']);
+    expect(tool.permissions).toContain('role(trusted)');
   });
 
   it('应该支持设置标签', () => {

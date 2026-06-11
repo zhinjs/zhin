@@ -1,5 +1,6 @@
-import type { Plugin } from '@zhin.js/core';
-import { resolveIMSessionIdFromToolContext, type IMSessionScope } from '@zhin.js/ai';
+import type { Message, Plugin } from '@zhin.js/core';
+import { commMessageFromHookContext } from '@zhin.js/core';
+import { resolveIMSessionId, resolveIMSessionIdFromMessage } from '@zhin.js/ai';
 import type { AIHookEvent } from './orchestrator/types.js';
 
 export type AIEventPayload = Plugin.AIEventPayload;
@@ -15,25 +16,21 @@ export interface AISessionCompactPayload extends Plugin.AIEventPayload {
   totalTokensAfter: number;
 }
 
+function resolveCommMessage(event: AIHookEvent): Message<any> | undefined {
+  return commMessageFromHookContext(event.context);
+}
+
 function resolveSessionId(event: AIHookEvent): string {
   if (event.sessionId) return event.sessionId;
-  const scope = (typeof event.context.scope === 'string'
-    ? event.context.scope
-    : 'private') as IMSessionScope;
-  return resolveIMSessionIdFromToolContext({
-    platform: typeof event.context.platform === 'string' ? event.context.platform : 'system',
-    botId: typeof event.context.botId === 'string' ? event.context.botId : 'default',
-    scope,
-    sceneId: typeof event.context.sceneId === 'string'
-      ? event.context.sceneId
-      : typeof event.context.channelId === 'string'
-        ? event.context.channelId
-        : undefined,
-    senderId: typeof event.context.senderId === 'string'
-      ? event.context.senderId
-      : typeof event.context.from === 'string'
-        ? event.context.from
-        : undefined,
+  const commMessage = resolveCommMessage(event);
+  if (commMessage) {
+    return resolveIMSessionIdFromMessage(commMessage);
+  }
+  return resolveIMSessionId({
+    platform: 'system',
+    endpointId: 'default',
+    scope: 'private',
+    sceneId: 'unknown',
   });
 }
 
@@ -42,6 +39,7 @@ export function createAIHookBusPayload(
   source: Plugin.AIEventPayload['source'],
   agentId?: string,
 ): Plugin.AIEventPayload {
+  const commMessage = resolveCommMessage(event);
   return {
     sessionId: resolveSessionId(event),
     source,
@@ -50,19 +48,11 @@ export function createAIHookBusPayload(
     hookContext: event.context,
     messages: event.messages,
     agentId,
-    platform: typeof event.context.platform === 'string' ? event.context.platform : undefined,
-    botId: typeof event.context.botId === 'string' ? event.context.botId : undefined,
-    userId: typeof event.context.senderId === 'string'
-      ? event.context.senderId
-      : typeof event.context.from === 'string'
-        ? event.context.from
-        : undefined,
-    sceneId: typeof event.context.sceneId === 'string'
-      ? event.context.sceneId
-      : typeof event.context.channelId === 'string'
-        ? event.context.channelId
-        : undefined,
-    messageId: typeof event.context.messageId === 'string' ? event.context.messageId : undefined,
+    platform: commMessage?.$adapter != null ? String(commMessage.$adapter) : undefined,
+    endpointId: commMessage?.$endpoint,
+    userId: commMessage?.$sender?.id,
+    sceneId: commMessage?.$channel?.id,
+    messageId: typeof event.context.messageId === 'string' ? event.context.messageId : commMessage?.$id,
     content: typeof event.context.content === 'string' ? event.context.content : undefined,
     toolName: typeof event.context.toolName === 'string' ? event.context.toolName : undefined,
     args: typeof event.context.args === 'object' && event.context.args !== null

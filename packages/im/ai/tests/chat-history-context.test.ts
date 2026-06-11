@@ -8,7 +8,7 @@ const seed: MessageRecord[] = [
   {
     id: 1,
     platform: 'icqq',
-    bot_id: 'b1',
+    endpoint_id: 'b1',
     scene_id: 'g1',
     scene_type: 'group',
     scene_name: '',
@@ -22,7 +22,7 @@ const seed: MessageRecord[] = [
   {
     id: 2,
     platform: 'icqq',
-    bot_id: 'b2',
+    endpoint_id: 'b2',
     scene_id: 'g1',
     scene_type: 'group',
     scene_name: '',
@@ -68,7 +68,7 @@ function createModels(messages: MessageRecord[]) {
 }
 
 describe('ChatHistoryContext', () => {
-  it('isolates by platform + bot_id + scene_id', async () => {
+  it('isolates by platform + endpoint_id + scene_id', async () => {
     const { messageModel, summaryModel } = createModels(seed);
     const ctx = new ChatHistoryContext(messageModel, summaryModel, {
       coldStartMaxMessages: 50,
@@ -78,7 +78,7 @@ describe('ChatHistoryContext', () => {
     const hist = await ctx.buildHistoryMessages({
       sessionId: 's1',
       platform: 'icqq',
-      botId: 'b1',
+      endpointId: 'b1',
       sceneId: 'g1',
     });
 
@@ -92,7 +92,7 @@ describe('ChatHistoryContext', () => {
       many.push({
         id: i + 1,
         platform: 'icqq',
-        bot_id: 'b1',
+        endpoint_id: 'b1',
         scene_id: 'g1',
         scene_type: 'group',
         scene_name: '',
@@ -133,7 +133,7 @@ describe('ChatHistoryContext', () => {
     const hist = await ctx.buildHistoryMessages({
       sessionId: 's1',
       platform: 'icqq',
-      botId: 'b1',
+      endpointId: 'b1',
       sceneId: 'g1',
     });
     const userLines = hist.filter((m) => m.role === 'user').map((m) => m.content);
@@ -146,7 +146,7 @@ describe('ChatHistoryContext', () => {
     const { messageModel, summaryModel } = createModels(seed);
     const ctx = new ChatHistoryContext(messageModel, summaryModel);
     const result = await ctx.searchMessages(
-      { sessionId: 's1', platform: 'icqq', botId: 'b1', sceneId: 'g1' },
+      { sessionId: 's1', platform: 'icqq', endpointId: 'b1', sceneId: 'g1' },
       'hello',
       10,
     );
@@ -158,7 +158,7 @@ describe('ChatHistoryContext', () => {
     const { messageModel, summaryModel } = createModels(seed);
     const ctx = new ChatHistoryContext(messageModel, summaryModel);
     const result = await ctx.listRecentMessages(
-      { sessionId: 's1', platform: 'icqq', botId: 'b2', sceneId: 'g1' },
+      { sessionId: 's1', platform: 'icqq', endpointId: 'b2', sceneId: 'g1' },
       5,
     );
     expect(result.messages).toHaveLength(1);

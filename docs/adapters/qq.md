@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/qq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/qq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=eb3539e83a4c8343 -->
+<!-- sync-adapter-docs:sha256=e7fc881778ddbe2b -->
 
 # @zhin.js/adapter-qq
 
@@ -28,7 +28,7 @@ pnpm add @zhin.js/adapter-qq
 import { defineConfig } from 'zhin.js';
 
 export default defineConfig({
-  bots: [
+  endpoints: [
     {
       context: 'qq',
       name: 'my-qq-bot',
@@ -50,7 +50,7 @@ export default defineConfig({
 ### 完整配置选项
 
 ```typescript
-const config: QQBotConfig = {
+const config: QQEndpointConfig = {
   context: 'qq',
   name: 'my-qq-bot',
   appid: 'YOUR_APPID',         // 机器人 AppID（必需，小写 appid）
@@ -284,7 +284,7 @@ addCommand(new MessageCommand('embed')
 | `false` | 始终发纯文本（与旧行为一致） |
 
 ```yaml
-bots:
+endpoints:
   - context: qq
     name: my-bot
     outboundMarkdown: auto   # 或 true / false
@@ -297,19 +297,19 @@ bots:
 ### 基础方法
 
 ```typescript
-const bot = app.adapters.get('qq')?.bots.get('你的机器人ID')
+const endpoint = app.adapters.get('qq')?.endpoints.get('你的机器人ID')
 
 // 发送私信
-await bot.sendPrivateMessage(userId, '消息内容')
+await endpoint.sendPrivateMessage(userId, '消息内容')
 
 // 发送群消息
-await bot.sendGroupMessage(groupId, '消息内容')
+await endpoint.sendGroupMessage(groupId, '消息内容')
 
 // 发送频道消息
-await bot.sendGuildMessage(channelId, '消息内容')
+await endpoint.sendGuildMessage(channelId, '消息内容')
 
 // 撤回消息
-await bot.$recallMessage(messageId)
+await endpoint.$recallMessage(messageId)
 ```
 
 ## 消息 ID 格式
@@ -361,7 +361,7 @@ A: 检查以下几点：
 
 ### Q: Typing Indicator 群聊报 `40034105 主动消息失败, 无权限`？
 
-A: QQ **群聊**不允许无引用的主动消息。框架已对 QQ 群场景的「正在处理中…」自动附带 `reply` 引用触发消息；若仍失败，可在 bot 配置中关闭群聊 typing：
+A: QQ **群聊**不允许无引用的主动消息。框架已对 QQ 群场景的「正在处理中…」自动附带 `reply` 引用触发消息；若仍失败，可在 Endpoint 配置中关闭群聊 typing：
 
 ```yaml
 typingIndicator:

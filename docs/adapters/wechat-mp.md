@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/wechat-mp/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/wechat-mp/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=a2d6b3bd54816949 -->
+<!-- sync-adapter-docs:sha256=3b90ceaca9ace14d -->
 
 # @zhin.js/adapter-wechat-mp
 
@@ -48,7 +48,7 @@ plugins:
   - "@zhin.js/adapter-wechat-mp"
   - "@zhin.js/host-router"
 
-bots:
+endpoints:
   - context: wechat-mp
     name: my-wechat-bot
     appId: "${WECHAT_APP_ID}"
@@ -68,7 +68,7 @@ bots:
 完整选项示例（含可选加密字段）：
 
 ```yaml
-bots:
+endpoints:
   - context: wechat-mp
     name: my-wechat-bot
     appId: ${WECHAT_APP_ID}
@@ -83,7 +83,7 @@ bots:
 import { defineConfig } from 'zhin.js'
 
 export default defineConfig({
-  bots: [
+  endpoints: [
     {
       context: 'wechat-mp',
       name: 'my-wechat-bot',

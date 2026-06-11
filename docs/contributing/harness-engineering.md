@@ -51,7 +51,7 @@ pnpm type-check             # TypeScript 类型检查
    ↓
 3. packages/im/ai (providers, agents, memory)
    ↓
-4. packages/im/core (Plugin, Adapter, Bot, Command)
+4. packages/im/core (Plugin, Adapter, Endpoint, Command)
    ↓
 5. packages/im/agent (ZhinAgent, security policies)
    ↓
@@ -89,7 +89,7 @@ renderSendMessage
   ↓
 root plugin before.sendMessage
   ↓
-platform Bot.$sendMessage
+platform Endpoint.$sendMessage
 ```
 
 ### 禁止的绕过方式

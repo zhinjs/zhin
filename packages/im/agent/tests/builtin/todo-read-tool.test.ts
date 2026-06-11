@@ -2,12 +2,14 @@
  * todo_read 内置工具（BuiltinBaseTool）单测
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mockCommMessage } from '../helpers/mock-comm-message.js';
+
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { createTodoReadTool, TodoReadBuiltinTool } from '../../src/builtin/todo-read-tool.js';
 import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
-import type { ToolContext } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 
 describe('TodoReadBuiltinTool', () => {
   let dataDir: string;
@@ -84,7 +86,7 @@ describe('TodoReadBuiltinTool', () => {
   it('execute 与 normalizeTool 绑定 context 时可调用', async () => {
     const tool = createTodoReadTool(dataDir);
     fs.writeFileSync(path.join(dataDir, 'TODO.json'), JSON.stringify({ items: [{ title: 'ok', status: 'pending' }] }), 'utf-8');
-    const ctx = { platform: 'test' } as ToolContext;
+    const ctx = mockCommMessage({ adapter: 'test' });
     const agentTool = normalizeTool(tool, ctx);
     const result = await agentTool.execute({ chat_id: 'global' });
     expect(String(result)).toContain('ok');

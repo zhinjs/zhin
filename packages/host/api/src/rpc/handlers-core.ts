@@ -3,7 +3,7 @@ import type { SchemaFeature, ConfigFeature } from "@zhin.js/core";
 import { broadcastSse } from "../sse-hub.js";
 import type { ConsoleRpcContext } from "./context.js";
 import {
-  collectBotsListWithPending,
+  collectEndpointsListWithPending,
   findPluginByConfigKey,
   getConfigFilePath,
   getPluginKeys,
@@ -80,7 +80,7 @@ async function withPersistentCronEngine(
 }
 
 type CronJobNotify =
-  | { channel: "im"; platform?: string; botId?: string; sceneId?: string; scope?: string }
+  | { channel: "im"; platform?: string; endpointId?: string; sceneId?: string; scope?: string }
   | { channel: "silent" }
   | { channel: "log" };
 
@@ -354,23 +354,23 @@ export async function handleCoreRpc(
       }
       return true;
 
-    case "bot:list": {
+    case "endpoint:list": {
       try {
-        const botsWithPending = await collectBotsListWithPending(root);
-        reply(ctx, { requestId, data: { bots: botsWithPending } });
+        const endpointsWithPending = await collectEndpointsListWithPending(root);
+        reply(ctx, { requestId, data: { endpoints: endpointsWithPending } });
       } catch (error) {
         reply(ctx, { requestId, error: (error as Error).message });
       }
       return true;
     }
 
-    case "bot:info": {
+    case "endpoint:info": {
       try {
         const d = (message.data || {}) as Record<string, unknown>;
         const adapter = d.adapter as string;
-        const botId = d.botId as string;
-        if (!adapter || !botId) {
-          reply(ctx, { requestId, error: "adapter and botId required" });
+        const endpointId = d.endpointId as string;
+        if (!adapter || !endpointId) {
+          reply(ctx, { requestId, error: "adapter and endpointId required" });
           return true;
         }
         const ad = root.inject(adapter as keyof Plugin.Contexts);
@@ -378,18 +378,18 @@ export async function handleCoreRpc(
           reply(ctx, { requestId, error: "adapter not found" });
           return true;
         }
-        const bot = ad.bots.get(botId);
-        if (!bot) {
-          reply(ctx, { requestId, error: "bot not found" });
+        const endpoint = ad.endpoints.get(endpointId);
+        if (!endpoint) {
+          reply(ctx, { requestId, error: "endpoint not found" });
           return true;
         }
         reply(ctx, {
           requestId,
           data: {
-            name: botId,
+            name: endpointId,
             adapter: String(adapter),
-            connected: !!bot.$connected,
-            status: bot.$connected ? "online" : "offline",
+            connected: !!endpoint.$connected,
+            status: endpoint.$connected ? "online" : "offline",
           },
         });
       } catch (error) {
@@ -398,16 +398,16 @@ export async function handleCoreRpc(
       return true;
     }
 
-    case "bot:sendMessage": {
+    case "endpoint:sendMessage": {
       try {
         const d = (message.data || {}) as Record<string, unknown>;
         const adapter = d.adapter as string;
-        const botId = d.botId as string;
+        const endpointId = d.endpointId as string;
         const id = d.id as string;
         const msgType = d.type as string;
         const content = d.content;
-        if (!adapter || !botId || !id || !msgType || content === undefined) {
-          reply(ctx, { requestId, error: "adapter, botId, id, type, content required" });
+        if (!adapter || !endpointId || !id || !msgType || content === undefined) {
+          reply(ctx, { requestId, error: "adapter, endpointId, id, type, content required" });
           return true;
         }
         const ad = root.inject(adapter as keyof Plugin.Contexts);
@@ -423,7 +423,7 @@ export async function handleCoreRpc(
               : String(content);
         const messageId = await ad.sendMessage({
           context: adapter,
-          bot: botId,
+          endpoint: endpointId,
           id: String(id),
           type: msgType as "private" | "group" | "channel",
           content: normalized,

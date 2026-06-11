@@ -138,7 +138,7 @@ ai:
 | `spawn_task` Subagent | ✅ | ✅ |
 | `toolSearch` + Worker | ❌ 默认关 | ✅ |
 | MCP Client / Server | ❌ 默认关 | ✅ ACCEPTANCE |
-| 多 bot 同进程 | 非 Stable 重点 | ✅ test-bot |
+| 多 Endpoint 同进程 | 非 Stable 重点 | ✅ test-bot |
 
 **建议路径**：先用 [minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot) 跑通 L1/L2 → 读本文 → [MCP 集成](/advanced/mcp) → 需要时再参考 [test-bot](https://github.com/zhinjs/zhin/tree/main/examples/test-bot)。
 

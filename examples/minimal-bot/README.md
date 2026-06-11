@@ -1,6 +1,6 @@
 # minimal-bot（Stable 黄金路径）
 
-Zhin.js **对外默认承诺**的最小示例：`bots: []`（Sandbox 由 Console 打开沙盒页时自动创建）、最少插件、关闭 `toolSearch` 与 MCP。
+Zhin.js **对外默认承诺**的最小示例：`endpoints: []`（Sandbox 由 Console 打开沙盒页时自动创建）、最少插件、关闭 `toolSearch` 与 MCP。
 
 维护者全功能配置见 [`../test-bot`](../test-bot/)（厨房水槽）。
 
@@ -37,7 +37,7 @@ pnpm dev
 
 | 项 | 值 |
 |----|-----|
-| `bots` | `[]`（Sandbox 在 Console 沙盒页连接时自动创建，一般无需写 `context: sandbox`） |
+| `endpoints` | `[]`（Sandbox 在 Console 沙盒页连接时自动创建，一般无需写 `context: sandbox`） |
 | Plugins | `@zhin.js/adapter-sandbox`、`@zhin.js/host-router`、`@zhin.js/host-api`、`hello` |
 | `ai.agent.toolSearch` | `false`（Advanced 能力在 test-bot 验证） |
 
@@ -52,7 +52,7 @@ data/memory/
   sessions/<safeSessionKey>/MEMORY.md
 ```
 
-会话笔记绑定 `session_key`（`platform:botId:scope:sceneId`），与 Console 沙盒私聊/群聊各自独立。
+会话笔记绑定 `session_key`（`platform:endpointId:scope:sceneId`），与 Console 沙盒私聊/群聊各自独立。
 
 ## 验收
 

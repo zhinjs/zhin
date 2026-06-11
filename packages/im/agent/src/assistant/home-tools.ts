@@ -2,7 +2,7 @@
  * home_* 工具 — 薄封装 HomeAssistantService（M4）
  */
 import { ZhinTool } from '@zhin.js/core';
-import type { ToolContext } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 import type { HomeAssistantService } from './domains/home-assistant.js';
 import type { HomePolicyConfig } from './home-config.js';
 import {
@@ -22,27 +22,27 @@ export interface HomeToolsOptions {
 function guard(
   operation: 'read' | 'write',
   entityId: string,
-  context: ToolContext | undefined,
+  commMessage: Message | undefined,
   policy: HomeToolsOptions['policy'],
 ): string | null {
-  const decision = checkHomeToolAccess(operation, entityId, context, policy);
+  const decision = checkHomeToolAccess(operation, entityId, commMessage, policy);
   return formatGuardResult(decision);
 }
 
 function guardMasterOnly(
-  context: ToolContext | undefined,
+  commMessage: Message | undefined,
   policy: HomeToolsOptions['policy'],
 ): string | null {
-  if (!policy.requireMaster || !context?.platform || !context.botId || !context.senderId) {
+  if (!policy.requireMaster || !commMessage?.$adapter || !commMessage?.$endpoint || !commMessage?.$sender?.id) {
     return null;
   }
   try {
-    const role = resolveToolRequesterRole(getPlugin(), context);
+    const role = resolveToolRequesterRole(getPlugin(), commMessage);
     if (role === 'master') return null;
     return toHomeDenyError({
       allowed: false,
       role,
-      reason: '智能家居操作仅允许 Bot Owner（master）调用。',
+      reason: '智能家居操作仅允许 Endpoint Owner（master）调用。',
     });
   } catch {
     return null;
@@ -62,11 +62,11 @@ export function createHomeTools(options: HomeToolsOptions): ZhinTool[] {
     .desc('列出已配置的智能家居设备别名（不暴露原始 entity_id 给用户层）')
     .keyword('智能家居', '设备列表', 'home list', '别名')
     .tag('home', 'assistant')
-    .execute(async (_args, context) => {
+    .execute(async (_args, commMessage) => {
       const aliases = service.listAliases();
       const names = Object.keys(aliases);
       if (names.length === 0) return { aliases: {}, message: '未配置任何设备别名' };
-      const listErr = guardMasterOnly(context, policy);
+      const listErr = guardMasterOnly(commMessage, policy);
       if (listErr) return { error: listErr };
       return { aliases: names, count: names.length };
     });
@@ -76,7 +76,7 @@ export function createHomeTools(options: HomeToolsOptions): ZhinTool[] {
     .keyword('设备状态', '灯状态', 'home state', '查询')
     .tag('home', 'assistant')
     .param('alias', { type: 'string', description: '设备别名（zhin.config.yml assistant.home.aliases 中配置）' }, true)
-    .execute(async (args, context) => {
+    .execute(async (args, commMessage) => {
       const alias = String(args.alias ?? '').trim();
       if (!alias) return { error: 'alias 必填' };
       let entityId: string;
@@ -85,7 +85,7 @@ export function createHomeTools(options: HomeToolsOptions): ZhinTool[] {
       } catch (e) {
         return { error: (e as Error).message };
       }
-      const err = guard('read', entityId, context, policy);
+      const err = guard('read', entityId, commMessage, policy);
       if (err) return { error: err };
       try {
         const state = await service.getState(alias);
@@ -105,7 +105,7 @@ export function createHomeTools(options: HomeToolsOptions): ZhinTool[] {
     .keyword('开灯', '打开', 'home on', 'turn on')
     .tag('home', 'assistant')
     .param('alias', { type: 'string', description: '设备别名' }, true)
-    .execute(async (args, context) => {
+    .execute(async (args, commMessage) => {
       const alias = String(args.alias ?? '').trim();
       if (!alias) return { error: 'alias 必填' };
       let entityId: string;
@@ -114,7 +114,7 @@ export function createHomeTools(options: HomeToolsOptions): ZhinTool[] {
       } catch (e) {
         return { error: (e as Error).message };
       }
-      const err = guard('write', entityId, context, policy);
+      const err = guard('write', entityId, commMessage, policy);
       if (err) return { error: err };
       try {
         const result = await service.turnOn(alias);
@@ -129,7 +129,7 @@ export function createHomeTools(options: HomeToolsOptions): ZhinTool[] {
     .keyword('关灯', '关闭', 'home off', 'turn off')
     .tag('home', 'assistant')
     .param('alias', { type: 'string', description: '设备别名' }, true)
-    .execute(async (args, context) => {
+    .execute(async (args, commMessage) => {
       const alias = String(args.alias ?? '').trim();
       if (!alias) return { error: 'alias 必填' };
       let entityId: string;
@@ -138,7 +138,7 @@ export function createHomeTools(options: HomeToolsOptions): ZhinTool[] {
       } catch (e) {
         return { error: (e as Error).message };
       }
-      const err = guard('write', entityId, context, policy);
+      const err = guard('write', entityId, commMessage, policy);
       if (err) return { error: err };
       try {
         const result = await service.turnOff(alias);

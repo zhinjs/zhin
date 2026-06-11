@@ -1,8 +1,8 @@
 /**
  * memory_search — semantic memory recall (L4, text match v1).
  */
-import type { ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
-import { resolveIMSessionIdFromToolContext } from '@zhin.js/ai';
+import type { Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
 import { parseMemoryTags } from '@zhin.js/ai';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import { getMemoryEntryRepository } from '../memory-entry-registry.js';
@@ -21,14 +21,8 @@ const PARAMS: ToolParametersSchema = {
   required: ['query'],
 };
 
-function sessionScopeKey(ctx: ToolContext): string {
-  return resolveIMSessionIdFromToolContext({
-    platform: ctx.platform || '',
-    botId: ctx.botId || '',
-    scope: ctx.scope,
-    sceneId: ctx.sceneId || '',
-    senderId: ctx.senderId || '',
-  });
+function sessionScopeKey(commMessage: Message): string {
+  return resolveIMSessionIdFromMessage(commMessage);
 }
 
 class MemorySearchTool extends BuiltinBaseTool {
@@ -37,7 +31,7 @@ class MemorySearchTool extends BuiltinBaseTool {
   readonly parameters = PARAMS;
   readonly keywords = ['memory', 'recall', 'remember', '记忆', '回忆'];
 
-  async run(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
+  async run(args: Record<string, unknown>, commMessage?: Message): Promise<ToolResult> {
     const repo = getMemoryEntryRepository();
     if (!repo) return '语义记忆未启用（ai.memory.semantic.enabled）或未初始化数据库。';
 
@@ -46,7 +40,7 @@ class MemorySearchTool extends BuiltinBaseTool {
 
     const scope = typeof args.scope === 'string' ? args.scope : undefined;
     const limit = typeof args.limit === 'number' ? args.limit : 5;
-    const scopeKey = scope === 'session' && context ? sessionScopeKey(context) : undefined;
+    const scopeKey = scope === 'session' && commMessage ? sessionScopeKey(commMessage) : undefined;
 
     const hits = await repo.search({
       query,

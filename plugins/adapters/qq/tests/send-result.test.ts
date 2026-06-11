@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveOutboundMessageId } from '../src/bot.js';
+import { resolveOutboundMessageId } from '../src/endpoint.js';
 
 describe('resolveOutboundMessageId', () => {
   it('应读取正常发送结果的 id', () => {

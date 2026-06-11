@@ -6,7 +6,7 @@
 
 ```
 packages/
-  im/           # IM 机器人主链（单向依赖）
+  im/           # Agent + IM/通道运行时主链（单向依赖）
     kernel/
     ai/
     core/

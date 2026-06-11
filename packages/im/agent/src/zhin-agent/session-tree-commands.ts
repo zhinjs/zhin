@@ -1,6 +1,6 @@
-import { resolveIMSessionIdFromToolContext } from '@zhin.js/ai';
+import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
 import type { SessionBranchPoint } from '@zhin.js/ai';
-import type { ToolContext } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 import { beginTurnSession, type SessionIODeps } from './session-io.js';
 import type { ZhinAgentPrivate } from './zhin-agent-private.js';
 
@@ -11,45 +11,33 @@ function formatBranchList(points: SessionBranchPoint[]): string {
     .join('\n');
 }
 
-export async function listSessionTreeForContext(
+export async function listSessionTreeForCommMessage(
   host: ZhinAgentPrivate,
-  context: ToolContext,
+  commMessage: Message,
 ): Promise<string> {
-  const sessionKey = resolveIMSessionIdFromToolContext({
-    platform: context.platform,
-    botId: context.botId,
-    scope: context.scope,
-    sceneId: context.sceneId,
-    senderId: context.senderId,
-  });
+  const sessionKey = resolveIMSessionIdFromMessage(commMessage);
   const deps: SessionIODeps = {
     imSessionStore: host.imSessionStore,
     agentSessionStore: host.agentSessionStore,
     contextRepository: host.contextRepository,
   };
-  const { sessionId } = await beginTurnSession(deps, sessionKey, context);
+  const { sessionId } = await beginTurnSession(deps, sessionKey, commMessage);
   const points = await host.contextRepository.listBranchPoints(sessionId);
   return `🌳 会话分支点（/tree N 跳转，/fork N 从该点继续）：\n${formatBranchList(points)}`;
 }
 
-export async function jumpSessionTreeForContext(
+export async function jumpSessionTreeForCommMessage(
   host: ZhinAgentPrivate,
-  context: ToolContext,
+  commMessage: Message,
   index: number,
 ): Promise<string> {
-  const sessionKey = resolveIMSessionIdFromToolContext({
-    platform: context.platform,
-    botId: context.botId,
-    scope: context.scope,
-    sceneId: context.sceneId,
-    senderId: context.senderId,
-  });
+  const sessionKey = resolveIMSessionIdFromMessage(commMessage);
   const deps: SessionIODeps = {
     imSessionStore: host.imSessionStore,
     agentSessionStore: host.agentSessionStore,
     contextRepository: host.contextRepository,
   };
-  const { sessionId } = await beginTurnSession(deps, sessionKey, context);
+  const { sessionId } = await beginTurnSession(deps, sessionKey, commMessage);
   const result = await host.contextRepository.jumpToBranchIndex(sessionId, index);
   return result.ok ? `✅ ${result.message}` : `ℹ️ ${result.message}`;
 }

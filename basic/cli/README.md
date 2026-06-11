@@ -1,6 +1,6 @@
 # @zhin.js/cli
 
-Zhin 机器人框架的全功能命令行工具，提供项目创建、开发调试、插件构建、进程管理等完整开发流程支持。
+Zhin **AI Agent 运行时**的全功能命令行工具，提供项目创建、Endpoint 联调、插件构建、进程管理与 Host API 访问支持。
 
 ## 核心功能
 
@@ -314,7 +314,7 @@ export default defineConfig(async (env) => {
   const isProduction = env.NODE_ENV === 'production';
   
   return {
-    bots: [
+    endpoints: [
       {
         context: 'sandbox',
         name: 'sandbox-bot',
@@ -554,7 +554,7 @@ zhin send <scene_id> [内容...] [options]
 **选项：**
 - `-s, --scene <type>`: 场景类型，`private` | `group` | `channel`，默认 `private`
 - `-a, --adapter <name>`: 适配器名称（如 `sandbox`、`icqq`、`discord`），默认 `sandbox`
-- `-b, --bot <id>`: 指定 Bot ID；不传则使用该适配器下第一个在线 Bot
+- `-e, --endpoint <id>`: 指定 Endpoint ID；不传则使用该适配器下第一个在线 Endpoint
 
 **示例：**
 ```bash
@@ -574,7 +574,7 @@ zhin watch --json       # JSON（脚本友好，默认单次）
 zhin watch -i 5         # 5 秒刷新间隔
 ```
 
-数据来源：`GET /api/stats`、`GET /api/system/status`（进程 rss/heap + 主机 freeMem/totalMem）、`/api/bots`、`/api/assistant/jobs`。
+数据来源：`GET /api/stats`、`GET /api/system/status`（进程 rss/heap + 主机 freeMem/totalMem）、`/api/endpoints`、`/api/assistant/jobs`。
 
 ### packages - zhin-package 包管理（ADR 0010）
 

@@ -25,8 +25,7 @@ import { DEFAULT_CONFIG, type ZhinAgentConfig } from './zhin-agent/config.js';
 import { applyExecPolicyToTools } from './security/exec-policy.js';
 import { resolveSubagentAgentTools } from './orchestrator/resolve-subagent-tools.js';
 import { createOwnerOrchestratedToolResultTransform } from './orchestrator/owner-confirm-orchestration.js';
-import type { ToolContext } from '@zhin.js/core';
-import type { FileRole } from './security/file-role-policy.js';
+import type { Message } from '@zhin.js/core';
 import {
   AgentDispatcher,
   type AgentRole,
@@ -59,14 +58,7 @@ const logger = new Logger(null, 'Subagent');
 // ============================================================================
 
 export interface SubagentOrigin {
-  platform: string;
-  botId: string;
-  sceneId: string;
-  senderId: string;
-  sceneType: string;
-  /** 入站消息 ID（ICQQ 等 reaction 打字必填） */
-  messageId?: string;
-  fileRole?: FileRole;
+  message: Message;
 }
 
 export interface SpawnOptions {
@@ -90,7 +82,7 @@ export interface SpawnOptions {
   /** 首条 user 消息（含 vision parts）；缺省则用 task 字符串 */
   runInput?: string | ContentPart[];
   /** 用于向用户发送「任务【id】:执行通道 => label」进度提示 */
-  notifyContext?: ToolContext;
+  notifyContext?: Message;
   /** 硬编排任务 ID（AgentDispatcher SSOT） */
   orchestrationTaskId?: string;
 }
@@ -469,13 +461,7 @@ export class SubagentManager {
         systemPrompt = `${systemPrompt}\n\n## Parent session context (fork)\n${opts.contextPreamble.trim()}`;
       }
       const model = binding?.model || provider.models[0];
-      const bashToolContext: ToolContext = {
-        platform: origin.platform,
-        botId: origin.botId,
-        sceneId: origin.sceneId,
-        senderId: origin.senderId,
-        fileRole: origin.fileRole,
-      };
+      const bashCommMessage = origin.message;
 
       await aiEvents?.agentStart(model);
       const result = await runAgentLoopStandaloneTurn({
@@ -486,9 +472,9 @@ export class SubagentManager {
         tools,
         userInput: agentUserInput,
         maxIterations: this.maxIterations,
-        toolContext: bashToolContext,
+        commMessage: bashCommMessage,
         transformToolResult: createOwnerOrchestratedToolResultTransform({
-          toolContext: bashToolContext,
+          commMessage: bashCommMessage,
           disableHardOrchestration: true,
         }),
         callbacks: aiEvents?.createAgentLoopCallbacks(model),

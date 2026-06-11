@@ -25,7 +25,7 @@ async function makeProject(options: Partial<InitOptions> = {}) {
     adapters: {
       packages: ['@zhin.js/adapter-sandbox'],
       plugins: ['@zhin.js/adapter-sandbox'],
-      bots: [],
+      endpoints: [],
       envVars: {},
     },
     ai: { enabled: false },

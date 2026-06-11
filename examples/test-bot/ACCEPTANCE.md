@@ -1,6 +1,6 @@
 # test-bot 验收清单
 
-**对外承诺范围 = Stable**（见 [minimal-bot](../minimal-bot/)）。本目录为**厨房水槽**：多 bot、toolSearch、MCP 等用于 Advanced / 回归，勿当作默认模板。
+**对外承诺范围 = Stable**（见 [minimal-bot](../minimal-bot/)）。本目录为**厨房水槽**：多 Endpoint、toolSearch、MCP 等用于 Advanced / 回归，勿当作默认模板。
 
 Vitest 基线：仓库根 `pnpm test`；MCP 注册相关见 `packages/agent/tests/mcp-registry.test.ts`。
 

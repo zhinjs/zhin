@@ -3,6 +3,11 @@
  */
 import { usePlugin, type Plugin, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
 import { SlackAdapter } from "./adapter.js";
+import {
+  platformPermit,
+  registerSlackPlatformPermitChecker,
+  slackGroupPermitResolver,
+} from "./platform-permit.js";
 
 declare module "zhin.js" {
   interface Adapters {
@@ -11,7 +16,7 @@ declare module "zhin.js" {
 }
 
 export * from "./types.js";
-export { SlackBot } from "./bot.js";
+export { SlackEndpoint } from "./endpoint.js";
 export { SlackAdapter } from "./adapter.js";
 
 const plugin = usePlugin();
@@ -19,7 +24,7 @@ const { provide, useContext } = plugin;
 
 provide({
   name: "slack",
-  description: "Slack Bot Adapter",
+  description: "Slack Endpoint Adapter",
   mounted: async (p: Plugin) => {
     const adapter = new SlackAdapter(p);
     await adapter.start();
@@ -31,16 +36,19 @@ provide({
 });
 
 useContext('tool', 'slack', (toolService: ToolFeature, slack: SlackAdapter) => {
+  const disposers: (() => void)[] = [];
+  disposers.push(registerSlackPlatformPermitChecker());
   const groupTools = createGroupManagementTools(
     slack as unknown as IGroupManagement,
     'slack',
+    { permitResolver: slackGroupPermitResolver, registerChecker: false },
   );
-  const disposers: (() => void)[] = groupTools.map(t => toolService.addTool(t, plugin.name));
+  disposers.push(...groupTools.map(t => toolService.addTool(t, plugin.name)));
 
-  function getBot(botId: string) {
-    const bot = slack.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot;
+  function getEndpoint(endpointId: string) {
+    const endpoint = slack.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint;
   }
 
   disposers.push(toolService.addTool({
@@ -49,17 +57,18 @@ useContext('tool', 'slack', (toolService: ToolFeature, slack: SlackAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         channel: { type: 'string', description: '频道 ID' },
         users: { type: 'string', description: '用户 ID 列表（逗号分隔）' },
       },
-      required: ['bot', 'channel', 'users'],
+      required: ['endpoint_id', 'channel', 'users'],
     },
     platforms: ['slack'],
     tags: ['slack'],
+    permissions: [platformPermit('channel_manager')],
     execute: async (args: Record<string, any>) => {
-      const bot = getBot(args.bot);
-      const success = await bot.inviteToChannel(args.channel, args.users.split(','));
+      const endpoint = getEndpoint(args.endpoint_id);
+      const success = await endpoint.inviteToChannel(args.channel, args.users.split(','));
       return { success, message: success ? '已邀请用户加入频道' : '操作失败' };
     },
   }, plugin.name));
@@ -70,17 +79,18 @@ useContext('tool', 'slack', (toolService: ToolFeature, slack: SlackAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         channel: { type: 'string', description: '频道 ID' },
         topic: { type: 'string', description: '新话题' },
       },
-      required: ['bot', 'channel', 'topic'],
+      required: ['endpoint_id', 'channel', 'topic'],
     },
     platforms: ['slack'],
     tags: ['slack'],
+    permissions: [platformPermit('channel_manager')],
     execute: async (args: Record<string, any>) => {
-      const bot = getBot(args.bot);
-      const success = await bot.setChannelTopic(args.channel, args.topic);
+      const endpoint = getEndpoint(args.endpoint_id);
+      const success = await endpoint.setChannelTopic(args.channel, args.topic);
       return { success, message: success ? '已设置频道话题' : '操作失败' };
     },
   }, plugin.name));
@@ -91,16 +101,17 @@ useContext('tool', 'slack', (toolService: ToolFeature, slack: SlackAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         channel: { type: 'string', description: '频道 ID' },
       },
-      required: ['bot', 'channel'],
+      required: ['endpoint_id', 'channel'],
     },
     platforms: ['slack'],
     tags: ['slack'],
+    permissions: [platformPermit('workspace_admin')],
     execute: async (args: Record<string, any>) => {
-      const bot = getBot(args.bot);
-      const success = await bot.archiveChannel(args.channel);
+      const endpoint = getEndpoint(args.endpoint_id);
+      const success = await endpoint.archiveChannel(args.channel);
       return { success, message: success ? '已归档频道' : '操作失败' };
     },
   }, plugin.name));
@@ -111,17 +122,18 @@ useContext('tool', 'slack', (toolService: ToolFeature, slack: SlackAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         channel: { type: 'string', description: '频道 ID' },
         timestamp: { type: 'string', description: '消息时间戳' },
       },
-      required: ['bot', 'channel', 'timestamp'],
+      required: ['endpoint_id', 'channel', 'timestamp'],
     },
     platforms: ['slack'],
     tags: ['slack'],
+    permissions: [platformPermit('channel_manager')],
     execute: async (args: Record<string, any>) => {
-      const bot = getBot(args.bot);
-      const success = await bot.pinMessage(args.channel, args.timestamp);
+      const endpoint = getEndpoint(args.endpoint_id);
+      const success = await endpoint.pinMessage(args.channel, args.timestamp);
       return { success, message: success ? '已置顶消息' : '操作失败' };
     },
   }, plugin.name));
@@ -132,18 +144,18 @@ useContext('tool', 'slack', (toolService: ToolFeature, slack: SlackAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         channel: { type: 'string', description: '频道 ID' },
         timestamp: { type: 'string', description: '消息时间戳' },
         emoji: { type: 'string', description: '表情名称（不含冒号）' },
       },
-      required: ['bot', 'channel', 'timestamp', 'emoji'],
+      required: ['endpoint_id', 'channel', 'timestamp', 'emoji'],
     },
     platforms: ['slack'],
     tags: ['slack'],
     execute: async (args: Record<string, any>) => {
-      const bot = getBot(args.bot);
-      const success = await bot.addReaction(args.channel, args.timestamp, args.emoji);
+      const endpoint = getEndpoint(args.endpoint_id);
+      const success = await endpoint.addReaction(args.channel, args.timestamp, args.emoji);
       return { success, message: success ? `已添加反应 :${args.emoji}:` : '操作失败' };
     },
   }, plugin.name));
@@ -154,18 +166,18 @@ useContext('tool', 'slack', (toolService: ToolFeature, slack: SlackAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         channel_id: { type: 'string', description: '频道 ID' },
         timestamp: { type: 'string', description: '消息时间戳' },
         name: { type: 'string', description: '表情名称（如 thumbsup、heart）' },
       },
-      required: ['bot', 'channel_id', 'timestamp', 'name'],
+      required: ['endpoint_id', 'channel_id', 'timestamp', 'name'],
     },
     platforms: ['slack'],
     tags: ['slack'],
     execute: async (args: Record<string, any>) => {
-      const bot = getBot(args.bot);
-      const success = await bot.removeReaction(args.channel_id, args.timestamp, args.name);
+      const endpoint = getEndpoint(args.endpoint_id);
+      const success = await endpoint.removeReaction(args.channel_id, args.timestamp, args.name);
       return { success, message: success ? `已移除反应 :${args.name}:` : '操作失败' };
     },
   }, plugin.name));
@@ -176,17 +188,18 @@ useContext('tool', 'slack', (toolService: ToolFeature, slack: SlackAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         channel_id: { type: 'string', description: '频道 ID' },
         timestamp: { type: 'string', description: '消息时间戳' },
       },
-      required: ['bot', 'channel_id', 'timestamp'],
+      required: ['endpoint_id', 'channel_id', 'timestamp'],
     },
     platforms: ['slack'],
     tags: ['slack'],
+    permissions: [platformPermit('channel_manager')],
     execute: async (args: Record<string, any>) => {
-      const bot = getBot(args.bot);
-      const success = await bot.unpinMessage(args.channel_id, args.timestamp);
+      const endpoint = getEndpoint(args.endpoint_id);
+      const success = await endpoint.unpinMessage(args.channel_id, args.timestamp);
       return { success, message: success ? '已取消置顶' : '操作失败' };
     },
   }, plugin.name));
@@ -197,16 +210,16 @@ useContext('tool', 'slack', (toolService: ToolFeature, slack: SlackAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         user_id: { type: 'string', description: '用户 ID' },
       },
-      required: ['bot', 'user_id'],
+      required: ['endpoint_id', 'user_id'],
     },
     platforms: ['slack'],
     tags: ['slack'],
     execute: async (args: Record<string, any>) => {
-      const bot = getBot(args.bot);
-      const user = await bot.getUserInfo(args.user_id);
+      const endpoint = getEndpoint(args.endpoint_id);
+      const user = await endpoint.getUserInfo(args.user_id);
       return {
         id: user.id,
         name: user.name,
@@ -226,17 +239,18 @@ useContext('tool', 'slack', (toolService: ToolFeature, slack: SlackAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         channel_id: { type: 'string', description: '频道 ID' },
         purpose: { type: 'string', description: '频道用途描述' },
       },
-      required: ['bot', 'channel_id', 'purpose'],
+      required: ['endpoint_id', 'channel_id', 'purpose'],
     },
     platforms: ['slack'],
     tags: ['slack'],
+    permissions: [platformPermit('channel_manager')],
     execute: async (args: Record<string, any>) => {
-      const bot = getBot(args.bot);
-      const success = await bot.setChannelPurpose(args.channel_id, args.purpose);
+      const endpoint = getEndpoint(args.endpoint_id);
+      const success = await endpoint.setChannelPurpose(args.channel_id, args.purpose);
       return { success, message: success ? '频道用途已更新' : '操作失败' };
     },
   }, plugin.name));
@@ -247,16 +261,17 @@ useContext('tool', 'slack', (toolService: ToolFeature, slack: SlackAdapter) => {
     parameters: {
       type: 'object',
       properties: {
-        bot: { type: 'string', description: 'Bot 名称' },
+        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
         channel_id: { type: 'string', description: '频道 ID' },
       },
-      required: ['bot', 'channel_id'],
+      required: ['endpoint_id', 'channel_id'],
     },
     platforms: ['slack'],
     tags: ['slack'],
+    permissions: [platformPermit('workspace_admin')],
     execute: async (args: Record<string, any>) => {
-      const bot = getBot(args.bot);
-      const success = await bot.unarchiveChannel(args.channel_id);
+      const endpoint = getEndpoint(args.endpoint_id);
+      const success = await endpoint.unarchiveChannel(args.channel_id);
       return { success, message: success ? '频道已恢复' : '操作失败' };
     },
   }, plugin.name));

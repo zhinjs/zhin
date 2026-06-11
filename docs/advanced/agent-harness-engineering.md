@@ -132,7 +132,7 @@ execSecurity: 'full'
 ZHIN_NEEDS_OWNER:
 ⚠️ 命令「rm -rf /tmp/test」不在允许列表中，需要用户确认后执行。
 
-此 shell 命令需 Bot Owner 审批后方可执行。
+此 shell 命令需 Endpoint Owner 审批后方可执行。
 ```
 
 ### 2. 文件策略 (File Policy)
@@ -241,7 +241,7 @@ budget: {
   "timestamp": 1234567890000,
   "sessionId": "session_abc123",
   "userId": "user_xyz",
-  "botId": "bot_001",
+  "endpointId": "bot_001",
   "platform": "qq",
   "command": "rm -rf /tmp/test",
   "message": "命令被拒绝: 命令「rm」不在允许列表中",

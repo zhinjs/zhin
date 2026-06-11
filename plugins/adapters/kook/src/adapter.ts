@@ -2,48 +2,50 @@
  * KOOK 适配器
  */
 import { formatCompact, Adapter, Plugin } from 'zhin.js';
-import { KookBot } from "./bot.js";
-import type { KookBotConfig } from "./types.js";
+import { KookEndpoint } from "./endpoint.js";
+import type { KookEndpointConfig } from "./types.js";
 
-export class KookAdapter extends Adapter<KookBot> {
+export class KookAdapter extends Adapter<KookEndpoint> {
+  static override readonly capabilities = ['inbound', 'outbound'] as const;
+
   constructor(plugin: Plugin) {
     super(plugin, "kook", []);
   }
 
-  createBot(config: KookBotConfig): KookBot {
-    return new KookBot(this, config);
+  createEndpoint(config: KookEndpointConfig): KookEndpoint {
+    return new KookEndpoint(this, config);
   }
 
   // ── IGroupManagement 标准群管方法 ──────────────────────────────────
 
-  async kickMember(botId: string, sceneId: string, userId: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.kickUser(sceneId, userId);
+  async kickMember(endpointId: string, sceneId: string, userId: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.kickUser(sceneId, userId);
   }
 
-  async banMember(botId: string, sceneId: string, userId: string, reason?: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.addToBlacklist(sceneId, userId, reason);
+  async banMember(endpointId: string, sceneId: string, userId: string, reason?: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.addToBlacklist(sceneId, userId, reason);
   }
 
-  async unbanMember(botId: string, sceneId: string, userId: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.removeFromBlacklist(sceneId, userId);
+  async unbanMember(endpointId: string, sceneId: string, userId: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.removeFromBlacklist(sceneId, userId);
   }
 
-  async setMemberNickname(botId: string, sceneId: string, userId: string, nickname: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.setNickname(sceneId, userId, nickname);
+  async setMemberNickname(endpointId: string, sceneId: string, userId: string, nickname: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.setNickname(sceneId, userId, nickname);
   }
 
-  async listMembers(botId: string, sceneId: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    const members = await bot.getGuildMembers(sceneId);
+  async listMembers(endpointId: string, sceneId: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    const members = await endpoint.getGuildMembers(sceneId);
     return {
       members: members.map(m => ({
         id: m.id, username: m.username,

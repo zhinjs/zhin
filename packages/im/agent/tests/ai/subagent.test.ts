@@ -22,11 +22,12 @@ vi.mock('@zhin.js/logger', async (importOriginal) => {
 });
 
 const baseOrigin: SubagentOrigin = {
-  platform: 'test',
-  botId: 'bot1',
-  sceneId: 'scene1',
-  senderId: 'user1',
-  sceneType: 'private',
+  message: {
+    $adapter: 'test',
+    $endpoint: 'bot1',
+    $sender: { id: 'user1' },
+    $channel: { type: 'private', id: 'scene1' },
+  } as import('@zhin.js/core').Message<any>,
 };
 
 function createMockProvider(response: string = '任务完成') {

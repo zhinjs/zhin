@@ -1,3 +1,4 @@
+import { mockCommMessage } from './helpers/mock-comm-message.js';
 import { describe, it, expect } from 'vitest';
 import type { AgentTool } from '@zhin.js/ai';
 import { createIcqqAgentPromptContributor } from '../../../../plugins/adapters/icqq/src/agent-prompt.js';
@@ -17,12 +18,12 @@ describe('icqq AgentPromptContributor', () => {
   it('matchesDeferredTask for QQ like/send intents', () => {
     expect(contributor.matchesDeferredTask?.({
       slot: 'deferred_worker',
-      toolContext: { platform: 'icqq' },
+      commMessage: mockCommMessage({ adapter: 'icqq' }),
       deferred: { goal: '为 1659488338 点赞 10 次', toolQuery: 'icqq friend like' },
     })).toBe(true);
     expect(contributor.matchesDeferredTask?.({
       slot: 'deferred_worker',
-      toolContext: { platform: 'icqq' },
+      commMessage: mockCommMessage({ adapter: 'icqq' }),
       deferred: { goal: '成都天气', toolQuery: 'weather' },
     })).toBe(false);
   });
@@ -47,7 +48,7 @@ describe('icqq AgentPromptContributor', () => {
   it('buildSections orchestrator', async () => {
     const sections = await contributor.buildSections({
       slot: 'orchestrator',
-      toolContext: { platform: 'icqq' },
+      commMessage: mockCommMessage({ adapter: 'icqq' }),
     });
     expect(sections?.[0].body).toMatch(/mcp_icqq/);
   });

@@ -138,9 +138,9 @@ export async function readExistingProjectConfig(cwd: string): Promise<ExistingPr
 
   const configFormat = inferConfigFormat(configPath);
   const existingPlugins = Array.isArray(config.plugins) ? config.plugins : [];
-  const existingBots = Array.isArray(config.bots) ? config.bots : [];
+  const existingBots = Array.isArray(config.endpoints) ? config.endpoints : [];
 
-  // 从 config.bots 和 config.plugins 推断 adapters（仅保留结构，env 从 .env 来）
+  // 从 config.endpoints 和 config.plugins 推断 adapters（仅保留结构，env 从 .env 来）
   const adapterPlugins = existingPlugins.filter(
     (p: string) => typeof p === 'string' && p.startsWith('@zhin.js/adapter-'),
   );
@@ -154,7 +154,7 @@ export async function readExistingProjectConfig(cwd: string): Promise<ExistingPr
     adapters: {
       packages: adapterPlugins,
       plugins: adapterPlugins,
-      bots: existingBots,
+      endpoints: existingBots,
       envVars,
     } as AdapterSetupResult,
   };

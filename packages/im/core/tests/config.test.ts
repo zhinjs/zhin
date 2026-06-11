@@ -17,7 +17,7 @@ describe('ConfigLoader', () => {
     it('should handle array methods correctly', () => {
       const config = {
         items: ['item1', 'item2', 'item3'],
-        bots: [
+        endpoints: [
           { context: 'sandbox', name: 'bot1' },
           { context: 'sandbox', name: 'bot2' }
         ]
@@ -34,7 +34,7 @@ describe('ConfigLoader', () => {
       
       // 测试数组的 filter 方法
       expect(() => {
-        const filtered = proxiedData.bots.filter((bot: any) => bot.name === 'bot1')
+        const filtered = proxiedData.endpoints.filter((endpoint: any) => endpoint.name === 'bot1')
         expect(filtered).toHaveLength(1)
       }).not.toThrow()
     })
@@ -122,7 +122,7 @@ describe('ConfigLoader', () => {
 
     it('should handle Set operations from array', () => {
       const config = {
-        bots: [
+        endpoints: [
           { context: 'sandbox', name: 'bot1' },
           { context: 'process', name: 'bot2' },
           { context: 'sandbox', name: 'bot3' }
@@ -134,7 +134,7 @@ describe('ConfigLoader', () => {
       
       // 模拟 setup.ts 中的操作
       expect(() => {
-        const contexts = new Set(proxiedData.bots.map((bot: any) => bot.context))
+        const contexts = new Set(proxiedData.endpoints.map((endpoint: any) => endpoint.context))
         expect(contexts.size).toBe(2)
         expect(contexts.has('sandbox')).toBe(true)
         expect(contexts.has('process')).toBe(true)

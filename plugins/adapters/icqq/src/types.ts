@@ -58,12 +58,12 @@ export interface TypingIndicatorConfig {
 }
 
 /**
- * Bot 配置：支持本地 IPC 和远程 RPC 两种连接模式。
+ * Endpoint 配置：支持本地 IPC 和远程 RPC 两种连接模式。
  *
  * - 本地模式（默认）：只需 name（QQ号），自动连接 ~/.icqq/<uin>/daemon.sock
  * - 远程模式：额外配置 rpc.host / rpc.port / rpc.token
  */
-export interface IcqqBotConfig {
+export interface IcqqEndpointConfig {
   context: "icqq";
   /** QQ 号码字符串 */
   name: `${number}`;

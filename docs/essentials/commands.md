@@ -31,12 +31,12 @@
 | 命令 | 说明 |
 |------|------|
 | `/cmd` | 已注册 IM 命令列表 |
-| `/bots` | Bot 与在线状态（含 adapter 列） |
+| `/endpoints` | Endpoint 与在线状态（含 adapter 列） |
 | `/bindings` | `ai.agents` 绑定 |
 | `/tools` | 已注册 ZhinTool |
 | `/mcp` | MCP Client 连接状态 |
 
-内省命令支持 **`[filter] [page]`**（例：`/tools github 2`）；单页仍过长时按行拆成多条 IM 消息。完整列表：`GET /api/introspection/{commands|bots|bindings|tools|mcp}`（Bearer，query：`page`、`filter`、`pageSize`）。
+内省命令支持 **`[filter] [page]`**（例：`/tools github 2`）；单页仍过长时按行拆成多条 IM 消息。完整列表：`GET /api/introspection/{commands|endpoints|bindings|tools|mcp}`（Bearer，query：`page`、`filter`、`pageSize`）。
 
 Console 亦可查询会话树：`GET /api/agent/sessions/:sessionKey/tree`、`POST .../leaf`（Bearer Token）。示例项目清单见 [test-bot TOOLS.md](https://github.com/zhinjs/zhin/blob/main/examples/test-bot/TOOLS.md)。
 

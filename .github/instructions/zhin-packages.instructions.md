@@ -26,7 +26,7 @@ applyTo: "basic/**,packages/**"
 ## 运行时不变量
 
 - 如果改动涉及 Plugin 上下文，usePlugin() 只能在模块顶层调用。
-- 如果改动涉及 IM 出站消息，必须保留统一链路：Message.$reply 或 Adapter.sendMessage → renderSendMessage → before.sendMessage → 平台 Bot。
+- 如果改动涉及 IM 出站消息，必须保留统一链路：Message.$reply 或 Adapter.sendMessage → renderSendMessage → before.sendMessage → 平台 Endpoint。
 - 不要新增绕过 before.sendMessage 的发送捷径。
 
 ## 变更落点

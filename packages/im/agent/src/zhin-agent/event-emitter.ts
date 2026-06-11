@@ -1,4 +1,4 @@
-import type { Plugin, ToolContext } from '@zhin.js/core';
+import type { Message, Plugin } from '@zhin.js/core';
 import { Logger, formatCompact } from '@zhin.js/logger';
 
 const logger = new Logger(null, 'ZhinAgent');
@@ -16,7 +16,7 @@ export class ZhinAgentEventEmitter {
 
   createPayload(
     sessionId: string,
-    context: ToolContext,
+    commMessage: Message,
     mode: Plugin.AIEventPayload['mode'],
     extra: Partial<Plugin.AIEventPayload> = {},
   ): Plugin.AIEventPayload {
@@ -25,12 +25,12 @@ export class ZhinAgentEventEmitter {
       sessionId,
       source,
       mode,
-      userId: context.senderId,
-      platform: context.platform,
-      botId: context.botId,
-      sceneId: context.sceneId,
-      messageId: context.messageId,
-      scope: context.scope,
+      userId: commMessage.$sender.id,
+      platform: String(commMessage.$adapter),
+      endpointId: commMessage.$endpoint,
+      sceneId: commMessage.$channel?.id ?? commMessage.$sender.id,
+      messageId: commMessage.$id,
+      scope: commMessage.$channel?.type ?? 'private',
       ...rest,
     };
   }

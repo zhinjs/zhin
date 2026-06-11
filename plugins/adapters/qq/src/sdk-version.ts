@@ -15,7 +15,7 @@ function readDepVersion(dep: string): string {
 export const SDK_VERSION_HEADER = "x-sdk-version";
 
 /**
- * Composite SDK identity: Zhin adapter + underlying qq-official-bot.
+ * Composite SDK identity: Zhin adapter + underlying qq-official-endpoint.
  * Example: `zhin-adapter-qq/v2.0.11+qq-official-bot/v1.2.1`
  */
 export const SDK_VERSION = `zhin-adapter-qq/v${adapterPkg.version}+qq-official-bot/v${readDepVersion("qq-official-bot")}`;

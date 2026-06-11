@@ -25,7 +25,7 @@ describe('AssistantJobStore', () => {
         prompt: '早报',
         label: '早报',
         enabled: true,
-        notify: { channel: 'im', platform: 'icqq', botId: '1', sceneId: '2', scope: 'private' },
+        notify: { channel: 'im', platform: 'icqq', endpointId: '1', sceneId: '2', scope: 'private' },
         createdAt: 1000,
       },
     ];
@@ -102,7 +102,7 @@ describe('AssistantJobStore', () => {
         cronExpression: '0 9 * * *',
         prompt: 'x',
         enabled: true,
-        context: { platform: 'icqq', botId: '1' },
+        context: { platform: 'icqq', endpointId: '1' },
         createdAt: 1,
       }]),
       'utf-8',

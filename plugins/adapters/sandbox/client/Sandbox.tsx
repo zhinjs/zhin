@@ -3,7 +3,7 @@ import { MessageSegment, cn, resolveMediaSrc, pickMediaRawUrl } from '@zhin.js/c
 import {
     buildSandboxWebSocketUrl,
 } from './sandboxTransport';
-import { User, Users, Trash2, Send, Hash, MessageSquare, Wifi, WifiOff, Smile, Image, X, Check, Info, Search, Bot, UserPlus, Bell, Video, Music } from 'lucide-react';
+import { User, Users, Trash2, Send, Hash, MessageSquare, Wifi, WifiOff, Smile, Image, X, Check, Info, Search, Endpoint, UserPlus, Bell, Video, Music } from 'lucide-react';
 import RichTextEditor, { RichTextEditorRef } from './RichTextEditor';
 
 interface Message {
@@ -25,7 +25,7 @@ export default function Sandbox() {
     const [faceList, setFaceList] = useState<Face[]>([])
     const [activeChannel, setActiveChannel] = useState<Channel>(channels[0])
     const [inputText, setInputText] = useState('')
-    const [botName, setBotName] = useState('ProcessBot')
+    const [endpointName, setBotName] = useState('ProcessEndpoint')
     const [connected, setConnected] = useState(false)
     const [showFacePicker, setShowFacePicker] = useState(false)
     /** 输入区：插入图片 / 视频 / 音频 URL */
@@ -56,14 +56,14 @@ export default function Sandbox() {
     useEffect(() => { fetchFaceList() }, [])
 
     const handleInboundPayload = (data: {
-        type: string; id: string; content?: unknown; bot?: string; timestamp: number
+        type: string; id: string; content?: unknown; endpoint?: string; timestamp: number
     }) => {
         const content: MessageSegment[] = typeof data.content === 'string'
             ? parseTextToSegments(data.content)
             : Array.isArray(data.content) ? data.content as MessageSegment[] : parseTextToSegments(String(data.content ?? ''))
 
         const channelName = data.type === 'private'
-            ? `私聊-${data.bot || botName}`
+            ? `私聊-${data.bot || endpointName}`
             : data.type === 'group'
             ? `群组-${data.id}`
             : `频道-${data.id}`
@@ -78,8 +78,8 @@ export default function Sandbox() {
 
         setMessages((prev) => [...prev, {
             id: `bot_${data.timestamp}`, type: 'received', channelType,
-            channelId: data.id, channelName, senderId: 'bot',
-            senderName: data.bot || botName, content, timestamp: data.timestamp,
+            channelId: data.id, channelName, senderId: 'endpoint',
+            senderName: data.bot || endpointName, content, timestamp: data.timestamp,
         }])
     }
 
@@ -348,7 +348,7 @@ export default function Sandbox() {
                             </span>
                         </div>
                         <div className="flex items-center gap-2">
-                            <input value={botName} onChange={(e) => setBotName(e.target.value)} placeholder="机器人名称"
+                            <input value={endpointName} onChange={(e) => setBotName(e.target.value)} placeholder="机器人名称"
                                 className="h-8 w-28 rounded-md border bg-transparent px-2 text-sm" />
                             <button className="inline-flex items-center gap-1 h-8 px-3 rounded-md bg-secondary text-secondary-foreground text-sm hover:bg-secondary/80" onClick={clearMessages}>
                                 <Trash2 size={14} /> 清空

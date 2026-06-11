@@ -71,7 +71,7 @@ rss:
 | url | text | Feed 地址 |
 | feed_title | text | Feed 标题（自动获取） |
 | adapter_name | text | 适配器名称 |
-| bot_id | text | Bot ID |
+| endpoint_id | text | Endpoint ID |
 | channel_type | text | 会话类型 (group/private) |
 | channel_id | text | 会话 ID |
 

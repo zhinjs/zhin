@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { Adapter } from '../src/adapter'
-import { Bot } from '../src/bot'
+import { Endpoint } from '../src/endpoint.js'
 import { Plugin } from '../src/plugin'
 import { Message, MessageBase } from '../src/message'
 import { EventEmitter } from 'events'
 
-// Mock Bot 实现用于测试
-class MockBot implements Bot<any, any> {
+// Mock Endpoint 实现用于测试
+class MockEndpoint implements Endpoint< any> {
   $id: string
   $config: any
   $connected: boolean = false
@@ -22,7 +22,7 @@ class MockBot implements Bot<any, any> {
     const base: MessageBase = {
       $id: event.id || 'mock-id',
       $adapter: 'test' as any,
-      $bot: this.$id,
+      $endpoint: this.$id,
       $content: [],
       $sender: { id: 'mock-sender', name: 'Mock Sender' },
       $channel: { id: 'mock-channel', type: 'private' },
@@ -46,7 +46,7 @@ class MockBot implements Bot<any, any> {
         return await this.adapter.sendMessage({
           ...base.$channel,
           context: 'test',
-          bot: this.$id,
+          endpoint: this.$id,
           content: finalContent,
         })
       },
@@ -73,9 +73,9 @@ class MockBot implements Bot<any, any> {
 }
 
 // Mock Adapter 类用于测试
-class MockAdapter extends Adapter<MockBot> {
-  createBot(config: any): MockBot {
-    return new MockBot(this, config)
+class MockAdapter extends Adapter<MockEndpoint> {
+  createEndpoint(config: any): MockEndpoint {
+    return new MockEndpoint(this, config)
   }
 }
 
@@ -99,8 +99,8 @@ describe('Adapter Core Functionality', () => {
     })
 
     it('should initialize with empty bots map', () => {
-      expect(adapter.bots).toBeInstanceOf(Map)
-      expect(adapter.bots.size).toBe(0)
+      expect(adapter.endpoints).toBeInstanceOf(Map)
+      expect(adapter.endpoints.size).toBe(0)
     })
 
     it('should inherit from EventEmitter', () => {
@@ -150,7 +150,7 @@ describe('Adapter Core Functionality', () => {
       expect(plugin.root.adapters).toContain('test')
     })
 
-    it('should create and connect bots from config', async () => {
+    it('should create and connect endpoints from config', async () => {
       const config = [
         { id: 'bot1' },
         { id: 'bot2' }
@@ -159,9 +159,9 @@ describe('Adapter Core Functionality', () => {
       
       await adapter.start()
       
-      expect(adapter.bots.size).toBe(2)
-      expect(adapter.bots.has('bot1')).toBe(true)
-      expect(adapter.bots.has('bot2')).toBe(true)
+      expect(adapter.endpoints.size).toBe(2)
+      expect(adapter.endpoints.has('bot1')).toBe(true)
+      expect(adapter.endpoints.has('bot2')).toBe(true)
     })
 
     it('should add adapter name to plugin adapters', async () => {
@@ -172,7 +172,7 @@ describe('Adapter Core Functionality', () => {
     it('should handle empty config array', async () => {
       const adapter = new MockAdapter(plugin, 'test', [])
       await adapter.start()
-      expect(adapter.bots.size).toBe(0)
+      expect(adapter.endpoints.size).toBe(0)
     })
   })
 
@@ -182,10 +182,10 @@ describe('Adapter Core Functionality', () => {
       const adapter = new MockAdapter(plugin, 'test', config)
       
       await adapter.start()
-      expect(adapter.bots.size).toBe(2)
+      expect(adapter.endpoints.size).toBe(2)
       
       await adapter.stop()
-      expect(adapter.bots.size).toBe(0)
+      expect(adapter.endpoints.size).toBe(0)
     })
 
     it('should remove adapter from plugin adapters', async () => {
@@ -216,20 +216,20 @@ describe('Adapter Core Functionality', () => {
       await adapter.start()
       
       // Mock first bot disconnect to throw error
-      const bot1 = adapter.bots.get('bot1')!
+      const bot1 = adapter.endpoints.get('bot1')!
       bot1.$disconnect = vi.fn().mockRejectedValue(new Error('Disconnect failed'))
       
       // Mock logger to spy on error logging
       const loggerSpy = vi.spyOn(adapter.logger, 'error')
       
       // adapter.stop() should handle errors gracefully: collect errors, continue cleanup
-      await expect(adapter.stop()).rejects.toThrow('1 bot(s) failed to disconnect')
+      await expect(adapter.stop()).rejects.toThrow('1 endpoint(s) failed to disconnect')
       
       // Should log the error for the failed bot
       expect(loggerSpy).toHaveBeenCalled()
       
       // Should still clean up all bots (including the second one that succeeded)
-      expect(adapter.bots.size).toBe(0)
+      expect(adapter.endpoints.size).toBe(0)
     })
   })
 
@@ -240,7 +240,7 @@ describe('Adapter Core Functionality', () => {
         const adapter = new MockAdapter(plugin, 'test', config)
         await adapter.start()
         
-        const bot = adapter.bots.get('bot1')!
+        const bot = adapter.endpoints.get('bot1')!
         const recallSpy = vi.spyOn(bot, '$recallMessage')
         
         await adapter.emit('call.recallMessage', 'bot1', 'message-id')
@@ -250,7 +250,7 @@ describe('Adapter Core Functionality', () => {
 
       it('should require valid bot id', () => {
         // 验证 adapter 不包含不存在的 bot
-        expect(adapter.bots.has('non-existent-bot')).toBe(false)
+        expect(adapter.endpoints.has('non-existent-bot')).toBe(false)
       })
     })
 
@@ -260,12 +260,12 @@ describe('Adapter Core Functionality', () => {
         const adapter = new MockAdapter(plugin, 'test', config)
         await adapter.start()
         
-        const bot = adapter.bots.get('bot1')!
+        const bot = adapter.endpoints.get('bot1')!
         const sendSpy = vi.spyOn(bot, '$sendMessage')
         
         const options = {
           context: 'test',
-          bot: 'bot1',
+          endpoint: 'bot1',
           content: 'Hello',
           id: 'channel-id',
           type: 'text' as const
@@ -277,16 +277,16 @@ describe('Adapter Core Functionality', () => {
         expect(messageId).toBe('mock-message-id')
       })
 
-      it('should throw error if bot not found', async () => {
+      it('should throw error if endpoint not found', async () => {
         const options = {
           context: 'test',
-          bot: 'non-existent-bot',
+          endpoint: 'non-existent-bot',
           content: 'Hello',
           id: 'channel-id',
           type: 'text' as const
         }
         
-        await expect(adapter.sendMessage(options)).rejects.toThrow('Bot non-existent-bot not found')
+        await expect(adapter.sendMessage(options)).rejects.toThrow('Endpoint non-existent-bot not found')
       })
 
       it('should call before.sendMessage handlers', async () => {
@@ -306,12 +306,12 @@ describe('Adapter Core Functionality', () => {
           }
         })
         
-        const bot = adapter.bots.get('bot1')!
+        const bot = adapter.endpoints.get('bot1')!
         const sendSpy = vi.spyOn(bot, '$sendMessage')
         
         const options = {
           context: 'test',
-          bot: 'bot1',
+          endpoint: 'bot1',
           content: 'Hello',
           id: 'channel-id',
           type: 'text' as const
@@ -335,12 +335,12 @@ describe('Adapter Core Functionality', () => {
           payloads.push({ messageId: payload.messageId, adapter: payload.adapter })
         })
 
-        const bot = adapter.bots.get('bot1')!
+        const bot = adapter.endpoints.get('bot1')!
         vi.spyOn(bot, '$sendMessage').mockResolvedValue('mid-42')
 
         await adapter.sendMessage({
           context: 'test',
-          bot: 'bot1',
+          endpoint: 'bot1',
           content: 'Hello',
           id: 'channel-id',
           type: 'text' as const,
@@ -368,7 +368,7 @@ describe('Adapter Core Functionality', () => {
         
         const options = {
           context: 'test',
-          bot: 'bot1',
+          endpoint: 'bot1',
           content: 'Hello',
           id: 'channel-id',
           type: 'text' as const
@@ -388,7 +388,7 @@ describe('Adapter Core Functionality', () => {
         
         const options = {
           context: 'test',
-          bot: 'bot1',
+          endpoint: 'bot1',
           content: [{ type: 'text', data: { text: 'Hello' } }],
           id: 'channel-id',
           type: 'private' as const
@@ -397,14 +397,14 @@ describe('Adapter Core Functionality', () => {
         await adapter.sendMessage(options)
         
         expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('send: private(channel-id)'))
-        expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('bot: bot1'))
+        expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('endpoint: bot1'))
         expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('preview: Hello'))
       })
     })
 
     describe('message.receive', () => {
       const makeInboundMessage = () => ({
-        $bot: 'bot1',
+        $endpoint: 'bot1',
         $adapter: 'test',
         $channel: { id: 'channel-id', type: 'text' },
         $content: 'Hello',
@@ -527,16 +527,16 @@ describe('Adapter Core Functionality', () => {
     })
   })
 
-  describe('Adapter createBot', () => {
+  describe('Adapter createEndpoint', () => {
     it('should be abstract method', () => {
-      expect(typeof adapter.createBot).toBe('function')
+      expect(typeof adapter.createEndpoint).toBe('function')
     })
 
     it('should create bot with config', () => {
       const config = { id: 'test-bot' }
-      const bot = adapter.createBot(config)
+      const bot = adapter.createEndpoint(config)
       
-      expect(bot).toBeInstanceOf(MockBot)
+      expect(bot).toBeInstanceOf(MockEndpoint)
       expect(bot.$id).toBe('test-bot')
     })
   })
@@ -552,8 +552,8 @@ describe('Adapter Core Functionality', () => {
       
       await adapter.start()
       
-      expect(adapter.bots.size).toBe(3)
-      expect(Array.from(adapter.bots.keys())).toEqual(['bot1', 'bot2', 'bot3'])
+      expect(adapter.endpoints.size).toBe(3)
+      expect(Array.from(adapter.endpoints.keys())).toEqual(['bot1', 'bot2', 'bot3'])
     })
 
     it('should access bot by id', async () => {
@@ -562,7 +562,7 @@ describe('Adapter Core Functionality', () => {
       
       await adapter.start()
       
-      const bot = adapter.bots.get('bot1')
+      const bot = adapter.endpoints.get('bot1')
       expect(bot).toBeDefined()
       expect(bot!.$id).toBe('bot1')
     })
@@ -574,7 +574,7 @@ describe('Adapter Core Functionality', () => {
       const adapter = new MockAdapter(plugin, 'test', config)
       await adapter.start()
       
-      const bot = adapter.bots.get('bot1')!
+      const bot = adapter.endpoints.get('bot1')!
       const message = bot.$formatMessage({ id: 'msg-1', raw: 'Hello' })
       
       const sendSpy = vi.spyOn(adapter, 'sendMessage')
@@ -582,7 +582,7 @@ describe('Adapter Core Functionality', () => {
       await message.$reply('Reply content')
       
       expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
-        bot: 'bot1',
+        endpoint: 'bot1',
         content: expect.arrayContaining([
           expect.objectContaining({ type: 'text', data: { text: 'Reply content' } })
         ])
@@ -594,7 +594,7 @@ describe('Adapter Core Functionality', () => {
       const adapter = new MockAdapter(plugin, 'test', config)
       await adapter.start()
       
-      const bot = adapter.bots.get('bot1')!
+      const bot = adapter.endpoints.get('bot1')!
       const message = bot.$formatMessage({ id: 'msg-1', raw: 'Hello' })
       
       const sendSpy = vi.spyOn(adapter, 'sendMessage')
@@ -614,7 +614,7 @@ describe('Adapter Core Functionality', () => {
       const adapter = new MockAdapter(plugin, 'test', config)
       await adapter.start()
       
-      const bot = adapter.bots.get('bot1')!
+      const bot = adapter.endpoints.get('bot1')!
       const message = bot.$formatMessage({ id: 'msg-1', raw: 'Hello' })
       
       const sendSpy = vi.spyOn(adapter, 'sendMessage')
@@ -633,7 +633,7 @@ describe('Adapter Core Functionality', () => {
       const adapter = new MockAdapter(plugin, 'test', config)
       await adapter.start()
       
-      const bot = adapter.bots.get('bot1')!
+      const bot = adapter.endpoints.get('bot1')!
       const message = bot.$formatMessage({ id: 'msg-1', raw: 'Hello' })
       
       const sendSpy = vi.spyOn(adapter, 'sendMessage')
@@ -662,7 +662,7 @@ describe('Adapter Core Functionality', () => {
         return options
       })
       
-      const bot = adapter.bots.get('bot1')!
+      const bot = adapter.endpoints.get('bot1')!
       const message = bot.$formatMessage({ id: 'msg-1', raw: 'Hello' })
       
       await message.$reply('Reply content')

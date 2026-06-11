@@ -4,7 +4,7 @@ import type { AppConfig } from '../types.js';
 export type BootstrapOptions = {
   /** 机器人项目根（加载 zhin.config 前 chdir） */
   projectRoot?: string;
-  /** 默认 true：执行 connectBots 后 plugin.start() */
+  /** 默认 true：执行 connectEndpoints 后 plugin.start() */
   autoStart?: boolean;
 };
 

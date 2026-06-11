@@ -5,10 +5,10 @@ import {
   resolveManagementCommandRoles,
 } from '../../src/init/management-command-guard.js';
 
-function fakeMessage(senderId: string, adapter = 'kook', bot = 'main') {
+function fakeMessage(senderId: string, adapter = 'kook', endpoint = 'main') {
   return {
     $adapter: adapter,
-    $bot: bot,
+    $endpoint: endpoint,
     $sender: { id: senderId },
     $channel: { type: 'private', id: senderId },
   } as any;
@@ -19,7 +19,7 @@ function fakeRoot(botMaster?: string, trusted: string[] = []) {
     inject(name: string) {
       if (name === 'kook') {
         return {
-          bots: new Map([
+          endpoints: new Map([
             ['main', { $config: { master: botMaster, trusted } }],
           ]),
         };

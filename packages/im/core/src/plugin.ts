@@ -165,6 +165,12 @@ export class Plugin extends PluginBase implements PluginLike {
     if (result === undefined || result === null) return await next();
     const adapter = this.inject(message.$adapter) as Adapter;
     if (!adapter || !(adapter instanceof Adapter)) return await next();
+    if (!message.$reply) {
+      this.logger.warn(
+        `command result cannot be sent: endpoint ${message.$endpoint} has no outbound capability`,
+      );
+      return;
+    }
     await message.$reply(result);
   };
   #middlewares: MessageMiddleware<RegisteredAdapter>[] = [this.#messageMiddleware];
@@ -726,7 +732,10 @@ export namespace Plugin {
     'before.sendMessage': [SendOptions];
     'message.send': [MessageSendPayload];
     "message.receive": [import('./message.js').Message];
-    "bot.login.pending": [import('./built/login-assist.js').PendingLoginTask];
+    "endpoint.login.pending": [import('./built/login-assist.js').PendingLoginTask];
+    'endpoint.connect': [import('./built/endpoint-lifecycle.js').EndpointLifecyclePayload];
+    'endpoint.disconnect': [import('./built/endpoint-lifecycle.js').EndpointLifecyclePayload];
+    'endpoint.error': [import('./built/endpoint-lifecycle.js').EndpointLifecyclePayload];
     "request.receive": [import('./request.js').Request];
     "notice.receive": [import('./notice.js').Notice];
     "ai.processing.start": [Plugin.AIEventPayload];
@@ -760,7 +769,7 @@ export namespace Plugin {
     path?: 'chat' | 'fast' | 'agent' | 'multimodal' | 'rate_limited';
     userId?: string;
     platform?: string;
-    botId?: string;
+    endpointId?: string;
     sceneId?: string;
     messageId?: string;
     scope?: string;

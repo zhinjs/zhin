@@ -1,11 +1,11 @@
 log_level: info
-disable_bots: []
+disable_endpoints: []
 disable_plugins: []
 plugin_dirs: []
-bots: []
+endpoints: []
 #   - context: icqq            # 须先 icqq login；name 为 QQ 号
 #     name: '123456789'
-#     master: '你的用户ID'      # ⚠️ Bot Master（ask_user 安全确认目标）
+#     master: '你的用户ID'      # ⚠️ Endpoint Master（ask_user 安全确认目标）
 plugins: []
 
 # AI 服务配置（可选）— 新格式：命名 providers + agents.zhin 绑定

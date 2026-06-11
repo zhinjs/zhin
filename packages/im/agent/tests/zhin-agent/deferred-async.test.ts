@@ -45,15 +45,14 @@ describe('runDeferredWorker sync', () => {
       getDeferredResultSender: () => sender,
     });
 
-    const context = {
-      platform: 'sandbox',
-      botId: 'b1',
-      sceneId: 'g1',
-      senderId: 'u1',
-      scope: 'group',
-    };
+    const commMessage = {
+      $adapter: 'sandbox',
+      $endpoint: 'b1',
+      $sender: { id: 'u1' },
+      $channel: { type: 'group', id: 'g1' },
+    } as import('@zhin.js/core').Message<any>;
 
-    const raw = await runDeferredWorker(agent, 'read memory file', 'read_file', context, [readFile]);
+    const raw = await runDeferredWorker(agent, 'read memory file', 'read_file', commMessage, [readFile]);
     const parsed = JSON.parse(raw) as { status: string; summary: string };
     expect(parsed.status).toBe('ok');
     expect(parsed.summary).toContain('done body');
@@ -69,15 +68,14 @@ describe('runDeferredWorker sync', () => {
 
     const readFile = makeTool('read_file');
     const agent = makeAgent();
-    const context = {
-      platform: 'sandbox',
-      botId: 'b1',
-      sceneId: 'g1',
-      senderId: 'u1',
-      scope: 'group',
-    };
+    const commMessage = {
+      $adapter: 'sandbox',
+      $endpoint: 'b1',
+      $sender: { id: 'u1' },
+      $channel: { type: 'group', id: 'g1' },
+    } as import('@zhin.js/core').Message<any>;
 
-    const raw = await runDeferredWorker(agent, 'read memory file', 'read_file', context, [readFile]);
+    const raw = await runDeferredWorker(agent, 'read memory file', 'read_file', commMessage, [readFile]);
     const parsed = JSON.parse(raw) as { status: string; error: string };
     expect(parsed.status).toBe('error');
     expect(parsed.error).toContain('worker boom');

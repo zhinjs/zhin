@@ -25,7 +25,7 @@ export function registerAdmin(plugin: Plugin, cfg: GroupSuiteConfig): void {
         if (!adapter?.sendMessage) return;
         await adapter.sendMessage({
           context: notice.$adapter,
-          bot: notice.$bot,
+          endpoint: notice.$endpoint,
           content: welcomeMsg,
           id: notice.$channel.id,
           type: notice.$channel.type,
@@ -52,7 +52,7 @@ export function registerAdmin(plugin: Plugin, cfg: GroupSuiteConfig): void {
         if (!adapter?.sendMessage) return;
         await adapter.sendMessage({
           context: notice.$adapter,
-          bot: notice.$bot,
+          endpoint: notice.$endpoint,
           content: msg,
           id: notice.$channel.id,
           type: notice.$channel.type,
@@ -85,7 +85,7 @@ export function registerAdmin(plugin: Plugin, cfg: GroupSuiteConfig): void {
     }
     for (const [keyword, reply] of keywords) {
       if (raw.includes(keyword)) {
-        await message.$reply(reply);
+        await message.$reply?.(reply);
         return;
       }
     }

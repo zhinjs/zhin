@@ -1,4 +1,4 @@
-import type { ToolContext } from '@zhin.js/core';
+import type { AgentTurnMessage, Message } from '@zhin.js/core';
 import { UserProfileStore } from '../user-profile.js';
 import {
   WEB_SEARCH_LOCALE_EXTRA_KEY,
@@ -6,15 +6,16 @@ import {
 } from '../builtin/web-search-locale.js';
 
 export async function attachWebSearchLocale(
-  context: ToolContext,
+  commMessage: Message,
   userId: string,
   userProfiles: UserProfileStore,
-): Promise<ToolContext> {
-  const extra: Record<string, unknown> = { ...(context.extra ?? {}) };
+): Promise<Message> {
+  const turn = commMessage as AgentTurnMessage;
+  const extra: Record<string, unknown> = { ...(turn.extra ?? {}) };
   const existing = extra[WEB_SEARCH_LOCALE_EXTRA_KEY];
   if (typeof existing === 'string' && existing.trim()) {
     extra[WEB_SEARCH_LOCALE_EXTRA_KEY] = normalizeWebSearchLocaleHint(existing);
-    return { ...context, extra };
+    return { ...commMessage, extra } as Message;
   }
   const [preferred, language] = await Promise.all([
     userProfiles.get(userId, 'preferred_language'),
@@ -24,5 +25,5 @@ export async function attachWebSearchLocale(
   if (hint) {
     extra[WEB_SEARCH_LOCALE_EXTRA_KEY] = normalizeWebSearchLocaleHint(hint);
   }
-  return { ...context, extra };
+  return { ...commMessage, extra } as Message;
 }

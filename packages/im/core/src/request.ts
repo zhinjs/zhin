@@ -37,7 +37,7 @@ export interface RequestChannel {
  * const request = Request.from(rawEvent, {
  *   $id: rawEvent.flag,
  *   $adapter: 'icqq',
- *   $bot: botName,
+ *   $endpoint: endpointId,
  *   $type: 'group_invite',
  *   $channel: { id: groupId, type: 'group' },
  *   $sender: { id: userId, name: '邀请者' },
@@ -54,8 +54,8 @@ export interface RequestBase {
   $id: string;
   /** 适配器名称 */
   $adapter: keyof Adapters;
-  /** Bot 名称 */
-  $bot: string;
+  /** Endpoint 名称 */
+  $endpoint: string;
   /** 请求类型 */
   $type: RequestType;
   /** 请求子类型 */

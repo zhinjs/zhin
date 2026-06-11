@@ -1,6 +1,6 @@
 # zhin.js
 
-Zhin.js 主入口包 —— 现代 TypeScript 聊天机器人框架，AI 驱动、插件化、多平台。
+Zhin.js 主入口包 —— **AI Agent 运行时**聚合导出：多通道 **Endpoint**、**ZhinAgent** 编排、插件化与热重载。
 
 本包 re-export **`@zhin.js/core` 全部 API**，并 selective re-export **`@zhin.js/agent`** 与多 Agent 编排 helper；**不包含** Host HTTP 栈（`@zhin.js/host-router`、`@zhin.js/host-api` 为可选插件，用于控制台与 REST 管理面）。
 
@@ -19,7 +19,7 @@ pnpm dev          # 开发模式（热重载）
 
 ```yaml
 # zhin.config.yml
-bots:
+endpoints:
   - context: icqq
     name: '123456789'   # 须先 icqq login，与 QQ 号一致
 

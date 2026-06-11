@@ -50,7 +50,7 @@ pnpm add @zhin.js/adapter-github
 
 ```yaml
 # zhin.config.yml
-bots:
+endpoints:
   - context: github
     name: my-github-bot
     app_id: 123456
@@ -93,7 +93,7 @@ GitHub adapter 将 Issue/PR 映射为聊天频道：
 
 | 工具 | 说明 |
 |------|------|
-| `github_star` | Star / Unstar / 检查（per-user OAuth 或 Bot 默认） |
+| `github_star` | Star / Unstar / 检查（per-user OAuth 或 Endpoint 默认） |
 | `github_bind` / `github_unbind` / `github_whoami` | 用户 GitHub 账号绑定 |
 | `github_install` | GitHub App 安装链接 |
 | `github_subscribe` / `github_unsubscribe` / `github_subscriptions` | 频道级 Webhook 订阅 |
@@ -160,11 +160,11 @@ Headers:
 ### 绑定流程
 
 1. 用户在聊天中触发 `github_bind`（或说「绑定 GitHub」）
-2. Bot 返回 **verification URI** 与 **user code**（GitHub Device Flow）
+2. Endpoint 返回 **verification URI** 与 **user code**（GitHub Device Flow）
 3. 用户在浏览器打开链接并输入 code 完成授权
 4. Token 写入 `github_oauth_users` 表；可用 `github_whoami` / `github_unbind` 管理
 
-**Client ID**：从 GitHub App 的 `/app` API 自动获取（`GhClient.getClientId()`），**无需**在 bot 配置里写 `client_id` / `client_secret`。
+**Client ID**：从 GitHub App 的 `/app` API 自动获取（`GhClient.getClientId()`），**无需**在 Endpoint 配置里写 `client_id` / `client_secret`。
 
 ### 前置条件
 
@@ -183,7 +183,7 @@ Headers:
 | target_id | text | 目标频道 ID |
 | target_type | text | 类型 (private/group/channel) |
 | adapter | text | 适配器名称 |
-| bot | text | 机器人名称 |
+| endpoint | text | 机器人名称 |
 
 ### github_events
 
@@ -212,11 +212,11 @@ adapter-github/
 ├── src/
 │   ├── index.ts              # 插件入口：provide、useContext、模型表
 │   ├── adapter.ts            # GitHubAdapter
-│   ├── bot.ts                # GitHubBot（Issue/PR 频道）
+│   ├── endpoint.ts                # GitHubEndpoint（Issue/PR 频道）
 │   ├── gh-client.ts          # GitHub REST（App JWT / Installation Token）
 │   ├── register-github-mcp.ts # orchestrator.addMcp(server-github)
 │   ├── agent-prompt.ts       # 平台 prompt / deferred 工具筛选
-│   └── types.ts              # BotConfig、Webhook payload、Channel ID
+│   └── types.ts              # EndpointConfig、Webhook payload、Channel ID
 ├── package.json
 └── README.md
 ```

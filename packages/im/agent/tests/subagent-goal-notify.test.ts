@@ -1,4 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
+import { mockCommMessage } from '../helpers/mock-comm-message.js';
+
 import {
   formatSubagentProcessingMessage,
   notifySubagentGoal,
@@ -6,7 +8,7 @@ import {
   resolveSubagentDisplayLabel,
   SUBAGENT_GOAL_NOTIFY_EXTRA_KEY,
 } from '../src/subagent-goal-notify.js';
-import type { ToolContext } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 
 describe('subagent-goal-notify', () => {
   it('formatSubagentProcessingMessage 使用执行通道而非 AgentRole', () => {
@@ -54,7 +56,7 @@ describe('subagent-goal-notify', () => {
     const notify = vi.fn();
     const ctx = {
       extra: { [SUBAGENT_GOAL_NOTIFY_EXTRA_KEY]: notify },
-    } as ToolContext;
+    } as Message<any>;
     await notifySubagentGoal(ctx, {
       taskId: 'abc12345',
       kind: 'deferred',

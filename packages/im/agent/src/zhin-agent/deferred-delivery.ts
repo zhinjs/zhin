@@ -1,8 +1,8 @@
 import type { OutputElement } from '@zhin.js/ai';
 import { truncatePreview } from '@zhin.js/logger';
 import type { DeferredWorkerResult } from '../deferred-worker-runner.js';
-import { originFromToolContext } from '../builtin/spawn-task-tool.js';
-import type { ToolContext } from '../orchestrator/types.js';
+import { originFromMessage } from '../builtin/spawn-task-tool.js';
+import type { Message } from '../orchestrator/types.js';
 import { buildSubagentUserDelivery } from '../media/subagent-user-delivery.js';
 import type { SubagentResultSender } from '../subagent.js';
 import { resolveSubagentDisplayLabel } from '../subagent-goal-notify.js';
@@ -24,7 +24,7 @@ export function extractDeferredBody(result: DeferredWorkerResult): string {
 
 export async function deliverDeferredWorkerResult(
   sender: SubagentResultSender,
-  context: ToolContext,
+  commMessage: Message,
   goal: string,
   taskId: string,
   result: DeferredWorkerResult,
@@ -37,15 +37,15 @@ export async function deliverDeferredWorkerResult(
     result: body,
     toolCalls: result.toolCalls ?? [],
   });
-  await sender(originFromToolContext(context), delivery);
+  await sender(originFromMessage(commMessage), delivery);
 }
 
 /** deferred auto-continue 完成后将主 Agent 续聊回复推送到 IM */
 export async function deliverDeferredAutoContinueReply(
   sender: SubagentResultSender,
-  context: ToolContext,
+  commMessage: Message,
   elements: OutputElement[],
 ): Promise<void> {
   if (!elements.length) return;
-  await sender(originFromToolContext(context), { text: '', elements });
+  await sender(originFromMessage(commMessage), { text: '', elements });
 }

@@ -29,12 +29,12 @@ import type {
   Usage,
   UserMessage,
 } from '@zhin.js/ai';
-import type { Tool, ToolContext } from '../orchestrator/types.js';
+import type { Tool, Message } from '../orchestrator/types.js';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { AgentOrchestrator } from '../orchestrator/index.js';
 import {
   createMemorySessionManager,
-  resolveIMSessionIdFromToolContext,
+  resolveIMSessionIdFromMessage,
   type SessionManager,
 } from '@zhin.js/ai';
 import {
@@ -330,23 +330,8 @@ export class ZhinAgent {
       registerSubagentTask: (done) => getActiveTurnTracker()?.trackSubagent(done),
       eventEmitter: this.emitter,
       onEvent: (event) => {
-        const sessionId = resolveIMSessionIdFromToolContext({
-          platform: event.origin.platform,
-          botId: event.origin.botId,
-          scope: event.origin.sceneType === 'group' || event.origin.sceneType === 'channel'
-            ? event.origin.sceneType
-            : 'private',
-          sceneId: event.origin.sceneId,
-          senderId: event.origin.senderId,
-        });
-        const payload = this.emitter.createPayload(sessionId, {
-          platform: event.origin.platform,
-          botId: event.origin.botId,
-          sceneId: event.origin.sceneId,
-          senderId: event.origin.senderId,
-          messageId: event.origin.messageId,
-          scope: event.origin.sceneType === 'group' ? 'group' : 'private',
-        }, 'text', {
+        const sessionId = resolveIMSessionIdFromMessage(event.origin.message);
+        const payload = this.emitter.createPayload(sessionId, event.origin.message, 'text', {
           source: 'subagent',
           path: 'agent',
           taskId: event.taskId,
@@ -395,18 +380,12 @@ export class ZhinAgent {
   }
 
   async continueAfterDeferredWorker(
-    context: ToolContext,
+    commMessage: Message,
     taskId: string,
     goal: string,
     result: DeferredWorkerResult,
   ): Promise<void> {
-    const sessionKey = resolveIMSessionIdFromToolContext({
-      platform: context.platform,
-      botId: context.botId,
-      scope: context.scope,
-      sceneId: context.sceneId,
-      senderId: context.senderId,
-    });
+    const sessionKey = resolveIMSessionIdFromMessage(commMessage);
     const depth = this.getDeferredAutoContinueDepth(sessionKey);
     this.deferredAutoContinueDepthBySession.set(sessionKey, depth + 1);
 
@@ -420,7 +399,7 @@ export class ZhinAgent {
 
     const message = buildDeferredAutoContinueUserMessage(taskId, goal, result.status);
     const elements = await this.runInTurnContext(randomUUID(), () =>
-      processTextTurn(asPrivate(this), '', context, [], undefined, {
+      processTextTurn(asPrivate(this), '', commMessage, [], undefined, {
         prebuiltMessages: [message],
         deferredAutoContinue: true,
       }),
@@ -428,7 +407,7 @@ export class ZhinAgent {
 
     const sender = this.getDeferredResultSender();
     if (sender && elements.length > 0) {
-      await deliverDeferredAutoContinueReply(sender, context, elements);
+      await deliverDeferredAutoContinueReply(sender, commMessage, elements);
     }
 
     logger.info(formatCompact({
@@ -454,16 +433,7 @@ export class ZhinAgent {
 
   /** fork 模式：主会话 active_leaf 链快照（不含 spawn_task / tool_search 编排噪声） */
   async buildParentContextSnapshotForSubagent(origin: SubagentOrigin): Promise<string | undefined> {
-    const scope = origin.sceneType === 'group' || origin.sceneType === 'channel'
-      ? origin.sceneType
-      : 'private';
-    const sessionKey = resolveIMSessionIdFromToolContext({
-      platform: origin.platform,
-      botId: origin.botId,
-      scope,
-      sceneId: origin.sceneId,
-      senderId: origin.senderId,
-    });
+    const sessionKey = resolveIMSessionIdFromMessage(origin.message);
     const active = await this.agentSessionStore.findActive(sessionKey);
     if (!active) return undefined;
     const ctx = await this.contextRepository.loadContext(active.session_id);
@@ -518,12 +488,12 @@ export class ZhinAgent {
 
   private emitSessionNewEvent(
     sessionId: string,
-    context: ToolContext,
+    commMessage: Message,
     mode: 'text' | 'multimodal',
     content: string,
     reply: string,
   ): void {
-    this.emitter.emit('ai.session.new', this.emitter.createPayload(sessionId, context, mode, {
+    this.emitter.emit('ai.session.new', this.emitter.createPayload(sessionId, commMessage, mode, {
       reason: 'first_message',
       content,
       reply,
@@ -532,7 +502,7 @@ export class ZhinAgent {
 
   emitSessionCompactEvent(
     sessionId: string,
-    context: ToolContext,
+    commMessage: Message,
     mode: 'text' | 'multimodal',
     info: {
       microSavedTokens: number;
@@ -541,7 +511,7 @@ export class ZhinAgent {
       totalTokensAfter: number;
     },
   ): void {
-    this.emitter.emit('ai.session.compact', this.emitter.createPayload(sessionId, context, mode, {
+    this.emitter.emit('ai.session.compact', this.emitter.createPayload(sessionId, commMessage, mode, {
       path: 'agent',
       compactedCount: 1,
       savedTokens: info.microSavedTokens + info.autoSavedTokens,
@@ -553,10 +523,10 @@ export class ZhinAgent {
 
   // ── prompt() / steer / followUp (ADR 0009 D6) ─────────────────────
 
-  private assertMasterForPromptControl(context: ToolContext): void {
+  private assertMasterForPromptControl(commMessage: Message): void {
     try {
       const plugin = getPlugin().root ?? getPlugin();
-      const role = resolveToolRequesterRole(plugin, context);
+      const role = resolveToolRequesterRole(plugin, commMessage);
       if (role !== 'master') {
         throw new PromptAccessDeniedError('steer/followUp 仅 master 可用');
       }
@@ -590,37 +560,25 @@ export class ZhinAgent {
     this.promptController.clearFollowUpQueue(sessionKey);
   }
 
-  steer(message: AgentMessage, context: ToolContext): void {
-    this.assertMasterForPromptControl(context);
-    const sessionKey = resolveIMSessionIdFromToolContext({
-      platform: context.platform,
-      botId: context.botId,
-      scope: context.scope,
-      sceneId: context.sceneId,
-      senderId: context.senderId,
-    });
+  steer(message: AgentMessage, commMessage: Message): void {
+    this.assertMasterForPromptControl(commMessage);
+    const sessionKey = resolveIMSessionIdFromMessage(commMessage);
     this.promptController.steer(sessionKey, message);
   }
 
-  followUp(message: AgentMessage, context: ToolContext): void {
-    this.assertMasterForPromptControl(context);
-    const sessionKey = resolveIMSessionIdFromToolContext({
-      platform: context.platform,
-      botId: context.botId,
-      scope: context.scope,
-      sceneId: context.sceneId,
-      senderId: context.senderId,
-    });
+  followUp(message: AgentMessage, commMessage: Message): void {
+    this.assertMasterForPromptControl(commMessage);
+    const sessionKey = resolveIMSessionIdFromMessage(commMessage);
     this.promptController.followUp(sessionKey, message);
   }
 
   /**
-   * 对齐 Agent.prompt：入队并执行 LLM turn（需 IM ToolContext）。
+   * 对齐 Agent.prompt：入队并执行 LLM turn（需 IM Message 通讯上下文）。
    * process() / processMultimodal() 在 agentLoop 路径下内部委托此方法。
    */
   async prompt(
     input: string | AgentMessage | AgentMessage[],
-    context: ToolContext,
+    commMessage: Message,
     options?: { images?: ImageContent[]; onChunk?: OnChunkCallback },
   ): Promise<void> {
     const messages = normalizePromptMessages(input, options?.images);
@@ -635,7 +593,7 @@ export class ZhinAgent {
       .join('\n')
       .trim();
     await this.runInTurnContext(randomUUID(), () =>
-      processTextTurn(asPrivate(this), text, context, [], options?.onChunk, {
+      processTextTurn(asPrivate(this), text, commMessage, [], options?.onChunk, {
         prebuiltMessages: messages,
       }),
     );
@@ -644,19 +602,13 @@ export class ZhinAgent {
   // ── Core processing ─────────────────────────────────────────────────
 
   /** 旁听由 zhin `message.receive` 写入 im_transcripts，此处保留空实现 */
-  async appendPassiveGroupChatter(_context: ToolContext, _rawContent: string): Promise<void> {
+  async appendPassiveGroupChatter(_commMessage: Message, _rawContent: string): Promise<void> {
     return;
   }
 
   /** 归档当前场景 active 会话（/reset）；下次 @ 将创建新 session 纪元 */
-  async archiveSessionForContext(context: ToolContext): Promise<boolean> {
-    const sessionKey = resolveIMSessionIdFromToolContext({
-      platform: context.platform,
-      botId: context.botId,
-      scope: context.scope,
-      sceneId: context.sceneId,
-      senderId: context.senderId,
-    });
+  async archiveSessionForCommMessage(commMessage: Message): Promise<boolean> {
+    const sessionKey = resolveIMSessionIdFromMessage(commMessage);
     return archiveSessionByKey(
       {
         imSessionStore: this.imSessionStore,
@@ -668,20 +620,14 @@ export class ZhinAgent {
   }
 
   /** 手动压缩当前 session epoch（/compact） */
-  async compactSessionForContext(context: ToolContext): Promise<{ ok: boolean; message: string }> {
-    const sessionKey = resolveIMSessionIdFromToolContext({
-      platform: context.platform,
-      botId: context.botId,
-      scope: context.scope,
-      sceneId: context.sceneId,
-      senderId: context.senderId,
-    });
+  async compactSessionForCommMessage(commMessage: Message): Promise<{ ok: boolean; message: string }> {
+    const sessionKey = resolveIMSessionIdFromMessage(commMessage);
     const deps = {
       imSessionStore: this.imSessionStore,
       agentSessionStore: this.agentSessionStore,
       contextRepository: this.contextRepository,
     };
-    const { sessionId } = await beginTurnSession(deps, sessionKey, context);
+    const { sessionId } = await beginTurnSession(deps, sessionKey, commMessage);
     const provider = this.getTurnProvider();
     const modelId = this.config.chatModel || provider.models[0] || '';
     const llmModel = getModel(provider.name, modelId);
@@ -689,7 +635,7 @@ export class ZhinAgent {
     return manualCompactSession(this.contextRepository, {
       host: asPrivate(this),
       sessionId,
-      context,
+      commMessage,
       model: llmModel,
       compactionConfig: this.config.compaction,
       contextWindow,
@@ -699,28 +645,28 @@ export class ZhinAgent {
 
   async process(
     content: string,
-    context: ToolContext,
+    commMessage: Message,
     externalTools: Tool[] = [],
     onChunk?: OnChunkCallback,
   ): Promise<OutputElement[]> {
     return this.runInTurnContext(randomUUID(), () =>
-      processTextTurn(asPrivate(this), content, context, externalTools, onChunk),
+      processTextTurn(asPrivate(this), content, commMessage, externalTools, onChunk),
     );
   }
   private resolveAgentToolsForTurn(
     allTools: AgentTool[],
-    context: ToolContext,
+    commMessage: Message,
   ): { tools: AgentTool[]; deferredStats?: string } {
-    return resolveToolsForTurn(asPrivate(this), allTools, context);
+    return resolveToolsForTurn(asPrivate(this), allTools, commMessage);
   }
 
   private async runDeferredWorker(
     goal: string,
     toolQuery: string | undefined,
-    context: ToolContext,
+    commMessage: Message,
     allTools: AgentTool[],
   ): Promise<string> {
-    return runDeferredWorkerTurn(asPrivate(this), goal, toolQuery, context, allTools);
+    return runDeferredWorkerTurn(asPrivate(this), goal, toolQuery, commMessage, allTools);
   }
 
   private buildDisciplinedPrompt(basePrompt: string): string {
@@ -729,11 +675,11 @@ export class ZhinAgent {
 
   async processMultimodal(
     parts: ContentPart[],
-    context: ToolContext,
+    commMessage: Message,
     onChunk?: OnChunkCallback,
   ): Promise<OutputElement[]> {
     return this.runInTurnContext(randomUUID(), () =>
-      processMultimodalTurn(asPrivate(this), parts, context, onChunk),
+      processMultimodalTurn(asPrivate(this), parts, commMessage, onChunk),
     );
   }
 

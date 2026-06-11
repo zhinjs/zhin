@@ -1,6 +1,7 @@
 import { setLevel } from '@zhin.js/logger';
 import { DatabaseFeature } from '@zhin.js/core';
 import type { Plugin } from '@zhin.js/core';
+import { registerEndpointIdColumnMigrationHook } from '@zhin.js/agent';
 import type { AppConfig } from '../types.js';
 import { DatabaseLogTransport } from '../log-transport.js';
 import { registerUnifiedInbox } from './register-inbox.js';
@@ -13,6 +14,7 @@ export function applyConfigAndDatabase(plugin: Plugin, appConfig: AppConfig): vo
   setLevel(appConfig.log_level);
 
   if (appConfig.database) {
+    registerEndpointIdColumnMigrationHook(plugin.logger);
     plugin.provide(new DatabaseFeature(appConfig.database));
     const logTransport = new DatabaseLogTransport(plugin);
     const logger = plugin.logger as unknown as { transports: unknown[] };

@@ -69,7 +69,7 @@ declare module '../plugin.js' {
 
 export class AgentPresetFeature extends Feature<AgentPreset> {
   readonly name = 'agentPreset' as const;
-  readonly icon = 'Bot';
+  readonly icon = 'Endpoint';
   readonly desc = 'Agent 预设';
 
   readonly byName = new Map<string, AgentPreset>();

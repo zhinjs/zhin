@@ -7,7 +7,7 @@
 
 ## 标题（三选一）
 
-1. **《10 分钟跑通 Zhin.js：TypeScript 写 IM 机器人，命令和 AI 可以混用》**（推荐）
+1. **《10 分钟跑通 Zhin.js：TypeScript AI Agent 运行时，Sandbox Endpoint 里命令和 AI 混用》**（推荐）
 2. 《不用真机也能调试 QQ 机器人逻辑：Zhin.js Sandbox + Remote Console 入门》
 3. 《从 `npm create zhin-app` 到沙盒对话：一个现代 Node.js 聊天助手框架首跑》
 
@@ -115,7 +115,7 @@ addCommand(
 
 **提示框文案**
 
-> `-y` 模式下 `bots: []` 是预期行为：Sandbox bot 在 Console 打开「沙盒」页时 **自动创建**，无需手写 `context: sandbox`。
+> `-y` 模式下 `endpoints: []` 是预期行为：Sandbox bot 在 Console 打开「沙盒」页时 **自动创建**，无需手写 `context: sandbox`。
 
 ---
 

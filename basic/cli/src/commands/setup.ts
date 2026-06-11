@@ -219,7 +219,7 @@ export const setupCommand = new Command('setup')
       console.log(chalk.yellow('未找到配置文件，将创建 zhin.config.yml\n'));
       config = {
         log_level: 'INFO',
-        bots: [],
+        endpoints: [],
         plugins: []
       };
     }

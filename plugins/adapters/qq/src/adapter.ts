@@ -6,10 +6,12 @@ import {
   Plugin,
 } from "zhin.js";
 import type { Router } from "@zhin.js/host-router";
-import { QQBot } from "./bot.js";
-import type { QQBotConfig, ReceiverMode } from "./types.js";
+import { QQEndpoint } from "./endpoint.js";
+import type { QQEndpointConfig, ReceiverMode } from "./types.js";
 
-export class QQAdapter extends Adapter<QQBot<ReceiverMode>> {
+export class QQAdapter extends Adapter<QQEndpoint<ReceiverMode>> {
+  static override readonly capabilities = ['inbound', 'outbound'] as const;
+
   #router?: Router;
 
   constructor(plugin: Plugin, router?: Router) {
@@ -21,40 +23,40 @@ export class QQAdapter extends Adapter<QQBot<ReceiverMode>> {
     return this.#router;
   }
 
-  createBot(config: QQBotConfig<ReceiverMode>): QQBot<ReceiverMode> {
-    return new QQBot(this, config);
+  createEndpoint(config: QQEndpointConfig<ReceiverMode>): QQEndpoint<ReceiverMode> {
+    return new QQEndpoint(this, config);
   }
 
   // ── IGroupManagement 标准群管方法 ──────────────────────────────────
 
-  async kickMember(botId: string, sceneId: string, userId: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.removeGuildMember(sceneId, userId, false);
+  async kickMember(endpointId: string, sceneId: string, userId: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.removeGuildMember(sceneId, userId, false);
   }
 
-  async muteMember(botId: string, sceneId: string, userId: string, duration = 600) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.muteMembers(sceneId, [userId], duration);
+  async muteMember(endpointId: string, sceneId: string, userId: string, duration = 600) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.muteMembers(sceneId, [userId], duration);
   }
 
-  async muteAll(botId: string, sceneId: string, enable = true) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.muteAll(sceneId, enable ? 600 : 0);
+  async muteAll(endpointId: string, sceneId: string, enable = true) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.muteAll(sceneId, enable ? 600 : 0);
   }
 
-  async listMembers(botId: string, sceneId: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.getGuildMembers(sceneId);
+  async listMembers(endpointId: string, sceneId: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.getGuildMembers(sceneId);
   }
 
-  async getGroupInfo(botId: string, sceneId: string) {
-    const bot = this.bots.get(botId);
-    if (!bot) throw new Error(`Bot ${botId} 不存在`);
-    return bot.getGuildInfo(sceneId);
+  async getGroupInfo(endpointId: string, sceneId: string) {
+    const endpoint = this.endpoints.get(endpointId);
+    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+    return endpoint.getGuildInfo(sceneId);
   }
 
   // ── 生命周期 ───────────────────────────────────────────────────────

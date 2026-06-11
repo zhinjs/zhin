@@ -2,7 +2,7 @@
  * 钉钉适配器类型定义
  */
 
-export interface DingTalkBotConfig {
+export interface DingTalkEndpointConfig {
   context: "dingtalk";
   name: string;
   appKey: string;

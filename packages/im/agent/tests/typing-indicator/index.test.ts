@@ -68,7 +68,7 @@ describe('TypingIndicatorManager', () => {
 
       const indicator = manager.createIndicator({
         platform: 'icqq',
-        botId: '75318',
+        endpointId: '75318',
         sessionId: 'private:liuchunlang',
         sceneType: 'private',
       });
@@ -93,7 +93,7 @@ describe('TypingIndicatorManager', () => {
 
       manager.createIndicator({
         platform: 'icqq',
-        botId: '75318',
+        endpointId: '75318',
         sessionId: 'private:liuchunlang',
         sceneType: 'private',
       });
@@ -101,7 +101,7 @@ describe('TypingIndicatorManager', () => {
       expect(adapter.createIndicator).toHaveBeenCalledWith(
         expect.objectContaining({
           platform: 'icqq',
-          botId: '75318',
+          endpointId: '75318',
         }),
         expect.objectContaining({
           type: 'reaction',
@@ -128,7 +128,7 @@ describe('TypingIndicatorManager', () => {
       manager.createIndicator(
         {
           platform: 'icqq',
-          botId: '75318',
+          endpointId: '75318',
           sessionId: 'private:liuchunlang',
           sceneType: 'private',
         },
@@ -146,7 +146,7 @@ describe('TypingIndicatorManager', () => {
     it('应该返回 NoneTypingIndicator 当没有适配器时', () => {
       const indicator = manager.createIndicator({
         platform: 'unknown',
-        botId: '75318',
+        endpointId: '75318',
         sessionId: 'private:liuchunlang',
         sceneType: 'private',
       });
@@ -173,7 +173,7 @@ describe('TypingIndicatorManager', () => {
 
       const indicator = await manager.start({
         platform: 'icqq',
-        botId: '75318',
+        endpointId: '75318',
         sessionId: 'private:liuchunlang',
         sceneType: 'private',
       });
@@ -199,14 +199,14 @@ describe('TypingIndicatorManager', () => {
 
       await manager.start({
         platform: 'icqq',
-        botId: '75318',
+        endpointId: '75318',
         sessionId: 'private:liuchunlang',
         sceneType: 'private',
       });
 
       await manager.stop({
         platform: 'icqq',
-        botId: '75318',
+        endpointId: '75318',
         sessionId: 'private:liuchunlang',
         sceneType: 'private',
       });
@@ -239,14 +239,14 @@ describe('TypingIndicatorManager', () => {
 
       await manager.start({
         platform: 'icqq',
-        botId: '75318',
+        endpointId: '75318',
         sessionId: 'session1',
         sceneType: 'private',
       });
 
       await manager.start({
         platform: 'icqq',
-        botId: '75318',
+        endpointId: '75318',
         sessionId: 'session2',
         sceneType: 'private',
       });
@@ -264,7 +264,7 @@ describe('ReactionTypingIndicator', () => {
     const indicator = new ReactionTypingIndicator(
       {
         platform: 'icqq',
-        botId: '75318',
+        endpointId: '75318',
         messageId: '123456',
         sceneType: 'private',
       },
@@ -286,7 +286,7 @@ describe('ReactionTypingIndicator', () => {
     const indicator = new ReactionTypingIndicator(
       {
         platform: 'icqq',
-        botId: '75318',
+        endpointId: '75318',
         messageId: '123456',
         sceneType: 'private',
       },
@@ -315,7 +315,7 @@ describe('ReactionTypingIndicator', () => {
     const indicator = new ReactionTypingIndicator(
       {
         platform: 'icqq',
-        botId: '75318',
+        endpointId: '75318',
         messageId: '123456',
         sceneType: 'private',
       },
@@ -343,7 +343,7 @@ describe('ReactionTypingIndicator', () => {
     const indicator = new ReactionTypingIndicator(
       {
         platform: 'icqq',
-        botId: '75318',
+        endpointId: '75318',
         messageId: '123456',
         sceneType: 'private',
       },
@@ -364,7 +364,7 @@ describe('ReactionTypingIndicator', () => {
     const indicator = new ReactionTypingIndicator(
       {
         platform: 'icqq',
-        botId: '75318',
+        endpointId: '75318',
         sceneType: 'private',
       },
       {
@@ -387,7 +387,7 @@ describe('MessageTypingIndicator', () => {
     const indicator = new MessageTypingIndicator(
       {
         platform: 'icqq',
-        botId: '75318',
+        endpointId: '75318',
         sessionId: 'private:liuchunlang',
         sceneType: 'private',
       },
@@ -409,7 +409,7 @@ describe('MessageTypingIndicator', () => {
     const indicator = new MessageTypingIndicator(
       {
         platform: 'icqq',
-        botId: '75318',
+        endpointId: '75318',
         sessionId: 'private:liuchunlang',
         sceneType: 'private',
       },
@@ -426,7 +426,7 @@ describe('MessageTypingIndicator', () => {
     expect(sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         platform: 'icqq',
-        botId: '75318',
+        endpointId: '75318',
         sessionId: 'private:liuchunlang',
         sceneType: 'private',
       }),
@@ -442,7 +442,7 @@ describe('MessageTypingIndicator', () => {
     const indicator = new MessageTypingIndicator(
       {
         platform: 'icqq',
-        botId: '75318',
+        endpointId: '75318',
         sessionId: 'private:liuchunlang',
         sceneType: 'private',
       },
@@ -469,7 +469,7 @@ describe('MessageTypingIndicator', () => {
     const indicator = new MessageTypingIndicator(
       {
         platform: 'icqq',
-        botId: '75318',
+        endpointId: '75318',
         sceneType: 'private',
       },
       {
@@ -530,7 +530,7 @@ describe('ReactionTypingIndicatorAdapter', () => {
     const indicator = adapter.createIndicator(
       {
         platform: 'icqq',
-        botId: '75318',
+        endpointId: '75318',
         messageId: '123456',
         sceneType: 'private',
       },
@@ -555,7 +555,7 @@ describe('ReactionTypingIndicatorAdapter', () => {
     const indicator = adapter.createIndicator(
       {
         platform: 'icqq',
-        botId: '75318',
+        endpointId: '75318',
         sessionId: 'private:liuchunlang',
         sceneType: 'private',
       },
@@ -592,7 +592,7 @@ describe('GenericTypingIndicatorAdapter', () => {
     const indicator = adapter.createIndicator(
       {
         platform: 'telegram',
-        botId: '123456',
+        endpointId: '123456',
         sessionId: 'user:123456',
         sceneType: 'private',
       },
@@ -615,7 +615,7 @@ describe('GenericTypingIndicatorAdapter', () => {
     const indicator = adapter.createIndicator(
       {
         platform: 'telegram',
-        botId: '123456',
+        endpointId: '123456',
         sessionId: 'user:123456',
         sceneType: 'private',
       },
@@ -664,7 +664,7 @@ describe('便捷函数', () => {
 
     const indicator = await startTypingIndicator({
       platform: 'icqq',
-      botId: '75318',
+      endpointId: '75318',
       sessionId: 'private:liuchunlang',
       sceneType: 'private',
     });
@@ -691,14 +691,14 @@ describe('便捷函数', () => {
 
     await startTypingIndicator({
       platform: 'icqq',
-      botId: '75318',
+      endpointId: '75318',
       sessionId: 'private:liuchunlang',
       sceneType: 'private',
     });
 
     await stopTypingIndicator({
       platform: 'icqq',
-      botId: '75318',
+      endpointId: '75318',
       sessionId: 'private:liuchunlang',
       sceneType: 'private',
     });

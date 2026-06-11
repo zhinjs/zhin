@@ -2,7 +2,7 @@
  * edit_file — 内置查找替换编辑
  */
 import * as fs from 'node:fs/promises';
-import type { Tool, ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import type { Tool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import {
   checkFileAccess,
   isBlockedDevicePath,
@@ -54,7 +54,7 @@ export class EditFileBuiltinTool extends BuiltinBaseTool {
     );
   }
 
-  async run(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
+  async run(args: Record<string, unknown>, commMessage?: Message): Promise<ToolResult> {
     const filePathArg = args.file_path;
     const oldStringArg = args.old_string;
     const newStringArg = args.new_string;
@@ -69,21 +69,21 @@ export class EditFileBuiltinTool extends BuiltinBaseTool {
     }
 
     // 第 1 层：角色门控
-    const roleDecision = checkFileToolAccess('edit_file', context);
+    const roleDecision = checkFileToolAccess('edit_file', commMessage);
     if (!roleDecision.allowed) {
       if (roleDecision.needsOwnerApproval) return toOwnerSignal(roleDecision);
       return toDenyError(roleDecision);
     }
 
     // 第 1.5 层：危险工具审批
-    const dangerousDecision = checkDangerousToolAccess('edit_file', context);
+    const dangerousDecision = checkDangerousToolAccess('edit_file', commMessage);
     if (!dangerousDecision.allowed) {
       if (dangerousDecision.needsOwnerApproval) return toOwnerSignal(dangerousDecision);
       return toDenyError(dangerousDecision);
     }
 
     // 第 2 层：文件角色权限矩阵
-    const fileRole = context?.fileRole ?? toolRequesterRoleToFileRole(roleDecision.role);
+    const fileRole = toolRequesterRoleToFileRole(roleDecision.role);
     const permResult = checkFilePermission(fileRole, 'update', filePathArg);
     if (!permResult.allowed) {
       return formatFilePermissionMessage(permResult, 'edit_file');
@@ -93,12 +93,12 @@ export class EditFileBuiltinTool extends BuiltinBaseTool {
 
     try {
       const fp = expandHome(filePathArg);
-      const memoryDecision = checkMemoryWritePath(fp, context);
+      const memoryDecision = checkMemoryWritePath(fp, commMessage);
       if (!memoryDecision.allowed) {
         return `Error: ${memoryDecision.reason}`;
       }
 
-      const sensitiveDecision = checkSensitiveFilePathAccess('edit_file', fp, context);
+      const sensitiveDecision = checkSensitiveFilePathAccess('edit_file', fp, commMessage);
       if (!sensitiveDecision.allowed) {
         if (sensitiveDecision.needsOwnerApproval) return toOwnerSignal(sensitiveDecision);
         return toDenyError(sensitiveDecision);

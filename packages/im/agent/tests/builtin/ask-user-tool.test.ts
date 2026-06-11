@@ -2,6 +2,8 @@
  * ask_user 内置工具单测 — 错误路径与 formatOwnerResponse
  */
 import { describe, it, expect } from 'vitest';
+import { mockCommMessage } from '../helpers/mock-comm-message.js';
+
 import {
   AskUserBuiltinTool,
   ASK_USER_PARAMETERS,
@@ -9,7 +11,7 @@ import {
   formatOwnerResponse,
 } from '../../src/builtin/ask-user-tool.js';
 import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
-import type { ToolContext } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 
 describe('ASK_USER_PARAMETERS', () => {
   it('options array has string items (OpenAI strict schema)', () => {
@@ -22,7 +24,7 @@ describe('ASK_USER_PARAMETERS', () => {
 describe('AskUserBuiltinTool', () => {
   it('无 message 上下文返回错误', async () => {
     const inst = new AskUserBuiltinTool(undefined);
-    const out = String(await inst.run({ question: 'q?' }, { platform: 'x', botId: 'b' } as ToolContext));
+    const out = String(await inst.run({ question: 'q?' }, undefined));
     expect(out).toContain('没有消息来源');
   });
 
@@ -30,7 +32,7 @@ describe('AskUserBuiltinTool', () => {
     const inst = new AskUserBuiltinTool(undefined);
     const out = String(await inst.run(
       { question: 'q?' },
-      { platform: 'x', botId: 'b', message: {} } as ToolContext,
+      mockCommMessage({ adapter: 'x', endpoint: 'b' }),
     ));
     expect(out).toContain('插件实例不可用');
   });
@@ -42,14 +44,14 @@ describe('AskUserBuiltinTool', () => {
 
   it('normalizeTool 执行无上下文时走错误分支', async () => {
     const tool = createAskUserTool();
-    const agentTool = normalizeTool(tool, { platform: 't' } as ToolContext);
+    const agentTool = normalizeTool(tool);
     const out = String(await agentTool.execute({ question: 'hi' }));
     expect(out).toContain('消息来源');
   });
 
   it('normalizeTool 应保留 ask_user 长超时', () => {
     const tool = createAskUserTool();
-    const agentTool = normalizeTool(tool, { platform: 't' } as ToolContext);
+    const agentTool = normalizeTool(tool, mockCommMessage({ adapter: 't' }));
     expect(agentTool.timeout).toBe(150_000);
   });
 });

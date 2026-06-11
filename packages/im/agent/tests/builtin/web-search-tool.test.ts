@@ -13,7 +13,7 @@ import {
 } from '../../src/builtin/bing-search-html.js';
 import { DEFAULT_WEB_SEARCH_MARKET } from '../../src/builtin/web-search-locale.js';
 import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
-import type { ToolContext } from '@zhin.js/core';
+import { mockCommMessage } from '../helpers/mock-comm-message.js';
 
 const originalFetch = globalThis.fetch;
 
@@ -69,7 +69,7 @@ describe('WebSearchBuiltinTool', () => {
     expect(out).toContain('https://example.com/direct');
   });
 
-  it('ToolContext.extra.web_search_locale 覆盖默认 Bing 市场', async () => {
+  it('Message.extra.web_search_locale 覆盖默认 Bing 市场', async () => {
     const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
       expect(String(url)).toContain('setmkt=en-US');
       expect((init?.headers as Record<string, string>)['Accept-Language']).toMatch(/en-US/i);
@@ -79,7 +79,7 @@ describe('WebSearchBuiltinTool', () => {
     const inst = new WebSearchBuiltinTool();
     await inst.run(
       { query: 'x', limit: 2 },
-      { platform: 'test', extra: { web_search_locale: 'en' } } as ToolContext,
+      mockCommMessage({ adapter: 'test', extra: { web_search_locale: 'en' } }),
     );
     expect(fetchMock).toHaveBeenCalled();
   });
@@ -111,7 +111,7 @@ describe('WebSearchBuiltinTool', () => {
   it('execute 经 normalizeTool 绑定 context 可调用', async () => {
     vi.stubGlobal('fetch', async () => new Response(bingResultHtml(), { status: 200 }));
     const tool = createWebSearchTool();
-    const ctx = { platform: 'test' } as ToolContext;
+    const ctx = mockCommMessage({ adapter: 'test' });
     const agentTool = normalizeTool(tool, ctx);
     const result = await agentTool.execute({ query: 'test' });
     expect(String(result)).toContain('Repo Title');

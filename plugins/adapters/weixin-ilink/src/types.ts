@@ -1,4 +1,4 @@
-export interface WeixinIlinkBotConfig {
+export interface WeixinIlinkEndpointConfig {
   context: "weixin-ilink";
   name: string;
   /** 观测用 bot_agent，默认 Zhin.js/<version> */

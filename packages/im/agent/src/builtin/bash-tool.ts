@@ -3,12 +3,13 @@
  */
 import { exec, type ExecOptions } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { Tool, ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import { getPlugin, type Tool, type Message, type ToolParametersSchema, type ToolResult } from '@zhin.js/core';
+import { resolveToolRequesterRole } from '../security/owner-approve-always-store.js';
+import { checkBashFilePermission, formatFilePermissionMessage, toolRequesterRoleToFileRole } from '../security/file-role-policy.js';
 import {
   checkBashCommandSafety,
   classifyBashCommand,
 } from '../security/file-policy.js';
-import { checkBashFilePermission, formatFilePermissionMessage } from '../security/file-role-policy.js';
 import { getSandbox } from '../security/sandbox.js';
 import { errMsg } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
@@ -51,7 +52,7 @@ export class BashBuiltinTool extends BuiltinBaseTool {
     this.useSandbox = options?.useSandbox ?? true;
   }
 
-  async run(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
+  async run(args: Record<string, unknown>, commMessage?: Message): Promise<ToolResult> {
     try {
       const cmd = String(args.command || '');
       if (!cmd.trim()) return 'Error: command is required';
@@ -59,7 +60,10 @@ export class BashBuiltinTool extends BuiltinBaseTool {
       const safety = checkBashCommandSafety(cmd);
       if (!safety.safe) return `Error: ${safety.reason}`;
 
-      const role = context?.fileRole ?? 'owner';
+      const requesterRole = commMessage
+        ? resolveToolRequesterRole(getPlugin(), commMessage)
+        : 'unknown';
+      const role = toolRequesterRoleToFileRole(requesterRole);
       const filePermResult = checkBashFilePermission(role, cmd);
       if (!filePermResult.allowed) {
         return formatFilePermissionMessage(filePermResult, 'bash', `Shell 命令: ${cmd.slice(0, 200)}`);

@@ -13,7 +13,7 @@ const TABLE_NOTICE = 'unified_inbox_notice';
 const MessageDefinition = {
   id: { type: 'integer' as const, primary: true, autoIncrement: true },
   adapter: { type: 'text' as const, nullable: false },
-  bot_id: { type: 'text' as const, nullable: false },
+  endpoint_id: { type: 'text' as const, nullable: false },
   platform_message_id: { type: 'text' as const, nullable: false },
   channel_id: { type: 'text' as const, nullable: false },
   channel_type: { type: 'text' as const, nullable: false },
@@ -28,7 +28,7 @@ const MessageDefinition = {
 const RequestDefinition = {
   id: { type: 'integer' as const, primary: true, autoIncrement: true },
   adapter: { type: 'text' as const, nullable: false },
-  bot_id: { type: 'text' as const, nullable: false },
+  endpoint_id: { type: 'text' as const, nullable: false },
   platform_request_id: { type: 'text' as const, nullable: false },
   type: { type: 'text' as const, nullable: false },
   sub_type: { type: 'text' as const, nullable: true },
@@ -45,7 +45,7 @@ const RequestDefinition = {
 const NoticeDefinition = {
   id: { type: 'integer' as const, primary: true, autoIncrement: true },
   adapter: { type: 'text' as const, nullable: false },
-  bot_id: { type: 'text' as const, nullable: false },
+  endpoint_id: { type: 'text' as const, nullable: false },
   platform_notice_id: { type: 'text' as const, nullable: false },
   type: { type: 'text' as const, nullable: false },
   sub_type: { type: 'text' as const, nullable: true },
@@ -76,12 +76,12 @@ function persistMessage(plugin: Plugin, msg: Message): void {
   const Message = getModel(plugin, TABLE_MESSAGE);
   if (!Message) return;
   const adapter = String(msg?.$adapter ?? '');
-  const botId = String(msg?.$bot ?? '');
+  const endpointId = String(msg?.$endpoint ?? '');
   const channel = msg?.$channel ?? {};
   const sender = msg?.$sender ?? {};
   Message.create({
     adapter,
-    bot_id: botId,
+    endpoint_id: endpointId,
     platform_message_id: String(msg?.$id ?? ''),
     channel_id: String(channel?.id ?? ''),
     channel_type: String(channel?.type ?? 'private'),
@@ -100,12 +100,12 @@ function persistRequest(plugin: Plugin, req: Request): void {
   const Request = getModel(plugin, TABLE_REQUEST);
   if (!Request) return;
   const adapter = String(req?.$adapter ?? '');
-  const botId = String(req?.$bot ?? '');
+  const endpointId = String(req?.$endpoint ?? '');
   const channel = req?.$channel ?? {};
   const sender = req?.$sender ?? {};
   Request.create({
     adapter,
-    bot_id: botId,
+    endpoint_id: endpointId,
     platform_request_id: String(req?.$id ?? ''),
     type: String(req?.$type ?? ''),
     sub_type: req?.$subType != null ? String(req.$subType) : null,
@@ -126,14 +126,14 @@ function persistNotice(plugin: Plugin, notice: Notice): void {
   const Notice = getModel(plugin, TABLE_NOTICE);
   if (!Notice) return;
   const adapter = String(notice?.$adapter ?? '');
-  const botId = String(notice?.$bot ?? '');
+  const endpointId = String(notice?.$endpoint ?? '');
   const channel = notice?.$channel ?? {} as NoticeChannel;
   const operator = notice?.$operator ?? {} as MessageSender;
   const target = notice?.$target ?? {} as MessageSender;
   const payload: Record<string, unknown> = {};
   try {
     for (const k of Object.keys(notice || {})) {
-      if (k.startsWith('$') || k === 'adapter' || k === 'bot') continue;
+      if (k.startsWith('$') || k === 'adapter' || k === 'endpoint') continue;
       payload[k] = notice[k as keyof Notice];
     }
   } catch {
@@ -141,7 +141,7 @@ function persistNotice(plugin: Plugin, notice: Notice): void {
   }
   Notice.create({
     adapter,
-    bot_id: botId,
+    endpoint_id: endpointId,
     platform_notice_id: String(notice?.$id ?? ''),
     type: String(notice?.$type ?? ''),
     sub_type: notice?.$subType != null ? String(notice.$subType) : null,
@@ -194,7 +194,7 @@ export function registerUnifiedInbox(plugin: Plugin, appConfig: AppConfig): void
 
 /**
  * 订阅根插件生命周期 message.receive（在 MessageDispatcher.dispatch 完成之后触发）。
- * 将消息写入收件箱。应在 connectBots / loadPlugins 之后调用，以便 root.adapters 已就绪。
+ * 将消息写入收件箱。应在 connectEndpoints / loadPlugins 之后调用，以便 root.adapters 已就绪。
  */
 export function registerUnifiedInboxMessageListeners(plugin: Plugin, appConfig: AppConfig): void {
   const enabled = !!appConfig?.inbox?.enabled;

@@ -2,6 +2,8 @@
  * todo_write 内置工具（BuiltinBaseTool）单测
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mockCommMessage } from '../helpers/mock-comm-message.js';
+
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -11,7 +13,7 @@ import {
 } from '../../src/builtin/todo-write-tool.js';
 import { TodoReadBuiltinTool } from '../../src/builtin/todo-read-tool.js';
 import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
-import type { ToolContext } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 
 describe('TodoWriteBuiltinTool', () => {
   let dataDir: string;
@@ -68,7 +70,7 @@ describe('TodoWriteBuiltinTool', () => {
 
   it('execute 与 normalizeTool 绑定 context 时可调用', async () => {
     const tool = createTodoWriteTool(dataDir);
-    const ctx = { platform: 'test' } as ToolContext;
+    const ctx = mockCommMessage({ adapter: 'test' });
     const agentTool = normalizeTool(tool, ctx);
     const result = await agentTool.execute({
       items: [{ title: 'via execute', status: 'done' }],

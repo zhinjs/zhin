@@ -1,7 +1,7 @@
-import { Adapter, Plugin, Bot, SendContent, SendOptions, MessageBase, Message, segment } from "@zhin.js/core";
+import { Adapter, Plugin, Endpoint, SendContent, SendOptions, MessageBase, Message, segment } from "@zhin.js/core";
 import { bindStdin, runtimePid, runtimeUser } from "./runtime-io.js";
 
-export class ProcessBot implements Bot<{ owner?: string },{content:string,ts:number}>{
+export class ProcessEndpoint implements Endpoint<{ owner?: string },{content:string,ts:number}>{
     $id = runtimePid();
     get logger() {
         return this.adapter.logger;
@@ -25,7 +25,7 @@ export class ProcessBot implements Bot<{ owner?: string },{content:string,ts:num
         const base:MessageBase={
             $id: `${event.ts}`,
             $adapter: 'process',
-            $bot: runtimePid(),
+            $endpoint: runtimePid(),
             $sender: {
                 id: runtimeUser(),
                 name: runtimeUser(),
@@ -44,7 +44,7 @@ export class ProcessBot implements Bot<{ owner?: string },{content:string,ts:num
             $reply: async (content: SendContent) => {
                 return await this.adapter.sendMessage({
                     context: 'process',
-                    bot: base.$bot,
+                    endpoint: base.$endpoint,
                     content,
                     id: base.$sender.id,
                     type: base.$channel.type,
@@ -67,13 +67,15 @@ export class ProcessBot implements Bot<{ owner?: string },{content:string,ts:num
         this.#unbindStdin = null;
     }
 }
-export class ProcessAdapter extends Adapter<ProcessBot>{
+export class ProcessAdapter extends Adapter<ProcessEndpoint>{
+    static override readonly capabilities = ['inbound', 'outbound'] as const;
+
     constructor(plugin: Plugin) {
         super(plugin, 'process', [{ owner: runtimePid() }]);
     }
     
-    createBot(config: Adapter.BotConfig<ProcessBot>): ProcessBot {
-        return new ProcessBot(this, config);
+    createEndpoint(config: Adapter.EndpointConfig<ProcessEndpoint>): ProcessEndpoint {
+        return new ProcessEndpoint(this, config);
     }
 }
 declare module '../adapter.js'{

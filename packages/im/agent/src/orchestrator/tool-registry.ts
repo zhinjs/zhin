@@ -14,7 +14,7 @@ import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from '../reserved-to
 import type {
   ResourceScope,
   Tool,
-  ToolContext,
+  Message,
   SenderRole,
   ToolParametersSchema,
   PropertySchema,
@@ -45,10 +45,9 @@ export class ZhinTool {
   #name: string;
   #description: string = '';
   #params: ParamDef[] = [];
-  #execute?: (args: Record<string, any>, context?: ToolContext) => MaybePromise<any>;
+  #execute?: (args: Record<string, any>, commMessage?: Message) => MaybePromise<any>;
   #platforms: string[] = [];
   #scopes: ToolScope[] = [];
-  #requiredAnyRole: SenderRole[] = [];
   #permissions: string[] = [];
   #tags: string[] = [];
   #keywords: string[] = [];
@@ -74,7 +73,6 @@ export class ZhinTool {
 
   platform(...platforms: string[]): this { this.#platforms.push(...platforms); return this; }
   scope(...scopes: ToolScope[]): this { this.#scopes.push(...scopes); return this; }
-  requireAnyRole(...roles: SenderRole[]): this { this.#requiredAnyRole = [...roles]; return this; }
   permit(...permissions: string[]): this { this.#permissions.push(...permissions); return this; }
   tag(...tags: string[]): this { this.#tags.push(...tags); return this; }
   keyword(...keywords: string[]): this { this.#keywords.push(...keywords); return this; }
@@ -82,7 +80,7 @@ export class ZhinTool {
   preExec(value = true): this { this.#preExecutable = value; return this; }
   kind(value: string): this { this.#kind = value; return this; }
 
-  execute(callback: (args: Record<string, any>, context?: ToolContext) => MaybePromise<any>): this {
+  execute(callback: (args: Record<string, any>, commMessage?: Message) => MaybePromise<any>): this {
     this.#execute = callback;
     return this;
   }
@@ -112,7 +110,6 @@ export class ZhinTool {
     };
     if (this.#platforms.length > 0) tool.platforms = this.#platforms;
     if (this.#scopes.length > 0) tool.scopes = this.#scopes;
-    if (this.#requiredAnyRole.length > 0) tool.requiredAnyRole = [...this.#requiredAnyRole];
     if (this.#permissions.length > 0) tool.permissions = this.#permissions;
     if (this.#tags.length > 0) tool.tags = this.#tags;
     if (this.#hidden) tool.hidden = this.#hidden;
@@ -131,7 +128,7 @@ export class ZhinTool {
     };
     if (this.#platforms.length > 0) json.platforms = this.#platforms;
     if (this.#scopes.length > 0) json.scopes = this.#scopes;
-    if (this.#requiredAnyRole.length > 0) json.requiredAnyRole = [...this.#requiredAnyRole];
+    if (this.#permissions.length > 0) json.permissions = [...this.#permissions];
     if (this.#tags.length > 0) json.tags = this.#tags;
     return json;
   }
@@ -146,7 +143,7 @@ export class ZhinTool {
         lines.push(`    ${p.name}: ${p.schema.type} ${req} ${p.schema.description || ''}`);
       }
     }
-    if (this.#requiredAnyRole.length > 0) lines.push(`  角色: ${this.#requiredAnyRole.join(', ')}`);
+    if (this.#permissions.length > 0) lines.push(`  权限: ${this.#permissions.join(', ')}`);
     if (this.#platforms.length > 0) lines.push(`  平台: ${this.#platforms.join(', ')}`);
     if (this.#scopes.length > 0) lines.push(`  场景: ${this.#scopes.join(', ')}`);
     return lines.join('\n');
@@ -211,8 +208,8 @@ export class ToolRegistry extends ResourceRegistry<AgentTool> {
     return this.remove(name, scope);
   }
 
-  filterByContext(tools: Tool[], context: ToolContext): Tool[] {
-    return tools.filter(t => canAccessTool(t, context));
+  filterByContext(tools: Tool[], commMessage: Message): Tool[] {
+    return tools.filter(t => canAccessTool(t, commMessage));
   }
 
   filterByRelevance(message: string, agentId?: string, options?: ToolFilterOptions): AgentTool[] {
@@ -220,7 +217,7 @@ export class ToolRegistry extends ResourceRegistry<AgentTool> {
     return sharedToolSelection.filterByRelevance(message, pool, options);
   }
 
-  async execute(name: string, args: Record<string, any>, _context?: ToolContext): Promise<unknown> {
+  async execute(name: string, args: Record<string, any>, _commMessage?: Message): Promise<unknown> {
     const tool = this.get(name) ?? this.findInSpecialized(name);
     if (!tool) throw new Error(`Tool "${name}" not found`);
     return tool.execute(args);

@@ -175,7 +175,7 @@ export {
   AI_SESSION_MODEL,
   resolveIMSessionId,
   resolveIMSceneIdForSession,
-  resolveIMSessionIdFromToolContext,
+  resolveIMSessionIdFromMessage,
 } from './memory/session.js';
 export type { ISessionManager, IMSessionScope, ResolveIMSessionIdInput, AISessionStatus } from './memory/session.js';
 

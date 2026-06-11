@@ -11,7 +11,7 @@
  */
 import type { OutputElement } from '@zhin.js/ai';
 import type { ZhinAgent } from './zhin-agent/index.js';
-import { Logger } from '@zhin.js/core';
+import { Logger, createSyntheticMessage } from '@zhin.js/core';
 import {
   createNotificationRouter,
   type NotificationRouter,
@@ -119,15 +119,16 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       }
 
       const im = effectiveNotify.channel === 'im' ? effectiveNotify : undefined;
-      const sceneId = im?.sceneId || 'default';
+      const sceneId = im?.sceneId || 'cron';
+      const scope = (im?.scope as 'private' | 'group' | 'channel' | undefined) || 'private';
+      const commMessage = createSyntheticMessage({
+        adapter: im?.platform || 'cron',
+        endpoint: im?.endpointId || 'default',
+        sender: { id: 'system', name: 'system', isMaster: true },
+        channel: { type: scope, id: sceneId },
+      });
       const elements = await withLock(sceneId, () =>
-        deps.agent.process(finalPrompt, {
-          platform: im?.platform || 'cron',
-          senderId: 'system',
-          botId: im?.botId,
-          sceneId: im?.sceneId || 'cron',
-          scope: (im?.scope as 'private' | 'group' | 'channel' | undefined) || undefined,
-        }),
+        deps.agent.process(finalPrompt, commMessage),
       );
 
       const text = elementsToText(elements);

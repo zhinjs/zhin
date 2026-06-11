@@ -5,7 +5,7 @@ import {
   type Message,
   type MessageSendPayload,
   type Plugin,
-  resolveSenderRoles,
+  resolveSubjectRoles,
   extractTextContent,
 } from '@zhin.js/core';
 import type { AppConfig } from '../types.js';
@@ -47,7 +47,7 @@ function recordTranscript(plugin: Plugin, input: ImTranscriptWriteInput): void {
   model.create({
     message_id: input.message_id ?? '',
     platform: input.platform,
-    bot_id: input.bot_id,
+    endpoint_id: input.endpoint_id,
     scene_id: input.scene_id,
     scene_type: input.scene_type,
     sender_id: input.sender_id,
@@ -63,13 +63,13 @@ function recordTranscript(plugin: Plugin, input: ImTranscriptWriteInput): void {
 function recordInbound(plugin: Plugin, message: Message): void {
   const sceneType = message.$channel?.type || 'private';
   const sceneId = message.$channel?.id || message.$sender.id;
-  const roles = resolveSenderRoles(message, {}, undefined).roles;
+  const roles = resolveSubjectRoles(plugin, message).roles;
   const senderRole = roles[0] ?? 'user';
 
   recordTranscript(plugin, {
     message_id: String(message.$id ?? ''),
     platform: message.$adapter,
-    bot_id: String(message.$bot ?? ''),
+    endpoint_id: String(message.$endpoint ?? ''),
     scene_id: String(sceneId),
     scene_type: sceneType,
     sender_id: String(message.$sender?.id ?? ''),
@@ -109,11 +109,11 @@ function recordOutbound(plugin: Plugin, payload: MessageSendPayload): void {
   recordTranscript(plugin, {
     message_id: String(messageId ?? ''),
     platform: adapter,
-    bot_id: String(options.bot ?? ''),
+    endpoint_id: String(options.endpoint ?? ''),
     scene_id: String(options.id ?? ''),
     scene_type: options.type,
-    sender_id: String(options.bot ?? ''),
-    sender_name: String(options.bot ?? ''),
+    sender_id: String(options.endpoint ?? ''),
+    sender_name: String(options.endpoint ?? ''),
     sender_role: 'assistant',
     direction: 'outbound',
     body,

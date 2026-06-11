@@ -23,7 +23,7 @@ describe('registerHtmlCardOutbound', () => {
     expect(handlers).toHaveLength(1);
     const result = (await handlers[0]!({
       context: 'icqq',
-      bot: '1',
+      endpoint: '1',
       type: 'private',
       id: 'u1',
       content: segment.html({ html: '<div>card</div>', fileName: 'stats.png' }),
@@ -66,7 +66,7 @@ describe('registerHtmlCardOutbound', () => {
     const input = segment.html({ html: '<div>keep</div>' });
     const result = (await handlers[0]!({
       context: 'icqq',
-      bot: '1',
+      endpoint: '1',
       type: 'private',
       id: 'u1',
       content: input,

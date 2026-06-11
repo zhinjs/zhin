@@ -2,7 +2,7 @@
 
 框架无关的 AI 引擎，提供 LLM Provider 抽象、Agent 循环、会话管理、记忆与压缩、成本追踪、性能缓存等能力。
 
-不依赖任何 IM/Bot 概念，可独立用于 Web 后端、CLI 工具、自动化脚本等任意 Node.js 应用。
+不依赖任何 IM/Endpoint 概念，可独立用于 Web 后端、CLI 工具、自动化脚本等任意 Node.js 应用。
 
 ## 核心模块
 

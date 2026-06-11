@@ -2,6 +2,8 @@
  * web_fetch 内置工具（BuiltinBaseTool）单测 — fetch 全局 mock
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { mockCommMessage } from '../helpers/mock-comm-message.js';
+
 import * as core from '@zhin.js/core';
 import {
   createWebFetchTool,
@@ -10,7 +12,7 @@ import {
 } from '../../src/builtin/web-fetch-tool.js';
 import { ZHIN_WEB_USER_AGENT } from '../../src/builtin/web-tool-utils.js';
 import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
-import type { ToolContext } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 
 const originalFetch = globalThis.fetch;
 
@@ -23,7 +25,7 @@ function mockPlugin(master = 'owner1', trusted: string[] = ['admin1'], execAllow
   const plugin = {
     inject: (name: string) => {
       if (name === 'icqq') {
-        return { bots: new Map([['bot1', { $config: { master, trusted } }]]) };
+        return { endpoints: new Map([['bot1', { $config: { master, trusted } }]]) };
       }
       if (name === 'ai') {
         return { getAgentConfig: () => ({ execAllowlist }) };
@@ -89,11 +91,12 @@ describe('WebFetchBuiltinTool', () => {
   });
 
   it('toTool 元数据与 execute 路径', async () => {
+    mockPlugin('owner1', [], ['web_fetch']);
     vi.stubGlobal('fetch', async () => new Response('<html><body>OK</body></html>', { status: 200 }));
     const tool = createWebFetchTool();
     expect(tool.name).toBe('web_fetch');
     expect(tool.parameters.required).toContain('url');
-    const ctx = { platform: 'test' } as ToolContext;
+    const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'owner1', sender_roles: ['master'] });
     const agentTool = normalizeTool(tool, ctx);
     const result = await agentTool.execute({ url: 'https://example.com/' });
     expect(String(result)).toContain('OK');
@@ -103,12 +106,7 @@ describe('WebFetchBuiltinTool', () => {
     mockPlugin('owner1', ['admin1'], []);
     vi.stubGlobal('fetch', vi.fn());
     const inst = new WebFetchBuiltinTool();
-    const ctx = {
-      platform: 'icqq',
-      botId: 'bot1',
-      senderId: 'admin1',
-      roles: ['trusted'],
-    } as ToolContext;
+    const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'admin1', sender_roles: ['trusted'] });
     const out = String(await inst.run({ url: 'https://example.com/' }, ctx));
     expect(out.startsWith('ZHIN_NEEDS_OWNER:\n')).toBe(true);
     expect(globalThis.fetch).not.toHaveBeenCalled();
@@ -118,12 +116,7 @@ describe('WebFetchBuiltinTool', () => {
     mockPlugin('owner1', ['admin1'], []);
     vi.stubGlobal('fetch', vi.fn());
     const inst = new WebFetchBuiltinTool();
-    const ctx = {
-      platform: 'icqq',
-      botId: 'bot1',
-      senderId: 'user1',
-      fileRole: 'user',
-    } as ToolContext;
+    const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'user1', sender_roles: ['user'] });
     const out = String(await inst.run({ url: 'https://example.com/' }, ctx));
     expect(out).toMatch(/^Error:/);
     expect(globalThis.fetch).not.toHaveBeenCalled();

@@ -91,10 +91,10 @@ plugins:
 
 ## 机器人配置（bots）
 
-`bots` 数组定义了每个平台的机器人实例。每个 bot 通过 `context` 字段关联到对应的适配器：
+`endpoints` 数组定义了每个平台的机器人实例。每个 bot 通过 `context` 字段关联到对应的适配器：
 
 ```yaml
-bots:
+endpoints:
   # ICQQ (QQ)：须先 `icqq login`，再配置同名 QQ 号
   - context: icqq
     name: "${ICQQ_ACCOUNT}"
@@ -119,7 +119,7 @@ bots:
 **说明**：
 - `context` 必须与适配器名称匹配（如 `icqq`、`qq`、`kook`、`discord`）
 - 使用 `${VAR}` 引用 `.env` 文件中的环境变量
-- 一个适配器可以配置多个 bot（不同账号）
+- 一个适配器可以配置多个 endpoint（不同账号）
 - **ICQQ 文生图出站**：Zhin 与 icqq 守护进程异机/异进程时，在 icqq bot 下设置 `outboundMedia: base64`（配置 `rpc` 时默认 `base64`）；同机可省略。见 `plugins/adapters/icqq/README.md` 与 [文生图](/advanced/ai#文生图-generate_image)
 
 ## 数据库配置
@@ -619,7 +619,7 @@ assistant:
     notify:               # 运行时未指定 notify 的 Job 默认 IM 投递目标
       channel: im
       platform: icqq
-      botId: "8596238"
+      endpointId: "8596238"
       sceneId: "1659488338"
       scope: private
   profile:                # 单文件 Profile，见 assistant-profile
@@ -688,7 +688,7 @@ plugins:
   - "@zhin.js/adapter-sandbox"
   - "@zhin.js/adapter-icqq"
 
-bots:
+endpoints:
   - context: icqq
     name: "${ICQQ_ACCOUNT}"
 

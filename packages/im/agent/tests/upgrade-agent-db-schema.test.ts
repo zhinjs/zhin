@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   AGENT_SESSION_TREE_SCHEMA_PATCHES,
   listSqliteTableColumns,
+  resolveAgentDbQuery,
   upgradeAgentSessionTreeSchema,
 } from '../src/init/upgrade-agent-db-schema.js';
 
@@ -69,5 +70,18 @@ describe('upgradeAgentSessionTreeSchema', () => {
     });
     expect(added).toEqual([]);
     expect(query.mock.calls.filter(([s]) => s.startsWith('ALTER'))).toHaveLength(0);
+  });
+});
+
+describe('resolveAgentDbQuery', () => {
+  it('binds nested db.query so class methods keep this', async () => {
+    const query = vi.fn(async function (this: { isStarted: boolean }, sql: string) {
+      if (!this.isStarted) throw new Error('lost this');
+      return sql;
+    });
+    const db = { isStarted: true, query, dialect: { name: 'sqlite' } };
+    const bound = resolveAgentDbQuery({ db });
+    expect(bound).toBeTypeOf('function');
+    await expect(bound!('SELECT 1')).resolves.toBe('SELECT 1');
   });
 });

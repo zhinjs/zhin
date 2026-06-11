@@ -11,7 +11,7 @@ import {
 import { createToolSearchTool } from '../builtin/tool-search-tool.js';
 import { normalizeTool } from '../orchestrator/tool-selection.js';
 import type { SubagentManager } from '../subagent.js';
-import type { ToolContext } from '../orchestrator/types.js';
+import type { Message } from '../orchestrator/types.js';
 import type { ZhinAgentConfig } from './config.js';
 import { resolveDeferredTaskToolTimeout } from './config.js';
 import { filterToolsForToolSearchCatalog, partitionToolsForToolSearch } from './tool-catalog.js';
@@ -70,7 +70,7 @@ export function compactActivateSkillResultForToolSearch(full: string): string {
 export interface BuildOrchestratorToolsParams {
   allTools: AgentTool[];
   config: Required<ZhinAgentConfig>;
-  context: ToolContext;
+  commMessage: Message;
   getDeferredCatalog: () => AgentTool[];
   runWorker: (goal: string, toolQuery?: string) => Promise<string>;
   /** 注入常驻 `spawn_task`；未初始化 SubagentManager 时跳过 */
@@ -84,13 +84,13 @@ export interface BuildOrchestratorToolsResult {
 }
 
 export function buildOrchestratorAgentTools(params: BuildOrchestratorToolsParams): BuildOrchestratorToolsResult {
-  const { allTools, config, context, getDeferredCatalog, runWorker } = params;
+  const { allTools, config, commMessage, getDeferredCatalog, runWorker } = params;
   const catalog = filterToolsForToolSearchCatalog(allTools);
   const part = partitionToolsForToolSearch(catalog, config.orchestratorTools);
   const byName = new Map<string, AgentTool>();
 
   for (const tool of part.orchestrator) {
-    byName.set(tool.name, normalizeTool(tool, context));
+    byName.set(tool.name, normalizeTool(tool, commMessage));
   }
 
   byName.set(
@@ -100,7 +100,7 @@ export function buildOrchestratorAgentTools(params: BuildOrchestratorToolsParams
         getDeferredCatalog,
         maxResults: config.deferredToolMaxResults,
       }),
-      context,
+      commMessage,
     ),
   );
   const runDeferred = normalizeTool(
@@ -108,7 +108,7 @@ export function buildOrchestratorAgentTools(params: BuildOrchestratorToolsParams
       runWorker,
       timeoutMs: resolveDeferredTaskToolTimeout(config),
     }),
-    context,
+    commMessage,
   );
   byName.set('run_deferred_task', runDeferred);
 
@@ -119,21 +119,21 @@ export function buildOrchestratorAgentTools(params: BuildOrchestratorToolsParams
     byName.set(
       'spawn_task',
       normalizeTool(
-        createSpawnTaskTool(context, params.subagentManager),
-        context,
+        createSpawnTaskTool(commMessage, params.subagentManager),
+        commMessage,
       ),
     );
   }
 
-  for (const tool of createOrchestrationTools(context)) {
+  for (const tool of createOrchestrationTools(commMessage)) {
     if (params.config.orchestratorTools.includes(tool.name)) {
-      byName.set(tool.name, normalizeTool(tool, context));
+      byName.set(tool.name, normalizeTool(tool, commMessage));
     }
   }
   for (const name of ORCHESTRATION_TOOL_NAMES) {
     if (params.config.orchestratorTools.includes(name) && !byName.has(name)) {
-      const found = createOrchestrationTools(context).find((t) => t.name === name);
-      if (found) byName.set(name, normalizeTool(found, context));
+      const found = createOrchestrationTools(commMessage).find((t) => t.name === name);
+      if (found) byName.set(name, normalizeTool(found, commMessage));
     }
   }
 

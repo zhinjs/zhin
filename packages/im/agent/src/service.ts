@@ -4,6 +4,7 @@
  */
 
 import type { Plugin, AITriggerConfig } from '@zhin.js/core';
+import { createSyntheticMessage } from '@zhin.js/core';
 import type {
   AIProvider,
   AIConfig,
@@ -295,7 +296,12 @@ export class AIService {
         tools,
         userInput,
         maxIterations,
-        toolContext: { platform: 'service', senderId: 'system' },
+        commMessage: createSyntheticMessage({
+          adapter: 'service',
+          endpoint: 'default',
+          sender: { id: 'system', isMaster: true },
+          channel: { type: 'private', id: 'system' },
+        }),
       }).then(toServiceAgentResult),
       dispose: () => undefined,
     };

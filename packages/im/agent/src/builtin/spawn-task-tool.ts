@@ -1,7 +1,7 @@
 /**
  * spawn_task — 主会话将耗时任务派给后台子 agent（与 issue #396 对齐）
  */
-import type { AgentTool, Tool, ToolContext, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import type { AgentTool, Message, Tool, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import type { SubagentManager, SubagentOrigin } from '../subagent.js';
 import type { SubagentContextMode } from '../subagent-preset.js';
 import { getAgentDispatcher } from '../orchestrator/agent-dispatcher.js';
@@ -47,15 +47,8 @@ export const SPAWN_TASK_PARAMETERS: ToolParametersSchema = {
   required: ['task'],
 };
 
-export function originFromToolContext(context: ToolContext): SubagentOrigin {
-  return {
-    platform: context.platform || '',
-    botId: context.botId || '',
-    senderId: context.senderId || '',
-    sceneId: context.sceneId || '',
-    sceneType: context.message?.$channel?.type || 'private',
-    messageId: context.messageId || context.message?.$id,
-  };
+export function originFromMessage(message: Message): SubagentOrigin {
+  return { message };
 }
 
 export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
@@ -65,7 +58,7 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
   readonly parameters = SPAWN_TASK_PARAMETERS;
 
   constructor(
-    private readonly sessionContext: ToolContext,
+    private readonly sessionCommMessage: Message,
     private readonly manager: SubagentManager,
   ) {
     super();
@@ -79,7 +72,7 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
     return tool;
   }
 
-  async run(args: Record<string, unknown>, _context?: ToolContext): Promise<ToolResult> {
+  async run(args: Record<string, unknown>, _commMessage?: Message): Promise<ToolResult> {
     const task = args.task;
     const label = args.label;
     const agentName = args.agent;
@@ -119,7 +112,7 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
       }
     }
 
-    const origin = originFromToolContext(this.sessionContext);
+    const origin = originFromMessage(this.sessionCommMessage);
     const labelStr = typeof label === 'string' ? label : undefined;
     const agentOpt = typeof agentName === 'string' && agentName.trim() ? agentName.trim() : undefined;
     const contextMode: SubagentContextMode | undefined =
@@ -133,7 +126,7 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
       origin,
       agent: agentOpt,
       role: orchestrationRole,
-      notifyContext: this.sessionContext,
+      notifyContext: this.sessionCommMessage,
       contextMode,
       orchestrationTaskId: orchestrationTaskId || undefined,
     };
@@ -151,8 +144,8 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
 }
 
 export function createSpawnTaskTool(
-  context: ToolContext,
+  commMessage: Message,
   manager: SubagentManager,
 ): AgentTool {
-  return new SpawnTaskBuiltinTool(context, manager).toTool() as AgentTool;
+  return new SpawnTaskBuiltinTool(commMessage, manager).toTool() as AgentTool;
 }

@@ -4,20 +4,41 @@
  */
 import { Feature, FeatureJSON } from "@zhin.js/kernel";
 import { Plugin, getPlugin } from "../plugin.js";
-import type { Tool, ToolContext, ToolJsonSchema, ToolParametersSchema, PropertySchema, MaybePromise, ToolScope } from "../types.js";
-import { roleSatisfies, resolveRolesFromContext } from './roles.js';
+import type { Tool, ToolJsonSchema, ToolParametersSchema, PropertySchema, MaybePromise, ToolScope } from "../types.js";
+import type { Message } from "../message.js";
+import { isBuiltinPermit, isPlatformPermit } from './permit-parse.js';
+import { checkBuiltinPermit } from './permit-check.js';
+import { checkPlatformPermit } from './platform-permit.js';
+import { senderRolesFromMessage } from './message-enrich.js';
 
 /**
- * 检查工具是否可被当前上下文访问
+ * 检查工具是否可被当前 Message 通讯上下文访问
  */
-export function canAccessTool(tool: Tool, context: ToolContext): boolean {
-  if (tool.platforms?.length && (!context.platform || !tool.platforms.includes(context.platform))) {
+export function canAccessTool(tool: Tool, message?: Message<any>): boolean {
+  if (!message) return !tool.platforms?.length && !tool.scopes?.length && !tool.permissions?.length;
+
+  const adapter = String(message.$adapter);
+  const scope = (message.$channel?.type || 'private') as ToolScope;
+
+  if (tool.platforms?.length && !tool.platforms.includes(adapter)) {
     return false;
   }
-  if (tool.scopes?.length && (!context.scope || !tool.scopes.includes(context.scope))) {
+  if (tool.scopes?.length && !tool.scopes.includes(scope)) {
     return false;
   }
-  return roleSatisfies(resolveRolesFromContext(context), tool.requiredAnyRole);
+  if (!tool.permissions?.length) return true;
+
+  const roles = senderRolesFromMessage(message);
+  for (const permit of tool.permissions) {
+    if (isBuiltinPermit(permit)) {
+      if (!checkBuiltinPermit(permit, message, roles)) return false;
+    } else if (isPlatformPermit(permit)) {
+      if (!checkPlatformPermit(permit, message)) return false;
+    } else {
+      return false;
+    }
+  }
+  return true;
 }
 
 // ============================================================================
@@ -72,10 +93,9 @@ export class ZhinTool {
   #description: string = '';
   /** 有序的参数列表 */
   #params: ParamDef[] = [];
-  #execute?: (args: Record<string, any>, context?: ToolContext) => MaybePromise<any>;
+  #execute?: (args: Record<string, any>, message?: Message<any>) => MaybePromise<any>;
   #platforms: string[] = [];
   #scopes: ToolScope[] = [];
-  #requiredAnyRole: import('./roles.js').SenderRole[] = [];
   #permissions: string[] = [];
   #tags: string[] = [];
   #keywords: string[] = [];
@@ -125,11 +145,6 @@ export class ZhinTool {
     return this;
   }
 
-  requireAnyRole(...roles: import('./roles.js').SenderRole[]): this {
-    this.#requiredAnyRole = [...roles];
-    return this;
-  }
-
   permit(...permissions: string[]): this {
     this.#permissions.push(...permissions);
     return this;
@@ -166,7 +181,7 @@ export class ZhinTool {
     return this;
   }
 
-  execute(callback: (args: Record<string, any>, context?: ToolContext) => MaybePromise<any>): this {
+  execute(callback: (args: Record<string, any>, message?: Message<any>) => MaybePromise<any>): this {
     this.#execute = callback;
     return this;
   }
@@ -209,7 +224,6 @@ export class ZhinTool {
 
     if (this.#platforms.length > 0) tool.platforms = this.#platforms;
     if (this.#scopes.length > 0) tool.scopes = this.#scopes;
-    if (this.#requiredAnyRole.length > 0) tool.requiredAnyRole = [...this.#requiredAnyRole];
     if (this.#permissions.length > 0) tool.permissions = this.#permissions;
     if (this.#tags.length > 0) tool.tags = this.#tags;
     if (this.#hidden) tool.hidden = this.#hidden;
@@ -227,7 +241,7 @@ export class ZhinTool {
     parameters: ToolParametersSchema;
     platforms?: string[];
     scopes?: ToolScope[];
-    requiredAnyRole?: import('./roles.js').SenderRole[];
+    permissions?: string[];
     tags?: string[];
   } {
     const json: ReturnType<ZhinTool['toJSON']> = {
@@ -238,7 +252,7 @@ export class ZhinTool {
 
     if (this.#platforms.length > 0) json.platforms = this.#platforms;
     if (this.#scopes.length > 0) json.scopes = this.#scopes;
-    if (this.#requiredAnyRole.length > 0) json.requiredAnyRole = [...this.#requiredAnyRole];
+    if (this.#permissions.length > 0) json.permissions = [...this.#permissions];
     if (this.#tags.length > 0) json.tags = this.#tags;
 
     return json;
@@ -257,10 +271,10 @@ export class ZhinTool {
       }
     }
     
-    if (this.#requiredAnyRole.length > 0) {
-      lines.push(`  角色: ${this.#requiredAnyRole.join(', ')}`);
+    if (this.#permissions.length > 0) {
+      lines.push(`  权限: ${this.#permissions.join(', ')}`);
     }
-    
+
     if (this.#platforms.length > 0) {
       lines.push(`  平台: ${this.#platforms.join(', ')}`);
     }
@@ -291,9 +305,9 @@ export function isZhinTool(obj: any): obj is ZhinTool {
 export type ToolInput = Tool | ZhinTool;
 
 /**
- * ToolContext 扩展方法类型
+ * Message 工具扩展方法类型
  */
-export interface ToolContextExtensions {
+export interface MessageToolExtensions {
   /** 添加工具 */
   addTool(tool: ToolInput): () => void;
 }
@@ -301,7 +315,7 @@ export interface ToolContextExtensions {
 // 扩展 Plugin 接口
 declare module "../plugin.js" {
   namespace Plugin {
-    interface Extensions extends ToolContextExtensions {}
+    interface Extensions extends MessageToolExtensions {}
     interface Contexts {
       tool: ToolFeature;
     }
@@ -396,19 +410,19 @@ export class ToolFeature extends Feature<Tool> {
   /**
    * 执行工具
    */
-  async execute(name: string, args: Record<string, any>, context?: ToolContext): Promise<any> {
+  async execute(name: string, args: Record<string, any>, message?: Message<any>): Promise<any> {
     const tool = this.byName.get(name);
     if (!tool) {
       throw new Error(`Tool "${name}" not found`);
     }
-    return tool.execute(args, context);
+    return tool.execute(args, message);
   }
 
   /**
-   * 根据上下文过滤工具
+   * 根据 Message 通讯上下文过滤工具
    */
-  filterByContext(tools: Tool[], context: ToolContext): Tool[] {
-    return tools.filter(tool => canAccessTool(tool, context));
+  filterByContext(tools: Tool[], message?: Message<any>): Tool[] {
+    return tools.filter(tool => canAccessTool(tool, message));
   }
 
   /**

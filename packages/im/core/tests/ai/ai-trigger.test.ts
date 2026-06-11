@@ -23,7 +23,7 @@ import {
 // 创建模拟消息
 function createMockMessage(options: {
   content: string | any[];
-  bot?: string;
+  endpoint?: string;
   channelType?: 'private' | 'group' | 'channel';
   senderId?: string;
   senderPermissions?: string[];
@@ -35,7 +35,7 @@ function createMockMessage(options: {
   
   return {
     $content: content,
-    $bot: options.bot || 'bot123',
+    $endpoint: options.endpoint || 'bot123',
     $channel: options.channelType ? { type: options.channelType, id: 'channel1' } : null,
     $sender: { 
       id: options.senderId || 'user1', 
@@ -128,7 +128,7 @@ describe('AI Trigger 工具函数', () => {
           { type: 'at', data: { user_id: 'bot123' } },
           { type: 'text', data: { text: ' 问题' } },
         ],
-        bot: 'bot123',
+        endpoint: 'bot123',
         channelType: 'group',
         channelId: 'g1',
       });
@@ -155,7 +155,7 @@ describe('AI Trigger 工具函数', () => {
           { type: 'at', data: { user_id: 'bot123' } },
           { type: 'text', data: { text: ' 问题' } },
         ],
-        bot: 'bot123',
+        endpoint: 'bot123',
         channelType: 'group',
         channelId: 'g1',
       });
@@ -172,7 +172,7 @@ describe('AI Trigger 工具函数', () => {
           { type: 'at', data: { user_id: 'bot123' } },
           { type: 'text', data: { text: ' 你好呀' } },
         ],
-        bot: 'bot123',
+        endpoint: 'bot123',
       });
       const result = shouldTriggerAI(message as any, { respondToAt: true });
       
@@ -186,7 +186,7 @@ describe('AI Trigger 工具函数', () => {
           { type: 'at', data: { user_id: 'bot123' } },
           { type: 'text', data: { text: ' 你好' } },
         ],
-        bot: 'bot123',
+        endpoint: 'bot123',
       });
       const result = shouldTriggerAI(message as any, { respondToAt: false });
       
@@ -199,7 +199,7 @@ describe('AI Trigger 工具函数', () => {
           { type: 'at', data: { user_id: 'other_user' } },
           { type: 'text', data: { text: ' 你好' } },
         ],
-        bot: 'bot123',
+        endpoint: 'bot123',
       });
       const result = shouldTriggerAI(message as any, { respondToAt: true });
       
@@ -212,7 +212,7 @@ describe('AI Trigger 工具函数', () => {
           { type: 'at', data: { qq: '8596238' } },
           { type: 'text', data: { text: ' 你好' } },
         ],
-        bot: '8596238',
+        endpoint: '8596238',
       });
       const result = shouldTriggerAI(message as any, { respondToAt: true });
 
@@ -223,7 +223,7 @@ describe('AI Trigger 工具函数', () => {
     it('仅 @ 机器人无正文也应触发', () => {
       const message = createMockMessage({
         content: [{ type: 'at', data: { qq: '8596238' } }],
-        bot: '8596238',
+        endpoint: '8596238',
       });
       const result = shouldTriggerAI(message as any, { respondToAt: true });
 
@@ -231,16 +231,16 @@ describe('AI Trigger 工具函数', () => {
       expect(result.content).toBe('');
     });
 
-    it('QQ 官方 mention 段应通过 botAtIds 匹配', () => {
+    it('QQ 官方 mention 段应通过 endpointAtIds 匹配', () => {
       const message = createMockMessage({
         content: [
           { type: 'mention', data: { user_id: '102069707' } },
           { type: 'text', data: { text: ' 在吗' } },
         ],
-        bot: 'zhin2号',
+        endpoint: 'zhin2号',
       });
       const result = shouldTriggerAI(message as any, { respondToAt: true }, {
-        botAtIds: ['zhin2号', '102069707'],
+        endpointAtIds: ['zhin2号', '102069707'],
       });
 
       expect(result.triggered).toBe(true);
@@ -250,7 +250,7 @@ describe('AI Trigger 工具函数', () => {
     it('纯文本 @ 号（无 at 段）应触发', () => {
       const message = createMockMessage({
         content: [{ type: 'text', data: { text: '@8596238 帮忙查一下' } }],
-        bot: '8596238',
+        endpoint: '8596238',
       });
       const result = shouldTriggerAI(message as any, { respondToAt: true });
 
@@ -410,23 +410,22 @@ describe('AI Trigger 工具函数', () => {
       expect(result.roles).not.toContain('master');
     });
 
-    it('应该解析 group_owner 角色', () => {
+    it('群 owner 权限不推导 group_owner（走 platform permit）', () => {
       const message = createMockMessage({
         content: 'test',
         senderPermissions: ['owner'],
       });
       const result = resolveSenderRoles(message as any, {});
-      expect(result.roles).toContain('group_owner');
+      expect(result.roles).toEqual(['user']);
     });
 
-    it('应该解析 group_admin 角色', () => {
+    it('群 admin 权限不推导 group_admin（走 platform permit）', () => {
       const message = createMockMessage({
         content: 'test',
         senderPermissions: ['admin'],
       });
       const result = resolveSenderRoles(message as any, {});
-      expect(result.roles).toContain('group_admin');
-      expect(result.roles).not.toContain('group_owner');
+      expect(result.roles).toEqual(['user']);
     });
 
     it('默认应该是 user 角色', () => {
@@ -442,13 +441,13 @@ describe('AI Trigger 工具函数', () => {
       expect(resolveSenderRoles(groupMsg as any, {}).scope).toBe('group');
     });
 
-    it('bots[].master 应赋予 master', () => {
+    it('endpoints[].master 应赋予 master', () => {
       const message = createMockMessage({ content: 'hi', senderId: 'qq111' });
       const result = resolveSenderRoles(message as any, {}, { master: 'qq111' });
       expect(result.roles).toContain('master');
     });
 
-    it('bots[].trusted 应赋予 trusted（群内可为普通成员）', () => {
+    it('endpoints[].trusted 应赋予 trusted（群内可为普通成员）', () => {
       const message = createMockMessage({
         content: 'hi',
         senderId: 'adminQQ',
@@ -456,10 +455,10 @@ describe('AI Trigger 工具函数', () => {
       });
       const result = resolveSenderRoles(message as any, {}, { trusted: ['adminQQ'] });
       expect(result.roles).toContain('trusted');
-      expect(result.roles).not.toContain('group_admin');
+      expect(result.roles).not.toContain('master');
     });
 
-    it('bot master 与群管角色可并存', () => {
+    it('bot master 不因群管权限额外推导 group_admin', () => {
       const message = createMockMessage({
         content: 'hi',
         senderId: 'ownerQQ',
@@ -468,7 +467,7 @@ describe('AI Trigger 工具函数', () => {
       });
       const result = resolveSenderRoles(message as any, {}, { master: 'ownerQQ' });
       expect(result.roles).toContain('master');
-      expect(result.roles).toContain('group_admin');
+      expect(result.roles).toEqual(['master']);
     });
 
     it('process 适配器发送者应恒为 master', () => {

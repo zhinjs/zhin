@@ -21,7 +21,7 @@ declare module "zhin.js" {
 }
 
 export * from "./types.js";
-export { WeixinIlinkBot } from "./bot.js";
+export { WeixinIlinkEndpoint } from "./endpoint.js";
 export { WeixinIlinkAdapter } from "./adapter.js";
 export {
   WeixinIlinkTypingIndicatorManager,
@@ -35,7 +35,7 @@ const { provide, useContext, root } = plugin;
 
 provide({
   name: "weixin-ilink",
-  description: "WeChat personal account via Tencent iLink Bot API (ClawBot)",
+  description: "WeChat personal account via Tencent iLink Endpoint API (ClawBot)",
   mounted: async (p: Plugin) => {
     const adapter = new WeixinIlinkAdapter(p);
     await adapter.start();

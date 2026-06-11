@@ -141,7 +141,7 @@ packages/im/ai/src/agent/
 | `id` | integer PK | |
 | `message_id` | text | 平台消息 id |
 | `platform` | text | |
-| `bot_id` | text | |
+| `endpoint_id` | text | |
 | `scene_id` | text | |
 | `scene_type` | text | private/group/channel |
 | `sender_id` | text | |
@@ -165,8 +165,8 @@ packages/im/ai/src/agent/
 | 列 | 类型 | 说明 |
 |----|------|------|
 | `session_id` | text PK | `{session_key}#{epoch}` |
-| `session_key` | text | `platform:botId:scope:sceneId` |
-| `platform` / `bot_id` / `scene_id` / `scene_type` | text | |
+| `session_key` | text | `platform:endpointId:scope:sceneId` |
+| `platform` / `endpoint_id` / `scene_id` / `scene_type` | text | |
 | `model` | text | 最近使用模型 |
 | `status` | text | active \| archived |
 | `created_at` / `updated_at` | integer | |

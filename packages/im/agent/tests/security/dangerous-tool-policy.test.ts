@@ -2,8 +2,9 @@
  * dangerous-tool-policy — 角色门控与 execAllowlist
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { mockCommMessage } from '../helpers/mock-comm-message.js';
+
 import * as core from '@zhin.js/core';
-import type { ToolContext } from '@zhin.js/core';
 import {
   checkDangerousToolAccess,
   checkFileToolAccess,
@@ -24,7 +25,7 @@ describe('checkDangerousToolAccess', () => {
     vi.spyOn(core, 'getPlugin').mockImplementation(() => {
       throw new Error('no ALS');
     });
-    const ctx = { platform: 'icqq', botId: 'b1', senderId: 'u1' } as ToolContext;
+    const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'b1', senderId: 'u1' });
     const d = checkDangerousToolAccess('web_fetch', ctx);
     expect(d.allowed).toBe(false);
     expect(d.needsOwnerApproval).toBeUndefined();
@@ -36,28 +37,8 @@ describe('checkDangerousToolAccess', () => {
         if (name === 'ai') {
           return { getAgentConfig: () => ({ execAllowlist: ['write_file'] }) };
         }
-        return undefined;
-      },
-      root: undefined as unknown,
-    } as unknown as ReturnType<typeof core.getPlugin>;
-    (plugin as { root: typeof plugin }).root = plugin;
-    vi.spyOn(core, 'getPlugin').mockImplementation(() => plugin);
-    const ctx = {
-      platform: 'icqq',
-      botId: 'b1',
-      senderId: 'admin1',
-      roles: ['trusted'],
-    } as ToolContext;
-    const d = checkDangerousToolAccess('write_file', ctx);
-    expect(d.allowed).toBe(true);
-    expect(d.role).toBe('trusted');
-  });
-
-  it('trusted 且 execAllowlist 含工具名时直接放行', () => {
-    const plugin = {
-      inject: (name: string) => {
-        if (name === 'ai') {
-          return { getAgentConfig: () => ({ execAllowlist: ['write_file'] }) };
+        if (name === 'icqq') {
+          return { endpoints: new Map([['b1', { $config: { master: 'owner1', trusted: ['admin1'] } }]]) };
         }
         return undefined;
       },
@@ -65,42 +46,51 @@ describe('checkDangerousToolAccess', () => {
     } as unknown as ReturnType<typeof core.getPlugin>;
     (plugin as { root: typeof plugin }).root = plugin;
     vi.spyOn(core, 'getPlugin').mockImplementation(() => plugin);
-    const ctx = {
-      platform: 'icqq',
-      botId: 'b1',
+    const ctx = mockCommMessage({
+      adapter: 'icqq',
+      endpoint: 'b1',
       senderId: 'admin1',
-      roles: ['trusted'],
-    } as ToolContext;
+      sender_roles: ['trusted'],
+      extra: { execAllowlist: ['write_file'] },
+    });
     const d = checkDangerousToolAccess('write_file', ctx);
     expect(d.allowed).toBe(true);
     expect(d.role).toBe('trusted');
   });
 
   it('有身份且 trusted 时未入 allowlist 需 Master 确认', () => {
-    vi.spyOn(core, 'getPlugin').mockImplementation(() => {
-      throw new Error('no ALS');
-    });
-    const ctx = {
-      platform: 'icqq',
-      botId: 'b1',
+    const plugin = {
+      inject: (name: string) => {
+        if (name === 'icqq') {
+          return { endpoints: new Map([['b1', { $config: { master: 'owner1', trusted: ['admin1'] } }]]) };
+        }
+        return undefined;
+      },
+      root: undefined as unknown,
+    } as unknown as ReturnType<typeof core.getPlugin>;
+    (plugin as { root: typeof plugin }).root = plugin;
+    vi.spyOn(core, 'getPlugin').mockImplementation(() => plugin);
+    const ctx = mockCommMessage({
+      adapter: 'icqq',
+      endpoint: 'b1',
       senderId: 'admin1',
-      roles: ['trusted'],
-    } as ToolContext;
+      sender_roles: ['trusted'],
+    });
     const d = checkDangerousToolAccess('write_file', ctx);
     expect(d.allowed).toBe(false);
     expect(d.needsOwnerApproval).toBe(true);
   });
 
-  it('普通用户（fileRole user）拒绝危险工具', () => {
+  it('普通用户拒绝危险工具', () => {
     vi.spyOn(core, 'getPlugin').mockImplementation(() => {
       throw new Error('no ALS');
     });
-    const ctx = {
-      platform: 'icqq',
-      botId: 'b1',
+    const ctx = mockCommMessage({
+      adapter: 'icqq',
+      endpoint: 'b1',
       senderId: 'user1',
-      fileRole: 'user',
-    } as ToolContext;
+      sender_roles: ['user'],
+    });
     const d = checkDangerousToolAccess('web_fetch', ctx);
     expect(d.allowed).toBe(false);
     expect(d.role).toBe('other');
@@ -108,11 +98,17 @@ describe('checkDangerousToolAccess', () => {
 });
 
 describe('checkFileToolAccess', () => {
+  it('master 读写均放行', () => {
+    const ctx = mockCommMessage({ sender_roles: ['master'] });
+    expect(checkFileToolAccess('read_file', ctx).allowed).toBe(true);
+    expect(checkFileToolAccess('write_file', ctx).allowed).toBe(true);
+  });
+
   it('有身份但角色未知时拒绝写操作', () => {
     vi.spyOn(core, 'getPlugin').mockImplementation(() => {
       throw new Error('no ALS');
     });
-    const ctx = { platform: 'icqq', botId: 'b1', senderId: 'x' } as ToolContext;
+    const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'b1', senderId: 'x' });
     const d = checkFileToolAccess('write_file', ctx);
     expect(d.allowed).toBe(false);
   });
@@ -121,7 +117,7 @@ describe('checkFileToolAccess', () => {
     vi.spyOn(core, 'getPlugin').mockImplementation(() => {
       throw new Error('no ALS');
     });
-    const ctx = { platform: 'icqq', botId: 'b1', senderId: 'x' } as ToolContext;
+    const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'b1', senderId: 'x' });
     const d = checkFileToolAccess('read_file', ctx);
     expect(d.allowed).toBe(true);
   });

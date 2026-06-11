@@ -3,7 +3,7 @@
 > **这不是默认入门模板。** 新用户请使用 [`../minimal-bot`](../minimal-bot/)（Stable 黄金路径）。  
 > 能力验收见 [ACCEPTANCE.md](./ACCEPTANCE.md)（Stable vs Advanced）。
 
-Zhin.js 维护者用**全功能**机器人：多适配器、toolSearch、MCP、多 bot 同开，用于回归与 Advanced 验收。
+Zhin.js 维护者用**全功能**实例：多 Adapter、多 Endpoint 同开、toolSearch、MCP，用于回归与 Advanced 验收。
 
 ## 维护者运行手册
 
@@ -35,7 +35,7 @@ pnpm start    # 生产模式
 | [docs/console-remote.md](../../docs/console-remote.md) | Remote Console 架构与 CORS 说明 |
 | [docs/adapters/index.md](../../docs/adapters/index.md) | 平台适配器矩阵（Stable / Advanced / Experimental 档位与各包文档） |
 
-本目录 `zhin.config.yml` 启用多 bot（ICQQ、QQ 官方、GitHub、Sandbox 等）。**ICQQ** 须先 `icqq login`，配置里只写 QQ 号（`name`）；新增或切换平台时对照 [适配器索引](../../docs/adapters/index.md) 与包内 README。
+本目录 `zhin.config.yml` 启用多 Endpoint（ICQQ、QQ 官方、GitHub、Sandbox 等）。**ICQQ** 须先 `icqq login`，配置里只写 QQ 号（`name`）；新增或切换通道时对照 [适配器索引](../../docs/adapters/index.md) 与包内 README。
 
 ## 功能
 
@@ -97,7 +97,7 @@ test-bot/
 
 ### 文生图 / ICQQ 部署检查清单
 
-1. `icqq login` 完成，且 `bots[].name` 与 QQ 号一致。
+1. `icqq login` 完成，且 `endpoints[].name` 与 QQ 号一致。
 2. `.env` 中至少配置 `BIG_MODEL_API_KEY`（或启用的其它文生图 provider）。
 3. `ai.providers.zhipu-vl.imageGeneration` 已设（test-bot 默认 `cogview-3-flash`）。
 4. **Zhin 与 icqq 守护进程不在同一可访问文件系统时**：在 icqq bot 下取消注释 `outboundMedia: base64`（见 `zhin.config.yml` 与 [ICQQ 适配器 README](../../plugins/adapters/icqq/README.md)）。

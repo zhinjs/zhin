@@ -38,7 +38,7 @@ http:
 | HTTP GET | `{base}/events`（SSE） |
 | HTTP POST | `{base}/console/request`（RPC 再过滤） |
 | WebSocket | `/sandbox` |
-| Console RPC | `ping`、`entries:get`、`bot:list`、`bot:info`、`bot:sendMessage` |
+| Console RPC | `ping`、`entries:get`、`endpoint:list`、`endpoint:info`、`endpoint:sendMessage` |
 
 **拒绝**（403，`Demo scope: forbidden`）
 

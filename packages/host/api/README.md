@@ -12,7 +12,7 @@ Zhin Host 上的 **官方管理面 API**（路线 A：`@zhin.js/host-router` 仅
 - 🔧 插件与 Feature 调试数据
 - 📝 日志与 OpenAPI（`GET /pub/openapi.json`）
 - 🌳 Agent 会话树（ADR 0010）：`GET /api/agent/sessions/:sessionKey/tree`、`POST .../leaf`（`messageId` 或 `index`）
-- 🔍 内省列表（分页）：`GET /api/introspection/{commands|bots|bindings|tools|mcp}`（query：`page`、`filter`、`pageSize`）；完整请求/响应字段见 `GET /pub/openapi.json` → `components.schemas.Introspection*`
+- 🔍 内省列表（分页）：`GET /api/introspection/{commands|endpoints|bindings|tools|mcp}`（query：`page`、`filter`、`pageSize`）；完整请求/响应字段见 `GET /pub/openapi.json` → `components.schemas.Introspection*`
 
 ### ICQQ 登录辅助（不在 Console 提供）
 

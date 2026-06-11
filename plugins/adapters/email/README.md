@@ -25,7 +25,7 @@ pnpm add @zhin.js/adapter-email
 | **网络** | 出站可连 SMTP/IMAP 端口（465/587/993 等） |
 | **host-router** | 不需要；IMAP 轮询在适配器内完成 |
 
-必填字段见 `EmailBotConfig`：`context`、`name`、`smtp`、`imap`（含 `auth.user` / `auth.pass` 与 `user` / `password`）。
+必填字段见 `EmailEndpointConfig`：`context`、`name`、`smtp`、`imap`（含 `auth.user` / `auth.pass` 与 `user` / `password`）。
 
 ## 最小配置
 
@@ -33,7 +33,7 @@ pnpm add @zhin.js/adapter-email
 plugins:
   - "@zhin.js/adapter-email"
 
-bots:
+endpoints:
   - context: email
     name: my-email-bot
     smtp:
@@ -73,7 +73,7 @@ bots:
 import { defineConfig } from 'zhin.js'
 
 export default defineConfig({
-  bots: [
+  endpoints: [
     {
       context: 'email',
       name: 'my-email-bot',
@@ -111,7 +111,7 @@ const { addCommand } = usePlugin()
 addCommand(
   new MessageCommand('status')
     .desc('查询状态')
-    .action(() => '机器人运行中')
+    .action(() => 'Agent 运行中')
 )
 ```
 

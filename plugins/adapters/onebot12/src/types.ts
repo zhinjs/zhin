@@ -36,7 +36,7 @@ export interface OneBot12WssConfig extends OneBot12ConfigBase {
   heartbeat_interval?: number;
 }
 
-export type OneBot12BotConfig = OneBot12WsConfig | OneBot12WebhookConfig | OneBot12WssConfig;
+export type OneBot12EndpointConfig = OneBot12WsConfig | OneBot12WebhookConfig | OneBot12WssConfig;
 
 /** 机器人自身标识（事件与动作中的 self） */
 export interface OneBot12Self {

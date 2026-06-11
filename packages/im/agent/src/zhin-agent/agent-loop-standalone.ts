@@ -18,8 +18,8 @@ import {
   type TokenUsage,
   type ToolResultTransform,
 } from '@zhin.js/ai';
-import { runWithBashToolContext, runWithDirectAgentExecution } from '../security/bash-tool-context.js';
-import type { ToolContext } from '../orchestrator/types.js';
+import { runWithCommMessage, runWithDirectAgentExecution } from '../security/comm-message-context.js';
+import type { Message } from '../orchestrator/types.js';
 import { sanitizeAssistantReply } from './text-sanitize.js';
 import type { ToolCallRecord } from './tool-calls-user-format.js';
 import { formatToolCallsForUser } from './tool-calls-user-format.js';
@@ -96,7 +96,7 @@ export interface AgentLoopStandaloneInput {
   tools: AgentTool[];
   userInput: string | ContentPart[];
   maxIterations: number;
-  toolContext: ToolContext;
+  commMessage: Message;
   transformToolResult?: ToolResultTransform;
   callbacks?: AgentLoopStandaloneCallbacks;
   signal?: AbortSignal;
@@ -122,7 +122,7 @@ export async function runAgentLoopStandaloneTurn(
     tools,
     userInput,
     maxIterations,
-    toolContext,
+    commMessage,
     transformToolResult,
     callbacks,
     signal,
@@ -150,10 +150,10 @@ export async function runAgentLoopStandaloneTurn(
       return toolResultToAgentMessage(toolCall, `Unknown tool: ${toolCall.name}`, true);
     }
     try {
-      const exec = () => legacy.execute(toolCall.arguments);
+      const exec = () => (legacy as import('@zhin.js/core').Tool).execute(toolCall.arguments, commMessage);
       const raw = directExecution
-        ? await runWithDirectAgentExecution(toolContext, exec)
-        : await runWithBashToolContext(toolContext, exec);
+        ? await runWithDirectAgentExecution(commMessage, exec)
+        : await runWithCommMessage(commMessage, exec);
       const rawText = typeof raw === 'string' ? raw : JSON.stringify(raw ?? null);
       const transformed = transformToolResult
         ? await transformToolResult({

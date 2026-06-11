@@ -18,7 +18,7 @@ function makeMessage(overrides: Partial<MessageBase> = {}): Message<any> {
   return {
     $id: '1',
     $adapter: 'test' as any,
-    $bot: 'bot1',
+    $endpoint: 'bot1',
     $content: [],
     $raw: '',
     $sender: { id: 'user1', name: 'User' },
@@ -227,10 +227,10 @@ describe('MessageFilterFeature', () => {
     });
 
     it('bot 匹配', () => {
-      filter.add({ name: 'r1', action: 'deny', bots: ['bot-a'] }, 'test');
+      filter.add({ name: 'r1', action: 'deny', endpoints: ['bot-a'] }, 'test');
 
-      expect(filter.test(makeMessage({ $bot: 'bot-a' })).allowed).toBe(false);
-      expect(filter.test(makeMessage({ $bot: 'bot-b' })).allowed).toBe(true);
+      expect(filter.test(makeMessage({ $endpoint: 'bot-a' })).allowed).toBe(false);
+      expect(filter.test(makeMessage({ $endpoint: 'bot-b' })).allowed).toBe(true);
     });
 
     it('channel 匹配', () => {

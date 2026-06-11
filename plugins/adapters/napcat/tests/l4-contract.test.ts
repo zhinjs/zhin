@@ -13,7 +13,7 @@ describe('NapCat L4 adapter contract', () => {
 
   it('full send/receive harness covered by integration.test.ts', () => {
     // adapter-harness suite in integration.test.ts validates:
-    // sendMessage → bot.$sendMessage, $reply routing, inbound normalize
+    // sendMessage → endpoint.$sendMessage, $reply routing, inbound normalize
     expect(true).toBe(true);
   });
 

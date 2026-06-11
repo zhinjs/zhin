@@ -28,7 +28,7 @@ pnpm add @zhin.js/adapter-napcat ws
 
 ## 配置
 
-所有 Bot 使用 **同一 context：`napcat`**，通过 **`connection`** 区分连接方式。
+所有 Endpoint 使用 **同一 context：`napcat`**，通过 **`connection`** 区分连接方式。
 
 ### 正向 WebSocket（connection: ws）
 
@@ -36,7 +36,7 @@ pnpm add @zhin.js/adapter-napcat ws
 plugins:
   - "@zhin.js/adapter-napcat"
 
-bots:
+endpoints:
   - context: napcat
     connection: ws
     name: my-bot
@@ -53,7 +53,7 @@ plugins:
   - "@zhin.js/host-router"
   - "@zhin.js/adapter-napcat"
 
-bots:
+endpoints:
   - context: napcat
     connection: wss
     name: my-bot
@@ -69,7 +69,7 @@ plugins:
   - "@zhin.js/host-router"
   - "@zhin.js/adapter-napcat"
 
-bots:
+endpoints:
   - context: napcat
     connection: http
     name: my-bot
@@ -82,7 +82,7 @@ bots:
 ### Typing Indicator（处理中提示）
 
 ```yaml
-bots:
+endpoints:
   - context: napcat
     connection: ws
     name: my-bot
@@ -122,7 +122,7 @@ bots:
 
 ## full-bot L4 参考
 
-[`examples/full-bot`](../../../examples/full-bot/) 默认加载本适配器（`bots` 段需自行填写 `ONEBOT11_*` 后取消注释）。
+[`examples/full-bot`](../../../examples/full-bot/) 默认加载本适配器（`endpoints` 段需自行填写 `ONEBOT11_*` 后取消注释）。
 
 - 入站 → `ZhinAgent` → 出站走 `Adapter.sendMessage` 统一链路
 - 契约测试：`plugins/adapters/napcat/tests/l4-contract.test.ts` + `integration.test.ts`（adapter-harness）

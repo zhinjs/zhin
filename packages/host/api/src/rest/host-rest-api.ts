@@ -1,6 +1,6 @@
 /**
  * Host REST 路由（Koa Router）。
- * Console 连接常用：/entries、/api/system/status、/api/stats、/api/plugins、/api/bots、/api/config、/api/schemas 等。
+ * Console 连接常用：/entries、/api/system/status、/api/stats、/api/plugins、/api/endpoints、/api/config、/api/schemas 等。
  */
 import { Adapter, Feature, type Plugin } from "@zhin.js/core";
 import {
@@ -55,14 +55,14 @@ export function registerHostRestRoutes(
   registerFetchRoute(router, "GET", `${base}/stats`, async (ctx: RouterContext) => {
     const root = getRoot();
     const status = getSystemStatusData();
-    let botCount = 0;
-    let onlineBotCount = 0;
+    let endpointCount = 0;
+    let onlineEndpointCount = 0;
     for (const adapterName of root.adapters) {
       const adapter = root.inject(adapterName);
       if (adapter instanceof Adapter) {
-        botCount += adapter.bots.size;
-        for (const bot of adapter.bots.values()) {
-          if ((bot as { $connected?: boolean }).$connected) onlineBotCount++;
+        endpointCount += adapter.endpoints.size;
+        for (const endpoint of adapter.endpoints.values()) {
+          if ((endpoint as { $connected?: boolean }).$connected) onlineEndpointCount++;
         }
       }
     }
@@ -76,7 +76,7 @@ export function registerHostRestRoutes(
       success: true,
       data: {
         plugins: { total: root.children.length, active: root.children.length },
-        bots: { total: botCount, online: onlineBotCount },
+        endpoints: { total: endpointCount, online: onlineEndpointCount },
         commands: commandService?.items.length || 0,
         components: componentService?.byName?.size || 0,
         uptime: status.uptime,
@@ -131,9 +131,9 @@ export function registerHostRestRoutes(
     };
   });
 
-  registerFetchRoute(router, "GET", `${base}/bots`, async (ctx: RouterContext) => {
+  registerFetchRoute(router, "GET", `${base}/endpoints`, async (ctx: RouterContext) => {
     const root = getRoot();
-    const bots: Array<{
+    const endpoints: Array<{
       name: string;
       adapter: string;
       connected: boolean;
@@ -142,17 +142,17 @@ export function registerHostRestRoutes(
     for (const name of root.adapters) {
       const adapter = root.inject(name);
       if (adapter instanceof Adapter) {
-        for (const [botName, bot] of adapter.bots.entries()) {
-          bots.push({
-            name: botName,
+        for (const [endpointId, endpoint] of adapter.endpoints.entries()) {
+          endpoints.push({
+            name: endpointId,
             adapter: String(name),
-            connected: !!(bot as { $connected?: boolean }).$connected,
-            status: (bot as { $connected?: boolean }).$connected ? "online" : "offline",
+            connected: !!(endpoint as { $connected?: boolean }).$connected,
+            status: (endpoint as { $connected?: boolean }).$connected ? "online" : "offline",
           });
         }
       }
     }
-    ctx.body = { success: true, data: bots, total: bots.length };
+    ctx.body = { success: true, data: endpoints, total: endpoints.length };
   });
 
   registerFetchRoute(router, "GET", `${base}/config`, async (ctx: RouterContext) => {
@@ -218,15 +218,15 @@ export function registerHostRestRoutes(
     const root = getRoot();
     const body = (ctx.request.body ?? {}) as Record<string, unknown>;
     const context = String(body.context ?? "");
-    const bot = String(body.bot ?? "");
+    const endpoint = String(body.endpoint ?? "");
     const id = String(body.id ?? "");
     const type = String(body.type ?? "");
     const content = body.content;
-    if (!context || !bot || !id || !type || content === undefined || content === null) {
+    if (!context || !endpoint || !id || !type || content === undefined || content === null) {
       ctx.status = 400;
       ctx.body = {
         success: false,
-        error: "Missing required fields: context, bot, id, type, content",
+        error: "Missing required fields: context, endpoint, id, type, content",
       };
       return;
     }
@@ -241,7 +241,7 @@ export function registerHostRestRoutes(
         typeof content === "string" ? content : Array.isArray(content) ? content : String(content);
       const msgId = await adapter.sendMessage({
         context,
-        bot,
+        endpoint,
         id,
         type: type as "private" | "group" | "channel",
         content: normalizedContent,
@@ -249,7 +249,7 @@ export function registerHostRestRoutes(
       ctx.body = {
         success: true,
         message: "Message sent successfully",
-        data: { context, bot, id, type, messageId: msgId, timestamp: new Date().toISOString() },
+        data: { context, endpoint, id, type, messageId: msgId, timestamp: new Date().toISOString() },
       };
     } catch (err) {
       ctx.status = 500;

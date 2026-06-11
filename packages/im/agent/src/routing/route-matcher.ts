@@ -4,12 +4,12 @@ import type { AgentBindingConfig, RouteMatchConfig } from '../config/types.js';
 import { DEFAULT_ZHIN_AGENT_NAME } from '../config/types.js';
 
 export interface RouteMatchInput {
-  message: Message<any>;
+  message: Message;
   contentText: string;
   discoveredAgentNames: Set<string>;
 }
 
-function mediaKindsFromMessage(message: Message<any>): Set<string> {
+function mediaKindsFromMessage(message: Message): Set<string> {
   const parts = extractMediaParts(message);
   const kinds = new Set<string>();
   for (const p of parts) {
@@ -24,9 +24,9 @@ function mediaKindsFromMessage(message: Message<any>): Set<string> {
 function matchRouteRule(match: RouteMatchConfig, input: RouteMatchInput): boolean {
   const { message, contentText } = input;
   if (match.adapter && message.$adapter !== match.adapter) return false;
-  if (match.bot) {
-    const bot = String(message.$bot ?? '');
-    if (bot !== match.bot && bot !== String(match.bot)) return false;
+  if (match.endpoint) {
+    const endpointId = String(message.$endpoint ?? '');
+    if (endpointId !== match.endpoint && endpointId !== String(match.endpoint)) return false;
   }
   if (match.scene) {
     const scene = message.$channel?.type || 'private';

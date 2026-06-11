@@ -1,5 +1,6 @@
 import * as zhinCore from '@zhin.js/core';
-import type { ToolContext } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
+import { hasSenderRole, resolveSubjectRoles, senderRolesFromMessage } from '@zhin.js/core';
 import type { ZhinAgentConfig } from '../zhin-agent/config.js';
 import { resolveToolRequesterRole, type ToolRequesterRole } from './owner-approve-always-store.js';
 import { checkFileAccess } from './file-policy.js';
@@ -48,20 +49,20 @@ function resolveExecAllowlistFromAiService(plugin: ReturnType<typeof getPlugin>)
   return allowlist.map((v) => String(v)).filter(Boolean);
 }
 
-function resolveExecAllowlistFromContext(context?: ToolContext): string[] {
-  const extra = context?.extra as { execAllowlist?: string[] } | undefined;
+function resolveExecAllowlistFromMessage(commMessage?: Message): string[] {
+  const extra = (commMessage as { extra?: { execAllowlist?: string[] } } | undefined)?.extra;
   if (Array.isArray(extra?.execAllowlist) && extra.execAllowlist.length > 0) {
     return extra.execAllowlist.map((v) => String(v)).filter(Boolean);
   }
   return [];
 }
 
-/** 优先 context.extra，再尝试 plugin / getPlugin() 读取 ai.agent.execAllowlist */
+/** 优先 message.extra，再尝试 plugin / getPlugin() 读取 ai.agent.execAllowlist */
 function resolveExecAllowlistSafe(
   plugin: ReturnType<typeof getPlugin> | undefined,
-  context?: ToolContext,
+  commMessage?: Message,
 ): string[] {
-  const fromExtra = resolveExecAllowlistFromContext(context);
+  const fromExtra = resolveExecAllowlistFromMessage(commMessage);
   if (fromExtra.length > 0) return fromExtra;
 
   if (plugin) {
@@ -76,23 +77,23 @@ function resolveExecAllowlistSafe(
   }
 }
 
-function hasToolIdentity(context?: ToolContext): boolean {
-  return Boolean(context?.platform && context?.botId && context?.senderId);
+function hasMessageIdentity(commMessage?: Message): boolean {
+  return Boolean(commMessage?.$adapter && commMessage?.$endpoint && commMessage?.$sender?.id);
 }
 
-function resolveRoleFromContext(context?: ToolContext): {
+function resolveRoleFromMessage(commMessage?: Message): {
   role: ToolRequesterRole;
   plugin?: ReturnType<typeof getPlugin>;
   hasIdentity: boolean;
 } {
-  const hasIdentity = hasToolIdentity(context);
+  const hasIdentity = hasMessageIdentity(commMessage);
   if (!hasIdentity) {
     return { role: 'unknown', hasIdentity: false };
   }
   try {
     const plugin = getPlugin();
     return {
-      role: resolveToolRequesterRole(plugin, context!),
+      role: resolveToolRequesterRole(plugin, commMessage!),
       plugin,
       hasIdentity: true,
     };
@@ -104,22 +105,29 @@ function resolveRoleFromContext(context?: ToolContext): {
       plugin = undefined;
     }
     return {
-      role: resolveRoleFromToolContextFallback(context!),
+      role: resolveRoleFromMessageFallback(commMessage!),
       plugin,
       hasIdentity: true,
     };
   }
 }
 
-/** getPlugin 不可用时，从 ToolContext 上的 IM 标记推断角色（测试/降级路径） */
-function resolveRoleFromToolContextFallback(context: ToolContext): ToolRequesterRole {
-  const roles = context.roles ?? [];
-  if (roles.includes('master')) return 'master';
-  if (roles.includes('trusted')) return 'trusted';
-  if (context.fileRole === 'owner') return 'master';
-  if (context.fileRole === 'admin') return 'trusted';
-  if (context.fileRole === 'user') return 'other';
-  return 'unknown';
+/** getPlugin 不可用时，从 Message.$sender 快照或重算角色（测试/降级路径） */
+function resolveRoleFromMessageFallback(commMessage: Message): ToolRequesterRole {
+  const snapshot = senderRolesFromMessage(commMessage);
+  if (commMessage.$sender.isMaster !== undefined || commMessage.$sender.isTrusted !== undefined) {
+    if (hasSenderRole(snapshot, 'master')) return 'master';
+    if (hasSenderRole(snapshot, 'trusted')) return 'trusted';
+    return 'other';
+  }
+  try {
+    const { roles } = resolveSubjectRoles(getPlugin().root ?? getPlugin(), commMessage);
+    if (hasSenderRole(roles, 'master')) return 'master';
+    if (hasSenderRole(roles, 'trusted')) return 'trusted';
+    return 'other';
+  } catch {
+    return 'unknown';
+  }
 }
 
 function denyUnidentifiedTool(toolName: string): DangerousToolDecision {
@@ -130,8 +138,8 @@ function denyUnidentifiedTool(toolName: string): DangerousToolDecision {
   };
 }
 
-export function checkFileToolAccess(toolName: FileToolName, context?: ToolContext): DangerousToolDecision {
-  const { role, hasIdentity } = resolveRoleFromContext(context);
+export function checkFileToolAccess(toolName: FileToolName, commMessage?: Message): DangerousToolDecision {
+  const { role, hasIdentity } = resolveRoleFromMessage(commMessage);
   const op = FILE_TOOL_OPERATION[toolName];
 
   if (role === 'master') {
@@ -171,9 +179,9 @@ export function checkFileToolAccess(toolName: FileToolName, context?: ToolContex
   };
 }
 
-export function checkSensitiveFilePathAccess(toolName: FileToolName, filePath: string, context?: ToolContext): DangerousToolDecision {
+export function checkSensitiveFilePathAccess(toolName: FileToolName, filePath: string, commMessage?: Message): DangerousToolDecision {
   const base = checkFileAccess(filePath);
-  const { role } = resolveRoleFromContext(context);
+  const { role } = resolveRoleFromMessage(commMessage);
   if (base.allowed) {
     return { allowed: true, role };
   }
@@ -203,8 +211,8 @@ export function checkSensitiveFilePathAccess(toolName: FileToolName, filePath: s
   };
 }
 
-export function checkDangerousToolAccess(toolName: 'write_file' | 'edit_file' | 'web_fetch', context?: ToolContext): DangerousToolDecision {
-  const { role, plugin, hasIdentity } = resolveRoleFromContext(context);
+export function checkDangerousToolAccess(toolName: 'write_file' | 'edit_file' | 'web_fetch', commMessage?: Message): DangerousToolDecision {
+  const { role, plugin, hasIdentity } = resolveRoleFromMessage(commMessage);
 
   if (!hasIdentity) {
     return { allowed: true, role: 'unknown' };
@@ -220,7 +228,7 @@ export function checkDangerousToolAccess(toolName: 'write_file' | 'edit_file' | 
     }
 
     if (role === 'trusted') {
-      const allowlist = resolveExecAllowlistSafe(plugin, context);
+      const allowlist = resolveExecAllowlistSafe(plugin, commMessage);
       if (isAllowlisted(allowlist, toolName)) {
         return { allowed: true, role };
       }

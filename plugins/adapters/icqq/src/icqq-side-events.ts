@@ -116,7 +116,7 @@ function senderFromId(id: unknown, name?: string) {
 
 export function formatIcqqNotice(
   event: IcqqIpcRawEvent,
-  botName: string,
+  endpointName: string,
 ): ReturnType<typeof Notice.from<IcqqIpcRawEvent>> {
   const $type = resolveNoticeZhinType(event);
   const isGroup = event.group_id != null;
@@ -128,7 +128,7 @@ export function formatIcqqNotice(
   return Notice.from(event, {
     $id: resolveSideEventDedupeKey(event, "notice"),
     $adapter: "icqq",
-    $bot: botName,
+    $endpoint: endpointName,
     $type,
     $subType: event.sub_type,
     $channel: {
@@ -152,7 +152,7 @@ function resolveRequestZhinType(event: IcqqIpcRawEvent): RequestType {
 
 export function formatIcqqRequest(
   event: IcqqIpcRawEvent,
-  botName: string,
+  endpointName: string,
   ipc: IpcClient,
 ): ReturnType<typeof Request.from<IcqqIpcRawEvent>> {
   const $type = resolveRequestZhinType(event);
@@ -169,7 +169,7 @@ export function formatIcqqRequest(
   return Request.from(event, {
     $id: String(flag),
     $adapter: "icqq",
-    $bot: botName,
+    $endpoint: endpointName,
     $type,
     $subType: event.sub_type,
     $channel: {

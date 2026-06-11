@@ -350,7 +350,7 @@ export class WebSocketManager {
 
   private handleBroadcast(message: WebSocketMessage): void {
     const t = message.type;
-    if (t === "bot:request" || t === "bot:notice" || t === "bot:message") {
+    if (t === "endpoint:request" || t === "endpoint:notice" || t === "endpoint:message") {
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("zhin-console-bot-push", { detail: message }));
       }

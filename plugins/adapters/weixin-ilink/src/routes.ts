@@ -13,14 +13,14 @@ export function registerRoutes(
 ): void {
   registerLoginAssistRoutes(router, root);
 
-  router.get("/api/weixin-ilink/bots", async (ctx) => {
+  router.get("/api/weixin-ilink/endpoints", async (ctx) => {
     try {
-      const bots = Array.from(adapter.bots.values());
-      const data = bots.map((bot) => ({
-        name: bot.$config.name,
-        connected: bot.$connected,
-        status: bot.$connected ? "online" : "offline",
-        hasCredentials: Boolean(bot.hasCredentials),
+      const endpoints = Array.from(adapter.endpoints.values());
+      const data = endpoints.map((endpoint) => ({
+        name: endpoint.$config.name,
+        connected: endpoint.$connected,
+        status: endpoint.$connected ? "online" : "offline",
+        hasCredentials: Boolean(endpoint.hasCredentials),
       }));
       ctx.body = {
         success: true,

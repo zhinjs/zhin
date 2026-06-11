@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
 import type { MessageSegment, SendContent } from "zhin.js";
-import type { IcqqBotConfig } from "./types.js";
+import type { IcqqEndpointConfig } from "./types.js";
 
 export type IcqqOutboundMediaMode = "file" | "base64";
 
@@ -38,7 +38,7 @@ function spoolBase64ToFile(
  * base64=保留 segment.base64，CQ 编码为 [image:base64://...] 经 IPC 交给守护进程解码（异机 RPC 默认）。
  */
 export function resolveIcqqOutboundMediaMode(
-  config: Pick<IcqqBotConfig, "rpc" | "outboundMedia">,
+  config: Pick<IcqqEndpointConfig, "rpc" | "outboundMedia">,
 ): IcqqOutboundMediaMode {
   if (config.outboundMedia === "base64" || config.outboundMedia === "file") {
     return config.outboundMedia;

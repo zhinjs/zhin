@@ -8,8 +8,8 @@ import { SatoriAdapter } from './adapter.js';
 export * from './types.js';
 export { callSatoriApi } from './api.js';
 export * from './utils.js';
-export { SatoriWsClient } from './bot-ws.js';
-export { SatoriWebhookBot } from './bot-webhook.js';
+export { SatoriWsClient } from './endpoint-ws.js';
+export { SatoriWebhookEndpoint } from './endpoint-webhook.js';
 export { SatoriAdapter, type SatoriBot } from './adapter.js';
 
 declare module 'zhin.js' {

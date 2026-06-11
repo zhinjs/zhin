@@ -36,7 +36,7 @@ plugins:
   - "@zhin.js/adapter-wechat-mp"
   - "@zhin.js/host-router"
 
-bots:
+endpoints:
   - context: wechat-mp
     name: my-wechat-bot
     appId: "${WECHAT_APP_ID}"
@@ -56,7 +56,7 @@ bots:
 完整选项示例（含可选加密字段）：
 
 ```yaml
-bots:
+endpoints:
   - context: wechat-mp
     name: my-wechat-bot
     appId: ${WECHAT_APP_ID}
@@ -71,7 +71,7 @@ bots:
 import { defineConfig } from 'zhin.js'
 
 export default defineConfig({
-  bots: [
+  endpoints: [
     {
       context: 'wechat-mp',
       name: 'my-wechat-bot',

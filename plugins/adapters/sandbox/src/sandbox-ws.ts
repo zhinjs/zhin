@@ -2,7 +2,7 @@
 import { EventEmitter } from "node:events";
 import {
   Adapter,
-  Bot,
+  Endpoint,
   Message,
   segment,
   type MessageElement,
@@ -17,11 +17,11 @@ export interface SandboxWsConfig {
   ws?: SandboxWsSocket;
   name: string;
   owner?: string;
-  /** yaml 预置名：启动时占位，WS 连接前在 bot:list 显示为离线 */
+  /** yaml 预置名：启动时占位，WS 连接前在 endpoint:list 显示为离线 */
   offline?: boolean;
 }
 
-/** 无 WS 时的占位 socket（仅用于 bot:list，不可收发） */
+/** 无 WS 时的占位 socket（仅用于 endpoint:list，不可收发） */
 export function createOfflineSandboxWs(): SandboxWsSocket {
   return { send: () => {}, close: () => {} };
 }
@@ -67,11 +67,11 @@ function envVar(key: string): string | undefined {
   return g.Deno?.env.get(key) ?? g.process?.env[key];
 }
 
-export function resolveSandboxBot(
+export function resolveSandboxEndpoint(
   appConfig: Record<string, unknown>,
 ): ResolvedSandboxBot {
-  const bots = appConfig.bots as Array<Record<string, unknown>> | undefined;
-  const entry = bots?.find((b) => b.context === "sandbox");
+  const endpoints = appConfig.endpoints as Array<Record<string, unknown>> | undefined;
+  const entry = endpoints?.find((b) => b.context === "sandbox");
   const fixedName = typeof entry?.name === "string" ? entry.name : undefined;
   const name =
     fixedName ||
@@ -178,14 +178,14 @@ export function parseSandboxWsPayload(raw: string): {
   return { type, id, content, timestamp: payload.timestamp ?? Date.now() };
 }
 
-type BotEvent = {
+type EndpointEvent = {
   content: MessageElement[];
   type: MessageType;
   id: string;
   ts: number;
 };
 
-export class SandboxWsBot extends EventEmitter implements Bot<SandboxWsConfig, BotEvent> {
+export class SandboxWsEndpoint extends EventEmitter implements Endpoint<SandboxWsConfig, EndpointEvent> {
   $connected = false;
   #unbind: (() => void) | null = null;
 
@@ -218,7 +218,7 @@ export class SandboxWsBot extends EventEmitter implements Bot<SandboxWsConfig, B
       onClose: () => {
         this.$connected = false;
         if (!this.$config.offline) {
-          this.adapter.bots.delete(this.$id);
+          this.adapter.endpoints.delete(this.$id);
         }
       },
       onError: (err) => {
@@ -237,14 +237,14 @@ export class SandboxWsBot extends EventEmitter implements Bot<SandboxWsConfig, B
     this.$connected = false;
   }
 
-  $formatMessage({ content, type, id, ts }: BotEvent) {
+  $formatMessage({ content, type, id, ts }: EndpointEvent) {
     if (!this.$config.owner) this.$config.owner = id;
-    const message = Message.from<BotEvent>(
+    const message = Message.from<EndpointEvent>(
       { content, type, id, ts },
       {
         $id: `${ts}`,
         $adapter: "sandbox" as const,
-        $bot: this.$config.name,
+        $endpoint: this.$config.name,
         $sender: { id, name: "mock" },
         $channel: { id, type },
         $content: content,
@@ -263,7 +263,7 @@ export class SandboxWsBot extends EventEmitter implements Bot<SandboxWsConfig, B
           }
           return await this.adapter.sendMessage({
             context: "sandbox",
-            bot: this.$config.name,
+            endpoint: this.$config.name,
             content: normalized,
             id,
             type,
@@ -291,7 +291,9 @@ export class SandboxWsBot extends EventEmitter implements Bot<SandboxWsConfig, B
   async $recallMessage(_id: string): Promise<void> {}
 }
 
-export class SandboxWsHostAdapter extends Adapter<SandboxWsBot> {
+export class SandboxWsHostAdapter extends Adapter<SandboxWsEndpoint> {
+  static override readonly capabilities = ['inbound', 'outbound'] as const;
+
   constructor(
     plugin: Plugin,
     protected readonly defaults: ResolvedSandboxBot,
@@ -309,17 +311,17 @@ export class SandboxWsHostAdapter extends Adapter<SandboxWsBot> {
     };
   }
 
-  createBot(config: SandboxWsConfig): SandboxWsBot {
-    const bot = new SandboxWsBot(this, config);
-    this.bots.set(bot.$id, bot);
-    return bot;
+  createEndpoint(config: SandboxWsConfig): SandboxWsEndpoint {
+    const endpoint = new SandboxWsEndpoint(this, config);
+    this.endpoints.set(endpoint.$id, endpoint);
+    return endpoint;
   }
 
-  /** `zhin.config.yml` 中 `context: sandbox` + 固定 `name` 时，启动即出现在 bot:list（离线） */
+  /** `zhin.config.yml` 中 `context: sandbox` + 固定 `name` 时，启动即出现在 endpoint:list（离线） */
   registerConfiguredPlaceholder(): void {
     if (this.defaults.randomNamePerConnection) return;
-    if (this.bots.has(this.defaults.name)) return;
-    this.createBot({
+    if (this.endpoints.has(this.defaults.name)) return;
+    this.createEndpoint({
       context: "sandbox",
       name: this.defaults.name,
       owner: this.defaults.owner,
@@ -332,24 +334,24 @@ export class SandboxWsHostAdapter extends Adapter<SandboxWsBot> {
   acceptWebSocket(
     ws: SandboxWsSocket,
     overrides?: Partial<Pick<SandboxWsConfig, "name" | "owner">>,
-  ): SandboxWsBot {
+  ): SandboxWsEndpoint {
     const name = overrides?.name ??
       (this.defaults.randomNamePerConnection
         ? `sandbox-${crypto.randomUUID().slice(0, 8)}`
         : this.defaults.name);
     const owner = overrides?.owner ?? this.defaults.owner;
-    const existing = this.bots.get(name);
+    const existing = this.endpoints.get(name);
     if (existing) {
       void existing.$disconnect();
-      this.bots.delete(name);
+      this.endpoints.delete(name);
     }
-    const bot = this.createBot({ context: "sandbox", ws, name, owner, offline: false });
-    void bot.$connect();
+    const endpoint = this.createEndpoint({ context: "sandbox", ws, name, owner, offline: false });
+    void endpoint.$connect();
     if (!this.defaults.randomNamePerConnection) {
       const readyPayload = JSON.stringify({
         type: "ready",
         id: owner,
-        bot: name,
+        endpoint: name,
         content: [
           {
             type: "text",
@@ -366,7 +368,7 @@ export class SandboxWsHostAdapter extends Adapter<SandboxWsBot> {
       });
       whenWsOpen(ws, () => ws.send(readyPayload));
     }
-    return bot;
+    return endpoint;
   }
 }
 

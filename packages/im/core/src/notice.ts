@@ -15,6 +15,7 @@ import type { MessageSender } from './types.js';
  * - group_poke:            群戳一戳
  * - friend_poke:           好友戳一戳
  * - group_transfer:        群转让
+ * - endpoint.lifecycle:         Endpoint 连接/断开/错误（$subType: connect | disconnect | error）
  *
  * 适配器可自行扩展更多子类型
  */
@@ -51,7 +52,7 @@ export interface NoticeChannel {
  * const notice = Notice.from(rawEvent, {
  *   $id: rawEvent.id,
  *   $adapter: 'icqq',
- *   $bot: botName,
+ *   $endpoint: endpointId,
  *   $type: 'group_member_decrease',
  *   $subType: 'kick',
  *   $channel: { id: groupId, type: 'group' },
@@ -67,8 +68,8 @@ export interface NoticeBase {
   $id: string;
   /** 适配器名称 */
   $adapter: keyof Adapters;
-  /** Bot 名称 */
-  $bot: string;
+  /** Endpoint 名称 */
+  $endpoint: string;
   /** 通知类型 */
   $type: NoticeType;
   /** 通知子类型（如 leave/kick、set/unset） */

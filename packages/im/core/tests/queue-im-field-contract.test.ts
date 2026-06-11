@@ -13,7 +13,7 @@ describe('queue IM field contract', () => {
   it('normalizes canonical outbound detail', () => {
     const detail = normalizeQueueOutboundDetail({
       context: 'qq',
-      bot: 'bot1',
+      endpoint: 'bot1',
       channelId: 'group1',
       channelType: 'group',
       content: 'hello',
@@ -22,7 +22,7 @@ describe('queue IM field contract', () => {
 
     expect(detail).toEqual({
       context: 'qq',
-      bot: 'bot1',
+      endpoint: 'bot1',
       channelId: 'group1',
       channelType: 'group',
       content: 'hello',
@@ -33,7 +33,7 @@ describe('queue IM field contract', () => {
   it('rejects legacy alias keys', () => {
     expect(() => normalizeQueueOutboundDetail({
       adapter: 'qq',
-      bot: 'bot1',
+      endpoint: 'bot1',
       id: 'legacy',
       type: 'group',
       text: 'legacy text',
@@ -43,7 +43,7 @@ describe('queue IM field contract', () => {
   it('rejects invalid message type', () => {
     expect(() => normalizeQueueOutboundDetail({
       context: 'qq',
-      bot: 'bot1',
+      endpoint: 'bot1',
       channelId: 'guild1',
       channelType: 'guild',
       content: 'hello',
@@ -57,14 +57,14 @@ describe('queue IM field contract', () => {
     } catch (error) {
       expect(error).toBeInstanceOf(QueueIMFieldContractError);
       expect((error as QueueIMFieldContractError).code).toBe('missing_field');
-      expect((error as QueueIMFieldContractError).field).toBe('bot');
+      expect((error as QueueIMFieldContractError).field).toBe('endpoint');
     }
   });
 
   it('converts normalized detail into SendOptions', () => {
     const sendOptions: SendOptions = toSendOptions({
       context: 'qq',
-      bot: 'bot1',
+      endpoint: 'bot1',
       channelId: 'group1',
       channelType: 'group',
       content: [{ type: 'text', data: { text: 'hello' } }],
@@ -72,7 +72,7 @@ describe('queue IM field contract', () => {
 
     expect(sendOptions).toEqual({
       context: 'qq',
-      bot: 'bot1',
+      endpoint: 'bot1',
       id: 'group1',
       type: 'group',
       content: [{ type: 'text', data: { text: 'hello' } }],
@@ -85,7 +85,7 @@ describe('queue IM field contract', () => {
       type: 'message.send',
       detail: {
         context: 'qq',
-        bot: 'bot1',
+        endpoint: 'bot1',
         channelId: 'group1',
         channelType: 'channel',
         content: 'hello',

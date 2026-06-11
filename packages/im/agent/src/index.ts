@@ -347,7 +347,7 @@ export {
 
 export {
   introspectionRestBindings,
-  introspectionRestBots,
+  introspectionRestEndpoints,
   introspectionRestCommands,
   introspectionRestMcp,
   introspectionRestTools,
@@ -418,7 +418,7 @@ export {
   AI_EVENT_NAMES,
   subscribeAIEvents,
 } from './ai-event-subscriber.js';
-export { originFromToolContext } from './builtin/spawn-task-tool.js';
+export { originFromMessage } from './builtin/spawn-task-tool.js';
 export type {
   AIEventName,
   AIEventFilter,
@@ -426,6 +426,7 @@ export type {
 } from './ai-event-subscriber.js';
 
 export { initAgentModule } from './init.js';
+export { registerEndpointIdColumnMigrationHook } from './init/upgrade-endpoint-id-schema.js';
 
 // ── Typing Indicator ──
 export {
@@ -463,7 +464,7 @@ export {
 export type {
   AdapterTypingIndicatorConfig,
   PlatformFeatures,
-  BotWithTypingIndicator,
+  EndpointWithTypingIndicator,
 } from './typing-indicator/adapter-integration.js';
 
 // ── MCP Client ──
@@ -493,7 +494,7 @@ export {
 export type {
   ToolInput, McpConnection,
   ResourceScope, ResourceEntry,
-  Tool, ToolContext, IMToolContext, SenderRole, ToolScope, FileRole,
+  Tool, Message, SenderRole, ToolScope, FileRole,
   ToolParametersSchema, PropertySchema, ToolJsonSchema,
   Skill, SkillMetadata,
   SubAgentDef, AgentPreset,

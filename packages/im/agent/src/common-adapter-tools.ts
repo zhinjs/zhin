@@ -28,16 +28,16 @@ export function createGroupManagementTools(
     parameters: {
       type: 'object' as const,
       properties: {
-        bot_id: { type: 'string', description: 'Bot ID', contextKey: 'botId' },
+        endpoint_id: { type: 'string', description: 'Endpoint ID', contextKey: 'endpointId' },
         scene_id: { type: 'string', description: '群/服务器 ID', contextKey: 'sceneId' },
         ...Object.fromEntries(Object.entries(spec.extraParams)),
       },
-      required: ['bot_id', 'scene_id', ...(spec.extraRequired ?? [])],
+      required: ['endpoint_id', 'scene_id', ...(spec.extraRequired ?? [])],
     },
     execute,
     tags: ['group', 'management', prefix],
     keywords: spec.keywords,
-    ...(spec.requiredAnyRole?.length ? { requiredAnyRole: spec.requiredAnyRole } : {}),
+    ...(spec.permit ? { permissions: [spec.permit] } : {}),
     scopes: ['group'] as ToolScope[],
     preExecutable: spec.preExecutable,
   }));

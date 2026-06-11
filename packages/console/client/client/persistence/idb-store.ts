@@ -6,7 +6,7 @@ const STORE_PENDING = "pending";
 export type InboxRecord = {
   id: string;
   adapter: string;
-  botId: string;
+  endpointId: string;
   kind: "message" | "request" | "notice";
   payload: unknown;
   updatedAt: number;
@@ -42,7 +42,7 @@ export async function idbPutInbox(record: InboxRecord): Promise<void> {
 
 export async function idbListInbox(
   adapter: string,
-  botId: string,
+  endpointId: string,
   kind: InboxRecord["kind"],
 ): Promise<InboxRecord[]> {
   const db = await openDb();
@@ -53,22 +53,22 @@ export async function idbListInbox(
     req.onerror = () => reject(req.error);
   });
   db.close();
-  return all.filter((r) => r.adapter === adapter && r.botId === botId && r.kind === kind);
+  return all.filter((r) => r.adapter === adapter && r.endpointId === endpointId && r.kind === kind);
 }
 
 export async function applyConsoleEvent(event: { type: string; data?: unknown }): Promise<void> {
   const t = event.type;
-  if (t === "bot:message" || t === "bot:request" || t === "bot:notice") {
+  if (t === "endpoint:message" || t === "endpoint:request" || t === "endpoint:notice") {
     const data = event.data as Record<string, unknown> | undefined;
     if (!data) return;
     const adapter = String(data.adapter ?? "");
-    const botId = String(data.botId ?? data.bot ?? "");
-    const id = `${adapter}:${botId}:${t}:${Date.now()}`;
+    const endpointId = String(data.endpointId ?? data.bot ?? "");
+    const id = `${adapter}:${endpointId}:${t}:${Date.now()}`;
     await idbPutInbox({
       id,
       adapter,
-      botId,
-      kind: t === "bot:message" ? "message" : t === "bot:request" ? "request" : "notice",
+      endpointId,
+      kind: t === "endpoint:message" ? "message" : t === "endpoint:request" ? "request" : "notice",
       payload: data,
       updatedAt: Date.now(),
     });

@@ -12,7 +12,7 @@ import type {
   MessageChannel,
   User,
   Group,
-  BotConfig,
+  EndpointConfig,
   AppConfig,
   SendOptions
 } from '../src/types'
@@ -111,7 +111,7 @@ describe('群组类型测试', () => {
 
 describe('机器人配置类型测试', () => {
   it('应该正确定义机器人配置', () => {
-    const config: BotConfig = {
+    const config: EndpointConfig = {
       name: '测试机器人',
       context: 'test',
       platform: 'qq',
@@ -127,7 +127,7 @@ describe('机器人配置类型测试', () => {
 describe('应用配置类型测试', () => {
   it('应该正确定义应用配置', () => {
     const config: AppConfig = {
-      bots: [{
+      endpoints: [{
         name: '测试机器人',
         context: 'test'
       }],
@@ -135,7 +135,7 @@ describe('应用配置类型测试', () => {
       plugins: ['test-plugin'],
       debug: true
     }
-    expect(config.bots).toHaveLength(1)
+    expect(config.endpoints).toHaveLength(1)
     expect(config.plugin_dirs).toEqual(['./plugins'])
     expect(config.plugins).toEqual(['test-plugin'])
     expect(config.debug).toBe(true)
@@ -148,13 +148,13 @@ describe('发送选项类型测试', () => {
       id: '123',
       type: 'group',
       context: 'test',
-      bot: 'test-bot',
+      endpoint: 'test-bot',
       content: '测试消息'
     }
     expect(options.id).toBe('123')
     expect(options.type).toBe('group')
     expect(options.context).toBe('test')
-    expect(options.bot).toBe('test-bot')
+    expect(options.endpoint).toBe('test-bot')
     expect(options.content).toBe('测试消息')
   })
 })

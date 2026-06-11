@@ -1,7 +1,7 @@
 /**
  * 微信 iLink Typing Indicator（iLink sendTyping API → 微信「正在输入」）
  */
-import type { WeixinIlinkBot } from "./bot.js";
+import type { WeixinIlinkEndpoint } from "./endpoint.js";
 import {
   NativeTypingIndicatorAdapter,
   TypingIndicatorManager,
@@ -31,10 +31,10 @@ const DEFAULT_CONFIG: WeixinIlinkTypingIndicatorConfig = {
 export class WeixinIlinkTypingIndicatorManager {
   private manager: TypingIndicatorManager;
   private config: WeixinIlinkTypingIndicatorConfig;
-  private bot: WeixinIlinkBot;
+  private endpoint: WeixinIlinkEndpoint;
 
-  constructor(bot: WeixinIlinkBot, config: WeixinIlinkTypingIndicatorConfig = {}) {
-    this.bot = bot;
+  constructor(endpoint: WeixinIlinkEndpoint, config: WeixinIlinkTypingIndicatorConfig = {}) {
+    this.endpoint = endpoint;
     this.config = {
       ...DEFAULT_CONFIG,
       ...config,
@@ -61,12 +61,12 @@ export class WeixinIlinkTypingIndicatorManager {
       async (options: TypingIndicatorOptions) => {
         const peerId = resolvePeerId(options);
         if (!peerId) return;
-        await this.bot.sendTypingToUser(peerId, TypingStatus.TYPING);
+        await this.endpoint.sendTypingToUser(peerId, TypingStatus.TYPING);
       },
       async (options: TypingIndicatorOptions) => {
         const peerId = resolvePeerId(options);
         if (!peerId) return;
-        await this.bot.sendTypingToUser(peerId, TypingStatus.CANCEL);
+        await this.endpoint.sendTypingToUser(peerId, TypingStatus.CANCEL);
       },
     );
     this.manager.registerAdapter(adapter);
@@ -94,7 +94,7 @@ export class WeixinIlinkTypingIndicatorManager {
       userId: peerId,
       groupId: options.groupId,
       platform: "weixin-ilink",
-      botId: this.bot.$id,
+      endpointId: this.endpoint.$id,
       sceneType: "private",
     };
 
@@ -112,7 +112,7 @@ export class WeixinIlinkTypingIndicatorManager {
       userId: peerId,
       groupId: options.groupId,
       platform: "weixin-ilink",
-      botId: this.bot.$id,
+      endpointId: this.endpoint.$id,
       sceneType: "private",
     });
   }
@@ -130,10 +130,10 @@ function resolvePeerId(options: {
 }
 
 export function enableTypingIndicator(
-  bot: WeixinIlinkBot,
+  endpoint: WeixinIlinkEndpoint,
   config?: WeixinIlinkTypingIndicatorConfig,
 ): WeixinIlinkTypingIndicatorManager {
-  const manager = new WeixinIlinkTypingIndicatorManager(bot, config);
-  bot.$typingIndicator = manager;
+  const manager = new WeixinIlinkTypingIndicatorManager(endpoint, config);
+  endpoint.$typingIndicator = manager;
   return manager;
 }

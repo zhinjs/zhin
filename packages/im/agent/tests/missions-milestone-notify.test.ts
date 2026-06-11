@@ -12,7 +12,7 @@ describe('mission-milestone-notify', () => {
   it('parses platform:bot:scope:sceneId session keys', () => {
     expect(parseOrchestrationSessionKey('sandbox:bot1:private:user1')).toEqual({
       platform: 'sandbox',
-      botId: 'bot1',
+      endpointId: 'bot1',
       scope: 'private',
       sceneId: 'user1',
     });
@@ -36,7 +36,7 @@ describe('mission-milestone-notify', () => {
     expect(ok).toBe(true);
     expect(send).toHaveBeenCalledWith(expect.objectContaining({
       context: 'sandbox',
-      bot: 'bot1',
+      endpoint: 'bot1',
       id: 'user1',
       type: 'private',
     }));

@@ -2,12 +2,14 @@
  * list_dir 内置工具（BuiltinBaseTool）单测
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mockCommMessage } from '../helpers/mock-comm-message.js';
+
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { createListDirTool, ListDirBuiltinTool } from '../../src/builtin/list-dir-tool.js';
 import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
-import type { ToolContext } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 
 describe('ListDirBuiltinTool', () => {
   let tmpDir: string;
@@ -61,7 +63,7 @@ describe('ListDirBuiltinTool', () => {
 
   it('execute 与 normalizeTool 绑定 context 时可调用', async () => {
     const tool = createListDirTool();
-    const ctx = { platform: 'test' } as ToolContext;
+    const ctx = mockCommMessage({ adapter: 'test' });
     const agentTool = normalizeTool(tool, ctx);
     const result = await agentTool.execute({ path: tmpDir });
     expect(String(result)).toContain('empty');

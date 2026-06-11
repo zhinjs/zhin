@@ -10,6 +10,7 @@ import {
   type Context,
   type IGroupManagement,
   createGroupManagementTools,
+  registerDefaultGroupPlatformPermitChecker,
   type ToolFeature,
   registerAgentPromptContributor,
   unregisterAgentPromptContributor,
@@ -22,11 +23,11 @@ import { createNapCatAgentPromptContributor } from './agent-prompt.js';
 import { registerRoutes } from './routes.js';
 
 export * from './types.js';
-export { NapCatWsClient } from './bot-ws-client.js';
-export { NapCatWsServer } from './bot-ws-server.js';
-export { NapCatHttpBot } from './bot-http.js';
-export { NapCatAdapter, type NapCatBot } from './adapter.js';
-export { NapCatBotBase } from './bot-base.js';
+export { NapCatWsClient } from './endpoint-ws-client.js';
+export { NapCatWsServer } from './endpoint-ws-server.js';
+export { NapCatHttpEndpoint } from './endpoint-http.js';
+export { NapCatAdapter, type NapCatEndpoint } from './adapter.js';
+export { NapCatEndpointBase } from './endpoint-base.js';
 export {
   NapCatTypingIndicatorManager,
   enableTypingIndicator,
@@ -67,6 +68,7 @@ provide({
 // ── AI 工具注册 ────────────────────────────────────────────────────
 useContext('tool', 'napcat', (toolService: ToolFeature, napcat: NapCatAdapter) => {
   const disposers: (() => void)[] = [];
+  disposers.push(registerDefaultGroupPlatformPermitChecker('napcat'));
 
   const groupTools = createGroupManagementTools(
     napcat as unknown as IGroupManagement,

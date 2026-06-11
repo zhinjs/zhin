@@ -41,8 +41,8 @@ export interface AuditEvent {
   sessionId?: string;
   /** 用户 ID */
   userId?: string;
-  /** Bot ID */
-  botId?: string;
+  /** Endpoint ID */
+  endpointId?: string;
   /** 平台 */
   platform?: string;
   /** 工具名称 */
@@ -379,13 +379,13 @@ export class AuditLogger {
   /**
    * 记录会话开始
    */
-  logSessionStart(sessionId: string, userId?: string, botId?: string, platform?: string): void {
+  logSessionStart(sessionId: string, userId?: string, endpointId?: string, platform?: string): void {
     this.log({
       type: 'session.start',
       severity: 'info',
       sessionId,
       userId,
-      botId,
+      endpointId,
       platform,
       message: `会话开始: ${sessionId}`,
     });

@@ -9,7 +9,7 @@ export const ASSISTANT_JOBS_FILENAME = 'assistant-jobs.json';
 const CRON_JOBS_FILENAME = 'cron-jobs.json';
 
 export type JobNotifyCli =
-  | { channel: 'im'; platform?: string; botId?: string; senderId?: string; sceneId?: string; scope?: string }
+  | { channel: 'im'; platform?: string; endpointId?: string; senderId?: string; sceneId?: string; scope?: string }
   | { channel: 'silent' }
   | { channel: 'log' };
 
