@@ -1,0 +1,42 @@
+log_level: 1
+
+endpoints: []
+
+plugins:
+  - "@zhin.js/adapter-sandbox"
+  - "@zhin.js/host-router"
+  - "@zhin.js/host-api"
+  - hello
+
+hostApi:
+  lazyLoad: true
+
+ai:
+  enabled: true
+  providers:
+    ollama:
+      api: ollama-chat
+      host: ${OLLAMA_HOST:-http://127.0.0.1:11434}
+  agents:
+    zhin:
+      provider: ollama
+      model: qwen3:8b
+  agent:
+    execSecurity: allowlist
+    execPreset: readonly
+  trigger:
+    prefixes:
+      - "ai:"
+    respondToAt: true
+    respondToPrivate: true
+
+http:
+  host: 0.0.0.0
+  port: 8086
+  token: ${ADMIN_TOKEN:-demo-admin-token}
+  tokens:
+    - token: ${DEMO_TOKEN:-demo-public-token}
+      scope: demo
+  corsOrigins:
+    - "https://demo.zhin.dev"
+  trustProxy: true
