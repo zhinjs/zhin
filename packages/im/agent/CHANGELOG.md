@@ -1,5 +1,17 @@
 # @zhin.js/agent
 
+## 0.2.1
+
+### Patch Changes
+
+- d8def69: fix: 性能优化
+- 2ef4896: fix: 更新概念 Bot=>Endpoint,已适配后续更多的业务场景;统一角色权限
+- Updated dependencies [d8def69]
+- Updated dependencies [2ef4896]
+  - @zhin.js/core@1.2.1
+  - @zhin.js/ai@1.2.1
+  - @zhin.js/logger@0.1.71
+
 ## 0.2.0
 
 ### Minor Changes

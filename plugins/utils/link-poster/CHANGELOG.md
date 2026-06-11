@@ -1,5 +1,14 @@
 # @zhin.js/plugin-link-poster
 
+## 1.0.1
+
+### Patch Changes
+
+- 2ef4896: fix: 更新概念 Bot=>Endpoint,已适配后续更多的业务场景;统一角色权限
+- Updated dependencies [d8def69]
+- Updated dependencies [2ef4896]
+  - zhin.js@2.0.1
+
 ## 1.0.0
 
 ### Patch Changes
