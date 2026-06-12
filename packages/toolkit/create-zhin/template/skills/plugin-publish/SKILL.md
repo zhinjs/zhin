@@ -182,6 +182,27 @@ pnpm add zhin.js-{name}
 - 使用 `>=x.x.x` 而不是精确版本
 - 确保与当前 zhin.js 最新版本兼容
 
+## 失败与兜底
+
+| 触发条件 | 一线处理 | 仍失败 |
+|----------|----------|--------|
+| `tsc` / `test` 失败 | 停止发布，先修或交 `plugin-quality` | 不得在红灯下 `npm publish` |
+| `npm pack` 缺文件 | 修 `files` 白名单与 `.npmignore` | 对照官方 adapter 的 `package.json` |
+| 包名已占用 | 换更具体名如 `zhin.js-music-search` | `npm view <name>` 确认 |
+| 无 npm 登录 | `npm whoami`；未登录则 `npm login` | 仅输出发布检查报告，不代发 |
+
+## 🔴 CHECKPOINT · 发布确认
+
+`npm publish` 前向用户确认：版本号、CHANGELOG、是否已跑完 test/coverage、`npm pack --dry-run` 结果。
+
+## 不要做什么
+
+- 不要发布含密钥、`.env`、私服的 `files` 条目
+- 不要跳过测试强行发 patch
+- 不要把 `tests/`、`coverage/` 打进 npm 包
+- 不要对 scoped 包忘记 `--access public`
+- 不要用本 skill 代替 Changeset 流程（monorepo 官方包）
+
 ## 检查清单（发布门禁）
 
 - [ ] `name` 遵循 `zhin.js-{name}` 命名规范

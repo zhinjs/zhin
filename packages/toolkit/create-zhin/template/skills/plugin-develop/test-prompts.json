@@ -1,0 +1,12 @@
+[
+  {
+    "id": 1,
+    "prompt": "帮我在 my-plugin 里加一个 greet 命令，用户发 greet 张三 就回复 Hello 张三",
+    "expected": "定位插件入口、用 MessageCommand 注册、提到 build/test 验证"
+  },
+  {
+    "id": 2,
+    "prompt": "给插件加一个每天 9 点执行的定时任务，打印日志",
+    "expected": "addCron、declareConfig 或 Cron 表达式、清理函数"
+  }
+]

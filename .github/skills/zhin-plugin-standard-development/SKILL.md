@@ -255,10 +255,32 @@ Web 相关：
 
 ### 需求像适配器而不是插件
 
-如果用户要处理平台协议、Bot 生命周期、消息格式转换、发送/撤回：
+如果用户要处理平台协议、Endpoint 生命周期、消息格式转换、发送/撤回：
 
 - 不按本 skill 继续
 - 改用 `adapter-developer` agent 或适配器相关工作流
+
+## 失败与兜底
+
+| 触发条件 | 一线处理 | 仍失败 |
+|----------|----------|--------|
+| `useContext` 永不执行 | 核对依赖插件是否在 `zhin.config` 的 `plugins` 列表 | 查启动日志 Context `provided` 顺序 |
+| 命令注册无响应 | 核对 `MessageCommand` 模板与 `result.params` | 对照 [实现分支参考](./references/implementation-branches.md) |
+| `tsc` 导入报错 | 互导路径加 `.js`；检查 `exports.development` | 对照官方插件 `package.json` |
+| 控制台页 404 | 确认 `@zhin.js/host-api` + `web.addEntry` 时机 | 查 `GET /entries` 是否列出 entry |
+| 结构已混乱难下手 | 停止扩写本 skill | 改用 `zhin-plugin-refactoring` |
+
+## 🔴 CHECKPOINT · 大范围改动前
+
+同时涉及数据库 + HTTP + `client/` 或改动超过 3 个模块前，向用户确认：功能列表、目录拆分、是否配套测试。
+
+## 不要做什么
+
+- 不要在 `async` 回调里调用 `usePlugin()`
+- 不要从 `@zhin.js/core` 直接 import（用户项目统一 `zhin.js`）
+- 不要绕过 `Message.$reply` / `Adapter.sendMessage` 发送链
+- 不要把适配器协议写进普通插件
+- 不要为「整洁」在无复杂度时拆出大量空目录
 
 ## 输出要求
 

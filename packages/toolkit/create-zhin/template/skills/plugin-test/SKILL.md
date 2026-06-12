@@ -88,33 +88,34 @@ describe('MyPlugin Lifecycle', () => {
 
 ### 2. 命令测试
 
+优先用 `command.handle()` 走完整匹配链（与仓库 `teach-command.test.ts` 一致），不要访问私有 `_action`：
+
 ```typescript
-import { describe, it, expect } from 'vitest'
-import { MessageCommand } from '@zhin.js/core'
+import { describe, it, expect, vi } from 'vitest'
+import { MessageCommand, type Message } from 'zhin.js'
 
-describe('Commands', () => {
-  it('should parse parameters', () => {
-    const cmd = new MessageCommand('hello <name:text> [count:number=1]')
-    // 验证命令定义正确
-    expect(cmd.name).toBe('hello')
-  })
+function msg(text: string): Message<any> {
+  return {
+    $content: [{ type: 'text', data: { text } }],
+    $raw: text,
+    $sender: { id: 'u1', name: 'User' },
+    $reply: vi.fn(),
+    $channel: { id: 'g1', type: 'group' },
+    $adapter: 'sandbox',
+    $endpoint: 'sandbox-bot',
+  } as Message<any>
+}
 
-  it('should execute command action', async () => {
-    const cmd = new MessageCommand('greet <name:text>')
-      .action(async (message, result) => {
-        return `Hello, ${result.params.name}!`
-      })
+const mockPlugin = { contextIsReady: () => false, inject: () => null } as any
 
-    // 模拟消息和匹配结果
-    const mockMessage = { $raw: 'greet World' } as any
-    const mockResult = { params: { name: 'World' } } as any
+describe('greet command', () => {
+  const command = new MessageCommand('greet <name:text>').action(
+    async (_message, result) => `Hello, ${result.params.name}!`,
+  )
 
-    // 直接调用 action 回调验证输出
-    const callback = cmd['_action']
-    if (callback) {
-      const output = await callback(mockMessage, mockResult)
-      expect(output).toBe('Hello, World!')
-    }
+  it('executes greet with parsed name', async () => {
+    const output = await command.handle(msg('greet World'), mockPlugin)
+    expect(output).toBe('Hello, World!')
   })
 })
 ```
@@ -262,6 +263,27 @@ tests/
 ├── tools.test.ts            # AI 工具逻辑
 └── integration.test.ts      # 集成测试（可选）
 ```
+
+## 失败与兜底
+
+| 触发条件 | 一线处理 | 仍失败 |
+|----------|----------|--------|
+| `Plugin` 启动失败 | 检查路径、`peerDependencies`、mock 的 root 插件 | 先跑 `plugin-init` 骨架是否可 start/stop |
+| 命令 action 难测 | 直接调 action 回调或抽纯函数测逻辑 | 避免强依赖完整 IM 消息链 |
+| 覆盖率不达标 | 补命令/中间件/工具单测，不堆无意义断言 | 用 `plugin-quality` 审查缺口 |
+| CI 与本地结果不一致 | 对齐 Node 版本；本地 `pnpm test` 复现 | 查 vitest 配置 `isolate` |
+
+## 🔴 CHECKPOINT · 测什么
+
+先列出待测能力（命令/中间件/工具/服务），再写测试文件，避免只测 `start/stop` 空壳。
+
+## 不要做什么
+
+- 不要在测试里调用真实平台 API 或生产 token
+- 不要留下 `.skip` / `.only` 进 PR
+- 不要用 `eval` 测 AI 工具（用固定输入测 `execute`）
+- 不要为覆盖率硬写 `expect(true).toBe(true)`
+- 不要把集成测试和单元测试混在同一文件无分区
 
 ## 检查清单
 

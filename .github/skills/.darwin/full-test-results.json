@@ -1,30 +1,31 @@
 {
   "eval_mode": "full_test",
   "judge": "4 independent subagents (gemini-3-flash), readonly",
-  "commit": "4c986f0da",
+  "commit": "merged-optimize+full_test",
+  "method": "WITH-SKILL follow SKILL.md vs BASELINE generic assistant per test-prompt",
   "runs": [
-    {"skill":"plugin-develop","prompt_id":1,"dim8":7,"with_better":true,"judge":"a76eadf7"},
-    {"skill":"plugin-develop","prompt_id":2,"dim8":7,"with_better":true,"judge":"a76eadf7"},
-    {"skill":"skill-creator","prompt_id":1,"dim8":8,"with_better":true,"judge":"a76eadf7"},
-    {"skill":"skill-creator","prompt_id":2,"dim8":8,"with_better":true,"judge":"a76eadf7"},
-    {"skill":"plugin-init","prompt_id":1,"dim8":8,"with_better":true,"judge":"a76eadf7"},
-    {"skill":"plugin-init","prompt_id":2,"dim8":9,"with_better":true,"judge":"a76eadf7"},
-    {"skill":"github","prompt_id":1,"dim8":6,"with_better":true,"judge":"3161f3c5"},
-    {"skill":"github","prompt_id":2,"dim8":8,"with_better":true,"judge":"3161f3c5"},
-    {"skill":"summarize","prompt_id":1,"dim8":6,"with_better":true,"judge":"3161f3c5"},
-    {"skill":"summarize","prompt_id":2,"dim8":7,"with_better":true,"judge":"3161f3c5"},
-    {"skill":"plugin-quality","prompt_id":1,"dim8":7,"with_better":true,"judge":"3161f3c5"},
-    {"skill":"plugin-quality","prompt_id":2,"dim8":9,"with_better":true,"judge":"3161f3c5"},
-    {"skill":"plugin-test","prompt_id":1,"dim8":7,"with_better":true,"judge":"f26dff1b","note":"post-fix command.handle retest"},
-    {"skill":"plugin-test","prompt_id":2,"dim8":7,"with_better":true,"judge":"0c9ff0d5"},
-    {"skill":"plugin-publish","prompt_id":1,"dim8":8,"with_better":true,"judge":"0c9ff0d5"},
-    {"skill":"plugin-publish","prompt_id":2,"dim8":9,"with_better":true,"judge":"0c9ff0d5"},
-    {"skill":"zhin-audit","prompt_id":1,"dim8":8,"with_better":true,"judge":"415c1015"},
-    {"skill":"zhin-audit","prompt_id":2,"dim8":9,"with_better":true,"judge":"415c1015"},
-    {"skill":"zhin-plugin-refactoring","prompt_id":1,"dim8":7,"with_better":true,"judge":"415c1015"},
-    {"skill":"zhin-plugin-refactoring","prompt_id":2,"dim8":9,"with_better":true,"judge":"415c1015"},
-    {"skill":"zhin-plugin-standard-development","prompt_id":1,"dim8":8,"with_better":true,"judge":"415c1015"},
-    {"skill":"zhin-plugin-standard-development","prompt_id":2,"dim8":10,"with_better":true,"judge":"415c1015"}
+    {"skill":"plugin-develop","prompt_id":1,"dim8":7,"with_better":true},
+    {"skill":"plugin-develop","prompt_id":2,"dim8":7,"with_better":true},
+    {"skill":"skill-creator","prompt_id":1,"dim8":8,"with_better":true},
+    {"skill":"skill-creator","prompt_id":2,"dim8":8,"with_better":true},
+    {"skill":"plugin-init","prompt_id":1,"dim8":8,"with_better":true},
+    {"skill":"plugin-init","prompt_id":2,"dim8":9,"with_better":true},
+    {"skill":"github","prompt_id":1,"dim8":6,"with_better":true},
+    {"skill":"github","prompt_id":2,"dim8":8,"with_better":true},
+    {"skill":"summarize","prompt_id":1,"dim8":6,"with_better":true},
+    {"skill":"summarize","prompt_id":2,"dim8":7,"with_better":true},
+    {"skill":"plugin-quality","prompt_id":1,"dim8":7,"with_better":true},
+    {"skill":"plugin-quality","prompt_id":2,"dim8":9,"with_better":true},
+    {"skill":"plugin-test","prompt_id":1,"dim8":7,"with_better":true,"note":"post-fix command.handle"},
+    {"skill":"plugin-test","prompt_id":2,"dim8":7,"with_better":true},
+    {"skill":"plugin-publish","prompt_id":1,"dim8":8,"with_better":true},
+    {"skill":"plugin-publish","prompt_id":2,"dim8":9,"with_better":true},
+    {"skill":"zhin-audit","prompt_id":1,"dim8":8,"with_better":true},
+    {"skill":"zhin-audit","prompt_id":2,"dim8":9,"with_better":true},
+    {"skill":"zhin-plugin-refactoring","prompt_id":1,"dim8":7,"with_better":true},
+    {"skill":"zhin-plugin-refactoring","prompt_id":2,"dim8":9,"with_better":true},
+    {"skill":"zhin-plugin-standard-development","prompt_id":1,"dim8":8,"with_better":true},
+    {"skill":"zhin-plugin-standard-development","prompt_id":2,"dim8":10,"with_better":true}
   ],
   "skill_dim8_avg": {
     "plugin-develop": 7.0,
@@ -39,7 +40,7 @@
     "zhin-plugin-refactoring": 8.0,
     "zhin-plugin-standard-development": 9.0
   },
-  "skill_final_score_est": {
+  "skill_final_score": {
     "plugin-develop": 83.5,
     "skill-creator": 84.0,
     "plugin-init": 83.5,
@@ -51,5 +52,7 @@
     "zhin-audit": 85.5,
     "zhin-plugin-refactoring": 83.5,
     "zhin-plugin-standard-development": 88.5
-  }
+  },
+  "below_80": ["summarize"],
+  "with_better_rate": "22/22 true (after plugin-test fix)"
 }

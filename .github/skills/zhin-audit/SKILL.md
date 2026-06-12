@@ -153,8 +153,28 @@ user-invocable: true
 1. **Tool Service 双注册**：`Plugin.#tools` 和 `ToolService` 可能不一致
 2. **Command Service 静默失败**：中间件在 CommandService 未注册时静默跳过
 3. **适配器消息格式化**：`$formatMessage` 必须包含 `$recall` 方法
-4. **出站消息链一致性**：所有发送必须经过 `renderSendMessage → before.sendMessage → bot.$sendMessage`
+4. **出站消息链一致性**：所有发送必须经过 `renderSendMessage → before.sendMessage → 平台 Endpoint 发送`（禁止 `bot.$sendMessage` 旁路）
 5. **热重载缓存失效**：`import(?t=...)` 防缓存 URL 和 `require.cache` 清理
+
+## 失败与兜底
+
+| 触发条件 | 一线处理 | 仍失败 |
+|----------|----------|--------|
+| 范围过大无法一次审完 | 按用户指定 scope（安全/性能/架构）缩小目录 | 🔴 列出未覆盖目录，请用户选下一批 |
+| `grep` 误报过多 | 结合文件上下文人工过滤测试/mock | 只报告可复现路径 + 行号 |
+| 无法运行构建/测试 | 在报告中标注「静态审计 only」 | 建议用户本地 `pnpm test` 后补测 |
+
+## 🔴 CHECKPOINT · 范围确认
+
+全面审计前确认：目录范围、是否含 `plugins/` 第三方、是否只审 `git diff`。
+
+## 不要做什么
+
+- 不要仅凭 `grep` 命中就标「严重」，需读上下文
+- 不要在审计报告粘贴 token、`.env`、用户私聊 ID
+- 不要建议绕过 IM 发送链或架构分层
+- 不要把风格偏好标成安全漏洞
+- 不要对未请求的目录做全仓 `grep` 后堆砌低价值告警
 
 ## 常用搜索命令
 

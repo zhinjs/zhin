@@ -1,0 +1,12 @@
+[
+  {
+    "id": 1,
+    "prompt": "帮我写一个 skill，让 Agent 知道怎么给插件加单元测试",
+    "expected": "skills/<name>/SKILL.md、frontmatter、工作流、反例"
+  },
+  {
+    "id": 2,
+    "prompt": "优化现有 SKILL.md 的 keywords，Agent 总不激活",
+    "expected": "补 description 触发词、检查重复 skill、单任务边界"
+  }
+]
