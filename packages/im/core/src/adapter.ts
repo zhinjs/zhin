@@ -16,6 +16,7 @@ import { getOutboundReplyStore } from "./built/dispatcher.js";
 import { coerceHtmlSegmentsToText } from "./built/html-segment-fallback.js";
 import { segment } from "./utils.js";
 import { runInboundMessage } from "./built/inbound-runner.js";
+import { InboundMessagePipeline } from "./built/inbound-pipeline.js";
 import { formatCompact, truncatePreview } from '@zhin.js/logger';
 /**
  * Adapter类：适配器抽象，管理多平台Bot实例。
@@ -72,63 +73,51 @@ export abstract class Adapter<
       await endpoint.$recallMessage(id);
     };
     this.on('call.recallMessage', this.recallMessageHandler);
+    this.inboundPipeline = new InboundMessagePipeline({
+      plugin: this.plugin,
+      logger: this.logger,
+      getMaxConcurrentMessages: () => this.maxConcurrentMessages,
+      getPendingMessages: () => this.#pendingMessages,
+      decrementPending: () => { this.#pendingMessages--; },
+    });
   }
 
+  /** 入站消息管线（替代 emit override 的隐式管线） */
+  private inboundPipeline!: InboundMessagePipeline;
+
   /**
-   * 重写 emit：拦截 message.receive 事件，按架构规定的入站流程处理
-   * 入站消息链：adapter.emit → dispatcher.dispatch → plugin.dispatch('message.receive') → adapter observers
-   *
-   * 以属性 + `EventEmitter.prototype.emit` 调用满足 Node @types 25 对泛型 `emit` 的可赋值检查。
+   * 重写 emit：拦截 message.receive/notice.receive/request.receive 事件，
+   * 将入站处理委托给 InboundMessagePipeline。
    */
   override emit: EventEmitter<Adapter.Lifecycle>['emit'] = ((
     event: string | symbol,
     ...args: unknown[]
   ): boolean => {
     if (event === 'notice.receive' || event === 'request.receive') {
-      const bridged = EventEmitter.prototype.emit.call(this, event, ...args);
-      if (this.plugin) {
-        void this.plugin.dispatch(
-          event as 'notice.receive' | 'request.receive',
-          args[0] as never,
-        );
-      }
-      return bridged;
+      return this.inboundPipeline.bridgeNoticeOrRequest(
+        event as string,
+        args,
+        () => EventEmitter.prototype.emit.call(this, event, ...args),
+      );
     }
 
     if (event !== 'message.receive') {
       return EventEmitter.prototype.emit.call(this, event, ...args);
     }
     const message = args[0] as Message;
-    this.logger.info(formatCompact( {
-      recv: `${message.$channel.type}(${message.$channel.id})`,
-      endpoint: message.$endpoint,
-      preview: truncatePreview(segment.raw(message.$content)),
-      ...(message.$quote_id ? { quote_id: message.$quote_id } : {}),
-    }));
 
-    // 背压控制：limit > 0 时启用，超出并发上限丢弃消息并告警
-    const limit = this.maxConcurrentMessages;
-    if (limit > 0 && this.#pendingMessages >= limit) {
-      this.logger.warn(formatCompact( { drop: 'concurrency', limit }));
+    // 背压控制：同步返回 false 表示丢弃
+    if (this.inboundPipeline.shouldDropDueToBackpressure()) {
+      this.logger.warn(formatCompact( { drop: 'concurrency', limit: this.maxConcurrentMessages }));
       return false;
     }
 
+    // 同步计数，保证背压判断的准确性
     this.#pendingMessages++;
-    // 异步执行入站消息处理链
-    const processing = async () => {
-      await runInboundMessage({
-        plugin: this.plugin,
-        message,
-        emitAdapterObservers: () => {
-          EventEmitter.prototype.emit.call(this, event, ...args);
-        },
-      });
-    };
 
-    processing().catch((e) => {
-      this.logger.warn(`message.receive handling error: ${e instanceof Error ? e.message : String(e)}`);
-    }).finally(() => {
-      this.#pendingMessages--;
+    // 异步入站管线（middleware → dispatcher → 生命周期 → 观察者）
+    this.inboundPipeline.receive(message, () => {
+      EventEmitter.prototype.emit.call(this, event, ...args);
     });
     return true;
   }) as EventEmitter<Adapter.Lifecycle>['emit'];
