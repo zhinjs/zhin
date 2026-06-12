@@ -38,3 +38,4 @@ timestamp	commit	skill	old_score	new_score	status	dimension	note	eval_mode
 2026-06-12T04:00	full_test	zhin-audit	82.0	85.5	keep	dim8=8.5	4子agent对比	full_test
 2026-06-12T04:00	full_test	zhin-plugin-refactoring	82.0	83.5	keep	dim8=8.0	4子agent对比	full_test
 2026-06-12T04:00	full_test	zhin-plugin-standard-development	86.0	88.5	keep	dim8=9.0	adapter边界prompt=10	full_test
+2026-06-12T05:00	full_test	summarize	79.5	83.0	keep	dim8=8.5	材料不足模式+事实分级	full_test

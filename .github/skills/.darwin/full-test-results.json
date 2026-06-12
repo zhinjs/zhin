@@ -12,8 +12,8 @@
     {"skill":"plugin-init","prompt_id":2,"dim8":9,"with_better":true},
     {"skill":"github","prompt_id":1,"dim8":6,"with_better":true},
     {"skill":"github","prompt_id":2,"dim8":8,"with_better":true},
-    {"skill":"summarize","prompt_id":1,"dim8":6,"with_better":true},
-    {"skill":"summarize","prompt_id":2,"dim8":7,"with_better":true},
+    {"skill":"summarize","prompt_id":1,"dim8":9,"with_better":true,"note":"retest: 材料不足模式"},
+    {"skill":"summarize","prompt_id":2,"dim8":8,"with_better":true,"note":"retest: CI ENOENT 模板"},
     {"skill":"plugin-quality","prompt_id":1,"dim8":7,"with_better":true},
     {"skill":"plugin-quality","prompt_id":2,"dim8":9,"with_better":true},
     {"skill":"plugin-test","prompt_id":1,"dim8":7,"with_better":true,"note":"post-fix command.handle"},
@@ -32,7 +32,7 @@
     "skill-creator": 8.0,
     "plugin-init": 8.5,
     "github": 7.0,
-    "summarize": 6.5,
+    "summarize": 8.5,
     "plugin-quality": 8.0,
     "plugin-test": 7.0,
     "plugin-publish": 8.5,
@@ -45,7 +45,7 @@
     "skill-creator": 84.0,
     "plugin-init": 83.5,
     "github": 80.5,
-    "summarize": 79.5,
+    "summarize": 83.0,
     "plugin-quality": 84.5,
     "plugin-test": 81.5,
     "plugin-publish": 85.0,
@@ -53,6 +53,6 @@
     "zhin-plugin-refactoring": 83.5,
     "zhin-plugin-standard-development": 88.5
   },
-  "below_80": ["summarize"],
+  "below_80": [],
   "with_better_rate": "22/22 true (after plugin-test fix)"
 }
