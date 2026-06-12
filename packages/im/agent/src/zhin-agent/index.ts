@@ -284,7 +284,13 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   }
 
   /** @deprecated 使用 configure({ activeBinding }) */
-  setActiveBinding(binding: ResolvedAgentBinding | null): void { this.configure({ activeBinding: binding ?? undefined }); }
+  setActiveBinding(binding: ResolvedAgentBinding | null): void {
+    if (binding === null) {
+      this.activeBinding = null;
+    } else {
+      this.configure({ activeBinding: binding });
+    }
+  }
 
   getActiveBinding(): ResolvedAgentBinding | null {
     return this.activeBinding;

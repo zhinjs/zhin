@@ -41,24 +41,26 @@ export async function activateAiDatabaseStorage(
     });
   }
 
-  if (agentMessageModel && agentSummaryModel && agentSessionStore) {
-    const contextRepository = new DatabaseContextRepository(
-      agentMessageModel,
-      agentSummaryModel,
-      agentSessionStore,
-      { tailMessageLimit: config.sessions?.coldStartMaxMessages },
-    );
-    const imTranscriptStore = imTranscriptModel
-      ? new DatabaseImTranscriptStore(imTranscriptModel, {
-        searchMaxAgeMs: config.sessions?.coldStartMaxAgeMs,
-      })
-      : undefined;
-    refs.zhinAgent.configure({
-      agentSessionStore,
-      contextRepository,
-      imTranscriptStore,
-    });
-  }
+  const contextRepository = (agentMessageModel && agentSummaryModel && agentSessionStore)
+    ? new DatabaseContextRepository(
+        agentMessageModel,
+        agentSummaryModel,
+        agentSessionStore,
+        { tailMessageLimit: config.sessions?.coldStartMaxMessages },
+      )
+    : undefined;
+
+  const imTranscriptStore = imTranscriptModel
+    ? new DatabaseImTranscriptStore(imTranscriptModel, {
+      searchMaxAgeMs: config.sessions?.coldStartMaxAgeMs,
+    })
+    : undefined;
+
+  refs.zhinAgent.configure({
+    agentSessionStore,
+    contextRepository,
+    imTranscriptStore,
+  });
 
   const profileModel = db.models?.get('ai_user_profiles');
   if (profileModel) {
