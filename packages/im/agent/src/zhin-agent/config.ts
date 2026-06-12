@@ -4,7 +4,23 @@
 
 import type { RateLimitConfig } from '@zhin.js/ai';
 import { DEFAULT_CONTEXT_TOKENS, DEFAULT_FOLLOW_UP_MODE, DEFAULT_STEERING_MODE, type QueueMode } from '@zhin.js/ai';
+import type {
+  AIProvider,
+  AgentSessionStore,
+  ContextRepository,
+  IMSessionStore,
+  ImTranscriptStore,
+  MemoryAgentSessionStore,
+  MemoryIMSessionStore,
+  ModelRegistry,
+  SessionManager,
+} from '@zhin.js/ai';
+import type { Plugin } from '@zhin.js/core';
 import type { ModelHarnessConfig } from './model-harness.js';
+import type { AgentOrchestrator } from '../orchestrator/index.js';
+import type { SkillRegistry } from '../orchestrator/skill-registry.js';
+import type { SubagentResultSender } from '../subagent.js';
+import type { ResolvedAgentBinding } from '../config/types.js';
 
 export type ModelSizeHint = 'small' | 'medium' | 'large';
 export type ExecApprovalMode = 'ask' | 'allow' | 'deny';
@@ -188,6 +204,26 @@ export const DEFAULT_TOOL_SEARCH_ORCHESTRATOR_TOOLS = DEFAULT_ORCHESTRATOR_TOOLS
 
 /** @deprecated 使用 DEFAULT_WORKER_BASE_TOOLS */
 export const DEFAULT_TOOL_SEARCH_WORKER_BASE_TOOLS = DEFAULT_WORKER_BASE_TOOLS;
+
+/** ZhinAgent 运行依赖（通过 setter 或 configure() 注入） */
+export interface ZhinAgentDependencies {
+  skillRegistry: SkillRegistry;
+  orchestrator: AgentOrchestrator;
+  sessionManager: SessionManager;
+  imSessionStore: IMSessionStore | MemoryIMSessionStore;
+  agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
+  contextRepository: ContextRepository;
+  imTranscriptStore: ImTranscriptStore;
+  modelRegistry: ModelRegistry;
+  hostPlugin: Plugin;
+  providerResolver: (alias: string) => AIProvider;
+  activeBinding: ResolvedAgentBinding;
+  subagentSender: SubagentResultSender;
+  deferredResultSender: SubagentResultSender;
+  bootstrapContext: string;
+  activeSkillsContext: string;
+  skillsSummaryXML: string;
+}
 
 export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   persona: 'You are Zhin, an intelligent IM assistant running in Zhin.js. Answer clearly, act through available tools when needed, and never claim actions or results unless confirmed by tool output.',

@@ -134,8 +134,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       if (refs.zhinAgent) {
         const alwaysContent = await loadAlwaysSkillsContent(skills);
         const skillsXml = buildSkillsSummaryXML(skills);
-        refs.zhinAgent.setActiveSkillsContext(alwaysContent);
-        refs.zhinAgent.setSkillsSummaryXML(skillsXml);
+        refs.zhinAgent.configure({ activeSkillsContext: alwaysContent, skillsSummaryXML: skillsXml });
       }
       return { count: skills.length, pluginTools: pluginToolCounts.join(',') };
     }
@@ -275,7 +274,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
 
         if (refs.zhinAgent && contextFiles.length > 0) {
           const contextSection = buildBootstrapContextSection(contextFiles);
-          refs.zhinAgent.setBootstrapContext(contextSection);
+          refs.zhinAgent.configure({ bootstrapContext: contextSection });
         }
       } catch (e: unknown) {
         logger.debug(`Bootstrap files not loaded: ${e instanceof Error ? e.message : String(e)}`);

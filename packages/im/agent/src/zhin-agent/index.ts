@@ -66,6 +66,7 @@ import { getAgentDispatcher } from '../orchestrator/agent-dispatcher.js';
 import {
   type ZhinAgentConfig,
   type OnChunkCallback,
+  type ZhinAgentDependencies,
   DEFAULT_CONFIG,
   isPhaseTraceEnabled,
 } from './config.js';
@@ -94,6 +95,7 @@ import { buildDeferredAutoContinueUserMessage } from './deferred-auto-continue.j
 import type { DeferredWorkerResult } from '../deferred-worker-runner.js';
 
 export type { ZhinAgentConfig, OnChunkCallback } from './config.js';
+export type { IAgentTurnProcessor, IAgentSessionManager, IAgentDiagnostics, IAgentConfigurator } from './interfaces.js';
 export type { ZhinAgentTurnMetrics, ZhinAgentTurnPath } from './turn-metrics.js';
 export { PromptAccessDeniedError } from './prompt-access.js';
 export { formatAiHandlerCompleteLog, formatZhinAgentTurnUsage } from './turn-metrics.js';
@@ -108,8 +110,14 @@ const logger = new Logger(null, 'ZhinAgent');
 // ============================================================================
 
 import { PromptAccessDeniedError } from './prompt-access.js';
+import type {
+  IAgentTurnProcessor,
+  IAgentSessionManager,
+  IAgentDiagnostics,
+  IAgentConfigurator,
+} from './interfaces.js';
 
-export class ZhinAgent {
+export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAgentDiagnostics, IAgentConfigurator {
   private provider: AIProvider;
   private providerResolver: ((alias: string) => AIProvider) | null = null;
   private activeBinding: ResolvedAgentBinding | null = null;
@@ -179,62 +187,84 @@ export class ZhinAgent {
 
   // ── DI setters ──────────────────────────────────────────────────────
 
-  setSkillRegistry(registry: SkillRegistry): void {
-    this.skillRegistry = registry;
-    logger.debug(`SkillRegistry connected (${registry.size} skills)`);
+  /**
+   * 统一依赖注入入口。替代逐字段 setter。
+   * 所有 setter 现委托到此方法；新代码优先使用 configure()。
+   */
+  configure(deps: Partial<ZhinAgentDependencies>): void {
+    if (deps.skillRegistry !== undefined) {
+      this.skillRegistry = deps.skillRegistry;
+      logger.debug(`SkillRegistry connected (${deps.skillRegistry.size} skills)`);
+    }
+    if (deps.orchestrator !== undefined) {
+      this.orchestrator = deps.orchestrator;
+      logger.debug('AgentOrchestrator connected for MCP and resources');
+    }
+    if (deps.sessionManager !== undefined) {
+      this.sessions.dispose();
+      this.sessions = deps.sessionManager;
+    }
+    if (deps.imSessionStore !== undefined) this.imSessionStore = deps.imSessionStore;
+    if (deps.agentSessionStore !== undefined) this.agentSessionStore = deps.agentSessionStore;
+    if (deps.contextRepository !== undefined) this.contextRepository = deps.contextRepository;
+    if (deps.imTranscriptStore !== undefined) this.imTranscriptStore = deps.imTranscriptStore;
+    if (deps.modelRegistry !== undefined) {
+      this.modelRegistry = deps.modelRegistry;
+      this.subagentManager?.setModelRegistry(deps.modelRegistry);
+    }
+    if (deps.hostPlugin !== undefined) this.emitter.setHostPlugin(deps.hostPlugin);
+    if (deps.providerResolver !== undefined) {
+      this.providerResolver = deps.providerResolver;
+      this.wireLlmApiLayer();
+    }
+    if (deps.activeBinding !== undefined) {
+      this.activeBinding = deps.activeBinding;
+      if (deps.activeBinding) {
+        const patch = bindingToModelConfig(deps.activeBinding);
+        this.config = { ...this.config, ...patch };
+      }
+    }
+    if (deps.subagentSender !== undefined) {
+      this.subagentManager?.setSender(deps.subagentSender);
+    }
+    if (deps.deferredResultSender !== undefined) this.deferredResultSender = deps.deferredResultSender;
+    if (deps.bootstrapContext !== undefined) {
+      this.bootstrapContext = deps.bootstrapContext;
+      logger.debug(`Bootstrap context set (${deps.bootstrapContext.length} chars)`);
+    }
+    if (deps.activeSkillsContext !== undefined) this.activeSkillsContext = deps.activeSkillsContext || '';
+    if (deps.skillsSummaryXML !== undefined) this.skillsSummaryXML = deps.skillsSummaryXML || '';
   }
 
-  setOrchestrator(orchestrator: AgentOrchestrator): void {
-    this.orchestrator = orchestrator;
-    logger.debug('AgentOrchestrator connected for MCP and resources');
-  }
+  /** @deprecated 使用 configure({ skillRegistry }) */
+  setSkillRegistry(registry: SkillRegistry): void { this.configure({ skillRegistry: registry }); }
 
-  setSessionManager(manager: SessionManager): void {
-    this.sessions.dispose();
-    this.sessions = manager;
-  }
+  /** @deprecated 使用 configure({ orchestrator }) */
+  setOrchestrator(orchestrator: AgentOrchestrator): void { this.configure({ orchestrator }); }
 
-  setIMSessionStore(store: IMSessionStore): void {
-    this.imSessionStore = store;
-  }
+  /** @deprecated 使用 configure({ sessionManager }) */
+  setSessionManager(manager: SessionManager): void { this.configure({ sessionManager: manager }); }
 
-  setAgentSessionStore(store: AgentSessionStore | MemoryAgentSessionStore): void {
-    this.agentSessionStore = store;
-  }
+  /** @deprecated 使用 configure({ imSessionStore }) */
+  setIMSessionStore(store: IMSessionStore): void { this.configure({ imSessionStore: store }); }
 
-  setContextRepository(repo: ContextRepository): void {
-    this.contextRepository = repo;
-  }
+  /** @deprecated 使用 configure({ agentSessionStore }) */
+  setAgentSessionStore(store: AgentSessionStore | MemoryAgentSessionStore): void { this.configure({ agentSessionStore: store }); }
 
-  setImTranscriptStore(store: ImTranscriptStore): void {
-    this.imTranscriptStore = store;
-  }
+  /** @deprecated 使用 configure({ contextRepository }) */
+  setContextRepository(repo: ContextRepository): void { this.configure({ contextRepository: repo }); }
 
-  getContextRepository(): ContextRepository {
-    return this.contextRepository;
-  }
+  /** @deprecated 使用 configure({ imTranscriptStore }) */
+  setImTranscriptStore(store: ImTranscriptStore): void { this.configure({ imTranscriptStore: store }); }
 
-  getAgentSessionStore(): AgentSessionStore | MemoryAgentSessionStore {
-    return this.agentSessionStore;
-  }
+  /** @deprecated 使用 configure({ modelRegistry }) */
+  setModelRegistry(registry: ModelRegistry): void { this.configure({ modelRegistry: registry }); }
 
-  getImTranscriptStore(): ImTranscriptStore {
-    return this.imTranscriptStore;
-  }
+  /** @deprecated 使用 configure({ hostPlugin }) */
+  setHostPlugin(plugin: Plugin): void { this.configure({ hostPlugin: plugin }); }
 
-  setModelRegistry(registry: ModelRegistry): void {
-    this.modelRegistry = registry;
-    this.subagentManager?.setModelRegistry(registry);
-  }
-
-  setHostPlugin(plugin: Plugin): void {
-    this.emitter.setHostPlugin(plugin);
-  }
-
-  setProviderResolver(resolver: (alias: string) => AIProvider): void {
-    this.providerResolver = resolver;
-    this.wireLlmApiLayer();
-  }
+  /** @deprecated 使用 configure({ providerResolver }) */
+  setProviderResolver(resolver: (alias: string) => AIProvider): void { this.configure({ providerResolver: resolver }); }
 
   private wireLlmApiLayer(): void {
     const resolve = (alias: string) => {
@@ -253,15 +283,12 @@ export class ZhinAgent {
     );
   }
 
-  /** 入站回合注入 ai.agents.<name> 绑定（zhin 或其它 route 摘要路径） */
+  /** @deprecated 使用 configure({ activeBinding }) */
   setActiveBinding(binding: ResolvedAgentBinding | null): void {
-    this.activeBinding = binding;
-    if (binding) {
-      const patch = bindingToModelConfig(binding);
-      this.config = {
-        ...this.config,
-        ...patch,
-      };
+    if (binding === null) {
+      this.activeBinding = null;
+    } else {
+      this.configure({ activeBinding: binding });
     }
   }
 
@@ -357,15 +384,11 @@ export class ZhinAgent {
     logger.debug('SubagentManager initialized');
   }
 
-  setSubagentSender(sender: SubagentResultSender): void {
-    if (this.subagentManager) {
-      this.subagentManager.setSender(sender);
-    }
-  }
+  /** @deprecated 使用 configure({ subagentSender }) */
+  setSubagentSender(sender: SubagentResultSender): void { this.configure({ subagentSender: sender }); }
 
-  setDeferredResultSender(sender: SubagentResultSender): void {
-    this.deferredResultSender = sender;
-  }
+  /** @deprecated 使用 configure({ deferredResultSender }) */
+  setDeferredResultSender(sender: SubagentResultSender): void { this.configure({ deferredResultSender: sender }); }
 
   getDeferredResultSender(): SubagentResultSender | null {
     return this.deferredResultSender;
@@ -454,18 +477,14 @@ export class ZhinAgent {
     return () => { this.externalTools.delete(tool.name); };
   }
 
-  setBootstrapContext(context: string): void {
-    this.bootstrapContext = context;
-    logger.debug(`Bootstrap context set (${context.length} chars)`);
-  }
+  /** @deprecated 使用 configure({ bootstrapContext }) */
+  setBootstrapContext(context: string): void { this.configure({ bootstrapContext: context }); }
 
-  setActiveSkillsContext(content: string): void {
-    this.activeSkillsContext = content || '';
-  }
+  /** @deprecated 使用 configure({ activeSkillsContext }) */
+  setActiveSkillsContext(content: string): void { this.configure({ activeSkillsContext: content }); }
 
-  setSkillsSummaryXML(xml: string): void {
-    this.skillsSummaryXML = xml || '';
-  }
+  /** @deprecated 使用 configure({ skillsSummaryXML }) */
+  setSkillsSummaryXML(xml: string): void { this.configure({ skillsSummaryXML: xml }); }
 
   getLastTurnMetrics(): ZhinAgentTurnMetrics | null {
     return this.lastTurnMetrics;

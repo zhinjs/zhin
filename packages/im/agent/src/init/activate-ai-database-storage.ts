@@ -39,25 +39,28 @@ export async function activateAiDatabaseStorage(
     agentSessionStore = new AgentSessionStore(agentSessionModel, {
       sessionIdleArchiveMs: config.sessions?.sessionIdleArchiveMs,
     });
-    refs.zhinAgent.setAgentSessionStore(agentSessionStore);
   }
 
-  if (agentMessageModel && agentSummaryModel && agentSessionStore) {
-    refs.zhinAgent.setContextRepository(
-      new DatabaseContextRepository(
+  const contextRepository = (agentMessageModel && agentSummaryModel && agentSessionStore)
+    ? new DatabaseContextRepository(
         agentMessageModel,
         agentSummaryModel,
         agentSessionStore,
         { tailMessageLimit: config.sessions?.coldStartMaxMessages },
-      ),
-    );
-  }
+      )
+    : undefined;
 
-  if (imTranscriptModel) {
-    refs.zhinAgent.setImTranscriptStore(new DatabaseImTranscriptStore(imTranscriptModel, {
+  const imTranscriptStore = imTranscriptModel
+    ? new DatabaseImTranscriptStore(imTranscriptModel, {
       searchMaxAgeMs: config.sessions?.coldStartMaxAgeMs,
-    }));
-  }
+    })
+    : undefined;
+
+  refs.zhinAgent.configure({
+    agentSessionStore,
+    contextRepository,
+    imTranscriptStore,
+  });
 
   const profileModel = db.models?.get('ai_user_profiles');
   if (profileModel) {
