@@ -496,23 +496,229 @@ npx zhin info zhin.js-my-plugin
 npx zhin install zhin.js-my-plugin
 ```
 
+## 高级模式
+
+### 中间件拦截
+
+中间件可以拦截消息、注入上下文或记录日志。**必须调用 `next()` 才能继续管线**：
+
+```typescript
+import { usePlugin } from 'zhin.js'
+
+const { addMiddleware, logger } = usePlugin()
+
+// 日志中间件
+addMiddleware(async (message, next) => {
+  const start = Date.now()
+  logger.info(`收到: ${message.$content}`)
+  await next()
+  logger.info(`处理完成: ${Date.now() - start}ms`)
+}, 'logger')
+
+// 权限拦截中间件
+addMiddleware(async (message, next) => {
+  if (!message.$sender.isMaster && message.$content.startsWith('/admin')) {
+    await message.$reply('权限不足')
+    return // 不调用 next()，中断管线
+  }
+  await next()
+}, 'guard')
+```
+
+::: warning 中间件执行顺序
+内置命令中间件始终先执行。用户添加的中间件在命令处理**之后**运行。如果消息已匹配命令并回复，用户中间件仍会执行（`next()` 返回后）。
+:::
+
+### 定时任务
+
+```typescript
+import { usePlugin, Cron } from 'zhin.js'
+
+const { addCron, logger } = usePlugin()
+
+// 每 5 分钟执行一次
+addCron(new Cron('*/5 * * * *', async () => {
+  logger.info('定时任务执行')
+  await checkFeeds()
+}))
+
+// 每天早上 9 点
+addCron(new Cron('0 9 * * *', async () => {
+  await sendDailyBrief()
+}))
+```
+
+定时任务在 `addCron()` 时自动启动，插件卸载时自动停止。标准 5 字段 cron 格式：`分 时 日 月 周`。
+
+### Schema 配置声明
+
+`declareConfig` 使用 Schema 验证配置，比 `addConfig` 更强大：
+
+```typescript
+import { usePlugin, Schema } from 'zhin.js'
+
+const { declareConfig, addCommand } = usePlugin()
+
+const config = declareConfig('my-plugin', Schema.object({
+  threshold: Schema.number()
+    .default(3)
+    .min(2)
+    .max(10)
+    .description('触发阈值'),
+  cooldown: Schema.number()
+    .default(30_000)
+    .description('冷却时间 (ms)'),
+  enabled: Schema.boolean()
+    .default(true)
+    .description('是否启用'),
+}))
+
+// config 现在是类型安全的：{ threshold: number, cooldown: number, enabled: boolean }
+// 用户可在 zhin.config.yml 中覆盖：
+// my-plugin:
+//   threshold: 5
+//   cooldown: 60000
+```
+
+### JSX 组件
+
+```typescript
+import { usePlugin, defineComponent } from 'zhin.js'
+
+const { addComponent } = usePlugin()
+
+const WeatherCard = defineComponent(
+  async function WeatherCard({ city }: { city: string }) {
+    const weather = await fetchWeather(city)
+    return `🌤️ ${city}: ${weather.temp}°C, ${weather.desc}`
+  },
+  'WeatherCard'
+)
+
+addComponent(WeatherCard)
+
+// 使用：<WeatherCard city="北京" />
+```
+
+### 技能声明（SKILL.md）
+
+在 `skills/` 目录放置 `SKILL.md` 文件，AI 会自动发现并使用：
+
+```text
+plugins/my-plugin/
+└── skills/
+    └── my-skill/
+        └── SKILL.md
+```
+
+```markdown
+# my-skill
+
+## When to use
+- 用户问天气时
+- 用户说"温度"、"天气"等关键词时
+
+## Tools
+- get_weather: 查询城市天气
+
+## Instructions
+1. 从用户消息中提取城市名
+2. 调用 get_weather 工具
+3. 用自然语言回复结果
+```
+
+### `useContext` 进阶
+
+`useContext` 有几个非直觉的行为：
+
+```typescript
+const { useContext } = usePlugin()
+
+useContext('database', 'icqq', (db, icqq) => {
+  // 1. 两个 context 都就绪时触发
+  // 2. 如果任一 context 被卸载后重新创建，会重新触发
+  
+  const cleanup = db.models.get('notes')
+  
+  // 3. 返回清理函数 — 当 context 被卸载时调用
+  return () => {
+    // 清理在此 context 下注册的资源
+  }
+})
+```
+
+### 提供自定义服务（provide + extensions）
+
+```typescript
+const { provide } = usePlugin()
+
+provide({
+  name: 'counter',
+  description: '计数器服务',
+  value: { counts: new Map<string, number>() },
+  // mounted: context 就绪后调用
+  mounted: async (plugin) => {
+    plugin.logger.info('Counter service mounted')
+    return { counts: new Map() }
+  },
+  // dispose: 插件卸载时调用
+  dispose: async (value) => {
+    value.counts.clear()
+  },
+  // extensions: 注入到 Plugin.prototype，所有插件可用
+  extensions: {
+    incrementCounter(key: string) {
+      const svc = this.inject('counter')
+      const val = (svc.counts.get(key) || 0) + 1
+      svc.counts.set(key, val)
+      return val
+    }
+  }
+})
+
+// 声明类型扩展
+declare module 'zhin.js' {
+  namespace Plugin {
+    interface Contexts {
+      counter: { counts: Map<string, number> }
+    }
+  }
+}
+```
+
+## 常见陷阱
+
+| 陷阱 | 说明 |
+|------|------|
+| `usePlugin()` 不在顶层调用 | 必须在模块顶层调用，不能在回调、async 函数或动态 import 内。框架通过调用栈检测文件路径。 |
+| 忘记调用 `next()` | 中间件不调用 `next()` 会中断管线，后续中间件和命令都不会执行。 |
+| `declareConfig` 返回值不是响应式的 | 返回的是合并后的快照，运行时配置文件修改不会自动更新返回值。 |
+| 工具名冲突 | 全局唯一。同名工具会覆盖旧的。 |
+| 热重载仅开发模式 | `pnpm dev` 才有效。`pnpm start` 不监听文件变化。 |
+| `useContext` 回调重复触发 | 任一 context 被卸载重装时，整个回调会重新执行。用 `onDispose` 返回的清理函数处理副作用。 |
+
 ## 插件开发最佳实践
 
 ### ✅ 推荐做法
 
-- **使用 TypeScript** — 获得完整的类型提示和编译时检查
-- **声明类型扩展** — 让其他插件获得类型提示（`declare module 'zhin.js'`）
-- **使用 `useContext`** — 确保依赖的服务就绪后再使用
-- **返回清理函数** — 在 `onDispose` 中清理定时器、连接等资源
-- **使用 `logger`** — 通过插件自带的 logger 输出日志，便于调试
-- **添加 `addConfig`** — 让用户可以通过配置文件自定义插件行为
+- **`usePlugin()` 在模块顶层调用** — 不能在回调、async 函数或动态 import 内
+- **使用 `declareConfig` + Schema** — 比 `addConfig` 更安全，有类型校验和 Web 控制台支持
+- **`useContext` 等待依赖** — 确保依赖的服务就绪后再注册命令/工具
+- **`useContext` 返回清理函数** — 当 context 被卸载时自动调用
+- **`onDispose` 清理资源** — 定时器、连接、订阅等
+- **声明 `declare module`** — 让其他插件获得类型提示
+- **使用 `logger`** — 不要用 `console.log`，插件自带的 logger 有上下文标识
+- **中间件命名** — `addMiddleware(fn, 'name')` 方便调试和日志追踪
+- **工具名全局唯一** — snake_case 命名，避免冲突
 
 ### ❌ 避免做法
 
-- **不要使用 `any` 类型** — 保持类型安全
-- **不要泄露资源** — 插件卸载时确保清理所有资源
-- **不要硬编码配置** — 使用 `addConfig` 或环境变量
-- **不要阻塞主线程** — 耗时操作使用 `async/await`
+- **`usePlugin()` 不在顶层** — 框架通过调用栈检测文件路径，异步调用会失败
+- **中间件不调用 `next()`** — 会中断管线，后续处理不会执行
+- **`declareConfig` 后修改返回值** — 返回的是快照，不会同步到配置文件
+- **插件卸载不清理资源** — 定时器、连接、事件监听器必须在 `onDispose` 中清理
+- **同步阻塞主线程** — 文件读写、网络请求使用 `async/await`
+- **硬编码配置** — 使用 `declareConfig` 或环境变量
 
 ### 完整插件模板
 
