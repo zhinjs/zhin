@@ -34,7 +34,7 @@ export function getCurrentFile(metaUrl = import.meta.url): string {
     new Set(stack.map((site) => site.getFileName()))
   );
   const idx = stackFiles.findIndex(
-    (f) => f === fileURLToPath(metaUrl) || f === metaUrl
+    (f) => (metaUrl.startsWith('file://') ? f === fileURLToPath(metaUrl) : false) || f === metaUrl
   );
   const result = stackFiles[idx + 1];
   if (!result) {
