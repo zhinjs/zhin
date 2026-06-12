@@ -178,17 +178,6 @@ export {
 } from './memory/session.js';
 export type { ISessionManager, IMSessionScope, ResolveIMSessionIdInput, AISessionStatus } from './memory/session.js';
 
-/** @deprecated ADR 0009 — 使用 ContextRepository + ImTranscriptStore */
-export {
-  ChatHistoryContext,
-} from './memory/chat-history-context.js';
-export type {
-  ChatHistoryConfig,
-  ChatHistoryQuery,
-  ChatHistorySearchHit,
-  ChatHistoryToolResult,
-} from './memory/chat-history-context.js';
-
 export {
   IMSessionStore,
   MemoryIMSessionStore,
