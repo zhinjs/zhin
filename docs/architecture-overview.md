@@ -95,13 +95,7 @@ graph TB
 
 ### @zhin.js/ai（AI 引擎层）
 
-**与 IM 无关的通用 AI 引擎**，可独立用于任何需要 LLM 集成的应用。按三个子模块组织：
-
-#### `agent/` — 遗留 Agent 类
-
-| 模块 | 说明 |
-|------|------|
-| `Agent` / `createAgent` | **遗留**有状态 tool-calling 循环；IM 生产路径已改走 `agentLoop`，保留供单测与直接 import |
+**与 IM 无关的通用 AI 引擎**，可独立用于任何需要 LLM 集成的应用。统一使用 `agentLoop` 作为唯一 LLM 回合引擎（ADR 0009）。
 
 #### `llm/` — LLM 统一栈（ADR 0009）
 
@@ -149,17 +143,17 @@ graph TB
 
 ### @zhin.js/core（IM 层）
 
-**IM 与多通道运行时**（Plugin、Adapter、Endpoint、MessageDispatcher），在 kernel 基础上添加消息领域概念。不再自带 AI Provider 实现（已迁至 `@zhin.js/ai`），而是从 `@zhin.js/ai` 选择性 re-export。
+**IM 与多通道运行时**（Plugin、Adapter、Endpoint、MessageDispatcher），在 kernel 基础上添加消息领域概念。不直接依赖 `@zhin.js/ai`——AI 类型由消费方从 `@zhin.js/ai` 直接导入。
 
 | 模块 | 说明 |
 |------|------|
 | `Plugin` | 完整的插件类，实现 `PluginLike` 接口，含 IM 特有功能（消息中间件、命令、组件） |
+| `InboundMessagePipeline` | 入站消息管线：日志、背压、middleware → dispatcher → 生命周期 → 观察者 |
 | `Adapter` | 适配器抽象基类，管理 Endpoint 连接、群管理方法自动检测 |
 | `Endpoint` | Endpoint 接口，规范连接/发消息/撤回/格式化等方法 |
 | `MessageDispatcher` | 消息三阶段调度：Guardrail → Route → Handle |
 | `Feature` 子类 | `CommandFeature`、`ToolFeature`、`SkillFeature`、`CronFeature`、`DatabaseFeature`、`ComponentFeature`、`PermissionFeature`、`ConfigFeature` |
 | 消息类型 | `Message`、`MessageElement`、`segment`（消息段工具） |
-| AI re-export | 从 `@zhin.js/ai` 选择性导出 Provider、Agent、Session、Memory、Compaction 等 |
 
 ### @zhin.js/agent（Agent 编排层）
 
@@ -177,21 +171,15 @@ graph TB
 | `HookRegistry` | AI 生命周期 Hook（错误隔离触发） |
 | `ResourceRegistry<T>` | 通用注册表基类（公共 vs 专有、增删与监听） |
 
-#### `discovery/` — 文件化能力发现
-
-| 模块 | 说明 |
-|------|------|
-| `tools.ts` | 扫描 `*.tool.md`，解析 frontmatter 并构建可注册工具 |
-| `skills.ts` | 扫描 `SKILL.md`，依赖检查、常驻技能与摘要 XML |
-| `agents.ts` | 扫描 `*.agent.md` 预设元数据 |
-| `utils.ts` | 发现路径优先级、目录列表等共享工具 |
-
 #### `security/` — 安全策略
 
 | 模块 | 说明 |
 |------|------|
 | `ExecPolicy` | Bash 执行安全（6 层纵深防御：黑名单、环境变量剥离、wrapper 剥离、复合命令拆分、只读放行、审批集成） |
 | `FilePolicy` | 文件访问安全（路径检查、设备路径拦截、命令读写分类） |
+| `Sandbox` | 多层沙箱：Docker 容器隔离（最强）→ ulimit 资源限制 + 进程组 kill（中等）→ 软沙箱（最弱） |
+| `NetworkPolicy` | 网络命令阻断（enableNetwork 配置）+ 域名白名单校验 |
+| `AuditLogger` | 安全事件审计日志 |
 
 #### `mcp-client/` — MCP 客户端
 
@@ -207,7 +195,11 @@ ZhinAgent 在 AI 回合前 `ensureConnected`，`collectRuntimeTools` 合并 MCP 
 
 | 模块 | 说明 |
 |------|------|
-| `ZhinAgent` | IM 主对话大脑：`promptController` → `runAgentLoopTextTurn` / `runAgentLoopVisionTurn` |
+| `ZhinAgent` | IM 主对话大脑：`promptController` → `runAgentLoopTextTurn` / `runAgentLoopVisionTurn`。统一依赖注入 `configure(deps)` |
+| `IAgentTurnProcessor` | Turn 处理接口：process/processMultimodal/prompt/steer/followUp |
+| `IAgentSessionManager` | 会话管理接口：compact/archive/upgradeMemory |
+| `IAgentDiagnostics` | 诊断接口：getSubagentManager/getEventEmitter/getLastTurnMetrics |
+| `IAgentConfigurator` | 配置接口：configure(deps) |
 | `AIService` | Provider 注册与路由；`createAgent()` 返回 `ServiceAgent`（agentLoop 隔离上下文） |
 | `SubagentManager` | 后台子任务 → `runAgentLoopStandaloneTurn` |
 | `DeferredWorkerRunner` | toolSearch Worker → `runAgentLoopStandaloneTurn` |
@@ -216,9 +208,7 @@ ZhinAgent 在 AI 回合前 `ensureConnected`，`collectRuntimeTools` 合并 MCP 
 | `BootstrapLoader` | 引导文件加载（SOUL.md / AGENTS.md / TOOLS.md） |
 | `buildRichSystemPrompt` | ZhinAgent 主路径 system prompt（Context / Style / Tools / Safety + Platform / Skills / Memory / Bootstrap） |
 | `PromptBuilder` | 可选分层提示词 API（`buildRichSystemPromptWithBuilder` 等） |
-| `defaults/` | 默认工具/子代理/Hook |
-| `common-adapter-tools` | 适配器群管方法 → AI 工具自动生成 |
-| 内置工具 | `bash`、`read_file`、`write_file`、`ask_user`、`web_search`、`chat_history` 等 |
+| `resetAllAgentSingletons()` | 集中重置所有 agent 级全局单例（用于测试隔离） |
 
 ### zhin.js（应用层）
 
@@ -430,9 +420,19 @@ class MyAdapter extends Adapter<MyEndpoint> {
 
 ```typescript
 import { PluginBase } from '@zhin.js/kernel'
-import { Agent, OpenAIProvider } from '@zhin.js/ai'
+import { agentLoop, agentContextFrom, createUserMessage, getModel } from '@zhin.js/ai'
 
 const app = new PluginBase({ name: 'my-web-app' })
-const provider = new OpenAIProvider({ apiKey: '...' })
-const agent = new Agent(provider, logger)
+const model = getModel('openai', 'gpt-4o')
+const context = agentContextFrom({ systemPrompt: 'You are a helpful assistant' })
+
+for await (const event of agentLoop(
+  [createUserMessage('Hello')],
+  context,
+  { model, maxIterations: 5 }
+)) {
+  if (event.type === 'turn_end') {
+    console.log('Assistant:', event.message)
+  }
+}
 ```
