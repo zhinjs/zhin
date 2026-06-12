@@ -24,17 +24,31 @@ export function stripFetchedHtmlToText(html: string): string {
   return htmlToPlainText(html);
 }
 
-function isBlockedSsrfHostname(hostname: string): boolean {
+/** SSRF 防护：检查主机名是否属于内网/私有/危险地址 */
+export function isBlockedSsrfHostname(hostname: string): boolean {
   const h = hostname.toLowerCase();
   return (
+    // Localhost
     h === 'localhost' ||
     h === '127.0.0.1' ||
     h === '::1' ||
     h === '0.0.0.0' ||
     h.endsWith('.local') ||
+    // IPv4 private ranges
     h.startsWith('10.') ||
     h.startsWith('192.168.') ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(h)
+    /^172\.(1[6-9]|2\d|3[01])\./.test(h) ||
+    // Cloud metadata endpoints (AWS/GCP/Azure)
+    h === '169.254.169.254' ||
+    h === 'metadata.google.internal' ||
+    h === 'metadata.google.com' ||
+    // IPv6 private/link-local ranges
+    /^fd[0-9a-f]{2}:/i.test(h) ||
+    /^fe80:/i.test(h) ||
+    // System-level domain blocklist
+    h.endsWith('.onion') ||
+    h.endsWith('.internal') ||
+    h.endsWith('.localhost')
   );
 }
 
@@ -84,11 +98,48 @@ export class WebFetchBuiltinTool extends BuiltinBaseTool {
         return `ZHIN_NEEDS_OWNER:\n禁止访问内网地址 ${hostname}（SSRF 防护）。若确有需要，请 Owner 确认风险后调整策略或在受控环境代为抓取。`;
       }
 
-      const response = await fetch(String(args.url ?? ''), {
-        headers: { 'User-Agent': ZHIN_WEB_USER_AGENT },
-        signal: AbortSignal.timeout(WEB_TOOL_FETCH_TIMEOUT_MS),
-        redirect: 'follow',
-      });
+      const MAX_REDIRECTS = 5;
+      let currentUrl = String(args.url ?? '');
+      let redirectCount = 0;
+      let response: Response;
+
+      // Manual redirect following with SSRF check at each hop
+      while (true) {
+        response = await fetch(currentUrl, {
+          headers: { 'User-Agent': ZHIN_WEB_USER_AGENT },
+          signal: AbortSignal.timeout(WEB_TOOL_FETCH_TIMEOUT_MS),
+          redirect: 'manual',
+        });
+
+        if (response.status >= 300 && response.status < 400) {
+          const location = response.headers.get('location');
+          if (!location) break;
+
+          redirectCount++;
+          if (redirectCount > MAX_REDIRECTS) {
+            return `Error: 超过最大重定向次数 (${MAX_REDIRECTS})`;
+          }
+
+          // Resolve relative redirects
+          const redirectUrl = new URL(location, currentUrl);
+          const redirectHostname = redirectUrl.hostname.toLowerCase();
+
+          // SSRF check on each redirect target
+          if (isBlockedSsrfHostname(redirectHostname)) {
+            return `ZHIN_NEEDS_OWNER:\n重定向目标 ${redirectHostname} 被 SSRF 防护拦截。`;
+          }
+
+          // Only follow http/https redirects
+          if (!['http:', 'https:'].includes(redirectUrl.protocol)) {
+            return `Error: 不允许重定向到 ${redirectUrl.protocol} 协议`;
+          }
+
+          currentUrl = redirectUrl.href;
+          continue;
+        }
+
+        break;
+      }
       if (!response.ok) return `HTTP ${response.status}: ${response.statusText}`;
       const html = await response.text();
       const text = stripFetchedHtmlToText(html);

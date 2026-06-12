@@ -72,7 +72,7 @@ describe('WebFetchBuiltinTool', () => {
     const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
       expect(String(url)).toBe('https://public.example/page');
       expect(init?.headers).toEqual({ 'User-Agent': ZHIN_WEB_USER_AGENT });
-      expect(init?.redirect).toBe('follow');
+      expect(init?.redirect).toBe('manual');
       expect(init?.signal).toBeInstanceOf(AbortSignal);
       return new Response(longBody, { status: 200, statusText: 'OK' });
     });

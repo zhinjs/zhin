@@ -13,6 +13,7 @@ import type { AgentTool } from '@zhin.js/ai';
 import { getPlugin } from '@zhin.js/core';
 import type { ZhinAgentConfig, ExecApprovalMode } from '../zhin-agent/config.js';
 import { classifyBashCommand } from './file-policy.js';
+import { isBlockedSsrfHostname } from '../builtin/web-fetch-tool.js';
 import { getCurrentCommMessage } from './comm-message-context.js';
 import {
   isIcqqSensitiveSubcommand,
@@ -21,6 +22,50 @@ import {
   type ToolRequesterRole,
 } from './owner-approve-always-store.js';
 import { getAuditLogger } from './audit-logger.js';
+
+// ── 网络命令 URL 校验 ──────────────────────────────────────────────────
+
+/** 从 curl/wget 命令中提取目标 URL */
+function extractUrlFromNetworkCommand(command: string): string | undefined {
+  const normalized = command.trim();
+  // 匹配 http(s):// 开头的 URL
+  const urlMatch = normalized.match(/https?:\/\/[^\s'"`&|;)}\]]+/i);
+  return urlMatch?.[0];
+}
+
+/**
+ * 校验 curl/wget 命令中的 URL 是否安全
+ * - 阻断内网地址（SSRF 防护）
+ * - 阻断数据外泄模式（curl -d @file, curl --data-binary @file）
+ */
+function validateNetworkCommandUrl(command: string): { safe: boolean; reason?: string } {
+  const normalized = command.trim();
+
+  // 检测数据外泄模式：curl -d @/path 或 curl --data-binary @/path
+  if (/\bcurl\b/.test(normalized) && /(?:-d|--data|--data-binary)\s+@/.test(normalized)) {
+    return {
+      safe: false,
+      reason: '阻断数据外泄：curl 的 -d @file 模式可能泄露本地文件内容',
+    };
+  }
+
+  const url = extractUrlFromNetworkCommand(command);
+  if (!url) return { safe: true }; // 无 URL 的命令（如 curl --version）放行
+
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    if (isBlockedSsrfHostname(hostname)) {
+      return {
+        safe: false,
+        reason: `SSRF 防护：禁止访问内网/私有地址 ${hostname}`,
+      };
+    }
+  } catch {
+    // URL 解析失败，放行
+  }
+
+  return { safe: true };
+}
 
 // ── 预设命令白名单 ──────────────────────────────────────────────────
 
@@ -341,6 +386,13 @@ function checkSingleCommand(
   });
 
   if (allowed) {
+    // curl/wget 白名单放行时，额外校验 URL（SSRF 防护 + 数据外泄阻断）
+    if (cmdName === 'curl' || cmdName === 'wget') {
+      const urlCheck = validateNetworkCommandUrl(fullSubCommand);
+      if (!urlCheck.safe) {
+        return { allowed: false, reason: urlCheck.reason };
+      }
+    }
     return { allowed: true };
   }
 

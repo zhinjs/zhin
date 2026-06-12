@@ -9,6 +9,49 @@ import type { AgentTool } from '@zhin.js/ai';
 import type { McpServerEntry, McpResource, McpPrompt } from '../orchestrator/types.js';
 import { mcpToolToAgentTool, mcpResourceToInfo, mcpPromptToInfo } from './bridge.js';
 
+// ── MCP 环境清理 ─────────────────────────────────────────────────────
+
+/** stdio MCP 进程的敏感环境变量（与 sandbox.ts 保持一致） */
+const SENSITIVE_ENV_VARS = [
+  'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN',
+  'AZURE_CLIENT_SECRET', 'AZURE_TENANT_SECRET',
+  'GOOGLE_APPLICATION_CREDENTIALS',
+  'GITHUB_TOKEN', 'GH_TOKEN',
+  'NPM_TOKEN', 'NPM_AUTH_TOKEN',
+  'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY',
+  'DATABASE_URL', 'REDIS_URL', 'MONGODB_URI',
+  'JWT_SECRET', 'SESSION_SECRET', 'ENCRYPTION_KEY',
+  'SSH_PRIVATE_KEY', 'GPG_PRIVATE_KEY',
+];
+
+/**
+ * 为 stdio MCP 进程创建清洁环境
+ * 过滤敏感环境变量，只传递必要的运行时变量
+ */
+function cleanMcpEnvironment(userEnv?: Record<string, string>): Record<string, string> {
+  const safeVars: Record<string, string> = {};
+
+  // 只传递必要的系统变量
+  const essentialVars = ['PATH', 'HOME', 'USER', 'LANG', 'LC_ALL', 'SHELL', 'TERM'];
+  for (const key of essentialVars) {
+    if (process.env[key]) safeVars[key] = process.env[key];
+  }
+
+  // 合并用户自定义环境变量（排除敏感变量）
+  if (userEnv) {
+    for (const [key, value] of Object.entries(userEnv)) {
+      const isSensitive = SENSITIVE_ENV_VARS.some(sensitive =>
+        key.toUpperCase().includes(sensitive) || key.toUpperCase().startsWith('TOKEN') || key.toUpperCase().startsWith('SECRET')
+      );
+      if (!isSensitive) {
+        safeVars[key] = value;
+      }
+    }
+  }
+
+  return safeVars;
+}
+
 export interface McpClientConnectionState {
   connected: boolean;
   tools: AgentTool[];
@@ -126,7 +169,7 @@ export class McpClientConnection {
         return new mod.StdioClientTransport({
           command: this.entry.command!,
           args: this.entry.args,
-          env: this.entry.env,
+          env: cleanMcpEnvironment(this.entry.env),
         });
       }
       default:
