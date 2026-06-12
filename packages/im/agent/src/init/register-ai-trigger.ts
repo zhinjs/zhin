@@ -20,7 +20,7 @@ import {
 } from '@zhin.js/core';
 import { extractMediaParts, extractMediaPartsFromQuotedPayload } from './message-media.js';
 import type { Plugin, Tool } from '@zhin.js/core';
-import type { ContentPart } from '@zhin.js/core';
+import type { ContentPart } from '@zhin.js/ai';
 import type { OutputElement } from '@zhin.js/ai';
 import type { AIServiceRefs } from './shared-refs.js';
 import {

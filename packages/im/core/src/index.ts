@@ -82,47 +82,6 @@ export type { EndpointLifecycleKind, EndpointLifecyclePayload } from './built/en
 export * from './built/schema-feature.js'
 // Login assist (producer-consumer for QR / SMS / slider etc.)
 export * from './built/login-assist.js'
-// AI 模块 — selective re-export from @zhin.js/ai to avoid conflicts with core types
-export {
-  BaseProvider, OpenAIProvider, DeepSeekProvider, MoonshotProvider,
-  ZhipuProvider, AnthropicProvider, OllamaProvider, CloudflareProvider, GoogleProvider,
-  filterTools, tokenize,
-  SessionManager, MemorySessionManager, DatabaseSessionManager,
-  createSessionManager, createMemorySessionManager, createDatabaseSessionManager,
-  AI_SESSION_MODEL,
-  resolveIMSessionId, resolveIMSceneIdForSession, resolveIMSessionIdFromMessage,
-  ContextManager, createContextManager, CHAT_MESSAGE_MODEL, CONTEXT_SUMMARY_MODEL,
-  ConversationMemory, AI_MESSAGE_MODEL, AI_SUMMARY_MODEL,
-  estimateTokens, estimateMessagesTokens,
-  DEFAULT_CONTEXT_TOKENS,
-  microCompactMessages,
-  CostTracker,
-  CachedToolFilter, computeToolSetHash,
-  FileStateCache,
-  RateLimiter,
-  detectTone,
-  parseOutput, renderToPlainText, renderToSatori,
-  MemoryStorageBackend, DatabaseStorageBackend, createSwappableBackend,
-  ModelRegistry, extractModelRoot, computeTierScore,
-} from '@zhin.js/ai'
-export type {
-  AIConfig, AIProvider, ProviderConfig, ProviderCapabilities,
-  ChatMessage, ChatCompletionRequest, ChatCompletionResponse, ChatCompletionChunk,
-  ContentPart, ToolCall, MessageRole,
-  AgentTool, AgentConfig, AgentResult,
-  ToolFilterOptions, Usage, SessionConfig, Session, JsonSchema,
-  ContextConfig, MessageRecord as AIMessageRecord,
-  ConversationMemoryConfig,
-  ContextWindowSource, ContextWindowInfo, ContextWindowGuardResult, PruneResult,
-  MicroCompactOptions, MicroCompactResult,
-  ModelUsage, ModelPricing, CostSnapshot,
-  RateLimitConfig, RateLimitResult,
-  Tone,
-  OutputElement, TextElement, ImageElement, AudioElement, VideoElement,
-  CardElement, FileElement,
-  StorageBackend, DbModel as AIDbModel,
-  AIModelInfo, ModelTask,
-} from '@zhin.js/ai'
 
 export * from './types.js'
 export * from './agent-prompt.js'

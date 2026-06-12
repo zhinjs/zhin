@@ -3,7 +3,7 @@
  *
  * REST 为主路径；配置 mcpServer 时与 ai.mcpServers 对齐，供 Agent binding 挂载 MCP 工具。
  */
-import type { AIConfig } from '@zhin.js/core';
+import type { AIConfig } from '@zhin.js/ai';
 import type { AssistantHomeConfig } from './home-config.js';
 import { resolveAssistantHomeConfig } from './home-config.js';
 

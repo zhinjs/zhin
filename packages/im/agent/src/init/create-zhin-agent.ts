@@ -38,7 +38,8 @@ import {
   setAssistantRuntime,
   type AssistantConfig,
 } from '../assistant/index.js';
-import type { AIConfig, Plugin } from '@zhin.js/core';
+import type { Plugin } from '@zhin.js/core'
+import type { AIConfig } from '@zhin.js/ai';
 import type { AIServiceRefs } from './shared-refs.js';
 import { activateAiDatabaseStorage } from './activate-ai-database-storage.js';
 import {

@@ -5,18 +5,8 @@
 
 import type { Plugin, AITriggerConfig } from '@zhin.js/core';
 import { createSyntheticMessage } from '@zhin.js/core';
-import type {
-  AIProvider,
-  AIConfig,
-  ChatMessage,
-  ChatCompletionRequest,
-  ChatCompletionResponse,
-  ChatCompletionChunk,
-  AgentTool,
-  Tool,
-  ContentPart,
-  Usage,
-} from '@zhin.js/core';
+import type { Tool } from '@zhin.js/core'
+import type { AIProvider, AIConfig, ChatMessage, ChatCompletionRequest, ChatCompletionResponse, ChatCompletionChunk, AgentTool, ContentPart, Usage } from '@zhin.js/ai';
 import {
   SessionManager,
   createMemorySessionManager,
@@ -225,7 +215,7 @@ export class AIService {
     );
   }
 
-  getProviderCapabilities(name?: string): { contextWindow?: number; capabilities?: import('@zhin.js/core').ProviderCapabilities } {
+  getProviderCapabilities(name?: string): { contextWindow?: number; capabilities?: import('@zhin.js/ai').ProviderCapabilities } {
     const provider = this.getProvider(name);
     return {
       contextWindow: provider.contextWindow,

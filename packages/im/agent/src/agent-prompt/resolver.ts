@@ -1,8 +1,5 @@
 import { Logger } from '@zhin.js/core';
-import type {
-  AgentPromptBuildContext,
-  AgentPromptSection,
-} from '@zhin.js/core';
+import type { AgentPromptBuildContext, AgentPromptSection,  } from '@zhin.js/core';
 import type { ZhinAgentConfig } from '../zhin-agent/config.js';
 import { DEFAULT_CONFIG } from '../zhin-agent/config.js';
 import { createAIHookEvent, triggerAIHook } from '../hooks.js';

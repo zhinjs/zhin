@@ -3,7 +3,7 @@
  */
 import './types.js';
 import { formatCompact, getPlugin, type Plugin } from '@zhin.js/core';
-import type { AIConfig } from '@zhin.js/core';
+import type { AIConfig } from '@zhin.js/ai';
 import { AIService } from '../service.js';
 import type { AIServiceRefs } from './shared-refs.js';
 

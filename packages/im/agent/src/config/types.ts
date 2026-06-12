@@ -1,4 +1,4 @@
-import type { ProviderConfig } from '@zhin.js/core';
+import type { ProviderConfig } from '@zhin.js/ai';
 import type { OllamaProviderConfig } from '@zhin.js/ai';
 
 export type ProviderDriver =

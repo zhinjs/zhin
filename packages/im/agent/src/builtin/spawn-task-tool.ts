@@ -1,7 +1,8 @@
 /**
  * spawn_task — 主会话将耗时任务派给后台子 agent（与 issue #396 对齐）
  */
-import type { AgentTool, Message, Tool, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import type { Message, Tool, ToolParametersSchema, ToolResult } from '@zhin.js/core'
+import type { AgentTool } from '@zhin.js/ai';
 import type { SubagentManager, SubagentOrigin } from '../subagent.js';
 import type { SubagentContextMode } from '../subagent-preset.js';
 import { getAgentDispatcher } from '../orchestrator/agent-dispatcher.js';

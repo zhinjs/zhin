@@ -1,4 +1,4 @@
-import type { AIConfig, ProviderConfig } from '@zhin.js/core';
+import type { AIConfig, ProviderConfig } from '@zhin.js/ai';
 import { driverToModelApi } from '@zhin.js/ai';
 import type {
   AgentBindingConfig,

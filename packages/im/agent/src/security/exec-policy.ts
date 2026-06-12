@@ -9,7 +9,7 @@
  *   6. Owner 信号 — execApprovalMode=ask 时返回需审批（ZHIN_NEEDS_OWNER），由编排层可硬触发 ask_user
  */
 
-import type { AgentTool } from '@zhin.js/core';
+import type { AgentTool } from '@zhin.js/ai';
 import { getPlugin } from '@zhin.js/core';
 import type { ZhinAgentConfig, ExecApprovalMode } from '../zhin-agent/config.js';
 import { classifyBashCommand } from './file-policy.js';

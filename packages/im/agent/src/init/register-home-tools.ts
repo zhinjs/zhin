@@ -8,7 +8,7 @@ import { createHomeTools } from '../assistant/home-tools.js';
 import { mergeProfileDeviceAliases, loadAssistantProfileFile } from '../assistant/profile-loader.js';
 import { validateHomeMcpServer } from '../assistant/home-mcp-bridge.js';
 import type { AssistantConfig } from '../assistant/config.js';
-import type { AIConfig } from '@zhin.js/core';
+import type { AIConfig } from '@zhin.js/ai';
 
 export function registerHomeTools(): void {
   const plugin = getPlugin();

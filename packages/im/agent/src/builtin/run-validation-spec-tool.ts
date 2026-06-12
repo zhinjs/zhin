@@ -1,7 +1,8 @@
 /**
  * run_validation_spec — Validator-only tool (ADR 0011 D3).
  */
-import type { AgentTool, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import type { ToolParametersSchema, ToolResult } from '@zhin.js/core'
+import type { AgentTool } from '@zhin.js/ai';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import { getOrchestrationService } from '../orchestrator/orchestration-service.js';
 import {
