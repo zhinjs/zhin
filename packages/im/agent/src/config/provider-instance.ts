@@ -1,4 +1,4 @@
-import type { AIProvider, ProviderConfig } from '@zhin.js/core';
+import type { AIProvider, ProviderConfig } from '@zhin.js/ai';
 import type { CloudflareConfig, OllamaProviderConfig } from '@zhin.js/ai';
 import {
   AnthropicProvider,
@@ -9,7 +9,7 @@ import {
   OpenAIProvider,
   ZhipuProvider,
   GoogleProvider,
-} from '@zhin.js/core';
+} from '@zhin.js/ai';
 import type { ProviderInstanceConfig } from './types.js';
 
 type ProviderFactory = new (config: ProviderConfig) => AIProvider;

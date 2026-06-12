@@ -1,7 +1,7 @@
 /**
  * Wire agent_* / im_transcripts stores into ZhinAgent (ADR 0009).
  */
-import type { AIConfig } from '@zhin.js/core';
+import type { AIConfig } from '@zhin.js/ai';
 import {
   AgentSessionStore,
   DatabaseContextRepository,

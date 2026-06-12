@@ -11,7 +11,7 @@
 import { randomUUID } from 'node:crypto';
 import { Logger } from '@zhin.js/core';
 import { formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
-import type { AIProvider, AgentTool, Usage } from '@zhin.js/core';
+import type { AIProvider, AgentTool, Usage } from '@zhin.js/ai';
 import type { ResolvedAgentBinding } from './config/types.js';
 import {
   ensureMcpConnectionsForBinding,

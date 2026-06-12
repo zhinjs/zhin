@@ -4,7 +4,7 @@
  */
 import * as path from 'node:path';
 import { formatCompact, getPlugin } from '@zhin.js/core';
-import type { AIConfig } from '@zhin.js/core';
+import type { AIConfig } from '@zhin.js/ai';
 import { getDataDir } from '../discovery/utils.js';
 import type { AgentOrchestrator } from '../orchestrator/index.js';
 

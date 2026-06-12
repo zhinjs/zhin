@@ -1,4 +1,4 @@
-import type { AIConfig } from '@zhin.js/core';
+import type { AIConfig } from '@zhin.js/ai';
 import { DEFAULT_ZHIN_AGENT_NAME } from './types.js';
 import { normalizeAiRoutingConfig } from './normalize-ai-config.js';
 

@@ -3,7 +3,7 @@
  */
 import { Logger } from '@zhin.js/core';
 import { formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
-import type { AIProvider, AgentTool } from '@zhin.js/core';
+import type { AIProvider, AgentTool } from '@zhin.js/ai';
 import {
   isOmittedToolSummary,
   sanitizeToolResult,

@@ -1,7 +1,8 @@
 /**
  * run_spec_dry_run — Planner tool: manifest + vitest dry-run.
  */
-import type { AgentTool, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import type { ToolParametersSchema, ToolResult } from '@zhin.js/core'
+import type { AgentTool } from '@zhin.js/ai';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import { getOrchestrationService } from '../orchestrator/orchestration-service.js';
 import {

@@ -3,7 +3,7 @@
  */
 import { getPlugin } from '@zhin.js/core';
 import { formatCompact } from '@zhin.js/logger';
-import type { AIConfig } from '@zhin.js/core';
+import type { AIConfig } from '@zhin.js/ai';
 import type { AgentOrchestrator } from '../orchestrator/index.js';
 import type { McpServerEntry } from '../orchestrator/types.js';
 import { resolveConfigEnvString } from '../utils/config-env.js';

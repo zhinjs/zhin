@@ -2,7 +2,7 @@
  * RemoteAgentRegistry — static ai.remoteAgents + health check (Agent Mesh v1).
  */
 import { Logger } from '@zhin.js/logger';
-import type { AIConfig } from '@zhin.js/core';
+import type { AIConfig } from '@zhin.js/ai';
 import { resolveConfigEnvString } from '../utils/config-env.js';
 import { McpClientConnection } from '../mcp-client/connection.js';
 import type { McpServerEntry } from './types.js';

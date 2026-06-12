@@ -1,7 +1,8 @@
 /**
  * Project director orchestration tools — Agent Mesh hard orchestration v1.
  */
-import type { AgentTool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import type { Message, ToolParametersSchema, ToolResult } from '@zhin.js/core'
+import type { AgentTool } from '@zhin.js/ai';
 import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import type { AgentRole } from '../orchestrator/agent-dispatcher.js';
