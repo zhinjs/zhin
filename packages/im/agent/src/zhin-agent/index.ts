@@ -242,21 +242,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   /** @deprecated 使用 configure({ orchestrator }) */
   setOrchestrator(orchestrator: AgentOrchestrator): void { this.configure({ orchestrator }); }
 
-  /** @deprecated 使用 configure({ sessionManager }) */
-  setSessionManager(manager: SessionManager): void { this.configure({ sessionManager: manager }); }
-
-  /** @deprecated 使用 configure({ imSessionStore }) */
-  setIMSessionStore(store: IMSessionStore): void { this.configure({ imSessionStore: store }); }
-
-  /** @deprecated 使用 configure({ agentSessionStore }) */
-  setAgentSessionStore(store: AgentSessionStore | MemoryAgentSessionStore): void { this.configure({ agentSessionStore: store }); }
-
-  /** @deprecated 使用 configure({ contextRepository }) */
-  setContextRepository(repo: ContextRepository): void { this.configure({ contextRepository: repo }); }
-
-  /** @deprecated 使用 configure({ imTranscriptStore }) */
-  setImTranscriptStore(store: ImTranscriptStore): void { this.configure({ imTranscriptStore: store }); }
-
   /** @deprecated 使用 configure({ modelRegistry }) */
   setModelRegistry(registry: ModelRegistry): void { this.configure({ modelRegistry: registry }); }
 
@@ -476,15 +461,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     this.externalTools.set(tool.name, tool);
     return () => { this.externalTools.delete(tool.name); };
   }
-
-  /** @deprecated 使用 configure({ bootstrapContext }) */
-  setBootstrapContext(context: string): void { this.configure({ bootstrapContext: context }); }
-
-  /** @deprecated 使用 configure({ activeSkillsContext }) */
-  setActiveSkillsContext(content: string): void { this.configure({ activeSkillsContext: content }); }
-
-  /** @deprecated 使用 configure({ skillsSummaryXML }) */
-  setSkillsSummaryXML(xml: string): void { this.configure({ skillsSummaryXML: xml }); }
 
   getLastTurnMetrics(): ZhinAgentTurnMetrics | null {
     return this.lastTurnMetrics;

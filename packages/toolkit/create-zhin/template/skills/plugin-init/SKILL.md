@@ -24,6 +24,15 @@ tags:
 - 用户说"帮我创建一个插件"、"新建插件"、"初始化一个 xxx 插件"
 - 需要从零搭建插件包结构
 
+## 优先路径（二选一）
+
+| 场景 | 命令 / 动作 | 输出 |
+|------|-------------|------|
+| 已有 Zhin 项目 | `zhin new <name>`（仓库根或项目根） | 官方 npm 包结构 + `skills/` |
+| 全新应用 | `pnpm create zhin-app` | 完整 bot 项目（含 `skills/` 目录） |
+
+仅当用户明确要求「手写目录」或 `zhin new` 不可用时，才走下方 7 步手工流程。
+
 ## 初始化流程
 
 ### 第 1 步：确认插件信息
@@ -211,6 +220,27 @@ describe('{Name} Plugin', () => {
 
 包含：安装、配置、使用示例、命令列表、AI 工具列表、开发说明。
 
+## 失败与兜底
+
+| 触发条件 | 一线处理 | 仍失败 |
+|----------|----------|--------|
+| 包名与目录不一致 | 统一 kebab-case；官方 `@zhin.js/adapter-*` 社区 `zhin.js-*` | 查 `docs/contributing/repo-structure.md` |
+| `pnpm build` 失败 | 检查 `tsconfig` `rootDir/outDir`、导入 `.js` | 对照 `plugins/utils/repeater` 最小插件 |
+| 测试无法加载插件 | `Plugin` 路径指向 `src/index.ts`；`afterEach` 里 `stop()` | 见下方测试骨架 |
+| 用户未给插件名 | 列出 3 个候选名 + 功能摘要，🔴 暂停生成 | 等用户确认名称与类型 |
+
+## 🔴 CHECKPOINT · 生成前
+
+确认：插件名、类型（普通/服务/适配器）、是否需要 `client/` 与数据库，再写 `package.json`。
+
+## 不要做什么
+
+- 不要用 `zhin new` 能完成的流程手写重复脚手架（优先 `zhin new` / `create-zhin-app`）
+- 不要把业务逻辑写进 `src/index.ts` 装配层
+- 不要省略 `tests/` 与 `skills/{name}/SKILL.md`（发布与 Agent 发现需要）
+- 不要在入口里从 `@zhin.js/core` import（用 `zhin.js`）
+- 不要把适配器骨架当普通插件模板下发
+
 ## 检查清单
 
 - [ ] 包名符合 `zhin.js-{name}` 或 `@zhin.js/{name}` 格式
@@ -221,3 +251,11 @@ describe('{Name} Plugin', () => {
 - [ ] 入口文件使用 `usePlugin()` 且在模块顶层
 - [ ] 测试文件存在且可运行
 - [ ] README 包含安装和使用说明
+
+## 延伸阅读
+
+| 文档 | 路径 |
+|------|------|
+| CLI 插件命令 | `basic/cli/README.md` |
+| 仓库插件规范 | `.github/instructions/zhin-plugin.instructions.md` |
+| 脚手架模板源 | `packages/toolkit/create-zhin/template/skills/` |

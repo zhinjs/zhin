@@ -1,0 +1,12 @@
+[
+  {
+    "id": 1,
+    "prompt": "给现有插件加一个带数据库的签到命令",
+    "expected": "declareConfig、useContext(database)、commands 拆分、清理函数"
+  },
+  {
+    "id": 2,
+    "prompt": "用户要接 QQ 协议发消息",
+    "expected": "识别为适配器需求，拒绝按插件 skill 继续，指向 adapter 工作流"
+  }
+]

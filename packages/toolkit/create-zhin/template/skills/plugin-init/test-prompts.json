@@ -1,0 +1,12 @@
+[
+  {
+    "id": 1,
+    "prompt": "帮我初始化一个叫 group-manager 的 Zhin 插件，要有 greet 命令",
+    "expected": "确认插件名/类型、生成 package.json/tsconfig/tests/skills 结构"
+  },
+  {
+    "id": 2,
+    "prompt": "新建插件但没说要不要控制台页面",
+    "expected": "CHECKPOINT 询问 client/、数据库需求后再生成"
+  }
+]

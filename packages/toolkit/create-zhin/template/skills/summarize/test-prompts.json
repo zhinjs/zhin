@@ -1,0 +1,12 @@
+[
+  {
+    "id": 1,
+    "prompt": "总结这轮调试：stats 500、删 bot.db、endpoint_id 迁移（无日志粘贴）",
+    "expected": "材料不足模式：无已完成脑补、待确认清单、每条附来源"
+  },
+  {
+    "id": 2,
+    "prompt": "CI 里 demo-config.test.ts ENOENT，写交接给同事",
+    "expected": "CI 模板、缺失路径、已排除须 [确认]、下一步"
+  }
+]

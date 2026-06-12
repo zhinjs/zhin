@@ -124,6 +124,45 @@ user-invocable: true
 - 定时任务和事件没有丢失
 - 关键配置读取仍然正确
 
+**验证命令（按插件包名替换 `<pkg>`）：**
+
+```bash
+pnpm --filter <pkg> build
+pnpm --filter <pkg> test
+# 手测：Sandbox 或 test-bot 触发原命令 / 访问原控制台路由
+```
+
+输出验证报告：
+
+```markdown
+## 重构验证
+- [ ] build 通过
+- [ ] test 通过
+- [ ] 命令 A：通过 / 未测
+- [ ] 路由/页面 B：通过 / 未测
+- 回滚风险：（仅列未覆盖路径）
+```
+
+## 失败与兜底
+
+| 触发条件 | 一线处理 | 仍失败 |
+|----------|----------|--------|
+| 重构后命令不触发 | 对比重构前后 `addCommand` 注册与模板字符串 | 回滚该模块，逐文件迁移 |
+| 测试大面积失败 | 先恢复行为再谈结构；用 git 对比入口装配 | 🔴 暂停拆文件，只修回归 |
+| Context 未就绪 | 确认 `useContext` 依赖顺序与清理函数 | 对照 [重构迁移清单](./references/refactor-migration-checklist.md) |
+
+## 🔴 CHECKPOINT · 行为冻结
+
+第 1 步「冻结当前行为」完成前，不得删除或改写用户可见命令/路由/页面逻辑。
+
+## 不要做什么
+
+- 不要在重构中顺带改功能或「优化」业务语义
+- 不要一次性拆出空目录填满占位文件
+- 不要把适配器协议逻辑迁入普通插件
+- 不要在未跑测试前大规模移动 `client/` 入口
+- 不要用本 skill 从零新建插件
+
 ## 输出要求
 
 最终输出应包含：
@@ -134,3 +173,11 @@ user-invocable: true
 4. 已完成改动：哪些模块已重构
 5. 验证结果：哪些路径已验证
 6. 风险说明：还有哪些行为敏感点
+
+## 延伸阅读
+
+| 文档 | 路径 |
+|------|------|
+| 标准开发（新建功能） | `.github/skills/zhin-plugin-standard-development/SKILL.md` |
+| 迁移清单 | `./references/refactor-migration-checklist.md` |
+| 前后对照 | `./references/refactor-before-after-example.md` |

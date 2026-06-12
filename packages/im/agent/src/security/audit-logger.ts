@@ -272,7 +272,7 @@ export class AuditLogger {
         console.error(message);
         break;
       default:
-        console.log(message);
+        console.info(message);
     }
   }
 

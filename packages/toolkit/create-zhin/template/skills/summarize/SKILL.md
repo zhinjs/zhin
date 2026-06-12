@@ -1,27 +1,176 @@
 ---
 name: summarize
-description: "Summarize conversations, logs, documents, or investigation notes into concise action-oriented records."
+description: "Summarize conversations, logs, docs, or investigation notes into action-oriented text with evidence tags. Use for recap, handoff, CI failure digest, or MEMORY. Triggers: 总结, 汇总, summarize, 交接, 复盘, 调试总结."
 keywords:
   - summarize
   - summary
   - recap
   - notes
+  - 总结
+  - 交接
+  - 复盘
+  - handoff
 tags:
   - writing
   - memory
+  - documentation
 ---
 
 # Summarize
 
-Use this skill when the user wants a clear recap, handoff note, issue summary, or durable memory from existing context.
+把**已有材料**压缩成可交接、可执行的摘要。只写能指回证据的事实；无证据不写结论。
 
-## Workflow
+## 何时使用
 
-1. Identify the audience and purpose of the summary.
-2. Preserve decisions, blockers, exact commands, and verification results.
-3. Separate facts from assumptions.
-4. Keep the output short unless the user asks for an exhaustive report.
+- 长对话 / 调试会话交接
+- CI / 测试失败浓缩
+- 写入 Issue、PR、MEMORY 前的草稿
 
-## Output
+## 不适用
 
-Return a structured summary with next actions when useful.
+- 用户要「分析根因并给出修复方案」→ 先调查再总结，或直接用开发 skill
+- 材料只有一句模糊描述 → 先追问，不要编造细节
+
+## 工作流
+
+### 第 1 步：确认受众与材料是否够用
+
+| 用途 | 长度 | 必含 |
+|------|------|------|
+| 口头交接 | 5–10 行 | 现状、阻塞、下一步 |
+| Issue/PR 摘要 | 中等 | 决策、验证命令、风险 |
+| 持久记忆 | 短条目 | 稳定事实、配置约定、踩坑 |
+
+**材料充分度检查**（缺任一项则进入「材料不足模式」，见第 2 步）：
+
+- [ ] 失败现象或目标（用户原话或日志一行）
+- [ ] 至少一条**已执行**的命令 + 结果（或明确写「未跑验证」）
+- [ ] 相关路径 / 版本 / 配置名（如有）
+
+### 第 2 步：选模式
+
+**A. 材料不足模式**（无日志、无命令结果、仅口头描述）：
+
+禁止输出「已完成」章节。只用：
+
+```markdown
+## 概要
+材料不足，以下为**待确认清单**（非最终结论）
+
+## 已从上下文提取（附来源）
+- [待确认] … — 来源：用户原话 / 对话片段
+
+## 待用户补充
+- [ ] 完整错误日志或 CI job 链接
+- [ ] 已运行的命令及输出
+- [ ] 相关文件路径（如 `zhin.config.yml`）
+
+## 建议下一步
+1. …
+```
+
+**B. 材料充足模式**：按第 3–4 步选模板，并遵守事实分级。
+
+### 第 3 步：事实分级（写入时强制）
+
+| 标记 | 含义 | 可放入 |
+|------|------|--------|
+| `[确认]` | 有命令输出、文件内容、可复现日志 | **已完成** |
+| `[待确认]` | 仅对话提及，未验证 | **未完成 / 阻塞** 或独立「待确认」节 |
+| 禁止 | 无来源的推断、脑补因果 | 任何章节 |
+
+每条 bullet 格式：`[确认] 结论 — 来源：`pnpm test` 失败于 demo-config.test.ts ENOENT``
+
+### 第 4 步：按场景输出
+
+**默认（材料充足）**：
+
+```markdown
+## 概要
+（1–2 句，仅 [确认] 事实）
+
+## 已完成
+- [确认] … — 来源：…
+
+## 未完成 / 阻塞
+- [待确认] … — 来源：…
+
+## 关键命令与结果
+- `命令` → 结果（一行）
+
+## 下一步（按优先级）
+1. …
+```
+
+**CI / 测试失败**（含 ENOENT、类型错误、端口占用）：
+
+```markdown
+## 概要
+Job/包：… | 首条错误：…
+
+## 失败信号
+- 命令：…
+- 错误（原文一行）：…
+- 涉及文件：…（若 ENOENT 写明缺失路径）
+
+## 已排除（须 [确认]）
+- … — 来源：…
+
+## 下一步
+1. …
+```
+
+**调试会话交接**：
+
+```markdown
+## 当前状态
+- 分支/commit：…
+- 服务可达性：… — 来源：curl/日志
+
+## 时间线（按发生顺序，每条带标记）
+1. [确认] … — 来源：…
+
+## 已尝试
+- `命令` → 结果
+
+## 阻塞
+- [待确认] … — 来源：…
+
+## 待办
+1. …
+```
+
+用户要求 exhaustive 时再扩展章节；默认保持短。
+
+## 🔴 CHECKPOINT · 敏感信息
+
+写入 Issue、PR、公开 MEMORY 前：删除 token、`.env`、用户 ID、内网 URL → `<REDACTED>`。
+
+## 🔴 CHECKPOINT · 材料不足
+
+若第 1 步检查未通过，必须用**材料不足模式**，不得用默认模板的「已完成」填空。
+
+## 失败与兜底
+
+| 触发条件 | 一线处理 | 仍失败 |
+|----------|----------|--------|
+| 上下文过长 | 按主题分段摘要再合并；保留来源标记 | 请用户指定时间范围或文件 |
+| 材料矛盾 | 并列两种说法，均标 `[待确认]` | 不合并成单一「真相」 |
+| 用户只要一句话 | 仍给 5 行结构：概要 + 阻塞 + 下一步 | 不省略失败原因 |
+
+## 不要做什么
+
+- 不要把推测写进「已完成」（无命令/日志支撑 = `[待确认]`）
+- 不要把摘要写成营销或过度乐观
+- 不要省略失败原因（禁止只写「有问题」「500」）
+- 不要无日志时编造调试时间线
+- 不要在摘要里泄露 token、密码、私聊 ID
+- 不要默认生成长报告（除非用户明确要求）
+
+## 延伸阅读
+
+| 场景 | 参考 |
+|------|------|
+| Issue/PR 正文 | skill `github` |
+| ADR | `docs/adr/` |
+| 记忆落盘 | `examples/full-bot/skills/memory-consolidate/` |
