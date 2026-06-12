@@ -110,6 +110,10 @@ export interface SandboxConfig {
   enableNetwork?: boolean;
   /** 允许的域名（如果启用网络） */
   allowedDomains?: string[];
+  /** 是否使用 Docker 容器隔离（默认 'auto'：检测到 Docker 就用） */
+  useDocker?: 'auto' | 'always' | 'never';
+  /** Docker 镜像（默认 node:20-alpine） */
+  dockerImage?: string;
 }
 
 const DEFAULT_CONFIG: SandboxConfig = {
@@ -407,9 +411,28 @@ function validateCommand(command: string, config: SandboxConfig): { valid: boole
 
 export class Sandbox {
   private config: SandboxConfig;
+  private _dockerAvailable: boolean | null = null; // 缓存检测结果
 
   constructor(config: Partial<SandboxConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+  }
+
+  /** 是否应该使用 Docker 沙箱 */
+  private shouldUseDocker(): boolean {
+    const mode = this.config.useDocker || 'auto';
+    if (mode === 'never') return false;
+    if (mode === 'always') return true;
+
+    // auto 模式：检测 Docker 是否可用
+    if (this._dockerAvailable === null) {
+      try {
+        const { isDockerAvailable } = require('./sandbox-docker.js');
+        this._dockerAvailable = isDockerAvailable();
+      } catch {
+        this._dockerAvailable = false;
+      }
+    }
+    return this._dockerAvailable ?? false;
   }
 
   /**
@@ -421,13 +444,12 @@ export class Sandbox {
     timeout?: number;
   }): Promise<SandboxResult> {
     if (!this.config.enabled) {
-      // 沙箱未启用，直接执行
       return this.executeUnsafe(command, options);
     }
 
     const startTime = Date.now();
 
-    // 验证命令
+    // 验证命令（无论使用哪种沙箱都先验证）
     const validation = validateCommand(command, this.config);
     if (!validation.valid) {
       return {
@@ -441,6 +463,32 @@ export class Sandbox {
         blockReason: validation.reason,
       };
     }
+
+    // 优先使用 Docker 容器隔离
+    if (this.shouldUseDocker()) {
+      try {
+        const { executeInDocker } = require('./sandbox-docker.js');
+        return executeInDocker(command, {
+          ...this.config,
+          workingDirectory: options?.cwd || this.config.workingDirectory,
+          timeout: options?.timeout || this.config.timeout,
+        });
+      } catch (e) {
+        // Docker 执行失败，降级到软沙箱
+      }
+    }
+
+    // 降级：软沙箱（ulimit 包装 + 进程组隔离）
+    return this.executeSoft(command, options);
+  }
+
+  /** 软沙箱执行（ulimit 包装 + detached 进程组 + /proc 资源监控） */
+  private async executeSoft(command: string, options?: {
+    cwd?: string;
+    env?: Record<string, string>;
+    timeout?: number;
+  }): Promise<SandboxResult> {
+    const startTime = Date.now();
 
     // 清理环境变量
     const cleanEnv = cleanEnvironment(this.config);
