@@ -8,7 +8,7 @@
 import type { Logger } from '@zhin.js/logger';
 import { formatCompact, truncatePreview } from '@zhin.js/logger';
 import { segment } from '../utils.js';
-import { Message, type Message as MessageType } from '../message.js';
+import { type Message as MessageType } from '../message.js';
 import type { Plugin } from '../plugin.js';
 import { runInboundMessage } from './inbound-runner.js';
 
