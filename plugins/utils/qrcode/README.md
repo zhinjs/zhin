@@ -1,4 +1,4 @@
-# qrcode
+# @zhin.js/plugin-qrcode
 
 Zhin.js plugin for qrcode functionality.
 
@@ -10,11 +10,19 @@ pnpm add @zhin.js/plugin-qrcode
 
 ## Usage
 
-Register the plugin in your Zhin bot:
+Add the plugin to your `zhin.config.yml`:
 
-```typescript
-import { usePlugin } from 'zhin.js';
-
-const plugin = usePlugin();
-// TODO: configure and use
+```yaml
+plugins:
+  - @zhin.js/plugin-qrcode
 ```
+
+Or via CLI:
+
+```bash
+zhin install @zhin.js/plugin-qrcode
+```
+
+## Configuration
+
+Configure in `zhin.config.yml` under the plugin's key. Refer to the plugin source for available options.

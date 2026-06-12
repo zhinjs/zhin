@@ -1,4 +1,4 @@
-# short-url
+# @zhin.js/plugin-short-url
 
 Zhin.js plugin for short-url functionality.
 
@@ -10,11 +10,19 @@ pnpm add @zhin.js/plugin-short-url
 
 ## Usage
 
-Register the plugin in your Zhin bot:
+Add the plugin to your `zhin.config.yml`:
 
-```typescript
-import { usePlugin } from 'zhin.js';
-
-const plugin = usePlugin();
-// TODO: configure and use
+```yaml
+plugins:
+  - @zhin.js/plugin-short-url
 ```
+
+Or via CLI:
+
+```bash
+zhin install @zhin.js/plugin-short-url
+```
+
+## Configuration
+
+Configure in `zhin.config.yml` under the plugin's key. Refer to the plugin source for available options.

@@ -1,4 +1,4 @@
-# code-runner
+# @zhin.js/plugin-code-runner
 
 Zhin.js plugin for code-runner functionality.
 
@@ -10,11 +10,19 @@ pnpm add @zhin.js/plugin-code-runner
 
 ## Usage
 
-Register the plugin in your Zhin bot:
+Add the plugin to your `zhin.config.yml`:
 
-```typescript
-import { usePlugin } from 'zhin.js';
-
-const plugin = usePlugin();
-// TODO: configure and use
+```yaml
+plugins:
+  - @zhin.js/plugin-code-runner
 ```
+
+Or via CLI:
+
+```bash
+zhin install @zhin.js/plugin-code-runner
+```
+
+## Configuration
+
+Configure in `zhin.config.yml` under the plugin's key. Refer to the plugin source for available options.
