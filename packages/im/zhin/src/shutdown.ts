@@ -1,5 +1,7 @@
 import type { Plugin } from '@zhin.js/core';
-import { formatCompact } from '@zhin.js/logger';
+import { formatCompact, Logger } from '@zhin.js/logger';
+
+const logger = new Logger(null, 'Shutdown');
 
 /** ADR 0013 D2 — 全局 shutdown 硬超时 */
 export const SHUTDOWN_TIMEOUT_MS = 10_000;

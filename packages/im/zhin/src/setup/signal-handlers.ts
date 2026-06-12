@@ -1,30 +1,23 @@
 import type { Plugin } from '@zhin.js/core';
 import { formatCompact } from '@zhin.js/logger';
+import { registerGracefulShutdown } from '../shutdown.js';
 
 /**
  * 启动核心上下文并注册优雅关闭与异常处理
+ * 使用 ADR 0013 优雅关闭协议（带硬超时和任务 drain）。
  */
 export async function registerSignalHandlers(plugin: Plugin): Promise<void> {
-  const { start, stop, logger } = plugin;
+  const { start, logger } = plugin;
 
   await start();
 
-  const handleSIGTERM = () => {
-    logger.info(formatCompact( { shutdown: 'SIGTERM' }));
-    stop();
-    process.exit(0);
-  };
-
-  const handleSIGINT = () => {
-    logger.info(formatCompact( { shutdown: 'SIGINT' }));
-    stop();
-    process.exit(0);
-  };
+  // 使用 ADR 0013 优雅关闭（10s 硬超时 + 任务 drain）
+  registerGracefulShutdown(plugin);
 
   const handleUncaughtException = (error: Error) => {
     logger.error('Uncaught exception:', error);
-    stop();
-    process.exit(1);
+    // 不立即 exit — 让 gracefulShutdown 处理清理
+    process.kill(process.pid, 'SIGTERM');
   };
 
   const handleUnhandledRejection = (reason: unknown) => {
@@ -40,13 +33,9 @@ export async function registerSignalHandlers(plugin: Plugin): Promise<void> {
     }
   };
 
-  process.removeListener('SIGTERM', handleSIGTERM);
-  process.removeListener('SIGINT', handleSIGINT);
   process.removeListener('uncaughtException', handleUncaughtException);
   process.removeListener('unhandledRejection', handleUnhandledRejection);
 
-  process.once('SIGTERM', handleSIGTERM);
-  process.once('SIGINT', handleSIGINT);
   process.on('uncaughtException', handleUncaughtException);
   process.on('unhandledRejection', handleUnhandledRejection);
 

@@ -9,6 +9,9 @@ import {
   type AITriggerConfig,
   type SenderRolesResult,
 } from './ai-trigger.js';
+import { formatCompact, Logger } from '@zhin.js/logger';
+
+const logger = new Logger(null, 'Authorization');
 
 interface YamlEndpointEntry {
   context?: string;
@@ -40,8 +43,8 @@ function readTriggerConfig(plugin: Plugin): AITriggerConfig {
   try {
     const ai = root.inject('ai') as { getTriggerConfig?: () => AITriggerConfig } | undefined;
     if (ai?.getTriggerConfig) return ai.getTriggerConfig();
-  } catch {
-    // ai 未就绪时回退 yaml
+  } catch (e) {
+    logger.debug(formatCompact({ auth: 'trigger_config_fallback', reason: 'ai_not_ready' }));
   }
   try {
     const configSvc = root.inject('config') as
@@ -49,7 +52,8 @@ function readTriggerConfig(plugin: Plugin): AITriggerConfig {
       | undefined;
     const primary = configSvc?.getPrimary?.() as PrimaryConfig | undefined;
     return primary?.ai?.trigger ?? {};
-  } catch {
+  } catch (e) {
+    logger.debug(formatCompact({ auth: 'trigger_config_read_error' }));
     return {};
   }
 }
@@ -68,7 +72,8 @@ function readEndpointConfig(plugin: Plugin, message: Message<any>): Record<strin
       String(message.$endpoint),
     );
     return entry as Record<string, unknown> | undefined;
-  } catch {
+  } catch (e) {
+    logger.debug(formatCompact({ auth: 'endpoint_config_read_error' }));
     return undefined;
   }
 }
