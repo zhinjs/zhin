@@ -210,7 +210,17 @@ function checkNetworkCommand(
   // 网络已启用但有域名白名单时，校验 URL
   if (config.allowedDomains && config.allowedDomains.length > 0) {
     const urls = extractUrlsFromCommand(command);
-    if (urls.length === 0) return { allowed: true }; // 无 URL 的命令放行
+    if (urls.length === 0) {
+      // 网络命令必须包含可校验的 URL
+      const hasNetworkCommand = NETWORK_COMMAND_PATTERNS.some(pattern => pattern.test(command));
+      if (hasNetworkCommand) {
+        return {
+          allowed: false,
+          reason: `启用 allowedDomains 时，网络命令必须包含可校验的 URL（如 http://example.com）`,
+        };
+      }
+      return { allowed: true };
+    }
 
     for (const url of urls) {
       try {
