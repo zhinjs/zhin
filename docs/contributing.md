@@ -37,20 +37,26 @@ cd zhin
 
 ### 2. 安装依赖
 ```bash
-# 使用 pnpm (推荐)
 pnpm install
-
-# 或使用 npm
-npm install
 ```
+
+::: warning 必须使用 pnpm
+本项目使用 pnpm workspace，**npm/yarn 不支持**。请安装 pnpm 9.x：
+```bash
+npm install -g pnpm@9
+```
+:::
 
 ### 3. 构建项目
 ```bash
-# 构建所有包
+# 构建所有包（按依赖顺序：basic/ → packages/ → plugins/）
 pnpm build
 
 # 构建特定包
-pnpm build --filter @zhin.js/core
+pnpm --filter @zhin.js/core build
+
+# 清理后重新构建
+pnpm clean && pnpm build
 ```
 
 ### 4. 运行测试
@@ -59,7 +65,16 @@ pnpm build --filter @zhin.js/core
 pnpm test
 
 # 运行特定包的测试
-pnpm test --filter @zhin.js/core
+pnpm --filter @zhin.js/core test
+
+# 运行单个测试文件
+pnpm vitest run packages/im/core/tests/plugin.test.ts
+
+# 监听模式
+pnpm vitest run packages/im/core/tests/plugin.test.ts --watch
+
+# 运行测试并生成覆盖率
+pnpm test:coverage
 ```
 
 ### 5. 开发模式
@@ -115,28 +130,24 @@ pnpm type-check             # TypeScript 类型检查
 - 使用 TypeScript 编写所有代码
 - 遵循严格的类型检查
 - 使用 ESLint 格式化代码（flat config 格式）
+- **导入路径必须使用 `.js` 扩展名**：`import { foo } from './bar.js'`（不是 `./bar.ts`）
+- `usePlugin()` 必须在模块顶层调用，不能在回调或 async 函数内
 
 ### 代码风格
 ```typescript
-// ✅ 好的示例
+// ✅ 好的示例 — .js 扩展名、显式类型
+import { usePlugin, MessageCommand } from 'zhin.js'
+import { helper } from './utils.js'
+
 interface UserConfig {
   name: string;
   age: number;
   email?: string;
 }
 
-class UserManager {
-  private users: Map<string, UserConfig> = new Map();
-  
-  async addUser(user: UserConfig): Promise<void> {
-    // 实现逻辑
-  }
-}
-
 // ❌ 避免的写法
-function addUser(user: any) {
-  // 避免使用 any 类型
-}
+import { helper } from './utils'  // 缺少 .js 扩展名
+function addUser(user: any) {     // 避免使用 any 类型
 ```
 
 ### 提交信息规范
@@ -160,6 +171,30 @@ git commit -m "docs: 更新 API 文档"
 ```
 
 ## 🔧 开发流程
+
+### 依赖方向（必须遵守）
+
+```
+basic/ (logger, schema, database, cli)
+  ↓
+packages/im/kernel (无 IM 概念)
+  ↓
+packages/im/ai (providers, agents, memory)
+  ↓
+packages/im/core (Plugin, Adapter, Endpoint, Command)
+  ↓
+packages/im/agent (ZhinAgent, security policies)
+  ↓
+packages/im/zhin (主入口)
+```
+
+**禁止的导入**：
+- `kernel` 不能导入 `core` / `agent` / `zhin` 层
+- `ai` 不能导入 `core` / `agent` / `zhin` 层
+- `core` 不能导入 `agent` 或 `zhin`
+- 插件不能直接导入 `kernel`（应通过 `@zhin.js/core`）
+
+违反时 CI 的 `check:architecture` 会报错。
 
 ### 1. 创建分支
 ```bash
@@ -195,6 +230,65 @@ git push origin feature/your-feature-name
 2. 填写详细的描述
 3. 关联相关 Issue
 4. 等待代码审查
+
+### PR 必须通过的 CI 检查
+
+| 检查 | 说明 |
+|------|------|
+| `test` | 全量构建 + type-check + lint + harness 检查 + 测试覆盖度 |
+| `CodeQL` | 安全分析 |
+| `codecov/patch` | 新增代码覆盖度（非阻断） |
+| `cubic · AI code reviewer` | 自动代码审查 |
+
+### Harness 检查详解
+
+PR 合并前必须通过以下自动化检查：
+
+```bash
+pnpm check:all              # 运行所有检查
+```
+
+| 检查命令 | 检查内容 |
+|----------|---------|
+| `check:harness-paths` | 消息发送不得绕过 Adapter.sendMessage 链路 |
+| `check:no-koa` | 插件不得直接 import koa（应使用 RouterContext） |
+| `check:prod` | 生产代码中无 console.log/debugger/TODO |
+| `check:plugin` | 插件必须有 package.json + 测试 + README |
+| `check:architecture` | 依赖层级方向正确（basic → kernel → ai → core → agent → zhin） |
+| `check:doc-links` | 文档相对链接有效 |
+| `check:doc-orphans` | 文档页面在侧栏中有链接 |
+| `check:readme-exports` | README 中的 import 与包导出一致 |
+| `check:config-docs` | 配置文档与 DEFAULT_CONFIG 关键字段对齐 |
+| `check:stable` | Stable 产品路径 smoke 测试 |
+| `check:use-plugin-top-level` | usePlugin() 必须在模块顶层调用 |
+| `check:l4` | L4 完整维度检查 |
+
+### 变更日志（Changesets）
+
+本项目使用 [Changesets](https://github.com/changesets/changesets) 管理版本。有破坏性变更或新功能时，需要添加 changeset：
+
+```bash
+# 添加 changeset（交互式选择包和版本类型）
+pnpm changeset
+
+# 选择影响的包（如 @zhin.js/core）
+# 选择版本类型：patch / minor / major
+# 填写变更摘要
+```
+
+Changeset 文件格式（`.changeset/xxx-xxx.md`）：
+```markdown
+---
+"@zhin.js/core": minor
+"@zhin.js/agent": patch
+---
+
+feat: 添加新安全策略模块
+
+新增网络安全防护和域名白名单校验功能。
+```
+
+CI 会检查 PR 是否包含 changeset（除非是纯文档/测试变更）。
 
 ## 🧪 测试指南
 
