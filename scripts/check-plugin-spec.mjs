@@ -86,7 +86,10 @@ function checkPlugin(pluginPath, pluginName) {
     ? path.join(pluginPath, packageJson.main.replace('./lib/', './src/').replace('.js', '.ts'))
     : path.join(srcDir, 'index.ts');
 
-  if (!fs.existsSync(entryFile)) {
+  // Accept both .ts and .tsx entry files (common for JSX-rendering plugins)
+  const entryFileTsx = entryFile.replace(/\.ts$/, '.tsx');
+
+  if (!fs.existsSync(entryFile) && !fs.existsSync(entryFileTsx)) {
     violations.push({
       plugin: relativePath,
       issue: `Entry file not found: ${path.relative(repoRoot, entryFile)}`,
