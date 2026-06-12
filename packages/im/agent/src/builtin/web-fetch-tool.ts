@@ -24,7 +24,8 @@ export function stripFetchedHtmlToText(html: string): string {
   return htmlToPlainText(html);
 }
 
-function isBlockedSsrfHostname(hostname: string): boolean {
+/** SSRF 防护：检查主机名是否属于内网/私有/危险地址 */
+export function isBlockedSsrfHostname(hostname: string): boolean {
   const h = hostname.toLowerCase();
   return (
     // Localhost
