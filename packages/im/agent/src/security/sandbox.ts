@@ -193,6 +193,80 @@ function matchDangerousSandboxCommand(command: string): string | undefined {
   return undefined;
 }
 
+// ── 网络命令检测 ────────────────────────────────────────────────────
+
+/** 网络命令模式（当 enableNetwork: false 时阻断） */
+const NETWORK_COMMAND_PATTERNS = [
+  /\bcurl\s+/,
+  /\bwget\s+/,
+  /\bnc\s+/,
+  /\bnetcat\s+/,
+  /\bssh\s+/,
+  /\bscp\s+/,
+  /\brsync\s+/,
+  /\bping\s+/,
+  /\btraceroute\s+/,
+  /\bnmap\s+/,
+  /\bhttp\s+/,
+  /\bhttps\s+/,
+];
+
+/** 从命令中提取 URL */
+function extractUrlsFromCommand(command: string): string[] {
+  const urlPattern = /https?:\/\/[^\s'"`&|;)}\]]+/gi;
+  return (command.match(urlPattern) || []).map(u => u.toLowerCase());
+}
+
+/**
+ * 检查网络命令访问权限
+ * - enableNetwork: false → 阻断所有网络命令
+ * - enableNetwork: true + allowedDomains → 仅允许指定域名
+ */
+function checkNetworkCommand(
+  command: string,
+  config: SandboxConfig,
+): { allowed: boolean; reason?: string } {
+  // 网络未启用时，阻断所有网络命令
+  if (!config.enableNetwork) {
+    for (const pattern of NETWORK_COMMAND_PATTERNS) {
+      if (pattern.test(command)) {
+        const cmd = command.match(pattern)?.[0]?.trim() || 'network command';
+        return {
+          allowed: false,
+          reason: `沙箱网络未启用，禁止执行网络命令: ${cmd}（配置 enableNetwork: true 以允许）`,
+        };
+      }
+    }
+    return { allowed: true };
+  }
+
+  // 网络已启用但有域名白名单时，校验 URL
+  if (config.allowedDomains && config.allowedDomains.length > 0) {
+    const urls = extractUrlsFromCommand(command);
+    if (urls.length === 0) return { allowed: true }; // 无 URL 的命令放行
+
+    for (const url of urls) {
+      try {
+        const hostname = new URL(url).hostname.toLowerCase();
+        const isAllowed = config.allowedDomains.some(domain => {
+          const d = domain.toLowerCase().replace(/^\./, '');
+          return hostname === d || hostname.endsWith('.' + d);
+        });
+        if (!isAllowed) {
+          return {
+            allowed: false,
+            reason: `域名 ${hostname} 不在允许列表中（允许: ${config.allowedDomains.join(', ')}）`,
+          };
+        }
+      } catch {
+        // URL 解析失败，放行（可能是相对路径或其他格式）
+      }
+    }
+  }
+
+  return { allowed: true };
+}
+
 /**
  * 验证命令是否在沙箱允许范围内
  */
@@ -243,6 +317,12 @@ function validateCommand(command: string, config: SandboxConfig): { valid: boole
   const blocked = matchDangerousSandboxCommand(command);
   if (blocked) {
     return { valid: false, reason: blocked };
+  }
+
+  // 网络命令检查
+  const networkCheck = checkNetworkCommand(command, config);
+  if (!networkCheck.allowed) {
+    return { valid: false, reason: networkCheck.reason };
   }
 
   return { valid: true };
