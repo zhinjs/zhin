@@ -31,7 +31,7 @@ function analyzeMemoryBreakdown() {
   breakdown.push(`  global 对象属性数: ${globalKeys.length}`);
   
   // 检查是否有大对象
-  let largeObjects: Array<{ name: string; size: number }> = [];
+  const largeObjects: Array<{ name: string; size: number }> = [];
   
   // 检查 process 对象
   try {

@@ -114,7 +114,7 @@ export function parseOutput(raw: string): OutputElement[] {
   const elements: OutputElement[] = [];
   let remaining = raw;
 
-  // eslint-disable-next-line no-constant-condition
+   
   while (remaining.length > 0) {
     // ── 尝试匹配 card 代码块 ──
     const cardMatch = remaining.match(/^([\s\S]*?)```card\s*\n([\s\S]*?)```/);

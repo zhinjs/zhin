@@ -260,7 +260,7 @@ useContext("server", (server: Server) => {
       return;
     }
     for (const listener of originalListeners) {
-      (listener as Function).call(server, req, res);
+      (listener as (...args: unknown[]) => unknown).call(server, req, res);
     }
   });
 

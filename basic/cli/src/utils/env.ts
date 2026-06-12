@@ -15,7 +15,7 @@ export function loadEnvFiles(cwd: string, nodeEnv: string): void {
     `.env.${nodeEnv}`
   ];
 
-  let loadedFiles: string[] = [];
+  const loadedFiles: string[] = [];
   let totalVars = 0;
 
   for (const envFile of envFiles) {

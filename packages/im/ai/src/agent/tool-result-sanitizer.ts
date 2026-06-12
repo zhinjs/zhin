@@ -201,7 +201,7 @@ export function sanitizeToolResult(
 ): string {
   const maxChars = options.maxChars ?? DEFAULT_MAX_CHARS;
   const cwd = options.cwd;
-  let raw = stripHallucinatedToolCalls((text || '').trim());
+  const raw = stripHallucinatedToolCalls((text || '').trim());
   if (!raw) return '';
   if (/<tool_call|<function=/i.test(raw)) {
     return TOOL_RESULT_OMITTED_PLAIN;

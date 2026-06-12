@@ -733,7 +733,7 @@ export async function handleWebSocketMessage(
         };
         if (beforeTs != null) where.created_at = { $lt: Number(beforeTs) };
         if (beforeId != null) where.id = { $lt: Number(beforeId) };
-        let q = MessageModel.select().where(where).orderBy("created_at", "DESC").limit(Math.min(Number(limit) || 50, 100));
+        const q = MessageModel.select().where(where).orderBy("created_at", "DESC").limit(Math.min(Number(limit) || 50, 100));
         const rows = await (typeof q.then === "function" ? q : Promise.resolve(q));
         const messages = (rows || []).map((r: any) => ({
           id: r.id,
@@ -782,7 +782,7 @@ export async function handleWebSocketMessage(
         const where = { adapter: String(adapter), endpoint_id: String(endpointId) };
         const limitNum = Math.min(Number(limit) || 30, 100);
         const offsetNum = Math.max(0, Number(offset) || 0);
-        let q = RequestModel.select().where(where).orderBy("created_at", "DESC").limit(limitNum).offset(offsetNum);
+        const q = RequestModel.select().where(where).orderBy("created_at", "DESC").limit(limitNum).offset(offsetNum);
         const rows = await (typeof q.then === "function" ? q : Promise.resolve(q));
         const requests = (rows || []).map((r: any) => ({
           id: r.id,
@@ -836,7 +836,7 @@ export async function handleWebSocketMessage(
         const where = { adapter: String(adapter), endpoint_id: String(endpointId) };
         const limitNum = Math.min(Number(limit) || 30, 100);
         const offsetNum = Math.max(0, Number(offset) || 0);
-        let q = NoticeModel.select().where(where).orderBy("created_at", "DESC").limit(limitNum).offset(offsetNum);
+        const q = NoticeModel.select().where(where).orderBy("created_at", "DESC").limit(limitNum).offset(offsetNum);
         const rows = await (typeof q.then === "function" ? q : Promise.resolve(q));
         const notices = (rows || []).map((r: any) => ({
           id: r.id,

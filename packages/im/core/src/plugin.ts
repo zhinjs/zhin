@@ -489,7 +489,7 @@ export class Plugin extends PluginBase implements PluginLike {
       installExtensionProxy(Plugin.prototype);
       for (const [name, fn] of Object.entries(context.extensions)) {
         if (typeof fn === 'function') {
-          registerExtension(name, fn);
+          registerExtension(name, fn as (...args: any[]) => any); // eslint-disable-line @typescript-eslint/no-explicit-any
         }
       }
     }

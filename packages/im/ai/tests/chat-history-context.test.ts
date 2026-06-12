@@ -109,7 +109,7 @@ describe('ChatHistoryContext', () => {
         where: (cond: Record<string, unknown>) => ({
           orderBy: (_f: string, dir: 'ASC' | 'DESC') => ({
             limit: (n: number) => {
-              let rows = many.filter((m) => matchWhere(m, cond));
+              const rows = many.filter((m) => matchWhere(m, cond));
               rows.sort((a, b) => (dir === 'DESC' ? b.time - a.time : a.time - b.time));
               return Promise.resolve(rows.slice(0, n));
             },

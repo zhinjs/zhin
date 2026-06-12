@@ -158,7 +158,7 @@ export async function* agentLoop(
             thinkingLevel: config.reasoning,
           });
         } catch (retryError) {
-          error = retryError;
+          error = retryError as Error; // eslint-disable-line no-ex-assign -- intentional re-assignment for retry
         }
       }
       if (!assistant!) {

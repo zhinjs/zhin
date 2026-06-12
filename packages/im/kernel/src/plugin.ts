@@ -75,7 +75,7 @@ export interface BaseContext<T = unknown> {
   value?: T;
   mounted?: (parent: PluginBase) => T | Promise<T>;
   dispose?: (value: T) => void;
-  extensions?: Record<string, Function>;
+  extensions?: Record<string, (...args: any[]) => any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 /**

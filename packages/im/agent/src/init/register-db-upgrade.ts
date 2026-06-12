@@ -25,7 +25,7 @@ export function registerDbUpgrade(refs: AIServiceRefs): void {
       refs.zhinAgent?.markMemoryPersistenceReady();
       return;
     }
-    const db = root.inject('database' as 'database') as
+    const db = root.inject('database' as const) as
       | { models?: Map<string, unknown> }
       | undefined;
     if (db && refs.zhinAgent) {

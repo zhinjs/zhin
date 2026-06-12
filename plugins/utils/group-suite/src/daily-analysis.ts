@@ -29,7 +29,7 @@ export function registerDailyAnalysis(
 // ─── 数据库与收件箱 ───────────────────────────────────────────────────────────
 
 let _db: any = null;
-let _settingsModel: any = null;
+const _settingsModel: any = null;
 
 function getInboxModel(): any {
   if (!_db) {
