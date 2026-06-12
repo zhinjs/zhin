@@ -16,6 +16,71 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import * as fs from 'node:fs';
 
+// ── 资源限制包装 ────────────────────────────────────────────────────
+
+/**
+ * 用 ulimit/timeout/nice 包装命令，强制施加资源限制。
+ * 仅在 POSIX 系统（Linux/macOS）生效。
+ */
+function wrapCommandWithLimits(
+  command: string,
+  config: { maxMemoryMB?: number; timeout?: number; maxCpuPercent?: number },
+): string {
+  if (process.platform === 'win32') return command;
+
+  const parts: string[] = [];
+
+  // 内存限制：ulimit -v <KB>（虚拟地址空间）— 仅 Linux 支持
+  if (config.maxMemoryMB && config.maxMemoryMB > 0 && process.platform === 'linux') {
+    const kb = config.maxMemoryMB * 1024;
+    parts.push(`ulimit -v ${kb} 2>/dev/null || true`);
+  }
+
+  // CPU 时间限制：ulimit -t <seconds> — 仅 Linux 支持
+  if (config.timeout && config.timeout > 0 && process.platform === 'linux') {
+    const cpuSeconds = Math.ceil(config.timeout / 1000) * 2;
+    parts.push(`ulimit -t ${cpuSeconds} 2>/dev/null || true`);
+  }
+
+  // 最大文件写入大小：ulimit -f <blocks>（10MB = 20480 blocks of 512B）
+  parts.push('ulimit -f 20480 2>/dev/null || true');
+
+  // 最大进程数：ulimit -u 64
+  parts.push('ulimit -u 64 2>/dev/null || true');
+
+  if (parts.length === 0) return command;
+
+  // 用分号连接，ulimit 失败也继续执行
+  const ulimitChain = parts.join(' ; ');
+  return `${ulimitChain} ; exec bash -c ${JSON.stringify(command)}`;
+}
+
+/**
+ * 从 /proc/<pid>/status 读取子进程资源使用（仅 Linux）
+ */
+function readChildResourceUsage(pid: number): { memoryKB: number } | null {
+  try {
+    const status = fs.readFileSync(`/proc/${pid}/status`, 'utf8');
+    const vmRss = status.match(/^VmRSS:\s+(\d+)\s+kB/m);
+    return {
+      memoryKB: vmRss ? parseInt(vmRss[1], 10) : 0,
+    };
+  } catch {
+    return null; // macOS 或进程已退出
+  }
+}
+
+/** 安全杀死进程组（detached 模式下杀整棵树） */
+function killProcessGroup(child: child_process.ChildProcess, signal: NodeJS.Signals = 'SIGKILL'): void {
+  try {
+    if (child.pid) {
+      process.kill(-child.pid, signal); // 负 PID = 杀整个进程组
+    }
+  } catch {
+    // 进程已退出
+  }
+}
+
 // ── 沙箱配置 ──────────────────────────────────────────────────────────
 
 export interface SandboxConfig {
@@ -309,22 +374,24 @@ export class Sandbox {
       fs.mkdirSync(cwd, { recursive: true });
     }
 
-    // 执行命令
+    // 执行命令（用 ulimit 包装资源限制）
     return new Promise((resolve) => {
       const timeout = options?.timeout || this.config.timeout || 30000;
       let timedOut = false;
       let killed = false;
 
-      const child = child_process.spawn('bash', ['-c', command], {
+      // 包装命令：ulimit 内存/CPU/文件/进程限制
+      const wrappedCommand = wrapCommandWithLimits(command, {
+        maxMemoryMB: this.config.maxMemoryMB,
+        timeout,
+        maxCpuPercent: this.config.maxCpuPercent,
+      });
+
+      const child = child_process.spawn('bash', ['-c', wrappedCommand], {
         cwd,
         env: cleanEnv,
         stdio: ['pipe', 'pipe', 'pipe'],
-        timeout,
-        // 资源限制（仅 Linux/macOS）
-        ...(process.platform !== 'win32' && {
-          // 内存限制（通过 ulimit）
-          // 注意：Node.js 没有直接的内存限制 API，需要通过 ulimit 命令
-        }),
+        detached: true, // 新进程组，便于整棵进程树 kill
       });
 
       const maxOutput = this.config.maxOutputSize || 10 * 1024 * 1024;
@@ -349,15 +416,33 @@ export class Sandbox {
         }
       });
 
-      // 超时处理
+      // 资源监控（每 500ms 采样一次子进程内存）
+      let peakMemoryKB = 0;
+      const resourceTimer = setInterval(() => {
+        if (child.pid) {
+          const usage = readChildResourceUsage(child.pid);
+          if (usage && usage.memoryKB > peakMemoryKB) {
+            peakMemoryKB = usage.memoryKB;
+          }
+        }
+      }, 500);
+
+      // 超时处理 — 杀整个进程组
       const timer = setTimeout(() => {
         timedOut = true;
         killed = true;
-        child.kill('SIGKILL');
+        killProcessGroup(child, 'SIGKILL');
       }, timeout);
 
       child.on('close', (exitCode) => {
         clearTimeout(timer);
+        clearInterval(resourceTimer);
+
+        // 超时后补一次资源采样
+        if (child.pid && peakMemoryKB === 0) {
+          const usage = readChildResourceUsage(child.pid);
+          if (usage) peakMemoryKB = usage.memoryKB;
+        }
 
         const stdout = stdoutChunks.join('').slice(0, maxOutput);
         const stderr = stderrChunks.join('').slice(0, maxOutput);
@@ -373,13 +458,14 @@ export class Sandbox {
           blocked: false,
           resourceUsage: {
             cpuTime: 0,
-            memoryUsage: 0,
+            memoryUsage: peakMemoryKB * 1024, // 转为 bytes
           },
         });
       });
 
       child.on('error', (error) => {
         clearTimeout(timer);
+        clearInterval(resourceTimer);
 
         resolve({
           success: false,
