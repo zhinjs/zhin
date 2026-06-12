@@ -1,3 +1,7 @@
+---
+sidebar: false
+---
+
 # B 站视频分镜脚本：Zhin.js 首跑教程
 
 > 配套掘金大纲：[juejin-first-run-outline.md](./juejin-first-run-outline.md)

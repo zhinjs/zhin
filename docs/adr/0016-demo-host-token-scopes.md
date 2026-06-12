@@ -1,3 +1,7 @@
+---
+sidebar: false
+---
+
 # Demo Host Token 作用域（demo.zhin.dev）
 
 为公开在线 Demo 提供 **作用域受限** 的 Bearer Token，避免将编译进前端的 Token 等同于全权限 Host 凭证。

@@ -1,3 +1,7 @@
+---
+sidebar: false
+---
+
 # Remote Console 需求文档
 
 > **受众**：zhin-console 仓库维护者与贡献者  

@@ -1,3 +1,7 @@
+---
+sidebar: false
+---
+
 # Graceful Shutdown 协议
 
 定义 Zhin 进程收到 SIGTERM/SIGINT 时的有序关闭流程，保证数据持久化、连接释放和资源清理。

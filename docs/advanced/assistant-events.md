@@ -1,3 +1,7 @@
+---
+sidebar: false
+---
+
 # Assistant Event Ingress（M2）
 
 外部系统（如 Home Assistant）可通过 HTTP 向 Zhin 投递事件，触发已注册的 Job 或一次性 Agent 任务。需同时启用 `assistant.enabled` 与 `assistant.events.enabled`。

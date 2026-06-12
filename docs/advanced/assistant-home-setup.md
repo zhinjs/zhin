@@ -1,3 +1,7 @@
+---
+sidebar: false
+---
+
 # Home Assistant × Zhin 接入清单（M4）
 
 从零到「私聊 bot：关掉客厅灯」的逐步验收清单。使用 **HA REST + 别名**，**不需要**配置 MCP。

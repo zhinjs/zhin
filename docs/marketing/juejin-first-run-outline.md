@@ -1,3 +1,7 @@
+---
+sidebar: false
+---
+
 # 掘金文章大纲：Zhin.js 首跑教程
 
 > 配套 B 站分镜：[bilibili-first-run-storyboard.md](./bilibili-first-run-storyboard.md)  

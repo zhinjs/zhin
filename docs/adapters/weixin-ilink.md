@@ -2,6 +2,7 @@
 title: "@zhin.js/adapter-weixin-ilink"
 package: "@zhin.js/adapter-weixin-ilink"
 tier: Advanced
+sidebar: false
 ---
 
 ::: info 文档同步

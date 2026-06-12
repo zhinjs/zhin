@@ -1,3 +1,7 @@
+---
+sidebar: false
+---
+
 # Assistant Runtime 演进路线图（路线 A）
 
 本文描述 Zhin.js 从 **IM 聊天 Bot** 演进到 **个人助手（Personal Assistant）** 的架构方案、分阶段交付、每步需改动的模块，以及 **破坏性变更** 边界。

@@ -1,3 +1,7 @@
+---
+sidebar: false
+---
+
 # 对齐 Missions Multi-Agent Harness（missions / MissionRunner）
 
 在 Agent Mesh 硬编排（[`OrchestrationService`](../../packages/im/agent/src/orchestrator/orchestration-service.ts) + MCP `agent.delegate_task`）已落地之后，本 ADR 记录 **Missions** 式 Multi-Agent Harness 的借鉴边界与实现决策。
