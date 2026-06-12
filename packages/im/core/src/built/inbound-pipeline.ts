@@ -13,7 +13,7 @@ import type { Plugin } from '../plugin.js';
 import { runInboundMessage } from './inbound-runner.js';
 
 export interface InboundPipelineOptions {
-  plugin: Plugin | null;
+  getPlugin: () => Plugin | null;
   logger: Logger;
   getMaxConcurrentMessages: () => number;
   getPendingMessages: () => number;
@@ -44,7 +44,7 @@ export class InboundMessagePipeline {
     this.logIncoming(message);
     try {
       await runInboundMessage({
-        plugin: this.options.plugin,
+        plugin: this.options.getPlugin(),
         message,
         emitAdapterObservers,
       });
@@ -60,8 +60,9 @@ export class InboundMessagePipeline {
   /** Bridge notice/request events to plugin dispatch */
   bridgeNoticeOrRequest(event: string, args: unknown[], directEmit: () => boolean): boolean {
     const result = directEmit();
-    if (this.options.plugin) {
-      void this.options.plugin.dispatch(event as 'notice.receive' | 'request.receive', args[0] as never);
+    const plugin = this.options.getPlugin();
+    if (plugin) {
+      void plugin.dispatch(event as 'notice.receive' | 'request.receive', args[0] as never);
     }
     return result;
   }

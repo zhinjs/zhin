@@ -74,7 +74,7 @@ export abstract class Adapter<
     };
     this.on('call.recallMessage', this.recallMessageHandler);
     this.inboundPipeline = new InboundMessagePipeline({
-      plugin: this.plugin,
+      getPlugin: () => this.plugin,
       logger: this.logger,
       getMaxConcurrentMessages: () => this.maxConcurrentMessages,
       getPendingMessages: () => this.#pendingMessages,
