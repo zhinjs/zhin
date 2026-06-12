@@ -278,7 +278,7 @@ export function addBashApproveRule(
     return { ok: false, error: '正则不能为空。' };
   }
   try {
-    // eslint-disable-next-line no-new
+     
     new RegExp(trimmed);
   } catch (e) {
     return { ok: false, error: `无效正则: ${e instanceof Error ? e.message : String(e)}` };

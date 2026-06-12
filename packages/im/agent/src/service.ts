@@ -272,7 +272,7 @@ export class AIService {
   }
 
   private resolveServiceAgentTools(options: CreateServiceAgentOptions): AgentTool[] {
-    let tools: AgentTool[] = [];
+    const tools: AgentTool[] = [];
     if (options.useBuiltinTools !== false) tools.push(...this.builtinTools);
     if (options.collectExternalTools !== false) tools.push(...this.customTools.values());
     if (options.tools?.length) tools.push(...options.tools);

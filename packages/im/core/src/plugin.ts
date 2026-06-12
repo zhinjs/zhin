@@ -7,11 +7,10 @@
  * - 中间件系统、适配器管理、useContext 等
  */
 
-import { AsyncLocalStorage } from "node:async_hooks";
 import type { PluginManifest } from "./types.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 import logger, { Logger, formatCompact } from "@zhin.js/logger";
 import { compose, remove, resolveEntry } from "./utils.js";
 import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, SendOptions, MessageSendPayload } from "./types.js";
@@ -30,6 +29,11 @@ import {
   installExtensionProxy,
 } from "@zhin.js/kernel";
 import type { PluginLike } from "@zhin.js/kernel";
+import { storage, getCurrentFile } from "./plugin-context.js";
+
+// Re-export getPlugin from plugin-context for backward compatibility
+export { getPlugin } from "./plugin-context.js";
+export { storage, getCurrentFile } from "./plugin-context.js";
 
 const contextsKey = Symbol("contexts");
 
@@ -49,41 +53,10 @@ export type SideEffect<A extends (keyof Plugin.Contexts)[]> = {
 export type DisposeFn<A> = (context: ArrayItem<A>) => MaybePromise<void>
 export type ContextList<CS extends (keyof Plugin.Contexts)[]> = CS extends [infer L, ...infer R] ? R extends (keyof Plugin.Contexts)[] ? [ContextItem<L>, ...ContextList<R>] : never[] : never[]
 type ContextItem<L> = L extends keyof Plugin.Contexts ? Plugin.Contexts[L] : never
-// ============================================================================
-// AsyncLocalStorage 上下文
-// ============================================================================
 
-export const storage = new AsyncLocalStorage<Plugin>();
-
-/**
- * 获取当前文件路径（调用者）
- */
-function getCurrentFile(metaUrl = import.meta.url): string {
-  if (typeof metaUrl !== "string" || metaUrl.length === 0) {
-    return path.join(process.cwd(), "__zhin_edge_bootstrap__.mjs");
-  }
-  const previousPrepareStackTrace = Error.prepareStackTrace;
-  Error.prepareStackTrace = function (_, stack) {
-    return stack;
-  };
-  const stack = new Error().stack as unknown as NodeJS.CallSite[];
-  Error.prepareStackTrace = previousPrepareStackTrace;
-  const stackFiles = Array.from(
-    new Set(stack.map((site) => site.getFileName()))
-  );
-  const idx = stackFiles.findIndex(
-    (f) => f === fileURLToPath(metaUrl) || f === metaUrl
-  );
-  const result = stackFiles[idx + 1];
-  if (!result) {
-    return path.join(process.cwd(), "__zhin_edge_bootstrap__.mjs");
-  }
-  try {
-    return fileURLToPath(result);
-  } catch {
-    return result;
-  }
-}
+// ============================================================================
+// usePlugin — 获取或创建当前插件实例
+// ============================================================================
 
 /**
  * usePlugin - 获取或创建当前插件实例
@@ -105,18 +78,6 @@ export function usePlugin(): Plugin {
     // Cloudflare Workers 等环境未实现 enterWith；调用方须用 storage.run()
   }
   return newPlugin;
-}
-
-/**
- * getPlugin - 获取当前 AsyncLocalStorage 中的插件实例
- * 用于 extensions 等场景，不创建新插件
- */
-export function getPlugin(): Plugin {
-  const plugin = storage.getStore();
-  if (!plugin) {
-    throw new Error('getPlugin() must be called within a plugin context');
-  }
-  return plugin;
 }
 
 // ============================================================================
@@ -145,7 +106,7 @@ export interface Plugin extends Plugin.Extensions {
  */
 export class Plugin extends PluginBase implements PluginLike {
   static [contextsKey] = [] as string[];
-  
+
   #cachedName?: string;
   #manifest?: PluginManifest | null;
   adapters: (keyof Plugin.Contexts)[] = [];
@@ -183,7 +144,7 @@ export class Plugin extends PluginBase implements PluginLike {
    */
   constructor(filePath: string = "", parent?: Plugin) {
     super(filePath, parent as PluginBase | undefined);
-    
+
     // 自动添加到父节点 — PluginBase constructor 已处理，
     // 但 PluginBase 使用 PluginBase[]，这里需要确保正确
     // （super 已调用 parent.children.push(this)，类型已通过 declare 窄化）
@@ -191,7 +152,7 @@ export class Plugin extends PluginBase implements PluginLike {
     // 绑定方法以支持解构使用
     this.$bindMethods();
   }
-  
+
   // 标记是否已绑定方法
   #methodsBound = false;
 
@@ -392,7 +353,7 @@ export class Plugin extends PluginBase implements PluginLike {
     const commandService = this.inject('command');
     const componentService = this.inject('component')
     const cronService = this.inject('cron');
-    
+
     return {
       commands: commandService ? commandService.items.map(c => c.pattern) : [],
       components: componentService ? componentService.getAllNames() : [],
@@ -528,7 +489,7 @@ export class Plugin extends PluginBase implements PluginLike {
       installExtensionProxy(Plugin.prototype);
       for (const [name, fn] of Object.entries(context.extensions)) {
         if (typeof fn === 'function') {
-          registerExtension(name, fn);
+          registerExtension(name, fn as (...args: any[]) => any); // eslint-disable-line @typescript-eslint/no-explicit-any
         }
       }
     }
@@ -555,7 +516,7 @@ export class Plugin extends PluginBase implements PluginLike {
     }
     // 避免重复加载同一路径的插件
     const normalized = realPath.replace(/\?t=\d+$/, '').replace(/\\/g, '/');
-    const existing = (this.children as Plugin[]).find(child => 
+    const existing = (this.children as Plugin[]).find(child =>
       child.filePath.replace(/\?t=\d+$/, '').replace(/\\/g, '/') === normalized
     );
     if (existing) {
@@ -648,7 +609,7 @@ export class Plugin extends PluginBase implements PluginLike {
   $bindMethods(): void {
     if (this.#methodsBound) return;
     this.#methodsBound = true;
-    
+
     const proto = Object.getPrototypeOf(this);
     for (const key of Plugin.#coreMethods) {
       const value = proto[key];
@@ -681,7 +642,7 @@ export class Plugin extends PluginBase implements PluginLike {
 
     const plugin = new Plugin(realPath, parent);
     plugin.fileHash = getFileHash(entryFile);
-    
+
     // 先记录，防止循环依赖时重复加载
     loadedModules.set(realPath, plugin);
 
@@ -806,7 +767,7 @@ export namespace Plugin {
    * 各个 Context 通过 declare module 扩展此接口
    */
   export interface Contexts extends Adapters {}
-  
+
   /**
    * Service 扩展方法类型
    * 这些方法由各个 Context 的 extensions 提供

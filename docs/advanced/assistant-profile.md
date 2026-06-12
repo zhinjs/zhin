@@ -1,3 +1,7 @@
+---
+sidebar: false
+---
+
 # Assistant Profile（M5）
 
 将 `SOUL.md`、`AGENTS.md`、`TOOLS.md`、默认 notify、heartbeat 巡检收敛到 **单文件 Profile**，与 Bootstrap 合并注入。

@@ -1,3 +1,7 @@
+---
+sidebar: false
+---
+
 # 稳定性增强路线图
 
 四轮审计修复了 52 项已存在的内存泄漏和生命周期缺陷（见 [ADR 0012](./0012-memory-lifecycle-stability-fixes.md)）。本文档列出尚未完成的增强项，按优先级分层。

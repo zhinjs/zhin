@@ -18,9 +18,6 @@ export type {
   ToolResultTransform,
 } from '@zhin.js/ai';
 
-export { Agent, createAgent, formatToolTitle } from '@zhin.js/ai';
-export type { AgentState, AgentEvents } from '@zhin.js/ai';
-
 export {
   SessionManager,
   MemorySessionManager,

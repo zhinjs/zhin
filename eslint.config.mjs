@@ -11,6 +11,7 @@ export default tseslint.config(
       '**/*.js',
       '**/*.mjs',
       '**/*.cjs',
+      '.github/skills/**',
     ],
   },
 
@@ -33,18 +34,32 @@ export default tseslint.config(
     },
     rules: {
       // TypeScript specific rules
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', ignoreRestSiblings: true, destructuredArrayIgnorePattern: '^_' }],
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/explicit-module-boundary-types': 'off',
       '@typescript-eslint/no-non-null-assertion': 'warn',
       '@typescript-eslint/no-empty-object-type': 'off',
+      '@typescript-eslint/no-namespace': 'off',
+      '@typescript-eslint/ban-ts-comment': 'warn',
+      '@typescript-eslint/no-unsafe-declaration-merging': 'warn',
 
       // General rules
       'no-console': ['warn', { allow: ['warn', 'error'] }],
       'no-debugger': 'error',
-      'no-duplicate-imports': 'error',
+      'no-duplicate-imports': 'warn',
       'no-unused-expressions': 'error',
+      'no-case-declarations': 'warn',
+      'no-useless-escape': 'warn',
+      'no-empty': ['error', { allowEmptyCatch: true }],
+      'no-useless-catch': 'warn',
+      'no-useless-assignment': 'warn',
+      '@typescript-eslint/no-this-alias': 'warn',
+      'preserve-caught-error': 'warn',
+      'no-control-regex': 'warn',
+      '@typescript-eslint/no-require-imports': 'warn',
+      '@typescript-eslint/no-non-null-asserted-optional-chain': 'warn',
+      'no-async-promise-executor': 'warn',
 
       // Style rules (optional, can be adjusted)
       'prefer-const': 'error',

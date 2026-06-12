@@ -5,7 +5,7 @@
  * 提供智能的任务续传能力。
  */
 
-import type { ChatMessage, Usage } from '@zhin.js/ai';
+import type { AgentMessage, Usage } from '@zhin.js/ai';
 import type { ZhinAgentConfig } from './config.js';
 
 // ── 任务状态定义 ──────────────────────────────────────────────────────
@@ -40,7 +40,7 @@ export interface TaskProgress {
   /** 累计时间（毫秒） */
   totalTime: number;
   /** 上下文消息 */
-  contextMessages: ChatMessage[];
+  contextMessages: AgentMessage[];
   /** 最后一次执行结果 */
   lastResult?: string;
   /** 创建时间 */
@@ -244,7 +244,7 @@ export class TaskContinuationManager {
   /**
    * 添加上下文消息
    */
-  addContextMessage(taskId: string, message: ChatMessage): TaskProgress | undefined {
+  addContextMessage(taskId: string, message: AgentMessage): TaskProgress | undefined {
     const task = this.tasks.get(taskId);
     if (!task) {
       return undefined;
@@ -290,7 +290,7 @@ export class TaskContinuationManager {
    */
   prepareContinuation(taskId: string): {
     canContinue: boolean;
-    contextMessages: ChatMessage[];
+    contextMessages: AgentMessage[];
     remainingSteps: string[];
     currentStep?: string;
     progress: number;

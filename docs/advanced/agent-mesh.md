@@ -1,3 +1,7 @@
+---
+sidebar: false
+---
+
 # Agent Mesh 硬编排
 
 基于项目总监模型：本地 **硬编排 DAG** + **MCP Agent Mesh** 跨实例委托。

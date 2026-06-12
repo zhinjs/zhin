@@ -1,3 +1,7 @@
+---
+sidebar: false
+---
+
 # 能力分档模型（Stable / Platform Stable / Advanced / Experimental）
 
 定义 Zhin.js 对外能力承诺的四档体系、CI 绑定与适配器升档规则。

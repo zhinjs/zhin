@@ -1,3 +1,7 @@
+---
+sidebar: false
+---
+
 # 推广素材
 
 社区推广用的分镜、文章大纲等，与 [能力分档与定位](../essentials/capability-tiers.md) 叙事保持一致。

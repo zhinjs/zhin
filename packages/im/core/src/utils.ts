@@ -238,7 +238,8 @@ export namespace segment {
     return content
       .map((item) => {
         if (typeof item === "string") return item;
-        let { type, data } = item;
+        let { type } = item;
+        const { data } = item;
         if (typeof type === "function") type = type.name;
         if (type === "text") return data.text;
         const keys = Object.keys(data).filter((key) => {

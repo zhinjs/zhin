@@ -9,10 +9,12 @@
  * that another plugin still depends on.
  */
 
-const registry = new Map<string, { fn: Function; refCount: number }>();
+type ExtensionFn = (...args: any[]) => any; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+const registry = new Map<string, { fn: ExtensionFn; refCount: number }>();
 const proxiedPrototypes = new WeakSet<object>();
 
-export function registerExtension(name: string, fn: Function): void {
+export function registerExtension(name: string, fn: ExtensionFn): void {
   const existing = registry.get(name);
   if (existing) {
     existing.fn = fn;
@@ -32,7 +34,7 @@ export function unregisterExtensions(names: string[]): void {
   }
 }
 
-export function getExtension(name: string): Function | undefined {
+export function getExtension(name: string): ExtensionFn | undefined {
   return registry.get(name)?.fn;
 }
 

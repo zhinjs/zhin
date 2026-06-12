@@ -93,7 +93,7 @@ export class GoogleProvider extends BaseProvider {
     );
   }
 
-  async *chatStream(_request: ChatCompletionRequest): AsyncIterable<ChatCompletionChunk> {
+  async *chatStream(_request: ChatCompletionRequest): AsyncIterable<ChatCompletionChunk> { // eslint-disable-line require-yield -- stub, throws immediately
     throw new Error(
       'GoogleProvider does not support chat; use driver google only as generate_image provider_alias',
     );

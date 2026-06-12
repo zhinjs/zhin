@@ -16,7 +16,7 @@ type Subscriber = {
 
 const MAX_REPLAY = 200;
 const SSE_STALE_MS = 5 * 60 * 1000;
-let subscribers = new Map<string, Subscriber & { lastActive: number }>();
+const subscribers = new Map<string, Subscriber & { lastActive: number }>();
 let nextSubId = 0;
 let nextEventId = 0;
 const eventHistory: StoredEvent[] = [];

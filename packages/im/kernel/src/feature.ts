@@ -139,7 +139,7 @@ export abstract class Feature<T = any> {
    * 提供给 Plugin.prototype 的扩展方法
    * 子类重写此 getter 以注册扩展（如 addCommand）
    */
-  get extensions(): Record<string, Function> {
+  get extensions(): Record<string, (...args: any[]) => any> { // eslint-disable-line @typescript-eslint/no-explicit-any
     return {};
   }
 

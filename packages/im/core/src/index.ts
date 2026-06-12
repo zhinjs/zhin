@@ -86,7 +86,6 @@ export * from './built/login-assist.js'
 export {
   BaseProvider, OpenAIProvider, DeepSeekProvider, MoonshotProvider,
   ZhipuProvider, AnthropicProvider, OllamaProvider, CloudflareProvider, GoogleProvider,
-  Agent, createAgent, formatToolTitle,
   filterTools, tokenize,
   SessionManager, MemorySessionManager, DatabaseSessionManager,
   createSessionManager, createMemorySessionManager, createDatabaseSessionManager,
@@ -112,7 +111,6 @@ export type {
   ContentPart, ToolCall, MessageRole,
   AgentTool, AgentConfig, AgentResult,
   ToolFilterOptions, Usage, SessionConfig, Session, JsonSchema,
-  AgentState, AgentEvents,
   ContextConfig, MessageRecord as AIMessageRecord,
   ConversationMemoryConfig,
   ContextWindowSource, ContextWindowInfo, ContextWindowGuardResult, PruneResult,

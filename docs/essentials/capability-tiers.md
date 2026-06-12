@@ -1,3 +1,7 @@
+---
+sidebar: false
+---
+
 # 能力分档与产品定位
 
 > 维护者决策记录见 [ADR 0015 — 能力分档模型](/adr/0015-capability-tier-model)。

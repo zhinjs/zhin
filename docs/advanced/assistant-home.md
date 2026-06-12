@@ -1,3 +1,7 @@
+---
+sidebar: false
+---
+
 # Assistant Home Domain（M4）
 
 通过 **配置别名** 控制 Home Assistant 设备，主 Agent 与子 Agent 使用 `home_*` 工具，无需记忆 `entity_id`。

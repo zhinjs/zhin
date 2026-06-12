@@ -646,7 +646,7 @@ export async function renderComponents(
 
 // 内置组件
 export const Fragment = defineComponent(async (props: { children?: SendContent }, context: ComponentContext) => {
-    let children = props.children || '';
+    const children = props.children || '';
     if (Array.isArray(children)) {
         return children.join('');
     }

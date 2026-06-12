@@ -97,42 +97,11 @@ for await (const event of agentLoop(
 
 业务插件通常不直接调用 `agentLoop`，而是通过 **`ZhinAgent`**、**`AIService.runAgent`** 或 **`@zhin.js/agent` 的 turn runner**。
 
-### Agent（遗留 — 单测 / 直接 import）
+### Agent（已移除 — 改用 `agentLoop`）
 
-::: warning 遗留 API
-`createAgent` / `Agent.run()` 仍保留在 `@zhin.js/ai`，供包内单测与历史代码直接 import。**新代码请使用 `agentLoop` 或 `@zhin.js/agent` 的封装。**
+::: danger 已删除
+`createAgent` / `Agent` 类已从 `@zhin.js/ai` 中删除。如需直接调用 LLM，请使用 **`agentLoop`** 或 **`@zhin.js/agent`** 的封装。参见上方的 **`agentLoop`（推荐）** 章节。
 :::
-
-无状态的多轮 tool-calling 循环引擎：
-
-```typescript
-import { createAgent } from '@zhin.js/ai'
-import type { AgentTool } from '@zhin.js/ai'
-
-const weatherTool: AgentTool = {
-  name: 'get_weather',
-  description: '查询城市天气',
-  parameters: {
-    type: 'object',
-    properties: { city: { type: 'string', description: '城市名' } },
-    required: ['city'],
-  },
-  execute: async ({ city }) => `${city}：晴，25°C`,
-}
-
-const agent = createAgent(provider, {
-  maxIterations: 5,
-  turnTimeout: 60000,
-  modelFallbacks: ['gpt-4o-mini'],
-  systemPrompt: '你是一个助手',
-  tools: [weatherTool],
-})
-
-// run(userMessage, contextMessages?, filterOptions?)
-const result = await agent.run('今天北京天气怎么样？')
-```
-
-`createAgent(provider, config)` 的 `config` 为 `Omit<AgentConfig, 'provider'>`；`agent.run()` 接受用户字符串与可选历史 `ChatMessage[]`。Agent 支持自动模型降级：主模型失败时依次尝试 `modelFallbacks`。
 
 ### ModelRegistry 与 ApiRegistry（模型发现 + agentLoop 白名单）
 
@@ -328,7 +297,7 @@ const tools = cache.filter('天气查询', allTools, { maxTools: 10 })
 | 类型 | 用途 |
 |------|------|
 | `ProviderConfig` / `OllamaProviderConfig` | 各 LLM Provider 连接与能力 |
-| `AgentConfig` | `createAgent`：模型、`modelFallbacks`、`maxIterations`、`turnTimeout`、工具列表等 |
+| `AgentLoopConfig` | `agentLoop`：模型、工具列表、超时、回调等（替代已删除的 `createAgent`） |
 | `SessionConfig` | 会话 `maxHistory`、`expireMs` |
 | `ContextConfig` | `ContextManager` 总结阈值与 token 预算 |
 | `ConversationMemoryConfig` | 话题切换与短期窗口 |

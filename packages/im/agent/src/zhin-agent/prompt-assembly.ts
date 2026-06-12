@@ -11,7 +11,7 @@ import {
 } from './prompt.js';
 import { buildPreExecFastPathPrompt } from './tool-runtime.js';
 import type { ZhinAgentPrivate } from './zhin-agent-private.js';
-import type { ChatMessage } from '@zhin.js/ai';
+import type { AgentMessage } from '@zhin.js/ai';
 
 export function buildDisciplinedPrompt(_agent: ZhinAgentPrivate, basePrompt: string): string {
   const guidance = [
@@ -119,7 +119,7 @@ export async function buildMultimodalVisionSystemPrompt(
 }
 
 export function buildAgentUserMessage(
-  historyMessages: ChatMessage[],
+  historyMessages: AgentMessage[],
   content: string,
 ): string {
   return buildUserMessageWithHistory(historyMessages, content);
