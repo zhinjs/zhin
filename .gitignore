@@ -118,3 +118,5 @@ apps/**/config.*
 
 # Heap snapshots (large binary, never commit)
 *.heapsnapshot
+# Generated API reference (run pnpm docs:api)
+docs/api/
