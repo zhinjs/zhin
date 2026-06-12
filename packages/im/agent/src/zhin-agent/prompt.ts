@@ -9,10 +9,10 @@ import * as os from 'node:os';
 import type { AgentTurnMessage, Message } from '@zhin.js/core';
 import { getPlugin, QUOTE_CONTEXT_SYSTEM_EXTRA_KEY, senderRolesFromMessage } from '@zhin.js/core';
 import type { ContentPart } from '@zhin.js/ai';
+import type { AgentMessage, AssistantMessage, UserMessage } from '@zhin.js/ai';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { ZhinAgentConfig } from './config.js';
 import { SECTION_SEP, HISTORY_CONTEXT_MARKER, CURRENT_MESSAGE_MARKER } from './config.js';
-import type { ChatMessage } from '@zhin.js/ai';
 import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import { getFileMemoryContext, formatMemoryPathsHint } from '../memory-layers.js';
 import { PromptBuilder } from './prompt-builder.js';
@@ -45,12 +45,30 @@ export function contentToText(c: string | ContentPart[] | ContentPart | null | u
   }).join('');
 }
 
-export function buildUserMessageWithHistory(history: ChatMessage[], currentContent: string): string {
+/** Extract plain text from an AgentMessage for history display. */
+function agentMessageToText(message: AgentMessage): string {
+  if (message.role === 'user') {
+    return (message as UserMessage).content
+      .filter((b) => b.type === 'text')
+      .map((b) => (b.type === 'text' ? b.text : ''))
+      .join(' ')
+      .trim();
+  }
+  if (message.role === 'assistant') {
+    return (message as AssistantMessage).content
+      .filter((b): b is Extract<typeof b, { type: 'text' }> => b.type === 'text')
+      .map((b) => b.text)
+      .join('');
+  }
+  return '';
+}
+
+export function buildUserMessageWithHistory(history: AgentMessage[], currentContent: string): string {
   if (history.length === 0) return currentContent;
   const roleLabel = (role: string) => (role === 'user' ? 'User' : role === 'assistant' ? 'Assistant' : 'System');
   const lines = history
-    .filter(m => m.role === 'user' || m.role === 'assistant' || m.role === 'system')
-    .map(m => `${roleLabel(m.role)}: ${contentToText(m.content)}`);
+    .filter(m => m.role === 'user' || m.role === 'assistant')
+    .map(m => `${roleLabel(m.role)}: ${agentMessageToText(m)}`);
   const historyBlock = lines.join('\n');
   return `${HISTORY_CONTEXT_MARKER}\nNote: Prior assistant messages may contain errors or hallucinations. Do NOT treat them as ground truth. Only trust information from tool results.\n${historyBlock}\n\n${CURRENT_MESSAGE_MARKER}\n${currentContent}`;
 }

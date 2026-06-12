@@ -18,8 +18,8 @@ import {
   getMcpToolsForBinding,
 } from './orchestrator/mcp-lifecycle.js';
 import type { McpRegistry } from './orchestrator/mcp-registry.js';
-import { Agent } from '@zhin.js/ai';
-import type { AgentResult, ContentPart, ModelRegistry } from '@zhin.js/ai';
+import { userMessageToFilterText } from '@zhin.js/ai';
+import type { ContentPart, ModelRegistry } from '@zhin.js/ai';
 import { runAgentLoopStandaloneTurn } from './zhin-agent/agent-loop-standalone.js';
 import { DEFAULT_CONFIG, type ZhinAgentConfig } from './zhin-agent/config.js';
 import { applyExecPolicyToTools } from './security/exec-policy.js';
@@ -103,7 +103,7 @@ export interface SubagentLifecycleEvent {
 
 export interface SubagentResultDelivery {
   text: string;
-  toolCalls?: AgentResult['toolCalls'] | ToolCallRecord[];
+  toolCalls?: { tool: string; args: Record<string, any>; result: any }[] | ToolCallRecord[];
   /** 主 Agent deferred auto-continue turn 的完整出站元素（优先于 text+toolCalls） */
   elements?: import('@zhin.js/ai').OutputElement[];
 }
@@ -365,7 +365,7 @@ export class SubagentManager {
       agent: resolveSubagentAgentLabel(opts?.presetName),
       role,
       input: inputKind,
-      task_preview: truncatePreview(typeof agentUserInput === 'string' ? agentUserInput : Agent.userMessageToFilterText(agentUserInput), 120),
+      task_preview: truncatePreview(typeof agentUserInput === 'string' ? agentUserInput : userMessageToFilterText(agentUserInput), 120),
     }));
     logger.debug(formatCompact( { task_id: taskId, label, role }));
 

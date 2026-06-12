@@ -9,9 +9,6 @@ export * from '@zhin.js/core';
 export {
   initAgentModule,
   initAgentModule as initAIModule,
-  Agent,
-  createAgent,
-  formatToolTitle,
   AIService,
   SessionManager,
   createMemorySessionManager,
@@ -88,8 +85,6 @@ export type {
   FileElement,
   CardField,
   CardButton,
-  AgentState,
-  AgentEvents,
   RichSystemPromptContext,
 } from '@zhin.js/agent';
 

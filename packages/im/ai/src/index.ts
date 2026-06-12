@@ -137,9 +137,8 @@ export type {
   ImageGenerationDefaults,
 } from './image-generation.js';
 
-// ── Agent Engine ──
-export { Agent, createAgent, formatToolTitle } from './agent/index.js';
-export type { AgentState, AgentEvents } from './agent/index.js';
+// ── Agent Engine (utilities, not the legacy Agent class) ──
+export { userMessageToFilterText } from './agent/user-message-text.js';
 export {
   sanitizeToolResult,
   compactMediaToolJsonForModel,

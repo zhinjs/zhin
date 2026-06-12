@@ -1,5 +1,4 @@
 import type {
-  ChatMessage,
   MemoryIMSessionStore,
   IMSessionStore,
   MemoryAgentSessionStore,
@@ -7,8 +6,8 @@ import type {
   ContextRepository,
   CreateIMSessionInput,
   CreateAgentSessionInput,
+  AgentMessage,
 } from '@zhin.js/ai';
-import { agentMessagesToOpenAi } from '@zhin.js/ai';
 import type { AgentTurnMessage, Message } from '@zhin.js/core';
 import {
   createUserMessage,
@@ -139,10 +138,10 @@ export async function buildHistoryMessagesFromContext(
   deps: SessionIODeps,
   sessionId: string,
   currentUserContent: string,
-): Promise<ChatMessage[]> {
+): Promise<AgentMessage[]> {
   const loaded = await deps.contextRepository.loadContext(sessionId);
-  const history = agentMessagesToOpenAi(loaded.messages);
-  return [...history, { role: 'user', content: currentUserContent }];
+  const timestamp = Date.now();
+  return [...loaded.messages, { role: 'user', content: [{ type: 'text', text: currentUserContent }], timestamp }];
 }
 
 /**
