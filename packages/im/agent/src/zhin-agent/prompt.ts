@@ -48,9 +48,11 @@ export function contentToText(c: string | ContentPart[] | ContentPart | null | u
 /** Extract plain text from an AgentMessage for history display. */
 function agentMessageToText(message: AgentMessage): string {
   if (message.role === 'user') {
-    return (message as UserMessage).content
-      .filter((b) => b.type === 'text')
-      .map((b) => (b.type === 'text' ? b.text : ''))
+    const content = (message as Partial<UserMessage>).content;
+    if (!Array.isArray(content)) return '';
+    return content
+      .filter((b): b is Extract<typeof b, { type: 'text' }> => b?.type === 'text')
+      .map((b) => b.text)
       .join(' ')
       .trim();
   }

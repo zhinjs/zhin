@@ -29,7 +29,7 @@ import {
   installExtensionProxy,
 } from "@zhin.js/kernel";
 import type { PluginLike } from "@zhin.js/kernel";
-import { storage, getCurrentFile, getPlugin } from "./plugin-context.js";
+import { storage, getCurrentFile } from "./plugin-context.js";
 
 // Re-export getPlugin from plugin-context for backward compatibility
 export { getPlugin } from "./plugin-context.js";
