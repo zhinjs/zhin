@@ -295,7 +295,6 @@ describe('Adapter Core Functionality', () => {
         await adapter.start()
         
         let handlerCalled = false
-        const modifiedContent = false
         
         plugin.root.on('before.sendMessage', (options) => {
           handlerCalled = true

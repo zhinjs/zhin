@@ -593,7 +593,7 @@ addTool(
 ${paramLines}
     .execute(async ({ ${destructureArgs} }) => {
       // 工具执行逻辑
-      return \`结果: TODO\`;
+      return \`结果: 请在此添加工具执行逻辑\`;
     })
 );
 `;
@@ -815,16 +815,16 @@ export function listEvents(): any {
     ],
     usage: `// 监听事件示例:
 import { usePlugin } from "zhin.js";
-const { root, onDispose } = usePlugin();
+const { root, logger } = usePlugin();
 
 root.on("context.mounted", (name) => {
-  console.log(\`服务 \${name} 已就绪\`);
+  logger.info(\`服务 \${name} 已就绪\`);
 });
 
 // 监听消息（通过中间件）:
 const { addMiddleware } = usePlugin();
 addMiddleware(async (message, next) => {
-  console.log("收到消息:", message.content);
+  logger.info("收到消息:" + message.content);
   await next();
 });`,
   };
