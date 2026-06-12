@@ -122,9 +122,11 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     void initRemoteAgentRegistry(appConfig.ai).healthCheckAll();
     initDelegationProcessor({ zhinAgent: agent });
     startRemoteTaskPoller({ intervalMs: 15_000 });
-    agent.setHostPlugin(root);
-    agent.setProviderResolver((alias) => ai.getProvider(alias));
-    agent.setActiveBinding(zhinBinding);
+    agent.configure({
+      hostPlugin: root,
+      providerResolver: (alias) => ai.getProvider(alias),
+      activeBinding: zhinBinding,
+    });
     const assistantCfg = resolveAssistantConfig(appConfig.assistant);
     const useDb = appConfig.ai?.sessions?.useDatabase !== false;
     const db = root.inject('database' as keyof Plugin.Contexts) as
@@ -147,8 +149,10 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
 
     const orchestrator = root.inject('agent');
     if (orchestrator) {
-      agent.setSkillRegistry(orchestrator.skills);
-      agent.setOrchestrator(orchestrator);
+      agent.configure({
+        skillRegistry: orchestrator.skills,
+        orchestrator,
+      });
     }
 
     // Model Registry: discover models and wire to agent
@@ -156,7 +160,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     const modelRegistry = new ModelRegistry(dataDir);
     const hadCache = modelRegistry.loadCache();
     applyExplicitModelLists(ai, modelRegistry);
-    agent.setModelRegistry(modelRegistry);
+    agent.configure({ modelRegistry });
     ai.setModelRegistry(modelRegistry);
     seedProviderModelsFromRegistry(ai, modelRegistry);
     ai.refreshLlmApiRegistry();
