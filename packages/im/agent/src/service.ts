@@ -13,7 +13,7 @@ import {
   type ImageGenerationDefaults,
 } from '@zhin.js/ai';
 import type { ModelRegistry } from '@zhin.js/ai';
-import type { ContextManager, ContextConfig } from '@zhin.js/ai';
+import type { ContextConfig } from '@zhin.js/ai';
 import { DEFAULT_CONFIG } from './zhin-agent/config.js';
 import { normalizeTool } from './orchestrator/tool-selection.js';
 import { createWebSearchTool } from './builtin/web-search-tool.js';
@@ -67,7 +67,6 @@ export class AIService {
   private routing: NormalizedAiRoutingConfig;
   private bindingRegistry: AgentBindingRegistry;
   public sessions: SessionManager;
-  public contextManager?: ContextManager;
   private builtinTools!: AgentTool[];
   private sessionConfig: { maxHistory?: number; expireMs?: number };
   private contextConfig: ContextConfig;
@@ -123,11 +122,6 @@ export class AIService {
   }
 
   setSessionManager(manager: SessionManager): void { this.sessions.dispose(); this.sessions = manager; }
-  setContextManager(manager: ContextManager): void {
-    this.contextManager = manager;
-    const defaultProvider = this.providers.get(this.defaultProvider);
-    if (defaultProvider) manager.setAIProvider(defaultProvider);
-  }
   setPlugin(plugin: Plugin): void {
     this.plugin = plugin;
     this.refreshBuiltinAgentTools();
