@@ -95,6 +95,7 @@ import { buildDeferredAutoContinueUserMessage } from './deferred-auto-continue.j
 import type { DeferredWorkerResult } from '../deferred-worker-runner.js';
 
 export type { ZhinAgentConfig, OnChunkCallback } from './config.js';
+export type { IAgentTurnProcessor, IAgentSessionManager, IAgentDiagnostics, IAgentConfigurator } from './interfaces.js';
 export type { ZhinAgentTurnMetrics, ZhinAgentTurnPath } from './turn-metrics.js';
 export { PromptAccessDeniedError } from './prompt-access.js';
 export { formatAiHandlerCompleteLog, formatZhinAgentTurnUsage } from './turn-metrics.js';
@@ -109,8 +110,14 @@ const logger = new Logger(null, 'ZhinAgent');
 // ============================================================================
 
 import { PromptAccessDeniedError } from './prompt-access.js';
+import type {
+  IAgentTurnProcessor,
+  IAgentSessionManager,
+  IAgentDiagnostics,
+  IAgentConfigurator,
+} from './interfaces.js';
 
-export class ZhinAgent {
+export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAgentDiagnostics, IAgentConfigurator {
   private provider: AIProvider;
   private providerResolver: ((alias: string) => AIProvider) | null = null;
   private activeBinding: ResolvedAgentBinding | null = null;
