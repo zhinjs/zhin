@@ -281,6 +281,8 @@ export interface CronManager {
 
 let cronManager: CronManager | null = null;
 
+export function resetCronManager(): void { cronManager = null; }
+
 export function setCronManager(m: CronManager | null): void {
   cronManager = m;
 }

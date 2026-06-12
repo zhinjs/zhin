@@ -544,6 +544,8 @@ export class GenericTypingIndicatorAdapter implements TypingIndicatorAdapter {
 
 let globalManager: TypingIndicatorManager | null = null;
 
+export function resetTypingIndicatorManager(): void { globalManager = null; }
+
 /**
  * 获取全局提示管理器
  */

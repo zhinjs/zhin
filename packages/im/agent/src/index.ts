@@ -351,6 +351,7 @@ export type {
 } from './ai-event-subscriber.js';
 
 export { initAgentModule } from './init.js';
+export { resetAllAgentSingletons } from './agent-runtime-reset.js';
 export { registerEndpointIdColumnMigrationHook } from './init/upgrade-endpoint-id-schema.js';
 
 // ── Typing Indicator ──

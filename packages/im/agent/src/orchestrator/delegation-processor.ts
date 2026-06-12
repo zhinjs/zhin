@@ -154,6 +154,8 @@ export class DelegationProcessor {
 
 let globalProcessor: DelegationProcessor | null = null;
 
+export function resetDelegationProcessor(): void { globalProcessor = null; }
+
 export function initDelegationProcessor(options: DelegationProcessorOptions): DelegationProcessor {
   globalProcessor = new DelegationProcessor(options);
   globalProcessor.start();

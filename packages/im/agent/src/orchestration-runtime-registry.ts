@@ -12,6 +12,8 @@ export interface OrchestrationRuntimeHandle {
 
 let runtime: OrchestrationRuntimeHandle | null = null;
 
+export function resetOrchestrationRuntime(): void { runtime = null; }
+
 export function setOrchestrationRuntime(handle: OrchestrationRuntimeHandle | null): void {
   runtime = handle;
 }

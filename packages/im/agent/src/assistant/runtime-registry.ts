@@ -16,6 +16,8 @@ export interface AssistantRuntimeHandle {
 
 let runtime: AssistantRuntimeHandle | null = null;
 
+export function resetAssistantRuntime(): void { runtime = null; }
+
 export function setAssistantRuntime(handle: AssistantRuntimeHandle | null): void {
   runtime = handle;
 }

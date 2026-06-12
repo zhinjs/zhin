@@ -151,6 +151,8 @@ export class RemoteAgentRegistry {
 
 let globalRegistry: RemoteAgentRegistry | null = null;
 
+export function resetRemoteAgentRegistry(): void { globalRegistry = null; }
+
 export function getRemoteAgentRegistry(): RemoteAgentRegistry {
   if (!globalRegistry) {
     globalRegistry = new RemoteAgentRegistry();

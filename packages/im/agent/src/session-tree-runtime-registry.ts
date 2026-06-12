@@ -25,6 +25,8 @@ export interface SessionTreeRuntimeHandle {
 
 let runtime: SessionTreeRuntimeHandle | null = null;
 
+export function resetSessionTreeRuntime(): void { runtime = null; }
+
 export function setSessionTreeRuntime(handle: SessionTreeRuntimeHandle | null): void {
   runtime = handle;
 }
