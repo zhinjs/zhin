@@ -1,5 +1,12 @@
 # @zhin.js/plugin-group-suite
 
+## 2.0.0
+
+### Patch Changes
+
+- zhin.js@3.0.0
+- @zhin.js/plugin-html-renderer@2.0.0
+
 ## 1.0.1
 
 ### Patch Changes
