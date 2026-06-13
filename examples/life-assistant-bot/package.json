@@ -17,6 +17,7 @@
     "@zhin.js/adapter-sandbox": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "workspace:*"
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
   }
 }

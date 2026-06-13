@@ -308,6 +308,31 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  examples/life-assistant-bot:
+    dependencies:
+      '@zhin.js/adapter-sandbox':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/sandbox
+      '@zhin.js/cli':
+        specifier: workspace:*
+        version: link:../../basic/cli
+      '@zhin.js/host-api':
+        specifier: workspace:*
+        version: link:../../packages/host/api
+      '@zhin.js/host-router':
+        specifier: workspace:*
+        version: link:../../packages/host/router
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../packages/im/zhin
+    devDependencies:
+      tsx:
+        specifier: ^4.22.4
+        version: 4.22.4
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   examples/minimal-bot:
     dependencies:
       '@zhin.js/adapter-sandbox':
