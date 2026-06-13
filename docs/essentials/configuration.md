@@ -347,6 +347,44 @@ ai:
 
 框架启动时自动分块索引（段落级），支持关键词匹配搜索。索引带 60 秒缓存，新增文件下次查询时自动发现。
 
+### 记忆系统
+
+Zhin.js 提供两层记忆能力，可独立或组合使用：
+
+#### 三层 Markdown 文件记忆（Stable 默认启用）
+
+| 层级 | 路径 | 写入 |
+|------|------|------|
+| 全局 | `data/memory/global/MEMORY.md` | 仅 master |
+| 平台 | `data/memory/platforms/{platform}/` | 仅 master |
+| 会话 | `data/memory/sessions/{sessionKey}/MEMORY.md` | 有权限的用户 |
+
+注入优先级：会话 → 平台 → 全局。窗口紧时先裁每日笔记。
+
+#### 语义记忆（Advanced，opt-in）
+
+启用后 Agent 可通过 `memory_search` / `memory_upsert` 工具在 `memory_entries` 表中按语义检索和写入结构化事实。
+
+```yaml
+ai:
+  memory:
+    semantic:
+      enabled: true              # 默认 false
+      autoConsolidate: false     # 自动合并碎片记忆（实验性）
+```
+
+**两层分工**：
+
+| 维度 | Markdown 文件记忆 | 语义记忆 |
+|------|-------------------|---------|
+| 档位 | Stable | Advanced |
+| 存储 | Markdown 文件（人类可读） | 数据库 `memory_entries` 表 |
+| 检索 | system prompt 注入（全量/按层） | `memory_search` 工具（按 query） |
+| 写入 | `write_file` 工具 | `memory_upsert` 工具 |
+| 适用 | 长期规则、人设、平台手册 | 碎片事实（用户偏好、历史事件） |
+
+**推荐**：生活助手场景建议两层都开 —— Markdown 存规则/人设，语义记忆存碎片事实。
+
 **说明**：
 - AI 模块需要 `ai.providers` 至少一个实例，且 **`ai.agents.zhin`** 为必填绑定
 - 旧版 `defaultProvider`、`ai.agent.chatModel` / `visionModel`、`allowedTools` / `disabledTools` 已移除，请迁移到 `ai.agents.<name>`
