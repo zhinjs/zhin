@@ -6,7 +6,6 @@ import type { Router } from '@zhin.js/host-router/router';
 import { WecomAdapter } from './adapter.js';
 import {
   registerWecomPlatformPermitChecker,
-  platformPermit,
 } from './platform-permit.js';
 
 declare module 'zhin.js' {

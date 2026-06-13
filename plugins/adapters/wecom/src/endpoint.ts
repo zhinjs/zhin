@@ -3,7 +3,7 @@
  */
 import { formatCompact, Endpoint, Message, MessageSegment, segment, type SendContent, type SendOptions } from 'zhin.js';
 import { registerFetchRoute, type Router, type RouterContext } from '@zhin.js/host-router/router';
-import { createHash, createDecipheriv, randomBytes } from 'node:crypto';
+import { createHash, createDecipheriv } from 'node:crypto';
 import type {
   WecomEndpointConfig,
   WecomMessage,
@@ -134,8 +134,8 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
         ? ctx.request.body
         : String(ctx.request.body || '');
 
-      // 从 XML 中提取 Encrypt 字段
-      const encryptMatch = rawBody.match(/<Encrypt><!\[CDATA\[(.+?)\]\]><\/Encrypt>/);
+      // 从 XML 中提取 Encrypt 字段（使用字符类避免 CodeQL 多项式正则警告）
+      const encryptMatch = rawBody.match(/<Encrypt><!\[CDATA\[([^[\]]+)]\]><\/Encrypt>/);
       if (!encryptMatch) {
         this.logger.warn(formatCompact({ op: 'webhook', ok: false, error: 'no Encrypt field' }));
         ctx.status = 200;
@@ -208,8 +208,9 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
   private parseXmlMessage(xml: string): WecomMessage | null {
     try {
       const get = (tag: string): string | undefined => {
-        const m = xml.match(new RegExp(`<${tag}><!\\[CDATA\\[(.+?)\\]\\]><\\/${tag}>`))
-          || xml.match(new RegExp(`<${tag}>(.+?)<\\/${tag}>`));
+        // 使用字符类避免 CodeQL 多项式正则警告
+        const m = xml.match(new RegExp(`<${tag}><!\\[CDATA\\[([^\\[\\]]*)\\]\\]><\\/${tag}>`))
+          || xml.match(new RegExp(`<${tag}>([^<]*)<\\/${tag}>`));
         return m ? m[1] : undefined;
       };
       const msgType = get('MsgType');
