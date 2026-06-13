@@ -1,0 +1,69 @@
+{
+  "name": "@zhin.js/adapter-wecom",
+  "version": "0.0.1",
+  "description": "Zhin.js adapter for WeCom (企业微信)",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "bot",
+    "adapter",
+    "wecom",
+    "企业微信",
+    "wechat work",
+    "chatbot"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "type": "git",
+    "directory": "plugins/adapters/wecom"
+  },
+  "scripts": {
+    "build": "pnpm build:node",
+    "clean": "rimraf lib",
+    "build:node": "tsc"
+  },
+  "devDependencies": {
+    "@types/koa": "^3.0.3",
+    "@types/node": "^25.9.2",
+    "@zhin.js/host-router": "workspace:*",
+    "typescript": "^6.0.3",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependencies": {
+    "@zhin.js/host-router": "workspace:*",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/host-router": {
+      "optional": false
+    }
+  },
+  "files": [
+    "src",
+    "lib",
+    "skills",
+    "plugin.yml",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

@@ -73,6 +73,8 @@ flowchart LR
 | 飞书 | [lark](/adapters/lark) |
 | 微信公众号 | [wechat-mp](/adapters/wechat-mp) |
 | 微信 iLink（个人微信） | [weixin-ilink](/adapters/weixin-ilink) |
+| 企业微信（WeCom） | [wecom](/adapters/wecom) |
+| LINE | [line](/adapters/line) |
 
 本地调试 IM 仍推荐 **Sandbox**（Stable Core）：[Remote Console 沙盒页](/console-remote#官方管理界面能做什么)。
 
@@ -82,12 +84,7 @@ flowchart LR
 
 ## 待补充平台
 
-下列 IM 尚无 Platform Stable 适配器，Issue 跟踪中：
-
-| 平台 | 跟踪 |
-|------|------|
-| 企业微信（WeCom） | [#484](https://github.com/zhinjs/zhin/issues/484) |
-| LINE | [#485](https://github.com/zhinjs/zhin/issues/485) |
+暂无。企业微信（WeCom）和 LINE 已在上方 Platform Stable 列表中。
 
 ## Stable（Core）还包含什么
 
