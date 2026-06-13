@@ -1,7 +1,5 @@
 import type { Plugin } from '@zhin.js/core';
-import { formatCompact, Logger } from '@zhin.js/logger';
-
-const logger = new Logger(null, 'Shutdown');
+import { formatCompact } from '@zhin.js/logger';
 
 /** ADR 0013 D2 — 全局 shutdown 硬超时 */
 export const SHUTDOWN_TIMEOUT_MS = 10_000;
@@ -12,6 +10,7 @@ let shuttingDown = false;
 
 export interface GracefulShutdownOptions {
   plugin: Plugin;
+  exitCode?: number;
 }
 
 async function drainTaskExecutorLocks(timeoutMs: number): Promise<void> {
@@ -48,7 +47,7 @@ export async function gracefulShutdown(
   }
   shuttingDown = true;
 
-  const { plugin } = options;
+  const { plugin, exitCode = 0 } = options;
   plugin.logger.info(formatCompact({ shutdown: signal, code: 'shutdown_start' }));
 
   const forceTimer = setTimeout(() => {
@@ -73,7 +72,7 @@ export async function gracefulShutdown(
     );
   } finally {
     clearTimeout(forceTimer);
-    process.exit(0);
+    process.exit(exitCode);
   }
 }
 

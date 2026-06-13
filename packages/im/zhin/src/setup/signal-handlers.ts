@@ -1,6 +1,6 @@
 import type { Plugin } from '@zhin.js/core';
 import { formatCompact } from '@zhin.js/logger';
-import { registerGracefulShutdown } from '../shutdown.js';
+import { registerGracefulShutdown, gracefulShutdown } from '../shutdown.js';
 
 /**
  * 启动核心上下文并注册优雅关闭与异常处理
@@ -16,8 +16,8 @@ export async function registerSignalHandlers(plugin: Plugin): Promise<void> {
 
   const handleUncaughtException = (error: Error) => {
     logger.error('Uncaught exception:', error);
-    // 不立即 exit — 让 gracefulShutdown 处理清理
-    process.kill(process.pid, 'SIGTERM');
+    // 使用 exitCode=1 让 gracefulShutdown 以非零码退出
+    void gracefulShutdown('uncaughtException', { plugin, exitCode: 1 });
   };
 
   const handleUnhandledRejection = (reason: unknown) => {
