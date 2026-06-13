@@ -8,16 +8,20 @@ sidebar: false
 
 ## 状态
 
-部分实现（2026-06-10）
+基本实现（2026-06-13）
 
 | 优先级 | 状态 | 关键路径 |
 |--------|------|----------|
-| P0-1 ~ P0-3 | ✅ 已实现 | `api-registry.ts`、`shutdown.ts`、DB dialects |
+| P0-1 ~ P0-3 | ✅ 已实现 | `api-registry.ts`、`shutdown.ts`（含 exitCode + graceful shutdown 测试）、DB dialects |
 | P1-1 ~ P1-3 | ✅ 已实现 | `service.dispose`、`ZhinAgent.dispose`、`BaseProvider.activeStreams` |
 | P2-1 | ✅ 已实现 | `agent/src/stability/memory-pressure.ts` |
-| P2-2 | ✅ 部分 | `stability-lifecycle.test.ts`、`session-write-lock.test.ts`、`api-registry.test.ts`；长压 RSS 测试未做（CI 不稳定） |
-| P2-3 | ✅ 部分 | dispose/eviction/shutdown 路径已带 `{ code }`；全仓库 warn/error 未统一 |
-| P2-4 | ✅ 部分 | 本文与 ADR 0013 已更新实现状态 |
+| P2-2 | ✅ 已实现 | `stability-lifecycle.test.ts`、`session-write-lock.test.ts`、`api-registry.test.ts`、`shutdown.test.ts`（PR #505）、`harness-commands.test.ts`（PR #507）；长压 RSS 测试 defer（CI 不稳定，见下方说明） |
+| P2-3 | ✅ 已实现 | dispose/eviction/shutdown 路径已带 `{ code }`；uncaught exception 使用 exitCode=1 |
+| P2-4 | ✅ 已实现 | 本文与 ADR 0013 已更新实现状态 |
+
+### 关于 nightly 长压测试
+
+RSS / 多轮对话长压冒烟测试未纳入 CI（避免 flaky）。建议在自托管 runner 上以 cron 触发，解读方式见 `.github/workflows/nightly-smoke.yml`（待创建）。
 
 ## P0 — 运行时会炸（下个版本必须修）
 
@@ -224,3 +228,18 @@ SIGTERM/SIGINT
 | P2-1 | 关键指标暴露到日志，超阈值时 warn |
 | P2-2 | 4 项集成测试通过 |
 | P2-3 | 所有 warn/error 日志带 code 字段 |
+
+## 数据库连接池 Drain 行为
+
+各数据库方言在 `close()` 时的行为：
+
+| 方言 | 连接类型 | close() 行为 | 超时 |
+|------|---------|-------------|------|
+| SQLite | 单连接 | `db.close()` 同步关闭 | 无 |
+| MySQL | 连接池 | `pool.end()` 等待活跃连接释放 | 默认 30s |
+| PostgreSQL | 连接池 | `pool.end()` 等待空闲连接关闭 | 默认 30s |
+| MongoDB | 连接池 | `client.close(true)` 强制关闭 | 无 |
+
+Graceful shutdown（ADR 0013）链路：SIGTERM → `gracefulShutdown()` → `plugin.stop()` → DB dialect `close()` → `process.exit(exitCode)`。超时 10s 后强制退出。
+
+相关测试：`shutdown.test.ts`（PR #505）、`harness-commands.test.ts`（PR #507）。
