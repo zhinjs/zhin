@@ -629,9 +629,17 @@ export class Sandbox {
       const timeout = options?.timeout || 30000;
       let timedOut = false;
 
+      // 即使在 unsafe 模式也要过滤敏感环境变量
+      const cleanEnv = { ...process.env };
+      if (this.config.blockedEnvVars) {
+        for (const key of this.config.blockedEnvVars) {
+          delete cleanEnv[key];
+        }
+      }
+
       const child = child_process.spawn('bash', ['-c', command], {
         cwd: options?.cwd || process.cwd(),
-        env: { ...process.env, ...options?.env },
+        env: { ...cleanEnv, ...options?.env },
         stdio: ['pipe', 'pipe', 'pipe'],
         timeout,
       });

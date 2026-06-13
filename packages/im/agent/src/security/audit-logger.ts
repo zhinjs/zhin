@@ -156,6 +156,7 @@ export class AuditLogger {
   private logStream: fs.WriteStream | null = null;
   private eventCount = 0;
   private sessionEvents: AuditEvent[] = [];
+  private static readonly MAX_SESSION_EVENTS = 5000;
 
   constructor(config: Partial<AuditLoggerConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -230,8 +231,11 @@ export class AuditLogger {
       }
     }
 
-    // 添加到会话事件
+    // 添加到会话事件（FIFO 淘汰）
     this.sessionEvents.push(fullEvent);
+    if (this.sessionEvents.length > AuditLogger.MAX_SESSION_EVENTS) {
+      this.sessionEvents.splice(0, this.sessionEvents.length - AuditLogger.MAX_SESSION_EVENTS);
+    }
 
     // 写入日志文件
     this.writeToFile(fullEvent);
@@ -428,8 +432,14 @@ export class AuditLogger {
     byType: Record<AuditEventType, number>;
     bySeverity: Record<AuditEventSeverity, number>;
   } {
-    const byType: Record<AuditEventType, number> = {} as any;
-    const bySeverity: Record<AuditEventSeverity, number> = {} as any;
+    const byType = {} as Record<AuditEventType, number>;
+    const bySeverity = {} as Record<AuditEventSeverity, number>;
+    for (const t of ['tool.execute', 'tool.denied', 'tool.approval', 'exec.policy', 'file.access', 'security.violation', 'owner.confirm', 'rate.limit', 'session.start', 'session.end'] as AuditEventType[]) {
+      byType[t] = 0;
+    }
+    for (const s of ['info', 'warn', 'error', 'critical'] as AuditEventSeverity[]) {
+      bySeverity[s] = 0;
+    }
     let blockedEvents = 0;
 
     for (const event of this.sessionEvents) {
