@@ -111,6 +111,11 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
 
       // 解密 echostr 并返回明文
       const decrypted = this.decryptMessage(echostr as string);
+      if (!decrypted) {
+        ctx.status = 400;
+        ctx.body = 'Decryption failed';
+        return;
+      }
       ctx.status = 200;
       ctx.body = decrypted;
     } catch (error) {
@@ -154,6 +159,11 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
 
       // 解密消息
       const decryptedXml = this.decryptMessage(encrypted);
+      if (!decryptedXml) {
+        ctx.status = 200;
+        ctx.body = 'success';
+        return;
+      }
       const message = this.parseXmlMessage(decryptedXml);
       if (message) {
         await this.handleMessage(message);
@@ -184,7 +194,7 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
 
   // ── AES-CBC 解密 ──
 
-  private decryptMessage(encrypted: string): string {
+  private decryptMessage(encrypted: string): string | null {
     const buf = Buffer.from(encrypted, 'base64');
     const iv = this.aesKey.subarray(0, 16);
     const decipher = createDecipheriv('aes-256-cbc', this.aesKey, iv);
@@ -198,7 +208,8 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
     const msg = content.subarray(20, 20 + msgLen).toString('utf8');
     const extractedCorpId = content.subarray(20 + msgLen).toString('utf8');
     if (extractedCorpId !== this.corpId) {
-      this.logger.warn(formatCompact({ op: 'decrypt', ok: false, error: 'corpId mismatch' }));
+      this.logger.warn(formatCompact({ op: 'decrypt', ok: false, error: 'corpId mismatch', expected: this.corpId, got: extractedCorpId }));
+      return null;
     }
     return msg;
   }
