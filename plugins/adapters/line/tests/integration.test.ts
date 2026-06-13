@@ -5,6 +5,7 @@
  * 测试 Endpoint 接口合规性、消息格式化、发送/接收链路、生命周期的完整性。
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { createHmac } from 'node:crypto';
 import { Plugin, type SendOptions } from 'zhin.js';
 import { createAdapterTestSuite } from '../../../../packages/im/core/tests/adapter-harness.js';
 import { LineAdapter } from '../src/adapter.js';
@@ -298,7 +299,6 @@ describe('LINE 适配器特定测试', () => {
 
   describe('签名验证', () => {
     it('verifySignature 应验证正确的 HMAC-SHA256 签名', () => {
-      const { createHmac } = require('node:crypto');
       // endpoint.$config.channelSecret is 'test' (set via adapter config spread)
       const secret = endpoint.$config.channelSecret;
       const body = '{"events":[]}';

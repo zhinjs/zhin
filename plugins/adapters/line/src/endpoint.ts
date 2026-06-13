@@ -4,8 +4,7 @@
  * 使用 Webhook 模式接收消息，通过 LINE Messaging API 发送消息。
  * HMAC-SHA256 签名验证确保请求来自 LINE 平台。
  */
-import { createHmac } from "node:crypto";
-import { EventEmitter } from "node:events";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import {
   Endpoint,
   Message,
@@ -20,6 +19,10 @@ import { registerFetchRoute, type Router, type RouterContext } from "@zhin.js/ho
 import type {
   LineEndpointConfig,
   LineEvent,
+  LineMessageEvent,
+  LineFollowEvent,
+  LineJoinEvent,
+  LinePostbackEvent,
   LineMessage,
   LineWebhookBody,
   LineReplyMessage,
@@ -29,7 +32,17 @@ import type {
 } from "./types.js";
 import type { LineAdapter } from "./adapter.js";
 
-export class LineEndpoint extends EventEmitter implements Endpoint<LineEndpointConfig, LineEvent> {
+/** Type guard: narrows a LineEvent to a message event */
+function isMessageEvent(e: LineEvent): e is LineMessageEvent {
+  return e.type === "message" && "message" in e && (e as LineMessageEvent).message != null;
+}
+
+/** Type guard: narrows a LineEvent to a postback event */
+function isPostbackEvent(e: LineEvent): e is LinePostbackEvent {
+  return e.type === "postback" && "postback" in e;
+}
+
+export class LineEndpoint implements Endpoint<LineEndpointConfig, LineEvent> {
   $connected: boolean = false;
 
   get pluginLogger() {
@@ -44,9 +57,7 @@ export class LineEndpoint extends EventEmitter implements Endpoint<LineEndpointC
     public adapter: LineAdapter,
     private router: Router,
     public $config: LineEndpointConfig,
-  ) {
-    super();
-  }
+  ) {}
 
   async $connect(): Promise<void> {
     try {
@@ -67,10 +78,11 @@ export class LineEndpoint extends EventEmitter implements Endpoint<LineEndpointC
   async $disconnect(): Promise<void> {
     try {
       this.$connected = false;
+      this.replyTokenCache.clear();
       this.pluginLogger.info(`LINE endpoint ${this.$config.name} disconnected`);
     } catch (error) {
       this.pluginLogger.error("Error disconnecting LINE endpoint:", error);
-      throw error;
+      // L02: Log and swallow instead of re-throwing
     }
   }
 
@@ -86,10 +98,16 @@ export class LineEndpoint extends EventEmitter implements Endpoint<LineEndpointC
         return;
       }
 
-      // 获取原始请求体用于签名验证
-      const rawBody = typeof ctx.request.body === "string"
-        ? ctx.request.body
-        : JSON.stringify(ctx.request.body);
+      // L05: 获取原始请求体用于签名验证
+      // Koa ctx.req 是 Node.js IncomingMessage，koa-body 可能已经消费了流
+      // 因此优先使用已解析的 body 并序列化，记录警告说明可能不精确
+      let rawBody: string;
+      if (typeof ctx.request.body === "string") {
+        rawBody = ctx.request.body;
+      } else {
+        rawBody = JSON.stringify(ctx.request.body);
+        this.pluginLogger.debug("Signature verification using JSON.stringify(body) — may differ from original raw body");
+      }
 
       if (!this.verifySignature(rawBody, signature)) {
         this.pluginLogger.warn(formatCompact({ op: "webhook", ok: false, error: "invalid signature" }));
@@ -123,23 +141,28 @@ export class LineEndpoint extends EventEmitter implements Endpoint<LineEndpointC
     }
   }
 
+  // L07: Use timing-safe comparison for signature
   private verifySignature(body: string, signature: string): boolean {
     const channelSecret = this.$config.channelSecret;
     const hmac = createHmac("sha256", channelSecret);
     hmac.update(body, "utf-8");
     const computedSignature = hmac.digest("base64");
-    return computedSignature === signature;
+    const sigBuf = Buffer.from(signature);
+    const computedBuf = Buffer.from(computedSignature);
+    if (sigBuf.length !== computedBuf.length) return false;
+    return timingSafeEqual(sigBuf, computedBuf);
   }
 
+  // L04: Use type guards instead of "in" checks + `as any` casts
   private async handleEvent(event: LineEvent): Promise<void> {
     switch (event.type) {
       case "message":
-        if ("message" in event && event.message) {
-          await this.handleMessageEvent(event as any);
+        if (isMessageEvent(event)) {
+          await this.handleMessageEvent(event);
         }
         break;
       case "follow":
-        await this.handleFollowEvent(event);
+        await this.handleFollowEvent(event as LineFollowEvent);
         break;
       case "unfollow":
         this.pluginLogger.debug(formatCompact({
@@ -149,7 +172,7 @@ export class LineEndpoint extends EventEmitter implements Endpoint<LineEndpointC
         }));
         break;
       case "join":
-        await this.handleJoinEvent(event);
+        await this.handleJoinEvent(event as LineJoinEvent);
         break;
       case "leave":
         this.pluginLogger.debug(formatCompact({
@@ -161,7 +184,7 @@ export class LineEndpoint extends EventEmitter implements Endpoint<LineEndpointC
         }));
         break;
       case "postback":
-        if ("postback" in event) {
+        if (isPostbackEvent(event)) {
           this.pluginLogger.debug(formatCompact({
             op: "postback",
             endpoint: this.$config.name,
@@ -173,12 +196,16 @@ export class LineEndpoint extends EventEmitter implements Endpoint<LineEndpointC
         this.pluginLogger.debug(formatCompact({
           op: "unknown_event",
           endpoint: this.$config.name,
-          type: (event as any).type,
+          type: (event as LineEvent).type,
         }));
     }
   }
 
-  private async handleMessageEvent(event: LineEvent & { message: LineMessage }): Promise<void> {
+  // L01: Cache replyToken from webhook events before emitting
+  private async handleMessageEvent(event: LineMessageEvent): Promise<void> {
+    const { channelId } = this.resolveChannel(event.source);
+    this.cacheReplyToken(channelId, event.replyToken);
+
     const message = this.$formatMessage(event);
     this.adapter.emit("message.receive", message);
     this.pluginLogger.debug(formatCompact({
@@ -190,7 +217,10 @@ export class LineEndpoint extends EventEmitter implements Endpoint<LineEndpointC
     }));
   }
 
-  private async handleFollowEvent(event: LineEvent): Promise<void> {
+  private async handleFollowEvent(event: LineFollowEvent): Promise<void> {
+    const { channelId } = this.resolveChannel(event.source);
+    this.cacheReplyToken(channelId, event.replyToken);
+
     const message = this.$formatMessage(event);
     this.adapter.emit("message.receive", message);
     this.pluginLogger.debug(formatCompact({
@@ -200,7 +230,10 @@ export class LineEndpoint extends EventEmitter implements Endpoint<LineEndpointC
     }));
   }
 
-  private async handleJoinEvent(event: LineEvent): Promise<void> {
+  private async handleJoinEvent(event: LineJoinEvent): Promise<void> {
+    const { channelId } = this.resolveChannel(event.source);
+    this.cacheReplyToken(channelId, event.replyToken);
+
     const message = this.$formatMessage(event);
     this.adapter.emit("message.receive", message);
     this.pluginLogger.debug(formatCompact({
@@ -251,7 +284,7 @@ export class LineEndpoint extends EventEmitter implements Endpoint<LineEndpointC
         if (!Array.isArray(content)) content = [content];
         if (quote) {
           const replyToMessageId = typeof quote === "boolean"
-            ? ("message" in event && event.message?.id) || ""
+            ? (isMessageEvent(event) && event.message?.id) || ""
             : quote;
           content.unshift({ type: "reply", data: { id: replyToMessageId } });
         }
@@ -267,7 +300,7 @@ export class LineEndpoint extends EventEmitter implements Endpoint<LineEndpointC
   }
 
   private generateMessageId(event: LineEvent): string {
-    if ("message" in event && event.message?.id) {
+    if (isMessageEvent(event) && event.message?.id) {
       return event.message.id;
     }
     return `${event.type}-${event.timestamp}`;
@@ -287,7 +320,7 @@ export class LineEndpoint extends EventEmitter implements Endpoint<LineEndpointC
   }
 
   private extractRawText(event: LineEvent): string {
-    if ("message" in event && event.message) {
+    if (isMessageEvent(event)) {
       const msg = event.message;
       if (msg.type === "text" && msg.text) return msg.text;
       if (msg.type === "location" && msg.address) return msg.address;
@@ -301,7 +334,7 @@ export class LineEndpoint extends EventEmitter implements Endpoint<LineEndpointC
   private parseMessageContent(event: LineEvent): MessageSegment[] {
     const segments: MessageSegment[] = [];
 
-    if ("message" in event && event.message) {
+    if (isMessageEvent(event)) {
       const msg = event.message;
       switch (msg.type) {
         case "text":
@@ -401,6 +434,13 @@ export class LineEndpoint extends EventEmitter implements Endpoint<LineEndpointC
         return await this.replyMessage(replyToken, messages);
       }
 
+      // L06: Validate Push API `to` field
+      if (!/^[UGR]/.test(options.id)) {
+        throw new Error(
+          `Invalid LINE recipient ID "${options.id}": must start with U (user), G (group), or R (room)`
+        );
+      }
+
       // 使用 Push API
       return await this.pushMessage(options.id, messages);
     } catch (error) {
@@ -418,6 +458,7 @@ export class LineEndpoint extends EventEmitter implements Endpoint<LineEndpointC
     this.replyTokenCache.set(channelId, replyToken);
   }
 
+  // L15: Parse Reply API response for message ID
   private async replyMessage(replyToken: string, messages: LineReplyMessage[]): Promise<string> {
     const baseUrl = this.$config.apiBaseUrl || "https://api.line.me";
     const request: LineReplyRequest = { replyToken, messages };
@@ -435,8 +476,9 @@ export class LineEndpoint extends EventEmitter implements Endpoint<LineEndpointC
       throw new Error(`LINE Reply API error ${response.status}: ${errorText}`);
     }
 
-    // Reply API 不返回 message ID
-    return `reply-${Date.now()}`;
+    // Reply API now returns sentMessages in the response body
+    const result: LineApiResponse = await response.json() as LineApiResponse;
+    return result.sentMessages?.[0]?.id || `reply-${Date.now()}`;
   }
 
   private async pushMessage(to: string, messages: LineReplyMessage[]): Promise<string> {
@@ -529,11 +571,24 @@ export class LineEndpoint extends EventEmitter implements Endpoint<LineEndpointC
       }
     }
 
+    // L14: Log warning when messages are sliced to 5 (LINE limit)
+    if (messages.length > 5) {
+      this.pluginLogger.warn(
+        `LINE messages truncated from ${messages.length} to 5 (platform limit)`
+      );
+    }
+
     // LINE 单次最多发送 5 条消息
     return messages.slice(0, 5);
   }
 
   private buildTextMessage(text: string): LineReplyMessage {
+    // L13: Log warning on text truncation
+    if (text.length > 5000) {
+      this.pluginLogger.warn(
+        `LINE text message truncated from ${text.length} to 5000 characters`
+      );
+    }
     // LINE 消息文本限制 5000 字符
     const truncated = text.length > 5000 ? text.slice(0, 4997) + "..." : text;
     return { type: "text", text: truncated };
@@ -541,8 +596,10 @@ export class LineEndpoint extends EventEmitter implements Endpoint<LineEndpointC
 
   // ── 消息撤回 ──────────────────────────────────────────────────────
 
+  // L16: Log warning and return gracefully (matching WeCom/DingTalk pattern)
   async $recallMessage(_id: string): Promise<void> {
-    // LINE Messaging API 不支持消息撤回
-    throw new Error("LINE Messaging API does not support message recall");
+    this.pluginLogger.warn(
+      formatCompact({ op: "recall", ok: false, error: "LINE Messaging API does not support message recall" })
+    );
   }
 }

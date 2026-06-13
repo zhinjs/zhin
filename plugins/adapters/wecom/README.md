@@ -49,7 +49,7 @@ endpoints:
   - name: wecom-bot
     context: wecom
     corpId: "ww1234567890abcdef"
-    agentId: "your-agent-secret"
+    agentSecret: "your-agent-secret"
     token: "your-verify-token"
     encodingAESKey: "your-43-char-encoding-aes-key"
     webhookPath: "/wecom/callback"
@@ -66,7 +66,7 @@ endpoints:
   - name: wecom-bot
     context: wecom
     corpId: "ww1234567890abcdef"
-    agentId: "your-agent-secret"
+    agentSecret: "your-agent-secret"
     token: "your-verify-token"
     encodingAESKey: "your-43-char-encoding-aes-key"
     webhookPath: "/wecom/callback"
@@ -78,7 +78,7 @@ endpoints:
 | 参数 | 必需 | 说明 |
 |------|------|------|
 | `corpId` | 是 | 企业 ID，在管理后台「我的企业」查看 |
-| `agentId` | 是 | 应用 Secret（注意：不是 AgentId），在应用详情页获取 |
+| `agentSecret` | 是 | 应用 Secret，在应用详情页获取 |
 | `token` | 是 | 用于签名验证，需与管理后台「接收消息」设置中的 Token 一致 |
 | `encodingAESKey` | 是 | 用于消息加解密，需与管理后台一致（43 字符） |
 | `webhookPath` | 否 | Webhook 回调路径，默认 `/wecom/callback` |
@@ -91,7 +91,7 @@ endpoints:
   - name: wecom-bot
     context: wecom
     corpId: "${WECOM_CORP_ID}"
-    agentId: "${WECOM_AGENT_SECRET}"
+    agentSecret: "${WECOM_AGENT_SECRET}"
     token: "${WECOM_TOKEN}"
     encodingAESKey: "${WECOM_AES_KEY}"
 ```
@@ -239,7 +239,7 @@ A: 可能的原因：
 ### Q: 发送消息失败？
 
 A: 可能的原因：
-1. `agentId`（应用 Secret）配置错误
+1. `agentSecret`（应用 Secret）配置错误
 2. access_token 获取失败（检查 CorpId 和 Secret）
 3. 接收者不在应用可见范围内
 4. 应用未开通消息发送权限
@@ -248,7 +248,7 @@ A: 可能的原因：
 
 A: 检查：
 1. CorpId 是否正确
-2. agentId 是否是应用 Secret（不是应用的 AgentId 数字）
+2. agentSecret 是否是应用 Secret（不是应用的 AgentId 数字）
 3. 企业微信 API 是否可访问
 
 ## 相关链接

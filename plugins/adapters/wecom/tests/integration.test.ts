@@ -50,7 +50,7 @@ class MockWecomAdapter extends WecomAdapter {
       context: 'wecom',
       name: config.name || 'test-endpoint',
       corpId: 'mock-corpid',
-      agentId: 'mock-agent-secret',
+      agentSecret: 'mock-agent-secret',
       token: 'mock-token',
       encodingAESKey: 'mock-aes-key-43chars-long-enough-for-base64',
       webhookPath: '/wecom/callback',

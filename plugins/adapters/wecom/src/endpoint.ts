@@ -8,17 +8,19 @@ import type {
   WecomEndpointConfig,
   WecomMessage,
   AccessToken,
+  WecomApiResponse,
 } from './types.js';
 import type { WecomAdapter } from './adapter.js';
 import { normalizeWecomSenderForPermit } from './platform-permit.js';
 
 export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage> {
   $connected: boolean;
-  private router: any;
+  private router: Router;
   private accessToken: AccessToken;
   private baseURL: string;
   private aesKey: Buffer;
   private corpId: string;
+  #refreshPromise: Promise<string> | null = null;
 
   get $id() {
     return this.$config.name;
@@ -30,7 +32,7 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
 
   constructor(
     public adapter: WecomAdapter,
-    router: any,
+    router: Router,
     public $config: WecomEndpointConfig
   ) {
     this.router = router;
@@ -39,6 +41,9 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
     this.baseURL = $config.apiBaseUrl || 'https://qyapi.weixin.qq.com';
     this.corpId = $config.corpId;
     this.aesKey = Buffer.from($config.encodingAESKey + '=', 'base64');
+    if (this.aesKey.length !== 32) {
+      throw new Error(`encodingAESKey must produce a 32-byte key, got ${this.aesKey.length} bytes`);
+    }
     this.setupWebhookRoute();
   }
 
@@ -48,10 +53,10 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
     path: string,
     options: {
       method?: 'GET' | 'POST';
-      params?: Record<string, any>;
-      body?: any;
+      params?: Record<string, string | number>;
+      body?: Record<string, unknown>;
     } = {}
-  ): Promise<any> {
+  ): Promise<WecomApiResponse> {
     await this.ensureAccessToken();
     const { method = 'GET', params = {}, body } = options;
     const urlParams = new URLSearchParams({
@@ -67,6 +72,10 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
       fetchOptions.body = JSON.stringify(body);
     }
     const response = await fetch(url, fetchOptions);
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(`WeCom API error ${response.status}: ${text}`);
+    }
     return await response.json();
   }
 
@@ -86,13 +95,14 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
 
   private handleVerification(ctx: RouterContext): void {
     try {
-      const query = ctx.query;
-      const msgSignature = query.msg_signature as string;
-      const timestamp = query.timestamp as string;
-      const nonce = query.nonce as string;
-      const echostr = query.echostr as string;
+      const { msg_signature, timestamp, nonce, echostr } = ctx.query;
+      if (!msg_signature || !timestamp || !nonce || !echostr) {
+        ctx.status = 400;
+        ctx.body = 'Missing required query parameters';
+        return;
+      }
 
-      if (!this.verifySignature(msgSignature, timestamp, nonce, echostr)) {
+      if (!this.verifySignature(msg_signature as string, timestamp as string, nonce as string, echostr as string)) {
         this.logger.warn(formatCompact({ op: 'verify', ok: false, error: 'invalid signature' }));
         ctx.status = 403;
         ctx.body = 'Forbidden';
@@ -100,7 +110,7 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
       }
 
       // 解密 echostr 并返回明文
-      const decrypted = this.decryptMessage(echostr);
+      const decrypted = this.decryptMessage(echostr as string);
       ctx.status = 200;
       ctx.body = decrypted;
     } catch (error) {
@@ -280,18 +290,25 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
     ) {
       return;
     }
-    await this.refreshAccessToken();
+    if (this.#refreshPromise) {
+      await this.#refreshPromise;
+      return;
+    }
+    this.#refreshPromise = this.refreshAccessToken()
+      .then(() => this.accessToken.access_token)
+      .finally(() => { this.#refreshPromise = null; });
+    await this.#refreshPromise;
   }
 
   private async refreshAccessToken(): Promise<void> {
     try {
-      const url = `${this.baseURL}/cgi-bin/gettoken?corpid=${this.corpId}&corpsecret=${this.$config.agentId}`;
+      const url = `${this.baseURL}/cgi-bin/gettoken?corpid=${this.corpId}&corpsecret=${this.$config.agentSecret}`;
       const response = await fetch(url);
-      const data = await response.json() as any;
+      const data = await response.json() as WecomApiResponse;
       if (data.errcode === 0) {
         this.accessToken = {
-          access_token: data.access_token,
-          expires_in: data.expires_in,
+          access_token: data.access_token as string,
+          expires_in: data.expires_in as number,
           timestamp: Date.now(),
         };
         this.logger.debug('Access token refreshed successfully');
@@ -311,7 +328,8 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
     // 企业微信中群消息与私聊消息的判断:
     // 群消息 FromUserName 以 @chatroom 结尾
     const chatType = msg.FromUserName.endsWith('@chatroom') ? 'group' : 'private';
-    const permit = normalizeWecomSenderForPermit({});
+    // TODO: v1: look up group admin status via WeCom API
+    const permit = normalizeWecomSenderForPermit({ isAdmin: false, isOwner: false });
 
     return Message.from(msg, {
       $id: msg.MsgId || Date.now().toString(),
@@ -418,10 +436,10 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
     const targetId = options.id;
     const content = this.formatSendContent(options.content);
     try {
-      const body: Record<string, any> = {
+      const body: Record<string, unknown> = {
         touser: targetId,
         msgtype: content.msgtype,
-        agentid: this.$config.agentId,
+        agentid: this.$config.agentSecret,
         [content.msgtype]: content.data,
       };
 
@@ -440,7 +458,7 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
         throw new Error(`Failed to send message: ${data.errmsg} (${data.errcode})`);
       }
       this.logger.debug(formatCompact({ op: 'send', endpoint: this.$config.name, to: targetId }));
-      return data.msgid || Date.now().toString();
+      return data.msgid as string || Date.now().toString();
     } catch (error) {
       this.logger.error('Failed to send message:', error);
       throw error;
@@ -455,7 +473,7 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
 
   // ── 发送内容格式化 ──
 
-  private formatSendContent(content: SendContent): { msgtype: string; data: any } {
+  private formatSendContent(content: SendContent): { msgtype: string; data: Record<string, unknown> } {
     if (typeof content === 'string') {
       return { msgtype: 'text', data: { content } };
     }
@@ -463,7 +481,8 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
       const textParts: string[] = [];
       let hasMedia = false;
       let mediaType = '';
-      let mediaData: any = null;
+      let mediaData: Record<string, unknown> | null = null;
+      let droppedMediaCount = 0;
 
       for (const item of content) {
         if (typeof item === 'string') {
@@ -485,6 +504,8 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
               hasMedia = true;
               mediaType = 'image';
               mediaData = { media_id: seg.data.file || seg.data.url };
+            } else {
+              droppedMediaCount++;
             }
             break;
           case 'markdown':
@@ -492,6 +513,8 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
               hasMedia = true;
               mediaType = 'markdown';
               mediaData = { content: seg.data.content || seg.data.text };
+            } else {
+              droppedMediaCount++;
             }
             break;
           case 'link':
@@ -506,9 +529,19 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
                   picurl: seg.data.picUrl,
                 }],
               };
+            } else {
+              droppedMediaCount++;
             }
             break;
         }
+      }
+
+      if (droppedMediaCount > 0) {
+        this.logger.warn(formatCompact({
+          op: 'formatSend',
+          droppedMedia: droppedMediaCount,
+          note: 'WeCom API only supports one media segment per message',
+        }));
       }
 
       if (hasMedia && mediaData) {
@@ -534,17 +567,13 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
   }
 
   async $disconnect(): Promise<void> {
-    try {
-      this.$connected = false;
-      this.logger.info(formatCompact({ op: 'disconnect', endpoint: this.$config.name }));
-    } catch (error) {
-      this.logger.error('Error disconnecting WeCom bot:', error);
-    }
+    this.$connected = false;
+    this.logger.info(formatCompact({ op: 'disconnect', endpoint: this.$config.name }));
   }
 
   // ── 企业微信特有 API ──
 
-  async getUserInfo(userId: string): Promise<any> {
+  async getUserInfo(userId: string): Promise<WecomApiResponse | null> {
     try {
       const data = await this.request('/cgi-bin/user/get', {
         params: { userid: userId },
@@ -557,12 +586,12 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
     }
   }
 
-  async getDepartmentUsers(deptId: number): Promise<any[]> {
+  async getDepartmentUsers(deptId: number): Promise<unknown[]> {
     try {
       const data = await this.request('/cgi-bin/user/simplelist', {
         params: { department_id: deptId },
       });
-      if (data.errcode === 0) return data.userlist || [];
+      if (data.errcode === 0) return (data.userlist as unknown[]) || [];
       throw new Error(`Failed to get department users: ${data.errmsg}`);
     } catch (error) {
       this.logger.error('Failed to get department users:', error);
@@ -570,12 +599,12 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
     }
   }
 
-  async getDepartmentList(deptId: number = 1): Promise<any[]> {
+  async getDepartmentList(deptId: number = 1): Promise<unknown[]> {
     try {
       const data = await this.request('/cgi-bin/department/list', {
         params: { id: deptId },
       });
-      if (data.errcode === 0) return data.department || [];
+      if (data.errcode === 0) return (data.department as unknown[]) || [];
       throw new Error(`Failed to get department list: ${data.errmsg}`);
     } catch (error) {
       this.logger.error('Failed to get department list:', error);
@@ -590,7 +619,7 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
         body: {
           touser: userId,
           msgtype: 'text',
-          agentid: this.$config.agentId,
+          agentid: this.$config.agentSecret,
           text: { content },
         },
       });

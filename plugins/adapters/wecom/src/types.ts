@@ -6,7 +6,7 @@ export interface WecomEndpointConfig {
   context: 'wecom'
   name: string
   corpId: string
-  agentId: string
+  agentSecret: string    // 应用 Secret
   token: string           // 用于签名验证
   encodingAESKey: string  // 用于消息加解密
   webhookPath?: string    // 默认 '/wecom/callback'
@@ -42,4 +42,10 @@ export interface AccessToken {
   access_token: string
   expires_in: number
   timestamp: number
+}
+
+export interface WecomApiResponse {
+  errcode: number
+  errmsg?: string
+  [key: string]: unknown
 }

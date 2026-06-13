@@ -2,6 +2,7 @@
  * 企业微信适配器入口：类型扩展、导出、注册
  */
 import { usePlugin, type Plugin, type ToolFeature } from 'zhin.js';
+import type { Router } from '@zhin.js/host-router/router';
 import { WecomAdapter } from './adapter.js';
 import {
   registerWecomPlatformPermitChecker,
@@ -26,7 +27,7 @@ export { WecomAdapter } from './adapter.js';
 const plugin = usePlugin();
 const { provide, useContext } = plugin;
 
-useContext('router', (router: any) => {
+useContext('router', (router: Router) => {
   provide({
     name: 'wecom',
     description: 'WeCom (企业微信) Endpoint Adapter',
