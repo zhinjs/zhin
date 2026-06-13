@@ -58,11 +58,13 @@ export async function gracefulShutdown(
     process.exit(1);
   }, SHUTDOWN_TIMEOUT_MS);
 
+  let code = exitCode;
   try {
     await drainTaskExecutorLocks(TASK_DRAIN_MS);
     await plugin.stop();
     await stopHostLayer();
   } catch (err) {
+    code = code || 1;
     plugin.logger.error(
       formatCompact({
         code: 'shutdown_error',
@@ -72,7 +74,7 @@ export async function gracefulShutdown(
     );
   } finally {
     clearTimeout(forceTimer);
-    process.exit(exitCode);
+    process.exit(code);
   }
 }
 
