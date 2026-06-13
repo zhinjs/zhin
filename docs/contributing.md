@@ -148,6 +148,7 @@ interface UserConfig {
 // ❌ 避免的写法
 import { helper } from './utils'  // 缺少 .js 扩展名
 function addUser(user: any) {     // 避免使用 any 类型
+}
 ```
 
 ### 提交信息规范

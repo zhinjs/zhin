@@ -15,6 +15,7 @@
       "@zhin.js/kernel": ["./packages/im/kernel/src/index.ts"],
       "@zhin.js/ai": ["./packages/im/ai/src/index.ts"],
       "@zhin.js/core": ["./packages/im/core/src/index.ts"],
+      "@zhin.js/core/queue-im-field-contract": ["./packages/im/core/src/built/queue-im-field-contract.ts"],
       "@zhin.js/agent": ["./packages/im/agent/src/index.ts"],
       "@zhin.js/cli": ["./basic/cli/src/index.ts"]
     }

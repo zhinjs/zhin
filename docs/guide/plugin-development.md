@@ -107,7 +107,7 @@ const {
 } = usePlugin()
 ```
 
-详见 [插件系统](/essentials/plugins) 和 [API 参考](/api/)。
+详见 [插件系统](/essentials/plugins) 和 API 参考（`pnpm docs:api` 本地生成）。
 
 ## 开发示例
 

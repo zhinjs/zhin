@@ -489,7 +489,7 @@ const prompt = builder
 ## 参考资料
 
 - [Agent Harness Engineering 指南](./agent-harness-engineering.md)（含安全策略、审计日志）
-- [API 参考](../api/)
+- API 参考（`pnpm docs:api` 本地生成）
 
 ## 获取帮助
 
