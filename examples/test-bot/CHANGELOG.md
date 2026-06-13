@@ -1,5 +1,39 @@
 # test-bot
 
+## 0.1.108
+
+### Patch Changes
+
+- zhin.js@3.0.0
+- @zhin.js/host-api@2.0.0
+- @zhin.js/adapter-icqq@5.0.0
+- @zhin.js/adapter-napcat@2.0.0
+- @zhin.js/adapter-weixin-ilink@2.0.0
+- @zhin.js/mcp@3.0.0
+- @zhin.js/host-router@2.0.0
+- @zhin.js/adapter-sandbox@5.0.0
+- @zhin.js/adapter-dingtalk@3.0.0
+- @zhin.js/adapter-discord@4.0.0
+- @zhin.js/adapter-email@2.0.0
+- @zhin.js/adapter-github@2.0.0
+- @zhin.js/adapter-kook@4.0.0
+- @zhin.js/adapter-lark@3.0.0
+- @zhin.js/adapter-milky@2.0.0
+- @zhin.js/adapter-onebot11@3.0.0
+- @zhin.js/adapter-onebot12@2.0.0
+- @zhin.js/adapter-qq@4.0.0
+- @zhin.js/adapter-satori@2.0.0
+- @zhin.js/adapter-slack@3.0.0
+- @zhin.js/adapter-telegram@4.0.0
+- @zhin.js/adapter-wechat-mp@2.0.0
+- @zhin.js/plugin-60s@2.0.0
+- @zhin.js/plugin-group-suite@2.0.0
+- @zhin.js/plugin-html-renderer@2.0.0
+- @zhin.js/plugin-music@4.0.0
+- @zhin.js/plugin-repeater@2.0.0
+- @zhin.js/plugin-rss@2.0.0
+- @zhin.js/sensitive-filter@2.0.0
+
 ## 0.1.107
 
 ### Patch Changes

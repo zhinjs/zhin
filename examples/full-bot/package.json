@@ -1,7 +1,7 @@
 {
   "name": "full-bot",
   "private": true,
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Zhin.js L4 全维度参考实例（Sandbox + NapCat + KOOK + 硬编排 + 语义记忆）",
   "type": "module",
   "scripts": {
