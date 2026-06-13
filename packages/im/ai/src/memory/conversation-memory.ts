@@ -186,7 +186,7 @@ class MemoryStore implements IStore {
     this.messages.set(record.session_id, list);
     if (this.messages.size > MemoryStore.MAX_SESSIONS) {
       const oldest = [...this.messages.entries()]
-        .sort((a, b) => a[1][0]?.created_at ?? 0 - (b[1][0]?.created_at ?? 0));
+        .sort((a, b) => (a[1][0]?.created_at ?? 0) - (b[1][0]?.created_at ?? 0));
       const excess = this.messages.size - MemoryStore.MAX_SESSIONS;
       for (let i = 0; i < excess && i < oldest.length; i++) {
         this.messages.delete(oldest[i][0]);
