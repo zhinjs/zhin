@@ -1,0 +1,56 @@
+# Zhin.js 生活助手示例
+# 介于 minimal-bot（Sandbox Core）与 test-bot（厨房水槽）之间
+
+log_level: 1
+
+# --- 插件 ---
+plugins:
+  - "@zhin.js/host-router"
+  - "@zhin.js/host-api"
+  - "@zhin.js/adapter-sandbox"
+  - assistant
+
+# --- Endpoint ---
+endpoints:
+  - context: sandbox
+    name: assistant
+
+# --- HTTP 服务 ---
+http:
+  port: 8086
+  token: "${HTTP_TOKEN}"
+
+# --- AI 配置 ---
+ai:
+  providers:
+    ollama:
+      api: ollama-chat
+      host: "http://localhost:11434"
+
+  agents:
+    zhin:
+      provider: ollama
+      model: qwen3:8b
+
+  # 本地知识库
+  knowledge:
+    baseDir: knowledge
+
+  # 三层文件记忆（Stable 默认启用）
+  memory:
+    enabled: true
+
+  # 触发配置
+  trigger:
+    respondToAt: true
+    respondToPrivate: true
+    prefixes: ["ai:", "AI:"]
+
+  # Agent 安全
+  agent:
+    execSecurity: allowlist
+    execApprovalMode: ask
+    compaction:
+      enabled: true
+      auto: true
+      keepRecentTokens: 20000
