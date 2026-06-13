@@ -497,7 +497,7 @@ graph TD
 
 ## 多平台适配器
 
-仓库内 [`plugins/adapters/`](./plugins/adapters/) 共 **17** 个适配器包（成熟度因平台而异，对外默认承诺以 Sandbox 为主）：
+仓库内 [`plugins/adapters/`](./plugins/adapters/) 共 **19** 个适配器包（成熟度因平台而异，对外默认承诺以 Sandbox 为主）：
 
 | 平台 | 包名 | 平台 | 包名 |
 |------|------|------|------|
@@ -509,6 +509,7 @@ graph TD
 | Slack | `@zhin.js/adapter-slack` | 钉钉 | `@zhin.js/adapter-dingtalk` |
 | 飞书 | `@zhin.js/adapter-lark` | 微信公众号 | `@zhin.js/adapter-wechat-mp` |
 | Email | `@zhin.js/adapter-email` | GitHub | `@zhin.js/adapter-github` |
+| 企业微信（WeCom） | `@zhin.js/adapter-wecom` | LINE | `@zhin.js/adapter-line` |
 | Satori | `@zhin.js/adapter-satori` | | |
 
 
