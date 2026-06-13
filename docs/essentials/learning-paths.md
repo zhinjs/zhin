@@ -75,6 +75,37 @@ Zhin.js 文档按三条跑道组织，对应不同目标。
 
 **进阶路径**：**Stable（minimal-bot）→ L4（full-bot）→ 厨房水槽（test-bot）**。
 
+## 生活助手路径
+
+**目标**：搭建一个能聊天、记东西、定时提醒、查询知识的个人助手（不是写代码的 Agent）。
+
+**与 L1-L4 的关系**：生活助手 = L1（跑起来）+ L2（写插件）+ 部分 L3+（记忆、知识库）。不需要 L4 的硬编排和多适配器。
+
+**建议阅读顺序**：
+
+1. [快速开始](/getting-started/) — 跑通 minimal-bot
+2. [配置文件 / 记忆系统](/essentials/configuration#记忆系统) — 开启 Markdown 三层记忆 + 语义记忆
+3. [配置文件 / 本地知识库](/essentials/configuration#本地知识库-knowledge-search-工具) — 创建 `knowledge/` 目录放入 FAQ/说明书
+4. [AI 模块](/advanced/ai) — 理解 Provider、Agent、工具调用
+5. [工具与技能](/advanced/tools-skills) — 注册自定义工具（天气、日程等）
+6. 可选：[Agent 安全](/advanced/agent-harness-engineering) — 沙箱、执行策略
+
+**关键配置**：
+
+```yaml
+# zhin.config.yml — 生活助手推荐配置
+ai:
+  knowledge:
+    baseDir: knowledge           # 本地知识库
+  memory:
+    semantic:
+      enabled: true              # 语义记忆（碎片事实）
+  agent:
+    execSecurity: allowlist      # 安全模式
+```
+
+**明确**：生活助手 ≠ 写代码 Agent。它关注的是对话、记忆、提醒、知识检索，不涉及 plan mode 或终端 coding harness。
+
 ## 我现在该读哪篇？
 
 ```mermaid

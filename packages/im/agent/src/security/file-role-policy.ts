@@ -210,7 +210,7 @@ export function toolRequesterRoleToFileRole(role: 'master' | 'trusted' | 'other'
     case 'master': return 'owner';
     case 'trusted': return 'admin';
     case 'other': return 'user';
-    case 'unknown': return 'owner';
+    case 'unknown': return 'user';  // 安全默认：未知身份仅读
   }
 }
 

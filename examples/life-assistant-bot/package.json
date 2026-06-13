@@ -1,0 +1,23 @@
+{
+  "name": "life-assistant-bot",
+  "version": "0.1.0",
+  "description": "Zhin.js 生活助手示例 — 聊天、记忆、知识库、定时提醒",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "zhin dev",
+    "start": "zhin start",
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zhin.js": "workspace:*",
+    "@zhin.js/cli": "workspace:*",
+    "@zhin.js/host-api": "workspace:*",
+    "@zhin.js/host-router": "workspace:*",
+    "@zhin.js/adapter-sandbox": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  }
+}

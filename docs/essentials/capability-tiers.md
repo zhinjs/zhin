@@ -17,7 +17,7 @@ Zhin.js 是 **TypeScript AI Agent 运行时**：通过 **Endpoint** 接入 IM、
 | 多轮对话、工具、记忆、Compaction、会话树 | ✅ 核心 | 服务**对话与生活场景**；会话树是「聊天分支」，不是代码变更计划 |
 | `spawn_task` / 子 Agent | ✅ Advanced | 任务分工（查资料、总结），非 IDE 式 plan-and-execute 写代码 |
 | Assistant Runtime、Home、Profile | ✅ Advanced / opt-in | [ADR 0008](/adr/0008-introduce-assistant-runtime.md) 路线 |
-| **RAG / 知识库** | 📋 计划中 | 可能纳入 Advanced；尚无 Stable 承诺 |
+| **RAG / 知识库** | ✅ Advanced | `knowledge_search` 工具，`ai.knowledge.baseDir` 配置 |
 | **plan mode、终端 coding harness、项目级写代码** | ❌ 不在范围 | [ADR 0010](/adr/0010-pi-coding-agent-harness-alignment.md) 仅借鉴 compaction/会话树，不照搬 pi coding-agent 产品形态 |
 | MCP Server 对外暴露工具 | 可选集成 | 供 Claude Desktop / Cursor **调用** Zhin；不改变 Zhin 自身「生活助手」定位 |
 

@@ -6,7 +6,7 @@ import path from 'path';
 import yaml from 'yaml';
 import type { InitOptions, DatabaseConfig, AdapterSetupResult, AISetupConfig } from '@zhin.js/scaffold-wizard';
 
-const CONFIG_CANDIDATES = ['zhin.config.yml', 'zhin.config.yaml', 'zhin.config.json'];
+const CONFIG_CANDIDATES = ['zhin.config.yml', 'zhin.config.yaml', 'zhin.config.json', 'zhin.config.toml'];
 
 export interface ExistingProjectState {
   /** 从现有配置推断的 InitOptions 默认值 */
