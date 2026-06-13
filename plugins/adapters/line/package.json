@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-line",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Zhin.js adapter for LINE Messaging API",
   "type": "module",
   "main": "./lib/index.js",
