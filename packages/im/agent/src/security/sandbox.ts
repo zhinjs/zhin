@@ -564,6 +564,7 @@ export class Sandbox {
           }
         }
       }, 500);
+      resourceTimer.unref?.();
 
       // 超时处理 — 杀整个进程组
       const timer = setTimeout(() => {

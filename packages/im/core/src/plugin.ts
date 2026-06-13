@@ -574,14 +574,21 @@ export class Plugin extends PluginBase implements PluginLike {
   ): void {
     if (!this.filePath || this.filePath.includes("node_modules")) return;
 
-    const unwatch = watchFile(this.filePath, () => {
-      const newHash = getFileHash(this.filePath);
-      if (newHash === this.fileHash) return;
+    const unwatch = watchFile(this.filePath, (() => {
+      let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+      return () => {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          debounceTimer = null;
+          const newHash = getFileHash(this.filePath);
+          if (newHash === this.fileHash) return;
 
-      this.logger.debug(`Plugin "${this.name}" file changed, reloading...`);
-      callback(this);
-      this.fileHash = newHash;
-    });
+          this.logger.debug(`Plugin "${this.name}" file changed, reloading...`);
+          callback(this);
+          this.fileHash = newHash;
+        }, 300);
+      };
+    })());
 
     this.on("dispose", unwatch);
 

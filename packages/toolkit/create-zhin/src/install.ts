@@ -43,5 +43,6 @@ export async function installDependencies(projectPath: string): Promise<void> {
     console.log(chalk.gray('你可以稍后手动安装:'));
     console.log(chalk.cyan(`  cd ${path.basename(projectPath)}`));
     console.log(chalk.cyan('  pnpm install'));
+    throw new Error(`pnpm install failed: ${errorMessage}`);
   }
 }
