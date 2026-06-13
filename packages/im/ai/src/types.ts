@@ -477,6 +477,14 @@ export interface AIConfig {
     };
   };
   /**
+   * 本地知识库（knowledge_search 工具数据源）。
+   * 放置 .md / .txt 文件到 baseDir，Agent 可通过 knowledge_search 工具检索。
+   */
+  knowledge?: {
+    /** 知识库目录路径（相对于项目根目录，默认 "knowledge"） */
+    baseDir?: string;
+  };
+  /**
    * @deprecated 请使用 ai.memory 文件三层；仍为 true 时注册 MCP 图谱并打弃用警告。
    */
   memoryMcp?: boolean;

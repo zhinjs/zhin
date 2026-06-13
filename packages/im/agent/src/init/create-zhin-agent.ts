@@ -102,6 +102,9 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
       ?? {};
     const agentConfig = ai.getAgentConfig();
     const semanticMemory = appConfig.ai?.memory?.semantic?.enabled === true;
+    const knowledgeDir = appConfig.ai?.knowledge?.baseDir
+      ? path.resolve(appConfig.ai.knowledge.baseDir)
+      : path.join(process.cwd(), 'knowledge');
     let orchestratorTools = (agentConfig as ZhinAgentConfig | undefined)?.orchestratorTools
       ?? appConfig.ai?.agent?.orchestratorTools
       ?? [...DEFAULT_HARD_ORCHESTRATOR_TOOLS];
@@ -111,6 +114,10 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
           orchestratorTools = [...orchestratorTools, name];
         }
       }
+    }
+    // knowledge_search 始终注册（工具内部处理目录不存在的情况）
+    if (orchestratorTools && !orchestratorTools.includes('knowledge_search')) {
+      orchestratorTools = [...orchestratorTools, 'knowledge_search'];
     }
     const zhinAgentCfg: ZhinAgentConfig = {
       ...(agentConfig as ZhinAgentConfig | undefined),
@@ -198,6 +205,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
         ...createBuiltinTools({
           plugin,
           semanticMemory,
+          knowledgeDir,
           skillInstructionMaxChars: resolveSkillInstructionMaxChars(fullConfig, modelName),
           pluginSkillRootsResolver: () => collectPluginSkillSearchRoots(root),
         }),

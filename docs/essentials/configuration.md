@@ -335,6 +335,18 @@ ai:
 使用 `mcpServers` 或已弃用的 `memoryMcp: true` 前请安装：`pnpm add @modelcontextprotocol/sdk`
 :::
 
+### 本地知识库（knowledge_search 工具）
+
+在项目根目录创建 `knowledge/` 目录，放入 `.md` / `.txt` 文件，Agent 即可通过 `knowledge_search` 工具检索本地文档（说明书、规章、菜谱、FAQ 等）。
+
+```yaml
+ai:
+  knowledge:
+    baseDir: knowledge    # 相对于项目根目录，默认 "knowledge"
+```
+
+框架启动时自动分块索引（段落级），支持关键词匹配搜索。索引带 60 秒缓存，新增文件下次查询时自动发现。
+
 **说明**：
 - AI 模块需要 `ai.providers` 至少一个实例，且 **`ai.agents.zhin`** 为必填绑定
 - 旧版 `defaultProvider`、`ai.agent.chatModel` / `visionModel`、`allowedTools` / `disabledTools` 已移除，请迁移到 `ai.agents.<name>`
