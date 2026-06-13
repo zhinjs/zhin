@@ -69,7 +69,13 @@ function chunkText(text: string, maxChunkSize = 1000): string[] {
       const lines = para.split('\n');
       let current = '';
       for (const line of lines) {
-        if (current && (current.length + line.length + 1) > maxChunkSize) {
+        // 超长行（无换行的单行段落）按字符强制拆分
+        if (line.length > maxChunkSize) {
+          if (current) { chunks.push(current); current = ''; }
+          for (let i = 0; i < line.length; i += maxChunkSize) {
+            chunks.push(line.slice(i, i + maxChunkSize));
+          }
+        } else if (current && (current.length + line.length + 1) > maxChunkSize) {
           chunks.push(current);
           current = line;
         } else {
@@ -122,7 +128,7 @@ class KnowledgeSearchTool extends BuiltinBaseTool {
    */
   private async loadChunks(): Promise<KnowledgeChunk[]> {
     const now = Date.now();
-    if (this.cachedChunks.length > 0 && (now - this.cacheTime) < this.cacheTtl) {
+    if (this.cacheTime > 0 && (now - this.cacheTime) < this.cacheTtl) {
       return this.cachedChunks;
     }
 
