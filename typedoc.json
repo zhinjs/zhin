@@ -1,0 +1,27 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "packages/im/ai/src/index.ts",
+    "packages/im/core/src/index.ts",
+    "packages/im/agent/src/index.ts"
+  ],
+  "out": "docs/api",
+  "name": "Zhin.js API Reference",
+  "readme": "none",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "exclude": [
+    "**/node_modules/**",
+    "**/lib/**",
+    "**/tests/**",
+    "**/*.test.ts"
+  ],
+  "tsconfig": "tsconfig.typedoc.json",
+  "githubPages": false,
+  "hideGenerator": true,
+  "searchInComments": true,
+  "navigationLinks": {
+    "Zhin.js": "https://zhin.pages.dev",
+    "GitHub": "https://github.com/zhinjs/zhin"
+  }
+}

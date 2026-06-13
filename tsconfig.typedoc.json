@@ -1,0 +1,38 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "outDir": "./docs/api-void",
+    "rootDir": ".",
+    "declaration": true,
+    "declarationMap": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "paths": {
+      "@zhin.js/logger": ["./basic/logger/src/index.ts"],
+      "@zhin.js/schema": ["./basic/schema/src/index.ts"],
+      "@zhin.js/database": ["./basic/database/src/index.ts"],
+      "@zhin.js/kernel": ["./packages/im/kernel/src/index.ts"],
+      "@zhin.js/ai": ["./packages/im/ai/src/index.ts"],
+      "@zhin.js/core": ["./packages/im/core/src/index.ts"],
+      "@zhin.js/agent": ["./packages/im/agent/src/index.ts"],
+      "@zhin.js/cli": ["./basic/cli/src/index.ts"]
+    }
+  },
+  "include": [
+    "packages/im/ai/src/**/*.ts",
+    "packages/im/core/src/**/*.ts",
+    "packages/im/agent/src/**/*.ts",
+    "packages/im/kernel/src/**/*.ts",
+    "basic/logger/src/**/*.ts",
+    "basic/schema/src/**/*.ts",
+    "basic/database/src/**/*.ts"
+  ],
+  "exclude": [
+    "**/node_modules/**",
+    "**/lib/**",
+    "**/tests/**",
+    "**/*.test.ts",
+    "**/dist/**"
+  ]
+}
