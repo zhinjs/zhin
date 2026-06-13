@@ -58,6 +58,28 @@ async function main() {
       ]);
       name = inputName;
     }
+
+    // 模板选择
+    if (!options.template && !options.yes) {
+      console.log('');
+      console.log(chalk.blue('📋 选择项目模板'));
+      const { template } = await inquirer.prompt([
+        {
+          type: 'select',
+          name: 'template',
+          message: '选择模板:',
+          choices: [
+            { name: '默认 — 最小配置，适合首跑和学习', value: 'default' },
+            { name: '生活助手 — AI 对话 + 知识库 + 记忆 + 定时提醒', value: 'life-assistant' },
+          ],
+          default: 'default',
+        },
+      ]);
+      options.template = template;
+    }
+    if (!options.template) {
+      options.template = 'default';
+    }
     
     if (!options.runtime) {
       const { runtime } = await inquirer.prompt([

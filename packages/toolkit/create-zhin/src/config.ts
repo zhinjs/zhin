@@ -167,10 +167,17 @@ export { CONSOLE_HOST_PLUGINS } from '@zhin.js/scaffold-wizard';
 
 function buildPluginsList(options: InitOptions): string[] {
   if (options.yes) {
-    return [...CONSOLE_HOST_PLUGINS, '@zhin.js/adapter-sandbox'];
+    const base = [...CONSOLE_HOST_PLUGINS, '@zhin.js/adapter-sandbox'];
+    if (options.template === 'life-assistant') base.push('assistant');
+    return base;
   }
 
   const plugins: string[] = ['example', ...CONSOLE_HOST_PLUGINS];
+
+  // 生活助手模板添加 assistant 插件
+  if (options.template === 'life-assistant') {
+    plugins.push('assistant');
+  }
 
   if (options.adapters?.plugins) {
     for (const plugin of options.adapters.plugins) {
@@ -210,6 +217,12 @@ export async function createConfigFile(appPath: string, format: string, options:
   if (enableInbox) yamlExtraConfig += '\ninbox:\n  enabled: true\n';
   if (endpointsYaml) yamlExtraConfig += endpointsYaml;
   if (aiYaml) yamlExtraConfig += aiYaml;
+
+  // 生活助手模板：添加知识库和 compaction 配置
+  if (options.template === 'life-assistant') {
+    yamlExtraConfig += '\n  knowledge:\n    baseDir: knowledge\n';
+    yamlExtraConfig += '  agent:\n    execSecurity: allowlist\n    execApprovalMode: ask\n    compaction:\n      enabled: true\n      auto: true\n      keepRecentTokens: 20000\n';
+  }
 
   const jsonSections: string[] = [];
   if (databaseConfig) jsonSections.push(databaseConfig.trim().replace(/,$/, ''));

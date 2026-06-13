@@ -814,6 +814,78 @@ export function register(api: PluginRegisterHostApi) {
     ]
   }, { spaces: 2 });
 
+  // 生活助手模板额外文件
+  if (options.template === 'life-assistant') {
+    // knowledge 目录
+    await fs.ensureDir(path.join(projectPath, 'knowledge'));
+    await fs.writeFile(path.join(projectPath, 'knowledge', 'faq.md'),
+`# 常见问题
+
+## 如何添加新知识？
+
+在 \`knowledge/\` 目录下创建 \`.md\` 文件即可。下次查询时自动发现。
+
+## 如何更换 AI 模型？
+
+修改 \`zhin.config.yml\` 中 \`ai.agents.zhin.model\` 字段。
+`);
+
+    // 三层记忆目录骨架
+    await fs.ensureDir(path.join(projectPath, 'data', 'memory', 'global'));
+    await fs.ensureDir(path.join(projectPath, 'data', 'memory', 'platforms'));
+    await fs.ensureDir(path.join(projectPath, 'data', 'memory', 'sessions'));
+
+    // 覆盖 SOUL.md 为生活助手人设
+    await fs.writeFile(path.join(projectPath, 'SOUL.md'),
+`# 你是谁
+
+你是一个生活助手。你善于聊天、记住用户喜好、查询知识库、设置提醒。
+
+## 性格
+
+- 友好、耐心、有条理
+- 回答简洁，不啰嗦
+- 遇到不确定的事情会诚实说"我不确定"
+
+## 能力
+
+1. **日常聊天** — 回答问题、闲聊、推荐
+2. **知识检索** — 使用 \`knowledge_search\` 查询本地知识库
+3. **记忆** — 记住用户告诉你的偏好和事实
+4. **时间感知** — 使用 \`get_current_time\` 了解当前时间
+
+## 限制
+
+- 你不是代码助手，不写代码
+- 你不执行危险的 bash 命令
+`);
+
+    // 生活助手插件
+    await fs.writeFile(path.join(projectPath, 'src', 'plugins', 'assistant.ts'),
+`import { usePlugin, MessageCommand, Cron } from 'zhin.js';
+
+const { addCommand, addCron, addTool, onMounted, logger } = usePlugin();
+
+addCommand(
+  new MessageCommand('remind <text:string>')
+    .desc('设置提醒')
+    .action((_, result) => \`✅ 已记录提醒：\${result.params.text}\`),
+);
+
+addTool({
+  name: 'get_current_time',
+  description: '获取当前日期和时间',
+  parameters: { type: 'object', properties: {} },
+  execute: async () => new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
+});
+
+addCron(new Cron('0 8 * * *', async () => { logger.info('早安提醒'); }));
+addCron(new Cron('0 22 * * *', async () => { logger.info('晚安提醒'); }));
+
+onMounted(() => { logger.info('生活助手插件已启动'); });
+`);
+  }
+
   // 创建配置文件
   await createConfigFile(projectPath, options.config!, options);
 }
