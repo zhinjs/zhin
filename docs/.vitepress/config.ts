@@ -42,6 +42,9 @@ const adapterSidebar = [
       { text: '钉钉', link: '/adapters/dingtalk' },
       { text: '飞书', link: '/adapters/lark' },
       { text: '微信公众号', link: '/adapters/wechat-mp' },
+      { text: '微信 iLink', link: '/adapters/weixin-ilink' },
+      { text: '企业微信', link: '/adapters/wecom' },
+      { text: 'LINE', link: '/adapters/line' },
     ],
   },
   {
