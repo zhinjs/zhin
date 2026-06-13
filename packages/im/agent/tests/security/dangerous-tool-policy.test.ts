@@ -18,7 +18,7 @@ describe('checkDangerousToolAccess', () => {
   it('无 IM 身份时放行（直连 Agent / 无 context）', () => {
     const d = checkDangerousToolAccess('web_fetch');
     expect(d.allowed).toBe(true);
-    expect(d.role).toBe('unknown');
+    expect(d.role).toBe('master');  // 无身份 = 直接调用 = 全权
   });
 
   it('有身份但无法解析插件时 fail-closed', () => {

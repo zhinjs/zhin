@@ -147,7 +147,8 @@ export function checkFileToolAccess(toolName: FileToolName, commMessage?: Messag
   }
 
   if (!hasIdentity) {
-    return { allowed: true, role: 'unknown' };
+    // 无 IM 上下文（直接工具调用、subagent）→ 全权
+    return { allowed: true, role: 'master' };
   }
 
   if (role === 'unknown') {
@@ -215,7 +216,8 @@ export function checkDangerousToolAccess(toolName: 'write_file' | 'edit_file' | 
   const { role, plugin, hasIdentity } = resolveRoleFromMessage(commMessage);
 
   if (!hasIdentity) {
-    return { allowed: true, role: 'unknown' };
+    // 无 IM 上下文 → 全权
+    return { allowed: true, role: 'master' };
   }
 
   try {
