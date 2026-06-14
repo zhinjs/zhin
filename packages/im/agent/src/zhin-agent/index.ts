@@ -86,6 +86,7 @@ import { normalizePromptMessages } from './prompt-input.js';
 import { resolveToolRequesterRole } from '../security/owner-approve-always-store.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import { bindingToModelConfig } from '../routing/runtime-binding.js';
+import type { Disposable } from '../types/disposable.js';
 import { buildDisciplinedPrompt as assembleDisciplinedPrompt } from './prompt-assembly.js';
 import {
   resolveAgentToolsForTurn as resolveToolsForTurn,
@@ -699,24 +700,23 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     if (this.promptController) {
       this.promptController.abort();
     }
-    if (this.imSessionStore && typeof (this.imSessionStore as any).dispose === 'function') {
-      (this.imSessionStore as any).dispose();
-    }
-    if (this.agentSessionStore && typeof (this.agentSessionStore as any).dispose === 'function') {
-      (this.agentSessionStore as any).dispose();
-    }
-    if (this.contextRepository && typeof (this.contextRepository as any).dispose === 'function') {
-      (this.contextRepository as any).dispose();
-    }
-    if (this.imTranscriptStore && typeof (this.imTranscriptStore as any).dispose === 'function') {
-      (this.imTranscriptStore as any).dispose();
-    }
+    // 使用 Disposable 接口统一清理资源（运行时 has-dispose 检查）
+    const tryDispose = (obj: unknown) => {
+      if (obj && typeof (obj as Disposable).dispose === 'function') {
+        (obj as Disposable).dispose?.();
+      }
+    };
+    tryDispose(this.imSessionStore);
+    tryDispose(this.agentSessionStore);
+    tryDispose(this.contextRepository);
+    tryDispose(this.imTranscriptStore);
     this.deferredAutoContinueDepthBySession.clear();
     this.deferredCatalog = [];
     this.lastTurnMetrics = null;
-    this.provider = null as any;
-    this.providerResolver = null as any;
-    this.skillRegistry = null as any;
-    this.orchestrator = null as any;
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- disposed, fields intentionally nulled
+    this.provider = null!;
+    this.providerResolver = null;
+    this.skillRegistry = null;
+    this.orchestrator = null;
   }
 }

@@ -50,10 +50,10 @@ export async function createWorkspace(projectPath: string, projectName: string, 
   if (options.database) {
     const dbPackage = DATABASE_PACKAGES[options.database.dialect];
     if (dbPackage) {
-      databaseDeps[dbPackage] = 'latest';
+      databaseDeps[dbPackage] = '^2.0.0';
     }
     // 总是添加数据库包
-    databaseDeps['@zhin.js/database'] = 'latest';
+    databaseDeps['@zhin.js/database'] = '^1.0.0';
   }
 
   // 根据适配器选择添加依赖
@@ -64,7 +64,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
   }
   // 确保 sandbox 始终包含
   if (!adapterDeps['@zhin.js/adapter-sandbox']) {
-    adapterDeps['@zhin.js/adapter-sandbox'] = 'latest';
+    adapterDeps['@zhin.js/adapter-sandbox'] = '^1.0.0';
   }
 
   // AI 启用时预装 MCP SDK
@@ -92,27 +92,27 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       'pm2:monit': 'pm2 monit'
     },
     dependencies: {
-      'zhin.js': 'latest',
-      '@zhin.js/cli': 'latest',
-      '@zhin.js/host-router': 'latest',
-      '@zhin.js/client': 'latest',
-      '@zhin.js/host-api': 'latest',
-      '@zhin.js/contract': 'latest',
-      'tsx': 'latest',
+      'zhin.js': '^2.0.0',
+      '@zhin.js/cli': '^1.0.0',
+      '@zhin.js/host-router': '^1.0.0',
+      '@zhin.js/client': '^2.0.0',
+      '@zhin.js/host-api': '^1.0.0',
+      '@zhin.js/contract': '^1.0.0',
+      'tsx': '^4.22.0',
       ...adapterDeps,
       ...databaseDeps,
       ...aiDeps
     },
     devDependencies: {
-      '@types/node': 'latest',
-      '@types/react': 'latest',
-      '@types/react-dom': 'latest',
-      'typescript': 'latest',
-      'rimraf': 'latest',
-      'pm2': 'latest',
-      'vite': 'latest',
-      '@vitejs/plugin-react': 'latest',
-      '@tailwindcss/vite': 'latest'
+      '@types/node': '^25.0.0',
+      '@types/react': '^19.0.0',
+      '@types/react-dom': '^19.0.0',
+      'typescript': '^6.0.0',
+      'rimraf': '^6.0.0',
+      'pm2': '^6.0.0',
+      'vite': '^6.0.0',
+      '@vitejs/plugin-react': '^4.0.0',
+      '@tailwindcss/vite': '^4.0.0'
     },
     pnpm: {
       onlyBuiltDependencies: ['esbuild']
