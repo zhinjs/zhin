@@ -25,32 +25,8 @@ export function stripFetchedHtmlToText(html: string): string {
 }
 
 /** SSRF 防护：检查主机名是否属于内网/私有/危险地址 */
-export function isBlockedSsrfHostname(hostname: string): boolean {
-  const h = hostname.toLowerCase();
-  return (
-    // Localhost
-    h === 'localhost' ||
-    h === '127.0.0.1' ||
-    h === '::1' ||
-    h === '0.0.0.0' ||
-    h.endsWith('.local') ||
-    // IPv4 private ranges
-    h.startsWith('10.') ||
-    h.startsWith('192.168.') ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(h) ||
-    // Cloud metadata endpoints (AWS/GCP/Azure)
-    h === '169.254.169.254' ||
-    h === 'metadata.google.internal' ||
-    h === 'metadata.google.com' ||
-    // IPv6 private/link-local ranges
-    /^fd[0-9a-f]{2}:/i.test(h) ||
-    /^fe80:/i.test(h) ||
-    // System-level domain blocklist
-    h.endsWith('.onion') ||
-    h.endsWith('.internal') ||
-    h.endsWith('.localhost')
-  );
-}
+export { isBlockedSsrfHostname } from '../security/network-policy.js';
+import { isBlockedSsrfHostname } from '../security/network-policy.js';
 
 export class WebFetchBuiltinTool extends BuiltinBaseTool {
   readonly name = 'web_fetch';
