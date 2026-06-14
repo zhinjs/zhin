@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Activity, Endpoint, LogIn, Users, RefreshCw, Wifi, WifiOff, Loader2 } from "lucide-react";
+import { Activity, Bot, Endpoint, LogIn, Users, RefreshCw, Wifi, WifiOff, Loader2 } from "lucide-react";
 import LoginAssistPanel from "./LoginAssistPanel";
 import { apiFetch } from "./utils/api";
 
