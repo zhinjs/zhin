@@ -1,6 +1,6 @@
 {
   "name": "life-assistant-bot",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Zhin.js 生活助手示例 — 聊天、记忆、知识库、定时提醒",
   "private": true,
   "type": "module",

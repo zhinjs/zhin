@@ -1,5 +1,13 @@
 # @zhin.js/mcp
 
+## 3.0.0
+
+### Patch Changes
+
+- Updated dependencies [db38da4]
+  - @zhin.js/core@1.3.0
+  - zhin.js@3.0.0
+
 ## 2.0.1
 
 ### Patch Changes
