@@ -1,5 +1,22 @@
 # @zhin.js/core
 
+## 1.3.0
+
+### Minor Changes
+
+- db38da4: refactor: remove legacy Agent class (1199 lines), migrate ChatMessage → AgentMessage, extract plugin-context.ts
+
+  - Delete legacy `Agent` class and its tests from `@zhin.js/ai`
+  - Extract `userMessageToFilterText()` as standalone utility
+  - Migrate `ChatMessage` → `AgentMessage` in prompt, session-io, task-continuation modules
+  - Remove Agent-related re-exports from ai/agent/core/zhin packages
+  - Extract AsyncLocalStorage + getPlugin into `plugin-context.ts` in core
+
+### Patch Changes
+
+- Updated dependencies [db38da4]
+  - @zhin.js/ai@1.3.0
+
 ## 1.2.1
 
 ### Patch Changes
