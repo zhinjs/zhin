@@ -13,7 +13,7 @@ export interface McpToolDefinition {
   description?: string;
   inputSchema?: {
     type: string;
-    properties?: Record<string, any>;
+    properties?: Record<string, unknown>;
     required?: string[];
     [key: string]: unknown;
   };
@@ -22,11 +22,11 @@ export interface McpToolDefinition {
 export function mcpToolToAgentTool(
   mcpTool: McpToolDefinition,
   serverName: string,
-  callTool: (name: string, args: Record<string, any>) => Promise<any>,
+  callTool: (name: string, args: Record<string, unknown>) => Promise<unknown>,
 ): AgentTool {
   const parameters: JsonSchema = {
     type: 'object',
-    properties: mcpTool.inputSchema?.properties ?? {},
+    properties: mcpTool.inputSchema?.properties as Record<string, JsonSchema> ?? {},
     required: mcpTool.inputSchema?.required,
   };
 
@@ -41,7 +41,7 @@ export function mcpToolToAgentTool(
   };
 }
 
-export function mcpResourceToInfo(resource: any): McpResource {
+export function mcpResourceToInfo(resource: McpResource): McpResource {
   return {
     uri: resource.uri,
     name: resource.name ?? resource.uri,
@@ -50,7 +50,7 @@ export function mcpResourceToInfo(resource: any): McpResource {
   };
 }
 
-export function mcpPromptToInfo(prompt: any): McpPrompt {
+export function mcpPromptToInfo(prompt: McpPrompt): McpPrompt {
   return {
     name: prompt.name,
     description: prompt.description,
