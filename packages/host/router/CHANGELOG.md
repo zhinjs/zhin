@@ -1,5 +1,12 @@
 # @zhin.js/host-router
 
+## 2.0.0
+
+### Patch Changes
+
+- Updated dependencies [db38da4]
+  - @zhin.js/core@1.3.0
+
 ## 1.0.1
 
 ### Patch Changes

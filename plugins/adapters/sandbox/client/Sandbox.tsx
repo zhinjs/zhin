@@ -3,7 +3,7 @@ import { MessageSegment, cn, resolveMediaSrc, pickMediaRawUrl } from '@zhin.js/c
 import {
     buildSandboxWebSocketUrl,
 } from './sandboxTransport';
-import { User, Users, Trash2, Send, Hash, MessageSquare, Wifi, WifiOff, Smile, Image, X, Check, Info, Search, Endpoint, UserPlus, Bell, Video, Music } from 'lucide-react';
+import { User, Bot, Users, Trash2, Send, Hash, MessageSquare, Wifi, WifiOff, Smile, Image, X, Check, Info, Search, Endpoint, UserPlus, Bell, Video, Music } from 'lucide-react';
 import RichTextEditor, { RichTextEditorRef } from './RichTextEditor';
 
 interface Message {
