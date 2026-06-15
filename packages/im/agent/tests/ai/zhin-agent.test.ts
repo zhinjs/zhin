@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ZhinAgent } from '@zhin.js/agent';
 import { Plugin, SkillFeature } from '@zhin.js/core';
 import { resetLlmApiRegistryForTests } from '@zhin.js/ai';
+import { wireMockProviderToLlmApi } from '../helpers/mock-llm-api.js';
 import type { AIProvider, AgentTool, ContentPart } from '@zhin.js/core';
 import type { Tool, Message } from '@zhin.js/core';
 
@@ -118,6 +119,7 @@ describe('ZhinAgent', () => {
   beforeEach(() => {
     resetLlmApiRegistryForTests();
     provider = createMockProvider();
+    wireMockProviderToLlmApi(provider);
     agent = new ZhinAgent(provider, {
       persona: '测试助手',
       maxIterations: 3,
@@ -226,6 +228,7 @@ describe('ZhinAgent', () => {
 
     it('应将 AI 生命周期桥接到 plugin 事件总线', async () => {
       const toolProvider = createToolCallProvider();
+      wireMockProviderToLlmApi(toolProvider);
       const busAgent = new ZhinAgent(toolProvider, {
         persona: '测试助手',
         maxIterations: 3,
@@ -400,6 +403,7 @@ describe('ZhinAgent', () => {
     beforeEach(() => {
       resetLlmApiRegistryForTests();
       streamProvider = createStreamMockProvider();
+      wireMockProviderToLlmApi(streamProvider);
       streamAgent = new ZhinAgent(streamProvider, {
         persona: '测试助手',
         maxIterations: 3,

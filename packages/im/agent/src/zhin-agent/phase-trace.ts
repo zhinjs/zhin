@@ -1,4 +1,4 @@
-import type { Usage } from '@zhin.js/ai';
+import type { Usage, TokenUsage } from '@zhin.js/ai';
 import { formatCompact, Logger } from '@zhin.js/logger';
 
 const logger = new Logger(null, 'ZhinAgent');
@@ -31,4 +31,41 @@ export function usageLogFields(usage?: Usage): Record<string, number> {
     completionTokens: usage.completion_tokens,
     totalTokens: usage.total_tokens,
   };
+}
+
+export function tokenUsageLogFields(usage?: TokenUsage): Record<string, number> {
+  if (!usage) return {};
+  const fields: Record<string, number> = {
+    promptTokens: usage.input,
+    completionTokens: usage.output,
+    totalTokens: usage.totalTokens,
+  };
+  if (usage.cacheRead > 0) fields.cacheReadTokens = usage.cacheRead;
+  if (usage.cacheWrite > 0) fields.cacheWriteTokens = usage.cacheWrite;
+  return fields;
+}
+
+export interface AgentLoopIterationTraceInput {
+  iteration: number;
+  model?: string;
+  label?: string;
+  usage?: TokenUsage;
+  stopReason?: string;
+  toolNames?: string;
+}
+
+/** 每次 LLM 迭代结束（含多轮 tool turn 的中间轮） */
+export function logAgentLoopIterationEnd(
+  config: PhaseTraceConfig,
+  sessionId: string,
+  input: AgentLoopIterationTraceInput,
+): void {
+  logPhase(config, 'agent_loop.iteration.end', sessionId, {
+    iteration: input.iteration,
+    model: input.model,
+    label: input.label,
+    stopReason: input.stopReason,
+    toolNames: input.toolNames || undefined,
+    ...tokenUsageLogFields(input.usage),
+  });
 }

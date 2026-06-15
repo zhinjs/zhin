@@ -11,7 +11,7 @@ export const GENERATE_IMAGE_PARAMETERS: ToolParametersSchema = {
     provider_alias: {
       type: 'string',
       description:
-        'ai.providers 中的实例名；driver 须支持 generateImage：zhipu、cloudflare、openai、google/gemini',
+        'ai.providers 中的实例名；sdk 须支持 generateImage：openai、google、openai-compatible（智谱等）、Cloudflare（accountId）',
     },
     prompt: {
       type: 'string',
@@ -63,7 +63,7 @@ function resolveWatermarkEnabled(
 export class GenerateImageBuiltinTool extends BuiltinBaseTool {
   readonly name = 'generate_image';
   readonly description =
-    'Text-to-image (文生图/画图). Drivers: zhipu (cogview-3-flash free), cloudflare (flux), openai (gpt-image-2), google/gemini (gemini-2.5-flash-image / Nano Banana). Unless user wants anime, use 写实摄影/photorealistic in prompt.';
+    'Text-to-image (文生图/画图). SDKs: openai-compatible + 智谱 (cogview-3-flash), Cloudflare (flux, accountId), openai (gpt-image-2), google (gemini-2.5-flash-image). Unless user wants anime, use 写实摄影/photorealistic in prompt.';
   readonly parameters = GENERATE_IMAGE_PARAMETERS;
   readonly kind = 'media';
 
@@ -98,7 +98,7 @@ export class GenerateImageBuiltinTool extends BuiltinBaseTool {
     }
 
     if (!hasGenerateImage(provider)) {
-      return `Error: provider "${alias}" does not support image generation (driver: zhipu, cloudflare, openai, google, gemini)`;
+      return `Error: provider "${alias}" does not support image generation (sdk: openai, google, openai-compatible, or Cloudflare with accountId)`;
     }
 
     const defaults = this.resolveDefaults(alias.trim());

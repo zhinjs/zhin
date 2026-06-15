@@ -5,11 +5,12 @@ import { exec, type ExecOptions } from 'node:child_process';
 import { promisify } from 'node:util';
 import { getPlugin, type Tool, type Message, type ToolParametersSchema, type ToolResult } from '@zhin.js/core';
 import { resolveToolRequesterRole } from '../security/owner-approve-always-store.js';
-import { checkBashFilePermission, formatFilePermissionMessage, toolRequesterRoleToFileRole } from '../security/file-role-policy.js';
+import { checkBashFilePermission, resolveFilePermissionGate, toolRequesterRoleToFileRole } from '../security/file-role-policy.js';
 import {
   checkBashCommandSafety,
   classifyBashCommand,
 } from '../security/file-policy.js';
+import { checkBashSensitiveReadAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
 import { getSandbox } from '../security/sandbox.js';
 import { errMsg } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
@@ -60,18 +61,19 @@ export class BashBuiltinTool extends BuiltinBaseTool {
       const safety = checkBashCommandSafety(cmd);
       if (!safety.safe) return `Error: ${safety.reason}`;
 
+      const sensitiveRead = checkBashSensitiveReadAccess(cmd, commMessage);
+      if (!sensitiveRead.allowed) {
+        if (sensitiveRead.needsOwnerApproval) return toOwnerSignal(sensitiveRead);
+        return toDenyError(sensitiveRead);
+      }
+
       const requesterRole = commMessage
         ? resolveToolRequesterRole(getPlugin(), commMessage)
         : 'unknown';
       const role = toolRequesterRoleToFileRole(requesterRole);
       const filePermResult = checkBashFilePermission(role, cmd);
-      if (!filePermResult.allowed) {
-        return formatFilePermissionMessage(filePermResult, 'bash', `Shell 命令: ${cmd.slice(0, 200)}`);
-      }
-      if (filePermResult.needsOwnerConfirmation || filePermResult.needsConfirmation) {
-        const msg = formatFilePermissionMessage(filePermResult, 'bash', `Shell 命令: ${cmd.slice(0, 200)}`);
-        if (msg) return msg;
-      }
+      const filePermGate = resolveFilePermissionGate(filePermResult, 'bash');
+      if (filePermGate) return filePermGate;
 
       const timeout = (args.timeout as number | undefined) ?? 30000;
       const classification = classifyBashCommand(cmd);

@@ -59,9 +59,12 @@ describe('createWorkspace', () => {
     const readme = await fs.readFile(path.join(projectPath, 'README.md'), 'utf8')
     const clientTsconfig = await fs.readJson(path.join(projectPath, 'client', 'tsconfig.json'))
     const examplePlugin = await fs.readFile(path.join(projectPath, 'src', 'plugins', 'example.ts'), 'utf8')
+    const statusCard = await fs.readFile(path.join(projectPath, 'src', 'plugins', 'status-card.tsx'), 'utf8')
+    const rootTsconfig = await fs.readJson(path.join(projectPath, 'tsconfig.json'))
 
     expect(pkg.dependencies).toHaveProperty('@zhin.js/host-api')
     expect(pkg.dependencies).toHaveProperty('@zhin.js/host-router')
+    expect(pkg.dependencies).toHaveProperty('@zhin.js/satori')
     expect(pkg.engines.node).toBe('^20.19.0 || >=22.12.0')
     expect(config).toContain('corsOrigins:')
     expect(config).toContain('https://console.zhin.dev')
@@ -71,7 +74,11 @@ describe('createWorkspace', () => {
     expect(readme).toContain('zhin.config.yml')
     expect(readme).toContain('Remote Console')
     expect(clientTsconfig.compilerOptions).not.toHaveProperty('jsxImportSource')
+    expect(rootTsconfig.compilerOptions.jsxImportSource).toBe('zhin.js')
     expect(examplePlugin).toContain('type MessageElement')
+    expect(examplePlugin).toContain('segment.html')
+    expect(statusCard).toContain('@jsxImportSource @zhin.js/satori')
+    expect(statusCard).toContain('buildStatusCard')
   })
 
   it('uses the real generated config filename for JSON projects', async () => {

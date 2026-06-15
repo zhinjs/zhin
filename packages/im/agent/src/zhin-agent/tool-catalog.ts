@@ -20,13 +20,20 @@ function domainForToolName(name: string): string {
 
 export function summarizeDeferredDomains(deferred: AgentTool[]): string {
   const counts = new Map<string, number>();
+  const otherNames: string[] = [];
   for (const tool of deferred) {
     const domain = domainForToolName(tool.name);
     counts.set(domain, (counts.get(domain) ?? 0) + 1);
+    if (domain === 'other') otherNames.push(tool.name);
   }
   const parts = [...counts.entries()]
     .sort((a, b) => b[1] - a[1])
-    .map(([domain, count]) => `${domain}(${count})`);
+    .map(([domain, count]) => {
+      if (domain === 'other' && otherNames.length > 0 && otherNames.length <= 12) {
+        return `other(${count}): ${otherNames.join(', ')}`;
+      }
+      return `${domain}(${count})`;
+    });
   return parts.length > 0 ? parts.join(', ') : 'none';
 }
 

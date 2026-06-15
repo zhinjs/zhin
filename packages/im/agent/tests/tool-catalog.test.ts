@@ -13,6 +13,16 @@ function t(name: string): AgentTool {
 }
 
 describe('tool-catalog', () => {
+  it('summarizeDeferredDomains lists workspace tool names under other', () => {
+    const stats = summarizeDeferredDomains([
+      t('get_weather'),
+      t('echo'),
+      t('github_star'),
+    ]);
+    expect(stats).toContain('github(1)');
+    expect(stats).toContain('other(2): get_weather, echo');
+  });
+
   it('summarizeDeferredDomains groups by prefix', () => {
     const stats = summarizeDeferredDomains([
       t('github_star'),
@@ -40,7 +50,9 @@ describe('tool-catalog', () => {
     expect(part.orchestrator.map(x => x.name).sort()).toEqual(
       [...DEFAULT_TOOL_SEARCH_ORCHESTRATOR_TOOLS].sort(),
     );
-    expect(part.deferred.map(x => x.name).sort()).toEqual(['bash', 'github_star', 'mcp_filesystem_read'].sort());
+    expect(part.deferred.map(x => x.name).sort()).toEqual(
+      ['bash', 'github_star', 'mcp_filesystem_read', 'web_search'].sort(),
+    );
     expect(part.deferred.some(x => x.name === 'activate_skill')).toBe(false);
   });
 });

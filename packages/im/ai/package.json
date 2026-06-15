@@ -21,12 +21,19 @@
     "test": "vitest run --config ../../vitest.config.ts"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.0",
+    "@ai-sdk/deepseek": "^1.0.0",
+    "@ai-sdk/google": "^3.0.0",
+    "@ai-sdk/openai": "^3.0.0",
+    "@ai-sdk/openai-compatible": "^1.0.0",
     "@sinclair/typebox": "^0.34.0",
-    "@zhin.js/logger": "workspace:*"
+    "@zhin.js/logger": "workspace:*",
+    "ai": "^6.0.0",
+    "undici": "^6.24.1"
   },
   "devDependencies": {
-    "@zhin.js/database": "workspace:*",
     "@types/node": "^25.9.2",
+    "@zhin.js/database": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.0"
   },

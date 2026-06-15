@@ -14,7 +14,7 @@ import { discoverWorkspaceSkills, loadAlwaysSkillsContent, buildSkillsSummaryXML
 import { discoverWorkspaceAgents } from '../discovery/agents.js';
 import { discoverWorkspaceTools, buildToolFromMeta } from '../discovery/tools.js';
 import { resolveSkillInstructionMaxChars, DEFAULT_CONFIG } from '../zhin-agent/config.js';
-import { loadBootstrapFiles, buildContextFiles, buildBootstrapContextSection } from '../bootstrap.js';
+import { loadBootstrapFiles, buildContextFiles, buildStableBootstrapSection } from '../bootstrap.js';
 import { loadBootstrapWithProfile, resolveAssistantConfig } from '../assistant/index.js';
 import { triggerAIHook, createAIHookEvent } from '../hooks.js';
 import { createCronTools } from '../cron-engine.js';
@@ -273,12 +273,14 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
         const toolsFile = contextFiles.find(f => f.path === 'TOOLS.md');
         if (toolsFile) loadedFiles.push('TOOLS.md');
 
-        const agentsFile = contextFiles.find(f => f.path === 'AGENTS.md');
+        const agentsFile = bootstrapFiles.find(f => f.name === 'AGENTS.md' && !f.missing);
         if (agentsFile) loadedFiles.push('AGENTS.md');
 
-        if (refs.zhinAgent && contextFiles.length > 0) {
-          const contextSection = buildBootstrapContextSection(contextFiles);
-          refs.zhinAgent.configure({ bootstrapContext: contextSection });
+        if (refs.zhinAgent) {
+          const stableSection = buildStableBootstrapSection(bootstrapFiles);
+          if (stableSection) {
+            refs.zhinAgent.configure({ bootstrapContext: stableSection });
+          }
         }
       } catch (e: unknown) {
         logger.debug(`Bootstrap files not loaded: ${e instanceof Error ? e.message : String(e)}`);

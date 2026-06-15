@@ -17,6 +17,7 @@
     "@zhin.js/host-api": "workspace:*",
     "@zhin.js/host-router": "workspace:*",
     "@zhin.js/mcp": "workspace:*",
+    "@zhin.js/satori": "workspace:*",
     "zhin.js": "workspace:*"
   },
   "devDependencies": {

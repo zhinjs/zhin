@@ -52,6 +52,17 @@ export {
 } from './zhin-agent/prompt.js';
 export type { RichSystemPromptContext, PromptSectionDebugInfo } from './zhin-agent/prompt.js';
 export {
+  buildAgentsEnvelopeContext,
+  collectAgentsInstructionChain,
+  clearAgentsInstructionCache,
+} from './zhin-agent/agents-instruction.js';
+export type { AgentsInstructionEntry } from './zhin-agent/agents-instruction.js';
+export {
+  resolveWorkspacePrompt,
+  clearWorkspacePromptCache,
+} from './zhin-agent/workspace-prompt.js';
+export type { WorkspacePromptRole } from './zhin-agent/workspace-prompt.js';
+export {
   registerAgentPromptContributor,
   unregisterAgentPromptContributor,
   getAgentPromptContributor,
@@ -281,8 +292,9 @@ export type { IntrospectionJsonResponse } from './init/introspection-rest.js';
 
 export {
   loadBootstrapFiles, buildContextFiles, buildBootstrapContextSection,
+  buildStableContextFiles, buildStableBootstrapSection,
   loadSoulPersona, loadToolsGuide, loadAgentsMemory, clearBootstrapCache,
-  getFileMemoryContext,
+  getFileMemoryContext, STABLE_BOOTSTRAP_FILENAMES,
 } from './bootstrap.js';
 export type { BootstrapFile, ContextFile } from './bootstrap.js';
 

@@ -61,6 +61,8 @@ export {
   completeSimple,
   createAssistantMessageEventStream,
   clearApiRegistryForTests,
+  setLiveModelsResolver,
+  setLegacyProviderResolver,
 } from './api-registry.js';
 export type {
   StreamOptions,
@@ -106,9 +108,9 @@ export {
 export {
   registerLlmApiFromProviders,
   resetLlmApiRegistryForTests,
-  setLegacyProviderResolver,
+  ensureLanguageModelRegistered,
 } from './register-api-layer.js';
-export type { LegacyProviderEntry } from './register-api-layer.js';
+export type { SdkProviderEntry, LegacyProviderEntry } from './register-api-layer.js';
 
 export {
   convertLegacyTool,
@@ -116,3 +118,36 @@ export {
 } from './legacy-tool-bridge.js';
 
 export { formatRedactedJson, redactValueForLog } from './redact-request-body.js';
+
+export {
+  SDK_IDS,
+  isSdkId,
+  createLanguageModel,
+  sdkSupportsImageGeneration,
+} from './sdk-registry.js';
+export type { SdkId } from './sdk-registry.js';
+
+export {
+  SDK_DEFAULT_MODELS,
+  ANYROUTER_ANTHROPIC_MODELS,
+  SDK_SUPPORTS_OPENAI_MODEL_DISCOVERY,
+  resolveSdkProviderModels,
+  sdkHasStaticModelPreset,
+} from './sdk-default-models.js';
+
+export { createSdkProviderAdapter, SdkProviderAdapter, sdkEntryFromProvider } from '../sdk-provider-adapter.js';
+
+export {
+  agentMessagesToAiSdk,
+  contextToAiSdkPrompt,
+  llmToolsToAiSdk,
+} from './bridge/ai-sdk-messages.js';
+
+export { createAiSdkStreamFn, generateTextViaAiSdk } from './bridge/ai-sdk-stream.js';
+export {
+  buildPromptCacheKey,
+  supportsPromptCacheSdk,
+  isStreamPromptCacheEnabled,
+  type PromptCacheRetention,
+} from './bridge/ai-sdk-prompt-cache.js';
+export { generateImageViaAiSdk } from './bridge/ai-sdk-image.js';

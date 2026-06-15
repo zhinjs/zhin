@@ -45,7 +45,7 @@ import {
   MemoryImTranscriptStore,
   getModel,
   registerLlmApiFromProviders,
-  setLegacyProviderResolver,
+  sdkEntryFromProvider,
   type AgentSessionStore,
   type ContextRepository,
   type IMSessionStore,
@@ -69,6 +69,8 @@ import {
   type ZhinAgentDependencies,
   DEFAULT_CONFIG,
   isPhaseTraceEnabled,
+  isPromptTraceEnabled,
+  isPromptTraceVerbose,
 } from './config.js';
 import { DeferredWorkerRunner } from '../deferred-worker-runner.js';
 import { deliverDeferredAutoContinueReply } from './deferred-delivery.js';
@@ -140,6 +142,8 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   private skillsSummaryXML: string = '';
   private modelRegistry: ModelRegistry | null = null;
   private phaseTraceEnabled: boolean;
+  private promptTraceEnabled: boolean;
+  private promptTraceVerbose: boolean;
   private readonly emitter = new ZhinAgentEventEmitter();
   private deferredCatalog: AgentTool[] = [];
   private readonly deferredWorkerRunner = new DeferredWorkerRunner();
@@ -155,10 +159,19 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     return { phaseTraceEnabled: this.phaseTraceEnabled, onPhaseTrace: this.config.onPhaseTrace };
   }
 
+  private get promptTraceConfig() {
+    return {
+      promptTraceEnabled: this.promptTraceEnabled,
+      promptTraceVerbose: this.promptTraceVerbose,
+    };
+  }
+
   constructor(provider: AIProvider, config?: ZhinAgentConfig) {
     this.provider = provider;
     this.config = { ...DEFAULT_CONFIG, ...config } as Required<ZhinAgentConfig>;
     this.phaseTraceEnabled = isPhaseTraceEnabled(this.config);
+    this.promptTraceEnabled = isPromptTraceEnabled(this.config);
+    this.promptTraceVerbose = isPromptTraceVerbose(this.config);
     this.memoryPersistenceReady = new Promise<void>((resolve) => {
       this.resolveMemoryPersistenceReady = resolve;
     });
@@ -253,19 +266,12 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   setProviderResolver(resolver: (alias: string) => AIProvider): void { this.configure({ providerResolver: resolver }); }
 
   private wireLlmApiLayer(): void {
-    const resolve = (alias: string) => {
-      if (alias === this.provider.name) return this.provider;
-      return this.providerResolver?.(alias);
-    };
-    setLegacyProviderResolver(resolve);
     registerLlmApiFromProviders(
-      [{
-        alias: this.provider.name,
-        provider: this.provider,
-        config: { api: 'openai-completions' },
-        models: [],
-      }],
-      resolve,
+      [sdkEntryFromProvider(this.provider)],
+      (alias) => {
+        const p = alias === this.provider.name ? this.provider : this.providerResolver?.(alias);
+        return p?.models ?? [];
+      },
     );
   }
 

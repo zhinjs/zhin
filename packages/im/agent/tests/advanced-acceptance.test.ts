@@ -34,7 +34,7 @@ const mockProvider = {
 } as any;
 
 describe('Advanced ACCEPTANCE (automated)', () => {
-  it('主编排常驻含 spawn_task 与 web_search，generate_image 在 deferred', () => {
+  it('主编排常驻含 spawn_task，web_search 在 deferred', () => {
     const built = buildOrchestratorAgentTools({
       allTools: [
         makeTool('ask_user'),
@@ -53,7 +53,8 @@ describe('Advanced ACCEPTANCE (automated)', () => {
     expect(built.orchestratorTools.map(t => t.name)).toEqual([
       ...DEFAULT_TOOL_SEARCH_ORCHESTRATOR_TOOLS,
     ]);
-    expect(built.orchestratorTools.map(t => t.name)).toContain('web_search');
+    expect(built.orchestratorTools.map(t => t.name)).not.toContain('web_search');
+    expect(built.deferred.some(t => t.name === 'web_search')).toBe(true);
     expect(built.orchestratorTools.map(t => t.name)).not.toContain('generate_image');
     expect(built.deferred.some(t => t.name === 'generate_image')).toBe(true);
   });

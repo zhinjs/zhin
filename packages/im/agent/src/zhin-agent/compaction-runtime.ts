@@ -11,6 +11,7 @@ import type { AgentMessage } from '@zhin.js/ai';
 import type { CompactionConfig } from './config.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import type { ZhinAgentPrivate, Message } from './zhin-agent-private.js';
+import { resolveWorkspacePrompt } from './workspace-prompt.js';
 
 export interface CompactionRuntimeOptions {
   host: ZhinAgentPrivate;
@@ -89,13 +90,19 @@ export async function transformContextWithCompaction(
 
   const beforeTokens = estimateAgentMessagesTokens(messages);
   const state = getCompactionState(options.sessionId);
+  const compactionPrompt = resolveWorkspacePrompt('compaction', options.model.sdk);
+  const customInstructions = [
+    compactionPrompt?.trim(),
+    options.customInstructions?.trim(),
+  ].filter(Boolean).join('\n\n') || undefined;
+
   const result = await autoCompactAgentMessagesIfNeeded({
     model: options.model,
     messages,
     config: cfg,
     state,
     force: options.force,
-    customInstructions: options.customInstructions,
+    customInstructions,
   });
 
   if (result.summary?.trim()) {

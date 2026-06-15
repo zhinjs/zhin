@@ -144,17 +144,23 @@ flowchart TD
 ai:
   providers:
     ollama:
-      api: ollama-chat
+      sdk: ollama
       host: "http://localhost:11434"
       # models 可省略 — listModels（/api/tags）自动发现
       num_ctx: 32768
       contextWindow: 32768
     openai-main:
-      api: openai-completions
+      sdk: openai
       apiKey: "${OPENAI_API_KEY}"
       baseUrl: "https://api.openai.com/v1"
       contextWindow: 128000
       # models 可省略 — listModels（GET /v1/models）；中转/聚合同样适用
+    anyrouter:
+      sdk: anthropic
+      apiKey: "${ANTHROPIC_API_KEY}"
+      baseUrl: "${ANTHROPIC_BASE_URL}"
+      # anyrouter.top — 模型 id 以控制台列表为准（如 claude-opus-4-8，无 [1m] 后缀）
+      # agents.<name>.model 建议显式指定；Sonnet/Opus 若 400 需先在 AnyRouter 开通 1M
 
   agents:
     zhin:
@@ -476,14 +482,14 @@ Zhin 可作为 **MCP Client** 消费外部工具（`ai.mcpServers`、`ai.memoryM
 
 子 agent 任务含「画/生图」等关键词时，会优先载入 `generate_image`（见 `resolve-subagent-tools`）。
 
-### Provider 与 driver
+### Provider 与 sdk（ADR 0018）
 
-| driver | 默认模型 | 说明 |
-|--------|----------|------|
-| `zhipu` | `cogview-3-flash` | 智谱 Flash 系列免费文生图；`cogview-4` 按次付费 |
-| `cloudflare` | `@cf/black-forest-labs/flux-1-schnell` | Workers AI 配额 |
-| `openai` | `gpt-image-2` | OpenAI Images API；需账号开通与计费 |
-| `google` / `gemini` | `gemini-2.5-flash-image` | Nano Banana；`generateContent` + IMAGE；**不支持 chat**，仅作 `generate_image` 的 provider |
+| sdk | 文生图 | 说明 |
+|-----|--------|------|
+| `openai-compatible` + 智谱 baseUrl | `cogview-3-flash` | 智谱 Flash 系列免费文生图 |
+| `openai-compatible` + Cloudflare accountId | `@cf/.../flux-1-schnell` | Workers AI 聊天走 OpenAI 面；**出图**仍走 `/ai/run`（ADR 0018 例外） |
+| `openai` | `gpt-image-2` | OpenAI Images API |
+| `google` | `gemini-2.5-flash-image` | Nano Banana |
 
 ### 配置
 
@@ -493,17 +499,18 @@ ai:
     watermarkEnabled: false # 智谱去水印须先在开放平台签署声明
   providers:
     zhipu-vl:
-      driver: zhipu
+      sdk: openai-compatible
+      baseUrl: https://open.bigmodel.cn/api/paas/v4
       apiKey: ${BIG_MODEL_API_KEY}
       imageGeneration:
         defaultModel: cogview-3-flash
         defaultSize: 1024x1024
         promptSuffix: "写实摄影..."  # 可选，追加到 prompt
     # openai-image:
-    #   driver: openai
+    #   sdk: openai
     #   imageGeneration: { defaultModel: gpt-image-2, quality: medium }
     # gemini-image:
-    #   driver: google
+    #   sdk: google
     #   imageGeneration: { defaultModel: gemini-2.5-flash-image, aspectRatio: "1:1", imageSize: "1K" }
   agents:
     draw:

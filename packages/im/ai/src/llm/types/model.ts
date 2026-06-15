@@ -1,6 +1,10 @@
-/** LLM Model descriptor (ADR 0009 D1). */
+/** LLM Model descriptor (ADR 0009 D1 / ADR 0018 transport). */
 
+import type { SdkId } from '../sdk-registry.js';
+
+/** @deprecated Legacy api ids in persisted messages; new transport uses `ai-sdk`. */
 export type ModelApi =
+  | 'ai-sdk'
   | 'openai-completions'
   | 'anthropic-messages'
   | 'google-generative-ai'
@@ -28,6 +32,7 @@ export interface Model {
   name?: string;
   provider: string;
   api: ModelApi;
+  sdk?: SdkId;
   baseUrl?: string;
   compat?: OpenAiCompatFlags;
   reasoning?: boolean;
@@ -38,7 +43,7 @@ export interface Model {
 }
 
 export interface ProviderInstanceConfig {
-  api: ModelApi;
+  sdk: SdkId;
   apiKey?: string;
   authScheme?: string;
   baseUrl?: string;
@@ -50,4 +55,12 @@ export interface ProviderInstanceConfig {
   accountId?: string;
   /** Ollama */
   host?: string;
+  /** Explicit model allowlist (yaml); overrides sdk preset */
+  models?: string[];
+  /** Default / preferred model; prepended to models list when absent */
+  defaultModel?: string;
+  /** Context window override */
+  contextWindow?: number;
+  /** Inherited from ProviderConfig — image defaults */
+  imageGeneration?: import('../../image-generation.js').ImageGenerationDefaults;
 }

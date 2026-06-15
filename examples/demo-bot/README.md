@@ -1,6 +1,6 @@
 # demo-bot（官方在线 Demo Host 配置）
 
-[demo-api.zhin.dev](https://demo-api.zhin.dev) 托管实例的配置模板：Sandbox + hello + `ai:`（Ollama），**Demo scoped Token** 供 [demo.zhin.dev](https://demo.zhin.dev) Console 使用。
+[demo-api.zhin.dev](https://demo-api.zhin.dev) 托管实例的配置模板：Sandbox + hello + `ai:`（Ollama），**Demo scoped Token** 供 [demo.zhin.dev](https://demo.zhin.dev) Console 使用。插件 `card` 命令演示 **@zhin.js/satori JSX** 出图卡片（见 `src/plugins/status-card.tsx`）。
 
 本地开发对照 [minimal-bot](../minimal-bot/)；部署见 [deploy/zhin-demo](../../deploy/zhin-demo/README.md)。
 

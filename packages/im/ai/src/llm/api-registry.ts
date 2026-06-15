@@ -1,4 +1,3 @@
-import type { AIProvider } from '../types.js';
 import type { Context } from './types/context.js';
 import type { Model, ModelApi, ProviderInstanceConfig } from './types/model.js';
 import type { ThinkingLevel } from './types/agent-event.js';
@@ -10,6 +9,11 @@ export interface StreamOptions {
   maxTokens?: number;
   sessionId?: string;
   thinkingLevel?: ThinkingLevel;
+  /** Provider prompt cache（默认启用；仅显式 false 禁用） */
+  promptCache?: boolean;
+  /** OpenAI routing hint；同 key 提高前缀命中率 */
+  promptCacheKey?: string;
+  promptCacheRetention?: import('./bridge/ai-sdk-prompt-cache.js').PromptCacheRetention;
   onPayload?: (payload: unknown) => void;
   onResponse?: (response: unknown) => void;
 }
@@ -50,17 +54,32 @@ export interface RegisteredProvider {
 const apiProviders = new Map<ModelApi, ApiProviderRegistration>();
 const providerConfigs = new Map<string, RegisteredProvider>();
 
-let legacyProviderResolver: ((alias: string) => AIProvider | undefined) | undefined;
+let liveModelsResolver: ((alias: string) => string[]) | undefined;
 
 /** @internal wired by register-api-layer */
-export function setLegacyProviderResolver(
-  resolver: ((alias: string) => AIProvider | undefined) | undefined,
+export function setLiveModelsResolver(
+  resolver: ((alias: string) => string[]) | undefined,
 ): void {
-  legacyProviderResolver = resolver;
+  liveModelsResolver = resolver;
 }
 
-export function getLegacyProviderResolver(): typeof legacyProviderResolver {
-  return legacyProviderResolver;
+export function getLiveModelsResolver(): typeof liveModelsResolver {
+  return liveModelsResolver;
+}
+
+/** @deprecated Use setLiveModelsResolver */
+export function setLegacyProviderResolver(
+  resolver: ((alias: string) => { models: string[] }) | undefined,
+): void {
+  if (!resolver) {
+    liveModelsResolver = undefined;
+    return;
+  }
+  liveModelsResolver = (alias) => resolver(alias)?.models ?? [];
+}
+
+export function getLegacyProviderResolver(): typeof liveModelsResolver {
+  return liveModelsResolver;
 }
 
 export function registerApiProvider(registration: ApiProviderRegistration): void {
@@ -89,8 +108,7 @@ export function getModel(providerAlias: string, modelId: string): Model {
     throw new Error(`Unknown provider alias: ${providerAlias}`);
   }
   const { config, models: registered } = entry;
-  const live = legacyProviderResolver?.(providerAlias)?.models ?? [];
-  // 显式 models 配置 → 用注册表白名单；否则用 provider.listModels(/v1/models) 发现结果
+  const live = liveModelsResolver?.(providerAlias) ?? [];
   const allowlist = registered.length > 0 ? registered : live;
   if (allowlist.length > 0 && !allowlist.includes(modelId)) {
     throw new Error(`Model ${modelId} not registered for provider ${providerAlias}`);
@@ -98,7 +116,8 @@ export function getModel(providerAlias: string, modelId: string): Model {
   return {
     id: modelId,
     provider: providerAlias,
-    api: config.api,
+    api: 'ai-sdk',
+    sdk: config.sdk,
     baseUrl: config.baseUrl,
     compat: config.compat,
     reasoning: false,
@@ -111,7 +130,7 @@ export function getModel(providerAlias: string, modelId: string): Model {
 export function clearApiRegistryForTests(): void {
   apiProviders.clear();
   providerConfigs.clear();
-  legacyProviderResolver = undefined;
+  liveModelsResolver = undefined;
 }
 
 export async function complete(

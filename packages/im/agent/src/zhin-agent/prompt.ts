@@ -21,6 +21,7 @@ import {
   inferFileRole,
   type FileRole,
 } from '../security/file-role-policy.js';
+import { resolveWorkspacePrompt } from './workspace-prompt.js';
 
 export const FIXED_DISCIPLINE_RULES = [
   'Never claim actions, results, or system state unless confirmed by tool output.',
@@ -65,6 +66,7 @@ function agentMessageToText(message: AgentMessage): string {
   return '';
 }
 
+/** @deprecated 主路径使用 contextRepository 原生 messages；保留供兼容调用。 */
 export function buildUserMessageWithHistory(history: AgentMessage[], currentContent: string): string {
   if (history.length === 0) return currentContent;
   const roleLabel = (role: string) => (role === 'user' ? 'User' : role === 'assistant' ? 'Assistant' : 'System');
@@ -81,17 +83,92 @@ export function buildEnhancedPersona(
   toneHint: string,
 ): string {
   let persona = config.persona;
-
   if (profileSummary) {
     persona += `\n\n${profileSummary}`;
   }
   if (toneHint) {
     persona += `\n\n[Tone hint] ${toneHint}`;
   }
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const timeStr = new Date().toLocaleString('zh-CN', { timeZone: tz });
-  persona += `\n\nCurrent time: ${timeStr} (${tz})`;
   return persona;
+}
+
+export const TURN_CONTEXT_BEGIN = '[Turn context]';
+export const TURN_CONTEXT_END = '[/Turn context]';
+
+export interface TurnContextEnvelopeInput {
+  commMessage?: Message;
+  profileSummary?: string;
+  toneHint?: string;
+  deferredStats?: string;
+  activeSkillsContext?: string;
+  quoteSystemHint?: string;
+  /** 形如 provider/modelId */
+  modelLine?: string;
+  sdk?: string;
+  agentsContext?: string;
+}
+
+/** 每轮易变上下文：不进可缓存 system，前缀到 user 消息。 */
+export function buildTurnContextEnvelope(input: TurnContextEnvelopeInput): string | null {
+  const lines: string[] = [];
+  const now = new Date();
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timeStr = now.toLocaleString('zh-CN', { timeZone: tz });
+  lines.push(`Time: ${timeStr} (${tz})`);
+
+  if (input.modelLine?.trim()) {
+    lines.push(`Model: ${input.modelLine.trim()}`);
+  }
+  if (input.sdk?.trim()) {
+    lines.push(`Sdk: ${input.sdk.trim()}`);
+  }
+
+  if (input.commMessage) {
+    const sessionLine = formatSessionContextLine(input.commMessage);
+    if (sessionLine) lines.push(sessionLine);
+    const sessionKey = resolveIMSessionIdFromMessage(input.commMessage);
+    const memoryPaths = formatMemoryPathsHint(
+      String(input.commMessage.$adapter),
+      sessionKey,
+    );
+    if (memoryPaths) lines.push(`Memory paths: ${memoryPaths}`);
+    const fileMemory = getFileMemoryContext(
+      undefined,
+      String(input.commMessage.$adapter),
+      sessionKey,
+    );
+    if (fileMemory?.trim()) {
+      lines.push('Memory snapshot:');
+      lines.push(fileMemory.trim());
+    }
+  }
+
+  if (input.deferredStats?.trim()) {
+    lines.push(`Deferred catalog: ${input.deferredStats.trim()}`);
+  }
+  if (input.profileSummary?.trim()) {
+    lines.push(input.profileSummary.trim());
+  }
+  if (input.toneHint?.trim()) {
+    lines.push(`[Tone hint] ${input.toneHint.trim()}`);
+  }
+  if (input.activeSkillsContext?.trim()) {
+    lines.push(input.activeSkillsContext.trim());
+  }
+  if (input.quoteSystemHint?.trim()) {
+    lines.push(input.quoteSystemHint.trim());
+  }
+  if (input.agentsContext?.trim()) {
+    lines.push(input.agentsContext.trim());
+  }
+
+  if (lines.length === 0) return null;
+  return `${TURN_CONTEXT_BEGIN}\n${lines.join('\n')}\n${TURN_CONTEXT_END}`;
+}
+
+export function prependTurnContextEnvelope(content: string, envelope: string | null | undefined): string {
+  if (!envelope?.trim()) return content;
+  return `${envelope.trim()}\n\n${content}`;
 }
 
 /** 从 Message 重算 SenderRole 并推导文件策略档位（提示词 §3b） */
@@ -134,6 +211,8 @@ export interface RichSystemPromptContext {
   platformSections?: string;
   /** 当前会话 Message（仅用于 # Runtime 中的 Session 行） */
   commMessage?: Message;
+  /** SDK 分治编排片段（workspace prompts/orchestrator*.md） */
+  orchestratorSdk?: string;
 }
 
 // ── Section builders ──
@@ -217,30 +296,18 @@ function resolvePersonaLead(config: Required<ZhinAgentConfig>, bootstrapContext?
 }
 
 /**
- * 身份 + 会话级运行时（Host / Time / IM Session）。
+ * 稳定运行时（可缓存）：不含时间、会话、deferred 统计、memory 正文。
  */
 function buildContextSection(
   config: Required<ZhinAgentConfig>,
-  commMessage?: Message,
+  _commMessage?: Message,
   bootstrapContext?: string,
 ): string {
-  const now = new Date();
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const timeStr = now.toLocaleString('zh-CN', { timeZone: tz });
-  const cwd = process.cwd();
-  const sessionKey = commMessage
-    ? resolveIMSessionIdFromMessage(commMessage)
-    : undefined;
-  const memoryPaths = formatMemoryPathsHint(commMessage ? String(commMessage.$adapter) : undefined, sessionKey);
-
   const envItems = [
-    `CWD: ${cwd}`,
+    `CWD: ${process.cwd()}`,
     `Host: ${os.platform()} | Node ${process.version} | Shell: ${process.env.SHELL || 'unknown'}`,
-    `Time: ${timeStr} (${tz})`,
-    `Memory: ${memoryPaths}`,
+    'Volatile runtime (time, session, deferred catalog, memory) is in [Turn context] on each user message.',
   ];
-  const sessionLine = commMessage ? formatSessionContextLine(commMessage) : null;
-  if (sessionLine) envItems.push(sessionLine);
 
   return [
     resolvePersonaLead(config, bootstrapContext),
@@ -261,21 +328,18 @@ function buildDirectToolsSection(): string {
   return ['# Tools', ...prependBullets(items)].join('\n');
 }
 
-/** toolSearch 编排层：合并原 Tools + Deferred */
-function buildOrchestrationSection(deferredStats?: string): string {
+/** toolSearch 编排层：合并原 Tools + Deferred + 可选 workspace/sdk 片段 */
+function buildOrchestrationSection(modelSdk?: string): string {
+  const resolved = resolveWorkspacePrompt('orchestrator', modelSdk);
+  if (resolved.trim()) {
+    return resolved.trim().startsWith('#')
+      ? resolved.trim()
+      : `# Orchestration\n${resolved.trim()}`;
+  }
   const items = [
-    'Use run_deferred_task for real work; do not call other deferred tool names directly.',
-    'For public web lookup, call web_search directly (all users, including read-only file tier).',
-    'When the user asks to read/fetch a URL or external page, delegate with run_deferred_task (tool_query: web_fetch). Do not claim you lack web access — the Worker has web_fetch.',
-    'User requests to follow instructions from a fetched document (e.g. skill.md, exam) are in scope once content is retrieved via run_deferred_task.',
-    'History lines tagged `[Deferred worker 完成]` are prior worker outputs (not user input)—treat them as ground truth for follow-ups like 开始考试 / 继续.',
-    'Lines tagged `[Deferred worker 完成 — 自动续聊]` are system-triggered continuations after a worker finishes—execute the next step immediately.',
-    'Use tool_search only when the needed tool or domain is unclear.',
-    'Use ask_user only when blocked and master input is required.',
-    'Use background execution only when explicitly requested.',
-    deferredStats
-      ? `Deferred catalog: ${deferredStats}. Worker runs bash, read_file, and domain tools.`
-      : 'Deferred worker runs bash, read_file, and domain tools.',
+    'Use run_deferred_task for real work; do not call other deferred tool names directly on the orchestrator.',
+    'Delegate execution via run_deferred_task(goal, tool_query); do not invent factual answers the worker should retrieve.',
+    'Use tool_search when the needed tool or domain is unclear.',
   ];
   return ['# Orchestration', ...prependBullets(items)].join('\n');
 }
@@ -386,20 +450,18 @@ export interface PromptSectionDebugInfo {
  */
 export function describePromptSectionsForDebug(ctx: RichSystemPromptContext): PromptSectionDebugInfo[] {
   const {
-    config, skillRegistry, skillsSummaryXML, activeSkillsContext, bootstrapContext,
-    toolSearchDeferredStats, platformSections,
+    config, skillRegistry, skillsSummaryXML, bootstrapContext,
+    toolSearchDeferredStats, platformSections, orchestratorSdk,
   } = ctx;
   const toolSearchActive = true;
   const boot = bootstrapContext?.trim() ? bootstrapContext : null;
   const pairs: [string, string | null][] = [
     ['§1_runtime', buildContextSection(config, ctx.commMessage, bootstrapContext)],
     ['§2_style', toolSearchActive ? null : buildCommunicationSection()],
-    ['§3_tools', toolSearchActive ? buildOrchestrationSection(toolSearchDeferredStats) : buildDirectToolsSection()],
+    ['§3_tools', toolSearchActive ? buildOrchestrationSection(orchestratorSdk) : buildDirectToolsSection()],
     ['§4_security', buildSecuritySection()],
     ['§6c_platform', buildPlatformSection(platformSections, toolSearchActive)],
     ['§8_skills', buildSkillsSection(skillRegistry, skillsSummaryXML, toolSearchActive)],
-    ['§9_active_skills', buildActiveSkillsSection(activeSkillsContext)],
-    ['§10_memory', buildMemorySection(ctx.commMessage)],
     ['§11_bootstrap', boot],
   ];
   return pairs
@@ -409,8 +471,8 @@ export function describePromptSectionsForDebug(ctx: RichSystemPromptContext): Pr
 
 export function buildRichSystemPrompt(ctx: RichSystemPromptContext): string {
   const {
-    config, skillRegistry, skillsSummaryXML, activeSkillsContext, bootstrapContext,
-    toolSearchDeferredStats, platformSections,
+    config, skillRegistry, skillsSummaryXML, bootstrapContext,
+    toolSearchDeferredStats, platformSections, orchestratorSdk,
   } = ctx;
   const toolSearchActive = true;
 
@@ -418,13 +480,11 @@ export function buildRichSystemPrompt(ctx: RichSystemPromptContext): string {
     buildContextSection(config, ctx.commMessage, bootstrapContext),
     toolSearchActive ? null : buildCommunicationSection(),
     toolSearchActive
-      ? buildOrchestrationSection(toolSearchDeferredStats)
+      ? buildOrchestrationSection(orchestratorSdk)
       : buildDirectToolsSection(),
     buildSecuritySection(),
     buildPlatformSection(platformSections, toolSearchActive),
     buildSkillsSection(skillRegistry, skillsSummaryXML, toolSearchActive),
-    buildActiveSkillsSection(activeSkillsContext),
-    buildMemorySection(ctx.commMessage),
     bootstrapContext || null,
   ];
 
@@ -584,9 +644,16 @@ export function buildLiteSystemPromptWithPlatform(
   return parts.join('\n\n');
 }
 
-/** 本轮有引用消息时追加说明；不写入常驻 system 模板，避免每轮无引用也膨胀 */
-export function appendQuoteContextSystemHint(prompt: string, commMessage?: AgentTurnMessage): string {
+/** 本轮有引用消息时的说明；写入 [Turn context]，不进入可缓存 system */
+export function resolveQuoteSystemHint(commMessage?: AgentTurnMessage): string | undefined {
   const hint = commMessage?.extra?.[QUOTE_CONTEXT_SYSTEM_EXTRA_KEY];
-  if (typeof hint !== 'string' || !hint.trim()) return prompt;
-  return `${prompt.trim()}\n\n${hint.trim()}`;
+  if (typeof hint !== 'string' || !hint.trim()) return undefined;
+  return hint.trim();
+}
+
+/** @deprecated 引用说明已迁入 [Turn context]；保留供旧测试/调用方 */
+export function appendQuoteContextSystemHint(prompt: string, commMessage?: AgentTurnMessage): string {
+  const hint = resolveQuoteSystemHint(commMessage);
+  if (!hint) return prompt;
+  return `${prompt.trim()}\n\n${hint}`;
 }

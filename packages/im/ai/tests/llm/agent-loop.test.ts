@@ -24,9 +24,9 @@ describe('agentLoop', () => {
 
   beforeEach(() => {
     clearApiRegistryForTests();
-    registerProviderInstance('test', { api: 'mock' }, ['mock']);
+    registerProviderInstance('test', { sdk: 'openai' }, ['mock']);
     registerApiProvider({
-      api: 'mock',
+      api: 'ai-sdk',
       stream(_model, context) {
         const last = context.messages.at(-1);
         const userText = last?.role === 'user'
@@ -43,7 +43,7 @@ describe('agentLoop', () => {
               name: 'echo',
               arguments: { message: userText.slice(5) },
             }],
-            api: 'mock',
+            api: 'ai-sdk',
             provider: 'test',
             model: 'mock',
             usage: EMPTY_TOKEN_USAGE,

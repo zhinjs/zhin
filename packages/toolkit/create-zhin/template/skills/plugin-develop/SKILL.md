@@ -138,6 +138,44 @@ useContext('database', (db) => {
 })
 ```
 
+**Satori 卡片**（`src/cards/*.tsx`，文件顶 `/** @jsxImportSource @zhin.js/satori */`）：
+
+```tsx
+/** @jsxImportSource @zhin.js/satori */
+import { Card, CardHeader, StatChip, Row, wrapCardHtml, DEFAULT_CARD_THEME } from '@zhin.js/satori'
+
+export function buildWelcomeCard(name: string): string {
+  const body = (
+    <Card>
+      <CardHeader title={`你好，${name}`} />
+      <Row gap={10}>
+        <StatChip label="状态" value="OK" accent={DEFAULT_CARD_THEME.accentMem} />
+      </Row>
+    </Card>
+  )
+  return wrapCardHtml(body, DEFAULT_CARD_THEME.canvas)
+}
+```
+
+命令里出站（纯 HTML；装 `html-renderer` 可自动转 PNG）：
+
+```typescript
+import { segment } from 'zhin.js'
+import { buildWelcomeCard } from './cards/welcome-card.js'
+
+plugin.addCommand(
+  new MessageCommand('welcome-card <name:text>')
+    .action((_, result) =>
+      segment.html({ html: buildWelcomeCard(result.params.name), width: 540 }),
+    ),
+)
+```
+
+| JSX 用途 | `jsxImportSource` | 产出 |
+|----------|-------------------|------|
+| IM 消息 / 组件 | `zhin.js` | `MessageComponent` |
+| Satori 卡片 | `@zhin.js/satori`（文件顶注释） | HTML 字符串 |
+
 ## 失败与兜底
 
 | 触发条件 | 一线处理 | 仍失败 |

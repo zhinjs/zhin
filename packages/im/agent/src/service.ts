@@ -201,11 +201,10 @@ export class AIService {
     registerLlmApiFromProviders(
       [...this.providers.entries()].map(([alias, provider]) => ({
         alias,
-        provider,
-        config: this.routing.providers[alias] ?? {},
-        models: this.hasExplicitModelList(alias) ? provider.models : [],
+        config: this.routing.providers[alias]!,
+        models: this.hasExplicitModelList(alias) ? (provider.models ?? []) : [],
       })),
-      (alias: string) => this.providers.get(alias),
+      (alias: string) => this.providers.get(alias)?.models ?? [],
     );
   }
 

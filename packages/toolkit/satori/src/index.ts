@@ -3,6 +3,8 @@
  */
 
 export { default as satori, default } from 'satori';
+export { jsx, jsxs, Fragment, renderJSX, createElement, serializeChildren } from './jsx.js';
+export type { JSXChild, JSXElementType, JSXProps } from './jsx.js';
 export { htmlToSvg, sanitizeHtml } from './html-to-svg.js';
 export type { HtmlToSvgOptions } from './html-to-svg.js';
 export { escapeHtml, e, html, htmlSafe, tightHtml, wrapCardHtml } from './html-template.js';

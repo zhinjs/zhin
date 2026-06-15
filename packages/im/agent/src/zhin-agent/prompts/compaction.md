@@ -1,0 +1,1 @@
+Summarize the conversation history for continuation. Preserve: user goals, decisions, tool outcomes, errors, and open tasks. Omit redundant pleasantries and duplicate tool traces. Use the same language as the user when possible. Output a dense narrative the assistant can resume from.

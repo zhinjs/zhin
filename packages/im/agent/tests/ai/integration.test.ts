@@ -109,8 +109,8 @@ describe('AI Service 集成测试', () => {
           openai: { driver: 'openai', apiKey: 'sk-test' },
           anthropic: { driver: 'anthropic', apiKey: 'sk-ant-test' },
           deepseek: { driver: 'deepseek', apiKey: 'sk-deepseek' },
-          moonshot: { driver: 'moonshot', apiKey: 'sk-moonshot' },
-          zhipu: { driver: 'zhipu', apiKey: 'sk-zhipu' },
+          moonshot: { driver: 'moonshot', apiKey: 'sk-moonshot', baseUrl: 'https://api.moonshot.cn/v1' },
+          zhipu: { driver: 'zhipu', apiKey: 'sk-zhipu', baseUrl: 'https://open.bigmodel.cn/api/paas/v4' },
           ollama: { driver: 'ollama', host: 'http://localhost:11434' },
         },
         agents: {
@@ -135,7 +135,7 @@ describe('AI Service 集成测试', () => {
         providers: {
           openai: { driver: 'openai', apiKey: 'sk-test' },
           deepseek: { driver: 'deepseek' },
-          moonshot: { driver: 'moonshot', apiKey: 'sk-moonshot' },
+          moonshot: { driver: 'moonshot', apiKey: 'sk-moonshot', baseUrl: 'https://api.moonshot.cn/v1' },
         },
         agents: {
           zhin: { provider: 'openai', model: 'gpt-4o-mini' },

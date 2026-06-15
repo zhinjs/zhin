@@ -8,6 +8,7 @@ import {
   isOmittedToolSummary,
   sanitizeToolResult,
   stripHallucinatedToolCalls,
+  getModel,
 } from '@zhin.js/ai';
 import { stripThinkBlocks } from './zhin-agent/text-sanitize.js';
 import { runAgentLoopStandaloneTurn } from './zhin-agent/agent-loop-standalone.js';
@@ -19,10 +20,13 @@ import {
 } from './agent-prompt/index.js';
 import type { AgentPromptBuildContext } from '@zhin.js/core';
 import type { ModelRegistry } from '@zhin.js/ai';
-import { resolveWorkerSlowToolTimeout } from './zhin-agent/config.js';
+import { resolveWorkerSlowToolTimeout, isPromptTraceEnabled, isPromptTraceVerbose, isPhaseTraceEnabled, buildAgentPromptCacheStreamOptions } from './zhin-agent/config.js';
 import type { ZhinAgentConfig, ExecApprovalMode } from './zhin-agent/config.js';
 import { createOwnerOrchestratedToolResultTransform } from './orchestrator/owner-confirm-orchestration.js';
 import { applyExecPolicyToTools } from './security/exec-policy.js';
+import { logPromptComposition } from './zhin-agent/prompt-trace.js';
+import { resolveWorkspacePrompt } from './zhin-agent/workspace-prompt.js';
+import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
 import type { Message } from '@zhin.js/core';
 import { DEFAULT_TOOL_SEARCH_ORCHESTRATOR_TOOLS } from './zhin-agent/config.js';
 
@@ -150,6 +154,7 @@ export class DeferredWorkerRunner {
     }
 
     const model = provider.models[0];
+    const llmModel = getModel(provider.name, model);
 
     const platformBody = await resolveAgentPromptMarkdown({
       ctx: promptCtx,
@@ -159,18 +164,12 @@ export class DeferredWorkerRunner {
       ? `\n\n## Platform\n${platformBody.trim()}`
       : '';
 
-    const systemPrompt = `# Deferred Task Worker
+    const workerBody = resolveWorkspacePrompt('deferred-worker', llmModel.sdk);
 
-You execute a single delegated task using the tools provided. Reply with a concise factual summary when done.
+    const systemPrompt = `${workerBody.trim()}
 
 ## Task
-${goal}${platformBlock}
-
-## Rules
-- Use tools to complete the task; do not describe steps without acting.
-- Shell approval follows Worker/Task execApprovalMode configuration.
-- If a tool fails, try an alternative once, then report honestly.
-- Final answer: plain language summary for the orchestrator (no tool call syntax).`;
+${goal}${platformBlock}`;
 
     const maxIterations = options.maxIterations ?? execPolicyConfig?.maxSubagentIterations ?? 15;
 
@@ -188,6 +187,20 @@ ${goal}${platformBlock}
     });
 
     try {
+      if (execPolicyConfig && isPromptTraceEnabled(execPolicyConfig)) {
+        logPromptComposition({
+          config: {
+            promptTraceEnabled: true,
+            promptTraceVerbose: isPromptTraceVerbose(execPolicyConfig),
+          },
+          sessionId: resolveIMSessionIdFromMessage(origin) ?? 'deferred',
+          label: 'deferred_worker',
+          systemPrompt,
+          historyMessages: [],
+          tools,
+          userPreview: goal,
+        });
+      }
       const result = await runAgentLoopStandaloneTurn({
         provider,
         model,
@@ -196,6 +209,22 @@ ${goal}${platformBlock}
         userInput: goal,
         maxIterations,
         commMessage: origin,
+        ...buildAgentPromptCacheStreamOptions(execPolicyConfig ?? {}, {
+          modelSdk: llmModel.sdk,
+          provider: provider.name,
+          modelId: model,
+          label: 'deferred_worker',
+        }),
+        iterationTrace: execPolicyConfig && isPhaseTraceEnabled(execPolicyConfig)
+          ? {
+              config: {
+                phaseTraceEnabled: true,
+                onPhaseTrace: execPolicyConfig.onPhaseTrace,
+              },
+              sessionId: resolveIMSessionIdFromMessage(origin) ?? 'deferred',
+              label: 'deferred_worker',
+            }
+          : undefined,
         transformToolResult: createOwnerOrchestratedToolResultTransform({
           commMessage: origin,
           disableHardOrchestration: true,

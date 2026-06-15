@@ -24,7 +24,7 @@ http:
 ai:
   providers:
     ollama:
-      api: ollama-chat
+      sdk: ollama
       host: "http://localhost:11434"
 
   agents:

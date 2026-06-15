@@ -37,9 +37,23 @@ export {
   resetLlmApiRegistryForTests,
   setLegacyProviderResolver,
   driverToModelApi,
+  isSdkId,
+  SDK_IDS,
+  createSdkProviderAdapter,
+  sdkEntryFromProvider,
+  sdkSupportsImageGeneration,
+  resolveSdkProviderModels,
+  SDK_DEFAULT_MODELS,
+  createOpenAiCompletionsStreamFn,
   convertLegacyTools,
   agentMessagesToOpenAi,
   formatRedactedJson,
+  buildPromptCacheKey,
+  supportsPromptCacheSdk,
+  isStreamPromptCacheEnabled,
+} from './llm/index.js';
+export type {
+  PromptCacheRetention,
 } from './llm/index.js';
 export type {
   Context,
@@ -69,6 +83,7 @@ export type {
   BeforeToolCallResult,
   AfterToolCallContext,
   TokenUsage,
+  SdkId,
 } from './llm/index.js';
 
 // ── Core AI Types ──

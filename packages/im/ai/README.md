@@ -58,7 +58,7 @@ if (hasGenerateImage(zhipu)) {
 
 ### agentLoop（推荐 — LLM 统一入口）
 
-IM 栈与 `@zhin.js/agent` 的生产路径均经 **`agentLoop`**（ADR 0009）。Provider 须配置 **`api`**（如 `openai-completions`），由 `registerLlmApiFromProviders` 注册到 ApiRegistry。
+IM 栈与 `@zhin.js/agent` 的生产路径均经 **`agentLoop`**（ADR 0009）。Provider 须配置 **`sdk`**（见 [ADR 0018](../../../docs/adr/0018-ai-sdk-transport-layer.md)），由 `registerLlmApiFromProviders` 注册 AI SDK transport 到 ApiRegistry（`api: 'ai-sdk'`）。
 
 ```typescript
 import {
@@ -68,16 +68,13 @@ import {
   convertLegacyTools,
   getModel,
   registerLlmApiFromProviders,
+  sdkEntryFromProvider,
 } from '@zhin.js/ai'
 
-// 未在 yaml 配置 models 时传 []；白名单由 ModelRegistry 发现后写入 provider.models，
-// getModel() 会读取实时列表（OpenAI 兼容：GET /v1/models）
-registerLlmApiFromProviders([{
-  alias: provider.name,
-  provider,
-  config: { api: 'openai-completions' },
-  models: [],
-}], (alias) => provider)
+registerLlmApiFromProviders(
+  [sdkEntryFromProvider(provider)],
+  (alias) => provider.models,
+)
 
 const model = getModel(provider.name, 'gpt-4o')
 const context = agentContextFrom({

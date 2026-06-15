@@ -1,3 +1,4 @@
+import { isSdkId } from '@zhin.js/ai';
 import { DEFAULT_ZHIN_AGENT_NAME } from './types.js';
 import type { NormalizedAiRoutingConfig } from './normalize-ai-config.js';
 
@@ -5,8 +6,18 @@ export function validateAiRoutingConfig(cfg: NormalizedAiRoutingConfig): string[
   const errors: string[] = [];
 
   for (const [alias, prov] of Object.entries(cfg.providers)) {
-    if (!prov.api?.trim()) {
-      errors.push(`ai.providers.${alias}: api is required`);
+    if (!prov.sdk?.trim()) {
+      errors.push(`ai.providers.${alias}: sdk is required`);
+    } else if (!isSdkId(prov.sdk.trim())) {
+      errors.push(
+        `ai.providers.${alias}: invalid sdk "${prov.sdk}" (openai | anthropic | google | deepseek | ollama | openai-compatible)`,
+      );
+    }
+    if (prov.sdk === 'openai-compatible' && !prov.baseUrl?.trim() && !prov.accountId?.trim()) {
+      errors.push(`ai.providers.${alias}: openai-compatible requires baseUrl or accountId`);
+    }
+    if (prov.sdk === 'ollama' && !prov.host?.trim() && !prov.baseUrl?.trim()) {
+      errors.push(`ai.providers.${alias}: ollama requires host or baseUrl`);
     }
   }
 

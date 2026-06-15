@@ -76,19 +76,22 @@ const PROVIDERS = [
   },
 ] as const;
 
-function providerApiFor(name: string): string {
+function providerSdkFor(name: string): string {
   switch (name) {
     case 'anthropic':
-      return 'anthropic-messages';
+      return 'anthropic';
     case 'google':
     case 'gemini':
-      return 'google-generative-ai';
+      return 'google';
     case 'ollama':
-      return 'ollama-chat';
-    case 'cloudflare':
-      return 'cloudflare-workers-ai';
+      return 'ollama';
+    case 'deepseek':
+      return 'deepseek';
+    case 'moonshot':
+    case 'zhipu':
+      return 'openai-compatible';
     default:
-      return 'openai-completions';
+      return 'openai';
   }
 }
 
@@ -348,7 +351,7 @@ export function generateAIConfigYaml(config: AISetupConfig): string {
   if (config.providers) {
     for (const [name, providerConfig] of Object.entries(config.providers)) {
       lines.push(`    ${name}:`);
-      lines.push(`      api: ${providerApiFor(name)}`);
+      lines.push(`      sdk: ${providerSdkFor(name)}`);
       if (providerConfig.apiKey) {
         lines.push(`      apiKey: ${providerConfig.apiKey}`);
       }

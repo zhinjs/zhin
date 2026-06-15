@@ -3,7 +3,7 @@
  */
 
 import type { RateLimitConfig } from '@zhin.js/ai';
-import { DEFAULT_CONTEXT_TOKENS, DEFAULT_FOLLOW_UP_MODE, DEFAULT_STEERING_MODE, type QueueMode } from '@zhin.js/ai';
+import { DEFAULT_CONTEXT_TOKENS, DEFAULT_FOLLOW_UP_MODE, DEFAULT_STEERING_MODE, buildPromptCacheKey, type QueueMode } from '@zhin.js/ai';
 import type {
   AIProvider,
   AgentSessionStore,
@@ -128,6 +128,16 @@ export interface ZhinAgentConfig {
   modelHarness?: ModelHarnessConfig;
   /** 输出回合 phase 观测日志（或通过 ZHIN_AGENT_PHASE_TRACE 环境变量开启） */
   phaseTrace?: boolean;
+  /** 记录发往 LLM 的提示词规模分段（或通过 ZHIN_AGENT_PROMPT_TRACE；默认随 phaseTrace 开启） */
+  promptTrace?: boolean;
+  /** promptTrace 时输出 system 首尾预览（或 ZHIN_AGENT_PROMPT_TRACE_VERBOSE） */
+  promptTraceVerbose?: boolean;
+  /** Provider prompt cache（anthropic / openai / openai-compatible）；默认启用，仅显式 false 禁用 */
+  promptCache?: boolean;
+  /** OpenAI `prompt_cache_retention`（默认 in_memory；部分模型支持 24h） */
+  promptCacheRetention?: 'in_memory' | '24h';
+  /** OpenAI `prompt_cache_key` 前缀（默认 zhin） */
+  promptCacheKeyPrefix?: string;
   /** phase 观测回调（测试或自定义遥测；与 phaseTrace 同时生效） */
   onPhaseTrace?: (event: {
     phase: string;
@@ -164,7 +174,6 @@ export interface ZhinAgentConfig {
 /** 主 Agent 默认常驻编排工具（不含 activate_skill：执行一律经 Worker；文生图走 deferred） */
 export const DEFAULT_ORCHESTRATOR_TOOLS = [
   'tool_search',
-  'web_search',
   'run_deferred_task',
   'ask_user',
   'spawn_task',
@@ -225,7 +234,7 @@ export interface ZhinAgentDependencies {
   skillsSummaryXML: string;
 }
 
-export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
+export const DEFAULT_CONFIG = {
   persona: 'You are Zhin, an intelligent IM assistant running in Zhin.js. Answer clearly, act through available tools when needed, and never claim actions or results unless confirmed by tool output.',
   maxIterations: 15,  // 增加到15次，支持复杂任务
   timeout: 120_000,   // 增加到2分钟
@@ -264,6 +273,9 @@ export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   modelHarness: {},
   phaseTrace: false,
   onPhaseTrace: () => {},
+  promptTraceVerbose: false,
+  promptCacheRetention: 'in_memory',
+  promptCacheKeyPrefix: 'zhin',
   deferredToolMaxResults: 8,
   orchestratorTools: [...DEFAULT_ORCHESTRATOR_TOOLS],
   workerBaseTools: [...DEFAULT_WORKER_BASE_TOOLS],
@@ -274,13 +286,77 @@ export const DEFAULT_CONFIG: Required<ZhinAgentConfig> = {
   policyDenialStopAfter: 2,
   deferredAutoContinue: false,
   deferredAutoContinueMaxDepth: 8,
-};
+} as unknown as Required<ZhinAgentConfig>;
 
 /** `env` 参数主要用于测试注入，运行时默认读取 `process.env`。 */
 export function isPhaseTraceEnabled(config: Required<ZhinAgentConfig>, env: NodeJS.ProcessEnv = process.env): boolean {
   if (config.phaseTrace) return true;
   const raw = env.ZHIN_AGENT_PHASE_TRACE?.trim().toLowerCase();
   return !!raw && TRUE_VALUES.has(raw);
+}
+
+function envFlagEnabled(env: NodeJS.ProcessEnv, key: string): boolean {
+  const raw = env[key]?.trim().toLowerCase();
+  return !!raw && TRUE_VALUES.has(raw);
+}
+
+/** 默认随 phaseTrace 开启；可单独用 `ZHIN_AGENT_PROMPT_TRACE` 或 `ai.agent.promptTrace` 控制。 */
+export function isPromptTraceEnabled(config: Required<ZhinAgentConfig>, env: NodeJS.ProcessEnv = process.env): boolean {
+  if (config.promptTrace === true) return true;
+  if (config.promptTrace === false) {
+    return envFlagEnabled(env, 'ZHIN_AGENT_PROMPT_TRACE');
+  }
+  if (envFlagEnabled(env, 'ZHIN_AGENT_PROMPT_TRACE')) return true;
+  return isPhaseTraceEnabled(config, env);
+}
+
+export function isPromptTraceVerbose(config: Required<ZhinAgentConfig>, env: NodeJS.ProcessEnv = process.env): boolean {
+  if (config.promptTraceVerbose) return true;
+  return envFlagEnabled(env, 'ZHIN_AGENT_PROMPT_TRACE_VERBOSE');
+}
+
+/** Provider prompt cache：默认启用；`promptCache: false` 或 `ZHIN_AGENT_PROMPT_CACHE=0` 显式禁用。 */
+export function isPromptCacheEnabled(
+  config: Pick<ZhinAgentConfig, 'promptCache'>,
+  modelSdk: string | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const supported = modelSdk === 'anthropic'
+    || modelSdk === 'openai'
+    || modelSdk === 'openai-compatible';
+  if (!supported) return false;
+  if (config.promptCache === false) return false;
+  const raw = env.ZHIN_AGENT_PROMPT_CACHE?.trim().toLowerCase();
+  if (raw && ['0', 'false', 'no', 'off'].includes(raw)) return false;
+  return true;
+}
+
+export function buildAgentPromptCacheStreamOptions(
+  config: Pick<ZhinAgentConfig, 'promptCache' | 'promptCacheRetention' | 'promptCacheKeyPrefix'>,
+  parts: {
+    modelSdk: string | undefined;
+    provider: string;
+    modelId: string;
+    label: string;
+  },
+  env: NodeJS.ProcessEnv = process.env,
+): {
+  promptCache: boolean;
+  promptCacheKey?: string;
+  promptCacheRetention?: 'in_memory' | '24h';
+} {
+  const promptCache = isPromptCacheEnabled(config, parts.modelSdk, env);
+  if (!promptCache) return { promptCache: false };
+  return {
+    promptCache: true,
+    promptCacheKey: buildPromptCacheKey({
+      prefix: config.promptCacheKeyPrefix ?? 'zhin',
+      label: parts.label,
+      provider: parts.provider,
+      modelId: parts.modelId,
+    }),
+    promptCacheRetention: config.promptCacheRetention ?? 'in_memory',
+  };
 }
 
 /** run_deferred_task 外层超时：须覆盖 Worker 多轮 LLM + MCP（默认远高于 Agent 30s 工具超时） */

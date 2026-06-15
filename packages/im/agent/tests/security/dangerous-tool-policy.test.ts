@@ -8,6 +8,8 @@ import * as core from '@zhin.js/core';
 import {
   checkDangerousToolAccess,
   checkFileToolAccess,
+  checkSensitiveFilePathAccess,
+  checkBashSensitiveReadAccess,
 } from '../../src/security/dangerous-tool-policy.js';
 
 afterEach(() => {
@@ -120,5 +122,47 @@ describe('checkFileToolAccess', () => {
     const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'b1', senderId: 'x' });
     const d = checkFileToolAccess('read_file', ctx);
     expect(d.allowed).toBe(true);
+  });
+});
+
+describe('checkSensitiveFilePathAccess', () => {
+  it('普通用户读取 .env 被拒绝', () => {
+    vi.spyOn(core, 'getPlugin').mockImplementation(() => {
+      throw new Error('no ALS');
+    });
+    const ctx = mockCommMessage({
+      adapter: 'icqq',
+      endpoint: 'b1',
+      senderId: 'user1',
+      sender_roles: ['user'],
+    });
+    const d = checkSensitiveFilePathAccess('read_file', '/app/.env', ctx);
+    expect(d.allowed).toBe(false);
+    expect(d.role).toBe('other');
+  });
+
+  it('master 读取 .env 需确认', () => {
+    const ctx = mockCommMessage({ sender_roles: ['master'] });
+    const d = checkSensitiveFilePathAccess('read_file', '/app/.env', ctx);
+    expect(d.allowed).toBe(false);
+    expect(d.needsOwnerApproval).toBe(true);
+    expect(d.role).toBe('master');
+  });
+});
+
+describe('checkBashSensitiveReadAccess', () => {
+  it('普通用户 bash head .env 被拒绝', () => {
+    vi.spyOn(core, 'getPlugin').mockImplementation(() => {
+      throw new Error('no ALS');
+    });
+    const ctx = mockCommMessage({
+      adapter: 'icqq',
+      endpoint: 'b1',
+      senderId: 'user1',
+      sender_roles: ['user'],
+    });
+    const d = checkBashSensitiveReadAccess('head .env', ctx);
+    expect(d.allowed).toBe(false);
+    expect(d.role).toBe('other');
   });
 });

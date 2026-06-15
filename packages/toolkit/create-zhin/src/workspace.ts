@@ -98,6 +98,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       '@zhin.js/client': '^2.0.0',
       '@zhin.js/host-api': '^1.0.0',
       '@zhin.js/contract': '^1.0.0',
+      '@zhin.js/satori': '^0.2.0',
       'tsx': '^4.22.0',
       ...adapterDeps,
       ...databaseDeps,
@@ -651,6 +652,7 @@ HTTP_TOKEN=change-me
       "sourceMap": true,
       "verbatimModuleSyntax": false,
       "jsx": "react-jsx",
+      "jsxImportSource": "zhin.js",
       "types": [
         "@types/node",
         "zhin.js",
@@ -669,11 +671,49 @@ HTTP_TOKEN=change-me
     ]
   }, { spaces: 2 });
   
+  // Satori 卡片（文件顶 @jsxImportSource，与 IM 的 zhin.js JSX 分离）
+  await fs.writeFile(path.join(projectPath, 'src', 'plugins', 'status-card.tsx'),
+`/** @jsxImportSource @zhin.js/satori */
+import {
+  Card,
+  CardHeader,
+  Row,
+  StatChip,
+  wrapCardHtml,
+  DEFAULT_CARD_THEME,
+} from '@zhin.js/satori';
+
+export interface StatusCardLine {
+  label: string;
+  value: string;
+}
+
+export function buildStatusCard(title: string, lines: StatusCardLine[]): string {
+  const body = (
+    <Card>
+      <CardHeader title={title} meta="Zhin.js 示例卡片" />
+      <Row gap={10}>
+        {lines.map((line) => (
+          <StatChip
+            key={line.label}
+            label={line.label}
+            value={line.value}
+            accent={DEFAULT_CARD_THEME.accentMem}
+          />
+        ))}
+      </Row>
+    </Card>
+  );
+  return wrapCardHtml(body, DEFAULT_CARD_THEME.canvas);
+}
+`);
+
   // src/plugins/example.ts（参考 test-bot 的风格）
   await fs.writeFile(path.join(projectPath, 'src', 'plugins', 'example.ts'),
-`import { usePlugin, MessageCommand, Time, type MessageElement } from 'zhin.js';
+`import { usePlugin, MessageCommand, Time, segment, type MessageElement } from 'zhin.js';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { buildStatusCard } from './status-card.js';
 
 const { addCommand, useContext } = usePlugin();
 
@@ -720,6 +760,23 @@ addCommand(
       ].join('\\n');
     })
 );
+
+// 状态卡片（@zhin.js/satori JSX → segment.html；安装 html-renderer 可自动转图）
+addCommand(
+  new MessageCommand('card')
+    .desc('示例状态卡片', '使用 @zhin.js/satori JSX 生成 HTML 卡片')
+    .usage('card')
+    .action(() => {
+      const mem = process.memoryUsage();
+      const html = buildStatusCard('运行状态', [
+        { label: 'RSS', value: \`\${Math.round(mem.rss / 1024 / 1024)}MB\` },
+        { label: '堆', value: \`\${Math.round(mem.heapUsed / 1024 / 1024)}MB\` },
+        { label: '运行', value: Time.formatTime(process.uptime() * 1000) },
+      ]);
+      return segment.html({ html, width: 540 });
+    })
+);
+
 addCommand(
   new MessageCommand("send").action(
     (_, result) => result.remaining as MessageElement[]

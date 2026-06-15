@@ -6,6 +6,7 @@ import {
   formatSessionContextLine,
   resolvePromptFileRole,
   buildRichSystemPrompt,
+  buildTurnContextEnvelope,
 } from '../../src/zhin-agent/prompt.js';
 import { buildSenderRolesFilePermissionsPrompt } from '../../src/security/file-role-policy.js';
 import type { Message } from '@zhin.js/core';
@@ -67,24 +68,28 @@ describe('buildContextHint', () => {
 });
 
 describe('buildRichSystemPrompt', () => {
-  it('Session 并入 # Runtime，无尾部 Context:', () => {
+  it('Session 不在可缓存 system；见 [Turn context]', () => {
+    const commMessage = mockCommMessage({
+      adapter: 'icqq',
+      endpoint: '8596238',
+      scope: 'group',
+      sceneId: '201193925',
+      senderId: '1659488338',
+    });
     const prompt = buildRichSystemPrompt({
       config: minimalConfig,
       skillRegistry: null,
       skillsSummaryXML: '',
       activeSkillsContext: '',
       bootstrapContext: '',
-      commMessage: mockCommMessage({
-        adapter: 'icqq',
-        endpoint: '8596238',
-        scope: 'group',
-        sceneId: '201193925',
-        senderId: '1659488338',
-      }),
+      commMessage,
     });
     expect(prompt).toContain('# Runtime');
-    expect(prompt).toContain('Session: platform:icqq | endpoint:8596238 | group_id:201193925');
-    expect(prompt).not.toMatch(/\nContext: platform:/);
+    expect(prompt).toContain('Volatile runtime');
+    expect(prompt).not.toContain('Session: platform:icqq');
+
+    const envelope = buildTurnContextEnvelope({ commMessage });
+    expect(envelope).toContain('Session: platform:icqq | endpoint:8596238 | group_id:201193925');
   });
 
   it('File Permissions 为各 SenderRole 静态说明，非当前用户档位', () => {

@@ -8,7 +8,7 @@ import {
   isBlockedDevicePath,
   MAX_READ_FILE_SIZE,
 } from '../security/file-policy.js';
-import { checkFilePermission, formatFilePermissionMessage, toolRequesterRoleToFileRole } from '../security/file-role-policy.js';
+import { checkFilePermission, resolveFilePermissionGate, toolRequesterRoleToFileRole } from '../security/file-role-policy.js';
 import { checkFileToolAccess, checkSensitiveFilePathAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
 import { expandHome, nodeErrToFileMessage } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
@@ -74,9 +74,8 @@ export class ReadFileBuiltinTool extends BuiltinBaseTool {
     // 第 2 层：文件角色权限矩阵（user 只有 read 权限，安全放行）
     const fileRole = toolRequesterRoleToFileRole(roleDecision.role);
     const permResult = checkFilePermission(fileRole, 'read', filePathArg);
-    if (!permResult.allowed) {
-      return formatFilePermissionMessage(permResult, 'read_file');
-    }
+    const permGate = resolveFilePermissionGate(permResult, 'read_file');
+    if (permGate) return permGate;
 
     // 第 3 层：敏感路径检测 + 文件操作
     try {

@@ -363,9 +363,9 @@ export interface OllamaProviderConfig extends ProviderConfig {
   num_ctx?: number;
 }
 
-/** 命名 provider 实例（driver + 连接参数） */
-export interface ProviderInstanceConfig extends ProviderConfig {
-  driver: string;
+/** 命名 provider 实例（sdk + 连接参数，ADR 0018） */
+export interface ProviderInstanceConfig extends ProviderConfig, OllamaProviderConfig {
+  sdk: import('./llm/sdk-registry.js').SdkId;
 }
 
 export interface RouteMatchConfig {

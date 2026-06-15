@@ -12,6 +12,7 @@ import {
   getModel,
   convertLegacyTools,
   registerLlmApiFromProviders,
+  sdkEntryFromProvider,
   type AgentMessage,
   type ParsedToolCall,
   type AssistantMessage,
@@ -25,6 +26,9 @@ import type { ToolCallRecord } from './tool-calls-user-format.js';
 import { formatToolCallsForUser } from './tool-calls-user-format.js';
 import { buildVisionUserMessage, summarizeMultimodalParts } from './multimodal-message.js';
 import { DEFAULT_MULTIMODAL_CONFIG } from '../media/media-types.js';
+import type { PhaseTraceConfig } from './phase-trace.js';
+import { logAgentLoopIterationEnd } from './phase-trace.js';
+import type { StreamOptions } from '@zhin.js/ai';
 
 const logger = new Logger(null, 'AgentLoopStandalone');
 
@@ -73,13 +77,11 @@ async function buildUserMessages(input: string | ContentPart[]): Promise<AgentMe
 
 function ensureLlmApi(provider: AIProvider, resolveProvider?: (alias: string) => AIProvider | undefined): void {
   registerLlmApiFromProviders(
-    [{
-      alias: provider.name,
-      provider,
-      config: { api: 'openai-completions' },
-      models: provider.models,
-    }],
-    (alias) => (alias === provider.name ? provider : resolveProvider?.(alias)),
+    [sdkEntryFromProvider(provider)],
+    (alias) => {
+      const p = alias === provider.name ? provider : resolveProvider?.(alias);
+      return p?.models ?? [];
+    },
   );
 }
 
@@ -100,6 +102,12 @@ export interface AgentLoopStandaloneInput {
   transformToolResult?: ToolResultTransform;
   callbacks?: AgentLoopStandaloneCallbacks;
   signal?: AbortSignal;
+  /** Anthropic / OpenAI prompt cache */
+  promptCache?: boolean;
+  promptCacheKey?: string;
+  promptCacheRetention?: 'in_memory' | '24h';
+  /** 与 orchestrator 一致的 per-iteration phase trace */
+  iterationTrace?: { config: PhaseTraceConfig; sessionId: string; label?: string };
   /** 默认 true：子 agent / worker 在 direct bash 上下文执行 */
   directExecution?: boolean;
 }
@@ -184,6 +192,11 @@ export async function runAgentLoopStandaloneTurn(
   const loopConfig = {
     model: llmModel,
     maxIterations,
+    streamOptions: {
+      promptCache: input.promptCache !== false,
+      promptCacheKey: input.promptCacheKey,
+      promptCacheRetention: input.promptCacheRetention,
+    } satisfies Pick<StreamOptions, 'promptCache' | 'promptCacheKey' | 'promptCacheRetention'>,
     convertToLlm: (messages: AgentMessage[]) => messages,
     beforeToolCall: async ({ toolCall }: { toolCall: ParsedToolCall }) => {
       callbacks?.onToolCall?.(toolCall.name, toolCall.arguments);
@@ -203,6 +216,21 @@ export async function runAgentLoopStandaloneTurn(
         lastAssistantText = `Something went wrong: ${assistant.errorMessage}. Please try again or rephrase your request.`;
       }
       lastUsage = assistant.usage;
+      const trace = input.iterationTrace;
+      if (trace) {
+        const toolNames = assistant.content
+          .filter((b): b is Extract<typeof b, { type: 'toolCall' }> => b.type === 'toolCall')
+          .map((b) => b.name)
+          .join(',');
+        logAgentLoopIterationEnd(trace.config, trace.sessionId, {
+          iteration: iterations,
+          model,
+          label: trace.label ?? 'standalone',
+          usage: assistant.usage,
+          stopReason: assistant.stopReason,
+          toolNames: toolNames || undefined,
+        });
+      }
     }
     if (event.type === 'agent_end') {
       const userBatch = event.userMessages ?? promptMessages;

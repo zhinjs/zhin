@@ -41,7 +41,7 @@ inbox:
 ai:
   providers:
     openai-main:
-      api: openai-completions
+      sdk: openai
       apiKey: ${AI_API_KEY}
       baseUrl: ${AI_API_BASE}
   agents:

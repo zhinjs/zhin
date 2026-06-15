@@ -18,7 +18,7 @@ function mockAssistantMessage(text: string): AssistantMessage {
   return {
     role: 'assistant',
     content: [{ type: 'text', text }],
-    api: 'openai-completions',
+    api: 'ai-sdk',
     provider: 'test',
     model: 'gpt-test',
     usage: EMPTY_TOKEN_USAGE,
@@ -33,7 +33,7 @@ describe('llm api-registry', () => {
   });
 
   it('getModel uses live provider models when registry allowlist is empty', () => {
-    registerProviderInstance('openai-main', { api: 'openai-completions' }, []);
+    registerProviderInstance('openai-main', { sdk: 'openai' }, []);
     setLegacyProviderResolver(() => ({
       name: 'openai-main',
       models: ['mimo-v2.5-pro'],
@@ -44,7 +44,7 @@ describe('llm api-registry', () => {
   });
 
   it('getModel rejects model not in live discovery list', () => {
-    registerProviderInstance('openai-main', { api: 'openai-completions' }, []);
+    registerProviderInstance('openai-main', { sdk: 'openai' }, []);
     setLegacyProviderResolver(() => ({
       name: 'openai-main',
       models: ['gpt-4o'],
@@ -54,7 +54,7 @@ describe('llm api-registry', () => {
   });
 
   it('getModel prefers explicit registry allowlist over live provider', () => {
-    registerProviderInstance('cloudflare-flash', { api: 'cloudflare-workers-ai' }, ['@cf/zai-org/glm-4.7-flash']);
+    registerProviderInstance('cloudflare-flash', { sdk: 'openai-compatible', accountId: 'acc' }, ['@cf/zai-org/glm-4.7-flash']);
     setLegacyProviderResolver(() => ({
       name: 'cloudflare-flash',
       models: ['other-model'],
@@ -66,7 +66,7 @@ describe('llm api-registry', () => {
   });
 
   it('getModel uses live provider models when registry allowlist is empty', () => {
-    registerProviderInstance('openai-main', { api: 'openai-completions' }, []);
+    registerProviderInstance('openai-main', { sdk: 'openai' }, []);
     setLegacyProviderResolver(() => ({
       name: 'openai-main',
       models: ['mimo-v2.5-pro'],
@@ -77,7 +77,7 @@ describe('llm api-registry', () => {
   });
 
   it('getModel rejects model not in live discovery list', () => {
-    registerProviderInstance('openai-main', { api: 'openai-completions' }, []);
+    registerProviderInstance('openai-main', { sdk: 'openai' }, []);
     setLegacyProviderResolver(() => ({
       name: 'openai-main',
       models: ['gpt-4o'],
@@ -87,7 +87,7 @@ describe('llm api-registry', () => {
   });
 
   it('getModel prefers explicit registry allowlist over live provider', () => {
-    registerProviderInstance('cloudflare-flash', { api: 'cloudflare-workers-ai' }, ['@cf/zai-org/glm-4.7-flash']);
+    registerProviderInstance('cloudflare-flash', { sdk: 'openai-compatible', accountId: 'acc' }, ['@cf/zai-org/glm-4.7-flash']);
     setLegacyProviderResolver(() => ({
       name: 'cloudflare-flash',
       models: ['other-model'],
@@ -100,21 +100,21 @@ describe('llm api-registry', () => {
 
   it('getModel resolves registered provider', () => {
     registerProviderInstance('openai', {
-      api: 'openai-completions',
+      sdk: 'openai',
       apiKey: 'k',
       baseUrl: 'https://api.example.com/v1',
     }, ['gpt-test']);
 
     const model = getModel('openai', 'gpt-test');
     expect(model.provider).toBe('openai');
-    expect(model.api).toBe('openai-completions');
+    expect(model.api).toBe('ai-sdk');
     expect(model.id).toBe('gpt-test');
   });
 
   it('stream delegates to registered api provider', async () => {
-    registerProviderInstance('openai', { api: 'openai-completions' }, ['gpt-test']);
+    registerProviderInstance('openai', { sdk: 'openai' }, ['gpt-test']);
     registerApiProvider({
-      api: 'openai-completions',
+      api: 'ai-sdk',
       stream(_model, context) {
         const text = context.messages[0]?.role === 'user'
           ? context.messages[0].content.find((b) => b.type === 'text')?.text ?? ''
@@ -134,7 +134,7 @@ describe('llm api-registry', () => {
   });
 
   it('stream throws when api not registered', () => {
-    registerProviderInstance('openai', { api: 'openai-completions' }, ['gpt-test']);
+    registerProviderInstance('openai', { sdk: 'openai' }, ['gpt-test']);
     const model = getModel('openai', 'gpt-test');
     expect(() => stream(model, createContext(''))).toThrow(/No ApiProvider registered/);
   });

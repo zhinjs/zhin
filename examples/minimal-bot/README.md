@@ -24,7 +24,7 @@ pnpm dev
 1. 确认终端里 Host 已启动（日志会给出监听地址，一般为 `http://127.0.0.1:8086`）。
 2. 打开 **[Remote Console](https://console.zhin.dev)**（或本地 [zhin-console](https://github.com/zhinjs/zhin-console) 开发服，通常 `http://127.0.0.1:5173`）。
 3. 登录时 **API Base** 填与日志一致的 Host 地址（如 `http://127.0.0.1:8086`），**Token** 与 `.env` 中 `HTTP_TOKEN` 一致（默认 `minimal-dev-token`）。
-4. 在 Console 侧栏打开 **沙盒** 页（连接建立后自动创建 Sandbox bot），发送 `hello` → 应收到插件回复。
+4. 在 Console 侧栏打开 **沙盒** 页（连接建立后自动创建 Sandbox bot），发送 `hello` → 应收到插件回复；发送 `card` 可查看 **@zhin.js/satori JSX** 示例卡片（`src/plugins/status-card.tsx`）。
 5. （可选）本地 [Ollama](https://ollama.com/) 运行后发送 `ai: 你好` 触发 AI 回合。
 
 详见 [docs/console-remote.md](../../docs/console-remote.md)。

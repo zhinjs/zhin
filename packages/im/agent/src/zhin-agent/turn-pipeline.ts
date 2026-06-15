@@ -18,9 +18,11 @@ import {
   beginTurnSession as beginTurnSessionIO,
   type SessionIODeps,
 } from './session-io.js';
-import { buildTurnUserMessages } from './turn-user-message.js';
+import { buildTurnUserMessages, applyTurnContextToUserMessages, prependEnvelopeToFirstUserText } from './turn-user-message.js';
 import { runAgentLoopTextTurn, runAgentLoopVisionTurn } from './agent-loop-turn.js';
-import { buildEnhancedPersona } from './prompt.js';
+import { buildTurnContextEnvelope, resolveQuoteSystemHint } from './prompt.js';
+import { buildAgentsEnvelopeContext } from './agents-instruction.js';
+import { getModel } from '@zhin.js/ai';
 import { collectRuntimeTools } from './tool-runtime.js';
 import { buildMultimodalVisionSystemPrompt } from './prompt-assembly.js';
 import { attachWebSearchLocale } from './web-search-locale-attach.js';
@@ -175,7 +177,7 @@ export async function processTextTurn(
 
     const profileSummary = await host.userProfiles.buildProfileSummary(userId);
     const toneHint = host.config.toneAwareness ? detectTone(content).hint : '';
-    const personaEnhanced = buildEnhancedPersona(host.config, profileSummary, toneHint);
+    const personaForChat = host.buildDisciplinedPrompt(host.config.persona);
 
     const chatCandidates = resolveModelCandidates(
       host.getTurnProvider().models,
@@ -184,11 +186,27 @@ export async function processTextTurn(
       host.config,
       'chat',
     );
+    const modelId = chatCandidates[0] || host.getTurnProvider().models[0] || 'gpt-4o-mini';
+    const providerAlias = host.getTurnProvider().name;
+    const llmModel = getModel(providerAlias, modelId);
+    const agentsContext = await buildAgentsEnvelopeContext();
+
+    const turnEnvelope = buildTurnContextEnvelope({
+      commMessage,
+      profileSummary,
+      toneHint,
+      deferredStats,
+      activeSkillsContext: host.activeSkillsContext || undefined,
+      quoteSystemHint: resolveQuoteSystemHint(commMessage),
+      modelLine: `${providerAlias}/${modelId}`,
+      sdk: llmModel.sdk,
+      agentsContext: agentsContext ?? undefined,
+    });
+    const userMessages = extras?.prebuiltMessages?.length
+      ? prependEnvelopeToFirstUserText(extras.prebuiltMessages, turnEnvelope)
+      : applyTurnContextToUserMessages(turnUser.promptMessages, turnEnvelope);
 
     logPhase(host.phaseConfig, 'path.agent_loop', sessionId, { toolCount: allTools.length });
-    const userMessages = extras?.prebuiltMessages?.length
-      ? extras.prebuiltMessages
-      : turnUser.promptMessages;
     const loopResult = await host.promptController.schedule({
       sessionKey,
       sessionId,
@@ -204,8 +222,8 @@ export async function processTextTurn(
         contextForTools,
         allTools,
         resolvedTools,
-        personaEnhanced,
-        modelId: chatCandidates[0] || host.getTurnProvider().models[0] || 'gpt-4o-mini',
+        personaEnhanced: personaForChat,
+        modelId,
         modelCandidates: chatCandidates,
         onChunk,
         initialMessages,
@@ -296,14 +314,13 @@ export async function processMultimodalTurn(
   const textContent = summarizeMultimodalParts(parts, supportsVision);
   const turnUser = buildTurnUserMessages(commMessage, textContent);
   const profileSummary = await host.userProfiles.buildProfileSummary(userId);
-  const personaEnhanced = host.buildDisciplinedPrompt(
-    buildEnhancedPersona(host.config, profileSummary, ''),
-  );
+  const toneHint = host.config.toneAwareness ? detectTone(textContent).hint : '';
+  const personaForVision = host.buildDisciplinedPrompt(host.config.persona);
   const visionSystemPrompt = await buildMultimodalVisionSystemPrompt(host, {
     commMessage,
     sessionId,
     textContent,
-    personaEnhanced,
+    personaEnhanced: personaForVision,
   });
   const visionCandidates = resolveModelCandidates(
     host.getTurnProvider().models,
@@ -312,8 +329,23 @@ export async function processMultimodalTurn(
     host.config,
     'vision',
   );
+  const visionModelId = visionCandidates[0] || host.getTurnProvider().models[0] || 'gpt-4o-mini';
+  const visionProviderAlias = host.getTurnProvider().name;
+  const visionLlmModel = getModel(visionProviderAlias, visionModelId);
+  const agentsContext = await buildAgentsEnvelopeContext();
 
   logPhase(host.phaseConfig, 'path.agent_loop', sessionId, { mode: 'multimodal' });
+
+  const turnEnvelope = buildTurnContextEnvelope({
+    commMessage,
+    profileSummary,
+    toneHint,
+    activeSkillsContext: host.activeSkillsContext || undefined,
+    quoteSystemHint: resolveQuoteSystemHint(commMessage),
+    modelLine: `${visionProviderAlias}/${visionModelId}`,
+    sdk: visionLlmModel.sdk,
+    agentsContext: agentsContext ?? undefined,
+  });
 
   const userMessage = await buildVisionUserMessage(
     userMessagePlainText(turnUser.promptMessages[0]!),
@@ -321,13 +353,14 @@ export async function processMultimodalTurn(
     supportsVision,
     DEFAULT_MULTIMODAL_CONFIG.maxFileBytes,
   );
+  const userMessages = prependEnvelopeToFirstUserText([userMessage], turnEnvelope);
 
   let loopResult;
   try {
     loopResult = await host.promptController.schedule({
       sessionKey,
       sessionId,
-      userMessages: [userMessage],
+      userMessages,
       commMessage,
       onChunk,
       execute: (initialMessages, hooks, signal, _turnId) => runAgentLoopVisionTurn({

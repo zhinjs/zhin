@@ -160,6 +160,35 @@ logger.info('{Name} 插件已加载')
 
 ### 第 5 步：生成 tsconfig.json
 
+**IM 消息组件**（命令回复、`<image>` 等）默认使用 `zhin.js` JSX：
+
+```json
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "zhin.js"
+  }
+}
+```
+
+**Satori 出图卡片**（HTML 字符串 → `segment.html` / `htmlToSvg`）与 IM JSX **分离**：在卡片 `.tsx` 文件顶加注释，或单独目录配置 `jsxImportSource: "@zhin.js/satori"`：
+
+```tsx
+/** @jsxImportSource @zhin.js/satori */
+import { Card, CardHeader, wrapCardHtml } from '@zhin.js/satori'
+
+export function buildMyCard(): string {
+  const body = (
+    <Card>
+      <CardHeader title="标题" />
+    </Card>
+  )
+  return wrapCardHtml(body, '#d8dce3')
+}
+```
+
+完整 `tsconfig.json` 示例：
+
 ```json
 {
   "compilerOptions": {
@@ -181,6 +210,8 @@ logger.info('{Name} 插件已加载')
   "exclude": ["lib", "node_modules", "client", "tests"]
 }
 ```
+
+依赖：`pnpm add @zhin.js/satori`（可选 `@zhin.js/plugin-html-renderer` 自动 HTML→PNG）。
 
 ### 第 6 步：生成测试文件
 

@@ -5,7 +5,7 @@ import { exec, type ExecOptions } from 'node:child_process';
 import { promisify } from 'node:util';
 import * as path from 'node:path';
 import type { Tool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
-import { shellEscape } from '../security/file-policy.js';
+import { shellEscape, buildSensitiveSearchExcludeGlobs } from '../security/file-policy.js';
 import { checkFileToolAccess, checkSensitiveFilePathAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
 import { errMsg } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
@@ -94,6 +94,9 @@ export class GrepBuiltinTool extends BuiltinBaseTool {
         }
         if (typeof args.include === 'string' && args.include.trim()) {
           rgFlags.push(`--glob=${shellEscape(args.include)}`);
+        }
+        for (const exclude of buildSensitiveSearchExcludeGlobs()) {
+          rgFlags.push(`--glob=${shellEscape(exclude)}`);
         }
         cmd = `rg ${rgFlags.join(' ')} ${safePattern} ${safePath} 2>/dev/null | head -${limit}`;
       } else {

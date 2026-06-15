@@ -22,12 +22,14 @@ import { runWithCommMessage } from '../security/comm-message-context.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
 import { createOwnerOrchestratedToolResultTransform } from '../orchestrator/owner-confirm-orchestration.js';
 import { resolveModelHarness } from './model-harness.js';
-import { buildAgentPathSystemPrompt, buildChatPathSystemPrompt } from './prompt-assembly.js';
+import { buildAgentPathSystemPrompt, buildChatPathSystemPrompt, describeAgentPathPromptSections } from './prompt-assembly.js';
+import { logPromptComposition } from './prompt-trace.js';
 import { planToolRun } from './tool-runtime.js';
 import { sanitizeAssistantReply } from './text-sanitize.js';
 import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-format.js';
 import { transformContextWithCompaction } from './compaction-runtime.js';
-import { logPhase, usageLogFields } from './phase-trace.js';
+import { logPhase, tokenUsageLogFields, logAgentLoopIterationEnd } from './phase-trace.js';
+import { buildAgentPromptCacheStreamOptions } from './config.js';
 import type { PromptTurnHooks } from './prompt-controller.js';
 import type { ZhinAgentPrivate, OnChunkCallback, Message } from './zhin-agent-private.js';
 
@@ -139,6 +141,12 @@ async function runAgentLoopVisionTurnOnce(
   const loopConfig = {
     model: llmModel,
     maxIterations: 1,
+    streamOptions: buildAgentPromptCacheStreamOptions(host.config, {
+      modelSdk: llmModel.sdk,
+      provider: providerAlias,
+      modelId,
+      label: 'vision',
+    }),
     convertToLlm: (messages: AgentMessage[]) => messages,
     getSteeringMessages: promptHooks?.getSteeringMessages,
     getFollowUpMessages: promptHooks?.getFollowUpMessages,
@@ -155,6 +163,18 @@ async function runAgentLoopVisionTurnOnce(
       const assistant = event.message as AssistantMessage;
       lastAssistantText = assistantText(assistant);
       lastUsage = assistant.usage;
+      const toolNames = assistant.content
+        .filter((b): b is Extract<typeof b, { type: 'toolCall' }> => b.type === 'toolCall')
+        .map((b) => b.name)
+        .join(',');
+      logAgentLoopIterationEnd(host.phaseConfig, sessionId, {
+        iteration: iterations,
+        model: modelId,
+        label: 'vision',
+        usage: assistant.usage,
+        stopReason: assistant.stopReason,
+        toolNames: toolNames || undefined,
+      });
       onChunk?.(lastAssistantText, lastAssistantText);
     }
     if (event.type === 'agent_end') {
@@ -170,7 +190,7 @@ async function runAgentLoopVisionTurnOnce(
 
   logPhase(host.phaseConfig, 'agent_loop.vision.end', sessionId, {
     iterations,
-    ...usageLogFields(lastUsage ? tokenUsageToLegacy(lastUsage) : undefined),
+    ...tokenUsageLogFields(lastUsage),
   });
 
   return {
@@ -249,6 +269,7 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
         personaEnhanced,
         preData,
         deferredStats: input.deferredStats,
+        modelSdk: llmModel.sdk,
       })
     : buildChatPathSystemPrompt(host, personaEnhanced, contextForTools);
 
@@ -257,6 +278,36 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
         approvalMode: host.config.execApprovalMode,
       })
     : [];
+
+  if (hasTools) {
+    const sections = await describeAgentPathPromptSections(host, {
+      commMessage: contextForTools,
+      content: input.rawContent,
+      sessionId,
+      deferredStats: input.deferredStats,
+      modelSdk: llmModel.sdk,
+    });
+    logPromptComposition({
+      config: host.promptTraceConfig,
+      sessionId,
+      label: 'orchestrator',
+      systemPrompt,
+      sections,
+      historyMessages: loaded.messages,
+      tools: agentTools,
+      userPreview: input.rawContent,
+    });
+  } else {
+    logPromptComposition({
+      config: host.promptTraceConfig,
+      sessionId,
+      label: 'chat',
+      systemPrompt,
+      historyMessages: loaded.messages,
+      tools: [],
+      userPreview: input.rawContent,
+    });
+  }
 
   const harness = resolveModelHarness(host.getTurnProvider().name, modelId, host.config.modelHarness);
   const maxIterations = hasTools
@@ -312,6 +363,12 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
     model: llmModel,
     maxIterations,
     sessionId,
+    streamOptions: buildAgentPromptCacheStreamOptions(host.config, {
+      modelSdk: llmModel.sdk,
+      provider: providerAlias,
+      modelId,
+      label: hasTools ? 'orchestrator' : 'chat',
+    }),
     convertToLlm: (messages: AgentMessage[]) => messages,
     transformContext: async (messages: AgentMessage[], ctxSignal?: AbortSignal) =>
       transformContextWithCompaction(messages, ctxSignal, {
@@ -392,6 +449,18 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
       const assistant = event.message as AssistantMessage;
       lastAssistantText = assistantText(assistant);
       lastUsage = assistant.usage;
+      const toolNames = assistant.content
+        .filter((b): b is Extract<typeof b, { type: 'toolCall' }> => b.type === 'toolCall')
+        .map((b) => b.name)
+        .join(',');
+      logAgentLoopIterationEnd(host.phaseConfig, sessionId, {
+        iteration: iterations,
+        model: modelId,
+        label: hasTools ? 'orchestrator' : 'chat',
+        usage: assistant.usage,
+        stopReason: assistant.stopReason,
+        toolNames: toolNames || undefined,
+      });
       onChunk?.(lastAssistantText, lastAssistantText);
     }
     if (event.type === 'agent_end') {
@@ -432,7 +501,7 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
 
   logPhase(host.phaseConfig, 'agent_loop.turn.end', sessionId, {
     iterations,
-    ...usageLogFields(lastUsage ? tokenUsageToLegacy(lastUsage) : undefined),
+    ...tokenUsageLogFields(lastUsage),
   });
 
   return {

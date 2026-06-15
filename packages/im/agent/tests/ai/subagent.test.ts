@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { resetLlmApiRegistryForTests } from '@zhin.js/ai';
+import { wireMockProviderToLlmApi } from '../helpers/mock-llm-api.js';
 import { SubagentManager } from '@zhin.js/agent';
 import type { ZhinAgentEventEmitter } from '../../src/zhin-agent/event-emitter.js';
 import type { SubagentOrigin, SpawnOptions } from '@zhin.js/agent';
@@ -92,6 +93,7 @@ describe('SubagentManager', () => {
   beforeEach(() => {
     resetLlmApiRegistryForTests();
     provider = createMockProvider();
+    wireMockProviderToLlmApi(provider);
     mockTools = createMockTools();
     manager = new SubagentManager({
       provider: provider as any,

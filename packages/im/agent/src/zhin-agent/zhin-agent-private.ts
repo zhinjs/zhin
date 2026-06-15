@@ -29,6 +29,7 @@ import type { DeferredWorkerResult } from '../deferred-worker-runner.js';
 import type { DeferredWorkerRunner } from '../deferred-worker-runner.js';
 import type { ZhinAgentConfig, OnChunkCallback } from './config.js';
 import type { PhaseTraceConfig } from './phase-trace.js';
+import type { PromptTraceConfig } from './prompt-trace.js';
 import type { ZhinAgentTurnMetrics } from './turn-metrics.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import type { PromptController } from './prompt-controller.js';
@@ -55,6 +56,7 @@ export interface ZhinAgentPrivate {
   readonly skillsSummaryXML: string;
   readonly modelRegistry: ModelRegistry | null;
   readonly phaseConfig: PhaseTraceConfig;
+  readonly promptTraceConfig: PromptTraceConfig;
   readonly emitter: ZhinAgentEventEmitter;
   deferredCatalog: AgentTool[];
   readonly deferredWorkerRunner: DeferredWorkerRunner;

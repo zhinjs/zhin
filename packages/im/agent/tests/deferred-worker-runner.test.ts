@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AgentTool, AIProvider } from '@zhin.js/ai';
 import { resetLlmApiRegistryForTests } from '@zhin.js/ai';
+import { wireMockProviderToLlmApi } from './helpers/mock-llm-api.js';
 import { DeferredWorkerRunner } from '../src/deferred-worker-runner.js';
 
 function makeTool(name: string, description = 'test'): AgentTool {
@@ -31,6 +32,7 @@ describe('DeferredWorkerRunner', () => {
       models: ['test-model'],
       chat,
     } as unknown as AIProvider;
+    wireMockProviderToLlmApi(provider);
 
     const deferredCatalog = [makeTool('github_star', 'star repo')];
     const allByName = new Map<string, AgentTool>([
@@ -64,6 +66,7 @@ describe('DeferredWorkerRunner', () => {
       models: ['test-model'],
       chat: vi.fn(),
     } as unknown as AIProvider;
+    wireMockProviderToLlmApi(provider);
 
     const runner = new DeferredWorkerRunner();
     const result = await runner.runSync({
@@ -104,6 +107,7 @@ describe('DeferredWorkerRunner', () => {
       models: ['test-model'],
       chat,
     } as unknown as AIProvider;
+    wireMockProviderToLlmApi(provider);
 
     const deferredCatalog = [makeTool('web_search', 'search web')];
     const allByName = new Map<string, AgentTool>([
@@ -164,6 +168,7 @@ describe('DeferredWorkerRunner', () => {
       models: ['test-model'],
       chat,
     } as unknown as AIProvider;
+    wireMockProviderToLlmApi(provider);
 
     const bash = makeTool('bash');
     const readFile = makeTool('read_file');
@@ -203,6 +208,7 @@ describe('DeferredWorkerRunner', () => {
       models: ['test-model'],
       chat,
     } as unknown as AIProvider;
+    wireMockProviderToLlmApi(provider);
 
     const deferredCatalog = [makeTool('github_star', 'star repo')];
     const allByName = new Map<string, AgentTool>([

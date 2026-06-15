@@ -164,18 +164,15 @@ describe('file-policy', () => {
       }
     });
 
-    describe('应阻止 cat 敏感文件', () => {
-      const blocked = [
+    describe('敏感文件读取改由 checkBashSensitiveReadAccess 按角色拦截', () => {
+      const sensitiveReads = [
         'cat .env',
-        'cat /path/to/.env.local',
-        'cat server.pem',
-        'cat private.key',
-        'cat cert.p12',
+        'head .env',
       ];
 
-      for (const cmd of blocked) {
-        it(`阻止: ${cmd}`, () => {
-          expect(checkBashCommandSafety(cmd).safe).toBe(false);
+      for (const cmd of sensitiveReads) {
+        it(`checkBashCommandSafety 不再硬拦: ${cmd}`, () => {
+          expect(checkBashCommandSafety(cmd).safe).toBe(true);
         });
       }
     });

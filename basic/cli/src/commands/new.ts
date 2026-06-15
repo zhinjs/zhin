@@ -43,6 +43,7 @@ function tryZhinWorkspaceDevDependencies(): Record<string, string> | null {
       '@zhin.js/cli': 'workspace:*',
       '@zhin.js/client': 'workspace:*',
       '@zhin.js/host-api': 'workspace:*',
+      '@zhin.js/satori': 'workspace:*',
     };
   } catch {
     return null;
@@ -217,6 +218,7 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
     '@types/node': 'latest',
     typescript: 'latest',
     ...zhinStack,
+    '@zhin.js/satori': zhinStack['zhin.js'] === 'workspace:*' ? 'workspace:*' : 'latest',
     vitest: 'latest',
     '@vitest/coverage-v8': 'latest',
     rimraf: 'latest',
@@ -300,6 +302,8 @@ version: 0.1.0
       "declarationMap": true,
       "sourceMap": true,
       "verbatimModuleSyntax": false,
+      "jsx": "react-jsx",
+      "jsxImportSource": "zhin.js",
       "types": ["node"]
     },
     "include": ["src/**/*"],
@@ -511,9 +515,10 @@ export type { ${capitalizedName}EndpointConfig } from './endpoint.js';
 `;
     await fs.writeFile(path.join(pluginDir, 'src', 'index.ts'), indexAd, 'utf8');
   } else {
-    const indexNormal = `import { formatCompact, MessageCommand, onDispose, useContext, usePlugin, ZhinTool } from 'zhin.js';
+    const indexNormal = `import { formatCompact, MessageCommand, onDispose, segment, useContext, usePlugin, ZhinTool } from 'zhin.js';
 import path from 'node:path';
 import { PageManager } from '@zhin.js/host-api';
+import { buildWelcomeCard } from './cards/welcome-card.js';
 
 const { addCommand, addTool, logger } = usePlugin();
 
@@ -521,6 +526,12 @@ addCommand(
   new MessageCommand('${pluginName}')
     .desc('${capitalizedName} 插件命令')
     .action(() => '${capitalizedName} 运行中！')
+);
+
+addCommand(
+  new MessageCommand('${pluginName}-card')
+    .desc('示例欢迎卡片（@zhin.js/satori JSX）')
+    .action(() => segment.html({ html: buildWelcomeCard('World'), width: 540 }))
 );
 
 addTool(
@@ -550,6 +561,31 @@ onDispose(() => {
 logger.info('${capitalizedName} 插件已加载');
 `;
     await fs.writeFile(path.join(pluginDir, 'src', 'index.ts'), indexNormal, 'utf8');
+
+    await fs.ensureDir(path.join(pluginDir, 'src', 'cards'));
+    const welcomeCardSrc = `/** @jsxImportSource @zhin.js/satori */
+import {
+  Card,
+  CardHeader,
+  StatChip,
+  Row,
+  wrapCardHtml,
+  DEFAULT_CARD_THEME,
+} from '@zhin.js/satori';
+
+export function buildWelcomeCard(name: string): string {
+  const body = (
+    <Card>
+      <CardHeader title={\`你好，\${name}\`} meta="${capitalizedName}" />
+      <Row gap={10}>
+        <StatChip label="状态" value="OK" accent={DEFAULT_CARD_THEME.accentMem} />
+      </Row>
+    </Card>
+  );
+  return wrapCardHtml(body, DEFAULT_CARD_THEME.canvas);
+}
+`;
+    await fs.writeFile(path.join(pluginDir, 'src', 'cards', 'welcome-card.tsx'), welcomeCardSrc, 'utf8');
   }
 
   if (withClient) {

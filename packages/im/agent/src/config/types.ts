@@ -1,20 +1,14 @@
 import type { ProviderConfig } from '@zhin.js/ai';
+import type { SdkId } from '@zhin.js/ai';
 import type { OllamaProviderConfig } from '@zhin.js/ai';
 
-export type ProviderDriver =
-  | 'openai'
-  | 'anthropic'
-  | 'deepseek'
-  | 'moonshot'
-  | 'zhipu'
-  | 'google'
-  | 'gemini'
-  | 'ollama'
-  | 'cloudflare';
+export type { SdkId };
 
-export interface ProviderInstanceConfig extends ProviderConfig {
-  /** LLM protocol id (ADR 0009 D1), e.g. openai-completions */
-  api: string;
+export interface ProviderInstanceConfig extends ProviderConfig, OllamaProviderConfig {
+  /** AI SDK provider id (ADR 0018 closed table) */
+  sdk: SdkId;
+  /** Cloudflare Workers AI */
+  accountId?: string;
 }
 
 export interface RouteMatchConfig {

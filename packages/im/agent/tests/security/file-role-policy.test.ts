@@ -46,6 +46,24 @@ describe('checkFilePermission', () => {
     }
   });
 
+  it('user 对敏感路径的 read 直接拒绝', () => {
+    const result = checkFilePermission('user', 'read', '/project/.env');
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toContain('敏感路径');
+  });
+
+  it('owner 对敏感路径的 read 需要 needsConfirmation', () => {
+    const result = checkFilePermission('owner', 'read', '/project/.env');
+    expect(result.allowed).toBe(true);
+    expect(result.needsConfirmation).toBe(true);
+  });
+
+  it('admin 对敏感路径的 read 需要 needsOwnerConfirmation', () => {
+    const result = checkFilePermission('admin', 'read', '/project/.env');
+    expect(result.allowed).toBe(true);
+    expect(result.needsOwnerConfirmation).toBe(true);
+  });
+
   it('owner 对敏感路径的 create/update 需要 needsConfirmation', () => {
     const result = checkFilePermission('owner', 'update', '/project/.env');
     expect(result.allowed).toBe(true);
@@ -79,8 +97,9 @@ describe('isDangerousFileOperation', () => {
     expect(isDangerousFileOperation('delete', '/tmp/test.txt')).toBe(true);
   });
 
-  it('read 操作不危险', () => {
-    expect(isDangerousFileOperation('read', '/project/.env')).toBe(false);
+  it('read 操作对敏感路径危险', () => {
+    expect(isDangerousFileOperation('read', '/project/.env')).toBe(true);
+    expect(isDangerousFileOperation('read', '/project/src/main.ts')).toBe(false);
   });
 
   it('create/update 对敏感路径危险', () => {

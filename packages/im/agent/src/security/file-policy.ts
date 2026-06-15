@@ -314,16 +314,31 @@ function splitPipeSegments(command: string): string[] {
   return parts;
 }
 
-function isCatSensitiveFile(command: string): boolean {
-  const lower = command.toLowerCase();
-  if (!/\bcat\b/.test(lower)) return false;
-  return (
-    lower.includes('.env') ||
-    lower.includes('.pem') ||
-    lower.includes('.key') ||
-    lower.includes('.p12') ||
-    lower.includes('.pfx')
-  );
+/**
+ * 构建 ripgrep/grep 排除敏感路径的 glob（防止从项目根搜索时泄漏 .env 等）。
+ */
+export function buildSensitiveSearchExcludeGlobs(): string[] {
+  return [
+    '!**/.env',
+    '!**/.env.*',
+    '!**/*.pem',
+    '!**/*.key',
+    '!**/*.p12',
+    '!**/*.pfx',
+    '!**/.npmrc',
+    '!**/.netrc',
+    '!**/.pgpass',
+    '!**/.my.cnf',
+    '!**/.bash_history',
+    '!**/.zsh_history',
+    '!**/.ssh/**',
+    '!**/.gnupg/**',
+    '!**/.aws/**',
+    '!**/.kube/**',
+    '!**/.docker/**',
+    '!**/.gcloud/**',
+    '!**/.config/gcloud/**',
+  ];
 }
 
 function splitShellOperatorParts(command: string): string[] {
@@ -368,10 +383,6 @@ export function checkBashCommandSafety(command: string): { safe: boolean; reason
     return { safe: false, reason: '禁止通过 echo/printf 输出含密钥名的环境变量' };
   }
 
-  if (isCatSensitiveFile(trimmed)) {
-    return { safe: false, reason: '禁止通过 cat 读取敏感文件（.env/.pem/.key）' };
-  }
-
   return { safe: true };
 }
 
@@ -387,6 +398,27 @@ const BASH_READ_COMMANDS: ReadonlySet<string> = new Set([
   'cat', 'head', 'tail', 'less', 'more', 'wc', 'stat', 'file', 'strings',
   'jq', 'awk', 'cut', 'sort', 'uniq', 'tr',
 ]);
+
+/**
+ * 从 bash 只读命令中提取可能的目标文件路径（不含 flag）。
+ */
+export function extractBashReadPaths(command: string): string[] {
+  const paths: string[] = [];
+  for (const part of splitShellOperatorParts(command.trim())) {
+    for (const segment of splitPipeSegments(part)) {
+      const tokens = segment.trim().split(/\s+/);
+      const baseCmd = tokens[0];
+      if (!baseCmd || !BASH_READ_COMMANDS.has(baseCmd)) continue;
+      for (let i = 1; i < tokens.length; i++) {
+        const tok = tokens[i];
+        if (!tok || tok.startsWith('-')) continue;
+        if (tok === '|' || tok === '&&' || tok === '||' || tok === ';') break;
+        paths.push(tok);
+      }
+    }
+  }
+  return paths;
+}
 
 /** 目录列出类命令 */
 const BASH_LIST_COMMANDS: ReadonlySet<string> = new Set([

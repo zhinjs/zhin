@@ -3,7 +3,9 @@
   "compilerOptions": {
     "types": ["@types/node", "zhin.js", "@zhin.js/adapter-sandbox", "@zhin.js/host-api", "@zhin.js/host-router"],
     "outDir": "./lib",
-    "rootDir": "./src"
+    "rootDir": "./src",
+    "jsx": "react-jsx",
+    "jsxImportSource": "zhin.js"
   },
   "include": ["src/**/*"],
   "exclude": ["lib", "node_modules"]

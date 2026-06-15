@@ -67,7 +67,7 @@ export function applyAiConfigFixes(
     fixes.push('removed deprecated ai.memoryMcp');
   }
 
-  if (hadDriver) fixes.push('migrated ai.providers.*.driver to api');
+  if (hadDriver) fixes.push('migrated ai.providers.*.driver to sdk');
 
   const context = next.context;
   if (context && typeof context === 'object' && !Array.isArray(context)) {

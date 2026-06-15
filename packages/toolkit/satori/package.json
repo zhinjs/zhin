@@ -18,6 +18,14 @@
     ".": {
       "import": "./lib/index.js",
       "types": "./lib/index.d.ts"
+    },
+    "./jsx-runtime": {
+      "import": "./lib/jsx-runtime.js",
+      "types": "./lib/jsx-runtime.d.ts"
+    },
+    "./jsx-dev-runtime": {
+      "import": "./lib/jsx-dev-runtime.js",
+      "types": "./lib/jsx-dev-runtime.d.ts"
     }
   },
   "scripts": {
@@ -25,9 +33,10 @@
     "clean": "rimraf lib",
     "build": "tsup",
     "dev": "tsup --watch",
+    "test": "vitest run --config vitest.config.ts",
     "test-type": "tsc --noEmit",
     "lint": "eslint . --ext .ts",
-    "ci-check": "pnpm test-type && pnpm lint"
+    "ci-check": "pnpm test-type && pnpm test && pnpm lint"
   },
   "keywords": [
     "satori",

@@ -65,4 +65,32 @@ describe('Prompt discipline block', () => {
     expect(prompt).toContain('# Platform');
     expect(prompt).toContain('icqq custom hint');
   });
+
+  it('§11 bootstrap 不含 AGENTS；toolSearch §8 为 catalog 非全文 XML', () => {
+    const xml = '<skills><skill available="true"><name>demo</name><desc>' + 'x'.repeat(200) + '</desc></skill></skills>';
+    const prompt = buildRichSystemPrompt({
+      config: DEFAULT_CONFIG,
+      skillRegistry: null,
+      skillsSummaryXML: xml,
+      activeSkillsContext: '<skill>full active xml</skill>',
+      bootstrapContext: [
+        '# Workspace',
+        '',
+        '## SOUL.md',
+        '',
+        'Soul persona',
+        '',
+        '## TOOLS.md',
+        '',
+        'Tool habits',
+      ].join('\n'),
+    });
+    expect(prompt).toContain('## SOUL.md');
+    expect(prompt).toContain('## TOOLS.md');
+    expect(prompt).not.toContain('## AGENTS.md');
+    expect(prompt).toContain('# Skills (catalog)');
+    expect(prompt).toContain(' - demo:');
+    expect(prompt).not.toContain('<skill available');
+    expect(prompt).not.toContain('full active xml');
+  });
 });

@@ -4,8 +4,8 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type { Tool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
-import { checkFileToolAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
-import { checkFilePermission, formatFilePermissionMessage, toolRequesterRoleToFileRole } from '../security/file-role-policy.js';
+import { checkFileToolAccess, checkSensitiveFilePathAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
+import { checkFilePermission, resolveFilePermissionGate, toolRequesterRoleToFileRole } from '../security/file-role-policy.js';
 import { expandHome, nodeErrToFileMessage } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import { normalizeContentPartsToPayloads } from '../media/media-normalize.js';
@@ -58,12 +58,16 @@ export class AnalyzeMediaBuiltinTool extends BuiltinBaseTool {
 
     const fileRole = toolRequesterRoleToFileRole(roleDecision.role);
     const permResult = checkFilePermission(fileRole, 'read', filePathArg);
-    if (!permResult.allowed) {
-      return formatFilePermissionMessage(permResult, 'analyze_media');
-    }
+    const permGate = resolveFilePermissionGate(permResult, 'analyze_media');
+    if (permGate) return permGate;
 
     try {
       const fp = expandHome(filePathArg);
+      const sensitiveDecision = checkSensitiveFilePathAccess('read_file', fp, commMessage);
+      if (!sensitiveDecision.allowed) {
+        if (sensitiveDecision.needsOwnerApproval) return toOwnerSignal(sensitiveDecision);
+        return toDenyError(sensitiveDecision);
+      }
       if (!isMediaPath(fp)) {
         return 'Error: analyze_media 仅支持图片/音频/视频扩展名；文本请用 read_file。';
       }

@@ -65,9 +65,11 @@ const svg = await htmlToSvg(html, {
 
 内联 `style` 会被解析为对象并传给 satori；支持的 HTML/CSS 以 [官方 satori 文档](https://github.com/vercel/satori) 为准。
 
-### 3. 卡片组件与 `h()`（推荐）
+### 3. 卡片组件（`h()` 或 JSX）
 
-出图卡片建议用 **纯 `.ts` + `h()`**，与 IM 的 zhin.js JSX 分离：
+出图卡片可用 **`.ts` + `h()`**，或与 IM 的 zhin.js JSX **分离** 的 **Satori JSX**（同步产出 HTML 字符串）。
+
+#### 3a. `h()`（无 JSX 编译）
 
 ```ts
 import { h, Card, CardHeader, StatChip, Row, wrapCardHtml } from '@zhin.js/satori'
@@ -81,6 +83,45 @@ const fragment = [
 
 const html = wrapCardHtml(fragment, '#d8dce3')
 ```
+
+#### 3b. JSX（`jsxImportSource: "@zhin.js/satori"`）
+
+与 `zhin.js` 相同：在 **tsconfig** 或 **文件顶注释** 指定 import source，TypeScript 会拉取 `@zhin.js/satori/jsx-runtime`。
+
+`tsconfig.json`（插件卡片目录）：
+
+```json
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "@zhin.js/satori"
+  }
+}
+```
+
+单文件覆盖（与 IM 组件同仓库时推荐，避免和 `zhin.js` 混用）：
+
+```tsx
+/** @jsxImportSource @zhin.js/satori */
+import { Card, CardHeader, StatChip, Row, wrapCardHtml } from '@zhin.js/satori'
+
+export function buildStatsCard() {
+  const body = (
+    <Card>
+      <CardHeader title="今日本群消息统计" />
+      <Row>
+        <StatChip label="消息" value="120" />
+      </Row>
+    </Card>
+  )
+  return wrapCardHtml(body, '#d8dce3')
+}
+```
+
+| 运行时 | 包路径 | 产出 |
+|--------|--------|------|
+| IM 消息 | `zhin.js` / `@zhin.js/core` | `MessageComponent`（异步 `renderJSX`） |
+| Satori 卡片 | `@zhin.js/satori` | **HTML 字符串**（同步） |
 
 内置组件包括 `Card`、`Surface`、`Section`、`KvTable`、`UsageBar`、`StatChip` 等。产出 HTML 后：
 
@@ -108,6 +149,7 @@ const html = wrapCardHtml(fragment, '#d8dce3')
 
 - **`satori(element, options)`**：官方 satori，签名与 [satori](https://www.npmjs.com/package/satori) 一致
 - **`htmlToSvg(html, options)`**：HTML 字符串 → SVG；`options` 同 satori（`width`、`height`、`fonts` 等）
+- **`@zhin.js/satori/jsx-runtime`**、**`@zhin.js/satori/jsx-dev-runtime`**：automatic JSX 运行时（`jsx` / `jsxs` / `Fragment` / `renderJSX`）
 - **字体方法**：见上表
 
 ## 环境

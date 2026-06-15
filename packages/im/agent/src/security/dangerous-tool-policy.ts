@@ -2,8 +2,8 @@ import * as zhinCore from '@zhin.js/core';
 import type { Message } from '@zhin.js/core';
 import { hasSenderRole, resolveSubjectRoles, senderRolesFromMessage } from '@zhin.js/core';
 import type { ZhinAgentConfig } from '../zhin-agent/config.js';
+import { checkFileAccess, extractBashReadPaths } from './file-policy.js';
 import { resolveToolRequesterRole, type ToolRequesterRole } from './owner-approve-always-store.js';
-import { checkFileAccess } from './file-policy.js';
 
 /** 命名空间调用，便于单测 vi.spyOn(core, 'getPlugin') 与实现一致 */
 function getPlugin(): zhinCore.Plugin {
@@ -210,6 +210,31 @@ export function checkSensitiveFilePathAccess(toolName: FileToolName, filePath: s
     role,
     reason: base.reason ?? `工具「${toolName}」访问敏感路径被拒绝。`,
   };
+}
+
+/**
+ * bash 只读命令中的目标路径敏感访问检查（与 read_file 对齐）。
+ */
+export function checkBashSensitiveReadAccess(
+  command: string,
+  commMessage?: Message,
+): DangerousToolDecision {
+  const paths = extractBashReadPaths(command);
+  if (paths.length === 0) {
+    const { role } = resolveRoleFromMessage(commMessage);
+    return { allowed: true, role };
+  }
+  for (const filePath of paths) {
+    const decision = checkSensitiveFilePathAccess('read_file', filePath, commMessage);
+    if (!decision.allowed) {
+      return {
+        ...decision,
+        reason: decision.reason?.replace('read_file', 'bash') ?? decision.reason,
+      };
+    }
+  }
+  const { role } = resolveRoleFromMessage(commMessage);
+  return { allowed: true, role };
 }
 
 export function checkDangerousToolAccess(toolName: 'write_file' | 'edit_file' | 'web_fetch', commMessage?: Message): DangerousToolDecision {

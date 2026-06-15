@@ -31,6 +31,12 @@ export const BOOTSTRAP_FILENAMES = [
   'TOOLS.md',
 ] as const;
 
+/** 可缓存 system §11：仅 SOUL + TOOLS（AGENTS 进 Turn envelope） */
+export const STABLE_BOOTSTRAP_FILENAMES = [
+  'SOUL.md',
+  'TOOLS.md',
+] as const;
+
 export type BootstrapFileName = typeof BOOTSTRAP_FILENAMES[number];
 
 /** 单文件最大字符数（默认 16KB） */
@@ -196,6 +202,31 @@ export function buildContextFiles(
   }
 
   return contextFiles;
+}
+
+/** 仅 SOUL.md + TOOLS.md，供可缓存 system §11 */
+export function buildStableContextFiles(
+  bootstrapFiles: BootstrapFile[],
+  options?: {
+    maxChars?: number;
+    totalMaxChars?: number;
+  },
+): ContextFile[] {
+  const stable = bootstrapFiles.filter(f =>
+    (STABLE_BOOTSTRAP_FILENAMES as readonly string[]).includes(f.name),
+  );
+  return buildContextFiles(stable, options);
+}
+
+/** 构建可缓存 bootstrap 段（不含 AGENTS.md） */
+export function buildStableBootstrapSection(
+  bootstrapFiles: BootstrapFile[],
+  options?: {
+    maxChars?: number;
+    totalMaxChars?: number;
+  },
+): string {
+  return buildBootstrapContextSection(buildStableContextFiles(bootstrapFiles, options));
 }
 
 /**

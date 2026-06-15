@@ -1,5 +1,5 @@
 import type { AIConfig, ProviderConfig } from '@zhin.js/ai';
-import { driverToModelApi } from '@zhin.js/ai';
+import { isSdkId } from '@zhin.js/ai';
 import type {
   AgentBindingConfig,
   ProviderInstanceConfig,
@@ -11,24 +11,68 @@ const LEGACY_DRIVER_KEYS = new Set([
   'openai', 'anthropic', 'deepseek', 'moonshot', 'zhipu', 'google', 'gemini', 'ollama', 'cloudflare',
 ]);
 
+/** Map legacy driver names to sdk ids (hard break: api/preset/spec are rejected). */
+const DRIVER_TO_SDK: Record<string, ProviderInstanceConfig['sdk']> = {
+  openai: 'openai',
+  anthropic: 'anthropic',
+  deepseek: 'deepseek',
+  moonshot: 'openai-compatible',
+  zhipu: 'openai-compatible',
+  google: 'google',
+  gemini: 'google',
+  ollama: 'ollama',
+  cloudflare: 'openai-compatible',
+};
+
 function isNamedProviderShape(
   providers: AIConfig['providers'],
-): providers is Record<string, ProviderInstanceConfig & { driver?: string }> {
+): providers is Record<string, ProviderInstanceConfig & { driver?: string; api?: string; preset?: string; spec?: string }> {
   if (!providers || typeof providers !== 'object' || Array.isArray(providers)) return false;
-  const first = Object.values(providers)[0] as (ProviderInstanceConfig & { driver?: string }) | undefined;
+  const first = Object.values(providers)[0] as ProviderInstanceConfig | undefined;
   if (!first || typeof first !== 'object') return false;
-  return 'api' in first || 'driver' in first;
+  return 'sdk' in first || 'driver' in first || 'api' in first || 'preset' in first;
 }
 
-/** Normalize legacy `driver` → required `api` (ADR 0009 D1). */
+function inferSdkFromAlias(alias: string): ProviderInstanceConfig['sdk'] | undefined {
+  const lower = alias.trim().toLowerCase();
+  if (DRIVER_TO_SDK[lower]) return DRIVER_TO_SDK[lower];
+  const head = lower.split(/[-_/]/)[0];
+  if (head && DRIVER_TO_SDK[head]) return DRIVER_TO_SDK[head];
+  return undefined;
+}
+
+/** Normalize provider entry to required `sdk` (ADR 0018). Rejects api/preset/spec. */
 export function normalizeProviderEntry(
   alias: string,
-  cfg: ProviderInstanceConfig & { driver?: string },
+  cfg: ProviderInstanceConfig & { driver?: string; api?: string; preset?: string; spec?: string },
 ): ProviderInstanceConfig {
+  if (cfg.api?.trim() || cfg.preset?.trim() || cfg.spec?.trim()) {
+    throw new Error(
+      `ai.providers.${alias}: "api", "preset", and "spec" are removed; use "sdk" instead (ADR 0018)`,
+    );
+  }
+
   const legacyDriver = cfg.driver?.trim().toLowerCase();
-  const api = cfg.api?.trim() || (legacyDriver ? driverToModelApi(legacyDriver) : driverToModelApi(alias));
-  const { driver: _driver, ...rest } = cfg;
-  return { ...rest, api };
+  const sdkRaw = cfg.sdk?.trim().toLowerCase()
+    || (legacyDriver ? DRIVER_TO_SDK[legacyDriver] : undefined)
+    || inferSdkFromAlias(alias);
+
+  if (!sdkRaw || !isSdkId(sdkRaw)) {
+    throw new Error(
+      `ai.providers.${alias}: sdk is required (openai | anthropic | google | deepseek | ollama | openai-compatible)`,
+    );
+  }
+
+  const rest = { ...cfg } as Record<string, unknown>;
+  delete rest.driver;
+  delete rest.api;
+  delete rest.preset;
+  delete rest.spec;
+  const normalized = { ...(rest as unknown as ProviderInstanceConfig), sdk: sdkRaw };
+  if (typeof normalized.apiKey === 'string') normalized.apiKey = normalized.apiKey.trim();
+  if (typeof normalized.baseUrl === 'string') normalized.baseUrl = normalized.baseUrl.trim();
+  if (typeof normalized.host === 'string') normalized.host = normalized.host.trim();
+  return normalized;
 }
 
 function normalizeLegacyProviders(
@@ -38,7 +82,10 @@ function normalizeLegacyProviders(
   for (const [key, cfg] of Object.entries(legacy)) {
     if (key === 'custom' || !cfg || typeof cfg !== 'object') continue;
     if (LEGACY_DRIVER_KEYS.has(key)) {
-      out[key] = normalizeProviderEntry(key, { ...(cfg as ProviderConfig), api: driverToModelApi(key) });
+      out[key] = normalizeProviderEntry(key, {
+        ...(cfg as ProviderConfig),
+        sdk: DRIVER_TO_SDK[key]!,
+      });
     }
   }
   return out;
