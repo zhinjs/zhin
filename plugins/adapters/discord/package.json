@@ -41,7 +41,7 @@
     "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
-    "@types/node": "^25.9.2",
+    "@types/node": "^25.9.3",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@zhin.js/cli": "workspace:*",

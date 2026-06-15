@@ -32,10 +32,10 @@
     "undici": "^6.24.1"
   },
   "devDependencies": {
-    "@types/node": "^25.9.2",
+    "@types/node": "^25.9.3",
     "@zhin.js/database": "workspace:*",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.9"
   },
   "repository": {
     "type": "git",
