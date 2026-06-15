@@ -42,7 +42,7 @@
     "qq-official-bot": "^1.2.2"
   },
   "devDependencies": {
-    "@types/react": "^19.2.15",
+    "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@zhin.js/cli": "workspace:*",
     "@zhin.js/client": "workspace:*",
