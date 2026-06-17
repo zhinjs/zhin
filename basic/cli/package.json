@@ -24,7 +24,7 @@
   },
   "dependencies": {
     "@zhin.js/scaffold-wizard": "workspace:*",
-    "esbuild": "^0.28.0",
+    "esbuild": "^0.28.1",
     "@zhin.js/logger": "workspace:*",
     "adm-zip": "^0.5.16",
     "chalk": "^5.6.2",

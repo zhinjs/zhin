@@ -17,7 +17,7 @@
     "@zhin.js/host-router": "workspace:*",
     "@zhin.js/satori": "workspace:*",
     "@ai-sdk/openai-compatible": "^1.0.0",
-    "ai": "^6.0.0",
+    "ai": "^6.0.207",
     "zod": "^4.4.3",
     "zhin.js": "workspace:*"
   },
