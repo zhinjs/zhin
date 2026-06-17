@@ -3,7 +3,8 @@
  * 
  * 验证新实现的 Hook 系统是否正常工作
  */
-import { usePlugin, registerAIHook } from 'zhin.js';
+import { usePlugin } from 'zhin.js';
+import { registerAIHook } from 'zhin.js/agent';
 
 const plugin = usePlugin();
 const { logger, useContext } = plugin;

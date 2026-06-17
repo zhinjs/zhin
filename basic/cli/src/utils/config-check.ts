@@ -1,6 +1,12 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { isValidLogLevelInput, toLogLevelName, type LogLevelInput } from '@zhin.js/logger';
+import {
+  diagnoseAIDependencies,
+  formatAIDependencyFixCommand,
+  isAiEnabledInConfig,
+  mergeDependenciesIntoPackageJson,
+} from '@zhin.js/scaffold-wizard';
 import { findConfigFile, hasLegacyTsConfig, readConfig, saveConfig } from './config-file.js';
 import { loadAiConfigUtils, type AiConfigUtils } from './ai-config-loader.js';
 
@@ -230,6 +236,36 @@ function checkDatabase(config: Record<string, unknown>, issues: ConfigIssue[]): 
   }
 }
 
+function checkAiDependencies(
+  cwd: string,
+  config: Record<string, unknown>,
+  issues: ConfigIssue[],
+): void {
+  const diagnosis = diagnoseAIDependencies(cwd, config);
+  if (!diagnosis) return;
+
+  if (diagnosis.missingFromPackageJson.length > 0) {
+    pushIssue(issues, {
+      severity: 'error',
+      code: 'ai.deps_missing',
+      path: 'package.json',
+      message: `AI 已启用但 package.json 缺少依赖: ${diagnosis.missingFromPackageJson.join(', ')}`,
+      fixable: true,
+      fixHint: formatAIDependencyFixCommand(diagnosis.missingFromPackageJson, diagnosis.required),
+    });
+  }
+
+  if (diagnosis.notInstalled.length > 0) {
+    pushIssue(issues, {
+      severity: 'warn',
+      code: 'ai.deps_not_installed',
+      path: 'node_modules',
+      message: `AI 依赖已声明但未安装: ${diagnosis.notInstalled.join(', ')}`,
+      fixHint: 'pnpm install',
+    });
+  }
+}
+
 function checkAi(
   config: Record<string, unknown>,
   issues: ConfigIssue[],
@@ -304,12 +340,22 @@ function checkAi(
   }
 
   if (!aiUtils) {
-    pushIssue(issues, {
-      severity: 'info',
-      code: 'ai.check_skipped',
-      path: 'ai',
-      message: '未解析到 @zhin.js/agent，跳过 AI 路由深度校验（请确保项目已安装 zhin.js）',
-    });
+    if (isAiEnabledInConfig({ ai: legacy })) {
+      pushIssue(issues, {
+        severity: 'error',
+        code: 'ai.agent_missing',
+        path: 'ai',
+        message: '配置已启用 AI，但未安装 @zhin.js/agent（zhin.js 4.x 需单独安装 AI 栈）',
+        fixHint: 'zhin setup --ai 或 pnpm add @zhin.js/agent zod ai',
+      });
+    } else {
+      pushIssue(issues, {
+        severity: 'info',
+        code: 'ai.check_skipped',
+        path: 'ai',
+        message: '未解析到 @zhin.js/agent，跳过 AI 路由深度校验',
+      });
+    }
     return;
   }
 
@@ -371,6 +417,7 @@ export async function runConfigCheck(
   checkLogLevel(config, issues);
   checkDatabase(config, issues);
   checkEndpoints(config, plugins, issues);
+  checkAiDependencies(cwd, config, issues);
   checkAi(config, issues, aiUtils);
   collectEnvRefs(config, '', env, issues);
 
@@ -508,6 +555,15 @@ export async function inspectProjectConfig(
       await saveConfig(path.join(cwd, result.configFile), fixed);
       fixesApplied.push(...fixes);
       result = await runConfigCheck(cwd, env);
+    }
+
+    const aiDiagnosis = diagnoseAIDependencies(cwd, result.config);
+    if (aiDiagnosis && aiDiagnosis.missingFromPackageJson.length > 0) {
+      const changed = await mergeDependenciesIntoPackageJson(cwd, aiDiagnosis.required);
+      if (changed) {
+        fixesApplied.push(`added AI deps: ${aiDiagnosis.missingFromPackageJson.join(', ')}`);
+        result = await runConfigCheck(cwd, env);
+      }
     }
   }
 

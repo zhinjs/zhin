@@ -251,9 +251,15 @@ importers:
 
   examples/demo-bot:
     dependencies:
+      '@ai-sdk/openai-compatible':
+        specifier: ^1.0.0
+        version: 1.0.40(zod@4.4.3)
       '@zhin.js/adapter-sandbox':
         specifier: workspace:*
         version: link:../../plugins/adapters/sandbox
+      '@zhin.js/agent':
+        specifier: workspace:*
+        version: link:../../packages/im/agent
       '@zhin.js/cli':
         specifier: workspace:*
         version: link:../../basic/cli
@@ -266,9 +272,15 @@ importers:
       '@zhin.js/satori':
         specifier: workspace:*
         version: link:../../packages/toolkit/satori
+      ai:
+        specifier: ^6.0.0
+        version: 6.0.205(zod@4.4.3)
       zhin.js:
         specifier: workspace:*
         version: link:../../packages/im/zhin
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       tsx:
         specifier: ^4.22.4
@@ -279,6 +291,9 @@ importers:
 
   examples/full-bot:
     dependencies:
+      '@ai-sdk/openai-compatible':
+        specifier: ^1.0.0
+        version: 1.0.40(zod@4.4.3)
       '@zhin.js/adapter-kook':
         specifier: workspace:*
         version: link:../../plugins/adapters/kook
@@ -288,6 +303,9 @@ importers:
       '@zhin.js/adapter-sandbox':
         specifier: workspace:*
         version: link:../../plugins/adapters/sandbox
+      '@zhin.js/agent':
+        specifier: workspace:*
+        version: link:../../packages/im/agent
       '@zhin.js/cli':
         specifier: workspace:*
         version: link:../../basic/cli
@@ -303,9 +321,15 @@ importers:
       '@zhin.js/satori':
         specifier: workspace:*
         version: link:../../packages/toolkit/satori
+      ai:
+        specifier: ^6.0.0
+        version: 6.0.205(zod@4.4.3)
       zhin.js:
         specifier: workspace:*
         version: link:../../packages/im/zhin
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       tsx:
         specifier: ^4.22.4
@@ -369,6 +393,21 @@ importers:
 
   examples/test-bot:
     dependencies:
+      '@ai-sdk/anthropic':
+        specifier: ^3.0.0
+        version: 3.0.84(zod@4.4.3)
+      '@ai-sdk/deepseek':
+        specifier: ^1.0.0
+        version: 1.0.43(zod@4.4.3)
+      '@ai-sdk/google':
+        specifier: ^3.0.0
+        version: 3.0.82(zod@4.4.3)
+      '@ai-sdk/openai':
+        specifier: ^3.0.0
+        version: 3.0.71(zod@4.4.3)
+      '@ai-sdk/openai-compatible':
+        specifier: ^1.0.0
+        version: 1.0.40(zod@4.4.3)
       '@puniyu/system-info':
         specifier: 1.5.6
         version: 1.5.6
@@ -426,6 +465,9 @@ importers:
       '@zhin.js/adapter-weixin-ilink':
         specifier: workspace:*
         version: link:../../plugins/adapters/weixin-ilink
+      '@zhin.js/agent':
+        specifier: workspace:*
+        version: link:../../packages/im/agent
       '@zhin.js/cli':
         specifier: workspace:*
         version: link:../../basic/cli
@@ -471,6 +513,9 @@ importers:
       '@zhin.js/sensitive-filter':
         specifier: workspace:*
         version: link:../../plugins/utils/sensitive-filter
+      ai:
+        specifier: ^6.0.0
+        version: 6.0.205(zod@4.4.3)
       react:
         specifier: ^19.2.6
         version: 19.2.6
@@ -486,6 +531,9 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../packages/im/zhin
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
@@ -720,9 +768,6 @@ importers:
       js-yaml:
         specifier: ^4.2.0
         version: 4.2.0
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
     devDependencies:
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
@@ -742,9 +787,19 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   packages/im/ai:
     dependencies:
+      '@zhin.js/logger':
+        specifier: workspace:*
+        version: link:../../../basic/logger
+      undici:
+        specifier: ^6.24.1
+        version: 6.24.1
+    devDependencies:
       '@ai-sdk/anthropic':
         specifier: ^3.0.0
         version: 3.0.84(zod@4.4.3)
@@ -760,37 +815,27 @@ importers:
       '@ai-sdk/openai-compatible':
         specifier: ^1.0.0
         version: 1.0.40(zod@4.4.3)
-      '@sinclair/typebox':
-        specifier: ^0.34.0
-        version: 0.34.49
-      '@zhin.js/logger':
-        specifier: workspace:*
-        version: link:../../../basic/logger
-      ai:
-        specifier: ^6.0.0
-        version: 6.0.205(zod@4.4.3)
-      undici:
-        specifier: ^6.24.1
-        version: 6.24.1
-    devDependencies:
       '@types/node':
         specifier: ^25.9.2
         version: 25.9.2
       '@zhin.js/database':
         specifier: workspace:*
         version: link:../../../basic/database
+      ai:
+        specifier: ^6.0.0
+        version: 6.0.205(zod@4.4.3)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
       vitest:
         specifier: ^4.1.0
         version: 4.1.8(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@25.9.2)(@vitest/coverage-v8@4.1.8)(@vitest/ui@4.1.8)(jsdom@24.1.3)(msw@2.14.5(@types/node@25.9.2)(typescript@6.0.3))(vite@6.4.2(@types/node@25.9.2)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.22.4)(yaml@2.9.0))
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   packages/im/core:
     dependencies:
-      '@zhin.js/ai':
-        specifier: workspace:*
-        version: link:../ai
       '@zhin.js/database':
         specifier: workspace:*
         version: link:../../../basic/database
@@ -819,6 +864,9 @@ importers:
       '@types/node':
         specifier: ^25.9.2
         version: 25.9.2
+      '@zhin.js/ai':
+        specifier: workspace:*
+        version: link:../ai
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -850,12 +898,6 @@ importers:
 
   packages/im/zhin:
     dependencies:
-      '@zhin.js/agent':
-        specifier: workspace:*
-        version: link:../agent
-      '@zhin.js/ai':
-        specifier: workspace:*
-        version: link:../ai
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../core
@@ -878,6 +920,12 @@ importers:
       '@types/node':
         specifier: ^25.9.2
         version: 25.9.2
+      '@zhin.js/agent':
+        specifier: workspace:*
+        version: link:../agent
+      '@zhin.js/ai':
+        specifier: workspace:*
+        version: link:../ai
       '@zhin.js/host-api':
         specifier: workspace:*
         version: link:../../host/api
@@ -3910,9 +3958,6 @@ packages:
     resolution: {integrity: sha512-3NgmNyH3l/Hv6EvsWJbsvpcpUba6R8IREQ83nH83cyakCw7uM1arZKNfHwv1Wz6jgqrF/j4x5ELvR6PnK9nTcA==}
     engines: {node: '>= 8.0.0'}
     hasBin: true
-
-  '@sinclair/typebox@0.34.49':
-    resolution: {integrity: sha512-brySQQs7Jtn0joV8Xh9ZV/hZb9Ozb0pmazDIASBkYKCjXrXU3mpcFahmK/z4YDhGkQvP9mWJbVyahdtU5wQA+A==}
 
   '@slack/bolt@4.7.3':
     resolution: {integrity: sha512-bODs8q/yNDWUPoxmQhFrRqLMA5vhB/PDizYWqb6CkQhLWEUo5JFtfJcmeU4ElGl6qSt++OKjSYNa4MPc77CleQ==}
@@ -9855,8 +9900,6 @@ snapshots:
     dependencies:
       fflate: 0.7.4
       string.prototype.codepointat: 0.2.1
-
-  '@sinclair/typebox@0.34.49': {}
 
   '@slack/bolt@4.7.3(@types/express@5.0.6)':
     dependencies:

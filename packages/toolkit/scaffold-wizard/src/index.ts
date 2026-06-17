@@ -34,6 +34,13 @@ export { configureDatabaseOptions } from './database.js';
 export {
   MCP_SDK_VERSION,
   getAIDependencies,
+  listAIDependencyNames,
+  formatAIDependencyHint,
+  isAiEnabledInConfig,
+  resolveDefaultProviderFromConfig,
+  getRequiredAIDependenciesForConfig,
+  diagnoseAIDependencies,
+  formatAIDependencyFixCommand,
   ensureDatabaseForAI,
   ensureDatabaseForAdapters,
 } from './project-deps.js';

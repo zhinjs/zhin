@@ -2,7 +2,7 @@
  * pi Context ↔ AI SDK ModelMessage bridge (ADR 0018).
  */
 
-import { jsonSchema, type ModelMessage, type ToolSet, type UserModelMessage, tool } from 'ai';
+import { type ModelMessage, type ToolSet, type UserModelMessage, tool } from 'ai';
 import type { Context } from '../types/context.js';
 import type { AgentMessage, AssistantMessage, ToolResultMessage, UserMessage } from '../types/agent-message.js';
 import { isLlmAgentMessage } from '../types/agent-message.js';
@@ -103,7 +103,7 @@ export function llmToolsToAiSdk(tools: LlmTool[] | undefined): ToolSet | undefin
   for (const llmTool of tools) {
     out[llmTool.name] = tool({
       description: llmTool.description,
-      inputSchema: jsonSchema(llmTool.parameters),
+      inputSchema: llmTool.parameters,
     });
   }
   return out;

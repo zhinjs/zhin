@@ -2,25 +2,21 @@ import type {
   AgentPromptBuildContext,
   AgentPromptContributor,
   AgentPromptSection,
+  DeferredToolCatalogItem,
 } from 'zhin.js';
-import type { AgentTool } from 'zhin.js';
-import { filterTools } from 'zhin.js';
-
-function isGithubDelegatedTask(query: string, goal: string): boolean {
-  const text = `${query} ${goal}`;
-  return /github|gh_|mcp_github|\bissue\b|pull\s*request|\bpr\b/i.test(text);
-}
+import type { AgentTool } from 'zhin.js/ai';
+import { filterTools } from 'zhin.js/ai';
 
 function selectGithubDeferredTools(
   query: string,
   goal: string,
-  deferredCatalog: AgentTool[],
+  deferredCatalog: DeferredToolCatalogItem[],
   maxTools: number,
-): AgentTool[] {
+): DeferredToolCatalogItem[] {
   const pool = deferredCatalog.filter(
     t => !t.name.startsWith('mcp_filesystem') && !t.name.startsWith('mcp_icqq_'),
   );
-  const pinned: AgentTool[] = [];
+  const pinned: DeferredToolCatalogItem[] = [];
   const bash = pool.find(t => t.name === 'bash');
   if (bash) pinned.push(bash);
 
@@ -34,15 +30,20 @@ function selectGithubDeferredTools(
     if (t && !pinned.some(p => p.name === name)) pinned.push(t);
   }
 
-  const extra = filterTools(`${query} ${goal}`, pool, { maxTools, minScore: 0.08 })
-    .filter(t => !pinned.some(p => p.name === t.name));
+  const extra = filterTools(`${query} ${goal}`, pool as AgentTool[], { maxTools, minScore: 0.08 })
+    .map((t) => ({ name: t.name, description: t.description }));
 
-  const merged = [...pinned];
+  const merged: DeferredToolCatalogItem[] = [...pinned];
   for (const t of extra) {
     if (merged.length >= maxTools) break;
-    merged.push(t);
+    if (!merged.some(p => p.name === t.name)) merged.push(t);
   }
   return merged.slice(0, maxTools);
+}
+
+function isGithubDelegatedTask(query: string, goal: string): boolean {
+  const text = `${query} ${goal}`;
+  return /github|gh_|mcp_github|\bissue\b|pull\s*request|\bpr\b/i.test(text);
 }
 
 const ORCHESTRATOR_GITHUB = [

@@ -44,6 +44,7 @@ pnpm install
 
 - `basic/*` — 基础能力（CLI、数据库、日志、schema 等）
 - `packages/im/*` — IM 主链：`kernel` → `ai` → `core` → `agent` → `zhin`
+  - **`zhin.js` 4.x**：主入口仅依赖 `core`；`@zhin.js/agent` 为 **optional peer**（安装分层见 [ADR 0019](../adr/0019-install-size-layering.md)）
   - `ai`：通用 AI 引擎（`agent/`、`memory/`、`compaction/`）
   - `agent`：IM Agent 编排（`orchestrator/`、`discovery/`、`security/`、`mcp-client/`、`defaults/`）
 - `packages/console/*` — 控制台：`contract`、`pagemanager`、`client`（npm 名均为单词包名）

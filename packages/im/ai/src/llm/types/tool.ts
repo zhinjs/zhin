@@ -1,10 +1,10 @@
-import type { TSchema } from '@sinclair/typebox';
+import type { z } from 'zod';
 
-/** TypeBox tool definition for the LLM engine (ADR 0009). */
+/** Zod tool definition for the LLM engine (ADR 0019). */
 export interface LlmTool {
   name: string;
   description: string;
-  parameters: TSchema;
+  parameters: z.ZodTypeAny;
   /** IM layer: run before agentLoop without model invocation */
   preExecutable?: boolean;
 }

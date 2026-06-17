@@ -3,12 +3,17 @@
  *
  * Implementations live in adapter plugins; resolution runs in @zhin.js/agent.
  */
-import type { AgentTool } from '@zhin.js/ai';
 import type { Message } from './message.js';
 
 export type AgentPromptSlot =
   | 'orchestrator'
   | 'deferred_worker';
+
+/** Minimal tool shape for deferred catalog selection (no @zhin.js/ai import). */
+export interface DeferredToolCatalogItem {
+  name: string;
+  description: string;
+}
 
 export interface AgentPromptBuildContext {
   slot: AgentPromptSlot;
@@ -44,7 +49,7 @@ export interface AgentPromptContributor {
   selectDeferredTools?(
     query: string,
     goal: string,
-    catalog: AgentTool[],
+    catalog: DeferredToolCatalogItem[],
     maxTools: number,
-  ): AgentTool[] | null;
+  ): DeferredToolCatalogItem[] | null;
 }

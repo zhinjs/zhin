@@ -1,5 +1,4 @@
-import { Type } from '@sinclair/typebox';
-import { Value } from '@sinclair/typebox/value';
+import { z } from 'zod';
 import type { LlmTool, ParsedToolCall } from './types/tool.js';
 
 export class ToolCallValidationError extends Error {
@@ -19,12 +18,13 @@ export function validateToolCall(tools: LlmTool[], toolCall: ParsedToolCall): Pa
     throw new ToolCallValidationError(`Unknown tool: ${toolCall.name}`, toolCall.name);
   }
 
-  const errors = [...Value.Errors(tool.parameters, toolCall.arguments)];
-  if (errors.length > 0) {
+  const parsed = tool.parameters.safeParse(toolCall.arguments);
+  if (!parsed.success) {
+    const first = parsed.error.issues[0];
     throw new ToolCallValidationError(
-      `Invalid arguments for tool ${toolCall.name}: ${errors[0]?.message ?? 'validation failed'}`,
+      `Invalid arguments for tool ${toolCall.name}: ${first?.message ?? 'validation failed'}`,
       toolCall.name,
-      errors,
+      parsed.error.issues,
     );
   }
 
@@ -39,17 +39,16 @@ export function toolCallFromContentBlock(
   return { id, name, arguments: args };
 }
 
-/** Minimal string tool schema helper for tests and builtins. */
-export function stringParamTool(name: string, description: string, required: string[] = []) {
-  const properties: Record<string, ReturnType<typeof Type.String>> = {};
+export function stringParamTool(name: string, description: string, required: string[] = []): LlmTool {
+  const shape: Record<string, z.ZodTypeAny> = {};
   for (const key of required) {
-    properties[key] = Type.String();
+    shape[key] = z.string();
   }
   return {
     name,
     description,
-    parameters: Type.Object(properties, { required }),
-  } satisfies LlmTool;
+    parameters: z.object(shape),
+  };
 }
 
-export { Type, Value };
+export { z };

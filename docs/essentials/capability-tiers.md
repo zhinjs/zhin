@@ -6,7 +6,11 @@ sidebar: false
 
 > 维护者决策记录见 [ADR 0015 — 能力分档模型](/adr/0015-capability-tier-model)。
 
-Zhin.js 是 **TypeScript AI Agent 运行时**：通过 **Endpoint** 接入 IM、邮件、GitHub、Sandbox 等通道，同时支持 **传统命令交互**、**ZhinAgent 对话** 与 **二者混合**。
+Zhin.js 是 **TypeScript AI Agent 运行时**：通过 **Endpoint** 接入 IM、邮件、GitHub、Sandbox 等通道，同时支持 **传统命令交互**、**ZhinAgent 对话**（需安装 `@zhin.js/agent`）与 **二者混合**。
+
+::: tip zhin.js 4.x 安装分层
+<<< ../snippets/install-tiers.md#callout-one-liner
+:::
 
 **产品对标**：多通道 **生活/工作助手**（私聊/群聊、记忆、cron、Home Assistant、通知）——不是 Cursor / Claude Code 类的 **写代码 Agent**，也不内置 **plan mode** 或以改仓库为主轴的 Harness。IM 是 Endpoint 的主场景之一，不是产品定义的全部。
 
@@ -27,7 +31,7 @@ Zhin.js 是 **TypeScript AI Agent 运行时**：通过 **Endpoint** 接入 IM、
 
 | 档位 | 一句话 | 验证 |
 |------|--------|------|
-| **Stable（Core）** | 最少配置能跑：Sandbox + AI + 命令 + cron + MCP Client 契约 | `pnpm check:stable`（Core 批）· [minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot) |
+| **Stable（Core）** | 最少配置能跑：**Sandbox + 命令 + Console**（IM）；AI 见 [full-bot](https://github.com/zhinjs/zhin/tree/main/examples/full-bot) | `pnpm check:stable`（Core 批）· [minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot) |
 | **Platform Stable** | 主流 IM 适配器，框架侧 integration 有 CI | `pnpm check:stable`（Platform 批）· [适配器索引](/adapters/) |
 | **Advanced** | 编排增强：toolSearch、MCP Mesh、多 Endpoint 同进程 | [test-bot ACCEPTANCE](https://github.com/zhinjs/zhin/blob/main/examples/test-bot/ACCEPTANCE.md) |
 | **Experimental** | 协议试验，自行验证 | 无全量 CI 承诺 |
@@ -51,8 +55,8 @@ flowchart LR
 |------|------|------|
 | `MessageCommand` / `addCommand` | Stable | [命令系统](/essentials/commands) |
 | `/` 前缀命令（不触发 AI） | Stable | `ai.trigger.ignorePrefixes` |
-| `@` / 关键词触发 Agent | Stable | [AI 模块](/advanced/ai) |
-| 内置运维命令 `/tools`、`/mcp` | Stable（需 trusted） | [命令 — 内置 IM 运维](/essentials/commands#内置-im-运维命令adr-0010) |
+| `@` / 关键词触发 Agent | Stable（需 `@zhin.js/agent`） | [AI 模块](/advanced/ai) |
+| 内置运维命令 `/tools`、`/mcp` | Stable（需 agent 栈 + trusted） | [命令 — 内置 IM 运维](/essentials/commands#内置-im-运维命令adr-0010) |
 | `toolSearch` + Worker | Advanced | [Agent 概念 — toolSearch](/advanced/agent-concepts#toolsearch何时开启) |
 
 典型混合 Bot：日常用 `hello`、`签到` 等命令；需要时用 `@机器人` 或 `ai:` 前缀走 Agent。
@@ -88,7 +92,7 @@ flowchart LR
 
 ## Stable（Core）还包含什么
 
-除 Sandbox 外，下列**不**需要开启 Advanced 开关：
+除 Sandbox 外，下列**不**需要开启 Advanced 开关（**Agent / MCP 相关能力需已安装 `@zhin.js/agent`**，脚手架启用 AI 时会写入）：
 
 - 插件化（`usePlugin`）、热重载、TypeScript
 - Feature：Tool / Skill / cron / 数据库（`cron-engine` 在 `check:stable`）
@@ -126,7 +130,8 @@ flowchart TD
 
 | 目标 | 起点 |
 |------|------|
-| 5 分钟首跑 | [快速开始](/getting-started/) → Console 沙盒 |
+| 5 分钟首跑（仅 IM） | [快速开始](/getting-started/) → Console 沙盒 · minimal-bot |
+| 5 分钟首跑（含 AI） | [full-bot](https://github.com/zhinjs/zhin/tree/main/examples/full-bot) 或 `npm create zhin-app` 启用 AI |
 | 纯命令 Endpoint | [命令系统](/essentials/commands) + 任选 Platform Stable 适配器 |
 | QQ / 微信系 | [qq](/adapters/qq)、[icqq](/adapters/icqq)、[wechat-mp](/adapters/wechat-mp)、[weixin-ilink](/adapters/weixin-ilink)、[napcat](/adapters/napcat) |
 | Agent + MCP | [Agent 概念](/advanced/agent-concepts) → [test-bot](https://github.com/zhinjs/zhin/tree/main/examples/test-bot) |

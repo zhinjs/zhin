@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Type } from '@sinclair/typebox';
+import { z } from 'zod';
 import {
   validateToolCall,
   ToolCallValidationError,
@@ -10,8 +10,8 @@ describe('validateToolCall', () => {
   const tool = {
     name: 'echo',
     description: 'echo',
-    parameters: Type.Object({
-      message: Type.String(),
+    parameters: z.object({
+      message: z.string(),
     }),
   };
 

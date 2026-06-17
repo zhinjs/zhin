@@ -19,7 +19,7 @@ import { segment } from "../utils.js";
 import {
   resolveIMSessionId,
   type IMSessionScope,
-} from '@zhin.js/ai';
+} from '../im-session-id.js';
 import {
   type SenderRole,
   normalizeSenderRoles,
@@ -288,20 +288,6 @@ export function resolveSenderRoles<T extends object>(
     scope,
     roles: normalizeSenderRoles(roles),
   };
-}
-
-/** 从 IM 消息生成 sessionId（platform:endpointId:type:sceneId） */
-export function resolveIMSessionIdFromMessage<T extends object>(message: Message<T>): string {
-  const scope = (message.$channel?.type || 'private') as IMSessionScope;
-  const sceneId = scope === 'private'
-    ? String(message.$sender.id)
-    : String(message.$channel?.id || message.$sender.id);
-  return resolveIMSessionId({
-    platform: message.$adapter,
-    endpointId: message.$endpoint,
-    scope,
-    sceneId,
-  });
 }
 
 /**

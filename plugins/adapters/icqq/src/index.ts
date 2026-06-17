@@ -6,9 +6,8 @@ import {
   usePlugin,
   type Plugin,
   type ToolFeature,
-  registerAgentPromptContributor,
-  unregisterAgentPromptContributor,
 } from "zhin.js";
+import { registerAgentPromptContributor, unregisterAgentPromptContributor } from "zhin.js/agent";
 import { createIcqqAgentPromptContributor } from "./agent-prompt.js";
 import type { Router } from "@zhin.js/host-router";
 import { PageManager } from "@zhin.js/host-api";

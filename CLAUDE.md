@@ -51,7 +51,7 @@ packages/im/core            # IM framework (Plugin, Adapter, Endpoint, Command, 
   ↓
 packages/im/agent           # Agent orchestration (ZhinAgent, security policies, MCP client)
   ↓
-packages/im/zhin            # Main entry — re-exports core + agent
+packages/im/zhin            # Main entry — IM core (4.x); agent via optional peer + zhin.js/agent
 
 packages/console/{contract,pagemanager,client}  # 控制台栈（平行，不经 IM 发送链）
 packages/toolkit/{create-zhin,satori}         # 脚手架与渲染库

@@ -9,7 +9,7 @@ import {
   clearApiRegistryForTests,
   createUserMessage,
   EMPTY_TOKEN_USAGE,
-  Type,
+  z,
   type AssistantMessage,
   type LlmTool,
 } from '../../src/llm/index.js';
@@ -19,7 +19,7 @@ describe('agentLoop', () => {
   const echoTool: LlmTool = {
     name: 'echo',
     description: 'echo',
-    parameters: Type.Object({ message: Type.String() }),
+    parameters: z.object({ message: z.string() }),
   };
 
   beforeEach(() => {

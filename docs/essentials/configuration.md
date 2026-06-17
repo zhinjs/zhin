@@ -157,6 +157,16 @@ database:
 
 ## AI 配置
 
+::: warning 先装依赖（zhin.js 4.x）
+`pnpm add zhin.js` **不会**安装 Agent 栈。启用本节配置前执行：
+
+<<< ../snippets/install-tiers.md#deps-install
+
+<<< ../snippets/install-tiers.md#doctor
+
+完整分档见 [AI 模块 — 安装与依赖](/advanced/ai#安装与依赖-zhinjs-4x) 与 [ADR 0019](/adr/0019-install-size-layering)。
+:::
+
 配置 AI 大模型集成：
 
 ```yaml
@@ -267,7 +277,7 @@ ai:
 
 ### Advanced AI 开关
 
-以下能力属于 **Advanced**，Stable 脚手架与 [minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot) 默认关闭。概念说明见 [Agent 概念入门](/advanced/agent-concepts)，MCP 实操见 [MCP 集成](/advanced/mcp)。
+以下能力属于 **Advanced**，Stable 脚手架与 [minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot) 默认关闭（`ai.enabled: false`，无 `@zhin.js/agent`）。启用 AI 见上文依赖说明与 [full-bot](https://github.com/zhinjs/zhin/tree/main/examples/full-bot)。概念说明见 [Agent 概念入门](/advanced/agent-concepts)，MCP 实操见 [MCP 集成](/advanced/mcp)。
 
 ```yaml
 ai:

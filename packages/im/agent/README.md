@@ -24,32 +24,31 @@ Zhin AI Agent 组合层：在 `@zhin.js/core` 的类型与 Provider 之上，提
 
 ## 依赖关系
 
-- 依赖 **@zhin.js/core**：AI 类型（`AIProvider`、`ChatMessage`、`Session` 等）与各 Provider 实现（OpenAI、Ollama 等）
-- 通常通过 **zhin.js** 主包使用，主包会调用 `initAgentModule()` 并 re-export 本包 API
+- 依赖 **@zhin.js/core**（IM 类型与消息链）与 **@zhin.js/ai**（`agentLoop`、Provider 抽象）
+- **zhin.js 4.x** 主包为 optional peer；运行时通过 `zhin.js/agent` 子路径或本包 import；`bootstrapNode` 在检测到本包时调用 `initAgentModule()`
 
 ## 安装
 
 ```bash
-npm install @zhin.js/agent
-# 或使用主包（已包含 agent）
-npm install zhin.js
+pnpm add @zhin.js/agent zod ai
+pnpm add @ai-sdk/openai   # 示例：按厂商安装 provider SDK
 ```
+
+仅 IM、不需要 Agent 时可只装 `zhin.js`（见 [ADR 0019](../../docs/adr/0019-install-size-layering.md)）。
 
 ## 使用
 
-### 在主包中（推荐）
+### 在 Zhin 项目中（推荐）
 
-主包 `zhin.js` 已依赖 `@zhin.js/agent` 并在 setup 中调用 `initAgentModule()`，插件可直接从 `zhin.js` 使用：
+安装本包后，从 **`zhin.js/agent`** 或 **`@zhin.js/agent`** 引入：
 
 ```typescript
 import {
-  initAgentModule,
   ZhinAgent,
   AIService,
   SessionManager,
   registerAIHook,
-  createBuiltinTools,
-} from 'zhin.js'
+} from 'zhin.js/agent'
 
 // 使用 ctx.ai (AIService)
 useContext('ai', async (ai) => {
@@ -58,9 +57,9 @@ useContext('ai', async (ai) => {
 })
 ```
 
-### 直接使用 @zhin.js/agent
+`initAgentModule()` 由 `zhin.js/node` 的 `bootstrapNode` 在启动时调用，插件一般无需手动 init。
 
-仅在需要单独集成 Agent 能力时使用：
+### 非 Zhin 宿主 / 单独集成
 
 ```javascript
 import { initAgentModule, AIService } from '@zhin.js/agent'

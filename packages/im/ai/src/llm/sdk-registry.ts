@@ -1,16 +1,24 @@
 /**
- * AI SDK provider factory — closed sdk table (ADR 0018).
- * @ai-sdk/* is an internal transport dependency; do not re-export from @zhin.js/ai.
+ * AI SDK provider factory — optional peer @ai-sdk/* (ADR 0019).
  */
 
-import { createAnthropic } from '@ai-sdk/anthropic';
-import { createDeepSeek } from '@ai-sdk/deepseek';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { createOpenAI } from '@ai-sdk/openai';
-import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
+import { createRequire } from 'node:module';
 import type { ImageModel, LanguageModel } from 'ai';
 import type { ProviderInstanceConfig } from './types/model.js';
 import { resolveProxyFetch } from './proxy-fetch.js';
+
+const requirePeer = createRequire(import.meta.url);
+
+function loadPeer<T>(id: string): T {
+  try {
+    return requirePeer(id) as T;
+  } catch (error) {
+    throw new Error(
+      `Missing peer dependency "${id}". Install it in your project: pnpm add ${id}`,
+      { cause: error },
+    );
+  }
+}
 
 export const SDK_IDS = [
   'openai',
@@ -32,7 +40,6 @@ function trimUrl(value: string | undefined): string | undefined {
   return trimmed || undefined;
 }
 
-/** @ai-sdk/anthropic uses `{baseURL}/messages`; baseURL must include `/v1` (unlike official SDK which appends `/v1/messages`). */
 function normalizeAnthropicBaseUrl(baseUrl: string | undefined): string | undefined {
   const url = trimUrl(baseUrl);
   if (!url) return undefined;
@@ -80,6 +87,9 @@ function createOpenAiCompatibleProvider(
   baseURL: string,
   name: string,
 ) {
+  const { createOpenAICompatible } = loadPeer<typeof import('@ai-sdk/openai-compatible')>(
+    '@ai-sdk/openai-compatible',
+  );
   return createOpenAICompatible({
     name,
     baseURL,
@@ -89,7 +99,6 @@ function createOpenAiCompatibleProvider(
   });
 }
 
-/** Create an AI SDK LanguageModel for the given sdk + model id. */
 export function createLanguageModel(
   sdk: SdkId,
   config: ProviderInstanceConfig,
@@ -100,6 +109,7 @@ export function createLanguageModel(
 
   switch (sdk) {
     case 'openai': {
+      const { createOpenAI } = loadPeer<typeof import('@ai-sdk/openai')>('@ai-sdk/openai');
       const openai = createOpenAI({
         apiKey: config.apiKey?.trim(),
         baseURL: trimUrl(config.baseUrl),
@@ -109,6 +119,7 @@ export function createLanguageModel(
       return openai(modelId);
     }
     case 'anthropic': {
+      const { createAnthropic } = loadPeer<typeof import('@ai-sdk/anthropic')>('@ai-sdk/anthropic');
       const anthropic = createAnthropic({
         apiKey: config.apiKey?.trim(),
         baseURL: normalizeAnthropicBaseUrl(config.baseUrl),
@@ -118,6 +129,7 @@ export function createLanguageModel(
       return anthropic(modelId);
     }
     case 'google': {
+      const { createGoogleGenerativeAI } = loadPeer<typeof import('@ai-sdk/google')>('@ai-sdk/google');
       const google = createGoogleGenerativeAI({
         apiKey: config.apiKey?.trim(),
         baseURL: trimUrl(config.baseUrl),
@@ -127,6 +139,7 @@ export function createLanguageModel(
       return google(modelId);
     }
     case 'deepseek': {
+      const { createDeepSeek } = loadPeer<typeof import('@ai-sdk/deepseek')>('@ai-sdk/deepseek');
       const deepseek = createDeepSeek({
         apiKey: config.apiKey?.trim(),
         baseURL: trimUrl(config.baseUrl),
@@ -162,7 +175,6 @@ export function createLanguageModel(
   }
 }
 
-/** Create an AI SDK ImageModel when the sdk supports image generation. */
 export function createImageModel(
   sdk: SdkId,
   config: ProviderInstanceConfig,
@@ -173,6 +185,7 @@ export function createImageModel(
 
   switch (sdk) {
     case 'openai': {
+      const { createOpenAI } = loadPeer<typeof import('@ai-sdk/openai')>('@ai-sdk/openai');
       const openai = createOpenAI({
         apiKey: config.apiKey,
         baseURL: config.baseUrl,
@@ -182,6 +195,7 @@ export function createImageModel(
       return openai.image(modelId);
     }
     case 'google': {
+      const { createGoogleGenerativeAI } = loadPeer<typeof import('@ai-sdk/google')>('@ai-sdk/google');
       const google = createGoogleGenerativeAI({
         apiKey: config.apiKey,
         baseURL: config.baseUrl,
@@ -202,7 +216,6 @@ export function createImageModel(
   }
 }
 
-/** Whether this sdk supports AI SDK image generation in Phase 1. */
 export function sdkSupportsImageGeneration(sdk: SdkId): boolean {
   return sdk === 'openai' || sdk === 'google' || sdk === 'openai-compatible';
 }

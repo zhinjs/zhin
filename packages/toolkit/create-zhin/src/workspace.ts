@@ -92,7 +92,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       'pm2:monit': 'pm2 monit'
     },
     dependencies: {
-      'zhin.js': '^2.0.0',
+      'zhin.js': '^4.0.0',
       '@zhin.js/cli': '^1.0.0',
       '@zhin.js/host-router': '^1.0.0',
       '@zhin.js/client': '^2.0.0',

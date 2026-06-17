@@ -6,11 +6,11 @@ Zhin.js 文档按三条跑道组织，对应不同目标。
 
 ## L1 — 能用
 
-**目标**：安装、配置、让机器人收到消息并回复。
+**目标**：安装、配置、让机器人收到消息并回复（IM）；可选再启用 AI。
 
 **建议阅读顺序**：
 
-1. [快速开始 / 安装与启动](/getting-started/)
+1. [快速开始 / 安装与启动](/getting-started/)（含 [Install tiers](/getting-started/#install-tierszhinjs-4x)）
 2. [配置文件](/essentials/configuration)
 3. 任选：[Remote Console](/console-remote)（管理 bot 与 Sandbox）
 4. 任选：[消息如何流转](/essentials/message-flow)（一页弄清「消息从哪来到哪去」）

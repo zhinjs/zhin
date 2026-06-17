@@ -47,6 +47,11 @@ const checks = [
     description: '检查文档相对链接是否断裂',
   },
   {
+    name: 'Install Tiers SSOT',
+    command: 'pnpm check:install-tiers-ssot',
+    description: 'README Install tiers 表与 docs/snippets/install-tiers.md 一致',
+  },
+  {
     name: 'Doc Orphans',
     command: 'pnpm check:doc-orphans',
     description: '检查站点 Markdown 是否在侧栏或 allowlist',
@@ -70,6 +75,11 @@ const checks = [
     name: 'usePlugin Top-Level',
     command: 'pnpm check:use-plugin-top-level',
     description: '插件 usePlugin() 须在模块顶层',
+  },
+  {
+    name: 'Install Size (IM core)',
+    command: 'pnpm check:install-size',
+    description: 'zhin.js production node_modules ≤10MB（ADR 0019）',
   },
 ];
 

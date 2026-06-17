@@ -328,7 +328,7 @@ const tools = cache.filter('天气查询', allTools, { maxTools: 10 })
 pnpm add @zhin.js/ai
 ```
 
-> 也可通过 `zhin.js` 或 `@zhin.js/agent` 间接引入。
+> 在 Zhin 项目中通常经 `@zhin.js/agent` 依赖引入；也可 `import … from 'zhin.js/ai'`（须已安装 `@zhin.js/ai`，一般由 agent 带入）。
 
 ## 许可证
 

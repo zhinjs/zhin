@@ -79,8 +79,7 @@ export {
   toolCallFromContentBlock,
   stringParamTool,
   ToolCallValidationError,
-  Type,
-  Value,
+  z,
 } from './validate-tool-call.js';
 
 export { agentLoop, agentContextFrom } from './agent-loop.js';

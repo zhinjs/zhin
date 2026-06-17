@@ -91,7 +91,7 @@ describe('createWorkspace', () => {
     expect(client).toContain('zhin.config.json')
   })
 
-  it('writes MCP SDK into package.json when AI is enabled', async () => {
+  it('writes AI stack dependencies when AI is enabled', async () => {
     const projectPath = await makeProject({
       ai: {
         enabled: true,
@@ -100,6 +100,10 @@ describe('createWorkspace', () => {
       },
     })
     const pkg = await fs.readJson(path.join(projectPath, 'package.json'))
+    expect(pkg.dependencies['@zhin.js/agent']).toBe('^4.0.0')
     expect(pkg.dependencies['@modelcontextprotocol/sdk']).toBe(MCP_SDK_VERSION)
+    expect(pkg.dependencies['@ai-sdk/openai-compatible']).toBe('^1.0.0')
+    expect(pkg.dependencies.zod).toBe('^4.0.0')
+    expect(pkg.dependencies.ai).toBe('^6.0.0')
   })
 })

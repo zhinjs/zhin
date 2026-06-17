@@ -6,10 +6,25 @@
 - **源码**：`packages/im/ai/src/types.ts`（Provider / Context）、`packages/im/agent/src/zhin-agent/config.ts`（`DEFAULT_CONFIG`）
 :::
 
-Zhin.js 内置 AI Agent 能力，可以对接大语言模型（LLM），让机器人具备智能对话、工具调用、上下文记忆等能力。
+Zhin.js 通过 **`@zhin.js/agent`**（IM 编排）与 **`@zhin.js/ai`**（LLM 引擎）提供 AI Agent 能力：智能对话、工具调用、上下文记忆等。**zhin.js 4.x 主包默认不含上述依赖**，须按档位安装（见下节）。
+
+## 安装与依赖（zhin.js 4.x）
+
+<<< ../snippets/install-tiers.md#tiers-table
+
+**Import 约定（4.x breaking）**：
+
+<<< ../snippets/install-tiers.md#imports
+
+<<< ../snippets/install-tiers.md#doctor
+
+<<< ../snippets/install-tiers.md#scaffold-note
+
+决策记录：[ADR 0019 — 安装体积分层](/adr/0019-install-size-layering)。
 
 ## 目录
 
+- [安装与依赖（zhin.js 4.x）](#安装与依赖-zhinjs-4x)
 - [架构概览](#架构概览)
 - [配置](#配置)
 - [Agent 配置详解](#agent-配置详解)
@@ -125,7 +140,7 @@ flowchart TD
 
 ### IM 消息事实源（im_transcripts）
 
-入站、出站消息由 **zhin.js 主包**在 core 生命周期落库（`registerChatMessageStore`），**不经过** ZhinAgent 写入：
+入站、出站消息由 **`zhin.js` 运行时**（`registerChatMessageStore`，经 `@zhin.js/agent` 挂载）在 core 生命周期落库，**不经过** ZhinAgent 写入：
 
 | 事件 | 时机 | 表 |
 |------|------|-----|
@@ -138,7 +153,7 @@ flowchart TD
 
 ## 配置
 
-在 `zhin.config.yml` 中配置 AI 模块：
+在 `zhin.config.yml` 中配置 AI 模块（**须已安装 `@zhin.js/agent` 与至少一个 `@ai-sdk/*`**）：
 
 ```yaml
 ai:
@@ -898,7 +913,7 @@ ai:
 ### 编程接口
 
 ```typescript
-import { ModelRegistry } from 'zhin.js'
+import { ModelRegistry } from 'zhin.js/ai'
 
 const registry = new ModelRegistry(logger)
 

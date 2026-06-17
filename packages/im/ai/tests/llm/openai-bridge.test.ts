@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Type } from '@sinclair/typebox';
+import { z } from 'zod';
 import {
   agentMessagesToOpenAi,
   contextToChatCompletionRequest,
@@ -29,7 +29,7 @@ describe('openai-bridge', () => {
     const ctx = createContext('sys', [createUserMessage('q')], [{
       name: 'echo',
       description: 'echo',
-      parameters: Type.Object({ message: Type.String() }),
+      parameters: z.object({ message: z.string() }),
     }]);
     const req = contextToChatCompletionRequest(
       {

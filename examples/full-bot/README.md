@@ -8,9 +8,13 @@
 
 | 示例 | 定位 |
 |------|------|
-| minimal-bot | Stable 黄金路径，`pnpm check:stable` |
-| **full-bot** | L4 参考，`pnpm check:l4` |
+| minimal-bot | Stable 黄金路径（**仅 IM**，`ai.enabled: false`） |
+| **full-bot** | L4 参考（**含 `@zhin.js/agent` + provider**），`pnpm check:l4` |
 | test-bot | 厨房水槽，全平台/全插件 |
+
+## 依赖
+
+本示例 `package.json` 已声明 `@zhin.js/agent`、`zod`、`ai` 与所用 `@ai-sdk/*`。从 minimal-bot 升级时请对照安装，或运行 `zhin doctor`。
 
 ## 快速开始
 

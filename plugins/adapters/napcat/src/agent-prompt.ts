@@ -2,9 +2,10 @@ import type {
   AgentPromptBuildContext,
   AgentPromptContributor,
   AgentPromptSection,
-  AgentTool,
+  DeferredToolCatalogItem,
 } from 'zhin.js';
-import { filterTools } from 'zhin.js';
+import type { AgentTool } from 'zhin.js/ai';
+import { filterTools } from 'zhin.js/ai';
 
 function isNapCatDelegatedTask(query: string, goal: string): boolean {
   const text = `${query} ${goal}`;
@@ -21,14 +22,14 @@ function isNapCatDelegatedTask(query: string, goal: string): boolean {
 function selectNapCatDeferredTools(
   query: string,
   goal: string,
-  deferredCatalog: AgentTool[],
+  deferredCatalog: DeferredToolCatalogItem[],
   maxTools: number,
-): AgentTool[] {
+): DeferredToolCatalogItem[] {
   const pool = deferredCatalog.filter(
     t => !t.name.startsWith('mcp_filesystem') && !t.name.startsWith('mcp_memory_'),
   );
   const napcatTools = pool.filter(t => t.name.startsWith('napcat_'));
-  const pinned: AgentTool[] = [];
+  const pinned: DeferredToolCatalogItem[] = [];
   const preferOrder = [
     'napcat_send_poke',
     'napcat_set_emoji_reaction',
@@ -46,10 +47,11 @@ function selectNapCatDeferredTools(
     if (!pinned.some(p => p.name === t.name)) pinned.push(t);
   }
 
-  const extra = filterTools(query, pool, { maxTools, minScore: 0.08 })
+  const extra = filterTools(query, pool as AgentTool[], { maxTools, minScore: 0.08 })
+    .map((t) => ({ name: t.name, description: t.description }))
     .filter(t => !pinned.some(p => p.name === t.name));
 
-  const merged: AgentTool[] = [...pinned];
+  const merged: DeferredToolCatalogItem[] = [...pinned];
   for (const t of extra) {
     if (merged.length >= maxTools) break;
     merged.push(t);

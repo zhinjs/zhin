@@ -1,8 +1,16 @@
 # 快速开始
 
-欢迎使用 Zhin.js！本教程带你从零跑通 **AI Agent 运行时**：配置 Endpoint（先从 Sandbox 开始）、启用 ZhinAgent，并在 Remote Console 里对话。
+欢迎使用 Zhin.js！本教程带你从零跑通 **IM 核心路径**：配置 Endpoint（先从 Sandbox 开始）、在 Remote Console 沙盒里收发消息。若需要 **ZhinAgent / 大模型对话**，见下文 [启用 AI（可选）](#启用-ai-可选) 与 [Install tiers](#install-tierszhinjs-4x)。
 
 > **读完本页后**：若希望按难度选课，打开 [学习路径](/essentials/learning-paths)；需要一页搞清消息进出，看 [消息如何流转](/essentials/message-flow)。
+
+## Install tiers（zhin.js 4.x）
+
+<<< ../snippets/install-tiers.md#tiers-table
+
+<<< ../snippets/install-tiers.md#breaking
+
+<<< ../snippets/install-tiers.md#scaffold-note
 
 ## 前置要求
 
@@ -39,7 +47,7 @@ cp .env.example .env
 pnpm dev
 ```
 
-保持 `pnpm dev` 运行后，打开 **[Remote Console](https://console.zhin.dev)**，用终端里显示的 Host 地址作为 API Base，Token 与 `.env` 的 `HTTP_TOKEN` 一致；在 Console **沙盒** 页连接后发送 `hello`。配置 Ollama 后可发送 `ai: …` 验证 AI。说明见 [console-remote.md](../console-remote.md)。
+保持 `pnpm dev` 运行后，打开 **[Remote Console](https://console.zhin.dev)**，用终端里显示的 Host 地址作为 API Base，Token 与 `.env` 的 `HTTP_TOKEN` 一致；在 Console **沙盒** 页连接后发送 `hello` 验证 IM 路径。**minimal-bot 默认关闭 AI**；要测 `ai:` 对话请用 [full-bot](https://github.com/zhinjs/zhin/tree/main/examples/full-bot) 或下文「启用 AI」。说明见 [console-remote.md](../console-remote.md)。
 
 - 示例说明：[examples/minimal-bot/README.md](https://github.com/zhinjs/zhin/blob/main/examples/minimal-bot/README.md)
 - 全功能维护者配置（**非默认模板**）：`examples/test-bot`
@@ -130,7 +138,27 @@ Token 会保存在 `.env` 文件中，用于访问本地 API 或在 Remote Conso
     Ollama (本地部署)
 ```
 
-选择 AI 提供商后，会引导你配置 API Key 和触发方式（@Endpoint、私聊、前缀触发等）。
+选择 AI 提供商后，会引导你配置 API Key 和触发方式（@Endpoint、私聊、前缀触发等），并自动安装 `@zhin.js/agent`、`zod`、`ai` 与所选 `@ai-sdk/*`。
+
+### 启用 AI（可选）
+
+若已克隆 monorepo 且从 **minimal-bot** 起步，需另装依赖并改配置：
+
+```bash
+cd examples/full-bot   # 或在你自己的项目根
+pnpm add @zhin.js/agent zod ai @ai-sdk/openai   # provider 按厂商替换
+```
+
+```yaml
+# zhin.config.yml 节选
+ai:
+  enabled: true
+  providers: { ... }
+  agents:
+    zhin: { provider: ..., model: ... }
+```
+
+也可直接 `cd examples/full-bot && pnpm dev`。详见 [AI 模块 — 安装与依赖](/advanced/ai#安装与依赖-zhinjs-4x)。
 
 ### 7. 等待安装
 
@@ -208,14 +236,14 @@ npx zhin stop
 
 Stable 路径常用：`pnpm dev`（等价 `zhin dev`）、`pnpm start`、`npx zhin stop`。完整命令表见 **[CLI 命令参考](/reference/cli)** 与仓库 [`@zhin.js/cli`](https://github.com/zhinjs/zhin/tree/main/basic/cli) README。
 
-## 测试 Agent（Stable：Remote Console 沙盒）
+## 测试 Agent（需已安装 @zhin.js/agent）
 
-Stable 路径下 **Sandbox 不走终端 stdin**。启动 `pnpm dev` 后：
+在 **已启用 AI** 的项目中（脚手架勾选 AI，或 [full-bot](https://github.com/zhinjs/zhin/tree/main/examples/full-bot)）：
 
 1. 打开 **[console.zhin.dev](https://console.zhin.dev)**，API Base 与日志中的 Host 一致（如 `http://127.0.0.1:8086`），Token 与 `.env` 的 `HTTP_TOKEN` 一致
-2. 进入 **沙盒** 页连接 WebSocket，发送 `hello` 或 `ai: …` 验证
+2. 进入 **沙盒** 页连接 WebSocket，发送 `hello`（命令）或 `ai: …`（Agent）
 
-这与 [minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot) 一致：`endpoints: []` 时 Console 打开沙盒页会自动创建 bot。
+**仅 IM 的 minimal-bot** 只能验证 `hello` 等命令，不能发 `ai:`。`endpoints: []` 时 Console 打开沙盒页会自动创建 bot。
 
 ::: info 终端里的 `> hello` 是什么？
 那是 **`process` 核心服务**（stdin/stdout），不是 Sandbox。默认启用但仅在 TTY 下绑定 stdin；Stable 调试请用 Console 沙盒。详见 [适配器 — Process](/essentials/adapters#process进程适配器)。
@@ -387,7 +415,7 @@ http:
 
 ## 下一步
 
-恭喜！你已经跑通了第一个 Zhin.js Agent 实例（Sandbox Endpoint）。接下来可以：
+恭喜！你已经跑通了第一个 Zhin.js 实例（Sandbox Endpoint）。接下来可以：
 
 - **[插件开发、测试与发布](/guide/plugin-development)** - 完整的插件生命周期（创建 → 测试 → 构建 → 发布）
 - **[配置文件](/essentials/configuration)** - 了解更多配置选项

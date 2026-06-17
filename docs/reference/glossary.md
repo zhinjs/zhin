@@ -6,10 +6,10 @@
 
 | 术语 | 级别 | 简述 |
 |------|------|------|
-| **Adapter** | L1～L2 | 平台协议运行时（icqq、discord、email…），把外部事件规范为 Core `Message`。 |
+| **Install tiers** | L1 | zhin.js 4.x：`zhin.js`（IM <10MB）→ `@zhin.js/agent` + provider。见 [ADR 0019](/adr/0019-install-size-layering)。 |
 | **Endpoint** | L1～L2 | Adapter 下的账号/连接实例（配置 `endpoints[].name`）；IM 号、邮箱、Sandbox 会话等均为 Endpoint。Console RPC：`endpoint:list` / `endpoint:info`。 |
 | **Endpoint Capability** | L3 | `inbound` / `outbound`：声明 Endpoint 是否接收入站、能否主动出站。 |
-| **ZhinAgent** | L2～L3 | 理解 Endpoint 上下文的 Agent 编排运行时（工具、技能、安全、Compaction）。 |
+| **ZhinAgent** | L2～L3 | `@zhin.js/agent` 提供的 IM 编排运行时；须单独安装，非 `zhin.js` 默认导出。 |
 
 ## 消息与调度
 

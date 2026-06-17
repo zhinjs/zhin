@@ -12,9 +12,8 @@ import {
   createGroupManagementTools,
   registerDefaultGroupPlatformPermitChecker,
   type ToolFeature,
-  registerAgentPromptContributor,
-  unregisterAgentPromptContributor,
 } from 'zhin.js';
+import { registerAgentPromptContributor, unregisterAgentPromptContributor } from 'zhin.js/agent';
 import type { Router } from '@zhin.js/host-router';
 import { PageManager } from '@zhin.js/host-api';
 import { NapCatAdapter } from './adapter.js';

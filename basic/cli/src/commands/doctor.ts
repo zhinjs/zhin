@@ -5,8 +5,15 @@ import path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { formatCompact } from '@zhin.js/logger';
+import {
+  diagnoseAIDependencies,
+  formatAIDependencyFixCommand,
+  isAiEnabledInConfig,
+  mergeDependenciesIntoPackageJson,
+} from '@zhin.js/scaffold-wizard';
 import { logger } from '../utils/logger.js';
 import { formatNodeRequirementMessage, isNodeVersionSupported } from '../utils/node-requirements.js';
+import { findConfigFile, readConfig } from '../utils/config-file.js';
 
 const execAsync = promisify(exec);
 
@@ -141,7 +148,61 @@ export const doctorCommand = new Command('doctor')
       });
     }
 
-    // 6. 检查 node_modules
+    // 6. 检查 AI 依赖（zhin.js 4.x：配置启用 AI 时需单独安装 agent 栈）
+    if (existingConfig) {
+      try {
+        const config = await readConfig(path.join(cwd, existingConfig));
+        if (isAiEnabledInConfig(config)) {
+          const aiDiagnosis = diagnoseAIDependencies(cwd, config);
+          if (aiDiagnosis) {
+            const providerLabel = aiDiagnosis.provider ? ` (${aiDiagnosis.provider})` : '';
+            if (aiDiagnosis.missingFromPackageJson.length > 0) {
+              const fixCmd = formatAIDependencyFixCommand(
+                aiDiagnosis.missingFromPackageJson,
+                aiDiagnosis.required,
+              );
+              results.push({
+                name: 'AI 依赖',
+                status: 'error',
+                message: `已启用 AI${providerLabel}，但 package.json 缺少: ${aiDiagnosis.missingFromPackageJson.join(', ')}`,
+                fix: options.fix ? '将写入 package.json' : fixCmd,
+              });
+              if (options.fix) {
+                const changed = await mergeDependenciesIntoPackageJson(cwd, aiDiagnosis.required);
+                if (changed) {
+                  logger.info(formatCompact({
+                    cmd: 'doctor',
+                    op: 'add_ai_deps',
+                    packages: aiDiagnosis.missingFromPackageJson.join(','),
+                  }));
+                }
+              }
+            } else if (aiDiagnosis.notInstalled.length > 0) {
+              results.push({
+                name: 'AI 依赖',
+                status: 'warn',
+                message: `已声明但未安装: ${aiDiagnosis.notInstalled.join(', ')}`,
+                fix: 'pnpm install',
+              });
+            } else {
+              results.push({
+                name: 'AI 依赖',
+                status: 'ok',
+                message: `AI 栈已就绪${providerLabel}`,
+              });
+            }
+          }
+        }
+      } catch {
+        results.push({
+          name: 'AI 依赖',
+          status: 'warn',
+          message: '无法读取配置以检查 AI 依赖',
+        });
+      }
+    }
+
+    // 7. 检查 node_modules
     const nodeModulesPath = path.join(cwd, 'node_modules');
     if (fs.existsSync(nodeModulesPath)) {
       results.push({
@@ -158,7 +219,7 @@ export const doctorCommand = new Command('doctor')
       });
     }
 
-    // 7. 检查端口占用（8086）
+    // 8. 检查端口占用（8086）
     try {
       const { stdout } = await execAsync('lsof -i:8086 || (ss -lntp | grep :8086) 2>/dev/null');
       if (stdout.trim()) {
@@ -183,7 +244,7 @@ export const doctorCommand = new Command('doctor')
       });
     }
 
-    // 8. 检查 TypeScript
+    // 9. 检查 TypeScript
     if (fs.existsSync(path.join(cwd, 'tsconfig.json'))) {
       try {
         const { stdout } = await execAsync('tsc --version');
@@ -202,7 +263,7 @@ export const doctorCommand = new Command('doctor')
       }
     }
 
-    // 9. 检查环境变量文件
+    // 10. 检查环境变量文件
     const envFile = path.join(cwd, '.env');
     if (fs.existsSync(envFile)) {
       results.push({

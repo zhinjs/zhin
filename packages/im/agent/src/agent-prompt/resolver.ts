@@ -1,5 +1,6 @@
 import { Logger } from '@zhin.js/core';
-import type { AgentPromptBuildContext, AgentPromptSection,  } from '@zhin.js/core';
+import type { AgentPromptBuildContext, AgentPromptSection } from '@zhin.js/core';
+import type { AgentTool } from '@zhin.js/ai';
 import type { ZhinAgentConfig } from '../zhin-agent/config.js';
 import { DEFAULT_CONFIG } from '../zhin-agent/config.js';
 import { createAIHookEvent, triggerAIHook } from '../hooks.js';
@@ -77,14 +78,25 @@ export function resolveDeferredToolsForPlatform(
   ctx: AgentPromptBuildContext,
   query: string,
   goal: string,
-  catalog: import('@zhin.js/ai').AgentTool[],
+  catalog: AgentTool[],
   maxTools: number,
-  defaultSelect: (query: string, goal: string, catalog: import('@zhin.js/ai').AgentTool[], maxTools: number) => import('@zhin.js/ai').AgentTool[],
-): import('@zhin.js/ai').AgentTool[] {
+  defaultSelect: (
+    query: string,
+    goal: string,
+    catalog: AgentTool[],
+    maxTools: number,
+  ) => AgentTool[],
+): AgentTool[] {
   const contributor = getAgentPromptContributor(String(ctx.commMessage.$adapter));
   if (contributor?.matchesDeferredTask?.(ctx)) {
-    const selected = contributor.selectDeferredTools?.(query, goal, catalog, maxTools);
-    if (selected) return selected;
+    const catalogLite = catalog.map((t) => ({ name: t.name, description: t.description }));
+    const selected = contributor.selectDeferredTools?.(query, goal, catalogLite, maxTools);
+    if (selected) {
+      const byName = new Map(catalog.map((t) => [t.name, t]));
+      return selected
+        .map((item) => byName.get(item.name))
+        .filter((tool): tool is AgentTool => tool != null);
+    }
   }
   return defaultSelect(query, goal, catalog, maxTools);
 }

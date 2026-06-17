@@ -44,6 +44,30 @@ ai:
     expect(codes).toContain('ai.provider_driver_deprecated');
   });
 
+  it('AI 已启用时应报告缺少 agent 栈依赖', async () => {
+    await fs.writeFile(path.join(tmpDir, 'package.json'), JSON.stringify({
+      name: 'bot',
+      dependencies: { 'zhin.js': '^4.0.0' },
+    }));
+    await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
+plugins:
+  - "@zhin.js/adapter-sandbox"
+ai:
+  enabled: true
+  agents:
+    zhin:
+      provider: openai
+      model: gpt-4o
+  providers:
+    openai:
+      sdk: openai
+`);
+
+    const result = await runConfigCheck(tmpDir);
+    const codes = result.issues.map((i) => i.code);
+    expect(codes).toContain('ai.deps_missing');
+  });
+
   it('--fix 应迁移旧版 ai 段', async () => {
     const config = {
       plugins: ['@zhin.js/adapter-process', '@zhin.js/host-router'],

@@ -17,7 +17,7 @@
 适配器在 `provide.mounted` 中：
 
 ```ts
-import { registerAgentPromptContributor, unregisterAgentPromptContributor } from 'zhin.js';
+import { registerAgentPromptContributor, unregisterAgentPromptContributor } from 'zhin.js/agent';
 import { createIcqqAgentPromptContributor } from './agent-prompt.js';
 
 registerAgentPromptContributor(createIcqqAgentPromptContributor());

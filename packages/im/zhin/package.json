@@ -1,7 +1,7 @@
 {
   "name": "zhin.js",
-  "version": "3.0.0",
-  "description": "Zhin.js 主入口 — IM 核心与 Agent API；HTTP/Remote Console 请安装 @zhin.js/host-router、@zhin.js/host-api 插件",
+  "version": "4.0.0",
+  "description": "Zhin.js IM 核心（<10MB 安装预算）；AI 请另装 @zhin.js/agent",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -10,6 +10,16 @@
       "types": "./lib/index.d.ts",
       "development": "./src/index.ts",
       "import": "./lib/index.js"
+    },
+    "./agent": {
+      "types": "./lib/agent.d.ts",
+      "development": "./src/agent.ts",
+      "import": "./lib/agent.js"
+    },
+    "./ai": {
+      "types": "./lib/ai.d.ts",
+      "development": "./src/ai.ts",
+      "import": "./lib/ai.js"
     },
     "./jsx": {
       "types": "./lib/jsx.d.ts",
@@ -44,8 +54,6 @@
     "clean": "rimraf lib"
   },
   "dependencies": {
-    "@zhin.js/agent": "workspace:*",
-    "@zhin.js/ai": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/kernel": "workspace:*",
     "@zhin.js/logger": "workspace:*",
@@ -54,10 +62,14 @@
     "dotenv": "^17.4.2"
   },
   "peerDependencies": {
+    "@zhin.js/agent": "^4.0.0",
     "@zhin.js/host-api": "workspace:^",
     "@zhin.js/host-router": "workspace:^"
   },
   "peerDependenciesMeta": {
+    "@zhin.js/agent": {
+      "optional": true
+    },
     "@zhin.js/host-api": {
       "optional": true
     },
@@ -67,6 +79,8 @@
   },
   "devDependencies": {
     "@types/node": "^25.9.2",
+    "@zhin.js/agent": "workspace:*",
+    "@zhin.js/ai": "workspace:*",
     "@zhin.js/host-api": "workspace:*",
     "@zhin.js/host-router": "workspace:*",
     "typescript": "^6.0.3"

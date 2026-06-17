@@ -30,8 +30,8 @@ hero:
 
 features:
   - icon: "\uD83E\uDDE0"
-    title: AI 驱动
-    details: 内置 ZhinAgent 智能体，接入 OpenAI / Ollama 等大模型。支持多轮对话、流式输出、Tool 工具调用、Skill 语义路由。
+    title: AI 驱动（可选分层）
+    details: 另装 @zhin.js/agent 后启用 ZhinAgent，接入 OpenAI / Ollama 等。支持多轮对话、流式输出、Tool、Skill 语义路由。IM 核心单独安装 <10MB（ADR 0019）。
 
   - icon: "\uD83E\uDDE9"
     title: Feature 可扩展架构
@@ -51,6 +51,6 @@ features:
 
   - icon: "\uD83C\uDF10"
     title: 多通道 Endpoint
-    details: 通过 Adapter 接入 QQ、Discord、Telegram、邮件、GitHub、Sandbox 等 17+ 通道。统一 Endpoint 契约与出站链路，ZhinAgent 在各通道上复用同一套工具与安全策略。
+    details: 通过 Adapter 接入 QQ、Discord、Telegram、邮件、GitHub、Sandbox 等 17+ 通道。统一 Endpoint 契约与出站链路；启用 Agent 栈后 ZhinAgent 在各通道复用同一套工具与安全策略。
 
 ---

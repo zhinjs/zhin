@@ -47,7 +47,7 @@ export async function bootstrapNode(options: BootstrapOptions = {}): Promise<Boo
 
   registerCoreServices(plugin, appConfig, configFeature);
   applyConfigAndDatabase(plugin, appConfig);
-  registerAI();
+  await registerAI();
   registerStdinLoginAssist(plugin);
 
   await connectEndpoints(plugin, appConfig);

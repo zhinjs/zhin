@@ -22,7 +22,8 @@
 - **推荐首跑**： [examples/minimal-bot](examples/minimal-bot/)（Stable 黄金路径）。
 - **L4 参考**： [examples/full-bot](examples/full-bot/)（分维度 L4 DoD；`pnpm check:l4`）。
 - [examples/test-bot](examples/test-bot/) 为维护者厨房水槽（多 Endpoint / Advanced 能力），非默认模板。
-- 进阶路径：**Stable（minimal-bot）→ L4（full-bot）→ 厨房水槽（test-bot）**。
+- 进阶路径：**Stable（minimal-bot，仅 IM）→ L4（full-bot，含 AI）→ 厨房水槽（test-bot）**。
+- **zhin.js 4.x**：默认安装仅 IM（<10MB）；AI 另装 `@zhin.js/agent` + `zod` + `ai` + 所选 `@ai-sdk/*`。用户向分档表 SSOT：[`docs/snippets/install-tiers.md`](docs/snippets/install-tiers.md)。见 [ADR 0019](docs/adr/0019-install-size-layering.md)。
 - **项目脚手架**：新建 workspace 用 `pnpm create zhin-app`（`create-zhin-app`）；已有项目增量配置用 `zhin setup`。二者共用 [`@zhin.js/scaffold-wizard`](packages/toolkit/scaffold-wizard/)。
 
 ## 常用命令
@@ -37,6 +38,8 @@
 - `pnpm sync:adapter-docs` / `pnpm check:adapter-docs`：平台适配器文档与 `plugins/adapters/*/README.md` 同步。
 - `pnpm --filter <pkg> build|test`：只验证单个包。
 - `pnpm check:l4`：L4 全维度验收（编排 + 语义记忆 + full-bot 契约 + MCP 鉴权；实机 IM 项 `L4_SKIP_PLATFORM=1` 跳过）。
+- `pnpm check:install-size`：zhin.js IM 核心 production `node_modules` ≤10MB（ADR 0019）。
+- `pnpm check:install-tiers-ssot`：根 `README` Install tiers 表与 `docs/snippets/install-tiers.md` 一致。
 - 改 **CLI** 或 **create-zhin-app** 前，若报找不到 `@zhin.js/scaffold-wizard`，先执行 `pnpm --filter @zhin.js/scaffold-wizard build`（或 `pnpm prepare:cli` / 全量 `pnpm build`）。该包产物在 `lib/`，未构建时 Node 无法解析。
 - **ADR 0010 Harness**：IM 会话命令见 [examples/test-bot/TOOLS.md](examples/test-bot/TOOLS.md)；`zhin packages` 见 [docs/adr/0010-pi-coding-agent-harness-alignment.md](docs/adr/0010-pi-coding-agent-harness-alignment.md)。
 
@@ -57,7 +60,7 @@
 - 框架核心、Plugin/Adapter/Dispatcher：看 packages/im/core。
 - AI 引擎、Session、Compaction、Provider、ModelRegistry、`getModel`：看 [packages/im/ai](packages/im/ai/README.md) 与 [docs/advanced/ai.md](docs/advanced/ai.md)。
 - AI 编排、工具发现、安全策略、MCP client：看 [packages/im/agent](packages/im/agent/README.md)。
-- 应用入口和聚合导出：看 [packages/im/zhin](packages/im/zhin/README.md)（含 `im_transcripts` 落库）。
+- 应用入口（IM 核心 + 可选 agent 子路径）：看 [packages/im/zhin](packages/im/zhin/README.md)（`im_transcripts` 落库需 `@zhin.js/agent`）。
 - Host 运行时（router / api / mcp）：看 packages/host。
 - 可选服务插件：看 plugins/services。
 - 平台适配器：看 plugins/adapters。

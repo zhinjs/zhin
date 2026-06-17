@@ -4,17 +4,17 @@
 
 ## IM 主栈（Stable）
 
-默认开发与对外承诺范围以 [examples/minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot) 为准。
+默认开发与对外承诺范围以 [examples/minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot) 为准（**IM 核心**；AI 见 [ADR 0019](../adr/0019-install-size-layering.md) 与 [full-bot](https://github.com/zhinjs/zhin/tree/main/examples/full-bot)）。
 
 | 文档 | 说明 |
 |------|------|
 | [架构概览](../architecture-overview.md) | 分层（basic → kernel → ai → core → agent → zhin）、消息流程图 |
+| [ADR 0019 — 安装体积分层](../adr/0019-install-size-layering.md) | zhin.js 4.x：IM <10MB、agent/provider optional peer |
 | [ADR 0009 — agentLoop 统一栈](../adr/0009-pi-aligned-ai-agent-core.md) | Context + stream + agentLoop 迁移与完成定义 |
 | [仓库结构](../contributing/repo-structure.md) | pnpm workspace、`src→lib` / `client→dist` |
 | [Harness 工程](../contributing/harness-engineering.md) | 发送链路、层级依赖、CI 检查 |
-| [AI 模块](../advanced/ai.md) | `agents` 绑定、模型发现、`im_transcripts` / `agent_messages` |
-| [packages 子包 README](https://github.com/zhinjs/zhin/blob/main/packages/README.md) | `im/ai`、`im/agent`、`im/core`、`im/zhin` 包内说明 |
-| [AI 模块](../advanced/ai.md) | `agents` 绑定、模型发现、`im_transcripts` / `agent_messages` |
+| [文档片段 `snippets/`](../snippets/README.md) | Install tiers 等 VitePress 可复用 SSOT |
+| [AI 模块](../advanced/ai.md) | 安装分层、`agents` 绑定、模型发现、`im_transcripts` / `agent_messages` |
 | [packages 子包 README](https://github.com/zhinjs/zhin/blob/main/packages/README.md) | `im/ai`、`im/agent`、`im/core`、`im/zhin` 包内说明 |
 | [Agent 上下文块](agent-context-blocks.md) | 系统提示词分段与贡献者约定 |
 | [Agent 提示词贡献者](agent-prompt-contributors.md) | 平台专属 `AgentPromptContributor` |

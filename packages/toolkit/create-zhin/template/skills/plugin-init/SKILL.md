@@ -155,7 +155,8 @@ logger.info('{Name} 插件已加载')
 **关键约定：**
 - `usePlugin()` 只在模块顶层调用
 - TS 文件间互导使用 `.js` 扩展名
-- 从 `zhin.js` 统一导入框架 API
+- 从 `zhin.js` 统一导入 **IM 框架 API**（Plugin、命令、`ZhinTool` 注册）
+- 使用 `ctx.ai` / `ZhinAgent` 类型时从 `zhin.js/agent` 引入；项目 `package.json` 须含 `@zhin.js/agent`、`zod`、`ai` 与所选 `@ai-sdk/*`（`zhin doctor` 可诊断）
 - `useContext()` 回调返回清理函数
 
 ### 第 5 步：生成 tsconfig.json

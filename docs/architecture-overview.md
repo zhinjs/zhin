@@ -105,7 +105,7 @@ graph TB
 | `agent-loop.ts` | `agentLoop(prompts, context, config)` → `AsyncIterable<AgentEvent>` |
 | `api-registry` | `registerLlmApiFromProviders`、`getModel`（发现列表白名单）、`complete` / `stream`；OpenAI bridge 调 `provider.chat` |
 | `convert/` | `AgentMessage` ↔ Chat Completions 请求/响应 |
-| `types` | `Model`、`Context`、`ParsedToolCall`、TypeBox 工具 schema |
+| `types` | `Model`、`Context`、`ParsedToolCall`、Zod 工具 schema |
 
 #### `memory/` — 会话与上下文（ADR 0009 主路径）
 
@@ -210,9 +210,9 @@ ZhinAgent 在 AI 回合前 `ensureConnected`，`collectRuntimeTools` 合并 MCP 
 | `PromptBuilder` | 可选分层提示词 API（`buildRichSystemPromptWithBuilder` 等） |
 | `resetAllAgentSingletons()` | 集中重置所有 agent 级全局单例（用于测试隔离） |
 
-### zhin.js（应用层）
+### zhin.js（应用层，4.x IM 核心）
 
-**面向终端用户的主入口包**，组合所有层并提供一键启动能力。
+**面向终端用户的主入口包**：加载配置、发现插件、连接 Endpoint。默认 **仅 re-export `@zhin.js/core`**；AI 经 **optional peer `@zhin.js/agent`** 与子路径 `zhin.js/agent`、`zhin.js/ai` 提供。
 
 | 模块 | 说明 |
 |------|------|
@@ -220,9 +220,9 @@ ZhinAgent 在 AI 回合前 `ensureConnected`，`collectRuntimeTools` 合并 MCP 
 | 项目根锁定 | `setZhinProjectRoot` 防止后续 chdir 导致插件路径偏移 |
 | 插件加载 | 基于锁定的项目根自动发现和加载插件（支持热重载） |
 | Endpoint 连接 | 按配置连接各平台适配器的 Endpoint |
-| AI 注册 | `initAgentModule`、ModelRegistry 发现、`registerChatMessageStore`（`im_transcripts`） |
+| AI 注册 | 已安装 `@zhin.js/agent` 时：`initAgentModule`、ModelRegistry、`registerChatMessageStore` |
 | 信号处理 | 优雅关闭（SIGINT/SIGTERM） |
-| 重新导出 | 直接 `export * from '@zhin.js/core'`，选择性 re-export `@zhin.js/agent`（不再使用 `re-exports/` 垫片文件） |
+| 主入口导出 | `export * from '@zhin.js/core'`（**不含** Agent / AI 引擎） |
 
 ## 依赖关系
 
@@ -244,8 +244,9 @@ graph TD
 
   croner(["⏰ croner"])
 
-  zhin ==> agent
+  zhin -.-> agent
   zhin -.-> cli
+  zhin ==> core
   agent ==> core
   agent ==> ai
   core ==> kernel
@@ -281,7 +282,7 @@ graph TD
 - **kernel** 和 **ai** 不依赖任何 IM 概念，可被非 IM 应用直接使用
 - **core** 只依赖 kernel，引入 IM 领域概念
 - **agent** 桥接 core + ai，实现 IM 场景的 AI 编排
-- **zhin.js** 作为 facade 层，组合所有包并提供完整的应用启动流程
+- **zhin.js** 4.x 为 IM facade；**`@zhin.js/agent` 为 optional peer**（见 [ADR 0019](/adr/0019-install-size-layering)）
 
 ## 消息处理流程
 

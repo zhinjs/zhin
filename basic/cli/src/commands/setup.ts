@@ -18,6 +18,7 @@ import {
   collectWizardDependencies,
   mergeDependenciesIntoPackageJson,
   finalizeWizardOptions,
+  formatAIDependencyHint,
   type InitOptions,
 } from '@zhin.js/scaffold-wizard';
 
@@ -251,6 +252,9 @@ export const setupCommand = new Command('setup')
       const depsChanged = await mergeDependenciesIntoPackageJson(cwd, deps);
       if (depsChanged) {
         console.log(chalk.gray('  ✓ 已更新 package.json 依赖，请运行 pnpm install'));
+        if (wizardOptions.ai?.enabled) {
+          console.log(chalk.gray(`    AI 栈: ${formatAIDependencyHint(wizardOptions.ai.defaultProvider)}`));
+        }
       }
 
       if (wizardOptions.adapters) {

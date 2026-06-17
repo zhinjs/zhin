@@ -158,6 +158,8 @@ npx zhin setup
    pnpm install
    ```
 
+   若项目启用了 `ai:` 配置，还需安装 Agent 栈：`pnpm add @zhin.js/agent zod ai` 与所选 `@ai-sdk/*`（或运行 `zhin doctor --fix`）。见 [Install tiers](/getting-started/#install-tierszhinjs-4x)。
+
 2. **重新运行**
    ```powershell
    pnpm start

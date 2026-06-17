@@ -16,6 +16,7 @@
 | [0010](./0010-pi-coding-agent-harness-alignment.md) | 对齐 pi coding-agent Harness（Compaction / 会话树 / 生态） |
 | [0011](./0011-missions-harness-alignment.md) | 对齐 Missions Multi-Agent Harness（missions / MissionRunner） |
 | [0016](./0016-demo-host-token-scopes.md) | Demo Host Token 作用域（demo.zhin.dev） |
+| [0019](./0019-install-size-layering.md) | 安装体积分层（IM <10MB、peer、TypeBox→Zod） |
 
 ## 相关
 

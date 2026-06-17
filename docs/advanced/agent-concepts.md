@@ -2,6 +2,10 @@
 
 本文用**概念图**说明 Zhin.js 的 Agent 栈，帮助不熟悉 MCP / Agent 编排的开发者建立心智模型。细节配置见 [AI 模块](/advanced/ai)，MCP 实操见 [MCP 集成](/advanced/mcp)。
 
+::: info 先装依赖
+Agent 概念对应 **`@zhin.js/agent`**（及 `@zhin.js/ai`、所选 `@ai-sdk/*`），**不包含**在 `pnpm add zhin.js` 的 IM 核心内。安装表见 [AI 模块 — 安装与依赖](/advanced/ai#安装与依赖-zhinjs-4x)。
+:::
+
 ## 分层：从 IM 到 LLM
 
 ```mermaid
@@ -41,7 +45,7 @@ flowchart LR
 
 ## 两个 Context：`ctx.ai` 与 `ctx.agent`
 
-`initAgentModule()` 挂载后，插件可注入两个不同层级的上下文：
+`initAgentModule()`（`@zhin.js/agent` 提供，由 `bootstrapNode` 挂载）后，插件可注入两个不同层级的上下文：
 
 | Context | 典型用途 | 示例 API |
 |---------|----------|----------|

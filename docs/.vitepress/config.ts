@@ -70,6 +70,8 @@ export default withMermaid(defineConfig({
     // Monorepo 源码 / 示例（链出 docs/ 根目录；VitePress 校验时会去掉 .md 后缀）
     /\.\.\/\.\.\/(examples|packages|basic|deploy)\//,
   ],
+
+  srcExclude: ['**/snippets/**'],
   
   themeConfig: {
     // 顶栏保持少量入口，其余收进下拉，降低首屏认知负担（侧栏仍保留完整路径）

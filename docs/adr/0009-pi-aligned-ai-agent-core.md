@@ -1,6 +1,8 @@
 # 对齐 pi 的 AI/Agent 核心（Context + stream + agentLoop）
 
-`@zhin.js/ai` 与 `@zhin.js/agent` 的 LLM 栈改为 **干净室** 对标 [pi `packages/ai`](https://github.com/earendil-works/pi/tree/main/packages/ai) / [pi `packages/agent`](https://github.com/earendil-works/pi/tree/main/packages/agent) 的接口形状：**Model + Context + stream/complete + agentLoop + TypeBox 工具**。允许 **major 破坏性变更**；**不迁移**旧 memory 数据。
+> **部分废止**：**D5 TypeBox 工具链**已由 [ADR 0019](./0019-install-size-layering.md) 修订为 **Zod**（`@zhin.js/ai` 内 `validateToolCall` / `LlmTool.parameters`）。下文 D5 与 TypeBox 表述仅作历史记录。
+
+`@zhin.js/ai` 与 `@zhin.js/agent` 的 LLM 栈改为 **干净室** 对标 [pi `packages/ai`](https://github.com/earendil-works/pi/tree/main/packages/ai) / [pi `packages/agent`](https://github.com/earendil-works/pi/tree/main/packages/agent) 的接口形状：**Model + Context + stream/complete + agentLoop**（工具校验现为 Zod，见 ADR 0019）。允许 **major 破坏性变更**；**不迁移**旧 memory 数据。
 
 Grill 决策摘要见本文「已定稿决策」章节（#1–#21）。
 
@@ -12,7 +14,7 @@ Grill 决策摘要见本文「已定稿决策」章节（#1–#21）。
 2. ~~**双记忆栈**~~：IM 主路径统一 `ContextRepository` + `im_transcripts`；停注册 legacy `chat_messages` / `ai_sessions`。
 3. **Provider 类树**：按 vendor 继承（`DeepSeekProvider extends OpenAIProvider`），OpenAI-compat 重复 endpoint/compat 逻辑；[`provider-instance.ts`](../../packages/im/agent/src/config/provider-instance.ts) 维护 `DRIVER_FACTORIES` 映射。（`api` 必填已落地；vendor 类树仍待后续收敛。）
 4. ~~**Agent 循环单体**~~：IM 生产路径已拆为 `agentLoop` + turn runner；legacy `Agent.run` 仅保留供单测。
-5. **工具 schema 多套**：JSON Schema `AgentTool`、orchestrator `Tool`、`ZhinTool`；校验经 `convertLegacyTools` + TypeBox 收敛，仍有多套定义。
+5. **工具 schema 多套**：JSON Schema `AgentTool`、orchestrator `Tool`、`ZhinTool`；校验经 bridge 层 JSON Schema → Zod（ADR 0019），仍有多套定义面。
 
 ### pi 可借鉴点（不 copy 源码）
 

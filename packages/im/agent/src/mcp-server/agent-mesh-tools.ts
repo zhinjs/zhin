@@ -3,7 +3,7 @@
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { AGENT_MESH_TOOL_NAMES } from '@zhin.js/core';
-import { z } from 'zod';
+import { z } from '@zhin.js/ai';
 import { getAgentDispatcher } from '../orchestrator/agent-dispatcher.js';
 import { getDelegationProcessor } from '../orchestrator/delegation-processor.js';
 import { getOrchestrationRuntime } from '../orchestration-runtime-registry.js';

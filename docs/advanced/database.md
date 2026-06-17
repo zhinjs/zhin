@@ -108,7 +108,7 @@ defineModel('example', {
 | `agent_summaries` | epoch 级链式摘要；可选 `branch_anchor_message_id`（分支切换时的 branch summarization） |
 | `ai_user_profiles` | 用户画像（跨会话个性化） |
 
-由 `initAgentModule` / `registerDbModels` 注册；`zhin.js` 另在 `message.receive` / `message.send` 链路写入 `im_transcripts`。
+由 `@zhin.js/agent` 的 `initAgentModule` / `registerDbModels` 注册；`bootstrapNode` 在 `message.receive` / `message.send` 链路写入 `im_transcripts`（需已安装 agent 栈）。
 
 > 旧表 `chat_messages` / `ai_messages` / `ai_sessions` / `ai_summaries` 已不再读写；删库重建后仅创建上表。
 

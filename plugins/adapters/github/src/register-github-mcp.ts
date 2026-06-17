@@ -1,7 +1,9 @@
 /**
  * Register @modelcontextprotocol/server-github when a PAT is available.
  */
-import type { AIConfig, Plugin } from 'zhin.js';
+import type { Plugin } from 'zhin.js';
+import type { AIConfig } from 'zhin.js/ai';
+import 'zhin.js/agent';
 
 interface GithubMcpServerEntry {
   name: string;

@@ -14,6 +14,7 @@ import {
   getAdapterSetupNotes,
   ensureDatabaseForAI,
   ensureDatabaseForAdapters,
+  formatAIDependencyHint,
 } from '@zhin.js/scaffold-wizard';
 import { createWorkspace } from './workspace.js';
 import { ensurePnpmInstalled, installDependencies } from './install.js';
@@ -292,7 +293,7 @@ async function main() {
       if (options.ai.memoryMcp) {
         console.log(`  ${chalk.gray('Memory MCP:')} ${chalk.cyan('已启用')}`);
       }
-      console.log(`  ${chalk.gray('MCP SDK:')} ${chalk.cyan('已预装 @modelcontextprotocol/sdk')}`);
+      console.log(`  ${chalk.gray('依赖:')} ${chalk.cyan(formatAIDependencyHint(options.ai.defaultProvider))}`);
       if (options.database && options.ai.sessions?.useDatabase !== false) {
         console.log(`  ${chalk.gray('会话存储:')} ${chalk.cyan('SQLite 持久化')}`);
       }

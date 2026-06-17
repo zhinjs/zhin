@@ -19,7 +19,7 @@ Zhin 项目脚手架的**共享交互向导**库。适配器、AI、数据库的
 | `adapter.ts` / `adapter-configurers.ts` | 适配器选择与分步配置（Telegram polling/webhook、GitHub App、OneBot11 等） |
 | `ai.ts` | AI Provider、触发方式、会话与安全默认值 |
 | `database.ts` | 数据库类型与连接参数 |
-| `project-deps.ts` | 依赖收集（含启用 AI 时预装 `@modelcontextprotocol/sdk`）、SQLite 前置条件 |
+| `project-deps.ts` | 依赖收集（启用 AI 时写入 `@zhin.js/agent`、`zod`、`ai`、所选 `@ai-sdk/*`、`@modelcontextprotocol/sdk`）、SQLite 前置条件 |
 | `apply.ts` | 将向导结果写入 `zhin.config.*`、`.env`、`package.json` |
 | `types.ts` | `InitOptions` 等共享类型 |
 

@@ -1,7 +1,8 @@
 /**
  * GitHub 适配器入口：类型扩展、模型、导出、注册
  */
-import { formatCompact, registerAgentPromptContributor, type Context, type Message, type Plugin, type Tool, type ToolFeature, unregisterAgentPromptContributor, usePlugin } from 'zhin.js';
+import { formatCompact, type Context, type Message, type Plugin, type Tool, type ToolFeature, usePlugin } from 'zhin.js';
+import { registerAgentPromptContributor, unregisterAgentPromptContributor } from 'zhin.js/agent';
 import { createGithubAgentPromptContributor } from './agent-prompt.js';
 import { GitHubAdapter } from './adapter.js';
 import { GhClient } from './gh-client.js';
