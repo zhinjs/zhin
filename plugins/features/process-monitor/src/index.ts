@@ -204,14 +204,21 @@ if (config.enabled) {
   loadProcessState();
   detectStartupReason();
 
-  process.on('SIGTERM', () => {
+  const onSigterm = () => {
     logger.info(formatCompact( { op: 'shutdown', signal: 'SIGTERM' }));
     saveProcessState();
-  });
-
-  process.on('SIGINT', () => {
+  };
+  const onSigint = () => {
     logger.info(formatCompact( { op: 'shutdown', signal: 'SIGINT' }));
     saveProcessState();
+  };
+
+  process.on('SIGTERM', onSigterm);
+  process.on('SIGINT', onSigint);
+
+  plugin.onDispose(() => {
+    process.removeListener('SIGTERM', onSigterm);
+    process.removeListener('SIGINT', onSigint);
   });
 }
 

@@ -209,7 +209,7 @@ describe('错误处理系统', () => {
         let circuitBreaker: CircuitBreaker
 
         beforeEach(() => {
-            circuitBreaker = new CircuitBreaker(2, 1000, 500)
+            circuitBreaker = new CircuitBreaker(2, 1000)
         })
 
         it('应该在正常情况下执行操作', async () => {

@@ -108,7 +108,7 @@ export function formatMcpServersList(servers: McpServerRow[]): string {
 }
 
 export function commandRowsFromService(
-  items: MessageCommand[],
+  items: readonly MessageCommand[],
   pluginMap?: Map<string, string>,
 ): CommandRow[] {
   return items.map((cmd) => ({

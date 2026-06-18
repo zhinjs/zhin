@@ -34,11 +34,21 @@
     "@ai-sdk/openai-compatible": "^1.0.0"
   },
   "peerDependenciesMeta": {
-    "@ai-sdk/anthropic": { "optional": true },
-    "@ai-sdk/deepseek": { "optional": true },
-    "@ai-sdk/google": { "optional": true },
-    "@ai-sdk/openai": { "optional": true },
-    "@ai-sdk/openai-compatible": { "optional": true }
+    "@ai-sdk/anthropic": {
+      "optional": true
+    },
+    "@ai-sdk/deepseek": {
+      "optional": true
+    },
+    "@ai-sdk/google": {
+      "optional": true
+    },
+    "@ai-sdk/openai": {
+      "optional": true
+    },
+    "@ai-sdk/openai-compatible": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@ai-sdk/anthropic": "^3.0.85",
@@ -61,5 +71,14 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
   }
 }

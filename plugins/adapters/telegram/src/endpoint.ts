@@ -90,6 +90,7 @@ export class TelegramEndpoint extends Telegraf implements Endpoint<TelegramEndpo
   async $disconnect(): Promise<void> {
     try {
       (this as unknown as import('node:events').EventEmitter).removeAllListeners();
+      this.chatMemberCache.clear();
       await this.stop();
       this.$connected = false;
       this.pluginLogger.info(`Telegram endpoint ${this.$config.name} disconnected`);
@@ -99,7 +100,25 @@ export class TelegramEndpoint extends Telegraf implements Endpoint<TelegramEndpo
     }
   }
 
+  private static readonly CHAT_MEMBER_CACHE_TTL_MS = 60_000;
+  private static readonly CHAT_MEMBER_CACHE_MAX = 2_000;
   private chatMemberCache = new Map<string, { at: number; role?: string; permissions: string[] }>();
+
+  private sweepChatMemberCache(now: number): void {
+    const ttl = TelegramEndpoint.CHAT_MEMBER_CACHE_TTL_MS;
+    for (const [key, entry] of this.chatMemberCache) {
+      if (now - entry.at >= ttl) this.chatMemberCache.delete(key);
+    }
+    if (this.chatMemberCache.size > TelegramEndpoint.CHAT_MEMBER_CACHE_MAX) {
+      const excess = this.chatMemberCache.size - TelegramEndpoint.CHAT_MEMBER_CACHE_MAX;
+      let removed = 0;
+      for (const [key] of this.chatMemberCache) {
+        if (removed >= excess) break;
+        this.chatMemberCache.delete(key);
+        removed++;
+      }
+    }
+  }
 
   private async enrichGroupSender(
     message: Message<TelegramMessage>,
@@ -110,8 +129,9 @@ export class TelegramEndpoint extends Telegraf implements Endpoint<TelegramEndpo
     const userId = msg.from.id;
     const key = `${chatId}:${userId}`;
     const now = Date.now();
+    this.sweepChatMemberCache(now);
     const cached = this.chatMemberCache.get(key);
-    if (cached && now - cached.at < 60_000) {
+    if (cached && now - cached.at < TelegramEndpoint.CHAT_MEMBER_CACHE_TTL_MS) {
       message.$sender.role = cached.role;
       message.$sender.permissions = cached.permissions;
       return;

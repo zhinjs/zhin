@@ -53,6 +53,9 @@ jobs:
       - name: type check
         run: pnpm type-check
 
+      - name: run harness checks
+        run: pnpm check:all
+
       - name: run tests
         run: pnpm test
 

@@ -59,5 +59,13 @@
     "@zhin.js/host-router": {
       "optional": true
     }
+  },
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
   }
 }

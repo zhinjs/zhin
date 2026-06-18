@@ -273,8 +273,7 @@ export class CircuitBreaker {
 
     constructor(
         private failureThreshold: number = 5,
-        private timeoutMs: number = 60000,
-        private monitoringPeriodMs: number = 10000
+        private timeoutMs: number = 60000
     ) {}
 
     /**
@@ -332,8 +331,3 @@ export class CircuitBreaker {
 
 // 默认错误管理器实例
 export const errorManager = new ErrorManager()
-
-// 默认错误处理器
-errorManager.registerGlobal((error, context) => {
-    // Default error handler - logs to console
-})

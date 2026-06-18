@@ -4,6 +4,9 @@ on:
   pull_request:
     branches:
       - main
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -15,6 +18,9 @@ jobs:
   test:
     timeout-minutes: 15
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22, 24]
     steps:
       - name: setup pnpm
         uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v4
@@ -27,16 +33,16 @@ jobs:
           fetch-depth: 0
 
       - name: setup node.js
-        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f8041769197238 # v6.2.0
         with:
-          node-version: 24
+          node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
 
       # changesets `baseBranch: main` compares against a **local** `main` ref; PR checkouts
       # often only have `origin/main`, which makes `pnpm changeset status` fail.
       - name: sync local main ref for changesets
         run: git fetch origin main:main
-      
+
       - name: configure github packages auth
         if: env.NPM_TOKEN != ''
         run: echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> .npmrc
@@ -48,69 +54,44 @@ jobs:
         env:
           NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
+
+      - name: audit dependencies
+        run: pnpm audit --prod || true
+
       - name: check changeset
+        if: matrix.node-version == 24
         run: pnpm changeset status
-      
+
       - name: build packages
         run: pnpm build
 
       - name: type check
+        if: matrix.node-version == 24
         run: pnpm type-check
 
       - name: lint
+        if: matrix.node-version == 24
         run: pnpm lint
 
-      - name: harness IM send-path check
-        run: pnpm check:harness-paths
+      - name: harness checks
+        if: matrix.node-version == 24
+        run: pnpm check:all
 
-      - name: check plugins do not import koa
-        run: pnpm check:no-koa
-
-      - name: check production config
-        run: pnpm check:prod
-
-      - name: check plugin spec
-        run: pnpm check:plugin
-
-      - name: check architecture layers
-        run: pnpm check:architecture
-
-      - name: check documentation links
-        run: pnpm check:doc-links
-
-      - name: check documentation orphans
-        run: pnpm check:doc-orphans
-
-      - name: check readme exports
-        run: pnpm check:readme-exports
-
-      - name: check config docs alignment
-        run: pnpm check:config-docs
-
-      - name: check adapter docs sync
-        run: pnpm check:adapter-docs
-
-      - name: stable path smoke
-        run: pnpm check:stable
-
-      - name: L4 full-dimension check
-        run: pnpm check:l4
-        env:
-          L4_SKIP_PLATFORM: "1"
-
-      - name: usePlugin top-level check
-        run: pnpm check:use-plugin-top-level
-      
       - name: run tests with coverage
+        if: matrix.node-version == 24
         run: pnpm vitest run --reporter=verbose --coverage
-      
+
+      - name: run tests (other node versions)
+        if: matrix.node-version != 24
+        run: pnpm vitest run
+
       - name: Upload coverage reports to Codecov
+        if: matrix.node-version == 24
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
       - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.node-version == 24 }}
         uses: codecov/test-results-action@0fa95f0e1eeaafde2c782583b36b28ad0d8c77d3 # v1.2.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

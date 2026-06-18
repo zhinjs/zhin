@@ -1,7 +1,8 @@
 import path from "node:path";
 import fs from "node:fs/promises";
-import { Adapter, Message, segment, usePlugin, type SendContent } from "zhin.js";
+import { Adapter, Message, segment, usePlugin, type SendContent } from "@zhin.js/core";
 import type { ConfigFeature } from "@zhin.js/core";
+import type {} from "zhin.js";
 
 const plugin = usePlugin();
 const root = plugin.root;

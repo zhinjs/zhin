@@ -27,7 +27,7 @@ class MockKookEndpoint extends KookEndpoint {
   }
 
   async $disconnect(): Promise<void> {
-    this.$connected = false;
+    await super.$disconnect();
   }
 
   async $sendMessage(options: SendOptions): Promise<string> {

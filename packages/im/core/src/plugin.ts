@@ -654,6 +654,10 @@ export class Plugin extends PluginBase implements PluginLike {
     // 先记录，防止循环依赖时重复加载
     loadedModules.set(realPath, plugin);
 
+    // 注意：?t= cache-busting 会导致 Node ESM 模块缓存累积旧条目。
+    // 这是 Node.js ESM 的已知限制——没有公开 API 可以逐出 ESM 模块缓存。
+    // 在生产环境中插件只加载一次，不会触发此问题；
+    // 开发环境中热重载会累积，但仅影响开发进程，重启即释放。
     await storage.run(plugin, async () => {
       await import(`${pathToFileURL(entryFile).href}?t=${Date.now()}`);
     });

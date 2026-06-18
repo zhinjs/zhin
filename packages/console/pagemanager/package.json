@@ -46,5 +46,13 @@
     "type": "git",
     "url": "git+https://github.com/zhinjs/zhin.git",
     "directory": "packages/console/pagemanager"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
   }
 }

@@ -36,8 +36,12 @@ export abstract class Feature<T = any> {
   abstract readonly icon: string;
   abstract readonly desc: string;
 
-  /** 全局 item 列表 */
-  readonly items: T[] = [];
+  /** 全局 item 列表（只读，防止外部绕过 add/remove 直接变异） */
+  #items: T[] = [];
+
+  get items(): readonly T[] {
+    return this.#items;
+  }
 
   /** 按插件名分组的 item 列表 */
   protected pluginItems = new Map<string, T[]>();
@@ -73,7 +77,7 @@ export abstract class Feature<T = any> {
    * @returns dispose 函数，用于移除该 item
    */
   add(item: T, pluginName: string): () => void {
-    this.items.push(item);
+    this.#items.push(item);
     if (!this.pluginItems.has(pluginName)) {
       this.pluginItems.set(pluginName, []);
     }
@@ -86,9 +90,9 @@ export abstract class Feature<T = any> {
    * 移除 item
    */
   remove(item: T, pluginName?: string): boolean {
-    const idx = this.items.indexOf(item);
+    const idx = this.#items.indexOf(item);
     if (idx !== -1) {
-      this.items.splice(idx, 1);
+      this.#items.splice(idx, 1);
       const resolvedPluginName = pluginName ?? this.#findPluginName(item);
       for (const [, items] of this.pluginItems) {
         const i = items.indexOf(item);
@@ -119,7 +123,7 @@ export abstract class Feature<T = any> {
    * 全局 item 数量
    */
   get count(): number {
-    return this.items.length;
+    return this.#items.length;
   }
 
   /**

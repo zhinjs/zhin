@@ -71,7 +71,7 @@ function providerPatternToRegExp(pattern: string): RegExp {
 }
 
 function sanitizeResolvedHarness(input: Record<string, unknown>): ResolvedModelHarness {
-  // TODO: 如需扩展更多 harness 字段，在此白名单中显式加入。
+  // NOTE: 如需扩展更多 harness 字段，在此白名单中显式加入。
   const maxIterationsRaw = input.maxIterations;
   if (typeof maxIterationsRaw === 'number' && Number.isFinite(maxIterationsRaw)) {
     return { maxIterations: maxIterationsRaw };

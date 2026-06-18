@@ -15,9 +15,8 @@ const scanRoots = [
   'packages/im/agent/src',
   'plugins/features',
   'packages/host',
-  'plugins/services',
+  'plugins/adapters',
   'plugins/utils',
-  'plugins/games',
 ];
 
 const skipDirNames = new Set(['node_modules', 'lib', 'dist', 'coverage', '.git']);

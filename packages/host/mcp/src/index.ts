@@ -4,7 +4,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { IncomingMessage, ServerResponse, Server } from "node:http";
 import type {} from "@zhin.js/host-router";
-import { formatCompact, type Tool, type ToolFeature, usePlugin } from 'zhin.js';
+import type {} from "zhin.js";
+import { formatCompact, type Tool, type ToolFeature, usePlugin } from '@zhin.js/core';
 import { z } from "zod";
 import { registerTools } from "./tools.js";
 import {

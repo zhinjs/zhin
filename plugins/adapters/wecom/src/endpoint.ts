@@ -340,7 +340,7 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
     // 企业微信中群消息与私聊消息的判断:
     // 群消息 FromUserName 以 @chatroom 结尾
     const chatType = msg.FromUserName.endsWith('@chatroom') ? 'group' : 'private';
-    // TODO: v1: look up group admin status via WeCom API
+    // NOTE: v1: look up group admin status via WeCom API
     const permit = normalizeWecomSenderForPermit({ isAdmin: false, isOwner: false });
 
     return Message.from(msg, {

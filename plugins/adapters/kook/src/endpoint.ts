@@ -65,6 +65,8 @@ export class KookEndpoint extends Client implements Endpoint<KookEndpointConfig,
   private readonly onGatewayEvent = (raw: KookGatewayEvent) => {
     this.handleGatewayEvent(raw);
   };
+  /** kook-client 构造函数注入的 process 监听器，disconnect 时需移除 */
+  private readonly _kookProcessListeners: Array<{ event: string; fn: (...args: any[]) => void }> = [];
 
   get $id(): string {
     return this.$config.name;
@@ -75,6 +77,8 @@ export class KookEndpoint extends Client implements Endpoint<KookEndpointConfig,
   }
 
   constructor(adapter: KookAdapter, public $config: KookEndpointConfig) {
+    // 记录构造前 process 上的 uncaughtException 监听器数量
+    const beforeCount = process.listenerCount('uncaughtException');
     super({
       token: $config.token,
       mode: "websocket", // KOOK 默认使用 WebSocket 模式
@@ -84,6 +88,11 @@ export class KookEndpoint extends Client implements Endpoint<KookEndpointConfig,
       ignore: $config.ignore || "bot",
       logLevel: $config.logLevel || "info",
     });
+    // 捕获 kook-client 构造函数注入的 process 监听器
+    const afterListeners = process.listeners('uncaughtException');
+    for (let i = beforeCount; i < afterListeners.length; i++) {
+      this._kookProcessListeners.push({ event: 'uncaughtException', fn: afterListeners[i] });
+    }
     this.adapter = adapter;
     this.setupEventListeners();
     this.hookGatewayReceiver();
@@ -671,6 +680,11 @@ export class KookEndpoint extends Client implements Endpoint<KookEndpointConfig,
       receiver.off("event", this.onGatewayEvent);
       this.inboundDeduper.clear();
       (this as unknown as import('node:events').EventEmitter).removeAllListeners();
+      // 移除 kook-client 构造函数注入的 process 监听器
+      for (const { event, fn } of this._kookProcessListeners) {
+        process.removeListener(event, fn);
+      }
+      this._kookProcessListeners.length = 0;
       await this.disconnect();
       this.$connected = false;
       this.pluginLogger.info(`KOOK Endpoint ${this.$id} 已断开连接`);

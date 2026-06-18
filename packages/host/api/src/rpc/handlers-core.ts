@@ -1,5 +1,5 @@
 import { Adapter, type Plugin } from "@zhin.js/core";
-import type { SchemaFeature, ConfigFeature } from "@zhin.js/core";
+import type { ConfigFeature } from "@zhin.js/core";
 import { broadcastSse } from "../sse-hub.js";
 import type { ConsoleRpcContext } from "./context.js";
 import {
@@ -32,7 +32,7 @@ type CronFeatureLike = {
 };
 
 function getCronFeature(root: Plugin): CronFeatureLike | undefined {
-  const cron = root.inject("cron" as never);
+  const cron = root.inject("cron");
   return cron && typeof (cron as CronFeatureLike).getStatus === "function"
     ? (cron as CronFeatureLike)
     : undefined;
@@ -175,7 +175,7 @@ export async function handleCoreRpc(
         const configService = root.inject("config") as ConfigFeature;
         const rawConfig = configService.getRaw<Record<string, unknown>>(configService.primaryFile);
         const allConfigs: Record<string, unknown> = { ...rawConfig };
-        const schemaService = root.inject("schema" as never) as SchemaFeature | null;
+        const schemaService = root.inject("schema");
         if (schemaService) {
           for (const [pName, configKey] of schemaService.getPluginKeyMap()) {
             if (pName !== configKey) {
@@ -207,7 +207,7 @@ export async function handleCoreRpc(
 
         broadcastSse({ type: "config:updated", data: { pluginName, config: data } });
 
-        const schemaService = root.inject("schema" as never) as SchemaFeature | null;
+        const schemaService = root.inject("schema");
         const reloadable = schemaService?.isReloadable?.(pluginName) ?? false;
 
         if (reloadable) {
@@ -242,7 +242,7 @@ export async function handleCoreRpc(
 
     case "schema:get":
       try {
-        const schemaService = root.inject("schema" as never) as SchemaFeature | null;
+        const schemaService = root.inject("schema");
         const schema = pluginName && schemaService ? schemaService.get(pluginName) : null;
         reply(ctx, { requestId, data: schema ? schema.toJSON() : null });
       } catch (error) {
@@ -252,7 +252,7 @@ export async function handleCoreRpc(
 
     case "schema:get-all":
       try {
-        const schemaService = root.inject("schema" as never) as SchemaFeature | null;
+        const schemaService = root.inject("schema");
         const schemas: Record<string, unknown> = {};
         if (schemaService) {
           for (const record of schemaService.items) {

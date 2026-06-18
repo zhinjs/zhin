@@ -3,54 +3,58 @@ layout: home
 
 hero:
   name: "Zhin.js"
-  text: "AI Agent 运行时 · 多通道 Endpoint"
-  tagline: ZhinAgent 编排 · Harness 安全 · 插件热重载 · TypeScript · IM / 邮件 / Webhook
+  text: "用 TypeScript 写一个跨平台聊天机器人"
+  tagline: 一套代码，同时跑在 QQ、Discord、Telegram、飞书、钉钉、Slack 等 20+ 平台。可选接入 AI Agent。
   image:
     src: /logo.svg
     alt: Zhin
   actions:
     - theme: brand
-      text: 快速开始
+      text: 5 分钟上手 →
       link: /getting-started/
     - theme: alt
-      text: 学习路径
-      link: /essentials/learning-paths
-    - theme: alt
-      text: AI 智能
-      link: /advanced/ai
-    - theme: alt
-      text: 插件开发
-      link: /essentials/plugins
-    - theme: alt
-      text: API 文档
-      link: /api/
-    - theme: alt
-      text: 🎮 在线体验
-      link: /playground
+      text: 这是什么？
+      link: /what-is-zhin
 
 features:
-  - icon: "\uD83E\uDDE0"
-    title: AI 驱动（可选分层）
-    details: 另装 @zhin.js/agent 后启用 ZhinAgent，接入 OpenAI / Ollama 等。支持多轮对话、流式输出、Tool、Skill 语义路由。IM 核心单独安装 <10MB（ADR 0019）。
+  - icon: "💬"
+    title: 20+ 平台，一套代码
+    details: QQ、Discord、Telegram、飞书、钉钉、Slack、KOOK、邮件、GitHub……写一次插件，所有平台通用。
 
-  - icon: "\uD83E\uDDE9"
-    title: Feature 可扩展架构
-    details: 命令、工具、技能、定时任务、数据库等所有能力统一抽象为 Feature，插件按需组合，自动管理生命周期。
+  - icon: "🧠"
+    title: AI Agent（可选）
+    details: 另装 @zhin.js/agent 即可接入 OpenAI / Ollama / DeepSeek，支持多轮对话、工具调用、技能路由。不装 AI 照样用。
 
-  - icon: "\uD83D\uDD0C"
-    title: 插件化架构
-    details: 基于 AsyncLocalStorage 的上下文管理，React Hooks 风格 API。支持热插拔、Web 控制台管理。
+  - icon: "⚡"
+    title: 改代码即生效
+    details: 插件热重载，改完保存自动加载，不用重启机器人。语法错误自动回滚，不影响正在运行的服务。
 
-  - icon: "\u26A1"
-    title: 智能热重载
-    details: 插件代码、配置文件修改即时生效，无需重启。智能依赖管理，语法错误自动回滚。
+  - icon: "💪"
+    title: TypeScript 原生
+    details: 完整类型推导，命令参数、平台差异、AI 工具全部有类型提示。
 
-  - icon: "\uD83D\uDCAA"
-    title: TypeScript 全量类型
-    details: 完整的类型推导和提示，提供极佳的开发体验。100% 类型覆盖。
+  - icon: "🔌"
+    title: 插件化，按需组合
+    details: 命令、定时任务、数据库、AI 工具——每个能力都是独立插件，用什么装什么。
 
-  - icon: "\uD83C\uDF10"
-    title: 多通道 Endpoint
-    details: 通过 Adapter 接入 QQ、Discord、Telegram、邮件、GitHub、Sandbox 等 17+ 通道。统一 Endpoint 契约与出站链路；启用 Agent 栈后 ZhinAgent 在各通道复用同一套工具与安全策略。
+  - icon: "🛡️"
+    title: 安全沙箱
+    details: AI 执行命令有 5 层安全策略：命令白名单、文件访问、网络域名、资源预算、审计日志。
 
 ---
+
+## 10 行代码，一个能用的机器人
+
+```typescript
+import { usePlugin, addCommand } from 'zhin.js'
+
+const plugin = usePlugin()
+
+addCommand('hello')
+  .action(() => '你好！我是 Zhin.js 机器人 🤖')
+
+addCommand('echo <text>')
+  .action((_, text) => text)
+```
+
+保存文件，机器人自动热重载。在 QQ、Discord 或任何已配置的平台发送 `/hello`，立刻收到回复。

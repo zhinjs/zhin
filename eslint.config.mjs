@@ -12,6 +12,7 @@ export default tseslint.config(
       '**/*.mjs',
       '**/*.cjs',
       '.github/skills/**',
+      'vendor/**',
     ],
   },
 

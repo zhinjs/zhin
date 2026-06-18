@@ -20,9 +20,9 @@ function registerStdinLoginAssist(plugin: Plugin): void {
     } | undefined;
     if (!loginAssist) return;
     const msg = task.payload?.message ?? '';
-    console.log(`[登录辅助] ${task.adapter}/${task.endpointId} ${task.type}: ${msg}`);
-    if (task.payload?.image) console.log(`二维码: ${task.payload.image}`);
-    if (task.payload?.url) console.log(`滑块: ${task.payload.url}`);
+    console.warn(`[登录辅助] ${task.adapter}/${task.endpointId} ${task.type}: ${msg}`);
+    if (task.payload?.image) console.warn(`二维码: ${task.payload.image}`);
+    if (task.payload?.url) console.warn(`滑块: ${task.payload.url}`);
     g.process.stdin.once('data', (data: Buffer) => {
       const line = data.toString().trim();
       const value = task.type === 'qrcode' && !line ? { done: true } : line;

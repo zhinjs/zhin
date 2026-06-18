@@ -20,13 +20,15 @@ for (const m of configText.matchAll(/link:\s*['"](\/[^'"]+)['"]/g)) {
   linked.add(route);
 }
 
-/** 无需侧栏的页面（首页、变更日志、维护者参考等） */
+/** 无需侧栏的页面（首页、变更日志、维护者参考、snippets 等） */
 const ALLOWLIST = new Set([
   '/',
   '/changelog/',
   '/playground/',
   '/advanced/miniclawd-reference/',
   '/advanced/typing-indicator-adapters/',
+  '/snippets/',
+  '/snippets/install-tiers/',
 ]);
 
 /**

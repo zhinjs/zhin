@@ -42,5 +42,14 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
   }
 }

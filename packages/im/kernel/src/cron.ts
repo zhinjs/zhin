@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Cron as Croner } from 'croner';
 
 /**
@@ -17,7 +18,7 @@ export class Cron {
    * @param callback - 要执行的回调函数
    */
   constructor(cronExpression: string, callback: () => void | Promise<void>) {
-    this.id=Math.random().toString(36).substring(2, 10);
+    this.id=randomUUID().slice(0, 8);
     try {
       this._cronExpression = cronExpression;
       this.callback = callback;

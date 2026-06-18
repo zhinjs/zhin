@@ -194,22 +194,18 @@ export function registerHostRestRoutes(
   });
 
   registerFetchRoute(router, "GET", `${base}/schemas`, async (ctx: RouterContext) => {
-    const schemaService = getRoot().inject("schema" as never) as unknown as {
-      items: Map<string, { toJSON: () => unknown }>;
-    } | null;
+    const schemaService = getRoot().inject("schema");
     const schemas: Record<string, unknown> = {};
     if (schemaService?.items) {
-      for (const [name, schema] of schemaService.items.entries()) {
-        schemas[name] = schema.toJSON();
+      for (const [name, record] of schemaService.items.entries()) {
+        schemas[name] = record.schema.toJSON();
       }
     }
     ctx.body = { success: true, data: schemas };
   });
 
   registerFetchRoute(router, "GET", `${base}/schemas/:name`, async (ctx: RouterContext) => {
-    const schemaService = getRoot().inject("schema" as never) as unknown as {
-      get: (n: string) => { toJSON: () => unknown } | undefined;
-    } | null;
+    const schemaService = getRoot().inject("schema");
     const schema = schemaService?.get(ctx.params.name);
     ctx.body = { success: true, data: schema ? schema.toJSON() : null };
   });

@@ -29,7 +29,7 @@ export function collectIntrospectionEndpoints(root: Plugin): EndpointRow[] {
   return rows;
 }
 
-export function collectIntrospectionCommands(commandService: { items: MessageCommand[] }): CommandRow[] {
+export function collectIntrospectionCommands(commandService: { items: readonly MessageCommand[] }): CommandRow[] {
   return commandRowsFromService(commandService.items);
 }
 

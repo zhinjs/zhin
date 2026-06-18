@@ -32,6 +32,9 @@ const layers = {
   'packages/im/core': { level: 3, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai'] },
   'packages/im/agent': { level: 4, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core'] },
   'packages/im/zhin': { level: 5, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent'] },
+  'packages/host/router': { level: 6, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core'] },
+  'packages/host/mcp': { level: 7, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/host/router'] },
+  'packages/host/api': { level: 8, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent', 'packages/host/router', 'packages/host/mcp', 'packages/console/contract', 'packages/console/pagemanager'] },
   'packages/console/contract': { level: 10, allowedImports: ['basic'] },
   'packages/console/pagemanager': { level: 11, allowedImports: ['basic', 'packages/console/contract'] },
   'packages/console/client': { level: 12, allowedImports: ['basic', 'packages/console/contract'] },
@@ -48,6 +51,9 @@ const packageNameToPath = {
   '@zhin.js/core': 'packages/im/core',
   '@zhin.js/agent': 'packages/im/agent',
   'zhin.js': 'packages/im/zhin',
+  '@zhin.js/host-router': 'packages/host/router',
+  '@zhin.js/host-api': 'packages/host/api',
+  '@zhin.js/mcp': 'packages/host/mcp',
   '@zhin.js/contract': 'packages/console/contract',
   '@zhin.js/pagemanager': 'packages/console/pagemanager',
   '@zhin.js/client': 'packages/console/client',
@@ -117,9 +123,9 @@ function parseImports(content) {
       continue;
     }
 
-    // 处理模板字符串（简单检测）
-    // 如果行包含反引号，可能是模板字符串的开始或结束
-    const backtickCount = (line.match(/`/g) || []).length;
+    // 处理模板字符串
+    // 只计算非转义的反引号（\` 不算）
+    const backtickCount = (line.match(/(?<!\\)`/g) || []).length;
     if (backtickCount % 2 === 1) {
       inTemplateString = !inTemplateString;
     }
@@ -130,7 +136,8 @@ function parseImports(content) {
     }
 
     // 匹配 import 语句（只匹配行首的导入，避免匹配字符串中的导入）
-    const importRegex = /^import\s+(?:.*?\s+from\s+)?['"]([^'"]+)['"]/;
+    // 跳过 import type（纯类型导入不产生运行时依赖）
+    const importRegex = /^import\s+(?!type\s)(?:.*?\s+from\s+)?['"]([^'"]+)['"]/;
     const match = importRegex.exec(trimmedLine);
     if (match) {
       imports.push(match[1]);

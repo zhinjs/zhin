@@ -52,7 +52,7 @@
     "zhin.js": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "latest",
+    "@types/node": "^25.9.2",
     "@zhin.js/host-router": "workspace:*",
     "zhin.js": "workspace:*"
   },
@@ -68,5 +68,8 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
   }
 }

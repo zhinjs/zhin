@@ -1,15 +1,15 @@
 import path from "node:path";
 import { Adapter, type Plugin } from "@zhin.js/core";
-import type { SchemaFeature, ConfigFeature } from "@zhin.js/core";
+import type { ConfigFeature } from "@zhin.js/core";
 import type { ConsoleRpcContext } from "./context.js";
 
 export function resolveConfigKey(root: Plugin, pluginName: string): string {
-  const schemaService = root.inject("schema" as never) as SchemaFeature | null;
+  const schemaService = root.inject("schema");
   return schemaService?.resolveConfigKey(pluginName) ?? pluginName;
 }
 
 export function getPluginKeys(root: Plugin): string[] {
-  const schemaService = root.inject("schema" as never) as SchemaFeature | null;
+  const schemaService = root.inject("schema");
   if (!schemaService) return [];
   const keys = new Set<string>();
   for (const [, configKey] of schemaService.getPluginKeyMap()) {

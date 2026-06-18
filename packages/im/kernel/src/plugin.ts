@@ -380,6 +380,8 @@ export class PluginBase extends EventEmitter<PluginBaseLifecycle> implements Plu
     plugin.fileHash = getFileHash(entryFile);
     loadedModules.set(realPath, plugin);
 
+    // 注意：?t= cache-busting 会导致 Node ESM 模块缓存累积旧条目。
+    // 生产环境插件只加载一次，不受影响；开发热重载时累积，重启即释放。
     let mod: any;
     await pluginStorage.run(plugin, async () => {
       mod = await import(`${pathToFileURL(entryFile).href}?t=${Date.now()}`);

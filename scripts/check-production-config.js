@@ -14,6 +14,11 @@ const repoRoot = path.resolve(__dirname, '..');
 
 const skipDirNames = new Set(['node_modules', 'lib', 'dist', 'coverage', '.git', 'tests', '__tests__']);
 
+/** Skip example/test files that are not production code */
+function isExampleOrTestFile(/** @type {string} */ name) {
+  return name === 'example.ts' || name === 'test.ts' || name.endsWith('-example.ts') || name.endsWith('-example.tsx');
+}
+
 /** @param {string} dir @param {string[]} acc */
 function walkTs(dir, acc) {
   if (!fs.existsSync(dir)) return;
@@ -22,7 +27,9 @@ function walkTs(dir, acc) {
     const p = path.join(dir, name);
     const st = fs.statSync(p);
     if (st.isDirectory()) walkTs(p, acc);
-    else if ((name.endsWith('.ts') || name.endsWith('.tsx')) && !name.endsWith('.test.ts') && !name.endsWith('.spec.ts')) {
+    else if ((name.endsWith('.ts') || name.endsWith('.tsx'))
+      && !name.endsWith('.test.ts') && !name.endsWith('.spec.ts')
+      && !isExampleOrTestFile(name)) {
       acc.push(p);
     }
   }
@@ -41,16 +48,15 @@ const debugPatterns = [
 
 // Scan source directories
 const scanRoots = [
-  'packages/kernel/src',
-  'packages/ai/src',
-  'packages/core/src',
-  'packages/agent/src',
-  'packages/zhin/src',
+  'packages/im/kernel/src',
+  'packages/im/ai/src',
+  'packages/im/core/src',
+  'packages/im/agent/src',
+  'packages/im/zhin/src',
   'plugins/features',
   'packages/host',
-  'plugins/services',
+  'plugins/adapters',
   'plugins/utils',
-  'plugins/games',
 ];
 
 for (const rel of scanRoots) {
@@ -65,14 +71,23 @@ for (const rel of scanRoots) {
     for (const { pattern, message } of debugPatterns) {
       lines.forEach((line, i) => {
         pattern.lastIndex = 0;
-        if (pattern.test(line)) {
-          violations.push({
-            file: path.relative(repoRoot, file),
-            line: i + 1,
-            text: line.trim(),
-            issue: message,
-          });
+        if (!pattern.test(line)) return;
+        const trimmed = line.trim();
+        // Skip JSDoc comment lines (e.g. * console.log('example'))
+        if (trimmed.startsWith('*')) return;
+        // Skip TODO/FIXME/HACK inside string literals (e.g. "包含TODO的字符串")
+        if (message.includes('TODO') || message.includes('FIXME') || message.includes('HACK')) {
+          // If the keyword appears only inside quotes, skip
+          const stripped = trimmed.replace(/['"`].*?['"`]/g, '');
+          pattern.lastIndex = 0;
+          if (!pattern.test(stripped)) return;
         }
+        violations.push({
+          file: path.relative(repoRoot, file),
+          line: i + 1,
+          text: trimmed,
+          issue: message,
+        });
       });
     }
   }

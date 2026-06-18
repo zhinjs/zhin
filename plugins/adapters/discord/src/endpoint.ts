@@ -178,6 +178,7 @@ export class DiscordEndpoint
 
   async $disconnect(): Promise<void> {
     try {
+      (this as unknown as import('node:events').EventEmitter).removeAllListeners();
       await this.destroy();
       this.$connected = false;
       this.pluginLogger.info(`Discord endpoint ${this.$config.name} disconnected`);

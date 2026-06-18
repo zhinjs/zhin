@@ -56,10 +56,10 @@
     "@zhin.js/core": "workspace:^"
   },
   "devDependencies": {
-    "@types/koa": "latest",
-    "@types/koa-bodyparser": "latest",
-    "@types/koa__router": "latest",
-    "@types/ws": "latest",
+    "@types/koa": "^3.0.3",
+    "@types/koa-bodyparser": "^4.3.13",
+    "@types/koa__router": "^12.0.4",
+    "@types/ws": "^8.18.1",
     "@zhin.js/core": "workspace:*"
   },
   "files": [
@@ -71,5 +71,8 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
   }
 }

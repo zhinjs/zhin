@@ -76,6 +76,7 @@ export default withMermaid(defineConfig({
   themeConfig: {
     // 顶栏保持少量入口，其余收进下拉，降低首屏认知负担（侧栏仍保留完整路径）
     nav: [
+      { text: '这是什么？', link: '/what-is-zhin' },
       { text: '快速开始', link: '/getting-started/' },
       {
         text: '文档',
@@ -109,6 +110,7 @@ export default withMermaid(defineConfig({
         {
           text: '快速开始',
           items: [
+            { text: '这是什么？', link: '/what-is-zhin' },
             { text: '安装与启动', link: '/getting-started/' },
             { text: 'Docker 部署', link: '/getting-started/docker' },
             { text: 'Remote Console', link: '/console-remote' },
@@ -195,6 +197,8 @@ export default withMermaid(defineConfig({
             { text: '0008 Assistant Runtime', link: '/adr/0008-introduce-assistant-runtime' },
             { text: '0009 pi AI/Agent 核心', link: '/adr/0009-pi-aligned-ai-agent-core' },
             { text: '0010 pi Harness 对齐', link: '/adr/0010-pi-coding-agent-harness-alignment' },
+            { text: '0018 AI SDK Transport', link: '/adr/0018-ai-sdk-transport-layer' },
+            { text: '0019 Install Size Layering', link: '/adr/0019-install-size-layering' },
           ],
         },
       ],
