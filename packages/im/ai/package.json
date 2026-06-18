@@ -56,11 +56,11 @@
     "@ai-sdk/google": "^3.0.83",
     "@ai-sdk/openai": "^3.0.72",
     "@ai-sdk/openai-compatible": "^1.0.0",
-    "@types/node": "^25.9.2",
+    "@types/node": "^25.9.3",
     "@zhin.js/database": "workspace:*",
     "ai": "^6.0.207",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.0",
+    "vitest": "^4.1.9",
     "zod": "^4.4.3"
   },
   "repository": {

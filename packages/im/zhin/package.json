@@ -78,7 +78,7 @@
     }
   },
   "devDependencies": {
-    "@types/node": "^25.9.2",
+    "@types/node": "^25.9.3",
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/ai": "workspace:*",
     "@zhin.js/host-api": "workspace:*",
