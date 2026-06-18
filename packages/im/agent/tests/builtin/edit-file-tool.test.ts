@@ -7,10 +7,10 @@ import { mockCommMessage } from '../helpers/mock-comm-message.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import * as core from '@zhin.js/core';
+import { setHostRootPlugin } from '../../../core/src/host-plugin-registry.js';
+import type { Message, Plugin } from '@zhin.js/core';
 import { createEditFileTool, EditFileBuiltinTool } from '../../src/builtin/edit-file-tool.js';
 import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
-import type { Message } from '@zhin.js/core';
 
 describe('EditFileBuiltinTool', () => {
   let tmpDir: string;
@@ -18,6 +18,7 @@ describe('EditFileBuiltinTool', () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-edit-file-'));
   });
   afterEach(() => {
+    setHostRootPlugin(null);
     vi.restoreAllMocks();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
@@ -33,9 +34,9 @@ describe('EditFileBuiltinTool', () => {
         }
         return undefined;
       },
-    } as unknown as core.Plugin;
-    (plugin as unknown as { root: core.Plugin }).root = plugin;
-    vi.spyOn(core, 'getPlugin').mockReturnValue(plugin as never);
+    } as unknown as Plugin;
+    (plugin as unknown as { root: Plugin }).root = plugin;
+    setHostRootPlugin(plugin);
   }
 
   it('toTool 元数据与 schema 完整', () => {

@@ -196,6 +196,32 @@ async function setup() {
 }
 ```
 
+### getPlugin() 使用
+
+```typescript
+// ✓ 正确：初始化阶段捕获，运行时回调用闭包
+const { addMiddleware, logger, root } = usePlugin();
+
+addMiddleware(async (message, next) => {
+  logger.info(message.sessionId);
+  await next();
+});
+
+// ✓ 正确：register/init 函数开头（装配阶段）
+export function registerMyCommands(): void {
+  const root = getPlugin().root ?? getPlugin();
+  addCommand(new MessageCommand('ping').action(() => root.name));
+}
+
+// ❌ 错误：中间件 / action / execute 等运行时回调内 getPlugin()
+addMiddleware(async (message, next) => {
+  getPlugin().logger.info('...'); // 线上易丢失 ALS 上下文
+  await next();
+});
+```
+
+CI 检查：`pnpm check:use-plugin-top-level`（usePlugin 顶层）、`pnpm check:get-plugin-runtime`（插件目录禁止运行时 getPlugin）。
+
 ## CI/CD 集成
 
 ### GitHub Actions 工作流

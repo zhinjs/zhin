@@ -85,7 +85,7 @@ import { usePlugin, MessageCommand, ZhinTool } from 'zhin.js'
 const { addCommand, addTool } = usePlugin()
 
 addCommand(
-  new MessageCommand('hello <name:string>')
+  new MessageCommand('hello <name:word>')
     .desc('打招呼')
     .action((_, result) => `Hello, ${result.params.name}!`)
 )

@@ -4,11 +4,10 @@
  * 阶段 A：工具结果首行 `ZHIN_NEEDS_OWNER:` 为权威信号。
  * 阶段 B：白名单工具 + 信号 + 非子 Agent 时由本模块同步调用 ask_user(type=confirm)。
  */
-import { getPlugin } from '@zhin.js/core';
+import { getHostRootPlugin } from '@zhin.js/core';
 import type { Plugin, Message } from '@zhin.js/core';
 import type { ToolResultTransform } from '@zhin.js/ai';
 import { AskUserBuiltinTool } from '../builtin/ask-user-tool.js';
-import { errMsg } from '../discovery/utils.js';
 import {
   clearPendingOrchestrationTool,
   hasOwnerApproveAlways,
@@ -35,7 +34,7 @@ export interface OwnerOrchestrationOptions {
   /** 每根任务自动 ask_user 上限，默认 3 */
   maxAutoOwnerAsk?: number;
   /**
-   * 当前 Endpoint 插件实例。生产路径可由 {@link ZhinAgent} 传入 `getPlugin()`；
+   * 当前 Endpoint 插件实例。生产路径由 {@link ZhinAgent} / agent-loop 传入，或读取 {@link getHostRootPlugin}。
    * 单测注入桩对象，避免依赖对 `@zhin.js/core` 的全局 mock（与 Vitest 模块缓存冲突）。
    */
   plugin?: Plugin;
@@ -96,13 +95,9 @@ export function createOwnerOrchestratedToolResultTransform(
       return appendLimitNote(result, maxAsk);
     }
 
-    let plugin: Plugin | undefined = options.plugin;
+    let plugin: Plugin | undefined = options.plugin ?? getHostRootPlugin() ?? undefined;
     if (!plugin) {
-      try {
-        plugin = getPlugin();
-      } catch (e: unknown) {
-        return appendUnavailableNote(result, errMsg(e));
-      }
+      return appendUnavailableNote(result, 'Host root plugin not registered');
     }
 
     const askTool = new AskUserBuiltinTool(plugin);

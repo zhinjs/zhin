@@ -10,7 +10,7 @@
  */
 
 import type { AgentTool } from '@zhin.js/ai';
-import { getPlugin } from '@zhin.js/core';
+import { getHostRootPlugin } from '@zhin.js/core';
 import type { ZhinAgentConfig, ExecApprovalMode } from '../zhin-agent/config.js';
 import { classifyBashCommand } from './file-policy.js';
 import { validateNetworkCommandUrl } from './network-policy.js';
@@ -226,7 +226,8 @@ function resolveRequesterRole(): ToolRequesterRole {
   if (!commMessage?.$adapter || !commMessage?.$endpoint || !commMessage?.$sender?.id) return 'unknown';
 
   try {
-    const plugin = getPlugin().root ?? getPlugin();
+    const plugin = getHostRootPlugin();
+    if (!plugin) return 'unknown';
     return resolveToolRequesterRole(plugin, commMessage);
   } catch {
     return 'unknown';
@@ -250,7 +251,8 @@ function tryExecBypassForSensitiveIcqq(normalizedSubCommand: string): boolean {
   const commMessage = getCurrentCommMessage();
   if (!commMessage?.$adapter || !commMessage?.$endpoint) return false;
   try {
-    const plugin = getPlugin().root ?? getPlugin();
+    const plugin = getHostRootPlugin();
+    if (!plugin) return false;
     return matchesBashOwnerExecBypass(plugin, commMessage, normalizedSubCommand);
   } catch {
     return false;

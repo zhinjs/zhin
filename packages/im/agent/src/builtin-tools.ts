@@ -72,7 +72,7 @@ export function createBuiltinTools(options: BuiltinToolsOptions): ToolInput[] {
   tools.push(createListDirTool());
   tools.push(createGlobTool());
   tools.push(createGrepTool());
-  tools.push(createBashTool());
+  tools.push(createBashTool(pluginRef.root ?? pluginRef));
   tools.push(createWebSearchTool());
   tools.push(createWebFetchTool());
   tools.push(createTodoReadTool(DATA_DIR));

@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { Plugin, storage } from '@zhin.js/core';
 import { HookRegistry, createAIHookEvent } from '../../src/orchestrator/index.js';
+import { withMockHostRoot } from '../helpers/mock-host-plugin.js';
 
 describe('HookRegistry ai.hook bus bridge', () => {
   it('bridges orchestrator hooks to plugin ai.hook bus', async () => {
-    const hostPlugin = new Plugin('/virtual/host-plugin.ts');
     const payloads: any[] = [];
-    hostPlugin.on('ai.hook', payload => payloads.push(payload));
 
-    await storage.run(hostPlugin, async () => {
+    await withMockHostRoot(async (hostPlugin) => {
+      hostPlugin.on('ai.hook', payload => payloads.push(payload));
+
       const registry = new HookRegistry();
       await registry.trigger(createAIHookEvent('tool', 'call', 'test:scene1:user1', {
         platform: 'mock',
@@ -28,11 +28,11 @@ describe('HookRegistry ai.hook bus bridge', () => {
   });
 
   it('bridges session compact hooks to stable ai.session.compact bus event', async () => {
-    const hostPlugin = new Plugin('/virtual/host-plugin.ts');
     const payloads: any[] = [];
-    hostPlugin.on('ai.session.compact', payload => payloads.push(payload));
 
-    await storage.run(hostPlugin, async () => {
+    await withMockHostRoot(async (hostPlugin) => {
+      hostPlugin.on('ai.session.compact', payload => payloads.push(payload));
+
       const registry = new HookRegistry();
       await registry.trigger(createAIHookEvent('session', 'compact', 'test:scene1:user1', {
         platform: 'mock',

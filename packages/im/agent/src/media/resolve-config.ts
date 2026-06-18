@@ -1,11 +1,11 @@
-import { getPlugin } from '@zhin.js/core';
+import { getHostRootPlugin } from '@zhin.js/core';
 import type { AIConfig } from '@zhin.js/ai';
 import { DEFAULT_MULTIMODAL_CONFIG, type MultimodalConfig } from './media-types.js';
 
 export function resolveMultimodalConfig(): MultimodalConfig {
-  try {
-    const plugin = getPlugin();
-    const configService = plugin.root?.inject?.('config') as
+  const host = getHostRootPlugin();
+  if (host) {
+    const configService = host.inject?.('config') as
       | { getPrimary?: () => { ai?: AIConfig } }
       | undefined;
     const mm = configService?.getPrimary?.()?.ai?.multimodal;
@@ -27,7 +27,6 @@ export function resolveMultimodalConfig(): MultimodalConfig {
         splitMessages: mm.outbound?.splitMessages ?? DEFAULT_MULTIMODAL_CONFIG.outbound.splitMessages,
       },
     };
-  } catch {
-    return { ...DEFAULT_MULTIMODAL_CONFIG };
   }
+  return { ...DEFAULT_MULTIMODAL_CONFIG };
 }

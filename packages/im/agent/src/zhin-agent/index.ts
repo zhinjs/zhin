@@ -18,7 +18,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { Plugin } from '@zhin.js/core';
-import { getPlugin } from '@zhin.js/core';
+import { getHostRootPlugin } from '@zhin.js/core';
 import { formatCompact, Logger } from '@zhin.js/logger';
 import type {
   AIProvider,
@@ -526,8 +526,11 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   // ── prompt() / steer / followUp (ADR 0009 D6) ─────────────────────
 
   private assertMasterForPromptControl(commMessage: Message): void {
+    const plugin = this.emitter.getHostPlugin();
+    if (!plugin) {
+      throw new PromptAccessDeniedError('steer/followUp 需要有效的 master 上下文');
+    }
     try {
-      const plugin = getPlugin().root ?? getPlugin();
       const role = resolveToolRequesterRole(plugin, commMessage);
       if (role !== 'master') {
         throw new PromptAccessDeniedError('steer/followUp 仅 master 可用');

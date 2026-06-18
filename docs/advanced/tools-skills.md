@@ -622,7 +622,7 @@ addTool({
 
 // 同时也注册一个命令（传统调用方式）
 addCommand(
-  new MessageCommand('music <keyword:string>')
+  new MessageCommand('music <keyword:word>')
     .desc('搜索音乐')
     .action(async (_, result) => {
       const data = await musicAPI.search(result.params.keyword, 3)

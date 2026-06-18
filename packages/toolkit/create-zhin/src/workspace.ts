@@ -924,7 +924,7 @@ export function register(api: PluginRegisterHostApi) {
 const { addCommand, addCron, addTool, onMounted, logger } = usePlugin();
 
 addCommand(
-  new MessageCommand('remind <text:string>')
+  new MessageCommand('remind <text:text>')
     .desc('设置提醒')
     .action((_, result) => \`✅ 已记录提醒：\${result.params.text}\`),
 );

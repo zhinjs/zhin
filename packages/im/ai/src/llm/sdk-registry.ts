@@ -48,6 +48,15 @@ function normalizeAnthropicBaseUrl(baseUrl: string | undefined): string | undefi
   return `${withoutTrailing}/v1`;
 }
 
+/** @ai-sdk/google 默认 base 以 /v1beta 结尾；代理根路径须补此后缀 */
+export function normalizeGoogleBaseUrl(baseUrl: string | undefined): string | undefined {
+  const url = trimUrl(baseUrl);
+  if (!url) return undefined;
+  const withoutTrailing = url.replace(/\/+$/, '');
+  if (withoutTrailing.endsWith('/v1beta')) return withoutTrailing;
+  return `${withoutTrailing}/v1beta`;
+}
+
 function normalizeOpenAiCompatibleBaseUrl(baseUrl: string): string {
   const url = baseUrl.replace(/\/+$/, '');
   if (url.endsWith('/v1')) return url;
@@ -132,7 +141,7 @@ export function createLanguageModel(
       const { createGoogleGenerativeAI } = loadPeer<typeof import('@ai-sdk/google')>('@ai-sdk/google');
       const google = createGoogleGenerativeAI({
         apiKey: config.apiKey?.trim(),
-        baseURL: trimUrl(config.baseUrl),
+        baseURL: normalizeGoogleBaseUrl(config.baseUrl),
         headers,
         ...transport,
       });
@@ -198,7 +207,7 @@ export function createImageModel(
       const { createGoogleGenerativeAI } = loadPeer<typeof import('@ai-sdk/google')>('@ai-sdk/google');
       const google = createGoogleGenerativeAI({
         apiKey: config.apiKey,
-        baseURL: config.baseUrl,
+        baseURL: normalizeGoogleBaseUrl(config.baseUrl),
         headers,
         ...transport,
       });

@@ -17,7 +17,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { mockCommMessage } from './helpers/mock-comm-message.js';
 import type { Plugin } from '@zhin.js/core';
-import * as core from '@zhin.js/core';
+import { setHostRootPlugin } from '../../core/src/host-plugin-registry.js';
 import * as utils from '../src/discovery/utils.js';
 import {
   isDangerousCommand,
@@ -432,13 +432,13 @@ describe('checkExecPolicy', () => {
     const plugin = makeRootPluginForIcqqExec('icqq');
     const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1' });
     expect(addBashApproveRule(plugin, ctx, '^icqq\\s+group\\s+kick\\b').ok).toBe(true);
-    const getPluginSpy = vi.spyOn(core, 'getPlugin').mockReturnValue(plugin as never);
+    setHostRootPlugin(plugin as never);
     const config = makeConfig({ execAllowlist: [], execApprovalMode: 'ask' });
     try {
       const r = runWithCommMessage(ctx, () => checkExecPolicy(config, 'icqq group kick 1 2'));
       expect(r.allowed).toBe(true);
     } finally {
-      getPluginSpy.mockRestore();
+      setHostRootPlugin(null);
       getDataSpy.mockRestore();
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
@@ -494,7 +494,7 @@ describe('checkExecPolicy', () => {
 
   it('owner 发起：不在 execAllowlist 也直接放行（无需 ask）', () => {
     const plugin = makeRootPluginWithOwnerAdmins('icqq', 'owner99', ['admin42']);
-    const getPluginSpy = vi.spyOn(core, 'getPlugin').mockReturnValue(plugin as never);
+    setHostRootPlugin(plugin as never);
     const config = makeConfig({ execAllowlist: ['ls'], execApprovalMode: 'ask' });
     const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'owner99', sender_roles: ['master'] });
 
@@ -503,13 +503,13 @@ describe('checkExecPolicy', () => {
       expect(r.allowed).toBe(true);
       expect(r.needsApproval).toBeUndefined();
     } finally {
-      getPluginSpy.mockRestore();
+      setHostRootPlugin(null);
     }
   });
 
   it('admin 发起：不在 execAllowlist 触发 owner 审批', () => {
     const plugin = makeRootPluginWithOwnerAdmins('icqq', 'owner99', ['admin42']);
-    const getPluginSpy = vi.spyOn(core, 'getPlugin').mockReturnValue(plugin as never);
+    setHostRootPlugin(plugin as never);
     const config = makeConfig({ execAllowlist: ['ls'], execApprovalMode: 'deny' });
     const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'admin42', sender_roles: ['trusted'] });
 
@@ -519,13 +519,13 @@ describe('checkExecPolicy', () => {
       expect(r.needsApproval).toBe(true);
       expect(r.reason).toContain('Owner');
     } finally {
-      getPluginSpy.mockRestore();
+      setHostRootPlugin(null);
     }
   });
 
   it('其他人发起：不在 execAllowlist 直接拒绝', () => {
     const plugin = makeRootPluginWithOwnerAdmins('icqq', 'owner99', ['admin42']);
-    const getPluginSpy = vi.spyOn(core, 'getPlugin').mockReturnValue(plugin as never);
+    setHostRootPlugin(plugin as never);
     const config = makeConfig({ execAllowlist: ['ls'], execApprovalMode: 'ask' });
     const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'user777', sender_roles: ['user'] });
 
@@ -535,7 +535,7 @@ describe('checkExecPolicy', () => {
       expect(r.needsApproval).toBeUndefined();
       expect(r.reason).toContain('owner/admin');
     } finally {
-      getPluginSpy.mockRestore();
+      setHostRootPlugin(null);
     }
   });
 });

@@ -13,7 +13,7 @@
 | [ADR 0009 — agentLoop 统一栈](../adr/0009-pi-aligned-ai-agent-core.md) | Context + stream + agentLoop 迁移与完成定义 |
 | [仓库结构](../contributing/repo-structure.md) | pnpm workspace、`src→lib` / `client→dist` |
 | [Harness 工程](../contributing/harness-engineering.md) | 发送链路、层级依赖、CI 检查 |
-| [文档片段 `snippets/`](../snippets/README.md) | Install tiers 等 VitePress 可复用 SSOT |
+| [文档片段 `snippets/`](https://github.com/zhinjs/zhin/blob/main/docs/snippets/README.md) | Install tiers 等 VitePress 可复用 SSOT（`srcExclude`，站内无页面） |
 | [AI 模块](../advanced/ai.md) | 安装分层、`agents` 绑定、模型发现、`im_transcripts` / `agent_messages` |
 | [packages 子包 README](https://github.com/zhinjs/zhin/blob/main/packages/README.md) | `im/ai`、`im/agent`、`im/core`、`im/zhin` 包内说明 |
 | [Agent 上下文块](agent-context-blocks.md) | 系统提示词分段与贡献者约定 |

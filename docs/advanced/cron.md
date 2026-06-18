@@ -205,7 +205,7 @@ const tasks = new Map<string, () => void>()
 
 // 添加定时任务命令
 addCommand(
-  new MessageCommand('cron-add <name:string> <pattern:string>')
+  new MessageCommand('cron-add <name:word> <pattern:text>')
     .desc('添加定时任务')
     .action((_, result) => {
       const { name, pattern } = result.params
@@ -221,7 +221,7 @@ addCommand(
 
 // 停止定时任务命令
 addCommand(
-  new MessageCommand('cron-stop <name:string>')
+  new MessageCommand('cron-stop <name:word>')
     .desc('停止定时任务')
     .action((_, result) => {
       const dispose = tasks.get(result.params.name)

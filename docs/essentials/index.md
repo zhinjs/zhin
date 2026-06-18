@@ -67,7 +67,7 @@ addCommand(
 
 ```typescript
 addCommand(
-  new MessageCommand('echo <message:string>')
+  new MessageCommand('echo <message:text>')
     .desc('回显消息')
     .action((_, result) => {
       // result.params.message 是用户输入的参数
@@ -218,7 +218,7 @@ addMiddleware(async (message, next) => {
 useContext('database', (db) => {
   // 4. 添加命令
   addCommand(
-    new MessageCommand('todo <text:string>')
+    new MessageCommand('todo <text:text>')
       .desc('添加待办事项')
       .action(async (_, result) => {
         // 保存到数据库

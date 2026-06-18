@@ -1,13 +1,9 @@
-import { getPlugin, type Plugin } from '@zhin.js/core';
+import { getHostRootPlugin, type Plugin } from '@zhin.js/core';
 import type { AIHookEvent } from './orchestrator/types.js';
 import { createAIHookBusPayload } from './ai-event-bus.js';
 
 function resolveRootPlugin(): Plugin | null {
-  try {
-    return getPlugin().root;
-  } catch {
-    return null;
-  }
+  return getHostRootPlugin();
 }
 
 export function emitAIHookBusEvent(

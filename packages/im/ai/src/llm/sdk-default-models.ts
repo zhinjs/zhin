@@ -39,6 +39,7 @@ export const SDK_DEFAULT_MODELS: Readonly<Record<SdkId, readonly string[]>> = {
     'gemini-2.5-flash',
     'gemini-2.5-flash-lite',
   ],
+  /** Static fallback; runtime discovery via GET /v1beta/models when yaml models omitted */
   deepseek: [
     'deepseek-v4-flash',
     'deepseek-v4-pro',

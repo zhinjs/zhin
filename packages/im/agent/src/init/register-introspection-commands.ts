@@ -26,6 +26,7 @@ import {
 function registerIntrospectionCommand(
   commandService: CommandFeature,
   pluginName: string,
+  root: ReturnType<typeof getPlugin>['root'],
   disposers: (() => void)[],
   pattern: string,
   desc: string,
@@ -34,11 +35,10 @@ function registerIntrospectionCommand(
   const cmd = new MessageCommand(pattern)
     .desc(desc)
     .action(async (message: Message) => {
-      const plugin = getPlugin();
-      const ai = plugin.root.inject('ai') as { getTriggerConfig?: () => import('@zhin.js/core').AITriggerConfig } | undefined;
+      const ai = root.inject('ai') as { getTriggerConfig?: () => import('@zhin.js/core').AITriggerConfig } | undefined;
       const denied = rejectUnlessManagementOperator(
         message,
-        plugin.root,
+        root,
         ai?.getTriggerConfig?.(),
       );
       if (denied) return denied;
@@ -88,6 +88,7 @@ export function registerIntrospectionCommands(_refs: AIServiceRefs): void {
     registerIntrospectionCommand(
       commandService,
       root.name,
+      root,
       disposers,
       '/cmd',
       '列出已注册的 IM 命令',
@@ -97,6 +98,7 @@ export function registerIntrospectionCommands(_refs: AIServiceRefs): void {
     registerIntrospectionCommand(
       commandService,
       root.name,
+      root,
       disposers,
       '/endpoints',
       '列出各适配器下的 Endpoint 及在线状态',
@@ -106,6 +108,7 @@ export function registerIntrospectionCommands(_refs: AIServiceRefs): void {
     registerIntrospectionCommand(
       commandService,
       root.name,
+      root,
       disposers,
       '/bindings',
       '列出 ai.agents 绑定（provider / model / mcp）',
@@ -130,6 +133,7 @@ export function registerIntrospectionCommands(_refs: AIServiceRefs): void {
     registerIntrospectionCommand(
       commandService,
       root.name,
+      root,
       disposers,
       '/tools',
       '列出 ToolFeature 已注册工具',
@@ -148,6 +152,7 @@ export function registerIntrospectionCommands(_refs: AIServiceRefs): void {
     registerIntrospectionCommand(
       commandService,
       root.name,
+      root,
       disposers,
       '/mcp',
       '列出已注册的 MCP Server 及连接状态',

@@ -108,6 +108,7 @@ pnpm check:adapter-docs     # 平台适配器文档与包 README 同步
 pnpm sync:adapter-docs      # 生成 docs/adapters/* 页面
 pnpm check:stable           # Stable 产品 smoke（Sandbox 入站 + minimal-bot 契约）
 pnpm check:use-plugin-top-level  # 适配器/特性插件 usePlugin 顶层约束
+pnpm check:get-plugin-runtime    # 禁止在 middleware/action 等运行时回调内 getPlugin()
 pnpm check:doc-orphans           # 站点 Markdown 须在侧栏或 allowlist
 pnpm check:readme-exports        # README import 与包导出一致（im + adapters）
 pnpm check:config-docs           # 配置文档与 DEFAULT_CONFIG 关键字段对齐
@@ -132,6 +133,7 @@ pnpm type-check             # TypeScript 类型检查
 - 使用 ESLint 格式化代码（flat config 格式）
 - **导入路径必须使用 `.js` 扩展名**：`import { foo } from './bar.js'`（不是 `./bar.ts`）
 - `usePlugin()` 必须在模块顶层调用，不能在回调或 async 函数内
+- `getPlugin()` 只能在插件初始化/装配阶段调用；中间件、命令 action、工具 execute 等运行时回调内应使用注册时捕获的 `plugin`/`root` 闭包
 
 ### 代码风格
 ```typescript
@@ -262,6 +264,7 @@ pnpm check:all              # 运行所有检查
 | `check:config-docs` | 配置文档与 DEFAULT_CONFIG 关键字段对齐 |
 | `check:stable` | Stable 产品路径 smoke 测试 |
 | `check:use-plugin-top-level` | usePlugin() 必须在模块顶层调用 |
+| `check:get-plugin-runtime` | 插件目录禁止在 middleware/action/execute 等运行时回调内 getPlugin() |
 | `check:l4` | L4 完整维度检查 |
 
 ### 变更日志（Changesets）

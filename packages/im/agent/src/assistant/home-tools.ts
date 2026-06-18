@@ -11,7 +11,7 @@ import {
   toHomeOwnerSignal,
   type HomeToolDecision,
 } from './home-policy.js';
-import { getPlugin } from '@zhin.js/core';
+import { getHostRootPlugin } from '@zhin.js/core';
 import { resolveToolRequesterRole } from '../security/owner-approve-always-store.js';
 
 export interface HomeToolsOptions {
@@ -37,7 +37,9 @@ function guardMasterOnly(
     return null;
   }
   try {
-    const role = resolveToolRequesterRole(getPlugin(), commMessage);
+    const host = getHostRootPlugin();
+    if (!host) return null;
+    const role = resolveToolRequesterRole(host, commMessage);
     if (role === 'master') return null;
     return toHomeDenyError({
       allowed: false,

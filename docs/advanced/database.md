@@ -145,7 +145,7 @@ useContext('database', (db) => {
   
   // 添加待办
   addCommand(
-    new MessageCommand('todo <text:string>')
+    new MessageCommand('todo <text:text>')
       .desc('添加待办')
       .action(async (_, result) => {
         await todos.insert({ text: result.params.text })

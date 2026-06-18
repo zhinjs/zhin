@@ -127,14 +127,14 @@ addCommand(
 
 // 带参数的命令
 addCommand(
-  new MessageCommand('echo <message:string>')
+  new MessageCommand('echo <message:text>')
     .desc('回显消息')
     .action((_, result) => `你说：${result.params.message}`)
 )
 
 // 带可选参数的命令
 addCommand(
-  new MessageCommand('greet [name:string]')
+  new MessageCommand('greet [name:word]')
     .desc('问候某人')
     .action((_, result) => {
       const name = result.params.name || '世界'
@@ -169,7 +169,7 @@ useContext('database', (db) => {
   const notes = db.models.get('notes')
 
   addCommand(
-    new MessageCommand('note <text:string>')
+    new MessageCommand('note <text:text>')
       .desc('添加笔记')
       .action(async (_, result) => {
         await notes.insert({ text: result.params.text })
@@ -358,7 +358,7 @@ describe('my-plugin', () => {
   })
 
   it('should handle echo command with params', () => {
-    const cmd = new MessageCommand('echo <message:string>')
+    const cmd = new MessageCommand('echo <message:text>')
       .desc('回显消息')
       .action((_, result) => `你说：${result.params.message}`)
 
@@ -686,11 +686,57 @@ declare module 'zhin.js' {
 }
 ```
 
+## getPlugin 与 usePlugin
+
+两者都基于 `AsyncLocalStorage` 管理插件上下文，但语义不同：
+
+- **`usePlugin()`**：按**调用文件**获取或创建插件实例。必须在**模块顶层**调用。
+- **`getPlugin()`**：读取当前 ALS 栈顶的插件，**不创建**新实例。只允许在**插件初始化/装配**阶段使用（模块顶层、`registerXxx()` 等 init 函数内、向 Feature 注册 handler **之前**）。
+
+**严禁**在以下运行时路径调用 `getPlugin()`：
+
+- `addMiddleware` 回调
+- 命令 `.action()` / `.usage()` 等 handler
+- 工具 `.execute()` / `execute:`
+- `addCron` 任务函数
+- `onMounted` / `onDispose` / `.on(...)` 等事件回调（若需访问 plugin，在注册前捕获）
+
+```typescript
+import { usePlugin, MessageCommand } from 'zhin.js'
+
+const { addCommand, addMiddleware, logger, root } = usePlugin()
+
+// ✅ 注册前捕获，回调内用闭包
+addMiddleware(async (message, next) => {
+  logger.debug('middleware', message.sessionId)
+  await next()
+})
+
+addCommand(
+  new MessageCommand('/status')
+    .action(() => {
+      const ai = root.inject('ai')
+      return ai?.isReady() ? 'AI ready' : 'AI offline'
+    }),
+)
+
+// ❌ 运行时 getPlugin — 跨 await / 部分平台回调时易丢失上下文
+addMiddleware(async (message, next) => {
+  getPlugin().logger.debug('...') // 禁止
+  await next()
+})
+```
+
+框架内部 init 模块（如 `register-*-commands.ts`）也遵循同一规则：在 `registerXxx()` 开头 `const root = getPlugin().root ?? getPlugin()`，再传入各 command action。
+
+Bot 启动时框架会调用 `setHostRootPlugin(root)` 注册宿主根插件；运行时模块（安全策略、内置工具、媒体配置等）应读取 `getHostRootPlugin()`，而不是 `getPlugin()`。
+
 ## 常见陷阱
 
 | 陷阱 | 说明 |
 |------|------|
 | `usePlugin()` 不在顶层调用 | 必须在模块顶层调用，不能在回调、async 函数或动态 import 内。框架通过调用栈检测文件路径。 |
+| `getPlugin()` 在运行时回调内调用 | 只能在插件初始化/装配阶段调用。中间件、命令 action、工具 execute、Cron、事件回调内须使用注册时捕获的 `plugin`/`root` 闭包，否则 AsyncLocalStorage 上下文丢失会导致线上报错。 |
 | 忘记调用 `next()` | 中间件不调用 `next()` 会中断管线，后续中间件和命令都不会执行。 |
 | `declareConfig` 返回值不是响应式的 | 返回的是合并后的快照，运行时配置文件修改不会自动更新返回值。 |
 | 工具名冲突 | 全局唯一。同名工具会覆盖旧的。 |
@@ -702,6 +748,7 @@ declare module 'zhin.js' {
 ### ✅ 推荐做法
 
 - **`usePlugin()` 在模块顶层调用** — 不能在回调、async 函数或动态 import 内
+- **运行时回调用闭包，不用 `getPlugin()`** — 注册中间件/命令/工具前捕获 `plugin`/`root`/`logger`
 - **使用 `declareConfig` + Schema** — 比 `addConfig` 更安全，有类型校验和 Web 控制台支持
 - **`useContext` 等待依赖** — 确保依赖的服务就绪后再注册命令/工具
 - **`useContext` 返回清理函数** — 当 context 被卸载时自动调用
@@ -714,6 +761,7 @@ declare module 'zhin.js' {
 ### ❌ 避免做法
 
 - **`usePlugin()` 不在顶层** — 框架通过调用栈检测文件路径，异步调用会失败
+- **运行时回调内 `getPlugin()`** — 跨 await 或平台回调时上下文常丢失；应在注册阶段捕获引用
 - **中间件不调用 `next()`** — 会中断管线，后续处理不会执行
 - **`declareConfig` 后修改返回值** — 返回的是快照，不会同步到配置文件
 - **插件卸载不清理资源** — 定时器、连接、事件监听器必须在 `onDispose` 中清理
@@ -777,7 +825,7 @@ useContext('database', (db) => {
   const model = db.models.get('my_data')
 
   addCommand(
-    new MessageCommand('mycommand <value:string>')
+    new MessageCommand('mycommand <value:word>')
       .desc('我的命令')
       .action(async (_, result) => {
         await model.insert({ value: result.params.value })

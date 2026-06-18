@@ -2,7 +2,7 @@
  * Home Domain 工具权限（M4）
  */
 import {
-  getPlugin,
+  getHostRootPlugin,
   hasSenderRole,
   mergeAITriggerConfig,
   resolveSenderRoles,
@@ -28,27 +28,27 @@ function resolveRole(commMessage?: Message): ToolRequesterRole {
     return 'unknown';
   }
   if (commMessage.$adapter === 'process') return 'master';
+  const host = getHostRootPlugin();
+  if (host) {
+    return resolveToolRequesterRole(host, commMessage);
+  }
+  if (commMessage.$sender.isMaster !== undefined || commMessage.$sender.isTrusted !== undefined) {
+    const roles = senderRolesFromMessage(commMessage);
+    if (hasSenderRole(roles, 'master')) return 'master';
+    if (hasSenderRole(roles, 'trusted')) return 'trusted';
+    return 'other';
+  }
   try {
-    return resolveToolRequesterRole(getPlugin(), commMessage);
+    const { roles } = resolveSenderRoles(
+      commMessage,
+      mergeAITriggerConfig({}),
+      undefined,
+    );
+    if (hasSenderRole(roles, 'master')) return 'master';
+    if (hasSenderRole(roles, 'trusted')) return 'trusted';
+    return 'other';
   } catch {
-    if (commMessage.$sender.isMaster !== undefined || commMessage.$sender.isTrusted !== undefined) {
-      const roles = senderRolesFromMessage(commMessage);
-      if (hasSenderRole(roles, 'master')) return 'master';
-      if (hasSenderRole(roles, 'trusted')) return 'trusted';
-      return 'other';
-    }
-    try {
-      const { roles } = resolveSenderRoles(
-        commMessage,
-        mergeAITriggerConfig({}),
-        undefined,
-      );
-      if (hasSenderRole(roles, 'master')) return 'master';
-      if (hasSenderRole(roles, 'trusted')) return 'trusted';
-      return 'other';
-    } catch {
-      return 'other';
-    }
+    return 'other';
   }
 }
 
