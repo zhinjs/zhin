@@ -1,5 +1,11 @@
 # @zhin.js/satori
 
+## 0.2.14
+
+### Patch Changes
+
+- 7dfafc2: fix: ai 提示词缓存优化
+
 ## 0.2.13
 
 ### Patch Changes
