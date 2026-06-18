@@ -1706,15 +1706,6 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
 
-  plugins/utils/icqq-bind:
-    devDependencies:
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/im/zhin
-
   plugins/utils/link-poster:
     devDependencies:
       typescript:
@@ -4410,7 +4401,7 @@ packages:
     resolution: {integrity: sha512-LEiN/xe4OSIbKe9HQIp5OC24agGD9J5CnmMgsLohVVoOPWL9a2sBoR6VBx43jQZb7Kr1l4RCuyCJzcAa0+dojw==}
     peerDependencies:
       msw: ^2.4.9
-      vite: '>=7.3.2'
+      vite: '>=8.0.5'
     peerDependenciesMeta:
       msw:
         optional: true
@@ -7664,7 +7655,7 @@ packages:
       '@vitest/ui': 4.1.8
       happy-dom: '*'
       jsdom: '*'
-      vite: '>=7.3.2'
+      vite: '>=8.0.5'
     peerDependenciesMeta:
       '@edge-runtime/vm':
         optional: true
