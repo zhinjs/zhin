@@ -95,7 +95,7 @@ export function createOwnerOrchestratedToolResultTransform(
       return appendLimitNote(result, maxAsk);
     }
 
-    let plugin: Plugin | undefined = options.plugin ?? getHostRootPlugin() ?? undefined;
+    const plugin: Plugin | undefined = options.plugin ?? getHostRootPlugin() ?? undefined;
     if (!plugin) {
       return appendUnavailableNote(result, 'Host root plugin not registered');
     }
