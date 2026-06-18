@@ -359,7 +359,7 @@ addCommand(new MessageCommand("hello").desc("打个招呼").action(() => "你好
 
 // 带参数的命令
 addCommand(
-  new MessageCommand("echo <message:string>")
+  new MessageCommand("echo <message:text>")
     .desc("回显消息")
     .action((_, result) => {
       return `你说：${result.params.message}`;
@@ -368,7 +368,7 @@ addCommand(
 
 // 带可选参数的命令
 addCommand(
-  new MessageCommand("greet [name:string]")
+  new MessageCommand("greet [name:word]")
     .desc("向某人问好")
     .action((_, result) => {
       const name = result.params.name || "陌生人";

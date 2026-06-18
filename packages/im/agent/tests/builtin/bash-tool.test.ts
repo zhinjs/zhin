@@ -1,10 +1,8 @@
 /**
  * bash 内置工具（BuiltinBaseTool）单测 — 注入 exec，避免在 CI 中执行真实 shell
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
-
-import * as core from '@zhin.js/core';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -72,9 +70,9 @@ describe('BashBuiltinTool', () => {
   });
 
   it('execute 与 normalizeTool 绑定 context 时可调用', async () => {
-    vi.spyOn(core, 'getPlugin').mockReturnValue({ root: { inject: () => undefined } } as ReturnType<typeof core.getPlugin>);
+    const host = { root: { inject: () => undefined } } as import('@zhin.js/core').Plugin;
     const mockExec: BashExecAsync = async () => ({ stdout: 'via-tool\n', stderr: '' });
-    const tool = new BashBuiltinTool(mockExec, { useSandbox: false }).toTool();
+    const tool = new BashBuiltinTool(mockExec, { useSandbox: false, plugin: host }).toTool();
     const ctx = mockCommMessage({
       adapter: 'process',
       senderId: '1',

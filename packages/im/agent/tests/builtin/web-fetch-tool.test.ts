@@ -4,7 +4,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
 
-import * as core from '@zhin.js/core';
+import { setHostRootPlugin } from '../../../core/src/host-plugin-registry.js';
+import type { Plugin, Message } from '@zhin.js/core';
 import {
   createWebFetchTool,
   WebFetchBuiltinTool,
@@ -18,6 +19,7 @@ const originalFetch = globalThis.fetch;
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  setHostRootPlugin(null);
   vi.restoreAllMocks();
 });
 
@@ -32,9 +34,9 @@ function mockPlugin(master = 'owner1', trusted: string[] = ['admin1'], execAllow
       }
       return undefined;
     },
-  } as unknown as core.Plugin;
-  (plugin as unknown as { root: core.Plugin }).root = plugin;
-  vi.spyOn(core, 'getPlugin').mockReturnValue(plugin as never);
+  } as unknown as Plugin;
+  (plugin as unknown as { root: Plugin }).root = plugin;
+  setHostRootPlugin(plugin);
 }
 
 describe('WebFetchBuiltinTool', () => {

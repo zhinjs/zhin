@@ -2,7 +2,7 @@
  * Register AIService as a plugin context.
  */
 import './types.js';
-import { formatCompact, getPlugin, type Plugin } from '@zhin.js/core';
+import { formatCompact, getPlugin, setHostRootPlugin, type Plugin } from '@zhin.js/core';
 import type { AIConfig } from '@zhin.js/ai';
 import { AIService } from '../service.js';
 import type { AIServiceRefs } from './shared-refs.js';
@@ -10,6 +10,7 @@ import type { AIServiceRefs } from './shared-refs.js';
 export function registerAIService(refs: AIServiceRefs): void {
   const plugin = getPlugin();
   const { provide, root, logger } = plugin;
+  setHostRootPlugin(root);
 
   provide({
     name: 'ai',

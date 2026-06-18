@@ -15,7 +15,7 @@ import {
   resolveSdkProviderModels,
   SDK_SUPPORTS_OPENAI_MODEL_DISCOVERY,
 } from './llm/sdk-default-models.js';
-import { createLanguageModel } from './llm/sdk-registry.js';
+import { createLanguageModel, normalizeGoogleBaseUrl } from './llm/sdk-registry.js';
 import { registerLanguageModel } from './llm/language-model-store.js';
 import { generateTextViaAiSdk } from './llm/bridge/ai-sdk-stream.js';
 import { generateImageViaAiSdk } from './llm/bridge/ai-sdk-image.js';
@@ -49,6 +49,63 @@ async function fetchOpenAiCompatibleModels(config: ProviderInstanceConfig): Prom
   if (!res.ok) return [];
   const json = await res.json() as { data?: Array<{ id?: string }> };
   return (json.data ?? []).map((m) => m.id).filter((id): id is string => !!id?.trim());
+}
+
+interface GoogleModelsListResponse {
+  models?: Array<{ name?: string; supportedGenerationMethods?: string[] }>;
+  nextPageToken?: string;
+}
+
+function hasExplicitYamlModels(config: ProviderInstanceConfig): boolean {
+  return (config.models ?? []).some((m) => m.trim().length > 0);
+}
+
+function parseGoogleModelId(name: string): string {
+  return name.startsWith('models/') ? name.slice('models/'.length) : name;
+}
+
+/** Google Gemini API: GET /v1beta/models (x-goog-api-key) */
+export async function fetchGoogleModels(config: ProviderInstanceConfig): Promise<string[]> {
+  const apiKey = config.apiKey?.trim();
+  if (!apiKey) return [];
+
+  const base = normalizeGoogleBaseUrl(config.baseUrl)
+    ?? 'https://generativelanguage.googleapis.com/v1beta';
+  const headers: Record<string, string> = {
+    ...config.headers,
+    'x-goog-api-key': apiKey,
+  };
+
+  const ids: string[] = [];
+  let pageToken: string | undefined;
+  const proxyFetch = resolveProxyFetch();
+  const doFetch = proxyFetch ?? fetch;
+
+  do {
+    const url = new URL(`${base}/models`);
+    url.searchParams.set('pageSize', '100');
+    if (pageToken) url.searchParams.set('pageToken', pageToken);
+
+    const res = await doFetch(url.toString(), { headers });
+    if (!res.ok) return ids.length > 0 ? ids : [];
+
+    const json = await res.json() as GoogleModelsListResponse;
+    for (const entry of json.models ?? []) {
+      const name = entry.name?.trim();
+      if (!name) continue;
+      const methods = entry.supportedGenerationMethods ?? [];
+      if (methods.length > 0 && !methods.includes('generateContent')) continue;
+      ids.push(parseGoogleModelId(name));
+    }
+    pageToken = json.nextPageToken;
+  } while (pageToken);
+
+  const seen = new Set<string>();
+  return ids.filter((id) => {
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
 }
 
 export class SdkProviderAdapter implements AIProvider {
@@ -140,6 +197,14 @@ export class SdkProviderAdapter implements AIProvider {
   }
 
   async listModels(): Promise<string[]> {
+    if (this.sdk === 'google' && !hasExplicitYamlModels(this.config)) {
+      const discovered = await fetchGoogleModels(this.config);
+      if (discovered.length > 0) {
+        this.models = discovered;
+        return this.models;
+      }
+    }
+
     if (this.models.length > 0 && !SDK_SUPPORTS_OPENAI_MODEL_DISCOVERY.has(this.sdk)) {
       return this.models;
     }

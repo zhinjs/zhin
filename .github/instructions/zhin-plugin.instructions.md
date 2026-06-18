@@ -15,6 +15,7 @@ applyTo: "plugins/**,examples/**/src/plugins/**"
 ## 插件入口
 
 - `usePlugin()` 只能在模块顶层调用，不能在 async 函数或 setTimeout 回调内调用
+- **`getPlugin()` 只能在插件初始化/装配阶段调用**（register/init、注册命令/中间件/工具之前）；**中间件、命令 action、工具 execute、Cron、事件回调等运行时路径严禁 `getPlugin()`**，应在注册时捕获 `plugin` / `root` 闭包引用
 - 入口文件负责装配（注册命令、中间件、Context），不要在入口里堆业务实现
 - 优先使用解构：`const { addCommand, addMiddleware, useContext, logger } = usePlugin()`
 
@@ -45,7 +46,7 @@ declare module 'zhin.js' {
 ## 命令
 
 - 参数从 `result.params` 读取，不要自行解析 `message.$raw`
-- 模板语法写全类型：`<name:text>`、`[count:number=1]`、`[...items:at]`
+- 模板语法写全类型：`<name:word>`、`<body:text>`、`[count:number=1]`、`[...items:text]`
 
 ## 数据库
 

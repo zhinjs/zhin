@@ -34,6 +34,7 @@ import { storage, getCurrentFile } from "./plugin-context.js";
 // Re-export getPlugin from plugin-context for backward compatibility
 export { getPlugin } from "./plugin-context.js";
 export { storage, getCurrentFile } from "./plugin-context.js";
+export { setHostRootPlugin, getHostRootPlugin } from "./host-plugin-registry.js";
 
 const contextsKey = Symbol("contexts");
 

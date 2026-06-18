@@ -8,7 +8,7 @@ const { addCommand, addCron, addTool, onMounted, logger } = usePlugin()
 // --- 命令 ---
 
 addCommand(
-  new MessageCommand('remind <text:string>')
+  new MessageCommand('remind <text:text>')
     .desc('设置提醒（示例：remind 明天下午3点开会）')
     .action((_, result) => {
       return `✅ 已记录提醒：${result.params.text}\n（提示：实际提醒需配合 cron 定时任务）`
@@ -16,7 +16,7 @@ addCommand(
 )
 
 addCommand(
-  new MessageCommand('mood [note:string]')
+  new MessageCommand('mood [note:text]')
     .desc('记录今日心情')
     .action((_, result) => {
       const note = result.params.note || '心情不错'

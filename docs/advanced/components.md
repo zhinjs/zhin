@@ -22,7 +22,7 @@ addComponent(MyComponent)
 ```typescript
 // 在消息中使用
 addCommand(
-  new MessageCommand('greet <name:string>')
+  new MessageCommand('greet <name:word>')
     .action((_, result) => {
       return `<MyComponent name="${result.params.name}"/>`
     })

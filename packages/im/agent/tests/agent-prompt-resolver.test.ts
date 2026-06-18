@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { AgentPromptContributor } from '@zhin.js/core';
-import { Plugin, storage } from '@zhin.js/core';
 import { mockCommMessage } from './helpers/mock-comm-message.js';
+import { withMockHostRoot } from './helpers/mock-host-plugin.js';
 import {
   clearAgentPromptContributors,
   registerAgentPromptContributor,
@@ -53,11 +53,11 @@ describe('resolveAgentPromptSections', () => {
   });
 
   it('bridges legacy hooks to plugin ai.hook bus', async () => {
-    const hostPlugin = new Plugin('/virtual/host-plugin.ts');
     const payloads: any[] = [];
-    hostPlugin.on('ai.hook', payload => payloads.push(payload));
 
-    await storage.run(hostPlugin, async () => {
+    await withMockHostRoot(async (hostPlugin) => {
+      hostPlugin.on('ai.hook', payload => payloads.push(payload));
+
       await resolveAgentPromptSections({
         sessionId: 'test:scene1:user1',
         ctx: {

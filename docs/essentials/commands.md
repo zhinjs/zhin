@@ -61,22 +61,31 @@ addCommand(
 ## 命令参数
 
 ```typescript
-// 必需参数
+// 单词参数（不含空格，如子命令、QQ 号、UUID）
 addCommand(
-  new MessageCommand('echo <message:string>')
+  new MessageCommand('/icqq <action:word> [requestId:text]')
+    .action((_, result) => {
+      const { action, requestId } = result.params
+      // /icqq approve dff51432-... → action=approve, requestId=dff51432-...
+    })
+)
+
+// 贪婪文本（吃掉当前文本段剩余内容，含空格）
+addCommand(
+  new MessageCommand('echo <message:text>')
     .action((_, result) => result.params.message)
 )
 
 // 可选参数
 addCommand(
-  new MessageCommand('greet [name:string]')
+  new MessageCommand('greet [name:word]')
     .action((_, result) => {
       const name = result.params.name
       return name ? `你好，${name}！` : '你好！'
     })
 )
 
-// 剩余参数
+// 剩余参数（跨多个词/段）
 addCommand(
   new MessageCommand('say [...content:text]')
     .action((_, result) => {
@@ -87,11 +96,25 @@ addCommand(
 
 ### 参数类型
 
+命令模式由 [`segment-matcher`](https://github.com/zhinjs/segment-matcher) 解析。**没有 `:string` 类型**；旧文档里的 `:string` 应改为下表中的实际类型。
+
 | 类型 | 说明 | 示例 |
 |------|------|------|
-| `string` | 单个字符串（空格分隔） | `<name:string>` |
-| `number` | 数字 | `<count:number>` |
-| `text` | 文本（包含空格） | `[...content:text]` |
+| `word` | 单个词（不含空格）；多参数时只取第一个 token | `<action:word>`、`[name:word]` |
+| `text` | 贪婪匹配当前文本段剩余内容（可含空格）；也可用引号 `'...'` / `"..."` 界定边界 | `<message:text>`、`[requestId:text]` |
+| `number` | 整数或小数 | `<count:number>` |
+| `integer` | 整数 | `<index:integer>` |
+| `float` | 必须带小数点的浮点数 | `<ratio:float>` |
+| `boolean` | `true` / `false` | `<force:boolean>` |
+| `face` / `image` / `at` 等 | 对应消息段类型 | `<emoji:face>` |
+
+::: warning 常见踩坑
+- **`:string` 无效** — 不会匹配任何文本，命令表现为「完全不触发」。单词用 **`word`**。
+- **`<param:text>` 是贪婪的** — `cmd <a:text> [b:text]` 会把整句都塞进 `a`，后面的 `b` 永远为空。子命令 + 后续 ID 应写 `<action:word> [id:text]`。
+- **多个 `:text` 连用** — 只有第一个会吃到剩余文本；需要「后面所有词」时用 `[...rest:text]`。
+:::
+
+默认类型：参数未写类型时等价于 `text`（`<name>` = `<name:text>`）。
 
 ## 命令描述
 
@@ -127,7 +150,7 @@ addCommand(
 
 ```typescript
 addCommand(
-  new MessageCommand('ban <user:string>')
+  new MessageCommand('ban <user:word>')
     .desc('封禁用户')
     .permit('admin')  // 需要 admin 权限
     .action((_, result) => {
@@ -140,7 +163,7 @@ addCommand(
 
 ```typescript
 addCommand(
-  new MessageCommand('weather <city:string>')
+  new MessageCommand('weather <city:word>')
     .action(async (_, result) => {
       const data = await fetchWeather(result.params.city)
       return `${result.params.city}: ${data.temp}°C`
@@ -168,7 +191,7 @@ addCommand(
 
 // 带参数
 addCommand(
-  new MessageCommand('echo <message:string>')
+  new MessageCommand('echo <message:text>')
     .desc('回显消息')
     .action((_, result) => result.params.message)
 )

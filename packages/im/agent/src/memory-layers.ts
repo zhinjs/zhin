@@ -4,7 +4,7 @@
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { getPlugin, senderRolesFromMessage } from '@zhin.js/core';
+import { getHostRootPlugin, senderRolesFromMessage } from '@zhin.js/core';
 import type { AIConfig } from '@zhin.js/ai';
 import type { Message } from '@zhin.js/core';
 import { Logger } from '@zhin.js/core';
@@ -268,9 +268,9 @@ export function buildMemoryPrompt(
 }
 
 export function resolveMemoryPromptOptions(): MemoryPromptOptions {
-  try {
-    const plugin = getPlugin();
-    const configService = plugin.root?.inject?.('config') as
+  const host = getHostRootPlugin();
+  if (host) {
+    const configService = host.inject?.('config') as
       | { getPrimary?: () => { ai?: AIConfig } }
       | undefined;
     const ai = configService?.getPrimary?.()?.ai;
@@ -279,9 +279,8 @@ export function resolveMemoryPromptOptions(): MemoryPromptOptions {
       enabled: mem?.enabled !== false,
       budgets: { ...DEFAULT_MEMORY_BUDGETS, ...mem?.budgets },
     };
-  } catch {
-    return { enabled: true, budgets: DEFAULT_MEMORY_BUDGETS };
   }
+  return { enabled: true, budgets: DEFAULT_MEMORY_BUDGETS };
 }
 
 export function getFileMemoryContext(
@@ -358,13 +357,11 @@ export function checkMemoryWritePath(
   }
 
   let role: string = 'unknown';
-  try {
-    const plugin = getPlugin();
-    if (context) {
-      role = resolveToolRequesterRole(plugin, context);
-    }
-  } catch {
-    if (context && senderRolesFromMessage(context).includes('master')) role = 'master';
+  const host = getHostRootPlugin();
+  if (host && context) {
+    role = resolveToolRequesterRole(host, context);
+  } else if (context && senderRolesFromMessage(context).includes('master')) {
+    role = 'master';
   }
   if (role === 'master') {
     return { allowed: true, scope };

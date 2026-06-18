@@ -2,7 +2,7 @@
  * agentLoop turn runner (ADR 0009) — used when ContextRepository is wired.
  */
 
-import { getPlugin, type Plugin } from '@zhin.js/core';
+import { getHostRootPlugin, type Plugin } from '@zhin.js/core';
 import type { AIService } from '../service.js';
 import { formatCompact, Logger } from '@zhin.js/logger';
 import type { AgentTool, Usage } from '@zhin.js/ai';
@@ -316,9 +316,8 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
 
   let orchestrationPlugin: Plugin | undefined = host.emitter.getHostPlugin() ?? undefined;
   if (!orchestrationPlugin) {
-    try {
-      orchestrationPlugin = getPlugin().root ?? getPlugin();
-    } catch {
+    orchestrationPlugin = getHostRootPlugin() ?? undefined;
+    if (!orchestrationPlugin) {
       logger.warn(formatCompact({ warn: 'no_host_plugin' }));
     }
   }

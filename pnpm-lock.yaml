@@ -1706,6 +1706,15 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
 
+  plugins/utils/icqq-bind:
+    devDependencies:
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
+
   plugins/utils/link-poster:
     devDependencies:
       typescript:

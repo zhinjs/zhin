@@ -323,6 +323,7 @@ These rules are non-negotiable — violating them will break the project:
 1. **Never bypass the send chain** — All outbound messages must flow through `Message.$reply` or `Adapter.sendMessage` → `renderSendMessage` → `before.sendMessage` → platform Endpoint.
 2. **Respect the dependency direction** — `basic → kernel → ai → core → agent → zhin`. Lower layers must never import from higher layers.
 3. **`usePlugin()` at module top-level only** — Never inside async functions, callbacks, or lazy init paths (AsyncLocalStorage context will be lost).
+4. **`getPlugin()` at plugin init only** — Capture `plugin`/`root` when registering middleware, commands, tools, and events; never call `getPlugin()` inside those runtime callbacks (common production failure mode).
 4. **Use `.js` extensions in imports** — TypeScript local imports require `.js` suffix (`import { x } from './y.js'`).
 5. **Build order matters** — When building incrementally, follow: logger/schema/database → kernel → ai → core → agent → zhin.
 6. **No git submodules** — This is a pnpm workspace monorepo; all packages live under `basic/`, `packages/`, `plugins/`, or `examples/`.

@@ -77,6 +77,11 @@ const checks = [
     description: '插件 usePlugin() 须在模块顶层',
   },
   {
+    name: 'getPlugin Runtime',
+    command: 'pnpm check:get-plugin-runtime',
+    description: '插件目录禁止在 middleware/action 等运行时回调内 getPlugin()',
+  },
+  {
     name: 'Install Size (IM core)',
     command: 'pnpm check:install-size',
     description: 'zhin.js production node_modules ≤10MB（ADR 0019）',

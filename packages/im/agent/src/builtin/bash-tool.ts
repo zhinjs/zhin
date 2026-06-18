@@ -3,7 +3,7 @@
  */
 import { exec, type ExecOptions } from 'node:child_process';
 import { promisify } from 'node:util';
-import { getPlugin, type Tool, type Message, type ToolParametersSchema, type ToolResult } from '@zhin.js/core';
+import { type Plugin, type Tool, type Message, type ToolParametersSchema, type ToolResult } from '@zhin.js/core';
 import { resolveToolRequesterRole } from '../security/owner-approve-always-store.js';
 import { checkBashFilePermission, resolveFilePermissionGate, toolRequesterRoleToFileRole } from '../security/file-role-policy.js';
 import {
@@ -42,15 +42,17 @@ export class BashBuiltinTool extends BuiltinBaseTool {
 
   /** 是否使用沙箱（默认 true，测试时可设为 false） */
   private useSandbox: boolean;
+  private readonly hostPlugin?: Plugin;
 
   constructor(
     private readonly execAsync: BashExecAsync = defaultExecAsync,
-    options?: { useSandbox?: boolean },
+    options?: { useSandbox?: boolean; plugin?: Plugin },
   ) {
     super();
     this.tags.push('shell', 'exec');
     this.keywords.push('执行', '运行', '命令', '终端', 'shell', 'bash');
     this.useSandbox = options?.useSandbox ?? true;
+    this.hostPlugin = options?.plugin?.root ?? options?.plugin;
   }
 
   async run(args: Record<string, unknown>, commMessage?: Message): Promise<ToolResult> {
@@ -67,8 +69,8 @@ export class BashBuiltinTool extends BuiltinBaseTool {
         return toDenyError(sensitiveRead);
       }
 
-      const requesterRole = commMessage
-        ? resolveToolRequesterRole(getPlugin(), commMessage)
+      const requesterRole = commMessage && this.hostPlugin
+        ? resolveToolRequesterRole(this.hostPlugin, commMessage)
         : 'unknown';
       const role = toolRequesterRoleToFileRole(requesterRole);
       const filePermResult = checkBashFilePermission(role, cmd);
@@ -127,6 +129,6 @@ export class BashBuiltinTool extends BuiltinBaseTool {
   }
 }
 
-export function createBashTool(): Tool {
-  return new BashBuiltinTool().toTool();
+export function createBashTool(plugin?: Plugin): Tool {
+  return new BashBuiltinTool(undefined, { plugin }).toTool();
 }

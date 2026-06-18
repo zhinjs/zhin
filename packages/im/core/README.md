@@ -19,7 +19,7 @@ onMounted(() => console.log('插件已挂载'))
 onDispose(() => console.log('插件已卸载'))
 
 addCommand(
-  new MessageCommand('hello <name:string>')
+  new MessageCommand('hello <name:word>')
     .desc('打招呼')
     .action((_, result) => `Hello, ${result.params.name}!`)
 )

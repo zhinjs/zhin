@@ -1,14 +1,8 @@
-import * as zhinCore from '@zhin.js/core';
-import type { Message } from '@zhin.js/core';
-import { hasSenderRole, resolveSubjectRoles, senderRolesFromMessage } from '@zhin.js/core';
+import { getHostRootPlugin, hasSenderRole, resolveSubjectRoles, senderRolesFromMessage } from '@zhin.js/core';
+import type { Message, Plugin } from '@zhin.js/core';
 import type { ZhinAgentConfig } from '../zhin-agent/config.js';
 import { checkFileAccess, extractBashReadPaths } from './file-policy.js';
 import { resolveToolRequesterRole, type ToolRequesterRole } from './owner-approve-always-store.js';
-
-/** 命名空间调用，便于单测 vi.spyOn(core, 'getPlugin') 与实现一致 */
-function getPlugin(): zhinCore.Plugin {
-  return zhinCore.getPlugin();
-}
 
 export interface DangerousToolDecision {
   allowed: boolean;
@@ -41,7 +35,7 @@ function isAllowlisted(allowlist: string[], item: string): boolean {
   });
 }
 
-function resolveExecAllowlistFromAiService(plugin: ReturnType<typeof getPlugin>): string[] {
+function resolveExecAllowlistFromAiService(plugin: Plugin): string[] {
   const root = plugin.root ?? plugin;
   const aiService = root.inject('ai') as { getAgentConfig?: () => { execAllowlist?: string[] } } | undefined;
   const allowlist = aiService?.getAgentConfig?.()?.execAllowlist;
@@ -57,24 +51,21 @@ function resolveExecAllowlistFromMessage(commMessage?: Message): string[] {
   return [];
 }
 
-/** 优先 message.extra，再尝试 plugin / getPlugin() 读取 ai.agent.execAllowlist */
+/** 优先 message.extra，再尝试 host root 读取 ai.agent.execAllowlist */
 function resolveExecAllowlistSafe(
-  plugin: ReturnType<typeof getPlugin> | undefined,
+  plugin: Plugin | undefined,
   commMessage?: Message,
 ): string[] {
   const fromExtra = resolveExecAllowlistFromMessage(commMessage);
   if (fromExtra.length > 0) return fromExtra;
 
-  if (plugin) {
-    const fromPlugin = resolveExecAllowlistFromAiService(plugin);
+  const host = plugin ?? getHostRootPlugin() ?? undefined;
+  if (host) {
+    const fromPlugin = resolveExecAllowlistFromAiService(host);
     if (fromPlugin.length > 0) return fromPlugin;
   }
 
-  try {
-    return resolveExecAllowlistFromAiService(getPlugin());
-  } catch {
-    return [];
-  }
+  return [];
 }
 
 function hasMessageIdentity(commMessage?: Message): boolean {
@@ -83,36 +74,31 @@ function hasMessageIdentity(commMessage?: Message): boolean {
 
 function resolveRoleFromMessage(commMessage?: Message): {
   role: ToolRequesterRole;
-  plugin?: ReturnType<typeof getPlugin>;
+  plugin?: Plugin;
   hasIdentity: boolean;
 } {
   const hasIdentity = hasMessageIdentity(commMessage);
   if (!hasIdentity) {
     return { role: 'unknown', hasIdentity: false };
   }
-  try {
-    const plugin = getPlugin();
+
+  const host = getHostRootPlugin();
+  if (host) {
     return {
-      role: resolveToolRequesterRole(plugin, commMessage!),
-      plugin,
-      hasIdentity: true,
-    };
-  } catch {
-    let plugin: ReturnType<typeof getPlugin> | undefined;
-    try {
-      plugin = getPlugin();
-    } catch {
-      plugin = undefined;
-    }
-    return {
-      role: resolveRoleFromMessageFallback(commMessage!),
-      plugin,
+      role: resolveToolRequesterRole(host, commMessage!),
+      plugin: host,
       hasIdentity: true,
     };
   }
+
+  return {
+    role: resolveRoleFromMessageFallback(commMessage!),
+    plugin: undefined,
+    hasIdentity: true,
+  };
 }
 
-/** getPlugin 不可用时，从 Message.$sender 快照或重算角色（测试/降级路径） */
+/** host root 不可用时，从 Message.$sender 快照或重算角色（测试/降级路径） */
 function resolveRoleFromMessageFallback(commMessage: Message): ToolRequesterRole {
   const snapshot = senderRolesFromMessage(commMessage);
   if (commMessage.$sender.isMaster !== undefined || commMessage.$sender.isTrusted !== undefined) {
@@ -120,14 +106,14 @@ function resolveRoleFromMessageFallback(commMessage: Message): ToolRequesterRole
     if (hasSenderRole(snapshot, 'trusted')) return 'trusted';
     return 'other';
   }
-  try {
-    const { roles } = resolveSubjectRoles(getPlugin().root ?? getPlugin(), commMessage);
+  const host = getHostRootPlugin();
+  if (host) {
+    const { roles } = resolveSubjectRoles(host, commMessage);
     if (hasSenderRole(roles, 'master')) return 'master';
     if (hasSenderRole(roles, 'trusted')) return 'trusted';
     return 'other';
-  } catch {
-    return 'unknown';
   }
+  return 'unknown';
 }
 
 function denyUnidentifiedTool(toolName: string): DangerousToolDecision {

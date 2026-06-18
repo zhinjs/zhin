@@ -8,7 +8,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { getPlugin } from '@zhin.js/core';
+import { getHostRootPlugin } from '@zhin.js/core';
 
 // ── 审计事件类型 ──────────────────────────────────────────────────────
 
@@ -484,12 +484,12 @@ let globalAuditLogger: AuditLogger | null = null;
  */
 export function getAuditLogger(): AuditLogger {
   if (!globalAuditLogger) {
-    try {
-      const plugin = getPlugin();
+    const host = getHostRootPlugin();
+    if (host) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const config = (plugin.root?.inject('config') as any)?.ai?.agent?.audit;
+      const config = (host.inject('config') as any)?.getPrimary?.()?.ai?.agent?.audit;
       globalAuditLogger = new AuditLogger(config);
-    } catch {
+    } else {
       globalAuditLogger = new AuditLogger({ enabled: false });
     }
   }

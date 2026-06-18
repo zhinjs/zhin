@@ -49,6 +49,7 @@
 
 - TypeScript 本地导入通常必须使用 .js 扩展名。
 - usePlugin() 应在模块顶层调用，不要放进异步函数、回调工厂或延迟执行路径。
+- getPlugin() 只能在插件初始化/装配阶段调用；中间件、命令 action、工具 execute、Cron、事件回调等运行时路径严禁 getPlugin()，应在注册时捕获 plugin/root 闭包。
 - 发送消息不能绕过统一链路：Message.$reply 或 Adapter.sendMessage → renderSendMessage → before.sendMessage → 平台 Endpoint。
 - Endpoint 可按 `capabilities`（`inbound` / `outbound`）拆分 IO；跨平台出站用 `inject(adapter).sendMessage`，见 `docs/essentials/message-flow.md`。
 - 保持依赖方向单向：basic → kernel → ai → core → agent → zhin；不要让低层依赖 IM 概念。
