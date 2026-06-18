@@ -44,6 +44,10 @@ examples/full-bot/data/memory/global/*
 # IDE
 .vscode/
 .idea/
+.codegraph/
+
+# Vendored dependencies
+vendor/
 *.swp
 *.swo
 *~
