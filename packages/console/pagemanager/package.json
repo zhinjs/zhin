@@ -24,7 +24,7 @@
   "dependencies": {
     "@zhin.js/contract": "workspace:*",
     "@koa/router": "^15.6.0",
-    "esbuild": "^0.28.0",
+    "esbuild": "^0.28.1",
     "koa": "^3.2.1",
     "koa-compose": "^4.1.0",
     "koa-static": "^5.0.0"
