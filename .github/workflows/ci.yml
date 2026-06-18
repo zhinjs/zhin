@@ -41,6 +41,7 @@ jobs:
       # changesets `baseBranch: main` compares against a **local** `main` ref; PR checkouts
       # often only have `origin/main`, which makes `pnpm changeset status` fail.
       - name: sync local main ref for changesets
+        if: github.event_name == 'pull_request'
         run: git fetch origin main:main
 
       - name: configure github packages auth
