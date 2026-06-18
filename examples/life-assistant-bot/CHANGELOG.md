@@ -1,5 +1,19 @@
 # life-assistant-bot
 
+## 0.1.2
+
+### Patch Changes
+
+- 7dfafc2: fix: ai 提示词缓存优化
+- Updated dependencies [7dfafc2]
+- Updated dependencies [93e58d9]
+- Updated dependencies [ae5239c]
+  - @zhin.js/cli@1.0.90
+  - @zhin.js/host-api@2.0.1
+  - zhin.js@4.0.1
+  - @zhin.js/host-router@2.0.0
+  - @zhin.js/adapter-sandbox@5.0.1
+
 ## 0.1.1
 
 ### Patch Changes

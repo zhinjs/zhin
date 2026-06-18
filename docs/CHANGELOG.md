@@ -1,5 +1,13 @@
 # @zhin.js/docs
 
+## 1.0.41
+
+### Patch Changes
+
+- 609da24: fix: 规范安全开发
+- 7dfafc2: fix: ai 提示词缓存优化
+- ae5239c: fix: 核心包瘦身
+
 ## 1.0.40
 
 ### Patch Changes

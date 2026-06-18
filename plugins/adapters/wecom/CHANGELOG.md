@@ -1,5 +1,13 @@
 # @zhin.js/adapter-wecom
 
+## 1.0.1
+
+### Patch Changes
+
+- Updated dependencies [ae5239c]
+  - zhin.js@4.0.1
+  - @zhin.js/host-router@2.0.0
+
 ## 1.0.0
 
 ### Minor Changes

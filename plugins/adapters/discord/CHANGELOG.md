@@ -1,5 +1,15 @@
 # @zhin.js/adapter-discord
 
+## 4.0.1
+
+### Patch Changes
+
+- Updated dependencies [93e58d9]
+- Updated dependencies [ae5239c]
+  - @zhin.js/host-api@2.0.1
+  - zhin.js@4.0.1
+  - @zhin.js/host-router@2.0.0
+
 ## 4.0.0
 
 ### Patch Changes

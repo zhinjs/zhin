@@ -1,6 +1,6 @@
 {
   "name": "zhin.js",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "description": "Zhin.js IM 核心（<10MB 安装预算）；AI 请另装 @zhin.js/agent",
   "type": "module",
   "main": "./lib/index.js",
@@ -62,7 +62,7 @@
     "dotenv": "^17.4.2"
   },
   "peerDependencies": {
-    "@zhin.js/agent": "^4.0.0",
+    "@zhin.js/agent": "^0.3.1",
     "@zhin.js/host-api": "workspace:^",
     "@zhin.js/host-router": "workspace:^"
   },
