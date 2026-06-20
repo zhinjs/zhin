@@ -1,5 +1,11 @@
 # @zhin.js/host-api
 
+## 2.0.2
+
+### Patch Changes
+
+- 384ea11: fix: 写库前检查
+
 ## 2.0.1
 
 ### Patch Changes

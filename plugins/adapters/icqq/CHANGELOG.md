@@ -1,5 +1,13 @@
 # @zhin.js/adapter-icqq
 
+## 5.0.2
+
+### Patch Changes
+
+- Updated dependencies [384ea11]
+  - @zhin.js/host-api@2.0.2
+  - zhin.js@4.0.1
+
 ## 5.0.1
 
 ### Patch Changes
