@@ -1,5 +1,16 @@
 # full-bot
 
+## 0.0.6
+
+### Patch Changes
+
+- Updated dependencies [384ea11]
+  - @zhin.js/host-api@2.0.2
+  - zhin.js@4.0.1
+  - @zhin.js/adapter-kook@4.0.2
+  - @zhin.js/adapter-napcat@2.0.2
+  - @zhin.js/adapter-sandbox@5.0.2
+
 ## 0.0.5
 
 ### Patch Changes
