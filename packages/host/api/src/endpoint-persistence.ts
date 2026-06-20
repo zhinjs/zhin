@@ -56,7 +56,12 @@ export function initBotPersistence(root: { inject: (key: string) => unknown }) {
   }
 }
 
+function dbPersistenceReady(): boolean {
+  return Boolean(dbRef?.db?.isStarted);
+}
+
 function getReqModel() {
+  if (!dbPersistenceReady()) return undefined;
   return dbRef?.db?.models?.get(TABLE_REQUESTS) as
     | {
         create: (row: Record<string, unknown>) => Promise<{ id: number }>;
@@ -67,6 +72,7 @@ function getReqModel() {
 }
 
 function getNoticeModel() {
+  if (!dbPersistenceReady()) return undefined;
   return dbRef?.db?.models?.get(TABLE_NOTICES) as
     | {
         create: (row: Record<string, unknown>) => Promise<{ id: number }>;
@@ -123,12 +129,18 @@ export async function insertRequest(
 ): Promise<StoredRequestRow> {
   const model = getReqModel();
   if (model) {
-    const created = await model.create({
-      ...row,
-      consumed: 0,
-    });
-    const id = typeof created?.id === "number" ? created.id : (created as unknown as { id: number }).id;
-    return { ...row, id, consumed: 0 };
+    try {
+      const created = await model.create({
+        ...row,
+        consumed: 0,
+      });
+      const id = typeof created?.id === "number" ? created.id : (created as unknown as { id: number }).id;
+      return { ...row, id, consumed: 0 };
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes("Database not started")) {
+        throw error;
+      }
+    }
   }
   const store = loadFile<StoredRequestRow>(REQ_FILE, { nextId: 1, rows: [] });
   const id = store.nextId++;
@@ -143,12 +155,18 @@ export async function insertNotice(
 ): Promise<StoredNoticeRow> {
   const model = getNoticeModel();
   if (model) {
-    const created = await model.create({
-      ...row,
-      consumed: 0,
-    });
-    const id = typeof created?.id === "number" ? created.id : (created as unknown as { id: number }).id;
-    return { ...row, id, consumed: 0 };
+    try {
+      const created = await model.create({
+        ...row,
+        consumed: 0,
+      });
+      const id = typeof created?.id === "number" ? created.id : (created as unknown as { id: number }).id;
+      return { ...row, id, consumed: 0 };
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes("Database not started")) {
+        throw error;
+      }
+    }
   }
   const store = loadFile<StoredNoticeRow>(NOTICE_FILE, { nextId: 1, rows: [] });
   const id = store.nextId++;
