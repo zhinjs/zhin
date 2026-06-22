@@ -1,5 +1,22 @@
 # test-bot
 
+## 0.1.110
+
+### Patch Changes
+
+- Updated dependencies [384ea11]
+  - @zhin.js/host-api@2.0.2
+  - zhin.js@4.0.1
+  - @zhin.js/adapter-discord@4.0.2
+  - @zhin.js/adapter-icqq@5.0.2
+  - @zhin.js/adapter-kook@4.0.2
+  - @zhin.js/adapter-napcat@2.0.2
+  - @zhin.js/adapter-qq@4.0.2
+  - @zhin.js/adapter-sandbox@5.0.2
+  - @zhin.js/adapter-telegram@4.0.2
+  - @zhin.js/adapter-weixin-ilink@2.0.2
+  - @zhin.js/plugin-music@4.0.2
+
 ## 0.1.109
 
 ### Patch Changes

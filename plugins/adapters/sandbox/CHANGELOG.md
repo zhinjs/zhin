@@ -1,5 +1,12 @@
 # @zhin.js/adapter-process
 
+## 5.0.2
+
+### Patch Changes
+
+- Updated dependencies [384ea11]
+  - @zhin.js/host-api@2.0.2
+
 ## 5.0.1
 
 ### Patch Changes
