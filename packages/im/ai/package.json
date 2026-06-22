@@ -25,12 +25,12 @@
     "undici": "^6.24.1"
   },
   "peerDependencies": {
-    "ai": "^6.0.207",
+    "ai": "^6.0.208",
     "zod": "^4.0.0",
     "@ai-sdk/anthropic": "^3.0.85",
     "@ai-sdk/deepseek": "^1.0.0",
     "@ai-sdk/google": "^3.0.83",
-    "@ai-sdk/openai": "^3.0.72",
+    "@ai-sdk/openai": "^3.0.73",
     "@ai-sdk/openai-compatible": "^1.0.0"
   },
   "peerDependenciesMeta": {
@@ -54,11 +54,11 @@
     "@ai-sdk/anthropic": "^3.0.85",
     "@ai-sdk/deepseek": "^1.0.0",
     "@ai-sdk/google": "^3.0.83",
-    "@ai-sdk/openai": "^3.0.72",
+    "@ai-sdk/openai": "^3.0.73",
     "@ai-sdk/openai-compatible": "^1.0.0",
     "@types/node": "^25.9.2",
     "@zhin.js/database": "workspace:*",
-    "ai": "^6.0.207",
+    "ai": "^6.0.208",
     "typescript": "^6.0.3",
     "vitest": "^4.1.0",
     "zod": "^4.4.3"
