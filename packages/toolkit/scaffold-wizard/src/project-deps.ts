@@ -7,7 +7,7 @@ import type { InitOptions } from './types.js';
 /** 与 monorepo 中 agent / test-bot 对齐的 MCP SDK 版本 */
 export const MCP_SDK_VERSION = '^1.29.0';
 
-const AI_STACK_VERSION = '^4.0.0';
+const AI_STACK_VERSION = 'latest';
 const ZOD_VERSION = '^4.0.0';
 const VERCEL_AI_VERSION = '^6.0.0';
 

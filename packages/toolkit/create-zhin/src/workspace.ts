@@ -1,7 +1,14 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { InitOptions, DATABASE_PACKAGES, generateAdapterEnvVars, generateAIEnvVars, getAdapterDependencies, getAIDependencies } from '@zhin.js/scaffold-wizard';
+import {
+  InitOptions,
+  DATABASE_PACKAGES,
+  generateAdapterEnvVars,
+  generateAIEnvVars,
+  getAdapterDependencies,
+  getAIDependencies,
+} from '@zhin.js/scaffold-wizard';
 import { createConfigFile, generateDatabaseEnvVars } from './config.js';
 import { SOUL_MD_TEMPLATE, TOOLS_MD_TEMPLATE, AGENTS_MD_TEMPLATE, ASSISTANT_PROFILE_YML_EXAMPLE } from './templates/bootstrap.js';
 
@@ -53,7 +60,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       databaseDeps[dbPackage] = '^2.0.0';
     }
     // 总是添加数据库包
-    databaseDeps['@zhin.js/database'] = '^1.0.0';
+    databaseDeps['@zhin.js/database'] = 'latest';
   }
 
   // 根据适配器选择添加依赖
@@ -64,7 +71,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
   }
   // 确保 sandbox 始终包含
   if (!adapterDeps['@zhin.js/adapter-sandbox']) {
-    adapterDeps['@zhin.js/adapter-sandbox'] = '^1.0.0';
+    adapterDeps['@zhin.js/adapter-sandbox'] = 'latest';
   }
 
   // AI 启用时预装 MCP SDK
@@ -92,13 +99,13 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       'pm2:monit': 'pm2 monit'
     },
     dependencies: {
-      'zhin.js': '^4.0.0',
-      '@zhin.js/cli': '^1.0.0',
-      '@zhin.js/host-router': '^1.0.0',
-      '@zhin.js/client': '^2.0.0',
-      '@zhin.js/host-api': '^1.0.0',
-      '@zhin.js/contract': '^1.0.0',
-      '@zhin.js/satori': '^0.2.0',
+      'zhin.js': 'latest',
+      '@zhin.js/cli': 'latest',
+      '@zhin.js/host-router': 'latest',
+      '@zhin.js/client': 'latest',
+      '@zhin.js/host-api': 'latest',
+      '@zhin.js/contract': 'latest',
+      '@zhin.js/satori': 'latest',
       'tsx': '^4.22.0',
       ...adapterDeps,
       ...databaseDeps,

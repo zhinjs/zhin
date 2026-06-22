@@ -46,7 +46,7 @@ describe('project-deps', () => {
   it('returns agent stack + MCP SDK + provider sdk when AI is enabled', () => {
     expect(getAIDependencies({ enabled: false })).toEqual({});
     expect(getAIDependencies({ enabled: true, defaultProvider: 'openai' })).toEqual({
-      '@zhin.js/agent': '^4.0.0',
+      '@zhin.js/agent': 'latest',
       zod: '^4.0.0',
       ai: '^6.0.0',
       '@modelcontextprotocol/sdk': MCP_SDK_VERSION,
