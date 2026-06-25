@@ -10,7 +10,6 @@ import {
   readQrcodeSegmentData,
   type QrcodeSegmentData,
 } from './rich-segments/qrcode-segment.js';
-import { resolveRichSegments } from './rich-segments/resolve.js';
 
 export type { QrcodeSegmentData };
 export { QrcodeSegment, readQrcodeSegmentData };
@@ -51,6 +50,7 @@ export async function resolveQrcodeSegmentsToImages(
   content: SendContent | undefined,
 ): Promise<SendContent | undefined> {
   if (content == null) return content;
+  const { resolveRichSegments } = await import('./rich-segments/index.js');
   return resolveRichSegments(content, LEGACY_QRCODE_ONLY_POLICY);
 }
 
