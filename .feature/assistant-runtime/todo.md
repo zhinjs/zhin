@@ -35,7 +35,7 @@
 
 - [x] REST + home_* 工具 + policy + 文档
 - [x] Profile `devices` 别名合并 + MCP 通道校验（`home-mcp-bridge.ts`）
-- [ ] **blocked · 需 HA**：真实控灯验收 → 见 [assistant-home-setup.md](../../docs/advanced/assistant-home-setup.md)
+- [x] **HA 实机 dogfood**（2026-06-25）：见 [assistant-home-setup.md](../../docs/advanced/assistant-home-setup.md)、`examples/life-assistant-bot/ACCEPTANCE.md`（#483）
 
 ---
 
@@ -76,5 +76,5 @@
 
 | 项 | 说明 |
 |----|------|
-| HA 实机 dogfood | 用户环境就绪后按 setup 清单验收 |
+| HA 实机 dogfood | ✅ 2026-06-25（#483）；REST 主路径 |
 | HA 纯 MCP 模式（无 REST） | 需 Agent binding + MCP Server，REST 仍为主路径 |

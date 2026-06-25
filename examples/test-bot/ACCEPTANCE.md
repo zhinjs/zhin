@@ -63,6 +63,13 @@ pnpm vitest run packages/agent/tests/advanced-acceptance.test.ts \
 - [x] **toolSearch + Worker**（`ai.agent.toolSearch: true`）：主编排 3 工具（`tool_search` / `run_deferred_task` / `ask_user`）；查 star 走 Worker — `advanced-acceptance.test.ts`、`tool-search-orchestrator.test.ts`；prompt token &lt; 20k — `advanced-acceptance.test.ts`
 - [x] **平台 Prompt**：icqq system 含 `# Platform`（经 `resolveAgentPromptMarkdown`）；通用 `buildRichSystemPrompt` 无 `mcp_icqq` 硬编码 — `prompt-discipline.test.ts`、`icqq-agent-prompt.test.ts`、`advanced-acceptance.test.ts`
 
+### Assistant / Home（实机）
+
+- [x] **Home Assistant**（`assistant.home` REST + `home_*` 工具）：维护者实机 dogfood（2026-06-25，#483）
+  - [x] profile `devices` 别名控实体（如客厅灯）
+  - [x] IM 触发 + NotificationRouter 回执
+  - 清单：[assistant-home-setup.md](../../docs/advanced/assistant-home-setup.md)；life-assistant-bot ACCEPTANCE 同步勾选
+
 ### Agent
 
 - [x] **cron_add** 端到端：`PersistentCronEngine` 持久化 + 调度触发 runner — `packages/agent/tests/cron-engine.test.ts`（手测：`AI: 用 cron_add 创建 1 分钟后 echo acceptance`）
@@ -97,3 +104,4 @@ pnpm vitest run packages/agent/tests/advanced-acceptance.test.ts \
 | 2026-06-01 | Plan 1 | Stable/Advanced 分档 | 对外承诺以 Stable 为准 |
 | 2026-06-01 | Plan 3 | Advanced 四项 Vitest + ZhinAgent 拆分 | `index.ts` &lt;600 行；`turn-pipeline` / `prompt-assembly` / `tool-orchestration` |
 | 2026-06-25 | liuchunlang | weixin-ilink 实机 dogfood 通过 | ClawBot 灰度；#486 关闭 |
+| 2026-06-25 | liuchunlang | Home Assistant 实机 dogfood 通过 | REST + home_* 工具；#483 关闭 |
