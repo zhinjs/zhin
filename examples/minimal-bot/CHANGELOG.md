@@ -1,5 +1,20 @@
 # minimal-bot
 
+## 0.0.12
+
+### Patch Changes
+
+- c4575c9: fix: 输入输出优化,文档优化
+- Updated dependencies [b2c73bd]
+- Updated dependencies [c4575c9]
+- Updated dependencies [c4575c9]
+  - @zhin.js/cli@1.0.91
+  - @zhin.js/adapter-sandbox@6.0.0
+  - @zhin.js/satori@0.2.15
+  - @zhin.js/host-router@3.0.0
+  - @zhin.js/host-api@3.0.0
+  - zhin.js@5.0.0
+
 ## 0.0.11
 
 ### Patch Changes

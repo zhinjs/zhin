@@ -1,5 +1,18 @@
 # life-assistant-bot
 
+## 0.1.4
+
+### Patch Changes
+
+- Updated dependencies [b2c73bd]
+- Updated dependencies [c4575c9]
+- Updated dependencies [c4575c9]
+  - @zhin.js/cli@1.0.91
+  - @zhin.js/adapter-sandbox@6.0.0
+  - @zhin.js/host-router@3.0.0
+  - @zhin.js/host-api@3.0.0
+  - zhin.js@5.0.0
+
 ## 0.1.3
 
 ### Patch Changes

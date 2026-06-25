@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-wecom",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "description": "Zhin.js adapter for WeCom (企业微信)",
   "type": "module",
   "main": "./lib/index.js",

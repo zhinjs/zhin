@@ -1,5 +1,20 @@
 # @zhin.js/agent
 
+## 0.4.0
+
+### Minor Changes
+
+- c4575c9: Add optional peer `@zhin.js/speech`: inbound STT (`audio.strategy: transcribe` default), outbound TTS (`segment.tts` + `voice_stt`/`voice_tts` tools), TTS providers edge/openai/azure/custom. Breaking: remove `@zhin.js/plugin-voice`; use `speech:` config key instead of `voice:`.
+
+### Patch Changes
+
+- c4575c9: fix: 输入输出优化,文档优化
+- Updated dependencies [c4575c9]
+- Updated dependencies [c4575c9]
+  - @zhin.js/core@1.4.0
+  - @zhin.js/ai@1.4.2
+  - @zhin.js/logger@0.1.72
+
 ## 0.3.1
 
 ### Patch Changes

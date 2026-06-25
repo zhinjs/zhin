@@ -1,5 +1,16 @@
 # @zhin.js/adapter-process
 
+## 6.0.0
+
+### Patch Changes
+
+- c4575c9: fix: 输入输出优化,文档优化
+- Updated dependencies [c4575c9]
+- Updated dependencies [c4575c9]
+  - @zhin.js/host-router@3.0.0
+  - @zhin.js/host-api@3.0.0
+  - @zhin.js/core@1.4.0
+
 ## 5.0.2
 
 ### Patch Changes

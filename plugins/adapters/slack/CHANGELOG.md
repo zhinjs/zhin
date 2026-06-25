@@ -1,5 +1,14 @@
 # Changelog
 
+## 4.0.0
+
+### Patch Changes
+
+- c4575c9: fix: 输入输出优化,文档优化
+- Updated dependencies [c4575c9]
+- Updated dependencies [c4575c9]
+  - zhin.js@5.0.0
+
 ## 3.0.1
 
 ### Patch Changes

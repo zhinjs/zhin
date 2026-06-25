@@ -1,5 +1,24 @@
 # full-bot
 
+## 0.0.7
+
+### Patch Changes
+
+- c4575c9: fix: 输入输出优化,文档优化
+- Updated dependencies [b2c73bd]
+- Updated dependencies [c4575c9]
+- Updated dependencies [c4575c9]
+  - @zhin.js/cli@1.0.91
+  - @zhin.js/adapter-sandbox@6.0.0
+  - @zhin.js/satori@0.2.15
+  - @zhin.js/adapter-napcat@3.0.0
+  - @zhin.js/adapter-kook@5.0.0
+  - @zhin.js/host-router@3.0.0
+  - @zhin.js/host-api@3.0.0
+  - @zhin.js/mcp@4.0.0
+  - @zhin.js/agent@0.4.0
+  - zhin.js@5.0.0
+
 ## 0.0.6
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @zhin.js/satori
 
+## 0.2.15
+
+### Patch Changes
+
+- c4575c9: fix: 输入输出优化,文档优化
+
 ## 0.2.14
 
 ### Patch Changes

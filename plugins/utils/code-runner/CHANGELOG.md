@@ -1,5 +1,13 @@
 # @zhin.js/plugin-code-runner
 
+## 3.0.0
+
+### Patch Changes
+
+- Updated dependencies [c4575c9]
+- Updated dependencies [c4575c9]
+  - zhin.js@5.0.0
+
 ## 2.0.1
 
 ### Patch Changes
