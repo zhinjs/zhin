@@ -28,7 +28,7 @@
     "ai": "^6.0.207",
     "zod": "^4.0.0",
     "@ai-sdk/anthropic": "^3.0.85",
-    "@ai-sdk/deepseek": "^1.0.0",
+    "@ai-sdk/deepseek": "^2.0.39",
     "@ai-sdk/google": "^3.0.83",
     "@ai-sdk/openai": "^3.0.72",
     "@ai-sdk/openai-compatible": "^2.0.51"
@@ -52,7 +52,7 @@
   },
   "devDependencies": {
     "@ai-sdk/anthropic": "^3.0.85",
-    "@ai-sdk/deepseek": "^1.0.0",
+    "@ai-sdk/deepseek": "^2.0.39",
     "@ai-sdk/google": "^3.0.83",
     "@ai-sdk/openai": "^3.0.72",
     "@ai-sdk/openai-compatible": "^2.0.51",
