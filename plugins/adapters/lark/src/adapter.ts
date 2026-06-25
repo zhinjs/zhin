@@ -2,7 +2,7 @@
  * 飞书/Lark 适配器
  */
 import { Adapter,
-  Plugin,, OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL } from 'zhin.js';
+  Plugin, OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL } from 'zhin.js';
 import { LarkEndpoint } from "./endpoint.js";
 import type { LarkEndpointConfig } from "./types.js";
 
