@@ -111,7 +111,7 @@ importers:
         specifier: ^9.4.0
         version: 9.4.0
       smol-toml:
-        specifier: ^1.5.2
+        specifier: ^1.7.0
         version: 1.7.0
       yaml:
         specifier: ^2.9.0
@@ -803,7 +803,7 @@ importers:
         specifier: ^1.0.5
         version: 1.0.5
       smol-toml:
-        specifier: ^1.6.1
+        specifier: ^1.7.0
         version: 1.7.0
       yaml:
         specifier: ^2.9.0
@@ -834,7 +834,7 @@ importers:
         specifier: ^9.1.0
         version: 9.1.0
       smol-toml:
-        specifier: ^1.6.1
+        specifier: ^1.7.0
         version: 1.7.0
       yaml:
         specifier: ^2.9.0
