@@ -11,8 +11,7 @@ import {
   segment,
   Notice,
   Request,
-  type QuotedMessagePayload,
-} from 'zhin.js';
+  type QuotedMessagePayload,} from 'zhin.js';
 import { parseOneBotGetMsgResponse } from './onebot-get-msg.js';
 import type { NapCatEndpointConfig, NapCatMessageEvent, MessageSegment, ApiResponse } from './types.js';
 import type { NapCatAdapter } from './adapter.js';

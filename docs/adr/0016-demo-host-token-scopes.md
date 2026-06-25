@@ -42,11 +42,12 @@ http:
 | HTTP GET | `{base}/events`（SSE） |
 | HTTP POST | `{base}/console/request`（RPC 再过滤） |
 | WebSocket | `/sandbox` |
-| Console RPC | `ping`、`entries:get`、`endpoint:list`、`endpoint:info`、`endpoint:sendMessage` |
+| Console RPC | `ping`、`entries:get`、`endpoint:*`（Sandbox 聊天）、`config:get*` / `schema:get*`（**只读**） |
 
 **拒绝**（403，`Demo scope: forbidden`）
 
-- 所有 `config:*` 写、`files:save`、`env:save`、`cron:add|remove|pause|resume`
+- 所有配置写（`config:set`、`config:save-yaml`）、`system:restart`
+- `files:save`、`env:save`、`cron:*`
 - 所有 `db:*`
 - 其余 REST（`/api/plugins`、`/api/config`、marketplace、logs 等）
 

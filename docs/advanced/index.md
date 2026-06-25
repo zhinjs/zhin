@@ -11,7 +11,7 @@
 ai:
   providers:
     ollama:
-      api: ollama-chat
+      sdk: ollama
       host: "http://127.0.0.1:11434"
       # models 可省略 — 自动 listModels
   agents:

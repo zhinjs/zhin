@@ -27,6 +27,7 @@ import {
   preprocessInboundMedia,
   publishOutboundElements,
   resolveMultimodalConfig,
+  getPrimaryAppConfig,
   INBOUND_MEDIA_PARTS_EXTRA_KEY,
   buildSubagentInboundTask,
 } from '../media/index.js';
@@ -38,7 +39,7 @@ import { summarizeSubagentResultForUser } from '../routing/subagent-summarize.js
 import { originFromMessage } from '../builtin/spawn-task-tool.js';
 import { parseOutput, resolveIMSessionIdFromMessage } from '@zhin.js/ai';
 import { canAccessTool } from '../orchestrator/tool-selection.js';
-import { formatCompactLog, truncatePreview } from '@zhin.js/logger';
+import { formatCompactLog, truncatePreview, formatContentChainLog, CONTENT_CHAIN_STAGE } from '@zhin.js/logger';
 import { formatRedactedJson } from '@zhin.js/ai';
 import { formatAiHandlerCompleteLog } from '../zhin-agent/turn-metrics.js';
 import {
@@ -148,7 +149,7 @@ export function registerAITrigger(refs: AIServiceRefs): void {
 
         let mediaParts = extractMediaParts(message);
         logger.info(formatCompactLog('AI Context', {
-          stage: 'extract_media',
+          stage: CONTENT_CHAIN_STAGE.EXTRACT_MEDIA,
           content_preview: truncatePreview(content, 200),
           media_parts: formatRedactedJson(mediaParts),
           raw_content_type: Array.isArray(message.$content) ? 'array' : typeof message.$content,
@@ -304,7 +305,15 @@ export function registerAITrigger(refs: AIServiceRefs): void {
 
         const mmConfig = resolveMultimodalConfig();
         if (mediaParts.length > 0 && mmConfig.enabled) {
-          const pre = await preprocessInboundMedia(mediaParts, mmConfig);
+          const pre = await preprocessInboundMedia(mediaParts, mmConfig, undefined, {
+            getConfig: getPrimaryAppConfig,
+            warn: (msg) => logger.warn(formatContentChainLog({
+              stage: CONTENT_CHAIN_STAGE.STT,
+              peer: 'speech',
+              fallback: msg,
+            })),
+            logContentChain: (fields) => logger.info(formatContentChainLog(fields)),
+          });
           const fullContent = [content, pre.textAppend].filter(Boolean).join('\n\n');
           const visionProvider = zhinBinding && refs.aiService?.isReady()
             ? refs.aiService.getProvider(zhinBinding.providerAlias)
@@ -319,8 +328,8 @@ export function registerAITrigger(refs: AIServiceRefs): void {
               [INBOUND_MEDIA_PARTS_EXTRA_KEY]: pre.visionParts,
             };
           }
-          logger.info(formatCompactLog('AI Context', {
-            stage: 'main_multimodal',
+          logger.info(formatContentChainLog({
+            stage: CONTENT_CHAIN_STAGE.MULTIMODAL,
             full_content_preview: truncatePreview(fullContent, 300),
             vision_parts: formatRedactedJson(pre.visionParts),
             can_inject_vision: canInjectVision,
@@ -342,8 +351,8 @@ export function registerAITrigger(refs: AIServiceRefs): void {
           const parts: ContentPart[] = [];
           if (aiContent) parts.push({ type: 'text', text: aiContent });
           parts.push(...mediaParts);
-          logger.info(formatCompactLog('AI Context', {
-            stage: 'process_multimodal',
+          logger.info(formatContentChainLog({
+            stage: CONTENT_CHAIN_STAGE.MULTIMODAL,
             parts: formatRedactedJson(parts),
           }));
           elements = await refs.zhinAgent.processMultimodal(parts, commMessage, onChunk);

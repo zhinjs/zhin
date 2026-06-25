@@ -18,10 +18,14 @@ describe("demo-scope", () => {
     expect(reg.resolve("wrong")).toBeNull();
   });
 
-  it("allows only sandbox chat RPC under demo", () => {
+  it("allows sandbox chat and read-only config RPC under demo", () => {
     expect(isDemoRpcAllowed("endpoint:sendMessage")).toBe(true);
+    expect(isDemoRpcAllowed("config:get-yaml")).toBe(true);
+    expect(isDemoRpcAllowed("config:set")).toBe(false);
     expect(isDemoRpcAllowed("config:save-yaml")).toBe(false);
+    expect(isDemoRpcAllowed("system:restart")).toBe(false);
     expect(assertDemoRpcAllowed("config:save-yaml")).toMatch(/forbidden/);
+    expect(assertDemoRpcAllowed("system:restart")).toMatch(/forbidden/);
   });
 
   it("allows demo HTTP paths for console + entries", () => {

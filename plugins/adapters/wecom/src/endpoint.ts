@@ -1,7 +1,7 @@
 /**
  * 企业微信 Endpoint 实现
  */
-import { formatCompact, Endpoint, Message, MessageSegment, segment, type SendContent, type SendOptions } from 'zhin.js';
+import { formatCompact, Endpoint, Message, MessageSegment, segment, type SendContent, type SendOptions,} from 'zhin.js';
 import { registerFetchRoute, type Router, type RouterContext } from '@zhin.js/host-router/router';
 import { createHash, createDecipheriv } from 'node:crypto';
 import type {

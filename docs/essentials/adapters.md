@@ -6,7 +6,7 @@
 
 各平台的安装、配置与 API 说明已拆分为**独立文档页**，内容与 `plugins/adapters/*/README.md` 自动同步：
 
-👉 **[平台适配器索引](/adapters/)** — 按 Stable / Advanced / Experimental 分类，17 个适配器各一篇
+👉 **[平台适配器索引](/adapters/)** — 按 Stable / Advanced / Experimental 分类，**20** 个适配器各一篇
 
 **档位说明**：Experimental **不等于**没有测试；表示部署差异大、**无全量 CI/实机对外承诺**，使用前请自行验证环境。
 
@@ -41,6 +41,9 @@
 | Satori | `@zhin.js/adapter-satori` | [Satori](/adapters/satori) |
 | Email | `@zhin.js/adapter-email` | [Email](/adapters/email) |
 | GitHub | `@zhin.js/adapter-github` | [GitHub](/adapters/github) |
+| LINE | `@zhin.js/adapter-line` | [LINE](/adapters/line) |
+| 企业微信 | `@zhin.js/adapter-wecom` | [企业微信](/adapters/wecom) |
+| 微信 iLink | `@zhin.js/adapter-weixin-ilink` | [微信 iLink](/adapters/weixin-ilink) |
 
 完整索引与档位说明亦见 **[平台适配器索引](/adapters/)**。
 
@@ -88,6 +91,39 @@ endpoints:
 ```
 
 所有平台共享同一套插件和命令，消息处理逻辑完全统一。各平台 bot 字段详见 [平台适配器索引](/adapters/)。
+
+## 运行时 Endpoint 管理
+
+core 提供 `/endpoint add|remove|edit|start|stop|cancel` 与 `/endpoints`（运行时内省）。配置持久化与热连接由 `EndpointLifecycleService` 统一执行；Adapter 实现 `EndpointManager` 或声明 `endpointConfigSchema` 即可接入。
+
+| 能力 | 说明 |
+|------|------|
+| `getEndpointManager()` | 自定义 add/edit 交互（如 QQ 扫码绑定） |
+| `endpointConfigSchema`（静态） | 无自定义 manager 时，core 用 IM Prompt 按 schema 逐字段提问 |
+| `getEndpointNeedsRestart()` | 热连接失败时提示是否需重启进程 |
+
+```typescript
+import { Adapter, type EndpointManager, type ProvisionContext } from '@zhin.js/core';
+
+class MyAdapter extends Adapter {
+  override getEndpointManager(): EndpointManager {
+    return {
+      supportsProvision: () => true,
+      listEndpoints: () => [],
+      addEndpoint: async (ctx: ProvisionContext) => {
+        await ctx.onStatusUpdate('请填写凭据…');
+        return { context: 'my', name: 'bot1', token: '…' };
+      },
+      editEndpoint: async (name, ctx) => ({ context: 'my', name, token: '…' }),
+      removeEndpoint: async () => true,
+      startEndpoint: async (name, ctx) => { await ctx.onStatusUpdate(`连接 ${name}…`); },
+      stopEndpoint: async () => true,
+    };
+  }
+}
+```
+
+权限：仅 **master / trusted** 可执行管理命令。QQ 官方适配器示例见 [`@zhin.js/adapter-qq`](/adapters/qq)（`/endpoint add qq`）。
 
 ## 适配器工具与技能
 

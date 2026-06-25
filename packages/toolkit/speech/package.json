@@ -1,0 +1,62 @@
+{
+  "name": "@zhin.js/speech",
+  "version": "0.0.1",
+  "description": "STT/TTS for Zhin.js (Whisper + edge/openai/azure/custom TTS); optional peer of zhin.js",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "lib",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rimraf lib",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "speech",
+    "stt",
+    "tts",
+    "whisper",
+    "edge-tts"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "license": "MIT",
+  "peerDependencies": {
+    "@zhin.js/core": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/core": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@zhin.js/core": "workspace:*",
+    "typescript": "^6.0.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/toolkit/speech"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

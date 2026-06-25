@@ -38,4 +38,10 @@ describe('minimal-bot Stable 配置契约', () => {
     expect(readme).toContain('ACCEPTANCE.md');
     expect(readme).toContain('Stable');
   });
+
+  it('hello 插件含 card 与 setup --ai 首跑引导', () => {
+    const hello = fs.readFileSync(path.join(botRoot, 'src', 'plugins', 'hello.ts'), 'utf8');
+    expect(hello).toContain('setup --ai');
+    expect(hello).toContain('card');
+  });
 });

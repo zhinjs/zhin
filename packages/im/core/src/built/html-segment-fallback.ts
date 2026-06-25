@@ -1,5 +1,6 @@
 /**
- * 出站 `html` 消息段兜底：未装 html-renderer 或转图失败时，自动剥离为 text 段。
+ * 出站 `html` 消息段兜底：等价于 Adapter policy `html:'text'`。
+ * 出站渲染首选 `resolveRichSegments`（renderSendMessage 首步）。
  */
 import type { Plugin } from '../plugin.js';
 import type { MessageElement, SendContent, SendOptions } from '../types.js';

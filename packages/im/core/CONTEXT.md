@@ -49,8 +49,8 @@ Dispatcher 作用域内的回复润色逻辑，但仍必须流经 `before.sendMe
 _避免使用_：send shortcut、adapter override
 
 **HTML Segment**:
-出站 `type: 'html'` 消息段；业务只提供 HTML，由 `before.sendMessage`（html-renderer）转图或链尾 `htmlToFallbackText` 剥离为 text。
-_避免使用_：inject html-renderer、双格式 text+html 回退
+出站 `type: 'html'` 等 Rich Segment：registry + policy + optional capability loader；增 kind 用 `registerRichSegmentKind`，增转码能力用 `registerRichSegmentCapabilityLoader`。
+_避免使用_：双格式 text+html 回退；Endpoint 层重复做 semantic 转换
 
 **Primary Config**:
 由配置服务标记的主应用配置，运行时通过默认约定和用户差异 deep merge 得到。

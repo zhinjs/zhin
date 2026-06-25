@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+import { loadSpeechPipeline } from '@zhin.js/core';
 import type { AIProvider, ContentPart } from '@zhin.js/ai';
 import {
   normalizeContentPartsToPayloads,
@@ -78,12 +79,42 @@ export async function buildSubagentInboundTask(
       continue;
     }
 
-    if (p.kind === 'audio' && config.audio.strategy !== 'text-only') {
-      const filePath = spoolPayloadToFile(p, inboundRoot, 'audio');
-      spooledPaths.push(filePath);
-      lines.push(
-        `${describePayload(p)}\n(已落盘: ${filePath}，可供 STT/MCP 使用)`,
-      );
+    if (p.kind === 'audio') {
+      if (config.audio.strategy === 'mcp') {
+        const filePath = spoolPayloadToFile(p, inboundRoot, 'audio');
+        spooledPaths.push(filePath);
+        lines.push(
+          `${describePayload(p)}\n(已落盘: ${filePath}，可供 STT/MCP 使用)`,
+        );
+        continue;
+      }
+
+      if (config.audio.strategy === 'transcribe') {
+        try {
+          const pipeline = await loadSpeechPipeline();
+          if (pipeline) {
+            const text = await pipeline.transcribe({
+              data: Buffer.from(p.base64, 'base64'),
+              mimeType: p.mimeType,
+            });
+            if (text?.trim()) {
+              lines.push(`[语音转写] ${text.trim()}`);
+              continue;
+            }
+          }
+        } catch {
+          // fall through
+        }
+        lines.push(describePayload(p));
+        continue;
+      }
+
+      if (config.audio.strategy !== 'text-only') {
+        lines.push(describePayload(p));
+        continue;
+      }
+
+      lines.push(describePayload(p));
       continue;
     }
 

@@ -22,7 +22,7 @@ export interface MultimodalConfig {
   inboundDir: string;
   outboundDir: string;
   image: { maxDimension: number; preferNativeVision: boolean };
-  audio: { strategy: 'mcp' | 'plugin-voice' | 'text-only' };
+  audio: { strategy: 'transcribe' | 'mcp' | 'text-only' };
   video: { strategy: 'mcp' | 'text-only'; maxFrames: number };
   outbound: { splitMessages: 'auto' | 'single' | 'always_split' };
 }
@@ -33,7 +33,7 @@ export const DEFAULT_MULTIMODAL_CONFIG: MultimodalConfig = {
   inboundDir: 'data/media/inbound',
   outboundDir: 'data/media/outbound',
   image: { maxDimension: 2048, preferNativeVision: true },
-  audio: { strategy: 'text-only' },
+  audio: { strategy: 'transcribe' },
   video: { strategy: 'text-only', maxFrames: 8 },
   outbound: { splitMessages: 'auto' },
 };

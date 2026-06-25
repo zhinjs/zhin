@@ -1,13 +1,14 @@
 /**
  * ICQQ 适配器 — 通过 @icqqjs/cli 守护进程 IPC 管理 Endpoint 实例
  */
-import { formatCompact, Adapter, Plugin } from 'zhin.js';
+import { formatCompact, Adapter, Plugin, OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL } from 'zhin.js';
 import { IcqqEndpoint } from "./endpoint.js";
 import type { IcqqEndpointConfig, IpcMemberInfo } from "./types.js";
 import { Actions } from "./protocol.js";
 
 export class IcqqAdapter extends Adapter<IcqqEndpoint> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
+  static override outboundRichSegmentPolicy = OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL;
 
   constructor(plugin: Plugin) {
     super(plugin, "icqq", []);

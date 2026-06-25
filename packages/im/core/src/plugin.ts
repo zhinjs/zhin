@@ -119,21 +119,9 @@ export class Plugin extends PluginBase implements PluginLike {
     return super.root as Plugin;
   }
 
-  // 插件功能
-  #messageMiddleware: MessageMiddleware<RegisteredAdapter> = async (message, next) => {
-    const commandService = this.inject('command');
-    if (!commandService) return await next();
-    const result = await commandService.handle(message, this);
-    if (result === undefined || result === null) return await next();
-    const adapter = this.inject(message.$adapter) as Adapter;
-    if (!adapter || !(adapter instanceof Adapter)) return await next();
-    if (!message.$reply) {
-      this.logger.warn(
-        `command result cannot be sent: endpoint ${message.$endpoint} has no outbound capability`,
-      );
-      return;
-    }
-    await message.$reply(result);
+  // 默认中间件：将入站消息交给 compose 链末端的 MessageDispatcher（命令/AI 路由在 dispatcher 内完成）
+  #messageMiddleware: MessageMiddleware<RegisteredAdapter> = async (_message, next) => {
+    await next();
   };
   #middlewares: MessageMiddleware<RegisteredAdapter>[] = [this.#messageMiddleware];
 

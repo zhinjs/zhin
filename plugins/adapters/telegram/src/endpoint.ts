@@ -10,8 +10,7 @@ import {
   SendContent,
   MessageSegment,
   segment,
-  type QuotedMessagePayload,
-} from "zhin.js";
+  type QuotedMessagePayload,} from 'zhin.js';
 import type { TelegramEndpointConfig, TelegramSenderInfo } from "./types.js";
 import type { TelegramAdapter } from "./adapter.js";
 import { normalizeTelegramChatMember } from "./platform-permit.js";

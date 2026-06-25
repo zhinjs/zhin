@@ -4,7 +4,7 @@
 import { registerFetchRoute, type Router, type RouterContext } from "@zhin.js/host-router/router";
 import axios, { type AxiosInstance } from "axios";
 import { createHash } from "crypto";
-import { formatCompact, Endpoint, Message, MessageSegment, segment, SendContent, SendOptions } from 'zhin.js';
+import { formatCompact, Endpoint, Message, MessageSegment, segment, SendContent, SendOptions,} from 'zhin.js';
 import type { LarkEndpointConfig, LarkMessage, LarkEvent, AccessToken } from "./types.js";
 import type { LarkAdapter } from "./adapter.js";
 import { normalizeLarkSenderForPermit } from "./platform-permit.js";
