@@ -2,7 +2,7 @@
  * LINE 适配器
  */
 import { Adapter,
-  Plugin,, OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL } from 'zhin.js';
+  Plugin, OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL } from 'zhin.js';
 import { LineEndpoint } from "./endpoint.js";
 import type { LineEndpointConfig } from "./types.js";
 import type { Router } from "@zhin.js/host-router/router";

@@ -2,7 +2,7 @@
  * Telegram 适配器
  */
 import { Adapter,
-  Plugin,, OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL } from 'zhin.js';
+  Plugin, OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL } from 'zhin.js';
 import { TelegramEndpoint } from "./endpoint.js";
 import type { TelegramEndpointConfig } from "./types.js";
 
