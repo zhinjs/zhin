@@ -576,7 +576,6 @@ export class Sandbox {
         cwd: options?.cwd || process.cwd(),
         env: { ...cleanEnv, ...options?.env },
         stdio: ['pipe', 'pipe', 'pipe'],
-        timeout,
       });
 
       const maxOutput = this.config.maxOutputSize || 10 * 1024 * 1024;
@@ -608,14 +607,16 @@ export class Sandbox {
 
       child.on('close', (exitCode) => {
         clearTimeout(timer);
+        const duration = Date.now() - startTime;
+        const didTimeout = timedOut || duration >= timeout;
 
         resolve({
-          success: exitCode === 0 && !timedOut,
+          success: exitCode === 0 && !didTimeout,
           stdout: stdoutChunks.join('').slice(0, maxOutput),
           stderr: stderrChunks.join('').slice(0, maxOutput),
           exitCode,
-          duration: Date.now() - startTime,
-          timedOut,
+          duration,
+          timedOut: didTimeout,
           blocked: false,
         });
       });
