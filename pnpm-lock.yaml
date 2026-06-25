@@ -1475,8 +1475,8 @@ importers:
         specifier: ^4.7.3
         version: 4.7.3(@types/express@5.0.6)
       '@slack/web-api':
-        specifier: ^7.16.0
-        version: 7.16.0
+        specifier: ^7.17.0
+        version: 7.17.0
     devDependencies:
       '@types/node':
         specifier: ^25.9.2
@@ -4101,8 +4101,8 @@ packages:
     resolution: {integrity: sha512-I8vmSjNYWsaxuWPx6dz4yeh0h7vRBWbgAMK14LEmblbZ404BtrPbXs6jDPx4cYgGf8msDGF4A9opLZBu21FViQ==}
     engines: {node: '>= 12.13.0', npm: '>= 6.12.0'}
 
-  '@slack/web-api@7.16.0':
-    resolution: {integrity: sha512-68SAV77uuGKuhyyaRytX8UijVnqSLsTSKslGXw17cjQYXn+jtNl7gbaEjHgC5x2rhCuFdahBrEC2VCLppbzReg==}
+  '@slack/web-api@7.17.0':
+    resolution: {integrity: sha512-jejr34a8B4L5AS713wOAx1LAqNkW16HVMDEa6sYBvFDc/llUBl8hXaiI4BwF+Al+Sug19Vn2O7iokTVIhVvZ1Q==}
     engines: {node: '>= 18', npm: '>= 8.6.0'}
 
   '@standard-schema/spec@1.1.0':
@@ -5690,10 +5690,6 @@ packages:
     peerDependenciesMeta:
       debug:
         optional: true
-
-  form-data@4.0.5:
-    resolution: {integrity: sha512-8RipRLol37bNs2bhoV67fiTEvdTrbMUYcFTiy3+wuuOnUog2QBHCZWXDRijWQfAkhBj2Uf5UnVaiWwA5vdd82w==}
-    engines: {node: '>= 6'}
 
   form-data@4.0.6:
     resolution: {integrity: sha512-vKatAh4SlVfgbv+YtmhiRjhEMJsYpsG1Y2rMQtR+SVSbytsSD1YGzDIcrAJmdFec88u/+VoGmxnl+80gL1tRCQ==}
@@ -10262,7 +10258,7 @@ snapshots:
       '@slack/oauth': 3.0.5
       '@slack/socket-mode': 2.0.7
       '@slack/types': 2.21.1
-      '@slack/web-api': 7.16.0
+      '@slack/web-api': 7.17.0
       '@types/express': 5.0.6
       axios: 1.18.1
       express: 5.2.1
@@ -10282,7 +10278,7 @@ snapshots:
   '@slack/oauth@3.0.5':
     dependencies:
       '@slack/logger': 4.0.1
-      '@slack/web-api': 7.16.0
+      '@slack/web-api': 7.17.0
       '@types/jsonwebtoken': 9.0.10
       '@types/node': 25.9.3
       jsonwebtoken: 9.0.3
@@ -10293,7 +10289,7 @@ snapshots:
   '@slack/socket-mode@2.0.7':
     dependencies:
       '@slack/logger': 4.0.1
-      '@slack/web-api': 7.16.0
+      '@slack/web-api': 7.17.0
       '@types/node': 25.9.3
       '@types/ws': 8.18.1
       eventemitter3: 5.0.4
@@ -10306,7 +10302,7 @@ snapshots:
 
   '@slack/types@2.21.1': {}
 
-  '@slack/web-api@7.16.0':
+  '@slack/web-api@7.17.0':
     dependencies:
       '@slack/logger': 4.0.1
       '@slack/types': 2.21.1
@@ -10314,7 +10310,7 @@ snapshots:
       '@types/retry': 0.12.0
       axios: 1.18.1
       eventemitter3: 5.0.4
-      form-data: 4.0.5
+      form-data: 4.0.6
       is-electron: 2.2.2
       is-stream: 2.0.1
       p-queue: 6.6.2
@@ -12148,14 +12144,6 @@ snapshots:
       tabbable: 6.4.0
 
   follow-redirects@1.16.0: {}
-
-  form-data@4.0.5:
-    dependencies:
-      asynckit: 0.4.0
-      combined-stream: 1.0.8
-      es-set-tostringtag: 2.1.0
-      hasown: 2.0.4
-      mime-types: 2.1.35
 
   form-data@4.0.6:
     dependencies:
