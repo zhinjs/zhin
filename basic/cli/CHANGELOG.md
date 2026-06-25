@@ -1,5 +1,16 @@
 # @zhin.js/cli
 
+## 1.0.91
+
+### Patch Changes
+
+- b2c73bd: fix: 初始化项目后,安装依赖失败
+- c4575c9: fix: 输入输出优化,文档优化
+- Updated dependencies [b2c73bd]
+- Updated dependencies [c4575c9]
+  - @zhin.js/scaffold-wizard@0.1.6
+  - @zhin.js/logger@1.0.72
+
 ## 1.0.90
 
 ### Patch Changes

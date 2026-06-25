@@ -1,5 +1,16 @@
 # @zhin.js/plugin-group-suite
 
+## 3.0.0
+
+### Patch Changes
+
+- c4575c9: fix: 输入输出优化,文档优化
+- Updated dependencies [c4575c9]
+- Updated dependencies [c4575c9]
+  - @zhin.js/satori@1.0.15
+  - zhin.js@4.1.0
+  - @zhin.js/html-renderer@1.0.1
+
 ## 2.0.1
 
 ### Patch Changes

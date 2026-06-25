@@ -1,5 +1,11 @@
 # @zhin.js/logger
 
+## 1.0.72
+
+### Patch Changes
+
+- c4575c9: fix: 输入输出优化,文档优化
+
 ## 1.0.71
 
 ### Patch Changes
