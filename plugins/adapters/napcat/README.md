@@ -1,5 +1,7 @@
 # @zhin.js/adapter-napcat
 
+> **QQ 群助手 + 可选 @AI** — 先在 [demo.zhin.dev](https://demo.zhin.dev) 或 Sandbox 调试，再接 NapCat。启用 AI：`npx zhin setup --ai`。接入本适配器：`npx zhin setup --adapters`。
+
 Zhin.js NapCatQQ 适配器，支持 OneBot11 标准 + go-cqhttp 扩展 + NapCat 独有 API。
 
 ## 功能特性

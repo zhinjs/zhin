@@ -1,7 +1,7 @@
 /**
  * Milky 适配器：单一适配器支持 WS 正向 / SSE / Webhook / 反向 WS，由 config.connection 区分
  */
-import { formatCompact, Adapter, Plugin, type IGroupManagement } from 'zhin.js';
+import { formatCompact, Adapter, Plugin, type IGroupManagement, OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL } from 'zhin.js';
 import type { Router } from '@zhin.js/host-router';
 import { MilkyWsClient } from './endpoint-ws.js';
 import { MilkySseClient } from './endpoint-sse.js';
@@ -19,6 +19,7 @@ export type MilkyBot = MilkyWsClient | MilkySseClient | MilkyWebhookEndpoint | M
 
 export class MilkyAdapter extends Adapter<MilkyBot> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
+  static override outboundRichSegmentPolicy = OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL;
 
   #router?: Router;
 

@@ -10,6 +10,7 @@ import {
   ProcessAdapter,
   LoginAssist,
   shouldBindProcessStdin,
+  registerEndpointManagementCommands,
 } from '@zhin.js/core';
 import type { Plugin, Message } from '@zhin.js/core';
 import type { AppConfig } from '../types.js';
@@ -45,7 +46,12 @@ export function registerCoreServices(
     });
   }
 
-  if (enabledServices.has('command')) provide(new CommandFeature());
+  if (enabledServices.has('command')) {
+    provide(new CommandFeature());
+    plugin.useContext('command', (commandService) => {
+      return registerEndpointManagementCommands(plugin, commandService);
+    });
+  }
   if (enabledServices.has('component')) provide(new ComponentFeature());
   if (enabledServices.has('permission')) provide(new PermissionFeature());
   if (enabledServices.has('cron')) provide(new CronFeature());

@@ -14,8 +14,7 @@
       "@zhin.js/adapter-qq",
       "@zhin.js/adapter-discord",
       "@zhin.js/mcp",
-      "@zhin.js/adapter-github",
-      "@zhin.js/sensitive-filter"
+      "@zhin.js/adapter-github"
     ],
     "outDir": "./lib",
     "rootDir": "./src",

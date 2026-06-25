@@ -1,7 +1,7 @@
 /**
  * OneBot11 适配器：单一适配器支持正向 WS / 反向 WS，由 config.connection 区分
  */
-import { formatCompact, Adapter, Plugin } from 'zhin.js';
+import { formatCompact, Adapter, Plugin, OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL } from 'zhin.js';
 import type { Router } from '@zhin.js/host-router';
 import { OneBot11WsClient } from './endpoint-ws-client.js';
 import { OneBot11WsServer } from './endpoint-ws-server.js';
@@ -15,6 +15,7 @@ export type OneBot11Bot = OneBot11WsClient | OneBot11WsServer;
 
 export class OneBot11Adapter extends Adapter<OneBot11Bot> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
+  static override outboundRichSegmentPolicy = OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL;
 
   #router?: Router;
 

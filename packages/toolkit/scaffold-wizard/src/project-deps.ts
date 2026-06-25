@@ -4,22 +4,22 @@ import path from 'node:path';
 import type { AISetupConfig } from './ai.js';
 import type { InitOptions } from './types.js';
 
-/** 与 monorepo 中 agent / test-bot 对齐的 MCP SDK 版本 */
-export const MCP_SDK_VERSION = '^1.29.0';
+/** 新项目依赖默认接受 npm latest 漂移，避免脚手架维护固定版本表。 */
+export const MCP_SDK_VERSION = 'latest';
 
-const AI_STACK_VERSION = '^4.0.0';
-const ZOD_VERSION = '^4.0.0';
-const VERCEL_AI_VERSION = '^6.0.0';
+const AI_STACK_VERSION = 'latest';
+const ZOD_VERSION = 'latest';
+const VERCEL_AI_VERSION = 'latest';
 
 const PROVIDER_SDK_PACKAGES: Record<string, { pkg: string; version: string }> = {
-  openai: { pkg: '@ai-sdk/openai', version: '^3.0.0' },
-  anthropic: { pkg: '@ai-sdk/anthropic', version: '^3.0.0' },
-  google: { pkg: '@ai-sdk/google', version: '^3.0.0' },
-  gemini: { pkg: '@ai-sdk/google', version: '^3.0.0' },
-  deepseek: { pkg: '@ai-sdk/deepseek', version: '^1.0.0' },
-  ollama: { pkg: '@ai-sdk/openai-compatible', version: '^1.0.0' },
-  moonshot: { pkg: '@ai-sdk/openai-compatible', version: '^1.0.0' },
-  zhipu: { pkg: '@ai-sdk/openai-compatible', version: '^1.0.0' },
+  openai: { pkg: '@ai-sdk/openai', version: 'latest' },
+  anthropic: { pkg: '@ai-sdk/anthropic', version: 'latest' },
+  google: { pkg: '@ai-sdk/google', version: 'latest' },
+  gemini: { pkg: '@ai-sdk/google', version: 'latest' },
+  deepseek: { pkg: '@ai-sdk/deepseek', version: 'latest' },
+  ollama: { pkg: '@ai-sdk/openai-compatible', version: 'latest' },
+  moonshot: { pkg: '@ai-sdk/openai-compatible', version: 'latest' },
+  zhipu: { pkg: '@ai-sdk/openai-compatible', version: 'latest' },
 };
 
 function providerSdkPackage(provider?: string): { pkg: string; version: string } | undefined {

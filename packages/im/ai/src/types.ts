@@ -454,7 +454,7 @@ export interface AIConfig {
     inboundDir?: string;
     outboundDir?: string;
     image?: { maxDimension?: number; preferNativeVision?: boolean };
-    audio?: { strategy?: 'mcp' | 'plugin-voice' | 'text-only' };
+    audio?: { strategy?: 'transcribe' | 'mcp' | 'text-only' };
     video?: { strategy?: 'mcp' | 'text-only'; mcpServer?: string; maxFrames?: number };
     outbound?: { splitMessages?: 'auto' | 'single' | 'always_split' };
   };

@@ -1,15 +1,14 @@
 /**
  * Slack 适配器
  */
-import {
-  Adapter,
-  Plugin,
-} from "zhin.js";
+import { Adapter,
+  Plugin, OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL } from 'zhin.js';
 import { SlackEndpoint } from "./endpoint.js";
 import type { SlackEndpointConfig } from "./types.js";
 
 export class SlackAdapter extends Adapter<SlackEndpoint> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
+  static override outboundRichSegmentPolicy = OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL;
 
   constructor(plugin: Plugin) {
     super(plugin, "slack", []);

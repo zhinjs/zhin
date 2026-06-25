@@ -60,7 +60,7 @@ pnpm build
 5. **数据库 / 适配器 / AI 向导**（`@zhin.js/scaffold-wizard`）: 分步选择并写入配置
    - 数据库：SQLite、MySQL、PostgreSQL、MongoDB、Redis
    - 适配器：Sandbox、Telegram、Discord、GitHub 等（含模式与 env 引导）
-   - AI：Provider、触发、会话；启用时预装 `@modelcontextprotocol/sdk`
+   - AI：Provider、触发、会话；默认首跑不启用，后续可用 `zhin setup --ai` 追加
 6. **创建 Workspace**: 生成 pnpm workspace 结构
 7. **生成配置文件**: 合并 wizard 结果到 `zhin.config.*`
 8. **生成 .env 文件**: 保存 Token、适配器与 AI 环境变量
@@ -115,13 +115,12 @@ npm create zhin-app my-bot --yes
 - 数据库: 无（内存会话；需持久化请交互式创建或手动加 SQLite）
 - HTTP Token: 随机生成
 - 适配器: `@zhin.js/adapter-sandbox`；`endpoints: []`（与 minimal-bot 一致，沙盒 bot 由 Console 连接时自动创建）
-- AI: 启用 Ollama（`http://127.0.0.1:11434`）；`toolSearch: false`；`execSecurity: allowlist` / `execPreset: readonly`；`memoryMcp: false`
+- AI: 不启用（首跑 IM-only，无 Ollama / API Key 前置条件；跑通后用 `zhin setup --ai`）
 - Remote Console: `https://console.zhin.dev`；API Base `http://127.0.0.1:8086`（见 [docs/console-remote.md](../../docs/console-remote.md)）
-- MCP SDK: 启用 AI 时预装 `@modelcontextprotocol/sdk`
 - 统一收件箱: 未启用（无 `database:` 块）
 - 插件开发技能模板: 未安装（`devSkills: false`）
 
-**与 [examples/minimal-bot](../../examples/minimal-bot/) 对齐：** `-y` 同样使用 `endpoints: []`、Sandbox + Host 插件与 `toolSearch: false`；首跑步骤见 minimal-bot README 与生成项目 README。
+**与 [examples/minimal-bot](../../examples/minimal-bot/) 对齐：** `-y` 使用 `endpoints: []`、Sandbox + Host 插件；首跑步骤见 minimal-bot README 与生成项目 README。
 
 ## 与 @zhin.js/cli 的分工
 
@@ -271,10 +270,19 @@ pnpm dev
 - Token 在创建项目时已配置
 - 保存在 `.env` 文件中
 - 创建完成时会在终端显示
+- 登录后进入 Sandbox / 沙盒页，连接后发送 `hello`
 
 > 💡 **修改 Token**: 编辑 `.env` 文件中的 `HTTP_TOKEN`
 
-### 3. 创建插件
+### 3. 可选：启用 AI
+
+```bash
+npx zhin setup --ai
+pnpm install
+pnpm dev
+```
+
+### 4. 创建插件
 
 ```bash
 # 创建新插件（自动添加到依赖）

@@ -633,7 +633,6 @@ export class EnhancedSandbox {
         cwd,
         env: cleanEnv,
         stdio: ['pipe', 'pipe', 'pipe'],
-        timeout,
       });
 
       const maxOutput = this.config.maxOutputSize || 10 * 1024 * 1024;
@@ -671,14 +670,16 @@ export class EnhancedSandbox {
 
         const stdout = stdoutChunks.join('').slice(0, maxOutput);
         const stderr = stderrChunks.join('').slice(0, maxOutput);
+        const duration = Date.now() - startTime;
+        const didTimeout = timedOut || duration >= timeout;
 
         resolve({
-          success: exitCode === 0 && !timedOut,
+          success: exitCode === 0 && !didTimeout,
           stdout,
           stderr,
           exitCode,
-          duration: Date.now() - startTime,
-          timedOut,
+          duration,
+          timedOut: didTimeout,
           blocked: false,
           resourceUsage,
           warnings: warnings.length > 0 ? warnings : undefined,
@@ -720,7 +721,6 @@ export class EnhancedSandbox {
         cwd: options?.cwd || process.cwd(),
         env: { ...process.env, ...options?.env },
         stdio: ['pipe', 'pipe', 'pipe'],
-        timeout,
       });
 
       const maxOutput = this.config.maxOutputSize || 10 * 1024 * 1024;
@@ -752,14 +752,16 @@ export class EnhancedSandbox {
 
       child.on('close', (exitCode) => {
         clearTimeout(timer);
+        const duration = Date.now() - startTime;
+        const didTimeout = timedOut || duration >= timeout;
 
         resolve({
-          success: exitCode === 0 && !timedOut,
+          success: exitCode === 0 && !didTimeout,
           stdout: stdoutChunks.join('').slice(0, maxOutput),
           stderr: stderrChunks.join('').slice(0, maxOutput),
           exitCode,
-          duration: Date.now() - startTime,
-          timedOut,
+          duration,
+          timedOut: didTimeout,
           blocked: false,
         });
       });

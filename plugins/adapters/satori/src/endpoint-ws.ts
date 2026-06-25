@@ -4,7 +4,7 @@
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { clearInterval } from 'node:timers';
-import { formatCompact, Endpoint, Message, segment, SendOptions } from 'zhin.js';
+import { formatCompact, Endpoint, Message, segment, SendOptions,} from 'zhin.js';
 import { callSatoriApi } from './api.js';
 import type { SatoriWsConfig, SatoriSignal, SatoriEventBody, SatoriLogin } from './types.js';
 import { SatoriOpcode } from './types.js';

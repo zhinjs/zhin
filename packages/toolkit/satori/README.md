@@ -126,7 +126,7 @@ export function buildStatsCard() {
 内置组件包括 `Card`、`Surface`、`Section`、`KvTable`、`UsageBar`、`StatChip` 等。产出 HTML 后：
 
 - 测试：直接 `htmlToSvg(wrapCardHtml(...))`
-- IM 出站：`segment.html({ html })` + 可选 `@zhin.js/plugin-html-renderer` 自动转 PNG
+- IM 出站：`segment.html({ html })` + 可选 `@zhin.js/html-renderer` 自动转 PNG
 
 ### 4. 内置字体
 

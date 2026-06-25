@@ -3,6 +3,13 @@
  *
  * CLI 与守护进程通过 Unix Domain Socket 通信，
  * 使用 JSON + 换行符（\n）分隔的文本协议。
+ *
+ * 通信流程（@icqqjs/cli `src/daemon/protocol.ts`）：
+ * 1. CLI 连接 Socket → auth（token）
+ * 2. 认证通过后发送 IpcRequest → 等待 IpcResponse
+ * 3. 认证通过后自动接收 icqq 事件推送（IpcEvent），断开连接自动停止
+ *
+ * 登录相关：**推送**走 IpcEvent（`system.login.*`），续传 invoke 见 `login-ipc-contract.ts`。
  */
 
 /** CLI → Daemon 请求 */
@@ -20,10 +27,18 @@ export type IpcResponse = {
   error?: string;
 };
 
-/** Daemon → CLI 事件推送 */
+/**
+ * Daemon → CLI 事件推送（icqq client.em 分发的全部事件）
+ *
+ * 登录/重连时推送 `system.login.*`（如 `system.login.auth` 含 url + device），
+ * 语义在 `event` 字段，不在 OneBot 式 `post_type` 里。
+ */
 export type IpcEvent = {
+  /** 固定为 `"*"`，客户端应忽略，由本地 handler 按 `event` 过滤 */
   id: string;
+  /** icqq 事件名，如 `system.login.auth`、`message.group.normal` */
   event: string;
+  /** icqq 事件 toJSON 后的 plain object */
   data: unknown;
 };
 
@@ -53,6 +68,7 @@ export interface IpcGuildMessageEventData {
  */
 export const Actions = {
   PING: "ping",
+  LOGOUT: "logout",
 
   // ── 列表查询 ──
   LIST_FRIENDS: "list_friends",
@@ -66,7 +82,10 @@ export const Actions = {
   GET_GROUP_INFO: "get_group_info",
   GET_GROUP_MEMBER_INFO: "get_group_member_info",
   GET_STRANGER_INFO: "get_stranger_info",
+  LIST_STRANGERS: "list_strangers",
+  GET_PROFILE: "get_profile",
   GET_STATUS: "get_status",
+  GET_ONLINE_STATUS: "get_online_status",
   GET_SELF_PROFILE: "get_self_profile",
 
   // ── 消息发送 ──
@@ -78,6 +97,8 @@ export const Actions = {
   GET_MSG: "get_msg",
   HISTORY_PRIVATE: "history_private",
   HISTORY_GROUP: "history_group",
+  HISTORY_BY_MSG_ID: "history_by_msg_id",
+  SEND_LONG_MSG: "send_long_msg",
   MARK_READ: "mark_read",
   DELETE_MSG: "delete_msg",
 
@@ -165,6 +186,9 @@ export const Actions = {
   SEND_PRIVATE_FILE: "send_private_file",
   SEND_GROUP_FILE: "send_group_file",
   FRIEND_RECALL_FILE: "friend_recall_file",
+  FRIEND_FORWARD_FILE: "friend_forward_file",
+  SEARCH_SAME_GROUP: "search_same_group",
+  SEND_CONTACT_SHARE: "send_contact_share",
   GFS_UPLOAD: "gfs_upload",
 
   // ── 群消息表态 ──
@@ -179,6 +203,7 @@ export const Actions = {
   GUILD_LIST: "guild_list",
   GUILD_INFO: "guild_info",
   GUILD_CHANNELS: "guild_channels",
+  GET_CHANNEL_INFO: "get_channel_info",
   GUILD_MEMBERS: "guild_members",
   GUILD_SEND_MSG: "guild_send_msg",
   GUILD_RECALL_MSG: "guild_recall_msg",
@@ -208,7 +233,13 @@ export const Actions = {
   GET_CLIENT_KEY: "get_client_key",
   GET_PSKEY: "get_pskey",
   UID2UIN: "uid2uin",
+  UID2UINS: "uid2uins",
   UIN2UID: "uin2uid",
+  UIN2UIDS: "uin2uids",
+  GET_COOKIES: "get_cookies",
+  GET_CSRF_TOKEN: "get_csrf_token",
+  REFRESH_NT_PIC_RKEY: "refresh_nt_pic_rkey",
+  SEND_DISCUSS_MSG: "send_discuss_msg",
 
   // ── 视频/加好友设置 ──
   GET_VIDEO_URL: "get_video_url",
