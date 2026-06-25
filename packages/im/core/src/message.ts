@@ -19,6 +19,14 @@ export type MessageComponent<T extends object>={
 export interface MessageChannel{
     id: string;
     type: MessageType;
+    /**
+     * 私聊/子频道消息的来源场景（如 QQ 群临时会话：type=private + parent.group）。
+     * 出站时 adapter 据此选择 API（icqq → send_temp_msg）。
+     */
+    parent?: {
+        type: 'group' | 'channel';
+        id: string;
+    };
 }
 /**
  * 消息类型枚举

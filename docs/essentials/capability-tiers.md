@@ -6,7 +6,7 @@ sidebar: false
 
 > 维护者决策记录见 [ADR 0015 — 能力分档模型](/adr/0015-capability-tier-model)。
 
-Zhin.js 是 **TypeScript AI Agent 运行时**：通过 **Endpoint** 接入 IM、邮件、GitHub、Sandbox 等通道，同时支持 **传统命令交互**、**ZhinAgent 对话**（需安装 `@zhin.js/agent`）与 **二者混合**。
+Zhin.js 是 **TypeScript 多通道 IM Bot 框架**（插件热重载、Sandbox、Remote Console），可选 **Agent 栈**（`@zhin.js/agent`）：通过 **Endpoint** 接入 IM、邮件、GitHub、Sandbox 等通道，同时支持 **传统命令交互**、**ZhinAgent 对话**与 **二者混合**。
 
 ::: tip zhin.js 4.x 安装分层
 <<< ../snippets/install-tiers.md#callout-one-liner

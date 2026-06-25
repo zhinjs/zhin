@@ -2,6 +2,14 @@ import { getHostRootPlugin } from '@zhin.js/core';
 import type { AIConfig } from '@zhin.js/ai';
 import { DEFAULT_MULTIMODAL_CONFIG, type MultimodalConfig } from './media-types.js';
 
+export function getPrimaryAppConfig(): Record<string, unknown> | undefined {
+  const host = getHostRootPlugin();
+  const configService = host?.inject?.('config') as
+    | { getPrimary?: () => Record<string, unknown> }
+    | undefined;
+  return configService?.getPrimary?.();
+}
+
 export function resolveMultimodalConfig(): MultimodalConfig {
   const host = getHostRootPlugin();
   if (host) {

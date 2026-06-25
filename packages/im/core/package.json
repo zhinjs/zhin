@@ -50,12 +50,14 @@
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/schema": "workspace:*",
     "croner": "^9.1.0",
+    "qrcode": "^1.5.4",
     "segment-matcher": "^1.0.5",
     "smol-toml": "^1.6.1",
     "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@types/node": "^25.9.2",
+    "@types/qrcode": "^1.5.5",
     "@zhin.js/ai": "workspace:*",
     "typescript": "^6.0.3"
   },

@@ -11,6 +11,7 @@ import {
   qqGuildPermitResolver,
   registerQqPlatformPermitChecker,
 } from "./platform-permit.js";
+import { disposeQqEndpointProvision } from "./qq-endpoint-manager.js";
 
 declare module "zhin.js" {
   namespace Plugin {
@@ -30,9 +31,12 @@ declare module "zhin.js" {
 export * from "./types.js";
 export { QQEndpoint } from "./endpoint.js";
 export { QQAdapter } from "./adapter.js";
+export { startQqBindFlow } from "./qq-bind-flow.js";
+export * from "./qq-bind-api.js";
+export { QqEndpointManager, disposeQqEndpointProvision } from "./qq-endpoint-manager.js";
 
 const plugin = usePlugin();
-const { provide, useContext } = plugin;
+const { provide, useContext, onDispose } = plugin;
 
 useContext("router", (router: Router) => {
   provide({
@@ -360,4 +364,8 @@ useContext("router", "qq", (router: any, qq: QQAdapter) => {
       ctx.body = { success: false, error: e instanceof Error ? e.message : "获取子频道失败" };
     }
   });
+});
+
+onDispose(() => {
+  disposeQqEndpointProvision();
 });

@@ -43,6 +43,9 @@
 | Satori | `@zhin.js/adapter-satori` | [Satori](/adapters/satori) |
 | Email | `@zhin.js/adapter-email` | [Email](/adapters/email) |
 | GitHub | `@zhin.js/adapter-github` | [GitHub](/adapters/github) |
+| LINE | `@zhin.js/adapter-line` | [LINE](/adapters/line) |
+| 企业微信 | `@zhin.js/adapter-wecom` | [企业微信](/adapters/wecom) |
+| 微信 iLink | `@zhin.js/adapter-weixin-ilink` | [微信 iLink](/adapters/weixin-ilink) |
 
 ## 维护说明
 

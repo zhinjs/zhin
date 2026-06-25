@@ -1,11 +1,19 @@
 # Zhin.js
 
-现代 TypeScript **AI Agent 运行时** —— 多通道 **Endpoint** 接入、Harness 安全编排、插件热重载
+TypeScript **多通道 IM Bot 框架** — 插件热重载、Sandbox 调试、Remote Console  
+可选 **Agent 栈**（`@zhin.js/agent`）— 命令与 `@` / `ai:` 对话可混用
 
 [文档](https://zhin.js.org)
 [CI](https://github.com/zhinjs/zhin/actions/workflows/ci.yml)
 [codecov](https://codecov.io/github/zhinjs/zhin)
 [License](./LICENSE)
+
+<details>
+<summary>产品边界（展开）</summary>
+
+对标多通道 **生活/工作助手**（私聊/群聊、记忆、cron、通知）——**不是** Cursor / Claude Code 类的 coding agent，也不内置 plan mode。IM 是 Endpoint 最常见的一类通道，不是产品定义的全部。详见 [能力分档与产品定位](./docs/essentials/capability-tiers.md)。
+
+</details>
 
 ## 核心特性
 
@@ -26,7 +34,7 @@
 | **Advanced** | Feature 体系 | 命令、工具、技能、cron、数据库等组合 |
 | **Advanced** | toolSearch / MCP | 编排工具、deferred worker、MCP Client/Server |
 
-> **推荐首跑**：克隆仓库后进入 [`examples/minimal-bot`](./examples/minimal-bot/)（Sandbox + 最少插件）。**零安装先试**：[**demo.zhin.dev**](https://demo.zhin.dev)（官方在线 Sandbox）。**L4 参考**：[`examples/full-bot`](./examples/full-bot/)。[`examples/test-bot`](./examples/test-bot/) 为维护者**厨房水槽**配置，勿当作默认模板。
+> **首跑入口（任选其一）**：[**demo.zhin.dev**](https://demo.zhin.dev) 零安装 · `npm create zhin-app -y` 独立项目 · [`examples/minimal-bot`](./examples/minimal-bot/) 贡献者调试。[`examples/test-bot`](./examples/test-bot/) 为维护者厨房水槽，勿作默认模板。
 
 ## 快速开始
 
@@ -35,20 +43,42 @@
 - **Node.js** 20.19.0+ 或 22.12.0+
 - **pnpm** 9.0+（`npm install -g pnpm`）
 
-### 在 monorepo 内首跑（Stable，推荐）
+### 三种入口（并列，任选）
+
+| 路径 | 适合谁 | 第一步 |
+|------|--------|--------|
+| [**demo.zhin.dev**](https://demo.zhin.dev) | 零安装体验 | 沙盒发 `hello` / `card` |
+| `npm create zhin-app -y` | 独立项目 | [5 分钟首跑](./docs/getting-started/first-run.md) |
+| `git clone` + [`minimal-bot`](./examples/minimal-bot/) | 贡献者 / 深度调试 | minimal-bot README |
+
+#### 脚手架（独立项目）
+
+```bash
+npm create zhin-app my-bot -y
+cd my-bot
+pnpm dev          # 开发模式（热重载）
+```
+
+`-y` 使用 IM-only 黄金路径：Sandbox + Host API + Remote Console，不要求 Ollama 或云模型 Key。
+
+#### Monorepo 内调试
 
 ```bash
 git clone https://github.com/zhinjs/zhin.git
 cd zhin
 pnpm install
 cd examples/minimal-bot
-cp .env.example .env   # 可选：配置 Ollama 或 OpenAI
+cp .env.example .env   # 可选
 pnpm dev
 ```
 
+#### 连接 Remote Console（三种入口共用）
+
 1. 保持 `pnpm dev` 运行（Host 监听 `http://127.0.0.1:8086`，**无**内置网页 UI）。
-2. 打开 **[Remote Console](https://console.zhin.dev)**，API Base 填终端日志中的 Host 地址（如 `http://127.0.0.1:8086`），Token 与 `.env` 中 `HTTP_TOKEN` 一致。
-3. 在 Sandbox 窗口发 `hello`；AI 需另装 `@zhin.js/agent`（见下方 **Install tiers**）。详见 [minimal-bot README](./examples/minimal-bot/README.md) 与 [Remote Console 说明](./docs/console-remote.md)。
+2. 打开 **[Remote Console](https://console.zhin.dev)**，API Base 填终端日志中的 Host 地址，Token 与 `.env` 中 `HTTP_TOKEN` 一致。零安装可先试 [demo.zhin.dev](https://demo.zhin.dev)。
+3. 在 Sandbox 发 `hello`（回复含 `card` / `ai:` 引导）；发 `card` 查看 JSX 卡片示例。详见 [minimal-bot README](./examples/minimal-bot/README.md) 与 [Remote Console 说明](./docs/console-remote.md)。
+
+首跑成功后（任选）：`npx zhin setup --adapters` · `npx zhin setup --ai` · [插件开发](./docs/guide/plugin-development.md) · `npx zhin doctor`
 
 ### Install tiers（zhin.js 4.x）
 
@@ -60,20 +90,10 @@ pnpm dev
 | **AI** | `+ @zhin.js/agent zod ai` | +~12–15MB | ZhinAgent、会话、工具、压缩 |
 | **Provider** | `+ @ai-sdk/openai` 等 | 按厂商 | 大模型调用 |
 | **MCP** | `+ @modelcontextprotocol/sdk` | +~数 MB | MCP Client / memoryMcp |
+| **Rich media** | `+ @zhin.js/html-renderer` | +~数 MB | 出站 `html` / `markdown` 转 PNG（未装则降级 text） |
+| **Speech** | `+ @zhin.js/speech` | +~数 MB | 入站 STT、出站 TTS、`segment.tts`（未装则 warn 降级） |
 
 Breaking（4.x）：`import from 'zhin.js'` 不再含 `ZhinAgent` / `AIService`；请 `import from 'zhin.js/agent'` 或 `zhin.js/ai`。详见 [ADR 0019](./docs/adr/0019-install-size-layering.md)。
-
-### 创建独立项目（脚手架）
-
-```bash
-npm create zhin-app my-bot
-cd my-bot
-pnpm dev          # 开发模式（热重载）
-```
-
-脚手架会引导你选择运行时、数据库、聊天平台和 AI 提供商。
-
-启动后在本机提供 Console **API**（默认 `http://127.0.0.1:8086`）。在 **[console.zhin.dev](https://console.zhin.dev)** 登录并填写 API Base 与 Token（见 [docs/console-remote.md](./docs/console-remote.md)）。
 
 > **Windows 用户** 📌：遇到问题请参考 [Windows 初始化指南](./docs/essentials/windows-setup.md)。
 

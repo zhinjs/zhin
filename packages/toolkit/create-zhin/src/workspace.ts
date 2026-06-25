@@ -432,8 +432,9 @@ pnpm dev          # 开发模式（支持热重载）
 \`\`\`
 
 1. 确认终端里 Host 已启动（一般为 \`http://127.0.0.1:8086\`）。
-2. 打开 **[Remote Console](https://console.zhin.dev)**，API Base 与 Token（\`.env\` 的 \`HTTP_TOKEN\`）与日志一致。
-3. 在 **沙盒** 页连接后发送 \`hello\`（\`endpoints: []\` 时自动创建 Sandbox bot，如 \`sandbox-xxxx\`）。
+2. 打开 **[Remote Console](https://console.zhin.dev)**，API Base 填 \`http://127.0.0.1:8086\`，Token 填 \`.env\` 的 \`HTTP_TOKEN\`。
+3. 进入 **Sandbox / 沙盒** 页并连接，发送 \`hello\`；收到回复即首跑成功。
+4. 若连接失败，先运行 \`npx zhin doctor\` 查看修复建议。
 
 ### Remote Console（同上）
 
@@ -442,6 +443,18 @@ pnpm dev          # 开发模式（支持热重载）
 - Token: \`.env\` 中的 \`HTTP_TOKEN\`，在 Console 登录页填写
 
 默认配置已经允许官方 Remote Console Origin。如需本地开发控制台，在 \`${configFilename}\` 的 \`http.corsOrigins\` 中追加本地 Origin。
+
+### 启用 AI（可选）
+
+首跑默认是 IM-only，不依赖 Ollama 或任何云模型。跑通 Sandbox 后再启用 AI：
+
+\`\`\`bash
+npx zhin setup --ai
+pnpm install
+pnpm dev
+\`\`\`
+
+本地模型用户请先启动 Ollama 并 pull 对应模型；云模型用户按向导把 API Key 写入 \`.env\`。
 
 ### 生产模式
 
@@ -742,7 +755,11 @@ addCommand(
     .desc('打招呼', '向机器人打招呼')
     .usage('hello')
     .action(() => {
-      return '你好！欢迎使用 Zhin.js！';
+      return [
+        '你好！欢迎使用 Zhin.js！',
+        '试试 card 查看 JSX 状态卡片。',
+        '启用 AI：npx zhin setup --ai，然后在 Sandbox 发 ai: 你好',
+      ].join('\\n');
     })
 );
 

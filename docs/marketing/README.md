@@ -14,6 +14,6 @@ sidebar: false
 | [juejin-first-run-outline.md](./juejin-first-run-outline.md) | 掘金首跑教程文章大纲 |
 | [demo.zhin.dev 部署](https://github.com/zhinjs/zhin/blob/main/deploy/zhin-demo/README.md) | 在线 Demo 部署包 |
 
-**黄金路径演示命令**：`npm create zhin-app my-first-bot -y` → `pnpm dev` → [console.zhin.dev](https://console.zhin.dev) → 沙盒 `hello`。
+**零安装引流**：[demo.zhin.dev](https://demo.zhin.dev)（预连 Sandbox + Demo onboarding，无需登录）
 
-**零安装引流**：[demo.zhin.dev](https://demo.zhin.dev)
+**本地首跑**：`npm create zhin-app my-first-bot -y` → `pnpm dev` → [console.zhin.dev](https://console.zhin.dev) → 沙盒 `hello`

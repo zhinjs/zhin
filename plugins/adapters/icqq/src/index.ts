@@ -14,6 +14,7 @@ import { PageManager } from "@zhin.js/host-api";
 import { IcqqAdapter } from "./adapter.js";
 import { registerTools } from "./tools/index.js";
 import { registerRoutes } from "./routes.js";
+import { registerLoginAssistRoutes } from "./login-assist-routes.js";
 
 declare module "zhin.js" {
   namespace Plugin {
@@ -76,4 +77,5 @@ useContext("web", (pageManager) => {
 // ── HTTP 路由 ──────────────────────────────────────────────────────
 useContext("router", "icqq", async (router: Router, icqq: IcqqAdapter) => {
   registerRoutes(router, icqq, root);
+  registerLoginAssistRoutes(router, root);
 });

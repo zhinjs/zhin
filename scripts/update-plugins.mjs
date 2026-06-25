@@ -37,6 +37,8 @@ const CORE_PACKAGES = new Set([
   '@zhin.js/schema',
   '@zhin.js/types',
   '@zhin.js/satori',
+  '@zhin.js/html-renderer',
+  '@zhin.js/speech',
   '@zhin.js/hmr',
   '@zhin.js/dependency',
   '@zhin.js/create-zhin',

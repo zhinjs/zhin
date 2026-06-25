@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/qq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/qq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=e7fc881778ddbe2b -->
+<!-- sync-adapter-docs:sha256=1ded0163e0db88da -->
 
 # @zhin.js/adapter-qq
 
@@ -19,6 +19,21 @@ Zhin.js QQ 官方机器人适配器，基于 QQ 官方机器人 API 开发，支
 ```bash
 pnpm add @zhin.js/adapter-qq
 ```
+
+## 扫码添加机器人（/endpoint）
+
+无需手动复制 AppID/AppSecret：在 IM 中由 **master / trusted** 操作员发送命令，适配器会内联调用 QQ 开放平台绑定协议（等价 `@tencent-connect/qqbot-connector`，**不依赖**该 npm 包），扫码成功后由 core 写入 `zhin.config.yml` 并热连接。
+
+| 命令 | 说明 |
+|------|------|
+| `/endpoint add qq [name]` | 发起扫码绑定；`name` 默认使用 AppID |
+| `/endpoint cancel` | 取消进行中的绑定 |
+| `/endpoints` | 查看运行时 qq endpoints 在线状态 |
+| `/endpoint help` | Endpoint 管理帮助 |
+
+二维码通过 IM `$reply` 发送 `segment.qrcode(url)`；各 Adapter 在 **`$sendMessage`** 内解析该段（IM → `image`，process → 终端 ASCII，GitHub 等 → 文本链接）。
+
+二维码渲染使用 core 的 `segment.qrcode` / `GeneratedQrCode`（`import { segment } from 'zhin.js'` 或 `import { GeneratedQrCode } from 'zhin.js/qrcode'`）。
 
 ## 配置
 

@@ -173,14 +173,14 @@ database:
 ai:
   enabled: true
 
-  # 命名 provider 实例（api + 连接参数；`driver` 为遗留别名，会归一化为 api）
+  # 命名 provider 实例（sdk + 连接参数；须符合 ADR 0018）
   providers:
     ds-main:
-      api: openai-completions
+      sdk: deepseek
       apiKey: "${DEEP_SEEK_API_KEY}"
       baseUrl: "https://api.deepseek.com"
     zhipu-vl:
-      api: openai-completions
+      sdk: openai-compatible
       apiKey: "${BIG_MODEL_API_KEY}"
       baseUrl: "https://open.bigmodel.cn/api/paas/v4"
       imageGeneration:
@@ -319,8 +319,7 @@ ai:
       maxDimension: 2048
       preferNativeVision: true
     audio:
-      strategy: mcp          # mcp | plugin-voice | text-only
-      mcpServer: whisper     # 可选，STT MCP 名称
+      strategy: transcribe    # transcribe（默认）| mcp | text-only
     video:
       strategy: mcp          # mcp | text-only
       mcpServer: ffmpeg
@@ -328,6 +327,28 @@ ai:
     outbound:
       splitMessages: auto    # auto | single | always_split
 ```
+
+### 语音 STT/TTS（`@zhin.js/speech` optional peer）
+
+安装：`pnpm add @zhin.js/speech`。由 `zhin start` 自动注册 `voice_stt` / `voice_tts` 工具；入站默认 `ai.multimodal.audio.strategy: transcribe`。
+
+```yaml
+speech:
+  stt:
+    enabled: true
+    provider: ollama          # ollama | openai
+    model: whisper
+    host: http://localhost:11434
+  tts:
+    enabled: true
+    provider: edge            # edge（默认）| openai | azure | custom
+    voice: zh-CN-XiaoxiaoNeural
+    edgeTtsCommand: edge-tts  # pip install edge-tts
+```
+
+::: warning Breaking
+`@zhin.js/plugin-voice` 已移除。请改用 `@zhin.js/speech` 与根键 `speech:`（旧 `voice:` 不再读取）。
+:::
 
 ### 三层文件记忆（Stable 默认启用）
 
@@ -763,7 +784,7 @@ hostApi:
 ai:
   providers:
     ollama:
-      api: ollama-chat
+      sdk: ollama
       host: "http://127.0.0.1:11434"
   agents:
     zhin:

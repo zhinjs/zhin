@@ -86,9 +86,9 @@ addCommand(
 ```typescript
 import { usePlugin } from 'zhin.js'
 
-const { addMiddleware } = usePlugin()
+const { root } = usePlugin()
 
-addMiddleware(async (message, next) => {
+root.addMiddleware(async (message, next) => {
   if (message.$adapter === 'discord') {
     console.log('Discord 消息:', message.$content)
   }

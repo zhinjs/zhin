@@ -46,6 +46,22 @@ export {
 } from './project-deps.js';
 
 export {
+  SPEECH_PACKAGE,
+  HTML_RENDERER_PACKAGE,
+  ADAPTERS_PREFER_HTML_IMAGE,
+  diagnoseOptionalPeers,
+  formatOptionalPeerFixCommand,
+  getOptionalPeerDependencies,
+} from './optional-peers.js';
+export type { OptionalPeerDiagnosis, OptionalPeersDiagnosis } from './optional-peers.js';
+
+export {
+  diagnoseUpgradeToL4,
+  getUpgradeToL4Dependencies,
+} from './upgrade-l4.js';
+export type { UpgradeToL4Diagnosis } from './upgrade-l4.js';
+
+export {
   CONSOLE_HOST_PLUGINS,
   applyDatabaseToConfig,
   applyAdaptersToConfig,

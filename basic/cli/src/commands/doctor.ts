@@ -10,12 +10,19 @@ import {
   formatAIDependencyFixCommand,
   isAiEnabledInConfig,
   mergeDependenciesIntoPackageJson,
+  diagnoseOptionalPeers,
+  formatOptionalPeerFixCommand,
+  diagnoseUpgradeToL4,
 } from '@zhin.js/scaffold-wizard';
 import { logger } from '../utils/logger.js';
 import { formatNodeRequirementMessage, isNodeVersionSupported } from '../utils/node-requirements.js';
-import { findConfigFile, readConfig } from '../utils/config-file.js';
+import { findConfigFile, readConfig, saveConfig } from '../utils/config-file.js';
 
 const execAsync = promisify(exec);
+const CONSOLE_URL = 'https://console.zhin.dev';
+const TROUBLESHOOTING_URL = 'https://zhin.js.org/troubleshooting/';
+const REQUIRED_CONSOLE_PLUGINS = ['@zhin.js/host-router', '@zhin.js/host-api'] as const;
+const SANDBOX_PLUGIN = '@zhin.js/adapter-sandbox';
 
 interface CheckResult {
   name: string;
@@ -24,16 +31,116 @@ interface CheckResult {
   fix?: string;
 }
 
+export interface ConsoleConfigDiagnosis {
+  missingHostPlugins: string[];
+  missingSandboxPlugin: boolean;
+  missingConsoleOrigin: boolean;
+  missingHttpToken: boolean;
+}
+
+export function diagnoseConsoleConfig(config: Record<string, unknown>): ConsoleConfigDiagnosis {
+  const plugins = Array.isArray(config.plugins) ? config.plugins.filter((p): p is string => typeof p === 'string') : [];
+  const http = config.http && typeof config.http === 'object' && !Array.isArray(config.http)
+    ? config.http as Record<string, unknown>
+    : {};
+  const corsOrigins = Array.isArray(http.corsOrigins) ? http.corsOrigins : [];
+
+  return {
+    missingHostPlugins: REQUIRED_CONSOLE_PLUGINS.filter((plugin) => !plugins.includes(plugin)),
+    missingSandboxPlugin: !plugins.includes(SANDBOX_PLUGIN),
+    missingConsoleOrigin: !corsOrigins.includes(CONSOLE_URL),
+    missingHttpToken: typeof http.token !== 'string' || http.token.trim().length === 0,
+  };
+}
+
+export function applyConsoleConfigFixes(config: Record<string, unknown>): boolean {
+  let changed = false;
+  const plugins = Array.isArray(config.plugins) ? [...config.plugins] : [];
+  for (const plugin of [...REQUIRED_CONSOLE_PLUGINS, SANDBOX_PLUGIN]) {
+    if (!plugins.includes(plugin)) {
+      plugins.push(plugin);
+      changed = true;
+    }
+  }
+  config.plugins = plugins;
+
+  const http = config.http && typeof config.http === 'object' && !Array.isArray(config.http)
+    ? { ...(config.http as Record<string, unknown>) }
+    : {};
+  const corsOrigins = Array.isArray(http.corsOrigins) ? [...http.corsOrigins] : [];
+  if (!corsOrigins.includes(CONSOLE_URL)) {
+    corsOrigins.push(CONSOLE_URL);
+    http.corsOrigins = corsOrigins;
+    changed = true;
+  }
+  if (typeof http.token !== 'string' || http.token.trim().length === 0) {
+    http.token = '${HTTP_TOKEN}';
+    changed = true;
+  }
+  config.http = http;
+  return changed;
+}
+
+function canWriteConfig(configPath: string): boolean {
+  return !configPath.endsWith('.ts');
+}
+
+async function writeConfig(filePath: string, config: Record<string, unknown>): Promise<void> {
+  await saveConfig(filePath, config);
+}
+
 export const doctorCommand = new Command('doctor')
   .alias('health')
   .description('检查系统环境和项目配置')
   .option('--fix', '自动修复可修复的问题')
+  .option('--upgrade-l4', '诊断 minimal→L4 升级路径（AI 栈 + optional peer）')
   .action(async (options) => {
     console.log(chalk.blue('🏥 Zhin.js 健康检查'));
     console.log('');
 
     const results: CheckResult[] = [];
     const cwd = process.cwd();
+
+    if (options.upgradeL4) {
+      const configPath = findConfigFile(cwd);
+      const config = configPath
+        ? await readConfig(path.join(cwd, configPath)) as Record<string, unknown>
+        : {};
+      const upgrade = diagnoseUpgradeToL4(cwd, config);
+      console.log(chalk.cyan('L4 升级诊断'));
+      if (upgrade.missingAiDeps.length > 0) {
+        console.log(chalk.yellow(`  缺少 AI 依赖: ${upgrade.missingAiDeps.join(', ')}`));
+      } else {
+        console.log(chalk.green('  AI 依赖: 已就绪'));
+      }
+      if (upgrade.missingOptionalPeers.length > 0) {
+        console.log(chalk.yellow(`  缺少 optional peer: ${upgrade.missingOptionalPeers.join(', ')}`));
+      }
+      if (upgrade.fixCommand) {
+        console.log(chalk.gray(`  修复: ${upgrade.fixCommand}`));
+      }
+      console.log(chalk.gray('\n建议配置增量:'));
+      for (const line of upgrade.configSnippets) {
+        console.log(chalk.gray(`  ${line}`));
+      }
+      console.log('');
+      if (options.fix && upgrade.fixCommand) {
+        const deps: Record<string, string> = {};
+        for (const name of upgrade.missingAiDeps) {
+          deps[name] = 'latest';
+        }
+        if (Object.keys(deps).length > 0) {
+          await mergeDependenciesIntoPackageJson(cwd, deps);
+        }
+        for (const peer of [upgrade.optionalPeers.speech, upgrade.optionalPeers.htmlRenderer]) {
+          if (peer && peer.missingFromPackageJson.length > 0) {
+            await mergeDependenciesIntoPackageJson(cwd, { [peer.packageName]: 'latest' });
+          }
+        }
+        console.log(chalk.green('已写入 package.json，请运行 pnpm install'));
+      }
+      return;
+    }
 
     // 1. 检查 Node.js 版本
     const nodeVersion = process.version;
@@ -64,8 +171,8 @@ export const doctorCommand = new Command('doctor')
     }
 
     // 3. 检查配置文件
-    const configFiles = ['zhin.config.yml', 'zhin.config.yaml', 'zhin.config.json', 'zhin.config.toml', 'zhin.config.ts'];
-    const existingConfig = configFiles.find(f => fs.existsSync(path.join(cwd, f)));
+    let existingConfig = findConfigFile(cwd) ?? undefined;
+    let loadedConfig: Record<string, unknown> | null = null;
     
     if (existingConfig) {
       results.push({
@@ -84,7 +191,88 @@ export const doctorCommand = new Command('doctor')
       if (options.fix) {
         // 创建默认配置
         await createDefaultConfig(cwd);
+        existingConfig = 'zhin.config.yml';
         logger.info(formatCompact( { cmd: 'doctor', op: 'create_config', file: 'zhin.config.yml' }));
+      }
+    }
+
+    if (existingConfig) {
+      const configPath = path.join(cwd, existingConfig);
+      try {
+        loadedConfig = await readConfig(configPath) as Record<string, unknown>;
+        let diagnosis = diagnoseConsoleConfig(loadedConfig);
+        const canFixConfig = canWriteConfig(configPath);
+
+        if (options.fix && canFixConfig) {
+          const changed = applyConsoleConfigFixes(loadedConfig);
+          if (changed) {
+            await writeConfig(configPath, loadedConfig);
+            diagnosis = diagnoseConsoleConfig(loadedConfig);
+            logger.info(formatCompact({ cmd: 'doctor', op: 'fix_console_config', file: existingConfig }));
+          }
+        }
+
+        if (diagnosis.missingHostPlugins.length === 0) {
+          results.push({
+            name: 'Remote Console Host',
+            status: 'ok',
+            message: 'host-router / host-api 已启用',
+          });
+        } else {
+          results.push({
+            name: 'Remote Console Host',
+            status: 'warn',
+            message: `缺少插件: ${diagnosis.missingHostPlugins.join(', ')}（Console 无法连接 Host API）`,
+            fix: options.fix
+              ? (canFixConfig ? '已写入配置' : `请手动添加到 ${existingConfig}`)
+              : `zhin install ${diagnosis.missingHostPlugins.join(' ')} 或查看 ${TROUBLESHOOTING_URL}`,
+          });
+        }
+
+        if (diagnosis.missingSandboxPlugin) {
+          results.push({
+            name: 'Sandbox 首跑',
+            status: 'warn',
+            message: '未启用 @zhin.js/adapter-sandbox，首跑沙盒页不可用',
+            fix: options.fix
+              ? (canFixConfig ? '已写入配置' : `请手动添加到 ${existingConfig}`)
+              : `zhin install ${SANDBOX_PLUGIN} 或查看 ${TROUBLESHOOTING_URL}`,
+          });
+        } else {
+          results.push({
+            name: 'Sandbox 首跑',
+            status: 'ok',
+            message: 'Sandbox 插件已启用',
+          });
+        }
+
+        if (diagnosis.missingConsoleOrigin || diagnosis.missingHttpToken) {
+          const details = [
+            diagnosis.missingConsoleOrigin ? `缺少 CORS Origin ${CONSOLE_URL}` : null,
+            diagnosis.missingHttpToken ? '缺少 http.token' : null,
+          ].filter(Boolean).join('；');
+          results.push({
+            name: 'Console 登录条件',
+            status: 'warn',
+            message: details,
+            fix: options.fix
+              ? (canFixConfig ? '已补全配置' : `请手动更新 ${existingConfig}`)
+              : `检查 http.token / http.corsOrigins，见 ${TROUBLESHOOTING_URL}`,
+          });
+        } else {
+          results.push({
+            name: 'Console 登录条件',
+            status: 'ok',
+            message: `Token 与 ${CONSOLE_URL} CORS 已配置`,
+          });
+        }
+      } catch {
+        results.push({
+          name: 'Console 首跑配置',
+          status: 'warn',
+          message: '无法读取配置以检查 Console / Sandbox 条件',
+          fix: TROUBLESHOOTING_URL,
+        });
       }
     }
 
@@ -151,7 +339,7 @@ export const doctorCommand = new Command('doctor')
     // 6. 检查 AI 依赖（zhin.js 4.x：配置启用 AI 时需单独安装 agent 栈）
     if (existingConfig) {
       try {
-        const config = await readConfig(path.join(cwd, existingConfig));
+        const config = loadedConfig ?? await readConfig(path.join(cwd, existingConfig));
         if (isAiEnabledInConfig(config)) {
           const aiDiagnosis = diagnoseAIDependencies(cwd, config);
           if (aiDiagnosis) {
@@ -198,6 +386,43 @@ export const doctorCommand = new Command('doctor')
           name: 'AI 依赖',
           status: 'warn',
           message: '无法读取配置以检查 AI 依赖',
+        });
+      }
+
+      // 6b. optional peer（speech / html-renderer）
+      try {
+        const config = loadedConfig ?? await readConfig(path.join(cwd, existingConfig));
+        const peerDiagnosis = diagnoseOptionalPeers(cwd, config as Record<string, unknown>);
+        for (const [label, peer] of [
+          ['Speech (@zhin.js/speech)', peerDiagnosis.speech],
+          ['HTML Renderer (@zhin.js/html-renderer)', peerDiagnosis.htmlRenderer],
+        ] as const) {
+          if (!peer?.required) continue;
+          const missing = [...new Set([...peer.missingFromPackageJson, ...peer.notInstalled])];
+          if (missing.length === 0) {
+            results.push({
+              name: label,
+              status: 'ok',
+              message: `已安装 (${peer.reason})`,
+            });
+            continue;
+          }
+          const fixCmd = formatOptionalPeerFixCommand(peer);
+          results.push({
+            name: label,
+            status: 'warn',
+            message: `需要 ${peer.packageName}（${peer.reason}），缺少: ${missing.join(', ')}`,
+            fix: options.fix ? '将写入 package.json' : fixCmd,
+          });
+          if (options.fix && peer.missingFromPackageJson.length > 0) {
+            await mergeDependenciesIntoPackageJson(cwd, { [peer.packageName]: 'latest' });
+          }
+        }
+      } catch {
+        results.push({
+          name: 'Optional peer',
+          status: 'warn',
+          message: '无法读取配置以检查 speech / html-renderer',
         });
       }
     }
@@ -280,7 +505,7 @@ export const doctorCommand = new Command('doctor')
       });
       
       if (options.fix) {
-        await fs.writeFile(envFile, '# Zhin.js 环境变量\n');
+        await fs.writeFile(envFile, '# Zhin.js 环境变量\nHTTP_TOKEN=zhin-local-token\n');
         logger.info(formatCompact( { cmd: 'doctor', op: 'create_env', file: '.env' }));
       }
     }
@@ -320,15 +545,15 @@ export const doctorCommand = new Command('doctor')
   });
 
 async function createDefaultConfig(cwd: string): Promise<void> {
-  const configContent = `endpoints:
-  - context: sandbox
-    name: sandbox-bot
+  const configContent = `endpoints: []
 plugins:
-  - "@zhin.js/adapter-sandbox"
   - "@zhin.js/host-router"
   - "@zhin.js/host-api"
+  - "@zhin.js/adapter-sandbox"
 http:
   token: \${HTTP_TOKEN}
+  corsOrigins:
+    - "${CONSOLE_URL}"
 `;
   await fs.writeFile(path.join(cwd, 'zhin.config.yml'), configContent);
 }

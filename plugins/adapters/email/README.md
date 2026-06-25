@@ -120,9 +120,9 @@ addCommand(
 ```typescript
 import { usePlugin } from 'zhin.js'
 
-const { addMiddleware } = usePlugin()
+const { root } = usePlugin()
 
-addMiddleware(async (message, next) => {
+root.addMiddleware(async (message, next) => {
   if (message.$adapter === 'email') {
     console.log('收到邮件:', message.$sender.name, message.$content)
   }

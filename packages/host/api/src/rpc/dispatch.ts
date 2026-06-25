@@ -1,6 +1,7 @@
 import { getPlugin, usePlugin, type Plugin } from "@zhin.js/core";
 import type { ConsoleRpcContext, ConsoleWebServer, ProjectFs } from "./context.js";
 import { createNodeProjectFs } from "./project-fs.js";
+import { assertDemoRpcAllowed } from "@zhin.js/host-router/router";
 import { handleCoreRpc } from "./handlers-core.js";
 
 /** REST 等路径须通过 options.root 注入；仅在已有 ALS 插件上下文时回退 getPlugin().root */
@@ -58,6 +59,18 @@ export async function dispatchConsoleRpc(
   const ctx = buildConsoleRpcContext(getWebServer, options, (p) => payloads.push(p));
 
   if (await handleCoreRpc(message, ctx)) {
+    return payloads;
+  }
+
+  // demo scope 禁止回落 websocket handler（system:restart、files:* 等）
+  if (options.authScope === "demo") {
+    const denied =
+      assertDemoRpcAllowed(String(message.type ?? "")) ??
+      "Demo scope: RPC is forbidden";
+    payloads.push({
+      requestId: message.requestId as number | undefined,
+      error: denied,
+    });
     return payloads;
   }
 
