@@ -23,5 +23,5 @@ git clone --recurse-submodules https://github.com/zhinjs/zhin.git
 - `adapters/` - 平台适配器 (icqq, kook, discord, qq, onebot11, ...)
 - `services/` - 功能服务 (http, console, mcp)
 - `features/` - 特性插件
-- `utils/` - 工具插件 (music, sensitive-filter, ...)
+- `utils/` - 工具插件 (music, rss, ...)
 - `games/` - 游戏插件

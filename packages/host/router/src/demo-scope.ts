@@ -14,13 +14,32 @@ export type TokenRegistryConfig = {
   scopedTokens?: ScopedTokenConfig[];
 };
 
-/** Console RPC types allowed under demo scope. */
+/** Console RPC types allowed under demo scope (read + Sandbox chat only). */
 export const DEMO_RPC_ALLOWLIST = new Set([
   "ping",
   "entries:get",
   "endpoint:list",
   "endpoint:info",
   "endpoint:sendMessage",
+  // 配置只读（ADR 0016）
+  "config:get",
+  "config:get-all",
+  "config:get-yaml",
+  "schema:get",
+  "schema:get-all",
+]);
+
+/** 显式拒绝的写操作（即使误加入 allowlist 也拦截） */
+export const DEMO_RPC_WRITE_BLOCKLIST = new Set([
+  "config:set",
+  "config:save-yaml",
+  "files:save",
+  "env:save",
+  "system:restart",
+  "cron:add",
+  "cron:remove",
+  "cron:pause",
+  "cron:resume",
 ]);
 
 const DEMO_HTTP_GET_PREFIXES = [
@@ -67,6 +86,7 @@ export class TokenRegistry {
 
 export function isDemoRpcAllowed(rpcType: string): boolean {
   if (rpcType.startsWith("db:")) return false;
+  if (DEMO_RPC_WRITE_BLOCKLIST.has(rpcType)) return false;
   return DEMO_RPC_ALLOWLIST.has(rpcType);
 }
 

@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/lark/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/lark/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=4ef8cd84c499f79e -->
+<!-- sync-adapter-docs:sha256=565b65368b9ab0f3 -->
 
 # @zhin.js/adapter-lark
 
@@ -96,9 +96,9 @@ addCommand(
 ```typescript
 import { usePlugin } from 'zhin.js'
 
-const { addMiddleware } = usePlugin()
+const { root } = usePlugin()
 
-addMiddleware(async (message, next) => {
+root.addMiddleware(async (message, next) => {
   if (message.$adapter === 'lark') {
     console.log('收到飞书消息:', message.$content)
   }

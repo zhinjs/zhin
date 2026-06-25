@@ -14,7 +14,18 @@
 
 ## 依赖
 
-本示例 `package.json` 已声明 `@zhin.js/agent`、`zod`、`ai` 与所用 `@ai-sdk/*`。从 minimal-bot 升级时请对照安装，或运行 `zhin doctor`。
+本示例 `package.json` 已声明 `@zhin.js/agent`、`zod`、`ai` 与所用 `@ai-sdk/*`。从 minimal-bot 升级时请对照安装，或运行 `zhin doctor --upgrade-l4`。
+
+## 可选多模态
+
+`zhin.config.yml` 内含注释块 `speech:`、`htmlRenderer:`、`ai.multimodal.audio`。启用前安装 optional peer：
+
+```bash
+pnpm add @zhin.js/speech @zhin.js/html-renderer   # 按需
+zhin doctor --fix
+```
+
+排查 stage 日志见 [AI 内容链可观测](../../docs/advanced/ai-content-chain.md)；Adapter 矩阵见 [Rich Segment 适配器](../../docs/essentials/rich-segment-adapters.md)。
 
 ## 快速开始
 

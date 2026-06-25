@@ -6,7 +6,14 @@ const { addCommand } = usePlugin();
 addCommand(
   new MessageCommand('hello')
     .desc('Demo smoke：非 AI 命令')
-    .action(() => '你好！这是 Zhin.js 官方 Demo。试试 ai: 你好'),
+    .action(() =>
+      [
+        '你好！这是 Zhin.js 官方 Demo。',
+        '试试 card 查看 JSX 状态卡片。',
+        '试试 ai: 你好 体验 Agent 对话。',
+        '部署到本机：npm create zhin-app -y',
+      ].join('\n'),
+    ),
 );
 
 addCommand(

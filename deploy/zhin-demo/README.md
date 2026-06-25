@@ -30,6 +30,8 @@ docker compose up -d
 | [console/](./console/) | Demo Console 构建说明与最小壳 |
 | [docs/RUNBOOK.md](./docs/RUNBOOK.md) | Token 轮换、监控、GPU |
 
+Demo 页 header 提供双 CTA：**部署到本机**（first-run 文档）与 **接 QQ Bot**（ICQQ 适配器文档）。首次访问展示 **3 步 Demo onboarding**（无需登录，见 [console/README.md](./console/README.md)）。
+
 ## 相关
 
 - Host 配置：[examples/demo-bot](../../examples/demo-bot/)

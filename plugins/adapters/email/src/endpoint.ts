@@ -4,7 +4,8 @@
 import nodemailer from "nodemailer";
 import Imap from "imap";
 import { simpleParser, type ParsedMail, type Attachment } from "mailparser";
-import { formatCompact, Endpoint, Message, MessageSegment, segment, SendContent, SendOptions, htmlToPlainTextWithBlockBreaks } from 'zhin.js';
+import { formatCompact, Endpoint, Message, MessageSegment, segment, SendContent, SendOptions, htmlToPlainTextWithBlockBreaks,
+} from 'zhin.js';
 import { EventEmitter } from "events";
 import { createWriteStream, promises as fs } from "fs";
 import path from "path";

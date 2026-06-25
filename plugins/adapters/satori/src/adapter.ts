@@ -2,7 +2,7 @@
  * Satori 适配器：单一适配器支持 WS 正向 / Webhook，由 config.connection 区分
  * 协议文档：https://satori.chat/zh-CN/introduction.html
  */
-import { formatCompact, Adapter, Plugin } from 'zhin.js';
+import { formatCompact, Adapter, Plugin, OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL } from 'zhin.js';
 import type { Router } from '@zhin.js/host-router';
 import { SatoriWsClient } from './endpoint-ws.js';
 import { SatoriWebhookEndpoint } from './endpoint-webhook.js';
@@ -17,6 +17,7 @@ export type SatoriBot = SatoriWsClient | SatoriWebhookEndpoint;
 
 export class SatoriAdapter extends Adapter<SatoriBot> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
+  static override outboundRichSegmentPolicy = OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL;
 
   #router?: Router;
 

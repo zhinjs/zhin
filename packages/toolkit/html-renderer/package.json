@@ -1,0 +1,64 @@
+{
+  "name": "@zhin.js/html-renderer",
+  "version": "0.0.1",
+  "description": "HTML to PNG/SVG for Zhin.js (satori + resvg); optional peer of zhin.js",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "lib",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rimraf lib"
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "html",
+    "image",
+    "satori",
+    "png"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@zhin.js/satori": "workspace:*",
+    "@resvg/resvg-js": "^2.6.2"
+  },
+  "peerDependencies": {
+    "@zhin.js/core": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/core": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@zhin.js/core": "workspace:*",
+    "typescript": "^6.0.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/toolkit/html-renderer"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

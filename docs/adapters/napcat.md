@@ -8,9 +8,11 @@ tier: Experimental
 本页由 [`plugins/adapters/napcat/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/napcat/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=a1b1d6520a2385d5 -->
+<!-- sync-adapter-docs:sha256=434499fa123e58f3 -->
 
 # @zhin.js/adapter-napcat
+
+> **QQ 群助手 + 可选 @AI** — 先在 [demo.zhin.dev](https://demo.zhin.dev) 或 Sandbox 调试，再接 NapCat。启用 AI：`npx zhin setup --ai`。接入本适配器：`npx zhin setup --adapters`。
 
 Zhin.js NapCatQQ 适配器，支持 OneBot11 标准 + go-cqhttp 扩展 + NapCat 独有 API。
 

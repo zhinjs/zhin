@@ -4,7 +4,7 @@
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { clearInterval } from 'node:timers';
-import { formatCompact, Endpoint, Message, Notice, Request, segment, SendContent, SendOptions, type QuotedMessagePayload, applyQqSenderRoleToMessageSender } from 'zhin.js';
+import { formatCompact, Endpoint, Message, Notice, Request, segment, SendContent, SendOptions, type QuotedMessagePayload, applyQqSenderRoleToMessageSender,} from 'zhin.js';
 import { parseOneBotGetMsgResponse } from './onebot-get-msg.js';
 import type {
   OneBot11WsClientConfig,

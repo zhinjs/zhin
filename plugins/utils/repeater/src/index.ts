@@ -26,7 +26,7 @@
 import { formatCompact, MessageCommand, Schema, usePlugin } from 'zhin.js';
 
 const plugin = usePlugin();
-const { logger, addCommand, addMiddleware, onDispose, declareConfig } = plugin;
+const { logger, addCommand, onDispose, declareConfig, root } = plugin;
 
 const config = declareConfig("repeater", Schema.object({
   threshold: Schema.number().default(3).min(2).max(10).description("触发复读的最少人数"),
@@ -56,7 +56,7 @@ function getSenderId(message: any): string {
 
 let totalRepeats = 0;
 
-addMiddleware(async function repeaterMiddleware(message: any, next: () => Promise<void>) {
+root.addMiddleware(async function repeaterMiddleware(message: any, next: () => Promise<void>) {
   const groupId = getGroupId(message);
   if (!groupId) return next();
 

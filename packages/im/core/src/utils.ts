@@ -31,6 +31,10 @@ import {
 } from "./types.js";
 import { Message } from "./message.js";
 import { htmlToFallbackText } from "./built/html-to-text.js";
+import { HtmlSegment } from "./built/rich-segments/html-segment.js";
+import { MarkdownSegment } from "./built/rich-segments/markdown-segment.js";
+import { QrcodeSegment } from "./built/rich-segments/qrcode-segment.js";
+import { TtsSegment } from "./built/rich-segments/tts-segment.js";
 
 /**
  * 组合中间件,洋葱模型
@@ -98,7 +102,7 @@ export namespace segment {
     return segment("face", { id, text });
   }
 
-  /** 出站 HTML 卡片段（html-renderer 转图；未安装时 core 自动剥离为 text） */
+  /** 出站 HTML 卡片段（Adapter policy 决定 image/text/origin） */
   export function htmlCard(options: {
     html: string;
     text?: string;
@@ -106,11 +110,39 @@ export namespace segment {
     backgroundColor?: string;
     fileName?: string;
   }) {
-    return segment("html", options);
+    return new HtmlSegment(options);
   }
 
   /** @alias htmlCard */
   export const html = htmlCard;
+
+  /** 出站 Markdown 段（Adapter policy 决定 image/text/origin） */
+  export function markdown(content: string, options: Omit<MarkdownSegment['data'], 'content'> = {}) {
+    return new MarkdownSegment({ content, ...options });
+  }
+
+  /** 二维码出站段（Adapter policy 决定 image/text/origin） */
+  export function qrcode(
+    text: string,
+    options: {
+      width?: number;
+      margin?: number;
+      errorCorrectionLevel?: 'L' | 'M' | 'Q' | 'H';
+      small?: boolean;
+    } = {},
+  ) {
+    return new QrcodeSegment({ text, ...options });
+  }
+
+  /** TTS 出站段（Adapter policy 决定 audio/text/origin） */
+  export function tts(options: {
+    text: string;
+    voice?: string;
+    provider?: string;
+  }) {
+    return new TtsSegment(options);
+  }
+
   export function from(content: SendContent): SendContent {
     if (!Array.isArray(content)) content = [content];
     const toString = (template: string | MessageElement) => {
@@ -228,6 +260,14 @@ export namespace segment {
             return stripped ? `[html-card] ${stripped.slice(0, 80)}` : "[html-card]";
           }
           return "[html-card]";
+        }
+        if (type === "qrcode") {
+          const t = typeof data.text === "string" ? data.text : "";
+          return t ? `[qrcode] ${t.slice(0, 80)}` : "[qrcode]";
+        }
+        if (type === "markdown") {
+          const t = typeof data.content === "string" ? data.content : typeof data.text === "string" ? data.text : "";
+          return t ? `[markdown] ${t.slice(0, 80)}` : "[markdown]";
         }
         return data.text ? `{${type}}(${data.text})` : `{${type}}`;
       })

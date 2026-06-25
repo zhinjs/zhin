@@ -4,9 +4,15 @@
 import { formatCompact, Adapter, Plugin } from 'zhin.js';
 import { KookEndpoint } from "./endpoint.js";
 import type { KookEndpointConfig } from "./types.js";
+import type { OutboundRichSegmentPolicy } from "zhin.js";
 
 export class KookAdapter extends Adapter<KookEndpoint> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
+  static override outboundRichSegmentPolicy: OutboundRichSegmentPolicy = {
+    qrcode: 'image',
+    html: 'image',
+    markdown: 'origin',
+  };
 
   constructor(plugin: Plugin) {
     super(plugin, "kook", []);

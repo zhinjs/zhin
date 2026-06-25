@@ -8,6 +8,18 @@ import { Feature, FeatureJSON } from "@zhin.js/kernel";
 export function commandLeadingToken(pattern: string): string {
   return pattern.split(/\s/)[0] ?? "";
 }
+
+/** 命令匹配优先级：首词越长越优先；同首词则完整 pattern 越长越优先 */
+export function compareCommandPatterns(a: string, b: string): number {
+  const leadDiff =
+    commandLeadingToken(b).length - commandLeadingToken(a).length;
+  if (leadDiff !== 0) return leadDiff;
+  const lenDiff = b.length - a.length;
+  if (lenDiff !== 0) return lenDiff;
+  const tokA = a.trim().split(/\s+/).length;
+  const tokB = b.trim().split(/\s+/).length;
+  return tokB - tokA;
+}
 import { MessageCommand } from "../command.js";
 import { Message } from "../message.js";
 import { Plugin, getPlugin } from "../plugin.js";
@@ -69,8 +81,8 @@ export class CommandFeature extends Feature<MessageCommand<RegisteredAdapter>> {
    * 处理消息，依次尝试匹配命令（较长前缀优先，避免 `teach` 抢 `teach-list`）
    */
   async handle(message: Message<AdapterMessage<RegisteredAdapter>>, plugin: Plugin): Promise<any> {
-    const commands = [...this.items].sort(
-      (a, b) => commandLeadingToken(b.pattern).length - commandLeadingToken(a.pattern).length,
+    const commands = [...this.items].sort((a, b) =>
+      compareCommandPatterns(a.pattern, b.pattern),
     );
     for (const command of commands) {
       const result = await command.handle(message, plugin);
