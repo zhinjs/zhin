@@ -17,8 +17,7 @@ import {
     hasOutbound,
     runInboundMessage,
     truncatePreview,
-    type MessageBase,
-} from 'zhin.js';
+    type MessageBase,} from 'zhin.js';
 import { registerFetchRoute, type Router, type RouterContext } from "@zhin.js/host-router/router";
 import type { WeChatMPConfig, WeChatMessage, WeChatAPIResponse, TokenResponse } from "./types.js";
 import type { WeChatMPAdapter } from "./adapter.js";

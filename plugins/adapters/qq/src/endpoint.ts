@@ -14,8 +14,7 @@ import {
   Message,
   SendOptions,
   SendContent,
-  segment,
-} from "zhin.js";
+  segment,} from 'zhin.js';
 import type { MessageElement } from "zhin.js";
 import { ReceiverMode, type QQEndpointConfig, type ApplicationPlatform } from "./types.js";
 import type { QQAdapter } from "./adapter.js";

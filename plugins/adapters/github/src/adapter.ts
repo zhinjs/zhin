@@ -1,7 +1,7 @@
 /**
  * GitHub 适配器（基于 gh CLI + App 认证 + Webhook/轮询混合）
  */
-import { formatCompact, Adapter, Message, Plugin } from 'zhin.js';
+import { formatCompact, Adapter, Message, Plugin, OUTBOUND_RICH_SEGMENT_POLICY_TEXT_ONLY } from 'zhin.js';
 import crypto from 'node:crypto';
 import { GitHubEndpoint } from './endpoint.js';
 import type { Router } from '@zhin.js/host-router';
@@ -71,6 +71,7 @@ function formatNotification(event: string, p: GenericWebhookPayload): string {
 
 export class GitHubAdapter extends Adapter<GitHubEndpoint> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
+  static override outboundRichSegmentPolicy = OUTBOUND_RICH_SEGMENT_POLICY_TEXT_ONLY;
 
   /** 轮询定时器 */
   private _pollTimer: ReturnType<typeof setInterval> | null = null;

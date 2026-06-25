@@ -4,6 +4,8 @@ import { connectEndpoints } from '../setup/connect-endpoints.js';
 import { loadConfig } from '../setup/load-config.js';
 import { loadPlugins } from '../setup/load-plugins.js';
 import { registerAI } from '../setup/register-ai.js';
+import { registerHtmlRenderer } from '../setup/register-html-renderer.js';
+import { registerSpeech } from '../setup/register-speech.js';
 import { registerCoreServices } from '../setup/register-core-services.js';
 import { registerSignalHandlers } from '../setup/signal-handlers.js';
 import { registerUnifiedInboxMessageListeners } from '../setup/register-inbox.js';
@@ -48,6 +50,8 @@ export async function bootstrapNode(options: BootstrapOptions = {}): Promise<Boo
   registerCoreServices(plugin, appConfig, configFeature);
   applyConfigAndDatabase(plugin, appConfig);
   await registerAI();
+  await registerHtmlRenderer(plugin, appConfig);
+  await registerSpeech(plugin, appConfig);
   registerStdinLoginAssist(plugin);
 
   await connectEndpoints(plugin, appConfig);

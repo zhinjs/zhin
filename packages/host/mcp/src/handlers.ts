@@ -461,12 +461,12 @@ export function createMiddlewareCode(args: {
 
   let code = `import { usePlugin } from "zhin.js";
 
-const { addMiddleware, logger } = usePlugin();
+const { root, logger } = usePlugin();
 
 `;
 
   if (hasFilter) {
-    code += `addMiddleware(function ${name}(message, next) {
+    code += `root.addMiddleware(function ${name}(message, next) {
   // ${description}
   if (message.type !== "group") {
     return next();
@@ -480,7 +480,7 @@ const { addMiddleware, logger } = usePlugin();
 });
 `;
   } else {
-    code += `addMiddleware(function ${name}(message, next) {
+    code += `root.addMiddleware(function ${name}(message, next) {
   // ${description}
   const start = Date.now();
 
@@ -822,9 +822,8 @@ root.on("context.mounted", (name) => {
   logger.info(\`服务 \${name} 已就绪\`);
 });
 
-// 监听消息（通过中间件）:
-const { addMiddleware } = usePlugin();
-addMiddleware(async (message, next) => {
+// 监听消息（通过中间件；入站链走 root.middleware）:
+root.addMiddleware(async (message, next) => {
   logger.info("收到消息:" + message.content);
   await next();
 });`,

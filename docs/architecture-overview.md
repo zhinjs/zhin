@@ -44,7 +44,9 @@ graph TB
                                 ├→ 命令路由 → 命令处理
                                 └→ AI Agent → 工具调用 → 回复
 
-回复 → renderSendMessage → before.sendMessage → Endpoint → 平台
+回复 → Adapter.sendMessage → renderSendMessage
+                                ├→ resolveRichSegments（html/tts/qrcode…）
+                                └→ before.sendMessage → Endpoint → 平台
 ```
 
 详细流程见 [消息如何流转](/essentials/message-flow)。

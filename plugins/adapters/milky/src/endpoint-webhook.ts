@@ -2,7 +2,7 @@
  * Milky Webhook Bot：无长连接，在 router.post(path) 接收 POST 事件，鉴权后转 Message
  */
 import { EventEmitter } from 'events';
-import { formatCompact, Endpoint, Message, segment, SendOptions } from 'zhin.js';
+import { formatCompact, Endpoint, Message, segment, SendOptions,} from 'zhin.js';
 import { firstHeader, firstQuery, registerFetchRoute, type Router, type RouterContext } from '@zhin.js/host-router/router';
 import { callApi } from './api.js';
 import type { MilkyWebhookConfig, MilkyEvent } from './types.js';

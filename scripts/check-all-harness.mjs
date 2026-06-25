@@ -86,6 +86,11 @@ const checks = [
     command: 'pnpm check:install-size',
     description: 'zhin.js production node_modules ≤10MB（ADR 0019）',
   },
+  {
+    name: 'Rich Segment Adapters',
+    command: 'pnpm check:rich-segments',
+    description: '各 adapter 声明 outboundRichSegmentPolicy 与契约测试',
+  },
 ];
 
 console.log('Running all harness checks...\n');

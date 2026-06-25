@@ -2,7 +2,7 @@
  * OneBot 12 适配器：单一适配器支持正向 WS / Webhook / 反向 WS，由 config.connection 区分
  * 协议文档：https://12.onebot.dev/
  */
-import { formatCompact, Adapter, Plugin } from 'zhin.js';
+import { formatCompact, Adapter, Plugin, OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL } from 'zhin.js';
 import type { Router } from '@zhin.js/host-router';
 import { OneBot12WsClient } from './endpoint-ws.js';
 import { OneBot12WebhookEndpoint } from './endpoint-webhook.js';
@@ -18,6 +18,7 @@ export type OneBot12Bot = OneBot12WsClient | OneBot12WebhookEndpoint | OneBot12W
 
 export class OneBot12Adapter extends Adapter<OneBot12Bot> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
+  static override outboundRichSegmentPolicy = OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL;
 
   #router?: Router;
 

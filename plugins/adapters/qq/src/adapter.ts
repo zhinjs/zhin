@@ -6,13 +6,22 @@ import {
   Plugin,
 } from "zhin.js";
 import type { Router } from "@zhin.js/host-router";
+import type { EndpointManager } from "zhin.js";
 import { QQEndpoint } from "./endpoint.js";
+import { QqEndpointManager } from "./qq-endpoint-manager.js";
 import type { QQEndpointConfig, ReceiverMode } from "./types.js";
+import type { OutboundRichSegmentPolicy } from "zhin.js";
 
 export class QQAdapter extends Adapter<QQEndpoint<ReceiverMode>> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
+  static override outboundRichSegmentPolicy: OutboundRichSegmentPolicy = {
+    qrcode: 'image',
+    html: 'image',
+    markdown: 'origin',
+  };
 
   #router?: Router;
+  #endpointManager?: QqEndpointManager;
 
   constructor(plugin: Plugin, router?: Router) {
     super(plugin, "qq", []);
@@ -25,6 +34,13 @@ export class QQAdapter extends Adapter<QQEndpoint<ReceiverMode>> {
 
   createEndpoint(config: QQEndpointConfig<ReceiverMode>): QQEndpoint<ReceiverMode> {
     return new QQEndpoint(this, config);
+  }
+
+  override getEndpointManager(): EndpointManager {
+    if (!this.#endpointManager) {
+      this.#endpointManager = new QqEndpointManager(this);
+    }
+    return this.#endpointManager;
   }
 
   // ── IGroupManagement 标准群管方法 ──────────────────────────────────

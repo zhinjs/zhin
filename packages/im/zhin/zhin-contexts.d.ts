@@ -9,6 +9,7 @@ declare module '@zhin.js/core' {
   namespace Plugin {
     interface Contexts {
       ai: import('@zhin.js/agent').AIService;
+      'html-renderer': import('@zhin.js/html-renderer').HtmlRendererService;
     }
   }
 }

@@ -44,11 +44,13 @@
 
 ## L4 — 全维度验收
 
-**目标**：硬编排、语义记忆、MCP Agent Mesh、多适配器。
+**目标**：硬编排、语义记忆、MCP Agent Mesh、多适配器、可选多模态（STT/TTS、Rich Segment）。
 
 1. [Agent Mesh 硬编排](/advanced/agent-mesh)
-2. [examples/full-bot](https://github.com/zhinjs/zhin/tree/main/examples/full-bot) — 全功能示例
-3. `pnpm check:l4` 验收
+2. [AI 内容链可观测](/advanced/ai-content-chain) — stage 日志、optional peer、doctor
+3. [Rich Segment 适配器矩阵](/essentials/rich-segment-adapters)
+4. [examples/full-bot](https://github.com/zhinjs/zhin/tree/main/examples/full-bot) — 全功能示例
+5. `pnpm check:l4` 验收；`zhin doctor --upgrade-l4` 从 minimal 升级
 
 ## 我该读哪篇？
 

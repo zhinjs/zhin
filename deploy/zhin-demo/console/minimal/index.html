@@ -7,21 +7,54 @@
   <style>
     :root { font-family: system-ui, sans-serif; color: #111; background: #f6f7f9; }
     body { margin: 0; display: flex; flex-direction: column; min-height: 100vh; }
-    header { padding: 12px 20px; background: #fff; border-bottom: 1px solid #e5e7eb; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
-    header a.cta { margin-left: auto; background: #2563eb; color: #fff; padding: 8px 14px; border-radius: 8px; text-decoration: none; font-weight: 600; }
-    main { flex: 1; display: flex; flex-direction: column; }
+    header { padding: 12px 20px; background: #fff; border-bottom: 1px solid #e5e7eb; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    header .meta { font-size: 14px; color: #555; }
+    header .actions { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    header a.cta { background: #2563eb; color: #fff; padding: 8px 14px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; white-space: nowrap; }
+    header a.cta.secondary { background: #fff; color: #2563eb; border: 1px solid #2563eb; }
+    header button.linkish { background: none; border: none; color: #2563eb; font-size: 13px; cursor: pointer; text-decoration: underline; padding: 0; }
+    main { flex: 1; display: flex; flex-direction: column; position: relative; }
     #status { padding: 8px 20px; font-size: 14px; color: #555; }
     iframe { flex: 1; border: 0; width: 100%; min-height: 70vh; background: #fff; }
+    #demo-onboarding { position: fixed; inset: 0; z-index: 100; background: rgba(15, 23, 42, 0.55); display: none; align-items: center; justify-content: center; padding: 16px; }
+    #demo-onboarding.open { display: flex; }
+    .onboard-card { background: #fff; border-radius: 12px; max-width: 440px; width: 100%; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,.15); }
+    .onboard-card h2 { margin: 0 0 8px; font-size: 20px; }
+    .onboard-card p { margin: 0 0 12px; color: #374151; line-height: 1.55; font-size: 15px; }
+    .onboard-card ul { margin: 0 0 16px; padding-left: 20px; color: #374151; font-size: 14px; line-height: 1.6; }
+    .onboard-card .step-label { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+    .onboard-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .onboard-actions button { flex: 1; min-width: 120px; padding: 10px 14px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; }
+    .onboard-actions .primary { background: #2563eb; color: #fff; }
+    .onboard-actions .ghost { background: #f3f4f6; color: #111; }
+    .onboard-ctas { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+    .onboard-ctas a { display: block; text-align: center; padding: 10px 14px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; }
+    .onboard-ctas a.primary { background: #2563eb; color: #fff; }
+    .onboard-ctas a.secondary { background: #fff; color: #2563eb; border: 1px solid #2563eb; }
   </style>
 </head>
 <body>
   <header>
     <strong>Zhin.js Demo</strong>
-    <span>命令 <code>hello</code> · AI <code>ai:</code> 前缀</span>
-    <a class="cta" href="https://zhin.js.org/getting-started/" target="_blank" rel="noopener">本地部署 npm create zhin-app</a>
+    <span class="meta">QQ 群助手框架 · Sandbox 零安装 · 命令 <code>hello</code> · 卡片 <code>card</code> · AI <code>ai:</code></span>
+    <div class="actions">
+      <button type="button" class="linkish" id="help-btn" hidden>使用说明</button>
+      <a class="cta" href="https://zhin.js.org/getting-started/first-run" target="_blank" rel="noopener">部署到本机</a>
+      <a class="cta secondary" href="https://zhin.js.org/adapters/icqq" target="_blank" rel="noopener">接 QQ Bot</a>
+    </div>
   </header>
   <div id="status">正在连接 Sandbox…</div>
   <main id="main"></main>
+
+  <div id="demo-onboarding" role="dialog" aria-modal="true" aria-labelledby="onboard-title">
+    <div class="onboard-card">
+      <div class="step-label" id="onboard-step-label">1 / 3</div>
+      <h2 id="onboard-title">零安装体验 Zhin</h2>
+      <div id="onboard-body"></div>
+      <div class="onboard-actions" id="onboard-nav"></div>
+    </div>
+  </div>
+
   <script type="module" src="./boot.js"></script>
 </body>
 </html>

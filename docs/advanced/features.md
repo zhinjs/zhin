@@ -24,6 +24,7 @@ Feature 提供了统一的基类，所有内置功能都继承自它。
 | `PermissionFeature` | `permission` | `addPermission()` | 权限规则管理 |
 | `DatabaseFeature` | `database` | `defineModel()` | 数据库模型定义 |
 | `ComponentFeature` | `component` | `addComponent()` | 消息组件注册 |
+| `MessageFilterFeature` | `message-filter` | `addFilterRule()` | 入站消息过滤（Guardrail 阶段） |
 
 ## Feature 基类 API
 

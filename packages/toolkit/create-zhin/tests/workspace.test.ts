@@ -3,7 +3,6 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { BASE_SKILL_NAMES, DEV_SKILL_NAMES, createWorkspace } from '../src/workspace'
-import { MCP_SDK_VERSION } from '@zhin.js/scaffold-wizard'
 import type { InitOptions } from '../src/types'
 
 const tmpRoots: string[] = []
@@ -65,6 +64,14 @@ describe('createWorkspace', () => {
     expect(pkg.dependencies).toHaveProperty('@zhin.js/host-api')
     expect(pkg.dependencies).toHaveProperty('@zhin.js/host-router')
     expect(pkg.dependencies).toHaveProperty('@zhin.js/satori')
+    expect(pkg.dependencies['zhin.js']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/cli']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/host-api']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/host-router']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/adapter-sandbox']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/client']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/contract']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/satori']).toBe('latest')
     expect(pkg.engines.node).toBe('^20.19.0 || >=22.12.0')
     expect(config).toContain('corsOrigins:')
     expect(config).toContain('https://console.zhin.dev')
@@ -79,6 +86,8 @@ describe('createWorkspace', () => {
     expect(examplePlugin).toContain('segment.html')
     expect(statusCard).toContain('@jsxImportSource @zhin.js/satori')
     expect(statusCard).toContain('buildStatusCard')
+    expect(examplePlugin).toContain('setup --ai')
+    expect(examplePlugin).toContain('card')
   })
 
   it('uses the real generated config filename for JSON projects', async () => {
@@ -100,10 +109,10 @@ describe('createWorkspace', () => {
       },
     })
     const pkg = await fs.readJson(path.join(projectPath, 'package.json'))
-    expect(pkg.dependencies['@zhin.js/agent']).toBe('^4.0.0')
-    expect(pkg.dependencies['@modelcontextprotocol/sdk']).toBe(MCP_SDK_VERSION)
-    expect(pkg.dependencies['@ai-sdk/openai-compatible']).toBe('^1.0.0')
-    expect(pkg.dependencies.zod).toBe('^4.0.0')
-    expect(pkg.dependencies.ai).toBe('^6.0.0')
+    expect(pkg.dependencies['@zhin.js/agent']).toBe('latest')
+    expect(pkg.dependencies['@modelcontextprotocol/sdk']).toBe('latest')
+    expect(pkg.dependencies['@ai-sdk/openai-compatible']).toBe('latest')
+    expect(pkg.dependencies.zod).toBe('latest')
+    expect(pkg.dependencies.ai).toBe('latest')
   })
 })

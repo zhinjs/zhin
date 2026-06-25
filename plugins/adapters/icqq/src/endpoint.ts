@@ -4,7 +4,7 @@
  * 不再直接依赖 @icqqjs/icqq 协议库。
  * 登录由 `icqq login` 完成，本 Endpoint 只负责连接守护进程并收发消息。
  */
-import { formatCompact, Endpoint, Message, segment, SendContent, SendOptions, type QuotedMessagePayload } from 'zhin.js';
+import { formatCompact, Endpoint, Message, segment, SendContent, SendOptions, type QuotedMessagePayload,} from 'zhin.js';
 import type {
   IcqqEndpointConfig,
   IcqqSenderInfo,
@@ -49,9 +49,16 @@ import {
   shouldRefreshListsOnMeta,
   type IcqqIpcRawEvent,
 } from "./icqq-side-events.js";
-import { enableTypingIndicator, type ICQQTypingIndicatorManager } from "./typing-indicator.js";
+import {
+  disposeIcqqLoginAssistBridge,
+  handleIcqqLoginIpcEvent,
+} from "./icqq-login-assist-bridge.js";
 import { parseIcqqGetMsgResponse } from "./get-msg.js";
 import { enrichQuotedPayloadWithForward, isForwardPlaceholderPayload } from "./forward-msg.js";
+import {
+  enableTypingIndicator,
+  type ICQQTypingIndicatorManager,
+} from "./typing-indicator.js";
 
 export class IcqqEndpoint implements Endpoint<IcqqEndpointConfig, IcqqIpcMessageEvent> {
   $connected = false;
@@ -280,6 +287,7 @@ export class IcqqEndpoint implements Endpoint<IcqqEndpointConfig, IcqqIpcMessage
     }
     this.subscriptions = [];
     this.inboundDeduper.clear();
+    disposeIcqqLoginAssistBridge(this.$id);
     this.ipc?.close();
     this.$connected = false;
     this.logger.info(formatCompact( { op: "disconnect", endpoint: this.$id }));
@@ -288,6 +296,11 @@ export class IcqqEndpoint implements Endpoint<IcqqEndpointConfig, IcqqIpcMessage
   // ── 消息处理 ───────────────────────────────────────────────────────
 
   private handleEvent(event: IpcEvent): void {
+    if (event.event?.startsWith("system.login.")) {
+      handleIcqqLoginIpcEvent(this, event.event, event.data);
+      return;
+    }
+
     const payload = unwrapIcqqIpcEventPayload(event);
     if (!payload || typeof payload !== "object") {
       if (process.env.ICQQ_IPC_LOG_RAW === "1") {
@@ -503,6 +516,9 @@ export class IcqqEndpoint implements Endpoint<IcqqEndpointConfig, IcqqIpcMessage
       $channel: {
         id: normalized.channelId,
         type: normalized.channelType,
+        ...(normalized.channelParentGroupId
+          ? { parent: { type: 'group' as const, id: normalized.channelParentGroupId } }
+          : {}),
       },
       $content: normalized.content,
       $quote_id: quoteId,
@@ -641,17 +657,30 @@ export class IcqqEndpoint implements Endpoint<IcqqEndpointConfig, IcqqIpcMessage
 
   async $sendMessage(options: SendOptions): Promise<string> {
     const outboundMedia = resolveIcqqOutboundMediaMode(this.$config);
-    const content = materializeOutboundBase64(options.content, outboundMedia);
+    const qrcodeContent = options.content;
+    const content = materializeOutboundBase64(qrcodeContent, outboundMedia);
     const message = buildIcqqIpcMessageImpl(content);
 
     let action: string;
     let params: Record<string, unknown>;
 
     switch (options.type) {
-      case "private":
-        action = Actions.SEND_PRIVATE_MSG;
-        params = { user_id: Number(options.id), message };
+      case "private": {
+        const groupParent =
+          options.parent?.type === "group" ? options.parent.id : undefined;
+        if (groupParent) {
+          action = Actions.SEND_TEMP_MSG;
+          params = {
+            group_id: Number(groupParent),
+            user_id: Number(options.id),
+            message,
+          };
+        } else {
+          action = Actions.SEND_PRIVATE_MSG;
+          params = { user_id: Number(options.id), message };
+        }
         break;
+      }
       case "group":
         action = Actions.SEND_GROUP_MSG;
         params = { group_id: Number(options.id), message };

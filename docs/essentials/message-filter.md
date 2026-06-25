@@ -164,14 +164,15 @@ plugin.addFilterRule({
 |---|---|---|
 | **消息过滤** | Dispatcher Guardrail (Stage 1) | 最早拦截，被过滤的消息不进入任何后续流程 |
 | **权限系统** | 命令执行前检查 | 消息可以被接收，但特定命令需要权限才能执行 |
-| **中间件** | Dispatcher 之后 | 消息已通过过滤和路由后的自定义处理 |
+| **中间件** | `root.middleware`（Dispatcher **之前**） | 包裹整条 dispatch；应用插件用 `root.addMiddleware` |
 
 ## 调试过滤
 
 在插件中查看消息的完整信息：
 
 ```typescript
-plugin.addMiddleware(async (message, next) => {
+const plugin = usePlugin()
+plugin.root.addMiddleware(async (message, next) => {
   console.log({
     adapter: message.$adapter,
     bot: message.$endpoint,
@@ -189,3 +190,9 @@ plugin.addMiddleware(async (message, next) => {
 const result = plugin.testFilter(message)
 console.log(result.reason) // e.g. 'matched rule "block-spam" → deny'
 ```
+
+## 与内容审查的区别
+
+`message_filter` 只回答 **谁 / 哪群 / 哪平台** 的消息要进入 Dispatcher，不检查文本是否含敏感词。
+
+若需对 **入站/出站文本** 做合规处理，请使用 Guardrail 与 `before.sendMessage` hook，见 [内容审查（运营者自建）](/advanced/content-moderation) 与 [ADR 0021](/adr/0021-content-moderation)。

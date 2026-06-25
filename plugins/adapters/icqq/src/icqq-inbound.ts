@@ -30,6 +30,8 @@ export interface IcqqIpcMessageEvent extends IcqqIpcEventBase {
     user_uid?: string;
     nickname?: string;
     card?: string;
+    /** 群临时会话来源群号 */
+    group_id?: number;
     /** NT/IPC 群成员角色：owner | admin | member */
     role?: GroupRole | string;
   };
@@ -81,6 +83,8 @@ export interface NormalizedIcqqInbound {
   idSource: "message_id" | "msg_id" | "seq" | "synthetic";
   channelType: "group" | "private";
   channelId: string;
+  /** 群临时会话：来源群号 */
+  channelParentGroupId?: string;
   userId: string;
   nickname: string;
   /** 群聊时来自 IPC sender.role（私聊无） */
@@ -204,9 +208,38 @@ export function shouldSkipSelfInboundMessage(
   return Number(data.self_id) === Number(data.user_id);
 }
 
+/** 群临时会话私聊：icqq message_type=private & sub_type=group */
+export function isIcqqGroupTempPrivateMessage(data: IcqqIpcMessageEvent): boolean {
+  const messageType =
+    data.message_type ??
+    (data.type === "group" || data.type === "private" ? data.type : undefined);
+  if (messageType !== "private") return false;
+  if (data.sub_type === "group") return true;
+  const groupId = data.sender?.group_id;
+  return typeof groupId === "number" && groupId > 0;
+}
+
 export function resolveChannelFromIcqqMessage(
   data: IcqqIpcMessageEvent,
-): { channelType: "group" | "private"; channelId: string } {
+): {
+  channelType: "group" | "private";
+  channelId: string;
+  channelParentGroupId?: string;
+} {
+  if (isIcqqGroupTempPrivateMessage(data)) {
+    const groupId = data.sender?.group_id ?? data.group_id;
+    const userId = resolveIcqqInboundUserId(
+      data as unknown as Record<string, unknown>,
+    );
+    if (groupId != null && userId != null) {
+      return {
+        channelType: "private",
+        channelId: String(userId),
+        channelParentGroupId: String(groupId),
+      };
+    }
+  }
+
   const messageType =
     data.message_type ??
     (data.type === "group" || data.type === "private" ? data.type : undefined);
@@ -594,7 +627,7 @@ export function normalizeIcqqInboundMessage(
   const ext = data as IcqqIpcMessageEvent & Record<string, unknown>;
   const userIdNum = resolveIcqqInboundUserId(ext);
   if (userIdNum == null) return null;
-  const { channelType, channelId } = resolveChannelFromIcqqMessage(data);
+  const { channelType, channelId, channelParentGroupId } = resolveChannelFromIcqqMessage(data);
   const resolved = resolveIcqqInboundMessageId(data, channelId);
   const nickname =
     data.sender?.nickname ?? data.nickname ?? String(userIdNum);
@@ -608,6 +641,7 @@ export function normalizeIcqqInboundMessage(
     idSource: resolved.source,
     channelType,
     channelId,
+    channelParentGroupId,
     userId: String(userIdNum),
     nickname,
     senderRole,

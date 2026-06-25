@@ -4,7 +4,7 @@
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { clearInterval } from 'node:timers';
-import { formatCompact, Endpoint, Message, segment, SendOptions } from 'zhin.js';
+import { formatCompact, Endpoint, Message, segment, SendOptions,} from 'zhin.js';
 import { callApi } from './api.js';
 import type { MilkyWsConfig, MilkyEvent } from './types.js';
 import type { MilkyAdapter } from './adapter.js';
