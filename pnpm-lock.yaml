@@ -1066,8 +1066,8 @@ importers:
         specifier: ^3.9.10
         version: 3.9.10
       nodemailer:
-        specifier: ^8.0.10
-        version: 8.0.10
+        specifier: ^9.0.1
+        version: 9.0.1
     devDependencies:
       '@types/imap':
         specifier: ^0.8.40
@@ -6631,12 +6631,12 @@ packages:
     resolution: {integrity: sha512-8sPAz/7tw1mCCc8xBG4f0wi+flHkSSgQeX998iQ75Pu27evA6UUWCjSE7xnrYTg2q33oU5leJ061EKPDv6BocQ==}
     engines: {node: '>=10.12.0'}
 
-  nodemailer@8.0.10:
-    resolution: {integrity: sha512-BLFuSth7QtHOkBzyqTehWWyub0NTRDuK2Q2SQfnGLsrJnzyU+Yeh4WpV1eZGuARFj1xQJHIdnTuJZLP+b9R1GQ==}
-    engines: {node: '>=6.0.0'}
-
   nodemailer@9.0.0:
     resolution: {integrity: sha512-tbPTid7d/p9jAA8CRZ3iomvrMaST0o6NYuY7v6JQZHpPRZ61mLFSPKYd7342NtOFuej9/+L48SOIxwfu2uDvtw==}
+    engines: {node: '>=6.0.0'}
+
+  nodemailer@9.0.1:
+    resolution: {integrity: sha512-Gwv8SQewT616ZM/URn0H54b8PWo/Wum7md3EW2aWy1lO27+WZCX+Xyak3J+NlmHUjDh5ME+uesJUDRbR3Ye8Bw==}
     engines: {node: '>=6.0.0'}
 
   non-layered-tidy-tree-layout@2.0.2:
@@ -13167,9 +13167,9 @@ snapshots:
     dependencies:
       p-limit: 3.1.0
 
-  nodemailer@8.0.10: {}
-
   nodemailer@9.0.0: {}
+
+  nodemailer@9.0.1: {}
 
   non-layered-tidy-tree-layout@2.0.2:
     optional: true
