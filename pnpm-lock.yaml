@@ -1475,7 +1475,7 @@ importers:
         specifier: ^4.7.3
         version: 4.7.3(@types/express@5.0.6)
       '@slack/web-api':
-        specifier: ^7.16.0
+        specifier: ^7.17.0
         version: 7.17.0
     devDependencies:
       '@types/node':
