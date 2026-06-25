@@ -13,8 +13,7 @@ import {
   MessageSegment,
   segment,
   formatCompact,
-  type QuotedMessagePayload,
-} from "zhin.js";
+  type QuotedMessagePayload,} from 'zhin.js';
 import { registerFetchRoute, type Router, type RouterContext } from "@zhin.js/host-router/router";
 import type {
   LineEndpointConfig,

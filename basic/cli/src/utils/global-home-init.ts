@@ -1,13 +1,8 @@
 import { execFileSync } from 'node:child_process';
-import { createRequire } from 'node:module';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { globalZhinHome } from './zhin-home.js';
-
-const require = createRequire(import.meta.url);
-const cliPkg = require('../../package.json') as { version: string };
-const ZHIN_VERSION = `^${cliPkg.version}`;
 
 const GLOBAL_PACKAGE_JSON = {
   name: 'zhin-global',
@@ -20,10 +15,10 @@ const GLOBAL_PACKAGE_JSON = {
     start: 'zhin start',
   },
   dependencies: {
-    'zhin.js': ZHIN_VERSION,
-    '@zhin.js/adapter-sandbox': ZHIN_VERSION,
-    '@zhin.js/host-api': ZHIN_VERSION,
-    '@zhin.js/host-router': ZHIN_VERSION,
+    'zhin.js': 'latest',
+    '@zhin.js/adapter-sandbox': 'latest',
+    '@zhin.js/host-api': 'latest',
+    '@zhin.js/host-router': 'latest',
   },
   devDependencies: {
     tsx: '^4.22.4',

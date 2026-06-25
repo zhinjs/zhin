@@ -90,11 +90,56 @@ return segment.html({
   backgroundColor: '#d8dce3',
   fileName: 'card.png',
 })
+
+// Markdown 段（QQ 等平台 policy 为 origin 时透传）
+return segment.markdown('# Title\n\nBody')
 ```
 
-- 安装 **`@zhin.js/plugin-html-renderer`** 时，`before.sendMessage` 自动将 `html` 转为 PNG。
-- 未安装或转图失败时，`Adapter.renderSendMessage` 链尾调用 **`coerceHtmlSegmentsToText`**，用 **`htmlToFallbackText`** 剥离纯文本。
-- 日志预览为 `[html-card]` + 自动剥离摘要（前 80 字），不 dump 完整 HTML。
+出站富媒体段（`qrcode` / `html` / `markdown`）在 **`Adapter.renderSendMessage` 首步** 按各 Adapter 的 **`outboundRichSegmentPolicy`** 统一渲染为 `image` / `text` / `origin`：
+
+| 渲染模式 | 含义 |
+|---------|------|
+| `image` | 转为 `image` 段（qrcode 生成 PNG；html/markdown 经 `@zhin.js/html-renderer` 动态转图，未安装则降级 text） |
+| `text` | 剥离为纯文本段 |
+| `origin` | 原样透传，由 Endpoint 解释（如 QQ markdown、process 终端二维码） |
+
+默认策略：`qrcode: image`，`html: text`，`markdown: text`。QQ / KOOK 等适配器 override static policy。
+
+- 安装 **`@zhin.js/html-renderer`** 且 policy 为 `html: 'image'` 时，core 在首步动态 import 并转 PNG。
+- policy 为 `html: 'text'` 时等价于 **`coerceHtmlSegmentsToText`** / **`htmlToFallbackText`**。
+- 日志预览：`[html-card]`、`[qrcode]`、`[markdown]` + 摘要（前 80 字）。
+
+#### 扩展新 Rich Segment（长期方案）
+
+内置 kind 通过 **`richSegmentRegistry`** 注册；optional 能力通过 **`registerRichSegmentCapabilityLoader`** 注入（与 `@zhin.js/html-renderer` 同模式）。
+
+```typescript
+import {
+  RichSegment,
+  registerRichSegmentKind,
+  registerRichSegmentCapabilityLoader,
+  RICH_SEGMENT_MODE,
+  segment,
+} from '@zhin.js/core';
+
+// 1. 内置 capability：speech（@zhin.js/speech）已注册，tts kind 已内置
+// 可选：注册 ffmpeg 等
+registerRichSegmentCapabilityLoader('media-pipeline', async (opts) => {
+  const { createMediaPipeline } = await import('@zhin.js/media-pipeline');
+  return createMediaPipeline(opts.getConfig?.());
+});
+
+// 2. 使用内置 segment.tts（Adapter policy 决定 audio/text/origin）
+// segment.tts({ text: '你好' })
+class MyAdapter extends Adapter {
+  static override outboundRichSegmentPolicy = {
+    tts: 'audio',
+    qrcode: 'image', // 其余 kind 用 registry 默认值
+  };
+}
+```
+
+**分工**：Rich Segment 负责「语义段 → 标准 IM 段」；Endpoint `materializeOutboundMedia` 负责「已有 audio/video/file → 平台上传」。
 
 ### Adapter（适配器）
 
@@ -175,7 +220,17 @@ export { createMessageDispatcher } from './built/dispatcher.js'
 // 适配器与消息
 export { Adapter, Message, MessageCommand, Endpoint, segment, ... } from './'
 
-// HTML 出站回退
+// 富媒体出站段
+export {
+  resolveRichSegments,
+  DEFAULT_OUTBOUND_RICH_SEGMENT_POLICY,
+  QrcodeSegment,
+  HtmlSegment,
+  MarkdownSegment,
+} from './built/rich-segments/index.js'
+export type { RichSegmentKind, RichRenderMode, OutboundRichSegmentPolicy } from './built/rich-segments/types.js'
+
+// HTML 出站回退（legacy；policy html:'text' 时等价）
 export { htmlToFallbackText, coerceHtmlSegmentsToText, registerHtmlSegmentFallback } from './built/*.js'
 
 // AI 原语（来自 @zhin.js/ai，非 ZhinAgent）

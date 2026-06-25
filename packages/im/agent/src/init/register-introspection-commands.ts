@@ -1,8 +1,7 @@
 /**
- * IM 内省指令：/cmd、/endpoints、/bindings、/tools、/mcp
+ * IM 内省指令：/cmd、/bindings、/tools、/mcp（/endpoints 已迁入 @zhin.js/core）
  */
 import {
-  Adapter,
   getPlugin,
   Message,
   MessageCommand,
@@ -14,12 +13,10 @@ import { rejectUnlessManagementOperator } from './management-command-guard.js';
 import {
   commandRowsFromService,
   formatAgentsList,
-  formatEndpointsList,
   formatCommandsList,
   formatMcpServersList,
   formatToolsList,
   introspectionHelpFooter,
-  type EndpointRow,
   type McpServerRow,
 } from './introspection-commands-format.js';
 
@@ -46,22 +43,6 @@ function registerIntrospectionCommand(
     });
   commandService.add(cmd, pluginName);
   disposers.push(() => commandService.remove(cmd));
-}
-
-function collectEndpoints(root: ReturnType<typeof getPlugin>['root']): EndpointRow[] {
-  const rows: EndpointRow[] = [];
-  for (const adapterName of root.adapters) {
-    const adapter = root.inject(adapterName);
-    if (!(adapter instanceof Adapter)) continue;
-    for (const [endpointId, endpoint] of adapter.endpoints.entries()) {
-      rows.push({
-        adapter: String(adapterName),
-        name: endpointId,
-        online: !!(endpoint as { $connected?: boolean }).$connected,
-      });
-    }
-  }
-  return rows;
 }
 
 function collectMcpRows(orchestrator: AgentOrchestrator | undefined): McpServerRow[] {
@@ -93,16 +74,6 @@ export function registerIntrospectionCommands(_refs: AIServiceRefs): void {
       '/cmd',
       '列出已注册的 IM 命令',
       listCommands,
-    );
-
-    registerIntrospectionCommand(
-      commandService,
-      root.name,
-      root,
-      disposers,
-      '/endpoints',
-      '列出各适配器下的 Endpoint 及在线状态',
-      () => formatEndpointsList(collectEndpoints(root)),
     );
 
     registerIntrospectionCommand(

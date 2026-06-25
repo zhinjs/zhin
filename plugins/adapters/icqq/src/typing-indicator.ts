@@ -113,10 +113,14 @@ export class ICQQTypingIndicatorManager {
           } else if (options.userId) {
             this.endpoint.logger.debug('[ICQQ:TypingIndicator] sending private message', {
               userId: options.userId,
+              groupId: options.groupId,
             });
             return await this.endpoint.$sendMessage({
               type: 'private',
               id: options.userId,
+              ...(options.groupId
+                ? { parent: { type: 'group' as const, id: options.groupId } }
+                : {}),
               context: 'icqq',
               endpoint: this.endpoint.$id,
               content: [{ type: 'text', data: { text: content } }],

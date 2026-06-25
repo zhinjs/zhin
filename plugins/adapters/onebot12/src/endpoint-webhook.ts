@@ -2,7 +2,7 @@
  * OneBot 12 HTTP Webhook Bot：OneBot 实现 POST 事件到应用 path，可选 api_url 用于发消息
  */
 import { EventEmitter } from 'events';
-import { formatCompact, Endpoint, Message, segment, SendOptions } from 'zhin.js';
+import { formatCompact, Endpoint, Message, segment, SendOptions,} from 'zhin.js';
 import { registerFetchRoute, type Router, type RouterContext } from '@zhin.js/host-router/router';
 import { callOneBot12Action } from './api.js';
 import type { OneBot12WebhookConfig, OneBot12Event } from './types.js';

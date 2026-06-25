@@ -15,6 +15,8 @@
 | **AI** | `+ @zhin.js/agent zod ai` | +~12–15MB | ZhinAgent、会话、工具、压缩 |
 | **Provider** | `+ @ai-sdk/openai` 等 | 按厂商 | 大模型调用 |
 | **MCP** | `+ @modelcontextprotocol/sdk` | +~数 MB | MCP Client / memoryMcp |
+| **Rich media** | `+ @zhin.js/html-renderer` | +~数 MB | 出站 `html` / `markdown` 转 PNG（未装则降级 text） |
+| **Speech** | `+ @zhin.js/speech` | +~数 MB | 入站 STT、出站 TTS、`segment.tts`（未装则 warn 降级） |
 <!-- #endregion tiers-table -->
 
 <!-- #region tiers-table-host -->
@@ -24,6 +26,8 @@
 | **AI** | `+ @zhin.js/agent zod ai` | ZhinAgent、`ctx.ai`、会话与工具 |
 | **Provider** | `+ @ai-sdk/openai` 等 | 大模型调用 |
 | **Host** | `+ @zhin.js/host-router @zhin.js/host-api` | Console API（可选 peer） |
+| **Rich media** | `+ @zhin.js/html-renderer` | 出站 html/markdown 转 PNG |
+| **Speech** | `+ @zhin.js/speech` | 入站 STT、出站 TTS、voice_stt/voice_tts 工具 |
 <!-- #endregion tiers-table-host -->
 
 <!-- #region breaking -->
@@ -50,7 +54,7 @@ pnpm add @ai-sdk/openai   # 示例：按 provider 替换
 <!-- #endregion deps-install -->
 
 <!-- #region doctor -->
-`zhin doctor --fix` 或 `zhin config check --fix` 可根据 `ai.enabled` 自动补全 `package.json`。
+`zhin doctor --fix` 或 `zhin config check --fix` 可根据 `ai.enabled` 自动补全 `package.json`；并检查 `@zhin.js/speech` / `@zhin.js/html-renderer` optional peer。升级到 L4：`zhin doctor --upgrade-l4`。
 <!-- #endregion doctor -->
 
 <!-- #region scaffold-note -->

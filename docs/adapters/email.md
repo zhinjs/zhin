@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/email/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/email/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=250828d330add928 -->
+<!-- sync-adapter-docs:sha256=e484d94215a3317e -->
 
 # @zhin.js/adapter-email
 
@@ -132,9 +132,9 @@ addCommand(
 ```typescript
 import { usePlugin } from 'zhin.js'
 
-const { addMiddleware } = usePlugin()
+const { root } = usePlugin()
 
-addMiddleware(async (message, next) => {
+root.addMiddleware(async (message, next) => {
   if (message.$adapter === 'email') {
     console.log('收到邮件:', message.$sender.name, message.$content)
   }

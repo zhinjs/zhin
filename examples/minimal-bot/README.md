@@ -25,7 +25,7 @@ pnpm dev
 2. 打开 **[Remote Console](https://console.zhin.dev)**（或本地 [zhin-console](https://github.com/zhinjs/zhin-console) 开发服，通常 `http://127.0.0.1:5173`）。
 3. 登录时 **API Base** 填与日志一致的 Host 地址（如 `http://127.0.0.1:8086`），**Token** 与 `.env` 中 `HTTP_TOKEN` 一致（默认 `minimal-dev-token`）。
 4. 在 Console 侧栏打开 **沙盒** 页（连接建立后自动创建 Sandbox bot），发送 `hello` → 应收到插件回复；发送 `card` 可查看 **@zhin.js/satori JSX** 示例卡片（`src/plugins/status-card.tsx`）。
-5. （可选 AI）见 [`../full-bot`](../full-bot/)：安装 `@zhin.js/agent` 与所选 `@ai-sdk/*` 后配置 `ai:` 段。
+5. （可选 AI）见 [`../full-bot`](../full-bot/)：安装 `@zhin.js/agent` 与所选 `@ai-sdk/*` 后配置 `ai:` 段；或运行 `zhin doctor --upgrade-l4` 获取依赖与配置建议。
 
 详见 [docs/console-remote.md](../../docs/console-remote.md)。
 

@@ -5,12 +5,24 @@ import fs from 'fs-extra';
 import path from 'path';
 import inquirer from 'inquirer';
 import { execFileSync } from 'node:child_process';
+import yaml from 'yaml';
 
 interface InstallOptions {
   save?: boolean;
   saveDev?: boolean;
   global?: boolean;
+  enable?: boolean;
+  dryRun?: boolean;
 }
+
+interface EnablePluginResult {
+  status: 'enabled' | 'already-enabled' | 'missing-config' | 'unsupported-config';
+  configFile?: string;
+  pluginName?: string;
+  message: string;
+}
+
+const CONFIG_CANDIDATES = ['zhin.config.yml', 'zhin.config.yaml', 'zhin.config.json'];
 
 /**
  * 安装插件的核心逻辑
@@ -50,6 +62,19 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
     logger.log(`执行命令: pnpm ${installArgs.join(' ')}`);
     logger.log('');
 
+    const pluginName = resolvePluginNameForEnable(pluginToInstall, pluginType, process.cwd());
+    const shouldEnable = options.enable !== false && !options.global;
+
+    if (options.dryRun) {
+      logger.log('🧪 dry-run：不会安装依赖，也不会修改配置。');
+      logger.log(`将执行: pnpm ${installArgs.join(' ')}`);
+      if (shouldEnable && pluginName) {
+        const preview = previewEnablePlugin(process.cwd(), pluginName);
+        logger.log(`将启用: ${preview.message}`);
+      }
+      return;
+    }
+
     // 执行安装（使用 execFileSync 防止 shell 注入）
     try {
       execFileSync('pnpm', installArgs, {
@@ -66,18 +91,28 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
         logger.log('');
       }
 
-      // 提示如何启用插件
-      const pluginName = extractPluginName(pluginToInstall, pluginType);
-      if (pluginName) {
-        logger.log('🔌 启用插件：');
-        logger.log(`在 zhin.config.ts 中添加：`);
-        logger.log('');
-        logger.log('  export default defineConfig({');
-        logger.log('    plugins: [');
-        logger.log(`      '${pluginName}'`);
-        logger.log('    ]');
-        logger.log('  });');
+      if (shouldEnable && pluginName) {
+        const enableResult = await enablePluginInProjectConfig(process.cwd(), pluginName);
+        logger.log(`🔌 ${enableResult.message}`);
+        if (enableResult.status === 'missing-config' || enableResult.status === 'unsupported-config') {
+          logger.log('可手动添加到 zhin.config.yml:');
+          logger.log('plugins:');
+          logger.log(`  - "${pluginName}"`);
+        }
+        if (pluginName.startsWith('@zhin.js/adapter-') && pluginName !== '@zhin.js/adapter-sandbox') {
+          logger.log('');
+          logger.log('🧭 适配器下一步：运行 zhin setup --adapters 添加 Endpoint，或启动后在 Console / IM 中执行 /endpoint add。');
+        }
+      } else if (pluginName) {
+        logger.log('🔌 未自动启用插件。可手动添加到 zhin.config.yml:');
+        logger.log('plugins:');
+        logger.log(`  - "${pluginName}"`);
       }
+
+      logger.log('');
+      logger.log('下一步：');
+      logger.log('  pnpm dev');
+      logger.log('  zhin doctor');
 
     } catch (error) {
       logger.error('安装失败');
@@ -96,6 +131,8 @@ export const installCommand = new Command('install')
   .option('-S, --save', '安装到 dependencies（默认）', true)
   .option('-D, --save-dev', '安装到 devDependencies', false)
   .option('-g, --global', '全局安装', false)
+  .option('--no-enable', '只安装依赖，不自动写入 zhin.config')
+  .option('--dry-run', '打印将要执行的安装和配置改动，不写入文件')
   .action(installPluginAction);
 
 // 别名命令
@@ -105,12 +142,14 @@ export const addCommand = new Command('add')
   .option('-S, --save', '安装到 dependencies（默认）', true)
   .option('-D, --save-dev', '安装到 devDependencies', false)
   .option('-g, --global', '全局安装', false)
+  .option('--no-enable', '只安装依赖，不自动写入 zhin.config')
+  .option('--dry-run', '打印将要执行的安装和配置改动，不写入文件')
   .action(installPluginAction);
 
 /**
  * 检测插件类型
  */
-function detectPluginType(plugin: string): 'npm' | 'git' | 'github' | 'gitlab' | 'bitbucket' {
+export function detectPluginType(plugin: string): 'npm' | 'git' | 'github' | 'gitlab' | 'bitbucket' {
   // Git 协议
   if (plugin.startsWith('git://') || plugin.startsWith('git+')) {
     return 'git';
@@ -166,7 +205,7 @@ function isWorkspaceRoot(): boolean {
 /**
  * 构建安装命令参数数组（不包含 pnpm 本身）
  */
-function buildInstallArgs(plugin: string, type: string, options: InstallOptions): string[] {
+export function buildInstallArgs(plugin: string, type: string, options: InstallOptions): string[] {
   const parts = ['add'];
 
   // 添加保存选项
@@ -224,21 +263,10 @@ function buildInstallArgs(plugin: string, type: string, options: InstallOptions)
 /**
  * 提取插件名称
  */
-function extractPluginName(plugin: string, type: string): string | null {
+export function extractPluginName(plugin: string, type: string): string | null {
   switch (type) {
     case 'npm':
-      // npm 包名可能包含 scope 和版本号
-      // @scope/package@version -> @scope/package 或 package
-      const match = plugin.match(/^(@?[\w-]+\/)?([^@]+)/);
-      if (match) {
-        const fullName = match[0].replace(/@[\d.]+.*$/, ''); // 移除版本号
-        // 如果是 @zhin.js/ 开头的包，提取最后的名称
-        if (fullName.startsWith('@zhin.js/')) {
-          return fullName.replace('@zhin.js/', '');
-        }
-        return fullName;
-      }
-      return plugin;
+      return stripNpmVersion(plugin);
 
     case 'github':
     case 'gitlab':
@@ -267,3 +295,112 @@ function extractPluginName(plugin: string, type: string): string | null {
   }
 }
 
+export function resolvePluginNameForEnable(plugin: string, type: string, cwd: string): string | null {
+  if (type === 'npm') {
+    const localName = readLocalPackageName(plugin, cwd);
+    if (localName) return localName;
+  }
+  return extractPluginName(plugin, type);
+}
+
+export function stripNpmVersion(spec: string): string {
+  const normalized = spec.replace(/^npm:/, '');
+  if (normalized.startsWith('@')) {
+    const slashIndex = normalized.indexOf('/');
+    if (slashIndex < 0) return normalized;
+    const versionIndex = normalized.indexOf('@', slashIndex + 1);
+    return versionIndex > 0 ? normalized.slice(0, versionIndex) : normalized;
+  }
+  const versionIndex = normalized.indexOf('@');
+  return versionIndex > 0 ? normalized.slice(0, versionIndex) : normalized;
+}
+
+function readLocalPackageName(spec: string, cwd: string): string | null {
+  const localSpec = spec.startsWith('file:') ? spec.slice('file:'.length) : spec;
+  if (!localSpec.startsWith('.') && !path.isAbsolute(localSpec)) return null;
+
+  const packageDir = path.resolve(cwd, localSpec);
+  const packageJsonPath = path.join(packageDir, 'package.json');
+  if (fs.existsSync(packageJsonPath)) {
+    try {
+      const pkg = fs.readJsonSync(packageJsonPath) as { name?: unknown };
+      if (typeof pkg.name === 'string' && pkg.name.trim().length > 0) {
+        return pkg.name;
+      }
+    } catch {
+      return path.basename(packageDir);
+    }
+  }
+  return path.basename(packageDir);
+}
+
+function findProjectConfig(cwd: string): string | null {
+  for (const candidate of CONFIG_CANDIDATES) {
+    const filePath = path.join(cwd, candidate);
+    if (fs.existsSync(filePath)) return filePath;
+  }
+  return null;
+}
+
+function readConfig(filePath: string): Record<string, unknown> {
+  const content = fs.readFileSync(filePath, 'utf8');
+  if (filePath.endsWith('.json')) {
+    return JSON.parse(content) as Record<string, unknown>;
+  }
+  return (yaml.parse(content) ?? {}) as Record<string, unknown>;
+}
+
+function writeConfig(filePath: string, config: Record<string, unknown>): void {
+  if (filePath.endsWith('.json')) {
+    fs.writeFileSync(filePath, `${JSON.stringify(config, null, 2)}\n`);
+    return;
+  }
+  fs.writeFileSync(filePath, yaml.stringify(config));
+}
+
+export function previewEnablePlugin(cwd: string, pluginName: string): EnablePluginResult {
+  const configFile = findProjectConfig(cwd);
+  if (!configFile) {
+    return {
+      status: 'missing-config',
+      pluginName,
+      message: `未找到 zhin.config.yml/json；将提示手动添加 ${pluginName}`,
+    };
+  }
+  if (!configFile.endsWith('.yml') && !configFile.endsWith('.yaml') && !configFile.endsWith('.json')) {
+    return {
+      status: 'unsupported-config',
+      configFile,
+      pluginName,
+      message: `${path.basename(configFile)} 暂不支持自动写入；将提示手动添加 ${pluginName}`,
+    };
+  }
+
+  const config = readConfig(configFile);
+  const plugins = Array.isArray(config.plugins) ? config.plugins : [];
+  const alreadyEnabled = plugins.includes(pluginName);
+  return {
+    status: alreadyEnabled ? 'already-enabled' : 'enabled',
+    configFile,
+    pluginName,
+    message: alreadyEnabled
+      ? `${pluginName} 已在 ${path.basename(configFile)} 中启用`
+      : `将在 ${path.basename(configFile)} 的 plugins 中添加 ${pluginName}`,
+  };
+}
+
+export async function enablePluginInProjectConfig(cwd: string, pluginName: string): Promise<EnablePluginResult> {
+  const preview = previewEnablePlugin(cwd, pluginName);
+  if (preview.status !== 'enabled' || !preview.configFile) return preview;
+
+  const config = readConfig(preview.configFile);
+  const plugins = Array.isArray(config.plugins) ? [...config.plugins] : [];
+  plugins.push(pluginName);
+  config.plugins = plugins;
+  writeConfig(preview.configFile, config);
+
+  return {
+    ...preview,
+    message: `已在 ${path.basename(preview.configFile)} 中启用 ${pluginName}`,
+  };
+}

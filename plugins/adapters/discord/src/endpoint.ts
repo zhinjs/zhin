@@ -29,8 +29,7 @@ import {
   SendOptions,
   SendContent,
   MessageSegment,
-  segment,
-} from "zhin.js";
+  segment,} from 'zhin.js';
 import type { DiscordGatewayConfig, DiscordChannelMessage } from "./types.js";
 import type { DiscordAdapter } from "./adapter.js";
 import { createReadStream } from "fs";

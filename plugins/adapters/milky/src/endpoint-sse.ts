@@ -3,7 +3,7 @@
  */
 import EventSource from 'eventsource';
 import { EventEmitter } from 'events';
-import { formatCompact, Endpoint, Message, segment, SendOptions } from 'zhin.js';
+import { formatCompact, Endpoint, Message, segment, SendOptions,} from 'zhin.js';
 import { callApi } from './api.js';
 import type { MilkySseConfig, MilkyEvent } from './types.js';
 import type { MilkyAdapter } from './adapter.js';

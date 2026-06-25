@@ -390,7 +390,7 @@ zhin pub my-plugin --registry https://registry.npmmirror.com
 
 ### install / add - 安装插件
 
-安装插件包（npm 或 git 仓库）：
+安装插件包（npm 或 git 仓库），默认会在本地项目的 `zhin.config.yml` / `zhin.config.yaml` / `zhin.config.json` 中启用插件：
 
 ```bash
 zhin install [plugin] [options]
@@ -401,11 +401,23 @@ zhin add [plugin] [options]   # 别名
 - `-S, --save`: 安装到 dependencies（默认）
 - `-D, --save-dev`: 安装到 devDependencies
 - `-g, --global`: 全局安装
+- `--dry-run`: 只展示依赖安装命令和配置改动，不写入文件
+- `--no-enable`: 只安装依赖，不自动写入 `plugins`
 
 **支持的安装来源：**
 - npm 包：`zhin install @zhin.js/adapter-kook`
 - GitHub 仓库：`zhin install github:user/repo`
 - Git URL：`zhin install git+https://github.com/user/repo.git`
+
+**使用示例：**
+
+```bash
+zhin install @zhin.js/adapter-telegram --dry-run
+zhin install @zhin.js/adapter-telegram
+zhin install @scope/plugin --no-enable
+```
+
+安装官方 `@zhin.js/adapter-*` 后，CLI 会提示继续运行 `zhin setup --adapters` 或通过 Console / IM 命令创建 Endpoint。
 
 ### search - 搜索插件
 
