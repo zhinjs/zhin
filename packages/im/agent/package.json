@@ -34,7 +34,7 @@
     "@zhin.js/core": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "he": "^1.2.0",
-    "js-yaml": "^4.2.0"
+    "js-yaml": "^5.0.0"
   },
   "peerDependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

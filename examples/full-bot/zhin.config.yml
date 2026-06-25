@@ -34,6 +34,10 @@ mcp:
 
 ai:
   enabled: true
+  # --- 可选多模态（需 optional peer，见 docs/advanced/ai-content-chain.md）---
+  # multimodal:
+  #   audio:
+  #     strategy: transcribe   # 需 @zhin.js/speech
   memory:
     semantic:
       enabled: true
@@ -58,3 +62,12 @@ ai:
       - "ai:"
     respondToAt: true
     respondToPrivate: true
+
+# speech:
+#   stt:
+#     provider: ollama
+#     model: whisper
+#   tts:
+#     provider: edge
+# htmlRenderer:
+#   width: 540

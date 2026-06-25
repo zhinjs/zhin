@@ -32,6 +32,7 @@ const TYPE_META: Record<string, { icon: React.ReactNode; label: string }> = {
   qrcode: { icon: <QrCode className="w-4 h-4" />, label: "扫码登录" },
   sms: { icon: <MessageSquare className="w-4 h-4" />, label: "短信验证码" },
   device: { icon: <Smartphone className="w-4 h-4" />, label: "设备验证" },
+  auth: { icon: <Smartphone className="w-4 h-4" />, label: "身份验证" },
   slider: { icon: <MousePointer className="w-4 h-4" />, label: "滑块验证" },
 };
 
@@ -184,10 +185,10 @@ export default function LoginAssistPanel() {
                   </div>
                 )}
 
-                {/* Slider URL */}
-                {task.type === "slider" && task.payload?.url && (
+                {/* Slider / auth URL */}
+                {(task.type === "slider" || task.type === "auth") && task.payload?.url && (
                   <p className="text-sm break-all mb-3">
-                    <span className="text-muted-foreground">滑块链接：</span>{" "}
+                    <span className="text-muted-foreground">验证链接：</span>{" "}
                     <a
                       href={String(task.payload.url)}
                       target="_blank"
@@ -197,6 +198,40 @@ export default function LoginAssistPanel() {
                       {String(task.payload.url)}
                     </a>
                   </p>
+                )}
+
+                {/* system.login.auth 设备信息 */}
+                {task.type === "auth" && task.payload?.device && typeof task.payload.device === "object" && (
+                  <div className="text-xs text-muted-foreground mb-3 space-y-1 rounded border p-3 bg-muted/20">
+                    <div className="font-medium text-foreground">设备信息（登录续传用）</div>
+                    {Object.entries(task.payload.device as Record<string, unknown>)
+                      .filter(([, v]) => v != null && String(v) !== "")
+                      .map(([k, v]) => (
+                        <div key={k}>
+                          <span className="opacity-70">{k}: </span>
+                          <span className="font-mono break-all">{String(v)}</span>
+                        </div>
+                      ))}
+                  </div>
+                )}
+
+                {/* auth 确认 */}
+                {task.type === "auth" && (
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm disabled:opacity-50"
+                      disabled={!!submitting[task.id]}
+                      onClick={() => void handleSubmit(task.id, { done: true })}
+                    >
+                      {submitting[task.id] ? "提交中…" : "我已完成验证"}
+                    </button>
+                    <button
+                      className="h-9 px-4 rounded-md border text-sm hover:bg-accent transition-colors"
+                      onClick={() => void handleCancel(task.id)}
+                    >
+                      取消
+                    </button>
+                  </div>
                 )}
 
                 {/* Text input (sms / device / slider ticket) */}

@@ -15,7 +15,7 @@ import type { Plugin } from '../plugin.js';
 // 类型
 // ============================================================================
 
-export type LoginAssistType = 'qrcode' | 'sms' | 'slider' | 'device' | 'other';
+export type LoginAssistType = 'qrcode' | 'sms' | 'slider' | 'device' | 'auth' | 'other';
 
 export interface PendingLoginTaskPayload {
   /** 说明文案（如「请扫码登录」） */

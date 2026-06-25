@@ -1,5 +1,15 @@
-import { Adapter, Plugin, Endpoint, SendContent, SendOptions, MessageBase, Message, segment } from "@zhin.js/core";
+import { formatCompact } from "@zhin.js/logger";
+import { Adapter } from "../adapter.js";
+import { Plugin } from "../plugin.js";
+import { Endpoint } from "../endpoint.js";
+import { Message, type MessageBase } from "../message.js";
+import type { SendContent, SendOptions } from "../types.js";
+import { segment } from "../utils.js";
+import { assertOutbound } from "../endpoint-capabilities.js";
+import { getOutboundReplyStore } from "./dispatcher.js";
 import { bindStdin, runtimePid, runtimeUser } from "./runtime-io.js";
+import { interpretOriginQrcodeForProcess } from "./rich-segments/qrcode-segment.js";
+import type { OutboundRichSegmentPolicy } from "./rich-segments/types.js";
 
 export class ProcessEndpoint implements Endpoint<{ owner?: string },{content:string,ts:number}>{
     $id = runtimePid();
@@ -56,6 +66,13 @@ export class ProcessEndpoint implements Endpoint<{ owner?: string },{content:str
     async $recallMessage(id: string) {
     }
     async $sendMessage(options: SendOptions) {
+        const content = await interpretOriginQrcodeForProcess(options.content ?? '');
+        if (content != null) {
+            const preview = segment.raw(content);
+            if (preview) {
+                process.stdout.write(`${preview}\n`);
+            }
+        }
         return `${Date.now()}`;
     }
     async $connect(): Promise<void> {
@@ -69,11 +86,40 @@ export class ProcessEndpoint implements Endpoint<{ owner?: string },{content:str
 }
 export class ProcessAdapter extends Adapter<ProcessEndpoint>{
     static override readonly capabilities = ['inbound', 'outbound'] as const;
+    static override outboundRichSegmentPolicy: OutboundRichSegmentPolicy = {
+        qrcode: 'origin',
+        html: 'text',
+        markdown: 'text',
+    };
 
     constructor(plugin: Plugin) {
         super(plugin, 'process', [{ owner: runtimePid() }]);
     }
-    
+
+    /**
+     * process 出站由 $sendMessage 写入 stdout；父类 INFO preview 会与终端输出重复，故仅 debug 元数据。
+     */
+    override async sendMessage(options: SendOptions): Promise<string> {
+        options = await this.renderSendMessage(options);
+        const endpoint = this.endpoints.get(options.endpoint);
+        if (!endpoint) throw new Error(`Endpoint ${options.endpoint} not found`);
+        assertOutbound(endpoint);
+        this.logger.debug(formatCompact({
+            send: `${options.type}(${options.id})`,
+            endpoint: options.endpoint,
+        }));
+        const messageId = await endpoint.$sendMessage(options);
+        const replyStore = getOutboundReplyStore();
+        this.plugin.root.dispatch('message.send', {
+            adapter: this.name,
+            options,
+            messageId,
+            replySource: replyStore?.source,
+            replyMessage: replyStore?.message,
+        });
+        return messageId;
+    }
+
     createEndpoint(config: Adapter.EndpointConfig<ProcessEndpoint>): ProcessEndpoint {
         return new ProcessEndpoint(this, config);
     }

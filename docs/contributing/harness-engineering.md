@@ -200,9 +200,9 @@ async function setup() {
 
 ```typescript
 // ✓ 正确：初始化阶段捕获，运行时回调用闭包
-const { addMiddleware, logger, root } = usePlugin();
+const { logger, root } = usePlugin();
 
-addMiddleware(async (message, next) => {
+root.addMiddleware(async (message, next) => {
   logger.info(message.sessionId);
   await next();
 });
@@ -214,7 +214,7 @@ export function registerMyCommands(): void {
 }
 
 // ❌ 错误：中间件 / action / execute 等运行时回调内 getPlugin()
-addMiddleware(async (message, next) => {
+root.addMiddleware(async (message, next) => {
   getPlugin().logger.info('...'); // 线上易丢失 ALS 上下文
   await next();
 });

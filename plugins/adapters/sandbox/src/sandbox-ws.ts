@@ -9,8 +9,7 @@ import {
   type MessageType,
   type Plugin,
   type SendContent,
-  type SendOptions,
-} from "zhin.js";
+  type SendOptions,} from 'zhin.js';
 
 export interface SandboxWsConfig {
   context: "sandbox";
@@ -275,6 +274,10 @@ export class SandboxWsEndpoint extends EventEmitter implements Endpoint<SandboxW
   }
 
   async $sendMessage(options: SendOptions): Promise<string> {
+    options = {
+      ...options,
+
+    };
     if (!this.$connected) return "";
     const ws = this.$config.ws;
     if (!ws) return "";

@@ -34,4 +34,4 @@ tools: []
 - **抖音**：短视频 → 封面 + 标题
 - **小红书**：笔记 → 封面 + 标题
 
-依赖 `html-renderer` 插件将 HTML 模板渲染为图片。
+依赖 `@zhin.js/html-renderer` 将 HTML 模板渲染为图片（`pnpm add @zhin.js/html-renderer`）。

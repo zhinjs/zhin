@@ -140,12 +140,12 @@ plugins/{name}/
 import { usePlugin } from 'zhin.js'
 
 const plugin = usePlugin()
-const { addCommand, addMiddleware, useContext, logger } = plugin
+const { addCommand, useContext, logger, root } = plugin
 
 // 配置声明
 // const getConfig = plugin.declareConfig('my-plugin', Schema.object({...}))
 
-// 注册命令、中间件、事件等
+// 注册命令、中间件（root.addMiddleware）、事件等
 // import './commands/index.js'
 // import './services/index.js'
 
@@ -212,7 +212,7 @@ export function buildMyCard(): string {
 }
 ```
 
-依赖：`pnpm add @zhin.js/satori`（可选 `@zhin.js/plugin-html-renderer` 自动 HTML→PNG）。
+依赖：`pnpm add @zhin.js/satori`（可选 `@zhin.js/html-renderer` 自动 HTML→PNG）。
 
 ### 第 6 步：生成测试文件
 

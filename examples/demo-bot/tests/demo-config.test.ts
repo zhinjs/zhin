@@ -12,4 +12,10 @@ describe('demo-bot config', () => {
     expect(configText).toMatch(/demo\.zhin\.dev/);
     expect(configText).toMatch(/host:\s*0\.0\.0\.0/);
   });
+
+  it('hello 插件含 card 与 ai 引导', () => {
+    const hello = readFileSync(resolve(dir, '../src/plugins/hello.ts'), 'utf8');
+    expect(hello).toContain('card');
+    expect(hello).toContain('ai:');
+  });
 });

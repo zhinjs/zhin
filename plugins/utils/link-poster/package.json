@@ -39,13 +39,16 @@
     "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
-  "dependencies": {},
+  "dependencies": {
+    "@zhin.js/html-renderer": "workspace:*"
+  },
   "devDependencies": {
     "typescript": "^6.0.3",
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {
-    "zhin.js": "workspace:*"
+    "zhin.js": "workspace:*",
+    "@zhin.js/html-renderer": "workspace:*"
   },
   "repository": {
     "type": "git",

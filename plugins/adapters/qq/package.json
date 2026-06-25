@@ -50,7 +50,7 @@
     "@zhin.js/host-api": "workspace:*",
     "@zhin.js/host-router": "workspace:*",
     "@zhin.js/logger": "workspace:*",
-    "lucide-react": "^1.17.0",
+    "lucide-react": "^1.21.0",
     "typescript": "^6.0.3",
     "zhin.js": "workspace:*"
   },

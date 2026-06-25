@@ -41,6 +41,13 @@ export {
 } from './compact-log.js'
 export type { CompactFieldValue, CompactUsage } from './compact-log.js'
 
+export { createWarnOnce, resetWarnOnceForTests } from './warn-once.js'
+export {
+  CONTENT_CHAIN_STAGE,
+  formatContentChainLog,
+} from './content-chain-stages.js'
+export type { ContentChainStage, ContentChainLogFields } from './content-chain-stages.js'
+
 export {
   toLogLevelName,
   isValidLogLevelInput,

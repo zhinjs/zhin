@@ -1,15 +1,14 @@
 /**
  * 钉钉适配器
  */
-import {
-  Adapter,
-  Plugin,
-} from "zhin.js";
+import { Adapter,
+  Plugin, OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL } from 'zhin.js';
 import { DingTalkEndpoint } from "./endpoint.js";
 import type { DingTalkEndpointConfig } from "./types.js";
 
 export class DingTalkAdapter extends Adapter<DingTalkEndpoint> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
+  static override outboundRichSegmentPolicy = OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL;
 
   #router: any;
 

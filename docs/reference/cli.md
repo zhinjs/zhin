@@ -27,11 +27,13 @@ Zhin.js 命令行工具完整说明。Stable 上手只需 `dev` / `start` / `sto
 | 命令           | 说明                                                              |
 | -------------- | ----------------------------------------------------------------- |
 | `zhin new`     | 创建插件模板（normal/service/adapter），支持 `--type`             |
-| `zhin install` | 安装插件（npm 或 git），支持 `-S/--save`、`-D/--save-dev`、`-g`  |
+| `zhin install` | 安装并启用插件（npm 或 git），支持 `--dry-run`、`--no-enable`、`-S/--save`、`-D/--save-dev`、`-g` |
 | `zhin add`     | `install` 的别名                                                  |
 | `zhin pub`     | 发布插件到 npm，支持 `--tag`、`--dry-run`、`--access`             |
 | `zhin search`  | 搜索 npm 上的 Zhin 插件，支持 `-c/--category`、`--official`       |
 | `zhin info`    | 查看某个插件的详细信息                                            |
+
+`zhin install @scope/plugin` 默认会写入本地 `zhin.config.yml` / `zhin.config.yaml` / `zhin.config.json` 的 `plugins` 数组。只想预览时用 `--dry-run`；只安装依赖不改配置时用 `--no-enable`。详见 [安装插件](/guide/plugin-install)。
 
 ## zhin-package（ADR 0010）
 
