@@ -53,6 +53,13 @@ pnpm vitest run packages/agent/tests/advanced-acceptance.test.ts \
 ### IM
 
 - [x] **QQ 官方 bot**（`adapter-qq`）：私聊或 @ 触发 AI — 已本地验证
+- [x] **微信 iLink**（`adapter-weixin-ilink`）：ClawBot 灰度实机 dogfood（2026-06-25）
+  - [x] Remote Console `/weixin-ilink` 扫码 → `data/weixin-ilink/<name>.json` 凭证落盘
+  - [x] 私聊文本入站 → 命令 / `@` Agent 回复 → 标准发送链出站
+  - [x] 媒体收发（图片 + 语音/文件）
+  - [x] Typing indicator（`sendTyping`）长任务期间可见
+  - [x] 文档边界：**仅私聊、无群**（见 [weixin-ilink README](../../plugins/adapters/weixin-ilink/README.md)）
+  - 实机回归：`L4_SKIP_PLATFORM=0` + 配置 `weixin-ilink` 段后跑 `pnpm check:l4`（可选）
 - [x] **toolSearch + Worker**（`ai.agent.toolSearch: true`）：主编排 3 工具（`tool_search` / `run_deferred_task` / `ask_user`）；查 star 走 Worker — `advanced-acceptance.test.ts`、`tool-search-orchestrator.test.ts`；prompt token &lt; 20k — `advanced-acceptance.test.ts`
 - [x] **平台 Prompt**：icqq system 含 `# Platform`（经 `resolveAgentPromptMarkdown`）；通用 `buildRichSystemPrompt` 无 `mcp_icqq` 硬编码 — `prompt-discipline.test.ts`、`icqq-agent-prompt.test.ts`、`advanced-acceptance.test.ts`
 
@@ -89,3 +96,4 @@ pnpm vitest run packages/agent/tests/advanced-acceptance.test.ts \
 | 2026-05-18 | 你 | QQ + LLM `mcp_*` 通过 | — |
 | 2026-06-01 | Plan 1 | Stable/Advanced 分档 | 对外承诺以 Stable 为准 |
 | 2026-06-01 | Plan 3 | Advanced 四项 Vitest + ZhinAgent 拆分 | `index.ts` &lt;600 行；`turn-pipeline` / `prompt-assembly` / `tool-orchestration` |
+| 2026-06-25 | liuchunlang | weixin-ilink 实机 dogfood 通过 | ClawBot 灰度；#486 关闭 |
