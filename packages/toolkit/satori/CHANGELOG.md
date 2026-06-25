@@ -1,5 +1,11 @@
 # @zhin.js/satori
 
+## 1.0.14
+
+### Patch Changes
+
+- chore: align stable version line to 1.0.x (no API change from 0.2.14)
+
 ## 0.2.14
 
 ### Patch Changes

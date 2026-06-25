@@ -67,7 +67,7 @@
     "dotenv": "^17.4.2"
   },
   "peerDependencies": {
-    "@zhin.js/agent": "^0.3.1",
+    "@zhin.js/agent": "^1.0.0",
     "@zhin.js/html-renderer": "workspace:^",
     "@zhin.js/speech": "workspace:^",
     "@zhin.js/host-api": "workspace:^",

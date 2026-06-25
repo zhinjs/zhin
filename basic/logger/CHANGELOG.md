@@ -1,5 +1,11 @@
 # @zhin.js/logger
 
+## 1.0.71
+
+### Patch Changes
+
+- chore: align stable version line to 1.0.x (no API change from 0.1.71)
+
 ## 0.1.71
 
 ### Patch Changes

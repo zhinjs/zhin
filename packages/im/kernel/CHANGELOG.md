@@ -1,5 +1,11 @@
 # @zhin.js/kernel
 
+## 1.0.0
+
+### Patch Changes
+
+- chore: align stable version line to 1.0.x (no API change from 0.1.1)
+
 ## 0.1.1
 
 ### Patch Changes
