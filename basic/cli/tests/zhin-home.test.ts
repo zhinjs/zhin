@@ -81,6 +81,18 @@ describe('zhin-home', () => {
     expect(fs.readFileSync(path.join(root, 'zhin.config.yml'), 'utf8')).toBe('custom: true\n');
   });
 
+  it('scaffoldGlobalHome uses latest runtime dependencies', async () => {
+    const { scaffoldGlobalHome } = await import('../src/utils/global-home-init.js');
+
+    const root = scaffoldGlobalHome({ homeDir: fakeHome });
+    const pkg = await fs.readJson(path.join(root, 'package.json'));
+
+    expect(pkg.dependencies['zhin.js']).toBe('latest');
+    expect(pkg.dependencies['@zhin.js/adapter-sandbox']).toBe('latest');
+    expect(pkg.dependencies['@zhin.js/host-api']).toBe('latest');
+    expect(pkg.dependencies['@zhin.js/host-router']).toBe('latest');
+  });
+
   it('buildSpawnEnv sets ZHIN_PROJECT_ROOT', async () => {
     const { buildSpawnEnv, ZHIN_PROJECT_ROOT_ENV } = await import('../src/utils/zhin-home.js');
     const env = buildSpawnEnv('/tmp/zhin-runtime', { NODE_ENV: 'test' });

@@ -1,5 +1,15 @@
 # create-zhin-app
 
+## 1.0.52
+
+### Patch Changes
+
+- 7dfafc2: fix: ai 提示词缓存优化
+- ae5239c: fix: 核心包瘦身
+- Updated dependencies [7dfafc2]
+- Updated dependencies [ae5239c]
+  - @zhin.js/scaffold-wizard@0.1.5
+
 ## 1.0.51
 
 ### Patch Changes

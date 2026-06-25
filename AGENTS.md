@@ -11,6 +11,7 @@
 3. [docs/contributing/repo-structure.md](docs/contributing/repo-structure.md)
 4. [README.md](README.md)
 5. 与当前改动最近的包 README 或 docs 页面
+6. 符号/调用链速查：[.codegraph/MEMORY.md](.codegraph/MEMORY.md)（CodeGraph 索引快照）
 
 如果任务属于插件实现，再读 [.github/instructions/zhin-plugin.instructions.md](.github/instructions/zhin-plugin.instructions.md)。
 

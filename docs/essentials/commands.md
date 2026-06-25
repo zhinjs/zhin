@@ -8,7 +8,19 @@
 
 ## 内置 IM 运维命令（ADR 0010）
 
-`@zhin.js/agent` 在启用 AI 时注册一批 **斜杠命令**，供维护者在 IM 里运维会话与内省运行时状态（实现见 `register-management-tools.ts`、`register-introspection-commands.ts`）。完整行为说明见 [AI 模块 — IM 运维与内省](/advanced/ai#im-运维与内省命令)。
+`@zhin.js/core` 注册 **Endpoint 运行时管理**（`registerEndpointManagementCommands`）；`@zhin.js/agent` 在启用 AI 时注册会话运维与内省命令（实现见 `register-management-tools.ts`、`register-introspection-commands.ts`）。完整行为说明见 [AI 模块 — IM 运维与内省](/advanced/ai#im-运维与内省命令)。
+
+### Endpoint 管理（core）
+
+| 命令 | 说明 |
+|------|------|
+| `/endpoint add [adapter]` | 添加 endpoint（adapter 交互或 schema 向导） |
+| `/endpoint remove <adapter> <name>` | 从配置移除 |
+| `/endpoint edit <adapter> <name>` | 编辑配置 |
+| `/endpoint start <adapter> <name>` | 连接 |
+| `/endpoint stop <adapter> <name>` | 断开（保留配置） |
+| `/endpoint cancel` | 取消进行中的添加/绑定 |
+| `/endpoint help` | 帮助 |
 
 ### 会话
 
@@ -31,7 +43,7 @@
 | 命令 | 说明 |
 |------|------|
 | `/cmd` | 已注册 IM 命令列表 |
-| `/endpoints` | Endpoint 与在线状态（含 adapter 列） |
+| `/endpoints` | Endpoint 与在线状态（含 adapter 列；由 core 注册） |
 | `/bindings` | `ai.agents` 绑定 |
 | `/tools` | 已注册 ZhinTool |
 | `/mcp` | MCP Client 连接状态 |

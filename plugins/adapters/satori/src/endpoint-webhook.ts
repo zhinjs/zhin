@@ -2,7 +2,7 @@
  * Satori WebHook Bot：应用提供 POST path，SDK 推送 EVENT（Satori-Opcode: 0）
  */
 import { EventEmitter } from 'events';
-import { formatCompact, Endpoint, Message, segment, SendOptions } from 'zhin.js';
+import { formatCompact, Endpoint, Message, segment, SendOptions,} from 'zhin.js';
 import { registerFetchRoute, type Router, type RouterContext } from '@zhin.js/host-router/router';
 import { callSatoriApi } from './api.js';
 import type { SatoriWebhookConfig, SatoriEventBody, SatoriLogin } from './types.js';

@@ -20,6 +20,8 @@ const advancedSidebar = [
   { text: '定时任务', link: '/advanced/cron' },
   { text: '数据库', link: '/advanced/database' },
   { text: '热重载', link: '/advanced/hot-reload' },
+  { text: 'AI 内容链', link: '/advanced/ai-content-chain' },
+  { text: '内容审查 hook', link: '/advanced/content-moderation' },
 ]
 
 const adapterSidebar = [
@@ -81,6 +83,7 @@ export default withMermaid(defineConfig({
       {
         text: '文档',
         items: [
+          { text: '5 分钟首跑', link: '/getting-started/first-run' },
           { text: '学习路径', link: '/essentials/learning-paths' },
           { text: '核心基础', link: '/essentials/' },
           { text: '消息如何流转', link: '/essentials/message-flow' },
@@ -89,9 +92,17 @@ export default withMermaid(defineConfig({
           { text: '术语表', link: '/reference/glossary' },
           { text: '平台适配器', link: '/adapters/' },
           { text: 'Host 栈', link: '/host/' },
+          { text: '疑难排查', link: '/troubleshooting/' },
         ],
       },
-      { text: '插件开发', link: '/guide/plugin-development' },
+      {
+        text: '插件',
+        items: [
+          { text: '安装插件', link: '/guide/plugin-install' },
+          { text: '插件生命周期', link: '/guide/plugin-lifecycle' },
+          { text: '插件开发指南', link: '/guide/plugin-development' },
+        ],
+      },
       { text: 'AI', link: '/advanced/ai' },
       {
         text: '参考与生态',
@@ -112,8 +123,10 @@ export default withMermaid(defineConfig({
           items: [
             { text: '这是什么？', link: '/what-is-zhin' },
             { text: '安装与启动', link: '/getting-started/' },
+            { text: '5 分钟首跑', link: '/getting-started/first-run' },
             { text: 'Docker 部署', link: '/getting-started/docker' },
             { text: 'Remote Console', link: '/console-remote' },
+            { text: '疑难排查', link: '/troubleshooting/' },
           ]
         }
       ],
@@ -123,8 +136,10 @@ export default withMermaid(defineConfig({
           text: '快速开始',
           items: [
             { text: '安装与启动', link: '/getting-started/' },
+            { text: '5 分钟首跑', link: '/getting-started/first-run' },
             { text: 'Docker 部署', link: '/getting-started/docker' },
             { text: 'Remote Console', link: '/console-remote' },
+            { text: '疑难排查', link: '/troubleshooting/' },
           ]
         }
       ],
@@ -133,9 +148,24 @@ export default withMermaid(defineConfig({
         {
           text: '开发指南',
           items: [
+            { text: '安装插件', link: '/guide/plugin-install' },
+            { text: '插件生命周期', link: '/guide/plugin-lifecycle' },
             { text: '插件开发、测试与发布', link: '/guide/plugin-development' }
           ]
         }
+      ],
+
+      '/troubleshooting/': [
+        {
+          text: '疑难排查',
+          items: [
+            { text: '疑难排查', link: '/troubleshooting/' },
+            { text: '5 分钟首跑', link: '/getting-started/first-run' },
+            { text: '安装插件', link: '/guide/plugin-install' },
+            { text: 'Remote Console', link: '/console-remote' },
+            { text: 'CLI 命令', link: '/reference/cli' },
+          ],
+        },
       ],
       
       '/essentials/': [
@@ -151,6 +181,7 @@ export default withMermaid(defineConfig({
             { text: '中间件', link: '/essentials/middleware' },
             { text: '适配器', link: '/essentials/adapters' },
             { text: '平台适配器索引', link: '/adapters/' },
+            { text: 'Rich Segment 矩阵', link: '/essentials/rich-segment-adapters' },
             { text: '消息过滤', link: '/essentials/message-filter' },
             { text: 'Windows 环境', link: '/essentials/windows-setup' },
           ]
@@ -199,6 +230,8 @@ export default withMermaid(defineConfig({
             { text: '0010 pi Harness 对齐', link: '/adr/0010-pi-coding-agent-harness-alignment' },
             { text: '0018 AI SDK Transport', link: '/adr/0018-ai-sdk-transport-layer' },
             { text: '0019 Install Size Layering', link: '/adr/0019-install-size-layering' },
+            { text: '0020 Speech STT/TTS', link: '/adr/0020-speech-pipeline-stt-tts' },
+            { text: '0021 内容审查边界', link: '/adr/0021-content-moderation' },
           ],
         },
       ],
@@ -215,6 +248,7 @@ export default withMermaid(defineConfig({
       '/advanced/cron': [{ text: '高级特性', items: advancedSidebar }],
       '/advanced/database': [{ text: '高级特性', items: advancedSidebar }],
       '/advanced/hot-reload': [{ text: '高级特性', items: advancedSidebar }],
+      '/advanced/content-moderation': [{ text: '高级特性', items: advancedSidebar }],
       '/advanced/pi-coding-agent-mapping': [{ text: '高级特性', items: advancedSidebar }],
 
       '/architecture/': [

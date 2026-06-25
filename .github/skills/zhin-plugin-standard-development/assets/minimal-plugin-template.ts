@@ -2,7 +2,7 @@
 import { MessageCommand, usePlugin } from 'zhin.js'
 
 const plugin = usePlugin()
-const { addCommand, addMiddleware } = plugin
+const { addCommand, root } = plugin
 
 addCommand(
   new MessageCommand('hello [name:text]')
@@ -13,7 +13,7 @@ addCommand(
     }),
 )
 
-addMiddleware(async (message, next) => {
+root.addMiddleware(async (message, next) => {
   if (!message.$raw.trim()) {
     return
   }

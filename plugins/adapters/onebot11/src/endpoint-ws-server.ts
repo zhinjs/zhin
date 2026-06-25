@@ -5,7 +5,7 @@ import WebSocket, { WebSocketServer } from 'ws';
 import { EventEmitter } from 'events';
 import { clearInterval } from 'node:timers';
 import { IncomingMessage } from 'http';
-import { formatCompact, Endpoint, Message, Notice, Request, segment, SendOptions, type QuotedMessagePayload, applyQqSenderRoleToMessageSender } from 'zhin.js';
+import { formatCompact, Endpoint, Message, Notice, Request, segment, SendOptions, type QuotedMessagePayload, applyQqSenderRoleToMessageSender,} from 'zhin.js';
 import { parseOneBotGetMsgResponse } from './onebot-get-msg.js';
 import type { Router } from '@zhin.js/host-router';
 import type {

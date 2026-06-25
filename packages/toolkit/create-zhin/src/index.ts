@@ -236,6 +236,7 @@ async function main() {
     console.log(`  ${chalk.gray('UI:')} ${chalk.cyan('https://console.zhin.dev')}`);
     console.log(`  ${chalk.gray('API Base:')} ${chalk.cyan('http://127.0.0.1:8086')}`);
     console.log(`  ${chalk.gray('Token:')} ${chalk.cyan(options.httpToken)}`);
+    console.log(`  ${chalk.gray('Sandbox:')} ${chalk.cyan('打开 Console 后进入 Sandbox / 沙盒页，连接后发送 hello')}`);
     console.log(`  ${chalk.yellow('⚠ Token 已保存到')} ${chalk.cyan('.env')} ${chalk.yellow('文件，用于 Bearer Token 或 Console 登录页')}`);
     
     // 显示数据库配置信息
@@ -320,6 +321,13 @@ async function main() {
     console.log('');
     console.log('📝 下一步操作：');
     console.log(`  ${chalk.cyan(`cd ${realName}`)}`);
+    console.log(`  ${chalk.cyan('pnpm dev')} ${chalk.gray('# 启动 Host，然后打开 Console 的 Sandbox 页发送 hello')}`);
+    console.log('');
+    console.log(chalk.blue('下一步（任选）：'));
+    console.log(`  ${chalk.gray('接 QQ/Discord')}    ${chalk.cyan('npx zhin setup --adapters')}`);
+    console.log(`  ${chalk.gray('启用 AI 对话')}     ${chalk.cyan('npx zhin setup --ai')}`);
+    console.log(`  ${chalk.gray('写插件')}           ${chalk.cyan('https://zhin.js.org/guide/plugin-development')}`);
+    console.log(`  ${chalk.gray('诊断')}             ${chalk.cyan('npx zhin doctor')}`);
     if (options.database?.dialect === 'sqlite') {
       console.log(`  ${chalk.gray('# SQLite 使用 Node 内置 node:sqlite，请使用 Node.js 22.5+（推荐 24+）')}`);
     }
@@ -333,6 +341,7 @@ async function main() {
       console.log('');
       console.log(chalk.yellow('开发环境：'));
       console.log(`  ${chalk.cyan('zhin dev')} ${chalk.gray('# 或 pnpm dev - 开发模式（自动监听，支持热重载）')}`);
+      console.log(`  ${chalk.cyan('zhin doctor')} ${chalk.gray('# 检查 Console / Host / Sandbox / 依赖状态')}`);
       console.log('');
       console.log(chalk.yellow('生产环境：'));
       console.log(`  ${chalk.cyan('zhin build')} ${chalk.gray('# 或 pnpm build - 构建客户端代码和所有插件')}`);
@@ -354,6 +363,7 @@ async function main() {
       console.log('');
       console.log(chalk.yellow('开发环境：'));
       console.log(`  ${chalk.cyan('pnpm dev')} ${chalk.gray('# 或 npx zhin dev - 开发模式（自动监听，支持热重载）')}`);
+      console.log(`  ${chalk.cyan('npx zhin doctor')} ${chalk.gray('# 检查 Console / Host / Sandbox / 依赖状态')}`);
       console.log('');
       console.log(chalk.yellow('生产环境：'));
       console.log(`  ${chalk.cyan('pnpm build')} ${chalk.gray('# 或 npx zhin build - 构建客户端代码和所有插件')}`);

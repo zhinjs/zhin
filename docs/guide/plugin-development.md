@@ -1,6 +1,6 @@
 # 插件开发指南
 
-> **前置**：先跑通 [快速开始](/getting-started/)，再读本页。
+> **前置**：先跑通 [快速开始](/getting-started/)；只想安装现成插件请看 [安装插件](/guide/plugin-install)，想了解从创建到发布的完整路径请看 [插件生命周期](/guide/plugin-lifecycle)。
 
 ## ⚠️ 必读陷阱
 
@@ -39,7 +39,7 @@ addCommand(new MessageCommand('hi').action(() => {
 const {
   addCommand,      // 添加命令
   addTool,         // 添加 AI 工具
-  addMiddleware,   // 添加中间件
+  addMiddleware,   // 添加中间件（应用插件请用 root.addMiddleware）
   addCron,         // 添加定时任务
   addComponent,    // 添加消息组件
   defineModel,     // 定义数据模型
@@ -160,6 +160,8 @@ pnpm changeset publish   # 发布到 npm
 
 ## 下一步
 
+- [安装插件](/guide/plugin-install) — 安装依赖并自动启用
+- [插件生命周期](/guide/plugin-lifecycle) — 从单文件到发布
 - [消息如何流转](/essentials/message-flow) — 理解消息进出
 - [配置文件](/essentials/configuration) — 所有配置项
 - [平台适配器](/adapters/) — 各平台接入配置

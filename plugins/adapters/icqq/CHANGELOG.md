@@ -1,5 +1,28 @@
 # @zhin.js/adapter-icqq
 
+## 5.0.2
+
+### Patch Changes
+
+- Updated dependencies [384ea11]
+  - @zhin.js/host-api@2.0.2
+  - zhin.js@4.0.1
+
+## 5.0.1
+
+### Patch Changes
+
+- ae5239c: fix: 核心包瘦身
+- Updated dependencies [609da24]
+- Updated dependencies [7dfafc2]
+- Updated dependencies [93e58d9]
+- Updated dependencies [ae5239c]
+  - @zhin.js/agent@0.3.1
+  - @zhin.js/core@1.3.1
+  - @zhin.js/host-api@2.0.1
+  - zhin.js@4.0.1
+  - @zhin.js/host-router@2.0.0
+
 ## 5.0.0
 
 ### Patch Changes

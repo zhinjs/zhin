@@ -3,7 +3,7 @@
  */
 import { App as SlackApp, LogLevel } from "@slack/bolt";
 import { WebClient, type ChatPostMessageArguments } from "@slack/web-api";
-import { formatCompact, Endpoint, Message, MessageSegment, segment, SendContent, SendOptions } from 'zhin.js';
+import { formatCompact, Endpoint, Message, MessageSegment, segment, SendContent, SendOptions,} from 'zhin.js';
 import type { SlackEndpointConfig, SlackMessageEvent } from "./types.js";
 import type { SlackAdapter } from "./adapter.js";
 import { normalizeSlackSenderForPermit } from "./platform-permit.js";

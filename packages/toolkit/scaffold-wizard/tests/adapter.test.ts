@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateEndpointsConfigYaml, getAdapterSetupNotes } from '../src/adapter.js';
+import { generateEndpointsConfigYaml, getAdapterDependencies, getAdapterSetupNotes } from '../src/adapter.js';
 import type { AdapterSetupResult } from '../src/adapter.js';
 
 describe('adapter setup notes', () => {
@@ -76,5 +76,20 @@ describe('generateEndpointsConfigYaml', () => {
     expect(yaml).toContain('domain: https://bot.example.com');
     expect(yaml).toContain('path: /telegram-webhook');
     expect(yaml).toContain('port: 8443');
+  });
+});
+
+describe('getAdapterDependencies', () => {
+  it('uses latest for unversioned Zhin adapters', () => {
+    const deps = getAdapterDependencies({
+      packages: ['@zhin.js/adapter-sandbox', '@zhin.js/adapter-telegram', '@icqqjs/icqq@latest'],
+      plugins: [],
+      endpoints: [],
+      envVars: {},
+    });
+
+    expect(deps['@zhin.js/adapter-sandbox']).toBe('latest');
+    expect(deps['@zhin.js/adapter-telegram']).toBe('latest');
+    expect(deps['@icqqjs/icqq']).toBe('latest');
   });
 });

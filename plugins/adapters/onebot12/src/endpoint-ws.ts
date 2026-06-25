@@ -4,7 +4,7 @@
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { clearInterval, clearTimeout } from 'node:timers';
-import { formatCompact, Endpoint, Message, segment, SendOptions } from 'zhin.js';
+import { formatCompact, Endpoint, Message, segment, SendOptions,} from 'zhin.js';
 import type { OneBot12WsConfig, OneBot12Event, OneBot12ActionRequest, OneBot12ActionResponse } from './types.js';
 import type { OneBot12Adapter } from './adapter.js';
 import { formatOneBot12MessagePayload, isMessageEvent, contentToOb12Segments } from './utils.js';

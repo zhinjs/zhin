@@ -8,15 +8,17 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=e8f41d9fd0512cdd -->
+<!-- sync-adapter-docs:sha256=26c2e61462ce60b3 -->
 
 # @zhin.js/adapter-icqq
+
+> **QQ 群助手 + 可选 @AI** — 先在 [demo.zhin.dev](https://demo.zhin.dev) 或 Sandbox 调试逻辑，再接实机 QQ。启用 AI：`npx zhin setup --ai`。接入本适配器：`npx zhin setup --adapters`。
 
 Zhin.js ICQQ 适配器，通过 **[@icqqjs/cli](https://github.com/icqqjs/cli) 守护进程 IPC** 连接已登录的 QQ 账号，支持群聊和私聊消息。协议与登录由 CLI 负责，Zhin 侧只配置 QQ 号并连接本地/远程守护进程。
 
 ## 功能特性
 
-- 🤖 支持 QQ 群聊和私聊消息处理
+- 🤖 支持 QQ 群聊、私聊与**群临时会话**消息处理
 - 🔐 登录由 `icqq login` 完成（短信/二维码/滑块等由 CLI 处理）
 - 🖥️ **Web 控制台登录辅助**：与 `@zhin.js/host-api` 同时启用时，在 **`/icqq`** 页面提供「概览 + 登录辅助」；HTTP 接口为 **`GET /api/login-assist/pending`**、**`POST /api/login-assist/submit`**、**`POST /api/login-assist/cancel`**（由本适配器在路由上下文中注册，依赖核心 `loginAssist` 服务）。
 - 📨 消息发送和接收处理
@@ -189,7 +191,9 @@ addCommand(new MessageCommand('at <user:at>')
 
 ### Web 控制台登录辅助（可选）
 
-与 **`@zhin.js/host-api`** 同时启用时，Remote Console 的 **ICQQ 管理**（`/icqq`）可提供登录辅助 Tab，对应 API：`GET/POST /api/login-assist/*`（依赖核心 `loginAssist` 服务）。**不能替代** `icqq login`；仅用于在 Host 已运行时配合完成验证步骤。
+与 **`@zhin.js/host-api`** 同时启用时，Remote Console 的 **ICQQ 管理**（`/icqq`）可提供登录辅助 Tab，对应 API：`GET/POST /api/login-assist/*`（依赖核心 `loginAssist` 服务）。
+
+守护进程在登录/重连时按 **`@icqqjs/cli` IPC 契约**推送 `IpcEvent`（`id: "*"` + `event: "system.login.*"` + `data`）。其中 **`system.login.auth`** 携带 `url` + `device` 设备指纹（形状见 `@icqqjs/icqq` `EventMap`）。适配器将其桥接到 `LoginAssist` 并在控制台展示；用户完成验证后，续传 invoke 与 CLI `LoginFlow` 一致（`login` / `submit_slider` / `submit_sms_code` / `send_sms_code`，见 `login-ipc-contract.ts`）。
 
 ## 消息类型支持
 
@@ -204,6 +208,7 @@ addCommand(new MessageCommand('at <user:at>')
 - ✅ 引用回复
 - ✅ 文件消息
 - ✅ JSON 卡片消息
+- ✅ **群临时会话**（`message_type=private` + `sub_type=group`；`$channel` 为 `private` + `parent.group`）
 
 ### 发送消息类型
 
@@ -218,6 +223,29 @@ addCommand(new MessageCommand('at <user:at>')
 - ✅ JSON 卡片消息
 - ✅ 戳一戳
 - ✅ 音乐分享
+- ✅ **群临时会话**（`type: private` + `parent: { type: 'group', id }` → IPC `send_temp_msg`）
+
+## 群临时会话
+
+当群成员通过「临时会话」私聊机器人时，新版 `@icqqjs/cli` 会以私聊事件推送（`sub_type: group`，`sender.group_id` 为来源群）。适配器使用 `private` + `parent.group` 表达场景，而非发明新的顶层 `MessageType`。
+
+| 字段 | 值 |
+|------|-----|
+| `$channel.type` | `private`（对端 QQ） |
+| `$channel.parent` | `{ type: 'group', id: 群号 }` |
+
+`message.$reply` 会原样带上 `parent`，出站自动走 `send_temp_msg`。
+
+```typescript
+await adapter.sendMessage({
+  context: 'icqq',
+  endpoint: '你的QQ号',
+  type: 'private',
+  id: '987654321',
+  parent: { type: 'group', id: '123456789' },
+  content: [{ type: 'text', data: { text: '你好' } }],
+})
+```
 
 ## API 方法
 

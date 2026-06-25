@@ -1,7 +1,7 @@
 /**
  * 钉钉 Endpoint 实现
  */
-import { formatCompact, Endpoint, Message, MessageSegment, segment, SendContent, SendOptions } from 'zhin.js';
+import { formatCompact, Endpoint, Message, MessageSegment, segment, SendContent, SendOptions,} from 'zhin.js';
 import { registerFetchRoute, type Router, type RouterContext } from "@zhin.js/host-router/router";
 import { createHmac } from "crypto";
 import type {

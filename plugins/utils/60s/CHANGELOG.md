@@ -1,5 +1,12 @@
 # @zhin.js/plugin-60s
 
+## 2.0.1
+
+### Patch Changes
+
+- Updated dependencies [ae5239c]
+  - zhin.js@4.0.1
+
 ## 2.0.0
 
 ### Patch Changes

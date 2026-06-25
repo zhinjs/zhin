@@ -1,7 +1,7 @@
 /**
  * NapCat 适配器：支持正向 WS / 反向 WS / HTTP
  */
-import { formatCompact, Adapter, Plugin } from 'zhin.js';
+import { formatCompact, Adapter, Plugin, OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL } from 'zhin.js';
 import type { Router } from '@zhin.js/host-router';
 import { NapCatWsClient } from './endpoint-ws-client.js';
 import { NapCatWsServer } from './endpoint-ws-server.js';
@@ -12,6 +12,7 @@ export type NapCatEndpoint = NapCatWsClient | NapCatWsServer | NapCatHttpEndpoin
 
 export class NapCatAdapter extends Adapter<NapCatEndpoint> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
+  static override outboundRichSegmentPolicy = OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL;
 
   #router?: Router;
 

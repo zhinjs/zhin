@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-discord",
-  "version": "4.0.0",
+  "version": "4.0.2",
   "description": "Zhin.js adapter for Discord",
   "type": "module",
   "main": "./lib/index.js",

@@ -1,5 +1,28 @@
 # @zhin.js/agent
 
+## 0.3.1
+
+### Patch Changes
+
+- 609da24: fix: 规范安全开发
+- 7dfafc2: fix: ai 提示词缓存优化
+- 93e58d9: refactor: 网络策略统一、core 导出整理、Disposable 接口、Bot 图标修复
+
+  - 新增 `security/network-policy.ts` 统一 SSRF 防护、域名匹配、网络命令检测
+  - `core/index.ts` 移除死导出、统一结构
+  - 新增 `Disposable` 接口替代 `as any` dispose 调用
+  - `bridge.ts` MCP inputSchema 类型安全
+  - 脚手架依赖版本锁定（latest → ^major.minor.0）
+  - 修复 icqq/sandbox 客户端缺失 Bot 图标导入
+
+- ae5239c: fix: 核心包瘦身
+- Updated dependencies [609da24]
+- Updated dependencies [7dfafc2]
+- Updated dependencies [93e58d9]
+- Updated dependencies [ae5239c]
+  - @zhin.js/core@1.3.1
+  - @zhin.js/ai@1.4.1
+
 ## 0.3.0
 
 ### Minor Changes

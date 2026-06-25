@@ -29,16 +29,17 @@ addCommand(new MessageCommand('echo <text>').desc('复读').action((_, r) => r.p
 
 ## 中间件（Middleware）
 
-拦截消息流，在命令执行前后插入逻辑。
+拦截消息流，在 Dispatcher **之前**包裹整条入站处理（命令 / AI 路由在其后的 `next()` 内执行）。
 
 ```typescript
-addMiddleware(async (message, next) => {
+const { logger, root } = usePlugin()
+root.addMiddleware(async (message, next) => {
   logger.debug(`收到: ${message.$raw}`)
   return next()
 })
 ```
 
-> **注意**：框架用 MessageDispatcher 做主路由。`addMiddleware` 主要在路由**之后**运行。要在路由**之前**拦截，用 Guardrail 或 [消息过滤](/essentials/message-filter)。
+> **注意**：`zhin.config.yml` 加载的应用插件是根插件的**子插件**，须使用 **`root.addMiddleware`**。路由前过滤请优先 `dispatcher.addGuardrail` 或 [消息过滤](/essentials/message-filter)。
 >
 > 详见 [中间件](/essentials/middleware)
 
