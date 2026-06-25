@@ -68,4 +68,15 @@ describe('life-assistant-bot 配置契约', () => {
   it('不包含 MCP Mesh', () => {
     expect(configText).not.toMatch(/remoteAgents:/)
   })
+
+  it('启用三层文件记忆，语义记忆默认关闭', () => {
+    expect(configText).toMatch(/memory:\s*\n/)
+    expect(configText).toMatch(/enabled:\s*true/)
+    expect(configText).toMatch(/semantic:\s*\n/)
+    expect(configText).toMatch(/semantic:\s*\n\s*enabled:\s*false/)
+  })
+
+  it('不使用已弃用 memoryMcp', () => {
+    expect(configText).not.toMatch(/memoryMcp:/)
+  })
 })

@@ -36,9 +36,11 @@ ai:
   knowledge:
     baseDir: knowledge
 
-  # 三层文件记忆（Stable 默认启用）
+  # 三层文件记忆（Stable 默认启用）；碎片事实可 opt-in 语义记忆（Advanced）
   memory:
     enabled: true
+    semantic:
+      enabled: false   # 生活助手推荐默认关；改为 true 启用 memory_search / memory_upsert
 
   # 触发配置
   trigger:

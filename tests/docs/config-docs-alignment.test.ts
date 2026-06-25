@@ -38,4 +38,12 @@ describe('config documentation alignment', () => {
     expect(minimalConfig).not.toMatch(/toolSearch:/);
     expect(minimalConfig).toMatch(/endpoints:\s*\[\]/);
   });
+
+  it('configuration.md 文档化语义记忆与弃用 memoryMcp', () => {
+    expect(configurationMd).toMatch(/semantic:\s*\n\s*enabled:/);
+    expect(configurationMd).toContain('memory_search');
+    expect(configurationMd).toContain('memory_upsert');
+    expect(configurationMd).toMatch(/memoryMcp/);
+    expect(configurationMd).toMatch(/三层 Markdown/);
+  });
 });
