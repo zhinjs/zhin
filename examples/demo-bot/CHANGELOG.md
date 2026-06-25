@@ -1,5 +1,21 @@
 # demo-bot
 
+## 0.0.6
+
+### Patch Changes
+
+- c4575c9: fix: 输入输出优化,文档优化
+- Updated dependencies [b2c73bd]
+- Updated dependencies [c4575c9]
+- Updated dependencies [c4575c9]
+  - @zhin.js/cli@1.0.91
+  - @zhin.js/adapter-sandbox@5.0.3
+  - @zhin.js/satori@1.0.15
+  - @zhin.js/host-router@2.0.1
+  - @zhin.js/host-api@2.0.3
+  - @zhin.js/agent@1.0.1
+  - zhin.js@4.1.0
+
 ## 0.0.5
 
 ### Patch Changes

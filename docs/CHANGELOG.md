@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.42
+
+### Patch Changes
+
+- c4575c9: fix: 输入输出优化,文档优化
+
 ## 1.0.41
 
 ### Patch Changes

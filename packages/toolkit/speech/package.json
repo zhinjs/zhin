@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/speech",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "STT/TTS for Zhin.js (Whisper + edge/openai/azure/custom TTS); optional peer of zhin.js",
   "type": "module",
   "main": "./lib/index.js",
