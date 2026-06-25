@@ -1,7 +1,7 @@
 ---
 "@zhin.js/speech": patch
-"@zhin.js/core": minor
-"@zhin.js/agent": minor
+"@zhin.js/core": patch
+"@zhin.js/agent": patch
 "zhin.js": minor
 ---
 
