@@ -197,8 +197,8 @@ importers:
   examples/demo-bot:
     dependencies:
       '@ai-sdk/openai-compatible':
-        specifier: ^1.0.0
-        version: 1.0.40(zod@4.4.3)
+        specifier: ^2.0.51
+        version: 2.0.51(zod@4.4.3)
       '@zhin.js/adapter-sandbox':
         specifier: workspace:*
         version: link:../../plugins/adapters/sandbox
@@ -237,8 +237,8 @@ importers:
   examples/full-bot:
     dependencies:
       '@ai-sdk/openai-compatible':
-        specifier: ^1.0.0
-        version: 1.0.40(zod@4.4.3)
+        specifier: ^2.0.51
+        version: 2.0.51(zod@4.4.3)
       '@zhin.js/adapter-kook':
         specifier: workspace:*
         version: link:../../plugins/adapters/kook
@@ -758,8 +758,8 @@ importers:
         specifier: ^3.0.72
         version: 3.0.72(zod@4.4.3)
       '@ai-sdk/openai-compatible':
-        specifier: ^1.0.0
-        version: 1.0.40(zod@4.4.3)
+        specifier: ^2.0.51
+        version: 2.0.51(zod@4.4.3)
       '@types/node':
         specifier: ^25.9.2
         version: 25.9.2
@@ -1777,12 +1777,6 @@ packages:
 
   '@ai-sdk/google@3.0.83':
     resolution: {integrity: sha512-Pz7aCX0dy+5x+r4K/37HbLZNaPtPL4q2NduzJW64VffLv5sI9Nb478wAd7PlH2r2asiypJsz/Jerf9draTciUA==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      zod: ^3.25.76 || ^4.1.8
-
-  '@ai-sdk/openai-compatible@1.0.40':
-    resolution: {integrity: sha512-K8SzN+Hpr25Fx23VurW9rtg8dmUgqX+rDI7LKJFCIJcM3TIu3PfknxYlRGivDIrmsmgzH3PjvMGuCq+E8ZW7rA==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -8104,12 +8098,6 @@ snapshots:
     dependencies:
       '@ai-sdk/provider': 3.0.10
       '@ai-sdk/provider-utils': 4.0.30(zod@4.4.3)
-      zod: 4.4.3
-
-  '@ai-sdk/openai-compatible@1.0.40(zod@4.4.3)':
-    dependencies:
-      '@ai-sdk/provider': 2.0.3
-      '@ai-sdk/provider-utils': 3.0.26(zod@4.4.3)
       zod: 4.4.3
 
   '@ai-sdk/openai-compatible@2.0.51(zod@4.4.3)':
