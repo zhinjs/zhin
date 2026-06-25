@@ -22,6 +22,8 @@ const l4TestFiles = [
   'packages/im/agent/tests/memory-entry.test.ts',
   'packages/host/mcp/tests/mesh-auth.test.ts',
   'examples/full-bot/tests/full-bot-l4-contract.test.ts',
+  'examples/full-bot/tests/multimodal-peers-contract.test.ts',
+  'packages/im/core/tests/multimodal-chain-contract.test.ts',
   'plugins/adapters/napcat/tests/l4-contract.test.ts',
   'plugins/adapters/kook/tests/l4-contract.test.ts',
 ];

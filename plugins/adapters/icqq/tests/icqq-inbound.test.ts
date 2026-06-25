@@ -2,8 +2,10 @@ import { describe, it, expect } from "vitest";
 import {
   InboundMessageDeduper,
   icqqElementsToSegments,
+  isIcqqGroupTempPrivateMessage,
   isIcqqMessagePostType,
   normalizeIcqqInboundMessage,
+  resolveChannelFromIcqqMessage,
   resolveIcqqInboundMessageId,
   resolveInboundContent,
   resolveIcqqQuoteIdFromEvent,
@@ -291,5 +293,40 @@ describe("icqqElementsToSegments", () => {
     expect(
       icqqElementsToSegments([{ type: "at", qq: "8596238" }]),
     ).toEqual([{ type: "at", data: { qq: "8596238" } }]);
+  });
+});
+
+describe("group temp session", () => {
+  const groupTempPayload = {
+    post_type: "message",
+    message_type: "private",
+    sub_type: "group",
+    user_id: 1659488338,
+    from_id: 1659488338,
+    time: 1780049842,
+    raw_message: "群临时会话 hi",
+    message: [{ type: "text", text: "群临时会话 hi" }],
+    sender: { user_id: 1659488338, nickname: "成员A", group_id: 123456789 },
+    self_id: 8596238,
+  } as const;
+
+  it("isIcqqGroupTempPrivateMessage 识别 sub_type=group", () => {
+    expect(isIcqqGroupTempPrivateMessage(groupTempPayload)).toBe(true);
+    expect(isIcqqGroupTempPrivateMessage(ntPrivatePayload)).toBe(false);
+  });
+
+  it("resolveChannelFromIcqqMessage 映射为 private + parent.group", () => {
+    expect(resolveChannelFromIcqqMessage(groupTempPayload)).toEqual({
+      channelType: "private",
+      channelId: "1659488338",
+      channelParentGroupId: "123456789",
+    });
+  });
+
+  it("normalizeIcqqInboundMessage 保留 parent 群上下文", () => {
+    const normalized = normalizeIcqqInboundMessage(groupTempPayload as any);
+    expect(normalized?.channelType).toBe("private");
+    expect(normalized?.channelId).toBe("1659488338");
+    expect(normalized?.channelParentGroupId).toBe("123456789");
   });
 });

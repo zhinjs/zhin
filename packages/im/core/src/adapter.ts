@@ -6,6 +6,7 @@ import {
   type EndpointCapability,
 } from "./endpoint-capabilities.js";
 import { connectEndpointInstance, disconnectEndpointInstance } from "./built/connect-endpoint-instance.js";
+import type { EndpointManager } from "./built/endpoint-manager.js";
 import { Plugin } from "./plugin.js";
 import { EventEmitter } from "node:events";
 import { Message } from "./message.js";
@@ -13,11 +14,17 @@ import { Notice } from "./notice.js";
 import { Request } from "./request.js";
 import { BeforeSendHandler, SendOptions } from "./types.js";
 import { getOutboundReplyStore } from "./built/dispatcher.js";
-import { coerceHtmlSegmentsToText } from "./built/html-segment-fallback.js";
+import {
+  DEFAULT_OUTBOUND_RICH_SEGMENT_POLICY,
+  resolveRichSegments,
+  type OutboundRichSegmentPolicy,
+} from "./built/rich-segments/index.js";
+import { createRichSegmentRenderContext } from "./built/rich-segments/capabilities.js";
+import { collectOutboundMediaKinds } from "./built/outbound-media-utils.js";
 import { segment } from "./utils.js";
-import { runInboundMessage } from "./built/inbound-runner.js";
 import { InboundMessagePipeline } from "./built/inbound-pipeline.js";
-import { formatCompact, truncatePreview } from '@zhin.js/logger';
+import { formatCompact, truncatePreview, formatContentChainLog, CONTENT_CHAIN_STAGE } from '@zhin.js/logger';
+import type { Schema } from '@zhin.js/schema';
 /**
  * Adapter类：适配器抽象，管理多平台Bot实例。
  * 负责根据配置启动/关闭各平台机器人，统一异常处理。
@@ -33,6 +40,9 @@ export abstract class Adapter<
 
   /** Adapter 支持的能力上限（子类覆盖） */
   static readonly capabilities: readonly EndpointCapability[] = DEFAULT_ENDPOINT_CAPABILITIES;
+
+  /** 出站富媒体段渲染策略（子类 override static） */
+  static outboundRichSegmentPolicy: OutboundRichSegmentPolicy = DEFAULT_OUTBOUND_RICH_SEGMENT_POLICY;
 
   /** 入站消息并发计数 */
   #pendingMessages = 0;
@@ -130,6 +140,15 @@ export abstract class Adapter<
     this.plugin = plugin;
   }
 
+  /** 运行时 Endpoint 管理（add/remove/edit/start/stop）；未实现则 core 尝试 endpointConfigSchema 通用向导 */
+  getEndpointManager?(): EndpointManager | null;
+
+  /** 通用 schema 驱动 add/edit 时的字段定义 */
+  getEndpointConfigSchema?(): Schema | undefined;
+
+  /** 热连接失败时是否建议重启进程 */
+  getEndpointNeedsRestart?(): boolean;
+
   /**
    * 出站富媒体能力（Publisher 按此过滤/降级；各 adapter 可覆盖）。
    */
@@ -149,14 +168,52 @@ export abstract class Adapter<
     };
   }
 
-  private async renderSendMessage(options:SendOptions):Promise<SendOptions>{
-    const fns=this.plugin.root.listeners('before.sendMessage') as BeforeSendHandler[];
-    for(const fn of fns){
-      const result=await fn(options);
-      if(result) options=result;
-    }
+  protected getOutboundRichSegmentPolicy(): OutboundRichSegmentPolicy {
+    return (this.constructor as typeof Adapter).outboundRichSegmentPolicy;
+  }
+
+  /**
+   * 出站两阶段：
+   * 1. resolveRichSegments — 语义段 → 标准 IM 段（image/audio/text）
+   * 2. Endpoint materializeOutboundMedia — base64/本地路径 → 平台 URL（各 adapter 可选）
+   * @see docs/essentials/rich-segment-adapters.md
+   */
+  protected async renderSendMessage(options: SendOptions): Promise<SendOptions> {
     if (options.content != null) {
-      options = { ...options, content: coerceHtmlSegmentsToText(options.content) };
+      options = {
+        ...options,
+        content: await resolveRichSegments(
+          options.content,
+          this.getOutboundRichSegmentPolicy(),
+          createRichSegmentRenderContext({
+            getConfig: () => {
+              const cfg = this.plugin.root.inject('config')?.getPrimary<{
+                htmlRenderer?: Record<string, unknown>;
+                speech?: Record<string, unknown>;
+              }>();
+              return cfg;
+            },
+            warn: (msg) => this.logger.warn(msg),
+            logContentChain: (fields) => {
+              this.logger.debug(formatContentChainLog({ ...fields, adapter: this.name }));
+            },
+          }),
+        ),
+      };
+      const mediaKinds = collectOutboundMediaKinds(options.content);
+      if (mediaKinds.length > 0) {
+        this.logger.debug(formatContentChainLog({
+          stage: CONTENT_CHAIN_STAGE.OUTBOUND,
+          adapter: this.name,
+          endpoint: options.endpoint,
+          media: mediaKinds.join(','),
+        }));
+      }
+    }
+    const fns = this.plugin.root.listeners('before.sendMessage') as BeforeSendHandler[];
+    for (const fn of fns) {
+      const result = await fn(options);
+      if (result) options = result;
     }
     return options;
   }

@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/wechat-mp/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/wechat-mp/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=3b90ceaca9ace14d -->
+<!-- sync-adapter-docs:sha256=cffb143a2fe6745a -->
 
 # @zhin.js/adapter-wechat-mp
 
@@ -118,9 +118,9 @@ addCommand(
 ```typescript
 import { usePlugin } from 'zhin.js'
 
-const { addMiddleware } = usePlugin()
+const { root } = usePlugin()
 
-addMiddleware(async (message, next) => {
+root.addMiddleware(async (message, next) => {
   if (message.$adapter === 'wechat-mp') {
     console.log('收到微信消息:', message.$content)
   }

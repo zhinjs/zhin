@@ -1,6 +1,6 @@
 # 平台适配器
 
-本目录共 **18** 个 `@zhin.js/adapter-*` 包。对外承诺以 **Stable** 列为准；其余为 **Advanced** 或 **Experimental**（需自行验证）。
+本目录共 **20** 个 `@zhin.js/adapter-*` 包。对外承诺以 **Stable** 列为准；其余为 **Advanced** 或 **Experimental**（需自行验证）。
 
 | 适配器 | npm 包 | 档位 | 说明 |
 |--------|--------|------|------|
@@ -19,6 +19,8 @@
 | 飞书 | `@zhin.js/adapter-lark` | Advanced | |
 | 微信公众号 | `@zhin.js/adapter-wechat-mp` | Advanced | |
 | 微信 iLink（ClawBot） | `@zhin.js/adapter-weixin-ilink` | Experimental | 个人微信长轮询；需 ClawBot 灰度 |
+| LINE | `@zhin.js/adapter-line` | Experimental | LINE Messaging API（Webhook） |
+| 企业微信 | `@zhin.js/adapter-wecom` | Experimental | 企业微信应用机器人 |
 | Email | `@zhin.js/adapter-email` | Experimental | 邮件收发 |
 | GitHub | `@zhin.js/adapter-github` | Experimental | GitHub 事件 |
 | Satori | `@zhin.js/adapter-satori` | Experimental | Satori 通用协议 |

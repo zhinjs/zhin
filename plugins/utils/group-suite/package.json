@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-group-suite",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Zhin.js 群运营套件 — 群管、签到、统计、日常分析、问答（合并原 5 个插件）",
   "type": "module",
   "main": "./lib/index.js",
@@ -48,14 +48,14 @@
   "devDependencies": {
     "typescript": "^6.0.3",
     "zhin.js": "workspace:*",
-    "@zhin.js/plugin-html-renderer": "workspace:*"
+    "@zhin.js/html-renderer": "workspace:*"
   },
   "peerDependencies": {
     "zhin.js": "workspace:*",
-    "@zhin.js/plugin-html-renderer": "workspace:*"
+    "@zhin.js/html-renderer": "workspace:*"
   },
   "peerDependenciesMeta": {
-    "@zhin.js/plugin-html-renderer": {
+    "@zhin.js/html-renderer": {
       "optional": true
     }
   },

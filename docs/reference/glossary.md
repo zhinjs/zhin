@@ -31,7 +31,7 @@
 | **Plugin / `usePlugin()`** | L1～L2 | IM 侧插件单元；`usePlugin()` 按文件归属插件树。 |
 | **Feature** | L2 | 能力模块（如 `CommandFeature`、`ToolFeature`），通过 `provide` 挂到根上下文。 |
 | **`PluginBase`（kernel）** | L3 | `@zhin.js/kernel` 中的通用插件基类；**不等同于** `@zhin.js/core` 的 `Plugin`，IM 主路径以 `core` 为准。 |
-| **`addMiddleware`** | L2～L3 | 在 Dispatcher **主处理之后** 执行的扩展链；前置拦截优先 Guardrail。 |
+| **`addMiddleware`** | L2～L3 | 注册到 **`root.middleware`**，在 Dispatcher **之前**包裹 `dispatch`；前置过滤优先 Guardrail / `addFilterRule`。 |
 
 ## 包与生态
 

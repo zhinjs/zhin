@@ -15,7 +15,7 @@
 
 ### 中间件
 
-- 入口：`addMiddleware(async (message, next) => { ... })`
+- 入口：`root.addMiddleware(async (message, next) => { ... })`（应用插件须挂根链）
 - 适用：消息流的前后置处理、过滤、统计、拦截
 - 典型场景：不依赖显式命令触发的消息处理
 
@@ -35,7 +35,7 @@
 
 - 入口：`defineComponent(...)` + `addComponent(...)`
 - 适用：可复用消息片段、异步消息渲染、JSX 组合输出
-- 真实来源：music、html-renderer、test-jsx
+- 真实来源：music、test-jsx
 
 ### Context / 服务
 

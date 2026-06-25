@@ -20,8 +20,7 @@ import {
   SendContent,
   MessageElement,
   segment,
-  MessageType,
-} from "zhin.js";
+  MessageType,} from 'zhin.js';
 import type { KookEndpointConfig, KookSenderInfo, KookRawMessage } from "./types.js";
 import { KookPermission } from "./types.js";
 import type { KookAdapter } from "./adapter.js";

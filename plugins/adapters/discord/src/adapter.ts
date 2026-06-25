@@ -1,7 +1,7 @@
 /**
  * Discord 适配器：单一适配器支持 Gateway / Interactions，由 config.connection 区分
  */
-import { Adapter, Plugin } from "zhin.js";
+import { Adapter, Plugin, OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL } from 'zhin.js';
 import type { Router } from "@zhin.js/host-router";
 import { DiscordEndpoint } from "./endpoint.js";
 import { DiscordInteractionsEndpoint } from "./endpoint-interactions.js";
@@ -19,6 +19,7 @@ function isGatewayBot(endpoint: DiscordEndpointLike): endpoint is DiscordEndpoin
 
 export class DiscordAdapter extends Adapter<DiscordEndpointLike> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
+  static override outboundRichSegmentPolicy = OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL;
 
   #router?: Router;
 

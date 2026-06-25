@@ -63,7 +63,7 @@ export class Prompt<P extends RegisteredAdapter> {
             dispose();
             clearTimeout(timer);
         };
-        const dispose = this.plugin.addMiddleware(middleware);
+        const dispose = this.plugin.root.addMiddleware(middleware);
         const timer = setTimeout(() => {
             dispose();
             callback(new Error(timeoutText));

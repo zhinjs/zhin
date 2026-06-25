@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MCP_SDK_VERSION, ensureDatabaseForAI, ensureDatabaseForAdapters, getAIDependencies, listAIDependencyNames, formatAIDependencyHint, diagnoseAIDependencies } from '../src/project-deps.js';
+import { ensureDatabaseForAI, ensureDatabaseForAdapters, getAIDependencies, listAIDependencyNames, formatAIDependencyHint, diagnoseAIDependencies } from '../src/project-deps.js';
 import { RECOMMENDED_AI_DEFAULTS } from '../src/ai.js';
 import type { InitOptions } from '../src/types.js';
 
@@ -46,14 +46,14 @@ describe('project-deps', () => {
   it('returns agent stack + MCP SDK + provider sdk when AI is enabled', () => {
     expect(getAIDependencies({ enabled: false })).toEqual({});
     expect(getAIDependencies({ enabled: true, defaultProvider: 'openai' })).toEqual({
-      '@zhin.js/agent': '^4.0.0',
-      zod: '^4.0.0',
-      ai: '^6.0.0',
-      '@modelcontextprotocol/sdk': MCP_SDK_VERSION,
-      '@ai-sdk/openai': '^3.0.0',
+      '@zhin.js/agent': 'latest',
+      zod: 'latest',
+      ai: 'latest',
+      '@modelcontextprotocol/sdk': 'latest',
+      '@ai-sdk/openai': 'latest',
     });
     expect(getAIDependencies({ enabled: true, defaultProvider: 'ollama' })).toMatchObject({
-      '@ai-sdk/openai-compatible': '^1.0.0',
+      '@ai-sdk/openai-compatible': 'latest',
     });
   });
 

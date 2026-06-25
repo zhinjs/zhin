@@ -1,7 +1,9 @@
 /**
  * GitHub Endpoint 实现（基于 gh CLI）
  */
-import { formatCompact, Endpoint, Message, segment, SendContent, SendOptions, type MessageSegment } from 'zhin.js';
+import { formatCompact, Endpoint, Message, segment, SendContent, SendOptions, type MessageSegment,
+  coerceQrcodeSegmentsToText,
+} from 'zhin.js';
 import type {
   GitHubEndpointConfig,
   IssueCommentPayload,
@@ -158,7 +160,7 @@ export class GitHubEndpoint implements Endpoint<GitHubEndpointConfig, IssueComme
     const parsed = parseChannelId(options.id);
     if (!parsed) throw new Error(`无效的 GitHub channel ID: ${options.id}`);
 
-    const text = toMarkdown(options.content);
+    const text = toMarkdown(coerceQrcodeSegmentsToText(options.content ?? ''));
     const r = parsed.type === 'issue'
       ? await this.gh.createIssueComment(parsed.repo, parsed.number, text)
       : await this.gh.createPRComment(parsed.repo, parsed.number, text);

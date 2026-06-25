@@ -1,15 +1,14 @@
 /**
  * Telegram 适配器
  */
-import {
-  Adapter,
-  Plugin,
-} from "zhin.js";
+import { Adapter,
+  Plugin,, OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL } from 'zhin.js';
 import { TelegramEndpoint } from "./endpoint.js";
 import type { TelegramEndpointConfig } from "./types.js";
 
 export class TelegramAdapter extends Adapter<TelegramEndpoint> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
+  static override outboundRichSegmentPolicy = OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL;
 
   constructor(plugin: Plugin) {
     super(plugin, "telegram", []);

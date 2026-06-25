@@ -91,8 +91,8 @@ plugin.useContext('database', (db) => {
   }
 })
 
-// 监听所有消息
-plugin.addMiddleware(async (message, next) => {
+// 监听所有消息（入站链走 root.middleware）
+plugin.root.addMiddleware(async (message, next) => {
   console.log('收到消息:', message.$raw)
   await next()
 })
@@ -150,7 +150,7 @@ pnpm --filter @zhin.js/core build
 # 2. packages/** (core, client, zhin, create-zhin)  
 # 3. packages/host/** (host-router, host-api, mcp)
 # 4. plugins/adapters/** (icqq, kook, discord, qq, onebot11, process)
-# 5. plugins/utils/** (music, sensitive-filter 等工具插件)
+# 5. plugins/utils/** (music、rss 等工具插件)
 ```
 
 ### 测试
@@ -231,17 +231,19 @@ type MessageMiddleware<P extends RegisteredAdapter=RegisteredAdapter> =
   (message: Message<AdapterMessage<P>>, next: () => Promise<void>) => MaybePromise<void>
 ```
 
-**洋葱模型**，按注册顺序执行：
+**洋葱模型**（应用插件须 `root.addMiddleware`，入站只走 `plugin.root.middleware`），按注册顺序执行：
 ```typescript
+const { root } = usePlugin()
+
 // 基础中间件
-addMiddleware(async (message, next) => {
+root.addMiddleware(async (message, next) => {
   console.log('before')
   await next()
   console.log('after')
 })
 
 // 日志中间件
-addMiddleware(async (message, next) => {
+root.addMiddleware(async (message, next) => {
   const start = Date.now()
   console.log(`[收到] ${message.$raw}`)
   await next()
@@ -249,7 +251,7 @@ addMiddleware(async (message, next) => {
 })
 
 // 过滤中间件（拦截消息）
-addMiddleware(async (message, next) => {
+root.addMiddleware(async (message, next) => {
   if (message.$raw.includes('广告')) {
     await message.$recall() // 撤回消息
     return // 不调用 next()，中断后续处理
@@ -545,7 +547,7 @@ async function setup() {
 3. **plugins/adapters/** - 平台适配器
    - process（`services` 内置，非 adapter 包）, icqq, kook, discord, qq, onebot11, telegram, slack 等
 4. **plugins/utils/** - 工具插件
-   - music, sensitive-filter 等
+   - music、rss 等
 
 ### 旧 API → 新 API 映射
 

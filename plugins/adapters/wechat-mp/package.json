@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-wechat-mp",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "type": "module",
   "description": "Zhin.js adapter for WeChat Official Account (微信公众号)",
   "main": "./lib/index.js",

@@ -10,8 +10,7 @@ import {
   type MessageSegment,
   type SendContent,
   type SendOptions,
-  segment,
-} from "zhin.js";
+  segment,} from 'zhin.js';
 import { getUpdates, notifyStart, notifyStop, sendTyping } from "./ilink-api.js";
 import {
   configureIlinkMeta,
