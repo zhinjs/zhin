@@ -1188,7 +1188,7 @@ importers:
   plugins/adapters/lark:
     dependencies:
       axios:
-        specifier: ^1.17.0
+        specifier: ^1.18.0
         version: 1.18.1
     devDependencies:
       '@types/koa':
@@ -1534,7 +1534,7 @@ importers:
   plugins/adapters/wechat-mp:
     dependencies:
       axios:
-        specifier: ^1.17.0
+        specifier: ^1.18.0
         version: 1.18.1
       form-data:
         specifier: ^4.0.6
