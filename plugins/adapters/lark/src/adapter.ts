@@ -9,6 +9,7 @@ import type { LarkEndpointConfig } from "./types.js";
 export class LarkAdapter extends Adapter<LarkEndpoint> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
   static override outboundRichSegmentPolicy = OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL;
+  static override interactivePolicy = 'native' as const;
 
     #router: any;
 

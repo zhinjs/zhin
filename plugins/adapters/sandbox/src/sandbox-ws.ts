@@ -281,14 +281,34 @@ export class SandboxWsEndpoint extends EventEmitter implements Endpoint<SandboxW
     if (!this.$connected) return "";
     const ws = this.$config.ws;
     if (!ws) return "";
+    const messageId = `sb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     ws.send(
       JSON.stringify({
         ...options,
+        messageId,
         content: options.content,
         timestamp: Date.now(),
       }),
     );
-    return "";
+    return messageId;
+  }
+
+  async $editMessage(options: import('zhin.js').EditMessageOptions): Promise<void> {
+    if (!this.$connected) return;
+    const ws = this.$config.ws;
+    if (!ws) return;
+    ws.send(
+      JSON.stringify({
+        type: 'edit',
+        messageId: options.messageId,
+        context: options.context,
+        endpoint: options.endpoint,
+        id: options.id,
+        channelType: options.type,
+        content: options.content,
+        timestamp: Date.now(),
+      }),
+    );
   }
 
   async $recallMessage(_id: string): Promise<void> {}
@@ -296,6 +316,7 @@ export class SandboxWsEndpoint extends EventEmitter implements Endpoint<SandboxW
 
 export class SandboxWsHostAdapter extends Adapter<SandboxWsEndpoint> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
+  static override interactivePolicy = 'native' as const;
 
   constructor(
     plugin: Plugin,

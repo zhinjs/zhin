@@ -9,6 +9,7 @@ import type { DingTalkEndpointConfig } from "./types.js";
 export class DingTalkAdapter extends Adapter<DingTalkEndpoint> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
   static override outboundRichSegmentPolicy = OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL;
+  static override interactivePolicy = 'text' as const;
 
   #router: any;
 

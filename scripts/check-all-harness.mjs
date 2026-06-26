@@ -52,6 +52,11 @@ const checks = [
     description: 'README Install tiers 表与 docs/snippets/install-tiers.md 一致',
   },
   {
+    name: 'Scaffold Deps SSOT',
+    command: 'pnpm check:scaffold-deps-ssot',
+    description: 'create-zhin 初始化依赖与 monorepo package.json 版本一致',
+  },
+  {
     name: 'Doc Orphans',
     command: 'pnpm check:doc-orphans',
     description: '检查站点 Markdown 是否在侧栏或 allowlist',
@@ -90,6 +95,11 @@ const checks = [
     name: 'Rich Segment Adapters',
     command: 'pnpm check:rich-segments',
     description: '各 adapter 声明 outboundRichSegmentPolicy 与契约测试',
+  },
+  {
+    name: 'Interactive Segments',
+    command: 'pnpm check:interactive-segments',
+    description: '各 adapter 声明 interactivePolicy 与契约测试',
   },
 ];
 

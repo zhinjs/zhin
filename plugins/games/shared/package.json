@@ -1,0 +1,32 @@
+{
+  "name": "@zhin.js/game-shared",
+  "version": "1.0.0",
+  "description": "Zhin.js 游戏插件通用工具包",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "import": "./lib/index.js",
+      "types": "./lib/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "peerDependencies": {
+    "zhin.js": "^4.0.0"
+  },
+  "devDependencies": {
+    "zhin.js": "workspace:*",
+    "typescript": "^6.0.3"
+  },
+  "files": [
+    "lib",
+    "src"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

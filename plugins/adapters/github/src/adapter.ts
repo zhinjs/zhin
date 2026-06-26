@@ -72,6 +72,7 @@ function formatNotification(event: string, p: GenericWebhookPayload): string {
 export class GitHubAdapter extends Adapter<GitHubEndpoint> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
   static override outboundRichSegmentPolicy = OUTBOUND_RICH_SEGMENT_POLICY_TEXT_ONLY;
+  static override interactivePolicy = 'text' as const;
 
   /** 轮询定时器 */
   private _pollTimer: ReturnType<typeof setInterval> | null = null;

@@ -9,6 +9,7 @@ import {
   generateEndpointsConfigJSON,
   generateEndpointsConfigToml,
   CONSOLE_HOST_PLUGINS,
+  DEFAULT_CREATE_BOT_HTTP_PORT,
 } from '@zhin.js/scaffold-wizard';
 
 // 生成数据库环境变量
@@ -231,6 +232,7 @@ ${pluginsJsonLines}
   ]`);
   jsonSections.push(`"http": {
     "token": "\${HTTP_TOKEN}",
+    "port": ${DEFAULT_CREATE_BOT_HTTP_PORT},
     "base": "/api",
     "corsOrigins": [
       "https://console.zhin.dev"
@@ -256,6 +258,7 @@ ${pluginsYamlLines}
 
 http:
   token: \${HTTP_TOKEN}
+  port: ${DEFAULT_CREATE_BOT_HTTP_PORT}
   base: /api
   corsOrigins:
     - "https://console.zhin.dev"
@@ -273,6 +276,7 @@ ${pluginsTomlLines}
 
 [http]
 token = "\${HTTP_TOKEN}"
+port = ${DEFAULT_CREATE_BOT_HTTP_PORT}
 base = "/api"
 corsOrigins = ["https://console.zhin.dev"]
 ${tomlExtraConfig}

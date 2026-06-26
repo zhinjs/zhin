@@ -5,7 +5,7 @@ import WebSocket, { WebSocketServer } from 'ws';
 import { EventEmitter } from 'events';
 import { clearInterval } from 'node:timers';
 import { IncomingMessage } from 'http';
-import { formatCompact, Endpoint, Message, Notice, Request, segment, SendOptions, type QuotedMessagePayload, applyQqSenderRoleToMessageSender,} from 'zhin.js';
+import { formatCompact, Endpoint, Message, Notice, Request, segment, SendOptions, expandInteractiveSegmentsInContent, type QuotedMessagePayload, applyQqSenderRoleToMessageSender,} from 'zhin.js';
 import { parseOneBotGetMsgResponse } from './onebot-get-msg.js';
 import type { Router } from '@zhin.js/host-router';
 import type {
@@ -148,7 +148,8 @@ export class OneBot11WsServer extends EventEmitter implements Endpoint<OneBot11W
   }
 
   async $sendMessage(options: SendOptions): Promise<string> {
-    const messageData: any = { message: options.content };
+    const content = expandInteractiveSegmentsInContent(options.content);
+    const messageData: any = { message: content };
     if (options.type === 'group') {
       const [self_id, id] = options.id.split(':');
       const result = await this.callApi(self_id, 'send_group_msg', {

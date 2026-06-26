@@ -10,6 +10,7 @@ import {
   configureSlackEndpoint,
   configureTelegramEndpoint,
 } from './adapter-configurers.js';
+import { ZHIN_STACK_VERSIONS } from './zhin-stack-deps.js';
 
 export interface AdapterSetupResult {
   packages: string[];
@@ -519,7 +520,7 @@ export function getAdapterDependencies(result: AdapterSetupResult): Record<strin
           deps[name] = version;
         }
       } else {
-        deps[pkg] = 'latest';
+        deps[pkg] = ZHIN_STACK_VERSIONS[pkg as keyof typeof ZHIN_STACK_VERSIONS] ?? 'latest';
       }
     } else {
       deps[pkg] = 'latest';

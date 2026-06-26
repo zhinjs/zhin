@@ -1,0 +1,54 @@
+{
+  "name": "@zhin.js/plugin-text-adventure",
+  "version": "1.0.0",
+  "description": "Zhin.js 交互式文字冒险 — 分支剧情与选项按钮",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "lib",
+    "plugin.yml",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rimraf lib"
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "bot",
+    "plugin",
+    "game",
+    "text-adventure"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "zhin.js": "workspace:*"
+  },
+  "dependencies": {
+    "@zhin.js/game-shared": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "zhin.js": "workspace:*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "plugins/games/text-adventure"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

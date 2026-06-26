@@ -13,6 +13,7 @@ export class WeixinIlinkAdapter extends Adapter<WeixinIlinkEndpoint> {
     html: 'text',
     markdown: 'origin',
   };
+  static override interactivePolicy = 'text' as const;
 
   constructor(plugin: Plugin) {
     super(plugin, "weixin-ilink", []);

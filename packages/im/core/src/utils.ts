@@ -35,6 +35,9 @@ import { HtmlSegment } from "./built/rich-segments/html-segment.js";
 import { MarkdownSegment } from "./built/rich-segments/markdown-segment.js";
 import { QrcodeSegment } from "./built/rich-segments/qrcode-segment.js";
 import { TtsSegment } from "./built/rich-segments/tts-segment.js";
+import { KeyboardSegment } from "./built/interactive-segments/keyboard-segment.js";
+import { ButtonSpec, normalizeKeyboardRows, type KeyboardRowInput } from "./built/interactive-segments/button-spec.js";
+import type { ButtonData, KeyboardFallback, KeyboardSegmentData } from "./built/interactive-segments/types.js";
 
 /**
  * 组合中间件,洋葱模型
@@ -141,6 +144,30 @@ export namespace segment {
     provider?: string;
   }) {
     return new TtsSegment(options);
+  }
+
+  /** 键盘按钮单元（与 {@link keyboard} 组合布局） */
+  export function button(data: ButtonData): ButtonSpec {
+    return new ButtonSpec(data);
+  }
+
+  /** 键盘布局出站段（Adapter interactivePolicy 决定 native/text） */
+  export function keyboard(
+    rows: KeyboardRowInput[],
+    options?: { fallback?: KeyboardFallback },
+  ): KeyboardSegment {
+    return new KeyboardSegment({
+      rows: normalizeKeyboardRows(rows),
+      fallback: options?.fallback,
+    });
+  }
+
+  /**
+   * @deprecated 使用 {@link keyboard} + {@link button}；文本请用 `segment.text` 单独发送
+   */
+  export function interactive(data: KeyboardSegmentData & { text?: SendContent }) {
+    const { text: _text, rows, fallback } = data;
+    return keyboard(rows, { fallback });
   }
 
   export function from(content: SendContent): SendContent {

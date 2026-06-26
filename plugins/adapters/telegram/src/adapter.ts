@@ -9,6 +9,7 @@ import type { TelegramEndpointConfig } from "./types.js";
 export class TelegramAdapter extends Adapter<TelegramEndpoint> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
   static override outboundRichSegmentPolicy = OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL;
+  static override interactivePolicy = 'native' as const;
 
   constructor(plugin: Plugin) {
     super(plugin, "telegram", []);

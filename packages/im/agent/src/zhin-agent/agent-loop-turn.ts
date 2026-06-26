@@ -4,7 +4,7 @@
 
 import { getHostRootPlugin, type Plugin } from '@zhin.js/core';
 import type { AIService } from '../service.js';
-import { formatCompact, Logger } from '@zhin.js/logger';
+import { formatCompact, Logger, truncatePreview } from '@zhin.js/logger';
 import type { AgentTool, Usage } from '@zhin.js/ai';
 import {
   agentLoop,
@@ -34,6 +34,29 @@ import type { PromptTurnHooks } from './prompt-controller.js';
 import type { ZhinAgentPrivate, OnChunkCallback, Message } from './zhin-agent-private.js';
 
 const logger = new Logger(null, 'ZhinAgent:AgentLoopTurn');
+
+function resolveAssistantReplyText(assistant: AssistantMessage): string {
+  const text = assistantText(assistant);
+  if (text.trim()) return text;
+  if (assistant.errorMessage) {
+    return `模型调用失败：${assistant.errorMessage}。请检查 API 密钥与网络后重试。`;
+  }
+  return text;
+}
+
+function logAssistantIterationFailure(
+  assistant: AssistantMessage,
+  modelId: string,
+  sessionId: string,
+): void {
+  if (assistant.stopReason !== 'error' || !assistant.errorMessage) return;
+  logger.warn(formatCompact({
+    op: 'llm_error',
+    session: sessionId,
+    model: modelId,
+    error: truncatePreview(assistant.errorMessage, 500),
+  }));
+}
 
 function resolveAIService(plugin?: Plugin): AIService | undefined {
   if (!plugin) return undefined;
@@ -161,8 +184,9 @@ async function runAgentLoopVisionTurnOnce(
     }
     if (event.type === 'message_end' && event.message.role === 'assistant') {
       const assistant = event.message as AssistantMessage;
-      lastAssistantText = assistantText(assistant);
+      lastAssistantText = resolveAssistantReplyText(assistant);
       lastUsage = assistant.usage;
+      logAssistantIterationFailure(assistant, modelId, sessionId);
       const toolNames = assistant.content
         .filter((b): b is Extract<typeof b, { type: 'toolCall' }> => b.type === 'toolCall')
         .map((b) => b.name)
@@ -446,8 +470,9 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
     }
     if (event.type === 'message_end' && event.message.role === 'assistant') {
       const assistant = event.message as AssistantMessage;
-      lastAssistantText = assistantText(assistant);
+      lastAssistantText = resolveAssistantReplyText(assistant);
       lastUsage = assistant.usage;
+      logAssistantIterationFailure(assistant, modelId, sessionId);
       const toolNames = assistant.content
         .filter((b): b is Extract<typeof b, { type: 'toolCall' }> => b.type === 'toolCall')
         .map((b) => b.name)

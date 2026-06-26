@@ -16,6 +16,7 @@ export type OneBot11Bot = OneBot11WsClient | OneBot11WsServer;
 export class OneBot11Adapter extends Adapter<OneBot11Bot> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
   static override outboundRichSegmentPolicy = OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL;
+  static override interactivePolicy = 'text' as const;
 
   #router?: Router;
 

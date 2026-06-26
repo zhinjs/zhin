@@ -9,6 +9,7 @@ import {
   SendContent,
   SendOptions,
   segment,
+  expandInteractiveSegmentsInContent,
   Notice,
   Request,
   type QuotedMessagePayload,} from 'zhin.js';
@@ -75,7 +76,8 @@ export abstract class NapCatEndpointBase extends EventEmitter implements Endpoin
   }
 
   async $sendMessage(options: SendOptions): Promise<string> {
-    const msg: any = { message: options.content };
+    const content = expandInteractiveSegmentsInContent(options.content);
+    const msg: any = { message: content };
     if (options.type === 'group') {
       const result = await this.callApi<{ message_id: number }>('send_group_msg', { group_id: parseInt(options.id), ...msg });
       this.logger.debug(`${this.$id} send group(${options.id}):${segment.raw(options.content)}`);

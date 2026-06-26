@@ -2,12 +2,17 @@ import fs from 'fs-extra';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import {
-  InitOptions,
   DATABASE_PACKAGES,
   generateAdapterEnvVars,
   generateAIEnvVars,
   getAdapterDependencies,
   getAIDependencies,
+  getCreateBotBaseDependencies,
+  DEFAULT_CREATE_BOT_HTTP_PORT,
+  CREATE_BOT_NPMRC,
+  getCreateBotPnpmConfig,
+  type InitOptions,
+  ZHIN_STACK_VERSIONS,
 } from '@zhin.js/scaffold-wizard';
 import { createConfigFile, generateDatabaseEnvVars } from './config.js';
 import { SOUL_MD_TEMPLATE, TOOLS_MD_TEMPLATE, AGENTS_MD_TEMPLATE, ASSISTANT_PROFILE_YML_EXAMPLE } from './templates/bootstrap.js';
@@ -45,6 +50,8 @@ export async function createWorkspace(projectPath: string, projectName: string, 
 
   await fs.ensureDir(projectPath);
   
+  await fs.writeFile(path.join(projectPath, '.npmrc'), CREATE_BOT_NPMRC);
+  
   // 创建 pnpm-workspace.yaml (包含 plugins 目录，支持 zhin new 创建的插件)
   await fs.writeFile(path.join(projectPath, 'pnpm-workspace.yaml'), 
 `packages:
@@ -60,7 +67,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       databaseDeps[dbPackage] = '^2.0.0';
     }
     // 总是添加数据库包
-    databaseDeps['@zhin.js/database'] = 'latest';
+    databaseDeps['@zhin.js/database'] = ZHIN_STACK_VERSIONS['@zhin.js/database'];
   }
 
   // 根据适配器选择添加依赖
@@ -71,7 +78,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
   }
   // 确保 sandbox 始终包含
   if (!adapterDeps['@zhin.js/adapter-sandbox']) {
-    adapterDeps['@zhin.js/adapter-sandbox'] = 'latest';
+    adapterDeps['@zhin.js/adapter-sandbox'] = ZHIN_STACK_VERSIONS['@zhin.js/adapter-sandbox'];
   }
 
   // AI 启用时预装 MCP SDK
@@ -99,13 +106,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       'pm2:monit': 'pm2 monit'
     },
     dependencies: {
-      'zhin.js': 'latest',
-      '@zhin.js/cli': 'latest',
-      '@zhin.js/host-router': 'latest',
-      '@zhin.js/client': 'latest',
-      '@zhin.js/host-api': 'latest',
-      '@zhin.js/contract': 'latest',
-      '@zhin.js/satori': 'latest',
+      ...getCreateBotBaseDependencies(),
       'tsx': '^4.22.0',
       ...adapterDeps,
       ...databaseDeps,
@@ -122,9 +123,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       '@vitejs/plugin-react': '^4.0.0',
       '@tailwindcss/vite': '^4.0.0'
     },
-    pnpm: {
-      onlyBuiltDependencies: ['esbuild']
-    },
+    pnpm: getCreateBotPnpmConfig(options.ai?.enabled),
     engines: {
       node: '^20.19.0 || >=22.12.0'
     }
@@ -431,15 +430,15 @@ ${projectName}/
 pnpm dev          # 开发模式（支持热重载）
 \`\`\`
 
-1. 确认终端里 Host 已启动（一般为 \`http://127.0.0.1:8086\`）。
-2. 打开 **[Remote Console](https://console.zhin.dev)**，API Base 填 \`http://127.0.0.1:8086\`，Token 填 \`.env\` 的 \`HTTP_TOKEN\`。
+1. 确认终端里 Host 已启动（一般为 \`http://127.0.0.1:${DEFAULT_CREATE_BOT_HTTP_PORT}\`）。
+2. 打开 **[Remote Console](https://console.zhin.dev)**，API Base 填 \`http://127.0.0.1:${DEFAULT_CREATE_BOT_HTTP_PORT}\`，Token 填 \`.env\` 的 \`HTTP_TOKEN\`。
 3. 进入 **Sandbox / 沙盒** 页并连接，发送 \`hello\`；收到回复即首跑成功。
 4. 若连接失败，先运行 \`npx zhin doctor\` 查看修复建议。
 
 ### Remote Console（同上）
 
 - UI: \`https://console.zhin.dev\`
-- API Base: \`http://127.0.0.1:8086\`（与 Host 启动日志一致）
+- API Base: \`http://127.0.0.1:${DEFAULT_CREATE_BOT_HTTP_PORT}\`（与 Host 启动日志一致）
 - Token: \`.env\` 中的 \`HTTP_TOKEN\`，在 Console 登录页填写
 
 默认配置已经允许官方 Remote Console Origin。如需本地开发控制台，在 \`${configFilename}\` 的 \`http.corsOrigins\` 中追加本地 Origin。

@@ -14,7 +14,8 @@ import {
   Message,
   SendOptions,
   SendContent,
-  segment,} from 'zhin.js';
+  segment,
+} from 'zhin.js';
 import type { MessageElement } from "zhin.js";
 import { ReceiverMode, type QQEndpointConfig, type ApplicationPlatform } from "./types.js";
 import type { QQAdapter } from "./adapter.js";
@@ -25,6 +26,8 @@ import { applyCustomAuthEndpoints } from "./gateway-config.js";
 import { normalizeOutboundMarkdown } from "./outbound-markdown.js";
 import { normalizeOutboundMedia } from "./outbound-media.js";
 import { normalizeQqGuildSenderForPermit } from "./platform-permit.js";
+import { expandKeyboardSegmentsForQq } from "./outbound-keyboard.js";
+import { formatQqActionMessage, type QqActionNoticeEvent } from "./inbound-action.js";
 
 /** 从 qq-official-bot SendResult / 审核回包中解析出站消息 ID */
 export function resolveOutboundMessageId(result: unknown): string {
@@ -171,6 +174,34 @@ export class QQEndpoint<T extends ReceiverMode, M extends ApplicationPlatform = 
     }
   }
 
+  private async handleQQAction(event: QqActionNoticeEvent): Promise<void> {
+    try {
+      await event.reply(0);
+      const channel = event.notice_type === 'group'
+        ? { id: String(event.group_id), type: 'group' as const }
+        : event.notice_type === 'guild'
+          ? { id: String(event.channel_id), type: 'channel' as const }
+          : { id: String(event.operator_id), type: 'private' as const };
+      const message = formatQqActionMessage(event, {
+        endpointName: this.$config.name,
+        send: async (content) => this.adapter.sendMessage({
+          ...channel,
+          context: 'qq',
+          endpoint: this.$config.name,
+          content,
+        }),
+      });
+      await this.adapter.receiveMessageAwait(message);
+      this.pluginLogger.debug(
+        `qq action ${message.$channel.type}(${message.$channel.id}): ${message.$raw}`,
+      );
+    } catch (err) {
+      this.pluginLogger.warn(
+        `qq format action failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   private handleGroupNotice(event: string, payload: { group_id?: string; operator_id?: string }): void {
     this.pluginLogger.info(
       `qq notice ${event}: group=${payload.group_id ?? '?'} operator=${payload.operator_id ?? '?'}`,
@@ -181,6 +212,9 @@ export class QQEndpoint<T extends ReceiverMode, M extends ApplicationPlatform = 
     this.on("message.group", this.handleQQMessage.bind(this));
     this.on("message.guild", this.handleQQMessage.bind(this));
     this.on("message.private", this.handleQQMessage.bind(this));
+    this.on("notice.friend.action", this.handleQQAction.bind(this));
+    this.on("notice.group.action", this.handleQQAction.bind(this));
+    this.on("notice.guild.action", this.handleQQAction.bind(this));
     this.on("notice.group.increase", (e) => this.handleGroupNotice('group.add_robot', e));
     this.on("notice.group.decrease", (e) => this.handleGroupNotice('group.del_robot', e));
     this.on("notice.group.receive_open", (e) => this.handleGroupNotice('group.msg_receive_open', e));
@@ -316,7 +350,7 @@ export class QQEndpoint<T extends ReceiverMode, M extends ApplicationPlatform = 
 
   async $sendMessage(options: SendOptions): Promise<string> {
     const content = normalizeOutboundMarkdown(
-      normalizeOutboundMedia(options.content),
+      normalizeOutboundMedia(expandKeyboardSegmentsForQq(options.content)),
       this.$config.outboundMarkdown,
     );
     switch (options.type) {

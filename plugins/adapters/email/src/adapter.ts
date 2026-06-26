@@ -13,6 +13,7 @@ export class EmailAdapter extends Adapter<EmailEndpoint> {
     html: 'origin',
     markdown: 'image',
   };
+  static override interactivePolicy = 'text' as const;
 
     constructor(plugin: Plugin) {
         super(plugin, 'email', []);

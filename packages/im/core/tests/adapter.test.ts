@@ -669,6 +669,74 @@ describe('Adapter Core Functionality', () => {
       expect(hookCalled).toBe(true)
     })
   })
+
+  describe('editMessage', () => {
+    it('should call $editMessage when endpoint implements it', async () => {
+      const config = [{ id: 'bot1' }]
+      const adapter = new MockAdapter(plugin, 'test', config)
+      await adapter.start()
+
+      const bot = adapter.endpoints.get('bot1')!
+      const editSpy = vi.fn()
+      ;(bot as any).$editMessage = editSpy
+
+      await adapter.editMessage({
+        messageId: 'msg-123',
+        context: 'test',
+        endpoint: 'bot1',
+        id: 'chan-1',
+        type: 'group',
+        content: 'Updated content',
+      })
+
+      expect(editSpy).toHaveBeenCalled()
+    })
+
+    it('should fallback to sendMessage when endpoint does not support $editMessage', async () => {
+      const config = [{ id: 'bot1' }]
+      const adapter = new MockAdapter(plugin, 'test', config)
+      await adapter.start()
+
+      const sendSpy = vi.spyOn(adapter, 'sendMessage')
+
+      const result = await adapter.editMessage({
+        messageId: 'msg-123',
+        context: 'test',
+        endpoint: 'bot1',
+        id: 'chan-1',
+        type: 'group',
+        content: 'Updated content',
+      })
+
+      expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
+        context: 'test',
+        endpoint: 'bot1',
+        id: 'chan-1',
+        type: 'group',
+      }))
+      expect(result).toBe('mock-message-id')
+    })
+
+    it('should return original messageId when edit succeeds', async () => {
+      const config = [{ id: 'bot1' }]
+      const adapter = new MockAdapter(plugin, 'test', config)
+      await adapter.start()
+
+      const bot = adapter.endpoints.get('bot1')!
+      ;(bot as any).$editMessage = vi.fn()
+
+      const result = await adapter.editMessage({
+        messageId: 'original-msg-id',
+        context: 'test',
+        endpoint: 'bot1',
+        id: 'chan-1',
+        type: 'group',
+        content: 'Updated content',
+      })
+
+      expect(result).toBe('original-msg-id')
+    })
+  })
 })
 
 describe('Adapter Registry', () => {

@@ -10,6 +10,7 @@ import type { Router } from "@zhin.js/host-router/router";
 export class LineAdapter extends Adapter<LineEndpoint> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
   static override outboundRichSegmentPolicy = OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL;
+  static override interactivePolicy = 'text' as const;
 
   #router: Router;
 

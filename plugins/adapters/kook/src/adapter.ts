@@ -13,6 +13,7 @@ export class KookAdapter extends Adapter<KookEndpoint> {
     html: 'image',
     markdown: 'origin',
   };
+  static override interactivePolicy = 'native' as const;
 
   constructor(plugin: Plugin) {
     super(plugin, "kook", []);

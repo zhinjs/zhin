@@ -17,19 +17,22 @@ import {
   Routes,
   ApplicationCommandData,
   ChatInputCommandInteraction,
+  ButtonInteraction,
   InteractionType,
   InteractionResponseType,
   GuildMember,
-  PermissionsBitField,
-  PermissionFlagsBits,
-} from "discord.js";
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  type EditMessageOptions as DiscordEditMessageOptions,
 import {
   Endpoint,
   Message,
   SendOptions,
   SendContent,
   MessageSegment,
-  segment,} from 'zhin.js';
+  segment,
+  type EditMessageOptions,} from 'zhin.js';
 import type { DiscordGatewayConfig, DiscordChannelMessage } from "./types.js";
 import type { DiscordAdapter } from "./adapter.js";
 import { createReadStream } from "fs";
@@ -122,19 +125,62 @@ export class DiscordEndpoint
     }
   }
 
+  private async handleButtonInteraction(interaction: ButtonInteraction): Promise<void> {
+    try {
+      await interaction.deferUpdate();
+    } catch {
+      // already acknowledged
+    }
+    const channel = interaction.channel;
+    if (!channel) return;
+    const channelType = channel.type === ChannelType.DM ? "private" : "group";
+    const message = Message.from(interaction, {
+      $id: interaction.id,
+      $adapter: "discord",
+      $endpoint: this.$config.name,
+      $sender: {
+        id: interaction.user.id,
+        name: interaction.user.username || interaction.user.displayName,
+      },
+      $channel: {
+        id: channel.id,
+        type: channelType,
+      },
+      $content: [{
+        type: "action",
+        data: {
+          id: interaction.customId,
+          payload: interaction.customId,
+          sourceMessageId: interaction.message?.id,
+        },
+      }],
+      $raw: interaction.customId,
+      $timestamp: Date.now(),
+      $recall: async () => {},
+      $reply: async (content: SendContent): Promise<string> => {
+        if (!interaction.channel?.isTextBased()) return "";
+        const result = await this.sendContentToChannel(interaction.channel as TextChannel, content);
+        return result.id;
+      },
+    });
+    this.adapter.emit("message.receive", message);
+  }
+
   async $connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       // 监听消息事件
       this.on("messageCreate", this.handleDiscordMessage.bind(this));
 
-      // 监听交互事件（Slash Commands）
-      if (this.$config.enableSlashCommands) {
-        this.on("interactionCreate", async (interaction) => {
-          if (interaction.isChatInputCommand()) {
-            await this.handleSlashCommand(interaction);
-          }
-        });
-      }
+      // 监听交互事件（Slash Commands + 按钮）
+      this.on("interactionCreate", async (interaction) => {
+        if (interaction.isChatInputCommand() && this.$config.enableSlashCommands) {
+          await this.handleSlashCommand(interaction);
+          return;
+        }
+        if (interaction.isButton()) {
+          await this.handleButtonInteraction(interaction);
+        }
+      });
 
       // 监听就绪事件
       this.once("clientReady", async () => {
@@ -620,6 +666,25 @@ export class DiscordEndpoint
           embeds.push(this.createEmbedFromData(data));
           break;
 
+        case "keyboard": {
+          const components = (data.rows ?? []).map((row: Array<{ id: string; label: string; payload: string; disabled?: boolean; style?: string }>) =>
+            new ActionRowBuilder<ButtonBuilder>().addComponents(
+              ...row.map((btn) => {
+                const b = new ButtonBuilder()
+                  .setCustomId(String(btn.payload).slice(0, 100))
+                  .setLabel(btn.label)
+                  .setDisabled(!!btn.disabled);
+                if (btn.style === "danger") b.setStyle(ButtonStyle.Danger);
+                else if (btn.style === "primary") b.setStyle(ButtonStyle.Primary);
+                else b.setStyle(ButtonStyle.Secondary);
+                return b;
+              }),
+            ),
+          );
+          messageOptions.components = components;
+          break;
+        }
+
         default:
           // 未知类型作为文本处理
           textContent += data.text || `[${type}]`;
@@ -642,6 +707,43 @@ export class DiscordEndpoint
     // 发送消息
     return await channel.send(messageOptions);
   }
+
+  async $editMessage(options: EditMessageOptions): Promise<void> {
+    const channel = await this.channels.fetch(options.id);
+    if (!channel || !channel.isTextBased()) {
+      throw new Error(`Channel ${options.id} is not a text channel`);
+    }
+    const msg = await (channel as TextChannel).messages.fetch(options.messageId);
+    const messageOptions: DiscordEditMessageOptions = {};
+    let textContent = "";
+    if (!Array.isArray(options.content)) options.content = [options.content];
+    for (const seg of options.content) {
+      if (typeof seg === "string") {
+        textContent += seg;
+        continue;
+      }
+      if (seg.type === "text") textContent += seg.data.text || "";
+      if (seg.type === "keyboard") {
+        messageOptions.components = (seg.data.rows ?? []).map((row: Array<{ label: string; payload: string; disabled?: boolean; style?: string }>) =>
+          new ActionRowBuilder<ButtonBuilder>().addComponents(
+            ...row.map((btn) => {
+              const b = new ButtonBuilder()
+                .setCustomId(String(btn.payload).slice(0, 100))
+                .setLabel(btn.label)
+                .setDisabled(!!btn.disabled);
+              if (btn.style === "danger") b.setStyle(ButtonStyle.Danger);
+              else if (btn.style === "primary") b.setStyle(ButtonStyle.Primary);
+              else b.setStyle(ButtonStyle.Secondary);
+              return b;
+            }),
+          ),
+        );
+      }
+    }
+    if (textContent.trim()) messageOptions.content = textContent.trim();
+    await msg.edit(messageOptions);
+  }
+
   async $recallMessage(id: string): Promise<void> { }
 
   // ==================== 服务器管理 API ====================

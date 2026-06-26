@@ -20,6 +20,7 @@ function isGatewayBot(endpoint: DiscordEndpointLike): endpoint is DiscordEndpoin
 export class DiscordAdapter extends Adapter<DiscordEndpointLike> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
   static override outboundRichSegmentPolicy = OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL;
+  static override interactivePolicy = 'native' as const;
 
   #router?: Router;
 

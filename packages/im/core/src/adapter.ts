@@ -12,13 +12,18 @@ import { EventEmitter } from "node:events";
 import { Message } from "./message.js";
 import { Notice } from "./notice.js";
 import { Request } from "./request.js";
-import { BeforeSendHandler, SendOptions } from "./types.js";
+import { BeforeSendHandler, EditMessageOptions, SendOptions } from "./types.js";
 import { getOutboundReplyStore } from "./built/dispatcher.js";
 import {
   DEFAULT_OUTBOUND_RICH_SEGMENT_POLICY,
   resolveRichSegments,
   type OutboundRichSegmentPolicy,
 } from "./built/rich-segments/index.js";
+import {
+  DEFAULT_INTERACTIVE_POLICY,
+  resolveInteractiveSegments,
+  type InteractivePolicy,
+} from "./built/interactive-segments/index.js";
 import { createRichSegmentRenderContext } from "./built/rich-segments/capabilities.js";
 import { collectOutboundMediaKinds } from "./built/outbound-media-utils.js";
 import { segment } from "./utils.js";
@@ -43,6 +48,13 @@ export abstract class Adapter<
 
   /** 出站富媒体段渲染策略（子类 override static） */
   static outboundRichSegmentPolicy: OutboundRichSegmentPolicy = DEFAULT_OUTBOUND_RICH_SEGMENT_POLICY;
+
+  /** 交互段出站策略：native 保留按钮段，text 降级为编号文本 */
+  static interactivePolicy: InteractivePolicy = DEFAULT_INTERACTIVE_POLICY;
+
+  protected getInteractivePolicy(): InteractivePolicy {
+    return (this.constructor as typeof Adapter).interactivePolicy;
+  }
 
   /** 入站消息并发计数 */
   #pendingMessages = 0;
@@ -140,6 +152,22 @@ export abstract class Adapter<
     this.plugin = plugin;
   }
 
+  /**
+   * 同步等待入站管线结束（middleware → dispatcher → 生命周期 → 观察者）。
+   * 用于 QQ 等需在被动回复完成后再 ack 交互的平台事件。
+   */
+  async receiveMessageAwait(message: Message): Promise<boolean> {
+    if (this.inboundPipeline.shouldDropDueToBackpressure()) {
+      this.logger.warn(formatCompact({ drop: 'concurrency', limit: this.maxConcurrentMessages }));
+      return false;
+    }
+    this.#pendingMessages++;
+    await this.inboundPipeline.receive(message, () => {
+      EventEmitter.prototype.emit.call(this, 'message.receive', message);
+    });
+    return true;
+  }
+
   /** 运行时 Endpoint 管理（add/remove/edit/start/stop）；未实现则 core 尝试 endpointConfigSchema 通用向导 */
   getEndpointManager?(): EndpointManager | null;
 
@@ -200,6 +228,13 @@ export abstract class Adapter<
           }),
         ),
       };
+      options = {
+        ...options,
+        content: resolveInteractiveSegments(
+          options.content,
+          this.getInteractivePolicy(),
+        ),
+      };
       const mediaKinds = collectOutboundMediaKinds(options.content);
       if (mediaKinds.length > 0) {
         this.logger.debug(formatContentChainLog({
@@ -238,6 +273,51 @@ export abstract class Adapter<
     });
     return messageId;
   }
+
+  /**
+   * 编辑已发送的消息。
+   * - 如果 Endpoint 实现了 $editMessage，调用平台编辑 API
+   * - 否则 fallback 到发送新消息
+   * @returns 消息 ID（编辑时返回原 ID，fallback 时返回新消息 ID）
+   */
+  async editMessage(options: EditMessageOptions): Promise<string> {
+    const endpoint = this.endpoints.get(options.endpoint);
+    if (!endpoint) throw new Error(`Endpoint ${options.endpoint} not found`);
+    assertOutbound(endpoint);
+
+    const editable = endpoint as { $editMessage?: (opts: EditMessageOptions) => Promise<void> };
+
+    if (editable.$editMessage) {
+      const rendered = await this.renderSendMessage({
+        context: options.context,
+        endpoint: options.endpoint,
+        id: options.id,
+        type: options.type,
+        content: options.content,
+      });
+      await editable.$editMessage({ ...options, content: rendered.content });
+      this.logger.info(formatCompact({
+        edit: `${options.type}(${options.id})`,
+        endpoint: options.endpoint,
+        messageId: options.messageId,
+      }));
+      return options.messageId;
+    }
+
+    this.logger.debug(formatCompact({
+      editFallback: 'sendMessage',
+      endpoint: options.endpoint,
+      reason: '$editMessage not implemented',
+    }));
+    return this.sendMessage({
+      context: options.context,
+      endpoint: options.endpoint,
+      id: options.id,
+      type: options.type,
+      content: options.content,
+    });
+  }
+
   async start() {
     if (this.endpoints.size > 0) {
       await this.stop();

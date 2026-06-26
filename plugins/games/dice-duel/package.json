@@ -1,0 +1,25 @@
+{
+  "name": "@zhin.js/plugin-dice-duel",
+  "version": "1.0.0",
+  "description": "Zhin.js 骰子对决 — 三局两胜比大小",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["src", "lib", "plugin.yml", "README.md"],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rimraf lib"
+  },
+  "license": "MIT",
+  "peerDependencies": { "zhin.js": "workspace:*" },
+  "dependencies": { "@zhin.js/game-shared": "workspace:*" },
+  "devDependencies": { "typescript": "^6.0.3", "zhin.js": "workspace:*" }
+}

@@ -6,6 +6,7 @@ import {
   chatCompletionToAssistantMessage,
   createContext,
   createUserMessage,
+  assistantText,
 } from '../../src/llm/index.js';
 
 describe('openai-bridge', () => {
@@ -90,5 +91,35 @@ describe('openai-bridge', () => {
     expect(Array.isArray(content)).toBe(true);
     const parts = content as Array<{ type: string; image_url?: { url: string } }>;
     expect(parts.some((p) => p.type === 'image_url' && p.image_url?.url === 'https://example.com/a.jpg')).toBe(true);
+  });
+
+  it('promotes reasoning-only assistant message to text when content is null', () => {
+    const model = {
+      id: 'glm-test',
+      provider: 'cloudflare',
+      api: 'openai-completions' as const,
+      input: ['text'] as const,
+      contextWindow: 128000,
+      maxTokens: 4096,
+    };
+    const assistant = chatCompletionToAssistantMessage(
+      {
+        id: '1',
+        object: 'chat.completion',
+        created: 0,
+        model: 'glm-test',
+        choices: [{
+          index: 0,
+          message: {
+            role: 'assistant',
+            content: null as unknown as string,
+            reasoning_content: '你好！',
+          },
+          finish_reason: 'length',
+        }],
+      },
+      model,
+    );
+    expect(assistantText(assistant)).toBe('你好！');
   });
 });

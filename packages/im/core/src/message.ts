@@ -72,4 +72,14 @@ export namespace Message{
     export function alignReplySegments(content: MessageElement[], quoteId?: string): void {
         alignReplySegmentsImpl(content, quoteId);
     }
+
+    export function actionPayload(message: Message<any>): string | undefined {
+        for (const item of message.$content ?? []) {
+            if (typeof item === 'string') continue;
+            if (item.type === 'action' && item.data?.payload) {
+                return String(item.data.payload);
+            }
+        }
+        return undefined;
+    }
 }

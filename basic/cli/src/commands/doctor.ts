@@ -10,9 +10,14 @@ import {
   formatAIDependencyFixCommand,
   isAiEnabledInConfig,
   mergeDependenciesIntoPackageJson,
+  packagesNeedingAiStackFix,
   diagnoseOptionalPeers,
   formatOptionalPeerFixCommand,
   diagnoseUpgradeToL4,
+  diagnoseZhinStackDependencies,
+  formatZhinStackFixCommand,
+  packagesNeedingZhinStackFix,
+  ZHIN_STACK_VERSIONS,
 } from '@zhin.js/scaffold-wizard';
 import { logger } from '../utils/logger.js';
 import { formatNodeRequirementMessage, isNodeVersionSupported } from '../utils/node-requirements.js';
@@ -336,6 +341,64 @@ export const doctorCommand = new Command('doctor')
       });
     }
 
+    // 5b. 检查 Zhin 生态依赖（zhin.js / plugins / database）
+    if (existingConfig) {
+      try {
+        const config = loadedConfig ?? await readConfig(path.join(cwd, existingConfig));
+        const pkgPath = path.join(cwd, 'package.json');
+        const pkg = fs.existsSync(pkgPath) ? await fs.readJSON(pkgPath) : {};
+        const zhinDiagnosis = diagnoseZhinStackDependencies(cwd, config as Record<string, unknown>, pkg);
+        const zhinFixPackages = packagesNeedingZhinStackFix(zhinDiagnosis);
+        if (zhinFixPackages.length > 0) {
+          const fixCmd = formatZhinStackFixCommand(zhinFixPackages, zhinDiagnosis.required);
+          const detailParts = [
+            zhinDiagnosis.missingFromPackageJson.length > 0
+              ? `缺少: ${zhinDiagnosis.missingFromPackageJson.join(', ')}`
+              : '',
+            zhinDiagnosis.outdatedInPackageJson.length > 0
+              ? `版本过旧: ${zhinDiagnosis.outdatedInPackageJson.join(', ')}`
+              : '',
+            zhinDiagnosis.incompatibleInstalled.map((issue) => issue.reason).join('；'),
+          ].filter(Boolean);
+          results.push({
+            name: 'Zhin 生态依赖',
+            status: 'error',
+            message: detailParts.join('；') || 'package.json 与 zhin.config 不匹配',
+            fix: options.fix ? '将写入 package.json' : fixCmd,
+          });
+          if (options.fix) {
+            const changed = await mergeDependenciesIntoPackageJson(cwd, zhinDiagnosis.required);
+            if (changed) {
+              logger.info(formatCompact({
+                cmd: 'doctor',
+                op: 'add_zhin_deps',
+                packages: zhinFixPackages.join(','),
+              }));
+            }
+          }
+        } else if (zhinDiagnosis.notInstalled.length > 0) {
+          results.push({
+            name: 'Zhin 生态依赖',
+            status: 'warn',
+            message: `已声明但未安装: ${zhinDiagnosis.notInstalled.join(', ')}`,
+            fix: 'pnpm install',
+          });
+        } else {
+          results.push({
+            name: 'Zhin 生态依赖',
+            status: 'ok',
+            message: 'zhin.js 与配置中的 @zhin.js/* 插件已对齐',
+          });
+        }
+      } catch {
+        results.push({
+          name: 'Zhin 生态依赖',
+          status: 'warn',
+          message: '无法读取配置以检查 Zhin 生态依赖',
+        });
+      }
+    }
+
     // 6. 检查 AI 依赖（zhin.js 4.x：配置启用 AI 时需单独安装 agent 栈）
     if (existingConfig) {
       try {
@@ -344,15 +407,27 @@ export const doctorCommand = new Command('doctor')
           const aiDiagnosis = diagnoseAIDependencies(cwd, config);
           if (aiDiagnosis) {
             const providerLabel = aiDiagnosis.provider ? ` (${aiDiagnosis.provider})` : '';
-            if (aiDiagnosis.missingFromPackageJson.length > 0) {
-              const fixCmd = formatAIDependencyFixCommand(
-                aiDiagnosis.missingFromPackageJson,
-                aiDiagnosis.required,
-              );
+            const fixPackages = packagesNeedingAiStackFix(aiDiagnosis);
+            const incompatibleMsg = aiDiagnosis.incompatibleInstalled
+              .map((issue) => issue.reason)
+              .join('；');
+            const outdatedMsg = aiDiagnosis.outdatedInPackageJson.length > 0
+              ? `版本过旧: ${aiDiagnosis.outdatedInPackageJson.join(', ')}`
+              : '';
+
+            if (fixPackages.length > 0) {
+              const fixCmd = formatAIDependencyFixCommand(fixPackages, aiDiagnosis.required);
+              const detailParts = [
+                aiDiagnosis.missingFromPackageJson.length > 0
+                  ? `缺少: ${aiDiagnosis.missingFromPackageJson.join(', ')}`
+                  : '',
+                outdatedMsg,
+                incompatibleMsg,
+              ].filter(Boolean);
               results.push({
                 name: 'AI 依赖',
                 status: 'error',
-                message: `已启用 AI${providerLabel}，但 package.json 缺少: ${aiDiagnosis.missingFromPackageJson.join(', ')}`,
+                message: `已启用 AI${providerLabel}${detailParts.length ? `，${detailParts.join('；')}` : ''}`,
                 fix: options.fix ? '将写入 package.json' : fixCmd,
               });
               if (options.fix) {
@@ -361,7 +436,7 @@ export const doctorCommand = new Command('doctor')
                   logger.info(formatCompact({
                     cmd: 'doctor',
                     op: 'add_ai_deps',
-                    packages: aiDiagnosis.missingFromPackageJson.join(','),
+                    packages: fixPackages.join(','),
                   }));
                 }
               }
@@ -415,7 +490,9 @@ export const doctorCommand = new Command('doctor')
             fix: options.fix ? '将写入 package.json' : fixCmd,
           });
           if (options.fix && peer.missingFromPackageJson.length > 0) {
-            await mergeDependenciesIntoPackageJson(cwd, { [peer.packageName]: 'latest' });
+            await mergeDependenciesIntoPackageJson(cwd, {
+              [peer.packageName]: ZHIN_STACK_VERSIONS[peer.packageName as keyof typeof ZHIN_STACK_VERSIONS] ?? 'latest',
+            });
           }
         }
       } catch {

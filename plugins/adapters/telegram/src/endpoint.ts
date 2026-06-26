@@ -43,8 +43,12 @@ export class TelegramEndpoint extends Telegraf implements Endpoint<TelegramEndpo
 
       // Set up callback query handler (for inline buttons)
       this.on("callback_query", async (ctx) => {
-        // Handle callback queries as special messages
         if (ctx.callbackQuery && "data" in ctx.callbackQuery) {
+          try {
+            await ctx.answerCbQuery();
+          } catch {
+            // already answered
+          }
           const message = this.$formatCallbackQuery(ctx);
           this.adapter.emit("message.receive", message);
           this.pluginLogger.debug(
@@ -271,7 +275,14 @@ export class TelegramEndpoint extends Telegraf implements Endpoint<TelegramEndpo
         id: channelId,
         type: channelType,
       },
-      $content: [{ type: "text", data: { text: query.data } }],
+      $content: [{
+        type: "action",
+        data: {
+          id: query.id,
+          payload: query.data,
+          sourceMessageId: msg && "message_id" in msg ? String(msg.message_id) : undefined,
+        },
+      }],
       $raw: query.data,
       $timestamp: Date.now(),
       $recall: async () => {
@@ -520,6 +531,38 @@ export class TelegramEndpoint extends Telegraf implements Endpoint<TelegramEndpo
     }
   }
 
+  async $editMessage(options: import('zhin.js').EditMessageOptions): Promise<void> {
+    const chatId = parseInt(options.id);
+    const messageId = parseInt(options.messageId);
+    const content = Array.isArray(options.content) ? options.content : [options.content];
+    let textContent = "";
+    let keyboard: { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> } | undefined;
+    for (const seg of content) {
+      if (typeof seg === "string") {
+        textContent += seg;
+        continue;
+      }
+      if (seg.type === "text") textContent += seg.data.text || "";
+      if (seg.type === "keyboard") {
+        keyboard = {
+          inline_keyboard: (seg.data.rows ?? []).map((row: Array<{ label: string; payload: string; disabled?: boolean }>) =>
+            row.map((btn) => ({
+              text: btn.label,
+              callback_data: String(btn.payload).slice(0, 64),
+            })),
+          ),
+        };
+      }
+    }
+    await this.telegram.editMessageText(
+      chatId,
+      messageId,
+      undefined,
+      textContent.trim() || " ",
+      keyboard ? { reply_markup: keyboard } : {},
+    );
+  }
+
   private async sendContentToChat(
     chatId: number,
     content: SendContent,
@@ -691,6 +734,20 @@ export class TelegramEndpoint extends Telegraf implements Endpoint<TelegramEndpo
               reply_parameters: { message_id: parseInt(data.id) },
               ...extraOptions,
             });
+
+        case "keyboard": {
+          const rows = (data.rows ?? []).map((row: Array<{ label: string; payload: string; disabled?: boolean }>) =>
+            row.map((btn) => ({
+              text: btn.label,
+              callback_data: String(btn.payload).slice(0, 64),
+            })),
+          );
+          return await this.telegram.sendMessage(chatId, textContent.trim() || " ", {
+            reply_markup: { inline_keyboard: rows },
+            ...extraOptions,
+          });
+        }
+
         default:
           // Unknown segment type, add as text
           textContent += data.text || `[${type}]`;
@@ -707,7 +764,6 @@ export class TelegramEndpoint extends Telegraf implements Endpoint<TelegramEndpo
   }
 
   async $recallMessage(id: string): Promise<void> {
-    // Telegram requires both chat_id and message_id to delete a message
     // The Endpoint interface only provides message_id, making recall impossible
     // Users should use message.$recall() instead, which has the full context
     throw new Error(

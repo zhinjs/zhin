@@ -44,6 +44,7 @@ describe('create-zhin -y Stable 默认值', () => {
     expect(config).not.toContain('defaultProvider:');
     expect(config).not.toContain('inbox:');
     expect(config).not.toContain('database:');
+    expect(config).toContain(`port: ${8068}`);
   });
 
   it('不安装 devSkills 模板', async () => {

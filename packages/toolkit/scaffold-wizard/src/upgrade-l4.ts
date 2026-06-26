@@ -8,6 +8,7 @@ import {
   isAiEnabledInConfig,
   findMissingPackageDependencies,
   findUnresolvedPackageInstalls,
+  packagesNeedingAiStackFix,
 } from './project-deps.js';
 import { diagnoseOptionalPeers, formatOptionalPeerFixCommand, getOptionalPeerDependencies } from './optional-peers.js';
 
@@ -52,7 +53,7 @@ export function diagnoseUpgradeToL4(
   const optionalPeers = diagnoseOptionalPeers(cwd, config, packageJson);
 
   const missingAiDeps = ai
-    ? [...new Set([...ai.missingFromPackageJson, ...ai.notInstalled])]
+    ? [...new Set([...packagesNeedingAiStackFix(ai), ...ai.notInstalled])]
     : [...Object.keys(getRequiredAIDependenciesForConfig({ ai: { enabled: true } }))];
 
   if (!aiEnabled) {

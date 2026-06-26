@@ -18,6 +18,7 @@ export type SatoriBot = SatoriWsClient | SatoriWebhookEndpoint;
 export class SatoriAdapter extends Adapter<SatoriBot> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
   static override outboundRichSegmentPolicy = OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL;
+  static override interactivePolicy = 'text' as const;
 
   #router?: Router;
 

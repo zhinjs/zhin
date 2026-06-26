@@ -2,7 +2,7 @@
  * KOOK Gateway 非聊天入站：系统消息 (type=255) / BROADCAST → Notice
  * @see https://developer.kookapp.cn/doc/event/event-introduction
  */
-import { Notice, formatCompact, type NoticeType } from "zhin.js";
+import { Notice, formatCompact, Message, type NoticeType } from "zhin.js";
 
 /** KOOK WebSocket s=0 时 d 字段（kook-client Receiver 入参） */
 export interface KookGatewayEvent {
@@ -198,5 +198,53 @@ export function formatKookNoticeLog(notice: ReturnType<typeof formatKookNotice>)
     kook_type: notice.$subType,
     channel: `${notice.$channel.type}(${notice.$channel.id})`,
     endpoint: notice.$endpoint,
+  });
+}
+
+/** KOOK 卡片按钮点击（type=255, extra.type=message_btn_click） */
+export function isKookButtonClickEvent(event: KookGatewayEvent): boolean {
+  return event.type === SYSTEM_MESSAGE_TYPE && event.extra?.type === 'message_btn_click';
+}
+
+export function formatKookButtonClickMessage(
+  event: KookGatewayEvent,
+  endpointName: string,
+): ReturnType<typeof Message.from<KookGatewayEvent>> {
+  const extra = event.extra ?? {};
+  const body = extra.body ?? {};
+  const payload = String(body.value ?? '');
+  const userInfo = body.user_info as { id?: string; username?: string; nickname?: string } | undefined;
+  const userId = String(body.user_id ?? userInfo?.id ?? event.author_id ?? '');
+  const userName = userInfo?.nickname ?? userInfo?.username ?? userId;
+  const sourceMessageId = String(body.msg_id ?? '');
+
+  let channelType: 'private' | 'channel' = 'private';
+  let channelId = String(body.target_id ?? event.target_id ?? userId);
+  if (body.channel_type === 'GROUP' || event.channel_type === 'GROUP') {
+    channelType = 'channel';
+    channelId = String(body.target_id ?? event.target_id ?? channelId);
+  } else if (body.channel_type === 'PERSON' || event.channel_type === 'PERSON') {
+    channelType = 'private';
+    channelId = String(body.target_id ?? event.target_id ?? userId);
+  }
+
+  return Message.from(event, {
+    $id: event.msg_id ?? `btn:${Date.now()}`,
+    $adapter: 'kook',
+    $endpoint: endpointName,
+    $sender: { id: userId, name: userName },
+    $channel: { id: channelId, type: channelType },
+    $content: [{
+      type: 'action',
+      data: {
+        id: payload,
+        payload,
+        sourceMessageId,
+      },
+    }],
+    $raw: payload,
+    $timestamp: event.msg_timestamp ?? Date.now(),
+    $recall: async () => {},
+    $reply: async () => '',
   });
 }

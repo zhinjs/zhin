@@ -9,6 +9,7 @@ import type { WeChatMPConfig } from "./types.js";
 export class WeChatMPAdapter extends Adapter<WeChatMPEndpoint> {
     static override readonly capabilities = ['inbound', 'outbound'] as const;
   static override outboundRichSegmentPolicy = OUTBOUND_RICH_SEGMENT_POLICY_TEXT_ONLY;
+  static override interactivePolicy = 'text' as const;
 
     #router: Router;
 

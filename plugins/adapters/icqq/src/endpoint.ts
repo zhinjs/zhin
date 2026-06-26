@@ -4,7 +4,7 @@
  * 不再直接依赖 @icqqjs/icqq 协议库。
  * 登录由 `icqq login` 完成，本 Endpoint 只负责连接守护进程并收发消息。
  */
-import { formatCompact, Endpoint, Message, segment, SendContent, SendOptions, type QuotedMessagePayload,} from 'zhin.js';
+import { formatCompact, Endpoint, Message, segment, SendContent, SendOptions, expandInteractiveSegmentsInContent, type QuotedMessagePayload,} from 'zhin.js';
 import type {
   IcqqEndpointConfig,
   IcqqSenderInfo,
@@ -657,7 +657,8 @@ export class IcqqEndpoint implements Endpoint<IcqqEndpointConfig, IcqqIpcMessage
 
   async $sendMessage(options: SendOptions): Promise<string> {
     const outboundMedia = resolveIcqqOutboundMediaMode(this.$config);
-    const qrcodeContent = options.content;
+    const expanded = expandInteractiveSegmentsInContent(options.content);
+    const qrcodeContent = expanded;
     const content = materializeOutboundBase64(qrcodeContent, outboundMedia);
     const message = buildIcqqIpcMessageImpl(content);
 

@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { ensureDatabaseForAI, ensureDatabaseForAdapters, getAIDependencies, listAIDependencyNames, formatAIDependencyHint, diagnoseAIDependencies } from '../src/project-deps.js';
+import {
+  AI_STACK_VERSIONS,
+  ensureDatabaseForAI,
+  ensureDatabaseForAdapters,
+  getAIDependencies,
+  listAIDependencyNames,
+  formatAIDependencyHint,
+  diagnoseAIDependencies,
+  findInstalledAiStackIncompatibilities,
+  getRequiredAIDependenciesForConfig,
+} from '../src/project-deps.js';
 import { RECOMMENDED_AI_DEFAULTS } from '../src/ai.js';
 import type { InitOptions } from '../src/types.js';
 
@@ -30,6 +40,31 @@ describe('project-deps', () => {
     expect(diagnosis?.missingFromPackageJson).not.toContain('@modelcontextprotocol/sdk');
   });
 
+  it('resolves openai-compatible sdk from custom provider alias', () => {
+    const config = {
+      ai: {
+        enabled: true,
+        agents: { zhin: { provider: 'agnes-ai' } },
+        providers: { 'agnes-ai': { sdk: 'openai-compatible' } },
+      },
+    };
+    const required = getRequiredAIDependenciesForConfig(config);
+    expect(required['@ai-sdk/openai-compatible']).toBe(AI_STACK_VERSIONS['@ai-sdk/openai-compatible']);
+    expect(required.ai).toBe(AI_STACK_VERSIONS.ai);
+  });
+
+  it('flags ai@6 + openai-compatible@3 incompatibility', () => {
+    const pkg = {
+      dependencies: {
+        ai: '^6.0.209',
+        '@ai-sdk/openai-compatible': '^3.0.0',
+      },
+    };
+    const issues = findInstalledAiStackIncompatibilities('/tmp/nonexistent', pkg);
+    expect(issues.some((issue) => issue.package === 'ai')).toBe(true);
+    expect(issues.some((issue) => issue.package === '@ai-sdk/openai-compatible')).toBe(true);
+  });
+
   it('includes MCP when memoryMcp is enabled', () => {
     const config = {
       ai: {
@@ -46,14 +81,14 @@ describe('project-deps', () => {
   it('returns agent stack + MCP SDK + provider sdk when AI is enabled', () => {
     expect(getAIDependencies({ enabled: false })).toEqual({});
     expect(getAIDependencies({ enabled: true, defaultProvider: 'openai' })).toEqual({
-      '@zhin.js/agent': 'latest',
-      zod: 'latest',
-      ai: 'latest',
-      '@modelcontextprotocol/sdk': 'latest',
-      '@ai-sdk/openai': 'latest',
+      '@zhin.js/agent': AI_STACK_VERSIONS['@zhin.js/agent'],
+      zod: AI_STACK_VERSIONS.zod,
+      ai: AI_STACK_VERSIONS.ai,
+      '@modelcontextprotocol/sdk': AI_STACK_VERSIONS['@modelcontextprotocol/sdk'],
+      '@ai-sdk/openai': AI_STACK_VERSIONS['@ai-sdk/openai'],
     });
     expect(getAIDependencies({ enabled: true, defaultProvider: 'ollama' })).toMatchObject({
-      '@ai-sdk/openai-compatible': 'latest',
+      '@ai-sdk/openai-compatible': AI_STACK_VERSIONS['@ai-sdk/openai-compatible'],
     });
   });
 

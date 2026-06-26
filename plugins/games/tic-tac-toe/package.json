@@ -1,0 +1,54 @@
+{
+  "name": "@zhin.js/plugin-tic-tac-toe",
+  "version": "1.0.0",
+  "description": "Zhin.js 跨平台井字棋 — 按钮/文本双模式，群聊排队与人机对战",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "lib",
+    "plugin.yml",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rimraf lib"
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "bot",
+    "plugin",
+    "game",
+    "tic-tac-toe"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "zhin.js": "workspace:*"
+  },
+  "dependencies": {
+    "@zhin.js/game-shared": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "zhin.js": "workspace:*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "plugins/games/tic-tac-toe"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

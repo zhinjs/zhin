@@ -18,6 +18,8 @@ export interface ChatMessage {
   tool_call_id?: string;
   tool_calls?: ToolCall[];
   reasoning_content?: string | null;
+  /** Some OpenAI-compatible providers (e.g. Cloudflare GLM) use `reasoning` instead of `reasoning_content`. */
+  reasoning?: string | null;
 }
 
 /** 内容部分（支持多模态） */

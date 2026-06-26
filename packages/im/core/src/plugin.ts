@@ -13,6 +13,11 @@ import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import logger, { Logger, formatCompact } from "@zhin.js/logger";
 import { compose, remove, resolveEntry } from "./utils.js";
+import {
+  ensureInteractiveMiddleware,
+  registerInteractiveHandler as registerInteractiveHandlerCore,
+} from "./built/interactive-segments/handlers.js";
+import type { InteractiveHandler } from "./built/interactive-segments/types.js";
 import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, SendOptions, MessageSendPayload } from "./types.js";
 import { Adapter, Adapters } from "./adapter.js";
 import { Feature } from "@zhin.js/kernel";
@@ -152,6 +157,16 @@ export class Plugin extends PluginBase implements PluginLike {
   addMiddleware<T extends RegisteredAdapter>(middleware: MessageMiddleware<T>, name?: string) {
     this.#middlewares.push(middleware as MessageMiddleware<RegisteredAdapter>);
     const dispose = () => remove(this.#middlewares, middleware);
+    this.onDispose(dispose);
+    return dispose;
+  }
+
+  /**
+   * 注册交互式 action 回调处理器（自动安装根中间件，优先于 Dispatcher）
+   */
+  registerInteractiveHandler(prefix: string, handler: InteractiveHandler): () => void {
+    ensureInteractiveMiddleware((mw) => this.root.addMiddleware(mw));
+    const dispose = registerInteractiveHandlerCore(prefix, handler);
     this.onDispose(dispose);
     return dispose;
   }

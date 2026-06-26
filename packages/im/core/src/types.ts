@@ -80,6 +80,20 @@ export interface QuotableEndpoint {
   $getMsg(messageId: string): Promise<QuotedMessagePayload>;
 }
 
+/** 可选：编辑已发送消息（交互式棋盘更新） */
+export interface EditMessageOptions {
+  messageId: string;
+  context: string;
+  endpoint: string;
+  id: string;
+  type: 'private' | 'group' | 'channel';
+  content: SendContent;
+}
+
+export interface EditableEndpoint {
+  $editMessage?(options: EditMessageOptions): Promise<void>;
+}
+
 /** 出站回复来源（指令 / AI），仅当经 MessageDispatcher.replyWithPolish 发出时由框架填入异步上下文 */
 export type OutboundReplySource = 'command' | 'ai'
 

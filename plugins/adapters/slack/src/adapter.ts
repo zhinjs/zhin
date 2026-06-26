@@ -9,6 +9,7 @@ import type { SlackEndpointConfig } from "./types.js";
 export class SlackAdapter extends Adapter<SlackEndpoint> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
   static override outboundRichSegmentPolicy = OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL;
+  static override interactivePolicy = 'text' as const;
 
   constructor(plugin: Plugin) {
     super(plugin, "slack", []);

@@ -32,6 +32,7 @@ export {
 export { configureDatabaseOptions } from './database.js';
 
 export {
+  AI_STACK_VERSIONS,
   MCP_SDK_VERSION,
   getAIDependencies,
   listAIDependencyNames,
@@ -41,9 +42,28 @@ export {
   getRequiredAIDependenciesForConfig,
   diagnoseAIDependencies,
   formatAIDependencyFixCommand,
+  packagesNeedingAiStackFix,
+  findOutdatedAiStackInPackageJson,
+  findInstalledAiStackIncompatibilities,
   ensureDatabaseForAI,
   ensureDatabaseForAdapters,
 } from './project-deps.js';
+export type { AiStackIncompatibility } from './project-deps.js';
+
+export {
+  ZHIN_STACK_VERSIONS,
+  DEFAULT_CREATE_BOT_HTTP_PORT,
+  CREATE_BOT_NPMRC,
+  getCreateBotBaseDependencies,
+  getCreateBotPnpmConfig,
+  getRequiredZhinDependenciesForConfig,
+  diagnoseZhinStackDependencies,
+  formatZhinStackFixCommand,
+  packagesNeedingZhinStackFix,
+  findOutdatedZhinStackInPackageJson,
+  findInstalledZhinStackIncompatibilities,
+} from './zhin-stack-deps.js';
+export type { ZhinStackDiagnosis, ZhinStackIncompatibility } from './zhin-stack-deps.js';
 
 export {
   SPEECH_PACKAGE,

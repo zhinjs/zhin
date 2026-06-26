@@ -232,6 +232,38 @@ function getMemoryOptimizationTips(rss: number, heapUsed: number, heapTotal: num
   return tips;
 }
 
+// 格式化内存大小
+function formatMemory(bytes: number): string {
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  let size = bytes;
+  let index = 0;
+  while (size > 1024 && index < sizes.length - 1) {
+    size = size / 1024;
+    index++;
+  }
+  return `${size.toFixed(2)}${sizes[index]}`;
+}
+// 状态命令
+addCommand(
+  new MessageCommand('status')
+    .desc('查看系统状态', '显示机器人的运行状态信息')
+    .usage('status')
+    .action(() => {
+      const memUsage = process.memoryUsage();
+      const uptime = process.uptime();
+      const totalmem = os.totalmem();
+      const freemem = os.freemem();
+      
+      return [
+        '系统状态',
+        `运行时：Node.js ${process.version} | 架构：${process.arch}`,
+        `运行时长：${Time.formatTime(uptime * 1000)}`,
+        `物理内存：${formatMemory(memUsage.rss)}`,
+        `堆内存：${formatMemory(memUsage.heapUsed)} / ${formatMemory(memUsage.heapTotal)}`,
+        `系统内存：${formatMemory(totalmem - freemem)} / ${formatMemory(totalmem)}`,
+      ].join('\n');
+    })
+);
 // ============================================
 // 堆快照命令 - 生成内存快照文件
 // ============================================

@@ -143,11 +143,15 @@ export function chatCompletionToAssistantMessage(
   const message = choice?.message;
   const content: AssistantMessage['content'] = [];
   const text = typeof message?.content === 'string' ? message.content : '';
+  const reasoningRaw = message?.reasoning_content ?? message?.reasoning;
+  const reasoning = typeof reasoningRaw === 'string' ? reasoningRaw : undefined;
   if (text) {
     content.push({ type: 'text', text });
+  } else if (reasoning && !(message?.tool_calls?.length)) {
+    content.push({ type: 'text', text: String(reasoning) });
   }
-  if (message?.reasoning_content) {
-    content.push({ type: 'thinking', thinking: String(message.reasoning_content) });
+  if (reasoning && text) {
+    content.push({ type: 'thinking', thinking: String(reasoning) });
   }
   const toolCalls = message?.tool_calls ?? [];
   for (const call of toolCalls) {
@@ -189,8 +193,15 @@ export function chatCompletionToAssistantMessage(
 }
 
 export function assistantText(message: AssistantMessage): string {
-  return message.content
+  const text = message.content
     .filter((b): b is Extract<typeof b, { type: 'text' }> => b.type === 'text')
     .map((b) => b.text)
+    .join('');
+  if (text.trim()) return text;
+  const hasToolCalls = message.content.some((b) => b.type === 'toolCall');
+  if (hasToolCalls) return text;
+  return message.content
+    .filter((b): b is Extract<typeof b, { type: 'thinking' }> => b.type === 'thinking')
+    .map((b) => b.thinking)
     .join('');
 }

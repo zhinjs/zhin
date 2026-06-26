@@ -19,6 +19,7 @@ export class QQAdapter extends Adapter<QQEndpoint<ReceiverMode>> {
     html: 'image',
     markdown: 'origin',
   };
+  static override interactivePolicy = 'native' as const;
 
   #router?: Router;
   #endpointManager?: QqEndpointManager;

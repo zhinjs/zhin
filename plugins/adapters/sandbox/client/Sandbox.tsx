@@ -56,8 +56,17 @@ export default function Sandbox() {
     useEffect(() => { fetchFaceList() }, [])
 
     const handleInboundPayload = (data: {
-        type: string; id: string; content?: unknown; endpoint?: string; timestamp: number
+        type: string; id: string; content?: unknown; endpoint?: string; timestamp: number;
+        messageId?: string; bot?: string;
     }) => {
+        if (data.type === 'edit' && data.messageId) {
+            const content: MessageSegment[] = Array.isArray(data.content)
+                ? data.content as MessageSegment[]
+                : parseTextToSegments(String(data.content ?? ''))
+            setMessages((prev) => prev.map((m) => (m.id === data.messageId ? { ...m, content } : m)))
+            return
+        }
+
         const content: MessageSegment[] = typeof data.content === 'string'
             ? parseTextToSegments(data.content)
             : Array.isArray(data.content) ? data.content as MessageSegment[] : parseTextToSegments(String(data.content ?? ''))
@@ -77,10 +86,16 @@ export default function Sandbox() {
         })
 
         setMessages((prev) => [...prev, {
-            id: `bot_${data.timestamp}`, type: 'received', channelType,
+            id: data.messageId ?? `bot_${data.timestamp}`, type: 'received', channelType,
             channelId: data.id, channelName, senderId: 'endpoint',
             senderName: data.bot || endpointName, content, timestamp: data.timestamp,
         }])
+    }
+
+    const sendInteractiveAction = (payload: string) => {
+        const segments: MessageSegment[] = [{ type: 'action', data: { id: payload, payload } }]
+        const payloadJson = JSON.stringify({ type: activeChannel.type, id: activeChannel.id, content: segments, timestamp: Date.now() })
+        wsRef.current?.send(payloadJson)
     }
 
     useEffect(() => {
@@ -131,6 +146,7 @@ export default function Sandbox() {
         if (segments.length === 0) return false
         return segments.some((s) => {
             if (s.type === 'text') return Boolean(String(s.data?.text ?? '').trim())
+            if (s.type === 'keyboard') return true
             return true
         })
     }
@@ -191,6 +207,33 @@ export default function Sandbox() {
                 }
                 case 'file':
                     return <span key={index} className="inline-flex items-center px-1.5 py-0.5 rounded border text-xs mx-0.5">📎 {String(d.name || '文件')}</span>
+                case 'keyboard': {
+                    const rows = (d.rows as Array<Array<{ label: string; payload: string; disabled?: boolean }>>) ?? []
+                    return (
+                        <div key={index} className="inline-grid gap-1 my-1">
+                            {rows.map((row, ri) => (
+                                <div key={ri} className="flex gap-1">
+                                    {row.map((btn) => (
+                                        <button
+                                            key={btn.payload}
+                                            type="button"
+                                            disabled={btn.disabled || isSent}
+                                            onClick={() => sendInteractiveAction(btn.payload)}
+                                            className={cn(
+                                                'min-w-9 h-9 rounded-md border text-sm font-medium transition-colors',
+                                                btn.disabled
+                                                    ? 'opacity-50 cursor-not-allowed'
+                                                    : 'hover:bg-accent active:scale-95',
+                                            )}
+                                        >
+                                            {btn.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            ))}
+                        </div>
+                    )
+                }
                 default:
                     return <span key={index} className="text-xs opacity-70">[{segment.type}]</span>
             }

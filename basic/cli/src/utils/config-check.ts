@@ -6,6 +6,10 @@ import {
   formatAIDependencyFixCommand,
   isAiEnabledInConfig,
   mergeDependenciesIntoPackageJson,
+  packagesNeedingAiStackFix,
+  diagnoseZhinStackDependencies,
+  formatZhinStackFixCommand,
+  packagesNeedingZhinStackFix,
 } from '@zhin.js/scaffold-wizard';
 import { findConfigFile, hasLegacyTsConfig, readConfig, saveConfig } from './config-file.js';
 import { loadAiConfigUtils, type AiConfigUtils } from './ai-config-loader.js';
@@ -236,6 +240,40 @@ function checkDatabase(config: Record<string, unknown>, issues: ConfigIssue[]): 
   }
 }
 
+function checkZhinStackDependencies(
+  cwd: string,
+  config: Record<string, unknown>,
+  issues: ConfigIssue[],
+): void {
+  const diagnosis = diagnoseZhinStackDependencies(cwd, config);
+  const fixPackages = packagesNeedingZhinStackFix(diagnosis);
+
+  if (fixPackages.length > 0) {
+    pushIssue(issues, {
+      severity: 'error',
+      code: 'zhin.deps_mismatch',
+      path: 'package.json',
+      message: `Zhin 生态依赖需修复: ${fixPackages.join(', ')}${
+        diagnosis.incompatibleInstalled.length > 0
+          ? `（${diagnosis.incompatibleInstalled.map((issue) => issue.reason).join('；')}）`
+          : ''
+      }`,
+      fixable: true,
+      fixHint: formatZhinStackFixCommand(fixPackages, diagnosis.required),
+    });
+  }
+
+  if (diagnosis.notInstalled.length > 0) {
+    pushIssue(issues, {
+      severity: 'warn',
+      code: 'zhin.deps_not_installed',
+      path: 'node_modules',
+      message: `Zhin 生态依赖已声明但未安装: ${diagnosis.notInstalled.join(', ')}`,
+      fixHint: 'pnpm install',
+    });
+  }
+}
+
 function checkAiDependencies(
   cwd: string,
   config: Record<string, unknown>,
@@ -244,14 +282,20 @@ function checkAiDependencies(
   const diagnosis = diagnoseAIDependencies(cwd, config);
   if (!diagnosis) return;
 
-  if (diagnosis.missingFromPackageJson.length > 0) {
+  const fixPackages = packagesNeedingAiStackFix(diagnosis);
+
+  if (fixPackages.length > 0) {
     pushIssue(issues, {
       severity: 'error',
       code: 'ai.deps_missing',
       path: 'package.json',
-      message: `AI 已启用但 package.json 缺少依赖: ${diagnosis.missingFromPackageJson.join(', ')}`,
+      message: `AI 已启用但 package.json AI 栈需修复: ${fixPackages.join(', ')}${
+        diagnosis.incompatibleInstalled.length > 0
+          ? `（${diagnosis.incompatibleInstalled.map((issue) => issue.reason).join('；')}）`
+          : ''
+      }`,
       fixable: true,
-      fixHint: formatAIDependencyFixCommand(diagnosis.missingFromPackageJson, diagnosis.required),
+      fixHint: formatAIDependencyFixCommand(fixPackages, diagnosis.required),
     });
   }
 
@@ -417,6 +461,7 @@ export async function runConfigCheck(
   checkLogLevel(config, issues);
   checkDatabase(config, issues);
   checkEndpoints(config, plugins, issues);
+  checkZhinStackDependencies(cwd, config, issues);
   checkAiDependencies(cwd, config, issues);
   checkAi(config, issues, aiUtils);
   collectEnvRefs(config, '', env, issues);
@@ -557,11 +602,22 @@ export async function inspectProjectConfig(
       result = await runConfigCheck(cwd, env);
     }
 
+    const zhinDiagnosis = diagnoseZhinStackDependencies(cwd, result.config);
+    const zhinFixPackages = packagesNeedingZhinStackFix(zhinDiagnosis);
+    if (zhinFixPackages.length > 0) {
+      const changed = await mergeDependenciesIntoPackageJson(cwd, zhinDiagnosis.required);
+      if (changed) {
+        fixesApplied.push(`updated Zhin stack: ${zhinFixPackages.join(', ')}`);
+        result = await runConfigCheck(cwd, env);
+      }
+    }
+
     const aiDiagnosis = diagnoseAIDependencies(cwd, result.config);
-    if (aiDiagnosis && aiDiagnosis.missingFromPackageJson.length > 0) {
+    const aiFixPackages = aiDiagnosis ? packagesNeedingAiStackFix(aiDiagnosis) : [];
+    if (aiDiagnosis && aiFixPackages.length > 0) {
       const changed = await mergeDependenciesIntoPackageJson(cwd, aiDiagnosis.required);
       if (changed) {
-        fixesApplied.push(`added AI deps: ${aiDiagnosis.missingFromPackageJson.join(', ')}`);
+        fixesApplied.push(`updated AI stack: ${aiFixPackages.join(', ')}`);
         result = await runConfigCheck(cwd, env);
       }
     }
