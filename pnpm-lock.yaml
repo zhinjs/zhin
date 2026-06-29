@@ -753,8 +753,8 @@ importers:
         specifier: ^1.2.0
         version: 1.2.0
       js-yaml:
-        specifier: ^5.0.0
-        version: 5.1.0
+        specifier: ^5.2.0
+        version: 5.2.0
     devDependencies:
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
@@ -6045,12 +6045,12 @@ packages:
   js-tokens@10.0.0:
     resolution: {integrity: sha512-lM/UBzQmfJRo9ABXbPWemivdCW8V2G8FHaHdypQaIy523snUjog0W71ayWXTjiR+ixeMyVHN2XcpnTd/liPg/Q==}
 
-  js-yaml@4.2.0:
-    resolution: {integrity: sha512-ePWsvanv0DWuDRsW8dnt+R4jQ31SCRCQ7hhNcPXZPsoBZiemuZNYGf7adZdqX2D86j6rvKp3RpCxVTSb8WQlOw==}
+  js-yaml@4.3.0:
+    resolution: {integrity: sha512-1td788aAnnZ5qs7V2QIRl1owjtYpbKt749Y3xauqQgwIIGF/xXWz1wMTEBx5O3LK3lXLVuqXPdPxj2BoFHaW9Q==}
     hasBin: true
 
-  js-yaml@5.1.0:
-    resolution: {integrity: sha512-s8VA5jkR8f22S3NAXmhKPFqGUduqZGlsufabVOgN14iTdw/RXcym7bKkbwjxLK9Yw2lEvvmJjFp119+KPeo8Kg==}
+  js-yaml@5.2.0:
+    resolution: {integrity: sha512-YeLUMlvR4Ou1B119LIaM0r65JvbOBooJDc9yEu0dClb/uSC5P4FrLU8OCCz/HXWvtPoIrR0dRzABTjo1sTN9Bw==}
     hasBin: true
 
   jsdom@24.1.3:
@@ -7484,11 +7484,11 @@ packages:
     resolution: {integrity: sha512-QXqwfEl9ddlGBaRFXIvNKK6OhipSiLXuRuLJX5DErz0o0Q0rYxulWLdFryTkV5PkdZct5iMInwYEGe/eR++1AA==}
     hasBin: true
 
-  tldts-core@7.4.4:
-    resolution: {integrity: sha512-vwVLJVvvpslm7vqAH7+XNj/neA/Ynq7DT2EEcMuwc5YzN5XaMyRAqxwU+uX3azZ1FQtB2gvrvnLnAEkvYlVdfg==}
+  tldts-core@7.4.5:
+    resolution: {integrity: sha512-pGrwzZDvPwKe+7NNUqAunb6rqTfynr0VOUhCMdqbu5xlvNiszsAJygRzwvpVycdzejlbpY+SWJOn+s75Og7FEA==}
 
-  tldts@7.4.4:
-    resolution: {integrity: sha512-kFXFK7O4WPextIUAOk8qtnw9dxR9UIXP9CjuH1cTBVBZMDeQcUPgr/IazGiw1B0Yiw5L75gHLWeW4iD793r90g==}
+  tldts@7.4.5:
+    resolution: {integrity: sha512-RfEzKWcq5fHUOFq7J3rl3Oz6ylKGtcHqUznzj4EcXsxLSIjJcvpbXAQtWGeJQ0xKnimR5e0Cn+cn9TssfMzm+g==}
     hasBin: true
 
   to-regex-range@5.0.1:
@@ -8339,7 +8339,7 @@ snapshots:
   '@changesets/parse@0.4.3':
     dependencies:
       '@changesets/types': 6.1.0
-      js-yaml: 4.2.0
+      js-yaml: 4.3.0
 
   '@changesets/pre@2.0.2':
     dependencies:
@@ -12532,11 +12532,11 @@ snapshots:
 
   js-tokens@10.0.0: {}
 
-  js-yaml@4.2.0:
+  js-yaml@4.3.0:
     dependencies:
       argparse: 2.0.1
 
-  js-yaml@5.1.0:
+  js-yaml@5.2.0:
     dependencies:
       argparse: 2.0.1
 
@@ -13663,7 +13663,7 @@ snapshots:
   read-yaml-file@1.1.0:
     dependencies:
       graceful-fs: 4.2.11
-      js-yaml: 4.2.0
+      js-yaml: 4.3.0
       pify: 4.0.1
       strip-bom: 3.0.0
 
@@ -14229,12 +14229,12 @@ snapshots:
 
   tlds@1.261.0: {}
 
-  tldts-core@7.4.4:
+  tldts-core@7.4.5:
     optional: true
 
-  tldts@7.4.4:
+  tldts@7.4.5:
     dependencies:
-      tldts-core: 7.4.4
+      tldts-core: 7.4.5
     optional: true
 
   to-regex-range@5.0.1:
@@ -14255,7 +14255,7 @@ snapshots:
 
   tough-cookie@6.0.1:
     dependencies:
-      tldts: 7.4.4
+      tldts: 7.4.5
     optional: true
 
   tr46@0.0.3: {}
