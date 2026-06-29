@@ -25,8 +25,9 @@ const TTL_MS = 60 * 60 * 1000;
 const contexts = new Map<string, HubMenuContext>();
 const lastMenus = new Map<string, LastHubMenu>();
 
-function userChannelKey(message: Message<any>): string {
-  return `${channelKey(message)}:${message.$sender.id}`;
+/** 大厅 fallback 按频道共享，任意成员可回复数字或点按钮 */
+function hubMenuKey(message: Message<any>): string {
+  return channelKey(message);
 }
 
 export function createHubScope(message: Message<any>): string {
@@ -46,7 +47,7 @@ export function rememberHubMenu(
   scopeId: string,
   choices: HubMenuChoice[],
 ): void {
-  lastMenus.set(userChannelKey(message), {
+  lastMenus.set(hubMenuKey(message), {
     scopeId,
     choices,
     expiresAt: Date.now() + TTL_MS,
@@ -56,9 +57,10 @@ export function rememberHubMenu(
 
 export function getLastHubMenu(message: Message<any>): LastHubMenu | null {
   pruneExpired();
-  const last = lastMenus.get(userChannelKey(message));
+  const key = hubMenuKey(message);
+  const last = lastMenus.get(key);
   if (!last || last.expiresAt < Date.now()) {
-    lastMenus.delete(userChannelKey(message));
+    lastMenus.delete(key);
     return null;
   }
   return last;

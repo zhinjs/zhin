@@ -1,5 +1,6 @@
 import type { SpeechPipelineForRichSegment } from './rich-segments/types.js';
 import { createWarnOnce, resetWarnOnceForTests } from '@zhin.js/logger';
+import { importOptionalPeerPackage } from './optional-peer-import.js';
 
 /** 动态 import 时使用的包名（与 @zhin.js/speech package.json 一致） */
 export const SPEECH_PACKAGE = '@zhin.js/speech';
@@ -12,6 +13,11 @@ export interface LoadSpeechPipelineOptions {
 let cached: SpeechPipelineForRichSegment | null | undefined;
 const speechPeerWarnOnce = createWarnOnce('speech');
 
+/** zhin 启动时已创建 pipeline 时注入 */
+export function seedSpeechPipeline(pipeline: SpeechPipelineForRichSegment): void {
+  cached = pipeline;
+}
+
 /** 动态加载 @zhin.js/speech；未安装时 warn 一次并返回 undefined */
 export async function loadSpeechPipeline(
   opts?: LoadSpeechPipelineOptions,
@@ -21,7 +27,9 @@ export async function loadSpeechPipeline(
   }
 
   try {
-    const mod = await import(SPEECH_PACKAGE);
+    const mod = await importOptionalPeerPackage<{
+      createSpeechPipeline: (config?: Record<string, unknown>) => SpeechPipelineForRichSegment;
+    }>(SPEECH_PACKAGE);
     const speechConfig = opts?.getConfig?.()?.speech as Record<string, unknown> | undefined;
     cached = mod.createSpeechPipeline(speechConfig) as SpeechPipelineForRichSegment;
     return cached;

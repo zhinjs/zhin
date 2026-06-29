@@ -13,6 +13,13 @@ import type { Plugin } from '../plugin.js';
 export const MANAGEMENT_COMMAND_DENIED =
   '⚠️ 该命令仅 Endpoint Owner（master）或 trusted 操作员可用。';
 
+/** 运维 / 内省 / Endpoint 管理命令：仅 master 或 trusted 可执行与展示 */
+export const MANAGEMENT_OPERATOR_PERMIT = 'role(master,trusted)' as const;
+
+/** Endpoint Owner 私聊专用命令（如 /approve） */
+export const OWNER_OPERATOR_PERMIT = 'role(master)' as const;
+export const OWNER_PRIVATE_PERMITS = [OWNER_OPERATOR_PERMIT, 'private(*)'] as const;
+
 export function resolveManagementCommandRoles(
   message: Message,
   root: Plugin,

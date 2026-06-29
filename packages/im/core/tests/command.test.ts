@@ -166,6 +166,35 @@ describe('Command系统测试', () => {
       expect(telegramResult).toBeUndefined()
       expect(emailResult).toBeUndefined()
     })
+
+    it('checkPermits 与 handle 权限结果一致', async () => {
+      const command = new MessageCommand('hello')
+        .permit('adapter(discord)')
+        .action(() => 'Hello from Discord!')
+
+      const discordMessage: Message = {
+        $id: '1',
+        $adapter: 'discord',
+        $endpoint: 'discord-bot',
+        $content: [{ type: 'text', data: { text: 'hello world' } }],
+        $sender: { id: 'user1', name: 'User' },
+        $reply: vi.fn(),
+        $channel: { id: 'channel1', type: 'channel' },
+        $timestamp: Date.now(),
+        $raw: 'hello world',
+      }
+
+      const telegramMessage: Message = {
+        ...discordMessage,
+        $id: '2',
+        $adapter: 'telegram',
+        $endpoint: 'telegram-bot',
+      }
+
+      expect(command.requiredPermits).toEqual(['adapter(discord)'])
+      expect(await command.checkPermits(discordMessage, mockApp)).toBe(true)
+      expect(await command.checkPermits(telegramMessage, mockApp)).toBe(false)
+    })
   })
 
   describe('动作(action)测试', () => {

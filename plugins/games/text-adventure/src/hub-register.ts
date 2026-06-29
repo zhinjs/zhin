@@ -11,7 +11,7 @@ export function registerAdvHub(getServices: () => GameServices | null): () => vo
     title: '秘境探险',
     icon: '🗺️',
     description: '文字冒险，31 区域 · 15 结局 · 成就收集',
-    commandPrefix: '冒险',
+    commandPrefix: '/冒险',
     quickStart: '开始',
     aliases: ['adv', '秘境'],
     menus: [

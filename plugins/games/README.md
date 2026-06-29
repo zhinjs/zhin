@@ -12,6 +12,7 @@
 | [@zhin.js/plugin-idiom-chain](./idiom-chain/) | 成语接龙（`接龙` / `chain` · 开源词库 + 同音接龙） |
 | [@zhin.js/plugin-word-riddle](./word-riddle/) | 猜谜（`猜谜` · 字谜 + 猜成语） |
 | [@zhin.js/plugin-text-adventure](./text-adventure/) | 文字冒险（`冒险` / `adv` · 进度与成就） |
+| [@zhin.js/plugin-blackjack](./blackjack/) | 21 点（`21点` / `bj` · 对庄 Blackjack） |
 
 ## 架构
 

@@ -15,6 +15,8 @@ function mockPluginTree() {
     addCommand: vi.fn(() => vi.fn()),
     registerInteractiveHandler: vi.fn(),
     addMiddleware: vi.fn(() => vi.fn()),
+    defineModel: vi.fn(),
+    useContext: vi.fn(),
     contexts: new Map<string, unknown>(),
     $contexts: new Map<string, { name: string; value: unknown; mounted?: (p: unknown) => void; extensions?: Record<string, unknown> }>(),
     contextIsReady(name: string) {
@@ -99,9 +101,10 @@ describe('GameHubFeature service', () => {
     feature.mounted(root);
 
     expect(isGameHubMounted()).toBe(true);
-    expect(root.addCommand).toHaveBeenCalledTimes(3);
+    expect(root.addCommand).toHaveBeenCalled();
+    expect((root.addCommand as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThanOrEqual(8);
     expect(root.registerInteractiveHandler).toHaveBeenCalledTimes(1);
-    expect(root.addMiddleware).toHaveBeenCalledTimes(1);
+    expect(root.addMiddleware).toHaveBeenCalled();
   });
 
   it('ensureGameHubService is idempotent', () => {

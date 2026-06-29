@@ -7,6 +7,7 @@ import type { QQAdapter } from './adapter.js';
 import type { QQEndpointConfig, ReceiverMode } from './types.js';
 import { ReceiverMode as QQReceiverMode } from './types.js';
 import { startQqBindFlow } from './qq-bind-flow.js';
+import { persistQqCredentialsToEnv } from './qq-bind-persist.js';
 
 const DEFAULT_INTENTS = [
   'GUILDS',
@@ -20,10 +21,19 @@ const DEFAULT_INTENTS = [
   'PUBLIC_GUILD_MESSAGES',
 ] as const;
 
+function clonePlainConfig<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
 function resolveQqEndpointTemplate(root: ProvisionContext['root']): Partial<QQEndpointConfig<ReceiverMode>> {
-  const configService = root.inject('config') as { getPrimary?: () => { endpoints?: Array<Record<string, unknown>> } } | undefined;
-  const doc = configService?.getPrimary?.();
-  const existing = doc?.endpoints?.find((e) => e.context === 'qq');
+  const configService = root.inject('config') as {
+    getRaw?: (f: string) => { endpoints?: Array<Record<string, unknown>> };
+    primaryFile?: string;
+  } | undefined;
+  const raw = configService?.primaryFile && configService.getRaw
+    ? configService.getRaw(configService.primaryFile)
+    : undefined;
+  const existing = raw?.endpoints?.find((e) => e.context === 'qq');
   if (!existing) {
     return {
       mode: QQReceiverMode.WEBSOCKET,
@@ -34,7 +44,44 @@ function resolveQqEndpointTemplate(root: ProvisionContext['root']): Partial<QQEn
     };
   }
   const { name: _n, appid: _a, secret: _s, context: _c, ...rest } = existing;
-  return rest as Partial<QQEndpointConfig<ReceiverMode>>;
+  return clonePlainConfig(rest) as Partial<QQEndpointConfig<ReceiverMode>>;
+}
+
+function resolveBindOperatorId(
+  userOpenId: string | undefined,
+  ctx: ProvisionContext,
+): string {
+  const fromApi = userOpenId?.trim();
+  if (fromApi) return fromApi;
+  return ctx.message.$sender?.id?.trim() ?? '';
+}
+
+function applyBindOwnership(
+  template: Partial<QQEndpointConfig<ReceiverMode>>,
+  operatorId: string,
+): Partial<QQEndpointConfig<ReceiverMode>> {
+  const { master: _m, aiAccess, ...rest } = template as Record<string, unknown>;
+  if (!operatorId) {
+    return rest as Partial<QQEndpointConfig<ReceiverMode>>;
+  }
+  const prior = aiAccess as {
+    mode?: string;
+    groups?: string[];
+    denyMessage?: string;
+  } | undefined;
+  return {
+    ...rest,
+    master: operatorId,
+    aiAccess: {
+      mode: prior?.mode ?? 'whitelist',
+      users: [operatorId],
+      groups: Array.isArray(prior?.groups) ? [...prior.groups] : [],
+      denyMessage:
+        typeof prior?.denyMessage === 'string'
+          ? prior.denyMessage
+          : '当前用户尚未开放 AI 功能，请联系开启。',
+    },
+  } as Partial<QQEndpointConfig<ReceiverMode>>;
 }
 
 function readQqConfigs(root: ProvisionContext['root']): EndpointConfigRecord[] {
@@ -80,7 +127,7 @@ export class QqEndpointManager implements EndpointManager {
       const stopFlow = startQqBindFlow(
         {
           onQrDisplayed: async (url) => {
-            await ctx.onStatusUpdate('请用手机 QQ 扫描下方二维码完成机器人绑定（source=zhin）。', {
+            await ctx.onStatusUpdate('请用手机 QQ 扫描二维码完成机器人绑定。', {
               qrcode: url,
             });
           },
@@ -89,15 +136,21 @@ export class QqEndpointManager implements EndpointManager {
           },
           onSuccess: async (credentials) => {
             activeStopFlow = null;
-            const [{ appId, appSecret }] = credentials;
+            const [{ appId, appSecret, userOpenId }] = credentials;
             const name = endpointName?.trim() || appId;
+            await ctx.onStatusUpdate(
+              '凭据绑定成功，正在写入配置…',
+            );
+            const envKeys = persistQqCredentialsToEnv(name, appId, appSecret);
             const template = resolveQqEndpointTemplate(ctx.root);
+            const operatorId = resolveBindOperatorId(userOpenId, ctx);
+            const owned = applyBindOwnership(template, operatorId);
             resolve({
               context: 'qq',
               name,
-              appid: appId,
-              secret: appSecret,
-              ...template,
+              appid: envKeys.appidRef,
+              secret: envKeys.secretRef,
+              ...owned,
             } as EndpointConfigRecord);
           },
           onFailure: async (error) => {

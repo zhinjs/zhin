@@ -3,6 +3,8 @@ import type { Message, Plugin } from 'zhin.js';
 import { handleHubChoice } from '../src/game-hub-flow.js';
 import {
   createHubScope,
+  getLastHubMenu,
+  rememberHubMenu,
   resetHubMenuContextForTests,
 } from '../src/game-hub-menu-context.js';
 import { ensureGameHubService } from '../src/game-hub-feature.js';
@@ -84,6 +86,16 @@ describe('game-hub-flow access', () => {
 
     expect(ok).toBe(true);
     expect(clicker.$reply).toHaveBeenCalled();
+  });
+
+  it('shares last hub menu across users in the same channel', () => {
+    const opener = mockMessage('alice', 'room-1');
+    const peer = mockMessage('bob', 'room-1');
+    const scopeId = createHubScope(opener);
+    rememberHubMenu(opener, scopeId, [{ id: 'g_demo', label: '演示' }]);
+
+    expect(getLastHubMenu(peer)?.scopeId).toBe(scopeId);
+    expect(getLastHubMenu(mockMessage('carol', 'room-2'))).toBeNull();
   });
 
   it('runAction uses clicker message not opener', async () => {

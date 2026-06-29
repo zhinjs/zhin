@@ -10,35 +10,28 @@ import {
   normalizeAdvAction,
   parseChoicePayload,
   registerGameTextMiddleware,
+  resolveGameChoice,
+  resolveGameTextPayload,
 } from '@zhin.js/game-shared';
 import { runAdvCommand } from './adv-command.js';
 import { handleChoice } from './game-flow.js';
 import { ADV_PREFIX, getScene, stateFromSession, visibleChoices } from './story.js';
 import type { GameServices } from './session-service.js';
 
-function registerAdvPattern(
-  plugin: Plugin,
-  pattern: string,
-  desc: string,
-  getServices: () => GameServices | null,
-): void {
-  plugin.addCommand(
-    new MessageCommand(pattern)
-      .desc(desc)
-      .action(async (message, result) => {
-        const services = getServices();
-        if (!services) return '文字冒险需要启用 database 配置。';
-        const raw = (result.params.action as string | undefined) ?? '';
-        const action = normalizeAdvAction(raw);
-        return runAdvCommand(plugin, services, message, action);
-      }),
-  );
-}
-
 async function resolveAdvChoice(
   message: Message<any>,
   services: GameServices,
 ): Promise<{ sessionId: string; choiceId: string } | null> {
+  const restart = await resolveGameChoice({
+    message,
+    gamePrefix: ADV_PREFIX,
+    validChoiceIds: ['restart'],
+    getById: (id) => services.sessions.getById(id),
+    getActiveForUser: (ch, uid) => services.sessions.getActiveForUser(ch, uid),
+    getByBoardMessageId: (mid) => services.sessions.getActiveByBoardMessageId(mid),
+  });
+  if (restart) return restart;
+
   const action = getActionFromMessage(message);
   if (!action) return null;
 
@@ -71,9 +64,27 @@ export function registerCommands(
   plugin: Plugin,
   getServices: () => GameServices | null,
 ): void {
-  registerAdvPattern(plugin, 'adv [action:word]', '秘境探险（adv）', getServices);
-  registerAdvPattern(plugin, '冒险 [action:word]', '秘境探险（中文）', getServices);
-  registerAdvPattern(plugin, '秘境 [action:word]', '秘境探险（简称）', getServices);
+  registerAdvPattern(plugin, '/adv [action:word]', '秘境探险（adv）', getServices);
+  registerAdvPattern(plugin, '/冒险 [action:word]', '秘境探险（中文）', getServices);
+  registerAdvPattern(plugin, '/秘境 [action:word]', '秘境探险（简称）', getServices);
+}
+
+function registerAdvPattern(
+  plugin: Plugin,
+  pattern: string,
+  desc: string,
+  getServices: () => GameServices | null,
+): void {
+  plugin.addCommand(
+    new MessageCommand(pattern)
+      .desc(desc)
+      .action(async (message, result) => {
+        const services = getServices();
+        if (!services) return '文字冒险需要启用 database 配置。';
+        const raw = (result.params.action as string | undefined) ?? '';
+        return runAdvCommand(plugin, services, message, normalizeAdvAction(raw));
+      }),
+  );
 }
 
 async function handleAdvAction(
@@ -110,20 +121,31 @@ export function registerTextFallback(
     const action = getActionFromMessage(message);
     if (action?.payload.startsWith(`${ADV_PREFIX}:`)) return next();
 
+    const raw = message.$raw?.trim() ?? '';
     const ch = channelKey(message);
+
+    const payloadFromText = resolveGameTextPayload(raw);
+    if (payloadFromText?.startsWith(`${ADV_PREFIX}:`)) {
+      const parsed = parseChoicePayload(payloadFromText, ADV_PREFIX);
+      if (parsed) {
+        const session = await services.sessions.getById(parsed.sessionId);
+        if (session?.channel_key === ch) {
+          const err = await handleChoice(plugin, services, message, parsed.sessionId, parsed.choiceId);
+          if (err) await message.$reply?.(err);
+          return;
+        }
+      }
+    }
+
     const session = await services.sessions.getActiveForUser(ch, message.$sender.id);
     if (!session) return next();
-
-    const raw = message.$raw?.trim() ?? '';
-    const n = /^(\d+)$/.exec(raw);
-    if (!n) return next();
 
     const scene = getScene(session.scene_id);
     if (!scene) return next();
     const state = stateFromSession(session);
     const choices = visibleChoices(scene, state);
     const map = buildChoiceFallbackMap(ADV_PREFIX, session.id, choices);
-    const payload = map[n[1]!];
+    const payload = resolveGameTextPayload(raw, map);
     const parsed = payload ? parseChoicePayload(payload, ADV_PREFIX) : null;
     if (!parsed || parsed.sessionId !== session.id) return next();
 

@@ -14,6 +14,7 @@ export function buildSceneInteractive(
   session: AdvSessionRow,
   extraNarrative = '',
   profile?: AdvProfileRow,
+  channelType?: string,
 ): SendContent | null {
   const scene = getScene(session.scene_id);
   if (!scene) return null;
@@ -42,5 +43,7 @@ export function buildSceneInteractive(
     terminal,
     buttonsPerRow: 2,
     fallbackHint: '回复数字选择（仅编号）',
+    interactionProfile: terminal ? 'terminal' : 'gameplay',
+    channelType,
   });
 }

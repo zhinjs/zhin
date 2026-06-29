@@ -1,5 +1,5 @@
 import type { Database, DatabaseFeature, Message, Models, RelatedModel } from 'zhin.js';
-import { channelKey, generateSessionId } from '@zhin.js/game-shared';
+import { channelKey, generateSessionId, boardMessageMatches } from '@zhin.js/game-shared';
 import type { AdvModelName, AdvSessionRow } from './models.js';
 import { createProfileService, ProfileService } from './profile-service.js';
 
@@ -40,14 +40,9 @@ export class SessionService {
 
   async getActiveByBoardMessageId(messageId: string): Promise<AdvSessionRow | null> {
     if (!messageId) return null;
-    const rows = await getModel(this.db, 'adv_sessions').findAll({ status: 'active' });
+    const rows = await getModel(this.db, 'adv_sessions').findAll({});
     for (const row of rows) {
-      const stored = row.board_message_id;
-      if (!stored) continue;
-      if (stored === messageId) return row;
-      if (stored.endsWith(`:${messageId}`)) return row;
-      const tail = stored.split(':').pop();
-      if (tail && messageId.endsWith(tail)) return row;
+      if (boardMessageMatches(row.board_message_id ?? '', messageId)) return row;
     }
     return null;
   }

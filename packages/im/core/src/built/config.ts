@@ -42,6 +42,10 @@ export class ConfigLoader<T extends object> {
   get extension() {
     return path.extname(this.filename).toLowerCase();
   }
+  /** `load()` / `patchKey()` 使用的绝对路径 */
+  get resolvedPath(): string {
+    return this.#resolvedPath || this.resolvePath();
+  }
   constructor(public filename: string, public initial: T, public schema?: Schema<T>) {
     this.#data = this.initial;
   }
@@ -101,8 +105,10 @@ export class ConfigLoader<T extends object> {
       : path.resolve(baseDir, this.filename);
   }
 
-  load(baseDir: string = runtimeCwd()) {
-    const fullPath = this.resolvePath(baseDir);
+  load(baseDir?: string) {
+    const fullPath = baseDir !== undefined
+      ? this.resolvePath(baseDir)
+      : (this.#resolvedPath || this.resolvePath());
     this.#resolvedPath = fullPath;
     if (!fs.existsSync(fullPath)) {
       try {
@@ -201,6 +207,24 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
     && typeof value === 'object'
     && !Array.isArray(value)
     && Object.getPrototypeOf(value) === Object.prototype;
+}
+
+/** 解析 endpoint 配置中的 `${ENV}` 引用（运行时 add 后热连接用） */
+export function resolveEndpointConfigEnv(
+  config: Record<string, unknown>,
+): Record<string, unknown> {
+  const out = { ...config };
+  for (const [key, value] of Object.entries(out)) {
+    if (typeof value !== 'string') continue;
+    const match = value.match(/^\$\{([^}]+)\}$/);
+    if (!match) continue;
+    const envKey = match[1];
+    const resolved = envLookup(envKey);
+    if (resolved != null && resolved !== '') {
+      out[key] = resolved;
+    }
+  }
+  return out;
 }
 
 export function mergeConfigDefaults<T>(defaults: T, overrides: unknown): T {

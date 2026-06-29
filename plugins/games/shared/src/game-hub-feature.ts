@@ -6,6 +6,8 @@ import {
   type PluginLike,
 } from 'zhin.js';
 import { mountGameHubUi, markGameHubUiMounted } from './game-hub-mount.js';
+import { registerGameRecordModels, initGameRecordDatabase } from './game-records.js';
+import type { DatabaseFeature } from 'zhin.js';
 
 export interface GameHubContext {
   plugin: Plugin;
@@ -105,7 +107,16 @@ export class GameHubFeature extends Feature<RegisteredGame> {
   mounted(plugin: PluginLike): void {
     activeFeature = this;
     const root = plugin as Plugin;
-    this.hubDisposers = mountGameHubUi(root.root ?? root);
+    const host = root.root ?? root;
+    registerGameRecordModels(host);
+    if (host.contextIsReady('database')) {
+      initGameRecordDatabase(host.inject('database') as DatabaseFeature);
+    } else {
+      host.useContext('database', (dbFeature: DatabaseFeature) => {
+        initGameRecordDatabase(dbFeature);
+      });
+    }
+    this.hubDisposers = mountGameHubUi(host);
     markGameHubUiMounted();
   }
 

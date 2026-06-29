@@ -5,10 +5,14 @@ import {
   normalizeChainAction,
   parseChoicePayload,
   registerGameTextMiddleware,
+  resolveGameChoice,
+  resolveGameTextPayload,
 } from '@zhin.js/game-shared';
 import { CHAIN_PREFIX, handleChoice, processIdiomText } from './game-flow.js';
 import { runChainCommand } from './chain-command.js';
 import type { SessionService } from './session-service.js';
+
+const VALID_CHOICES = ['hint', 'skip', 'quit', 'restart'] as const;
 
 function registerPattern(
   plugin: Plugin,
@@ -29,34 +33,22 @@ function registerPattern(
 }
 
 export function registerCommands(plugin: Plugin, getServices: () => SessionService | null): void {
-  registerPattern(plugin, 'chain [action:word]', '成语接龙（chain）', getServices);
-  registerPattern(plugin, '接龙 [action:word]', '成语接龙（中文）', getServices);
+  registerPattern(plugin, '/chain [action:word]', '成语接龙（chain）', getServices);
+  registerPattern(plugin, '/接龙 [action:word]', '成语接龙（中文）', getServices);
 }
 
 async function resolveChoice(
   message: Message<any>,
   services: SessionService,
 ): Promise<{ sessionId: string; choiceId: string } | null> {
-  const action = getActionFromMessage(message);
-  if (!action) return null;
-
-  const parsed = parseChoicePayload(action.payload, CHAIN_PREFIX);
-  if (parsed) return { sessionId: parsed.sessionId, choiceId: parsed.choiceId };
-
-  const choiceId = action.id || action.payload;
-  if (!choiceId) return null;
-
-  const ch = channelKey(message);
-  const session =
-    await services.getActiveForUser(ch, message.$sender.id)
-    ?? (action.sourceMessageId
-      ? await services.getActiveByBoardMessageId(action.sourceMessageId)
-      : null);
-  if (!session || session.channel_key !== ch) return null;
-
-  const valid = ['hint', 'skip', 'quit', 'restart'];
-  if (!valid.includes(choiceId)) return null;
-  return { sessionId: session.id, choiceId };
+  return resolveGameChoice({
+    message,
+    gamePrefix: CHAIN_PREFIX,
+    validChoiceIds: VALID_CHOICES,
+    getById: (id) => services.getById(id),
+    getActiveForUser: (ch, uid) => services.getActiveForUser(ch, uid),
+    getByBoardMessageId: (mid) => services.getActiveByBoardMessageId(mid),
+  });
 }
 
 export function registerInteractive(plugin: Plugin, getServices: () => SessionService | null): void {
@@ -79,21 +71,33 @@ export function registerTextMiddleware(plugin: Plugin, getServices: () => Sessio
     const action = getActionFromMessage(message);
     if (action?.payload.startsWith(`${CHAIN_PREFIX}:`)) return next();
 
-    const ch = channelKey(message);
-    const session = await services.getActiveForUser(ch, message.$sender.id);
-    if (!session) return next();
-
     const raw = message.$raw?.trim() ?? '';
     if (!raw) return next();
 
-    const n = /^(\d+)$/.exec(raw);
-    if (n && session.status === 'active') {
+    const ch = channelKey(message);
+    const payloadFromText = resolveGameTextPayload(raw);
+    if (payloadFromText?.startsWith(`${CHAIN_PREFIX}:`)) {
+      const parsed = parseChoicePayload(payloadFromText, CHAIN_PREFIX);
+      if (parsed) {
+        const session = await services.getById(parsed.sessionId);
+        if (session?.channel_key === ch) {
+          const err = await handleChoice(plugin, services, message, parsed.sessionId, parsed.choiceId);
+          if (err) await message.$reply?.(err);
+          return;
+        }
+      }
+    }
+
+    const session = await services.getActiveForUser(ch, message.$sender.id);
+    if (!session) return next();
+
+    if (session.status === 'active') {
       const map = buildChoiceFallbackMap(CHAIN_PREFIX, session.id, [
         { id: 'hint', label: '提示' },
         { id: 'skip', label: '跳过' },
         { id: 'quit', label: '认输' },
       ]);
-      const payload = map[n[1]!];
+      const payload = resolveGameTextPayload(raw, map);
       const parsed = payload ? parseChoicePayload(payload, CHAIN_PREFIX) : null;
       if (parsed?.sessionId === session.id) {
         const err = await handleChoice(plugin, services, message, session.id, parsed.choiceId);

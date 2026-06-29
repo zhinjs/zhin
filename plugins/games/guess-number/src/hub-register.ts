@@ -11,7 +11,7 @@ export function registerGuessHub(getServices: () => SessionService | null): () =
     title: '猜数字',
     icon: '🔢',
     description: '1~100 七步猜中神秘数',
-    commandPrefix: '猜数',
+    commandPrefix: '/猜数',
     quickStart: '开始',
     aliases: ['guess'],
     menus: [

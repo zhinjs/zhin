@@ -143,5 +143,26 @@ describe('grid-keyboard', () => {
       const textData = (content[0] as { data: { text: string } }).data.text;
       expect(textData).toContain('ASCII_BOARD');
     });
+
+    it('merges postChoices into one keyboard segment', () => {
+      const cells: GridCell[] = Array(9).fill(null).map(() => ({
+        state: 1,
+        label: 'X',
+        disabled: true,
+      }));
+      const content = buildGridKeyboard({
+        gamePrefix: 'ttt',
+        sessionId: 's1',
+        rows: 3,
+        cols: 3,
+        cells,
+        statusLine: '平局',
+        terminal: true,
+        postChoices: [{ id: 'restart', label: '再来一局' }],
+      });
+      expect(content).toHaveLength(2);
+      const kb = content[1] as { type: string; data: { rows: unknown[][] } };
+      expect(kb.data.rows).toHaveLength(4);
+    });
   });
 });

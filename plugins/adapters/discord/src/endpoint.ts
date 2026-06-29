@@ -25,6 +25,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   type EditMessageOptions as DiscordEditMessageOptions,
+} from 'discord.js';
 import {
   Endpoint,
   Message,
@@ -32,7 +33,8 @@ import {
   SendContent,
   MessageSegment,
   segment,
-  type EditMessageOptions,} from 'zhin.js';
+  type EditMessageOptions,
+} from 'zhin.js';
 import type { DiscordGatewayConfig, DiscordChannelMessage } from "./types.js";
 import type { DiscordAdapter } from "./adapter.js";
 import { createReadStream } from "fs";

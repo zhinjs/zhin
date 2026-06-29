@@ -1,4 +1,5 @@
 import type { HtmlRendererForRichSegment } from './rich-segments/types.js';
+import { importOptionalPeerPackage } from './optional-peer-import.js';
 
 /** 动态 import 时使用的包名（与 @zhin.js/html-renderer package.json 一致） */
 export const HTML_RENDERER_PACKAGE = '@zhin.js/html-renderer';
@@ -11,6 +12,11 @@ export interface LoadHtmlRendererOptions {
 let cached: HtmlRendererForRichSegment | null | undefined;
 let warned = false;
 
+/** zhin 启动时已创建 renderer 时注入，避免 core 目录下 peer 解析失败 */
+export function seedHtmlRenderer(renderer: HtmlRendererForRichSegment): void {
+  cached = renderer;
+}
+
 /** 动态加载 @zhin.js/html-renderer；未安装时 warn 一次并返回 undefined */
 export async function loadHtmlRenderer(
   opts?: LoadHtmlRendererOptions,
@@ -20,7 +26,9 @@ export async function loadHtmlRenderer(
   }
 
   try {
-    const mod = await import(HTML_RENDERER_PACKAGE);
+    const mod = await importOptionalPeerPackage<{
+      createHtmlRenderer: (config?: Record<string, unknown>) => HtmlRendererForRichSegment;
+    }>(HTML_RENDERER_PACKAGE);
     cached = mod.createHtmlRenderer(opts?.getConfig?.() ?? {}) as HtmlRendererForRichSegment;
     return cached;
   } catch {

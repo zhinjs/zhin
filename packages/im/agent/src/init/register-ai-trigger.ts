@@ -16,7 +16,9 @@ import {
   segment,
   shouldTriggerAI,
   enrichMessageForAgent,
+  checkAIAccess,
   type AgentTurnMessage,
+  type AIAccessScopeConfig,
 } from '@zhin.js/core';
 import { extractMediaParts, extractMediaPartsFromQuotedPayload } from './message-media.js';
 import type { Plugin, Tool } from '@zhin.js/core';
@@ -63,6 +65,17 @@ function resolveEndpointAtIds(message: Message, root: Plugin): string[] {
     // adapter 未就绪时仍用 message.$endpoint
   }
   return [...ids];
+}
+
+function resolveEndpointAiAccess(message: Message, root: Plugin): AIAccessScopeConfig | undefined {
+  try {
+    const adapter = root.inject(message.$adapter) as
+      | { endpoints?: Map<string, { $config?: { aiAccess?: AIAccessScopeConfig } }> }
+      | undefined;
+    return adapter?.endpoints?.get(message.$endpoint)?.$config?.aiAccess;
+  } catch {
+    return undefined;
+  }
 }
 
 export function registerAITrigger(refs: AIServiceRefs): void {
@@ -117,6 +130,24 @@ export function registerAITrigger(refs: AIServiceRefs): void {
         await replyOutbound('AI Agent 未初始化，请查看启动日志。');
         return;
       }
+
+      const access = checkAIAccess(
+        message,
+        ai.getAccessConfig?.(),
+        resolveEndpointAiAccess(message, root),
+      );
+      if (!access.allowed) {
+        logger.info(formatCompactLog('AI Access', {
+          adapter: message.$adapter,
+          endpoint: message.$endpoint,
+          channel: message.$channel?.type,
+          allowed: false,
+          reason: access.reason,
+        }));
+        if (access.replyMessage) await replyOutbound(access.replyMessage);
+        return;
+      }
+
       if (triggerConfig.thinkingMessage)
         await replyOutbound(triggerConfig.thinkingMessage);
 

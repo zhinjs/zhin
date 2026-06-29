@@ -1,5 +1,5 @@
 import type { Database, DatabaseFeature, Message, Models, RelatedModel } from 'zhin.js';
-import { channelKey } from '@zhin.js/game-shared';
+import { channelKey, boardMessageMatches } from '@zhin.js/game-shared';
 import type { TttModelName, TttSessionRow } from './models.js';
 
 /** 井字棋服务使用的数据库实例（Models 经 models.ts 模块增强） */
@@ -103,14 +103,9 @@ export class SessionService {
   /** 根据棋盘消息 ID 查找进行中的局（QQ 等 action 带 sourceMessageId） */
   async getActiveByBoardMessageId(messageId: string): Promise<TttSessionRow | null> {
     if (!messageId) return null;
-    const rows = await getModel(this.db, 'ttt_sessions').findAll({ status: 'active' });
+    const rows = await getModel(this.db, 'ttt_sessions').findAll({});
     for (const row of rows) {
-      const stored = row.board_message_id;
-      if (!stored) continue;
-      if (stored === messageId) return row;
-      if (stored.endsWith(`:${messageId}`)) return row;
-      const tail = stored.split(':').pop();
-      if (tail && messageId.endsWith(tail)) return row;
+      if (boardMessageMatches(row.board_message_id ?? '', messageId)) return row;
     }
     return null;
   }

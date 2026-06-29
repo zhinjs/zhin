@@ -14,6 +14,7 @@ const POLL_INTERVAL_MS = 2000;
 export interface QqBindCredentials {
   appId: string;
   appSecret: string;
+  userOpenId?: string;
 }
 
 export interface QqBindCallbacks {
@@ -50,7 +51,7 @@ async function pollUntilResult(
   taskId: string,
   key: string,
   signal?: AbortSignal,
-): Promise<{ outcome: 'scanned'; appId: string; appSecret: string } | { outcome: 'expired' }> {
+): Promise<{ outcome: 'scanned'; appId: string; appSecret: string; userOpenId: string } | { outcome: 'expired' }> {
   while (!signal?.aborted) {
     let result;
     try {
@@ -61,7 +62,12 @@ async function pollUntilResult(
     }
     if (result.status === BindStatus.COMPLETED) {
       const appSecret = decryptSecret(result.botEncryptSecret, key);
-      return { outcome: 'scanned', appId: result.botAppId, appSecret };
+      return {
+        outcome: 'scanned',
+        appId: result.botAppId,
+        appSecret,
+        userOpenId: result.userOpenId,
+      };
     }
     if (result.status === BindStatus.EXPIRED) {
       return { outcome: 'expired' };
@@ -101,7 +107,11 @@ export function startQqBindFlow(
       await callbacks.onQrDisplayed?.(connectUrl);
       const pollResult = await pollUntilResult(task.taskId, task.key, signal);
       if (pollResult.outcome === 'scanned') {
-        callbacks.onSuccess([{ appId: pollResult.appId, appSecret: pollResult.appSecret }]);
+        callbacks.onSuccess([{
+          appId: pollResult.appId,
+          appSecret: pollResult.appSecret,
+          userOpenId: pollResult.userOpenId || undefined,
+        }]);
         return;
       }
       await callbacks.onQrExpired?.();

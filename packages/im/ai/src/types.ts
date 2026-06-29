@@ -546,6 +546,17 @@ export interface AIConfig {
     /** Deferred Worker 基础工具 */
     workerBaseTools?: string[];
   };
+  /** AI 访问控制（平台 AIGC 合规；Endpoint 可用 aiAccess 覆盖） */
+  access?: {
+    /** open | closed | whitelist，默认 open */
+    mode?: 'open' | 'closed' | 'whitelist';
+    /** 允许触发 AI 的 sender.id */
+    users?: string[];
+    /** 允许触发 AI 的 group/channel id */
+    groups?: string[];
+    /** 私聊拒绝时的回复文案 */
+    denyMessage?: string;
+  };
   /** AI 触发配置 */
   trigger?: {
     /** 是否启用（默认 true） */

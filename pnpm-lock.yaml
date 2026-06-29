@@ -357,6 +357,64 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  examples/qq-games-bot:
+    dependencies:
+      '@zhin.js/adapter-qq':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/qq
+      '@zhin.js/cli':
+        specifier: workspace:*
+        version: link:../../basic/cli
+      '@zhin.js/host-api':
+        specifier: workspace:*
+        version: link:../../packages/host/api
+      '@zhin.js/host-router':
+        specifier: workspace:*
+        version: link:../../packages/host/router
+      '@zhin.js/html-renderer':
+        specifier: workspace:*
+        version: link:../../packages/toolkit/html-renderer
+      '@zhin.js/plugin-blackjack':
+        specifier: workspace:*
+        version: link:../../plugins/games/blackjack
+      '@zhin.js/plugin-dice-duel':
+        specifier: workspace:*
+        version: link:../../plugins/games/dice-duel
+      '@zhin.js/plugin-group-suite':
+        specifier: workspace:*
+        version: link:../../plugins/utils/group-suite
+      '@zhin.js/plugin-guess-number':
+        specifier: workspace:*
+        version: link:../../plugins/games/guess-number
+      '@zhin.js/plugin-idiom-chain':
+        specifier: workspace:*
+        version: link:../../plugins/games/idiom-chain
+      '@zhin.js/plugin-rps':
+        specifier: workspace:*
+        version: link:../../plugins/games/rps
+      '@zhin.js/plugin-text-adventure':
+        specifier: workspace:*
+        version: link:../../plugins/games/text-adventure
+      '@zhin.js/plugin-tic-tac-toe':
+        specifier: workspace:*
+        version: link:../../plugins/games/tic-tac-toe
+      '@zhin.js/plugin-word-riddle':
+        specifier: workspace:*
+        version: link:../../plugins/games/word-riddle
+      sqlite3:
+        specifier: latest
+        version: 6.0.1
+      tsx:
+        specifier: ^4.22.4
+        version: 4.22.4
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../packages/im/zhin
+    devDependencies:
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   examples/test-bot:
     dependencies:
       '@ai-sdk/anthropic':
@@ -1680,6 +1738,19 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  plugins/games/blackjack:
+    dependencies:
+      '@zhin.js/game-shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
+
   plugins/games/dice-duel:
     dependencies:
       '@zhin.js/game-shared':
@@ -1736,6 +1807,13 @@ importers:
         version: link:../../../packages/im/zhin
 
   plugins/games/shared:
+    dependencies:
+      '@zhin.js/html-renderer':
+        specifier: workspace:*
+        version: link:../../../packages/toolkit/html-renderer
+      '@zhin.js/satori':
+        specifier: workspace:*
+        version: link:../../../packages/toolkit/satori
     devDependencies:
       typescript:
         specifier: ^6.0.3

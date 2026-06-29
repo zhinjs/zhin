@@ -1,5 +1,5 @@
 import type { Database, DatabaseFeature, Message, Models, RelatedModel } from 'zhin.js';
-import { channelKey, generateSessionId } from '@zhin.js/game-shared';
+import { channelKey, generateSessionId, boardMessageMatches } from '@zhin.js/game-shared';
 import type { RpsSessionRow } from './models.js';
 
 export type RpsDatabase = Database<unknown, Models, string>;
@@ -30,13 +30,9 @@ export class SessionService {
 
   async getActiveByBoardMessageId(messageId: string): Promise<RpsSessionRow | null> {
     if (!messageId) return null;
-    const rows = await getModel(this.db).findAll({ status: 'active' });
+    const rows = await getModel(this.db).findAll({});
     for (const row of rows) {
-      const stored = row.board_message_id;
-      if (!stored) continue;
-      if (stored === messageId || stored.endsWith(`:${messageId}`)) return row;
-      const tail = stored.split(':').pop();
-      if (tail && messageId.endsWith(tail)) return row;
+      if (boardMessageMatches(row.board_message_id ?? '', messageId)) return row;
     }
     return null;
   }

@@ -14,7 +14,7 @@ export function registerRiddleHub(getServices: () => SessionService | null): () 
     title: '猜谜',
     icon: '🧩',
     description: `字谜 ${counts.char.toLocaleString('zh-CN')} 题 + 成语 ${counts.idiom.toLocaleString('zh-CN')} 题`,
-    commandPrefix: '猜谜',
+    commandPrefix: '/猜谜',
     quickStart: '开始',
     aliases: ['riddle'],
     menus: [

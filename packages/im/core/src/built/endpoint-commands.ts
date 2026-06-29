@@ -6,7 +6,7 @@ import { MessageCommand } from '../command.js';
 import type { CommandFeature } from './command.js';
 import type { Message } from '../message.js';
 import type { Plugin } from '../plugin.js';
-import { rejectUnlessManagementOperator } from './management-command-guard.js';
+import { MANAGEMENT_OPERATOR_PERMIT } from './management-command-guard.js';
 import { createEndpointLifecycleService } from './endpoint-lifecycle-service.js';
 import { endpointHelpText, formatEndpointsList, type EndpointRow } from './introspection-format.js';
 
@@ -34,11 +34,6 @@ export function registerEndpointManagementCommands(
   const disposers: (() => void)[] = [];
   const service = () => createEndpointLifecycleService(root);
 
-  const guard = (message: Message): string | null => {
-    const ai = root.inject('ai') as { getTriggerConfig?: () => import('./ai-trigger.js').AITriggerConfig } | undefined;
-    return rejectUnlessManagementOperator(message, root, ai?.getTriggerConfig?.());
-  };
-
   const register = (
     pattern: string,
     desc: string,
@@ -46,9 +41,8 @@ export function registerEndpointManagementCommands(
   ) => {
     const cmd = new MessageCommand(pattern)
       .desc(desc)
+      .permit(MANAGEMENT_OPERATOR_PERMIT)
       .action(async (message, match) => {
-        const denied = guard(message);
-        if (denied) return denied;
         try {
           return await handler(message, match);
         } catch (err) {
@@ -110,6 +104,11 @@ export function registerEndpointManagementCommands(
       return '当前没有进行中的 Endpoint 绑定流程。';
     }
     return '已取消 Endpoint 绑定流程。';
+  });
+
+  register('/endpoint sync', '将内存中的 endpoint 配置写回 zhin.config', async () => {
+    const result = await service().syncToDisk();
+    return result.message;
   });
 
   register('/endpoints', '列出各适配器下的 Endpoint 及在线状态', () =>

@@ -2,7 +2,7 @@
  * Owner 私聊指令：approve always / approve rule / list / revoke —— **bash + icqq 放行策略**。
  *
  */
-import { getPlugin, MessageCommand, type Message, type CommandFeature } from '@zhin.js/core';
+import { getPlugin, MessageCommand, OWNER_PRIVATE_PERMITS, type Message, type CommandFeature } from '@zhin.js/core';
 import {
   addBashApproveRule,
   addOwnerApproveAlways,
@@ -36,6 +36,7 @@ function registerApproveCommands(
   const alwaysExplicit = new MessageCommand('/approve always bash')
     .desc('Owner：永久放行 bash 的在线安全确认', '仅私聊；写入 data/owner-approve-always.json')
     .usage('/approve always bash')
+    .permit(...OWNER_PRIVATE_PERMITS)
     .action((message: Message) => {
       const ctx = getOwnerCommMessageOrUndefined(root, message);
       if (!ctx) return '⚠️ 仅 Endpoint Owner 可在私聊中使用此指令。';
@@ -48,6 +49,7 @@ function registerApproveCommands(
 
   const alwaysImplicit = new MessageCommand('/approve always')
     .desc('Owner：永久放行 bash（须在近期 bash 待确认窗口内）')
+    .permit(...OWNER_PRIVATE_PERMITS)
     .action((message: Message) => {
       const ctx = getOwnerCommMessageOrUndefined(root, message);
       if (!ctx) return '⚠️ 仅 Endpoint Owner 可在私聊中使用此指令。';
@@ -65,6 +67,7 @@ function registerApproveCommands(
 
   const revokeRuleCmd = new MessageCommand('/approve revoke rule <id:text>')
     .desc('Owner：按 id（或前 8 位前缀）删除一条放行正则')
+    .permit(...OWNER_PRIVATE_PERMITS)
     .action((message: Message, match) => {
       const ctx = getOwnerCommMessageOrUndefined(root, message);
       if (!ctx) return '⚠️ 仅 Endpoint Owner 可在私聊中使用此指令。';
@@ -80,6 +83,7 @@ function registerApproveCommands(
   const ruleCmd = new MessageCommand('/approve rule <pattern:text>')
     .desc('Owner：添加 bash/icqq 放行正则（匹配整段待执行子命令）')
     .usage('/approve rule ^icqq\\\\s+friend\\\\s+like\\\\b')
+    .permit(...OWNER_PRIVATE_PERMITS)
     .action((message: Message, match) => {
       const ctx = getOwnerCommMessageOrUndefined(root, message);
       if (!ctx) return '⚠️ 仅 Endpoint Owner 可在私聊中使用此指令。';
@@ -94,6 +98,7 @@ function registerApproveCommands(
 
   const listCmd = new MessageCommand('/approve list')
     .desc('Owner：列出 bash 永久放行与正则规则')
+    .permit(...OWNER_PRIVATE_PERMITS)
     .action((message: Message) => {
       const ctx = getOwnerCommMessageOrUndefined(root, message);
       if (!ctx) return '⚠️ 仅 Endpoint Owner 可在私聊中使用此指令。';
@@ -104,6 +109,7 @@ function registerApproveCommands(
 
   const revokeCmd = new MessageCommand('/approve revoke')
     .desc('Owner：撤销 bash 永久放行（保留正则规则）')
+    .permit(...OWNER_PRIVATE_PERMITS)
     .action((message: Message) => {
       const ctx = getOwnerCommMessageOrUndefined(root, message);
       if (!ctx) return '⚠️ 仅 Endpoint Owner 可在私聊中使用此指令。';

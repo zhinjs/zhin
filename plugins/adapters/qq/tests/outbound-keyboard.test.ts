@@ -18,8 +18,35 @@ describe('expandKeyboardSegmentsForQq', () => {
     const items = out as Array<{ type: string; data: Record<string, unknown> }>;
     expect(items[0]?.type).toBe('markdown');
     expect(items[1]?.type).toBe('button');
-    const buttons = items[1]?.data.buttons as Array<{ action: { data: string; click_limit: number } }>;
+    const buttons = items[1]?.data.buttons as Array<{ action: { type: number; data: string; click_limit: number } }>;
+    expect(buttons[0]?.action.type).toBe(1);
     expect(buttons[0]?.action.data).toBe('game:0');
     expect(buttons[1]?.action.click_limit).toBe(0);
+  });
+
+  it('maps command mode buttons to QQ type 2 with enter/reply', () => {
+    const out = expandKeyboardSegmentsForQq([
+      segment.text('大厅'),
+      segment.keyboard([
+        [
+          segment.button({
+            id: 'g1',
+            label: '井字棋',
+            payload: 'hub:s1:g_ttt',
+            mode: 'command',
+            command: { enter: true, reply: true },
+          }),
+        ],
+      ]),
+    ]);
+
+    const items = out as Array<{ type: string; data: Record<string, unknown> }>;
+    const buttons = items[1]?.data.buttons as Array<{
+      action: { type: number; data: string; enter?: boolean; reply?: boolean };
+    }>;
+    expect(buttons[0]?.action.type).toBe(2);
+    expect(buttons[0]?.action.data).toBe('hub:s1:g_ttt');
+    expect(buttons[0]?.action.enter).toBe(true);
+    expect(buttons[0]?.action.reply).toBe(true);
   });
 });

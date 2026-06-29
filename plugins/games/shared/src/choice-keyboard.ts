@@ -2,6 +2,7 @@
  * 选项式交互键盘（文字冒险、问答、剧情分支等）
  */
 import { segment, type SendContent } from 'zhin.js';
+import { applyInteractionProfile, type InteractionProfile } from './interaction-profiles.js';
 
 export interface ChoiceOption {
   /** 选项 ID，写入 payload */
@@ -9,6 +10,8 @@ export interface ChoiceOption {
   label: string;
   disabled?: boolean;
   style?: 'primary' | 'danger' | 'secondary';
+  /** 终局菜单（如「再来一局」）保持可点 */
+  keepEnabledWhenTerminal?: boolean;
 }
 
 export interface ChoiceKeyboardOptions {
@@ -22,6 +25,10 @@ export interface ChoiceKeyboardOptions {
   fallbackHint?: string;
   /** 每行最多几个按钮（默认全部一行） */
   buttonsPerRow?: number;
+  /** 交互 profile：menu→command，gameplay→callback，terminal→command */
+  interactionProfile?: InteractionProfile;
+  /** terminal profile 私聊 auto-enter 用 */
+  channelType?: string;
 }
 
 export function buildChoiceFallbackMap(
@@ -61,19 +68,26 @@ export function buildChoiceKeyboard(options: ChoiceKeyboardOptions): SendContent
     terminal,
     fallbackHint,
     buttonsPerRow,
+    interactionProfile,
+    channelType,
   } = options;
 
   const enabled = choices.filter((c) => !c.disabled);
   const buttonRows = chunkChoices(enabled, buttonsPerRow ?? enabled.length).map((row) =>
-    row.map((choice) =>
-      segment.button({
+    row.map((choice) => {
+      const base = segment.button({
         id: choice.id,
         label: choice.label,
         payload: `${gamePrefix}:${sessionId}:${choice.id}`,
-        disabled: terminal || choice.disabled,
+        disabled: choice.disabled || (terminal && !choice.keepEnabledWhenTerminal),
         style: choice.style ?? 'secondary',
-      }),
-    ),
+      });
+      const data = base.data;
+      if (!interactionProfile) return base;
+      return segment.button(
+        applyInteractionProfile(data, { profile: interactionProfile, channelType }),
+      );
+    }),
   );
 
   const fallback = buildChoiceFallbackMap(gamePrefix, sessionId, choices);

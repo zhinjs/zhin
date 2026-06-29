@@ -11,7 +11,7 @@ export function registerRpsHub(getServices: () => SessionService | null): () => 
     title: '猜拳对决',
     icon: '✊',
     description: '石头剪刀布，三局两胜',
-    commandPrefix: '猜拳',
+    commandPrefix: '/猜拳',
     quickStart: '开始',
     aliases: ['rps'],
     menus: [

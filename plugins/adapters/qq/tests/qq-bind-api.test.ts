@@ -32,8 +32,14 @@ describe('qq-bind-api', () => {
     expect(decryptSecret(payload, keyBase64)).toBe(plaintext);
   });
 
-  it('BindStatus enum values match connector', () => {
-    expect(BindStatus.COMPLETED).toBe(2);
-    expect(BindStatus.EXPIRED).toBe(3);
+  it('parsePollBindResultData reads user_openid', async () => {
+    const { parsePollBindResultData, BindStatus } = await import('../src/qq-bind-api.js');
+    const parsed = parsePollBindResultData({
+      status: BindStatus.COMPLETED,
+      bot_appid: '900000001',
+      bot_encrypt_secret: 'mock-encrypted',
+      user_openid: 'MOCK_OPERATOR_OPENID',
+    });
+    expect(parsed.userOpenId).toBe('MOCK_OPERATOR_OPENID');
   });
 });

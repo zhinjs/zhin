@@ -21,7 +21,7 @@ export async function sendOrEditView(
   session: RiddleSessionRow,
   eventLines: string[] = [],
 ): Promise<void> {
-  const content = buildRiddleView(session, eventLines);
+  const content = buildRiddleView(session, eventLines, message.$channel.type);
   if (typeof content === 'string') {
     await message.$reply?.(content);
     return;

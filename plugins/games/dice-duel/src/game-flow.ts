@@ -1,4 +1,5 @@
 import type { Adapter, Message, Plugin } from 'zhin.js';
+import { recordGameOutcome } from '@zhin.js/game-shared';
 import type { DiceSessionRow } from './models.js';
 import { compareRolls, DICE_PREFIX, rollD6, WIN_TARGET } from './engine.js';
 import type { SessionService } from './session-service.js';
@@ -11,7 +12,7 @@ export async function sendOrEditView(
   session: DiceSessionRow,
   lastRound?: { player: number; bot: number; result: 0 | 1 | 2 },
 ): Promise<void> {
-  const content = buildDiceView(session, lastRound);
+  const content = buildDiceView(session, lastRound, message.$channel.type);
   const adapter = plugin.root.inject(message.$adapter) as Adapter;
 
   if (session.board_message_id) {
@@ -81,17 +82,8 @@ export async function handleChoice(
   }
 
   if (choiceId === 'restart') {
-    await services.updateSession(session.id, {
-      player_wins: 0,
-      bot_wins: 0,
-      round: 0,
-      last_player_roll: 0,
-      last_bot_roll: 0,
-      status: 'active',
-      board_message_id: '',
-    });
-    const updated = (await services.getById(session.id))!;
-    await sendOrEditView(plugin, services, message, updated);
+    await services.updateSession(session.id, { status: 'aborted' });
+    await startGame(plugin, services, message);
     return null;
   }
 
@@ -120,6 +112,8 @@ export async function handleChoice(
   });
 
   const updated = (await services.getById(session.id))!;
+  if (status === 'won') void recordGameOutcome(message, 'dice', 'won', playerWins * 10);
+  else if (status === 'lost') void recordGameOutcome(message, 'dice', 'lost');
   await sendOrEditView(plugin, services, message, updated, { player, bot, result });
   return null;
 }

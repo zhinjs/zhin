@@ -10,11 +10,16 @@ pnpm add @zhin.js/adapter-qq
 
 ## 扫码添加机器人（/endpoint）
 
-无需手动复制 AppID/AppSecret：在 IM 中由 **master / trusted** 操作员发送命令，适配器会内联调用 QQ 开放平台绑定协议（等价 `@tencent-connect/qqbot-connector`，**不依赖**该 npm 包），扫码成功后由 core 写入 `zhin.config.yml` 并热连接。
+无需手动复制 AppID/AppSecret：在 IM 中由 **master / trusted** 操作员发送命令，适配器会内联调用 QQ 开放平台绑定协议（等价 `@tencent-connect/qqbot-connector`，**不依赖**该 npm 包），扫码成功后：
+
+- 凭据写入项目根 **`.env`**（键名 `QQ_<name>_APPID` / `QQ_<name>_SECRET`）
+- `zhin.config.yml` 仅保留 **`${...}` 引用**（与脚手架其它 adapter 一致）
+- **`master`** 与 **`aiAccess.users`** 自动设为 `poll_bind_result` 返回的扫码者 OpenID（接口无该字段时回退为发起命令的用户 ID）
 
 | 命令 | 说明 |
 |------|------|
 | `/endpoint add qq [name]` | 发起扫码绑定；`name` 默认使用 AppID |
+| `/endpoint sync` | 将内存 endpoint 写回 `zhin.config.yml` |
 | `/endpoint cancel` | 取消进行中的绑定 |
 | `/endpoints` | 查看运行时 qq endpoints 在线状态 |
 | `/endpoint help` | Endpoint 管理帮助 |
@@ -22,6 +27,31 @@ pnpm add @zhin.js/adapter-qq
 二维码通过 IM `$reply` 发送 `segment.qrcode(url)`；各 Adapter 在 **`$sendMessage`** 内解析该段（IM → `image`，process → 终端 ASCII，GitHub 等 → 文本链接）。
 
 二维码渲染使用 core 的 `segment.qrcode` / `GeneratedQrCode`（`import { segment } from 'zhin.js'` 或 `import { GeneratedQrCode } from 'zhin.js/qrcode'`）。
+
+## AIGC 合规（AI 白名单）
+
+QQ 开放平台限制 AIGC 进入社群场景、禁止面向全量用户开放生成式能力。请配置 **`endpoints[].aiAccess`**（推荐）或全局 **`ai.access`**，仅 gate LLM 回复；斜杠命令、游戏插件等不受影响。
+
+```yaml
+endpoints:
+  - context: qq
+    name: my-bot
+    appid: ...
+    secret: ...
+    aiAccess:
+      mode: whitelist
+      users: ['QQ用户openid']
+      groups: ['QQ群openid']
+      denyMessage: 当前未开放 AI，请联系管理员。
+```
+
+多 Endpoint 时可分别设置（例如正式服 `whitelist`、沙箱 `open`）。未写 `endpoints[].aiAccess` 时回退到全局 `ai.access`。
+
+- 群/频道未放行：**静默**（不回复 AI）
+- 私聊未放行：回复 `denyMessage`
+- 白名单：`users` 与 `groups` **OR** 匹配
+
+详见 [内容审查 / AI Access Gate](../../../docs/advanced/content-moderation.md)。
 
 ## 配置
 
@@ -294,6 +324,15 @@ endpoints:
 ```
 
 含图片/文件等富媒体的多段消息不会合并，避免破坏分条发送。
+
+**图文混排**（文本 + 图片，典型如二维码说明 + `segment.qrcode`）会自动处理：
+
+| 图片类型 | 行为 |
+|---|---|
+| 公网 `https` URL | 合并为单条 Markdown（`msg_type=2`），图片用 `![说明 #宽 #高](url)` |
+| 内联 base64 / data URI（如二维码渲染） | 群聊/私聊先上传 `file_info`，再以 `msg_type=7` 图文混排同条发送 |
+
+`outboundMarkdown: false` 时关闭上述合并，恢复分条发送。
 
 ## API 方法
 

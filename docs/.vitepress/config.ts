@@ -182,6 +182,7 @@ export default withMermaid(defineConfig({
             { text: '适配器', link: '/essentials/adapters' },
             { text: '平台适配器索引', link: '/adapters/' },
             { text: 'Rich Segment 矩阵', link: '/essentials/rich-segment-adapters' },
+            { text: 'Interactive 消息段', link: '/essentials/interactive-segments' },
             { text: '消息过滤', link: '/essentials/message-filter' },
             { text: 'Windows 环境', link: '/essentials/windows-setup' },
           ]
@@ -232,6 +233,7 @@ export default withMermaid(defineConfig({
             { text: '0019 Install Size Layering', link: '/adr/0019-install-size-layering' },
             { text: '0020 Speech STT/TTS', link: '/adr/0020-speech-pipeline-stt-tts' },
             { text: '0021 内容审查边界', link: '/adr/0021-content-moderation' },
+            { text: '0022 Interactive 按钮模式', link: '/adr/0022-interactive-button-modes' },
           ],
         },
       ],

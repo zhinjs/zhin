@@ -6,6 +6,7 @@ import { MOVE_LABELS, RPS_PREFIX, WIN_TARGET, type RpsMove } from './engine.js';
 export function buildRpsView(
   session: RpsSessionRow,
   lastRound?: { player: RpsMove; bot: RpsMove; result: 0 | 1 | 2 },
+  channelType?: string,
 ): SendContent {
   const terminal = session.status !== 'active';
   const lines = [
@@ -37,7 +38,7 @@ export function buildRpsView(
   }
 
   const choices = terminal
-    ? [{ id: 'restart', label: '🔄 再来一局', style: 'primary' as const }]
+    ? [{ id: 'restart', label: '🔄 再来一局', style: 'primary' as const, keepEnabledWhenTerminal: true }]
     : (['rock', 'paper', 'scissors'] as RpsMove[]).map((m) => ({
         id: m,
         label: MOVE_LABELS[m],
@@ -52,5 +53,7 @@ export function buildRpsView(
     terminal,
     buttonsPerRow: 3,
     fallbackHint: '回复数字出拳（1石头 2布 3剪刀）',
+    interactionProfile: terminal ? 'terminal' : 'gameplay',
+    channelType,
   });
 }

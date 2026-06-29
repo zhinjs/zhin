@@ -19,6 +19,22 @@ export function getActionFromMessage(message: Message<any>): ActionSegmentData |
   return undefined;
 }
 
+/** 入站互动 action（按钮点击等），不应计入用户发言/消息统计 */
+export function isActionMessage(message: Message<any>): boolean {
+  return getActionFromMessage(message) != null;
+}
+
+const PAYLOAD_PATTERN = /^[a-z0-9_]+:[^:\s]+:[a-z0-9_-]+$/i;
+
+/** 去掉 @bot、XML at 段、首尾空白（QQ 指令预填文本归一化） */
+export function stripInteractiveCommandText(raw: string): string {
+  let text = raw.trim();
+  text = text.replace(/<at\s[^>]*\/>/gi, ' ');
+  text = text.replace(/^@\S+\s+/u, '');
+  text = text.replace(/\s+/g, ' ').trim();
+  return text;
+}
+
 /** 从文本降级输入解析 payload（需在 active session 的 fallback.map 中查找） */
 export function resolveTextFallbackPayload(
   raw: string,
@@ -28,6 +44,23 @@ export function resolveTextFallbackPayload(
   if (map[trimmed]) return map[trimmed];
   const match = trimmed.match(/^(?:ttt\s+)?(\d)$/i);
   if (match && map[match[1]!]) return map[match[1]!];
+  return undefined;
+}
+
+/**
+ * 从用户文本入站解析 interactive payload：
+ * 归一化 → 直接匹配 prefix:session:id → fallback 数字映射
+ */
+export function resolvePayloadFromText(
+  raw: string,
+  map?: Record<string, string>,
+): string | undefined {
+  const normalized = stripInteractiveCommandText(raw);
+  if (!normalized) return undefined;
+  if (PAYLOAD_PATTERN.test(normalized)) return normalized;
+  if (map && Object.keys(map).length > 0) {
+    return resolveTextFallbackPayload(normalized, map);
+  }
   return undefined;
 }
 

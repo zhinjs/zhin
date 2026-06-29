@@ -27,7 +27,7 @@ export async function sendOrEditView(
   session: ChainSessionRow,
   eventLines: string[] = [],
 ): Promise<void> {
-  const content = buildChainView(session, eventLines);
+  const content = buildChainView(session, eventLines, message.$channel.type);
   const adapter = plugin.root.inject(message.$adapter) as Adapter;
 
   if (session.board_message_id) {

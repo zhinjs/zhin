@@ -1,4 +1,4 @@
-import { formatCompact, MessageCommand, segment, type Plugin } from "zhin.js";
+import { formatCompact, isActionMessage, MessageCommand, segment, type Plugin } from "zhin.js";
 import type { GroupSuiteConfig } from "./config.js";
 import { todayStr, ts } from "./shared.js";
 import { buildStatsRankReportData, type MyStatsReportData } from "./stats-data.js";
@@ -149,6 +149,7 @@ export function registerStats(plugin: Plugin, cfg: GroupSuiteConfig): void {
   });
 
   plugin.root.addMiddleware(async (message, next) => {
+    if (isActionMessage(message)) return next();
     const userId = String(message.$sender?.id || "");
     if (!userId) return next();
     const key = bufferKey(userId, getGroupId(message), todayStr());

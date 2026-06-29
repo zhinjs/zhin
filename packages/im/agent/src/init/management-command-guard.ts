@@ -4,6 +4,7 @@
  */
 export {
   MANAGEMENT_COMMAND_DENIED,
+  MANAGEMENT_OPERATOR_PERMIT,
   rejectUnlessManagementOperator,
   resolveManagementCommandRoles,
 } from '@zhin.js/core';

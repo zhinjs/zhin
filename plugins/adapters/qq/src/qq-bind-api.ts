@@ -102,6 +102,26 @@ export interface PollBindResultOk {
   status: BindStatus;
   botAppId: string;
   botEncryptSecret: string;
+  /** 扫码绑定开发者 QQ 的 OpenID（poll_bind_result 返回） */
+  userOpenId: string;
+}
+
+export function parsePollBindResultData(data: {
+  status?: number;
+  bot_appid?: string | number;
+  bot_encrypt_secret?: string;
+  user_openid?: string;
+  userOpenid?: string;
+  openid?: string;
+} | undefined): PollBindResultOk {
+  return {
+    status: (data?.status ?? BindStatus.NONE) as BindStatus,
+    botAppId: String(data?.bot_appid ?? ''),
+    botEncryptSecret: data?.bot_encrypt_secret ?? '',
+    userOpenId: String(
+      data?.user_openid ?? data?.userOpenid ?? data?.openid ?? '',
+    ),
+  };
 }
 
 export async function pollBindResult(
@@ -114,13 +134,12 @@ export async function pollBindResult(
     status?: number;
     bot_appid?: string | number;
     bot_encrypt_secret?: string;
+    user_openid?: string;
+    userOpenid?: string;
+    openid?: string;
   }>(url, { task_id: taskId }, timeoutMs);
   if (res.retcode !== 0) {
     throw new Error(res.msg ?? 'poll_bind_result failed');
   }
-  return {
-    status: (res.data?.status ?? BindStatus.NONE) as BindStatus,
-    botAppId: String(res.data?.bot_appid ?? ''),
-    botEncryptSecret: res.data?.bot_encrypt_secret ?? '',
-  };
+  return parsePollBindResultData(res.data);
 }

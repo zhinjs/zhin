@@ -3,13 +3,13 @@
  */
 import {
   getPlugin,
-  Message,
+  MANAGEMENT_OPERATOR_PERMIT,
   MessageCommand,
   type CommandFeature,
+  type Message,
 } from '@zhin.js/core';
 import type { AgentOrchestrator } from '../orchestrator/index.js';
 import type { AIServiceRefs } from './shared-refs.js';
-import { rejectUnlessManagementOperator } from './management-command-guard.js';
 import {
   commandRowsFromService,
   formatAgentsList,
@@ -23,26 +23,29 @@ import {
 function registerIntrospectionCommand(
   commandService: CommandFeature,
   pluginName: string,
-  root: ReturnType<typeof getPlugin>['root'],
   disposers: (() => void)[],
   pattern: string,
   desc: string,
-  handler: () => Promise<string> | string,
+  handler: (message: Message) => Promise<string> | string,
 ): void {
   const cmd = new MessageCommand(pattern)
     .desc(desc)
-    .action(async (message: Message) => {
-      const ai = root.inject('ai') as { getTriggerConfig?: () => import('@zhin.js/core').AITriggerConfig } | undefined;
-      const denied = rejectUnlessManagementOperator(
-        message,
-        root,
-        ai?.getTriggerConfig?.(),
-      );
-      if (denied) return denied;
-      return handler();
-    });
+    .permit(MANAGEMENT_OPERATOR_PERMIT)
+    .action(async (message) => handler(message));
   commandService.add(cmd, pluginName);
   disposers.push(() => commandService.remove(cmd));
+}
+
+async function visibleCommandItems(
+  commandService: CommandFeature,
+  message: Message,
+  plugin: ReturnType<typeof getPlugin>['root'],
+): Promise<MessageCommand[]> {
+  const out: MessageCommand[] = [];
+  for (const cmd of commandService.items) {
+    if (await cmd.checkPermits(message, plugin)) out.push(cmd);
+  }
+  return out;
 }
 
 function collectMcpRows(orchestrator: AgentOrchestrator | undefined): McpServerRow[] {
@@ -62,14 +65,15 @@ export function registerIntrospectionCommands(_refs: AIServiceRefs): void {
     if (!commandService) return;
     const disposers: (() => void)[] = [];
 
-    const listCommands = () => {
-      const rows = commandRowsFromService(commandService.items);
+    const listCommands = async (message: Message) => {
+      const rows = commandRowsFromService(
+        await visibleCommandItems(commandService, message, root),
+      );
       return formatCommandsList(rows) + introspectionHelpFooter();
     };
     registerIntrospectionCommand(
       commandService,
       root.name,
-      root,
       disposers,
       '/cmd',
       '列出已注册的 IM 命令',
@@ -79,7 +83,6 @@ export function registerIntrospectionCommands(_refs: AIServiceRefs): void {
     registerIntrospectionCommand(
       commandService,
       root.name,
-      root,
       disposers,
       '/bindings',
       '列出 ai.agents 绑定（provider / model / mcp）',
@@ -104,7 +107,6 @@ export function registerIntrospectionCommands(_refs: AIServiceRefs): void {
     registerIntrospectionCommand(
       commandService,
       root.name,
-      root,
       disposers,
       '/tools',
       '列出 ToolFeature 已注册工具',
@@ -123,7 +125,6 @@ export function registerIntrospectionCommands(_refs: AIServiceRefs): void {
     registerIntrospectionCommand(
       commandService,
       root.name,
-      root,
       disposers,
       '/mcp',
       '列出已注册的 MCP Server 及连接状态',

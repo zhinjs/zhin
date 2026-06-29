@@ -12,7 +12,7 @@ export function registerChainHub(getServices: () => SessionService | null): () =
     title: '成语接龙',
     icon: '📜',
     description: `四字成语接龙（同音/同字），词库 ${idiomCount()} 条`,
-    commandPrefix: '接龙',
+    commandPrefix: '/接龙',
     quickStart: 'start_pinyin',
     aliases: ['chain'],
     menus: [

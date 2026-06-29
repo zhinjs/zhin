@@ -1,4 +1,5 @@
 import type { Plugin } from '@zhin.js/core';
+import { seedSpeechPipeline } from '@zhin.js/core';
 import type { AppConfig } from '../types.js';
 import { registerSpeechImIntegration } from './speech-im.js';
 
@@ -14,6 +15,7 @@ export async function registerSpeech(
     const { createSpeechPipeline } = await import('@zhin.js/speech');
     const speechConfig = (appConfig.speech ?? {}) as import('@zhin.js/speech').SpeechConfig;
     const pipeline = createSpeechPipeline(speechConfig, plugin.logger);
+    seedSpeechPipeline(pipeline);
 
     plugin.onDispose(registerSpeechImIntegration(plugin, pipeline));
   } catch {

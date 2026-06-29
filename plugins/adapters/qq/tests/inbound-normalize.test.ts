@@ -6,7 +6,7 @@ describe('normalizeQqInboundWsPayload', () => {
       d: {
         group_openid: 'GROUP_OPENID_1',
         author: { member_openid: 'MEMBER_1' },
-        content: '<@!102073979> 你好',
+        content: '<@!900000099> 你好',
         attachments: [{ content_type: 'image/png' }],
       },
     };
@@ -14,7 +14,7 @@ describe('normalizeQqInboundWsPayload', () => {
 
     expect(packet.d!.group_id).toBe('GROUP_OPENID_1');
     expect((packet.d!.author as { id?: string }).id).toBe('MEMBER_1');
-    expect(packet.d!.mentions).toEqual([{ id: '102073979' }]);
+    expect(packet.d!.mentions).toEqual([{ id: '900000099' }]);
     expect((packet.d!.attachments as Array<{ url: string }>)[0]!.url).toBe('');
     expect(packet.d!.__zhin_group_at).toBe(true);
   });

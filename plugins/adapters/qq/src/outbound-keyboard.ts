@@ -2,7 +2,7 @@
  * 将 core keyboard 段转为 qq-official-bot 可识别的 button / markdown 段。
  * @see https://bot.q.qq.com/wiki/develop/api-v2/server-inter/message/trans/msg-btn.html
  */
-import type { KeyboardSegmentData } from "zhin.js";
+import type { ButtonData, KeyboardSegmentData } from "zhin.js";
 import type { MessageSegment, SendContent } from "zhin.js";
 import { isKeyboardSegment, KeyboardSegment } from "zhin.js";
 
@@ -23,15 +23,24 @@ type QqButton = {
     data: string;
     click_limit: number;
     unsupport_tips: string;
+    enter?: boolean;
+    reply?: boolean;
   };
 };
 
-function coreButtonToQq(btn: {
-  id: string;
-  label: string;
-  payload: string;
-  disabled?: boolean;
-}): QqButton {
+function coreButtonToQq(btn: ButtonData): QqButton {
+  const isCommand = btn.mode === 'command';
+  const action: QqButton['action'] = {
+    type: isCommand ? 2 : 1,
+    permission: { type: 2 },
+    data: btn.payload,
+    click_limit: btn.disabled ? 0 : 10,
+    unsupport_tips: btn.disabled ? "该按钮不可用" : "",
+  };
+  if (isCommand) {
+    if (btn.command?.enter != null) action.enter = btn.command.enter;
+    if (btn.command?.reply != null) action.reply = btn.command.reply;
+  }
   return {
     id: btn.id,
     render_data: {
@@ -39,13 +48,7 @@ function coreButtonToQq(btn: {
       visited_label: btn.label,
       style: 0,
     },
-    action: {
-      type: 1,
-      permission: { type: 2 },
-      data: btn.payload,
-      click_limit: btn.disabled ? 0 : 10,
-      unsupport_tips: btn.disabled ? "该按钮不可用" : "",
-    },
+    action,
   };
 }
 

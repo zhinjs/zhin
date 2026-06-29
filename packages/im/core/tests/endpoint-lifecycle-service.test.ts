@@ -49,6 +49,7 @@ function createConfigFeature(endpoints: EndpointConfigRecord[] = []) {
   const loader = {
     patchKey: vi.fn(),
     load: vi.fn(),
+    resolvedPath: '/tmp/zhin.config.yml',
   };
   return {
     primaryFile: 'zhin.config.yml',
@@ -89,7 +90,6 @@ describe('EndpointLifecycleService', () => {
       'endpoints',
       [{ context: 'mock', name: 'bot1', token: 'x' }],
     );
-    expect(configFeature.loader.load).toHaveBeenCalled();
     expect(adapter.endpoints.has('bot1')).toBe(true);
   });
 
@@ -98,6 +98,21 @@ describe('EndpointLifecycleService', () => {
     root.provide({ name: 'config', description: 'test', value: configFeature });
     service = new EndpointLifecycleService(root);
     await expect(service.add('mock', {} as never)).rejects.toThrow(/已存在/);
+  });
+
+  it('syncToDisk persists in-memory endpoints', async () => {
+    configFeature = createConfigFeature([
+      { context: 'mock', name: 'bot1', token: 'x' },
+      { context: 'qq', name: 'mock-qq-bot', appid: '900000001', secret: 'mock-sec' },
+    ]);
+    root.provide({ name: 'config', description: 'test', value: configFeature });
+    service = new EndpointLifecycleService(root);
+    const result = await service.syncToDisk();
+    expect(result.message).toMatch(/写入/);
+    expect(configFeature.loader.patchKey).toHaveBeenCalledWith(
+      'endpoints',
+      expect.arrayContaining([expect.objectContaining({ name: 'mock-qq-bot' })]),
+    );
   });
 
   it('stop disconnects runtime without removing config', async () => {

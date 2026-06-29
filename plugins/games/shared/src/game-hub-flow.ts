@@ -50,7 +50,7 @@ export function openMainMenu(message: Message<any>): ReturnType<typeof buildMain
   const scopeId = createHubScope(message);
   const choices = mainMenuChoices();
   rememberHubMenu(message, scopeId, choices);
-  return buildMainHubMenu(scopeId, games);
+  return buildMainHubMenu(scopeId, games, message.$channel.type);
 }
 
 export async function handleHubChoice(
@@ -78,7 +78,7 @@ export async function handleHubChoice(
     const games = getRegisteredGames();
     const choices = mainMenuChoices();
     rememberHubMenu(message, scopeId, choices);
-    await message.$reply?.(buildMainHubMenu(scopeId, games));
+    await message.$reply?.(buildMainHubMenu(scopeId, games, message.$channel.type));
     return true;
   }
 

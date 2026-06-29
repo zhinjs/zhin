@@ -29,6 +29,7 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { Message } from '../message.js';
+import { isActionMessage } from './interactive-segments/action.js';
 import { Plugin, getPlugin } from '../plugin.js';
 import type {
   MessageMiddleware,
@@ -380,7 +381,7 @@ export function createMessageDispatcher(
   }
 
   async function maybeRecordGroupPassiveContext(message: Message<any>): Promise<void> {
-    if (!groupPassiveContextHandler) return;
+    if (!groupPassiveContextHandler || isActionMessage(message)) return;
     const scope = message.$channel?.type;
     if (scope !== 'group' && scope !== 'channel') return;
     try {

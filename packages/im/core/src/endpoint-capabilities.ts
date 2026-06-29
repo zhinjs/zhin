@@ -2,6 +2,7 @@ import type { Message } from './message.js';
 import type { Notice } from './notice.js';
 import type { Request } from './request.js';
 import type { SendOptions } from './types.js';
+import type { AIAccessScopeConfig } from './built/ai-access.js';
 
 export type EndpointCapability = 'inbound' | 'outbound';
 
@@ -122,4 +123,6 @@ export function assertOutbound(
 
 export interface EndpointCapabilitiesConfig {
   capabilities?: EndpointCapability[];
+  /** 本 Endpoint 的 AI 访问控制（覆盖 ai.access 全局默认） */
+  aiAccess?: AIAccessScopeConfig;
 }

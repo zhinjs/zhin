@@ -1,8 +1,15 @@
 import { Message, MessageCommand, getActionFromMessage, type Plugin } from 'zhin.js';
-import { channelKey, normalizeTttAction, registerGameTextMiddleware } from '@zhin.js/game-shared';
-import { buildFallbackMap } from './board-view.js';
+import {
+  channelKey,
+  normalizeTttAction,
+  parseChoicePayload,
+  registerGameTextMiddleware,
+  resolveGameChoice,
+  resolveGameTextPayload,
+} from '@zhin.js/game-shared';
+import { buildFallbackMap, TTT_PREFIX } from './board-view.js';
 import { parseBoard } from './engine.js';
-import { handleMove } from './game-flow.js';
+import { handleMove, restartFromTerminal } from './game-flow.js';
 import { runTttCommand } from './ttt-command.js';
 import type { SessionServices } from './session-service.js';
 
@@ -10,7 +17,6 @@ function actionPayload(message: Message<any>): string | undefined {
   return getActionFromMessage(message)?.payload;
 }
 
-/** @deprecated 使用 game-shared parseChoicePayload；保留 ttt 专用解析 */
 function parseTttPayload(payload: string): { sessionId: string; cell: number } | null {
   const m = /^ttt:([^:]+):(\d)$/.exec(payload);
   if (!m) return null;
@@ -24,15 +30,25 @@ function parseCellButtonId(id: string): number | null {
   return cell >= 0 && cell <= 8 ? cell : null;
 }
 
-async function resolveTttMove(
+async function resolveTttAction(
   message: Message<any>,
   services: SessionServices,
-): Promise<{ sessionId: string; cell: number } | null> {
+): Promise<{ kind: 'move'; sessionId: string; cell: number } | { kind: 'restart'; sessionId: string } | null> {
+  const restart = await resolveGameChoice({
+    message,
+    gamePrefix: TTT_PREFIX,
+    validChoiceIds: ['restart'],
+    getById: (id) => services.session.getById(id),
+    getActiveForUser: (ch, uid) => services.session.getActiveForUser(ch, uid),
+    getByBoardMessageId: (mid) => services.session.getActiveByBoardMessageId(mid),
+  });
+  if (restart) return { kind: 'restart', sessionId: restart.sessionId };
+
   const action = getActionFromMessage(message);
   if (!action) return null;
 
   const fromPayload = parseTttPayload(action.payload);
-  if (fromPayload) return fromPayload;
+  if (fromPayload) return { kind: 'move', ...fromPayload };
 
   const cell =
     parseCellButtonId(action.payload)
@@ -46,7 +62,15 @@ async function resolveTttMove(
       ? await services.session.getActiveByBoardMessageId(action.sourceMessageId)
       : null);
   if (!session || session.channel_key !== ch) return null;
-  return { sessionId: session.id, cell };
+  return { kind: 'move', sessionId: session.id, cell };
+}
+
+export function registerCommands(
+  plugin: Plugin,
+  getServices: () => SessionServices | null,
+): void {
+  registerTttPattern(plugin, '/ttt [action:word]', '井字棋（ttt）', getServices);
+  registerTttPattern(plugin, '/井字棋 [action:word]', '井字棋（中文）', getServices);
 }
 
 function registerTttPattern(
@@ -62,18 +86,9 @@ function registerTttPattern(
         const services = getServices();
         if (!services) return '井字棋需要启用 database 配置。';
         const raw = (result.params.action as string | undefined) ?? '';
-        const action = normalizeTttAction(raw);
-        return runTttCommand(plugin, services, message, action);
+        return runTttCommand(plugin, services, message, normalizeTttAction(raw));
       }),
   );
-}
-
-export function registerCommands(
-  plugin: Plugin,
-  getServices: () => SessionServices | null,
-): void {
-  registerTttPattern(plugin, 'ttt [action:word]', '井字棋（ttt）', getServices);
-  registerTttPattern(plugin, '井字棋 [action:word]', '井字棋（中文）', getServices);
 }
 
 async function handleTttAction(
@@ -83,9 +98,16 @@ async function handleTttAction(
 ): Promise<boolean> {
   const services = getServices();
   if (!services) return false;
-  const move = await resolveTttMove(message, services);
-  if (!move) return false;
-  const err = await handleMove(plugin, services, message, move.sessionId, move.cell);
+  const action = await resolveTttAction(message, services);
+  if (!action) return false;
+
+  if (action.kind === 'restart') {
+    const err = await restartFromTerminal(plugin, services, message, action.sessionId);
+    if (err) await message.$reply?.(err);
+    return true;
+  }
+
+  const err = await handleMove(plugin, services, message, action.sessionId, action.cell);
   if (err) await message.$reply?.(err);
   return true;
 }
@@ -103,24 +125,30 @@ export function registerTextFallback(plugin: Plugin, getServices: () => SessionS
     const inboundAction = actionPayload(message);
     if (inboundAction?.startsWith('ttt:')) return next();
 
+    const raw = message.$raw?.trim() ?? '';
     const ch = channelKey(message);
+
+    const payloadFromText = resolveGameTextPayload(raw);
+    if (payloadFromText?.startsWith(`${TTT_PREFIX}:`)) {
+      const parsed = parseChoicePayload(payloadFromText, TTT_PREFIX);
+      if (parsed?.choiceId === 'restart') {
+        const session = await services.session.getById(parsed.sessionId);
+        if (session?.channel_key === ch) {
+          const err = await restartFromTerminal(plugin, services, message, parsed.sessionId);
+          if (err) await message.$reply?.(err);
+          return;
+        }
+      }
+    }
+
     const session = await services.session.getActiveForUser(ch, message.$sender.id);
     if (!session) return next();
 
-    const raw = message.$raw?.trim() ?? '';
     let cell: number | null = null;
-    const direct = parseTttPayload(raw.startsWith('ttt:') ? raw : '');
-    if (direct && direct.sessionId === session.id) {
-      cell = direct.cell;
-    } else {
-      const n = /^(\d)$/.exec(raw);
-      if (n) {
-        const map = buildFallbackMap(session.id, parseBoard(session.board));
-        const payload = map[n[1]!];
-        const p = payload ? parseTttPayload(payload) : null;
-        if (p?.sessionId === session.id) cell = p.cell;
-      }
-    }
+    const map = buildFallbackMap(session.id, parseBoard(session.board));
+    const payloadText = resolveGameTextPayload(raw, map);
+    const p = payloadText ? parseTttPayload(payloadText) : null;
+    if (p?.sessionId === session.id) cell = p.cell;
     if (cell == null) return next();
 
     const err = await handleMove(plugin, services, message, session.id, cell);

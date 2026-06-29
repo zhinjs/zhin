@@ -19,6 +19,7 @@
 | [0019](./0019-install-size-layering.md) | 安装体积分层（IM <10MB、peer、TypeBox→Zod） |
 | [0020](./0020-speech-pipeline-stt-tts.md) | 语音管线 STT/TTS 与 AI 内容链 |
 | [0021](./0021-content-moderation.md) | 内容审查 — 机制在框架，策略在运营者 |
+| [0022](./0022-interactive-button-modes.md) | Interactive 按钮 callback / command 双模式 |
 
 ## 相关
 

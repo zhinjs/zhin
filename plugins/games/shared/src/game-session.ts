@@ -86,3 +86,11 @@ export function senderDisplayName(message: Message<any>): string {
   const name = message.$sender.name?.trim();
   return name || message.$sender.id;
 }
+
+/** 比对出站 board_message_id 与平台回调 messageId（含 composite id） */
+export function boardMessageMatches(stored: string, messageId: string): boolean {
+  if (!stored || !messageId) return false;
+  if (stored === messageId || stored.endsWith(`:${messageId}`)) return true;
+  const tail = stored.split(':').pop();
+  return !!(tail && messageId.endsWith(tail));
+}

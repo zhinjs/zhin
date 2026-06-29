@@ -1,4 +1,5 @@
 import type { Plugin } from '@zhin.js/core';
+import { seedHtmlRenderer } from '@zhin.js/core';
 import type { AppConfig } from '../types.js';
 import { registerHtmlRendererImIntegration } from './html-renderer-im.js';
 
@@ -16,6 +17,7 @@ export async function registerHtmlRenderer(
     );
     const htmlConfig = (appConfig.htmlRenderer ?? {}) as import('@zhin.js/html-renderer').HtmlRendererConfig;
     const renderer = createHtmlRenderer(htmlConfig, plugin.logger);
+    seedHtmlRenderer(renderer);
 
     plugin.onDispose(registerHtmlRendererImIntegration(plugin, renderer));
 

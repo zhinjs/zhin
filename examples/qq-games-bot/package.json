@@ -1,0 +1,37 @@
+{
+  "name": "qq-games-bot",
+  "private": true,
+  "version": "0.1.0",
+  "description": "QQ 群游戏机器人（大厅 + 群工具，无 AI）",
+  "type": "module",
+  "scripts": {
+    "dev": "zhin dev",
+    "start": "zhin start",
+    "build": "zhin build"
+  },
+  "dependencies": {
+    "@zhin.js/adapter-qq": "workspace:*",
+    "@zhin.js/cli": "workspace:*",
+    "@zhin.js/host-api": "workspace:*",
+    "@zhin.js/host-router": "workspace:*",
+    "@zhin.js/html-renderer": "workspace:*",
+    "@zhin.js/plugin-blackjack": "workspace:*",
+    "@zhin.js/plugin-dice-duel": "workspace:*",
+    "@zhin.js/plugin-group-suite": "workspace:*",
+    "@zhin.js/plugin-guess-number": "workspace:*",
+    "@zhin.js/plugin-idiom-chain": "workspace:*",
+    "@zhin.js/plugin-rps": "workspace:*",
+    "@zhin.js/plugin-text-adventure": "workspace:*",
+    "@zhin.js/plugin-tic-tac-toe": "workspace:*",
+    "@zhin.js/plugin-word-riddle": "workspace:*",
+    "sqlite3": "latest",
+    "tsx": "^4.22.4",
+    "zhin.js": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  }
+}

@@ -23,8 +23,14 @@ import { normalizeQqInboundWsPayload, type QqWsPacket } from "./inbound-normaliz
 import { normalizeGroupAtPrefix } from "./group-at-normalize.js";
 import { SDK_VERSION, SDK_VERSION_HEADER } from "./sdk-version.js";
 import { applyCustomAuthEndpoints } from "./gateway-config.js";
-import { normalizeOutboundMarkdown } from "./outbound-markdown.js";
+import { normalizeOutboundMarkdown, asOutboundSegments, splitReplyPrefix } from "./outbound-markdown.js";
 import { normalizeOutboundMedia } from "./outbound-media.js";
+import {
+  buildMixedMediaMessagePayload,
+  buildQqImageUploadPayload,
+  firstImageSegment,
+  shouldSendTextImageMixedMedia,
+} from "./outbound-mixed-media.js";
 import { normalizeQqGuildSenderForPermit } from "./platform-permit.js";
 import { expandKeyboardSegmentsForQq } from "./outbound-keyboard.js";
 import { formatQqActionMessage, type QqActionNoticeEvent } from "./inbound-action.js";
@@ -349,10 +355,19 @@ export class QQEndpoint<T extends ReceiverMode, M extends ApplicationPlatform = 
   }
 
   async $sendMessage(options: SendOptions): Promise<string> {
-    const content = normalizeOutboundMarkdown(
-      normalizeOutboundMedia(expandKeyboardSegmentsForQq(options.content)),
-      this.$config.outboundMarkdown,
-    );
+    const expanded = expandKeyboardSegmentsForQq(options.content);
+    const mediaNorm = normalizeOutboundMedia(expanded);
+    const markdownMode = this.$config.outboundMarkdown;
+
+    if (
+      (options.type === "group" || options.type === "private")
+      && !options.id.startsWith("direct:")
+      && shouldSendTextImageMixedMedia(mediaNorm, markdownMode)
+    ) {
+      return await this.$sendTextImageMixedMedia(options, mediaNorm);
+    }
+
+    const content = normalizeOutboundMarkdown(mediaNorm, markdownMode);
     switch (options.type) {
       case "private": {
         if (options.id.startsWith("direct:")) {
@@ -378,6 +393,51 @@ export class QQEndpoint<T extends ReceiverMode, M extends ApplicationPlatform = 
       }
       default:
         throw new Error(`unsupported channel type ${options.type}`);
+    }
+  }
+
+  /** 内联图 + 文本：上传 file_info 后以 msg_type=7 图文混排发送（二维码等场景） */
+  private async $sendTextImageMixedMedia(
+    options: SendOptions,
+    content: SendContent,
+  ): Promise<string> {
+    const endpointPath = this.resolveV2EndpointPath(options);
+    const { body } = splitReplyPrefix(asOutboundSegments(content));
+    const image = firstImageSegment(body);
+    if (!image) {
+      throw new Error("QQ 图文混排：未找到图片段");
+    }
+
+    const uploadPayload = buildQqImageUploadPayload(image);
+    const { data: uploadResult } = await this.request.post(
+      `${endpointPath}/files`,
+      { ...uploadPayload, srv_send_msg: false },
+    ) as { data: { file_info?: string } };
+
+    if (!uploadResult?.file_info) {
+      throw new Error("QQ 图文混排：图片上传未返回 file_info");
+    }
+
+    const messagePayload = buildMixedMediaMessagePayload(content, uploadResult.file_info);
+    const { data: result } = await this.request.post(
+      `${endpointPath}/messages`,
+      messagePayload,
+    );
+    this.pluginLogger.debug(
+      `${this.$config.name} send mixed-media ${options.type}(${options.id}):${segment.raw(content)}`,
+    );
+    const idPrefix = options.type === "group" ? "group" : "private";
+    return `${idPrefix}-${options.id}:${resolveOutboundMessageId(result)}`;
+  }
+
+  private resolveV2EndpointPath(options: SendOptions): string {
+    switch (options.type) {
+      case "group":
+        return `/v2/groups/${options.id}`;
+      case "private":
+        return `/v2/users/${options.id}`;
+      default:
+        throw new Error(`QQ 图文混排不支持 ${options.type}`);
     }
   }
 

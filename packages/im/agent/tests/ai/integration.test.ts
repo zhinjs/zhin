@@ -167,6 +167,22 @@ describe('AI Service 集成测试', () => {
       const config = aiService.getTriggerConfig();
       expect(config).toBeDefined();
     });
+
+    it('应该返回 access 配置', () => {
+      const svc = new AIService({
+        providers: { mock: { driver: 'openai', apiKey: 'sk-test' } },
+        agents: { zhin: { provider: 'mock', model: 'gpt-4o-mini' } },
+        access: {
+          mode: 'whitelist',
+          users: ['vip'],
+        },
+      });
+      expect(svc.getAccessConfig()).toEqual({
+        mode: 'whitelist',
+        users: ['vip'],
+      });
+      svc.dispose();
+    });
   });
 
   describe('工具管理', () => {

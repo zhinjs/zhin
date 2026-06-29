@@ -1,5 +1,4 @@
-import {MatchResult, SegmentMatcher} from "segment-matcher";
-import logger, { formatCompact } from "@zhin.js/logger";
+import { MatchResult, SegmentMatcher} from "segment-matcher";
 import {AdapterMessage, SendContent} from "./types.js";
 import {RegisteredAdapter} from "./types.js";
 import type {Message} from "./message.js";
@@ -56,6 +55,20 @@ export class MessageCommand<T extends RegisteredAdapter=RegisteredAdapter> exten
         this.#permissions.push(...permissions)
         return this as MessageCommand<T>;
     }
+    /** 命令要求的 permit 列表（空表示所有人可用） */
+    get requiredPermits(): readonly string[] {
+        return this.#permissions;
+    }
+    /** 与 handle 一致的 permit 校验，供帮助菜单等场景过滤不可见命令 */
+    async checkPermits(message: Message<AdapterMessage<T>>, plugin: Plugin): Promise<boolean> {
+        if (!this.#permissions.length) return true;
+        const auth = plugin.contextIsReady('permission') ? plugin.inject('permission') : null;
+        if (!auth) return false;
+        for (const permit of this.#permissions) {
+            if (!(await auth.check(permit, message))) return false;
+        }
+        return true;
+    }
     /**
      * 处理消息，自动匹配命令并执行回调
      * @param message 消息对象
@@ -63,19 +76,8 @@ export class MessageCommand<T extends RegisteredAdapter=RegisteredAdapter> exten
      * @returns 命令返回内容或undefined
      */
     async handle(message:Message<AdapterMessage<T>>,plugin:Plugin):Promise<SendContent|undefined>{
-        const auth = plugin.contextIsReady('permission') ? plugin.inject('permission') : null
-        for(const permit of this.#permissions){
-            const passed = auth ? await auth.check(permit, message) : false
-            if(!passed) {
-                logger.debug(formatCompact({
-                    op: 'permit_denied',
-                    permit,
-                    senderId: message.$sender.id,
-                    adapter: message.$adapter,
-                    endpoint: message.$endpoint,
-                }));
-                return;
-            }
+        if (!(await this.checkPermits(message, plugin))) {
+            return;
         }
         const matched=this.match(message.$content);
         if(!matched) return

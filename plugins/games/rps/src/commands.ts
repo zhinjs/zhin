@@ -5,10 +5,14 @@ import {
   normalizeRpsAction,
   parseChoicePayload,
   registerGameTextMiddleware,
+  resolveGameChoice,
+  resolveGameTextPayload,
 } from '@zhin.js/game-shared';
 import { handleChoice, RPS_PREFIX } from './game-flow.js';
 import { runRpsCommand } from './rps-command.js';
 import type { SessionService } from './session-service.js';
+
+const VALID_CHOICES = ['rock', 'paper', 'scissors', 'restart'] as const;
 
 function registerPattern(
   plugin: Plugin,
@@ -29,34 +33,22 @@ function registerPattern(
 }
 
 export function registerCommands(plugin: Plugin, getServices: () => SessionService | null): void {
-  registerPattern(plugin, 'rps [action:word]', '猜拳（rps）', getServices);
-  registerPattern(plugin, '猜拳 [action:word]', '猜拳（中文）', getServices);
+  registerPattern(plugin, '/rps [action:word]', '猜拳（rps）', getServices);
+  registerPattern(plugin, '/猜拳 [action:word]', '猜拳（中文）', getServices);
 }
 
 async function resolveChoice(
   message: Message<any>,
   services: SessionService,
 ): Promise<{ sessionId: string; choiceId: string } | null> {
-  const action = getActionFromMessage(message);
-  if (!action) return null;
-
-  const parsed = parseChoicePayload(action.payload, RPS_PREFIX);
-  if (parsed) return { sessionId: parsed.sessionId, choiceId: parsed.choiceId };
-
-  const choiceId = action.id || action.payload;
-  if (!choiceId) return null;
-
-  const ch = channelKey(message);
-  const session =
-    await services.getActiveForUser(ch, message.$sender.id)
-    ?? (action.sourceMessageId
-      ? await services.getActiveByBoardMessageId(action.sourceMessageId)
-      : null);
-  if (!session || session.channel_key !== ch) return null;
-
-  const valid = ['rock', 'paper', 'scissors', 'restart'];
-  if (!valid.includes(choiceId)) return null;
-  return { sessionId: session.id, choiceId };
+  return resolveGameChoice({
+    message,
+    gamePrefix: RPS_PREFIX,
+    validChoiceIds: VALID_CHOICES,
+    getById: (id) => services.getById(id),
+    getActiveForUser: (ch, uid) => services.getActiveForUser(ch, uid),
+    getByBoardMessageId: (mid) => services.getActiveByBoardMessageId(mid),
+  });
 }
 
 export function registerInteractive(plugin: Plugin, getServices: () => SessionService | null): void {
@@ -79,20 +71,31 @@ export function registerTextFallback(plugin: Plugin, getServices: () => SessionS
     const action = getActionFromMessage(message);
     if (action?.payload.startsWith(`${RPS_PREFIX}:`)) return next();
 
+    const raw = message.$raw?.trim() ?? '';
     const ch = channelKey(message);
+
+    const payloadFromText = resolveGameTextPayload(raw);
+    if (payloadFromText?.startsWith(`${RPS_PREFIX}:`)) {
+      const parsed = parseChoicePayload(payloadFromText, RPS_PREFIX);
+      if (parsed) {
+        const session = await services.getById(parsed.sessionId);
+        if (session?.channel_key === ch) {
+          const err = await handleChoice(plugin, services, message, parsed.sessionId, parsed.choiceId);
+          if (err) await message.$reply?.(err);
+          return;
+        }
+      }
+    }
+
     const session = await services.getActiveForUser(ch, message.$sender.id);
     if (!session || session.status !== 'active') return next();
-
-    const raw = message.$raw?.trim() ?? '';
-    const n = /^(\d+)$/.exec(raw);
-    if (!n) return next();
 
     const map = buildChoiceFallbackMap(RPS_PREFIX, session.id, [
       { id: 'rock', label: '石头' },
       { id: 'paper', label: '布' },
       { id: 'scissors', label: '剪刀' },
     ]);
-    const payload = map[n[1]!];
+    const payload = resolveGameTextPayload(raw, map);
     const parsed = payload ? parseChoicePayload(payload, RPS_PREFIX) : null;
     if (!parsed || parsed.sessionId !== session.id) return next();
 

@@ -3,7 +3,7 @@
  * 统一管理多个模型提供商，提供会话和 Agent 能力
  */
 
-import type { Plugin, AITriggerConfig } from '@zhin.js/core';
+import type { Plugin, AITriggerConfig, AIAccessConfig } from '@zhin.js/core';
 import { createSyntheticMessage } from '@zhin.js/core';
 import type { Tool } from '@zhin.js/core'
 import type { AIProvider, AIConfig, ChatMessage, ChatCompletionRequest, ChatCompletionResponse, ChatCompletionChunk, AgentTool, ContentPart, Usage } from '@zhin.js/ai';
@@ -71,6 +71,7 @@ export class AIService {
   private sessionConfig: { maxHistory?: number; expireMs?: number };
   private contextConfig: ContextConfig;
   private triggerConfig: AITriggerConfig;
+  private accessConfig: AIAccessConfig;
   private agentConfig: AIConfig['agent'];
   private imageGenerationGlobal?: ImageGenerationDefaults;
   private plugin?: Plugin;
@@ -98,6 +99,7 @@ export class AIService {
     this.sessionConfig = config.sessions || {};
     this.contextConfig = config.context || {};
     this.triggerConfig = config.trigger || {};
+    this.accessConfig = config.access || {};
     this.agentConfig = config.agent;
     this.imageGenerationGlobal = config.imageGeneration;
     this.sessions = createMemorySessionManager(this.sessionConfig);
@@ -168,6 +170,7 @@ export class AIService {
   getContextConfig(): ContextConfig { return this.contextConfig; }
   getSessionConfig() { return this.sessionConfig; }
   getTriggerConfig(): AITriggerConfig { return this.triggerConfig; }
+  getAccessConfig(): AIAccessConfig { return this.accessConfig; }
   /** 部署级 harness（execSecurity 等）；工具由编排 + TF-IDF + 角色（子 agent）选用 */
   getAgentConfig(): AIConfig['agent'] { return this.agentConfig; }
 

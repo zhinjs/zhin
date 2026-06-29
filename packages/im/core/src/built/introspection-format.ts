@@ -28,6 +28,7 @@ export function endpointHelpText(): string {
     '  /endpoint start <adapter> <name>',
     '  /endpoint stop <adapter> <name>',
     '  /endpoint cancel          — 取消进行中的添加/绑定',
+    '  /endpoint sync            — 将内存 endpoint 写回 zhin.config',
     '  /endpoint help',
     '  /endpoints                — 查看运行时在线状态',
   ].join('\n');

@@ -153,6 +153,30 @@ registerGame({
 
 **入站文本中间件**：须用 `registerGameTextMiddleware(plugin, …)` 注册到 **root**（子插件 `addMiddleware` 不会进入入站管线）。
 
+### Interaction Profile（按钮 mode 预设）
+
+见 [ADR 0022](../../../docs/adr/0022-interactive-button-modes.md)。
+
+| Profile | 默认 mode | 用途 |
+|---------|-----------|------|
+| `menu` | command（私聊）/ callback（群） | 游戏大厅、子菜单 |
+| `gameplay` | callback | 棋盘、出拳、剧情分支 |
+| `terminal` | command | 终局「再来一局」（私聊可 auto-enter） |
+
+```typescript
+import { buildChoiceKeyboard } from '@zhin.js/game-shared';
+
+buildChoiceKeyboard({
+  gamePrefix: 'hub',
+  sessionId: scopeId,
+  narrative: '…',
+  choices: [/* … */],
+  interactionProfile: 'menu',
+});
+```
+
+文本入站统一用 `resolveGameTextPayload(raw, map)`（封装 core 的 `resolvePayloadFromText`）。
+
 ## 支持的游戏模式
 
 | 功能 | 井字棋 | 五子棋 | 四子棋 | ...  |

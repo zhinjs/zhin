@@ -2,7 +2,58 @@
 
 Zhin.js **不提供** 内置敏感词库或默认内容审查。内容是否合规属于 **Bot 运营者的政策选择**，与司法辖区、平台规则、业务场景相关。
 
-架构边界见 [ADR 0021](/adr/0021-content-moderation)。与 [消息过滤](/essentials/message-filter)（谁/哪群能进 Dispatcher）不同，本文讲的是 **文本说什么**。
+架构边界见 [ADR 0021](/adr/0021-content-moderation)。与 [消息过滤](/essentials/message-filter)（谁/哪群能进 Dispatcher）不同，本文讲的是 **文本说什么** 与 **是否允许走 LLM 回复路径**。
+
+## AI Access Gate（平台 AIGC 合规）
+
+QQ 等平台可能禁止 AIGC 内容进入社群或面向全量用户。框架内置 **`ai.access`**，在 AI Handler 入口 gate **仅 LLM 回复**；`/游戏`、斜杠命令、交互按钮等 **不受影响**。
+
+与 `message_filter` 的区别：
+
+| 机制 | 拦截范围 | 典型用途 |
+|------|----------|----------|
+| `message_filter` | 整条入站消息（命令 + AI 均不执行） | 垃圾群、全 bot 静默 |
+| `ai.access` | 仅 `handleAIMessage` / LLM 路径 | QQ AIGC 白名单 |
+
+### 配置
+
+**推荐**：写在 `endpoints[]` 上，每个机器人独立控制（与 `master` / `trusted` 同级）：
+
+```yaml
+endpoints:
+  - context: qq
+    name: zhin-prod
+    appid: ...
+    secret: ...
+    aiAccess:
+      mode: whitelist
+      users: ['openid-a']
+      groups: ['group-openid']
+      denyMessage: 当前未开放 AI，请联系管理员。
+  - context: qq
+    name: zhin-sandbox
+    aiAccess:
+      mode: open
+```
+
+**可选全局默认**（`ai.access`），当 Endpoint 未配置 `aiAccess` 时生效：
+
+```yaml
+ai:
+  access:
+    mode: closed
+    denyMessage: 当前会话未开放 AI 功能。
+```
+
+合并优先级：**`ai.access` → `endpoints[].aiAccess`**（Endpoint 覆盖全局）。
+
+字段说明：
+
+- **open**：可触发 AI（默认，向后兼容）。
+- **closed**：禁止 AI；群/频道 **静默**，私聊回复 `denyMessage`。
+- **whitelist**：`sender.id ∈ users` **或** `channel.id ∈ groups` 时放行；否则同上。
+
+实现：`checkAIAccess`（`@zhin.js/core`），在 `@zhin.js/agent` 注册 AI trigger 时于 `handleAIMessage` 开头调用；Endpoint 配置来自运行时 `endpoints[].$config.aiAccess`。
 
 ## 为何不内置
 

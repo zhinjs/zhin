@@ -20,7 +20,7 @@ export async function sendOrEditScene(
 ): Promise<string> {
   const prof = profile
     ?? await services.profiles.getOrCreate(session.player_id, session.player_name);
-  const content = buildSceneInteractive(session, extraNarrative, prof);
+  const content = buildSceneInteractive(session, extraNarrative, prof, message.$channel.type);
   if (!content) {
     return '场景数据异常，请 adv quit 后重新开始。';
   }

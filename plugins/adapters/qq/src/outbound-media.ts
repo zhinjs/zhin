@@ -19,7 +19,8 @@ function isInlineBase64(value: string): boolean {
   return value.startsWith("base64://") || /^data:[^/]+\/[^;]+;base64,/i.test(value);
 }
 
-function resolveMediaFile(data: Record<string, unknown>): string | undefined {
+/** 解析 image/audio/video/file 段的本地或内联 payload（供 mixed-media 上传复用） */
+export function resolveMediaFile(data: Record<string, unknown>): string | undefined {
   const url = typeof data.url === "string" ? data.url : undefined;
   const file = typeof data.file === "string" ? data.file : undefined;
   const base64 = typeof data.base64 === "string" ? data.base64 : undefined;

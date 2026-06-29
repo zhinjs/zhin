@@ -1,6 +1,19 @@
 import type { SendContent } from 'zhin.js';
+import { segment } from 'zhin.js';
 import { buildChoiceKeyboard } from './choice-keyboard.js';
+import { slashCommandPrefix } from './game-commands.js';
 import type { RegisteredGame } from './game-hub-feature.js';
+import {
+  formatHubOpenCommandLines,
+  formatSupplementaryCommandsHelp,
+  type CommandHelpSource,
+} from './command-help.js';
+import {
+  buildBotHelpHtml,
+  buildHubHelpHtml,
+  HELP_CARD_CANVAS,
+  HELP_CARD_WIDTH,
+} from './help-card.js';
 
 export const HUB_PREFIX = 'hub';
 
@@ -34,7 +47,11 @@ export function parseHubChoiceId(
   return null;
 }
 
-export function buildMainHubMenu(scopeId: string, games: readonly RegisteredGame[]): SendContent {
+export function buildMainHubMenu(
+  scopeId: string,
+  games: readonly RegisteredGame[],
+  channelType: string,
+): SendContent {
   const cmdHint = formatCommandPrefixHint(games);
   const lines = [
     '🎮 **游戏大厅**',
@@ -59,6 +76,8 @@ export function buildMainHubMenu(scopeId: string, games: readonly RegisteredGame
     })),
     buttonsPerRow: 2,
     fallbackHint: '回复数字进入对应游戏',
+    interactionProfile: 'menu',
+    channelType,
   });
 }
 
@@ -88,24 +107,28 @@ export function buildGameHubMenu(
     ],
     buttonsPerRow: 2,
     fallbackHint: '回复数字选择操作',
+    interactionProfile: 'menu',
+    channelType,
   });
 }
 
 /** 大厅主菜单：命令前缀提示 */
 export function formatCommandPrefixHint(games: readonly RegisteredGame[]): string {
   if (!games.length) return '暂无可用游戏。';
-  const sample = games.slice(0, 5).map((g) => g.commandPrefix);
+  const sample = games.slice(0, 5).map((g) => slashCommandPrefix(g.commandPrefix.replace(/^\//, '')));
   const tail = games.length > sample.length ? '等' : '';
-  return `选择想玩的游戏（也可直接发送中文命令，如「${sample.join('」「')}」${tail}）：`;
+  return `选择想玩的游戏（也可直接发送斜杠命令，如「${sample.join('」「')}」${tail}）：`;
 }
 
 /** 游戏大厅帮助文案（随 registerGame 动态生成） */
-export function formatHubHelp(games: readonly RegisteredGame[]): string {
+export function formatHubHelp(
+  games: readonly RegisteredGame[],
+  commands?: readonly CommandHelpSource[],
+): string {
   const lines = [
     '🎮 **游戏大厅**',
     '',
-    '游戏 — 打开可点击的游戏菜单',
-    'game — 同上（英文）',
+    ...formatHubOpenCommandLines(commands),
   ];
 
   if (!games.length) {
@@ -119,10 +142,76 @@ export function formatHubHelp(games: readonly RegisteredGame[]): string {
     const quick = g.quickStart ?? '开始';
     const alias = g.aliases?.length ? ` · ${g.aliases.join(' / ')}` : '';
     lines.push(`• ${g.icon} **${g.title}**${alias}`);
-    lines.push(`  命令：\`${g.commandPrefix} ${quick}\` — ${g.description}`);
+    lines.push(`  命令：\`${slashCommandPrefix(g.commandPrefix.replace(/^\//, ''))} ${quick}\` — ${g.description}`);
   }
 
   return lines.join('\n');
+}
+
+/** 顶层 /帮助：游戏大厅 + 已注册命令自动汇总 */
+export function formatBotHelp(
+  games: readonly RegisteredGame[],
+  options?: {
+    channelType?: string;
+    commands?: readonly CommandHelpSource[];
+  },
+): string {
+  const commands = options?.commands;
+  const sections = [formatHubHelp(games, commands)];
+
+  const other = commands?.length
+    ? formatSupplementaryCommandsHelp(commands, games)
+    : '';
+  if (other) {
+    sections.push('', '---', '', other);
+  }
+
+  if (options?.channelType === 'group') {
+    sections.push(
+      '',
+      '**QQ 群用法**',
+      '• 公域群需 **@ 机器人** 后发送命令，或直接 **点击消息按钮**',
+      '• 发送 `/游戏` 打开大厅，同群成员均可点击按钮',
+    );
+  }
+  return sections.join('\n');
+}
+
+/** 顶层 /帮助：HTML 卡片（QQ 等出站 policy 为 image 时渲染为 PNG；无 renderer 时回退文本） */
+export function buildBotHelpReply(
+  games: readonly RegisteredGame[],
+  options?: {
+    channelType?: string;
+    commands?: readonly CommandHelpSource[];
+  },
+): SendContent {
+  const text = formatBotHelp(games, options);
+  return segment.html({
+    html: buildBotHelpHtml({
+      games,
+      commands: options?.commands,
+      channelType: options?.channelType,
+    }),
+    text,
+    width: HELP_CARD_WIDTH,
+    backgroundColor: HELP_CARD_CANVAS,
+    fileName: 'bot-help.png',
+  });
+}
+
+/** /游戏 帮助：大厅专用卡片 */
+export function buildHubHelpReply(
+  games: readonly RegisteredGame[],
+  commands?: readonly CommandHelpSource[],
+): SendContent {
+  const text = formatHubHelp(games, commands);
+  return segment.html({
+    html: buildHubHelpHtml(games, commands),
+    text,
+    width: HELP_CARD_WIDTH,
+    backgroundColor: HELP_CARD_CANVAS,
+    fileName: 'game-hub-help.png',
+  });
 }
 
 /** 无游戏时的提示 */

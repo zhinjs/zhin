@@ -1,4 +1,5 @@
 import type { Adapter, Message, Plugin } from 'zhin.js';
+import { recordGameOutcome } from '@zhin.js/game-shared';
 import type { TttSessionRow } from './models.js';
 import { buildBoardInteractive } from './board-view.js';
 import {
@@ -49,6 +50,7 @@ export async function sendOrEditBoard(
     terminal,
     omitAsciiBoard: message.$adapter === 'qq',
     highlight,
+    channelType: message.$channel.type,
   });
 
   const adapter = plugin.root.inject(message.$adapter) as Adapter;
@@ -73,6 +75,24 @@ export async function sendOrEditBoard(
     await services.session.updateSession(session.id, { board_message_id: msgId });
   }
   return msgId ?? '';
+}
+
+export async function restartFromTerminal(
+  plugin: Plugin,
+  services: SessionServices,
+  message: Message<any>,
+  sessionId: string,
+): Promise<string | null> {
+  const session = await services.session.getById(sessionId);
+  if (!session) return '对局不存在。';
+  const mark = playerMark(message.$sender.id, {
+    playerX: session.player_x,
+    playerO: session.player_o,
+  });
+  if (!mark) return '你不是本局玩家。';
+  await services.session.updateSession(session.id, { status: 'aborted', winner: 0 });
+  const hint = await startBotGame(plugin, services, message);
+  return hint.includes('已有') ? hint : null;
 }
 
 function turnCell(session: TttSessionRow): Cell {
@@ -131,6 +151,29 @@ export async function handleMove(
   });
 
   const updated = (await services.session.getById(session.id))!;
+
+  if (win || draw) {
+    const humanId = isBotSession(updated)
+      ? (updated.player_x === BOT_ID ? updated.player_o : updated.player_x)
+      : message.$sender.id;
+    const humanName = isBotSession(updated)
+      ? (updated.player_x === BOT_ID ? updated.player_o_name : updated.player_x_name)
+      : String(message.$sender.name ?? message.$sender.id);
+    const humanMsg = {
+      ...message,
+      $sender: { ...message.$sender, id: humanId, name: humanName },
+    } as Message<any>;
+    if (win) {
+      const humanMark = playerMark(humanId, {
+        playerX: updated.player_x,
+        playerO: updated.player_o,
+      });
+      const humanWon = humanMark === win.winner;
+      void recordGameOutcome(humanMsg, 'ttt', humanWon ? 'won' : 'lost', humanWon ? 20 : 0);
+    } else {
+      void recordGameOutcome(humanMsg, 'ttt', 'draw');
+    }
+  }
 
   if (win) {
     const status = formatWinHeadline(updated, win.winner);

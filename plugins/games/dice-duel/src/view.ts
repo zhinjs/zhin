@@ -6,6 +6,7 @@ import { DICE_PREFIX, diceEmoji, WIN_TARGET } from './engine.js';
 export function buildDiceView(
   session: DiceSessionRow,
   lastRound?: { player: number; bot: number; result: 0 | 1 | 2 },
+  channelType?: string,
 ): SendContent {
   const terminal = session.status !== 'active';
   const lines = [
@@ -35,7 +36,7 @@ export function buildDiceView(
   }
 
   const choices = terminal
-    ? [{ id: 'restart', label: '🔄 再来一局', style: 'primary' as const }]
+    ? [{ id: 'restart', label: '🔄 再来一局', style: 'primary' as const, keepEnabledWhenTerminal: true }]
     : [{ id: 'roll', label: '🎲 掷骰', style: 'primary' as const }];
 
   return buildChoiceKeyboard({
@@ -45,5 +46,7 @@ export function buildDiceView(
     choices,
     terminal,
     fallbackHint: '回复 1 掷骰',
+    interactionProfile: terminal ? 'terminal' : 'gameplay',
+    channelType,
   });
 }

@@ -7,6 +7,7 @@ import {
   type Plugin,
   resolveSubjectRoles,
   extractTextContent,
+  isActionMessage,
 } from '@zhin.js/core';
 import type { AppConfig } from '../types.js';
 import type { ImTranscriptWriteInput } from '@zhin.js/ai';
@@ -30,6 +31,7 @@ function serializeMediaJson(content: unknown): string {
 }
 
 function hasInboundContent(message: Message): boolean {
+  if (isActionMessage(message)) return false;
   const text = extractTextContent(message).trim();
   if (text) return true;
   const content = message.$content;

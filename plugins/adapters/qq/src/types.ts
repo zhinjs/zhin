@@ -36,6 +36,13 @@ export type QQEndpointConfig<
    * - `false`：保持纯文本
    */
   outboundMarkdown?: boolean | "auto";
+  /** 本 Endpoint AI 访问控制（见 docs/advanced/content-moderation.md） */
+  aiAccess?: {
+    mode?: 'open' | 'closed' | 'whitelist';
+    users?: string[];
+    groups?: string[];
+    denyMessage?: string;
+  };
 };
 
 export interface QQEndpoint<

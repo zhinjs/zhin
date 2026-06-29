@@ -4,6 +4,7 @@
  */
 import {
   getPlugin,
+  isActionMessage,
   mergeAITriggerConfig,
   resolveSenderRoles,
   resolveIMSessionIdFromMessage,
@@ -36,7 +37,7 @@ export function registerGroupSessionPassive(refs: AIServiceRefs): void {
     }
 
     dispatcher.setGroupPassiveContextHandler(async (message) => {
-      if (!refs.zhinAgent || isBotSelfMessage(message)) return;
+      if (!refs.zhinAgent || isBotSelfMessage(message) || isActionMessage(message)) return;
 
       const triggerConfig = mergeAITriggerConfig(ai.getTriggerConfig());
       const adapterInstance = root.inject(message.$adapter) as

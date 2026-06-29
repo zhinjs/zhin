@@ -46,6 +46,13 @@ describe('checkBuiltinPermit', () => {
     expect(checkBuiltinPermit('group(999)', msg, ['user'])).toBe(false);
   });
 
+  it('role(master,trusted) OR 匹配', () => {
+    const msg = mockMessage();
+    expect(checkBuiltinPermit('role(master,trusted)', msg, ['user'])).toBe(false);
+    expect(checkBuiltinPermit('role(master,trusted)', msg, ['trusted'])).toBe(true);
+    expect(checkBuiltinPermit('role(master,trusted)', msg, ['master'])).toBe(true);
+  });
+
   it('role OR + master 升格 trusted', () => {
     const msg = mockMessage();
     expect(checkBuiltinPermit('role(trusted)', msg, ['master'])).toBe(true);

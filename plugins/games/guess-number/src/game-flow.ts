@@ -1,4 +1,5 @@
 import type { Message } from 'zhin.js';
+import { recordGameOutcome } from '@zhin.js/game-shared';
 import { evaluateGuess, hintText, MAX, MIN } from './engine.js';
 import type { SessionService } from './session-service.js';
 import { formatStatus } from './session-service.js';
@@ -34,21 +35,23 @@ export async function processGuess(
 
   if (result === 'win') {
     await services.updateSession(session.id, { attempts, status: 'won' });
+    void recordGameOutcome(message, 'guess', 'won', Math.max(1, session.max_attempts - attempts + 1) * 10);
     return [
       '🎉 **猜对了！**',
       '',
       `答案就是 **${session.secret}**，你用了 ${attempts} 次。`,
-      '发送「猜数 开始」再来一局。',
+      '发送 `/猜数 开始` 再来一局。',
     ].join('\n');
   }
 
   if (attempts >= session.max_attempts) {
     await services.updateSession(session.id, { attempts, status: 'lost' });
+    void recordGameOutcome(message, 'guess', 'lost');
     return [
       '💀 **机会用完了！**',
       '',
       `正确答案是 **${session.secret}**。`,
-      '发送「猜数 开始」再来一局。',
+      '发送 `/猜数 开始` 再来一局。',
     ].join('\n');
   }
 

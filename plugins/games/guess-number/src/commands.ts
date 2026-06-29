@@ -1,4 +1,4 @@
-import { Message, MessageCommand, type Plugin } from 'zhin.js';
+import { Message, MessageCommand, getActionFromMessage, type Plugin } from 'zhin.js';
 import { channelKey, normalizeGuessAction, registerGameTextMiddleware } from '@zhin.js/game-shared';
 import { processGuess } from './game-flow.js';
 import { runGuessCommand } from './guess-command.js';
@@ -23,8 +23,8 @@ function registerPattern(
 }
 
 export function registerCommands(plugin: Plugin, getServices: () => SessionService | null): void {
-  registerPattern(plugin, 'guess [action:word]', '猜数字（guess）', getServices);
-  registerPattern(plugin, '猜数 [action:word]', '猜数字（中文）', getServices);
+  registerPattern(plugin, '/guess [action:word]', '猜数字（guess）', getServices);
+  registerPattern(plugin, '/猜数 [action:word]', '猜数字（中文）', getServices);
 }
 
 export function registerGuessMiddleware(plugin: Plugin, getServices: () => SessionService | null): void {

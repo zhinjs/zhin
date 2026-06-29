@@ -103,7 +103,19 @@ export class EndpointLifecycleService {
     const configService = getConfigService(this.root);
     const loader = configService.configs.get(configService.primaryFile)!;
     loader.patchKey('endpoints', endpoints);
-    loader.load();
+  }
+
+  /** 将内存中的 endpoints 写回 zhin.config（修复运行时与磁盘不一致） */
+  async syncToDisk(): Promise<EndpointLifecycleResult> {
+    const configService = getConfigService(this.root);
+    const loader = configService.configs.get(configService.primaryFile)!;
+    const endpoints = readAllEndpoints(this.root);
+    await this.persistEndpoints(endpoints);
+    const configPath = loader.resolvedPath;
+    const names = endpoints.map((e) => `${e.context}/${e.name}`).join(', ') || '（无）';
+    return {
+      message: `✅ 已将 ${endpoints.length} 个 endpoint 写入 \`${configPath}\`：${names}`,
+    };
   }
 
   async connectConfig(adapter: Adapter, config: EndpointConfigRecord): Promise<Endpoint> {
@@ -142,7 +154,18 @@ export class EndpointLifecycleService {
     }
 
     const endpoints = readAllEndpoints(this.root);
-    assertUniqueName(endpoints, config.context, config.name);
+    try {
+      assertUniqueName(endpoints, config.context, config.name);
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('已存在')) {
+        const online = adapter.endpoints.has(config.name);
+        const hint = online
+          ? '该 Endpoint 已在运行时注册，无需重复扫码；可发 /endpoints 确认。若 zhin.config.yml 未更新，请 /endpoint sync。'
+          : '可用 /endpoint start 重试连接，或 /endpoint remove 后重新添加。';
+        throw new Error(`${err.message}。${hint}`);
+      }
+      throw err;
+    }
     endpoints.push(config);
     await this.persistEndpoints(endpoints);
 

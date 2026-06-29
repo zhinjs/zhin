@@ -10,12 +10,25 @@ export type ButtonStyle = 'primary' | 'danger' | 'secondary';
 /** @deprecated 使用 {@link ButtonStyle} */
 export type InteractiveButtonStyle = ButtonStyle;
 
+/** callback：平台回调 action 入站；command：QQ 指令预填后文本入站 */
+export type ButtonInteractionMode = 'callback' | 'command';
+
+export interface ButtonCommandOptions {
+  /** QQ action.enter — 仅单聊；预填后自动发送 */
+  enter?: boolean;
+  /** QQ action.reply — 预填时引用原消息 */
+  reply?: boolean;
+}
+
 export interface ButtonData {
   id: string;
   label: string;
   payload: string;
   disabled?: boolean;
   style?: ButtonStyle;
+  /** 默认 callback */
+  mode?: ButtonInteractionMode;
+  command?: ButtonCommandOptions;
 }
 /** @deprecated 使用 {@link ButtonData} */
 export type InteractiveButton = ButtonData;

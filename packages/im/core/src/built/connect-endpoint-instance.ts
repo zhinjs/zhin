@@ -10,6 +10,7 @@ import {
   type EndpointCapabilitiesConfig,
 } from '../endpoint-capabilities.js';
 import { emitEndpointLifecycle } from './endpoint-lifecycle.js';
+import { resolveEndpointConfigEnv } from './config.js';
 
 export interface ConnectEndpointInstanceOptions {
   plugin: Plugin;
@@ -24,7 +25,8 @@ export async function connectEndpointInstance(options: ConnectEndpointInstanceOp
   const { plugin, adapter, config } = options;
   const adapterCaps = getAdapterCapabilities(adapter);
   const caps = resolveEndpointCapabilities(adapterCaps, config.capabilities);
-  const endpoint = adapter.createEndpoint(config as never);
+  const resolvedConfig = resolveEndpointConfigEnv(config);
+  const endpoint = adapter.createEndpoint(resolvedConfig as never);
   registerEndpointCapabilities(endpoint, caps);
 
   if (caps.includes('inbound')) {

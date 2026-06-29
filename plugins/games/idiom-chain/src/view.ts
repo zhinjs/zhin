@@ -12,6 +12,7 @@ function sessionMode(session: ChainSessionRow): 'char' | 'pinyin' {
 export function buildChainView(
   session: ChainSessionRow,
   eventLines: string[] = [],
+  channelType?: string,
 ): SendContent {
   const terminal = session.status !== 'active';
   const mode = sessionMode(session);
@@ -44,7 +45,7 @@ export function buildChainView(
   }
 
   const choices = terminal
-    ? [{ id: 'restart', label: '🔄 再来一局', style: 'primary' as const }]
+    ? [{ id: 'restart', label: '🔄 再来一局', style: 'primary' as const, keepEnabledWhenTerminal: true }]
     : [
         { id: 'hint', label: '💡 提示', style: 'secondary' as const },
         { id: 'skip', label: '⏭️ 跳过', style: 'secondary' as const },
@@ -59,6 +60,8 @@ export function buildChainView(
     terminal,
     buttonsPerRow: 3,
     fallbackHint: '回复成语，或 1提示 2跳过 3认输',
+    interactionProfile: terminal ? 'terminal' : 'gameplay',
+    channelType,
   });
 }
 

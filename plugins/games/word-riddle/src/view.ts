@@ -9,6 +9,7 @@ const MAX_WRONG = 3;
 export function buildRiddleView(
   session: RiddleSessionRow,
   eventLines: string[] = [],
+  channelType?: string,
 ): SendContent | string {
   const queue = parseQueue(session.queue);
   const terminal = session.status !== 'active';
@@ -37,8 +38,8 @@ export function buildRiddleView(
 
   const choices = terminal
     ? [
-        { id: 'restart_char', label: '🔤 再来字谜', style: 'primary' as const },
-        { id: 'restart_idiom', label: '📜 再来成语', style: 'primary' as const },
+        { id: 'restart_char', label: '🔤 再来字谜', style: 'primary' as const, keepEnabledWhenTerminal: true },
+        { id: 'restart_idiom', label: '📜 再来成语', style: 'primary' as const, keepEnabledWhenTerminal: true },
       ]
     : [
         { id: 'hint', label: '💡 提示', style: 'secondary' as const },
@@ -54,6 +55,8 @@ export function buildRiddleView(
     terminal,
     buttonsPerRow: terminal ? 2 : 3,
     fallbackHint: '回复答案，或 1提示 2跳过 3结束',
+    interactionProfile: terminal ? 'terminal' : 'gameplay',
+    channelType,
   });
 }
 

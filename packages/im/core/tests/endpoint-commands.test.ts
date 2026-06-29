@@ -1,8 +1,29 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Plugin, CommandFeature } from '../src/index.js';
+import { PermissionFeature } from '../src/built/permission.js';
+import { MANAGEMENT_OPERATOR_PERMIT } from '../src/built/management-command-guard.js';
 import { registerEndpointManagementCommands } from '../src/built/endpoint-commands.js';
 import * as lifecycleModule from '../src/built/endpoint-lifecycle-service.js';
-import * as guardModule from '../src/built/management-command-guard.js';
+
+function trustedMsg(text: string) {
+  return {
+    $content: [{ type: 'text', data: { text } }],
+    $sender: { id: '1', isTrusted: true },
+    $adapter: 'qq',
+    $endpoint: 'zhin',
+    $channel: { type: 'group', id: '1' },
+  } as never;
+}
+
+function untrustedMsg(text: string) {
+  return {
+    $content: [{ type: 'text', data: { text } }],
+    $sender: { id: '9999' },
+    $adapter: 'qq',
+    $endpoint: 'zhin',
+    $channel: { type: 'group', id: '1' },
+  } as never;
+}
 
 describe('registerEndpointManagementCommands', () => {
   let root: Plugin;
@@ -11,9 +32,9 @@ describe('registerEndpointManagementCommands', () => {
 
   beforeEach(() => {
     root = new Plugin('/test/root.ts');
+    root.provide(new PermissionFeature());
     plugin = new Plugin('/packages/im/core/index.ts', root);
     commandService = new CommandFeature();
-    vi.spyOn(guardModule, 'rejectUnlessManagementOperator').mockReturnValue(null);
     vi.spyOn(lifecycleModule, 'createEndpointLifecycleService').mockReturnValue({
       listProvisionableAdapters: () => ['qq', 'process'],
       add: vi.fn(async () => ({ message: 'added' })),
@@ -34,17 +55,22 @@ describe('registerEndpointManagementCommands', () => {
     expect(patterns.some((p) => p.includes('list'))).toBe(false);
   });
 
+  it('registers all patterns with management operator permit', () => {
+    registerEndpointManagementCommands(plugin, commandService);
+    for (const item of commandService.items) {
+      expect(item.requiredPermits).toContain(MANAGEMENT_OPERATOR_PERMIT);
+    }
+  });
+
   it('/endpoint add without adapter lists provisionable adapters', async () => {
     registerEndpointManagementCommands(plugin, commandService);
-    const msg = { $content: [{ type: 'text', data: { text: '/endpoint add' } }] } as never;
-    const result = await commandService.handle(msg, plugin);
+    const result = await commandService.handle(trustedMsg('/endpoint add'), plugin);
     expect(String(result)).toMatch(/qq/);
   });
 
-  it('denies when management guard rejects', async () => {
-    vi.spyOn(guardModule, 'rejectUnlessManagementOperator').mockReturnValue('DENIED');
+  it('denies when sender lacks trusted role', async () => {
     registerEndpointManagementCommands(plugin, commandService);
-    const msg = { $content: [{ type: 'text', data: { text: '/endpoint help' } }] } as never;
-    expect(await commandService.handle(msg, plugin)).toBe('DENIED');
+    const result = await commandService.handle(untrustedMsg('/endpoint help'), plugin);
+    expect(result).toBeFalsy();
   });
 });

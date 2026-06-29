@@ -11,7 +11,7 @@ export function registerDiceHub(getServices: () => SessionService | null): () =>
     title: '骰子对决',
     icon: '🎲',
     description: '掷骰比大小，三局两胜',
-    commandPrefix: '骰子',
+    commandPrefix: '/骰子',
     quickStart: '开始',
     aliases: ['dice'],
     menus: [

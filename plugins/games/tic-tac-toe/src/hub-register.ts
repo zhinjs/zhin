@@ -11,7 +11,7 @@ export function registerTttHub(getServices: () => SessionServices | null): () =>
     title: '井字棋',
     icon: '♟️',
     description: '三子连珠，群聊排队或人机对战',
-    commandPrefix: '井字棋',
+    commandPrefix: '/井字棋',
     quickStart: '人机',
     aliases: ['ttt'],
     menus: [

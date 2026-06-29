@@ -52,8 +52,9 @@ export function buildBoardInteractive(options: {
   terminal?: boolean;
   omitAsciiBoard?: boolean;
   highlight?: number[];
+  channelType?: string;
 }): SendContent {
-  const { sessionId, board, statusLine, terminal, omitAsciiBoard, highlight } = options;
+  const { sessionId, board, statusLine, terminal, omitAsciiBoard, highlight, channelType } = options;
 
   return buildGridKeyboard({
     gamePrefix: TTT_PREFIX,
@@ -67,6 +68,10 @@ export function buildBoardInteractive(options: {
     renderAscii: renderTttAscii,
     highlight,
     fallbackHint: '落子：回复数字 1-9（仅空格）',
+    postChoices: terminal
+      ? [{ id: 'restart', label: '🔄 再来一局', style: 'primary' }]
+      : undefined,
+    channelType,
   });
 }
 

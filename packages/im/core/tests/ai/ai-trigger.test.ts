@@ -234,13 +234,13 @@ describe('AI Trigger 工具函数', () => {
     it('QQ 官方 mention 段应通过 endpointAtIds 匹配', () => {
       const message = createMockMessage({
         content: [
-          { type: 'mention', data: { user_id: '102069707' } },
+          { type: 'mention', data: { user_id: '900000001' } },
           { type: 'text', data: { text: ' 在吗' } },
         ],
         endpoint: 'zhin2号',
       });
       const result = shouldTriggerAI(message as any, { respondToAt: true }, {
-        endpointAtIds: ['zhin2号', '102069707'],
+        endpointAtIds: ['zhin2号', '900000001'],
       });
 
       expect(result.triggered).toBe(true);

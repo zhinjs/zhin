@@ -6,6 +6,7 @@ import {
   quoteIdFromContent as quoteIdFromContentImpl,
   syncQuoteId as syncQuoteIdImpl,
 } from "./message-quote.js";
+import { isActionMessage as isActionMessageImpl } from "./built/interactive-segments/action.js";
 /**
  * 消息组件类型：用于自定义消息结构
  */
@@ -81,5 +82,9 @@ export namespace Message{
             }
         }
         return undefined;
+    }
+
+    export function isAction(message: Message<any>): boolean {
+        return isActionMessageImpl(message);
     }
 }
