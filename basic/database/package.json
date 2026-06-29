@@ -45,9 +45,9 @@
   },
   "devDependencies": {
     "@types/pg": "^8.15.0",
-    "mongodb": "^7.2.0",
+    "mongodb": "^7.4.0",
     "mysql2": "^3.22.5",
-    "pg": "^8.21.0",
+    "pg": "^8.22.0",
     "redis": "latest",
     "typescript": "^6.0.3"
   },
