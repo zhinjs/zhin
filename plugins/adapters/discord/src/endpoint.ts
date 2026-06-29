@@ -24,7 +24,8 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  type EditMessageOptions as DiscordEditMessageOptions,
+  PermissionFlagsBits,
+  type MessageEditOptions as DiscordEditMessageOptions,
 } from 'discord.js';
 import {
   Endpoint,
