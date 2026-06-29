@@ -646,33 +646,6 @@ export class KookEndpoint extends Client implements Endpoint<KookEndpointConfig,
           // Card 消息暂不支持，转为提示文本
           elements.push({ type: "text", data: { text: "[卡片消息]" } });
           break;
-
-        case "keyboard": {
-          const data = (segment as { data: { rows?: Array<Array<{ label?: string; payload?: string; data?: string; disabled?: boolean; disable?: boolean }>> } }).data;
-          const rows = data.rows ?? [];
-          const isCoreLayout = rows.length > 0 && Array.isArray(rows[0]) && rows[0]![0] != null && 'payload' in (rows[0]![0] as object);
-          if (isCoreLayout) {
-            const card = [{
-              type: "card",
-              theme: "secondary",
-              size: "sm",
-              modules: (rows as Array<Array<{ label: string; payload: string; disabled?: boolean }>>).map((row) => ({
-                type: "action-group",
-                elements: row.map((btn) => ({
-                  type: "button",
-                  theme: btn.disabled ? "secondary" : "primary",
-                  value: btn.payload,
-                  click: "return-val",
-                  text: { type: "plain-text", content: btn.label },
-                })),
-              })),
-            }];
-            elements.push({ type: "card", data: card });
-          } else {
-            elements.push({ type: "keyboard", data: segment });
-          }
-          break;
-        }
           
         default:
           this.pluginLogger.warn(`未知的 KOOK 消息段类型: ${(segment as any).type}`);

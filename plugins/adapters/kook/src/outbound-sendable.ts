@@ -4,6 +4,9 @@
  */
 import { segment, type MessageSegment as KookMessageSegment } from "kook-client";
 import type { MessageElement } from "zhin.js";
+import { coreKeyboardToKookCard, findKeyboardSegment } from "./outbound-keyboard.js";
+
+export type KookSendable = string | KookMessageSegment[] | Array<Record<string, unknown>>;
 
 function mediaUrl(data: Record<string, unknown>): string {
   return String(data.url ?? data.file ?? "");
@@ -15,7 +18,16 @@ function mediaUrl(data: Record<string, unknown>): string {
 export function convertToKookSendable(
   elements: MessageElement[],
   formatText: (content: MessageElement[]) => string,
-): string | KookMessageSegment[] {
+): KookSendable {
+  const keyboardBundle = findKeyboardSegment(elements);
+  if (keyboardBundle) {
+    const { keyboard, rest } = keyboardBundle;
+    const nonReplyRest = rest.filter((el) => el.type !== "reply");
+    if (nonReplyRest.every((el) => el.type === "text" || el.type === "reply")) {
+      return coreKeyboardToKookCard(keyboard.data, nonReplyRest.filter((el) => el.type === "text"));
+    }
+  }
+
   const replies: string[] = [];
   const images: string[] = [];
   const videos: string[] = [];
