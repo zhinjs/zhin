@@ -1,0 +1,15 @@
+log_level: info
+endpoints:
+  - &qq_template
+    context: qq
+    name: zhin
+    appid: ${QQ_APPID}
+    secret: ${QQ_SECRET}
+    mode: websocket
+    sandbox: true
+    timeout: 10000
+    data_dir: ./data
+  - context: github
+    name: zhin-github
+    app_id: ${GITHUB_APP_ID}
+    poll_interval: 60

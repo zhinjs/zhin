@@ -17,12 +17,12 @@ const DEFAULT_APP_CONFIG = {
 const MOCK_SECOND_QQ_NAME = 'mock-qq-second';
 const MOCK_SECOND_QQ_APPID = '900000003';
 
+const FIXTURE_CONFIG = path.join(import.meta.dirname, 'fixtures/patch-endpoints-zhin.config.yml');
+
 describe('patchKey endpoints with YAML anchors', () => {
   it('reload after patchKey keeps all endpoints including second qq', () => {
-    const repoRoot = path.resolve(import.meta.dirname, '../../../../');
-    const source = path.join(repoRoot, 'examples/test-bot/zhin.config.yml');
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-cfg-'));
-    fs.copyFileSync(source, path.join(tmp, 'zhin.config.yml'));
+    fs.copyFileSync(FIXTURE_CONFIG, path.join(tmp, 'zhin.config.yml'));
 
     const cf = new ConfigFeature();
     cf.load('zhin.config.yml', DEFAULT_APP_CONFIG, undefined, tmp);
@@ -58,10 +58,8 @@ describe('patchKey endpoints with YAML anchors', () => {
   });
 
   it('reload without baseDir after patchKey still keeps endpoints when cwd matches project root', () => {
-    const repoRoot = path.resolve(import.meta.dirname, '../../../../');
-    const source = path.join(repoRoot, 'examples/test-bot/zhin.config.yml');
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-cfg-'));
-    fs.copyFileSync(source, path.join(tmp, 'zhin.config.yml'));
+    fs.copyFileSync(FIXTURE_CONFIG, path.join(tmp, 'zhin.config.yml'));
 
     const cf = new ConfigFeature();
     cf.load('zhin.config.yml', DEFAULT_APP_CONFIG, undefined, tmp);
@@ -85,14 +83,12 @@ describe('patchKey endpoints with YAML anchors', () => {
   });
 
   it('ConfigLoader.load() without baseDir re-reads resolved config path, not process cwd', () => {
-    const repoRoot = path.resolve(import.meta.dirname, '../../../../');
-    const source = path.join(repoRoot, 'examples/test-bot/zhin.config.yml');
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-cfg-'));
     const botDir = path.join(tmp, 'bot');
     const wrongDir = path.join(tmp, 'wrong');
     fs.mkdirSync(botDir);
     fs.mkdirSync(wrongDir);
-    fs.copyFileSync(source, path.join(botDir, 'zhin.config.yml'));
+    fs.copyFileSync(FIXTURE_CONFIG, path.join(botDir, 'zhin.config.yml'));
     fs.writeFileSync(path.join(wrongDir, 'zhin.config.yml'), 'endpoints: []\nlog_level: info\n');
 
     const loader = ConfigLoader.load('zhin.config.yml', DEFAULT_APP_CONFIG, undefined, botDir);
