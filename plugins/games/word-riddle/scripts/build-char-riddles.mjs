@@ -66,5 +66,6 @@ function parseCsv(text) {
 
 const csv = await loadCsv();
 const entries = parseCsv(csv);
+await mkdir(dirname(OUT), { recursive: true });
 await writeFile(OUT, JSON.stringify(entries), 'utf8');
 console.log(`Wrote ${entries.length} char riddles → ${OUT}`);

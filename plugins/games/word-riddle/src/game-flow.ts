@@ -6,7 +6,7 @@ import {
   typeLabel,
 } from './engine.js';
 import type { RiddleSessionRow } from './models.js';
-import type { RiddleType } from './data/riddles.js';
+import type { RiddleType } from './riddles-catalog.js';
 import {
   currentRiddleId,
   parseQueue,

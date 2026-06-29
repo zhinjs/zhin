@@ -1,6 +1,6 @@
 import { getPlugin } from 'zhin.js';
 import { ensureGameHubService } from '@zhin.js/game-shared';
-import { riddleCount } from './data/riddles.js';
+import { riddleCount } from './riddles-catalog.js';
 import { runRiddleCommand, RIDDLE_HELP } from './riddle-command.js';
 import type { SessionService } from './session-service.js';
 

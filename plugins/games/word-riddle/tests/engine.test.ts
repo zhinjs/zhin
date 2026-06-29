@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { checkAnswer } from '../src/engine.js';
-import { riddleCount } from '../src/data/riddles.js';
+import { riddleCount } from '../src/riddles-catalog.js';
 
 describe('word riddle', () => {
   it('loads open-source char and idiom pools', () => {

@@ -1,6 +1,6 @@
 import type { Database, DatabaseFeature, Message, Models, RelatedModel } from 'zhin.js';
 import { channelKey, generateSessionId, boardMessageMatches } from '@zhin.js/game-shared';
-import { pickRoundQueue, type RiddleType } from './data/riddles.js';
+import { pickRoundQueue, type RiddleType } from './riddles-catalog.js';
 import type { RiddleSessionRow } from './models.js';
 
 export type RiddleDatabase = Database<unknown, Models, string>;
