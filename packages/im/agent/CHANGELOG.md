@@ -1,5 +1,16 @@
 # @zhin.js/agent
 
+## 1.0.2
+
+### Patch Changes
+
+- b9b3881: fix: 增加游戏引擎以及部分游戏
+- 7700903: fix: 游戏强化
+- Updated dependencies [b9b3881]
+- Updated dependencies [7700903]
+  - @zhin.js/core@1.3.3
+  - @zhin.js/ai@1.4.3
+
 ## 1.0.1
 
 ### Patch Changes

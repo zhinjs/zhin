@@ -1,5 +1,44 @@
 # test-bot
 
+## 0.1.112
+
+### Patch Changes
+
+- b9b3881: fix: 增加游戏引擎以及部分游戏
+- Updated dependencies [b9b3881]
+- Updated dependencies [7700903]
+  - @zhin.js/adapter-weixin-ilink@3.0.1
+  - @zhin.js/adapter-wechat-mp@3.0.1
+  - @zhin.js/adapter-dingtalk@4.0.1
+  - @zhin.js/adapter-onebot11@4.0.1
+  - @zhin.js/adapter-onebot12@3.0.1
+  - @zhin.js/adapter-telegram@5.0.1
+  - @zhin.js/adapter-discord@5.0.1
+  - @zhin.js/adapter-sandbox@5.0.4
+  - @zhin.js/adapter-github@3.0.1
+  - @zhin.js/adapter-napcat@3.0.1
+  - @zhin.js/adapter-satori@3.0.1
+  - @zhin.js/adapter-email@3.0.1
+  - @zhin.js/adapter-milky@3.0.1
+  - @zhin.js/adapter-slack@4.0.1
+  - @zhin.js/adapter-icqq@6.0.1
+  - @zhin.js/adapter-kook@5.0.1
+  - @zhin.js/adapter-lark@4.0.1
+  - @zhin.js/adapter-qq@5.0.1
+  - @zhin.js/agent@1.0.2
+  - @zhin.js/cli@1.0.92
+  - @zhin.js/plugin-group-suite@3.0.1
+  - zhin.js@4.1.1
+  - @zhin.js/plugin-music@5.0.1
+  - @zhin.js/host-api@2.0.3
+  - @zhin.js/mcp@4.0.1
+  - @zhin.js/host-router@2.0.1
+  - @zhin.js/html-renderer@1.0.2
+  - @zhin.js/speech@1.0.2
+  - @zhin.js/plugin-60s@3.0.1
+  - @zhin.js/plugin-repeater@3.0.1
+  - @zhin.js/plugin-rss@3.0.1
+
 ## 0.1.111
 
 ### Patch Changes

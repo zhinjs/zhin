@@ -1,5 +1,11 @@
 # @zhin.js/scaffold-wizard
 
+## 0.1.7
+
+### Patch Changes
+
+- b9b3881: fix: 增加游戏引擎以及部分游戏
+
 ## 0.1.6
 
 ### Patch Changes

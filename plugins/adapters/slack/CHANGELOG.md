@@ -1,5 +1,13 @@
 # Changelog
 
+## 4.0.1
+
+### Patch Changes
+
+- b9b3881: fix: 增加游戏引擎以及部分游戏
+- Updated dependencies [7700903]
+  - zhin.js@4.1.1
+
 ## 4.0.0
 
 ### Patch Changes

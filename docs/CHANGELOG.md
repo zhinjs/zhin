@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.43
+
+### Patch Changes
+
+- 7700903: fix: 游戏强化
+
 ## 1.0.42
 
 ### Patch Changes

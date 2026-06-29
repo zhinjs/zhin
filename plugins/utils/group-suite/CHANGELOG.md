@@ -1,5 +1,14 @@
 # @zhin.js/plugin-group-suite
 
+## 3.0.1
+
+### Patch Changes
+
+- 7700903: fix: 游戏强化
+- Updated dependencies [7700903]
+  - zhin.js@4.1.1
+  - @zhin.js/html-renderer@1.0.2
+
 ## 3.0.0
 
 ### Patch Changes
