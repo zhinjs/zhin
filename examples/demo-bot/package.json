@@ -10,14 +10,14 @@
     "build": "zhin build"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "^3.0.0",
+    "@ai-sdk/openai-compatible": "^3.0.1",
     "@zhin.js/adapter-sandbox": "workspace:*",
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/cli": "workspace:*",
     "@zhin.js/host-api": "workspace:*",
     "@zhin.js/host-router": "workspace:*",
     "@zhin.js/satori": "workspace:*",
-    "ai": "^7.0.2",
+    "ai": "^7.0.4",
     "zhin.js": "workspace:*",
     "zod": "^4.4.3"
   },
