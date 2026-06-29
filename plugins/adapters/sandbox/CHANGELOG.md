@@ -1,5 +1,16 @@
 # @zhin.js/adapter-process
 
+## 5.0.4
+
+### Patch Changes
+
+- b9b3881: fix: 增加游戏引擎以及部分游戏
+- Updated dependencies [b9b3881]
+- Updated dependencies [7700903]
+  - @zhin.js/core@1.3.3
+  - @zhin.js/host-api@2.0.3
+  - @zhin.js/host-router@2.0.1
+
 ## 5.0.3
 
 ### Patch Changes

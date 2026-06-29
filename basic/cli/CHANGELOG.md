@@ -1,5 +1,13 @@
 # @zhin.js/cli
 
+## 1.0.92
+
+### Patch Changes
+
+- b9b3881: fix: 增加游戏引擎以及部分游戏
+- Updated dependencies [b9b3881]
+  - @zhin.js/scaffold-wizard@0.1.7
+
 ## 1.0.91
 
 ### Patch Changes

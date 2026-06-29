@@ -1,5 +1,19 @@
 # zhin.js
 
+## 4.1.1
+
+### Patch Changes
+
+- 7700903: fix: 游戏强化
+- Updated dependencies [b9b3881]
+- Updated dependencies [7700903]
+  - @zhin.js/agent@1.0.2
+  - @zhin.js/core@1.3.3
+  - @zhin.js/host-api@2.0.3
+  - @zhin.js/host-router@2.0.1
+  - @zhin.js/html-renderer@1.0.2
+  - @zhin.js/speech@1.0.2
+
 ## 4.1.0
 
 ### Minor Changes

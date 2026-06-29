@@ -1,5 +1,12 @@
 # @zhin.js/ai
 
+## 1.4.3
+
+### Patch Changes
+
+- b9b3881: fix: 增加游戏引擎以及部分游戏
+- 7700903: fix: 游戏强化
+
 ## 1.4.2
 
 ### Patch Changes
