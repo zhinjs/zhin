@@ -653,6 +653,37 @@
       }
     },
     {
+      "name": "@zhin.js/plugin-short-url",
+      "displayName": "plugin-short-url",
+      "description": "URL shortener plugin for Zhin.js — shorten & expand URLs",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": "util",
+      "version": "3.0.0",
+      "npm": "https://www.npmjs.com/package/@zhin.js/plugin-short-url",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "zhin.js",
+        "bot",
+        "plugin",
+        "short-url",
+        "url-shortener"
+      ],
+      "lastUpdate": "2026-06-25T10:06:55.350Z",
+      "downloads": {
+        "weekly": 338,
+        "monthly": 2113
+      },
+      "readme": "Zhin.js plugin for short-url functionality.\nbash\npnpm add @zhin.js/plugin-short-url\nAdd the plugin to your zhin.config.yml:\nyaml\nplugins:\n  - @zhin.js/plugin-short-url\nOr via CLI:\nbash\nzhin install @z",
+      "license": "MIT",
+      "engines": {},
+      "peerDependencies": {
+        "zhin.js": "4.1.0"
+      }
+    },
+    {
       "name": "@zhin.js/adapter-onebot12",
       "displayName": "onebot12",
       "description": "Zhin.js adapter for OneBot 12 protocol",
@@ -685,112 +716,6 @@
       "peerDependencies": {
         "zhin.js": "4.1.0",
         "@zhin.js/host-router": "2.0.1"
-      }
-    },
-    {
-      "name": "@zhin.js/console",
-      "displayName": "console",
-      "description": "Web console service for Zhin.js with real-time monitoring",
-      "author": "GitHub Actions",
-      "isOfficial": true,
-      "category": "service",
-      "version": "3.0.5",
-      "npm": "https://www.npmjs.com/package/@zhin.js/console",
-      "github": "git+https://github.com/zhinjs/zhin.git",
-      "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "service",
-        "console",
-        "web",
-        "dashboard",
-        "monitoring",
-        "admin"
-      ],
-      "lastUpdate": "2026-06-02T01:39:12.169Z",
-      "downloads": {
-        "weekly": 293,
-        "monthly": 1319
-      },
-      "readme": "Zhin Host 上的 Console API 插件：PageManager、POST /api/console/request、SSE /api/events、GET /entries 等。聊天与管理 UI 不在本 Host 提供（serveClientHost: false），请使用 Remote Console（仓库 zhin-console）。说明见 docs/console-remot",
-      "license": "MIT",
-      "engines": {},
-      "peerDependencies": {
-        "@types/ws": "^8.18.1",
-        "koa": "^3.1.1",
-        "@zhin.js/agent": "^0.1.26",
-        "@zhin.js/client": "^1.1.4",
-        "@zhin.js/core": "^1.1.28",
-        "zhin.js": "1.0.86",
-        "@zhin.js/http": "^1.0.79",
-        "@zhin.js/http-host": "^0.1.4"
-      }
-    },
-    {
-      "name": "@zhin.js/plugin-short-url",
-      "displayName": "plugin-short-url",
-      "description": "URL shortener plugin for Zhin.js — shorten & expand URLs",
-      "author": "GitHub Actions",
-      "isOfficial": true,
-      "category": "util",
-      "version": "3.0.0",
-      "npm": "https://www.npmjs.com/package/@zhin.js/plugin-short-url",
-      "github": "git+https://github.com/zhinjs/zhin.git",
-      "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "plugin",
-        "short-url",
-        "url-shortener"
-      ],
-      "lastUpdate": "2026-06-25T10:06:55.350Z",
-      "downloads": {
-        "weekly": 0,
-        "monthly": 0
-      },
-      "readme": "Zhin.js plugin for short-url functionality.\nbash\npnpm add @zhin.js/plugin-short-url\nAdd the plugin to your zhin.config.yml:\nyaml\nplugins:\n  - @zhin.js/plugin-short-url\nOr via CLI:\nbash\nzhin install @z",
-      "license": "MIT",
-      "engines": {},
-      "peerDependencies": {
-        "zhin.js": "4.1.0"
-      }
-    },
-    {
-      "name": "@zhin.js/http",
-      "displayName": "http",
-      "description": "HTTP server service for Zhin.js with routing and WebSocket support",
-      "author": "GitHub Actions",
-      "isOfficial": true,
-      "category": "service",
-      "version": "1.0.79",
-      "npm": "https://www.npmjs.com/package/@zhin.js/http",
-      "github": "git+https://github.com/zhinjs/zhin.git",
-      "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "service",
-        "http",
-        "server",
-        "router",
-        "websocket",
-        "api"
-      ],
-      "lastUpdate": "2026-06-02T01:39:15.145Z",
-      "downloads": {
-        "weekly": 0,
-        "monthly": 0
-      },
-      "readme": "基于 Koa 的 HTTP 服务器插件，为 Zhin 机器人框架提供 HTTP API 和 WebSocket 支持。\n- 🌐 基于 Koa.js 的 HTTP 服务器\n- 🔐 Token 身份验证\n- 🛠️ RESTful API 支持\n- 📡 WebSocket 实时通信\n- 🔄 请求体解析 (JSON)\n- 🌍 可配置的服务器设置\n- 📊 路由管理和中间件支持\n- 📋 内置 ",
-      "license": "MIT",
-      "engines": {},
-      "peerDependencies": {
-        "zhin.js": "1.0.86"
       }
     },
     {
@@ -894,6 +819,47 @@
       }
     },
     {
+      "name": "@zhin.js/console",
+      "displayName": "console",
+      "description": "Web console service for Zhin.js with real-time monitoring",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": "service",
+      "version": "3.0.5",
+      "npm": "https://www.npmjs.com/package/@zhin.js/console",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "zhin.js",
+        "bot",
+        "service",
+        "console",
+        "web",
+        "dashboard",
+        "monitoring",
+        "admin"
+      ],
+      "lastUpdate": "2026-06-02T01:39:12.169Z",
+      "downloads": {
+        "weekly": 0,
+        "monthly": 0
+      },
+      "readme": "Zhin Host 上的 Console API 插件：PageManager、POST /api/console/request、SSE /api/events、GET /entries 等。聊天与管理 UI 不在本 Host 提供（serveClientHost: false），请使用 Remote Console（仓库 zhin-console）。说明见 docs/console-remot",
+      "license": "MIT",
+      "engines": {},
+      "peerDependencies": {
+        "@types/ws": "^8.18.1",
+        "koa": "^3.1.1",
+        "@zhin.js/agent": "^0.1.26",
+        "@zhin.js/client": "^1.1.4",
+        "@zhin.js/core": "^1.1.28",
+        "zhin.js": "1.0.86",
+        "@zhin.js/http": "^1.0.79",
+        "@zhin.js/http-host": "^0.1.4"
+      }
+    },
+    {
       "name": "@zhin.js/plugin-code-runner",
       "displayName": "plugin-code-runner",
       "description": "Sandboxed code execution plugin for Zhin.js — run code snippets via AI or command",
@@ -926,38 +892,37 @@
       }
     },
     {
-      "name": "@zhin.js/plugin-voice",
-      "displayName": "plugin-voice",
-      "description": "Voice input/output plugin for Zhin.js — STT via Whisper + TTS via edge-tts",
+      "name": "@zhin.js/http",
+      "displayName": "http",
+      "description": "HTTP server service for Zhin.js with routing and WebSocket support",
       "author": "GitHub Actions",
       "isOfficial": true,
-      "category": "util",
-      "version": "2.0.1",
-      "npm": "https://www.npmjs.com/package/@zhin.js/plugin-voice",
+      "category": "service",
+      "version": "1.0.79",
+      "npm": "https://www.npmjs.com/package/@zhin.js/http",
       "github": "git+https://github.com/zhinjs/zhin.git",
       "homepage": "https://github.com/zhinjs/zhin#readme",
       "tags": [
         "zhin",
         "zhin.js",
         "bot",
-        "plugin",
-        "voice",
-        "stt",
-        "tts",
-        "whisper",
-        "edge-tts",
-        "speech"
+        "service",
+        "http",
+        "server",
+        "router",
+        "websocket",
+        "api"
       ],
-      "lastUpdate": "2026-06-18T17:16:38.535Z",
+      "lastUpdate": "2026-06-02T01:39:15.145Z",
       "downloads": {
         "weekly": 0,
         "monthly": 0
       },
-      "readme": "Zhin.js 语音输入/输出插件，提供语音识别（STT）和语音合成（TTS）功能。\n- STT（Speech-to-Text） — 通过 Whisper 模型将语音消息转写为文字\n  - 支持 Ollama 和 OpenAI API 两种 Provider\n- TTS（Text-to-Speech） — 通过 edge-tts 将文字转换为语音消息\n  - 支持自定义语音、语速、音调\n- AI ",
+      "readme": "基于 Koa 的 HTTP 服务器插件，为 Zhin 机器人框架提供 HTTP API 和 WebSocket 支持。\n- 🌐 基于 Koa.js 的 HTTP 服务器\n- 🔐 Token 身份验证\n- 🛠️ RESTful API 支持\n- 📡 WebSocket 实时通信\n- 🔄 请求体解析 (JSON)\n- 🌍 可配置的服务器设置\n- 📊 路由管理和中间件支持\n- 📋 内置 ",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
-        "zhin.js": "4.0.1"
+        "zhin.js": "1.0.86"
       }
     },
     {
@@ -1000,6 +965,41 @@
       }
     },
     {
+      "name": "@zhin.js/plugin-voice",
+      "displayName": "plugin-voice",
+      "description": "Voice input/output plugin for Zhin.js — STT via Whisper + TTS via edge-tts",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": "util",
+      "version": "2.0.1",
+      "npm": "https://www.npmjs.com/package/@zhin.js/plugin-voice",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "zhin.js",
+        "bot",
+        "plugin",
+        "voice",
+        "stt",
+        "tts",
+        "whisper",
+        "edge-tts",
+        "speech"
+      ],
+      "lastUpdate": "2026-06-18T17:16:38.535Z",
+      "downloads": {
+        "weekly": 0,
+        "monthly": 0
+      },
+      "readme": "Zhin.js 语音输入/输出插件，提供语音识别（STT）和语音合成（TTS）功能。\n- STT（Speech-to-Text） — 通过 Whisper 模型将语音消息转写为文字\n  - 支持 Ollama 和 OpenAI API 两种 Provider\n- TTS（Text-to-Speech） — 通过 edge-tts 将文字转换为语音消息\n  - 支持自定义语音、语速、音调\n- AI ",
+      "license": "MIT",
+      "engines": {},
+      "peerDependencies": {
+        "zhin.js": "4.0.1"
+      }
+    },
+    {
       "name": "@zhin.js/plugin-repeater",
       "displayName": "plugin-repeater",
       "description": "Repeater plugin for Zhin.js — auto-repeat messages when group members echo the same content",
@@ -1027,43 +1027,6 @@
         "monthly": 0
       },
       "readme": "复读机插件 —— 当群内连续多人发送相同消息时，Bot 自动跟读。\nbash\nnpm install @zhin.js/plugin-repeater\n在 zhin.config.yml 中添加：\nyaml\nplugins:\n - \"@zhin.js/plugin-repeater\" \nrepeater:\n  threshold: 3       # 触发复读的最少人数（默认 3）\n  coold",
-      "license": "MIT",
-      "engines": {},
-      "peerDependencies": {
-        "zhin.js": "4.1.0"
-      }
-    },
-    {
-      "name": "@zhin.js/plugin-rss",
-      "displayName": "plugin-rss",
-      "description": "RSS/Atom feed subscription & push plugin for Zhin.js — subscribe feeds, auto-poll, push new items to groups",
-      "author": "GitHub Actions",
-      "isOfficial": true,
-      "category": "util",
-      "version": "3.0.0",
-      "npm": "https://www.npmjs.com/package/@zhin.js/plugin-rss",
-      "github": "git+https://github.com/zhinjs/zhin.git",
-      "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [
-        "zhin",
-        "zhin.js",
-        "bot",
-        "plugin",
-        "rss",
-        "atom",
-        "feed",
-        "subscription",
-        "push",
-        "notify",
-        "chatbot",
-        "im"
-      ],
-      "lastUpdate": "2026-06-25T10:06:53.536Z",
-      "downloads": {
-        "weekly": 0,
-        "monthly": 0
-      },
-      "readme": "RSS/Atom 订阅推送插件 —— 订阅 feed 源，自动轮询并推送新内容到群聊或私聊。\nbash\nnpm install @zhin.js/plugin-rss\n在 zhin.config.yml 中添加：\nyaml\nplugins:\n  - \"@zhin.js/plugin-rss\"\nrss:\n  pollCron: \"/5    \"   # 轮询频率，Cron 表达式（默认每 5 分钟）",
       "license": "MIT",
       "engines": {},
       "peerDependencies": {
@@ -1104,6 +1067,43 @@
       },
       "peerDependencies": {
         "@zhin.js/host-router": "2.0.1",
+        "zhin.js": "4.1.0"
+      }
+    },
+    {
+      "name": "@zhin.js/plugin-rss",
+      "displayName": "plugin-rss",
+      "description": "RSS/Atom feed subscription & push plugin for Zhin.js — subscribe feeds, auto-poll, push new items to groups",
+      "author": "GitHub Actions",
+      "isOfficial": true,
+      "category": "util",
+      "version": "3.0.0",
+      "npm": "https://www.npmjs.com/package/@zhin.js/plugin-rss",
+      "github": "git+https://github.com/zhinjs/zhin.git",
+      "homepage": "https://github.com/zhinjs/zhin#readme",
+      "tags": [
+        "zhin",
+        "zhin.js",
+        "bot",
+        "plugin",
+        "rss",
+        "atom",
+        "feed",
+        "subscription",
+        "push",
+        "notify",
+        "chatbot",
+        "im"
+      ],
+      "lastUpdate": "2026-06-25T10:06:53.536Z",
+      "downloads": {
+        "weekly": 0,
+        "monthly": 0
+      },
+      "readme": "RSS/Atom 订阅推送插件 —— 订阅 feed 源，自动轮询并推送新内容到群聊或私聊。\nbash\nnpm install @zhin.js/plugin-rss\n在 zhin.config.yml 中添加：\nyaml\nplugins:\n  - \"@zhin.js/plugin-rss\"\nrss:\n  pollCron: \"/5    \"   # 轮询频率，Cron 表达式（默认每 5 分钟）",
+      "license": "MIT",
+      "engines": {},
+      "peerDependencies": {
         "zhin.js": "4.1.0"
       }
     },
@@ -1764,5 +1764,5 @@
     "games": 2,
     "features": 1
   },
-  "updatedAt": "2026-06-29T10:17:27.194Z"
+  "updatedAt": "2026-07-02T08:38:31.681Z"
 }
