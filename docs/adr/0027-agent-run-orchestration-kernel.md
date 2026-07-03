@@ -52,7 +52,7 @@ The kernel supports multiple executor kinds:
 | Kind | Purpose |
 | --- | --- |
 | `local` | Execute a local `ZhinAgent` or subagent |
-| `group_mention` | Send a task into an IM group as an `@` assignment and wait for handback |
+| `scene_mention` | Send a task into an IM group/channel as an `@` assignment and wait for handback ([ADR 0028](./0028-generic-im-scene-agent.md); legacy name `group_mention`) |
 | `remote_mesh` | Delegate to a remote agent over MCP/HTTP |
 
 Executors emit execution events. They do not directly mutate task status.
@@ -66,11 +66,11 @@ Five-agent is implemented as one built-in strategy, not the default architecture
 ## Consequences
 
 - `spawn_task` creates or uses kernel tasks.
-- Inbound group routing creates `group_mention` tasks instead of directly advancing cell pipeline state.
+- Inbound group routing creates `scene_mention` tasks instead of directly advancing collaboration scene pipeline state.
 - Console and REST should read kernel snapshots/event streams for run status.
-- `CollaborationCell` remains valuable as IM scene and member context, but no longer owns orchestration state.
+- `CollaborationScene` remains valuable as member context and IM projection, but no longer owns orchestration state.
 
 ## Related
 
-- [ADR 0023](./0023-group-cell-multi-endpoint-agents.md)
+- [ADR 0028](./0028-generic-im-scene-agent.md)
 - [ADR 0024](./0024-five-agent-aop-pipeline.md)

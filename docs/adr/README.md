@@ -26,11 +26,12 @@
 | [0020](./0020-speech-pipeline-stt-tts.md) | 语音管线 STT/TTS 与 AI 内容链 |
 | [0021](./0021-content-moderation.md) | 内容审查 — 机制在框架，策略在运营者 |
 | [0022](./0022-interactive-button-modes.md) | Interactive 按钮 callback / command 双模式 |
-| [0023](./0023-group-cell-multi-endpoint-agents.md) | GroupCell 多 Endpoint Agent 协作 |
+| [0023](./0023-group-cell-multi-endpoint-agents.md) | CollaborationScene 多 Endpoint Agent 协作 |
 | [0024](./0024-five-agent-aop-pipeline.md) | Five-Agent Pipeline（Superseded） |
 | [0025](./0025-adapter-ai-outbound-json.md) | Adapter 驱动的 AI 结构化出站 JSON |
 | [0026](./0026-retire-scenario-specific-pipeline-harnesses.md) | 废弃场景专用 Pipeline Harness |
 | [0027](./0027-agent-run-orchestration-kernel.md) | Agent Run Orchestration Kernel |
+| [0028](./0028-generic-im-scene-agent.md) | Generic IM Scene Agent（Scene 契约 + 破坏性统一） |
 
 ## 相关
 

@@ -31,7 +31,8 @@ describe('multi-agent-room 协作契约', () => {
 
   it('README 说明 REST 与数据库 SSOT', () => {
     const readme = fs.readFileSync(path.join(botRoot, 'README.md'), 'utf8');
-    expect(readme).toContain('collaboration/cells');
+    expect(readme).toContain('collaboration/scenes');
+    expect(readme).toContain('collaboration_scenes');
     expect(readme).toContain('数据库');
     expect(readme).toContain('/collab init');
   });

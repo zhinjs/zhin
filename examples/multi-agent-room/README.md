@@ -5,7 +5,7 @@
 ## 架构要点
 
 - **SSOT**：`collaboration_scenes` + `collaboration_scene_members`（多进程共享同一 DB 即可对齐）
-- **管理面**：Cell CRUD + Member 子资源 + Endpoint 反查；群内 **master** 可用 `/collab` 指令
+- **管理面**：Scene CRUD + Member 子资源 + Endpoint 反查；群内 **master** 可用 `/collab` 指令
 - **成员**：`/collab init` 后使用 `/collab bind` 挂载 Bot；可选在 yaml 配置 `collaboration.roster` 作为 init 模板
 
 ## 快速开始
@@ -24,7 +24,7 @@ pnpm dev
 
 ## REST 示例
 
-创建 Cell（可带 members 一次性写入，或先建空 Cell 再挂成员）：
+创建协作 Scene（可带 members 一次性写入，或先建空 Scene 再挂成员）：
 
 ```bash
 curl -X POST http://127.0.0.1:8788/api/collaboration/scenes \

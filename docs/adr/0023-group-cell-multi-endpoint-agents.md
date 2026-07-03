@@ -1,71 +1,76 @@
-# ADR 0023: GroupCell multi-endpoint agent collaboration
+# ADR 0023: CollaborationScene multi-endpoint agent collaboration
 
 ## Status
 
-Accepted, revised by [ADR 0027](./0027-agent-run-orchestration-kernel.md).
+Accepted, revised by [ADR 0027](./0027-agent-run-orchestration-kernel.md) and [ADR 0028](./0028-generic-im-scene-agent.md).
 
 ## Context
 
-Zhin needs a first-class experience where multiple real bots in the same IM group can collaborate visibly. Earlier designs made `CollaborationCell` carry pipeline state and made group chat the orchestration plane. That made the IM projection, task state machine, and five-agent workflow too tightly coupled.
+Zhin needs a first-class experience where multiple real bots in the same IM group can collaborate visibly. Earlier designs stored pipeline state on the collaboration unit and used group chat as the orchestration plane. That coupled IM projection, task state, and five-agent workflow too tightly.
 
 ## Decision
 
-`CollaborationCell` is no longer the orchestration state machine. It is an IM scene abstraction:
+`CollaborationScene` (formerly `CollaborationCell`) is **not** the orchestration state machine. It is the **collaboration plane** over one or more IM scenes:
 
 | Concept | Owner | Responsibility |
 | --- | --- | --- |
 | Transport Actor | Endpoint | Platform identity used for outbound messages |
 | Cognitive Profile | `ai.agents` / `.agent.md` | Model, prompt, tools, and policy |
 | Runtime | `ZhinAgent` per endpoint | Executes local turns and local tasks |
-| Collaboration Scene | `CollaborationCell` | Logical scene, member directory, endpoint/profile mapping, group projection context |
+| Collaboration Scene | `CollaborationScene` | Logical unit, member directory, endpoint/profile mapping, group projection context |
+| IM Scene | `IMSceneRef` | Platform group/channel/private identity ([ADR 0028](./0028-generic-im-scene-agent.md)) |
 | Run State | `OrchestrationKernel` | Runs, tasks, assignments, events, state transitions |
 
-Run-to-cell linkage is expressed by:
+Run-to-scene linkage:
 
 ```ts
 run.source = {
-  kind: 'im_cell',
-  cellId,
-  adapter,
-  sceneId,
+  kind: 'im_scene',
+  scene: { platform, endpointId, sceneId, kind },
+  collaborationSceneId, // optional CollaborationScene.id
 }
 ```
 
 ### Invariants
 
-1. Identity follows outbound: when a peer endpoint should speak, the group executor sends an actual IM mention instead of making the planner impersonate that peer.
+1. Identity follows outbound: when a peer endpoint should speak, the scene executor sends an actual IM mention instead of making the planner impersonate that peer.
 2. Cognition follows profile: agent configuration does not imply transport identity.
 3. Coordination follows the kernel: runs, tasks, assignments, handback, progress, and result recovery are kernel events.
 4. Platform remains a projection bus: group messages are a visible projection of assignments and results, not the source of truth for task state.
 
-### Group Mention Executor
+### Scene Mention Executor
 
-The group collaboration feature is preserved through `GroupMentionExecutor`.
+Group collaboration uses `scene_mention` (`group_mention` is a read-time alias only).
 
-- Assignment emits a group mention containing `#taskId`.
+- Assignment emits a group/channel mention containing `#taskId`.
 - Handback first matches an explicit `#taskId`.
-- If no `#taskId` exists and the `(cell, endpoint)` pair has exactly one active assignment, the reply is attributed to that task.
-- If multiple active assignments exist and no `#taskId` is present, the kernel records `task.progress` and the bot asks the peer to include the task id.
+- If no `#taskId` exists and the `(collaborationSceneId, endpoint)` pair has exactly one active assignment, the reply is attributed to that task.
+- Private scenes **cannot** use `scene_mention`.
 
-### Cell Data
+### Persistence
 
-The cell store keeps scene and membership data only:
+Tables (new installs, [ADR 0028](./0028-generic-im-scene-agent.md)):
 
-- `id`, `adapter`, `sceneId`
-- logical scene aliases
-- members and endpoint/profile mapping
-- optional goal text for group context
+- `collaboration_scenes` — id, adapter, scene_id (IM), goal, optional legacy pipeline fields
+- `collaboration_scene_members` — collaboration_scene_id, endpoint_id, roles
+- `collaboration_scene_aliases` — logical_scene_id ↔ adapter/scene_id
+- `collaboration_scene_member_channels` — cross-adapter identity edges
 
-Historical fields such as `pipelineState`, `missionRunId`, and `pipelineRole` may still exist during migration, but they are not the orchestration contract.
+Host REST: `/api/collaboration/scenes*` (members, pipeline, artifacts sub-resources).
+
+### User commands
+
+`/collab init`, `bind`, `status`, etc. remain the in-chat management surface. Master endpoint gate unchanged.
 
 ## Consequences
 
-- Console collaboration REST manages cells and members; run snapshots and event streams come from the kernel.
-- Existing group-chat collaboration remains visible to users, but implementation can evolve independently of the core run state machine.
-- Five-agent collaboration is a workflow strategy over kernel tasks, not a cell-level state machine.
+- Console collaboration REST manages scenes and members; run snapshots and event streams come from the kernel.
+- Existing group-chat collaboration remains visible to users; implementation evolves independently of the core run state machine.
+- Five-agent collaboration is a workflow strategy over kernel tasks, not a scene-level state machine.
 
 ## Related
 
+- [ADR 0028](./0028-generic-im-scene-agent.md)
 - [ADR 0027](./0027-agent-run-orchestration-kernel.md)
 - [ADR 0024](./0024-five-agent-aop-pipeline.md)
 - [ADR 0025](./0025-adapter-ai-outbound-json.md)

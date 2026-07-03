@@ -83,7 +83,7 @@ type JobAction =
   | { kind: 'handler'; handler: string; args?: Record<string, unknown> };
 
 type JobNotify =
-  | { channel: 'im'; platform: string; endpointId: string; sceneId: string; scope?: string }
+  | { channel: 'im'; target: IMDeliveryTarget }
   | { channel: 'ha'; service: string; target?: string }
   | { channel: 'silent' }
   | { channel: 'log' };
