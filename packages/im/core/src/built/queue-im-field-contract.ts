@@ -1,5 +1,6 @@
 import type { MessageType } from '../message.js';
 import type { SendContent, SendOptions } from '../types.js';
+import { sceneRefToSendOptions, type IMDeliveryTarget } from '../im-scene.js';
 
 export interface QueueEnvelope<TDetail extends Record<string, unknown> = Record<string, unknown>> {
   kind: string;
@@ -82,7 +83,21 @@ export function toSendOptions(detail: NormalizedQueueOutboundDetail): SendOption
   };
 }
 
-export function normalizeRecordToSendOptions(record: Record<string, unknown>): SendOptions {
-  return toSendOptions(normalizeQueueOutboundDetail(record));
+export interface QueueIMSceneTargetDetail {
+  target: IMDeliveryTarget;
+  content: SendContent;
 }
 
+export function sceneTargetToSendOptions(detail: QueueIMSceneTargetDetail): SendOptions {
+  return sceneRefToSendOptions(detail.target, detail.content);
+}
+
+export function normalizeRecordToSendOptions(record: Record<string, unknown>): SendOptions {
+  if (record.target && typeof record.target === 'object') {
+    return sceneTargetToSendOptions({
+      target: record.target as IMDeliveryTarget,
+      content: requireContent(record.content),
+    });
+  }
+  return toSendOptions(normalizeQueueOutboundDetail(record));
+}

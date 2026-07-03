@@ -17,13 +17,13 @@ import {
   canAccessTool,
   roleSatisfies,
   checkBuiltinPermitList,
-  registerDefaultGroupPlatformPermitChecker,
+  registerDefaultScenePlatformPermitChecker,
   clearPlatformPermitCheckers,
 } from '@zhin.js/core';
 import type { Tool } from '@zhin.js/core';
 
 beforeEach(() => {
-  registerDefaultGroupPlatformPermitChecker('qq');
+  registerDefaultScenePlatformPermitChecker('qq');
 });
 
 afterEach(() => {
@@ -55,10 +55,10 @@ function mockCommMessage(overrides: Record<string, any> = {}) {
   };
 }
 
-function mockMessage(role: 'user' | 'group_admin' | 'group_owner' | 'master' = 'user') {
-  const platformRole = role === 'group_admin'
+function mockMessage(role: 'user' | 'scene_admin' | 'scene_owner' | 'master' = 'user') {
+  const platformRole = role === 'scene_admin'
     ? 'admin'
-    : role === 'group_owner'
+    : role === 'scene_owner'
       ? 'owner'
       : undefined;
   const adapter = role === 'master' ? 'process' : 'qq';
@@ -148,7 +148,7 @@ describe('ZhinTool 类', () => {
     const tool = new ZhinTool('help_test')
       .desc('帮助测试')
       .param('name', { type: 'string', description: '名字' }, true)
-      .permit('platform(qq,group_admin)')
+      .permit('platform(qq,scene_admin)')
       .platform('qq')
       .scope('group')
       .execute(async () => '');
@@ -158,7 +158,7 @@ describe('ZhinTool 类', () => {
     expect(help).toContain('help_test');
     expect(help).toContain('帮助测试');
     expect(help).toContain('name');
-    expect(help).toContain('group_admin');
+    expect(help).toContain('scene_admin');
     expect(help).toContain('qq');
     expect(help).toContain('group');
   });
@@ -291,9 +291,9 @@ describe('canAccessTool 函数', () => {
   });
 
   it('应该正确检查 platform(...) permit', () => {
-    const tool: Tool = { ...baseTool, permissions: ['platform(qq,group_admin)'] };
-    const adminMsg = mockMessage('group_admin');
-    const ownerMsg = mockMessage('group_owner');
+    const tool: Tool = { ...baseTool, permissions: ['platform(qq,scene_admin)'] };
+    const adminMsg = mockMessage('scene_admin');
+    const ownerMsg = mockMessage('scene_owner');
     const masterMsg = mockMessage('master');
 
     expect(canAccessTool(tool, adminMsg)).toBe(true);
@@ -307,9 +307,9 @@ describe('canAccessTool 函数', () => {
       ...baseTool,
       platforms: ['qq'],
       scopes: ['group'],
-      permissions: ['platform(qq,group_admin)'],
+      permissions: ['platform(qq,scene_admin)'],
     };
-    const okMsg = mockMessage('group_admin');
+    const okMsg = mockMessage('scene_admin');
 
     expect(canAccessTool(tool, { ...okMsg, $adapter: 'qq', $channel: { type: 'group', id: 'g1' } })).toBe(true);
 
@@ -321,7 +321,7 @@ describe('canAccessTool 函数', () => {
   });
 
   it('checkBuiltinPermitList 支持 AND 链', () => {
-    const msg = mockMessage('group_admin');
+    const msg = mockMessage('scene_admin');
     expect(checkBuiltinPermitList(
       ['adapter(qq)', 'group(*)'],
       msg,
@@ -409,7 +409,7 @@ describe('ZhinTool 高级功能', () => {
       .param('city', { type: 'string', description: '城市' }, true)
       .platform('qq')
       .scope('group')
-      .permit('platform(qq,group_admin)')
+      .permit('platform(qq,scene_admin)')
       .tag('test')
       .execute(async () => '');
 
@@ -420,7 +420,7 @@ describe('ZhinTool 高级功能', () => {
     expect(json.parameters.properties).toHaveProperty('city');
     expect(json.platforms).toContain('qq');
     expect(json.scopes).toContain('group');
-    expect(json.permissions).toEqual(['platform(qq,group_admin)']);
+    expect(json.permissions).toEqual(['platform(qq,scene_admin)']);
     expect(json.tags).toContain('test');
     // execute 不应该在 JSON 中
     expect(json).not.toHaveProperty('execute');

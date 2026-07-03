@@ -4,6 +4,7 @@ import {
   isMessageType,
   normalizeQueueOutboundDetail,
   normalizeRecordToSendOptions,
+  sceneTargetToSendOptions,
   toSendOptions,
   type QueueEnvelope,
 } from '../src/built/queue-im-field-contract.js';
@@ -99,9 +100,49 @@ describe('queue IM field contract', () => {
     });
   });
 
+  it('normalizes scene delivery target to SendOptions', () => {
+    expect(sceneTargetToSendOptions({
+      target: {
+        channel: 'im',
+        scene: {
+          platform: 'qq',
+          endpointId: 'bot1',
+          sceneId: 'g1',
+          kind: 'group',
+        },
+      },
+      content: 'hello',
+    })).toEqual({
+      context: 'qq',
+      endpoint: 'bot1',
+      id: 'g1',
+      type: 'group',
+      content: 'hello',
+    });
+  });
+
+  it('normalizes record scene target to SendOptions', () => {
+    expect(normalizeRecordToSendOptions({
+      target: {
+        channel: 'im',
+        scene: {
+          platform: 'qq',
+          endpointId: 'bot1',
+          sceneId: 'ch1',
+          kind: 'channel',
+        },
+      },
+      content: 'hello',
+    })).toMatchObject({
+      context: 'qq',
+      endpoint: 'bot1',
+      type: 'channel',
+      id: 'ch1',
+    });
+  });
+
   it('guards MessageType values', () => {
     expect(isMessageType('private')).toBe(true);
     expect(isMessageType('dm')).toBe(false);
   });
 });
-

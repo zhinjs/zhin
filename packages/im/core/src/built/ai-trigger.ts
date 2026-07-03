@@ -18,7 +18,6 @@ import type {
 import { segment } from "../utils.js";
 import {
   resolveIMSessionId,
-  type IMSessionScope,
 } from '../im-session-id.js';
 import {
   type SenderRole,

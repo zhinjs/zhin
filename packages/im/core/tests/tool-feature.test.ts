@@ -11,13 +11,13 @@ import {
   ToolFeature,
 } from '../src/built/tool.js';
 import {
-  registerDefaultGroupPlatformPermitChecker,
+  registerDefaultScenePlatformPermitChecker,
   clearPlatformPermitCheckers,
 } from '../src/built/platform-permit.js';
 import type { Tool } from '../src/types.js';
 
 beforeEach(() => {
-  registerDefaultGroupPlatformPermitChecker('qq');
+  registerDefaultScenePlatformPermitChecker('qq');
 });
 
 afterEach(() => {
@@ -86,7 +86,7 @@ describe('canAccessTool', () => {
   });
 
   it('应检查 platform(...) permit', () => {
-    const tool = { ...baseTool, permissions: ['platform(qq,group_admin)'] };
+    const tool = { ...baseTool, permissions: ['platform(qq,scene_admin)'] };
     const msg = {
       $adapter: 'qq',
       $endpoint: 'b1',

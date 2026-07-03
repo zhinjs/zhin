@@ -202,13 +202,13 @@ describe('resolveIMSessionId', () => {
     const a = resolveIMSessionId({
       platform: 'icqq',
       endpointId: '75318',
-      scope: 'group',
+      kind: 'group',
       sceneId: '123456',
     });
     const b = resolveIMSessionId({
       platform: 'icqq',
       endpointId: '75318',
-      scope: 'group',
+      kind: 'group',
       sceneId: '123456',
     });
     expect(a).toBe('icqq:75318:group:123456');
@@ -237,7 +237,7 @@ describe('resolveIMSessionId', () => {
     expect(resolveIMSessionId({
       platform: 'discord',
       endpointId: 'bot1',
-      scope: 'channel',
+      kind: 'channel',
       sceneId: 'ch99',
     })).toBe('discord:bot1:channel:ch99');
   });
@@ -248,13 +248,13 @@ describe('resolveIMSessionId', () => {
     const a = resolveIMSessionId({
       platform: 'icqq',
       endpointId: '75318',
-      scope: 'group',
+      kind: 'group',
       sceneId: '123456',
     });
     const b = resolveIMSessionId({
       platform: 'icqq',
       endpointId: '75318',
-      scope: 'group',
+      kind: 'group',
       sceneId: '123456',
     });
     expect(a).toBe('icqq:75318:group:123456');
@@ -283,7 +283,7 @@ describe('resolveIMSessionId', () => {
     expect(resolveIMSessionId({
       platform: 'discord',
       endpointId: 'bot1',
-      scope: 'channel',
+      kind: 'channel',
       sceneId: 'ch99',
     })).toBe('discord:bot1:channel:ch99');
   });

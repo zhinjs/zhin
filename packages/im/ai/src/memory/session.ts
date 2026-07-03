@@ -14,36 +14,34 @@ import type { ChatMessage, SessionConfig, Session } from '../types.js';
 
 const logger = new Logger(null, 'AI-Session');
 
-/** IM 场景类型，用于 sessionId 的 type 段 */
-export type IMSessionScope = 'private' | 'group' | 'channel';
+/** IM 场景类型，用于 sessionId 的 kind 段（与 @zhin.js/core IMSceneKind 对齐） */
+export type IMSceneKind = 'private' | 'group' | 'channel';
 
 export interface ResolveIMSessionIdInput {
   platform: string;
   endpointId: string;
-  scope: IMSessionScope;
+  kind: IMSceneKind;
   sceneId: string;
 }
 
 /**
- * 解析 IM 会话 ID：`platform:endpointId:type:sceneId`
- * - 群/频道：sceneId 为群号或频道 ID（不含 senderId）
- * - 私聊：sceneId 为对方用户 ID
+ * 解析 IM 会话 ID：`platform:endpointId:kind:sceneId`
  */
 export function resolveIMSessionId(input: ResolveIMSessionIdInput): string {
   const platform = String(input.platform || 'unknown');
   const endpointId = String(input.endpointId || 'default');
-  const scope: IMSessionScope = input.scope || 'private';
+  const kind: IMSceneKind = input.kind || 'private';
   const sceneId = String(input.sceneId || 'unknown');
-  return `${platform}:${endpointId}:${scope}:${sceneId}`;
+  return `${platform}:${endpointId}:${kind}:${sceneId}`;
 }
 
 /** 按场景决定写入 sessionId 的 scene 段 */
 export function resolveIMSceneIdForSession(
-  scope: IMSessionScope,
+  kind: IMSceneKind,
   sceneId?: string,
   senderId?: string,
 ): string {
-  if (scope === 'group' || scope === 'channel') {
+  if (kind === 'group' || kind === 'channel') {
     return sceneId || senderId || 'unknown';
   }
   return senderId || sceneId || 'unknown';
@@ -84,19 +82,19 @@ export function resolveAgentScopedSessionId(
 export function resolveIMSessionIdFromMessage(message: {
   $adapter?: string;
   $endpoint?: string;
-  $channel?: { type?: IMSessionScope; id?: string };
+  $channel?: { type?: IMSceneKind; id?: string };
   $sender?: { id?: string };
 }): string {
-  const scope = (message.$channel?.type || 'private') as IMSessionScope;
+  const kind = (message.$channel?.type || 'private') as IMSceneKind;
   const sceneId = resolveIMSceneIdForSession(
-    scope,
+    kind,
     message.$channel?.id,
     message.$sender?.id,
   );
   return resolveIMSessionId({
     platform: String(message.$adapter || ''),
     endpointId: String(message.$endpoint || ''),
-    scope,
+    kind,
     sceneId,
   });
 }

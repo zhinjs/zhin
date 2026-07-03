@@ -161,6 +161,8 @@ export interface SendOptions extends MessageChannel{
   context:string
   endpoint:string
   content:SendContent
+  quoteId?: string
+  threadId?: string
 }
 
 /** `Adapter.sendMessage` 成功发出后由 core 分发的载荷 */

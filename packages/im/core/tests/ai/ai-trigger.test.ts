@@ -410,7 +410,7 @@ describe('AI Trigger 工具函数', () => {
       expect(result.roles).not.toContain('master');
     });
 
-    it('群 owner 权限不推导 group_owner（走 platform permit）', () => {
+    it('群 owner 权限不推导 scene_owner（走 platform permit）', () => {
       const message = createMockMessage({
         content: 'test',
         senderPermissions: ['owner'],
@@ -419,7 +419,7 @@ describe('AI Trigger 工具函数', () => {
       expect(result.roles).toEqual(['user']);
     });
 
-    it('群 admin 权限不推导 group_admin（走 platform permit）', () => {
+    it('群 admin 权限不推导 scene_admin（走 platform permit）', () => {
       const message = createMockMessage({
         content: 'test',
         senderPermissions: ['admin'],
@@ -458,7 +458,7 @@ describe('AI Trigger 工具函数', () => {
       expect(result.roles).not.toContain('master');
     });
 
-    it('bot master 不因群管权限额外推导 group_admin', () => {
+    it('bot master 不因群管权限额外推导 scene_admin', () => {
       const message = createMockMessage({
         content: 'hi',
         senderId: 'ownerQQ',

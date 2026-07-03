@@ -3,7 +3,7 @@
  * Does not replace transport session keys (per ADR 0023 D4).
  */
 
-import type { IMSessionScope } from '@zhin.js/core';
+import type { IMSceneKind } from '@zhin.js/core';
 import { getSceneIdentityService } from './scene-identity-service.js';
 
 export function resolveCellContextKey(adapter: string, sceneId: string): string {
@@ -15,7 +15,7 @@ export function resolveCellContextKey(adapter: string, sceneId: string): string 
 
 export function resolveCellContextKeyFromMessage(message: {
   $adapter?: string;
-  $channel?: { type?: IMSessionScope; id?: string };
+  $channel?: { type?: IMSceneKind; id?: string };
   $sender?: { id?: string };
 }): string | undefined {
   const scope = message.$channel?.type || 'private';
