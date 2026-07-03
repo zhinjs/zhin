@@ -258,36 +258,4 @@ describe('collaboration outbound harness helpers', () => {
       [{ type: 'at', data: { id: '8596238' } }, { type: 'text', data: { text: ' 已完成' } }],
     ])).toBe(false);
   });
-
-  it('filterPipelineDelegateeOutboundBatches drops tool JSON instead of falling back', async () => {
-    const { filterPipelineDelegateeOutboundBatches } = await import('../../src/collaboration/collaboration-outbound.js');
-    const toolJson = JSON.stringify({ ok: true, cellId: 'c1', pipelineState: { runId: 'r1' } });
-    const delegateeCell = {
-      ...cell,
-      pipelineState: {
-        runId: 'r1',
-        stage: 'researcher' as const,
-        reviewCycles: 0,
-        maxReviewCycles: 3,
-        allowedNextStages: ['evaluator'],
-        todo: [],
-        activeDelegations: [{
-          targetEndpointId: '210723495',
-          targetRole: 'researcher' as const,
-          runId: 'r1',
-          requireArtifact: true,
-          artifactKinds: ['report' as const],
-          delegateText: '调研',
-          updatedAt: 1,
-        }],
-        updatedAt: 1,
-      },
-    };
-    const out = filterPipelineDelegateeOutboundBatches(
-      [[{ type: 'text', data: { text: toolJson } }]],
-      delegateeCell,
-      '210723495',
-    );
-    expect(out).toEqual([]);
-  });
 });

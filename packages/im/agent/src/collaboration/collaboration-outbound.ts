@@ -12,8 +12,8 @@ import {
 import { resolvePeerEndpointInCell } from './collaboration-config.js';
 import { resolveCollaborationCellForMessage } from './collaboration-context.js';
 import type { CollaborationCell } from './types.js';
-import { isPipelineDelegateeTurn, resolvePlannerEndpointId, summarizeDelegateeReply, isCellToolResultJson, removeEmbeddedCellToolJsonFromText } from './collaboration-delegation.js';
-import { buildAtMessageContent, sendGroupMessageContent, sendGroupMessageFromEndpoint, resolvePlatformAtId, splitLongTextForIm, DEFAULT_IM_TEXT_CHUNK_CHARS, type GroupMessageAdapterView } from './group-message.js';
+import { isCellToolResultJson, removeEmbeddedCellToolJsonFromText } from './collaboration-delegation.js';
+import { buildAtMessageContent, sendGroupMessageContent, sendGroupMessageFromEndpoint, resolvePlatformAtId, type GroupMessageAdapterView } from './group-message.js';
 import { getHostRootPlugin } from '@zhin.js/core';
 import {
   tryResolveStructuredAiOutbound,
@@ -282,78 +282,6 @@ export function segmentsMentionEndpoint(
 }
 
 /**
- * RosterRound 委派完成后，在出站末尾补上对委派方（Planner）的真实 @（模型未 @ 时 harness 兜底）。
- * @deprecated 优先使用 appendDelegatorHandbackBatch 拆成独立 @ 消息。
- */
-export function ensureDelegatorHandbackOnSegments(
-  segments: MessageElement[],
-  delegatorEndpointId: string,
-  adapter: GroupMessageAdapterView,
-  cell?: CollaborationCell,
-): MessageElement[] {
-  if (segmentsMentionEndpoint(segments, delegatorEndpointId, adapter, cell)) {
-    return segments;
-  }
-  return [
-    ...segments,
-    ...buildAtMessageContent(adapter, [delegatorEndpointId], ' '),
-  ];
-}
-
-/** 若出站未 @ 委派方，追加独立 handback 批次（结果摘要 + 真实 @，与正文拆条）。 */
-export function appendDelegatorHandbackBatch(
-  batches: MessageElement[][],
-  delegatorEndpointId: string,
-  adapter: GroupMessageAdapterView,
-  cell?: CollaborationCell,
-  options?: { summary?: string },
-): MessageElement[][] {
-  if (segmentsMentionEndpoint(batches.flat(), delegatorEndpointId, adapter, cell)) {
-    return batches;
-  }
-  const rawSummary = options?.summary?.trim();
-  const summary = rawSummary
-    ? (rawSummary.startsWith('已完成') ? rawSummary : `已完成：${rawSummary}`)
-    : '已完成。';
-  const chunks = splitLongTextForIm(summary, DEFAULT_IM_TEXT_CHUNK_CHARS);
-  if (chunks.length <= 1) {
-    return [...batches, buildAtMessageContent(adapter, [delegatorEndpointId], ` ${summary}`)];
-  }
-  const expanded = [...batches];
-  expanded.push(buildAtMessageContent(adapter, [delegatorEndpointId], ` ${chunks[0]!}`));
-  for (const chunk of chunks.slice(1)) {
-    expanded.push([{ type: 'text', data: { text: ` ${chunk}` } }]);
-  }
-  return expanded;
-}
-
-function summarizeOutboundText(batches: MessageElement[][]): string | undefined {
-  const text = batches
-    .flat()
-    .filter((seg) => seg.type === 'text' && seg.data?.text != null)
-    .map((seg) => String(seg.data!.text).trim())
-    .filter(Boolean)
-    .join(' ');
-  if (!text) return undefined;
-  return text;
-}
-
-/** Pipeline 被委派方完成 turn 后追加交还 @ 批次。 */
-export function appendPipelineHandbackIfNeeded(
-  batches: MessageElement[][],
-  cell: CollaborationCell,
-  endpointId: string,
-  adapter: GroupMessageAdapterView,
-): MessageElement[][] {
-  const delegatorId = cell.members.find((m) => m.pipelineRole === 'planner')?.endpointId;
-  if (!delegatorId || endpointId === delegatorId) return batches;
-  if (!isPipelineDelegateeTurn(cell, endpointId)) return batches;
-  return appendDelegatorHandbackBatch(batches, delegatorId, adapter, cell, {
-    summary: summarizeOutboundText(batches),
-  });
-}
-
-/**
  * Pipeline 被委派方出站：只保留公开正文，剥离模型 JSON handback（post-turn harness 代发 @）。
  */
 export function sanitizeCellToolJsonInOutboundBatches(
@@ -369,37 +297,6 @@ export function sanitizeCellToolJsonInOutboundBatches(
         const text = removeEmbeddedCellToolJsonFromText(raw);
         if (!text.trim()) return null;
         if (text === raw) return seg;
-        return {
-          type: 'text' as const,
-          data: { text: text.startsWith(' ') ? text : ` ${text}` },
-        };
-      })
-      .filter((seg): seg is MessageElement => seg != null);
-    if (cleaned.length) kept.push(cleaned);
-  }
-  return kept;
-}
-
-export function filterPipelineDelegateeOutboundBatches(
-  batches: MessageElement[][],
-  cell: CollaborationCell,
-  endpointId: string,
-  adapter?: GroupMessageAdapterView,
-): MessageElement[][] {
-  const plannerId = resolvePlannerEndpointId(cell);
-  if (!plannerId || endpointId === plannerId || !isPipelineDelegateeTurn(cell, endpointId)) {
-    return batches;
-  }
-
-  const kept: MessageElement[][] = [];
-  for (const batch of batches) {
-    if (adapter && segmentsMentionEndpoint(batch, plannerId, adapter, cell)) continue;
-    const cleaned = batch
-      .map((seg) => {
-        if (seg.type !== 'text' || seg.data?.text == null) return seg;
-        const text = summarizeDelegateeReply(String(seg.data.text));
-        if (!text || text === '已完成。') return null;
-        if (isCellToolResultJson(String(seg.data.text).trim())) return null;
         return {
           type: 'text' as const,
           data: { text: text.startsWith(' ') ? text : ` ${text}` },

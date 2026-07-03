@@ -2,7 +2,7 @@
  * RosterRound WorkflowStrategy — sequential "轮流发言" over kernel tasks.
  *
  * Replaces the ADR 0026 RosterRound post-turn harness. Instead of mutating
- * `collaboration_cells.round_state`, the roster round is expressed as a chain
+ * cell-level round state, the roster round is expressed as a chain
  * of `group_mention` tasks (one per member, in pipeline-role order), each
  * depending on the previous. The kernel owns the state; the IM group is a
  * projection.

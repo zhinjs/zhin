@@ -10,9 +10,6 @@ import {
 } from './upgrade-agent-db-schema.js';
 
 export const COLLABORATION_SCHEMA_PATCHES: Record<string, Record<string, string>> = {
-  collaboration_cells: {
-    round_state: 'TEXT',
-  },
   collaboration_cell_members: {
     adapter: 'TEXT',
   },

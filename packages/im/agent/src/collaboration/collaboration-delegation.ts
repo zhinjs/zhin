@@ -1,11 +1,10 @@
 /**
  * Pipeline 协作委派识别与 handback 摘要（传输层 harness）。
  */
-import type { Message, Plugin } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 import { extractEmbeddedAiOutboundJson } from '@zhin.js/core';
 import type { CollaborationCell, PipelineArtifactKind } from './types.js';
-import { resolveMemberBySender } from './endpoint-identity.js';
-import { findActiveDelegation, isActiveDelegatee } from './delegation-state.js';
+import { findActiveDelegation } from './delegation-state.js';
 import { isOrchestrationKernelReady } from './collaboration-kernel-bridge.js';
 import { detectCeremonyOrchestrationIntent } from './collaboration-context.js';
 import { resolveNextCeremonyEndpointId } from './ceremony-round.js';
@@ -18,14 +17,6 @@ export function messageTextContent(message: Message): string {
     }
   }
   return parts.join(' ').trim();
-}
-
-function segmentAtUserId(seg: { type: string; data?: Record<string, unknown> }): string {
-  if (seg.type !== 'at' && seg.type !== 'mention') return '';
-  const data = seg.data;
-  if (!data) return '';
-  const raw = data.user_id ?? data.qq ?? data.id;
-  return raw == null ? '' : String(raw);
 }
 
 export function resolvePlannerEndpointId(cell: CollaborationCell): string | undefined {
@@ -149,37 +140,6 @@ export function stripCellToolJsonFromOutputElements(
     kept.push(cleaned === el.content ? el : { ...el, content: cleaned });
   }
   return kept;
-}
-
-/** 当前 endpoint 是否为活跃被委派方。 */
-export function isPipelineDelegateeTurn(
-  cell: CollaborationCell | undefined,
-  endpointId: string,
-): boolean {
-  return isActiveDelegatee(cell, endpointId);
-}
-
-/** 入站是否为 Planner 经 group_delegate 发出的正式委派 @。 */
-export function isPlannerPipelineDelegation(
-  message: Message,
-  cell: CollaborationCell,
-  root?: Plugin,
-): boolean {
-  const delegations = cell.pipelineState?.activeDelegations;
-  if (!delegations?.length) return false;
-
-  const senderId = String(message.$sender?.id ?? '');
-  if (!senderId) return false;
-  const sender = resolveMemberBySender(cell, senderId, root);
-  if (!sender || sender.pipelineRole !== 'planner') return false;
-
-  const activeIds = new Set(delegations.map((d) => d.targetEndpointId));
-  for (const seg of message.$content) {
-    if (seg.type !== 'at' && seg.type !== 'mention') continue;
-    const uid = segmentAtUserId(seg as { type: string; data?: Record<string, unknown> });
-    if (uid && activeIds.has(uid)) return true;
-  }
-  return false;
 }
 
 /** 被委派方 turn hint：上一棒角色与委派期望。 */

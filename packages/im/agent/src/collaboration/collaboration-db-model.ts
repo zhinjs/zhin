@@ -10,8 +10,6 @@ export const COLLABORATION_CELL_MODEL = {
   mission_run_id: { type: 'text' as const, default: '' },
   /** Pipeline 状态机 JSON（ADR 0024 D4）；空串表示尚未初始化。 */
   pipeline_state: { type: 'text' as const, default: '' },
-  /** RosterRound 轮流发言 JSON（ADR 0026）；空串表示未激活。 */
-  round_state: { type: 'text' as const, default: '' },
   version: { type: 'integer' as const, default: 0 },
   enabled: { type: 'integer' as const, default: 1 },
   created_at: { type: 'integer' as const, default: 0 },
@@ -63,7 +61,6 @@ export interface CollaborationCellRecord {
   goal: string;
   mission_run_id: string;
   pipeline_state: string;
-  round_state: string;
   version: number;
   enabled: number;
   created_at: number;
@@ -100,7 +97,6 @@ export interface UpsertCollaborationCellInput {
   goal?: string;
   missionRunId?: string;
   pipelineState?: string;
-  roundState?: string;
   members?: CollaborationCellMemberRecord[];
   enabled?: boolean;
 }
