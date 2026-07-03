@@ -72,7 +72,6 @@ export function applyAiConfigFixes(
     'orchestration_complete',
     'orchestration_retry_task',
     'orchestration_skip_task',
-    'orchestration_patch_state',
   ]);
   const agentSection = next.agent;
   if (agentSection && typeof agentSection === 'object' && !Array.isArray(agentSection)) {

@@ -178,9 +178,9 @@ export const AGENT_ROLE_CONFIGS: Record<AgentRole, AgentRoleConfig> = {
     role: 'planner',
     description: '规划 Agent，全局总控 + 动态路由（ADR 0024 director）',
     allowedTools: [
-      'cell_set_goal', 'cell_mission_status', 'cell_pipeline_status',
-      'cell_manage_pipeline', 'cell_advance_stage', 'cell_reset_pipeline', 'cell_read_artifact',
-      'group_delegate', 'spawn_task', 'ask_user',
+      'orchestration_start', 'orchestration_add_task', 'orchestration_status',
+      'orchestration_complete', 'orchestration_retry_task', 'orchestration_skip_task',
+      'spawn_task', 'ask_user',
     ],
     blockedTools: ['write_file', 'edit_file', 'bash', 'web_search', 'web_fetch', 'generate_image'],
     canSendMessage: true,

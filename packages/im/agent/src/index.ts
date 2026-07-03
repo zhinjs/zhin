@@ -519,10 +519,3 @@ export {
   FIVE_AGENT_WORKFLOW_STRATEGY_NAME,
   createFiveAgentWorkflowStrategy,
 } from './builtin/five-agent/index.js';
-
-export {
-  ROSTER_ROUND_WORKFLOW_STRATEGY_NAME,
-  createRosterRoundWorkflowStrategy,
-  runRosterRound,
-  resolveRosterEndpointIds,
-} from './builtin/roster-round/strategy.js';

@@ -28,7 +28,7 @@ const cell: CollaborationCell = {
       targetRole: 'researcher',
       runId: 'run-1',
       requireArtifact: false,
-      mode: 'ceremony',
+      mode: 'legacy-handoff',
       delegateText: 'intro',
       updatedAt: 1,
     }],
@@ -50,7 +50,7 @@ describe('collaboration-kernel-bridge', () => {
   });
 
   it('substantive reply gate rejects empty handback', () => {
-    expect(isSubstantiveGroupTaskReply('已完成自我介绍 ✅')).toBe(false);
-    expect(isSubstantiveGroupTaskReply('大家好，我是 Researcher，擅长调研。')).toBe(true);
+    expect(isSubstantiveGroupTaskReply('已完成 ✅')).toBe(false);
+    expect(isSubstantiveGroupTaskReply('Researcher 已完成调研，关键结论是可以继续推进。')).toBe(true);
   });
 });

@@ -46,15 +46,6 @@ export function upsertActiveDelegation(
   return [...rest, entry];
 }
 
-/** ceremony 轮流发言：同时只保留一位活跃被委派方。 */
-export function replaceCeremonyDelegation(
-  delegations: ActiveDelegation[] | undefined,
-  entry: ActiveDelegation,
-): ActiveDelegation[] {
-  const rest = (delegations ?? []).filter((d) => d.mode !== 'ceremony');
-  return upsertActiveDelegation(rest, entry);
-}
-
 export function removeActiveDelegationForEndpoint(
   delegations: ActiveDelegation[] | undefined,
   endpointId: string,

@@ -48,12 +48,13 @@ describe('role ACL', () => {
     expect(isToolAllowedForRole('cell_read_artifact', 'reviewer')).toBe(true);
   });
 
-  it('planner cannot write deliverables but can delegate', () => {
+  it('planner cannot write deliverables but can orchestrate', () => {
     expect(isToolAllowedForRole('write_file', 'planner')).toBe(false);
-    expect(isToolAllowedForRole('group_delegate', 'planner')).toBe(true);
-    expect(isToolAllowedForRole('cell_advance_stage', 'planner')).toBe(true);
-    expect(isToolAllowedForRole('cell_manage_pipeline', 'planner')).toBe(true);
-    expect(isToolAllowedForRole('cell_reset_pipeline', 'planner')).toBe(true);
+    expect(isToolAllowedForRole('orchestration_start', 'planner')).toBe(true);
+    expect(isToolAllowedForRole('orchestration_add_task', 'planner')).toBe(true);
+    expect(isToolAllowedForRole('spawn_task', 'planner')).toBe(true);
+    expect(isToolAllowedForRole('group_delegate', 'planner')).toBe(false);
+    expect(isToolAllowedForRole('cell_advance_stage', 'planner')).toBe(false);
   });
 
   it('filters tool name list by role', () => {

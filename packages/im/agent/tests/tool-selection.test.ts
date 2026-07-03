@@ -363,8 +363,6 @@ describe('ToolSelection', () => {
     );
     const externalTools = [
       ...filler,
-      makeTool({ name: 'cell_set_goal', description: 'Set collaboration goal', keywords: ['goal'] }),
-      makeTool({ name: 'cell_mission_status', description: 'Read collaboration cell status', keywords: ['status'] }),
       makeTool({ name: 'group_delegate', description: 'Legacy delegate to peer bot', keywords: ['delegate'] }),
     ];
     const tools = selection.collectRelevantTools('重新启动调研 zhin框架', context, externalTools, {

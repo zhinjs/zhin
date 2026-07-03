@@ -17,7 +17,6 @@ import {
   resolveSkillInstructionMaxChars,
   DEFAULT_CONFIG,
   DEFAULT_HARD_ORCHESTRATOR_TOOLS,
-  COLLABORATION_ORCHESTRATOR_TOOLS,
   type ZhinAgentConfig,
 } from '../zhin-agent/config.js';
 import { PersistentCronEngine, setCronManager } from '../cron-engine.js';
@@ -121,14 +120,6 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     // knowledge_search 始终注册（工具内部处理目录不存在的情况）
     if (orchestratorTools && !orchestratorTools.includes('knowledge_search')) {
       orchestratorTools = [...orchestratorTools, 'knowledge_search'];
-    }
-    if (appConfig.collaboration && typeof appConfig.collaboration === 'object'
-      && (appConfig.collaboration as { enabled?: boolean }).enabled !== false) {
-      for (const name of COLLABORATION_ORCHESTRATOR_TOOLS) {
-        if (!orchestratorTools.includes(name)) {
-          orchestratorTools = [...orchestratorTools, name];
-        }
-      }
     }
     const zhinAgentCfg: ZhinAgentConfig = {
       ...(agentConfig as ZhinAgentConfig | undefined),

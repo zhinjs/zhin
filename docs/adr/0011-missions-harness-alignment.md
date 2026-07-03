@@ -57,7 +57,7 @@ Grill 定稿摘要见本文「已定稿决策」章节（#1–#8）。
 - `validation_spec_paths[]`, `assertion_count`, `last_validation`
 - `decision_log[]`, `retry_budget`, `writer_task_id`
 
-**写入 API：** `OrchestrationRepository.patchMissionState`；工具 `orchestration_patch_state`（按 phase 校验写权限）。
+**历史写入 API：** `OrchestrationRepository.patchMissionState` 曾用于 Missions harness；该设计已被 ADR 0027 的 `OrchestrationKernel` 取代，不再提供模型可见 patch-state 工具。
 
 ### D2. Validation Spec 前置（可执行断言包）
 

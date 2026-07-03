@@ -85,7 +85,7 @@ describe('buildRichSystemPrompt', () => {
       commMessage,
     });
     expect(prompt).toContain('# Runtime');
-    expect(prompt).toContain('Volatile runtime');
+    expect(prompt).toContain('CWD:');
     expect(prompt).not.toContain('Session: platform:icqq');
 
     const envelope = buildTurnContextEnvelope({ commMessage });

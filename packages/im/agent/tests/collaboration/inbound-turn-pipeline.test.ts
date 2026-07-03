@@ -7,6 +7,9 @@ import {
 } from '../../src/collaboration/cell-service.js';
 import { getAgentRuntimeRegistry, resetAgentRuntimeRegistry } from '../../src/collaboration/runtime-registry.js';
 import { MemoryCollaborationCellRepository } from '../../src/collaboration/collaboration-cell-repository.js';
+import { initOrchestrationService } from '../../src/orchestrator/orchestration-service.js';
+import { MemoryOrchestrationRepository } from '../../src/orchestrator/orchestration-repository.js';
+import { registerDefaultExecutors } from '../../src/orchestrator/bootstrap-executors.js';
 
 describe('createInboundTurnPipeline', () => {
   afterEach(() => {
@@ -107,6 +110,91 @@ describe('createInboundTurnPipeline', () => {
     expect(capturedTools.map((t) => t.name)).not.toContain('cell_advance_stage');
   });
 
+  it('does not special-case ordered group requests in the default inbound path', async () => {
+    resetCollaborationCellService();
+    const repo = new MemoryCollaborationCellRepository();
+    await repo.upsert({
+      id: 'icqq-collab-room',
+      adapter: 'icqq',
+      sceneId: '373460458',
+      goal: 'test',
+      members: [
+        { endpointId: '8596238', primary: 'planner', pipelineRole: 'planner' },
+        { endpointId: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
+      ],
+    });
+    getCollaborationCellService().setRepository(repo);
+    await getCollaborationCellService().reloadFromRepository();
+
+    const replies: unknown[] = [];
+    const process = vi.fn(async () => [{ type: 'text', text: 'agent handled ordered group request' }]);
+    const zhinAgent = {
+      getSubagentManager: () => null,
+      process,
+      processMultimodal: vi.fn(),
+      setActiveBinding: vi.fn(),
+      getLastTurnMetrics: () => null,
+    };
+    getAgentRuntimeRegistry().registerForEndpoint('8596238', zhinAgent as any);
+
+    const message = {
+      ...mockCommMessage({
+        adapter: 'icqq',
+        endpoint: '8596238',
+        scope: 'group',
+        sceneId: '373460458',
+      }),
+      $content: [
+        { type: 'at', data: { qq: '8596238' } },
+        { type: 'text', data: { text: ' 组织大家按顺序同步项目进展' } },
+      ],
+    };
+
+    const pipeline = createInboundTurnPipeline({
+      root: { inject: () => undefined } as any,
+      ai: {
+        isReady: () => true,
+        getAccessConfig: () => undefined,
+        getResidentToolsAsTools: () => [],
+      } as any,
+      refs: {
+        aiService: {
+          isReady: () => true,
+          getProvider: () => ({ name: 'mock', models: ['mock-model'] }),
+          getRoutingConfig: () => ({
+            agents: { zhin: { provider: 'mock', model: 'mock-model' } },
+          }),
+          getBindingRegistry: () => ({
+            getDiscoveredAgentNames: () => new Set(['zhin', 'planner']),
+            getBinding: () => null,
+            requireZhinBinding: () => ({
+              name: 'zhin',
+              providerAlias: 'mock',
+              model: 'mock-model',
+              mcpServers: [],
+            }),
+          }),
+          setDiscoveredAgents: () => undefined,
+        },
+        zhinAgent,
+      } as any,
+      triggerConfig: {
+        errorTemplate: 'ERR {error}',
+        resolveQuotedMessages: false,
+      } as any,
+      peerMode: 'mention-only',
+      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn() },
+      replyOutbound: async (payload) => {
+        replies.push(payload);
+      },
+    });
+
+    await pipeline(message, '组织大家按顺序同步项目进展');
+
+    expect(process).toHaveBeenCalled();
+    expect(JSON.stringify(replies)).not.toContain('开始自动接管');
+  });
+
   it('executes spawn_task turn plans through SubagentManager', async () => {
     const spawnSync = vi.fn(async () => 'vision result');
     const process = vi.fn(async () => [{ type: 'text', text: 'local result' }]);
@@ -121,6 +209,41 @@ describe('createInboundTurnPipeline', () => {
       model: 'mock-model',
       mcpServers: [],
     };
+    const zhinAgent = {
+      getSubagentManager: () => ({ spawnSync }),
+      process,
+      processMultimodal: vi.fn(),
+      setActiveBinding: vi.fn(),
+      getLastTurnMetrics: () => null,
+    };
+    const aiService = {
+      isReady: () => true,
+      getProvider: () => ({ name: 'mock', models: ['mock-model'] }),
+      getRoutingConfig: () => ({
+        agents: {
+          zhin: { provider: 'mock', model: 'mock-model' },
+          vision: {
+            provider: 'mock',
+            model: 'mock-model',
+            priority: 10,
+            match: { contentContains: 'route this' },
+          },
+        },
+      }),
+      getBindingRegistry: () => ({
+        getDiscoveredAgentNames: () => new Set(['zhin', 'vision']),
+        getBinding: (name: string) => name === 'vision' ? binding : null,
+        requireZhinBinding: () => ({
+          name: 'zhin',
+          providerAlias: 'mock',
+          model: 'mock-model',
+          mcpServers: [],
+        }),
+      }),
+      setDiscoveredAgents: () => undefined,
+    };
+    const refs = { aiService, zhinAgent } as any;
+    registerDefaultExecutors(initOrchestrationService(new MemoryOrchestrationRepository()), { refs });
     const pipeline = createInboundTurnPipeline({
       root: { inject: () => undefined } as any,
       ai: {
@@ -128,41 +251,7 @@ describe('createInboundTurnPipeline', () => {
         getAccessConfig: () => undefined,
         getResidentToolsAsTools: () => [],
       } as any,
-      refs: {
-        aiService: {
-          isReady: () => true,
-          getProvider: () => ({ name: 'mock', models: ['mock-model'] }),
-          getRoutingConfig: () => ({
-            agents: {
-              zhin: { provider: 'mock', model: 'mock-model' },
-              vision: {
-                provider: 'mock',
-                model: 'mock-model',
-                priority: 10,
-                match: { contentContains: 'route this' },
-              },
-            },
-          }),
-          getBindingRegistry: () => ({
-            getDiscoveredAgentNames: () => new Set(['zhin', 'vision']),
-            getBinding: (name: string) => name === 'vision' ? binding : null,
-            requireZhinBinding: () => ({
-              name: 'zhin',
-              providerAlias: 'mock',
-              model: 'mock-model',
-              mcpServers: [],
-            }),
-          }),
-          setDiscoveredAgents: () => undefined,
-        },
-        zhinAgent: {
-          getSubagentManager: () => ({ spawnSync }),
-          process,
-          processMultimodal: vi.fn(),
-          setActiveBinding: vi.fn(),
-          getLastTurnMetrics: () => null,
-        },
-      } as any,
+      refs,
       triggerConfig: {
         errorTemplate: 'ERR {error}',
         resolveQuotedMessages: false,

@@ -146,7 +146,7 @@ describe('DatabaseCollaborationCellRepository', () => {
       allowedNextStages: ['evaluator' as const],
       todo: [] as { id: string; text: string }[],
       pendingDelegateTarget: '210723495',
-      taskBrief: '做自我介绍',
+      taskBrief: '整理调研摘要',
       updatedAt: 1,
     };
     const cellRow = {
@@ -179,6 +179,6 @@ describe('DatabaseCollaborationCellRepository', () => {
     const cell = await repo.getById('cell-icqq-373460458');
     expect(cell?.pipelineState?.stage).toBe('researcher');
     expect(cell?.pipelineState?.pendingDelegateTarget).toBe('210723495');
-    expect(cell?.pipelineState?.taskBrief).toBe('做自我介绍');
+    expect(cell?.pipelineState?.taskBrief).toBe('整理调研摘要');
   });
 });

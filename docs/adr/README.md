@@ -29,7 +29,7 @@
 | [0023](./0023-group-cell-multi-endpoint-agents.md) | GroupCell 多 Endpoint Agent 协作 |
 | [0024](./0024-five-agent-aop-pipeline.md) | Five-Agent Pipeline（Superseded） |
 | [0025](./0025-adapter-ai-outbound-json.md) | Adapter 驱动的 AI 结构化出站 JSON |
-| [0026](./0026-roster-round-harness.md) | RosterRound 轮流发言编排 Harness |
+| [0026](./0026-retire-scenario-specific-pipeline-harnesses.md) | 废弃场景专用 Pipeline Harness |
 | [0027](./0027-agent-run-orchestration-kernel.md) | Agent Run Orchestration Kernel |
 
 ## 相关

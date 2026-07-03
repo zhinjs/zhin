@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { Message } from '../../../core/src/message.js';
 import {
-  detectCeremonyOrchestrationIntent,
   formatCollaborationCellHint,
   resolveCollaborationCellForMessage,
   resolveCollaborationTurnHint,
@@ -44,7 +43,6 @@ describe('formatCollaborationCellHint', () => {
     expect(hint).toContain('Assignments and task handback are managed by the orchestration kernel');
     expect(hint).not.toContain('group_delegate');
     expect(hint).not.toContain('cell_pipeline_status');
-    expect(hint).toContain('cell_mission_status');
   });
 });
 
@@ -120,8 +118,8 @@ describe('resolveCollaborationTurnHint', () => {
         targetRole: 'researcher',
         runId: 'run-1',
         requireArtifact: false,
-        delegateText: '做自我介绍',
-        mode: 'ceremony',
+        delegateText: '整理调研摘要',
+        mode: 'legacy-handoff',
         updatedAt: Date.now(),
       }],
       updatedAt: Date.now(),
@@ -130,7 +128,7 @@ describe('resolveCollaborationTurnHint', () => {
     const hint = resolveCollaborationTurnHint(groupMessage('210723495'));
     expect(hint).toContain('Assignments and peer mentions are managed by the orchestration kernel');
     expect(hint).not.toContain('[Active delegation]');
-    expect(hint).not.toContain('做自我介绍');
+    expect(hint).not.toContain('整理调研摘要');
     expect(hint).not.toContain('[Delegate]');
   });
 
@@ -198,7 +196,7 @@ describe('resolveCollaborationTurnHint', () => {
     expect(hint).not.toContain('cell_manage_pipeline');
   });
 
-  it('does not inject legacy ceremony delegation instructions for ordinary planner turns', async () => {
+  it('does not inject legacy delegation scripts for ordinary planner turns', async () => {
     const svc = getCollaborationCellService();
     const repo = new MemoryCollaborationCellRepository();
     await repo.upsert({
@@ -215,17 +213,9 @@ describe('resolveCollaborationTurnHint', () => {
 
     const hint = resolveCollaborationTurnHint(
       groupMessage('8596238'),
-      '组织大家，一次在群里做一个自我介绍',
+      '组织大家在群里按顺序同步项目进展',
     );
-    expect(hint).not.toContain('[Ceremony]');
     expect(hint).not.toContain('requireArtifact=false');
-  });
-});
-
-describe('detectCeremonyOrchestrationIntent', () => {
-  it('matches intro and round-robin phrasing', () => {
-    expect(detectCeremonyOrchestrationIntent('组织大家做一次自我介绍')).toBe(true);
-    expect(detectCeremonyOrchestrationIntent('请大家依次汇报')).toBe(true);
-    expect(detectCeremonyOrchestrationIntent('调研 Zhin 框架')).toBe(false);
+    expect(hint).not.toContain('cell_submit_artifact');
   });
 });

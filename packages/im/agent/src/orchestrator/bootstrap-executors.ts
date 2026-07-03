@@ -5,7 +5,7 @@
  * For that contract to hold, executors must live in the kernel's registry
  * rather than being passed inline at each call site. This module owns the
  * three executor kinds (local / group_mention / remote_mesh) and registers
- * the five-agent workflow strategy, so the IM inbound path and tool path can
+ * generic built-in workflow strategies, so the IM inbound path and tool path can
  * dispatch through `orch.runTask(taskId, message)` without supplying their
  * own executor.
  */
@@ -17,7 +17,6 @@ import { buildSubagentInboundTask } from '../media/index.js';
 import { sendGroupPeerMention } from '../collaboration/im-mention-delegate.js';
 import { executeRemoteOrchestrationTask } from './remote-task-executor.js';
 import { createFiveAgentWorkflowStrategy } from '../builtin/five-agent/strategy.js';
-import { createRosterRoundWorkflowStrategy } from '../builtin/roster-round/strategy.js';
 
 export interface RegisterExecutorsDeps {
   refs: AIServiceRefs;
@@ -122,7 +121,6 @@ export function registerDefaultExecutors(
     kernel.registerExecutor(groupMentionExecutor),
     kernel.registerExecutor(remoteMeshExecutor),
     kernel.registerWorkflowStrategy(createFiveAgentWorkflowStrategy()),
-    kernel.registerWorkflowStrategy(createRosterRoundWorkflowStrategy()),
   ];
   return () => {
     for (const cleanup of cleanups) cleanup();

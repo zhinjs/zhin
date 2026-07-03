@@ -12,8 +12,6 @@ import { getCollaborationCellService } from '../../collaboration/cell-service.js
 import { resolveCellForScene, findCellMemberByEndpoint } from '../../collaboration/collaboration-config.js';
 import { resolveArtifactRunId } from '../../collaboration/resolve-agent-session-key.js';
 import { resolveArtifactSubmitRunId, findActiveDelegation } from '../../collaboration/delegation-state.js';
-import { detectCeremonyOrchestrationIntent } from '../../collaboration/collaboration-context.js';
-import { isCeremonyActive } from '../../collaboration/ceremony-round.js';
 import { readCollaborationTurnSnapshot } from '../../collaboration/collaboration-turn-snapshot.js';
 import {
   isPipelineRole,
@@ -146,14 +144,7 @@ class CellSubmitArtifactTool extends BuiltinBaseTool {
     if (delegation && !delegation.requireArtifact) {
       return {
         ok: false,
-        error: '当前为 ceremony 委派，无需 cell_submit_artifact；请公开自我介绍后 handback @Planner',
-      };
-    }
-    const ceremonyGoal = state.userGoal ?? cell.goal;
-    if (!delegation?.requireArtifact && detectCeremonyOrchestrationIntent(ceremonyGoal)) {
-      return {
-        ok: false,
-        error: '仪式/自我介绍任务无需产物；请直接回复群消息',
+        error: '当前委派未要求结构化产物；请直接回复任务结果并 handback @Planner',
       };
     }
     const snap = readCollaborationTurnSnapshot(this.ctx);
@@ -243,12 +234,6 @@ class CellAdvanceStageTool extends BuiltinBaseTool {
   async run(args: Record<string, unknown>): Promise<ToolResult> {
     const cell = resolveCell(this.ctx);
     if (!cell) return { ok: false, error: '无法解析协作单元' };
-    if (isCeremonyActive(cell)) {
-      return {
-        ok: false,
-        error: 'ceremony/自我介绍任务请勿 cell_advance_stage；handback 后 harness 会自动 @ 下一位',
-      };
-    }
     const member = findCellMemberByEndpoint(cell, String(this.ctx.$endpoint));
     if (member?.pipelineRole && member.pipelineRole !== 'planner') {
       return { ok: false, error: '仅 Planner 可推进阶段' };

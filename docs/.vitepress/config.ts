@@ -244,7 +244,7 @@ export default withMermaid(defineConfig({
             { text: '0023 GroupCell 多 Endpoint', link: '/adr/0023-group-cell-multi-endpoint-agents' },
             { text: '0024 Five-Agent Pipeline (Superseded)', link: '/adr/0024-five-agent-aop-pipeline' },
             { text: '0025 AI Outbound JSON', link: '/adr/0025-adapter-ai-outbound-json' },
-            { text: '0026 RosterRound Harness', link: '/adr/0026-roster-round-harness' },
+            { text: '0026 废弃场景专用 Harness', link: '/adr/0026-retire-scenario-specific-pipeline-harnesses' },
             { text: '0027 Orchestration Kernel', link: '/adr/0027-agent-run-orchestration-kernel' },
           ],
         },

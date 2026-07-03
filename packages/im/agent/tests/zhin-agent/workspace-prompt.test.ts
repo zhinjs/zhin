@@ -23,7 +23,7 @@ describe('workspace-prompt', () => {
   it('包内 fallback 可加载 orchestrator', () => {
     const text = resolveWorkspacePrompt('orchestrator', undefined, tmpDir);
     expect(text).toContain('# Orchestration');
-    expect(text).toContain('run_deferred_task');
+    expect(text).toContain('spawn_task');
   });
 
   it('workspace 覆盖通用文件', () => {

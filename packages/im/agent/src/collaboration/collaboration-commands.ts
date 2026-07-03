@@ -21,6 +21,7 @@ import { getSceneIdentityService } from './scene-identity-service.js';
 import { startInitWizard, aggregateAndActivate, cancelInitWizard } from './init-wizard-service.js';
 import { extractAtTargets, buildRegisteredEndpointMap } from './init-observe-hook.js';
 import { checkCollabAdminGate } from './collab-admin-gate.js';
+import { getOrchestrationService } from '../orchestrator/orchestration-service.js';
 
 const PIPELINE_ROLE_LABELS_ZH: Record<PipelineRole, string> = {
   planner: '规划员',
@@ -257,8 +258,7 @@ function formatMemberLine(cell: CollaborationCell): string {
     .join('\n');
 }
 
-function formatStatus(cell: CollaborationCell): string {
-  const pipeline = cell.pipelineState;
+async function formatStatus(cell: CollaborationCell): Promise<string> {
   const lines = [
     `协作群 ${cell.id}`,
     `  adapter: ${cell.adapter}`,
@@ -267,14 +267,38 @@ function formatStatus(cell: CollaborationCell): string {
     `  members (${cell.members.length}):`,
     formatMemberLine(cell) || '  (无成员 — 使用 /collab bind)',
   ];
-  if (pipeline) {
-    lines.push(
-      `  pipeline: ${pipeline.stage} (run ${pipeline.runId.slice(0, 8)}…)`,
-      `  delegations: ${pipeline.activeDelegations?.length ?? 0}`,
-    );
+
+  const runId = cell.missionRunId?.trim();
+  if (runId) {
+    lines.push(`  kernel run: ${runId}`);
+    const orch = getOrchestrationService();
+    if (orch) {
+      const snapshot = await orch.getStatus(runId);
+      if (snapshot) {
+        const active = snapshot.tasks.filter((t) =>
+          ['pending', 'assigned', 'running', 'waiting_result'].includes(t.status),
+        ).length;
+        lines.push(
+          `  run status: ${snapshot.run.status}; tasks: ${snapshot.tasks.length} (${active} active)`,
+        );
+      }
+    }
   } else {
-    lines.push('  pipeline: (未初始化 — @规划员 启动任务或 /collab reset)');
+    lines.push('  kernel run: (none — Planner 使用 orchestration_start 或群内 @Planner 启动)');
   }
+
+  const pipeline = cell.pipelineState;
+  if (pipeline?.activeDelegations?.length) {
+    lines.push(
+      `  legacy delegations: ${pipeline.activeDelegations.length} (deprecated — 见 kernel run / orchestration_status)`,
+    );
+  }
+  if (pipeline && !runId) {
+    lines.push(
+      `  legacy pipeline: ${pipeline.stage} (run ${pipeline.runId.slice(0, 8)}…) — ADR 0026 起请用 kernel`,
+    );
+  }
+
   return lines.join('\n');
 }
 
@@ -299,7 +323,7 @@ export async function handleCollabStatus(message: Message): Promise<string> {
       '      /collab bind <endpoint> <pipelineRole>',
     ].join('\n');
   }
-  return formatStatus(cell);
+  return await formatStatus(cell);
 }
 
 
@@ -429,7 +453,7 @@ export async function handleCollabBind(
   const label = transportAdapter === cell.adapter
     ? endpointId
     : `${transportAdapter}/${endpointId}`;
-  return `✅ 已绑定 ${label} → ${pipelineRoleRaw}\n${formatStatus(cell)}`;
+  return `✅ 已绑定 ${label} → ${pipelineRoleRaw}\n${await formatStatus(cell)}`;
 }
 
 export async function handleCollabUnbind(message: Message, endpointRef: string): Promise<string> {
@@ -449,7 +473,7 @@ export async function handleCollabUnbind(message: Message, endpointRef: string):
 
   const fresh = (await svc.getCellFresh(cell.id)) ?? cell;
   await rebootstrapEndpointRuntimes();
-  return `✅ 已移除 ${endpointId}\n${formatStatus(fresh)}`;
+  return `✅ 已移除 ${endpointId}\n${await formatStatus(fresh)}`;
 }
 
 export async function handleCollabReset(message: Message, force = true): Promise<string> {
@@ -463,14 +487,14 @@ export async function handleCollabReset(message: Message, force = true): Promise
   if (!cell) return '⚠️ 当前群未注册协作 Cell。请先 /collab init';
 
   if (!cell.pipelineState) {
-    return `ℹ️ 协作群已注册，pipeline 尚未启动。\n${formatStatus(cell)}`;
+    return `ℹ️ 协作群已注册，pipeline 尚未启动。\n${await formatStatus(cell)}`;
   }
 
   const result = await getPipelineService().resetRun(cell.id, { force });
   if (!result.ok) return `⚠️ 重置失败：${result.error}`;
 
   const fresh = (await svc.getCellFresh(cell.id)) ?? cell;
-  return `✅ 已重置 pipeline（run ${result.previousRunId?.slice(0, 8) ?? '?'} → ${result.state.runId.slice(0, 8)}）\n${formatStatus(fresh)}`;
+  return `✅ 已重置 pipeline（run ${result.previousRunId?.slice(0, 8) ?? '?'} → ${result.state.runId.slice(0, 8)}）\n${await formatStatus(fresh)}`;
 }
 
 /**
@@ -557,7 +581,7 @@ export async function handleCollabInited(
     lines.push(...result.warnings.map((w) => `⚠️ ${w}`));
   }
   if (result.cell) {
-    lines.push(formatStatus(result.cell));
+    lines.push(await formatStatus(result.cell));
   }
   return lines.join('\n');
 }

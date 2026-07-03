@@ -6,7 +6,6 @@ import {
   removeActiveDelegationForEndpoint,
   resolveArtifactSubmitRunId,
   findInFlightArchivedRunId,
-  replaceCeremonyDelegation,
 } from '../../src/collaboration/delegation-state.js';
 import type { CollaborationCell } from '../../src/collaboration/types.js';
 
@@ -48,30 +47,6 @@ describe('delegation-state', () => {
   it('isActiveDelegatee excludes planner', () => {
     expect(isActiveDelegatee(cell, 'researcher')).toBe(true);
     expect(isActiveDelegatee(cell, 'planner')).toBe(false);
-  });
-
-  it('replaceCeremonyDelegation keeps only one ceremony delegatee', () => {
-    const a = {
-      targetEndpointId: 'researcher',
-      targetRole: 'researcher' as const,
-      runId: 'run-1',
-      requireArtifact: false,
-      mode: 'ceremony' as const,
-      delegateText: 'a',
-      updatedAt: 1,
-    };
-    const b = {
-      targetEndpointId: 'evaluator',
-      targetRole: 'evaluator' as const,
-      runId: 'run-1',
-      requireArtifact: false,
-      mode: 'ceremony' as const,
-      delegateText: 'b',
-      updatedAt: 2,
-    };
-    const list = replaceCeremonyDelegation([a], b);
-    expect(list).toHaveLength(1);
-    expect(list[0]?.targetEndpointId).toBe('evaluator');
   });
 
   it('upsert and remove active delegations', () => {

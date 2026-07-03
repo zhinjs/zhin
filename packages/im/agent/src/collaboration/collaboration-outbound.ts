@@ -318,7 +318,7 @@ export function parseCollaborationReplyJson(raw: string): CollaborationReplyPayl
 export interface GroupDelegatePayload extends CollaborationReplyPayload {
   requireArtifact: boolean;
   artifactKinds?: import('./types.js').PipelineArtifactKind[];
-  mode?: import('./types.js').ActiveDelegationMode;
+  mode?: string;
 }
 
 function parseGroupDelegateFields(obj: Record<string, unknown>): GroupDelegatePayload | null {
@@ -335,7 +335,7 @@ function parseGroupDelegateFields(obj: Record<string, unknown>): GroupDelegatePa
         && ['report', 'blueprint', 'deliverable', 'review', 'citations'].includes(k),
     )
     : undefined;
-  const mode = obj.mode === 'ceremony' || obj.mode === 'pipeline' ? obj.mode : undefined;
+  const mode = typeof obj.mode === 'string' && obj.mode.trim() ? obj.mode.trim() : undefined;
   return { mentions, text, requireArtifact: obj.requireArtifact, artifactKinds, mode };
 }
 

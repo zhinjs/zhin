@@ -188,19 +188,11 @@ export const HARD_ORCHESTRATION_TOOLS = [
   'orchestration_complete',
   'orchestration_retry_task',
   'orchestration_skip_task',
-  'orchestration_patch_state',
-] as const;
-
-/** 群协作单元轻量工具。任务分派统一走 OrchestrationKernel/spawn_task。 */
-export const COLLABORATION_ORCHESTRATOR_TOOLS = [
-  'cell_set_goal',
-  'cell_mission_status',
 ] as const;
 
 export const DEFAULT_HARD_ORCHESTRATOR_TOOLS = [
   ...DEFAULT_ORCHESTRATOR_TOOLS,
   ...HARD_ORCHESTRATION_TOOLS,
-  ...COLLABORATION_ORCHESTRATOR_TOOLS,
 ] as const;
 
 /** Deferred Worker 默认基础工具 */

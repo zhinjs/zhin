@@ -351,8 +351,7 @@ function buildContextSection(
 ): string {
   const envItems = [
     `CWD: ${process.cwd()}`,
-    `Host: ${os.platform()} | Node ${process.version} | Shell: ${process.env.SHELL || 'unknown'}`,
-    'Volatile runtime (time, session, deferred catalog, memory) is in [Turn context] on each user message.',
+    `Host: ${os.platform()} | Node ${process.version}`,
   ];
 
   return [
@@ -367,8 +366,7 @@ function buildContextSection(
 function buildPipelineRuntimeSection(commMessage?: Message): string {
   const envItems = [
     `CWD: ${process.cwd()}`,
-    `Host: ${os.platform()} | Node ${process.version} | Shell: ${process.env.SHELL || 'unknown'}`,
-    'Volatile runtime (time, session, pipeline stage, memory) is in [Turn context] on each user message.',
+    `Host: ${os.platform()} | Node ${process.version}`,
   ];
   if (commMessage) {
     const sessionLine = formatSessionContextLine(commMessage);

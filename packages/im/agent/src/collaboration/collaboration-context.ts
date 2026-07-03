@@ -8,18 +8,6 @@ import {
 import type { CollaborationCell } from './types.js';
 import { resolveCellForScene, findCellMemberByEndpoint } from './collaboration-config.js';
 
-/** 用户要求重来 / 重启 pipeline（Planner 应先 cell_reset_pipeline）。 */
-export function detectPipelineRestartIntent(content: string | undefined): boolean {
-  if (!content?.trim()) return false;
-  return /重新(开始|启动|来)|从头开始|重来|再来一次|restart(?:\s+(?:the\s+)?(?:process|pipeline|run))?|new\s+run/i.test(content);
-}
-
-/** 仪式/轮流协作任务（自我介绍、依次发言等）— 不走调研 pipeline + 产物。 */
-export function detectCeremonyOrchestrationIntent(content: string | undefined): boolean {
-  if (!content?.trim()) return false;
-  return /自我介绍|介绍一下自己|依次|轮流|按顺序|点名|round\s*robin|大家.{0,8}(说|发言|介绍|汇报)|组织大家/i.test(content);
-}
-
 /** 每轮 turn envelope 用的精简 Cell 提示（勿重复 buildAiOutboundPromptHint 长文）。 */
 export function formatCollaborationTurnCellHint(
   cell: CollaborationCell,
@@ -83,7 +71,6 @@ export function formatCollaborationCellHint(
       forceJsonOnly: options?.forceJsonOnly ?? false,
     }),
     'Assignments and task handback are managed by the orchestration kernel.',
-    'Status: cell_mission_status.',
   ];
   return lines.join('\n');
 }

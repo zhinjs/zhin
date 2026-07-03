@@ -66,9 +66,6 @@ export interface PipelineRunArchive {
 
 export type PipelineManageAction = 'create' | 'reset' | 'update' | 'activate' | 'list';
 
-/** Planner group_delegate 写入的活跃委派（可并行多项）。 */
-export type ActiveDelegationMode = 'pipeline' | 'ceremony';
-
 export interface ActiveDelegation {
   targetEndpointId: string;
   targetRole: PipelineRole;
@@ -76,7 +73,8 @@ export interface ActiveDelegation {
   runId: string;
   requireArtifact: boolean;
   artifactKinds?: PipelineArtifactKind[];
-  mode?: ActiveDelegationMode;
+  /** @deprecated Legacy planner metadata; OrchestrationKernel tasks carry executor/workflow state. */
+  mode?: string;
   delegateText: string;
   updatedAt: number;
 }
@@ -101,8 +99,6 @@ export interface PipelineState {
   pendingDelegateTarget?: string;
   /** @deprecated 使用 activeDelegations[].delegateText */
   taskBrief?: string;
-  /** ceremony 轮流发言：已完成公开介绍的 endpointId 列表 */
-  ceremonySpoken?: string[];
   updatedAt: number;
 }
 

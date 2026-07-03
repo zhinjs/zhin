@@ -174,10 +174,6 @@ export function formatActiveDelegationHint(
       lines.push(...artifactSubmitInstructions(kinds));
     }
     lines.push('Read: cell_pipeline_status → cell_read_artifact → submit → public reply.');
-  } else if (delegation.mode === 'ceremony') {
-    lines.push('Ceremony: write 2–4 sentence PUBLIC self-intro (or on-topic reply) in this turn.');
-    lines.push('Do NOT reply with only "已完成" — harness blocks empty handback.');
-    lines.push('After public intro, hand back: {"mentions":["planner"],"text":"已完成。"}');
   } else {
     lines.push('No artifact required; brief public summary is enough.');
   }
