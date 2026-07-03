@@ -20,6 +20,7 @@ import {
 import type { AssistantConfig } from './config.js';
 import type { AssistantJob, AssistantJobFile, JobAction, JobNotify } from './types.js';
 import { ASSISTANT_JOBS_FILENAME, ASSISTANT_JOBS_VERSION } from './types.js';
+import { parseJobNotify } from './notification-router.js';
 
 const logger = new Logger(null, 'assistant-job-store');
 
@@ -159,8 +160,7 @@ export class AssistantJobStore {
     payload?: unknown;
   }): Promise<AssistantJob> {
     const now = Date.now();
-    // 未指定时留 im 空壳，执行时由 TaskExecutor 合并 assistant.defaults.notify
-    const notify: JobNotify = input.notify ?? { channel: 'im' };
+    const notify: JobNotify = input.notify ?? { channel: 'silent' };
     const job: AssistantJob = {
       id: input.id,
       label: input.label,
@@ -287,12 +287,9 @@ export class AssistantJobStore {
 }
 
 function normalizeJob(raw: AssistantJob): AssistantJob {
-  if (!raw.notify || typeof raw.notify !== 'object' || !('channel' in raw.notify)) {
-    throw new Error(`assistant-jobs.json: job "${raw.id}" 缺少 notify 字段（破坏性更新：context 已移除）`);
-  }
   return {
     ...raw,
-    notify: raw.notify,
+    notify: parseJobNotify(raw.notify),
     state: raw.state ?? {},
     createdAt: raw.createdAt ?? Date.now(),
     updatedAt: raw.updatedAt ?? raw.createdAt ?? Date.now(),

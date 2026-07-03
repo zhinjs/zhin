@@ -17,9 +17,23 @@ import {
 } from "./project-files.js";
 import { handleDbRpc } from "./handlers-db.js";
 import { assertDemoRpcAllowed } from "@zhin.js/host-router/router";
+import { parseJobNotify, type JobNotify } from "@zhin.js/agent";
 
 function reply(ctx: ConsoleRpcContext, payload: Record<string, unknown>) {
   ctx.emit(payload);
+}
+
+function parseCronNotify(message: Record<string, unknown>): JobNotify {
+  const raw = message.notify;
+  if (raw && typeof raw === "object" && raw !== null && "channel" in raw) {
+    return parseJobNotify(raw);
+  }
+  const ch = String(message.notifyChannel ?? message.notify_channel ?? "silent").toLowerCase();
+  if (ch === "im") {
+    throw new Error("IM notify requires notify.target (IMDeliveryTarget)");
+  }
+  if (ch === "log") return { channel: "log" };
+  return { channel: "silent" };
 }
 
 type CronFeatureLike = {
@@ -77,22 +91,6 @@ async function withPersistentCronEngine(
   }
   await run(m.engine);
   return true;
-}
-
-type CronJobNotify =
-  | { channel: "im"; platform?: string; endpointId?: string; sceneId?: string; scope?: string }
-  | { channel: "silent" }
-  | { channel: "log" };
-
-function parseCronNotify(message: Record<string, unknown>): CronJobNotify {
-  const raw = message.notify;
-  if (raw && typeof raw === "object" && raw !== null && "channel" in raw) {
-    return raw as CronJobNotify;
-  }
-  const ch = String(message.notifyChannel ?? message.notify_channel ?? "silent").toLowerCase();
-  if (ch === "im") return { channel: "im" };
-  if (ch === "log") return { channel: "log" };
-  return { channel: "silent" };
 }
 
 /** Console RPC（返回是否已处理）。 */

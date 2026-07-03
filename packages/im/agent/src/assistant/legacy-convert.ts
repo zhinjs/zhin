@@ -1,9 +1,10 @@
 /**
  * Legacy cron-jobs / scheduler-jobs ↔ AssistantJob 转换
  */
-import type { Message } from '@zhin.js/core';
+import { messageToIMDeliveryTarget as coreMessageToIMDeliveryTarget, type IMDeliveryTarget, type Message } from '@zhin.js/core';
 import type { CronJobRecord } from '../cron-engine.js';
 import type { AssistantJob, JobAction, JobNotify, JobSchedule } from './types.js';
+import { parseJobNotify } from './notification-router.js';
 
 const HEARTBEAT_PAYLOAD_KIND = 'heartbeat';
 
@@ -15,7 +16,7 @@ export function cronRecordToAssistant(record: CronJobRecord): AssistantJob {
     enabled: record.enabled,
     schedule: { kind: 'cron', expr: record.cronExpression },
     action: { kind: 'agent', prompt: record.prompt },
-    notify: record.notify,
+    notify: parseJobNotify(record.notify),
     createdAt: record.createdAt,
     updatedAt: record.createdAt,
     state: {
@@ -89,13 +90,7 @@ function schedulerPayloadToAction(payload: LegacySchedulerJob['payload']): JobAc
 export function schedulerRecordToAssistant(record: LegacySchedulerJob): AssistantJob | null {
   const schedule = schedulerScheduleToJobSchedule(record.schedule);
   if (!schedule) return null;
-  const notify: JobNotify = record.payload.deliver && record.payload.channel
-    ? {
-        channel: 'im',
-        platform: record.payload.channel,
-        sceneId: record.payload.to,
-      }
-    : { channel: 'silent' };
+  const notify: JobNotify = { channel: 'silent' };
 
   return {
     id: record.id.startsWith('assistant-') ? record.id : `assistant-${record.id}`,
@@ -131,17 +126,7 @@ export function jobPrompt(job: AssistantJob): string {
   return job.action.prompt;
 }
 
-/** 从 Message 通讯上下文构建 im notify（cron_add 等） */
-export function commMessageToImNotify(message: Message<any>): JobNotify {
-  if (!message.$adapter && !message.$endpoint && !message.$channel?.id) {
-    return { channel: 'silent' };
-  }
-  return {
-    channel: 'im',
-    platform: String(message.$adapter),
-    endpointId: message.$endpoint,
-    senderId: message.$sender?.id,
-    sceneId: message.$channel?.id,
-    scope: message.$channel?.type,
-  };
+/** 从 Message 通讯上下文构建完整 IM 投递目标（cron_add 等） */
+export function messageToIMDeliveryTarget(message: Message<any>): IMDeliveryTarget | undefined {
+  return coreMessageToIMDeliveryTarget(message);
 }

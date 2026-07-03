@@ -71,7 +71,7 @@ export {
   assistantToCronRecord,
   cronRecordToAssistant,
   schedulerRecordToAssistant,
-  commMessageToImNotify,
+  messageToIMDeliveryTarget,
   isCronSchedulable,
   jobPrompt,
 } from './legacy-convert.js';
@@ -92,8 +92,8 @@ export type { AssistantJobEngineOptions } from './job-engine.js';
 export {
   createNotificationRouter,
   resolveEffectiveNotify,
-  notifyToSendOptions,
-  mergeImNotify,
+  imNotifyToSendOptions,
+  parseJobNotify,
 } from './notification-router.js';
 export type {
   NotificationRouter,

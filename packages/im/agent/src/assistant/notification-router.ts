@@ -1,10 +1,9 @@
 /**
  * NotificationRouter — 按 JobNotify.channel 分发任务结果（M3）
  */
-import type { MessageType, SendOptions } from '@zhin.js/core';
-import { Logger } from '@zhin.js/core';
+import type { SendOptions } from '@zhin.js/core';
+import { Logger, sceneRefToSendOptions } from '@zhin.js/core';
 import { formatCompact } from '@zhin.js/logger';
-import { toSendOptions, type NormalizedQueueOutboundDetail } from '@zhin.js/core/queue-im-field-contract';
 import type { JobNotify } from './types.js';
 
 const logger = new Logger(null, 'notification-router');
@@ -29,15 +28,51 @@ export interface DeliverResult {
   channel: JobNotify['channel'];
 }
 
-export function mergeImNotify(notify: ImJobNotify, defaults?: JobNotify): ImJobNotify {
-  const def = defaults?.channel === 'im' ? defaults : undefined;
+function assertImJobNotify(notify: ImJobNotify): void {
+  const target = notify.target;
+  if (!target || target.channel !== 'im') {
+    throw new Error('IM notify requires target (IMDeliveryTarget)');
+  }
+  const scene = target.scene;
+  if (!scene?.platform || !scene.endpointId || !scene.sceneId || !scene.kind) {
+    throw new Error('IM notify target.scene requires platform, endpointId, sceneId, kind');
+  }
+}
+
+/** 解析并校验持久化 notify（破坏性：不接受 flat platform/endpointId/sceneId/scope） */
+export function parseJobNotify(notify: unknown): JobNotify {
+  if (!notify || typeof notify !== 'object' || !('channel' in notify)) {
+    throw new Error('Invalid notify: missing channel');
+  }
+  const parsed = notify as JobNotify;
+  if (parsed.channel === 'im') {
+    assertImJobNotify(parsed);
+  }
+  return parsed;
+}
+
+function mergeImTargets(primary: ImJobNotify, fallback: ImJobNotify): ImJobNotify {
+  const p = primary.target;
+  const f = fallback.target;
   return {
     channel: 'im',
-    platform: notify.platform ?? def?.platform,
-    endpointId: notify.endpointId ?? def?.endpointId,
-    senderId: notify.senderId ?? def?.senderId,
-    sceneId: notify.sceneId ?? def?.sceneId,
-    scope: notify.scope ?? def?.scope,
+    target: {
+      channel: 'im',
+      scene: {
+        platform: p.scene.platform || f.scene.platform,
+        endpointId: p.scene.endpointId || f.scene.endpointId,
+        sceneId: p.scene.sceneId || f.scene.sceneId,
+        kind: p.scene.kind || f.scene.kind,
+        ...(p.scene.senderId ?? f.scene.senderId
+          ? { senderId: p.scene.senderId ?? f.scene.senderId }
+          : {}),
+        ...(p.scene.parent ?? f.scene.parent
+          ? { parent: p.scene.parent ?? f.scene.parent }
+          : {}),
+      },
+      ...(p.threadId ?? f.threadId ? { threadId: p.threadId ?? f.threadId } : {}),
+      ...(p.quoteId ?? f.quoteId ? { quoteId: p.quoteId ?? f.quoteId } : {}),
+    },
   };
 }
 
@@ -46,8 +81,8 @@ export function resolveEffectiveNotify(
   defaults: JobNotify | undefined,
 ): JobNotify {
   if (notify) {
-    if (notify.channel === 'im') {
-      return mergeImNotify(notify, defaults);
+    if (notify.channel === 'im' && defaults?.channel === 'im') {
+      return mergeImTargets(notify, defaults);
     }
     return notify;
   }
@@ -55,38 +90,29 @@ export function resolveEffectiveNotify(
   return { channel: 'silent' };
 }
 
-export function notifyToSendOptions(notify: ImJobNotify, content: string): SendOptions {
-  if (!notify.endpointId) throw new Error('Missing notify field: endpointId');
-  const sceneType = (notify.scope || 'private') as MessageType;
-  const outboundDetail: NormalizedQueueOutboundDetail = {
-    context: notify.platform || 'cron',
-    endpoint: notify.endpointId,
-    channelId: notify.sceneId || 'cron',
-    channelType: sceneType,
-    content,
-  };
-  if (notify.senderId) outboundDetail.senderId = notify.senderId;
-  return toSendOptions(outboundDetail);
+export function imNotifyToSendOptions(notify: ImJobNotify, content: string): SendOptions {
+  return sceneRefToSendOptions(notify.target, content);
 }
 
 export function createNotificationRouter(deps: NotificationRouterDeps) {
   async function deliverIm(notify: ImJobNotify, content: string): Promise<DeliverResult> {
-    if (!notify.platform || !notify.endpointId || !notify.sceneId) {
+    const scene = notify.target.scene;
+    if (!scene.platform || !scene.endpointId || !scene.sceneId) {
       logger.warn(formatCompact({
         op: 'notify_im_skip',
         reason: 'missing_routing',
-        platform: notify.platform,
-        endpointId: notify.endpointId,
-        sceneId: notify.sceneId,
+        platform: scene.platform,
+        endpointId: scene.endpointId,
+        sceneId: scene.sceneId,
       }));
       return { delivered: false, channel: 'im' };
     }
-    const adapter = deps.resolveAdapter(notify.platform);
+    const adapter = deps.resolveAdapter(scene.platform);
     if (!adapter) {
-      logger.warn(formatCompact({ op: 'notify_im_skip', reason: 'adapter_not_found', platform: notify.platform }));
+      logger.warn(formatCompact({ op: 'notify_im_skip', reason: 'adapter_not_found', platform: scene.platform }));
       return { delivered: false, channel: 'im' };
     }
-    await adapter.sendMessage(notifyToSendOptions(notify, content));
+    await adapter.sendMessage(imNotifyToSendOptions(notify, content));
     return { delivered: true, channel: 'im' };
   }
 

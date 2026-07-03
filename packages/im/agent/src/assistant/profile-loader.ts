@@ -115,7 +115,7 @@ export function buildCronJobFromRoutine(
     enabled: routine.enabled !== false,
     schedule: { kind: 'cron', expr: routine.cron.trim(), tz: routine.tz },
     action: { kind: 'agent', prompt: routine.prompt.trim() },
-    notify: routine.notify ?? { channel: 'im' },
+    notify: routine.notify ?? { channel: 'silent' },
     createdAt: now,
     updatedAt: now,
     state: {},

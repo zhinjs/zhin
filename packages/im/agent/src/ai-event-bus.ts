@@ -29,7 +29,7 @@ function resolveSessionId(event: AIHookEvent): string {
   return resolveIMSessionId({
     platform: 'system',
     endpointId: 'default',
-    scope: 'private',
+    kind: 'private',
     sceneId: 'unknown',
   });
 }

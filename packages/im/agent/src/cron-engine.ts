@@ -11,10 +11,10 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { Cron, ZhinTool, Logger } from '@zhin.js/core';
+import { Cron, ZhinTool, Logger, messageToIMDeliveryTarget } from '@zhin.js/core';
 import { formatCompact } from '@zhin.js/logger';
 import type { JobNotify } from './assistant/types.js';
-import { commMessageToImNotify } from './assistant/legacy-convert.js';
+import { parseJobNotify } from './assistant/notification-router.js';
 
 const logger = new Logger(null, 'cron-engine');
 
@@ -64,9 +64,13 @@ export async function readCronJobsFile(dataDir: string): Promise<CronJobRecord[]
 }
 
 function normalizeCronJobRecord(raw: Record<string, unknown>): CronJobRecord {
-  const notify = raw.notify as JobNotify | undefined;
-  if (!notify || typeof notify !== 'object' || !('channel' in notify)) {
-    throw new Error(`cron-jobs.json: job "${String(raw.id)}" 缺少 notify 字段（破坏性更新：context 已移除）`);
+  let notify: JobNotify;
+  try {
+    notify = parseJobNotify(raw.notify);
+  } catch (e) {
+    throw new Error(
+      `cron-jobs.json: job "${String(raw.id)}" notify 无效（需 IMDeliveryTarget，旧 flat 字段不再支持）: ${(e as Error).message}`,
+    );
   }
   return {
     id: String(raw.id),
@@ -381,7 +385,8 @@ export function createCronTools(options?: { optimizePrompt?: PromptOptimizer }):
       } else if (notifyChannel !== 'im') {
         return { error: `notify_channel 无效: ${notifyChannel}，可选 im | silent | log` };
       } else {
-        notify = commMessage ? commMessageToImNotify(commMessage) : { channel: 'silent' };
+        const target = commMessage ? messageToIMDeliveryTarget(commMessage) : undefined;
+        notify = target ? { channel: 'im', target } : { channel: 'silent' };
       }
 
       const job = await m.engine.addJob({

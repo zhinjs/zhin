@@ -1,8 +1,9 @@
 /**
  * Assistant Runtime — 统一 Job 模型（M1）
  */
+import type { IMDeliveryTarget } from '@zhin.js/core';
 
-export const ASSISTANT_JOBS_VERSION = 1;
+export const ASSISTANT_JOBS_VERSION = 2;
 export const ASSISTANT_JOBS_FILENAME = 'assistant-jobs.json';
 
 export type JobSchedule =
@@ -16,7 +17,7 @@ export type JobAction =
   | { kind: 'heartbeat'; prompt: string };
 
 export type JobNotify =
-  | { channel: 'im'; platform?: string; endpointId?: string; senderId?: string; sceneId?: string; scope?: string }
+  | { channel: 'im'; target: IMDeliveryTarget }
   | { channel: 'silent' }
   | { channel: 'log' }
   | { channel: 'ha'; service: string; target?: string; data?: Record<string, unknown> };

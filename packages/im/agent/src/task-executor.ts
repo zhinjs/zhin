@@ -119,11 +119,12 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       }
 
       const im = effectiveNotify.channel === 'im' ? effectiveNotify : undefined;
-      const sceneId = im?.sceneId || 'cron';
-      const scope = (im?.scope as 'private' | 'group' | 'channel' | undefined) || 'private';
+      const scene = im?.target.scene;
+      const sceneId = scene?.sceneId || 'cron';
+      const scope = scene?.kind || 'private';
       const commMessage = createSyntheticMessage({
-        adapter: im?.platform || 'cron',
-        endpoint: im?.endpointId || 'default',
+        adapter: scene?.platform || 'cron',
+        endpoint: scene?.endpointId || 'default',
         sender: { id: 'system', name: 'system', isMaster: true },
         channel: { type: scope, id: sceneId },
       });

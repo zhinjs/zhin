@@ -386,8 +386,19 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
           const target = job.payload.target;
           await executor.executeTask({
             prompt: job.payload.message,
-            notify: job.payload.deliver && target
-              ? { channel: 'im', platform: target, sceneId: job.payload.to }
+            notify: job.payload.deliver && target && job.payload.to
+              ? {
+                  channel: 'im',
+                  target: {
+                    channel: 'im',
+                    scene: {
+                      platform: target,
+                      endpointId: 'default',
+                      sceneId: job.payload.to,
+                      kind: 'private',
+                    },
+                  },
+                }
               : { channel: 'silent' },
           });
         },
