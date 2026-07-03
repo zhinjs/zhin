@@ -45,7 +45,7 @@ export class OneBot11Adapter extends Adapter<OneBot11Bot> {
     }
   }
 
-  async kickMember(endpointId: string, sceneId: string, userId: string) {
+  async removeMember(endpointId: string, sceneId: string, userId: string) {
     const endpoint = this.endpoints.get(endpointId);
     if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
     return endpoint.kickMember(Number(sceneId), Number(userId), false);
@@ -57,13 +57,13 @@ export class OneBot11Adapter extends Adapter<OneBot11Bot> {
     return endpoint.muteMember(Number(sceneId), Number(userId), duration);
   }
 
-  async muteAll(endpointId: string, sceneId: string, enable = true) {
+  async setSceneMuted(endpointId: string, sceneId: string, enable = true) {
     const endpoint = this.endpoints.get(endpointId);
     if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
     return endpoint.muteAll(Number(sceneId), enable);
   }
 
-  async setAdmin(endpointId: string, sceneId: string, userId: string, enable = true) {
+  async setModerator(endpointId: string, sceneId: string, userId: string, enable = true) {
     const endpoint = this.endpoints.get(endpointId);
     if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
     return endpoint.setAdmin(Number(sceneId), Number(userId), enable);
@@ -75,7 +75,7 @@ export class OneBot11Adapter extends Adapter<OneBot11Bot> {
     return endpoint.setCard(Number(sceneId), Number(userId), nickname);
   }
 
-  async setGroupName(endpointId: string, sceneId: string, name: string) {
+  async renameScene(endpointId: string, sceneId: string, name: string) {
     const endpoint = this.endpoints.get(endpointId);
     if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
     return endpoint.setGroupName(Number(sceneId), name);
@@ -97,7 +97,7 @@ export class OneBot11Adapter extends Adapter<OneBot11Bot> {
     };
   }
 
-  async getGroupInfo(endpointId: string, sceneId: string) {
+  async getSceneInfo(endpointId: string, sceneId: string) {
     const endpoint = this.endpoints.get(endpointId);
     if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
     return endpoint.getGroupInfo(Number(sceneId));

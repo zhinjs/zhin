@@ -23,9 +23,9 @@ export class KookAdapter extends Adapter<KookEndpoint> {
     return new KookEndpoint(this, config);
   }
 
-  // ── IGroupManagement 标准群管方法 ──────────────────────────────────
+  // ── ISceneManagement 标准群管方法 ──────────────────────────────────
 
-  async kickMember(endpointId: string, sceneId: string, userId: string) {
+  async removeMember(endpointId: string, sceneId: string, userId: string) {
     const endpoint = this.endpoints.get(endpointId);
     if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
     return endpoint.kickUser(sceneId, userId);

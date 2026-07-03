@@ -3,7 +3,7 @@ import {
   applyQqSenderRoleToMessageSender,
   canAccessTool,
   clearPlatformPermitCheckers,
-  registerDefaultGroupPlatformPermitChecker,
+  registerDefaultScenePlatformPermitChecker,
 } from 'zhin.js';
 
 function mockMsg(role?: string) {
@@ -19,7 +19,7 @@ function mockMsg(role?: string) {
 describe('napcat platform-permit (QQ group_*)', () => {
   beforeEach(() => {
     clearPlatformPermitCheckers();
-    registerDefaultGroupPlatformPermitChecker('napcat');
+    registerDefaultScenePlatformPermitChecker('napcat');
   });
   afterEach(() => clearPlatformPermitCheckers());
 
@@ -29,15 +29,15 @@ describe('napcat platform-permit (QQ group_*)', () => {
     expect(mockMsg('member').$sender.role).toBeUndefined();
   });
 
-  it('canAccessTool group_admin / group_owner', () => {
+  it('canAccessTool scene_admin / scene_owner', () => {
     const adminTool = {
       name: 't',
       description: 'd',
       parameters: { type: 'object', properties: {} },
-      permissions: ['platform(napcat,group_admin)'],
+      permissions: ['platform(napcat,scene_admin)'],
       execute: async () => '',
     };
-    const ownerTool = { ...adminTool, permissions: ['platform(napcat,group_owner)'] };
+    const ownerTool = { ...adminTool, permissions: ['platform(napcat,scene_owner)'] };
     expect(canAccessTool(adminTool, mockMsg('member'))).toBe(false);
     expect(canAccessTool(adminTool, mockMsg('admin'))).toBe(true);
     expect(canAccessTool(ownerTool, mockMsg('admin'))).toBe(false);

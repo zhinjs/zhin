@@ -1,7 +1,7 @@
 /**
  * 钉钉适配器入口：类型扩展、导出、注册
  */
-import { usePlugin, type Plugin, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
+import { usePlugin, type Plugin, type ISceneManagement, createSceneManagementTools, type ToolFeature } from "zhin.js";
 import { DingTalkAdapter } from "./adapter.js";
 import {
   dingtalkGroupPermitResolver,
@@ -45,12 +45,12 @@ useContext("router", (router: any) => {
 useContext('tool', 'dingtalk', (toolService: ToolFeature, dingtalk: DingTalkAdapter) => {
   const disposers: (() => void)[] = [];
   disposers.push(registerDingtalkPlatformPermitChecker());
-  const groupTools = createGroupManagementTools(
-    dingtalk as unknown as IGroupManagement,
+  const sceneTools = createSceneManagementTools(
+    dingtalk as unknown as ISceneManagement,
     'dingtalk',
     { permitResolver: dingtalkGroupPermitResolver, registerChecker: false },
   );
-  disposers.push(...groupTools.map(t => toolService.addTool(t, plugin.name)));
+  disposers.push(...sceneTools.map(t => toolService.addTool(t, plugin.name)));
 
   disposers.push(toolService.addTool({
     name: 'dingtalk_get_user',

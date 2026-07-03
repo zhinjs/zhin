@@ -12,8 +12,8 @@ export function platformPermit(perm: string): string {
 
 /** 官方频道工厂工具：映射到 guild 语义，不用 group_* */
 const FACTORY_PERM_MAP: Record<string, string> = {
-  group_admin: 'guild_admin',
-  group_owner: 'guild_owner',
+  scene_admin: 'guild_admin',
+  scene_owner: 'guild_owner',
 };
 
 export function qqGuildPermitResolver(logicalPerm: string): string {

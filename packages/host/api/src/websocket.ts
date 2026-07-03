@@ -891,11 +891,11 @@ export async function handleWebSocketMessage(
             ws.send(JSON.stringify({ requestId, error: "userId required" }));
             break;
           }
-          if (typeof adMethods.kickMember !== "function") {
-            ws.send(JSON.stringify({ requestId, error: "adapter does not support kickMember" }));
+          if (typeof adMethods.removeMember !== "function") {
+            ws.send(JSON.stringify({ requestId, error: "adapter does not support removeMember" }));
             break;
           }
-          await adMethods.kickMember(endpointId, gid, String(userId));
+          await adMethods.removeMember(endpointId, gid, String(userId));
           ws.send(JSON.stringify({ requestId, data: { success: true } }));
         } else if (type === "endpoint:groupMute") {
           if (!userId) {
@@ -913,11 +913,11 @@ export async function handleWebSocketMessage(
             ws.send(JSON.stringify({ requestId, error: "userId required" }));
             break;
           }
-          if (typeof adMethods.setAdmin !== "function") {
-            ws.send(JSON.stringify({ requestId, error: "adapter does not support setAdmin" }));
+          if (typeof adMethods.setModerator !== "function") {
+            ws.send(JSON.stringify({ requestId, error: "adapter does not support setModerator" }));
             break;
           }
-          await adMethods.setAdmin(endpointId, gid, String(userId), enable !== false);
+          await adMethods.setModerator(endpointId, gid, String(userId), enable !== false);
           ws.send(JSON.stringify({ requestId, data: { success: true } }));
         }
       } catch (error: unknown) {

@@ -206,7 +206,8 @@ export {
   resolveAssistantEventsConfig,
   isAssistantEventsActive,
   createNotificationRouter,
-  notifyToSendOptions,
+  imNotifyToSendOptions,
+  parseJobNotify,
   setAssistantRuntime,
   getAssistantRuntime,
   isAssistantEventsEndpointActive,
@@ -442,10 +443,10 @@ export type { McpClientConnectionState, McpToolDefinition } from './mcp-client/i
 
 // ── Common adapter tools (migrated from core) ──
 export {
-  createGroupManagementTools, buildMethodArgs,
-  GROUP_METHOD_SPECS, GROUP_MANAGEMENT_SKILL_TAGS, GROUP_MANAGEMENT_SKILL_KEYWORDS,
+  createSceneManagementTools, buildSceneMethodArgs,
+  SCENE_MANAGEMENT_METHOD_SPECS, SCENE_MANAGEMENT_SKILL_TAGS, SCENE_MANAGEMENT_SKILL_KEYWORDS,
 } from './common-adapter-tools.js';
-export type { IGroupManagement, GroupMethodSpec } from './common-adapter-tools.js';
+export type { ISceneManagement, SceneManagementMethodSpec } from './common-adapter-tools.js';
 
 // ── Orchestrator (AI resource hub) ──
 export { AgentOrchestrator } from './orchestrator/index.js';

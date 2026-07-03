@@ -2,7 +2,7 @@
  * Discord 适配器入口：单一适配器，支持 Gateway / Interactions（connection: gateway | interactions）
  */
 import path from "node:path";
-import { usePlugin, type Plugin, type Context, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
+import { usePlugin, type Plugin, type Context, type ISceneManagement, createSceneManagementTools, type ToolFeature } from "zhin.js";
 import type { Router } from "@zhin.js/host-router";
 import { PageManager } from "@zhin.js/host-api";
 import { DiscordAdapter, type DiscordEndpointLike } from "./adapter.js";
@@ -47,12 +47,12 @@ provide({
 useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter) => {
   const disposers: (() => void)[] = [];
   disposers.push(registerDiscordPlatformPermitChecker());
-  const groupTools = createGroupManagementTools(
-    discord as unknown as IGroupManagement,
+  const sceneTools = createSceneManagementTools(
+    discord as unknown as ISceneManagement,
     'discord',
     { permitResolver: discordGroupPermitResolver, registerChecker: false },
   );
-  disposers.push(...groupTools.map(t => toolService.addTool(t, plugin.name)));
+  disposers.push(...sceneTools.map(t => toolService.addTool(t, plugin.name)));
 
   function getGatewayBot(endpointId: string): DiscordEndpointLike {
     const endpoint = discord.endpoints.get(endpointId);

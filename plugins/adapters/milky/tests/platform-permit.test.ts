@@ -3,7 +3,7 @@ import {
   applyQqSenderRoleToMessageSender,
   canAccessTool,
   clearPlatformPermitCheckers,
-  registerDefaultGroupPlatformPermitChecker,
+  registerDefaultScenePlatformPermitChecker,
 } from 'zhin.js';
 
 function mockMsg(role?: string) {
@@ -15,16 +15,16 @@ function mockMsg(role?: string) {
 describe('milky platform-permit', () => {
   beforeEach(() => {
     clearPlatformPermitCheckers();
-    registerDefaultGroupPlatformPermitChecker('milky');
+    registerDefaultScenePlatformPermitChecker('milky');
   });
   afterEach(() => clearPlatformPermitCheckers());
 
-  it('group_owner 仅 owner 可通过', () => {
+  it('scene_owner 仅 owner 可通过', () => {
     const tool = {
       name: 't',
       description: 'd',
       parameters: { type: 'object', properties: {} },
-      permissions: ['platform(milky,group_owner)'],
+      permissions: ['platform(milky,scene_owner)'],
       execute: async () => '',
     };
     expect(canAccessTool(tool, mockMsg('admin'))).toBe(false);

@@ -128,7 +128,7 @@ addCommand(new MessageCommand('pic')
 )
 ```
 
-发消息、撤回、群管等通过适配器封装的 HTTP API 完成。群管能力通过 `IGroupManagement` 自动注册为工具，详见 [工具与技能](/advanced/tools-skills)。
+发消息、撤回、群管等通过适配器封装的 HTTP API 完成。群管能力通过 `ISceneManagement` 自动注册为工具，详见 [工具与技能](/advanced/tools-skills)。
 
 ## 消息 ID 格式
 

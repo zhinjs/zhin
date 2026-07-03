@@ -1,11 +1,11 @@
 /**
  * ICQQ 平台特有工具注册 — 通过 IPC 调用守护进程 Actions
  *
- * 通用群管理工具由 createGroupManagementTools() 自动生成;
+ * 通用群管理工具由 createSceneManagementTools() 自动生成;
  * 本模块注册 ICQQ 独有的扩展工具。
  */
 import type { ToolFeature } from "zhin.js";
-import { createGroupManagementTools } from "zhin.js";
+import { createSceneManagementTools } from "zhin.js";
 import type { IcqqAdapter } from "../adapter.js";
 import { Actions } from "../protocol.js";
 
@@ -17,8 +17,8 @@ export function registerTools(
   const disposers: (() => void)[] = [];
 
   // ── 通用群管工具 ───────────────────────────────────────────────────
-  const groupTools = createGroupManagementTools(icqq, "icqq");
-  disposers.push(...groupTools.map((t) => toolService.addTool(t, pluginName)));
+  const sceneTools = createSceneManagementTools(icqq, "icqq");
+  disposers.push(...sceneTools.map((t) => toolService.addTool(t, pluginName)));
 
   // ── 设置头衔 ───────────────────────────────────────────────────────
   disposers.push(
@@ -39,7 +39,7 @@ export function registerTools(
         },
         platforms: ["icqq"],
         tags: ["icqq"],
-        permissions: ["platform(icqq,group_owner)"],
+        permissions: ["platform(icqq,scene_owner)"],
         execute: async (args: Record<string, any>) => {
           const endpoint = icqq.endpoints.get(args.endpoint_id);
           if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
@@ -73,7 +73,7 @@ export function registerTools(
         },
         platforms: ["icqq"],
         tags: ["icqq"],
-        permissions: ["platform(icqq,group_admin)"],
+        permissions: ["platform(icqq,scene_admin)"],
         execute: async (args: Record<string, any>) => {
           const endpoint = icqq.endpoints.get(args.endpoint_id);
           if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
@@ -135,7 +135,7 @@ export function registerTools(
         },
         platforms: ["icqq"],
         tags: ["icqq"],
-        permissions: ["platform(icqq,group_admin)"],
+        permissions: ["platform(icqq,scene_admin)"],
         execute: async (args: Record<string, any>) => {
           const endpoint = icqq.endpoints.get(args.endpoint_id);
           if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
@@ -199,7 +199,7 @@ export function registerTools(
         },
         platforms: ["icqq"],
         tags: ["icqq"],
-        permissions: ["platform(icqq,group_owner)"],
+        permissions: ["platform(icqq,scene_owner)"],
         execute: async (args: Record<string, any>) => {
           const endpoint = icqq.endpoints.get(args.endpoint_id);
           if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
@@ -393,7 +393,7 @@ export function registerTools(
         },
         platforms: ["icqq"],
         tags: ["icqq"],
-        permissions: ["platform(icqq,group_admin)"],
+        permissions: ["platform(icqq,scene_admin)"],
         execute: async (args: Record<string, any>) => {
           const endpoint = icqq.endpoints.get(args.endpoint_id);
           if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);

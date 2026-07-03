@@ -150,9 +150,9 @@ class MyAdapter extends Adapter {
 Adapter.register('my-platform', MyAdapter)
 ```
 
-每个适配器可以通过 `addTool()` 注册平台特有工具，标准群管操作通过覆写 `IGroupManagement` 方法自动注册。
+每个适配器可以通过 `addTool()` 注册平台特有工具，标准群管操作通过覆写 `ISceneManagement` 方法自动注册。
 
-**群管理能力自动检测：** 适配器基类声明了 `IGroupManagement` 接口中的可选方法（`kickMember`、`muteMember`、`banMember` 等），子类只需覆写自己平台支持的方法，`start()` 会自动检测哪些方法已实现，生成对应的 Tool 并注册为"群聊管理"Skill。目前所有 9 个 IM 适配器（ICQQ、OneBot11、QQ 官方、Telegram、Discord、KOOK、Slack、钉钉、飞书）均已采用此模式：
+**群管理能力自动检测：** 适配器基类声明了 `ISceneManagement` 接口中的可选方法（`kickMember`、`muteMember`、`banMember` 等），子类只需覆写自己平台支持的方法，`start()` 会自动检测哪些方法已实现，生成对应的 Tool 并注册为"群聊管理"Skill。目前所有 9 个 IM 适配器（ICQQ、OneBot11、QQ 官方、Telegram、Discord、KOOK、Slack、钉钉、飞书）均已采用此模式：
 
 ```typescript
 class IcqqAdapter extends Adapter<IcqqEndpoint> {

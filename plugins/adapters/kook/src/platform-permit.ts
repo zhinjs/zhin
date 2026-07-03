@@ -13,8 +13,8 @@ export function platformPermit(perm: string): string {
 }
 
 const FACTORY_PERM_MAP: Record<string, string> = {
-  group_admin: 'guild_admin',
-  group_owner: 'guild_owner',
+  scene_admin: 'guild_admin',
+  scene_owner: 'guild_owner',
 };
 
 export function kookGroupPermitResolver(logicalPerm: string): string {

@@ -43,9 +43,9 @@ export class NapCatAdapter extends Adapter<NapCatEndpoint> {
     }
   }
 
-  // ── 群管理接口（IGroupManagement 适配）──────────────────────────
+  // ── 群管理接口（ISceneManagement 适配）──────────────────────────
 
-  async kickMember(endpointId: string, sceneId: string, userId: string) {
+  async removeMember(endpointId: string, sceneId: string, userId: string) {
     const endpoint = this.endpoints.get(endpointId);
     if (!endpoint) throw new Error(`Endpoint ${endpointId} not found`);
     return endpoint.kickMember(Number(sceneId), Number(userId));
@@ -57,13 +57,13 @@ export class NapCatAdapter extends Adapter<NapCatEndpoint> {
     return endpoint.muteMember(Number(sceneId), Number(userId), duration);
   }
 
-  async muteAll(endpointId: string, sceneId: string, enable = true) {
+  async setSceneMuted(endpointId: string, sceneId: string, enable = true) {
     const endpoint = this.endpoints.get(endpointId);
     if (!endpoint) throw new Error(`Endpoint ${endpointId} not found`);
     return endpoint.muteAll(Number(sceneId), enable);
   }
 
-  async setAdmin(endpointId: string, sceneId: string, userId: string, enable = true) {
+  async setModerator(endpointId: string, sceneId: string, userId: string, enable = true) {
     const endpoint = this.endpoints.get(endpointId);
     if (!endpoint) throw new Error(`Endpoint ${endpointId} not found`);
     return endpoint.setAdmin(Number(sceneId), Number(userId), enable);
@@ -75,7 +75,7 @@ export class NapCatAdapter extends Adapter<NapCatEndpoint> {
     return endpoint.setCard(Number(sceneId), Number(userId), nickname);
   }
 
-  async setGroupName(endpointId: string, sceneId: string, name: string) {
+  async renameScene(endpointId: string, sceneId: string, name: string) {
     const endpoint = this.endpoints.get(endpointId);
     if (!endpoint) throw new Error(`Endpoint ${endpointId} not found`);
     return endpoint.setGroupName(Number(sceneId), name);
@@ -93,7 +93,7 @@ export class NapCatAdapter extends Adapter<NapCatEndpoint> {
     };
   }
 
-  async getGroupInfo(endpointId: string, sceneId: string) {
+  async getSceneInfo(endpointId: string, sceneId: string) {
     const endpoint = this.endpoints.get(endpointId);
     if (!endpoint) throw new Error(`Endpoint ${endpointId} not found`);
     return endpoint.getGroupInfo(Number(sceneId));

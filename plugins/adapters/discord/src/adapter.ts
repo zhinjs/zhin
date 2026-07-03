@@ -45,7 +45,7 @@ export class DiscordAdapter extends Adapter<DiscordEndpointLike> {
     }
   }
 
-  async kickMember(endpointId: string, sceneId: string, userId: string) {
+  async removeMember(endpointId: string, sceneId: string, userId: string) {
     const endpoint = this.endpoints.get(endpointId);
     if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
     if (!isGatewayBot(endpoint)) throw new Error("群管仅支持 connection: gateway");
@@ -87,7 +87,7 @@ export class DiscordAdapter extends Adapter<DiscordEndpointLike> {
     return endpoint.getMembers(sceneId);
   }
 
-  async getGroupInfo(endpointId: string, sceneId: string) {
+  async getSceneInfo(endpointId: string, sceneId: string) {
     const endpoint = this.endpoints.get(endpointId);
     if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
     if (!isGatewayBot(endpoint)) throw new Error("群管仅支持 connection: gateway");

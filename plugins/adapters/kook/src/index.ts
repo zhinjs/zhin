@@ -2,7 +2,7 @@
  * KOOK 适配器入口：类型扩展、导出、注册
  */
 import path from "node:path";
-import { usePlugin, type Plugin, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
+import { usePlugin, type Plugin, type ISceneManagement, createSceneManagementTools, type ToolFeature } from "zhin.js";
 import { KookAdapter } from "./adapter.js";
 import { kookGroupPermitResolver, platformPermit, registerKookPlatformPermitChecker } from "./platform-permit.js";
 import { PageManager } from "@zhin.js/host-api";
@@ -44,12 +44,12 @@ provide({
 useContext('tool', 'kook', (toolService: ToolFeature, kook: KookAdapter) => {
   const disposers: (() => void)[] = [];
   disposers.push(registerKookPlatformPermitChecker());
-  const groupTools = createGroupManagementTools(
-    kook as unknown as IGroupManagement,
+  const sceneTools = createSceneManagementTools(
+    kook as unknown as ISceneManagement,
     'kook',
     { permitResolver: kookGroupPermitResolver, registerChecker: false },
   );
-  disposers.push(...groupTools.map(t => toolService.addTool(t, plugin.name)));
+  disposers.push(...sceneTools.map(t => toolService.addTool(t, plugin.name)));
 
   disposers.push(toolService.addTool({
     name: 'kook_grant_role',

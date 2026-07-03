@@ -122,7 +122,7 @@ const NAPCAT_TOOL_SPECS: ToolSpec[] = [
     },
     required: ['endpoint_id', 'message_id'],
     keywords: ['精华', 'essence', '设精', '加精'],
-    permit: 'platform(napcat,group_admin)',
+    permit: 'platform(napcat,scene_admin)',
     scopes: ['group'],
     execute: async (adapter, args) => {
       const endpoint = getEndpoint(adapter, args.endpoint_id);
@@ -139,7 +139,7 @@ const NAPCAT_TOOL_SPECS: ToolSpec[] = [
     },
     required: ['endpoint_id', 'message_id'],
     keywords: ['取消精华', '移除精华', 'delete essence'],
-    permit: 'platform(napcat,group_admin)',
+    permit: 'platform(napcat,scene_admin)',
     scopes: ['group'],
     execute: async (adapter, args) => {
       const endpoint = getEndpoint(adapter, args.endpoint_id);
@@ -176,7 +176,7 @@ const NAPCAT_TOOL_SPECS: ToolSpec[] = [
     },
     required: ['endpoint_id', 'group_id', 'content'],
     keywords: ['群公告', 'notice', '公告', '发公告'],
-    permit: 'platform(napcat,group_admin)',
+    permit: 'platform(napcat,scene_admin)',
     scopes: ['group'],
     execute: async (adapter, args) => {
       const endpoint = getEndpoint(adapter, args.endpoint_id);
@@ -210,7 +210,7 @@ const NAPCAT_TOOL_SPECS: ToolSpec[] = [
     },
     required: ['endpoint_id', 'group_id', 'notice_id'],
     keywords: ['删除公告', 'delete notice'],
-    permit: 'platform(napcat,group_admin)',
+    permit: 'platform(napcat,scene_admin)',
     scopes: ['group'],
     execute: async (adapter, args) => {
       const endpoint = getEndpoint(adapter, args.endpoint_id);
@@ -301,7 +301,7 @@ const NAPCAT_TOOL_SPECS: ToolSpec[] = [
     },
     required: ['endpoint_id', 'group_id', 'file'],
     keywords: ['群头像', 'group portrait', '设置群头像'],
-    permit: 'platform(napcat,group_admin)',
+    permit: 'platform(napcat,scene_admin)',
     scopes: ['group'],
     execute: async (adapter, args) => {
       const endpoint = getEndpoint(adapter, args.endpoint_id);
@@ -320,7 +320,7 @@ const NAPCAT_TOOL_SPECS: ToolSpec[] = [
     },
     required: ['endpoint_id', 'group_id', 'user_id', 'title'],
     keywords: ['头衔', 'title', '专属头衔', '设置头衔'],
-    permit: 'platform(napcat,group_owner)',
+    permit: 'platform(napcat,scene_owner)',
     scopes: ['group'],
     execute: async (adapter, args) => {
       const endpoint = getEndpoint(adapter, args.endpoint_id);
@@ -603,7 +603,7 @@ const NAPCAT_TOOL_SPECS: ToolSpec[] = [
     },
     required: ['endpoint_id', 'user_id'],
     keywords: ['删除好友', 'delete friend', '删好友'],
-    permit: 'platform(napcat,group_admin)',
+    permit: 'platform(napcat,scene_admin)',
     execute: async (adapter, args) => {
       const endpoint = getEndpoint(adapter, args.endpoint_id);
       await endpoint.deleteFriend(args.user_id);

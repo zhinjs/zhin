@@ -8,15 +8,15 @@
 
 | `platform(icqq,…)` | 含义 |
 |--------------------|------|
-| `group_owner` | 群主 |
-| `group_admin` | 群管理员（含群主） |
+| `scene_owner` | 群主 |
+| `scene_admin` | 群管理员（含群主） |
 
 ## 扩展工具示例
 
 | 工具 | permit |
 |------|--------|
-| `icqq_set_title` | `group_owner` |
-| `icqq_announce` / `icqq_essence` / `icqq_list_muted` | `group_admin` |
-| `icqq_set_anonymous` | `group_owner` |
+| `icqq_set_title` | `scene_owner` |
+| `icqq_announce` / `icqq_essence` / `icqq_list_muted` | `scene_admin` |
+| `icqq_set_anonymous` | `scene_owner` |
 
-工厂群管工具使用默认 `group_admin` / `group_owner`。
+工厂群管工具使用默认 `scene_admin` / `scene_owner`。

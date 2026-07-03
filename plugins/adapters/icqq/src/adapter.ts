@@ -44,7 +44,7 @@ export class IcqqAdapter extends Adapter<IcqqEndpoint> {
     this.logger.debug(formatCompact({ stop: true }));
   }
 
-  // ── IGroupManagement 标准群管方法（通过 IPC） ─────────────────────
+  // ── ISceneManagement 标准群管方法（通过 IPC） ─────────────────────
 
   private getEndpoint(endpointId: string): IcqqEndpoint {
     const endpoint = this.endpoints.get(endpointId);
@@ -52,7 +52,7 @@ export class IcqqAdapter extends Adapter<IcqqEndpoint> {
     return endpoint;
   }
 
-  async kickMember(endpointId: string, sceneId: string, userId: string) {
+  async removeMember(endpointId: string, sceneId: string, userId: string) {
     const endpoint = this.getEndpoint(endpointId);
     const resp = await endpoint.ipc.request(Actions.GROUP_KICK, {
       group_id: Number(sceneId),
@@ -79,7 +79,7 @@ export class IcqqAdapter extends Adapter<IcqqEndpoint> {
     return true;
   }
 
-  async muteAll(endpointId: string, sceneId: string, enable = true) {
+  async setSceneMuted(endpointId: string, sceneId: string, enable = true) {
     const endpoint = this.getEndpoint(endpointId);
     const resp = await endpoint.ipc.request(Actions.GROUP_MUTE_ALL, {
       group_id: Number(sceneId),
@@ -89,7 +89,7 @@ export class IcqqAdapter extends Adapter<IcqqEndpoint> {
     return true;
   }
 
-  async setAdmin(
+  async setModerator(
     endpointId: string,
     sceneId: string,
     userId: string,
@@ -121,7 +121,7 @@ export class IcqqAdapter extends Adapter<IcqqEndpoint> {
     return true;
   }
 
-  async setGroupName(endpointId: string, sceneId: string, name: string) {
+  async renameScene(endpointId: string, sceneId: string, name: string) {
     const endpoint = this.getEndpoint(endpointId);
     const resp = await endpoint.ipc.request(Actions.SET_GROUP_NAME, {
       group_id: Number(sceneId),

@@ -131,7 +131,7 @@ class MyAdapter extends Adapter {
 
 ### 群管理能力（自动检测）
 
-群管理是 IM 系统的通用能力。Adapter 基类声明了 `IGroupManagement` 接口中的可选方法规范，适配器只需覆写自己平台支持的方法，`start()` 会自动检测并生成 Tool + 注册 Skill，无需任何手动调用：
+群管理是 IM 系统的通用能力。Adapter 基类声明了 `ISceneManagement` 接口中的可选方法规范，适配器只需覆写自己平台支持的方法，`start()` 会自动检测并生成 Tool + 注册 Skill，无需任何手动调用：
 
 ```typescript
 class IcqqAdapter extends Adapter<IcqqEndpoint> {
@@ -164,7 +164,7 @@ private registerPlatformTools() {
     name: 'icqq_set_title',
     description: '设置群成员的专属头衔',
     parameters: { /* JSON Schema */ },
-    requiredAnyRole: ['group_owner'],
+    requiredAnyRole: ['scene_owner'],
     execute: async (args) => { /* ... */ },
   })
 }

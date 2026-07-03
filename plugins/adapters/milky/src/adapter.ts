@@ -1,7 +1,7 @@
 /**
  * Milky 适配器：单一适配器支持 WS 正向 / SSE / Webhook / 反向 WS，由 config.connection 区分
  */
-import { formatCompact, Adapter, Plugin, type IGroupManagement, OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL, ONEBOT_KEYBOARD_AI_OUTBOUND_EXTENSION } from 'zhin.js';
+import { formatCompact, Adapter, Plugin, type ISceneManagement, OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL, ONEBOT_KEYBOARD_AI_OUTBOUND_EXTENSION } from 'zhin.js';
 import type { Router } from '@zhin.js/host-router';
 import { MilkyWsClient } from './endpoint-ws.js';
 import { MilkySseClient } from './endpoint-sse.js';
@@ -51,7 +51,7 @@ export class MilkyAdapter extends Adapter<MilkyBot> {
     }
   }
 
-  async kickMember(endpointId: string, sceneId: string, userId: string) {
+  async removeMember(endpointId: string, sceneId: string, userId: string) {
     const endpoint = this.endpoints.get(endpointId);
     if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
     return endpoint.kickMember(Number(sceneId), Number(userId), false);
@@ -63,13 +63,13 @@ export class MilkyAdapter extends Adapter<MilkyBot> {
     return endpoint.muteMember(Number(sceneId), Number(userId), duration);
   }
 
-  async muteAll(endpointId: string, sceneId: string, enable = true) {
+  async setSceneMuted(endpointId: string, sceneId: string, enable = true) {
     const endpoint = this.endpoints.get(endpointId);
     if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
     return endpoint.muteAll(Number(sceneId), enable);
   }
 
-  async setAdmin(endpointId: string, sceneId: string, userId: string, enable = true) {
+  async setModerator(endpointId: string, sceneId: string, userId: string, enable = true) {
     const endpoint = this.endpoints.get(endpointId);
     if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
     return endpoint.setAdmin(Number(sceneId), Number(userId), enable);
@@ -81,7 +81,7 @@ export class MilkyAdapter extends Adapter<MilkyBot> {
     return endpoint.setCard(Number(sceneId), Number(userId), nickname);
   }
 
-  async setGroupName(endpointId: string, sceneId: string, name: string) {
+  async renameScene(endpointId: string, sceneId: string, name: string) {
     const endpoint = this.endpoints.get(endpointId);
     if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
     return endpoint.setGroupName(Number(sceneId), name);
@@ -94,7 +94,7 @@ export class MilkyAdapter extends Adapter<MilkyBot> {
     return { members: Array.isArray(members) ? members : [], count: Array.isArray(members) ? members.length : 0 };
   }
 
-  async getGroupInfo(endpointId: string, sceneId: string) {
+  async getSceneInfo(endpointId: string, sceneId: string) {
     const endpoint = this.endpoints.get(endpointId);
     if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
     return endpoint.getGroupInfo(Number(sceneId));

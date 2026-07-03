@@ -22,4 +22,4 @@ Guild 频道消息从 `msg.member.permissions` bitfield 解析：
 
 ## 工厂映射
 
-`group_admin` → `moderate_members` · `group_owner` → `guild_owner`
+`scene_admin` → `moderate_members` · `scene_owner` → `guild_owner`

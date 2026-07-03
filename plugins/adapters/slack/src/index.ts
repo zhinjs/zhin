@@ -1,7 +1,7 @@
 /**
  * Slack 适配器入口：类型扩展、导出、注册
  */
-import { usePlugin, type Plugin, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
+import { usePlugin, type Plugin, type ISceneManagement, createSceneManagementTools, type ToolFeature } from "zhin.js";
 import { SlackAdapter } from "./adapter.js";
 import {
   platformPermit,
@@ -38,12 +38,12 @@ provide({
 useContext('tool', 'slack', (toolService: ToolFeature, slack: SlackAdapter) => {
   const disposers: (() => void)[] = [];
   disposers.push(registerSlackPlatformPermitChecker());
-  const groupTools = createGroupManagementTools(
-    slack as unknown as IGroupManagement,
+  const sceneTools = createSceneManagementTools(
+    slack as unknown as ISceneManagement,
     'slack',
     { permitResolver: slackGroupPermitResolver, registerChecker: false },
   );
-  disposers.push(...groupTools.map(t => toolService.addTool(t, plugin.name)));
+  disposers.push(...sceneTools.map(t => toolService.addTool(t, plugin.name)));
 
   function getEndpoint(endpointId: string) {
     const endpoint = slack.endpoints.get(endpointId);

@@ -19,9 +19,9 @@ export class TelegramAdapter extends Adapter<TelegramEndpoint> {
     return new TelegramEndpoint(this, config);
   }
 
-  // ── IGroupManagement 标准群管方法 ──────────────────────────────────
+  // ── ISceneManagement 标准群管方法 ──────────────────────────────────
 
-  async kickMember(endpointId: string, sceneId: string, userId: string) {
+  async removeMember(endpointId: string, sceneId: string, userId: string) {
     const endpoint = this.endpoints.get(endpointId);
     if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
     return endpoint.kickMember(Number(sceneId), Number(userId));
@@ -39,19 +39,19 @@ export class TelegramAdapter extends Adapter<TelegramEndpoint> {
     return endpoint.muteMember(Number(sceneId), Number(userId), duration);
   }
 
-  async setAdmin(endpointId: string, sceneId: string, userId: string, enable = true) {
+  async setModerator(endpointId: string, sceneId: string, userId: string, enable = true) {
     const endpoint = this.endpoints.get(endpointId);
     if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
     return endpoint.setAdmin(Number(sceneId), Number(userId), enable);
   }
 
-  async setGroupName(endpointId: string, sceneId: string, name: string) {
+  async renameScene(endpointId: string, sceneId: string, name: string) {
     const endpoint = this.endpoints.get(endpointId);
     if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
     return endpoint.setChatTitle(Number(sceneId), name);
   }
 
-  async getGroupInfo(endpointId: string, sceneId: string) {
+  async getSceneInfo(endpointId: string, sceneId: string) {
     const endpoint = this.endpoints.get(endpointId);
     if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
     return endpoint.getChatInfo(Number(sceneId));

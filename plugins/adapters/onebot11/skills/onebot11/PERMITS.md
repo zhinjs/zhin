@@ -8,7 +8,7 @@
 
 | `platform(onebot11,…)` | 含义 |
 |------------------------|------|
-| `group_owner` | 群主 |
-| `group_admin` | 群管理员（含群主） |
+| `scene_owner` | 群主 |
+| `scene_admin` | 群管理员（含群主） |
 
-工厂工具默认 `group_admin` / `group_owner`；扩展工具如 `onebot11_set_title` 使用 `group_owner`。
+工厂工具默认 `scene_admin` / `scene_owner`；扩展工具如 `onebot11_set_title` 使用 `scene_owner`。

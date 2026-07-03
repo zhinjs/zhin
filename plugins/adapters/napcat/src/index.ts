@@ -8,9 +8,9 @@ import {
   usePlugin,
   type Plugin,
   type Context,
-  type IGroupManagement,
-  createGroupManagementTools,
-  registerDefaultGroupPlatformPermitChecker,
+  type ISceneManagement,
+  createSceneManagementTools,
+  registerDefaultScenePlatformPermitChecker,
   type ToolFeature,
 } from 'zhin.js';
 import { registerAgentPromptContributor, unregisterAgentPromptContributor } from 'zhin.js/agent';
@@ -67,13 +67,13 @@ provide({
 // ── AI 工具注册 ────────────────────────────────────────────────────
 useContext('tool', 'napcat', (toolService: ToolFeature, napcat: NapCatAdapter) => {
   const disposers: (() => void)[] = [];
-  disposers.push(registerDefaultGroupPlatformPermitChecker('napcat'));
+  disposers.push(registerDefaultScenePlatformPermitChecker('napcat'));
 
-  const groupTools = createGroupManagementTools(
-    napcat as unknown as IGroupManagement,
+  const sceneTools = createSceneManagementTools(
+    napcat as unknown as ISceneManagement,
     'napcat',
   );
-  disposers.push(...groupTools.map(t => toolService.addTool(t, plugin.name)));
+  disposers.push(...sceneTools.map(t => toolService.addTool(t, plugin.name)));
 
   const napcatTools = createNapCatTools(napcat);
   disposers.push(...napcatTools.map(t => toolService.addTool(t, plugin.name)));

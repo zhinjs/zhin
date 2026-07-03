@@ -1,5 +1,5 @@
 /**
- * Platform permit — 适配器注册的平台级权限校验（群管、频道身份等）
+ * Platform permit — 适配器注册的平台级权限校验（场景治理、频道身份等）
  */
 import type { Message } from '../message.js';
 import { parsePlatformPermitName, isPlatformPermit } from './permit-parse.js';
@@ -10,7 +10,7 @@ export type PlatformPermitChecker = (
 ) => boolean;
 
 const checkers = new Map<string, PlatformPermitChecker>();
-const registeredDefaultGroupCheckers = new Set<string>();
+const registeredDefaultSceneCheckers = new Set<string>();
 
 export function registerPlatformPermitChecker(
   adapter: string,
@@ -27,7 +27,7 @@ export function registerPlatformPermitChecker(
 
 export function clearPlatformPermitCheckers(): void {
   checkers.clear();
-  registeredDefaultGroupCheckers.clear();
+  registeredDefaultSceneCheckers.clear();
 }
 
 export function checkPlatformPermit(name: string, message: Message<any>): boolean {
@@ -64,22 +64,22 @@ export function applyQqSenderRoleToMessageSender(
   sender.permissions = [normalized];
 }
 
-/** 常见 IM 平台群身份：$sender.role 为 owner / admin */
-export function createGroupRolePlatformChecker(): PlatformPermitChecker {
+/** 常见 IM 平台场景身份：$sender.role 为 owner / admin */
+export function createSceneRolePlatformChecker(): PlatformPermitChecker {
   return (perm, message) => {
     const role = message.$sender?.role;
-    if (perm === 'group_admin') return role === 'admin' || role === 'owner';
-    if (perm === 'group_owner') return role === 'owner';
+    if (perm === 'scene_admin') return role === 'admin' || role === 'owner';
+    if (perm === 'scene_owner') return role === 'owner';
     return false;
   };
 }
 
-/** 为适配器注册默认群管 platform checker（幂等） */
-export function registerDefaultGroupPlatformPermitChecker(adapter: string): () => void {
+/** 为适配器注册默认场景治理 platform checker（幂等） */
+export function registerDefaultScenePlatformPermitChecker(adapter: string): () => void {
   const key = String(adapter);
-  if (registeredDefaultGroupCheckers.has(key)) {
+  if (registeredDefaultSceneCheckers.has(key)) {
     return () => {};
   }
-  registeredDefaultGroupCheckers.add(key);
-  return registerPlatformPermitChecker(key, createGroupRolePlatformChecker());
+  registeredDefaultSceneCheckers.add(key);
+  return registerPlatformPermitChecker(key, createSceneRolePlatformChecker());
 }

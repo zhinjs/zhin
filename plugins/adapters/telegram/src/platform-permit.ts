@@ -11,8 +11,8 @@ export function platformPermit(perm: string): string {
 }
 
 const FACTORY_PERM_MAP: Record<string, string> = {
-  group_admin: 'chat_administrator',
-  group_owner: 'chat_creator',
+  scene_admin: 'chat_administrator',
+  scene_owner: 'chat_creator',
 };
 
 export function telegramGroupPermitResolver(logicalPerm: string): string {

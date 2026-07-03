@@ -702,7 +702,7 @@ ai:
 
 ## 权限控制（SenderRole）
 
-工具通过 `requiredAnyRole` 声明所需角色；`ToolContext.roles` 为发送者角色集合（`user`、`group_admin`、`group_owner`、`trusted`、`master`）。详见 [工具与技能](/advanced/tools-skills#权限控制senderrole-集合)。
+工具通过 `requiredAnyRole` 声明所需角色；`ToolContext.roles` 为发送者角色集合（`user`、`scene_admin`、`scene_owner`、`trusted`、`master`）。详见 [工具与技能](/advanced/tools-skills#权限控制senderrole-集合)。
 
 **Breaking**：阶梯 `permissionLevel` 已移除；trigger 配置使用 `masters` / `trusted`，bot 配置使用 `endpoints[].master` / `endpoints[].trusted`。
 

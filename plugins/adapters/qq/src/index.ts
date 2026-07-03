@@ -2,7 +2,7 @@
  * QQ 官方适配器入口：类型扩展、导出、注册
  */
 import path from "node:path";
-import { usePlugin, type Plugin, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
+import { usePlugin, type Plugin, type ISceneManagement, createSceneManagementTools, type ToolFeature } from "zhin.js";
 import type { Router } from "@zhin.js/host-router";
 import { QQAdapter } from "./adapter.js";
 import { PageManager } from "@zhin.js/host-api";
@@ -56,12 +56,12 @@ useContext("router", (router: Router) => {
 useContext('tool', 'qq', (toolService: ToolFeature, qq: QQAdapter) => {
   const disposers: (() => void)[] = [];
   disposers.push(registerQqPlatformPermitChecker());
-  const groupTools = createGroupManagementTools(
-    qq as unknown as IGroupManagement,
+  const sceneTools = createSceneManagementTools(
+    qq as unknown as ISceneManagement,
     'qq',
     { permitResolver: qqGuildPermitResolver, registerChecker: false },
   );
-  disposers.push(...groupTools.map(t => toolService.addTool(t, plugin.name)));
+  disposers.push(...sceneTools.map(t => toolService.addTool(t, plugin.name)));
 
   // 获取频道列表
   disposers.push(toolService.addTool({

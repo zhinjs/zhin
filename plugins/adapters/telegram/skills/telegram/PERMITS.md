@@ -21,4 +21,4 @@
 
 ## 工厂映射
 
-`group_admin` → `chat_administrator` · `group_owner` → `chat_creator`
+`scene_admin` → `chat_administrator` · `scene_owner` → `chat_creator`

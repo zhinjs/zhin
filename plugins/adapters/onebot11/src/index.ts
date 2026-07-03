@@ -1,7 +1,7 @@
 /**
  * OneBot11 适配器入口：单一适配器，支持正向 WS / 反向 WS（connection: ws | wss）
  */
-import { usePlugin, type Plugin, type Context, type IGroupManagement, createGroupManagementTools, registerDefaultGroupPlatformPermitChecker, type ToolFeature } from 'zhin.js';
+import { usePlugin, type Plugin, type Context, type ISceneManagement, createSceneManagementTools, registerDefaultScenePlatformPermitChecker, type ToolFeature } from 'zhin.js';
 import type { Router } from '@zhin.js/host-router';
 import { OneBot11Adapter } from './adapter.js';
 
@@ -38,12 +38,12 @@ provide({
 
 useContext('tool', 'onebot11', (toolService: ToolFeature, onebot11: OneBot11Adapter) => {
   const disposers: (() => void)[] = [];
-  disposers.push(registerDefaultGroupPlatformPermitChecker('onebot11'));
-  const groupTools = createGroupManagementTools(
-    onebot11 as unknown as IGroupManagement,
+  disposers.push(registerDefaultScenePlatformPermitChecker('onebot11'));
+  const sceneTools = createSceneManagementTools(
+    onebot11 as unknown as ISceneManagement,
     'onebot11',
   );
-  disposers.push(...groupTools.map(t => toolService.addTool(t, plugin.name)));
+  disposers.push(...sceneTools.map(t => toolService.addTool(t, plugin.name)));
 
   // Platform-specific tool: set title
   disposers.push(toolService.addTool({
@@ -61,7 +61,7 @@ useContext('tool', 'onebot11', (toolService: ToolFeature, onebot11: OneBot11Adap
     },
     platforms: ['onebot11'],
     tags: ['onebot11'],
-    permissions: ['platform(onebot11,group_owner)'],
+    permissions: ['platform(onebot11,scene_owner)'],
     execute: async (args: Record<string, any>) => {
       const endpoint = onebot11.endpoints.get(args.endpoint_id);
       if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);

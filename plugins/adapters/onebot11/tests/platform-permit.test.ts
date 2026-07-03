@@ -3,7 +3,7 @@ import {
   applyQqSenderRoleToMessageSender,
   canAccessTool,
   clearPlatformPermitCheckers,
-  registerDefaultGroupPlatformPermitChecker,
+  registerDefaultScenePlatformPermitChecker,
 } from 'zhin.js';
 
 function mockMsg(role?: string) {
@@ -15,16 +15,16 @@ function mockMsg(role?: string) {
 describe('onebot11 platform-permit', () => {
   beforeEach(() => {
     clearPlatformPermitCheckers();
-    registerDefaultGroupPlatformPermitChecker('onebot11');
+    registerDefaultScenePlatformPermitChecker('onebot11');
   });
   afterEach(() => clearPlatformPermitCheckers());
 
-  it('入站 sender.role 驱动 group_admin', () => {
+  it('入站 sender.role 驱动 scene_admin', () => {
     const tool = {
       name: 't',
       description: 'd',
       parameters: { type: 'object', properties: {} },
-      permissions: ['platform(onebot11,group_admin)'],
+      permissions: ['platform(onebot11,scene_admin)'],
       execute: async () => '',
     };
     expect(canAccessTool(tool, mockMsg('admin'))).toBe(true);

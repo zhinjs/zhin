@@ -36,7 +36,7 @@ describe('formatUserContentForSession', () => {
       $channel: { type: 'group', id: 'g1' },
     } as AgentTurnMessage;
     const out = formatUserContentForSession(commMessage, '你好');
-    expect(out).toBe('[sender:id=12345 name=Alice roles=group_admin] 你好');
+    expect(out).toBe('[sender:id=12345 name=Alice roles=scene_admin] 你好');
   });
 
   it('prepareUserContentForSession 返回干净正文与 extra', () => {
@@ -50,7 +50,7 @@ describe('formatUserContentForSession', () => {
     expect(prepared.content).toBe('你好');
     expect(prepared.extra?.sender?.id).toBe('12345');
     expect(prepared.extra?.sender?.name).toBe('Alice');
-    expect(prepared.extra?.sender?.roles).toContain('group_admin');
+    expect(prepared.extra?.sender?.roles).toContain('scene_admin');
   });
 
   it('剥离用户自造 roles 前缀', () => {

@@ -22,4 +22,4 @@
 
 ## 工厂映射
 
-`group_admin` → `guild_admin` · `group_owner` → `guild_owner`
+`scene_admin` → `guild_admin` · `scene_owner` → `guild_owner`

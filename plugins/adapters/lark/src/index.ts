@@ -1,7 +1,7 @@
 /**
  * 飞书/Lark 适配器入口：类型扩展、导出、注册
  */
-import { usePlugin, type Plugin, type Context, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
+import { usePlugin, type Plugin, type Context, type ISceneManagement, createSceneManagementTools, type ToolFeature } from "zhin.js";
 import { LarkAdapter } from "./adapter.js";
 import {
   larkGroupPermitResolver,
@@ -45,12 +45,12 @@ const { provide, useContext } = plugin;
 useContext('tool', 'lark', (toolService: ToolFeature, lark: LarkAdapter) => {
   const disposers: (() => void)[] = [];
   disposers.push(registerLarkPlatformPermitChecker());
-  const groupTools = createGroupManagementTools(
-    lark as unknown as IGroupManagement,
+  const sceneTools = createSceneManagementTools(
+    lark as unknown as ISceneManagement,
     'lark',
     { permitResolver: larkGroupPermitResolver, registerChecker: false },
   );
-  disposers.push(...groupTools.map(t => toolService.addTool(t, plugin.name)));
+  disposers.push(...sceneTools.map(t => toolService.addTool(t, plugin.name)));
 
   disposers.push(toolService.addTool({
     name: 'lark_get_user',

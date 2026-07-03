@@ -1,44 +1,44 @@
 /**
- * Agent-side group management tool creation.
+ * Agent-side scene management tool creation.
  *
- * Delegates interface, specs, constants, and buildMethodArgs to @zhin.js/core,
+ * Delegates interface, specs, constants, and buildSceneMethodArgs to @zhin.js/core,
  * then adapts the result to the agent Tool type.
  */
 
 import {
-  createGroupManagementToolsRaw,
-  buildMethodArgs,
-  GROUP_METHOD_SPECS,
-  GROUP_MANAGEMENT_SKILL_KEYWORDS,
-  GROUP_MANAGEMENT_SKILL_TAGS,
+  createSceneManagementToolsRaw,
+  buildSceneMethodArgs,
+  SCENE_MANAGEMENT_METHOD_SPECS,
+  SCENE_MANAGEMENT_SKILL_KEYWORDS,
+  SCENE_MANAGEMENT_SKILL_TAGS,
 } from '@zhin.js/core';
-import type { IGroupManagement, GroupMethodSpec } from '@zhin.js/core';
+import type { ISceneManagement, SceneManagementMethodSpec } from '@zhin.js/core';
 import type { Tool, ToolScope } from './orchestrator/types.js';
 
-export type { IGroupManagement, GroupMethodSpec };
-export { GROUP_METHOD_SPECS, GROUP_MANAGEMENT_SKILL_KEYWORDS, GROUP_MANAGEMENT_SKILL_TAGS, buildMethodArgs };
+export type { ISceneManagement, SceneManagementMethodSpec };
+export { SCENE_MANAGEMENT_METHOD_SPECS, SCENE_MANAGEMENT_SKILL_KEYWORDS, SCENE_MANAGEMENT_SKILL_TAGS, buildSceneMethodArgs };
 
-export function createGroupManagementTools(
-  adapter: IGroupManagement,
+export function createSceneManagementTools(
+  adapter: ISceneManagement,
   prefix: string,
 ): Tool[] {
-  return createGroupManagementToolsRaw<Tool>(adapter, prefix, (spec, prefix, execute) => ({
+  return createSceneManagementToolsRaw<Tool>(adapter, prefix, (spec, prefix, execute) => ({
     name: `${prefix}_${spec.toolSuffix}`,
     description: `${spec.description} (${prefix})`,
     parameters: {
       type: 'object' as const,
       properties: {
         endpoint_id: { type: 'string', description: 'Endpoint ID', contextKey: 'endpointId' },
-        scene_id: { type: 'string', description: '群/服务器 ID', contextKey: 'sceneId' },
+        scene_id: { type: 'string', description: 'IM 场景 ID', contextKey: 'sceneId' },
         ...Object.fromEntries(Object.entries(spec.extraParams)),
       },
       required: ['endpoint_id', 'scene_id', ...(spec.extraRequired ?? [])],
     },
     execute,
-    tags: ['group', 'management', prefix],
+    tags: ['scene', 'management', prefix],
     keywords: spec.keywords,
     ...(spec.permit ? { permissions: [spec.permit] } : {}),
-    scopes: ['group'] as ToolScope[],
+    scopes: ['group', 'channel'] as ToolScope[],
     preExecutable: spec.preExecutable,
   }));
 }

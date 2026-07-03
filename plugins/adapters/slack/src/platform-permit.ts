@@ -11,8 +11,8 @@ export function platformPermit(perm: string): string {
 }
 
 const FACTORY_PERM_MAP: Record<string, string> = {
-  group_admin: 'channel_manager',
-  group_owner: 'workspace_owner',
+  scene_admin: 'channel_manager',
+  scene_owner: 'workspace_owner',
 };
 
 export function slackGroupPermitResolver(logicalPerm: string): string {

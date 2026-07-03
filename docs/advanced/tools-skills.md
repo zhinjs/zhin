@@ -261,7 +261,7 @@ tags: [utility]
 | `tags` | string[] | — | 分类标签 |
 | `platforms` | string[] | — | 限定平台 |
 | `scopes` | string[] | — | 限定场景 |
-| `requiredAnyRole` | string / string[] | — | 需具备的角色之一（如 `trusted`、`group_admin`） |
+| `requiredAnyRole` | string / string[] | — | 需具备的角色之一（如 `trusted`、`scene_admin`） |
 | `kind` | string | — | 工具分类 |
 | `hidden` | boolean | — | 是否隐藏 |
 
@@ -429,7 +429,7 @@ plugins/utils/my-plugin/skills/my-plugin/SKILL.md
 
 #### 群管理能力（推荐：覆写方法自动检测）
 
-群管理是 IM 的通用能力。Adapter 基类声明了 `IGroupManagement` 接口中的可选方法规范，适配器只需覆写自己平台支持的方法，`start()` 会自动检测并**生成群管 Tool**（Skill 粗筛依赖 `SKILL.md` 或工具 `keywords`，不再由适配器代码注册 Skill）：
+群管理是 IM 的通用能力。Adapter 基类声明了 `ISceneManagement` 接口中的可选方法规范，适配器只需覆写自己平台支持的方法，`start()` 会自动检测并**生成群管 Tool**（Skill 粗筛依赖 `SKILL.md` 或工具 `keywords`，不再由适配器代码注册 Skill）：
 
 ```typescript
 class IcqqAdapter extends Adapter<IcqqEndpoint> {
@@ -479,15 +479,15 @@ class IcqqAdapter extends Adapter<IcqqEndpoint> {
 
 | 方法 | 说明 | 权限级别 |
 |------|------|---------|
-| `kickMember` | 踢出成员 | group_admin |
-| `muteMember` | 禁言（duration=0 解除） | group_admin |
-| `setMemberNickname` | 设置群昵称/名片 | group_admin |
-| `setAdmin` | 设置/取消管理员 | group_owner |
+| `kickMember` | 踢出成员 | scene_admin |
+| `muteMember` | 禁言（duration=0 解除） | scene_admin |
+| `setMemberNickname` | 设置群昵称/名片 | scene_admin |
+| `setAdmin` | 设置/取消管理员 | scene_owner |
 | `listMembers` | 获取成员列表 | user |
-| `banMember` | 封禁成员 | group_admin |
-| `unbanMember` | 解除封禁 | group_admin |
-| `setGroupName` | 修改群名称 | group_admin |
-| `muteAll` | 全员禁言/解除 | group_admin |
+| `banMember` | 封禁成员 | scene_admin |
+| `unbanMember` | 解除封禁 | scene_admin |
+| `setGroupName` | 修改群名称 | scene_admin |
+| `muteAll` | 全员禁言/解除 | scene_admin |
 | `getGroupInfo` | 获取群信息 | user |
 
 #### 群管理使用指南
@@ -548,17 +548,17 @@ interface Skill {
 ### 角色
 
 ```typescript
-type SenderRole = 'user' | 'group_admin' | 'group_owner' | 'trusted' | 'master'
+type SenderRole = 'user' | 'scene_admin' | 'scene_owner' | 'trusted' | 'master'
 ```
 
 | 角色 | 含义 |
 |------|------|
 | `user` | 默认（无其它角色时仅此） |
-| `group_admin` / `group_owner` | IM 群管 / 群主 |
+| `scene_admin` / `scene_owner` | IM 群管 / 群主 |
 | `trusted` | 本 bot 可信操作员（配置 `trusted` / `bots[].trusted`） |
 | `master` | 本 bot 主人 + 全局 trigger `masters` |
 
-工具声明 `requiredAnyRole?: SenderRole[]`：调用者 `context.roles` 须**包含其一**（匹配时 `group_owner` 隐含 `group_admin`，`master` 隐含 `trusted`；`master` 不隐含群管角色）。
+工具声明 `requiredAnyRole?: SenderRole[]`：调用者 `context.roles` 须**包含其一**（匹配时 `scene_owner` 隐含 `scene_admin`，`master` 隐含 `trusted`；`master` 不隐含群管角色）。
 
 ### 两层校验
 

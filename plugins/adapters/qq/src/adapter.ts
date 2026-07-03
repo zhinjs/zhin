@@ -51,9 +51,9 @@ export class QQAdapter extends Adapter<QQEndpoint<ReceiverMode>> {
     return this.#endpointManager;
   }
 
-  // ── IGroupManagement 标准群管方法 ──────────────────────────────────
+  // ── ISceneManagement 标准群管方法 ──────────────────────────────────
 
-  async kickMember(endpointId: string, sceneId: string, userId: string) {
+  async removeMember(endpointId: string, sceneId: string, userId: string) {
     const endpoint = this.endpoints.get(endpointId);
     if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
     return endpoint.removeGuildMember(sceneId, userId, false);
@@ -65,7 +65,7 @@ export class QQAdapter extends Adapter<QQEndpoint<ReceiverMode>> {
     return endpoint.muteMembers(sceneId, [userId], duration);
   }
 
-  async muteAll(endpointId: string, sceneId: string, enable = true) {
+  async setSceneMuted(endpointId: string, sceneId: string, enable = true) {
     const endpoint = this.endpoints.get(endpointId);
     if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
     return endpoint.muteAll(sceneId, enable ? 600 : 0);
@@ -77,7 +77,7 @@ export class QQAdapter extends Adapter<QQEndpoint<ReceiverMode>> {
     return endpoint.getGuildMembers(sceneId);
   }
 
-  async getGroupInfo(endpointId: string, sceneId: string) {
+  async getSceneInfo(endpointId: string, sceneId: string) {
     const endpoint = this.endpoints.get(endpointId);
     if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
     return endpoint.getGuildInfo(sceneId);

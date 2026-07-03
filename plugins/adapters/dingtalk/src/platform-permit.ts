@@ -11,8 +11,8 @@ export function platformPermit(perm: string): string {
 }
 
 const FACTORY_PERM_MAP: Record<string, string> = {
-  group_admin: 'chat_admin',
-  group_owner: 'chat_owner',
+  scene_admin: 'chat_admin',
+  scene_owner: 'chat_owner',
 };
 
 export function dingtalkGroupPermitResolver(logicalPerm: string): string {

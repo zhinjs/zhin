@@ -43,8 +43,8 @@ function resolveSenderDisplayName(message: Message): string {
 
 function mapPlatformRoleForLabel(role?: string): string | undefined {
   if (!role || role === 'member') return undefined;
-  if (role === 'owner') return 'group_owner';
-  if (role === 'admin') return 'group_admin';
+  if (role === 'owner') return 'scene_owner';
+  if (role === 'admin') return 'scene_admin';
   return role;
 }
 

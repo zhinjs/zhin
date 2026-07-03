@@ -261,11 +261,11 @@ const memberInfo = endpoint.getGroupMemberInfo(groupId, userId)
 
 ## 🔧 群管理工具（AI 可调用）
 
-适配器通过覆写 `IGroupManagement` 标准方法自动注册群管理工具，同时保留平台特有工具，这些工具可以被 AI 调用，实现智能化的群管理。
+适配器通过覆写 `ISceneManagement` 标准方法自动注册群管理工具，同时保留平台特有工具，这些工具可以被 AI 调用，实现智能化的群管理。
 
 ### 标准群管工具（自动生成）
 
-通过覆写 `IGroupManagement` 方法，`start()` 时自动检测并生成对应 Tool：
+通过覆写 `ISceneManagement` 方法，`start()` 时自动检测并生成对应 Tool：
 
 | 工具 | 覆写方法 | 所需权限 | 说明 |
 |------|---------|----------|------|

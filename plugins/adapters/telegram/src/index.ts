@@ -2,7 +2,7 @@
  * Telegram 适配器入口：类型扩展、导出、注册
  */
 import path from "node:path";
-import { usePlugin, type Plugin, type Context, type IGroupManagement, createGroupManagementTools, type ToolFeature } from "zhin.js";
+import { usePlugin, type Plugin, type Context, type ISceneManagement, createSceneManagementTools, type ToolFeature } from "zhin.js";
 import { TelegramAdapter } from "./adapter.js";
 import { PageManager } from "@zhin.js/host-api";
 import {
@@ -48,12 +48,12 @@ provide({
 useContext('tool', 'telegram', (toolService: ToolFeature, telegram: TelegramAdapter) => {
   const disposers: (() => void)[] = [];
   disposers.push(registerTelegramPlatformPermitChecker());
-  const groupTools = createGroupManagementTools(
-    telegram as unknown as IGroupManagement,
+  const sceneTools = createSceneManagementTools(
+    telegram as unknown as ISceneManagement,
     'telegram',
     { permitResolver: telegramGroupPermitResolver, registerChecker: false },
   );
-  disposers.push(...groupTools.map(t => toolService.addTool(t, plugin.name)));
+  disposers.push(...sceneTools.map(t => toolService.addTool(t, plugin.name)));
 
   disposers.push(toolService.addTool({
     name: 'telegram_pin_message',

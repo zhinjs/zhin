@@ -164,7 +164,7 @@ addCommand(
   if (hasPermission) {
     code += `
     .permit((message) => {
-      // 框架层：master/trusted；平台群管用 platform(adapter,group_admin) + checker
+      // 框架层：master/trusted；场景治理用 platform(adapter,scene_admin) + checker
       return message.$sender.isMaster === true;
     })`;
   }

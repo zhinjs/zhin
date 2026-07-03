@@ -21,4 +21,4 @@
 
 ## 工厂映射
 
-`group_admin` → `channel_manager` · `group_owner` → `workspace_owner`
+`scene_admin` → `channel_manager` · `scene_owner` → `workspace_owner`

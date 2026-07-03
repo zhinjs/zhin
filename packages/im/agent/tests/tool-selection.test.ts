@@ -25,7 +25,7 @@ import {
   normalizeTool,
 } from '../src/orchestrator/tool-selection.js';
 import {
-  registerDefaultGroupPlatformPermitChecker,
+  registerDefaultScenePlatformPermitChecker,
   clearPlatformPermitCheckers,
 } from '@zhin.js/core';
 import { planToolRun } from '../src/zhin-agent/tool-runtime.js';
@@ -91,7 +91,7 @@ function makeTool(overrides: Partial<Tool> = {}): Tool {
 
 describe('tool-selection permissions', () => {
   beforeEach(() => {
-    registerDefaultGroupPlatformPermitChecker('qq');
+    registerDefaultScenePlatformPermitChecker('qq');
   });
 
   afterEach(() => {
@@ -102,7 +102,7 @@ describe('tool-selection permissions', () => {
     const tool = makeTool({
       platforms: ['qq'],
       scopes: ['group'],
-      permissions: ['platform(qq,group_admin)'],
+      permissions: ['platform(qq,scene_admin)'],
     });
     const msg = {
       $adapter: 'qq',
