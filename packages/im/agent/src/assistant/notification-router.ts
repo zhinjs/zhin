@@ -39,7 +39,12 @@ function assertImJobNotify(notify: ImJobNotify): void {
   }
 }
 
-/** 解析并校验持久化 notify（破坏性：不接受 flat platform/endpointId/sceneId/scope） */
+function hasImTarget(notify: ImJobNotify): boolean {
+  const scene = notify.target?.scene;
+  return !!(scene?.platform && scene.endpointId && scene.sceneId && scene.kind);
+}
+
+/** 解析并校验 notify（须为 canonical JobNotify + IMDeliveryTarget） */
 export function parseJobNotify(notify: unknown): JobNotify {
   if (!notify || typeof notify !== 'object' || !('channel' in notify)) {
     throw new Error('Invalid notify: missing channel');
@@ -81,8 +86,17 @@ export function resolveEffectiveNotify(
   defaults: JobNotify | undefined,
 ): JobNotify {
   if (notify) {
-    if (notify.channel === 'im' && defaults?.channel === 'im') {
-      return mergeImTargets(notify, defaults);
+    if (notify.channel === 'im') {
+      const im = notify as ImJobNotify;
+      if (!hasImTarget(im)) {
+        if (defaults?.channel === 'im' && hasImTarget(defaults as ImJobNotify)) {
+          return defaults;
+        }
+        return notify;
+      }
+      if (defaults?.channel === 'im' && hasImTarget(defaults as ImJobNotify)) {
+        return mergeImTargets(im, defaults as ImJobNotify);
+      }
     }
     return notify;
   }

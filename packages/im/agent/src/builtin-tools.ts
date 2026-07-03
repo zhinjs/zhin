@@ -6,7 +6,7 @@
  * 网络:      web_search, web_fetch（builtin/web-*-tool）
  * 计划:      todo_read, todo_write（builtin/todo-*-tool）
  * 记忆 MCP:  mcp_memory_*（ai.memoryMcp: true 时注册 server-memory）
- * 技能:      activate_skill, install_skill（builtin/activate-skill-tool, install-skill-tool）
+ * 技能:      load_skill, install_skill（builtin/load-skill-tool, install-skill-tool）
  * 交互:      ask_user（builtin/ask-user-tool）
  *
  * 发现逻辑已拆分到 discovery/skills.ts、agents.ts、tools.ts
@@ -25,7 +25,7 @@ import { createWebSearchTool } from './builtin/web-search-tool.js';
 import { createWebFetchTool } from './builtin/web-fetch-tool.js';
 import { createTodoReadTool } from './builtin/todo-read-tool.js';
 import { createTodoWriteTool } from './builtin/todo-write-tool.js';
-import { createActivateSkillTool } from './builtin/activate-skill-tool.js';
+import { createDeferredMetaTools } from './builtin/deferred-tool-meta.js';
 import { createInstallSkillTool } from './builtin/install-skill-tool.js';
 import { createAskUserTool } from './builtin/ask-user-tool.js';
 import { createAnalyzeMediaTool } from './builtin/analyze-media-tool.js';
@@ -79,7 +79,7 @@ export function createBuiltinTools(options: BuiltinToolsOptions): ToolInput[] {
   tools.push(createTodoWriteTool(DATA_DIR));
 
   tools.push(
-    createActivateSkillTool({
+    ...createDeferredMetaTools({
       skillFileLookup,
       skillDirList,
       skillMaxChars,

@@ -29,9 +29,16 @@ import { sanitizeAssistantReply } from './text-sanitize.js';
 import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-format.js';
 import { transformContextWithCompaction } from './compaction-runtime.js';
 import { logPhase, tokenUsageLogFields, logAgentLoopIterationEnd } from './phase-trace.js';
-import { buildAgentPromptCacheStreamOptions } from './config.js';
+import { buildAgentPromptCacheStreamOptions, resolveSkillInstructionMaxChars } from './config.js';
 import type { PromptTurnHooks } from './prompt-controller.js';
 import type { ZhinAgentPrivate, OnChunkCallback, Message } from './zhin-agent-private.js';
+import { bindDeferredToolRuntime } from '../builtin/deferred-tool-meta.js';
+import { persistDeferredToolSnapshot, buildLlmToolsForProvider } from './tool-orchestration.js';
+import { resolveDeferredToolsConfig, resolveAlwaysLoadedSet } from '../tool-catalog/resolve-config.js';
+import { resolveDeferredApiTools } from '../tool-catalog/tool-catalog.js';
+import { getLoadedToolNamesFromSnapshot } from '@zhin.js/ai';
+import { mergeSkillDirsWithResolver, collectPluginSkillSearchRoots } from '../discovery/utils.js';
+import { getPlugin } from '@zhin.js/core';
 
 const logger = new Logger(null, 'ZhinAgent:AgentLoopTurn');
 
@@ -317,6 +324,50 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
       })
     : [];
 
+  let sessionSnapshot = host.lastDeferredSessionSnapshot ?? { loadedTools: {}, loadedSkills: [] };
+  const catalog = host.lastDeferredCatalog ?? [];
+  const deferredCfg = resolveDeferredToolsConfig(host.config);
+
+  if (hasTools && catalog.length > 0) {
+    const skillMaxChars = resolveSkillInstructionMaxChars(host.config, modelId);
+    let skillDirList = () => [] as string[];
+    let skillFileLookup: ((name: string) => string | undefined) | undefined;
+    try {
+      const root = getPlugin().root;
+      skillDirList = () => mergeSkillDirsWithResolver(() => collectPluginSkillSearchRoots(root));
+      skillFileLookup = (name: string) => host.skillRegistry?.getByName(name)?.filePath;
+    } catch {
+      skillFileLookup = (name: string) => host.skillRegistry?.getByName(name)?.filePath;
+    }
+    bindDeferredToolRuntime(contextForTools, {
+      sessionId,
+      catalog,
+      skillRegistry: host.skillRegistry,
+      snapshot: sessionSnapshot,
+      maxLoadedPerSession: deferredCfg.maxLoadedPerSession,
+      discoverTopK: deferredCfg.discoverTopK,
+      persistSnapshot: async (snap) => {
+        sessionSnapshot = snap;
+        host.lastDeferredSessionSnapshot = snap;
+        await persistDeferredToolSnapshot(host, sessionId, snap);
+      },
+      onSkillLoaded: (_name, instructions) => {
+        host.appendActiveSkillsContext(instructions);
+      },
+      skillLoadOpts: {
+        skillDirList,
+        skillMaxChars,
+        skillFileLookup,
+      },
+    });
+  }
+
+  const refreshResolvedTools = () => {
+    const alwaysLoaded = resolveAlwaysLoadedSet(host.config);
+    const loaded = getLoadedToolNamesFromSnapshot(sessionSnapshot);
+    return resolveDeferredApiTools(catalog, alwaysLoaded, loaded);
+  };
+
   if (hasTools) {
     const sections = await describeAgentPathPromptSections(host, {
       commMessage: contextForTools,
@@ -367,7 +418,13 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
   });
 
   const legacyByName = new Map(agentTools.map((t) => [t.name, t]));
-  const llmTools = convertLegacyTools(agentTools);
+  let llmTools = buildLlmToolsForProvider(
+    llmModel.sdk,
+    catalog,
+    agentTools,
+    resolveAlwaysLoadedSet(host.config),
+    getLoadedToolNamesFromSnapshot(sessionSnapshot),
+  );
   const toolCalls: ToolCallRecord[] = [];
   let iterations = 0;
   let lastAssistantText = '';
@@ -391,6 +448,22 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
     messages: loaded.messages,
     tools: llmTools,
   });
+
+  const rebuildLlmTools = () => {
+    const nextAgentTools = applyExecPolicyToTools(host.config, refreshResolvedTools(), {
+      approvalMode: host.config.execApprovalMode,
+    });
+    legacyByName.clear();
+    for (const t of nextAgentTools) legacyByName.set(t.name, t);
+    llmTools = buildLlmToolsForProvider(
+      llmModel.sdk,
+      catalog,
+      nextAgentTools,
+      resolveAlwaysLoadedSet(host.config),
+      getLoadedToolNamesFromSnapshot(sessionSnapshot),
+    );
+    return llmTools;
+  };
 
   const contextWindow = llmModel.contextWindow ?? host.config.contextTokens;
   const aiService = resolveAIService(orchestrationPlugin);
@@ -524,6 +597,17 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
     afterToolCall: async ({ toolCall, result }: { toolCall: ParsedToolCall; result: AgentMessage }) => {
       await loopHooks?.runAfterToolCall({ toolCall, result, sessionId });
     },
+    refreshTools: hasTools ? () => rebuildLlmTools() : undefined,
+    shouldRecompleteAfterTool: (result: AgentMessage) => {
+      if (result.role !== 'toolResult' || !Array.isArray(result.content)) return false;
+      return result.content.some(
+        (block) =>
+          block.type === 'text'
+          && typeof block.text === 'string'
+          && block.text.includes('__zhin_tools_mutated__'),
+      );
+    },
+    maxRecompletePerIteration: 1,
   };
 
   for await (const event of agentLoop(promptMessages, loopContext, loopConfig, signal)) {

@@ -15,7 +15,7 @@ export interface ToolCallRecord {
   result: unknown;
 }
 
-const INTERNAL_META_TOOLS = new Set(['activate_skill', 'install_skill', 'tool_search']);
+const INTERNAL_META_TOOLS = new Set(['load_skill', 'discover', 'load_tool', 'install_skill', 'tool_search']);
 
 function asString(result: unknown): string {
   if (result == null) return '';

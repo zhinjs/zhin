@@ -7,12 +7,17 @@ import { prependTurnContextEnvelope } from './prompt.js';
 export function buildTurnUserMessages(
   commMessage: Message,
   rawContent: string,
+  passiveBlock?: string | null,
 ): {
   rawContent: string;
   userMessageExtra?: AgentMessageExtra;
   promptMessages: UserMessage[];
 } {
-  const { content, extra, llmMessage } = resolveTurnUserMessage(commMessage as import('@zhin.js/core').AgentTurnMessage, rawContent);
+  const { content, extra, llmMessage } = resolveTurnUserMessage(
+    commMessage as import('@zhin.js/core').AgentTurnMessage,
+    rawContent,
+    { passiveBlock },
+  );
   return {
     rawContent: content,
     userMessageExtra: extra,

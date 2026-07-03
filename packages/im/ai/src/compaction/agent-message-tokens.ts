@@ -32,6 +32,18 @@ export function estimateAgentMessagesTokens(messages: AgentMessage[]): number {
 }
 
 /**
+ * Ensure compaction keep-boundary does not orphan tool results from their assistant tool_calls.
+ */
+export function snapCompactionStartIndex(messages: AgentMessage[], startIdx: number): number {
+  if (startIdx <= 0 || messages.length === 0) return 0;
+  let idx = Math.min(startIdx, messages.length - 1);
+  while (idx > 0 && messages[idx]?.role === 'toolResult') {
+    idx -= 1;
+  }
+  return idx;
+}
+
+/**
  * Walk from newest messages backward until keepRecentTokens budget is met.
  * Returns index of first kept message (0 = keep all).
  */
@@ -47,7 +59,7 @@ export function findKeepRecentStartIndex(
     tokens += estimateAgentMessageTokens(messages[i]);
     kept += 1;
     if (tokens >= keepRecentTokens && kept >= minKeepCount) {
-      return i;
+      return snapCompactionStartIndex(messages, i);
     }
   }
   return 0;

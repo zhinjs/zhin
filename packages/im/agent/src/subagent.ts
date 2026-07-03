@@ -92,6 +92,14 @@ export interface SpawnOptions {
   notifyContext?: Message;
   /** 硬编排任务 ID（AgentDispatcher SSOT） */
   orchestrationTaskId?: string;
+  /** spawn_task 声明的子任务工具（与父会话 sessionLoaded 取交集作为初始池） */
+  requestedTools?: string[];
+  /** spawn_task 声明的技能名 */
+  requestedSkills?: string[];
+  /** 父会话已 load 的工具名 */
+  parentSessionLoaded?: string[];
+  /** 父会话已 load 的技能名 */
+  parentLoadedSkills?: string[];
 }
 
 export interface SubagentLifecycleEvent {
@@ -279,6 +287,10 @@ export class SubagentManager {
         runInput: enriched.runInput,
         orchestrationTaskId: enriched.orchestrationTaskId,
         agentMeta: enriched._agentMeta,
+        requestedTools: enriched.requestedTools,
+        requestedSkills: enriched.requestedSkills,
+        parentSessionLoaded: enriched.parentSessionLoaded,
+        parentLoadedSkills: enriched.parentLoadedSkills,
       },
     );
     return result ?? '任务已完成，但未生成最终响应。';
@@ -310,6 +322,10 @@ export class SubagentManager {
       presetName: enriched.agent ?? enriched.label,
       orchestrationTaskId: enriched.orchestrationTaskId,
       agentMeta: enriched._agentMeta,
+      requestedTools: enriched.requestedTools,
+      requestedSkills: enriched.requestedSkills,
+      parentSessionLoaded: enriched.parentSessionLoaded,
+      parentLoadedSkills: enriched.parentLoadedSkills,
     })
       .then(() => undefined)
       .catch((error) => {
@@ -364,6 +380,10 @@ export class SubagentManager {
       contextPreamble?: string;
       orchestrationTaskId?: string;
       agentMeta?: AgentMeta;
+      requestedTools?: string[];
+      requestedSkills?: string[];
+      parentSessionLoaded?: string[];
+      parentLoadedSkills?: string[];
     },
   ): Promise<string | void> {
     const startedAt = Date.now();
@@ -429,6 +449,8 @@ export class SubagentManager {
         config: (this.execPolicyConfig ?? DEFAULT_CONFIG) as Required<ZhinAgentConfig>,
         agentDispatcher: this.agentDispatcher,
         agentMeta: opts?.agentMeta,
+        requestedTools: opts?.requestedTools,
+        parentSessionLoaded: opts?.parentSessionLoaded,
       });
 
       if (this.execPolicyConfig) {
@@ -648,7 +670,7 @@ ${task}
 ## You must not
 - Send messages directly to the user
 - Spawn further sub-tasks or delegate to other agents
-- Use orchestration tools (spawn_task, tool_search, run_deferred_task)
+- Use orchestration tools (spawn_task, discover, install_skill)
 
 ## Workspace
 Workspace path: ${this.workspace}

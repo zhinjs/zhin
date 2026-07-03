@@ -33,6 +33,8 @@ import type { PromptTraceConfig } from './prompt-trace.js';
 import type { ZhinAgentTurnMetrics } from './turn-metrics.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import type { PromptController } from './prompt-controller.js';
+import type { ToolCatalogItem } from '../tool-catalog/types.js';
+import type { DeferredToolSessionSnapshot } from '@zhin.js/ai';
 
 export interface ZhinAgentPrivate {
   readonly config: Required<ZhinAgentConfig>;
@@ -53,12 +55,15 @@ export interface ZhinAgentPrivate {
   readonly subagentManager: SubagentManager | null;
   readonly bootstrapContext: string;
   readonly activeSkillsContext: string;
+  appendActiveSkillsContext(fragment: string): void;
   readonly skillsSummaryXML: string;
   readonly modelRegistry: ModelRegistry | null;
   readonly phaseConfig: PhaseTraceConfig;
   readonly promptTraceConfig: PromptTraceConfig;
   readonly emitter: ZhinAgentEventEmitter;
   deferredCatalog: AgentTool[];
+  lastDeferredCatalog?: ToolCatalogItem[];
+  lastDeferredSessionSnapshot?: DeferredToolSessionSnapshot;
   readonly deferredWorkerRunner: DeferredWorkerRunner;
   lastToolSearchDeferredStats?: string;
   readonly promptController: PromptController;
@@ -93,10 +98,6 @@ export interface ZhinAgentPrivate {
     },
   ): void;
   buildDisciplinedPrompt(basePrompt: string): string;
-  resolveAgentToolsForTurn(
-    allTools: AgentTool[],
-    commMessage: Message,
-  ): { tools: AgentTool[]; deferredStats?: string };
   runDeferredWorker(
     goal: string,
     toolQuery: string | undefined,

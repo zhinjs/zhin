@@ -43,10 +43,18 @@ describe('NotificationRouter', () => {
     });
   });
 
-  it('parseJobNotify 拒绝 flat legacy im notify', () => {
+  it('parseJobNotify 拒绝 legacy flat im notify', () => {
     expect(() =>
       parseJobNotify({ channel: 'im', platform: 'icqq', endpointId: '1' }),
     ).toThrow(/target/);
+  });
+
+  it('resolveEffectiveNotify 将 channel:im 解析为 defaults target', () => {
+    const notify = resolveEffectiveNotify(
+      { channel: 'im' },
+      privateTarget,
+    );
+    expect(parseJobNotify(notify)).toEqual(privateTarget);
   });
 
   it('resolveEffectiveNotify 优先 notify 并合并 defaults target', () => {

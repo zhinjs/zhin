@@ -87,10 +87,14 @@ version: 1
 defaults:
   notify:
     channel: im
-    platform: icqq
-    endpointId: "<endpoint_id>"
-    sceneId: "<master_user_id>"
-    scope: private
+    target:
+      channel: im
+      scene:
+        platform: icqq
+        endpointId: "<endpoint_id>"
+        sceneId: "<master_user_id>"
+        kind: private
+  notifyOnFailure: false
 
 routines:
   heartbeat:
@@ -98,4 +102,11 @@ routines:
     everyMs: 1800000
     notify:
       channel: silent
+  morningBrief:
+    enabled: false
+    cron: "0 8 * * *"
+    prompt: |
+      汇总今日待办与提醒，生成简短早报。
+    notify:
+      channel: im
 `;

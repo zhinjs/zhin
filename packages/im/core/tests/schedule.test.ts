@@ -29,6 +29,35 @@ describe('ScheduleFeature', () => {
     expect(dispose).not.toHaveBeenCalled();
   });
 
+  it('remove 不应与 dispose 互相递归', () => {
+    const disposeEngine = vi.fn();
+    const handle = {
+      id: 'recursive',
+      descriptor: { kind: 'every' as const, everyMs: 1000 },
+      dispose: () => {
+        disposeEngine();
+        feature.remove(handle);
+      },
+    };
+    feature.add(handle, 'test-plugin');
+    expect(() => feature.remove(handle)).not.toThrow();
+    expect(disposeEngine).toHaveBeenCalledTimes(1);
+    expect(feature.items).toHaveLength(0);
+  });
+
+  it('addSchedule 风格 handle 仅注销 engine，由 remove 负责 feature 清理', () => {
+    const disposeEngine = vi.fn();
+    const handle = {
+      id: 'sched-style',
+      descriptor: { kind: 'every' as const, everyMs: 1000 },
+      dispose: disposeEngine,
+    };
+    feature.add(handle, 'test-plugin');
+    feature.remove(handle);
+    expect(disposeEngine).toHaveBeenCalledTimes(1);
+    expect(feature.get('sched-style')).toBeUndefined();
+    expect(feature.items).toHaveLength(0);
+  });
   it('remove 应注销任务', () => {
     const handle = { id: 'h1', descriptor: { kind: 'solar' as const, cron: '0 0 12 * * *' }, dispose: vi.fn() };
     feature.add(handle, 'test-plugin');

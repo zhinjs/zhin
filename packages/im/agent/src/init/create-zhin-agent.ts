@@ -17,6 +17,7 @@ import {
   resolveSkillInstructionMaxChars,
   DEFAULT_CONFIG,
   DEFAULT_HARD_ORCHESTRATOR_TOOLS,
+  DEFAULT_ALWAYS_LOADED_TOOLS,
   type ZhinAgentConfig,
 } from '../zhin-agent/config.js';
 import { setScheduleManager } from '../schedule-manager.js';
@@ -30,8 +31,10 @@ import {
   createScheduleJobStoreFromConfig,
   createNotificationRouter,
   loadAssistantProfileFile,
+  parseJobNotify,
   syncProfileHeartbeatToStore,
   syncProfileRoutinesToStore,
+  pruneStaleProfileCronJobs,
   validateAssistantProfile,
   resolveAssistantConfig,
   resolveAssistantDefaultsConfig,
@@ -109,24 +112,29 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     const knowledgeDir = appConfig.ai?.knowledge?.baseDir
       ? path.resolve(appConfig.ai.knowledge.baseDir)
       : path.join(process.cwd(), 'knowledge');
-    let orchestratorTools = (agentConfig as ZhinAgentConfig | undefined)?.orchestratorTools
+    const deferredFromConfig = (agentConfig as ZhinAgentConfig | undefined)?.deferredTools
+      ?? appConfig.ai?.agent?.deferredTools;
+    let alwaysLoadedTools = deferredFromConfig?.alwaysLoadedTools
+      ?? (agentConfig as ZhinAgentConfig | undefined)?.orchestratorTools
       ?? appConfig.ai?.agent?.orchestratorTools
-      ?? [...DEFAULT_HARD_ORCHESTRATOR_TOOLS];
-    if (semanticMemory && orchestratorTools) {
+      ?? [...DEFAULT_ALWAYS_LOADED_TOOLS];
+    if (semanticMemory) {
       for (const name of ['memory_search', 'memory_upsert'] as const) {
-        if (!orchestratorTools.includes(name)) {
-          orchestratorTools = [...orchestratorTools, name];
+        if (!alwaysLoadedTools.includes(name)) {
+          alwaysLoadedTools = [...alwaysLoadedTools, name];
         }
       }
     }
-    // knowledge_search 始终注册（工具内部处理目录不存在的情况）
-    if (orchestratorTools && !orchestratorTools.includes('knowledge_search')) {
-      orchestratorTools = [...orchestratorTools, 'knowledge_search'];
+    if (!alwaysLoadedTools.includes('knowledge_search')) {
+      alwaysLoadedTools = [...alwaysLoadedTools, 'knowledge_search'];
     }
     const zhinAgentCfg: ZhinAgentConfig = {
       ...(agentConfig as ZhinAgentConfig | undefined),
       chatModel: zhinBinding.model,
-      orchestratorTools,
+      deferredTools: {
+        ...deferredFromConfig,
+        alwaysLoadedTools,
+      },
     };
     const agent = new ZhinAgent(provider, zhinAgentCfg);
     refs.zhinAgent = agent;
@@ -269,7 +277,12 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
       return undefined;
     };
     const defaultNotifyCfg = assistantCfg.enabled
-      ? resolveAssistantDefaultsConfig(assistantCfg.defaults)
+      ? {
+          notifyOnFailure: resolveAssistantDefaultsConfig(assistantCfg.defaults).notifyOnFailure,
+          notify: assistantCfg.defaults?.notify
+            ? parseJobNotify(assistantCfg.defaults.notify)
+            : undefined,
+        }
       : { notify: undefined, notifyOnFailure: false };
     const notificationRouter = createNotificationRouter({ resolveAdapter });
     const executor = createTaskExecutor({
@@ -308,7 +321,9 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     if (!getScheduleEngine()) {
       setScheduleEngine(new ScheduleEngine());
     }
-    const store = createScheduleJobStoreFromConfig(dataDir, assistantCfg);
+    const store = createScheduleJobStoreFromConfig(dataDir, {
+      defaultNotify: defaultNotifyCfg.notify,
+    });
     jobWorker = new JobWorker({
       executor,
       queue: assistantCfg.queue,
@@ -332,6 +347,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
         }
         await syncProfileHeartbeatToStore(store, profile);
         await syncProfileRoutinesToStore(store, profile);
+        await pruneStaleProfileCronJobs(store, profile);
       }
       jobEngine!.load();
     })().catch((e) => {

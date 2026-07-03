@@ -24,6 +24,7 @@ export {
   isLlmAgentMessage,
   createUserMessage,
 } from './types/agent-message.js';
+export { repairAgentMessagesForLlm } from './repair-agent-messages.js';
 
 export type {
   Model,

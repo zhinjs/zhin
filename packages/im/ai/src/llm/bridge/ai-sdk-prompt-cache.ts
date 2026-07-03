@@ -3,6 +3,7 @@ import type { SdkId } from '../sdk-registry.js';
 
 export type PromptCacheProviderOptions = {
   openai?: Record<string, string>;
+  anthropic?: Record<string, string | string[]>;
 };
 
 export type PromptCacheRetention = 'in_memory' | '24h';

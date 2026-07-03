@@ -6,7 +6,7 @@ export {
 export { validateAiRoutingConfig } from './validate-ai-config.js';
 export { applyAiConfigFixes } from './fix-ai-config.js';
 export { DEFAULT_ZHIN_AGENT_NAME } from './types.js';
-export type { AgentBindingConfig, PipelineRoleConfig, ResolvedAgentBinding } from './types.js';
+export type { AgentBindingConfig, ResolvedAgentBinding } from './types.js';
 export {
   resolvePipelineRoleBinding,
   resolvePlannerNickname,

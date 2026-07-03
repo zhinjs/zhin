@@ -62,7 +62,7 @@ export const AGENT_ROLE_CONFIGS: Record<AgentRole, AgentRoleConfig> = {
       'bash', 'web_search', 'web_fetch',
       'generate_image', 'analyze_media',
     ],
-    blockedTools: ['send_message', 'spawn_subagent', 'activate_skill'],
+    blockedTools: ['send_message', 'spawn_subagent', 'discover'],
     canSendMessage: false,
     canSpawnSubagents: false,
     canAccessMainHistory: false,

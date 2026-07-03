@@ -26,6 +26,8 @@ import {
   type SessionBranchPoint,
 } from './session-tree.js';
 import { SessionWriteLock } from './session-write-lock.js';
+import type { DeferredToolSessionSnapshot } from './deferred-tool-session.js';
+import { EMPTY_DEFERRED_TOOL_SNAPSHOT } from './deferred-tool-session.js';
 
 const logger = new Logger(null, 'ContextRepository');
 
@@ -68,6 +70,8 @@ export interface ContextRepository {
   listBranchPoints(sessionId: string): Promise<SessionBranchPoint[]>;
   setActiveLeaf(sessionId: string, messageId: number): Promise<boolean>;
   jumpToBranchIndex(sessionId: string, index: number): Promise<{ ok: boolean; message: string }>;
+  getDeferredToolSnapshot(sessionId: string): Promise<DeferredToolSessionSnapshot>;
+  setDeferredToolSnapshot(sessionId: string, snapshot: DeferredToolSessionSnapshot): Promise<void>;
 }
 
 type SqlInsertResult = { lastID?: number; changes?: number };
@@ -174,6 +178,7 @@ export class DatabaseContextRepository implements ContextRepository {
   private readonly sessionStore: AgentSessionStore;
   private readonly writeLock = new SessionWriteLock();
   private readonly config: Required<Pick<ContextRepositoryConfig, 'tailMessageLimit'>>;
+  private readonly deferredToolSnapshots = new Map<string, DeferredToolSessionSnapshot>();
 
   constructor(
     messageModel: MessageDbModel,
@@ -339,6 +344,14 @@ export class DatabaseContextRepository implements ContextRepository {
     return anchorRow?.id;
   }
 
+  async getDeferredToolSnapshot(sessionId: string): Promise<DeferredToolSessionSnapshot> {
+    return this.deferredToolSnapshots.get(sessionId) ?? { ...EMPTY_DEFERRED_TOOL_SNAPSHOT };
+  }
+
+  async setDeferredToolSnapshot(sessionId: string, snapshot: DeferredToolSessionSnapshot): Promise<void> {
+    this.deferredToolSnapshots.set(sessionId, snapshot);
+  }
+
   private async loadAllSummaryRows(sessionId: string): Promise<AgentSummaryRecord[]> {
     try {
       const probe = this.summaryModel.select().where({ session_id: sessionId });
@@ -397,6 +410,7 @@ export class MemoryContextRepository implements ContextRepository {
   private readonly sessionStore: MemoryAgentSessionStore;
   private readonly writeLock = new SessionWriteLock();
   private readonly config: Required<Pick<ContextRepositoryConfig, 'tailMessageLimit'>>;
+  private readonly deferredToolSnapshots = new Map<string, DeferredToolSessionSnapshot>();
 
   constructor(
     sessionStore: MemoryAgentSessionStore,
@@ -564,6 +578,14 @@ export class MemoryContextRepository implements ContextRepository {
     if (startIdx === 0) return undefined;
     const anchorRow = rows[startIdx - 1];
     return anchorRow?.id;
+  }
+
+  async getDeferredToolSnapshot(sessionId: string): Promise<DeferredToolSessionSnapshot> {
+    return this.deferredToolSnapshots.get(sessionId) ?? { ...EMPTY_DEFERRED_TOOL_SNAPSHOT };
+  }
+
+  async setDeferredToolSnapshot(sessionId: string, snapshot: DeferredToolSessionSnapshot): Promise<void> {
+    this.deferredToolSnapshots.set(sessionId, snapshot);
   }
 }
 

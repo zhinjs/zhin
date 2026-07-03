@@ -4,13 +4,12 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { formatCompact, Logger } from '@zhin.js/logger';
-import type { AssistantConfig } from './config.js';
 import type { ScheduleJob, ScheduleJobFile, JobAction, JobNotify } from './types.js';
 import {
   SCHEDULE_JOBS_FILENAME,
   SCHEDULE_JOBS_VERSION,
 } from './types.js';
-import { parseJobNotify } from './notification-router.js';
+import { parseJobNotify, resolveEffectiveNotify } from './notification-router.js';
 
 const logger = new Logger(null, 'schedule-job-store');
 
@@ -20,6 +19,8 @@ export type AssistantJob = ScheduleJob;
 export interface ScheduleJobStoreOptions {
   dataDir: string;
   jobsFile?: string;
+  /** 读盘时合并 `{ channel: im }` 等缺 target 的 notify（与 resolveEffectiveNotify 一致） */
+  defaultNotify?: JobNotify;
 }
 
 export function getScheduleJobsPath(dataDir: string, jobsFile = SCHEDULE_JOBS_FILENAME): string {
@@ -34,11 +35,13 @@ export function getAssistantJobsPath(dataDir: string, jobsFile?: string): string
 export class ScheduleJobStore {
   private dataDir: string;
   private filePath: string;
+  private defaultNotify?: JobNotify;
   private cache: ScheduleJobFile | null = null;
 
   constructor(options: ScheduleJobStoreOptions) {
     this.dataDir = options.dataDir;
     this.filePath = getScheduleJobsPath(options.dataDir, options.jobsFile);
+    this.defaultNotify = options.defaultNotify;
   }
 
   getDataDir(): string {
@@ -60,7 +63,9 @@ export class ScheduleJobStore {
       }
       this.cache = {
         version: data.version ?? SCHEDULE_JOBS_VERSION,
-        jobs: (data.jobs as unknown[]).map((j) => normalizeJob(j as Record<string, unknown>)),
+        jobs: (data.jobs as unknown[]).map((j) =>
+          normalizeJob(j as Record<string, unknown>, this.defaultNotify),
+        ),
       };
       return this.cache;
     } catch (e: unknown) {
@@ -164,8 +169,10 @@ export class ScheduleJobStore {
   }
 }
 
-function normalizeJob(raw: Record<string, unknown>): ScheduleJob {
-  const notify = parseJobNotify(raw.notify);
+function normalizeJob(raw: Record<string, unknown>, defaultNotify?: JobNotify): ScheduleJob {
+  const notify = parseJobNotify(
+    resolveEffectiveNotify(raw.notify as JobNotify | undefined, defaultNotify),
+  );
   const schedule = raw.schedule as ScheduleJob['schedule'];
   const action = raw.action as JobAction;
   if (!schedule || !action) {
@@ -189,9 +196,9 @@ function normalizeJob(raw: Record<string, unknown>): ScheduleJob {
 
 export function createScheduleJobStoreFromConfig(
   dataDir: string,
-  _config?: AssistantConfig,
+  options?: { defaultNotify?: JobNotify },
 ): ScheduleJobStore {
-  return new ScheduleJobStore({ dataDir });
+  return new ScheduleJobStore({ dataDir, defaultNotify: options?.defaultNotify });
 }
 
 /** @deprecated */

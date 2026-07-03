@@ -7,6 +7,8 @@ export interface LlmTool {
   parameters: z.ZodTypeAny;
   /** IM layer: run before agentLoop without model invocation */
   preExecutable?: boolean;
+  /** Anthropic advanced tool use: defer schema from context until referenced */
+  deferLoading?: boolean;
 }
 
 export interface ParsedToolCall {

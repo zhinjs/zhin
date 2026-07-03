@@ -22,6 +22,7 @@ import {
   senderRolesFromMessage,
   stripUserSpoofedSenderPrefix,
 } from '@zhin.js/core';
+import { CURRENT_MESSAGE_MARKER } from './config.js';
 
 export interface SessionIODeps {
   imSessionStore: IMSessionStore | MemoryIMSessionStore;
@@ -82,21 +83,43 @@ export function prepareUserContentForSession(
   return { content, extra };
 }
 
+/** 旁听块 + 引用块 + 当前 @ 正文分层（仅 LLM 侧；入库 payload 仍为干净正文） */
+export function layerInboundUserTurnBody(
+  body: string,
+  opts?: { passiveBlock?: string | null; quoteBlock?: string | null },
+): string {
+  const parts: string[] = [];
+  if (opts?.passiveBlock?.trim()) parts.push(opts.passiveBlock.trim());
+  if (opts?.quoteBlock?.trim()) parts.push(opts.quoteBlock.trim());
+  if (parts.length === 0) return body;
+  return `${parts.join('\n\n')}\n\n${CURRENT_MESSAGE_MARKER}\n${body}`;
+}
+
 /** 本轮 user 消息：干净正文 + extra + LLM 渲染（引用/sender 仅 extra + 加载时拼接） */
 export function resolveTurnUserMessage(
   commMessage: AgentTurnMessage,
   rawContent: string,
+  options?: { passiveBlock?: string | null },
 ): { content: string; extra?: AgentMessageExtra; llmMessage: UserMessage } {
   const { content, extra: senderExtra } = prepareUserContentForSession(commMessage, rawContent);
   const quoteBlock = (commMessage as import('@zhin.js/core').AgentTurnMessage).extra?.[QUOTE_CONTEXT_BLOCK_EXTRA_KEY];
+  const quoteText = typeof quoteBlock === 'string' && quoteBlock.trim() ? quoteBlock.trim() : undefined;
   const extra: AgentMessageExtra = {
     ...senderExtra,
-    ...(typeof quoteBlock === 'string' && quoteBlock.trim()
-      ? { quote: { block: quoteBlock.trim(), messageId: commMessage.$quote_id } }
-      : {}),
+    ...(quoteText ? { quote: { block: quoteText, messageId: commMessage.$quote_id } } : {}),
   };
   const hasExtra = !!(extra.sender || extra.quote);
-  const llmMessage = renderUserMessageForLlm(createUserMessage(content), hasExtra ? extra : undefined);
+  const layered = layerInboundUserTurnBody(content, {
+    passiveBlock: options?.passiveBlock,
+    quoteBlock: quoteText,
+  });
+  const inlinedContext = layered !== content;
+  const llmMessage = renderUserMessageForLlm(
+    createUserMessage(layered),
+    inlinedContext
+      ? (senderExtra?.sender ? { sender: senderExtra.sender } : undefined)
+      : (hasExtra ? extra : undefined),
+  );
   return { content, extra: hasExtra ? extra : undefined, llmMessage };
 }
 

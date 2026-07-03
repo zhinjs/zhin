@@ -40,7 +40,42 @@ describe('ScheduleJobStore', () => {
     expect(parsed.jobs).toHaveLength(1);
   });
 
-  it('缺少 notify 的 job 读取失败', async () => {
+  it('读盘时 channel:im 无 target 可合并 defaultNotify', async () => {
+    const defaultNotify = {
+      channel: 'im' as const,
+      target: {
+        channel: 'im' as const,
+        scene: {
+          platform: 'icqq',
+          endpointId: '8596238',
+          sceneId: '1659488338',
+          kind: 'private' as const,
+        },
+      },
+    };
+    await writeFile(
+      join(dataDir, SCHEDULE_JOBS_FILENAME),
+      JSON.stringify({
+        version: 1,
+        jobs: [{
+          id: 'legacy-im',
+          enabled: true,
+          schedule: { kind: 'solar', cron: '0 8 * * *' },
+          action: { kind: 'agent', prompt: '早报' },
+          notify: { channel: 'im' },
+          createdAt: 1,
+          updatedAt: 1,
+          state: {},
+        }],
+      }),
+      'utf-8',
+    );
+    const store = new ScheduleJobStore({ dataDir, defaultNotify });
+    const jobs = await store.listJobs();
+    expect(jobs[0]?.notify).toEqual(defaultNotify);
+  });
+
+  it('缺少 notify 时回退为 silent', async () => {
     await writeFile(
       join(dataDir, SCHEDULE_JOBS_FILENAME),
       JSON.stringify({
@@ -58,7 +93,30 @@ describe('ScheduleJobStore', () => {
       'utf-8',
     );
     const store = new ScheduleJobStore({ dataDir });
-    await expect(store.listJobs()).rejects.toThrow(/notify/);
+    const jobs = await store.listJobs();
+    expect(jobs[0]?.notify).toEqual({ channel: 'silent' });
+  });
+
+  it('channel:im 无 target 且无 defaultNotify 时读取失败', async () => {
+    await writeFile(
+      join(dataDir, SCHEDULE_JOBS_FILENAME),
+      JSON.stringify({
+        version: 1,
+        jobs: [{
+          id: 'bad-im',
+          enabled: true,
+          schedule: { kind: 'solar', cron: '0 0 9 * * *' },
+          action: { kind: 'agent', prompt: 'x' },
+          notify: { channel: 'im' },
+          createdAt: 1,
+          updatedAt: 1,
+          state: {},
+        }],
+      }),
+      'utf-8',
+    );
+    const store = new ScheduleJobStore({ dataDir });
+    await expect(store.listJobs()).rejects.toThrow(/target/);
   });
 
   it('removeJob 删除记录', async () => {

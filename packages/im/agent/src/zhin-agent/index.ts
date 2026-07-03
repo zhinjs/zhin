@@ -92,9 +92,6 @@ import type { ResolvedAgentBinding } from '../config/types.js';
 import { bindingToModelConfig } from '../routing/runtime-binding.js';
 import type { Disposable } from '../types/disposable.js';
 import { buildDisciplinedPrompt as assembleDisciplinedPrompt } from './prompt-assembly.js';
-import {
-  resolveAgentToolsForTurn as resolveToolsForTurn,
-} from './tool-orchestration.js';
 import { buildDeferredAutoContinueUserMessage } from './deferred-auto-continue.js';
 import type { DeferredWorkerResult } from '../deferred-worker-runner.js';
 
@@ -249,6 +246,17 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     }
     if (deps.activeSkillsContext !== undefined) this.activeSkillsContext = deps.activeSkillsContext || '';
     if (deps.skillsSummaryXML !== undefined) this.skillsSummaryXML = deps.skillsSummaryXML || '';
+  }
+
+  appendActiveSkillsContext(fragment: string): void {
+    const trimmed = fragment.trim();
+    if (!trimmed) return;
+    const prev = this.activeSkillsContext || '';
+    this.activeSkillsContext = prev ? `${prev}\n\n${trimmed}` : trimmed;
+  }
+
+  buildDisciplinedPrompt(basePrompt: string): string {
+    return assembleDisciplinedPrompt(asPrivate(this), basePrompt);
   }
 
   /** @deprecated 使用 configure({ skillRegistry }) */
@@ -732,15 +740,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     }
 
     await runPromise.catch(() => {});
-  }
-  private resolveAgentToolsForTurn(
-    allTools: AgentTool[],
-  ): { tools: AgentTool[]; deferredStats?: string } {
-    return resolveToolsForTurn(asPrivate(this), allTools);
-  }
-
-  private buildDisciplinedPrompt(basePrompt: string): string {
-    return assembleDisciplinedPrompt(asPrivate(this), basePrompt);
   }
 
   async processMultimodal(

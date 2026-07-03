@@ -2,7 +2,12 @@
  * spawn_task — 主会话将耗时任务派给后台子 agent（与 issue #396 对齐）
  */
 import type { Message, Tool, ToolParametersSchema, ToolResult } from '@zhin.js/core';
-import { resolveIMSessionIdFromMessage, type AgentTool, type OrchestrationRunSource } from '@zhin.js/ai';
+import {
+  resolveIMSessionIdFromMessage,
+  getLoadedToolNamesFromSnapshot,
+  type AgentTool,
+  type OrchestrationRunSource,
+} from '@zhin.js/ai';
 import { orchestrationSourceFromMessage } from '../collaboration/collaboration-kernel-bridge.js';
 import type { SubagentManager, SubagentOrigin } from '../subagent.js';
 import type { SubagentContextMode } from '../subagent-preset.js';
@@ -10,6 +15,7 @@ import { getAgentDispatcher } from '../orchestrator/agent-dispatcher.js';
 import { getOrchestrationService } from '../orchestrator/orchestration-service.js';
 import { executeRemoteOrchestrationTask } from '../orchestrator/remote-task-executor.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
+import { getDeferredToolRuntime } from './deferred-tool-meta.js';
 
 export const SPAWN_TASK_PARAMETERS: ToolParametersSchema = {
   type: 'object',
@@ -37,6 +43,16 @@ export const SPAWN_TASK_PARAMETERS: ToolParametersSchema = {
       description:
         '上下文模式：fork 注入主会话最近消息快照；fresh 空上下文。缺省按 *.agent.md 或角色默认',
     },
+    tools: {
+      type: 'array',
+      items: { type: 'string' },
+      description: '子任务需要的工具名（建议填写）',
+    },
+    skills: {
+      type: 'array',
+      items: { type: 'string' },
+      description: '子任务需要的技能名（建议填写）',
+    },
     run_id: {
       type: 'string',
       description: '硬编排 run ID（与 task_id 配合使用）',
@@ -59,6 +75,14 @@ function runTitle(label: string | undefined, task: string): string {
 
 function sourceFromMessage(message: Message): OrchestrationRunSource {
   return orchestrationSourceFromMessage(message);
+}
+
+function parseStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const items = value
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .map(item => item.trim());
+  return items.length > 0 ? items : undefined;
 }
 
 export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
@@ -128,6 +152,13 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
     const orchestrationRole = targetTaskId
       ? getAgentDispatcher().getTask(targetTaskId)?.role
       : undefined;
+    const requestedTools = parseStringArray(args.tools);
+    const requestedSkills = parseStringArray(args.skills);
+    const deferredRuntime = getDeferredToolRuntime(this.sessionCommMessage);
+    const parentSessionLoaded = deferredRuntime
+      ? getLoadedToolNamesFromSnapshot(deferredRuntime.snapshot)
+      : undefined;
+    const parentLoadedSkills = deferredRuntime?.snapshot.loadedSkills;
 
     if (svc && !targetTaskId) {
       const sessionKey = resolveIMSessionIdFromMessage(this.sessionCommMessage);
@@ -165,6 +196,10 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
       notifyContext: this.sessionCommMessage,
       contextMode,
       orchestrationTaskId: targetTaskId || undefined,
+      requestedTools,
+      requestedSkills,
+      parentSessionLoaded,
+      parentLoadedSkills,
     };
 
     if (args.wait === true) {

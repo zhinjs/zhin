@@ -88,23 +88,25 @@ describe('builtin prompts', () => {
 
 describe('pipeline role binding', () => {
   const agents = { zhin: { provider: 'agnes', model: 'flash', nickname: '总监' } };
-  it('inherits zhin provider/model when pipeline omits', () => {
-    const b = resolvePipelineRoleBinding('executor', { agents, pipeline: {} });
+  it('inherits zhin provider/model when role agent omits', () => {
+    const b = resolvePipelineRoleBinding('executor', { agents });
     expect(b.providerAlias).toBe('agnes');
     expect(b.model).toBe('flash');
     expect(b.nickname).toBe('Executor');
   });
-  it('overrides provider/model and nickname per role', () => {
+  it('uses ai.agents.<role> override', () => {
     const b = resolvePipelineRoleBinding('evaluator', {
-      agents,
-      pipeline: { evaluator: { provider: 'bigmodel', model: 'glm', nickname: '分析师' } },
+      agents: {
+        ...agents,
+        evaluator: { provider: 'bigmodel', model: 'glm', nickname: '分析师' },
+      },
     });
     expect(b.providerAlias).toBe('bigmodel');
     expect(b.model).toBe('glm');
     expect(b.nickname).toBe('分析师');
   });
   it('planner inherits zhin nickname', () => {
-    const b = resolvePipelineRoleBinding('planner', { agents, pipeline: {} });
+    const b = resolvePipelineRoleBinding('planner', { agents });
     expect(b.nickname).toBe('总监');
   });
 });

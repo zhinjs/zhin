@@ -2,9 +2,10 @@
  * 持久化调度任务 + AI 工具
  */
 import { ZhinTool, Logger, messageToIMDeliveryTarget } from '@zhin.js/core';
-import type { ScheduleKind, FestivalName } from '@zhin.js/kernel';
+import type { FestivalName } from '@zhin.js/kernel';
 import type { JobNotify, JobSchedule, ScheduleJob } from './assistant/types.js';
 import type { ScheduleJobEngine } from './assistant/job-engine.js';
+import { buildJobScheduleFromCronInput } from './schedule-cron.js';
 
 const logger = new Logger(null, 'schedule-manager');
 
@@ -41,11 +42,11 @@ export function generateScheduleJobId(): string {
 export type PromptOptimizer = (rawPrompt: string, schedule: JobSchedule) => Promise<string>;
 
 function buildScheduleFromArgs(args: Record<string, unknown>): JobSchedule | { error: string } {
-  const kind = String(args.schedule_kind || 'solar').toLowerCase();
+  const kind = args.schedule_kind as string | undefined;
   const cron = args.cron as string | undefined;
   const delayMin = args.delay_minutes as number | undefined;
 
-  if (kind === 'at' || (delayMin && delayMin > 0)) {
+  if (String(kind || '').toLowerCase() === 'at' || (delayMin && delayMin > 0)) {
     const atMs = delayMin && delayMin > 0
       ? Date.now() + delayMin * 60 * 1000
       : args.at_ms != null ? Number(args.at_ms) : undefined;
@@ -57,25 +58,19 @@ function buildScheduleFromArgs(args: Record<string, unknown>): JobSchedule | { e
     return { error: '请提供 6 段 cron 表达式（秒 分 时 日 月 周）' };
   }
 
-  switch (kind) {
-    case 'lunar':
-      return { kind: 'lunar', cron };
-    case 'workday':
-      return { kind: 'workday', cron };
-    case 'freeDay':
-      return { kind: 'freeDay', cron };
-    case 'holiday': {
-      const festivals = args.festivals;
-      return {
-        kind: 'holiday',
-        cron,
-        festivals: Array.isArray(festivals) ? festivals as FestivalName[] : undefined,
-        everyDayOfHoliday: args.every_day_of_holiday === true,
-      };
-    }
-    default:
-      return { kind: 'solar', cron };
+  const built = buildJobScheduleFromCronInput(kind, cron);
+  if ('error' in built) return built;
+
+  if (built.kind === 'holiday') {
+    const festivals = args.festivals;
+    return {
+      ...built,
+      festivals: Array.isArray(festivals) ? festivals as FestivalName[] : undefined,
+      everyDayOfHoliday: args.every_day_of_holiday === true,
+    };
   }
+
+  return built;
 }
 
 export function createScheduleTools(options?: { optimizePrompt?: PromptOptimizer }): ZhinTool[] {
@@ -104,10 +99,21 @@ export function createScheduleTools(options?: { optimizePrompt?: PromptOptimizer
     });
 
   const addTool = new ZhinTool('schedule_add')
-    .desc('添加持久化调度任务。schedule_kind: solar|lunar|workday|freeDay|holiday；6 段 cron；或 delay_minutes 一次性。')
+    .desc(
+      '添加持久化调度任务。schedule_kind: solar|lunar|workday|freeDay|holiday。'
+      + '中国大陆「工作日」必须用 workday（法定工作日含调休）。'
+      + 'workday 示例：schedule_kind=workday, cron="0 0 9 * * *"。'
+      + '或 delay_minutes 一次性。',
+    )
     .tag('schedule', '定时')
-    .param('schedule_kind', { type: 'string', description: 'solar|lunar|workday|freeDay|holiday（默认 solar）' })
-    .param('cron', { type: 'string', description: '6 段 cron；workday 示例 "0 0 9 * * *"' })
+    .param('schedule_kind', {
+      type: 'string',
+      description: 'solar|lunar|workday|freeDay|holiday。（默认 solar）',
+    })
+    .param('cron', {
+      type: 'string',
+      description: '6 段 cron（秒 分 时 日 月 周）。workday 仅填时刻如 "0 0 9 * * *"，日/月/周用 *',
+    })
     .param('delay_minutes', { type: 'number', description: '一次性延迟（分钟）' })
     .param('prompt', { type: 'string', description: '到点 prompt' }, true)
     .param('label', { type: 'string', description: '标签' })

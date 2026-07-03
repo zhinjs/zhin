@@ -25,6 +25,7 @@ export {
   stringParamTool,
   ToolCallValidationError,
   isLlmAgentMessage,
+  repairAgentMessagesForLlm,
   EMPTY_TOKEN_USAGE,
   DEFAULT_STEERING_MODE,
   DEFAULT_FOLLOW_UP_MODE,
@@ -44,6 +45,7 @@ export {
   resolveSdkProviderModels,
   SDK_DEFAULT_MODELS,
   createOpenAiCompletionsStreamFn,
+  convertLegacyTool,
   convertLegacyTools,
   agentMessagesToOpenAi,
   formatRedactedJson,
@@ -234,6 +236,7 @@ export {
   estimateAgentMessageTokens,
   estimateAgentMessagesTokens,
   findKeepRecentStartIndex,
+  snapCompactionStartIndex,
   microCompactAgentMessages,
   autoCompactAgentMessagesIfNeeded,
   compactAgentMessages,
@@ -401,6 +404,14 @@ export type {
   ContextRepositoryConfig,
   SaveSummaryOptions,
 } from './memory/context-repository.js';
+export type { DeferredToolSessionSnapshot } from './memory/deferred-tool-session.js';
+export {
+  EMPTY_DEFERRED_TOOL_SNAPSHOT,
+  getLoadedToolNamesFromSnapshot,
+  touchToolInSnapshot,
+  touchToolsInSnapshot,
+  addSkillToSnapshot,
+} from './memory/deferred-tool-session.js';
 export type { SessionBranchPoint } from './memory/session-tree.js';
 export {
   collectAbandonedPathRows,

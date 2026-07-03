@@ -60,6 +60,22 @@ describe('validateAiRoutingConfig', () => {
     expect(validateAiRoutingConfig(cfg)).toEqual([]);
   });
 
+  it('legacy ai.pipeline 迁移进 agents.<role>', () => {
+    const cfg = normalizeAiRoutingConfig({
+      providers: { p: { sdk: 'openai', apiKey: 'k' } },
+      agents: { zhin: { provider: 'p', model: 'base' } },
+      pipeline: {
+        evaluator: { provider: 'p', model: 'glm', nickname: '分析师' },
+      },
+    } as any);
+    expect(cfg.agents.evaluator).toEqual({
+      provider: 'p',
+      model: 'glm',
+      nickname: '分析师',
+    });
+    expect(validateAiRoutingConfig(cfg)).toEqual([]);
+  });
+
   it('拒绝 api/preset/spec 字段', () => {
     expect(() => normalizeAiRoutingConfig({
       providers: { p: { api: 'openai-completions', apiKey: 'k' } },

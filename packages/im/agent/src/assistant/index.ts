@@ -23,6 +23,7 @@ export {
   syncProfileHeartbeatToStore,
   syncProfileRoutinesToStore,
   syncProfileCronRoutinesToStore,
+  pruneStaleProfileCronJobs,
   mergeProfileDeviceAliases,
   validateAssistantProfile,
   resolveAssistantProfileConfig,

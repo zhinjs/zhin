@@ -2,7 +2,6 @@ import type { AIConfig, ProviderConfig } from '@zhin.js/ai';
 import { isSdkId } from '@zhin.js/ai';
 import type {
   AgentBindingConfig,
-  PipelineRoleConfig,
   ProviderInstanceConfig,
   RouteEntryConfig,
 } from './types.js';
@@ -111,25 +110,39 @@ function mergeLegacyRoutesIntoAgents(
 export interface NormalizedAiRoutingConfig {
   providers: Record<string, ProviderInstanceConfig>;
   agents: Record<string, AgentBindingConfig>;
-  pipeline: Record<string, PipelineRoleConfig>;
 }
 
-function normalizePipelineConfig(raw: unknown): Record<string, PipelineRoleConfig> {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+/** 旧版 ai.pipeline.<role> → ai.agents.<role>（读配置时一次性迁移） */
+function mergeLegacyPipelineIntoAgents(
+  agents: Record<string, AgentBindingConfig>,
+  raw: unknown,
+): void {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return;
   const src = raw as Record<string, unknown>;
-  const out: Record<string, PipelineRoleConfig> = {};
+  const base = agents[DEFAULT_ZHIN_AGENT_NAME];
+  if (!base) return;
+
   for (const role of PIPELINE_ROLES) {
     const entry = src[role];
     if (!entry || typeof entry !== 'object') continue;
     const e = entry as Record<string, unknown>;
-    const cfg: PipelineRoleConfig = {};
-    if (typeof e.nickname === 'string') cfg.nickname = e.nickname;
-    if (typeof e.provider === 'string') cfg.provider = e.provider;
-    if (typeof e.model === 'string') cfg.model = e.model;
-    if (Array.isArray(e.mcpServers)) cfg.mcpServers = e.mcpServers.filter((s): s is string => typeof s === 'string');
-    out[role] = cfg;
+    const existing = agents[role];
+    const merged: AgentBindingConfig = {
+      provider: (typeof e.provider === 'string' ? e.provider : undefined) ?? existing?.provider ?? base.provider,
+      model: (typeof e.model === 'string' ? e.model : undefined) ?? existing?.model ?? base.model,
+      ...(Array.isArray(e.mcpServers)
+        ? { mcpServers: e.mcpServers.filter((s): s is string => typeof s === 'string') }
+        : existing?.mcpServers
+          ? { mcpServers: existing.mcpServers }
+          : {}),
+      ...(typeof e.nickname === 'string'
+        ? { nickname: e.nickname }
+        : existing?.nickname
+          ? { nickname: existing.nickname }
+          : {}),
+    };
+    agents[role] = merged;
   }
-  return out;
 }
 
 /**
@@ -161,7 +174,10 @@ export function normalizeAiRoutingConfig(ai: AIConfig | undefined): NormalizedAi
     };
   }
 
-  const pipeline = normalizePipelineConfig((ai as AIConfig & { pipeline?: unknown })?.pipeline);
+  mergeLegacyPipelineIntoAgents(
+    agents,
+    (ai as AIConfig & { pipeline?: unknown })?.pipeline,
+  );
 
-  return { providers, agents, pipeline };
+  return { providers, agents };
 }

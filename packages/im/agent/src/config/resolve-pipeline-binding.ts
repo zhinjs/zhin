@@ -1,14 +1,13 @@
 /**
- * resolvePipelineRoleBinding — Five-Agent 角色 provider/model/nickname 解析（ADR 0024 #12/#14）。
+ * 协作群 pipelineRole → agent 绑定。
  *
- * SSOT：`ai.agents.zhin` 为默认源；`ai.pipeline.<role>` 可选覆盖。
- * 不依赖独立 `ai.agents.researcher` 等 binding。
+ * SSOT：`ai.agents.zhin`；可选 `ai.agents.<role>`（如 researcher）覆盖 provider/model/nickname。
  */
 import type { PipelineRole } from '../collaboration/types.js';
-import type { AgentBindingConfig, PipelineRoleConfig, ResolvedAgentBinding } from './types.js';
+import type { AgentBindingConfig, ResolvedAgentBinding } from './types.js';
 import { DEFAULT_ZHIN_AGENT_NAME } from './types.js';
 
-/** 角色昵称缺省回退（英文 role label，不再硬编码品牌名）。 */
+/** 角色昵称缺省回退（英文 role label）。 */
 export const PIPELINE_ROLE_LABELS: Record<PipelineRole, string> = {
   planner: 'Planner',
   researcher: 'Researcher',
@@ -17,25 +16,24 @@ export const PIPELINE_ROLE_LABELS: Record<PipelineRole, string> = {
   reviewer: 'Reviewer',
 };
 
-export interface PipelineBindingSources {
+export interface RoleBindingSources {
   agents: Record<string, AgentBindingConfig>;
-  pipeline?: Record<string, PipelineRoleConfig>;
 }
 
 export function resolvePipelineRoleBinding(
   role: PipelineRole,
-  sources: PipelineBindingSources,
+  sources: RoleBindingSources,
 ): ResolvedAgentBinding {
   const base = sources.agents[DEFAULT_ZHIN_AGENT_NAME];
   if (!base) {
     throw new Error(`ai.agents.${DEFAULT_ZHIN_AGENT_NAME} is required to resolve pipeline role "${role}"`);
   }
-  const patch = sources.pipeline?.[role] ?? {};
-  const provider = patch.provider ?? base.provider;
-  const model = patch.model ?? base.model;
-  const mcpServers = patch.mcpServers ?? base.mcpServers ?? [];
+  const roleAgent = sources.agents[role];
+  const provider = roleAgent?.provider ?? base.provider;
+  const model = roleAgent?.model ?? base.model;
+  const mcpServers = roleAgent?.mcpServers ?? base.mcpServers ?? [];
   const nickname =
-    patch.nickname
+    roleAgent?.nickname
     ?? (role === 'planner' ? base.nickname : undefined)
     ?? PIPELINE_ROLE_LABELS[role];
   return {
@@ -48,6 +46,6 @@ export function resolvePipelineRoleBinding(
 }
 
 /** Planner 入口（= zhin binding）的展示昵称。 */
-export function resolvePlannerNickname(sources: PipelineBindingSources): string {
+export function resolvePlannerNickname(sources: RoleBindingSources): string {
   return resolvePipelineRoleBinding('planner', sources).nickname ?? PIPELINE_ROLE_LABELS.planner;
 }

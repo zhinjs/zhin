@@ -22,8 +22,8 @@ describe('openai-bridge', () => {
         timestamp: 1,
       },
     ]);
-    expect(openAi).toHaveLength(2);
-    expect(openAi[1]?.role).toBe('tool');
+    expect(openAi).toHaveLength(1);
+    expect(openAi[0]?.role).toBe('user');
   });
 
   it('builds chat completion request with tools', () => {

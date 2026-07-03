@@ -88,7 +88,7 @@ export class InstallSkillBuiltinTool extends BuiltinBaseTool {
       await fs.writeFile(skillPath, content, 'utf-8');
 
       logger.info(`技能已安装: ${skillName} → ${skillPath}`);
-      return `✅ 技能「${skillName}」已安装到 ${skillPath}。现在可以用 activate_skill("${skillName}") 激活它。`;
+      return `✅ 技能「${skillName}」已安装到 ${skillPath}。现在可以用 load_skill("${skillName}") 加载它。`;
     } catch (e: unknown) {
       return `Error: ${errMsg(e)}`;
     }

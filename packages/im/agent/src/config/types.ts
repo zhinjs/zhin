@@ -31,17 +31,6 @@ export interface AgentBindingConfig {
   nickname?: string;
 }
 
-/**
- * Five-Agent pipeline 角色配置（ADR 0024 #12/#14）。
- * 省略 provider/model 时继承 `ai.agents.zhin`。
- */
-export interface PipelineRoleConfig {
-  nickname?: string;
-  provider?: string;
-  model?: string;
-  mcpServers?: string[];
-}
-
 /** @deprecated 仅用于归一化旧版 ai.routes */
 export interface RouteEntryConfig {
   priority: number;

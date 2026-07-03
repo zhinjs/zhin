@@ -16,7 +16,9 @@ export interface AssistantProfileRoutineHeartbeat {
 export interface AssistantProfileRoutineCron {
   enabled?: boolean;
   label?: string;
-  /** 5 字段 cron 表达式 */
+  /** 调度语义，默认 solar；中国大陆「工作日」请用 workday（含调休），不要用 solar 的 1-5 */
+  scheduleKind?: 'solar' | 'lunar' | 'workday' | 'freeDay' | 'holiday';
+  /** cron 表达式（5 或 6 段；workday 仅需时刻，日/月/周应为 *） */
   cron: string;
   tz?: string;
   prompt: string;
@@ -29,6 +31,9 @@ export interface AssistantProfileRoutines {
   morningBrief?: AssistantProfileRoutineCron;
   /** 睡前巡检（默认 22:00） */
   bedtimeCheck?: AssistantProfileRoutineCron;
+  /** 工作日天气早报等自定义 cron routine */
+  weatherReport?: AssistantProfileRoutineCron;
+  [key: string]: AssistantProfileRoutineCron | AssistantProfileRoutineHeartbeat | undefined;
 }
 
 export interface AssistantProfile {

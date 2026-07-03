@@ -5,10 +5,13 @@ version: 1
 defaults:
   notify:
     channel: im
-    platform: icqq
-    endpointId: "8596238"
-    sceneId: "1659488338"
-    scope: private
+    target:
+      channel: im
+      scene:
+        platform: icqq
+        endpointId: "8596238"
+        sceneId: "1659488338"
+        kind: private
   notifyOnFailure: false
 
 routines:
@@ -17,23 +20,10 @@ routines:
     everyMs: 1800000
     notify:
       channel: silent
-  morningBrief:
-    enabled: true
-    cron: "0 8 * * *"
-    prompt: |
-      汇总今日待办、日历与未读提醒，生成简短早报；若无内容回复「今日无待办」。
-    notify:
-      channel: im
-  bedtimeCheck:
-    enabled: true
-    cron: "0 22 * * *"
-    prompt: |
-      睡前巡检：检查未完成任务、明日首个提醒、门窗/设备异常（若有 home 工具）；简要汇报。
-    notify:
-      channel: im
   weatherReport:
     enabled: true
-    cron: "0 8 * * 1-5"
+    scheduleKind: workday
+    cron: "0 0 9 * * *"
     prompt: |
       查询成都市今天的天气情况，用 web_search 获取最新天气信息，生成简洁天气早报（温度、天气状况、风速、湿度等），使用中文回复。
     notify:

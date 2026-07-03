@@ -396,7 +396,8 @@ function buildOrchestrationSection(modelSdk?: string): string {
   }
   const items = [
     'Use the available tools directly when they match the task.',
-    'Use spawn_task for complex, long-running, or specialist work that should run in a sub-agent.',
+      'Use discover(kind) to find deferred tools/skills, then load_skill / load_tool before calling them.',
+      'Use spawn_task for complex, long-running, or specialist work that should run in a sub-agent.',
     'Do not call deprecated orchestration tools such as tool_search or run_deferred_task.',
   ];
   return ['# Orchestration', ...prependBullets(items)].join('\n');
@@ -452,11 +453,11 @@ function buildSkillsSection(
       '# Skills (catalog)',
       catalog,
       '',
-      'Activate a matching skill when you need its instructions, then use the available tools directly or delegate specialist work with spawn_task.',
+      'Use discover(kind) to find matching skills, load_skill for instructions, then load_tool or call unlocked tools. Delegate specialist work with spawn_task.',
     ].join('\n');
   }
   if (skillsSummaryXML) {
-    return '# Available Skills\n\n' + skillsSummaryXML + '\n\nIf the user message matches a skill (name/keywords) OR the chat platform matches a skill\'s `platforms` in frontmatter, call activate_skill(name) when you need that skill\'s full instructions—then follow them.';
+    return '# Available Skills\n\n' + skillsSummaryXML + '\n\nUse discover(kind=skill) then load_skill(name) when you need full skill instructions.';
   }
   if (skillRegistry && skillRegistry.size > 0) {
     const skills = skillRegistry.getAll();
@@ -464,7 +465,7 @@ function buildSkillsSection(
     for (const skill of skills) {
       lines.push(` - ${skill.name}: ${skill.description}`);
     }
-    lines.push('\nIf the user message matches a skill (name/keywords) OR the chat platform matches a skill\'s `platforms` in frontmatter, call activate_skill(name) when you need that skill\'s full instructions—then follow them.');
+    lines.push('\nUse discover(kind=skill) then load_skill(name) when you need full skill instructions.');
     return lines.join('\n');
   }
   return null;

@@ -68,9 +68,15 @@ export class ScheduleFeature extends Feature<ScheduleHandle> {
   }
 
   remove(handle: ScheduleHandle): boolean {
-    handle.dispose();
+    if (!this.byName.has(handle.id) && !this.items.includes(handle)) {
+      return false;
+    }
     this.byName.delete(handle.id);
-    return super.remove(handle);
+    const removed = super.remove(handle);
+    if (removed) {
+      handle.dispose();
+    }
+    return removed;
   }
 
   get(id: string): ScheduleHandle | undefined {
@@ -160,20 +166,12 @@ export class ScheduleFeature extends Feature<ScheduleHandle> {
           descriptor,
           dispose: () => {
             disposeEngine();
-            feature.byName.delete(jobId);
-            feature.remove(handle);
           },
         };
         const dispose = feature.add(handle, plugin.name);
         plugin.recordFeatureContribution(feature.name, jobId);
-        plugin.onDispose(() => {
-          handle.dispose();
-          dispose();
-        });
-        return () => {
-          handle.dispose();
-          dispose();
-        };
+        plugin.onDispose(dispose);
+        return dispose;
       },
     };
   }

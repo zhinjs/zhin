@@ -46,7 +46,6 @@ function resolveEndpointBinding(
     const routing = ai.getRoutingConfig();
     return resolvePipelineRoleBinding(member.pipelineRole, {
       agents: routing.agents,
-      pipeline: routing.pipeline,
     });
   }
   return (

@@ -390,14 +390,6 @@ export interface AgentBindingConfig {
   nickname?: string;
 }
 
-/** Five-Agent pipeline 角色配置（ADR 0024）。省略字段继承 ai.agents.zhin。 */
-export interface PipelineRoleConfig {
-  nickname?: string;
-  provider?: string;
-  model?: string;
-  mcpServers?: string[];
-}
-
 /** @deprecated 已并入 ai.agents.<name>.priority / match */
 export interface RouteEntryConfig {
   priority: number;
@@ -422,10 +414,10 @@ export interface AIConfig {
     cloudflare?: ProviderConfig & { accountId: string };
     custom?: ProviderConfig[];
   };
-  /** per-agent 绑定 + 可选入站 priority/match */
+  /** per-agent 绑定 + 可选入站 priority/match（协作角色如 researcher 亦用 agents.<role>） */
   agents?: Record<string, AgentBindingConfig>;
-  /** Five-Agent pipeline 角色覆盖（ADR 0024）。 */
-  pipeline?: Record<string, PipelineRoleConfig>;
+  /** @deprecated 已并入 ai.agents.<role>；读配置时自动迁移 */
+  pipeline?: Record<string, Pick<AgentBindingConfig, 'nickname' | 'provider' | 'model' | 'mcpServers'>>;
   /** @deprecated 使用 ai.agents.<name>.priority / match */
   routes?: Record<string, RouteEntryConfig>;
   sessions?: {
@@ -553,8 +545,15 @@ export interface AIConfig {
     };
     /** Worker 侧 TF-IDF 载入 deferred 工具数量上限 */
     deferredToolMaxResults?: number;
-    /** 主 Agent 常驻编排工具名 */
+    /** @deprecated 使用 agent.deferredTools.alwaysLoadedTools */
     orchestratorTools?: string[];
+    /** 工具 schema 按需加载 */
+    deferredTools?: {
+      maxLoadedPerSession?: number;
+      discoverTopK?: number;
+      alwaysLoadedTools?: string[];
+      mcpServers?: Record<string, { alwaysLoaded?: string[] }>;
+    };
     /** Deferred Worker 基础工具 */
     workerBaseTools?: string[];
   };

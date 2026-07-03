@@ -119,7 +119,18 @@ export function createAiSdkStreamFn(): StreamFn {
       const { system: systemText, messages } = contextToAiSdkPrompt(context);
       const system: string | SystemModelMessage | undefined = wrapSystemForPromptCache(systemText, cacheCtx);
       const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools), cacheCtx);
-      const providerOptions = buildPromptCacheProviderOptions(cacheCtx);
+      const hasDeferredTools = context.tools?.some(t => t.deferLoading) === true;
+      const cacheOpts = buildPromptCacheProviderOptions(cacheCtx);
+      const providerOptions =
+        hasDeferredTools && model.sdk === 'anthropic'
+          ? {
+              ...(cacheOpts ?? {}),
+              anthropic: {
+                ...(cacheOpts?.anthropic ?? {}),
+                betas: ['advanced-tool-use-2025-11-20'],
+              },
+            }
+          : cacheOpts;
 
       llmContextLogger.debug(formatCompact({
         op: 'ai_sdk_request',
@@ -227,7 +238,13 @@ export async function generateTextViaAiSdk(
   const { system: systemText, messages } = contextToAiSdkPrompt(context);
   const system: string | SystemModelMessage | undefined = wrapSystemForPromptCache(systemText, cacheCtx);
   const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools), cacheCtx);
-  const providerOptions = buildPromptCacheProviderOptions(cacheCtx);
+  const hasDeferredTools = context.tools?.some(t => t.deferLoading) === true;
+  const providerOptions = {
+    ...buildPromptCacheProviderOptions(cacheCtx),
+    ...(hasDeferredTools && model.sdk === 'anthropic'
+      ? { anthropic: { betas: ['advanced-tool-use-2025-11-20'] } }
+      : {}),
+  };
 
   const result = await generateText({
     model: languageModel,

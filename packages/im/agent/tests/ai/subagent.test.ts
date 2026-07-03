@@ -185,7 +185,7 @@ describe('SubagentManager', () => {
         const toolNames = request.tools.map((t: any) => t.function?.name || t.name);
         expect(toolNames).toContain('read_file');
         expect(toolNames).not.toContain('spawn_task');
-        expect(toolNames).not.toContain('activate_skill');
+        expect(toolNames).not.toContain('discover');
       }
     });
 

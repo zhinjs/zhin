@@ -22,6 +22,15 @@ import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { SubagentResultSender } from '../subagent.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import { DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT } from './context-tail-limit.js';
+import {
+  DEFAULT_ALWAYS_LOADED_TOOLS,
+  DEFAULT_DEFERRED_TOOLS_CONFIG,
+} from '../tool-catalog/types.js';
+
+export {
+  DEFAULT_ALWAYS_LOADED_TOOLS,
+  DEFAULT_DEFERRED_TOOLS_CONFIG,
+} from '../tool-catalog/types.js';
 
 export type ModelSizeHint = 'small' | 'medium' | 'large';
 export type ExecApprovalMode = 'ask' | 'allow' | 'deny';
@@ -149,8 +158,10 @@ export interface ZhinAgentConfig {
   }) => void;
   /** Worker 侧 TF-IDF 载入 deferred 工具数量上限 */
   deferredToolMaxResults?: number;
-  /** 主 Agent 常驻编排工具名 */
+  /** @deprecated 使用 deferredTools.alwaysLoadedTools */
   orchestratorTools?: string[];
+  /** Deferred tool schema 按需加载 */
+  deferredTools?: import('../tool-catalog/types.js').DeferredToolsConfig;
   /** Deferred Worker 基础工具（另加 TF-IDF 载入的 deferred） */
   workerBaseTools?: string[];
   /** 单轮平台 prompt 段 body 上限（字符） */
@@ -174,11 +185,8 @@ export interface ZhinAgentConfig {
   deferredAutoContinueMaxDepth?: number;
 }
 
-/** 主 Agent 默认常驻编排工具 */
-export const DEFAULT_ORCHESTRATOR_TOOLS = [
-  'ask_user',
-  'spawn_task',
-] as const;
+/** @deprecated 使用 DEFAULT_ALWAYS_LOADED_TOOLS */
+export const DEFAULT_ORCHESTRATOR_TOOLS = DEFAULT_ALWAYS_LOADED_TOOLS;
 
 /** 硬编排 v1 追加的总监工具 */
 export const HARD_ORCHESTRATION_TOOLS = [
@@ -266,7 +274,8 @@ export const DEFAULT_CONFIG = {
   promptCacheRetention: 'in_memory',
   promptCacheKeyPrefix: 'zhin',
   deferredToolMaxResults: 8,
-  orchestratorTools: [...DEFAULT_ORCHESTRATOR_TOOLS],
+  deferredTools: { ...DEFAULT_DEFERRED_TOOLS_CONFIG },
+  orchestratorTools: [...DEFAULT_ALWAYS_LOADED_TOOLS],
   workerBaseTools: [...DEFAULT_WORKER_BASE_TOOLS],
   platformPromptSectionMaxChars: 2048,
   platformPromptMaxChars: 4096,

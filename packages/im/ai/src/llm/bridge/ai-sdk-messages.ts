@@ -6,6 +6,7 @@ import { type ModelMessage, type ToolSet, type UserModelMessage, tool } from 'ai
 import type { Context } from '../types/context.js';
 import type { AgentMessage, AssistantMessage, ToolResultMessage, UserMessage } from '../types/agent-message.js';
 import { isLlmAgentMessage } from '../types/agent-message.js';
+import { repairAgentMessagesForLlm } from '../repair-agent-messages.js';
 import type { LlmTool } from '../types/tool.js';
 
 function userBlocksToAiContent(blocks: UserMessage['content']): UserModelMessage['content'] {
@@ -75,7 +76,7 @@ function toolResultToAiMessage(message: ToolResultMessage): ModelMessage {
 
 export function agentMessagesToAiSdk(messages: AgentMessage[]): ModelMessage[] {
   const out: ModelMessage[] = [];
-  for (const message of messages) {
+  for (const message of repairAgentMessagesForLlm(messages)) {
     if (!isLlmAgentMessage(message)) continue;
     if (message.role === 'user') {
       out.push({ role: 'user', content: userBlocksToAiContent(message.content) });
@@ -101,10 +102,20 @@ export function llmToolsToAiSdk(tools: LlmTool[] | undefined): ToolSet | undefin
   if (!tools?.length) return undefined;
   const out: ToolSet = {};
   for (const llmTool of tools) {
-    out[llmTool.name] = tool({
+    const base = tool({
       description: llmTool.description,
       inputSchema: llmTool.parameters,
     });
+    if (llmTool.deferLoading) {
+      out[llmTool.name] = {
+        ...base,
+        providerOptions: {
+          anthropic: { deferLoading: true },
+        },
+      } as typeof base;
+    } else {
+      out[llmTool.name] = base;
+    }
   }
   return out;
 }

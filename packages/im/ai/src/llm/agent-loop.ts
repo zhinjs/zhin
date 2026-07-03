@@ -45,6 +45,12 @@ export interface AgentLoopConfig {
     tools: LlmTool[],
     signal?: AbortSignal,
   ) => Promise<AgentMessage>;
+  /** Refresh tool list after meta-tool load (discover/load_*). */
+  refreshTools?: () => LlmTool[] | Promise<LlmTool[]>;
+  /** Detect tool result that expanded the session tool set. */
+  shouldRecompleteAfterTool?: (result: AgentMessage) => boolean;
+  /** Max LLM re-complete calls per iteration after tool mutation (default 1). */
+  maxRecompletePerIteration?: number;
   getSteeringMessages?: () => Promise<AgentMessage[]>;
   getFollowUpMessages?: () => Promise<AgentMessage[]>;
   onContextOverflow?: (
@@ -107,9 +113,10 @@ export async function* agentLoop(
   signal?: AbortSignal,
 ): AsyncGenerator<AgentEvent> {
   const promptBatch = Array.isArray(prompts) ? prompts : [prompts];
-  const tools = initialContext.tools;
+  let tools = [...initialContext.tools];
   const messages: AgentMessage[] = [...initialContext.messages, ...promptBatch];
   const maxIterations = config.maxIterations ?? 8;
+  const maxRecomplete = config.maxRecompletePerIteration ?? 1;
   const convertToLlm = config.convertToLlm ?? defaultConvertToLlm;
   const executeTool = config.executeTool ?? defaultExecuteTool;
   const emitted: AgentMessage[] = [];
@@ -183,8 +190,9 @@ export async function* agentLoop(
 
     const toolCalls = extractToolCalls(assistant);
     const toolResults: AgentMessage[] = [];
+    let recompleteCount = 0;
 
-    if (toolCalls.length === 0 || assistant.stopReason !== 'toolCalls') {
+    if (toolCalls.length === 0) {
       yield { type: 'turn_end', message: assistant, toolResults };
       break;
     }
@@ -236,6 +244,55 @@ export async function* agentLoop(
       yield { type: 'tool_execution_end', toolCallId: toolCall.id, result };
       if (config.afterToolCall) {
         await config.afterToolCall({ toolCall, result }, signal);
+      }
+
+      const mutated = config.shouldRecompleteAfterTool?.(result) === true;
+      if (mutated && config.refreshTools && recompleteCount < maxRecomplete) {
+        const refreshed = await config.refreshTools();
+        tools = [...refreshed];
+        recompleteCount += 1;
+        try {
+          const followUp = await complete(config.model, await buildLlmContext(), {
+            ...config.streamOptions,
+            signal,
+            sessionId: config.sessionId,
+            thinkingLevel: config.reasoning,
+          });
+          yield { type: 'message_start', message: followUp };
+          yield { type: 'message_end', message: followUp };
+          messages.push(followUp);
+          emitted.push(followUp);
+          const followCalls = extractToolCalls(followUp);
+          if (followCalls.length > 0) {
+            for (const fc of followCalls) {
+              if (signal?.aborted) break;
+              let fToolCall = fc;
+              try {
+                fToolCall = validateToolCall(tools, fc);
+              } catch (error) {
+                const errResult = createErrorToolResult(
+                  fc,
+                  error instanceof Error ? error.message : String(error),
+                );
+                toolResults.push(errResult);
+                messages.push(errResult);
+                emitted.push(errResult);
+                continue;
+              }
+              yield { type: 'tool_execution_start', toolCallId: fToolCall.id, toolCall: fToolCall };
+              const fResult = await executeTool(fToolCall, tools, signal);
+              toolResults.push(fResult);
+              messages.push(fResult);
+              emitted.push(fResult);
+              yield { type: 'tool_execution_end', toolCallId: fToolCall.id, result: fResult };
+              if (config.afterToolCall) {
+                await config.afterToolCall({ toolCall: fToolCall, result: fResult }, signal);
+              }
+            }
+          }
+        } catch {
+          // re-complete failure: keep original tool results
+        }
       }
     }
 

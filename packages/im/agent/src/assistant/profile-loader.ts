@@ -18,7 +18,35 @@ import {
   type AssistantProfileRoutineHeartbeat,
 } from './profile-types.js';
 import type { ScheduleJobStore } from './job-store.js';
-import type { ScheduleJob } from './types.js';
+import type { JobNotify, ScheduleJob } from './types.js';
+import { parseJobNotify, resolveEffectiveNotify } from './notification-router.js';
+import { buildJobScheduleFromCronInput } from '../schedule-cron.js';
+
+function resolveProfileJobNotify(
+  routineNotify: JobNotify | undefined,
+  profileDefaults: JobNotify | undefined,
+): JobNotify {
+  const effective = resolveEffectiveNotify(routineNotify, profileDefaults);
+  if (effective.channel === 'im') {
+    return parseJobNotify(effective);
+  }
+  return effective;
+}
+
+function profileCronJobId(key: string): string {
+  if (key === 'morningBrief') return PROFILE_MORNING_BRIEF_JOB_ID;
+  if (key === 'bedtimeCheck') return PROFILE_BEDTIME_CHECK_JOB_ID;
+  return `assistant-profile-${key}`;
+}
+
+function isCronRoutine(
+  key: string,
+  value: unknown,
+): value is AssistantProfileRoutineCron {
+  if (key === 'heartbeat' || !value || typeof value !== 'object') return false;
+  const routine = value as AssistantProfileRoutineCron;
+  return typeof routine.cron === 'string' && typeof routine.prompt === 'string';
+}
 
 export function resolveAssistantProfileConfig(
   raw?: AssistantProfileConfig,
@@ -107,15 +135,20 @@ export function buildScheduleJobFromRoutine(
   jobId: string,
   defaultLabel: string,
   routine: AssistantProfileRoutineCron,
+  profileDefaults?: JobNotify,
 ): ScheduleJob {
+  const built = buildJobScheduleFromCronInput(routine.scheduleKind, routine.cron, routine.tz);
+  if ('error' in built) {
+    throw new Error(`profile routine "${jobId}": ${built.error}`);
+  }
   const now = Date.now();
   return {
     id: jobId,
     label: routine.label?.trim() || defaultLabel,
     enabled: routine.enabled !== false,
-    schedule: { kind: 'solar', cron: routine.cron.trim(), tz: routine.tz },
+    schedule: built,
     action: { kind: 'agent', prompt: routine.prompt.trim() },
-    notify: routine.notify ?? { channel: 'silent' },
+    notify: resolveProfileJobNotify(routine.notify, profileDefaults),
     createdAt: now,
     updatedAt: now,
     state: {},
@@ -128,6 +161,7 @@ export const buildCronJobFromRoutine = buildScheduleJobFromRoutine;
 
 export function buildHeartbeatJobFromRoutine(
   routine: AssistantProfileRoutineHeartbeat,
+  profileDefaults?: JobNotify,
 ): ScheduleJob {
   const now = Date.now();
   return {
@@ -142,7 +176,7 @@ export function buildHeartbeatJobFromRoutine(
       kind: 'heartbeat',
       prompt: routine.prompt?.trim() || DEFAULT_HEARTBEAT_PROMPT,
     },
-    notify: routine.notify ?? { channel: 'silent' },
+    notify: resolveProfileJobNotify(routine.notify, profileDefaults),
     createdAt: now,
     updatedAt: now,
     state: {},
@@ -158,36 +192,59 @@ export async function syncProfileHeartbeatToStore(
   const routine = profile?.routines?.heartbeat;
   if (!routine || routine.enabled === false) return false;
 
-  const job = buildHeartbeatJobFromRoutine(routine);
+  const job = buildHeartbeatJobFromRoutine(routine, profile?.defaults?.notify);
   await store.upsertJob(job);
   return true;
 }
 
-const PROFILE_CRON_ROUTINES: Array<{
-  key: 'morningBrief' | 'bedtimeCheck';
-  jobId: string;
-  defaultLabel: string;
-}> = [
-  { key: 'morningBrief', jobId: PROFILE_MORNING_BRIEF_JOB_ID, defaultLabel: '早报' },
-  { key: 'bedtimeCheck', jobId: PROFILE_BEDTIME_CHECK_JOB_ID, defaultLabel: '睡前巡检' },
-];
+const PROFILE_CRON_LABELS: Record<string, string> = {
+  morningBrief: '早报',
+  bedtimeCheck: '睡前巡检',
+  weatherReport: '天气早报',
+};
 
-/** 将 Profile routines 中的调度 Job 同步进 JobStore */
+/** 将 Profile routines 中的 cron 调度 Job 同步进 JobStore（含 weatherReport 等扩展 routine） */
 export async function syncProfileRoutinesToStore(
   store: ScheduleJobStore,
   profile: AssistantProfile | null,
 ): Promise<number> {
   if (!profile?.routines) return 0;
+  const profileDefaults = profile.defaults?.notify;
   let synced = 0;
-  for (const { key, jobId, defaultLabel } of PROFILE_CRON_ROUTINES) {
-    const routine = profile.routines[key];
-    if (!routine || routine.enabled === false || !routine.cron?.trim() || !routine.prompt?.trim()) {
-      continue;
-    }
-    await store.upsertJob(buildScheduleJobFromRoutine(jobId, defaultLabel, routine));
+  for (const [key, routine] of Object.entries(profile.routines)) {
+    if (!isCronRoutine(key, routine)) continue;
+    if (routine.enabled === false || !routine.cron?.trim() || !routine.prompt?.trim()) continue;
+    const jobId = profileCronJobId(key);
+    const defaultLabel = PROFILE_CRON_LABELS[key] ?? key;
+    await store.upsertJob(buildScheduleJobFromRoutine(jobId, defaultLabel, routine, profileDefaults));
     synced++;
   }
   return synced;
+}
+
+/** 移除 profile 中已删除的 cron routine 对应 Job（避免 schedule-jobs.json 残留旧条目） */
+export async function pruneStaleProfileCronJobs(
+  store: ScheduleJobStore,
+  profile: AssistantProfile | null,
+): Promise<number> {
+  const activeCronIds = new Set<string>();
+  if (profile?.routines) {
+    for (const [key, routine] of Object.entries(profile.routines)) {
+      if (!isCronRoutine(key, routine)) continue;
+      if (routine.enabled === false || !routine.cron?.trim() || !routine.prompt?.trim()) continue;
+      activeCronIds.add(profileCronJobId(key));
+    }
+  }
+  const jobs = await store.listJobs();
+  let removed = 0;
+  for (const job of jobs) {
+    if (job.source !== 'profile') continue;
+    if (job.id === PROFILE_HEARTBEAT_JOB_ID) continue;
+    if (job.schedule.kind === 'every' && job.action.kind === 'heartbeat') continue;
+    if (activeCronIds.has(job.id)) continue;
+    if (await store.removeJob(job.id)) removed++;
+  }
+  return removed;
 }
 
 /** @deprecated */
@@ -211,12 +268,11 @@ export function validateAssistantProfile(profile: AssistantProfile): string[] {
   if (profile.routines?.heartbeat?.everyMs != null && profile.routines.heartbeat.everyMs <= 0) {
     errors.push('routines.heartbeat.everyMs must be positive');
   }
-  for (const { key } of [
-    { key: 'morningBrief' as const },
-    { key: 'bedtimeCheck' as const },
-  ]) {
-    const routine = profile.routines?.[key];
-    if (!routine?.cron?.trim()) continue;
+  for (const key of Object.keys(profile.routines ?? {})) {
+    if (key === 'heartbeat') continue;
+    const routine = profile.routines?.[key as keyof typeof profile.routines];
+    if (!isCronRoutine(key, routine)) continue;
+    if (!routine.cron?.trim()) continue;
     if (!routine.prompt?.trim()) {
       errors.push(`routines.${key}.prompt is required when cron is set`);
     }

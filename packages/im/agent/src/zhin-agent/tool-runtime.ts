@@ -1,6 +1,7 @@
 import { isReservedToolName, type AgentTool } from '@zhin.js/ai';
 import { Logger } from '@zhin.js/core';
 import type { Tool, Message } from '../orchestrator/types.js';
+import { sceneRefFromMessage } from '@zhin.js/core';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { ZhinAgentConfig } from './config.js';
 import { KEYWORD_TRIGGERS } from './config.js';
@@ -32,18 +33,38 @@ export interface CollectRuntimeToolsOptions {
   mcpTools?: AgentTool[];
 }
 
+function canAccessTool(tool: Tool, message: Message): boolean {
+  const perms = tool.permissions;
+  if (!perms?.length) return true;
+  const adapter = String(message.$adapter ?? '');
+  const scene = sceneRefFromMessage(message)?.kind ?? '';
+  return perms.some(p => p === adapter || p === scene || p === '*');
+}
+
 export function collectRuntimeTools(options: CollectRuntimeToolsOptions): AgentTool[] {
-  const tools = sharedToolSelection.collectRelevantTools(options.content, options.commMessage, options.externalTools, {
-    config: options.config,
-    skillRegistry: options.skillRegistry,
-    externalRegistered: options.externalRegistered,
-  });
-  const names = new Set(tools.map(tool => tool.name));
+  const { commMessage, externalTools, skillRegistry, externalRegistered } = options;
+  const tools: AgentTool[] = [];
+  const names = new Set<string>();
   const add = (tool: AgentTool) => {
     if (names.has(tool.name)) return;
     tools.push(tool);
     names.add(tool.name);
   };
+
+  for (const tool of externalTools) {
+    if (!canAccessTool(tool, commMessage)) continue;
+    add(sharedToolSelection.normalize(tool, commMessage));
+  }
+
+  if (skillRegistry) {
+    for (const tool of skillRegistry.collectAllTools()) {
+      add(sharedToolSelection.normalize(tool, commMessage));
+    }
+  }
+
+  for (const tool of externalRegistered.values()) {
+    add(tool);
+  }
 
   if (KEYWORD_TRIGGERS.chatHistory.test(options.content)) {
     add(
@@ -102,4 +123,3 @@ ${preData}
 
 Answer the user's question based on the data above. Be clear and concise; use emoji when appropriate.`;
 }
-

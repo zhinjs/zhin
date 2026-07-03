@@ -22,6 +22,10 @@ import { runAgentLoopTextTurn, runAgentLoopVisionTurn } from './agent-loop-turn.
 import { buildTurnContextEnvelope, resolveQuoteSystemHint } from './prompt.js';
 import { resolveCollaborationSceneForMessage, resolveCollaborationTurnHint } from '../collaboration/collaboration-context.js';
 import { resolveAgentSessionKeyForTurn } from '../collaboration/resolve-agent-session-key.js';
+import {
+  drainPassiveGroupBuffer,
+  formatPassiveGroupContextBlock,
+} from './passive-group-buffer.js';
 import { readCollaborationTurnSnapshot } from '../collaboration/collaboration-turn-snapshot.js';
 import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
 
@@ -95,8 +99,13 @@ export async function processTextTurn(
 ): Promise<OutputElement[]> {
     const t0 = now();
     const userId = commMessage.$sender.id || 'unknown';
-    const turnUser = buildTurnUserMessages(commMessage, content);
     const sessionKey = resolveTurnSessionKey(commMessage);
+    const channelScope = commMessage.$channel?.type;
+    const passiveBlock =
+      channelScope === 'group' || channelScope === 'channel'
+        ? formatPassiveGroupContextBlock(drainPassiveGroupBuffer(sessionKey))
+        : null;
+    const turnUser = buildTurnUserMessages(commMessage, content, passiveBlock);
     const isNewSession = await resolveSessionIsNewBeforeCreate(
       sessionDeps(host),
       sessionKey,
@@ -184,7 +193,10 @@ export async function processTextTurn(
       mcpTools,
     });
 
-    const { tools: resolvedTools, deferredStats } = resolveAgentToolsForTurn(host, allTools);
+    const resolved = await resolveAgentToolsForTurn(host, allTools, sessionId, contextForTools);
+    const { tools: resolvedTools, deferredStats, catalog, sessionSnapshot } = resolved;
+    host.lastDeferredCatalog = catalog;
+    host.lastDeferredSessionSnapshot = sessionSnapshot;
     host.lastToolSearchDeferredStats = deferredStats;
 
     const filterMs = (now() - tFilter).toFixed(0);
@@ -349,7 +361,12 @@ export async function processMultimodalTurn(
 
   const supportsVision = providerSupportsVision(host.getTurnProvider());
   const textContent = summarizeMultimodalParts(parts, supportsVision);
-  const turnUser = buildTurnUserMessages(commMessage, textContent);
+  const channelScope = commMessage.$channel?.type;
+  const passiveBlock =
+    channelScope === 'group' || channelScope === 'channel'
+      ? formatPassiveGroupContextBlock(drainPassiveGroupBuffer(sessionKey))
+      : null;
+  const turnUser = buildTurnUserMessages(commMessage, textContent, passiveBlock);
   const profileSummary = await host.userProfiles.buildProfileSummary(userId);
   const toneHint = host.config.toneAwareness ? detectTone(textContent).hint : '';
   const personaForVision = host.buildDisciplinedPrompt(host.config.persona);

@@ -1,5 +1,5 @@
 /**
- * 群/频道共享 session：未 @ 机器人的消息写入 ConversationMemory，供后续 @ 时带入上下文。
+ * 群/频道共享 session：未 @ 机器人的消息写入 ContextRepository，供后续 @ 时带入上下文。
  * AI 回复仍仅由 shouldTriggerAI（群/频道下主要为 @）触发。
  */
 import {
@@ -7,12 +7,13 @@ import {
   isActionMessage,
   mergeAITriggerConfig,
   resolveSenderRoles,
-  resolveIMSessionIdFromMessage,
   extractTextContent,
 } from '@zhin.js/core';
 import type { Message } from '@zhin.js/core';
 import { formatCompactLog } from '@zhin.js/logger';
-import { prepareUserContentForSession } from '../zhin-agent/session-io.js';
+import { findCellForInbound } from '../collaboration/collaboration-config.js';
+import { getCollaborationSceneService } from '../collaboration/scene-service.js';
+import { appendPassiveGroupMessageToContext } from '../zhin-agent/passive-group-context.js';
 import { asPrivate } from '../zhin-agent/zhin-agent-private.js';
 import type { AIServiceRefs } from './shared-refs.js';
 
@@ -46,19 +47,26 @@ export function registerGroupSessionPassive(refs: AIServiceRefs): void {
       const endpointConfig = adapterInstance?.endpoints?.get(message.$endpoint)?.$config;
 
       const { scope, roles } = resolveSenderRoles(message, triggerConfig, endpointConfig);
+      void scope;
+      void roles;
       const rawText = extractTextContent(message).trim();
       if (!rawText) return;
 
-      const sessionId = resolveIMSessionIdFromMessage(message);
-      const sceneId = message.$channel?.id || message.$sender.id;
-      const { content } = prepareUserContentForSession(message, rawText);
+      const endpointId = String(message.$endpoint ?? '');
+      const channelScope = message.$channel?.type;
+      const sceneId = message.$channel?.id ?? '';
+      let cell =
+        (channelScope === 'group' || channelScope === 'channel') && sceneId !== ''
+          ? findCellForInbound(
+            getCollaborationSceneService().listScenes(),
+            String(message.$adapter),
+            String(sceneId),
+            endpointId,
+          )
+          : undefined;
 
       const agent = asPrivate(refs.zhinAgent);
-      await agent.memory.appendPassiveGroupUserMessage(sessionId, content, {
-        senderId: message.$sender.id,
-        senderRoles: roles,
-      });
-      await agent.sessions.addMessage(sessionId, { role: 'user', content });
+      await appendPassiveGroupMessageToContext(agent, message, rawText, cell);
     });
 
     logger.debug(formatCompactLog('GroupSessionPassive', { hook: 'on' }));

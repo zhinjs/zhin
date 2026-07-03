@@ -24,4 +24,18 @@ describe('applyAiConfigFixes', () => {
     expect(normalized.agents.zhin?.model).toBe('gpt-4o-mini');
     expect(normalized.agents.vision?.priority).toBe(10);
   });
+
+  it('应迁移 ai.pipeline 并删除顶层 pipeline', () => {
+    const { ai, fixes } = applyAiConfigFixes({
+      providers: { p: { sdk: 'openai', apiKey: 'k' } },
+      agents: { zhin: { provider: 'p', model: 'base' } },
+      pipeline: { evaluator: { provider: 'p', model: 'glm', nickname: '分析师' } },
+    });
+
+    expect(fixes).toContain('merged ai.pipeline into ai.agents and removed ai.pipeline');
+    expect(ai?.pipeline).toBeUndefined();
+    const normalized = normalizeAiRoutingConfig(ai as never);
+    expect(normalized.agents.evaluator?.model).toBe('glm');
+    expect(validateAiRoutingConfig(normalized)).toEqual([]);
+  });
 });

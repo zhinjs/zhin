@@ -21,6 +21,9 @@ export function applyAiConfigFixes(
   };
 
   const hadRoutes = !!legacy.routes && Object.keys(legacy.routes).length > 0;
+  const hadPipeline = !!(legacy as AIConfig & { pipeline?: unknown }).pipeline
+    && typeof (legacy as AIConfig & { pipeline?: unknown }).pipeline === 'object'
+    && Object.keys((legacy as AIConfig & { pipeline?: Record<string, unknown> }).pipeline ?? {}).length > 0;
   const hadDefaultProvider = !!legacy.defaultProvider;
   const hadLegacyAgent = !!(legacy.agent?.chatModel || legacy.agent?.visionModel);
   const providers = src.providers;
@@ -42,9 +45,19 @@ export function applyAiConfigFixes(
     agents,
   };
 
+  const migratedAgent = migrateAgentDeferredSection(src.agent);
+  if (migratedAgent.section) {
+    next.agent = migratedAgent.section;
+    fixes.push(...migratedAgent.fixes);
+  }
+
   if (hadRoutes) {
     delete next.routes;
     fixes.push('merged ai.routes into ai.agents and removed ai.routes');
+  }
+  if (hadPipeline) {
+    delete next.pipeline;
+    fixes.push('merged ai.pipeline into ai.agents and removed ai.pipeline');
   }
   if (hadDefaultProvider) {
     delete next.defaultProvider;
@@ -53,37 +66,15 @@ export function applyAiConfigFixes(
   if (legacy.agent) {
     delete next.agent;
     if (hadLegacyAgent) fixes.push('migrated ai.agent.chatModel into ai.agents.zhin');
+    if (migratedAgent.section) {
+      next.agent = migratedAgent.section;
+    }
   }
 
   for (const key of ['allowedTools', 'disabledTools', 'toolSearch'] as const) {
     if (key in next) {
       delete next[key];
       fixes.push(`removed deprecated ai.${key}`);
-    }
-  }
-
-  // ADR 0024：剥离 agent.orchestratorTools 中已废弃的主编排/Missions 工具
-  const DEPRECATED_ORCHESTRATOR_TOOLS = new Set([
-    'tool_search',
-    'run_deferred_task',
-    'orchestration_start',
-    'orchestration_add_task',
-    'orchestration_status',
-    'orchestration_complete',
-    'orchestration_retry_task',
-    'orchestration_skip_task',
-  ]);
-  const agentSection = next.agent;
-  if (agentSection && typeof agentSection === 'object' && !Array.isArray(agentSection)) {
-    const agentObj = { ...(agentSection as Record<string, unknown>) };
-    const tools = agentObj.orchestratorTools;
-    if (Array.isArray(tools)) {
-      const kept = tools.filter((t) => typeof t === 'string' && !DEPRECATED_ORCHESTRATOR_TOOLS.has(t));
-      if (kept.length !== tools.length) {
-        agentObj.orchestratorTools = kept;
-        next.agent = agentObj;
-        fixes.push('removed deprecated orchestratorTools (toolSearch/Missions) per ADR 0024');
-      }
     }
   }
 
@@ -106,4 +97,54 @@ export function applyAiConfigFixes(
   }
 
   return { ai: next, fixes };
+}
+
+const DEPRECATED_ORCHESTRATOR_TOOLS = new Set([
+  'tool_search',
+  'run_deferred_task',
+  'activate_skill',
+  'orchestration_start',
+  'orchestration_add_task',
+  'orchestration_status',
+  'orchestration_complete',
+  'orchestration_retry_task',
+  'orchestration_skip_task',
+]);
+
+function migrateAgentDeferredSection(
+  agentSection: unknown,
+): { section?: Record<string, unknown>; fixes: string[] } {
+  const fixes: string[] = [];
+  if (!agentSection || typeof agentSection !== 'object' || Array.isArray(agentSection)) {
+    return { fixes };
+  }
+  const agentObj = { ...(agentSection as Record<string, unknown>) };
+  let changed = false;
+  const tools = agentObj.orchestratorTools;
+  if (Array.isArray(tools)) {
+    const migrated = tools
+      .filter((t): t is string => typeof t === 'string')
+      .map(t => (t === 'activate_skill' ? 'load_skill' : t))
+      .filter(t => !DEPRECATED_ORCHESTRATOR_TOOLS.has(t));
+    const unique = [...new Set(migrated)];
+    if (unique.length !== tools.length || tools.some(t => t === 'activate_skill')) {
+      delete agentObj.orchestratorTools;
+      const dt = (agentObj.deferredTools && typeof agentObj.deferredTools === 'object'
+        ? { ...(agentObj.deferredTools as Record<string, unknown>) }
+        : {}) as Record<string, unknown>;
+      if (!dt.alwaysLoadedTools) {
+        dt.alwaysLoadedTools = unique;
+      }
+      agentObj.deferredTools = dt;
+      fixes.push('migrated agent.orchestratorTools → agent.deferredTools.alwaysLoadedTools (ADR 0029)');
+      changed = true;
+    }
+  }
+  const allowed = agentObj.allowedTools;
+  if (Array.isArray(allowed) && allowed.includes('activate_skill')) {
+    agentObj.allowedTools = allowed.map(t => (t === 'activate_skill' ? 'load_skill' : t));
+    fixes.push('replaced activate_skill with load_skill in agent.allowedTools');
+    changed = true;
+  }
+  return changed ? { section: agentObj, fixes } : { fixes };
 }

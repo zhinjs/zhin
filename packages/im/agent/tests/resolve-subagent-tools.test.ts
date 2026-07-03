@@ -76,14 +76,26 @@ describe('resolveSubagentAgentTools', () => {
     expect(tools.map(t => t.name)).toContain('generate_image');
   });
 
-  it('使用全池 + 角色 + TF-IDF（无 agents.tools 配置）', () => {
+  it('spawn_task 声明工具时仅暴露父会话已 load 的项 + load_tool/load_skill', () => {
     const tools = resolveSubagentAgentTools({
-      allTools: catalog,
-      task: '画一只橘猫',
+      allTools: [
+        ...catalog,
+        makeTool('load_tool'),
+        makeTool('load_skill'),
+        makeTool('web_search'),
+      ],
+      task: '搜索资料',
       role: 'subtask',
       config: DEFAULT_CONFIG,
       agentDispatcher: dispatcher,
+      requestedTools: ['web_search', 'bash'],
+      parentSessionLoaded: ['web_search'],
     });
-    expect(tools.map(t => t.name)).toContain('generate_image');
+    const names = tools.map(t => t.name);
+    expect(names).toContain('load_tool');
+    expect(names).toContain('load_skill');
+    expect(names).toContain('web_search');
+    expect(names).not.toContain('bash');
+    expect(names).not.toContain('spawn_task');
   });
 });

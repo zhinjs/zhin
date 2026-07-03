@@ -15,6 +15,7 @@ import { isLlmAgentMessage } from '../types/agent-message.js';
 import type { LlmTool } from '../types/tool.js';
 import type { Model } from '../types/model.js';
 import { EMPTY_TOKEN_USAGE } from '../types/agent-message.js';
+import { repairAgentMessagesForLlm } from '../repair-agent-messages.js';
 
 function userBlocksToOpenAiContent(
   blocks: UserMessage['content'],
@@ -81,7 +82,7 @@ function toolResultToOpenAiMessage(message: ToolResultMessage): ChatMessage {
 
 export function agentMessagesToOpenAi(messages: AgentMessage[]): ChatMessage[] {
   const out: ChatMessage[] = [];
-  for (const message of messages) {
+  for (const message of repairAgentMessagesForLlm(messages)) {
     if (!isLlmAgentMessage(message)) continue;
     if (message.role === 'user') {
       out.push({ role: 'user', content: userBlocksToOpenAiContent(message.content) });

@@ -163,11 +163,23 @@ export {
   TODO_WRITE_PARAMETERS,
 } from './builtin/todo-write-tool.js';
 export {
-  ActivateSkillBuiltinTool,
-  createActivateSkillTool,
-  ACTIVATE_SKILL_PARAMETERS,
-  type ActivateSkillToolOptions,
-} from './builtin/activate-skill-tool.js';
+  readSkillInstructions,
+  LoadSkillBuiltinTool,
+  createLoadSkillTool,
+  LOAD_SKILL_PARAMETERS,
+  type LoadSkillToolOptions,
+} from './builtin/load-skill-tool.js';
+export {
+  DiscoverBuiltinTool,
+  LoadToolBuiltinTool,
+  LoadSkillBuiltinToolMeta,
+  createDeferredMetaTools,
+  bindDeferredToolRuntime,
+  getDeferredToolRuntime,
+  isToolsMutatedResult,
+  TOOLS_MUTATED_MARKER,
+  type DeferredToolRuntime,
+} from './builtin/deferred-tool-meta.js';
 export {
   InstallSkillBuiltinTool,
   createInstallSkillTool,
@@ -239,6 +251,7 @@ export {
   loadBootstrapWithProfile,
   syncProfileHeartbeatToStore,
   syncProfileCronRoutinesToStore,
+  pruneStaleProfileCronJobs,
   mergeProfileDeviceAliases,
   validateAssistantProfile,
   resolveAssistantProfileConfig,

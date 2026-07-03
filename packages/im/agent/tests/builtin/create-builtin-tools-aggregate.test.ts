@@ -13,7 +13,9 @@ describe('createBuiltinTools', () => {
     const names = tools.map(t => t.name);
     expect(names).toEqual(
       expect.arrayContaining([
-        'activate_skill',
+        'discover',
+        'load_tool',
+        'load_skill',
         'install_skill',
         'ask_user',
       ]),

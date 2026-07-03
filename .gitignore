@@ -15,6 +15,7 @@ docs/.vitepress/cache
 docs/.vitepress/dist
 # Testing
 coverage/
+/tests/.tmp/
 
 # Turbo
 .turbo/
