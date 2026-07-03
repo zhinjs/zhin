@@ -20,11 +20,11 @@
     "stop": "停止守护进程"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^4.0.0",
-    "@ai-sdk/deepseek": "^3.0.0",
-    "@ai-sdk/google": "^4.0.0",
-    "@ai-sdk/openai": "4.0.0",
-    "@ai-sdk/openai-compatible": "^3.0.0",
+    "@ai-sdk/anthropic": "^4.0.7",
+    "@ai-sdk/deepseek": "^3.0.5",
+    "@ai-sdk/google": "^4.0.8",
+    "@ai-sdk/openai": "4.0.7",
+    "@ai-sdk/openai-compatible": "^3.0.5",
     "@puniyu/system-info": "1.5.7",
     "@zhin.js/adapter-dingtalk": "workspace:*",
     "@zhin.js/adapter-discord": "workspace:*",
@@ -71,7 +71,7 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "sqlite3": "latest",
-    "tsx": "^4.22.4",
+    "tsx": "^4.22.5",
     "zhin.js": "workspace:*",
     "zod": "^4.4.3"
   },

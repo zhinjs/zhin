@@ -12,8 +12,8 @@
   },
   "dependencies": {
     "imap": "^0.8.19",
-    "mailparser": "^3.9.11",
-    "nodemailer": "^9.0.1"
+    "mailparser": "^3.9.12",
+    "nodemailer": "^9.0.3"
   },
   "peerDependencies": {
     "zhin.js": "workspace:*"
