@@ -8,12 +8,14 @@ vi.mock('@zhin.js/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@zhin.js/core')>();
   return {
     ...actual,
+    getHostRootPlugin: vi.fn(() => null),
     resolveSubjectRoles: vi.fn((_plugin: unknown, message: { _roles?: string[] }) => ({
       scope: 'group',
       roles: message?._roles ?? ['user'],
     })),
   };
 });
+
 import type { AgentTool } from '@zhin.js/ai';
 import {
   ToolSelection,
@@ -30,6 +32,12 @@ import { planToolRun } from '../src/zhin-agent/tool-runtime.js';
 import { mockCommMessage } from './helpers/mock-comm-message.js';
 import type { Tool } from '../src/orchestrator/types.js';
 import type { ZhinAgentConfig } from '../src/zhin-agent/config.js';
+import {
+  getCollaborationCellService,
+  resetCollaborationCellService,
+} from '../src/collaboration/cell-service.js';
+import { MemoryCollaborationCellRepository } from '../src/collaboration/collaboration-cell-repository.js';
+import { setSceneIdentityService } from '../src/collaboration/scene-identity-service.js';
 
 function makeConfig(overrides: Partial<ZhinAgentConfig> = {}): Required<ZhinAgentConfig> {
   return {
@@ -181,6 +189,13 @@ describe('normalizeTool', () => {
 });
 
 describe('ToolSelection', () => {
+  beforeEach(async () => {
+    resetCollaborationCellService();
+    setSceneIdentityService(null);
+    getCollaborationCellService().setRepository(new MemoryCollaborationCellRepository());
+    await getCollaborationCellService().reloadFromRepository();
+  });
+
   it('owns relevance cache for agent-side filtering', () => {
     const selection = new ToolSelection();
     const tools: AgentTool[] = [
@@ -326,6 +341,38 @@ describe('ToolSelection', () => {
       externalRegistered: new Map(),
     });
     expect(tools.some(t => t.name === 'ask_user')).toBe(true);
+  });
+
+  it('does not pin legacy collaboration delegation tools after TF-IDF filter in multi-bot groups', async () => {
+    const repo = new MemoryCollaborationCellRepository();
+    await repo.upsert({
+      id: 'cell-1',
+      adapter: 'icqq',
+      sceneId: '373460458',
+      members: [
+        { endpointId: '8596238', primary: 'planner', pipelineRole: 'planner' },
+        { endpointId: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
+      ],
+    });
+    getCollaborationCellService().setRepository(repo);
+    await getCollaborationCellService().reloadFromRepository();
+    const selection = new ToolSelection();
+    const context = mockCommMessage({ adapter: 'icqq', sceneId: '373460458', scope: 'group' });
+    const filler = Array.from({ length: 14 }, (_, i) =>
+      makeTool({ name: `filler_${i}`, description: `misc tool ${i}`, keywords: ['zhin', 'framework'] }),
+    );
+    const externalTools = [
+      ...filler,
+      makeTool({ name: 'cell_set_goal', description: 'Set collaboration goal', keywords: ['goal'] }),
+      makeTool({ name: 'cell_mission_status', description: 'Read collaboration cell status', keywords: ['status'] }),
+      makeTool({ name: 'group_delegate', description: 'Legacy delegate to peer bot', keywords: ['delegate'] }),
+    ];
+    const tools = selection.collectRelevantTools('重新启动调研 zhin框架', context, externalTools, {
+      config: makeConfig({ maxTools: 12 }),
+      skillRegistry: null,
+      externalRegistered: new Map(),
+    });
+    expect(tools.map((t) => t.name)).not.toContain('group_delegate');
   });
 });
 

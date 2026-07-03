@@ -292,12 +292,14 @@ export function icqqElementsToSegments(
           out.push({ type: "text", data: { text: String(el.text) } });
         }
         break;
-      case "at":
+      case "at": {
+        const atId = String(el.qq ?? el.user_id ?? "");
         out.push({
           type: "at",
-          data: { qq: String(el.qq ?? el.user_id ?? "") },
+          data: { qq: atId, user_id: atId, id: atId },
         });
         break;
+      }
       case "face":
         out.push({ type: "face", data: { id: Number(el.id) } });
         break;

@@ -2,10 +2,12 @@ import type { AIConfig, ProviderConfig } from '@zhin.js/ai';
 import { isSdkId } from '@zhin.js/ai';
 import type {
   AgentBindingConfig,
+  PipelineRoleConfig,
   ProviderInstanceConfig,
   RouteEntryConfig,
 } from './types.js';
 import { DEFAULT_ZHIN_AGENT_NAME } from './types.js';
+import { PIPELINE_ROLES } from '../collaboration/types.js';
 
 const LEGACY_DRIVER_KEYS = new Set([
   'openai', 'anthropic', 'deepseek', 'moonshot', 'zhipu', 'google', 'gemini', 'ollama', 'cloudflare',
@@ -109,6 +111,25 @@ function mergeLegacyRoutesIntoAgents(
 export interface NormalizedAiRoutingConfig {
   providers: Record<string, ProviderInstanceConfig>;
   agents: Record<string, AgentBindingConfig>;
+  pipeline: Record<string, PipelineRoleConfig>;
+}
+
+function normalizePipelineConfig(raw: unknown): Record<string, PipelineRoleConfig> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const src = raw as Record<string, unknown>;
+  const out: Record<string, PipelineRoleConfig> = {};
+  for (const role of PIPELINE_ROLES) {
+    const entry = src[role];
+    if (!entry || typeof entry !== 'object') continue;
+    const e = entry as Record<string, unknown>;
+    const cfg: PipelineRoleConfig = {};
+    if (typeof e.nickname === 'string') cfg.nickname = e.nickname;
+    if (typeof e.provider === 'string') cfg.provider = e.provider;
+    if (typeof e.model === 'string') cfg.model = e.model;
+    if (Array.isArray(e.mcpServers)) cfg.mcpServers = e.mcpServers.filter((s): s is string => typeof s === 'string');
+    out[role] = cfg;
+  }
+  return out;
 }
 
 /**
@@ -140,5 +161,7 @@ export function normalizeAiRoutingConfig(ai: AIConfig | undefined): NormalizedAi
     };
   }
 
-  return { providers, agents };
+  const pipeline = normalizePipelineConfig((ai as AIConfig & { pipeline?: unknown })?.pipeline);
+
+  return { providers, agents, pipeline };
 }

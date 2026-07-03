@@ -1,7 +1,6 @@
 import { createRequire } from 'node:module';
 import fs from 'fs-extra';
 import path from 'node:path';
-import generated from './stack-versions.generated.json' with { type: 'json' };
 import { DATABASE_PACKAGES } from './types.js';
 import type { PackageJsonLike } from './project-deps.js';
 import {
@@ -11,12 +10,44 @@ import {
 } from './project-deps.js';
 
 /**
- * Zhin 生态 npm 包版本 SSOT（create-zhin-app / zhin setup / doctor --fix）。
- * 由 scripts/sync-scaffold-deps.mjs 从 monorepo package.json 生成，pnpm bump 时自动同步。
+ * User project dependency policy: scaffolded dependencies intentionally float to latest.
  */
-export const ZHIN_STACK_VERSIONS = generated.zhinStack;
+export const ZHIN_STACK_VERSIONS = {
+  'zhin.js': 'latest',
+  '@zhin.js/cli': 'latest',
+  '@zhin.js/agent': 'latest',
+  '@zhin.js/database': 'latest',
+  '@zhin.js/host-router': 'latest',
+  '@zhin.js/host-api': 'latest',
+  '@zhin.js/client': 'latest',
+  '@zhin.js/contract': 'latest',
+  '@zhin.js/satori': 'latest',
+  '@zhin.js/speech': 'latest',
+  '@zhin.js/html-renderer': 'latest',
+  '@zhin.js/mcp': 'latest',
+  '@zhin.js/adapter-sandbox': 'latest',
+  '@zhin.js/adapter-dingtalk': 'latest',
+  '@zhin.js/adapter-discord': 'latest',
+  '@zhin.js/adapter-email': 'latest',
+  '@zhin.js/adapter-github': 'latest',
+  '@zhin.js/adapter-icqq': 'latest',
+  '@zhin.js/adapter-kook': 'latest',
+  '@zhin.js/adapter-lark': 'latest',
+  '@zhin.js/adapter-line': 'latest',
+  '@zhin.js/adapter-milky': 'latest',
+  '@zhin.js/adapter-napcat': 'latest',
+  '@zhin.js/adapter-onebot11': 'latest',
+  '@zhin.js/adapter-onebot12': 'latest',
+  '@zhin.js/adapter-qq': 'latest',
+  '@zhin.js/adapter-satori': 'latest',
+  '@zhin.js/adapter-slack': 'latest',
+  '@zhin.js/adapter-telegram': 'latest',
+  '@zhin.js/adapter-wechat-mp': 'latest',
+  '@zhin.js/adapter-wecom': 'latest',
+  '@zhin.js/adapter-weixin-ilink': 'latest',
+} as const;
 
-export type ZhinStackPackage = keyof typeof generated.zhinStack;
+export type ZhinStackPackage = keyof typeof ZHIN_STACK_VERSIONS;
 
 const HOST_CONSOLE_PLUGINS = new Set([
   '@zhin.js/host-router',
@@ -67,30 +98,11 @@ export const DEFAULT_CREATE_BOT_HTTP_PORT = 8068;
 /** create-zhin 生成项目的 .npmrc（避免全局 strict-peer-dependencies 阻断 AI 栈安装） */
 export const CREATE_BOT_NPMRC = 'strict-peer-dependencies=false\n';
 
-function majorFromRange(range: string): string {
-  const match = range.match(/(\d+)/);
-  return match?.[1] ?? range;
-}
-
 /** create-zhin 生成项目的 pnpm 配置 */
-export function getCreateBotPnpmConfig(aiEnabled?: boolean): Record<string, unknown> {
-  const config: Record<string, unknown> = {
+export function getCreateBotPnpmConfig(_aiEnabled?: boolean): Record<string, unknown> {
+  return {
     onlyBuiltDependencies: ['esbuild'],
   };
-  if (aiEnabled) {
-    const aiStack = generated.aiStack as Record<string, string>;
-    config.peerDependencyRules = {
-      allowedVersions: {
-        ai: majorFromRange(aiStack.ai ?? '^7.0.0'),
-        '@ai-sdk/openai-compatible': majorFromRange(aiStack['@ai-sdk/openai-compatible'] ?? '^3.0.0'),
-        '@ai-sdk/openai': majorFromRange(aiStack['@ai-sdk/openai'] ?? '^4.0.0'),
-        '@ai-sdk/anthropic': majorFromRange(aiStack['@ai-sdk/anthropic'] ?? '^4.0.0'),
-        '@ai-sdk/google': majorFromRange(aiStack['@ai-sdk/google'] ?? '^4.0.0'),
-        '@ai-sdk/deepseek': majorFromRange(aiStack['@ai-sdk/deepseek'] ?? '^3.0.0'),
-      },
-    };
-  }
-  return config;
 }
 
 /** create-zhin-app 默认 bot 骨架依赖（不含适配器 / AI / 数据库驱动） */

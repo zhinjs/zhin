@@ -280,9 +280,10 @@ async function main() {
 
     // 显示 AI 配置信息
     if (options.ai?.enabled) {
+      const agentProvider = options.ai.agentProvider ?? options.ai.defaultProvider;
       console.log('');
       console.log(chalk.blue('🤖 AI 智能体配置：'));
-      console.log(`  ${chalk.gray('提供商:')} ${chalk.cyan(options.ai.defaultProvider || 'N/A')}`);
+      console.log(`  ${chalk.gray('提供商:')} ${chalk.cyan(agentProvider || 'N/A')}`);
       if (options.ai.trigger) {
         const triggers: string[] = [];
         if (options.ai.trigger.respondToAt) triggers.push('@机器人');
@@ -295,14 +296,14 @@ async function main() {
       if (options.ai.memoryMcp) {
         console.log(`  ${chalk.gray('Memory MCP:')} ${chalk.cyan('已启用')}`);
       }
-      console.log(`  ${chalk.gray('依赖:')} ${chalk.cyan(formatAIDependencyHint(options.ai.defaultProvider))}`);
+      console.log(`  ${chalk.gray('依赖:')} ${chalk.cyan(formatAIDependencyHint(agentProvider))}`);
       if (options.database && options.ai.sessions?.useDatabase !== false) {
         console.log(`  ${chalk.gray('会话存储:')} ${chalk.cyan('SQLite 持久化')}`);
       }
       const providerKey = options.ai.providers && Object.values(options.ai.providers)[0];
       if (providerKey && (providerKey as { apiKey?: string }).apiKey) {
         console.log(`  ${chalk.yellow('⚠ API Key 已保存到')} ${chalk.cyan('.env')} ${chalk.yellow('文件（AI_API_KEY）')}`);
-      } else if (options.ai.defaultProvider === 'ollama') {
+      } else if (agentProvider === 'ollama') {
         console.log(`  ${chalk.gray('提示:')} 请确保 Ollama 已启动且模型已 pull`);
       }
     }

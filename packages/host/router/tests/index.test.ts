@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
 
 // 加载 host-router 时会调用 usePlugin().declareConfig 等，测试环境无 Zhin 应用，需 mock
-vi.mock('@zhin.js/core', () => ({
+vi.mock('@zhin.js/core', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@zhin.js/core')>()),
   usePlugin: () => ({
     declareConfig: vi.fn(),
     provide: vi.fn(),

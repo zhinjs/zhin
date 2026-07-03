@@ -49,6 +49,37 @@ export function resolveIMSceneIdForSession(
   return senderId || sceneId || 'unknown';
 }
 
+export type AgentMemoryScope = 'user' | 'session' | 'agent';
+
+/**
+ * Resolve a session ID scoped by agent memory isolation policy.
+ *
+ * - 'session' (default): use the base session ID as-is (current behavior)
+ * - 'agent': combine agent name + base session ID → different agents in the same
+ *   session get independent memory
+ * - 'user': use platform + endpoint + user ID → shared across sessions for the same user
+ */
+export function resolveAgentScopedSessionId(
+  baseSessionId: string,
+  agentName: string | undefined,
+  memoryScope: AgentMemoryScope = 'session',
+): string {
+  switch (memoryScope) {
+    case 'agent':
+      return agentName ? `agent:${agentName}:${baseSessionId}` : baseSessionId;
+    case 'user': {
+      const parts = baseSessionId.split(':');
+      if (parts.length >= 2) {
+        return `user:${parts[0]}:${parts[1]}:${parts[parts.length - 1]}`;
+      }
+      return `user:${baseSessionId}`;
+    }
+    case 'session':
+    default:
+      return baseSessionId;
+  }
+}
+
 /** 从 Message 通讯上下文生成 IM sessionId */
 export function resolveIMSessionIdFromMessage(message: {
   $adapter?: string;

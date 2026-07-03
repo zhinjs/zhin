@@ -107,14 +107,14 @@ describe('Enhanced Agent Features', () => {
     });
 
     it('should get role config', () => {
-      const config = dispatcher.getRoleConfig('main');
-      expect(config.role).toBe('main');
+      const config = dispatcher.getRoleConfig('planner');
+      expect(config.role).toBe('planner');
       expect(config.canSendMessage).toBe(true);
       expect(config.canSpawnSubagents).toBe(true);
     });
 
     it('should have all role configs', () => {
-      const roles = ['main', 'subtask', 'worker', 'researcher', 'executor', 'reviewer', 'planner'];
+      const roles = ['subtask', 'worker', 'researcher', 'executor', 'reviewer', 'planner'];
       for (const role of roles) {
         const config = AGENT_ROLE_CONFIGS[role as keyof typeof AGENT_ROLE_CONFIGS];
         expect(config).toBeDefined();
@@ -356,11 +356,11 @@ describe('Enhanced Agent Features', () => {
     });
 
     it('should add role definition', () => {
-      builder.addRoleDefinition('main');
+      builder.addRoleDefinition('planner');
       const sections = builder.getSections();
       expect(sections.length).toBe(1);
       expect(sections[0].layer).toBe('role');
-      expect(sections[0].content).toContain('main');
+      expect(sections[0].content).toContain('planner');
     });
 
     it('should add task description', () => {
@@ -444,7 +444,7 @@ describe('Enhanced Agent Features', () => {
     it('should build complete prompt', () => {
       const prompt = builder
         .addSystemPrompt('You are a helpful assistant.')
-        .addRoleDefinition('main')
+        .addRoleDefinition('planner')
         .addTaskDescription({
           name: 'Test Task',
           description: 'A test task',
@@ -455,7 +455,7 @@ describe('Enhanced Agent Features', () => {
         .build();
 
       expect(prompt).toContain('You are a helpful assistant.');
-      expect(prompt).toContain('main');
+      expect(prompt).toContain('planner');
       expect(prompt).toContain('Test Task');
       expect(prompt).toContain('ZHIN_NEEDS_OWNER');
       expect(prompt).toContain('Markdown');
@@ -464,7 +464,7 @@ describe('Enhanced Agent Features', () => {
     it('should respect priority order', () => {
       const prompt = builder
         .addSystemPrompt('System prompt', { priority: 100 })
-        .addRoleDefinition('main')  // priority 90
+        .addRoleDefinition('planner')  // priority 90
         .addTaskDescription({
           name: 'Task',
           description: 'Task description',
@@ -474,7 +474,7 @@ describe('Enhanced Agent Features', () => {
 
       // System prompt should come first
       const systemIndex = prompt.indexOf('System prompt');
-      const roleIndex = prompt.indexOf('main');
+      const roleIndex = prompt.indexOf('planner');
       const taskIndex = prompt.indexOf('Task');
 
       expect(systemIndex).toBeLessThan(roleIndex);

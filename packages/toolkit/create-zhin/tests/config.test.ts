@@ -209,7 +209,7 @@ describe('create-zhin config', () => {
           },
           ai: {
             enabled: true,
-            defaultProvider: 'ollama',
+            agentProvider: 'ollama',
             providers: {
               ollama: {
                 host: 'http://localhost:11434',
@@ -237,7 +237,10 @@ describe('create-zhin config', () => {
         expect(raw).toContain('sessions:')
         expect(raw).toContain('context:')
         expect(raw).toContain('agent:')
+        expect(raw).toContain('sdk: ollama')
+        expect(raw).toContain('provider: ollama')
         expect(raw).toContain('memoryMcp: false')
+        expect(raw).not.toContain('defaultProvider')
       } finally {
         await fs.remove(root)
       }

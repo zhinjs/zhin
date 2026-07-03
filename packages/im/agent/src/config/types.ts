@@ -27,6 +27,19 @@ export interface AgentBindingConfig {
   mcpServers?: string[];
   priority?: number;
   match?: RouteMatchConfig;
+  /** Agent 昵称（LLM 自称 + IM 协作展示，ADR 0024 #11）。 */
+  nickname?: string;
+}
+
+/**
+ * Five-Agent pipeline 角色配置（ADR 0024 #12/#14）。
+ * 省略 provider/model 时继承 `ai.agents.zhin`。
+ */
+export interface PipelineRoleConfig {
+  nickname?: string;
+  provider?: string;
+  model?: string;
+  mcpServers?: string[];
 }
 
 /** @deprecated 仅用于归一化旧版 ai.routes */
@@ -41,6 +54,8 @@ export interface ResolvedAgentBinding {
   providerAlias: string;
   model: string;
   mcpServers: string[];
+  /** 展示昵称（缺省回退 role label / agent 名）。 */
+  nickname?: string;
 }
 
 export const DEFAULT_ZHIN_AGENT_NAME = 'zhin';

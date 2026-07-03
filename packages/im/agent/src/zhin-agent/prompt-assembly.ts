@@ -57,6 +57,7 @@ export async function describeAgentPathPromptSections(
     toolSearchDeferredStats: options.deferredStats,
     platformSections: platformMarkdown,
     orchestratorSdk: options.modelSdk,
+    agentNickname: agent.activeBinding?.nickname,
   });
 }
 
@@ -85,7 +86,7 @@ export async function buildAgentPathSystemPrompt(
     sessionId,
   });
 
-  const richPrompt = buildRichSystemPrompt({
+  const promptCtx = {
     config: agent.config,
     skillRegistry: agent.skillRegistry,
     skillsSummaryXML: agent.skillsSummaryXML,
@@ -95,7 +96,9 @@ export async function buildAgentPathSystemPrompt(
     toolSearchDeferredStats: deferredStats,
     platformSections: platformMarkdown,
     orchestratorSdk: modelSdk,
-  });
+    agentNickname: agent.activeBinding?.nickname,
+  };
+  const richPrompt = buildRichSystemPrompt(promptCtx);
 
   return `${richPrompt}${preData ? `\n\nPre-fetched data:\n${preData}` : ''}`;
 }

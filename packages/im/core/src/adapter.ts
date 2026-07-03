@@ -24,6 +24,11 @@ import {
   resolveInteractiveSegments,
   type InteractivePolicy,
 } from "./built/interactive-segments/index.js";
+import {
+  DEFAULT_AI_OUTBOUND_CAPABILITIES,
+  type AiOutboundCapabilities,
+  type AiOutboundExtensionDefinition,
+} from "./built/ai-outbound/index.js";
 import { createRichSegmentRenderContext } from "./built/rich-segments/capabilities.js";
 import { collectOutboundMediaKinds } from "./built/outbound-media-utils.js";
 import { segment } from "./utils.js";
@@ -51,6 +56,12 @@ export abstract class Adapter<
 
   /** 交互段出站策略：native 保留按钮段，text 降级为编号文本 */
   static interactivePolicy: InteractivePolicy = DEFAULT_INTERACTIVE_POLICY;
+
+  /** AI 结构化出站能力声明（mentions / richSegments / interactive） */
+  static aiOutboundCapabilities: AiOutboundCapabilities = DEFAULT_AI_OUTBOUND_CAPABILITIES;
+
+  /** 平台特有 extensions schema + 解析（对齐各 SDK 文档子集） */
+  static aiOutboundExtensions?: readonly AiOutboundExtensionDefinition[];
 
   protected getInteractivePolicy(): InteractivePolicy {
     return (this.constructor as typeof Adapter).interactivePolicy;

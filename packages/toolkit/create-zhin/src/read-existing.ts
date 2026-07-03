@@ -3,10 +3,13 @@
  */
 import fs from 'fs-extra';
 import path from 'path';
-import yaml from 'yaml';
-import type { InitOptions, DatabaseConfig, AdapterSetupResult, AISetupConfig } from '@zhin.js/scaffold-wizard';
-
-const CONFIG_CANDIDATES = ['zhin.config.yml', 'zhin.config.yaml', 'zhin.config.json', 'zhin.config.toml'];
+import {
+  loadProjectConfig,
+  type InitOptions,
+  type DatabaseConfig,
+  type AdapterSetupResult,
+  type AISetupConfig,
+} from '@zhin.js/scaffold-wizard';
 
 export interface ExistingProjectState {
   /** 从现有配置推断的 InitOptions 默认值 */
@@ -36,13 +39,6 @@ function parseEnvFile(content: string): Record<string, string> {
   return out;
 }
 
-function inferConfigFormat(configPath: string): 'yaml' | 'json' | 'toml' {
-  const ext = path.extname(configPath).toLowerCase();
-  if (ext === '.json') return 'json';
-  if (ext === '.toml') return 'toml';
-  return 'yaml';
-}
-
 function mapDatabaseFromConfig(db: any): DatabaseConfig | undefined {
   if (!db || !db.dialect) return undefined;
   return {
@@ -64,12 +60,13 @@ function mapAIFromConfig(ai: any, env: Record<string, string>): AISetupConfig | 
   if (!ai) return undefined;
   const enabled = ai.enabled !== false;
   if (!enabled) return { enabled: false };
-  const defaultProvider = ai.defaultProvider;
+  const agentProvider = ai.agents?.zhin?.provider ?? ai.defaultProvider;
   const providers: AISetupConfig['providers'] = {};
   if (ai.providers) {
     for (const [name, p] of Object.entries(ai.providers as Record<string, any>)) {
       if (!p) continue;
       providers[name] = {
+        sdk: p.sdk,
         apiKey: p.apiKey,
         host: p.host,
         baseUrl: p.baseUrl,
@@ -79,7 +76,7 @@ function mapAIFromConfig(ai: any, env: Record<string, string>): AISetupConfig | 
   }
   return {
     enabled: true,
-    defaultProvider,
+    agentProvider,
     providers: Object.keys(providers).length ? providers : undefined,
     trigger: ai.trigger
       ? {
@@ -102,32 +99,11 @@ function mapAIFromConfig(ai: any, env: Record<string, string>): AISetupConfig | 
  * 从现有项目目录读取配置与 .env，返回用于 in-place 的默认选项
  */
 export async function readExistingProjectConfig(cwd: string): Promise<ExistingProjectState | null> {
-  let configPath: string | null = null;
-  for (const name of CONFIG_CANDIDATES) {
-    const p = path.join(cwd, name);
-    if (await fs.pathExists(p)) {
-      configPath = p;
-      break;
-    }
-  }
-  if (!configPath) return null;
-
-  const raw = await fs.readFile(configPath, 'utf-8');
-  const ext = path.extname(configPath).toLowerCase();
-  let config: any = {};
-  if (ext === '.json') {
-    try {
-      config = JSON.parse(raw);
-    } catch {
-      return null;
-    }
-  } else {
-    try {
-      config = yaml.parse(raw);
-    } catch {
-      return null;
-    }
-  }
+  const loaded = loadProjectConfig(cwd);
+  if (loaded.status !== 'loaded' || !loaded.configPath || !loaded.format) return null;
+  if (loaded.format === 'ts') return null;
+  const configPath = loaded.configPath;
+  const config: any = loaded.config;
 
   const envPath = path.join(cwd, '.env');
   let env: Record<string, string> = {};
@@ -136,7 +112,7 @@ export async function readExistingProjectConfig(cwd: string): Promise<ExistingPr
     env = parseEnvFile(envContent);
   }
 
-  const configFormat = inferConfigFormat(configPath);
+  const configFormat = loaded.format;
   const existingPlugins = Array.isArray(config.plugins) ? config.plugins : [];
   const existingBots = Array.isArray(config.endpoints) ? config.endpoints : [];
 

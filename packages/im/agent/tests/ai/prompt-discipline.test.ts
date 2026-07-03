@@ -38,7 +38,7 @@ describe('Prompt discipline block', () => {
     expect(prompt).not.toContain('# Action safety');
   });
 
-  it('toolSearch 通用段不含平台硬编码', () => {
+  it('编排通用段不含平台硬编码', () => {
     const prompt = buildRichSystemPrompt({
       config: DEFAULT_CONFIG,
       skillRegistry: null,
@@ -48,7 +48,8 @@ describe('Prompt discipline block', () => {
     });
     expect(prompt).not.toMatch(/mcp_icqq/);
     expect(prompt).toContain('# Orchestration');
-    expect(prompt).toContain('Use run_deferred_task for real work');
+    expect(prompt).toContain('Use available tools directly');
+    expect(prompt).toContain('Use spawn_task for complex');
     expect(prompt).not.toContain('# Style');
     expect(prompt).not.toContain('# Deferred Tools');
   });

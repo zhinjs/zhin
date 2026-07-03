@@ -6,23 +6,32 @@ import { getPlugin } from '@zhin.js/core';
 import type { AIConfig } from '@zhin.js/ai';
 import type { AIServiceRefs } from './shared-refs.js';
 import { activateAiDatabaseStorage } from './activate-ai-database-storage.js';
+import { wireCollaborationStorage } from '../collaboration/wire-collaboration-storage.js';
+import { markAllRuntimesPersistenceReady } from '../collaboration/bootstrap-agent-runtimes.js';
 import {
   upgradeAgentSessionTreeData,
   type AgentDbQueryable,
 } from './upgrade-agent-db-schema.js';
 import { registerEndpointIdColumnMigrationHook } from './upgrade-endpoint-id-schema.js';
+import {
+  registerCollaborationRoundStateMigrationHook,
+  upgradeCollaborationDbSchema,
+  asAgentDbQueryable,
+} from './upgrade-collaboration-db-schema.js';
 
 export function registerDbUpgrade(refs: AIServiceRefs): void {
   const plugin = getPlugin();
   const { useContext, root, logger } = plugin;
 
   registerEndpointIdColumnMigrationHook(logger);
+  registerCollaborationRoundStateMigrationHook(logger);
 
   useContext('ai', (ai) => {
     const configService = root.inject('config');
-    const appConfig = configService?.getPrimary<{ ai?: AIConfig }>() || {};
+    const appConfig = configService?.getPrimary<{ ai?: AIConfig; collaboration?: unknown }>() || {};
     if (appConfig.ai?.sessions?.useDatabase === false) {
-      refs.zhinAgent?.markMemoryPersistenceReady();
+      if (refs.zhinAgent) markAllRuntimesPersistenceReady(refs.zhinAgent);
+      void wireCollaborationStorage(undefined, appConfig.collaboration);
       return;
     }
     const db = root.inject('database' as const) as
@@ -30,22 +39,23 @@ export function registerDbUpgrade(refs: AIServiceRefs): void {
       | undefined;
     if (db && refs.zhinAgent) {
       void upgradeAgentSessionTreeData(db as AgentDbQueryable)
-        .then((result) => {
+        .then(async (result) => {
           logger.info(
             `AI Session: session tree upgrade checked (columns=${result.columns.length}, ids=${result.idsBackfilled}, parent_links=${result.parentLinks}, active_leaves=${result.activeLeaves})`,
           );
           if (result.columns.length > 0) {
             logger.info(`AI Session: migrated agent_* columns: ${result.columns.join(', ')}`);
           }
-          if (result.idsBackfilled > 0 || result.parentLinks > 0 || result.activeLeaves > 0) {
-            logger.info(
-              `AI Session: repaired session tree (ids=${result.idsBackfilled}, parent_links=${result.parentLinks}, active_leaves=${result.activeLeaves})`,
-            );
+          const collabCols = await upgradeCollaborationDbSchema(asAgentDbQueryable(db));
+          if (collabCols.length > 0) {
+            logger.info(`AI Session: migrated collaboration columns: ${collabCols.join(', ')}`);
           }
         })
-        .then(() => activateAiDatabaseStorage(db, refs, appConfig.ai || {}))
+        .then(() => activateAiDatabaseStorage(db, refs, appConfig.ai || {}, appConfig.collaboration))
         .catch((e) => logger.error('AI Session: database setup failed:', e))
-        .finally(() => refs.zhinAgent?.markMemoryPersistenceReady());
+        .finally(() => {
+          if (refs.zhinAgent) markAllRuntimesPersistenceReady(refs.zhinAgent);
+        });
     }
   });
 
@@ -54,7 +64,7 @@ export function registerDbUpgrade(refs: AIServiceRefs): void {
       if (!refs.aiService) return;
       const configService = root.inject('config');
       const appConfig =
-        configService?.getPrimary<{ ai?: AIConfig }>() || {};
+        configService?.getPrimary<{ ai?: AIConfig; collaboration?: unknown }>() || {};
       const config = appConfig.ai || {};
       if (config.sessions?.useDatabase === false) return;
 
@@ -65,17 +75,21 @@ export function registerDbUpgrade(refs: AIServiceRefs): void {
       if (result.columns.length > 0) {
         logger.info(`AI Session: migrated agent_* columns: ${result.columns.join(', ')}`);
       }
+      const collabCols = await upgradeCollaborationDbSchema(asAgentDbQueryable(db));
+      if (collabCols.length > 0) {
+        logger.info(`AI Session: migrated collaboration columns: ${collabCols.join(', ')}`);
+      }
       if (result.idsBackfilled > 0 || result.parentLinks > 0 || result.activeLeaves > 0) {
         logger.info(
           `AI Session: repaired session tree (ids=${result.idsBackfilled}, parent_links=${result.parentLinks}, active_leaves=${result.activeLeaves})`,
         );
       }
-      await activateAiDatabaseStorage(db, refs, config);
+      await activateAiDatabaseStorage(db, refs, config, appConfig.collaboration);
       logger.debug('AI database storage activated (agent_sessions, agent_messages, im_transcripts)');
     } catch (e) {
       logger.error('AI Session: database setup failed:', e);
     } finally {
-      refs.zhinAgent?.markMemoryPersistenceReady();
+      if (refs.zhinAgent) markAllRuntimesPersistenceReady(refs.zhinAgent);
     }
   });
 }

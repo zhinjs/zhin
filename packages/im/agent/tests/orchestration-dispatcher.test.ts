@@ -28,7 +28,7 @@ describe('AgentDispatcher hard orchestration', () => {
     expect(gate.reason).toContain('失败');
   });
 
-  it('skipped dependency unlocks downstream', async () => {
+  it('cancelled dependency unlocks downstream', async () => {
     const dispatcher = getAgentDispatcher();
     const repo = new MemoryOrchestrationRepository();
     dispatcher.setRepository(repo);
@@ -38,7 +38,7 @@ describe('AgentDispatcher hard orchestration', () => {
     dispatcher.syncTaskFromRecord(a);
     dispatcher.syncTaskFromRecord(b);
 
-    await repo.updateTaskStatus(a.id, 'skipped', { error: 'skip' });
+    await repo.updateTaskStatus(a.id, 'cancelled', { error: 'cancelled' });
     dispatcher.syncTaskFromRecord((await repo.getTask(a.id))!);
 
     const gate = dispatcher.canExecute(b.id);

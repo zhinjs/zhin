@@ -17,6 +17,8 @@ import {
 } from '@zhin.js/core';
 import type { Skill, Tool } from './types.js';
 import type { ZhinAgentConfig } from '../zhin-agent/config.js';
+import { COLLABORATION_TOOL_NAMES } from '../collaboration/collaboration-tools.js';
+import { resolveCellForScene } from '../collaboration/collaboration-config.js';
 
 const logger = new Logger(null, 'ZhinAgent:ToolSelection');
 
@@ -400,6 +402,8 @@ export class ToolSelection {
       if (t) filtered.unshift(t);
     }
 
+    pinCollaborationCellTools(filtered, collected, commMessage);
+
     if (mentionedSkill && filtered.length > 0) {
       const activateSkillIdx = filtered.findIndex(t => t.name === 'activate_skill');
       if (activateSkillIdx > 0) {
@@ -458,3 +462,24 @@ export class ToolSelection {
 
 export const sharedToolSelection = new ToolSelection();
 
+/** 协作 Cell 内轻量 cell 工具须常驻，勿被 TF-IDF 裁掉。 */
+function pinCollaborationCellTools(
+  filtered: AgentTool[],
+  collected: AgentTool[],
+  commMessage: Message,
+): void {
+  const scope = commMessage.$channel?.type;
+  if (scope !== 'group' && scope !== 'channel') return;
+  const sceneId = commMessage.$channel?.id;
+  if (!sceneId) return;
+  const cell = resolveCellForScene(
+    String(commMessage.$adapter ?? ''),
+    String(sceneId),
+  );
+  if (!cell || cell.members.length < 2) return;
+  for (const name of COLLABORATION_TOOL_NAMES) {
+    if (filtered.some((t) => t.name === name)) continue;
+    const t = collected.find((x) => x.name === name);
+    if (t) filtered.unshift(t);
+  }
+}

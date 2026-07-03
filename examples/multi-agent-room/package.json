@@ -1,0 +1,31 @@
+{
+  "name": "multi-agent-room",
+  "private": true,
+  "version": "0.0.1",
+  "description": "多 Bot 同群协作示例（GroupCell + collaboration.cells，ADR 0023）",
+  "type": "module",
+  "scripts": {
+    "dev": "zhin dev",
+    "start": "zhin start",
+    "build": "zhin build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@zhin.js/adapter-sandbox": "workspace:*",
+    "@zhin.js/agent": "workspace:*",
+    "@zhin.js/cli": "workspace:*",
+    "@zhin.js/host-api": "workspace:*",
+    "@zhin.js/host-router": "workspace:*",
+    "ai": "^6.0.116",
+    "zod": "^4.3.6",
+    "zhin.js": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  }
+}

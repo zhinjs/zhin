@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createUserMessage } from '@zhin.js/ai';
-import { PromptController } from '../../src/zhin-agent/prompt-controller.js';
+import { PromptController, TurnSupersededError } from '../../src/zhin-agent/prompt-controller.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
 
 const commMessage = mockCommMessage({
@@ -47,31 +47,29 @@ describe('PromptController', () => {
     expect(order.indexOf('start:B')).toBeLessThan(order.indexOf('end:A'));
   });
 
-  it('same session busy spawns parallel independent turns', async () => {
+  it('same session aborts prior in-flight turn when a new message arrives', async () => {
     const controller = new PromptController('one-at-a-time', 'one-at-a-time');
     let release!: () => void;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
+    const firstAborted: boolean[] = [];
 
     const first = controller.schedule({
       sessionKey: 's1',
       sessionId: 's1#1',
       userMessages: [createUserMessage('first')],
       commMessage,
-      execute: async (initialMessages) => {
-        const block = initialMessages[0]?.content.find((b) => b.type === 'text');
-        const text = block && block.type === 'text' ? block.text : '';
-        if (text === 'first') await gate;
-        return makeResult(text);
+      execute: async (_initial, _hooks, signal) => {
+        await gate;
+        firstAborted.push(signal.aborted);
+        return makeResult('first');
       },
     });
 
     await new Promise((r) => setTimeout(r, 5));
-    expect(controller.isBusy()).toBe(true);
-    expect(controller.getActiveTurnCount()).toBe(1);
 
-    const second = controller.schedule({
+    const second = await controller.schedule({
       sessionKey: 's1',
       sessionId: 's1#1',
       userMessages: [createUserMessage('second')],
@@ -79,14 +77,11 @@ describe('PromptController', () => {
       execute: async () => makeResult('second'),
     });
 
-    expect(controller.getActiveTurnCount()).toBe(2);
-
-    const secondDone = await second;
-    expect(secondDone.reply).toBe('second');
+    expect(second.reply).toBe('second');
 
     release();
-    const firstDone = await first;
-    expect(firstDone.reply).toBe('first');
+    await expect(first).rejects.toBeInstanceOf(TurnSupersededError);
+    expect(firstAborted).toEqual([true]);
   });
 
   it('steer requires active same-session turn', () => {

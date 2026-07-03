@@ -1,7 +1,7 @@
 /**
  * ICQQ 适配器 — 通过 @icqqjs/cli 守护进程 IPC 管理 Endpoint 实例
  */
-import { formatCompact, Adapter, Plugin, OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL } from 'zhin.js';
+import { formatCompact, Adapter, Plugin, OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL, ONEBOT_KEYBOARD_AI_OUTBOUND_EXTENSION } from 'zhin.js';
 import { IcqqEndpoint } from "./endpoint.js";
 import type { IcqqEndpointConfig, IpcMemberInfo } from "./types.js";
 import { Actions } from "./protocol.js";
@@ -10,6 +10,12 @@ export class IcqqAdapter extends Adapter<IcqqEndpoint> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
   static override outboundRichSegmentPolicy = OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL;
   static override interactivePolicy = 'text' as const;
+  static override aiOutboundCapabilities = {
+    mentions: true,
+    richSegments: ['qrcode', 'html', 'markdown', 'tts'],
+    interactive: 'text' as const,
+  };
+  static override aiOutboundExtensions = [ONEBOT_KEYBOARD_AI_OUTBOUND_EXTENSION];
 
   constructor(plugin: Plugin) {
     super(plugin, "icqq", []);

@@ -12,7 +12,6 @@ import {
   CREATE_BOT_NPMRC,
   getCreateBotPnpmConfig,
   type InitOptions,
-  ZHIN_STACK_VERSIONS,
 } from '@zhin.js/scaffold-wizard';
 import { createConfigFile, generateDatabaseEnvVars } from './config.js';
 import { SOUL_MD_TEMPLATE, TOOLS_MD_TEMPLATE, AGENTS_MD_TEMPLATE, ASSISTANT_PROFILE_YML_EXAMPLE } from './templates/bootstrap.js';
@@ -64,10 +63,10 @@ export async function createWorkspace(projectPath: string, projectName: string, 
   if (options.database) {
     const dbPackage = DATABASE_PACKAGES[options.database.dialect];
     if (dbPackage) {
-      databaseDeps[dbPackage] = '^2.0.0';
+      databaseDeps[dbPackage] = 'latest';
     }
     // 总是添加数据库包
-    databaseDeps['@zhin.js/database'] = ZHIN_STACK_VERSIONS['@zhin.js/database'];
+    databaseDeps['@zhin.js/database'] = 'latest';
   }
 
   // 根据适配器选择添加依赖
@@ -78,7 +77,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
   }
   // 确保 sandbox 始终包含
   if (!adapterDeps['@zhin.js/adapter-sandbox']) {
-    adapterDeps['@zhin.js/adapter-sandbox'] = ZHIN_STACK_VERSIONS['@zhin.js/adapter-sandbox'];
+    adapterDeps['@zhin.js/adapter-sandbox'] = 'latest';
   }
 
   // AI 启用时预装 MCP SDK

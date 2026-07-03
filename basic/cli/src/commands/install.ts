@@ -5,7 +5,12 @@ import fs from 'fs-extra';
 import path from 'path';
 import inquirer from 'inquirer';
 import { execFileSync } from 'node:child_process';
-import yaml from 'yaml';
+import {
+  applyProjectConfigPlan,
+  createProjectConfigPlan,
+  loadProjectConfig,
+  renderProjectConfigPatch,
+} from '@zhin.js/scaffold-wizard';
 
 interface InstallOptions {
   save?: boolean;
@@ -20,9 +25,8 @@ interface EnablePluginResult {
   configFile?: string;
   pluginName?: string;
   message: string;
+  patch?: string;
 }
-
-const CONFIG_CANDIDATES = ['zhin.config.yml', 'zhin.config.yaml', 'zhin.config.json'];
 
 /**
  * 安装插件的核心逻辑
@@ -71,6 +75,10 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
       if (shouldEnable && pluginName) {
         const preview = previewEnablePlugin(process.cwd(), pluginName);
         logger.log(`将启用: ${preview.message}`);
+        if (preview.patch) {
+          logger.log('');
+          logger.log(preview.patch);
+        }
       }
       return;
     }
@@ -334,58 +342,34 @@ function readLocalPackageName(spec: string, cwd: string): string | null {
   return path.basename(packageDir);
 }
 
-function findProjectConfig(cwd: string): string | null {
-  for (const candidate of CONFIG_CANDIDATES) {
-    const filePath = path.join(cwd, candidate);
-    if (fs.existsSync(filePath)) return filePath;
-  }
-  return null;
-}
-
-function readConfig(filePath: string): Record<string, unknown> {
-  const content = fs.readFileSync(filePath, 'utf8');
-  if (filePath.endsWith('.json')) {
-    return JSON.parse(content) as Record<string, unknown>;
-  }
-  return (yaml.parse(content) ?? {}) as Record<string, unknown>;
-}
-
-function writeConfig(filePath: string, config: Record<string, unknown>): void {
-  if (filePath.endsWith('.json')) {
-    fs.writeFileSync(filePath, `${JSON.stringify(config, null, 2)}\n`);
-    return;
-  }
-  fs.writeFileSync(filePath, yaml.stringify(config));
-}
-
 export function previewEnablePlugin(cwd: string, pluginName: string): EnablePluginResult {
-  const configFile = findProjectConfig(cwd);
-  if (!configFile) {
+  const loaded = loadProjectConfig(cwd);
+  if (loaded.status === 'missing') {
     return {
       status: 'missing-config',
       pluginName,
-      message: `未找到 zhin.config.yml/json；将提示手动添加 ${pluginName}`,
+      message: `未找到 zhin.config.yml/json/toml；将提示手动添加 ${pluginName}`,
     };
   }
-  if (!configFile.endsWith('.yml') && !configFile.endsWith('.yaml') && !configFile.endsWith('.json')) {
+  if (loaded.status !== 'loaded') {
     return {
       status: 'unsupported-config',
-      configFile,
+      configFile: loaded.configPath,
       pluginName,
-      message: `${path.basename(configFile)} 暂不支持自动写入；将提示手动添加 ${pluginName}`,
+      message: `${loaded.relativePath ?? 'zhin.config'} 暂不支持自动写入；将提示手动添加 ${pluginName}`,
     };
   }
 
-  const config = readConfig(configFile);
-  const plugins = Array.isArray(config.plugins) ? config.plugins : [];
-  const alreadyEnabled = plugins.includes(pluginName);
+  const plan = createProjectConfigPlan({ loaded, enablePlugins: [pluginName] });
+  const alreadyEnabled = !plan.changed;
   return {
     status: alreadyEnabled ? 'already-enabled' : 'enabled',
-    configFile,
+    configFile: loaded.configPath,
     pluginName,
     message: alreadyEnabled
-      ? `${pluginName} 已在 ${path.basename(configFile)} 中启用`
-      : `将在 ${path.basename(configFile)} 的 plugins 中添加 ${pluginName}`,
+      ? `${pluginName} 已在 ${loaded.relativePath} 中启用`
+      : `将在 ${loaded.relativePath} 的 plugins 中添加 ${pluginName}`,
+    patch: alreadyEnabled ? undefined : renderProjectConfigPatch(plan),
   };
 }
 
@@ -393,11 +377,9 @@ export async function enablePluginInProjectConfig(cwd: string, pluginName: strin
   const preview = previewEnablePlugin(cwd, pluginName);
   if (preview.status !== 'enabled' || !preview.configFile) return preview;
 
-  const config = readConfig(preview.configFile);
-  const plugins = Array.isArray(config.plugins) ? [...config.plugins] : [];
-  plugins.push(pluginName);
-  config.plugins = plugins;
-  writeConfig(preview.configFile, config);
+  const loaded = loadProjectConfig(cwd, preview.configFile);
+  const plan = createProjectConfigPlan({ loaded, enablePlugins: [pluginName] });
+  await applyProjectConfigPlan(plan);
 
   return {
     ...preview,

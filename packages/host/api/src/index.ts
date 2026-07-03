@@ -21,6 +21,7 @@ export { registerAssistantEventsRoute } from "./rest/assistant-events-rest-api.j
 export { registerAssistantJobsRoute } from "./rest/assistant-jobs-rest-api.js";
 export { registerAgentSessionsRoutes } from "./rest/agent-sessions-rest-api.js";
 export { registerOrchestrationRoutes } from "./rest/orchestration-rest-api.js";
+export { registerCollaborationRoutes } from "./rest/collaboration-rest-api.js";
 export { registerIntrospectionRoutes } from "./rest/introspection-rest-api.js";
 export { stopSseHub } from "./sse-hub.js";
 import { registerHostRestRoutes } from "./rest/host-rest-api.js";
@@ -30,6 +31,7 @@ import { registerAssistantEventsRoute } from "./rest/assistant-events-rest-api.j
 import { registerAssistantJobsRoute } from "./rest/assistant-jobs-rest-api.js";
 import { registerAgentSessionsRoutes } from "./rest/agent-sessions-rest-api.js";
 import { registerOrchestrationRoutes } from "./rest/orchestration-rest-api.js";
+import { registerCollaborationRoutes } from "./rest/collaboration-rest-api.js";
 import { registerIntrospectionRoutes } from "./rest/introspection-rest-api.js";
 import { registerBotModels } from "./endpoint-db-models.js";
 import { initBotPersistence } from "./endpoint-persistence.js";
@@ -127,6 +129,7 @@ if (enabled) {
     registerAssistantJobsRoute(router, apiBase);
     registerAgentSessionsRoutes(router, apiBase);
     registerOrchestrationRoutes(router, apiBase);
+    registerCollaborationRoutes(router, apiBase);
     registerIntrospectionRoutes(router, apiBase, () => root);
     registerMarketplaceRoutes(router, apiBase, () => root);
 

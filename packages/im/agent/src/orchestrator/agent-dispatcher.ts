@@ -9,20 +9,19 @@
 
 import { randomUUID } from 'node:crypto';
 import type { AgentTool } from '@zhin.js/ai';
-import type { OrchestrationTaskRecord, OrchestrationTaskStatus } from '@zhin.js/ai';
+import type { OrchestrationExecutorKind, OrchestrationTaskRecord, OrchestrationTaskStatus } from '@zhin.js/ai';
 import { taskRecordToAgentTaskShape, type OrchestrationRepository } from './orchestration-repository.js';
 
 // ── Agent 角色定义 ────────────────────────────────────────────────────
 
 export type AgentRole =
-  | 'main'           // 主 Agent（用户交互）
   | 'subtask'        // 子任务 Agent（后台执行）
   | 'worker'         // 工作 Agent（延迟任务）
-  | 'researcher'     // 研究 Agent（只读）
+  | 'researcher'     // 研究 Agent（只读检索）
+  | 'evaluator'      // 评估 Agent（纯推理，零外部工具，ADR 0024）
   | 'executor'       // 执行 Agent（写操作）
-  | 'reviewer'       // 审查 Agent（只读+分析）
-  | 'planner'        // 规划 Agent（只读+规划）
-  | 'validator';     // 验收 Agent（仅跑 Validation Spec）
+  | 'reviewer'       // 审查 Agent（质检；仅读 artifact）
+  | 'planner';       // 规划 Agent（总控/路由，ADR 0024 director）
 
 export interface AgentRoleConfig {
   /** 角色名称 */
@@ -54,21 +53,6 @@ export interface AgentRoleConfig {
 // ── 预定义角色配置 ────────────────────────────────────────────────────
 
 export const AGENT_ROLE_CONFIGS: Record<AgentRole, AgentRoleConfig> = {
-  main: {
-    role: 'main',
-    description: '主 Agent，负责用户交互和任务编排',
-    allowedTools: ['*'],  // 所有工具
-    blockedTools: [],
-    canSendMessage: true,
-    canSpawnSubagents: true,
-    canAccessMainHistory: true,
-    canWrite: true,
-    canExecuteDangerous: false,
-    maxIterations: 20,
-    maxToolCalls: 100,
-    timeout: 600000,  // 10 分钟
-  },
-
   subtask: {
     role: 'subtask',
     description: '子任务 Agent，后台执行特定任务',
@@ -111,10 +95,11 @@ export const AGENT_ROLE_CONFIGS: Record<AgentRole, AgentRoleConfig> = {
 
   researcher: {
     role: 'researcher',
-    description: '研究 Agent，只读分析',
+    description: '研究 Agent，只读检索 + 事实交叉验证（ADR 0024）',
     allowedTools: [
       'read_file', 'list_dir', 'glob', 'grep',
       'web_search', 'web_fetch',
+      'cell_submit_artifact', 'cell_read_artifact', 'cell_pipeline_status',
     ],
     blockedTools: ['write_file', 'edit_file', 'bash', 'send_message', 'spawn_subagent'],
     canSendMessage: false,
@@ -127,15 +112,39 @@ export const AGENT_ROLE_CONFIGS: Record<AgentRole, AgentRoleConfig> = {
     timeout: 180000,
   },
 
+  evaluator: {
+    role: 'evaluator',
+    description: '评估 Agent，纯逻辑推理与方案评估；只读文件 + artifact（ADR 0024）',
+    allowedTools: [
+      'read_file', 'list_dir', 'glob', 'grep',
+      'cell_read_artifact', 'cell_submit_artifact', 'cell_pipeline_status',
+    ],
+    blockedTools: [
+      'write_file', 'edit_file',
+      'bash', 'web_search', 'web_fetch', 'send_message', 'spawn_subagent',
+      'generate_image', 'analyze_media',
+    ],
+    canSendMessage: false,
+    canSpawnSubagents: false,
+    canAccessMainHistory: false,
+    canWrite: false,
+    canExecuteDangerous: false,
+    maxIterations: 8,
+    maxToolCalls: 16,
+    timeout: 180000,
+  },
+
   executor: {
     role: 'executor',
-    description: '执行 Agent，执行写操作',
+    description: '执行 Agent，物理落地与工具调用（写/bash/MCP/生图）（ADR 0024）',
     allowedTools: [
       'read_file', 'write_file', 'edit_file',
       'list_dir', 'glob', 'grep',
       'bash',
+      'generate_image', 'analyze_media',
+      'cell_submit_artifact', 'cell_read_artifact', 'cell_pipeline_status',
     ],
-    blockedTools: ['web_search', 'web_fetch', 'send_message', 'spawn_subagent'],
+    blockedTools: ['send_message', 'spawn_subagent'],
     canSendMessage: false,
     canSpawnSubagents: false,
     canAccessMainHistory: false,
@@ -148,47 +157,9 @@ export const AGENT_ROLE_CONFIGS: Record<AgentRole, AgentRoleConfig> = {
 
   reviewer: {
     role: 'reviewer',
-    description: '审查 Agent，只读分析',
-    allowedTools: [
-      'read_file', 'list_dir', 'glob', 'grep',
-      'web_search', 'web_fetch',
-    ],
-    blockedTools: ['write_file', 'edit_file', 'bash', 'send_message', 'spawn_subagent'],
-    canSendMessage: false,
-    canSpawnSubagents: false,
-    canAccessMainHistory: false,
-    canWrite: false,
-    canExecuteDangerous: false,
-    maxIterations: 10,
-    maxToolCalls: 30,
-    timeout: 180000,
-  },
-
-  planner: {
-    role: 'planner',
-    description: '规划 Agent，只读规划',
-    allowedTools: [
-      'read_file', 'list_dir', 'glob', 'grep',
-      'write_file',
-      'web_search', 'web_fetch',
-      'orchestration_patch_state',
-      'run_spec_dry_run',
-    ],
-    blockedTools: ['write_file', 'edit_file', 'bash', 'send_message', 'spawn_subagent'],
-    canSendMessage: false,
-    canSpawnSubagents: false,
-    canAccessMainHistory: false,
-    canWrite: false,
-    canExecuteDangerous: false,
-    maxIterations: 5,
-    maxToolCalls: 20,
-    timeout: 120000,
-  },
-
-  validator: {
-    role: 'validator',
-    description: '验收 Agent，仅执行 Validation Spec，不得阅读实现源码',
-    allowedTools: ['run_validation_spec', 'orchestration_patch_state'],
+    description: '审查 Agent，质检合规；仅读 artifact 白名单（禁搜网/禁读 Evaluator CoT，ADR 0024）',
+    // I2：跨角色数据只经 artifact；reviewer 不可 web_search / 不可读实现源 CoT
+    allowedTools: ['cell_read_artifact', 'cell_submit_artifact', 'cell_pipeline_status'],
     blockedTools: [
       'read_file', 'write_file', 'edit_file', 'list_dir', 'glob', 'grep',
       'bash', 'web_search', 'web_fetch', 'send_message', 'spawn_subagent',
@@ -198,9 +169,28 @@ export const AGENT_ROLE_CONFIGS: Record<AgentRole, AgentRoleConfig> = {
     canAccessMainHistory: false,
     canWrite: false,
     canExecuteDangerous: false,
-    maxIterations: 5,
-    maxToolCalls: 10,
+    maxIterations: 8,
+    maxToolCalls: 20,
     timeout: 180000,
+  },
+
+  planner: {
+    role: 'planner',
+    description: '规划 Agent，全局总控 + 动态路由（ADR 0024 director）',
+    allowedTools: [
+      'cell_set_goal', 'cell_mission_status', 'cell_pipeline_status',
+      'cell_manage_pipeline', 'cell_advance_stage', 'cell_reset_pipeline', 'cell_read_artifact',
+      'group_delegate', 'spawn_task', 'ask_user',
+    ],
+    blockedTools: ['write_file', 'edit_file', 'bash', 'web_search', 'web_fetch', 'generate_image'],
+    canSendMessage: true,
+    canSpawnSubagents: true,
+    canAccessMainHistory: true,
+    canWrite: false,
+    canExecuteDangerous: false,
+    maxIterations: 12,
+    maxToolCalls: 40,
+    timeout: 300000,
   },
 };
 
@@ -227,14 +217,10 @@ export interface AgentTask {
   dependencies?: string[];
   /** 持久化任务状态 */
   status?: OrchestrationTaskStatus;
-  /** 执行器：local 子 agent / remote MCP delegate */
-  executorKind?: 'local' | 'remote';
+  /** 执行器：local / group mention / remote mesh */
+  executorKind?: OrchestrationExecutorKind;
   remoteAgentId?: string;
   remoteTaskId?: string;
-  /** missions-v1：参与 Run 级 Writer 互斥 */
-  isWriter?: boolean;
-  /** missions-v1 阶段 */
-  phase?: string;
   /** 超时时间（毫秒） */
   timeout?: number;
   /** 最大重试次数 */
@@ -325,8 +311,6 @@ export class AgentDispatcher {
       executorKind: shape.executorKind,
       remoteAgentId: shape.remoteAgentId,
       remoteTaskId: shape.remoteTaskId,
-      isWriter: shape.isWriter,
-      phase: shape.phase,
     };
     this.tasks.set(task.id, task);
     this.taskTimestamps.set(task.id, record.updated_at || Date.now());
@@ -350,12 +334,12 @@ export class AgentDispatcher {
         duration: (record.finished_at ?? record.updated_at) - (record.started_at ?? record.created_at),
       });
       this.running.delete(task.id);
-    } else if (record.status === 'skipped') {
+    } else if (record.status === 'cancelled') {
       this.results.set(task.id, {
         taskId: task.id,
         role: task.role,
         success: true,
-        summary: record.error || 'skipped',
+        summary: record.error || 'cancelled',
         duration: 0,
       });
       this.running.delete(task.id);
@@ -520,7 +504,7 @@ export class AgentDispatcher {
         return { valid: false, reason: `依赖任务 ${depId} 尚未完成` };
       }
 
-      if (!depResult.success && depTask.status !== 'skipped') {
+      if (!depResult.success && depTask.status !== 'cancelled') {
         return { valid: false, reason: `依赖任务 ${depId} 执行失败` };
       }
     }
@@ -550,55 +534,7 @@ export class AgentDispatcher {
       return { canExecute: false, reason: depValidation.reason };
     }
 
-    if (task.isWriter && task.runId && this.runHasRunningWriter(task.runId, taskId)) {
-      return { canExecute: false, reason: 'Run 内已有 Writer 任务运行中' };
-    }
-
     return { canExecute: true };
-  }
-
-  private runHasRunningWriter(runId: string, excludeTaskId: string): boolean {
-    for (const [id, t] of this.tasks.entries()) {
-      if (id === excludeTaskId || t.runId !== runId || !t.isWriter) continue;
-      if (this.running.has(id) || t.status === 'running') return true;
-    }
-    return false;
-  }
-
-  /**
-   * Async missions gate check (call before spawn).
-   */
-  async canExecuteMissions(taskId: string): Promise<{ canExecute: boolean; reason?: string }> {
-    const base = this.canExecute(taskId);
-    if (!base.canExecute) return base;
-
-    const task = this.tasks.get(taskId);
-    if (!task?.runId || !this.repository) return base;
-
-    const run = await this.repository.getRun(task.runId);
-    if (!run) return base;
-
-    const { isMissionsTemplate } = await import('./mission-state.js');
-    if (!isMissionsTemplate(run)) return base;
-
-    const state = await this.repository.getMissionState(task.runId);
-    if (!state) return base;
-
-    if (task.phase === 'develop' || task.isWriter) {
-      const { missionSpecGateSatisfied } = await import('./mission-state.js');
-      if (!missionSpecGateSatisfied(state)) {
-        return { canExecute: false, reason: 'Validation Spec 门禁未通过（需 spec 路径 + dry-run + assertion_count）' };
-      }
-    }
-
-    if (task.phase === 'negotiate') {
-      const failed = state.last_validation && state.last_validation.failed > 0;
-      if (!failed && task.role === 'planner') {
-        return { canExecute: false, reason: 'Validate 已通过，Negotiate 无需执行' };
-      }
-    }
-
-    return base;
   }
 
   /**

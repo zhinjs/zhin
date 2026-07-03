@@ -189,8 +189,9 @@ export {
   resolveIMSessionId,
   resolveIMSceneIdForSession,
   resolveIMSessionIdFromMessage,
+  resolveAgentScopedSessionId,
 } from './memory/session.js';
-export type { ISessionManager, IMSessionScope, ResolveIMSessionIdInput, AISessionStatus } from './memory/session.js';
+export type { ISessionManager, IMSessionScope, ResolveIMSessionIdInput, AISessionStatus, AgentMemoryScope } from './memory/session.js';
 
 export {
   IMSessionStore,
@@ -332,6 +333,7 @@ export type {
 export {
   ORCHESTRATION_RUN_MODEL,
   ORCHESTRATION_TASK_MODEL,
+  ORCHESTRATION_EVENT_MODEL,
   parseDependsOn,
   serializeDependsOn,
 } from './memory/orchestration-db-models.js';
@@ -357,10 +359,14 @@ export type {
   OrchestrationRunStatus,
   OrchestrationTaskStatus,
   OrchestrationExecutorKind,
+  OrchestrationRunSource,
+  OrchestrationRunEventType,
   OrchestrationRunRecord,
   OrchestrationTaskRecord,
+  OrchestrationEventRecord,
   CreateOrchestrationRunInput,
   CreateOrchestrationTaskInput,
+  CreateOrchestrationEventInput,
 } from './memory/orchestration-db-models.js';
 export {
   buildSenderPrefix,

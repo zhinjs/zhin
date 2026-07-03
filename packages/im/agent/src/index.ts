@@ -20,6 +20,15 @@ export type {
 
 export { ZhinAgent } from './zhin-agent/index.js';
 export type { ZhinAgentConfig, OnChunkCallback } from './zhin-agent/index.js';
+export type {
+  TurnEvent, TurnUsage,
+  TurnStartEvent, ChunkEvent,
+  ToolCallEvent as TurnToolCallEvent,
+  ToolResultEvent,
+  ThinkingEvent, TurnEndEvent, TurnErrorEvent,
+  SubagentStartEvent, SubagentProgressEvent, SubagentEndEvent,
+  McpConnectEvent, McpToolCallEvent,
+} from './zhin-agent/turn-event.js';
 
 export {
   DEFAULT_CONFIG as ZHIN_AGENT_DEFAULT_CONFIG,
@@ -251,10 +260,33 @@ export type { OrchestrationRuntimeHandle } from './orchestration-runtime-registr
 
 export {
   getOrchestrationService,
+  getOrchestrationKernel,
   initOrchestrationService,
+  upgradeOrchestrationRepository,
+  OrchestrationKernel,
   OrchestrationService,
-  MISSIONS_TEMPLATE,
 } from './orchestrator/orchestration-service.js';
+export type {
+  OrchestrationStartInput,
+  OrchestrationAddTaskInput,
+  DispatchTaskInput,
+  HandleUserMessageInput,
+} from './orchestrator/orchestration-service.js';
+export type {
+  RunStatus,
+  TaskStatus,
+  ExecutorKind,
+  OrchestrationRun,
+  OrchestrationTask,
+  RunEvent,
+  RunSnapshot,
+  AgentExecutionEvent,
+  AgentExecutorInput,
+  AgentExecutor,
+  WorkflowStrategyInput,
+  WorkflowTaskSpec,
+  WorkflowStrategy,
+} from './orchestrator/kernel-types.js';
 
 export {
   getAgentDispatcher,
@@ -417,6 +449,7 @@ export type { IGroupManagement, GroupMethodSpec } from './common-adapter-tools.j
 
 // ── Orchestrator (AI resource hub) ──
 export { AgentOrchestrator } from './orchestrator/index.js';
+export { AgentOrchestrator as ResourceHub } from './orchestrator/index.js';
 export {
   ResourceRegistry,
   ToolRegistry, ZhinTool, isZhinTool, defineTool, extractParamInfo,
@@ -437,4 +470,59 @@ export type {
   SubAgentDef, AgentPreset,
   McpServerEntry, McpResource, McpPrompt,
   AIHook, AIHookEvent as OrchestratorHookEvent, AIHookEventType as OrchestratorHookEventType, AIHookHandler as OrchestratorHookHandler,
+  ToolHookDecision, PostToolHookDecision,
+  PreToolUseEvent, PostToolUseEvent,
+  PreToolUseHandler, PostToolUseHandler,
+  PreToolUseHook, PostToolUseHook, ToolHook,
 } from './orchestrator/index.js';
+
+// ── Collaboration (GroupCell multi-endpoint) ──
+export {
+  getAgentRuntimeRegistry,
+  resetAgentRuntimeRegistry,
+  getCollaborationCellService,
+  initCollaborationCellService,
+  resetCollaborationCellService,
+  wireCollaborationStorage,
+  getCollaborationCellRepository,
+  MemoryCollaborationCellRepository,
+  getCollaborationArtifactRepository,
+  setCollaborationArtifactRepository,
+  createCollaborationArtifactRepository,
+  COLLABORATION_CELL_MODEL,
+  COLLABORATION_CELL_MEMBER_MODEL,
+  COLLABORATION_CELL_ARTIFACT_MODEL,
+  createInboundTurnPipeline,
+  bootstrapEndpointRuntimes,
+  buildTurnPlan,
+  evaluatePeerTrigger,
+  resolveCellContextKey,
+  resolveCellContextKeyFromMessage,
+} from './collaboration/index.js';
+export type {
+  CollaborationCell,
+  CollaborationCellMemberRuntime,
+  CollaborationConfig,
+  TurnPlan,
+  DelegationMode,
+  PeerTriggerMode,
+  InboundTurnPipeline,
+  InboundTurnPipelineDeps,
+} from './collaboration/index.js';
+export {
+  resolveMemberBySender,
+  resolveEndpointIdsForMember,
+  isInboundFromPeerBot,
+} from './collaboration/endpoint-identity.js';
+
+export {
+  FIVE_AGENT_WORKFLOW_STRATEGY_NAME,
+  createFiveAgentWorkflowStrategy,
+} from './builtin/five-agent/index.js';
+
+export {
+  ROSTER_ROUND_WORKFLOW_STRATEGY_NAME,
+  createRosterRoundWorkflowStrategy,
+  runRosterRound,
+  resolveRosterEndpointIds,
+} from './builtin/roster-round/strategy.js';

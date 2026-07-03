@@ -22,6 +22,8 @@ import {
   type FileRole,
 } from '../security/file-role-policy.js';
 import { resolveWorkspacePrompt } from './workspace-prompt.js';
+import { FiveAgentPromptRegistry } from '../builtin/five-agent/index.js';
+import type { PipelineRole } from '../collaboration/types.js';
 
 export const FIXED_DISCIPLINE_RULES = [
   'Never claim actions, results, or system state unless confirmed by tool output.',
@@ -102,6 +104,7 @@ export interface TurnContextEnvelopeInput {
   deferredStats?: string;
   activeSkillsContext?: string;
   quoteSystemHint?: string;
+  collaborationHint?: string;
   /** 形如 provider/modelId */
   modelLine?: string;
   sdk?: string;
@@ -158,6 +161,9 @@ export function buildTurnContextEnvelope(input: TurnContextEnvelopeInput): strin
   if (input.quoteSystemHint?.trim()) {
     lines.push(input.quoteSystemHint.trim());
   }
+  if (input.collaborationHint?.trim()) {
+    lines.push(input.collaborationHint.trim());
+  }
   if (input.agentsContext?.trim()) {
     lines.push(input.agentsContext.trim());
   }
@@ -213,6 +219,14 @@ export interface RichSystemPromptContext {
   commMessage?: Message;
   /** SDK 分治编排片段（workspace prompts/orchestrator*.md） */
   orchestratorSdk?: string;
+  /** ai.agents.*.nickname（经 activeBinding 解析） */
+  agentNickname?: string;
+  /** Five-Agent pipeline 角色：走内置角色 prompt + 直连工具 rich 段 */
+  pipelineRole?: PipelineRole;
+}
+
+export interface PipelineRoleSystemPromptContext extends RichSystemPromptContext {
+  pipelineRole: PipelineRole;
 }
 
 // ── Section builders ──
@@ -288,9 +302,40 @@ function bootstrapHasSoul(bootstrapContext: string | undefined): boolean {
   return /##\s*SOUL\.md/i.test(bootstrapContext) || /\n#\s*Soul\b/i.test(bootstrapContext);
 }
 
-function resolvePersonaLead(config: Required<ZhinAgentConfig>, bootstrapContext?: string): string {
+const DEFAULT_PERSONA_ZHIN_PREFIX = /^You are Zhin\b/i;
+
+function applyAgentNicknameToPersona(persona: string, nickname: string): string {
+  const p = persona.trim();
+  if (!p) {
+    return `You are ${nickname}, an intelligent IM assistant. Answer clearly and act through available tools when needed.`;
+  }
+  if (DEFAULT_PERSONA_ZHIN_PREFIX.test(p)) {
+    return p.replace(DEFAULT_PERSONA_ZHIN_PREFIX, `You are ${nickname}`);
+  }
+  if (p.includes(nickname)) return p;
+  return `You are ${nickname}. ${p}`;
+}
+
+function resolvePersonaLead(
+  config: Required<ZhinAgentConfig>,
+  bootstrapContext?: string,
+  agentNickname?: string,
+): string {
+  const nickname = agentNickname?.trim();
+  const persona = config.persona.trim();
+
   if (bootstrapHasSoul(bootstrapContext)) {
-    return 'You are Zhin. Persona and tone: see SOUL.md in # Workspace.';
+    if (nickname) {
+      return `You are ${nickname}. Persona and tone: see SOUL.md in # Workspace.`;
+    }
+    if (persona && !DEFAULT_PERSONA_ZHIN_PREFIX.test(persona)) {
+      return `${persona}\n\nPersona and tone: see SOUL.md in # Workspace.`;
+    }
+    return 'Persona, identity, and tone: see SOUL.md in # Workspace.';
+  }
+
+  if (nickname) {
+    return applyAgentNicknameToPersona(config.persona, nickname);
   }
   return config.persona;
 }
@@ -302,6 +347,7 @@ function buildContextSection(
   config: Required<ZhinAgentConfig>,
   _commMessage?: Message,
   bootstrapContext?: string,
+  agentNickname?: string,
 ): string {
   const envItems = [
     `CWD: ${process.cwd()}`,
@@ -310,11 +356,25 @@ function buildContextSection(
   ];
 
   return [
-    resolvePersonaLead(config, bootstrapContext),
+    resolvePersonaLead(config, bootstrapContext, agentNickname),
     '',
     '# Runtime',
     ...prependBullets(envItems),
   ].join('\n');
+}
+
+/** Five-Agent 专用 Runtime 段（无通用 persona / SOUL） */
+function buildPipelineRuntimeSection(commMessage?: Message): string {
+  const envItems = [
+    `CWD: ${process.cwd()}`,
+    `Host: ${os.platform()} | Node ${process.version} | Shell: ${process.env.SHELL || 'unknown'}`,
+    'Volatile runtime (time, session, pipeline stage, memory) is in [Turn context] on each user message.',
+  ];
+  if (commMessage) {
+    const sessionLine = formatSessionContextLine(commMessage);
+    if (sessionLine) envItems.unshift(sessionLine);
+  }
+  return ['# Runtime', ...prependBullets(envItems)].join('\n');
 }
 
 /** 直连工具模式：工具 + 纪律 */
@@ -328,7 +388,7 @@ function buildDirectToolsSection(): string {
   return ['# Tools', ...prependBullets(items)].join('\n');
 }
 
-/** toolSearch 编排层：合并原 Tools + Deferred + 可选 workspace/sdk 片段 */
+/** 编排层：合并原 Tools + 可选 workspace/sdk 片段 */
 function buildOrchestrationSection(modelSdk?: string): string {
   const resolved = resolveWorkspacePrompt('orchestrator', modelSdk);
   if (resolved.trim()) {
@@ -337,9 +397,9 @@ function buildOrchestrationSection(modelSdk?: string): string {
       : `# Orchestration\n${resolved.trim()}`;
   }
   const items = [
-    'Use run_deferred_task for real work; do not call other deferred tool names directly on the orchestrator.',
-    'Delegate execution via run_deferred_task(goal, tool_query); do not invent factual answers the worker should retrieve.',
-    'Use tool_search when the needed tool or domain is unclear.',
+    'Use the available tools directly when they match the task.',
+    'Use spawn_task for complex, long-running, or specialist work that should run in a sub-agent.',
+    'Do not call deprecated orchestration tools such as tool_search or run_deferred_task.',
   ];
   return ['# Orchestration', ...prependBullets(items)].join('\n');
 }
@@ -394,7 +454,7 @@ function buildSkillsSection(
       '# Skills (catalog)',
       catalog,
       '',
-      'Orchestrator does not run skill tools directly — use run_deferred_task(goal, tool_query).',
+      'Activate a matching skill when you need its instructions, then use the available tools directly or delegate specialist work with spawn_task.',
     ].join('\n');
   }
   if (skillsSummaryXML) {
@@ -448,7 +508,32 @@ export interface PromptSectionDebugInfo {
  * 返回当前上下文中**实际注入**的系统提示各段大小（不含 SECTION_SEP）。
  * 用于观测渐进披露与 token 压力，不改变线上 prompt 拼接逻辑。
  */
+function describePipelineRolePromptSectionsForDebug(
+  ctx: PipelineRoleSystemPromptContext,
+): PromptSectionDebugInfo[] {
+  const toolSearchActive = false;
+  const rolePrompt = FiveAgentPromptRegistry.render({
+    role: ctx.pipelineRole,
+    nickname: ctx.agentNickname,
+  });
+  const pairs: [string, string | null][] = [
+    ['§0_role', rolePrompt],
+    ['§1_runtime', buildPipelineRuntimeSection(ctx.commMessage)],
+    ['§2_style', buildCommunicationSection()],
+    ['§3_tools', buildDirectToolsSection()],
+    ['§4_security', buildSecuritySection()],
+    ['§6c_platform', buildPlatformSection(ctx.platformSections, toolSearchActive)],
+    ['§8_skills', buildSkillsSection(ctx.skillRegistry, ctx.skillsSummaryXML, toolSearchActive)],
+  ];
+  return pairs
+    .filter(([, c]) => c != null && c.trim().length > 0)
+    .map(([id, c]) => ({ id, approxChars: c!.length }));
+}
+
 export function describePromptSectionsForDebug(ctx: RichSystemPromptContext): PromptSectionDebugInfo[] {
+  if (ctx.pipelineRole) {
+    return describePipelineRolePromptSectionsForDebug(ctx as PipelineRoleSystemPromptContext);
+  }
   const {
     config, skillRegistry, skillsSummaryXML, bootstrapContext,
     toolSearchDeferredStats, platformSections, orchestratorSdk,
@@ -456,7 +541,7 @@ export function describePromptSectionsForDebug(ctx: RichSystemPromptContext): Pr
   const toolSearchActive = true;
   const boot = bootstrapContext?.trim() ? bootstrapContext : null;
   const pairs: [string, string | null][] = [
-    ['§1_runtime', buildContextSection(config, ctx.commMessage, bootstrapContext)],
+    ['§1_runtime', buildContextSection(config, ctx.commMessage, bootstrapContext, ctx.agentNickname)],
     ['§2_style', toolSearchActive ? null : buildCommunicationSection()],
     ['§3_tools', toolSearchActive ? buildOrchestrationSection(orchestratorSdk) : buildDirectToolsSection()],
     ['§4_security', buildSecuritySection()],
@@ -469,6 +554,35 @@ export function describePromptSectionsForDebug(ctx: RichSystemPromptContext): Pr
     .map(([id, c]) => ({ id, approxChars: c!.length }));
 }
 
+/**
+ * Five-Agent 角色专用 rich system prompt：
+ * §0 内置角色矩阵 + §1 Runtime + §2 Style + §3 Tools + §4 Security + §6c Platform + §8 Skills。
+ * 不含通用 persona / bootstrap SOUL；易变 pipeline 状态在 user [Turn context]。
+ */
+export function buildPipelineRoleRichSystemPrompt(ctx: PipelineRoleSystemPromptContext): string {
+  const {
+    skillRegistry, skillsSummaryXML, platformSections, commMessage, pipelineRole, agentNickname,
+  } = ctx;
+  const toolSearchActive = false;
+
+  const rolePrompt = FiveAgentPromptRegistry.render({
+    role: pipelineRole,
+    nickname: agentNickname,
+  });
+
+  const sections: (string | null)[] = [
+    rolePrompt,
+    buildPipelineRuntimeSection(commMessage),
+    buildCommunicationSection(),
+    buildDirectToolsSection(),
+    buildSecuritySection(),
+    buildPlatformSection(platformSections, toolSearchActive),
+    buildSkillsSection(skillRegistry, skillsSummaryXML, toolSearchActive),
+  ];
+
+  return sections.filter(Boolean).join(SECTION_SEP);
+}
+
 export function buildRichSystemPrompt(ctx: RichSystemPromptContext): string {
   const {
     config, skillRegistry, skillsSummaryXML, bootstrapContext,
@@ -477,7 +591,7 @@ export function buildRichSystemPrompt(ctx: RichSystemPromptContext): string {
   const toolSearchActive = true;
 
   const sections: (string | null)[] = [
-    buildContextSection(config, ctx.commMessage, bootstrapContext),
+    buildContextSection(config, ctx.commMessage, bootstrapContext, ctx.agentNickname),
     toolSearchActive ? null : buildCommunicationSection(),
     toolSearchActive
       ? buildOrchestrationSection(orchestratorSdk)
@@ -514,7 +628,7 @@ export function buildRichSystemPromptWithBuilder(ctx: RichSystemPromptContext): 
   });
 
   // 1. 系统级提示词（最高优先级）
-  builder.addSystemPrompt(resolvePersonaLead(config, bootstrapContext), { priority: 100 });
+  builder.addSystemPrompt(resolvePersonaLead(config, bootstrapContext, ctx.agentNickname), { priority: 100 });
 
   // 2. 上下文信息
   const now = new Date();

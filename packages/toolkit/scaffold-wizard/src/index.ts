@@ -82,6 +82,23 @@ export {
 export type { UpgradeToL4Diagnosis } from './upgrade-l4.js';
 
 export {
+  loadProjectConfig,
+  createProjectConfigPlan,
+  renderProjectConfigPatch,
+  applyProjectConfigPlan,
+  migrateAiLegacyConfig,
+  diagnoseConsoleConfig,
+  applyConsoleConfigFixes,
+} from './project-config-plan.js';
+export type {
+  LoadedProjectConfig,
+  ProjectConfigFormat,
+  ProjectConfigPlan,
+  ProjectConfigPlanOptions,
+  ConsoleConfigDiagnosis,
+} from './project-config-plan.js';
+
+export {
   CONSOLE_HOST_PLUGINS,
   applyDatabaseToConfig,
   applyAdaptersToConfig,

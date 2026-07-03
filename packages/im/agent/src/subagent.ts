@@ -32,8 +32,15 @@ import {
   type AgentResult as DispatcherAgentResult,
 } from './orchestrator/agent-dispatcher.js';
 import { buildSubagentUserDelivery } from './media/subagent-user-delivery.js';
-import type { AgentMeta } from './discovery/agents.js';
+import type { AgentMeta, AgentEffortLevel } from './discovery/agents.js';
 import { loadAgentMarkdownBody } from './discovery/agents.js';
+
+const EFFORT_MAX_ITERATIONS: Record<AgentEffortLevel, number> = {
+  low: 3,
+  medium: 5,
+  high: 10,
+  max: 20,
+};
 import {
   resolveSubagentContextMode,
   resolveSubagentRole,
@@ -212,7 +219,7 @@ export class SubagentManager {
     if (deps.getParentContextSnapshot) this.getParentContextSnapshotFn = deps.getParentContextSnapshot;
   }
 
-  private async enrichSpawnOptions(options: SpawnOptions): Promise<SpawnOptions> {
+  private async enrichSpawnOptions(options: SpawnOptions): Promise<SpawnOptions & { _agentMeta?: AgentMeta }> {
     const agentName = options.agent?.trim();
     const meta = agentName && this.resolveAgentMetaFn
       ? await this.resolveAgentMetaFn(agentName)
@@ -237,6 +244,7 @@ export class SubagentManager {
       contextMode,
       systemPrompt,
       contextPreamble,
+      _agentMeta: meta ?? undefined,
     };
   }
 
@@ -249,7 +257,7 @@ export class SubagentManager {
     if (enriched.notifyContext) {
       await notifySubagentGoal(enriched.notifyContext, {
         taskId,
-        kind: resolveSpawnExecutionKind({ sync: true, agent: enriched.agent }),
+        kind: resolveSpawnExecutionKind({ sync: true }),
         label: displayLabel,
         agent: enriched.agent,
       });
@@ -270,6 +278,7 @@ export class SubagentManager {
         keepTypingUntilUpstreamFinish: true,
         runInput: enriched.runInput,
         orchestrationTaskId: enriched.orchestrationTaskId,
+        agentMeta: enriched._agentMeta,
       },
     );
     return result ?? '任务已完成，但未生成最终响应。';
@@ -284,7 +293,7 @@ export class SubagentManager {
     if (enriched.notifyContext) {
       await notifySubagentGoal(enriched.notifyContext, {
         taskId,
-        kind: resolveSpawnExecutionKind({ sync: false, agent: enriched.agent }),
+        kind: resolveSpawnExecutionKind({ sync: false }),
         label: displayLabel,
         agent: enriched.agent,
       });
@@ -300,6 +309,7 @@ export class SubagentManager {
       contextPreamble: enriched.contextPreamble,
       presetName: enriched.agent ?? enriched.label,
       orchestrationTaskId: enriched.orchestrationTaskId,
+      agentMeta: enriched._agentMeta,
     })
       .then(() => undefined)
       .catch((error) => {
@@ -353,6 +363,7 @@ export class SubagentManager {
       runInput?: string | ContentPart[];
       contextPreamble?: string;
       orchestrationTaskId?: string;
+      agentMeta?: AgentMeta;
     },
   ): Promise<string | void> {
     const startedAt = Date.now();
@@ -417,6 +428,7 @@ export class SubagentManager {
         role,
         config: (this.execPolicyConfig ?? DEFAULT_CONFIG) as Required<ZhinAgentConfig>,
         agentDispatcher: this.agentDispatcher,
+        agentMeta: opts?.agentMeta,
       });
 
       if (this.execPolicyConfig) {
@@ -464,6 +476,9 @@ export class SubagentManager {
       const bashCommMessage = origin.message;
 
       await aiEvents?.agentStart(model);
+      const effortIterations = opts?.agentMeta?.effort
+        ? EFFORT_MAX_ITERATIONS[opts.agentMeta.effort]
+        : undefined;
       const result = await runAgentLoopStandaloneTurn({
         provider,
         resolveProvider: this.getProviderFn ?? undefined,
@@ -471,7 +486,7 @@ export class SubagentManager {
         systemPrompt,
         tools,
         userInput: agentUserInput,
-        maxIterations: this.maxIterations,
+        maxIterations: effortIterations ?? this.maxIterations,
         commMessage: bashCommMessage,
         transformToolResult: createOwnerOrchestratedToolResultTransform({
           commMessage: bashCommMessage,

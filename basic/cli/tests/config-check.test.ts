@@ -21,7 +21,7 @@ describe('config check', () => {
     await fs.remove(tmpDir);
   });
 
-  it('应检测废弃的 ai.defaultProvider 与 driver', async () => {
+  it('应检测废弃的 ai.defaultProvider 与 provider driver/api', async () => {
     await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
 plugins:
   - "@zhin.js/adapter-sandbox"
@@ -36,6 +36,9 @@ ai:
     openai:
       driver: openai
       apiKey: test
+    ollama:
+      api: ollama-chat
+      host: http://127.0.0.1:11434
 `);
 
     const result = await runConfigCheck(tmpDir, { OPENAI_API_KEY: 'x' });
@@ -89,7 +92,13 @@ ai:
       provider: 'openai',
       model: 'gpt-4o-mini',
     });
-    expect((fixed.ai as { defaultProvider?: string }).defaultProvider).toBeUndefined();
+    const fixedAi = fixed.ai as {
+      defaultProvider?: string;
+      providers: { openai: { sdk?: string; driver?: string } };
+    };
+    expect(fixedAi.defaultProvider).toBeUndefined();
+    expect(fixedAi.providers.openai.sdk).toBe('openai');
+    expect(fixedAi.providers.openai.driver).toBeUndefined();
   });
 
   it('应报告 bot 缺少对应 adapter 插件', async () => {

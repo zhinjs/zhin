@@ -150,6 +150,36 @@ export { SubAgentRegistry } from './subagent-registry.js';
 export { McpRegistry } from './mcp-registry.js';
 export type { McpConnection } from './mcp-registry.js';
 export { HookRegistry, createAIHookEvent } from './hook-registry.js';
+export {
+  OrchestrationKernel,
+  OrchestrationService,
+  getOrchestrationKernel,
+  getOrchestrationService,
+  initOrchestrationService,
+  upgradeOrchestrationRepository,
+} from './orchestration-service.js';
+export type {
+  OrchestrationStartInput,
+  OrchestrationAddTaskInput,
+  DispatchTaskInput,
+  HandleUserMessageInput,
+} from './orchestration-service.js';
+export * from './kernel-types.js';
+export {
+  MemoryOrchestrationRepository,
+  DatabaseOrchestrationRepository,
+  taskRecordToAgentTaskShape,
+} from './orchestration-repository.js';
+export type {
+  OrchestrationRepository,
+  OrchestrationRunWithTasks,
+} from './orchestration-repository.js';
 export * from './types.js';
 export * from './agent-dispatcher.js';
-export * from './task-queue.js';
+export { TaskQueue } from './task-queue.js';
+export type {
+  Task,
+  TaskPriority,
+  TaskQueueConfig,
+  TaskStatus as QueueTaskStatus,
+} from './task-queue.js';

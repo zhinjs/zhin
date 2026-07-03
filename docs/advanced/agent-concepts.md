@@ -96,19 +96,21 @@ Discord/KOOK 的群管理员、群主是**平台权限**；本文的 Agent **角
 |------|------|
 | `main` | 主 Agent，可发消息、spawn、写文件 |
 | `subtask` | 子任务，不可发消息 |
-| `worker` | 执行 deferred 工具 |
+| `worker` | 后台子任务执行 |
 | `researcher` / `executor` / `reviewer` / `planner` | 分工型 Worker 变体 |
 
 详情与权限表见 [Agent Harness — 预定义角色](/advanced/agent-harness-engineering#预定义角色)。
 
-## toolSearch：何时开启
+## 子任务：何时使用
 
-**toolSearch** 启用 **deferred Worker** 编排：主 Agent 仅保留少量编排工具（如 `tool_search`、`run_deferred_task`、`ask_user`），具体业务工具由 Worker 按需执行，从而控制 system prompt 体积。
+`spawn_task` 用于把复杂、耗时或专业角色任务交给子 agent。主 Agent 默认可以直接使用当前可见工具；需要隔离上下文、后台执行或调用特定 `agents/<name>.agent.md` 时再委派。
 
 ```yaml
 ai:
-  agent:
-    toolSearch: true   # Stable 默认 false
+  agents:
+    draw:
+      provider: openai
+      model: gpt-4o
 ```
 
 | | Stable（minimal-bot / 脚手架默认） | Advanced（test-bot） |

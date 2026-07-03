@@ -17,6 +17,29 @@ const minimalConfig = fs.readFileSync(
   path.join(repoRoot, 'examples/minimal-bot/zhin.config.yml'),
   'utf8',
 );
+const highTrafficConfigDocs = [
+  'README.md',
+  'packages/toolkit/create-zhin/README.md',
+  'packages/im/agent/README.md',
+  ...collectMarkdownFiles(path.join(repoRoot, 'docs'))
+    .map((file) => path.relative(repoRoot, file))
+    .filter((file) => !file.startsWith('docs/adr/') && !file.startsWith('docs/api/')),
+];
+
+function collectMarkdownFiles(dir: string, files: string[] = []): string[] {
+  if (!fs.existsSync(dir)) return files;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      collectMarkdownFiles(full, files);
+      continue;
+    }
+    if (entry.isFile() && entry.name.endsWith('.md')) {
+      files.push(full);
+    }
+  }
+  return files;
+}
 
 describe('config documentation alignment', () => {
   it('configuration.md 含 Agent 默认 maxIterations', () => {
@@ -45,5 +68,13 @@ describe('config documentation alignment', () => {
     expect(configurationMd).toContain('memory_upsert');
     expect(configurationMd).toMatch(/memoryMcp/);
     expect(configurationMd).toMatch(/三层 Markdown/);
+  });
+
+  it('高流量配置文档不再展示旧 provider 字段', () => {
+    for (const relativePath of highTrafficConfigDocs) {
+      const content = fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
+      expect(content, relativePath).not.toMatch(/api:\s*ollama-chat/);
+      expect(content, relativePath).not.toMatch(/driver 应迁移为 api/);
+    }
   });
 });

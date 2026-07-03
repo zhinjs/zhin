@@ -1,22 +1,14 @@
-/**
- * 主 Agent 委派子任务时，向 IM 用户即时发送进度提示。
- *
- * 注意：`kind` 是用户可见的「执行通道」（异步/视觉/定时/同步/编排），
- * 与 AgentDispatcher 内部的 `AgentRole`（subtask/worker 等工具权限）不是同一概念。
- */
 import type { AgentTurnMessage, Message } from '@zhin.js/core';
 
 /** AgentTurnMessage.extra 中挂载的回调键 */
 export const SUBAGENT_GOAL_NOTIFY_EXTRA_KEY = 'onSubagentGoal';
 
 /** 用户可见的执行通道（进度提示中间段） */
-export type SubagentExecutionKind = 'async' | 'sync' | 'vision' | 'draw' | 'deferred' | 'cron';
+export type SubagentExecutionKind = 'async' | 'sync' | 'deferred' | 'cron';
 
 export const SUBAGENT_EXECUTION_KIND_LABELS: Record<SubagentExecutionKind, string> = {
   async: '异步',
   sync: '同步',
-  vision: '视觉',
-  draw: '文生图',
   deferred: '编排',
   cron: '定时',
 };
@@ -37,14 +29,10 @@ export function resolveSubagentDisplayLabel(label: string | undefined, task: str
   return task.slice(0, 30) + (task.length > 30 ? '...' : '');
 }
 
-/** spawn / spawnSync 的执行通道：具名 agent 优先，否则 sync/async */
+/** spawn / spawnSync 的执行通道 */
 export function resolveSpawnExecutionKind(options: {
   sync?: boolean;
-  agent?: string;
 }): SubagentExecutionKind {
-  const agent = options.agent?.trim().toLowerCase();
-  if (agent === 'vision') return 'vision';
-  if (agent === 'draw') return 'draw';
   if (options.sync) return 'sync';
   return 'async';
 }
@@ -67,6 +55,21 @@ export function formatSubagentProcessingMessage(notice: SubagentProcessingNotice
   const agent = resolveSubagentAgentLabel(notice.agent);
   const channel = agent ? `${kindLabel}·${agent}` : kindLabel;
   return `任务【${taskId}】:${channel} => ${label}`;
+}
+
+/**
+ * 多 Bot 同群协作时，编排/子任务进度提示若发到群里会被 peer Bot 收进引用链。
+ * 此类场景仅打日志，最终结论仍由主 Agent 正常 reply。
+ */
+export function shouldSuppressSubagentGoalNotifyToIm(
+  message: Message,
+  cell?: { members: { endpointId: string }[] },
+): boolean {
+  const scope = message.$channel?.type;
+  if (scope !== 'group' && scope !== 'channel') return false;
+  if (!cell?.members?.length) return false;
+  const endpoints = new Set(cell.members.map((m) => m.endpointId));
+  return endpoints.size >= 2;
 }
 
 export function getSubagentGoalNotifier(commMessage?: Message): SubagentGoalNotifier | undefined {

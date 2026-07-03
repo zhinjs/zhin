@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from 'vitest';
-import { mockCommMessage } from '../helpers/mock-comm-message.js';
 
 import {
   formatSubagentProcessingMessage,
@@ -7,6 +6,7 @@ import {
   resolveSpawnExecutionKind,
   resolveSubagentDisplayLabel,
   SUBAGENT_GOAL_NOTIFY_EXTRA_KEY,
+  shouldSuppressSubagentGoalNotifyToIm,
 } from '../src/subagent-goal-notify.js';
 import type { Message } from '@zhin.js/core';
 
@@ -22,29 +22,26 @@ describe('subagent-goal-notify', () => {
     expect(
       formatSubagentProcessingMessage({
         taskId: 'abc',
-        kind: 'vision',
+        kind: 'sync',
         label: '识图',
       }),
-    ).toBe('任务【abc】:视觉 => 识图');
+    ).toBe('任务【abc】:同步 => 识图');
   });
 
   it('formatSubagentProcessingMessage 展示 agent 名', () => {
     expect(
       formatSubagentProcessingMessage({
         taskId: '23aba5a5',
-        kind: 'draw',
-        agent: 'draw',
-        label: '画特朗普',
+        kind: 'async',
+        agent: 'researcher',
+        label: '查资料',
       }),
-    ).toBe('任务【23aba5a5】:文生图·draw => 画特朗普');
+    ).toBe('任务【23aba5a5】:异步·researcher => 查资料');
   });
 
-  it('resolveSpawnExecutionKind 区分 async/sync/vision/draw', () => {
+  it('resolveSpawnExecutionKind 区分 async/sync', () => {
     expect(resolveSpawnExecutionKind({ sync: false })).toBe('async');
     expect(resolveSpawnExecutionKind({ sync: true })).toBe('sync');
-    expect(resolveSpawnExecutionKind({ sync: false, agent: 'vision' })).toBe('vision');
-    expect(resolveSpawnExecutionKind({ sync: true, agent: 'vision' })).toBe('vision');
-    expect(resolveSpawnExecutionKind({ sync: false, agent: 'draw' })).toBe('draw');
   });
 
   it('resolveSubagentDisplayLabel 无 label 时截断 task', () => {
@@ -74,5 +71,23 @@ describe('subagent-goal-notify', () => {
     await expect(
       notifySubagentGoal(undefined, { taskId: 'x', kind: 'async', label: 'y' }),
     ).resolves.toBeUndefined();
+  });
+
+  it('shouldSuppressSubagentGoalNotifyToIm 多 Bot 同群协作时抑制 IM', () => {
+    const cell = {
+      members: [
+        { endpointId: '8596238' },
+        { endpointId: '210723495' },
+      ],
+    };
+    const groupMsg = {
+      $channel: { type: 'group', id: '373460458' },
+    } as Message;
+    const privateMsg = {
+      $channel: { type: 'private', id: 'u1' },
+    } as Message;
+    expect(shouldSuppressSubagentGoalNotifyToIm(groupMsg, cell)).toBe(true);
+    expect(shouldSuppressSubagentGoalNotifyToIm(privateMsg, cell)).toBe(false);
+    expect(shouldSuppressSubagentGoalNotifyToIm(groupMsg, { members: [{ endpointId: 'a' }] })).toBe(false);
   });
 });

@@ -16,7 +16,7 @@ describe('apply wizard to config', () => {
         endpoints: [{ context: 'telegram', name: 'tg', polling: true, token: '${TELEGRAM_TOKEN}' }],
         envVars: { TELEGRAM_TOKEN: 'x' },
       },
-      ai: { enabled: true, defaultProvider: 'ollama', providers: { ollama: { host: 'http://127.0.0.1:11434' } } },
+      ai: { enabled: true, agentProvider: 'ollama', providers: { ollama: { host: 'http://127.0.0.1:11434' } } },
     };
 
     finalizeWizardOptions(options);
@@ -26,6 +26,10 @@ describe('apply wizard to config', () => {
     expect(config.plugins).toContain('@zhin.js/adapter-telegram');
     expect(config.plugins).toContain('@zhin.js/host-router');
     expect(config.endpoints).toHaveLength(1);
-    expect(config.ai).toMatchObject({ enabled: true, defaultProvider: 'ollama' });
+    expect(config.ai).toMatchObject({
+      providers: { ollama: { sdk: 'ollama', host: 'http://127.0.0.1:11434' } },
+      agents: { zhin: { provider: 'ollama' } },
+    });
+    expect(config.ai).not.toHaveProperty('defaultProvider');
   });
 });

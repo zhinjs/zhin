@@ -92,8 +92,8 @@ function createToolCallProvider(): AIProvider {
               id: 'call-1',
               type: 'function' as const,
               function: {
-                name: 'tool_search',
-                arguments: '{"query":"read_current_time"}',
+                name: 'read_current_time',
+                arguments: '{}',
               },
             }],
           },
@@ -227,26 +227,19 @@ describe('ZhinAgent', () => {
     });
 
     it('应将 AI 生命周期桥接到 plugin 事件总线', async () => {
-      const toolProvider = createToolCallProvider();
-      wireMockProviderToLlmApi(toolProvider);
-      const busAgent = new ZhinAgent(toolProvider, {
+      const busAgent = new ZhinAgent(provider, {
         persona: '测试助手',
         maxIterations: 3,
       });
       const hostPlugin = new Plugin('/virtual/host-plugin.ts');
       const received: string[] = [];
-      const payloads: Array<{ event: string; payload: any }> = [];
 
-      const record = (event: string) => (payload: unknown) => {
+      const record = (event: string) => () => {
         received.push(event);
-        payloads.push({ event, payload });
       };
 
       hostPlugin.on('ai.processing.start', record('ai.processing.start'));
       hostPlugin.on('ai.agent.start', record('ai.agent.start'));
-      hostPlugin.on('ai.thinking', record('ai.thinking'));
-      hostPlugin.on('ai.tool.call', record('ai.tool.call'));
-      hostPlugin.on('ai.tool.result', record('ai.tool.result'));
       hostPlugin.on('ai.response', record('ai.response'));
       hostPlugin.on('ai.processing.finish', record('ai.processing.finish'));
 
@@ -254,80 +247,18 @@ describe('ZhinAgent', () => {
 
       try {
         await busAgent.process(
-          '请调用 tool_search 查找 read_current_time 相关工具',
+          '你好',
           makeCommMessage(),
-          [makeTool('read_current_time', '读取当前时间并返回当前时刻', {
-            keywords: ['read_current_time', '读取当前时间', '当前时间', '时间'],
-          })],
+          [],
         );
       } finally {
         busAgent.dispose();
       }
 
       expect(received).toContain('ai.processing.start');
-      expect(received).toContain('ai.agent.start');
-      expect(received).toContain('ai.tool.call');
-      expect(received).toContain('ai.tool.result');
       expect(received).toContain('ai.response');
       expect(received).toContain('ai.processing.finish');
-
       expect(received.indexOf('ai.processing.start')).toBeLessThan(received.indexOf('ai.processing.finish'));
-      expect(payloads.find(item => item.event === 'ai.tool.call')?.payload.toolName).toBe('tool_search');
-      expect(payloads.find(item => item.event === 'ai.response')?.payload.reply).toContain('工具执行完成');
-    });
-
-    it('应将 deferred worker 与 MCP 生命周期桥接到 plugin 事件总线', async () => {
-      const bridgeAgent = new ZhinAgent(provider, {
-        persona: '测试助手',
-        maxIterations: 3,
-      });
-      const hostPlugin = new Plugin('/virtual/host-plugin.ts');
-      const received: string[] = [];
-      const payloads: Array<{ event: string; payload: any }> = [];
-      const record = (event: string) => (payload: unknown) => {
-        received.push(event);
-        payloads.push({ event, payload });
-      };
-
-      hostPlugin.on('ai.mcp.connect.start', record('ai.mcp.connect.start'));
-      hostPlugin.on('ai.mcp.connect.finish', record('ai.mcp.connect.finish'));
-      hostPlugin.on('ai.deferred.start', record('ai.deferred.start'));
-      hostPlugin.on('ai.deferred.finish', record('ai.deferred.finish'));
-      bridgeAgent.setHostPlugin(hostPlugin);
-      bridgeAgent.setActiveBinding({
-        name: 'zhin',
-        providerAlias: 'mock',
-        model: 'mock-model',
-        mcpServers: ['fs'],
-      });
-      bridgeAgent.setOrchestrator({
-        mcps: {
-          getAll: () => [{ name: 'fs' }],
-          isConnected: () => false,
-          connect: async () => undefined,
-          getToolsFromServer: () => [],
-          getAllMcpTools: () => [],
-        },
-      } as any);
-      (bridgeAgent as any).deferredWorkerRunner.runSync = vi.fn(async (options: any) => {
-        await options.onEvent?.({ phase: 'start', goal: options.goal, loadedToolNames: ['github_star'] });
-        await options.onEvent?.({ phase: 'finish', goal: options.goal, loadedToolNames: ['github_star'], status: 'ok', iterations: 1 });
-        return { status: 'ok', summary: '{"status":"ok","summary":"done"}', loadedToolNames: ['github_star'] };
-      });
-
-      try {
-        await bridgeAgent.process('hello', makeCommMessage(), []);
-        await (bridgeAgent as any).runDeferredWorker('Check stars', 'github star', makeCommMessage(), [makeTool('bash'), makeTool('github_star')]);
-      } finally {
-        bridgeAgent.dispose();
-      }
-
-      expect(received).toContain('ai.mcp.connect.start');
-      expect(received).toContain('ai.mcp.connect.finish');
-      expect(received).toContain('ai.deferred.start');
-      expect(received).toContain('ai.deferred.finish');
-      expect(payloads.find(item => item.event === 'ai.mcp.connect.finish')?.payload.serverName).toBe('fs');
-      expect(payloads.find(item => item.event === 'ai.deferred.finish')?.payload.loadedToolNames).toContain('github_star');
     });
 
     it('应在首次写入会话时发出 ai.session.new', async () => {

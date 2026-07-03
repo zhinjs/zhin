@@ -16,7 +16,7 @@ import { discoverWorkspaceTools, buildToolFromMeta } from '../discovery/tools.js
 import { resolveSkillInstructionMaxChars, DEFAULT_CONFIG } from '../zhin-agent/config.js';
 import { loadBootstrapFiles, buildContextFiles, buildStableBootstrapSection } from '../bootstrap.js';
 import { loadBootstrapWithProfile, resolveAssistantConfig } from '../assistant/index.js';
-import { triggerAIHook, createAIHookEvent } from '../hooks.js';
+import { createAIHookEvent } from '../orchestrator/hook-registry.js';
 import { createCronTools } from '../cron-engine.js';
 import { createGenerateImageTool } from '../builtin/generate-image-tool.js';
 import type { AIServiceRefs } from './shared-refs.js';
@@ -297,8 +297,8 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       }));
 
       // Trigger agent:bootstrap hook
-      const orchestrator2 = root.inject?.('agent');
-      await triggerAIHook(createAIHookEvent('agent', 'bootstrap', undefined, {
+      const orchestrator2 = root.inject?.('agent') as AgentOrchestrator | undefined;
+      await orchestrator2?.hooks.trigger(createAIHookEvent('agent', 'bootstrap', undefined, {
         workspaceDir: process.cwd(),
         toolCount: builtinTools.length,
         skillCount: orchestrator2?.skills.size ?? 0,
@@ -341,7 +341,8 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
           skillReloadDebounce = null;
           try {
             const skills = await syncWorkspaceSkills();
-            await triggerAIHook(createAIHookEvent('agent', 'skills-reloaded', undefined, { skillCount: skills.count }));
+            const orch = root.inject?.('agent') as AgentOrchestrator | undefined;
+            await orch?.hooks.trigger(createAIHookEvent('agent', 'skills-reloaded', undefined, { skillCount: skills.count }));
             if (skills.count >= 0) logger.debug(formatCompact( { skills: skills.count }));
           } catch (e: unknown) {
             logger.warn(formatCompact( { reload: 'fail', error: e instanceof Error ? e.message : String(e) }));

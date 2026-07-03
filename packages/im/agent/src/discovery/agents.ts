@@ -14,7 +14,7 @@ import { getDataDir } from './utils.js';
 export type SubagentContextMode = 'fork' | 'fresh';
 
 const KNOWN_AGENT_ROLES = new Set([
-  'main', 'subtask', 'worker', 'researcher', 'executor', 'reviewer', 'planner',
+  'subtask', 'worker', 'researcher', 'evaluator', 'executor', 'reviewer', 'planner',
 ]);
 
 const logger = new Logger(null, 'builtin-tools');
@@ -23,13 +23,17 @@ const logger = new Logger(null, 'builtin-tools');
 // 类型
 // ============================================================================
 
+export type AgentEffortLevel = 'low' | 'medium' | 'high' | 'max';
+
 export interface AgentMeta {
   name: string;
   description: string;
   keywords?: string[];
   tags?: string[];
-  /** frontmatter 中声明的工具名列表 */
+  /** frontmatter 中声明的工具名列表（白名单） */
   toolNames?: string[];
+  /** 工具黑名单 — 与 toolNames 互斥，从可用工具池中排除 */
+  disallowedTools?: string[];
   /** *.agent.md 文件的绝对路径 */
   filePath: string;
   /** 首选模型名 */
@@ -44,6 +48,12 @@ export interface AgentMeta {
   role?: string;
   /** fork：注入主会话快照；fresh：空 standalone 上下文 */
   contextMode?: SubagentContextMode;
+  /** 工具名重定向映射 — key 是 LLM 看到的名字，value 是实际执行的工具名 */
+  toolAliases?: Record<string, string>;
+  /** effort 级别 — 映射到 maxIterations 和 reasoning_effort */
+  effort?: AgentEffortLevel;
+  /** 记忆范围 — 决定 ContextRepository key 隔离粒度 */
+  memory?: 'user' | 'session' | 'agent';
 }
 
 // ============================================================================
@@ -135,12 +145,17 @@ export async function discoverWorkspaceAgents(root?: Plugin | null): Promise<Age
 
         const roleRaw = typeof metadata.role === 'string' ? metadata.role.trim() : undefined;
         const contextRaw = typeof metadata.contextMode === 'string' ? metadata.contextMode.trim() : undefined;
+        const effortRaw = typeof metadata.effort === 'string' ? metadata.effort.trim() : undefined;
+        const memoryRaw = typeof metadata.memory === 'string' ? metadata.memory.trim() : undefined;
+        const VALID_EFFORT = new Set<AgentEffortLevel>(['low', 'medium', 'high', 'max']);
+        const VALID_MEMORY = new Set(['user', 'session', 'agent']);
         agents.push({
           name: metadata.name,
           description: metadata.description,
           keywords: metadata.keywords || [],
           tags: metadata.tags || [],
           toolNames: Array.isArray(metadata.tools) ? metadata.tools : [],
+          disallowedTools: Array.isArray(metadata.disallowedTools) ? metadata.disallowedTools : undefined,
           filePath: agentMdPath,
           model: metadata.model,
           provider: metadata.provider,
@@ -148,6 +163,11 @@ export async function discoverWorkspaceAgents(root?: Plugin | null): Promise<Age
           ownerPlugin: dirToPlugin.get(agentsDir),
           role: roleRaw && KNOWN_AGENT_ROLES.has(roleRaw) ? roleRaw : undefined,
           contextMode: contextRaw === 'fork' || contextRaw === 'fresh' ? contextRaw : undefined,
+          toolAliases: metadata.toolAliases && typeof metadata.toolAliases === 'object' && !Array.isArray(metadata.toolAliases)
+            ? metadata.toolAliases as Record<string, string>
+            : undefined,
+          effort: effortRaw && VALID_EFFORT.has(effortRaw as AgentEffortLevel) ? effortRaw as AgentEffortLevel : undefined,
+          memory: memoryRaw && VALID_MEMORY.has(memoryRaw) ? memoryRaw as 'user' | 'session' | 'agent' : undefined,
         });
         logger.debug(`Agent发现成功: ${metadata.name}`);
       } catch (e) {

@@ -17,16 +17,19 @@ import {
   diagnoseZhinStackDependencies,
   formatZhinStackFixCommand,
   packagesNeedingZhinStackFix,
-  ZHIN_STACK_VERSIONS,
+  applyProjectConfigPlan,
+  createProjectConfigPlan,
+  loadProjectConfig,
+  diagnoseConsoleConfig,
+  type ConsoleConfigDiagnosis,
 } from '@zhin.js/scaffold-wizard';
 import { logger } from '../utils/logger.js';
 import { formatNodeRequirementMessage, isNodeVersionSupported } from '../utils/node-requirements.js';
-import { findConfigFile, readConfig, saveConfig } from '../utils/config-file.js';
+import { findConfigFile, readConfig } from '../utils/config-file.js';
 
 const execAsync = promisify(exec);
 const CONSOLE_URL = 'https://console.zhin.dev';
 const TROUBLESHOOTING_URL = 'https://zhin.js.org/troubleshooting/';
-const REQUIRED_CONSOLE_PLUGINS = ['@zhin.js/host-router', '@zhin.js/host-api'] as const;
 const SANDBOX_PLUGIN = '@zhin.js/adapter-sandbox';
 
 interface CheckResult {
@@ -34,64 +37,6 @@ interface CheckResult {
   status: 'ok' | 'warn' | 'error';
   message: string;
   fix?: string;
-}
-
-export interface ConsoleConfigDiagnosis {
-  missingHostPlugins: string[];
-  missingSandboxPlugin: boolean;
-  missingConsoleOrigin: boolean;
-  missingHttpToken: boolean;
-}
-
-export function diagnoseConsoleConfig(config: Record<string, unknown>): ConsoleConfigDiagnosis {
-  const plugins = Array.isArray(config.plugins) ? config.plugins.filter((p): p is string => typeof p === 'string') : [];
-  const http = config.http && typeof config.http === 'object' && !Array.isArray(config.http)
-    ? config.http as Record<string, unknown>
-    : {};
-  const corsOrigins = Array.isArray(http.corsOrigins) ? http.corsOrigins : [];
-
-  return {
-    missingHostPlugins: REQUIRED_CONSOLE_PLUGINS.filter((plugin) => !plugins.includes(plugin)),
-    missingSandboxPlugin: !plugins.includes(SANDBOX_PLUGIN),
-    missingConsoleOrigin: !corsOrigins.includes(CONSOLE_URL),
-    missingHttpToken: typeof http.token !== 'string' || http.token.trim().length === 0,
-  };
-}
-
-export function applyConsoleConfigFixes(config: Record<string, unknown>): boolean {
-  let changed = false;
-  const plugins = Array.isArray(config.plugins) ? [...config.plugins] : [];
-  for (const plugin of [...REQUIRED_CONSOLE_PLUGINS, SANDBOX_PLUGIN]) {
-    if (!plugins.includes(plugin)) {
-      plugins.push(plugin);
-      changed = true;
-    }
-  }
-  config.plugins = plugins;
-
-  const http = config.http && typeof config.http === 'object' && !Array.isArray(config.http)
-    ? { ...(config.http as Record<string, unknown>) }
-    : {};
-  const corsOrigins = Array.isArray(http.corsOrigins) ? [...http.corsOrigins] : [];
-  if (!corsOrigins.includes(CONSOLE_URL)) {
-    corsOrigins.push(CONSOLE_URL);
-    http.corsOrigins = corsOrigins;
-    changed = true;
-  }
-  if (typeof http.token !== 'string' || http.token.trim().length === 0) {
-    http.token = '${HTTP_TOKEN}';
-    changed = true;
-  }
-  config.http = http;
-  return changed;
-}
-
-function canWriteConfig(configPath: string): boolean {
-  return !configPath.endsWith('.ts');
-}
-
-async function writeConfig(filePath: string, config: Record<string, unknown>): Promise<void> {
-  await saveConfig(filePath, config);
 }
 
 export const doctorCommand = new Command('doctor')
@@ -204,14 +149,23 @@ export const doctorCommand = new Command('doctor')
     if (existingConfig) {
       const configPath = path.join(cwd, existingConfig);
       try {
-        loadedConfig = await readConfig(configPath) as Record<string, unknown>;
-        let diagnosis = diagnoseConsoleConfig(loadedConfig);
-        const canFixConfig = canWriteConfig(configPath);
+        const loaded = loadProjectConfig(cwd, configPath);
+        loadedConfig = loaded.status === 'loaded'
+          ? loaded.config
+          : await readConfig(configPath) as Record<string, unknown>;
+        let diagnosis: ConsoleConfigDiagnosis = diagnoseConsoleConfig(loadedConfig);
+        const canFixConfig = loaded.status === 'loaded' && loaded.writable;
 
         if (options.fix && canFixConfig) {
-          const changed = applyConsoleConfigFixes(loadedConfig);
-          if (changed) {
-            await writeConfig(configPath, loadedConfig);
+          const plan = createProjectConfigPlan({
+            loaded,
+            ensureConsole: true,
+            ensureSandbox: true,
+            ensureHttp: true,
+            migrateAiLegacy: true,
+          });
+          if (await applyProjectConfigPlan(plan)) {
+            loadedConfig = plan.after;
             diagnosis = diagnoseConsoleConfig(loadedConfig);
             logger.info(formatCompact({ cmd: 'doctor', op: 'fix_console_config', file: existingConfig }));
           }
@@ -491,7 +445,7 @@ export const doctorCommand = new Command('doctor')
           });
           if (options.fix && peer.missingFromPackageJson.length > 0) {
             await mergeDependenciesIntoPackageJson(cwd, {
-              [peer.packageName]: ZHIN_STACK_VERSIONS[peer.packageName as keyof typeof ZHIN_STACK_VERSIONS] ?? 'latest',
+              [peer.packageName]: 'latest',
             });
           }
         }

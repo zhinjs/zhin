@@ -2,7 +2,6 @@ import fs from 'fs-extra'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import generated from '../../scaffold-wizard/src/stack-versions.generated.json' with { type: 'json' };
 import { BASE_SKILL_NAMES, DEV_SKILL_NAMES, createWorkspace } from '../src/workspace'
 import type { InitOptions } from '../src/types'
 
@@ -65,14 +64,14 @@ describe('createWorkspace', () => {
     expect(pkg.dependencies).toHaveProperty('@zhin.js/host-api')
     expect(pkg.dependencies).toHaveProperty('@zhin.js/host-router')
     expect(pkg.dependencies).toHaveProperty('@zhin.js/satori')
-    expect(pkg.dependencies['zhin.js']).toBe(generated.zhinStack['zhin.js'])
-    expect(pkg.dependencies['@zhin.js/cli']).toBe(generated.zhinStack['@zhin.js/cli'])
-    expect(pkg.dependencies['@zhin.js/host-api']).toBe(generated.zhinStack['@zhin.js/host-api'])
-    expect(pkg.dependencies['@zhin.js/host-router']).toBe(generated.zhinStack['@zhin.js/host-router'])
-    expect(pkg.dependencies['@zhin.js/adapter-sandbox']).toBe(generated.zhinStack['@zhin.js/adapter-sandbox'])
-    expect(pkg.dependencies['@zhin.js/client']).toBe(generated.zhinStack['@zhin.js/client'])
-    expect(pkg.dependencies['@zhin.js/contract']).toBe(generated.zhinStack['@zhin.js/contract'])
-    expect(pkg.dependencies['@zhin.js/satori']).toBe(generated.zhinStack['@zhin.js/satori'])
+    expect(pkg.dependencies['zhin.js']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/cli']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/host-api']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/host-router']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/adapter-sandbox']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/client']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/contract']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/satori']).toBe('latest')
     expect(pkg.engines.node).toBe('^20.19.0 || >=22.12.0')
     expect(config).toContain('corsOrigins:')
     expect(config).toContain('https://console.zhin.dev')
@@ -105,15 +104,15 @@ describe('createWorkspace', () => {
     const projectPath = await makeProject({
       ai: {
         enabled: true,
-        defaultProvider: 'ollama',
+        agentProvider: 'ollama',
         providers: { ollama: { host: 'http://127.0.0.1:11434' } },
       },
     })
     const pkg = await fs.readJson(path.join(projectPath, 'package.json'))
-    expect(pkg.dependencies['@zhin.js/agent']).toBe(generated.aiStack['@zhin.js/agent'])
-    expect(pkg.dependencies['@modelcontextprotocol/sdk']).toBe('^1.29.0')
-    expect(pkg.dependencies['@ai-sdk/openai-compatible']).toBe('^3.0.0')
-    expect(pkg.dependencies.zod).toBe('^4.0.0')
-    expect(pkg.dependencies.ai).toBe('^7.0.0')
+    expect(pkg.dependencies['@zhin.js/agent']).toBe('latest')
+    expect(pkg.dependencies['@modelcontextprotocol/sdk']).toBe('latest')
+    expect(pkg.dependencies['@ai-sdk/openai-compatible']).toBe('latest')
+    expect(pkg.dependencies.zod).toBe('latest')
+    expect(pkg.dependencies.ai).toBe('latest')
   })
 })

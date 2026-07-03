@@ -4,6 +4,8 @@ import {RegisteredAdapter} from "./types.js";
 import type {Message} from "./message.js";
 import {MaybePromise} from "./types.js";
 import {Plugin} from "./plugin.js";
+type ConstructFirstParam<T extends new (...args: any[]) => any> = T extends new (...args: [infer U, ...any[]]) => any ? U : never;
+type ConstructSecondParam<T extends new (...args: any[]) => any> = T extends new (...args: [any, infer V, ...any[]]) => any ? V : never;
 
 /**
  * MessageCommand类：命令系统核心，基于segment-matcher实现。
@@ -22,6 +24,24 @@ export class MessageCommand<T extends RegisteredAdapter=RegisteredAdapter> exten
             usage: this.#usage,
             examples: this.#examples
         }
+    }
+    constructor(C:ConstructFirstParam<typeof SegmentMatcher>,P:ConstructSecondParam<typeof SegmentMatcher>={}){
+        super(C,{
+            at:['qq','user_id'],
+            face:['id'],
+            mention:['qq','user_id'],
+            html:['content'],
+            markdown:['content'],
+            image:['file','src','url'],
+            video:['file','src','url'],
+            audio:['file','src','url'],
+            file:['file','src','url'],
+            reply:['id','reply_id','message_id'],
+            quote:['id','reply_id','message_id'],
+            forward:['id','res_id','message_id'],
+            location:['latitude','longitude'],
+            ...P,
+        });
     }
     get help(){
         return [

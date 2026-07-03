@@ -4,8 +4,10 @@
 import { randomUUID } from 'node:crypto';
 import { Logger } from '@zhin.js/logger';
 import type {
+  CreateOrchestrationEventInput,
   CreateOrchestrationRunInput,
   CreateOrchestrationTaskInput,
+  OrchestrationEventRecord,
   OrchestrationRunRecord,
   OrchestrationRunStatus,
   OrchestrationTaskRecord,
@@ -15,13 +17,6 @@ import {
   parseDependsOn,
   serializeDependsOn,
 } from '@zhin.js/ai';
-import {
-  createDefaultMissionState,
-  mergeMissionStatePatch,
-  parseMissionState,
-  serializeMissionState,
-  type MissionState,
-} from '../orchestrator/mission-state.js';
 
 const logger = new Logger(null, 'OrchestrationRepository');
 
@@ -38,6 +33,7 @@ type DbModel = {
 export interface OrchestrationRunWithTasks {
   run: OrchestrationRunRecord;
   tasks: OrchestrationTaskRecord[];
+  events?: OrchestrationEventRecord[];
 }
 
 export interface OrchestrationRepository {
@@ -52,22 +48,23 @@ export interface OrchestrationRepository {
   updateTaskStatus(
     taskId: string,
     status: OrchestrationTaskStatus,
-    patch?: Partial<Pick<OrchestrationTaskRecord, 'result_summary' | 'error' | 'remote_task_id' | 'started_at' | 'finished_at'>>,
+    patch?: Partial<Pick<OrchestrationTaskRecord, 'result_summary' | 'error' | 'remote_task_id' | 'assigned_to' | 'started_at' | 'finished_at'>>,
   ): Promise<boolean>;
+  appendEvent(input: CreateOrchestrationEventInput): Promise<OrchestrationEventRecord>;
+  listEventsByRun(runId: string): Promise<OrchestrationEventRecord[]>;
   getRunWithTasks(runId: string): Promise<OrchestrationRunWithTasks | null>;
   listActiveRemoteTasks(): Promise<OrchestrationTaskRecord[]>;
-  getMissionState(runId: string): Promise<MissionState | null>;
-  patchMissionState(runId: string, patch: Partial<MissionState>): Promise<MissionState | null>;
 }
 
 function rowToRun(row: Record<string, unknown>): OrchestrationRunRecord {
   return {
     id: String(row.id ?? ''),
     session_key: String(row.session_key ?? ''),
-    status: (row.status as OrchestrationRunRecord['status']) ?? 'active',
+    status: (row.status as OrchestrationRunRecord['status']) ?? 'open',
     title: String(row.title ?? ''),
     template: String(row.template ?? ''),
-    mission_state_json: String(row.mission_state_json ?? ''),
+    source_json: String(row.source_json ?? ''),
+    state_json: String(row.state_json ?? row.mission_state_json ?? ''),
     state_version: Number(row.state_version ?? 0),
     created_at: Number(row.created_at ?? 0),
     updated_at: Number(row.updated_at ?? 0),
@@ -85,6 +82,7 @@ function rowToTask(row: Record<string, unknown>): OrchestrationTaskRecord {
     status: (row.status as OrchestrationTaskStatus) ?? 'pending',
     depends_on: String(row.depends_on ?? '[]'),
     executor_kind: (row.executor_kind as OrchestrationTaskRecord['executor_kind']) ?? 'local',
+    assigned_to: String(row.assigned_to ?? ''),
     remote_agent_id: String(row.remote_agent_id ?? ''),
     remote_task_id: String(row.remote_task_id ?? ''),
     priority: String(row.priority ?? 'medium'),
@@ -100,10 +98,23 @@ function rowToTask(row: Record<string, unknown>): OrchestrationTaskRecord {
   };
 }
 
+function rowToEvent(row: Record<string, unknown>): OrchestrationEventRecord {
+  return {
+    id: String(row.id ?? ''),
+    run_id: String(row.run_id ?? ''),
+    task_id: String(row.task_id ?? ''),
+    type: row.type as OrchestrationEventRecord['type'],
+    seq: Number(row.seq ?? 0),
+    payload_json: String(row.payload_json ?? '{}'),
+    created_at: Number(row.created_at ?? 0),
+  };
+}
+
 export class DatabaseOrchestrationRepository implements OrchestrationRepository {
   constructor(
     private readonly runModel: DbModel,
     private readonly taskModel: DbModel,
+    private readonly eventModel?: DbModel,
   ) {}
 
   async createRun(input: CreateOrchestrationRunInput): Promise<OrchestrationRunRecord> {
@@ -111,10 +122,11 @@ export class DatabaseOrchestrationRepository implements OrchestrationRepository 
     const record: OrchestrationRunRecord = {
       id: randomUUID().slice(0, 8),
       session_key: input.session_key,
-      status: 'active',
+      status: 'open',
       title: input.title ?? '',
       template: input.template ?? '',
-      mission_state_json: serializeMissionState(createDefaultMissionState()),
+      source_json: input.source ? JSON.stringify(input.source) : '',
+      state_json: input.state ? JSON.stringify(input.state) : '',
       state_version: 0,
       created_at: now,
       updated_at: now,
@@ -158,6 +170,7 @@ export class DatabaseOrchestrationRepository implements OrchestrationRepository 
       status: 'pending',
       depends_on: serializeDependsOn(input.depends_on ?? []),
       executor_kind: input.executor_kind ?? 'local',
+      assigned_to: input.assigned_to ?? '',
       remote_agent_id: input.remote_agent_id ?? '',
       remote_task_id: '',
       priority: input.priority ?? 'medium',
@@ -189,7 +202,7 @@ export class DatabaseOrchestrationRepository implements OrchestrationRepository 
   async updateTaskStatus(
     taskId: string,
     status: OrchestrationTaskStatus,
-    patch: Partial<Pick<OrchestrationTaskRecord, 'result_summary' | 'error' | 'remote_task_id' | 'started_at' | 'finished_at'>> = {},
+    patch: Partial<Pick<OrchestrationTaskRecord, 'result_summary' | 'error' | 'remote_task_id' | 'assigned_to' | 'started_at' | 'finished_at'>> = {},
   ): Promise<boolean> {
     const data: Record<string, unknown> = { status, updated_at: Date.now(), ...patch };
     await this.taskModel.update(data).where({ id: taskId });
@@ -200,45 +213,53 @@ export class DatabaseOrchestrationRepository implements OrchestrationRepository 
     return true;
   }
 
+  async appendEvent(input: CreateOrchestrationEventInput): Promise<OrchestrationEventRecord> {
+    const now = Date.now();
+    const events = await this.listEventsByRun(input.run_id);
+    const record: OrchestrationEventRecord = {
+      id: randomUUID().slice(0, 8),
+      run_id: input.run_id,
+      task_id: input.task_id ?? '',
+      type: input.type,
+      seq: events.length > 0 ? Math.max(...events.map(e => e.seq)) + 1 : 0,
+      payload_json: JSON.stringify(input.payload ?? {}),
+      created_at: now,
+    };
+    if (this.eventModel) {
+      await this.eventModel.create(record as unknown as Record<string, unknown>);
+    }
+    await this.runModel.update({ updated_at: now }).where({ id: input.run_id });
+    return record;
+  }
+
+  async listEventsByRun(runId: string): Promise<OrchestrationEventRecord[]> {
+    if (!this.eventModel) return [];
+    const rows = await this.eventModel.select().where({ run_id: runId });
+    return (rows ?? []).map(rowToEvent).sort((a, b) => a.seq - b.seq);
+  }
+
   async getRunWithTasks(runId: string): Promise<OrchestrationRunWithTasks | null> {
     const run = await this.getRun(runId);
     if (!run) return null;
     const tasks = await this.listTasksByRun(runId);
-    return { run, tasks };
+    const events = await this.listEventsByRun(runId);
+    return { run, tasks, events };
   }
 
   async listActiveRemoteTasks(): Promise<OrchestrationTaskRecord[]> {
-    const rows = await this.taskModel.select().where({ executor_kind: 'remote' });
+    const rows = await this.taskModel.select().where({ executor_kind: 'remote_mesh' });
     return (rows ?? [])
       .map(rowToTask)
-      .filter((t) => t.status === 'pending' || t.status === 'running');
+      .filter((t) => t.status === 'pending' || t.status === 'assigned' || t.status === 'running' || t.status === 'waiting_result');
   }
 
-  async getMissionState(runId: string): Promise<MissionState | null> {
-    const run = await this.getRun(runId);
-    if (!run) return null;
-    return parseMissionState(run.mission_state_json);
-  }
-
-  async patchMissionState(runId: string, patch: Partial<MissionState>): Promise<MissionState | null> {
-    const run = await this.getRun(runId);
-    if (!run) return null;
-    const current = parseMissionState(run.mission_state_json);
-    const next = mergeMissionStatePatch(current, patch);
-    const stateVersion = run.state_version + 1;
-    await this.runModel.update({
-      mission_state_json: serializeMissionState(next),
-      state_version: stateVersion,
-      updated_at: Date.now(),
-    }).where({ id: runId });
-    return next;
-  }
 }
 
 /** In-memory fallback when DB models are unavailable. */
 export class MemoryOrchestrationRepository implements OrchestrationRepository {
   private runs = new Map<string, OrchestrationRunRecord>();
   private tasks = new Map<string, OrchestrationTaskRecord>();
+  private events = new Map<string, OrchestrationEventRecord[]>();
   private static readonly MAX_RUNS = 1000;
   private static readonly MAX_TASKS = 5000;
 
@@ -247,10 +268,11 @@ export class MemoryOrchestrationRepository implements OrchestrationRepository {
     const record: OrchestrationRunRecord = {
       id: randomUUID().slice(0, 8),
       session_key: input.session_key,
-      status: 'active',
+      status: 'open',
       title: input.title ?? '',
       template: input.template ?? '',
-      mission_state_json: serializeMissionState(createDefaultMissionState()),
+      source_json: input.source ? JSON.stringify(input.source) : '',
+      state_json: input.state ? JSON.stringify(input.state) : '',
       state_version: 0,
       created_at: now,
       updated_at: now,
@@ -296,6 +318,7 @@ export class MemoryOrchestrationRepository implements OrchestrationRepository {
       status: 'pending',
       depends_on: serializeDependsOn(input.depends_on ?? []),
       executor_kind: input.executor_kind ?? 'local',
+      assigned_to: input.assigned_to ?? '',
       remote_agent_id: input.remote_agent_id ?? '',
       remote_task_id: '',
       priority: input.priority ?? 'medium',
@@ -329,7 +352,7 @@ export class MemoryOrchestrationRepository implements OrchestrationRepository {
   async updateTaskStatus(
     taskId: string,
     status: OrchestrationTaskStatus,
-    patch: Partial<Pick<OrchestrationTaskRecord, 'result_summary' | 'error' | 'remote_task_id' | 'started_at' | 'finished_at'>> = {},
+    patch: Partial<Pick<OrchestrationTaskRecord, 'result_summary' | 'error' | 'remote_task_id' | 'assigned_to' | 'started_at' | 'finished_at'>> = {},
   ): Promise<boolean> {
     const task = this.tasks.get(taskId);
     if (!task) return false;
@@ -338,6 +361,7 @@ export class MemoryOrchestrationRepository implements OrchestrationRepository {
     if (patch.result_summary !== undefined) task.result_summary = patch.result_summary;
     if (patch.error !== undefined) task.error = patch.error;
     if (patch.remote_task_id !== undefined) task.remote_task_id = patch.remote_task_id;
+    if (patch.assigned_to !== undefined) task.assigned_to = patch.assigned_to;
     if (patch.started_at !== undefined) task.started_at = patch.started_at;
     if (patch.finished_at !== undefined) task.finished_at = patch.finished_at;
     const run = this.runs.get(task.run_id);
@@ -345,33 +369,43 @@ export class MemoryOrchestrationRepository implements OrchestrationRepository {
     return true;
   }
 
+  async appendEvent(input: CreateOrchestrationEventInput): Promise<OrchestrationEventRecord> {
+    const now = Date.now();
+    const events = this.events.get(input.run_id) ?? [];
+    const record: OrchestrationEventRecord = {
+      id: randomUUID().slice(0, 8),
+      run_id: input.run_id,
+      task_id: input.task_id ?? '',
+      type: input.type,
+      seq: events.length > 0 ? Math.max(...events.map(e => e.seq)) + 1 : 0,
+      payload_json: JSON.stringify(input.payload ?? {}),
+      created_at: now,
+    };
+    this.events.set(input.run_id, [...events, record]);
+    const run = this.runs.get(input.run_id);
+    if (run) run.updated_at = now;
+    return record;
+  }
+
+  async listEventsByRun(runId: string): Promise<OrchestrationEventRecord[]> {
+    return [...(this.events.get(runId) ?? [])].sort((a, b) => a.seq - b.seq);
+  }
+
   async getRunWithTasks(runId: string): Promise<OrchestrationRunWithTasks | null> {
     const run = await this.getRun(runId);
     if (!run) return null;
-    return { run, tasks: await this.listTasksByRun(runId) };
+    return {
+      run,
+      tasks: await this.listTasksByRun(runId),
+      events: await this.listEventsByRun(runId),
+    };
   }
 
   async listActiveRemoteTasks(): Promise<OrchestrationTaskRecord[]> {
     return [...this.tasks.values()].filter(
-      (t) => t.executor_kind === 'remote' && (t.status === 'pending' || t.status === 'running'),
+      (t) => t.executor_kind === 'remote_mesh'
+        && (t.status === 'pending' || t.status === 'assigned' || t.status === 'running' || t.status === 'waiting_result'),
     );
-  }
-
-  async getMissionState(runId: string): Promise<MissionState | null> {
-    const run = await this.getRun(runId);
-    if (!run) return null;
-    return parseMissionState(run.mission_state_json);
-  }
-
-  async patchMissionState(runId: string, patch: Partial<MissionState>): Promise<MissionState | null> {
-    const run = this.runs.get(runId);
-    if (!run) return null;
-    const current = parseMissionState(run.mission_state_json);
-    const next = mergeMissionStatePatch(current, patch);
-    run.mission_state_json = serializeMissionState(next);
-    run.state_version += 1;
-    run.updated_at = Date.now();
-    return next;
   }
 
   private evictIfNeeded(): void {
@@ -394,6 +428,7 @@ export class MemoryOrchestrationRepository implements OrchestrationRepository {
   dispose(): void {
     this.runs.clear();
     this.tasks.clear();
+    this.events.clear();
   }
 
   runCount(): number {
@@ -419,8 +454,6 @@ export function taskRecordToAgentTaskShape(task: OrchestrationTaskRecord): {
   executorKind: OrchestrationTaskRecord['executor_kind'];
   remoteAgentId: string;
   remoteTaskId: string;
-  isWriter: boolean;
-  phase: OrchestrationTaskRecord['phase'];
 } {
   let context: Record<string, unknown> | undefined;
   if (task.context_json?.trim()) {
@@ -444,7 +477,5 @@ export function taskRecordToAgentTaskShape(task: OrchestrationTaskRecord): {
     executorKind: task.executor_kind,
     remoteAgentId: task.remote_agent_id,
     remoteTaskId: task.remote_task_id,
-    isWriter: task.is_writer === 1,
-    phase: task.phase,
   };
 }

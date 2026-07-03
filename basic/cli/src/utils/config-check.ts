@@ -10,6 +10,7 @@ import {
   diagnoseZhinStackDependencies,
   formatZhinStackFixCommand,
   packagesNeedingZhinStackFix,
+  migrateAiLegacyConfig,
 } from '@zhin.js/scaffold-wizard';
 import { findConfigFile, hasLegacyTsConfig, readConfig, saveConfig } from './config-file.js';
 import { loadAiConfigUtils, type AiConfigUtils } from './ai-config-loader.js';
@@ -370,12 +371,16 @@ function checkAi(
   const providers = legacy.providers;
   if (providers && typeof providers === 'object' && !Array.isArray(providers)) {
     for (const [alias, prov] of Object.entries(providers)) {
-      if (prov && typeof prov === 'object' && 'driver' in (prov as object)) {
+      const provider = prov as Record<string, unknown>;
+      const legacyField = prov && typeof prov === 'object'
+        ? ['driver', 'api', 'preset', 'spec'].find((key) => key in provider)
+        : undefined;
+      if (legacyField) {
         pushIssue(issues, {
           severity: 'warn',
           code: 'ai.provider_driver_deprecated',
-          path: `ai.providers.${alias}.driver`,
-          message: `ai.providers.${alias}.driver 应迁移为 api`,
+          path: `ai.providers.${alias}.${legacyField}`,
+          message: `ai.providers.${alias}.${legacyField} 应迁移为 sdk`,
           fixable: true,
           fixHint: 'zhin config check --fix',
         });
@@ -390,7 +395,7 @@ function checkAi(
         code: 'ai.agent_missing',
         path: 'ai',
         message: '配置已启用 AI，但未安装 @zhin.js/agent（zhin.js 4.x 需单独安装 AI 栈）',
-        fixHint: 'zhin setup --ai 或 pnpm add @zhin.js/agent zod ai',
+        fixHint: 'zhin setup --ai 或 pnpm add @zhin.js/agent@latest zod@latest ai@latest',
       });
     } else {
       pushIssue(issues, {
@@ -403,13 +408,24 @@ function checkAi(
     return;
   }
 
-  const normalized = aiUtils.normalizeAiRoutingConfig(legacy);
-  for (const err of aiUtils.validateAiRoutingConfig(normalized)) {
+  try {
+    const validationAi = migrateAiLegacyConfig(legacy).ai;
+    const normalized = aiUtils.normalizeAiRoutingConfig(validationAi);
+    for (const err of aiUtils.validateAiRoutingConfig(normalized)) {
+      pushIssue(issues, {
+        severity: 'error',
+        code: 'ai.routing_invalid',
+        path: 'ai',
+        message: err,
+        fixHint: 'zhin setup --ai',
+      });
+    }
+  } catch (error) {
     pushIssue(issues, {
       severity: 'error',
       code: 'ai.routing_invalid',
       path: 'ai',
-      message: err,
+      message: error instanceof Error ? error.message : String(error),
       fixHint: 'zhin setup --ai',
     });
   }
@@ -547,6 +563,14 @@ export function applyConfigFixes(
       }
       return row;
     });
+  }
+
+  if (next.ai && typeof next.ai === 'object' && !Array.isArray(next.ai)) {
+    const { ai, fixes: aiMigrationFixes } = migrateAiLegacyConfig(next.ai as Record<string, unknown>);
+    if (aiMigrationFixes.length > 0) {
+      next.ai = ai;
+      fixes.push(...aiMigrationFixes);
+    }
   }
 
   if (next.ai && aiUtils) {

@@ -292,7 +292,7 @@ describe("icqqElementsToSegments", () => {
   it("解析 at 段", () => {
     expect(
       icqqElementsToSegments([{ type: "at", qq: "8596238" }]),
-    ).toEqual([{ type: "at", data: { qq: "8596238" } }]);
+    ).toEqual([{ type: "at", data: { qq: "8596238", user_id: "8596238", id: "8596238" } }]);
   });
 });
 

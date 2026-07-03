@@ -156,13 +156,8 @@ const ROLE_TEMPLATES: Record<AgentRole, {
   communicationStyle: string;
   toolUsage: string;
 }> = {
-  main: {
-    systemPrompt: 'You are the main AI assistant, responsible for user interaction and task orchestration.',
-    communicationStyle: 'Be helpful, clear, and proactive. Ask clarifying questions when needed.',
-    toolUsage: 'Use tools efficiently. Prefer read-only tools when possible. Always verify before destructive operations.',
-  },
   subtask: {
-    systemPrompt: 'You are a sub-task agent spawned by the main agent to complete a specific task.',
+    systemPrompt: 'You are a sub-task agent spawned to complete a specific task.',
     communicationStyle: 'Be focused and task-oriented. Report results clearly.',
     toolUsage: 'Use only the tools provided. Do not attempt to access tools not in your allowed set.',
   },
@@ -176,6 +171,11 @@ const ROLE_TEMPLATES: Record<AgentRole, {
     communicationStyle: 'Be thorough and analytical. Provide detailed findings.',
     toolUsage: 'Use read-only tools to gather information. Do not modify any files.',
   },
+  evaluator: {
+    systemPrompt: 'You are an evaluator agent. Reason over researcher facts and produce a decision blueprint. No external tools.',
+    communicationStyle: 'Be rigorous and explicit about trade-offs and risks.',
+    toolUsage: 'Read upstream artifacts and submit a blueprint. Never search the web, write files, or execute.',
+  },
   executor: {
     systemPrompt: 'You are an executor agent responsible for implementing changes.',
     communicationStyle: 'Be careful and methodical. Verify each change before proceeding.',
@@ -187,14 +187,9 @@ const ROLE_TEMPLATES: Record<AgentRole, {
     toolUsage: 'Use read-only tools to analyze. Do not make any changes.',
   },
   planner: {
-    systemPrompt: 'You are a planner agent creating implementation plans.',
+    systemPrompt: 'You are a planner agent creating implementation plans and directing the pipeline.',
     communicationStyle: 'Be strategic and thorough. Consider all aspects.',
-    toolUsage: 'Use read-only tools to understand the codebase. Create detailed plans.',
-  },
-  validator: {
-    systemPrompt: 'You are a validator agent. Run Validation Spec only; do not read implementation source.',
-    communicationStyle: 'Report pass/fail with assertion IDs only.',
-    toolUsage: 'Use run_validation_spec only. Never read files or grep source code.',
+    toolUsage: 'Use cell orchestration tools and spawn_task. Avoid direct file writes.',
   },
 };
 
@@ -671,7 +666,7 @@ export function buildMainAgentPrompt(options: {
 
   builder
     .addSystemPrompt('You are a helpful AI assistant.')
-    .addRoleDefinition('main', {
+    .addRoleDefinition('planner', {
       systemPrompt: options.role || undefined,
     })
     .addSafetyRules()

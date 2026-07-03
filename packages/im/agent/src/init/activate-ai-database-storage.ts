@@ -9,22 +9,21 @@ import {
   DatabaseMemoryEntryRepository,
   InMemoryMemoryEntryRepository,
 } from '@zhin.js/ai';
+import { DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT } from '../zhin-agent/context-tail-limit.js';
 import { setMemoryEntryRepository } from '../memory-entry-registry.js';
 import {
   DatabaseOrchestrationRepository,
   MemoryOrchestrationRepository,
 } from '../orchestrator/orchestration-repository.js';
-import { initOrchestrationService } from '../orchestrator/orchestration-service.js';
-import {
-  createOrchestrationRuntimeFromService,
-  setOrchestrationRuntime,
-} from '../orchestration-runtime-registry.js';
+import { upgradeOrchestrationRepository } from '../orchestrator/orchestration-service.js';
 import type { AIServiceRefs } from './shared-refs.js';
+import { wireCollaborationStorage } from '../collaboration/wire-collaboration-storage.js';
 
 export async function activateAiDatabaseStorage(
   db: any,
   refs: AIServiceRefs,
   config: AIConfig,
+  collaborationRaw?: unknown,
 ): Promise<void> {
   if (!refs.zhinAgent) return;
   if (config.sessions?.useDatabase === false) return;
@@ -46,7 +45,7 @@ export async function activateAiDatabaseStorage(
         agentMessageModel,
         agentSummaryModel,
         agentSessionStore,
-        { tailMessageLimit: config.sessions?.coldStartMaxMessages },
+        { tailMessageLimit: config.sessions?.coldStartMaxMessages ?? DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT },
       )
     : undefined;
 
@@ -69,11 +68,15 @@ export async function activateAiDatabaseStorage(
 
   const runModel = db.models?.get('orchestration_runs');
   const taskModel = db.models?.get('orchestration_tasks');
+  const eventModel = db.models?.get('orchestration_events');
   const orchRepo = runModel && taskModel
-    ? new DatabaseOrchestrationRepository(runModel, taskModel)
+    ? new DatabaseOrchestrationRepository(runModel, taskModel, eventModel)
     : new MemoryOrchestrationRepository();
-  const orchService = initOrchestrationService(orchRepo);
-  setOrchestrationRuntime(createOrchestrationRuntimeFromService(orchService));
+  // Upgrade the existing kernel's repository in-place. The kernel was already
+  // initialised with a Memory placeholder during create-zhinAgent; this swaps
+  // it to the Database repository while preserving registered executors and
+  // workflow strategies (ADR 0027 — single state-transition authority).
+  upgradeOrchestrationRepository(orchRepo);
 
   const semanticEnabled = config.memory?.semantic?.enabled === true;
   if (semanticEnabled) {
@@ -85,4 +88,6 @@ export async function activateAiDatabaseStorage(
   } else {
     setMemoryEntryRepository(null);
   }
+
+  await wireCollaborationStorage(db, collaborationRaw);
 }

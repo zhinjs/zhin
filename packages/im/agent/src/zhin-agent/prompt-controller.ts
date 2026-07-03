@@ -24,6 +24,17 @@ export interface PromptTurnRequest {
   ) => Promise<AgentLoopTurnResult>;
 }
 
+/** 同 session 新入站消息取代仍在执行的旧 turn 时抛出；调用方应跳过出站回复。 */
+export class TurnSupersededError extends Error {
+  readonly sessionKey: string;
+
+  constructor(sessionKey: string) {
+    super(`Turn superseded on session ${sessionKey}`);
+    this.name = 'TurnSupersededError';
+    this.sessionKey = sessionKey;
+  }
+}
+
 type PromptSubscriber = (event: AgentEvent, signal: AbortSignal) => void | Promise<void>;
 
 interface ActiveTurn {
@@ -127,8 +138,9 @@ export class PromptController {
     turn.queue.pushFollowUp(message);
   }
 
-  /** Parallel scheduling: each inbound message spawns an independent turn. */
+  /** 同 session 串行：新 turn 开始前 abort 仍在执行的旧 turn，避免过期回复污染群上下文。 */
   schedule(request: PromptTurnRequest): Promise<AgentLoopTurnResult> {
+    this.abort(request.sessionKey);
     return this.runTurn(request);
   }
 
@@ -198,6 +210,10 @@ export class PromptController {
       while (queue.hasFollowUp() && !signal.aborted) {
         const batch = queue.drainFollowUp();
         lastResult = await request.execute(batch, hooks, signal, turnId);
+      }
+
+      if (signal.aborted) {
+        throw new TurnSupersededError(request.sessionKey);
       }
 
       await this.emitEvent({ type: 'agent_end', messages: request.userMessages }, signal);

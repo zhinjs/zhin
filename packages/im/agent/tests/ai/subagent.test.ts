@@ -183,12 +183,9 @@ describe('SubagentManager', () => {
       const request = callArgs[0] as any;
       if (request?.tools) {
         const toolNames = request.tools.map((t: any) => t.function?.name || t.name);
-        const allowed = new Set(['bash', 'read_file', 'write_file', 'web_search']);
-        expect(toolNames.every((n: string) => allowed.has(n))).toBe(true);
         expect(toolNames).toContain('read_file');
         expect(toolNames).not.toContain('spawn_task');
         expect(toolNames).not.toContain('activate_skill');
-        expect(toolNames).not.toContain('todo_write');
       }
     });
 

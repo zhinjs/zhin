@@ -1,8 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { createServer } from "node:http";
+import { canListenOnLocalhost, skipIfNoLocalhostListen } from "./listen-support.js";
 
 // Mock @zhin.js/core so the module can be imported without a full Zhin app.
-vi.mock("@zhin.js/core", () => ({
+vi.mock("@zhin.js/core", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@zhin.js/core")>()),
   usePlugin: () => ({
     declareConfig: vi.fn(),
     provide: vi.fn(),
@@ -19,14 +21,20 @@ vi.mock("@zhin.js/core", () => ({
 
 describe("Router WebSocket auth", () => {
   let Router: typeof import("../src/koa-router.js").Router;
+  let canListen = false;
   const TEST_TOKEN = "test-secret-token-abc123";
+
+  beforeAll(async () => {
+    canListen = await canListenOnLocalhost();
+  });
 
   beforeEach(async () => {
     const mod = await import("../src/koa-router.js");
     Router = mod.Router;
   });
 
-  it("should reject WS upgrade without token when authToken is set", async () => {
+  it("should reject WS upgrade without token when authToken is set", async (ctx) => {
+    if (skipIfNoLocalhostListen(ctx, canListen)) return;
     const server = createServer();
     const router = new Router(server);
     router.setAuthToken(TEST_TOKEN);
@@ -55,7 +63,8 @@ describe("Router WebSocket auth", () => {
     }
   });
 
-  it("should accept WS upgrade with valid token in query", async () => {
+  it("should accept WS upgrade with valid token in query", async (ctx) => {
+    if (skipIfNoLocalhostListen(ctx, canListen)) return;
     const server = createServer();
     const router = new Router(server);
     router.setAuthToken(TEST_TOKEN);
@@ -84,7 +93,8 @@ describe("Router WebSocket auth", () => {
     }
   });
 
-  it("should accept WS upgrade with valid Bearer header", async () => {
+  it("should accept WS upgrade with valid Bearer header", async (ctx) => {
+    if (skipIfNoLocalhostListen(ctx, canListen)) return;
     const server = createServer();
     const router = new Router(server);
     router.setAuthToken(TEST_TOKEN);
@@ -114,7 +124,8 @@ describe("Router WebSocket auth", () => {
     }
   });
 
-  it("should exempt paths with their own verifyClient", async () => {
+  it("should exempt paths with their own verifyClient", async (ctx) => {
+    if (skipIfNoLocalhostListen(ctx, canListen)) return;
     const server = createServer();
     const router = new Router(server);
     router.setAuthToken(TEST_TOKEN);
@@ -147,7 +158,8 @@ describe("Router WebSocket auth", () => {
     }
   });
 
-  it("should reject WS upgrade with wrong token", async () => {
+  it("should reject WS upgrade with wrong token", async (ctx) => {
+    if (skipIfNoLocalhostListen(ctx, canListen)) return;
     const server = createServer();
     const router = new Router(server);
     router.setAuthToken(TEST_TOKEN);

@@ -1,14 +1,13 @@
 import { formatCompact, Logger } from '@zhin.js/logger';
 import type { ContentPart } from '@zhin.js/ai';
 import { userMessagePlainText } from '@zhin.js/ai';
-import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
 import { parseOutput } from '@zhin.js/ai';
 import { detectTone } from '@zhin.js/ai';
 import {
   ensureMcpConnectionsForBinding,
   getMcpToolsForBinding,
 } from '../orchestrator/mcp-lifecycle.js';
-import { triggerAIHook, createAIHookEvent } from '../hooks.js';
+import { createAIHookEvent } from '../orchestrator/hook-registry.js';
 import { resolveModelCandidates } from './model-resolver.js';
 import { mergeToolOutboundElements } from '../media/media-tool-bridge.js';
 import { providerSupportsVision } from '../media/vision-capability.js';
@@ -21,6 +20,19 @@ import {
 import { buildTurnUserMessages, applyTurnContextToUserMessages, prependEnvelopeToFirstUserText } from './turn-user-message.js';
 import { runAgentLoopTextTurn, runAgentLoopVisionTurn } from './agent-loop-turn.js';
 import { buildTurnContextEnvelope, resolveQuoteSystemHint } from './prompt.js';
+import { resolveCollaborationCellForMessage, resolveCollaborationTurnHint } from '../collaboration/collaboration-context.js';
+import { resolveAgentSessionKeyForTurn } from '../collaboration/resolve-agent-session-key.js';
+import { readCollaborationTurnSnapshot } from '../collaboration/collaboration-turn-snapshot.js';
+import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
+
+/** 合并协作 roster + handback 提示。编排状态由 OrchestrationKernel 管理。 */
+function resolveTurnCollaborationHint(
+  commMessage: import('@zhin.js/core').Message | undefined,
+  inboundContent?: string,
+): string | undefined {
+  const collab = resolveCollaborationTurnHint(commMessage, inboundContent);
+  return collab || undefined;
+}
 import { buildAgentsEnvelopeContext } from './agents-instruction.js';
 import { getModel } from '@zhin.js/ai';
 import { collectRuntimeTools } from './tool-runtime.js';
@@ -29,6 +41,7 @@ import { attachWebSearchLocale } from './web-search-locale-attach.js';
 import { EMPTY_USAGE } from './turn-metrics.js';
 import { resolveAgentToolsForTurn } from './tool-orchestration.js';
 import { logPhase } from './phase-trace.js';
+import { TurnSupersededError } from './prompt-controller.js';
 import { buildVisionUserMessage, summarizeMultimodalParts } from './multimodal-message.js';
 import { DEFAULT_MULTIMODAL_CONFIG } from '../media/media-types.js';
 import type {
@@ -56,8 +69,19 @@ function sessionDeps(host: ZhinAgentPrivate): SessionIODeps {
   };
 }
 
+function resolveTurnSessionKey(commMessage: Message): string {
+  const snap = readCollaborationTurnSnapshot(commMessage);
+  if (snap?.runId) {
+    const transport = resolveIMSessionIdFromMessage(commMessage);
+    const bindRun = snap.delegationRunId ?? snap.runId;
+    return `pipeline:${bindRun.slice(0, 8)}:${transport}`;
+  }
+  const cell = resolveCollaborationCellForMessage(commMessage);
+  return resolveAgentSessionKeyForTurn(commMessage, cell);
+}
+
 async function beginTurnSession(host: ZhinAgentPrivate, commMessage: Message) {
-  const sessionKey = resolveIMSessionIdFromMessage(commMessage);
+  const sessionKey = resolveTurnSessionKey(commMessage);
   return beginTurnSessionIO(sessionDeps(host), sessionKey, commMessage);
 }
 
@@ -72,7 +96,7 @@ export async function processTextTurn(
     const t0 = now();
     const userId = commMessage.$sender.id || 'unknown';
     const turnUser = buildTurnUserMessages(commMessage, content);
-    const sessionKey = resolveIMSessionIdFromMessage(commMessage);
+    const sessionKey = resolveTurnSessionKey(commMessage);
     const isNewSession = await resolveSessionIsNewBeforeCreate(
       sessionDeps(host),
       sessionKey,
@@ -115,7 +139,7 @@ export async function processTextTurn(
 
     const contextForTools = await attachWebSearchLocale(commMessage, userId, host.userProfiles);
 
-    triggerAIHook(createAIHookEvent('message', 'received', sessionId, {
+    host.orchestrator?.hooks.trigger(createAIHookEvent('message', 'received', sessionId, {
       commMessage: contextForTools,
       content,
     })).catch(() => {});
@@ -160,10 +184,7 @@ export async function processTextTurn(
       mcpTools,
     });
 
-    const { tools: resolvedTools, deferredStats } = resolveAgentToolsForTurn(host,
-      allTools,
-      contextForTools,
-    );
+    const { tools: resolvedTools, deferredStats } = resolveAgentToolsForTurn(host, allTools);
     host.lastToolSearchDeferredStats = deferredStats;
 
     const filterMs = (now() - tFilter).toFixed(0);
@@ -198,6 +219,7 @@ export async function processTextTurn(
       deferredStats,
       activeSkillsContext: host.activeSkillsContext || undefined,
       quoteSystemHint: resolveQuoteSystemHint(commMessage),
+      collaborationHint: resolveTurnCollaborationHint(commMessage, content),
       modelLine: `${providerAlias}/${modelId}`,
       sdk: llmModel.sdk,
       agentsContext: agentsContext ?? undefined,
@@ -206,32 +228,47 @@ export async function processTextTurn(
       ? prependEnvelopeToFirstUserText(extras.prebuiltMessages, turnEnvelope)
       : applyTurnContextToUserMessages(turnUser.promptMessages, turnEnvelope);
 
-    logPhase(host.phaseConfig, 'path.agent_loop', sessionId, { toolCount: allTools.length });
-    const loopResult = await host.promptController.schedule({
-      sessionKey,
-      sessionId,
-      userMessages,
-      commMessage,
-      onChunk,
-      execute: (initialMessages, hooks, signal, _turnId) => runAgentLoopTextTurn({
-        host,
-        sessionId,
-        userMessageExtra: turnUser.userMessageExtra,
-        rawContent: turnUser.rawContent,
-        commMessage,
-        contextForTools,
-        allTools,
-        resolvedTools,
-        personaEnhanced: personaForChat,
-        modelId,
-        modelCandidates: chatCandidates,
-        onChunk,
-        initialMessages,
-        promptHooks: hooks,
-        signal,
-        deferredStats,
-      }),
+    logPhase(host.phaseConfig, 'path.agent_loop', sessionId, {
+      toolCount: resolvedTools.length,
     });
+    let loopResult;
+    try {
+      loopResult = await host.promptController.schedule({
+        sessionKey,
+        sessionId,
+        userMessages,
+        commMessage,
+        onChunk,
+        execute: (initialMessages, hooks, signal, _turnId) => runAgentLoopTextTurn({
+          host,
+          sessionId,
+          userMessageExtra: turnUser.userMessageExtra,
+          rawContent: turnUser.rawContent,
+          commMessage,
+          contextForTools,
+          allTools,
+          resolvedTools,
+          personaEnhanced: personaForChat,
+          modelId,
+          modelCandidates: chatCandidates,
+          onChunk,
+          initialMessages,
+          promptHooks: hooks,
+          signal,
+          deferredStats,
+        }),
+      });
+    } catch (err) {
+      if (err instanceof TurnSupersededError) {
+        logPhase(host.phaseConfig, 'turn.superseded', sessionId, { sessionKey: err.sessionKey });
+        host.emitter.emit('ai.typing.stop', host.emitter.createPayload(sessionId, commMessage, 'text', {
+          reason: 'superseded',
+        }));
+        await host.finalizeActiveTurn({ usage: EMPTY_USAGE, path: 'superseded' });
+        return [];
+      }
+      throw err;
+    }
     const reply = loopResult.reply;
 
     await host.emitter.dispatch('ai.response', host.emitter.createPayload(sessionId, commMessage, 'text', {
@@ -251,7 +288,7 @@ export async function processTextTurn(
       model: loopResult.model,
     });
 
-    triggerAIHook(createAIHookEvent('message', 'sent', sessionId, {
+    host.orchestrator?.hooks.trigger(createAIHookEvent('message', 'sent', sessionId, {
       commMessage,
       content: reply,
     })).catch(() => {});
@@ -284,7 +321,7 @@ export async function processMultimodalTurn(
   onChunk?: OnChunkCallback,
 ): Promise<OutputElement[]> {
   const userId = commMessage.$sender?.id || 'unknown';
-  const sessionKey = resolveIMSessionIdFromMessage(commMessage);
+  const sessionKey = resolveTurnSessionKey(commMessage);
   const isNewSession = await resolveSessionIsNewBeforeCreate(
     sessionDeps(host),
     sessionKey,
@@ -342,6 +379,7 @@ export async function processMultimodalTurn(
     toneHint,
     activeSkillsContext: host.activeSkillsContext || undefined,
     quoteSystemHint: resolveQuoteSystemHint(commMessage),
+    collaborationHint: resolveTurnCollaborationHint(commMessage, textContent),
     modelLine: `${visionProviderAlias}/${visionModelId}`,
     sdk: visionLlmModel.sdk,
     agentsContext: agentsContext ?? undefined,
@@ -375,7 +413,14 @@ export async function processMultimodalTurn(
         signal,
       }),
     });
-  } catch {
+  } catch (err) {
+    if (err instanceof TurnSupersededError) {
+      host.emitter.emit('ai.typing.stop', host.emitter.createPayload(sessionId, commMessage, 'multimodal', {
+        reason: 'superseded',
+      }));
+      await host.finalizeActiveTurn({ usage: EMPTY_USAGE, path: 'superseded' });
+      return [];
+    }
     loopResult = {
       reply: '抱歉，我无法理解这条消息。',
       usage: EMPTY_USAGE,

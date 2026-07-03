@@ -204,7 +204,7 @@ ai:
       model: glm-4.7-flash
 
   # 入站识图：agents.vision + agents/vision.agent.md
-  # 文生图：run_deferred_task 或 spawn_task(agent: draw) + generate_image（provider_alias 如 zhipu-vl）
+  # 文生图：spawn_task(agent: draw) + generate_image（provider_alias 如 zhipu-vl）
   imageGeneration:
     watermarkEnabled: false
 
@@ -419,6 +419,7 @@ ai:
 **说明**：
 - AI 模块需要 `ai.providers` 至少一个实例，且 **`ai.agents.zhin`** 为必填绑定
 - 旧版 `defaultProvider`、`ai.agent.chatModel` / `visionModel`、`allowedTools` / `disabledTools` 已移除，请迁移到 `ai.agents.<name>`
+- 旧版 `providers.*.driver` / `api` / `preset` / `spec` 已移除，请迁移到 `providers.*.sdk`
 - 入站路由写在 `agents.<name>.priority` + `agents.<name>.match`（无 `route` 嵌套层）；`zhin` 不可写这两项
 - 非 `zhin` 且带 `match` 的 agent 须存在 `agents/<name>.agent.md`；`zhin` 永不读 `zhin.agent.md`
 - 旧版顶层 `ai.routes` 启动时自动合并进同名 `agents.*`（已废弃，请迁走）

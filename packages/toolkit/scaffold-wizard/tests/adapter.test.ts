@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import generated from '../src/stack-versions.generated.json' with { type: 'json' };
 import { generateEndpointsConfigYaml, getAdapterDependencies, getAdapterSetupNotes } from '../src/adapter.js';
 import type { AdapterSetupResult } from '../src/adapter.js';
 
@@ -81,7 +80,7 @@ describe('generateEndpointsConfigYaml', () => {
 });
 
 describe('getAdapterDependencies', () => {
-  it('uses synced versions for @zhin.js adapters', () => {
+  it('uses latest for @zhin.js adapters in user projects', () => {
     const deps = getAdapterDependencies({
       packages: ['@zhin.js/adapter-sandbox', '@zhin.js/adapter-telegram', '@icqqjs/icqq@latest'],
       plugins: [],
@@ -89,8 +88,8 @@ describe('getAdapterDependencies', () => {
       envVars: {},
     });
 
-    expect(deps['@zhin.js/adapter-sandbox']).toBe(generated.zhinStack['@zhin.js/adapter-sandbox']);
-    expect(deps['@zhin.js/adapter-telegram']).toBe(generated.zhinStack['@zhin.js/adapter-telegram']);
+    expect(deps['@zhin.js/adapter-sandbox']).toBe('latest');
+    expect(deps['@zhin.js/adapter-telegram']).toBe('latest');
     expect(deps['@icqqjs/icqq']).toBe('latest');
   });
 });

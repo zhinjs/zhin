@@ -15,11 +15,22 @@
 | [0009](./0009-pi-aligned-ai-agent-core.md) | 对齐 pi 的 AI/Agent 核心（Context + stream + agentLoop） |
 | [0010](./0010-pi-coding-agent-harness-alignment.md) | 对齐 pi coding-agent Harness（Compaction / 会话树 / 生态） |
 | [0011](./0011-missions-harness-alignment.md) | 对齐 Missions Multi-Agent Harness（missions / MissionRunner） |
+| [0012](./0012-memory-lifecycle-stability-fixes.md) | 内存与生命周期稳定性修复 |
+| [0013](./0013-graceful-shutdown-protocol.md) | Graceful Shutdown 协议 |
+| [0014](./0014-stability-enhancement-roadmap.md) | 稳定性增强路线图 |
+| [0015](./0015-capability-tier-model.md) | 能力分档模型 |
 | [0016](./0016-demo-host-token-scopes.md) | Demo Host Token 作用域（demo.zhin.dev） |
+| [0017](./0017-rag-v0-knowledge-search.md) | RAG v0 知识检索 |
+| [0018](./0018-ai-sdk-transport-layer.md) | AI SDK Transport Layer |
 | [0019](./0019-install-size-layering.md) | 安装体积分层（IM <10MB、peer、TypeBox→Zod） |
 | [0020](./0020-speech-pipeline-stt-tts.md) | 语音管线 STT/TTS 与 AI 内容链 |
 | [0021](./0021-content-moderation.md) | 内容审查 — 机制在框架，策略在运营者 |
 | [0022](./0022-interactive-button-modes.md) | Interactive 按钮 callback / command 双模式 |
+| [0023](./0023-group-cell-multi-endpoint-agents.md) | GroupCell 多 Endpoint Agent 协作 |
+| [0024](./0024-five-agent-aop-pipeline.md) | Five-Agent Pipeline（Superseded） |
+| [0025](./0025-adapter-ai-outbound-json.md) | Adapter 驱动的 AI 结构化出站 JSON |
+| [0026](./0026-roster-round-harness.md) | RosterRound 轮流发言编排 Harness |
+| [0027](./0027-agent-run-orchestration-kernel.md) | Agent Run Orchestration Kernel |
 
 ## 相关
 

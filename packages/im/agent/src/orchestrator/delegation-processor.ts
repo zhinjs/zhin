@@ -61,7 +61,7 @@ export class DelegationProcessor {
       name: payload.title,
       description: payload.description,
       goal: payload.description,
-      role: 'main',
+      role: 'planner',
       context: {
         acceptance_criteria: payload.acceptance_criteria ?? '',
         artifacts: payload.artifacts ?? [],
@@ -100,7 +100,7 @@ export class DelegationProcessor {
 
     const runs = await orch.repositoryHandle.listRunsBySessionKeyPrefix(DELEGATION_SESSION_PREFIX);
     for (const run of runs) {
-      if (run.status !== 'active') continue;
+      if (run.status !== 'open' && run.status !== 'running' && run.status !== 'waiting') continue;
       const tasks = await orch.repositoryHandle.listTasksByRun(run.id);
       for (const task of tasks) {
         if (task.status !== 'pending' || this.processing.has(task.id)) continue;
@@ -131,7 +131,7 @@ export class DelegationProcessor {
 
       dispatcher.recordResult({
         taskId,
-        role: 'main',
+        role: 'planner',
         success: true,
         summary: resultText,
         duration: 0,
@@ -139,7 +139,7 @@ export class DelegationProcessor {
     } catch (err) {
       dispatcher.recordResult({
         taskId,
-        role: 'main',
+        role: 'planner',
         success: false,
         summary: 'delegation failed',
         error: err instanceof Error ? err.message : String(err),

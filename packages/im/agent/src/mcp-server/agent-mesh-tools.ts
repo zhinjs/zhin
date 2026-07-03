@@ -140,7 +140,7 @@ export function registerAgentMeshTools(server: McpServer): void {
           isError: true,
         };
       }
-      if (task.status === 'completed' || task.status === 'skipped') {
+      if (task.status === 'completed' || task.status === 'cancelled') {
         return {
           content: [{ type: 'text' as const, text: JSON.stringify({ error: 'Task already finished' }) }],
           isError: true,

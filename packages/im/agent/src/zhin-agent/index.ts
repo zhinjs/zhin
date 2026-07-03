@@ -56,6 +56,7 @@ import { type ZhinAgentTurnMetrics } from './turn-metrics.js';
 import { TurnTracker } from './turn-tracker.js';
 import { ZhinAgentEventEmitter } from './event-emitter.js';
 import { type PhaseTraceConfig } from './phase-trace.js';
+import type { TurnEvent } from './turn-event.js';
 
 import type { ModelRegistry } from '@zhin.js/ai';
 import { UserProfileStore } from '../user-profile.js';
@@ -75,12 +76,13 @@ import {
 import { DeferredWorkerRunner } from '../deferred-worker-runner.js';
 import { deliverDeferredAutoContinueReply } from './deferred-delivery.js';
 import { processTextTurn, processMultimodalTurn } from './turn-pipeline.js';
-import { manualCompactSession } from './compaction-runtime.js';
+import { resolveContextTailMessageLimit } from './context-tail-limit.js';
 import {
   archiveSessionByKey,
   beginTurnSession,
   formatUserContentForSession,
 } from './session-io.js';
+import { manualCompactSession } from './compaction-runtime.js';
 import { asPrivate } from './zhin-agent-private.js';
 import { PromptController } from './prompt-controller.js';
 import { getActiveTurnTracker, runInTurnContext as runInTurnContextAls } from './turn-context.js';
@@ -92,7 +94,6 @@ import type { Disposable } from '../types/disposable.js';
 import { buildDisciplinedPrompt as assembleDisciplinedPrompt } from './prompt-assembly.js';
 import {
   resolveAgentToolsForTurn as resolveToolsForTurn,
-  runDeferredWorker as runDeferredWorkerTurn,
 } from './tool-orchestration.js';
 import { buildDeferredAutoContinueUserMessage } from './deferred-auto-continue.js';
 import type { DeferredWorkerResult } from '../deferred-worker-runner.js';
@@ -190,7 +191,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
       this.config.followUpMode,
     );
     const memoryStack = createMemoryContextRepository({
-      tailMessageLimit: this.config.slidingWindowSize,
+      tailMessageLimit: resolveContextTailMessageLimit(this.config),
     });
     this.agentSessionStore = memoryStack.sessionStore;
     this.contextRepository = memoryStack.repository;
@@ -329,6 +330,19 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     if (this.memoryPersistenceDone) return;
     this.memoryPersistenceDone = true;
     this.resolveMemoryPersistenceReady?.();
+  }
+
+  /** 多 Endpoint Runtime 共享主 Agent 的 DB session / transcript 存储 */
+  sharePersistenceWith(target: ZhinAgent): void {
+    target.configure({
+      imSessionStore: this.imSessionStore,
+      agentSessionStore: this.agentSessionStore,
+      contextRepository: this.contextRepository,
+      imTranscriptStore: this.imTranscriptStore,
+    });
+    if (this.memoryPersistenceDone) {
+      target.markMemoryPersistenceReady();
+    }
   }
 
   upgradeProfilesToDatabase(model: any): void {
@@ -658,20 +672,71 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
       processTextTurn(asPrivate(this), content, commMessage, externalTools, onChunk),
     );
   }
+
+  async *processStream(
+    content: string,
+    commMessage: Message,
+    externalTools: Tool[] = [],
+  ): AsyncGenerator<TurnEvent, void, undefined> {
+    const turnId = randomUUID();
+    const sessionId = resolveIMSessionIdFromMessage(commMessage);
+
+    yield { type: 'turn_start', sessionId, turnId };
+
+    let accumulated = '';
+    const onChunk: OnChunkCallback = (chunk, acc) => {
+      accumulated = acc;
+      eventQueue.push({ type: 'chunk', text: chunk, accumulated: acc });
+      resolveWaiting?.();
+    };
+
+    const eventQueue: TurnEvent[] = [];
+    let resolveWaiting: (() => void) | undefined;
+    let done = false;
+    let finalOutput: OutputElement[] = [];
+    let finalError: Error | undefined;
+
+    const runPromise = this.runInTurnContext(turnId, () =>
+      processTextTurn(asPrivate(this), content, commMessage, externalTools, onChunk),
+    ).then((output) => {
+      finalOutput = output;
+      done = true;
+      resolveWaiting?.();
+    }).catch((err) => {
+      finalError = err instanceof Error ? err : new Error(String(err));
+      done = true;
+      resolveWaiting?.();
+    });
+
+    while (!done) {
+      if (eventQueue.length > 0) {
+        yield eventQueue.shift()!;
+        continue;
+      }
+      await new Promise<void>(resolve => { resolveWaiting = resolve; });
+      resolveWaiting = undefined;
+    }
+
+    while (eventQueue.length > 0) {
+      yield eventQueue.shift()!;
+    }
+
+    if (finalError) {
+      yield { type: 'error', error: finalError, recoverable: false };
+    } else {
+      yield {
+        type: 'turn_end',
+        output: finalOutput,
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      };
+    }
+
+    await runPromise.catch(() => {});
+  }
   private resolveAgentToolsForTurn(
     allTools: AgentTool[],
-    commMessage: Message,
   ): { tools: AgentTool[]; deferredStats?: string } {
-    return resolveToolsForTurn(asPrivate(this), allTools, commMessage);
-  }
-
-  private async runDeferredWorker(
-    goal: string,
-    toolQuery: string | undefined,
-    commMessage: Message,
-    allTools: AgentTool[],
-  ): Promise<string> {
-    return runDeferredWorkerTurn(asPrivate(this), goal, toolQuery, commMessage, allTools);
+    return resolveToolsForTurn(asPrivate(this), allTools);
   }
 
   private buildDisciplinedPrompt(basePrompt: string): string {

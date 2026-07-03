@@ -1,0 +1,231 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import type { Message } from '../../../core/src/message.js';
+import {
+  detectCeremonyOrchestrationIntent,
+  formatCollaborationCellHint,
+  resolveCollaborationCellForMessage,
+  resolveCollaborationTurnHint,
+} from '../../src/collaboration/collaboration-context.js';
+import {
+  getCollaborationCellService,
+  resetCollaborationCellService,
+} from '../../src/collaboration/cell-service.js';
+import { MemoryCollaborationCellRepository } from '../../src/collaboration/collaboration-cell-repository.js';
+import type { CollaborationCell } from '../../src/collaboration/types.js';
+
+const cell: CollaborationCell = {
+  id: 'icqq-collab-room',
+  adapter: 'icqq',
+  sceneId: '373460458',
+  goal: 'ICQQ 多 Bot 同群协作',
+  members: [
+    { endpointId: '8596238', primary: 'planner', role: 'coordinator' },
+    { endpointId: '210723495', primary: 'executor', role: 'worker' },
+  ],
+};
+
+function groupMessage(endpoint: string, sceneId = '373460458'): Message {
+  return {
+    $adapter: 'icqq',
+    $endpoint: endpoint,
+    $channel: { type: 'group', id: sceneId },
+    $sender: { id: 'user1' },
+    $content: [],
+  } as unknown as Message;
+}
+
+describe('formatCollaborationCellHint', () => {
+  it('lists self and peers for planner endpoint', () => {
+    const hint = formatCollaborationCellHint(cell, '8596238');
+    expect(hint).toContain('8596238');
+    expect(hint).toContain('planner');
+    expect(hint).toContain('210723495');
+    expect(hint).toContain('executor');
+    expect(hint).toContain('Assignments and task handback are managed by the orchestration kernel');
+    expect(hint).not.toContain('group_delegate');
+    expect(hint).not.toContain('cell_pipeline_status');
+    expect(hint).toContain('cell_mission_status');
+  });
+});
+
+describe('resolveCollaborationTurnHint', () => {
+  beforeEach(async () => {
+    resetCollaborationCellService();
+    const repo = new MemoryCollaborationCellRepository();
+    await repo.upsert({
+      id: cell.id,
+      adapter: cell.adapter,
+      sceneId: cell.sceneId,
+      goal: cell.goal,
+      members: cell.members,
+    });
+    const svc = getCollaborationCellService();
+    svc.setRepository(repo);
+    await svc.reloadFromRepository();
+  });
+
+  it('injects hint only for group cell member with peers', () => {
+    const hint = resolveCollaborationTurnHint(groupMessage('8596238'));
+    expect(hint).toContain('210723495');
+    expect(hint).toContain('#taskId');
+    expect(hint).not.toContain('group_delegate');
+  });
+
+  it('skips private chat', () => {
+    const msg = {
+      ...groupMessage('8596238'),
+      $channel: { type: 'private', id: 'user1' },
+    } as unknown as Message;
+    expect(resolveCollaborationTurnHint(msg)).toBeUndefined();
+  });
+
+  it('skips group without matching cell', () => {
+    expect(resolveCollaborationTurnHint(groupMessage('8596238', '999'))).toBeUndefined();
+  });
+
+  it('skips endpoint not in cell', () => {
+    expect(resolveCollaborationTurnHint(groupMessage('unknown-bot'))).toBeUndefined();
+  });
+
+  it('resolveCollaborationCellForMessage matches resolveCollaborationTurnHint gate', () => {
+    const msg = groupMessage('8596238');
+    expect(resolveCollaborationCellForMessage(msg)?.id).toBe('icqq-collab-room');
+    expect(resolveCollaborationTurnHint(msg)).toBeTruthy();
+  });
+
+  it('does not leak legacy pipeline delegatee hints from stored cell state', async () => {
+    const svc = getCollaborationCellService();
+    const repo = new MemoryCollaborationCellRepository();
+    await repo.upsert({
+      id: cell.id,
+      adapter: cell.adapter,
+      sceneId: cell.sceneId,
+      members: [
+        { endpointId: '8596238', primary: 'planner', pipelineRole: 'planner' },
+        { endpointId: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
+      ],
+    });
+    svc.setRepository(repo);
+    await svc.reloadFromRepository();
+
+    await svc.setPipelineState(cell.id, {
+      runId: 'run-1',
+      stage: 'researcher',
+      reviewCycles: 0,
+      maxReviewCycles: 3,
+      allowedNextStages: ['evaluator'],
+      todo: [],
+      activeDelegations: [{
+        targetEndpointId: '210723495',
+        targetRole: 'researcher',
+        runId: 'run-1',
+        requireArtifact: false,
+        delegateText: '做自我介绍',
+        mode: 'ceremony',
+        updatedAt: Date.now(),
+      }],
+      updatedAt: Date.now(),
+    });
+
+    const hint = resolveCollaborationTurnHint(groupMessage('210723495'));
+    expect(hint).toContain('Assignments and peer mentions are managed by the orchestration kernel');
+    expect(hint).not.toContain('[Active delegation]');
+    expect(hint).not.toContain('做自我介绍');
+    expect(hint).not.toContain('[Delegate]');
+  });
+
+  it('does not inject legacy artifact-gate instructions when artifacts were required before migration', async () => {
+    const svc = getCollaborationCellService();
+    const repo = new MemoryCollaborationCellRepository();
+    await repo.upsert({
+      id: cell.id,
+      adapter: cell.adapter,
+      sceneId: cell.sceneId,
+      members: [
+        { endpointId: '8596238', primary: 'planner', pipelineRole: 'planner' },
+        { endpointId: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
+      ],
+    });
+    svc.setRepository(repo);
+    await svc.reloadFromRepository();
+
+    await svc.setPipelineState(cell.id, {
+      runId: 'run-1',
+      stage: 'researcher',
+      reviewCycles: 0,
+      maxReviewCycles: 3,
+      allowedNextStages: ['evaluator'],
+      todo: [],
+      activeDelegations: [{
+        targetEndpointId: '210723495',
+        targetRole: 'researcher',
+        runId: 'run-1',
+        requireArtifact: true,
+        artifactKinds: ['report', 'citations'],
+        delegateText: '调研',
+        mode: 'pipeline',
+        updatedAt: Date.now(),
+      }],
+      updatedAt: Date.now(),
+    });
+
+    const hint = resolveCollaborationTurnHint(groupMessage('210723495'));
+    expect(hint).not.toContain('cell_submit_artifact');
+    expect(hint).not.toContain('report:{summary');
+    expect(hint).not.toContain('citations:{sources');
+  });
+
+  it('does not inject legacy restart commands for ordinary planner turns', async () => {
+    const svc = getCollaborationCellService();
+    const repo = new MemoryCollaborationCellRepository();
+    await repo.upsert({
+      id: cell.id,
+      adapter: cell.adapter,
+      sceneId: cell.sceneId,
+      members: [
+        { endpointId: '8596238', primary: 'planner', pipelineRole: 'planner' },
+        { endpointId: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
+      ],
+    });
+    svc.setRepository(repo);
+    await svc.reloadFromRepository();
+
+    const hint = resolveCollaborationTurnHint(
+      groupMessage('8596238'),
+      '好的，重新启动 **Zhin 框架调研** 流程！',
+    );
+    expect(hint).not.toContain('[Pipeline restart]');
+    expect(hint).not.toContain('cell_manage_pipeline');
+  });
+
+  it('does not inject legacy ceremony delegation instructions for ordinary planner turns', async () => {
+    const svc = getCollaborationCellService();
+    const repo = new MemoryCollaborationCellRepository();
+    await repo.upsert({
+      id: cell.id,
+      adapter: cell.adapter,
+      sceneId: cell.sceneId,
+      members: [
+        { endpointId: '8596238', primary: 'planner', pipelineRole: 'planner' },
+        { endpointId: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
+      ],
+    });
+    svc.setRepository(repo);
+    await svc.reloadFromRepository();
+
+    const hint = resolveCollaborationTurnHint(
+      groupMessage('8596238'),
+      '组织大家，一次在群里做一个自我介绍',
+    );
+    expect(hint).not.toContain('[Ceremony]');
+    expect(hint).not.toContain('requireArtifact=false');
+  });
+});
+
+describe('detectCeremonyOrchestrationIntent', () => {
+  it('matches intro and round-robin phrasing', () => {
+    expect(detectCeremonyOrchestrationIntent('组织大家做一次自我介绍')).toBe(true);
+    expect(detectCeremonyOrchestrationIntent('请大家依次汇报')).toBe(true);
+    expect(detectCeremonyOrchestrationIntent('调研 Zhin 框架')).toBe(false);
+  });
+});

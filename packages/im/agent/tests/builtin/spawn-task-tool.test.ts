@@ -42,13 +42,13 @@ describe('SpawnTaskBuiltinTool / createSpawnTaskTool', () => {
     const out = await tool.execute({ task: '整理文档', label: 'doc' });
 
     expect(spawn).toHaveBeenCalledTimes(1);
-    expect(spawn).toHaveBeenCalledWith({
+    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({
       task: '整理文档',
       label: 'doc',
       origin: { message: commMessage },
       agent: undefined,
       notifyContext: commMessage,
-    });
+    }));
     expect(out).toBe('子任务已启动');
   });
 

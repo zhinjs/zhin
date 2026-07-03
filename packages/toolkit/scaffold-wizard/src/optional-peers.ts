@@ -5,7 +5,6 @@ import {
   findMissingPackageDependencies,
   findUnresolvedPackageInstalls,
 } from './project-deps.js';
-import { ZHIN_STACK_VERSIONS } from './zhin-stack-deps.js';
 
 export const SPEECH_PACKAGE = '@zhin.js/speech';
 export const HTML_RENDERER_PACKAGE = '@zhin.js/html-renderer';
@@ -71,7 +70,7 @@ function diagnosePeer(
 ): OptionalPeerDiagnosis | undefined {
   if (!required) return undefined;
   const requiredDeps = {
-    [packageName]: ZHIN_STACK_VERSIONS[packageName as keyof typeof ZHIN_STACK_VERSIONS] ?? 'latest',
+    [packageName]: 'latest',
   };
   const missingFromPackageJson = findMissingPackageDependencies(pkg, requiredDeps);
   const declared = [packageName].filter((n) => !missingFromPackageJson.includes(n));
@@ -138,13 +137,13 @@ export function formatOptionalPeerFixCommand(diagnosis: OptionalPeerDiagnosis): 
   ];
   const unique = [...new Set(missing)];
   if (unique.length === 0) return 'pnpm install';
-  return `pnpm add ${unique.map((n) => `${n}@${ZHIN_STACK_VERSIONS[n as keyof typeof ZHIN_STACK_VERSIONS] ?? 'latest'}`).join(' ')}`;
+  return `pnpm add ${unique.map((n) => `${n}@latest`).join(' ')}`;
 }
 
 export function getOptionalPeerDependencies(config: Record<string, unknown>): Record<string, string> {
   const peers = diagnoseOptionalPeers(process.cwd(), config);
   const deps: Record<string, string> = {};
-  if (peers.speech?.required) deps[SPEECH_PACKAGE] = ZHIN_STACK_VERSIONS['@zhin.js/speech'];
-  if (peers.htmlRenderer?.required) deps[HTML_RENDERER_PACKAGE] = ZHIN_STACK_VERSIONS['@zhin.js/html-renderer'];
+  if (peers.speech?.required) deps[SPEECH_PACKAGE] = 'latest';
+  if (peers.htmlRenderer?.required) deps[HTML_RENDERER_PACKAGE] = 'latest';
   return deps;
 }

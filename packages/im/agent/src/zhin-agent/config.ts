@@ -21,6 +21,7 @@ import type { AgentOrchestrator } from '../orchestrator/index.js';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { SubagentResultSender } from '../subagent.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
+import { DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT } from './context-tail-limit.js';
 
 export type ModelSizeHint = 'small' | 'medium' | 'large';
 export type ExecApprovalMode = 'ask' | 'allow' | 'deny';
@@ -91,6 +92,8 @@ export interface ZhinAgentConfig {
   maxTools?: number;
   minTopicRounds?: number;
   slidingWindowSize?: number;
+  /** agent_messages 上下文 tail 条数（默认 80；勿与 slidingWindowSize 混用） */
+  contextTailMessageLimit?: number;
   topicChangeThreshold?: number;
   rateLimit?: RateLimitConfig;
   toneAwareness?: boolean;
@@ -171,10 +174,8 @@ export interface ZhinAgentConfig {
   deferredAutoContinueMaxDepth?: number;
 }
 
-/** 主 Agent 默认常驻编排工具（不含 activate_skill：执行一律经 Worker；文生图走 deferred） */
+/** 主 Agent 默认常驻编排工具 */
 export const DEFAULT_ORCHESTRATOR_TOOLS = [
-  'tool_search',
-  'run_deferred_task',
   'ask_user',
   'spawn_task',
 ] as const;
@@ -190,16 +191,17 @@ export const HARD_ORCHESTRATION_TOOLS = [
   'orchestration_patch_state',
 ] as const;
 
+/** 群协作单元轻量工具。任务分派统一走 OrchestrationKernel/spawn_task。 */
+export const COLLABORATION_ORCHESTRATOR_TOOLS = [
+  'cell_set_goal',
+  'cell_mission_status',
+] as const;
+
 export const DEFAULT_HARD_ORCHESTRATOR_TOOLS = [
   ...DEFAULT_ORCHESTRATOR_TOOLS,
   ...HARD_ORCHESTRATION_TOOLS,
+  ...COLLABORATION_ORCHESTRATOR_TOOLS,
 ] as const;
-
-/** 不进入主编排也不进入 deferred 目录 */
-export const DEFERRED_CATALOG_EXCLUDED_TOOLS = ['activate_skill', 'install_skill'] as const;
-
-/** @deprecated 使用 DEFERRED_CATALOG_EXCLUDED_TOOLS */
-export const TOOL_SEARCH_EXCLUDED_TOOLS = DEFERRED_CATALOG_EXCLUDED_TOOLS;
 
 /** Deferred Worker 默认基础工具 */
 export const DEFAULT_WORKER_BASE_TOOLS = [
@@ -207,12 +209,6 @@ export const DEFAULT_WORKER_BASE_TOOLS = [
   'read_file',
   'web_search',
 ] as const;
-
-/** @deprecated 使用 DEFAULT_ORCHESTRATOR_TOOLS */
-export const DEFAULT_TOOL_SEARCH_ORCHESTRATOR_TOOLS = DEFAULT_ORCHESTRATOR_TOOLS;
-
-/** @deprecated 使用 DEFAULT_WORKER_BASE_TOOLS */
-export const DEFAULT_TOOL_SEARCH_WORKER_BASE_TOOLS = DEFAULT_WORKER_BASE_TOOLS;
 
 /** ZhinAgent 运行依赖（通过 setter 或 configure() 注入） */
 export interface ZhinAgentDependencies {
@@ -243,6 +239,7 @@ export const DEFAULT_CONFIG = {
   maxTools: 12,       // 增加工具数量
   minTopicRounds: 5,
   slidingWindowSize: 5,
+  contextTailMessageLimit: DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT,
   topicChangeThreshold: 0.15,
   rateLimit: {},
   toneAwareness: true,

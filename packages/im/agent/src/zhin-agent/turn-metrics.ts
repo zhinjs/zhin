@@ -1,7 +1,7 @@
 import type { Usage } from '@zhin.js/ai';
 import { formatCompactLog, formatCompactUsage } from '@zhin.js/logger';
 
-export type ZhinAgentTurnPath = 'chat' | 'fast' | 'agent' | 'multimodal' | 'rate_limited';
+export type ZhinAgentTurnPath = 'chat' | 'fast' | 'agent' | 'multimodal' | 'rate_limited' | 'superseded';
 
 export interface ZhinAgentTurnMetrics {
   /** 主 agent + 本轮 spawn 的子 agent 合计 */

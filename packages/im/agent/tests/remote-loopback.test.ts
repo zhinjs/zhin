@@ -36,7 +36,7 @@ describe('Remote loopback delegate flow', () => {
       run_id: run.id,
       name: 'Remote work',
       role: 'subtask',
-      executor_kind: 'remote',
+      executor_kind: 'remote_mesh',
       remote_agent_id: 'local',
     });
     getAgentDispatcher().syncTaskFromRecord(task);

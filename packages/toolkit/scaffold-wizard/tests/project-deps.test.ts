@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AI_STACK_VERSIONS,
   ensureDatabaseForAI,
   ensureDatabaseForAdapters,
   getAIDependencies,
@@ -49,8 +48,8 @@ describe('project-deps', () => {
       },
     };
     const required = getRequiredAIDependenciesForConfig(config);
-    expect(required['@ai-sdk/openai-compatible']).toBe(AI_STACK_VERSIONS['@ai-sdk/openai-compatible']);
-    expect(required.ai).toBe(AI_STACK_VERSIONS.ai);
+    expect(required['@ai-sdk/openai-compatible']).toBe('latest');
+    expect(required.ai).toBe('latest');
   });
 
   it('flags ai@6 + openai-compatible@3 incompatibility', () => {
@@ -80,15 +79,15 @@ describe('project-deps', () => {
 
   it('returns agent stack + MCP SDK + provider sdk when AI is enabled', () => {
     expect(getAIDependencies({ enabled: false })).toEqual({});
-    expect(getAIDependencies({ enabled: true, defaultProvider: 'openai' })).toEqual({
-      '@zhin.js/agent': AI_STACK_VERSIONS['@zhin.js/agent'],
-      zod: AI_STACK_VERSIONS.zod,
-      ai: AI_STACK_VERSIONS.ai,
-      '@modelcontextprotocol/sdk': AI_STACK_VERSIONS['@modelcontextprotocol/sdk'],
-      '@ai-sdk/openai': AI_STACK_VERSIONS['@ai-sdk/openai'],
+    expect(getAIDependencies({ enabled: true, agentProvider: 'openai' })).toEqual({
+      '@zhin.js/agent': 'latest',
+      zod: 'latest',
+      ai: 'latest',
+      '@modelcontextprotocol/sdk': 'latest',
+      '@ai-sdk/openai': 'latest',
     });
-    expect(getAIDependencies({ enabled: true, defaultProvider: 'ollama' })).toMatchObject({
-      '@ai-sdk/openai-compatible': AI_STACK_VERSIONS['@ai-sdk/openai-compatible'],
+    expect(getAIDependencies({ enabled: true, agentProvider: 'ollama' })).toMatchObject({
+      '@ai-sdk/openai-compatible': 'latest',
     });
   });
 
@@ -97,7 +96,7 @@ describe('project-deps', () => {
       yes: false,
       ai: {
         enabled: true,
-        defaultProvider: 'openai',
+        agentProvider: 'openai',
         sessions: RECOMMENDED_AI_DEFAULTS.sessions,
       },
     };
@@ -114,7 +113,7 @@ describe('project-deps', () => {
   it('does not auto-add database in -y Stable mode', () => {
     const options: InitOptions = {
       yes: true,
-      ai: { enabled: true, defaultProvider: 'ollama' },
+      ai: { enabled: true, agentProvider: 'ollama' },
     };
 
     ensureDatabaseForAI(options);

@@ -27,7 +27,7 @@
 | `createAgentSession`（终端会话文件） | `ZhinAgent` + `session_key` / DB `agent_messages` |
 | 项目 `trust.json` | IM sender 角色 + exec/file policy |
 | 终端 TUI `/tree` 可视化 | IM 文本列表 + Console API |
-| 内置 sub-agents | `spawn_task` / `run_deferred_task` |
+| 内置 sub-agents | `spawn_task` |
 | 无 MCP 哲学 | 内置 MCP 客户端 |
 | `data/skills` | **已删除**；用 `skills/` 或 `.agents/skills/` |
 | IM 出站 | 仍走 Adapter 链（ADR 0004） |

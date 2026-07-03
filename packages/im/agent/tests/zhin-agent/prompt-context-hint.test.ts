@@ -107,6 +107,32 @@ describe('buildRichSystemPrompt', () => {
     expect(prompt).not.toContain('当前用户角色');
     expect(prompt).not.toContain('Owner（拥有者）');
   });
+
+  it('SOUL.md 存在时用 nickname 而非硬编码 Zhin', () => {
+    const prompt = buildRichSystemPrompt({
+      config: minimalConfig,
+      skillRegistry: null,
+      skillsSummaryXML: '',
+      activeSkillsContext: '',
+      bootstrapContext: '## SOUL.md\n# Soul\nAction-oriented assistant.',
+      agentNickname: '小智',
+    });
+    expect(prompt).toContain('You are 小智.');
+    expect(prompt).toContain('see SOUL.md');
+    expect(prompt).not.toMatch(/You are Zhin\b/);
+  });
+
+  it('SOUL.md 且无 nickname 时不注入 Zhin 品牌名', () => {
+    const prompt = buildRichSystemPrompt({
+      config: minimalConfig,
+      skillRegistry: null,
+      skillsSummaryXML: '',
+      activeSkillsContext: '',
+      bootstrapContext: '## SOUL.md\n# Soul\n',
+    });
+    expect(prompt).toContain('Persona, identity, and tone: see SOUL.md');
+    expect(prompt).not.toMatch(/You are Zhin\b/);
+  });
 });
 
 describe('resolvePromptFileRole', () => {

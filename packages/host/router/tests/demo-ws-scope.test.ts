@@ -1,8 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { createServer } from "node:http";
 import { TokenRegistry } from "../src/demo-scope.js";
+import { canListenOnLocalhost, skipIfNoLocalhostListen } from "./listen-support.js";
 
-vi.mock("@zhin.js/core", () => ({
+vi.mock("@zhin.js/core", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@zhin.js/core")>()),
   usePlugin: () => ({
     declareConfig: vi.fn(),
     provide: vi.fn(),
@@ -19,8 +21,13 @@ vi.mock("@zhin.js/core", () => ({
 
 describe("Router WebSocket auth — demo scope", () => {
   let Router: typeof import("../src/koa-router.js").Router;
+  let canListen = false;
   const FULL_TOKEN = "full-secret-token";
   const DEMO_TOKEN = "demo-public-token";
+
+  beforeAll(async () => {
+    canListen = await canListenOnLocalhost();
+  });
 
   beforeEach(async () => {
     const mod = await import("../src/koa-router.js");
@@ -34,7 +41,8 @@ describe("Router WebSocket auth — demo scope", () => {
     });
   }
 
-  it("demo token connects to /sandbox only", async () => {
+  it("demo token connects to /sandbox only", async (ctx) => {
+    if (skipIfNoLocalhostListen(ctx, canListen)) return;
     const server = createServer();
     const router = new Router(server);
     router.setTokenRegistry(registry());

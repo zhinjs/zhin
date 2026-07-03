@@ -54,5 +54,11 @@ export function validateAiRoutingConfig(cfg: NormalizedAiRoutingConfig): string[
     }
   }
 
+  for (const [role, roleCfg] of Object.entries(cfg.pipeline)) {
+    if (roleCfg.provider && !cfg.providers[roleCfg.provider]) {
+      errors.push(`ai.pipeline.${role}: unknown provider "${roleCfg.provider}"`);
+    }
+  }
+
   return errors;
 }

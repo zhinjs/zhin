@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyConsoleConfigFixes, diagnoseConsoleConfig } from '../src/commands/doctor.js';
+import { applyConsoleConfigFixes, diagnoseConsoleConfig } from '@zhin.js/scaffold-wizard';
 
 describe('doctor console diagnostics', () => {
   it('detects missing Console host, Sandbox, CORS, and token config', () => {

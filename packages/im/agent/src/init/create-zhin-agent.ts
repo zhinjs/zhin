@@ -10,8 +10,6 @@ import { setMemoryEntryRepository } from '../memory-entry-registry.js';
 import { ZhinAgent } from '../zhin-agent/index.js';
 import { createBuiltinTools } from '../builtin-tools.js';
 import { createGenerateImageTool } from '../builtin/generate-image-tool.js';
-import { createRunValidationSpecTool } from '../builtin/run-validation-spec-tool.js';
-import { createRunSpecDryRunTool } from '../builtin/run-spec-dry-run-tool.js';
 import { collectPluginSkillSearchRoots } from '../discovery/utils.js';
 import { discoverWorkspaceAgents } from '../discovery/agents.js';
 
@@ -19,6 +17,7 @@ import {
   resolveSkillInstructionMaxChars,
   DEFAULT_CONFIG,
   DEFAULT_HARD_ORCHESTRATOR_TOOLS,
+  COLLABORATION_ORCHESTRATOR_TOOLS,
   type ZhinAgentConfig,
 } from '../zhin-agent/config.js';
 import { PersistentCronEngine, setCronManager } from '../cron-engine.js';
@@ -42,6 +41,7 @@ import type { Plugin } from '@zhin.js/core'
 import type { AIConfig } from '@zhin.js/ai';
 import type { AIServiceRefs } from './shared-refs.js';
 import { activateAiDatabaseStorage } from './activate-ai-database-storage.js';
+import { wireCollaborationStorage } from '../collaboration/wire-collaboration-storage.js';
 import {
   createSessionTreeRuntimeFromAgent,
   setSessionTreeRuntime,
@@ -52,14 +52,17 @@ import {
   createOrchestrationRuntimeFromService,
   setOrchestrationRuntime,
 } from '../orchestration-runtime-registry.js';
+import { registerDefaultExecutors } from '../orchestrator/bootstrap-executors.js';
 import { initDelegationProcessor } from '../orchestrator/delegation-processor.js';
 import { initRemoteAgentRegistry } from '../orchestrator/remote-agent-registry.js';
 import { startRemoteTaskPoller } from '../orchestrator/remote-task-poller.js';
-import { initMissionRunner } from '../orchestrator/mission-runner.js';
-import { sessionKeyToSubagentOrigin } from '../orchestrator/mission-milestone-notify.js';
 import { createSyntheticMessage, type Message } from '@zhin.js/core';
 import { asPrivate } from '../zhin-agent/zhin-agent-private.js';
 import type { AIService } from '../service.js';
+import { createExecPolicyHook } from '../security/exec-policy-hook.js';
+import { createFilePolicyHook } from '../security/file-policy-hook.js';
+import { createDangerousToolPolicyHook } from '../security/dangerous-tool-policy-hook.js';
+import { bootstrapEndpointRuntimes, markAllRuntimesPersistenceReady } from '../collaboration/bootstrap-agent-runtimes.js';
 
 /** yaml 中显式 models 列表：覆盖 provider.models 与 ModelRegistry 缓存，避免 /v1/models 发现结果污染白名单 */
 function applyExplicitModelLists(ai: AIService, modelRegistry: ModelRegistry): void {
@@ -97,8 +100,8 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     const provider = ai.getProvider(zhinBinding.providerAlias);
     const configService = root.inject('config');
     const appConfig = (configService?.primaryFile
-      ? configService.getRaw<{ ai?: AIConfig; assistant?: AssistantConfig }>(configService.primaryFile)
-      : configService?.getPrimary<{ ai?: AIConfig; assistant?: AssistantConfig }>())
+      ? configService.getRaw<{ ai?: AIConfig; assistant?: AssistantConfig; collaboration?: unknown }>(configService.primaryFile)
+      : configService?.getPrimary<{ ai?: AIConfig; assistant?: AssistantConfig; collaboration?: unknown }>())
       ?? {};
     const agentConfig = ai.getAgentConfig();
     const semanticMemory = appConfig.ai?.memory?.semantic?.enabled === true;
@@ -119,6 +122,14 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     if (orchestratorTools && !orchestratorTools.includes('knowledge_search')) {
       orchestratorTools = [...orchestratorTools, 'knowledge_search'];
     }
+    if (appConfig.collaboration && typeof appConfig.collaboration === 'object'
+      && (appConfig.collaboration as { enabled?: boolean }).enabled !== false) {
+      for (const name of COLLABORATION_ORCHESTRATOR_TOOLS) {
+        if (!orchestratorTools.includes(name)) {
+          orchestratorTools = [...orchestratorTools, name];
+        }
+      }
+    }
     const zhinAgentCfg: ZhinAgentConfig = {
       ...(agentConfig as ZhinAgentConfig | undefined),
       chatModel: zhinBinding.model,
@@ -126,6 +137,13 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     };
     const agent = new ZhinAgent(provider, zhinAgentCfg);
     refs.zhinAgent = agent;
+    bootstrapEndpointRuntimes({
+      refs,
+      plugin,
+      ai,
+      primaryAgent: agent,
+      agentConfig: zhinAgentCfg,
+    });
     setSessionTreeRuntime(createSessionTreeRuntimeFromAgent(asPrivate(agent)));
     void initRemoteAgentRegistry(appConfig.ai).healthCheckAll();
     initDelegationProcessor({ zhinAgent: agent });
@@ -140,19 +158,25 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     const db = root.inject('database' as keyof Plugin.Contexts) as
       | { models?: Map<string, unknown> }
       | undefined;
+    // Always initialise the kernel synchronously with a Memory repository. The
+    // DB activation path upgrades it in-place via upgradeOrchestrationRepository,
+    // preserving registered executors/strategies. This eliminates the startup
+    // window where getOrchestrationService() was null (ADR 0027).
+    const orchService = initOrchestrationService(new MemoryOrchestrationRepository());
+    setOrchestrationRuntime(createOrchestrationRuntimeFromService(orchService));
     if (!useDb) {
-      const orchService = initOrchestrationService(new MemoryOrchestrationRepository());
-      setOrchestrationRuntime(createOrchestrationRuntimeFromService(orchService));
       if (semanticMemory) {
         setMemoryEntryRepository(new InMemoryMemoryEntryRepository());
       }
-      agent.markMemoryPersistenceReady();
+      markAllRuntimesPersistenceReady(agent);
+      void wireCollaborationStorage(undefined, appConfig.collaboration);
     } else if (db) {
-      void activateAiDatabaseStorage(db, refs, appConfig.ai || {})
+      void activateAiDatabaseStorage(db, refs, appConfig.ai || {}, appConfig.collaboration)
         .catch((e) => logger.error('AI Session: database setup failed:', e))
-        .finally(() => agent.markMemoryPersistenceReady());
+        .finally(() => markAllRuntimesPersistenceReady(agent));
     } else {
-      agent.markMemoryPersistenceReady();
+      // useDb requested but no database plugin present: keep the Memory kernel.
+      markAllRuntimesPersistenceReady(agent);
     }
 
     const orchestrator = root.inject('agent');
@@ -161,6 +185,14 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
         skillRegistry: orchestrator.skills,
         orchestrator,
       });
+
+      // Register security policy hooks (highest priority)
+      const fullAgentConfig = asPrivate(agent).config;
+      orchestrator.hooks.addPreToolUseHook(
+        createExecPolicyHook(fullAgentConfig),
+      );
+      orchestrator.hooks.addPreToolUseHook(createFilePolicyHook());
+      orchestrator.hooks.addPreToolUseHook(createDangerousToolPolicyHook());
     }
 
     // Model Registry: discover models and wire to agent
@@ -209,13 +241,10 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
           skillInstructionMaxChars: resolveSkillInstructionMaxChars(fullConfig, modelName),
           pluginSkillRootsResolver: () => collectPluginSkillSearchRoots(root),
         }),
-        // 与 registerBuiltinTools 一致：子 agent 须能 TF-IDF 载入 generate_image
         createGenerateImageTool(
           (alias) => ai.getProvider(alias),
           (alias) => ai.getImageGenerationDefaults(alias),
         ),
-        createRunValidationSpecTool(),
-        createRunSpecDryRunTool(),
       ];
       return zhinTools.map(item => {
         const t = isZhinTool(item) ? item.toTool() : item;
@@ -275,19 +304,10 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     agent.setSubagentSender(deliverOutbound);
     agent.setDeferredResultSender(deliverOutbound);
 
-    const subagentManager = agent.getSubagentManager();
-    if (subagentManager) {
-      initMissionRunner({
-        subagentManager,
-        resolveSessionContext: (sessionKey: string): Message | null =>
-          sessionKeyToSubagentOrigin(sessionKey)?.message ?? null,
-        sendImMessage: async (options) => {
-          const adapter = resolveAdapter(options.context);
-          if (!adapter) throw new Error(`adapter not found: ${options.context}`);
-          return adapter.sendMessage(options);
-        },
-      });
-    }
+    // Register default kernel executors + five-agent workflow strategy now that
+    // the subagent manager and sender are configured. Registration is idempotent
+    // and survives the Memory → DB repository upgrade (ADR 0027).
+    registerDefaultExecutors(orchService, { refs });
 
     let jobEngine: import('../cron-engine.js').IPersistentJobEngine | null = null;
     let jobWorker: JobWorker | null = null;

@@ -386,6 +386,16 @@ export interface AgentBindingConfig {
   priority?: number;
   /** 入站路由匹配条件（无则仅 spawn_task / 绑定，不参与入站竞争） */
   match?: RouteMatchConfig;
+  /** Agent 昵称（LLM 自称 + IM 协作展示，ADR 0024）。 */
+  nickname?: string;
+}
+
+/** Five-Agent pipeline 角色配置（ADR 0024）。省略字段继承 ai.agents.zhin。 */
+export interface PipelineRoleConfig {
+  nickname?: string;
+  provider?: string;
+  model?: string;
+  mcpServers?: string[];
 }
 
 /** @deprecated 已并入 ai.agents.<name>.priority / match */
@@ -414,6 +424,8 @@ export interface AIConfig {
   };
   /** per-agent 绑定 + 可选入站 priority/match */
   agents?: Record<string, AgentBindingConfig>;
+  /** Five-Agent pipeline 角色覆盖（ADR 0024）。 */
+  pipeline?: Record<string, PipelineRoleConfig>;
   /** @deprecated 使用 ai.agents.<name>.priority / match */
   routes?: Record<string, RouteEntryConfig>;
   sessions?: {

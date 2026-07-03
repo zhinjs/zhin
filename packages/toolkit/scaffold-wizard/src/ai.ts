@@ -3,8 +3,16 @@ import chalk from 'chalk';
 
 export interface AISetupConfig {
   enabled: boolean;
+  agentProvider?: string;
+  /** @deprecated Use agentProvider. Kept for one compatibility cycle. */
   defaultProvider?: string;
-  providers?: Record<string, { apiKey?: string; host?: string; models?: string[]; baseUrl?: string }>;
+  providers?: Record<string, {
+    sdk?: string;
+    apiKey?: string;
+    host?: string;
+    models?: string[];
+    baseUrl?: string;
+  }>;
   sessions?: { useDatabase: boolean; maxHistory: number; expireMs: number };
   context?: { enabled: boolean; maxRecentMessages: number; summaryThreshold: number; keepAfterSummary: number };
   agent?: {
@@ -76,7 +84,7 @@ const PROVIDERS = [
   },
 ] as const;
 
-function providerSdkFor(name: string): string {
+export function providerSdkFor(name: string): string {
   switch (name) {
     case 'anthropic':
       return 'anthropic';
@@ -98,6 +106,60 @@ function providerSdkFor(name: string): string {
 function defaultModelForProvider(driver: string): string {
   const entry = PROVIDERS.find(p => p.value === driver);
   return entry?.defaultModel ?? '';
+}
+
+export function resolveAISetupAgentProvider(config: Pick<AISetupConfig, 'agentProvider' | 'defaultProvider' | 'providers'>): string {
+  return config.agentProvider
+    ?? config.defaultProvider
+    ?? Object.keys(config.providers ?? {})[0]
+    ?? 'openai';
+}
+
+function resolveAISetupAgentModel(config: AISetupConfig, providerAlias: string): string {
+  return config.providers?.[providerAlias]?.models?.[0]
+    ?? defaultModelForProvider(providerAlias)
+    ?? '';
+}
+
+export function materializeAIConfig(config: AISetupConfig): Record<string, unknown> {
+  const providerAlias = resolveAISetupAgentProvider(config);
+  const providers: Record<string, Record<string, unknown>> = {};
+
+  for (const [name, providerConfig] of Object.entries(config.providers ?? {})) {
+    const clean: Record<string, unknown> = {
+      sdk: providerConfig.sdk ?? providerSdkFor(name),
+    };
+    if (providerConfig.apiKey) clean.apiKey = providerConfig.apiKey;
+    if (providerConfig.host) clean.host = providerConfig.host;
+    if (providerConfig.models) clean.models = providerConfig.models;
+    if (providerConfig.baseUrl) clean.baseUrl = providerConfig.baseUrl;
+    providers[name] = clean;
+  }
+
+  if (Object.keys(providers).length === 0) {
+    providers[providerAlias] = { sdk: providerSdkFor(providerAlias) };
+  }
+
+  const agent: Record<string, unknown> = {
+    provider: providerAlias,
+  };
+  const model = resolveAISetupAgentModel(config, providerAlias);
+  if (model) agent.model = model;
+
+  const obj: Record<string, unknown> = {
+    providers,
+    agents: {
+      zhin: agent,
+    },
+    sessions: config.sessions,
+    context: config.context,
+    agent: config.agent,
+    trigger: config.trigger ? { ...config.trigger } : undefined,
+    memoryMcp: config.memoryMcp ?? false,
+    mcpServers: config.mcpServers ?? [],
+  };
+
+  return Object.fromEntries(Object.entries(obj).filter(([, value]) => value !== undefined));
 }
 
 export const RECOMMENDED_AI_DEFAULTS = {
@@ -292,7 +354,7 @@ export async function configureAI(): Promise<AISetupConfig> {
 
   return {
     enabled: true,
-    defaultProvider: provider,
+    agentProvider: provider,
     providers: {
       [provider]: providerConfig,
     },
@@ -340,7 +402,7 @@ export function generateAIEnvVars(config: AISetupConfig): string {
 export function generateAIConfigYaml(config: AISetupConfig): string {
   if (!config.enabled) return '';
 
-  const providerAlias = config.defaultProvider || Object.keys(config.providers ?? {})[0] || 'openai';
+  const providerAlias = resolveAISetupAgentProvider(config);
 
   const lines: string[] = [
     '',
@@ -351,7 +413,7 @@ export function generateAIConfigYaml(config: AISetupConfig): string {
   if (config.providers) {
     for (const [name, providerConfig] of Object.entries(config.providers)) {
       lines.push(`    ${name}:`);
-      lines.push(`      sdk: ${providerSdkFor(name)}`);
+      lines.push(`      sdk: ${providerConfig.sdk ?? providerSdkFor(name)}`);
       if (providerConfig.apiKey) {
         lines.push(`      apiKey: ${providerConfig.apiKey}`);
       }
@@ -370,9 +432,7 @@ export function generateAIConfigYaml(config: AISetupConfig): string {
     }
   }
 
-  const zhinModel = defaultModelForProvider(providerAlias)
-    || config.providers?.[providerAlias]?.models?.[0]
-    || '';
+  const zhinModel = resolveAISetupAgentModel(config, providerAlias);
   lines.push('  agents:');
   lines.push('    zhin:');
   lines.push(`      provider: ${providerAlias}`);
@@ -436,13 +496,13 @@ export function generateAIConfigToml(config: AISetupConfig): string {
   const lines: string[] = [
     '',
     '[ai]',
-    `defaultProvider = "${config.defaultProvider}"`,
     `memoryMcp = ${config.memoryMcp ?? false}`,
   ];
 
   if (config.providers) {
     for (const [name, providerConfig] of Object.entries(config.providers)) {
       lines.push('', `[ai.providers.${name}]`);
+      lines.push(`sdk = "${providerConfig.sdk ?? providerSdkFor(name)}"`);
       if (providerConfig.apiKey) lines.push(`apiKey = "${providerConfig.apiKey}"`);
       if (providerConfig.host) lines.push(`host = "${providerConfig.host}"`);
       if (providerConfig.models?.length) {
@@ -451,6 +511,12 @@ export function generateAIConfigToml(config: AISetupConfig): string {
       if (providerConfig.baseUrl) lines.push(`baseUrl = "${providerConfig.baseUrl}"`);
     }
   }
+
+  const providerAlias = resolveAISetupAgentProvider(config);
+  lines.push('', '[ai.agents.zhin]');
+  lines.push(`provider = "${providerAlias}"`);
+  const zhinModel = resolveAISetupAgentModel(config, providerAlias);
+  if (zhinModel) lines.push(`model = "${zhinModel}"`);
 
   if (config.trigger) {
     lines.push('', '[ai.trigger]');
@@ -493,29 +559,7 @@ export function generateAIConfigToml(config: AISetupConfig): string {
 export function generateAIConfigJSON(config: AISetupConfig): string {
   if (!config.enabled) return '';
 
-  const obj: any = {
-    defaultProvider: config.defaultProvider,
-    providers: {},
-    sessions: config.sessions,
-    context: config.context,
-    agent: config.agent,
-    trigger: config.trigger ? {
-      ...config.trigger,
-    } : undefined,
-    memoryMcp: config.memoryMcp ?? false,
-    mcpServers: config.mcpServers ?? [],
-  };
-
-  if (config.providers) {
-    for (const [name, providerConfig] of Object.entries(config.providers)) {
-      const clean: any = {};
-      if (providerConfig.apiKey) clean.apiKey = providerConfig.apiKey;
-      if (providerConfig.host) clean.host = providerConfig.host;
-      if (providerConfig.models) clean.models = providerConfig.models;
-      if (providerConfig.baseUrl) clean.baseUrl = providerConfig.baseUrl;
-      obj.providers[name] = clean;
-    }
-  }
+  const obj = materializeAIConfig(config);
 
   return `"ai": ${JSON.stringify(obj, null, 4).replace(/^/gm, '  ').trimStart()}`;
 }

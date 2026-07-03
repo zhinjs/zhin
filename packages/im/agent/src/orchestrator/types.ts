@@ -176,3 +176,56 @@ export interface AIHook {
   event: string;
   handler: AIHookHandler;
 }
+
+// ============================================================================
+// Tool Hook (PreToolUse / PostToolUse interception)
+// ============================================================================
+
+export type ToolHookDecision =
+  | { decision: 'allow' }
+  | { decision: 'deny'; reason: string }
+  | { decision: 'modify'; modifiedInput: Record<string, unknown> }
+  | { decision: 'skip' };
+
+export type PostToolHookDecision =
+  | { decision: 'accept' }
+  | { decision: 'reject'; reason: string }
+  | { decision: 'modify'; modifiedOutput: unknown };
+
+export interface PreToolUseEvent {
+  type: 'preToolUse';
+  toolName: string;
+  toolInput: Record<string, unknown>;
+  toolSource?: string;
+  sessionId: string;
+  commMessage?: Message;
+}
+
+export interface PostToolUseEvent {
+  type: 'postToolUse';
+  toolName: string;
+  toolInput: Record<string, unknown>;
+  toolOutput: unknown;
+  durationMs: number;
+  sessionId: string;
+  commMessage?: Message;
+}
+
+export type PreToolUseHandler = (event: PreToolUseEvent) => Promise<ToolHookDecision> | ToolHookDecision;
+export type PostToolUseHandler = (event: PostToolUseEvent) => Promise<PostToolHookDecision> | PostToolHookDecision;
+
+export interface ToolHook {
+  name: string;
+  /** Higher priority hooks run first. Default: 0. Security hooks use 1000+. */
+  priority: number;
+}
+
+export interface PreToolUseHook extends ToolHook {
+  type: 'preToolUse';
+  handler: PreToolUseHandler;
+}
+
+export interface PostToolUseHook extends ToolHook {
+  type: 'postToolUse';
+  handler: PostToolUseHandler;
+}

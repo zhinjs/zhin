@@ -14,6 +14,15 @@ import {
 } from '@zhin.js/core';
 import { errMsg } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
+import {
+  clearPendingAskUser,
+  registerPendingAskUser,
+} from './ask-user-session.js';
+import {
+  buildGroupAskUserFollowUp,
+  notifyGroupOwnerAskUserResolved,
+  shouldBlockDelegationAskUser,
+} from '../collaboration/ask-user-bridge.js';
 
 // ============================================================================
 // Prompt / Owner 回复格式化（原 builtin-tools 顶部辅助函数）
@@ -170,10 +179,16 @@ export class AskUserBuiltinTool extends BuiltinBaseTool {
       return `Error: 无法获取适配器 ${platform}，无法向 Owner 发送私聊确认。`;
     }
 
+    const question = String(args.question ?? '');
+    const delegationBlock = shouldBlockDelegationAskUser(commMessage, question, questionType);
+    if (delegationBlock) return delegationBlock;
+
+    const groupOrigin = commMessage.$channel?.type !== 'private' ? commMessage : undefined;
+
     const sourceInfo = commMessage.$channel?.type !== 'private'
       ? `来源: ${commMessage.$channel?.type}(${commMessage.$channel?.id}) 用户: ${commMessage.$sender.id}`
       : `来源: 私聊 用户: ${commMessage.$sender.id}`;
-    let questionText = `🔐 AI 安全确认\n${sourceInfo}\n\n${args.question}`;
+    let questionText = `请求确认：\n${sourceInfo}\n\n${question}`;
     if (questionType === 'confirm') {
       questionText += '\n输入"yes"以确认';
     } else if (questionType === 'pick' && (args.options as any[])?.length) {
@@ -195,20 +210,37 @@ export class AskUserBuiltinTool extends BuiltinBaseTool {
     }
 
     const hostPlugin = this.plugin!.root ?? this.plugin!;
+    const masterId = String(botMaster);
+    const endpointKey = String(endpointId);
+
+    registerPendingAskUser({
+      endpointId: endpointKey,
+      masterId,
+      groupOrigin,
+      registeredAt: Date.now(),
+    });
+
+    const finish = async (rawAnswer: string): Promise<string> => {
+      clearPendingAskUser(endpointKey, masterId);
+      if (!groupOrigin) return rawAnswer;
+      await notifyGroupOwnerAskUserResolved(groupOrigin, rawAnswer);
+      return buildGroupAskUserFollowUp(groupOrigin, rawAnswer);
+    };
 
     return new Promise<string>((resolve) => {
       const middleware: MessageMiddleware = async (message, next) => {
         if (message.$channel?.type !== 'private') return next();
-        if (String(message.$sender.id) !== String(botMaster)) return next();
-        if (String(message.$endpoint) !== String(endpointId)) return next();
+        if (String(message.$sender.id) !== masterId) return next();
+        if (String(message.$endpoint) !== endpointKey) return next();
         dispose();
         clearTimeout(timer);
         const raw = message.$raw;
-        resolve(formatOwnerResponse(raw, questionType, recordArgs));
+        void finish(formatOwnerResponse(raw, questionType, recordArgs)).then(resolve);
       };
       const dispose = hostPlugin.addMiddleware(middleware);
       const timer = setTimeout(() => {
         dispose();
+        clearPendingAskUser(endpointKey, masterId);
         if (args.default_value != null) {
           resolve(String(args.default_value));
         } else {

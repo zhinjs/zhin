@@ -38,7 +38,5 @@
 | 遗留 Agent 类 | `packages/im/ai/src/agent/`（单测 / 直接 import） |
 | IM 落库 | `packages/im/zhin/src/setup/register-chat-message-store.ts` |
 | ApiRegistry / getModel | `packages/im/ai/src/llm/api-registry.ts` |
-| IM 落库 | `packages/im/zhin/src/setup/register-chat-message-store.ts` |
-| ApiRegistry / getModel | `packages/im/ai/src/llm/api-registry.ts` |
 | Host Router | `packages/host/router/src/` |
 | Host API | `packages/host/api/src/` |

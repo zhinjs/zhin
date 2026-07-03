@@ -165,7 +165,7 @@ ai:
   enabled: true
   providers:
     ollama:
-      api: ollama-chat
+      sdk: ollama
       host: "http://localhost:11434"
       # models 可省略 — 启动时 listModels（Ollama / OpenAI 兼容 GET /v1/models）
   agents:

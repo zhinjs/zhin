@@ -329,7 +329,7 @@ dispatcher:
 - **有工具** → 同一 `agentLoop`；`preExecutable` 工具在 turn 前并行预跑，结果注入 prompt
 - **多模态** → vision 模型 + image blocks，仍走 `agentLoop`（`runAgentLoopVisionTurn`）
 
-并发同 session：每条入站 @ 消息 **独立并行 turn**（`PromptController.schedule`）；`ContextRepository.appendMessages` 经 per-session 写入锁串行化。master **`steer()`** 注入该 session 最新 active turn（`ai.agent.steeringMode` / `followUpMode` 仍作用于单 turn 内队列）。`run_deferred_task` 异步委派，完成后单独推送结果。
+并发同 session：每条入站 @ 消息 **独立并行 turn**（`PromptController.schedule`）；`ContextRepository.appendMessages` 经 per-session 写入锁串行化。master **`steer()`** 注入该 session 最新 active turn（`ai.agent.steeringMode` / `followUpMode` 仍作用于单 turn 内队列）。`spawn_task` 可把复杂任务交给子 agent，异步完成后单独推送结果。
 
 ### 4. 自适应 maxIterations
 
@@ -456,9 +456,9 @@ Zhin 可作为 **MCP Client** 消费外部工具（`ai.mcpServers`、`ai.memoryM
 
 **完整教程**：[MCP 集成](/advanced/mcp)
 
-## toolSearch 与 Deferred Tools
+## 工具与子任务
 
-`ai.agent.toolSearch: true` 时，主 Agent 仅保留少量编排工具（如 `tool_search`、`run_deferred_task`），具体业务工具由 **Worker** 角色按需执行，从而控制 system prompt 体积。Stable 路径（minimal-bot / 脚手架）默认 **关闭**。
+主 Agent 默认可以直接使用当前可见工具；复杂、耗时或专业角色任务通过 `spawn_task` 交给子 agent。旧版 `tool_search` / `run_deferred_task` 主编排已被 ADR 0024 的 Pipeline / 子任务模型取代。
 
 - 概念与 Stable vs Advanced 对照：[Agent 概念入门](/advanced/agent-concepts)
 - 提示词分段约定：[Agent 上下文块](/architecture/agent-context-blocks)
@@ -477,29 +477,29 @@ Zhin 可作为 **MCP Client** 消费外部工具（`ai.mcpServers`、`ai.memoryM
 
 ### 受限工具集
 
-子 agent **没有**固定工具白名单。与 Deferred Worker 相同，使用 **toolSearch 分区**（`resolveSubagentAgentTools`）：
+子 agent **没有**固定工具白名单。工具由 `resolveSubagentAgentTools` 按角色和任务选择：
 
 1. 先载入 `ai.agent.workerBaseTools`（默认 `bash`、`read_file`、`web_search`）
 2. 再按任务文本 TF-IDF 从 deferred 工具目录载入（上限 `deferredToolMaxResults`，默认 8）
 3. 任务含生图关键词时优先载入 `generate_image`（若已注册）
 
-**禁止**子 agent 直接调用主编排工具：`tool_search`、`run_deferred_task`、`spawn_task`、`activate_skill`、`install_skill`。
+**禁止**子 agent 直接调用主编排工具：`spawn_task`、`activate_skill`、`install_skill`。
 
 **安全**：子 agent 的 `bash` 受 `execSecurity` 与 `subagentExecApprovalMode` 约束；icqq 放行规则与主会话一致（见 [icqq 与 bash](/advanced/ai#icqq-bash-exec)）。
 
 ### 主编排常驻
 
-`spawn_task` 为主 Agent 默认常驻编排工具之一（与 `tool_search`、`run_deferred_task`、`ask_user` 并列），无需关键词触发即可指派后台子 agent。文生图请使用 **`agent: draw`**（`agents/draw.agent.md`）；**`vision`** 仅用于入站识图，不要用于画图。
+`spawn_task` 为主 Agent 默认常驻编排工具之一（与 `ask_user` 并列），无需关键词触发即可指派后台子 agent。文生图请使用 **`agent: draw`**（`agents/draw.agent.md`）；**`vision`** 仅用于入站识图，不要用于画图。
 
 ## 文生图 (generate_image)
 
-主编排**不常驻** `generate_image`（控制 prompt 体积）；通过 deferred 或子 agent 调用。
+主编排**不常驻** `generate_image`（控制 prompt 体积）；通过子 agent 调用。
 
 ### 调用路径
 
 | 场景 | 路径 |
 |------|------|
-| 当场出图 | 主 agent → `tool_search` → `run_deferred_task`（Worker 目录含 `generate_image`） |
+| 当场出图 | `spawn_task(task, label, agent: "draw", wait: true)` |
 | 后台出图 | `spawn_task(task, label, agent: "draw")` + `ai.agents.draw` + `agents/draw.agent.md` |
 
 子 agent 任务含「画/生图」等关键词时，会优先载入 `generate_image`（见 `resolve-subagent-tools`）。

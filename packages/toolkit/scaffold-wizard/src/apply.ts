@@ -2,7 +2,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import type { AdapterSetupResult, AISetupConfig, DatabaseConfig, InitOptions } from './types.js';
 import { generateAdapterEnvVars, getAdapterDependencies } from './adapter.js';
-import { generateAIEnvVars } from './ai.js';
+import { generateAIEnvVars, materializeAIConfig } from './ai.js';
 import { ensureDatabaseForAdapters, ensureDatabaseForAI, getAIDependencies } from './project-deps.js';
 
 /** Host 插件（Webhook / Console 必需） */
@@ -36,7 +36,7 @@ export function applyAdaptersToConfig(config: Record<string, unknown>, result: A
 }
 
 export function applyAIToConfig(config: Record<string, unknown>, ai: AISetupConfig): void {
-  config.ai = ai;
+  config.ai = materializeAIConfig(ai);
 }
 
 export async function appendWizardEnvVars(

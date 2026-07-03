@@ -12,6 +12,7 @@ export function resolveAgentBinding(
     providerAlias: raw.provider,
     model: raw.model,
     mcpServers: raw.mcpServers ?? [],
+    nickname: raw.nickname,
   };
 }
 

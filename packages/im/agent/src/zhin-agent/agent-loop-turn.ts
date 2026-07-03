@@ -114,6 +114,8 @@ export interface AgentLoopTurnInput {
   promptHooks?: PromptTurnHooks;
   signal?: AbortSignal;
   deferredStats?: string;
+  /** Tool name aliases: LLM-facing name → actual tool name */
+  toolAliases?: Record<string, string>;
 }
 
 export interface AgentLoopTurnResult {
@@ -202,9 +204,21 @@ async function runAgentLoopVisionTurnOnce(
       onChunk?.(lastAssistantText, lastAssistantText);
     }
     if (event.type === 'agent_end') {
+      if (signal?.aborted) continue;
       const userBatch = event.userMessages ?? promptMessages;
       await repo.appendMessages(sessionId, [...userBatch, ...event.messages]);
     }
+  }
+
+  if (signal?.aborted) {
+    return {
+      reply: '',
+      usage: lastUsage ? tokenUsageToLegacy(lastUsage) : { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+      path: 'multimodal',
+      iterations,
+      model: modelId,
+      toolCalls: [],
+    };
   }
 
   const reply = sanitizeAssistantReply(lastAssistantText);
@@ -419,32 +433,83 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
     getSteeringMessages: promptHooks?.getSteeringMessages,
     getFollowUpMessages: promptHooks?.getFollowUpMessages,
     executeTool: async (toolCall: ParsedToolCall, _tools: typeof llmTools, toolSignal?: AbortSignal) => {
-      const legacy = legacyByName.get(toolCall.name);
-      if (!legacy) {
-        return toolResultToAgentMessage(toolCall, `Unknown tool: ${toolCall.name}`, true);
+      const hookRegistry = host.orchestrator?.hooks;
+      const currentAliases = input.toolAliases;
+      const resolvedName = currentAliases?.[toolCall.name] ?? toolCall.name;
+      let effectiveArgs = toolCall.arguments;
+
+      // PreToolUse interception
+      if (hookRegistry) {
+        const preDecision = await hookRegistry.triggerPreToolUse({
+          type: 'preToolUse',
+          toolName: resolvedName,
+          toolInput: effectiveArgs,
+          toolSource: legacyByName.get(resolvedName)?.source,
+          sessionId,
+          commMessage: contextForTools,
+        });
+        if (preDecision.decision === 'deny') {
+          const reason = preDecision.reason;
+          toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: reason });
+          return toolResultToAgentMessage(toolCall, reason, true);
+        }
+        if (preDecision.decision === 'modify') {
+          effectiveArgs = preDecision.modifiedInput;
+        }
       }
+
+      const legacy = legacyByName.get(resolvedName);
+      if (!legacy) {
+        return toolResultToAgentMessage(toolCall, `Unknown tool: ${resolvedName}`, true);
+      }
+      const t0 = performance.now();
       try {
         const raw = await runWithCommMessage(contextForTools, () =>
-          legacy.execute(toolCall.arguments),
+          legacy.execute(effectiveArgs),
         );
+        const durationMs = performance.now() - t0;
         const rawText = typeof raw === 'string' ? raw : JSON.stringify(raw ?? null);
+
+        // PostToolUse interception
+        let resultText = rawText;
+        if (hookRegistry) {
+          const postDecision = await hookRegistry.triggerPostToolUse({
+            type: 'postToolUse',
+            toolName: resolvedName,
+            toolInput: effectiveArgs,
+            toolOutput: rawText,
+            durationMs,
+            sessionId,
+            commMessage: contextForTools,
+          });
+          if (postDecision.decision === 'reject') {
+            toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: postDecision.reason });
+            return toolResultToAgentMessage(toolCall, postDecision.reason, true);
+          }
+          if (postDecision.decision === 'modify') {
+            resultText = typeof postDecision.modifiedOutput === 'string'
+              ? postDecision.modifiedOutput
+              : JSON.stringify(postDecision.modifiedOutput);
+          }
+        }
+
         const transformed = await transformToolResult({
-          toolName: toolCall.name,
+          toolName: resolvedName,
           toolCallId: toolCall.id,
-          args: toolCall.arguments,
-          result: rawText,
+          args: effectiveArgs,
+          result: resultText,
         });
-        const resultText = typeof transformed === 'string' ? transformed : String(transformed);
-        toolCalls.push({ tool: toolCall.name, args: toolCall.arguments, result: resultText });
+        const finalText = typeof transformed === 'string' ? transformed : String(transformed);
+        toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: finalText });
         host.emitter.emit('ai.tool.result', host.emitter.createPayload(sessionId, contextForTools, 'text', {
           path: 'agent',
-          toolName: toolCall.name,
-          result: resultText,
+          toolName: resolvedName,
+          result: finalText,
         }));
-        return toolResultToAgentMessage(toolCall, resultText, false);
+        return toolResultToAgentMessage(toolCall, finalText, false);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        toolCalls.push({ tool: toolCall.name, args: toolCall.arguments, result: message });
+        toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: message });
         return toolResultToAgentMessage(toolCall, message, true);
       }
     },
@@ -488,6 +553,7 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
       onChunk?.(lastAssistantText, lastAssistantText);
     }
     if (event.type === 'agent_end') {
+      if (signal?.aborted) continue;
       const userBatch = event.userMessages ?? promptMessages;
       const batch = [...userBatch, ...event.messages];
       const messageExtras = batch.map((msg, i) => (
@@ -495,6 +561,17 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
       ));
       await repo.appendMessages(sessionId, batch, { messageExtras });
     }
+  }
+
+  if (signal?.aborted) {
+    return {
+      reply: '',
+      usage: lastUsage ? tokenUsageToLegacy(lastUsage) : { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+      path: hasTools ? 'agent' : 'chat',
+      iterations,
+      model: modelId,
+      toolCalls,
+    };
   }
 
   const reply = sanitizeAssistantReply(lastAssistantText, {

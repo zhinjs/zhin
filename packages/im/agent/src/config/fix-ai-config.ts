@@ -62,6 +62,32 @@ export function applyAiConfigFixes(
     }
   }
 
+  // ADR 0024：剥离 agent.orchestratorTools 中已废弃的主编排/Missions 工具
+  const DEPRECATED_ORCHESTRATOR_TOOLS = new Set([
+    'tool_search',
+    'run_deferred_task',
+    'orchestration_start',
+    'orchestration_add_task',
+    'orchestration_status',
+    'orchestration_complete',
+    'orchestration_retry_task',
+    'orchestration_skip_task',
+    'orchestration_patch_state',
+  ]);
+  const agentSection = next.agent;
+  if (agentSection && typeof agentSection === 'object' && !Array.isArray(agentSection)) {
+    const agentObj = { ...(agentSection as Record<string, unknown>) };
+    const tools = agentObj.orchestratorTools;
+    if (Array.isArray(tools)) {
+      const kept = tools.filter((t) => typeof t === 'string' && !DEPRECATED_ORCHESTRATOR_TOOLS.has(t));
+      if (kept.length !== tools.length) {
+        agentObj.orchestratorTools = kept;
+        next.agent = agentObj;
+        fixes.push('removed deprecated orchestratorTools (toolSearch/Missions) per ADR 0024');
+      }
+    }
+  }
+
   if ('memoryMcp' in next) {
     delete next.memoryMcp;
     fixes.push('removed deprecated ai.memoryMcp');

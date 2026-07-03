@@ -57,9 +57,6 @@ export function mountFirstAtHintMiddleware(root: Plugin): () => void {
     hintedChannels.add(key);
     channelHintAt.set(key, Date.now());
 
-    await message.$reply?.(
-      '👋 发送 **/游戏** 打开游戏大厅，或 **/帮助** 查看全部玩法。',
-    );
     return next();
   });
 }

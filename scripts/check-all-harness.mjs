@@ -52,14 +52,24 @@ const checks = [
     description: 'README Install tiers 表与 docs/snippets/install-tiers.md 一致',
   },
   {
-    name: 'Scaffold Deps SSOT',
-    command: 'pnpm check:scaffold-deps-ssot',
-    description: 'create-zhin 初始化依赖与 monorepo package.json 版本一致',
+    name: 'Dependency Policy',
+    command: 'pnpm check:dependency-policy',
+    description: '用户项目脚手架依赖默认写 latest',
+  },
+  {
+    name: 'API Surface',
+    command: 'pnpm check:api-surface',
+    description: '检查 public API surface 快照',
   },
   {
     name: 'Doc Orphans',
     command: 'pnpm check:doc-orphans',
     description: '检查站点 Markdown 是否在侧栏或 allowlist',
+  },
+  {
+    name: 'ADR Manifest',
+    command: 'pnpm check:adr-manifest',
+    description: '检查 ADR README 与 VitePress 侧栏覆盖所有 ADR',
   },
   {
     name: 'README Exports',
@@ -95,6 +105,11 @@ const checks = [
     name: 'Rich Segment Adapters',
     command: 'pnpm check:rich-segments',
     description: '各 adapter 声明 outboundRichSegmentPolicy 与契约测试',
+  },
+  {
+    name: 'AI Outbound Adapters',
+    command: 'pnpm check:ai-outbound',
+    description: '声明 aiOutboundExtensions 的 adapter 含契约测试',
   },
   {
     name: 'Interactive Segments',

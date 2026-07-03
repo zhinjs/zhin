@@ -7,7 +7,6 @@ import { createWorkspace } from '../src/workspace.js';
 import { applyStableYesDefaults } from '../src/stable-yes-defaults.js';
 import type { InitOptions } from '../src/types.js';
 import { DEFAULT_CREATE_BOT_HTTP_PORT } from '@zhin.js/scaffold-wizard';
-import generated from '../../scaffold-wizard/src/stack-versions.generated.json' with { type: 'json' };
 
 const tmpRoots: string[] = [];
 const e2eTimeoutMs = 180_000;
@@ -37,7 +36,7 @@ function aiEnabledOptions(): InitOptions {
     },
     ai: {
       enabled: true,
-      defaultProvider: 'ollama',
+      agentProvider: 'ollama',
       providers: { ollama: { host: 'http://127.0.0.1:11434' } },
     },
     devSkills: false,
@@ -75,7 +74,7 @@ afterEach(async () => {
   await Promise.all(tmpRoots.splice(0).map((root) => fs.remove(root)));
 });
 
-describe('create-zhin npm bootstrap', () => {
+describe.skipIf(process.env.ZHIN_RUN_NETWORK_BOOTSTRAP !== '1')('create-zhin npm bootstrap', () => {
   it(
     'create -y → pnpm install → pnpm start 可启动 Host',
     async () => {
@@ -115,8 +114,8 @@ describe('create-zhin npm bootstrap', () => {
       await createWorkspace(projectPath, 'ai-bootstrap-bot', aiEnabledOptions());
 
       const pkg = await fs.readJson(path.join(projectPath, 'package.json'));
-      expect(pkg.pnpm?.peerDependencyRules?.allowedVersions?.ai).toBe('7');
-      expect(pkg.dependencies.ai).toBe(generated.aiStack.ai);
+      expect(pkg.pnpm?.peerDependencyRules).toBeUndefined();
+      expect(pkg.dependencies.ai).toBe('latest');
       expect(await fs.readFile(path.join(projectPath, '.npmrc'), 'utf8')).toContain('strict-peer-dependencies=false');
 
       execSync('pnpm install', {

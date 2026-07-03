@@ -126,7 +126,7 @@ export async function handleChoice(
 
   if (session.status !== 'active') return '对局已结束，请点击再来一局。';
 
-  let deck = parseDeck(session.deck_json);
+  const deck = parseDeck(session.deck_json);
   let player = parseCards(session.player_cards_json);
   let dealer = parseCards(session.dealer_cards_json);
 

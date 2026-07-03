@@ -211,7 +211,7 @@ useContext('ai', async (ai) => {
 
 `AIService` 构造时：
 
-1. 按 `ai.providers.<别名>` 实例化 Provider（须配置 `api`，如 `openai-completions`）。
+1. 按 `ai.providers.<别名>` 实例化 Provider（须配置 `sdk`，如 `openai` 或 `openai-compatible`）。
 2. `registerLlmApiFromProviders`：**未写 `models` 的 provider** 在 ApiRegistry 注册为空白名单，由后台 `ModelRegistry.discover()` 填充 `provider.models`；**写了 `models`** 则用 yaml 白名单。
 3. `createZhinAgent` 启动时 `loadCache()` 先恢复上次发现结果，再异步刷新 `/v1/models`。
 
@@ -221,12 +221,12 @@ useContext('ai', async (ai) => {
 ai:
   providers:
     openai-main:
-      api: openai-completions
+      sdk: openai-compatible
       baseUrl: ${OPENAI_BASE_URL}
       apiKey: ${OPENAI_API_KEY}
       # models 省略 → 自动 GET /v1/models
     cloudflare-flash:
-      api: cloudflare-workers-ai
+      sdk: openai-compatible
       models: ["@cf/zai-org/glm-4.7-flash"]  # 显式列表
   agents:
     zhin:
@@ -238,7 +238,7 @@ ai:
 
 `AIService` 构造时：
 
-1. 按 `ai.providers.<别名>` 实例化 Provider（须配置 `api`，如 `openai-completions`）。
+1. 按 `ai.providers.<别名>` 实例化 Provider（须配置 `sdk`，如 `openai` 或 `openai-compatible`）。
 2. `registerLlmApiFromProviders`：**未写 `models` 的 provider** 在 ApiRegistry 注册为空白名单，由后台 `ModelRegistry.discover()` 填充 `provider.models`；**写了 `models`** 则用 yaml 白名单。
 3. `createZhinAgent` 启动时 `loadCache()` 先恢复上次发现结果，再异步刷新 `/v1/models`。
 
@@ -248,12 +248,12 @@ ai:
 ai:
   providers:
     openai-main:
-      api: openai-completions
+      sdk: openai-compatible
       baseUrl: ${OPENAI_BASE_URL}
       apiKey: ${OPENAI_API_KEY}
       # models 省略 → 自动 GET /v1/models
     cloudflare-flash:
-      api: cloudflare-workers-ai
+      sdk: openai-compatible
       models: ["@cf/zai-org/glm-4.7-flash"]  # 显式列表
   agents:
     zhin:

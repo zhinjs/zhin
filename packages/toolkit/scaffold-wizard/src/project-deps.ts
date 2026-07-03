@@ -1,14 +1,23 @@
 import { createRequire } from 'node:module';
 import fs from 'fs-extra';
 import path from 'node:path';
-import generated from './stack-versions.generated.json' with { type: 'json' };
 import type { AISetupConfig } from './ai.js';
 import type { InitOptions } from './types.js';
 
 /**
- * AI 栈版本 SSOT — 与 @zhin.js/ai peerDependencies 同步（scripts/sync-scaffold-deps.mjs）。
+ * User project dependency policy: scaffolded dependencies intentionally float to latest.
  */
-export const AI_STACK_VERSIONS = generated.aiStack;
+export const AI_STACK_VERSIONS = {
+  '@zhin.js/agent': 'latest',
+  zod: 'latest',
+  ai: 'latest',
+  '@modelcontextprotocol/sdk': 'latest',
+  '@ai-sdk/openai': 'latest',
+  '@ai-sdk/anthropic': 'latest',
+  '@ai-sdk/google': 'latest',
+  '@ai-sdk/deepseek': 'latest',
+  '@ai-sdk/openai-compatible': 'latest',
+} as const;
 
 /** @deprecated 使用 AI_STACK_VERSIONS['@modelcontextprotocol/sdk'] */
 export const MCP_SDK_VERSION = AI_STACK_VERSIONS['@modelcontextprotocol/sdk'];
@@ -24,7 +33,7 @@ const WIZARD_ALIAS_TO_SDK: Record<string, string> = {
   zhipu: 'openai-compatible',
 };
 
-const SDK_TO_NPM_PACKAGE: Record<string, keyof typeof generated.aiStack> = {
+const SDK_TO_NPM_PACKAGE: Record<string, keyof typeof AI_STACK_VERSIONS> = {
   openai: '@ai-sdk/openai',
   anthropic: '@ai-sdk/anthropic',
   google: '@ai-sdk/google',
@@ -78,8 +87,9 @@ function packagesForSdkIds(sdkIds: Iterable<string>): Record<string, string> {
 
 function collectSdkPackagesFromSetup(ai: AISetupConfig): Record<string, string> {
   const sdkIds = new Set<string>();
-  if (ai.defaultProvider) {
-    const id = inferSdkId(ai.defaultProvider, ai.providers?.[ai.defaultProvider] as { sdk?: string });
+  const agentProvider = ai.agentProvider ?? ai.defaultProvider;
+  if (agentProvider) {
+    const id = inferSdkId(agentProvider, ai.providers?.[agentProvider] as { sdk?: string });
     if (id) sdkIds.add(id);
   }
   for (const [alias, entry] of Object.entries(ai.providers ?? {})) {
@@ -270,7 +280,7 @@ export function getRequiredAIDependenciesForConfig(config: { ai?: unknown }): Re
   const ai = config.ai as Record<string, unknown>;
   const setup: AISetupConfig = {
     enabled: true,
-    defaultProvider: resolveDefaultProviderFromConfig(config),
+    agentProvider: resolveDefaultProviderFromConfig(config),
     providers: ai.providers as AISetupConfig['providers'],
     memoryMcp: aiConfigNeedsMcp(ai),
   };

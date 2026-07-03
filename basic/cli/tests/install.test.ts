@@ -66,6 +66,17 @@ describe('install command plugin enable helpers', () => {
     expect(config.plugins).toEqual(['example', '@scope/plugin']);
   });
 
+  it('writes plugin into TOML config', async () => {
+    const root = await makeTempProject();
+    await fs.writeFile(path.join(root, 'zhin.config.toml'), 'plugins = ["example"]\n');
+
+    const result = await enablePluginInProjectConfig(root, '@scope/plugin');
+    const content = await fs.readFile(path.join(root, 'zhin.config.toml'), 'utf8');
+
+    expect(result.status).toBe('enabled');
+    expect(content).toContain('"@scope/plugin"');
+  });
+
   it('resolves local plugin installs from package.json before enabling config', async () => {
     const root = await makeTempProject();
     const pluginDir = path.join(root, 'plugins', 'my-plugin');

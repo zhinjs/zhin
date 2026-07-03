@@ -11,6 +11,7 @@ import { QQEndpoint } from "./endpoint.js";
 import { QqEndpointManager } from "./qq-endpoint-manager.js";
 import type { QQEndpointConfig, ReceiverMode } from "./types.js";
 import type { OutboundRichSegmentPolicy } from "zhin.js";
+import { QQ_AI_OUTBOUND_EXTENSIONS } from "zhin.js";
 
 export class QQAdapter extends Adapter<QQEndpoint<ReceiverMode>> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
@@ -20,6 +21,12 @@ export class QQAdapter extends Adapter<QQEndpoint<ReceiverMode>> {
     markdown: 'origin',
   };
   static override interactivePolicy = 'native' as const;
+  static override aiOutboundCapabilities = {
+    mentions: true,
+    richSegments: ['qrcode', 'html', 'markdown', 'tts'],
+    interactive: 'native' as const,
+  };
+  static override aiOutboundExtensions = QQ_AI_OUTBOUND_EXTENSIONS;
 
   #router?: Router;
   #endpointManager?: QqEndpointManager;

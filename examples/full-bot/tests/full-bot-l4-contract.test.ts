@@ -10,13 +10,10 @@ const botRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const configText = fs.readFileSync(path.join(botRoot, 'zhin.config.yml'), 'utf8');
 
 describe('full-bot L4 配置契约', () => {
-  it('Missions 硬编排无配置开关（始终内置）', async () => {
-    const { MISSIONS_TEMPLATE } = await import(
-      '../../../packages/im/agent/src/orchestrator/mission-state.js'
-    );
-    expect(MISSIONS_TEMPLATE).toBe('missions');
+  it('ADR 0024 Pipeline 取代 Missions 配置开关', () => {
     expect(configText).not.toMatch(/hardMode:/);
     expect(configText).not.toMatch(/autoAdvance:/);
+    expect(configText).not.toMatch(/MISSIONS_TEMPLATE/);
   });
 
   it('启用语义记忆 semantic', () => {

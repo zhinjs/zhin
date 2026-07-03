@@ -12,8 +12,9 @@ import chalk from 'chalk';
 import fs from 'fs-extra';
 import path from 'path';
 import { execSync, spawnSync } from 'child_process';
-import yaml from 'yaml';
+import { loadProjectConfig } from '@zhin.js/scaffold-wizard';
 import { logger } from '../utils/logger.js';
+import { saveConfig } from '../utils/config-file.js';
 import {
   CREATE_PROJECT_COMMAND,
   spawnCreateProject,
@@ -73,19 +74,6 @@ function isZhinProject(dir: string): boolean {
   }
 }
 
-const CONFIG_CANDIDATES = ['zhin.config.yml', 'zhin.config.yaml', 'zhin.config.json', 'zhin.config.toml'];
-
-function findConfigFile(dir: string): string | null {
-  return CONFIG_CANDIDATES.find((f) => fs.existsSync(path.join(dir, f))) ?? null;
-}
-
-async function readConfig(filePath: string): Promise<any> {
-  const content = await fs.readFile(filePath, 'utf-8');
-  const ext = path.extname(filePath).toLowerCase();
-  if (ext === '.json') return JSON.parse(content);
-  return yaml.parse(content);
-}
-
 function parseEnvFile(content: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const line of content.split('\n')) {
@@ -107,12 +95,11 @@ async function loadExistingState(dir: string): Promise<{
   env: Record<string, string>;
   hasDataDir: boolean;
 } | null> {
-  const configFile = findConfigFile(dir);
-  if (!configFile) return null;
-  const configPath = path.join(dir, configFile);
-  const config = await readConfig(configPath);
-  const ext = path.extname(configFile).toLowerCase();
-  const configFormat = ext === '.json' ? 'json' : 'yaml';
+  const loaded = loadProjectConfig(dir);
+  if (loaded.status !== 'loaded' || !loaded.configPath || !loaded.format) return null;
+  const configPath = loaded.configPath;
+  const config = loaded.config;
+  const configFormat = loaded.format;
   const envPath = path.join(dir, '.env');
   let env: Record<string, string> = {};
   if (fs.existsSync(envPath)) {
@@ -172,7 +159,10 @@ function printSummary(state: NonNullable<Awaited<ReturnType<typeof loadExistingS
     }
   }
   if (state.config.ai?.enabled !== false) {
-    console.log(chalk.gray('  AI: ') + chalk.cyan(state.config.ai?.defaultProvider || '未指定'));
+    const provider = state.config.ai?.agents?.zhin?.provider
+      ?? state.config.ai?.defaultProvider
+      ?? '未指定';
+    console.log(chalk.gray('  AI: ') + chalk.cyan(provider));
   }
   if (state.hasDataDir) {
     console.log(chalk.gray('  data 目录: ') + chalk.green('已存在'));
@@ -245,12 +235,7 @@ async function runInProject(_checks: ReturnType<typeof checkEnvironment>): Promi
 
   if (action === 'reset' && hasExistingConfig && state) {
     const minimal = getMinimalConfig();
-    const configPath = path.join(cwd, state.configFormat === 'json' ? 'zhin.config.json' : 'zhin.config.yml');
-    if (state.configFormat === 'json') {
-      await fs.writeFile(configPath, JSON.stringify(minimal, null, 2));
-    } else {
-      await fs.writeFile(configPath, yaml.stringify(minimal));
-    }
+    await saveConfig(state.configPath, minimal);
     console.log(chalk.yellow('已写入最小默认配置，接下来运行配置向导。'));
     console.log('');
   }
