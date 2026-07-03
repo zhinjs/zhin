@@ -29,7 +29,7 @@ export const groupSuiteSchema = Schema.object({
 
   analysisDays: Schema.number().default(1).min(1).max(30),
   autoAnalysisEnabled: Schema.boolean().default(false),
-  autoAnalysisCron: Schema.string().default("0 9 * * *"),
+  autoAnalysisCron: Schema.string().default("0 0 9 * * *"),
   analysisGroups: Schema.list(Schema.string())
     .default([])
     .description("启用群日报的群 ID 白名单（空=不限制）"),

@@ -124,7 +124,7 @@ function getMinimalConfig(): any {
     log_level: 1,
     database: { dialect: 'sqlite', filename: './data/bot.db', mode: 'wal' },
     plugin_dirs: ['node_modules', './src/plugins'],
-    services: ['process', 'config', 'command', 'component', 'permission', 'cron'],
+    services: ['process', 'config', 'command', 'component', 'permission', 'schedule'],
     plugins: ['@zhin.js/adapter-sandbox'],
     http: { port: 8086, token: '${HTTP_TOKEN}', base: '/api' },
     hostApi: { enabled: true, lazyLoad: true },

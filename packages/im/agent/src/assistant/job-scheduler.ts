@@ -1,20 +1,66 @@
 /**
- * Assistant Job 非 cron 调度（every / at）+ cron 注册（M1.5）
+ * Schedule job registration — calendar + every/at
  */
-import { Cron } from '@zhin.js/core';
-import { formatCompact, Logger } from '@zhin.js/logger';
-import type { AddCronFn } from '../cron-engine.js';
-import type { AssistantJob } from './types.js';
+import {
+  ScheduleEngine,
+  getScheduleEngine,
+  resolveSolarJob,
+  resolveLunarJob,
+  resolveWorkdayJob,
+  resolveFreeDayJob,
+  resolveHolidayJob,
+  resolveScatterJob,
+  type ResolvedJob,
+} from '@zhin.js/kernel';
+import type { ScheduleJob, JobSchedule } from './types.js';
 
-const logger = new Logger(null, 'assistant-job-scheduler');
+const loggerName = 'schedule-job-scheduler';
 
 export type ScheduleDispose = () => void;
 
-export function isRuntimeSchedulable(job: AssistantJob, now = Date.now()): boolean {
+function ensureEngine(): ScheduleEngine {
+  let engine = getScheduleEngine();
+  if (!engine) {
+    engine = new ScheduleEngine();
+  }
+  return engine;
+}
+
+export function jobScheduleToResolved(schedule: JobSchedule, timezone = 'Asia/Shanghai'): ResolvedJob | null {
+  const tz = 'tz' in schedule ? schedule.tz ?? timezone : timezone;
+  switch (schedule.kind) {
+    case 'solar':
+      return resolveSolarJob(schedule.cron, tz);
+    case 'lunar':
+      return resolveLunarJob(schedule.cron, tz);
+    case 'workday':
+      return resolveWorkdayJob(schedule.cron, tz);
+    case 'freeDay':
+      return resolveFreeDayJob(schedule.cron, tz);
+    case 'holiday':
+      return resolveHolidayJob({
+        cron: schedule.cron,
+        festivals: schedule.festivals,
+        everyDayOfHoliday: schedule.everyDayOfHoliday,
+      }, tz);
+    case 'scatter':
+      return resolveScatterJob(schedule.input, tz);
+    default:
+      return null;
+  }
+}
+
+export function isRuntimeSchedulable(job: ScheduleJob, now = Date.now()): boolean {
   if (!job.enabled) return false;
   switch (job.schedule.kind) {
-    case 'cron':
-      return Boolean(job.schedule.expr);
+    case 'solar':
+    case 'lunar':
+    case 'workday':
+    case 'freeDay':
+    case 'holiday':
+      return Boolean(job.schedule.cron);
+    case 'scatter':
+      return Boolean(job.schedule.input);
     case 'every':
       return job.schedule.everyMs > 0;
     case 'at':
@@ -27,42 +73,30 @@ export function isRuntimeSchedulable(job: AssistantJob, now = Date.now()): boole
 }
 
 export function registerJobSchedule(
-  job: AssistantJob,
-  addCron: AddCronFn,
+  job: ScheduleJob,
   onRun: (jobId: string) => void | Promise<void>,
 ): ScheduleDispose | null {
   const jobId = job.id;
+  const engine = ensureEngine();
   try {
-    if (job.schedule.kind === 'cron') {
-      const cron = new Cron(job.schedule.expr, async () => {
+    const schedule = job.schedule;
+    if (schedule.kind === 'every') {
+      return engine.register(jobId, 'every', async () => {
         await onRun(jobId);
-      });
-      cron.id = jobId;
-      return addCron(cron);
+      }, { everyMs: schedule.everyMs });
     }
-
-    if (job.schedule.kind === 'every') {
-      const everyMs = job.schedule.everyMs;
-      const timer = setInterval(() => {
-        void onRun(jobId);
-      }, everyMs);
-      return () => clearInterval(timer);
+    if (schedule.kind === 'at') {
+      return engine.register(jobId, 'at', async () => {
+        await onRun(jobId);
+      }, { atMs: schedule.atMs });
     }
-
-    if (job.schedule.kind === 'at') {
-      const delay = job.schedule.atMs - Date.now();
-      if (delay <= 0) return null;
-      const timer = setTimeout(() => {
-        void onRun(jobId);
-      }, delay);
-      return () => clearTimeout(timer);
-    }
+    const resolved = jobScheduleToResolved(schedule);
+    if (!resolved) return null;
+    return engine.registerResolved(jobId, resolved, async () => {
+      await onRun(jobId);
+    });
   } catch (e: unknown) {
-    logger.warn(formatCompact({
-      op: 'register_schedule_failed',
-      jobId,
-      error: (e as Error)?.message || String(e),
-    }));
+    console.warn(`[${loggerName}] register failed for ${jobId}:`, (e as Error)?.message || String(e));
+    return null;
   }
-  return null;
 }

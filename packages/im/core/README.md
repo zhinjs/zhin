@@ -13,7 +13,7 @@ Zhin.js **IM/多通道运行时**包：Plugin、Adapter、**Endpoint**、Message
 ```typescript
 import { usePlugin, MessageCommand } from '@zhin.js/core'
 
-const { addCommand, addTool, addCron, onMounted, onDispose } = usePlugin()
+const { addCommand, addTool, addSchedule, onMounted, onDispose } = usePlugin()
 
 onMounted(() => console.log('插件已挂载'))
 onDispose(() => console.log('插件已卸载'))
@@ -55,7 +55,7 @@ Feature (抽象基类)
 ├── CommandFeature    — 消息命令       addCommand()
 ├── ToolFeature       — AI 可调用工具   addTool()
 ├── SkillFeature      — 技能记录       Agent 从 SKILL.md 注入
-├── CronFeature       — 定时任务       addCron()
+├── ScheduleFeature   — 调度任务       addSchedule()
 ├── DatabaseFeature   — 数据模型       defineModel()
 ├── ComponentFeature  — 消息组件       addComponent()
 ├── ConfigFeature     — 插件配置       addConfig()
@@ -212,7 +212,7 @@ export { Plugin, usePlugin, getPlugin, definePlugin } from './plugin.js'
 
 // Feature 体系（Cron / Scheduler 来自 @zhin.js/kernel）
 export { Feature, Cron, Scheduler } from '@zhin.js/kernel'
-export { CommandFeature, ToolFeature, SkillFeature, CronFeature, DatabaseFeature, ... } from './built/*.js'
+export { CommandFeature, ToolFeature, SkillFeature, ScheduleFeature, DatabaseFeature, ... } from './built/*.js'
 
 // 消息路由
 export { createMessageDispatcher } from './built/dispatcher.js'

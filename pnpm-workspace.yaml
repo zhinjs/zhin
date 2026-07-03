@@ -19,6 +19,7 @@ overrides:
   '@zhin.js/logger': workspace:*
   '@zhin.js/schema': workspace:*
   '@zhin.js/database': workspace:*
+  '@zhin.js/schedule': workspace:*
   '@zhin.js/cli': workspace:*
   '@zhin.js/client': workspace:*
   '@zhin.js/agent': workspace:*

@@ -25,8 +25,6 @@ import {
   getRequestRowById,
 } from "./endpoint-persistence.js";
 import { removePendingRequest } from "./endpoint-hub.js";
-import { getCronManager, generateCronJobId } from "@zhin.js/agent";
-import type { CronJobRecord } from "@zhin.js/agent";
 import { createNodeProjectFs } from "./rpc/project-fs.js";
 import { handleCoreRpc } from "./rpc/handlers-core.js";
 

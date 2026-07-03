@@ -19,17 +19,19 @@ import {
   DEFAULT_HARD_ORCHESTRATOR_TOOLS,
   type ZhinAgentConfig,
 } from '../zhin-agent/config.js';
-import { PersistentCronEngine, setCronManager } from '../cron-engine.js';
+import { setScheduleManager } from '../schedule-manager.js';
+import { ScheduleEngine, getScheduleEngine, setScheduleEngine } from '@zhin.js/kernel';
 import { createTaskExecutor } from '../task-executor.js';
 import {
   AssistantEventIngress,
-  AssistantJobEngine,
+  ScheduleJobEngine,
   JobWorker,
-  createAssistantJobStore,
+  ScheduleJobStore,
+  createScheduleJobStoreFromConfig,
   createNotificationRouter,
   loadAssistantProfileFile,
   syncProfileHeartbeatToStore,
-  syncProfileCronRoutinesToStore,
+  syncProfileRoutinesToStore,
   validateAssistantProfile,
   resolveAssistantConfig,
   resolveAssistantDefaultsConfig,
@@ -300,82 +302,67 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     // and survives the Memory → DB repository upgrade (ADR 0027).
     registerDefaultExecutors(orchService, { refs });
 
-    let jobEngine: import('../cron-engine.js').IPersistentJobEngine | null = null;
+    let jobEngine: ScheduleJobEngine | null = null;
     let jobWorker: JobWorker | null = null;
-    const cronFeature = root.inject('cron') as import('@zhin.js/core').CronFeature | undefined;
-    if (cronFeature && typeof cronFeature.add === 'function') {
-      const addCron: import('../cron-engine.js').AddCronFn = (c) => cronFeature.add(c, 'cron-engine');
+    const scheduleFeature = root.inject('schedule') as import('@zhin.js/core').ScheduleFeature | undefined;
+    if (!getScheduleEngine()) {
+      setScheduleEngine(new ScheduleEngine());
+    }
+    const store = createScheduleJobStoreFromConfig(dataDir, assistantCfg);
+    jobWorker = new JobWorker({
+      executor,
+      queue: assistantCfg.queue,
+      assistantEnabled: assistantCfg.enabled,
+    });
+    jobEngine = new ScheduleJobEngine({
+      store,
+      worker: jobWorker,
+      notifyOnFailure: defaultNotifyCfg.notifyOnFailure,
+      router: notificationRouter,
+      defaultNotify: defaultNotifyCfg.notify,
+    });
 
+    void (async () => {
       if (assistantCfg.enabled) {
-        const store = createAssistantJobStore(dataDir, assistantCfg);
-        jobWorker = new JobWorker({
-          executor,
-          queue: assistantCfg.queue,
-          assistantEnabled: true,
-        });
-        const assistantEngine = new AssistantJobEngine({
-          store,
-          addCron,
-          worker: jobWorker,
-          notifyOnFailure: defaultNotifyCfg.notifyOnFailure,
-          router: notificationRouter,
-          defaultNotify: defaultNotifyCfg.notify,
-        });
-        jobEngine = assistantEngine;
-
-        void store.migrateLegacyIfNeeded()
-          .then(() => store.syncSchedulerJobsFromLegacy())
-          .then(async () => {
-            const profile = await loadAssistantProfileFile(process.cwd(), assistantCfg.profile);
-            if (profile) {
-              for (const err of validateAssistantProfile(profile)) {
-                logger.warn(formatCompact({ assistant_profile: err }));
-              }
-            }
-            await syncProfileHeartbeatToStore(store, profile);
-            await syncProfileCronRoutinesToStore(store, profile);
-            assistantEngine.load();
-          }).catch((e) => {
-            logger.warn('Assistant load failed: ' + ((e as Error)?.message || String(e)));
-            assistantEngine.load();
-          });
-        const ingress = new AssistantEventIngress({
-          store,
-          engine: assistantEngine,
-          eventsConfig: assistantCfg.events,
-        });
-        setAssistantRuntime({
-          config: assistantCfg,
-          store,
-          engine: assistantEngine,
-          ingress,
-        });
-        logger.info(formatCompact({
-          assistant_runtime: true,
-          legacyDualWrite: assistantCfg.legacyDualWrite,
-          events: ingress.isEnabled(),
-          profile: assistantCfg.profile?.enabled === true,
-        }));
-      } else {
-        const runner = async (prompt: string, jobId: string, notify?: import('../assistant/types.js').JobNotify) => {
-          if (!refs.zhinAgent) return;
-          const result = await executor.executeTask({
-            prompt,
-            notify,
-            timeContext: true,
-          });
-          if (jobEngine) {
-            await jobEngine.updateJobStatus(jobId, result.success ? 'ok' : 'error', result.error);
+        const profile = await loadAssistantProfileFile(process.cwd(), assistantCfg.profile);
+        if (profile) {
+          for (const err of validateAssistantProfile(profile)) {
+            logger.warn(formatCompact({ assistant_profile: err }));
           }
-        };
-        jobEngine = new PersistentCronEngine({ dataDir, addCron, runner });
-        jobEngine.load();
+        }
+        await syncProfileHeartbeatToStore(store, profile);
+        await syncProfileRoutinesToStore(store, profile);
       }
+      jobEngine!.load();
+    })().catch((e) => {
+      logger.warn('Schedule load failed: ' + ((e as Error)?.message || String(e)));
+      jobEngine?.load();
+    });
 
-      setCronManager({ cronFeature, engine: jobEngine });
+    if (assistantCfg.enabled) {
+      const ingress = new AssistantEventIngress({
+        store,
+        engine: jobEngine,
+        eventsConfig: assistantCfg.events,
+      });
+      setAssistantRuntime({
+        config: assistantCfg,
+        store,
+        engine: jobEngine,
+        ingress,
+      });
+      logger.info(formatCompact({
+        assistant_runtime: true,
+        events: ingress.isEnabled(),
+        profile: assistantCfg.profile?.enabled === true,
+      }));
     }
 
-    // Legacy Scheduler：assistant.enabled 时由 JobStore 统一调度
+    if (scheduleFeature) {
+      setScheduleManager({ scheduleFeature, engine: jobEngine });
+    }
+
+    // HEARTBEAT.md 周期检查（与 schedule-jobs 并行）
     if (!assistantCfg.enabled) {
       const scheduler = new Scheduler({
         storePath: path.join(dataDir, 'scheduler-jobs.json'),
@@ -383,23 +370,9 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
         heartbeatEnabled: true,
         onJob: async (job) => {
           if (!refs.zhinAgent) return;
-          const target = job.payload.target;
           await executor.executeTask({
             prompt: job.payload.message,
-            notify: job.payload.deliver && target && job.payload.to
-              ? {
-                  channel: 'im',
-                  target: {
-                    channel: 'im',
-                    scene: {
-                      platform: target,
-                      endpointId: 'default',
-                      sceneId: job.payload.to,
-                      kind: 'private',
-                    },
-                  },
-                }
-              : { channel: 'silent' },
+            notify: { channel: 'silent' },
           });
         },
       });
@@ -412,7 +385,8 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     logger.debug('ZhinAgent created');
     return () => {
       setSessionTreeRuntime(null);
-      setCronManager(null);
+      setScheduleManager(null);
+      setScheduleEngine(null);
       setAssistantRuntime(null);
       if (jobEngine) {
         jobEngine.unload();

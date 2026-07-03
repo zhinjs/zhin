@@ -18,6 +18,7 @@ const IM_BUDGET_BYTES = 10 * 1024 * 1024;
 const IM_STACK = [
   { dir: 'basic/schema', name: '@zhin.js/schema' },
   { dir: 'basic/logger', name: '@zhin.js/logger' },
+  { dir: 'basic/schedule', name: '@zhin.js/schedule' },
   { dir: 'packages/im/kernel', name: '@zhin.js/kernel' },
   { dir: 'basic/database', name: '@zhin.js/database' },
   { dir: 'packages/im/core', name: '@zhin.js/core' },

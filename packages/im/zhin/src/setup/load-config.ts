@@ -5,7 +5,7 @@ import { LogLevel } from '@zhin.js/logger';
 import type { AppConfig } from '../types.js';
 import { setZhinProjectRoot } from './project-root.js';
 
-export const DEFAULT_CORE_SERVICES = ['process', 'config', 'command', 'component', 'permission', 'cron'] as const;
+export const DEFAULT_CORE_SERVICES = ['process', 'config', 'command', 'component', 'permission', 'schedule'] as const;
 
 export const DEFAULT_APP_CONFIG: AppConfig = {
   log_level: LogLevel.INFO,

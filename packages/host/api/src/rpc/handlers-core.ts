@@ -36,25 +36,29 @@ function parseCronNotify(message: Record<string, unknown>): JobNotify {
   return { channel: "silent" };
 }
 
-type CronFeatureLike = {
+type ScheduleFeatureLike = {
   getStatus(): Array<{
-    expression: string;
+    id: string;
+    kind: string;
+    expression?: string;
     running: boolean;
     nextExecution: Date | null;
     plugin: string;
   }>;
 };
 
-function getCronFeature(root: Plugin): CronFeatureLike | undefined {
-  const cron = root.inject("cron");
-  return cron && typeof (cron as CronFeatureLike).getStatus === "function"
-    ? (cron as CronFeatureLike)
+function getScheduleFeature(root: Plugin): ScheduleFeatureLike | undefined {
+  const schedule = root.inject("schedule");
+  return schedule && typeof (schedule as ScheduleFeatureLike).getStatus === "function"
+    ? (schedule as ScheduleFeatureLike)
     : undefined;
 }
 
-function mapMemoryCronStatus(cronFeature: CronFeatureLike) {
-  return cronFeature.getStatus().map((s) => ({
+function mapMemoryScheduleStatus(scheduleFeature: ScheduleFeatureLike) {
+  return scheduleFeature.getStatus().map((s) => ({
     type: "memory" as const,
+    id: s.id,
+    kind: s.kind,
     expression: s.expression,
     running: s.running,
     nextExecution: s.nextExecution?.toISOString() ?? null,
@@ -62,10 +66,9 @@ function mapMemoryCronStatus(cronFeature: CronFeatureLike) {
   }));
 }
 
-/** 拉取持久化任务 */
-async function listPersistentCronJobs() {
-  const { getCronManager } = await import("@zhin.js/agent");
-  const m = getCronManager();
+async function listPersistentScheduleJobs() {
+  const { getScheduleManager } = await import("@zhin.js/agent");
+  const m = getScheduleManager();
   if (!m?.engine) return [];
   return (await m.engine.listJobs()).map((j) => ({
     type: "persistent" as const,
@@ -73,7 +76,7 @@ async function listPersistentCronJobs() {
   }));
 }
 
-async function withPersistentCronEngine(
+async function withPersistentScheduleEngine(
   requestId: number | undefined,
   ctx: ConsoleRpcContext,
   run: (engine: {
@@ -83,13 +86,13 @@ async function withPersistentCronEngine(
     resumeJob: (id: string) => Promise<boolean>;
   }) => Promise<void>,
 ): Promise<boolean> {
-  const { getCronManager } = await import("@zhin.js/agent");
-  const m = getCronManager();
+  const { getScheduleManager } = await import("@zhin.js/agent");
+  const m = getScheduleManager();
   if (!m?.engine) {
-    reply(ctx, { requestId, error: "持久化定时任务引擎不可用" });
+    reply(ctx, { requestId, error: "持久化调度引擎不可用" });
     return true;
   }
-  await run(m.engine);
+  await run(m.engine as never);
   return true;
 }
 
@@ -433,15 +436,15 @@ export async function handleCoreRpc(
       return true;
     }
 
-    case "cron:list": {
+    case "schedule:list": {
       try {
-        const cronFeature = getCronFeature(root);
-        if (!cronFeature) {
-          reply(ctx, { requestId, error: "定时任务服务不可用" });
+        const scheduleFeature = getScheduleFeature(root);
+        if (!scheduleFeature) {
+          reply(ctx, { requestId, error: "调度服务不可用" });
           return true;
         }
-        const memory = mapMemoryCronStatus(cronFeature);
-        const persistent = await listPersistentCronJobs();
+        const memory = mapMemoryScheduleStatus(scheduleFeature);
+        const persistent = await listPersistentScheduleJobs();
         reply(ctx, { requestId, data: { memory, persistent } });
       } catch (error) {
         reply(ctx, { requestId, error: (error as Error).message });
@@ -449,23 +452,24 @@ export async function handleCoreRpc(
       return true;
     }
 
-    case "cron:add": {
+    case "schedule:add": {
       try {
-        const cronExpression = message.cronExpression as string;
+        const cron = message.cron as string;
         const prompt = message.prompt as string;
-        if (!cronExpression || !prompt) {
-          reply(ctx, { requestId, error: "缺少 cronExpression 或 prompt" });
+        const scheduleKind = (message.scheduleKind as string) || "solar";
+        if (!cron || !prompt) {
+          reply(ctx, { requestId, error: "缺少 cron（6段）或 prompt" });
           return true;
         }
-        return await withPersistentCronEngine(requestId, ctx, async (engine) => {
-          const { generateCronJobId } = await import("@zhin.js/agent");
+        return await withPersistentScheduleEngine(requestId, ctx, async (engine) => {
+          const { generateScheduleJobId } = await import("@zhin.js/agent");
           const notify = parseCronNotify(message);
           const record = await engine.addJob({
-            id: generateCronJobId(),
-            cronExpression,
-            prompt,
-            label: (message.label as string) || undefined,
+            id: generateScheduleJobId(),
             enabled: true,
+            schedule: { kind: scheduleKind, cron },
+            action: { kind: "agent", prompt },
+            label: (message.label as string) || undefined,
             notify,
           });
           reply(ctx, { requestId, data: record });
@@ -476,14 +480,14 @@ export async function handleCoreRpc(
       return true;
     }
 
-    case "cron:remove": {
+    case "schedule:remove": {
       try {
         const id = message.id as string;
         if (!id) {
           reply(ctx, { requestId, error: "缺少任务 id" });
           return true;
         }
-        return await withPersistentCronEngine(requestId, ctx, async (engine) => {
+        return await withPersistentScheduleEngine(requestId, ctx, async (engine) => {
           const ok = await engine.removeJob(id);
           reply(ctx, { requestId, data: { success: ok } });
         });
@@ -493,14 +497,14 @@ export async function handleCoreRpc(
       return true;
     }
 
-    case "cron:pause": {
+    case "schedule:pause": {
       try {
         const id = message.id as string;
         if (!id) {
           reply(ctx, { requestId, error: "缺少任务 id" });
           return true;
         }
-        return await withPersistentCronEngine(requestId, ctx, async (engine) => {
+        return await withPersistentScheduleEngine(requestId, ctx, async (engine) => {
           const ok = await engine.pauseJob(id);
           reply(ctx, { requestId, data: { success: ok } });
         });
@@ -510,14 +514,14 @@ export async function handleCoreRpc(
       return true;
     }
 
-    case "cron:resume": {
+    case "schedule:resume": {
       try {
         const id = message.id as string;
         if (!id) {
           reply(ctx, { requestId, error: "缺少任务 id" });
           return true;
         }
-        return await withPersistentCronEngine(requestId, ctx, async (engine) => {
+        return await withPersistentScheduleEngine(requestId, ctx, async (engine) => {
           const ok = await engine.resumeJob(id);
           reply(ctx, { requestId, data: { success: ok } });
         });

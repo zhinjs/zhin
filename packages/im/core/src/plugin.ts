@@ -280,7 +280,8 @@ export class Plugin extends PluginBase implements PluginLike {
   inject<T extends keyof Plugin.Contexts>(name: T): Plugin.Contexts[T]|undefined;
   inject(name: string): unknown;
   inject(name: string): unknown {
-    const context = this.root.contexts.get(name);
+    const resolved = name === 'cron' ? 'schedule' : name;
+    const context = this.root.contexts.get(resolved);
     return context?.value;
   }
 
@@ -356,12 +357,12 @@ export class Plugin extends PluginBase implements PluginLike {
   get features(): Plugin.Features {
     const commandService = this.inject('command');
     const componentService = this.inject('component')
-    const cronService = this.inject('cron');
+    const scheduleService = this.inject('schedule');
 
     return {
       commands: commandService ? commandService.items.map(c => c.pattern) : [],
       components: componentService ? componentService.getAllNames() : [],
-      crons: cronService ? cronService.items.map(c => c.cronExpression) : [],
+      schedules: scheduleService ? scheduleService.items.map(s => s.id) : [],
       middlewares: this.#middlewares.map((m, i) => m.name || `middleware_${i}`),
     };
   }
@@ -375,7 +376,7 @@ export class Plugin extends PluginBase implements PluginLike {
     const f = this.features;
     if (f.commands.length > 0) result.push({ name: 'command', count: f.commands.length });
     if (f.components.length > 0) result.push({ name: 'component', count: f.components.length });
-    if (f.crons.length > 0) result.push({ name: 'cron', count: f.crons.length });
+    if (f.schedules.length > 0) result.push({ name: 'schedule', count: f.schedules.length });
     // #middlewares includes the default command middleware, only count user-added ones
     const userMiddlewareCount = this.#middlewares.length - 1; // subtract default #messageMiddleware
     if (userMiddlewareCount > 0) result.push({ name: 'middleware', count: userMiddlewareCount });
@@ -690,7 +691,7 @@ export namespace Plugin {
   export interface Features {
     commands: string[];
     components: string[];
-    crons: string[];
+    schedules: string[];
     middlewares: string[];
   }
 

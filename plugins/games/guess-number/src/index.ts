@@ -1,4 +1,4 @@
-import { Cron, formatCompact, usePlugin, type DatabaseFeature } from 'zhin.js';
+import { formatCompact, usePlugin, type DatabaseFeature } from 'zhin.js';
 import { registerModels } from './models.js';
 import {
   createServices,
@@ -9,7 +9,7 @@ import { registerCommands, registerGuessMiddleware } from './commands.js';
 import { registerGuessHub } from './hub-register.js';
 
 const plugin = usePlugin();
-const { logger, useContext, addCron } = plugin;
+const { logger, useContext, addSchedule } = plugin;
 
 registerModels(plugin);
 
@@ -24,12 +24,10 @@ registerGuessHub(() => services);
 registerCommands(plugin, () => services);
 registerGuessMiddleware(plugin, () => services);
 
-addCron(
-  new Cron('0 */15 * * * *', async () => {
+addSchedule({ kind: 'solar', cron: '0 */15 * * * *' }, async () => {
     if (!services) return;
     const n = await services.abortStale(30 * 60 * 1000);
     if (n > 0) logger.debug(formatCompact({ 猜数字: '清理超时局', count: n }));
-  }),
-);
+  });
 
 logger.info(formatCompact({ 模块: '猜数字', 状态: '已加载' }));

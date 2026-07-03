@@ -37,6 +37,7 @@ export default defineConfig({
         'basic/logger/node_modules',
         'basic/schema/node_modules',
         'basic/database/node_modules',
+        'basic/schedule/node_modules',
       ],
     },
   },

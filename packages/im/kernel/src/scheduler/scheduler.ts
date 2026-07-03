@@ -7,7 +7,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { Cron as Croner } from 'croner';
+import { getNextRun, resolveSolarJob } from '@zhin.js/schedule';
 import type {
   Schedule,
   ScheduledJob,
@@ -40,9 +40,8 @@ function computeNextRun(schedule: Schedule, currentMs: number): number | undefin
   }
   if (schedule.kind === 'cron' && schedule.expr) {
     try {
-      const job = new Croner(schedule.expr, { paused: true, timezone: schedule.tz });
-      const next = job.nextRun();
-      job.stop();
+      const resolved = resolveSolarJob(schedule.expr, schedule.tz ?? 'Asia/Shanghai');
+      const next = getNextRun(resolved, new Date(currentMs));
       return next ? next.getTime() : undefined;
     } catch {
       return undefined;

@@ -1,7 +1,7 @@
 /**
  * 群日常分析（group-suite 子模块）
  */
-import { formatCompact, Cron, MessageCommand, segment, type Plugin } from "zhin.js";
+import { formatCompact, MessageCommand, segment, type Plugin } from "zhin.js";
 import type { InboxMessageRow } from "./analysis.js";
 import {
   buildAnalysisReportData,
@@ -24,7 +24,7 @@ export function registerDailyAnalysis(
   plugin: Plugin,
   config: GroupSuiteConfig,
 ): void {
-  const { logger, root, addCommand, useContext, addCron, onDispose } = plugin;
+  const { logger, root, addCommand, useContext, addSchedule, onDispose } = plugin;
 
 // ─── 数据库与收件箱 ───────────────────────────────────────────────────────────
 
@@ -366,14 +366,15 @@ addCommand(
 
 // ─── 定时任务（可选）───────────────────────────────────────────────────────────
 
-let cronDispose: (() => void) | null = null;
+let scheduleDispose: (() => void) | null = null;
 
 useContext("database", () => {
-  if (!config.autoAnalysisEnabled || cronDispose) return;
-  if (typeof addCron !== "function") return;
+  if (!config.autoAnalysisEnabled || scheduleDispose) return;
+  if (typeof addSchedule !== "function") return;
   try {
-    cronDispose = addCron(
-      new Cron(config.autoAnalysisCron, async () => {
+    scheduleDispose = addSchedule(
+      { kind: 'solar', cron: config.autoAnalysisCron },
+      async () => {
         const inject = root.inject?.bind(root) as (key: string) => any;
         if (typeof inject !== "function") return;
         const targets: { channelId: string; adapter: string; endpointId: string }[] =
@@ -442,17 +443,17 @@ useContext("database", () => {
             logger.warn(formatCompact( { op: "send", channel: t.channelId, ok: false, error: (e as Error)?.message }));
           }
         }
-      }),
+      },
     );
   } catch (e) {
-    logger.warn(formatCompact( { op: "cron", ok: false, error: (e as Error)?.message }));
+    logger.warn(formatCompact( { op: "schedule", ok: false, error: (e as Error)?.message }));
   }
 });
 
 onDispose(() => {
-  if (cronDispose) {
-    cronDispose();
-    cronDispose = null;
+  if (scheduleDispose) {
+    scheduleDispose();
+    scheduleDispose = null;
   }
 });
 }

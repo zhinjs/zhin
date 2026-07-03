@@ -36,10 +36,10 @@ export const DEMO_RPC_WRITE_BLOCKLIST = new Set([
   "files:save",
   "env:save",
   "system:restart",
-  "cron:add",
-  "cron:remove",
-  "cron:pause",
-  "cron:resume",
+  "schedule:add",
+  "schedule:remove",
+  "schedule:pause",
+  "schedule:resume",
 ]);
 
 const DEMO_HTTP_GET_PREFIXES = [

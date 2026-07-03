@@ -1,5 +1,5 @@
 import { formatCompact, usePlugin } from '@zhin.js/core';
-import type { DatabaseFeature, SchemaFeature, CronFeature } from '@zhin.js/core';
+import type { DatabaseFeature, SchemaFeature, ScheduleFeature } from '@zhin.js/core';
 import {
   PageManager,
   mountConsoleRouter,
@@ -53,7 +53,7 @@ declare module "@zhin.js/core" {
       web: PageManager;
       router: Router;
       schema: SchemaFeature;
-      cron: CronFeature;
+      schedule: ScheduleFeature;
     }
   }
 }

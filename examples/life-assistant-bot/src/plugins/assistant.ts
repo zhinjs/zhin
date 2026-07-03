@@ -1,17 +1,15 @@
 /**
  * 生活助手插件 — 日程提醒、知识查询、对话记忆
  */
-import { usePlugin, MessageCommand, Cron } from 'zhin.js'
+import { usePlugin, MessageCommand } from 'zhin.js'
 
-const { addCommand, addCron, addTool, onMounted, logger } = usePlugin()
-
-// --- 命令 ---
+const { addCommand, addSchedule, addTool, onMounted, logger } = usePlugin()
 
 addCommand(
   new MessageCommand('remind <text:text>')
     .desc('设置提醒（示例：remind 明天下午3点开会）')
     .action((_, result) => {
-      return `✅ 已记录提醒：${result.params.text}\n（提示：实际提醒需配合 cron 定时任务）`
+      return `✅ 已记录提醒：${result.params.text}\n（提示：实际提醒需配合 schedule 调度）`
     }),
 )
 
@@ -23,8 +21,6 @@ addCommand(
       return `📝 已记录：${new Date().toLocaleDateString('zh-CN')} — ${note}`
     }),
 )
-
-// --- AI 工具 ---
 
 addTool({
   name: 'get_current_time',
@@ -40,22 +36,13 @@ addTool({
   },
 })
 
-// --- 定时任务 ---
+addSchedule({ kind: 'solar', cron: '0 0 8 * * *' }, async () => {
+  logger.info('早安提醒触发')
+})
 
-addCron(
-  new Cron('0 8 * * *', async () => {
-    logger.info('早安提醒触发')
-    // 实际推送需要配置 IM 适配器
-  }),
-)
-
-addCron(
-  new Cron('0 22 * * *', async () => {
-    logger.info('晚安提醒触发')
-  }),
-)
-
-// --- 生命周期 ---
+addSchedule({ kind: 'solar', cron: '0 0 22 * * *' }, async () => {
+  logger.info('晚安提醒触发')
+})
 
 onMounted(() => {
   logger.info('生活助手插件已启动')

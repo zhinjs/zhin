@@ -941,9 +941,9 @@ export function register(api: PluginRegisterHostApi) {
 
     // 生活助手插件
     await fs.writeFile(path.join(projectPath, 'src', 'plugins', 'assistant.ts'),
-`import { usePlugin, MessageCommand, Cron } from 'zhin.js';
+`import { usePlugin, MessageCommand } from 'zhin.js';
 
-const { addCommand, addCron, addTool, onMounted, logger } = usePlugin();
+const { addCommand, addSchedule, addTool, onMounted, logger } = usePlugin();
 
 addCommand(
   new MessageCommand('remind <text:text>')
@@ -958,8 +958,8 @@ addTool({
   execute: async () => new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
 });
 
-addCron(new Cron('0 8 * * *', async () => { logger.info('早安提醒'); }));
-addCron(new Cron('0 22 * * *', async () => { logger.info('晚安提醒'); }));
+addSchedule({ kind: 'solar', cron: '0 0 8 * * *' }, async () => { logger.info('早安提醒'); });
+addSchedule({ kind: 'solar', cron: '0 0 22 * * *' }, async () => { logger.info('晚安提醒'); });
 
 onMounted(() => { logger.info('生活助手插件已启动'); });
 `);

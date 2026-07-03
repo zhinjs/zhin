@@ -20,7 +20,7 @@ export function registerAssistantJobsRoute(router: Router, base: string): void {
       return;
     }
 
-    const jobs = await runtime.engine.listAssistantJobs();
+    const jobs = await runtime.engine.listJobs();
     ctx.status = 200;
     ctx.body = {
       success: true,

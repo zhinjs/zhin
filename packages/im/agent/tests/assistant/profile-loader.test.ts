@@ -45,7 +45,7 @@ agents: |
   it('syncProfileHeartbeatToStore 写入 every 调度 Job', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'zhin-profile-hb-'));
     try {
-      const store = new AssistantJobStore({ dataDir: dir, legacyDualWrite: false });
+      const store = new AssistantJobStore({ dataDir: dir });
       const ok = await syncProfileHeartbeatToStore(store, {
         version: 1,
         routines: { heartbeat: { enabled: true, everyMs: 60_000 } },
@@ -62,16 +62,16 @@ agents: |
   it('syncProfileCronRoutinesToStore 写入早报与睡前巡检', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'zhin-profile-cron-'));
     try {
-      const store = new AssistantJobStore({ dataDir: dir, legacyDualWrite: false });
+      const store = new AssistantJobStore({ dataDir: dir });
       const count = await syncProfileCronRoutinesToStore(store, {
         version: 1,
         routines: {
-          morningBrief: { enabled: true, cron: '0 8 * * *', prompt: '早报' },
-          bedtimeCheck: { enabled: true, cron: '0 22 * * *', prompt: '睡前' },
+          morningBrief: { enabled: true, cron: '0 0 8 * * *', prompt: '早报' },
+          bedtimeCheck: { enabled: true, cron: '0 0 22 * * *', prompt: '睡前' },
         },
       });
       expect(count).toBe(2);
-      expect((await store.getJob(PROFILE_MORNING_BRIEF_JOB_ID))?.schedule.kind).toBe('cron');
+      expect((await store.getJob(PROFILE_MORNING_BRIEF_JOB_ID))?.schedule.kind).toBe('solar');
       expect((await store.getJob(PROFILE_BEDTIME_CHECK_JOB_ID))?.action.kind).toBe('agent');
     } finally {
       await rm(dir, { recursive: true, force: true });

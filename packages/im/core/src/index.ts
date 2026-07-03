@@ -18,7 +18,8 @@ export * from './errors.js'
 // ── Built 模块 ──────────────────────────────────────────────────────
 export * from './built/config.js'
 export * from './built/command.js'
-export * from './built/cron.js'
+export * from './built/schedule.js'
+export type { ScheduleDescriptor, ScheduleHandle, ScheduleContextExtensions } from './built/schedule.js'
 // Models
 export * from './models/system-log.js'
 export * from './models/user.js'
@@ -79,8 +80,31 @@ export * from '@zhin.js/database'
 export * from '@zhin.js/logger'
 export { Schema } from '@zhin.js/schema'
 export type { PluginLike } from '@zhin.js/kernel'
-export { Feature, Cron, Scheduler, getScheduler, setScheduler } from '@zhin.js/kernel'
+export {
+  Feature,
+  ScheduleEngine,
+  getScheduleEngine,
+  setScheduleEngine,
+  Scheduler,
+  getScheduler,
+  setScheduler,
+} from '@zhin.js/kernel'
 export type {
-  FeatureJSON, FeatureListener, Schedule, JobPayload, JobState,
-  ScheduledJob, JobStore, JobCallback, AddJobOptions, IScheduler, SchedulerOptions,
+  FeatureJSON,
+  FeatureListener,
+  Schedule,
+  JobPayload,
+  JobState,
+  ScheduledJob,
+  JobStore,
+  JobCallback,
+  AddJobOptions,
+  IScheduler,
+  SchedulerOptions,
+  ScheduleFireCallback,
+  MemoryScheduleRegistration,
+  ScheduleEngineOptions,
+  JobContext,
+  ResolvedJob,
+  ScheduleKind,
 } from '@zhin.js/kernel'

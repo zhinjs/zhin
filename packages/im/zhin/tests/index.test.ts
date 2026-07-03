@@ -32,10 +32,10 @@ describe('Zhin Package Exports', () => {
     expect(typeof logger).toBe('object')
   })
 
-  it('should export Cron', async () => {
-    const { Cron } = await import('../src/index')
-    expect(Cron).toBeDefined()
-    expect(typeof Cron).toBe('function')
+  it('should export ScheduleEngine', async () => {
+    const { ScheduleEngine } = await import('../src/index')
+    expect(ScheduleEngine).toBeDefined()
+    expect(typeof ScheduleEngine).toBe('function')
   })
 
   it('should export component utilities', async () => {

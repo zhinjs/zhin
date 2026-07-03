@@ -26,7 +26,7 @@ describe('assistant job-scheduler', () => {
       notify: { channel: 'silent' },
       createdAt: 1, updatedAt: 1, state: {},
     };
-    const dispose = registerJobSchedule(job, () => () => {}, onRun);
+    const dispose = registerJobSchedule(job, onRun);
     expect(dispose).not.toBeNull();
     await vi.advanceTimersByTimeAsync(2500);
     expect(onRun).toHaveBeenCalledWith('every1');

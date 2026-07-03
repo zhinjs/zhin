@@ -17,8 +17,8 @@ import {
   type AssistantProfileRoutineCron,
   type AssistantProfileRoutineHeartbeat,
 } from './profile-types.js';
-import type { AssistantJobStore } from './job-store.js';
-import type { AssistantJob } from './types.js';
+import type { ScheduleJobStore } from './job-store.js';
+import type { ScheduleJob } from './types.js';
 
 export function resolveAssistantProfileConfig(
   raw?: AssistantProfileConfig,
@@ -103,29 +103,32 @@ export async function loadBootstrapWithProfile(
   return { files: merged, profile, profilePath };
 }
 
-export function buildCronJobFromRoutine(
+export function buildScheduleJobFromRoutine(
   jobId: string,
   defaultLabel: string,
   routine: AssistantProfileRoutineCron,
-): AssistantJob {
+): ScheduleJob {
   const now = Date.now();
   return {
     id: jobId,
     label: routine.label?.trim() || defaultLabel,
     enabled: routine.enabled !== false,
-    schedule: { kind: 'cron', expr: routine.cron.trim(), tz: routine.tz },
+    schedule: { kind: 'solar', cron: routine.cron.trim(), tz: routine.tz },
     action: { kind: 'agent', prompt: routine.prompt.trim() },
     notify: routine.notify ?? { channel: 'silent' },
     createdAt: now,
     updatedAt: now,
     state: {},
-    source: 'manual',
+    source: 'profile',
   };
 }
 
+/** @deprecated */
+export const buildCronJobFromRoutine = buildScheduleJobFromRoutine;
+
 export function buildHeartbeatJobFromRoutine(
   routine: AssistantProfileRoutineHeartbeat,
-): AssistantJob {
+): ScheduleJob {
   const now = Date.now();
   return {
     id: PROFILE_HEARTBEAT_JOB_ID,
@@ -143,13 +146,13 @@ export function buildHeartbeatJobFromRoutine(
     createdAt: now,
     updatedAt: now,
     state: {},
-    source: 'manual',
+    source: 'profile',
   };
 }
 
 /** 将 Profile routines.heartbeat 同步进 JobStore（M1.5 + M5） */
 export async function syncProfileHeartbeatToStore(
-  store: AssistantJobStore,
+  store: ScheduleJobStore,
   profile: AssistantProfile | null,
 ): Promise<boolean> {
   const routine = profile?.routines?.heartbeat;
@@ -169,9 +172,9 @@ const PROFILE_CRON_ROUTINES: Array<{
   { key: 'bedtimeCheck', jobId: PROFILE_BEDTIME_CHECK_JOB_ID, defaultLabel: '睡前巡检' },
 ];
 
-/** 将 Profile routines 中的 cron Job 同步进 JobStore */
-export async function syncProfileCronRoutinesToStore(
-  store: AssistantJobStore,
+/** 将 Profile routines 中的调度 Job 同步进 JobStore */
+export async function syncProfileRoutinesToStore(
+  store: ScheduleJobStore,
   profile: AssistantProfile | null,
 ): Promise<number> {
   if (!profile?.routines) return 0;
@@ -181,11 +184,14 @@ export async function syncProfileCronRoutinesToStore(
     if (!routine || routine.enabled === false || !routine.cron?.trim() || !routine.prompt?.trim()) {
       continue;
     }
-    await store.upsertJob(buildCronJobFromRoutine(jobId, defaultLabel, routine));
+    await store.upsertJob(buildScheduleJobFromRoutine(jobId, defaultLabel, routine));
     synced++;
   }
   return synced;
 }
+
+/** @deprecated */
+export const syncProfileCronRoutinesToStore = syncProfileRoutinesToStore;
 
 /** 合并 Profile + assistant.home 的设备别名 */
 export function mergeProfileDeviceAliases(

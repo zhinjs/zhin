@@ -185,21 +185,24 @@ export { createBuiltinTools, type BuiltinToolsOptions } from './builtin-tools.js
 export { ZHIN_WEB_USER_AGENT, WEB_TOOL_FETCH_TIMEOUT_MS } from './builtin/web-tool-utils.js';
 
 export {
-  PersistentCronEngine,
-  readCronJobsFile, writeCronJobsFile, getCronJobsFilePath, generateCronJobId,
-  createCronTools, setCronManager, getCronManager, CRON_JOBS_FILENAME,
-} from './cron-engine.js';
-export type {
-  CronJobRecord, CronRunner, AddCronFn,
-  PersistentCronEngineOptions, CronManager, PromptOptimizer, IPersistentJobEngine,
-} from './cron-engine.js';
+  createScheduleTools,
+  setScheduleManager,
+  getScheduleManager,
+  generateScheduleJobId,
+  SCHEDULE_JOBS_FILENAME,
+} from './schedule-manager.js';
+export type { ScheduleManager, PromptOptimizer } from './schedule-manager.js';
 
 export {
+  ScheduleJobEngine,
+  ScheduleJobStore,
   AssistantJobEngine,
   AssistantJobStore,
   AssistantEventIngress,
   JobWorker,
+  createScheduleJobStoreFromConfig,
   createAssistantJobStore,
+  getScheduleJobsPath,
   getAssistantJobsPath,
   resolveAssistantConfig,
   resolveAssistantDefaultsConfig,
@@ -212,9 +215,9 @@ export {
   getAssistantRuntime,
   isAssistantEventsEndpointActive,
   getAssistantEventsTokenFallback,
+  SCHEDULE_JOBS_VERSION,
   ASSISTANT_JOBS_FILENAME,
-  cronRecordToAssistant,
-  assistantToCronRecord,
+  syncProfileRoutinesToStore,
 } from './assistant/index.js';
 export type {
   AssistantConfig,
@@ -223,12 +226,13 @@ export type {
   AssistantProfileConfig,
   AssistantProfile,
   NotificationRouter,
+  ScheduleJob,
+  ScheduleJobFile,
   AssistantJob,
   AssistantJobFile,
   AssistantEventRequest,
   AssistantEventResult,
   AssistantRuntimeHandle,
-  MigrationResult,
 } from './assistant/index.js';
 export {
   loadAssistantProfileFile,

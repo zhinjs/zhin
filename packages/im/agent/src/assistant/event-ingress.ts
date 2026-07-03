@@ -6,15 +6,15 @@ import { formatCompact } from '@zhin.js/logger';
 import type { AssistantEventsConfig } from './config.js';
 import { resolveAssistantEventsConfig } from './config.js';
 import type { AssistantEventRequest, AssistantEventResult } from './event-types.js';
-import type { AssistantJobEngine } from './job-engine.js';
-import type { AssistantJobStore } from './job-store.js';
+import type { ScheduleJobEngine } from './job-engine.js';
+import type { ScheduleJobStore } from './job-store.js';
 import type { JobAction, JobNotify } from './types.js';
 
 const logger = new Logger(null, 'assistant-event-ingress');
 
 export interface AssistantEventIngressOptions {
-  store: AssistantJobStore;
-  engine: AssistantJobEngine;
+  store: ScheduleJobStore;
+  engine: ScheduleJobEngine;
   eventsConfig?: AssistantEventsConfig;
 }
 
@@ -24,8 +24,8 @@ interface RateBucket {
 }
 
 export class AssistantEventIngress {
-  private store: AssistantJobStore;
-  private engine: AssistantJobEngine;
+  private store: ScheduleJobStore;
+  private engine: ScheduleJobEngine;
   private eventsCfg: ReturnType<typeof resolveAssistantEventsConfig>;
   private rateBuckets = new Map<string, RateBucket>();
 

@@ -32,6 +32,8 @@
   "dependencies": {
     "@zhin.js/ai": "workspace:*",
     "@zhin.js/core": "workspace:*",
+    "@zhin.js/kernel": "workspace:*",
+    "@zhin.js/schedule": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "he": "^1.2.0",
     "js-yaml": "^5.0.0"

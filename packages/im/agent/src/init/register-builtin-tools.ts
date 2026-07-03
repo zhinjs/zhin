@@ -17,7 +17,7 @@ import { resolveSkillInstructionMaxChars, DEFAULT_CONFIG } from '../zhin-agent/c
 import { loadBootstrapFiles, buildContextFiles, buildStableBootstrapSection } from '../bootstrap.js';
 import { loadBootstrapWithProfile, resolveAssistantConfig } from '../assistant/index.js';
 import { createAIHookEvent } from '../orchestrator/hook-registry.js';
-import { createCronTools } from '../cron-engine.js';
+import { createScheduleTools } from '../schedule-manager.js';
 import { createGenerateImageTool } from '../builtin/generate-image-tool.js';
 import type { AIServiceRefs } from './shared-refs.js';
 
@@ -59,8 +59,8 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       const plain = isZhinTool(tool) ? tool.toTool() : tool;
       disposers.push(toolService.addTool({ ...plain, source: 'builtin' }, root.name));
     }
-    const cronTools = createCronTools();
-    for (const tool of cronTools) {
+    const scheduleTools = createScheduleTools();
+    for (const tool of scheduleTools) {
       const plain = tool.toTool();
       disposers.push(toolService.addTool({ ...plain, source: 'builtin' }, root.name));
     }
@@ -288,7 +288,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
 
       logger.info(formatCompact( {
         内置工具: builtinTools.length,
-        定时任务工具: cronTools.length,
+        定时任务工具: scheduleTools.length,
         技能数量: skillCount,
         工作区工具: toolCount,
         预设代理: agentCount,

@@ -21,12 +21,13 @@ export {
   loadAssistantProfileFile,
   loadBootstrapWithProfile,
   syncProfileHeartbeatToStore,
+  syncProfileRoutinesToStore,
   syncProfileCronRoutinesToStore,
   mergeProfileDeviceAliases,
   validateAssistantProfile,
   resolveAssistantProfileConfig,
   buildHeartbeatJobFromRoutine,
-  buildCronJobFromRoutine,
+  buildScheduleJobFromRoutine,
 } from './profile-loader.js';
 
 export { registerJobSchedule, isRuntimeSchedulable } from './job-scheduler.js';
@@ -57,6 +58,9 @@ export {
 export type { AssistantRuntimeHandle } from './runtime-registry.js';
 
 export type {
+  ScheduleJob,
+  ScheduleJobFile,
+  ScheduleJobState,
   AssistantJob,
   AssistantJobFile,
   AssistantJobState,
@@ -64,30 +68,30 @@ export type {
   JobNotify,
   JobSchedule,
 } from './types.js';
-export { ASSISTANT_JOBS_FILENAME, ASSISTANT_JOBS_VERSION } from './types.js';
+export {
+  SCHEDULE_JOBS_FILENAME,
+  SCHEDULE_JOBS_VERSION,
+  ASSISTANT_JOBS_FILENAME,
+  ASSISTANT_JOBS_VERSION,
+} from './types.js';
+
+export { jobPrompt } from './job-utils.js';
 
 export {
-  assistantCronJobs,
-  assistantToCronRecord,
-  cronRecordToAssistant,
-  schedulerRecordToAssistant,
-  messageToIMDeliveryTarget,
-  isCronSchedulable,
-  jobPrompt,
-} from './legacy-convert.js';
-
-export {
+  ScheduleJobStore,
   AssistantJobStore,
-  createAssistantJobStore,
+  createScheduleJobStoreFromConfig,
+  getScheduleJobsPath,
   getAssistantJobsPath,
 } from './job-store.js';
-export type { AssistantJobStoreOptions, MigrationResult } from './job-store.js';
+export { createScheduleJobStoreFromConfig as createAssistantJobStore } from './job-store.js';
+export type { ScheduleJobStoreOptions } from './job-store.js';
 
 export { JobWorker } from './job-worker.js';
 export type { JobWorkerOptions } from './job-worker.js';
 
-export { AssistantJobEngine } from './job-engine.js';
-export type { AssistantJobEngineOptions } from './job-engine.js';
+export { ScheduleJobEngine, AssistantJobEngine } from './job-engine.js';
+export type { ScheduleJobEngineOptions, AssistantJobEngineOptions } from './job-engine.js';
 
 export {
   createNotificationRouter,

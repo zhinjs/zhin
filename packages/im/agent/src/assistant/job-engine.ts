@@ -1,47 +1,39 @@
 /**
- * AssistantJobEngine — 基于 JobStore 的持久化调度（API 兼容 PersistentCronEngine）
+ * ScheduleJobEngine — schedule-jobs.json 持久化调度
  */
 import { Logger } from '@zhin.js/core';
 import { formatCompact } from '@zhin.js/logger';
-import type {
-  AddCronFn,
-  CronJobRecord,
-} from '../cron-engine.js';
-import {
-  assistantToCronRecord,
-  cronRecordToAssistant,
-  jobPrompt,
-} from './legacy-convert.js';
 import { registerJobSchedule, isRuntimeSchedulable } from './job-scheduler.js';
-import type { AssistantJobStore } from './job-store.js';
+import type { ScheduleJobStore } from './job-store.js';
 import type { JobWorker } from './job-worker.js';
-import type { AssistantJob } from './types.js';
+import type { ScheduleJob } from './types.js';
 import type { NotificationRouter } from './notification-router.js';
 import { resolveEffectiveNotify } from './notification-router.js';
+import { jobPrompt } from './job-utils.js';
 
-const logger = new Logger(null, 'assistant-job-engine');
+const logger = new Logger(null, 'schedule-job-engine');
 
-export interface AssistantJobEngineOptions {
-  store: AssistantJobStore;
-  addCron: AddCronFn;
+export interface ScheduleJobEngineOptions {
+  store: ScheduleJobStore;
   worker: JobWorker;
   notifyOnFailure?: boolean;
   router?: NotificationRouter;
   defaultNotify?: import('./types.js').JobNotify;
 }
 
-export class AssistantJobEngine {
-  private store: AssistantJobStore;
-  private addCron: AddCronFn;
+/** @deprecated */
+export type AssistantJobEngineOptions = ScheduleJobEngineOptions;
+
+export class ScheduleJobEngine {
+  private store: ScheduleJobStore;
   private worker: JobWorker;
   private disposes = new Map<string, () => void>();
   private notifyOnFailure: boolean;
   private router?: NotificationRouter;
   private defaultNotify?: import('./types.js').JobNotify;
 
-  constructor(options: AssistantJobEngineOptions) {
+  constructor(options: ScheduleJobEngineOptions) {
     this.store = options.store;
-    this.addCron = options.addCron;
     this.worker = options.worker;
     this.notifyOnFailure = options.notifyOnFailure === true;
     this.router = options.router;
@@ -53,7 +45,7 @@ export class AssistantJobEngine {
   }
 
   load(): void {
-    this.store.migrateLegacyIfNeeded().then(() => this.store.listJobs()).then((jobs) => {
+    this.store.listJobs().then((jobs) => {
       for (const job of jobs) {
         if (isRuntimeSchedulable(job)) {
           this.registerOne(job);
@@ -61,15 +53,15 @@ export class AssistantJobEngine {
       }
       const count = jobs.filter((j) => isRuntimeSchedulable(j)).length;
       if (count > 0) {
-        logger.debug(formatCompact({ assistant_jobs: count }));
+        logger.debug(formatCompact({ schedule_jobs: count }));
       }
     }).catch((e) => {
-      logger.warn('加载 Assistant Job 失败: ' + ((e as Error)?.message || String(e)));
+      logger.warn('加载 Schedule Job 失败: ' + ((e as Error)?.message || String(e)));
     });
   }
 
-  registerOne(job: AssistantJob): void {
-    const dispose = registerJobSchedule(job, this.addCron, (jobId) => this.runJob(jobId));
+  registerOne(job: ScheduleJob): void {
+    const dispose = registerJobSchedule(job, (jobId) => this.runJob(jobId));
     if (dispose) {
       this.disposes.set(job.id, dispose);
     }
@@ -108,28 +100,29 @@ export class AssistantJobEngine {
     }
   }
 
-  async listJobs(): Promise<CronJobRecord[]> {
-    return this.store.listCronCompatible();
-  }
-
-  async listAssistantJobs(): Promise<AssistantJob[]> {
+  async listJobs(): Promise<ScheduleJob[]> {
     return this.store.listJobs();
   }
 
-  async addJob(record: Omit<CronJobRecord, 'createdAt'> & { createdAt?: number }): Promise<CronJobRecord> {
-    const assistant = cronRecordToAssistant({
-      ...record,
-      createdAt: record.createdAt ?? Date.now(),
-      enabled: record.enabled ?? true,
-    });
-    assistant.source = 'manual';
-    await this.store.upsertJob(assistant);
-    if (isRuntimeSchedulable(assistant)) {
-      this.registerOne(assistant);
+  async addJob(job: Omit<ScheduleJob, 'createdAt' | 'updatedAt' | 'state'> & {
+    createdAt?: number;
+    updatedAt?: number;
+    state?: ScheduleJob['state'];
+  }): Promise<ScheduleJob> {
+    const now = Date.now();
+    const full: ScheduleJob = {
+      ...job,
+      createdAt: job.createdAt ?? now,
+      updatedAt: job.updatedAt ?? now,
+      state: job.state ?? {},
+      enabled: job.enabled ?? true,
+    };
+    full.source = job.source ?? 'manual';
+    await this.store.upsertJob(full);
+    if (isRuntimeSchedulable(full)) {
+      this.registerOne(full);
     }
-    const out = assistantToCronRecord(assistant);
-    if (!out) throw new Error('Failed to convert assistant job to cron record');
-    return out;
+    return full;
   }
 
   async removeJob(id: string): Promise<boolean> {
@@ -172,19 +165,12 @@ export class AssistantJobEngine {
       try {
         dispose();
       } catch (e) {
-        logger.warn(`Assistant schedule dispose failed for ${id}:`, e);
+        logger.warn(`Schedule dispose failed for ${id}:`, e);
       }
     }
     this.disposes.clear();
   }
-
-  async updateJobStatus(id: string, status: 'ok' | 'error', error?: string): Promise<void> {
-    await this.store.updateJobState(id, {
-      lastExecutedAt: Date.now(),
-      lastStatus: status,
-      lastError: status === 'error' ? error : undefined,
-    });
-  }
 }
 
-export type { AddCronFn } from '../cron-engine.js';
+/** @deprecated */
+export const AssistantJobEngine = ScheduleJobEngine;

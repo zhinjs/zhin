@@ -31,8 +31,28 @@ export {
   CircuitBreaker,
 } from './errors.js';
 
-// ── Cron ──
-export { Cron } from './cron.js';
+// ── Schedule engine ──
+export {
+  ScheduleEngine,
+  getScheduleEngine,
+  setScheduleEngine,
+  resolveSolarJob,
+  resolveLunarJob,
+  resolveHolidayJob,
+  resolveFreeDayJob,
+  resolveWorkdayJob,
+  resolveScatterJob,
+  getNextRun,
+} from './schedule-engine.js';
+export type {
+  ScheduleFireCallback,
+  MemoryScheduleRegistration,
+  ScheduleEngineOptions,
+  JobContext,
+  ResolvedJob,
+  ScheduleKind,
+} from './schedule-engine.js';
+export type { HolidayInput, ScatterInput, FestivalName } from '@zhin.js/schedule';
 
 // ── Scheduler ──
 export { Scheduler, getScheduler, setScheduler } from './scheduler/index.js';

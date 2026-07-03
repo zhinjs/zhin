@@ -2,7 +2,7 @@ import {
   ConfigFeature,
   CommandFeature,
   ComponentFeature,
-  CronFeature,
+  ScheduleFeature,
   PermissionFeature,
   SchemaFeature,
   MessageFilterFeature,
@@ -16,6 +16,14 @@ import type { Plugin, Message } from '@zhin.js/core';
 import type { AppConfig } from '../types.js';
 import { DEFAULT_CORE_SERVICES } from './load-config.js';
 
+/** `cron` 服务名已退役，映射为 `schedule` */
+function normalizeCoreServices(
+  services: readonly string[],
+): Set<string> {
+  const set = new Set(services);
+  return set;
+}
+
 /**
  * 注册配置服务（必须）及按配置注册可选服务：process / command / component / permission / cron / dispatcher / skill / agentPreset
  */
@@ -27,8 +35,8 @@ export function registerCoreServices(
   const { provide } = plugin;
   provide(configFeature);
 
-  const enabledServices = new Set(
-    appConfig.services || DEFAULT_CORE_SERVICES,
+  const enabledServices = normalizeCoreServices(
+    appConfig.services || [...DEFAULT_CORE_SERVICES],
   );
 
   if (enabledServices.has('process') && shouldBindProcessStdin()) {
@@ -54,7 +62,7 @@ export function registerCoreServices(
   }
   if (enabledServices.has('component')) provide(new ComponentFeature());
   if (enabledServices.has('permission')) provide(new PermissionFeature());
-  if (enabledServices.has('cron')) provide(new CronFeature());
+  if (enabledServices.has('schedule')) provide(new ScheduleFeature());
 
   // 消息过滤引擎
   const filterFeature = new MessageFilterFeature(appConfig.message_filter);

@@ -13,8 +13,8 @@ export interface AppConfig<T extends keyof Databases = keyof Databases> {
   plugin_dirs?: string[];
   /** 需要加载的插件列表 */
   plugins?: string[];
-  /** 启用的内置服务列表，例如 ['process','config','command','component','permission','cron'] */
-  services?: ('process' | 'config' | 'command' | 'component' | 'permission' | 'cron')[];
+  /** 启用的内置服务列表，例如 ['process','config','command','component','permission','schedule'] */
+  services?: ('process' | 'config' | 'command' | 'component' | 'permission' | 'schedule')[];
   /** 是否启用调试模式 */
   debug?: boolean;
   /** 日志配置 */
@@ -42,13 +42,13 @@ export interface AppConfig<T extends keyof Databases = keyof Databases> {
     enabled?: boolean;
   };
   /**
-   * Assistant Runtime（Advanced / opt-in）：统一 JobStore，合并 cron-jobs 与 scheduler-jobs。
+   * Assistant Runtime（Advanced / opt-in）：profile、事件入口等；调度 SSOT 为 data/schedule-jobs.json。
    * 见 docs/architecture/assistant-runtime.md
    */
   assistant?: {
-    /** 启用 assistant-jobs.json 作为定时任务 SSOT，默认 false */
+    /** 启用 Assistant 扩展能力（profile、events 等），默认 false */
     enabled?: boolean;
-    /** 双写 legacy cron-jobs.json，默认 true（M1 迁移期） */
+    /** @deprecated 不再双写 cron-jobs.json */
     legacyDualWrite?: boolean;
     jobsFile?: string;
     /** M3：默认 notify（未显式指定时用于 Job 投递） */

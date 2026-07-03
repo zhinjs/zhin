@@ -31,16 +31,16 @@
  *   timeout: 15000
  * ```
  */
-import { formatCompact, Adapter, Cron, MessageCommand, Schema, usePlugin, ZhinTool } from 'zhin.js';
+import { formatCompact, Adapter, MessageCommand, Schema, usePlugin, ZhinTool } from 'zhin.js';
 import Parser from "rss-parser";
 
 const plugin = usePlugin();
-const { logger, root, addCommand, addCron, useContext, onDispose, declareConfig } = plugin;
+const { logger, root, addCommand, addSchedule, useContext, onDispose, declareConfig } = plugin;
 
 // ─── 配置 ─────────────────────────────────────────────────────────────────────
 
 const config = declareConfig("rss", Schema.object({
-  pollCron: Schema.string().default("*/5 * * * *").description("轮询频率 (Cron 表达式)"),
+  pollCron: Schema.string().default("0 */5 * * * *").description("轮询频率 (6 段 Cron 表达式)"),
   maxPerGroup: Schema.number().default(30).min(1).max(200).description("每会话最大订阅数"),
   maxItems: Schema.number().default(5).min(1).max(20).description("单次推送最多条数"),
   timeout: Schema.number().default(15_000).min(1000).max(60000).description("拉取超时 (ms)"),
@@ -272,8 +272,8 @@ async function cleanOldSeen(): Promise<void> {
 
 // ─── Cron 定时任务 ────────────────────────────────────────────────────────────
 
-addCron(new Cron(config.pollCron, pollAllFeeds));
-addCron(new Cron("0 4 * * *", cleanOldSeen));
+addSchedule({ kind: 'solar', cron: config.pollCron }, pollAllFeeds);
+addSchedule({ kind: 'solar', cron: '0 0 4 * * *' }, cleanOldSeen);
 
 // ─── 命令：rss-add ───────────────────────────────────────────────────────────
 

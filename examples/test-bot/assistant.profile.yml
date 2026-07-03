@@ -31,6 +31,13 @@ routines:
       睡前巡检：检查未完成任务、明日首个提醒、门窗/设备异常（若有 home 工具）；简要汇报。
     notify:
       channel: im
+  weatherReport:
+    enabled: true
+    cron: "0 8 * * 1-5"
+    prompt: |
+      查询成都市今天的天气情况，用 web_search 获取最新天气信息，生成简洁天气早报（温度、天气状况、风速、湿度等），使用中文回复。
+    notify:
+      channel: im
 
 # 需 assistant.home.enabled + HA 凭证
 devices:

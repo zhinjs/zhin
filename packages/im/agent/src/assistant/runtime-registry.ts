@@ -4,13 +4,13 @@
 import type { AssistantConfig } from './config.js';
 import { isAssistantEventsActive, resolveAssistantConfig, resolveAssistantEventsConfig } from './config.js';
 import type { AssistantEventIngress } from './event-ingress.js';
-import type { AssistantJobEngine } from './job-engine.js';
+import type { ScheduleJobEngine } from './job-engine.js';
 import type { AssistantJobStore } from './job-store.js';
 
 export interface AssistantRuntimeHandle {
   config: AssistantConfig & { enabled: boolean };
   store: AssistantJobStore;
-  engine: AssistantJobEngine;
+  engine: ScheduleJobEngine;
   ingress: AssistantEventIngress;
 }
 

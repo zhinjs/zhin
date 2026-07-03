@@ -1,13 +1,19 @@
 /**
- * Assistant Runtime — 统一 Job 模型（M1）
+ * Schedule Runtime — 统一 Job 模型
  */
+import type { FestivalName, HolidayInput, ScatterInput } from '@zhin.js/kernel';
 import type { IMDeliveryTarget } from '@zhin.js/core';
 
-export const ASSISTANT_JOBS_VERSION = 2;
-export const ASSISTANT_JOBS_FILENAME = 'assistant-jobs.json';
+export const SCHEDULE_JOBS_VERSION = 1;
+export const SCHEDULE_JOBS_FILENAME = 'schedule-jobs.json';
 
 export type JobSchedule =
-  | { kind: 'cron'; expr: string; tz?: string }
+  | { kind: 'solar'; cron: string; tz?: string }
+  | { kind: 'lunar'; cron: string; tz?: string }
+  | { kind: 'workday'; cron: string; tz?: string }
+  | { kind: 'freeDay'; cron: string; tz?: string }
+  | { kind: 'holiday'; cron: string; festivals?: FestivalName[] | 'all'; everyDayOfHoliday?: boolean; tz?: string }
+  | { kind: 'scatter'; input: ScatterInput; tz?: string }
   | { kind: 'every'; everyMs: number }
   | { kind: 'at'; atMs: number; deleteAfterRun?: boolean }
   | { kind: 'event'; eventId?: string; source?: string; eventType?: string };
@@ -22,7 +28,7 @@ export type JobNotify =
   | { channel: 'log' }
   | { channel: 'ha'; service: string; target?: string; data?: Record<string, unknown> };
 
-export interface AssistantJobState {
+export interface ScheduleJobState {
   lastExecutedAt?: number;
   lastStatus?: 'ok' | 'error' | 'skipped';
   lastError?: string;
@@ -30,24 +36,37 @@ export interface AssistantJobState {
   retryCount?: number;
 }
 
-export interface AssistantJob {
+export interface ScheduleJob {
   id: string;
   label?: string;
   enabled: boolean;
   schedule: JobSchedule;
   action: JobAction;
   notify: JobNotify;
-  /** 失败时是否向 notify 通道发送错误摘要（默认跟随 assistant.defaults.notifyOnFailure） */
   notifyOnFailure?: boolean;
   createdAt: number;
   updatedAt: number;
-  state: AssistantJobState;
-  source?: 'cron' | 'scheduler' | 'manual' | 'event';
-  /** 事件载荷（M2 ingress 可选持久化） */
+  state: ScheduleJobState;
+  source?: 'schedule' | 'manual' | 'event' | 'profile';
   eventPayload?: unknown;
 }
 
-export interface AssistantJobFile {
+/** @deprecated use ScheduleJob */
+export type AssistantJob = ScheduleJob;
+
+/** @deprecated */
+export type AssistantJobState = ScheduleJobState;
+/** @deprecated */
+export type AssistantJobFile = ScheduleJobFile;
+
+export interface ScheduleJobFile {
   version: number;
-  jobs: AssistantJob[];
+  jobs: ScheduleJob[];
 }
+
+/** @deprecated */
+export const ASSISTANT_JOBS_VERSION = SCHEDULE_JOBS_VERSION;
+/** @deprecated */
+export const ASSISTANT_JOBS_FILENAME = SCHEDULE_JOBS_FILENAME;
+
+export type { HolidayInput, ScatterInput, FestivalName };
