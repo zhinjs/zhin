@@ -5,9 +5,6 @@ import type { Message } from '@zhin.js/core';
 import { extractEmbeddedAiOutboundJson } from '@zhin.js/core';
 import type { CollaborationCell, PipelineArtifactKind } from './types.js';
 import { findActiveDelegation } from './delegation-state.js';
-import { isOrchestrationKernelReady } from './collaboration-kernel-bridge.js';
-import { detectCeremonyOrchestrationIntent } from './collaboration-context.js';
-import { resolveNextCeremonyEndpointId } from './ceremony-round.js';
 
 export function messageTextContent(message: Message): string {
   const parts: string[] = [];
@@ -190,57 +187,11 @@ export function formatActiveDelegationHint(
   return lines.join('\n');
 }
 
-/** @deprecated Kernel 路径下不使用；仅 legacy cell harness 保留。 */
-function isLegacyCeremonyCell(cell: CollaborationCell): boolean {
-  if (detectCeremonyOrchestrationIntent(cell.pipelineState?.userGoal ?? cell.goal)) return true;
-  if ((cell.pipelineState?.ceremonySpoken?.length ?? 0) > 0) return true;
-  return (cell.pipelineState?.activeDelegations ?? []).some((d) => d.mode === 'ceremony');
-}
-
 /** Planner 收到成员 handback @ 时的 turn 指引。 */
-export function formatPlannerHandbackHint(cell: CollaborationCell): string | undefined {
-  if (isOrchestrationKernelReady()) {
-    return [
-      '[Kernel handback] A member completed a group_mention task.',
-      'Check orchestration_status / #taskId results; dispatch the next task if needed.',
-      'Do not use legacy cell_advance_stage or group_delegate.',
-    ].join('\n');
-  }
-
-  const pipeline = cell.pipelineState;
-  if (!pipeline) return undefined;
-
-  if (isLegacyCeremonyCell(cell)) {
-    const nextCeremony = resolveNextCeremonyEndpointId(cell);
-    const lines = [
-      '[Ceremony handback] Member finished their public turn.',
-      'Do NOT cell_advance_stage during ceremony/intro rounds.',
-    ];
-    if (nextCeremony) {
-      const role = cell.members.find((m) => m.endpointId === nextCeremony)?.pipelineRole ?? nextCeremony;
-      lines.push(`Harness auto-@ ${role} next — optional: one short group ack only.`);
-    } else {
-      lines.push('Ceremony round complete — summarize for the user.');
-    }
-    return lines.join('\n');
-  }
-
-  const lines = [
-    '[Pipeline handback] A member @ you with results.',
-    `Current stage: ${pipeline.stage}. Allowed next: ${pipeline.allowedNextStages.join(', ') || 'none'}.`,
-  ];
-  const next = pipeline.allowedNextStages.find(
-    (s) => s !== 'done' && s !== 'failed' && s !== 'planner',
-  );
-  if (next) {
-    lines.push(
-      `Required: cell_advance_stage("${next}") then group_delegate({"mentions":["${next}"],"text":"…","requireArtifact":false,"mode":"ceremony"}).`,
-    );
-    lines.push(
-      'Transport fallback: separate real @ message to the next role — plain "**Evaluator**,请…" without @ does NOT trigger them.',
-    );
-  } else {
-    lines.push('Summarize for the user or cell_advance_stage("done") if the run is complete.');
-  }
-  return lines.join('\n');
+export function formatPlannerHandbackHint(_cell: CollaborationCell): string | undefined {
+  return [
+    '[Kernel handback] A member completed a group_mention task.',
+    'Check orchestration_status / #taskId results; dispatch the next task if needed.',
+    'Use orchestration_add_task(executor="group_mention", assigned_to="<endpointId>") for delegation.',
+  ].join('\n');
 }

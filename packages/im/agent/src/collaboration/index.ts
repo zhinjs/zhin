@@ -6,7 +6,6 @@ export * from './turn-plan-resolver.js';
 export * from './runtime-registry.js';
 export * from './cell-service.js';
 export * from './bootstrap-agent-runtimes.js';
-export * from './collaboration-tools.js';
 export * from './endpoint-identity.js';
 export { wireCollaborationStorage } from './wire-collaboration-storage.js';
 export {

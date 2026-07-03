@@ -65,6 +65,9 @@ import { attachCollaborationTurnSnapshot } from './collaboration-turn-snapshot.j
 import type { GroupMessageAdapterView } from './group-message.js';
 import type { CollaborationCell, PeerTriggerMode } from './types.js';
 import { getOrchestrationService } from '../orchestrator/orchestration-service.js';
+import { createOrchestrationTools } from '../builtin/orchestration-tools.js';
+import { detectCeremonyOrchestrationIntent } from './collaboration-context.js';
+import { runRosterRound } from '../builtin/roster-round/strategy.js';
 
 function applyCollaborationOutboundPostProcess(
   batches: MessageElement[][],
@@ -278,6 +281,20 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
       }
     }
 
+    // Ceremony detection: user requests round-robin / self-intro (ADR 0027 P5)
+    if (!peerInbound && cell && detectCeremonyOrchestrationIntent(content)) {
+      const plannerId = cell.members.find((m) => m.pipelineRole === 'planner')?.endpointId;
+      if (plannerId === endpointId) {
+        await replyAi('好的，开始轮流发言。');
+        void runRosterRound({ message, cell, goal: content }).catch((err) => {
+          logger.warn(formatCompactLog('CeremonyRound', {
+            error: err instanceof Error ? err.message : String(err),
+          }));
+        });
+        return;
+      }
+    }
+
     if (triggerConfig.thinkingMessage) await replyAi(triggerConfig.thinkingMessage);
 
     enrichMessageForAgent(root, message);
@@ -305,6 +322,9 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
       externalTools = toolService.filterByContext(externalTools, commMessage);
     } else {
       externalTools = externalTools.filter((t) => canAccessTool(t, commMessage));
+    }
+    if (cell) {
+      externalTools.push(...createOrchestrationTools(commMessage));
     }
 
     try {

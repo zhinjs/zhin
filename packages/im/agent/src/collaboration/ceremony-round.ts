@@ -1,10 +1,11 @@
 /**
- * Ceremony 轮流发言 harness — 自我介绍/依次发言等，与 pipeline stage 正交。
+ * Ceremony 轮流发言 — 自我介绍/依次发言等，与 pipeline stage 正交。
+ *
+ * Read-only helpers: state writes are handled by the kernel (runRosterRound)
+ * and the roster-round WorkflowStrategy, not by direct cell.pipelineState mutation.
  */
 import type { CollaborationCell, PipelineRole } from './types.js';
 import { detectCeremonyOrchestrationIntent } from './collaboration-context.js';
-import { replaceCeremonyDelegation } from './delegation-state.js';
-import { getCollaborationCellService } from './cell-service.js';
 
 export const CEREMONY_ROSTER_ROLES: readonly PipelineRole[] = [
   'researcher',
@@ -70,52 +71,4 @@ export function ceremonyPingText(cell: CollaborationCell, targetEndpointId: stri
   return `${role}，请按顺序发言（2–4 句公开回复），说完后再 handback @Planner。`;
 }
 
-export async function recordCeremonySpoken(
-  cellId: string,
-  endpointId: string,
-): Promise<void> {
-  const svc = getCollaborationCellService();
-  await svc.patchPipelineState(cellId, (prev) => {
-    if (!prev) return undefined;
-    const spoken = [...(prev.ceremonySpoken ?? [])];
-    if (!spoken.includes(endpointId)) spoken.push(endpointId);
-    return { ...prev, ceremonySpoken: spoken, updatedAt: Date.now() };
-  });
-}
 
-export async function assignCeremonyDelegate(
-  cell: CollaborationCell,
-  targetEndpointId: string,
-  text: string,
-): Promise<void> {
-  const svc = getCollaborationCellService();
-  const runId = cell.pipelineState?.runId;
-  if (!runId) return;
-  const targetRole = cell.members.find((m) => m.endpointId === targetEndpointId)?.pipelineRole;
-  if (!targetRole) return;
-  await svc.patchPipelineState(cell.id, (prev) => {
-    if (!prev) return undefined;
-    const entry = {
-      targetEndpointId,
-      targetRole,
-      runId,
-      requireArtifact: false,
-      mode: 'ceremony' as const,
-      delegateText: text,
-      updatedAt: Date.now(),
-    };
-    return {
-      ...prev,
-      activeDelegations: replaceCeremonyDelegation(prev.activeDelegations ?? [], entry),
-      updatedAt: Date.now(),
-    };
-  });
-}
-
-export async function resetCeremonySpoken(cellId: string): Promise<void> {
-  const svc = getCollaborationCellService();
-  await svc.patchPipelineState(cellId, (prev) => {
-    if (!prev?.ceremonySpoken?.length) return undefined;
-    return { ...prev, ceremonySpoken: undefined, updatedAt: Date.now() };
-  });
-}

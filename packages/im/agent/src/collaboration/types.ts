@@ -95,7 +95,7 @@ export interface PipelineState {
   userGoal?: string;
   /** 已归档 run（不含当前 active runId） */
   runHistory?: PipelineRunArchive[];
-  /** 活跃委派列表（入站门控 + artifact 期望 SSOT） */
+  /** @deprecated ADR 0027: 委派状态由 kernel task 管理，不再写入 cell.pipelineState.activeDelegations。 */
   activeDelegations?: ActiveDelegation[];
   /** @deprecated 使用 activeDelegations */
   pendingDelegateTarget?: string;

@@ -1,8 +1,7 @@
 /**
  * Project director orchestration tools — Agent Mesh hard orchestration v1.
  */
-import type { Message, ToolParametersSchema, ToolResult } from '@zhin.js/core'
-import type { AgentTool } from '@zhin.js/ai';
+import type { Message, Tool, ToolParametersSchema, ToolResult } from '@zhin.js/core'
 import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import type { AgentRole } from '../orchestrator/agent-dispatcher.js';
@@ -79,7 +78,16 @@ const ADD_TASK_PARAMS: ToolParametersSchema = {
     },
     executor: {
       type: 'string',
-      description: 'local 或 remote:<agentId>',
+      enum: ['local', 'group_mention', 'remote_mesh'],
+      description: '执行器类型：local（本地子代理）、group_mention（同群 @ 委派）、remote_mesh（远程 Agent Mesh）',
+    },
+    assigned_to: {
+      type: 'string',
+      description: '目标 endpoint ID（executor=group_mention 时必填）',
+    },
+    auto_start: {
+      type: 'boolean',
+      description: '是否立即执行（默认 true；false 时仅创建任务）',
     },
     context: { type: 'object', description: '结构化上下文（JSON）' },
   },
@@ -135,13 +143,49 @@ class OrchestrationStartTool extends BuiltinBaseTool {
 
 class OrchestrationAddTaskTool extends BuiltinBaseTool {
   readonly name = 'orchestration_add_task';
-  readonly description = '向 run 添加 DAG 节点（role、depends_on、executor）。';
+  readonly description = '向 run 添加 DAG 节点并可选立即执行（支持同群 group_mention 委派）。';
   readonly parameters = ADD_TASK_PARAMS;
+
+  constructor(private readonly sessionContext: Message<any>) {
+    super();
+    this.tags.push('orchestration', 'director');
+  }
 
   async run(args: Record<string, unknown>): Promise<ToolResult> {
     const svc = requireService();
     const runId = String(args.run_id ?? '');
     if (!runId) return '请提供 run_id';
+
+    const autoStart = args.auto_start !== false;
+    const executorKind = typeof args.executor === 'string' ? args.executor : undefined;
+    const assignedTo = typeof args.assigned_to === 'string' ? args.assigned_to : undefined;
+
+    if (executorKind === 'group_mention' && !assignedTo) {
+      return 'executor=group_mention 时必须提供 assigned_to（目标 endpoint ID）';
+    }
+
+    if (autoStart) {
+      const { run, task } = await svc.dispatchTask({
+        runId,
+        name: String(args.name ?? 'task'),
+        description: typeof args.description === 'string' ? args.description : undefined,
+        role: typeof args.role === 'string' ? (args.role as AgentRole) : undefined,
+        goal: typeof args.goal === 'string' ? args.goal : undefined,
+        dependsOn: Array.isArray(args.depends_on) ? args.depends_on.map(String) : undefined,
+        executorKind: executorKind as 'local' | 'group_mention' | 'remote_mesh' | undefined,
+        assignedTo,
+        context: args.context && typeof args.context === 'object'
+          ? (args.context as Record<string, unknown>)
+          : undefined,
+        message: this.sessionContext,
+        autoStart: true,
+      });
+      const status = task.status;
+      if (status === 'waiting_result') {
+        return `任务已派发并 @ 通知 ${assignedTo ?? ''}：${task.id} (${task.role}) status=${status}\n等待对方 handback 后自动完成。`;
+      }
+      return `任务已派发：${task.id} (${task.role}) status=${status}`;
+    }
 
     const input: OrchestrationAddTaskInput = {
       runId,
@@ -150,9 +194,8 @@ class OrchestrationAddTaskTool extends BuiltinBaseTool {
       role: typeof args.role === 'string' ? (args.role as AgentRole) : undefined,
       goal: typeof args.goal === 'string' ? args.goal : undefined,
       dependsOn: Array.isArray(args.depends_on) ? args.depends_on.map(String) : undefined,
-      executor: typeof args.executor === 'string'
-        ? (args.executor as OrchestrationAddTaskInput['executor'])
-        : undefined,
+      executor: executorKind as OrchestrationAddTaskInput['executor'],
+      assignedTo,
       context: args.context && typeof args.context === 'object'
         ? (args.context as Record<string, unknown>)
         : undefined,
@@ -224,15 +267,15 @@ class OrchestrationSkipTaskTool extends BuiltinBaseTool {
   }
 }
 
-export function createOrchestrationTools(commMessage: Message): AgentTool[] {
+export function createOrchestrationTools(commMessage: Message): Tool[] {
   return [
     new OrchestrationStartTool(commMessage).toTool(),
-    new OrchestrationAddTaskTool().toTool(),
+    new OrchestrationAddTaskTool(commMessage).toTool(),
     new OrchestrationStatusTool().toTool(),
     new OrchestrationCompleteTool().toTool(),
     new OrchestrationRetryTaskTool().toTool(),
     new OrchestrationSkipTaskTool().toTool(),
-  ] as AgentTool[];
+  ];
 }
 
 export const ORCHESTRATION_TOOL_NAMES = [

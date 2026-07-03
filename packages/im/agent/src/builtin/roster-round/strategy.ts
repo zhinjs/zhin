@@ -6,6 +6,11 @@
  * of `group_mention` tasks (one per member, in pipeline-role order), each
  * depending on the previous. The kernel owns the state; the IM group is a
  * projection.
+ *
+ * Production entry: inbound-turn-pipeline detects ceremony intent via
+ * detectCeremonyOrchestrationIntent() and fires runRosterRound() in the
+ * background (non-blocking). The Planner can also use orchestration_add_task
+ * with executor='group_mention' for ad-hoc delegation.
  */
 import type { WorkflowStrategy, WorkflowTaskSpec } from '../../orchestrator/kernel-types.js';
 import type { OrchestrationRunSource } from '@zhin.js/ai';
