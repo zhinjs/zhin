@@ -30,11 +30,21 @@ export type OrchestrationTaskStatus =
   | 'failed'
   | 'cancelled';
 
-export type OrchestrationExecutorKind = 'local' | 'group_mention' | 'remote_mesh';
+export type OrchestrationExecutorKind = 'local' | 'scene_mention' | 'remote_mesh';
+
+export type OrchestrationSceneKind = 'private' | 'group' | 'channel';
+
+export interface OrchestrationSceneRef {
+  platform: string;
+  endpointId: string;
+  sceneId: string;
+  kind: OrchestrationSceneKind;
+  senderId?: string;
+  parent?: { kind: Extract<OrchestrationSceneKind, 'group' | 'channel'>; sceneId: string };
+}
 
 export type OrchestrationRunSource =
-  | { kind: 'im_cell'; cellId: string; adapter: string; sceneId: string }
-  | { kind: 'im_session'; adapter: string; endpointId: string; sceneId?: string }
+  | { kind: 'im_scene'; scene: OrchestrationSceneRef; cellId?: string }
   | { kind: 'manual'; label?: string };
 
 export type OrchestrationRunEventType =

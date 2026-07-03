@@ -4,7 +4,7 @@
  * ADR 0027 makes the OrchestrationKernel the only state-transition authority.
  * For that contract to hold, executors must live in the kernel's registry
  * rather than being passed inline at each call site. This module owns the
- * three executor kinds (local / group_mention / remote_mesh) and registers
+ * three executor kinds (local / scene_mention / remote_mesh) and registers
  * generic built-in workflow strategies, so the IM inbound path and tool path can
  * dispatch through `orch.runTask(taskId, message)` without supplying their
  * own executor.
@@ -76,16 +76,16 @@ export function registerDefaultExecutors(
     },
   };
 
-  const groupMentionExecutor: AgentExecutor = {
-    kind: 'group_mention',
+  const sceneMentionExecutor: AgentExecutor = {
+    kind: 'scene_mention',
     async *execute({ task, message }) {
       if (!message) {
-        yield { type: 'error', error: 'group_mention executor requires an inbound message' };
+        yield { type: 'error', error: 'scene_mention executor requires an inbound message' };
         return;
       }
       const targetEndpointId = task.assignedTo;
       if (!targetEndpointId) {
-        yield { type: 'error', error: 'group_mention task has no assignedTo endpoint' };
+        yield { type: 'error', error: 'scene_mention task has no assignedTo endpoint' };
         return;
       }
       const delegateText = task.goal || task.description || '请处理上述协作请求。';
@@ -118,7 +118,7 @@ export function registerDefaultExecutors(
 
   const cleanups = [
     kernel.registerExecutor(localExecutor),
-    kernel.registerExecutor(groupMentionExecutor),
+    kernel.registerExecutor(sceneMentionExecutor),
     kernel.registerExecutor(remoteMeshExecutor),
     kernel.registerWorkflowStrategy(createFiveAgentWorkflowStrategy()),
   ];

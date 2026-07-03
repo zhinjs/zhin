@@ -1,15 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createTaskExecutor } from '../src/task-executor.js';
-import { notifyToSendOptions } from '../src/assistant/notification-router.js';
+import { imNotifyToSendOptions } from '../src/assistant/notification-router.js';
 
 describe('task executor outbound seam', () => {
   it('converts im notify through the queue IM field contract shape', () => {
-    expect(notifyToSendOptions({
+    expect(imNotifyToSendOptions({
       channel: 'im',
-      platform: 'qq',
-      endpointId: 'bot1',
-      sceneId: 'group1',
-      scope: 'group',
+      target: {
+        channel: 'im',
+        scene: {
+          platform: 'qq',
+          endpointId: 'bot1',
+          sceneId: 'group1',
+          kind: 'group',
+        },
+      },
     }, 'hello')).toEqual({
       context: 'qq',
       endpoint: 'bot1',
@@ -32,10 +37,15 @@ describe('task executor outbound seam', () => {
       prompt: 'say hello',
       notify: {
         channel: 'im',
-        platform: 'qq',
-        endpointId: 'bot1',
-        sceneId: 'group1',
-        scope: 'group',
+        target: {
+          channel: 'im',
+          scene: {
+            platform: 'qq',
+            endpointId: 'bot1',
+            sceneId: 'group1',
+            kind: 'group',
+          },
+        },
       },
     });
 

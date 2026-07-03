@@ -45,7 +45,9 @@ describe('migrate test-bot cron-jobs fixture', () => {
     const jobs = await store.listCronCompatible();
     expect(jobs).toHaveLength(fixture.length);
 
-    const withIm = jobs.filter((j) => j.notify?.channel === 'im' && j.notify.platform === 'icqq');
+    const withIm = jobs.filter(
+      (j) => j.notify?.channel === 'im' && j.notify.target.scene.platform === 'icqq',
+    );
     expect(withIm.length).toBeGreaterThan(0);
   });
 });

@@ -25,7 +25,18 @@ describe('AssistantJobStore', () => {
         prompt: '早报',
         label: '早报',
         enabled: true,
-        notify: { channel: 'im', platform: 'icqq', endpointId: '1', sceneId: '2', scope: 'private' },
+        notify: {
+          channel: 'im',
+          target: {
+            channel: 'im',
+            scene: {
+              platform: 'icqq',
+              endpointId: '1',
+              sceneId: '2',
+              kind: 'private',
+            },
+          },
+        },
         createdAt: 1000,
       },
     ];
@@ -45,7 +56,7 @@ describe('AssistantJobStore', () => {
     expect(jobs).toHaveLength(1);
     expect(jobs[0]?.prompt).toBe('早报');
     expect(jobs[0]?.cronExpression).toBe('0 9 * * *');
-    expect(jobs[0]?.notify?.platform).toBe('icqq');
+    expect(jobs[0]?.notify?.channel === 'im' ? jobs[0].notify.target.scene.platform : undefined).toBe('icqq');
 
     const raw = await readFile(join(dataDir, ASSISTANT_JOBS_FILENAME), 'utf-8');
     const parsed = JSON.parse(raw);
@@ -81,7 +92,7 @@ describe('AssistantJobStore', () => {
     );
     await writeFile(
       join(dataDir, ASSISTANT_JOBS_FILENAME),
-      JSON.stringify({ version: 1, jobs: [{ id: 'existing', enabled: true, schedule: { kind: 'cron', expr: '0 0 * * *' }, action: { kind: 'agent', prompt: 'b' }, notify: { channel: 'silent' }, createdAt: 1, updatedAt: 1, state: {} }] }),
+      JSON.stringify({ version: 2, jobs: [{ id: 'existing', enabled: true, schedule: { kind: 'cron', expr: '0 0 * * *' }, action: { kind: 'agent', prompt: 'b' }, notify: { channel: 'silent' }, createdAt: 1, updatedAt: 1, state: {} }] }),
       'utf-8',
     );
 
@@ -91,6 +102,23 @@ describe('AssistantJobStore', () => {
     const jobs = await store.listJobs();
     expect(jobs).toHaveLength(1);
     expect(jobs[0]?.id).toBe('existing');
+  });
+
+  it('flat legacy cron notify 迁移失败', async () => {
+    await writeFile(
+      join(dataDir, CRON_JOBS_FILENAME),
+      JSON.stringify([{
+        id: 'legacy_flat',
+        cronExpression: '0 9 * * *',
+        prompt: 'x',
+        enabled: true,
+        notify: { channel: 'im', platform: 'icqq', endpointId: '1', sceneId: '2', scope: 'private' },
+        createdAt: 1,
+      }]),
+      'utf-8',
+    );
+    const store = new AssistantJobStore({ dataDir });
+    await expect(store.migrateLegacyIfNeeded()).rejects.toThrow(/IMDeliveryTarget/);
   });
 
   it('缺少 notify 的 cron-jobs 读取失败', async () => {

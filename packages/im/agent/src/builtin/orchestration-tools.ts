@@ -2,6 +2,7 @@
  * Project director orchestration tools — Agent Mesh hard orchestration v1.
  */
 import type { Message, Tool, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import { sceneRefFromMessage } from '@zhin.js/core';
 import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import type { AgentRole } from '../orchestrator/agent-dispatcher.js';
@@ -9,6 +10,7 @@ import {
   getOrchestrationService,
   type OrchestrationAddTaskInput,
 } from '../orchestrator/orchestration-service.js';
+import { orchestrationSourceFromMessage } from '../collaboration/collaboration-kernel-bridge.js';
 import { writeOrchestrationRunSummaryToMemory } from '../orchestration-memory-hook.js';
 
 function sessionKeyFromContext(commMessage: Message<any>): string {
@@ -78,12 +80,12 @@ const ADD_TASK_PARAMS: ToolParametersSchema = {
     },
     executor: {
       type: 'string',
-      enum: ['local', 'group_mention', 'remote_mesh'],
-      description: '执行器类型：local（本地子代理）、group_mention（同群 @ 委派）、remote_mesh（远程 Agent Mesh）',
+      enum: ['local', 'scene_mention', 'remote_mesh'],
+      description: '执行器类型：local（本地子代理）、scene_mention（群/频道 @ 委派）、remote_mesh（远程 Agent Mesh）',
     },
     assigned_to: {
       type: 'string',
-      description: '目标 endpoint ID（executor=group_mention 时必填）',
+      description: '目标 endpoint ID（executor=scene_mention 时必填）',
     },
     auto_start: {
       type: 'boolean',
@@ -126,8 +128,12 @@ class OrchestrationStartTool extends BuiltinBaseTool {
     const svc = requireService();
     const sessionKey = sessionKeyFromContext(this.sessionContext);
     const title = typeof args.title === 'string' ? args.title : undefined;
-    const snapshot = await svc.startRun({ sessionKey, title });
     const cellId = typeof args.cell_id === 'string' ? args.cell_id : undefined;
+    const snapshot = await svc.startRun({
+      sessionKey,
+      title,
+      source: orchestrationSourceFromMessage(this.sessionContext, cellId),
+    });
     if (cellId) {
       const { getCollaborationCellService } = await import('../collaboration/cell-service.js');
       await getCollaborationCellService().setMissionRunId(cellId, snapshot.run.id);
@@ -143,7 +149,7 @@ class OrchestrationStartTool extends BuiltinBaseTool {
 
 class OrchestrationAddTaskTool extends BuiltinBaseTool {
   readonly name = 'orchestration_add_task';
-  readonly description = '向 run 添加 DAG 节点并可选立即执行（支持同群 group_mention 委派）。';
+  readonly description = '向 run 添加 DAG 节点并可选立即执行（支持 scene_mention 群/频道 @ 委派）。';
   readonly parameters = ADD_TASK_PARAMS;
 
   constructor(private readonly sessionContext: Message<any>) {
@@ -159,9 +165,15 @@ class OrchestrationAddTaskTool extends BuiltinBaseTool {
     const autoStart = args.auto_start !== false;
     const executorKind = typeof args.executor === 'string' ? args.executor : undefined;
     const assignedTo = typeof args.assigned_to === 'string' ? args.assigned_to : undefined;
+    const sceneKind = sceneRefFromMessage(this.sessionContext)?.kind;
 
-    if (executorKind === 'group_mention' && !assignedTo) {
-      return 'executor=group_mention 时必须提供 assigned_to（目标 endpoint ID）';
+    if (executorKind === 'scene_mention') {
+      if (!assignedTo) {
+        return 'executor=scene_mention 时必须提供 assigned_to（目标 endpoint ID）';
+      }
+      if (sceneKind === 'private') {
+        return 'scene_mention 不支持 private 场景，请使用 local 或 spawn_task';
+      }
     }
 
     if (autoStart) {
@@ -172,7 +184,7 @@ class OrchestrationAddTaskTool extends BuiltinBaseTool {
         role: typeof args.role === 'string' ? (args.role as AgentRole) : undefined,
         goal: typeof args.goal === 'string' ? args.goal : undefined,
         dependsOn: Array.isArray(args.depends_on) ? args.depends_on.map(String) : undefined,
-        executorKind: executorKind as 'local' | 'group_mention' | 'remote_mesh' | undefined,
+        executorKind: executorKind as 'local' | 'scene_mention' | 'remote_mesh' | undefined,
         assignedTo,
         context: args.context && typeof args.context === 'object'
           ? (args.context as Record<string, unknown>)

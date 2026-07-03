@@ -18,7 +18,7 @@ import {
   type OrchestrationRunWithTasks,
   taskRecordToAgentTaskShape,
 } from './orchestration-repository.js';
-import { mapEventRecord, mapRunRecord, mapTaskRecord } from './kernel-mappers.js';
+import { mapEventRecord, mapRunRecord, mapTaskRecord, normalizeExecutorKind } from './kernel-mappers.js';
 import type {
   AgentExecutionEvent,
   AgentExecutor,
@@ -91,7 +91,8 @@ function normalizeExecutor(input?: OrchestrationAddTaskInput['executor']): {
   if (value.startsWith('remote:')) {
     return { executorKind: 'remote_mesh', remoteAgentId: value.slice('remote:'.length) };
   }
-  if (value === 'group_mention' || value === 'remote_mesh') return { executorKind: value };
+  if (value === 'group_mention') return { executorKind: 'scene_mention' };
+  if (value === 'scene_mention' || value === 'remote_mesh') return { executorKind: value };
   return { executorKind: 'local' };
 }
 
@@ -248,12 +249,13 @@ export class OrchestrationKernel {
     if (!runRecord) throw new Error(`run ${taskRecord.run_id} not found`);
     if (!ACTIVE_TASK_STATUSES.has(taskRecord.status)) return mapTaskRecord(taskRecord);
 
-    const executor = overrideExecutor ?? this.executors.get(taskRecord.executor_kind);
+    const executorKind = normalizeExecutorKind(taskRecord.executor_kind);
+    const executor = overrideExecutor ?? this.executors.get(executorKind);
     if (!executor) {
       await this.repository.updateTaskStatus(taskId, 'waiting_result');
       await this.appendEvent(taskRecord.run_id, 'task.progress', taskId, {
         status: 'waiting_result',
-        reason: `executor ${taskRecord.executor_kind} not registered`,
+        reason: `executor ${executorKind} not registered`,
       });
       return mapTaskRecord((await this.repository.getTask(taskId))!);
     }

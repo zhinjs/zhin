@@ -35,7 +35,7 @@ describe('session-tree', () => {
       sender: {
         id: '1659488338',
         name: '归雨',
-        roles: ['master', 'group_admin'],
+        roles: ['master', 'scene_admin'],
         scope: 'group',
       },
     });

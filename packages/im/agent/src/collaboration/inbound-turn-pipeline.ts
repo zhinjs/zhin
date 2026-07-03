@@ -53,7 +53,11 @@ import {
 } from './collaboration-outbound.js';
 import { expandOutboundBatchesForLongText } from './group-message.js';
 import { normalizePlannerOutboundBatches } from './planner-outbound-normalize.js';
-import { tryCompleteKernelGroupMentionFromOutbound } from './collaboration-kernel-bridge.js';
+import {
+  orchestrationSourceFromMessage,
+  tryCompleteKernelGroupMentionFromOutbound,
+} from './collaboration-kernel-bridge.js';
+import { normalizeExecutorKind } from '../orchestrator/kernel-mappers.js';
 import {
   messageTextContent,
   stripCellToolJsonFromOutputElements,
@@ -224,7 +228,7 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
         const sessionKey = resolveIMSessionIdFromMessage(message);
         const runs = await orch.listRuns(sessionKey);
         const activeGroupTasks = runs.flatMap((run) => run.tasks).filter((task) =>
-          task.executor_kind === 'group_mention'
+          normalizeExecutorKind(task.executor_kind) === 'scene_mention'
           && task.assigned_to === peerResult.peerEndpointId
           && ['assigned', 'running', 'waiting_result', 'pending'].includes(task.status),
         );
@@ -244,7 +248,7 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
           return;
         }
 
-        if (target?.executor_kind === 'group_mention') {
+        if (target && normalizeExecutorKind(target.executor_kind) === 'scene_mention') {
           const assignee = target.assigned_to || peerResult.peerEndpointId;
           if (assignee !== peerResult.peerEndpointId) {
             logger.debug(formatCompactLog('OrchestrationKernel', {
@@ -377,12 +381,7 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
           const run = await orch.findOrCreateRun({
             sessionKey: resolveIMSessionIdFromMessage(commMessage),
             title: delegateText.slice(0, 80) || 'IM group delegation',
-            source: {
-              kind: 'im_cell',
-              cellId: cell.id,
-              adapter: String(message.$adapter),
-              sceneId,
-            },
+            source: orchestrationSourceFromMessage(commMessage, cell.id),
           });
           const dispatched = await orch.dispatchTask({
             runId: run.id,
@@ -390,7 +389,7 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
             description: delegateText,
             role: 'worker',
             goal: delegateText,
-            executorKind: 'group_mention',
+            executorKind: 'scene_mention',
             assignedTo: turnPlan.delegation.targetEndpointId,
             context: {
               handlerProfile: turnPlan.handlerProfile,
@@ -399,11 +398,11 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
             message: commMessage,
             autoStart: false,
           });
-          // Execute via the registered group_mention executor (ADR 0027).
+          // Execute via the registered scene_mention executor (ADR 0027).
           const result = await orch.runTask(dispatched.task.id, commMessage);
           if (result.status === 'waiting_result' || result.status === 'running') {
             logger.info(formatCompactLog('AI Handler', {
-              path: 'kernel_group_mention',
+              path: 'kernel_scene_mention',
               run: dispatched.run.id,
               task: dispatched.task.id,
               from: endpointId,
@@ -413,7 +412,7 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
             return;
           }
           logger.warn(formatCompactLog('AI Handler', {
-            path: 'kernel_group_mention_failed',
+            path: 'kernel_scene_mention_failed',
             task: dispatched.task.id,
             error: result.error,
             fallback: 'local_process',
@@ -458,19 +457,7 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
             const run = await orch.findOrCreateRun({
               sessionKey: resolveIMSessionIdFromMessage(commMessage),
               title: aiContent.slice(0, 80) || `Route to ${targetAgentId}`,
-              source: cell
-                ? {
-                  kind: 'im_cell',
-                  cellId: cell.id,
-                  adapter: String(message.$adapter),
-                  sceneId,
-                }
-                : {
-                  kind: 'im_session',
-                  adapter: String(message.$adapter),
-                  endpointId,
-                  sceneId: sceneId || undefined,
-                },
+              source: orchestrationSourceFromMessage(commMessage, cell?.id),
             });
             const dispatched = await orch.dispatchTask({
               runId: run.id,

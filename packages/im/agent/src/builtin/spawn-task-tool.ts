@@ -1,8 +1,9 @@
 /**
  * spawn_task — 主会话将耗时任务派给后台子 agent（与 issue #396 对齐）
  */
-import type { Message, Tool, ToolParametersSchema, ToolResult } from '@zhin.js/core'
-import { resolveIMSessionIdFromMessage, type AgentTool } from '@zhin.js/ai';
+import type { Message, Tool, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import { resolveIMSessionIdFromMessage, type AgentTool, type OrchestrationRunSource } from '@zhin.js/ai';
+import { orchestrationSourceFromMessage } from '../collaboration/collaboration-kernel-bridge.js';
 import type { SubagentManager, SubagentOrigin } from '../subagent.js';
 import type { SubagentContextMode } from '../subagent-preset.js';
 import { getAgentDispatcher } from '../orchestrator/agent-dispatcher.js';
@@ -56,21 +57,8 @@ function runTitle(label: string | undefined, task: string): string {
   return label ?? (task.slice(0, 80) || 'spawn_task');
 }
 
-function sourceFromMessage(message: Message): { kind: 'im_session'; adapter: string; endpointId: string; sceneId?: string } | { kind: 'manual'; label: string } {
-  const raw = message as Message & {
-    $adapter?: string;
-    $endpoint?: string;
-    $channel?: { id?: string };
-  };
-  if (raw.$adapter && raw.$endpoint) {
-    return {
-      kind: 'im_session',
-      adapter: raw.$adapter,
-      endpointId: raw.$endpoint,
-      sceneId: raw.$channel?.id,
-    };
-  }
-  return { kind: 'manual', label: 'spawn_task' };
+function sourceFromMessage(message: Message): OrchestrationRunSource {
+  return orchestrationSourceFromMessage(message);
 }
 
 export class SpawnTaskBuiltinTool extends BuiltinBaseTool {

@@ -16,20 +16,20 @@ describe('sender-extra', () => {
   const sender = {
     id: '1659488338',
     name: '归雨',
-    roles: ['master', 'group_admin'],
+    roles: ['master', 'scene_admin'],
     scope: 'group' as const,
   };
 
   it('buildSenderPrefix formats group sender label', () => {
     expect(buildSenderPrefix(sender)).toBe(
-      '[sender:id=1659488338 name=归雨 roles=master,group_admin]',
+      '[sender:id=1659488338 name=归雨 roles=master,scene_admin]',
     );
   });
 
   it('normalizeUserMessageForStorage splits sender and quote into extra', () => {
     const quoteBlock = `${QUOTED_MESSAGE_CONTEXT_MARKER}\ncontent: hi\n\n${CURRENT_USER_MESSAGE_MARKER}\n你是谁`;
     const prefixed = createUserMessage(
-      `[sender:id=1659488338 name=归雨 roles=master,group_admin] ${quoteBlock}`,
+      `[sender:id=1659488338 name=归雨 roles=master,scene_admin] ${quoteBlock}`,
     );
     const stored = normalizeUserMessageForStorage(prefixed);
     expect(stored.extra?.sender?.id).toBe('1659488338');
@@ -69,7 +69,7 @@ describe('sender-extra', () => {
     if (out.role === 'user') {
       expect(out.content[0]).toMatchObject({
         type: 'text',
-        text: '[sender:id=1659488338 name=归雨 roles=master,group_admin] 继续',
+        text: '[sender:id=1659488338 name=归雨 roles=master,scene_admin] 继续',
       });
     }
   });
@@ -88,7 +88,7 @@ describe('sender-extra', () => {
     if (out.role === 'user') {
       expect(out.content[0]).toMatchObject({
         type: 'text',
-        text: '[sender:id=1659488338 name=归雨 roles=master,group_admin] 继续',
+        text: '[sender:id=1659488338 name=归雨 roles=master,scene_admin] 继续',
       });
     }
   });

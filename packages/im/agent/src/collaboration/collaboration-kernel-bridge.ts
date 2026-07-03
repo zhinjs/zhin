@@ -4,10 +4,12 @@
  */
 import { formatCompactLog } from '@zhin.js/logger';
 import type { Message, MessageElement } from '@zhin.js/core';
+import { sceneRefFromMessage } from '@zhin.js/core';
 import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
 import type { CollaborationCell } from './types.js';
+import type { OrchestrationRunSource, OrchestrationSceneRef, OrchestrationTaskRecord } from '@zhin.js/ai';
 import { getOrchestrationService } from '../orchestrator/orchestration-service.js';
-import type { OrchestrationTaskRecord } from '@zhin.js/ai';
+import { normalizeExecutorKind } from '../orchestrator/kernel-mappers.js';
 import {
   isSubstantiveGroupTaskReply,
   resolvePlannerEndpointId,
@@ -41,18 +43,41 @@ function flattenOutboundText(batches: MessageElement[][]): string {
     .trim();
 }
 
-export function findActiveGroupMentionTasksForEndpoint(
+export function orchestrationSourceFromMessage(
+  message: Message,
+  cellId?: string,
+): OrchestrationRunSource {
+  const scene = sceneRefFromMessage(message);
+  if (!scene) {
+    return { kind: 'manual', label: 'orchestration' };
+  }
+  const orchestrationScene: OrchestrationSceneRef = {
+    platform: scene.platform,
+    endpointId: scene.endpointId,
+    sceneId: scene.sceneId,
+    kind: scene.kind,
+    ...(scene.senderId ? { senderId: scene.senderId } : {}),
+    ...(scene.parent ? { parent: scene.parent } : {}),
+  };
+  return {
+    kind: 'im_scene',
+    scene: orchestrationScene,
+    ...(cellId ? { cellId } : {}),
+  };
+}
+
+export function findActiveSceneMentionTasksForEndpoint(
   tasks: OrchestrationTaskRecord[],
   endpointId: string,
 ): OrchestrationTaskRecord[] {
   return tasks.filter((task) =>
-    task.executor_kind === 'group_mention'
+    normalizeExecutorKind(task.executor_kind) === 'scene_mention'
     && task.assigned_to === endpointId
     && ACTIVE_GROUP_TASK_STATUSES.has(task.status),
   );
 }
 
-export async function listActiveGroupMentionTasks(
+export async function listActiveSceneMentionTasks(
   message: Message,
   endpointId: string,
 ): Promise<OrchestrationTaskRecord[]> {
@@ -60,7 +85,7 @@ export async function listActiveGroupMentionTasks(
   if (!orch) return [];
   const sessionKey = resolveIMSessionIdFromMessage(message);
   const runs = await orch.listRuns(sessionKey);
-  return runs.flatMap((run) => findActiveGroupMentionTasksForEndpoint(run.tasks, endpointId));
+  return runs.flatMap((run) => findActiveSceneMentionTasksForEndpoint(run.tasks, endpointId));
 }
 
 /**
@@ -79,7 +104,7 @@ export async function tryCompleteKernelGroupMentionFromOutbound(input: {
   const publicText = flattenOutboundText(input.outboundBatches);
   if (!isSubstantiveGroupTaskReply(publicText)) return;
 
-  const active = await listActiveGroupMentionTasks(input.message, input.endpointId);
+  const active = await listActiveSceneMentionTasks(input.message, input.endpointId);
   if (active.length !== 1) return;
 
   const task = active[0]!;

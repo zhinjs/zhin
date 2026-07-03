@@ -186,8 +186,8 @@ export function formatActiveDelegationHint(
 /** Planner 收到成员 handback @ 时的 turn 指引。 */
 export function formatPlannerHandbackHint(_cell: CollaborationCell): string | undefined {
   return [
-    '[Kernel handback] A member completed a group_mention task.',
+    '[Kernel handback] A member completed a scene_mention task.',
     'Check orchestration_status / #taskId results; dispatch the next task if needed.',
-    'Use orchestration_add_task(executor="group_mention", assigned_to="<endpointId>") for delegation.',
+    'Use orchestration_add_task(executor="scene_mention", assigned_to="<endpointId>") for delegation.',
   ].join('\n');
 }

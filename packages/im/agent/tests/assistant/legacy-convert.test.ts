@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   cronRecordToAssistant,
   assistantToCronRecord,
-  commMessageToImNotify,
+  messageToIMDeliveryTarget,
 } from '../../src/assistant/legacy-convert.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
 
@@ -15,10 +15,15 @@ describe('legacy-convert', () => {
       enabled: true,
       notify: {
         channel: 'im' as const,
-        platform: 'icqq',
-        endpointId: '8596238',
-        sceneId: '123',
-        scope: 'private' as const,
+        target: {
+          channel: 'im' as const,
+          scene: {
+            platform: 'icqq',
+            endpointId: '8596238',
+            sceneId: '123',
+            kind: 'private' as const,
+          },
+        },
       },
       createdAt: 2000,
     };
@@ -30,11 +35,21 @@ describe('legacy-convert', () => {
 
     const back = assistantToCronRecord(assistant);
     expect(back?.cronExpression).toBe('0 8 * * 1-5');
-    expect(back?.notify?.endpointId).toBe('8596238');
+    expect(back?.notify?.channel).toBe('im');
+    expect(back?.notify?.channel === 'im' ? back.notify.target.scene.endpointId : undefined).toBe('8596238');
   });
 
-  it('commMessageToImNotify 从 Message 通讯上下文构建 im notify', () => {
-    expect(commMessageToImNotify({} as import('@zhin.js/core').Message<any>)).toEqual({ channel: 'silent' });
-    expect(commMessageToImNotify(mockCommMessage({ endpoint: '1', sceneId: '2' })).channel).toBe('im');
+  it('messageToIMDeliveryTarget 从 Message 通讯上下文构建 IM target', () => {
+    expect(messageToIMDeliveryTarget({} as import('@zhin.js/core').Message<any>)).toBeUndefined();
+    expect(messageToIMDeliveryTarget(mockCommMessage({ endpoint: '1', senderId: '2' }))).toEqual({
+      channel: 'im',
+      scene: {
+        platform: 'qq',
+        endpointId: '1',
+        sceneId: '2',
+        kind: 'private',
+        senderId: '2',
+      },
+    });
   });
 });

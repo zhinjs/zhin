@@ -191,7 +191,7 @@ export {
   resolveIMSessionIdFromMessage,
   resolveAgentScopedSessionId,
 } from './memory/session.js';
-export type { ISessionManager, IMSessionScope, ResolveIMSessionIdInput, AISessionStatus, AgentMemoryScope } from './memory/session.js';
+export type { ISessionManager, IMSceneKind, ResolveIMSessionIdInput, AISessionStatus, AgentMemoryScope } from './memory/session.js';
 
 export {
   IMSessionStore,
@@ -360,6 +360,8 @@ export type {
   OrchestrationTaskStatus,
   OrchestrationExecutorKind,
   OrchestrationRunSource,
+  OrchestrationSceneKind,
+  OrchestrationSceneRef,
   OrchestrationRunEventType,
   OrchestrationRunRecord,
   OrchestrationTaskRecord,
