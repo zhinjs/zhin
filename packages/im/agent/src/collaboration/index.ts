@@ -1,10 +1,10 @@
 export * from './types.js';
-export * from './cell-context.js';
+export * from './scene-context.js';
 export * from './collaboration-config.js';
 export * from './peer-policy.js';
 export * from './turn-plan-resolver.js';
 export * from './runtime-registry.js';
-export * from './cell-service.js';
+export * from './scene-service.js';
 export * from './bootstrap-agent-runtimes.js';
 export * from './endpoint-identity.js';
 export { wireCollaborationStorage } from './wire-collaboration-storage.js';
@@ -22,20 +22,20 @@ export { checkCollabAdminGate } from './collab-admin-gate.js';
 export { observeAtForInitWizard, extractAtTargets, buildRegisteredEndpointMap } from './init-observe-hook.js';
 export { startInitWizard, aggregateAndActivate, cancelInitWizard } from './init-wizard-service.js';
 export {
-  COLLABORATION_CELL_MODEL,
-  COLLABORATION_CELL_MEMBER_MODEL,
-  COLLABORATION_CELL_ARTIFACT_MODEL,
-  COLLABORATION_CELL_SCENE_MODEL,
+  COLLABORATION_SCENE_MODEL,
+  COLLABORATION_SCENE_MEMBER_MODEL,
+  COLLABORATION_SCENE_ARTIFACT_MODEL,
+  COLLABORATION_SCENE_ALIAS_MODEL,
   COLLABORATION_INIT_SESSION_MODEL,
   COLLABORATION_INIT_OBSERVATION_MODEL,
-  COLLABORATION_CELL_MEMBER_CHANNEL_MODEL,
+  COLLABORATION_SCENE_MEMBER_CHANNEL_MODEL,
 } from './collaboration-db-model.js';
 export {
-  getCollaborationCellRepository,
-  setCollaborationCellRepository,
-  MemoryCollaborationCellRepository,
-  DatabaseCollaborationCellRepository,
-} from './collaboration-cell-repository.js';
+  getCollaborationSceneRepository,
+  setCollaborationSceneRepository,
+  MemoryCollaborationSceneRepository,
+  DatabaseCollaborationSceneRepository,
+} from './collaboration-scene-repository.js';
 export {
   getCollaborationArtifactRepository,
   setCollaborationArtifactRepository,

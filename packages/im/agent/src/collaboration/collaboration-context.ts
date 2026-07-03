@@ -5,12 +5,12 @@ import {
   getAdapterAiOutboundExtensions,
   getHostRootPlugin,
 } from '@zhin.js/core';
-import type { CollaborationCell } from './types.js';
+import type { CollaborationScene } from './types.js';
 import { resolveCellForScene, findCellMemberByEndpoint } from './collaboration-config.js';
 
 /** 每轮 turn envelope 用的精简 Cell 提示（勿重复 buildAiOutboundPromptHint 长文）。 */
 export function formatCollaborationTurnCellHint(
-  cell: CollaborationCell,
+  cell: CollaborationScene,
   currentEndpointId: string,
 ): string {
   const self = findCellMemberByEndpoint(cell, currentEndpointId);
@@ -28,8 +28,8 @@ export function formatCollaborationTurnCellHint(
   return lines.join('\n');
 }
 
-export function formatCollaborationCellHint(
-  cell: CollaborationCell,
+export function formatCollaborationSceneHint(
+  cell: CollaborationScene,
   currentEndpointId: string,
   options?: { forceJsonOnly?: boolean },
 ): string {
@@ -76,9 +76,9 @@ export function formatCollaborationCellHint(
 }
 
 /** 仅当入站消息命中多 Bot 协作 Cell 时返回 Cell（私聊、非成员、单 Bot Cell 均不注入）。 */
-export function resolveCollaborationCellForMessage(
+export function resolveCollaborationSceneForMessage(
   message: Message | undefined,
-): CollaborationCell | undefined {
+): CollaborationScene | undefined {
   if (!message) return undefined;
   const scope = message.$channel?.type;
   if (scope !== 'group' && scope !== 'channel') return undefined;
@@ -101,7 +101,7 @@ export function resolveCollaborationTurnHint(
   message: Message | undefined,
   _inboundContent?: string,
 ): string | undefined {
-  const cell = resolveCollaborationCellForMessage(message);
+  const cell = resolveCollaborationSceneForMessage(message);
   if (!cell) return undefined;
   const endpointId = String(message!.$endpoint);
   const lines = [

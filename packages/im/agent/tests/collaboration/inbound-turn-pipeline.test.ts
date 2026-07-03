@@ -2,24 +2,24 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 import { createInboundTurnPipeline } from '../../src/collaboration/inbound-turn-pipeline.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
 import {
-  getCollaborationCellService,
-  resetCollaborationCellService,
-} from '../../src/collaboration/cell-service.js';
+  getCollaborationSceneService,
+  resetCollaborationSceneService,
+} from '../../src/collaboration/scene-service.js';
 import { getAgentRuntimeRegistry, resetAgentRuntimeRegistry } from '../../src/collaboration/runtime-registry.js';
-import { MemoryCollaborationCellRepository } from '../../src/collaboration/collaboration-cell-repository.js';
+import { MemoryCollaborationSceneRepository } from '../../src/collaboration/collaboration-scene-repository.js';
 import { initOrchestrationService } from '../../src/orchestrator/orchestration-service.js';
 import { MemoryOrchestrationRepository } from '../../src/orchestrator/orchestration-repository.js';
 import { registerDefaultExecutors } from '../../src/orchestrator/bootstrap-executors.js';
 
 describe('createInboundTurnPipeline', () => {
   afterEach(() => {
-    resetCollaborationCellService();
+    resetCollaborationSceneService();
     resetAgentRuntimeRegistry();
   });
 
   it('does not inject legacy collaboration delegation tools for cell members', async () => {
-    resetCollaborationCellService();
-    const repo = new MemoryCollaborationCellRepository();
+    resetCollaborationSceneService();
+    const repo = new MemoryCollaborationSceneRepository();
     await repo.upsert({
       id: 'icqq-collab-room',
       adapter: 'icqq',
@@ -30,8 +30,8 @@ describe('createInboundTurnPipeline', () => {
         { endpointId: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
       ],
     });
-    getCollaborationCellService().setRepository(repo);
-    await getCollaborationCellService().reloadFromRepository();
+    getCollaborationSceneService().setRepository(repo);
+    await getCollaborationSceneService().reloadFromRepository();
 
     let capturedTools: { name: string }[] = [];
     const process = vi.fn(async (_content, _msg, externalTools: { name: string }[]) => {
@@ -111,8 +111,8 @@ describe('createInboundTurnPipeline', () => {
   });
 
   it('does not special-case ordered group requests in the default inbound path', async () => {
-    resetCollaborationCellService();
-    const repo = new MemoryCollaborationCellRepository();
+    resetCollaborationSceneService();
+    const repo = new MemoryCollaborationSceneRepository();
     await repo.upsert({
       id: 'icqq-collab-room',
       adapter: 'icqq',
@@ -123,8 +123,8 @@ describe('createInboundTurnPipeline', () => {
         { endpointId: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
       ],
     });
-    getCollaborationCellService().setRepository(repo);
-    await getCollaborationCellService().reloadFromRepository();
+    getCollaborationSceneService().setRepository(repo);
+    await getCollaborationSceneService().reloadFromRepository();
 
     const replies: unknown[] = [];
     const process = vi.fn(async () => [{ type: 'text', text: 'agent handled ordered group request' }]);

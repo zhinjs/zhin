@@ -5,10 +5,10 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { PipelineArtifact, PipelineArtifactKind, PipelineStage } from './types.js';
-import type { CollaborationCellArtifactRow } from './collaboration-db-model.js';
+import type { CollaborationSceneArtifactRow } from './collaboration-db-model.js';
 
 export interface SubmitArtifactInput {
-  cellId: string;
+  collaborationSceneId: string;
   runId: string;
   stage: PipelineStage;
   kind: PipelineArtifactKind;
@@ -19,10 +19,10 @@ export interface SubmitArtifactInput {
 export interface CollaborationArtifactRepository {
   submit(input: SubmitArtifactInput): Promise<PipelineArtifact>;
   /** 列出某 run 的产物，可选按 kind 过滤。 */
-  listByRun(cellId: string, runId: string, kinds?: PipelineArtifactKind[]): Promise<PipelineArtifact[]>;
+  listByRun(collaborationSceneId: string, runId: string, kinds?: PipelineArtifactKind[]): Promise<PipelineArtifact[]>;
   /** 取某 run + kind 的最新一条。 */
-  latest(cellId: string, runId: string, kind: PipelineArtifactKind): Promise<PipelineArtifact | null>;
-  deleteByCell(cellId: string): Promise<void>;
+  latest(collaborationSceneId: string, runId: string, kind: PipelineArtifactKind): Promise<PipelineArtifact | null>;
+  deleteByScene(collaborationSceneId: string): Promise<void>;
 }
 
 type DbModel = {
@@ -33,7 +33,7 @@ type DbModel = {
   delete?(): { where(condition: Record<string, unknown>): Promise<unknown> };
 };
 
-function rowToArtifact(row: CollaborationCellArtifactRow): PipelineArtifact {
+function rowToArtifact(row: CollaborationSceneArtifactRow): PipelineArtifact {
   let payload: Record<string, unknown> = {};
   try {
     payload = row.payload ? (JSON.parse(row.payload) as Record<string, unknown>) : {};
@@ -42,7 +42,7 @@ function rowToArtifact(row: CollaborationCellArtifactRow): PipelineArtifact {
   }
   return {
     id: row.id,
-    cellId: row.cell_id,
+    collaborationSceneId: row.collaboration_scene_id,
     runId: row.run_id,
     stage: row.stage as PipelineStage,
     kind: row.kind as PipelineArtifactKind,
@@ -52,10 +52,10 @@ function rowToArtifact(row: CollaborationCellArtifactRow): PipelineArtifact {
   };
 }
 
-function buildRow(input: SubmitArtifactInput): CollaborationCellArtifactRow {
+function buildRow(input: SubmitArtifactInput): CollaborationSceneArtifactRow {
   return {
     id: randomUUID(),
-    cell_id: input.cellId,
+    collaboration_scene_id: input.collaborationSceneId,
     run_id: input.runId,
     stage: input.stage,
     kind: input.kind,
@@ -80,23 +80,23 @@ export class MemoryCollaborationArtifactRepository implements CollaborationArtif
 
   async submit(input: SubmitArtifactInput): Promise<PipelineArtifact> {
     const artifact = rowToArtifact(buildRow(input));
-    const list = this.byCell.get(input.cellId) ?? [];
+    const list = this.byCell.get(input.collaborationSceneId) ?? [];
     list.push(artifact);
-    this.byCell.set(input.cellId, list);
+    this.byCell.set(input.collaborationSceneId, list);
     return artifact;
   }
 
-  async listByRun(cellId: string, runId: string, kinds?: PipelineArtifactKind[]): Promise<PipelineArtifact[]> {
-    return applyFilter(this.byCell.get(cellId) ?? [], runId, kinds);
+  async listByRun(collaborationSceneId: string, runId: string, kinds?: PipelineArtifactKind[]): Promise<PipelineArtifact[]> {
+    return applyFilter(this.byCell.get(collaborationSceneId) ?? [], runId, kinds);
   }
 
-  async latest(cellId: string, runId: string, kind: PipelineArtifactKind): Promise<PipelineArtifact | null> {
-    const list = applyFilter(this.byCell.get(cellId) ?? [], runId, [kind]);
+  async latest(collaborationSceneId: string, runId: string, kind: PipelineArtifactKind): Promise<PipelineArtifact | null> {
+    const list = applyFilter(this.byCell.get(collaborationSceneId) ?? [], runId, [kind]);
     return list.length ? list[list.length - 1]! : null;
   }
 
-  async deleteByCell(cellId: string): Promise<void> {
-    this.byCell.delete(cellId);
+  async deleteByScene(collaborationSceneId: string): Promise<void> {
+    this.byCell.delete(collaborationSceneId);
   }
 }
 
@@ -109,20 +109,20 @@ export class DatabaseCollaborationArtifactRepository implements CollaborationArt
     return rowToArtifact(row);
   }
 
-  async listByRun(cellId: string, runId: string, kinds?: PipelineArtifactKind[]): Promise<PipelineArtifact[]> {
-    const rows = await this.model.select().where({ cell_id: cellId, run_id: runId });
-    const artifacts = rows.map((r) => rowToArtifact(r as unknown as CollaborationCellArtifactRow));
+  async listByRun(collaborationSceneId: string, runId: string, kinds?: PipelineArtifactKind[]): Promise<PipelineArtifact[]> {
+    const rows = await this.model.select().where({ collaboration_scene_id: collaborationSceneId, run_id: runId });
+    const artifacts = rows.map((r) => rowToArtifact(r as unknown as CollaborationSceneArtifactRow));
     return applyFilter(artifacts, runId, kinds);
   }
 
-  async latest(cellId: string, runId: string, kind: PipelineArtifactKind): Promise<PipelineArtifact | null> {
-    const list = await this.listByRun(cellId, runId, [kind]);
+  async latest(collaborationSceneId: string, runId: string, kind: PipelineArtifactKind): Promise<PipelineArtifact | null> {
+    const list = await this.listByRun(collaborationSceneId, runId, [kind]);
     return list.length ? list[list.length - 1]! : null;
   }
 
-  async deleteByCell(cellId: string): Promise<void> {
+  async deleteByScene(collaborationSceneId: string): Promise<void> {
     if (!this.model.delete) return;
-    await this.model.delete().where({ cell_id: cellId });
+    await this.model.delete().where({ collaboration_scene_id: collaborationSceneId });
   }
 }
 

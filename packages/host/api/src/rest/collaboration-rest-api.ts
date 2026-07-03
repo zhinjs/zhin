@@ -2,22 +2,22 @@
  * Collaboration REST — GroupCell + Members CRUD（数据库 SSOT，ADR 0023）
  *
  * Cells:
- *   GET    /api/collaboration/cells?endpointId=
- *   GET    /api/collaboration/cells/:id
- *   POST   /api/collaboration/cells
- *   PUT    /api/collaboration/cells/:id
- *   DELETE /api/collaboration/cells/:id
+ *   GET    /api/collaboration/scenes?endpointId=
+ *   GET    /api/collaboration/scenes/:id
+ *   POST   /api/collaboration/scenes
+ *   PUT    /api/collaboration/scenes/:id
+ *   DELETE /api/collaboration/scenes/:id
  *
  * Members:
- *   GET    /api/collaboration/cells/:id/members
- *   POST   /api/collaboration/cells/:id/members
- *   PUT    /api/collaboration/cells/:id/members/:endpointId
- *   DELETE /api/collaboration/cells/:id/members/:endpointId
+ *   GET    /api/collaboration/scenes/:id/members
+ *   POST   /api/collaboration/scenes/:id/members
+ *   PUT    /api/collaboration/scenes/:id/members/:endpointId
+ *   DELETE /api/collaboration/scenes/:id/members/:endpointId
  *
  * Reverse lookup:
- *   GET    /api/collaboration/endpoints/:endpointId/cells
+ *   GET    /api/collaboration/endpoints/:endpointId/scenes
  */
-import { getCollaborationCellService, getCollaborationArtifactRepository } from '@zhin.js/agent';
+import { getCollaborationSceneService, getCollaborationArtifactRepository } from '@zhin.js/agent';
 import {
   registerFetchRoute,
   type Router,
@@ -58,42 +58,42 @@ function parseMembers(body: unknown): MemberPayload[] | null {
 }
 
 export function registerCollaborationRoutes(router: Router, base: string): void {
-  const svc = () => getCollaborationCellService();
+  const svc = () => getCollaborationSceneService();
 
-  registerFetchRoute(router, 'GET', `${base}/collaboration/cells`, async (ctx: RouterContext) => {
+  registerFetchRoute(router, 'GET', `${base}/collaboration/scenes`, async (ctx: RouterContext) => {
     const endpointId = typeof ctx.query.endpointId === 'string' ? ctx.query.endpointId : '';
     if (endpointId) {
-      const cells = (await svc().findCellsByEndpoint(endpointId)).map((c) => svc().toSnapshot(c));
+      const scenes = (await svc().findScenesByEndpoint(endpointId)).map((c) => svc().toSnapshot(c));
       ctx.status = 200;
-      ctx.body = { success: true, data: { cells, endpointId } };
+      ctx.body = { success: true, data: { scenes, endpointId } };
       return;
     }
     await svc().reloadFromRepository();
-    const cells = svc().listCells().map((c) => svc().toSnapshot(c));
+    const scenes = svc().listScenes().map((c) => svc().toSnapshot(c));
     ctx.status = 200;
-    ctx.body = { success: true, data: { cells } };
+    ctx.body = { success: true, data: { scenes } };
   });
 
-  registerFetchRoute(router, 'GET', `${base}/collaboration/endpoints/:endpointId/cells`, async (ctx: RouterContext) => {
+  registerFetchRoute(router, 'GET', `${base}/collaboration/endpoints/:endpointId/scenes`, async (ctx: RouterContext) => {
     const endpointId = ctx.params.endpointId;
-    const cells = (await svc().findCellsByEndpoint(endpointId)).map((c) => svc().toSnapshot(c));
+    const scenes = (await svc().findScenesByEndpoint(endpointId)).map((c) => svc().toSnapshot(c));
     ctx.status = 200;
-    ctx.body = { success: true, data: { endpointId, cells } };
+    ctx.body = { success: true, data: { endpointId, scenes } };
   });
 
-  registerFetchRoute(router, 'GET', `${base}/collaboration/cells/:id`, async (ctx: RouterContext) => {
+  registerFetchRoute(router, 'GET', `${base}/collaboration/scenes/:id`, async (ctx: RouterContext) => {
     const id = ctx.params.id;
-    const cell = await svc().getCellFresh(id);
+    const cell = await svc().getSceneFresh(id);
     if (!cell) {
       ctx.status = 404;
-      ctx.body = { success: false, error: `Cell ${id} not found` };
+      ctx.body = { success: false, error: `Scene ${id} not found` };
       return;
     }
     ctx.status = 200;
     ctx.body = { success: true, data: svc().toSnapshot(cell) };
   });
 
-  registerFetchRoute(router, 'POST', `${base}/collaboration/cells`, async (ctx: RouterContext) => {
+  registerFetchRoute(router, 'POST', `${base}/collaboration/scenes`, async (ctx: RouterContext) => {
     const body = (ctx.request.body ?? {}) as Record<string, unknown>;
     const id = typeof body.id === 'string' ? body.id : '';
     const adapter = typeof body.adapter === 'string' ? body.adapter : '';
@@ -109,7 +109,7 @@ export function registerCollaborationRoutes(router: Router, base: string): void 
       ctx.body = { success: false, error: 'members 无效' };
       return;
     }
-    const cell = await svc().upsertCell({
+    const cell = await svc().upsertScene({
       id,
       adapter,
       sceneId,
@@ -121,13 +121,13 @@ export function registerCollaborationRoutes(router: Router, base: string): void 
     ctx.body = { success: true, data: svc().toSnapshot(cell) };
   });
 
-  registerFetchRoute(router, 'PUT', `${base}/collaboration/cells/:id`, async (ctx: RouterContext) => {
+  registerFetchRoute(router, 'PUT', `${base}/collaboration/scenes/:id`, async (ctx: RouterContext) => {
     const id = ctx.params.id;
     const body = (ctx.request.body ?? {}) as Record<string, unknown>;
-    const existing = await svc().getCellFresh(id);
+    const existing = await svc().getSceneFresh(id);
     if (!existing) {
       ctx.status = 404;
-      ctx.body = { success: false, error: `Cell ${id} not found` };
+      ctx.body = { success: false, error: `Scene ${id} not found` };
       return;
     }
 
@@ -139,7 +139,7 @@ export function registerCollaborationRoutes(router: Router, base: string): void 
         ctx.body = { success: false, error: result.error };
         return;
       }
-      const cell = svc().getCell(id);
+      const cell = svc().getScene(id);
       ctx.status = 200;
       ctx.body = { success: true, data: cell ? svc().toSnapshot(cell) : undefined };
       return;
@@ -151,7 +151,7 @@ export function registerCollaborationRoutes(router: Router, base: string): void 
       ctx.body = { success: false, error: 'members 无效' };
       return;
     }
-    const cell = await svc().upsertCell({
+    const cell = await svc().upsertScene({
       id,
       adapter: typeof body.adapter === 'string' ? body.adapter : existing.adapter,
       sceneId: typeof body.sceneId === 'string' ? body.sceneId : existing.sceneId,
@@ -164,32 +164,32 @@ export function registerCollaborationRoutes(router: Router, base: string): void 
     ctx.body = { success: true, data: svc().toSnapshot(cell) };
   });
 
-  registerFetchRoute(router, 'DELETE', `${base}/collaboration/cells/:id`, async (ctx: RouterContext) => {
+  registerFetchRoute(router, 'DELETE', `${base}/collaboration/scenes/:id`, async (ctx: RouterContext) => {
     const id = ctx.params.id;
-    const ok = await svc().deleteCell(id);
+    const ok = await svc().deleteScene(id);
     if (!ok) {
       ctx.status = 404;
-      ctx.body = { success: false, error: `Cell ${id} not found` };
+      ctx.body = { success: false, error: `Scene ${id} not found` };
       return;
     }
     ctx.status = 200;
     ctx.body = { success: true };
   });
 
-  registerFetchRoute(router, 'GET', `${base}/collaboration/cells/:id/members`, async (ctx: RouterContext) => {
+  registerFetchRoute(router, 'GET', `${base}/collaboration/scenes/:id/members`, async (ctx: RouterContext) => {
     const id = ctx.params.id;
-    const cell = await svc().getCellFresh(id);
+    const cell = await svc().getSceneFresh(id);
     if (!cell) {
       ctx.status = 404;
-      ctx.body = { success: false, error: `Cell ${id} not found` };
+      ctx.body = { success: false, error: `Scene ${id} not found` };
       return;
     }
     const members = await svc().listMembers(id);
     ctx.status = 200;
-    ctx.body = { success: true, data: { cellId: id, members } };
+    ctx.body = { success: true, data: { collaborationSceneId: id, members } };
   });
 
-  registerFetchRoute(router, 'POST', `${base}/collaboration/cells/:id/members`, async (ctx: RouterContext) => {
+  registerFetchRoute(router, 'POST', `${base}/collaboration/scenes/:id/members`, async (ctx: RouterContext) => {
     const id = ctx.params.id;
     const member = parseMember(ctx.request.body);
     if (!member) {
@@ -203,12 +203,12 @@ export function registerCollaborationRoutes(router: Router, base: string): void 
       ctx.body = { success: false, error: result.error };
       return;
     }
-    const cell = svc().getCell(id);
+    const cell = svc().getScene(id);
     ctx.status = 201;
-    ctx.body = { success: true, data: { member: result.member, cell: cell ? svc().toSnapshot(cell) : undefined } };
+    ctx.body = { success: true, data: { member: result.member, scene: cell ? svc().toSnapshot(cell) : undefined } };
   });
 
-  registerFetchRoute(router, 'PUT', `${base}/collaboration/cells/:id/members/:endpointId`, async (ctx: RouterContext) => {
+  registerFetchRoute(router, 'PUT', `${base}/collaboration/scenes/:id/members/:endpointId`, async (ctx: RouterContext) => {
     const id = ctx.params.id;
     const endpointId = ctx.params.endpointId;
     const body = (ctx.request.body ?? {}) as Record<string, unknown>;
@@ -226,12 +226,12 @@ export function registerCollaborationRoutes(router: Router, base: string): void 
       ctx.body = { success: false, error: result.error };
       return;
     }
-    const cell = svc().getCell(id);
+    const cell = svc().getScene(id);
     ctx.status = 200;
-    ctx.body = { success: true, data: { member: result.member, cell: cell ? svc().toSnapshot(cell) : undefined } };
+    ctx.body = { success: true, data: { member: result.member, scene: cell ? svc().toSnapshot(cell) : undefined } };
   });
 
-  registerFetchRoute(router, 'DELETE', `${base}/collaboration/cells/:id/members/:endpointId`, async (ctx: RouterContext) => {
+  registerFetchRoute(router, 'DELETE', `${base}/collaboration/scenes/:id/members/:endpointId`, async (ctx: RouterContext) => {
     const id = ctx.params.id;
     const endpointId = ctx.params.endpointId;
     const ok = await svc().removeMember(id, endpointId);
@@ -240,37 +240,37 @@ export function registerCollaborationRoutes(router: Router, base: string): void 
       ctx.body = { success: false, error: `Member ${endpointId} not found` };
       return;
     }
-    const cell = svc().getCell(id);
+    const cell = svc().getScene(id);
     ctx.status = 200;
-    ctx.body = { success: true, data: { cell: cell ? svc().toSnapshot(cell) : undefined } };
+    ctx.body = { success: true, data: { scene: cell ? svc().toSnapshot(cell) : undefined } };
   });
 
   // ── Pipeline 状态 + Artifacts（ADR 0024 D4）──────────────────────────
 
-  registerFetchRoute(router, 'GET', `${base}/collaboration/cells/:id/pipeline`, async (ctx: RouterContext) => {
+  registerFetchRoute(router, 'GET', `${base}/collaboration/scenes/:id/pipeline`, async (ctx: RouterContext) => {
     const id = ctx.params.id;
-    const cell = await svc().getCellFresh(id);
+    const cell = await svc().getSceneFresh(id);
     if (!cell) {
       ctx.status = 404;
-      ctx.body = { success: false, error: `Cell ${id} not found` };
+      ctx.body = { success: false, error: `Scene ${id} not found` };
       return;
     }
     ctx.status = 200;
-    ctx.body = { success: true, data: { cellId: id, pipelineState: cell.pipelineState ?? null } };
+    ctx.body = { success: true, data: { collaborationSceneId: id, pipelineState: cell.pipelineState ?? null } };
   });
 
-  registerFetchRoute(router, 'GET', `${base}/collaboration/cells/:id/artifacts`, async (ctx: RouterContext) => {
+  registerFetchRoute(router, 'GET', `${base}/collaboration/scenes/:id/artifacts`, async (ctx: RouterContext) => {
     const id = ctx.params.id;
     const runId = typeof ctx.query.runId === 'string' ? ctx.query.runId : '';
-    const cell = await svc().getCellFresh(id);
+    const cell = await svc().getSceneFresh(id);
     const effectiveRun = runId || cell?.pipelineState?.runId || '';
     if (!effectiveRun) {
       ctx.status = 200;
-      ctx.body = { success: true, data: { cellId: id, runId: '', artifacts: [] } };
+      ctx.body = { success: true, data: { collaborationSceneId: id, runId: '', artifacts: [] } };
       return;
     }
     const artifacts = await getCollaborationArtifactRepository().listByRun(id, effectiveRun);
     ctx.status = 200;
-    ctx.body = { success: true, data: { cellId: id, runId: effectiveRun, artifacts } };
+    ctx.body = { success: true, data: { collaborationSceneId: id, runId: effectiveRun, artifacts } };
   });
 }

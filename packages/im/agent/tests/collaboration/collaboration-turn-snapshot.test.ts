@@ -5,9 +5,9 @@ import {
   readCollaborationTurnSnapshot,
 } from '../../src/collaboration/collaboration-turn-snapshot.js';
 import type { AgentTurnMessage } from '@zhin.js/core';
-import type { CollaborationCell } from '../../src/collaboration/types.js';
+import type { CollaborationScene } from '../../src/collaboration/types.js';
 
-const cell: CollaborationCell = {
+const cell: CollaborationScene = {
   id: 'cell-1',
   adapter: 'icqq',
   sceneId: '1',
@@ -48,7 +48,7 @@ describe('collaboration-turn-snapshot', () => {
     const msg = { extra: {} } as AgentTurnMessage;
     attachCollaborationTurnSnapshot(msg, cell, 'researcher');
     const read = readCollaborationTurnSnapshot(msg);
-    expect(read?.cellId).toBe('cell-1');
+    expect(read?.collaborationSceneId).toBe('cell-1');
     expect(read?.delegationRunId).toBe('run-abc-111');
   });
 

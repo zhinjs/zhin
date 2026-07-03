@@ -3,10 +3,10 @@ import {
   resolveAgentSessionKeyForTurn,
   resolveArtifactRunId,
 } from '../../src/collaboration/resolve-agent-session-key.js';
-import type { CollaborationCell } from '../../src/collaboration/types.js';
+import type { CollaborationScene } from '../../src/collaboration/types.js';
 import type { Message } from '@zhin.js/core';
 
-const cell: CollaborationCell = {
+const cell: CollaborationScene = {
   id: 'c1',
   adapter: 'icqq',
   sceneId: '373460458',

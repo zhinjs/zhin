@@ -3,7 +3,7 @@
  */
 import type {
   ActiveDelegation,
-  CollaborationCell,
+  CollaborationScene,
   PipelineArtifactKind,
   PipelineRole,
 } from './types.js';
@@ -21,7 +21,7 @@ export function defaultArtifactKindsForRole(role: PipelineRole): PipelineArtifac
 }
 
 export function findActiveDelegation(
-  cell: CollaborationCell | undefined,
+  cell: CollaborationScene | undefined,
   endpointId: string,
 ): ActiveDelegation | undefined {
   const list = cell?.pipelineState?.activeDelegations;
@@ -29,7 +29,7 @@ export function findActiveDelegation(
 }
 
 export function isActiveDelegatee(
-  cell: CollaborationCell | undefined,
+  cell: CollaborationScene | undefined,
   endpointId: string,
 ): boolean {
   if (!cell) return false;
@@ -70,7 +70,7 @@ export function parseArtifactKinds(raw: unknown): PipelineArtifactKind[] | undef
 }
 
 export function resolveTargetRole(
-  cell: CollaborationCell,
+  cell: CollaborationScene,
   endpointId: string,
 ): PipelineRole | undefined {
   return cell.members.find((m) => m.endpointId === endpointId)?.pipelineRole;
@@ -78,7 +78,7 @@ export function resolveTargetRole(
 
 /** 最近归档 run 上是否仍有该 endpoint 的未完成委派（create/reset 后 in-flight）。 */
 export function findInFlightArchivedRunId(
-  cell: CollaborationCell | undefined,
+  cell: CollaborationScene | undefined,
   endpointId: string,
 ): string | undefined {
   const history = cell?.pipelineState?.runHistory;
@@ -96,7 +96,7 @@ export function findInFlightArchivedRunId(
  * 1) 活跃委派绑定的 runId；2) 归档 run 上 in-flight 委派；3) 当前 active run。
  */
 export function resolveArtifactSubmitRunId(
-  cell: CollaborationCell | undefined,
+  cell: CollaborationScene | undefined,
   endpointId: string,
   opts?: { turnDelegationRunId?: string },
 ): { ok: true; runId: string; reason: 'turn_snapshot_delegation' | 'active_delegation' | 'in_flight_archive' | 'current_run' } | { ok: false; error: string } {

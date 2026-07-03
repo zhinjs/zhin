@@ -10,16 +10,16 @@ import {
   isAskUserPendingReply,
 } from '../../src/builtin/ask-user-session.js';
 import {
-  getCollaborationCellService,
-  resetCollaborationCellService,
-} from '../../src/collaboration/cell-service.js';
-import { MemoryCollaborationCellRepository } from '../../src/collaboration/collaboration-cell-repository.js';
+  getCollaborationSceneService,
+  resetCollaborationSceneService,
+} from '../../src/collaboration/scene-service.js';
+import { MemoryCollaborationSceneRepository } from '../../src/collaboration/collaboration-scene-repository.js';
 
 const GROUP_ID = '373460458';
 
 async function seedCollabCell(): Promise<void> {
-  resetCollaborationCellService();
-  const repo = new MemoryCollaborationCellRepository();
+  resetCollaborationSceneService();
+  const repo = new MemoryCollaborationSceneRepository();
   await repo.upsert({
     id: 'icqq-collab-room',
     adapter: 'icqq',
@@ -29,8 +29,8 @@ async function seedCollabCell(): Promise<void> {
       { endpointId: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
     ],
   });
-  getCollaborationCellService().setRepository(repo);
-  await getCollaborationCellService().reloadFromRepository();
+  getCollaborationSceneService().setRepository(repo);
+  await getCollaborationSceneService().reloadFromRepository();
 }
 
 describe('shouldBlockDelegationAskUser', () => {

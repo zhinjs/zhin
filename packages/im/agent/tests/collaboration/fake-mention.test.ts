@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { evaluateCellAtOwnership } from '../../src/collaboration/peer-policy.js';
 import { stripCellPeerMentionsFromSegments } from '../../src/collaboration/collaboration-outbound.js';
-import type { CollaborationCell } from '../../src/collaboration/types.js';
+import type { CollaborationScene } from '../../src/collaboration/types.js';
 
-const cell: CollaborationCell = {
+const cell: CollaborationScene = {
   id: 'room',
   adapter: 'icqq',
   sceneId: '373460458',

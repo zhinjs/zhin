@@ -8,14 +8,14 @@
  */
 import type { Message, Tool, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import { BuiltinBaseTool } from '../../builtin/builtin-base-tool.js';
-import { getCollaborationCellService } from '../../collaboration/cell-service.js';
+import { getCollaborationSceneService } from '../../collaboration/scene-service.js';
 import { resolveCellForScene, findCellMemberByEndpoint } from '../../collaboration/collaboration-config.js';
 import { resolveArtifactRunId } from '../../collaboration/resolve-agent-session-key.js';
 import { resolveArtifactSubmitRunId, findActiveDelegation } from '../../collaboration/delegation-state.js';
 import { readCollaborationTurnSnapshot } from '../../collaboration/collaboration-turn-snapshot.js';
 import {
   isPipelineRole,
-  type CollaborationCell,
+  type CollaborationScene,
   type PipelineArtifactKind,
   type PipelineStage,
 } from '../../collaboration/types.js';
@@ -41,7 +41,7 @@ export const PIPELINE_TOOL_NAMES = [
 
 const ARTIFACT_KINDS: PipelineArtifactKind[] = ['report', 'blueprint', 'deliverable', 'review', 'citations'];
 
-function resolveCell(message: Message): CollaborationCell | undefined {
+function resolveCell(message: Message): CollaborationScene | undefined {
   const adapter = String(message.$adapter || '');
   const sceneId = message.$channel?.id;
   if (!sceneId) return undefined;
@@ -105,7 +105,7 @@ const MANAGE_PARAMS: ToolParametersSchema = {
   required: ['action'],
 };
 
-function assertPlanner(cell: CollaborationCell, ctx: Message): { ok: true } | { ok: false; error: string } {
+function assertPlanner(cell: CollaborationScene, ctx: Message): { ok: true } | { ok: false; error: string } {
   const member = findCellMemberByEndpoint(cell, String(ctx.$endpoint));
   if (member?.pipelineRole && member.pipelineRole !== 'planner') {
     return { ok: false, error: '仅 Planner 可管理 pipeline 流程' };
@@ -132,10 +132,10 @@ class CellSubmitArtifactTool extends BuiltinBaseTool {
   }
 
   async run(args: Record<string, unknown>): Promise<ToolResult> {
-    const svc = getCollaborationCellService();
+    const svc = getCollaborationSceneService();
     let cell = resolveCell(this.ctx);
     if (!cell) return { ok: false, error: '无法解析协作单元' };
-    const fresh = await svc.getCellFresh(cell.id);
+    const fresh = await svc.getSceneFresh(cell.id);
     if (fresh) cell = fresh;
     const state = cell.pipelineState;
     if (!state) return { ok: false, error: 'pipeline 未初始化' };
@@ -158,7 +158,7 @@ class CellSubmitArtifactTool extends BuiltinBaseTool {
     const member = findCellMemberByEndpoint(cell, endpointId);
     const stage: PipelineStage = isPipelineRole(member?.pipelineRole) ? member!.pipelineRole : state.stage;
     const artifact = await getPipelineService().submitArtifact({
-      cellId: cell.id,
+      collaborationSceneId: cell.id,
       runId: submitRun.runId,
       stage,
       kind,
@@ -278,7 +278,7 @@ class CellPipelineStatusTool extends BuiltinBaseTool {
       : { ok: false as const, error: 'pipeline not initialized' };
     return {
       ok: true,
-      cellId: cell.id,
+      collaborationSceneId: cell.id,
       goal: cell.goal,
       pipelineState: cell.pipelineState ?? null,
       runs: listed.ok ? listed.runs : [],
@@ -344,7 +344,7 @@ class CellManagePipelineTool extends BuiltinBaseTool {
       if (!listed.ok) return { ok: false, error: listed.error };
       return {
         ok: true,
-        cellId: cell.id,
+        collaborationSceneId: cell.id,
         activeRunId: cell.pipelineState?.runId,
         runs: listed.runs,
       };
@@ -409,7 +409,7 @@ class CellManagePipelineTool extends BuiltinBaseTool {
     }
 
     if (userGoal) {
-      await getCollaborationCellService().setGoal(cell.id, userGoal);
+      await getCollaborationSceneService().setGoal(cell.id, userGoal);
     }
 
     await publishCollaborationGroupFeed({

@@ -10,8 +10,8 @@ import {
   type ZhinAiOutboundPayload,
 } from '@zhin.js/core';
 import { resolvePeerEndpointInCell } from './collaboration-config.js';
-import { resolveCollaborationCellForMessage } from './collaboration-context.js';
-import type { CollaborationCell } from './types.js';
+import { resolveCollaborationSceneForMessage } from './collaboration-context.js';
+import type { CollaborationScene } from './types.js';
 import { isCellToolResultJson, removeEmbeddedCellToolJsonFromText } from './collaboration-delegation.js';
 import { buildAtMessageContent, sendGroupMessageContent, sendGroupMessageFromEndpoint, resolvePlatformAtId, type GroupMessageAdapterView } from './group-message.js';
 import { getHostRootPlugin } from '@zhin.js/core';
@@ -30,7 +30,7 @@ export const COLLABORATION_REPLY_JSON_HINT = buildAiOutboundPromptHint({
 });
 
 export function resolveMentionEndpointIds(
-  cell: import('./types.js').CollaborationCell,
+  cell: import('./types.js').CollaborationScene,
   mentions: string[] | undefined,
 ): { ok: true; endpointIds: string[] } | { ok: false; error: string } {
   if (!mentions?.length) {
@@ -54,7 +54,7 @@ export function buildCollaborationMentionSegmentsFromPayload(
   message: Message,
   payload: ZhinAiOutboundPayload,
 ): MessageElement[] | null {
-  const cell = resolveCollaborationCellForMessage(message);
+  const cell = resolveCollaborationSceneForMessage(message);
   if (!cell) return null;
 
   const adapter = resolveAdapterView(message);
@@ -80,7 +80,7 @@ export async function sendCollaborationMentionPayload(
   message: Message,
   payload: ZhinAiOutboundPayload,
 ): Promise<{ ok: boolean; error?: string; endpointIds?: string[] }> {
-  const cell = resolveCollaborationCellForMessage(message);
+  const cell = resolveCollaborationSceneForMessage(message);
   if (!cell) return { ok: false, error: '不在协作 Cell 群场景' };
 
   const text = payload.text?.trim() ?? '';
@@ -112,7 +112,7 @@ function segmentAtUserId(seg: { type: string; data?: Record<string, unknown> }):
 }
 
 function collectPeerMentionTokens(
-  cell: CollaborationCell,
+  cell: CollaborationScene,
   selfEndpointId: string,
   adapter?: GroupMessageAdapterView,
 ): Set<string> {
@@ -145,7 +145,7 @@ function stripPlainMentionTokens(text: string, tokens: Set<string>): string {
  */
 export function stripCellPeerMentionsFromSegments(
   segments: MessageElement[],
-  cell: CollaborationCell,
+  cell: CollaborationScene,
   selfEndpointId: string,
   adapter?: GroupMessageAdapterView,
 ): MessageElement[] {
@@ -177,7 +177,7 @@ export function stripCellPeerMentionsFromSegments(
 }
 
 function collectSelfMentionTokens(
-  cell: CollaborationCell,
+  cell: CollaborationScene,
   selfEndpointId: string,
   adapter?: GroupMessageAdapterView,
 ): Set<string> {
@@ -194,7 +194,7 @@ function collectSelfMentionTokens(
 /** 剥离出站里对自身的 @（模型误 @ 自己的 endpoint/QQ）。 */
 export function stripCellSelfMentionsFromSegments(
   segments: MessageElement[],
-  cell: CollaborationCell,
+  cell: CollaborationScene,
   selfEndpointId: string,
   adapter?: GroupMessageAdapterView,
 ): MessageElement[] {
@@ -225,7 +225,7 @@ export function stripCellSelfMentionsFromSegments(
 /** Planner 公开正文：剥离 peer 假 @ 与 self @。 */
 export function stripPlannerPublicMentionsFromSegments(
   segments: MessageElement[],
-  cell: CollaborationCell,
+  cell: CollaborationScene,
   selfEndpointId: string,
   adapter?: GroupMessageAdapterView,
 ): MessageElement[] {
@@ -254,7 +254,7 @@ export function isCollaborationNoOpReasoningOutbound(batches: MessageElement[][]
 function collectEndpointMentionTokens(
   endpointId: string,
   adapter?: GroupMessageAdapterView,
-  cell?: CollaborationCell,
+  cell?: CollaborationScene,
 ): Set<string> {
   const tokens = new Set<string>([endpointId]);
   const member = cell?.members.find((m) => m.endpointId === endpointId);
@@ -270,7 +270,7 @@ export function segmentsMentionEndpoint(
   segments: MessageElement[],
   endpointId: string,
   adapter?: GroupMessageAdapterView,
-  cell?: CollaborationCell,
+  cell?: CollaborationScene,
 ): boolean {
   const tokens = collectEndpointMentionTokens(endpointId, adapter, cell);
   for (const seg of segments) {

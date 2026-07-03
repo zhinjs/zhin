@@ -54,7 +54,7 @@ const START_PARAMS: ToolParametersSchema = {
       type: 'string',
       description: '可选：Validate 跑在 remote:<agentId>',
     },
-    cell_id: {
+    collaboration_scene_id: {
       type: 'string',
       description: '可选：协作单元 ID；绑定 Mission run 到 GroupCell（ADR 0023）',
     },
@@ -128,15 +128,15 @@ class OrchestrationStartTool extends BuiltinBaseTool {
     const svc = requireService();
     const sessionKey = sessionKeyFromContext(this.sessionContext);
     const title = typeof args.title === 'string' ? args.title : undefined;
-    const cellId = typeof args.cell_id === 'string' ? args.cell_id : undefined;
+    const collaborationSceneId = typeof args.collaboration_scene_id === 'string' ? args.collaboration_scene_id : undefined;
     const snapshot = await svc.startRun({
       sessionKey,
       title,
-      source: orchestrationSourceFromMessage(this.sessionContext, cellId),
+      source: orchestrationSourceFromMessage(this.sessionContext, collaborationSceneId),
     });
-    if (cellId) {
-      const { getCollaborationCellService } = await import('../collaboration/cell-service.js');
-      await getCollaborationCellService().setMissionRunId(cellId, snapshot.run.id);
+    if (collaborationSceneId) {
+      const { getCollaborationSceneService } = await import('../collaboration/scene-service.js');
+      await getCollaborationSceneService().setMissionRunId(collaborationSceneId, snapshot.run.id);
     }
     return (
       `编排 run 已创建：${snapshot.run.id}\n`

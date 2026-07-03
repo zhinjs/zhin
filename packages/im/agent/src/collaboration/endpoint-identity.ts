@@ -7,7 +7,7 @@
  */
 import type { Message, Plugin } from '@zhin.js/core';
 import { getHostRootPlugin } from '@zhin.js/core';
-import type { CollaborationCell, CollaborationCellMemberRuntime } from './types.js';
+import type { CollaborationScene, CollaborationSceneMemberRuntime } from './types.js';
 import { memberTransportAdapter } from './collaboration-config.js';
 
 interface EndpointLike {
@@ -40,10 +40,10 @@ export function resolveEndpointIdsForMember(
 
 /** 在 Cell 成员中按平台 senderId 反查；命中即 peer Bot，未命中为人类。 */
 export function resolveMemberBySender(
-  cell: CollaborationCell | undefined,
+  cell: CollaborationScene | undefined,
   senderId: string,
   root?: Plugin,
-): CollaborationCellMemberRuntime | undefined {
+): CollaborationSceneMemberRuntime | undefined {
   if (!cell || !senderId) return undefined;
   const plugin = root ?? getHostRootPlugin() ?? undefined;
   for (const member of cell.members) {
@@ -60,7 +60,7 @@ export function resolveMemberBySender(
 /** 便捷：判断入站消息是否来自同 Cell 的 peer Bot。 */
 export function isInboundFromPeerBot(
   message: Message,
-  cell: CollaborationCell | undefined,
+  cell: CollaborationScene | undefined,
   root?: Plugin,
 ): boolean {
   const senderId = String(message.$sender?.id ?? '');
@@ -80,8 +80,8 @@ export function isInboundFromPeerBot(
  * 3. fallback → 使用 endpointId
  */
 export function resolveOutboundMentionId(
-  cell: CollaborationCell,
-  targetMember: CollaborationCellMemberRuntime,
+  cell: CollaborationScene,
+  targetMember: CollaborationSceneMemberRuntime,
   senderAdapter: string,
   root?: Plugin,
 ): string {

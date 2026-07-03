@@ -35,7 +35,7 @@ export type PipelineArtifactKind =
 
 export interface PipelineArtifact {
   id: string;
-  cellId: string;
+  collaborationSceneId: string;
   runId: string;
   stage: PipelineStage;
   kind: PipelineArtifactKind;
@@ -104,20 +104,20 @@ export interface PipelineState {
 
 export const DEFAULT_MAX_REVIEW_CYCLES = 3;
 
-export interface CollaborationCellMember {
+export interface CollaborationSceneMember {
   endpoint: string;
   primary: string;
   role?: string;
   pipelineRole?: PipelineRole;
 }
 
-export interface CollaborationCellConfig {
+export interface CollaborationSceneConfig {
   id: string;
   adapter: string;
   sceneId: string;
   goal?: string;
   missionRunId?: string;
-  members: CollaborationCellMember[];
+  members: CollaborationSceneMember[];
 }
 
 export interface CollaborationConfig {
@@ -129,10 +129,10 @@ export interface CollaborationConfig {
    * 按 adapter 的默认成员模板；仅在使用 /collab init 时挂载，不自动导入。
    * 示例：roster.icqq[].endpoint / primary / pipelineRole
    */
-  roster?: Record<string, CollaborationCellMember[]>;
+  roster?: Record<string, CollaborationSceneMember[]>;
 }
 
-export interface CollaborationCellMemberRuntime {
+export interface CollaborationSceneMemberRuntime {
   endpointId: string;
   /** 成员所属 adapter；缺省与 Cell.adapter 相同（跨 adapter 同群协作时显式填写）。 */
   adapter?: string;
@@ -141,13 +141,13 @@ export interface CollaborationCellMemberRuntime {
   pipelineRole?: PipelineRole;
 }
 
-export interface CollaborationCell {
+export interface CollaborationScene {
   id: string;
   adapter: string;
   sceneId: string;
   goal?: string;
   missionRunId?: string;
-  members: CollaborationCellMemberRuntime[];
+  members: CollaborationSceneMemberRuntime[];
   pipelineState?: PipelineState;
   version?: number;
 }
@@ -162,10 +162,10 @@ export interface TurnPlan {
   inboundEndpointId: string;
   handlerProfile: string;
   outboundEndpointId: string;
-  cellId?: string;
+  collaborationSceneId?: string;
   sessionKeys: {
     transport: string;
-    cell?: string;
+    collaborationScene?: string;
   };
   delegation?: TurnPlanDelegation;
 }

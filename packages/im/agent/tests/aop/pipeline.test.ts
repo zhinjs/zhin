@@ -6,7 +6,7 @@ import {
 } from '../../src/aop/pipeline/pipeline-transitions.js';
 import { PipelineService } from '../../src/aop/pipeline/pipeline-service.js';
 import { MemoryCollaborationArtifactRepository } from '../../src/collaboration/collaboration-artifact-repository.js';
-import type { CollaborationCell, PipelineState } from '../../src/collaboration/types.js';
+import type { CollaborationScene, PipelineState } from '../../src/collaboration/types.js';
 
 describe('pipeline transitions', () => {
   it('full path is planner→researcher→evaluator→executor→reviewer', () => {
@@ -29,7 +29,7 @@ describe('pipeline transitions', () => {
 });
 
 describe('PipelineService', () => {
-  let cell: CollaborationCell;
+  let cell: CollaborationScene;
   let svc: PipelineService;
 
   beforeEach(() => {
@@ -47,7 +47,7 @@ describe('PipelineService', () => {
     };
     svc = new PipelineService({
       cells: {
-        getCell: (id) => (id === cell.id ? cell : undefined),
+        getScene: (id) => (id === cell.id ? cell : undefined),
         setPipelineState: async (id, state: PipelineState) => {
           if (id === cell.id) cell = { ...cell, pipelineState: state };
         },
@@ -89,9 +89,9 @@ describe('PipelineService', () => {
 
   it('reviewer slice excludes evaluator blueprint', async () => {
     const state = await svc.initState(cell, { userGoal: 'g' });
-    await svc.submitArtifact({ cellId: 'cellA', runId: state.runId, stage: 'researcher', kind: 'citations', payload: { src: 'a' } });
-    await svc.submitArtifact({ cellId: 'cellA', runId: state.runId, stage: 'evaluator', kind: 'blueprint', payload: { secret: 'cot' } });
-    await svc.submitArtifact({ cellId: 'cellA', runId: state.runId, stage: 'executor', kind: 'deliverable', payload: { out: 'final' } });
+    await svc.submitArtifact({ collaborationSceneId: 'cellA', runId: state.runId, stage: 'researcher', kind: 'citations', payload: { src: 'a' } });
+    await svc.submitArtifact({ collaborationSceneId: 'cellA', runId: state.runId, stage: 'evaluator', kind: 'blueprint', payload: { secret: 'cot' } });
+    await svc.submitArtifact({ collaborationSceneId: 'cellA', runId: state.runId, stage: 'executor', kind: 'deliverable', payload: { out: 'final' } });
     const slice = await svc.reviewerContextSlice('cellA', state.runId);
     expect(slice.deliverable).toEqual({ out: 'final' });
     expect(JSON.stringify(slice)).not.toContain('cot');
@@ -100,7 +100,7 @@ describe('PipelineService', () => {
   it('resetRun issues new runId and clears delegations', async () => {
     const first = await svc.initState(cell, { userGoal: 'old goal' });
     await svc.submitArtifact({
-      cellId: 'cellA',
+      collaborationSceneId: 'cellA',
       runId: first.runId,
       stage: 'researcher',
       kind: 'report',

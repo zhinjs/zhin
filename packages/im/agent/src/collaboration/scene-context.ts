@@ -6,14 +6,14 @@
 import type { IMSceneKind } from '@zhin.js/core';
 import { getSceneIdentityService } from './scene-identity-service.js';
 
-export function resolveCellContextKey(adapter: string, sceneId: string): string {
+export function resolveCollaborationSceneContextKey(adapter: string, sceneId: string): string {
   const svc = getSceneIdentityService();
-  const cell = svc.resolveLogicalCell(adapter, sceneId);
-  if (cell) return `cell:${cell.id}`;
-  return `cell:${String(adapter || 'unknown')}:${String(sceneId || 'unknown')}`;
+  const cell = svc.resolveLogicalScene(adapter, sceneId);
+  if (cell) return `collab-scene:${cell.id}`;
+  return `collab-scene:${String(adapter || 'unknown')}:${String(sceneId || 'unknown')}`;
 }
 
-export function resolveCellContextKeyFromMessage(message: {
+export function resolveCollaborationSceneContextKeyFromMessage(message: {
   $adapter?: string;
   $channel?: { type?: IMSceneKind; id?: string };
   $sender?: { id?: string };
@@ -22,5 +22,5 @@ export function resolveCellContextKeyFromMessage(message: {
   if (scope !== 'group' && scope !== 'channel') return undefined;
   const sceneId = message.$channel?.id;
   if (!sceneId) return undefined;
-  return resolveCellContextKey(String(message.$adapter || ''), sceneId);
+  return resolveCollaborationSceneContextKey(String(message.$adapter || ''), sceneId);
 }

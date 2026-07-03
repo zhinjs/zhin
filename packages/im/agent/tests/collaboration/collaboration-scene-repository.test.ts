@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-  DatabaseCollaborationCellRepository,
-  MemoryCollaborationCellRepository,
-} from '../../src/collaboration/collaboration-cell-repository.js';
+  DatabaseCollaborationSceneRepository,
+  MemoryCollaborationSceneRepository,
+} from '../../src/collaboration/collaboration-scene-repository.js';
 
-describe('MemoryCollaborationCellRepository', () => {
-  let repo: MemoryCollaborationCellRepository;
+describe('MemoryCollaborationSceneRepository', () => {
+  let repo: MemoryCollaborationSceneRepository;
 
   beforeEach(() => {
-    repo = new MemoryCollaborationCellRepository();
+    repo = new MemoryCollaborationSceneRepository();
   });
 
   it('upserts and lists cells', async () => {
@@ -77,7 +77,7 @@ describe('MemoryCollaborationCellRepository', () => {
         { endpointId: 'writer-bot', primary: 'writer' },
       ],
     });
-    const cells = await repo.findCellsByEndpoint('planner-bot');
+    const cells = await repo.findScenesByEndpoint('planner-bot');
     expect(cells.map((c) => c.id).sort()).toEqual(['room-a', 'room-b']);
   });
 
@@ -136,7 +136,7 @@ describe('MemoryCollaborationCellRepository', () => {
   });
 });
 
-describe('DatabaseCollaborationCellRepository', () => {
+describe('DatabaseCollaborationSceneRepository', () => {
   it('reads pipeline_state when SQLite dialect auto-parses JSON TEXT to object', async () => {
     const pipelineState = {
       runId: 'run-1',
@@ -175,7 +175,7 @@ describe('DatabaseCollaborationCellRepository', () => {
       create: async () => {},
       update: () => ({ where: async () => {} }),
     };
-    const repo = new DatabaseCollaborationCellRepository(cellModel, memberModel);
+    const repo = new DatabaseCollaborationSceneRepository(cellModel, memberModel);
     const cell = await repo.getById('cell-icqq-373460458');
     expect(cell?.pipelineState?.stage).toBe('researcher');
     expect(cell?.pipelineState?.pendingDelegateTarget).toBe('210723495');

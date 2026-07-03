@@ -42,7 +42,7 @@ import {
 import type { AIService } from '../service.js';
 import { evaluateCellAtOwnership, evaluatePeerTrigger, isInboundFromCollaborationPeer } from './peer-policy.js';
 import { buildTurnPlan } from './turn-plan-resolver.js';
-import { getCollaborationCellService } from './cell-service.js';
+import { getCollaborationSceneService } from './scene-service.js';
 import { findCellForInbound, findCellMemberByEndpoint } from './collaboration-config.js';
 import { sendImMentionDelegation } from './im-mention-delegate.js';
 import {
@@ -67,17 +67,17 @@ import {
 import { getAgentRuntimeRegistry } from './runtime-registry.js';
 import { attachCollaborationTurnSnapshot } from './collaboration-turn-snapshot.js';
 import type { GroupMessageAdapterView } from './group-message.js';
-import type { CollaborationCell, PeerTriggerMode } from './types.js';
+import type { CollaborationScene, PeerTriggerMode } from './types.js';
 import { getOrchestrationService } from '../orchestrator/orchestration-service.js';
 import { createOrchestrationTools } from '../builtin/orchestration-tools.js';
 
 function applyCollaborationOutboundPostProcess(
   batches: MessageElement[][],
   input: {
-    cell?: CollaborationCell;
+    cell?: CollaborationScene;
     endpointId: string;
     adapterView?: GroupMessageAdapterView;
-    selfMember?: CollaborationCell['members'][number];
+    selfMember?: CollaborationScene['members'][number];
   },
 ): MessageElement[][] {
   const { cell, endpointId, adapterView, selfMember } = input;
@@ -173,20 +173,20 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
     }
 
     const endpointAtIds = resolveEndpointAtIds(message, root);
-    const cellService = getCollaborationCellService();
+    const cellService = getCollaborationSceneService();
     const scope = message.$channel?.type || 'private';
     const sceneId = message.$channel?.id ?? '';
     let cell =
       (scope === 'group' || scope === 'channel') && sceneId !== ''
         ? findCellForInbound(
-          cellService.listCells(),
+          cellService.listScenes(),
           String(message.$adapter),
           String(sceneId),
           endpointId,
         )
         : undefined;
     if (cell) {
-      const fresh = await cellService.getCellFresh(cell.id);
+      const fresh = await cellService.getSceneFresh(cell.id);
       if (fresh) cell = fresh;
     }
 
@@ -359,14 +359,14 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
         message,
         contentText: aiContent,
         endpointId,
-        cells: cellService.listCells(),
+        cells: cellService.listScenes(),
         agents: routing?.agents ?? {},
         discoveredAgentNames,
       });
 
       logger.debug(formatCompactLog('AI Handler', {
         turn_plan: turnPlan.handlerProfile,
-        cell: turnPlan.cellId,
+        cell: turnPlan.collaborationSceneId,
         delegation: turnPlan.delegation?.mode,
       }));
 
@@ -514,7 +514,7 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
       if (handlerBinding) zhinAgent.setActiveBinding(handlerBinding);
 
       if (cell && findCellMemberByEndpoint(cell, endpointId)) {
-        const snapCell = (await cellService.getCellFresh(cell.id)) ?? cell;
+        const snapCell = (await cellService.getSceneFresh(cell.id)) ?? cell;
         attachCollaborationTurnSnapshot(commMessage, snapCell, endpointId);
         cell = snapCell;
       }
@@ -575,7 +575,7 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
       ];
 
       if (cell) {
-        const freshOutbound = await cellService.getCellFresh(cell.id);
+        const freshOutbound = await cellService.getSceneFresh(cell.id);
         if (freshOutbound) cell = freshOutbound;
       }
 

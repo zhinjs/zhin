@@ -9,10 +9,10 @@ import type { AIServiceRefs } from '../init/shared-refs.js';
 import { DEFAULT_ZHIN_AGENT_NAME } from '../config/types.js';
 import type { ZhinAgentConfig } from '../zhin-agent/config.js';
 import { getAgentRuntimeRegistry } from './runtime-registry.js';
-import { getCollaborationCellService } from './cell-service.js';
+import { getCollaborationSceneService } from './scene-service.js';
 import { findCellMemberByEndpoint } from './collaboration-config.js';
 import { resolvePipelineRoleBinding } from '../config/resolve-pipeline-binding.js';
-import { isPipelineRole, type CollaborationCell } from './types.js';
+import { isPipelineRole, type CollaborationScene } from './types.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import { COLLABORATION_CONTEXT_TAIL_MESSAGE_LIMIT } from '../zhin-agent/context-tail-limit.js';
 
@@ -27,7 +27,7 @@ export interface BootstrapRuntimesOptions {
 let lastBootstrapOptions: BootstrapRuntimesOptions | null = null;
 
 function resolveMemberForEndpoint(
-  cells: CollaborationCell[],
+  cells: CollaborationScene[],
   endpointId: string,
 ): { primary: string; pipelineRole?: string } {
   for (const cell of cells) {
@@ -61,7 +61,7 @@ function applyEndpointRuntimes(options: BootstrapRuntimesOptions): void {
   registry.registerDefault(primaryAgent);
   refs.zhinAgent = primaryAgent;
 
-  const cellList = getCollaborationCellService().listCells();
+  const cellList = getCollaborationSceneService().listScenes();
   if (cellList.length === 0) return;
 
   const endpointIds = [...new Set(cellList.flatMap((c) => c.members.map((m) => m.endpointId)))].sort();

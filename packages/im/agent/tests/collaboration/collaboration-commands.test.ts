@@ -9,10 +9,10 @@ import {
   handleCollabUnbind,
 } from '../../src/collaboration/collaboration-commands.js';
 import {
-  getCollaborationCellService,
-  resetCollaborationCellService,
-} from '../../src/collaboration/cell-service.js';
-import { MemoryCollaborationCellRepository } from '../../src/collaboration/collaboration-cell-repository.js';
+  getCollaborationSceneService,
+  resetCollaborationSceneService,
+} from '../../src/collaboration/scene-service.js';
+import { MemoryCollaborationSceneRepository } from '../../src/collaboration/collaboration-scene-repository.js';
 
 vi.mock('../../src/collaboration/bootstrap-agent-runtimes.js', () => ({
   rebootstrapEndpointRuntimes: vi.fn(async () => {}),
@@ -56,7 +56,7 @@ function mockSingleBotRoot() {
 }
 
 async function seedEmptyCell(sceneId = '373460458') {
-  await getCollaborationCellService().upsertCell({
+  await getCollaborationSceneService().upsertScene({
     id: defaultCellId('icqq', sceneId),
     adapter: 'icqq',
     sceneId,
@@ -67,15 +67,15 @@ async function seedEmptyCell(sceneId = '373460458') {
 
 describe('collaboration /collab commands', () => {
   beforeEach(async () => {
-    resetCollaborationCellService();
-    const repo = new MemoryCollaborationCellRepository();
-    getCollaborationCellService().setRepository(repo);
-    await getCollaborationCellService().reloadFromRepository();
+    resetCollaborationSceneService();
+    const repo = new MemoryCollaborationSceneRepository();
+    getCollaborationSceneService().setRepository(repo);
+    await getCollaborationSceneService().reloadFromRepository();
     mockMultiBotRoot();
   });
 
   afterEach(() => {
-    resetCollaborationCellService();
+    resetCollaborationSceneService();
     vi.clearAllMocks();
   });
 

@@ -2,7 +2,7 @@
  * /collab 协作群管理指令（仅 master；ADR 0023 Cell 注册 SSOT）。
  */
 import { Adapter, getHostRootPlugin, type Message } from '@zhin.js/core';
-import { getCollaborationCellService } from './cell-service.js';
+import { getCollaborationSceneService } from './scene-service.js';
 import {
   findCellForMessage,
   memberTransportAdapter,
@@ -13,7 +13,7 @@ import { getPipelineService } from '../aop/pipeline/pipeline-service.js';
 import {
   isPipelineRole,
   PIPELINE_ROLES,
-  type CollaborationCell,
+  type CollaborationScene,
   type CollaborationConfig,
   type PipelineRole,
 } from './types.js';
@@ -55,11 +55,11 @@ function listAdapterEndpoints(adapterName: string): Array<{ id: string; online: 
   }));
 }
 
-function memberBindKey(cell: CollaborationCell, member: CollaborationCell['members'][number]): string {
+function memberBindKey(cell: CollaborationScene, member: CollaborationScene['members'][number]): string {
   return `${memberTransportAdapter(cell, member)}:${member.endpointId}`;
 }
 
-function listAllBindableEndpoints(cell: CollaborationCell): BindableEndpointRef[] {
+function listAllBindableEndpoints(cell: CollaborationScene): BindableEndpointRef[] {
   const root = getHostRootPlugin();
   if (!root) return [];
   const bound = new Set(cell.members.map((m) => memberBindKey(cell, m)));
@@ -77,7 +77,7 @@ function listAllBindableEndpoints(cell: CollaborationCell): BindableEndpointRef[
 
 function listBindableEndpointsForAdapter(
   adapterName: string,
-  cell: CollaborationCell,
+  cell: CollaborationScene,
 ): BindableEndpointRef[] {
   return listAllBindableEndpoints(cell).filter((ep) => ep.adapter === adapterName);
 }
@@ -122,14 +122,14 @@ function formatBindCommand(ref: BindableEndpointRef, role?: PipelineRole): strin
   return `/collab bind ${ref.adapter} ${ref.id}${roleSuffix}`;
 }
 
-function availablePipelineRoles(cell: CollaborationCell): PipelineRole[] {
+function availablePipelineRoles(cell: CollaborationScene): PipelineRole[] {
   const taken = new Set(
     cell.members.map((m) => m.pipelineRole).filter((r): r is PipelineRole => !!r),
   );
   return PIPELINE_ROLES.filter((r) => !taken.has(r));
 }
 
-function formatAdapterBindPrompt(cell: CollaborationCell): string {
+function formatAdapterBindPrompt(cell: CollaborationScene): string {
   const adapters = listProvisionableAdapterNames();
   if (adapters.length === 0) {
     return '当前没有可绑定的适配器 Endpoint。可用 /endpoints 查看。';
@@ -141,7 +141,7 @@ function formatAdapterBindPrompt(cell: CollaborationCell): string {
 }
 
 function formatEndpointBindPrompt(
-  cell: CollaborationCell,
+  cell: CollaborationScene,
   role?: PipelineRole,
   adapterFilter?: string,
 ): string {
@@ -164,7 +164,7 @@ function formatEndpointBindPrompt(
 }
 
 function formatRoleBindPrompt(
-  cell: CollaborationCell,
+  cell: CollaborationScene,
   endpointRef?: BindableEndpointRef,
 ): string {
   const roles = availablePipelineRoles(cell);
@@ -182,13 +182,13 @@ function formatRoleBindPrompt(
   ].join('\n');
 }
 
-function formatMemberEndpointLabel(cell: CollaborationCell, member: CollaborationCell['members'][number]): string {
+function formatMemberEndpointLabel(cell: CollaborationScene, member: CollaborationScene['members'][number]): string {
   const adapter = memberTransportAdapter(cell, member);
   return adapter === cell.adapter ? member.endpointId : `${adapter}/${member.endpointId}`;
 }
 
 function parseBindArgs(
-  cell: CollaborationCell,
+  cell: CollaborationScene,
   adapterArg: string,
   endpointArg: string,
   roleArg: string,
@@ -249,7 +249,7 @@ export function resolveSceneFromMessage(message: Message):
 }
 
 
-function formatMemberLine(cell: CollaborationCell): string {
+function formatMemberLine(cell: CollaborationScene): string {
   return cell.members
     .map((m) => {
       const role = m.pipelineRole ?? m.primary;
@@ -258,7 +258,7 @@ function formatMemberLine(cell: CollaborationCell): string {
     .join('\n');
 }
 
-async function formatStatus(cell: CollaborationCell): Promise<string> {
+async function formatStatus(cell: CollaborationScene): Promise<string> {
   const lines = [
     `协作群 ${cell.id}`,
     `  adapter: ${cell.adapter}`,
@@ -313,9 +313,9 @@ export async function handleCollabStatus(message: Message): Promise<string> {
   const scene = resolveSceneFromMessage(message);
   if (!scene.ok) return `ℹ️ ${scene.error}`;
   if (collabAdminBlocked(message)) return '';
-  const svc = getCollaborationCellService();
+  const svc = getCollaborationSceneService();
   await svc.reloadFromRepository();
-  const cell = findCellForMessage(svc.listCells(), scene.adapter, scene.sceneId);
+  const cell = findCellForMessage(svc.listScenes(), scene.adapter, scene.sceneId);
   if (!cell) {
     return [
       '当前群尚未注册为协作 Cell。',
@@ -338,9 +338,9 @@ export async function handleCollabBindPrompt(
   if (!scene.ok) return `⚠️ ${scene.error}`;
   if (collabAdminBlocked(message)) return '';
 
-  const svc = getCollaborationCellService();
+  const svc = getCollaborationSceneService();
   await svc.reloadFromRepository();
-  const cell = findCellForMessage(svc.listCells(), scene.adapter, scene.sceneId);
+  const cell = findCellForMessage(svc.listScenes(), scene.adapter, scene.sceneId);
   if (!cell) return '⚠️ 当前群未注册协作 Cell。请先 /collab init';
 
   const { adapter, endpoint, role } = parseBindArgs(
@@ -426,9 +426,9 @@ export async function handleCollabBind(
     return `⚠️ pipelineRole 须为：${PIPELINE_ROLES.join(' | ')}`;
   }
 
-  const svc = getCollaborationCellService();
+  const svc = getCollaborationSceneService();
   await svc.reloadFromRepository();
-  let cell = findCellForMessage(svc.listCells(), scene.adapter, scene.sceneId);
+  let cell = findCellForMessage(svc.listScenes(), scene.adapter, scene.sceneId);
   if (!cell) {
     return '⚠️ 当前群未注册协作 Cell。请先 /collab init';
   }
@@ -448,7 +448,7 @@ export async function handleCollabBind(
   });
   if (!added.ok) return `⚠️ 绑定失败：${added.error ?? 'unknown'}`;
 
-  cell = (await svc.getCellFresh(cell.id)) ?? cell;
+  cell = (await svc.getSceneFresh(cell.id)) ?? cell;
   await rebootstrapEndpointRuntimes();
   const label = transportAdapter === cell.adapter
     ? endpointId
@@ -461,9 +461,9 @@ export async function handleCollabUnbind(message: Message, endpointRef: string):
   if (!scene.ok) return `⚠️ ${scene.error}`;
   if (collabAdminBlocked(message)) return '';
 
-  const svc = getCollaborationCellService();
+  const svc = getCollaborationSceneService();
   await svc.reloadFromRepository();
-  const cell = findCellForMessage(svc.listCells(), scene.adapter, scene.sceneId);
+  const cell = findCellForMessage(svc.listScenes(), scene.adapter, scene.sceneId);
   if (!cell) return '⚠️ 当前群未注册协作 Cell。';
 
   const ref = endpointRef.trim();
@@ -471,7 +471,7 @@ export async function handleCollabUnbind(message: Message, endpointRef: string):
   const ok = await svc.removeMember(cell.id, endpointId);
   if (!ok) return `⚠️ 未找到成员 ${endpointId}`;
 
-  const fresh = (await svc.getCellFresh(cell.id)) ?? cell;
+  const fresh = (await svc.getSceneFresh(cell.id)) ?? cell;
   await rebootstrapEndpointRuntimes();
   return `✅ 已移除 ${endpointId}\n${await formatStatus(fresh)}`;
 }
@@ -481,9 +481,9 @@ export async function handleCollabReset(message: Message, force = true): Promise
   if (!scene.ok) return `⚠️ ${scene.error}`;
   if (collabAdminBlocked(message)) return '';
 
-  const svc = getCollaborationCellService();
+  const svc = getCollaborationSceneService();
   await svc.reloadFromRepository();
-  const cell = findCellForMessage(svc.listCells(), scene.adapter, scene.sceneId);
+  const cell = findCellForMessage(svc.listScenes(), scene.adapter, scene.sceneId);
   if (!cell) return '⚠️ 当前群未注册协作 Cell。请先 /collab init';
 
   if (!cell.pipelineState) {
@@ -493,7 +493,7 @@ export async function handleCollabReset(message: Message, force = true): Promise
   const result = await getPipelineService().resetRun(cell.id, { force });
   if (!result.ok) return `⚠️ 重置失败：${result.error}`;
 
-  const fresh = (await svc.getCellFresh(cell.id)) ?? cell;
+  const fresh = (await svc.getSceneFresh(cell.id)) ?? cell;
   return `✅ 已重置 pipeline（run ${result.previousRunId?.slice(0, 8) ?? '?'} → ${result.state.runId.slice(0, 8)}）\n${await formatStatus(fresh)}`;
 }
 
@@ -580,8 +580,8 @@ export async function handleCollabInited(
   if (result.warnings.length > 0) {
     lines.push(...result.warnings.map((w) => `⚠️ ${w}`));
   }
-  if (result.cell) {
-    lines.push(await formatStatus(result.cell));
+  if (result.scene) {
+    lines.push(await formatStatus(result.scene));
   }
   return lines.join('\n');
 }

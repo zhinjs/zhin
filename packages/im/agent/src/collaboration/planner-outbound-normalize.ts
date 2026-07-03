@@ -7,7 +7,7 @@ import {
   parseAiOutboundJson,
   rewritePlainTextMentions,
 } from '@zhin.js/core';
-import type { CollaborationCell, PipelineRole } from './types.js';
+import type { CollaborationScene, PipelineRole } from './types.js';
 import { resolvePeerEndpointInCell } from './collaboration-config.js';
 import { buildAtMessageContent, type GroupMessageAdapterView } from './group-message.js';
 import { stripPlannerPublicMentionsFromSegments, batchHasAtSegment, segmentsMentionEndpoint } from './collaboration-outbound.js';
@@ -26,7 +26,7 @@ function batchPlainText(batch: MessageElement[]): string {
 /** 批次是否为对 peer 的真实 @ 委派。 */
 export function isPlannerDelegateBatch(
   batch: MessageElement[],
-  cell: CollaborationCell,
+  cell: CollaborationScene,
   selfEndpointId: string,
   adapter?: GroupMessageAdapterView,
 ): boolean {
@@ -40,7 +40,7 @@ export function isPlannerDelegateBatch(
 
 function resolveRoleCallInProse(
   text: string,
-  cell: CollaborationCell,
+  cell: CollaborationScene,
 ): { role: PipelineRole; task: string } | undefined {
   for (const role of PIPELINE_ROLES) {
     const member = cell.members.find((m) => m.pipelineRole === role);
@@ -65,7 +65,7 @@ function buildDelegateBatch(
 
 function splitProseIntoDelegateBatches(
   batch: MessageElement[],
-  cell: CollaborationCell,
+  cell: CollaborationScene,
   selfEndpointId: string,
   adapter: GroupMessageAdapterView,
 ): MessageElement[][] {
@@ -137,7 +137,7 @@ function splitProseIntoDelegateBatches(
 /** Planner 出站：拆分委派 @、剥离 self 假 @，不删除真实委派 batch。 */
 export function normalizePlannerOutboundBatches(
   batches: MessageElement[][],
-  cell: CollaborationCell,
+  cell: CollaborationScene,
   selfEndpointId: string,
   adapter: GroupMessageAdapterView,
 ): MessageElement[][] {

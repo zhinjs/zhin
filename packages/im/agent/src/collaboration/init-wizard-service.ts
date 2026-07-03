@@ -6,10 +6,10 @@
  * 2. 提交阶段：/collab inited @Planner → 汇聚 stash → 一次性创建 Cell
  */
 
-import type { CollaborationCell, PipelineRole } from './types.js';
+import type { CollaborationScene, PipelineRole } from './types.js';
 import { WIZARD_STEPS, isAssignableWizardRole, type WizardStep, type AssignableWizardRole } from './collaboration-db-model.js';
 import { getSceneIdentityService, type InitSessionRecord } from './scene-identity-service.js';
-import { getCollaborationCellService } from './cell-service.js';
+import { getCollaborationSceneService } from './scene-service.js';
 import { rebootstrapEndpointRuntimes } from './bootstrap-agent-runtimes.js';
 import { defaultCellId } from './collaboration-commands.js';
 
@@ -67,11 +67,11 @@ export async function startInitWizard(input: StartWizardInput): Promise<StartWiz
   }
 
   const sessionId = `init-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  const logicalCellId = defaultCellId(input.plannerAdapter, input.plannerSceneId);
+  const logicalSceneId = defaultCellId(input.plannerAdapter, input.plannerSceneId);
 
   await svc.createInitSession({
     id: sessionId,
-    logicalCellId,
+    logicalSceneId,
     plannerEndpointId: input.plannerEndpointId,
     plannerAdapter: input.plannerAdapter,
     plannerSceneId: input.plannerSceneId,
@@ -131,7 +131,7 @@ export async function advanceWizardStep(
 
 export interface AggregateResult {
   ok: boolean;
-  cell?: CollaborationCell;
+  scene?: CollaborationScene;
   warnings: string[];
   sceneCount: number;
   memberCount: number;
@@ -147,23 +147,23 @@ export async function aggregateAndActivate(
   plannerPrimary: string,
 ): Promise<AggregateResult> {
   const sceneSvc = getSceneIdentityService();
-  const cellSvc = getCollaborationCellService();
+  const cellSvc = getCollaborationSceneService();
   const warnings: string[] = [];
 
   await sceneSvc.updateInitSessionStatus(session.id, 'aggregating');
 
-  const logicalCellId = session.logicalCellId || defaultCellId(session.plannerAdapter, session.plannerSceneId);
+  const logicalSceneId = session.logicalSceneId || defaultCellId(session.plannerAdapter, session.plannerSceneId);
 
   const observations = await sceneSvc.listObservations(session.id);
   const plan = sceneSvc.planInitFromObservations(
-    logicalCellId,
+    logicalSceneId,
     observations,
     registeredEndpoints,
     { plannerEndpointId: session.plannerEndpointId },
   );
 
   const plannerSceneAlias = {
-    logicalCellId,
+    logicalSceneId,
     adapter: session.plannerAdapter,
     sceneId: session.plannerSceneId,
   };
@@ -174,7 +174,7 @@ export async function aggregateAndActivate(
   }
 
   const plannerChannels = [...sceneAliasDedup.values()].map((alias) => ({
-    logicalCellId,
+    logicalSceneId,
     endpointId: session.plannerEndpointId,
     pipelineRole: 'planner',
     adapter: alias.adapter,
@@ -184,7 +184,7 @@ export async function aggregateAndActivate(
   const allChannels = [...plannerChannels, ...plan.channels];
 
   await sceneSvc.commitInitPlan({
-    logicalCellId,
+    logicalSceneId,
     sceneAliases: [...sceneAliasDedup.values()],
     channels: allChannels,
   });
@@ -218,20 +218,20 @@ export async function aggregateAndActivate(
     warnings.push(`缺少角色：${missingRoles.join(', ')}（可稍后用 /collab bind 补充）`);
   }
 
-  const cell = await cellSvc.upsertCell({
-    id: logicalCellId,
+  const cell = await cellSvc.upsertScene({
+    id: logicalSceneId,
     adapter: session.plannerAdapter,
     sceneId: session.plannerSceneId,
     goal: '多 Agent 协作群',
     members: [...deduped.values()],
   });
 
-  await sceneSvc.updateInitSessionStatus(session.id, 'active', logicalCellId);
+  await sceneSvc.updateInitSessionStatus(session.id, 'active', logicalSceneId);
   await rebootstrapEndpointRuntimes();
 
   return {
     ok: true,
-    cell,
+    scene: cell,
     warnings,
     sceneCount: sceneAliasDedup.size,
     memberCount: deduped.size,

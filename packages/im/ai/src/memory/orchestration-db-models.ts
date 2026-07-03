@@ -44,7 +44,7 @@ export interface OrchestrationSceneRef {
 }
 
 export type OrchestrationRunSource =
-  | { kind: 'im_scene'; scene: OrchestrationSceneRef; cellId?: string }
+  | { kind: 'im_scene'; scene: OrchestrationSceneRef; collaborationSceneId?: string }
   | { kind: 'manual'; label?: string };
 
 export type OrchestrationRunEventType =

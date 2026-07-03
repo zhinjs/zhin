@@ -4,12 +4,12 @@
 
 import type { Message, Plugin } from '@zhin.js/core';
 import { isAtEndpoint, segment } from '@zhin.js/core';
-import type { CollaborationCell, PeerTriggerMode, PeerTriggerResult } from './types.js';
+import type { CollaborationScene, PeerTriggerMode, PeerTriggerResult } from './types.js';
 import { resolveMemberBySender } from './endpoint-identity.js';
 
 export interface PeerPolicyInput {
   message: Message;
-  cell?: CollaborationCell;
+  cell?: CollaborationScene;
   peerMode: PeerTriggerMode;
   endpointAtIds: string[];
   /** 用于 Endpoint 反查 peer 身份（缺省回退 getHostRootPlugin）。 */
@@ -34,7 +34,7 @@ function segmentAtUserId(seg: { type: string; data?: Record<string, unknown> }):
 /** 按消息顺序收集 @ 到的 Cell 成员 endpointId */
 export function resolveCellAtMentionedEndpointIds(
   message: Message,
-  cell: CollaborationCell,
+  cell: CollaborationScene,
   root?: Plugin,
 ): string[] {
   const memberIds = new Set(cell.members.map((m) => m.endpointId));
@@ -62,7 +62,7 @@ export function resolveCellAtMentionedEndpointIds(
 /** @deprecated 使用 resolveCellAtMentionedEndpointIds；保留首个 @ 以兼容旧调用 */
 export function resolveCellAtWinnerEndpointId(
   message: Message,
-  cell: CollaborationCell,
+  cell: CollaborationScene,
 ): string | undefined {
   return resolveCellAtMentionedEndpointIds(message, cell)[0];
 }
@@ -70,7 +70,7 @@ export function resolveCellAtWinnerEndpointId(
 /** 同群多 Bot：仅被 @ 的 Cell 成员响应；未 @ 任何成员时不触发 */
 export function evaluateCellAtOwnership(
   message: Message,
-  cell: CollaborationCell | undefined,
+  cell: CollaborationScene | undefined,
   endpointId: string,
   root?: Plugin,
 ): CellAtOwnershipResult {
@@ -158,7 +158,7 @@ export function evaluatePeerTrigger(input: PeerPolicyInput): PeerTriggerResult {
 /** 入站是否来自同 Cell 的另一 Endpoint（Bot↔Bot 协作，非人类用户） */
 export function isInboundFromCollaborationPeer(
   message: Message,
-  cell: CollaborationCell | undefined,
+  cell: CollaborationScene | undefined,
   root?: Plugin,
 ): boolean {
   if (!cell) return false;

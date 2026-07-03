@@ -4,10 +4,10 @@ import {
   tryBuildCollaborationMentionSegments,
 } from '../../src/collaboration/collaboration-outbound.js';
 import {
-  getCollaborationCellService,
-  resetCollaborationCellService,
-} from '../../src/collaboration/cell-service.js';
-import { MemoryCollaborationCellRepository } from '../../src/collaboration/collaboration-cell-repository.js';
+  getCollaborationSceneService,
+  resetCollaborationSceneService,
+} from '../../src/collaboration/scene-service.js';
+import { MemoryCollaborationSceneRepository } from '../../src/collaboration/collaboration-scene-repository.js';
 import type { Message } from '@zhin.js/core';
 
 describe('parseCollaborationReplyJson', () => {
@@ -38,8 +38,8 @@ describe('parseCollaborationReplyJson', () => {
 
 describe.skip('legacy tryBuildCollaborationMentionSegments', () => {
   beforeEach(async () => {
-    resetCollaborationCellService();
-    const repo = new MemoryCollaborationCellRepository();
+    resetCollaborationSceneService();
+    const repo = new MemoryCollaborationSceneRepository();
     await repo.upsert({
       id: 'room',
       adapter: 'icqq',
@@ -49,12 +49,12 @@ describe.skip('legacy tryBuildCollaborationMentionSegments', () => {
         { endpointId: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
       ],
     });
-    getCollaborationCellService().setRepository(repo);
-    await getCollaborationCellService().reloadFromRepository();
+    getCollaborationSceneService().setRepository(repo);
+    await getCollaborationSceneService().reloadFromRepository();
   });
 
   afterEach(() => {
-    resetCollaborationCellService();
+    resetCollaborationSceneService();
     vi.restoreAllMocks();
   });
 

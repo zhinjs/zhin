@@ -3,13 +3,13 @@
  */
 import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
 import type { Message } from '@zhin.js/core';
-import type { CollaborationCell } from './types.js';
+import type { CollaborationScene } from './types.js';
 import { resolveRunIdRef } from '../aop/pipeline/pipeline-flow.js';
 
 /** transport session + 可选 pipeline run 前缀（同 endpoint 不同 run 独立 agent_messages）。 */
 export function resolveAgentSessionKeyForTurn(
   message: Message,
-  cell?: CollaborationCell,
+  cell?: CollaborationScene,
 ): string {
   const transport = resolveIMSessionIdFromMessage(message);
   const runId = cell?.pipelineState?.runId;
@@ -21,7 +21,7 @@ export function resolveAgentSessionKeyForTurn(
 /** cell_read_artifact / list 用的 runId 解析（支持前缀）。 */
 export function resolveArtifactRunId(
   runRef: string | undefined,
-  cell: CollaborationCell,
+  cell: CollaborationScene,
 ): { ok: true; runId: string } | { ok: false; error: string } {
   const state = cell.pipelineState;
   if (!state) return { ok: false, error: 'pipeline 未初始化' };

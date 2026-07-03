@@ -6,7 +6,7 @@ import { formatCompactLog } from '@zhin.js/logger';
 import type { Message, MessageElement } from '@zhin.js/core';
 import { sceneRefFromMessage } from '@zhin.js/core';
 import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
-import type { CollaborationCell } from './types.js';
+import type { CollaborationScene } from './types.js';
 import type { OrchestrationRunSource, OrchestrationSceneRef, OrchestrationTaskRecord } from '@zhin.js/ai';
 import { getOrchestrationService } from '../orchestrator/orchestration-service.js';
 import { normalizeExecutorKind } from '../orchestrator/kernel-mappers.js';
@@ -22,7 +22,7 @@ export function isOrchestrationKernelReady(): boolean {
 }
 
 /** Legacy pipelineState.activeDelegations harness — kernel 就绪时停用。 */
-export function shouldUseLegacyCellDelegationHarness(cell?: CollaborationCell): boolean {
+export function shouldUseLegacyCellDelegationHarness(cell?: CollaborationScene): boolean {
   if (isOrchestrationKernelReady()) return false;
   return Boolean(cell?.pipelineState?.activeDelegations?.length);
 }
@@ -45,7 +45,7 @@ function flattenOutboundText(batches: MessageElement[][]): string {
 
 export function orchestrationSourceFromMessage(
   message: Message,
-  cellId?: string,
+  collaborationSceneId?: string,
 ): OrchestrationRunSource {
   const scene = sceneRefFromMessage(message);
   if (!scene) {
@@ -62,7 +62,7 @@ export function orchestrationSourceFromMessage(
   return {
     kind: 'im_scene',
     scene: orchestrationScene,
-    ...(cellId ? { cellId } : {}),
+    ...(collaborationSceneId ? { collaborationSceneId } : {}),
   };
 }
 
@@ -93,7 +93,7 @@ export async function listActiveSceneMentionTasks(
  */
 export async function tryCompleteKernelGroupMentionFromOutbound(input: {
   message: Message;
-  cell: CollaborationCell;
+  cell: CollaborationScene;
   endpointId: string;
   outboundBatches: MessageElement[][];
   logger: { info: (...args: unknown[]) => void };

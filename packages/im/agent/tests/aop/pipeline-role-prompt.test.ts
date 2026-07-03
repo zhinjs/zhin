@@ -3,10 +3,10 @@ import type { Message } from '@zhin.js/core';
 import { buildPipelineRoleRichSystemPrompt } from '../../src/zhin-agent/prompt.js';
 import { resolvePipelineRoleForTurn } from '../../src/aop/pipeline/resolve-pipeline-role-for-turn.js';
 import {
-  getCollaborationCellService,
-  resetCollaborationCellService,
-} from '../../src/collaboration/cell-service.js';
-import { MemoryCollaborationCellRepository } from '../../src/collaboration/collaboration-cell-repository.js';
+  getCollaborationSceneService,
+  resetCollaborationSceneService,
+} from '../../src/collaboration/scene-service.js';
+import { MemoryCollaborationSceneRepository } from '../../src/collaboration/collaboration-scene-repository.js';
 import type { ZhinAgentConfig } from '../../src/zhin-agent/config.js';
 import type { ResolvedAgentBinding } from '../../src/config/types.js';
 
@@ -95,8 +95,8 @@ describe('buildPipelineRoleRichSystemPrompt', () => {
 
 describe('resolvePipelineRoleForTurn', () => {
   beforeEach(async () => {
-    resetCollaborationCellService();
-    const repo = new MemoryCollaborationCellRepository();
+    resetCollaborationSceneService();
+    const repo = new MemoryCollaborationSceneRepository();
     await repo.upsert({
       id: 'icqq-collab',
       adapter: 'icqq',
@@ -106,8 +106,8 @@ describe('resolvePipelineRoleForTurn', () => {
         { endpointId: '210723495', primary: 'executor', pipelineRole: 'executor' },
       ],
     });
-    getCollaborationCellService().setRepository(repo);
-    await getCollaborationCellService().reloadFromRepository();
+    getCollaborationSceneService().setRepository(repo);
+    await getCollaborationSceneService().reloadFromRepository();
   });
 
   it('reads pipelineRole from cell member endpoint', () => {

@@ -68,17 +68,22 @@ export function normalizeRunSource(raw: unknown): OrchestrationRunSource | undef
     return {
       kind: 'im_scene',
       scene,
-      ...(typeof o.cellId === 'string' && o.cellId ? { cellId: o.cellId } : {}),
+      ...(() => {
+        const id = typeof o.collaborationSceneId === 'string' ? o.collaborationSceneId
+          : typeof o.cellId === 'string' ? o.cellId : '';
+        return id ? { collaborationSceneId: id } : {};
+      })(),
     };
   }
   if (o.kind === 'im_cell') {
     const adapter = typeof o.adapter === 'string' ? o.adapter : '';
     const sceneId = typeof o.sceneId === 'string' ? o.sceneId : '';
-    const cellId = typeof o.cellId === 'string' ? o.cellId : '';
-    if (!adapter || !sceneId || !cellId) return undefined;
+    const collaborationSceneId = typeof o.collaborationSceneId === 'string' ? o.collaborationSceneId
+      : typeof o.cellId === 'string' ? o.cellId : '';
+    if (!adapter || !sceneId || !collaborationSceneId) return undefined;
     return {
       kind: 'im_scene',
-      cellId,
+      collaborationSceneId,
       scene: {
         platform: adapter,
         endpointId: '',

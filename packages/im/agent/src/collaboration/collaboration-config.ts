@@ -2,7 +2,7 @@
  * Collaboration config normalization — DB is SSOT; yaml roster 仅供 /collab init 模板。
  */
 
-import type { CollaborationCell, CollaborationCellConfig, CollaborationConfig, CollaborationCellMember } from './types.js';
+import type { CollaborationScene, CollaborationSceneConfig, CollaborationConfig, CollaborationSceneMember } from './types.js';
 import { isPipelineRole } from './types.js';
 import { getSceneIdentityService } from './scene-identity-service.js';
 
@@ -23,7 +23,7 @@ function hasLegacyCells(obj: Record<string, unknown>): boolean {
   return Array.isArray(obj.cells) && obj.cells.length > 0;
 }
 
-function parseMemberEntry(m: unknown): CollaborationCellMember | null {
+function parseMemberEntry(m: unknown): CollaborationSceneMember | null {
   if (!m || typeof m !== 'object') return null;
   const mem = m as Record<string, unknown>;
   const endpoint = typeof mem.endpoint === 'string' ? mem.endpoint : '';
@@ -38,22 +38,22 @@ function parseMemberEntry(m: unknown): CollaborationCellMember | null {
   };
 }
 
-function parseRosterMap(raw: unknown): Record<string, CollaborationCellMember[]> | undefined {
+function parseRosterMap(raw: unknown): Record<string, CollaborationSceneMember[]> | undefined {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
-  const out: Record<string, CollaborationCellMember[]> = {};
+  const out: Record<string, CollaborationSceneMember[]> = {};
   for (const [adapter, membersRaw] of Object.entries(raw as Record<string, unknown>)) {
     if (!Array.isArray(membersRaw)) continue;
     const members = membersRaw
       .map((m) => parseMemberEntry(m))
-      .filter((m): m is CollaborationCellMember => m != null);
+      .filter((m): m is CollaborationSceneMember => m != null);
     if (members.length) out[adapter] = members;
   }
   return Object.keys(out).length ? out : undefined;
 }
 
 /** @deprecated 仅测试/迁移；新代码请用 roster + /collab init */
-export function parseCellConfigs(cellsRaw: unknown[]): CollaborationCellConfig[] {
-  const cells: CollaborationCellConfig[] = [];
+export function parseCellConfigs(cellsRaw: unknown[]): CollaborationSceneConfig[] {
+  const cells: CollaborationSceneConfig[] = [];
   for (const entry of cellsRaw) {
     if (!entry || typeof entry !== 'object') continue;
     const c = entry as Record<string, unknown>;
@@ -64,7 +64,7 @@ export function parseCellConfigs(cellsRaw: unknown[]): CollaborationCellConfig[]
     const membersRaw = Array.isArray(c.members) ? c.members : [];
     const members = membersRaw
       .map((m) => parseMemberEntry(m))
-      .filter((m): m is CollaborationCellMember => m != null);
+      .filter((m): m is CollaborationSceneMember => m != null);
     if (members.length === 0) continue;
     cells.push({
       id,
@@ -78,7 +78,7 @@ export function parseCellConfigs(cellsRaw: unknown[]): CollaborationCellConfig[]
   return cells;
 }
 
-export function configCellToRuntime(cell: CollaborationCellConfig): CollaborationCell {
+export function configCellToRuntime(cell: CollaborationSceneConfig): CollaborationScene {
   return {
     id: cell.id,
     adapter: cell.adapter,
@@ -95,10 +95,10 @@ export function configCellToRuntime(cell: CollaborationCellConfig): Collaboratio
 }
 
 export function findCellForMessage(
-  cells: CollaborationCell[],
+  cells: CollaborationScene[],
   adapter: string,
   sceneId: string,
-): CollaborationCell | undefined {
+): CollaborationScene | undefined {
   const ad = String(adapter);
   const sid = String(sceneId);
   return cells.find((c) => c.adapter === ad && String(c.sceneId) === sid);
@@ -106,8 +106,8 @@ export function findCellForMessage(
 
 /** 成员 transport adapter（缺省继承 Cell）。 */
 export function memberTransportAdapter(
-  cell: CollaborationCell,
-  member: CollaborationCell['members'][number],
+  cell: CollaborationScene,
+  member: CollaborationScene['members'][number],
 ): string {
   return member.adapter ?? cell.adapter;
 }
@@ -116,12 +116,12 @@ export function memberTransportAdapter(
  * 入站 Cell 查找：scene_aliases → (adapter, sceneId) 直查 → endpoint 成员反查。
  */
 export function findCellForInbound(
-  cells: CollaborationCell[],
+  cells: CollaborationScene[],
   adapter: string,
   sceneId: string,
   endpointId?: string,
-): CollaborationCell | undefined {
-  const fromSceneIndex = getSceneIdentityService().resolveLogicalCell(adapter, sceneId, endpointId);
+): CollaborationScene | undefined {
+  const fromSceneIndex = getSceneIdentityService().resolveLogicalScene(adapter, sceneId, endpointId);
   if (fromSceneIndex) return fromSceneIndex;
 
   const direct = findCellForMessage(cells, adapter, sceneId);
@@ -141,15 +141,15 @@ export function resolveCellForScene(
   adapter: string,
   sceneId: string,
   endpointId?: string,
-): CollaborationCell | undefined {
-  return getSceneIdentityService().resolveLogicalCell(adapter, sceneId, endpointId);
+): CollaborationScene | undefined {
+  return getSceneIdentityService().resolveLogicalScene(adapter, sceneId, endpointId);
 }
 
 export function findCellMemberByEndpoint(
-  cell: CollaborationCell,
+  cell: CollaborationScene,
   endpointId: string,
   adapter?: string,
-): CollaborationCell['members'][number] | undefined {
+): CollaborationScene['members'][number] | undefined {
   if (adapter) {
     return cell.members.find(
       (m) => m.endpointId === endpointId && memberTransportAdapter(cell, m) === adapter,
@@ -159,7 +159,7 @@ export function findCellMemberByEndpoint(
 }
 
 export function resolvePrimaryForEndpoint(
-  cell: CollaborationCell | undefined,
+  cell: CollaborationScene | undefined,
   endpointId: string,
   fallback: string,
 ): string {
@@ -168,7 +168,7 @@ export function resolvePrimaryForEndpoint(
 }
 
 export function endpointHasPeerInCell(
-  cell: CollaborationCell | undefined,
+  cell: CollaborationScene | undefined,
   agentName: string,
 ): { hasPeer: boolean; peerEndpointId?: string } {
   if (!cell) return { hasPeer: false };
@@ -183,7 +183,7 @@ export function endpointHasPeerInCell(
  * Resolve group_delegate peerEndpoint — accepts endpoint ID, pipelineRole, or primary agent name.
  */
 export function resolvePeerEndpointInCell(
-  cell: CollaborationCell,
+  cell: CollaborationScene,
   peerRef: string,
 ): string | undefined {
   const ref = peerRef.trim();

@@ -1,18 +1,18 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { Message } from '../../../core/src/message.js';
 import {
-  formatCollaborationCellHint,
-  resolveCollaborationCellForMessage,
+  formatCollaborationSceneHint,
+  resolveCollaborationSceneForMessage,
   resolveCollaborationTurnHint,
 } from '../../src/collaboration/collaboration-context.js';
 import {
-  getCollaborationCellService,
-  resetCollaborationCellService,
-} from '../../src/collaboration/cell-service.js';
-import { MemoryCollaborationCellRepository } from '../../src/collaboration/collaboration-cell-repository.js';
-import type { CollaborationCell } from '../../src/collaboration/types.js';
+  getCollaborationSceneService,
+  resetCollaborationSceneService,
+} from '../../src/collaboration/scene-service.js';
+import { MemoryCollaborationSceneRepository } from '../../src/collaboration/collaboration-scene-repository.js';
+import type { CollaborationScene } from '../../src/collaboration/types.js';
 
-const cell: CollaborationCell = {
+const cell: CollaborationScene = {
   id: 'icqq-collab-room',
   adapter: 'icqq',
   sceneId: '373460458',
@@ -33,9 +33,9 @@ function groupMessage(endpoint: string, sceneId = '373460458'): Message {
   } as unknown as Message;
 }
 
-describe('formatCollaborationCellHint', () => {
+describe('formatCollaborationSceneHint', () => {
   it('lists self and peers for planner endpoint', () => {
-    const hint = formatCollaborationCellHint(cell, '8596238');
+    const hint = formatCollaborationSceneHint(cell, '8596238');
     expect(hint).toContain('8596238');
     expect(hint).toContain('planner');
     expect(hint).toContain('210723495');
@@ -48,8 +48,8 @@ describe('formatCollaborationCellHint', () => {
 
 describe('resolveCollaborationTurnHint', () => {
   beforeEach(async () => {
-    resetCollaborationCellService();
-    const repo = new MemoryCollaborationCellRepository();
+    resetCollaborationSceneService();
+    const repo = new MemoryCollaborationSceneRepository();
     await repo.upsert({
       id: cell.id,
       adapter: cell.adapter,
@@ -57,7 +57,7 @@ describe('resolveCollaborationTurnHint', () => {
       goal: cell.goal,
       members: cell.members,
     });
-    const svc = getCollaborationCellService();
+    const svc = getCollaborationSceneService();
     svc.setRepository(repo);
     await svc.reloadFromRepository();
   });
@@ -85,15 +85,15 @@ describe('resolveCollaborationTurnHint', () => {
     expect(resolveCollaborationTurnHint(groupMessage('unknown-bot'))).toBeUndefined();
   });
 
-  it('resolveCollaborationCellForMessage matches resolveCollaborationTurnHint gate', () => {
+  it('resolveCollaborationSceneForMessage matches resolveCollaborationTurnHint gate', () => {
     const msg = groupMessage('8596238');
-    expect(resolveCollaborationCellForMessage(msg)?.id).toBe('icqq-collab-room');
+    expect(resolveCollaborationSceneForMessage(msg)?.id).toBe('icqq-collab-room');
     expect(resolveCollaborationTurnHint(msg)).toBeTruthy();
   });
 
   it('does not leak legacy pipeline delegatee hints from stored cell state', async () => {
-    const svc = getCollaborationCellService();
-    const repo = new MemoryCollaborationCellRepository();
+    const svc = getCollaborationSceneService();
+    const repo = new MemoryCollaborationSceneRepository();
     await repo.upsert({
       id: cell.id,
       adapter: cell.adapter,
@@ -133,8 +133,8 @@ describe('resolveCollaborationTurnHint', () => {
   });
 
   it('does not inject legacy artifact-gate instructions when artifacts were required before migration', async () => {
-    const svc = getCollaborationCellService();
-    const repo = new MemoryCollaborationCellRepository();
+    const svc = getCollaborationSceneService();
+    const repo = new MemoryCollaborationSceneRepository();
     await repo.upsert({
       id: cell.id,
       adapter: cell.adapter,
@@ -174,8 +174,8 @@ describe('resolveCollaborationTurnHint', () => {
   });
 
   it('does not inject legacy restart commands for ordinary planner turns', async () => {
-    const svc = getCollaborationCellService();
-    const repo = new MemoryCollaborationCellRepository();
+    const svc = getCollaborationSceneService();
+    const repo = new MemoryCollaborationSceneRepository();
     await repo.upsert({
       id: cell.id,
       adapter: cell.adapter,
@@ -197,8 +197,8 @@ describe('resolveCollaborationTurnHint', () => {
   });
 
   it('does not inject legacy delegation scripts for ordinary planner turns', async () => {
-    const svc = getCollaborationCellService();
-    const repo = new MemoryCollaborationCellRepository();
+    const svc = getCollaborationSceneService();
+    const repo = new MemoryCollaborationSceneRepository();
     await repo.upsert({
       id: cell.id,
       adapter: cell.adapter,

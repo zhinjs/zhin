@@ -7,9 +7,9 @@ import {
   resolveArtifactSubmitRunId,
   findInFlightArchivedRunId,
 } from '../../src/collaboration/delegation-state.js';
-import type { CollaborationCell } from '../../src/collaboration/types.js';
+import type { CollaborationScene } from '../../src/collaboration/types.js';
 
-const cell: CollaborationCell = {
+const cell: CollaborationScene = {
   id: 'cell-1',
   adapter: 'icqq',
   sceneId: '1',
@@ -74,7 +74,7 @@ describe('delegation-state', () => {
   });
 
   it('routes in-flight submit to archived run after reset cleared delegation', () => {
-    const afterReset: CollaborationCell = {
+    const afterReset: CollaborationScene = {
       ...cell,
       pipelineState: {
         ...cell.pipelineState!,
@@ -109,7 +109,7 @@ describe('delegation-state', () => {
   });
 
   it('turn snapshot delegationRunId wins over current active run', () => {
-    const afterReset: CollaborationCell = {
+    const afterReset: CollaborationScene = {
       ...cell,
       pipelineState: {
         ...cell.pipelineState!,

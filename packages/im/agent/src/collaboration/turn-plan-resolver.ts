@@ -7,25 +7,25 @@ import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
 import { resolveRoutedAgentName } from '../routing/route-matcher.js';
 import { DEFAULT_ZHIN_AGENT_NAME } from '../config/types.js';
 import type { AgentBindingConfig } from '../config/types.js';
-import { resolveCellContextKeyFromMessage } from './cell-context.js';
+import { resolveCollaborationSceneContextKeyFromMessage } from './scene-context.js';
 import {
   findCellForMessage,
   resolveCellForScene,
   resolvePrimaryForEndpoint,
 } from './collaboration-config.js';
-import type { CollaborationCell } from './types.js';
+import type { CollaborationScene } from './types.js';
 import type { TurnPlan } from './types.js';
 
 export interface TurnPlanResolverInput {
   message: Message;
   contentText: string;
   endpointId: string;
-  cells: CollaborationCell[];
+  cells: CollaborationScene[];
   agents: Record<string, AgentBindingConfig>;
   discoveredAgentNames: Set<string>;
 }
 
-function findEndpointIdForAgent(cell: CollaborationCell, agentName: string): string | undefined {
+function findEndpointIdForAgent(cell: CollaborationScene, agentName: string): string | undefined {
   return cell.members.find((m) => m.primary === agentName)?.endpointId;
 }
 
@@ -52,16 +52,16 @@ export function buildTurnPlan(input: TurnPlanResolverInput): TurnPlan {
     routedAgent !== DEFAULT_ZHIN_AGENT_NAME ? routedAgent : primary;
 
   const transport = resolveIMSessionIdFromMessage(message);
-  const cellKey = resolveCellContextKeyFromMessage(message);
+  const cellKey = resolveCollaborationSceneContextKeyFromMessage(message);
 
   const plan: TurnPlan = {
     inboundEndpointId: endpointId,
     handlerProfile,
     outboundEndpointId: endpointId,
-    cellId: cell?.id,
+    collaborationSceneId: cell?.id,
     sessionKeys: {
       transport,
-      cell: cellKey,
+      collaborationScene: cellKey,
     },
     delegation: { mode: 'local_process' },
   };

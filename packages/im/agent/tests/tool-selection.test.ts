@@ -33,10 +33,10 @@ import { mockCommMessage } from './helpers/mock-comm-message.js';
 import type { Tool } from '../src/orchestrator/types.js';
 import type { ZhinAgentConfig } from '../src/zhin-agent/config.js';
 import {
-  getCollaborationCellService,
-  resetCollaborationCellService,
-} from '../src/collaboration/cell-service.js';
-import { MemoryCollaborationCellRepository } from '../src/collaboration/collaboration-cell-repository.js';
+  getCollaborationSceneService,
+  resetCollaborationSceneService,
+} from '../src/collaboration/scene-service.js';
+import { MemoryCollaborationSceneRepository } from '../src/collaboration/collaboration-scene-repository.js';
 import { setSceneIdentityService } from '../src/collaboration/scene-identity-service.js';
 
 function makeConfig(overrides: Partial<ZhinAgentConfig> = {}): Required<ZhinAgentConfig> {
@@ -190,10 +190,10 @@ describe('normalizeTool', () => {
 
 describe('ToolSelection', () => {
   beforeEach(async () => {
-    resetCollaborationCellService();
+    resetCollaborationSceneService();
     setSceneIdentityService(null);
-    getCollaborationCellService().setRepository(new MemoryCollaborationCellRepository());
-    await getCollaborationCellService().reloadFromRepository();
+    getCollaborationSceneService().setRepository(new MemoryCollaborationSceneRepository());
+    await getCollaborationSceneService().reloadFromRepository();
   });
 
   it('owns relevance cache for agent-side filtering', () => {
@@ -344,7 +344,7 @@ describe('ToolSelection', () => {
   });
 
   it('does not pin legacy collaboration delegation tools after TF-IDF filter in multi-bot groups', async () => {
-    const repo = new MemoryCollaborationCellRepository();
+    const repo = new MemoryCollaborationSceneRepository();
     await repo.upsert({
       id: 'cell-1',
       adapter: 'icqq',
@@ -354,8 +354,8 @@ describe('ToolSelection', () => {
         { endpointId: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
       ],
     });
-    getCollaborationCellService().setRepository(repo);
-    await getCollaborationCellService().reloadFromRepository();
+    getCollaborationSceneService().setRepository(repo);
+    await getCollaborationSceneService().reloadFromRepository();
     const selection = new ToolSelection();
     const context = mockCommMessage({ adapter: 'icqq', sceneId: '373460458', scope: 'group' });
     const filler = Array.from({ length: 14 }, (_, i) =>

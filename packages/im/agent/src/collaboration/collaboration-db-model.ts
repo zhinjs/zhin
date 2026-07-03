@@ -1,8 +1,8 @@
 /**
- * collaboration_cells + collaboration_cell_members — GroupCell 持久化（ADR 0023）
+ * collaboration_scenes + collaboration_scene_members — GroupCell 持久化（ADR 0023）
  */
 
-export const COLLABORATION_CELL_MODEL = {
+export const COLLABORATION_SCENE_MODEL = {
   id: { type: 'text' as const, nullable: false },
   adapter: { type: 'text' as const, nullable: false },
   scene_id: { type: 'text' as const, nullable: false },
@@ -16,8 +16,8 @@ export const COLLABORATION_CELL_MODEL = {
   updated_at: { type: 'integer' as const, default: 0 },
 };
 
-export const COLLABORATION_CELL_MEMBER_MODEL = {
-  cell_id: { type: 'text' as const, nullable: false },
+export const COLLABORATION_SCENE_MEMBER_MODEL = {
+  collaboration_scene_id: { type: 'text' as const, nullable: false },
   endpoint_id: { type: 'text' as const, nullable: false },
   /** 成员 transport adapter；空串表示继承 Cell.adapter */
   adapter: { type: 'text' as const, default: '' },
@@ -32,9 +32,9 @@ export const COLLABORATION_CELL_MEMBER_MODEL = {
 };
 
 /** Pipeline 阶段产物表（ADR 0024 D4）。 */
-export const COLLABORATION_CELL_ARTIFACT_MODEL = {
+export const COLLABORATION_SCENE_ARTIFACT_MODEL = {
   id: { type: 'text' as const, nullable: false },
-  cell_id: { type: 'text' as const, nullable: false },
+  collaboration_scene_id: { type: 'text' as const, nullable: false },
   run_id: { type: 'text' as const, default: '' },
   stage: { type: 'text' as const, default: '' },
   kind: { type: 'text' as const, default: '' },
@@ -43,9 +43,9 @@ export const COLLABORATION_CELL_ARTIFACT_MODEL = {
   created_at: { type: 'integer' as const, default: 0 },
 };
 
-export interface CollaborationCellArtifactRow {
+export interface CollaborationSceneArtifactRow {
   id: string;
-  cell_id: string;
+  collaboration_scene_id: string;
   run_id: string;
   stage: string;
   kind: string;
@@ -54,7 +54,7 @@ export interface CollaborationCellArtifactRow {
   created_at: number;
 }
 
-export interface CollaborationCellRecord {
+export interface CollaborationSceneRecord {
   id: string;
   adapter: string;
   scene_id: string;
@@ -67,8 +67,8 @@ export interface CollaborationCellRecord {
   updated_at: number;
 }
 
-export interface CollaborationCellMemberRow {
-  cell_id: string;
+export interface CollaborationSceneMemberRow {
+  collaboration_scene_id: string;
   endpoint_id: string;
   adapter: string;
   primary: string;
@@ -80,7 +80,7 @@ export interface CollaborationCellMemberRow {
   updated_at: number;
 }
 
-export interface CollaborationCellMemberRecord {
+export interface CollaborationSceneMemberRecord {
   endpointId: string;
   adapter?: string;
   primary: string;
@@ -90,14 +90,14 @@ export interface CollaborationCellMemberRecord {
   enabled?: boolean;
 }
 
-export interface UpsertCollaborationCellInput {
+export interface UpsertCollaborationSceneInput {
   id: string;
   adapter: string;
   sceneId: string;
   goal?: string;
   missionRunId?: string;
   pipelineState?: string;
-  members?: CollaborationCellMemberRecord[];
+  members?: CollaborationSceneMemberRecord[];
   enabled?: boolean;
 }
 
@@ -111,7 +111,7 @@ export interface UpsertCollaborationMemberInput {
   enabled?: boolean;
 }
 
-export function memberRowToRecord(row: CollaborationCellMemberRow): CollaborationCellMemberRecord {
+export function memberRowToRecord(row: CollaborationSceneMemberRow): CollaborationSceneMemberRecord {
   return {
     endpointId: row.endpoint_id,
     adapter: row.adapter || undefined,
@@ -124,13 +124,13 @@ export function memberRowToRecord(row: CollaborationCellMemberRow): Collaboratio
 }
 
 export function memberInputToRow(
-  cellId: string,
+  collaborationSceneId: string,
   input: UpsertCollaborationMemberInput,
   now = Date.now(),
-  existing?: CollaborationCellMemberRow,
-): CollaborationCellMemberRow {
+  existing?: CollaborationSceneMemberRow,
+): CollaborationSceneMemberRow {
   return {
-    cell_id: cellId,
+    collaboration_scene_id: collaborationSceneId,
     endpoint_id: input.endpointId,
     adapter: input.adapter ?? existing?.adapter ?? '',
     primary: input.primary,
@@ -143,8 +143,8 @@ export function memberInputToRow(
   };
 }
 
-export const COLLABORATION_CELL_SCENE_MODEL = {
-  logical_cell_id: { type: 'text' as const, nullable: false },
+export const COLLABORATION_SCENE_ALIAS_MODEL = {
+  logical_scene_id: { type: 'text' as const, nullable: false },
   adapter: { type: 'text' as const, nullable: false },
   scene_id: { type: 'text' as const, nullable: false },
   created_at: { type: 'integer' as const, default: 0 },
@@ -152,7 +152,7 @@ export const COLLABORATION_CELL_SCENE_MODEL = {
 
 export const COLLABORATION_INIT_SESSION_MODEL = {
   id: { type: 'text' as const, nullable: false },
-  logical_cell_id: { type: 'text' as const, default: '' },
+  logical_scene_id: { type: 'text' as const, default: '' },
   planner_endpoint_id: { type: 'text' as const, nullable: false },
   planner_adapter: { type: 'text' as const, nullable: false },
   planner_scene_id: { type: 'text' as const, default: '' },
@@ -172,8 +172,8 @@ export const COLLABORATION_INIT_OBSERVATION_MODEL = {
   observed_at: { type: 'integer' as const, default: 0 },
 };
 
-export interface CollaborationCellSceneRow {
-  logical_cell_id: string;
+export interface CollaborationSceneAliasRow {
+  logical_scene_id: string;
   adapter: string;
   scene_id: string;
   created_at: number;
@@ -181,7 +181,7 @@ export interface CollaborationCellSceneRow {
 
 export interface CollaborationInitSessionRow {
   id: string;
-  logical_cell_id: string;
+  logical_scene_id: string;
   planner_endpoint_id: string;
   planner_adapter: string;
   planner_scene_id: string;
@@ -219,8 +219,8 @@ export interface CollaborationInitObservationRow {
 }
 
 /** 成员跨 adapter 身份表（identity 边表）。 */
-export const COLLABORATION_CELL_MEMBER_CHANNEL_MODEL = {
-  logical_cell_id: { type: 'text' as const, nullable: false },
+export const COLLABORATION_SCENE_MEMBER_CHANNEL_MODEL = {
+  logical_scene_id: { type: 'text' as const, nullable: false },
   endpoint_id: { type: 'text' as const, nullable: false },
   pipeline_role: { type: 'text' as const, default: '' },
   adapter: { type: 'text' as const, nullable: false },
@@ -229,8 +229,8 @@ export const COLLABORATION_CELL_MEMBER_CHANNEL_MODEL = {
   created_at: { type: 'integer' as const, default: 0 },
 };
 
-export interface CollaborationCellMemberChannelRow {
-  logical_cell_id: string;
+export interface CollaborationSceneMemberChannelRow {
+  logical_scene_id: string;
   endpoint_id: string;
   pipeline_role: string;
   adapter: string;

@@ -20,7 +20,7 @@ import {
 import { buildTurnUserMessages, applyTurnContextToUserMessages, prependEnvelopeToFirstUserText } from './turn-user-message.js';
 import { runAgentLoopTextTurn, runAgentLoopVisionTurn } from './agent-loop-turn.js';
 import { buildTurnContextEnvelope, resolveQuoteSystemHint } from './prompt.js';
-import { resolveCollaborationCellForMessage, resolveCollaborationTurnHint } from '../collaboration/collaboration-context.js';
+import { resolveCollaborationSceneForMessage, resolveCollaborationTurnHint } from '../collaboration/collaboration-context.js';
 import { resolveAgentSessionKeyForTurn } from '../collaboration/resolve-agent-session-key.js';
 import { readCollaborationTurnSnapshot } from '../collaboration/collaboration-turn-snapshot.js';
 import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
@@ -76,7 +76,7 @@ function resolveTurnSessionKey(commMessage: Message): string {
     const bindRun = snap.delegationRunId ?? snap.runId;
     return `pipeline:${bindRun.slice(0, 8)}:${transport}`;
   }
-  const cell = resolveCollaborationCellForMessage(commMessage);
+  const cell = resolveCollaborationSceneForMessage(commMessage);
   return resolveAgentSessionKeyForTurn(commMessage, cell);
 }
 

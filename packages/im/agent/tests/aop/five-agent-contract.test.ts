@@ -14,9 +14,9 @@ import {
 import { detectPipelineProfile, cellHasFiveRoles } from '../../src/aop/pipeline/pipeline-mode.js';
 import { FiveAgentPromptRegistry } from '../../src/builtin/five-agent/index.js';
 import { resolvePipelineRoleBinding } from '../../src/config/resolve-pipeline-binding.js';
-import type { CollaborationCell } from '../../src/collaboration/types.js';
+import type { CollaborationScene } from '../../src/collaboration/types.js';
 
-const fullCell: CollaborationCell = {
+const fullCell: CollaborationScene = {
   id: 'c', adapter: 'sandbox', sceneId: 'g',
   members: [
     { endpointId: 'p', primary: 'planner', pipelineRole: 'planner' },
@@ -27,7 +27,7 @@ const fullCell: CollaborationCell = {
   ],
 };
 
-const compactCell: CollaborationCell = {
+const compactCell: CollaborationScene = {
   id: 'c2', adapter: 'sandbox', sceneId: 'g2',
   members: [
     { endpointId: 'p', primary: 'planner', pipelineRole: 'planner' },

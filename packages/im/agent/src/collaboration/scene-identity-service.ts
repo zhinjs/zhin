@@ -2,28 +2,28 @@
  * SceneIdentityService — 逻辑 Cell 解析 + scene_aliases 管理。
  *
  * 同一物理协作群 = 一个逻辑 Cell + 多 adapter 下的 scene/user 视角表。
- * 入站消息通过 `resolveLogicalCell(adapter, sceneId)` 得到逻辑 Cell。
+ * 入站消息通过 `resolveLogicalScene(adapter, sceneId)` 得到逻辑 Cell。
  */
 
-import type { CollaborationCell } from './types.js';
-import { getCollaborationCellService } from './cell-service.js';
+import type { CollaborationScene } from './types.js';
+import { getCollaborationSceneService } from './scene-service.js';
 import type {
-  CollaborationCellSceneRow,
+  CollaborationSceneAliasRow,
   CollaborationInitSessionRow,
   CollaborationInitObservationRow,
-  CollaborationCellMemberChannelRow,
+  CollaborationSceneMemberChannelRow,
 } from './collaboration-db-model.js';
 import { isPipelineRole } from './types.js';
 
 export interface SceneAliasRecord {
-  logicalCellId: string;
+  logicalSceneId: string;
   adapter: string;
   sceneId: string;
 }
 
 export interface InitSessionRecord {
   id: string;
-  logicalCellId: string;
+  logicalSceneId: string;
   plannerEndpointId: string;
   plannerAdapter: string;
   plannerSceneId: string;
@@ -44,7 +44,7 @@ export interface InitObservationRecord {
 }
 
 export interface MemberChannelRecord {
-  logicalCellId: string;
+  logicalSceneId: string;
   endpointId: string;
   pipelineRole: string;
   adapter: string;
@@ -79,7 +79,7 @@ type DbModel = {
 
 function rowToSceneAlias(row: Record<string, unknown>): SceneAliasRecord {
   return {
-    logicalCellId: String(row.logical_cell_id ?? ''),
+    logicalSceneId: String(row.logical_scene_id ?? ''),
     adapter: String(row.adapter ?? ''),
     sceneId: String(row.scene_id ?? ''),
   };
@@ -88,7 +88,7 @@ function rowToSceneAlias(row: Record<string, unknown>): SceneAliasRecord {
 function rowToInitSession(row: Record<string, unknown>): InitSessionRecord {
   return {
     id: String(row.id ?? ''),
-    logicalCellId: String(row.logical_cell_id ?? ''),
+    logicalSceneId: String(row.logical_scene_id ?? ''),
     plannerEndpointId: String(row.planner_endpoint_id ?? ''),
     plannerAdapter: String(row.planner_adapter ?? ''),
     plannerSceneId: String(row.planner_scene_id ?? ''),
@@ -134,19 +134,19 @@ export class SceneIdentityService {
     const rows = await this.sceneModel.select().where({});
     for (const row of rows) {
       const alias = rowToSceneAlias(row);
-      this.sceneIndex.set(this.sceneKey(alias.adapter, alias.sceneId), alias.logicalCellId);
+      this.sceneIndex.set(this.sceneKey(alias.adapter, alias.sceneId), alias.logicalSceneId);
     }
   }
 
   /**
    * 解析逻辑 Cell：先 scene_aliases 表，再 fallback 到 CellService.findByScene。
    */
-  resolveLogicalCell(adapter: string, sceneId: string, endpointId?: string): CollaborationCell | undefined {
-    const svc = getCollaborationCellService();
+  resolveLogicalScene(adapter: string, sceneId: string, endpointId?: string): CollaborationScene | undefined {
+    const svc = getCollaborationSceneService();
 
-    const logicalCellId = this.sceneIndex.get(this.sceneKey(adapter, sceneId));
-    if (logicalCellId) {
-      const cell = svc.getCell(logicalCellId);
+    const logicalSceneId = this.sceneIndex.get(this.sceneKey(adapter, sceneId));
+    if (logicalSceneId) {
+      const cell = svc.getScene(logicalSceneId);
       if (cell) return cell;
     }
 
@@ -154,39 +154,39 @@ export class SceneIdentityService {
     if (direct) return direct;
 
     if (!endpointId) return undefined;
-    return svc.listCells().find((c) =>
+    return svc.listScenes().find((c) =>
       c.members.some(
         (m) => m.endpointId === endpointId && (m.adapter ?? c.adapter) === adapter,
       ),
     );
   }
 
-  async registerSceneAlias(logicalCellId: string, adapter: string, sceneId: string): Promise<void> {
+  async registerSceneAlias(logicalSceneId: string, adapter: string, sceneId: string): Promise<void> {
     const key = this.sceneKey(adapter, sceneId);
-    if (this.sceneIndex.get(key) === logicalCellId) return;
+    if (this.sceneIndex.get(key) === logicalSceneId) return;
 
-    this.sceneIndex.set(key, logicalCellId);
+    this.sceneIndex.set(key, logicalSceneId);
     if (!this.sceneModel) return;
 
     const existing = await this.sceneModel.select().where({ adapter, scene_id: sceneId });
     if (existing.length > 0) {
-      await this.sceneModel.update({ logical_cell_id: logicalCellId }).where({ adapter, scene_id: sceneId });
+      await this.sceneModel.update({ logical_scene_id: logicalSceneId }).where({ adapter, scene_id: sceneId });
     } else {
       await this.sceneModel.create({
-        logical_cell_id: logicalCellId,
+        logical_scene_id: logicalSceneId,
         adapter,
         scene_id: sceneId,
         created_at: Date.now(),
-      } satisfies CollaborationCellSceneRow);
+      } satisfies CollaborationSceneAliasRow);
     }
   }
 
-  async listAliases(logicalCellId: string): Promise<SceneAliasRecord[]> {
+  async listAliases(logicalSceneId: string): Promise<SceneAliasRecord[]> {
     const out: SceneAliasRecord[] = [];
-    for (const [key, cellId] of this.sceneIndex) {
-      if (cellId !== logicalCellId) continue;
+    for (const [key, collaborationSceneId] of this.sceneIndex) {
+      if (collaborationSceneId !== logicalSceneId) continue;
       const [adapter, ...rest] = key.split(':');
-      out.push({ logicalCellId: cellId, adapter: adapter!, sceneId: rest.join(':') });
+      out.push({ logicalSceneId: collaborationSceneId, adapter: adapter!, sceneId: rest.join(':') });
     }
     return out;
   }
@@ -195,7 +195,7 @@ export class SceneIdentityService {
 
   async createInitSession(input: {
     id: string;
-    logicalCellId: string;
+    logicalSceneId: string;
     plannerEndpointId: string;
     plannerAdapter: string;
     plannerSceneId: string;
@@ -203,7 +203,7 @@ export class SceneIdentityService {
     const now = Date.now();
     const record: InitSessionRecord = {
       id: input.id,
-      logicalCellId: input.logicalCellId,
+      logicalSceneId: input.logicalSceneId,
       plannerEndpointId: input.plannerEndpointId,
       plannerAdapter: input.plannerAdapter,
       plannerSceneId: input.plannerSceneId,
@@ -216,7 +216,7 @@ export class SceneIdentityService {
     if (this.sessionModel) {
       await this.sessionModel.create({
         id: record.id,
-        logical_cell_id: record.logicalCellId,
+        logical_scene_id: record.logicalSceneId,
         planner_endpoint_id: record.plannerEndpointId,
         planner_adapter: record.plannerAdapter,
         planner_scene_id: record.plannerSceneId,
@@ -341,16 +341,16 @@ export class SceneIdentityService {
     return true;
   }
 
-  async updateInitSessionStatus(sessionId: string, status: string, logicalCellId?: string): Promise<void> {
+  async updateInitSessionStatus(sessionId: string, status: string, logicalSceneId?: string): Promise<void> {
     const mem = this.memorySessions.get(sessionId);
     if (mem) {
       mem.status = status;
       mem.updatedAt = Date.now();
-      if (logicalCellId) mem.logicalCellId = logicalCellId;
+      if (logicalSceneId) mem.logicalSceneId = logicalSceneId;
     }
     if (this.sessionModel) {
       const patch: Record<string, unknown> = { status, updated_at: Date.now() };
-      if (logicalCellId) patch.logical_cell_id = logicalCellId;
+      if (logicalSceneId) patch.logical_scene_id = logicalSceneId;
       await this.sessionModel.update(patch).where({ id: sessionId });
     }
   }
@@ -400,7 +400,7 @@ export class SceneIdentityService {
    * 从 stash observations 计算 init 计划（不写 Cell / alias / channel）。
    */
   planInitFromObservations(
-    logicalCellId: string,
+    logicalSceneId: string,
     observations: InitObservationRecord[],
     registeredEndpoints: Map<string, { adapter: string; endpointId: string }>,
     options?: { plannerEndpointId?: string },
@@ -414,7 +414,7 @@ export class SceneIdentityService {
       const key = this.sceneKey(obs.observerAdapter, obs.observerSceneId);
       if (!sceneSet.has(key)) {
         sceneSet.set(key, {
-          logicalCellId,
+          logicalSceneId,
           adapter: obs.observerAdapter,
           sceneId: obs.observerSceneId,
         });
@@ -457,7 +457,7 @@ export class SceneIdentityService {
       if (!channelDedup.has(chKey)) {
         channelDedup.add(chKey);
         channels.push({
-          logicalCellId,
+          logicalSceneId,
           endpointId: ep.endpointId,
           pipelineRole: obs.wizardStep,
           adapter: obs.observerAdapter,
@@ -478,20 +478,20 @@ export class SceneIdentityService {
    * /collab inited 一次性提交：写 scene_aliases + member_channels（Cell 由上层 upsert）。
    */
   async commitInitPlan(input: {
-    logicalCellId: string;
+    logicalSceneId: string;
     sceneAliases: SceneAliasRecord[];
     channels: MemberChannelRecord[];
   }): Promise<void> {
     for (const alias of input.sceneAliases) {
-      await this.registerSceneAlias(input.logicalCellId, alias.adapter, alias.sceneId);
+      await this.registerSceneAlias(input.logicalSceneId, alias.adapter, alias.sceneId);
     }
-    await this.saveMemberChannels(input.logicalCellId, input.channels);
+    await this.saveMemberChannels(input.logicalSceneId, input.channels);
   }
 
   /** @deprecated 使用 planInitFromObservations + commitInitPlan */
   async aggregateObservations(
     sessionId: string,
-    logicalCellId: string,
+    logicalSceneId: string,
     registeredEndpoints: Map<string, { adapter: string; endpointId: string }>,
   ): Promise<{
     sceneAliases: SceneAliasRecord[];
@@ -499,9 +499,9 @@ export class SceneIdentityService {
     channels: MemberChannelRecord[];
   }> {
     const observations = await this.listObservations(sessionId);
-    const plan = this.planInitFromObservations(logicalCellId, observations, registeredEndpoints);
+    const plan = this.planInitFromObservations(logicalSceneId, observations, registeredEndpoints);
     await this.commitInitPlan({
-      logicalCellId,
+      logicalSceneId,
       sceneAliases: plan.sceneAliases,
       channels: plan.channels,
     });
@@ -510,33 +510,33 @@ export class SceneIdentityService {
 
   // ─── Member channel (identity edge) management ───
 
-  async saveMemberChannels(logicalCellId: string, channels: MemberChannelRecord[]): Promise<void> {
-    this.memoryChannels = this.memoryChannels.filter((c) => c.logicalCellId !== logicalCellId);
+  async saveMemberChannels(logicalSceneId: string, channels: MemberChannelRecord[]): Promise<void> {
+    this.memoryChannels = this.memoryChannels.filter((c) => c.logicalSceneId !== logicalSceneId);
     this.memoryChannels.push(...channels);
 
     if (!this.channelModel) return;
 
     if (this.channelModel.delete) {
-      await this.channelModel.delete().where({ logical_cell_id: logicalCellId });
+      await this.channelModel.delete().where({ logical_scene_id: logicalSceneId });
     }
     for (const ch of channels) {
       await this.channelModel.create({
-        logical_cell_id: ch.logicalCellId,
+        logical_scene_id: ch.logicalSceneId,
         endpoint_id: ch.endpointId,
         pipeline_role: ch.pipelineRole,
         adapter: ch.adapter,
         scene_id: ch.sceneId,
         bot_id: ch.botId,
         created_at: Date.now(),
-      } satisfies CollaborationCellMemberChannelRow);
+      } satisfies CollaborationSceneMemberChannelRow);
     }
   }
 
-  async listMemberChannels(logicalCellId: string): Promise<MemberChannelRecord[]> {
+  async listMemberChannels(logicalSceneId: string): Promise<MemberChannelRecord[]> {
     if (this.channelModel) {
-      const rows = await this.channelModel.select().where({ logical_cell_id: logicalCellId });
+      const rows = await this.channelModel.select().where({ logical_scene_id: logicalSceneId });
       return rows.map((row) => ({
-        logicalCellId: String(row.logical_cell_id ?? ''),
+        logicalSceneId: String(row.logical_scene_id ?? ''),
         endpointId: String(row.endpoint_id ?? ''),
         pipelineRole: String(row.pipeline_role ?? ''),
         adapter: String(row.adapter ?? ''),
@@ -544,16 +544,16 @@ export class SceneIdentityService {
         botId: String(row.bot_id ?? ''),
       }));
     }
-    return this.memoryChannels.filter((c) => c.logicalCellId === logicalCellId);
+    return this.memoryChannels.filter((c) => c.logicalSceneId === logicalSceneId);
   }
 
   /**
    * 构建协作群全景图 — 输出 { group_id, group_name, agents[].channels[] }。
    */
-  async buildGroupView(logicalCellId: string, groupName?: string): Promise<GroupView> {
-    const channels = await this.listMemberChannels(logicalCellId);
-    const cellSvc = getCollaborationCellService();
-    const cell = cellSvc.getCell(logicalCellId);
+  async buildGroupView(logicalSceneId: string, groupName?: string): Promise<GroupView> {
+    const channels = await this.listMemberChannels(logicalSceneId);
+    const cellSvc = getCollaborationSceneService();
+    const cell = cellSvc.getScene(logicalSceneId);
 
     const agentMap = new Map<string, GroupViewAgent>();
     for (const ch of channels) {
@@ -570,7 +570,7 @@ export class SceneIdentityService {
     }
 
     return {
-      group_id: logicalCellId,
+      group_id: logicalSceneId,
       group_name: groupName ?? cell?.goal ?? '',
       agents: [...agentMap.values()],
     };

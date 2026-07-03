@@ -8,13 +8,13 @@
  */
 import {
   DEFAULT_MAX_REVIEW_CYCLES,
-  type CollaborationCell,
+  type CollaborationScene,
   type PipelineArtifactKind,
   type PipelineStage,
   type PipelineState,
   type PipelineTodoItem,
 } from '../../collaboration/types.js';
-import { getCollaborationCellService } from '../../collaboration/cell-service.js';
+import { getCollaborationSceneService } from '../../collaboration/scene-service.js';
 import { getCollaborationArtifactRepository } from '../../collaboration/collaboration-artifact-repository.js';
 import {
   allowedNextStages,
@@ -63,20 +63,20 @@ export const REVIEWER_ARTIFACT_WHITELIST: PipelineArtifactKind[] = ['deliverable
 export class PipelineService {
   constructor(private readonly deps: PipelineServiceDeps) {}
 
-  private async resolveCell(cellId: string): Promise<CollaborationCell | undefined> {
-    return (await this.deps.cells.getCellFresh?.(cellId)) ?? this.deps.cells.getCell(cellId);
+  private async resolveCell(collaborationSceneId: string): Promise<CollaborationScene | undefined> {
+    return (await this.deps.cells.getSceneFresh?.(collaborationSceneId)) ?? this.deps.cells.getScene(collaborationSceneId);
   }
 
-  getState(cell: CollaborationCell): PipelineState | undefined {
+  getState(cell: CollaborationScene): PipelineState | undefined {
     return cell.pipelineState;
   }
 
-  async ensureState(cell: CollaborationCell, opts: EnsureStateOptions = {}): Promise<PipelineState> {
+  async ensureState(cell: CollaborationScene, opts: EnsureStateOptions = {}): Promise<PipelineState> {
     if (cell.pipelineState) return cell.pipelineState;
     return this.initState(cell, opts);
   }
 
-  async initState(cell: CollaborationCell, opts: EnsureStateOptions = {}): Promise<PipelineState> {
+  async initState(cell: CollaborationScene, opts: EnsureStateOptions = {}): Promise<PipelineState> {
     const profile = opts.profile ?? 'full';
     const state = buildFreshPipelineState(profile, {
       userGoal: opts.userGoal,
@@ -91,11 +91,11 @@ export class PipelineService {
 
   /** 新建流程：归档当前 run（若有），开启新 runId。 */
   async createRun(
-    cellId: string,
+    collaborationSceneId: string,
     opts: EnsureStateOptions = {},
   ): Promise<{ ok: true; state: PipelineState; previousRunId?: string } | { ok: false; error: string }> {
-    const cell = await this.resolveCell(cellId);
-    if (!cell) return { ok: false, error: `cell ${cellId} not found` };
+    const cell = await this.resolveCell(collaborationSceneId);
+    if (!cell) return { ok: false, error: `cell ${collaborationSceneId} not found` };
     const pending = cell.pipelineState?.activeDelegations?.length ?? 0;
     if (pending > 0 && !opts.force) {
       return {
@@ -115,22 +115,22 @@ export class PipelineService {
       runHistory,
     });
     (state as PipelineState & { profile?: PipelineProfile }).profile = profile;
-    await this.deps.cells.setPipelineState(cellId, state);
-    await this.syncActiveRunId(cellId, state.runId);
+    await this.deps.cells.setPipelineState(collaborationSceneId, state);
+    await this.syncActiveRunId(collaborationSceneId, state.runId);
     return { ok: true, state, previousRunId };
   }
 
   /** 重置流程：同 createRun，语义为「当前任务重来」。 */
   async resetRun(
-    cellId: string,
+    collaborationSceneId: string,
     opts: EnsureStateOptions & { reason?: string } = {},
   ): Promise<{ ok: true; state: PipelineState; previousRunId?: string } | { ok: false; error: string }> {
-    return this.createRun(cellId, opts);
+    return this.createRun(collaborationSceneId, opts);
   }
 
   /** 修改当前流程（不换 runId）。 */
   async updateRun(
-    cellId: string,
+    collaborationSceneId: string,
     patch: {
       userGoal?: string;
       runLabel?: string;
@@ -138,7 +138,7 @@ export class PipelineService {
       maxReviewCycles?: number;
     },
   ): Promise<{ ok: true; state: PipelineState } | { ok: false; error: string }> {
-    const cell = await this.resolveCell(cellId);
+    const cell = await this.resolveCell(collaborationSceneId);
     if (!cell?.pipelineState) return { ok: false, error: 'pipeline not initialized' };
     const state = cell.pipelineState;
     const next: PipelineState = {
@@ -149,20 +149,20 @@ export class PipelineService {
       maxReviewCycles: patch.maxReviewCycles ?? state.maxReviewCycles,
       updatedAt: Date.now(),
     };
-    await this.deps.cells.setPipelineState(cellId, next);
+    await this.deps.cells.setPipelineState(collaborationSceneId, next);
     if (patch.userGoal?.trim()) {
-      await getCollaborationCellService().setGoal(cellId, patch.userGoal.trim());
+      await getCollaborationSceneService().setGoal(collaborationSceneId, patch.userGoal.trim());
     }
     return { ok: true, state: next };
   }
 
   /** 设置当前流程：切换到 runHistory 中的 run。 */
   async activateRun(
-    cellId: string,
+    collaborationSceneId: string,
     runRef: string,
     opts: { force?: boolean } = {},
   ): Promise<{ ok: true; state: PipelineState; previousRunId?: string } | { ok: false; error: string }> {
-    const cell = await this.resolveCell(cellId);
+    const cell = await this.resolveCell(collaborationSceneId);
     if (!cell?.pipelineState) return { ok: false, error: 'pipeline not initialized' };
     const pending = cell.pipelineState.activeDelegations?.length ?? 0;
     if (pending > 0 && !opts.force) {
@@ -192,28 +192,28 @@ export class PipelineService {
       runHistory: nextHistory,
     });
     (next as PipelineState & { profile?: PipelineProfile }).profile = profile;
-    await this.deps.cells.setPipelineState(cellId, next);
-    await this.syncActiveRunId(cellId, next.runId);
+    await this.deps.cells.setPipelineState(collaborationSceneId, next);
+    await this.syncActiveRunId(collaborationSceneId, next.runId);
     return { ok: true, state: next, previousRunId };
   }
 
-  listRuns(cellId: string): { ok: true; runs: ReturnType<typeof summarizeRuns> } | { ok: false; error: string } {
-    const cell = this.deps.cells.getCell(cellId);
+  listRuns(collaborationSceneId: string): { ok: true; runs: ReturnType<typeof summarizeRuns> } | { ok: false; error: string } {
+    const cell = this.deps.cells.getScene(collaborationSceneId);
     if (!cell?.pipelineState) return { ok: false, error: 'pipeline not initialized' };
     return { ok: true, runs: summarizeRuns(cell.pipelineState) };
   }
 
-  private async syncActiveRunId(cellId: string, runId: string): Promise<void> {
-    await this.deps.cells.setMissionRunId?.(cellId, runId);
+  private async syncActiveRunId(collaborationSceneId: string, runId: string): Promise<void> {
+    await this.deps.cells.setMissionRunId?.(collaborationSceneId, runId);
   }
 
   private profileOf(state: PipelineState): PipelineProfile {
     return (state as PipelineState & { profile?: PipelineProfile }).profile ?? 'full';
   }
 
-  async advance(cellId: string, to: PipelineStage, actor?: string): Promise<AdvanceResult> {
-    const cell = await this.resolveCell(cellId);
-    if (!cell) return { ok: false, error: `cell ${cellId} not found` };
+  async advance(collaborationSceneId: string, to: PipelineStage, actor?: string): Promise<AdvanceResult> {
+    const cell = await this.resolveCell(collaborationSceneId);
+    if (!cell) return { ok: false, error: `cell ${collaborationSceneId} not found` };
     const state = cell.pipelineState;
     if (!state) return { ok: false, error: 'pipeline not initialized' };
     if (state.activeDelegations?.length) {
@@ -249,12 +249,12 @@ export class PipelineService {
       updatedAt: Date.now(),
     };
     (next as PipelineState & { profile?: PipelineProfile }).profile = profile;
-    await this.deps.cells.setPipelineState(cellId, next);
+    await this.deps.cells.setPipelineState(collaborationSceneId, next);
     return { ok: true, state: next };
   }
 
   async submitArtifact(input: {
-    cellId: string;
+    collaborationSceneId: string;
     runId: string;
     stage: PipelineStage;
     kind: PipelineArtifactKind;
@@ -264,22 +264,22 @@ export class PipelineService {
     return this.deps.artifacts.submit(input);
   }
 
-  async readArtifacts(cellId: string, runId: string, kinds?: PipelineArtifactKind[]) {
-    return this.deps.artifacts.listByRun(cellId, runId, kinds);
+  async readArtifacts(collaborationSceneId: string, runId: string, kinds?: PipelineArtifactKind[]) {
+    return this.deps.artifacts.listByRun(collaborationSceneId, runId, kinds);
   }
 
   /**
    * Reviewer 记忆切片（I2）：只暴露 userGoal + Executor deliverable + Researcher citations，
    * 永不暴露 Evaluator blueprint（CoT 隔离）。
    */
-  async reviewerContextSlice(cellId: string, runId: string): Promise<{
+  async reviewerContextSlice(collaborationSceneId: string, runId: string): Promise<{
     userGoal?: string;
     deliverable?: Record<string, unknown>;
     citations: Array<Record<string, unknown>>;
   }> {
-    const cell = this.deps.cells.getCell(cellId);
-    const deliverable = await this.deps.artifacts.latest(cellId, runId, 'deliverable');
-    const citationArtifacts = await this.deps.artifacts.listByRun(cellId, runId, ['citations', 'report']);
+    const cell = this.deps.cells.getScene(collaborationSceneId);
+    const deliverable = await this.deps.artifacts.latest(collaborationSceneId, runId, 'deliverable');
+    const citationArtifacts = await this.deps.artifacts.listByRun(collaborationSceneId, runId, ['citations', 'report']);
     return {
       userGoal: cell?.pipelineState?.userGoal,
       deliverable: deliverable?.payload,
@@ -294,10 +294,10 @@ export function getPipelineService(): PipelineService {
   if (!globalPipelineService) {
     globalPipelineService = new PipelineService({
       cells: {
-        getCell: (id) => getCollaborationCellService().getCell(id),
-        getCellFresh: async (id) => (await getCollaborationCellService().getCellFresh(id)) ?? undefined,
-        setPipelineState: (id, state) => getCollaborationCellService().setPipelineState(id, state),
-        setMissionRunId: (id, runId) => getCollaborationCellService().setMissionRunId(id, runId),
+        getScene: (id) => getCollaborationSceneService().getScene(id),
+        getSceneFresh: async (id) => (await getCollaborationSceneService().getSceneFresh(id)) ?? undefined,
+        setPipelineState: (id, state) => getCollaborationSceneService().setPipelineState(id, state),
+        setMissionRunId: (id, runId) => getCollaborationSceneService().setMissionRunId(id, runId),
       },
       artifacts: getCollaborationArtifactRepository(),
     });

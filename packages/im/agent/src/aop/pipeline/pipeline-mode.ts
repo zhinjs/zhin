@@ -3,15 +3,15 @@
  * - full：Cell 成员齐 5 个 pipelineRole（群 5 Endpoint）
  * - compact：私聊/单 Bot/成员不齐（Planner 可短路）
  */
-import { PIPELINE_ROLES, type CollaborationCell } from '../../collaboration/types.js';
+import { PIPELINE_ROLES, type CollaborationScene } from '../../collaboration/types.js';
 import type { PipelineProfile } from './pipeline-transitions.js';
 
-export function cellHasFiveRoles(cell: CollaborationCell | undefined): boolean {
+export function cellHasFiveRoles(cell: CollaborationScene | undefined): boolean {
   if (!cell) return false;
   const roles = new Set(cell.members.map((m) => m.pipelineRole).filter(Boolean));
   return PIPELINE_ROLES.every((r) => roles.has(r));
 }
 
-export function detectPipelineProfile(cell: CollaborationCell | undefined): PipelineProfile {
+export function detectPipelineProfile(cell: CollaborationScene | undefined): PipelineProfile {
   return cellHasFiveRoles(cell) ? 'full' : 'compact';
 }

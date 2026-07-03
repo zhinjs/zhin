@@ -13,18 +13,12 @@ import {
   type AgentDbQueryable,
 } from './upgrade-agent-db-schema.js';
 import { registerEndpointIdColumnMigrationHook } from './upgrade-endpoint-id-schema.js';
-import {
-  registerCollaborationRoundStateMigrationHook,
-  upgradeCollaborationDbSchema,
-  asAgentDbQueryable,
-} from './upgrade-collaboration-db-schema.js';
 
 export function registerDbUpgrade(refs: AIServiceRefs): void {
   const plugin = getPlugin();
   const { useContext, root, logger } = plugin;
 
   registerEndpointIdColumnMigrationHook(logger);
-  registerCollaborationRoundStateMigrationHook(logger);
 
   useContext('ai', (ai) => {
     const configService = root.inject('config');
@@ -45,10 +39,6 @@ export function registerDbUpgrade(refs: AIServiceRefs): void {
           );
           if (result.columns.length > 0) {
             logger.info(`AI Session: migrated agent_* columns: ${result.columns.join(', ')}`);
-          }
-          const collabCols = await upgradeCollaborationDbSchema(asAgentDbQueryable(db));
-          if (collabCols.length > 0) {
-            logger.info(`AI Session: migrated collaboration columns: ${collabCols.join(', ')}`);
           }
         })
         .then(() => activateAiDatabaseStorage(db, refs, appConfig.ai || {}, appConfig.collaboration))
@@ -74,10 +64,6 @@ export function registerDbUpgrade(refs: AIServiceRefs): void {
       );
       if (result.columns.length > 0) {
         logger.info(`AI Session: migrated agent_* columns: ${result.columns.join(', ')}`);
-      }
-      const collabCols = await upgradeCollaborationDbSchema(asAgentDbQueryable(db));
-      if (collabCols.length > 0) {
-        logger.info(`AI Session: migrated collaboration columns: ${collabCols.join(', ')}`);
       }
       if (result.idsBackfilled > 0 || result.parentLinks > 0 || result.activeLeaves > 0) {
         logger.info(

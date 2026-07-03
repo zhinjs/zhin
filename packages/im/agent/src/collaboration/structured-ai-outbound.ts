@@ -19,7 +19,7 @@ import {
 } from '@zhin.js/core';
 import { formatContentChainLog, CONTENT_CHAIN_STAGE } from '@zhin.js/logger';
 import { resolvePeerEndpointInCell } from './collaboration-config.js';
-import { resolveCollaborationCellForMessage } from './collaboration-context.js';
+import { resolveCollaborationSceneForMessage } from './collaboration-context.js';
 import { resolvePlatformAtId, type GroupMessageAdapterView } from './group-message.js';
 
 function extractPlainTextFromElements(elements: OutputElement[]): string {
@@ -44,7 +44,7 @@ function resolveAdapterView(message: Message): GroupMessageAdapterView | undefin
 }
 
 function buildParseContext(message: Message): AiOutboundParseContext | null {
-  const cell = resolveCollaborationCellForMessage(message);
+  const cell = resolveCollaborationSceneForMessage(message);
   const adapter = resolveAdapterView(message);
   if (!adapter) return null;
 
@@ -77,7 +77,7 @@ async function trySplitEmbeddedMentionBatches(
   message: Message,
   plain: string,
 ): Promise<MessageElement[][] | null> {
-  const cell = resolveCollaborationCellForMessage(message);
+  const cell = resolveCollaborationSceneForMessage(message);
   if (!cell) return null;
 
   const embedded = extractEmbeddedAiOutboundJson(plain);
@@ -129,7 +129,7 @@ export async function tryResolveStructuredAiOutbound(
   elements: OutputElement[],
   options: TryResolveStructuredAiOutboundOptions = {},
 ): Promise<MessageElement[] | null> {
-  const cell = resolveCollaborationCellForMessage(message);
+  const cell = resolveCollaborationSceneForMessage(message);
   const adapterInstance = getHostRootPlugin()?.inject(message.$adapter) as object | undefined;
   const extensions = adapterInstance ? getAdapterAiOutboundExtensions(adapterInstance) : [];
   const structuredRequired = isStructuredOutboundRequired({
@@ -207,7 +207,7 @@ export function resolveStructuredOutboundRequired(
   toolRequiresStructured?: boolean,
 ): boolean {
   if (!message) return false;
-  const cell = resolveCollaborationCellForMessage(message);
+  const cell = resolveCollaborationSceneForMessage(message);
   const plugin = getHostRootPlugin();
   const adapterInstance = plugin?.inject(message.$adapter) as object | undefined;
   const extensions = adapterInstance ? getAdapterAiOutboundExtensions(adapterInstance) : [];

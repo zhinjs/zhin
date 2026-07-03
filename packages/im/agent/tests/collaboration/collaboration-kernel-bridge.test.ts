@@ -6,9 +6,9 @@ import {
 import { isSubstantiveGroupTaskReply } from '../../src/collaboration/collaboration-delegation.js';
 import { initOrchestrationService } from '../../src/orchestrator/orchestration-service.js';
 import { MemoryOrchestrationRepository } from '../../src/orchestrator/orchestration-repository.js';
-import type { CollaborationCell } from '../../src/collaboration/types.js';
+import type { CollaborationScene } from '../../src/collaboration/types.js';
 
-const cell: CollaborationCell = {
+const cell: CollaborationScene = {
   id: 'cell-1',
   adapter: 'icqq',
   sceneId: '1',

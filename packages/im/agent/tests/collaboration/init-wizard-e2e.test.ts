@@ -19,13 +19,13 @@ import {
 } from '../../src/collaboration/init-observe-hook.js';
 import { checkCollabAdminGate } from '../../src/collaboration/collab-admin-gate.js';
 import {
-  MemoryCollaborationCellRepository,
-  setCollaborationCellRepository,
-} from '../../src/collaboration/collaboration-cell-repository.js';
+  MemoryCollaborationSceneRepository,
+  setCollaborationSceneRepository,
+} from '../../src/collaboration/collaboration-scene-repository.js';
 import {
-  getCollaborationCellService,
-  resetCollaborationCellService,
-} from '../../src/collaboration/cell-service.js';
+  getCollaborationSceneService,
+  resetCollaborationSceneService,
+} from '../../src/collaboration/scene-service.js';
 import type { Message, Plugin } from '@zhin.js/core';
 
 function makeMessage(overrides: Partial<Message> & { $content?: Array<{ type: string; data?: Record<string, unknown> }> } = {}): Message {
@@ -61,19 +61,19 @@ describe('SceneIdentityService', () => {
     svc = new SceneIdentityService();
     setSceneIdentityService(svc);
 
-    resetCollaborationCellService();
-    const repo = new MemoryCollaborationCellRepository();
-    setCollaborationCellRepository(repo);
-    getCollaborationCellService().setRepository(repo);
+    resetCollaborationSceneService();
+    const repo = new MemoryCollaborationSceneRepository();
+    setCollaborationSceneRepository(repo);
+    getCollaborationSceneService().setRepository(repo);
   });
 
-  it('resolveLogicalCell returns undefined when no aliases', () => {
-    expect(svc.resolveLogicalCell('icqq', '373460458')).toBeUndefined();
+  it('resolveLogicalScene returns undefined when no aliases', () => {
+    expect(svc.resolveLogicalScene('icqq', '373460458')).toBeUndefined();
   });
 
-  it('registerSceneAlias + resolveLogicalCell round-trip', async () => {
-    const cellSvc = getCollaborationCellService();
-    await cellSvc.upsertCell({
+  it('registerSceneAlias + resolveLogicalScene round-trip', async () => {
+    const cellSvc = getCollaborationSceneService();
+    await cellSvc.upsertScene({
       id: 'test-cell',
       adapter: 'icqq',
       sceneId: '373460458',
@@ -83,17 +83,17 @@ describe('SceneIdentityService', () => {
     await svc.registerSceneAlias('test-cell', 'icqq', '373460458');
     await svc.registerSceneAlias('test-cell', 'qq', 'group_openid_abc');
 
-    const fromIcqq = svc.resolveLogicalCell('icqq', '373460458');
+    const fromIcqq = svc.resolveLogicalScene('icqq', '373460458');
     expect(fromIcqq?.id).toBe('test-cell');
 
-    const fromQq = svc.resolveLogicalCell('qq', 'group_openid_abc');
+    const fromQq = svc.resolveLogicalScene('qq', 'group_openid_abc');
     expect(fromQq?.id).toBe('test-cell');
   });
 
   it('findActiveInitSessionForInbound falls back to single global wizard session', async () => {
     await svc.createInitSession({
       id: 'init-only',
-      logicalCellId: 'cell-a',
+      logicalSceneId: 'cell-a',
       plannerEndpointId: 'bot-planner',
       plannerAdapter: 'icqq',
       plannerSceneId: '373460458',
@@ -121,10 +121,10 @@ describe('Init Wizard', () => {
     sceneSvc = new SceneIdentityService();
     setSceneIdentityService(sceneSvc);
 
-    resetCollaborationCellService();
-    const repo = new MemoryCollaborationCellRepository();
-    setCollaborationCellRepository(repo);
-    getCollaborationCellService().setRepository(repo);
+    resetCollaborationSceneService();
+    const repo = new MemoryCollaborationSceneRepository();
+    setCollaborationSceneRepository(repo);
+    getCollaborationSceneService().setRepository(repo);
   });
 
   it('startInitWizard creates session and returns researcher prompt', async () => {
@@ -199,10 +199,10 @@ describe('5 Bot observation aggregation', () => {
     sceneSvc = new SceneIdentityService();
     setSceneIdentityService(sceneSvc);
 
-    resetCollaborationCellService();
-    const repo = new MemoryCollaborationCellRepository();
-    setCollaborationCellRepository(repo);
-    getCollaborationCellService().setRepository(repo);
+    resetCollaborationSceneService();
+    const repo = new MemoryCollaborationSceneRepository();
+    setCollaborationSceneRepository(repo);
+    getCollaborationSceneService().setRepository(repo);
   });
 
   it('aggregates observations from 5 bots into 1 cell', async () => {
@@ -246,8 +246,8 @@ describe('5 Bot observation aggregation', () => {
 
     expect(result.ok).toBe(true);
     expect(result.memberCount).toBe(5);
-    expect(result.cell).toBeTruthy();
-    expect(result.cell!.members.map((m) => m.pipelineRole).sort()).toEqual(
+    expect(result.scene).toBeTruthy();
+    expect(result.scene!.members.map((m) => m.pipelineRole).sort()).toEqual(
       ['evaluator', 'executor', 'planner', 'researcher', 'reviewer'],
     );
     expect(result.warnings).toHaveLength(0);
@@ -290,10 +290,10 @@ describe('Cross-adapter scene aliases', () => {
     sceneSvc = new SceneIdentityService();
     setSceneIdentityService(sceneSvc);
 
-    resetCollaborationCellService();
-    const repo = new MemoryCollaborationCellRepository();
-    setCollaborationCellRepository(repo);
-    getCollaborationCellService().setRepository(repo);
+    resetCollaborationSceneService();
+    const repo = new MemoryCollaborationSceneRepository();
+    setCollaborationSceneRepository(repo);
+    getCollaborationSceneService().setRepository(repo);
   });
 
   it('icqq + qq observations create cross-adapter scene aliases', async () => {
@@ -330,14 +330,14 @@ describe('Cross-adapter scene aliases', () => {
     expect(result.ok).toBe(true);
     expect(result.sceneCount).toBeGreaterThanOrEqual(2);
 
-    const cellSvc = getCollaborationCellService();
-    const cell = cellSvc.getCell(result.cell!.id);
+    const cellSvc = getCollaborationSceneService();
+    const cell = cellSvc.getScene(result.scene!.id);
     expect(cell).toBeTruthy();
 
-    const fromIcqq = sceneSvc.resolveLogicalCell('icqq', '373460458');
+    const fromIcqq = sceneSvc.resolveLogicalScene('icqq', '373460458');
     expect(fromIcqq?.id).toBe(cell!.id);
 
-    const fromQq = sceneSvc.resolveLogicalCell('qq', 'group_openid_xyz');
+    const fromQq = sceneSvc.resolveLogicalScene('qq', 'group_openid_xyz');
     expect(fromQq?.id).toBe(cell!.id);
   });
 });
@@ -481,10 +481,10 @@ describe('Member channels (identity edge table)', () => {
     sceneSvc = new SceneIdentityService();
     setSceneIdentityService(sceneSvc);
 
-    resetCollaborationCellService();
-    const repo = new MemoryCollaborationCellRepository();
-    setCollaborationCellRepository(repo);
-    getCollaborationCellService().setRepository(repo);
+    resetCollaborationSceneService();
+    const repo = new MemoryCollaborationSceneRepository();
+    setCollaborationSceneRepository(repo);
+    getCollaborationSceneService().setRepository(repo);
   });
 
   it('aggregation produces per-member per-adapter channels', async () => {
@@ -522,7 +522,7 @@ describe('Member channels (identity edge table)', () => {
     expect(result.ok).toBe(true);
     expect(result.channelCount).toBeGreaterThanOrEqual(2);
 
-    const channels = await sceneSvc.listMemberChannels(result.cell!.id);
+    const channels = await sceneSvc.listMemberChannels(result.scene!.id);
     const researcherChannels = channels.filter((c) => c.pipelineRole === 'researcher');
     expect(researcherChannels).toHaveLength(2);
 
@@ -577,9 +577,9 @@ describe('Member channels (identity edge table)', () => {
     const result = await aggregateAndActivate(session, registeredEndpoints, 'planner');
     expect(result.ok).toBe(true);
 
-    const view = await sceneSvc.buildGroupView(result.cell!.id, 'zhinTest');
+    const view = await sceneSvc.buildGroupView(result.scene!.id, 'zhinTest');
 
-    expect(view.group_id).toBe(result.cell!.id);
+    expect(view.group_id).toBe(result.scene!.id);
     expect(view.group_name).toBe('zhinTest');
     expect(view.agents).toHaveLength(5);
 
@@ -640,8 +640,8 @@ describe('Member channels (identity edge table)', () => {
 
   it('saveMemberChannels + listMemberChannels round-trip (memory)', async () => {
     const channels = [
-      { logicalCellId: 'cell-1', endpointId: 'ep1', pipelineRole: 'planner', adapter: 'icqq', sceneId: '111', botId: 'bid1' },
-      { logicalCellId: 'cell-1', endpointId: 'ep2', pipelineRole: 'researcher', adapter: 'qq', sceneId: '222', botId: 'bid2' },
+      { logicalSceneId: 'cell-1', endpointId: 'ep1', pipelineRole: 'planner', adapter: 'icqq', sceneId: '111', botId: 'bid1' },
+      { logicalSceneId: 'cell-1', endpointId: 'ep2', pipelineRole: 'researcher', adapter: 'qq', sceneId: '222', botId: 'bid2' },
     ];
     await sceneSvc.saveMemberChannels('cell-1', channels);
 

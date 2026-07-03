@@ -6,9 +6,9 @@ import type { Message } from '@zhin.js/core';
 import { resolveCellForScene, findCellMemberByEndpoint } from '../../collaboration/collaboration-config.js';
 import { readCollaborationTurnSnapshot } from '../../collaboration/collaboration-turn-snapshot.js';
 import { PIPELINE_ROLE_LABELS } from '../../config/resolve-pipeline-binding.js';
-import type { CollaborationCell } from '../../collaboration/types.js';
+import type { CollaborationScene } from '../../collaboration/types.js';
 
-function rosterLines(cell: CollaborationCell, selfEndpoint: string): string[] {
+function rosterLines(cell: CollaborationScene, selfEndpoint: string): string[] {
   const lines: string[] = ['Cell roster:'];
   for (const m of cell.members) {
     const tag = m.endpointId === selfEndpoint ? ' (you)' : '';

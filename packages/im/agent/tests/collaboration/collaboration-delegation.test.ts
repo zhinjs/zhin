@@ -9,7 +9,7 @@ describe('collaboration-delegation outbound hygiene', () => {
   it('isCellToolResultJson detects cell_pipeline_status dumps', () => {
     const raw = JSON.stringify({
       ok: true,
-      cellId: 'icqq-collab-room',
+      collaborationSceneId: 'icqq-collab-room',
       pipelineState: { runId: 'f084a265', stage: 'researcher' },
     });
     expect(isCellToolResultJson(raw)).toBe(true);
@@ -32,7 +32,7 @@ describe('collaboration-delegation outbound hygiene', () => {
   });
 
   it('summarizeDelegateeReply drops tool JSON blobs', () => {
-    const raw = JSON.stringify({ ok: true, cellId: 'c1', runs: [] });
+    const raw = JSON.stringify({ ok: true, collaborationSceneId: 'c1', runs: [] });
     expect(summarizeDelegateeReply(raw)).toBe('已完成。');
     expect(summarizeDelegateeReply('调研完成，已写入 report。')).toContain('调研完成');
   });

@@ -3,7 +3,7 @@
  */
 import type { Message } from '@zhin.js/core';
 import { extractEmbeddedAiOutboundJson } from '@zhin.js/core';
-import type { CollaborationCell, PipelineArtifactKind } from './types.js';
+import type { CollaborationScene, PipelineArtifactKind } from './types.js';
 import { findActiveDelegation } from './delegation-state.js';
 
 export function messageTextContent(message: Message): string {
@@ -16,7 +16,7 @@ export function messageTextContent(message: Message): string {
   return parts.join(' ').trim();
 }
 
-export function resolvePlannerEndpointId(cell: CollaborationCell): string | undefined {
+export function resolvePlannerEndpointId(cell: CollaborationScene): string | undefined {
   return cell.members.find((m) => m.pipelineRole === 'planner')?.endpointId;
 }
 
@@ -27,7 +27,7 @@ export function isCellToolResultJson(text: string): boolean {
   try {
     const o = JSON.parse(t) as Record<string, unknown>;
     if (o.ok !== true) return false;
-    if (typeof o.cellId === 'string') return true;
+    if (typeof o.collaborationSceneId === 'string') return true;
     if (o.pipelineState != null) return true;
     if (typeof o.artifactId === 'string') return true;
     if (Array.isArray(o.artifacts)) return true;
@@ -156,7 +156,7 @@ function artifactSubmitInstructions(kinds: PipelineArtifactKind[]): string[] {
 }
 
 export function formatActiveDelegationHint(
-  cell: CollaborationCell,
+  cell: CollaborationScene,
   endpointId: string,
 ): string | undefined {
   const delegation = findActiveDelegation(cell, endpointId);
@@ -184,7 +184,7 @@ export function formatActiveDelegationHint(
 }
 
 /** Planner 收到成员 handback @ 时的 turn 指引。 */
-export function formatPlannerHandbackHint(_cell: CollaborationCell): string | undefined {
+export function formatPlannerHandbackHint(_cell: CollaborationScene): string | undefined {
   return [
     '[Kernel handback] A member completed a scene_mention task.',
     'Check orchestration_status / #taskId results; dispatch the next task if needed.',

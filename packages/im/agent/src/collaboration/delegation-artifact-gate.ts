@@ -1,7 +1,7 @@
 /**
  * activeDelegation.requireArtifact 硬门控。
  */
-import type { CollaborationCell, PipelineArtifactKind } from './types.js';
+import type { CollaborationScene, PipelineArtifactKind } from './types.js';
 import { getPipelineService } from '../aop/pipeline/pipeline-service.js';
 import { findActiveDelegation } from './delegation-state.js';
 
@@ -11,7 +11,7 @@ export interface DelegationArtifactGateResult {
 }
 
 export async function delegationArtifactsSatisfied(
-  cell: CollaborationCell,
+  cell: CollaborationScene,
   endpointId: string,
 ): Promise<DelegationArtifactGateResult> {
   const delegation = findActiveDelegation(cell, endpointId);

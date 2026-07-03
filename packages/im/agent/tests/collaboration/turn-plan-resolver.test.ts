@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { buildTurnPlan } from '../../src/collaboration/turn-plan-resolver.js';
 import { DEFAULT_ZHIN_AGENT_NAME } from '../../src/config/types.js';
-import type { CollaborationCell } from '../../src/collaboration/types.js';
+import type { CollaborationScene } from '../../src/collaboration/types.js';
 
-const cell: CollaborationCell = {
+const cell: CollaborationScene = {
   id: 'room-alpha',
   adapter: 'sandbox',
   sceneId: 'group-1',
@@ -34,8 +34,8 @@ describe('buildTurnPlan', () => {
       discoveredAgentNames: new Set(['zhin']),
     });
     expect(plan.handlerProfile).toBe('researcher');
-    expect(plan.cellId).toBe('room-alpha');
-    expect(plan.sessionKeys.cell).toBe('cell:sandbox:group-1');
+    expect(plan.collaborationSceneId).toBe('room-alpha');
+    expect(plan.sessionKeys.collaborationScene).toBe('collab-scene:sandbox:group-1');
     expect(plan.delegation?.mode).toBe('local_process');
   });
 
@@ -49,7 +49,7 @@ describe('buildTurnPlan', () => {
       discoveredAgentNames: new Set(['zhin']),
     });
     expect(plan.handlerProfile).toBe(DEFAULT_ZHIN_AGENT_NAME);
-    expect(plan.cellId).toBeUndefined();
+    expect(plan.collaborationSceneId).toBeUndefined();
   });
 
   it('prefers im_mention when routed agent maps to peer endpoint', () => {
