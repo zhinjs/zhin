@@ -71,6 +71,18 @@ export type {
 // ── Extension Registry ──
 export { registerExtension, unregisterExtensions, getExtension, hasExtension, installExtensionProxy } from './extension-registry.js';
 
+// ── IM identity (scene/session keys) ──
+export type {
+  IMSceneKind,
+  IMSceneIdentity,
+  ResolveIMSessionIdInput,
+} from './im-identity.js';
+export {
+  resolveIMSceneIdForSession,
+  resolveIMSceneSessionId,
+  resolveIMSessionId,
+} from './im-identity.js';
+
 // ── Utils ──
 export {
   evaluate,

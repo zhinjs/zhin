@@ -1,9 +1,14 @@
 /**
- * IM 会话 ID 解析（无 AI 依赖）
+ * IM 会话 ID 解析（SSOT 在 @zhin.js/kernel + im-scene）
  *
  * 格式：`platform:endpointId:kind:sceneId`
  */
 
+import {
+  resolveIMSceneIdForSession as resolveIMSceneIdForSessionKernel,
+  resolveIMSessionId as resolveIMSessionIdKernel,
+  type ResolveIMSessionIdInput,
+} from '@zhin.js/kernel';
 import {
   resolveIMSceneSessionId,
   sceneRefFromMessage,
@@ -11,22 +16,10 @@ import {
   type IMSceneRef,
 } from './im-scene.js';
 
-export type { IMSceneKind };
-
-export interface ResolveIMSessionIdInput {
-  platform: string;
-  endpointId: string;
-  kind: IMSceneKind;
-  sceneId: string;
-}
+export type { IMSceneKind, ResolveIMSessionIdInput };
 
 export function resolveIMSessionId(input: ResolveIMSessionIdInput): string {
-  return resolveIMSceneSessionId({
-    platform: input.platform,
-    endpointId: input.endpointId,
-    kind: input.kind,
-    sceneId: input.sceneId,
-  });
+  return resolveIMSessionIdKernel(input);
 }
 
 export function resolveIMSessionIdFromScene(scene: IMSceneRef): string {
@@ -38,10 +31,7 @@ export function resolveIMSceneIdForSession(
   sceneId?: string,
   senderId?: string,
 ): string {
-  if (kind === 'group' || kind === 'channel') {
-    return sceneId || senderId || 'unknown';
-  }
-  return senderId || sceneId || 'unknown';
+  return resolveIMSceneIdForSessionKernel(kind, sceneId, senderId);
 }
 
 export function resolveIMSessionIdFromMessage(message: {

@@ -153,11 +153,6 @@ describe('AI Service 集成测试', () => {
   });
 
   describe('配置管理', () => {
-    it('应该返回会话配置', () => {
-      const config = aiService.getSessionConfig();
-      expect(config.maxHistory).toBe(10);
-    });
-
     it('应该返回上下文配置', () => {
       const config = aiService.getContextConfig();
       expect(config).toBeDefined();

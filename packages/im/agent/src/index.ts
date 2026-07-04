@@ -310,7 +310,7 @@ export type {
   WorkflowStrategyInput,
   WorkflowTaskSpec,
   WorkflowStrategy,
-} from './orchestrator/kernel-types.js';
+} from './orchestrator/orchestration-types.js';
 
 export {
   getAgentDispatcher,

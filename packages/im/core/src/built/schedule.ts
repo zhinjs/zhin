@@ -10,7 +10,7 @@ import {
   type ScheduleKind,
 } from '@zhin.js/kernel';
 import type { HolidayInput, ScatterInput } from '@zhin.js/kernel';
-import { Plugin, getPlugin } from '../plugin.js';
+import { Plugin } from '../plugin.js';
 
 export interface ScheduleDescriptor {
   kind: ScheduleKind | 'every' | 'at';
@@ -148,7 +148,7 @@ export class ScheduleFeature extends Feature<ScheduleHandle> {
         callback: () => void | Promise<void>,
         id?: string,
       ) {
-        const plugin = getPlugin();
+        const plugin = this as Plugin;
         const jobId = id ?? `sched_${Math.random().toString(36).slice(2, 10)}`;
         const engine = ensureEngine();
         const disposeEngine = engine.register(jobId, descriptor.kind, async () => {

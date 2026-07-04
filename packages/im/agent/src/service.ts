@@ -8,8 +8,6 @@ import { createSyntheticMessage } from '@zhin.js/core';
 import type { Tool } from '@zhin.js/core'
 import type { AIProvider, AIConfig, ChatMessage, ChatCompletionRequest, ChatCompletionResponse, ChatCompletionChunk, AgentTool, ContentPart, Usage } from '@zhin.js/ai';
 import {
-  SessionManager,
-  createMemorySessionManager,
   type ImageGenerationDefaults,
 } from '@zhin.js/ai';
 import type { ModelRegistry } from '@zhin.js/ai';
@@ -66,10 +64,7 @@ export class AIService {
   private defaultProvider: string;
   private routing: NormalizedAiRoutingConfig;
   private bindingRegistry: AgentBindingRegistry;
-  /** @deprecated Legacy ChatMessage session store. Use ContextRepository / agent_sessions (ADR 0009). */
-  public sessions: SessionManager;
   private builtinTools!: AgentTool[];
-  private sessionConfig: { maxHistory?: number; expireMs?: number };
   private contextConfig: ContextConfig;
   private triggerConfig: AITriggerConfig;
   private accessConfig: AIAccessConfig;
@@ -97,13 +92,11 @@ export class AIService {
       || 'openai';
 
     this.bindingRegistry = new AgentBindingRegistry(this.routing.agents);
-    this.sessionConfig = config.sessions || {};
     this.contextConfig = config.context || {};
     this.triggerConfig = config.trigger || {};
     this.accessConfig = config.access || {};
     this.agentConfig = config.agent;
     this.imageGenerationGlobal = config.imageGeneration;
-    this.sessions = createMemorySessionManager(this.sessionConfig);
     this.refreshBuiltinAgentTools();
   }
 
@@ -124,7 +117,6 @@ export class AIService {
     return this.providers.size > 0;
   }
 
-  setSessionManager(manager: SessionManager): void { this.sessions.dispose(); this.sessions = manager; }
   setPlugin(plugin: Plugin): void {
     this.plugin = plugin;
     this.refreshBuiltinAgentTools();
@@ -169,7 +161,6 @@ export class AIService {
   }
 
   getContextConfig(): ContextConfig { return this.contextConfig; }
-  getSessionConfig() { return this.sessionConfig; }
   getTriggerConfig(): AITriggerConfig { return this.triggerConfig; }
   getAccessConfig(): AIAccessConfig { return this.accessConfig; }
   /** 部署级 harness（execSecurity 等）；工具由编排 + TF-IDF + 角色（子 agent）选用 */
@@ -314,7 +305,7 @@ export class AIService {
     return results;
   }
 
-  dispose(): void { this.sessions.dispose(); this.providers.clear(); }
+  dispose(): void { this.providers.clear(); }
 }
 
 function toServiceAgentResult(result: AgentLoopStandaloneResult): ServiceAgentResult {

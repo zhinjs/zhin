@@ -164,7 +164,7 @@ export type {
   DispatchTaskInput,
   HandleUserMessageInput,
 } from './orchestration-service.js';
-export * from './kernel-types.js';
+export * from './orchestration-types.js';
 export {
   MemoryOrchestrationRepository,
   DatabaseOrchestrationRepository,

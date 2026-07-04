@@ -6,7 +6,7 @@ import { Registry, Definition, Databases, Database } from "@zhin.js/database";
 import { formatCompact } from '@zhin.js/logger';
 import { DatabaseConfig, Models } from "../types.js";
 import { Feature, FeatureJSON } from "@zhin.js/kernel";
-import { Plugin, getPlugin } from "../plugin.js";
+import { Plugin } from "../plugin.js";
 import type { PluginLike } from '@zhin.js/kernel';
 import { SystemLogDefinition } from "../models/system-log.js";
 import { UserDefinition } from "../models/user.js";
@@ -136,7 +136,7 @@ export class DatabaseFeature extends Feature<ModelRecord> {
     const feature = this;
     return {
       defineModel<K extends keyof Models>(name: K, definition: Definition<Models[K]>) {
-        const plugin = getPlugin();
+        const plugin = this as Plugin;
         const record: ModelRecord = { name: name as string, definition };
         const dispose = feature.add(record, plugin.name);
         plugin.recordFeatureContribution(feature.name, name as string);

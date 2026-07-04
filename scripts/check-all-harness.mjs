@@ -47,6 +47,11 @@ const checks = [
     description: 'agent/zhin 运行时代码须使用 getLlmTransportModel 而非歧义 getModel',
   },
   {
+    name: 'Legacy AI Exports',
+    command: 'pnpm check:legacy-ai-exports',
+    description: '禁止 @zhin.js/ai 再导出 SessionManager / resolveIMSessionId* / convertLegacy* / getModel',
+  },
+  {
     name: 'Adapter Docs Sync',
     command: 'pnpm check:adapter-docs',
     description: '检查平台适配器文档是否与 plugins/adapters README 同步',

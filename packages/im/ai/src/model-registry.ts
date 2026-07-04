@@ -369,11 +369,6 @@ export class ModelRegistry {
     return this.models.get(providerName)?.find(m => m.id === modelId);
   }
 
-  /** @deprecated Use {@link getCachedModelInfo} — not the LLM transport {@link getLlmTransportModel}. */
-  getModel(providerName: string, modelId: string): AIModelInfo | undefined {
-    return this.getCachedModelInfo(providerName, modelId);
-  }
-
   /** 查找支持特定能力的模型 */
   findModelsWithCapability(capability: string, providerName?: string): AIModelInfo[] {
     const result: AIModelInfo[] = [];

@@ -9,7 +9,7 @@
  * dispatch through `orch.runTask(taskId, message)` without supplying their
  * own executor.
  */
-import type { AgentExecutor } from './kernel-types.js';
+import type { AgentExecutor } from './orchestration-types.js';
 import type { OrchestrationKernel } from './orchestration-service.js';
 import type { AIServiceRefs } from '../init/shared-refs.js';
 import { extractMediaParts } from '../init/message-media.js';

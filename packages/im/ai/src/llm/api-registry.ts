@@ -127,11 +127,6 @@ export function getLlmTransportModel(providerAlias: string, modelId: string): Mo
   };
 }
 
-/** @deprecated Use {@link getLlmTransportModel} — returns pi transport `Model`, not discovery metadata. */
-export function getModel(providerAlias: string, modelId: string): Model {
-  return getLlmTransportModel(providerAlias, modelId);
-}
-
 export function clearApiRegistryForTests(): void {
   apiProviders.clear();
   providerConfigs.clear();

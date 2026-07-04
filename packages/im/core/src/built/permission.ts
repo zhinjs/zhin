@@ -4,7 +4,7 @@
  */
 import { Feature, FeatureJSON } from "@zhin.js/kernel";
 import logger, { formatCompact } from "@zhin.js/logger";
-import { getPlugin } from "../plugin.js";
+import { Plugin } from "../plugin.js";
 import type { MaybePromise, RegisteredAdapter, AdapterMessage } from "../types.js";
 import { Message as MessageClass } from "../message.js";
 import { isBuiltinPermit, parsePermitName } from "./permit-parse.js";
@@ -126,7 +126,7 @@ export class PermissionFeature extends Feature<PermissionItem> {
     const feature = this;
     return {
       addPermission(permission: PermissionItem) {
-        const plugin = getPlugin();
+        const plugin = this as Plugin;
         const dispose = feature.add(permission, plugin.name);
         const permName = permission.name instanceof RegExp ? permission.name.source : permission.name;
         plugin.recordFeatureContribution(feature.name, permName);

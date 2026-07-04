@@ -66,7 +66,7 @@ export function repairAgentMessagesForLlm(messages: AgentMessage[]): AgentMessag
       continue;
     }
 
-    const toolCalls = extractAssistantToolCalls(message);
+    const toolCalls = extractAssistantToolCalls(message as AssistantMessage);
     out.push(message);
     if (toolCalls.length === 0) continue;
 
@@ -75,7 +75,7 @@ export function repairAgentMessagesForLlm(messages: AgentMessage[]): AgentMessag
     while (j < normalized.length) {
       const next = normalized[j]!;
       if (next.role === 'user' || next.role === 'assistant') break;
-      if (next.role === 'toolResult') {
+      if (next.role === 'toolResult' && typeof next.toolCallId === 'string') {
         resultsById.set(next.toolCallId, next);
       }
       j += 1;

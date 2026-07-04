@@ -8,7 +8,7 @@ import type {
   OrchestrationTaskRecord,
 } from '@zhin.js/ai';
 import { parseDependsOn } from '@zhin.js/ai';
-import type { OrchestrationRun, OrchestrationTask, RunEvent } from './kernel-types.js';
+import type { OrchestrationRun, OrchestrationTask, RunEvent } from './orchestration-types.js';
 
 function parseJsonObject(text: string): Record<string, unknown> | undefined {
   if (!text.trim()) return undefined;

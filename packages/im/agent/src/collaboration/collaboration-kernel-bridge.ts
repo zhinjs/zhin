@@ -9,7 +9,7 @@ import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import type { CollaborationScene } from './types.js';
 import type { OrchestrationRunSource, OrchestrationSceneRef, OrchestrationTaskRecord } from '@zhin.js/ai';
 import { getOrchestrationService } from '../orchestrator/orchestration-service.js';
-import { normalizeExecutorKind } from '../orchestrator/kernel-mappers.js';
+import { normalizeExecutorKind } from '../orchestrator/orchestration-mappers.js';
 import {
   isSubstantiveGroupTaskReply,
   resolvePlannerEndpointId,

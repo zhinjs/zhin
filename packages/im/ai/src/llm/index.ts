@@ -55,7 +55,6 @@ export {
   registerProviderInstance,
   getApiProvider,
   getProviderConfig,
-  getModel,
   getLlmTransportModel,
   stream,
   complete,
@@ -114,8 +113,6 @@ export {
 export type { SdkProviderEntry, LegacyProviderEntry } from './register-api-layer.js';
 
 export {
-  convertLegacyTool,
-  convertLegacyTools,
   agentToolToLlmTool,
   agentToolsToLlmTools,
 } from './legacy-tool-bridge.js';

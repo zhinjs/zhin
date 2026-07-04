@@ -12,7 +12,7 @@ import {
   assistantText,
   createUserMessage,
   getLlmTransportModel,
-  convertLegacyTools,
+  agentToolsToLlmTools,
   type AgentMessage,
   type ParsedToolCall,
   type AssistantMessage,

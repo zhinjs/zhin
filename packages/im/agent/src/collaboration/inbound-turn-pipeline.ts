@@ -58,7 +58,7 @@ import {
   orchestrationSourceFromMessage,
   tryCompleteKernelGroupMentionFromOutbound,
 } from './collaboration-kernel-bridge.js';
-import { normalizeExecutorKind } from '../orchestrator/kernel-mappers.js';
+import { normalizeExecutorKind } from '../orchestrator/orchestration-mappers.js';
 import {
   messageTextContent,
   stripCellToolJsonFromOutputElements,

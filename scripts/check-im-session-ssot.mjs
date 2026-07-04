@@ -19,7 +19,7 @@ const scanRoots = [
 const ssotAllowlist = new Set([
   'packages/im/core/src/im-scene.ts',
   'packages/im/core/src/im-session-id.ts',
-  'packages/im/ai/src/memory/session.ts',
+  'packages/im/kernel/src/im-identity.ts',
 ]);
 
 const skipDirNames = new Set(['node_modules', 'lib', 'dist', 'coverage', '.git', 'tests']);
