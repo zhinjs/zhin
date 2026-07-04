@@ -261,6 +261,3 @@ export function sdkEntryFromProvider(provider: AIProvider): import('./llm/regist
     models: [...provider.models],
   };
 }
-
-/** @deprecated transitional export */
-export type { ProviderConfig };

@@ -10,7 +10,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const aiIndex = path.join(repoRoot, 'packages/im/ai/src/index.ts');
 const content = fs.readFileSync(aiIndex, 'utf8');
 
-const forbidden = [
+const forbiddenSubstrings = [
   'SessionManager',
   'MemorySessionManager',
   'DatabaseSessionManager',
@@ -22,10 +22,19 @@ const forbidden = [
   'resolveIMSceneIdForSession',
   'convertLegacyTool',
   'convertLegacyTools',
-  'getModel,',
+  'setLegacyProviderResolver',
+  'jsonSchemaToTypeBox',
 ];
 
-const violations = forbidden.filter((sym) => content.includes(sym));
+const forbiddenPatterns = [
+  { label: 'getModel export', re: /\bgetModel\b/ },
+  { label: 'Session type export', re: /\bSessionConfig\b|\bSession\b(?=,|\s*\})/ },
+];
+
+const violations = [
+  ...forbiddenSubstrings.filter((sym) => content.includes(sym)),
+  ...forbiddenPatterns.filter(({ re }) => re.test(content)).map(({ label }) => label),
+];
 
 if (violations.length) {
   console.error('Harness legacy ai export check: FAILED\n');

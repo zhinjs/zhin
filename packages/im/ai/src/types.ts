@@ -10,9 +10,7 @@
 /** 消息角色 */
 export type MessageRole = 'system' | 'user' | 'assistant' | 'tool' | 'tool_call' | 'tool_result';
 
-/** 聊天消息
- * @deprecated Legacy OpenAI-shaped history. Production agent path uses {@link AgentMessage} + ContextRepository (ADR 0009).
- */
+/** OpenAI-compatible wire format for Provider chat/stream APIs (not agent session history). */
 export interface ChatMessage {
   role: MessageRole;
   content: string | ContentPart[];
@@ -334,33 +332,6 @@ export interface AgentResult {
 }
 
 // ============================================================================
-// Session 类型
-// ============================================================================
-
-/** 会话配置
- * @deprecated Use ContextRepository / agent session stores (ADR 0009).
- */
-export interface SessionConfig {
-  provider: string;
-  model?: string;
-  systemPrompt?: string;
-  maxHistory?: number;
-  expireMs?: number;
-}
-
-/** 会话
- * @deprecated Use ContextRepository + AgentMessage (ADR 0009).
- */
-export interface Session {
-  id: string;
-  config: SessionConfig;
-  messages: ChatMessage[];
-  createdAt: number;
-  updatedAt: number;
-  metadata?: Record<string, any>;
-}
-
-// ============================================================================
 // AI Service 配置
 // ============================================================================
 
@@ -396,36 +367,12 @@ export interface AgentBindingConfig {
   nickname?: string;
 }
 
-/** @deprecated 已并入 ai.agents.<name>.priority / match */
-export interface RouteEntryConfig {
-  priority: number;
-  match: RouteMatchConfig;
-}
-
-/** AI 服务配置 */
 export interface AIConfig {
   enabled?: boolean;
-  /** @deprecated 使用 ai.agents.zhin.provider */
-  defaultProvider?: string;
-  /** 命名 provider 实例；或旧版固定键（由 @zhin.js/agent 归一化） */
-  providers?: Record<string, ProviderInstanceConfig> | {
-    openai?: ProviderConfig;
-    anthropic?: ProviderConfig;
-    deepseek?: ProviderConfig;
-    moonshot?: ProviderConfig;
-    zhipu?: ProviderConfig;
-    google?: ProviderConfig;
-    gemini?: ProviderConfig;
-    ollama?: OllamaProviderConfig;
-    cloudflare?: ProviderConfig & { accountId: string };
-    custom?: ProviderConfig[];
-  };
+  /** 命名 provider 实例 */
+  providers?: Record<string, ProviderInstanceConfig>;
   /** per-agent 绑定 + 可选入站 priority/match（协作角色如 researcher 亦用 agents.<role>） */
   agents?: Record<string, AgentBindingConfig>;
-  /** @deprecated 已并入 ai.agents.<role>；读配置时自动迁移 */
-  pipeline?: Record<string, Pick<AgentBindingConfig, 'nickname' | 'provider' | 'model' | 'mcpServers'>>;
-  /** @deprecated 使用 ai.agents.<name>.priority / match */
-  routes?: Record<string, RouteEntryConfig>;
   sessions?: {
     /** 最大历史消息数（数据库模式默认200，内存模式默认100） */
     maxHistory?: number;
@@ -496,10 +443,6 @@ export interface AIConfig {
     /** 知识库目录路径（相对于项目根目录，默认 "knowledge"） */
     baseDir?: string;
   };
-  /**
-   * @deprecated 请使用 ai.memory 文件三层；仍为 true 时注册 MCP 图谱并打弃用警告。
-   */
-  memoryMcp?: boolean;
   /** PAT for adapter-github auto-registered server-github MCP (overrides env when set). */
   githubMcp?: {
     token?: string;
@@ -528,10 +471,6 @@ export interface AIConfig {
   }>;
   /** Agent 工具开关与执行安全 */
   agent?: {
-    /** @deprecated 使用 ai.agents.<name>.tools 白名单 */
-    disabledTools?: string[];
-    /** @deprecated 使用 ai.agents.<name>.tools 白名单 */
-    allowedTools?: string[];
     /** bash 执行策略：deny=禁止执行，allowlist=仅允许列表内命令，full=不限制 */
     execSecurity?: 'deny' | 'allowlist' | 'full';
     /** 预设命令白名单模式：readonly / network / development / custom（默认 custom，使用自定义 execAllowlist） */
@@ -551,8 +490,6 @@ export interface AIConfig {
     };
     /** Worker 侧 TF-IDF 载入 deferred 工具数量上限 */
     deferredToolMaxResults?: number;
-    /** @deprecated 使用 agent.deferredTools.alwaysLoadedTools */
-    orchestratorTools?: string[];
     /** 工具 schema 按需加载 */
     deferredTools?: {
       maxLoadedPerSession?: number;

@@ -4,7 +4,9 @@ node_modules/
 .agent/
 .agents/
 .claude/
-data/
+/data/
+!basic/schedule/src/data/
+!basic/schedule/src/data/**
 .cursor/
 .opencode/
 .codex/

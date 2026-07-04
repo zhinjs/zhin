@@ -512,7 +512,7 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
         bindingRegistry?.getBinding(turnPlan.handlerProfile)
         ?? bindingRegistry?.getBinding(DEFAULT_ZHIN_AGENT_NAME)
         ?? bindingRegistry?.requireZhinBinding();
-      if (handlerBinding) zhinAgent.setActiveBinding(handlerBinding);
+      if (handlerBinding) zhinAgent.configure({ activeBinding: handlerBinding });
 
       if (cell && findCellMemberByEndpoint(cell, endpointId)) {
         const snapCell = (await cellService.getSceneFresh(cell.id)) ?? cell;

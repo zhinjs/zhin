@@ -35,7 +35,7 @@ export {
   assistantText,
   registerLlmApiFromProviders,
   resetLlmApiRegistryForTests,
-  setLegacyProviderResolver,
+  setLiveModelsResolver,
   driverToModelApi,
   isSdkId,
   SDK_IDS,
@@ -112,8 +112,6 @@ export type {
   ToolResultTransform,
   ToolFilterOptions,
   Usage,
-  SessionConfig,
-  Session,
   JsonSchema,
   ToolContext,
 } from './types.js';

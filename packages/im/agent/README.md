@@ -7,9 +7,9 @@ Zhin AI Agent 组合层：在 `@zhin.js/core` 的类型与 Provider 之上，提
 ## 功能特性
 
 - 🤖 **agentLoop 统一路径**：ZhinAgent、Subagent、Deferred Worker、AIService 均经 `agentLoop`（legacy `Agent.run` 仅保留在 `@zhin.js/ai` 供单测）
-- 📝 **会话管理**：`SessionManager`、内存/数据库会话、`SessionManager.generateId`
+- 📝 **会话持久化**：`AgentSessionStore` + `ContextRepository` + `ImTranscriptStore`（ADR 0009）
 - 🧠 **ZhinAgent**：与 Zhin 消息流集成的智能体（SOUL/TOOLS/AGENTS、工具收集、执行策略）
-- 🔍 **模型自动发现**：`ModelRegistry` 调用 `listModels()`（OpenAI 兼容 `/v1/models`、Ollama `/api/tags`）；结果写入 `provider.models` 并供 `getModel()` 校验；yaml 显式 `models` 时以配置为准
+- 🔍 **模型自动发现**：`ModelRegistry` 调用 `listModels()`；结果写入 `provider.models` 并供 `getLlmTransportModel()` 校验
 - 🔄 **模型自动降级**：首选模型失败时按 `resolveModelCandidates` 候选链 fallback（文本 / 多模态 / standalone 均走 agentLoop）
 - 🛡️ **6 层 Bash 安全**：`ExecPolicy` 纵深防御（危险黑名单、环境变量剥离、wrapper 剥离、复合命令拆分、只读放行、交互式审批）
 - 📂 **文件访问安全**：`FilePolicy` 路径检查、设备路径拦截、命令读写分类
@@ -46,13 +46,12 @@ pnpm add @ai-sdk/openai   # 示例：按厂商安装 provider SDK
 import {
   ZhinAgent,
   AIService,
-  SessionManager,
   registerAIHook,
 } from 'zhin.js/agent'
 
 // 使用 ctx.ai (AIService)
 useContext('ai', async (ai) => {
-  const session = ai.sessions.get(sessionId)
+  const result = await ai.runAgent('你好', { provider: 'ollama' })
   // ...
 })
 ```
@@ -84,7 +83,7 @@ useContext('ai', async (ai) => {
 | 初始化 | `initAgentModule` |
 | Agent | `ServiceAgent`、`CreateServiceAgentOptions`（`AIService.createAgent`）；legacy `Agent` / `createAgent` re-export 自 `@zhin.js/ai` |
 | Model harness | `MODEL_HARNESS_DEFAULTS`, `resolveModelHarness`, `mergeModelHarnessValues` |
-| 服务与会话 | `AIService`, `SessionManager`, `MemorySessionManager`, `DatabaseSessionManager`, `createMemorySessionManager`, `createDatabaseSessionManager` |
+| 服务与会话 | `AIService`, `ContextRepository`, `AgentSessionStore`, `ImTranscriptStore` |
 | ZhinAgent | `ZhinAgent`，以及 config / exec-policy / file-policy / tool-runtime / prompt / builtin-tools 等子模块 |
 | 安全策略 | `checkExecPolicy`, `applyExecPolicyToTools`, `isDangerousCommand`, `stripEnvVarPrefix`, `stripSafeWrappers`, `splitCompoundCommand`, `extractCommandName`, `ExecPolicyResult`, `checkFileAccess`, `classifyBashCommand`, `isBlockedDevicePath` |
 | 提示词构建 | `buildRichSystemPrompt`, `buildEnhancedPersona`, `buildUserMessageWithHistory`, `buildContextHint` |
@@ -149,7 +148,7 @@ ai:
 框架已提供 **SubagentManager**：主 ZhinAgent 通过工具 `spawn_task` 把复杂/耗时任务派给**后台子 Agent** 异步执行，子 Agent 默认仅用受限工具集（文件、Shell、网络搜索等），完成后通过回调把结果发回主会话。
 
 - 主对话不阻塞，用户可继续聊天。
-- 子 Agent 由 `ZhinAgent.initSubagentManager(createTools)` 在 init 时挂好；`spawn_task` 为主编排序列化常驻工具（见 `orchestratorTools` / `DEFAULT_ORCHESTRATOR_TOOLS`）。
+- 子 Agent 由 `ZhinAgent.initSubagentManager(createTools)` 在 init 时挂好；`spawn_task` 为主编排序列化常驻工具（见 `deferredTools.alwaysLoadedTools` / `DEFAULT_ALWAYS_LOADED_TOOLS`）。
 - 用户说「后台帮我整理这份文档」时，主 Agent 可调用 `spawn_task({ task: '...', label: '...' })`，子任务在后台跑完后再通知用户。
 
 无需额外配置即可使用；若需放宽子 Agent 的工具范围，使用 `ai.agent.subagentTools` 显式追加白名单（不会自动继承主会话全部 skill/tool）。

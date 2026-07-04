@@ -87,7 +87,6 @@ export class AIService {
     const zhinProvider = this.routing.agents[DEFAULT_ZHIN_AGENT_NAME]?.provider;
     this.defaultProvider =
       zhinProvider
-      || config.defaultProvider
       || this.providers.keys().next().value
       || 'openai';
 

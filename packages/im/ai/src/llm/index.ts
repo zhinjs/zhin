@@ -63,7 +63,6 @@ export {
   createAssistantMessageEventStream,
   clearApiRegistryForTests,
   setLiveModelsResolver,
-  setLegacyProviderResolver,
 } from './api-registry.js';
 export type {
   StreamOptions,
@@ -110,7 +109,7 @@ export {
   resetLlmApiRegistryForTests,
   ensureLanguageModelRegistered,
 } from './register-api-layer.js';
-export type { SdkProviderEntry, LegacyProviderEntry } from './register-api-layer.js';
+export type { SdkProviderEntry } from './register-api-layer.js';
 
 export {
   agentToolToLlmTool,

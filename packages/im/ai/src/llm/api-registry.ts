@@ -67,21 +67,6 @@ export function getLiveModelsResolver(): typeof liveModelsResolver {
   return liveModelsResolver;
 }
 
-/** @deprecated Use setLiveModelsResolver */
-export function setLegacyProviderResolver(
-  resolver: ((alias: string) => { models: string[] }) | undefined,
-): void {
-  if (!resolver) {
-    liveModelsResolver = undefined;
-    return;
-  }
-  liveModelsResolver = (alias) => resolver(alias)?.models ?? [];
-}
-
-export function getLegacyProviderResolver(): typeof liveModelsResolver {
-  return liveModelsResolver;
-}
-
 export function registerApiProvider(registration: ApiProviderRegistration): void {
   apiProviders.set(registration.api, registration);
 }

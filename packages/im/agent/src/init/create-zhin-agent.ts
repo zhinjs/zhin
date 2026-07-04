@@ -115,8 +115,6 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     const deferredFromConfig = (agentConfig as ZhinAgentConfig | undefined)?.deferredTools
       ?? appConfig.ai?.agent?.deferredTools;
     let alwaysLoadedTools = deferredFromConfig?.alwaysLoadedTools
-      ?? (agentConfig as ZhinAgentConfig | undefined)?.orchestratorTools
-      ?? appConfig.ai?.agent?.orchestratorTools
       ?? [...DEFAULT_ALWAYS_LOADED_TOOLS];
     if (semanticMemory) {
       for (const name of ['memory_search', 'memory_upsert'] as const) {
@@ -307,8 +305,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
         send: (opts) => adapter.sendMessage(opts),
       });
     };
-    agent.setSubagentSender(deliverOutbound);
-    agent.setDeferredResultSender(deliverOutbound);
+    agent.configure({ subagentSender: deliverOutbound, deferredResultSender: deliverOutbound });
 
     // Register default kernel executors + five-agent workflow strategy now that
     // the subagent manager and sender are configured. Registration is idempotent

@@ -111,7 +111,7 @@ flowchart TD
 - **ContextRepository** - 可序列化 `AgentMessage[]` 读写（内存或 `agent_messages` + `agent_summaries`）
 - **AgentSessionStore** - `agent_sessions` 活跃/归档（`session_key` → 纪元 `session_id`）
 - **ImTranscriptStore** - `im_transcripts` 扁平静态 IM 消息（旁听、`chat_history` 工具）
-- **SessionManager** - 遗留 API；IM 主路径见 `AgentSessionStore` + `ContextRepository`
+- **AgentSessionStore** + **ContextRepository** — IM 主路径会话与 LLM 历史（ADR 0009）
 - **ContextManager** - 场景级摘要（`context_summaries`，非 IM 主路径）
 - **ConversationMemory** - 主题检测 + 链式摘要（辅助；LLM 历史以 `ContextRepository` 为准）
 - **CostTracker** - Token 用量与成本追踪器，支持按模型/Provider 统计

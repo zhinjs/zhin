@@ -56,8 +56,6 @@ export interface IAgentSessionManager {
   compactSessionForCommMessage(commMessage: Message): Promise<{ ok: boolean; message: string }>;
   archiveSessionForCommMessage(commMessage: Message): Promise<boolean>;
   getLastTurnMetrics(): ZhinAgentTurnMetrics | null;
-  /** @deprecated 消息事实源已迁至 im_transcripts / agent_messages */
-  upgradeMemoryToDatabase(_msgModel: unknown, _sumModel: unknown): Promise<void>;
   upgradeProfilesToDatabase(model: any): void;
 }
 
@@ -68,8 +66,6 @@ export interface IAgentDiagnostics {
   getSubagentManager(): SubagentManager | null;
   getEventEmitter(): ZhinAgentEventEmitter;
   getLastTurnMetrics(): ZhinAgentTurnMetrics | null;
-  /** @deprecated 使用 refs.zhinAgent.registerTool */
-  registerTool(tool: import('@zhin.js/ai').AgentTool): () => void;
 }
 
 /**

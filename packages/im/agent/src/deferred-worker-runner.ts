@@ -28,10 +28,10 @@ import { logPromptComposition } from './zhin-agent/prompt-trace.js';
 import { resolveWorkspacePrompt } from './zhin-agent/workspace-prompt.js';
 import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import type { Message } from '@zhin.js/core';
-import { DEFAULT_ORCHESTRATOR_TOOLS } from './zhin-agent/config.js';
+import { DEFAULT_ALWAYS_LOADED_TOOLS } from './zhin-agent/config.js';
 
 const logger = new Logger(null, 'DeferredWorker');
-const ORCHESTRATOR_TOOL_SET = new Set<string>(DEFAULT_ORCHESTRATOR_TOOLS);
+const ORCHESTRATOR_TOOL_SET = new Set<string>(DEFAULT_ALWAYS_LOADED_TOOLS);
 
 /** 回传给主 Agent 的摘要最大字符数 */
 export const DEFAULT_WORKER_SUMMARY_MAX_CHARS = 1500;

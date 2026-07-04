@@ -248,21 +248,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     return assembleDisciplinedPrompt(asPrivate(this), basePrompt);
   }
 
-  /** @deprecated 使用 configure({ skillRegistry }) */
-  setSkillRegistry(registry: SkillRegistry): void { this.configure({ skillRegistry: registry }); }
-
-  /** @deprecated 使用 configure({ orchestrator }) */
-  setOrchestrator(orchestrator: AgentOrchestrator): void { this.configure({ orchestrator }); }
-
-  /** @deprecated 使用 configure({ modelRegistry }) */
-  setModelRegistry(registry: ModelRegistry): void { this.configure({ modelRegistry: registry }); }
-
-  /** @deprecated 使用 configure({ hostPlugin }) */
-  setHostPlugin(plugin: Plugin): void { this.configure({ hostPlugin: plugin }); }
-
-  /** @deprecated 使用 configure({ providerResolver }) */
-  setProviderResolver(resolver: (alias: string) => AIProvider): void { this.configure({ providerResolver: resolver }); }
-
   private wireLlmApiLayer(): void {
     registerLlmApiFromProviders(
       [sdkEntryFromProvider(this.provider)],
@@ -271,15 +256,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
         return p?.models ?? [];
       },
     );
-  }
-
-  /** @deprecated 使用 configure({ activeBinding }) */
-  setActiveBinding(binding: ResolvedAgentBinding | null): void {
-    if (binding === null) {
-      this.activeBinding = null;
-    } else {
-      this.configure({ activeBinding: binding });
-    }
   }
 
   getActiveBinding(): ResolvedAgentBinding | null {
@@ -296,11 +272,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
       }
     }
     return this.provider;
-  }
-
-  /** @deprecated 消息事实源已迁至 im_transcripts / agent_messages，保留空实现以兼容旧 bootstrap */
-  async upgradeMemoryToDatabase(_msgModel: unknown, _sumModel: unknown): Promise<void> {
-    return;
   }
 
   /** 等待 DB store 注入（bootstrap 会 mark；已 mark 时立即返回） */
@@ -386,12 +357,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     });
     logger.debug('SubagentManager initialized');
   }
-
-  /** @deprecated 使用 configure({ subagentSender }) */
-  setSubagentSender(sender: SubagentResultSender): void { this.configure({ subagentSender: sender }); }
-
-  /** @deprecated 使用 configure({ deferredResultSender }) */
-  setDeferredResultSender(sender: SubagentResultSender): void { this.configure({ deferredResultSender: sender }); }
 
   getDeferredResultSender(): SubagentResultSender | null {
     return this.deferredResultSender;

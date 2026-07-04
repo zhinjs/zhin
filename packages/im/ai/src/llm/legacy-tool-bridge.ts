@@ -3,7 +3,7 @@ import type { AgentTool as LegacyAgentTool } from '../types.js';
 import type { LlmTool } from './types/tool.js';
 import { jsonSchemaToZod } from './json-schema-zod.js';
 
-export { jsonSchemaToZod, jsonSchemaToTypeBox } from './json-schema-zod.js';
+export { jsonSchemaToZod } from './json-schema-zod.js';
 
 /** `@zhin.js/ai` AgentTool → pi LlmTool for agentLoop transport. */
 export function agentToolToLlmTool(tool: LegacyAgentTool): LlmTool {

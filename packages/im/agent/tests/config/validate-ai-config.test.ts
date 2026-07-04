@@ -26,14 +26,13 @@ describe('validateAiRoutingConfig', () => {
     expect(errors.some(e => e.includes('vision') && e.includes('priority'))).toBe(true);
   });
 
-  it('旧版 ai.routes 归一化进 agents 后可通过校验', () => {
+  it('agents 内联 priority/match 可通过校验', () => {
     const cfg = normalizeAiRoutingConfig({
       providers: { p: { sdk: 'openai', apiKey: 'k' } },
       agents: {
         zhin: { provider: 'p', model: 'm' },
-        vision: { provider: 'p', model: 'm2' },
+        vision: { provider: 'p', model: 'm2', priority: 10, match: { adapter: 'icqq' } },
       },
-      routes: { vision: { priority: 10, match: { adapter: 'icqq' } } },
     } as any);
     const errors = validateAiRoutingConfig(cfg);
     expect(errors).toEqual([]);
@@ -60,20 +59,20 @@ describe('validateAiRoutingConfig', () => {
     expect(validateAiRoutingConfig(cfg)).toEqual([]);
   });
 
-  it('legacy ai.pipeline 迁移进 agents.<role>', () => {
-    const cfg = normalizeAiRoutingConfig({
+  it('拒绝 ai.routes', () => {
+    expect(() => normalizeAiRoutingConfig({
       providers: { p: { sdk: 'openai', apiKey: 'k' } },
       agents: { zhin: { provider: 'p', model: 'base' } },
-      pipeline: {
-        evaluator: { provider: 'p', model: 'glm', nickname: '分析师' },
-      },
-    } as any);
-    expect(cfg.agents.evaluator).toEqual({
-      provider: 'p',
-      model: 'glm',
-      nickname: '分析师',
-    });
-    expect(validateAiRoutingConfig(cfg)).toEqual([]);
+      routes: { vision: { priority: 10, match: { adapter: 'icqq' } } },
+    } as any)).toThrow(/ai\.routes removed/);
+  });
+
+  it('拒绝 ai.pipeline', () => {
+    expect(() => normalizeAiRoutingConfig({
+      providers: { p: { sdk: 'openai', apiKey: 'k' } },
+      agents: { zhin: { provider: 'p', model: 'base' } },
+      pipeline: { evaluator: { provider: 'p', model: 'glm', nickname: '分析师' } },
+    } as any)).toThrow(/ai\.pipeline removed/);
   });
 
   it('拒绝 api/preset/spec 字段', () => {

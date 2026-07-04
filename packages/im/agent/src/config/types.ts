@@ -31,12 +31,6 @@ export interface AgentBindingConfig {
   nickname?: string;
 }
 
-/** @deprecated 仅用于归一化旧版 ai.routes */
-export interface RouteEntryConfig {
-  priority: number;
-  match: RouteMatchConfig;
-}
-
 /** 解析后的 agent 绑定（运行时） */
 export interface ResolvedAgentBinding {
   name: string;
