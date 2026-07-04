@@ -102,7 +102,7 @@ export function getProviderConfig(alias: string): RegisteredProvider | undefined
   return providerConfigs.get(alias);
 }
 
-export function getModel(providerAlias: string, modelId: string): Model {
+export function getLlmTransportModel(providerAlias: string, modelId: string): Model {
   const entry = providerConfigs.get(providerAlias);
   if (!entry) {
     throw new Error(`Unknown provider alias: ${providerAlias}`);
@@ -125,6 +125,11 @@ export function getModel(providerAlias: string, modelId: string): Model {
     contextWindow: 128_000,
     maxTokens: 8_192,
   };
+}
+
+/** @deprecated Use {@link getLlmTransportModel} — returns pi transport `Model`, not discovery metadata. */
+export function getModel(providerAlias: string, modelId: string): Model {
+  return getLlmTransportModel(providerAlias, modelId);
 }
 
 export function clearApiRegistryForTests(): void {

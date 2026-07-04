@@ -10,7 +10,9 @@
 /** 消息角色 */
 export type MessageRole = 'system' | 'user' | 'assistant' | 'tool' | 'tool_call' | 'tool_result';
 
-/** 聊天消息 */
+/** 聊天消息
+ * @deprecated Legacy OpenAI-shaped history. Production agent path uses {@link AgentMessage} + ContextRepository (ADR 0009).
+ */
 export interface ChatMessage {
   role: MessageRole;
   content: string | ContentPart[];
@@ -335,7 +337,9 @@ export interface AgentResult {
 // Session 类型
 // ============================================================================
 
-/** 会话配置 */
+/** 会话配置
+ * @deprecated Use ContextRepository / agent session stores (ADR 0009).
+ */
 export interface SessionConfig {
   provider: string;
   model?: string;
@@ -344,7 +348,9 @@ export interface SessionConfig {
   expireMs?: number;
 }
 
-/** 会话 */
+/** 会话
+ * @deprecated Use ContextRepository + AgentMessage (ADR 0009).
+ */
 export interface Session {
   id: string;
   config: SessionConfig;

@@ -653,6 +653,9 @@ export class DatabaseSessionManager implements ISessionManager {
  * 会话管理器包装器
  * 支持同步和异步接口的统一使用
  */
+/**
+ * @deprecated Legacy ChatMessage session manager. Production path uses ContextRepository + AgentMessage.
+ */
 export class SessionManager implements ISessionManager {
   private manager: ISessionManager;
 

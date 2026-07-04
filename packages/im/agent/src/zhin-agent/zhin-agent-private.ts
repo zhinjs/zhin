@@ -20,7 +20,6 @@ import type { AgentOrchestrator } from '../orchestrator/index.js';
 import type { SubagentManager } from '../subagent.js';
 import type { UserProfileStore } from '../user-profile.js';
 import type { ConversationMemory } from '@zhin.js/ai';
-import type { SessionManager } from '@zhin.js/ai';
 import type { RateLimiter } from '@zhin.js/ai';
 import type { ZhinAgentEventEmitter } from './event-emitter.js';
 import type { TurnTracker } from './turn-tracker.js';
@@ -43,7 +42,6 @@ export interface ZhinAgentPrivate {
   getTurnProvider(): AIProvider;
   readonly skillRegistry: SkillRegistry | null;
   readonly orchestrator: AgentOrchestrator | null;
-  readonly sessions: SessionManager;
   readonly imSessionStore: IMSessionStore | MemoryIMSessionStore;
   readonly agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
   readonly contextRepository: ContextRepository;

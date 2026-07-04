@@ -8,7 +8,7 @@ import {
   isOmittedToolSummary,
   sanitizeToolResult,
   stripHallucinatedToolCalls,
-  getModel,
+  getLlmTransportModel,
 } from '@zhin.js/ai';
 import { stripThinkBlocks } from './zhin-agent/text-sanitize.js';
 import { runAgentLoopStandaloneTurn } from './zhin-agent/agent-loop-standalone.js';
@@ -154,7 +154,7 @@ export class DeferredWorkerRunner {
     }
 
     const model = provider.models[0];
-    const llmModel = getModel(provider.name, model);
+    const llmModel = getLlmTransportModel(provider.name, model);
 
     const platformBody = await resolveAgentPromptMarkdown({
       ctx: promptCtx,

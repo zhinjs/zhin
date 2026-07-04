@@ -1,3 +1,7 @@
+/**
+ * Legacy ChatMessage context budget helpers.
+ * @deprecated Use ContextRepository compaction (transformContextWithCompaction) on AgentMessage history.
+ */
 import type { AIProvider, ChatMessage, PruneResult } from '@zhin.js/ai';
 import {
   DEFAULT_CONTEXT_TOKENS,
@@ -24,7 +28,7 @@ function resolveRegistryWindow(
   model?: string,
 ): number | undefined {
   if (!registry || !model) return undefined;
-  return registry.getModel(provider.name, model)?.contextWindow;
+  return registry.getCachedModelInfo(provider.name, model)?.contextWindow;
 }
 
 export function resolveContextBudget(params: {

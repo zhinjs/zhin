@@ -42,6 +42,11 @@ const checks = [
     description: '检查 IM 场景/session 身份解析是否使用 core SSOT',
   },
   {
+    name: 'getModel Import Disambiguation',
+    command: 'pnpm check:get-model-imports',
+    description: 'agent/zhin 运行时代码须使用 getLlmTransportModel 而非歧义 getModel',
+  },
+  {
     name: 'Adapter Docs Sync',
     command: 'pnpm check:adapter-docs',
     description: '检查平台适配器文档是否与 plugins/adapters README 同步',

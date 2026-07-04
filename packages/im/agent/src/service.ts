@@ -66,6 +66,7 @@ export class AIService {
   private defaultProvider: string;
   private routing: NormalizedAiRoutingConfig;
   private bindingRegistry: AgentBindingRegistry;
+  /** @deprecated Legacy ChatMessage session store. Use ContextRepository / agent_sessions (ADR 0009). */
   public sessions: SessionManager;
   private builtinTools!: AgentTool[];
   private sessionConfig: { maxHistory?: number; expireMs?: number };

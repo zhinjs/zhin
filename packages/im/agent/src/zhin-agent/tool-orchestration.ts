@@ -1,5 +1,5 @@
 import type { AgentTool, LlmTool } from '@zhin.js/ai';
-import { convertLegacyTool } from '@zhin.js/ai';
+import { agentToolToLlmTool } from '../tool-bridge.js';
 import {
   getLoadedToolNamesFromSnapshot,
   addSkillToSnapshot,
@@ -108,9 +108,9 @@ export function buildLlmToolsForProvider(
     return catalog
       .filter(item => item.source !== 'meta')
       .map(item => ({
-        ...convertLegacyTool(item.fullTool),
+        ...agentToolToLlmTool(item.fullTool),
         deferLoading: !loaded.has(item.name),
       }));
   }
-  return apiTools.map(t => convertLegacyTool(t));
+  return apiTools.map(t => agentToolToLlmTool(t));
 }

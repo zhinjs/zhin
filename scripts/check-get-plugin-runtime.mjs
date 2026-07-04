@@ -18,6 +18,16 @@ const scanRoots = [
   'examples/full-bot/src/plugins',
   'examples/demo-bot/src/plugins',
   'examples/test-bot/src/plugins',
+  'packages/im/agent/src',
+  'packages/im/zhin/src',
+];
+
+/** Paths where getPlugin() at registration/bootstrap is intentional */
+const getPluginAllowlist = [
+  '/init/',
+  'plugin-context.ts',
+  'host-plugin-registry.ts',
+  'packages/im/core/src/built/',
 ];
 
 const CALLBACK_MARKERS = [

@@ -11,7 +11,7 @@ import {
   agentContextFrom,
   assistantText,
   createUserMessage,
-  getModel,
+  getLlmTransportModel,
   convertLegacyTools,
   type AgentMessage,
   type ParsedToolCall,
@@ -153,7 +153,7 @@ async function runAgentLoopVisionTurnOnce(
   const { host, sessionId, commMessage, visionSystemPrompt, modelId, onChunk, promptHooks, signal } = input;
   const repo = host.contextRepository;
   const providerAlias = host.getTurnProvider().name;
-  const llmModel = getModel(providerAlias, modelId);
+  const llmModel = getLlmTransportModel(providerAlias, modelId);
   const loaded = await repo.loadContext(sessionId);
   const promptMessages = input.userMessages;
 
@@ -293,7 +293,7 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
   const repo = host.contextRepository;
 
   const providerAlias = host.getTurnProvider().name;
-  const llmModel = getModel(providerAlias, modelId);
+  const llmModel = getLlmTransportModel(providerAlias, modelId);
   const loaded = await repo.loadContext(sessionId);
   const promptMessages = input.initialMessages?.length
     ? input.initialMessages

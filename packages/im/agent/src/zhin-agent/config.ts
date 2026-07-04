@@ -13,7 +13,6 @@ import type {
   MemoryAgentSessionStore,
   MemoryIMSessionStore,
   ModelRegistry,
-  SessionManager,
 } from '@zhin.js/ai';
 import type { Plugin } from '@zhin.js/core';
 import type { ModelHarnessConfig } from './model-harness.js';
@@ -214,7 +213,6 @@ export const DEFAULT_WORKER_BASE_TOOLS = [
 export interface ZhinAgentDependencies {
   skillRegistry: SkillRegistry;
   orchestrator: AgentOrchestrator;
-  sessionManager: SessionManager;
   imSessionStore: IMSessionStore | MemoryIMSessionStore;
   agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
   contextRepository: ContextRepository;

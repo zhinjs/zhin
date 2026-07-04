@@ -364,9 +364,14 @@ export class ModelRegistry {
     return new Map(this.models);
   }
 
-  /** 获取单个模型信息 */
-  getModel(providerName: string, modelId: string): AIModelInfo | undefined {
+  /** 获取单个模型发现缓存条目 */
+  getCachedModelInfo(providerName: string, modelId: string): AIModelInfo | undefined {
     return this.models.get(providerName)?.find(m => m.id === modelId);
+  }
+
+  /** @deprecated Use {@link getCachedModelInfo} — not the LLM transport {@link getLlmTransportModel}. */
+  getModel(providerName: string, modelId: string): AIModelInfo | undefined {
+    return this.getCachedModelInfo(providerName, modelId);
   }
 
   /** 查找支持特定能力的模型 */

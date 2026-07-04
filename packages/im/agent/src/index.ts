@@ -19,6 +19,12 @@ export type {
 } from './plugin-loop-hooks.js';
 
 export { ZhinAgent } from './zhin-agent/index.js';
+export {
+  pluginToolToAgentTool,
+  agentToolToLlmTool,
+  agentToolsToLlmTools,
+} from './tool-bridge.js';
+export type { NormalizableTool } from './tool-bridge.js';
 export type { ZhinAgentConfig, OnChunkCallback } from './zhin-agent/index.js';
 export type {
   TurnEvent, TurnUsage,
