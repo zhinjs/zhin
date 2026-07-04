@@ -27,7 +27,7 @@ import {
   formatPassiveGroupContextBlock,
 } from './passive-group-buffer.js';
 import { readCollaborationTurnSnapshot } from '../collaboration/collaboration-turn-snapshot.js';
-import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
+import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 
 /** 合并协作 roster + handback 提示。编排状态由 OrchestrationKernel 管理。 */
 function resolveTurnCollaborationHint(

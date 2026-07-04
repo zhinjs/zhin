@@ -26,7 +26,7 @@ import { createOwnerOrchestratedToolResultTransform } from './orchestrator/owner
 import { applyExecPolicyToTools } from './security/exec-policy.js';
 import { logPromptComposition } from './zhin-agent/prompt-trace.js';
 import { resolveWorkspacePrompt } from './zhin-agent/workspace-prompt.js';
-import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
+import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import type { Message } from '@zhin.js/core';
 import { DEFAULT_ORCHESTRATOR_TOOLS } from './zhin-agent/config.js';
 

@@ -15,6 +15,7 @@ import {
   mergeAITriggerConfig,
   resolveSenderRoles,
   resolveIMSessionIdFromMessage,
+  resolveSceneFieldsFromMessage,
   parseRichMediaContent,
   DEFAULT_AI_TRIGGER_CONFIG,
   type AITriggerConfig,
@@ -489,6 +490,23 @@ describe('AI Trigger 工具函数', () => {
     it('私聊：按 sender 区分', () => {
       const msg = createMockMessage({ content: 'hi', channelType: 'private', senderId: 'userA' });
       expect(resolveIMSessionIdFromMessage(msg as any)).toBe('test:bot123:private:userA');
+    });
+  });
+
+  describe('resolveSceneFieldsFromMessage', () => {
+    it('私聊：sender 优先于 channel id', () => {
+      const msg = createMockMessage({ content: 'hi', channelType: 'private', senderId: 'userA' });
+      (msg as any).$channel.id = 'channelFallback';
+      const fields = resolveSceneFieldsFromMessage(msg as any);
+      expect(fields.sceneId).toBe('userA');
+      expect(fields.sceneType).toBe('private');
+    });
+
+    it('群聊：channel id 优先于 sender', () => {
+      const msg = createMockMessage({ content: 'hi', channelType: 'group', senderId: 'userA' });
+      const fields = resolveSceneFieldsFromMessage(msg as any);
+      expect(fields.sceneId).toBe('channel1');
+      expect(fields.sceneType).toBe('group');
     });
   });
 

@@ -5,7 +5,7 @@
 import { formatCompactLog } from '@zhin.js/logger';
 import type { Message, MessageElement } from '@zhin.js/core';
 import { sceneRefFromMessage } from '@zhin.js/core';
-import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
+import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import type { CollaborationScene } from './types.js';
 import type { OrchestrationRunSource, OrchestrationSceneRef, OrchestrationTaskRecord } from '@zhin.js/ai';
 import { getOrchestrationService } from '../orchestrator/orchestration-service.js';

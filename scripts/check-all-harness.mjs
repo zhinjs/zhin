@@ -37,6 +37,11 @@ const checks = [
     description: '检查架构层级依赖是否正确',
   },
   {
+    name: 'IM Session SSOT',
+    command: 'pnpm check:im-session-ssot',
+    description: '检查 IM 场景/session 身份解析是否使用 core SSOT',
+  },
+  {
     name: 'Adapter Docs Sync',
     command: 'pnpm check:adapter-docs',
     description: '检查平台适配器文档是否与 plugins/adapters README 同步',

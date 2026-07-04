@@ -3,7 +3,7 @@
  */
 import type { Message, Tool, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import { sceneRefFromMessage } from '@zhin.js/core';
-import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
+import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import type { AgentRole } from '../orchestrator/agent-dispatcher.js';
 import {

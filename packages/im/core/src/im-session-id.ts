@@ -60,3 +60,33 @@ export function resolveIMSessionIdFromMessage(message: {
     sceneId: resolveIMSceneIdForSession(kind, message.$channel?.id, message.$sender?.id),
   });
 }
+
+/** Canonical scene fields for transcript / session persistence (ADR 0028 SSOT). */
+export function resolveSceneFieldsFromMessage(message: {
+  $adapter?: string;
+  $endpoint?: string;
+  $channel?: { type?: IMSceneKind; id?: string };
+  $sender?: { id?: string };
+}): {
+  platform: string;
+  endpointId: string;
+  sceneId: string;
+  sceneType: IMSceneKind;
+} {
+  const scene = sceneRefFromMessage(message as any);
+  if (scene) {
+    return {
+      platform: scene.platform,
+      endpointId: scene.endpointId,
+      sceneId: scene.sceneId,
+      sceneType: scene.kind,
+    };
+  }
+  const sceneType = (message.$channel?.type || 'private') as IMSceneKind;
+  return {
+    platform: String(message.$adapter || ''),
+    endpointId: String(message.$endpoint || ''),
+    sceneType,
+    sceneId: resolveIMSceneIdForSession(sceneType, message.$channel?.id, message.$sender?.id),
+  };
+}

@@ -18,7 +18,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { Plugin } from '@zhin.js/core';
-import { getHostRootPlugin } from '@zhin.js/core';
+import { getHostRootPlugin, resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import { formatCompact, Logger } from '@zhin.js/logger';
 import type {
   AIProvider,
@@ -34,7 +34,6 @@ import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { AgentOrchestrator } from '../orchestrator/index.js';
 import {
   createMemorySessionManager,
-  resolveIMSessionIdFromMessage,
   type SessionManager,
 } from '@zhin.js/ai';
 import {

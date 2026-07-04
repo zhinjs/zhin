@@ -26,6 +26,7 @@ export interface ResolveIMSessionIdInput {
 
 /**
  * 解析 IM 会话 ID：`platform:endpointId:kind:sceneId`
+ * @deprecated SSOT 在 `@zhin.js/core`（`resolveIMSessionId`）；此处保留供 ai-only 消费者向后兼容。
  */
 export function resolveIMSessionId(input: ResolveIMSessionIdInput): string {
   const platform = String(input.platform || 'unknown');
@@ -35,7 +36,9 @@ export function resolveIMSessionId(input: ResolveIMSessionIdInput): string {
   return `${platform}:${endpointId}:${kind}:${sceneId}`;
 }
 
-/** 按场景决定写入 sessionId 的 scene 段 */
+/** 按场景决定写入 sessionId 的 scene 段
+ * @deprecated SSOT 在 `@zhin.js/core`（`resolveIMSceneIdForSession`）。
+ */
 export function resolveIMSceneIdForSession(
   kind: IMSceneKind,
   sceneId?: string,
@@ -78,7 +81,9 @@ export function resolveAgentScopedSessionId(
   }
 }
 
-/** 从 Message 通讯上下文生成 IM sessionId */
+/** 从 Message 通讯上下文生成 IM sessionId
+ * @deprecated SSOT 在 `@zhin.js/core`（`resolveIMSessionIdFromMessage`）。
+ */
 export function resolveIMSessionIdFromMessage(message: {
   $adapter?: string;
   $endpoint?: string;
