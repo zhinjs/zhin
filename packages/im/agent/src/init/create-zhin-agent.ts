@@ -309,10 +309,12 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
       ...DEFAULT_CONFIG,
       ...(agentConfig as import('../zhin-agent/config.js').ZhinAgentConfig | undefined),
     } as Required<import('../zhin-agent/config.js').ZhinAgentConfig>;
-    if (wiredAgentConfig.subagentDirectImDelivery) {
-      agent.setSubagentSender(deliverOutbound);
-    }
-    agent.setDeferredResultSender(deliverOutbound);
+    agent.configure({
+      ...(wiredAgentConfig.subagentDirectImDelivery
+        ? { subagentSender: deliverOutbound }
+        : {}),
+      deferredResultSender: deliverOutbound,
+    });
 
     // Register default kernel executors + five-agent workflow strategy now that
     // the subagent manager and sender are configured. Registration is idempotent
