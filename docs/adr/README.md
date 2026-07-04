@@ -32,6 +32,7 @@
 | [0026](./0026-retire-scenario-specific-pipeline-harnesses.md) | 废弃场景专用 Pipeline Harness |
 | [0027](./0027-agent-run-orchestration-kernel.md) | Agent Run Orchestration Kernel |
 | [0028](./0028-generic-im-scene-agent.md) | Generic IM Scene Agent（Scene 契约 + 破坏性统一） |
+| [0030](./0030-spawn-parallel-subagents.md) | spawn_task 并行子代理与并发治理 |
 
 ## 相关
 
