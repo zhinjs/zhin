@@ -303,8 +303,9 @@ parameters:
 | `chat_history` | 按需查 `im_transcripts`（`keyword` + `limit`；关键词触发注入） |
 | `user_profile` | 读写用户偏好（关键词触发） |
 | `schedule_followup` | 安排定时跟进提醒（关键词触发） |
-| `spawn_task` | 创建后台子任务（关键词触发） |
-| `activate_skill` | 激活已安装的技能 |
+| `spawn_task` | 创建后台子任务（主 Agent 常驻；`turn-pipeline` 每轮注入） |
+| `discover` | 发现 deferred 工具/技能 |
+| `load_tool` / `load_skill` | 按需加载 schema / 技能说明 |
 | `install_skill` | 从 URL 安装技能 |
 
 ### ask_user — 用户确认工具

@@ -608,6 +608,7 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
       );
     },
     maxRecompletePerIteration: 1,
+    toolExecution: host.config.toolExecution ?? 'tiered',
   };
 
   for await (const event of agentLoop(promptMessages, loopContext, loopConfig, signal)) {

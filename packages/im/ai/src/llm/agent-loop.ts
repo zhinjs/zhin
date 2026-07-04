@@ -7,6 +7,7 @@ import { EMPTY_TOKEN_USAGE, isLlmAgentMessage } from './types/agent-message.js';
 import { isContextOverflowError } from '../compaction/agent-message-compaction.js';
 import { complete, type StreamOptions } from './api-registry.js';
 import { validateToolCall } from './validate-tool-call.js';
+import { isTieredParallelTool } from './tiered-tool-buckets.js';
 
 export interface BeforeToolCallContext {
   toolCall: ParsedToolCall;
@@ -106,6 +107,84 @@ async function defaultExecuteTool(
   return createErrorToolResult(toolCall, `Tool execution not configured: ${toolCall.name}`);
 }
 
+function isParallelToolCall(name: string, mode: ToolExecutionMode | undefined): boolean {
+  if (mode === 'sequential') return false;
+  if (mode === 'parallel') return true;
+  return isTieredParallelTool(name);
+}
+
+interface ExecuteToolCallsOptions {
+  toolCalls: ParsedToolCall[];
+  tools: LlmTool[];
+  config: AgentLoopConfig;
+  executeTool: NonNullable<AgentLoopConfig['executeTool']>;
+  signal?: AbortSignal;
+  onResult: (result: AgentMessage) => void;
+  onEvent: (event: AgentEvent) => void;
+}
+
+async function executeToolCallsInTurn(options: ExecuteToolCallsOptions): Promise<void> {
+  const { toolCalls, tools, config, executeTool, signal, onResult, onEvent } = options;
+  const mode = config.toolExecution ?? 'sequential';
+
+  const runOne = async (rawCall: ParsedToolCall): Promise<void> => {
+    if (signal?.aborted) return;
+
+    let toolCall = rawCall;
+    try {
+      toolCall = validateToolCall(tools, rawCall);
+    } catch (error) {
+      const result = createErrorToolResult(
+        rawCall,
+        error instanceof Error ? error.message : String(error),
+      );
+      onResult(result);
+      onEvent({ type: 'tool_execution_start', toolCallId: rawCall.id, toolCall: rawCall });
+      onEvent({ type: 'tool_execution_end', toolCallId: rawCall.id, result });
+      return;
+    }
+
+    if (config.beforeToolCall) {
+      const gate = await config.beforeToolCall({ toolCall, tools }, signal);
+      if (gate?.allowed === false) {
+        const result = createErrorToolResult(toolCall, gate.reason ?? 'Tool call denied');
+        onResult(result);
+        onEvent({ type: 'tool_execution_start', toolCallId: toolCall.id, toolCall });
+        onEvent({ type: 'tool_execution_end', toolCallId: toolCall.id, result });
+        return;
+      }
+      if (gate?.modifiedArguments) {
+        toolCall = { ...toolCall, arguments: gate.modifiedArguments };
+      }
+    }
+
+    onEvent({ type: 'tool_execution_start', toolCallId: toolCall.id, toolCall });
+    const result = await executeTool(toolCall, tools, signal);
+    onResult(result);
+    onEvent({ type: 'tool_execution_end', toolCallId: toolCall.id, result });
+    if (config.afterToolCall) {
+      await config.afterToolCall({ toolCall, result }, signal);
+    }
+  };
+
+  const parallelCalls: ParsedToolCall[] = [];
+  const sequentialCalls: ParsedToolCall[] = [];
+  for (const call of toolCalls) {
+    if (isParallelToolCall(call.name, mode)) {
+      parallelCalls.push(call);
+    } else {
+      sequentialCalls.push(call);
+    }
+  }
+
+  if (parallelCalls.length > 0) {
+    await Promise.all(parallelCalls.map((call) => runOne(call)));
+  }
+  for (const call of sequentialCalls) {
+    await runOne(call);
+  }
+}
+
 export async function* agentLoop(
   prompts: AgentMessage | AgentMessage[],
   initialContext: AgentContext,
@@ -201,98 +280,69 @@ export async function* agentLoop(
       ? toolCalls
       : toolCalls;
 
-    for (const rawCall of runCalls) {
-      if (signal?.aborted) break;
-
-      let toolCall = rawCall;
-      try {
-        toolCall = validateToolCall(tools, rawCall);
-      } catch (error) {
-        const result = createErrorToolResult(
-          rawCall,
-          error instanceof Error ? error.message : String(error),
-        );
+    const pendingEvents: AgentEvent[] = [];
+    let recompletePending = false;
+    await executeToolCallsInTurn({
+      toolCalls: runCalls,
+      tools,
+      config,
+      executeTool,
+      signal,
+      onResult: (result) => {
         toolResults.push(result);
         messages.push(result);
         emitted.push(result);
-        yield { type: 'tool_execution_start', toolCallId: rawCall.id, toolCall: rawCall };
-        yield { type: 'tool_execution_end', toolCallId: rawCall.id, result };
-        continue;
-      }
-
-      if (config.beforeToolCall) {
-        const gate = await config.beforeToolCall({ toolCall, tools }, signal);
-        if (gate?.allowed === false) {
-          const result = createErrorToolResult(toolCall, gate.reason ?? 'Tool call denied');
-          toolResults.push(result);
-          messages.push(result);
-          emitted.push(result);
-          yield { type: 'tool_execution_start', toolCallId: toolCall.id, toolCall };
-          yield { type: 'tool_execution_end', toolCallId: toolCall.id, result };
-          continue;
+        if (config.shouldRecompleteAfterTool?.(result) === true) {
+          recompletePending = true;
         }
-        if (gate?.modifiedArguments) {
-          toolCall = { ...toolCall, arguments: gate.modifiedArguments };
-        }
-      }
+      },
+      onEvent: (event) => {
+        pendingEvents.push(event);
+      },
+    });
+    for (const event of pendingEvents) {
+      yield event;
+    }
 
-      yield { type: 'tool_execution_start', toolCallId: toolCall.id, toolCall };
-      const result = await executeTool(toolCall, tools, signal);
-      toolResults.push(result);
-      messages.push(result);
-      emitted.push(result);
-      yield { type: 'tool_execution_end', toolCallId: toolCall.id, result };
-      if (config.afterToolCall) {
-        await config.afterToolCall({ toolCall, result }, signal);
-      }
-
-      const mutated = config.shouldRecompleteAfterTool?.(result) === true;
-      if (mutated && config.refreshTools && recompleteCount < maxRecomplete) {
-        const refreshed = await config.refreshTools();
-        tools = [...refreshed];
-        recompleteCount += 1;
-        try {
-          const followUp = await complete(config.model, await buildLlmContext(), {
-            ...config.streamOptions,
+    if (recompletePending && config.refreshTools && recompleteCount < maxRecomplete) {
+      const refreshed = await config.refreshTools();
+      tools = [...refreshed];
+      recompleteCount += 1;
+      try {
+        const followUp = await complete(config.model, await buildLlmContext(), {
+          ...config.streamOptions,
+          signal,
+          sessionId: config.sessionId,
+          thinkingLevel: config.reasoning,
+        });
+        yield { type: 'message_start', message: followUp };
+        yield { type: 'message_end', message: followUp };
+        messages.push(followUp);
+        emitted.push(followUp);
+        const followCalls = extractToolCalls(followUp);
+        if (followCalls.length > 0) {
+          const followEvents: AgentEvent[] = [];
+          await executeToolCallsInTurn({
+            toolCalls: followCalls,
+            tools,
+            config,
+            executeTool,
             signal,
-            sessionId: config.sessionId,
-            thinkingLevel: config.reasoning,
+            onResult: (result) => {
+              toolResults.push(result);
+              messages.push(result);
+              emitted.push(result);
+            },
+            onEvent: (event) => {
+              followEvents.push(event);
+            },
           });
-          yield { type: 'message_start', message: followUp };
-          yield { type: 'message_end', message: followUp };
-          messages.push(followUp);
-          emitted.push(followUp);
-          const followCalls = extractToolCalls(followUp);
-          if (followCalls.length > 0) {
-            for (const fc of followCalls) {
-              if (signal?.aborted) break;
-              let fToolCall = fc;
-              try {
-                fToolCall = validateToolCall(tools, fc);
-              } catch (error) {
-                const errResult = createErrorToolResult(
-                  fc,
-                  error instanceof Error ? error.message : String(error),
-                );
-                toolResults.push(errResult);
-                messages.push(errResult);
-                emitted.push(errResult);
-                continue;
-              }
-              yield { type: 'tool_execution_start', toolCallId: fToolCall.id, toolCall: fToolCall };
-              const fResult = await executeTool(fToolCall, tools, signal);
-              toolResults.push(fResult);
-              messages.push(fResult);
-              emitted.push(fResult);
-              yield { type: 'tool_execution_end', toolCallId: fToolCall.id, result: fResult };
-              if (config.afterToolCall) {
-                await config.afterToolCall({ toolCall: fToolCall, result: fResult }, signal);
-              }
-            }
+          for (const event of followEvents) {
+            yield event;
           }
-        } catch {
-          // re-complete failure: keep original tool results
         }
+      } catch {
+        // re-complete failure: keep original tool results
       }
     }
 

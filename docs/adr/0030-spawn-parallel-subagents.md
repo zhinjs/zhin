@@ -2,16 +2,18 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Context
 
-Zhin 已具备 `spawn_task` 与 `SubagentManager`，能让主 Agent 按需委派子任务，但当前仍有四个核心缺口：
+Zhin 已具备 `spawn_task` 与 `SubagentManager`。本 ADR 落地前存在四个缺口（现已补齐）：
 
-1. `agent-loop` 工具执行路径仍是单轮顺序执行，缺少分层并行能力。
-2. `SubagentManager.runningTasks` 仅计数不设硬上限，存在资源放大风险。
-3. 缺少基于 `permission.task` 的子代理类型可见性过滤，主 Agent 仍可能看到不应使用的类型。
-4. `spawn_task` 与主编排提示词对“同轮并行 spawn”引导不足，导致模型并行利用率不稳定。
+1. `agent-loop` 工具执行路径为单轮顺序执行，缺少分层并行能力。
+2. `SubagentManager.runningTasks` 仅计数不设硬上限。
+3. 缺少基于 `permission.task` 的子代理类型可见性过滤。
+4. `spawn_task` 与主编排提示词对「同轮并行 spawn」引导不足。
+
+另：异步子 agent 结果原先经 `resultSender` 直推 IM，与「主 Agent 编排后再回复用户」不一致；实现上改为 **结果先交还主 Agent（`onSubagentComplete` + auto-continue）**，IM 直发改为可选（`subagentDirectImDelivery`）或 hook（`ai.subagent.finish`）。
 
 OpenCode 的实践表明，“同时开几个子代理”主要由 **LLM 分解 + Prompt 引导 + Permission 可见性** 决定，而不是框架静态拆分算法。Zhin 需要在保持现有 spawn 模型的前提下补齐并发治理与提示词工程。
 
@@ -62,6 +64,7 @@ OpenCode 的实践表明，“同时开几个子代理”主要由 **LLM 分解 
 - 主 Agent 在复杂任务上可提升吞吐，但写操作与交互操作仍保持顺序安全。
 - 达到上限时将出现显式拒绝，调用方需自行重排计划，不做隐式排队。
 - 子代理类型暴露面收敛，降低误用与越权尝试。
+- 异步子 agent 结果默认经主 Agent 续聊出站；副作用（log、额外 IM）走事件 hook，不绑死在 `SubagentManager` 内。
 
 ## Non-Goals
 
@@ -75,4 +78,8 @@ OpenCode 的实践表明，“同时开几个子代理”主要由 **LLM 分解 
 - `packages/im/ai/src/llm/agent-loop.ts`
 - `packages/im/agent/src/subagent.ts`
 - `packages/im/agent/src/builtin/spawn-task-tool.ts`
+- `packages/im/agent/src/spawn/permission-task.ts`
+- `packages/im/agent/src/zhin-agent/persist-subagent-context.ts`
+- `packages/im/agent/src/zhin-agent/subagent-auto-continue.ts`
+- `packages/im/ai/src/llm/tiered-tool-buckets.ts`
 - `docs/advanced/ai.md`（Subagent 章节）

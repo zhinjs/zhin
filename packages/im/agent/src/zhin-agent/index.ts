@@ -62,6 +62,7 @@ import type { ModelRegistry } from '@zhin.js/ai';
 import { UserProfileStore } from '../user-profile.js';
 import { RateLimiter } from '@zhin.js/ai';
 import { SubagentManager, type SubagentOrigin, type SubagentResultSender } from '../subagent.js';
+import type { SubagentCompletePayload } from '../subagent.js';
 import { buildParentContextPreamble } from '../subagent-parent-context.js';
 import { getAgentDispatcher } from '../orchestrator/agent-dispatcher.js';
 import {
@@ -93,6 +94,8 @@ import { bindingToModelConfig } from '../routing/runtime-binding.js';
 import type { Disposable } from '../types/disposable.js';
 import { buildDisciplinedPrompt as assembleDisciplinedPrompt } from './prompt-assembly.js';
 import { buildDeferredAutoContinueUserMessage } from './deferred-auto-continue.js';
+import { buildSubagentAutoContinueUserMessage } from './subagent-auto-continue.js';
+import { persistSubagentResultToContext } from './persist-subagent-context.js';
 import type { DeferredWorkerResult } from '../deferred-worker-runner.js';
 
 export type { ZhinAgentConfig, OnChunkCallback } from './config.js';
@@ -364,6 +367,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
       createTools,
       subagentTools: this.config.subagentTools,
       maxIterations: this.config.maxSubagentIterations,
+      maxParallelSubagents: this.config.maxParallelSubagents,
       execPolicyConfig: this.config,
       modelRegistry: this.modelRegistry,
       agentDispatcher: getAgentDispatcher(),
@@ -394,6 +398,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
           this.emitter.emit('ai.subagent.finish', payload);
         }
       },
+      onSubagentComplete: (payload) => this.continueAfterSubagent(payload),
     });
     logger.debug('SubagentManager initialized');
   }
@@ -450,6 +455,66 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     logger.info(formatCompact({
       deferred: 'auto_continue_done',
       task_id: taskId,
+      depth: depth + 1,
+      outbound: elements.length,
+    }));
+  }
+
+  async continueAfterSubagent(payload: SubagentCompletePayload): Promise<void> {
+    if (this.config.subagentAutoContinue === false) return;
+
+    const commMessage = payload.origin.message;
+    const sessionKey = resolveIMSessionIdFromMessage(commMessage);
+    const depth = this.getDeferredAutoContinueDepth(sessionKey);
+    if (depth >= this.config.deferredAutoContinueMaxDepth) {
+      logger.warn(formatCompact({
+        subagent: 'auto_continue_skipped',
+        task_id: payload.taskId,
+        reason: 'max_depth',
+        depth,
+      }));
+      return;
+    }
+
+    const persisted = await persistSubagentResultToContext(asPrivate(this), commMessage, payload);
+    if (!persisted) {
+      logger.warn(formatCompact({
+        subagent: 'auto_continue_skipped',
+        task_id: payload.taskId,
+        reason: 'persist_failed',
+      }));
+      return;
+    }
+
+    await this.promptController.waitForIdle();
+    this.deferredAutoContinueDepthBySession.set(sessionKey, depth + 1);
+
+    logger.info(formatCompact({
+      subagent: 'auto_continue',
+      task_id: payload.taskId,
+      depth: depth + 1,
+    }));
+
+    const message = buildSubagentAutoContinueUserMessage(
+      payload.taskId,
+      payload.label,
+      payload.status,
+    );
+    const elements = await this.runInTurnContext(randomUUID(), () =>
+      processTextTurn(asPrivate(this), '', commMessage, [], undefined, {
+        prebuiltMessages: [message],
+        deferredAutoContinue: true,
+      }),
+    );
+
+    const sender = this.getDeferredResultSender();
+    if (sender && elements.length > 0) {
+      await deliverDeferredAutoContinueReply(sender, commMessage, elements);
+    }
+
+    logger.info(formatCompact({
+      subagent: 'auto_continue_done',
+      task_id: payload.taskId,
       depth: depth + 1,
       outbound: elements.length,
     }));

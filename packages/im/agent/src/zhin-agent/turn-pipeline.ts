@@ -28,6 +28,19 @@ import {
 } from './passive-group-buffer.js';
 import { readCollaborationTurnSnapshot } from '../collaboration/collaboration-turn-snapshot.js';
 import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
+import { buildAgentsEnvelopeContext } from './agents-instruction.js';
+import { getModel } from '@zhin.js/ai';
+import { collectRuntimeTools } from './tool-runtime.js';
+import { buildMultimodalVisionSystemPrompt } from './prompt-assembly.js';
+import { attachWebSearchLocale } from './web-search-locale-attach.js';
+import { EMPTY_USAGE } from './turn-metrics.js';
+import { resolveAgentToolsForTurn } from './tool-orchestration.js';
+import { createSpawnTaskTool } from '../builtin/spawn-task-tool.js';
+import { filterAgentsForSpawnDescription } from '../spawn/permission-task.js';
+import { logPhase } from './phase-trace.js';
+import { TurnSupersededError } from './prompt-controller.js';
+import { buildVisionUserMessage, summarizeMultimodalParts } from './multimodal-message.js';
+import { DEFAULT_MULTIMODAL_CONFIG } from '../media/media-types.js';
 
 /** 合并协作 roster + handback 提示。编排状态由 OrchestrationKernel 管理。 */
 function resolveTurnCollaborationHint(
@@ -37,17 +50,11 @@ function resolveTurnCollaborationHint(
   const collab = resolveCollaborationTurnHint(commMessage, inboundContent);
   return collab || undefined;
 }
-import { buildAgentsEnvelopeContext } from './agents-instruction.js';
-import { getModel } from '@zhin.js/ai';
-import { collectRuntimeTools } from './tool-runtime.js';
-import { buildMultimodalVisionSystemPrompt } from './prompt-assembly.js';
-import { attachWebSearchLocale } from './web-search-locale-attach.js';
-import { EMPTY_USAGE } from './turn-metrics.js';
-import { resolveAgentToolsForTurn } from './tool-orchestration.js';
-import { logPhase } from './phase-trace.js';
-import { TurnSupersededError } from './prompt-controller.js';
-import { buildVisionUserMessage, summarizeMultimodalParts } from './multimodal-message.js';
-import { DEFAULT_MULTIMODAL_CONFIG } from '../media/media-types.js';
+
+function listSpawnableAgentNames(host: ZhinAgentPrivate): string[] {
+  const presets = host.orchestrator?.subagents.getAllPresets().map((p) => p.name) ?? [];
+  return [...new Set(presets.filter(Boolean))].sort();
+}
 import type {
   ZhinAgentPrivate,
   OnChunkCallback,
@@ -192,6 +199,15 @@ export async function processTextTurn(
       userProfiles: host.userProfiles,
       mcpTools,
     });
+
+    if (host.subagentManager) {
+      const spawnable = listSpawnableAgentNames(host);
+      const permissionTask = host.activeBinding?.permission?.task;
+      allTools.push(createSpawnTaskTool(contextForTools, host.subagentManager, {
+        allowedAgents: filterAgentsForSpawnDescription(spawnable, permissionTask),
+        permissionTaskRules: permissionTask,
+      }));
+    }
 
     const resolved = await resolveAgentToolsForTurn(host, allTools, sessionId, contextForTools);
     const { tools: resolvedTools, deferredStats, catalog, sessionSnapshot } = resolved;

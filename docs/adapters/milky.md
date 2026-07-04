@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/milky/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/milky/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=bed3062419687205 -->
+<!-- sync-adapter-docs:sha256=f98e5cab1385c4e9 -->
 
 # @zhin.js/adapter-milky
 

@@ -11,5 +11,5 @@ export {
   resolvePipelineRoleBinding,
   resolvePlannerNickname,
   PIPELINE_ROLE_LABELS,
-  type PipelineBindingSources,
+  type RoleBindingSources,
 } from './resolve-pipeline-binding.js';

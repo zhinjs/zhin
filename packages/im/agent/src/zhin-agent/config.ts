@@ -121,6 +121,14 @@ export interface ZhinAgentConfig {
   execApprovalMode?: ExecApprovalMode;
   /** 子 Agent（spawn_task）执行模式 */
   subagentExecApprovalMode?: ExecApprovalMode;
+  /** 并行子 agent 硬上限（ADR 0030，默认 5） */
+  maxParallelSubagents?: number;
+  /** agent-loop 工具执行模式（ADR 0030 tiered 并行） */
+  toolExecution?: 'parallel' | 'sequential' | 'tiered';
+  /** 异步 subagent 完成后唤醒主 agent 续聊（默认 true） */
+  subagentAutoContinue?: boolean;
+  /** 除主 agent 续聊外，是否额外将格式化子任务结果直发 IM（默认 false；可用 hook 替代） */
+  subagentDirectImDelivery?: boolean;
   /** Worker 执行模式（deferred worker 默认） */
   workerExecApprovalMode?: ExecApprovalMode;
   /** Task 执行模式（run_deferred_task 入口） */
@@ -260,6 +268,10 @@ export const DEFAULT_CONFIG = {
   execAllowlist: [],
   execApprovalMode: 'deny',
   subagentExecApprovalMode: 'deny',
+  maxParallelSubagents: 5,
+  toolExecution: 'tiered',
+  subagentAutoContinue: true,
+  subagentDirectImDelivery: false,
   workerExecApprovalMode: 'deny',
   taskExecApprovalMode: 'deny',
   maxSubagentIterations: 25,  // 增加子任务迭代次数

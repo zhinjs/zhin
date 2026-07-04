@@ -21,6 +21,8 @@ export interface RouteMatchConfig {
   contentContains?: string;
 }
 
+export type PermissionTaskAction = 'allow' | 'deny';
+
 export interface AgentBindingConfig {
   provider: string;
   model: string;
@@ -29,6 +31,10 @@ export interface AgentBindingConfig {
   match?: RouteMatchConfig;
   /** Agent 昵称（LLM 自称 + IM 协作展示，ADR 0024 #11）。 */
   nickname?: string;
+  /** spawn_task 可见子 agent 类型（glob → allow/deny，ADR 0030）。 */
+  permission?: {
+    task?: Record<string, PermissionTaskAction>;
+  };
 }
 
 /** @deprecated 仅用于归一化旧版 ai.routes */
@@ -45,6 +51,8 @@ export interface ResolvedAgentBinding {
   mcpServers: string[];
   /** 展示昵称（缺省回退 role label / agent 名）。 */
   nickname?: string;
+  /** spawn_task 子 agent 类型过滤（ADR 0030）。 */
+  permission?: AgentBindingConfig['permission'];
 }
 
 export const DEFAULT_ZHIN_AGENT_NAME = 'zhin';

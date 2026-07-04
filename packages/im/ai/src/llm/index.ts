@@ -84,6 +84,7 @@ export {
 } from './validate-tool-call.js';
 
 export { agentLoop, agentContextFrom } from './agent-loop.js';
+export { isTieredParallelTool, TIERED_PARALLEL_TOOL_NAMES } from './tiered-tool-buckets.js';
 export type {
   AgentLoopConfig,
   AgentContext,

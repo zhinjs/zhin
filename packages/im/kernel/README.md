@@ -1,12 +1,12 @@
 # @zhin.js/kernel
 
-zhin 运行时内核，提供插件 DI、Feature 抽象、Cron 调度、错误体系和通用工具函数。
+zhin 运行时内核，提供插件 DI、Feature 抽象、Schedule 调度引擎、错误体系和通用工具函数。
 
 可用于 Web 后端、CLI 工具、自动化脚本等任意 Node.js 应用。
 
 ## 架构
 
-`@zhin.js/kernel` 位于 Zhin.js 分层底部，**不含 IM / Endpoint 概念**。上层 `@zhin.js/core` 继承本包的 `Feature`、`Cron`、`Scheduler` 并扩展 IM 运行时：
+`@zhin.js/kernel` 位于 Zhin.js 分层底部，**不含 IM / Endpoint 概念**。上层 `@zhin.js/core` 继承本包的 `Feature`、`ScheduleFeature`、`Scheduler` 并扩展 IM 运行时：
 
 ```
 basic/ (@zhin.js/logger, schema, database, cli)
@@ -68,17 +68,18 @@ feature.on('add', (item, pluginName) => {
 })
 ```
 
-### Cron（定时任务）
+### ScheduleEngine（内存调度）
 
-基于 [croner](https://github.com/hexagon/croner) 的 cron 表达式调度器。
+插件侧推荐通过 `@zhin.js/core` 的 `ScheduleFeature` / `addSchedule` 注册任务；内核提供 `ScheduleEngine` 解析 cron / 农历 / 节假日等。
 
 ```typescript
-import { Cron } from '@zhin.js/kernel'
+import { ScheduleEngine, getScheduleEngine } from '@zhin.js/kernel'
 
-const cron = new Cron('daily-report', '0 9 * * *', () => {
+const engine = getScheduleEngine() ?? new ScheduleEngine()
+engine.register({ id: 'daily-report', kind: 'cron', cron: '0 9 * * *' }, () => {
   console.log('每天 9:00 执行')
 })
-cron.start()
+engine.start()
 ```
 
 ### Scheduler（任务调度器）
@@ -139,7 +140,7 @@ import {
 | `pluginStorage` | AsyncLocalStorage 插件上下文 |
 | `PluginLike` | 最小插件接口（用于 Feature 等依赖） |
 | `Feature` | 特性抽象基类 |
-| `Cron` | cron 定时任务 |
+| `ScheduleEngine` | 内存调度引擎（cron / 农历 / 节假日等） |
 | `Scheduler` | 持久化任务调度器 |
 | `ZhinError` | 基础错误类 |
 | `ErrorManager` | 全局错误管理器 |

@@ -1,0 +1,125 @@
+/** Lunar year bit table 1900-2100 */
+export const LUNAR_INFO: readonly number[] = [
+  0x4bd8,0x4ae0,0xa570,0x54d5,0xd260,0xd950,0x16554,0x56a0,0x9ad0,0x55d2,
+  0x4ae0,0xa5b6,0xa4d0,0xd250,0x1d255,0xb540,0xd6a0,0xada2,0x95b0,0x14977,
+  0x4970,0xa4b0,0xb4b5,0x6a50,0x6d40,0x1ab54,0x2b60,0x9570,0x52f2,0x4970,
+  0x6566,0xd4a0,0xea50,0x6e95,0x5ad0,0x2b60,0x186e3,0x92e0,0x1c8d7,0xc950,
+  0xd4a0,0x1d8a6,0xb550,0x56a0,0x1a5b4,0x25d0,0x92d0,0xd2b2,0xa950,0xb557,
+  0x6ca0,0xb550,0x15355,0x4da0,0xa5b0,0x14573,0x52b0,0xa9a8,0xe950,0x6aa0,
+  0xaea6,0xab50,0x4b60,0xaae4,0xa570,0x5260,0xf263,0xd950,0x5b57,0x56a0,
+  0x96d0,0x4dd5,0x4ad0,0xa4d0,0xd4d4,0xd250,0xd558,0xb540,0xb6a0,0x195a6,
+  0x95b0,0x49b0,0xa974,0xa4b0,0xb27a,0x6a50,0x6d40,0xaf46,0xab60,0x9570,
+  0x4af5,0x4970,0x64b0,0x74a3,0xea50,0x6b58,0x5ac0,0xab60,0x96d5,0x92e0,
+  0xc960,0xd954,0xd4a0,0xda50,0x7552,0x56a0,0xabb7,0x25d0,0x92d0,0xcab5,
+  0xa950,0xb4a0,0xbaa4,0xad50,0x55d9,0x4ba0,0xa5b0,0x15176,0x52b0,0xa930,
+  0x7954,0x6aa0,0xad50,0x5b52,0x4b60,0xa6e6,0xa4e0,0xd260,0xea65,0xd530,
+  0x5aa0,0x76a3,0x96d0,0x4afb,0x4ad0,0xa4d0,0x1d0b6,0xd250,0xd520,0xdd45,
+  0xb5a0,0x56d0,0x55b2,0x49b0,0xa577,0xa4b0,0xaa50,0x1b255,0x6d20,0xada0,
+  0x14b63,0x9370,0x49f8,0x4970,0x64b0,0x168a6,0xea50,0x6b20,0x1a6c4,0xaae0,
+  0x92e0,0xd2e3,0xc960,0xd557,0xd4a0,0xda50,0x5d55,0x56a0,0xa6d0,0x55d4,
+  0x52d0,0xa9b8,0xa950,0xb4a0,0xb6a6,0xad50,0x55a0,0xaba4,0xa5b0,0x52b0,
+  0xb273,0x6930,0x7337,0x6aa0,0xad50,0x14b55,0x4b60,0xa570,0x54e4,0xd160,
+  0xe968,0xd520,0xdaa0,0x16aa6,0x56d0,0x4ae0,0xa9d4,0xa4d0,0xd150,0xf252,
+  0xd520
+];
+
+export const MIN_LUNAR_YEAR = 1900;
+export const MAX_LUNAR_YEAR = 2100;
+
+export interface LunarDate {
+  year: number;
+  month: number;
+  day: number;
+  isLeapMonth: boolean;
+}
+
+function lYearDays(y: number): number {
+  let sum = 348;
+  for (let i = 0x8000; i > 0x8; i >>= 1) {
+    sum += (LUNAR_INFO[y - MIN_LUNAR_YEAR] & i) ? 1 : 0;
+  }
+  return sum + leapDays(y);
+}
+
+function leapMonth(y: number): number {
+  return LUNAR_INFO[y - MIN_LUNAR_YEAR] & 0xf;
+}
+
+function leapDays(y: number): number {
+  if (leapMonth(y)) {
+    return (LUNAR_INFO[y - MIN_LUNAR_YEAR] & 0x10000) ? 30 : 29;
+  }
+  return 0;
+}
+
+function monthDays(y: number, m: number): number {
+  return (LUNAR_INFO[y - MIN_LUNAR_YEAR] & (0x10000 >> m)) ? 30 : 29;
+}
+
+/** Convert Gregorian calendar date (year/month/day) to lunar */
+export function solarToLunar(y: number, m: number, d: number): LunarDate {
+  if (y < MIN_LUNAR_YEAR || y > MAX_LUNAR_YEAR) {
+    throw new RangeError(`Year ${y} out of range ${MIN_LUNAR_YEAR}-${MAX_LUNAR_YEAR}`);
+  }
+  if (y === MIN_LUNAR_YEAR && (m < 1 || (m === 1 && d < 31))) {
+    throw new RangeError('Date before 1900-01-31');
+  }
+
+  let offset = (Date.UTC(y, m - 1, d) - Date.UTC(1900, 0, 31)) / 86400000;
+  let i: number;
+  let temp = 0;
+
+  for (i = MIN_LUNAR_YEAR; i < MAX_LUNAR_YEAR + 1 && offset > 0; i++) {
+    temp = lYearDays(i);
+    offset -= temp;
+  }
+  if (offset < 0) {
+    offset += temp;
+    i--;
+  }
+
+  const year = i;
+  const leap = leapMonth(i);
+  let isLeap = false;
+
+  for (i = 1; i < 13 && offset > 0; i++) {
+    if (leap > 0 && i === leap + 1 && !isLeap) {
+      i--;
+      isLeap = true;
+      temp = leapDays(year);
+    } else {
+      temp = monthDays(year, i);
+    }
+    if (isLeap && i === leap + 1) {
+      isLeap = false;
+    }
+    offset -= temp;
+  }
+
+  if (offset === 0 && leap > 0 && i === leap + 1) {
+    if (isLeap) {
+      isLeap = false;
+    } else {
+      isLeap = true;
+      i--;
+    }
+  }
+  if (offset < 0) {
+    offset += temp;
+    i--;
+  }
+
+  return { year, month: i, day: offset + 1, isLeapMonth: isLeap };
+}
+
+export function solarDateToLunar(date: Date, timezone: string): LunarDate {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  });
+  const parts = formatter.formatToParts(date);
+  const get = (type: string) => parseInt(parts.find((p) => p.type === type)?.value ?? '0', 10);
+  return solarToLunar(get('year'), get('month'), get('day'));
+}

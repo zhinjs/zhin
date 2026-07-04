@@ -146,11 +146,31 @@ ai:
 
 ### 1. 主 Agent + 子 Agent（内置）
 
-框架已提供 **SubagentManager**：主 ZhinAgent 通过工具 `spawn_task` 把复杂/耗时任务派给**后台子 Agent** 异步执行，子 Agent 默认仅用受限工具集（文件、Shell、网络搜索等），完成后通过回调把结果发回主会话。
+框架已提供 **SubagentManager**：主 ZhinAgent 通过工具 `spawn_task` 把复杂/耗时任务派给**后台子 Agent** 异步执行。子 Agent 使用受限工具集；完成后**先交还主 Agent**（写入主会话 + auto-continue 续聊），用户可见回复由主 Agent 整理发出。
 
-- 主对话不阻塞，用户可继续聊天。
-- 子 Agent 由 `ZhinAgent.initSubagentManager(createTools)` 在 init 时挂好；`spawn_task` 为主编排序列化常驻工具（见 `orchestratorTools` / `DEFAULT_ORCHESTRATOR_TOOLS`）。
-- 用户说「后台帮我整理这份文档」时，主 Agent 可调用 `spawn_task({ task: '...', label: '...' })`，子任务在后台跑完后再通知用户。
+- 主对话不阻塞，用户可继续聊天（异步 `spawn_task`）。
+- `spawn_task` 在每轮 `turn-pipeline` 注入（`createSpawnTaskTool`），并默认列入 `deferredTools.alwaysLoadedTools`。
+- **`wait: true`** 时同步等待，结果经 tool result 回到当前主 Agent turn。
+- 监听 `ai.subagent.finish` 可做 log / 监控；需旧式「子任务摘要直推 IM」时设 `ai.agent.subagentDirectImDelivery: true`。
+
+**并发与并行（ADR 0030）**
+
+| 配置 | 默认 | 说明 |
+|------|------|------|
+| `toolExecution` | `tiered` | 同轮 `spawn_task` + 只读工具并行；写/bash 顺序 |
+| `maxParallelSubagents` | `5` | 并行子 agent 硬顶，超限拒绝 |
+| `subagentAutoContinue` | `true` | 异步完成后唤醒主 Agent |
+| `subagentDirectImDelivery` | `false` | 额外直发格式化摘要到 IM |
+
+**类型权限**：`ai.agents.<name>.permission.task`（glob → allow/deny）控制主 Agent 可见的子 agent 预设。
+
+关键路径：
+
+- `src/subagent.ts` — `SubagentManager`、`onSubagentComplete`
+- `src/builtin/spawn-task-tool.ts` — 工具定义与 `permission.task` 校验
+- `src/zhin-agent/persist-subagent-context.ts` / `subagent-auto-continue.ts` — 结果落库与续聊
+- `src/zhin-agent/turn-pipeline.ts` — 每轮注入 `spawn_task`
+- `packages/im/ai/src/llm/tiered-tool-buckets.ts` — tiered 并行工具 SSOT
 
 无需额外配置即可使用；若需放宽子 Agent 的工具范围，使用 `ai.agent.subagentTools` 显式追加白名单（不会自动继承主会话全部 skill/tool）。
 

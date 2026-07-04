@@ -116,6 +116,18 @@ export interface SubagentLifecycleEvent {
   error?: string;
 }
 
+/** Async subagent completion payload — delivered to main agent first. */
+export interface SubagentCompletePayload {
+  taskId: string;
+  label: string;
+  task: string;
+  origin: SubagentOrigin;
+  status: 'ok' | 'error';
+  result: string;
+  toolCalls: ToolCallRecord[];
+  agent?: string;
+}
+
 export interface SubagentResultDelivery {
   text: string;
   toolCalls?: { tool: string; args: Record<string, any>; result: any }[] | ToolCallRecord[];
@@ -137,6 +149,8 @@ export interface SubagentManagerOptions {
   createTools: () => AgentTool[];
   subagentTools?: string[];
   maxIterations?: number;
+  /** 并行子 agent 硬上限（ADR 0030） */
+  maxParallelSubagents?: number;
   /** Exec policy config to enforce on subagent bash tools */
   execPolicyConfig?: Required<ZhinAgentConfig>;
   modelRegistry?: ModelRegistry | null;
@@ -148,6 +162,8 @@ export interface SubagentManagerOptions {
   agentDispatcher?: AgentDispatcher;
   /** 生命周期事件回调（供上层桥接到统一事件总线） */
   onEvent?: (event: SubagentLifecycleEvent) => void | Promise<void>;
+  /** 异步子 agent 完成：结果交还主 agent（优先于 resultSender） */
+  onSubagentComplete?: (payload: SubagentCompletePayload) => Promise<void>;
   /** 与主 ZhinAgent 相同的 AI 处理事件总线（processing / tool / mcp 等） */
   eventEmitter?: ZhinAgentEventEmitter | null;
   /** 解析 *.agent.md 元数据 */
@@ -168,6 +184,7 @@ export class SubagentManager {
   private workspace: string;
   private createTools: () => AgentTool[];
   private maxIterations: number;
+  private maxParallelSubagents: number;
   private subagentTools: string[];
   private execPolicyConfig: Required<ZhinAgentConfig> | null;
   private modelRegistry: ModelRegistry | null;
@@ -177,6 +194,7 @@ export class SubagentManager {
   private registerSubagentTask: ((done: Promise<void>) => void) | null;
   private agentDispatcher: AgentDispatcher | null;
   private onEvent: ((event: SubagentLifecycleEvent) => void | Promise<void>) | null;
+  private onSubagentCompleteFn: ((payload: SubagentCompletePayload) => Promise<void>) | null;
   private eventEmitter: ZhinAgentEventEmitter | null;
   private resolveAgentMetaFn: ((agentName: string) => Promise<AgentMeta | null>) | null;
   private getParentContextSnapshotFn: ((origin: SubagentOrigin) => Promise<string | undefined>) | null;
@@ -189,6 +207,7 @@ export class SubagentManager {
     this.workspace = options.workspace;
     this.createTools = options.createTools;
     this.maxIterations = options.maxIterations ?? 15;
+    this.maxParallelSubagents = options.maxParallelSubagents ?? 5;
     this.subagentTools = options.subagentTools || [];
     this.execPolicyConfig = options.execPolicyConfig ?? null;
     this.modelRegistry = options.modelRegistry ?? null;
@@ -196,6 +215,7 @@ export class SubagentManager {
     this.registerSubagentTask = options.registerSubagentTask ?? null;
     this.agentDispatcher = options.agentDispatcher ?? null;
     this.onEvent = options.onEvent ?? null;
+    this.onSubagentCompleteFn = options.onSubagentComplete ?? null;
     this.eventEmitter = options.eventEmitter ?? null;
     this.resolveAgentMetaFn = options.resolveAgentMeta ?? null;
     this.getParentContextSnapshotFn = options.getParentContextSnapshot ?? null;
@@ -258,45 +278,56 @@ export class SubagentManager {
 
   /** 同步执行子 agent（入站 route 用）；返回最终文本，不经过 resultSender */
   async spawnSync(options: SpawnOptions): Promise<string> {
+    const capError = this.parallelCapacityError();
+    if (capError) return capError;
+
     const enriched = await this.enrichSpawnOptions(options);
     const role = enriched.role || 'subtask';
     const displayLabel = resolveSubagentDisplayLabel(enriched.label, enriched.task);
     const taskId = randomUUID().slice(0, 8);
-    if (enriched.notifyContext) {
-      await notifySubagentGoal(enriched.notifyContext, {
+    this.trackRunningTask(taskId);
+    try {
+      if (enriched.notifyContext) {
+        await notifySubagentGoal(enriched.notifyContext, {
+          taskId,
+          kind: resolveSpawnExecutionKind({ sync: true }),
+          label: displayLabel,
+          agent: enriched.agent,
+        });
+      }
+      const result = await this.runSubagent(
         taskId,
-        kind: resolveSpawnExecutionKind({ sync: true }),
-        label: displayLabel,
-        agent: enriched.agent,
-      });
+        enriched.task,
+        displayLabel,
+        enriched.origin,
+        role,
+        enriched.context,
+        {
+          binding: enriched.binding ?? (enriched.agent ? this.resolveBindingFn?.(enriched.agent) ?? null : null),
+          systemPrompt: enriched.systemPrompt,
+          contextPreamble: enriched.contextPreamble,
+          sync: true,
+          presetName: enriched.agent ?? enriched.label,
+          keepTypingUntilUpstreamFinish: true,
+          runInput: enriched.runInput,
+          orchestrationTaskId: enriched.orchestrationTaskId,
+          agentMeta: enriched._agentMeta,
+          requestedTools: enriched.requestedTools,
+          requestedSkills: enriched.requestedSkills,
+          parentSessionLoaded: enriched.parentSessionLoaded,
+          parentLoadedSkills: enriched.parentLoadedSkills,
+        },
+      );
+      return result ?? '任务已完成，但未生成最终响应。';
+    } finally {
+      this.releaseRunningTask(taskId);
     }
-    const result = await this.runSubagent(
-      taskId,
-      enriched.task,
-      displayLabel,
-      enriched.origin,
-      role,
-      enriched.context,
-      {
-        binding: enriched.binding ?? (enriched.agent ? this.resolveBindingFn?.(enriched.agent) ?? null : null),
-        systemPrompt: enriched.systemPrompt,
-        contextPreamble: enriched.contextPreamble,
-        sync: true,
-        presetName: enriched.agent ?? enriched.label,
-        keepTypingUntilUpstreamFinish: true,
-        runInput: enriched.runInput,
-        orchestrationTaskId: enriched.orchestrationTaskId,
-        agentMeta: enriched._agentMeta,
-        requestedTools: enriched.requestedTools,
-        requestedSkills: enriched.requestedSkills,
-        parentSessionLoaded: enriched.parentSessionLoaded,
-        parentLoadedSkills: enriched.parentLoadedSkills,
-      },
-    );
-    return result ?? '任务已完成，但未生成最终响应。';
   }
 
   async spawn(options: SpawnOptions): Promise<string> {
+    const capError = this.parallelCapacityError();
+    if (capError) return capError;
+
     const enriched = await this.enrichSpawnOptions(options);
     const taskId = randomUUID().slice(0, 8);
     const role = enriched.role || 'subtask';
@@ -358,6 +389,25 @@ export class SubagentManager {
 
   getRunningCount(): number {
     return this.runningTasks.size;
+  }
+
+  private parallelCapacityError(): string | undefined {
+    const running = this.getRunningCount();
+    if (running >= this.maxParallelSubagents) {
+      return (
+        `并行子代理已达上限 (${running}/${this.maxParallelSubagents})。`
+        + '请等待已有任务完成，或拆分批次后再 spawn。'
+      );
+    }
+    return undefined;
+  }
+
+  private trackRunningTask(taskId: string): void {
+    this.runningTasks.set(taskId, new AbortController());
+  }
+
+  private releaseRunningTask(taskId: string): void {
+    this.runningTasks.delete(taskId);
   }
 
   // ── 内部方法 ──────────────────────────────────────────────────────
@@ -569,7 +619,16 @@ export class SubagentManager {
         resolveOrchestrationRunning?.(agentResult);
       }
       if (opts?.sync) return finalResult;
-      await this.announceResult(taskId, label, task, finalResult, origin, 'ok', result.toolCalls);
+      await this.deliverAsyncResult({
+        taskId,
+        label,
+        task,
+        origin,
+        status: 'ok',
+        result: finalResult,
+        toolCalls: result.toolCalls,
+        agent: opts?.presetName,
+      });
       return;
     } catch (error) {
       const errorMsg = `Error: ${error instanceof Error ? error.message : String(error)}`;
@@ -607,7 +666,16 @@ export class SubagentManager {
         resolveOrchestrationRunning?.(failResult);
       }
       if (opts?.sync) return errorMsg;
-      await this.announceResult(taskId, label, task, errorMsg, origin, 'error', []);
+      await this.deliverAsyncResult({
+        taskId,
+        label,
+        task,
+        origin,
+        status: 'error',
+        result: errorMsg,
+        toolCalls: [],
+        agent: opts?.presetName,
+      });
     } finally {
       if (this.agentDispatcher && dispatcherTaskId && !isOrchestrationTask) {
         this.agentDispatcher.releaseTask(dispatcherTaskId);
@@ -616,32 +684,35 @@ export class SubagentManager {
     return;
   }
 
-  private async announceResult(
-    taskId: string,
-    label: string,
-    task: string,
-    result: string,
-    origin: SubagentOrigin,
-    status: 'ok' | 'error',
-    toolCalls: ToolCallRecord[] = [],
-  ): Promise<void> {
-    if (!this.resultSender) {
-      logger.warn(formatCompact( { task_id: taskId, error: 'no_sender' }));
-      return;
+  private async deliverAsyncResult(payload: SubagentCompletePayload): Promise<void> {
+    if (this.onSubagentCompleteFn) {
+      try {
+        await this.onSubagentCompleteFn(payload);
+      } catch (error) {
+        logger.error({ taskId: payload.taskId, error }, 'onSubagentComplete failed');
+      }
+    } else {
+      logger.warn(formatCompact({ task_id: payload.taskId, error: 'no_onSubagentComplete' }));
     }
 
+    if (!this.resultSender) return;
+
     const delivery = buildSubagentUserDelivery({
-      label,
-      status,
-      result,
-      toolCalls,
+      label: payload.label,
+      status: payload.status,
+      result: payload.result,
+      toolCalls: payload.toolCalls,
     });
 
     try {
-      await this.resultSender(origin, delivery);
-      logger.debug({ taskId, origin, tool_calls: toolCalls.length }, 'Subagent announced result');
-    } catch (e) {
-      logger.error({ taskId, error: e }, 'Failed to announce subagent result');
+      await this.resultSender(payload.origin, delivery);
+      logger.debug({
+        taskId: payload.taskId,
+        origin: payload.origin,
+        tool_calls: payload.toolCalls.length,
+      }, 'Subagent direct IM delivery');
+    } catch (error) {
+      logger.error({ taskId: payload.taskId, error }, 'Subagent direct IM delivery failed');
     }
   }
 

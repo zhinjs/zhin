@@ -51,7 +51,7 @@
 | **`agentLoop`** | L2 | `@zhin.js/ai` 唯一 LLM 回合引擎；IM 生产路径均经此入口。 |
 | **`ServiceAgent`** | L3 | `AIService.createAgent()` 返回值；`run()` 调用 `runAgentLoopStandaloneTurn`。 |
 | **`ctx.agent`** | L3 | 扩展编排： `addTool`、`addSkill`、`addMcp` 等注册 API。 |
-| **Subagent（`spawn_task`）** | L3 | 主 Agent 派发的后台子任务，默认即可用，与 harness「角色」不同。 |
+| **Subagent（`spawn_task`）** | L3 | 主 Agent 派发的后台子任务；异步完成后先交还主 Agent 续聊，与 harness「角色」不同。 |
 | **toolSearch** | L3+ | Advanced：`ai.agent.toolSearch: true` 启用 deferred Worker 编排，控制 prompt 体积。 |
 | **MCP Client** | L3+ | Zhin **消费**外部 MCP Server 工具（`ai.mcpServers`、`ai.memoryMcp`）。 |
 | **MCP Server** | L3+ | Zhin **对外暴露**工具（`@zhin.js/mcp`），供 Claude / Cursor 等调用。 |
