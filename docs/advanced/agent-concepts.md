@@ -78,7 +78,7 @@ useContext('agent', async (agent) => {
 
 | 模式 | 机制 | 何时用 |
 |------|------|--------|
-| **Subagent（`spawn_task`）** | 主 ZhinAgent 派后台子任务，完成后回调通知 | 耗时任务不阻塞主对话；**默认即可用** |
+| **Subagent（`spawn_task`）** | 主 ZhinAgent 派后台子任务；完成后**先交还主 Agent 续聊**，再向用户回复 | 耗时任务不阻塞主对话；**默认即可用** |
 | **多实例（`ai.createAgent` / `runAgent`）** | `ServiceAgent` + 隔离 context；不同 provider/model/systemPrompt | 代码审查、翻译等**专用角色** |
 | **AgentDispatcher 角色** | harness 层 7 种预定义角色（main / worker / …） | **toolSearch + Worker** 编排；见 [Agent 安全与角色](/advanced/agent-harness-engineering) |
 
@@ -89,6 +89,10 @@ Discord/KOOK 的群管理员、群主是**平台权限**；本文的 Agent **角
 ### Subagent 速览
 
 用户说「后台帮我整理文档」时，主 Agent 可调用 `spawn_task({ task: '...', label: '...' })`。子 Agent 工具集默认受限；可通过 `ai.agent.subagentTools` 追加白名单。
+
+异步完成后：结果写入主会话 → 主 Agent auto-continue → 用户看到主 Agent 整理后的回复。插件可订阅 `ai.subagent.finish` 做 log 或自定义通知；`subagentDirectImDelivery: true` 可恢复「子任务摘要直推 IM」旧行为。
+
+同轮可并行多个独立 `spawn_task`（`toolExecution: tiered`）；并行子 agent 默认上限 5（`maxParallelSubagents`）。子 agent 类型可用 `ai.agents.<name>.permission.task` 限制。详见 [AI 模块 — 子任务](/advanced/ai#子任务-subagent) 与 [ADR 0030](/adr/0030-spawn-parallel-subagents)。
 
 ### AgentDispatcher 七种角色（Advanced）
 

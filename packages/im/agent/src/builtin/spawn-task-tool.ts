@@ -16,50 +16,73 @@ import { getOrchestrationService } from '../orchestrator/orchestration-service.j
 import { executeRemoteOrchestrationTask } from '../orchestrator/remote-task-executor.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import { getDeferredToolRuntime } from './deferred-tool-meta.js';
+import {
+  assertSpawnAgentAllowed,
+  type PermissionTaskRules,
+} from '../spawn/permission-task.js';
+
+export interface SpawnTaskToolOptions {
+  /** 经 permission.task 过滤后可展示的子 agent 名 */
+  allowedAgents?: string[];
+  permissionTaskRules?: PermissionTaskRules;
+}
+
+function buildSpawnTaskDescription(allowedAgents?: string[]): string {
+  const lines = [
+    'Delegate complex or long-running work to a sub-agent. By default creates a kernel task, runs asynchronously, and returns #taskId; set wait=true to block until completion.',
+    'You may issue multiple spawn_task calls in one assistant turn when subtasks are independent (prefer parallel spawn for independent work).',
+    'Use draw for text-to-image and vision for image understanding. Image results log preview as {image}; when wait=true, do not tell the user to wait.',
+  ];
+  if (allowedAgents?.length) {
+    lines.push(`Allowed sub-agent types: ${allowedAgents.join(', ')}.`);
+  } else {
+    lines.push('Allowed sub-agent types are defined in ai.agents and agents/*.agent.md.');
+  }
+  return lines.join(' ');
+}
 
 export const SPAWN_TASK_PARAMETERS: ToolParametersSchema = {
   type: 'object',
   properties: {
     task: {
       type: 'string',
-      description: '要交给子 agent 完成的任务描述（尽量详细，包含目标、范围、期望输出）',
+      description: 'Detailed task description for the sub-agent (goals, scope, expected output).',
     },
     label: {
       type: 'string',
-      description: '任务的简短标签（用于显示，可选）',
+      description: 'Short display label (optional).',
     },
     agent: {
       type: 'string',
-      description: '子 agent 名（须在 ai.agents 与 agents/<name>.agent.md 中定义；默认 subtask 工具集）',
+      description: 'Sub-agent name (must exist in ai.agents and agents/<name>.agent.md; default subtask toolset).',
     },
     wait: {
       type: 'boolean',
-      description:
-        '为 true 时同步等待子 agent 完成并将结果返回给你',
+      description: 'If true, wait synchronously for the sub-agent to finish and return its result.',
     },
     context: {
       type: 'string',
       enum: ['fork', 'fresh'],
       description:
-        '上下文模式：fork 注入主会话最近消息快照；fresh 空上下文。缺省按 *.agent.md 或角色默认',
+        'Context mode: fork injects recent parent session messages; fresh starts empty. Default follows *.agent.md or role.',
     },
     tools: {
       type: 'array',
       items: { type: 'string' },
-      description: '子任务需要的工具名（建议填写）',
+      description: 'Tool names the subtask needs (recommended).',
     },
     skills: {
       type: 'array',
       items: { type: 'string' },
-      description: '子任务需要的技能名（建议填写）',
+      description: 'Skill names the subtask needs (recommended).',
     },
     run_id: {
       type: 'string',
-      description: '硬编排 run ID（与 task_id 配合使用）',
+      description: 'Hard orchestration run ID (use with task_id).',
     },
     task_id: {
       type: 'string',
-      description: '硬编排任务 ID（须先 orchestration_add_task 或 template 预置）',
+      description: 'Hard orchestration task ID (must exist via orchestration_add_task or template).',
     },
   },
   required: ['task'],
@@ -87,15 +110,18 @@ function parseStringArray(value: unknown): string[] | undefined {
 
 export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
   readonly name = 'spawn_task';
-  readonly description =
-    '将复杂或耗时的任务交给子 agent。默认创建 kernel task 后异步执行并返回 #taskId；需同步等待结果时设 wait=true。文生图用 draw，识图用 vision。含图结果日志 preview 为 {image}；wait=true 时勿再发「稍等」。';
+  readonly description: string;
   readonly parameters = SPAWN_TASK_PARAMETERS;
+  private readonly permissionTaskRules?: PermissionTaskRules;
 
   constructor(
     private readonly sessionCommMessage: Message,
     private readonly manager: SubagentManager,
+    options?: SpawnTaskToolOptions,
   ) {
     super();
+    this.description = buildSpawnTaskDescription(options?.allowedAgents);
+    this.permissionTaskRules = options?.permissionTaskRules;
     this.tags.push('agent', 'async', 'task', '后台', '子任务');
     this.keywords.push('后台', '异步', '子任务', 'spawn', 'background', '并行', '独立处理');
   }
@@ -147,6 +173,8 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
     const origin = originFromMessage(this.sessionCommMessage);
     const labelStr = typeof label === 'string' ? label : undefined;
     const agentOpt = typeof agentName === 'string' && agentName.trim() ? agentName.trim() : undefined;
+    const permissionError = assertSpawnAgentAllowed(agentOpt, this.permissionTaskRules);
+    if (permissionError) return permissionError;
     const contextMode: SubagentContextMode | undefined =
       args.context === 'fork' || args.context === 'fresh' ? args.context : undefined;
     const orchestrationRole = targetTaskId
@@ -242,6 +270,7 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
 export function createSpawnTaskTool(
   commMessage: Message,
   manager: SubagentManager,
+  options?: SpawnTaskToolOptions,
 ): AgentTool {
-  return new SpawnTaskBuiltinTool(commMessage, manager).toTool() as AgentTool;
+  return new SpawnTaskBuiltinTool(commMessage, manager, options).toTool() as AgentTool;
 }

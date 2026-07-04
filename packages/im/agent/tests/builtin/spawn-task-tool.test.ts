@@ -78,4 +78,25 @@ describe('SpawnTaskBuiltinTool / createSpawnTaskTool', () => {
     expect(out).toBe('请提供任务描述');
     expect(spawn).not.toHaveBeenCalled();
   });
+
+  it('run rejects unauthorized agent via permission.task', async () => {
+    const spawn = vi.fn();
+    const manager = { spawn } as unknown as SubagentManager;
+    const commMessage = mockMessage();
+    const tool = createSpawnTaskTool(commMessage, manager, {
+      allowedAgents: ['pm'],
+      permissionTaskRules: { '*': 'deny', pm: 'allow' },
+    });
+    const out = await tool.execute({ task: '设计', agent: 'architect' });
+    expect(String(out)).toContain('not allowed');
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it('description lists allowed agents when provided', () => {
+    const tool = createSpawnTaskTool(mockMessage(), { spawn: vi.fn() } as unknown as SubagentManager, {
+      allowedAgents: ['pm', 'dev'],
+    });
+    expect(tool.description).toContain('pm, dev');
+    expect(tool.description).toContain('parallel');
+  });
 });

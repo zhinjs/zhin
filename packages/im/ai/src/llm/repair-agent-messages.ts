@@ -1,5 +1,12 @@
-import type { AgentMessage, AssistantMessage } from './types/agent-message.js';
+import type {
+  AgentMessage,
+  AssistantMessage,
+  ToolResultMessage,
+  UserMessage,
+} from './types/agent-message.js';
 import { isLlmAgentMessage } from './types/agent-message.js';
+
+type LlmAgentMessage = UserMessage | AssistantMessage | ToolResultMessage;
 
 const MISSING_TOOL_RESULT_TEXT =
   '[zhin] tool result unavailable (interrupted turn or incomplete history)';
@@ -40,7 +47,7 @@ function syntheticToolResult(toolCallId: string, toolName: string): AgentMessage
  * - AI_MissingToolResultsError
  */
 export function repairAgentMessagesForLlm(messages: AgentMessage[]): AgentMessage[] {
-  const normalized: AgentMessage[] = [];
+  const normalized: LlmAgentMessage[] = [];
   for (const message of messages) {
     if (!isLlmAgentMessage(message)) continue;
     if (message.role === 'toolResult') {

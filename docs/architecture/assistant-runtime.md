@@ -351,7 +351,7 @@ assistant:
 | `zhin cron` CLI | 保留；读写 JobStore |
 | 插件 `addCron` | 保留；内存任务类型 `runtime: memory`（不持久化） |
 | `TaskExecutor` | JobWorker 内复用 |
-| `spawn_task` | 不变；长任务仍走 Subagent |
+| `spawn_task` | 不变；长任务仍走 Subagent；异步完成后默认交还主 Agent 续聊（非直推 IM） |
 
 ---
 

@@ -19,4 +19,4 @@ export type AgentMessageDelta =
 
 export type ThinkingLevel = 'off' | 'low' | 'medium' | 'high';
 
-export type ToolExecutionMode = 'parallel' | 'sequential';
+export type ToolExecutionMode = 'parallel' | 'sequential' | 'tiered';

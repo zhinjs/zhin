@@ -42,6 +42,7 @@ export function resolvePipelineRoleBinding(
     model,
     mcpServers,
     nickname,
+    permission: roleAgent?.permission ?? base.permission,
   };
 }
 

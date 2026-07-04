@@ -398,6 +398,7 @@ function buildOrchestrationSection(modelSdk?: string): string {
     'Use the available tools directly when they match the task.',
       'Use discover(kind) to find deferred tools/skills, then load_skill / load_tool before calling them.',
       'Use spawn_task for complex, long-running, or specialist work that should run in a sub-agent.',
+      'When subtasks are independent, spawn multiple spawn_task calls in one assistant turn (parallel).',
     'Do not call deprecated orchestration tools such as tool_search or run_deferred_task.',
   ];
   return ['# Orchestration', ...prependBullets(items)].join('\n');

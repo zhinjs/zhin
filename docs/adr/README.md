@@ -32,7 +32,7 @@
 | [0026](./0026-retire-scenario-specific-pipeline-harnesses.md) | 废弃场景专用 Pipeline Harness |
 | [0027](./0027-agent-run-orchestration-kernel.md) | Agent Run Orchestration Kernel |
 | [0028](./0028-generic-im-scene-agent.md) | Generic IM Scene Agent（Scene 契约 + 破坏性统一） |
-| [0028](./0028-schedule-facility-replace-cron.md) | Schedule 设施取代 Cron |
+| [0028-schedule](./0028-schedule-facility-replace-cron.md) | Schedule 设施取代 Cron |
 | [0029](./0029-deferred-tool-schema-loading.md) | Deferred Tool Schema Loading |
 | [0030](./0030-spawn-parallel-subagents.md) | spawn_task 并行子代理与并发治理 |
 

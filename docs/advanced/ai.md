@@ -261,6 +261,10 @@ ai:
 | `maxSubagentIterations` | number | 25 | 子 agent 最大工具调用轮数 |
 | `subagentTurnWaitMs` | number | 300000 | 主回合结束前等待 spawn 子 agent 的毫秒数（0=不等待） |
 | `subagentTools` | string[] | [] | 子 agent 额外允许的工具名（显式白名单追加；不自动继承主会话技能工具） |
+| `toolExecution` | string | `tiered` | agent-loop 工具执行模式：`parallel` / `sequential` / `tiered`（默认）。`tiered` 时同轮内 `spawn_task` 与只读工具并行，写操作与 `bash` 仍顺序执行（[ADR 0030](../adr/0030-spawn-parallel-subagents.md)） |
+| `maxParallelSubagents` | number | 5 | 并行子 agent 硬上限；`spawn` / `spawnSync` 超限时立即拒绝，不排队 |
+| `subagentAutoContinue` | boolean | true | 异步子 agent 完成后写入主会话上下文并唤醒主 agent 续聊（默认开启） |
+| `subagentDirectImDelivery` | boolean | false | 为 `true` 时，除主 agent 续聊外，额外将格式化子任务摘要直发 IM（旧行为；一般用 hook 替代） |
 | `phaseTrace` | boolean | false | 开启后输出稳定 `[AGENT_PHASE]` 回合阶段日志（或 `ZHIN_AGENT_PHASE_TRACE=1`） |
 | `modelHarness.providerPatterns` | object | {} | 按 provider 模式（支持 `*`）覆盖 harness |
 | `modelHarness.models` | object | {} | 按 model id 覆盖 harness；支持 `model` 或 `provider:model` 精确键 |
@@ -329,7 +333,7 @@ dispatcher:
 - **有工具** → 同一 `agentLoop`；`preExecutable` 工具在 turn 前并行预跑，结果注入 prompt
 - **多模态** → vision 模型 + image blocks，仍走 `agentLoop`（`runAgentLoopVisionTurn`）
 
-并发同 session：每条入站 @ 消息 **独立并行 turn**（`PromptController.schedule`）；`ContextRepository.appendMessages` 经 per-session 写入锁串行化。master **`steer()`** 注入该 session 最新 active turn（`ai.agent.steeringMode` / `followUpMode` 仍作用于单 turn 内队列）。`spawn_task` 可把复杂任务交给子 agent，异步完成后单独推送结果。
+并发同 session：每条入站 @ 消息 **独立并行 turn**（`PromptController.schedule`）；`ContextRepository.appendMessages` 经 per-session 写入锁串行化。master **`steer()`** 注入该 session 最新 active turn（`ai.agent.steeringMode` / `followUpMode` 仍作用于单 turn 内队列）。`spawn_task` 可把复杂任务交给子 agent；异步完成后**先交还主 agent 续聊**，再由主 agent 向用户回复（见 [子任务](#子任务-subagent)）。
 
 ### 4. 自适应 maxIterations
 
@@ -485,14 +489,16 @@ ai:
 
 ## 子任务 (Subagent)
 
-`spawn_task` 工具允许 AI 将复杂或耗时的任务交给后台子 agent 异步处理。
+`spawn_task` 工具允许 AI 将复杂或耗时的任务交给后台子 agent 异步处理（或 `wait: true` 同步等待）。
 
 ### 工作原理
 
-1. 主 agent 调用 `spawn_task(task, label)`
+1. 主 agent 调用 `spawn_task({ task, label, agent?, wait? })`（同轮可并行多个，见 ADR 0030）
 2. `SubagentManager` 创建独立子 agent（**`runAgentLoopStandaloneTurn`**，不共享主 session 的 `ContextRepository`）
-3. 子 agent 独立执行，不阻塞主对话
-4. 完成后通过 `resultSender` 回调将结果发送到原始频道
+3. 子 agent 独立执行，不阻塞主对话（异步模式）
+4. 完成后按 [结果回传](#结果回传主-agent-优先) 交还主 agent；用户最终看到主 agent 整理后的回复
+
+`spawn_task` 工具描述与参数为英文（面向 LLM）；对用户可见文案由主 agent 续聊生成。
 
 ### 受限工具集
 
@@ -502,13 +508,62 @@ ai:
 2. 再按任务文本 TF-IDF 从 deferred 工具目录载入（上限 `deferredToolMaxResults`，默认 8）
 3. 任务含生图关键词时优先载入 `generate_image`（若已注册）
 
-**禁止**子 agent 直接调用主编排工具：`spawn_task`、`activate_skill`、`install_skill`。
+**禁止**子 agent 直接调用主编排工具：`spawn_task`、`discover`、`load_tool` / `load_skill`（子会话内按需 load 除外）、`install_skill`。
 
 **安全**：子 agent 的 `bash` 受 `execSecurity` 与 `subagentExecApprovalMode` 约束；icqq 放行规则与主会话一致（见 [icqq 与 bash](/advanced/ai#icqq-bash-exec)）。
 
+### 结果回传（主 agent 优先）
+
+异步 `spawn_task`（默认 `wait: false`）完成后的顺序：
+
+1. **交还主 agent（必走）** — `SubagentManager.onSubagentComplete` → `persistSubagentResultToContext` 写入主会话 → `continueAfterSubagent` 唤醒主 agent 续聊 turn；用户可见回复由主 agent 整理后经正常出站链发出。
+2. **Hook / 事件（可选）** — `ai.subagent.finish`（及 `onEvent` phase `finish`）携带 `taskId`、`label`、`reply` 等，供插件打 log、监控或自定义副作用。
+3. **直发 IM（可选，默认关）** — `ai.agent.subagentDirectImDelivery: true` 时，额外调用 `resultSender` 将「【label】完成」类格式化摘要直推频道；一般不必开启。
+
+同步等待（`wait: true`）时，结果经 `spawn_task` tool result 直接回到**当前**主 agent turn，不触发 auto-continue。
+
+### 并行 spawn 与并发上限（ADR 0030）
+
+- **`toolExecution: tiered`（默认）**：同一 assistant turn 内，多个 `spawn_task` 与只读工具（`read_file`、`grep`、`glob`、`web_search` 等，SSOT：`packages/im/ai/src/llm/tiered-tool-buckets.ts`）可并行执行；`bash`、写文件、`ask_user` 等仍顺序执行。
+- **`maxParallelSubagents: 5`（默认）**：后台同时运行的子 agent 数硬顶；超限 `spawn` / `spawnSync` 立即拒绝并提示等待或拆分批次。
+- **编排提示**：`spawn_task` 工具描述与主 Agent orchestration system prompt 均引导「独立子任务可在单条消息中并行 spawn」。
+
+### 子 agent 类型权限（permission.task）
+
+限制主 agent 可见/可选的子 agent 类型（`agents/*.agent.md` / 预设名）：
+
+```yaml
+ai:
+  agents:
+    zhin:
+      provider: openai
+      model: gpt-4o-mini
+      permission:
+        task:
+          "*": deny
+          pm: allow
+          dev*: allow
+          researcher: allow
+```
+
+规则为 glob → `allow` / `deny`，**最后匹配优先**；未配置时默认全部允许。未授权类型不会出现在 `spawn_task` 工具描述中，执行期仍会校验。
+
+### Hook：监听子 agent 完成
+
+```typescript
+import { subscribeAIEvents } from '@zhin.js/agent';
+
+subscribeAIEvents(plugin, {
+  onSubagentFinish: async (payload) => {
+    // payload.taskId, payload.label, payload.reply, payload.status …
+    // 打 log、指标、或自定义 IM（勿替代主 agent 续聊 unless subagentDirectImDelivery）
+  },
+});
+```
+
 ### 主编排常驻
 
-`spawn_task` 为主 Agent 默认常驻编排工具之一（与 `ask_user` 并列），无需关键词触发即可指派后台子 agent。文生图请使用 **`agent: draw`**（`agents/draw.agent.md`）；**`vision`** 仅用于入站识图，不要用于画图。
+`spawn_task` 在每轮 turn 中由 `turn-pipeline` 注入（需已初始化 `SubagentManager`），并列入 `deferredTools.alwaysLoadedTools` 默认常驻。文生图请使用 **`agent: draw`**（`agents/draw.agent.md`）；**`vision`** 仅用于入站识图，不要用于画图。
 
 ## 文生图 (generate_image)
 

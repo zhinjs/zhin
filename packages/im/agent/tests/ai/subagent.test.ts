@@ -89,17 +89,20 @@ describe('SubagentManager', () => {
   let manager: SubagentManager;
   let provider: ReturnType<typeof createMockProvider>;
   let mockTools: AgentTool[];
+  let onSubagentComplete: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     resetLlmApiRegistryForTests();
     provider = createMockProvider();
     wireMockProviderToLlmApi(provider);
     mockTools = createMockTools();
+    onSubagentComplete = vi.fn().mockResolvedValue(undefined);
     manager = new SubagentManager({
       provider: provider as any,
       workspace: '/tmp/test-workspace',
       createTools: () => mockTools,
       maxIterations: 5,
+      onSubagentComplete,
     });
   });
 
@@ -143,18 +146,17 @@ describe('SubagentManager', () => {
 
     it('应触发生命周期事件回调', async () => {
       const onEvent = vi.fn();
-      const sender = vi.fn();
       const eventManager = new SubagentManager({
         provider: provider as any,
         workspace: '/tmp/test-workspace',
         createTools: () => mockTools,
         maxIterations: 5,
         onEvent,
+        onSubagentComplete: vi.fn().mockResolvedValue(undefined),
       });
-      eventManager.setSender(sender);
 
       await eventManager.spawn({ task: '分析 README', label: 'README分析', origin: baseOrigin });
-      await vi.waitFor(() => expect(sender).toHaveBeenCalled(), { timeout: 2000 });
+      await vi.waitFor(() => expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ phase: 'finish' })), { timeout: 2000 });
 
       expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ phase: 'spawn', label: 'README分析' }));
       expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ phase: 'start', label: 'README分析' }));
@@ -166,13 +168,9 @@ describe('SubagentManager', () => {
 
   describe('工具过滤', () => {
     it('子 agent 应只获得白名单内的工具', async () => {
-      const sender = vi.fn();
-      manager.setSender(sender);
-
       await manager.spawn({ task: '读取文件写入并搜索网页', origin: baseOrigin });
 
-      // 等待子 agent 完成
-      await vi.waitFor(() => expect(sender).toHaveBeenCalled(), { timeout: 2000 });
+      await vi.waitFor(() => expect(onSubagentComplete).toHaveBeenCalled(), { timeout: 2000 });
 
       // 验证 provider.chat 被调用时传入的工具列表
       const chatCall = provider.chat.mock.calls[0][0] ?? provider.chat.mock.calls[0];
@@ -197,16 +195,16 @@ describe('SubagentManager', () => {
         keywords: ['todo', '任务', '清单'],
         execute: async () => 'ok',
       };
+      const onComplete = vi.fn().mockResolvedValue(undefined);
       const customManager = new SubagentManager({
         provider: provider as any,
         workspace: '/tmp/test-workspace',
         createTools: () => [...mockTools, extraTool],
+        onSubagentComplete: onComplete,
       });
-      const sender = vi.fn();
-      customManager.setSender(sender);
 
       await customManager.spawn({ task: '帮我列一份 todo 任务清单', origin: baseOrigin });
-      await vi.waitFor(() => expect(sender).toHaveBeenCalled(), { timeout: 2000 });
+      await vi.waitFor(() => expect(onComplete).toHaveBeenCalled(), { timeout: 2000 });
 
       const request = provider.chat.mock.calls[0]?.[0] as any;
       if (request?.tools) {
@@ -218,68 +216,77 @@ describe('SubagentManager', () => {
   });
 
   describe('结果回告', () => {
-    it('完成后应通过 sender 发送结果', async () => {
+    it('完成后应先交给 onSubagentComplete（主 agent 路径）', async () => {
+      await manager.spawn({ task: '读取 README', label: '读README', origin: baseOrigin });
+
+      await vi.waitFor(() => expect(onSubagentComplete).toHaveBeenCalled(), { timeout: 2000 });
+
+      expect(onSubagentComplete).toHaveBeenCalledTimes(1);
+      const payload = onSubagentComplete.mock.calls[0]![0];
+      expect(payload.origin).toEqual(baseOrigin);
+      expect(payload.label).toBe('读README');
+      expect(payload.status).toBe('ok');
+      expect(payload.result).toContain('任务完成');
+    });
+
+    it('subagentDirectImDelivery 时可额外通过 sender 直发 IM', async () => {
       const sender = vi.fn();
       manager.setSender(sender);
 
       await manager.spawn({ task: '读取 README', label: '读README', origin: baseOrigin });
 
-      // 等待异步子 agent 完成
       await vi.waitFor(() => expect(sender).toHaveBeenCalled(), { timeout: 2000 });
 
+      expect(onSubagentComplete).toHaveBeenCalledTimes(1);
       expect(sender).toHaveBeenCalledTimes(1);
-      const [origin, delivery] = sender.mock.calls[0];
+      const [origin, delivery] = sender.mock.calls[0]!;
       expect(origin).toEqual(baseOrigin);
       expect(delivery.text).toContain('读README');
       expect(delivery.text).toContain('完成');
     });
 
-    it('provider 错误时 Agent 内部兜底，结果仍应送达', async () => {
+    it('provider 错误时仍应交给 onSubagentComplete', async () => {
       provider.chat.mockRejectedValue(new Error('API 调用失败'));
-      const sender = vi.fn();
-      manager.setSender(sender);
 
       await manager.spawn({ task: '会失败的任务', label: '失败测试', origin: baseOrigin });
 
-      await vi.waitFor(() => expect(sender).toHaveBeenCalled(), { timeout: 2000 });
+      await vi.waitFor(() => expect(onSubagentComplete).toHaveBeenCalled(), { timeout: 2000 });
 
-      const [_origin, delivery] = sender.mock.calls[0];
-      // Agent.run() 内部兜底返回友好文本，SubagentManager 视为成功完成
-      expect(delivery.text).toContain('失败测试');
-      expect(delivery.text).toContain('API 调用失败');
+      const payload = onSubagentComplete.mock.calls[0]![0];
+      expect(payload.status).toBe('ok');
+      expect(payload.result).toContain('API 调用失败');
     });
 
-    it('无 sender 时不应崩溃', async () => {
-      // 不设置 sender
-      await manager.spawn({ task: '测试', origin: baseOrigin });
+    it('无 onSubagentComplete 时不应崩溃', async () => {
+      const bare = new SubagentManager({
+        provider: provider as any,
+        workspace: '/tmp/test-workspace',
+        createTools: () => mockTools,
+        maxIterations: 5,
+      });
+      await bare.spawn({ task: '测试', origin: baseOrigin });
 
-      // 等待子 agent 完成（不应抛错）
       await new Promise(r => setTimeout(r, 200));
-      expect(manager.getRunningCount()).toBe(0);
+      expect(bare.getRunningCount()).toBe(0);
+      bare.dispose();
     });
   });
 
   describe('完成后清理', () => {
     it('完成后应从 runningTasks 移除', async () => {
-      const sender = vi.fn();
-      manager.setSender(sender);
-
       await manager.spawn({ task: '快速任务', origin: baseOrigin });
 
-      // 等待完成
-      await vi.waitFor(() => expect(sender).toHaveBeenCalled(), { timeout: 2000 });
+      await vi.waitFor(() => expect(onSubagentComplete).toHaveBeenCalled(), { timeout: 2000 });
 
       expect(manager.getRunningCount()).toBe(0);
     });
 
     it('失败后也应从 runningTasks 移除', async () => {
       provider.chat.mockRejectedValue(new Error('boom'));
-      const sender = vi.fn();
-      manager.setSender(sender);
 
       await manager.spawn({ task: '会失败', origin: baseOrigin });
 
-      await vi.waitFor(() => expect(sender).toHaveBeenCalled(), { timeout: 2000 });
+      await vi.waitFor(() => expect(onSubagentComplete).toHaveBeenCalled(), { timeout: 2000 });
 
       expect(manager.getRunningCount()).toBe(0);
     });
@@ -314,6 +321,7 @@ describe('SubagentManager', () => {
         createTools: () => mockTools,
         maxIterations: 5,
         eventEmitter: emitter,
+        onSubagentComplete: vi.fn().mockResolvedValue(undefined),
       });
 
       await mgr.spawnSync({
@@ -353,12 +361,48 @@ describe('SubagentManager', () => {
         createTools: () => mockTools,
         maxIterations: 5,
         eventEmitter: emitter,
+        onSubagentComplete: vi.fn().mockResolvedValue(undefined),
       });
 
       await mgr.spawn({ task: 'hi', origin: { ...baseOrigin, messageId: 'msg-1' } });
       await vi.waitFor(() => expect(dispatched).toContain('ai.processing.finish'), { timeout: 2000 });
 
       expect(emitted).toContain('ai.typing.stop');
+    });
+  });
+
+  describe('maxParallelSubagents cap', () => {
+    it('rejects spawn when at capacity', async () => {
+      provider.chat.mockImplementation(() => new Promise(() => {}));
+      const capped = new SubagentManager({
+        provider: provider as any,
+        workspace: '/tmp/test-workspace',
+        createTools: () => mockTools,
+        maxIterations: 5,
+        maxParallelSubagents: 1,
+      });
+      await capped.spawn({ task: 'task-1', origin: baseOrigin });
+      expect(capped.getRunningCount()).toBe(1);
+      const rejected = await capped.spawn({ task: 'task-2', origin: baseOrigin });
+      expect(rejected).toContain('并行子代理已达上限');
+      capped.dispose();
+    });
+
+    it('spawnSync rejects when at capacity', async () => {
+      provider.chat.mockImplementation(() => new Promise(() => {}));
+      const capped = new SubagentManager({
+        provider: provider as any,
+        workspace: '/tmp/test-workspace',
+        createTools: () => mockTools,
+        maxIterations: 5,
+        maxParallelSubagents: 1,
+        onSubagentComplete: vi.fn().mockResolvedValue(undefined),
+      });
+      void capped.spawn({ task: 'bg task', origin: baseOrigin });
+      await vi.waitFor(() => expect(capped.getRunningCount()).toBe(1));
+      const rejected = await capped.spawnSync({ task: 'sync task', origin: baseOrigin });
+      expect(rejected).toContain('并行子代理已达上限');
+      capped.dispose();
     });
   });
 });

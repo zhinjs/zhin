@@ -95,6 +95,7 @@ export { UserProfileStore, AI_USER_PROFILE_MODEL } from './user-profile.js';
 export { SubagentManager } from './subagent.js';
 export type {
   SubagentOrigin, SubagentResultDelivery, SubagentResultSender, SpawnOptions, SubagentManagerOptions,
+  SubagentCompletePayload,
 } from './subagent.js';
 export { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from './reserved-tools.js';
 

@@ -35,7 +35,7 @@
     "export type{ScheduleManager,PromptOptimizer}from './schedule-manager.js';",
     "export type{ServiceAgent,ServiceAgentResult,CreateServiceAgentOptions}from './service.js';",
     "export type{SessionTreeRuntimeHandle}from './session-tree-runtime-registry.js';",
-    "export type{SubagentOrigin,SubagentResultDelivery,SubagentResultSender,SpawnOptions,SubagentManagerOptions,}from './subagent.js';",
+    "export type{SubagentOrigin,SubagentResultDelivery,SubagentResultSender,SpawnOptions,SubagentManagerOptions,SubagentCompletePayload,}from './subagent.js';",
     "export type{ToolInput,McpConnection,ResourceScope,ResourceEntry,Tool,Message,SenderRole,ToolScope,FileRole,ToolParametersSchema,PropertySchema,ToolJsonSchema,Skill,SkillMetadata,SubAgentDef,AgentPreset,McpServerEntry,McpResource,McpPrompt,AIHook,AIHookEvent as OrchestratorHookEvent,AIHookEventType as OrchestratorHookEventType,AIHookHandler as OrchestratorHookHandler,ToolHookDecision,PostToolHookDecision,PreToolUseEvent,PostToolUseEvent,PreToolUseHandler,PostToolUseHandler,PreToolUseHook,PostToolUseHook,ToolHook,}from './orchestrator/index.js';",
     "export type{TurnEvent,TurnUsage,TurnStartEvent,ChunkEvent,ToolCallEvent as TurnToolCallEvent,ToolResultEvent,ThinkingEvent,TurnEndEvent,TurnErrorEvent,SubagentStartEvent,SubagentProgressEvent,SubagentEndEvent,McpConnectEvent,McpToolCallEvent,}from './zhin-agent/turn-event.js';",
     "export type{TypingIndicatorType,TypingIndicatorConfig,TypingIndicatorOptions,TypingIndicator,TypingIndicatorAdapter,}from './typing-indicator/index.js';",
