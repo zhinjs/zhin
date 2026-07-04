@@ -534,15 +534,13 @@ export function createMessageDispatcher(
     },
     extensions: {
       addGuardrail(guardrail: GuardrailMiddleware) {
-        const plugin = this as Plugin;
         const dispose = service.addGuardrail(guardrail);
-        plugin.onDispose(dispose);
+        rootPlugin?.onDispose(dispose);
         return dispose;
       },
       addOutboundPolish(handler: OutboundPolishMiddleware) {
-        const plugin = this as Plugin;
         const dispose = service.addOutboundPolish(handler);
-        plugin.onDispose(dispose);
+        rootPlugin?.onDispose(dispose);
         return dispose;
       },
     },

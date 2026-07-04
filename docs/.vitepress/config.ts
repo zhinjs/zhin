@@ -96,9 +96,9 @@ const adrSidebar: DefaultTheme.SidebarItem[] = [
   { text: '0026 废弃场景专用 Harness', link: '/adr/0026-retire-scenario-specific-pipeline-harnesses' },
   { text: '0027 Orchestration Kernel', link: '/adr/0027-agent-run-orchestration-kernel' },
   { text: '0028 Generic IM Scene Agent', link: '/adr/0028-generic-im-scene-agent' },
-  { text: '0028-schedule Schedule 取代 Cron', link: '/adr/0028-schedule-facility-replace-cron' },
   { text: '0029 Deferred Tool Schema', link: '/adr/0029-deferred-tool-schema-loading' },
   { text: '0030 并行子代理', link: '/adr/0030-spawn-parallel-subagents' },
+  { text: '0031 Schedule 取代 Cron', link: '/adr/0031-schedule-facility-replace-cron' },
 ]
 
 /** A+B：部署、配置、写插件与 AI */

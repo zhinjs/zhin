@@ -32,7 +32,9 @@ export function resolveIMSceneIdForSession(
 
 export function resolveIMSceneSessionId(scene: IMSceneIdentity): string {
   const platform = String(scene.platform || 'unknown');
-  const endpointId = String(scene.endpointId || 'default');
+  const endpointId = scene.endpointId != null && scene.endpointId !== ''
+    ? String(scene.endpointId)
+    : '';
   const kind: IMSceneKind = scene.kind || 'private';
   const sceneId = String(scene.sceneId || 'unknown');
   return `${platform}:${endpointId}:${kind}:${sceneId}`;

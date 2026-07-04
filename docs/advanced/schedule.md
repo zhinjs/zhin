@@ -16,7 +16,7 @@ addSchedule({ kind: 'workday', cron: '0 0 9 * * *' }, async () => { /* 工作日
 addSchedule({ kind: 'every', everyMs: 30 * 60 * 1000 }, async () => { /* 每 30 分钟 */ });
 ```
 
-Breaking：`addCron` / `Cron` 类已移除，见 [ADR 0028](/adr/0028-schedule-facility-replace-cron.md)。
+Breaking：`addCron` / `Cron` 类已移除，见 [ADR 0031](/adr/0031-schedule-facility-replace-cron.md)。
 
 ## 持久化：`data/schedule-jobs.json`
 
@@ -69,5 +69,5 @@ zhin schedule add --every 30m "检查待办"
 
 ## 相关文档
 
-- [ADR 0028 — Schedule 取代 Cron](/adr/0028-schedule-facility-replace-cron.md)
+- [ADR 0031 — Schedule 取代 Cron](/adr/0031-schedule-facility-replace-cron.md)
 - [Assistant Runtime](/architecture/assistant-runtime.md)

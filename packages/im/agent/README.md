@@ -83,11 +83,11 @@ useContext('ai', async (ai) => {
 | 初始化 | `initAgentModule` |
 | Agent | `ServiceAgent`、`CreateServiceAgentOptions`（`AIService.createAgent`）；legacy `Agent` / `createAgent` re-export 自 `@zhin.js/ai` |
 | Model harness | `MODEL_HARNESS_DEFAULTS`, `resolveModelHarness`, `mergeModelHarnessValues` |
-| 服务与会话 | `AIService`, `ContextRepository`, `AgentSessionStore`, `ImTranscriptStore` |
+| 服务与会话 | `AIService`；会话/context 类型见 `@zhin.js/ai`（`ContextRepository`、`AgentSessionStore`、`ImTranscriptStore`） |
 | ZhinAgent | `ZhinAgent`，以及 config / exec-policy / file-policy / tool-runtime / prompt / builtin-tools 等子模块 |
 | 安全策略 | `checkExecPolicy`, `applyExecPolicyToTools`, `isDangerousCommand`, `stripEnvVarPrefix`, `stripSafeWrappers`, `splitCompoundCommand`, `extractCommandName`, `ExecPolicyResult`, `checkFileAccess`, `classifyBashCommand`, `isBlockedDevicePath` |
 | 提示词构建 | `buildRichSystemPrompt`, `buildEnhancedPersona`, `buildUserMessageWithHistory`, `buildContextHint` |
-| 上下文与记忆 | `ContextRepository`, `AgentSessionStore`, `ImTranscriptStore`（经 ZhinAgent 注入）；`ContextManager`, `ConversationMemory`, `UserProfileStore` |
+| 上下文与记忆 | `ContextRepository`, `AgentSessionStore`, `ImTranscriptStore`（`@zhin.js/ai`）；`ContextManager`, `ConversationMemory`, `UserProfileStore` |
 | 跟进与定时 | `FollowUpManager`, `PersistentCronEngine`, `createCronTools`, `setCronManager`, `getCronManager` |
 | 压缩与 Bootstrap | `compactSession`, `estimateTokens`, `loadBootstrapFiles`, `loadSoulPersona`, `loadToolsGuide`, `loadAgentsMemory` |
 | Hook | `registerAIHook`, `unregisterAIHook`, `triggerAIHook`, `createAIHookEvent` |

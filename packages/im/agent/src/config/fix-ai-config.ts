@@ -89,10 +89,7 @@ export function applyAiConfigFixes(
     mergeLegacyRoutesIntoAgents(agents, legacy.routes!);
     fixes.push('merged ai.routes into ai.agents and removed ai.routes');
   }
-  if (hadPipeline) {
-    mergeLegacyPipelineIntoAgents(agents, legacy.pipeline);
-    fixes.push('merged ai.pipeline into ai.agents and removed ai.pipeline');
-  }
+  // Synthesize zhin before pipeline merge — pipeline roles inherit from base agent bindings.
   if (hadDefaultProvider || hadLegacyAgent) {
     const providerAlias = legacy.defaultProvider
       || agents[DEFAULT_ZHIN_AGENT_NAME]?.provider
@@ -108,6 +105,10 @@ export function applyAiConfigFixes(
     };
     if (hadDefaultProvider) fixes.push('migrated ai.defaultProvider into ai.agents.zhin');
     if (hadLegacyAgent) fixes.push('migrated ai.agent.chatModel into ai.agents.zhin');
+  }
+  if (hadPipeline) {
+    mergeLegacyPipelineIntoAgents(agents, legacy.pipeline);
+    fixes.push('merged ai.pipeline into ai.agents and removed ai.pipeline');
   }
 
   const preNormalized = {

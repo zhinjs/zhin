@@ -1,4 +1,4 @@
-# ADR 0028: Schedule 设施取代 Cron
+# ADR 0031: Schedule 设施取代 Cron
 
 ## 状态
 

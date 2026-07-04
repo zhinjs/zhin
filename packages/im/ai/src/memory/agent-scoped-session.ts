@@ -17,6 +17,9 @@ export function resolveAgentScopedSessionId(
       return agentName ? `agent:${agentName}:${baseSessionId}` : baseSessionId;
     case 'user': {
       const parts = baseSessionId.split(':');
+      if (parts.length >= 4) {
+        return `user:${parts[0]}:${parts[1]}:${parts[2]}:${parts[3]}`;
+      }
       if (parts.length >= 2) {
         return `user:${parts[0]}:${parts[1]}:${parts[parts.length - 1]}`;
       }

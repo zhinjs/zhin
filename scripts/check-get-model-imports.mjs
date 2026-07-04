@@ -14,6 +14,7 @@ const scanRoots = [
   'packages/im/zhin/src',
 ];
 
+/** init/ is bootstrap-only; runtime turn paths live outside it */
 const skipDirNames = new Set(['node_modules', 'lib', 'dist', 'coverage', '.git', 'tests', 'init']);
 
 /** @param {string} dir @param {string[]} acc */
@@ -34,11 +35,26 @@ function walkTs(dir, acc) {
   }
 }
 
+/** @param {string} text */
+function findGetModelImportViolations(text) {
+  /** @type {{ line: number, text: string }[]} */
+  const hits = [];
+  const importBlockRe = /import\s+(?:type\s+)?\{([\s\S]*?)\}\s*from\s+['"]@zhin\.js\/ai['"]/g;
+  let match;
+  while ((match = importBlockRe.exec(text)) !== null) {
+    const block = match[1];
+    if (!/\bgetModel\b/.test(block) || /\bgetLlmTransportModel\b/.test(block)) continue;
+    const blockStart = match.index;
+    const prefix = text.slice(0, blockStart);
+    const line = prefix.split(/\r?\n/).length;
+    const snippet = match[0].replace(/\s+/g, ' ').trim();
+    hits.push({ line, text: snippet });
+  }
+  return hits;
+}
+
 /** @type {{ file: string, line: number, text: string }[]} */
 const violations = [];
-
-const importFromAiRe = /from\s+['"]@zhin\.js\/ai['"]/;
-const bareGetModelImportRe = /\bgetModel\b/;
 
 for (const rel of scanRoots) {
   const abs = path.join(repoRoot, rel);
@@ -46,17 +62,9 @@ for (const rel of scanRoots) {
   walkTs(abs, files);
   for (const file of files) {
     const relFile = path.relative(repoRoot, file);
-    const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      if (!importFromAiRe.test(line) || !bareGetModelImportRe.test(line)) continue;
-      if (/\bgetLlmTransportModel\b/.test(line)) continue;
-      if (line.trim().startsWith('//')) continue;
-      violations.push({
-        file: relFile,
-        line: i + 1,
-        text: line.trim(),
-      });
+    const text = fs.readFileSync(file, 'utf8');
+    for (const hit of findGetModelImportViolations(text)) {
+      violations.push({ file: relFile, ...hit });
     }
   }
 }

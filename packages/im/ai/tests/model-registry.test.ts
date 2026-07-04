@@ -217,7 +217,7 @@ describe('ModelRegistry', () => {
   });
 
   describe('query methods', () => {
-    it('getModel returns specific model', async () => {
+    it('getCachedModelInfo returns specific model', async () => {
       const provider = createMockProvider({
         listModels: async () => ['model-x'],
       });
@@ -228,7 +228,7 @@ describe('ModelRegistry', () => {
       expect(model?.id).toBe('model-x');
     });
 
-    it('getModel returns undefined for missing model', async () => {
+    it('getCachedModelInfo returns undefined for missing model', async () => {
       const provider = createMockProvider({
         listModels: async () => ['model-x'],
       });

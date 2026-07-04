@@ -30,6 +30,12 @@ const getPluginAllowlist = [
   'packages/im/core/src/built/',
 ];
 
+/** @param {string} relFile */
+function isGetPluginAllowlisted(relFile) {
+  const normalized = relFile.replace(/\\/g, '/');
+  return getPluginAllowlist.some((p) => normalized.includes(p));
+}
+
 const CALLBACK_MARKERS = [
   /\.action\s*\(/,
   /\.execute\s*\(/,
@@ -101,8 +107,10 @@ for (const rel of scanRoots) {
       const line = lines[i];
 
       if (lineHasGetPluginCall(line) && callbackBodyDepth !== null && depth >= callbackBodyDepth) {
+        const relFile = path.relative(repoRoot, file);
+        if (isGetPluginAllowlisted(relFile)) continue;
         violations.push({
-          file: path.relative(repoRoot, file),
+          file: relFile,
           line: i + 1,
           text: line.trim(),
         });
