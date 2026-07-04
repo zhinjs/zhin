@@ -424,7 +424,7 @@ ai:
 - 非 `zhin` 且带 `match` 的 agent 须存在 `agents/<name>.agent.md`；`zhin` 永不读 `zhin.agent.md`
 - 旧版顶层 `ai.routes` 启动时自动合并进同名 `agents.*`（已废弃，请迁走）
 - `tools[]` 为唯一工具白名单（内置、插件、`mcp_{server}_{tool}` 均须按名写出）
-- `providers.*.models` 可省略 — `ModelRegistry` + `GET /v1/models`（或 Ollama `/api/tags`）发现；`getModel()` 用发现结果校验；`agents.<name>.model` 为首选绑定
+- `providers.*.models` 可省略 — `ModelRegistry` + `GET /v1/models`（或 Ollama `/api/tags`）发现；`getLlmTransportModel()` 用发现结果校验；`agents.<name>.model` 为首选绑定
 - 当首选模型不可用时，系统自动降级到次优模型
 - `modelHarness` 会在 TypeScript 默认 harness 之上做 deep merge：对象按字段合并，数组（如后续扩展字段）显式写出时完整覆盖默认数组
 - `phaseTrace`（或环境变量 `ZHIN_AGENT_PHASE_TRACE=1`）可输出稳定的 `[AGENT_PHASE]` 阶段日志，便于排障与回归对照
