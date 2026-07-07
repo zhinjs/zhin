@@ -1,15 +1,17 @@
+import { segmentsForImDelivery } from '../segment-contract/delivery.js';
+import type { Segment } from '../segment-contract/types.js';
 import type { MessageElement } from '../../types.js';
 import type { AiOutboundParseContext, ZhinAiOutboundPayload } from './types.js';
 
-function buildAtSegments(
+function buildMentionSegments(
   endpointIds: string[],
   text: string,
   ctx: AiOutboundParseContext,
-): MessageElement[] {
-  const segments: MessageElement[] = [];
+): Segment[] {
+  const segments: Segment[] = [];
   for (const endpointId of endpointIds) {
-    const atId = ctx.atIdResolver?.(endpointId) ?? endpointId;
-    segments.push({ type: 'at', data: { id: atId, qq: atId } });
+    const target = ctx.atIdResolver?.(endpointId) ?? endpointId;
+    segments.push({ type: 'mention', data: { target } });
   }
   const body = text.trim();
   segments.push({
@@ -40,22 +42,30 @@ function resolveMentionEndpointIds(
   return { ok: true, endpointIds };
 }
 
-/** 将 ZhinAiOutboundPayload 转为 MessageElement[]（核心字段 + extensions）。 */
+/** 将 ZhinAiOutboundPayload 转为 MessageElement[]（canonical segments + extensions）。 */
 export async function resolveAiOutboundToMessageElements(
   payload: ZhinAiOutboundPayload,
   ctx: AiOutboundParseContext,
 ): Promise<MessageElement[] | null> {
-  const parts: MessageElement[] = [];
+  const segments: Segment[] = [];
 
   if (payload.mentions?.length) {
     const resolved = resolveMentionEndpointIds(payload.mentions, ctx);
     if (!resolved.ok) return null;
     const text = payload.text?.trim() ?? '';
     if (!text) return null;
-    parts.push(...buildAtSegments(resolved.endpointIds, text, ctx));
+    segments.push(...buildMentionSegments(resolved.endpointIds, text, ctx));
   } else if (payload.text?.trim()) {
-    parts.push({ type: 'text', data: { text: payload.text.trim() } });
+    segments.push({ type: 'text', data: { text: payload.text.trim() } });
   }
+
+  if (payload.segments?.length) {
+    segments.push(...payload.segments);
+  }
+
+  const parts: MessageElement[] = segments.length
+    ? segmentsForImDelivery(segments)
+    : [];
 
   if (payload.extensions && ctx.extensions?.length) {
     for (const def of ctx.extensions) {

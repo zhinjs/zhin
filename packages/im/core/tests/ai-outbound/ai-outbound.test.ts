@@ -1,12 +1,33 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseAiOutboundJson,
+  parseOutboundSegment,
   extractEmbeddedAiOutboundJson,
   rewritePlainTextMentions,
   buildAiOutboundPromptHint,
   detectInboundHandoffIntent,
   isStructuredOutboundRequired,
+  resolveAiOutboundToMessageElements,
 } from '../../src/built/ai-outbound/index.js';
+import type { Message } from '../../src/message.js';
+
+const stubMessage = { $adapter: 'sandbox', $endpoint: 'ep1' } as Message;
+
+describe('parseOutboundSegment', () => {
+  it('parses canonical segment', () => {
+    expect(parseOutboundSegment({ type: 'text', data: { text: 'hi' } })).toEqual({
+      type: 'text',
+      data: { text: 'hi' },
+    });
+  });
+
+  it('maps legacy kind to type', () => {
+    expect(parseOutboundSegment({ kind: 'mention', data: { target: '1' } })).toEqual({
+      type: 'mention',
+      data: { target: '1' },
+    });
+  });
+});
 
 describe('parseAiOutboundJson', () => {
   it('parses mentions and text', () => {
@@ -23,6 +44,23 @@ describe('parseAiOutboundJson', () => {
       text: 'hi',
       mentions: undefined,
       segments: undefined,
+      extensions: undefined,
+    });
+  });
+
+  it('parses canonical segments array', () => {
+    expect(parseAiOutboundJson(JSON.stringify({
+      segments: [
+        { type: 'text', data: { text: 'a' } },
+        { kind: 'mention', data: { target: '9' } },
+      ],
+    }))).toEqual({
+      text: undefined,
+      mentions: undefined,
+      segments: [
+        { type: 'text', data: { text: 'a' } },
+        { type: 'mention', data: { target: '9' } },
+      ],
       extensions: undefined,
     });
   });
@@ -87,5 +125,60 @@ describe('buildAiOutboundPromptHint', () => {
   it('includes force json line', () => {
     const hint = buildAiOutboundPromptHint({ forceJsonOnly: true });
     expect(hint).toContain('MUST reply with JSON only');
+  });
+});
+
+describe('resolveAiOutboundToMessageElements', () => {
+  const ctx = {
+    message: stubMessage,
+    mentionResolver: (ref: string) => (ref === 'researcher' ? 'ep-researcher' : undefined),
+    atIdResolver: (endpointId: string) => `qq:${endpointId}`,
+  };
+
+  it('resolves mentions to canonical mention segments', async () => {
+    const result = await resolveAiOutboundToMessageElements(
+      { mentions: ['researcher'], text: 'hello' },
+      ctx,
+    );
+    expect(result).toEqual([
+      { type: 'mention', data: { target: 'qq:ep-researcher' } },
+      { type: 'text', data: { text: ' hello' } },
+    ]);
+  });
+
+  it('consumes payload.segments and filters AI-only types', async () => {
+    const result = await resolveAiOutboundToMessageElements(
+      {
+        text: 'visible',
+        segments: [
+          { type: 'thinking', data: { text: 'hidden' } },
+          { type: 'image', data: { media: { kind: 'url', value: 'https://x/y.png' } } },
+        ],
+      },
+      { message: stubMessage },
+    );
+    expect(result).toEqual([
+      { type: 'text', data: { text: 'visible' } },
+      { type: 'image', data: { media: { kind: 'url', value: 'https://x/y.png' } } },
+    ]);
+  });
+
+  it('appends extension segments', async () => {
+    const result = await resolveAiOutboundToMessageElements(
+      { text: 'hi', extensions: { 'test.ext': { foo: 1 } } },
+      {
+        message: stubMessage,
+        extensions: [{
+          key: 'test.ext',
+          schema: {},
+          examples: ['{}'],
+          toMessageElements: () => [{ type: 'text', data: { text: ' ext' } }],
+        }],
+      },
+    );
+    expect(result).toEqual([
+      { type: 'text', data: { text: 'hi' } },
+      { type: 'text', data: { text: ' ext' } },
+    ]);
   });
 });

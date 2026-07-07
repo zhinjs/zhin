@@ -1,4 +1,28 @@
+import { isCanonicalSegment } from '../segment-contract/assert.js';
+import type { Segment } from '../segment-contract/types.js';
 import type { ZhinAiOutboundPayload } from './types.js';
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** 解析单条 outbound segment（canonical 或 legacy kind/mode）。 */
+export function parseOutboundSegment(raw: unknown): Segment | null {
+  if (!isPlainObject(raw)) return null;
+
+  const type =
+    typeof raw.type === 'string' && raw.type.trim()
+      ? raw.type.trim()
+      : typeof raw.kind === 'string' && raw.kind.trim()
+        ? raw.kind.trim()
+        : undefined;
+  if (!type) return null;
+
+  const data = isPlainObject(raw.data) ? raw.data : {};
+  const platform = isPlainObject(raw.platform) ? raw.platform : undefined;
+  const segment = platform ? { type, data, platform } : { type, data };
+  return isCanonicalSegment(segment) ? segment : null;
+}
 
 /** 去掉嵌入 JSON 候选末尾的 markdown 围栏（模型常见 ```json … ``` 误输出）。 */
 export function trimTrailingMarkdownFence(raw: string): string {
@@ -61,15 +85,8 @@ export function parseAiOutboundJson(raw: string): ZhinAiOutboundPayload | null {
     const segmentsRaw = parsed.segments;
     const segments = Array.isArray(segmentsRaw)
       ? segmentsRaw
-          .filter((s): s is Record<string, unknown> => s != null && typeof s === 'object')
-          .map((s) => ({
-            kind: String(s.kind ?? ''),
-            mode: typeof s.mode === 'string' ? s.mode : undefined,
-            data: s.data != null && typeof s.data === 'object'
-              ? (s.data as Record<string, unknown>)
-              : undefined,
-          }))
-          .filter((s) => s.kind)
+          .map((item) => parseOutboundSegment(item))
+          .filter((s): s is Segment => s != null)
       : undefined;
     const extensions =
       parsed.extensions != null && typeof parsed.extensions === 'object' && !Array.isArray(parsed.extensions)
