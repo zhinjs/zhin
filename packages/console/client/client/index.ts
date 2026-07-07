@@ -4,6 +4,9 @@ export * from "./types";
 // Media URL resolution
 export { resolveMediaSrc, pickMediaRawUrl, type MediaKind } from "./mediaSrc";
 
+// Segment IM visibility (inbox vs agent panel)
+export { segmentsForImDelivery, segmentsForAgentPanel } from "./segments.js";
+
 // Console app singleton (pagemanager / registry style)
 export {
   app,
