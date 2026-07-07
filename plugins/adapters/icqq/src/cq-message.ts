@@ -98,6 +98,11 @@ export function toCqString(content: SendContent): string {
         case "face":
           return `[face:${data.id}]`;
         case "image": {
+          const media = data.media as { kind?: string; value?: string } | undefined;
+          if (media?.value) {
+            if (media.kind === "base64") return `[image:base64://${media.value}]`;
+            return `[image:${media.value}]`;
+          }
           const b64 =
             typeof data.base64 === "string"
               ? data.base64

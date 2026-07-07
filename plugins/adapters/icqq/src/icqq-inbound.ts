@@ -3,6 +3,7 @@
  */
 import { Message, type MessageSegment, type QuotedMessagePayload } from "zhin.js";
 import { parseCqMessage } from "./cq-message.js";
+import { toCanonicalSegments } from "./segment-mapper.js";
 import { extractForwardResidFromJsonElement } from "./forward-msg.js";
 import type { GroupRole } from "./types.js";
 
@@ -619,7 +620,7 @@ export function resolveInboundContent(
   } else {
     content = [{ type: "text", data: { text: "" } }];
   }
-  return mergeReplyFromSource(content, data);
+  return toCanonicalSegments(mergeReplyFromSource(content, data));
 }
 
 export function normalizeIcqqInboundMessage(

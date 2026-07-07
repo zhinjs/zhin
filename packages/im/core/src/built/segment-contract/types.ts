@@ -26,8 +26,13 @@ export interface MentionSegment extends SegmentBase {
   data: { target: string; name?: string };
 }
 
+export interface ImageSegment extends SegmentBase {
+  type: 'image';
+  data: { media: MediaRef; alt?: string };
+}
+
 /** 规范态 segment（#550 起：text + mention 严格校验；其余 type 宽松透传） */
-export type Segment = TextSegment | MentionSegment | SegmentBase;
+export type Segment = TextSegment | MentionSegment | ImageSegment | SegmentBase;
 
 /** @deprecated 使用 Segment；保留别名供 Console / adapter 渐进迁移 */
 export type MessageSegment = Segment;

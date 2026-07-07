@@ -43,9 +43,14 @@ export function resolveMediaSrc(
   return `data:${defaultMime};base64,${b64}`
 }
 
-/** 从 segment.data 取常见媒体字段 */
+/** 从 segment.data 取常见媒体字段（优先 canonical MediaRef） */
 export function pickMediaRawUrl(data: Record<string, unknown> | undefined): string | undefined {
   if (!data) return undefined
+  const media = data.media
+  if (media && typeof media === 'object' && media !== null) {
+    const value = (media as { value?: unknown }).value
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
   const v = data.url ?? data.file ?? data.src ?? data.href
   return typeof v === 'string' && v.trim() ? v.trim() : undefined
 }
