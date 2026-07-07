@@ -153,6 +153,7 @@
     "export * from './built/schedule.js'",
     "export * from './built/schema-endpoint-manager.js'",
     "export * from './built/schema-feature.js'",
+    "export * from './built/segment-contract/index.js'",
     "export * from './built/skill.js'",
     "export * from './built/tool.js'",
     "export * from './command.js'",

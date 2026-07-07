@@ -54,6 +54,7 @@ export { loadSpeechPipeline, seedSpeechPipeline, SPEECH_PACKAGE } from './built/
 export * from './built/outbound-media-utils.js'
 export * from './built/outbound-media-contract.js'
 export * from './built/interactive-segment-contract.js'
+export * from './built/segment-contract/index.js'
 export * from './built/adapter-process.js'
 export * from './built/component.js'
 export * from './built/inbound-runner.js'

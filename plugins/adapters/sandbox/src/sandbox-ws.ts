@@ -10,6 +10,7 @@ import {
   type Plugin,
   type SendContent,
   type SendOptions,} from 'zhin.js';
+import { fromCanonicalSegments, toCanonicalSegments } from './segment-mapper.js';
 
 export interface SandboxWsConfig {
   context: "sandbox";
@@ -172,7 +173,7 @@ export function parseSandboxWsPayload(raw: string): {
   const content: MessageElement[] = typeof payload.content === "string"
     ? [{ type: "text", data: { text: payload.content } }]
     : Array.isArray(payload.content)
-    ? payload.content
+    ? toCanonicalSegments(payload.content)
     : [{ type: "text", data: { text: payload.text ?? raw } }];
   return { type, id, content, timestamp: payload.timestamp ?? Date.now() };
 }
@@ -238,6 +239,7 @@ export class SandboxWsEndpoint extends EventEmitter implements Endpoint<SandboxW
 
   $formatMessage({ content, type, id, ts }: EndpointEvent) {
     if (!this.$config.owner) this.$config.owner = id;
+    const canonical = toCanonicalSegments(content);
     const message = Message.from<EndpointEvent>(
       { content, type, id, ts },
       {
@@ -246,8 +248,8 @@ export class SandboxWsEndpoint extends EventEmitter implements Endpoint<SandboxW
         $endpoint: this.$config.name,
         $sender: { id, name: "mock" },
         $channel: { id, type },
-        $content: content,
-        $raw: segment.raw(content),
+        $content: canonical,
+        $raw: segment.raw(canonical),
         $timestamp: ts,
         $recall: async () => {},
         $reply: async (replyContent: SendContent, quote?: boolean | string) => {
@@ -282,11 +284,15 @@ export class SandboxWsEndpoint extends EventEmitter implements Endpoint<SandboxW
     const ws = this.$config.ws;
     if (!ws) return "";
     const messageId = `sb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const normalized = (Array.isArray(options.content) ? options.content : [options.content]).map((s) =>
+      typeof s === 'string' ? { type: 'text' as const, data: { text: s } } : s,
+    );
+    const wire = fromCanonicalSegments(toCanonicalSegments(normalized));
     ws.send(
       JSON.stringify({
         ...options,
         messageId,
-        content: options.content,
+        content: wire,
         timestamp: Date.now(),
       }),
     );

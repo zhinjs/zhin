@@ -128,7 +128,7 @@ export default function Sandbox() {
                 const t = text.substring(lastIndex, match.index)
                 if (t) segments.push({ type: 'text', data: { text: t } })
             }
-            if (match[1]) segments.push({ type: 'at', data: { qq: match[1], name: match[1] } })
+            if (match[1]) segments.push({ type: 'mention', data: { target: match[1], name: match[1] } })
             else if (match[2]) segments.push({ type: 'face', data: { id: parseInt(match[2], 10) } })
             else if (match[3]) segments.push({ type: 'image', data: { url: match[3] } })
             else if (match[4]) segments.push({ type: 'video', data: { url: match[4] } })
@@ -161,8 +161,9 @@ export default function Sandbox() {
             switch (segment.type) {
                 case 'text':
                     return <span key={index}>{String(d.text ?? '').split('\n').map((part: string, i: number) => <React.Fragment key={i}>{part}{i < String(d.text ?? '').split('\n').length - 1 && <br />}</React.Fragment>)}</span>
+                case 'mention':
                 case 'at':
-                    return <span key={index} className="inline-flex items-center px-1.5 py-0.5 rounded bg-accent text-accent-foreground text-xs mx-0.5">@{String(d.name ?? d.qq ?? '')}</span>
+                    return <span key={index} className="inline-flex items-center px-1.5 py-0.5 rounded bg-accent text-accent-foreground text-xs mx-0.5">@{String(d.name ?? d.target ?? d.qq ?? '')}</span>
                 case 'face':
                     return <img key={index} src={`https://face.viki.moe/apng/${d.id}.png`} alt="" className="w-6 h-6 inline-block align-middle mx-0.5" />
                 case 'image': {
