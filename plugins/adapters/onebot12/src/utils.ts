@@ -3,6 +3,7 @@
  */
 import type { SendContent } from 'zhin.js';
 import type { OneBot12Event, OneBot12Segment } from './types.js';
+import { toCanonicalSegments } from './segment-mapper.js';
 
 /** 判断是否为消息事件（type=message） */
 export function isMessageEvent(ev: OneBot12Event): ev is OneBot12Event & { message_id: string; message?: OneBot12Segment[] } {
@@ -46,9 +47,10 @@ export function formatOneBot12MessagePayload(
   const channelId = getChannelId(ev);
   const channelType = getChannelType(ev);
   const raw = ev.alt_message ?? (Array.isArray(ev.message) ? ev.message.map((s) => (s.type === 'text' ? (s.data?.text as string) ?? '' : '')).join('') : '');
-  const content = Array.isArray(ev.message)
+  const wire = Array.isArray(ev.message)
     ? ev.message.map((s) => ({ type: s.type, data: (s.data ?? {}) as Record<string, unknown> }))
     : [{ type: 'text', data: { text: raw } }];
+  const content = toCanonicalSegments(wire);
   const senderId = ev.user_id ?? '';
   const senderName = (ev as Record<string, unknown>)['user.name'] as string | undefined ?? (ev as Record<string, unknown>)['qq.nickname'] as string | undefined ?? senderId;
 

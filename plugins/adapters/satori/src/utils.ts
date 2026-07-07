@@ -4,6 +4,7 @@
 import type { SendContent } from 'zhin.js';
 import { Message } from 'zhin.js';
 import type { SatoriEventBody, SatoriMessage, SatoriChannel } from './types.js';
+import { toCanonicalSegments } from './segment-mapper.js';
 
 /** Satori Channel.type: 0=TEXT, 1=DIRECT, 2=CATEGORY, 3=VOICE */
 export function isPrivateChannel(channel?: SatoriChannel): boolean {
@@ -45,7 +46,7 @@ export function formatSatoriMessagePayload(
     $endpoint: endpointName,
     $channel: { id: channelId, type: isPrivate ? 'private' : 'group' },
     $sender: { id: senderId, name: senderName },
-    $content: [{ type: 'text', data: { text: raw } }],
+    $content: toCanonicalSegments([{ type: 'text', data: { text: raw } }]),
     $raw: raw,
     $timestamp: body.timestamp ?? msg.created_at ?? Math.floor(Date.now() / 1000),
     $recall: () => recallFn(`${channelId}:${msg.id}`),

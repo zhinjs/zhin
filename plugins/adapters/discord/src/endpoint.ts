@@ -34,6 +34,7 @@ import {
   SendContent,
   MessageSegment,
   segment,
+  expandInteractiveSegmentsInContent,
   type EditMessageOptions,
 } from 'zhin.js';
 import type { DiscordGatewayConfig, DiscordChannelMessage } from "./types.js";
@@ -41,6 +42,7 @@ import type { DiscordAdapter } from "./adapter.js";
 import { createReadStream } from "fs";
 import { promises as fs } from "fs";
 import path from "path";
+import { fromCanonicalSegments, toCanonicalSegments } from './segment-mapper.js';
 
 export class DiscordEndpoint
   extends Client
@@ -253,7 +255,8 @@ export class DiscordEndpoint
     }
 
     // 转换消息内容为 segment 格式
-    const content = this.parseMessageContent(msg);
+    const wire = this.parseMessageContent(msg);
+    const content = toCanonicalSegments(wire);
 
     const sender = (() => {
       const base = {
@@ -599,9 +602,11 @@ export class DiscordEndpoint
         throw new Error(`Channel ${options.id} is not a text channel`);
       }
 
+      const canonical = expandInteractiveSegmentsInContent(options.content);
+      const wire = fromCanonicalSegments(canonical);
       const result = await this.sendContentToChannel(
         channel as any,
-        options.content
+        wire
       );
       this.messageChannelMap.set(result.id, options.id);
       this.pluginLogger.debug(

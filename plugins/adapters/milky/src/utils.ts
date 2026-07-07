@@ -4,6 +4,7 @@
 import type { MessageBase, SendContent } from 'zhin.js';
 import { Message, applyQqSenderRoleToMessageSender } from 'zhin.js';
 import type { MilkyEvent, MilkyIncomingMessage, MilkyIncomingSegment } from './types.js';
+import { toCanonicalSegments } from './segment-mapper.js';
 
 /** 将 Milky 接收消息段转为 zhin 的 $content（MessageSegment[]） */
 export function formatMilkySegments(segments: MilkyIncomingSegment[]): Array<{ type: string; data: Record<string, unknown> }> {
@@ -76,7 +77,7 @@ export function formatMilkyMessagePayload(
   const senderId = data.sender_id.toString();
   const senderName =
     (isGroup ? data.group_member?.card ?? data.group_member?.nickname : data.friend?.nickname) ?? senderId;
-  const content = formatMilkySegments(data.segments);
+  const content = toCanonicalSegments(formatMilkySegments(data.segments));
   const raw = content.map((c) => (c.type === 'text' ? (c.data as { text?: string }).text : '')).join('');
 
   return {

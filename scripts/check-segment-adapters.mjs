@@ -11,27 +11,14 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const adaptersDir = path.join(repoRoot, 'plugins/adapters');
 
 /** 必须含 segment-mapper + segment-contract.test.ts */
-const REQUIRED_ADAPTERS = new Set(['sandbox', 'icqq', 'napcat', 'onebot11', 'qq']);
+const REQUIRED_ADAPTERS = new Set([
+  'sandbox', 'icqq', 'napcat', 'onebot11', 'qq',
+  'dingtalk', 'discord', 'email', 'github', 'kook', 'lark', 'line', 'milky',
+  'onebot12', 'process', 'satori', 'slack', 'telegram', 'wechat-mp', 'wecom', 'weixin-ilink',
+]);
 
 /** 尚未迁移 segment-mapper 的 adapter（不报错） */
-const PENDING_ADAPTERS = new Set([
-  'dingtalk',
-  'discord',
-  'email',
-  'github',
-  'kook',
-  'lark',
-  'line',
-  'milky',
-  'onebot12',
-  'process',
-  'satori',
-  'slack',
-  'telegram',
-  'wechat-mp',
-  'wecom',
-  'weixin-ilink',
-]);
+const PENDING_ADAPTERS = new Set([]);
 
 const entries = fs.readdirSync(adaptersDir, { withFileTypes: true })
   .filter((d) => d.isDirectory())

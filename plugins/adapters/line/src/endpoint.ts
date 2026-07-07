@@ -13,6 +13,7 @@ import {
   MessageSegment,
   segment,
   formatCompact,
+  expandInteractiveSegmentsInContent,
   type QuotedMessagePayload,} from 'zhin.js';
 import { registerFetchRoute, type Router, type RouterContext } from "@zhin.js/host-router/router";
 import type {
@@ -30,6 +31,7 @@ import type {
   LineApiResponse,
 } from "./types.js";
 import type { LineAdapter } from "./adapter.js";
+import { fromCanonicalSegments, toCanonicalSegments } from './segment-mapper.js';
 
 /** Type guard: narrows a LineEvent to a message event */
 function isMessageEvent(e: LineEvent): e is LineMessageEvent {
@@ -248,9 +250,10 @@ export class LineEndpoint implements Endpoint<LineEndpointConfig, LineEvent> {
 
   $formatMessage(event: LineEvent): Message<LineEvent> {
     const { channelType, channelId } = this.resolveChannel(event.source);
-    const content = this.parseMessageContent(event);
-    const quoteId = Message.quoteIdFromContent(content);
-    Message.alignReplySegments(content, quoteId);
+    const wire = this.parseMessageContent(event);
+    const quoteId = Message.quoteIdFromContent(wire);
+    Message.alignReplySegments(wire, quoteId);
+    const content = toCanonicalSegments(wire);
 
     const userId = event.source.userId || "";
     const timestamp = event.timestamp || Date.now();
@@ -421,7 +424,9 @@ export class LineEndpoint implements Endpoint<LineEndpointConfig, LineEvent> {
 
   async $sendMessage(options: SendOptions): Promise<string> {
     try {
-      const messages = this.buildLineMessages(options.content);
+      const canonical = expandInteractiveSegmentsInContent(options.content);
+      const wire = fromCanonicalSegments(canonical);
+      const messages = this.buildLineMessages(wire);
       if (messages.length === 0) {
         throw new Error("No valid LINE messages to send");
       }

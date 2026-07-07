@@ -3,6 +3,7 @@
  */
 import { formatCompact, Endpoint, Message, segment, SendContent, SendOptions, type MessageSegment,
   coerceQrcodeSegmentsToText,
+  expandInteractiveSegmentsInContent,
 } from 'zhin.js';
 import type {
   GitHubEndpointConfig,
@@ -13,6 +14,7 @@ import type {
 import { buildChannelId, parseChannelId } from './types.js';
 import type { GitHubAdapter } from './adapter.js';
 import { GhClient } from './gh-client.js';
+import { fromCanonicalSegments, toCanonicalSegments } from './segment-mapper.js';
 
 export function parseMarkdown(md: string): MessageSegment[] {
   const segments: MessageSegment[] = [];
@@ -34,6 +36,7 @@ export function toMarkdown(content: SendContent): string {
     if (typeof seg === 'string') return seg;
     switch (seg.type) {
       case 'text': return seg.data.text || '';
+      case 'mention': return `@${seg.data.name || seg.data.target}`;
       case 'at': return `@${seg.data.name || seg.data.id}`;
       case 'image': return seg.data.url ? `![image](${seg.data.url})` : '[image]';
       case 'link': return `[${seg.data.text || seg.data.url}](${seg.data.url})`;
@@ -85,7 +88,7 @@ export class GitHubEndpoint implements Endpoint<GitHubEndpointConfig, IssueComme
       $endpoint: this.$config.name,
       $sender: { id: payload.sender.login, name: payload.sender.login },
       $channel: { id: channelId, type: 'group' },
-      $content: parseMarkdown(payload.comment.body),
+      $content: toCanonicalSegments(parseMarkdown(payload.comment.body)),
       $raw: payload.comment.body,
       $timestamp: new Date(payload.comment.created_at).getTime(),
       $recall: async () => { await gh.deleteIssueComment(repo, payload.comment.id); },
@@ -115,7 +118,7 @@ export class GitHubEndpoint implements Endpoint<GitHubEndpointConfig, IssueComme
       $endpoint: this.$config.name,
       $sender: { id: payload.sender.login, name: payload.sender.login },
       $channel: { id: channelId, type: 'group' },
-      $content: parseMarkdown(body),
+      $content: toCanonicalSegments(parseMarkdown(body)),
       $raw: body,
       $timestamp: new Date(payload.comment.created_at).getTime(),
       $recall: async () => { await gh.deletePRReviewComment(repo, payload.comment.id); },
@@ -145,7 +148,7 @@ export class GitHubEndpoint implements Endpoint<GitHubEndpointConfig, IssueComme
       $endpoint: this.$config.name,
       $sender: { id: payload.sender.login, name: payload.sender.login },
       $channel: { id: channelId, type: 'group' },
-      $content: parseMarkdown(body),
+      $content: toCanonicalSegments(parseMarkdown(body)),
       $raw: body,
       $timestamp: new Date(payload.review.submitted_at).getTime(),
       $recall: async () => {},
@@ -160,7 +163,10 @@ export class GitHubEndpoint implements Endpoint<GitHubEndpointConfig, IssueComme
     const parsed = parseChannelId(options.id);
     if (!parsed) throw new Error(`无效的 GitHub channel ID: ${options.id}`);
 
-    const text = toMarkdown(coerceQrcodeSegmentsToText(options.content ?? ''));
+    const expanded = expandInteractiveSegmentsInContent(coerceQrcodeSegmentsToText(options.content ?? ''));
+    const arr = Array.isArray(expanded) ? expanded : [expanded];
+    const canonical = arr.map((s) => (typeof s === 'string' ? { type: 'text' as const, data: { text: s } } : s));
+    const text = toMarkdown(fromCanonicalSegments(canonical));
     const r = parsed.type === 'issue'
       ? await this.gh.createIssueComment(parsed.repo, parsed.number, text)
       : await this.gh.createPRComment(parsed.repo, parsed.number, text);

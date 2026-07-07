@@ -57,6 +57,7 @@ import {
 import { materializeOutboundMedia } from "./outbound-media.js";
 import { uploadKookAsset } from "./kook-asset-upload.js";
 import { convertToKookSendable } from "./outbound-sendable.js";
+import { fromCanonicalSegments, toCanonicalSegments } from './segment-mapper.js';
 
 export class KookEndpoint extends Client implements Endpoint<KookEndpointConfig, KookRawMessage> {
   $connected: boolean = false;
@@ -235,7 +236,7 @@ export class KookEndpoint extends Client implements Endpoint<KookEndpointConfig,
         ...(guildId ? { guild_id: guildId } : {}),
       },
       
-      $content: this.parseMessageContent(msg.message),
+      $content: toCanonicalSegments(this.parseMessageContent(msg.message)),
       $raw: msg.raw_message,
       $timestamp: msg.timestamp,
       
@@ -721,7 +722,9 @@ export class KookEndpoint extends Client implements Endpoint<KookEndpointConfig,
     try {
       const { id, type, content } = options;
 
-      const elements = await materializeOutboundMedia(this, expandInteractiveSegmentsInContent(content));
+      const canonical = expandInteractiveSegmentsInContent(content);
+      const wire = fromCanonicalSegments(canonical);
+      const elements = await materializeOutboundMedia(this, wire);
       const kookContent = convertToKookSendable(
         elements,
         (els) => this.convertToKookFormat(els),
