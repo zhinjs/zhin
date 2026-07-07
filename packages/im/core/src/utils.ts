@@ -101,6 +101,9 @@ export namespace segment {
   export function text(text: string) {
     return segment("text", { text });
   }
+  export function mention(target: string, name?: string) {
+    return segment("mention", name ? { target, name } : { target });
+  }
   export function face(id: string, text?: string) {
     return segment("face", { id, text });
   }

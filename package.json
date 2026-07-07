@@ -57,6 +57,7 @@
     "check:rich-segments": "node scripts/check-rich-segment-adapters.mjs",
     "check:ai-outbound": "node scripts/check-ai-outbound-adapters.mjs",
     "check:interactive-segments": "node scripts/check-interactive-segment-adapters.mjs",
+    "check:segments": "node scripts/check-segment-adapters.mjs",
     "check:use-plugin-top-level": "node scripts/check-use-plugin-top-level.mjs",
     "check:get-plugin-runtime": "node scripts/check-get-plugin-runtime.mjs",
     "check:all": "node scripts/check-all-harness.mjs",
