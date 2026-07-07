@@ -35,7 +35,7 @@ function pushCqSegment(segments: MessageSegment[], type: string, arg: string): v
       segments.push({ type: "video", data: { file: arg } });
       break;
     case "reply":
-      segments.push({ type: "reply", data: { id: arg } });
+      segments.push({ type: "reply", data: { message_id: arg } });
       break;
     default:
       segments.push({ type, data: { text: `[${type}:${arg}]` } });
@@ -135,7 +135,7 @@ export function toCqString(content: SendContent): string {
           return `[video:${data.file || data.url}]`;
         }
         case "reply":
-          return `[reply:${data.id}]`;
+          return `[reply:${data.message_id ?? data.id}]`;
         default:
           return segment.toString(seg);
       }

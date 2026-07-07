@@ -31,8 +31,28 @@ export interface ImageSegment extends SegmentBase {
   data: { media: MediaRef; alt?: string };
 }
 
-/** 规范态 segment（#550 起：text + mention 严格校验；其余 type 宽松透传） */
-export type Segment = TextSegment | MentionSegment | ImageSegment | SegmentBase;
+export interface ReplySegment extends SegmentBase {
+  type: 'reply';
+  data: { message_id: string };
+}
+
+export interface ForwardSegment extends SegmentBase {
+  type: 'forward';
+  data: {
+    forward_id: string;
+    title?: string;
+    messages?: Segment[][];
+  };
+}
+
+/** 规范态 segment（严格校验 text / mention / image / reply / forward） */
+export type Segment =
+  | TextSegment
+  | MentionSegment
+  | ImageSegment
+  | ReplySegment
+  | ForwardSegment
+  | SegmentBase;
 
 /** @deprecated 使用 Segment；保留别名供 Console / adapter 渐进迁移 */
 export type MessageSegment = Segment;

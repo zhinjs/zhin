@@ -587,7 +587,7 @@ function mergeReplyFromRawMessage(
   const quoteFromRaw = Message.quoteIdFromContent(fromRaw);
   if (!quoteFromRaw) return content;
   return [
-    { type: "reply", data: { id: quoteFromRaw, message_id: quoteFromRaw } },
+    { type: "reply", data: { message_id: quoteFromRaw } },
     ...content.filter((s) => s.type !== "reply"),
   ];
 }
@@ -602,7 +602,7 @@ function mergeReplyFromSource(
     resolveQuoteIdFromIcqqSource(findIcqqNestedMessageSource(data));
   if (!quoteId) return content;
   return [
-    { type: "reply", data: { id: quoteId, message_id: quoteId } },
+    { type: "reply", data: { message_id: quoteId } },
     ...content.filter((s) => s.type !== "reply"),
   ];
 }

@@ -41,6 +41,21 @@ describe('segment-contract schema', () => {
     };
     expect(isCanonicalSegment(seg)).toBe(true);
   });
+
+  it('accepts reply with message_id', () => {
+    const seg = { type: 'reply', data: { message_id: '123' } };
+    expect(isCanonicalSegment(seg)).toBe(true);
+  });
+
+  it('rejects reply with only legacy id', () => {
+    const seg = { type: 'reply', data: { id: '123' } };
+    expect(isCanonicalSegment(seg)).toBe(false);
+  });
+
+  it('accepts forward with forward_id', () => {
+    const seg = { type: 'forward', data: { forward_id: 'resid-1', title: '群聊' } };
+    expect(isCanonicalSegment(seg)).toBe(true);
+  });
 });
 
 describe('assertCanonicalSegments', () => {

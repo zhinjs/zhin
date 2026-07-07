@@ -73,14 +73,14 @@ export function syncQuoteId(message: Message<any>): void {
   if (id) message.$quote_id = id;
 }
 
-/** 将 reply 段的 id / message_id 与 $quote_id 对齐 */
+/** 将 reply 段与 $quote_id 对齐（canonical 仅保留 message_id） */
 export function alignReplySegments(content: MessageElement[], quoteId?: string): void {
   const id = quoteId ?? quoteIdFromContent(content);
   if (!id) return;
   for (const seg of content) {
     if (seg.type !== 'reply' || !seg.data || typeof seg.data !== 'object') continue;
     const data = seg.data as Record<string, unknown>;
-    data.id = id;
     data.message_id = id;
+    delete data.id;
   }
 }

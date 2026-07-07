@@ -32,4 +32,24 @@ describe('icqq segment contract', () => {
     }];
     assertSegmentRoundTrip(mapper, canonical, canonical);
   });
+
+  it('normalizes legacy reply id to message_id', () => {
+    assertSegmentRoundTrip(
+      mapper,
+      [{ type: 'reply', data: { id: 'q-1' } }],
+      [{ type: 'reply', data: { message_id: 'q-1' } }],
+    );
+  });
+
+  it('normalizes legacy forward id/resid to forward_id', () => {
+    assertSegmentRoundTrip(
+      mapper,
+      [{ type: 'forward', data: { id: 'fwd-9', resid: 'fwd-9', title: '群聊' } }],
+      [{
+        type: 'forward',
+        data: { forward_id: 'fwd-9', title: '群聊' },
+        platform: { resid: 'fwd-9' },
+      }],
+    );
+  });
 });

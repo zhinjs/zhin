@@ -32,11 +32,31 @@ export const imageSegmentSchema = z.object({
   platform: z.record(z.string(), z.unknown()).optional(),
 });
 
+export const replySegmentSchema = z.object({
+  type: z.literal('reply'),
+  data: z.object({
+    message_id: z.string(),
+  }),
+  platform: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const forwardSegmentSchema = z.object({
+  type: z.literal('forward'),
+  data: z.object({
+    forward_id: z.string(),
+    title: z.string().optional(),
+    messages: z.array(z.array(z.record(z.string(), z.unknown()))).optional(),
+  }),
+  platform: z.record(z.string(), z.unknown()).optional(),
+});
+
 /** 当前已严格校验的 canonical 段（其余 type 由 assert 宽松接受） */
 export const canonicalSegmentSchema = z.discriminatedUnion('type', [
   textSegmentSchema,
   mentionSegmentSchema,
   imageSegmentSchema,
+  replySegmentSchema,
+  forwardSegmentSchema,
 ]);
 
 export const segmentArraySchema = z.array(canonicalSegmentSchema);
