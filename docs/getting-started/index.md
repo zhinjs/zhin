@@ -1,6 +1,8 @@
 # 快速开始
 
-TypeScript **多通道 IM Bot 框架** + 可选 **Agent 栈**。5 分钟跑通本地首个机器人：创建项目、启动 Host、打开 Remote Console、在 Sandbox 发出第一条消息。
+<p class="lead">5 分钟在本地跑通首个机器人：创建项目 → 启动 Host → 连接 Remote Console → 在 Sandbox 发出 <code>hello</code>。可选再写第一个插件或接入真实平台。</p>
+
+TypeScript **多通道 IM Bot 框架** + 可选 **Agent 栈**。完整资源见 [生态与资源](/ecosystem)。
 
 ## 三种入口（任选）
 
@@ -103,6 +105,7 @@ Sandbox 只是调试用。接入真实平台只需两步：
 
 ## 启用 AI（可选）
 
+```bash
 npx zhin setup --ai
 pnpm install
 pnpm dev
@@ -125,3 +128,11 @@ pnpm dev
 - **[消息如何流转](/essentials/message-flow)** — 一页搞清消息进出
 - **[配置文件](/essentials/configuration)** — 所有配置项
 - **[平台适配器](/adapters/)** — QQ、Discord、Telegram 等各平台配置
+
+## Install tiers（zhin.js 4.x） {#install-tierszhinjs-4x}
+
+<<< ../snippets/install-tiers.md#tiers-table
+
+<<< ../snippets/install-tiers.md#breaking
+
+<<< ../snippets/install-tiers.md#imports

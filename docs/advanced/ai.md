@@ -887,6 +887,41 @@ interface ProviderConfig {
 
 各 Provider 将 `contextWindow` 映射到自身参数（Ollama → `num_ctx`，OpenAI/Anthropic 用于窗口管理）。**未配置 `models`** 时由 `ModelRegistry.discover()` 填充 `provider.models`（`listModels` → `/v1/models` 等）；**已配置 `models`** 时以 yaml 为白名单，不调用发现接口覆盖列表。
 
+### 已知 LLM 网关预设
+
+框架在 `normalizeProviderEntry` 阶段应用 **`provider-gateway-presets`**（源码：`packages/im/ai/src/llm/provider-gateway-presets.ts`），避免常见代理网关的 sdk / 上下文窗口误配。CI 契约：`pnpm check:provider-gateway`（亦含于 `pnpm check:stable` / L4 的 full-bot 测试）。
+
+| 匹配条件（alias 或 baseUrl） | 自动 sdk | 默认 contextWindow | 说明 |
+|------------------------------|----------|-------------------|------|
+| `opencode` / `opencode.ai/zen` | `openai-compatible`（**强制**） | 32768 | OpenCode Zen 聊天模型走 `/v1/chat/completions`；`sdk: openai` 会误打 `/v1/responses` |
+| `openrouter` / `openrouter.ai` | `openai-compatible` | 128000 | 聚合网关 |
+| `nvidia` / `integrate.api.nvidia.com` | `openai-compatible`（**强制**） | 128000 | NVIDIA NIM |
+
+**yaml 仍可显式覆盖** `contextWindow`；仅当未设置时套用预设默认值。启动时若检测到 OpenCode + `sdk: openai`，会打印 `[ai.providers]` 警告（可用 `ZHIN_PROVIDER_GATEWAY_WARN=0` 关闭）。
+
+OpenCode 免费模型示例（sdk 可省略，由 preset 推断）：
+
+```yaml
+ai:
+  providers:
+    opencode:
+      baseUrl: ${OPENCODE_BASE_URL}   # https://opencode.ai/zen/v1
+      apiKey: ${OPENCODE_API_KEY}
+      contextWindow: 32768              # 可选；省略时用 preset
+      models:
+        - north-mini-code-free         # 非推理型，Agent 默认 prompt 更稳
+        - mimo-v2.5-free
+  agents:
+    zhin:
+      provider: opencode
+      model: north-mini-code-free
+  agent:
+    compaction:
+      keepRecentTokens: 6000          # 小窗口网关建议降低保留量
+```
+
+**推理型模型**（MiMo、DeepSeek-R 等）：流式路径会在 `content` 为空时回退读取 `reasoningText`，避免 IM 出现「无可见回复」。Agent 仍建议为免费/小窗口模型 **减少 MCP 与 alwaysLoadedTools**，否则易 `context_length_exceeded`（见 [test-bot 说明](https://github.com/zhinjs/zhin/tree/main/examples/test-bot) — 维护者厨房水槽，非用户模板）。
+
 ### 查询能力
 
 ```typescript

@@ -52,9 +52,15 @@ export {
   buildPromptCacheKey,
   supportsPromptCacheSdk,
   isStreamPromptCacheEnabled,
+  applyProviderGatewayPreset,
+  validateProviderGatewayConfig,
+  inferModelReasoning,
+  resolveTransportContextWindow,
+  PROVIDER_GATEWAY_PRESETS,
 } from './llm/index.js';
 export type {
   PromptCacheRetention,
+  ProviderGatewayPreset,
 } from './llm/index.js';
 export type {
   Context,

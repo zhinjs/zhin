@@ -1,10 +1,11 @@
 import { mkdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getNextRun } from '../src/dispatch.js';
 import {
   getMaxHolidayYear,
   getMinHolidayYear,
+  resetHolidayRegistryForTests,
   updateData,
 } from '../src/update-data.js';
 import { getFestivalForDate, isWorkday } from '../src/resolvers/holiday.js';
@@ -20,6 +21,10 @@ function at(iso: string): Date {
 
 describe('holiday registry / updateData', () => {
   let tempDir: string;
+
+  beforeEach(() => {
+    resetHolidayRegistryForTests();
+  });
 
   afterEach(async () => {
     vi.unstubAllGlobals();

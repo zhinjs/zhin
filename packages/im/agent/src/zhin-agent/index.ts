@@ -626,7 +626,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     input: string | AgentMessage | AgentMessage[],
     commMessage: Message,
     options?: { images?: ImageContent[]; onChunk?: OnChunkCallback },
-  ): Promise<void> {
+  ): Promise<OutputElement[]> {
     const messages = normalizePromptMessages(input, options?.images);
     const text = messages
       .flatMap((message) => {
@@ -638,7 +638,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
       })
       .join('\n')
       .trim();
-    await this.runInTurnContext(randomUUID(), () =>
+    return this.runInTurnContext(randomUUID(), () =>
       processTextTurn(asPrivate(this), text, commMessage, [], options?.onChunk, {
         prebuiltMessages: messages,
       }),

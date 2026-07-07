@@ -19,6 +19,7 @@ plugins:
   - "@zhin.js/host-api"
   - "@zhin.js/mcp"
   - hello
+  - orchestration-console
 
 hostApi:
   lazyLoad: true

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as dispatch from '../src/dispatch.js';
-import { updateData } from '../src/update-data.js';
+import { updateData, resetHolidayRegistryForTests } from '../src/update-data.js';
 import { CalendarScheduler } from '../src/scheduler.js';
 import type { JobStore, StoredJob } from '../src/store/types.js';
 
@@ -13,6 +13,7 @@ function at(iso: string): Date {
 describe('CalendarScheduler branch coverage', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    resetHolidayRegistryForTests();
   });
 
   afterEach(() => {

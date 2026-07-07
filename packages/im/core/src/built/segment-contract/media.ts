@@ -1,15 +1,7 @@
 import type { MediaRef } from './types.js';
-import { mediaRefSchema } from './schema.js';
+import { isMediaRef } from './validate.js';
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-export function isMediaRef(value: unknown): value is MediaRef {
-  return mediaRefSchema.safeParse(value).success;
-}
-
-/** legacy url/file/src/base64 → MediaRef */
+export { isMediaRef };
 export function mediaRefFromLegacyData(data: Record<string, unknown>): MediaRef | undefined {
   if (isMediaRef(data.media)) {
     return data.media;
@@ -28,7 +20,7 @@ export function mediaRefFromLegacyData(data: Record<string, unknown>): MediaRef 
   }
 
   const raw = [data.url, data.file, data.src, data.href]
-    .find((v) => typeof v === 'string' && v.trim());
+    .find((v): v is string => typeof v === 'string' && v.trim().length > 0);
   if (!raw) return undefined;
 
   const value = raw.trim();

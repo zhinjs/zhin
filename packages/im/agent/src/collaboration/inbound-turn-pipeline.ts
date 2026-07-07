@@ -360,6 +360,7 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
         message,
         contentText: aiContent,
         endpointId,
+        endpointIds: endpointAtIds,
         cells: cellService.listScenes(),
         agents: routing?.agents ?? {},
         discoveredAgentNames,
@@ -493,7 +494,24 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
             });
           }
           const outboundSegments = await publishOutboundElements(parseOutput(summary), message.$adapter);
-          if (outboundSegments.length) await replyAi(outboundSegments);
+          if (outboundSegments.length) {
+            await replyAi(outboundSegments);
+          } else {
+            const fallback = '任务已完成，但没有可展示的文本结果。';
+            await replyAi(fallback);
+            logger.warn(formatCompactLog('AI Handler', {
+              path: 'kernel_spawn_task_empty_reply',
+              task: kernelTaskId,
+              agent: targetAgentId,
+            }));
+          }
+          const emitter = zhinAgent.getEventEmitter();
+          if (emitter) {
+            const sessionId = resolveIMSessionIdFromMessage(commMessage);
+            emitter.emit('ai.typing.stop', emitter.createPayload(sessionId, commMessage, 'text', {
+              reason: 'spawn_task_reply',
+            }));
+          }
           logger.info(formatCompactLog('AI Handler', {
             path: kernelTaskId ? 'kernel_spawn_task' : 'spawn_task_legacy',
             task: kernelTaskId,

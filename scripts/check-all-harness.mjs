@@ -136,6 +136,16 @@ const checks = [
     command: 'pnpm check:segments',
     description: '各 adapter segment-mapper 契约（sandbox 必须达标）',
   },
+  {
+    name: 'Provider Gateway',
+    command: 'pnpm check:provider-gateway',
+    description: '已知 LLM 网关 sdk/contextWindow 预设与 OpenCode 等契约',
+  },
+  {
+    name: 'Orchestration SSOT',
+    command: 'pnpm check:orchestration-ssot',
+    description: '编排任务状态须经 OrchestrationKernel，禁止 repositoryHandle 直写',
+  },
 ];
 
 console.log('Running all harness checks...\n');

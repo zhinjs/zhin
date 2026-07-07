@@ -256,7 +256,7 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
     }
 
     void svc.runTaskWithResult(targetTaskId, this.manager.spawnSync(opts)).catch((err) => {
-      void svc.failTask(targetTaskId, err instanceof Error ? err.message : String(err));
+      void svc.safeFailTask(targetTaskId, err instanceof Error ? err.message : String(err));
     });
 
     return (

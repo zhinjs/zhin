@@ -1,7 +1,7 @@
 import { mkdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { updateData } from '../src/update-data.js';
+import { updateData, resetHolidayRegistryForTests } from '../src/update-data.js';
 import { CalendarScheduler } from '../src/scheduler.js';
 import { createLocalJsonStore } from '../src/store/local-json-store.js';
 
@@ -12,6 +12,7 @@ describe('CalendarScheduler edge cases', () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
+    resetHolidayRegistryForTests();
   });
 
   afterEach(async () => {

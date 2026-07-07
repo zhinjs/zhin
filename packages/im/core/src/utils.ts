@@ -285,6 +285,11 @@ export namespace segment {
         }
         if (type === "text") return data.text;
         if (type === "at") return `@${data.user_id || data.qq || data.id || data.name || ""}`;
+        if (type === "mention") {
+          const target = data.target ?? data.user_id ?? data.qq ?? data.id;
+          if (target === "all") return "@all";
+          return `@${target ?? data.name ?? ""}`;
+        }
         if (type === "html") {
           if (typeof data.text === "string" && data.text) {
             return data.text.slice(0, 80);

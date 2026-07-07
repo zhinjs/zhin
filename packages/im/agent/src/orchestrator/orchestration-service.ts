@@ -191,7 +191,7 @@ export class OrchestrationKernel {
     const task = mapTaskRecord(record);
     if (input.autoStart !== false) {
       void this.runTask(record.id, input.message).catch((err) => {
-        void this.failTask(record.id, err instanceof Error ? err.message : String(err));
+        void this.safeFailTask(record.id, err instanceof Error ? err.message : String(err));
       });
     }
     return { run: snapshot.run, task };
@@ -274,11 +274,14 @@ export class OrchestrationKernel {
         if (event.type === 'result') completed = true;
       }
       if (!completed) {
-        await this.repository.updateTaskStatus(taskId, 'waiting_result');
-        await this.appendEvent(taskRecord.run_id, 'task.progress', taskId, { status: 'waiting_result' });
+        const afterLoop = await this.repository.getTask(taskId);
+        if (afterLoop && !TERMINAL_TASK_STATUSES.has(afterLoop.status)) {
+          await this.repository.updateTaskStatus(taskId, 'waiting_result');
+          await this.appendEvent(taskRecord.run_id, 'task.progress', taskId, { status: 'waiting_result' });
+        }
       }
     } catch (err) {
-      return this.failTask(taskId, err instanceof Error ? err.message : String(err));
+      return this.safeFailTask(taskId, err instanceof Error ? err.message : String(err));
     }
 
     return mapTaskRecord((await this.repository.getTask(taskId))!);
@@ -286,6 +289,9 @@ export class OrchestrationKernel {
 
   async completeTask(taskId: string, result: string): Promise<OrchestrationTask> {
     const task = await this.requireTask(taskId);
+    if (task.status === 'completed') {
+      return mapTaskRecord(task);
+    }
     if (TERMINAL_TASK_STATUSES.has(task.status)) {
       throw new Error(`task ${taskId} is ${task.status}, cannot complete`);
     }
@@ -307,7 +313,7 @@ export class OrchestrationKernel {
   async failTask(taskId: string, error: string): Promise<OrchestrationTask> {
     const task = await this.requireTask(taskId);
     if (TERMINAL_TASK_STATUSES.has(task.status)) {
-      throw new Error(`task ${taskId} is ${task.status}, cannot fail`);
+      return mapTaskRecord(task);
     }
     await this.repository.updateTaskStatus(taskId, 'failed', {
       error,
@@ -331,6 +337,64 @@ export class OrchestrationKernel {
   async taskProgress(taskId: string, text: string): Promise<void> {
     const task = await this.requireTask(taskId);
     await this.appendEvent(task.run_id, 'task.progress', taskId, { text });
+  }
+
+  /** Mark task waiting on external handback (e.g. remote mesh); kernel-owned status transition. */
+  async markTaskWaitingResult(
+    taskId: string,
+    patch: { remoteTaskId?: string; progress?: string } = {},
+  ): Promise<OrchestrationTask> {
+    const task = await this.requireTask(taskId);
+    if (TERMINAL_TASK_STATUSES.has(task.status)) {
+      return mapTaskRecord(task);
+    }
+    await this.repository.updateTaskStatus(taskId, 'waiting_result', {
+      remote_task_id: patch.remoteTaskId,
+      started_at: task.started_at ?? Date.now(),
+    });
+    if (patch.progress) {
+      await this.appendEvent(task.run_id, 'task.progress', taskId, { text: patch.progress });
+    }
+    const updated = await this.repository.getTask(taskId);
+    if (updated) getAgentDispatcher().syncTaskFromRecord(updated);
+    await this.recomputeRunStatus(task.run_id);
+    return mapTaskRecord((await this.repository.getTask(taskId))!);
+  }
+
+  /** Cancel an active task (mesh / director); idempotent when already cancelled. */
+  async cancelTask(taskId: string, reason: string): Promise<OrchestrationTask> {
+    const task = await this.requireTask(taskId);
+    if (task.status === 'cancelled') {
+      return mapTaskRecord(task);
+    }
+    if (TERMINAL_TASK_STATUSES.has(task.status)) {
+      throw new Error(`task ${taskId} is ${task.status}, cannot cancel`);
+    }
+    await this.repository.updateTaskStatus(taskId, 'cancelled', {
+      error: reason,
+      result_summary: '',
+      finished_at: Date.now(),
+    });
+    const updated = await this.repository.getTask(taskId);
+    if (updated) getAgentDispatcher().syncTaskFromRecord(updated);
+    await this.appendEvent(task.run_id, 'task.failed', taskId, { cancelled: true, reason });
+    await this.recomputeRunStatus(task.run_id);
+    const mapped = mapTaskRecord((await this.repository.getTask(taskId))!);
+    this.notifyWaiters(mapped);
+    return mapped;
+  }
+
+  /** failTask wrapper that never throws on terminal races (executor catch paths). */
+  async safeFailTask(taskId: string, error: string): Promise<OrchestrationTask> {
+    try {
+      return await this.failTask(taskId, error);
+    } catch (err) {
+      const task = await this.repository.getTask(taskId);
+      if (task && TERMINAL_TASK_STATUSES.has(task.status)) {
+        return mapTaskRecord(task);
+      }
+      throw err;
+    }
   }
 
   async waitForTask(taskId: string, timeoutMs = 120_000): Promise<OrchestrationTask> {

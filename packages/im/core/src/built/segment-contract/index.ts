@@ -10,7 +10,6 @@ export type {
   FaceSegment,
   DiceSegment,
   RpsSegment,
-  MessageSegment,
 } from './types.js';
 export {
   mediaRefSchema,
@@ -24,7 +23,7 @@ export {
   rpsSegmentSchema,
   canonicalSegmentSchema,
   segmentArraySchema,
-} from './schema.js';
+} from './validate.js';
 export { assertCanonicalSegments, isCanonicalSegment } from './assert.js';
 export { segmentsForImDelivery } from './delivery.js';
 export { isMediaRef, mediaRefFromLegacyData, mediaRefToLegacyFields } from './media.js';

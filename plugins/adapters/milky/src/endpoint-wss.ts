@@ -160,7 +160,9 @@ export class MilkyWssServer extends EventEmitter implements Endpoint<MilkyWssCon
     const wire = fromCanonicalSegments(
       arr.map((c) => (typeof c === 'string' ? { type: 'text' as const, data: { text: c } } : c)),
     );
-    const message = toMilkyOutgoingSegments(wire);
+    const message = toMilkyOutgoingSegments(
+      wire as (string | { type: string; data?: Record<string, unknown> })[],
+    );
     if (options.type === 'group') {
       const result = await callApi(this.apiOptions(), 'send_group_message', {
         group_id: parseInt(options.id, 10),

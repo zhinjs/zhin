@@ -52,8 +52,15 @@
     "qrcode": "^1.5.4",
     "segment-matcher": "^1.0.5",
     "smol-toml": "^1.7.0",
-    "yaml": "^2.9.0",
-    "zod": "^4.4.3"
+    "yaml": "^2.9.0"
+  },
+  "peerDependencies": {
+    "zod": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "zod": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/node": "^25.9.2",

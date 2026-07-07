@@ -1,11 +1,12 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { expandRange } from '../src/data/holiday-registry.js';
 import {
   getMaxHolidayYear,
   loadHolidayOverrides,
   onHolidayDataUpdate,
+  resetHolidayRegistryForTests,
   updateData,
 } from '../src/update-data.js';
 
@@ -13,6 +14,10 @@ const TEST_TMP_ROOT = join(process.cwd(), 'tests', '.tmp');
 
 describe('holiday registry extras', () => {
   let tempDir: string;
+
+  beforeEach(() => {
+    resetHolidayRegistryForTests();
+  });
 
   afterEach(async () => {
     if (tempDir) {

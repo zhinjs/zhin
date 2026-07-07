@@ -64,6 +64,14 @@ export {
   clearApiRegistryForTests,
   setLiveModelsResolver,
 } from './api-registry.js';
+export {
+  applyProviderGatewayPreset,
+  validateProviderGatewayConfig,
+  inferModelReasoning,
+  resolveTransportContextWindow,
+  PROVIDER_GATEWAY_PRESETS,
+} from './provider-gateway-presets.js';
+export type { ProviderGatewayPreset } from './provider-gateway-presets.js';
 export type {
   StreamOptions,
   StreamFn,

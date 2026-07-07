@@ -211,6 +211,10 @@ describe('createInboundTurnPipeline', () => {
     };
     const zhinAgent = {
       getSubagentManager: () => ({ spawnSync }),
+      getEventEmitter: () => ({
+        emit: vi.fn(),
+        createPayload: vi.fn(() => ({})),
+      }),
       process,
       processMultimodal: vi.fn(),
       configure: vi.fn(),
@@ -273,6 +277,165 @@ describe('createInboundTurnPipeline', () => {
       notifyContext: expect.any(Object),
     }));
     expect(process).not.toHaveBeenCalled();
-    expect(replies).toEqual([[{ type: 'text', data: { text: 'vision result' } }]]);
+    expect(replies[0]).toEqual([{ type: 'text', data: { text: 'vision result' } }]);
+  });
+
+  it('kernel spawn_task empty summary sends IM fallback', async () => {
+    const spawnSync = vi.fn(async () => '');
+    const process = vi.fn(async () => [{ type: 'text', text: 'local result' }]);
+    const replies: unknown[] = [];
+    const message = {
+      ...mockCommMessage({ adapter: 'sandbox', endpoint: 'solo-bot', scope: 'private' }),
+      $content: [{ type: 'text', data: { text: 'please route this' } }],
+    };
+    const binding = {
+      name: 'vision',
+      providerAlias: 'mock',
+      model: 'mock-model',
+      mcpServers: [],
+    };
+    const zhinAgent = {
+      getSubagentManager: () => ({ spawnSync }),
+      getEventEmitter: () => ({
+        emit: vi.fn(),
+        createPayload: vi.fn(() => ({})),
+      }),
+      process,
+      processMultimodal: vi.fn(),
+      configure: vi.fn(),
+      getLastTurnMetrics: () => null,
+    };
+    const aiService = {
+      isReady: () => true,
+      getProvider: () => ({ name: 'mock', models: ['mock-model'] }),
+      getRoutingConfig: () => ({
+        agents: {
+          zhin: { provider: 'mock', model: 'mock-model' },
+          vision: {
+            provider: 'mock',
+            model: 'mock-model',
+            priority: 10,
+            match: { contentContains: 'route this' },
+          },
+        },
+      }),
+      getBindingRegistry: () => ({
+        getDiscoveredAgentNames: () => new Set(['zhin', 'vision']),
+        getBinding: (name: string) => name === 'vision' ? binding : null,
+        requireZhinBinding: () => ({
+          name: 'zhin',
+          providerAlias: 'mock',
+          model: 'mock-model',
+          mcpServers: [],
+        }),
+      }),
+      setDiscoveredAgents: () => undefined,
+    };
+    const refs = { aiService, zhinAgent } as any;
+    registerDefaultExecutors(initOrchestrationService(new MemoryOrchestrationRepository()), { refs });
+    const pipeline = createInboundTurnPipeline({
+      root: { inject: () => undefined } as any,
+      ai: {
+        isReady: () => true,
+        getAccessConfig: () => undefined,
+        getResidentToolsAsTools: () => [],
+      } as any,
+      refs,
+      triggerConfig: {
+        errorTemplate: 'ERR {error}',
+        resolveQuotedMessages: false,
+      } as any,
+      peerMode: 'mention-only',
+      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn() },
+      replyOutbound: async (payload) => {
+        replies.push(payload);
+      },
+    });
+
+    await pipeline(message, 'please route this');
+
+    expect(spawnSync).toHaveBeenCalled();
+    expect(replies).toEqual(['任务已完成，但没有可展示的文本结果。']);
+  });
+
+  it('kernel spawn_task failure sends errorTemplate IM reply', async () => {
+    const spawnSync = vi.fn(async () => {
+      throw new Error('subagent boom');
+    });
+    const process = vi.fn(async () => [{ type: 'text', text: 'local result' }]);
+    const replies: unknown[] = [];
+    const message = {
+      ...mockCommMessage({ adapter: 'sandbox', endpoint: 'solo-bot', scope: 'private' }),
+      $content: [{ type: 'text', data: { text: 'please route this' } }],
+    };
+    const binding = {
+      name: 'vision',
+      providerAlias: 'mock',
+      model: 'mock-model',
+      mcpServers: [],
+    };
+    const zhinAgent = {
+      getSubagentManager: () => ({ spawnSync }),
+      getEventEmitter: () => ({
+        emit: vi.fn(),
+        createPayload: vi.fn(() => ({})),
+      }),
+      process,
+      processMultimodal: vi.fn(),
+      configure: vi.fn(),
+      getLastTurnMetrics: () => null,
+    };
+    const aiService = {
+      isReady: () => true,
+      getProvider: () => ({ name: 'mock', models: ['mock-model'] }),
+      getRoutingConfig: () => ({
+        agents: {
+          zhin: { provider: 'mock', model: 'mock-model' },
+          vision: {
+            provider: 'mock',
+            model: 'mock-model',
+            priority: 10,
+            match: { contentContains: 'route this' },
+          },
+        },
+      }),
+      getBindingRegistry: () => ({
+        getDiscoveredAgentNames: () => new Set(['zhin', 'vision']),
+        getBinding: (name: string) => name === 'vision' ? binding : null,
+        requireZhinBinding: () => ({
+          name: 'zhin',
+          providerAlias: 'mock',
+          model: 'mock-model',
+          mcpServers: [],
+        }),
+      }),
+      setDiscoveredAgents: () => undefined,
+    };
+    const refs = { aiService, zhinAgent } as any;
+    registerDefaultExecutors(initOrchestrationService(new MemoryOrchestrationRepository()), { refs });
+    const pipeline = createInboundTurnPipeline({
+      root: { inject: () => undefined } as any,
+      ai: {
+        isReady: () => true,
+        getAccessConfig: () => undefined,
+        getResidentToolsAsTools: () => [],
+      } as any,
+      refs,
+      triggerConfig: {
+        errorTemplate: 'ERR {error}',
+        resolveQuotedMessages: false,
+      } as any,
+      peerMode: 'mention-only',
+      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn() },
+      replyOutbound: async (payload) => {
+        replies.push(payload);
+      },
+    });
+
+    await pipeline(message, 'please route this');
+
+    expect(spawnSync).toHaveBeenCalled();
+    expect(process).not.toHaveBeenCalled();
+    expect(replies).toEqual(['ERR subagent boom']);
   });
 });

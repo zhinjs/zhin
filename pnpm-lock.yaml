@@ -284,6 +284,9 @@ importers:
       '@zhin.js/cli':
         specifier: workspace:*
         version: link:../../basic/cli
+      '@zhin.js/client':
+        specifier: workspace:*
+        version: link:../../packages/console/client
       '@zhin.js/host-api':
         specifier: workspace:*
         version: link:../../packages/host/api
@@ -958,7 +961,7 @@ importers:
         specifier: ^2.9.0
         version: 2.9.0
       zod:
-        specifier: ^4.4.3
+        specifier: ^4.0.0
         version: 4.4.3
     devDependencies:
       '@types/node':

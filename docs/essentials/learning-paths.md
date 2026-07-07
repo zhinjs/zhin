@@ -1,8 +1,13 @@
 # 学习路径
 
-> 先能跑起来，再按需加深。不必一次读完所有文档。
->
-> 文档站顶栏：**使用文档**（本页及下方路径）面向 bot 部署与插件作者；**框架开发**（[贡献指南](/contributing) 与 ADR 索引）面向 monorepo 贡献者。
+<div class="path-start">
+
+**推荐起点**：从未用过 Zhin → [快速开始](/getting-started/) → Sandbox 发 `hello` → 再按下方 L1 往下读。  
+文档站顶栏 **使用文档** 面向部署与插件作者；**框架开发** 面向 monorepo 贡献者。
+
+</div>
+
+> 叙事原则（对齐 [Koishi](https://koishi.chat/zh-CN/) / [Karin](https://karin.deno.dev/)）：**先能跑，再理解**；每级只解决一类问题，避免一次读完 ADR 与架构深读。
 
 ## L1 — 跑起来
 

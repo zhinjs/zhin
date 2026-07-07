@@ -22,7 +22,7 @@
 - 主要分层：basic → kernel → ai → core → agent → zhin。
 - **推荐首跑**： [examples/minimal-bot](examples/minimal-bot/)（Stable 黄金路径）。
 - **L4 参考**： [examples/full-bot](examples/full-bot/)（分维度 L4 DoD；`pnpm check:l4`）。
-- [examples/test-bot](examples/test-bot/) 为维护者厨房水槽（多 Endpoint / Advanced 能力），非默认模板。
+- [examples/test-bot](examples/test-bot/) 为维护者厨房水槽（多 Endpoint / Advanced 能力），**非默认模板**；根目录 `pnpm dev` 指向它，仅供本仓库回归。
 - 进阶路径：**Stable（minimal-bot，仅 IM）→ L4（full-bot，含 AI）→ 厨房水槽（test-bot）**。
 - **zhin.js 4.x**：默认安装仅 IM（<10MB）；AI 另装 `@zhin.js/agent` + `zod` + `ai` + 所选 `@ai-sdk/*`。用户向分档表 SSOT：[`docs/snippets/install-tiers.md`](docs/snippets/install-tiers.md)。见 [ADR 0019](docs/adr/0019-install-size-layering.md)。
 - **项目脚手架**：新建 workspace 用 `pnpm create zhin-app`（`create-zhin-app`）；已有项目增量配置用 `zhin setup`。二者共用 [`@zhin.js/scaffold-wizard`](packages/toolkit/scaffold-wizard/)。
@@ -30,7 +30,7 @@
 ## 常用命令
 
 - 在仓库根 `pnpm install` 后，进入 `examples/minimal-bot` 执行 `pnpm dev`（Sandbox + 控制台）。
-- `pnpm dev`（根目录）仍指向 test-bot 热重载，用于全功能回归。
+- `pnpm dev`（根目录）仍指向 test-bot 热重载，用于全功能回归。**勿将 test-bot 配置当作用户模板**；对外文档与脚手架以 minimal-bot / full-bot 为准。
 - `pnpm build`：按 basic → packages → plugins 的顺序构建全部包。
 - `pnpm test`：运行 Vitest。
 - `pnpm type-check`：运行 TypeScript 类型检查。

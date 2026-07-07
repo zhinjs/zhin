@@ -294,7 +294,7 @@ export class AgentDispatcher {
     };
   }
 
-  /** 从 DB 记录同步到内存（硬编排 SSOT 写穿缓存） */
+  /** 从 DB 记录同步到内存（Kernel 投影缓存，非终态权威） */
   syncTaskFromRecord(record: OrchestrationTaskRecord): void {
     const shape = taskRecordToAgentTaskShape(record);
     const task: AgentTask = {
@@ -547,17 +547,9 @@ export class AgentDispatcher {
     if (task) {
       task.status = result.success ? 'completed' : 'failed';
     }
-    if (this.repository && task?.runId) {
-      void this.repository.updateTaskStatus(
-        result.taskId,
-        result.success ? 'completed' : 'failed',
-        {
-          result_summary: result.summary,
-          error: result.error ?? '',
-          finished_at: Date.now(),
-        },
-      );
-    }
+    // OrchestrationKernel owns persisted task transitions (ADR 0027). Writing
+    // terminal status here races with kernel completeTask/failTask and surfaces
+    // as "task is completed, cannot fail" on the inbound spawn_task path.
     for (const listener of this.resultListeners) {
       try {
         listener(result);
@@ -574,9 +566,11 @@ export class AgentDispatcher {
     this.running.set(taskId, promise);
     const task = this.tasks.get(taskId);
     if (task) task.status = 'running';
-    if (this.repository && task?.runId) {
-      void this.repository.updateTaskStatus(taskId, 'running', { started_at: Date.now() });
-    }
+  }
+
+  /** 清除运行中标记（编排任务由 Kernel 写终态，不经过 recordResult） */
+  releaseRunning(taskId: string): void {
+    this.running.delete(taskId);
   }
 
   async hydrateRun(runId: string): Promise<void> {

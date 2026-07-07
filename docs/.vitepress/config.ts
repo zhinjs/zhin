@@ -2,6 +2,15 @@ import { defineConfig } from 'vitepress'
 import { withMermaid } from 'vitepress-plugin-mermaid'
 import type { DefaultTheme } from 'vitepress'
 
+/** 可折叠侧栏分组（默认折叠；含当前页的分组由 VitePress 自动展开） */
+function sidebarGroup(
+  text: string,
+  items: DefaultTheme.SidebarItem[],
+  collapsed = true,
+): DefaultTheme.SidebarItem {
+  return { text, items, collapsed }
+}
+
 const aiSidebar: DefaultTheme.SidebarItem[] = [
   { text: 'AI 模块', link: '/advanced/ai' },
   { text: 'Agent 概念入门', link: '/advanced/agent-concepts' },
@@ -11,14 +20,13 @@ const aiSidebar: DefaultTheme.SidebarItem[] = [
   { text: 'Agent 安全与角色', link: '/advanced/agent-harness-engineering' },
   { text: 'Agent 最佳实践', link: '/advanced/agent-best-practices' },
   { text: 'Agent Mesh', link: '/advanced/agent-mesh' },
+  { text: '五角色群协作（高级）', link: '/advanced/five-agent-recipe' },
   { text: 'Assistant Home', link: '/advanced/assistant-home' },
   { text: 'Assistant Profile', link: '/advanced/assistant-profile' },
   { text: 'pi coding-agent 映射', link: '/advanced/pi-coding-agent-mapping' },
 ]
 
-const advancedSidebar: DefaultTheme.SidebarItem[] = [
-  { text: '概述', link: '/advanced/' },
-  ...aiSidebar,
+const advancedInfraSidebar: DefaultTheme.SidebarItem[] = [
   { text: '组件系统', link: '/advanced/components' },
   { text: '定时任务（兼容）', link: '/advanced/cron' },
   { text: 'Schedule 设施', link: '/advanced/schedule' },
@@ -28,16 +36,17 @@ const advancedSidebar: DefaultTheme.SidebarItem[] = [
   { text: '内容审查 hook', link: '/advanced/content-moderation' },
 ]
 
+const advancedSidebar: DefaultTheme.SidebarItem[] = [
+  { text: '概述', link: '/advanced/' },
+  sidebarGroup('AI 模块', aiSidebar),
+  sidebarGroup('框架进阶', advancedInfraSidebar),
+]
+
 const adapterSidebar: DefaultTheme.SidebarItem[] = [
   { text: '概览', link: '/adapters/' },
   { text: '适配器（框架概念）', link: '/essentials/adapters' },
-  {
-    text: 'Stable',
-    items: [{ text: 'Sandbox', link: '/adapters/sandbox' }],
-  },
-  {
-    text: 'Advanced',
-    items: [
+  sidebarGroup('Stable', [{ text: 'Sandbox', link: '/adapters/sandbox' }]),
+  sidebarGroup('Advanced', [
       { text: 'ICQQ (QQ)', link: '/adapters/icqq' },
       { text: 'QQ 官方', link: '/adapters/qq' },
       { text: 'OneBot v11', link: '/adapters/onebot11' },
@@ -51,22 +60,18 @@ const adapterSidebar: DefaultTheme.SidebarItem[] = [
       { text: '微信 iLink', link: '/adapters/weixin-ilink' },
       { text: '企业微信', link: '/adapters/wecom' },
       { text: 'LINE', link: '/adapters/line' },
-    ],
-  },
-  {
-    text: 'Experimental',
-    items: [
+  ]),
+  sidebarGroup('Experimental', [
       { text: 'NapCat', link: '/adapters/napcat' },
       { text: 'OneBot v12', link: '/adapters/onebot12' },
       { text: 'Milky', link: '/adapters/milky' },
       { text: 'Satori', link: '/adapters/satori' },
       { text: 'Email', link: '/adapters/email' },
       { text: 'GitHub', link: '/adapters/github' },
-    ],
-  },
+  ]),
 ]
 
-const adrSidebar: DefaultTheme.SidebarItem[] = [
+const adrSidebar0001: DefaultTheme.SidebarItem[] = [
   { text: '索引', link: '/adr/' },
   { text: '0001 多上下文领域文档', link: '/adr/0001-use-multi-context-domain-docs' },
   { text: '0002 集中 IM 入站路由', link: '/adr/0002-centralize-im-inbound-routing' },
@@ -78,6 +83,9 @@ const adrSidebar: DefaultTheme.SidebarItem[] = [
   { text: '0008 Assistant Runtime', link: '/adr/0008-introduce-assistant-runtime' },
   { text: '0009 pi AI/Agent 核心', link: '/adr/0009-pi-aligned-ai-agent-core' },
   { text: '0010 pi Harness 对齐', link: '/adr/0010-pi-coding-agent-harness-alignment' },
+]
+
+const adrSidebar0011: DefaultTheme.SidebarItem[] = [
   { text: '0011 Missions Harness 对齐', link: '/adr/0011-missions-harness-alignment' },
   { text: '0012 内存与生命周期', link: '/adr/0012-memory-lifecycle-stability-fixes' },
   { text: '0013 Graceful Shutdown', link: '/adr/0013-graceful-shutdown-protocol' },
@@ -88,6 +96,9 @@ const adrSidebar: DefaultTheme.SidebarItem[] = [
   { text: '0018 AI SDK Transport', link: '/adr/0018-ai-sdk-transport-layer' },
   { text: '0019 Install Size Layering', link: '/adr/0019-install-size-layering' },
   { text: '0020 Speech STT/TTS', link: '/adr/0020-speech-pipeline-stt-tts' },
+]
+
+const adrSidebar0021: DefaultTheme.SidebarItem[] = [
   { text: '0021 内容审查边界', link: '/adr/0021-content-moderation' },
   { text: '0022 Interactive 按钮模式', link: '/adr/0022-interactive-button-modes' },
   { text: '0023 GroupCell 多 Endpoint', link: '/adr/0023-group-cell-multi-endpoint-agents' },
@@ -101,24 +112,25 @@ const adrSidebar: DefaultTheme.SidebarItem[] = [
   { text: '0031 Schedule 取代 Cron', link: '/adr/0031-schedule-facility-replace-cron' },
 ]
 
+const adrSidebar: DefaultTheme.SidebarItem[] = [
+  sidebarGroup('0001–0010', adrSidebar0001),
+  sidebarGroup('0011–0020', adrSidebar0011),
+  sidebarGroup('0021–0031', adrSidebar0021),
+]
+
 /** A+B：部署、配置、写插件与 AI */
 const useDocsSidebar: DefaultTheme.SidebarItem[] = [
-  {
-    text: '入门',
-    collapsed: false,
-    items: [
+  sidebarGroup('入门', [
       { text: '这是什么？', link: '/what-is-zhin' },
       { text: '安装与启动', link: '/getting-started/' },
       { text: '5 分钟首跑', link: '/getting-started/first-run' },
+      { text: '生态与资源', link: '/ecosystem' },
       { text: 'Docker 部署', link: '/getting-started/docker' },
       { text: '能力分档与定位', link: '/essentials/capability-tiers' },
       { text: '学习路径', link: '/essentials/learning-paths' },
       { text: '疑难排查', link: '/troubleshooting/' },
-    ],
-  },
-  {
-    text: '核心概念',
-    items: [
+  ]),
+  sidebarGroup('核心概念', [
       { text: '核心概念速查', link: '/essentials/' },
       { text: '消息如何流转', link: '/essentials/message-flow' },
       { text: '架构概览', link: '/architecture-overview' },
@@ -130,41 +142,25 @@ const useDocsSidebar: DefaultTheme.SidebarItem[] = [
       { text: 'Rich Segment 矩阵', link: '/essentials/rich-segment-adapters' },
       { text: 'Interactive 消息段', link: '/essentials/interactive-segments' },
       { text: 'Windows 环境', link: '/essentials/windows-setup' },
-    ],
-  },
-  {
-    text: '插件开发',
-    items: [
+  ]),
+  sidebarGroup('插件开发', [
       { text: '安装插件', link: '/guide/plugin-install' },
       { text: '插件生命周期', link: '/guide/plugin-lifecycle' },
       { text: '插件开发、测试与发布', link: '/guide/plugin-development' },
-    ],
-  },
-  {
-    text: '平台适配器',
-    items: adapterSidebar,
-  },
-  {
-    text: 'AI 与进阶',
-    items: advancedSidebar,
-  },
-  {
-    text: 'Host 与 Console',
-    items: [
+  ]),
+  sidebarGroup('平台适配器', adapterSidebar),
+  sidebarGroup('AI 与进阶', advancedSidebar),
+  sidebarGroup('Host 与 Console', [
       { text: 'Host 栈概览', link: '/host/' },
       { text: 'Remote Console', link: '/console-remote' },
-    ],
-  },
-  {
-    text: '参考与生态',
-    items: [
+  ]),
+  sidebarGroup('参考与生态', [
       { text: '术语表', link: '/reference/glossary' },
       { text: 'CLI 命令', link: '/reference/cli' },
       { text: 'API 参考', link: '/api/' },
       { text: '插件市场', link: '/plugins/' },
       { text: '演练场', link: '/playground' },
-    ],
-  },
+  ]),
   {
     text: '框架开发 →',
     link: '/contributing',
@@ -173,40 +169,28 @@ const useDocsSidebar: DefaultTheme.SidebarItem[] = [
 
 /** C：贡献 monorepo、读 ADR 与架构深读 */
 const devDocsSidebar: DefaultTheme.SidebarItem[] = [
-  {
-    text: '贡献',
-    collapsed: false,
-    items: [
+  sidebarGroup('贡献', [
       { text: '贡献指南总览', link: '/contributing' },
       { text: '仓库结构与模块化约定', link: '/contributing/repo-structure' },
       { text: 'Harness Engineering', link: '/contributing/harness-engineering' },
       { text: 'Monorepo（无 submodule）', link: '/contributing/monorepo-no-submodules' },
-    ],
-  },
-  {
-    text: '架构深读',
-    items: [
+  ]),
+  sidebarGroup('架构深读', [
       { text: '架构索引', link: '/architecture/' },
       { text: '架构概览（用户向）', link: '/architecture-overview' },
+      { text: 'Segment 内容模型', link: '/architecture/segment-content-model' },
       { text: 'Assistant Runtime', link: '/architecture/assistant-runtime' },
       { text: 'Agent 上下文块', link: '/architecture/agent-context-blocks' },
       { text: 'Agent 提示词贡献者', link: '/architecture/agent-prompt-contributors' },
       { text: 'HTTP 路由编写', link: '/architecture/fetch-router-authoring' },
       { text: 'Harness 检查来源', link: '/architecture/harness-engineering-sources' },
-    ],
-  },
-  {
-    text: 'ADR',
-    items: adrSidebar,
-  },
-  {
-    text: '维护者',
-    items: [
+  ]),
+  sidebarGroup('ADR', adrSidebar),
+  sidebarGroup('维护者', [
       { text: 'Issue 流程', link: '/agents/issue-tracker' },
       { text: 'Triage 标签', link: '/agents/triage-labels' },
       { text: '领域词汇', link: '/agents/domain' },
-    ],
-  },
+  ]),
   {
     text: '← 使用文档',
     link: '/getting-started/',
@@ -216,6 +200,7 @@ const devDocsSidebar: DefaultTheme.SidebarItem[] = [
 const USE_DOC_PREFIXES = [
   '/getting-started/',
   '/what-is-zhin',
+  '/ecosystem',
   '/console-remote',
   '/troubleshooting/',
   '/guide/',
@@ -253,6 +238,7 @@ export default withMermaid(defineConfig({
     /^https?:\/\/localhost/,
     /^https?:\/\/github\.com/,
     /\.\.\/\.\.\/(examples|packages|basic|deploy)\//,
+    /^\/adr\/index$/,
   ],
 
   srcExclude: ['**/snippets/**', 'README.md'],
@@ -260,12 +246,14 @@ export default withMermaid(defineConfig({
   themeConfig: {
     nav: [
       { text: '首页', link: '/' },
+      { text: '生态', link: '/ecosystem' },
       {
         text: '使用文档',
-        activeMatch: '^/(getting-started|essentials|guide|adapters|advanced|reference|host|troubleshooting|what-is-zhin|architecture-overview|console-remote|api|plugins|playground)',
+        activeMatch: '^/(getting-started|essentials|guide|adapters|advanced|reference|host|troubleshooting|what-is-zhin|architecture-overview|console-remote|api|plugins|playground|ecosystem)',
         items: [
           { text: '快速开始', link: '/getting-started/' },
           { text: '5 分钟首跑', link: '/getting-started/first-run' },
+          { text: '生态与资源', link: '/ecosystem' },
           { text: '学习路径', link: '/essentials/learning-paths' },
           { text: '核心概念', link: '/essentials/' },
           { text: '插件开发', link: '/guide/plugin-development' },
@@ -299,7 +287,7 @@ export default withMermaid(defineConfig({
     ],
 
     footer: {
-      message: '基于 MIT 许可发布',
+      message: 'MIT License · <a href="/ecosystem">生态</a> · <a href="/adapters/">适配器</a> · <a href="https://github.com/zhinjs/zhin">GitHub</a>',
       copyright: 'Copyright © 2024-present lc-cn',
     },
 

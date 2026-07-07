@@ -9,7 +9,30 @@
 pnpm check:l4
 ```
 
-覆盖：编排 E2E、语义记忆、MCP 鉴权、full-bot 配置契约、NapCat/KOOK L4 契约（实机项 `L4_SKIP_PLATFORM=1` 时 skip）。
+覆盖：编排 E2E、语义记忆、MCP 鉴权、full-bot 配置契约、NapCat/KOOK L4 契约（实机项 `L4_SKIP_PLATFORM=1` 时 skip）；`pnpm check:orchestration-ssot` 纳入 Executor 契约与 IM 终态测试。
+
+## Orchestration SSOT v1（手工项）
+
+与 [ADR 0027](https://github.com/zhinjs/zhin/blob/main/docs/adr/0027-agent-run-orchestration-kernel.md) 对齐；自动化见 `pnpm check:orchestration-ssot` / `pnpm check:l4`。
+
+### A. 终态权威（Kernel-only）
+
+- [ ] `local` / `scene_mention` / `remote_mesh` 成功、失败、取消均落在 Kernel `completed` / `failed` / `cancelled`，无永久 `waiting_result`
+- [ ] `pnpm check:orchestration-ssot` 通过
+
+### B. IM 终态反馈（观众 #1）
+
+- [ ] **私聊 spawn_task**（路由到非 `zhin` Agent）：Sandbox 发 `ai: <触发 vision 路由的文本>`，应收到子 Agent 文本结果
+- [ ] **空 summary**：子 Agent 返回空文本时，IM 应收到固定 fallback：`任务已完成，但没有可展示的文本结果。`
+- [ ] **失败**：子 Agent 抛错时，IM 应收到 `trigger.errorTemplate` 错误回复（非仅日志）
+- [ ] **remote_mesh**：`executor: remote:local` 任务委托后轮询至 `completed` 或失败终态（见下文 §3）
+- [ ] **（可选）群 scene_mention**：ICQQ 多 Bot 群协作时，被 @ 方公开实质回复后 Kernel `completeTask`（见 [五角色高级配方](/advanced/five-agent-recipe)）
+
+### C. API / Console 投影（v1 = API；v1.1 = UI）
+
+- [ ] `GET /api/agent/orchestration/runs?sessionKey=` 与 DB 一致
+- [ ] `GET /api/agent/orchestration/runs/:runId` 含 tasks + events
+- [ ] Remote Console「编排」页可查看 Run / Task / Event（full-bot `client/` 入口）
 
 ## 手工验收
 

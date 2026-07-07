@@ -4,6 +4,7 @@ export {
   getMinHolidayYear,
   getMaxHolidayYear,
   onHolidayDataUpdate,
+  resetHolidayRegistryForTests,
 } from './data/holiday-registry.js';
 export {
   fetchHolidayYearData,

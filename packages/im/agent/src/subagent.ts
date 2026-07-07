@@ -29,7 +29,6 @@ import type { Message } from '@zhin.js/core';
 import {
   AgentDispatcher,
   type AgentRole,
-  type AgentResult as DispatcherAgentResult,
 } from './orchestrator/agent-dispatcher.js';
 import { buildSubagentUserDelivery } from './media/subagent-user-delivery.js';
 import type { AgentMeta, AgentEffortLevel } from './discovery/agents.js';
@@ -90,7 +89,7 @@ export interface SpawnOptions {
   runInput?: string | ContentPart[];
   /** 用于向用户发送「任务【id】:执行通道 => label」进度提示 */
   notifyContext?: Message;
-  /** 硬编排任务 ID（AgentDispatcher SSOT） */
+  /** 编排 Task ID（Kernel 持久化；Dispatcher 仅内存投影） */
   orchestrationTaskId?: string;
   /** spawn_task 声明的子任务工具（与父会话 sessionLoaded 取交集作为初始池） */
   requestedTools?: string[];
@@ -475,7 +474,6 @@ export class SubagentManager {
 
     let dispatcherTaskId: string | undefined = opts?.orchestrationTaskId;
     const isOrchestrationTask = !!opts?.orchestrationTaskId;
-    let resolveOrchestrationRunning: ((r: DispatcherAgentResult) => void) | undefined;
     const binding = opts?.binding ?? null;
     const provider = binding && this.getProviderFn
       ? this.getProviderFn(binding.providerAlias)
@@ -536,10 +534,10 @@ export class SubagentManager {
       }
 
       if (isOrchestrationTask && dispatcherTaskId && this.agentDispatcher) {
-        const runningPromise = new Promise<DispatcherAgentResult>((resolve) => {
-          resolveOrchestrationRunning = resolve;
-        });
-        this.agentDispatcher.markRunning(dispatcherTaskId, runningPromise);
+        this.agentDispatcher.markRunning(
+          dispatcherTaskId,
+          new Promise(() => {}),
+        );
       }
       if (opts?.contextPreamble?.trim()) {
         systemPrompt = `${systemPrompt}\n\n## Parent session context (fork)\n${opts.contextPreamble.trim()}`;
@@ -600,24 +598,6 @@ export class SubagentManager {
         iterations: result.iterations,
         status: 'ok',
       });
-      if (isOrchestrationTask && dispatcherTaskId && this.agentDispatcher) {
-        const agentResult: DispatcherAgentResult = {
-          taskId: dispatcherTaskId,
-          role,
-          success: true,
-          summary: finalResult.slice(0, 4000),
-          duration: Date.now() - startedAt,
-          tokenUsage: result.usage
-            ? {
-                input: result.usage.prompt_tokens ?? 0,
-                output: result.usage.completion_tokens ?? 0,
-                total: result.usage.total_tokens ?? 0,
-              }
-            : undefined,
-        };
-        this.agentDispatcher.recordResult(agentResult);
-        resolveOrchestrationRunning?.(agentResult);
-      }
       if (opts?.sync) return finalResult;
       await this.deliverAsyncResult({
         taskId,
@@ -653,18 +633,6 @@ export class SubagentManager {
         status: 'error',
         error: errorMsg,
       });
-      if (isOrchestrationTask && dispatcherTaskId && this.agentDispatcher) {
-        const failResult: DispatcherAgentResult = {
-          taskId: dispatcherTaskId,
-          role,
-          success: false,
-          summary: errorMsg,
-          error: errorMsg,
-          duration: Date.now() - startedAt,
-        };
-        this.agentDispatcher.recordResult(failResult);
-        resolveOrchestrationRunning?.(failResult);
-      }
       if (opts?.sync) return errorMsg;
       await this.deliverAsyncResult({
         taskId,
@@ -677,6 +645,9 @@ export class SubagentManager {
         agent: opts?.presetName,
       });
     } finally {
+      if (isOrchestrationTask && dispatcherTaskId && this.agentDispatcher) {
+        this.agentDispatcher.releaseRunning(dispatcherTaskId);
+      }
       if (this.agentDispatcher && dispatcherTaskId && !isOrchestrationTask) {
         this.agentDispatcher.releaseTask(dispatcherTaskId);
       }

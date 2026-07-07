@@ -67,7 +67,6 @@ describe('Remote loopback delegate flow', () => {
 
     const delegate = await executeRemoteOrchestrationTask(task.id);
     expect(delegate.ok).toBe(true);
-    await new Promise((r) => setTimeout(r, 50));
 
     const updated = await repo.getTask(task.id);
     expect(updated?.remote_task_id).toBe(remoteTaskId);
@@ -82,5 +81,34 @@ describe('Remote loopback delegate flow', () => {
     expect(callTool).toHaveBeenCalledWith('agent.delegate_task', expect.any(Object));
     expect(callTool).toHaveBeenCalledWith('agent.query_status', { task_id: remoteTaskId });
     expect(callTool).toHaveBeenCalledWith('agent.get_result', { task_id: remoteTaskId });
+  });
+
+  it('marks kernel task failed when remote delegate_task throws', async () => {
+    const run = await repo.createRun({ session_key: 's2', title: 'remote fail' });
+    const task = await repo.createTask({
+      run_id: run.id,
+      name: 'Remote work',
+      role: 'subtask',
+      executor_kind: 'remote_mesh',
+      remote_agent_id: 'local',
+      status: 'running',
+    });
+    getAgentDispatcher().syncTaskFromRecord(task);
+
+    const registry = initRemoteAgentRegistry({
+      remoteAgents: [{ id: 'local', url: 'http://127.0.0.1:8068/mcp', token: 't' }],
+    });
+    vi.spyOn(registry, 'getConnection').mockResolvedValue({
+      callTool: vi.fn().mockRejectedValue(new Error('MCP unavailable')),
+      isConnected: true,
+      connect: vi.fn(),
+    } as unknown as Awaited<ReturnType<RemoteAgentRegistry['getConnection']>>);
+
+    const delegate = await executeRemoteOrchestrationTask(task.id);
+    expect(delegate.ok).toBe(false);
+
+    const updated = await repo.getTask(task.id);
+    expect(updated?.status).toBe('failed');
+    expect(updated?.error).toContain('MCP unavailable');
   });
 });

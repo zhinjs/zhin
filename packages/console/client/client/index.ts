@@ -50,3 +50,6 @@ export {
   type FetchConsoleEntriesOptions,
   type LoadConsoleEntriesOptions,
 } from "./bootstrap/loadConsoleEntries.js";
+
+export { registerOrchestrationConsole } from "./orchestration/registerOrchestrationConsole.js";
+export { default as OrchestrationRunsPage } from "./orchestration/OrchestrationRunsPage.js";

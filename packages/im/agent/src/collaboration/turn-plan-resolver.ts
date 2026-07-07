@@ -20,6 +20,7 @@ export interface TurnPlanResolverInput {
   message: Message;
   contentText: string;
   endpointId: string;
+  endpointIds?: string[];
   cells: CollaborationScene[];
   agents: Record<string, AgentBindingConfig>;
   discoveredAgentNames: Set<string>;
@@ -30,7 +31,7 @@ function findEndpointIdForAgent(cell: CollaborationScene, agentName: string): st
 }
 
 export function buildTurnPlan(input: TurnPlanResolverInput): TurnPlan {
-  const { message, contentText, endpointId, cells, agents, discoveredAgentNames } = input;
+  const { message, contentText, endpointId, endpointIds, cells, agents, discoveredAgentNames } = input;
   const scope = message.$channel?.type || 'private';
   const sceneId = message.$channel?.id ?? '';
   const adapter = String(message.$adapter || '');
@@ -46,6 +47,7 @@ export function buildTurnPlan(input: TurnPlanResolverInput): TurnPlan {
     message,
     contentText,
     discoveredAgentNames,
+    endpointIds,
   });
 
   const handlerProfile =

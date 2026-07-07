@@ -1,4 +1,8 @@
 import { isEmpty } from './utils.js';
+import { safeParseSchema, type SchemaSafeParseResult } from './validate.js';
+
+export { SchemaValidationError, type SchemaSafeParseResult, type SchemaValidationIssue } from './validate.js';
+export { safeParseSchema };
 
 export class Schema<S = any, T = S> {
     public [Symbol.toStringTag] = 'Schema';
@@ -130,7 +134,7 @@ export class Schema<S = any, T = S> {
     static dict<X extends Schema>(input: X, key?: string) {
         return new Schema<Record<string, Schema.Types<X>>>({ type: 'dict', key }, { inner: input });
     }
-    static object<X extends Record<string, Schema>>(input: X, key: string = '') {
+    static object<X extends Record<string, Schema<any, any>>>(input: X, key: string = '') {
         return new Schema<Schema.RecordTypes<X>>({ type: 'object', key }, { object: input });
     }
     /** 声明一个列表类型 */
@@ -142,7 +146,7 @@ export class Schema<S = any, T = S> {
         return new Schema<Schema.Tuple<X>>({ type: 'tuple', key }, { list });
     }
     /** 声明一个联合类型 */
-    static union<X extends readonly any[]>(list: X, key?: string) {
+    static union<X extends readonly Schema[]>(list: X, key?: string): Schema<Schema.Union<X>> {
         return new Schema<Schema.Union<X>>({ type: 'union', key }, { list });
     }
     /** 声明一个交叉类型 */
@@ -156,6 +160,26 @@ export class Schema<S = any, T = S> {
     /** 声明任意类型 */
     static any(key?: any) {
         return new Schema<any>({ type: 'any', key });
+    }
+    /**
+     * 按判别字段声明联合类型（各分支自动补上 `discriminator: const(tag)`）。
+     * 用于 Segment / 消息体等 tagged union。
+     */
+    static discriminatedUnion<
+        D extends string,
+        V extends Record<string, Record<string, Schema<any, any>>>,
+    >(discriminator: D, variants: V, key?: string): Schema<any> {
+        const branches = Object.entries(variants).map(([tag, shape]) =>
+            Schema.object({
+                [discriminator]: Schema.const(tag),
+                ...shape,
+            }),
+        );
+        return Schema.union(branches as unknown as readonly Schema[]) as unknown as Schema<any>;
+    }
+    /** validate-only：不填默认值、不 throw */
+    safeParse(value?: unknown): SchemaSafeParseResult<T> {
+        return safeParseSchema(this as unknown as Schema<T>, value);
     }
     static resolve<T extends string>(type: T): Schema.Formatter {
         return Schema.formatters.get(type)!;

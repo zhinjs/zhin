@@ -1,1 +1,1 @@
-export { toCanonicalSegments, fromCanonicalSegments } from '../../common/generic-segment-mapper.js';
+export { toCanonicalSegments, fromCanonicalSegments } from 'zhin.js';

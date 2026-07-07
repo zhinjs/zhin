@@ -2,6 +2,7 @@ import type { Context } from './types/context.js';
 import type { Model, ModelApi, ProviderInstanceConfig } from './types/model.js';
 import type { ThinkingLevel } from './types/agent-event.js';
 import type { AssistantMessage } from './types/agent-message.js';
+import { inferModelReasoning, resolveTransportContextWindow } from './provider-gateway-presets.js';
 
 export interface StreamOptions {
   signal?: AbortSignal;
@@ -105,9 +106,9 @@ export function getLlmTransportModel(providerAlias: string, modelId: string): Mo
     sdk: config.sdk,
     baseUrl: config.baseUrl,
     compat: config.compat,
-    reasoning: false,
+    reasoning: inferModelReasoning(modelId),
     input: ['text'],
-    contextWindow: 128_000,
+    contextWindow: resolveTransportContextWindow(config, modelId),
     maxTokens: 8_192,
   };
 }

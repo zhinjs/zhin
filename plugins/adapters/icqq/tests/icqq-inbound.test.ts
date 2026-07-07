@@ -154,7 +154,7 @@ describe("IcqqMessageEvent.source", () => {
       source: { message_id: "src-msg-id", raw_message: "原消息" },
     } as any);
     expect(content[0].type).toBe("reply");
-    expect(content[0].data).toMatchObject({ id: "src-msg-id" });
+    expect(content[0].data).toMatchObject({ message_id: "src-msg-id" });
   });
 });
 
@@ -176,7 +176,6 @@ describe("resolveInboundContent", () => {
     expect(content[0]).toEqual({
       type: "reply",
       data: {
-        id: "M0zHrrS7mJ0AC8rBcOxj/moZcDUB",
         message_id: "M0zHrrS7mJ0AC8rBcOxj/moZcDUB",
       },
     });

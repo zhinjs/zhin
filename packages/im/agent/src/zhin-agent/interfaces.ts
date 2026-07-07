@@ -37,7 +37,7 @@ export interface IAgentTurnProcessor {
     input: string | AgentMessage | AgentMessage[],
     commMessage: Message,
     options?: { images?: ImageContent[]; onChunk?: OnChunkCallback },
-  ): Promise<void>;
+  ): Promise<OutputElement[]>;
 
   steer(message: AgentMessage, commMessage: Message): void;
   followUp(message: AgentMessage, commMessage: Message): void;

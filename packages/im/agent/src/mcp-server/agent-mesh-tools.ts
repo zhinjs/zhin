@@ -146,10 +146,7 @@ export function registerAgentMeshTools(server: McpServer): void {
           isError: true,
         };
       }
-      await runtime.service.repositoryHandle.updateTaskStatus(args.task_id, 'failed', {
-        error: 'cancelled via agent.cancel_task',
-        finished_at: Date.now(),
-      });
+      await runtime.service.cancelTask(args.task_id, 'cancelled via agent.cancel_task');
       return {
         content: [{
           type: 'text' as const,

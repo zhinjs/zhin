@@ -1,49 +1,61 @@
 # Zhin.js 是什么？
 
-Zhin.js 是一个 **TypeScript 聊天机器人框架**。你可以用它：
+**一句话**：Zhin.js 是用 TypeScript 编写**跨平台 IM 机器人**的框架；可选叠加 **AI Agent** 做自然语言对话与工具调用。
 
-- 写一个机器人，同时跑在 QQ、Discord、Telegram、飞书、钉钉、Slack、KOOK、邮件等 20+ 平台
-- 给机器人接入 AI（OpenAI、Ollama、DeepSeek 等），让它能理解自然语言、调用工具、执行任务
-- 通过插件扩展功能：命令、定时任务、数据库、Web 控制台
+若你熟悉 [Koishi](https://koishi.chat/zh-CN/) 的「插件 + 多平台」或 [Karin](https://karin.deno.dev/) 的「几行代码起 bot」，可以把 Zhin 理解为：**TypeScript 优先、出站链路统一、IM 核心可单独安装（&lt;10MB）** 的同类方案，并内置可选 Agent 编排与安全 Harness。
 
-## 它能做什么？
+## 能做什么？
 
-| 场景 | 说明 |
-|------|------|
-| **多平台客服机器人** | 一套回复逻辑，QQ 群和 Discord 服务器同时用 |
-| **AI 助手** | 接入大模型，支持多轮对话、工具调用、文件分析 |
-| **群管理工具** | 入群验证、关键词过滤、定时公告、签到统计 |
-| **开发运维机器人** | 监控报警、CI/CD 通知、远程执行命令 |
-| **个人效率工具** | RSS 推送、日程提醒、天气查询、翻译 |
+| 场景 | 你会用到 |
+|------|----------|
+| 多平台客服 / 群管 | 一套插件逻辑，QQ、Discord、Telegram 等同跑 |
+| AI 助手 | `@zhin.js/agent` + Provider，多轮对话与工具 |
+| 运维通知 | Webhook、邮件、GitHub 等 Endpoint |
+| 本地调试 | Sandbox + Remote Console，无需先接真机 |
 
-## 和其他方案有什么不同？
+**产品边界**：面向生活/工作类 IM 助手，**不是** Cursor / Claude Code 类 coding agent。见 [能力分档](/essentials/capability-tiers)。
 
-| | Zhin.js | Koishi | 从零写 bot |
-|---|---------|--------|-----------|
-| **多平台** | 20+ 平台统一 API | 主打 QQ 生态 | 每个平台单独写 |
-| **AI 集成** | 内置 Agent 编排、工具调用、安全沙箱 | 需要插件 | 自己实现 |
-| **TypeScript** | 原生 TS，完整类型推导 | JS 为主 | 看你怎么写 |
-| **热重载** | 保存即生效，自动回滚 | 支持 | 自己实现 |
-| **插件生态** | 官方 20 个适配器 + 工具插件 | 丰富 | 无 |
+## 核心概念（30 秒）
 
-## 适合谁？
+```
+Adapter（平台协议） → Endpoint（账号实例） → Plugin（你的功能）
+入站消息 → Dispatcher → 命令 / AI → 统一出站链路 → 平台
+```
 
-- **想快速做一个能跑的机器人**——脚手架 7 步向导，5 分钟出成品
-- **需要同时覆盖多个平台**——写一次代码，所有平台通用
-- **想给机器人加 AI 能力**——内置 Agent 编排，不用自己对接大模型 API
-- **用 TypeScript 开发**——完整类型提示，IDE 补全
+- **Plugin**：`usePlugin()` 注册命令、中间件、工具（须在文件顶层调用）
+- **Endpoint**：一个 QQ 号、一个 Discord Bot、一个 Sandbox 会话
+- **ZhinAgent**（可选）：在入站消息上跑大模型与工具
+
+一页展开：[核心概念速查](/essentials/)。
+
+## 和常见方案对比
+
+| | Zhin.js | Koishi | 从零写 SDK |
+|---|---------|--------|------------|
+| 语言 | TypeScript 原生 | 以 JS 为主，支持 TS | 自定 |
+| 多平台 | 20+ Adapter，统一 Message API | 生态以 QQ 为主，平台丰富 | 每平台一套 |
+| AI | 可选 `@zhin.js/agent`，编排 + Harness | 靠插件组合 | 自研 |
+| 热重载 | 插件/配置保存即加载 | 支持 | 自研 |
+| 安装体积 | IM 核心 &lt;10MB（4.x 分档） | 视插件而定 | — |
+
+与 **协议端**（如 [NapCatQQ](https://napneko.github.io/)）的关系：NapCat 提供 QQ 协议能力；Zhin 通过 `@zhin.js/adapter-napcat` 等适配器接入，上层仍写 Zhin 插件与命令。
 
 ## 两个安装层级
 
-Zhin.js 有两种安装方式，按需选择：
+| 层级 | 包 | 约体积 | 能力 |
+|------|-----|--------|------|
+| **IM 核心** | `zhin.js` | &lt;10 MB | 多平台、命令、插件、热重载 |
+| **+ AI** | `@zhin.js/agent` 等 | +约 12–15 MB | Agent、会话、工具、压缩 |
 
-| 层级 | 包 | 大小 | 能力 |
-|------|-----|------|------|
-| **IM 核心** | `zhin.js` | <10 MB | 多平台收发消息、命令、插件、热重载 |
-| **AI Agent** | `zhin.js` + `@zhin.js/agent` | +AI 依赖 | 多模型编排、工具调用、会话管理、安全沙箱 |
+详见 [Install tiers](/getting-started/#install-tierszhinjs-4x) 与 [ADR 0019](/adr/0019-install-size-layering)。
 
-大多数场景装 IM 核心就够了。需要 AI 时再加装 Agent 层。
+## 建议阅读顺序
 
-## 下一步
+::: tip 先跑起来，再加深
+1. [快速开始](/getting-started/) — 5 分钟 Sandbox 首跑  
+2. [消息如何流转](/essentials/message-flow) — 弄清入站/出站  
+3. [插件开发](/guide/plugin-development) — 写自己的功能  
+4. [学习路径](/essentials/learning-paths) — 按 L1–L4 选读  
+:::
 
-[5 分钟上手 →](/getting-started/)
+完整资源索引：[生态与资源](/ecosystem)。

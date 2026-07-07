@@ -16,6 +16,7 @@
     "@zhin.js/adapter-sandbox": "workspace:*",
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/cli": "workspace:*",
+    "@zhin.js/client": "workspace:*",
     "@zhin.js/host-api": "workspace:*",
     "@zhin.js/host-router": "workspace:*",
     "@zhin.js/mcp": "workspace:*",

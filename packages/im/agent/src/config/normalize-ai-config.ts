@@ -1,5 +1,5 @@
 import type { AIConfig, ProviderConfig } from '@zhin.js/ai';
-import { isSdkId } from '@zhin.js/ai';
+import { applyProviderGatewayPreset, isSdkId, validateProviderGatewayConfig } from '@zhin.js/ai';
 import type {
   AgentBindingConfig,
   ProviderInstanceConfig,
@@ -26,9 +26,11 @@ function isNamedProviderShape(
   providers: AIConfig['providers'],
 ): providers is Record<string, ProviderInstanceConfig & { driver?: string; api?: string; preset?: string; spec?: string }> {
   if (!providers || typeof providers !== 'object' || Array.isArray(providers)) return false;
-  const first = Object.values(providers)[0] as ProviderInstanceConfig | undefined;
-  if (!first || typeof first !== 'object') return false;
-  return 'sdk' in first || 'driver' in first || 'api' in first || 'preset' in first;
+  const entries = Object.entries(providers);
+  if (entries.length === 0) return false;
+  // Legacy flat shape: keys are driver ids (openai, anthropic, …)
+  if (entries.every(([key]) => LEGACY_DRIVER_KEYS.has(key))) return false;
+  return true;
 }
 
 function inferSdkFromAlias(alias: string): ProviderInstanceConfig['sdk'] | undefined {
@@ -51,9 +53,23 @@ export function normalizeProviderEntry(
   }
 
   const legacyDriver = cfg.driver?.trim().toLowerCase();
+  const sdkForPreset = (
+    cfg.sdk?.trim().toLowerCase() as ProviderInstanceConfig['sdk'] | undefined
+  )
+    || (legacyDriver ? DRIVER_TO_SDK[legacyDriver] : undefined)
+    || inferSdkFromAlias(alias)
+    || 'openai-compatible';
+  const presetHint = applyProviderGatewayPreset(alias, {
+    sdk: sdkForPreset,
+    baseUrl: cfg.baseUrl?.trim(),
+    host: cfg.host?.trim(),
+    apiKey: cfg.apiKey,
+    contextWindow: cfg.contextWindow,
+  });
   const sdkRaw = cfg.sdk?.trim().toLowerCase()
     || (legacyDriver ? DRIVER_TO_SDK[legacyDriver] : undefined)
-    || inferSdkFromAlias(alias);
+    || inferSdkFromAlias(alias)
+    || presetHint.sdk?.trim().toLowerCase();
 
   if (!sdkRaw || !isSdkId(sdkRaw)) {
     throw new Error(
@@ -70,7 +86,14 @@ export function normalizeProviderEntry(
   if (typeof normalized.apiKey === 'string') normalized.apiKey = normalized.apiKey.trim();
   if (typeof normalized.baseUrl === 'string') normalized.baseUrl = normalized.baseUrl.trim();
   if (typeof normalized.host === 'string') normalized.host = normalized.host.trim();
-  return normalized;
+  const withGateway = applyProviderGatewayPreset(alias, normalized);
+  const warnings = validateProviderGatewayConfig(alias, normalized);
+  if (warnings.length > 0 && process.env.ZHIN_PROVIDER_GATEWAY_WARN !== '0') {
+    for (const w of warnings) {
+      console.warn(`[ai.providers] ${w}`);
+    }
+  }
+  return withGateway;
 }
 
 function normalizeLegacyProviders(

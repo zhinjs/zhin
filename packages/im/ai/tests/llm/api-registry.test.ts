@@ -69,6 +69,17 @@ describe('llm api-registry', () => {
     expect(model.id).toBe('gpt-test');
   });
 
+  it('getLlmTransportModel uses provider contextWindow override', () => {
+    registerProviderInstance('opencode', {
+      sdk: 'openai-compatible',
+      baseUrl: 'https://opencode.ai/zen/v1',
+      contextWindow: 32_768,
+    }, ['mimo-v2.5-free']);
+    const model = getLlmTransportModel('opencode', 'mimo-v2.5-free');
+    expect(model.contextWindow).toBe(32_768);
+    expect(model.reasoning).toBe(true);
+  });
+
   it('stream delegates to registered api provider', async () => {
     registerProviderInstance('openai', { sdk: 'openai' }, ['gpt-test']);
     registerApiProvider({

@@ -15,7 +15,6 @@ describe('onebot11 segment contract', () => {
       [{
         type: 'image',
         data: { media: { kind: 'url', value: 'https://cdn.example/cat.jpg' } },
-        platform: { url: 'https://cdn.example/cat.jpg' },
       }],
     );
   });

@@ -17,7 +17,7 @@ export function filterImDeliveryContent(content: SendContent): SendContent {
   if (typeof content === 'string') return content;
 
   const items = Array.isArray(content) ? content : [content];
-  const filtered: MessageElement[] = [];
+  const filtered: (string | MessageElement)[] = [];
 
   for (const item of items) {
     if (!isSegmentLike(item)) {

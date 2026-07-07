@@ -71,6 +71,3 @@ export type Segment =
   | DiceSegment
   | RpsSegment
   | SegmentBase;
-
-/** @deprecated 使用 Segment；保留别名供 Console / adapter 渐进迁移 */
-export type MessageSegment = Segment;

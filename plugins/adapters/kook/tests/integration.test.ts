@@ -165,8 +165,8 @@ describe('Kook 适配器特定测试', () => {
         raw_message: '(met)970972780(met) 你好',
       });
       const msg = endpoint.$formatMessage(raw);
-      const atSeg = msg.$content.find((s) => s.type === 'at');
-      expect(atSeg?.data?.user_id).toBe('970972780');
+      const mentionSeg = msg.$content.find((s) => s.type === 'mention');
+      expect(mentionSeg?.data?.target).toBe('970972780');
       expect(segment.raw(msg.$content)).toBe('@970972780 你好');
     });
 

@@ -82,3 +82,34 @@ describe('normalizeAiRoutingConfig breaking rejects', () => {
     } as never)).toThrow(/ai\.pipeline removed/);
   });
 });
+
+describe('normalizeAiRoutingConfig provider gateway presets', () => {
+  it('coerces test-bot style OpenCode provider to openai-compatible', () => {
+    const normalized = normalizeAiRoutingConfig({
+      providers: {
+        opencode: {
+          sdk: 'openai',
+          baseUrl: 'https://opencode.ai/zen/v1',
+          apiKey: 'k',
+          models: ['mimo-v2.5-free'],
+        },
+      },
+      agents: { zhin: { provider: 'opencode', model: 'mimo-v2.5-free' } },
+    } as never);
+    expect(normalized.providers.opencode?.sdk).toBe('openai-compatible');
+    expect(normalized.providers.opencode?.contextWindow).toBe(32_768);
+  });
+
+  it('infers OpenCode sdk from alias when yaml omits sdk', () => {
+    const normalized = normalizeAiRoutingConfig({
+      providers: {
+        opencode: {
+          baseUrl: 'https://opencode.ai/zen/v1',
+          apiKey: 'k',
+        },
+      },
+      agents: { zhin: { provider: 'opencode', model: 'mimo-v2.5-free' } },
+    } as never);
+    expect(normalized.providers.opencode?.sdk).toBe('openai-compatible');
+  });
+});

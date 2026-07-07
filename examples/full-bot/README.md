@@ -10,7 +10,9 @@
 |------|------|
 | minimal-bot | Stable 黄金路径（**仅 IM**，`ai.enabled: false`） |
 | **full-bot** | L4 参考（**含 `@zhin.js/agent` + provider**），`pnpm check:l4` |
-| test-bot | 厨房水槽，全平台/全插件 |
+| test-bot | 厨房水槽，全平台/全插件；**勿复制到新项目** |
+
+Provider 网关（OpenCode / OpenRouter 等）的 sdk 与 `contextWindow` 预设见 [AI 模块 — 已知 LLM 网关预设](../../docs/advanced/ai.md#已知-llm-网关预设)。L4 契约测试：`examples/full-bot/tests/provider-gateway-contract.test.ts`。
 
 ## 依赖
 

@@ -206,14 +206,17 @@ export function createAiSdkStreamFn(): StreamFn {
       options?.onResponse?.(final.response);
 
       const finalText = await final.text;
+      const finalReasoning = await Promise.resolve(final.reasoningText).catch(() => '');
       const finishReason = await final.finishReason;
       const finalUsage = await final.usage;
 
       const calls = [...toolCalls.values()];
+      const resolvedText = text || finalText;
+      const resolvedThinking = thinking || finalReasoning || '';
       const assistant = buildAssistantMessage(
         model,
-        text || finalText,
-        thinking,
+        resolvedText,
+        resolvedThinking,
         calls,
         mapFinishReason(finishReason, calls.length > 0),
         usageFromAiSdk(finalUsage),
@@ -267,7 +270,7 @@ export async function generateTextViaAiSdk(
   return buildAssistantMessage(
     model,
     result.text,
-    '',
+    result.reasoningText ?? '',
     toolCalls,
     mapFinishReason(result.finishReason, toolCalls.length > 0),
     usageFromAiSdk(result.usage),

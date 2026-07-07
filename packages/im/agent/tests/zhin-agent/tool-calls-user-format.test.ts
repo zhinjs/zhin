@@ -13,6 +13,12 @@ const DEFERRED_JSON = JSON.stringify({
 });
 
 describe('formatToolCallsForUser', () => {
+  it('empty toolCalls returns actionable hint', () => {
+    const out = formatToolCallsForUser([]);
+    expect(out).toContain('/reset');
+    expect(out).not.toContain('任务已结束，但没有可展示的结果');
+  });
+
   it('extracts summary from run_deferred_task JSON without wrapper', () => {
     const out = formatToolCallsForUser([
       { tool: 'tool_search', result: '未找到与「狐」匹配的工具' },

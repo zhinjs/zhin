@@ -22,6 +22,9 @@ const pluginDirs = [
   'plugins/utils',
 ];
 
+/** 非插件目录（共享代码、工具文件夹） */
+const SKIP_PLUGIN_NAMES = new Set(['common']);
+
 const violations = [];
 
 /**
@@ -121,6 +124,14 @@ function checkPlugin(pluginPath, pluginName) {
  * 扫描插件目录
  * @param {string} dir - 要扫描的目录
  */
+function shouldCheckPlugin(pluginPath) {
+  if (SKIP_PLUGIN_NAMES.has(path.basename(pluginPath))) return false;
+  const hasPackageJson = fs.existsSync(path.join(pluginPath, 'package.json'));
+  const hasSrc = fs.existsSync(path.join(pluginPath, 'src'));
+  // 仅校验有意图的插件目录（含 package.json 或 src/）；跳过 lib 残留等
+  return hasPackageJson || hasSrc;
+}
+
 function scanPluginDir(dir) {
   const absPath = path.join(repoRoot, dir);
   if (!fs.existsSync(absPath)) return;
@@ -130,6 +141,7 @@ function scanPluginDir(dir) {
     const stat = fs.statSync(pluginPath);
 
     if (stat.isDirectory() && !name.startsWith('.') && name !== 'node_modules') {
+      if (!shouldCheckPlugin(pluginPath)) continue;
       checkPlugin(pluginPath, name);
     }
   }

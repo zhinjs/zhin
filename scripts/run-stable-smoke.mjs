@@ -16,6 +16,7 @@ const stableTestFiles = [
   'packages/im/agent/tests/ai/integration.test.ts',
   'packages/im/agent/tests/builtin/spawn-task-tool.test.ts',
   'packages/im/agent/tests/exec-policy.test.ts',
+  'packages/im/ai/tests/llm/provider-gateway-presets.test.ts',
   'examples/minimal-bot/tests/stable-path.test.ts',
 ];
 

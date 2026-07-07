@@ -48,6 +48,36 @@ _避免使用_：max tokens、history size、window
 可以在模型回合前执行、用于收集新鲜上下文的 Tool。
 _避免使用_：preload、setup action、preflight
 
+## 编排（Orchestration）
+
+**OrchestrationKernel**:
+Run 与 Task 持久化状态迁移的唯一权威；Executor 只产出 execution event，由 Kernel 写入终态。
+_避免使用_：orchestrator service、mission runner、dispatcher SSOT
+
+**Run**:
+用户可见的一单元工作，常源于 IM session 或协作场景（Cell）。
+_避免使用_：mission、job、pipeline run（非 Kernel 语境时）
+
+**Task**:
+Run 内有生命周期的工作项，可委派给不同 Executor。
+_避免使用_：subagent id、spawn id、job item
+
+**Executor**:
+执行 Task 的运行时策略（local / scene_mention / remote_mesh），向 Kernel 上报 progress/result/error event。
+_避免使用_：worker、handler、直接改 task status
+
+**RunEvent**:
+Run/Task 的只追加事件流，供快照与投影消费。
+_避免使用_：log line、debug 输出
+
+**Projection**:
+从 Kernel 状态派生的只读视图（Console API、REST、IM 进度文案）。
+_避免使用_：dispatcher 内存缓存、recordResult
+
+**AgentDispatcher**:
+内存中的 Task 投影与依赖调度缓存；从 Kernel 仓库 `syncTaskFromRecord`，不拥有持久化终态。
+_避免使用_：SSOT、source of truth、终态写入方
+
 ## 关系
 
 - **ZhinAgent** 通过 **Agent Orchestrator** 发现 **Tool**、**Skill**、**Subagent** 与 Hook；MCP 条目经 `addMcp` / `ai.mcpServers` / 可选 `ai.memoryMcp`（`server-memory`）注册，在每次 AI 回合前懒连接，工具以 `mcp_{server}_{tool}` 并入工具池（不再使用内置 `read_memory`/`write_memory`）。
@@ -57,6 +87,7 @@ _避免使用_：preload、setup action、preflight
 - **Context Budget** 同时约束提示词历史裁剪和底层 `@zhin.js/ai` Agent 配置。
 - **Pre-executable Tool** 在主模型回合前产出上下文。
 - **Subagent** 使用与父级 Agent Runtime 相同的 Provider 和预算词汇。
+- **OrchestrationKernel** 拥有 **Run** / **Task** 终态；**Executor** 仅上报 event；**AgentDispatcher** 为 **Projection** 的内存缓存，供依赖检查与非持久化查询。
 
 ## 示例对话
 
@@ -68,4 +99,5 @@ _避免使用_：preload、setup action、preflight
 - “tool” 过去同时指 Zhin 运行时工具和 Provider 工具。已决议：**Tool** 是面向 Zhin 的契约；**AgentTool** 是 `@zhin.js/ai` 的契约。
 - “maxTokens” 过去混用了生成预算和上下文容量。已决议：**Context Budget** 表示历史/模型窗口；生成限制仍属于模型或 Provider 选项。
 - **MCP Client vs Server**：Client（`mcp-client/`）消费外部 MCP 工具；`packages/host/mcp` 为 MCP **Server**（向外暴露 Zhin 工具）。SDK 为可选 peer；单 server 连接失败不阻塞 AI 回合。
+- **Kernel vs Dispatcher**：编排 Task 的 `completed` / `failed` / `cancelled` 仅由 **OrchestrationKernel** 写库；**AgentDispatcher** `recordResult` 不得作为编排终态权威（ADR 0027）。
 

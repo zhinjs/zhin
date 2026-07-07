@@ -1,9 +1,22 @@
 # test-bot（厨房水槽 · Advanced）
 
-> **这不是默认入门模板。** 新用户请使用 [`../minimal-bot`](../minimal-bot/)（Stable 黄金路径）。  
-> 能力验收见 [ACCEPTANCE.md](./ACCEPTANCE.md)（Stable vs Advanced）。
+> **这不是默认入门模板，也不要复制到新项目。**  
+> 新用户请使用 [`../minimal-bot`](../minimal-bot/)（Stable 黄金路径）。  
+> L4 能力验收见 [`../full-bot`](../full-bot/) 与 [ACCEPTANCE.md](./ACCEPTANCE.md)。  
+> 根目录 `pnpm dev` 指向本目录，仅供 **Zhin 仓库维护者** 做全 adapter / MCP / 多 agent 回归。
 
 Zhin.js 维护者用**全功能**实例：多 Adapter、多 Endpoint 同开、toolSearch、MCP，用于回归与 Advanced 验收。
+
+## 不要从 test-bot 复制什么
+
+| 项 | 说明 |
+|----|------|
+| 多 ICQQ / QQ / GitHub endpoint 同开 | 维护者私网回归用；用户项目通常 1–2 个通道 |
+| `ai.providers` 大杂烩 | 仅演示多网关；生产应 1–2 个 provider + 显式 `contextWindow` |
+| OpenCode 免费模型 + 全量 MCP | Agent prompt 极大，易触发上下文/空回复；见 `provider-gateway-presets` |
+| `agents` 五角色 ICQQ 路由 | ADR 0031 演示，非默认 |
+
+**推荐 AI 验证路径**：`full-bot` + 单一 provider（如 ollama / 一个云 API）。
 
 ## 维护者运行手册
 

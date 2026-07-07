@@ -722,7 +722,8 @@ export class KookEndpoint extends Client implements Endpoint<KookEndpointConfig,
     try {
       const { id, type, content } = options;
 
-      const canonical = expandInteractiveSegmentsInContent(content);
+      const expanded = expandInteractiveSegmentsInContent(content);
+      const canonical = toCanonicalSegments(Array.isArray(expanded) ? expanded : [expanded]);
       const wire = fromCanonicalSegments(canonical);
       const elements = await materializeOutboundMedia(this, wire);
       const kookContent = convertToKookSendable(

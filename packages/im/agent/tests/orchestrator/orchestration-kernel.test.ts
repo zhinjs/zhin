@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { getAgentDispatcher } from '../../src/orchestrator/agent-dispatcher.js';
 import { MemoryOrchestrationRepository } from '../../src/orchestrator/orchestration-repository.js';
 import { initOrchestrationService } from '../../src/orchestrator/orchestration-service.js';
 import type { AgentExecutor } from '../../src/orchestrator/orchestration-types.js';
@@ -48,13 +49,63 @@ describe('OrchestrationKernel', () => {
     expect(snapshot.events.map((event) => event.type)).toContain('result.returned');
   });
 
-  it('rejects terminal task mutation', async () => {
+  it('failTask is idempotent on terminal tasks', async () => {
     const kernel = initOrchestrationService(new MemoryOrchestrationRepository());
     const run = await kernel.startRun({ sessionKey: 's2' });
     const task = await kernel.addTask({ runId: run.run.id, name: 'one' });
 
     await kernel.completeTask(task.id, 'ok');
-    await expect(kernel.failTask(task.id, 'late error')).rejects.toThrow('cannot fail');
+    const again = await kernel.failTask(task.id, 'late error');
+    expect(again.status).toBe('completed');
+  });
+
+  it('cancelTask cancels active mesh tasks', async () => {
+    const kernel = initOrchestrationService(new MemoryOrchestrationRepository());
+    const run = await kernel.startRun({ sessionKey: 's-cancel' });
+    const task = await kernel.addTask({ runId: run.run.id, name: 'mesh' });
+    await kernel.repository.updateTaskStatus(task.id, 'running', { started_at: Date.now() });
+
+    const cancelled = await kernel.cancelTask(task.id, 'user cancelled');
+    expect(cancelled.status).toBe('cancelled');
+    expect(cancelled.error).toContain('user cancelled');
+  });
+
+  it('completes task when dispatcher recordResult precedes kernel result event', async () => {
+    const repo = new MemoryOrchestrationRepository();
+    const kernel = initOrchestrationService(repo);
+    const dispatcher = getAgentDispatcher();
+    dispatcher.setRepository(repo);
+
+    const started = await kernel.startRun({ sessionKey: 'spawn-race' });
+    const dispatched = await kernel.dispatchTask({
+      runId: started.run.id,
+      name: 'reviewer',
+      description: '你好',
+      role: 'subtask',
+      goal: '你好',
+      executorKind: 'local',
+      assignedTo: 'reviewer',
+      autoStart: false,
+    });
+    dispatcher.syncTaskFromRecord((await repo.getTask(dispatched.task.id))!);
+
+    const executor: AgentExecutor = {
+      kind: 'local',
+      execute: async function* ({ task }) {
+        dispatcher.recordResult({
+          taskId: task.id,
+          role: 'subtask',
+          success: true,
+          summary: '你好！有什么我可以帮你的吗？',
+          duration: 1000,
+        });
+        yield { type: 'result', result: '你好！有什么我可以帮你的吗？' };
+      },
+    };
+
+    const completed = await kernel.runTask(dispatched.task.id, undefined, executor);
+    expect(completed.status).toBe('completed');
+    expect(completed.resultSummary).toBe('你好！有什么我可以帮你的吗？');
   });
 
   it('plans five-agent workflow as an optional strategy', async () => {

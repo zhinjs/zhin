@@ -3,10 +3,11 @@
  */
 import { randomUUID } from 'node:crypto';
 import { Logger } from '@zhin.js/logger';
+import type { OutputElement } from '@zhin.js/ai';
 import type { ZhinAgent } from '../zhin-agent/index.js';
 import { createSyntheticMessage } from '@zhin.js/core';
 import { getOrchestrationService } from './orchestration-service.js';
-import { getAgentDispatcher } from './agent-dispatcher.js';
+import type { AgentExecutor } from './orchestration-types.js';
 
 const logger = new Logger(null, 'DelegationProcessor');
 
@@ -23,6 +24,13 @@ export interface DelegationProcessorOptions {
 }
 
 const DELEGATION_SESSION_PREFIX = 'mesh:delegation:';
+
+function outputElementsToText(elements: OutputElement[]): string {
+  return elements
+    .map((el) => (el.type === 'text' ? el.content || '' : ''))
+    .join('\n')
+    .trim();
+}
 
 export class DelegationProcessor {
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -109,15 +117,33 @@ export class DelegationProcessor {
     }
   }
 
+  private delegationExecutor(prompt: string): AgentExecutor {
+    const zhinAgent = this.options.zhinAgent;
+    return {
+      kind: 'local',
+      async *execute({ message }) {
+        if (!message) {
+          yield { type: 'error', error: 'mesh delegation requires synthetic inbound message' };
+          return;
+        }
+        yield { type: 'progress', text: 'running mesh delegation via main agent' };
+        const output = await zhinAgent.prompt(prompt, message);
+        const resultText = outputElementsToText(output);
+        yield {
+          type: 'result',
+          result: resultText || '（委托已完成，主 Agent 未返回文本）',
+        };
+      },
+    };
+  }
+
   private async processTask(taskId: string, prompt: string, sessionKey: string): Promise<void> {
     if (this.processing.has(taskId)) return;
     this.processing.add(taskId);
     const orch = getOrchestrationService();
-    const dispatcher = getAgentDispatcher();
 
     try {
-      await orch?.repositoryHandle.updateTaskStatus(taskId, 'running', { started_at: Date.now() });
-      dispatcher.syncTaskFromRecord((await orch!.repositoryHandle.getTask(taskId))!);
+      if (!orch) throw new Error('OrchestrationService not ready');
 
       const commMessage = createSyntheticMessage({
         adapter: 'mesh',
@@ -126,26 +152,13 @@ export class DelegationProcessor {
         channel: { type: 'private', id: sessionKey },
       });
 
-      await this.options.zhinAgent.prompt(prompt, commMessage);
-      const resultText = 'Delegation completed via main agent turn';
-
-      dispatcher.recordResult({
-        taskId,
-        role: 'planner',
-        success: true,
-        summary: resultText,
-        duration: 0,
-      });
+      const completed = await orch.runTask(taskId, commMessage, this.delegationExecutor(prompt));
+      if (completed.status === 'failed') {
+        logger.error(`Delegation task ${taskId} failed: ${completed.error ?? 'unknown'}`);
+      }
     } catch (err) {
-      dispatcher.recordResult({
-        taskId,
-        role: 'planner',
-        success: false,
-        summary: 'delegation failed',
-        error: err instanceof Error ? err.message : String(err),
-        duration: 0,
-      });
       logger.error(`Delegation task ${taskId} failed:`, err);
+      await orch?.safeFailTask(taskId, err instanceof Error ? err.message : String(err));
     } finally {
       this.processing.delete(taskId);
     }

@@ -67,6 +67,16 @@ export function getMaxHolidayYear(): number | null {
   return years.length === 0 ? null : Math.max(...years);
 }
 
+/** 仅测试：将内存 registry 恢复为 bundled 数据并清空缓存 */
+export function resetHolidayRegistryForTests(): void {
+  holidayData.clear();
+  for (const [year, data] of Object.entries(BUNDLED_DATA)) {
+    holidayData.set(Number(year), data);
+  }
+  holidaySetCache.clear();
+  workdaySetCache.clear();
+}
+
 export function getYearData(year: number): HolidayYearData | null {
   return holidayData.get(year) ?? null;
 }

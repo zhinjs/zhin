@@ -42,7 +42,7 @@ export abstract class NapCatEndpointBase extends EventEmitter implements Endpoin
     const items = (Array.isArray(content) ? content : [content]).map((item) =>
       typeof item === 'string' ? { type: 'text', data: { text: item } } : item as MessageSegment,
     );
-    return fromCanonicalSegments(toCanonicalSegments(items));
+    return fromCanonicalSegments(toCanonicalSegments(items)) as MessageSegment[];
   }
 
   $formatMessage(ev: NapCatMessageEvent): Message<NapCatMessageEvent> {

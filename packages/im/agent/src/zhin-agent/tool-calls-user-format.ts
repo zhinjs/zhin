@@ -93,7 +93,7 @@ function formatGenericToolResult(tool: string, result: unknown): string {
  */
 export function formatToolCallsForUser(toolCalls: ToolCallRecord[]): string {
   if (toolCalls.length === 0) {
-    return '任务已结束，但没有可展示的结果。';
+    return '模型未返回可见内容（可能为推理型模型空回复或上下文过长）。可发送 /reset 后重试，或换用非推理模型。';
   }
 
   const deferredSummaries: string[] = [];

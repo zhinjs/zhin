@@ -29,7 +29,7 @@ describe("parseCqMessage reply with slash", () => {
     );
     expect(segs[0]).toEqual({
       type: "reply",
-      data: { id: "M0zHrrS7mJ0AC8rBcOxj/moZcDUB" },
+      data: { message_id: "M0zHrrS7mJ0AC8rBcOxj/moZcDUB" },
     });
     expect(segs[1]).toEqual({ type: "text", data: { text: "正文" } });
   });

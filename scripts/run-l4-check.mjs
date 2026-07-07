@@ -18,10 +18,13 @@ const l4TestFiles = [
   'packages/im/agent/tests/orchestration-repository.test.ts',
   'packages/im/agent/tests/orchestration-dispatcher.test.ts',
   'packages/im/agent/tests/orchestration-e2e.test.ts',
+  'packages/im/agent/tests/orchestrator/executor-contract.test.ts',
+  'packages/im/agent/tests/collaboration/collaboration-kernel-bridge.test.ts',
   'packages/im/agent/tests/remote-loopback.test.ts',
   'packages/im/agent/tests/memory-entry.test.ts',
   'packages/host/mcp/tests/mesh-auth.test.ts',
   'examples/full-bot/tests/full-bot-l4-contract.test.ts',
+  'examples/full-bot/tests/provider-gateway-contract.test.ts',
   'examples/full-bot/tests/multimodal-peers-contract.test.ts',
   'packages/im/core/tests/multimodal-chain-contract.test.ts',
   'plugins/adapters/napcat/tests/l4-contract.test.ts',
@@ -34,6 +37,12 @@ for (const file of l4TestFiles) {
 }
 
 execSync(`pnpm vitest run ${l4TestFiles.map((f) => JSON.stringify(f)).join(' ')}`, {
+  cwd: repoRoot,
+  stdio: 'inherit',
+  env: { ...process.env, L4_SKIP_PLATFORM: process.env.L4_SKIP_PLATFORM },
+});
+
+execSync('pnpm check:orchestration-ssot', {
   cwd: repoRoot,
   stdio: 'inherit',
   env: { ...process.env, L4_SKIP_PLATFORM: process.env.L4_SKIP_PLATFORM },

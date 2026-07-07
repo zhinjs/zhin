@@ -4,7 +4,7 @@ import {
   agentContextFrom,
   registerApiProvider,
   registerProviderInstance,
-  getModel,
+  getLlmTransportModel,
   createAssistantMessageEventStream,
   clearApiRegistryForTests,
   createUserMessage,
@@ -79,7 +79,7 @@ describe('agentLoop tiered execution', () => {
   });
 
   it('runs tiered parallel bucket concurrently before sequential tools', async () => {
-    const model = getModel('test', 'mock');
+    const model = getLlmTransportModel('test', 'mock');
     const delayMs = 40;
 
     const executeTool = vi.fn(async (toolCall): Promise<AgentMessage> => {

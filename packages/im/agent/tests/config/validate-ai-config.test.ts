@@ -37,7 +37,25 @@ describe('validateAiRoutingConfig', () => {
     const errors = validateAiRoutingConfig(cfg);
     expect(errors).toEqual([]);
     expect(cfg.agents.vision?.priority).toBe(10);
-    expect(cfg.agents.vision?.match?.adapter).toBe('icqq');
+    const visionMatch = cfg.agents.vision?.match;
+    expect(visionMatch && !Array.isArray(visionMatch) && visionMatch.adapter).toBe('icqq');
+  });
+
+  it('拒绝无约束的 match 数组', () => {
+    const cfg = normalizeAiRoutingConfig({
+      providers: { p: { sdk: 'openai', apiKey: 'k' } },
+      agents: {
+        zhin: { provider: 'p', model: 'm' },
+        reviewer: {
+          provider: 'p',
+          model: 'm2',
+          priority: 100,
+          match: [{}],
+        },
+      },
+    } as any);
+    const errors = validateAiRoutingConfig(cfg);
+    expect(errors.some(e => e.includes('reviewer') && e.includes('no routable constraints'))).toBe(true);
   });
 
   it('providers 缺少 sdk 时报错', () => {

@@ -36,62 +36,49 @@ export async function executeRemoteOrchestrationTask(
     return { ok: false, message: `远程 Agent ${task.remoteAgentId} 未注册` };
   }
 
-  const promise = (async (): Promise<void> => {
+  try {
+    const conn = await registry.getConnection(task.remoteAgentId);
+    const result = await conn.callTool('agent.delegate_task', {
+      title: task.name,
+      description: task.goal || task.description,
+      acceptance_criteria: task.context?.acceptance_criteria ?? '',
+      artifacts: task.context?.artifacts ?? [],
+    });
+    const text = extractMcpText(result);
+    let remoteTaskId = taskId;
     try {
-      const conn = await registry.getConnection(task.remoteAgentId!);
-      const result = await conn.callTool('agent.delegate_task', {
-        title: task.name,
-        description: task.goal || task.description,
-        acceptance_criteria: task.context?.acceptance_criteria ?? '',
-        artifacts: task.context?.artifacts ?? [],
+      const parsed = JSON.parse(text) as { remote_task_id?: string; task_id?: string };
+      remoteTaskId = parsed.remote_task_id ?? parsed.task_id ?? taskId;
+    } catch {
+      const match = text.match(/remote_task_id["\s:]+([a-zA-Z0-9-]+)/);
+      if (match) remoteTaskId = match[1]!;
+    }
+    if (orch) {
+      await orch.markTaskWaitingResult(taskId, {
+        remoteTaskId,
+        progress: `remote delegation started: ${task.remoteAgentId}:${remoteTaskId}`,
       });
-      const text = extractMcpText(result);
-      let remoteTaskId = taskId;
-      try {
-        const parsed = JSON.parse(text) as { remote_task_id?: string; task_id?: string };
-        remoteTaskId = parsed.remote_task_id ?? parsed.task_id ?? taskId;
-      } catch {
-        const match = text.match(/remote_task_id["\s:]+([a-zA-Z0-9-]+)/);
-        if (match) remoteTaskId = match[1]!;
-      }
-      if (orch) {
-        await orch.repositoryHandle.updateTaskStatus(taskId, 'waiting_result', {
-          remote_task_id: remoteTaskId,
-          started_at: Date.now(),
-        });
-        await orch.taskProgress(taskId, `remote delegation started: ${task.remoteAgentId}:${remoteTaskId}`);
-      }
-      dispatcher.markRunning(taskId, Promise.resolve({
-        taskId,
-        role: task.role,
-        success: true,
-        summary: `delegated to ${task.remoteAgentId}:${remoteTaskId}`,
-        duration: 0,
-      }));
-    } catch (err) {
+    }
+    return {
+      ok: true,
+      message: `远程任务已委托给 ${task.remoteAgentId}（task ${taskId}），将通过轮询同步状态。`,
+    };
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    if (orch) {
+      await orch.safeFailTask(taskId, `remote delegate failed: ${error}`);
+    } else {
       dispatcher.recordResult({
         taskId,
         role: task.role,
         success: false,
         summary: 'remote delegate failed',
-        error: err instanceof Error ? err.message : String(err),
+        error,
         duration: 0,
       });
     }
-  })();
-
-  dispatcher.markRunning(taskId, promise.then(() => ({
-    taskId,
-    role: task.role,
-    success: true,
-    summary: 'remote delegation started',
-    duration: 0,
-  })));
-
-  return {
-    ok: true,
-    message: `远程任务已委托给 ${task.remoteAgentId}（task ${taskId}），将通过轮询同步状态。`,
-  };
+    return { ok: false, message: `远程委托失败: ${error}` };
+  }
 }
 
 export async function pollRemoteTaskStatus(
@@ -114,6 +101,7 @@ export async function pollRemoteTaskStatus(
   } catch {
     if (/completed|done|success/i.test(statusText)) status = 'completed';
     if (/failed|error/i.test(statusText)) status = 'failed';
+    if (/cancelled|canceled/i.test(statusText)) status = 'cancelled';
     if (/pending/i.test(statusText)) status = 'pending';
   }
 
@@ -134,7 +122,23 @@ export async function pollRemoteTaskStatus(
     return { done: true, status, result: resultText };
   }
 
-  if (status === 'failed' || status === 'cancelled') {
+  if (status === 'cancelled') {
+    if (orch) {
+      await orch.cancelTask(taskId, statusText || 'remote task cancelled');
+    } else {
+      dispatcher.recordResult({
+        taskId,
+        role: task.role,
+        success: false,
+        summary: statusText,
+        error: statusText,
+        duration: 0,
+      });
+    }
+    return { done: true, status, result: statusText };
+  }
+
+  if (status === 'failed') {
     if (orch) {
       await orch.failTask(taskId, statusText);
     } else {
@@ -151,7 +155,6 @@ export async function pollRemoteTaskStatus(
   }
 
   if (orch) {
-    await orch.repositoryHandle.updateTaskStatus(taskId, 'running');
     await orch.taskProgress(taskId, `remote status: ${status}`);
   }
   return { done: false, status };

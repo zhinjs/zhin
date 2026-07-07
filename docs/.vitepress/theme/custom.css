@@ -1,17 +1,17 @@
 /**
- * 自定义样式
+ * Zhin.js 文档站样式
+ * 首页叙事区块对齐 Karin / Koishi / NapCat：利益点 → 命令 → 步骤 → 开发者 → 生态
  */
 
-/* 全局样式优化 */
 :root {
   --vp-c-brand: #3eaf7c;
   --vp-c-brand-light: #4abf8a;
   --vp-c-brand-lighter: #63d4a3;
   --vp-c-brand-dark: #2d8659;
   --vp-c-brand-darker: #1f6042;
+  --zhin-home-section-gap: 3rem;
 }
 
-/* 深色模式品牌色调整 */
 .dark {
   --vp-c-brand: #4abf8a;
   --vp-c-brand-light: #63d4a3;
@@ -20,41 +20,169 @@
   --vp-c-brand-darker: #2d8659;
 }
 
-/* 平滑滚动 */
 html {
   scroll-behavior: smooth;
 }
 
-/* 代码块样式优化 */
+/* ── 通用文档排版 ── */
 .vp-doc [class*='language-'] {
   border-radius: 8px;
   margin: 16px 0;
 }
 
-/* 链接样式 */
 .vp-doc a {
   font-weight: 500;
   transition: color 0.2s;
 }
 
-/* 表格样式 */
 .vp-doc table {
   border-radius: 8px;
   overflow: hidden;
 }
 
-/* 按钮样式统一 */
-button {
-  font-family: inherit;
-}
-
-/* 响应式图片 */
 .vp-doc img {
   border-radius: 8px;
 }
 
-/* ClientOnly 组件样式 */
+button {
+  font-family: inherit;
+}
+
 .client-only {
   display: contents;
 }
 
+/* 首段摘要式 lead（用于入门页） */
+.vp-doc .lead {
+  font-size: 1.125rem;
+  line-height: 1.75;
+  color: var(--vp-c-text-2);
+  margin-bottom: 1.5rem;
+}
+
+/* ── 首页：Hero 与 Features ── */
+.VPHome .VPHero .name {
+  font-weight: 700;
+}
+
+.VPHome .VPHero .text {
+  font-size: 2.4rem;
+  line-height: 1.2;
+}
+
+.VPHome .VPFeatures .box {
+  border-radius: 12px;
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.VPHome .VPFeatures .box:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+  transform: translateY(-2px);
+}
+
+.dark .VPHome .VPFeatures .box:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+/* 首页正文区（frontmatter 下方 Markdown） */
+.VPHome .vp-doc {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 24px var(--zhin-home-section-gap);
+}
+
+.VPHome .vp-doc > h2 {
+  margin-top: var(--zhin-home-section-gap);
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--vp-c-divider);
+  font-size: 1.5rem;
+  letter-spacing: -0.02em;
+}
+
+.VPHome .vp-doc > h2:first-of-type {
+  border-top: none;
+  margin-top: 2rem;
+}
+
+/* 三步上手 */
+.home-steps {
+  display: grid;
+  gap: 1rem;
+  margin: 1.25rem 0;
+}
+
+@media (min-width: 768px) {
+  .home-steps {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.home-steps h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+  color: var(--vp-c-brand);
+}
+
+.home-steps p {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--vp-c-text-2);
+}
+
+/* 入口表格 */
+.home-entry-grid table,
+.home-dev-grid table {
+  width: 100%;
+  margin: 1rem 0;
+}
+
+/* 开发者能力表 */
+.home-dev-grid {
+  margin: 1rem 0 1.5rem;
+}
+
+/* 平台链接区 */
+.home-platform-grid {
+  line-height: 2;
+  font-size: 0.95rem;
+  color: var(--vp-c-text-2);
+}
+
+.home-platform-grid strong {
+  color: var(--vp-c-text-1);
+  display: inline-block;
+  min-width: 6.5em;
+}
+
+/* 首页 CTA */
+.home-cta {
+  margin: 1.5rem 0 0;
+  text-align: center;
+}
+
+/* 学习路径：推荐起点 */
+.path-start {
+  padding: 1rem 1.25rem;
+  border-radius: 12px;
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-divider);
+  margin-bottom: 1.5rem;
+}
+
+.path-start strong {
+  color: var(--vp-c-brand);
+}
+
+/* 侧栏：嵌套分组缩进与折叠箭头 */
+.VPSidebar .group + .group {
+  margin-top: 0.25rem;
+}
+
+.VPSidebar .items .items {
+  padding-left: 0.5rem;
+}
+
+.VPSidebar .items .items .item .text {
+  font-size: 13px;
+}
