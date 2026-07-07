@@ -5,6 +5,8 @@ export type {
   TextSegment,
   MentionSegment,
   ImageSegment,
+  ReplySegment,
+  ForwardSegment,
   MessageSegment,
 } from './types.js';
 export {
@@ -12,6 +14,8 @@ export {
   textSegmentSchema,
   mentionSegmentSchema,
   imageSegmentSchema,
+  replySegmentSchema,
+  forwardSegmentSchema,
   canonicalSegmentSchema,
   segmentArraySchema,
 } from './schema.js';

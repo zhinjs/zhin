@@ -53,9 +53,41 @@ function normalizeImage(seg: MessageSegment): Segment {
   });
 }
 
+function normalizeReply(seg: MessageSegment): Segment {
+  const data = seg.data as Record<string, unknown>;
+  const messageId = String(data.message_id ?? data.id ?? '').trim();
+  if (!messageId) return seg as Segment;
+  return { type: 'reply', data: { message_id: messageId } };
+}
+
+function normalizeForward(seg: MessageSegment): Segment {
+  const data = seg.data as Record<string, unknown>;
+  const forwardId = String(
+    data.forward_id ?? data.id ?? data.resid ?? data.res_id ?? '',
+  ).trim();
+  if (!forwardId) return seg as Segment;
+
+  const platform: Record<string, unknown> = { ...(seg.platform ?? {}) };
+  for (const key of ['resid', 'res_id'] as const) {
+    if (typeof data[key] === 'string' && data[key]) platform[key] = data[key];
+  }
+
+  return {
+    type: 'forward',
+    data: {
+      forward_id: forwardId,
+      ...(typeof data.title === 'string' && data.title ? { title: data.title } : {}),
+      ...(Array.isArray(data.messages) ? { messages: data.messages as Segment[][] } : {}),
+    },
+    ...(Object.keys(platform).length ? { platform } : {}),
+  };
+}
+
 function normalizeSegment(seg: MessageSegment): Segment {
   if (seg.type === 'at' || seg.type === 'mention') return normalizeMention(seg);
   if (seg.type === 'image') return normalizeImage(seg);
+  if (seg.type === 'reply') return normalizeReply(seg);
+  if (seg.type === 'forward') return normalizeForward(seg);
   return seg as Segment;
 }
 
@@ -92,6 +124,34 @@ export function fromCanonicalSegments(segments: readonly Segment[]): MessageSegm
           ...(data.name ? { name: data.name } : {}),
         },
         ...(seg.platform ? { platform: seg.platform } : {}),
+      };
+    }
+    if (seg.type === 'reply') {
+      const messageId = String((seg.data as { message_id: string }).message_id);
+      return {
+        type: 'reply',
+        data: { id: messageId, message_id: messageId },
+        ...(seg.platform ? { platform: seg.platform } : {}),
+      };
+    }
+    if (seg.type === 'forward') {
+      const data = seg.data as {
+        forward_id: string;
+        title?: string;
+        messages?: unknown;
+      };
+      const platform = { ...(seg.platform ?? {}) };
+      const resid = platform.resid ?? data.forward_id;
+      return {
+        type: 'forward',
+        data: {
+          id: data.forward_id,
+          forward_id: data.forward_id,
+          resid,
+          ...(data.title ? { title: data.title } : {}),
+          ...(data.messages ? { messages: data.messages } : {}),
+        },
+        platform: { ...platform, resid },
       };
     }
     return seg as MessageSegment;
