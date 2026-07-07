@@ -25,6 +25,7 @@ import { SDK_VERSION, SDK_VERSION_HEADER } from "./sdk-version.js";
 import { applyCustomAuthEndpoints } from "./gateway-config.js";
 import { normalizeOutboundMarkdown, asOutboundSegments, splitReplyPrefix } from "./outbound-markdown.js";
 import { normalizeOutboundMedia } from "./outbound-media.js";
+import { fromCanonicalSegments, toCanonicalSegments } from "./segment-mapper.js";
 import {
   buildMixedMediaMessagePayload,
   buildQqImageUploadPayload,
@@ -292,6 +293,13 @@ export class QQEndpoint<T extends ReceiverMode, M extends ApplicationPlatform = 
     }
   }
 
+  private toWireSendContent(content: SendContent): MessageElement[] {
+    const items = (Array.isArray(content) ? content : [content]).map((item) =>
+      typeof item === "string" ? { type: "text", data: { text: item } } : item as MessageElement,
+    );
+    return fromCanonicalSegments(toCanonicalSegments(items as never));
+  }
+
   $formatMessage(msg: PrivateMessageEvent | GroupMessageEvent) {
     const raw = msg as PrivateMessageEvent & GroupMessageEvent & {
       group_openid?: string;
@@ -320,6 +328,10 @@ export class QQEndpoint<T extends ReceiverMode, M extends ApplicationPlatform = 
         .filter((id): id is string => Boolean(id))
         .map(String);
       content = normalizeGroupAtPrefix(content, endpointAtIds, raw.__zhin_group_at === true);
+    }
+
+    if (Array.isArray(content)) {
+      content = toCanonicalSegments(content);
     }
 
     const result = Message.from(msg, {
@@ -356,7 +368,8 @@ export class QQEndpoint<T extends ReceiverMode, M extends ApplicationPlatform = 
 
   async $sendMessage(options: SendOptions): Promise<string> {
     const expanded = expandKeyboardSegmentsForQq(options.content);
-    const mediaNorm = normalizeOutboundMedia(expanded);
+    const canonicalized = this.toWireSendContent(expanded);
+    const mediaNorm = normalizeOutboundMedia(canonicalized);
     const markdownMode = this.$config.outboundMarkdown;
 
     if (
