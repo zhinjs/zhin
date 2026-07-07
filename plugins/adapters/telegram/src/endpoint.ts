@@ -10,10 +10,12 @@ import {
   SendContent,
   MessageSegment,
   segment,
+  expandInteractiveSegmentsInContent,
   type QuotedMessagePayload,} from 'zhin.js';
 import type { TelegramEndpointConfig, TelegramSenderInfo } from "./types.js";
 import type { TelegramAdapter } from "./adapter.js";
 import { normalizeTelegramChatMember } from "./platform-permit.js";
+import { fromCanonicalSegments, toCanonicalSegments } from './segment-mapper.js';
 
 export class TelegramEndpoint extends Telegraf implements Endpoint<TelegramEndpointConfig, TelegramMessage> {
   $connected: boolean = false;
@@ -173,9 +175,10 @@ export class TelegramEndpoint extends Telegraf implements Endpoint<TelegramEndpo
     const channelId = msg.chat.id.toString();
 
     // Parse message content
-    const content = this.parseMessageContent(msg);
-    const quoteId = Message.quoteIdFromContent(content);
-    Message.alignReplySegments(content, quoteId);
+    const wire = this.parseMessageContent(msg);
+    const quoteId = Message.quoteIdFromContent(wire);
+    Message.alignReplySegments(wire, quoteId);
+    const content = toCanonicalSegments(wire);
 
     const result = Message.from(msg, {
       $id: msg.message_id.toString(),
@@ -519,7 +522,9 @@ export class TelegramEndpoint extends Telegraf implements Endpoint<TelegramEndpo
   async $sendMessage(options: SendOptions): Promise<string> {
     try {
       const chatId = parseInt(options.id);
-      const result = await this.sendContentToChat(chatId, options.content);
+      const canonical = expandInteractiveSegmentsInContent(options.content);
+      const wire = fromCanonicalSegments(canonical);
+      const result = await this.sendContentToChat(chatId, wire);
       this.messageChatMap.set(result.message_id.toString(), options.id);
       this.pluginLogger.debug(
         `${this.$config.name} send ${options.type}(${options.id}): ${segment.raw(options.content)}`

@@ -1,7 +1,7 @@
 /**
  * 钉钉 Endpoint 实现
  */
-import { formatCompact, Endpoint, Message, MessageSegment, segment, SendContent, SendOptions,} from 'zhin.js';
+import { formatCompact, Endpoint, Message, MessageSegment, segment, SendContent, SendOptions, expandInteractiveSegmentsInContent,} from 'zhin.js';
 import { registerFetchRoute, type Router, type RouterContext } from "@zhin.js/host-router/router";
 import { createHmac } from "crypto";
 import type {
@@ -12,6 +12,7 @@ import type {
 } from "./types.js";
 import type { DingTalkAdapter } from "./adapter.js";
 import { normalizeDingtalkSenderForPermit } from "./platform-permit.js";
+import { fromCanonicalSegments, toCanonicalSegments } from './segment-mapper.js';
 
 export class DingTalkEndpoint implements Endpoint<DingTalkEndpointConfig, DingTalkMessage> {
   $connected: boolean;
@@ -169,7 +170,8 @@ export class DingTalkEndpoint implements Endpoint<DingTalkEndpointConfig, DingTa
   }
 
   $formatMessage(msg: DingTalkMessage): Message<DingTalkMessage> {
-    const content = this.parseMessageContent(msg);
+    const wire = this.parseMessageContent(msg);
+    const content = toCanonicalSegments(wire);
     const chatType = msg.conversationType === "2" ? "group" : "private";
     const permit = normalizeDingtalkSenderForPermit({ isAdmin: msg.isAdmin === true });
     return Message.from(msg, {
@@ -306,7 +308,9 @@ export class DingTalkEndpoint implements Endpoint<DingTalkEndpointConfig, DingTa
 
   async $sendMessage(options: SendOptions): Promise<string> {
     const conversationId = options.id;
-    const content = this.formatSendContent(options.content);
+    const canonical = expandInteractiveSegmentsInContent(options.content);
+    const wire = fromCanonicalSegments(canonical);
+    const content = this.formatSendContent(wire);
     try {
       const sessionWebhook = this.sessionWebhooks.get(conversationId);
       if (sessionWebhook) {

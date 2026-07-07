@@ -2,12 +2,13 @@
  * OneBot 12 HTTP Webhook Bot：OneBot 实现 POST 事件到应用 path，可选 api_url 用于发消息
  */
 import { EventEmitter } from 'events';
-import { formatCompact, Endpoint, Message, segment, SendOptions,} from 'zhin.js';
+import { formatCompact, Endpoint, Message, segment, SendOptions, expandInteractiveSegmentsInContent,} from 'zhin.js';
 import { registerFetchRoute, type Router, type RouterContext } from '@zhin.js/host-router/router';
 import { callOneBot12Action } from './api.js';
 import type { OneBot12WebhookConfig, OneBot12Event } from './types.js';
 import type { OneBot12Adapter } from './adapter.js';
 import { formatOneBot12MessagePayload, isMessageEvent, contentToOb12Segments } from './utils.js';
+import { fromCanonicalSegments } from './segment-mapper.js';
 
 export class OneBot12WebhookEndpoint extends EventEmitter implements Endpoint<OneBot12WebhookConfig, OneBot12Event> {
   $connected: boolean = true;
@@ -103,7 +104,12 @@ export class OneBot12WebhookEndpoint extends EventEmitter implements Endpoint<On
     if (!apiUrl) {
       throw new Error('OneBot12 Webhook 发消息需要配置 api_url（OneBot 实现的 HTTP 端点）');
     }
-    const message = contentToOb12Segments(options.content);
+    const expanded = expandInteractiveSegmentsInContent(options.content);
+    const arr = Array.isArray(expanded) ? expanded : [expanded];
+    const wire = fromCanonicalSegments(
+      arr.map((c) => (typeof c === 'string' ? { type: 'text' as const, data: { text: c } } : c)),
+    );
+    const message = contentToOb12Segments(wire);
     const params: Record<string, unknown> = { message };
     if (options.type === 'private') {
       params.detail_type = 'private';

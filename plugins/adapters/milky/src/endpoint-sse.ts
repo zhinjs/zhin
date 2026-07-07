@@ -3,7 +3,7 @@
  */
 import EventSource from 'eventsource';
 import { EventEmitter } from 'events';
-import { formatCompact, Endpoint, Message, segment, SendOptions,} from 'zhin.js';
+import { formatCompact, Endpoint, Message, segment, SendOptions, expandInteractiveSegmentsInContent,} from 'zhin.js';
 import { callApi } from './api.js';
 import type { MilkySseConfig, MilkyEvent } from './types.js';
 import type { MilkyAdapter } from './adapter.js';
@@ -13,6 +13,7 @@ import {
   toMilkyOutgoingSegments,
   parseMilkyMessageId,
 } from './utils.js';
+import { fromCanonicalSegments } from './segment-mapper.js';
 
 export class MilkySseClient extends EventEmitter implements Endpoint<MilkySseConfig, MilkyEvent> {
   $connected: boolean;
@@ -121,11 +122,12 @@ export class MilkySseClient extends EventEmitter implements Endpoint<MilkySseCon
   }
 
   async $sendMessage(options: SendOptions): Promise<string> {
-    const content = Array.isArray(options.content) ? options.content : [options.content];
-    const segments = content.map((c) =>
-      typeof c === 'string' ? { type: 'text' as const, data: { text: c } } : (c as { type: string; data?: Record<string, unknown> }),
+    const expanded = expandInteractiveSegmentsInContent(options.content);
+    const arr = Array.isArray(expanded) ? expanded : [expanded];
+    const wire = fromCanonicalSegments(
+      arr.map((c) => (typeof c === 'string' ? { type: 'text' as const, data: { text: c } } : c)),
     );
-    const message = toMilkyOutgoingSegments(segments);
+    const message = toMilkyOutgoingSegments(wire);
     if (options.type === 'group') {
       const result = await callApi(this.apiOptions(), 'send_group_message', {
         group_id: parseInt(options.id, 10),

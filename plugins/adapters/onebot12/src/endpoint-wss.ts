@@ -5,11 +5,12 @@ import WebSocket, { WebSocketServer } from 'ws';
 import { EventEmitter } from 'events';
 import { clearInterval, clearTimeout } from 'node:timers';
 import { IncomingMessage } from 'http';
-import { formatCompact, Endpoint, Message, segment, SendOptions,} from 'zhin.js';
+import { formatCompact, Endpoint, Message, segment, SendOptions, expandInteractiveSegmentsInContent,} from 'zhin.js';
 import type { Router } from '@zhin.js/host-router';
 import type { OneBot12WssConfig, OneBot12Event, OneBot12ActionRequest, OneBot12ActionResponse } from './types.js';
 import type { OneBot12Adapter } from './adapter.js';
 import { formatOneBot12MessagePayload, isMessageEvent, contentToOb12Segments } from './utils.js';
+import { fromCanonicalSegments } from './segment-mapper.js';
 
 export class OneBot12WssServer extends EventEmitter implements Endpoint<OneBot12WssConfig, OneBot12Event> {
   $connected: boolean = false;
@@ -178,7 +179,12 @@ export class OneBot12WssServer extends EventEmitter implements Endpoint<OneBot12
   }
 
   async $sendMessage(options: SendOptions): Promise<string> {
-    const message = contentToOb12Segments(options.content);
+    const expanded = expandInteractiveSegmentsInContent(options.content);
+    const arr = Array.isArray(expanded) ? expanded : [expanded];
+    const wire = fromCanonicalSegments(
+      arr.map((c) => (typeof c === 'string' ? { type: 'text' as const, data: { text: c } } : c)),
+    );
+    const message = contentToOb12Segments(wire);
     const params: Record<string, unknown> = { message };
     if (options.type === 'private') {
       params.detail_type = 'private';

@@ -4,10 +4,11 @@
 import { registerFetchRoute, type Router, type RouterContext } from "@zhin.js/host-router/router";
 import axios, { type AxiosInstance } from "axios";
 import { createHash } from "crypto";
-import { formatCompact, Endpoint, Message, MessageSegment, segment, SendContent, SendOptions,} from 'zhin.js';
+import { formatCompact, Endpoint, Message, MessageSegment, segment, SendContent, SendOptions, expandInteractiveSegmentsInContent,} from 'zhin.js';
 import type { LarkEndpointConfig, LarkMessage, LarkEvent, AccessToken } from "./types.js";
 import type { LarkAdapter } from "./adapter.js";
 import { normalizeLarkSenderForPermit } from "./platform-permit.js";
+import { fromCanonicalSegments, toCanonicalSegments } from './segment-mapper.js';
 
 export class LarkEndpoint implements Endpoint<LarkEndpointConfig, LarkMessage> {
     $connected: boolean
@@ -221,7 +222,8 @@ export class LarkEndpoint implements Endpoint<LarkEndpointConfig, LarkMessage> {
     // ================================================================================================
 
     $formatMessage(msg: LarkMessage, event?: any): Message<LarkMessage> {
-        const content = this.parseMessageContent(msg);
+        const wire = this.parseMessageContent(msg);
+        const content = toCanonicalSegments(wire);
         
         // 确定聊天类型
         const chatType = msg.chat_id?.startsWith('oc_') ? 'group' : 'private';
@@ -373,7 +375,9 @@ export class LarkEndpoint implements Endpoint<LarkEndpointConfig, LarkMessage> {
 
     async $sendMessage(options: SendOptions): Promise<string> {
         const chatId = options.id;
-        const content = this.formatSendContent(options.content);
+        const canonical = expandInteractiveSegmentsInContent(options.content);
+        const wire = fromCanonicalSegments(canonical);
+        const content = this.formatSendContent(wire);
         
         try {
             const response = await this.axiosInstance.post('/im/v1/messages', {
