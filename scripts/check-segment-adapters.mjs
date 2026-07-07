@@ -11,7 +11,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const adaptersDir = path.join(repoRoot, 'plugins/adapters');
 
 /** 必须含 segment-mapper + segment-contract.test.ts */
-const REQUIRED_ADAPTERS = new Set(['sandbox', 'icqq']);
+const REQUIRED_ADAPTERS = new Set(['sandbox', 'icqq', 'napcat', 'onebot11', 'qq']);
 
 /** 尚未迁移 segment-mapper 的 adapter（不报错） */
 const PENDING_ADAPTERS = new Set([
@@ -23,11 +23,8 @@ const PENDING_ADAPTERS = new Set([
   'lark',
   'line',
   'milky',
-  'napcat',
-  'onebot11',
   'onebot12',
   'process',
-  'qq',
   'satori',
   'slack',
   'telegram',

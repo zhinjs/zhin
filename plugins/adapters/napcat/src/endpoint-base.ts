@@ -17,6 +17,7 @@ import { parseOneBotGetMsgResponse } from './onebot-get-msg.js';
 import type { NapCatEndpointConfig, NapCatMessageEvent, MessageSegment, ApiResponse } from './types.js';
 import type { NapCatAdapter } from './adapter.js';
 import { InboundMessageDeduper, isSelfMessage, normalizeMessage, resolveSideEventDedupeKey } from './napcat-inbound.js';
+import { fromCanonicalSegments, toCanonicalSegments } from './segment-mapper.js';
 
 export abstract class NapCatEndpointBase extends EventEmitter implements Endpoint<NapCatEndpointConfig, NapCatMessageEvent> {
   $connected = false;
@@ -37,10 +38,18 @@ export abstract class NapCatEndpointBase extends EventEmitter implements Endpoin
   // 消息格式化
   // ══════════════════════════════════════════════════════════════════
 
+  private toWireSendContent(content: SendContent): MessageSegment[] {
+    const items = (Array.isArray(content) ? content : [content]).map((item) =>
+      typeof item === 'string' ? { type: 'text', data: { text: item } } : item as MessageSegment,
+    );
+    return fromCanonicalSegments(toCanonicalSegments(items));
+  }
+
   $formatMessage(ev: NapCatMessageEvent): Message<NapCatMessageEvent> {
-    const content = normalizeMessage(ev.message);
-    const quoteId = Message.quoteIdFromContent(content);
-    Message.alignReplySegments(content, quoteId);
+    const wire = normalizeMessage(ev.message);
+    const quoteId = Message.quoteIdFromContent(wire);
+    Message.alignReplySegments(wire, quoteId);
+    const content = toCanonicalSegments(wire);
 
     const message = Message.from(ev, {
       $id: ev.message_id.toString(),
@@ -76,7 +85,7 @@ export abstract class NapCatEndpointBase extends EventEmitter implements Endpoin
   }
 
   async $sendMessage(options: SendOptions): Promise<string> {
-    const content = expandInteractiveSegmentsInContent(options.content);
+    const content = this.toWireSendContent(expandInteractiveSegmentsInContent(options.content));
     const msg: any = { message: content };
     if (options.type === 'group') {
       const result = await this.callApi<{ message_id: number }>('send_group_msg', { group_id: parseInt(options.id), ...msg });

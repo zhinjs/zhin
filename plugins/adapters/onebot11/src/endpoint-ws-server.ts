@@ -5,8 +5,9 @@ import WebSocket, { WebSocketServer } from 'ws';
 import { EventEmitter } from 'events';
 import { clearInterval } from 'node:timers';
 import { IncomingMessage } from 'http';
-import { formatCompact, Endpoint, Message, Notice, Request, segment, SendOptions, expandInteractiveSegmentsInContent, type QuotedMessagePayload, applyQqSenderRoleToMessageSender,} from 'zhin.js';
+import { formatCompact, Endpoint, Message, Notice, Request, segment, SendContent, SendOptions, expandInteractiveSegmentsInContent, type QuotedMessagePayload, applyQqSenderRoleToMessageSender, type MessageElement,} from 'zhin.js';
 import { parseOneBotGetMsgResponse } from './onebot-get-msg.js';
+import { fromCanonicalSegments, toCanonicalSegments } from './segment-mapper.js';
 import type { Router } from '@zhin.js/host-router';
 import type {
   OneBot11WsServerConfig,
@@ -105,15 +106,23 @@ export class OneBot11WsServer extends EventEmitter implements Endpoint<OneBot11W
     }
   }
 
+  private toWireSendContent(content: SendContent): MessageElement[] {
+    const items = (Array.isArray(content) ? content : [content]).map((item) =>
+      typeof item === 'string' ? { type: 'text', data: { text: item } } : item as MessageElement,
+    );
+    return fromCanonicalSegments(toCanonicalSegments(items as never));
+  }
+
   $formatMessage(onebotMsg: OneBot11Message) {
     const msgId = [onebotMsg.self_id, onebotMsg.message_id].join(':');
     const channel = {
       id: [onebotMsg.self_id, (onebotMsg.group_id || onebotMsg.user_id)].join(':'),
       type: (onebotMsg.group_id ? 'group' : 'private') as 'group' | 'private',
     };
-    const content = Array.isArray(onebotMsg.message) ? [...onebotMsg.message] : [];
-    const quoteId = Message.quoteIdFromContent(content);
-    Message.alignReplySegments(content, quoteId);
+    const wire = Array.isArray(onebotMsg.message) ? [...onebotMsg.message] : [];
+    const quoteId = Message.quoteIdFromContent(wire);
+    Message.alignReplySegments(wire, quoteId);
+    const content = toCanonicalSegments(wire as never);
 
     const message = Message.from(onebotMsg, {
       $id: msgId,
@@ -148,7 +157,7 @@ export class OneBot11WsServer extends EventEmitter implements Endpoint<OneBot11W
   }
 
   async $sendMessage(options: SendOptions): Promise<string> {
-    const content = expandInteractiveSegmentsInContent(options.content);
+    const content = this.toWireSendContent(expandInteractiveSegmentsInContent(options.content));
     const messageData: any = { message: content };
     if (options.type === 'group') {
       const [self_id, id] = options.id.split(':');
