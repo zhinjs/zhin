@@ -1,7 +1,9 @@
 import type { Segment } from './types.js';
 import { canonicalSegmentSchema } from './schema.js';
 
-const STRICT_CANONICAL_TYPES = new Set(['text', 'mention', 'image', 'reply', 'forward']);
+const STRICT_CANONICAL_TYPES = new Set([
+  'text', 'mention', 'image', 'reply', 'forward', 'face', 'dice', 'rps',
+]);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

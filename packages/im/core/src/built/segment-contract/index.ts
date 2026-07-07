@@ -7,6 +7,9 @@ export type {
   ImageSegment,
   ReplySegment,
   ForwardSegment,
+  FaceSegment,
+  DiceSegment,
+  RpsSegment,
   MessageSegment,
 } from './types.js';
 export {
@@ -16,6 +19,9 @@ export {
   imageSegmentSchema,
   replySegmentSchema,
   forwardSegmentSchema,
+  faceSegmentSchema,
+  diceSegmentSchema,
+  rpsSegmentSchema,
   canonicalSegmentSchema,
   segmentArraySchema,
 } from './schema.js';

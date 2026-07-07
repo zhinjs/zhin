@@ -45,13 +45,31 @@ export interface ForwardSegment extends SegmentBase {
   };
 }
 
-/** 规范态 segment（严格校验 text / mention / image / reply / forward） */
+export interface FaceSegment extends SegmentBase {
+  type: 'face';
+  data: { id: string | number; name?: string };
+}
+
+export interface DiceSegment extends SegmentBase {
+  type: 'dice';
+  data: { result?: number };
+}
+
+export interface RpsSegment extends SegmentBase {
+  type: 'rps';
+  data: { result?: number };
+}
+
+/** 规范态 segment（严格校验 text / mention / image / reply / forward / face / dice / rps） */
 export type Segment =
   | TextSegment
   | MentionSegment
   | ImageSegment
   | ReplySegment
   | ForwardSegment
+  | FaceSegment
+  | DiceSegment
+  | RpsSegment
   | SegmentBase;
 
 /** @deprecated 使用 Segment；保留别名供 Console / adapter 渐进迁移 */
