@@ -1,5 +1,7 @@
 # Rich Segment 适配器矩阵
 
+Canonical 存储形状见 [Segment 内容模型](../architecture/segment-content-model.md)（`markdown` / `html` / `qrcode` / `tts` 保留原 type；出站 rich render 不改写 SSOT）。
+
 Rich Segment 在 **Adapter.renderSendMessage** 首步由 `resolveRichSegments` 渲染为标准 IM 段；Endpoint 可选 **materializeOutboundMedia** 将 base64/本地文件转为平台 URL。
 
 Install tiers：[Rich media](/getting-started/#install-tierszhinjs-4x)（`@zhin.js/html-renderer`）、[Speech](/getting-started/#install-tierszhinjs-4x)（`@zhin.js/speech`）。

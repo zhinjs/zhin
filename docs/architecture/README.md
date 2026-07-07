@@ -9,6 +9,7 @@
 | 文档 | 说明 |
 |------|------|
 | [架构概览](../architecture-overview.md) | 分层（basic → kernel → ai → core → agent → zhin）、消息流程图 |
+| [Segment 内容模型](segment-content-model.md) | **SSOT**：`Segment[]` 形状、MediaRef、IM 可见性、AI 出站 JSON |
 | [ADR 0019 — 安装体积分层](../adr/0019-install-size-layering.md) | zhin.js 4.x：IM <10MB、agent/provider optional peer |
 | [ADR 0009 — agentLoop 统一栈](../adr/0009-pi-aligned-ai-agent-core.md) | Context + stream + agentLoop 迁移与完成定义 |
 | [仓库结构](../contributing/repo-structure.md) | pnpm workspace、`src→lib` / `client→dist` |
