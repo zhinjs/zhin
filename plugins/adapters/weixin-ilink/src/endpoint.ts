@@ -10,8 +10,10 @@ import {
   type MessageSegment,
   type SendContent,
   type SendOptions,
-  segment,} from 'zhin.js';
+  segment,
+  expandInteractiveSegmentsInContent,} from 'zhin.js';
 import { getUpdates, notifyStart, notifyStop, sendTyping } from "./ilink-api.js";
+import { fromCanonicalSegments, toCanonicalSegments } from './segment-mapper.js';
 import {
   configureIlinkMeta,
   DEFAULT_API_BASE_URL,
@@ -194,9 +196,10 @@ export class WeixinIlinkEndpoint implements Endpoint<WeixinIlinkEndpointConfig, 
 
   $formatMessage(msg: WeixinMessageWithMedia): Message<WeixinMessage> {
     const userId = msg.from_user_id ?? "";
-    const content = this.buildInboundContent(msg);
-    const quoteId = Message.quoteIdFromContent(content);
-    Message.alignReplySegments(content, quoteId);
+    const wire = this.buildInboundContent(msg);
+    const quoteId = Message.quoteIdFromContent(wire);
+    Message.alignReplySegments(wire, quoteId);
+    const content = toCanonicalSegments(wire);
     const msgId = String(msg.message_id ?? msg.client_id ?? msg.seq ?? Date.now());
 
     return Message.from(msg, {
@@ -271,7 +274,13 @@ export class WeixinIlinkEndpoint implements Endpoint<WeixinIlinkEndpointConfig, 
     };
 
     const outboundDir = path.join(resolveStateDir(), "media", "outbound");
-    const materialized = await materializeOutboundMedia(options.content, outboundDir);
+    const canonical = expandInteractiveSegmentsInContent(options.content);
+    const wire = fromCanonicalSegments(
+      (Array.isArray(canonical) ? canonical : [canonical]).map((s) =>
+        typeof s === 'string' ? { type: 'text' as const, data: { text: s } } : s,
+      ),
+    );
+    const materialized = await materializeOutboundMedia(wire, outboundDir);
     const segments = Array.isArray(materialized) ? materialized : [materialized];
     let lastId = "";
     let pendingText = "";

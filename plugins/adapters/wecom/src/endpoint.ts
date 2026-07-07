@@ -1,7 +1,7 @@
 /**
  * 企业微信 Endpoint 实现
  */
-import { formatCompact, Endpoint, Message, MessageSegment, segment, type SendContent, type SendOptions,} from 'zhin.js';
+import { formatCompact, Endpoint, Message, MessageSegment, segment, type SendContent, type SendOptions, expandInteractiveSegmentsInContent,} from 'zhin.js';
 import { registerFetchRoute, type Router, type RouterContext } from '@zhin.js/host-router/router';
 import { createHash, createDecipheriv } from 'node:crypto';
 import type {
@@ -12,6 +12,7 @@ import type {
 } from './types.js';
 import type { WecomAdapter } from './adapter.js';
 import { normalizeWecomSenderForPermit } from './platform-permit.js';
+import { fromCanonicalSegments, toCanonicalSegments } from './segment-mapper.js';
 
 export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage> {
   $connected: boolean;
@@ -336,7 +337,8 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
   // ── $formatMessage ──
 
   $formatMessage(msg: WecomMessage): Message<WecomMessage> {
-    const content = this.parseMessageContent(msg);
+    const wire = this.parseMessageContent(msg);
+    const content = toCanonicalSegments(wire);
     // 企业微信中群消息与私聊消息的判断:
     // 群消息 FromUserName 以 @chatroom 结尾
     const chatType = msg.FromUserName.endsWith('@chatroom') ? 'group' : 'private';
@@ -446,7 +448,9 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
 
   async $sendMessage(options: SendOptions): Promise<string> {
     const targetId = options.id;
-    const content = this.formatSendContent(options.content);
+    const canonical = expandInteractiveSegmentsInContent(options.content);
+    const wire = fromCanonicalSegments(canonical);
+    const content = this.formatSendContent(wire);
     try {
       const body: Record<string, unknown> = {
         touser: targetId,

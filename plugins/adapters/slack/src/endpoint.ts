@@ -3,10 +3,11 @@
  */
 import { App as SlackApp, LogLevel } from "@slack/bolt";
 import { WebClient, type ChatPostMessageArguments } from "@slack/web-api";
-import { formatCompact, Endpoint, Message, MessageSegment, segment, SendContent, SendOptions,} from 'zhin.js';
+import { formatCompact, Endpoint, Message, MessageSegment, segment, SendContent, SendOptions, expandInteractiveSegmentsInContent,} from 'zhin.js';
 import type { SlackEndpointConfig, SlackMessageEvent } from "./types.js";
 import type { SlackAdapter } from "./adapter.js";
 import { normalizeSlackSenderForPermit } from "./platform-permit.js";
+import { fromCanonicalSegments, toCanonicalSegments } from './segment-mapper.js';
 
 
 export class SlackEndpoint implements Endpoint<SlackEndpointConfig, SlackMessageEvent> {
@@ -165,7 +166,8 @@ export class SlackEndpoint implements Endpoint<SlackEndpointConfig, SlackMessage
     const channelId = msg.channel;
 
     // Parse message content
-    const content = this.parseMessageContent(msg);
+    const wire = this.parseMessageContent(msg);
+    const content = toCanonicalSegments(wire);
 
     // Extract user info safely
     const userId = ("user" in msg ? msg.user : "") || "";
@@ -405,9 +407,11 @@ export class SlackEndpoint implements Endpoint<SlackEndpointConfig, SlackMessage
 
   async $sendMessage(options: SendOptions): Promise<string> {
     try {
+      const canonical = expandInteractiveSegmentsInContent(options.content);
+      const wire = fromCanonicalSegments(canonical);
       const result = await this.sendContentToChannel(
         options.id,
-        options.content
+        wire
       );
       this.logger.debug(
         `${this.$config.name} send ${options.type}(${options.id}): ${segment.raw(options.content)}`

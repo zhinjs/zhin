@@ -364,6 +364,8 @@ export {
 } from './media/index.js';
 export type { MediaBinaryPayload, MultimodalConfig, OutboundMediaCapabilities } from './media/index.js';
 
+export { filterImDeliveryContent } from './segment/filter-im-delivery.js';
+
 export {
   loadMemoryLayers,
   buildMemoryPrompt,

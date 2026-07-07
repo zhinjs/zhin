@@ -1,7 +1,7 @@
 import { useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
 
 export interface MessageSegment {
-    type: 'text' | 'at' | 'face' | 'image' | 'video' | 'audio' | 'record' | 'file'
+    type: 'text' | 'mention' | 'at' | 'face' | 'image' | 'video' | 'audio' | 'record' | 'file'
     data: Record<string, any>
 }
 
@@ -69,7 +69,10 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
                         const name = el.dataset.name
                         const id = el.dataset.id
                         text += `[@${name}]`
-                        segments.push({ type: 'at', data: { name, qq: id } })
+                        segments.push({
+                            type: 'mention',
+                            data: id ? { target: id, name } : { target: name, name },
+                        })
                     } else if (el.tagName === 'BR') {
                         text += '\n'
                     }

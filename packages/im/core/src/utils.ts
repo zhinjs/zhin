@@ -38,6 +38,7 @@ import { TtsSegment } from "./built/rich-segments/tts-segment.js";
 import { KeyboardSegment } from "./built/interactive-segments/keyboard-segment.js";
 import { ButtonSpec, normalizeKeyboardRows, type KeyboardRowInput } from "./built/interactive-segments/button-spec.js";
 import type { ButtonData, KeyboardFallback, KeyboardSegmentData } from "./built/interactive-segments/types.js";
+import type { MediaRef } from "./built/segment-contract/types.js";
 
 /**
  * 组合中间件,洋葱模型
@@ -100,6 +101,12 @@ export namespace segment {
   }
   export function text(text: string) {
     return segment("text", { text });
+  }
+  export function mention(target: string, name?: string) {
+    return segment("mention", name ? { target, name } : { target });
+  }
+  export function image(media: MediaRef, alt?: string) {
+    return segment("image", alt ? { media, alt } : { media });
   }
   export function face(id: string, text?: string) {
     return segment("face", { id, text });

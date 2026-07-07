@@ -131,6 +131,11 @@ const checks = [
     command: 'pnpm check:interactive-segments',
     description: '各 adapter 声明 interactivePolicy 与契约测试',
   },
+  {
+    name: 'Segment Adapters',
+    command: 'pnpm check:segments',
+    description: '各 adapter segment-mapper 契约（sandbox 必须达标）',
+  },
 ];
 
 console.log('Running all harness checks...\n');

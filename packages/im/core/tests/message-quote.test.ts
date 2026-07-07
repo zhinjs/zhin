@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Message } from '../src/message.js';
-import { quoteIdFromContent, quoteIdFromRaw, syncQuoteId } from '../src/message-quote.js';
+import { quoteIdFromContent, quoteIdFromRaw, syncQuoteId, alignReplySegments } from '../src/message-quote.js';
 import {
   buildUserTurnWithQuoteContext,
   CURRENT_USER_MESSAGE_MARKER,
@@ -61,7 +61,7 @@ describe('Message.quote helpers', () => {
         $id: '1',
         $adapter: 'icqq',
         $endpoint: 'b',
-        $content: [{ type: 'reply', data: { id: 'q1' } }],
+        $content: [{ type: 'reply', data: { message_id: 'q1' } }],
         $sender: { id: 'u' },
         $reply: async () => '1',
         $recall: async () => {},
@@ -72,6 +72,12 @@ describe('Message.quote helpers', () => {
     );
     Message.syncQuoteId(msg);
     expect(msg.$quote_id).toBe('q1');
+  });
+
+  it('alignReplySegments writes message_id only', () => {
+    const content = [{ type: 'reply', data: { id: 'old' } }, { type: 'text', data: { text: 'x' } }] as import('../src/types.js').MessageElement[];
+    alignReplySegments(content, 'new-id');
+    expect(content[0]).toEqual({ type: 'reply', data: { message_id: 'new-id' } });
   });
 });
 

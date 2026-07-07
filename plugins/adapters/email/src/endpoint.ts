@@ -4,13 +4,14 @@
 import nodemailer from "nodemailer";
 import Imap from "imap";
 import { simpleParser, type ParsedMail, type Attachment } from "mailparser";
-import { formatCompact, Endpoint, Message, MessageSegment, segment, SendContent, SendOptions, htmlToPlainTextWithBlockBreaks,
+import { formatCompact, Endpoint, Message, MessageSegment, segment, SendContent, SendOptions, htmlToPlainTextWithBlockBreaks, expandInteractiveSegmentsInContent,
 } from 'zhin.js';
 import { EventEmitter } from "events";
 import { createWriteStream, promises as fs } from "fs";
 import path from "path";
 import type { EmailEndpointConfig, EmailMessage } from "./types.js";
 import type { EmailAdapter } from "./adapter.js";
+import { fromCanonicalSegments, toCanonicalSegments } from './segment-mapper.js';
 
 export class EmailEndpoint extends EventEmitter implements Endpoint<EmailEndpointConfig, EmailMessage> {
     $config: EmailEndpointConfig;
@@ -231,7 +232,8 @@ export class EmailEndpoint extends EventEmitter implements Endpoint<EmailEndpoin
         const channelId = emailMsg.from;
 
         // 解析邮件内容
-        const content = EmailEndpoint.parseEmailContent(emailMsg);
+        const wire = EmailEndpoint.parseEmailContent(emailMsg);
+        const content = toCanonicalSegments(wire);
 
         const result = Message.from(emailMsg, {
             $id: emailMsg.messageId,
@@ -312,7 +314,9 @@ export class EmailEndpoint extends EventEmitter implements Endpoint<EmailEndpoin
         }
 
         try {
-            const mailOptions = await this.formatSendContent(options);
+            const canonical = expandInteractiveSegmentsInContent(options.content);
+            const wire = fromCanonicalSegments(canonical);
+            const mailOptions = await this.formatSendContent({ ...options, content: wire });
             const info = await this.smtpTransporter.sendMail(mailOptions);
             this.logger.debug('Email sent:', info.messageId);
             return info.messageId || '';

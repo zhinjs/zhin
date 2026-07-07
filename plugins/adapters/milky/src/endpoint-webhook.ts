@@ -2,7 +2,7 @@
  * Milky Webhook Bot：无长连接，在 router.post(path) 接收 POST 事件，鉴权后转 Message
  */
 import { EventEmitter } from 'events';
-import { formatCompact, Endpoint, Message, segment, SendOptions,} from 'zhin.js';
+import { formatCompact, Endpoint, Message, segment, SendOptions, expandInteractiveSegmentsInContent,} from 'zhin.js';
 import { firstHeader, firstQuery, registerFetchRoute, type Router, type RouterContext } from '@zhin.js/host-router/router';
 import { callApi } from './api.js';
 import type { MilkyWebhookConfig, MilkyEvent } from './types.js';
@@ -13,6 +13,7 @@ import {
   toMilkyOutgoingSegments,
   parseMilkyMessageId,
 } from './utils.js';
+import { fromCanonicalSegments } from './segment-mapper.js';
 
 function getAccessTokenFromRequest(ctx: RouterContext): string | undefined {
   const auth = firstHeader(ctx, 'authorization');
@@ -116,11 +117,12 @@ export class MilkyWebhookEndpoint extends EventEmitter implements Endpoint<Milky
   }
 
   async $sendMessage(options: SendOptions): Promise<string> {
-    const content = Array.isArray(options.content) ? options.content : [options.content];
-    const segments = content.map((c) =>
-      typeof c === 'string' ? { type: 'text' as const, data: { text: c } } : (c as { type: string; data?: Record<string, unknown> }),
+    const expanded = expandInteractiveSegmentsInContent(options.content);
+    const arr = Array.isArray(expanded) ? expanded : [expanded];
+    const wire = fromCanonicalSegments(
+      arr.map((c) => (typeof c === 'string' ? { type: 'text' as const, data: { text: c } } : c)),
     );
-    const message = toMilkyOutgoingSegments(segments);
+    const message = toMilkyOutgoingSegments(wire);
     if (options.type === 'group') {
       const result = await callApi(this.apiOptions(), 'send_group_message', {
         group_id: parseInt(options.id, 10),

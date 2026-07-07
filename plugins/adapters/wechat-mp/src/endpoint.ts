@@ -17,6 +17,7 @@ import {
     hasOutbound,
     runInboundMessage,
     truncatePreview,
+    expandInteractiveSegmentsInContent,
     type MessageBase,} from 'zhin.js';
 import { registerFetchRoute, type Router, type RouterContext } from "@zhin.js/host-router/router";
 import type { WeChatMPConfig, WeChatMessage, WeChatAPIResponse, TokenResponse } from "./types.js";
@@ -26,6 +27,7 @@ import {
     recordPassiveReplyText,
     runWithPassiveReplyCapture,
 } from "./passive-reply.js";
+import { fromCanonicalSegments, toCanonicalSegments } from './segment-mapper.js';
 
 function queryParam(value: unknown): string {
     if (typeof value === "string") return value;
@@ -342,7 +344,8 @@ export class WeChatMPEndpoint extends EventEmitter implements Endpoint<WeChatMPC
         const channelId = wechatMsg.FromUserName;
         
         // 解析消息内容
-        const content = WeChatMPEndpoint.parseMessageContent(wechatMsg);
+        const wire = WeChatMPEndpoint.parseMessageContent(wechatMsg);
+        const content = toCanonicalSegments(wire);
         
         const base: MessageBase = {
             $id: wechatMsg.MsgId || `${wechatMsg.CreateTime}`,
@@ -444,15 +447,22 @@ export class WeChatMPEndpoint extends EventEmitter implements Endpoint<WeChatMPC
     }
 
     async $sendMessage(options: SendOptions): Promise<string> {
+        const canonical = expandInteractiveSegmentsInContent(options.content);
+        const wire = fromCanonicalSegments(
+            (Array.isArray(canonical) ? canonical : [canonical]).map((s) =>
+                typeof s === 'string' ? { type: 'text' as const, data: { text: s } } : s,
+            ),
+        );
+        const outbound = { ...options, content: wire };
         if (getPassiveReplyCapture()) {
-            const text = this.extractSendText(options);
+            const text = this.extractSendText(outbound);
             recordPassiveReplyText(text);
             return `passive_${Date.now()}`;
         }
 
         if (!this.usesPassiveReply()) {
             try {
-                return await this.sendCustomerServiceMessage(options);
+                return await this.sendCustomerServiceMessage(outbound);
             } catch (error) {
                 this.logger.error("Failed to send WeChat message:", error);
                 throw error;

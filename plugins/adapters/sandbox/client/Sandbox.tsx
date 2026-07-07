@@ -128,7 +128,7 @@ export default function Sandbox() {
                 const t = text.substring(lastIndex, match.index)
                 if (t) segments.push({ type: 'text', data: { text: t } })
             }
-            if (match[1]) segments.push({ type: 'at', data: { qq: match[1], name: match[1] } })
+            if (match[1]) segments.push({ type: 'mention', data: { target: match[1], name: match[1] } })
             else if (match[2]) segments.push({ type: 'face', data: { id: parseInt(match[2], 10) } })
             else if (match[3]) segments.push({ type: 'image', data: { url: match[3] } })
             else if (match[4]) segments.push({ type: 'video', data: { url: match[4] } })
@@ -161,10 +161,15 @@ export default function Sandbox() {
             switch (segment.type) {
                 case 'text':
                     return <span key={index}>{String(d.text ?? '').split('\n').map((part: string, i: number) => <React.Fragment key={i}>{part}{i < String(d.text ?? '').split('\n').length - 1 && <br />}</React.Fragment>)}</span>
+                case 'mention':
                 case 'at':
-                    return <span key={index} className="inline-flex items-center px-1.5 py-0.5 rounded bg-accent text-accent-foreground text-xs mx-0.5">@{String(d.name ?? d.qq ?? '')}</span>
+                    return <span key={index} className="inline-flex items-center px-1.5 py-0.5 rounded bg-accent text-accent-foreground text-xs mx-0.5">@{String(d.name ?? d.target ?? d.qq ?? '')}</span>
                 case 'face':
-                    return <img key={index} src={`https://face.viki.moe/apng/${d.id}.png`} alt="" className="w-6 h-6 inline-block align-middle mx-0.5" />
+                    return <img key={index} src={`https://face.viki.moe/apng/${d.id}.png`} alt={String(d.name ?? '')} className="w-6 h-6 inline-block align-middle mx-0.5" title={String(d.name ?? d.id ?? '')} />
+                case 'dice':
+                    return <span key={index} className="inline-flex items-center px-1.5 py-0.5 rounded bg-secondary text-xs mx-0.5">🎲 {d.result != null ? `点数 ${String(d.result)}` : '骰子'}</span>
+                case 'rps':
+                    return <span key={index} className="inline-flex items-center px-1.5 py-0.5 rounded bg-secondary text-xs mx-0.5">✊ {d.result != null ? `结果 ${String(d.result)}` : '猜拳'}</span>
                 case 'image': {
                     const raw = pickMediaRawUrl(d)
                     const src = resolveMediaSrc(raw, 'image')
@@ -205,8 +210,37 @@ export default function Sandbox() {
                         />
                     )
                 }
-                case 'file':
-                    return <span key={index} className="inline-flex items-center px-1.5 py-0.5 rounded border text-xs mx-0.5">📎 {String(d.name || '文件')}</span>
+                case 'reply':
+                    return (
+                        <div key={index} className="mb-1 rounded-md border border-dashed px-2 py-1 text-xs opacity-90">
+                            ↩ 引用消息 #{String(d.message_id ?? d.id ?? '')}
+                        </div>
+                    )
+                case 'forward': {
+                    const messages = d.messages as Array<Array<{ type?: string; data?: Record<string, unknown> }>> | undefined
+                    const title = String(d.title ?? '聊天记录')
+                    return (
+                        <div key={index} className="my-1 rounded-md border bg-background/40 px-2 py-2 text-xs space-y-1">
+                            <div className="font-medium">📨 {title}</div>
+                            {Array.isArray(messages) && messages.length > 0 ? (
+                                <div className="space-y-1 pl-2 border-l-2 border-muted">
+                                    {messages.slice(0, 3).map((batch, bi) => (
+                                        <div key={bi} className="opacity-90">
+                                            {batch.map((s, si) => (
+                                                <span key={si}>
+                                                    {s.type === 'text' ? String(s.data?.text ?? '') : `[${s.type ?? 'seg'}]`}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    ))}
+                                    {messages.length > 3 && <div className="opacity-60">…共 {messages.length} 条</div>}
+                                </div>
+                            ) : (
+                                <div className="opacity-70">[合并转发]</div>
+                            )}
+                        </div>
+                    )
+                }
                 case 'keyboard': {
                     const rows = (d.rows as Array<Array<{ label: string; payload: string; disabled?: boolean }>>) ?? []
                     return (

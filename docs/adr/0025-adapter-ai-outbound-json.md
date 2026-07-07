@@ -19,6 +19,8 @@ Accepted
 | Core `ZhinAiOutboundPayload` | `text` / `mentions` / `segments` / `extensions` — 平台无关 |
 | Adapter `extensions` | 对齐各 SDK 文档子集（如 `onebot.keyboard`、`qq.markdown`） |
 
+`segments` 数组元素与 IM **`Segment[]` 同形**（`{ type, data, platform? }`），见 [Segment 内容模型 SSOT](../architecture/segment-content-model.md)。**废弃** `{ kind, mode, data }` DSL。
+
 **禁止**让 AI 直接输出平台原生 segment 数组；Adapter 负责 `extensions` → `MessageElement[]`。
 
 ### D2. structured_only 生效范围

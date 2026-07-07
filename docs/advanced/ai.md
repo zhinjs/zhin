@@ -1090,18 +1090,11 @@ agent.processMultimodal(
 
 未安装 `@zhin.js/speech` 且 strategy 为 `transcribe` 时降级为占位文本（warn once）。配置见 [configuration — 语音](/essentials/configuration#语音-stt-tts-zhinjsspeech-optional-peer) 与 [ADR 0020](/adr/0020-speech-pipeline-stt-tts)。
 
-### 输入：MessageElement 约定
+### 输入：Segment 约定（SSOT）
 
-多模态输入依赖 `message.$content`（`MessageElement[]`）中 **MessageSegment** 的 `type` 与 `data` 约定。适配器在构造 `$content` 时需使用下表约定的段类型与字段，AI 触发器才能正确提取并转为 `ContentPart`：
+多模态输入依赖 `message.$content`（`MessageElement[]`）中的 canonical **`Segment[]`**。段类型、`MediaRef`、legacy 映射与 IM 可见性见 **[Segment 内容模型](../architecture/segment-content-model.md)**（唯一权威表）。
 
-| 消息段 type | 说明 | data 常用字段 |
-|---|---|---|
-| `image` | 图片 | `url`、`file` 或 `src`（任一带有效值即可） |
-| `video` | 视频 | `url`、`file` 或 `src` |
-| `audio`、`record`、`voice` | 音频/语音 | base64 内容：`data` 或 `base64`；格式：`format`（`wav`/`mp3`）。若仅有 `url`，会退化为文本描述传给模型 |
-| `face`、`sticker`、`emoji` | 表情/贴纸 | `id` 或 `face_id`；可选 `text`、`name`、`describe` |
-
-仅当 `$content` 元素为 `MessageSegment`（`{ type: string, data: Record<string, any> }`）且 `type` 匹配上表时会被提取；`MessageComponent` 或其它 type 会被安全跳过。
+仅当 `$content` 元素为 `MessageSegment`（`{ type, data, platform? }`）且 `type` 为 SSOT 所列 IM 可见类型时会被提取并转为 `ContentPart`；`MessageComponent` 或其它 type 会被安全跳过。
 
 ### 输出回传
 

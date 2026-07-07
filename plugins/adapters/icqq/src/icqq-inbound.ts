@@ -3,6 +3,7 @@
  */
 import { Message, type MessageSegment, type QuotedMessagePayload } from "zhin.js";
 import { parseCqMessage } from "./cq-message.js";
+import { toCanonicalSegments } from "./segment-mapper.js";
 import { extractForwardResidFromJsonElement } from "./forward-msg.js";
 import type { GroupRole } from "./types.js";
 
@@ -586,7 +587,7 @@ function mergeReplyFromRawMessage(
   const quoteFromRaw = Message.quoteIdFromContent(fromRaw);
   if (!quoteFromRaw) return content;
   return [
-    { type: "reply", data: { id: quoteFromRaw, message_id: quoteFromRaw } },
+    { type: "reply", data: { message_id: quoteFromRaw } },
     ...content.filter((s) => s.type !== "reply"),
   ];
 }
@@ -601,7 +602,7 @@ function mergeReplyFromSource(
     resolveQuoteIdFromIcqqSource(findIcqqNestedMessageSource(data));
   if (!quoteId) return content;
   return [
-    { type: "reply", data: { id: quoteId, message_id: quoteId } },
+    { type: "reply", data: { message_id: quoteId } },
     ...content.filter((s) => s.type !== "reply"),
   ];
 }
@@ -619,7 +620,7 @@ export function resolveInboundContent(
   } else {
     content = [{ type: "text", data: { text: "" } }];
   }
-  return mergeReplyFromSource(content, data);
+  return toCanonicalSegments(mergeReplyFromSource(content, data));
 }
 
 export function normalizeIcqqInboundMessage(
