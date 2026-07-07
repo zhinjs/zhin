@@ -33,6 +33,7 @@ import { registerInitWizardGuardrail } from './init/register-init-wizard-guardra
 import { registerBuiltinTools } from './init/register-builtin-tools.js';
 import { registerHomeTools } from './init/register-home-tools.js';
 import { registerTypingIndicator } from './init/register-typing-indicator.js';
+import { registerImSegmentFilter } from './init/register-im-segment-filter.js';
 import { registerAgentMeshMcp } from './init/register-agent-mesh-mcp.js';
 
 /**
@@ -66,4 +67,5 @@ export function initAgentModule(): void {
   registerBuiltinTools(refs);
   registerHomeTools();
   registerTypingIndicator(refs);
+  registerImSegmentFilter();
 }
