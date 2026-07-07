@@ -23,10 +23,20 @@ export const mentionSegmentSchema = z.object({
   platform: z.record(z.string(), z.unknown()).optional(),
 });
 
+export const imageSegmentSchema = z.object({
+  type: z.literal('image'),
+  data: z.object({
+    media: mediaRefSchema,
+    alt: z.string().optional(),
+  }),
+  platform: z.record(z.string(), z.unknown()).optional(),
+});
+
 /** 当前已严格校验的 canonical 段（其余 type 由 assert 宽松接受） */
 export const canonicalSegmentSchema = z.discriminatedUnion('type', [
   textSegmentSchema,
   mentionSegmentSchema,
+  imageSegmentSchema,
 ]);
 
 export const segmentArraySchema = z.array(canonicalSegmentSchema);

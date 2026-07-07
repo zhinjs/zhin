@@ -26,8 +26,19 @@ describe('segment-contract schema', () => {
     expect(isCanonicalSegment(seg)).toBe(false);
   });
 
-  it('loosely accepts non-strict types with valid shape', () => {
-    const seg = { type: 'image', data: { url: 'https://cdn.example/a.jpg' } };
+  it('rejects image without media', () => {
+    const seg = { type: 'image', data: { url: 'https://x/y.jpg' } };
+    expect(isCanonicalSegment(seg)).toBe(false);
+  });
+
+  it('accepts image segment with MediaRef', () => {
+    const seg = {
+      type: 'image',
+      data: {
+        media: { kind: 'url', value: 'https://cdn.example/a.jpg', mime_type: 'image/jpeg' },
+        alt: 'pic',
+      },
+    };
     expect(isCanonicalSegment(seg)).toBe(true);
   });
 });
@@ -82,7 +93,7 @@ describe('segmentsForImDelivery', () => {
     const cases: Array<{ type: string; data: Record<string, unknown> }> = [
       { type: 'text', data: { text: 'x' } },
       { type: 'mention', data: { target: 'all' } },
-      { type: 'image', data: { url: 'https://x/y.jpg' } },
+      { type: 'image', data: { media: { kind: 'url', value: 'https://x/y.jpg' } } },
       { type: 'markdown', data: { content: '# hi' } },
       { type: 'keyboard', data: { rows: [] } },
     ];
