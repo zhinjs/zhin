@@ -165,7 +165,11 @@ export default function Sandbox() {
                 case 'at':
                     return <span key={index} className="inline-flex items-center px-1.5 py-0.5 rounded bg-accent text-accent-foreground text-xs mx-0.5">@{String(d.name ?? d.target ?? d.qq ?? '')}</span>
                 case 'face':
-                    return <img key={index} src={`https://face.viki.moe/apng/${d.id}.png`} alt="" className="w-6 h-6 inline-block align-middle mx-0.5" />
+                    return <img key={index} src={`https://face.viki.moe/apng/${d.id}.png`} alt={String(d.name ?? '')} className="w-6 h-6 inline-block align-middle mx-0.5" title={String(d.name ?? d.id ?? '')} />
+                case 'dice':
+                    return <span key={index} className="inline-flex items-center px-1.5 py-0.5 rounded bg-secondary text-xs mx-0.5">🎲 {d.result != null ? `点数 ${String(d.result)}` : '骰子'}</span>
+                case 'rps':
+                    return <span key={index} className="inline-flex items-center px-1.5 py-0.5 rounded bg-secondary text-xs mx-0.5">✊ {d.result != null ? `结果 ${String(d.result)}` : '猜拳'}</span>
                 case 'image': {
                     const raw = pickMediaRawUrl(d)
                     const src = resolveMediaSrc(raw, 'image')

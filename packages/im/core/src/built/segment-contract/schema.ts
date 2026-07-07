@@ -50,6 +50,31 @@ export const forwardSegmentSchema = z.object({
   platform: z.record(z.string(), z.unknown()).optional(),
 });
 
+export const faceSegmentSchema = z.object({
+  type: z.literal('face'),
+  data: z.object({
+    id: z.union([z.string(), z.number()]),
+    name: z.string().optional(),
+  }),
+  platform: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const diceSegmentSchema = z.object({
+  type: z.literal('dice'),
+  data: z.object({
+    result: z.number().optional(),
+  }),
+  platform: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const rpsSegmentSchema = z.object({
+  type: z.literal('rps'),
+  data: z.object({
+    result: z.number().optional(),
+  }),
+  platform: z.record(z.string(), z.unknown()).optional(),
+});
+
 /** 当前已严格校验的 canonical 段（其余 type 由 assert 宽松接受） */
 export const canonicalSegmentSchema = z.discriminatedUnion('type', [
   textSegmentSchema,
@@ -57,6 +82,9 @@ export const canonicalSegmentSchema = z.discriminatedUnion('type', [
   imageSegmentSchema,
   replySegmentSchema,
   forwardSegmentSchema,
+  faceSegmentSchema,
+  diceSegmentSchema,
+  rpsSegmentSchema,
 ]);
 
 export const segmentArraySchema = z.array(canonicalSegmentSchema);

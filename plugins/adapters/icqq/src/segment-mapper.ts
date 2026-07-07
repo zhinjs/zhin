@@ -83,11 +83,45 @@ function normalizeForward(seg: MessageSegment): Segment {
   };
 }
 
+function normalizeFace(seg: MessageSegment): Segment {
+  const data = seg.data as Record<string, unknown>;
+  const id = data.id ?? data.face_id;
+  if (id == null || id === '') return seg as Segment;
+  const name =
+    typeof data.name === 'string' && data.name
+      ? data.name
+      : typeof data.text === 'string' && data.text
+        ? data.text
+        : undefined;
+  return {
+    type: 'face',
+    data: {
+      id: typeof id === 'number' ? id : String(id),
+      ...(name ? { name } : {}),
+    },
+    ...(seg.platform ? { platform: seg.platform } : {}),
+  };
+}
+
+function normalizeGame(seg: MessageSegment, type: 'dice' | 'rps'): Segment {
+  const data = seg.data as Record<string, unknown>;
+  const result = typeof data.result === 'number' ? data.result : undefined;
+  return {
+    type,
+    data: result != null ? { result } : {},
+    ...(seg.platform ? { platform: seg.platform } : {}),
+  };
+}
+
 function normalizeSegment(seg: MessageSegment): Segment {
   if (seg.type === 'at' || seg.type === 'mention') return normalizeMention(seg);
   if (seg.type === 'image') return normalizeImage(seg);
   if (seg.type === 'reply') return normalizeReply(seg);
   if (seg.type === 'forward') return normalizeForward(seg);
+  if (seg.type === 'face' || seg.type === 'sticker' || seg.type === 'emoji') {
+    return normalizeFace(seg);
+  }
+  if (seg.type === 'dice' || seg.type === 'rps') return normalizeGame(seg, seg.type);
   return seg as Segment;
 }
 

@@ -56,6 +56,12 @@ describe('segment-contract schema', () => {
     const seg = { type: 'forward', data: { forward_id: 'resid-1', title: '群聊' } };
     expect(isCanonicalSegment(seg)).toBe(true);
   });
+
+  it('accepts face and dice/rps', () => {
+    expect(isCanonicalSegment({ type: 'face', data: { id: 66, name: '笑哭' } })).toBe(true);
+    expect(isCanonicalSegment({ type: 'dice', data: {} })).toBe(true);
+    expect(isCanonicalSegment({ type: 'rps', data: { result: 2 } })).toBe(true);
+  });
 });
 
 describe('assertCanonicalSegments', () => {

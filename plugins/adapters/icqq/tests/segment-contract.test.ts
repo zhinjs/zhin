@@ -52,4 +52,25 @@ describe('icqq segment contract', () => {
       }],
     );
   });
+
+  it('normalizes sticker/emoji to face', () => {
+    assertSegmentRoundTrip(
+      mapper,
+      [{ type: 'sticker', data: { id: '66', text: '笑哭' } }],
+      [{ type: 'face', data: { id: '66', name: '笑哭' } }],
+    );
+  });
+
+  it('round-trips mention via CQ at wire', () => {
+    assertSegmentRoundTrip(
+      mapper,
+      [{ type: 'at', data: { qq: '10001', name: 'Alice' } }],
+      [{ type: 'mention', data: { target: '10001', name: 'Alice' } }],
+    );
+  });
+
+  it('round-trips dice and rps', () => {
+    assertSegmentRoundTrip(mapper, [{ type: 'dice', data: {} }], [{ type: 'dice', data: {} }]);
+    assertSegmentRoundTrip(mapper, [{ type: 'rps', data: { result: 1 } }], [{ type: 'rps', data: { result: 1 } }]);
+  });
 });
