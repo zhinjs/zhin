@@ -12,7 +12,7 @@ export {
   registerProviderInstance,
   getApiProvider,
   getProviderConfig,
-  getModel,
+  getLlmTransportModel,
   stream,
   complete,
   streamSimple,
@@ -35,7 +35,7 @@ export {
   assistantText,
   registerLlmApiFromProviders,
   resetLlmApiRegistryForTests,
-  setLegacyProviderResolver,
+  setLiveModelsResolver,
   driverToModelApi,
   isSdkId,
   SDK_IDS,
@@ -45,8 +45,8 @@ export {
   resolveSdkProviderModels,
   SDK_DEFAULT_MODELS,
   createOpenAiCompletionsStreamFn,
-  convertLegacyTool,
-  convertLegacyTools,
+  agentToolToLlmTool,
+  agentToolsToLlmTools,
   agentMessagesToOpenAi,
   formatRedactedJson,
   buildPromptCacheKey,
@@ -112,8 +112,6 @@ export type {
   ToolResultTransform,
   ToolFilterOptions,
   Usage,
-  SessionConfig,
-  Session,
   JsonSchema,
   ToolContext,
 } from './types.js';
@@ -179,21 +177,9 @@ export type {
   MergeToolsByNameResult,
 } from './agent/tool-naming.js';
 
-// ── Session Management ──
-export {
-  SessionManager,
-  MemorySessionManager,
-  DatabaseSessionManager,
-  createSessionManager,
-  createMemorySessionManager,
-  createDatabaseSessionManager,
-  AI_SESSION_MODEL,
-  resolveIMSessionId,
-  resolveIMSceneIdForSession,
-  resolveIMSessionIdFromMessage,
-  resolveAgentScopedSessionId,
-} from './memory/session.js';
-export type { ISessionManager, IMSceneKind, ResolveIMSessionIdInput, AISessionStatus, AgentMemoryScope } from './memory/session.js';
+// ── Agent memory scope ──
+export { resolveAgentScopedSessionId } from './memory/agent-scoped-session.js';
+export type { AgentMemoryScope } from './memory/agent-scoped-session.js';
 
 export {
   IMSessionStore,

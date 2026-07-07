@@ -9,7 +9,7 @@ import { stringify as stringifyYaml, parse as parseYaml, parseDocument } from "y
 import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
 import { Schema } from "@zhin.js/schema";
 import { Feature, FeatureJSON } from "@zhin.js/kernel";
-import { getPlugin } from "../plugin.js";
+import { Plugin } from "../plugin.js";
 
 /** Deno / Node 统一的工作目录（`Deno.chdir` 后应与 `process.cwd()` 一致） */
 export function runtimeCwd(): string {
@@ -402,7 +402,7 @@ export class ConfigFeature extends Feature<ConfigRecord> {
     const feature = this;
     return {
       addConfig(key: string, defaultValue: any) {
-        const plugin = getPlugin();
+        const plugin = this as Plugin;
 
         // 尝试写入主配置文件（如果 key 不存在）
         if (feature.#primaryConfigFile) {

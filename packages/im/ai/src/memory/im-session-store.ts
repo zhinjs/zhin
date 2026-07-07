@@ -3,7 +3,8 @@
  */
 
 import { Logger } from '@zhin.js/logger';
-import type { AISessionStatus } from './session.js';
+
+export type AISessionStatus = 'active' | 'archived';
 
 const logger = new Logger(null, 'IM-Session');
 

@@ -8,7 +8,7 @@ import {
   isOmittedToolSummary,
   sanitizeToolResult,
   stripHallucinatedToolCalls,
-  getModel,
+  getLlmTransportModel,
 } from '@zhin.js/ai';
 import { stripThinkBlocks } from './zhin-agent/text-sanitize.js';
 import { runAgentLoopStandaloneTurn } from './zhin-agent/agent-loop-standalone.js';
@@ -26,12 +26,12 @@ import { createOwnerOrchestratedToolResultTransform } from './orchestrator/owner
 import { applyExecPolicyToTools } from './security/exec-policy.js';
 import { logPromptComposition } from './zhin-agent/prompt-trace.js';
 import { resolveWorkspacePrompt } from './zhin-agent/workspace-prompt.js';
-import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
+import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import type { Message } from '@zhin.js/core';
-import { DEFAULT_ORCHESTRATOR_TOOLS } from './zhin-agent/config.js';
+import { DEFAULT_ALWAYS_LOADED_TOOLS } from './zhin-agent/config.js';
 
 const logger = new Logger(null, 'DeferredWorker');
-const ORCHESTRATOR_TOOL_SET = new Set<string>(DEFAULT_ORCHESTRATOR_TOOLS);
+const ORCHESTRATOR_TOOL_SET = new Set<string>(DEFAULT_ALWAYS_LOADED_TOOLS);
 
 /** 回传给主 Agent 的摘要最大字符数 */
 export const DEFAULT_WORKER_SUMMARY_MAX_CHARS = 1500;
@@ -154,7 +154,7 @@ export class DeferredWorkerRunner {
     }
 
     const model = provider.models[0];
-    const llmModel = getModel(provider.name, model);
+    const llmModel = getLlmTransportModel(provider.name, model);
 
     const platformBody = await resolveAgentPromptMarkdown({
       ctx: promptCtx,

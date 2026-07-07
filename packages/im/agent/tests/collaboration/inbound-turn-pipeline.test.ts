@@ -48,7 +48,7 @@ describe('createInboundTurnPipeline', () => {
       getSubagentManager: () => null,
       process,
       processMultimodal: vi.fn(),
-      setActiveBinding: vi.fn(),
+      configure: vi.fn(),
       getLastTurnMetrics: () => null,
     };
     getAgentRuntimeRegistry().registerForEndpoint('8596238', zhinAgent as any);
@@ -132,7 +132,7 @@ describe('createInboundTurnPipeline', () => {
       getSubagentManager: () => null,
       process,
       processMultimodal: vi.fn(),
-      setActiveBinding: vi.fn(),
+      configure: vi.fn(),
       getLastTurnMetrics: () => null,
     };
     getAgentRuntimeRegistry().registerForEndpoint('8596238', zhinAgent as any);
@@ -213,7 +213,7 @@ describe('createInboundTurnPipeline', () => {
       getSubagentManager: () => ({ spawnSync }),
       process,
       processMultimodal: vi.fn(),
-      setActiveBinding: vi.fn(),
+      configure: vi.fn(),
       getLastTurnMetrics: () => null,
     };
     const aiService = {

@@ -67,21 +67,6 @@ export function getLiveModelsResolver(): typeof liveModelsResolver {
   return liveModelsResolver;
 }
 
-/** @deprecated Use setLiveModelsResolver */
-export function setLegacyProviderResolver(
-  resolver: ((alias: string) => { models: string[] }) | undefined,
-): void {
-  if (!resolver) {
-    liveModelsResolver = undefined;
-    return;
-  }
-  liveModelsResolver = (alias) => resolver(alias)?.models ?? [];
-}
-
-export function getLegacyProviderResolver(): typeof liveModelsResolver {
-  return liveModelsResolver;
-}
-
 export function registerApiProvider(registration: ApiProviderRegistration): void {
   apiProviders.set(registration.api, registration);
 }
@@ -102,7 +87,7 @@ export function getProviderConfig(alias: string): RegisteredProvider | undefined
   return providerConfigs.get(alias);
 }
 
-export function getModel(providerAlias: string, modelId: string): Model {
+export function getLlmTransportModel(providerAlias: string, modelId: string): Model {
   const entry = providerConfigs.get(providerAlias);
   if (!entry) {
     throw new Error(`Unknown provider alias: ${providerAlias}`);

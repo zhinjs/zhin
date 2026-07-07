@@ -18,7 +18,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { Plugin } from '@zhin.js/core';
-import { getHostRootPlugin } from '@zhin.js/core';
+import { getHostRootPlugin, resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import { formatCompact, Logger } from '@zhin.js/logger';
 import type {
   AIProvider,
@@ -33,17 +33,12 @@ import type { Tool, Message } from '../orchestrator/types.js';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { AgentOrchestrator } from '../orchestrator/index.js';
 import {
-  createMemorySessionManager,
-  resolveIMSessionIdFromMessage,
-  type SessionManager,
-} from '@zhin.js/ai';
-import {
   ConversationMemory,
   createMemoryContextRepository,
   MemoryAgentSessionStore,
   MemoryIMSessionStore,
   MemoryImTranscriptStore,
-  getModel,
+  getLlmTransportModel,
   registerLlmApiFromProviders,
   sdkEntryFromProvider,
   type AgentSessionStore,
@@ -128,7 +123,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   private config: Required<ZhinAgentConfig>;
   private skillRegistry: SkillRegistry | null = null;
   private orchestrator: AgentOrchestrator | null = null;
-  private sessions: SessionManager;
   private imSessionStore: IMSessionStore | MemoryIMSessionStore = new MemoryIMSessionStore();
   private agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
   private contextRepository: ContextRepository;
@@ -176,7 +170,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     this.memoryPersistenceReady = new Promise<void>((resolve) => {
       this.resolveMemoryPersistenceReady = resolve;
     });
-    this.sessions = createMemorySessionManager();
     this.memory = new ConversationMemory({
       minTopicRounds: this.config.minTopicRounds,
       slidingWindowSize: this.config.slidingWindowSize,
@@ -214,10 +207,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     if (deps.orchestrator !== undefined) {
       this.orchestrator = deps.orchestrator;
       logger.debug('AgentOrchestrator connected for MCP and resources');
-    }
-    if (deps.sessionManager !== undefined) {
-      this.sessions.dispose();
-      this.sessions = deps.sessionManager;
     }
     if (deps.imSessionStore !== undefined) this.imSessionStore = deps.imSessionStore;
     if (deps.agentSessionStore !== undefined) this.agentSessionStore = deps.agentSessionStore;
@@ -262,21 +251,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     return assembleDisciplinedPrompt(asPrivate(this), basePrompt);
   }
 
-  /** @deprecated 使用 configure({ skillRegistry }) */
-  setSkillRegistry(registry: SkillRegistry): void { this.configure({ skillRegistry: registry }); }
-
-  /** @deprecated 使用 configure({ orchestrator }) */
-  setOrchestrator(orchestrator: AgentOrchestrator): void { this.configure({ orchestrator }); }
-
-  /** @deprecated 使用 configure({ modelRegistry }) */
-  setModelRegistry(registry: ModelRegistry): void { this.configure({ modelRegistry: registry }); }
-
-  /** @deprecated 使用 configure({ hostPlugin }) */
-  setHostPlugin(plugin: Plugin): void { this.configure({ hostPlugin: plugin }); }
-
-  /** @deprecated 使用 configure({ providerResolver }) */
-  setProviderResolver(resolver: (alias: string) => AIProvider): void { this.configure({ providerResolver: resolver }); }
-
   private wireLlmApiLayer(): void {
     registerLlmApiFromProviders(
       [sdkEntryFromProvider(this.provider)],
@@ -285,15 +259,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
         return p?.models ?? [];
       },
     );
-  }
-
-  /** @deprecated 使用 configure({ activeBinding }) */
-  setActiveBinding(binding: ResolvedAgentBinding | null): void {
-    if (binding === null) {
-      this.activeBinding = null;
-    } else {
-      this.configure({ activeBinding: binding });
-    }
   }
 
   getActiveBinding(): ResolvedAgentBinding | null {
@@ -310,11 +275,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
       }
     }
     return this.provider;
-  }
-
-  /** @deprecated 消息事实源已迁至 im_transcripts / agent_messages，保留空实现以兼容旧 bootstrap */
-  async upgradeMemoryToDatabase(_msgModel: unknown, _sumModel: unknown): Promise<void> {
-    return;
   }
 
   /** 等待 DB store 注入（bootstrap 会 mark；已 mark 时立即返回） */
@@ -402,12 +362,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     });
     logger.debug('SubagentManager initialized');
   }
-
-  /** @deprecated 使用 configure({ subagentSender }) */
-  setSubagentSender(sender: SubagentResultSender): void { this.configure({ subagentSender: sender }); }
-
-  /** @deprecated 使用 configure({ deferredResultSender }) */
-  setDeferredResultSender(sender: SubagentResultSender): void { this.configure({ deferredResultSender: sender }); }
 
   getDeferredResultSender(): SubagentResultSender | null {
     return this.deferredResultSender;
@@ -722,7 +676,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     const { sessionId } = await beginTurnSession(deps, sessionKey, commMessage);
     const provider = this.getTurnProvider();
     const modelId = this.config.chatModel || provider.models[0] || '';
-    const llmModel = getModel(provider.name, modelId);
+    const llmModel = getLlmTransportModel(provider.name, modelId);
     const contextWindow = llmModel.contextWindow ?? this.config.contextTokens;
     return manualCompactSession(this.contextRepository, {
       host: asPrivate(this),
@@ -827,7 +781,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   dispose(): void {
     this.memory.dispose();
-    this.sessions.dispose();
     this.externalTools.clear();
     this.userProfiles.dispose();
     this.rateLimiter.dispose();

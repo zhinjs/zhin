@@ -3,9 +3,9 @@
  */
 import {
   EMPTY_TOKEN_USAGE,
-  resolveIMSessionIdFromMessage,
   type AssistantMessage,
 } from '@zhin.js/ai';
+import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import type { SubagentCompletePayload } from '../subagent.js';
 import { packageSubagentResult } from '../subagent-artifact.js';
 import type { Message } from '../orchestrator/types.js';

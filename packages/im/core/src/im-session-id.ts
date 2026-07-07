@@ -1,9 +1,14 @@
 /**
- * IM 会话 ID 解析（无 AI 依赖）
+ * IM 会话 ID 解析（SSOT 在 @zhin.js/kernel + im-scene）
  *
  * 格式：`platform:endpointId:kind:sceneId`
  */
 
+import {
+  resolveIMSceneIdForSession as resolveIMSceneIdForSessionKernel,
+  resolveIMSessionId as resolveIMSessionIdKernel,
+  type ResolveIMSessionIdInput,
+} from '@zhin.js/kernel';
 import {
   resolveIMSceneSessionId,
   sceneRefFromMessage,
@@ -11,22 +16,10 @@ import {
   type IMSceneRef,
 } from './im-scene.js';
 
-export type { IMSceneKind };
-
-export interface ResolveIMSessionIdInput {
-  platform: string;
-  endpointId: string;
-  kind: IMSceneKind;
-  sceneId: string;
-}
+export type { IMSceneKind, ResolveIMSessionIdInput };
 
 export function resolveIMSessionId(input: ResolveIMSessionIdInput): string {
-  return resolveIMSceneSessionId({
-    platform: input.platform,
-    endpointId: input.endpointId,
-    kind: input.kind,
-    sceneId: input.sceneId,
-  });
+  return resolveIMSessionIdKernel(input);
 }
 
 export function resolveIMSessionIdFromScene(scene: IMSceneRef): string {
@@ -38,10 +31,7 @@ export function resolveIMSceneIdForSession(
   sceneId?: string,
   senderId?: string,
 ): string {
-  if (kind === 'group' || kind === 'channel') {
-    return sceneId || senderId || 'unknown';
-  }
-  return senderId || sceneId || 'unknown';
+  return resolveIMSceneIdForSessionKernel(kind, sceneId, senderId);
 }
 
 export function resolveIMSessionIdFromMessage(message: {
@@ -59,4 +49,34 @@ export function resolveIMSessionIdFromMessage(message: {
     kind,
     sceneId: resolveIMSceneIdForSession(kind, message.$channel?.id, message.$sender?.id),
   });
+}
+
+/** Canonical scene fields for transcript / session persistence (ADR 0028 SSOT). */
+export function resolveSceneFieldsFromMessage(message: {
+  $adapter?: string;
+  $endpoint?: string;
+  $channel?: { type?: IMSceneKind; id?: string };
+  $sender?: { id?: string };
+}): {
+  platform: string;
+  endpointId: string;
+  sceneId: string;
+  sceneType: IMSceneKind;
+} {
+  const scene = sceneRefFromMessage(message as any);
+  if (scene) {
+    return {
+      platform: scene.platform,
+      endpointId: scene.endpointId,
+      sceneId: scene.sceneId,
+      sceneType: scene.kind,
+    };
+  }
+  const sceneType = (message.$channel?.type || 'private') as IMSceneKind;
+  return {
+    platform: String(message.$adapter || ''),
+    endpointId: String(message.$endpoint || ''),
+    sceneType,
+    sceneId: resolveIMSceneIdForSession(sceneType, message.$channel?.id, message.$sender?.id),
+  };
 }

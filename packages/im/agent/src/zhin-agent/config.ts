@@ -13,7 +13,6 @@ import type {
   MemoryAgentSessionStore,
   MemoryIMSessionStore,
   ModelRegistry,
-  SessionManager,
 } from '@zhin.js/ai';
 import type { Plugin } from '@zhin.js/core';
 import type { ModelHarnessConfig } from './model-harness.js';
@@ -166,8 +165,6 @@ export interface ZhinAgentConfig {
   }) => void;
   /** Worker 侧 TF-IDF 载入 deferred 工具数量上限 */
   deferredToolMaxResults?: number;
-  /** @deprecated 使用 deferredTools.alwaysLoadedTools */
-  orchestratorTools?: string[];
   /** Deferred tool schema 按需加载 */
   deferredTools?: import('../tool-catalog/types.js').DeferredToolsConfig;
   /** Deferred Worker 基础工具（另加 TF-IDF 载入的 deferred） */
@@ -185,16 +182,9 @@ export interface ZhinAgentConfig {
    * 设为 0 禁用熔断。
    */
   policyDenialStopAfter?: number;
-  /**
-   * @deprecated Worker 结果经 run_deferred_task 同步回传主 Agent，不再使用独立 auto_continue 回合。
-   */
   deferredAutoContinue?: boolean;
-  /** @deprecated 见 deferredAutoContinue */
   deferredAutoContinueMaxDepth?: number;
 }
-
-/** @deprecated 使用 DEFAULT_ALWAYS_LOADED_TOOLS */
-export const DEFAULT_ORCHESTRATOR_TOOLS = DEFAULT_ALWAYS_LOADED_TOOLS;
 
 /** 硬编排 v1 追加的总监工具 */
 export const HARD_ORCHESTRATION_TOOLS = [
@@ -207,7 +197,7 @@ export const HARD_ORCHESTRATION_TOOLS = [
 ] as const;
 
 export const DEFAULT_HARD_ORCHESTRATOR_TOOLS = [
-  ...DEFAULT_ORCHESTRATOR_TOOLS,
+  ...DEFAULT_ALWAYS_LOADED_TOOLS,
   ...HARD_ORCHESTRATION_TOOLS,
 ] as const;
 
@@ -222,7 +212,6 @@ export const DEFAULT_WORKER_BASE_TOOLS = [
 export interface ZhinAgentDependencies {
   skillRegistry: SkillRegistry;
   orchestrator: AgentOrchestrator;
-  sessionManager: SessionManager;
   imSessionStore: IMSessionStore | MemoryIMSessionStore;
   agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
   contextRepository: ContextRepository;
@@ -287,7 +276,6 @@ export const DEFAULT_CONFIG = {
   promptCacheKeyPrefix: 'zhin',
   deferredToolMaxResults: 8,
   deferredTools: { ...DEFAULT_DEFERRED_TOOLS_CONFIG },
-  orchestratorTools: [...DEFAULT_ALWAYS_LOADED_TOOLS],
   workerBaseTools: [...DEFAULT_WORKER_BASE_TOOLS],
   platformPromptSectionMaxChars: 2048,
   platformPromptMaxChars: 4096,

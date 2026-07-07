@@ -1,0 +1,56 @@
+log_level: 1
+
+# 协作 Scene SSOT 落库（collaboration_scenes + collaboration_scene_members）
+database:
+  dialect: sqlite
+  filename: ./data/bot.db
+  mode: wal
+
+collaboration:
+  enabled: true
+  defaultGoal: 演示多 Bot 协作
+
+plugins:
+  - "@zhin.js/adapter-sandbox"
+  - "@zhin.js/host-router"
+  - "@zhin.js/host-api"
+
+hostApi:
+  lazyLoad: true
+
+# 双 Sandbox Endpoint：/collab init 后在群内 bind 成员
+endpoints:
+  - context: sandbox
+    name: planner-bot
+  - context: sandbox
+    name: researcher-bot
+
+http:
+  token: ${HTTP_TOKEN:-multi-agent-room-dev-token}
+  port: 8788
+
+ai:
+  enabled: true
+  providers:
+    ollama:
+      sdk: ollama
+      host: ${OLLAMA_HOST:-http://127.0.0.1:11434}
+  agents:
+    zhin:
+      provider: ollama
+      model: qwen3:8b
+    planner:
+      provider: ollama
+      model: qwen3:8b
+    researcher:
+      provider: ollama
+      model: qwen3:8b
+  agent:
+    execSecurity: allowlist
+    execPreset: readonly
+  trigger:
+    prefixes:
+      - "ai:"
+    respondToAt: true
+    respondToPrivate: true
+    peerMode: mention-only

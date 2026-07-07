@@ -4,7 +4,7 @@ import {
   agentContextFrom,
   registerApiProvider,
   registerProviderInstance,
-  getModel,
+  getLlmTransportModel,
   createAssistantMessageEventStream,
   clearApiRegistryForTests,
   createUserMessage,
@@ -79,7 +79,7 @@ describe('agentLoop', () => {
   });
 
   it('single iteration when no tools (maxIterations=1)', async () => {
-    const model = getModel('test', 'mock');
+    const model = getLlmTransportModel('test', 'mock');
     const events = [];
     for await (const event of runLoop(
       createUserMessage('hello'),
@@ -93,7 +93,7 @@ describe('agentLoop', () => {
   });
 
   it('executes tool call then completes', async () => {
-    const model = getModel('test', 'mock');
+    const model = getLlmTransportModel('test', 'mock');
     const events = [];
     for await (const event of runLoop(
       createUserMessage('tool:ping'),

@@ -88,7 +88,7 @@ describe('AI Service 集成测试', () => {
   describe('服务初始化', () => {
     it('应该创建 AI 服务实例', () => {
       expect(aiService).toBeDefined();
-      expect(aiService.sessions).toBeDefined();
+      expect(aiService.getBindingRegistry()).toBeDefined();
     });
 
     it('配置了 provider 与 agents.zhin 时 isReady 为 true', () => {
@@ -153,11 +153,6 @@ describe('AI Service 集成测试', () => {
   });
 
   describe('配置管理', () => {
-    it('应该返回会话配置', () => {
-      const config = aiService.getSessionConfig();
-      expect(config.maxHistory).toBe(10);
-    });
-
     it('应该返回上下文配置', () => {
       const config = aiService.getContextConfig();
       expect(config).toBeDefined();

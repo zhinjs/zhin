@@ -17,7 +17,6 @@ import './init/types.js';
 import { createRefs } from './init/shared-refs.js';
 import { registerOrchestrator } from './init/register-orchestrator.js';
 import { registerMcpFromConfig } from './init/register-mcp-from-config.js';
-import { registerMcpMemoryDefault } from './init/register-mcp-memory-default.js';
 import { registerToolService } from './init/register-tool-service.js';
 import { registerDbModels } from './init/register-db-models.js';
 import { registerAIService } from './init/register-ai-service.js';
@@ -51,7 +50,6 @@ export function initAgentModule(): void {
   registerOrchestrator();
   registerAgentMeshMcp();
   registerMcpFromConfig();
-  registerMcpMemoryDefault();
   registerToolService();
   registerDbModels();
   registerAIService(refs);

@@ -4,7 +4,7 @@ node_modules/
 .agent/
 .agents/
 .claude/
-data/
+/data/
 # schedule 包内置节假日/农历数据源（须入库，否则 CI tsc 缺文件）
 !basic/schedule/src/data/
 !basic/schedule/src/data/**
@@ -31,6 +31,7 @@ examples/**/zhin.config.*
 !examples/full-bot/zhin.config.yml
 !examples/demo-bot/zhin.config.yml
 !examples/life-assistant-bot/zhin.config.yml
+!examples/multi-agent-room/zhin.config.yml
 # full-bot L4 种子 MEMORY（其余 data/ 仍忽略）
 !examples/full-bot/data/
 examples/full-bot/data/*

@@ -18,7 +18,23 @@ const scanRoots = [
   'examples/full-bot/src/plugins',
   'examples/demo-bot/src/plugins',
   'examples/test-bot/src/plugins',
+  'packages/im/agent/src',
+  'packages/im/zhin/src',
 ];
+
+/** Paths where getPlugin() at registration/bootstrap is intentional */
+const getPluginAllowlist = [
+  '/init/',
+  'plugin-context.ts',
+  'host-plugin-registry.ts',
+  'packages/im/core/src/built/',
+];
+
+/** @param {string} relFile */
+function isGetPluginAllowlisted(relFile) {
+  const normalized = relFile.replace(/\\/g, '/');
+  return getPluginAllowlist.some((p) => normalized.includes(p));
+}
 
 const CALLBACK_MARKERS = [
   /\.action\s*\(/,
@@ -91,8 +107,10 @@ for (const rel of scanRoots) {
       const line = lines[i];
 
       if (lineHasGetPluginCall(line) && callbackBodyDepth !== null && depth >= callbackBodyDepth) {
+        const relFile = path.relative(repoRoot, file);
+        if (isGetPluginAllowlisted(relFile)) continue;
         violations.push({
-          file: path.relative(repoRoot, file),
+          file: relFile,
           line: i + 1,
           text: line.trim(),
         });

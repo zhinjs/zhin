@@ -11,7 +11,7 @@
  */
 
 import { Schema } from '@zhin.js/schema';
-import { Plugin, getPlugin } from '../plugin.js';
+import { Plugin } from '../plugin.js';
 
 import { Feature, FeatureJSON } from '@zhin.js/kernel';
 // 类型
@@ -140,7 +140,7 @@ export class SchemaFeature extends Feature<SchemaRecord> {
         schema: Schema<T>,
         options?: { reloadable?: boolean },
       ): Required<T> {
-        const plugin = getPlugin() as Plugin;
+        const plugin = this as Plugin;
         const reloadable = options?.reloadable ?? true;
 
         // 从 Schema 提取默认值

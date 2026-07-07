@@ -217,24 +217,24 @@ describe('ModelRegistry', () => {
   });
 
   describe('query methods', () => {
-    it('getModel returns specific model', async () => {
+    it('getCachedModelInfo returns specific model', async () => {
       const provider = createMockProvider({
         listModels: async () => ['model-x'],
       });
       await registry.discover(provider);
 
-      const model = registry.getModel('test-provider', 'model-x');
+      const model = registry.getCachedModelInfo('test-provider', 'model-x');
       expect(model).toBeDefined();
       expect(model?.id).toBe('model-x');
     });
 
-    it('getModel returns undefined for missing model', async () => {
+    it('getCachedModelInfo returns undefined for missing model', async () => {
       const provider = createMockProvider({
         listModels: async () => ['model-x'],
       });
       await registry.discover(provider);
 
-      expect(registry.getModel('test-provider', 'missing')).toBeUndefined();
+      expect(registry.getCachedModelInfo('test-provider', 'missing')).toBeUndefined();
     });
 
     it('getAllModels returns all providers', async () => {
@@ -499,7 +499,7 @@ describe('ModelRegistry', () => {
       const models = registry.selectModels('router', 'vision');
       // Only vision-capable models
       for (const id of models) {
-        const info = registry.getModel('router', id);
+        const info = registry.getCachedModelInfo('router', id);
         expect(info?.capabilities).toContain('vision');
       }
     });

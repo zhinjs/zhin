@@ -75,18 +75,3 @@ export function resetLlmApiRegistryForTests(): void {
   clearApiRegistryForTests();
   clearLanguageModelStoreForTests();
 }
-
-/** @deprecated Legacy entry shape — kept for transitional imports */
-export interface LegacyProviderEntry {
-  alias: string;
-  provider: { name: string; models: string[] };
-  config: ProviderConfig & { api?: string; sdk?: string };
-  models: string[];
-}
-
-/** @deprecated Use registerLlmApiFromProviders with SdkProviderEntry */
-export function setLegacyProviderResolver(
-  _resolver: (alias: string) => unknown,
-): void {
-  // no-op — legacy resolver removed in ADR 0018
-}

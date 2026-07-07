@@ -19,6 +19,7 @@ import {
 import {
   formatSenderRolesForLabel,
   QUOTE_CONTEXT_BLOCK_EXTRA_KEY,
+  resolveSceneFieldsFromMessage,
   senderRolesFromMessage,
   stripUserSpoofedSenderPrefix,
 } from '@zhin.js/core';
@@ -138,22 +139,24 @@ export function buildSessionCreateInput(
   sessionKey: string,
   commMessage: Message,
 ): CreateIMSessionInput & CreateAgentSessionInput {
+  const { platform, endpointId, sceneId, sceneType } = resolveSceneFieldsFromMessage(commMessage);
   return {
     session_key: sessionKey,
-    platform: String(commMessage.$adapter || ''),
-    endpoint_id: commMessage.$endpoint || '',
-    scene_id: commMessage.$channel?.id ?? commMessage.$sender.id ?? '',
-    scene_type: commMessage.$channel?.type || 'private',
+    platform,
+    endpoint_id: endpointId,
+    scene_id: sceneId,
+    scene_type: sceneType,
   };
 }
 
 export function buildImTranscriptQuery(
   commMessage: Message,
 ): import('@zhin.js/ai').ImTranscriptQuery {
+  const { platform, endpointId, sceneId } = resolveSceneFieldsFromMessage(commMessage);
   return {
-    platform: String(commMessage.$adapter || ''),
-    endpointId: commMessage.$endpoint || '',
-    sceneId: commMessage.$channel?.id ?? commMessage.$sender.id ?? '',
+    platform,
+    endpointId,
+    sceneId,
   };
 }
 

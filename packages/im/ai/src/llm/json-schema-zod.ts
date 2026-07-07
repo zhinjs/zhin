@@ -35,6 +35,3 @@ export function jsonSchemaToZod(schema: JsonSchema): z.ZodObject<Record<string, 
   }
   return z.object({});
 }
-
-/** @deprecated 使用 jsonSchemaToZod */
-export const jsonSchemaToTypeBox = jsonSchemaToZod;

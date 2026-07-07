@@ -1,4 +1,4 @@
-import type { WorkflowStrategy, WorkflowTaskSpec } from '../../orchestrator/kernel-types.js';
+import type { WorkflowStrategy, WorkflowTaskSpec } from '../../orchestrator/orchestration-types.js';
 
 export const FIVE_AGENT_WORKFLOW_STRATEGY_NAME = 'five-agent';
 

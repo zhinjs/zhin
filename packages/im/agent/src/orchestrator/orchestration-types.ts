@@ -1,5 +1,5 @@
 /**
- * Agent Run orchestration kernel public contracts.
+ * Agent run orchestration public contracts.
  */
 import type {
   OrchestrationExecutorKind,

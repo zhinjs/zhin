@@ -8,6 +8,7 @@ import {
   resolveSubjectRoles,
   extractTextContent,
   isActionMessage,
+  resolveSceneFieldsFromMessage,
 } from '@zhin.js/core';
 import type { AppConfig } from '../types.js';
 import type { ImTranscriptWriteInput } from '@zhin.js/ai';
@@ -63,8 +64,7 @@ function recordTranscript(plugin: Plugin, input: ImTranscriptWriteInput): void {
 }
 
 function recordInbound(plugin: Plugin, message: Message): void {
-  const sceneType = message.$channel?.type || 'private';
-  const sceneId = message.$channel?.id || message.$sender.id;
+  const { sceneType, sceneId } = resolveSceneFieldsFromMessage(message);
   const roles = resolveSubjectRoles(plugin, message).roles;
   const senderRole = roles[0] ?? 'user';
 

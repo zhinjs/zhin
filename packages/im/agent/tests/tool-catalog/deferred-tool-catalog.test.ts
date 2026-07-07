@@ -45,9 +45,9 @@ describe('tool-catalog', () => {
     expect(results.some(r => r.kind === 'tool' && r.name === 'deploy_tool')).toBe(true);
   });
 
-  it('resolveDeferredToolsConfig migrates legacy orchestratorTools', () => {
+  it('resolveDeferredToolsConfig uses deferredTools.alwaysLoadedTools', () => {
     const cfg = resolveDeferredToolsConfig({
-      orchestratorTools: ['ask_user', 'spawn_task'],
+      deferredTools: { alwaysLoadedTools: ['ask_user', 'spawn_task'] },
     });
     expect(cfg.alwaysLoadedTools).toContain('ask_user');
     expect(cfg.maxLoadedPerSession).toBe(12);

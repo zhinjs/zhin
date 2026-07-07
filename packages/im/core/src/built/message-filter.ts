@@ -14,7 +14,7 @@
  */
 
 import { Feature, FeatureJSON } from '@zhin.js/kernel';
-import { getPlugin } from '../plugin.js';
+import { Plugin } from '../plugin.js';
 import type { Message, MessageType } from '../message.js';
 
 // ============================================================================
@@ -305,7 +305,7 @@ export class MessageFilterFeature extends Feature<FilterRule> {
     const feature = this;
     return {
       addFilterRule(rule: FilterRule) {
-        const plugin = getPlugin();
+        const plugin = this as Plugin;
         const dispose = feature.add(rule, plugin.name);
         plugin.recordFeatureContribution(feature.name, rule.name);
         plugin.onDispose(dispose);

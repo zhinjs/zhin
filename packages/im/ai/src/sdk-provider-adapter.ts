@@ -23,7 +23,7 @@ import { createContext } from './llm/types/context.js';
 import { createUserMessage } from './llm/types/agent-message.js';
 import { assistantText } from './llm/convert/openai-bridge.js';
 import type { ImageGenerateRequest, ImageGenerateResult } from './image-generation.js';
-import { getModel } from './llm/api-registry.js';
+import { getLlmTransportModel } from './llm/api-registry.js';
 import { resolveProxyFetch } from './llm/proxy-fetch.js';
 
 async function fetchOpenAiCompatibleModels(config: ProviderInstanceConfig): Promise<string[]> {
@@ -135,7 +135,7 @@ export class SdkProviderAdapter implements AIProvider {
 
   async chat(request: ChatCompletionRequest): Promise<ChatCompletionResponse> {
     this.ensureLanguageModel(request.model);
-    const model = getModel(this.name, request.model);
+    const model = getLlmTransportModel(this.name, request.model);
     const messages = request.messages
       .filter((m) => m.role !== 'system')
       .map((m) => {
@@ -261,6 +261,3 @@ export function sdkEntryFromProvider(provider: AIProvider): import('./llm/regist
     models: [...provider.models],
   };
 }
-
-/** @deprecated transitional export */
-export type { ProviderConfig };

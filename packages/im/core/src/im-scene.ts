@@ -1,5 +1,9 @@
 import type { Message, MessageType } from './message.js';
 import type { SendContent, SendOptions } from './types.js';
+import {
+  resolveIMSceneSessionId as resolveIMSceneSessionIdKernel,
+  type IMSceneKind as KernelIMSceneKind,
+} from '@zhin.js/kernel';
 
 export type IMSceneKind = MessageType;
 
@@ -78,11 +82,12 @@ export function sceneRefToSendOptions(
 }
 
 export function resolveIMSceneSessionId(scene: IMSceneRef): string {
-  const platform = String(scene.platform || 'unknown');
-  const endpointId = String(scene.endpointId || 'default');
-  const kind: IMSceneKind = scene.kind || 'private';
-  const sceneId = String(scene.sceneId || 'unknown');
-  return `${platform}:${endpointId}:${kind}:${sceneId}`;
+  return resolveIMSceneSessionIdKernel({
+    platform: scene.platform,
+    endpointId: scene.endpointId,
+    sceneId: scene.sceneId,
+    kind: scene.kind as KernelIMSceneKind,
+  });
 }
 
 export function messageToIMDeliveryTarget(message: Partial<Message<any>>): IMDeliveryTarget | undefined {

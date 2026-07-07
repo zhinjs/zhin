@@ -3,7 +3,7 @@
  * 工具仅面向 AI（通过 MCP 注册），不再与 Command 互转
  */
 import { Feature, FeatureJSON } from "@zhin.js/kernel";
-import { Plugin, getPlugin } from "../plugin.js";
+import { Plugin } from "../plugin.js";
 import type { Tool, ToolJsonSchema, ToolParametersSchema, PropertySchema, MaybePromise, ToolScope } from "../types.js";
 import type { Message } from "../message.js";
 import { isBuiltinPermit, isPlatformPermit } from './permit-parse.js';
@@ -480,7 +480,7 @@ export class ToolFeature extends Feature<Tool> {
     const feature = this;
     return {
       addTool(tool: ToolInput) {
-        const plugin = getPlugin();
+        const plugin = this as Plugin;
         const toolObj = isZhinTool(tool) ? tool.toTool() : tool as Tool;
         const dispose = feature.addTool(tool, plugin.name);
         plugin.recordFeatureContribution(feature.name, toolObj.name);

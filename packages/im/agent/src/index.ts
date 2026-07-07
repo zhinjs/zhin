@@ -19,6 +19,12 @@ export type {
 } from './plugin-loop-hooks.js';
 
 export { ZhinAgent } from './zhin-agent/index.js';
+export {
+  pluginToolToAgentTool,
+  agentToolToLlmTool,
+  agentToolsToLlmTools,
+} from './tool-bridge.js';
+export type { NormalizableTool } from './tool-bridge.js';
 export type { ZhinAgentConfig, OnChunkCallback } from './zhin-agent/index.js';
 export type {
   TurnEvent, TurnUsage,
@@ -32,7 +38,7 @@ export type {
 
 export {
   DEFAULT_CONFIG as ZHIN_AGENT_DEFAULT_CONFIG,
-  DEFAULT_ORCHESTRATOR_TOOLS,
+  DEFAULT_ALWAYS_LOADED_TOOLS,
   SECTION_SEP,
 } from './zhin-agent/config.js';
 export { MODEL_HARNESS_DEFAULTS, resolveModelHarness, mergeModelHarnessValues } from './zhin-agent/model-harness.js';
@@ -305,7 +311,7 @@ export type {
   WorkflowStrategyInput,
   WorkflowTaskSpec,
   WorkflowStrategy,
-} from './orchestrator/kernel-types.js';
+} from './orchestrator/orchestration-types.js';
 
 export {
   getAgentDispatcher,

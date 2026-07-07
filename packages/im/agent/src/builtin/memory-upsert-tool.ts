@@ -2,7 +2,7 @@
  * memory_upsert — write semantic memory entries (L4).
  */
 import type { Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
-import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
+import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import { getMemoryEntryRepository } from '../memory-entry-registry.js';
 import type { MemoryEntryScope } from '@zhin.js/ai';

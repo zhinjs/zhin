@@ -1,4 +1,4 @@
-import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
+import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import type { SessionBranchPoint } from '@zhin.js/ai';
 import type { Message } from '@zhin.js/core';
 import { beginTurnSession, type SessionIODeps } from './session-io.js';

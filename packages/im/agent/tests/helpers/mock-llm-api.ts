@@ -6,7 +6,7 @@ import {
   registerApiProvider,
   registerProviderInstance,
   createOpenAiCompletionsStreamFn,
-  setLegacyProviderResolver,
+  setLiveModelsResolver,
 } from '@zhin.js/ai';
 
 export function wireMockProviderToLlmApi(provider: AIProvider): void {
@@ -15,8 +15,8 @@ export function wireMockProviderToLlmApi(provider: AIProvider): void {
     { sdk: 'openai', apiKey: 'test-key' },
     [...provider.models],
   );
-  setLegacyProviderResolver((alias) => (
-    alias === provider.name ? { models: [...provider.models] } : { models: [] }
+  setLiveModelsResolver((alias) => (
+    alias === provider.name ? [...provider.models] : []
   ));
   const streamFn = createOpenAiCompletionsStreamFn(() => (
     (alias: string) => (alias === provider.name ? provider : undefined)

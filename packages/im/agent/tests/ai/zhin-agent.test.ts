@@ -137,9 +137,9 @@ describe('ZhinAgent', () => {
   });
 
   describe('依赖注入', () => {
-    it('setSkillRegistry 应正常工作', () => {
+    it('configure({ skillRegistry }) 应正常工作', () => {
       const registry = new SkillFeature();
-      expect(() => agent.setSkillRegistry(registry)).not.toThrow();
+      expect(() => agent.configure({ skillRegistry: registry })).not.toThrow();
     });
 
     it('registerTool 应添加和移除工具', () => {
@@ -243,7 +243,7 @@ describe('ZhinAgent', () => {
       hostPlugin.on('ai.response', record('ai.response'));
       hostPlugin.on('ai.processing.finish', record('ai.processing.finish'));
 
-      busAgent.setHostPlugin(hostPlugin);
+      busAgent.configure({ hostPlugin });
 
       try {
         await busAgent.process(
@@ -269,7 +269,7 @@ describe('ZhinAgent', () => {
       const hostPlugin = new Plugin('/virtual/host-plugin.ts');
       const payloads: any[] = [];
       hostPlugin.on('ai.session.new', payload => payloads.push(payload));
-      sessionAgent.setHostPlugin(hostPlugin);
+      sessionAgent.configure({ hostPlugin });
 
       try {
         await sessionAgent.process('你好', makeCommMessage(), []);
@@ -298,7 +298,7 @@ describe('ZhinAgent', () => {
         pluginName: 'p1',
       }, 'p1');
 
-      agent.setSkillRegistry(registry);
+      agent.configure({ skillRegistry: registry });
 
       // 外部也传入 tool_a（同名）
       const externalTools = [makeTool('tool_a', '来自外部的工具')];

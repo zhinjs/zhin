@@ -5,7 +5,7 @@
 import { Feature, FeatureJSON } from "@zhin.js/kernel";
 import { Component, renderComponents } from "../component.js";
 import { SendOptions, MaybePromise } from "../types.js";
-import { Plugin, getPlugin } from "../plugin.js";
+import { Plugin } from "../plugin.js";
 import type { PluginLike } from '@zhin.js/kernel';
 
 type Listener = (options: SendOptions) => MaybePromise<SendOptions>;
@@ -120,7 +120,7 @@ export class ComponentFeature extends Feature<Component<any>> {
     const feature = this;
     return {
       addComponent<T extends Component<any>>(component: T) {
-        const plugin = getPlugin();
+        const plugin = this as Plugin;
         const dispose = feature.add(component, plugin.name);
         plugin.recordFeatureContribution(feature.name, component.name);
         plugin.onDispose(dispose);

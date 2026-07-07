@@ -55,7 +55,7 @@ export function registerGroupSessionPassive(refs: AIServiceRefs): void {
       const endpointId = String(message.$endpoint ?? '');
       const channelScope = message.$channel?.type;
       const sceneId = message.$channel?.id ?? '';
-      let cell =
+      const cell =
         (channelScope === 'group' || channelScope === 'channel') && sceneId !== ''
           ? findCellForInbound(
             getCollaborationSceneService().listScenes(),

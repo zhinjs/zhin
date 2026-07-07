@@ -4,9 +4,9 @@
  */
 import {
   EMPTY_TOKEN_USAGE,
-  resolveIMSessionIdFromMessage,
   type AssistantMessage,
 } from '@zhin.js/ai';
+import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import type { DeferredWorkerResult } from '../deferred-worker-runner.js';
 import { resolveSubagentDisplayLabel } from '../subagent-goal-notify.js';
 import { packageSubagentResult } from '../subagent-artifact.js';

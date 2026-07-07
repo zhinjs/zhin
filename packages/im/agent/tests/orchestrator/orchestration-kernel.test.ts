@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MemoryOrchestrationRepository } from '../../src/orchestrator/orchestration-repository.js';
 import { initOrchestrationService } from '../../src/orchestrator/orchestration-service.js';
-import type { AgentExecutor } from '../../src/orchestrator/kernel-types.js';
+import type { AgentExecutor } from '../../src/orchestrator/orchestration-types.js';
 import { createFiveAgentWorkflowStrategy } from '../../src/builtin/five-agent/index.js';
 
 describe('OrchestrationKernel', () => {

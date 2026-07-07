@@ -18,7 +18,7 @@ import {
   type OrchestrationRunWithTasks,
   taskRecordToAgentTaskShape,
 } from './orchestration-repository.js';
-import { mapEventRecord, mapRunRecord, mapTaskRecord, normalizeExecutorKind } from './kernel-mappers.js';
+import { mapEventRecord, mapRunRecord, mapTaskRecord, normalizeExecutorKind } from './orchestration-mappers.js';
 import type {
   AgentExecutionEvent,
   AgentExecutor,
@@ -29,7 +29,7 @@ import type {
   RunSnapshot,
   WorkflowStrategy,
   WorkflowTaskSpec,
-} from './kernel-types.js';
+} from './orchestration-types.js';
 
 export interface OrchestrationStartInput {
   sessionKey: string;

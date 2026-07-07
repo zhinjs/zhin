@@ -27,9 +27,9 @@ import {
   formatPassiveGroupContextBlock,
 } from './passive-group-buffer.js';
 import { readCollaborationTurnSnapshot } from '../collaboration/collaboration-turn-snapshot.js';
-import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
+import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import { buildAgentsEnvelopeContext } from './agents-instruction.js';
-import { getModel } from '@zhin.js/ai';
+import { getLlmTransportModel } from '@zhin.js/ai';
 import { collectRuntimeTools } from './tool-runtime.js';
 import { buildMultimodalVisionSystemPrompt } from './prompt-assembly.js';
 import { attachWebSearchLocale } from './web-search-locale-attach.js';
@@ -237,7 +237,7 @@ export async function processTextTurn(
     );
     const modelId = chatCandidates[0] || host.getTurnProvider().models[0] || 'gpt-4o-mini';
     const providerAlias = host.getTurnProvider().name;
-    const llmModel = getModel(providerAlias, modelId);
+    const llmModel = getLlmTransportModel(providerAlias, modelId);
     const agentsContext = await buildAgentsEnvelopeContext();
 
     const turnEnvelope = buildTurnContextEnvelope({
@@ -401,7 +401,7 @@ export async function processMultimodalTurn(
   );
   const visionModelId = visionCandidates[0] || host.getTurnProvider().models[0] || 'gpt-4o-mini';
   const visionProviderAlias = host.getTurnProvider().name;
-  const visionLlmModel = getModel(visionProviderAlias, visionModelId);
+  const visionLlmModel = getLlmTransportModel(visionProviderAlias, visionModelId);
   const agentsContext = await buildAgentsEnvelopeContext();
 
   logPhase(host.phaseConfig, 'path.agent_loop', sessionId, { mode: 'multimodal' });

@@ -3,7 +3,7 @@
  */
 
 import type { Message } from '@zhin.js/core';
-import { resolveIMSessionIdFromMessage } from '@zhin.js/ai';
+import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import { resolveRoutedAgentName } from '../routing/route-matcher.js';
 import { DEFAULT_ZHIN_AGENT_NAME } from '../config/types.js';
 import type { AgentBindingConfig } from '../config/types.js';

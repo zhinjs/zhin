@@ -7,9 +7,9 @@ Zhin AI Agent 组合层：在 `@zhin.js/core` 的类型与 Provider 之上，提
 ## 功能特性
 
 - 🤖 **agentLoop 统一路径**：ZhinAgent、Subagent、Deferred Worker、AIService 均经 `agentLoop`（legacy `Agent.run` 仅保留在 `@zhin.js/ai` 供单测）
-- 📝 **会话管理**：`SessionManager`、内存/数据库会话、`SessionManager.generateId`
+- 📝 **会话持久化**：`AgentSessionStore` + `ContextRepository` + `ImTranscriptStore`（ADR 0009）
 - 🧠 **ZhinAgent**：与 Zhin 消息流集成的智能体（SOUL/TOOLS/AGENTS、工具收集、执行策略）
-- 🔍 **模型自动发现**：`ModelRegistry` 调用 `listModels()`（OpenAI 兼容 `/v1/models`、Ollama `/api/tags`）；结果写入 `provider.models` 并供 `getModel()` 校验；yaml 显式 `models` 时以配置为准
+- 🔍 **模型自动发现**：`ModelRegistry` 调用 `listModels()`；结果写入 `provider.models` 并供 `getLlmTransportModel()` 校验
 - 🔄 **模型自动降级**：首选模型失败时按 `resolveModelCandidates` 候选链 fallback（文本 / 多模态 / standalone 均走 agentLoop）
 - 🛡️ **6 层 Bash 安全**：`ExecPolicy` 纵深防御（危险黑名单、环境变量剥离、wrapper 剥离、复合命令拆分、只读放行、交互式审批）
 - 📂 **文件访问安全**：`FilePolicy` 路径检查、设备路径拦截、命令读写分类
@@ -46,13 +46,12 @@ pnpm add @ai-sdk/openai   # 示例：按厂商安装 provider SDK
 import {
   ZhinAgent,
   AIService,
-  SessionManager,
   registerAIHook,
 } from 'zhin.js/agent'
 
 // 使用 ctx.ai (AIService)
 useContext('ai', async (ai) => {
-  const session = ai.sessions.get(sessionId)
+  const result = await ai.runAgent('你好', { provider: 'ollama' })
   // ...
 })
 ```
@@ -84,11 +83,11 @@ useContext('ai', async (ai) => {
 | 初始化 | `initAgentModule` |
 | Agent | `ServiceAgent`、`CreateServiceAgentOptions`（`AIService.createAgent`）；legacy `Agent` / `createAgent` re-export 自 `@zhin.js/ai` |
 | Model harness | `MODEL_HARNESS_DEFAULTS`, `resolveModelHarness`, `mergeModelHarnessValues` |
-| 服务与会话 | `AIService`, `SessionManager`, `MemorySessionManager`, `DatabaseSessionManager`, `createMemorySessionManager`, `createDatabaseSessionManager` |
+| 服务与会话 | `AIService`；会话/context 类型见 `@zhin.js/ai`（`ContextRepository`、`AgentSessionStore`、`ImTranscriptStore`） |
 | ZhinAgent | `ZhinAgent`，以及 config / exec-policy / file-policy / tool-runtime / prompt / builtin-tools 等子模块 |
 | 安全策略 | `checkExecPolicy`, `applyExecPolicyToTools`, `isDangerousCommand`, `stripEnvVarPrefix`, `stripSafeWrappers`, `splitCompoundCommand`, `extractCommandName`, `ExecPolicyResult`, `checkFileAccess`, `classifyBashCommand`, `isBlockedDevicePath` |
 | 提示词构建 | `buildRichSystemPrompt`, `buildEnhancedPersona`, `buildUserMessageWithHistory`, `buildContextHint` |
-| 上下文与记忆 | `ContextRepository`, `AgentSessionStore`, `ImTranscriptStore`（经 ZhinAgent 注入）；`ContextManager`, `ConversationMemory`, `UserProfileStore` |
+| 上下文与记忆 | `ContextRepository`, `AgentSessionStore`, `ImTranscriptStore`（`@zhin.js/ai`）；`ContextManager`, `ConversationMemory`, `UserProfileStore` |
 | 跟进与定时 | `FollowUpManager`, `PersistentCronEngine`, `createCronTools`, `setCronManager`, `getCronManager` |
 | 压缩与 Bootstrap | `compactSession`, `estimateTokens`, `loadBootstrapFiles`, `loadSoulPersona`, `loadToolsGuide`, `loadAgentsMemory` |
 | Hook | `registerAIHook`, `unregisterAIHook`, `triggerAIHook`, `createAIHookEvent` |

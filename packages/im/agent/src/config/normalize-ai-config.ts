@@ -3,10 +3,7 @@ import { isSdkId } from '@zhin.js/ai';
 import type {
   AgentBindingConfig,
   ProviderInstanceConfig,
-  RouteEntryConfig,
 } from './types.js';
-import { DEFAULT_ZHIN_AGENT_NAME } from './types.js';
-import { PIPELINE_ROLES } from '../collaboration/types.js';
 
 const LEGACY_DRIVER_KEYS = new Set([
   'openai', 'anthropic', 'deepseek', 'moonshot', 'zhipu', 'google', 'gemini', 'ollama', 'cloudflare',
@@ -92,18 +89,24 @@ function normalizeLegacyProviders(
   return out;
 }
 
-function mergeLegacyRoutesIntoAgents(
-  agents: Record<string, AgentBindingConfig>,
-  routes: Record<string, RouteEntryConfig>,
-): void {
-  for (const [name, route] of Object.entries(routes)) {
-    const existing = agents[name];
-    if (!existing) continue;
-    agents[name] = {
-      ...existing,
-      priority: existing.priority ?? route.priority,
-      match: existing.match ?? route.match,
-    };
+function rejectRemovedAiConfigFields(ai: AIConfig | undefined): void {
+  const raw = ai as Record<string, unknown> | undefined;
+  if (!raw) return;
+  if (raw.routes && typeof raw.routes === 'object' && Object.keys(raw.routes as object).length > 0) {
+    throw new Error('ai.routes removed; set ai.agents.<name>.priority and ai.agents.<name>.match');
+  }
+  if (raw.pipeline && typeof raw.pipeline === 'object' && Object.keys(raw.pipeline as object).length > 0) {
+    throw new Error('ai.pipeline removed; use ai.agents.<role>');
+  }
+  if (typeof raw.defaultProvider === 'string' && raw.defaultProvider.trim()) {
+    throw new Error('ai.defaultProvider removed; use ai.agents.zhin.provider');
+  }
+  const agent = raw.agent;
+  if (agent && typeof agent === 'object' && !Array.isArray(agent)) {
+    const legacyAgent = agent as Record<string, unknown>;
+    if (typeof legacyAgent.chatModel === 'string' || typeof legacyAgent.visionModel === 'string') {
+      throw new Error('ai.agent.chatModel/visionModel removed; use ai.agents.zhin.model');
+    }
   }
 }
 
@@ -112,43 +115,12 @@ export interface NormalizedAiRoutingConfig {
   agents: Record<string, AgentBindingConfig>;
 }
 
-/** 旧版 ai.pipeline.<role> → ai.agents.<role>（读配置时一次性迁移） */
-function mergeLegacyPipelineIntoAgents(
-  agents: Record<string, AgentBindingConfig>,
-  raw: unknown,
-): void {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return;
-  const src = raw as Record<string, unknown>;
-  const base = agents[DEFAULT_ZHIN_AGENT_NAME];
-  if (!base) return;
-
-  for (const role of PIPELINE_ROLES) {
-    const entry = src[role];
-    if (!entry || typeof entry !== 'object') continue;
-    const e = entry as Record<string, unknown>;
-    const existing = agents[role];
-    const merged: AgentBindingConfig = {
-      provider: (typeof e.provider === 'string' ? e.provider : undefined) ?? existing?.provider ?? base.provider,
-      model: (typeof e.model === 'string' ? e.model : undefined) ?? existing?.model ?? base.model,
-      ...(Array.isArray(e.mcpServers)
-        ? { mcpServers: e.mcpServers.filter((s): s is string => typeof s === 'string') }
-        : existing?.mcpServers
-          ? { mcpServers: existing.mcpServers }
-          : {}),
-      ...(typeof e.nickname === 'string'
-        ? { nickname: e.nickname }
-        : existing?.nickname
-          ? { nickname: existing.nickname }
-          : {}),
-    };
-    agents[role] = merged;
-  }
-}
-
 /**
- * 解析 ai.providers / agents；兼容旧版 providers.<driver> 与顶层 ai.routes。
+ * 解析 ai.providers / agents（拒绝已删除的 routes / pipeline / defaultProvider）。
  */
 export function normalizeAiRoutingConfig(ai: AIConfig | undefined): NormalizedAiRoutingConfig {
+  rejectRemovedAiConfigFields(ai);
+
   let providers: Record<string, ProviderInstanceConfig>;
 
   if (isNamedProviderShape(ai?.providers)) {
@@ -161,23 +133,6 @@ export function normalizeAiRoutingConfig(ai: AIConfig | undefined): NormalizedAi
   }
 
   const agents = { ...((ai as AIConfig & { agents?: Record<string, AgentBindingConfig> })?.agents ?? {}) };
-  const legacyRoutes = (ai as AIConfig & { routes?: Record<string, RouteEntryConfig> })?.routes ?? {};
-  mergeLegacyRoutesIntoAgents(agents, legacyRoutes);
-
-  if (!agents[DEFAULT_ZHIN_AGENT_NAME] && (ai as AIConfig & { agent?: { chatModel?: string } })?.agent) {
-    const legacy = ai as AIConfig & { defaultProvider?: string; agent?: { chatModel?: string } };
-    const providerAlias = legacy.defaultProvider || Object.keys(providers)[0] || 'openai';
-    const model = legacy.agent?.chatModel || '';
-    agents[DEFAULT_ZHIN_AGENT_NAME] = {
-      provider: providerAlias,
-      model,
-    };
-  }
-
-  mergeLegacyPipelineIntoAgents(
-    agents,
-    (ai as AIConfig & { pipeline?: unknown })?.pipeline,
-  );
 
   return { providers, agents };
 }

@@ -11,8 +11,8 @@ import {
   agentContextFrom,
   assistantText,
   createUserMessage,
-  getModel,
-  convertLegacyTools,
+  getLlmTransportModel,
+  agentToolsToLlmTools,
   type AgentMessage,
   type ParsedToolCall,
   type AssistantMessage,
@@ -38,7 +38,6 @@ import { resolveDeferredToolsConfig, resolveAlwaysLoadedSet } from '../tool-cata
 import { resolveDeferredApiTools } from '../tool-catalog/tool-catalog.js';
 import { getLoadedToolNamesFromSnapshot } from '@zhin.js/ai';
 import { mergeSkillDirsWithResolver, collectPluginSkillSearchRoots } from '../discovery/utils.js';
-import { getPlugin } from '@zhin.js/core';
 
 const logger = new Logger(null, 'ZhinAgent:AgentLoopTurn');
 
@@ -154,7 +153,7 @@ async function runAgentLoopVisionTurnOnce(
   const { host, sessionId, commMessage, visionSystemPrompt, modelId, onChunk, promptHooks, signal } = input;
   const repo = host.contextRepository;
   const providerAlias = host.getTurnProvider().name;
-  const llmModel = getModel(providerAlias, modelId);
+  const llmModel = getLlmTransportModel(providerAlias, modelId);
   const loaded = await repo.loadContext(sessionId);
   const promptMessages = input.userMessages;
 
@@ -294,7 +293,7 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
   const repo = host.contextRepository;
 
   const providerAlias = host.getTurnProvider().name;
-  const llmModel = getModel(providerAlias, modelId);
+  const llmModel = getLlmTransportModel(providerAlias, modelId);
   const loaded = await repo.loadContext(sessionId);
   const promptMessages = input.initialMessages?.length
     ? input.initialMessages
@@ -333,8 +332,10 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
     let skillDirList = () => [] as string[];
     let skillFileLookup: ((name: string) => string | undefined) | undefined;
     try {
-      const root = getPlugin().root;
-      skillDirList = () => mergeSkillDirsWithResolver(() => collectPluginSkillSearchRoots(root));
+      const root = getHostRootPlugin();
+      if (root) {
+        skillDirList = () => mergeSkillDirsWithResolver(() => collectPluginSkillSearchRoots(root));
+      }
       skillFileLookup = (name: string) => host.skillRegistry?.getByName(name)?.filePath;
     } catch {
       skillFileLookup = (name: string) => host.skillRegistry?.getByName(name)?.filePath;

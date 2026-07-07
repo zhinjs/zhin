@@ -30,7 +30,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { Message } from '../message.js';
 import { isActionMessage } from './interactive-segments/action.js';
-import { Plugin, getPlugin } from '../plugin.js';
+import { Plugin } from '../plugin.js';
 import type {
   MessageMiddleware,
   RegisteredAdapter,
@@ -534,15 +534,13 @@ export function createMessageDispatcher(
     },
     extensions: {
       addGuardrail(guardrail: GuardrailMiddleware) {
-        const plugin = getPlugin();
         const dispose = service.addGuardrail(guardrail);
-        plugin.onDispose(dispose);
+        rootPlugin?.onDispose(dispose);
         return dispose;
       },
       addOutboundPolish(handler: OutboundPolishMiddleware) {
-        const plugin = getPlugin();
         const dispose = service.addOutboundPolish(handler);
-        plugin.onDispose(dispose);
+        rootPlugin?.onDispose(dispose);
         return dispose;
       },
     },

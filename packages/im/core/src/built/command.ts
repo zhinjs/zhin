@@ -22,7 +22,7 @@ export function compareCommandPatterns(a: string, b: string): number {
 }
 import { MessageCommand } from "../command.js";
 import { Message } from "../message.js";
-import { Plugin, getPlugin } from "../plugin.js";
+import { Plugin } from "../plugin.js";
 import type { RegisteredAdapter, AdapterMessage } from "../types.js";
 
 /**
@@ -124,7 +124,7 @@ export class CommandFeature extends Feature<MessageCommand<RegisteredAdapter>> {
     const feature = this;
     return {
       addCommand<T extends RegisteredAdapter>(command: MessageCommand<T>) {
-        const plugin = getPlugin();
+        const plugin = this as Plugin;
         const dispose = feature.add(command as MessageCommand<RegisteredAdapter>, plugin.name);
         plugin.recordFeatureContribution(feature.name, command.pattern);
         plugin.onDispose(dispose);

@@ -2,8 +2,8 @@
  * spawn_task — 主会话将耗时任务派给后台子 agent（与 issue #396 对齐）
  */
 import type { Message, Tool, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import {
-  resolveIMSessionIdFromMessage,
   getLoadedToolNamesFromSnapshot,
   type AgentTool,
   type OrchestrationRunSource,

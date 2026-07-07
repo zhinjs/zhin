@@ -5,14 +5,12 @@ import {
 } from './types.js';
 
 export function resolveDeferredToolsConfig(
-  config: Pick<ZhinAgentConfig, 'deferredTools' | 'orchestratorTools'>,
+  config: Pick<ZhinAgentConfig, 'deferredTools'>,
 ): Required<Pick<DeferredToolsConfig, 'maxLoadedPerSession' | 'discoverTopK' | 'alwaysLoadedTools'>> & {
   mcpServers: NonNullable<DeferredToolsConfig['mcpServers']>;
 } {
   const dt = config.deferredTools ?? {};
-  const legacy = config.orchestratorTools;
-  const alwaysLoaded = dt.alwaysLoadedTools
-    ?? (legacy?.length ? legacy : DEFAULT_DEFERRED_TOOLS_CONFIG.alwaysLoadedTools);
+  const alwaysLoaded = dt.alwaysLoadedTools ?? DEFAULT_DEFERRED_TOOLS_CONFIG.alwaysLoadedTools;
   return {
     maxLoadedPerSession: dt.maxLoadedPerSession ?? DEFAULT_DEFERRED_TOOLS_CONFIG.maxLoadedPerSession,
     discoverTopK: dt.discoverTopK ?? DEFAULT_DEFERRED_TOOLS_CONFIG.discoverTopK,
@@ -22,7 +20,7 @@ export function resolveDeferredToolsConfig(
 }
 
 export function resolveAlwaysLoadedSet(
-  config: Pick<ZhinAgentConfig, 'deferredTools' | 'orchestratorTools'>,
+  config: Pick<ZhinAgentConfig, 'deferredTools'>,
 ): Set<string> {
   return new Set(resolveDeferredToolsConfig(config).alwaysLoadedTools);
 }

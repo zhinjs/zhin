@@ -16,7 +16,8 @@ import {
 } from '@zhin.js/core';
 import type { ContentPart } from '@zhin.js/ai';
 import type { OutputElement } from '@zhin.js/ai';
-import { parseOutput, resolveIMSessionIdFromMessage } from '@zhin.js/ai';
+import { parseOutput } from '@zhin.js/ai';
+import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import { formatCompactLog, truncatePreview, formatContentChainLog, CONTENT_CHAIN_STAGE } from '@zhin.js/logger';
 import { formatRedactedJson } from '@zhin.js/ai';
 import type { AIServiceRefs } from '../init/shared-refs.js';
@@ -57,7 +58,7 @@ import {
   orchestrationSourceFromMessage,
   tryCompleteKernelGroupMentionFromOutbound,
 } from './collaboration-kernel-bridge.js';
-import { normalizeExecutorKind } from '../orchestrator/kernel-mappers.js';
+import { normalizeExecutorKind } from '../orchestrator/orchestration-mappers.js';
 import {
   messageTextContent,
   stripCellToolJsonFromOutputElements,
@@ -511,7 +512,7 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
         bindingRegistry?.getBinding(turnPlan.handlerProfile)
         ?? bindingRegistry?.getBinding(DEFAULT_ZHIN_AGENT_NAME)
         ?? bindingRegistry?.requireZhinBinding();
-      if (handlerBinding) zhinAgent.setActiveBinding(handlerBinding);
+      if (handlerBinding) zhinAgent.configure({ activeBinding: handlerBinding });
 
       if (cell && findCellMemberByEndpoint(cell, endpointId)) {
         const snapCell = (await cellService.getSceneFresh(cell.id)) ?? cell;

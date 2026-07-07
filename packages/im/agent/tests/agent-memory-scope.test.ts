@@ -39,7 +39,13 @@ describe('resolveAgentScopedSessionId', () => {
   describe('user scope', () => {
     it('extracts user-level key from session ID', () => {
       const result = resolveAgentScopedSessionId(BASE_SESSION, 'researcher', 'user');
-      expect(result).toBe('user:icqq:bot123:group456');
+      expect(result).toBe('user:icqq:bot123:group:group456');
+    });
+
+    it('isolates private vs group sessions with the same scene id', () => {
+      const groupKey = resolveAgentScopedSessionId('icqq:bot123:group:999', 'researcher', 'user');
+      const privateKey = resolveAgentScopedSessionId('icqq:bot123:private:999', 'researcher', 'user');
+      expect(groupKey).not.toBe(privateKey);
     });
 
     it('same user across different groups gets same key', () => {
@@ -53,7 +59,7 @@ describe('resolveAgentScopedSessionId', () => {
     it('private session extracts user ID', () => {
       const privateSession = 'icqq:bot123:private:user789';
       const result = resolveAgentScopedSessionId(privateSession, 'agent', 'user');
-      expect(result).toBe('user:icqq:bot123:user789');
+      expect(result).toBe('user:icqq:bot123:private:user789');
     });
 
     it('handles minimal session ID', () => {

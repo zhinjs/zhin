@@ -9,8 +9,8 @@ import {
   assistantText,
   createUserMessage,
   createMemoryContextRepository,
-  getModel,
-  convertLegacyTools,
+  getLlmTransportModel,
+  agentToolsToLlmTools,
   registerLlmApiFromProviders,
   sdkEntryFromProvider,
   type AgentMessage,
@@ -139,14 +139,14 @@ export async function runAgentLoopStandaloneTurn(
 
   ensureLlmApi(provider, input.resolveProvider);
 
-  const llmModel = getModel(provider.name, model);
+  const llmModel = getLlmTransportModel(provider.name, model);
   const { repository } = createMemoryContextRepository();
   const sessionId = `standalone:${Date.now()}`;
   const loaded = await repository.loadContext(sessionId);
   const promptMessages = await buildUserMessages(userInput);
 
   const legacyByName = new Map(tools.map((t) => [t.name, t]));
-  const llmTools = convertLegacyTools(tools);
+  const llmTools = agentToolsToLlmTools(tools);
   const toolCalls: ToolCallRecord[] = [];
   let iterations = 0;
   let lastAssistantText = '';
