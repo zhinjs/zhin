@@ -1,15 +1,20 @@
 import type { Message } from '../../message.js';
 import type { MessageElement } from '../../types.js';
 import type { InteractivePolicy } from '../interactive-segments/types.js';
+import type { Segment } from '../segment-contract/types.js';
 
 /** AI 结构化出站 payload — 平台无关 DSL（Adapter extensions 承载平台特有段）。 */
 export interface ZhinAiOutboundPayload {
   text?: string;
   mentions?: string[];
-  segments?: AiOutboundSegment[];
+  segments?: Segment[];
   extensions?: Record<string, unknown>;
 }
 
+/**
+ * @deprecated 使用 canonical `Segment`（`type` + `data` + 可选 `platform`）。
+ * 历史 `kind` → `type`；`mode` 已删除。
+ */
 export interface AiOutboundSegment {
   kind: string;
   mode?: string;
