@@ -726,6 +726,8 @@ export namespace Plugin {
     "ai.response": [Plugin.AIEventPayload];
     "ai.typing.start": [Plugin.AIEventPayload];
     "ai.typing.stop": [Plugin.AIEventPayload];
+    "ai.activity.queued.start": [Plugin.AIEventPayload];
+    "ai.activity.queued.clear": [Plugin.AIEventPayload];
     "ai.subagent.spawn": [Plugin.AIEventPayload];
     "ai.subagent.start": [Plugin.AIEventPayload];
     "ai.subagent.finish": [Plugin.AIEventPayload];

@@ -604,6 +604,9 @@ importers:
       '@zhin.js/satori':
         specifier: workspace:*
         version: link:../../packages/toolkit/satori
+      '@zhin.js/service-activity-feedback':
+        specifier: workspace:*
+        version: link:../../plugins/services/activity-feedback
       '@zhin.js/speech':
         specifier: workspace:*
         version: link:../../packages/toolkit/speech
@@ -1918,6 +1921,22 @@ importers:
         specifier: ^1.1.0
         version: 1.1.0
     devDependencies:
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
+
+  plugins/services/activity-feedback:
+    dependencies:
+      '@zhin.js/agent':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent
+    devDependencies:
+      '@types/node':
+        specifier: ^25.9.2
+        version: 25.9.4
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

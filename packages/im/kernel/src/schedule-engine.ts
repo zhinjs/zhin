@@ -11,8 +11,11 @@ import {
   resolveFreeDayJob,
   resolveWorkdayJob,
   resolveScatterJob,
+  type HolidayInput,
   type JobContext,
+  type JobInfo,
   type ResolvedJob,
+  type ScatterInput,
   type ScheduleKind,
 } from '@zhin.js/schedule';
 
@@ -38,8 +41,8 @@ function jobScheduleToResolved(
   input: {
     cron?: string;
     expr?: string;
-    scatterInput?: import('@zhin.js/schedule').ScatterInput;
-    holidayInput?: import('@zhin.js/schedule').HolidayInput;
+    scatterInput?: ScatterInput;
+    holidayInput?: HolidayInput;
     tz?: string;
   },
   timezone: string,
@@ -78,7 +81,7 @@ export class ScheduleEngine {
     this.calendar = new CalendarScheduler({
       timezone: this.timezone,
       onError: options.onError
-        ? (err, job) => options.onError!(err, job.id)
+        ? (err: Error, job: JobInfo) => options.onError!(err, job.id)
         : undefined,
     });
   }
@@ -92,8 +95,8 @@ export class ScheduleEngine {
       expr?: string;
       everyMs?: number;
       atMs?: number;
-      scatterInput?: import('@zhin.js/schedule').ScatterInput;
-      holidayInput?: import('@zhin.js/schedule').HolidayInput;
+      scatterInput?: ScatterInput;
+      holidayInput?: HolidayInput;
       tz?: string;
     },
   ): () => void {
@@ -159,7 +162,7 @@ export class ScheduleEngine {
       throw new Error(`Invalid schedule registration for job ${id}`);
     }
 
-    const info = this.calendar.registerResolved(resolved, (ctx) => wrapped(ctx), { id });
+    const info = this.calendar.registerResolved(resolved, (ctx: JobContext) => wrapped(ctx), { id });
     this.timers.set(id, () => info.cancel());
     const next = getNextRun(resolved, new Date());
     this.meta.set(id, {
@@ -181,7 +184,7 @@ export class ScheduleEngine {
       await callback(ctx);
     };
     this.callbacks.set(id, wrapped);
-    const info = this.calendar.registerResolved(resolved, (ctx) => wrapped(ctx), { id });
+    const info = this.calendar.registerResolved(resolved, (ctx: JobContext) => wrapped(ctx), { id });
     this.timers.set(id, () => info.cancel());
     const next = getNextRun(resolved, new Date());
     this.meta.set(id, {

@@ -13,6 +13,8 @@ export type AIEventName =
   | 'ai.response'
   | 'ai.typing.start'
   | 'ai.typing.stop'
+  | 'ai.activity.queued.start'
+  | 'ai.activity.queued.clear'
   | 'ai.subagent.spawn'
   | 'ai.subagent.start'
   | 'ai.subagent.finish'
@@ -48,6 +50,8 @@ export interface AIEventHandlers {
   onResponse?: (payload: AIEventPayload) => void;
   onTypingStart?: (payload: AIEventPayload) => void;
   onTypingStop?: (payload: AIEventPayload) => void;
+  onQueuedStart?: (payload: AIEventPayload) => void;
+  onQueuedClear?: (payload: AIEventPayload) => void;
   onSubagentSpawn?: (payload: AIEventPayload) => void;
   onSubagentStart?: (payload: AIEventPayload) => void;
   onSubagentFinish?: (payload: AIEventPayload) => void;
@@ -73,6 +77,8 @@ const EVENT_HANDLER_MAP: Record<AIEventName, keyof AIEventHandlers | undefined> 
   'ai.response': 'onResponse',
   'ai.typing.start': 'onTypingStart',
   'ai.typing.stop': 'onTypingStop',
+  'ai.activity.queued.start': 'onQueuedStart',
+  'ai.activity.queued.clear': 'onQueuedClear',
   'ai.subagent.spawn': 'onSubagentSpawn',
   'ai.subagent.start': 'onSubagentStart',
   'ai.subagent.finish': 'onSubagentFinish',

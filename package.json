@@ -31,7 +31,7 @@
     "init-publish": "node scripts/init-new-packages.mjs",
     "stop": "pnpm --filter test-bot stop",
     "init": "pnpm --filter test-bot initial && pnpm install",
-    "prepare:logger": "pnpm --filter @zhin.js/logger build && pnpm --filter @zhin.js/cli install",
+    "prepare:logger": "pnpm --filter @zhin.js/logger build && pnpm --filter @zhin.js/schedule build && pnpm --filter @zhin.js/cli install",
     "prepare:cli": "pnpm --filter @zhin.js/scaffold-wizard build && pnpm --filter @zhin.js/cli build && pnpm install",
     "build": "turbo run build --filter=./basic/** --filter=./packages/** --filter=./plugins/**",
     "build:all": "turbo run build",

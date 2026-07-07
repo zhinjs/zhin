@@ -25,6 +25,9 @@ import {
   DEFAULT_ALWAYS_LOADED_TOOLS,
   DEFAULT_DEFERRED_TOOLS_CONFIG,
 } from '../tool-catalog/types.js';
+import type { InboundQueueConfig } from './inbound-queue-config.js';
+
+export type { InboundQueueConfig } from './inbound-queue-config.js';
 
 export {
   DEFAULT_ALWAYS_LOADED_TOOLS,
@@ -111,6 +114,8 @@ export interface ZhinAgentConfig {
   contextTokens?: number;
   maxHistoryShare?: number;
   compaction?: CompactionConfig;
+  /** 群/频道入站 @ 排队（fifo 时触发 ai.activity.queued.*） */
+  inboundQueue?: InboundQueueConfig;
   disabledTools?: string[];
   allowedTools?: string[];
   execSecurity?: 'deny' | 'allowlist' | 'full';

@@ -92,6 +92,12 @@ import { buildDeferredAutoContinueUserMessage } from './deferred-auto-continue.j
 import { buildSubagentAutoContinueUserMessage } from './subagent-auto-continue.js';
 import { persistSubagentResultToContext } from './persist-subagent-context.js';
 import type { DeferredWorkerResult } from '../deferred-worker-runner.js';
+import {
+  normalizeInboundQueueConfig,
+  shouldUseGroupFifoQueue,
+  type ResolvedInboundQueueConfig,
+} from './inbound-queue-config.js';
+import { InboundTurnQueue } from './inbound-turn-queue.js';
 
 export type { ZhinAgentConfig, OnChunkCallback } from './config.js';
 export type { IAgentTurnProcessor, IAgentSessionManager, IAgentDiagnostics, IAgentConfigurator } from './interfaces.js';
@@ -150,6 +156,8 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   private memoryPersistenceReady: Promise<void>;
   private resolveMemoryPersistenceReady!: () => void;
   private memoryPersistenceDone = false;
+  private readonly inboundQueueConfig: ResolvedInboundQueueConfig;
+  private readonly inboundTurnQueue: InboundTurnQueue;
   private get phaseConfig(): PhaseTraceConfig {
     return { phaseTraceEnabled: this.phaseTraceEnabled, onPhaseTrace: this.config.onPhaseTrace };
   }
@@ -163,7 +171,9 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   constructor(provider: AIProvider, config?: ZhinAgentConfig) {
     this.provider = provider;
-    this.config = { ...DEFAULT_CONFIG, ...config } as Required<ZhinAgentConfig>;
+    const merged = { ...DEFAULT_CONFIG, ...config } as Required<ZhinAgentConfig>;
+    this.inboundQueueConfig = normalizeInboundQueueConfig(merged.inboundQueue);
+    this.config = merged;
     this.phaseTraceEnabled = isPhaseTraceEnabled(this.config);
     this.promptTraceEnabled = isPromptTraceEnabled(this.config);
     this.promptTraceVerbose = isPromptTraceVerbose(this.config);
@@ -183,6 +193,20 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
       this.config.steeringMode,
       this.config.followUpMode,
     );
+    this.inboundTurnQueue = new InboundTurnQueue(this.inboundQueueConfig, {
+      emitQueuedStart: (commMessage, sessionKey) => {
+        this.emitter.emit(
+          'ai.activity.queued.start',
+          this.emitter.createPayload(sessionKey, commMessage, 'text'),
+        );
+      },
+      emitQueuedClear: (commMessage, sessionKey) => {
+        this.emitter.emit(
+          'ai.activity.queued.clear',
+          this.emitter.createPayload(sessionKey, commMessage, 'text'),
+        );
+      },
+    });
     const memoryStack = createMemoryContextRepository({
       tailMessageLimit: resolveContextTailMessageLimit(this.config),
     });
@@ -695,9 +719,22 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     externalTools: Tool[] = [],
     onChunk?: OnChunkCallback,
   ): Promise<OutputElement[]> {
-    return this.runInTurnContext(randomUUID(), () =>
-      processTextTurn(asPrivate(this), content, commMessage, externalTools, onChunk),
-    );
+    const runTurn = (turnContent: string) =>
+      this.runInTurnContext(randomUUID(), () =>
+        processTextTurn(asPrivate(this), turnContent, commMessage, externalTools, onChunk),
+      );
+
+    if (shouldUseGroupFifoQueue(commMessage, this.inboundQueueConfig)) {
+      const sessionKey = resolveIMSessionIdFromMessage(commMessage);
+      return this.inboundTurnQueue.schedule({
+        sessionKey,
+        commMessage,
+        content,
+        run: runTurn,
+      });
+    }
+
+    return runTurn(content);
   }
 
   async *processStream(
@@ -723,9 +760,19 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     let finalOutput: OutputElement[] = [];
     let finalError: Error | undefined;
 
-    const runPromise = this.runInTurnContext(turnId, () =>
-      processTextTurn(asPrivate(this), content, commMessage, externalTools, onChunk),
-    ).then((output) => {
+    const runPromise = this.runInTurnContext(turnId, async () => {
+      if (shouldUseGroupFifoQueue(commMessage, this.inboundQueueConfig)) {
+        const sessionKey = resolveIMSessionIdFromMessage(commMessage);
+        return this.inboundTurnQueue.schedule({
+          sessionKey,
+          commMessage,
+          content,
+          run: (mergedContent) =>
+            processTextTurn(asPrivate(this), mergedContent, commMessage, externalTools, onChunk),
+        });
+      }
+      return processTextTurn(asPrivate(this), content, commMessage, externalTools, onChunk);
+    }).then((output) => {
       finalOutput = output;
       done = true;
       resolveWaiting?.();
@@ -766,9 +813,22 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     commMessage: Message,
     onChunk?: OnChunkCallback,
   ): Promise<OutputElement[]> {
-    return this.runInTurnContext(randomUUID(), () =>
-      processMultimodalTurn(asPrivate(this), parts, commMessage, onChunk),
-    );
+    const runTurn = () =>
+      this.runInTurnContext(randomUUID(), () =>
+        processMultimodalTurn(asPrivate(this), parts, commMessage, onChunk),
+      );
+
+    if (shouldUseGroupFifoQueue(commMessage, this.inboundQueueConfig)) {
+      const sessionKey = resolveIMSessionIdFromMessage(commMessage);
+      return this.inboundTurnQueue.schedule({
+        sessionKey,
+        commMessage,
+        coalesce: false,
+        run: () => runTurn(),
+      });
+    }
+
+    return runTurn();
   }
 
   // ── Internal helpers ────────────────────────────────────────────────
@@ -791,6 +851,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     if (this.promptController) {
       this.promptController.abort();
     }
+    this.inboundTurnQueue.dispose();
     // 使用 Disposable 接口统一清理资源（运行时 has-dispose 检查）
     const tryDispose = (obj: unknown) => {
       if (obj && typeof (obj as Disposable).dispose === 'function') {

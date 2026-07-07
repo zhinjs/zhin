@@ -424,6 +424,35 @@ export type {
 export { initAgentModule } from './init.js';
 export { registerEndpointIdColumnMigrationHook } from './init/upgrade-endpoint-id-schema.js';
 
+// ── Activity Feedback（替代 endpoint typingIndicator）──
+export {
+  ActivityFeedbackManager,
+  getActivityFeedbackManager,
+  initActivityFeedbackManager,
+  resolveActivityFeedbackPhaseConfig,
+  toActivityFeedbackEventContext,
+  resolveActivitySceneType,
+  resolveActivityEventTargets,
+  enableActivityFeedbackForBot,
+  getAdapterActivityFeedbackManager,
+  initAdapterActivityFeedbackManager,
+  isGenericActivityFeedbackManager,
+} from './activity-feedback/index.js';
+export type {
+  ActivityFeedbackType,
+  ActivityFeedbackPhase,
+  ActivitySceneType,
+  ActivityFeedbackPhaseConfig,
+  ActivityFeedbackScenePhases,
+  ActivityFeedbackConfig,
+  ResolvedActivityFeedbackPhaseConfig,
+  EndpointWithActivityFeedback,
+  PlatformActivityFeedbackManager,
+  PlatformActivityFeedbackStartOptions,
+  BotActivityFeedbackManager,
+  ActivityFeedbackEventContext,
+} from './activity-feedback/index.js';
+
 // ── Typing Indicator ──
 export {
   TypingIndicatorManager,

@@ -1,4 +1,6 @@
 {
+  // IDE-only monorepo typecheck. Per-package builds use each package's tsconfig (outDir → lib/).
+  // Keep noEmit; do not add declaration/sourceMap — no outDir here, emit would land beside src/*.ts.
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
@@ -15,9 +17,6 @@
     "allowSyntheticDefaultImports": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
     "paths": {
       "@zhin.js/core": [
         "./packages/im/core/src/index.ts"

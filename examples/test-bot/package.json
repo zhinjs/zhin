@@ -67,6 +67,7 @@
     "@zhin.js/plugin-rss": "workspace:*",
     "@zhin.js/satori": "workspace:*",
     "@zhin.js/speech": "workspace:*",
+    "@zhin.js/service-activity-feedback": "workspace:*",
     "ai": "^7.0.2",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

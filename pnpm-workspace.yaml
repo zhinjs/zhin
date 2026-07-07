@@ -8,6 +8,7 @@ packages:
   - 'plugins/features/*'
   - 'plugins/utils/*'
   - 'plugins/games/*'
+  - 'plugins/services/*'
   - 'examples/*'
   - 'docs'
 

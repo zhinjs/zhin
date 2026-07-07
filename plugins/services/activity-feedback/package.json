@@ -1,0 +1,54 @@
+{
+  "name": "@zhin.js/service-activity-feedback",
+  "version": "1.0.0",
+  "description": "Activity Feedback 服务插件：订阅 AI 生命周期事件，按 endpoint activityFeedback 配置驱动适配器能力",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "lib",
+    "plugin.yml",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "test": "vitest run --config ../../../vitest.config.ts plugins/services/activity-feedback/tests"
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "plugin",
+    "service",
+    "activity-feedback",
+    "typing-indicator"
+  ],
+  "author": "Zhin.js Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "plugins/services/activity-feedback"
+  },
+  "dependencies": {
+    "@zhin.js/agent": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.2",
+    "typescript": "^6.0.3",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependencies": {
+    "@zhin.js/agent": "workspace:*",
+    "zhin.js": "workspace:*"
+  }
+}
