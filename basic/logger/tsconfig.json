@@ -4,7 +4,8 @@
     "types": ["node"],
     "outDir": "./lib",
     "rootDir": "./src",
-    "allowJs": true
+    "sourceMap": false,
+    "declarationMap": false
   },
   "include": ["src/**/*"],
   "exclude": ["lib", "node_modules", "tests"]

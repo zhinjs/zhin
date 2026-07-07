@@ -30,6 +30,10 @@ function run(cmd, opts = {}) {
 }
 
 function duBytes(dir) {
+  if (process.platform !== 'darwin') {
+    const out = execSync(`du -sb ${JSON.stringify(dir)}`, { encoding: 'utf8' });
+    return Number.parseInt(out.split(/\s+/)[0], 10);
+  }
   const out = execSync(`du -sk ${JSON.stringify(dir)}`, { encoding: 'utf8' });
   const kb = Number.parseInt(out.split(/\s+/)[0], 10);
   return kb * 1024;
@@ -85,9 +89,15 @@ function formatMb(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
+function rimrafLib(pkgDir) {
+  const lib = path.join(pkgDir, 'lib');
+  if (fs.existsSync(lib)) fs.rmSync(lib, { recursive: true, force: true });
+}
+
 function main() {
   console.log('Building IM stack packages…');
   for (const entry of IM_STACK) {
+    rimrafLib(path.join(repoRoot, entry.dir));
     run(`pnpm --filter ${entry.name} build`, { cwd: repoRoot, stdio: 'pipe' });
   }
 
