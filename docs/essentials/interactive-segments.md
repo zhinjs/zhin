@@ -1,5 +1,7 @@
 # Interactive / Keyboard Segment 适配器矩阵
 
+Canonical `keyboard` 段形状见 [Segment 内容模型](../architecture/segment-content-model.md)。
+
 交互按钮在 **Adapter.renderSendMessage** 中于 `resolveRichSegments` 之后由 `resolveKeyboardSegments`（别名 `resolveInteractiveSegments`）处理。
 
 详见 [ADR 0022](../adr/0022-interactive-button-modes.md)。
