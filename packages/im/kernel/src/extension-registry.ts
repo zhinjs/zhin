@@ -54,7 +54,7 @@ export function installExtensionProxy(prototype: object): void {
     get(target, prop, receiver) {
       if (typeof prop === "string") {
         const entry = registry.get(prop);
-        if (entry) return entry.fn;
+        if (entry) return entry.fn.bind(receiver);
       }
       return Reflect.get(target, prop, receiver);
     },
