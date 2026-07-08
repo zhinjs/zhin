@@ -53,7 +53,7 @@
     "zhin.js": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^25.9.2",
+    "@types/node": "^26.1.0",
     "@zhin.js/host-router": "workspace:*",
     "zhin.js": "workspace:*"
   },

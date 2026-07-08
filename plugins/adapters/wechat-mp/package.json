@@ -21,7 +21,7 @@
   },
   "devDependencies": {
     "@types/koa": "^3.0.3",
-    "@types/node": "^25.9.2",
+    "@types/node": "^26.1.0",
     "@types/xml2js": "^0.4.14",
     "@zhin.js/host-router": "workspace:*",
     "typescript": "^6.0.3",
