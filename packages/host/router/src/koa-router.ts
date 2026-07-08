@@ -25,7 +25,7 @@ export type RouterContext = Context & {
 
 type Path = string | RegExp;
 type RouteHandler = (ctx: RouterContext) => void | Promise<void>;
-type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
+type HttpMethod = "GET" | "POST" | "PUT" | "DELETE" | "ALL";
 
 function parseRouteArgs(
   path: Path,
@@ -146,6 +146,9 @@ export class Router extends KoaRouter {
       case "DELETE":
         super.delete(koaPath, run);
         break;
+      case "ALL":
+        super.all(koaPath, run);
+        break;
       default:
         break;
     }
@@ -220,6 +223,12 @@ export class Router extends KoaRouter {
   delete(path: Path, ...handlers: (RouteHandler | RouteMeta)[]): this;
   delete(pathOrName: string | RegExp | string[], pathOrHandler?: unknown, ...rest: unknown[]): this {
     return this.delegateOrTrack("DELETE", pathOrName, pathOrHandler, rest);
+  }
+
+  all(path: string | RegExp | string[], ...middleware: RouterMiddleware[]): this;
+  all(path: Path, ...handlers: (RouteHandler | RouteMeta)[]): this;
+  all(pathOrName: string | RegExp | string[], pathOrHandler?: unknown, ...rest: unknown[]): this {
+    return this.delegateOrTrack("ALL", pathOrName, pathOrHandler, rest);
   }
 
   destroyWs(wsServer: WebSocketServer): void {

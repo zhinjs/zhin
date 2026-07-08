@@ -18,6 +18,9 @@ describe("toKoaRouterPath", () => {
         ctx.body = { ok: true };
       });
     }).not.toThrow();
+    expect(() => {
+      router.all("/mcp/:tail+", () => {});
+    }).not.toThrow();
     server.close();
   });
 });
