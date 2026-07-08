@@ -39,7 +39,7 @@
     "build:node": "tsc"
   },
   "dependencies": {
-    "qq-official-bot": "^1.2.2"
+    "qq-official-bot": "^1.2.3"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",
