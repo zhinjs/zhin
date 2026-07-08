@@ -83,8 +83,8 @@ export function buildTurnPlan(input: TurnPlanResolverInput): TurnPlan {
 
   if (handlerEndpointId) {
     plan.delegation = {
-      mode: 'im_mention',
-      targetEndpointId: handlerEndpointId,
+      mode: 'local_process',
+      delegateToPeer: handlerEndpointId,
       targetAgentId: handlerProfile,
     };
     return plan;

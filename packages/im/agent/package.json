@@ -30,6 +30,7 @@
     "clean": "rimraf lib"
   },
   "dependencies": {
+    "@a2a-js/sdk": "1.0.0-beta.0",
     "@zhin.js/ai": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/kernel": "workspace:*",

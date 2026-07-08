@@ -49,6 +49,7 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
+    "@zhin.js/host-router": "workspace:*",
     "zhin.js": "workspace:*"
   },
   "devDependencies": {

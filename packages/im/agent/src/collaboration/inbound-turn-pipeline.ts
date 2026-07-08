@@ -45,7 +45,6 @@ import { evaluateCellAtOwnership, evaluatePeerTrigger, isInboundFromCollaboratio
 import { buildTurnPlan } from './turn-plan-resolver.js';
 import { getCollaborationSceneService } from './scene-service.js';
 import { findCellForInbound, findCellMemberByEndpoint } from './collaboration-config.js';
-import { sendImMentionDelegation } from './im-mention-delegate.js';
 import {
   tryBuildCollaborationOutboundBatches,
   sanitizeCellToolJsonInOutboundBatches,
@@ -56,8 +55,9 @@ import { expandOutboundBatchesForLongText } from './group-message.js';
 import { normalizePlannerOutboundBatches } from './planner-outbound-normalize.js';
 import {
   orchestrationSourceFromMessage,
-  tryCompleteKernelGroupMentionFromOutbound,
+  tryCompleteKernelImProjectionFromOutbound,
 } from './collaboration-kernel-bridge.js';
+import { dispatchPeerTask } from './collaboration-dispatch.js';
 import { normalizeExecutorKind } from '../orchestrator/orchestration-mappers.js';
 import {
   messageTextContent,
@@ -229,7 +229,7 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
         const sessionKey = resolveIMSessionIdFromMessage(message);
         const runs = await orch.listRuns(sessionKey);
         const activeGroupTasks = runs.flatMap((run) => run.tasks).filter((task) =>
-          normalizeExecutorKind(task.executor_kind) === 'scene_mention'
+          normalizeExecutorKind(task.executor_kind) === 'im_projection'
           && task.assigned_to === peerResult.peerEndpointId
           && ['assigned', 'running', 'waiting_result', 'pending'].includes(task.status),
         );
@@ -249,7 +249,7 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
           return;
         }
 
-        if (target && normalizeExecutorKind(target.executor_kind) === 'scene_mention') {
+        if (target && normalizeExecutorKind(target.executor_kind) === 'im_projection') {
           const assignee = target.assigned_to || peerResult.peerEndpointId;
           if (assignee !== peerResult.peerEndpointId) {
             logger.debug(formatCompactLog('OrchestrationKernel', {
@@ -372,72 +372,43 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
         delegation: turnPlan.delegation?.mode,
       }));
 
-      if (
-        turnPlan.delegation?.mode === 'im_mention'
-        && turnPlan.delegation.targetEndpointId
-        && turnPlan.delegation.targetEndpointId !== endpointId
-      ) {
+      const peerTarget = turnPlan.delegation?.delegateToPeer ?? turnPlan.delegation?.targetEndpointId;
+      if (peerTarget && peerTarget !== endpointId && cell) {
         const delegateText = aiContent.trim() || '请处理上述协作请求。';
-        const orch = getOrchestrationService();
-        if (orch && cell) {
-          const run = await orch.findOrCreateRun({
-            sessionKey: resolveIMSessionIdFromMessage(commMessage),
-            title: delegateText.slice(0, 80) || 'IM group delegation',
-            source: orchestrationSourceFromMessage(commMessage, cell.id),
-          });
-          const dispatched = await orch.dispatchTask({
-            runId: run.id,
-            name: `@${turnPlan.delegation.targetEndpointId}`,
-            description: delegateText,
-            role: 'worker',
+        try {
+          const dispatched = await dispatchPeerTask({
+            cell,
+            fromEndpointId: endpointId,
+            toEndpointId: peerTarget,
             goal: delegateText,
-            executorKind: 'scene_mention',
-            assignedTo: turnPlan.delegation.targetEndpointId,
-            context: {
-              handlerProfile: turnPlan.handlerProfile,
-              fromEndpointId: endpointId,
-            },
+            handlerProfile: turnPlan.handlerProfile,
             message: commMessage,
-            autoStart: false,
           });
-          // Execute via the registered scene_mention executor (ADR 0027).
-          const result = await orch.runTask(dispatched.task.id, commMessage);
-          if (result.status === 'waiting_result' || result.status === 'running') {
+          if (
+            dispatched.task.status === 'completed'
+            || dispatched.task.status === 'waiting_result'
+            || dispatched.task.status === 'running'
+          ) {
             logger.info(formatCompactLog('AI Handler', {
-              path: 'kernel_scene_mention',
-              run: dispatched.run.id,
-              task: dispatched.task.id,
+              path: 'kernel_internal_room',
+              run: dispatched.runId,
+              task: dispatched.taskId,
               from: endpointId,
-              to: turnPlan.delegation.targetEndpointId,
+              to: peerTarget,
               agent: turnPlan.handlerProfile,
             }));
             return;
           }
           logger.warn(formatCompactLog('AI Handler', {
-            path: 'kernel_scene_mention_failed',
-            task: dispatched.task.id,
-            error: result.error,
+            path: 'kernel_internal_room_failed',
+            task: dispatched.taskId,
+            error: dispatched.task.error,
             fallback: 'local_process',
           }));
-        } else {
-          const sent = await sendImMentionDelegation({
-            message,
-            targetEndpointId: turnPlan.delegation.targetEndpointId,
-            text: delegateText,
-            cell,
-          });
-          if (sent.ok) {
-            logger.info(formatCompactLog('AI Handler', {
-              path: 'im_mention_legacy',
-              from: endpointId,
-              to: turnPlan.delegation.targetEndpointId,
-              agent: turnPlan.handlerProfile,
-            }));
-            return;
-          }
+        } catch (err) {
           logger.warn(formatCompactLog('AI Handler', {
-            path: 'im_mention_failed',
-            error: sent.error,
+            path: 'kernel_internal_room_failed',
+            error: err instanceof Error ? err.message : String(err),
             fallback: 'local_process',
           }));
         }
@@ -631,7 +602,7 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
 
       if (cell && outboundBatches.some((b) => b.length > 0)) {
         try {
-          await tryCompleteKernelGroupMentionFromOutbound({
+          await tryCompleteKernelImProjectionFromOutbound({
             message,
             cell,
             endpointId,

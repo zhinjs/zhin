@@ -3,7 +3,6 @@
  */
 import type { IncomingMessage } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
-import { AGENT_MESH_TOOL_NAMES } from '@zhin.js/core';
 
 export interface McpAuthConfig {
   allowUnauthenticatedLocalhost?: boolean;
@@ -36,15 +35,11 @@ export function extractMcpToolName(body: unknown): string | undefined {
 }
 
 export function mcpAuthRequired(
-  body: unknown,
+  _body: unknown,
   req: IncomingMessage,
   mcpCfg: McpAuthConfig,
   isProduction: boolean,
 ): boolean {
-  const toolName = extractMcpToolName(body);
-  if (toolName && (AGENT_MESH_TOOL_NAMES as readonly string[]).includes(toolName)) {
-    return true;
-  }
   if (!isProduction && mcpCfg.allowUnauthenticatedLocalhost !== false && isLocalhost(req)) {
     return false;
   }

@@ -66,18 +66,21 @@ export function orchestrationSourceFromMessage(
   };
 }
 
-export function findActiveSceneMentionTasksForEndpoint(
+export function findActiveImProjectionTasksForEndpoint(
   tasks: OrchestrationTaskRecord[],
   endpointId: string,
 ): OrchestrationTaskRecord[] {
   return tasks.filter((task) =>
-    normalizeExecutorKind(task.executor_kind) === 'scene_mention'
+    normalizeExecutorKind(task.executor_kind) === 'im_projection'
     && task.assigned_to === endpointId
     && ACTIVE_GROUP_TASK_STATUSES.has(task.status),
   );
 }
 
-export async function listActiveSceneMentionTasks(
+/** @deprecated use findActiveImProjectionTasksForEndpoint */
+export const findActiveSceneMentionTasksForEndpoint = findActiveImProjectionTasksForEndpoint;
+
+export async function listActiveImProjectionTasks(
   message: Message,
   endpointId: string,
 ): Promise<OrchestrationTaskRecord[]> {
@@ -85,13 +88,17 @@ export async function listActiveSceneMentionTasks(
   if (!orch) return [];
   const sessionKey = resolveIMSessionIdFromMessage(message);
   const runs = await orch.listRuns(sessionKey);
-  return runs.flatMap((run) => findActiveSceneMentionTasksForEndpoint(run.tasks, endpointId));
+  return runs.flatMap((run) => findActiveImProjectionTasksForEndpoint(run.tasks, endpointId));
 }
+
+/** @deprecated use listActiveImProjectionTasks */
+export const listActiveSceneMentionTasks = listActiveImProjectionTasks;
 
 /**
  * 被委派方 AI 出站后：实质公开回复 → completeTask + 可选 handback @Planner（含 #taskId）。
+ * 仅适用于 im_projection 任务；internal_room 走 kernel 直完成。
  */
-export async function tryCompleteKernelGroupMentionFromOutbound(input: {
+export async function tryCompleteKernelImProjectionFromOutbound(input: {
   message: Message;
   cell: CollaborationScene;
   endpointId: string;
@@ -104,7 +111,7 @@ export async function tryCompleteKernelGroupMentionFromOutbound(input: {
   const publicText = flattenOutboundText(input.outboundBatches);
   if (!isSubstantiveGroupTaskReply(publicText)) return;
 
-  const active = await listActiveSceneMentionTasks(input.message, input.endpointId);
+  const active = await listActiveImProjectionTasks(input.message, input.endpointId);
   if (active.length !== 1) return;
 
   const task = active[0]!;
@@ -129,3 +136,6 @@ export async function tryCompleteKernelGroupMentionFromOutbound(input: {
     text: handbackText,
   });
 }
+
+/** @deprecated use tryCompleteKernelImProjectionFromOutbound */
+export const tryCompleteKernelGroupMentionFromOutbound = tryCompleteKernelImProjectionFromOutbound;

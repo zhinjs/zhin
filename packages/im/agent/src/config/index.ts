@@ -5,6 +5,7 @@ export {
 } from './normalize-ai-config.js';
 export { validateAiRoutingConfig } from './validate-ai-config.js';
 export { applyAiConfigFixes } from './fix-ai-config.js';
+export { AgentBindingRegistry } from './agent-binding-registry.js';
 export { DEFAULT_ZHIN_AGENT_NAME } from './types.js';
 export type { AgentBindingConfig, ResolvedAgentBinding } from './types.js';
 export {

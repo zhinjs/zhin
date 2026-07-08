@@ -26,10 +26,10 @@ export function shouldBlockDelegationAskUser(
   const q = question.trim();
   if (questionType !== 'confirm') return undefined;
   if (/授权|authorize|是否.*(调用|使用|委派|派遣)|allow.*(researcher|executor|delegate|agent)/i.test(q)) {
-    return 'Error: In group collaboration, do not ask_owner to authorize delegation. Use orchestration_add_task (scene_mention) or spawn_task with the peer endpoint.';
+    return 'Error: In group collaboration, do not ask_owner to authorize delegation. Use orchestration_add_task (internal_room) or spawn_task with the peer endpoint.';
   }
   if (/Researcher|Evaluator|Executor|Reviewer/i.test(q) && /是否|authorize|授权|调用/i.test(q)) {
-    return 'Error: In group collaboration, dispatch peers via OrchestrationKernel (scene_mention task) — do not ask_owner for role authorization.';
+    return 'Error: In group collaboration, dispatch peers via OrchestrationKernel (internal_room task) — do not ask_owner for role authorization.';
   }
   return undefined;
 }
@@ -53,8 +53,8 @@ export function buildGroupAskUserFollowUp(commMessage: Message, answer: string):
     answer,
     '',
     `[Collaboration] Owner replied via private. Active scene: group ${sceneId}.`,
-    `Next: orchestration_add_task with executor scene_mention assigned_to ${peerEp}, or spawn_task for local work (${roleLabel}).`,
-    'Peer @ assignments must include #taskId in the outbound text.',
+    `Next: orchestration_add_task with executor internal_room assigned_to ${peerEp}, or spawn_task for local work (${roleLabel}).`,
+    'Optional group visibility: project_to_im true or a separate im_projection task; #taskId is only required for im_projection handback.',
     'Do NOT answer from memory or skip kernel task dispatch.',
   ].join('\n');
 }

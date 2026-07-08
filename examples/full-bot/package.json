@@ -20,6 +20,7 @@
     "@zhin.js/host-api": "workspace:*",
     "@zhin.js/host-router": "workspace:*",
     "@zhin.js/mcp": "workspace:*",
+    "@zhin.js/a2a": "workspace:*",
     "@zhin.js/satori": "workspace:*",
     "ai": "^7.0.2",
     "zhin.js": "workspace:*",

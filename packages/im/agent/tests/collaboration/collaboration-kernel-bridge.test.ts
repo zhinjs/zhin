@@ -26,7 +26,7 @@ describe('tryCompleteKernelGroupMentionFromOutbound', () => {
     vi.clearAllMocks();
   });
 
-  it('completes single active scene_mention task from substantive outbound', async () => {
+  it('completes single active im_projection task from substantive outbound', async () => {
     const message = mockCommMessage({
       adapter: 'icqq',
       endpoint: 'worker-bot',
@@ -40,12 +40,12 @@ describe('tryCompleteKernelGroupMentionFromOutbound', () => {
     const dispatched = await orch.dispatchTask({
       runId: run.run.id,
       name: '@worker-bot',
-      executorKind: 'scene_mention',
+      executorKind: 'im_projection',
       assignedTo: 'worker-bot',
       autoStart: false,
     });
     await orch.runTask(dispatched.task.id, undefined, {
-      kind: 'scene_mention',
+      kind: 'im_projection',
       async *execute() {
         yield { type: 'progress', text: 'waiting' };
       },

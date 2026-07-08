@@ -80,12 +80,16 @@ const ADD_TASK_PARAMS: ToolParametersSchema = {
     },
     executor: {
       type: 'string',
-      enum: ['local', 'scene_mention', 'remote_mesh'],
-      description: '执行器类型：local（本地子代理）、scene_mention（群/频道 @ 委派）、remote_mesh（远程 Agent Mesh）',
+      enum: ['local', 'internal_room', 'im_projection', 'remote_mesh', 'scene_mention'],
+      description: '执行器：local（本地子代理）、internal_room（同实例 peer 直派）、im_projection（仅 IM 群投影）、remote_mesh（A2A 远程）',
     },
     assigned_to: {
       type: 'string',
-      description: '目标 endpoint ID（executor=scene_mention 时必填）',
+      description: '目标 endpoint ID（internal_room / im_projection 时必填）',
+    },
+    project_to_im: {
+      type: 'boolean',
+      description: 'internal_room 派发成功后是否在群内投影 @mention（默认 false）',
     },
     auto_start: {
       type: 'boolean',
@@ -149,7 +153,7 @@ class OrchestrationStartTool extends BuiltinBaseTool {
 
 class OrchestrationAddTaskTool extends BuiltinBaseTool {
   readonly name = 'orchestration_add_task';
-  readonly description = '向 run 添加 DAG 节点并可选立即执行（支持 scene_mention 群/频道 @ 委派）。';
+  readonly description = '向 run 添加 DAG 节点并可选立即执行（支持 internal_room / im_projection）。';
   readonly parameters = ADD_TASK_PARAMS;
 
   constructor(private readonly sessionContext: Message<any>) {
@@ -165,14 +169,15 @@ class OrchestrationAddTaskTool extends BuiltinBaseTool {
     const autoStart = args.auto_start !== false;
     const executorKind = typeof args.executor === 'string' ? args.executor : undefined;
     const assignedTo = typeof args.assigned_to === 'string' ? args.assigned_to : undefined;
+    const projectToIm = args.project_to_im === true;
     const sceneKind = sceneRefFromMessage(this.sessionContext)?.kind;
 
-    if (executorKind === 'scene_mention') {
+    if (executorKind === 'internal_room' || executorKind === 'im_projection' || executorKind === 'scene_mention') {
       if (!assignedTo) {
-        return 'executor=scene_mention 时必须提供 assigned_to（目标 endpoint ID）';
+        return 'executor=internal_room 或 im_projection 时必须提供 assigned_to（目标 endpoint ID）';
       }
       if (sceneKind === 'private') {
-        return 'scene_mention 不支持 private 场景，请使用 local 或 spawn_task';
+        return 'internal_room / im_projection 不支持 private 场景，请使用 local 或 spawn_task';
       }
     }
 
@@ -184,11 +189,14 @@ class OrchestrationAddTaskTool extends BuiltinBaseTool {
         role: typeof args.role === 'string' ? (args.role as AgentRole) : undefined,
         goal: typeof args.goal === 'string' ? args.goal : undefined,
         dependsOn: Array.isArray(args.depends_on) ? args.depends_on.map(String) : undefined,
-        executorKind: executorKind as 'local' | 'scene_mention' | 'remote_mesh' | undefined,
+        executorKind: executorKind as 'local' | 'internal_room' | 'im_projection' | 'remote_mesh' | undefined,
         assignedTo,
-        context: args.context && typeof args.context === 'object'
-          ? (args.context as Record<string, unknown>)
-          : undefined,
+        context: {
+          ...(args.context && typeof args.context === 'object'
+            ? (args.context as Record<string, unknown>)
+            : {}),
+          ...(projectToIm ? { projectToIm: true } : {}),
+        },
         message: this.sessionContext,
         autoStart: true,
       });

@@ -63,6 +63,7 @@
     "check:segments": "node scripts/check-segment-adapters.mjs",
     "check:provider-gateway": "node scripts/check-provider-gateway.mjs",
     "check:orchestration-ssot": "node scripts/check-orchestration-ssot.mjs",
+    "check:a2a-mesh": "node scripts/check-a2a-mesh.mjs",
     "check:use-plugin-top-level": "node scripts/check-use-plugin-top-level.mjs",
     "check:get-plugin-runtime": "node scripts/check-get-plugin-runtime.mjs",
     "check:all": "node scripts/check-all-harness.mjs",

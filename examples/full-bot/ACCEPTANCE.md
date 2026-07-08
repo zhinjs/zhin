@@ -55,19 +55,28 @@ pnpm check:l4
 
 ### 3. loopback remoteAgents
 
-配置已含 `remoteAgents[].id: local` 指向本机 `/mcp`。添加 `executor: remote:local` 任务后，应委托成功并由 `RemoteTaskPoller` 轮询至 completed（需 MCP 与主 Agent 就绪）。
+配置已含 `remoteAgents[].id: local`，`cardUrl` 指向本机 A2A Agent Card（`/a2a/zhin/.well-known/agent-card.json`）。添加 `executor: remote:local` 任务后，应通过 A2A 委托成功并由 `RemoteTaskPoller`（或 SSE）同步至 completed（需 `@zhin.js/a2a` 与主 Agent 就绪）。
 
-### 4. MCP 鉴权
+### 4. MCP 与 A2A 鉴权
+
+MCP 工具（非 Agent Mesh）：
 
 ```bash
 curl -s -X POST http://127.0.0.1:8069/mcp \
   -H 'Content-Type: application/json' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"agent.delegate_task","arguments":{}}}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
 
-无 `Authorization: Bearer` → **401**。
+无 `Authorization: Bearer` → **401**（非 localhost 宽松时）。
 
-带正确 Bearer → 200（或业务层错误，非 401）。
+A2A Agent Card：
+
+```bash
+curl -s http://127.0.0.1:8069/a2a/zhin/.well-known/agent-card.json \
+  -H "Authorization: Bearer ${HTTP_TOKEN}"
+```
+
+无 Bearer → **401**（配置了 `http.token` 时）。
 
 ### 5.（可选实机）NapCat 或 KOOK
 

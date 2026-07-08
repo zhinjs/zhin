@@ -3,6 +3,7 @@
  * Each executor kind must reach Kernel terminal states (not stuck waiting_result).
  */
 import { describe, expect, it, vi } from 'vitest';
+import { TaskState, Role } from '@a2a-js/sdk';
 import { getAgentDispatcher } from '../../src/orchestrator/agent-dispatcher.js';
 import { MemoryOrchestrationRepository } from '../../src/orchestrator/orchestration-repository.js';
 import { initOrchestrationService } from '../../src/orchestrator/orchestration-service.js';
@@ -74,20 +75,20 @@ describe('Executor contract — local', () => {
   });
 });
 
-describe('Executor contract — scene_mention', () => {
+describe('Executor contract — im_projection', () => {
   it('fail: error event → failed', async () => {
     const kernel = initOrchestrationService(new MemoryOrchestrationRepository());
     const run = await kernel.startRun({ sessionKey: 'mention-fail' });
     const dispatched = await kernel.dispatchTask({
       runId: run.run.id,
       name: '@peer',
-      executorKind: 'scene_mention',
+      executorKind: 'im_projection',
       assignedTo: 'peer-bot',
       autoStart: false,
     });
 
     const executor: AgentExecutor = {
-      kind: 'scene_mention',
+      kind: 'im_projection',
       async *execute() {
         yield { type: 'error', error: 'mention send failed' };
       },
@@ -104,13 +105,13 @@ describe('Executor contract — scene_mention', () => {
     const dispatched = await kernel.dispatchTask({
       runId: run.run.id,
       name: '@peer',
-      executorKind: 'scene_mention',
+      executorKind: 'im_projection',
       assignedTo: 'peer-bot',
       autoStart: false,
     });
 
     const executor: AgentExecutor = {
-      kind: 'scene_mention',
+      kind: 'im_projection',
       async *execute() {
         yield { type: 'progress', text: 'waiting_result from peer-bot' };
       },
@@ -126,10 +127,63 @@ describe('Executor contract — scene_mention', () => {
   });
 });
 
+describe('Executor contract — internal_room', () => {
+  it('success: result event → completed + result_summary', async () => {
+    const kernel = initOrchestrationService(new MemoryOrchestrationRepository());
+    const run = await kernel.startRun({ sessionKey: 'internal-room-ok' });
+    const dispatched = await kernel.dispatchTask({
+      runId: run.run.id,
+      name: '@peer',
+      executorKind: 'internal_room',
+      assignedTo: 'peer-bot',
+      autoStart: false,
+    });
+
+    const executor: AgentExecutor = {
+      kind: 'internal_room',
+      async *execute() {
+        yield { type: 'result', result: 'peer done internally' };
+      },
+    };
+
+    const task = await kernel.runTask(dispatched.task.id, undefined, executor);
+    expect(task.status).toBe('completed');
+    expect(task.resultSummary).toBe('peer done internally');
+  });
+});
+
 describe('Executor contract — remote_mesh', () => {
+  function stubA2aClient(registry: RemoteAgentRegistry, client: {
+    sendMessage: ReturnType<typeof vi.fn>;
+    getTask: ReturnType<typeof vi.fn>;
+  }) {
+    const entry = registry.list()[0];
+    if (entry) {
+      entry.card = {
+        name: 'local',
+        description: 'test',
+        version: '1.0.0',
+        supportedInterfaces: [],
+        capabilities: { streaming: false, extensions: [] },
+        securitySchemes: {},
+        securityRequirements: [],
+        defaultInputModes: ['text/plain'],
+        defaultOutputModes: ['text/plain'],
+        skills: [],
+        signatures: [],
+      };
+    }
+    vi.spyOn(registry, 'getA2aClient').mockResolvedValue({
+      sendMessage: client.sendMessage,
+      sendMessageStream: vi.fn(),
+      getTask: client.getTask,
+      cancelTask: vi.fn(),
+    });
+  }
+
   beforeEach(() => {
-    initRemoteAgentRegistry({
-      remoteAgents: [{ id: 'local', url: 'http://127.0.0.1:8068/mcp', token: 't' }],
+    void initRemoteAgentRegistry({
+      remoteAgents: [{ id: 'local', cardUrl: 'http://127.0.0.1:8068/a2a/zhin/.well-known/agent-card.json', token: 't' }],
     });
   });
 
@@ -150,24 +204,37 @@ describe('Executor contract — remote_mesh', () => {
     getAgentDispatcher().syncTaskFromRecord(task);
 
     const remoteTaskId = 'rt-1';
-    const registry = initRemoteAgentRegistry({
-      remoteAgents: [{ id: 'local', url: 'http://127.0.0.1:8068/mcp', token: 't' }],
+    const registry = await initRemoteAgentRegistry({
+      remoteAgents: [{ id: 'local', cardUrl: 'http://127.0.0.1:8068/a2a/zhin/.well-known/agent-card.json', token: 't' }],
     });
-    const callTool = vi.fn()
-      .mockResolvedValueOnce({
-        content: [{ type: 'text', text: JSON.stringify({ remote_task_id: remoteTaskId }) }],
-      })
-      .mockResolvedValueOnce({
-        content: [{ type: 'text', text: JSON.stringify({ status: 'completed' }) }],
-      })
-      .mockResolvedValueOnce({
-        content: [{ type: 'text', text: 'remote result text' }],
-      });
-    vi.spyOn(registry, 'getConnection').mockResolvedValue({
-      callTool,
-      isConnected: true,
-      connect: vi.fn(),
-    } as unknown as Awaited<ReturnType<RemoteAgentRegistry['getConnection']>>);
+    stubA2aClient(registry, {
+      sendMessage: vi.fn().mockResolvedValue({
+        id: remoteTaskId,
+        contextId: 'ctx',
+        status: { state: TaskState.TASK_STATE_WORKING },
+        artifacts: [],
+        history: [],
+      }),
+      getTask: vi.fn().mockResolvedValue({
+        id: remoteTaskId,
+        contextId: 'ctx',
+        status: {
+          state: TaskState.TASK_STATE_COMPLETED,
+          message: {
+            messageId: 'm1',
+            contextId: 'ctx',
+            taskId: remoteTaskId,
+            role: Role.ROLE_AGENT,
+            parts: [{ content: { $case: 'text', value: 'remote result text' }, metadata: undefined, filename: '', mediaType: 'text/plain' }],
+            metadata: undefined,
+            extensions: [],
+            referenceTaskIds: [],
+          },
+        },
+        artifacts: [],
+        history: [],
+      }),
+    });
 
     expect((await executeRemoteOrchestrationTask(task.id)).ok).toBe(true);
     const poll = await pollRemoteTaskStatus(task.id);
@@ -195,14 +262,13 @@ describe('Executor contract — remote_mesh', () => {
     });
     getAgentDispatcher().syncTaskFromRecord(task);
 
-    const registry = initRemoteAgentRegistry({
-      remoteAgents: [{ id: 'local', url: 'http://127.0.0.1:8068/mcp', token: 't' }],
+    const registry = await initRemoteAgentRegistry({
+      remoteAgents: [{ id: 'local', cardUrl: 'http://127.0.0.1:8068/a2a/zhin/.well-known/agent-card.json', token: 't' }],
     });
-    vi.spyOn(registry, 'getConnection').mockResolvedValue({
-      callTool: vi.fn().mockRejectedValue(new Error('delegate boom')),
-      isConnected: true,
-      connect: vi.fn(),
-    } as unknown as Awaited<ReturnType<RemoteAgentRegistry['getConnection']>>);
+    stubA2aClient(registry, {
+      sendMessage: vi.fn().mockRejectedValue(new Error('delegate boom')),
+      getTask: vi.fn(),
+    });
 
     expect((await executeRemoteOrchestrationTask(task.id)).ok).toBe(false);
     const updated = await repo.getTask(task.id);
@@ -227,16 +293,31 @@ describe('Executor contract — remote_mesh', () => {
     const synced = (await repo.getTask(task.id))!;
     getAgentDispatcher().syncTaskFromRecord(synced);
 
-    const registry = initRemoteAgentRegistry({
-      remoteAgents: [{ id: 'local', url: 'http://127.0.0.1:8068/mcp', token: 't' }],
+    const registry = await initRemoteAgentRegistry({
+      remoteAgents: [{ id: 'local', cardUrl: 'http://127.0.0.1:8068/a2a/zhin/.well-known/agent-card.json', token: 't' }],
     });
-    vi.spyOn(registry, 'getConnection').mockResolvedValue({
-      callTool: vi.fn().mockResolvedValue({
-        content: [{ type: 'text', text: JSON.stringify({ status: 'cancelled' }) }],
+    stubA2aClient(registry, {
+      sendMessage: vi.fn(),
+      getTask: vi.fn().mockResolvedValue({
+        id: 'rt-cancel',
+        contextId: 'ctx',
+        status: {
+          state: TaskState.TASK_STATE_CANCELED,
+          message: {
+            messageId: 'm',
+            contextId: 'ctx',
+            taskId: 'rt-cancel',
+            role: Role.ROLE_AGENT,
+            parts: [{ content: { $case: 'text', value: 'cancelled' }, metadata: undefined, filename: '', mediaType: 'text/plain' }],
+            metadata: undefined,
+            extensions: [],
+            referenceTaskIds: [],
+          },
+        },
+        artifacts: [],
+        history: [],
       }),
-      isConnected: true,
-      connect: vi.fn(),
-    } as unknown as Awaited<ReturnType<RemoteAgentRegistry['getConnection']>>);
+    });
 
     const poll = await pollRemoteTaskStatus(task.id);
     expect(poll.done).toBe(true);

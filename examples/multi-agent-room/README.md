@@ -5,6 +5,7 @@
 ## 架构要点
 
 - **SSOT**：`collaboration_scenes` + `collaboration_scene_members`（多进程共享同一 DB 即可对齐）
+- **层内委派（ADR 0036）**：默认 `internal_room`（TurnPlan 跨 endpoint 直派）；可选 `project_to_im` 做群聊投影
 - **管理面**：Scene CRUD + Member 子资源 + Endpoint 反查；群内 **master** 可用 `/collab` 指令
 - **成员**：`/collab init` 后使用 `/collab bind` 挂载 Bot；可选在 yaml 配置 `collaboration.roster` 作为 init 模板
 

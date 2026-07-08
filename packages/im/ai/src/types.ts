@@ -460,11 +460,12 @@ export interface AIConfig {
     env?: Record<string, string>;
     headers?: Record<string, string>;
   }>;
-  /** Agent Mesh — 远程 Agent 静态注册表 */
+  /** Agent Mesh — 远程 Agent（A2A Agent Card URL） */
   remoteAgents?: Array<{
     id: string;
     name?: string;
-    url: string;
+    /** A2A Agent Card URL（如 https://host/a2a/pm/.well-known/agent-card.json） */
+    cardUrl: string;
     token?: string;
     roles?: string[];
     description?: string;

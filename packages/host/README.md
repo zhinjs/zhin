@@ -7,6 +7,7 @@ Zhin **Host 运行时**（与 `packages/im`、`packages/console` 并列的常驻
 | [router](./router/) | `@zhin.js/host-router` | Koa 监听、`Router`/WS、Bearer、CORS |
 | [api](./api/) | `@zhin.js/host-api` | 管理面 REST、Console 协议、`PageManager` / `entries` |
 | [mcp](./mcp/) | `@zhin.js/mcp` | MCP **Server**（向外暴露 Zhin 工具） |
+| [a2a](./a2a/) | `@zhin.js/a2a` | A2A v1.0 **Server**（Agent Card + 跨实例委派） |
 
 配置：`zhin.config` 中 **`http:`**（传输）、**`hostApi:`**（管理面）；`plugins` 列表启用上述包名。
 

@@ -23,19 +23,21 @@ describe('full-bot L4 配置契约', () => {
     expect(configText).toMatch(/autoConsolidate:\s*false/);
   });
 
-  it('三适配器 + MCP + host', () => {
+  it('三适配器 + MCP + A2A + host', () => {
     expect(configText).toContain('@zhin.js/adapter-sandbox');
     expect(configText).toContain('@zhin.js/adapter-napcat');
     expect(configText).toContain('@zhin.js/adapter-kook');
     expect(configText).toContain('@zhin.js/mcp');
+    expect(configText).toContain('@zhin.js/a2a');
     expect(configText).toContain('@zhin.js/host-router');
     expect(configText).toContain('@zhin.js/host-api');
   });
 
-  it('loopback remoteAgents 指向本机 /mcp', () => {
+  it('loopback remoteAgents 指向本机 A2A Agent Card', () => {
     expect(configText).toMatch(/remoteAgents:/);
     expect(configText).toMatch(/id:\s*local/);
-    expect(configText).toMatch(/\/mcp/);
+    expect(configText).toMatch(/cardUrl:/);
+    expect(configText).toMatch(/\/a2a\/zhin\/.well-known\/agent-card\.json/);
   });
 
   it('MEMORY 纲领与 memory-consolidate skill 存在', () => {

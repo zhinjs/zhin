@@ -1,13 +1,8 @@
 /**
  * Register the default kernel executors and the built-in workflow strategies.
  *
- * ADR 0027 makes the OrchestrationKernel the only state-transition authority.
- * For that contract to hold, executors must live in the kernel's registry
- * rather than being passed inline at each call site. This module owns the
- * three executor kinds (local / scene_mention / remote_mesh) and registers
- * generic built-in workflow strategies, so the IM inbound path and tool path can
- * dispatch through `orch.runTask(taskId, message)` without supplying their
- * own executor.
+ * ADR 0027 / 0036 — OrchestrationKernel owns executors:
+ * local / internal_room / im_projection / remote_mesh
  */
 import type { AgentExecutor } from './orchestration-types.js';
 import type { OrchestrationKernel } from './orchestration-service.js';
@@ -15,6 +10,9 @@ import type { AIServiceRefs } from '../init/shared-refs.js';
 import { extractMediaParts } from '../init/message-media.js';
 import { buildSubagentInboundTask } from '../media/index.js';
 import { sendGroupPeerMention } from '../collaboration/im-mention-delegate.js';
+import { getAgentRuntimeRegistry } from '../collaboration/runtime-registry.js';
+import { getCollaborationSceneService } from '../collaboration/scene-service.js';
+import { assertPeerMember, projectInternalRoomTaskToIm } from '../collaboration/collaboration-dispatch.js';
 import { executeRemoteOrchestrationTask } from './remote-task-executor.js';
 import { createFiveAgentWorkflowStrategy } from '../builtin/five-agent/strategy.js';
 
@@ -22,14 +20,6 @@ export interface RegisterExecutorsDeps {
   refs: AIServiceRefs;
 }
 
-/**
- * Register the default executors and built-in workflow strategies on a kernel.
- * Returns a cleanup function that unregisters them.
- *
- * Executors resolve their runtime dependencies lazily through `refs` so they
- * remain valid across the Memory → Database repository upgrade performed by
- * `upgradeOrchestrationRepository`.
- */
 export function registerDefaultExecutors(
   kernel: OrchestrationKernel,
   deps: RegisterExecutorsDeps,
@@ -76,27 +66,105 @@ export function registerDefaultExecutors(
     },
   };
 
-  const sceneMentionExecutor: AgentExecutor = {
-    kind: 'scene_mention',
+  const internalRoomExecutor: AgentExecutor = {
+    kind: 'internal_room',
+    async *execute({ task, message, run }) {
+      const targetEndpointId = task.assignedTo;
+      if (!targetEndpointId) {
+        yield { type: 'error', error: 'internal_room task has no assignedTo endpoint' };
+        return;
+      }
+
+      const sceneId = typeof task.context?.collaborationSceneId === 'string'
+        ? task.context.collaborationSceneId
+        : undefined;
+      if (sceneId) {
+        const cell = getCollaborationSceneService().getScene(sceneId);
+        if (!cell) {
+          yield { type: 'error', error: `collaboration scene "${sceneId}" not found` };
+          return;
+        }
+        try {
+          assertPeerMember(cell, targetEndpointId);
+        } catch (err) {
+          yield { type: 'error', error: err instanceof Error ? err.message : String(err) };
+          return;
+        }
+      }
+
+      const peerAgent = getAgentRuntimeRegistry().getForEndpoint(targetEndpointId);
+      const subagentManager = peerAgent?.getSubagentManager();
+      if (!peerAgent || !subagentManager) {
+        yield { type: 'error', error: `no ZhinAgent runtime for endpoint ${targetEndpointId}` };
+        return;
+      }
+      if (!message) {
+        yield { type: 'error', error: 'internal_room executor requires an inbound message for peer subagent origin' };
+        return;
+      }
+
+      const delegateText = task.goal || task.description || '请处理上述协作请求。';
+      yield { type: 'progress', text: `internal_room dispatch to ${targetEndpointId}` };
+
+      if (task.context?.projectToIm === true && message && targetEndpointId) {
+        await projectInternalRoomTaskToIm({
+          runId: run.id,
+          taskId: task.id,
+          message,
+          toEndpointId: targetEndpointId,
+          goal: delegateText,
+        });
+      }
+
+      const bindingRegistry = refs.aiService?.getBindingRegistry();
+      const routeBinding = bindingRegistry?.getBinding(targetEndpointId) ?? null;
+      const routeProvider = routeBinding && refs.aiService?.isReady()
+        ? refs.aiService!.getProvider(routeBinding.providerAlias)
+        : undefined;
+
+      let runInput: string | import('@zhin.js/ai').ContentPart[] | undefined = delegateText;
+      const mediaParts = extractMediaParts(message);
+      const inbound = await buildSubagentInboundTask(delegateText, mediaParts, {
+        workspaceDir: process.cwd(),
+        provider: routeProvider,
+      });
+      runInput = inbound.runInput;
+
+      const result = await subagentManager.spawnSync({
+        task: delegateText.trim() || '请处理上述协作请求。',
+        runInput,
+        label: targetEndpointId,
+        agent: targetEndpointId,
+        binding: routeBinding ?? undefined,
+        origin: { message },
+        notifyContext: message,
+        orchestrationTaskId: task.id,
+      });
+      yield { type: 'result', result };
+    },
+  };
+
+  const imProjectionExecutor: AgentExecutor = {
+    kind: 'im_projection',
     async *execute({ task, message }) {
       if (!message) {
-        yield { type: 'error', error: 'scene_mention executor requires an inbound message' };
+        yield { type: 'error', error: 'im_projection executor requires an inbound message' };
         return;
       }
       const targetEndpointId = task.assignedTo;
       if (!targetEndpointId) {
-        yield { type: 'error', error: 'scene_mention task has no assignedTo endpoint' };
+        yield { type: 'error', error: 'im_projection task has no assignedTo endpoint' };
         return;
       }
       const delegateText = task.goal || task.description || '请处理上述协作请求。';
-      yield { type: 'progress', text: `sending @ delegation to ${targetEndpointId}` };
+      yield { type: 'progress', text: `projecting IM @ to ${targetEndpointId}` };
       const sent = await sendGroupPeerMention({
         message,
         targetEndpointId,
-        text: `#${task.id}\n${delegateText}`,
+        text: delegateText.includes(`#${task.id}`) ? delegateText : `#${task.id}\n${delegateText}`,
       });
       if (!sent.ok) {
-        yield { type: 'error', error: sent.error ?? 'im mention delegation failed' };
+        yield { type: 'error', error: sent.error ?? 'im projection failed' };
         return;
       }
       yield { type: 'progress', text: `waiting_result from ${targetEndpointId}` };
@@ -118,7 +186,8 @@ export function registerDefaultExecutors(
 
   const cleanups = [
     kernel.registerExecutor(localExecutor),
-    kernel.registerExecutor(sceneMentionExecutor),
+    kernel.registerExecutor(internalRoomExecutor),
+    kernel.registerExecutor(imProjectionExecutor),
     kernel.registerExecutor(remoteMeshExecutor),
     kernel.registerWorkflowStrategy(createFiveAgentWorkflowStrategy()),
   ];

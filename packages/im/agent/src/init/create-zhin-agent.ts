@@ -57,7 +57,6 @@ import {
   setOrchestrationRuntime,
 } from '../orchestration-runtime-registry.js';
 import { registerDefaultExecutors } from '../orchestrator/bootstrap-executors.js';
-import { initDelegationProcessor } from '../orchestrator/delegation-processor.js';
 import { initRemoteAgentRegistry } from '../orchestrator/remote-agent-registry.js';
 import { startRemoteTaskPoller } from '../orchestrator/remote-task-poller.js';
 import { createSyntheticMessage, type Message } from '@zhin.js/core';
@@ -144,8 +143,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
       agentConfig: zhinAgentCfg,
     });
     setSessionTreeRuntime(createSessionTreeRuntimeFromAgent(asPrivate(agent)));
-    void initRemoteAgentRegistry(appConfig.ai).healthCheckAll();
-    initDelegationProcessor({ zhinAgent: agent });
+    void initRemoteAgentRegistry(appConfig.ai).then((registry) => registry.healthCheckAll());
     startRemoteTaskPoller({ intervalMs: 15_000 });
     agent.configure({
       hostPlugin: root,

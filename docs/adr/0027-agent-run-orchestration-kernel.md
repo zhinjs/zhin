@@ -53,7 +53,7 @@ The kernel supports multiple executor kinds:
 | --- | --- |
 | `local` | Execute a local `ZhinAgent` or subagent |
 | `scene_mention` | Send a task into an IM group/channel as an `@` assignment and wait for handback ([ADR 0028](./0028-generic-im-scene-agent.md); legacy name `group_mention`) |
-| `remote_mesh` | Delegate to a remote agent over MCP/HTTP |
+| `remote_mesh` | Delegate to a remote agent over **A2A** |
 
 Executors emit execution events. They do not directly mutate task status.
 

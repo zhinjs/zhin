@@ -186,8 +186,9 @@ export function formatActiveDelegationHint(
 /** Planner 收到成员 handback @ 时的 turn 指引。 */
 export function formatPlannerHandbackHint(_cell: CollaborationScene): string | undefined {
   return [
-    '[Kernel handback] A member completed a scene_mention task.',
-    'Check orchestration_status / #taskId results; dispatch the next task if needed.',
-    'Use orchestration_add_task(executor="scene_mention", assigned_to="<endpointId>") for delegation.',
+    '[Kernel handback] A peer task completed (internal_room) or an im_projection handback arrived.',
+    'Check orchestration_status for results; #taskId in group text applies only to im_projection.',
+    'Dispatch the next peer with orchestration_add_task(executor="internal_room", assigned_to="<endpointId>").',
+    'Add project_to_im: true when humans should see an @ in the group.',
   ].join('\n');
 }

@@ -46,8 +46,8 @@ pnpm dev
 
 - Missions 硬编排内置（无 `ai.orchestration` 配置项）
 - `ai.memory.semantic.enabled: true`（`autoConsolidate: false`，由 skill 触发）
-- `ai.remoteAgents` loopback 指向本机 `/mcp`
-- `@zhin.js/mcp` 插件 + Bearer 鉴权
+- `ai.remoteAgents` loopback `cardUrl` 指向本机 A2A Agent Card（`/a2a/zhin/...`）
+- `@zhin.js/a2a` + `@zhin.js/mcp` 插件 + Bearer 鉴权
 
 详见 [`zhin.config.yml`](./zhin.config.yml) 与 [`ACCEPTANCE.md`](./ACCEPTANCE.md)。
 

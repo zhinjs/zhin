@@ -13,7 +13,7 @@ const agentSrc = path.join(repoRoot, 'packages/im/agent/src');
 const ssotVitestFiles = [
   'packages/im/agent/tests/orchestrator/orchestration-kernel.test.ts',
   'packages/im/agent/tests/orchestrator/executor-contract.test.ts',
-  'packages/im/agent/tests/orchestrator/delegation-processor.test.ts',
+  'packages/im/agent/tests/a2a/delegation-message.test.ts',
   'packages/im/agent/tests/collaboration/collaboration-kernel-bridge.test.ts',
   'packages/im/agent/tests/collaboration/inbound-turn-pipeline.test.ts',
   'packages/im/agent/tests/config/validate-ai-config.test.ts',

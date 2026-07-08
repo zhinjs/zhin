@@ -3,7 +3,7 @@
  * @see docs/adr/0023-group-cell-multi-endpoint-agents.md
  */
 
-export type DelegationMode = 'local_process' | 'spawn_task' | 'im_mention' | 'mesh_remote';
+export type DelegationMode = 'local_process' | 'spawn_task' | 'mesh_remote';
 
 export type PeerTriggerMode = 'mention-only' | 'off';
 
@@ -154,6 +154,9 @@ export interface CollaborationScene {
 
 export interface TurnPlanDelegation {
   mode: DelegationMode;
+  /** Cross-endpoint peer in the same CollaborationScene (default delivery: internal_room). */
+  delegateToPeer?: string;
+  /** @deprecated use delegateToPeer */
   targetEndpointId?: string;
   targetAgentId?: string;
 }

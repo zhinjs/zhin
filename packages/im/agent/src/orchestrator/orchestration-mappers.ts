@@ -117,8 +117,10 @@ export function normalizeRunSource(raw: unknown): OrchestrationRunSource | undef
 }
 
 export function normalizeExecutorKind(kind: string): OrchestrationExecutorKind {
-  if (kind === 'group_mention') return 'scene_mention';
-  if (kind === 'scene_mention' || kind === 'local' || kind === 'remote_mesh') return kind;
+  if (kind === 'group_mention' || kind === 'scene_mention') return 'im_projection';
+  if (kind === 'internal_room' || kind === 'im_projection' || kind === 'local' || kind === 'remote_mesh') {
+    return kind;
+  }
   return 'local';
 }
 
@@ -149,6 +151,7 @@ export function mapTaskRecord(record: OrchestrationTaskRecord): OrchestrationTas
     remoteAgentId: record.remote_agent_id || undefined,
     resultSummary: record.result_summary || undefined,
     error: record.error || undefined,
+    context: parseJsonObject(record.context_json),
     createdAt: record.created_at,
     updatedAt: record.updated_at,
   };

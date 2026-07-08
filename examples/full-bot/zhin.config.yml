@@ -18,6 +18,7 @@ plugins:
   - "@zhin.js/host-router"
   - "@zhin.js/host-api"
   - "@zhin.js/mcp"
+  - "@zhin.js/a2a"
   - hello
   - orchestration-console
 
@@ -45,7 +46,7 @@ ai:
       autoConsolidate: false
   remoteAgents:
     - id: local
-      url: http://127.0.0.1:8069/mcp
+      cardUrl: http://127.0.0.1:8069/a2a/zhin/.well-known/agent-card.json
       token: ${HTTP_TOKEN:-full-bot-dev-token}
   providers:
     ollama:

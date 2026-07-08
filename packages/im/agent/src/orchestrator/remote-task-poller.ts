@@ -1,5 +1,5 @@
 /**
- * RemoteTaskPoller — 轮询远程 MCP 任务状态（Agent Mesh v1）。
+ * RemoteTaskPoller — 轮询远程 A2A 任务状态（Get Task fallback）。
  */
 import { Logger } from '@zhin.js/logger';
 import { getOrchestrationService } from './orchestration-service.js';

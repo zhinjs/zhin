@@ -1,0 +1,67 @@
+{
+  "name": "@zhin.js/a2a",
+  "version": "1.0.0",
+  "description": "A2A Protocol server for Zhin.js — multi-agent Agent Cards and task delegation",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "keywords": [
+    "zhin",
+    "a2a",
+    "agent2agent",
+    "agent-mesh"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "type": "git",
+    "directory": "packages/host/a2a"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib"
+  },
+  "dependencies": {
+    "@a2a-js/sdk": "1.0.0-beta.0",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/logger": "workspace:*"
+  },
+  "peerDependencies": {
+    "@zhin.js/agent": "workspace:*",
+    "@zhin.js/host-router": "workspace:*",
+    "zhin.js": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.2",
+    "@zhin.js/agent": "workspace:*",
+    "@zhin.js/host-router": "workspace:*",
+    "rimraf": "^6.0.0",
+    "typescript": "^6.0.3",
+    "zhin.js": "workspace:*"
+  },
+  "files": [
+    "src",
+    "lib",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  }
+}

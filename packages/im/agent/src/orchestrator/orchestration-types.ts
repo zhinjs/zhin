@@ -38,6 +38,7 @@ export interface OrchestrationTask {
   remoteAgentId?: string;
   resultSummary?: string;
   error?: string;
+  context?: Record<string, unknown>;
   createdAt: number;
   updatedAt: number;
 }

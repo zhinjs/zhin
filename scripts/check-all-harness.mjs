@@ -146,6 +146,11 @@ const checks = [
     command: 'pnpm check:orchestration-ssot',
     description: '编排任务状态须经 OrchestrationKernel，禁止 repositoryHandle 直写',
   },
+  {
+    name: 'A2A Mesh',
+    command: 'pnpm check:a2a-mesh',
+    description: '禁止残留 MCP Agent Mesh v1 符号',
+  },
 ];
 
 console.log('Running all harness checks...\n');

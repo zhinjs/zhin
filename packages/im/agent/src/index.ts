@@ -324,11 +324,6 @@ export type {
 } from './orchestrator/agent-dispatcher.js';
 
 export {
-  initDelegationProcessor,
-  getDelegationProcessor,
-} from './orchestrator/delegation-processor.js';
-
-export {
   getRemoteAgentRegistry,
   initRemoteAgentRegistry,
 } from './orchestrator/remote-agent-registry.js';

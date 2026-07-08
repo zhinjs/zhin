@@ -73,7 +73,6 @@ export * from './built/introspection-format.js'
 export * from './built/management-command-guard.js'
 export * from './built/html-to-text.js'
 export * from './built/html-segment-fallback.js'
-export * from './built/mcp-mesh-registrar.js'
 export * from './built/prepend-quote-context.js'
 export * from './message-quote.js'
 

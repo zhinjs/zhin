@@ -52,7 +52,7 @@ describe('buildTurnPlan', () => {
     expect(plan.collaborationSceneId).toBeUndefined();
   });
 
-  it('prefers im_mention when routed agent maps to peer endpoint', () => {
+  it('prefers delegateToPeer when routed agent maps to peer endpoint', () => {
     const plan = buildTurnPlan({
       message: {
         ...mockMessage('planner-bot'),
@@ -73,8 +73,8 @@ describe('buildTurnPlan', () => {
       discoveredAgentNames: new Set(['zhin', 'researcher']),
     });
     expect(plan.handlerProfile).toBe('researcher');
-    expect(plan.delegation?.mode).toBe('im_mention');
-    expect(plan.delegation?.targetEndpointId).toBe('researcher-bot');
+    expect(plan.delegation?.mode).toBe('local_process');
+    expect(plan.delegation?.delegateToPeer).toBe('researcher-bot');
   });
 
   it('uses spawn_task path when no peer endpoint', () => {

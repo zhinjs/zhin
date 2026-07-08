@@ -30,7 +30,7 @@ export type OrchestrationTaskStatus =
   | 'failed'
   | 'cancelled';
 
-export type OrchestrationExecutorKind = 'local' | 'scene_mention' | 'remote_mesh';
+export type OrchestrationExecutorKind = 'local' | 'internal_room' | 'im_projection' | 'remote_mesh';
 
 export type OrchestrationSceneKind = 'private' | 'group' | 'channel';
 

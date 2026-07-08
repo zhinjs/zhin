@@ -1,5 +1,5 @@
 /**
- * L4 MCP agent.* Bearer auth contract.
+ * L4 MCP Bearer auth contract.
  */
 import { describe, it, expect } from 'vitest';
 import type { IncomingMessage } from 'node:http';
@@ -28,15 +28,14 @@ function mockReq(opts: {
   } as IncomingMessage;
 }
 
-describe('MCP mesh auth', () => {
-  it('agent.delegate_task always requires auth', () => {
-    const body = { params: { name: 'agent.delegate_task' } };
+describe('MCP auth', () => {
+  it('requires auth in production', () => {
+    const body = { params: { name: 'some_tool' } };
     const req = mockReq({ host: 'localhost:8068', remoteAddress: '127.0.0.1' });
-    expect(mcpAuthRequired(body, req, {}, false)).toBe(true);
-    expect(mcpAuthRequired(body, req, { allowUnauthenticatedLocalhost: true }, false)).toBe(true);
+    expect(mcpAuthRequired(body, req, {}, true)).toBe(true);
   });
 
-  it('non-agent tools allow localhost in dev', () => {
+  it('allows localhost in dev when configured', () => {
     const body = { params: { name: 'some_other_tool' } };
     const req = mockReq({ host: 'localhost:8068', remoteAddress: '127.0.0.1' });
     expect(mcpAuthRequired(body, req, {}, false)).toBe(false);
@@ -54,7 +53,7 @@ describe('MCP mesh auth', () => {
   });
 
   it('extractMcpToolName parses JSON-RPC body', () => {
-    expect(extractMcpToolName({ params: { name: 'agent.query_status' } })).toBe('agent.query_status');
+    expect(extractMcpToolName({ params: { name: 'tools/list' } })).toBe('tools/list');
     expect(extractMcpToolName({})).toBeUndefined();
   });
 });

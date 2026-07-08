@@ -1,21 +1,23 @@
 /**
- * RemoteAgentRegistry — static ai.remoteAgents + health check (Agent Mesh v1).
+ * RemoteAgentRegistry — A2A Agent Card discovery + Client cache.
  */
+import { createRequire } from 'node:module';
 import { Logger } from '@zhin.js/logger';
 import type { AIConfig } from '@zhin.js/ai';
+import type { AgentCard } from '@a2a-js/sdk';
 import { resolveConfigEnvString } from '../utils/config-env.js';
-import { McpClientConnection } from '../mcp-client/connection.js';
-import type { McpServerEntry } from './types.js';
 
 const logger = new Logger(null, 'RemoteAgentRegistry');
+const requirePeer = createRequire(import.meta.url);
 
 export interface RemoteAgentEntry {
   id: string;
   name: string;
-  url: string;
+  cardUrl: string;
   token?: string;
   roles: string[];
   description: string;
+  card?: AgentCard;
 }
 
 export interface RemoteAgentHealth {
@@ -24,18 +26,29 @@ export interface RemoteAgentHealth {
   error?: string;
 }
 
+import type { Client } from '@a2a-js/sdk/client';
+
+function isA2aSdkInstalled(): boolean {
+  try {
+    requirePeer.resolve('@a2a-js/sdk/package.json');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function parseRemoteAgents(config: AIConfig | undefined): RemoteAgentEntry[] {
   const raw = config?.remoteAgents;
   if (!raw?.length) return [];
   const out: RemoteAgentEntry[] = [];
   for (const item of raw) {
-    if (!item?.id?.trim() || !item.url?.trim()) continue;
-    const url = resolveConfigEnvString(item.url) ?? item.url;
+    if (!item?.id?.trim() || !item.cardUrl?.trim()) continue;
+    const cardUrl = resolveConfigEnvString(item.cardUrl) ?? item.cardUrl;
     const token = item.token ? (resolveConfigEnvString(item.token) ?? item.token) : undefined;
     out.push({
       id: item.id.trim(),
       name: item.name?.trim() || item.id.trim(),
-      url: url.trim(),
+      cardUrl: cardUrl.trim(),
       token,
       roles: Array.isArray(item.roles) ? item.roles.map(String) : [],
       description: item.description?.trim() || '',
@@ -44,13 +57,24 @@ function parseRemoteAgents(config: AIConfig | undefined): RemoteAgentEntry[] {
   return out;
 }
 
+async function fetchAgentCard(cardUrl: string): Promise<AgentCard> {
+  const res = await fetch(cardUrl, {
+    headers: { Accept: 'application/json' },
+  });
+  if (!res.ok) {
+    throw new Error(`Agent Card fetch failed (${res.status}): ${cardUrl}`);
+  }
+  return res.json() as Promise<AgentCard>;
+}
+
 export class RemoteAgentRegistry {
   private entries = new Map<string, RemoteAgentEntry>();
   private health = new Map<string, RemoteAgentHealth>();
-  private connections = new Map<string, McpClientConnection>();
+  private clients = new Map<string, Client>();
 
   loadFromConfig(config: AIConfig | undefined): void {
     this.entries.clear();
+    this.clients.clear();
     for (const entry of parseRemoteAgents(config)) {
       this.entries.set(entry.id, entry);
     }
@@ -68,48 +92,68 @@ export class RemoteAgentRegistry {
     return this.health.get(id);
   }
 
-  toMcpEntry(agent: RemoteAgentEntry): McpServerEntry {
-    const headers: Record<string, string> = {};
-    if (agent.token) {
-      headers.Authorization = `Bearer ${agent.token}`;
-    }
-    return {
-      name: `remote-agent:${agent.id}`,
-      transport: 'streamable-http',
-      url: agent.url,
-      headers,
-    };
+  supportsStreaming(agentId: string): boolean {
+    const card = this.entries.get(agentId)?.card;
+    return card?.capabilities?.streaming === true;
   }
 
-  async getConnection(agentId: string): Promise<McpClientConnection> {
+  async refreshCard(agentId: string): Promise<AgentCard> {
     const agent = this.entries.get(agentId);
     if (!agent) throw new Error(`Remote agent "${agentId}" not registered`);
-    let conn = this.connections.get(agentId);
-    if (conn && conn.isConnected) return conn;
-    if (conn) {
-      try { await conn.disconnect(); } catch { /* ignore */ }
-      this.connections.delete(agentId);
+    const card = await fetchAgentCard(agent.cardUrl);
+    agent.card = card;
+    this.clients.delete(agentId);
+    return card;
+  }
+
+  async ensureCard(agentId: string): Promise<AgentCard> {
+    const agent = this.entries.get(agentId);
+    if (!agent) throw new Error(`Remote agent "${agentId}" not registered`);
+    if (agent.card) return agent.card;
+    return this.refreshCard(agentId);
+  }
+
+  async getA2aClient(agentId: string): Promise<Client> {
+    if (!isA2aSdkInstalled()) {
+      throw new Error('@a2a-js/sdk is not installed — required for A2A remote_mesh');
     }
-    conn = new McpClientConnection(this.toMcpEntry(agent));
-    try {
-      await conn.connect();
-    } catch (err) {
-      this.connections.delete(agentId);
-      throw err;
-    }
-    this.connections.set(agentId, conn);
-    return conn;
+    let client = this.clients.get(agentId);
+    if (client) return client;
+
+    const agent = this.entries.get(agentId);
+    if (!agent) throw new Error(`Remote agent "${agentId}" not registered`);
+
+    await this.ensureCard(agentId);
+
+    const {
+      ClientFactory,
+      JsonRpcTransportFactory,
+      RestTransportFactory,
+    } = await import('@a2a-js/sdk/client');
+    const token = agent.token ?? '';
+
+    const fetchImpl: typeof fetch = token
+      ? (input, init) => {
+          const headers = new Headers(init?.headers);
+          headers.set('Authorization', `Bearer ${token}`);
+          return fetch(input, { ...init, headers });
+        }
+      : fetch;
+
+    const factory = new ClientFactory({
+      transports: [
+        new JsonRpcTransportFactory({ fetchImpl }),
+        new RestTransportFactory({ fetchImpl }),
+      ],
+    });
+
+    client = await factory.createFromAgentCard(agent.card!);
+    this.clients.set(agentId, client);
+    return client;
   }
 
   async dispose(): Promise<void> {
-    for (const [agentId, conn] of this.connections.entries()) {
-      try {
-        await conn.disconnect();
-      } catch (err) {
-        logger.debug(`Failed to disconnect remote agent ${agentId}:`, err);
-      }
-    }
-    this.connections.clear();
+    this.clients.clear();
     this.entries.clear();
     this.health.clear();
   }
@@ -117,8 +161,7 @@ export class RemoteAgentRegistry {
   async healthCheckAll(): Promise<RemoteAgentHealth[]> {
     const results: RemoteAgentHealth[] = [];
     for (const agent of this.entries.values()) {
-      const health = await this.pingAgent(agent.id);
-      results.push(health);
+      results.push(await this.pingAgent(agent.id));
     }
     return results;
   }
@@ -131,8 +174,7 @@ export class RemoteAgentRegistry {
       return h;
     }
     try {
-      const conn = await this.getConnection(agentId);
-      await conn.ping();
+      await this.refreshCard(agentId);
       const h = { id: agentId, healthy: true };
       this.health.set(agentId, h);
       return h;
@@ -158,9 +200,16 @@ export function getRemoteAgentRegistry(): RemoteAgentRegistry {
   return globalRegistry;
 }
 
-export function initRemoteAgentRegistry(config: AIConfig | undefined): RemoteAgentRegistry {
+export async function initRemoteAgentRegistry(config: AIConfig | undefined): Promise<RemoteAgentRegistry> {
   const registry = getRemoteAgentRegistry();
   registry.loadFromConfig(config);
+  for (const entry of registry.list()) {
+    try {
+      await registry.refreshCard(entry.id);
+    } catch (err) {
+      logger.debug(`Initial Agent Card fetch failed for ${entry.id}:`, err);
+    }
+  }
   return registry;
 }
 

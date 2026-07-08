@@ -91,8 +91,10 @@ function normalizeExecutor(input?: OrchestrationAddTaskInput['executor']): {
   if (value.startsWith('remote:')) {
     return { executorKind: 'remote_mesh', remoteAgentId: value.slice('remote:'.length) };
   }
-  if (value === 'group_mention') return { executorKind: 'scene_mention' };
-  if (value === 'scene_mention' || value === 'remote_mesh') return { executorKind: value };
+  if (value === 'group_mention' || value === 'scene_mention') return { executorKind: 'im_projection' };
+  if (value === 'internal_room' || value === 'im_projection' || value === 'remote_mesh') {
+    return { executorKind: value };
+  }
   return { executorKind: 'local' };
 }
 

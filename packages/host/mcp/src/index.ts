@@ -2,9 +2,9 @@
 // 外部 MCP Server：从 ToolFeature 读取所有注册工具，暴露给外部开发者
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import type { IncomingMessage, ServerResponse, Server } from "node:http";
+import type { IncomingMessage } from "node:http";
+import type { Router, RouterContext } from "@zhin.js/host-router";
 import type {} from "@zhin.js/host-router";
-import type {} from "zhin.js";
 import { formatCompact, type Tool, type ToolFeature, usePlugin } from '@zhin.js/core';
 import { z } from "zod";
 import { registerTools } from "./tools.js";
@@ -14,13 +14,7 @@ import {
 } from "./mesh-auth.js";
 import { registerResources } from "./resources.js";
 import { registerPrompts } from "./prompts.js";
-import {
-  applyAgentMeshTools,
-  AGENT_MESH_TOOL_NAMES,
-  setAgentMeshToolsRegistrar,
-} from "@zhin.js/core";
 
-export { setAgentMeshToolsRegistrar, AGENT_MESH_TOOL_NAMES } from "@zhin.js/core";
 export {
   mcpAuthRequired,
   verifyMcpBearer,
@@ -34,7 +28,7 @@ export interface McpConfig {
   path?: string;
   /** MCP Bearer token；缺省回退 http.token */
   token?: string;
-  /** 非 production 下 localhost 是否允许无 token 调用非 agent.* 工具 */
+  /** 非 production 下 localhost 是否允许无 token 调用 */
   allowUnauthenticatedLocalhost?: boolean;
 }
 
@@ -109,7 +103,6 @@ function createMcpServer(toolFeature: ToolFeature | null): McpServer {
   registerTools(server);
   registerResources(server);
   registerPrompts(server);
-  applyAgentMeshTools(server);
 
   // 从 ToolFeature 读取所有注册的工具，暴露给外部 MCP 客户端（按 name 去重）
   if (toolFeature) {
@@ -160,8 +153,37 @@ function parseJsonBody(req: IncomingMessage): Promise<unknown> {
   });
 }
 
+async function resolveRequestBody(ctx: RouterContext): Promise<unknown> {
+  const parsed = ctx.request.body;
+  if (parsed !== undefined && parsed !== null) return parsed;
+  return parseJsonBody(ctx.req);
+}
+
+function sendJsonViaRawRes(
+  ctx: RouterContext,
+  status: number,
+  body: unknown,
+  extraHeaders?: Record<string, string>,
+): void {
+  ctx.respond = false;
+  ctx.res.writeHead(status, { "Content-Type": "application/json", ...extraHeaders });
+  ctx.res.end(JSON.stringify(body));
+}
+
+function registerMcpRoutes(
+  router: Router,
+  basePath: string,
+  handler: (ctx: RouterContext) => Promise<void>,
+): void {
+  const normalized = basePath.replace(/\/+$/, "") || "/";
+  router.all(normalized, handler);
+  if (normalized !== "/") {
+    router.all(`${normalized}/:tail+`, handler);
+  }
+}
+
 const plugin = usePlugin();
-const { root, useContext, logger, onDispose } = plugin;
+const { root, useContext, logger } = plugin;
 
 // 获取 ToolFeature 引用（可能在 MCP server 启动前或后注册）
 let toolFeatureRef: ToolFeature | null = null;
@@ -172,7 +194,7 @@ useContext("tool", (toolService: ToolFeature) => {
   };
 });
 
-useContext("server", (server: Server) => {
+useContext("router", (router: Router) => {
   const configService = root.inject("config")!;
   const appConfig = configService.get<{ mcp?: McpConfig; http?: { token?: string } }>("zhin.config.yml");
   const mcpCfg = appConfig.mcp || {};
@@ -185,17 +207,19 @@ useContext("server", (server: Server) => {
     return;
   }
 
-  const mcpHandler = async (req: IncomingMessage, res: ServerResponse) => {
+  const mcpHandler = async (ctx: RouterContext): Promise<void> => {
+    ctx.respond = false;
+    const { req, res } = ctx;
+
     try {
       if (req.method === "POST") {
-        const body = await parseJsonBody(req);
+        const body = await resolveRequestBody(ctx);
         if (mcpAuthRequired(body, req, mcpCfg, isProduction) && !verifyMcpBearer(req, mcpToken)) {
-          res.writeHead(401, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({
+          sendJsonViaRawRes(ctx, 401, {
             jsonrpc: "2.0",
             error: { code: -32001, message: "Unauthorized — Bearer token required" },
             id: (body as { id?: unknown })?.id ?? null,
-          }));
+          });
           return;
         }
         const mcpServer = createMcpServer(toolFeatureRef);
@@ -213,73 +237,36 @@ useContext("server", (server: Server) => {
       }
 
       if (req.method === "GET" || req.method === "DELETE") {
-        res.writeHead(405, {
-          Allow: "POST",
-          "Content-Type": "application/json",
-        });
-        res.end(
-          JSON.stringify({
+        sendJsonViaRawRes(
+          ctx,
+          405,
+          {
             jsonrpc: "2.0",
             error: {
               code: -32000,
               message: "Method not allowed in stateless mode",
             },
             id: null,
-          }),
+          },
+          { Allow: "POST" },
         );
         return;
       }
 
-      res.writeHead(405, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Method not allowed" }));
+      sendJsonViaRawRes(ctx, 405, { error: "Method not allowed" });
     } catch (err) {
       logger.error("MCP request error:", err);
       if (!res.headersSent) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(
-          JSON.stringify({
-            jsonrpc: "2.0",
-            error: { code: -32603, message: "Internal server error" },
-            id: null,
-          }),
-        );
+        sendJsonViaRawRes(ctx, 500, {
+          jsonrpc: "2.0",
+          error: { code: -32603, message: "Internal server error" },
+          id: null,
+        });
       }
     }
   };
 
-  const originalListeners = server.listeners("request").slice();
-  server.removeAllListeners("request");
-
-  server.on("request", (req: IncomingMessage, res: ServerResponse) => {
-    const url = req.url || "";
-    if (
-      url === mcpPath ||
-      url.startsWith(mcpPath + "?") ||
-      url.startsWith(mcpPath + "/")
-    ) {
-      mcpHandler(req, res);
-      return;
-    }
-    for (const listener of originalListeners) {
-      (listener as (...args: unknown[]) => unknown).call(server, req, res);
-    }
-  });
+  registerMcpRoutes(router, mcpPath, mcpHandler);
 
   logger.info(formatCompact({ MCP路径: mcpPath, 运行模式: "无状态" }));
-
-  onDispose(() => {
-    server.removeAllListeners("request");
-    for (const listener of originalListeners) {
-      server.on("request", listener);
-    }
-  });
 });
-
-import type {} from "@zhin.js/host-router";
-declare module "zhin.js" {
-  namespace Plugin {
-    interface Contexts {
-      server: import("node:http").Server;
-    }
-  }
-}

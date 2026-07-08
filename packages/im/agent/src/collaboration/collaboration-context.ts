@@ -23,8 +23,8 @@ export function formatCollaborationTurnCellHint(
   ];
   if (cell.goal?.trim()) lines.push(`Goal: ${cell.goal.trim()}`);
   if (peerBrief) lines.push(`Peers: ${peerBrief}`);
-  lines.push('Assignments and peer mentions are managed by the orchestration kernel.');
-  lines.push('If this is a delegated task and the message includes #taskId, include that #taskId in your handback.');
+  lines.push('Peer dispatch uses internal_room via the orchestration kernel; IM @ is optional (im_projection / project_to_im).');
+  lines.push('If the inbound message includes #taskId (im_projection), include that #taskId in your public handback.');
   return lines.join('\n');
 }
 
@@ -70,7 +70,7 @@ export function formatCollaborationSceneHint(
       rosterLines: cellLines,
       forceJsonOnly: options?.forceJsonOnly ?? false,
     }),
-    'Assignments and task handback are managed by the orchestration kernel.',
+    'Peer dispatch and task handback are managed by the orchestration kernel (internal_room; IM projection is optional).',
   ];
   return lines.join('\n');
 }
