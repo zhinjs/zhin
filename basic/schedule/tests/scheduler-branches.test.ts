@@ -17,6 +17,8 @@ describe('CalendarScheduler branch coverage', () => {
 
   afterEach(async () => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
+    await Promise.resolve();
     if (tempDir) {
       const { rm } = await import('node:fs/promises');
       await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
@@ -210,6 +212,7 @@ describe('CalendarScheduler branch coverage', () => {
 
     expect(handler).toHaveBeenCalledTimes(1);
     scheduler.stop();
+    await Promise.resolve();
   });
 
   it('fromStoredJob accepts null nextRunAt without scheduling', async () => {

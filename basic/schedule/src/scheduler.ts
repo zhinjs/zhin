@@ -269,7 +269,7 @@ export class CalendarScheduler {
     this.timer.remove(id);
     this.jobs.delete(id);
     if (this.store && !job.ephemeral) {
-      void this.store.remove(id);
+      void this.removePersistedJob(id);
     }
     return true;
   }
@@ -387,6 +387,17 @@ export class CalendarScheduler {
     }
   }
 
+  private async removePersistedJob(id: string): Promise<void> {
+    if (!this.store) {
+      return;
+    }
+    try {
+      await this.store.remove(id);
+    } catch {
+      // persistence is best-effort (e.g. store path removed during shutdown)
+    }
+  }
+
   private jobExpired(job: InternalJob, now: Date): boolean {
     return job.expiresAt != null && now.getTime() >= job.expiresAt.getTime();
   }
@@ -493,7 +504,7 @@ export class CalendarScheduler {
             job.cancelled = true;
             this.jobs.delete(job.id);
             if (this.store && !job.ephemeral) {
-              void this.store.remove(job.id);
+              void this.removePersistedJob(job.id);
             }
             return;
           }
@@ -558,7 +569,7 @@ export class CalendarScheduler {
         job.cancelled = true;
         this.jobs.delete(job.id);
         if (this.store && !job.ephemeral) {
-          void this.store.remove(job.id);
+          void this.removePersistedJob(job.id);
         }
         return;
       }
@@ -605,7 +616,7 @@ export class CalendarScheduler {
         this.timer.remove(job.id);
         this.jobs.delete(job.id);
         if (this.store && !job.ephemeral) {
-          await this.store.remove(job.id);
+          await this.removePersistedJob(job.id);
         }
         continue;
       }
