@@ -26,9 +26,9 @@ export type BashExecAsync = (
 export const BASH_PARAMETERS: ToolParametersSchema = {
   type: 'object',
   properties: {
-    command: { type: 'string', description: 'Shell 命令' },
-    cwd: { type: 'string', description: '工作目录' },
-    timeout: { type: 'number', description: '超时毫秒数（默认 30000）' },
+    command: { type: 'string', description: 'Shell command to execute' },
+    cwd: { type: 'string', description: 'Working directory' },
+    timeout: { type: 'number', description: 'Timeout in milliseconds (default 30000)' },
   },
   required: ['command'],
 };
@@ -36,7 +36,7 @@ export const BASH_PARAMETERS: ToolParametersSchema = {
 export class BashBuiltinTool extends BuiltinBaseTool {
   readonly name = 'bash';
   readonly description =
-    '执行 Shell 命令（带超时保护和命令分类）。返回结果中会标注命令类型（只读/搜索/写入）。';
+    'Execute a shell command with timeout protection and command classification. Output notes whether the command is read-only, search, or write.';
   readonly parameters = BASH_PARAMETERS;
   readonly kind = 'shell';
 

@@ -9,7 +9,6 @@ import type { NapCatHttpConfig, ApiResponse } from './types.js';
 import type { NapCatAdapter } from './adapter.js';
 import { registerFetchRoute, type Router, type RouterContext } from '@zhin.js/host-router/router';
 import * as crypto from 'crypto';
-import { enableTypingIndicator } from './typing-indicator.js';
 
 export class NapCatHttpEndpoint extends NapCatEndpointBase {
   private pollTimer?: NodeJS.Timeout;
@@ -25,7 +24,6 @@ export class NapCatHttpEndpoint extends NapCatEndpointBase {
     await this.checkConnection();
     this.startPoll();
     this.$connected = true;
-    this.initTypingIndicator();
     this.logger.info(formatCompact({ endpoint: this.$id, mode: 'http' }));
   }
 
@@ -93,17 +91,5 @@ export class NapCatHttpEndpoint extends NapCatEndpointBase {
         this.logger.warn(formatCompact( { op: 'heartbeat', endpoint: this.$id, ok: false }));
       }
     }, interval);
-  }
-
-  private initTypingIndicator(): void {
-    const tiConfig = (this.$config as any).typingIndicator;
-    if (tiConfig && tiConfig.enabled !== false) {
-      enableTypingIndicator(this, {
-        enabled: true,
-        defaultEmoji: tiConfig.defaultEmoji || '128516',
-        autoRemove: true,
-        removeDelay: 5000,
-      });
-    }
   }
 }

@@ -1,10 +1,8 @@
 import type { MessageElement } from "zhin.js";
+import { readMentionSegmentTarget } from "zhin.js";
 
 function segmentAtId(seg: MessageElement): string {
-  if (seg.type !== "at" && seg.type !== "mention") return "";
-  const data = seg.data as Record<string, unknown> | undefined;
-  const raw = data?.user_id ?? data?.qq ?? data?.id;
-  return raw == null ? "" : String(raw);
+  return readMentionSegmentTarget(seg);
 }
 
 function textMentionsEndpoint(text: string, endpointIds: string[]): boolean {

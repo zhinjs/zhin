@@ -17,6 +17,9 @@ const MessageDefinition = {
   platform_message_id: { type: 'text' as const, nullable: false },
   channel_id: { type: 'text' as const, nullable: false },
   channel_type: { type: 'text' as const, nullable: false },
+  channel_name: { type: 'text' as const, nullable: true },
+  channel_parent_type: { type: 'text' as const, nullable: true },
+  channel_parent_id: { type: 'text' as const, nullable: true },
   sender_id: { type: 'text' as const, nullable: false },
   sender_name: { type: 'text' as const, nullable: true },
   sender_payload: { type: 'text' as const, nullable: false },
@@ -79,12 +82,20 @@ function persistMessage(plugin: Plugin, msg: Message): void {
   const endpointId = String(msg?.$endpoint ?? '');
   const channel = msg?.$channel ?? {};
   const sender = msg?.$sender ?? {};
+  const parent = channel?.parent;
+  const parentType =
+    parent?.type === 'group' || parent?.type === 'guild' ? parent.type : null;
   Message.create({
     adapter,
     endpoint_id: endpointId,
     platform_message_id: String(msg?.$id ?? ''),
     channel_id: String(channel?.id ?? ''),
     channel_type: String(channel?.type ?? 'private'),
+    channel_name: (channel as { name?: string })?.name != null
+      ? String((channel as { name?: string }).name)
+      : null,
+    channel_parent_type: parentType,
+    channel_parent_id: parent?.id != null ? String(parent.id) : null,
     sender_id: String(sender?.id ?? ''),
     sender_name: sender?.name != null ? String(sender.name) : null,
     sender_payload: safeJson(sender),

@@ -50,10 +50,6 @@ import { getExtensionFromMime, sniffMimeFromBuffer } from "./mime.js";
 import type { WeixinInboundMediaOpts } from "./weixin-inbound.js";
 import type { WeixinIlinkEndpointConfig } from "./types.js";
 import type { WeixinIlinkAdapter } from "./adapter.js";
-import {
-  WeixinIlinkTypingIndicatorManager,
-  type WeixinIlinkTypingIndicatorConfig,
-} from "./typing-indicator.js";
 
 const DEFAULT_LONG_POLL_TIMEOUT_MS = 35_000;
 const MAX_CONSECUTIVE_FAILURES = 3;
@@ -93,7 +89,6 @@ function segmentLocalPath(seg: MessageSegment): string | undefined {
 
 export class WeixinIlinkEndpoint implements Endpoint<WeixinIlinkEndpointConfig, WeixinMessage> {
   $connected = false;
-  $typingIndicator?: WeixinIlinkTypingIndicatorManager;
 
   private creds: WeixinIlinkCredentials | null = null;
   private pollAbort?: AbortController;
@@ -139,13 +134,6 @@ export class WeixinIlinkEndpoint implements Endpoint<WeixinIlinkEndpointConfig, 
       { baseUrl: this.apiBaseUrl(), token: this.creds.botToken },
       (msg) => this.pluginLogger.debug(msg),
     );
-
-    if (this.$config.typingIndicator?.enabled !== false) {
-      this.$typingIndicator = new WeixinIlinkTypingIndicatorManager(
-        this,
-        this.$config.typingIndicator as WeixinIlinkTypingIndicatorConfig | undefined,
-      );
-    }
 
     this.pollAbort = new AbortController();
     this.pollPromise = this.pollLoop(this.pollAbort.signal);

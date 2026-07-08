@@ -225,6 +225,11 @@ export class Router extends KoaRouter {
     return this.delegateOrTrack("DELETE", pathOrName, pathOrHandler, rest);
   }
 
+  all(
+    name: string,
+    path: string | RegExp,
+    ...middleware: RouterMiddleware[]
+  ): this;
   all(path: string | RegExp | string[], ...middleware: RouterMiddleware[]): this;
   all(path: Path, ...handlers: (RouteHandler | RouteMeta)[]): this;
   all(pathOrName: string | RegExp | string[], pathOrHandler?: unknown, ...rest: unknown[]): this {

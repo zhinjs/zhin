@@ -44,12 +44,6 @@ describe('NapCat 适配器模块导出', () => {
     expect(mod.normalizeMessage).toBeDefined();
   });
 
-  it('应导出 typing-indicator', async () => {
-    const mod = await import('../src/typing-indicator');
-    expect(mod.NapCatTypingIndicatorManager).toBeDefined();
-    expect(mod.enableTypingIndicator).toBeDefined();
-  });
-
   it('应导出 agent-prompt', async () => {
     const mod = await import('../src/agent-prompt');
     expect(mod.createNapCatAgentPromptContributor).toBeDefined();

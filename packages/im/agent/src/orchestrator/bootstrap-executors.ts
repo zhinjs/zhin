@@ -14,8 +14,6 @@ import { getAgentRuntimeRegistry } from '../collaboration/runtime-registry.js';
 import { getCollaborationSceneService } from '../collaboration/scene-service.js';
 import { assertPeerMember, projectInternalRoomTaskToIm } from '../collaboration/collaboration-dispatch.js';
 import { executeRemoteOrchestrationTask } from './remote-task-executor.js';
-import { createFiveAgentWorkflowStrategy } from '../builtin/five-agent/strategy.js';
-
 export interface RegisterExecutorsDeps {
   refs: AIServiceRefs;
 }
@@ -189,7 +187,7 @@ export function registerDefaultExecutors(
     kernel.registerExecutor(internalRoomExecutor),
     kernel.registerExecutor(imProjectionExecutor),
     kernel.registerExecutor(remoteMeshExecutor),
-    kernel.registerWorkflowStrategy(createFiveAgentWorkflowStrategy()),
+    // five-agent WorkflowStrategy is opt-in: kernel.registerWorkflowStrategy(createFiveAgentWorkflowStrategy())
   ];
   return () => {
     for (const cleanup of cleanups) cleanup();

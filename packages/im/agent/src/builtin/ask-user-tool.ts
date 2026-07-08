@@ -1,5 +1,5 @@
 /**
- * ask_user — 基于 Prompt / 私聊 向 Endpoint Owner 确认或提问
+ * ask_user — 默认在当前会话（群/频道/私聊）Prompt 提问；敏感确认走私聊 master（群来源带 parent）。
  */
 import {
   Prompt,
@@ -20,16 +20,15 @@ import {
 } from './ask-user-session.js';
 import {
   buildGroupAskUserFollowUp,
-  notifyGroupOwnerAskUserResolved,
   shouldBlockDelegationAskUser,
 } from '../collaboration/ask-user-bridge.js';
 
 // ============================================================================
-// Prompt / Owner 回复格式化（原 builtin-tools 顶部辅助函数）
+// Prompt / Owner 回复格式化
 // ============================================================================
 
 /**
- * 私聊 Owner 场景：使用 Prompt 类直接交互（原有行为）
+ * 在当前消息会话内 Prompt 交互（群/频道/私聊均可；仅匹配触发用户）。
  */
 export async function askViaPrompt(
   plugin: Plugin,
@@ -95,22 +94,130 @@ export function formatOwnerResponse(raw: string, questionType: string, args: Rec
   }
 }
 
+export function buildSensitiveOwnerQuestionText(
+  commMessage: Message,
+  question: string,
+  questionType: string,
+  options?: string[],
+): string {
+  const sourceInfo = commMessage.$channel?.type !== 'private'
+    ? `来源: ${commMessage.$channel?.type}(${commMessage.$channel?.id}) 用户: ${commMessage.$sender.id}`
+    : `来源: 私聊 用户: ${commMessage.$sender.id}`;
+  let questionText = `请求确认：\n${sourceInfo}\n\n${question}`;
+  if (questionType === 'confirm') {
+    questionText += '\n输入"yes"以确认';
+  } else if (questionType === 'pick' && options?.length) {
+    questionText += '\n' + options.map((o, i) => `${i + 1}.${o}`).join('\n');
+  } else if (questionType === 'number') {
+    questionText += '\n(请输入数字)';
+  }
+  return questionText;
+}
+
+function isGroupOrChannelScope(message: Message): boolean {
+  const scope = message.$channel?.type;
+  return scope === 'group' || scope === 'channel';
+}
+
+/**
+ * 敏感确认：向 Endpoint Owner 发私聊（群/频道来源带 parent），静默不回群。
+ */
+export async function askOwnerViaPrivateWithParent(
+  plugin: Plugin,
+  commMessage: Message,
+  args: Record<string, any>,
+  questionType: string,
+  timeoutMs: number,
+  botMaster: string,
+  adapter: Adapter,
+): Promise<string> {
+  const platform = commMessage.$adapter!;
+  const endpointId = commMessage.$endpoint!;
+  const question = String(args.question ?? '');
+  const sceneId = String(commMessage.$channel?.id ?? '');
+  const parentType = commMessage.$channel?.type === 'channel' ? 'channel' as const : 'group' as const;
+
+  const questionText = buildSensitiveOwnerQuestionText(
+    commMessage,
+    question,
+    questionType,
+    args.options as string[] | undefined,
+  );
+
+  try {
+    await adapter.sendMessage({
+      context: platform,
+      endpoint: endpointId,
+      id: botMaster,
+      type: 'private',
+      parent: { type: parentType, id: sceneId },
+      content: questionText,
+    } satisfies SendOptions);
+  } catch (e: unknown) {
+    return `Error: 无法向 Owner 发送私聊消息: ${errMsg(e)}`;
+  }
+
+  const hostPlugin = plugin.root ?? plugin;
+  const masterId = String(botMaster);
+  const endpointKey = String(endpointId);
+  const groupOrigin = commMessage;
+
+  registerPendingAskUser({
+    endpointId: endpointKey,
+    masterId,
+    groupOrigin,
+    registeredAt: Date.now(),
+  });
+
+  const finish = (rawAnswer: string): string => {
+    clearPendingAskUser(endpointKey, masterId);
+    return buildGroupAskUserFollowUp(groupOrigin, rawAnswer);
+  };
+
+  return new Promise<string>((resolve) => {
+    const middleware: MessageMiddleware = async (message, next) => {
+      if (message.$channel?.type !== 'private') return next();
+      if (String(message.$sender.id) !== masterId) return next();
+      if (String(message.$endpoint) !== endpointKey) return next();
+      dispose();
+      clearTimeout(timer);
+      const raw = message.$raw;
+      resolve(finish(formatOwnerResponse(raw, questionType, args)));
+    };
+    const dispose = hostPlugin.addMiddleware(middleware);
+    const timer = setTimeout(() => {
+      dispose();
+      clearPendingAskUser(endpointKey, masterId);
+      if (args.default_value != null) {
+        resolve(String(args.default_value));
+      } else {
+        resolve('Owner 未在规定时间内响应，操作已取消。');
+      }
+    }, timeoutMs);
+  });
+}
+
 export const ASK_USER_PARAMETERS: ToolParametersSchema = {
   type: 'object',
   properties: {
-    question: { type: 'string', description: '要向 Owner 提出的问题文本' },
+    question: { type: 'string', description: 'Question text to ask the user or Endpoint Owner' },
     type: {
       type: 'string',
       enum: ['text', 'number', 'confirm', 'pick'],
-      description: '问题类型: text(文本输入)、number(数字输入)、confirm(是/否确认)、pick(选项选择)。默认 text',
+      description: 'Response type: text, number, confirm (yes/no), or pick (numbered options). Default: text',
     },
     options: {
       type: 'array',
       items: { type: 'string' },
-      description: '选项列表（type=pick 时必填），每项为字符串，如 ["选项A","选项B","选项C"]',
+      description: 'Option labels when type=pick (required), e.g. ["Option A","Option B"]',
     },
-    default_value: { type: 'string', description: 'Owner 超时未回复时使用的默认值' },
-    timeout: { type: 'number', description: '等待 Owner 回复的超时时间（秒），默认 120' },
+    default_value: { type: 'string', description: 'Fallback value if the user does not reply before timeout' },
+    timeout: { type: 'number', description: 'Wait timeout in seconds. Default: 120' },
+    sensitive: {
+      type: 'boolean',
+      description:
+        'When true, send a private confirmation to the Endpoint Owner (group/channel origin includes parent scene). Use for exec approval, secrets, or other sensitive confirms. Do not set for ordinary clarification.',
+    },
   },
   required: ['question'],
 };
@@ -125,10 +232,10 @@ export function createAskUserTool(plugin: Plugin): Tool {
 export class AskUserBuiltinTool extends BuiltinBaseTool {
   readonly name = 'ask_user';
   readonly description =
-    '向 Endpoint Owner 发送问题并等待回复；群聊场景下通过私聊确认。bash/icqq：Owner 私聊可用「/approve always bash」「/approve rule <正则>」（匹配整段 shell 子命令，如点赞类 icqq 不必固化解参数）、「/approve list」「/approve revoke rule <id>」「/approve revoke」。write_file / edit_file / web_fetch 的硬编排仍须逐次确认。';
+    'Ask the user and wait for a reply. Default: prompt in the current session (group/channel/private) to the triggering user. Set sensitive=true only to confirm with the Endpoint Owner via private DM (group origin uses parent; no group-visible trace). Owner private chat: /approve always bash, /approve rule <regex>, /approve list, /approve revoke. write_file / edit_file / web_fetch hard-orchestration still requires per-action Owner confirm.';
   readonly parameters = ASK_USER_PARAMETERS;
   readonly kind = 'interaction';
-  /** 默认等待 Owner 120s，须大于 Agent 默认 30s 工具超时 */
+  /** 默认等待 120s，须大于 Agent 默认 30s 工具超时 */
   readonly executionTimeoutMs = 150_000;
 
   constructor(private readonly plugin: Plugin) {
@@ -149,7 +256,7 @@ export class AskUserBuiltinTool extends BuiltinBaseTool {
 
   async run(args: Record<string, unknown>, commMessage?: Message): Promise<ToolResult> {
     if (!commMessage) {
-      return 'Error: 当前上下文没有消息来源，无法向 Owner 提问。请改为在回复中直接询问。';
+      return 'Error: 当前上下文没有消息来源，无法提问。请改为在回复中直接询问。';
     }
     if (!this.plugin) {
       return 'Error: 插件实例不可用，无法创建交互式提问。请改为在回复中直接询问。';
@@ -158,6 +265,7 @@ export class AskUserBuiltinTool extends BuiltinBaseTool {
     const timeoutMs = ((args.timeout as number) ?? 120) * 1000;
     const questionType = (args.type as string) || 'text';
     const recordArgs = args as Record<string, any>;
+    const question = String(args.question ?? '');
 
     const platform = commMessage.$adapter!;
     const endpointId = commMessage.$endpoint!;
@@ -171,82 +279,28 @@ export class AskUserBuiltinTool extends BuiltinBaseTool {
       return askViaPrompt(this.plugin, commMessage, recordArgs, questionType, timeoutMs);
     }
 
-    if (!botMaster) {
-      return 'Error: 当前 Endpoint 未配置 master，无法进行安全确认。请在 endpoints 配置中设置 master 字段。';
-    }
-
-    if (!adapter || typeof adapter.sendMessage !== 'function') {
-      return `Error: 无法获取适配器 ${platform}，无法向 Owner 发送私聊确认。`;
-    }
-
-    const question = String(args.question ?? '');
     const delegationBlock = shouldBlockDelegationAskUser(commMessage, question, questionType);
     if (delegationBlock) return delegationBlock;
 
-    const groupOrigin = commMessage.$channel?.type !== 'private' ? commMessage : undefined;
-
-    const sourceInfo = commMessage.$channel?.type !== 'private'
-      ? `来源: ${commMessage.$channel?.type}(${commMessage.$channel?.id}) 用户: ${commMessage.$sender.id}`
-      : `来源: 私聊 用户: ${commMessage.$sender.id}`;
-    let questionText = `请求确认：\n${sourceInfo}\n\n${question}`;
-    if (questionType === 'confirm') {
-      questionText += '\n输入"yes"以确认';
-    } else if (questionType === 'pick' && (args.options as any[])?.length) {
-      questionText += '\n' + (args.options as string[]).map((o, i) => `${i + 1}.${o}`).join('\n');
-    } else if (questionType === 'number') {
-      questionText += '\n(请输入数字)';
+    const sensitive = args.sensitive === true;
+    if (sensitive && isGroupOrChannelScope(commMessage)) {
+      if (!botMaster) {
+        return 'Error: 当前 Endpoint 未配置 master，无法进行敏感确认。请在 endpoints 配置中设置 master 字段。';
+      }
+      if (!adapter || typeof adapter.sendMessage !== 'function') {
+        return `Error: 无法获取适配器 ${platform}，无法向 Owner 发送私聊确认。`;
+      }
+      return askOwnerViaPrivateWithParent(
+        this.plugin,
+        commMessage,
+        recordArgs,
+        questionType,
+        timeoutMs,
+        botMaster,
+        adapter,
+      );
     }
 
-    try {
-      await adapter.sendMessage({
-        context: platform,
-        endpoint: endpointId,
-        id: botMaster,
-        type: 'private',
-        content: questionText,
-      } satisfies SendOptions);
-    } catch (e: unknown) {
-      return `Error: 无法向 Owner 发送私聊消息: ${errMsg(e)}`;
-    }
-
-    const hostPlugin = this.plugin!.root ?? this.plugin!;
-    const masterId = String(botMaster);
-    const endpointKey = String(endpointId);
-
-    registerPendingAskUser({
-      endpointId: endpointKey,
-      masterId,
-      groupOrigin,
-      registeredAt: Date.now(),
-    });
-
-    const finish = async (rawAnswer: string): Promise<string> => {
-      clearPendingAskUser(endpointKey, masterId);
-      if (!groupOrigin) return rawAnswer;
-      await notifyGroupOwnerAskUserResolved(groupOrigin, rawAnswer);
-      return buildGroupAskUserFollowUp(groupOrigin, rawAnswer);
-    };
-
-    return new Promise<string>((resolve) => {
-      const middleware: MessageMiddleware = async (message, next) => {
-        if (message.$channel?.type !== 'private') return next();
-        if (String(message.$sender.id) !== masterId) return next();
-        if (String(message.$endpoint) !== endpointKey) return next();
-        dispose();
-        clearTimeout(timer);
-        const raw = message.$raw;
-        void finish(formatOwnerResponse(raw, questionType, recordArgs)).then(resolve);
-      };
-      const dispose = hostPlugin.addMiddleware(middleware);
-      const timer = setTimeout(() => {
-        dispose();
-        clearPendingAskUser(endpointKey, masterId);
-        if (args.default_value != null) {
-          resolve(String(args.default_value));
-        } else {
-          resolve('Owner 未在规定时间内响应，操作已取消。');
-        }
-      }, timeoutMs);
-    });
+    return askViaPrompt(this.plugin, commMessage, recordArgs, questionType, timeoutMs);
   }
 }

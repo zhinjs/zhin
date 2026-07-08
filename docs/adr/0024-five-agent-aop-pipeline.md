@@ -36,7 +36,9 @@ Roles are task metadata. They do not write to `CollaborationCell`, and they do n
 
 ## Migration Notes
 
-- `PipelineService`, pipeline tools, and post-turn harness are legacy implementation details.
+- **Removed (2026):** Model-facing `cell_*` pipeline tools (`cell_submit_artifact`, `cell_advance_stage`, etc.). Use `orchestration_*` + `internal_room` instead.
+- `PipelineService` and `cell.pipelineState` remain for `/collab reset` and reading archived legacy state only.
+- `five-agent` `WorkflowStrategy` is **opt-in** (`kernel.registerWorkflowStrategy(createFiveAgentWorkflowStrategy())`); not registered at startup by default.
 - `group_delegate` is not a public model-facing orchestration tool in the default path.
 - New strategies should emit `WorkflowTaskSpec[]` and let the kernel create tasks, resolve dependencies, run executors, and publish events.
 - Visible reasoning must be stored as `task.thinking` summaries or `task.progress`, never raw chain-of-thought.

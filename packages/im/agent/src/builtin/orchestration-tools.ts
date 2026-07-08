@@ -49,14 +49,14 @@ function formatRunStatus(runId: string, snapshot: Awaited<ReturnType<ReturnType<
 const START_PARAMS: ToolParametersSchema = {
   type: 'object',
   properties: {
-    title: { type: 'string', description: 'Run 标题' },
+    title: { type: 'string', description: 'Run title' },
     remote_validator: {
       type: 'string',
-      description: '可选：Validate 跑在 remote:<agentId>',
+      description: 'Optional: run Validate on remote:<agentId>',
     },
     collaboration_scene_id: {
       type: 'string',
-      description: '可选：协作单元 ID；绑定 Mission run 到 GroupCell（ADR 0023）',
+      description: 'Optional: collaboration scene ID; binds Mission run to GroupCell (ADR 0023)',
     },
   },
 };
@@ -64,38 +64,38 @@ const START_PARAMS: ToolParametersSchema = {
 const ADD_TASK_PARAMS: ToolParametersSchema = {
   type: 'object',
   properties: {
-    run_id: { type: 'string', description: '编排 run ID' },
-    name: { type: 'string', description: '任务名称' },
-    description: { type: 'string', description: '任务描述' },
+    run_id: { type: 'string', description: 'Orchestration run ID' },
+    name: { type: 'string', description: 'Task name' },
+    description: { type: 'string', description: 'Task description' },
     role: {
       type: 'string',
       enum: ['planner', 'subtask', 'reviewer', 'researcher', 'evaluator', 'executor', 'worker'],
-      description: 'Agent 角色',
+      description: 'Agent role',
     },
-    goal: { type: 'string', description: '任务目标' },
+    goal: { type: 'string', description: 'Task goal' },
     depends_on: {
       type: 'array',
       items: { type: 'string' },
-      description: '依赖任务 ID 列表',
+      description: 'Dependent task ID list',
     },
     executor: {
       type: 'string',
       enum: ['local', 'internal_room', 'im_projection', 'remote_mesh', 'scene_mention'],
-      description: '执行器：local（本地子代理）、internal_room（同实例 peer 直派）、im_projection（仅 IM 群投影）、remote_mesh（A2A 远程）',
+      description: 'Executor: local (local sub-agent), internal_room (same-instance peer), im_projection (IM group projection only), remote_mesh (A2A remote)',
     },
     assigned_to: {
       type: 'string',
-      description: '目标 endpoint ID（internal_room / im_projection 时必填）',
+      description: 'Target endpoint ID (required for internal_room / im_projection)',
     },
     project_to_im: {
       type: 'boolean',
-      description: 'internal_room 派发成功后是否在群内投影 @mention（默认 false）',
+      description: 'After internal_room dispatch, project @mention to the group (default false)',
     },
     auto_start: {
       type: 'boolean',
-      description: '是否立即执行（默认 true；false 时仅创建任务）',
+      description: 'Execute immediately (default true; false creates task only)',
     },
-    context: { type: 'object', description: '结构化上下文（JSON）' },
+    context: { type: 'object', description: 'Structured context (JSON)' },
   },
   required: ['run_id', 'name'],
 };
@@ -103,8 +103,8 @@ const ADD_TASK_PARAMS: ToolParametersSchema = {
 const RUN_ID_PARAMS: ToolParametersSchema = {
   type: 'object',
   properties: {
-    run_id: { type: 'string', description: '编排 run ID' },
-    force: { type: 'boolean', description: '强制关闭（忽略未完成节点）' },
+    run_id: { type: 'string', description: 'Orchestration run ID' },
+    force: { type: 'boolean', description: 'Force close (ignore unfinished nodes)' },
   },
   required: ['run_id'],
 };
@@ -112,15 +112,15 @@ const RUN_ID_PARAMS: ToolParametersSchema = {
 const TASK_ID_PARAMS: ToolParametersSchema = {
   type: 'object',
   properties: {
-    task_id: { type: 'string', description: '任务 ID' },
-    reason: { type: 'string', description: 'skip 原因' },
+    task_id: { type: 'string', description: 'Task ID' },
+    reason: { type: 'string', description: 'Skip reason' },
   },
   required: ['task_id'],
 };
 
 class OrchestrationStartTool extends BuiltinBaseTool {
   readonly name = 'orchestration_start';
-  readonly description = '创建编排 run。';
+  readonly description = 'Create an orchestration run.';
   readonly parameters = START_PARAMS;
 
   constructor(private readonly sessionContext: Message<any>) {
@@ -153,7 +153,7 @@ class OrchestrationStartTool extends BuiltinBaseTool {
 
 class OrchestrationAddTaskTool extends BuiltinBaseTool {
   readonly name = 'orchestration_add_task';
-  readonly description = '向 run 添加 DAG 节点并可选立即执行（支持 internal_room / im_projection）。';
+  readonly description = 'Add a DAG node to a run and optionally execute immediately (supports internal_room / im_projection).';
   readonly parameters = ADD_TASK_PARAMS;
 
   constructor(private readonly sessionContext: Message<any>) {
@@ -228,7 +228,7 @@ class OrchestrationAddTaskTool extends BuiltinBaseTool {
 
 class OrchestrationStatusTool extends BuiltinBaseTool {
   readonly name = 'orchestration_status';
-  readonly description = '查询 run 及 DAG 任务状态。';
+  readonly description = 'Query run and DAG task status.';
   readonly parameters = RUN_ID_PARAMS;
 
   async run(args: Record<string, unknown>): Promise<ToolResult> {
@@ -242,7 +242,7 @@ class OrchestrationStatusTool extends BuiltinBaseTool {
 
 class OrchestrationCompleteTool extends BuiltinBaseTool {
   readonly name = 'orchestration_complete';
-  readonly description = '关闭编排 run（默认要求无 pending/running 节点）。';
+  readonly description = 'Close an orchestration run (by default requires no pending/running nodes).';
   readonly parameters = RUN_ID_PARAMS;
 
   async run(args: Record<string, unknown>): Promise<ToolResult> {
@@ -260,7 +260,7 @@ class OrchestrationCompleteTool extends BuiltinBaseTool {
 
 class OrchestrationRetryTaskTool extends BuiltinBaseTool {
   readonly name = 'orchestration_retry_task';
-  readonly description = '将 failed 任务重置为 pending，解锁下游。';
+  readonly description = 'Reset a failed task to pending and unblock downstream nodes.';
   readonly parameters = TASK_ID_PARAMS;
 
   async run(args: Record<string, unknown>): Promise<ToolResult> {
@@ -274,7 +274,7 @@ class OrchestrationRetryTaskTool extends BuiltinBaseTool {
 
 class OrchestrationSkipTaskTool extends BuiltinBaseTool {
   readonly name = 'orchestration_skip_task';
-  readonly description = '跳过 failed/pending 任务（记录 reason），解锁下游。';
+  readonly description = 'Skip a failed/pending task (records reason) and unblock downstream nodes.';
   readonly parameters = TASK_ID_PARAMS;
 
   async run(args: Record<string, unknown>): Promise<ToolResult> {

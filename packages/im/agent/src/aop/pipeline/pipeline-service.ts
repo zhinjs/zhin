@@ -1,7 +1,9 @@
 /**
- * PipelineService — Five-Agent 流水线状态机 + Artifact 通道（ADR 0024 D4）。
+ * PipelineService — legacy cell.pipelineState（ADR 0024 D4，superseded by OrchestrationKernel）。
  *
- * 不变量：
+ * Model-facing cell_* tools were removed. Retained for /collab reset and archived state reads.
+ *
+ * 不变量（legacy）：
  * - I3 阶段转移 = 代码门控（allowedNextStages）∩ Planner 决策
  * - I2 跨角色数据只经 ArtifactStore；Reviewer 仅读白名单 kind
  * - reviewCycles 超过 maxReviewCycles → 熔断进入 failed
@@ -174,7 +176,7 @@ export class PipelineService {
     const state = cell.pipelineState;
     const targetRunId = resolveRunIdRef(runRef, state);
     if (!targetRunId) {
-      return { ok: false, error: `run ${runRef} not found (use cell_manage_pipeline action=list)` };
+      return { ok: false, error: `run ${runRef} not found (legacy pipeline; use /collab status or orchestration_status)` };
     }
     if (targetRunId === state.runId) {
       return { ok: true, state, previousRunId: state.runId };

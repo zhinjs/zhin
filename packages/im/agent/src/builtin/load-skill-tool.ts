@@ -17,7 +17,7 @@ export interface LoadSkillToolOptions {
 export const LOAD_SKILL_PARAMETERS: ToolParametersSchema = {
   type: 'object',
   properties: {
-    name: { type: 'string', description: '技能名称' },
+    name: { type: 'string', description: 'Skill name' },
   },
   required: ['name'],
 };
@@ -48,7 +48,7 @@ export async function readSkillInstructions(
 export class LoadSkillBuiltinTool extends BuiltinBaseTool {
   readonly name = 'load_skill';
   readonly description =
-    '按名称加载技能完整指令。在 discover 找到相关技能后调用；会自动解锁技能关联的工具。';
+    'Load full skill instructions by name. Call after discover finds a relevant skill; unlocks tools linked to the skill.';
   readonly parameters = LOAD_SKILL_PARAMETERS;
   readonly kind = 'skill';
 

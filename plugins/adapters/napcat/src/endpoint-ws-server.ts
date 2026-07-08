@@ -8,7 +8,6 @@ import { NapCatEndpointBase } from './endpoint-base.js';
 import type { NapCatWsServerConfig, ApiResponse } from './types.js';
 import type { NapCatAdapter } from './adapter.js';
 import type { Router } from '@zhin.js/host-router';
-import { enableTypingIndicator } from './typing-indicator.js';
 
 export class NapCatWsServer extends NapCatEndpointBase {
   #wss?: WebSocketServer;
@@ -120,7 +119,6 @@ export class NapCatWsServer extends NapCatEndpointBase {
       this.#clientMap.set(String(message.self_id), client);
       this.$connected = true;
       this.logger.info(formatCompact({ endpoint: this.$id, self_id: message.self_id }));
-      this.initTypingIndicator();
       return;
     }
     this.dispatchEvent(message);
@@ -134,17 +132,5 @@ export class NapCatWsServer extends NapCatEndpointBase {
         if (client.readyState === WebSocket.OPEN) client.ping();
       }
     }, interval);
-  }
-
-  private initTypingIndicator(): void {
-    const tiConfig = (this.$config as any).typingIndicator;
-    if (tiConfig && tiConfig.enabled !== false) {
-      enableTypingIndicator(this, {
-        enabled: true,
-        defaultEmoji: tiConfig.defaultEmoji || '128516',
-        autoRemove: true,
-        removeDelay: 5000,
-      });
-    }
   }
 }

@@ -11,16 +11,6 @@ export interface WeixinIlinkEndpointConfig {
   longPollTimeoutMs?: number;
   /** 直接配置 token（优先于侧车凭证文件） */
   botToken?: string;
-  typingIndicator?: {
-    enabled?: boolean;
-    /** sendTyping 保活间隔（ms） */
-    keepaliveIntervalMs?: number;
-    privateConfig?: {
-      type?: "typing";
-      autoRemove?: boolean;
-      platformConfig?: Record<string, unknown>;
-    };
-  };
 }
 
 export type { WeixinMessage, MessageItem } from "./ilink-types.js";

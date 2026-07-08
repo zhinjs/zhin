@@ -7,6 +7,7 @@ import {
   AI_OUTBOUND_JSON_EXAMPLE,
   buildAiOutboundPromptHint,
   parseAiOutboundJson,
+  readMentionSegmentTarget,
   type ZhinAiOutboundPayload,
 } from '@zhin.js/core';
 import { resolvePeerEndpointInCell } from './collaboration-config.js';
@@ -104,11 +105,7 @@ export async function sendCollaborationMentionPayload(
 }
 
 function segmentAtUserId(seg: { type: string; data?: Record<string, unknown> }): string {
-  if (seg.type !== 'at' && seg.type !== 'mention') return '';
-  const data = seg.data;
-  if (!data) return '';
-  const raw = data.user_id ?? data.qq ?? data.id;
-  return raw == null ? '' : String(raw);
+  return readMentionSegmentTarget(seg);
 }
 
 function collectPeerMentionTokens(

@@ -14,10 +14,10 @@ describe('segment.html', () => {
     const preview = segment.raw(
       segment.html({ html: '<div>今日本群消息统计</div><div>120</div>' }),
     );
-    expect(preview).toMatch(/^\[html-card\]/);
+    expect(preview).toMatch(/^\[html\]/);
     expect(preview).toContain('今日本群消息统计');
     expect(preview).toContain('120');
-    expect(preview.length).toBeLessThanOrEqual(80 + '[html-card] '.length + 5);
+    expect(preview.length).toBeLessThanOrEqual(80 + '[html] '.length + 5);
   });
 
   it('raw 预览优先显式 text', () => {

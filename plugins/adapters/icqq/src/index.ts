@@ -31,14 +31,6 @@ declare module "zhin.js" {
 export * from "./types.js";
 export { IcqqEndpoint } from "./endpoint.js";
 export { IcqqAdapter } from "./adapter.js";
-export {
-  ICQQTypingIndicatorManager,
-  createICQQTypingIndicatorManager,
-  startICQQTypingIndicator,
-  enableTypingIndicator,
-  type ICQQTypingIndicatorConfig,
-} from "./typing-indicator.js";
-export type { TypingIndicatorConfig } from "./types.js";
 
 const plugin = usePlugin();
 const { provide, useContext, addCommand, root } = plugin;

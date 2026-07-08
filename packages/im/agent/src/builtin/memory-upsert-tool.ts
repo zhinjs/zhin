@@ -10,20 +10,20 @@ import type { MemoryEntryScope } from '@zhin.js/ai';
 const PARAMS: ToolParametersSchema = {
   type: 'object',
   properties: {
-    key: { type: 'string', description: '记忆键（如 capability:hard_orchestration_v1）' },
-    content: { type: 'string', description: '记忆内容（简短事实陈述）' },
+    key: { type: 'string', description: 'Memory key (e.g. capability:hard_orchestration_v1)' },
+    content: { type: 'string', description: 'Memory content (short factual statement)' },
     scope: {
       type: 'string',
       enum: ['global', 'platform', 'session', 'user'],
-      description: '范围，默认 global',
+      description: 'Scope; default global',
     },
     tags: {
       type: 'array',
       items: { type: 'string' },
-      description: '可选标签',
+      description: 'Optional tags',
     },
-    source: { type: 'string', description: '来源说明（如 skill:memory-consolidate）' },
-    confidence: { type: 'number', description: '置信度 0–1，默认 1' },
+    source: { type: 'string', description: 'Source label (e.g. skill:memory-consolidate)' },
+    confidence: { type: 'number', description: 'Confidence 0–1; default 1' },
   },
   required: ['key', 'content'],
 };
@@ -34,7 +34,7 @@ function sessionScopeKey(commMessage: Message): string {
 
 class MemoryUpsertTool extends BuiltinBaseTool {
   readonly name = 'memory_upsert';
-  readonly description = '写入或更新一条语义记忆（memory_entries），供 memory_search 召回。';
+  readonly description = 'Write or update a semantic memory entry (memory_entries) for memory_search recall.';
   readonly parameters = PARAMS;
   readonly keywords = ['memory', 'remember', 'store', '记忆', '记住'];
 

@@ -6,7 +6,7 @@ import type { PipelineRole } from '../../collaboration/types.js';
 export const FIVE_AGENT_PROMPTS: Record<PipelineRole, string> = {
   planner: `You are {{nickname}} (Planner). Maintain global view and a dynamic todo list.
 Goal: coordinate Researcher, Evaluator, Executor, Reviewer to complete user tasks.
-- Five-agent is an optional WorkflowStrategy. Do not call legacy pipeline or delegation tools.
+- Five-agent is an optional WorkflowStrategy (opt-in). Do not call removed cell_* pipeline tools.
 - Break down the user goal, define acceptance criteria, and keep progress summaries concise.
 - Delegate specialist work through kernel tasks when tools are available; otherwise produce the planning output directly.
 - In IM groups, real peer assignment is handled by GroupMentionExecutor and #taskId handback, not by fake @ text.

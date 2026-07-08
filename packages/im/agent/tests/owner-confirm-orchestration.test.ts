@@ -70,7 +70,7 @@ describe('owner-confirm-orchestration', () => {
   });
 
   it('硬编排成功时附加 Owner 答复块', async () => {
-    vi.spyOn(AskUserBuiltinTool.prototype, 'run').mockResolvedValue('yes');
+    const spy = vi.spyOn(AskUserBuiltinTool.prototype, 'run').mockResolvedValue('yes');
     const t = createOwnerOrchestratedToolResultTransform({
       commMessage: mockCommMessage({ adapter: 'test' }),
       plugin: stubPlugin,
@@ -79,6 +79,10 @@ describe('owner-confirm-orchestration', () => {
     const out = await t({ toolName: 'bash', toolCallId: '1', args: {}, result: raw });
     expect(out).toContain('[Owner confirmation (orchestrated)]');
     expect(out).toContain('yes');
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({ sensitive: true, type: 'confirm' }),
+      expect.anything(),
+    );
   });
 
   it('ask_user 返回 Error 时软降级且不消耗自动确认次数', async () => {

@@ -21,16 +21,16 @@ export const MAX_WEB_SEARCH_COUNT = 20;
 export const WEB_SEARCH_PARAMETERS: ToolParametersSchema = {
   type: 'object',
   properties: {
-    query: { type: 'string', description: '搜索关键词或完整查询语句' },
-    limit: { type: 'number', description: '返回结果数量（默认 5，建议 1–10）' },
+    query: { type: 'string', description: 'Search keywords or full query string' },
+    limit: { type: 'number', description: 'Number of results (default 5; recommend 1–10)' },
     allowed_domains: {
       type: 'array',
-      description: '仅保留这些域名的结果（可选，如 ["github.com", "stackoverflow.com"]）；含子域',
+      description: 'Keep only results from these domains (optional, e.g. ["github.com"]); includes subdomains',
       items: { type: 'string' },
     },
     blocked_domains: {
       type: 'array',
-      description: '排除这些域名的结果（可选）；含子域',
+      description: 'Exclude results from these domains (optional); includes subdomains',
       items: { type: 'string' },
     },
   },
@@ -75,7 +75,7 @@ function filterByDomains(
 export class WebSearchBuiltinTool extends BuiltinBaseTool {
   readonly name = 'web_search';
   readonly description =
-    '在互联网上搜索（Bing），返回匹配的标题、URL 和摘要片段。用于查资料、找网页。支持域名过滤。默认中文结果；用户可在 user_profile 中设置 language 或 preferred_language 覆盖；也可由集成方设置 Message.extra.web_search_locale。';
+    'Search the web (Bing) and return titles, URLs, and snippets. Supports domain filters. Default locale is Chinese; override via user_profile language/preferred_language or Message.extra.web_search_locale.';
   readonly parameters = WEB_SEARCH_PARAMETERS;
   readonly kind = 'web';
 

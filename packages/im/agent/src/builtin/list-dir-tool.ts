@@ -13,7 +13,7 @@ export const LIST_DIR_PARAMETERS: ToolParametersSchema = {
   properties: {
     path: {
       type: 'string',
-      description: '要列出的目录路径（绝对或相对项目根目录）',
+      description: 'Directory path to list (absolute or relative to project root)',
     },
   },
   required: ['path'],
@@ -22,7 +22,7 @@ export const LIST_DIR_PARAMETERS: ToolParametersSchema = {
 export class ListDirBuiltinTool extends BuiltinBaseTool {
   readonly name = 'list_dir';
   readonly description =
-    '列出指定目录下的文件和子目录名称。用于查看目录结构、有哪些文件。';
+    'List file and subdirectory names in a directory. Use to inspect directory structure and available files.';
   readonly parameters = LIST_DIR_PARAMETERS;
   readonly kind = 'file';
 

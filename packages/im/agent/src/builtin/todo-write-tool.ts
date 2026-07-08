@@ -12,11 +12,11 @@ export const TODO_WRITE_PARAMETERS: ToolParametersSchema = {
   properties: {
     items: {
       type: 'array',
-      description: '任务列表 [{title, detail?, status: pending|in-progress|done}]',
+      description: 'Task list [{title, detail?, status: pending|in-progress|done}]',
     },
     chat_id: {
       type: 'string',
-      description: '聊天范围（可选）',
+      description: 'Chat scope (optional)',
     },
   },
   required: ['items'],
@@ -24,7 +24,7 @@ export const TODO_WRITE_PARAMETERS: ToolParametersSchema = {
 
 export class TodoWriteBuiltinTool extends BuiltinBaseTool {
   readonly name = 'todo_write';
-  readonly description = '创建或更新任务计划，用于分解复杂任务并跟踪进度';
+  readonly description = 'Create or update a task plan to break down complex work and track progress.';
   readonly parameters = TODO_WRITE_PARAMETERS;
   readonly kind = 'plan';
 

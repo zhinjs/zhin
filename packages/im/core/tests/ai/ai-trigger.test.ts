@@ -248,6 +248,23 @@ describe('AI Trigger 工具函数', () => {
       expect(result.content).toBe('在吗');
     });
 
+    it('canonical mention.target 应触发 @', () => {
+      const message = createMockMessage({
+        content: [
+          { type: 'mention', data: { target: '1689919782' } },
+          { type: 'text', data: { text: ' foo bar' } },
+        ],
+        endpoint: '1689919782',
+        channelType: 'group',
+      });
+      const result = shouldTriggerAI(message as any, { respondToAt: true }, {
+        endpointAtIds: ['1689919782'],
+      });
+
+      expect(result.triggered).toBe(true);
+      expect(result.content).toContain('foo bar');
+    });
+
     it('纯文本 @ 号（无 at 段）应触发', () => {
       const message = createMockMessage({
         content: [{ type: 'text', data: { text: '@8596238 帮忙查一下' } }],

@@ -13,8 +13,8 @@ export const WEB_FETCH_DEFAULT_MAX_LENGTH = 20 * 1024;
 export const WEB_FETCH_PARAMETERS: ToolParametersSchema = {
   type: 'object',
   properties: {
-    url: { type: 'string', description: '要抓取的完整 URL（需 http 或 https）' },
-    max_length: { type: 'number', description: '最大返回字符数（默认 20480）' },
+    url: { type: 'string', description: 'Full URL to fetch (http or https only)' },
+    max_length: { type: 'number', description: 'Max characters to return (default 20480)' },
   },
   required: ['url'],
 };
@@ -31,7 +31,7 @@ import { isBlockedSsrfHostname } from '../security/network-policy.js';
 export class WebFetchBuiltinTool extends BuiltinBaseTool {
   readonly name = 'web_fetch';
   readonly description =
-    '抓取指定 URL 的网页内容并提取正文（去除广告、脚本等），返回可读文本。仅支持 http/https 协议。';
+    'Fetch a URL and extract readable page text (strips ads, scripts, etc.). http/https only.';
   readonly parameters = WEB_FETCH_PARAMETERS;
   readonly kind = 'web';
 

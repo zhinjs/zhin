@@ -113,7 +113,10 @@ export function toCqString(content: SendContent): string {
           return `[image:${data.file || data.url || data.src}]`;
         }
         case "at":
-          return `[at:${data.qq ?? data.id}]`;
+        case "mention": {
+          const target = data.target ?? data.qq ?? data.id ?? data.user_id;
+          return `[at:${target}]`;
+        }
         case "dice":
           return "[dice]";
         case "rps":

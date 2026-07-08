@@ -50,4 +50,13 @@ describe("toCqString (legacy)", () => {
       toCqString([{ type: "image", data: { base64: "aGVsbG8=" } }]),
     ).toBe("[image:base64://aGVsbG8=]");
   });
+
+  it("canonical mention 编码为 [at:target]", () => {
+    expect(
+      toCqString([
+        { type: "mention", data: { target: "8596238", name: "Bot" } },
+        { type: "text", data: { text: " hi" } },
+      ]),
+    ).toBe("[at:8596238] hi");
+  });
 });

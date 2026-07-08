@@ -1,10 +1,8 @@
 /**
- * Five-Agent 契约测试（ADR 0024）：
- * - 角色 ACL：evaluator 零外部工具；reviewer 禁 web_search
- * - 转移门控：full 严格顺序；compact 允许 Planner 短路
+ * Five-Agent 契约测试（ADR 0024，legacy pipeline tools removed ADR 0026/0027）：
+ * - 角色 ACL（subagent spawn_task 路径）
  * - 模式探测：5 角色 → full；不齐 → compact
- * - Reviewer 记忆隔离：切片不含 evaluator blueprint
- * - 内置 prompt：nickname 渲染
+ * - 内置 opt-in prompt：nickname 渲染
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -36,16 +34,16 @@ const compactCell: CollaborationScene = {
 };
 
 describe('role ACL', () => {
-  it('evaluator has no external tools', () => {
+  it('evaluator has no external write or web tools', () => {
     expect(isToolAllowedForRole('web_search', 'evaluator')).toBe(false);
     expect(isToolAllowedForRole('write_file', 'evaluator')).toBe(false);
-    expect(isToolAllowedForRole('cell_submit_artifact', 'evaluator')).toBe(true);
+    expect(isToolAllowedForRole('read_file', 'evaluator')).toBe(true);
   });
 
-  it('reviewer cannot web_search or read source', () => {
+  it('reviewer cannot web_search or write', () => {
     expect(isToolAllowedForRole('web_search', 'reviewer')).toBe(false);
-    expect(isToolAllowedForRole('read_file', 'reviewer')).toBe(false);
-    expect(isToolAllowedForRole('cell_read_artifact', 'reviewer')).toBe(true);
+    expect(isToolAllowedForRole('read_file', 'reviewer')).toBe(true);
+    expect(isToolAllowedForRole('write_file', 'reviewer')).toBe(false);
   });
 
   it('planner cannot write deliverables but can orchestrate', () => {
@@ -54,12 +52,11 @@ describe('role ACL', () => {
     expect(isToolAllowedForRole('orchestration_add_task', 'planner')).toBe(true);
     expect(isToolAllowedForRole('spawn_task', 'planner')).toBe(true);
     expect(isToolAllowedForRole('group_delegate', 'planner')).toBe(false);
-    expect(isToolAllowedForRole('cell_advance_stage', 'planner')).toBe(false);
   });
 
   it('filters tool name list by role', () => {
-    const tools = ['web_search', 'cell_submit_artifact', 'write_file', 'cell_read_artifact'];
-    expect(filterToolNamesForRole(tools, 'evaluator')).toEqual(['cell_submit_artifact', 'cell_read_artifact']);
+    const tools = ['web_search', 'read_file', 'write_file', 'grep'];
+    expect(filterToolNamesForRole(tools, 'evaluator')).toEqual(['read_file', 'grep']);
   });
 });
 
@@ -74,7 +71,7 @@ describe('mode detection', () => {
   });
 });
 
-describe('builtin prompts', () => {
+describe('builtin prompts (opt-in WorkflowStrategy)', () => {
   it('renders nickname into planner prompt', () => {
     const p = FiveAgentPromptRegistry.render({ role: 'planner', nickname: '总监' });
     expect(p).toContain('总监');

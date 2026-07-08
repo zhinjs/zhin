@@ -56,9 +56,12 @@ import {
 import { parseIcqqGetMsgResponse } from "./get-msg.js";
 import { enrichQuotedPayloadWithForward, isForwardPlaceholderPayload } from "./forward-msg.js";
 import {
-  enableTypingIndicator,
-  type ICQQTypingIndicatorManager,
-} from "./typing-indicator.js";
+  IcqqGuildCatalog,
+  isIcqqGuildIpcEvent,
+  normalizeIcqqGuildInboundMessage,
+  type NormalizedIcqqGuildInbound,
+} from "./icqq-guild.js";
+import type { IpcGuildMessageEventData } from "./protocol.js";
 
 export class IcqqEndpoint implements Endpoint<IcqqEndpointConfig, IcqqIpcMessageEvent> {
   $connected = false;
@@ -69,6 +72,8 @@ export class IcqqEndpoint implements Endpoint<IcqqEndpointConfig, IcqqIpcMessage
   friends = new Map<number, IpcFriendInfo>();
   /** 缓存的群列表 */
   groups = new Map<number, IpcGroupInfo>();
+  /** QQ 频道（guild）子频道缓存 */
+  readonly guildCatalog = new IcqqGuildCatalog();
 
   private subscriptions: Array<{ unsubscribe: () => Promise<void> }> = [];
   /** 事件去重：覆盖多端回流/服务端重复推送等场景 */
@@ -79,9 +84,6 @@ export class IcqqEndpoint implements Endpoint<IcqqEndpointConfig, IcqqIpcMessage
   private intentionalDisconnect = false;
   /** 是否已有重连循环在跑（避免多次 schedule 叠套） */
   private reconnectRunning = false;
-
-  /** Typing Indicator 管理器 */
-  $typingIndicator?: ICQQTypingIndicatorManager;
 
   get $id() {
     return this.$config.name;
@@ -113,48 +115,11 @@ export class IcqqEndpoint implements Endpoint<IcqqEndpointConfig, IcqqIpcMessage
 
     await this.rebindIpcSession();
 
-    // 根据配置自动启用 Typing Indicator
-    this.initTypingIndicator();
-
     this.logger.info(formatCompact( {
       机器人: this.$id,
       好友数: this.friends.size,
       群组数: this.groups.size,
-      思考提示: this.$typingIndicator ? '已启用' : '未启用',
     }));
-  }
-
-  /**
-   * 初始化 Typing Indicator
-   * 根据配置自动启用或禁用
-   */
-  private initTypingIndicator(): void {
-    const typingConfig = this.$config.typingIndicator;
-
-    // 如果配置中明确设置为 false，则不启用
-    if (typingConfig?.enabled === false) {
-      this.logger.debug(formatCompact({
-        endpoint: this.$id,
-        typingIndicator: 'disabled_by_config',
-      }));
-      return;
-    }
-
-    // 启用 Typing Indicator
-    try {
-      this.$typingIndicator = enableTypingIndicator(this, typingConfig);
-      this.logger.debug(formatCompact({
-        endpoint: this.$id,
-        typingIndicator: 'enabled',
-        emoji: typingConfig?.defaultEmoji || '⏳',
-      }));
-    } catch (error) {
-      this.logger.warn(formatCompact({
-        endpoint: this.$id,
-        typingIndicator: 'failed',
-        error: error instanceof Error ? error.message : String(error),
-      }));
-    }
   }
 
   /** 建立或恢复与守护进程的 IPC/RPC 会话（订阅、缓存列表） */
@@ -268,18 +233,33 @@ export class IcqqEndpoint implements Endpoint<IcqqEndpointConfig, IcqqIpcMessage
         this.groups.set(g.group_id, g);
       }
     }
+
+    await this.guildCatalog.syncAll(this.ipc).catch((e: unknown) => {
+      this.logger.warn(formatCompact({
+        op: "sync_guilds",
+        endpoint: this.$id,
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+      }));
+    });
+  }
+
+  /** Console：列出 guild 子频道（含 parent.guild） */
+  getGuildChannelList(): ReturnType<IcqqGuildCatalog["getGuildChannelList"]> {
+    return this.guildCatalog.getGuildChannelList();
+  }
+
+  resolveConsoleChannelNames(
+    channelId: string,
+    guildId?: string,
+  ): { channelName?: string; parentName?: string } {
+    return this.guildCatalog.resolveConsoleChannelNames(channelId, guildId);
   }
 
   // ── 断开 ───────────────────────────────────────────────────────────
 
   async $disconnect(): Promise<void> {
     this.intentionalDisconnect = true;
-
-    // 停止所有 Typing Indicator
-    if (this.$typingIndicator) {
-      await this.$typingIndicator.stopAll().catch(() => {});
-      this.$typingIndicator = undefined;
-    }
 
     this.ipc?.setOnRemoteDisconnect(null);
     for (const sub of this.subscriptions) {
@@ -298,6 +278,23 @@ export class IcqqEndpoint implements Endpoint<IcqqEndpointConfig, IcqqIpcMessage
   private handleEvent(event: IpcEvent): void {
     if (event.event?.startsWith("system.login.")) {
       handleIcqqLoginIpcEvent(this, event.event, event.data);
+      return;
+    }
+
+    if (event.event === Actions.RELOAD_GUILDS) {
+      void this.guildCatalog.syncAll(this.ipc).catch((e: unknown) => {
+        this.logger.warn(formatCompact({
+          op: "reload_guilds",
+          endpoint: this.$id,
+          ok: false,
+          error: e instanceof Error ? e.message : String(e),
+        }));
+      });
+      return;
+    }
+
+    if (isIcqqGuildIpcEvent(event.event)) {
+      this.handleGuildMessageEvent(event);
       return;
     }
 
@@ -391,6 +388,80 @@ export class IcqqEndpoint implements Endpoint<IcqqEndpointConfig, IcqqIpcMessage
     this.logger.debug(
       `${this.$id} recv ${message.$channel.type}(${message.$channel.id}):${segment.raw(message.$content)}${message.$quote_id ? ` quote_id=${message.$quote_id}` : ""}`,
     );
+  }
+
+  private handleGuildMessageEvent(event: IpcEvent): void {
+    const payload = event.data;
+    if (!payload || typeof payload !== "object") return;
+    const data = payload as IpcGuildMessageEventData & Record<string, unknown>;
+    const normalized = normalizeIcqqGuildInboundMessage(data);
+    if (!normalized) return;
+
+    this.guildCatalog.upsertFromInbound(data);
+
+    if (!this.inboundDeduper.shouldProcess(`guild:${normalized.messageId}`)) {
+      return;
+    }
+
+    void this.dispatchGuildInboundMessage(normalized);
+  }
+
+  private async dispatchGuildInboundMessage(
+    normalized: NormalizedIcqqGuildInbound,
+  ): Promise<void> {
+    const message = this.$formatGuildMessage(normalized);
+    this.adapter.emit("message.receive", message);
+    this.logger.debug(
+      `${this.$id} recv channel(${message.$channel.id}):${segment.raw(message.$content)}`,
+    );
+  }
+
+  private $formatGuildMessage(
+    normalized: NormalizedIcqqGuildInbound,
+  ): ReturnType<typeof Message.from<IpcGuildMessageEventData>> {
+    const senderInfo: IcqqSenderInfo = {
+      id: normalized.userId,
+      name: normalized.nickname,
+    };
+
+    const result = Message.from(normalized.raw, {
+      $id: normalized.messageId,
+      $adapter: "icqq" as const,
+      $endpoint: this.$config.name,
+      $sender: senderInfo,
+      $channel: {
+        id: normalized.channelId,
+        type: "channel",
+        parent: { type: "guild", id: normalized.guildId },
+      },
+      $content: normalized.content,
+      $raw: normalized.rawMessage,
+      $timestamp: normalized.timestampMs,
+      $recall: async () => {
+        await this.$recallMessage(result.$id);
+      },
+      $reply: async (
+        content: SendContent,
+        quote?: boolean | string,
+      ): Promise<string> => {
+        if (!Array.isArray(content)) content = [content];
+        if (quote) {
+          content.unshift({
+            type: "reply",
+            data: { id: typeof quote === "boolean" ? result.$id : quote },
+          });
+        }
+        return await this.adapter.sendMessage({
+          context: "icqq",
+          endpoint: this.$config.name,
+          id: normalized.channelId,
+          type: "channel",
+          parent: { type: "guild", id: normalized.guildId },
+          content,
+        });
+      },
+    });
+    return result;
   }
 
   private handleNoticeEvent(event: IcqqIpcRawEvent): void {
@@ -686,6 +757,22 @@ export class IcqqEndpoint implements Endpoint<IcqqEndpointConfig, IcqqIpcMessage
         action = Actions.SEND_GROUP_MSG;
         params = { group_id: Number(options.id), message };
         break;
+      case "channel": {
+        const guildId =
+          options.parent?.type === "guild" ? options.parent.id : undefined;
+        if (!guildId) {
+          throw new Error(
+            'channel 发送需要 parent: { type: "guild", id: guild_id }',
+          );
+        }
+        action = Actions.GUILD_SEND_MSG;
+        params = {
+          guild_id: guildId,
+          channel_id: options.id,
+          message,
+        };
+        break;
+      }
       default:
         throw new Error(`不支持的频道类型: ${options.type}`);
     }

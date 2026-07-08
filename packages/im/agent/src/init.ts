@@ -31,7 +31,6 @@ import { registerCollaborationCommands } from './init/register-collaboration-com
 import { registerInitWizardGuardrail } from './init/register-init-wizard-guardrail.js';
 import { registerBuiltinTools } from './init/register-builtin-tools.js';
 import { registerHomeTools } from './init/register-home-tools.js';
-import { registerTypingIndicator } from './init/register-typing-indicator.js';
 import { registerImSegmentFilter } from './init/register-im-segment-filter.js';
 
 /**
@@ -62,6 +61,5 @@ export function initAgentModule(): void {
   registerIntrospectionCommands(refs);
   registerBuiltinTools(refs);
   registerHomeTools();
-  registerTypingIndicator(refs);
   registerImSegmentFilter();
 }

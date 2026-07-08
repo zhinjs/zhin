@@ -314,9 +314,9 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
       deferredResultSender: deliverOutbound,
     });
 
-    // Register default kernel executors + five-agent workflow strategy now that
-    // the subagent manager and sender are configured. Registration is idempotent
-    // and survives the Memory → DB repository upgrade (ADR 0027).
+    // Register default kernel executors now that the subagent manager and sender
+    // are configured. Registration is idempotent and survives the Memory → DB
+    // repository upgrade (ADR 0027). five-agent WorkflowStrategy is opt-in.
     registerDefaultExecutors(orchService, { refs });
 
     let jobEngine: ScheduleJobEngine | null = null;

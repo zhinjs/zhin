@@ -21,11 +21,12 @@ export interface MessageChannel{
     id: string;
     type: MessageType;
     /**
-     * 私聊/子频道消息的来源场景（如 QQ 群临时会话：type=private + parent.group）。
-     * 出站时 adapter 据此选择 API（icqq → send_temp_msg）。
+     * 私聊/子频道消息的来源场景：
+     * - 群临时会话：type=private + parent.group
+     * - QQ 子频道：type=channel + parent.guild
      */
     parent?: {
-        type: 'group' | 'channel';
+        type: 'group' | 'guild';
         id: string;
     };
 }

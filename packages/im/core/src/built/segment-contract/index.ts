@@ -28,3 +28,5 @@ export { assertCanonicalSegments, isCanonicalSegment } from './assert.js';
 export { segmentsForImDelivery } from './delivery.js';
 export { isMediaRef, mediaRefFromLegacyData, mediaRefToLegacyFields } from './media.js';
 export { createImageSegment } from './image.js';
+export { formatSegmentPreview } from './preview.js';
+export { readMentionTarget, readMentionName, readMentionSegmentTarget } from './mention.js';

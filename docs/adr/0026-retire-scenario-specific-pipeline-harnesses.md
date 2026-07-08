@@ -28,8 +28,9 @@
 
 ## 影响
 
-- 删除默认注册的专用 workflow strategy。
-- 删除专用 helper、测试与 public export。
+- 删除默认注册的专用 workflow strategy（`five-agent` 改为显式 opt-in）。
+- **已删除** 模型面向的 `cell_*` pipeline 工具及 `createPipelineTools`。
+- 删除专用 helper、测试与 public export（`resolvePipelineTurnHint`、`buildPipelineRoleRichSystemPrompt` 等）。
 - `ActiveDelegation.mode` 降级为 legacy 字符串元数据，不能再驱动状态分支。
 - `cell_submit_artifact` / `cell_advance_stage` 只检查通用 pipeline 规则，不再识别具体场景。
 

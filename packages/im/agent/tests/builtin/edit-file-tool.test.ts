@@ -42,7 +42,7 @@ describe('EditFileBuiltinTool', () => {
   it('toTool 元数据与 schema 完整', () => {
     const tool = createEditFileTool();
     expect(tool.name).toBe('edit_file');
-    expect(tool.description).toContain('替换');
+    expect(tool.description).toContain('replace');
     expect(tool.parameters.required).toContain('file_path');
     expect(tool.parameters.required).toContain('old_string');
     expect(tool.parameters.required).toContain('new_string');

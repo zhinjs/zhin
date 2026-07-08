@@ -47,6 +47,59 @@ describe('IM scene contract', () => {
     });
   });
 
+  it('preserves guild parent for sub-channel messages', () => {
+    expect(sceneRefFromMessage({
+      $adapter: 'icqq',
+      $endpoint: 'bot1',
+      $channel: {
+        type: 'channel',
+        id: '634415832',
+        parent: { type: 'guild', id: '650779094005186335' },
+      },
+      $sender: { id: 'u1' },
+    })?.parent).toEqual({
+      kind: 'guild',
+      sceneId: '650779094005186335',
+    });
+  });
+
+  it('normalizes legacy parent.type channel to guild', () => {
+    expect(sceneRefFromMessage({
+      $adapter: 'icqq',
+      $endpoint: 'bot1',
+      $channel: {
+        type: 'channel',
+        id: 'ch1',
+        parent: { type: "channel" as never, id: "g1" },
+      },
+      $sender: { id: 'u1' },
+    })?.parent).toEqual({
+      kind: 'guild',
+      sceneId: 'g1',
+    });
+  });
+
+  it('round-trips channel scene with guild parent to SendOptions', () => {
+    const target = messageToIMDeliveryTarget({
+      $adapter: 'icqq',
+      $endpoint: '8596238',
+      $channel: {
+        type: 'channel',
+        id: '634415832',
+        parent: { type: 'guild', id: '650779094005186335' },
+      },
+      $sender: { id: 'u1' },
+    });
+    expect(sceneRefToSendOptions(target!, 'nihao')).toEqual({
+      context: 'icqq',
+      endpoint: '8596238',
+      id: '634415832',
+      type: 'channel',
+      parent: { type: 'guild', id: '650779094005186335' },
+      content: 'nihao',
+    });
+  });
+
   it('converts a scene delivery target to SendOptions', () => {
     expect(sceneRefToSendOptions({
       channel: 'im',

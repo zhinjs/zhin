@@ -3,7 +3,7 @@
  */
 
 import type { Message, Plugin } from '@zhin.js/core';
-import { isAtEndpoint, segment } from '@zhin.js/core';
+import { isAtEndpoint, readMentionSegmentTarget, segment } from '@zhin.js/core';
 import type { CollaborationScene, PeerTriggerMode, PeerTriggerResult } from './types.js';
 import { resolveMemberBySender } from './endpoint-identity.js';
 
@@ -24,11 +24,7 @@ export interface CellAtOwnershipResult {
 }
 
 function segmentAtUserId(seg: { type: string; data?: Record<string, unknown> }): string {
-  if (seg.type !== 'at' && seg.type !== 'mention') return '';
-  const data = seg.data;
-  if (!data) return '';
-  const raw = data.user_id ?? data.qq ?? data.id;
-  return raw == null ? '' : String(raw);
+  return readMentionSegmentTarget(seg);
 }
 
 /** 按消息顺序收集 @ 到的 Cell 成员 endpointId */

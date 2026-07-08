@@ -27,6 +27,13 @@ import {
 import { removePendingRequest } from "./endpoint-hub.js";
 import { createNodeProjectFs } from "./rpc/project-fs.js";
 import { handleCoreRpc } from "./rpc/handlers-core.js";
+import {
+  channelFromStoredRow,
+  inboxChannelWhere,
+  parentFromStoredRow,
+  toConsoleChannel,
+  toConsoleChannelParent,
+} from "./endpoint-channel.js";
 
 const plugin = usePlugin();
 const { root, logger } = plugin;
@@ -479,7 +486,7 @@ export async function handleWebSocketMessage(
               | undefined;
             groups = Array.from((map || new Map()).values()).map((g) => ({
               group_id: Number(g.group_id),
-              name: String(g.name ?? g.group_id ?? ""),
+              name: String(g.group_name ?? g.name ?? g.group_id ?? ""),
             }));
           } else if (typeof endpointAny.getGroupList === "function") {
             const raw = await (endpointAny.getGroupList as () => Promise<unknown>)();
@@ -518,19 +525,22 @@ export async function handleWebSocketMessage(
           ws.send(JSON.stringify({ requestId, error: "adapter and endpointId required" }));
           break;
         }
-        if (isIcqqAdapterKey(adapter)) {
-          ws.send(JSON.stringify({ requestId, error: "channels not supported for icqq" }));
-          break;
-        }
         const ad = root.inject(adapter as keyof Plugin.Contexts);
         const endpoint = ad instanceof Adapter ? ad.endpoints.get(endpointId) : undefined;
         if (!endpoint) {
           ws.send(JSON.stringify({ requestId, error: "endpoint not found" }));
           break;
         }
-        const channels: Array<{ id: string; name: string }> = [];
+        const channels: Array<{ id: string; name?: string; parent?: { type: string; id: string; name?: string } }> = [];
         const endpointMethods = endpoint as unknown as Record<string, unknown>;
-        if (adapter === "qq" && typeof endpointMethods.getGuilds === "function" && typeof endpointMethods.getChannels === "function") {
+        if (isIcqqAdapterKey(adapter) && typeof endpointMethods.getGuildChannelList === "function") {
+          const list = (endpointMethods.getGuildChannelList as () => Array<{
+            id: string;
+            name: string;
+            parent: { type: "guild"; id: string; name: string };
+          }>)();
+          channels.push(...list);
+        } else if (adapter === "qq" && typeof endpointMethods.getGuilds === "function" && typeof endpointMethods.getChannels === "function") {
           const qqEndpoint = endpoint as unknown as {
             getGuilds(): Promise<Array<Record<string, unknown>>>;
             getChannels(guildId: string): Promise<Array<Record<string, unknown>>>;
@@ -538,22 +548,37 @@ export async function handleWebSocketMessage(
           const guilds = (await qqEndpoint.getGuilds()) || [];
           for (const g of guilds) {
             const gid = String(g?.id ?? g?.guild_id ?? g);
+            const guildName = String(g?.name ?? g?.guild_name ?? gid);
             const chs = (await qqEndpoint.getChannels(gid)) || [];
             for (const c of chs) {
               channels.push({
                 id: String(c?.id ?? c?.channel_id ?? c),
                 name: String(c?.name ?? c?.channel_name ?? c?.id ?? ""),
+                parent: { type: "guild", id: gid, name: guildName },
               });
             }
           }
         } else if (ad && typeof (ad as Record<string, unknown>).listChannels === "function") {
           const adMethods = ad as Record<string, (...args: unknown[]) => unknown>;
           const result = await adMethods.listChannels(endpointId) as Record<string, unknown> | unknown[];
-          if (Array.isArray(result)) channels.push(...result.map((c) => {
-            const row = c as Record<string, unknown>;
-            return { id: String(row?.id ?? c), name: String(row?.name ?? row?.id ?? "") };
-          }));
-          else if (result && typeof result === 'object' && 'channels' in result) channels.push(...((result as Record<string, unknown>).channels as Array<Record<string, unknown>>).map((c) => ({ id: String(c?.id ?? c), name: String(c?.name ?? c?.id ?? "") })));
+          if (Array.isArray(result)) {
+            channels.push(...result.map((c) => {
+              const row = c as Record<string, unknown>;
+              const normalized = toConsoleChannel({
+                id: String(row?.id ?? c),
+                parent: row?.parent as { type?: string; id?: string; name?: string } | undefined,
+              }, { channelName: String(row?.name ?? row?.id ?? "") });
+              return normalized ?? { id: String(row?.id ?? c), name: String(row?.name ?? row?.id ?? "") };
+            }));
+          } else if (result && typeof result === "object" && "channels" in result) {
+            channels.push(...((result as Record<string, unknown>).channels as Array<Record<string, unknown>>).map((c) => {
+              const normalized = toConsoleChannel({
+                id: String(c?.id ?? ""),
+                parent: c?.parent as { type?: string; id?: string; name?: string } | undefined,
+              }, { channelName: String(c?.name ?? c?.id ?? "") });
+              return normalized ?? { id: String(c?.id ?? ""), name: String(c?.name ?? c?.id ?? "") };
+            }));
+          }
         }
         ws.send(JSON.stringify({ requestId, data: { channels, count: channels.length } }));
       } catch (error: unknown) {
@@ -700,7 +725,7 @@ export async function handleWebSocketMessage(
     case "endpoint:inboxMessages": {
       try {
         const d = message.data || {};
-        const { adapter, endpointId, channelId, channelType, limit = 50, beforeId, beforeTs } = d;
+        const { adapter, endpointId, channelId, channelType, limit = 50, beforeId, beforeTs, parent } = d;
         if (!adapter || !endpointId || !channelId || !channelType) {
           ws.send(JSON.stringify({ requestId, error: "adapter, endpointId, channelId, channelType required" }));
           break;
@@ -723,25 +748,30 @@ export async function handleWebSocketMessage(
           ws.send(JSON.stringify({ requestId, data: { messages: [], inboxEnabled: false } }));
           break;
         }
-        const where: Record<string, unknown> = {
+        const where = inboxChannelWhere({
           adapter: String(adapter),
           endpoint_id: String(endpointId),
           channel_id: String(channelId),
           channel_type: String(channelType),
-        };
+        }, toConsoleChannelParent(parent as { type?: string; id?: string } | undefined));
         if (beforeTs != null) where.created_at = { $lt: Number(beforeTs) };
         if (beforeId != null) where.id = { $lt: Number(beforeId) };
         const q = MessageModel.select().where(where).orderBy("created_at", "DESC").limit(Math.min(Number(limit) || 50, 100));
         const rows = await (typeof q.then === "function" ? q : Promise.resolve(q));
-        const messages = (rows || []).map((r: any) => ({
-          id: r.id,
-          platform_message_id: r.platform_message_id,
-          sender_id: r.sender_id,
-          sender_name: r.sender_name,
-          content: r.content,
-          raw: r.raw,
-          created_at: r.created_at,
-        }));
+        const messages = (rows || []).map((r: unknown) => {
+          const row = r as Record<string, unknown>;
+          return {
+            id: row.id,
+            platform_message_id: row.platform_message_id,
+            sender_id: row.sender_id,
+            sender_name: row.sender_name,
+            content: row.content,
+            raw: row.raw,
+            created_at: row.created_at,
+            channel: channelFromStoredRow(row),
+            parent: parentFromStoredRow(row),
+          };
+        });
         ws.send(JSON.stringify({ requestId, data: { messages, inboxEnabled: true } }));
       } catch (error: unknown) {
         ws.send(JSON.stringify({ requestId, error: error instanceof Error ? error.message : String(error) }));

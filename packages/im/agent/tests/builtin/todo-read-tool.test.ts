@@ -23,7 +23,7 @@ describe('TodoReadBuiltinTool', () => {
   it('toTool 元数据与 schema 完整', () => {
     const tool = createTodoReadTool(dataDir);
     expect(tool.name).toBe('todo_read');
-    expect(tool.description).toContain('任务');
+    expect(tool.description).toContain('task');
     expect(tool.parameters.required).toContain('chat_id');
     expect(tool.source).toBe('builtin:agent');
     expect(tool.tags).toContain('plan');

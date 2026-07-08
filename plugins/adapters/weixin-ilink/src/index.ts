@@ -23,11 +23,6 @@ declare module "zhin.js" {
 export * from "./types.js";
 export { WeixinIlinkEndpoint } from "./endpoint.js";
 export { WeixinIlinkAdapter } from "./adapter.js";
-export {
-  WeixinIlinkTypingIndicatorManager,
-  enableTypingIndicator,
-  type WeixinIlinkTypingIndicatorConfig,
-} from "./typing-indicator.js";
 export { registerLoginAssistRoutes } from "./login-assist-routes.js";
 
 const plugin = usePlugin();

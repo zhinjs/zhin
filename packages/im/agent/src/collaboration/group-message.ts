@@ -14,7 +14,7 @@ export interface GroupMessageAdapterView {
     endpoint: string;
     id: string;
     type: string;
-    parent?: { type: 'group' | 'channel'; id: string };
+    parent?: { type: 'group' | 'guild'; id: string };
     content: unknown;
   }) => Promise<string>;
 }

@@ -1,5 +1,5 @@
-import { Adapter, type Plugin } from "@zhin.js/core";
-import type { ConfigFeature } from "@zhin.js/core";
+import { Adapter, type Plugin, type ConfigFeature } from "@zhin.js/core";
+import { toConsoleChannelParent } from "../endpoint-channel.js";
 import { broadcastSse } from "../sse-hub.js";
 import type { ConsoleRpcContext } from "./context.js";
 import {
@@ -422,11 +422,15 @@ export async function handleCoreRpc(
             : Array.isArray(content)
               ? content
               : String(content);
+        const parent = toConsoleChannelParent(
+          d.parent as { type?: string; id?: string; name?: string } | undefined,
+        );
         const messageId = await ad.sendMessage({
           context: adapter,
           endpoint: endpointId,
           id: String(id),
           type: msgType as "private" | "group" | "channel",
+          ...(parent ? { parent } : {}),
           content: normalized,
         });
         reply(ctx, { requestId, data: { messageId } });

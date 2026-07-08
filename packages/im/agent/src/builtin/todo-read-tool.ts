@@ -12,7 +12,7 @@ export const TODO_READ_PARAMETERS: ToolParametersSchema = {
   properties: {
     chat_id: {
       type: 'string',
-      description: '聊天范围（传 "global" 表示全局，或传具体聊天 ID）',
+      description: 'Chat scope ("global" for global, or a specific chat ID)',
     },
   },
   required: ['chat_id'],
@@ -20,7 +20,7 @@ export const TODO_READ_PARAMETERS: ToolParametersSchema = {
 
 export class TodoReadBuiltinTool extends BuiltinBaseTool {
   readonly name = 'todo_read';
-  readonly description = '读取当前任务计划列表，用于查看进度和待办事项';
+  readonly description = 'Read the current task plan list to check progress and pending items.';
   readonly parameters = TODO_READ_PARAMETERS;
   readonly kind = 'plan';
 

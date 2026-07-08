@@ -18,46 +18,6 @@ export interface IcqqSenderInfo {
 }
 
 /**
- * Typing Indicator 配置
- */
-export interface TypingIndicatorConfig {
-  /** 是否启用（默认 true） */
-  enabled?: boolean;
-  /** 默认表情（默认 '⏳'） */
-  defaultEmoji?: string;
-  /** 是否在完成后自动移除（默认 true） */
-  autoRemove?: boolean;
-  /** 自动移除延迟，毫秒（默认 5000） */
-  removeDelay?: number;
-  /** 私聊配置 */
-  privateConfig?: {
-    /** 提示类型 */
-    type: 'message' | 'reaction';
-    /** 消息内容（type='message' 时使用） */
-    message?: string;
-    /** 表情符号（type='reaction' 时使用） */
-    emoji?: string;
-    /** 是否自动移除 */
-    autoRemove?: boolean;
-    /** 自动移除延迟 */
-    removeDelay?: number;
-  };
-  /** 群聊配置 */
-  groupConfig?: {
-    /** 提示类型 */
-    type: 'message' | 'reaction';
-    /** 消息内容（type='message' 时使用） */
-    message?: string;
-    /** 表情符号（type='reaction' 时使用） */
-    emoji?: string;
-    /** 是否自动移除 */
-    autoRemove?: boolean;
-    /** 自动移除延迟 */
-    removeDelay?: number;
-  };
-}
-
-/**
  * Endpoint 配置：支持本地 IPC 和远程 RPC 两种连接模式。
  *
  * - 本地模式（默认）：只需 name（QQ号），自动连接 ~/.icqq/<uin>/daemon.sock
@@ -81,11 +41,6 @@ export interface IcqqEndpointConfig {
    * 默认 true；设为 false 则断开后仅将 `$connected` 置为 false，需手动重连。
    */
   autoReconnect?: boolean;
-  /**
-   * Typing Indicator 配置
-   * 用于在 AI 处理消息时提示用户正在处理中
-   */
-  typingIndicator?: TypingIndicatorConfig;
   /**
    * 出站图片/语音/视频：file=本机临时文件路径（需与 icqq 守护进程同机可读）；
    * base64=经 CQ `base64://` 交给守护进程解码（Zhin 与 icqq 异进程/异机时用，配置 rpc 时默认 base64）。

@@ -28,7 +28,7 @@
 
 | 序号 | 功能 | 说明 |
 |------|------|------|
-| 1 | 频道列表 `endpoint:channels` | 非 icqq 时前端调用并展示频道到侧栏；后端对 qq 适配器用 getGuilds+getChannels 拉取，其他适配器可实现 listChannels 返回 |
+| 1 | 频道列表 `endpoint:channels` | icqq 与 qq 适配器均支持；每项含 `parent: { type: "guild", id, name? }`；qq 用 getGuilds+getChannels，icqq 用 getGuildChannelList |
 
 ## 三、已实现（原“未实现/可选增强”）
 
@@ -44,7 +44,7 @@
 
 | WS 类型 | 说明 |
 |--------|------|
-| `endpoint:inboxMessages` | 按会话分页拉取历史消息，参数：adapter, endpointId, channelId, channelType, limit, 可选 beforeTs/beforeId |
+| `endpoint:inboxMessages` | 按会话分页拉取历史消息，参数：adapter, endpointId, channelId, channelType, limit, 可选 beforeTs/beforeId、parent（guild 过滤） |
 | `endpoint:inboxRequests` | 分页拉取请求历史（只读），参数：adapter, endpointId, limit, offset |
 | `endpoint:inboxNotices` | 分页拉取通知历史（只读），参数：adapter, endpointId, limit, offset |
 

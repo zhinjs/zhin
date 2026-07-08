@@ -113,7 +113,7 @@ export function createOwnerOrchestratedToolResultTransform(
     }
     try {
       const ownerRaw = await askTool.run(
-        { question, type: 'confirm', timeout: 120 },
+        { question, type: 'confirm', timeout: 120, sensitive: true },
         options.commMessage,
       );
       const ownerStr = typeof ownerRaw === 'string' ? ownerRaw : String(ownerRaw);

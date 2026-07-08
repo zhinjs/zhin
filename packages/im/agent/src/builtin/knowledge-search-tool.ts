@@ -24,8 +24,8 @@ interface KnowledgeChunk {
 const PARAMS: ToolParametersSchema = {
   type: 'object',
   properties: {
-    query: { type: 'string', description: '搜索关键词或短语（支持多词空格分隔）' },
-    limit: { type: 'number', description: '最多返回条数（默认 5）' },
+    query: { type: 'string', description: 'Search keywords or phrase (multi-word supported)' },
+    limit: { type: 'number', description: 'Max entries to return (default 5)' },
   },
   required: ['query'],
 };
@@ -104,7 +104,7 @@ function scoreChunk(text: string, query: string): number {
 
 class KnowledgeSearchTool extends BuiltinBaseTool {
   readonly name = 'knowledge_search';
-  readonly description = '在本地知识库中检索相关信息。知识库由 Markdown 文件组成，放在项目 knowledge/ 目录下。返回匹配片段和来源文件路径。适用于查找说明书、规章、菜谱、FAQ 等本地文档。';
+  readonly description = 'Search the local knowledge base (Markdown files under knowledge/). Returns matching snippets and source paths. Use for manuals, policies, recipes, FAQs, and other local docs.';
   readonly parameters = PARAMS;
   readonly kind = 'knowledge';
   readonly keywords = ['knowledge', 'search', '知识', '检索', '文档', 'FAQ', '说明'];

@@ -23,7 +23,7 @@ describe('ReadFileBuiltinTool', () => {
   it('toTool 元数据与 schema 完整', () => {
     const tool = createReadFileTool();
     expect(tool.name).toBe('read_file');
-    expect(tool.description).toContain('读取');
+    expect(tool.description).toContain('Read');
     expect(tool.parameters.required).toContain('file_path');
     expect(tool.source).toBe('builtin:agent');
     expect(tool.tags).toContain('file');

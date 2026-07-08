@@ -471,20 +471,14 @@ export type {
   TypingIndicatorAdapter,
 } from './typing-indicator/index.js';
 
-// ── Adapter Typing Indicator Integration ──
+// ── Activity Feedback 平台能力 ──
 export {
-  AdapterTypingIndicatorManager,
   PLATFORM_FEATURES,
-  getAdapterTypingIndicatorManager,
-  initAdapterTypingIndicatorManager,
-  enableTypingIndicatorForBot,
-  startTypingForBot,
-  stopTypingForBot,
+  buildTypingSendContent,
 } from './typing-indicator/adapter-integration.js';
 export type {
-  AdapterTypingIndicatorConfig,
   PlatformFeatures,
-  EndpointWithTypingIndicator,
+  BotWithEditing,
 } from './typing-indicator/adapter-integration.js';
 
 // ── MCP Client ──

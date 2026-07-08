@@ -23,7 +23,7 @@ describe('ListDirBuiltinTool', () => {
   it('toTool 元数据与 schema 完整', () => {
     const tool = createListDirTool();
     expect(tool.name).toBe('list_dir');
-    expect(tool.description).toContain('列出');
+    expect(tool.description).toContain('List');
     expect(tool.parameters.required).toContain('path');
     expect(tool.source).toBe('builtin:agent');
     expect(tool.tags).toContain('file');

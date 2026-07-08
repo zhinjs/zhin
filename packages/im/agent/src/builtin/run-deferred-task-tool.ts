@@ -9,11 +9,11 @@ export const RUN_DEFERRED_TASK_PARAMETERS: ToolParametersSchema = {
   properties: {
     goal: {
       type: 'string',
-      description: '交给 Worker 完成的完整任务描述（目标、仓库、期望输出）',
+      description: 'Full task description for the Worker (goals, repo context, expected output)',
     },
     tool_query: {
       type: 'string',
-      description: '用于 TF-IDF 选取 deferred 工具的搜索词；省略则使用 goal',
+      description: 'Search terms for TF-IDF deferred tool selection; defaults to goal if omitted',
     },
   },
   required: ['goal'],
@@ -28,7 +28,7 @@ export interface RunDeferredTaskToolOptions {
 export class RunDeferredTaskBuiltinTool extends BuiltinBaseTool {
   readonly name = 'run_deferred_task';
   readonly description =
-    '在隔离的 Worker 子 Agent 中同步执行 deferred 工具任务（github/mcp/插件等）。Worker 完成后将结果作为工具返回值交还主 Agent，由主 Agent 在同一轮对话中继续编排或总结回复用户。这是调用 deferred 能力的唯一入口';
+    'Run a deferred-tool task synchronously in an isolated Worker sub-agent (github/mcp/plugins, etc.). Returns the Worker result to the main agent to continue orchestration or reply. This is the only entry point for deferred capabilities.';
   readonly parameters = RUN_DEFERRED_TASK_PARAMETERS;
   readonly kind = 'meta';
   readonly executionTimeoutMs: number;

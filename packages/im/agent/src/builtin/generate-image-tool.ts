@@ -11,38 +11,38 @@ export const GENERATE_IMAGE_PARAMETERS: ToolParametersSchema = {
     provider_alias: {
       type: 'string',
       description:
-        'ai.providers 中的实例名；sdk 须支持 generateImage：openai、google、openai-compatible（智谱等）、Cloudflare（accountId）',
+        'Provider instance name from ai.providers; SDK must support generateImage: openai, google, openai-compatible (e.g. Zhipu), Cloudflare (accountId)',
     },
     prompt: {
       type: 'string',
       description:
-        '图像描述。默认偏写实：写明主体与场景，并含 photorealistic/写实摄影/真实照片 等（除非用户要动漫插画）。避免仅写「可爱的」导致偏二次元。',
+        'Image description. Default to photorealistic: describe subject and scene, include photorealistic/realistic photography unless user wants anime/illustration. Avoid vague "cute" prompts that skew anime.',
     },
     model: {
       type: 'string',
       description:
-        '可选；默认：智谱 cogview-3-flash、OpenAI gpt-image-2、Gemini gemini-2.5-flash-image、Cloudflare flux-1-schnell',
+        'Optional; defaults: Zhipu cogview-3-flash, OpenAI gpt-image-2, Gemini gemini-2.5-flash-image, Cloudflare flux-1-schnell',
     },
     size: {
       type: 'string',
-      description: '可选；OpenAI/智谱尺寸，如 1024x1024',
+      description: 'Optional; OpenAI/Zhipu size, e.g. 1024x1024',
     },
     quality: {
       type: 'string',
-      description: '可选；OpenAI GPT Image：low | medium | high | auto',
+      description: 'Optional; OpenAI GPT Image: low | medium | high | auto',
     },
     aspect_ratio: {
       type: 'string',
-      description: '可选；Gemini Nano Banana 宽高比，如 1:1、16:9',
+      description: 'Optional; Gemini Nano Banana aspect ratio, e.g. 1:1, 16:9',
     },
     image_size: {
       type: 'string',
-      description: '可选；Gemini 输出分辨率：1K、2K、4K 等',
+      description: 'Optional; Gemini output resolution: 1K, 2K, 4K, etc.',
     },
     watermark_enabled: {
       type: 'boolean',
       description:
-        '可选；智谱 CogView/GLM-Image 水印。false=去水印（须在智谱开放平台签署免责声明）；默认取 zhin.config 的 imageGeneration.watermarkEnabled',
+        'Optional; Zhipu CogView/GLM-Image watermark. false=disable (requires disclaimer on Zhipu platform); default from zhin.config imageGeneration.watermarkEnabled',
     },
   },
   required: ['provider_alias', 'prompt'],
@@ -63,7 +63,7 @@ function resolveWatermarkEnabled(
 export class GenerateImageBuiltinTool extends BuiltinBaseTool {
   readonly name = 'generate_image';
   readonly description =
-    'Text-to-image (文生图/画图). SDKs: openai-compatible + 智谱 (cogview-3-flash), Cloudflare (flux, accountId), openai (gpt-image-2), google (gemini-2.5-flash-image). Unless user wants anime, use 写实摄影/photorealistic in prompt.';
+    'Text-to-image generation. SDKs: openai-compatible + Zhipu (cogview-3-flash), Cloudflare (flux, accountId), openai (gpt-image-2), google (gemini-2.5-flash-image). Unless user wants anime, use photorealistic/realistic photography in prompt.';
   readonly parameters = GENERATE_IMAGE_PARAMETERS;
   readonly kind = 'media';
 

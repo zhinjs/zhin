@@ -22,12 +22,12 @@ import {
 export const EDIT_FILE_PARAMETERS: ToolParametersSchema = {
   type: 'object',
   properties: {
-    file_path: { type: 'string', description: '要编辑的文件路径' },
+    file_path: { type: 'string', description: 'File path to edit' },
     old_string: {
       type: 'string',
-      description: '文件中要替换的原文（必须与文件内容完全一致）',
+      description: 'Exact text to replace in the file (must match file content exactly)',
     },
-    new_string: { type: 'string', description: '替换后的新文本' },
+    new_string: { type: 'string', description: 'Replacement text' },
   },
   required: ['file_path', 'old_string', 'new_string'],
 };
@@ -35,7 +35,7 @@ export const EDIT_FILE_PARAMETERS: ToolParametersSchema = {
 export class EditFileBuiltinTool extends BuiltinBaseTool {
   readonly name = 'edit_file';
   readonly description =
-    '在文件中查找并替换一段文本。old_string 必须在文件中精确存在且唯一；建议包含完整行或足够上下文以避免重复匹配。支持弯引号/直引号自动归一化。';
+    'Find and replace text in a file. old_string must exist exactly once; include full lines or enough context. Supports curly/straight quote normalization.';
   readonly parameters = EDIT_FILE_PARAMETERS;
   readonly kind = 'file';
 

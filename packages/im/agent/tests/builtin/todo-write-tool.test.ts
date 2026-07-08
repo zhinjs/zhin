@@ -27,7 +27,7 @@ describe('TodoWriteBuiltinTool', () => {
   it('toTool 元数据与 schema 完整', () => {
     const tool = createTodoWriteTool(dataDir);
     expect(tool.name).toBe('todo_write');
-    expect(tool.description).toContain('计划');
+    expect(tool.description).toContain('task plan');
     expect(tool.parameters.required).toContain('items');
     expect(tool.source).toBe('builtin:agent');
   });

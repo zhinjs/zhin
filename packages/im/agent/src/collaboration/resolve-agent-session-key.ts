@@ -18,7 +18,7 @@ export function resolveAgentSessionKeyForTurn(
   return `pipeline:${runPrefix}:${transport}`;
 }
 
-/** cell_read_artifact / list 用的 runId 解析（支持前缀）。 */
+/** legacy pipeline run 解析（支持前缀）；新编排请用 missionRunId / orchestration_status。 */
 export function resolveArtifactRunId(
   runRef: string | undefined,
   cell: CollaborationScene,
@@ -34,6 +34,6 @@ export function resolveArtifactRunId(
   }
   return {
     ok: false,
-    error: `runId ${runRef} 未找到；用 cell_pipeline_status 查看 runs 列表`,
+    error: `runId ${runRef} 未找到；legacy pipeline 已弃用，请用 orchestration_status`,
   };
 }

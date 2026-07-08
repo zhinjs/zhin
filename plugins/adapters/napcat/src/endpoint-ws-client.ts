@@ -6,7 +6,6 @@ import { formatCompact } from 'zhin.js';
 import { NapCatEndpointBase } from './endpoint-base.js';
 import type { NapCatWsClientConfig, ApiResponse } from './types.js';
 import type { NapCatAdapter } from './adapter.js';
-import { enableTypingIndicator } from './typing-indicator.js';
 
 export class NapCatWsClient extends NapCatEndpointBase {
   private ws?: WebSocket;
@@ -44,7 +43,6 @@ export class NapCatWsClient extends NapCatEndpointBase {
         }
         this.logger.info(formatCompact({ endpoint: this.$id, mode: 'ws' }));
         this.startHeartbeat();
-        this.initTypingIndicator();
         resolve();
       });
 
@@ -134,31 +132,6 @@ export class NapCatWsClient extends NapCatEndpointBase {
   protected handleMeta(event: any): void {
     if (event.meta_event_type === 'lifecycle' && event.sub_type === 'connect') {
       this.logger.info(formatCompact({ endpoint: this.$id, lifecycle: 'connect', self_id: event.self_id }));
-    }
-  }
-
-  private initTypingIndicator(): void {
-    const tiConfig = this.$config.typingIndicator;
-    if (tiConfig && tiConfig.enabled !== false) {
-      enableTypingIndicator(this, {
-        enabled: tiConfig.enabled ?? true,
-        defaultEmoji: tiConfig.defaultEmoji || '128516',
-        autoRemove: true,
-        removeDelay: 5000,
-        privateConfig: tiConfig.privateConfig ? {
-          type: tiConfig.privateConfig.type || 'message',
-          message: tiConfig.privateConfig.message || '正在思考中...',
-          autoRemove: true,
-          removeDelay: 3000,
-        } : undefined,
-        groupConfig: tiConfig.groupConfig ? {
-          type: tiConfig.groupConfig.type || 'reaction',
-          emoji: tiConfig.groupConfig.emoji || '128516',
-          autoRemove: true,
-          removeDelay: 5000,
-        } : undefined,
-      });
-      this.logger.info(formatCompact({ endpoint: this.$id, typingIndicator: 'enabled' }));
     }
   }
 }

@@ -53,7 +53,7 @@ export function isCellToolResultJson(text: string): boolean {
   }
 }
 
-/** 从混合正文中剥离内嵌的 cell_* 工具 JSON（保留其余可读文本）。 */
+/** 从混合正文中剥离内嵌的 legacy cell_* 工具 JSON（保留其余可读文本）。 */
 export function removeEmbeddedCellToolJsonFromText(text: string): string {
   const result = text.replace(/```(?:json)?\s*([\s\S]*?)```/gi, (full, inner: string) => {
     if (isCellToolResultJson(String(inner).trim())) return ' ';
@@ -139,7 +139,7 @@ export function stripCellToolJsonFromOutputElements(
   return kept;
 }
 
-/** 被委派方 turn hint：上一棒角色与委派期望。 */
+/** 被委派方 turn hint：上一棒角色与委派期望（legacy activeDelegations；kernel 路径见 formatPlannerHandbackHint）。 */
 function artifactSubmitInstructions(kinds: PipelineArtifactKind[]): string[] {
   const brief: Record<PipelineArtifactKind, string> = {
     report: 'report:{summary,findings[]}',
@@ -150,8 +150,8 @@ function artifactSubmitInstructions(kinds: PipelineArtifactKind[]): string[] {
   };
   const kindsLine = kinds.map((k) => brief[k] ?? k).join('; ');
   return [
-    `Submit: cell_submit_artifact — ${kindsLine}`,
-    'Public reply = short summary only.',
+    `Required artifact kinds (legacy): ${kindsLine}`,
+    'Public reply = short summary only; use orchestration_status for kernel tasks.',
   ];
 }
 
@@ -173,7 +173,7 @@ export function formatActiveDelegationHint(
     if (kinds.length) {
       lines.push(...artifactSubmitInstructions(kinds));
     }
-    lines.push('Read: cell_pipeline_status → cell_read_artifact → submit → public reply.');
+    lines.push('Legacy pipeline artifacts are deprecated; prefer orchestration_status + internal_room handback.');
   } else {
     lines.push('No artifact required; brief public summary is enough.');
   }

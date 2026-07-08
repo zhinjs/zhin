@@ -99,7 +99,6 @@ export const AGENT_ROLE_CONFIGS: Record<AgentRole, AgentRoleConfig> = {
     allowedTools: [
       'read_file', 'list_dir', 'glob', 'grep',
       'web_search', 'web_fetch',
-      'cell_submit_artifact', 'cell_read_artifact', 'cell_pipeline_status',
     ],
     blockedTools: ['write_file', 'edit_file', 'bash', 'send_message', 'spawn_subagent'],
     canSendMessage: false,
@@ -117,7 +116,6 @@ export const AGENT_ROLE_CONFIGS: Record<AgentRole, AgentRoleConfig> = {
     description: '评估 Agent，纯逻辑推理与方案评估；只读文件 + artifact（ADR 0024）',
     allowedTools: [
       'read_file', 'list_dir', 'glob', 'grep',
-      'cell_read_artifact', 'cell_submit_artifact', 'cell_pipeline_status',
     ],
     blockedTools: [
       'write_file', 'edit_file',
@@ -142,7 +140,6 @@ export const AGENT_ROLE_CONFIGS: Record<AgentRole, AgentRoleConfig> = {
       'list_dir', 'glob', 'grep',
       'bash',
       'generate_image', 'analyze_media',
-      'cell_submit_artifact', 'cell_read_artifact', 'cell_pipeline_status',
     ],
     blockedTools: ['send_message', 'spawn_subagent'],
     canSendMessage: false,
@@ -157,11 +154,10 @@ export const AGENT_ROLE_CONFIGS: Record<AgentRole, AgentRoleConfig> = {
 
   reviewer: {
     role: 'reviewer',
-    description: '审查 Agent，质检合规；仅读 artifact 白名单（禁搜网/禁读 Evaluator CoT，ADR 0024）',
-    // I2：跨角色数据只经 artifact；reviewer 不可 web_search / 不可读实现源 CoT
-    allowedTools: ['cell_read_artifact', 'cell_submit_artifact', 'cell_pipeline_status'],
+    description: '审查 Agent，质检合规；只读文件（禁搜网，ADR 0024）',
+    allowedTools: ['read_file', 'list_dir', 'glob', 'grep'],
     blockedTools: [
-      'read_file', 'write_file', 'edit_file', 'list_dir', 'glob', 'grep',
+      'write_file', 'edit_file',
       'bash', 'web_search', 'web_fetch', 'send_message', 'spawn_subagent',
     ],
     canSendMessage: false,

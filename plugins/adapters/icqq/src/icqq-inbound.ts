@@ -295,9 +295,17 @@ export function icqqElementsToSegments(
         break;
       case "at": {
         const atId = String(el.qq ?? el.user_id ?? "");
+        const name =
+          typeof el.name === "string"
+            ? el.name
+            : typeof el.nickname === "string"
+              ? el.nickname
+              : undefined;
         out.push({
           type: "at",
-          data: { qq: atId, user_id: atId, id: atId },
+          data: name
+            ? { qq: atId, user_id: atId, id: atId, name }
+            : { qq: atId, user_id: atId, id: atId },
         });
         break;
       }

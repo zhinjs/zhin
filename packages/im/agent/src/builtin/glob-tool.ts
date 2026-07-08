@@ -20,8 +20,8 @@ export type GlobExecAsync = (
 export const GLOB_PARAMETERS: ToolParametersSchema = {
   type: 'object',
   properties: {
-    pattern: { type: 'string', description: 'Glob 模式（如 **/*.ts）' },
-    cwd: { type: 'string', description: '工作目录（默认项目根目录）' },
+    pattern: { type: 'string', description: 'Glob pattern (e.g. **/*.ts)' },
+    cwd: { type: 'string', description: 'Working directory (default project root)' },
   },
   required: ['pattern'],
 };
@@ -29,7 +29,7 @@ export const GLOB_PARAMETERS: ToolParametersSchema = {
 export class GlobBuiltinTool extends BuiltinBaseTool {
   readonly name = 'glob';
   readonly description =
-    '按 glob 模式查找匹配的文件路径（如 **/*.ts）。用于按模式找文件，而非列出目录。';
+    'Find file paths matching a glob pattern (e.g. **/*.ts). Use for pattern-based file lookup, not directory listing.';
   readonly parameters = GLOB_PARAMETERS;
   readonly kind = 'file';
 

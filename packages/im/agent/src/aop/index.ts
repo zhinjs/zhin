@@ -1,7 +1,8 @@
 /**
- * Agent Orchestration Plane 2.0 — public barrel（ADR 0024 D1）。
+ * Agent Orchestration Plane — collaboration + legacy pipeline state (ADR 0024/0027).
  *
- * 三平面 + 薄入站：inbound → pipeline → coordination → runtime。
+ * Model-facing cell_* pipeline tools were removed (ADR 0026). Default orchestration
+ * uses OrchestrationKernel + orchestration_* tools.
  */
 export * from './coordination/index.js';
 export * from './pipeline/index.js';

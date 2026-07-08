@@ -27,11 +27,6 @@ export { NapCatWsServer } from './endpoint-ws-server.js';
 export { NapCatHttpEndpoint } from './endpoint-http.js';
 export { NapCatAdapter, type NapCatEndpoint } from './adapter.js';
 export { NapCatEndpointBase } from './endpoint-base.js';
-export {
-  NapCatTypingIndicatorManager,
-  enableTypingIndicator,
-  type NapCatTypingIndicatorConfig,
-} from './typing-indicator.js';
 
 declare module 'zhin.js' {
   namespace Plugin {

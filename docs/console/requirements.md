@@ -294,7 +294,7 @@ GET {API_BASE}/pub/openapi.json
 | `env:save` | `filename`, `content` | `{ success }` |
 | `endpoint:list` | — | `{ endpoints: EndpointRow[] }`（含 pending 状态） |
 | `endpoint:info` | `data: { adapter, endpointId }` | Endpoint 详情 |
-| `endpoint:sendMessage` | `data: { adapter, endpointId, id, type, content }` | `{ messageId }` |
+| `endpoint:sendMessage` | `data: { adapter, endpointId, id, type, content, parent? }` — `parent` 可选：`{ type: "group" \| "guild", id }`（QQ 子频道发消息需 `type: "channel"` + `parent: { type: "guild", id: guild_id }`） | `{ messageId }` |
 | `cron:list` | — | `{ memory[], persistent[] }` |
 | `cron:add` | `cronExpression`, `prompt`, `label?`, `notify?` | 新建 persistent 任务记录 |
 | `cron:remove` | `id` | `{ success }` |
@@ -329,12 +329,12 @@ GET {API_BASE}/pub/openapi.json
 |------|------|
 | `endpoint:friends` | 好友列表 |
 | `endpoint:groups` | 群列表 |
-| `endpoint:channels` | 频道列表 |
+| `endpoint:channels` | 频道列表；每项 `{ id, name?, parent?: { type: "guild", id, name? } }` |
 | `endpoint:requests` | 好友/群请求 |
 | `endpoint:requestApprove` / `endpoint:requestReject` | 处理请求 |
 | `endpoint:requestConsumed` | 标记请求已读 |
 | `endpoint:noticeConsumed` | 标记通知已读 |
-| `endpoint:inboxMessages` | 收件箱消息 |
+| `endpoint:inboxMessages` | 收件箱消息；可选 `parent: { type, id }` 按 guild 精确过滤 |
 | `endpoint:inboxRequests` | 收件箱请求 |
 | `endpoint:inboxNotices` | 收件箱通知 |
 | `endpoint:deleteFriend` | 删除好友 |

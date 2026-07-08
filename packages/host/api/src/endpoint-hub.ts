@@ -13,6 +13,7 @@ import {
   findRequestRow,
   type StoredRequestRow,
 } from "./endpoint-persistence.js";
+import { toConsoleChannel, toConsoleChannelParent } from "./endpoint-channel.js";
 
 type WsIterable = { clients?: Set<WebSocket> | WebSocket[] };
 
@@ -256,14 +257,44 @@ export function initEndpointHub(root: {
       try {
         const ad = inject(name) as { on?: (ev: string, fn: (...a: any[]) => void) => void; off?: (ev: string, fn: (...a: any[]) => void) => void } | null;
         if (ad && typeof ad.on === "function") {
-          const handler = (msg: any) => {
+          const handler = (msg: Record<string, unknown>) => {
+            const msgChannel = msg?.$channel as {
+              id?: string;
+              type?: string;
+              parent?: { type?: string; id?: string };
+            } | undefined;
+            let resolvedNames: { channelName?: string; parentName?: string } | undefined;
+            try {
+              const endpointId = String(msg?.$endpoint ?? "");
+              const adFull = inject(name) as {
+                endpoints?: Map<string, {
+                  resolveConsoleChannelNames?: (
+                    channelId: string,
+                    guildId?: string,
+                  ) => { channelName?: string; parentName?: string };
+                }>;
+              } | null;
+              const ep = adFull?.endpoints?.get(endpointId);
+              if (ep?.resolveConsoleChannelNames && msgChannel?.id) {
+                resolvedNames = ep.resolveConsoleChannelNames(
+                  msgChannel.id,
+                  msgChannel.parent?.id,
+                );
+              }
+            } catch {
+              // ignore name resolution failures
+            }
+            const channel = toConsoleChannel(msgChannel, resolvedNames);
+            const parent = toConsoleChannelParent(msgChannel?.parent);
             const payload = {
               type: "endpoint:message",
               data: {
                 adapter: name,
                 endpointId: msg?.$endpoint,
-                channelId: msg?.$channel?.id,
-                channelType: msg?.$channel?.type,
+                channelId: msgChannel?.id,
+                channelType: msgChannel?.type,
+                channel,
+                parent,
                 sender: msg?.$sender,
                 content: msg?.$content ?? [],
                 timestamp: typeof msg?.$timestamp === "number" ? msg.$timestamp : Date.now(),

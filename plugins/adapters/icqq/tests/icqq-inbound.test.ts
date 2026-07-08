@@ -179,6 +179,8 @@ describe("resolveInboundContent", () => {
         message_id: "M0zHrrS7mJ0AC8rBcOxj/moZcDUB",
       },
     });
+    expect(content[1]).toEqual({ type: "mention", data: { target: "907624307" } });
+    expect(content[2]).toEqual({ type: "mention", data: { target: "8596238" } });
   });
 });
 

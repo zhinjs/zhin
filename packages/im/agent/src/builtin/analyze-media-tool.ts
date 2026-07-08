@@ -26,7 +26,7 @@ function isMediaPath(filePath: string): boolean {
 export const ANALYZE_MEDIA_PARAMETERS: ToolParametersSchema = {
   type: 'object',
   properties: {
-    file_path: { type: 'string', description: '媒体文件路径（图片/音频/视频）' },
+    file_path: { type: 'string', description: 'Media file path (image/audio/video)' },
   },
   required: ['file_path'],
 };
@@ -34,7 +34,7 @@ export const ANALYZE_MEDIA_PARAMETERS: ToolParametersSchema = {
 export class AnalyzeMediaBuiltinTool extends BuiltinBaseTool {
   readonly name = 'analyze_media';
   readonly description =
-    '分析本地图片、音频或视频文件，返回可读摘要（转写/尺寸/格式）；不要对媒体文件使用 read_file。';
+    'Analyze a local image, audio, or video file and return a readable summary (transcript/dimensions/format). Do not use read_file for media files.';
   readonly parameters = ANALYZE_MEDIA_PARAMETERS;
   readonly kind = 'file';
 

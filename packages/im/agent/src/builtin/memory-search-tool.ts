@@ -10,13 +10,13 @@ import { getMemoryEntryRepository } from '../memory-entry-registry.js';
 const PARAMS: ToolParametersSchema = {
   type: 'object',
   properties: {
-    query: { type: 'string', description: '检索关键词或短语' },
+    query: { type: 'string', description: 'Search keywords or phrase' },
     scope: {
       type: 'string',
       enum: ['global', 'platform', 'session', 'user'],
-      description: '可选：限定记忆范围',
+      description: 'Optional: limit memory scope',
     },
-    limit: { type: 'number', description: '最多返回条数（默认 5）' },
+    limit: { type: 'number', description: 'Max entries to return (default 5)' },
   },
   required: ['query'],
 };
@@ -27,7 +27,7 @@ function sessionScopeKey(commMessage: Message): string {
 
 class MemorySearchTool extends BuiltinBaseTool {
   readonly name = 'memory_search';
-  readonly description = '在语义记忆库中检索与 query 相关的事实条目（memory_entries）。';
+  readonly description = 'Search semantic memory (memory_entries) for facts related to query.';
   readonly parameters = PARAMS;
   readonly keywords = ['memory', 'recall', 'remember', '记忆', '回忆'];
 

@@ -7,8 +7,11 @@ import {
 
 export type IMSceneKind = MessageType;
 
+/** Parent scene kind (distinct from sub-channel MessageType.channel). */
+export type IMSceneParentKind = 'group' | 'guild';
+
 export interface IMSceneParentRef {
-  kind: Extract<IMSceneKind, 'group' | 'channel'>;
+  kind: IMSceneParentKind;
   sceneId: string;
 }
 
@@ -32,6 +35,13 @@ function nonEmptyString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
+/** Normalize legacy parent.type channel → guild. */
+export function normalizeIMSceneParentKind(value: unknown): IMSceneParentKind | undefined {
+  if (value === 'group' || value === 'guild') return value;
+  if (value === 'channel') return 'guild';
+  return undefined;
+}
+
 export function sceneRefFromMessage(message: Partial<Message<any>>): IMSceneRef | undefined {
   const platform = nonEmptyString(message.$adapter);
   const endpointId = nonEmptyString(message.$endpoint);
@@ -45,9 +55,12 @@ export function sceneRefFromMessage(message: Partial<Message<any>>): IMSceneRef 
     : channelId ?? senderId;
   if (!sceneId) return undefined;
 
-  const parent = message.$channel?.parent
+  const parentKind = message.$channel?.parent
+    ? normalizeIMSceneParentKind(message.$channel.parent.type)
+    : undefined;
+  const parent = parentKind && message.$channel?.parent
     ? {
-        kind: message.$channel.parent.type as IMSceneParentRef['kind'],
+        kind: parentKind,
         sceneId: String(message.$channel.parent.id),
       }
     : undefined;

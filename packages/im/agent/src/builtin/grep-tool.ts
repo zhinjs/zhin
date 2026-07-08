@@ -21,15 +21,15 @@ export type GrepExecAsync = (
 export const GREP_PARAMETERS: ToolParametersSchema = {
   type: 'object',
   properties: {
-    pattern: { type: 'string', description: '正则表达式' },
-    path: { type: 'string', description: '搜索路径（默认 .）' },
-    include: { type: 'string', description: '文件类型过滤（如 *.ts）' },
-    context: { type: 'number', description: '匹配行上下文行数（-C 参数）' },
-    before: { type: 'number', description: '匹配行之前显示行数（-B 参数）' },
-    after: { type: 'number', description: '匹配行之后显示行数（-A 参数）' },
-    ignore_case: { type: 'boolean', description: '大小写不敏感搜索（-i 参数）' },
-    multiline: { type: 'boolean', description: '多行模式，. 匹配换行（仅 ripgrep 支持）' },
-    limit: { type: 'number', description: '最多返回结果行数（默认 50）' },
+    pattern: { type: 'string', description: 'Regular expression pattern' },
+    path: { type: 'string', description: 'Search path (default .)' },
+    include: { type: 'string', description: 'File glob filter (e.g. *.ts)' },
+    context: { type: 'number', description: 'Context lines around each match (-C)' },
+    before: { type: 'number', description: 'Lines before each match (-B)' },
+    after: { type: 'number', description: 'Lines after each match (-A)' },
+    ignore_case: { type: 'boolean', description: 'Case-insensitive search (-i)' },
+    multiline: { type: 'boolean', description: 'Multiline mode: . matches newlines (ripgrep only)' },
+    limit: { type: 'number', description: 'Max result lines to return (default 50)' },
   },
   required: ['pattern'],
 };
@@ -37,7 +37,7 @@ export const GREP_PARAMETERS: ToolParametersSchema = {
 export class GrepBuiltinTool extends BuiltinBaseTool {
   readonly name = 'grep';
   readonly description =
-    '按正则搜索文件内容，返回匹配行和行号。优先使用 ripgrep (rg)，回退到 grep。';
+    'Search file contents by regex; returns matching lines with line numbers. Prefers ripgrep (rg), falls back to grep.';
   readonly parameters = GREP_PARAMETERS;
   readonly kind = 'file';
 

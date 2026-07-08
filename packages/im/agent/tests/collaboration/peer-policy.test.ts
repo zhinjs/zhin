@@ -126,6 +126,18 @@ describe('evaluateCellAtOwnership', () => {
     expect(evaluateCellAtOwnership(message, cell, 'researcher-bot').reason).toBe('cell_not_mentioned');
   });
 
+  it('recognizes canonical mention.target for cell @ ownership', () => {
+    const message = {
+      $content: [
+        { type: 'mention', data: { target: 'researcher-bot' } },
+        { type: 'text', data: { text: ' foo bar' } },
+      ],
+    } as import('@zhin.js/core').Message;
+
+    expect(evaluateCellAtOwnership(message, cell, 'researcher-bot').shouldHandle).toBe(true);
+    expect(evaluateCellAtOwnership(message, cell, 'planner-bot').shouldHandle).toBe(false);
+  });
+
   it('skips all members when message has no @ in cell', () => {
     const message = {
       $content: [{ type: 'text', data: { text: 'hello everyone' } }],

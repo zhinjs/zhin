@@ -26,10 +26,10 @@ export const READ_FILE_PARAMETERS: ToolParametersSchema = {
   properties: {
     file_path: {
       type: 'string',
-      description: '要读取的文件路径（绝对路径或相对项目根目录）',
+      description: 'File path to read (absolute or relative to project root)',
     },
-    offset: { type: 'number', description: '起始行号（0-based，可选，默认从第 1 行开始）' },
-    limit: { type: 'number', description: '最多读取行数（可选，默认全部）' },
+    offset: { type: 'number', description: 'Start line (0-based, optional; default from line 1)' },
+    limit: { type: 'number', description: 'Max lines to read (optional; default all)' },
   },
   required: ['file_path'],
 };
@@ -37,7 +37,7 @@ export const READ_FILE_PARAMETERS: ToolParametersSchema = {
 export class ReadFileBuiltinTool extends BuiltinBaseTool {
   readonly name = 'read_file';
   readonly description =
-    '读取指定路径的文本文件内容。图片/音频/视频请使用 analyze_media，不要用 read_file。';
+    'Read text file contents at the given path. For images/audio/video use analyze_media, not read_file.';
   readonly parameters = READ_FILE_PARAMETERS;
   readonly kind = 'file';
 

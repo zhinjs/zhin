@@ -30,7 +30,7 @@ import {
   SendContent,
 } from "./types.js";
 import { Message } from "./message.js";
-import { htmlToFallbackText } from "./built/html-to-text.js";
+import { formatSegmentPreview } from "./built/segment-contract/preview.js";
 import { HtmlSegment } from "./built/rich-segments/html-segment.js";
 import { MarkdownSegment } from "./built/rich-segments/markdown-segment.js";
 import { QrcodeSegment } from "./built/rich-segments/qrcode-segment.js";
@@ -283,32 +283,7 @@ export namespace segment {
         if (typeof type === "function") {
           return `{${type.name || "Component"}}`;
         }
-        if (type === "text") return data.text;
-        if (type === "at") return `@${data.user_id || data.qq || data.id || data.name || ""}`;
-        if (type === "mention") {
-          const target = data.target ?? data.user_id ?? data.qq ?? data.id;
-          if (target === "all") return "@all";
-          return `@${target ?? data.name ?? ""}`;
-        }
-        if (type === "html") {
-          if (typeof data.text === "string" && data.text) {
-            return data.text.slice(0, 80);
-          }
-          if (typeof data.html === "string") {
-            const stripped = htmlToFallbackText(data.html);
-            return stripped ? `[html-card] ${stripped.slice(0, 80)}` : "[html-card]";
-          }
-          return "[html-card]";
-        }
-        if (type === "qrcode") {
-          const t = typeof data.text === "string" ? data.text : "";
-          return t ? `[qrcode] ${t.slice(0, 80)}` : "[qrcode]";
-        }
-        if (type === "markdown") {
-          const t = typeof data.content === "string" ? data.content : typeof data.text === "string" ? data.text : "";
-          return t ? `[markdown] ${t.slice(0, 80)}` : "[markdown]";
-        }
-        return data.text ? `{${type}}(${data.text})` : `{${type}}`;
+        return formatSegmentPreview({ type, data: data ?? {} });
       })
       .join("");
   }

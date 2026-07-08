@@ -82,7 +82,7 @@ export interface ActiveDelegation {
 /** 挂在 Cell 上的流水线状态机（SSOT，ADR 0024 D4）。 */
 export interface PipelineState {
   runId: string;
-  /** 人类可读流程名（Planner 通过 cell_manage_pipeline 设置） */
+  /** 人类可读流程名（legacy pipelineState.runLabel） */
   runLabel?: string;
   runCreatedAt?: number;
   stage: PipelineStage;

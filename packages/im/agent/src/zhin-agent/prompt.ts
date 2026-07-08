@@ -22,8 +22,6 @@ import {
   type FileRole,
 } from '../security/file-role-policy.js';
 import { resolveWorkspacePrompt } from './workspace-prompt.js';
-import { FiveAgentPromptRegistry } from '../builtin/five-agent/index.js';
-import type { PipelineRole } from '../collaboration/types.js';
 
 export const FIXED_DISCIPLINE_RULES = [
   'Never claim actions, results, or system state unless confirmed by tool output.',
@@ -221,12 +219,6 @@ export interface RichSystemPromptContext {
   orchestratorSdk?: string;
   /** ai.agents.*.nickname（经 activeBinding 解析） */
   agentNickname?: string;
-  /** Five-Agent pipeline 角色：走内置角色 prompt + 直连工具 rich 段 */
-  pipelineRole?: PipelineRole;
-}
-
-export interface PipelineRoleSystemPromptContext extends RichSystemPromptContext {
-  pipelineRole: PipelineRole;
 }
 
 // ── Section builders ──
@@ -362,19 +354,6 @@ function buildContextSection(
   ].join('\n');
 }
 
-/** Five-Agent 专用 Runtime 段（无通用 persona / SOUL） */
-function buildPipelineRuntimeSection(commMessage?: Message): string {
-  const envItems = [
-    `CWD: ${process.cwd()}`,
-    `Host: ${os.platform()} | Node ${process.version}`,
-  ];
-  if (commMessage) {
-    const sessionLine = formatSessionContextLine(commMessage);
-    if (sessionLine) envItems.unshift(sessionLine);
-  }
-  return ['# Runtime', ...prependBullets(envItems)].join('\n');
-}
-
 /** 直连工具模式：工具 + 纪律 */
 function buildDirectToolsSection(): string {
   const items = [
@@ -508,32 +487,7 @@ export interface PromptSectionDebugInfo {
  * 返回当前上下文中**实际注入**的系统提示各段大小（不含 SECTION_SEP）。
  * 用于观测渐进披露与 token 压力，不改变线上 prompt 拼接逻辑。
  */
-function describePipelineRolePromptSectionsForDebug(
-  ctx: PipelineRoleSystemPromptContext,
-): PromptSectionDebugInfo[] {
-  const toolSearchActive = false;
-  const rolePrompt = FiveAgentPromptRegistry.render({
-    role: ctx.pipelineRole,
-    nickname: ctx.agentNickname,
-  });
-  const pairs: [string, string | null][] = [
-    ['§0_role', rolePrompt],
-    ['§1_runtime', buildPipelineRuntimeSection(ctx.commMessage)],
-    ['§2_style', buildCommunicationSection()],
-    ['§3_tools', buildDirectToolsSection()],
-    ['§4_security', buildSecuritySection()],
-    ['§6c_platform', buildPlatformSection(ctx.platformSections, toolSearchActive)],
-    ['§8_skills', buildSkillsSection(ctx.skillRegistry, ctx.skillsSummaryXML, toolSearchActive)],
-  ];
-  return pairs
-    .filter(([, c]) => c != null && c.trim().length > 0)
-    .map(([id, c]) => ({ id, approxChars: c!.length }));
-}
-
 export function describePromptSectionsForDebug(ctx: RichSystemPromptContext): PromptSectionDebugInfo[] {
-  if (ctx.pipelineRole) {
-    return describePipelineRolePromptSectionsForDebug(ctx as PipelineRoleSystemPromptContext);
-  }
   const {
     config, skillRegistry, skillsSummaryXML, bootstrapContext,
     toolSearchDeferredStats, platformSections, orchestratorSdk,
@@ -552,35 +506,6 @@ export function describePromptSectionsForDebug(ctx: RichSystemPromptContext): Pr
   return pairs
     .filter(([, c]) => c != null && c.trim().length > 0)
     .map(([id, c]) => ({ id, approxChars: c!.length }));
-}
-
-/**
- * Five-Agent 角色专用 rich system prompt：
- * §0 内置角色矩阵 + §1 Runtime + §2 Style + §3 Tools + §4 Security + §6c Platform + §8 Skills。
- * 不含通用 persona / bootstrap SOUL；易变 pipeline 状态在 user [Turn context]。
- */
-export function buildPipelineRoleRichSystemPrompt(ctx: PipelineRoleSystemPromptContext): string {
-  const {
-    skillRegistry, skillsSummaryXML, platformSections, commMessage, pipelineRole, agentNickname,
-  } = ctx;
-  const toolSearchActive = false;
-
-  const rolePrompt = FiveAgentPromptRegistry.render({
-    role: pipelineRole,
-    nickname: agentNickname,
-  });
-
-  const sections: (string | null)[] = [
-    rolePrompt,
-    buildPipelineRuntimeSection(commMessage),
-    buildCommunicationSection(),
-    buildDirectToolsSection(),
-    buildSecuritySection(),
-    buildPlatformSection(platformSections, toolSearchActive),
-    buildSkillsSection(skillRegistry, skillsSummaryXML, toolSearchActive),
-  ];
-
-  return sections.filter(Boolean).join(SECTION_SEP);
 }
 
 export function buildRichSystemPrompt(ctx: RichSystemPromptContext): string {

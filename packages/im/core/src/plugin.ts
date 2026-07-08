@@ -70,7 +70,9 @@ type ContextItem<L> = L extends keyof Plugin.Contexts ? Plugin.Contexts[L] : nev
  * 同一上下文中同一文件多次调用返回同一实例
  */
 export function usePlugin(): Plugin {
-  const callerFile = getCurrentFile();
+  // 必须传入 plugin.ts 的 import.meta.url：getCurrentFile 默认锚定在 plugin-context.ts，
+  // 否则会多跳一层 usePlugin 帧，把调用方误判为 plugin.ts（plugin.name === "plugin"）。
+  const callerFile = getCurrentFile(import.meta.url);
   // 如果当前 store 已是同一文件创建的插件，直接返回
   const current = storage.getStore();
   if (current && current.filePath.replace(/\?t=\d+$/, '') === callerFile.replace(/\?t=\d+$/, '')) {

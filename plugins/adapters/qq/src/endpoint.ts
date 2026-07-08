@@ -26,6 +26,7 @@ import { applyCustomAuthEndpoints } from "./gateway-config.js";
 import { normalizeOutboundMarkdown, asOutboundSegments, splitReplyPrefix } from "./outbound-markdown.js";
 import { normalizeOutboundMedia } from "./outbound-media.js";
 import { fromCanonicalSegments, toCanonicalSegments } from "./segment-mapper.js";
+import { enrichCanonicalMentionNames } from "./mention-enrich.js";
 import {
   buildMixedMediaMessagePayload,
   buildQqImageUploadPayload,
@@ -304,6 +305,7 @@ export class QQEndpoint<T extends ReceiverMode, M extends ApplicationPlatform = 
     const raw = msg as PrivateMessageEvent & GroupMessageEvent & {
       group_openid?: string;
       author?: { member_openid?: string; user_openid?: string; id?: string; username?: string };
+      mentions?: Array<{ id?: string; member_openid?: string; username?: string; nickname?: string }>;
       __zhin_group_at?: boolean;
     };
 
@@ -331,7 +333,11 @@ export class QQEndpoint<T extends ReceiverMode, M extends ApplicationPlatform = 
     }
 
     if (Array.isArray(content)) {
-      content = toCanonicalSegments(content);
+      content = enrichCanonicalMentionNames(
+        toCanonicalSegments(content),
+        this.adapter,
+        raw.mentions,
+      );
     }
 
     const result = Message.from(msg, {

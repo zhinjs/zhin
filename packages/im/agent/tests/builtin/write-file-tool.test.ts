@@ -43,7 +43,7 @@ describe('WriteFileBuiltinTool', () => {
   it('toTool 元数据与 schema 完整', () => {
     const tool = createWriteFileTool();
     expect(tool.name).toBe('write_file');
-    expect(tool.description).toContain('写入');
+    expect(tool.description).toContain('Write');
     expect(tool.parameters.required).toContain('file_path');
     expect(tool.parameters.required).toContain('content');
     expect(tool.source).toBe('builtin:agent');

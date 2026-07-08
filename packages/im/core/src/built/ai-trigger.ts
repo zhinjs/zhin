@@ -16,6 +16,7 @@ import type {
   MaybePromise, 
 } from "../types.js";
 import { segment } from "../utils.js";
+import { readMentionSegmentTarget } from './segment-contract/mention.js';
 import {
   resolveIMSessionId,
 } from '../im-session-id.js';
@@ -125,11 +126,7 @@ function normalizeAtIds(endpointAtIds?: string[]): string[] {
 }
 
 function segmentAtUserId(seg: MessageElement): string {
-  const { data } = seg;
-  if (!data || typeof data !== 'object') return '';
-  const record = data as Record<string, unknown>;
-  const raw = record.user_id ?? record.qq ?? record.id;
-  return raw == null ? '' : String(raw);
+  return readMentionSegmentTarget(seg);
 }
 
 function isAtSegmentForEndpoint(seg: MessageElement, endpointIds: string[]): boolean {

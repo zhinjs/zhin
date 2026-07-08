@@ -2,28 +2,24 @@
  * Host REST 路由（Koa Router）。
  * Console 连接常用：/entries、/api/system/status、/api/stats、/api/plugins、/api/endpoints、/api/config、/api/schemas 等。
  */
-import { Adapter, Feature, type Plugin } from "@zhin.js/core";
+import { Adapter, type Plugin } from "@zhin.js/core";
 import {
   registerFetchRoute,
   type Router,
   type RouterContext,
 } from "@zhin.js/host-router/router";
+import {
+  buildPluginFeatures,
+  buildPluginListItem,
+  collectFeatureServices,
+  collectOwnContexts,
+} from "./plugin-inspection.js";
 import { getSystemStatusData, registerSystemStatusRoute } from "./system-routes.js";
 
 export type EntriesResponseBody = {
   entries: unknown[];
   runtimeEnvHint: "development" | "production";
 };
-
-function collectFeatures(root: Plugin): Feature[] {
-  const features: Feature[] = [];
-  for (const [, context] of root.contexts) {
-    if (context.value instanceof Feature) {
-      features.push(context.value);
-    }
-  }
-  return features;
-}
 
 /** GET /entries — Remote Console 插件发现（Edge 可为空列表） */
 export function registerEntriesRoute(
@@ -88,18 +84,10 @@ export function registerHostRestRoutes(
 
   registerFetchRoute(router, "GET", `${base}/plugins`, async (ctx: RouterContext) => {
     const root = getRoot();
-    const featureServices = collectFeatures(root);
-    const plugins = root.children.map((p) => {
-      const features = featureServices
-        .map((f) => f.toJSON(p.name))
-        .filter((f) => f.count > 0);
-      return {
-        name: p.name,
-        status: p.started ? "active" : "inactive",
-        description: ((p as Plugin).manifest as { description?: string } | undefined)?.description || p.name,
-        features,
-      };
-    });
+    const featureServices = collectFeatureServices(root);
+    const plugins = root.children.map((p) =>
+      buildPluginListItem(p as Plugin, featureServices),
+    );
     ctx.body = { success: true, data: plugins, total: plugins.length };
   });
 
@@ -112,11 +100,8 @@ export function registerHostRestRoutes(
       ctx.body = { success: false, error: "插件不存在" };
       return;
     }
-    const featureServices = collectFeatures(root);
-    const features = featureServices
-      .map((f) => f.toJSON(pluginName))
-      .filter((f) => f.count > 0);
-    const contexts = Array.from(plugin.contexts.entries()).map(([name]) => ({ name }));
+    const featureServices = collectFeatureServices(root);
+    const contexts = collectOwnContexts(plugin as Plugin);
     ctx.body = {
       success: true,
       data: {
@@ -125,7 +110,8 @@ export function registerHostRestRoutes(
         filePath: plugin.filePath,
         status: plugin.started ? "active" : "inactive",
         description: ((plugin as Plugin).manifest as { description?: string } | undefined)?.description || plugin.name,
-        features,
+        features: buildPluginFeatures(plugin as Plugin, featureServices),
+        contextCount: contexts.length,
         contexts,
       },
     };

@@ -22,7 +22,7 @@ export const INSTALL_SKILL_PARAMETERS: ToolParametersSchema = {
   properties: {
     url: {
       type: 'string',
-      description: 'SKILL.md 文件的完整 URL（如 https://example.com/skill.md）',
+      description: 'Full URL of a SKILL.md file (e.g. https://example.com/skill.md)',
     },
   },
   required: ['url'],
@@ -33,7 +33,7 @@ const logger = new Logger(null, 'install-skill-tool');
 export class InstallSkillBuiltinTool extends BuiltinBaseTool {
   readonly name = 'install_skill';
   readonly description =
-    '从 URL 下载 SKILL.md 并安装到本地 skills/ 目录。用户要求加入/安装/下载某个技能时使用';
+    'Download SKILL.md from a URL and install it under local skills/. Use when the user asks to add, install, or download a skill.';
   readonly parameters = INSTALL_SKILL_PARAMETERS;
   readonly kind = 'skill';
 

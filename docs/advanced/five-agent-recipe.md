@@ -17,9 +17,12 @@ title: 五角色群协作（高级配方）
 | 概念 | 群协作中的含义 |
 |------|----------------|
 | **Run** | 群会话（`sessionKey` = `platform:endpointId:group:sceneId`）上的编排单元 |
-| **Task (`scene_mention`)** | Planner @ Researcher 等 Endpoint 的委派项 |
-| **Kernel** | 唯一终态权威；被委派方实质群回复 → `tryCompleteKernelGroupMentionFromOutbound` → `completeTask` |
-| **WorkflowStrategy `five-agent`** | 可选批量工作流；主叙事仍是路由 + Kernel |
+| **Task (`internal_room`)** | Planner 通过 `orchestration_add_task` 委派 peer Endpoint |
+| **Kernel** | 唯一终态权威；`orchestration_status` 查询进度与结果 |
+| **WorkflowStrategy `five-agent`** | **显式 opt-in** 批量建 DAG；不再默认注册 |
+| **已移除** | 模型面向的 `cell_*` pipeline 工具（`cell_submit_artifact` 等） |
+
+> 群协作主路径：`orchestration_*` + `internal_room` / 可选 `im_projection`。详见 [ADR 0026](/adr/0026-retire-scenario-specific-pipeline-harnesses)。
 
 ## 配置清单
 
@@ -31,9 +34,9 @@ title: 五角色群协作（高级配方）
 ## 验证步骤（test-bot / 实机 ICQQ）
 
 1. 群 @ Planner，下达可委派任务
-2. Planner 路由为 `scene_mention` → Kernel 创建 task → 群 @ 目标 Endpoint
-3. 目标 Bot 在群内 **实质公开回复**（≥12 字，非仅「已完成」）
-4. Kernel task → `completed`；可选 handback @ Planner（`#taskId`）
+2. Planner 调用 `orchestration_add_task(executor="internal_room", assigned_to="<peerEndpointId>")`
+3. 目标 Bot 处理任务并在群内回复（可选 `project_to_im: true` 投影 @）
+4. `orchestration_status` 可见 task 完成；`#taskId` 仅用于 `im_projection` handback
 5. `GET /api/agent/orchestration/runs?sessionKey=<群 sessionKey>` 可见 run / tasks
 
 ## 相关文档

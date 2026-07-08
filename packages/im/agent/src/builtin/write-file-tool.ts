@@ -14,8 +14,8 @@ import { BuiltinBaseTool } from './builtin-base-tool.js';
 export const WRITE_FILE_PARAMETERS: ToolParametersSchema = {
   type: 'object',
   properties: {
-    file_path: { type: 'string', description: '要写入的文件路径' },
-    content: { type: 'string', description: '要写入的完整内容' },
+    file_path: { type: 'string', description: 'File path to write' },
+    content: { type: 'string', description: 'Full file content to write' },
   },
   required: ['file_path', 'content'],
 };
@@ -23,7 +23,7 @@ export const WRITE_FILE_PARAMETERS: ToolParametersSchema = {
 export class WriteFileBuiltinTool extends BuiltinBaseTool {
   readonly name = 'write_file';
   readonly description =
-    '向指定路径写入内容，创建或覆盖文件；若目录不存在会自动创建。';
+    'Write content to a file path, creating or overwriting the file; creates parent directories if missing.';
   readonly parameters = WRITE_FILE_PARAMETERS;
   readonly kind = 'file';
 

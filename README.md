@@ -484,7 +484,7 @@ graph TD
 
 ### 4. AI 思考状态连携与统一出站链路
 
-[packages/im/agent/src/init/register-typing-indicator.ts](packages/im/agent/src/init/register-typing-indicator.ts) 自动转换 AI 复杂的思考流、子任务分发状态并渲染给指示器。最终的渲染通过统一保护链路：
+[`plugins/services/activity-feedback`](plugins/services/activity-feedback/) 通过 [`ai-event-binder.ts`](plugins/services/activity-feedback/src/ai-event-binder.ts) 订阅 `ai.*` 生命周期事件，经 [`ActivityFeedbackManager`](packages/im/agent/src/activity-feedback/manager.ts) 将 queued / active / thinking 等阶段投影到群 reaction 或 typing 编辑。最终出站仍走统一保护链路：
 
 ```mermaid
 graph TD
@@ -495,18 +495,18 @@ graph TD
     end
 
     %% 状态自动连携
-    subgraph StateBinding["2. AI 思考状态连携机制"]
-        RegIndicator["register-typing-indicator (启动绑定)"]
-        TIM["TypingIndicatorManager (适配器管理)"]
-        ActiveInd["Active Typing Indicator (思考指示器)"]
+    subgraph StateBinding["2. Activity Feedback 连携机制"]
+        Binder["activity-feedback / ai-event-binder"]
+        AFM["ActivityFeedbackManager"]
+        ActiveFB["群 reaction / typing 编辑"]
 
-        RegIndicator -->|监听全部 ai.* 事件| TIM
-        TIM -->|启动 / 流式 editMessage / 终止| ActiveInd
+        Binder -->|监听 ai.* 事件| AFM
+        AFM -->|按 phase 启动 / 更新 / 停止| ActiveFB
     end
 
     %% 统一安全出站链路 (IM Send Path)
     subgraph OutboundPipeline["3. 统一安全出站保护链路"]
-        ActiveInd -->|流式思考内容 / 状态占位符| SendAPI["Adapter.sendMessage / Message.$reply"]
+        ActiveFB -->|状态占位 / 流式编辑| SendAPI["Adapter.sendMessage / Message.$reply"]
         ZhinAgentAns["ZhinAgent 最终回复内容"] -->|输出内容| SendAPI
 
         SendAPI -->|1. 经过模板渲染与组件自解析| Render["renderSendMessage (JSX 动态解析)"]
@@ -516,18 +516,18 @@ graph TD
     end
 
     %% 事件流到绑定的连动
-    Evt_Start -->|1. 触发| RegIndicator
-    Evt_Think -->|2. 触发| RegIndicator
-    Evt_SubStart -->|3. 触发| RegIndicator
-    Evt_SubFinish -->|4. 触发| RegIndicator
-    Evt_Finish -->|5. 触发| RegIndicator
+    Evt_Start -->|1. 触发| Binder
+    Evt_Think -->|2. 触发| Binder
+    Evt_SubStart -->|3. 触发| Binder
+    Evt_SubFinish -->|4. 触发| Binder
+    Evt_Finish -->|5. 触发| Binder
 
     classDef stream fill:#eceff1,stroke:#90a4ae,color:#263238
     classDef binding fill:#e8f5e9,stroke:#81c784,color:#1b5e20
     classDef pipeline fill:#fff8e1,stroke:#ffb74d,color:#5d4037
 
     class Evt_Start,Evt_Think,Evt_SubStart,Evt_SubFinish,Evt_Finish stream
-    class RegIndicator,TIM,ActiveInd binding
+    class Binder,AFM,ActiveFB binding
     class SendAPI,ZhinAgentAns,Render,BeforeHook,EndpointSend,Client pipeline
 ```
 

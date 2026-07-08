@@ -5,6 +5,7 @@ import {
   isMediaRef,
   mediaRefFromLegacyData,
   mediaRefToLegacyFields,
+  readMentionTarget,
 } from './segment-contract/index.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -14,12 +15,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function readPlatform(seg: MessageSegment): Record<string, unknown> | undefined {
   const platform = (seg as Segment).platform;
   return platform && typeof platform === 'object' ? platform : undefined;
-}
-
-function readMentionTarget(data: Record<string, unknown>): string {
-  const raw = data.target ?? data.user_id ?? data.qq ?? data.id;
-  if (raw === 'all') return 'all';
-  return raw != null ? String(raw) : '';
 }
 
 function normalizeMention(seg: MessageSegment): Segment {

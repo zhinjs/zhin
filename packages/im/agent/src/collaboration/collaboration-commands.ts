@@ -487,14 +487,18 @@ export async function handleCollabReset(message: Message, force = true): Promise
   if (!cell) return '⚠️ 当前群未注册协作 Cell。请先 /collab init';
 
   if (!cell.pipelineState) {
-    return `ℹ️ 协作群已注册，pipeline 尚未启动。\n${await formatStatus(cell)}`;
+    return `ℹ️ 协作群已注册，无 legacy pipeline 状态。\n${await formatStatus(cell)}`;
   }
 
   const result = await getPipelineService().resetRun(cell.id, { force });
   if (!result.ok) return `⚠️ 重置失败：${result.error}`;
 
   const fresh = (await svc.getSceneFresh(cell.id)) ?? cell;
-  return `✅ 已重置 pipeline（run ${result.previousRunId?.slice(0, 8) ?? '?'} → ${result.state.runId.slice(0, 8)}）\n${await formatStatus(fresh)}`;
+  return (
+    `✅ 已重置 legacy pipeline（run ${result.previousRunId?.slice(0, 8) ?? '?'} → ${result.state.runId.slice(0, 8)}）\n`
+    + `新编排请用 orchestration_start / orchestration_status。\n`
+    + `${await formatStatus(fresh)}`
+  );
 }
 
 /**

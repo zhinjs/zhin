@@ -52,7 +52,7 @@ let activeFeature: GameHubFeature | null = null;
 export class GameHubFeature extends Feature<RegisteredGame> {
   readonly name = 'game' as const;
   readonly icon = 'Gamepad2';
-  readonly desc = '游戏大厅';
+  readonly desc = '游戏';
 
   private readonly byId = new Map<string, RegisteredGame>();
   private hubDisposers: (() => void)[] = [];

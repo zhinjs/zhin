@@ -7,15 +7,6 @@ endpoints:
   - context: icqq
     name: ${ICQQ_ACCOUNT}
     master: 1659488338
-    typingIndicator:
-      enabled: true
-      defaultEmoji: "60"
-      privateConfig:
-        type: "message"
-        message: "正在思考中..."
-      groupConfig:
-        type: "reaction"
-        emoji: "60"
   - context: github
     name: zhin-ai
     app_id: ${GITHUB_APP_ID}
