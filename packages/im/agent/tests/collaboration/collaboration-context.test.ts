@@ -40,7 +40,7 @@ describe('formatCollaborationSceneHint', () => {
     expect(hint).toContain('planner');
     expect(hint).toContain('210723495');
     expect(hint).toContain('executor');
-    expect(hint).toContain('Assignments and task handback are managed by the orchestration kernel');
+    expect(hint).toContain('Peer dispatch and task handback are managed by the orchestration kernel');
     expect(hint).not.toContain('group_delegate');
     expect(hint).not.toContain('cell_pipeline_status');
   });
@@ -126,7 +126,7 @@ describe('resolveCollaborationTurnHint', () => {
     });
 
     const hint = resolveCollaborationTurnHint(groupMessage('210723495'));
-    expect(hint).toContain('Assignments and peer mentions are managed by the orchestration kernel');
+    expect(hint).toContain('Peer dispatch uses internal_room via the orchestration kernel');
     expect(hint).not.toContain('[Active delegation]');
     expect(hint).not.toContain('整理调研摘要');
     expect(hint).not.toContain('[Delegate]');
