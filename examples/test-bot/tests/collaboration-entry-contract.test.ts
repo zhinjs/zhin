@@ -8,7 +8,8 @@ import { describe, it, expect } from 'vitest';
 import { createInboundTurnPipeline } from '@zhin.js/agent';
 
 const botRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const configText = fs.readFileSync(path.join(botRoot, 'zhin.config.yml'), 'utf8');
+const configFixture = path.join(botRoot, 'fixtures/collaboration-contract.zhin.config.yml');
+const configText = fs.readFileSync(configFixture, 'utf8');
 
 describe('test-bot 协作入口契约', () => {
   it('createInboundTurnPipeline 可从 @zhin.js/agent 解析', () => {

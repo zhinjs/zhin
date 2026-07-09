@@ -1,0 +1,18 @@
+# CI 契约夹具（无密钥）；与 test-bot 协作/多 Agent 配置形状对齐。
+# 维护者本地完整配置见 zhin.config.yml（gitignore，勿提交凭据）。
+
+ai:
+  trigger:
+    prefixes:
+      - "ai:"
+    peerMode: mention-only
+  agents:
+    planner:
+      provider: ollama
+      model: placeholder
+    researcher:
+      provider: ollama
+      model: placeholder
+  agent:
+    tools:
+      - spawn_task

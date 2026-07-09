@@ -76,4 +76,12 @@ export default tseslint.config(
       'no-console': 'off',
     },
   },
+
+  // CLI commands write to stdout/stderr by design
+  {
+    files: ['basic/cli/src/commands/**/*.ts'],
+    rules: {
+      'no-console': 'off',
+    },
+  },
 );

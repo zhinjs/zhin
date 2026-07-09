@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { CommandFeature, Plugin, ToolFeature } from "@zhin.js/core";
 import {
   buildPluginFeatures,
@@ -9,13 +11,17 @@ import {
 } from "../src/rest/plugin-inspection.js";
 
 describe("plugin inspection", () => {
+  const repoRoot = path.resolve(fileURLToPath(import.meta.url), "../../../../../");
+  const testPluginPath = path.join(
+    repoRoot,
+    "examples/test-bot/src/plugins/test-plugin.ts",
+  );
+
   it("collects command feature and attributes addCommand to child plugin name", async () => {
     const root = new Plugin("/tmp/test-bot/src/index.ts");
     root.provide(new CommandFeature());
     root.provide(new ToolFeature());
-    const child = await root.import(
-      "/Users/liuchunlang/IdeaProjects/zhin/examples/test-bot/src/plugins/test-plugin.ts",
-    );
+    const child = await root.import(testPluginPath);
     await root.start();
 
     const featureServices = collectFeatureServices(root);
