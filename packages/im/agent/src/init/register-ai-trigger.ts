@@ -10,28 +10,11 @@ import {
   shouldTriggerAI,
   segment,
 } from '@zhin.js/core';
-import type { Plugin } from '@zhin.js/core';
 import type { AIServiceRefs } from './shared-refs.js';
 import { formatCompactLog, truncatePreview } from '@zhin.js/logger';
 import { createInboundTurnPipeline } from '../collaboration/inbound-turn-pipeline.js';
+import { resolveEndpointAtIds } from '../collaboration/inbound-turn-endpoint.js';
 import { isAskUserPendingReply, ensureAskUserSessionService } from '../builtin/ask-user-session.js';
-
-function resolveEndpointAtIds(message: Message, root: Plugin): string[] {
-  const ids = new Set<string>([String(message.$endpoint)]);
-  try {
-    const adapter = root.inject(message.$adapter) as
-      | { endpoints?: Map<string, { $config?: Record<string, unknown>; $platformUserId?: string }> }
-      | undefined;
-    const endpoint = adapter?.endpoints?.get(message.$endpoint);
-    const cfg = endpoint?.$config;
-    if (cfg?.name) ids.add(String(cfg.name));
-    if (cfg?.appid) ids.add(String(cfg.appid));
-    if (endpoint?.$platformUserId) ids.add(String(endpoint.$platformUserId));
-  } catch {
-    // adapter 未就绪时仍用 message.$endpoint
-  }
-  return [...ids];
-}
 
 export function registerAITrigger(refs: AIServiceRefs): void {
   const plugin = getPlugin();

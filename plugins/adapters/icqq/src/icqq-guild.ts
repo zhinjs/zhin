@@ -137,10 +137,9 @@ export function normalizeIcqqGuildInboundMessage(
         ? String(data.seq)
         : `${data.time ?? 0}_${userId}_${channelId}`;
 
-  let content: MessageSegment[];
   const parsed = parseCqMessage(rawMessage);
   const canonical = toCanonicalSegments(parsed);
-  content = canonical.length > 0 ? canonical : [{ type: "text", data: { text: rawMessage } }];
+  const content: MessageSegment[] = canonical.length > 0 ? canonical : [{ type: "text", data: { text: rawMessage } }];
 
   return {
     messageId,

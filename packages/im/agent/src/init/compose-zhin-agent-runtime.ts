@@ -3,6 +3,7 @@
  */
 import type { AIProvider } from '@zhin.js/ai';
 import { AgentCore } from '../core/agent-core.js';
+import { DEFAULT_AGENT_CORE_CONFIG, createAgentCoreDepsForCompose } from '../core/compose-deps.js';
 import { createToolSystem } from '../tool/tool-system.js';
 import { createSessionSystem } from '../session/session-system.js';
 import { createEventSystem } from '../event/event-system.js';
@@ -54,20 +55,8 @@ export function composeZhinAgentRuntime(
   }
 
   const agentCore = new AgentCore(
-    {
-      maxIterations: 15,
-      timeout: 120_000,
-      toolExecution: 'tiered',
-    },
-    {
-      provider,
-      toolExecutor: { executeAll: async () => [] },
-      contextManager: {
-        prepare: async (input) => ({ messages: input.messages }),
-        append: async () => {},
-      },
-      eventBus: eventSystem,
-    },
+    DEFAULT_AGENT_CORE_CONFIG,
+    createAgentCoreDepsForCompose(provider, eventSystem),
   );
 
   return {

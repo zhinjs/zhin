@@ -34,6 +34,7 @@ export interface ResolveOutboundBatchesInput {
   adapterView?: GroupMessageAdapterView;
   selfMember?: CollaborationScene['members'][number];
   warn?: (message: string) => void;
+  root?: import('@zhin.js/core').Plugin;
 }
 
 export interface ResolveOutboundBatchesResult {
@@ -226,6 +227,7 @@ export async function resolveOutboundBatches(
   const collabBatches = await tryBuildCollaborationOutboundBatches(message, elements, {
     inboundContent,
     warn,
+    root: input.root,
   });
 
   let batches: MessageElement[][] = collabBatches ?? [

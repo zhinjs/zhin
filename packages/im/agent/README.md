@@ -45,10 +45,29 @@ packages/im/agent/src/
   turn/          Turn pipeline、inbound 队列、auto-continue、metrics
   config/        ZhinAgent 配置 SSOT、model harness
   orchestrator/  Orchestration Kernel（ADR 0027 SSOT）
-  collaboration/ IM 入站/出站策略（inbound-turn-pipeline 等）
+  collaboration/ IM 入站/出站（阶段 4）
+    inbound-turn-pipeline.ts      enrich → peerPolicy → plan → route → outbound
+    inbound-turn-enrich.ts        媒体/引用/subagent 通知
+    inbound-turn-route.ts         Kernel 委派 / spawn / 本地 execute
+    inbound-turn-outbound-stage.ts  出站 batch + Kernel 投影
+    inbound-turn-endpoint.ts      @ ID / aiAccess
   zhin-agent/    ZhinAgent 门面类（单文件 index.ts）
-  init/          create-zhin-agent、compose/configure/dispose 生命周期
+  init/          create-zhin-agent、composeZhinAgentRuntime、configure/dispose 生命周期
 ```
+
+**阶段 4 — `collaboration/` 入站编排子模块**
+
+| 文件 | 职责 |
+|------|------|
+| `inbound-turn-pipeline.ts` | enrich → peerPolicy → buildTurnPlan → route → outbound 纯编排 |
+| `inbound-turn-enrich.ts` | 媒体/引用/subagent 通知 enrich |
+| `inbound-turn-route.ts` | Kernel 委派、spawn_task、本地 `executeInboundAgentTurn` |
+| `inbound-turn-outbound-stage.ts` | 出站 batch 解析、IM 发送、Kernel 投影 |
+| `inbound-turn-endpoint.ts` | @ ID / aiAccess 解析 |
+
+**Agent Core**：`AgentCore.runText()` / `runVision()` 为 `AsyncGenerator<TurnEvent>` SSOT；`runTextTurn` 为 collector。组合层经 `composeZhinAgentRuntime` 注入 8 模块 + `createAgentCoreDepsForCompose`。
+
+Port 边界见 [orchestrator/PORTS.md](./src/orchestrator/PORTS.md)。
 
 可选 subpath（`package.json` `exports`）：
 

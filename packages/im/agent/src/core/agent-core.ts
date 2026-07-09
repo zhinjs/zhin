@@ -4,6 +4,7 @@
 
 import type { TurnEvent } from '../event/turn-event.js';
 import type { AgentCoreConfig, AgentCoreDependencies } from './contracts.js';
+import { DEFAULT_AGENT_CORE_CONFIG, createDefaultAgentCoreDeps } from './compose-deps.js';
 import {
   runAgentLoopTextTurnRun,
   runAgentLoopVisionTurnRun,
@@ -82,18 +83,6 @@ export class AgentCore {
 }
 
 export const defaultAgentCore = new AgentCore(
-  {
-    maxIterations: 15,
-    timeout: 120_000,
-    toolExecution: 'tiered',
-  },
-  {
-    provider: {} as AgentCoreDependencies['provider'],
-    toolExecutor: { executeAll: async () => [] },
-    contextManager: {
-      prepare: async (input) => ({ messages: input.messages }),
-      append: async () => {},
-    },
-    eventBus: { emit: async () => {} },
-  },
+  DEFAULT_AGENT_CORE_CONFIG,
+  createDefaultAgentCoreDeps(),
 );

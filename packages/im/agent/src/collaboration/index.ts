@@ -44,6 +44,10 @@ export {
   DatabaseCollaborationArtifactRepository,
 } from './collaboration-artifact-repository.js';
 export { createInboundTurnPipeline } from './inbound-turn-pipeline.js';
+export { routeInboundTurnExecution } from './inbound-turn-route.js';
+export { executeInboundOutboundStage } from './inbound-turn-outbound-stage.js';
+export { prepareInboundTurnEnrichment } from './inbound-turn-enrich.js';
+export { resolveEndpointConfig, resolveEndpointAtIds, resolveEndpointAiAccess } from './inbound-turn-endpoint.js';
 export { resolvePlannerEndpointId } from './collaboration-delegation.js';
 export type {
   InboundTurnPipeline,

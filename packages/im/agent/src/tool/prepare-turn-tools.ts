@@ -82,8 +82,9 @@ export async function prepareTurnTools(
   });
 
   const resolved = await toolSystem.resolveForTurn(host, allTools, opts.sessionId);
-  let { tools: resolvedTools, deferredStats, catalog, sessionSnapshot } = resolved;
+  const { tools: resolvedTools, deferredStats, catalog, sessionSnapshot: initialSnapshot } = resolved;
 
+  let sessionSnapshot = initialSnapshot;
   sessionSnapshot = await preloadScheduleToolsFromContext(host, opts.sessionId, catalog, sessionSnapshot);
   captureDeferredSnapshotBefore(sessionSnapshot);
   host.lastDeferredSnapshotBefore = cloneDeferredSnapshot(sessionSnapshot);

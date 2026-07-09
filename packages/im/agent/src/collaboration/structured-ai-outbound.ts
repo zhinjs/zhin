@@ -4,6 +4,7 @@
 import type { OutputElement } from '@zhin.js/ai';
 import { renderToPlainText } from '@zhin.js/ai';
 import type { Message, MessageElement } from '@zhin.js/core';
+import type { Plugin } from '@zhin.js/core';
 import {
   getHostRootPlugin,
   parseAiOutboundJson,
@@ -37,18 +38,19 @@ function extractPlainTextFromElements(elements: OutputElement[]): string {
   return parts.join('\n').trim();
 }
 
-function resolveAdapterView(message: Message): GroupMessageAdapterView | undefined {
-  const plugin = getHostRootPlugin();
+function resolveAdapterView(message: Message, root?: Plugin): GroupMessageAdapterView | undefined {
+  const plugin = root ?? getHostRootPlugin();
   if (!plugin) return undefined;
   return plugin.inject(message.$adapter) as GroupMessageAdapterView | undefined;
 }
 
-function buildParseContext(message: Message): AiOutboundParseContext | null {
+function buildParseContext(message: Message, root?: Plugin): AiOutboundParseContext | null {
   const cell = resolveCollaborationSceneForMessage(message);
-  const adapter = resolveAdapterView(message);
+  const adapter = resolveAdapterView(message, root);
   if (!adapter) return null;
 
-  const adapterInstance = getHostRootPlugin()?.inject(message.$adapter) as object | undefined;
+  const plugin = root ?? getHostRootPlugin();
+  const adapterInstance = plugin?.inject(message.$adapter) as object | undefined;
 
   return {
     message,
@@ -71,11 +73,14 @@ export interface TryResolveStructuredAiOutboundOptions {
   inboundContent?: string;
   toolRequiresStructured?: boolean;
   warn?: (message: string) => void;
+  /** Init-time root plugin; avoids getHostRootPlugin in inbound pipeline path */
+  root?: import('@zhin.js/core').Plugin;
 }
 
 async function trySplitEmbeddedMentionBatches(
   message: Message,
   plain: string,
+  root?: Plugin,
 ): Promise<MessageElement[][] | null> {
   const cell = resolveCollaborationSceneForMessage(message);
   if (!cell) return null;
@@ -83,7 +88,7 @@ async function trySplitEmbeddedMentionBatches(
   const embedded = extractEmbeddedAiOutboundJson(plain);
   if (!embedded) return null;
 
-  const ctx = buildParseContext(message);
+  const ctx = buildParseContext(message, root);
   if (!ctx) return null;
 
   const payload = parseAiOutboundJson(embedded.jsonRaw);
@@ -110,7 +115,7 @@ export async function tryBuildCollaborationOutboundBatches(
 ): Promise<MessageElement[][] | null> {
   const plain = extractPlainTextFromElements(elements);
   if (plain) {
-    const split = await trySplitEmbeddedMentionBatches(message, plain);
+    const split = await trySplitEmbeddedMentionBatches(message, plain, options.root);
     if (split) return split;
   }
 
@@ -130,7 +135,8 @@ export async function tryResolveStructuredAiOutbound(
   options: TryResolveStructuredAiOutboundOptions = {},
 ): Promise<MessageElement[] | null> {
   const cell = resolveCollaborationSceneForMessage(message);
-  const adapterInstance = getHostRootPlugin()?.inject(message.$adapter) as object | undefined;
+  const plugin = options.root ?? getHostRootPlugin();
+  const adapterInstance = plugin?.inject(message.$adapter) as object | undefined;
   const extensions = adapterInstance ? getAdapterAiOutboundExtensions(adapterInstance) : [];
   const structuredRequired = isStructuredOutboundRequired({
     collaborationCell: Boolean(cell),
@@ -150,7 +156,7 @@ export async function tryResolveStructuredAiOutbound(
   const embedded = extractEmbeddedAiOutboundJson(plain);
   if (embedded?.prose.trim()) return null;
 
-  const ctx = buildParseContext(message);
+  const ctx = buildParseContext(message, options.root);
   if (!ctx) return null;
 
   let payload = parseAiOutboundJson(plain);

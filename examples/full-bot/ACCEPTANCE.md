@@ -18,7 +18,7 @@ pnpm check:l4
 ### A. 终态权威（Kernel-only）
 
 - [ ] `local` / `scene_mention` / `remote_mesh` 成功、失败、取消均落在 Kernel `completed` / `failed` / `cancelled`，无永久 `waiting_result`
-- [ ] `pnpm check:orchestration-ssot` 通过
+- [x] `pnpm check:orchestration-ssot` 通过
 
 ### B. IM 终态反馈（观众 #1）
 

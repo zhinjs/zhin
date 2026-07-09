@@ -1,11 +1,8 @@
 import { formatCompact, Logger } from '@zhin.js/logger';
 import type { ContentPart } from '@zhin.js/ai';
-import { userMessagePlainText } from '@zhin.js/ai';
-import { parseOutput } from '@zhin.js/ai';
+import { userMessagePlainText, parseOutput } from '@zhin.js/ai';
 import { createAIHookEvent } from '../orchestrator/hook-registry.js';
-import { mergeToolOutboundElements } from '../media/media-tool-bridge.js';
 import { providerSupportsVision } from '../media/vision-capability.js';
-import { touchSession } from '../session/session-io.js';
 import { buildMultimodalVisionSystemPrompt } from '../prompt/assembly.js';
 import { TurnSupersededError } from './prompt-controller.js';
 import { buildVisionUserMessage, summarizeMultimodalParts } from './multimodal-message.js';
@@ -18,6 +15,11 @@ import { defaultAgentCore } from '../core/agent-core.js';
 import type { ContextSystem } from '../context/context-system.js';
 import type { AgentLoopTurnResult } from '../core/agent-loop-turn.js';
 import type { TurnEvent } from '../event/turn-event.js';
+import {
+  buildTextTurnOutbound,
+  finalizeTurnAfterAgentLoop,
+  handleTurnSuperseded,
+} from './turn-complete.js';
 import type {
   ZhinAgentPrivate,
   OnChunkCallback,
@@ -60,7 +62,8 @@ export async function processTextTurn(
   extras?: ProcessTextTurnOptions,
 ): Promise<OutputElement[]> {
     const t0 = now();
-    const prep = await requireSessionSystem(host).prepareTextTurn(host, commMessage, content, {
+    const sessionSystem = requireSessionSystem(host);
+    const prep = await sessionSystem.prepareTextTurn(host, commMessage, content, {
       deferredAutoContinue: extras?.deferredAutoContinue,
     });
     const { sessionKey, userId, sessionId, isNewSession, turnUser } = prep;
@@ -175,56 +178,27 @@ export async function processTextTurn(
       });
     } catch (err) {
       if (err instanceof TurnSupersededError) {
-        logPhase(host.phaseConfig, 'turn.superseded', sessionId, { sessionKey: err.sessionKey });
-        host.emitter.emit('ai.typing.stop', host.emitter.createPayload(sessionId, commMessage, 'text', {
-          reason: 'superseded',
-        }));
-        await host.finalizeActiveTurn({ usage: EMPTY_USAGE, path: 'superseded' });
-        return [];
+        return handleTurnSuperseded(host, sessionId, commMessage, 'text', err);
       }
       throw err;
     }
+
     const reply = loopResult.reply;
-
-    await host.emitter.dispatch('ai.response', host.emitter.createPayload(sessionId, commMessage, 'text', {
-      path: loopResult.path,
-      model: loopResult.model,
-      iterations: loopResult.iterations,
-      reply,
-    }));
-    await requireSessionSystem(host).touchAfterTurn(host, sessionId);
-    if (isNewSession) {
-      host.emitSessionNewEvent(sessionId, commMessage, 'text', turnUser.rawContent, reply);
-    }
-    await host.finalizeActiveTurn({
-      usage: loopResult.usage,
-      path: loopResult.path,
-      iterations: loopResult.iterations,
-      model: loopResult.model,
-    });
-
-    host.orchestrator?.hooks.trigger(createAIHookEvent('message', 'sent', sessionId, {
+    await finalizeTurnAfterAgentLoop({
+      host,
+      sessionSystem,
+      sessionId,
       commMessage,
-      content: reply,
-    })).catch(() => {});
-
-    await host.emitter.dispatch('ai.processing.finish', host.emitter.createPayload(sessionId, commMessage, 'text', {
-      path: loopResult.path,
-      model: loopResult.model,
+      mode: 'text',
+      loopResult,
+      isNewSession,
+      rawContent: turnUser.rawContent,
       reply,
-    }));
-    host.emitter.emit('ai.typing.stop', host.emitter.createPayload(sessionId, commMessage, 'text', {
-      reason: 'processing_complete',
-    }));
-    logPhase(host.phaseConfig, 'turn.end', sessionId, {
-      path: loopResult.path,
-      filter_ms: filterMs,
-      total_ms: Math.round(now() - t0),
+      filterMs,
+      startedAt: t0,
     });
 
-    const outbound = mergeToolOutboundElements(parseOutput(reply), loopResult.toolCalls);
-    if (!reply.trim() && outbound.length === 0) return [];
-    return outbound;
+    return buildTextTurnOutbound(reply, loopResult);
 }
 
 export async function processMultimodalTurn(
@@ -233,8 +207,9 @@ export async function processMultimodalTurn(
   commMessage: Message,
   onChunk?: OnChunkCallback,
 ): Promise<OutputElement[]> {
+  const sessionSystem = requireSessionSystem(host);
   const textContent = summarizeMultimodalParts(parts, providerSupportsVision(host.getTurnProvider()));
-  const prep = await requireSessionSystem(host).prepareTextTurn(host, commMessage, textContent);
+  const prep = await sessionSystem.prepareTextTurn(host, commMessage, textContent);
   const { sessionKey, userId, sessionId, isNewSession, turnUser } = prep;
 
   await host.emitter.dispatch('ai.processing.start', host.emitter.createPayload(sessionId, commMessage, 'multimodal'));
@@ -312,11 +287,7 @@ export async function processMultimodalTurn(
     });
   } catch (err) {
     if (err instanceof TurnSupersededError) {
-      host.emitter.emit('ai.typing.stop', host.emitter.createPayload(sessionId, commMessage, 'multimodal', {
-        reason: 'superseded',
-      }));
-      await host.finalizeActiveTurn({ usage: EMPTY_USAGE, path: 'superseded' });
-      return [];
+      return handleTurnSuperseded(host, sessionId, commMessage, 'multimodal', err);
     }
     loopResult = {
       reply: '抱歉，我无法理解这条消息。',
@@ -329,30 +300,18 @@ export async function processMultimodalTurn(
   }
 
   const reply = loopResult.reply;
-  await host.emitter.dispatch('ai.response', host.emitter.createPayload(sessionId, commMessage, 'multimodal', {
-    path: 'multimodal',
-    model: loopResult.model,
+  await finalizeTurnAfterAgentLoop({
+    host,
+    sessionSystem,
+    sessionId,
+    commMessage,
+    mode: 'multimodal',
+    loopResult,
+    isNewSession,
+    rawContent: turnUser.rawContent,
     reply,
-  }));
-  await requireSessionSystem(host).touchAfterTurn(host, sessionId);
-  if (isNewSession) {
-    host.emitSessionNewEvent(sessionId, commMessage, 'multimodal', turnUser.rawContent, reply);
-  }
-  await host.finalizeActiveTurn({
-    usage: loopResult.usage,
-    path: 'multimodal',
-    model: loopResult.model,
-    iterations: loopResult.iterations,
+    finishPath: 'multimodal',
   });
-  await host.emitter.dispatch('ai.processing.finish', host.emitter.createPayload(sessionId, commMessage, 'multimodal', {
-    path: 'multimodal',
-    model: loopResult.model,
-    reply,
-  }));
-
-  host.emitter.emit('ai.typing.stop', host.emitter.createPayload(sessionId, commMessage, 'multimodal', {
-    reason: 'processing_complete',
-  }));
 
   return parseOutput(reply);
 }

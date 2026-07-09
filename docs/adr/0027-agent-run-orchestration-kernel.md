@@ -74,3 +74,7 @@ Five-agent is implemented as one built-in strategy, not the default architecture
 
 - [ADR 0028](./0028-generic-im-scene-agent.md)
 - [ADR 0024](./0024-five-agent-aop-pipeline.md)
+
+## Implementation
+
+IM 组合层与 Kernel Port 的模块边界与调用表见 [`packages/im/agent/src/orchestrator/PORTS.md`](../../packages/im/agent/src/orchestrator/PORTS.md)。入站编排 wiring 在 `collaboration/inbound-turn-pipeline.ts`；路由与出站阶段分别为 `inbound-turn-route.ts` / `inbound-turn-outbound-stage.ts`（阶段 4）。

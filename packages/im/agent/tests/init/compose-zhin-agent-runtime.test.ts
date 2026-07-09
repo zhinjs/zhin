@@ -46,4 +46,15 @@ describe('composeZhinAgentRuntime', () => {
     const b = composeZhinAgentRuntime(new ZhinAgent(provider), provider, { send: async () => {} });
     expect(a.contextSystem).not.toBe(b.contextSystem);
   });
+
+  it('wires AgentCore eventBus to composed EventSystem', () => {
+    const provider = { name: 'mock', models: ['m1'] } as any;
+    const { agentCore, eventSystem } = composeZhinAgentRuntime(
+      new ZhinAgent(provider),
+      provider,
+      { send: async () => {} },
+    );
+    expect(agentCore.deps.eventBus).toBe(eventSystem);
+    expect(agentCore.deps.provider).toBe(provider);
+  });
 });

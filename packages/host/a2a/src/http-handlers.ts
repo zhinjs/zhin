@@ -118,7 +118,7 @@ export async function handleJsonRpc(
     if (rpcResponseOrStream && typeof (rpcResponseOrStream as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function') {
       const stream = rpcResponseOrStream as AsyncGenerator<unknown, void, undefined>;
       const iterator = stream[Symbol.asyncIterator]();
-      let firstResult = await iterator.next();
+      const firstResult = await iterator.next();
 
       for (const [key, value] of Object.entries(SSE_HEADERS)) {
         res.setHeader(key, value);

@@ -19,13 +19,23 @@ vi.mock('../../src/collaboration/collaboration-dispatch.js', async (importOrigin
   };
 });
 
+vi.mock('../../src/collaboration/collaboration-kernel-bridge.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/collaboration/collaboration-kernel-bridge.js')>();
+  return {
+    ...actual,
+    tryCompleteKernelImProjectionFromOutbound: vi.fn(async () => {}),
+  };
+});
+
 import { dispatchPeerTask } from '../../src/collaboration/collaboration-dispatch.js';
+import { tryCompleteKernelImProjectionFromOutbound } from '../../src/collaboration/collaboration-kernel-bridge.js';
 
 describe('createInboundTurnPipeline', () => {
   afterEach(() => {
     resetCollaborationSceneService();
     resetAgentRuntimeRegistry();
     vi.mocked(dispatchPeerTask).mockReset();
+    vi.mocked(tryCompleteKernelImProjectionFromOutbound).mockReset();
   });
 
   it('does not inject legacy collaboration delegation tools for cell members', async () => {
@@ -559,5 +569,92 @@ describe('createInboundTurnPipeline', () => {
       toEndpointId: '210723495',
     }));
     expect(process).not.toHaveBeenCalled();
+  });
+
+  it('calls tryCompleteKernelImProjectionFromOutbound after local turn outbound', async () => {
+    resetCollaborationSceneService();
+    const repo = new MemoryCollaborationSceneRepository();
+    await repo.upsert({
+      id: 'icqq-collab-room',
+      adapter: 'icqq',
+      sceneId: '373460458',
+      goal: 'test',
+      members: [
+        { endpointId: '8596238', primary: 'planner', pipelineRole: 'planner' },
+      ],
+    });
+    getCollaborationSceneService().setRepository(repo);
+    await getCollaborationSceneService().reloadFromRepository();
+
+    const process = vi.fn(async () => [{ type: 'text', content: 'task done with substance' }]);
+    const zhinAgent = {
+      getSubagentSystem: () => null,
+      initInboundTurnContext: vi.fn(),
+      process,
+      processMultimodal: vi.fn(),
+      configure: vi.fn(),
+      getLastTurnMetrics: () => null,
+    };
+    getAgentRuntimeRegistry().registerForEndpoint('8596238', zhinAgent as any);
+
+    const message = {
+      ...mockCommMessage({
+        adapter: 'icqq',
+        endpoint: '8596238',
+        scope: 'group',
+        sceneId: '373460458',
+      }),
+      $content: [
+        { type: 'at', data: { qq: '8596238' } },
+        { type: 'text', data: { text: ' hello' } },
+      ],
+    };
+
+    const pipeline = createInboundTurnPipeline({
+      root: { inject: () => undefined } as any,
+      ai: {
+        isReady: () => true,
+        getAccessConfig: () => undefined,
+        getResidentToolsAsTools: () => [],
+      } as any,
+      refs: {
+        aiService: {
+          isReady: () => true,
+          getProvider: () => ({ name: 'mock', models: ['mock-model'] }),
+          getRoutingConfig: () => ({
+            agents: { zhin: { provider: 'mock', model: 'mock-model' } },
+          }),
+          getBindingRegistry: () => ({
+            getDiscoveredAgentNames: () => new Set(['zhin']),
+            getBinding: () => null,
+            requireZhinBinding: () => ({
+              name: 'zhin',
+              providerAlias: 'mock',
+              model: 'mock-model',
+              mcpServers: [],
+            }),
+          }),
+          setDiscoveredAgents: () => undefined,
+        },
+        zhinAgent,
+      } as any,
+      triggerConfig: {
+        errorTemplate: 'ERR {error}',
+        resolveQuotedMessages: false,
+      } as any,
+      peerMode: 'mention-only',
+      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn() },
+      replyOutbound: vi.fn(),
+    });
+
+    await pipeline(message, 'hello');
+
+    expect(process).toHaveBeenCalled();
+    expect(tryCompleteKernelImProjectionFromOutbound).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endpointId: '8596238',
+        cell: expect.objectContaining({ id: 'icqq-collab-room' }),
+      }),
+    );
   });
 });
