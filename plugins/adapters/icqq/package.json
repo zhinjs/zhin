@@ -59,8 +59,13 @@
     "@zhin.js/core": "workspace:*",
     "@zhin.js/host-api": "workspace:*",
     "@zhin.js/host-router": "workspace:*",
+<<<<<<< HEAD
     "lucide-react": "^1.22.0",
     "radix-ui": "^1.5.0",
+=======
+    "lucide-react": "^1.21.0",
+    "radix-ui": "^1.6.2",
+>>>>>>> 0c34c01ea2685bac831bd1f209331d2434a553ad
     "typescript": "^6.0.3",
     "zhin.js": "workspace:*"
   },

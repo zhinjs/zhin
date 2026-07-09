@@ -26,7 +26,7 @@
   "devDependencies": {
     "@types/node": "^26.1.0",
     "@types/fs-extra": "^11.0.4",
-    "@types/inquirer": "^9.0.7",
+    "@types/inquirer": "^9.0.10",
     "typescript": "^6.0.3"
   },
   "engines": {

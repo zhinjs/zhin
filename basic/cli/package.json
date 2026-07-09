@@ -42,8 +42,13 @@
   "devDependencies": {
     "@types/cross-spawn": "^6.0.6",
     "@types/fs-extra": "^11.0.4",
+<<<<<<< HEAD
     "@types/inquirer": "^9.0.7",
     "@types/node": "^26.1.0",
+=======
+    "@types/inquirer": "^9.0.10",
+    "@types/node": "^25.9.2",
+>>>>>>> 0c34c01ea2685bac831bd1f209331d2434a553ad
     "typescript": "^6.0.3"
   },
   "repository": {
