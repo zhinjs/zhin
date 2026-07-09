@@ -5,17 +5,48 @@ import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import type { Message } from '@zhin.js/core';
 import type { CollaborationScene } from './types.js';
 import { resolveRunIdRef } from '../aop/pipeline/pipeline-flow.js';
+import { readCollaborationTurnSnapshot } from './collaboration-turn-snapshot.js';
+import { resolveCollaborationSceneForMessage } from './collaboration-context.js';
+import { findActiveDelegation } from './delegation-state.js';
+
+function pipelinePrefixedSessionKey(transport: string, bindRun: string): string {
+  return `pipeline:${bindRun.slice(0, 8)}:${transport}`;
+}
+
+function resolveBindRunFromCell(cell: CollaborationScene, endpointId: string): string | undefined {
+  const runId = cell.pipelineState?.runId;
+  if (!runId) return undefined;
+  const delegation = findActiveDelegation(cell, endpointId);
+  return delegation?.runId ?? runId;
+}
+
+/**
+ * Agent turn 级 session key SSOT（IM transport + 可选 pipeline run 隔离）。
+ * passive write / @ drain / auto-continue depth / persist 须共用此函数。
+ */
+export function resolveAgentTurnSessionKey(
+  message: Message,
+  cell?: CollaborationScene,
+): string {
+  const transport = resolveIMSessionIdFromMessage(message);
+  const snap = readCollaborationTurnSnapshot(message);
+  if (snap?.runId) {
+    const bindRun = snap.delegationRunId ?? snap.runId;
+    return pipelinePrefixedSessionKey(transport, bindRun);
+  }
+  const resolvedCell = cell ?? resolveCollaborationSceneForMessage(message);
+  if (!resolvedCell) return transport;
+  const bindRun = resolveBindRunFromCell(resolvedCell, String(message.$endpoint ?? ''));
+  if (!bindRun) return transport;
+  return pipelinePrefixedSessionKey(transport, bindRun);
+}
 
 /** transport session + 可选 pipeline run 前缀（同 endpoint 不同 run 独立 agent_messages）。 */
 export function resolveAgentSessionKeyForTurn(
   message: Message,
   cell?: CollaborationScene,
 ): string {
-  const transport = resolveIMSessionIdFromMessage(message);
-  const runId = cell?.pipelineState?.runId;
-  if (!runId) return transport;
-  const runPrefix = runId.slice(0, 8);
-  return `pipeline:${runPrefix}:${transport}`;
+  return resolveAgentTurnSessionKey(message, cell);
 }
 
 /** legacy pipeline run 解析（支持前缀）；新编排请用 missionRunId / orchestration_status。 */

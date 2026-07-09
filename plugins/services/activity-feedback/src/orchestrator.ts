@@ -1,6 +1,6 @@
 import {
   toActivityFeedbackEventContext,
-  isScheduleActivityFeedbackEnabled,
+  isActivityFeedbackEnabled,
   type AIEventPayload,
   type ActivityFeedbackPhase,
 } from '@zhin.js/agent';
@@ -17,7 +17,8 @@ export class ActivityFeedbackOrchestrator {
   ) {}
 
   async startPhase(payload: AIEventPayload, phase: ActivityFeedbackPhase, reason: string): Promise<void> {
-    if (!isScheduleActivityFeedbackEnabled(payload)) return;
+    const gatePhase = phase as import('@zhin.js/agent').ActivityFeedbackGatePhase;
+    if (!isActivityFeedbackEnabled(payload, gatePhase)) return;
     const ctx = toActivityFeedbackEventContext(payload);
     if (!ctx) return;
 

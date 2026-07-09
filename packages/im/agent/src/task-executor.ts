@@ -47,6 +47,7 @@ export interface TaskExecutorDeps {
   resolveAdapter: (platform: string) => { sendMessage: (opts: import('@zhin.js/core').SendOptions) => Promise<string> } | undefined;
   router?: NotificationRouter;
   defaultNotify?: JobNotify;
+  deliverIm?: (notify: JobNotify & { channel: 'im' }, content: string) => Promise<void>;
 }
 
 const locks = new Map<string, Promise<unknown>>();
@@ -76,7 +77,12 @@ function elementsToText(elements: OutputElement[]): string {
 }
 
 export function createTaskExecutor(deps: TaskExecutorDeps) {
-  const router = deps.router ?? createNotificationRouter({ resolveAdapter: deps.resolveAdapter });
+  const router = deps.router ?? createNotificationRouter({
+    resolveAdapter: deps.resolveAdapter,
+    sendIm: deps.deliverIm
+      ? async (notify, content) => deps.deliverIm!(notify, content)
+      : undefined,
+  });
 
   async function executeTask(options: TaskExecutionOptions): Promise<TaskExecutionResult> {
     const {
@@ -108,6 +114,14 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       jobId: scheduleJobId,
     });
 
+    const emitter = deps.agent.getEventEmitter?.() ?? {
+      emit: () => {},
+      createPayload: (_sessionId: string, comm: Message) => ({
+        sessionId: resolveIMSessionIdFromMessage(comm),
+        source: 'zhin-agent' as const,
+      }),
+    };
+
     let commMessage: Message;
     if (preview && previewCommMessage) {
       commMessage = buildScheduleTurnMessage({ sourceMessage: previewCommMessage });
@@ -127,11 +141,18 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       });
     }
 
+    const dispatchSchedule = (name: 'schedule.start' | 'schedule.finish' | 'schedule.error') => {
+      if (!activityFeedback) return;
+      const sessionId = resolveIMSessionIdFromMessage(commMessage);
+      emitter.emit(name, emitter.createPayload(sessionId, commMessage, 'text'));
+    };
+
     const lockKey = preview
       ? `preview:${resolveIMSessionIdFromMessage(previewCommMessage ?? commMessage)}`
       : (commMessage.$channel?.id ?? 'cron');
 
     try {
+      dispatchSchedule('schedule.start');
       const elements = await withLock(lockKey, () =>
         deps.agent.process(finalPrompt, commMessage),
       );
@@ -164,12 +185,19 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       }
 
       if (!text) {
+        dispatchSchedule('schedule.finish');
         return { success: true, responseText: '', durationMs: Date.now() - t0, executionPlan: resultPlan };
       }
 
-      await router.deliver({ notify: effectiveNotify, content: text });
+      if (deps.deliverIm && effectiveNotify.channel === 'im') {
+        await deps.deliverIm(effectiveNotify, text);
+      } else {
+        await router.deliver({ notify: effectiveNotify, content: text });
+      }
+      dispatchSchedule('schedule.finish');
       return { success: true, responseText: text, durationMs: Date.now() - t0, executionPlan: resultPlan };
     } catch (e) {
+      dispatchSchedule('schedule.error');
       const error = (e as Error).message || String(e);
       logger.error(`[TaskExecutor] 执行失败: ${error}`);
       return { success: false, responseText: '', durationMs: Date.now() - t0, error };

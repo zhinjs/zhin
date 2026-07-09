@@ -11,6 +11,9 @@ const PHASE_DEFAULT_MESSAGE: Record<ActivityFeedbackPhase, string> = {
   queued: '⏳',
   active: '正在处理中...',
   thinking: '思考中...',
+  schedule_start: '⏰ 定时任务执行中...',
+  schedule_finish: '✅ 定时任务完成',
+  schedule_error: '❌ 定时任务失败',
 };
 
 function sceneKey(sceneType: ActivitySceneType): keyof ActivityFeedbackConfig['phases'] extends infer _ ? 'private' | 'group' | 'channel' : never {
@@ -48,6 +51,10 @@ function resolvePlatformPhaseDefault(
       return { type: 'typing', autoRemove: true };
     }
     return { type: 'message', message: PHASE_DEFAULT_MESSAGE.thinking, autoRemove: true };
+  }
+
+  if (phase === 'schedule_start' || phase === 'schedule_finish' || phase === 'schedule_error') {
+    return { type: 'message', message: PHASE_DEFAULT_MESSAGE[phase], autoRemove: true };
   }
 
   // active

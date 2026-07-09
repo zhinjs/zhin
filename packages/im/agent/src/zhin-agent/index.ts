@@ -90,9 +90,11 @@ import type { ResolvedAgentBinding } from '../config/types.js';
 import { bindingToModelConfig } from '../routing/runtime-binding.js';
 import type { Disposable } from '../types/disposable.js';
 import { buildDisciplinedPrompt as assembleDisciplinedPrompt } from './prompt-assembly.js';
-import { buildDeferredAutoContinueUserMessage } from './deferred-auto-continue.js';
+import { buildDeferredAutoContinueUserMessage, shouldDeferredAutoContinue } from './deferred-auto-continue.js';
 import { buildSubagentAutoContinueUserMessage } from './subagent-auto-continue.js';
 import { persistSubagentResultToContext } from './persist-subagent-context.js';
+import { persistDeferredWorkerResultToContext } from './persist-deferred-context.js';
+import { resolveAgentTurnSessionKey } from '../collaboration/resolve-agent-session-key.js';
 import type { DeferredWorkerResult } from '../deferred-worker-runner.js';
 import {
   normalizeInboundQueueConfig,
@@ -144,6 +146,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   private alwaysSkillsBaseline: string = '';
   private skillsSummaryXML: string = '';
   private pendingScheduleTurnContext?: ScheduleTurnContext;
+  private pendingActivityFeedbackEligible?: boolean;
   private modelRegistry: ModelRegistry | null = null;
   private phaseTraceEnabled: boolean;
   private promptTraceEnabled: boolean;
@@ -287,6 +290,12 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   initScheduleTurnContext(ctx: ScheduleTurnContext): void {
     this.pendingScheduleTurnContext = ctx;
+    this.pendingActivityFeedbackEligible = false;
+  }
+
+  initInboundTurnContext(): void {
+    this.pendingActivityFeedbackEligible = true;
+    this.pendingScheduleTurnContext = undefined;
   }
 
   appendActiveSkillsContext(fragment: string): void {
@@ -427,11 +436,29 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     goal: string,
     result: DeferredWorkerResult,
   ): Promise<void> {
-    const sessionKey = resolveIMSessionIdFromMessage(commMessage);
+    const sessionKey = resolveAgentTurnSessionKey(commMessage);
     const depth = this.getDeferredAutoContinueDepth(sessionKey);
-    this.deferredAutoContinueDepthBySession.set(sessionKey, depth + 1);
+
+    const persisted = await persistDeferredWorkerResultToContext(
+      asPrivate(this),
+      commMessage,
+      taskId,
+      goal,
+      result,
+    );
+    if (!shouldDeferredAutoContinue(this.config, result, depth, persisted)) {
+      logger.warn(formatCompact({
+        deferred: 'auto_continue_skipped',
+        task_id: taskId,
+        depth,
+        persisted,
+        status: result.status,
+      }));
+      return;
+    }
 
     await this.promptController.waitForIdle();
+    this.deferredAutoContinueDepthBySession.set(sessionKey, depth + 1);
 
     logger.info(formatCompact({
       deferred: 'auto_continue',
@@ -464,7 +491,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     if (this.config.subagentAutoContinue === false) return;
 
     const commMessage = payload.origin.message;
-    const sessionKey = resolveIMSessionIdFromMessage(commMessage);
+    const sessionKey = resolveAgentTurnSessionKey(commMessage);
     const depth = this.getDeferredAutoContinueDepth(sessionKey);
     if (depth >= this.config.deferredAutoContinueMaxDepth) {
       logger.warn(formatCompact({
@@ -527,8 +554,13 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   runInTurnContext<T>(turnId: string, fn: () => Promise<T>): Promise<T> {
     const tracker = new TurnTracker(this.config.subagentTurnWaitMs);
     const scheduleContext = this.pendingScheduleTurnContext;
+    const activityFeedbackEligible = this.pendingActivityFeedbackEligible;
     this.pendingScheduleTurnContext = undefined;
-    return runInTurnContextAls(turnId, tracker, fn, scheduleContext ? { scheduleContext } : undefined);
+    this.pendingActivityFeedbackEligible = undefined;
+    const init: Partial<Pick<import('./turn-context.js').TurnContextStore, 'scheduleContext' | 'activityFeedbackEligible'>> = {};
+    if (scheduleContext) init.scheduleContext = scheduleContext;
+    if (activityFeedbackEligible) init.activityFeedbackEligible = true;
+    return runInTurnContextAls(turnId, tracker, fn, Object.keys(init).length ? init : undefined);
   }
 
   getSubagentManager(): SubagentManager | null {

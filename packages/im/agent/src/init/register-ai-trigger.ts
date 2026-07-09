@@ -14,7 +14,7 @@ import type { Plugin } from '@zhin.js/core';
 import type { AIServiceRefs } from './shared-refs.js';
 import { formatCompactLog, truncatePreview } from '@zhin.js/logger';
 import { createInboundTurnPipeline } from '../collaboration/inbound-turn-pipeline.js';
-import { isAskUserPendingReply } from '../builtin/ask-user-session.js';
+import { isAskUserPendingReply, ensureAskUserSessionService } from '../builtin/ask-user-session.js';
 
 function resolveEndpointAtIds(message: Message, root: Plugin): string[] {
   const ids = new Set<string>([String(message.$endpoint)]);
@@ -86,6 +86,7 @@ export function registerAITrigger(refs: AIServiceRefs): void {
     }
 
     dispatcher.setAITriggerMatcher((message: Message) => {
+      ensureAskUserSessionService(root);
       if (isAskUserPendingReply(message, root)) {
         logger.debug(formatCompactLog('AI Trigger', {
           skip: 'ask_user_pending_reply',

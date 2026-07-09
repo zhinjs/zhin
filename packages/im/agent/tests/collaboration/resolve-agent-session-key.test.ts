@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   resolveAgentSessionKeyForTurn,
+  resolveAgentTurnSessionKey,
   resolveArtifactRunId,
 } from '../../src/collaboration/resolve-agent-session-key.js';
+import { attachCollaborationTurnSnapshot } from '../../src/collaboration/collaboration-turn-snapshot.js';
 import type { CollaborationScene } from '../../src/collaboration/types.js';
 import type { Message } from '@zhin.js/core';
 
@@ -39,6 +41,40 @@ function msg(endpoint = '210723495'): Message {
     $sender: { id: 'u1' },
   } as unknown as Message;
 }
+
+describe('resolveAgentTurnSessionKey', () => {
+  const cellWithDelegation: CollaborationScene = {
+    ...cell,
+    pipelineState: {
+      ...cell.pipelineState!,
+      activeDelegations: [{
+        targetEndpointId: '210723495',
+        targetRole: 'researcher',
+        runId: 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff',
+        requireArtifact: true,
+        delegateText: 'research',
+        updatedAt: 1,
+      }],
+    },
+  };
+
+  it('uses collaboration snapshot bindRun when attached', () => {
+    const message = msg() as Message;
+    attachCollaborationTurnSnapshot(message, cellWithDelegation, '210723495');
+    const key = resolveAgentTurnSessionKey(message);
+    expect(key).toMatch(/^pipeline:bbbbbbbb:/);
+  });
+
+  it('matches record and drain keys when snapshot reflects same bindRun', () => {
+    const passiveMsg = msg();
+    const recordKey = resolveAgentTurnSessionKey(passiveMsg, cellWithDelegation);
+    const atMsg = msg() as Message;
+    attachCollaborationTurnSnapshot(atMsg, cellWithDelegation, '210723495');
+    const drainKey = resolveAgentTurnSessionKey(atMsg);
+    expect(recordKey).toBe(drainKey);
+    expect(recordKey).toMatch(/^pipeline:bbbbbbbb:/);
+  });
+});
 
 describe('resolveAgentSessionKeyForTurn', () => {
   it('prefixes session key with pipeline run when cell has state', () => {

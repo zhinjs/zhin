@@ -46,13 +46,11 @@ import { buildTurnPlan } from './turn-plan-resolver.js';
 import { getCollaborationSceneService } from './scene-service.js';
 import { findCellForInbound, findCellMemberByEndpoint } from './collaboration-config.js';
 import {
-  tryBuildCollaborationOutboundBatches,
   sanitizeCellToolJsonInOutboundBatches,
   batchHasAtSegment,
   isCollaborationNoOpReasoningOutbound,
 } from './collaboration-outbound.js';
-import { expandOutboundBatchesForLongText } from './group-message.js';
-import { normalizePlannerOutboundBatches } from './planner-outbound-normalize.js';
+import { resolveOutboundBatches } from './outbound-resolver.js';
 import {
   orchestrationSourceFromMessage,
   tryCompleteKernelImProjectionFromOutbound,
@@ -74,22 +72,8 @@ import { createOrchestrationTools } from '../builtin/orchestration-tools.js';
 
 function applyCollaborationOutboundPostProcess(
   batches: MessageElement[][],
-  input: {
-    cell?: CollaborationScene;
-    endpointId: string;
-    adapterView?: GroupMessageAdapterView;
-    selfMember?: CollaborationScene['members'][number];
-  },
 ): MessageElement[][] {
-  const { cell, endpointId, adapterView, selfMember } = input;
-
-  let result = batches.map((batch) => [...batch]);
-
-  if (cell && selfMember?.pipelineRole === 'planner' && adapterView) {
-    result = normalizePlannerOutboundBatches(result, cell, endpointId, adapterView);
-  }
-
-  return result.filter((batch) => batch.length > 0);
+  return batches.filter((batch) => batch.length > 0);
 }
 
 function resolveEndpointAtIds(message: Message, root: Plugin): string[] {
@@ -509,6 +493,8 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
         cell = snapCell;
       }
 
+      zhinAgent.initInboundTurnContext();
+
       let elements: OutputElement[];
       const mmConfig = resolveMultimodalConfig();
       if (mediaParts.length > 0 && mmConfig.enabled) {
@@ -556,33 +542,29 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
         elements = stripCellToolJsonFromOutputElements(elements);
       }
 
-      const collabBatches = await tryBuildCollaborationOutboundBatches(message, elements, {
-        inboundContent: aiContent,
-        warn: (msg) => logger.warn(msg),
-      });
-      let outboundBatches: MessageElement[][] = collabBatches ?? [
-        await publishOutboundElements(elements, message.$adapter),
-      ];
-
       if (cell) {
         const freshOutbound = await cellService.getSceneFresh(cell.id);
         if (freshOutbound) cell = freshOutbound;
       }
-
       const selfMember = cell ? findCellMemberByEndpoint(cell, endpointId) : undefined;
       const adapterView = root.inject(message.$adapter) as GroupMessageAdapterView | undefined;
 
-      outboundBatches = applyCollaborationOutboundPostProcess(outboundBatches, {
+      const collabResolved = await resolveOutboundBatches({
+        message,
+        elements,
+        inboundContent: aiContent,
         cell,
         endpointId,
-        adapterView,
+        adapterView: adapterView,
         selfMember,
+        warn: (msg) => logger.warn(msg),
       });
+      let outboundBatches: MessageElement[][] = collabResolved.batches;
 
       if (cell) {
         outboundBatches = sanitizeCellToolJsonInOutboundBatches(outboundBatches);
       }
-      outboundBatches = expandOutboundBatchesForLongText(outboundBatches);
+      outboundBatches = applyCollaborationOutboundPostProcess(outboundBatches);
 
       if (cell && isCollaborationNoOpReasoningOutbound(outboundBatches)) {
         logger.info(formatCompactLog('CollaborationOutbound', {

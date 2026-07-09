@@ -1,6 +1,6 @@
 import type { Message, Plugin } from '@zhin.js/core';
 import { Logger, formatCompact } from '@zhin.js/logger';
-import { getScheduleTurnContext } from './turn-context.js';
+import { getScheduleTurnContext, getActivityFeedbackEligible } from './turn-context.js';
 
 const logger = new Logger(null, 'ZhinAgent');
 
@@ -31,6 +31,7 @@ export class ZhinAgentEventEmitter {
     if (scheduleCtx?.preview === true) hookContext.schedulePreview = true;
     if (scheduleCtx?.activityFeedback === true) hookContext.scheduleActivityFeedback = true;
     if (scheduleCtx?.executionPlan) hookContext.scheduleExecutionPlan = scheduleCtx.executionPlan;
+    if (getActivityFeedbackEligible()) hookContext.activityFeedbackEligible = true;
     return {
       sessionId,
       source,

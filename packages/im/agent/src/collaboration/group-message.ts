@@ -170,7 +170,12 @@ export async function sendGroupMessageContent(
     endpoint: String(message.$endpoint),
     id: channel.id,
     type: channel.type,
-    parent: channel.parent,
+    parent: channel.parent
+      ? {
+          type: channel.parent.type === 'channel' ? 'guild' as const : channel.parent.type,
+          id: channel.parent.id,
+        }
+      : undefined,
     content,
   });
   return { ok: true };

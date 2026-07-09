@@ -25,7 +25,10 @@ export type AIEventName =
   | 'ai.mcp.connect.error'
   | 'ai.session.new'
   | 'ai.session.compact'
-  | 'ai.hook';
+  | 'ai.hook'
+  | 'schedule.start'
+  | 'schedule.finish'
+  | 'schedule.error';
 
 export type AIEventPayload = Plugin.AIEventPayload;
 
@@ -63,6 +66,9 @@ export interface AIEventHandlers {
   onSessionNew?: (payload: AIEventPayload) => void;
   onSessionCompact?: (payload: AIEventPayload) => void;
   onHook?: (payload: AIEventPayload) => void;
+  onScheduleStart?: (payload: AIEventPayload) => void;
+  onScheduleFinish?: (payload: AIEventPayload) => void;
+  onScheduleError?: (payload: AIEventPayload) => void;
 }
 
 const EVENT_HANDLER_MAP: Record<AIEventName, keyof AIEventHandlers | undefined> = {
@@ -90,6 +96,9 @@ const EVENT_HANDLER_MAP: Record<AIEventName, keyof AIEventHandlers | undefined> 
   'ai.session.new': 'onSessionNew',
   'ai.session.compact': 'onSessionCompact',
   'ai.hook': 'onHook',
+  'schedule.start': 'onScheduleStart',
+  'schedule.finish': 'onScheduleFinish',
+  'schedule.error': 'onScheduleError',
 };
 
 export const AI_EVENT_NAMES = Object.keys(EVENT_HANDLER_MAP) as AIEventName[];

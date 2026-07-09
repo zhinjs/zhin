@@ -741,6 +741,9 @@ export namespace Plugin {
     "ai.session.new": [Plugin.AIEventPayload];
     "ai.session.compact": [Plugin.AIEventPayload];
     "ai.hook": [Plugin.AIEventPayload];
+    "schedule.start": [Plugin.AIEventPayload];
+    "schedule.finish": [Plugin.AIEventPayload];
+    "schedule.error": [Plugin.AIEventPayload];
   }
 
   export interface AIEventPayload {

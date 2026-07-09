@@ -13,7 +13,7 @@ import type { Message } from '@zhin.js/core';
 import { formatCompactLog } from '@zhin.js/logger';
 import { findCellForInbound } from '../collaboration/collaboration-config.js';
 import { getCollaborationSceneService } from '../collaboration/scene-service.js';
-import { appendPassiveGroupMessageToContext } from '../zhin-agent/passive-group-context.js';
+import { recordPassiveGroupMessage } from '../zhin-agent/passive-group-session.js';
 import { asPrivate } from '../zhin-agent/zhin-agent-private.js';
 import type { AIServiceRefs } from './shared-refs.js';
 
@@ -55,7 +55,7 @@ export function registerGroupSessionPassive(refs: AIServiceRefs): void {
       const endpointId = String(message.$endpoint ?? '');
       const channelScope = message.$channel?.type;
       const sceneId = message.$channel?.id ?? '';
-      const cell =
+      let cell =
         (channelScope === 'group' || channelScope === 'channel') && sceneId !== ''
           ? findCellForInbound(
             getCollaborationSceneService().listScenes(),
@@ -64,9 +64,12 @@ export function registerGroupSessionPassive(refs: AIServiceRefs): void {
             endpointId,
           )
           : undefined;
+      if (cell) {
+        cell = (await getCollaborationSceneService().getSceneFresh(cell.id)) ?? cell;
+      }
 
       const agent = asPrivate(refs.zhinAgent);
-      await appendPassiveGroupMessageToContext(agent, message, rawText, cell);
+      await recordPassiveGroupMessage(agent, message, rawText, cell);
     });
 
     logger.debug(formatCompactLog('GroupSessionPassive', { hook: 'on' }));

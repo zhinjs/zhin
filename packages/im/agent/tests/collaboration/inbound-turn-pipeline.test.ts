@@ -46,6 +46,7 @@ describe('createInboundTurnPipeline', () => {
     };
     const zhinAgent = {
       getSubagentManager: () => null,
+      initInboundTurnContext: vi.fn(),
       process,
       processMultimodal: vi.fn(),
       configure: vi.fn(),
@@ -130,6 +131,7 @@ describe('createInboundTurnPipeline', () => {
     const process = vi.fn(async () => [{ type: 'text', text: 'agent handled ordered group request' }]);
     const zhinAgent = {
       getSubagentManager: () => null,
+      initInboundTurnContext: vi.fn(),
       process,
       processMultimodal: vi.fn(),
       configure: vi.fn(),
@@ -215,6 +217,7 @@ describe('createInboundTurnPipeline', () => {
         emit: vi.fn(),
         createPayload: vi.fn(() => ({})),
       }),
+      initInboundTurnContext: vi.fn(),
       process,
       processMultimodal: vi.fn(),
       configure: vi.fn(),
@@ -300,6 +303,7 @@ describe('createInboundTurnPipeline', () => {
         emit: vi.fn(),
         createPayload: vi.fn(() => ({})),
       }),
+      initInboundTurnContext: vi.fn(),
       process,
       processMultimodal: vi.fn(),
       configure: vi.fn(),
@@ -380,6 +384,7 @@ describe('createInboundTurnPipeline', () => {
         emit: vi.fn(),
         createPayload: vi.fn(() => ({})),
       }),
+      initInboundTurnContext: vi.fn(),
       process,
       processMultimodal: vi.fn(),
       configure: vi.fn(),

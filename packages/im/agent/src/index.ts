@@ -435,7 +435,7 @@ export {
   getActivityFeedbackManager,
   initActivityFeedbackManager,
   resolveActivityFeedbackPhaseConfig,
-  isScheduleActivityFeedbackEnabled,
+  isActivityFeedbackEnabled,
   toActivityFeedbackEventContext,
   resolveActivitySceneType,
   resolveActivityEventTargets,
@@ -457,7 +457,17 @@ export type {
   PlatformActivityFeedbackStartOptions,
   BotActivityFeedbackManager,
   ActivityFeedbackEventContext,
+  ActivityFeedbackGatePhase,
 } from './activity-feedback/index.js';
+
+export { createProactiveOutboundService } from './outbound/send-proactive.js';
+export type {
+  ProactiveSendContext,
+  ProactiveSendSource,
+  ProactiveOutboundService,
+} from './outbound/send-proactive.js';
+export { resolveOutboundBatches, stripFakeAtTokens } from './collaboration/outbound-resolver.js';
+export { AskUserSessionService } from './builtin/ask-user-session-service.js';
 
 // ── Typing Indicator ──
 export {

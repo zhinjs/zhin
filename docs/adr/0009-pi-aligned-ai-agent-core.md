@@ -253,6 +253,7 @@ IM 特有逻辑保留在 agent 包，注入 loop 钩子：
 | MCP lazy connect | turn 前 `transformContext` 或 ZhinAgent `prepareTools` |
 | model harness / fallback | `stream` 层或 loop 内 `resolveModelCandidates` |
 | session_key / session_id | turn 前 `ContextRepository` + `IMSessionStore` 合并为 `agent_sessions` |
+| **agent turn session key SSOT** | [`resolveAgentTurnSessionKey`](../../packages/im/agent/src/collaboration/resolve-agent-session-key.ts)：`transport` 或 `pipeline:{runPrefix}:{transport}`；passive write / @ drain / auto-continue depth / persist **须共用** |
 | preExecutable 工具 | turn 前并行预跑 → 注入 context → agentLoop |
 
 ### D7. 图片生成（独立 API）

@@ -39,14 +39,15 @@ import type {
   OutboundReplySource,
   OutboundPolishContext,
   OutboundPolishMiddleware,
+  OutboundReplyStore,
   BeforeSendHandler,
 } from '../types.js';
 import type { Context } from '../plugin.js';
 
 /** Dispatcher 管理的「会话回复」异步上下文，供 `before.sendMessage` 内读取（与 Adapter.renderSendMessage 同链） */
-const outboundReplyAls = new AsyncLocalStorage<{ message: Message<any>; source: OutboundReplySource }>();
+const outboundReplyAls = new AsyncLocalStorage<OutboundReplyStore>();
 
-export function getOutboundReplyStore(): { message: Message<any>; source: OutboundReplySource } | undefined {
+export function getOutboundReplyStore(): OutboundReplyStore | undefined {
   return outboundReplyAls.getStore();
 }
 
@@ -171,6 +172,12 @@ export interface MessageDispatcherService {
     content: SendContent,
     options?: ReplyWithPolishOptions,
   ): Promise<unknown>;
+
+  /** Proactive 出站：在 ALS 内执行 send，触发 outbound polish / before.sendMessage */
+  runWithOutboundPolish<T>(
+    store: Pick<OutboundReplyStore, 'message' | 'trigger' | 'proactiveSource'> & { source?: OutboundReplySource },
+    fn: () => Promise<T>,
+  ): Promise<T>;
 
   /**
    * 是否匹配为指令路径（与 dispatch 内判定一致）
@@ -375,9 +382,25 @@ export function createMessageDispatcher(
     if (!rootPlugin) {
       return quote ? message.$reply(content, quote) : message.$reply(content);
     }
-    return outboundReplyAls.run({ message, source }, () =>
+    return outboundReplyAls.run({
+      message,
+      source,
+      trigger: 'inbound',
+    }, () =>
       quote ? message.$reply(content, quote) : message.$reply(content),
     );
+  }
+
+  async function runWithOutboundPolish<T>(
+    store: Pick<OutboundReplyStore, 'message' | 'trigger' | 'proactiveSource'> & { source?: OutboundReplySource },
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    return outboundReplyAls.run({
+      message: store.message,
+      source: store.source ?? 'proactive',
+      trigger: store.trigger,
+      proactiveSource: store.proactiveSource,
+    }, fn);
   }
 
   async function maybeRecordGroupPassiveContext(message: Message<any>): Promise<void> {
@@ -512,6 +535,9 @@ export function createMessageDispatcher(
 
     replyWithPolish(message, source, content, options) {
       return replyWithPolishInternal(message, source, content, options);
+    },
+    runWithOutboundPolish(store, fn) {
+      return runWithOutboundPolish(store, fn);
     },
 
     matchCommand(message) {

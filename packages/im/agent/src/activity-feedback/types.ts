@@ -1,7 +1,13 @@
 import type { TypingIndicatorConfig, TypingIndicatorType } from '../typing-indicator/index.js';
 
 export type ActivityFeedbackType = TypingIndicatorType;
-export type ActivityFeedbackPhase = 'queued' | 'active' | 'thinking';
+export type ActivityFeedbackPhase =
+  | 'queued'
+  | 'active'
+  | 'thinking'
+  | 'schedule_start'
+  | 'schedule_finish'
+  | 'schedule_error';
 export type ActivitySceneType = 'private' | 'group' | 'channel';
 
 export interface ActivityFeedbackPhaseConfig {

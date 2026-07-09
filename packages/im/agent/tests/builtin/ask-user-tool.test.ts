@@ -5,6 +5,7 @@ import {
   askOwnerViaPrivateWithParent,
   buildSensitiveOwnerQuestionText,
 } from '../../src/builtin/ask-user-tool.js';
+import { AskUserSessionService } from '../../src/builtin/ask-user-session-service.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
 
 function messageWithReply(
@@ -31,6 +32,7 @@ describe('AskUserBuiltinTool.run', () => {
   let disposeMiddleware: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    AskUserSessionService.resetForTests();
     sendMessage = vi.fn().mockResolvedValue('msg-1');
     disposeMiddleware = vi.fn();
     const endpoints = new Map([
@@ -53,8 +55,8 @@ describe('AskUserBuiltinTool.run', () => {
     const msg = messageWithReply({ adapter: 'icqq', endpoint: 'bot1', scope: 'group', sceneId: 'g1', senderId: 'u1' });
     const runPromise = tool.run({ question: '请补充细节', timeout: 1 }, msg);
 
-    await vi.waitFor(() => expect(plugin.addMiddleware).toHaveBeenCalled());
-    const mw = (plugin.addMiddleware as ReturnType<typeof vi.fn>).mock.calls[0]![0] as (
+    await vi.waitFor(() => expect((plugin.addMiddleware as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0));
+    const mw = (plugin.addMiddleware as ReturnType<typeof vi.fn>).mock.calls.at(-1)![0] as (
       m: Message,
       next: () => Promise<void>,
     ) => Promise<void>;
@@ -78,8 +80,8 @@ describe('AskUserBuiltinTool.run', () => {
     expect(opts.parent).toEqual({ type: 'group', id: 'g1' });
     expect(msg.$reply).not.toHaveBeenCalled();
 
-    await vi.waitFor(() => expect(plugin.addMiddleware).toHaveBeenCalled());
-    const mw = (plugin.addMiddleware as ReturnType<typeof vi.fn>).mock.calls[0]![0] as (
+    await vi.waitFor(() => expect((plugin.addMiddleware as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0));
+    const mw = (plugin.addMiddleware as ReturnType<typeof vi.fn>).mock.calls.at(-1)![0] as (
       m: Message,
       next: () => Promise<void>,
     ) => Promise<void>;
@@ -104,8 +106,8 @@ describe('AskUserBuiltinTool.run', () => {
     });
     const runPromise = tool.run({ question: '确认?', type: 'confirm', timeout: 1 }, msg);
 
-    await vi.waitFor(() => expect(plugin.addMiddleware).toHaveBeenCalled());
-    const mw = (plugin.addMiddleware as ReturnType<typeof vi.fn>).mock.calls[0]![0] as (
+    await vi.waitFor(() => expect((plugin.addMiddleware as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0));
+    const mw = (plugin.addMiddleware as ReturnType<typeof vi.fn>).mock.calls.at(-1)![0] as (
       m: Message,
       next: () => Promise<void>,
     ) => Promise<void>;
@@ -126,6 +128,10 @@ describe('AskUserBuiltinTool.run', () => {
 });
 
 describe('askOwnerViaPrivateWithParent', () => {
+  beforeEach(() => {
+    AskUserSessionService.resetForTests();
+  });
+
   it('sendMessage 携带 parent.group', async () => {
     const sendMessage = vi.fn().mockResolvedValue('sent-1');
     const addMiddleware = vi.fn(() => vi.fn());
@@ -151,8 +157,8 @@ describe('askOwnerViaPrivateWithParent', () => {
     expect(opts.id).toBe('owner1');
     expect(opts.parent).toEqual({ type: 'group', id: 'g99' });
 
-    await vi.waitFor(() => expect(addMiddleware).toHaveBeenCalled());
-    const mw = addMiddleware.mock.calls[0]![0] as (
+    await vi.waitFor(() => expect(addMiddleware.mock.calls.length).toBeGreaterThan(0));
+    const mw = addMiddleware.mock.calls.at(-1)![0] as (
       m: Message,
       next: () => Promise<void>,
     ) => Promise<void>;

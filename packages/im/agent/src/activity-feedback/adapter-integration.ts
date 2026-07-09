@@ -53,10 +53,8 @@ function createOutboundSendMessage(
         content: segments,
       };
       if (outbound) return await outbound.sendMessage(sendOptions);
-      const bot = endpoint as BotWithEditing & {
-        $sendMessage?(options: SendOptions): Promise<string | null>;
-      };
-      return await bot.$sendMessage?.(sendOptions) ?? null;
+      console.error(`[${platform}] Activity feedback requires Adapter.sendMessage; endpoint ${endpoint.$id} has no outbound adapter`);
+      return null;
     } catch (error) {
       console.error(`[${platform}] Failed to send activity feedback message:`, error);
       return null;

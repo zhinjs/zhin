@@ -94,8 +94,17 @@ export interface EditableEndpoint {
   $editMessage?(options: EditMessageOptions): Promise<void>;
 }
 
-/** 出站回复来源（指令 / AI），仅当经 MessageDispatcher.replyWithPolish 发出时由框架填入异步上下文 */
-export type OutboundReplySource = 'command' | 'ai'
+/** 出站回复来源（指令 / AI / proactive），仅当经 MessageDispatcher.replyWithPolish 或 runWithOutboundPolish 发出时由框架填入异步上下文 */
+export type OutboundReplySource = 'command' | 'ai' | 'proactive'
+
+export type OutboundReplyTrigger = 'inbound' | 'proactive';
+
+export interface OutboundReplyStore {
+  message: Message
+  source: OutboundReplySource
+  trigger: OutboundReplyTrigger
+  proactiveSource?: string
+}
 
 /**
  * 出站润色上下文（`dispatcher.addOutboundPolish` 的 handler 签名的同构类型）。

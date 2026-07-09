@@ -88,6 +88,14 @@ _避免使用_：optimizePrompt、extra 上的 executionPlan
 带 TurnContext ALS `scheduleContext` 的 agent turn（`preview` 预演或 `scheduled` 到点执行）；`buildScheduleTurnMessage` 提供 synthetic 载体，hookContext 由 event-emitter 从 ALS 投影。
 _避免使用_：mutate 入站 Message.extra、augmentPromptWithExecutionPlan
 
+**Passive Group Context**:
+群/频道未 @ 入站消息写入进程内 buffer（`MAX_PASSIVE_LINES=50`、`PASSIVE_TTL_MS=30min`），@ 触发时 drain 合并进 turn；session key 与 `resolveAgentTurnSessionKey` SSOT 一致；pipeline reset 后不继承旧 run buffer。
+_避免使用_：持久化 passive、跨 run 继承旁听
+
+**Agent Turn Session Key**:
+`resolveAgentTurnSessionKey`（transport + 可选 `pipeline:{runPrefix}:`）为 turn 级 SSOT；passive write / @ drain / auto-continue depth / persist 共用。
+_避免使用_：私有 `resolveTurnSessionKey`、snapshot 与 cell 双轨 key
+
 ## 关系
 
 - **ZhinAgent** 通过 **Agent Orchestrator** 发现 **Tool**、**Skill**、**Subagent** 与 Hook；MCP 条目经 `addMcp` / `ai.mcpServers` / 可选 `ai.memoryMcp`（`server-memory`）注册，在每次 AI 回合前懒连接，工具以 `mcp_{server}_{tool}` 并入工具池（不再使用内置 `read_memory`/`write_memory`）。

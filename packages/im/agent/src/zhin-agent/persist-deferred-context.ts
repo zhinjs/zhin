@@ -6,7 +6,7 @@ import {
   EMPTY_TOKEN_USAGE,
   type AssistantMessage,
 } from '@zhin.js/ai';
-import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
+import { resolveAgentTurnSessionKey } from '../collaboration/resolve-agent-session-key.js';
 import type { DeferredWorkerResult } from '../deferred-worker-runner.js';
 import { resolveSubagentDisplayLabel } from '../subagent-goal-notify.js';
 import { packageSubagentResult } from '../subagent-artifact.js';
@@ -24,7 +24,7 @@ export async function persistDeferredWorkerResultToContext(
   const body = extractDeferredBody(result);
   if (!body.trim()) return false;
 
-  const sessionKey = resolveIMSessionIdFromMessage(commMessage);
+  const sessionKey = resolveAgentTurnSessionKey(commMessage);
   const active = await agent.agentSessionStore.findActive(sessionKey);
   const sessionId = active?.session_id;
   if (!sessionId) return false;

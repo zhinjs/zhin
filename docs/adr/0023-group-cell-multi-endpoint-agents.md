@@ -68,6 +68,13 @@ Host REST: `/api/collaboration/scenes*` (members, pipeline, artifacts sub-resour
 - Existing group-chat collaboration remains visible to users; implementation evolves independently of the core run state machine.
 - Five-agent collaboration is a workflow strategy over kernel tasks, not a scene-level state machine.
 
+### Passive Group Context（Amended 2026-07）
+
+- 群/频道 **未 @** 入站写入进程内 passive buffer（**不持久化**）；`MAX_PASSIVE_LINES=50`、`PASSIVE_TTL_MS=30min`。
+- Session key 与 `resolveAgentTurnSessionKey` 一致；`bindRun = delegationRunId ?? runId`。
+- Pipeline **reset** 后新 run **不继承** 旧 passive buffer（与 run 隔离一致）。
+- 实现：[`passive-group-session.ts`](../../packages/im/agent/src/zhin-agent/passive-group-session.ts)、[`passive-group-buffer.ts`](../../packages/im/agent/src/zhin-agent/passive-group-buffer.ts)。
+
 ## Related
 
 - [ADR 0028](./0028-generic-im-scene-agent.md)

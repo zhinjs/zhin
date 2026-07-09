@@ -30,6 +30,10 @@ describe('task executor outbound seam', () => {
       agent: {
         process: vi.fn(async () => [{ type: 'text', content: 'hello' }]),
         initScheduleTurnContext: vi.fn(),
+        getEventEmitter: () => ({
+          emit: vi.fn(),
+          createPayload: vi.fn(() => ({ sessionId: 's1', source: 'zhin-agent' })),
+        }),
       } as any,
       resolveAdapter: () => ({ sendMessage }),
     });

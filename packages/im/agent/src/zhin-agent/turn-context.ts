@@ -17,6 +17,8 @@ export interface TurnContextStore {
   turnActiveSkills: string;
   deferredSnapshotBefore?: DeferredToolSessionSnapshot;
   scheduleContext?: ScheduleTurnContext;
+  /** 仅人类 register-ai-trigger 入站为 true；TaskExecutor/subagent/deferred 为 false */
+  activityFeedbackEligible?: boolean;
 }
 
 const turnContextStorage = new AsyncLocalStorage<TurnContextStore>();
@@ -25,13 +27,14 @@ export function runInTurnContext<T>(
   turnId: string,
   tracker: TurnTracker,
   fn: () => Promise<T>,
-  init?: Partial<Pick<TurnContextStore, 'scheduleContext'>>,
+  init?: Partial<Pick<TurnContextStore, 'scheduleContext' | 'activityFeedbackEligible'>>,
 ): Promise<T> {
   return turnContextStorage.run({
     turnId,
     tracker,
     turnActiveSkills: '',
     scheduleContext: init?.scheduleContext,
+    activityFeedbackEligible: init?.activityFeedbackEligible,
   }, fn);
 }
 
@@ -64,6 +67,10 @@ export function appendTurnActiveSkills(fragment: string): void {
 
 export function getScheduleTurnContext(): ScheduleTurnContext | undefined {
   return turnContextStorage.getStore()?.scheduleContext;
+}
+
+export function getActivityFeedbackEligible(): boolean {
+  return turnContextStorage.getStore()?.activityFeedbackEligible === true;
 }
 
 export function setScheduleTurnContext(ctx: ScheduleTurnContext | undefined): void {

@@ -1,33 +1,24 @@
-import { describe, expect, it } from 'vitest';
-import { isScheduleActivityFeedbackEnabled } from '../../src/activity-feedback/schedule-guard.js';
+import { describe, it, expect } from 'vitest';
+import { isActivityFeedbackEnabled } from '../../src/activity-feedback/schedule-guard.js';
+import type { AIEventPayload } from '../../src/ai-event-subscriber.js';
 
-describe('isScheduleActivityFeedbackEnabled', () => {
-  it('allows feedback for normal turns', () => {
-    expect(isScheduleActivityFeedbackEnabled({ hookContext: {} } as any)).toBe(true);
-    expect(isScheduleActivityFeedbackEnabled({} as any)).toBe(true);
+function payload(hook: Record<string, unknown>): AIEventPayload {
+  return { sessionId: 's1', source: 'zhin-agent', hookContext: hook };
+}
+
+describe('isActivityFeedbackEnabled', () => {
+  it('allows queued on manual inbound turn', () => {
+    expect(isActivityFeedbackEnabled(payload({ activityFeedbackEligible: true }), 'queued')).toBe(true);
   });
 
-  it('blocks schedule turns unless explicitly enabled', () => {
-    expect(
-      isScheduleActivityFeedbackEnabled({
-        hookContext: { scheduleJobId: 'sched_1' },
-      } as any),
-    ).toBe(false);
-    expect(
-      isScheduleActivityFeedbackEnabled({
-        hookContext: { schedulePreview: true },
-      } as any),
-    ).toBe(false);
+  it('blocks queued on schedule turn without schedule activity', () => {
+    expect(isActivityFeedbackEnabled(payload({ scheduleJobId: 'j1' }), 'queued')).toBe(false);
   });
 
-  it('allows schedule turns when scheduleActivityFeedback is true', () => {
-    expect(
-      isScheduleActivityFeedbackEnabled({
-        hookContext: {
-          scheduleJobId: 'sched_1',
-          scheduleActivityFeedback: true,
-        },
-      } as any),
-    ).toBe(true);
+  it('allows schedule_start when schedule activity enabled', () => {
+    expect(isActivityFeedbackEnabled(
+      payload({ scheduleJobId: 'j1', scheduleActivityFeedback: true }),
+      'schedule_start',
+    )).toBe(true);
   });
 });

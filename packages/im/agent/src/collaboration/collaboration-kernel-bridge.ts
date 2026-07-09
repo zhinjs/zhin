@@ -57,7 +57,12 @@ export function orchestrationSourceFromMessage(
     sceneId: scene.sceneId,
     kind: scene.kind,
     ...(scene.senderId ? { senderId: scene.senderId } : {}),
-    ...(scene.parent ? { parent: scene.parent } : {}),
+    ...(scene.parent ? {
+      parent: {
+        kind: scene.parent.kind === 'guild' ? 'channel' as const : scene.parent.kind,
+        sceneId: scene.parent.sceneId,
+      },
+    } : {}),
   };
   return {
     kind: 'im_scene',

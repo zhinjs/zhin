@@ -12,6 +12,8 @@ export type ImJobNotify = Extract<JobNotify, { channel: 'im' }>;
 
 export interface NotificationRouterDeps {
   resolveAdapter: (platform: string) => { sendMessage: (opts: SendOptions) => Promise<string> } | undefined;
+  /** 优先经 sendProactive 出站；未注入时回退 resolveAdapter.sendMessage */
+  sendIm?: (notify: ImJobNotify, content: string) => Promise<void>;
   /** M4 注入 HA REST；M3 未配置时仅记日志 */
   callHaService?: (service: string, target?: string, data?: unknown) => Promise<void>;
 }
@@ -122,11 +124,15 @@ export function createNotificationRouter(deps: NotificationRouterDeps) {
       return { delivered: false, channel: 'im' };
     }
     const adapter = deps.resolveAdapter(scene.platform);
-    if (!adapter) {
+    if (!adapter && !deps.sendIm) {
       logger.warn(formatCompact({ op: 'notify_im_skip', reason: 'adapter_not_found', platform: scene.platform }));
       return { delivered: false, channel: 'im' };
     }
-    await adapter.sendMessage(imNotifyToSendOptions(notify, content));
+    if (deps.sendIm) {
+      await deps.sendIm(notify, content);
+    } else {
+      await adapter!.sendMessage(imNotifyToSendOptions(notify, content));
+    }
     return { delivered: true, channel: 'im' };
   }
 

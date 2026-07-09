@@ -1,5 +1,5 @@
 import type { Plugin } from 'zhin.js';
-import { subscribeAIEvents } from '@zhin.js/agent';
+import { subscribeAIEvents, isActivityFeedbackEnabled } from '@zhin.js/agent';
 import type { ActivityFeedbackServiceConfig } from './config.js';
 import {
   ActivityFeedbackExecutor,
@@ -15,10 +15,17 @@ export function bindActivityFeedbackToAIEvents(
   orchestrator: ActivityFeedbackOrchestrator,
 ): () => void {
   return subscribeAIEvents(root, {
-    onQueuedStart: (payload) => orchestrator.startPhase(payload, 'queued', 'activity.queued.start'),
-    onQueuedClear: (payload) => orchestrator.stopPhase(payload, 'queued', 'activity.queued.clear'),
+    onQueuedStart: (payload) => {
+      if (!isActivityFeedbackEnabled(payload, 'queued')) return;
+      return orchestrator.startPhase(payload, 'queued', 'activity.queued.start');
+    },
+    onQueuedClear: (payload) => {
+      if (!isActivityFeedbackEnabled(payload, 'queued')) return;
+      return orchestrator.stopPhase(payload, 'queued', 'activity.queued.clear');
+    },
 
     onProcessingStart: async (payload) => {
+      if (!isActivityFeedbackEnabled(payload, 'active')) return;
       await orchestrator.stopPhase(payload, 'queued', 'processing.start');
       await orchestrator.startPhase(payload, 'active', 'processing.start');
     },
@@ -26,19 +33,25 @@ export function bindActivityFeedbackToAIEvents(
     onTypingStart: async () => {},
 
     onProcessingFinish: async (payload) => {
+      if (!isActivityFeedbackEnabled(payload, 'active')) return;
       if (payload.keepTyping) return;
       await orchestrator.stopPhase(payload, 'thinking', 'processing.finish');
       await orchestrator.stopPhase(payload, 'active', 'processing.finish');
     },
 
     onProcessingError: async (payload) => {
+      if (!isActivityFeedbackEnabled(payload, 'active')) return;
       await orchestrator.stopPhase(payload, 'thinking', 'processing.error');
       await orchestrator.stopPhase(payload, 'active', 'processing.error');
     },
 
-    onTypingStop: (payload) => orchestrator.stopPhase(payload, 'active', 'typing.stop'),
+    onTypingStop: (payload) => {
+      if (!isActivityFeedbackEnabled(payload, 'active')) return;
+      return orchestrator.stopPhase(payload, 'active', 'typing.stop');
+    },
 
     onThinking: async (payload) => {
+      if (!isActivityFeedbackEnabled(payload, 'thinking')) return;
       if (!payload.thinking) return;
       await orchestrator.stopPhase(payload, 'active', 'thinking');
       await orchestrator.startPhase(payload, 'thinking', 'thinking');
@@ -46,6 +59,7 @@ export function bindActivityFeedbackToAIEvents(
     },
 
     onSubagentStart: async (payload) => {
+      if (!isActivityFeedbackEnabled(payload, 'thinking')) return;
       await orchestrator.stopPhase(payload, 'active', 'subagent.start');
       await orchestrator.startPhase(payload, 'thinking', 'subagent.start');
       const label = payload.label
@@ -55,8 +69,16 @@ export function bindActivityFeedbackToAIEvents(
     },
 
     onSubagentFinish: async (payload) => {
+      if (!isActivityFeedbackEnabled(payload, 'active')) return;
       await orchestrator.stopPhase(payload, 'thinking', 'subagent.finish');
       await orchestrator.startPhase(payload, 'active', 'subagent.finish');
+    },
+
+    onScheduleStart: (payload) => orchestrator.startPhase(payload, 'schedule_start', 'schedule.start'),
+    onScheduleFinish: (payload) => orchestrator.stopPhase(payload, 'schedule_start', 'schedule.finish'),
+    onScheduleError: async (payload) => {
+      await orchestrator.stopPhase(payload, 'schedule_start', 'schedule.error');
+      await orchestrator.startPhase(payload, 'schedule_error', 'schedule.error');
     },
   });
 }

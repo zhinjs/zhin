@@ -4,16 +4,14 @@ import {
   shouldBlockDelegationAskUser,
   buildGroupAskUserFollowUp,
 } from '../../src/collaboration/ask-user-bridge.js';
-import {
-  registerPendingAskUser,
-  clearPendingAskUser,
-  isAskUserPendingReply,
-} from '../../src/builtin/ask-user-session.js';
+import { AskUserSessionService } from '../../src/builtin/ask-user-session-service.js';
+import { isAskUserPendingReply } from '../../src/builtin/ask-user-session.js';
 import {
   getCollaborationSceneService,
   resetCollaborationSceneService,
 } from '../../src/collaboration/scene-service.js';
 import { MemoryCollaborationSceneRepository } from '../../src/collaboration/collaboration-scene-repository.js';
+import type { Plugin } from '@zhin.js/core';
 
 const GROUP_ID = '373460458';
 
@@ -85,12 +83,42 @@ describe('buildGroupAskUserFollowUp', () => {
 });
 
 describe('ask-user-session', () => {
-  it('marks pending private master reply', () => {
-    registerPendingAskUser({
-      endpointId: '8596238',
-      masterId: '1659488338',
-      registeredAt: Date.now(),
+  beforeEach(() => {
+    AskUserSessionService.resetForTests();
+  });
+
+  it('marks pending private master reply via AskUserSessionService', async () => {
+    let capturedMw: (m: import('@zhin.js/core').Message, next: () => Promise<void>) => Promise<void> = async () => {};
+    const plugin = {
+      root: {
+        addMiddleware: (fn: typeof capturedMw) => {
+          capturedMw = fn;
+          return () => {};
+        },
+      },
+    } as unknown as Plugin;
+    const service = AskUserSessionService.install(plugin);
+    const groupMsg = mockCommMessage({
+      adapter: 'icqq',
+      endpoint: '8596238',
+      scope: 'group',
+      sceneId: GROUP_ID,
     });
+    const sendMessage = async () => 'sent';
+    const adapter = { sendMessage } as never;
+
+    const pending = service.open({
+      sessionId: 's1',
+      kind: 'sensitive_dm',
+      message: groupMsg,
+      questionType: 'confirm',
+      args: { question: 'ok?' },
+      timeoutMs: 5000,
+      botMaster: '1659488338',
+      adapter,
+      groupOrigin: groupMsg,
+    });
+
     const msg = mockCommMessage({
       adapter: 'icqq',
       endpoint: '8596238',
@@ -98,7 +126,9 @@ describe('ask-user-session', () => {
       senderId: '1659488338',
     });
     expect(isAskUserPendingReply(msg)).toBe(true);
-    clearPendingAskUser('8596238', '1659488338');
+
+    await capturedMw({ ...msg, $raw: 'yes' } as never, async () => {});
+    await expect(pending).resolves.toContain('yes');
     expect(isAskUserPendingReply(msg)).toBe(false);
   });
 });

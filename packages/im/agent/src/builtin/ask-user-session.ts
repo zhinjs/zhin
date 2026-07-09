@@ -1,52 +1,26 @@
 /**
- * ask_user 挂起会话注册表 — 防止 Owner 私聊回复同时触发独立 AI 回合（与群协作 turn 抢答）。
+ * ask_user 挂起会话注册表 — 委托 AskUserSessionService（常驻 middleware）。
  */
 import type { Message, Plugin } from '@zhin.js/core';
+import { AskUserSessionService } from './ask-user-session-service.js';
 
 export interface PendingAskUserSession {
   endpointId: string;
   masterId: string;
-  /** 群/频道来源消息（群协作 ask_user 时保留，用于回群与 follow-up 提示） */
   groupOrigin?: Message;
   registeredAt: number;
 }
 
-const pending = new Map<string, PendingAskUserSession>();
-
-function sessionKey(endpointId: string, masterId: string): string {
-  return `${endpointId}:${masterId}`;
+export function registerPendingAskUser(_session: PendingAskUserSession): void {
+  // legacy no-op：排队与会话状态由 AskUserSessionService 管理
 }
 
-export function registerPendingAskUser(session: PendingAskUserSession): void {
-  pending.set(sessionKey(session.endpointId, session.masterId), session);
+export function clearPendingAskUser(_endpointId: string, _masterId: string): void {
+  // legacy no-op
 }
 
-export function clearPendingAskUser(endpointId: string, masterId: string): void {
-  pending.delete(sessionKey(endpointId, masterId));
-}
-
-export function getPendingAskUser(endpointId: string, masterId: string): PendingAskUserSession | undefined {
-  return pending.get(sessionKey(endpointId, masterId));
-}
-
-function resolveEndpointMaster(
-  message: Message,
-  root?: Plugin,
-): { endpointId: string; masterId: string } | undefined {
-  const endpointId = String(message.$endpoint ?? '');
-  if (!endpointId) return undefined;
-  const plugin = root;
-  if (!plugin) return undefined;
-  try {
-    const adapter = plugin.inject(message.$adapter) as
-      | { endpoints?: Map<string, { $config?: { master?: string } }> }
-      | undefined;
-    const master = adapter?.endpoints?.get(endpointId)?.$config?.master;
-    if (master == null) return undefined;
-    return { endpointId, masterId: String(master) };
-  } catch {
-    return undefined;
-  }
+export function getPendingAskUser(_endpointId: string, _masterId: string): PendingAskUserSession | undefined {
+  return undefined;
 }
 
 /** 该私聊消息是否应作为 ask_user 回复消费（勿再触发 AI Handler）。 */
@@ -54,13 +28,11 @@ export function isAskUserPendingReply(
   message: Message,
   root?: Plugin,
 ): boolean {
-  if (message.$channel?.type !== 'private') return false;
-  const endpointId = String(message.$endpoint ?? '');
-  const senderId = String(message.$sender?.id ?? '');
-  if (!endpointId || !senderId) return false;
-  if (getPendingAskUser(endpointId, senderId)) return true;
-  const ids = resolveEndpointMaster(message, root);
-  if (!ids) return false;
-  if (senderId !== ids.masterId) return false;
-  return !!getPendingAskUser(ids.endpointId, ids.masterId);
+  const service = AskUserSessionService.get();
+  if (!service) return false;
+  return service.isPendingReply(message, root);
+}
+
+export function ensureAskUserSessionService(plugin: Plugin): AskUserSessionService {
+  return AskUserSessionService.install(plugin);
 }

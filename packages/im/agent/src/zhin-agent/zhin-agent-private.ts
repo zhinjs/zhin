@@ -55,6 +55,7 @@ export interface ZhinAgentPrivate {
   getTurnActiveSkills(): string;
   getAlwaysSkillsBaseline(): string;
   initScheduleTurnContext(ctx: import('./turn-context.js').ScheduleTurnContext): void;
+  initInboundTurnContext(): void;
   appendActiveSkillsContext(fragment: string): void;
   readonly skillsSummaryXML: string;
   readonly modelRegistry: ModelRegistry | null;

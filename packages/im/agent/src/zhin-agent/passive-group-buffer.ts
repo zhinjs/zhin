@@ -12,10 +12,20 @@ export interface PassiveGroupLine {
 
 const buffers = new Map<string, PassiveGroupLine[]>();
 
+export const MAX_PASSIVE_LINES = 50;
+export const PASSIVE_TTL_MS = 30 * 60 * 1000;
+
+export function prunePassiveLines(lines: PassiveGroupLine[]): PassiveGroupLine[] {
+  const cutoff = Date.now() - PASSIVE_TTL_MS;
+  const fresh = lines.filter((line) => line.at >= cutoff);
+  if (fresh.length <= MAX_PASSIVE_LINES) return fresh;
+  return fresh.slice(fresh.length - MAX_PASSIVE_LINES);
+}
+
 export function pushPassiveGroupLine(sessionKey: string, line: PassiveGroupLine): void {
   const list = buffers.get(sessionKey) ?? [];
   list.push(line);
-  buffers.set(sessionKey, list);
+  buffers.set(sessionKey, prunePassiveLines(list));
 }
 
 export function drainPassiveGroupBuffer(sessionKey: string): PassiveGroupLine[] {

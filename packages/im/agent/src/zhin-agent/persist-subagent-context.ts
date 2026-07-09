@@ -5,7 +5,7 @@ import {
   EMPTY_TOKEN_USAGE,
   type AssistantMessage,
 } from '@zhin.js/ai';
-import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
+import { resolveAgentTurnSessionKey } from '../collaboration/resolve-agent-session-key.js';
 import type { SubagentCompletePayload } from '../subagent.js';
 import { packageSubagentResult } from '../subagent-artifact.js';
 import type { Message } from '../orchestrator/types.js';
@@ -19,7 +19,7 @@ export async function persistSubagentResultToContext(
   const body = payload.result.trim();
   if (!body) return false;
 
-  const sessionKey = resolveIMSessionIdFromMessage(commMessage);
+  const sessionKey = resolveAgentTurnSessionKey(commMessage);
   const active = await agent.agentSessionStore.findActive(sessionKey);
   const sessionId = active?.session_id;
   if (!sessionId) return false;

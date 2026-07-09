@@ -37,7 +37,7 @@ describe('passive group buffer', () => {
       senderId: 'u1',
       senderName: 'Alice',
       text: '怎么可能，数据不会串的',
-      at: 1,
+      at: Date.now(),
     });
     const passiveBlock = formatPassiveGroupContextBlock(drainPassiveGroupBuffer(SESSION_KEY));
     const { promptMessages } = buildTurnUserMessages(

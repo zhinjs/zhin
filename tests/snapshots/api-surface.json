@@ -44,7 +44,7 @@
     "export type{ZhinAgentConfig,OnChunkCallback}from './zhin-agent/index.js';",
     "export{AIService}from './service.js';",
     "export{AI_EVENT_NAMES,subscribeAIEvents,}from './ai-event-subscriber.js';",
-    "export{ActivityFeedbackManager,getActivityFeedbackManager,initActivityFeedbackManager,resolveActivityFeedbackPhaseConfig,isScheduleActivityFeedbackEnabled,toActivityFeedbackEventContext,resolveActivitySceneType,resolveActivityEventTargets,enableActivityFeedbackForBot,getAdapterActivityFeedbackManager,initAdapterActivityFeedbackManager,isGenericActivityFeedbackManager,}from './activity-feedback/index.js';",
+    "export{ActivityFeedbackManager,getActivityFeedbackManager,initActivityFeedbackManager,resolveActivityFeedbackPhaseConfig,isActivityFeedbackEnabled,toActivityFeedbackEventContext,resolveActivitySceneType,resolveActivityEventTargets,enableActivityFeedbackForBot,getAdapterActivityFeedbackManager,initAdapterActivityFeedbackManager,isGenericActivityFeedbackManager,}from './activity-feedback/index.js';",
     "export{AgentOrchestrator as ResourceHub}from './orchestrator/index.js';",
     "export{AgentOrchestrator}from './orchestrator/index.js';",
     "export{AskUserBuiltinTool,createAskUserTool,ASK_USER_PARAMETERS,askViaPrompt,formatOwnerResponse,}from './builtin/ask-user-tool.js';",

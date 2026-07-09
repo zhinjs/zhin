@@ -5,6 +5,8 @@
 import * as path from 'node:path';
 import { formatCompact, getPlugin, getScheduler, isZhinTool, Scheduler, setScheduler, type SendOptions } from '@zhin.js/core';
 import { deliverSubagentResult } from '../media/deliver-subagent-result.js';
+import { createProactiveOutboundService } from '../outbound/send-proactive.js';
+import { sceneRefFromMessage } from '@zhin.js/core';
 import { ModelRegistry, computeTierScore, InMemoryMemoryEntryRepository } from '@zhin.js/ai';
 import { setMemoryEntryRepository } from '../memory-entry-registry.js';
 import { ZhinAgent } from '../zhin-agent/index.js';
@@ -280,27 +282,47 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
             : undefined,
         }
       : { notify: undefined, notifyOnFailure: false };
-    const notificationRouter = createNotificationRouter({ resolveAdapter });
+    const proactiveOutbound = createProactiveOutboundService({ plugin: root, resolveAdapter });
+    const notificationRouter = createNotificationRouter({
+      resolveAdapter,
+      sendIm: async (notify, content) => {
+        await proactiveOutbound.send({
+          scene: notify.target.scene,
+          source: 'notification',
+        }, content);
+      },
+    });
     const executor = createTaskExecutor({
       agent,
       resolveAdapter,
       defaultNotify: defaultNotifyCfg.notify,
       router: notificationRouter,
+      deliverIm: async (notify, content) => {
+        await proactiveOutbound.send({
+          scene: notify.target.scene,
+          source: 'scheduled',
+        }, content);
+      },
     });
 
     const deliverOutbound = async (
       origin: Parameters<typeof deliverSubagentResult>[0]['origin'],
       delivery: Parameters<typeof deliverSubagentResult>[0]['delivery'],
     ) => {
-      const adapter = resolveAdapter(origin.message.$adapter);
-      if (!adapter) {
-        logger.warn(formatCompact( { error: 'adapter_not_found', platform: origin.message.$adapter }));
+      const scene = sceneRefFromMessage(origin.message);
+      if (!scene) {
+        logger.warn(formatCompact({ error: 'scene_ref_missing', platform: origin.message.$adapter }));
         return;
       }
       await deliverSubagentResult({
         origin,
         delivery,
-        send: (opts) => adapter.sendMessage(opts),
+        send: (opts) => proactiveOutbound.send({
+          scene,
+          source: 'subagent',
+          originMessage: origin.message,
+          quoteMessageId: opts.quoteId,
+        }, opts.content),
       });
     };
     const wiredAgentConfig = {

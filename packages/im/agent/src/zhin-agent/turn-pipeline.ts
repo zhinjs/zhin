@@ -20,14 +20,9 @@ import {
 import { buildTurnUserMessages, applyTurnContextToUserMessages, prependEnvelopeToFirstUserText } from './turn-user-message.js';
 import { runAgentLoopTextTurn, runAgentLoopVisionTurn } from './agent-loop-turn.js';
 import { buildTurnContextEnvelope, resolveQuoteSystemHint } from './prompt.js';
-import { resolveCollaborationSceneForMessage, resolveCollaborationTurnHint } from '../collaboration/collaboration-context.js';
-import { resolveAgentSessionKeyForTurn } from '../collaboration/resolve-agent-session-key.js';
-import {
-  drainPassiveGroupBuffer,
-  formatPassiveGroupContextBlock,
-} from './passive-group-buffer.js';
-import { readCollaborationTurnSnapshot } from '../collaboration/collaboration-turn-snapshot.js';
-import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
+import { resolveCollaborationTurnHint } from '../collaboration/collaboration-context.js';
+import { resolveAgentTurnSessionKey } from '../collaboration/resolve-agent-session-key.js';
+import { consumePassiveGroupContextForTurn } from './passive-group-session.js';
 import { buildAgentsEnvelopeContext } from './agents-instruction.js';
 import { getLlmTransportModel } from '@zhin.js/ai';
 import { collectRuntimeTools } from './tool-runtime.js';
@@ -83,19 +78,8 @@ function sessionDeps(host: ZhinAgentPrivate): SessionIODeps {
   };
 }
 
-function resolveTurnSessionKey(commMessage: Message): string {
-  const snap = readCollaborationTurnSnapshot(commMessage);
-  if (snap?.runId) {
-    const transport = resolveIMSessionIdFromMessage(commMessage);
-    const bindRun = snap.delegationRunId ?? snap.runId;
-    return `pipeline:${bindRun.slice(0, 8)}:${transport}`;
-  }
-  const cell = resolveCollaborationSceneForMessage(commMessage);
-  return resolveAgentSessionKeyForTurn(commMessage, cell);
-}
-
 async function beginTurnSession(host: ZhinAgentPrivate, commMessage: Message) {
-  const sessionKey = resolveTurnSessionKey(commMessage);
+  const sessionKey = resolveAgentTurnSessionKey(commMessage);
   return beginTurnSessionIO(sessionDeps(host), sessionKey, commMessage);
 }
 
@@ -109,11 +93,11 @@ export async function processTextTurn(
 ): Promise<OutputElement[]> {
     const t0 = now();
     const userId = commMessage.$sender.id || 'unknown';
-    const sessionKey = resolveTurnSessionKey(commMessage);
+    const sessionKey = resolveAgentTurnSessionKey(commMessage);
     const channelScope = commMessage.$channel?.type;
     const passiveBlock =
       channelScope === 'group' || channelScope === 'channel'
-        ? formatPassiveGroupContextBlock(drainPassiveGroupBuffer(sessionKey))
+        ? consumePassiveGroupContextForTurn(commMessage)
         : null;
     const turnUser = buildTurnUserMessages(commMessage, content, passiveBlock);
     const isNewSession = await resolveSessionIsNewBeforeCreate(
@@ -357,7 +341,8 @@ export async function processMultimodalTurn(
   onChunk?: OnChunkCallback,
 ): Promise<OutputElement[]> {
   const userId = commMessage.$sender?.id || 'unknown';
-  const sessionKey = resolveTurnSessionKey(commMessage);
+  const sessionKey = resolveAgentTurnSessionKey(commMessage);
+  host.resetDeferredAutoContinueDepth(sessionKey);
   const isNewSession = await resolveSessionIsNewBeforeCreate(
     sessionDeps(host),
     sessionKey,
@@ -388,7 +373,7 @@ export async function processMultimodalTurn(
   const channelScope = commMessage.$channel?.type;
   const passiveBlock =
     channelScope === 'group' || channelScope === 'channel'
-      ? formatPassiveGroupContextBlock(drainPassiveGroupBuffer(sessionKey))
+      ? consumePassiveGroupContextForTurn(commMessage)
       : null;
   const turnUser = buildTurnUserMessages(commMessage, textContent, passiveBlock);
   const profileSummary = await host.userProfiles.buildProfileSummary(userId);

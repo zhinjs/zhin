@@ -2,81 +2,42 @@
  * ask_user — 默认在当前会话（群/频道/私聊）Prompt 提问；敏感确认走私聊 master（群来源带 parent）。
  */
 import {
-  Prompt,
-  Adapter,
   type Plugin,
   type Message,
-  type MessageMiddleware,
-  type SendOptions,
   type Tool,
   type ToolParametersSchema,
   type ToolResult,
+  type Adapter,
 } from '@zhin.js/core';
-import { errMsg } from '../discovery/utils.js';
+import { randomUUID } from 'node:crypto';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
-import {
-  clearPendingAskUser,
-  registerPendingAskUser,
-} from './ask-user-session.js';
-import {
-  buildGroupAskUserFollowUp,
-  shouldBlockDelegationAskUser,
-} from '../collaboration/ask-user-bridge.js';
+import { shouldBlockDelegationAskUser } from '../collaboration/ask-user-bridge.js';
+import { AskUserSessionService } from './ask-user-session-service.js';
+import { ensureAskUserSessionService } from './ask-user-session.js';
 
 // ============================================================================
 // Prompt / Owner 回复格式化
 // ============================================================================
 
-/**
- * 在当前消息会话内 Prompt 交互（群/频道/私聊均可；仅匹配触发用户）。
- */
 export async function askViaPrompt(
   plugin: Plugin,
-  message: any,
-  args: Record<string, any>,
+  message: Message,
+  args: Record<string, unknown>,
   questionType: string,
   timeoutMs: number,
 ): Promise<string> {
-  const host = plugin.root ?? plugin;
-  const prompt = new Prompt(host, message);
-  try {
-    switch (questionType) {
-      case 'number': {
-        const defaultNum = args.default_value != null ? Number(args.default_value) : undefined;
-        const result = await prompt.number(args.question, timeoutMs, defaultNum, '输入超时，已取消');
-        return String(result);
-      }
-      case 'confirm': {
-        const result = await prompt.confirm(args.question, 'yes', timeoutMs, false, '确认超时，已取消');
-        return result ? 'yes' : 'no';
-      }
-      case 'pick': {
-        if (!args.options?.length) {
-          return 'Error: type=pick 时必须提供 options 选项列表';
-        }
-        const pickOptions = (args.options as string[]).map((o: string) => ({ label: o, value: o }));
-        const result = await prompt.pick(args.question, {
-          type: 'text' as const,
-          options: pickOptions,
-          timeout: timeoutMs,
-        }, '选择超时，已取消');
-        return String(result);
-      }
-      case 'text':
-      default: {
-        const result = await prompt.text(args.question, timeoutMs, args.default_value || '', '输入超时，已取消');
-        return result;
-      }
-    }
-  } catch (e: unknown) {
-    return `Owner 未响应或输入错误: ${errMsg(e)}`;
-  }
+  const service = ensureAskUserSessionService(plugin);
+  return service.open({
+    sessionId: randomUUID(),
+    kind: 'prompt',
+    message,
+    questionType,
+    args,
+    timeoutMs,
+  });
 }
 
-/**
- * 将 Owner 私聊回复格式化为对应类型的结果
- */
-export function formatOwnerResponse(raw: string, questionType: string, args: Record<string, any>): string {
+export function formatOwnerResponse(raw: string, questionType: string, args: Record<string, unknown>): string {
   switch (questionType) {
     case 'confirm':
       return raw.trim().toLowerCase() === 'yes' ? 'yes' : 'no';
@@ -85,7 +46,7 @@ export function formatOwnerResponse(raw: string, questionType: string, args: Rec
     case 'pick': {
       const idx = Number(raw.trim());
       const options = (args.options as string[]) || [];
-      if (idx >= 1 && idx <= options.length) return options[idx - 1];
+      if (idx >= 1 && idx <= options.length) return options[idx - 1]!;
       return raw;
     }
     case 'text':
@@ -119,81 +80,26 @@ function isGroupOrChannelScope(message: Message): boolean {
   return scope === 'group' || scope === 'channel';
 }
 
-/**
- * 敏感确认：向 Endpoint Owner 发私聊（群/频道来源带 parent），静默不回群。
- */
 export async function askOwnerViaPrivateWithParent(
   plugin: Plugin,
   commMessage: Message,
-  args: Record<string, any>,
+  args: Record<string, unknown>,
   questionType: string,
   timeoutMs: number,
   botMaster: string,
   adapter: Adapter,
 ): Promise<string> {
-  const platform = commMessage.$adapter!;
-  const endpointId = commMessage.$endpoint!;
-  const question = String(args.question ?? '');
-  const sceneId = String(commMessage.$channel?.id ?? '');
-  const parentType = commMessage.$channel?.type === 'channel' ? 'channel' as const : 'group' as const;
-
-  const questionText = buildSensitiveOwnerQuestionText(
-    commMessage,
-    question,
+  const service = ensureAskUserSessionService(plugin);
+  return service.open({
+    sessionId: randomUUID(),
+    kind: 'sensitive_dm',
+    message: commMessage,
     questionType,
-    args.options as string[] | undefined,
-  );
-
-  try {
-    await adapter.sendMessage({
-      context: platform,
-      endpoint: endpointId,
-      id: botMaster,
-      type: 'private',
-      parent: { type: parentType, id: sceneId },
-      content: questionText,
-    } satisfies SendOptions);
-  } catch (e: unknown) {
-    return `Error: 无法向 Owner 发送私聊消息: ${errMsg(e)}`;
-  }
-
-  const hostPlugin = plugin.root ?? plugin;
-  const masterId = String(botMaster);
-  const endpointKey = String(endpointId);
-  const groupOrigin = commMessage;
-
-  registerPendingAskUser({
-    endpointId: endpointKey,
-    masterId,
-    groupOrigin,
-    registeredAt: Date.now(),
-  });
-
-  const finish = (rawAnswer: string): string => {
-    clearPendingAskUser(endpointKey, masterId);
-    return buildGroupAskUserFollowUp(groupOrigin, rawAnswer);
-  };
-
-  return new Promise<string>((resolve) => {
-    const middleware: MessageMiddleware = async (message, next) => {
-      if (message.$channel?.type !== 'private') return next();
-      if (String(message.$sender.id) !== masterId) return next();
-      if (String(message.$endpoint) !== endpointKey) return next();
-      dispose();
-      clearTimeout(timer);
-      const raw = message.$raw;
-      resolve(finish(formatOwnerResponse(raw, questionType, args)));
-    };
-    const dispose = hostPlugin.addMiddleware(middleware);
-    const timer = setTimeout(() => {
-      dispose();
-      clearPendingAskUser(endpointKey, masterId);
-      if (args.default_value != null) {
-        resolve(String(args.default_value));
-      } else {
-        resolve('Owner 未在规定时间内响应，操作已取消。');
-      }
-    }, timeoutMs);
+    args,
+    timeoutMs,
+    botMaster,
+    adapter,
+    groupOrigin: commMessage,
   });
 }
 
@@ -222,10 +128,8 @@ export const ASK_USER_PARAMETERS: ToolParametersSchema = {
   required: ['question'],
 };
 
-/**
- * 工厂：`createAskUserTool(plugin)` 或 `createAskUserTool({ plugin })`
- */
 export function createAskUserTool(plugin: Plugin): Tool {
+  ensureAskUserSessionService(plugin);
   return new AskUserBuiltinTool(plugin).toTool();
 }
 
@@ -235,7 +139,6 @@ export class AskUserBuiltinTool extends BuiltinBaseTool {
     'Ask the user and wait for a reply. Default: prompt in the current session (group/channel/private) to the triggering user. Set sensitive=true only to confirm with the Endpoint Owner via private DM (group origin uses parent; no group-visible trace). Owner private chat: /approve always bash, /approve rule <regex>, /approve list, /approve revoke. write_file / edit_file / web_fetch hard-orchestration still requires per-action Owner confirm.';
   readonly parameters = ASK_USER_PARAMETERS;
   readonly kind = 'interaction';
-  /** 默认等待 120s，须大于 Agent 默认 30s 工具超时 */
   readonly executionTimeoutMs = 150_000;
 
   constructor(private readonly plugin: Plugin) {
@@ -264,7 +167,7 @@ export class AskUserBuiltinTool extends BuiltinBaseTool {
 
     const timeoutMs = ((args.timeout as number) ?? 120) * 1000;
     const questionType = (args.type as string) || 'text';
-    const recordArgs = args as Record<string, any>;
+    const recordArgs = args;
     const question = String(args.question ?? '');
 
     const platform = commMessage.$adapter!;

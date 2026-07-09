@@ -6,6 +6,10 @@ export interface ActivityFeedbackServiceConfig {
   defaults?: ActivityFeedbackConfig;
   platforms?: Record<string, ActivityFeedbackConfig>;
   endpoints?: Record<string, ActivityFeedbackConfig>;
+  /** Schedule turn 专用相位配置 */
+  schedule?: {
+    phases?: Partial<Record<'start' | 'error' | 'finish', import('@zhin.js/agent').ActivityFeedbackScenePhases>>;
+  };
 }
 
 function mergePhaseScene(
