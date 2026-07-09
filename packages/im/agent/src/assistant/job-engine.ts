@@ -79,6 +79,10 @@ export class ScheduleJobEngine {
     const result = await this.worker.run(jobId, jobPrompt(job), {
       notify: job.notify,
       label: job.label || jobId,
+      createdBy: job.createdBy,
+      executionPlan: job.executionPlan,
+      activityFeedback: job.activityFeedback,
+      scheduleJobId: jobId,
     });
 
     await this.store.updateJobState(jobId, {

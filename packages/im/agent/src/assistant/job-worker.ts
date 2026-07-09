@@ -6,7 +6,7 @@ import { getTaskQueue, initTaskQueue } from '../orchestrator/task-queue.js';
 import type { TaskExecutionResult, TaskExecutor } from '../task-executor.js';
 import type { AssistantQueueConfig } from './config.js';
 import { resolveAssistantQueueConfig } from './config.js';
-import type { JobNotify } from './types.js';
+import type { JobNotify, ScheduleJobCreator, ScheduleJobExecutionPlan } from './types.js';
 
 const logger = new Logger(null, 'assistant-job-worker');
 
@@ -39,6 +39,10 @@ export class JobWorker {
     options?: {
       notify?: JobNotify;
       label?: string;
+      createdBy?: ScheduleJobCreator;
+      executionPlan?: ScheduleJobExecutionPlan;
+      activityFeedback?: boolean;
+      scheduleJobId?: string;
     },
   ): Promise<TaskExecutionResult> {
     if (!this.queueCfg.enabled) {
@@ -59,6 +63,10 @@ export class JobWorker {
             prompt,
             notify: options?.notify,
             timeContext: true,
+            createdBy: options?.createdBy,
+            executionPlan: options?.executionPlan,
+            activityFeedback: options?.activityFeedback,
+            scheduleJobId: options?.scheduleJobId,
           });
           if (!result.success) {
             throw new Error(result.error || 'job failed');
@@ -79,12 +87,20 @@ export class JobWorker {
     options?: {
       notify?: JobNotify;
       label?: string;
+      createdBy?: ScheduleJobCreator;
+      executionPlan?: ScheduleJobExecutionPlan;
+      activityFeedback?: boolean;
+      scheduleJobId?: string;
     },
   ): Promise<TaskExecutionResult> {
     const result = await this.executor.executeTask({
       prompt,
       notify: options?.notify,
       timeContext: true,
+      createdBy: options?.createdBy,
+      executionPlan: options?.executionPlan,
+      activityFeedback: options?.activityFeedback,
+      scheduleJobId: options?.scheduleJobId,
     });
     const label = options?.label;
     if (!result.success) {

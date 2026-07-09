@@ -47,10 +47,89 @@ describe('ScheduleJobEngine', () => {
 
     await vi.advanceTimersByTimeAsync(2_500);
     expect(executeTask).toHaveBeenCalled();
+    expect(executeTask.mock.calls[0]?.[0]).toMatchObject({
+      createdBy: undefined,
+    });
 
     const stored = await store.getJob('sched-echo');
     expect(stored?.state.lastStatus).toBe('ok');
 
+    engine.unload();
+  });
+
+  it('runJob passes createdBy to task executor', async () => {
+    const executeTask = vi.fn(async () => ({
+      success: true,
+      responseText: 'ok',
+      durationMs: 10,
+    }));
+    const executor = { executeTask } as unknown as TaskExecutor;
+    const store = new ScheduleJobStore({ dataDir });
+    const worker = new JobWorker({ executor });
+    const engine = new ScheduleJobEngine({ store, worker });
+
+    await engine.addJob({
+      id: 'sched-owner',
+      enabled: true,
+      schedule: { kind: 'every', everyMs: 60_000 },
+      action: { kind: 'agent', prompt: 'daily weather' },
+      notify: { channel: 'silent' },
+      createdBy: { userId: '1659488338', roles: ['master'], name: 'Owner' },
+    });
+    engine.registerOne((await store.getJob('sched-owner'))!);
+    await engine.runJobNow('sched-owner');
+
+    expect(executeTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        createdBy: {
+          userId: '1659488338',
+          roles: ['master'],
+          name: 'Owner',
+        },
+      }),
+    );
+    engine.unload();
+  });
+
+  it('runJob passes executionPlan and activityFeedback to task executor', async () => {
+    const executeTask = vi.fn(async () => ({
+      success: true,
+      responseText: 'ok',
+      durationMs: 10,
+    }));
+    const executor = { executeTask } as unknown as TaskExecutor;
+    const store = new ScheduleJobStore({ dataDir });
+    const worker = new JobWorker({ executor });
+    const engine = new ScheduleJobEngine({ store, worker });
+
+    await engine.addJob({
+      id: 'sched-plan',
+      enabled: true,
+      schedule: { kind: 'every', everyMs: 60_000 },
+      action: { kind: 'agent', prompt: 'daily weather' },
+      notify: { channel: 'silent' },
+      executionPlan: {
+        prompt: 'refined weather',
+        tools: ['web_search'],
+        skills: ['weather'],
+        confirmed: true,
+      },
+      activityFeedback: true,
+    });
+    await engine.runJobNow('sched-plan');
+
+    expect(executeTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        executionPlan: {
+          prompt: 'refined weather',
+          tools: ['web_search'],
+          skills: ['weather'],
+          confirmed: true,
+        },
+        activityFeedback: true,
+        scheduleJobId: 'sched-plan',
+      }),
+    );
     engine.unload();
   });
 });

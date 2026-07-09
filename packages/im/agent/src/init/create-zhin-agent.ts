@@ -379,7 +379,15 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     }
 
     if (scheduleFeature) {
-      setScheduleManager({ scheduleFeature, engine: jobEngine });
+      setScheduleManager({
+        scheduleFeature,
+        engine: jobEngine,
+        previewTask: (opts) => executor.executeTask({
+          ...opts,
+          preview: true,
+          timeContext: false,
+        }),
+      });
     }
 
     // HEARTBEAT.md 周期检查（与 schedule-jobs 并行）

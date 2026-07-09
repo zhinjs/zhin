@@ -1,11 +1,15 @@
 /**
  * 持久化调度任务 + AI 工具
  */
-import { ZhinTool, Logger, messageToIMDeliveryTarget } from '@zhin.js/core';
-import type { FestivalName } from '@zhin.js/kernel';
-import type { JobNotify, JobSchedule, ScheduleJob } from './assistant/types.js';
+import { ZhinTool, Logger } from '@zhin.js/core';
+import { captureScheduleJobCreator } from './assistant/job-creator.js';
+import {
+  addScheduleJob,
+  generateScheduleJobId,
+  parseScheduleAddFromToolArgs,
+} from './assistant/schedule-job-service.js';
 import type { ScheduleJobEngine } from './assistant/job-engine.js';
-import { buildJobScheduleFromCronInput } from './schedule-cron.js';
+import type { TaskExecutionOptions, TaskExecutionResult } from './task-executor.js';
 
 const logger = new Logger(null, 'schedule-manager');
 
@@ -23,6 +27,8 @@ export interface ScheduleManager {
     }>;
   };
   engine: ScheduleJobEngine | null;
+  /** 调度任务预演（dry-run） */
+  previewTask?: (options: TaskExecutionOptions) => Promise<TaskExecutionResult>;
 }
 
 let scheduleManager: ScheduleManager | null = null;
@@ -35,45 +41,9 @@ export function getScheduleManager(): ScheduleManager | null {
   return scheduleManager;
 }
 
-export function generateScheduleJobId(): string {
-  return `sched_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
+export { generateScheduleJobId };
 
-export type PromptOptimizer = (rawPrompt: string, schedule: JobSchedule) => Promise<string>;
-
-function buildScheduleFromArgs(args: Record<string, unknown>): JobSchedule | { error: string } {
-  const kind = args.schedule_kind as string | undefined;
-  const cron = args.cron as string | undefined;
-  const delayMin = args.delay_minutes as number | undefined;
-
-  if (String(kind || '').toLowerCase() === 'at' || (delayMin && delayMin > 0)) {
-    const atMs = delayMin && delayMin > 0
-      ? Date.now() + delayMin * 60 * 1000
-      : args.at_ms != null ? Number(args.at_ms) : undefined;
-    if (!atMs) return { error: '请提供 delay_minutes 或 at_ms' };
-    return { kind: 'at', atMs, deleteAfterRun: true };
-  }
-
-  if (!cron) {
-    return { error: '请提供 6 段 cron 表达式（秒 分 时 日 月 周）' };
-  }
-
-  const built = buildJobScheduleFromCronInput(kind, cron);
-  if ('error' in built) return built;
-
-  if (built.kind === 'holiday') {
-    const festivals = args.festivals;
-    return {
-      ...built,
-      festivals: Array.isArray(festivals) ? festivals as FestivalName[] : undefined,
-      everyDayOfHoliday: args.every_day_of_holiday === true,
-    };
-  }
-
-  return built;
-}
-
-export function createScheduleTools(options?: { optimizePrompt?: PromptOptimizer }): ZhinTool[] {
+export function createScheduleTools(): ZhinTool[] {
   const listTool = new ZhinTool('schedule_list')
     .desc('列出所有调度任务：内存任务与持久化 schedule-jobs.json')
     .keyword('定时任务', 'schedule', '计划任务')
@@ -118,47 +88,31 @@ export function createScheduleTools(options?: { optimizePrompt?: PromptOptimizer
     .param('prompt', { type: 'string', description: '到点 prompt' }, true)
     .param('label', { type: 'string', description: '标签' })
     .param('notify_channel', { type: 'string', description: 'im | silent | log' })
+    .param('activity_feedback', {
+      type: 'boolean',
+      description: '到点执行时是否向 IM 发送 reaction/typing，默认 false',
+    })
+    .param('execution_plan', {
+      type: 'object',
+      description: '预演确认后的执行计划 { prompt, tools?, skills? }',
+    })
+    .param('refined_prompt', { type: 'string', description: '预演 refine 后的 prompt' })
+    .param('tools', { type: 'string', description: '逗号分隔的工具名（来自预演）' })
+    .param('skills', { type: 'string', description: '逗号分隔的技能名（来自预演）' })
     .execute(async (args, commMessage) => {
       const m = getScheduleManager();
       if (!m?.engine) return { error: '持久化调度引擎不可用' };
 
-      const built = buildScheduleFromArgs(args);
-      if ('error' in built) return { error: built.error };
+      const input = parseScheduleAddFromToolArgs(args, commMessage);
+      if ('error' in input) return { error: input.error };
 
-      const id = generateScheduleJobId();
-      let finalPrompt = String(args.prompt);
-      if (options?.optimizePrompt) {
-        try {
-          finalPrompt = await options.optimizePrompt(finalPrompt, built);
-        } catch (e) {
-          logger.warn('Prompt optimization failed: ' + (e as Error).message);
-        }
-      }
-
-      const notifyChannel = String(args.notify_channel || 'im').toLowerCase();
-      let notify: JobNotify;
-      if (notifyChannel === 'silent') {
-        notify = { channel: 'silent' };
-      } else if (notifyChannel === 'log') {
-        notify = { channel: 'log' };
-      } else if (notifyChannel !== 'im') {
-        return { error: `notify_channel 无效: ${notifyChannel}` };
-      } else {
-        const target = commMessage ? messageToIMDeliveryTarget(commMessage) : undefined;
-        notify = target ? { channel: 'im', target } : { channel: 'silent' };
-      }
-
-      const job = await m.engine.addJob({
-        id,
-        label: args.label as string | undefined,
-        enabled: true,
-        schedule: built,
-        action: { kind: 'agent', prompt: finalPrompt },
-        notify,
+      const job = await addScheduleJob(m.engine, {
+        ...input,
+        id: generateScheduleJobId(),
       });
 
-      if (built.kind === 'at') {
-        const timeStr = new Date(built.atMs).toLocaleString('zh-CN', { hour12: false });
+      if (job.schedule.kind === 'at') {
+        const timeStr = new Date(job.schedule.atMs).toLocaleString('zh-CN', { hour12: false });
         return { success: true, id: job.id, message: `已安排一次性任务，将在 ${timeStr} 执行` };
       }
       return { success: true, id: job.id, message: '已添加调度任务' };
@@ -190,5 +144,43 @@ export function createScheduleTools(options?: { optimizePrompt?: PromptOptimizer
       return (await m.engine.resumeJob(args.id as string)) ? { success: true } : { error: '未找到' };
     });
 
-  return [listTool, addTool, removeTool, pauseTool, resumeTool];
+  const previewTool = new ZhinTool('schedule_preview')
+    .desc(
+      '预演调度任务（dry-run）：按创建者身份执行一次，将结果与推荐 tools/skills 返回供确认；'
+      + '确认后请用 schedule_add 并传入 execution_plan 创建正式任务。',
+    )
+    .tag('schedule', '定时', '预演')
+    .param('prompt', { type: 'string', description: '任务 prompt' }, true)
+    .param('activity_feedback', {
+      type: 'boolean',
+      description: '预演时是否显示 reaction/typing，默认 false',
+    })
+    .execute(async (args, commMessage) => {
+      const m = getScheduleManager();
+      if (!m?.previewTask) return { error: '预演服务不可用' };
+      if (!commMessage) return { error: '缺少会话上下文，无法预演' };
+
+      const prompt = String(args.prompt);
+      const result = await m.previewTask({
+        prompt,
+        preview: true,
+        previewCommMessage: commMessage,
+        createdBy: captureScheduleJobCreator(commMessage),
+        activityFeedback: args.activity_feedback === true,
+        timeContext: false,
+      });
+
+      if (!result.success) {
+        return { error: result.error || '预演失败' };
+      }
+
+      return {
+        success: true,
+        preview: result.responseText,
+        execution_plan: result.executionPlan,
+        message: '预演完成。确认无误后使用 schedule_add 并传入 execution_plan 创建正式任务。',
+      };
+    });
+
+  return [listTool, addTool, previewTool, removeTool, pauseTool, resumeTool];
 }

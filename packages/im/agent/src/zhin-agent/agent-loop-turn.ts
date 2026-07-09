@@ -37,7 +37,7 @@ import { persistDeferredToolSnapshot, buildLlmToolsForProvider } from './tool-or
 import { resolveDeferredToolsConfig, resolveAlwaysLoadedSet } from '../tool-catalog/resolve-config.js';
 import { resolveDeferredApiTools } from '../tool-catalog/tool-catalog.js';
 import { getLoadedToolNamesFromSnapshot } from '@zhin.js/ai';
-import { mergeSkillDirsWithResolver, collectPluginSkillSearchRoots } from '../discovery/utils.js';
+import { buildSkillLoadOptsForAgent } from './skill-load-opts.js';
 
 const logger = new Logger(null, 'ZhinAgent:AgentLoopTurn');
 
@@ -328,18 +328,7 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
   const deferredCfg = resolveDeferredToolsConfig(host.config);
 
   if (hasTools && catalog.length > 0) {
-    const skillMaxChars = resolveSkillInstructionMaxChars(host.config, modelId);
-    let skillDirList = () => [] as string[];
-    let skillFileLookup: ((name: string) => string | undefined) | undefined;
-    try {
-      const root = getHostRootPlugin();
-      if (root) {
-        skillDirList = () => mergeSkillDirsWithResolver(() => collectPluginSkillSearchRoots(root));
-      }
-      skillFileLookup = (name: string) => host.skillRegistry?.getByName(name)?.filePath;
-    } catch {
-      skillFileLookup = (name: string) => host.skillRegistry?.getByName(name)?.filePath;
-    }
+    const skillLoadOpts = buildSkillLoadOptsForAgent(host);
     bindDeferredToolRuntime(contextForTools, {
       sessionId,
       catalog,
@@ -355,11 +344,7 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
       onSkillLoaded: (_name, instructions) => {
         host.appendActiveSkillsContext(instructions);
       },
-      skillLoadOpts: {
-        skillDirList,
-        skillMaxChars,
-        skillFileLookup,
-      },
+      skillLoadOpts,
     });
   }
 

@@ -35,6 +35,9 @@ import { buildMultimodalVisionSystemPrompt } from './prompt-assembly.js';
 import { attachWebSearchLocale } from './web-search-locale-attach.js';
 import { EMPTY_USAGE } from './turn-metrics.js';
 import { resolveAgentToolsForTurn } from './tool-orchestration.js';
+import { captureDeferredSnapshotBefore, cloneDeferredSnapshot } from './turn-context.js';
+import { preloadScheduleToolsFromContext } from '../assistant/schedule-tool-runtime.js';
+import { rehydrateTurnActiveSkills } from '../assistant/schedule-skills.js';
 import { createSpawnTaskTool } from '../builtin/spawn-task-tool.js';
 import { filterAgentsForSpawnDescription } from '../spawn/permission-task.js';
 import { logPhase } from './phase-trace.js';
@@ -209,10 +212,15 @@ export async function processTextTurn(
       }));
     }
 
-    const resolved = await resolveAgentToolsForTurn(host, allTools, sessionId, contextForTools);
-    const { tools: resolvedTools, deferredStats, catalog, sessionSnapshot } = resolved;
-    host.lastDeferredCatalog = catalog;
+    const resolved = await resolveAgentToolsForTurn(host, allTools, sessionId);
+    let { tools: resolvedTools, deferredStats, catalog, sessionSnapshot } = resolved;
+
+    sessionSnapshot = await preloadScheduleToolsFromContext(host, sessionId, catalog, sessionSnapshot);
+    captureDeferredSnapshotBefore(sessionSnapshot);
+    host.lastDeferredSnapshotBefore = cloneDeferredSnapshot(sessionSnapshot);
+    await rehydrateTurnActiveSkills(host, sessionId, host.getAlwaysSkillsBaseline());
     host.lastDeferredSessionSnapshot = sessionSnapshot;
+    host.lastDeferredCatalog = catalog;
     host.lastToolSearchDeferredStats = deferredStats;
 
     const filterMs = (now() - tFilter).toFixed(0);
@@ -245,7 +253,7 @@ export async function processTextTurn(
       profileSummary,
       toneHint,
       deferredStats,
-      activeSkillsContext: host.activeSkillsContext || undefined,
+      activeSkillsContext: host.getTurnActiveSkills() || undefined,
       quoteSystemHint: resolveQuoteSystemHint(commMessage),
       collaborationHint: resolveTurnCollaborationHint(commMessage, content),
       modelLine: `${providerAlias}/${modelId}`,
@@ -410,7 +418,7 @@ export async function processMultimodalTurn(
     commMessage,
     profileSummary,
     toneHint,
-    activeSkillsContext: host.activeSkillsContext || undefined,
+    activeSkillsContext: host.getTurnActiveSkills() || undefined,
     quoteSystemHint: resolveQuoteSystemHint(commMessage),
     collaborationHint: resolveTurnCollaborationHint(commMessage, textContent),
     modelLine: `${visionProviderAlias}/${visionModelId}`,

@@ -12,6 +12,7 @@ export { toTypingIndicatorConfig } from './types.js';
 export {
   resolveActivityFeedbackPhaseConfig,
 } from './config-resolver.js';
+export { isScheduleActivityFeedbackEnabled } from './schedule-guard.js';
 
 export {
   toActivityFeedbackEventContext,

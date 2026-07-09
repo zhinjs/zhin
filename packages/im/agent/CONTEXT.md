@@ -78,6 +78,16 @@ _避免使用_：dispatcher 内存缓存、recordResult
 内存中的 Task 投影与依赖调度缓存；从 Kernel 仓库 `syncTaskFromRecord`，不拥有持久化终态。
 _避免使用_：SSOT、source of truth、终态写入方
 
+## 调度（Schedule）
+
+**Schedule Execution Plan**:
+预演确认后固化的 prompt / tools / skills 快照，经 `addScheduleJob` 持久化到 `schedule-jobs.json`；到点执行时由 `schedule-tool-runtime` 预加载 deferred snapshot，不再写入 `commMessage.extra`。
+_避免使用_：optimizePrompt、extra 上的 executionPlan
+
+**Schedule Turn**:
+带 TurnContext ALS `scheduleContext` 的 agent turn（`preview` 预演或 `scheduled` 到点执行）；`buildScheduleTurnMessage` 提供 synthetic 载体，hookContext 由 event-emitter 从 ALS 投影。
+_避免使用_：mutate 入站 Message.extra、augmentPromptWithExecutionPlan
+
 ## 关系
 
 - **ZhinAgent** 通过 **Agent Orchestrator** 发现 **Tool**、**Skill**、**Subagent** 与 Hook；MCP 条目经 `addMcp` / `ai.mcpServers` / 可选 `ai.memoryMcp`（`server-memory`）注册，在每次 AI 回合前懒连接，工具以 `mcp_{server}_{tool}` 并入工具池（不再使用内置 `read_memory`/`write_memory`）。
@@ -87,7 +97,7 @@ _避免使用_：SSOT、source of truth、终态写入方
 - **Context Budget** 同时约束提示词历史裁剪和底层 `@zhin.js/ai` Agent 配置。
 - **Pre-executable Tool** 在主模型回合前产出上下文。
 - **Subagent** 使用与父级 Agent Runtime 相同的 Provider 和预算词汇。
-- **OrchestrationKernel** 拥有 **Run** / **Task** 终态；**Executor** 仅上报 event；**AgentDispatcher** 为 **Projection** 的内存缓存，供依赖检查与非持久化查询。
+- **Schedule Turn** 在 turn-pipeline 中顺序执行 resolve → preload → capture before → rehydrate skills；预演 delta 由 `getLastTurnToolSnapshot` 采集本 turn 新增 tools/skills。
 
 ## 示例对话
 

@@ -5,6 +5,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { formatCompact, Logger } from '@zhin.js/logger';
 import type { ScheduleJob, ScheduleJobFile, JobAction, JobNotify } from './types.js';
+import { parseScheduleJobCreator } from './job-creator.js';
+import { parseScheduleJobExecutionPlan } from './schedule-execution.js';
 import {
   SCHEDULE_JOBS_FILENAME,
   SCHEDULE_JOBS_VERSION,
@@ -190,6 +192,9 @@ function normalizeJob(raw: Record<string, unknown>, defaultNotify?: JobNotify): 
     updatedAt: Number(raw.updatedAt) || Date.now(),
     state: (raw.state as ScheduleJob['state']) ?? {},
     source: raw.source as ScheduleJob['source'],
+    createdBy: parseScheduleJobCreator(raw.createdBy),
+    executionPlan: parseScheduleJobExecutionPlan(raw.executionPlan),
+    activityFeedback: raw.activityFeedback === true ? true : undefined,
     eventPayload: raw.eventPayload,
   };
 }

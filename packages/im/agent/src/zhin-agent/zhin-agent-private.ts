@@ -52,7 +52,9 @@ export interface ZhinAgentPrivate {
   readonly rateLimiter: RateLimiter;
   readonly subagentManager: SubagentManager | null;
   readonly bootstrapContext: string;
-  readonly activeSkillsContext: string;
+  getTurnActiveSkills(): string;
+  getAlwaysSkillsBaseline(): string;
+  initScheduleTurnContext(ctx: import('./turn-context.js').ScheduleTurnContext): void;
   appendActiveSkillsContext(fragment: string): void;
   readonly skillsSummaryXML: string;
   readonly modelRegistry: ModelRegistry | null;
@@ -62,6 +64,7 @@ export interface ZhinAgentPrivate {
   deferredCatalog: AgentTool[];
   lastDeferredCatalog?: ToolCatalogItem[];
   lastDeferredSessionSnapshot?: DeferredToolSessionSnapshot;
+  lastDeferredSnapshotBefore?: DeferredToolSessionSnapshot;
   readonly deferredWorkerRunner: DeferredWorkerRunner;
   lastToolSearchDeferredStats?: string;
   readonly promptController: PromptController;

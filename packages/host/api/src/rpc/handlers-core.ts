@@ -458,23 +458,20 @@ export async function handleCoreRpc(
 
     case "schedule:add": {
       try {
-        const cron = message.cron as string;
-        const prompt = message.prompt as string;
-        const scheduleKind = (message.scheduleKind as string) || "solar";
-        if (!cron || !prompt) {
-          reply(ctx, { requestId, error: "缺少 cron（6段）或 prompt" });
-          return true;
-        }
         return await withPersistentScheduleEngine(requestId, ctx, async (engine) => {
-          const { generateScheduleJobId } = await import("@zhin.js/agent");
-          const notify = parseCronNotify(message);
-          const record = await engine.addJob({
+          const {
+            addScheduleJob,
+            generateScheduleJobId,
+            parseScheduleAddFromRpcMessage,
+          } = await import("@zhin.js/agent");
+          const input = parseScheduleAddFromRpcMessage(message as Record<string, unknown>);
+          if ("error" in input) {
+            reply(ctx, { requestId, error: input.error });
+            return true;
+          }
+          const record = await addScheduleJob(engine, {
+            ...input,
             id: generateScheduleJobId(),
-            enabled: true,
-            schedule: { kind: scheduleKind, cron },
-            action: { kind: "agent", prompt },
-            label: (message.label as string) || undefined,
-            notify,
           });
           reply(ctx, { requestId, data: record });
         });

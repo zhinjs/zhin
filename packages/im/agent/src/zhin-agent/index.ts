@@ -81,7 +81,9 @@ import {
 import { manualCompactSession } from './compaction-runtime.js';
 import { asPrivate } from './zhin-agent-private.js';
 import { PromptController } from './prompt-controller.js';
-import { getActiveTurnTracker, runInTurnContext as runInTurnContextAls } from './turn-context.js';
+import { getActiveTurnTracker, runInTurnContext as runInTurnContextAls, type ScheduleTurnContext, appendTurnActiveSkills, getTurnActiveSkillsFromContext } from './turn-context.js';
+import { computeDeferredDelta } from './turn-deferred-delta.js';
+import { resolveDeferredToolsConfig } from '../tool-catalog/resolve-config.js';
 import { normalizePromptMessages } from './prompt-input.js';
 import { resolveToolRequesterRole } from '../security/owner-approve-always-store.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
@@ -139,8 +141,9 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   private rateLimiter: RateLimiter;
   private subagentManager: SubagentManager | null = null;
   private bootstrapContext: string = '';
-  private activeSkillsContext: string = '';
+  private alwaysSkillsBaseline: string = '';
   private skillsSummaryXML: string = '';
+  private pendingScheduleTurnContext?: ScheduleTurnContext;
   private modelRegistry: ModelRegistry | null = null;
   private phaseTraceEnabled: boolean;
   private promptTraceEnabled: boolean;
@@ -260,15 +263,34 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
       this.bootstrapContext = deps.bootstrapContext;
       logger.debug(`Bootstrap context set (${deps.bootstrapContext.length} chars)`);
     }
-    if (deps.activeSkillsContext !== undefined) this.activeSkillsContext = deps.activeSkillsContext || '';
+    if (deps.activeSkillsContext !== undefined) {
+      this.alwaysSkillsBaseline = deps.activeSkillsContext || '';
+    }
     if (deps.skillsSummaryXML !== undefined) this.skillsSummaryXML = deps.skillsSummaryXML || '';
   }
 
+  /** turn 内 Active Skills（ALS）；无 turn 时回退 always baseline */
+  getTurnActiveSkills(): string {
+    const fromTurn = getTurnActiveSkillsFromContext();
+    if (fromTurn) return fromTurn;
+    return this.alwaysSkillsBaseline;
+  }
+
+  /** @deprecated 使用 getTurnActiveSkills() */
+  get activeSkillsContext(): string {
+    return this.getTurnActiveSkills();
+  }
+
+  getAlwaysSkillsBaseline(): string {
+    return this.alwaysSkillsBaseline;
+  }
+
+  initScheduleTurnContext(ctx: ScheduleTurnContext): void {
+    this.pendingScheduleTurnContext = ctx;
+  }
+
   appendActiveSkillsContext(fragment: string): void {
-    const trimmed = fragment.trim();
-    if (!trimmed) return;
-    const prev = this.activeSkillsContext || '';
-    this.activeSkillsContext = prev ? `${prev}\n\n${trimmed}` : trimmed;
+    appendTurnActiveSkills(fragment);
   }
 
   buildDisciplinedPrompt(basePrompt: string): string {
@@ -504,7 +526,9 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   runInTurnContext<T>(turnId: string, fn: () => Promise<T>): Promise<T> {
     const tracker = new TurnTracker(this.config.subagentTurnWaitMs);
-    return runInTurnContextAls(turnId, tracker, fn);
+    const scheduleContext = this.pendingScheduleTurnContext;
+    this.pendingScheduleTurnContext = undefined;
+    return runInTurnContextAls(turnId, tracker, fn, scheduleContext ? { scheduleContext } : undefined);
   }
 
   getSubagentManager(): SubagentManager | null {
@@ -536,6 +560,14 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   getLastTurnMetrics(): ZhinAgentTurnMetrics | null {
     return this.lastTurnMetrics;
+  }
+
+  /** 本 turn deferred tools/skills delta（调度预演采集 execution plan 用） */
+  getLastTurnToolSnapshot(): { tools: string[]; skills: string[] } {
+    const priv = asPrivate(this);
+    const snap = priv.lastDeferredSessionSnapshot ?? { loadedTools: {}, loadedSkills: [] };
+    const deferredCfg = resolveDeferredToolsConfig(this.config);
+    return computeDeferredDelta(snap, deferredCfg.alwaysLoadedTools, priv.lastDeferredSnapshotBefore);
   }
 
   private beginActiveTurn(): void {

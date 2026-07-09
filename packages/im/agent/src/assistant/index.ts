@@ -62,6 +62,8 @@ export type {
   ScheduleJob,
   ScheduleJobFile,
   ScheduleJobState,
+  ScheduleJobCreator,
+  ScheduleJobExecutionPlan,
   AssistantJob,
   AssistantJobFile,
   AssistantJobState,
@@ -77,6 +79,34 @@ export {
 } from './types.js';
 
 export { jobPrompt } from './job-utils.js';
+export {
+  captureScheduleJobCreator,
+  parseScheduleJobCreator,
+  senderFromScheduleCreator,
+} from './job-creator.js';
+
+export {
+  SCHEDULE_MESSAGE_EXTRA,
+  buildScheduleTurnPrompt,
+  buildSchedulePreviewPrompt,
+  buildScheduleTimeContextPrompt,
+  parseExecutionPlanFromArgs,
+  parseScheduleJobExecutionPlan,
+  parseStringArrayArg,
+} from './schedule-execution.js';
+
+export { buildScheduleTurnMessage } from './schedule-message.js';
+export type { BuildScheduleTurnMessageInput } from './schedule-message.js';
+export { preloadScheduleTools, preloadScheduleToolsFromContext } from './schedule-tool-runtime.js';
+export { rehydrateTurnActiveSkills } from './schedule-skills.js';
+export {
+  addScheduleJob,
+  generateScheduleJobId,
+  parseScheduleAddFromToolArgs,
+  parseScheduleAddFromRpcMessage,
+  parseScheduleNotifyFromRpc,
+} from './schedule-job-service.js';
+export type { ScheduleAddInput } from './schedule-job-service.js';
 
 export {
   ScheduleJobStore,

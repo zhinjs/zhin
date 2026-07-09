@@ -6,7 +6,6 @@ import {
   touchToolsInSnapshot,
   type DeferredToolSessionSnapshot,
 } from '@zhin.js/ai';
-import type { Message } from '../orchestrator/types.js';
 import {
   buildDeferredStats,
   buildToolCatalog,
@@ -45,7 +44,6 @@ export async function resolveAgentToolsForTurn(
   agent: ZhinAgentPrivate,
   allTools: AgentTool[],
   sessionId: string,
-  _commMessage?: Message,
 ): Promise<ResolvedToolsForTurn> {
   const deferredCfg = resolveDeferredToolsConfig(agent.config);
   const alwaysLoaded = new Set(deferredCfg.alwaysLoadedTools);
@@ -58,8 +56,8 @@ export async function resolveAgentToolsForTurn(
   });
 
   let sessionSnapshot = await agent.contextRepository.getDeferredToolSnapshot(sessionId);
+  let touched = false;
   if (agent.skillRegistry?.getAlwaysSkills) {
-    let touched = false;
     for (const skill of agent.skillRegistry.getAlwaysSkills()) {
       sessionSnapshot = addSkillToSnapshot(sessionSnapshot, skill.name);
       sessionSnapshot = touchToolsInSnapshot(
@@ -69,9 +67,9 @@ export async function resolveAgentToolsForTurn(
       );
       touched = true;
     }
-    if (touched) {
-      await persistDeferredToolSnapshot(agent, sessionId, sessionSnapshot);
-    }
+  }
+  if (touched) {
+    await persistDeferredToolSnapshot(agent, sessionId, sessionSnapshot);
   }
   const sessionLoaded = getLoadedToolNamesFromSnapshot(sessionSnapshot);
   const apiTools = resolveDeferredApiTools(catalog, alwaysLoaded, sessionLoaded);

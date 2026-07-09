@@ -26,7 +26,7 @@ export interface MessageChannel{
      * - QQ 子频道：type=channel + parent.guild
      */
     parent?: {
-        type: 'group' | 'guild';
+        type: 'group' | 'channel' | 'guild';
         id: string;
     };
 }

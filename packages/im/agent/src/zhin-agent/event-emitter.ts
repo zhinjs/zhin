@@ -1,5 +1,6 @@
 import type { Message, Plugin } from '@zhin.js/core';
 import { Logger, formatCompact } from '@zhin.js/logger';
+import { getScheduleTurnContext } from './turn-context.js';
 
 const logger = new Logger(null, 'ZhinAgent');
 
@@ -20,7 +21,16 @@ export class ZhinAgentEventEmitter {
     mode: Plugin.AIEventPayload['mode'],
     extra: Partial<Plugin.AIEventPayload> = {},
   ): Plugin.AIEventPayload {
-    const { source = 'zhin-agent', ...rest } = extra;
+    const { source = 'zhin-agent', hookContext: extraHookContext, ...rest } = extra;
+    const scheduleCtx = getScheduleTurnContext();
+    const hookContext: Record<string, unknown> = {
+      ...(extraHookContext && typeof extraHookContext === 'object' ? extraHookContext : {}),
+    };
+    if (scheduleCtx?.createdBy) hookContext.scheduleCreatedBy = scheduleCtx.createdBy;
+    if (scheduleCtx?.jobId) hookContext.scheduleJobId = scheduleCtx.jobId;
+    if (scheduleCtx?.preview === true) hookContext.schedulePreview = true;
+    if (scheduleCtx?.activityFeedback === true) hookContext.scheduleActivityFeedback = true;
+    if (scheduleCtx?.executionPlan) hookContext.scheduleExecutionPlan = scheduleCtx.executionPlan;
     return {
       sessionId,
       source,
@@ -31,6 +41,7 @@ export class ZhinAgentEventEmitter {
       sceneId: commMessage.$channel?.id ?? commMessage.$sender.id,
       messageId: commMessage.$id,
       scope: commMessage.$channel?.type ?? 'private',
+      ...(Object.keys(hookContext).length > 0 ? { hookContext } : {}),
       ...rest,
     };
   }

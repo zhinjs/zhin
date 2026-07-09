@@ -210,7 +210,7 @@ export {
   generateScheduleJobId,
   SCHEDULE_JOBS_FILENAME,
 } from './schedule-manager.js';
-export type { ScheduleManager, PromptOptimizer } from './schedule-manager.js';
+export type { ScheduleManager } from './schedule-manager.js';
 
 export {
   ScheduleJobEngine,
@@ -237,6 +237,14 @@ export {
   SCHEDULE_JOBS_VERSION,
   ASSISTANT_JOBS_FILENAME,
   syncProfileRoutinesToStore,
+  captureScheduleJobCreator,
+  parseScheduleJobCreator,
+  parseExecutionPlanFromArgs,
+  parseScheduleJobExecutionPlan,
+  addScheduleJob,
+  parseScheduleAddFromToolArgs,
+  parseScheduleAddFromRpcMessage,
+  buildScheduleTurnPrompt,
 } from './assistant/index.js';
 export type {
   AssistantConfig,
@@ -247,6 +255,8 @@ export type {
   NotificationRouter,
   ScheduleJob,
   ScheduleJobFile,
+  ScheduleJobCreator,
+  ScheduleJobExecutionPlan,
   AssistantJob,
   AssistantJobFile,
   AssistantEventRequest,
@@ -425,6 +435,7 @@ export {
   getActivityFeedbackManager,
   initActivityFeedbackManager,
   resolveActivityFeedbackPhaseConfig,
+  isScheduleActivityFeedbackEnabled,
   toActivityFeedbackEventContext,
   resolveActivitySceneType,
   resolveActivityEventTargets,

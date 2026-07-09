@@ -29,6 +29,7 @@ describe('task executor outbound seam', () => {
     const executor = createTaskExecutor({
       agent: {
         process: vi.fn(async () => [{ type: 'text', content: 'hello' }]),
+        initScheduleTurnContext: vi.fn(),
       } as any,
       resolveAdapter: () => ({ sendMessage }),
     });

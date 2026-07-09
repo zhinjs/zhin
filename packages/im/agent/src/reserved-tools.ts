@@ -26,6 +26,7 @@ export const RESERVED_TOOL_NAMES = [
   'spawn_task',
   'schedule_list',
   'schedule_add',
+  'schedule_preview',
   'schedule_remove',
   'schedule_pause',
   'schedule_resume',
