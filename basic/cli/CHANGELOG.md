@@ -1,5 +1,16 @@
 # @zhin.js/cli
 
+## 1.0.92
+
+### Patch Changes
+
+- 5cc9c03: fix: ai 优化
+- b9b3881: fix: 增加游戏引擎以及部分游戏
+- Updated dependencies [5cc9c03]
+- Updated dependencies [b9b3881]
+  - @zhin.js/logger@1.0.73
+  - @zhin.js/scaffold-wizard@0.1.7
+
 ## 1.0.91
 
 ### Patch Changes

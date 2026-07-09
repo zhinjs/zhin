@@ -1,5 +1,13 @@
 # @zhin.js/client
 
+## 2.0.4
+
+### Patch Changes
+
+- 5cc9c03: fix: ai 优化
+- Updated dependencies [5cc9c03]
+  - @zhin.js/contract@1.0.2
+
 ## 2.0.3
 
 ### Patch Changes

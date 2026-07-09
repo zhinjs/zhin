@@ -1,5 +1,11 @@
 # @zhin.js/contract
 
+## 1.0.2
+
+### Patch Changes
+
+- 5cc9c03: fix: ai 优化
+
 ## 1.0.1
 
 ### Patch Changes

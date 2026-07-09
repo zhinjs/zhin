@@ -1,5 +1,14 @@
 # @zhin.js/plugin-repeater
 
+## 3.0.1
+
+### Patch Changes
+
+- 5cc9c03: fix: ai 优化
+- Updated dependencies [5cc9c03]
+- Updated dependencies [7700903]
+  - zhin.js@4.1.1
+
 ## 3.0.0
 
 ### Patch Changes

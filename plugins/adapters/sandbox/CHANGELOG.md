@@ -1,5 +1,22 @@
 # @zhin.js/adapter-process
 
+## 5.0.4
+
+### Patch Changes
+
+- 5cc9c03: fix: ai 优化
+- b9b3881: fix: 增加游戏引擎以及部分游戏
+- Updated dependencies [5b08052]
+- Updated dependencies [5cc9c03]
+- Updated dependencies [36d6db2]
+- Updated dependencies [b9b3881]
+- Updated dependencies [7700903]
+  - @zhin.js/core@1.3.3
+  - @zhin.js/client@2.0.4
+  - @zhin.js/contract@1.0.2
+  - @zhin.js/host-api@2.0.4
+  - @zhin.js/host-router@2.0.2
+
 ## 5.0.3
 
 ### Patch Changes

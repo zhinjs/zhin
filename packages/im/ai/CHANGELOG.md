@@ -1,5 +1,16 @@
 # @zhin.js/ai
 
+## 1.4.3
+
+### Patch Changes
+
+- 5cc9c03: fix: ai 优化
+- 36d6db2: fix: agent 互联
+- b9b3881: fix: 增加游戏引擎以及部分游戏
+- 7700903: fix: 游戏强化
+- Updated dependencies [5cc9c03]
+  - @zhin.js/logger@1.0.73
+
 ## 1.4.2
 
 ### Patch Changes

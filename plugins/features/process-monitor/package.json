@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/process-monitor",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "进程监控与重启通知插件",
   "type": "module",
   "main": "./lib/index.js",

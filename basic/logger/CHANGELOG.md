@@ -1,5 +1,11 @@
 # @zhin.js/logger
 
+## 1.0.73
+
+### Patch Changes
+
+- 5cc9c03: fix: ai 优化
+
 ## 1.0.72
 
 ### Patch Changes
