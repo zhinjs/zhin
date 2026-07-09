@@ -51,21 +51,12 @@
     }
   },
   "devDependencies": {
-<<<<<<< HEAD
-    "@ai-sdk/anthropic": "^4.0.0",
-    "@ai-sdk/deepseek": "^3.0.0",
-    "@ai-sdk/google": "^4.0.0",
-    "@ai-sdk/openai": "^4.0.0",
-    "@ai-sdk/openai-compatible": "^3.0.0",
-    "@types/node": "^26.1.0",
-=======
     "@ai-sdk/anthropic": "^4.0.9",
     "@ai-sdk/deepseek": "^3.0.5",
     "@ai-sdk/google": "^4.0.9",
     "@ai-sdk/openai": "^4.0.8",
     "@ai-sdk/openai-compatible": "^3.0.5",
-    "@types/node": "^25.9.2",
->>>>>>> 53946321b8d533d710ed7c11836bfc94f5214518
+    "@types/node": "^26.1.0",
     "@zhin.js/database": "workspace:*",
     "ai": "^7.0.2",
     "typescript": "^6.0.3",

@@ -92,13 +92,8 @@
     "chalk": "^5.6.2",
     "commander": "^15.0.0",
     "cross-spawn": "^7.0.6",
-<<<<<<< HEAD
-    "eslint": "^10.5.0",
-    "fs-extra": "^11.3.6",
-=======
     "eslint": "^10.6.0",
-    "fs-extra": "^11.3.5",
->>>>>>> 0c34c01ea2685bac831bd1f209331d2434a553ad
+    "fs-extra": "^11.3.6",
     "inquirer": "^14.0.2",
     "ora": "^9.4.1",
     "rimraf": "^6.1.3",
