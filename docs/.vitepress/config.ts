@@ -112,12 +112,13 @@ const adrSidebar0021: DefaultTheme.SidebarItem[] = [
   { text: '0031 Schedule 取代 Cron', link: '/adr/0031-schedule-facility-replace-cron' },
   { text: '0035 A2A Agent Mesh', link: '/adr/0035-a2a-agent-mesh' },
   { text: '0036 Internal Room 协作', link: '/adr/0036-internal-room-collaboration' },
+  { text: '0038 Activity Feedback 三相位', link: '/adr/0038-activity-feedback-schedule-phases' },
 ]
 
 const adrSidebar: DefaultTheme.SidebarItem[] = [
   sidebarGroup('0001–0010', adrSidebar0001),
   sidebarGroup('0011–0020', adrSidebar0011),
-  sidebarGroup('0021–0036', adrSidebar0021),
+  sidebarGroup('0021–0038', adrSidebar0021),
 ]
 
 /** A+B：部署、配置、写插件与 AI */
