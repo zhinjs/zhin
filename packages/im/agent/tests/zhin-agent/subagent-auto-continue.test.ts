@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   SUBAGENT_AUTO_CONTINUE_MARKER,
   buildSubagentAutoContinueUserMessage,
-} from '../../src/zhin-agent/subagent-auto-continue.js';
+} from '../../src/turn/subagent-auto-continue.js';
 
 describe('subagent-auto-continue', () => {
   it('builds wake-up user message for main agent', () => {

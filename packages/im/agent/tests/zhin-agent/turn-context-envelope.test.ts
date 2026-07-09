@@ -5,11 +5,11 @@ import {
   prependTurnContextEnvelope,
   TURN_CONTEXT_BEGIN,
   TURN_CONTEXT_END,
-} from '../../src/zhin-agent/prompt.js';
+} from '../../src/context/turn-envelope.js';
 import {
   applyTurnContextToUserMessages,
   prependEnvelopeToFirstUserText,
-} from '../../src/zhin-agent/turn-user-message.js';
+} from '../../src/context/turn-user-message.js';
 import { createUserMessage } from '@zhin.js/ai';
 
 describe('buildTurnContextEnvelope', () => {

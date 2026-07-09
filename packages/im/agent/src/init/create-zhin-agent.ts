@@ -4,9 +4,8 @@
  */
 import * as path from 'node:path';
 import { formatCompact, getPlugin, getScheduler, isZhinTool, Scheduler, setScheduler, type SendOptions } from '@zhin.js/core';
-import { deliverSubagentResult } from '../media/deliver-subagent-result.js';
 import { createProactiveOutboundService } from '../outbound/send-proactive.js';
-import { sceneRefFromMessage } from '@zhin.js/core';
+import { composeZhinAgentRuntime } from './compose-zhin-agent-runtime.js';
 import { ModelRegistry, computeTierScore, InMemoryMemoryEntryRepository } from '@zhin.js/ai';
 import { setMemoryEntryRepository } from '../memory-entry-registry.js';
 import { ZhinAgent } from '../zhin-agent/index.js';
@@ -21,7 +20,7 @@ import {
   DEFAULT_HARD_ORCHESTRATOR_TOOLS,
   DEFAULT_ALWAYS_LOADED_TOOLS,
   type ZhinAgentConfig,
-} from '../zhin-agent/config.js';
+} from '../config/index.js';
 import { setScheduleManager } from '../schedule-manager.js';
 import { ScheduleEngine, getScheduleEngine, setScheduleEngine } from '@zhin.js/kernel';
 import { createTaskExecutor } from '../task-executor.js';
@@ -62,7 +61,7 @@ import { registerDefaultExecutors } from '../orchestrator/bootstrap-executors.js
 import { initRemoteAgentRegistry } from '../orchestrator/remote-agent-registry.js';
 import { startRemoteTaskPoller } from '../orchestrator/remote-task-poller.js';
 import { createSyntheticMessage, type Message } from '@zhin.js/core';
-import { asPrivate } from '../zhin-agent/zhin-agent-private.js';
+import { asPrivate } from '../internal/as-private.js';
 import type { AIService } from '../service.js';
 import { createExecPolicyHook } from '../security/exec-policy-hook.js';
 import { createFilePolicyHook } from '../security/file-policy-hook.js';
@@ -229,9 +228,9 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
 
     // Subagent manager for background tasks
     const orchestratorEarly = root.inject('agent');
-    agent.initSubagentManager(() => {
+    agent.initSubagentSystem(() => {
       const modelName = zhinBinding.model || provider.models[0] || '';
-      const fullConfig = { ...DEFAULT_CONFIG, ...agentConfig } as Required<import('../zhin-agent/config.js').ZhinAgentConfig>;
+      const fullConfig = { ...DEFAULT_CONFIG, ...agentConfig } as Required<import('../config/index.js').ZhinAgentConfig>;
       const zhinTools = [
         ...createBuiltinTools({
           plugin,
@@ -258,7 +257,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
         };
       });
     });
-    agent.getSubagentManager()?.configureRouting({
+    agent.getSubagentSystem()?.configureRouting({
       getProvider: (alias) => ai.getProvider(alias),
       resolveBinding: (name) => ai.getBindingRegistry().getBinding(name),
       getMcpRegistry: () => orchestratorEarly?.mcps ?? null,
@@ -305,31 +304,19 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
       },
     });
 
-    const deliverOutbound = async (
-      origin: Parameters<typeof deliverSubagentResult>[0]['origin'],
-      delivery: Parameters<typeof deliverSubagentResult>[0]['delivery'],
-    ) => {
-      const scene = sceneRefFromMessage(origin.message);
-      if (!scene) {
-        logger.warn(formatCompact({ error: 'scene_ref_missing', platform: origin.message.$adapter }));
-        return;
-      }
-      await deliverSubagentResult({
-        origin,
-        delivery,
-        send: (opts) => proactiveOutbound.send({
-          scene,
-          source: 'subagent',
-          originMessage: origin.message,
-          quoteMessageId: opts.quoteId,
-        }, opts.content),
-      });
-    };
+    const composed = composeZhinAgentRuntime(agent, provider, proactiveOutbound);
+    const { deliverOutbound } = composed;
     const wiredAgentConfig = {
       ...DEFAULT_CONFIG,
-      ...(agentConfig as import('../zhin-agent/config.js').ZhinAgentConfig | undefined),
-    } as Required<import('../zhin-agent/config.js').ZhinAgentConfig>;
+      ...(agentConfig as import('../config/index.js').ZhinAgentConfig | undefined),
+    } as Required<import('../config/index.js').ZhinAgentConfig>;
     agent.configure({
+      agentCore: composed.agentCore,
+      toolSystem: composed.toolSystem,
+      contextSystem: composed.contextSystem,
+      memorySystem: composed.memorySystem,
+      sessionSystem: composed.sessionSystem,
+      eventSystem: composed.eventSystem,
       ...(wiredAgentConfig.subagentDirectImDelivery
         ? { subagentSender: deliverOutbound }
         : {}),

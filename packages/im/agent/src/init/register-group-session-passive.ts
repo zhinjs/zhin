@@ -13,8 +13,8 @@ import type { Message } from '@zhin.js/core';
 import { formatCompactLog } from '@zhin.js/logger';
 import { findCellForInbound } from '../collaboration/collaboration-config.js';
 import { getCollaborationSceneService } from '../collaboration/scene-service.js';
-import { recordPassiveGroupMessage } from '../zhin-agent/passive-group-session.js';
-import { asPrivate } from '../zhin-agent/zhin-agent-private.js';
+import { recordPassiveGroupMessage } from '../session/passive-group-session.js';
+import { asPrivate } from '../internal/as-private.js';
 import type { AIServiceRefs } from './shared-refs.js';
 
 function isBotSelfMessage(message: Message): boolean {

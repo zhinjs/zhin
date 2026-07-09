@@ -4,11 +4,11 @@
  */
 import { describe, it, expect } from 'vitest';
 import { checkExecPolicy } from '../src/security/exec-policy.js';
-import type { ZhinAgentConfig } from '../src/zhin-agent/config.js';
-import { DEFAULT_CONFIG } from '../src/zhin-agent/config.js';
+import type { ZhinAgentConfig } from '../src/config/index.js';
+import { DEFAULT_CONFIG } from '../src/config/index.js';
 import { checkFileAccess, isBlockedDevicePath } from '../src/security/file-policy.js';
-import { describePromptSectionsForDebug } from '../src/zhin-agent/prompt.js';
-import type { RichSystemPromptContext } from '../src/zhin-agent/prompt.js';
+import { describePromptSectionsForDebug } from '../src/prompt/system-prompt.js';
+import type { RichSystemPromptContext } from '../src/prompt/system-prompt.js';
 
 function makeConfig(overrides: Partial<ZhinAgentConfig> = {}): Required<ZhinAgentConfig> {
   return {

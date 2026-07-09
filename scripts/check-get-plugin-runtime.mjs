@@ -45,14 +45,24 @@ const CALLBACK_MARKERS = [
 ];
 
 /** @param {string} line */
-function lineHasGetPluginCall(line) {
+function lineIsCommentOrDoc(line) {
   const trimmed = line.trim();
-  if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/**')) return false;
+  return trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/**');
+}
+
+/** @param {string} line @param {string} pattern */
+function lineHasCall(line, pattern) {
+  if (lineIsCommentOrDoc(line)) return false;
   const noStrings = line.replace(
     /('[^'\\]*(?:\\.[^'\\]*)*'|"[^"\\]*(?:\\.[^'\\]*)*"|`[^`\\]*(?:\\.[^`\\]*)*`)/g,
     '',
   );
-  return /\bgetPlugin\s*\(/.test(noStrings);
+  return pattern.test(noStrings);
+}
+
+/** @param {string} line */
+function lineHasGetPluginCall(line) {
+  return lineHasCall(line, /\bgetPlugin\s*\(/);
 }
 
 /** @param {string} line */
@@ -144,6 +154,52 @@ if (violations.length > 0) {
     console.error(`  ${v.file}:${v.line}  ${v.text}`);
   }
   console.error('\nCapture plugin/root at registration time and use closures instead.');
+  process.exit(1);
+}
+
+/** ideal 模块 turn 路径禁止 getHostRootPlugin；hostPlugin 须经 configure → emitter 注入 */
+const getHostRootPluginBanRoots = [
+  'packages/im/agent/src/core',
+  'packages/im/agent/src/skill',
+  'packages/im/agent/src/turn',
+  'packages/im/agent/src/tool',
+  'packages/im/agent/src/context',
+  'packages/im/agent/src/memory',
+  'packages/im/agent/src/session',
+  'packages/im/agent/src/event',
+];
+
+/** @type {{ file: string, line: number, text: string }[]} */
+const hostRootViolations = [];
+
+for (const rel of getHostRootPluginBanRoots) {
+  const abs = path.join(repoRoot, rel);
+  const files = [];
+  walkTs(abs, files);
+  for (const file of files) {
+    const txt = fs.readFileSync(file, 'utf8');
+    if (!/\bgetHostRootPlugin\s*\(/.test(txt)) continue;
+    const lines = txt.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+      if (lineHasCall(lines[i], /\bgetHostRootPlugin\s*\(/)) {
+        hostRootViolations.push({
+          file: path.relative(repoRoot, file),
+          line: i + 1,
+          text: lines[i].trim(),
+        });
+      }
+    }
+  }
+}
+
+if (hostRootViolations.length > 0) {
+  console.error(
+    'getHostRootPlugin() must not be used in ideal agent modules (core/skill/turn/tool/context/memory/session/event):\n',
+  );
+  for (const v of hostRootViolations) {
+    console.error(`  ${v.file}:${v.line}  ${v.text}`);
+  }
+  console.error('\nInject hostPlugin via ZhinAgent.configure({ hostPlugin: root }) and read host.emitter.getHostPlugin().');
   process.exit(1);
 }
 

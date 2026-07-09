@@ -7,7 +7,7 @@ import type { AIProvider } from '@zhin.js/ai';
 import {
   getCompactionStateCount,
   clearCompactionStates,
-} from '../src/zhin-agent/compaction-runtime.js';
+} from '../src/memory/compaction-runtime.js';
 import { MemoryOrchestrationRepository } from '../src/orchestrator/orchestration-repository.js';
 import { MemoryAgentSessionStore } from '@zhin.js/ai';
 import { collectStabilityMetrics, startStabilityMonitor } from '../src/stability/memory-pressure.js';

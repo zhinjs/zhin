@@ -117,5 +117,73 @@ _避免使用_：私有 `resolveTurnSessionKey`、snapshot 与 cell 双轨 key
 - “tool” 过去同时指 Zhin 运行时工具和 Provider 工具。已决议：**Tool** 是面向 Zhin 的契约；**AgentTool** 是 `@zhin.js/ai` 的契约。
 - “maxTokens” 过去混用了生成预算和上下文容量。已决议：**Context Budget** 表示历史/模型窗口；生成限制仍属于模型或 Provider 选项。
 - **MCP Client vs Server**：Client（`mcp-client/`）消费外部 MCP 工具；`packages/host/mcp` 为 MCP **Server**（向外暴露 Zhin 工具）。SDK 为可选 peer；单 server 连接失败不阻塞 AI 回合。
-- **Kernel vs Dispatcher**：编排 Task 的 `completed` / `failed` / `cancelled` 仅由 **OrchestrationKernel** 写库；**AgentDispatcher** `recordResult` 不得作为编排终态权威（ADR 0027）。
+- **Kernel vs Dispatcher**：编排 Task 的 `completed` / `failed` / `cancelled` 仅由 **OrchestrationKernel** 写库；**AgentDispatcher** `recordResult` 不得作为编排终态权威（ADR 0027）。Port 契约见 [`src/orchestrator/PORTS.md`](src/orchestrator/PORTS.md)。
+
+## 模块化重构（理想蓝图映射）
+
+> SSOT：`.opencode/plans/refactor-agent-modular-architecture.md`（理想蓝图冻结；迁移路径严格执行）。
+
+### 层级边界契约
+
+```
+@zhin.js/ai          stream / agentLoop / Context / Memory / Compaction
+       ↑ 仅类型与循环，无 Message / Plugin / Endpoint
+@zhin.js/agent       ZhinAgent 门面 + 8 理想模块（包内 src/*）+ Orchestration + Security
+       ↑ 理解 IM，出站仍走 Message.$reply / Adapter.sendMessage（ADR 0004）
+zhin.js + plugins    createZhinAgent、register-ai-trigger、activity-feedback、adapter 绑定
+```
+
+| 理想模块 | 包内路径 | 主要落层 | 与下层关系 |
+|----------|----------|----------|------------|
+| Agent Core | `src/core/` | agent | **委托** `@zhin.js/ai` `agentLoop`；禁止自有 LLM 迭代（ADR 0009） |
+| Tool System | `src/tool/` | agent | 包装 orchestrator + builtin + MCP 生命周期 |
+| Session System | `src/session/` | agent | IM/Agent 双 store + `resolveAgentTurnSessionKey` SSOT |
+| Event System | `src/event/` | agent | Agent turn 域事件；不替代 Kernel RunEvent 或 plugin `before.*` |
+| Skill System | `src/skill/` | agent | 包装 `SkillRegistry` + discovery |
+| Memory System | `src/memory/` | agent → port → ai | `MemoryStore` 适配 `ContextRepository`；压缩委托 ai compaction |
+| Subagent System | `src/subagent/` | agent | `SubagentSystem` spawn/cancel；`ResultSink` 对接 outbound |
+| Context System | `src/context/` | agent | prompt-assembly / turn-user-message builder 链 |
+| Orchestration（图内） | `src/orchestrator/` | agent | Kernel SSOT（ADR 0027）；不并入 Subagent |
+| IM 组合 | `src/init/`、`collaboration/` | agent | 入站/出站策略，不进 ai |
+
+### 现状 → 理想模块映射
+
+| 理想模块 | 实现路径 | 公开入口 |
+|----------|----------|----------|
+| Agent Core | `src/core/` | `@zhin.js/agent/core` |
+| Tool System | `src/tool/` | `@zhin.js/agent/tool` |
+| Session System | `src/session/`、`collaboration/resolve-agent-session-key.ts` | `@zhin.js/agent/session` |
+| Event System | `src/event/`（含 `event-emitter.ts`、`session-events.ts`） | `@zhin.js/agent/event` |
+| Skill System | `src/skill/`、`orchestrator/skill-registry.ts` | `@zhin.js/agent/skill` |
+| Memory System | `src/memory/`、`ContextRepository`（ai） | `@zhin.js/agent/memory` |
+| Subagent System | `src/subagent/`、`subagent.ts` | `@zhin.js/agent/subagent` |
+| Context System | `src/context/` | `@zhin.js/agent/context` |
+| Prompt | `src/prompt/` | `@zhin.js/agent/prompt` |
+| Turn | `src/turn/` | `@zhin.js/agent/turn` |
+| Config | `src/config/` | `@zhin.js/agent/config` |
+| Orchestration | `src/orchestrator/` | 包根 export + [PORTS.md](src/orchestrator/PORTS.md) |
+| IM 组合 | `src/init/`、`collaboration/`、`zhin-agent/`（门面） | 包根 export |
+| Host 契约（包内） | `src/internal/agent-host.ts`、`as-private.ts` | 不对外 export |
+
+各模块 `contracts.ts` 承载蓝图接口并与实现对齐（注明已实现 / 未实现项）；`index.ts` re-export 公开 API。ideal 模块仅依赖 `internal/agent-host` 类型与 `asPrivate()`，不 import `zhin-agent/` 实现。
+
+### 事件总线分工
+
+| 总线 | 职责 |
+|------|------|
+| **EventSystem**（蓝图，`src/event/`） | Agent turn：`turn_start`、`tool_call`、`chunk`、`turn_end` |
+| **ZhinAgentEventEmitter** | 现有订阅方、`scheduleContext` 投影；迁移期作 EventSystem 后端 |
+| **OrchestrationKernel RunEvent** | Run/Task 持久化事件流；**不合并** |
+| **Plugin `before.*` / hooks** | IM 发送链、AI hook；仍走 `@zhin.js/core` |
+
+### ADR 对齐确认（阶段 0）
+
+| ADR | 约束 | 模块化重构符合性 |
+|-----|------|------------------|
+| [0009](../../../docs/adr/0009-pi-aligned-ai-agent-core.md) | 唯一 LLM 入口 `stream` / `agentLoop` | `AgentCore.runText()` AsyncGenerator + `runTextTurn` collector |
+| [0004](../../../docs/adr/0004-normalize-queue-outbound-fields-before-im-send.md) | 出站走 `Message.$reply` / Adapter | Subagent `ResultSink`、proactive 不得旁路发送链 |
+| [0027](../../../docs/adr/0027-agent-run-orchestration-kernel.md) | Kernel 为 Run/Task 终态 SSOT | Orchestration 保持 `src/orchestrator/`；Dispatcher 仅投影 |
+| [0019](../../../docs/adr/0019-install-size-layering.md) | agent 可选 peer、依赖扁平 | 迁移期单包 + 子目录；阶段 5 前不拆 8 个 npm 包 |
+
+**公开 API**：`ZhinAgent` 实现 `config/agent-interfaces.ts` 四接口（`IAgentTurnProcessor` 等）；`@zhin.js/agent` 与 `@zhin.js/agent/config` 均可 import 类型。
 

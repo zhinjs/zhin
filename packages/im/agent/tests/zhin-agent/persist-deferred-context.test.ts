@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { persistDeferredWorkerResultToContext } from '../../src/zhin-agent/persist-deferred-context.js';
-import type { ZhinAgentPrivate } from '../../src/zhin-agent/zhin-agent-private.js';
+import { persistDeferredWorkerResultToContext } from '../../src/turn/persist-deferred-context.js';
+import type { ZhinAgentPrivate } from '../../src/internal/agent-host.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
 
 describe('persistDeferredWorkerResultToContext', () => {

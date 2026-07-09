@@ -11,7 +11,7 @@
 
 import type { AgentTool } from '@zhin.js/ai';
 import { getHostRootPlugin } from '@zhin.js/core';
-import type { ZhinAgentConfig, ExecApprovalMode } from '../zhin-agent/config.js';
+import type { ZhinAgentConfig, ExecApprovalMode } from '../config/index.js';
 import { classifyBashCommand } from './file-policy.js';
 import { validateNetworkCommandUrl } from './network-policy.js';
 import { getCurrentCommMessage } from './comm-message-context.js';

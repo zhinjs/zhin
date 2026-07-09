@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { persistSubagentResultToContext } from '../../src/zhin-agent/persist-subagent-context.js';
-import type { ZhinAgentPrivate } from '../../src/zhin-agent/zhin-agent-private.js';
+import { persistSubagentResultToContext } from '../../src/turn/persist-subagent-context.js';
+import type { ZhinAgentPrivate } from '../../src/internal/agent-host.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
 
 describe('persistSubagentResultToContext', () => {

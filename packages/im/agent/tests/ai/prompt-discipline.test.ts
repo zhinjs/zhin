@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildRichSystemPrompt } from '../../src/zhin-agent/prompt.js';
-import { DEFAULT_CONFIG } from '../../src/zhin-agent/config.js';
+import { buildRichSystemPrompt } from '../../src/prompt/system-prompt.js';
+import { DEFAULT_CONFIG } from '../../src/config/index.js';
 
 describe('Prompt discipline block', () => {
   it('direct-tool prompt 应包含固定纪律规则', () => {

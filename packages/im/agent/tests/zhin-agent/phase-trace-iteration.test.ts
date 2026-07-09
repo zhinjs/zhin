@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { logAgentLoopIterationEnd } from '../../src/zhin-agent/phase-trace.js';
+import { logAgentLoopIterationEnd } from '../../src/internal/phase-trace.js';
 
 describe('logAgentLoopIterationEnd', () => {
   it('emits agent_loop.iteration.end with cache fields', () => {

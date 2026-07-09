@@ -79,7 +79,7 @@ OpenCode 的实践表明，“同时开几个子代理”主要由 **LLM 分解 
 - `packages/im/agent/src/subagent.ts`
 - `packages/im/agent/src/builtin/spawn-task-tool.ts`
 - `packages/im/agent/src/spawn/permission-task.ts`
-- `packages/im/agent/src/zhin-agent/persist-subagent-context.ts`
-- `packages/im/agent/src/zhin-agent/subagent-auto-continue.ts`
+- `packages/im/agent/src/turn/persist-subagent-context.ts`
+- `packages/im/agent/src/turn/subagent-auto-continue.ts`
 - `packages/im/ai/src/llm/tiered-tool-buckets.ts`
 - `docs/advanced/ai.md`（Subagent 章节）

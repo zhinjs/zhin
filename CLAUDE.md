@@ -178,7 +178,7 @@ Agent harness engineering 提供多层安全防护：执行策略（5 层防御�
 | Agent dispatcher | `packages/im/agent/src/orchestrator/agent-dispatcher.ts` |
 | Security policies | `packages/im/agent/src/security/` |
 | Sandbox environment | `packages/im/agent/src/security/sandbox.ts` |
-| Prompt builder | `packages/im/agent/src/zhin-agent/prompt-builder.ts` |
+| Prompt builder | `packages/im/agent/src/prompt/prompt-builder.ts` |
 | AI providers | `packages/im/ai/src/providers/` |
 | Architecture docs index | `docs/architecture/README.md` |
 | Architecture overview | `docs/architecture-overview.md` |

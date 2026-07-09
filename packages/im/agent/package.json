@@ -20,6 +20,56 @@
       "types": "./lib/task-executor.d.ts",
       "development": "./src/task-executor.ts",
       "import": "./lib/task-executor.js"
+    },
+    "./core": {
+      "types": "./lib/core/index.d.ts",
+      "development": "./src/core/index.ts",
+      "import": "./lib/core/index.js"
+    },
+    "./tool": {
+      "types": "./lib/tool/index.d.ts",
+      "development": "./src/tool/index.ts",
+      "import": "./lib/tool/index.js"
+    },
+    "./session": {
+      "types": "./lib/session/index.d.ts",
+      "development": "./src/session/index.ts",
+      "import": "./lib/session/index.js"
+    },
+    "./event": {
+      "types": "./lib/event/index.d.ts",
+      "development": "./src/event/index.ts",
+      "import": "./lib/event/index.js"
+    },
+    "./skill": {
+      "types": "./lib/skill/index.d.ts",
+      "development": "./src/skill/index.ts",
+      "import": "./lib/skill/index.js"
+    },
+    "./memory": {
+      "types": "./lib/memory/index.d.ts",
+      "development": "./src/memory/index.ts",
+      "import": "./lib/memory/index.js"
+    },
+    "./subagent": {
+      "types": "./lib/subagent/index.d.ts",
+      "development": "./src/subagent/index.ts",
+      "import": "./lib/subagent/index.js"
+    },
+    "./context": {
+      "types": "./lib/context/index.d.ts",
+      "development": "./src/context/index.ts",
+      "import": "./lib/context/index.js"
+    },
+    "./prompt": {
+      "types": "./lib/prompt/index.d.ts",
+      "development": "./src/prompt/index.ts",
+      "import": "./lib/prompt/index.js"
+    },
+    "./turn": {
+      "types": "./lib/turn/index.d.ts",
+      "development": "./src/turn/index.ts",
+      "import": "./lib/turn/index.js"
     }
   },
   "files": [

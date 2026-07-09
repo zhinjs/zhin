@@ -10,9 +10,9 @@ import {
   stripHallucinatedToolCalls,
   getLlmTransportModel,
 } from '@zhin.js/ai';
-import { stripThinkBlocks } from './zhin-agent/text-sanitize.js';
-import { runAgentLoopStandaloneTurn } from './zhin-agent/agent-loop-standalone.js';
-import type { ToolCallRecord } from './zhin-agent/tool-calls-user-format.js';
+import { stripThinkBlocks } from './core/text-sanitize.js';
+import { runAgentLoopStandaloneTurn } from './core/agent-loop-standalone.js';
+import type { ToolCallRecord } from './core/tool-calls-user-format.js';
 import { selectDeferredToolsForWorker } from './deferred-worker-tool-load.js';
 import {
   resolveAgentPromptMarkdown,
@@ -20,15 +20,15 @@ import {
 } from './agent-prompt/index.js';
 import type { AgentPromptBuildContext } from '@zhin.js/core';
 import type { ModelRegistry } from '@zhin.js/ai';
-import { resolveWorkerSlowToolTimeout, isPromptTraceEnabled, isPromptTraceVerbose, isPhaseTraceEnabled, buildAgentPromptCacheStreamOptions } from './zhin-agent/config.js';
-import type { ZhinAgentConfig, ExecApprovalMode } from './zhin-agent/config.js';
+import { resolveWorkerSlowToolTimeout, isPromptTraceEnabled, isPromptTraceVerbose, isPhaseTraceEnabled, buildAgentPromptCacheStreamOptions } from './config/index.js';
+import type { ZhinAgentConfig, ExecApprovalMode } from './config/index.js';
 import { createOwnerOrchestratedToolResultTransform } from './orchestrator/owner-confirm-orchestration.js';
 import { applyExecPolicyToTools } from './security/exec-policy.js';
-import { logPromptComposition } from './zhin-agent/prompt-trace.js';
-import { resolveWorkspacePrompt } from './zhin-agent/workspace-prompt.js';
+import { logPromptComposition } from './internal/prompt-trace.js';
+import { resolveWorkspacePrompt } from './prompt/workspace-prompt.js';
 import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import type { Message } from '@zhin.js/core';
-import { DEFAULT_ALWAYS_LOADED_TOOLS } from './zhin-agent/config.js';
+import { DEFAULT_ALWAYS_LOADED_TOOLS } from './config/index.js';
 
 const logger = new Logger(null, 'DeferredWorker');
 const ORCHESTRATOR_TOOL_SET = new Set<string>(DEFAULT_ALWAYS_LOADED_TOOLS);

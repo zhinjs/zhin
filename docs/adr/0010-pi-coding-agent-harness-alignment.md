@@ -88,7 +88,7 @@ ai:
 
 **保持 ADR 0009 epoch-only 语义**：`/new` 归档当前 epoch，下次 @ 创建新 `session_id`，LLM context 归零；`im_transcripts` **不归档**（`chat_history` 仍可检索）。
 
-**修复**：`/new`、`ai.clear`、`ai_clear` 统一调用 [`archiveSessionByKey`](../../packages/im/agent/src/zhin-agent/session-io.ts)（`contextRepository.archiveSession` + `agentSessionStore.archiveByKey`），**禁止**仅调 `imSessionStore.archiveByKey`。
+**修复**：`/new`、`ai.clear`、`ai_clear` 统一调用 [`archiveSessionByKey`](../../packages/im/agent/src/session/session-io.ts)（`contextRepository.archiveSession` + `agentSessionStore.archiveByKey`），**禁止**仅调 `imSessionStore.archiveByKey`。
 
 ### D3. 消息级会话树
 

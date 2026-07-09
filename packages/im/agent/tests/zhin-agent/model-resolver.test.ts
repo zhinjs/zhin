@@ -1,5 +1,5 @@
 import { ModelRegistry } from '@zhin.js/ai';
-import { resolveModelCandidates } from '../../src/zhin-agent/model-resolver.js';
+import { resolveModelCandidates } from '../../src/context/model-resolver.js';
 
 describe('resolveModelCandidates', () => {
   it('显式 models 白名单应过滤 ModelRegistry 缓存中的域外模型', () => {

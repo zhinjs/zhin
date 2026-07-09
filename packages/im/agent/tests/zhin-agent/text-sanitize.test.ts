@@ -3,7 +3,7 @@ import {
   looksLikeRawToolMarkup,
   sanitizeAssistantReply,
   stripHallucinatedToolCalls,
-} from '../../src/zhin-agent/text-sanitize.js';
+} from '../../src/core/text-sanitize.js';
 
 const DSML_SAMPLE = `<｜｜DSML｜｜tool_calls>
 <｜｜DSML｜｜invoke name="run_deferred_task">

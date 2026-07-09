@@ -1,19 +1,24 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { rehydrateTurnActiveSkills } from '../../src/assistant/schedule-skills.js';
-import { getTurnActiveSkillsFromContext, runInTurnContext } from '../../src/zhin-agent/turn-context.js';
-import { TurnTracker } from '../../src/zhin-agent/turn-tracker.js';
-import type { ZhinAgentPrivate } from '../../src/zhin-agent/zhin-agent-private.js';
+import { getTurnActiveSkillsFromContext, runInTurnContext } from '../../src/internal/turn-context.js';
+import { TurnTracker } from '../../src/turn/turn-tracker.js';
+import type { ZhinAgentPrivate } from '../../src/internal/agent-host.js';
+import * as loadSkillTool from '../../src/builtin/load-skill-tool.js';
+import * as skillLoadOpts from '../../src/skill/skill-load-opts.js';
 
-vi.mock('../../src/builtin/load-skill-tool.js', () => ({
-  readSkillInstructions: vi.fn(async (name: string) => `# Skill ${name}\nInstructions.`),
-}));
-
-vi.mock('../../src/zhin-agent/skill-load-opts.js', () => ({
-  buildSkillLoadOptsForAgent: vi.fn(() => ({
+beforeEach(() => {
+  vi.spyOn(loadSkillTool, 'readSkillInstructions').mockImplementation(
+    async (name: string) => `# Skill ${name}\nInstructions.`,
+  );
+  vi.spyOn(skillLoadOpts, 'buildSkillLoadOptsForAgent').mockReturnValue({
     skillDirList: () => [],
     skillMaxChars: 8000,
-  })),
-}));
+  });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 function mockAgent(): ZhinAgentPrivate {
   return {

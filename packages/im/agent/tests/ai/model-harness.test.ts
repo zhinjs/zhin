@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mergeModelHarnessValues, resolveModelHarness } from '../../src/zhin-agent/model-harness.js';
+import { mergeModelHarnessValues, resolveModelHarness } from '../../src/config/model-harness-runtime.js';
 
 describe('model harness defaults', () => {
   it('应为小型 ollama 模型返回较低迭代上限', () => {

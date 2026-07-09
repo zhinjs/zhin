@@ -6,7 +6,7 @@ import {
   pushPassiveGroupLine,
   peekPassiveGroupBuffer,
   drainPassiveGroupBuffer,
-} from '../../src/zhin-agent/passive-group-buffer.js';
+} from '../../src/session/passive-group-buffer.js';
 
 describe('passive-group-buffer cap/TTL', () => {
   it('prunePassiveLines drops expired lines', () => {

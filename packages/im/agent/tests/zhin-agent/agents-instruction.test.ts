@@ -6,7 +6,7 @@ import {
   collectAgentsInstructionChain,
   buildAgentsEnvelopeContext,
   clearAgentsInstructionCache,
-} from '../../src/zhin-agent/agents-instruction.js';
+} from '../../src/context/agents-instruction.js';
 import { clearBootstrapCache } from '../../src/bootstrap.js';
 
 describe('agents-instruction', () => {

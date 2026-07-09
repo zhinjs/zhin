@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_CONFIG } from '../../src/zhin-agent/config.js';
+import { DEFAULT_CONFIG } from '../../src/config/index.js';
 import {
   buildDeferredAutoContinueUserMessage,
   DEFERRED_AUTO_CONTINUE_MARKER,
   isDeferredAutoContinueEnabled,
   shouldDeferredAutoContinue,
-} from '../../src/zhin-agent/deferred-auto-continue.js';
+} from '../../src/turn/deferred-auto-continue.js';
 import type { DeferredWorkerResult } from '../../src/deferred-worker-runner.js';
 
 function makeResult(overrides: Partial<DeferredWorkerResult> = {}): DeferredWorkerResult {

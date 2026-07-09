@@ -8,9 +8,9 @@ import {
   runInTurnContext,
   setScheduleTurnContext,
   setTurnActiveSkills,
-} from '../../src/zhin-agent/turn-context.js';
-import { computeDeferredDelta } from '../../src/zhin-agent/turn-deferred-delta.js';
-import { TurnTracker } from '../../src/zhin-agent/turn-tracker.js';
+} from '../../src/internal/turn-context.js';
+import { computeDeferredDelta } from '../../src/turn/turn-deferred-delta.js';
+import { TurnTracker } from '../../src/turn/turn-tracker.js';
 
 describe('turn context schedule ALS', () => {
   it('stores and reads turnActiveSkills within runInTurnContext', async () => {

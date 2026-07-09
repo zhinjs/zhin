@@ -3,11 +3,11 @@
  */
 import './types.js';
 import { getPlugin, Message, ZhinTool, MessageCommand, MANAGEMENT_OPERATOR_PERMIT } from '@zhin.js/core';
-import { asPrivate } from '../zhin-agent/zhin-agent-private.js';
+import { asPrivate } from '../internal/as-private.js';
 import {
   jumpSessionTreeForCommMessage,
   listSessionTreeForCommMessage,
-} from '../zhin-agent/session-tree-commands.js';
+} from '../session/session-tree-commands.js';
 import type { AIServiceRefs } from './shared-refs.js';
 
 export function registerManagementTools(refs: AIServiceRefs): void {

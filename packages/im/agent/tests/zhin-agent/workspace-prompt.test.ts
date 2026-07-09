@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import {
   resolveWorkspacePrompt,
   clearWorkspacePromptCache,
-} from '../../src/zhin-agent/workspace-prompt.js';
+} from '../../src/prompt/workspace-prompt.js';
 
 describe('workspace-prompt', () => {
   let tmpDir: string;

@@ -134,7 +134,7 @@ SIGTERM/SIGINT
 
 **涉及文件**：
 - `packages/im/agent/src/zhin-agent/index.ts`
-- `packages/im/agent/src/zhin-agent/compaction-runtime.ts`
+- `packages/im/agent/src/memory/compaction-runtime.ts`
 - `packages/im/agent/src/typing-indicator/adapter-integration.ts`
 - `packages/im/agent/src/bootstrap.ts`
 

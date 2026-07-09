@@ -1,10 +1,10 @@
 import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
-import type { AgentLoopStandaloneCallbacks } from './zhin-agent/agent-loop-standalone.js';
+import type { AgentLoopStandaloneCallbacks } from './core/agent-loop-standalone.js';
 import type { Message } from '@zhin.js/core';
 import type { McpRegistry } from './orchestrator/mcp-registry.js';
 import { ensureMcpConnectionsForBinding } from './orchestrator/mcp-lifecycle.js';
-import type { SubagentOrigin } from './subagent.js';
-import type { ZhinAgentEventEmitter } from './zhin-agent/event-emitter.js';
+import type { SubagentOrigin } from './subagent/index.js';
+import type { ZhinAgentEventEmitter } from './event/event-emitter.js';
 
 export interface SubagentAiEventContext {
   taskId: string;

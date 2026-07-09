@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentTool } from '@zhin.js/ai';
-import { DEFAULT_CONFIG } from '../src/zhin-agent/config.js';
+import { DEFAULT_CONFIG } from '../src/config/index.js';
 import { AgentDispatcher } from '../src/orchestrator/agent-dispatcher.js';
 import { resolveSubagentAgentTools } from '../src/orchestrator/resolve-subagent-tools.js';
 

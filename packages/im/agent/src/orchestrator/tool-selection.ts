@@ -16,7 +16,7 @@ import {
   type Message,
 } from '@zhin.js/core';
 import type { Skill, Tool } from './types.js';
-import type { ZhinAgentConfig } from '../zhin-agent/config.js';
+import type { ZhinAgentConfig } from '../config/index.js';
 
 const logger = new Logger(null, 'ZhinAgent:ToolSelection');
 

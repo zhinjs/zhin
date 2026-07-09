@@ -40,7 +40,7 @@ Activity Feedback 插件订阅上述事件；**不**走 `ai.processing.start/fin
 
 ## 实现位置
 
-- [`turn-context.ts`](../../packages/im/agent/src/zhin-agent/turn-context.ts)
+- [`turn-context.ts`](../../packages/im/agent/src/internal/turn-context.ts)
 - [`schedule-guard.ts`](../../packages/im/agent/src/activity-feedback/schedule-guard.ts)
 - [`task-executor.ts`](../../packages/im/agent/src/task-executor.ts)
 - [`plugins/services/activity-feedback/src/ai-event-binder.ts`](../../plugins/services/activity-feedback/src/ai-event-binder.ts)

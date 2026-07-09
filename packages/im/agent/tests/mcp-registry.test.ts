@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AgentTool } from '@zhin.js/ai';
 import { MemoryImTranscriptStore } from '@zhin.js/ai';
-import { collectRuntimeTools } from '../src/zhin-agent/tool-runtime.js';
-import { DEFAULT_CONFIG } from '../src/zhin-agent/config.js';
+import { collectRuntimeTools } from '../src/tool/runtime.js';
+import { DEFAULT_CONFIG } from '../src/config/index.js';
 import { mockCommMessage } from './helpers/mock-comm-message.js';
 
 const mockTool: AgentTool = {

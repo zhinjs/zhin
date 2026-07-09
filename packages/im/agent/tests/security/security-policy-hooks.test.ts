@@ -3,7 +3,7 @@ import { HookRegistry } from '../../src/orchestrator/index.js';
 import { createExecPolicyHook } from '../../src/security/exec-policy-hook.js';
 import { createFilePolicyHook } from '../../src/security/file-policy-hook.js';
 import { createDangerousToolPolicyHook } from '../../src/security/dangerous-tool-policy-hook.js';
-import { DEFAULT_CONFIG } from '../../src/zhin-agent/config.js';
+import { DEFAULT_CONFIG } from '../../src/config/index.js';
 import type { PreToolUseEvent } from '../../src/orchestrator/types.js';
 
 function makeEvent(overrides: Partial<PreToolUseEvent> = {}): PreToolUseEvent {

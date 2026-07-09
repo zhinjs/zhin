@@ -4,7 +4,7 @@ import {
   normalizeInboundQueueConfig,
   shouldUseGroupFifoQueue,
   validateInboundQueueConfig,
-} from '../../src/zhin-agent/inbound-queue-config.js';
+} from '../../src/turn/inbound-queue-config.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
 
 describe('inbound-queue-config', () => {

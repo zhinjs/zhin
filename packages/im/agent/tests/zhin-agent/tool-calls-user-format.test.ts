@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   formatToolCallsForUser,
   looksLikeInternalToolDump,
-} from '../../src/zhin-agent/tool-calls-user-format.js';
-import { sanitizeAssistantReply } from '../../src/zhin-agent/text-sanitize.js';
+} from '../../src/core/tool-calls-user-format.js';
+import { sanitizeAssistantReply } from '../../src/core/text-sanitize.js';
 
 const DEFERRED_JSON = JSON.stringify({
   status: 'ok',

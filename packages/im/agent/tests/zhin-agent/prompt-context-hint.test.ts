@@ -3,14 +3,16 @@ import { mockCommMessage } from '../helpers/mock-comm-message.js';
 import * as core from '@zhin.js/core';
 import {
   buildContextHint,
-  formatSessionContextLine,
   resolvePromptFileRole,
   buildRichSystemPrompt,
+} from '../../src/prompt/system-prompt.js';
+import {
+  formatSessionContextLine,
   buildTurnContextEnvelope,
-} from '../../src/zhin-agent/prompt.js';
+} from '../../src/context/turn-envelope.js';
 import { buildSenderRolesFilePermissionsPrompt } from '../../src/security/file-role-policy.js';
 import type { Message } from '@zhin.js/core';
-import type { ZhinAgentConfig } from '../../src/zhin-agent/config.js';
+import type { ZhinAgentConfig } from '../../src/config/index.js';
 
 const minimalConfig = {
   persona: '',

@@ -3,17 +3,17 @@ import {
   createMemoryContextRepository,
   type AgentMessage,
 } from '@zhin.js/ai';
-import { appendPassiveGroupMessageToContext } from '../src/zhin-agent/passive-group-context.js';
+import { appendPassiveGroupMessageToContext } from '../src/session/passive-group-session.js';
 import {
   drainPassiveGroupBuffer,
   formatPassiveGroupContextBlock,
   peekPassiveGroupBuffer,
   pushPassiveGroupLine,
-} from '../src/zhin-agent/passive-group-buffer.js';
-import { buildTurnUserMessages } from '../src/zhin-agent/turn-user-message.js';
-import { CURRENT_MESSAGE_MARKER } from '../src/zhin-agent/config.js';
-import type { ZhinAgentPrivate } from '../src/zhin-agent/zhin-agent-private.js';
-import { DEFAULT_CONFIG } from '../src/zhin-agent/config.js';
+} from '../src/session/passive-group-buffer.js';
+import { buildTurnUserMessages } from '../src/context/turn-user-message.js';
+import { CURRENT_MESSAGE_MARKER } from '../src/config/index.js';
+import type { ZhinAgentPrivate } from '../src/internal/agent-host.js';
+import { DEFAULT_CONFIG } from '../src/config/index.js';
 
 function groupMessage(text: string, senderId = 'u-peer') {
   return {

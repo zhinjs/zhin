@@ -1,4 +1,4 @@
-import type { ZhinAgentConfig } from '../zhin-agent/config.js';
+import type { ZhinAgentConfig } from '../config/index.js';
 import {
   DEFAULT_DEFERRED_TOOLS_CONFIG,
   type DeferredToolsConfig,

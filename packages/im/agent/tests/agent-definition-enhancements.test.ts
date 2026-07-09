@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { AgentTool } from '@zhin.js/ai';
 import { resolveSubagentAgentTools, SUBAGENT_BLOCKED_TOOL_NAMES } from '../src/orchestrator/resolve-subagent-tools.js';
-import { DEFAULT_CONFIG } from '../src/zhin-agent/config.js';
+import { DEFAULT_CONFIG } from '../src/config/index.js';
 import type { AgentMeta, AgentEffortLevel } from '../src/discovery/agents.js';
 
 function makeTool(name: string): AgentTool {

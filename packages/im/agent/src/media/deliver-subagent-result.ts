@@ -4,8 +4,8 @@
  */
 import { parseOutput, type OutputElement } from '@zhin.js/ai';
 import type { MessageElement, MessageType, SendOptions } from '@zhin.js/core';
-import type { SubagentOrigin } from '../subagent.js';
-import type { ToolCallRecord } from '../zhin-agent/tool-calls-user-format.js';
+import type { SubagentOrigin } from '../subagent/index.js';
+import type { ToolCallRecord } from '../core/tool-calls-user-format.js';
 import { mergeToolOutboundElements } from './media-tool-bridge.js';
 import { publishOutboundElements } from './media-publisher.js';
 

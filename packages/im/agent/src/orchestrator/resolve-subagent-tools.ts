@@ -2,7 +2,7 @@
  * 子 Agent 工具集：角色限制 + 编排黑名单 + AgentMeta disallowedTools。
  */
 import type { AgentTool } from '@zhin.js/ai';
-import type { ZhinAgentConfig } from '../zhin-agent/config.js';
+import type { ZhinAgentConfig } from '../config/index.js';
 import type { AgentDispatcher, AgentRole } from './agent-dispatcher.js';
 import type { AgentMeta } from '../discovery/agents.js';
 

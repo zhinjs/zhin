@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createUserMessage } from '@zhin.js/ai';
-import { PromptController, TurnSupersededError } from '../../src/zhin-agent/prompt-controller.js';
+import { PromptController, TurnSupersededError } from '../../src/turn/prompt-controller.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
 
 const commMessage = mockCommMessage({

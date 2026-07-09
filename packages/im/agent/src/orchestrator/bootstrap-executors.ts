@@ -28,8 +28,8 @@ export function registerDefaultExecutors(
     kind: 'local',
     async *execute({ task, message }) {
       const zhinAgent = refs.zhinAgent;
-      const subagentManager = zhinAgent?.getSubagentManager();
-      if (!zhinAgent || !subagentManager) {
+      const subagentSystem = zhinAgent?.getSubagentSystem();
+      if (!zhinAgent || !subagentSystem) {
         yield { type: 'error', error: 'zhin agent or subagent manager not initialized' };
         return;
       }
@@ -50,7 +50,7 @@ export function registerDefaultExecutors(
         provider: routeProvider,
       });
       yield { type: 'progress', text: `running local subagent ${targetAgentId}` };
-      const result = await subagentManager.spawnSync({
+      const result = await subagentSystem.spawnSync({
         task: aiContent.trim() || '请处理这条入站消息。',
         runInput: inbound.runInput,
         label: targetAgentId,
@@ -91,8 +91,8 @@ export function registerDefaultExecutors(
       }
 
       const peerAgent = getAgentRuntimeRegistry().getForEndpoint(targetEndpointId);
-      const subagentManager = peerAgent?.getSubagentManager();
-      if (!peerAgent || !subagentManager) {
+      const subagentSystem = peerAgent?.getSubagentSystem();
+      if (!peerAgent || !subagentSystem) {
         yield { type: 'error', error: `no ZhinAgent runtime for endpoint ${targetEndpointId}` };
         return;
       }
@@ -128,7 +128,7 @@ export function registerDefaultExecutors(
       });
       runInput = inbound.runInput;
 
-      const result = await subagentManager.spawnSync({
+      const result = await subagentSystem.spawnSync({
         task: delegateText.trim() || '请处理上述协作请求。',
         runInput,
         label: targetEndpointId,

@@ -11,8 +11,8 @@ import type {
 import {
   jumpToBranchIndexWithSummarization,
   switchActiveLeafWithBranchSummarization,
-} from './zhin-agent/branch-summarization-runtime.js';
-import type { ZhinAgentPrivate } from './zhin-agent/zhin-agent-private.js';
+} from './session/branch-summarization-runtime.js';
+import type { ZhinAgentPrivate } from './internal/agent-host.js';
 
 export interface SessionTreeRuntimeHandle {
   contextRepository: ContextRepository;

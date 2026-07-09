@@ -1,11 +1,11 @@
 /**
- * SubagentManager 测试
+ * SubagentRuntime 测试
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { resetLlmApiRegistryForTests } from '@zhin.js/ai';
 import { wireMockProviderToLlmApi } from '../helpers/mock-llm-api.js';
-import { SubagentManager } from '@zhin.js/agent';
-import type { ZhinAgentEventEmitter } from '../../src/zhin-agent/event-emitter.js';
+import { SubagentRuntime } from '@zhin.js/agent';
+import type { ZhinAgentEventEmitter } from '../../src/event/event-emitter.js';
 import type { SubagentOrigin, SpawnOptions } from '@zhin.js/agent';
 import type { AgentTool, ChatCompletionResponse } from '@zhin.js/core';
 
@@ -85,8 +85,8 @@ function createMockTools(): AgentTool[] {
   ];
 }
 
-describe('SubagentManager', () => {
-  let manager: SubagentManager;
+describe('SubagentRuntime', () => {
+  let manager: SubagentRuntime;
   let provider: ReturnType<typeof createMockProvider>;
   let mockTools: AgentTool[];
   let onSubagentComplete: ReturnType<typeof vi.fn>;
@@ -97,7 +97,7 @@ describe('SubagentManager', () => {
     wireMockProviderToLlmApi(provider);
     mockTools = createMockTools();
     onSubagentComplete = vi.fn().mockResolvedValue(undefined);
-    manager = new SubagentManager({
+    manager = new SubagentRuntime({
       provider: provider as any,
       workspace: '/tmp/test-workspace',
       createTools: () => mockTools,
@@ -146,7 +146,7 @@ describe('SubagentManager', () => {
 
     it('应触发生命周期事件回调', async () => {
       const onEvent = vi.fn();
-      const eventManager = new SubagentManager({
+      const eventManager = new SubagentRuntime({
         provider: provider as any,
         workspace: '/tmp/test-workspace',
         createTools: () => mockTools,
@@ -196,7 +196,7 @@ describe('SubagentManager', () => {
         execute: async () => 'ok',
       };
       const onComplete = vi.fn().mockResolvedValue(undefined);
-      const customManager = new SubagentManager({
+      const customManager = new SubagentRuntime({
         provider: provider as any,
         workspace: '/tmp/test-workspace',
         createTools: () => [...mockTools, extraTool],
@@ -258,7 +258,7 @@ describe('SubagentManager', () => {
     });
 
     it('无 onSubagentComplete 时不应崩溃', async () => {
-      const bare = new SubagentManager({
+      const bare = new SubagentRuntime({
         provider: provider as any,
         workspace: '/tmp/test-workspace',
         createTools: () => mockTools,
@@ -315,7 +315,7 @@ describe('SubagentManager', () => {
         }),
       } as unknown as ZhinAgentEventEmitter;
 
-      const mgr = new SubagentManager({
+      const mgr = new SubagentRuntime({
         provider: provider as any,
         workspace: '/tmp/test-workspace',
         createTools: () => mockTools,
@@ -353,9 +353,9 @@ describe('SubagentManager', () => {
         }),
         dispatch: vi.fn(async (name: string) => { dispatched.push(name); }),
         emit: vi.fn((name: string) => { emitted.push(name); }),
-      } as unknown as import('../../src/zhin-agent/event-emitter.js').ZhinAgentEventEmitter;
+      } as unknown as import('../../src/event/event-emitter.js').ZhinAgentEventEmitter;
 
-      const mgr = new SubagentManager({
+      const mgr = new SubagentRuntime({
         provider: provider as any,
         workspace: '/tmp/test-workspace',
         createTools: () => mockTools,
@@ -374,7 +374,7 @@ describe('SubagentManager', () => {
   describe('maxParallelSubagents cap', () => {
     it('rejects spawn when at capacity', async () => {
       provider.chat.mockImplementation(() => new Promise(() => {}));
-      const capped = new SubagentManager({
+      const capped = new SubagentRuntime({
         provider: provider as any,
         workspace: '/tmp/test-workspace',
         createTools: () => mockTools,
@@ -390,7 +390,7 @@ describe('SubagentManager', () => {
 
     it('spawnSync rejects when at capacity', async () => {
       provider.chat.mockImplementation(() => new Promise(() => {}));
-      const capped = new SubagentManager({
+      const capped = new SubagentRuntime({
         provider: provider as any,
         workspace: '/tmp/test-workspace',
         createTools: () => mockTools,

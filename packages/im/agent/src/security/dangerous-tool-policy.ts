@@ -1,6 +1,6 @@
 import { getHostRootPlugin, hasSenderRole, resolveSubjectRoles, senderRolesFromMessage } from '@zhin.js/core';
 import type { Message, Plugin } from '@zhin.js/core';
-import type { ZhinAgentConfig } from '../zhin-agent/config.js';
+import type { ZhinAgentConfig } from '../config/index.js';
 import { checkFileAccess, extractBashReadPaths } from './file-policy.js';
 import { resolveToolRequesterRole, type ToolRequesterRole } from './owner-approve-always-store.js';
 

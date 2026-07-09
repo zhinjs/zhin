@@ -7,14 +7,14 @@ import { ZhinAgent } from '../zhin-agent/index.js';
 import type { AIService } from '../service.js';
 import type { AIServiceRefs } from '../init/shared-refs.js';
 import { DEFAULT_ZHIN_AGENT_NAME } from '../config/types.js';
-import type { ZhinAgentConfig } from '../zhin-agent/config.js';
+import type { ZhinAgentConfig } from '../config/index.js';
 import { getAgentRuntimeRegistry } from './runtime-registry.js';
 import { getCollaborationSceneService } from './scene-service.js';
 import { findCellMemberByEndpoint } from './collaboration-config.js';
 import { resolvePipelineRoleBinding } from '../config/resolve-pipeline-binding.js';
 import { isPipelineRole, type CollaborationScene } from './types.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
-import { COLLABORATION_CONTEXT_TAIL_MESSAGE_LIMIT } from '../zhin-agent/context-tail-limit.js';
+import { COLLABORATION_CONTEXT_TAIL_MESSAGE_LIMIT } from '../context/context-tail-limit.js';
 
 export interface BootstrapRuntimesOptions {
   refs: AIServiceRefs;

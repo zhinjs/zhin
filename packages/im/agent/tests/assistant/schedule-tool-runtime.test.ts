@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentTool } from '@zhin.js/ai';
 import { preloadScheduleTools } from '../../src/assistant/schedule-tool-runtime.js';
-import type { ZhinAgentPrivate } from '../../src/zhin-agent/zhin-agent-private.js';
+import type { ZhinAgentPrivate } from '../../src/internal/agent-host.js';
 
 function mockTool(name: string): AgentTool {
   return { name, description: name, execute: async () => 'ok' };

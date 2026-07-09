@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildRichSystemPrompt } from '../../src/zhin-agent/prompt.js';
-import { DEFAULT_CONFIG, SECTION_SEP } from '../../src/zhin-agent/config.js';
+import { buildRichSystemPrompt } from '../../src/prompt/system-prompt.js';
+import { DEFAULT_CONFIG, SECTION_SEP } from '../../src/config/index.js';
 
 function countSection(prompt: string, heading: string): number {
   return (prompt.match(new RegExp(`^# ${heading}`, 'gm')) || []).length;

@@ -1,6 +1,6 @@
 import type { AIProvider } from '@zhin.js/ai';
 import type { ResolvedAgentBinding } from '../config/types.js';
-import type { ZhinAgentConfig } from '../zhin-agent/config.js';
+import type { ZhinAgentConfig } from '../config/index.js';
 
 export interface TurnRuntimeBinding {
   binding: ResolvedAgentBinding;

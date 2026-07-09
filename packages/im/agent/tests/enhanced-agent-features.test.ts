@@ -19,7 +19,7 @@ import {
   buildMainAgentPrompt,
   buildSubAgentPrompt,
   buildWorkerPrompt,
-} from '../src/zhin-agent/prompt-builder.js';
+} from '../src/prompt/prompt-builder.js';
 
 describe('Enhanced Agent Features', () => {
   describe('Sandbox', () => {

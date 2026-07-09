@@ -73,7 +73,7 @@ Host REST: `/api/collaboration/scenes*` (members, pipeline, artifacts sub-resour
 - 群/频道 **未 @** 入站写入进程内 passive buffer（**不持久化**）；`MAX_PASSIVE_LINES=50`、`PASSIVE_TTL_MS=30min`。
 - Session key 与 `resolveAgentTurnSessionKey` 一致；`bindRun = delegationRunId ?? runId`。
 - Pipeline **reset** 后新 run **不继承** 旧 passive buffer（与 run 隔离一致）。
-- 实现：[`passive-group-session.ts`](../../packages/im/agent/src/zhin-agent/passive-group-session.ts)、[`passive-group-buffer.ts`](../../packages/im/agent/src/zhin-agent/passive-group-buffer.ts)。
+- 实现：[`session/passive-group-session.ts`](../../packages/im/agent/src/session/passive-group-session.ts)、[`passive-group-buffer.ts`](../../packages/im/agent/src/session/passive-group-buffer.ts)。
 
 ## Related
 

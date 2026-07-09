@@ -13,7 +13,7 @@ import { collectPluginSkillSearchRoots } from '../discovery/utils.js';
 import { discoverWorkspaceSkills, loadAlwaysSkillsContent, buildSkillsSummaryXML } from '../discovery/skills.js';
 import { discoverWorkspaceAgents } from '../discovery/agents.js';
 import { discoverWorkspaceTools, buildToolFromMeta } from '../discovery/tools.js';
-import { resolveSkillInstructionMaxChars, DEFAULT_CONFIG } from '../zhin-agent/config.js';
+import { resolveSkillInstructionMaxChars, DEFAULT_CONFIG } from '../config/index.js';
 import { loadBootstrapFiles, buildContextFiles, buildStableBootstrapSection } from '../bootstrap.js';
 import { loadBootstrapWithProfile, resolveAssistantConfig } from '../assistant/index.js';
 import { createAIHookEvent } from '../orchestrator/hook-registry.js';
@@ -37,7 +37,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
     const knowledgeDir = appConfig.ai?.knowledge?.baseDir
       ? path.resolve(appConfig.ai.knowledge.baseDir)
       : path.join(process.cwd(), 'knowledge');
-    const fullCfg = { ...DEFAULT_CONFIG, ...agentCfg } as Required<import('../zhin-agent/config.js').ZhinAgentConfig>;
+    const fullCfg = { ...DEFAULT_CONFIG, ...agentCfg } as Required<import('../config/index.js').ZhinAgentConfig>;
     const modelName = provider.models[0] || '';
     const builtinTools = createBuiltinTools({
       plugin,

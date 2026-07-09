@@ -6,7 +6,7 @@
  * 且 toolCalls 已含 generate_image，则从文字中去掉以免与图片段重复。
  */
 import { compactMediaToolJsonForModel } from '@zhin.js/ai';
-import type { ToolCallRecord } from '../zhin-agent/tool-calls-user-format.js';
+import type { ToolCallRecord } from '../core/tool-calls-user-format.js';
 import { extractMediaElementsFromToolCalls } from './media-tool-bridge.js';
 import type { SubagentOutboundDelivery } from './deliver-subagent-result.js';
 

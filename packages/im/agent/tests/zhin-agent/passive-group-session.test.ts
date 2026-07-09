@@ -4,7 +4,7 @@ import {
   recordPassiveGroupMessage,
   consumePassiveGroupContextForTurn,
   resolvePassiveGroupSessionKey,
-} from '../../src/zhin-agent/passive-group-session.js';
+} from '../../src/session/passive-group-session.js';
 import { attachCollaborationTurnSnapshot } from '../../src/collaboration/collaboration-turn-snapshot.js';
 import type { CollaborationScene } from '../../src/collaboration/types.js';
 import type { Message } from '@zhin.js/core';

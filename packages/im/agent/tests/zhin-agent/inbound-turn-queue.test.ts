@@ -3,8 +3,8 @@ import {
   InboundTurnExpiredError,
   InboundTurnQueue,
   type InboundQueueActivityEmitter,
-} from '../../src/zhin-agent/inbound-turn-queue.js';
-import { normalizeInboundQueueConfig } from '../../src/zhin-agent/inbound-queue-config.js';
+} from '../../src/turn/inbound-turn-queue.js';
+import { normalizeInboundQueueConfig } from '../../src/turn/inbound-queue-config.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
 
 describe('InboundTurnQueue', () => {

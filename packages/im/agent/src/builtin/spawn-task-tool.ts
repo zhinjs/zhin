@@ -9,7 +9,7 @@ import {
   type OrchestrationRunSource,
 } from '@zhin.js/ai';
 import { orchestrationSourceFromMessage } from '../collaboration/collaboration-kernel-bridge.js';
-import type { SubagentManager, SubagentOrigin } from '../subagent.js';
+import type { SubagentSystem, SubagentOrigin } from '../subagent/index.js';
 import type { SubagentContextMode } from '../subagent-preset.js';
 import { getAgentDispatcher } from '../orchestrator/agent-dispatcher.js';
 import { getOrchestrationService } from '../orchestrator/orchestration-service.js';
@@ -116,7 +116,7 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
 
   constructor(
     private readonly sessionCommMessage: Message,
-    private readonly manager: SubagentManager,
+    private readonly manager: SubagentSystem,
     options?: SpawnTaskToolOptions,
   ) {
     super();
@@ -269,7 +269,7 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
 
 export function createSpawnTaskTool(
   commMessage: Message,
-  manager: SubagentManager,
+  manager: SubagentSystem,
   options?: SpawnTaskToolOptions,
 ): AgentTool {
   return new SpawnTaskBuiltinTool(commMessage, manager, options).toTool() as AgentTool;

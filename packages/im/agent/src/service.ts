@@ -12,7 +12,7 @@ import {
 } from '@zhin.js/ai';
 import type { ModelRegistry } from '@zhin.js/ai';
 import type { ContextConfig } from '@zhin.js/ai';
-import { DEFAULT_CONFIG } from './zhin-agent/config.js';
+import { DEFAULT_CONFIG } from './config/index.js';
 import { normalizeTool } from './orchestrator/tool-selection.js';
 import { createWebSearchTool } from './builtin/web-search-tool.js';
 import { createAskUserTool } from './builtin/ask-user-tool.js';
@@ -25,8 +25,8 @@ import { DEFAULT_ZHIN_AGENT_NAME } from './config/types.js';
 import {
   runAgentLoopStandaloneTurn,
   type AgentLoopStandaloneResult,
-} from './zhin-agent/agent-loop-standalone.js';
-import type { ToolCallRecord } from './zhin-agent/tool-calls-user-format.js';
+} from './core/agent-loop-standalone.js';
+import type { ToolCallRecord } from './core/tool-calls-user-format.js';
 import {
   PluginAILoopHookRegistry,
   type PluginAfterToolCallHandler,

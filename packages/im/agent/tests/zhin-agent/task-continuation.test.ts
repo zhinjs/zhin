@@ -4,7 +4,7 @@ import {
   decomposeTask,
   initContinuationManager,
   getContinuationManager,
-} from '../../src/zhin-agent/task-continuation.js';
+} from '../../src/turn/task-continuation.js';
 
 describe('TaskContinuationManager', () => {
   let manager: TaskContinuationManager;

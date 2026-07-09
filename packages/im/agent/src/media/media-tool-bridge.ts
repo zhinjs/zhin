@@ -1,5 +1,5 @@
 import type { OutputElement } from '@zhin.js/ai';
-import type { ToolCallRecord } from '../zhin-agent/tool-calls-user-format.js';
+import type { ToolCallRecord } from '../core/tool-calls-user-format.js';
 
 function parseToolResultObject(result: unknown): Record<string, unknown> | null {
   if (result && typeof result === 'object' && !Array.isArray(result)) {

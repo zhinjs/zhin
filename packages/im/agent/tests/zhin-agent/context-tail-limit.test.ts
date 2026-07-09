@@ -3,7 +3,7 @@ import {
   COLLABORATION_CONTEXT_TAIL_MESSAGE_LIMIT,
   resolveContextTailMessageLimit,
   DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT,
-} from '../../src/zhin-agent/context-tail-limit.js';
+} from '../../src/context/context-tail-limit.js';
 
 describe('resolveContextTailMessageLimit', () => {
   it('uses explicit contextTailMessageLimit when set', () => {

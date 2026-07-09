@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_CONFIG } from '../../packages/im/agent/src/zhin-agent/config.js';
+import { DEFAULT_CONFIG } from '../../packages/im/agent/src/config/index.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const configurationMd = fs.readFileSync(

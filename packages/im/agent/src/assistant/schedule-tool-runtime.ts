@@ -6,9 +6,9 @@ import {
 import { Logger } from '@zhin.js/logger';
 import type { ToolCatalogItem } from '../tool-catalog/types.js';
 import { resolveDeferredToolsConfig } from '../tool-catalog/resolve-config.js';
-import { persistDeferredToolSnapshot } from '../zhin-agent/tool-orchestration.js';
-import type { ZhinAgentPrivate } from '../zhin-agent/zhin-agent-private.js';
-import { getScheduleTurnContext } from '../zhin-agent/turn-context.js';
+import { persistDeferredToolSnapshot } from '../tool/deferred-resolution.js';
+import type { ZhinAgentPrivate } from '../internal/agent-host.js';
+import { getScheduleTurnContext } from '../internal/turn-context.js';
 import type { ScheduleJobExecutionPlan } from './types.js';
 
 const logger = new Logger(null, 'schedule-tool-runtime');

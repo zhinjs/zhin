@@ -14,7 +14,7 @@ import type {
   McpConnectEvent,
   McpToolCallEvent,
   TurnUsage,
-} from '../../src/zhin-agent/turn-event.js';
+} from '../../src/event/turn-event.js';
 
 describe('TurnEvent type structure', () => {
   it('turn_start event has required fields', () => {

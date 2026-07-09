@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createUserMessage } from '@zhin.js/ai';
-import { SessionMessageQueue } from '../../src/zhin-agent/session-message-queue.js';
+import { SessionMessageQueue } from '../../src/turn/session-message-queue.js';
 
 describe('SessionMessageQueue', () => {
   const msg = (text: string) => createUserMessage(text);

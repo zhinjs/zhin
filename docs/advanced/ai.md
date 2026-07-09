@@ -273,7 +273,7 @@ ai:
 | `compaction.keepRecentTokens` | number | 20000 | L2 后保留最近消息 token 预算 |
 | `compaction.minKeepCount` | number | 2 | L2 后至少保留消息条数 |
 
-`modelHarness` 与 TypeScript 默认表（`packages/im/agent/src/zhin-agent/model-harness.ts`）按 **ADR 0006** 规则合并：对象 deep merge，数组显式写出时完整覆盖默认数组。
+`modelHarness` 与 TypeScript 默认表（`packages/im/agent/src/config/model-harness.ts`）按 **ADR 0006** 规则合并：对象 deep merge，数组显式写出时完整覆盖默认数组。
 
 ### Agent phase 观测（排障）
 
@@ -1190,7 +1190,7 @@ ai:
 
 ## 系统提示词架构
 
-ZhinAgent 的系统提示词采用精简分层架构（`packages/im/agent/src/zhin-agent/prompt.ts`）：常驻段只保留必要边界，平台、技能、记忆等按需注入。
+ZhinAgent 的系统提示词采用精简分层架构（`packages/im/agent/src/prompt/system-prompt.ts`）：常驻段只保留必要边界，平台、技能、记忆等按需注入。
 
 | 名称 | 内容 |
 |------|------|

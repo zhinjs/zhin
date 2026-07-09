@@ -11,10 +11,21 @@ import { initOrchestrationService } from '../../src/orchestrator/orchestration-s
 import { MemoryOrchestrationRepository } from '../../src/orchestrator/orchestration-repository.js';
 import { registerDefaultExecutors } from '../../src/orchestrator/bootstrap-executors.js';
 
+vi.mock('../../src/collaboration/collaboration-dispatch.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/collaboration/collaboration-dispatch.js')>();
+  return {
+    ...actual,
+    dispatchPeerTask: vi.fn(),
+  };
+});
+
+import { dispatchPeerTask } from '../../src/collaboration/collaboration-dispatch.js';
+
 describe('createInboundTurnPipeline', () => {
   afterEach(() => {
     resetCollaborationSceneService();
     resetAgentRuntimeRegistry();
+    vi.mocked(dispatchPeerTask).mockReset();
   });
 
   it('does not inject legacy collaboration delegation tools for cell members', async () => {
@@ -45,7 +56,7 @@ describe('createInboundTurnPipeline', () => {
       mcpServers: [],
     };
     const zhinAgent = {
-      getSubagentManager: () => null,
+      getSubagentSystem: () => null,
       initInboundTurnContext: vi.fn(),
       process,
       processMultimodal: vi.fn(),
@@ -130,7 +141,7 @@ describe('createInboundTurnPipeline', () => {
     const replies: unknown[] = [];
     const process = vi.fn(async () => [{ type: 'text', text: 'agent handled ordered group request' }]);
     const zhinAgent = {
-      getSubagentManager: () => null,
+      getSubagentSystem: () => null,
       initInboundTurnContext: vi.fn(),
       process,
       processMultimodal: vi.fn(),
@@ -197,7 +208,7 @@ describe('createInboundTurnPipeline', () => {
     expect(JSON.stringify(replies)).not.toContain('开始自动接管');
   });
 
-  it('executes spawn_task turn plans through SubagentManager', async () => {
+  it('executes spawn_task turn plans through SubagentSystem', async () => {
     const spawnSync = vi.fn(async () => 'vision result');
     const process = vi.fn(async () => [{ type: 'text', text: 'local result' }]);
     const replies: unknown[] = [];
@@ -212,7 +223,7 @@ describe('createInboundTurnPipeline', () => {
       mcpServers: [],
     };
     const zhinAgent = {
-      getSubagentManager: () => ({ spawnSync }),
+      getSubagentSystem: () => ({ spawnSync }),
       getEventEmitter: () => ({
         emit: vi.fn(),
         createPayload: vi.fn(() => ({})),
@@ -298,7 +309,7 @@ describe('createInboundTurnPipeline', () => {
       mcpServers: [],
     };
     const zhinAgent = {
-      getSubagentManager: () => ({ spawnSync }),
+      getSubagentSystem: () => ({ spawnSync }),
       getEventEmitter: () => ({
         emit: vi.fn(),
         createPayload: vi.fn(() => ({})),
@@ -379,7 +390,7 @@ describe('createInboundTurnPipeline', () => {
       mcpServers: [],
     };
     const zhinAgent = {
-      getSubagentManager: () => ({ spawnSync }),
+      getSubagentSystem: () => ({ spawnSync }),
       getEventEmitter: () => ({
         emit: vi.fn(),
         createPayload: vi.fn(() => ({})),
@@ -442,5 +453,111 @@ describe('createInboundTurnPipeline', () => {
     expect(spawnSync).toHaveBeenCalled();
     expect(process).not.toHaveBeenCalled();
     expect(replies).toEqual(['ERR subagent boom']);
+  });
+
+  it('delegates to peer endpoint without local process when turn plan routes to another cell member', async () => {
+    resetCollaborationSceneService();
+    const repo = new MemoryCollaborationSceneRepository();
+    await repo.upsert({
+      id: 'icqq-collab-room',
+      adapter: 'icqq',
+      sceneId: '373460458',
+      goal: 'test',
+      members: [
+        { endpointId: '8596238', primary: 'planner', pipelineRole: 'planner' },
+        { endpointId: '210723495', primary: 'researcher', pipelineRole: 'researcher' },
+      ],
+    });
+    getCollaborationSceneService().setRepository(repo);
+    await getCollaborationSceneService().reloadFromRepository();
+
+    vi.mocked(dispatchPeerTask).mockResolvedValue({
+      runId: 'run-1',
+      taskId: 'task-1',
+      task: { id: 'task-1', status: 'waiting_result' } as any,
+    });
+
+    const process = vi.fn(async () => [{ type: 'text', text: 'should not run' }]);
+    const zhinAgent = {
+      getSubagentSystem: () => null,
+      initInboundTurnContext: vi.fn(),
+      process,
+      processMultimodal: vi.fn(),
+      configure: vi.fn(),
+      getLastTurnMetrics: () => null,
+    };
+    getAgentRuntimeRegistry().registerForEndpoint('8596238', zhinAgent as any);
+
+    const researcherBinding = {
+      name: 'researcher',
+      providerAlias: 'mock',
+      model: 'mock-model',
+      mcpServers: [],
+    };
+    const message = {
+      ...mockCommMessage({
+        adapter: 'icqq',
+        endpoint: '8596238',
+        scope: 'group',
+        sceneId: '373460458',
+      }),
+      $content: [
+        { type: 'at', data: { qq: '8596238' } },
+        { type: 'text', data: { text: ' delegate to researcher peer' } },
+      ],
+    };
+
+    const pipeline = createInboundTurnPipeline({
+      root: { inject: () => undefined } as any,
+      ai: {
+        isReady: () => true,
+        getAccessConfig: () => undefined,
+        getResidentToolsAsTools: () => [],
+      } as any,
+      refs: {
+        aiService: {
+          isReady: () => true,
+          getProvider: () => ({ name: 'mock', models: ['mock-model'] }),
+          getRoutingConfig: () => ({
+            agents: {
+              zhin: { provider: 'mock', model: 'mock-model' },
+              researcher: {
+                provider: 'mock',
+                model: 'mock-model',
+                priority: 10,
+                match: { contentContains: 'delegate to researcher' },
+              },
+            },
+          }),
+          getBindingRegistry: () => ({
+            getDiscoveredAgentNames: () => new Set(['zhin', 'researcher']),
+            getBinding: (name: string) => (name === 'researcher' ? researcherBinding : null),
+            requireZhinBinding: () => ({
+              name: 'zhin',
+              providerAlias: 'mock',
+              model: 'mock-model',
+              mcpServers: [],
+            }),
+          }),
+          setDiscoveredAgents: () => undefined,
+        },
+        zhinAgent,
+      } as any,
+      triggerConfig: {
+        errorTemplate: 'ERR {error}',
+        resolveQuotedMessages: false,
+      } as any,
+      peerMode: 'mention-only',
+      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn() },
+      replyOutbound: vi.fn(),
+    });
+
+    await pipeline(message, 'delegate to researcher peer');
+
+    expect(dispatchPeerTask).toHaveBeenCalledWith(expect.objectContaining({
+      fromEndpointId: '8596238',
+      toEndpointId: '210723495',
+    }));
+    expect(process).not.toHaveBeenCalled();
   });
 });

@@ -28,10 +28,10 @@ import {
   registerDefaultScenePlatformPermitChecker,
   clearPlatformPermitCheckers,
 } from '@zhin.js/core';
-import { planToolRun } from '../src/zhin-agent/tool-runtime.js';
+import { planToolRun } from '../src/tool/runtime.js';
 import { mockCommMessage } from './helpers/mock-comm-message.js';
 import type { Tool } from '../src/orchestrator/types.js';
-import type { ZhinAgentConfig } from '../src/zhin-agent/config.js';
+import type { ZhinAgentConfig } from '../src/config/index.js';
 import {
   getCollaborationSceneService,
   resetCollaborationSceneService,

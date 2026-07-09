@@ -173,6 +173,13 @@ export {
 export type { ToolResultSanitizerOptions } from './agent/tool-result-sanitizer.js';
 export { filterTools, tokenize } from './agent/tool-filter.js';
 export {
+  buildDocumentFrequency,
+  createIdfFn,
+  scoreWeightedTfidfOverlap,
+  collectSkillWeightedTerms,
+  collectTermSet,
+} from './agent/tfidf.js';
+export {
   mergeToolsByName,
   isReservedToolName,
   isBuiltinToolSource,

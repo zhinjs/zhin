@@ -27,6 +27,40 @@ Zhin AI Agent 组合层：在 `@zhin.js/core` 的类型与 Provider 之上，提
 - 依赖 **@zhin.js/core**（IM 类型与消息链）与 **@zhin.js/ai**（`agentLoop`、Provider 抽象）
 - **zhin.js 4.x** 主包为 optional peer；运行时通过 `zhin.js/agent` 子路径或本包 import；`bootstrapNode` 在检测到本包时调用 `initAgentModule()`
 
+## 模块化架构（理想蓝图 8 模块）
+
+迁移完成后，`src/` 按职责拆分为 8 个理想模块 + Orchestration + IM 组合层（单包，可选 subpath export）：
+
+```
+packages/im/agent/src/
+  core/          Agent Core — agentLoop 薄适配（ADR 0009）
+  tool/          Tool System — Source/Filter、deferred 解析、运行时
+  session/       Session System — IM/Agent 双 store、passive group、session-io
+  event/         Event System — Agent turn 域事件（不替代 Kernel RunEvent）
+  skill/         Skill System — SkillRegistry 统一出口
+  memory/        Memory System — Port → ContextRepository + compaction
+  subagent/      Subagent System — SubagentSystem + ImResultSink
+  context/       Context System — builder/injector 链、tail limit
+  prompt/        系统提示词、assembly、workspace 模板
+  turn/          Turn pipeline、inbound 队列、auto-continue、metrics
+  config/        ZhinAgent 配置 SSOT、model harness
+  orchestrator/  Orchestration Kernel（ADR 0027 SSOT）
+  collaboration/ IM 入站/出站策略（inbound-turn-pipeline 等）
+  zhin-agent/    ZhinAgent 门面类（单文件 index.ts）
+  init/          create-zhin-agent、compose/configure/dispose 生命周期
+```
+
+可选 subpath（`package.json` `exports`）：
+
+```typescript
+import { AgentCore } from '@zhin.js/agent/core'
+import { ToolSystem } from '@zhin.js/agent/tool'
+import { SessionSystem } from '@zhin.js/agent/session'
+// …/event、/skill、/memory、/subagent、/context、/prompt、/turn、/config
+```
+
+词汇与 Port 边界见 [CONTEXT.md](./CONTEXT.md)、[orchestrator/PORTS.md](./src/orchestrator/PORTS.md)。
+
 ## 安装
 
 ```bash
@@ -84,7 +118,7 @@ useContext('ai', async (ai) => {
 | Agent | `ServiceAgent`、`CreateServiceAgentOptions`（`AIService.createAgent`）；legacy `Agent` / `createAgent` re-export 自 `@zhin.js/ai` |
 | Model harness | `MODEL_HARNESS_DEFAULTS`, `resolveModelHarness`, `mergeModelHarnessValues` |
 | 服务与会话 | `AIService`；会话/context 类型见 `@zhin.js/ai`（`ContextRepository`、`AgentSessionStore`、`ImTranscriptStore`） |
-| ZhinAgent | `ZhinAgent`，以及 config / exec-policy / file-policy / tool-runtime / prompt / builtin-tools 等子模块 |
+| ZhinAgent | `ZhinAgent`，以及 config / exec-policy / file-policy / `@zhin.js/agent/tool` / prompt / builtin-tools 等 |
 | 安全策略 | `checkExecPolicy`, `applyExecPolicyToTools`, `isDangerousCommand`, `stripEnvVarPrefix`, `stripSafeWrappers`, `splitCompoundCommand`, `extractCommandName`, `ExecPolicyResult`, `checkFileAccess`, `classifyBashCommand`, `isBlockedDevicePath` |
 | 提示词构建 | `buildRichSystemPrompt`, `buildEnhancedPersona`, `buildUserMessageWithHistory`, `buildContextHint` |
 | 上下文与记忆 | `ContextRepository`, `AgentSessionStore`, `ImTranscriptStore`（`@zhin.js/ai`）；`ContextManager`, `ConversationMemory`, `UserProfileStore` |
@@ -93,7 +127,7 @@ useContext('ai', async (ai) => {
 | Hook | `registerAIHook`, `unregisterAIHook`, `triggerAIHook`, `createAIHookEvent` |
 | IM 内置工具工厂 | `createBuiltinTools`、`BuiltinBaseTool`；具体工具见 `src/builtin/*` |
 | 输出与检测 | `parseOutput`, `renderToPlainText`, `renderToSatori`, `detectTone` |
-| 子代理 | `SubagentManager` |
+| 子代理 | `SubagentSystem` |
 | 编排 | `AgentOrchestrator`、`ToolRegistry`、`SkillRegistry`、`SubAgentRegistry`、`McpRegistry`、`HookRegistry` |
 | MCP 客户端 | `McpClientManager`、`McpClientConnection`、`mcpToolToAgentTool`、`ensureMcpConnections`（见下方「MCP」） |
 | 限流 | `RateLimiter` |
@@ -145,7 +179,7 @@ ai:
 
 ### 1. 主 Agent + 子 Agent（内置）
 
-框架已提供 **SubagentManager**：主 ZhinAgent 通过工具 `spawn_task` 把复杂/耗时任务派给**后台子 Agent** 异步执行。子 Agent 使用受限工具集；完成后**先交还主 Agent**（写入主会话 + auto-continue 续聊），用户可见回复由主 Agent 整理发出。
+框架已提供 **SubagentSystem**：主 ZhinAgent 通过工具 `spawn_task` 把复杂/耗时任务派给**后台子 Agent** 异步执行。子 Agent 使用受限工具集；完成后**先交还主 Agent**（写入主会话 + auto-continue 续聊），用户可见回复由主 Agent 整理发出。
 
 - 主对话不阻塞，用户可继续聊天（异步 `spawn_task`）。
 - `spawn_task` 在每轮 `turn-pipeline` 注入（`createSpawnTaskTool`），并默认列入 `deferredTools.alwaysLoadedTools`。
@@ -165,10 +199,10 @@ ai:
 
 关键路径：
 
-- `src/subagent.ts` — `SubagentManager`、`onSubagentComplete`
+- `src/subagent/` — `SubagentSystem`、`SubagentRuntime`、`onSubagentComplete`
 - `src/builtin/spawn-task-tool.ts` — 工具定义与 `permission.task` 校验
-- `src/zhin-agent/persist-subagent-context.ts` / `subagent-auto-continue.ts` — 结果落库与续聊
-- `src/zhin-agent/turn-pipeline.ts` — 每轮注入 `spawn_task`
+- `src/turn/persist-subagent-context.ts` / `subagent-auto-continue.ts` — 结果落库与续聊
+- `src/turn/turn-pipeline.ts` — 每轮注入 `spawn_task`
 - `packages/im/ai/src/llm/tiered-tool-buckets.ts` — tiered 并行工具 SSOT
 
 无需额外配置即可使用；若需放宽子 Agent 的工具范围，使用 `ai.agent.subagentTools` 显式追加白名单（不会自动继承主会话全部 skill/tool）。
@@ -286,7 +320,7 @@ ai:
 
 **合并顺序**（约定优先，详见 [ADR 0007](../../docs/adr/0007-ai-agent-model-harness-yaml-overrides.md)）：
 
-1. TypeScript 默认表 `MODEL_HARNESS_DEFAULTS`（[`src/zhin-agent/model-harness.ts`](./src/zhin-agent/model-harness.ts)）
+1. TypeScript 默认表 `MODEL_HARNESS_DEFAULTS`（[`src/config/model-harness.ts`](./src/config/model-harness.ts) + [`model-harness-runtime.ts`](./src/config/model-harness-runtime.ts)）
 2. YAML `ai.agent.modelHarness.providerPatterns`（匹配当前 provider，支持 `*` 通配；按对象键插入顺序叠加）
 3. YAML `ai.agent.modelHarness.models`（`model` 或 `provider:model` 精确键）
 
@@ -306,7 +340,7 @@ ai:
 
 运行时由 `resolveModelHarness(providerName, modelName, config?.modelHarness)` 解析；包入口导出 `MODEL_HARNESS_DEFAULTS`、`resolveModelHarness`、`mergeModelHarnessValues` 与 `ModelHarnessConfig` 类型。未命中任何规则时回退 TS 默认行或空对象；当前仅消费 `maxIterations`，未知 YAML 字段会被忽略。
 
-增补内置默认值：在 `model-harness.ts` 增加 `ModelHarnessRow` 并附测试；YAML 只做覆盖，不替代 TS 约定层。
+增补内置默认值：在 `config/model-harness.ts` 增加 `ModelHarnessRow` 并附测试；YAML 只做覆盖，不替代 TS 约定层。
 
 ## IM 管理命令
 
@@ -326,44 +360,45 @@ zhin-package CLI：`zhin packages`（`basic/cli`）。详见 [ADR 0010](../../do
 
 ```
 src/
-├── index.ts                         # 导出 AgentOrchestrator + 五类 Registry + ZhinAgent + init
+├── index.ts                         # 包根导出：Orchestrator、ZhinAgent、init、builtin…
 │
-├── orchestrator/                    # ★ 核心：编排中枢
+├── core/                            # Agent Core — agentLoop 薄适配
+├── tool/                            # Tool System — 运行时工具收集
+├── session/                         # Session System — IM/Agent 双 store、session-io
+├── event/                           # Event System — turn 域事件 + session 事件
+├── skill/                           # Skill System
+├── memory/                          # Memory System
+├── subagent/                        # Subagent System + manager init
+├── context/                         # Context System — builder/injector、tail limit
+├── prompt/                          # 系统提示词、assembly、workspace 模板
+├── turn/                            # Turn pipeline、inbound 队列、auto-continue
+├── config/                          # ZhinAgent 配置 SSOT、model harness
+│
+├── orchestrator/                    # ★ 编排中枢（Kernel SSOT，ADR 0027）
 │   ├── index.ts                     # AgentOrchestrator class
-│   ├── types.ts                     # ResourceScope, ResourceEntry, Skill, SubAgentDef, AIHook, McpServerEntry
-│   ├── resource-registry.ts         # ResourceRegistry<T> 基类
-│   ├── tool-registry.ts             # ToolRegistry（含 ZhinTool, defineTool, 权限过滤）
-│   ├── skill-registry.ts            # SkillRegistry（含搜索）
-│   ├── subagent-registry.ts         # SubAgentRegistry
-│   ├── mcp-registry.ts              # McpRegistry
-│   └── hook-registry.ts             # HookRegistry
+│   ├── types.ts                     # ResourceScope, Skill, SubAgentDef, AIHook…
+│   ├── resource-registry.ts
+│   ├── tool-registry.ts
+│   ├── skill-registry.ts
+│   ├── subagent-registry.ts
+│   ├── mcp-registry.ts
+│   └── hook-registry.ts
 │
-├── mcp-client/                      # MCP 客户端（Manager / Connection / bridge）
+├── mcp-client/                      # MCP 客户端
 │
 ├── init.ts                          # initAgentModule 入口
-├── init/                            # 挂载子模块（orchestrator、ai、builtin-tools…）
+├── init/                            # create-zhin-agent、compose/configure/dispose 生命周期
 │
-├── service.ts                       # AIService（保留，对接 Orchestrator）
+├── service.ts                       # AIService
 │
-├── zhin-agent/                      # 主对话 Agent
-│   ├── index.ts                     # ZhinAgent（改造：从 Orchestrator 获取资源）
-│   ├── config.ts
-│   ├── prompt.ts
-│   ├── tool-runtime.ts              # 运行时工具收集与执行路径规划
-│   └── builtin-tools.ts             # chat_history（im_transcripts）, user_profile, spawn_task
+├── zhin-agent/                      # ZhinAgent 门面类（单文件）
+│   └── index.ts
 │
-├── discovery/                       # ★ 文件化资源发现
-│   ├── index.ts
-│   ├── utils.ts
-│   ├── tools.ts                     # *.tool.md 发现
-│   ├── skills.ts                    # SKILL.md 发现
-│   └── agents.ts                    # *.agent.md 发现
-│
-├── security/                        # ★ 安全策略
-│   ├── file-policy.ts
-│   └── exec-policy.ts
-│
-├── builtin/                         # IM 内置工具（BuiltinBaseTool + 各 *-tool.ts）
+├── internal/                        # host 契约、asPrivate、turn-context、phase/prompt trace
+├── collaboration/                   # 多 Endpoint 入站/出站
+├── discovery/                       # 文件化资源发现（tools / skills / agents）
+├── security/                        # exec-policy、file-policy
+├── builtin/                         # IM 内置工具
 ├── builtin-tools.ts                 # createBuiltinTools() 聚合
 │
 ├── defaults/                        # ★ 各注册表的默认资源

@@ -9,7 +9,7 @@ import {
   DatabaseMemoryEntryRepository,
   InMemoryMemoryEntryRepository,
 } from '@zhin.js/ai';
-import { DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT } from '../zhin-agent/context-tail-limit.js';
+import { DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT } from '../context/context-tail-limit.js';
 import { setMemoryEntryRepository } from '../memory-entry-registry.js';
 import {
   DatabaseOrchestrationRepository,

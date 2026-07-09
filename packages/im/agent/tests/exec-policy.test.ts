@@ -32,7 +32,7 @@ import {
   applyExecPolicyToTools,
   EXEC_PRESETS,
 } from '../src/security/exec-policy.js';
-import type { ZhinAgentConfig } from '../src/zhin-agent/config.js';
+import type { ZhinAgentConfig } from '../src/config/index.js';
 import { addBashApproveRule } from '../src/security/owner-approve-always-store.js';
 import { runWithCommMessage } from '../src/security/comm-message-context.js';
 import type { AgentTool } from '@zhin.js/ai';

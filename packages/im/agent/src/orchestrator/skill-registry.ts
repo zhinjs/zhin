@@ -4,8 +4,20 @@
  * Absorbs: core/built/skill.ts (SkillFeature, search scoring)
  */
 
+import {
+  buildDocumentFrequency,
+  collectSkillWeightedTerms,
+  collectTermSet,
+  createIdfFn,
+  scoreWeightedTfidfOverlap,
+} from '@zhin.js/ai';
 import { ResourceRegistry } from './resource-registry.js';
 import type { ResourceScope, Skill, Tool } from './types.js';
+
+export interface SkillSearchScoredResult {
+  skill: Skill;
+  score: number;
+}
 
 export class SkillRegistry extends ResourceRegistry<Skill> {
   private readonly byName = new Map<string, Skill>();
@@ -24,22 +36,46 @@ export class SkillRegistry extends ResourceRegistry<Skill> {
     return this.byName.get(name);
   }
 
-  search(query: string, options?: { maxResults?: number; platform?: string; agentId?: string }): Skill[] {
+  searchScored(
+    query: string,
+    options?: { maxResults?: number; platform?: string; agentId?: string; minScore?: number },
+  ): SkillSearchScoredResult[] {
     const maxResults = options?.maxResults ?? 5;
+    const minScore = options?.minScore ?? 0.1;
     const platform = options?.platform;
     const pool = options?.agentId ? this.getForAgent(options.agentId) : this.getAll();
 
-    const scored = pool
-      .filter(skill => {
-        if (platform && skill.platforms?.length) return skill.platforms.includes(platform);
-        return true;
-      })
-      .map(skill => ({ skill, score: this.scoreSkill(skill, query) }))
-      .filter(({ score }) => score > 0)
+    const filtered = pool.filter(skill => {
+      if (platform && skill.platforms?.length) return skill.platforms.includes(platform);
+      return true;
+    });
+    if (filtered.length === 0) return [];
+
+    const weightedBySkill = new Map<Skill, Map<string, number>>();
+    const corpusSets: Set<string>[] = [];
+    for (const skill of filtered) {
+      const weighted = collectSkillWeightedTerms(skill);
+      weightedBySkill.set(skill, weighted);
+      corpusSets.push(collectTermSet(weighted));
+    }
+
+    const df = buildDocumentFrequency(corpusSets);
+    const idf = createIdfFn(filtered.length, df);
+
+    const scored = filtered
+      .map(skill => ({
+        skill,
+        score: scoreWeightedTfidfOverlap(query, weightedBySkill.get(skill)!, idf),
+      }))
+      .filter(({ score }) => score >= minScore)
       .sort((a, b) => b.score - a.score)
       .slice(0, maxResults);
 
-    return scored.map(({ skill }) => skill);
+    return scored;
+  }
+
+  search(query: string, options?: { maxResults?: number; platform?: string; agentId?: string }): Skill[] {
+    return this.searchScored(query, options).map(({ skill }) => skill);
   }
 
   collectAllTools(agentId?: string): Tool[] {
@@ -57,33 +93,5 @@ export class SkillRegistry extends ResourceRegistry<Skill> {
   override dispose(): void {
     this.byName.clear();
     super.dispose();
-  }
-
-  private scoreSkill(skill: Skill, query: string): number {
-    const lq = query.toLowerCase();
-    let score = 0;
-
-    if (skill.keywords) {
-      for (const kw of skill.keywords) {
-        if (lq.includes(kw.toLowerCase())) score += 1.0;
-      }
-    }
-    if (skill.tags) {
-      for (const tag of skill.tags) {
-        if (lq.includes(tag.toLowerCase())) score += 0.5;
-      }
-    }
-    if (lq.includes(skill.name.toLowerCase())) score += 0.3;
-
-    const ld = skill.description.toLowerCase();
-    if (ld.includes(lq)) score += 0.2;
-    if (lq.includes(ld)) score += 0.15;
-
-    for (const tool of skill.tools) {
-      if (lq.includes(tool.name.toLowerCase())) score += 0.4;
-      if (tool.description && lq.includes(tool.description.toLowerCase().slice(0, 10))) score += 0.1;
-    }
-
-    return score;
   }
 }

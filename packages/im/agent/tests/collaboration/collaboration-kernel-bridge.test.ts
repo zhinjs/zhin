@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import { initOrchestrationService } from '../../src/orchestrator/orchestration-service.js';
 import { MemoryOrchestrationRepository } from '../../src/orchestrator/orchestration-repository.js';
-import { tryCompleteKernelGroupMentionFromOutbound } from '../../src/collaboration/collaboration-kernel-bridge.js';
+import { tryCompleteKernelImProjectionFromOutbound } from '../../src/collaboration/collaboration-kernel-bridge.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
 import type { CollaborationScene } from '../../src/collaboration/types.js';
 
@@ -10,7 +10,7 @@ vi.mock('../../src/collaboration/im-mention-delegate.js', () => ({
   sendGroupPeerMention: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
-describe('tryCompleteKernelGroupMentionFromOutbound', () => {
+describe('tryCompleteKernelImProjectionFromOutbound', () => {
   const cell: CollaborationScene = {
     id: 'cell-1',
     adapter: 'icqq',
@@ -51,7 +51,7 @@ describe('tryCompleteKernelGroupMentionFromOutbound', () => {
       },
     });
 
-    await tryCompleteKernelGroupMentionFromOutbound({
+    await tryCompleteKernelImProjectionFromOutbound({
       message,
       cell,
       endpointId: 'worker-bot',

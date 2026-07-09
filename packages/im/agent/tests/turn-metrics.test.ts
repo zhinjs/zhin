@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addUsage, formatAiHandlerCompleteLog } from '../src/zhin-agent/turn-metrics.js';
+import { addUsage, formatAiHandlerCompleteLog } from '../src/turn/turn-metrics.js';
 
 describe('turn-metrics', () => {
   it('formatAiHandlerCompleteLog 紧凑格式含子 agent', () => {

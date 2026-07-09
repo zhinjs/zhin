@@ -132,7 +132,7 @@ try { return await fn(); } finally { release(); }
 
 **理由**：PromptController 是 ZhinAgent 的核心调度器，dispose 时如果有正在执行的 turn 不取消，turn 内的 LLM 调用会继续消耗 token 和网络资源。所有等待 idle 的 waiter 应立即 resolve，否则 `waitForIdle()` 永远 hang。
 
-**适用于**：`packages/im/agent/src/zhin-agent/prompt-controller.ts`。
+**适用于**：`packages/im/agent/src/turn/prompt-controller.ts`。
 
 ### D12 — `pendingOrchestration` 添加定时 sweep
 

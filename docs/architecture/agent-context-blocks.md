@@ -1,6 +1,6 @@
 # Agent 系统提示词 — 上下文块契约与 Debug 形状
 
-对应 `packages/im/agent/src/zhin-agent/prompt.ts` 中精简分层架构（与文件头注释一致）。
+对应 `packages/im/agent/src/prompt/system-prompt.ts` 中精简分层架构（与文件头注释一致）。
 
 ## 块顺序（稳定段 → 动态段）
 

@@ -2,8 +2,9 @@
  * InboundTurnPipeline — Agent Orchestration Plane entry (ADR 0023).
  *
  * Stages: enrich → peerPolicy → buildTurnPlan → executeTurn → outbound
+ * Turn 执行委托 `inbound-turn-execute` / `inbound-spawn-task`（阶段 4）。
  */
-import type { Plugin, Tool, Message, MessageElement, AgentTurnMessage, AIAccessScopeConfig, AITriggerConfig } from '@zhin.js/core';
+import type { Plugin, Tool, Message, AgentTurnMessage, AIAccessScopeConfig, AITriggerConfig } from '@zhin.js/core';
 import {
   checkAIAccess,
   enrichMessageForAgent,
@@ -14,26 +15,14 @@ import {
   QUOTED_MESSAGE_CONTEXT_MARKER,
   resolveQuotedMessagePayload,
 } from '@zhin.js/core';
-import type { ContentPart } from '@zhin.js/ai';
-import type { OutputElement } from '@zhin.js/ai';
-import { parseOutput } from '@zhin.js/ai';
+import type { MessageElement } from '@zhin.js/core';
 import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import { formatCompactLog, truncatePreview, formatContentChainLog, CONTENT_CHAIN_STAGE } from '@zhin.js/logger';
-import { formatRedactedJson } from '@zhin.js/ai';
 import type { AIServiceRefs } from '../init/shared-refs.js';
 import { extractMediaParts, extractMediaPartsFromQuotedPayload } from '../init/message-media.js';
-import {
-  preprocessInboundMedia,
-  publishOutboundElements,
-  resolveMultimodalConfig,
-  getPrimaryAppConfig,
-  INBOUND_MEDIA_PARTS_EXTRA_KEY,
-} from '../media/index.js';
-import { providerSupportsVision } from '../media/vision-capability.js';
 import { DEFAULT_ZHIN_AGENT_NAME } from '../config/types.js';
 import { discoverWorkspaceAgents } from '../discovery/agents.js';
-import { canAccessTool } from '../orchestrator/tool-selection.js';
-import { formatAiHandlerCompleteLog } from '../zhin-agent/turn-metrics.js';
+import { formatAiHandlerCompleteLog } from '../turn/turn-metrics.js';
 import {
   formatSubagentProcessingMessage,
   SUBAGENT_GOAL_NOTIFY_EXTRA_KEY,
@@ -51,24 +40,15 @@ import {
   isCollaborationNoOpReasoningOutbound,
 } from './collaboration-outbound.js';
 import { resolveOutboundBatches } from './outbound-resolver.js';
-import {
-  orchestrationSourceFromMessage,
-  tryCompleteKernelImProjectionFromOutbound,
-} from './collaboration-kernel-bridge.js';
+import { tryCompleteKernelImProjectionFromOutbound } from './collaboration-kernel-bridge.js';
 import { dispatchPeerTask } from './collaboration-dispatch.js';
-import { normalizeExecutorKind } from '../orchestrator/orchestration-mappers.js';
-import {
-  messageTextContent,
-  stripCellToolJsonFromOutputElements,
-  summarizeDelegateeReply,
-  isSubstantiveGroupTaskReply,
-} from './collaboration-delegation.js';
-import { getAgentRuntimeRegistry } from './runtime-registry.js';
-import { attachCollaborationTurnSnapshot } from './collaboration-turn-snapshot.js';
 import type { GroupMessageAdapterView } from './group-message.js';
-import type { CollaborationScene, PeerTriggerMode } from './types.js';
-import { getOrchestrationService } from '../orchestrator/orchestration-service.js';
-import { createOrchestrationTools } from '../builtin/orchestration-tools.js';
+import type { PeerTriggerMode } from './types.js';
+import { collectInboundTurnTools } from './inbound-turn-tools.js';
+import { tryHandlePeerInboundHandback } from './inbound-peer-handback.js';
+import { executeInboundSpawnTaskTurn } from './inbound-spawn-task.js';
+import { executeInboundAgentTurn } from './inbound-turn-execute.js';
+import { getAgentRuntimeRegistry } from './runtime-registry.js';
 
 function applyCollaborationOutboundPostProcess(
   batches: MessageElement[][],
@@ -110,7 +90,7 @@ export interface InboundTurnPipelineDeps {
   refs: AIServiceRefs;
   triggerConfig: AITriggerConfig;
   peerMode: PeerTriggerMode;
-  logger: { debug: (...a: unknown[]) => void; info: (...a: unknown[]) => void; warn: (...a: unknown[]) => void };
+  logger: { debug: (...args: unknown[]) => void; info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void };
   replyOutbound: (payload: unknown, options?: { quote?: boolean }) => Promise<unknown>;
 }
 
@@ -206,66 +186,14 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
       replyOutbound(payload, { quote: !peerInbound });
 
     if (peerInbound && cell && peerResult.peerEndpointId) {
-      const orch = getOrchestrationService();
-      if (orch) {
-        const rawText = messageTextContent(message);
-        const explicitTaskId = rawText.match(/(?:^|[\s(（])#([A-Za-z0-9_-]{4,})(?=$|[\s),，。.!！?:：）])/u)?.[1];
-        const sessionKey = resolveIMSessionIdFromMessage(message);
-        const runs = await orch.listRuns(sessionKey);
-        const activeGroupTasks = runs.flatMap((run) => run.tasks).filter((task) =>
-          normalizeExecutorKind(task.executor_kind) === 'im_projection'
-          && task.assigned_to === peerResult.peerEndpointId
-          && ['assigned', 'running', 'waiting_result', 'pending'].includes(task.status),
-        );
-        const target = explicitTaskId
-          ? activeGroupTasks.find((task) => task.id === explicitTaskId)
-            ?? (await orch.repositoryHandle.getTask(explicitTaskId))
-          : activeGroupTasks.length === 1
-            ? activeGroupTasks[0]
-            : undefined;
-
-        if (!explicitTaskId && activeGroupTasks.length > 1) {
-          const hint = `检测到 ${activeGroupTasks.length} 个活跃任务，请在回复中带上 #taskId，例如 #${activeGroupTasks[0]!.id}`;
-          for (const task of activeGroupTasks) {
-            await orch.taskProgress(task.id, `ambiguous handback from ${peerResult.peerEndpointId}; taskId required`);
-          }
-          await replyAi(hint);
-          return;
-        }
-
-        if (target && normalizeExecutorKind(target.executor_kind) === 'im_projection') {
-          const assignee = target.assigned_to || peerResult.peerEndpointId;
-          if (assignee !== peerResult.peerEndpointId) {
-            logger.debug(formatCompactLog('OrchestrationKernel', {
-              action: 'group_handback_skip',
-              reason: 'assignee_mismatch',
-              task: target.id,
-              assignee,
-              from: peerResult.peerEndpointId,
-            }));
-          } else {
-            const summary = summarizeDelegateeReply(
-              explicitTaskId ? rawText.replace(`#${explicitTaskId}`, '').trim() : rawText,
-            );
-            if (!isSubstantiveGroupTaskReply(summary)) {
-              logger.info(formatCompactLog('OrchestrationKernel', {
-                action: 'group_handback_skip',
-                reason: 'not_substantive',
-                task: target.id,
-                from: peerResult.peerEndpointId,
-              }));
-            } else {
-              await orch.completeTask(target.id, summary);
-              logger.info(formatCompactLog('OrchestrationKernel', {
-                action: 'group_handback',
-                task: target.id,
-                cell: cell.id,
-                from: peerResult.peerEndpointId,
-              }));
-            }
-          }
-        }
-      }
+      const handbackDone = await tryHandlePeerInboundHandback({
+        message,
+        cell,
+        peerEndpointId: peerResult.peerEndpointId,
+        replyAi,
+        logger,
+      });
+      if (handbackDone) return;
     }
 
     if (triggerConfig.thinkingMessage) await replyAi(triggerConfig.thinkingMessage);
@@ -288,17 +216,6 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
         await replyOutbound(formatSubagentProcessingMessage(notice));
       },
     };
-    const toolService = root.inject('tool');
-    let externalTools: Tool[] = [...ai.getResidentToolsAsTools()];
-    if (toolService) {
-      externalTools.push(...toolService.getAll());
-      externalTools = toolService.filterByContext(externalTools, commMessage);
-    } else {
-      externalTools = externalTools.filter((t) => canAccessTool(t, commMessage));
-    }
-    if (cell) {
-      externalTools.push(...createOrchestrationTools(commMessage));
-    }
 
     try {
       const resolveQuotes = triggerConfig.resolveQuotedMessages && !peerInbound;
@@ -403,144 +320,40 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
         && turnPlan.delegation.targetAgentId
         && turnPlan.delegation.targetAgentId !== DEFAULT_ZHIN_AGENT_NAME
       ) {
-        const subagentManager = zhinAgent.getSubagentManager();
-        if (subagentManager) {
-          const targetAgentId = turnPlan.delegation.targetAgentId;
-          const delegateText = aiContent.trim() || '请处理这条入站消息。';
-          const orch = getOrchestrationService();
-          let summary: string;
-          let kernelTaskId: string | undefined;
-          if (orch) {
-            const run = await orch.findOrCreateRun({
-              sessionKey: resolveIMSessionIdFromMessage(commMessage),
-              title: aiContent.slice(0, 80) || `Route to ${targetAgentId}`,
-              source: orchestrationSourceFromMessage(commMessage, cell?.id),
-            });
-            const dispatched = await orch.dispatchTask({
-              runId: run.id,
-              name: targetAgentId,
-              description: delegateText,
-              role: 'subtask',
-              goal: delegateText,
-              executorKind: 'local',
-              assignedTo: targetAgentId,
-              context: {
-                route: 'inbound_spawn_task',
-              },
-              message: commMessage,
-              autoStart: false,
-            });
-            kernelTaskId = dispatched.task.id;
-            // Execute via the registered local executor (ADR 0027). Media
-            // handling and subagent spawn live in the executor, not here.
-            const completed = await orch.runTask(dispatched.task.id, commMessage);
-            if (completed.status === 'failed') {
-              throw new Error(completed.error ?? `subagent ${targetAgentId} failed`);
-            }
-            summary = completed.resultSummary ?? '';
-          } else {
-            summary = await subagentManager.spawnSync({
-              task: delegateText,
-              label: targetAgentId,
-              agent: targetAgentId,
-              binding: bindingRegistry?.getBinding(targetAgentId) ?? undefined,
-              origin: { message: commMessage },
-              notifyContext: commMessage,
-            });
-          }
-          const outboundSegments = await publishOutboundElements(parseOutput(summary), message.$adapter);
-          if (outboundSegments.length) {
-            await replyAi(outboundSegments);
-          } else {
-            const fallback = '任务已完成，但没有可展示的文本结果。';
-            await replyAi(fallback);
-            logger.warn(formatCompactLog('AI Handler', {
-              path: 'kernel_spawn_task_empty_reply',
-              task: kernelTaskId,
-              agent: targetAgentId,
-            }));
-          }
-          const emitter = zhinAgent.getEventEmitter();
-          if (emitter) {
-            const sessionId = resolveIMSessionIdFromMessage(commMessage);
-            emitter.emit('ai.typing.stop', emitter.createPayload(sessionId, commMessage, 'text', {
-              reason: 'spawn_task_reply',
-            }));
-          }
-          logger.info(formatCompactLog('AI Handler', {
-            path: kernelTaskId ? 'kernel_spawn_task' : 'spawn_task_legacy',
-            task: kernelTaskId,
-            agent: targetAgentId,
-          }));
-          return;
-        }
-        logger.warn(formatCompactLog('AI Handler', {
-          path: 'spawn_task_unavailable',
-          agent: turnPlan.delegation.targetAgentId,
-          fallback: 'local_process',
-        }));
+        const spawnResult = await executeInboundSpawnTaskTurn({
+          zhinAgent,
+          commMessage,
+          message,
+          aiContent,
+          delegation: turnPlan.delegation,
+          cell,
+          bindingRegistry,
+          replyAi,
+          logger,
+        });
+        if (spawnResult.handled) return;
       }
 
       const handlerBinding =
         bindingRegistry?.getBinding(turnPlan.handlerProfile)
         ?? bindingRegistry?.getBinding(DEFAULT_ZHIN_AGENT_NAME)
         ?? bindingRegistry?.requireZhinBinding();
-      if (handlerBinding) zhinAgent.configure({ activeBinding: handlerBinding });
 
-      if (cell && findCellMemberByEndpoint(cell, endpointId)) {
-        const snapCell = (await cellService.getSceneFresh(cell.id)) ?? cell;
-        attachCollaborationTurnSnapshot(commMessage, snapCell, endpointId);
-        cell = snapCell;
-      }
-
-      zhinAgent.initInboundTurnContext();
-
-      let elements: OutputElement[];
-      const mmConfig = resolveMultimodalConfig();
-      if (mediaParts.length > 0 && mmConfig.enabled) {
-        const pre = await preprocessInboundMedia(mediaParts, mmConfig, undefined, {
-          getConfig: getPrimaryAppConfig,
-          warn: (msg) => logger.warn(formatContentChainLog({
-            stage: CONTENT_CHAIN_STAGE.STT,
-            peer: 'speech',
-            fallback: msg,
-          })),
-          logContentChain: (fields) => logger.info(formatContentChainLog(fields)),
-        });
-        const fullContent = [content, pre.textAppend].filter(Boolean).join('\n\n');
-        const visionProvider = handlerBinding && refs.aiService?.isReady()
-          ? refs.aiService.getProvider(handlerBinding.providerAlias)
-          : refs.aiService?.getProvider();
-        const canInjectVision = pre.visionParts.length > 0
-          && refs.aiService?.isReady()
-          && visionProvider
-          && providerSupportsVision(visionProvider);
-        if (canInjectVision) {
-          commMessage.extra = {
-            ...commMessage.extra,
-            [INBOUND_MEDIA_PARTS_EXTRA_KEY]: pre.visionParts,
-          };
-        }
-        try {
-          elements = await zhinAgent.process(fullContent, commMessage, externalTools, onChunk);
-        } catch {
-          const parts: ContentPart[] = [];
-          if (aiContent) parts.push({ type: 'text', text: aiContent });
-          parts.push(...mediaParts);
-          elements = await zhinAgent.processMultimodal(parts, commMessage, onChunk);
-        }
-      } else if (mediaParts.length > 0) {
-        const parts: ContentPart[] = [];
-        if (aiContent) parts.push({ type: 'text', text: aiContent });
-        parts.push(...mediaParts);
-        elements = await zhinAgent.processMultimodal(parts, commMessage, onChunk);
-      } else {
-        elements = await zhinAgent.process(aiContent, commMessage, externalTools, onChunk);
-      }
-
-      if (cell) {
-        elements = stripCellToolJsonFromOutputElements(elements);
-      }
+      const externalTools = collectInboundTurnTools({ root, ai, commMessage, cell });
+      const { elements, cell: turnCell } = await executeInboundAgentTurn({
+        zhinAgent,
+        commMessage,
+        aiContent,
+        externalTools,
+        mediaParts,
+        handlerBinding: handlerBinding ?? null,
+        refs,
+        cell,
+        endpointId,
+        onChunk,
+        logger,
+      });
+      cell = turnCell;
 
       if (cell) {
         const freshOutbound = await cellService.getSceneFresh(cell.id);

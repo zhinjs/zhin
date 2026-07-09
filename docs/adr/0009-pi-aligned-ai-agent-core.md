@@ -92,7 +92,7 @@ type ContentBlock =
 
 IM 多模态：入站 `ContentPart` 在 turn 边界转为 `{ type: 'image', data, mimeType }`。
 
-群聊 user 消息：写入 `agent_messages.payload` 前仍经 [`formatUserContentForSession`](../../packages/im/agent/src/zhin-agent/session-io.ts) 加 `[sender:id=… name=… roles=…]` 前缀，并剥离用户伪造前缀（Grill #11）。
+群聊 user 消息：写入 `agent_messages.payload` 前仍经 [`formatUserContentForSession`](../../packages/im/agent/src/session/session-io.ts) 加 `[sender:id=… name=… roles=…]` 前缀，并剥离用户伪造前缀（Grill #11）。
 
 ### D3. `agentLoop` + `Agent` 分层
 
@@ -121,7 +121,7 @@ packages/im/ai/src/agent/
 | pre-exec-fast-path | preExecutable 工具 turn 前并行预跑 → 注入 `systemPrompt`/`transformContext` → **同一 agentLoop** |
 | subagent / deferred-worker | `agentLoop` 或 `Agent.prompt` |
 
-删除：`Agent.run`, `Agent.runStream`, `createAgent().run`, [`llm-runner.ts`](../../packages/im/agent/src/zhin-agent/llm-runner.ts) 直连 provider 的逻辑。
+删除：`Agent.run`, `Agent.runStream`, `createAgent().run`、原 `zhin-agent/llm-runner.ts` 直连 provider 的逻辑（现由 [`core/agent-loop-turn.ts`](../../packages/im/agent/src/core/agent-loop-turn.ts) 经 `agentLoop` 统一）。
 
 **模型路由**（Grill #10、#20）：
 

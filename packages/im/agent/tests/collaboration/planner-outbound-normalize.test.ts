@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizePlannerOutboundBatches } from '../../src/collaboration/planner-outbound-normalize.js';
+import { normalizePlannerOutboundBatches } from '../../src/collaboration/outbound-resolver.js';
 import type { CollaborationScene } from '../../src/collaboration/types.js';
 
 const cell: CollaborationScene = {

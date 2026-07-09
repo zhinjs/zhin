@@ -14,7 +14,7 @@ vi.mock('@zhin.js/core', async (importOriginal) => {
 import {
   formatUserContentForSession,
   prepareUserContentForSession,
-} from '../src/zhin-agent/session-io.js';
+} from '../src/session/session-io.js';
 import type { AgentTurnMessage } from '@zhin.js/core';
 
 describe('formatUserContentForSession', () => {

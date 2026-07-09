@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_CONFIG, isPhaseTraceEnabled, isPromptTraceEnabled, isPromptCacheEnabled, buildAgentPromptCacheStreamOptions } from '../../src/zhin-agent/config.js';
+import { DEFAULT_CONFIG, isPhaseTraceEnabled, isPromptTraceEnabled, isPromptCacheEnabled, buildAgentPromptCacheStreamOptions } from '../../src/config/index.js';
 
 describe('isPhaseTraceEnabled', () => {
   it('config.phaseTrace=true 时应直接开启', () => {

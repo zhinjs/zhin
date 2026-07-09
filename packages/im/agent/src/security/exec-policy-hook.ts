@@ -2,7 +2,7 @@
  * Exec-policy PreToolUse hook — wraps checkExecPolicy for the unified hook chain.
  */
 import type { PreToolUseHook, PreToolUseEvent, ToolHookDecision } from '../orchestrator/types.js';
-import type { ZhinAgentConfig } from '../zhin-agent/config.js';
+import type { ZhinAgentConfig } from '../config/index.js';
 import { checkExecPolicyWithOptions } from './exec-policy.js';
 
 export function createExecPolicyHook(config: Required<ZhinAgentConfig>): PreToolUseHook {

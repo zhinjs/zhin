@@ -4,7 +4,7 @@ import {
   initTemplateManager,
   getTemplateManager,
   DEFAULT_TEMPLATES,
-} from '../../src/zhin-agent/prompt-templates.js';
+} from '../../src/prompt/templates.js';
 
 describe('PromptTemplateManager', () => {
   let manager: PromptTemplateManager;

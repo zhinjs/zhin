@@ -2,7 +2,7 @@
  * ADR 0014 P2-1 — 关键全局 Map / RSS 内存压力监控
  */
 import { formatCompact, Logger } from '@zhin.js/logger';
-import { getCompactionStateCount, evictCompactionStatesIfOverPressure } from '../zhin-agent/compaction-runtime.js';
+import { getCompactionStateCount, evictCompactionStatesIfOverPressure } from '../memory/compaction-runtime.js';
 import {
   getPendingOrchestrationCount,
   evictPendingOrchestrationIfOverPressure,

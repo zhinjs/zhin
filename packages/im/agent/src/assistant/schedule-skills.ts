@@ -1,7 +1,7 @@
 import { readSkillInstructions } from '../builtin/load-skill-tool.js';
-import { buildSkillLoadOptsForAgent } from '../zhin-agent/skill-load-opts.js';
-import { setTurnActiveSkills } from '../zhin-agent/turn-context.js';
-import type { ZhinAgentPrivate } from '../zhin-agent/zhin-agent-private.js';
+import { buildSkillLoadOptsForAgent } from '../skill/skill-load-opts.js';
+import { setTurnActiveSkills } from '../internal/turn-context.js';
+import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 
 export async function rehydrateTurnActiveSkills(
   host: ZhinAgentPrivate,

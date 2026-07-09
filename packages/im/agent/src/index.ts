@@ -25,7 +25,13 @@ export {
   agentToolsToLlmTools,
 } from './tool-bridge.js';
 export type { NormalizableTool } from './tool-bridge.js';
-export type { ZhinAgentConfig, OnChunkCallback } from './zhin-agent/index.js';
+export type { ZhinAgentConfig, OnChunkCallback } from './config/index.js';
+export type {
+  IAgentTurnProcessor,
+  IAgentSessionManager,
+  IAgentDiagnostics,
+  IAgentConfigurator,
+} from './config/agent-interfaces.js';
 export type {
   TurnEvent, TurnUsage,
   TurnStartEvent, ChunkEvent,
@@ -34,15 +40,15 @@ export type {
   ThinkingEvent, TurnEndEvent, TurnErrorEvent,
   SubagentStartEvent, SubagentProgressEvent, SubagentEndEvent,
   McpConnectEvent, McpToolCallEvent,
-} from './zhin-agent/turn-event.js';
+} from './event/turn-event.js';
 
 export {
   DEFAULT_CONFIG as ZHIN_AGENT_DEFAULT_CONFIG,
   DEFAULT_ALWAYS_LOADED_TOOLS,
   SECTION_SEP,
-} from './zhin-agent/config.js';
-export { MODEL_HARNESS_DEFAULTS, resolveModelHarness, mergeModelHarnessValues } from './zhin-agent/model-harness.js';
-export type { ModelHarnessRow, ResolvedModelHarness, ModelHarnessConfig } from './zhin-agent/model-harness.js';
+} from './config/index.js';
+export { MODEL_HARNESS_DEFAULTS, resolveModelHarness, mergeModelHarnessValues } from './config/model-harness-runtime.js';
+export type { ModelHarnessRow, ResolvedModelHarness, ModelHarnessConfig } from './config/model-harness.js';
 export {
   checkExecPolicy, applyExecPolicyToTools, resolveExecAllowlist, EXEC_PRESETS,
   isDangerousCommand, stripEnvVarPrefix, stripSafeWrappers, splitCompoundCommand, extractCommandName,
@@ -64,19 +70,19 @@ export {
   buildUserMessageWithHistory,
   contentToText,
   describePromptSectionsForDebug,
-} from './zhin-agent/prompt.js';
-export type { RichSystemPromptContext, PromptSectionDebugInfo } from './zhin-agent/prompt.js';
+} from './prompt/system-prompt.js';
+export type { RichSystemPromptContext, PromptSectionDebugInfo } from './prompt/system-prompt.js';
 export {
   buildAgentsEnvelopeContext,
   collectAgentsInstructionChain,
   clearAgentsInstructionCache,
-} from './zhin-agent/agents-instruction.js';
-export type { AgentsInstructionEntry } from './zhin-agent/agents-instruction.js';
+} from './context/agents-instruction.js';
+export type { AgentsInstructionEntry } from './context/agents-instruction.js';
 export {
   resolveWorkspacePrompt,
   clearWorkspacePromptCache,
-} from './zhin-agent/workspace-prompt.js';
-export type { WorkspacePromptRole } from './zhin-agent/workspace-prompt.js';
+} from './prompt/workspace-prompt.js';
+export type { WorkspacePromptRole } from './prompt/workspace-prompt.js';
 export {
   registerAgentPromptContributor,
   unregisterAgentPromptContributor,
@@ -88,15 +94,17 @@ export {
   formatAgentPromptSectionsMarkdown,
 } from './agent-prompt/index.js';
 export type { ResolveAgentPromptOptions } from './agent-prompt/index.js';
-export { createImTranscriptHistoryTool, createUserProfileTool, createSpawnTaskTool } from './zhin-agent/builtin-tools.js';
+export { createImTranscriptHistoryTool, createUserProfileTool } from './tool/context-tools.js';
+export { createSpawnTaskTool } from './builtin/spawn-task-tool.js';
 
 export { UserProfileStore, AI_USER_PROFILE_MODEL } from './user-profile.js';
 
-export { SubagentManager } from './subagent.js';
+export { SubagentSystem } from './subagent/index.js';
+export { SubagentRuntime } from './subagent/subagent-runtime.js';
 export type {
-  SubagentOrigin, SubagentResultDelivery, SubagentResultSender, SpawnOptions, SubagentManagerOptions,
+  SubagentOrigin, SubagentResultDelivery, SubagentResultSender, SpawnOptions, SubagentRuntimeOptions,
   SubagentCompletePayload,
-} from './subagent.js';
+} from './subagent/index.js';
 export { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from './reserved-tools.js';
 
 export { BuiltinBaseTool } from './builtin/builtin-base-tool.js';
