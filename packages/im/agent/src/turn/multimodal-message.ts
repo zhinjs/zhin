@@ -1,10 +1,8 @@
 /**
  * ContentPart[] → agentLoop UserMessage（ADR 0009 D2：image blocks）
  */
-import type { ContentPart, ImageContent, UserMessage } from '@zhin.js/ai';
-import { createUserMessage } from '@zhin.js/ai';
+import { type ContentPart, type ImageContent, type UserMessage, createUserMessage } from '@zhin.js/ai';
 import { normalizeContentPartsToPayloads } from '../media/media-normalize.js';
-
 type MultimodalPart =
   | ContentPart
   | { type: 'video_url'; video_url: { url: string } }

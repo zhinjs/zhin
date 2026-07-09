@@ -2,20 +2,16 @@
  * Turn plan resolution — endpoint primary, route overlay, delegation rules.
  */
 
-import type { Message } from '@zhin.js/core';
-import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
+import { type Message, resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import { resolveRoutedAgentName } from '../routing/route-matcher.js';
-import { DEFAULT_ZHIN_AGENT_NAME } from '../config/types.js';
-import type { AgentBindingConfig } from '../config/types.js';
+import { DEFAULT_ZHIN_AGENT_NAME, type AgentBindingConfig } from '../config/types.js';
 import { resolveCollaborationSceneContextKeyFromMessage } from './scene-context.js';
 import {
   findCellForMessage,
   resolveCellForScene,
   resolvePrimaryForEndpoint,
 } from './collaboration-config.js';
-import type { CollaborationScene } from './types.js';
-import type { TurnPlan } from './types.js';
-
+import type { CollaborationScene, TurnPlan } from './types.js';
 export interface TurnPlanResolverInput {
   message: Message;
   contentText: string;

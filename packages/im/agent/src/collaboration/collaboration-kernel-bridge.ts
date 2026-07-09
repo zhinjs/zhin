@@ -3,9 +3,7 @@
  * Kernel 就绪时 Cell 不再写入 activeDelegations；handback 走 task 完成。
  */
 import { formatCompactLog } from '@zhin.js/logger';
-import type { Message, MessageElement } from '@zhin.js/core';
-import { sceneRefFromMessage } from '@zhin.js/core';
-import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
+import { type Message, type MessageElement, sceneRefFromMessage, resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import type { CollaborationScene } from './types.js';
 import type { OrchestrationRunSource, OrchestrationSceneRef, OrchestrationTaskRecord } from '@zhin.js/ai';
 import { getOrchestrationService } from '../orchestrator/orchestration-service.js';
@@ -16,7 +14,6 @@ import {
   summarizeDelegateeReply,
 } from './collaboration-delegation.js';
 import { sendGroupPeerMention } from './im-mention-delegate.js';
-
 export function isOrchestrationKernelReady(): boolean {
   return getOrchestrationService() != null;
 }

@@ -1,14 +1,7 @@
 /**
  * Wire agent_* / im_transcripts stores into ZhinAgent (ADR 0009).
  */
-import type { AIConfig } from '@zhin.js/ai';
-import {
-  AgentSessionStore,
-  DatabaseContextRepository,
-  DatabaseImTranscriptStore,
-  DatabaseMemoryEntryRepository,
-  InMemoryMemoryEntryRepository,
-} from '@zhin.js/ai';
+import { type AIConfig, AgentSessionStore, DatabaseContextRepository, DatabaseImTranscriptStore, DatabaseMemoryEntryRepository, InMemoryMemoryEntryRepository } from '@zhin.js/ai';
 import { DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT } from '../context/context-tail-limit.js';
 import { setMemoryEntryRepository } from '../memory-entry-registry.js';
 import {
@@ -18,7 +11,6 @@ import {
 import { upgradeOrchestrationRepository } from '../orchestrator/orchestration-service.js';
 import type { AIServiceRefs } from './shared-refs.js';
 import { wireCollaborationStorage } from '../collaboration/wire-collaboration-storage.js';
-
 export async function activateAiDatabaseStorage(
   db: any,
   refs: AIServiceRefs,

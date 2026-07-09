@@ -1,5 +1,4 @@
-import { getLlmTransportModel } from '@zhin.js/ai';
-import type { ContextRepository } from '@zhin.js/ai';
+import { getLlmTransportModel, type ContextRepository } from '@zhin.js/ai';
 import { resolveIMSessionIdFromMessage, type Message } from '@zhin.js/core';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import { beginTurnSession, type SessionIODeps } from '../session/session-io.js';
@@ -7,7 +6,6 @@ import type { MemoryStore, MemorySystemConfig } from './contracts.js';
 import { ContextRepositoryMemoryStore } from './context-repository-store.js';
 import { manualCompactSession } from './compaction-runtime.js';
 import { AiCompactionStrategy } from './ai-compaction-strategy.js';
-
 export class MemorySystem {
   private stores = new Map<string, MemoryStore>();
 

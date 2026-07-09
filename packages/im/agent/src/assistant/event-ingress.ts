@@ -3,13 +3,11 @@
  */
 import { Logger } from '@zhin.js/core';
 import { formatCompact } from '@zhin.js/logger';
-import type { AssistantEventsConfig } from './config.js';
-import { resolveAssistantEventsConfig } from './config.js';
+import { type AssistantEventsConfig, resolveAssistantEventsConfig } from './config.js';
 import type { AssistantEventRequest, AssistantEventResult } from './event-types.js';
 import type { ScheduleJobEngine } from './job-engine.js';
 import type { ScheduleJobStore } from './job-store.js';
 import type { JobAction, JobNotify } from './types.js';
-
 const logger = new Logger(null, 'assistant-event-ingress');
 
 export interface AssistantEventIngressOptions {

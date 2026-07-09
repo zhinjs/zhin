@@ -2,9 +2,7 @@
  * Build A2A SendMessageRequest from orchestration task fields.
  */
 import { randomUUID } from 'node:crypto';
-import type { Part, SendMessageRequest } from '@a2a-js/sdk';
-import { Role } from '@a2a-js/sdk';
-
+import { type Part, type SendMessageRequest, Role } from '@a2a-js/sdk';
 export interface DelegationTaskPayload {
   title: string;
   description: string;

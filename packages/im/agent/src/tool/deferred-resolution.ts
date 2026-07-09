@@ -1,11 +1,5 @@
-import type { AgentTool, LlmTool } from '@zhin.js/ai';
+import { type AgentTool, type LlmTool, getLoadedToolNamesFromSnapshot, addSkillToSnapshot, touchToolsInSnapshot, type DeferredToolSessionSnapshot } from '@zhin.js/ai';
 import { agentToolToLlmTool } from '../tool-bridge.js';
-import {
-  getLoadedToolNamesFromSnapshot,
-  addSkillToSnapshot,
-  touchToolsInSnapshot,
-  type DeferredToolSessionSnapshot,
-} from '@zhin.js/ai';
 import {
   buildDeferredStats,
   buildToolCatalog,
@@ -14,7 +8,6 @@ import {
 import type { ToolCatalogItem } from '../tool-catalog/types.js';
 import { resolveDeferredToolsConfig } from '../tool-catalog/resolve-config.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
-
 export interface ResolvedToolsForTurn {
   tools: AgentTool[];
   catalog: ToolCatalogItem[];

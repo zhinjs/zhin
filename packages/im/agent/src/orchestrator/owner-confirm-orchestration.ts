@@ -4,8 +4,7 @@
  * 阶段 A：工具结果首行 `ZHIN_NEEDS_OWNER:` 为权威信号。
  * 阶段 B：白名单工具 + 信号 + 非子 Agent 时由本模块同步调用 ask_user(type=confirm)。
  */
-import { getHostRootPlugin } from '@zhin.js/core';
-import type { Plugin, Message } from '@zhin.js/core';
+import { getHostRootPlugin, type Plugin, type Message } from '@zhin.js/core';
 import type { ToolResultTransform } from '@zhin.js/ai';
 import { AskUserBuiltinTool } from '../builtin/ask-user-tool.js';
 import {
@@ -14,7 +13,6 @@ import {
   setPendingOrchestrationTool,
 } from '../security/owner-approve-always-store.js';
 import { OWNER_HARD_ORCHESTRATION_TOOLS } from './owner-orchestration-constants.js';
-
 /** 工具结果第一行须与此完全一致（行首无空白） */
 export const ZHIN_NEEDS_OWNER_FIRST_LINE = 'ZHIN_NEEDS_OWNER:' as const;
 

@@ -1,12 +1,6 @@
 import { segment } from '../../utils.js';
 import { RichSegment } from './base.js';
-import type {
-  RichSegmentRenderContext,
-  RichSegmentRenderResult,
-  SpeechPipelineForRichSegment,
-} from './types.js';
-import { RICH_SEGMENT_MODE } from './types.js';
-
+import { type RichSegmentRenderContext, type RichSegmentRenderResult, type SpeechPipelineForRichSegment, RICH_SEGMENT_MODE } from './types.js';
 export interface TtsSegmentData {
   text: string;
   voice?: string;

@@ -6,13 +6,11 @@
  */
 
 import type { AgentMessage, AgentEvent, ImageContent, OutputElement } from '@zhin.js/ai';
-import type { Message } from '../orchestrator/types.js';
-import type { Tool } from '../orchestrator/types.js';
+import type { Message, Tool } from '../orchestrator/types.js';
 import type { SubagentSystem } from '../subagent/index.js';
 import type { ZhinAgentEventEmitter } from '../event/event-emitter.js';
 import type { ZhinAgentTurnMetrics } from '../turn/turn-metrics.js';
 import type { OnChunkCallback } from './zhin-agent-config.js';
-
 // 提示：若此处 import 报错，说明尚未完全解耦。
 // 请确保该文件只 import 类型（type-only），不引入运行时依赖。
 

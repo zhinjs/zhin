@@ -3,17 +3,16 @@
  * (follow-up sender, subagent manager, cron engine, scheduler).
  */
 import * as path from 'node:path';
-import { formatCompact, getPlugin, getScheduler, isZhinTool, Scheduler, setScheduler, type SendOptions } from '@zhin.js/core';
+import { formatCompact, getPlugin, getScheduler, isZhinTool, Scheduler, setScheduler, type SendOptions, type Plugin, createSyntheticMessage, type Message } from '@zhin.js/core';
 import { createProactiveOutboundService } from '../outbound/send-proactive.js';
 import { composeZhinAgentRuntime } from './compose-zhin-agent-runtime.js';
-import { ModelRegistry, computeTierScore, InMemoryMemoryEntryRepository } from '@zhin.js/ai';
+import { ModelRegistry, computeTierScore, InMemoryMemoryEntryRepository, type AIConfig } from '@zhin.js/ai';
 import { setMemoryEntryRepository } from '../memory-entry-registry.js';
 import { ZhinAgent } from '../zhin-agent/index.js';
 import { createBuiltinTools } from '../builtin-tools.js';
 import { createGenerateImageTool } from '../builtin/generate-image-tool.js';
 import { collectPluginSkillSearchRoots } from '../discovery/utils.js';
 import { discoverWorkspaceAgents } from '../discovery/agents.js';
-
 import {
   resolveSkillInstructionMaxChars,
   DEFAULT_CONFIG,
@@ -42,8 +41,6 @@ import {
   setAssistantRuntime,
   type AssistantConfig,
 } from '../assistant/index.js';
-import type { Plugin } from '@zhin.js/core'
-import type { AIConfig } from '@zhin.js/ai';
 import type { AIServiceRefs } from './shared-refs.js';
 import { activateAiDatabaseStorage } from './activate-ai-database-storage.js';
 import { wireCollaborationStorage } from '../collaboration/wire-collaboration-storage.js';
@@ -60,14 +57,12 @@ import {
 import { registerDefaultExecutors } from '../orchestrator/bootstrap-executors.js';
 import { initRemoteAgentRegistry } from '../orchestrator/remote-agent-registry.js';
 import { startRemoteTaskPoller } from '../orchestrator/remote-task-poller.js';
-import { createSyntheticMessage, type Message } from '@zhin.js/core';
 import { asPrivate } from '../internal/as-private.js';
 import type { AIService } from '../service.js';
 import { createExecPolicyHook } from '../security/exec-policy-hook.js';
 import { createFilePolicyHook } from '../security/file-policy-hook.js';
 import { createDangerousToolPolicyHook } from '../security/dangerous-tool-policy-hook.js';
 import { bootstrapEndpointRuntimes, markAllRuntimesPersistenceReady } from '../collaboration/bootstrap-agent-runtimes.js';
-
 /** yaml 中显式 models 列表：覆盖 provider.models 与 ModelRegistry 缓存，避免 /v1/models 发现结果污染白名单 */
 function applyExplicitModelLists(ai: AIService, modelRegistry: ModelRegistry): void {
   for (const alias of ai.listProviders()) {

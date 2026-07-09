@@ -1,18 +1,8 @@
-import {
-  autoCompactAgentMessagesIfNeeded,
-  createAgentCompactionState,
-  estimateAgentMessagesTokens,
-  type AgentCompactionConfig,
-  type AgentCompactionState,
-  type ContextRepository,
-  type Model,
-} from '@zhin.js/ai';
-import type { AgentMessage } from '@zhin.js/ai';
+import { autoCompactAgentMessagesIfNeeded, createAgentCompactionState, estimateAgentMessagesTokens, type AgentCompactionConfig, type AgentCompactionState, type ContextRepository, type Model, type AgentMessage } from '@zhin.js/ai';
 import type { CompactionConfig } from '../config/zhin-agent-config.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import type { ZhinAgentPrivate, Message } from '../internal/agent-host.js';
 import { resolveWorkspacePrompt } from '../prompt/workspace-prompt.js';
-
 export interface CompactionRuntimeOptions {
   host: ZhinAgentPrivate;
   sessionId: string;

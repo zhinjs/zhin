@@ -1,10 +1,8 @@
 /**
  * 运行时上下文工具（session / profile），由 ToolSystem 按 turn 注入。
  */
-import type { AgentTool } from '@zhin.js/ai';
-import type { ImTranscriptQuery, ImTranscriptSearchHit, ImTranscriptStore, MemoryImTranscriptStore } from '@zhin.js/ai';
+import type { AgentTool, ImTranscriptQuery, ImTranscriptSearchHit, ImTranscriptStore, MemoryImTranscriptStore } from '@zhin.js/ai';
 import type { UserProfileStore } from '../user-profile.js';
-
 function formatTranscriptHitLine(hit: ImTranscriptSearchHit): string {
   const role = hit.direction === 'inbound' ? '用户' : '助手';
   const time = new Date(hit.time).toLocaleString('zh-CN');

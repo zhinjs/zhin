@@ -1,14 +1,12 @@
 import type { Context } from './types/context.js';
-import type { AgentMessage, AssistantMessage, UserMessage } from './types/agent-message.js';
+import { type AgentMessage, type AssistantMessage, type UserMessage, EMPTY_TOKEN_USAGE, isLlmAgentMessage } from './types/agent-message.js';
 import type { AgentEvent, ThinkingLevel, ToolExecutionMode } from './types/agent-event.js';
 import type { Model } from './types/model.js';
 import type { LlmTool, ParsedToolCall } from './types/tool.js';
-import { EMPTY_TOKEN_USAGE, isLlmAgentMessage } from './types/agent-message.js';
 import { isContextOverflowError } from '../compaction/agent-message-compaction.js';
 import { complete, type StreamOptions } from './api-registry.js';
 import { validateToolCall } from './validate-tool-call.js';
 import { isTieredParallelTool } from './tiered-tool-buckets.js';
-
 export interface BeforeToolCallContext {
   toolCall: ParsedToolCall;
   tools: LlmTool[];

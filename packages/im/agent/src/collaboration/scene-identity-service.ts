@@ -5,7 +5,7 @@
  * 入站消息通过 `resolveLogicalScene(adapter, sceneId)` 得到逻辑 Cell。
  */
 
-import type { CollaborationScene } from './types.js';
+import { type CollaborationScene, isPipelineRole } from './types.js';
 import { getCollaborationSceneService } from './scene-service.js';
 import type {
   CollaborationSceneAliasRow,
@@ -13,8 +13,6 @@ import type {
   CollaborationInitObservationRow,
   CollaborationSceneMemberChannelRow,
 } from './collaboration-db-model.js';
-import { isPipelineRole } from './types.js';
-
 export interface SceneAliasRecord {
   logicalSceneId: string;
   adapter: string;

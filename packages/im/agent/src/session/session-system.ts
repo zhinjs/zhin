@@ -4,16 +4,9 @@ import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import { buildTurnUserMessages } from '../context/turn-user-message.js';
 import { logPhase } from '../internal/phase-trace.js';
 import type { SessionStrategy, SessionSystemConfig } from './contracts.js';
-import type { SessionIODeps } from './session-io.js';
-import {
-  beginTurnSession,
-  resolveSessionIsNewBeforeCreate,
-  touchSession,
-  archiveSessionByKey,
-} from './session-io.js';
+import { type SessionIODeps, beginTurnSession, resolveSessionIsNewBeforeCreate, touchSession, archiveSessionByKey } from './session-io.js';
 import { consumePassiveGroupContextForTurn } from './passive-group-session.js';
 import { CollaborationSessionStrategy } from './strategies.js';
-
 export type { SessionIODeps } from './session-io.js';
 
 export interface TurnSessionPrep {

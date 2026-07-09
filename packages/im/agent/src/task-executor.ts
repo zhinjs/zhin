@@ -2,8 +2,7 @@
  * Unified task execution + delivery layer.
  */
 import type { OutputElement } from '@zhin.js/ai';
-import type { Message } from '@zhin.js/core';
-import { Logger, createSyntheticMessage, resolveIMSessionIdFromMessage } from '@zhin.js/core';
+import { type Message, Logger, createSyntheticMessage, resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import type { ZhinAgent } from './zhin-agent/index.js';
 import {
   createNotificationRouter,
@@ -17,7 +16,6 @@ import type {
 import { senderFromScheduleCreator } from './assistant/job-creator.js';
 import { buildScheduleTurnMessage } from './assistant/schedule-message.js';
 import { buildScheduleTurnPrompt } from './assistant/schedule-execution.js';
-
 const logger = new Logger(null, 'task-executor');
 
 export interface TaskExecutionOptions {

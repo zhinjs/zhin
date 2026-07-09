@@ -1,12 +1,6 @@
-import type { ScheduleTurnContext } from '../internal/turn-context.js';
-import {
-  appendTurnActiveSkills,
-  getTurnActiveSkillsFromContext,
-  runInTurnContext as runInTurnContextAls,
-} from '../internal/turn-context.js';
+import { type ScheduleTurnContext, appendTurnActiveSkills, getTurnActiveSkillsFromContext, runInTurnContext as runInTurnContextAls } from '../internal/turn-context.js';
 import { TurnTracker } from './turn-tracker.js';
 import type { ZhinAgentConfig } from '../config/index.js';
-
 export interface TurnContextBridgeState {
   pendingScheduleTurnContext?: ScheduleTurnContext;
   pendingActivityFeedbackEligible?: boolean;

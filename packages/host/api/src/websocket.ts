@@ -1,8 +1,7 @@
-import fs from "node:fs";
-import path from "node:path";
-import WebSocket from "ws";
-import { formatCompact, Adapter, Plugin, usePlugin } from '@zhin.js/core';
-import type { ConfigFeature, DatabaseFeature } from "@zhin.js/core";
+import fs from 'node:fs';
+import path from 'node:path';
+import WebSocket from 'ws';
+import { formatCompact, Adapter, Plugin, usePlugin, type ConfigFeature, type DatabaseFeature } from '@zhin.js/core';
 export interface ConsoleWebServer {
   ws: import("ws").WebSocketServer;
   entries?: Record<string, string>;

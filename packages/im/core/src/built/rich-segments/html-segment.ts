@@ -1,13 +1,7 @@
 import { segment } from '../../utils.js';
 import { htmlToFallbackText } from '../html-to-text.js';
 import { RichSegment } from './base.js';
-import type {
-  HtmlRendererForRichSegment,
-  RichSegmentRenderContext,
-  RichSegmentRenderResult,
-} from './types.js';
-import { RICH_SEGMENT_MODE } from './types.js';
-
+import { type HtmlRendererForRichSegment, type RichSegmentRenderContext, type RichSegmentRenderResult, RICH_SEGMENT_MODE } from './types.js';
 export interface HtmlSegmentData {
   html: string;
   text?: string;

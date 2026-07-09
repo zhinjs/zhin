@@ -1,7 +1,5 @@
-import type { AIProvider } from '@zhin.js/ai';
-import { createSdkProviderAdapter } from '@zhin.js/ai';
+import { type AIProvider, createSdkProviderAdapter } from '@zhin.js/ai';
 import type { ProviderInstanceConfig } from './types.js';
-
 export function createProviderInstance(
   alias: string,
   raw: ProviderInstanceConfig,

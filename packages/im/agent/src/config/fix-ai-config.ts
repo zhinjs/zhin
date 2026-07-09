@@ -1,9 +1,7 @@
 import type { AIConfig, ProviderConfig } from '@zhin.js/ai';
-import type { AgentBindingConfig } from './types.js';
-import { DEFAULT_ZHIN_AGENT_NAME } from './types.js';
+import { type AgentBindingConfig, DEFAULT_ZHIN_AGENT_NAME } from './types.js';
 import { PIPELINE_ROLES } from '../collaboration/types.js';
 import { normalizeAiRoutingConfig } from './normalize-ai-config.js';
-
 type LegacyRouteEntry = { priority: number; match: AgentBindingConfig['match'] };
 
 function mergeLegacyRoutesIntoAgents(

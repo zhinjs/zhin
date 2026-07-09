@@ -1,8 +1,7 @@
 /**
  * Peer 入站 handback（OrchestrationKernel SSOT；阶段 4）。
  */
-import type { Message } from '@zhin.js/core';
-import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
+import { type Message, resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import { formatCompactLog } from '@zhin.js/logger';
 import { getOrchestrationService } from '../orchestrator/orchestration-service.js';
 import { normalizeExecutorKind } from '../orchestrator/orchestration-mappers.js';
@@ -15,7 +14,6 @@ import {
   summarizeDelegateeReply,
 } from './collaboration-delegation.js';
 import type { CollaborationScene } from './types.js';
-
 export interface PeerInboundHandbackInput {
   message: Message;
   cell: CollaborationScene;

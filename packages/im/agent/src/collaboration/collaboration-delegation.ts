@@ -1,11 +1,9 @@
 /**
  * Pipeline 协作委派识别与 handback 摘要（传输层 harness）。
  */
-import type { Message } from '@zhin.js/core';
-import { extractEmbeddedAiOutboundJson } from '@zhin.js/core';
+import { type Message, extractEmbeddedAiOutboundJson } from '@zhin.js/core';
 import type { CollaborationScene, PipelineArtifactKind } from './types.js';
 import { findActiveDelegation } from './delegation-state.js';
-
 export function messageTextContent(message: Message): string {
   const parts: string[] = [];
   for (const seg of message.$content) {

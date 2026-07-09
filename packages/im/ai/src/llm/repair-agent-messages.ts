@@ -1,11 +1,4 @@
-import type {
-  AgentMessage,
-  AssistantMessage,
-  ToolResultMessage,
-  UserMessage,
-} from './types/agent-message.js';
-import { isLlmAgentMessage } from './types/agent-message.js';
-
+import { type AgentMessage, type AssistantMessage, type ToolResultMessage, type UserMessage, isLlmAgentMessage } from './types/agent-message.js';
 type LlmAgentMessage = UserMessage | AssistantMessage | ToolResultMessage;
 
 const MISSING_TOOL_RESULT_TEXT =

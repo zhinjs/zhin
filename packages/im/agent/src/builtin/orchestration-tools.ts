@@ -1,9 +1,7 @@
 /**
  * Project director orchestration tools — Agent Mesh hard orchestration v1.
  */
-import type { Message, Tool, ToolParametersSchema, ToolResult } from '@zhin.js/core';
-import { sceneRefFromMessage } from '@zhin.js/core';
-import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
+import { type Message, type Tool, type ToolParametersSchema, type ToolResult, sceneRefFromMessage, resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import type { AgentRole } from '../orchestrator/agent-dispatcher.js';
 import {
@@ -12,7 +10,6 @@ import {
 } from '../orchestrator/orchestration-service.js';
 import { orchestrationSourceFromMessage } from '../collaboration/collaboration-kernel-bridge.js';
 import { writeOrchestrationRunSummaryToMemory } from '../orchestration-memory-hook.js';
-
 function sessionKeyFromContext(commMessage: Message<any>): string {
   return resolveIMSessionIdFromMessage(commMessage);
 }

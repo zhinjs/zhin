@@ -103,10 +103,12 @@ export class QQMusicService implements MusicSearchService {
       
       const response = await fetch(url, { method: 'GET' })
       const data = await response.json() as { url?: string, data?: { url?: string } }
-      if(!data.url && !data.data?.url) {
+      if (!data.url && !data.data?.url) {
         throw new Error('Audio URL not found')
       }
-      return data.url || data.data?.url!
+      const audioUrl = data.url ?? data.data?.url
+      if (!audioUrl) throw new Error('Audio URL not found')
+      return audioUrl
   }
 
   /**

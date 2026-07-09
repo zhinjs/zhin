@@ -1,12 +1,10 @@
 /**
  * memory_search — semantic memory recall (L4, text match v1).
  */
-import type { Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
-import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
+import { type Message, type ToolParametersSchema, type ToolResult, resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import { parseMemoryTags } from '@zhin.js/ai';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import { getMemoryEntryRepository } from '../memory-entry-registry.js';
-
 const PARAMS: ToolParametersSchema = {
   type: 'object',
   properties: {

@@ -6,8 +6,7 @@
  *   - ai/tool-filter.ts + tool-search-cache.ts (relevance filtering)
  */
 
-import type { AgentTool, ToolFilterOptions } from '@zhin.js/ai';
-import { isBuiltinToolSource, isReservedToolName } from '@zhin.js/ai';
+import { type AgentTool, type ToolFilterOptions, isBuiltinToolSource, isReservedToolName } from '@zhin.js/ai';
 import { Logger } from '@zhin.js/core';
 import { ResourceRegistry } from './resource-registry.js';
 import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from '../reserved-tools.js';
@@ -25,7 +24,6 @@ import {
   sharedToolSelection,
   type ToolLike,
 } from './tool-selection.js';
-
 export { canAccessTool } from './tool-selection.js';
 export type { ToolLike } from './tool-selection.js';
 

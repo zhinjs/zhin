@@ -2,11 +2,9 @@
  * Peer inbound trigger policy — prevent bot-to-bot chat storms.
  */
 
-import type { Message, Plugin } from '@zhin.js/core';
-import { isAtEndpoint, readMentionSegmentTarget, segment } from '@zhin.js/core';
+import { type Message, type Plugin, isAtEndpoint, readMentionSegmentTarget, segment } from '@zhin.js/core';
 import type { CollaborationScene, PeerTriggerMode, PeerTriggerResult } from './types.js';
 import { resolveMemberBySender } from './endpoint-identity.js';
-
 export interface PeerPolicyInput {
   message: Message;
   cell?: CollaborationScene;

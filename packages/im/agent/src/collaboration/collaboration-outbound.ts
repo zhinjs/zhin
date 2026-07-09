@@ -2,25 +2,16 @@
  * 协作群出站解析 — 委托 core ZhinAiOutboundPayload；cell roster 语义保留在此。
  */
 import type { OutputElement } from '@zhin.js/ai';
-import type { Message, MessageElement } from '@zhin.js/core';
-import {
-  AI_OUTBOUND_JSON_EXAMPLE,
-  buildAiOutboundPromptHint,
-  parseAiOutboundJson,
-  readMentionSegmentTarget,
-  type ZhinAiOutboundPayload,
-} from '@zhin.js/core';
+import { type Message, type MessageElement, AI_OUTBOUND_JSON_EXAMPLE, buildAiOutboundPromptHint, parseAiOutboundJson, readMentionSegmentTarget, type ZhinAiOutboundPayload, getHostRootPlugin } from '@zhin.js/core';
 import { resolvePeerEndpointInCell } from './collaboration-config.js';
 import { resolveCollaborationSceneForMessage } from './collaboration-context.js';
 import type { CollaborationScene } from './types.js';
 import { isCellToolResultJson, removeEmbeddedCellToolJsonFromText } from './collaboration-delegation.js';
 import { buildAtMessageContent, sendGroupMessageContent, sendGroupMessageFromEndpoint, resolvePlatformAtId, type GroupMessageAdapterView } from './group-message.js';
-import { getHostRootPlugin } from '@zhin.js/core';
 import {
   tryResolveStructuredAiOutbound,
   type TryResolveStructuredAiOutboundOptions,
 } from './structured-ai-outbound.js';
-
 /** @deprecated 使用 ZhinAiOutboundPayload */
 export type CollaborationReplyPayload = ZhinAiOutboundPayload & { text: string };
 

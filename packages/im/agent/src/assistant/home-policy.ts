@@ -1,21 +1,13 @@
 /**
  * Home Domain 工具权限（M4）
  */
-import {
-  getHostRootPlugin,
-  hasSenderRole,
-  mergeAITriggerConfig,
-  resolveSenderRoles,
-  senderRolesFromMessage,
-} from '@zhin.js/core';
-import type { Message } from '@zhin.js/core';
+import { getHostRootPlugin, hasSenderRole, mergeAITriggerConfig, resolveSenderRoles, senderRolesFromMessage, type Message } from '@zhin.js/core';
 import {
   resolveToolRequesterRole,
   type ToolRequesterRole,
 } from '../security/owner-approve-always-store.js';
 import type { HomePolicyConfig } from './home-config.js';
 import { parseEntityDomain } from './domains/home-assistant.js';
-
 export interface HomeToolDecision {
   allowed: boolean;
   needsOwnerApproval?: boolean;

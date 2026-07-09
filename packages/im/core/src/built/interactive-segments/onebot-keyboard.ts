@@ -1,8 +1,6 @@
 import type { MessageElement, MessageSegment, SendContent } from '../../types.js';
-import type { KeyboardSegmentData } from './types.js';
-import { isKeyboardSegment } from './types.js';
+import { type KeyboardSegmentData, isKeyboardSegment } from './types.js';
 import { KeyboardSegment } from './keyboard-segment.js';
-
 /** OneBot / QQ 系 keyboard 段（各 adapter 在 $sendMessage 中识别） */
 export function keyboardToOneBotSegment(data: KeyboardSegmentData): MessageSegment {
   return {

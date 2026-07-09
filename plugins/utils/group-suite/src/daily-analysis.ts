@@ -2,7 +2,6 @@
  * 群日常分析（group-suite 子模块）
  */
 import { formatCompact, MessageCommand, segment, type Plugin } from "zhin.js";
-import type { InboxMessageRow } from "./analysis.js";
 import {
   buildAnalysisReportData,
   computeBasicStats,
@@ -10,6 +9,7 @@ import {
   appendLLMReport,
   parseLLMResponse,
   extractText,
+  type InboxMessageRow,
   type AnalysisResult,
   type LLMAnalysis,
 } from "./analysis.js";
@@ -29,7 +29,6 @@ export function registerDailyAnalysis(
 // ─── 数据库与收件箱 ───────────────────────────────────────────────────────────
 
 let _db: any = null;
-const _settingsModel: any = null;
 
 function getInboxModel(): any {
   if (!_db) {

@@ -1,6 +1,4 @@
-import type { OutboundRichSegmentPolicy } from './types.js';
-import { BUILTIN_RICH_SEGMENT_KINDS, RICH_SEGMENT_MODE } from './types.js';
-
+import { type OutboundRichSegmentPolicy, BUILTIN_RICH_SEGMENT_KINDS, RICH_SEGMENT_MODE } from './types.js';
 /** 全功能 IM：html/markdown/qrcode→image，tts→audio */
 export const OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL: OutboundRichSegmentPolicy = {
   [BUILTIN_RICH_SEGMENT_KINDS.QRCODE]: RICH_SEGMENT_MODE.IMAGE,

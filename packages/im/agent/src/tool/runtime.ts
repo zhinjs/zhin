@@ -1,8 +1,7 @@
-import type { AgentTool } from '@zhin.js/ai';
+import type { AgentTool, ImTranscriptStore, MemoryImTranscriptStore } from '@zhin.js/ai';
 import type { Tool, Message } from '../orchestrator/types.js';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { ZhinAgentConfig } from '../config/zhin-agent-config.js';
-import type { ImTranscriptStore, MemoryImTranscriptStore } from '@zhin.js/ai';
 import type { UserProfileStore } from '../user-profile.js';
 import {
   createDefaultToolSources,
@@ -11,7 +10,6 @@ import {
   type ToolRunPlan,
   type ToolSystem,
 } from './tool-system.js';
-
 export interface CollectRuntimeToolsOptions {
   content: string;
   commMessage: Message;

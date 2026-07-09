@@ -7,10 +7,8 @@ import { registerJobSchedule, isRuntimeSchedulable } from './job-scheduler.js';
 import type { ScheduleJobStore } from './job-store.js';
 import type { JobWorker } from './job-worker.js';
 import type { ScheduleJob } from './types.js';
-import type { NotificationRouter } from './notification-router.js';
-import { resolveEffectiveNotify } from './notification-router.js';
+import { type NotificationRouter, resolveEffectiveNotify } from './notification-router.js';
 import { jobPrompt } from './job-utils.js';
-
 const logger = new Logger(null, 'schedule-job-engine');
 
 export interface ScheduleJobEngineOptions {

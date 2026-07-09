@@ -2,15 +2,11 @@ import * as crypto from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type { OutputElement } from '@zhin.js/ai';
-import { renderToPlainText } from '@zhin.js/ai';
+import { type OutputElement, renderToPlainText } from '@zhin.js/ai';
 import type { MessageElement } from '@zhin.js/core';
-import type { OutboundMediaCapabilities } from './media-types.js';
+import type { OutboundMediaCapabilities, MediaBinaryPayload, MediaKind } from './media-types.js';
 import { resolveOutboundCapabilities } from './media-capabilities.js';
 import { fetchUrlAsBase64 } from './media-normalize.js';
-import type { MediaBinaryPayload } from './media-types.js';
-import type { MediaKind } from './media-types.js';
-
 /** 超过此长度的 base64 先落盘，避免出站 segment.toString→from 模板超 400KB */
 const OUTBOUND_SPOOL_B64_CHARS = 32_000;
 

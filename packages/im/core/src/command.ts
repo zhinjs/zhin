@@ -1,9 +1,7 @@
-import { MatchResult, SegmentMatcher} from "segment-matcher";
-import {AdapterMessage, SendContent} from "./types.js";
-import {RegisteredAdapter} from "./types.js";
-import type {Message} from "./message.js";
-import {MaybePromise} from "./types.js";
-import {Plugin} from "./plugin.js";
+import { MatchResult, SegmentMatcher} from 'segment-matcher';
+import { AdapterMessage, SendContent, RegisteredAdapter, MaybePromise } from './types.js';
+import type {Message} from './message.js';
+import {Plugin} from './plugin.js';
 type ConstructFirstParam<T extends new (...args: any[]) => any> = T extends new (...args: [infer U, ...any[]]) => any ? U : never;
 type ConstructSecondParam<T extends new (...args: any[]) => any> = T extends new (...args: [any, infer V, ...any[]]) => any ? V : never;
 

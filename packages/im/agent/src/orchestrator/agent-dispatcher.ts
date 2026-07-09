@@ -8,10 +8,8 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import type { AgentTool } from '@zhin.js/ai';
-import type { OrchestrationExecutorKind, OrchestrationTaskRecord, OrchestrationTaskStatus } from '@zhin.js/ai';
+import type { AgentTool, OrchestrationExecutorKind, OrchestrationTaskRecord, OrchestrationTaskStatus } from '@zhin.js/ai';
 import { taskRecordToAgentTaskShape, type OrchestrationRepository } from './orchestration-repository.js';
-
 // ── Agent 角色定义 ────────────────────────────────────────────────────
 
 export type AgentRole =

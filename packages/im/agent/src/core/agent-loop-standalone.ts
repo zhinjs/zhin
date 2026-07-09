@@ -2,34 +2,14 @@
  * Standalone agentLoop runner (subagent / deferred worker) — isolated memory context.
  */
 import { formatCompact, Logger } from '@zhin.js/logger';
-import type { AgentTool, AIProvider, ContentPart, Usage } from '@zhin.js/ai';
-import {
-  agentLoop,
-  agentContextFrom,
-  assistantText,
-  createUserMessage,
-  createMemoryContextRepository,
-  getLlmTransportModel,
-  agentToolsToLlmTools,
-  registerLlmApiFromProviders,
-  sdkEntryFromProvider,
-  type AgentMessage,
-  type ParsedToolCall,
-  type AssistantMessage,
-  type TokenUsage,
-  type ToolResultTransform,
-} from '@zhin.js/ai';
+import { type AgentTool, type AIProvider, type ContentPart, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, createMemoryContextRepository, getLlmTransportModel, agentToolsToLlmTools, registerLlmApiFromProviders, sdkEntryFromProvider, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolResultTransform, type StreamOptions } from '@zhin.js/ai';
 import { runWithCommMessage, runWithDirectAgentExecution } from '../security/comm-message-context.js';
 import type { Message } from '../orchestrator/types.js';
 import { sanitizeAssistantReply } from '../core/text-sanitize.js';
-import type { ToolCallRecord } from '../core/tool-calls-user-format.js';
-import { formatToolCallsForUser } from '../core/tool-calls-user-format.js';
+import { type ToolCallRecord, formatToolCallsForUser } from '../core/tool-calls-user-format.js';
 import { buildVisionUserMessage, summarizeMultimodalParts } from '../turn/multimodal-message.js';
 import { DEFAULT_MULTIMODAL_CONFIG } from '../media/media-types.js';
-import type { PhaseTraceConfig } from '../internal/phase-trace.js';
-import { logAgentLoopIterationEnd } from '../internal/phase-trace.js';
-import type { StreamOptions } from '@zhin.js/ai';
-
+import { type PhaseTraceConfig, logAgentLoopIterationEnd } from '../internal/phase-trace.js';
 const logger = new Logger(null, 'AgentLoopStandalone');
 
 function tokenUsageToLegacy(usage: TokenUsage): Usage {

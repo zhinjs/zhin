@@ -1,14 +1,12 @@
 /**
  * 协作群 Agent 会话 key：按 pipeline run 隔离，避免 reset 后旧 IM 上下文污染新 run。
  */
-import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
-import type { Message } from '@zhin.js/core';
+import { resolveIMSessionIdFromMessage, type Message } from '@zhin.js/core';
 import type { CollaborationScene } from './types.js';
 import { resolveRunIdRef } from '../aop/pipeline/pipeline-flow.js';
 import { readCollaborationTurnSnapshot } from './collaboration-turn-snapshot.js';
 import { resolveCollaborationSceneForMessage } from './collaboration-context.js';
 import { findActiveDelegation } from './delegation-state.js';
-
 function pipelinePrefixedSessionKey(transport: string, bindRun: string): string {
   return `pipeline:${bindRun.slice(0, 8)}:${transport}`;
 }

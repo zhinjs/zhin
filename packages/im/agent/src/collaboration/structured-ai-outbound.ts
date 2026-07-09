@@ -1,10 +1,7 @@
 /**
  * 结构化 AI 出站解析 — JSON DSL + 协作 Cell 假 @ 兜底。
  */
-import type { OutputElement } from '@zhin.js/ai';
-import { renderToPlainText } from '@zhin.js/ai';
-import type { Message, MessageElement } from '@zhin.js/core';
-import type { Plugin } from '@zhin.js/core';
+import { renderToPlainText, type OutputElement } from '@zhin.js/ai';
 import {
   getHostRootPlugin,
   parseAiOutboundJson,
@@ -15,6 +12,9 @@ import {
   detectInboundHandoffIntent,
   getAdapterAiOutboundCapabilities,
   getAdapterAiOutboundExtensions,
+  type Message,
+  type MessageElement,
+  type Plugin,
   type AiOutboundParseContext,
   type ZhinAiOutboundPayload,
 } from '@zhin.js/core';

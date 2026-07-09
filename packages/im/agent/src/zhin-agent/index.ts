@@ -4,36 +4,41 @@
 import { randomUUID } from 'node:crypto';
 import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import { Logger } from '@zhin.js/logger';
-import type {
-  AIProvider,
-  AgentTool,
-  AgentMessage,
-  ContentPart,
-  ImageContent,
-  Usage,
-  AgentEvent,
-} from '@zhin.js/ai';
-import type { Tool, Message } from '../orchestrator/types.js';
-import type { SkillRegistry } from '../orchestrator/skill-registry.js';
-import type { AgentOrchestrator } from '../orchestrator/index.js';
 import {
-  ConversationMemory,
-  createMemoryContextRepository,
-  MemoryAgentSessionStore,
-  MemoryIMSessionStore,
-  MemoryImTranscriptStore,
+  type AIProvider,
+  type AgentTool,
+  type AgentMessage,
+  type ContentPart,
+  type ImageContent,
+  type Usage,
+  type AgentEvent,
+  type OutputElement,
+  type ModelRegistry,
   type AgentSessionStore,
   type ContextRepository,
   type IMSessionStore,
   type ImTranscriptStore,
+  type MemoryAgentSessionStore,
+  MemoryIMSessionStore,
+  ConversationMemory,
+  createMemoryContextRepository,
+  MemoryImTranscriptStore,
+  RateLimiter,
 } from '@zhin.js/ai';
-import type { OutputElement } from '@zhin.js/ai';
+import type { Tool, Message } from '../orchestrator/types.js';
+import type { SkillRegistry } from '../orchestrator/skill-registry.js';
+import type { SkillSystem } from '../skill/skill-system.js';
+import type { AgentOrchestrator } from '../orchestrator/index.js';
+import type { AgentCore } from '../core/agent-core.js';
+import type { ToolSystem } from '../tool/tool-system.js';
+import type { ContextSystem } from '../context/context-system.js';
+import { type MemorySystem, createMemorySystemForHost } from '../memory/memory-system.js';
+import type { SessionSystem } from '../session/session-system.js';
+import type { EventSystem } from '../event/event-system.js';
 import { type ZhinAgentTurnMetrics } from '../turn/turn-metrics.js';
 import { TurnTracker } from '../turn/turn-tracker.js';
 import { ZhinAgentEventEmitter } from '../event/event-emitter.js';
-import type { ModelRegistry } from '@zhin.js/ai';
 import { UserProfileStore } from '../user-profile.js';
-import { RateLimiter } from '@zhin.js/ai';
 import { SubagentSystem, type SubagentOrigin, type SubagentResultSender, type SubagentCompletePayload } from '../subagent/index.js';
 import { buildParentContextPreamble } from '../subagent-parent-context.js';
 import {
@@ -48,25 +53,13 @@ import {
 import { processTextTurn, processMultimodalTurn } from '../turn/turn-pipeline.js';
 import { resolveContextTailMessageLimit } from '../context/context-tail-limit.js';
 import { archiveSessionByKey } from '../session/session-io.js';
-import { createMemorySystemForHost } from '../memory/memory-system.js';
-import { createSessionSystem } from '../session/session-system.js';
-import { createEventSystem } from '../event/event-system.js';
-import type { SkillSystem } from '../skill/skill-system.js';
-import type { AgentCore } from '../core/agent-core.js';
-import type { ToolSystem } from '../tool/tool-system.js';
-import type { ContextSystem } from '../context/context-system.js';
-import type { MemorySystem } from '../memory/memory-system.js';
-import type { SessionSystem } from '../session/session-system.js';
-import type { EventSystem } from '../event/event-system.js';
-import { createContextSystemForHost } from '../context/context-system.js';
 import { asPrivate } from '../internal/as-private.js';
 import { PromptController } from '../turn/prompt-controller.js';
-import { getActiveTurnTracker } from '../internal/turn-context.js';
+import { getActiveTurnTracker, type ScheduleTurnContext } from '../internal/turn-context.js';
 import { computeDeferredDelta } from '../turn/turn-deferred-delta.js';
 import { resolveDeferredToolsConfig } from '../tool-catalog/resolve-config.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import { buildDisciplinedPrompt as assembleDisciplinedPrompt } from '../prompt/assembly.js';
-import type { ScheduleTurnContext } from '../internal/turn-context.js';
 import { createInboundTurnQueue, runWithInboundQueue } from '../turn/inbound-queue-runtime.js';
 import type { ResolvedInboundQueueConfig } from '../turn/inbound-queue-config.js';
 import type { InboundTurnQueue } from '../turn/inbound-turn-queue.js';
@@ -94,7 +87,11 @@ import type {
   IAgentDiagnostics,
   IAgentConfigurator,
 } from '../config/agent-interfaces.js';
-
+import {
+  clearZhinAgentRuntimeModules,
+  createZhinAgentRuntimeModules,
+  type ZhinAgentRuntimeModules,
+} from './runtime-modules.js';
 export type { ZhinAgentConfig, OnChunkCallback } from '../config/index.js';
 export type {
   IAgentTurnProcessor,
@@ -116,15 +113,8 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   private providerResolver: ((alias: string) => AIProvider) | null = null;
   private activeBinding: ResolvedAgentBinding | null = null;
   private config: Required<ZhinAgentConfig>;
-  private skillRegistry: SkillRegistry | null = null;
-  private skillSystem: SkillSystem | null = null;
-  private orchestrator: AgentOrchestrator | null = null;
-  private agentCore: AgentCore | null = null;
-  private toolSystem: ToolSystem | null = null;
-  private contextSystem: ContextSystem | null = null;
-  private memorySystem: MemorySystem | null = null;
-  private sessionSystem: SessionSystem | null = null;
-  private eventSystem: EventSystem | null = null;
+  /** ideal 模块槽位；经 getter/setter 供 configure 与 asPrivate(host) 读写 */
+  private readonly runtimeModules: ZhinAgentRuntimeModules;
   private imSessionStore: IMSessionStore | MemoryIMSessionStore = new MemoryIMSessionStore();
   private agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
   private contextRepository: ContextRepository;
@@ -156,6 +146,33 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   private readonly turnContextState: TurnContextBridgeState = {
     alwaysSkillsBaseline: '',
   };
+
+  get skillRegistry(): SkillRegistry | null { return this.runtimeModules.skillRegistry; }
+  set skillRegistry(value: SkillRegistry | null) { this.runtimeModules.skillRegistry = value; }
+
+  get skillSystem(): SkillSystem | null { return this.runtimeModules.skillSystem; }
+  set skillSystem(value: SkillSystem | null) { this.runtimeModules.skillSystem = value; }
+
+  get orchestrator(): AgentOrchestrator | null { return this.runtimeModules.orchestrator; }
+  set orchestrator(value: AgentOrchestrator | null) { this.runtimeModules.orchestrator = value; }
+
+  get agentCore(): AgentCore | null { return this.runtimeModules.agentCore; }
+  set agentCore(value: AgentCore | null) { this.runtimeModules.agentCore = value; }
+
+  get toolSystem(): ToolSystem | null { return this.runtimeModules.toolSystem; }
+  set toolSystem(value: ToolSystem | null) { this.runtimeModules.toolSystem = value; }
+
+  get contextSystem(): ContextSystem | null { return this.runtimeModules.contextSystem; }
+  set contextSystem(value: ContextSystem | null) { this.runtimeModules.contextSystem = value; }
+
+  get memorySystem(): MemorySystem | null { return this.runtimeModules.memorySystem; }
+  set memorySystem(value: MemorySystem | null) { this.runtimeModules.memorySystem = value; }
+
+  get sessionSystem(): SessionSystem | null { return this.runtimeModules.sessionSystem; }
+  set sessionSystem(value: SessionSystem | null) { this.runtimeModules.sessionSystem = value; }
+
+  get eventSystem(): EventSystem | null { return this.runtimeModules.eventSystem; }
+  set eventSystem(value: EventSystem | null) { this.runtimeModules.eventSystem = value; }
 
   private get phaseConfig(): PhaseTraceConfig {
     return { phaseTraceEnabled: this.phaseTraceEnabled, onPhaseTrace: this.config.onPhaseTrace };
@@ -213,9 +230,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     this.contextRepository = memoryStack.repository;
     this.imTranscriptStore = new MemoryImTranscriptStore();
     this.turnContextState.alwaysSkillsBaseline = this.alwaysSkillsBaseline;
-    this.contextSystem = createContextSystemForHost(asPrivate(this));
-    this.sessionSystem = createSessionSystem();
-    this.eventSystem = createEventSystem();
+    this.runtimeModules = createZhinAgentRuntimeModules(asPrivate(this));
     this.wireLlmApiLayer();
   }
 
@@ -307,7 +322,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     }
   }
 
-  upgradeProfilesToDatabase(model: any): void {
+  upgradeProfilesToDatabase(model: Parameters<UserProfileStore['upgradeToDatabase']>[0]): void {
     this.userProfiles.upgradeToDatabase(model);
   }
 
@@ -494,7 +509,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   async compactSessionForCommMessage(commMessage: Message): Promise<{ ok: boolean; message: string }> {
     const priv = asPrivate(this);
-    const memorySystem = priv.memorySystem ?? createMemorySystemForHost(priv);
+    const memorySystem = this.memorySystem ?? createMemorySystemForHost(priv);
     return memorySystem.compactSessionForCommMessage(
       priv,
       commMessage,
@@ -503,10 +518,11 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   }
 
   private requireSessionSystem(): SessionSystem {
-    if (!this.sessionSystem) {
+    const system = this.sessionSystem;
+    if (!system) {
       throw new Error('ZhinAgent.sessionSystem is required');
     }
-    return this.sessionSystem;
+    return system;
   }
 
   async process(
@@ -565,8 +581,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- disposed, fields intentionally nulled
     this.provider = null!;
     this.providerResolver = null;
-    this.skillRegistry = null;
-    this.skillSystem = null;
-    this.orchestrator = null;
+    clearZhinAgentRuntimeModules(this.runtimeModules);
   }
 }

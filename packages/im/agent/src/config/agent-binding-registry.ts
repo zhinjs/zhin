@@ -1,8 +1,6 @@
 import type { AgentMeta } from '../discovery/agents.js';
 import { resolveAgentBinding } from './agent-bindings.js';
-import type { AgentBindingConfig, ResolvedAgentBinding } from './types.js';
-import { DEFAULT_ZHIN_AGENT_NAME } from './types.js';
-
+import { type AgentBindingConfig, type ResolvedAgentBinding, DEFAULT_ZHIN_AGENT_NAME } from './types.js';
 export class AgentBindingRegistry {
   private readonly agents: Record<string, AgentBindingConfig>;
   private readonly fileNames: Set<string>;

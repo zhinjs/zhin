@@ -1,15 +1,12 @@
-import KoaRouter from "@koa/router";
-import type { RouterMiddleware } from "@koa/router";
-import type { Context, Request as KoaRequest } from "koa";
-import { Logger, formatCompact } from "@zhin.js/logger";
-import type { Server } from "node:http";
-import { parse } from "node:url";
-import type { ServerOptions, WebSocketServer } from "ws";
-import { WebSocketServer as WSS } from "ws";
-import type { ListedRoute } from "./openapi.js";
-import { toKoaRouterPath } from "./path-pattern.js";
-import { isRouteMeta, type RouteMeta } from "./route-meta.js";
-
+import KoaRouter, { type RouterMiddleware } from '@koa/router';
+import type { Context, Request as KoaRequest } from 'koa';
+import { Logger, formatCompact } from '@zhin.js/logger';
+import type { Server } from 'node:http';
+import { parse } from 'node:url';
+import { type ServerOptions, type WebSocketServer, WebSocketServer as WSS } from 'ws';
+import type { ListedRoute } from './openapi.js';
+import { toKoaRouterPath } from './path-pattern.js';
+import { isRouteMeta, type RouteMeta } from './route-meta.js';
 const logger = new Logger(null, 'WsRouter');
 import { timingSafeEqualString } from "./timing-safe-equal.js";
 import {

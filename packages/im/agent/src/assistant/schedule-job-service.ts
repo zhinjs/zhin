@@ -1,5 +1,4 @@
-import type { Message } from '@zhin.js/core';
-import { messageToIMDeliveryTarget } from '@zhin.js/core';
+import { type Message, messageToIMDeliveryTarget } from '@zhin.js/core';
 import type { FestivalName } from '@zhin.js/kernel';
 import type { ScheduleJobEngine } from './job-engine.js';
 import { captureScheduleJobCreator, parseScheduleJobCreator } from './job-creator.js';
@@ -13,7 +12,6 @@ import type {
   ScheduleJobCreator,
   ScheduleJobExecutionPlan,
 } from './types.js';
-
 export function generateScheduleJobId(): string {
   return `sched_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }

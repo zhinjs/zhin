@@ -1,6 +1,4 @@
-import type { KeyboardSegmentData } from './types.js';
-import { KEYBOARD_SEGMENT_TYPE } from './types.js';
-
+import { type KeyboardSegmentData, KEYBOARD_SEGMENT_TYPE } from './types.js';
 export class KeyboardSegment {
   readonly segmentType = KEYBOARD_SEGMENT_TYPE;
 

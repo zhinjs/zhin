@@ -1,9 +1,7 @@
 /**
  * 群消息发送 — 经统一 Adapter.sendMessage 从当前 Endpoint 出站（ADR 0023 identity follows outbound）。
  */
-import type { Message, MessageElement } from '@zhin.js/core';
-import { getHostRootPlugin, segment } from '@zhin.js/core';
-
+import { type Message, type MessageElement, getHostRootPlugin, segment } from '@zhin.js/core';
 /** IM 单条文本上限（QQ 等约 4k；超长则分段连发，不截断省略）。 */
 export const DEFAULT_IM_TEXT_CHUNK_CHARS = 4000;
 

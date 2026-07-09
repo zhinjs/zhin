@@ -1,6 +1,5 @@
 import type { AgentTool } from '@zhin.js/ai';
-import type { PreExecuteResult } from './pre-exec.js';
-import { runPreExecutableTools } from './pre-exec.js';
+import { type PreExecuteResult, runPreExecutableTools } from './pre-exec.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import type { Tool } from '../orchestrator/types.js';
 import { createSpawnTaskTool } from '../builtin/spawn-task-tool.js';
@@ -19,7 +18,6 @@ import {
   resolveAgentToolsForTurn,
   type ResolvedToolsForTurn,
 } from './deferred-resolution.js';
-
 export type { CollectToolsContext } from './sources.js';
 export type { ResolvedToolsForTurn } from './deferred-resolution.js';
 

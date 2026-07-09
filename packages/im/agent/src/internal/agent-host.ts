@@ -1,20 +1,7 @@
 /**
  * ZhinAgent 运行时 host 契约 — 供 ideal 模块引用，避免依赖 zhin-agent 门面实现。
  */
-import type { AIProvider, AgentTool, ContentPart, Usage } from '@zhin.js/ai';
-import type { OutputElement } from '@zhin.js/ai';
-import type {
-  AgentSessionStore,
-  ContextRepository,
-  IMSessionStore,
-  ImTranscriptStore,
-  MemoryAgentSessionStore,
-  MemoryIMSessionStore,
-  ConversationMemory,
-  RateLimiter,
-  DeferredToolSessionSnapshot,
-} from '@zhin.js/ai';
-import type { ModelRegistry } from '@zhin.js/ai';
+import type { AIProvider, AgentTool, ContentPart, Usage, OutputElement, AgentSessionStore, ContextRepository, IMSessionStore, ImTranscriptStore, MemoryAgentSessionStore, MemoryIMSessionStore, ConversationMemory, RateLimiter, DeferredToolSessionSnapshot, ModelRegistry } from '@zhin.js/ai';
 import type { Plugin } from '@zhin.js/core';
 import type { Tool, Message } from '../orchestrator/types.js';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
@@ -30,8 +17,7 @@ import type { SessionSystem } from '../session/session-system.js';
 import type { EventSystem } from '../event/event-system.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import type { ToolCatalogItem } from '../tool-catalog/types.js';
-import type { DeferredWorkerResult } from '../deferred-worker-runner.js';
-import type { DeferredWorkerRunner } from '../deferred-worker-runner.js';
+import type { DeferredWorkerResult, DeferredWorkerRunner } from '../deferred-worker-runner.js';
 import type {
   HostEventEmitter,
   HostPhaseTraceConfig,
@@ -43,7 +29,6 @@ import type {
   OnChunkCallback,
   RequiredHostConfig,
 } from './host-types.js';
-
 export interface ZhinAgentPrivate {
   readonly config: RequiredHostConfig;
   readonly provider: AIProvider;

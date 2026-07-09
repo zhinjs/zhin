@@ -1,10 +1,7 @@
-import { Logger } from '@zhin.js/core';
-import type { AgentPromptBuildContext, AgentPromptSection } from '@zhin.js/core';
+import { Logger, type AgentPromptBuildContext, type AgentPromptSection, getHostRootPlugin } from '@zhin.js/core';
 import type { AgentTool } from '@zhin.js/ai';
-import type { ZhinAgentConfig } from '../config/index.js';
-import { DEFAULT_CONFIG } from '../config/index.js';
+import { type ZhinAgentConfig, DEFAULT_CONFIG } from '../config/index.js';
 import { createAIHookEvent, triggerAIHook } from '../hooks.js';
-import { getHostRootPlugin } from '@zhin.js/core';
 import type { AgentOrchestrator } from '../orchestrator/index.js';
 import {
   applyAgentPromptLimits,
@@ -12,7 +9,6 @@ import {
   sortAgentPromptSections,
 } from './format.js';
 import { getAgentPromptContributor } from './registry.js';
-
 const logger = new Logger(null, 'AgentPromptResolver');
 
 export interface ResolveAgentPromptOptions {

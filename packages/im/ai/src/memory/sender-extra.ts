@@ -1,6 +1,4 @@
-import type { AgentMessage, UserMessage } from '../llm/types/agent-message.js';
-import { createUserMessage } from '../llm/types/agent-message.js';
-
+import { type AgentMessage, type UserMessage, createUserMessage } from '../llm/types/agent-message.js';
 export type SenderScope = 'group' | 'channel' | 'private';
 
 /** 与 core `QUOTED_MESSAGE_CONTEXT_MARKER` / `CURRENT_USER_MESSAGE_MARKER` 对齐 */

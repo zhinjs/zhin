@@ -1,6 +1,4 @@
-import type { AgentMessage } from '@zhin.js/ai';
-import type { QueueMode } from '@zhin.js/ai';
-
+import type { AgentMessage, QueueMode } from '@zhin.js/ai';
 function normalizeMessages(input: AgentMessage | AgentMessage[]): AgentMessage[] {
   return Array.isArray(input) ? input : [input];
 }

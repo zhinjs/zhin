@@ -4,8 +4,7 @@
  * Stages: enrich → peerPolicy → buildTurnPlan → route/execute → outbound
  * Turn 路由/执行/出站委托 `inbound-turn-route` / `inbound-turn-outbound-stage`（阶段 4）。
  */
-import type { Plugin, Message, AITriggerConfig } from '@zhin.js/core';
-import { checkAIAccess } from '@zhin.js/core';
+import { checkAIAccess, type Plugin, type Message, type AITriggerConfig } from '@zhin.js/core';
 import { formatCompactLog, truncatePreview } from '@zhin.js/logger';
 import type { AIServiceRefs } from '../init/shared-refs.js';
 import { discoverWorkspaceAgents } from '../discovery/agents.js';

@@ -5,11 +5,9 @@
  * Endpoint 在平台上的身份（platformUserId / config.name / appid / endpointId），
  * 则该消息来自 peer Bot；否则视为人类（非 roster sender）。
  */
-import type { Message, Plugin } from '@zhin.js/core';
-import { getHostRootPlugin } from '@zhin.js/core';
+import { type Message, type Plugin, getHostRootPlugin } from '@zhin.js/core';
 import type { CollaborationScene, CollaborationSceneMemberRuntime } from './types.js';
 import { memberTransportAdapter } from './collaboration-config.js';
-
 interface EndpointLike {
   $config?: Record<string, unknown>;
   $platformUserId?: string;

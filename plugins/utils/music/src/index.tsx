@@ -18,7 +18,7 @@ addComponent(ShareMusic)
 // Suspense 组件 - 用于包装异步组件
 const Suspense = defineComponent(async function Suspense(
   props: { fallback?: string; children?: any },
-  context
+  _context
 ) {
   try {
     // 如果 children 是一个 Promise（异步组件），等待它

@@ -4,23 +4,18 @@
 import type { AIProvider } from '@zhin.js/ai';
 import { AgentCore } from '../core/agent-core.js';
 import { DEFAULT_AGENT_CORE_CONFIG, createAgentCoreDepsForCompose } from '../core/compose-deps.js';
-import { createToolSystem } from '../tool/tool-system.js';
-import { createSessionSystem } from '../session/session-system.js';
-import { createEventSystem } from '../event/event-system.js';
+import { createToolSystem, type ToolSystem } from '../tool/tool-system.js';
+import { createSessionSystem, type SessionSystem } from '../session/session-system.js';
+import { createEventSystem, type EventSystem } from '../event/event-system.js';
 import { defaultSkillSystem } from '../skill/skill-system.js';
-import { createMemorySystemForHost } from '../memory/memory-system.js';
+import { createMemorySystemForHost, type MemorySystem } from '../memory/memory-system.js';
 import { SubagentSystem } from '../subagent/subagent-system.js';
 import { ImResultSink } from '../subagent/im-result-sink.js';
-import { createContextSystemForHost } from '../context/context-system.js';
+import { createContextSystemForHost, type ContextSystem } from '../context/context-system.js';
 import type { ProactiveOutboundService } from '../outbound/send-proactive.js';
 import type { SubagentResultSender } from '../subagent/index.js';
 import type { ZhinAgent } from '../zhin-agent/index.js';
 import { asPrivate } from '../internal/as-private.js';
-import type { ToolSystem } from '../tool/tool-system.js';
-import type { MemorySystem } from '../memory/memory-system.js';
-import type { ContextSystem } from '../context/context-system.js';
-import type { SessionSystem } from '../session/session-system.js';
-import type { EventSystem } from '../event/event-system.js';
 
 export interface ComposedZhinAgentRuntime {
   agent: ZhinAgent;

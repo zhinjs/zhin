@@ -1,4 +1,3 @@
-import type { Message, AgentTurnMessage, Plugin } from '@zhin.js/core';
 import {
   enrichMessageForAgent,
   resolveQuoteContextBlock,
@@ -7,6 +6,9 @@ import {
   QUOTE_CONTEXT_SYSTEM_HINT,
   QUOTED_MESSAGE_CONTEXT_MARKER,
   resolveQuotedMessagePayload,
+  type Message,
+  type AgentTurnMessage,
+  type Plugin,
 } from '@zhin.js/core';
 import { formatCompactLog, truncatePreview } from '@zhin.js/logger';
 import type { ContentPart } from '@zhin.js/ai';

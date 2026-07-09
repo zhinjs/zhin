@@ -18,8 +18,8 @@ async function shortenUrl(url: string): Promise<string> {
   const res = await fetch(api)
   if (!res.ok) throw new Error(`is.gd 返回 ${res.status}`)
   const data = (await res.json()) as { shorturl?: string; errorcode?: number; errormessage?: string }
-  if (data.errorcode) throw new Error(data.errormessage ?? '缩短失败')
-  return data.shorturl!
+  if (!data.shorturl) throw new Error(data.errormessage ?? '缩短失败')
+  return data.shorturl
 }
 
 async function expandUrl(url: string): Promise<string> {

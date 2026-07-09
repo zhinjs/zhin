@@ -1,8 +1,6 @@
-import path from "node:path";
-import { Adapter, type Plugin } from "@zhin.js/core";
-import type { ConfigFeature } from "@zhin.js/core";
-import type { ConsoleRpcContext } from "./context.js";
-
+import path from 'node:path';
+import { Adapter, type Plugin, type ConfigFeature } from '@zhin.js/core';
+import type { ConsoleRpcContext } from './context.js';
 export function resolveConfigKey(root: Plugin, pluginName: string): string {
   const schemaService = root.inject("schema");
   return schemaService?.resolveConfigKey(pluginName) ?? pluginName;

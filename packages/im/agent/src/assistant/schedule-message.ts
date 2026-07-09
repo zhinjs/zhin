@@ -1,6 +1,4 @@
-import type { Message, SendContent } from '@zhin.js/core';
-import { createSyntheticMessage, type AgentTurnMessage } from '@zhin.js/core';
-
+import { type Message, type SendContent, createSyntheticMessage, type AgentTurnMessage } from '@zhin.js/core';
 export interface BuildScheduleTurnMessageInput {
   sourceMessage: Message;
   /** 仅用于 synthetic 载体，不写入 sourceMessage */

@@ -3,11 +3,9 @@
  *
  * 不走 discoverWorkspaceAgents()；用户无法用 workspace `agents/*.md` 覆盖。
  */
-import type { PipelineRole } from '../../collaboration/types.js';
-import { isPipelineRole } from '../../collaboration/types.js';
+import { type PipelineRole, isPipelineRole } from '../../collaboration/types.js';
 import { PIPELINE_ROLE_LABELS } from '../../config/resolve-pipeline-binding.js';
 import { renderFiveAgentPrompt } from './prompts.js';
-
 export { FIVE_AGENT_PROMPTS, renderFiveAgentPrompt } from './prompts.js';
 export {
   FIVE_AGENT_WORKFLOW_STRATEGY_NAME,

@@ -1,5 +1,4 @@
-import type { AgentMessage } from '@zhin.js/ai';
-import { getLlmTransportModel } from '@zhin.js/ai';
+import { type AgentMessage, getLlmTransportModel } from '@zhin.js/ai';
 import type { Message } from '@zhin.js/core';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import { createDefaultContextBuilders } from './default-builders.js';
@@ -15,7 +14,6 @@ import {
   resolveQuoteSystemHint,
 } from './turn-envelope.js';
 import { resolveModelCandidates } from './model-resolver.js';
-
 export type { TurnEnvelopeParts } from './envelope-parts.js';
 export {
   ProfileContextBuilder,

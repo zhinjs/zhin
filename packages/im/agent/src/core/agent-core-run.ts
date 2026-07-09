@@ -5,19 +5,7 @@
 import type { Plugin } from '@zhin.js/core';
 import type { AIService } from '../service.js';
 import { formatCompact, Logger, truncatePreview } from '@zhin.js/logger';
-import type { AgentTool, Usage } from '@zhin.js/ai';
-import {
-  agentLoop,
-  agentContextFrom,
-  assistantText,
-  createUserMessage,
-  getLlmTransportModel,
-  agentToolsToLlmTools,
-  type AgentMessage,
-  type ParsedToolCall,
-  type AssistantMessage,
-  type TokenUsage,
-} from '@zhin.js/ai';
+import { type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, getLlmTransportModel, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, getLoadedToolNamesFromSnapshot } from '@zhin.js/ai';
 import { runWithCommMessage } from '../security/comm-message-context.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
 import { createOwnerOrchestratedToolResultTransform } from '../orchestrator/owner-confirm-orchestration.js';
@@ -37,14 +25,12 @@ import { bindDeferredToolRuntime } from '../builtin/deferred-tool-meta.js';
 import { persistDeferredToolSnapshot, buildLlmToolsForProvider } from '../tool/deferred-resolution.js';
 import { resolveDeferredToolsConfig, resolveAlwaysLoadedSet } from '../tool-catalog/resolve-config.js';
 import { resolveDeferredApiTools } from '../tool-catalog/tool-catalog.js';
-import { getLoadedToolNamesFromSnapshot } from '@zhin.js/ai';
 import { buildSkillLoadOptsForAgent } from '../skill/skill-load-opts.js';
 import type { TurnEvent } from '../event/turn-event.js';
 import {
   createTurnEventMapperState,
   mapAgentEventToTurnEvents,
 } from './turn-event-mapper.js';
-
 const logger = new Logger(null, 'ZhinAgent:AgentLoopTurn');
 
 function resolveAssistantReplyText(assistant: AssistantMessage): string {

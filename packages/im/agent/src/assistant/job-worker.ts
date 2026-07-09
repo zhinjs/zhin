@@ -4,10 +4,8 @@
 import { Logger } from '@zhin.js/core';
 import { getTaskQueue, initTaskQueue } from '../orchestrator/task-queue.js';
 import type { TaskExecutionResult, TaskExecutor } from '../task-executor.js';
-import type { AssistantQueueConfig } from './config.js';
-import { resolveAssistantQueueConfig } from './config.js';
+import { type AssistantQueueConfig, resolveAssistantQueueConfig } from './config.js';
 import type { JobNotify, ScheduleJobCreator, ScheduleJobExecutionPlan } from './types.js';
-
 const logger = new Logger(null, 'assistant-job-worker');
 
 export interface JobWorkerOptions {

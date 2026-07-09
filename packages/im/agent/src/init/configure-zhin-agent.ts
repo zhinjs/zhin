@@ -1,8 +1,6 @@
 import { Logger } from '@zhin.js/logger';
-import { registerLlmApiFromProviders, sdkEntryFromProvider } from '@zhin.js/ai';
-import type { AIProvider } from '@zhin.js/ai';
-import type { ModelRegistry } from '@zhin.js/ai';
-import { createSkillSystem, type SkillSystem } from '../skill/skill-system.js';
+import { registerLlmApiFromProviders, sdkEntryFromProvider, AIProvider, ModelRegistry } from '@zhin.js/ai';
+import { createSkillSystem, SkillSystem } from '../skill/skill-system.js';
 import type { AgentCore } from '../core/agent-core.js';
 import type { ToolSystem } from '../tool/tool-system.js';
 import type { ContextSystem } from '../context/context-system.js';
@@ -11,14 +9,12 @@ import type { SessionSystem } from '../session/session-system.js';
 import type { EventSystem } from '../event/event-system.js';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { AgentOrchestrator } from '../orchestrator/index.js';
-import type { SubagentSystem } from '../subagent/index.js';
-import type { SubagentResultSender } from '../subagent/index.js';
+import type { SubagentSystem, SubagentResultSender } from '../subagent/index.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import { bindingToModelConfig } from '../routing/runtime-binding.js';
 import type { ZhinAgentConfig, ZhinAgentDependencies } from '../config/index.js';
 import type { ZhinAgentEventEmitter } from '../event/event-emitter.js';
 import type { TurnContextBridgeState } from '../turn/turn-context-bridge.js';
-
 const logger = new Logger(null, 'ZhinAgent');
 
 export interface ConfigureZhinAgentTarget {

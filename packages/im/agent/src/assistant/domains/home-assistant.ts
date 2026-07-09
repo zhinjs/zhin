@@ -3,9 +3,7 @@
  */
 import { Logger } from '@zhin.js/core';
 import { formatCompact } from '@zhin.js/logger';
-import type { AssistantHomeConfig } from '../home-config.js';
-import { resolveAssistantHomeConfig } from '../home-config.js';
-
+import { type AssistantHomeConfig, resolveAssistantHomeConfig } from '../home-config.js';
 const logger = new Logger(null, 'home-assistant');
 
 export type HaFetch = (url: string, init?: RequestInit) => Promise<Response>;

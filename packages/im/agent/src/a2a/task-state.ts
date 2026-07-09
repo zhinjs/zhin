@@ -1,9 +1,7 @@
 /**
  * Map A2A TaskState to remote_mesh poll status strings.
  */
-import type { Task } from '@a2a-js/sdk';
-import { TaskState, taskStateToJSON } from '@a2a-js/sdk';
-
+import { type Task, TaskState, taskStateToJSON } from '@a2a-js/sdk';
 export type RemotePollStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 
 function stateKey(state: TaskState | undefined): string {

@@ -1,7 +1,4 @@
-import type { ProviderConfig } from '@zhin.js/ai';
-import type { SdkId } from '@zhin.js/ai';
-import type { OllamaProviderConfig } from '@zhin.js/ai';
-
+import type { ProviderConfig, SdkId, OllamaProviderConfig } from '@zhin.js/ai';
 export type { SdkId };
 
 export interface ProviderInstanceConfig extends ProviderConfig, OllamaProviderConfig {

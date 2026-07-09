@@ -86,8 +86,8 @@ export async function executeInboundOutboundStage(
   }
 
   for (let i = 0; i < outboundBatches.length; i++) {
-    const batch = outboundBatches[i]!;
-    if (!batch.length) continue;
+    const batch = outboundBatches[i];
+    if (!batch?.length) continue;
     const quote = !peerInbound && i === 0 && !batchHasAtSegment(batch);
     await replyOutbound(batch, { quote });
   }

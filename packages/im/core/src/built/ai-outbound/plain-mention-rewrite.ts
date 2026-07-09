@@ -1,6 +1,4 @@
-import type { AiOutboundMentionResolver } from './types.js';
-import type { ZhinAiOutboundPayload } from './types.js';
-
+import type { AiOutboundMentionResolver, ZhinAiOutboundPayload } from './types.js';
 const PLAIN_MENTION_PATTERN = /@([\w-]+)/g;
 
 /**

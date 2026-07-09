@@ -1,10 +1,8 @@
-import type { AIConfig, ProviderConfig } from '@zhin.js/ai';
-import { applyProviderGatewayPreset, isSdkId, validateProviderGatewayConfig } from '@zhin.js/ai';
+import { type AIConfig, type ProviderConfig, applyProviderGatewayPreset, isSdkId, validateProviderGatewayConfig } from '@zhin.js/ai';
 import type {
   AgentBindingConfig,
   ProviderInstanceConfig,
 } from './types.js';
-
 const LEGACY_DRIVER_KEYS = new Set([
   'openai', 'anthropic', 'deepseek', 'moonshot', 'zhipu', 'google', 'gemini', 'ollama', 'cloudflare',
 ]);

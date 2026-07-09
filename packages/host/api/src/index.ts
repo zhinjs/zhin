@@ -1,16 +1,15 @@
-import { formatCompact, usePlugin } from '@zhin.js/core';
-import type { DatabaseFeature, SchemaFeature, ScheduleFeature } from '@zhin.js/core';
+import { formatCompact, usePlugin, type DatabaseFeature, type SchemaFeature, type ScheduleFeature } from '@zhin.js/core';
 import {
   PageManager,
   mountConsoleRouter,
   buildEntriesResponse,
-} from "@zhin.js/pagemanager/node";
-import type { Router, RouterContext } from "@zhin.js/host-router";
-import { Schema } from "@zhin.js/schema";
-import * as path from "node:path";
-import { DEFAULT_CONSOLE_BASE_PATH } from "@zhin.js/contract";
-import { initConsoleHub, notifyDataUpdate, type ConsoleWebServer } from "./websocket.js";
-import { registerConsoleApi, registerConsoleRoutes } from "./console-api.js";
+} from '@zhin.js/pagemanager/node';
+import type { Router, RouterContext } from '@zhin.js/host-router';
+import { Schema } from '@zhin.js/schema';
+import * as path from 'node:path';
+import { DEFAULT_CONSOLE_BASE_PATH } from '@zhin.js/contract';
+import { initConsoleHub, notifyDataUpdate, type ConsoleWebServer } from './websocket.js';
+import { registerConsoleApi, registerConsoleRoutes } from './console-api.js';
 export { registerConsoleRoutes, type ConsoleApiOptions } from "./console-api.js";
 export { dispatchConsoleRpc } from "./rpc/dispatch.js";
 export { createNodeProjectFs } from "./rpc/project-fs.js";

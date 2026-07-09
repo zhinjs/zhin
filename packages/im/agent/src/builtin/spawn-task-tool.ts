@@ -1,8 +1,7 @@
 /**
  * spawn_task — 主会话将耗时任务派给后台子 agent（与 issue #396 对齐）
  */
-import type { Message, Tool, ToolParametersSchema, ToolResult } from '@zhin.js/core';
-import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
+import { type Message, type Tool, type ToolParametersSchema, type ToolResult, resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import {
   getLoadedToolNamesFromSnapshot,
   type AgentTool,
@@ -20,7 +19,6 @@ import {
   assertSpawnAgentAllowed,
   type PermissionTaskRules,
 } from '../spawn/permission-task.js';
-
 export interface SpawnTaskToolOptions {
   /** 经 permission.task 过滤后可展示的子 agent 名 */
   allowedAgents?: string[];

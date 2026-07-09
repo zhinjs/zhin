@@ -2,9 +2,7 @@ import { segment } from '../../utils.js';
 import type { MessageElement } from '../../types.js';
 import { GeneratedQrCode, type GenerateQrCodeOptions } from '../generated-qrcode.js';
 import { RichSegment } from './base.js';
-import type { RichSegmentRenderContext, RichSegmentRenderResult } from './types.js';
-import { RICH_SEGMENT_MODE } from './types.js';
-
+import { type RichSegmentRenderContext, type RichSegmentRenderResult, RICH_SEGMENT_MODE } from './types.js';
 export interface QrcodeSegmentData extends GenerateQrCodeOptions {
   text: string;
   /** process origin 模式终端渲染时使用 */

@@ -4,13 +4,10 @@
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { getHostRootPlugin, senderRolesFromMessage } from '@zhin.js/core';
+import { getHostRootPlugin, senderRolesFromMessage, type Message, Logger } from '@zhin.js/core';
 import type { AIConfig } from '@zhin.js/ai';
-import type { Message } from '@zhin.js/core';
-import { Logger } from '@zhin.js/core';
 import { getMemoryDir } from './bootstrap.js';
 import { resolveToolRequesterRole } from './security/owner-approve-always-store.js';
-
 const logger = new Logger(null, 'MemoryLayers');
 
 export interface MemoryLayerBudgets {

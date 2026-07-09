@@ -9,31 +9,26 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { Logger } from '@zhin.js/core';
+import { Logger, type Message } from '@zhin.js/core';
 import { formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
-import type { AIProvider, AgentTool, Usage } from '@zhin.js/ai';
+import { type AIProvider, type AgentTool, type Usage, userMessageToFilterText, type ContentPart, type ModelRegistry } from '@zhin.js/ai';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import {
   ensureMcpConnectionsForBinding,
   getMcpToolsForBinding,
 } from '../orchestrator/mcp-lifecycle.js';
 import type { McpRegistry } from '../orchestrator/mcp-registry.js';
-import { userMessageToFilterText } from '@zhin.js/ai';
-import type { ContentPart, ModelRegistry } from '@zhin.js/ai';
 import { runAgentLoopStandaloneTurn } from '../core/agent-loop-standalone.js';
 import { DEFAULT_CONFIG, type ZhinAgentConfig } from '../config/index.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
 import { resolveSubagentAgentTools } from '../orchestrator/resolve-subagent-tools.js';
 import { createOwnerOrchestratedToolResultTransform } from '../orchestrator/owner-confirm-orchestration.js';
-import type { Message } from '@zhin.js/core';
 import {
   AgentDispatcher,
   type AgentRole,
 } from '../orchestrator/agent-dispatcher.js';
 import { buildSubagentUserDelivery } from '../media/subagent-user-delivery.js';
-import type { AgentMeta, AgentEffortLevel } from '../discovery/agents.js';
-import { loadAgentMarkdownBody } from '../discovery/agents.js';
-
+import { type AgentMeta, type AgentEffortLevel, loadAgentMarkdownBody } from '../discovery/agents.js';
 const EFFORT_MAX_ITERATIONS: Record<AgentEffortLevel, number> = {
   low: 3,
   medium: 5,

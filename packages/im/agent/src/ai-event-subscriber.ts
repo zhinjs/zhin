@@ -1,6 +1,4 @@
-import { storage } from '@zhin.js/core';
-import type { Plugin } from '@zhin.js/core';
-
+import { storage, type Plugin } from '@zhin.js/core';
 export type AIEventName =
   | 'ai.processing.start'
   | 'ai.processing.finish'

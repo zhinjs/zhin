@@ -5,16 +5,8 @@
  * then adapts the result to the agent Tool type.
  */
 
-import {
-  createSceneManagementToolsRaw,
-  buildSceneMethodArgs,
-  SCENE_MANAGEMENT_METHOD_SPECS,
-  SCENE_MANAGEMENT_SKILL_KEYWORDS,
-  SCENE_MANAGEMENT_SKILL_TAGS,
-} from '@zhin.js/core';
-import type { ISceneManagement, SceneManagementMethodSpec } from '@zhin.js/core';
+import { createSceneManagementToolsRaw, buildSceneMethodArgs, SCENE_MANAGEMENT_METHOD_SPECS, SCENE_MANAGEMENT_SKILL_KEYWORDS, SCENE_MANAGEMENT_SKILL_TAGS, type ISceneManagement, type SceneManagementMethodSpec } from '@zhin.js/core';
 import type { Tool, ToolScope } from './orchestrator/types.js';
-
 export type { ISceneManagement, SceneManagementMethodSpec };
 export { SCENE_MANAGEMENT_METHOD_SPECS, SCENE_MANAGEMENT_SKILL_KEYWORDS, SCENE_MANAGEMENT_SKILL_TAGS, buildSceneMethodArgs };
 

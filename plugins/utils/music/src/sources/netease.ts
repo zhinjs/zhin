@@ -77,8 +77,9 @@ export class NeteaseMusicService implements MusicSearchService {
       
       const response = await fetch(url, { method: 'GET' })
       const data = await response.json() as { url?: string, data?: { url?: string } }
-      if(!data.url && !data.data?.url) throw new Error('Audio URL not found')
-      // 不同的 Meting API 返回格式可能不同
-      return data.url || data.data?.url!
+      if (!data.url && !data.data?.url) throw new Error('Audio URL not found')
+      const audioUrl = data.url ?? data.data?.url
+      if (!audioUrl) throw new Error('Audio URL not found')
+      return audioUrl
   }
 }

@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { MessageCommand } from 'zhin.js';
-import type { Message } from 'zhin.js';
+import { MessageCommand, type Message } from 'zhin.js';
 
 function msg(text: string): Message<any> {
   return {

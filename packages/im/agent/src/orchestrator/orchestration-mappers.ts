@@ -1,15 +1,5 @@
-import type {
-  OrchestrationEventRecord,
-  OrchestrationExecutorKind,
-  OrchestrationRunRecord,
-  OrchestrationRunSource,
-  OrchestrationSceneKind,
-  OrchestrationSceneRef,
-  OrchestrationTaskRecord,
-} from '@zhin.js/ai';
-import { parseDependsOn } from '@zhin.js/ai';
+import { type OrchestrationEventRecord, type OrchestrationExecutorKind, type OrchestrationRunRecord, type OrchestrationRunSource, type OrchestrationSceneKind, type OrchestrationSceneRef, type OrchestrationTaskRecord, parseDependsOn } from '@zhin.js/ai';
 import type { OrchestrationRun, OrchestrationTask, RunEvent } from './orchestration-types.js';
-
 function parseJsonObject(text: string): Record<string, unknown> | undefined {
   if (!text.trim()) return undefined;
   try {

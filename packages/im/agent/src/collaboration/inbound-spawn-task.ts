@@ -1,18 +1,15 @@
 /**
  * spawn_task 入站委派（OrchestrationKernel / SubagentSystem；阶段 4）。
  */
-import type { Message, AgentTurnMessage } from '@zhin.js/core';
-import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
+import { type Message, type AgentTurnMessage, resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import { formatCompactLog } from '@zhin.js/logger';
 import { parseOutput } from '@zhin.js/ai';
-import { DEFAULT_ZHIN_AGENT_NAME } from '../config/types.js';
-import type { ResolvedAgentBinding } from '../config/types.js';
+import { DEFAULT_ZHIN_AGENT_NAME, type ResolvedAgentBinding } from '../config/types.js';
 import { getOrchestrationService } from '../orchestrator/orchestration-service.js';
 import { publishOutboundElements } from '../media/index.js';
 import { orchestrationSourceFromMessage } from './collaboration-kernel-bridge.js';
 import type { CollaborationScene, TurnPlanDelegation } from './types.js';
 import type { ZhinAgent } from '../zhin-agent/index.js';
-
 export interface ExecuteInboundSpawnTaskInput {
   zhinAgent: ZhinAgent;
   commMessage: AgentTurnMessage;

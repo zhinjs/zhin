@@ -1,13 +1,6 @@
-import type { Message } from '@zhin.js/core';
-import {
-  buildAiOutboundPromptHint,
-  getAdapterAiOutboundCapabilities,
-  getAdapterAiOutboundExtensions,
-  getHostRootPlugin,
-} from '@zhin.js/core';
+import { type Message, buildAiOutboundPromptHint, getAdapterAiOutboundCapabilities, getAdapterAiOutboundExtensions, getHostRootPlugin } from '@zhin.js/core';
 import type { CollaborationScene } from './types.js';
 import { resolveCellForScene, findCellMemberByEndpoint } from './collaboration-config.js';
-
 /** 每轮 turn envelope 用的精简 Cell 提示（勿重复 buildAiOutboundPromptHint 长文）。 */
 export function formatCollaborationTurnCellHint(
   cell: CollaborationScene,

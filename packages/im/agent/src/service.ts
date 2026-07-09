@@ -3,15 +3,8 @@
  * 统一管理多个模型提供商，提供会话和 Agent 能力
  */
 
-import type { Plugin, AITriggerConfig, AIAccessConfig } from '@zhin.js/core';
-import { createSyntheticMessage } from '@zhin.js/core';
-import type { Tool } from '@zhin.js/core'
-import type { AIProvider, AIConfig, ChatMessage, ChatCompletionRequest, ChatCompletionResponse, ChatCompletionChunk, AgentTool, ContentPart, Usage } from '@zhin.js/ai';
-import {
-  type ImageGenerationDefaults,
-} from '@zhin.js/ai';
-import type { ModelRegistry } from '@zhin.js/ai';
-import type { ContextConfig } from '@zhin.js/ai';
+import { type Plugin, type AITriggerConfig, type AIAccessConfig, createSyntheticMessage, type Tool } from '@zhin.js/core';
+import { type AIProvider, type AIConfig, type ChatMessage, type ChatCompletionRequest, type ChatCompletionResponse, type ChatCompletionChunk, type AgentTool, type ContentPart, type Usage, type ImageGenerationDefaults, type ModelRegistry, type ContextConfig, registerLlmApiFromProviders } from '@zhin.js/ai';
 import { DEFAULT_CONFIG } from './config/index.js';
 import { normalizeTool } from './orchestrator/tool-selection.js';
 import { createWebSearchTool } from './builtin/web-search-tool.js';
@@ -19,7 +12,6 @@ import { createAskUserTool } from './builtin/ask-user-tool.js';
 import { registerProviderInstances } from './config/provider-instance.js';
 import { normalizeAiRoutingConfig, type NormalizedAiRoutingConfig } from './config/normalize-ai-config.js';
 import { validateAiRoutingConfig } from './config/validate-ai-config.js';
-import { registerLlmApiFromProviders } from '@zhin.js/ai';
 import { AgentBindingRegistry } from './config/agent-binding-registry.js';
 import { DEFAULT_ZHIN_AGENT_NAME } from './config/types.js';
 import {
@@ -33,7 +25,6 @@ import {
   type PluginBeforeToolCallHandler,
   type PluginTransformContextHandler,
 } from './plugin-loop-hooks.js';
-
 /** AIService 程序化 Agent 句柄（agentLoop 隔离上下文，非 legacy `Agent` 类） */
 export interface ServiceAgent {
   run(userInput: string | ContentPart[]): Promise<ServiceAgentResult>;

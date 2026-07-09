@@ -7,7 +7,7 @@ const cooldownMap = new Map<string, number>();
 function isSafeRegex(pattern: string): boolean {
   if (pattern.length > 200) return false;
   if (/(\+|\*|\{)\)?(\+|\*|\{)/.test(pattern)) return false;
-  if (/\([^)]*(\+|\*)[^)]*(\+|\*)[^)]*\)[\+\*]/.test(pattern)) return false;
+  if (/\([^)]*(\+|\*)[^)]*(\+|\*)[^)]*\)[+*]/.test(pattern)) return false;
   const altGroups = pattern.match(/\([^)]*\|[^)]*\)/g) || [];
   for (const g of altGroups) {
     if ((g.match(/\|/g) || []).length > 10) return false;

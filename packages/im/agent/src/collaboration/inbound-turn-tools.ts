@@ -1,7 +1,7 @@
 /**
  * 入站 turn 外部工具收集（IM 策略层；阶段 4）。
  */
-import type { Plugin, Tool, Message, AgentTurnMessage } from '@zhin.js/core';
+import type { Plugin, Tool, AgentTurnMessage } from '@zhin.js/core';
 import { canAccessTool } from '../orchestrator/tool-selection.js';
 import { createOrchestrationTools } from '../builtin/orchestration-tools.js';
 import type { AIService } from '../service.js';

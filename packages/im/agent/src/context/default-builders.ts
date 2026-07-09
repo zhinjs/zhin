@@ -1,9 +1,7 @@
-import type { AgentMessage } from '@zhin.js/ai';
-import { detectTone } from '@zhin.js/ai';
+import { type AgentMessage, detectTone } from '@zhin.js/ai';
 import { resolveCollaborationTurnHint } from '../collaboration/collaboration-context.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import type { BuildContext, ContextBuilder, ContextInjector, InjectContext } from './contracts.js';
-
 export class ProfileContextBuilder implements ContextBuilder {
   name = 'profile';
 

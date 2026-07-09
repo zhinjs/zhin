@@ -9,10 +9,8 @@
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { Adapter, Message, Plugin } from '@zhin.js/core';
-import { hasSenderRole, resolveSubjectRoles, senderRolesFromMessage } from '@zhin.js/core';
+import { type Adapter, type Message, type Plugin, hasSenderRole, resolveSubjectRoles, senderRolesFromMessage } from '@zhin.js/core';
 import { getDataDir } from '../discovery/utils.js';
-
 export const OWNER_APPROVE_ALWAYS_TOOL = 'bash' as const;
 
 export type ToolRequesterRole = 'master' | 'trusted' | 'other' | 'unknown';

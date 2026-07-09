@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import {
   A2A_CONTENT_TYPE,
   A2A_VERSION_HEADER,
+  Extensions,
   HTTP_EXTENSION_HEADER,
 } from '@a2a-js/sdk';
 import {
@@ -13,9 +14,8 @@ import {
   ServerCallContext,
   UnauthenticatedUser,
   validateVersion,
+  type A2ARequestHandler,
 } from '@a2a-js/sdk/server';
-import { Extensions } from '@a2a-js/sdk';
-import type { A2ARequestHandler } from '@a2a-js/sdk/server';
 import { RestTransportHandler } from './rest-transport-handler.js';
 
 const SSE_HEADERS: Record<string, string> = {
@@ -189,17 +189,27 @@ export async function handleRest(
 
     const taskGet = path.match(/^v1\/tasks\/([^/]+)$/);
     if (method === 'GET' && taskGet) {
+      const taskId = taskGet[1];
+      if (!taskId) {
+        sendJson(res, 400, { error: 'invalid task id' });
+        return;
+      }
       const historyLength = req.url?.includes('historyLength=')
         ? new URL(req.url, 'http://localhost').searchParams.get('historyLength') ?? undefined
         : undefined;
-      const result = await transport.getTask(taskGet[1]!, context, historyLength ?? undefined);
+      const result = await transport.getTask(taskId, context, historyLength ?? undefined);
       sendJson(res, 200, result, { 'Content-Type': A2A_CONTENT_TYPE });
       return;
     }
 
     const taskCancel = path.match(/^v1\/tasks\/([^/]+):cancel$/);
     if (method === 'POST' && taskCancel) {
-      const result = await transport.cancelTask(taskCancel[1]!, context);
+      const taskId = taskCancel[1];
+      if (!taskId) {
+        sendJson(res, 400, { error: 'invalid task id' });
+        return;
+      }
+      const result = await transport.cancelTask(taskId, context);
       sendJson(res, 200, result, { 'Content-Type': A2A_CONTENT_TYPE });
       return;
     }

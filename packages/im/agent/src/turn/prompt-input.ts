@@ -1,6 +1,4 @@
-import type { AgentMessage, ImageContent } from '@zhin.js/ai';
-import { createUserMessage } from '@zhin.js/ai';
-
+import { type AgentMessage, type ImageContent, createUserMessage } from '@zhin.js/ai';
 export function normalizePromptMessages(
   input: string | AgentMessage | AgentMessage[],
   images?: ImageContent[],

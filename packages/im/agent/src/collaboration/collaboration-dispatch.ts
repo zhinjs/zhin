@@ -2,14 +2,12 @@
  * CollaborationDispatch — deep module for peer delegation within a CollaborationScene.
  * @see docs/adr/0036-internal-room-collaboration.md
  */
-import type { Message } from '@zhin.js/core';
-import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
+import { type Message, resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import { getOrchestrationService } from '../orchestrator/orchestration-service.js';
 import type { OrchestrationTask } from '../orchestrator/orchestration-types.js';
 import { orchestrationSourceFromMessage } from './collaboration-kernel-bridge.js';
 import type { CollaborationScene } from './types.js';
 import { findCellMemberByEndpoint } from './collaboration-config.js';
-
 export interface DispatchPeerTaskInput {
   cell: CollaborationScene;
   fromEndpointId: string;

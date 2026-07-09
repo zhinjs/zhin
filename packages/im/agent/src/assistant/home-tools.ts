@@ -1,8 +1,7 @@
 /**
  * home_* 工具 — 薄封装 HomeAssistantService（M4）
  */
-import { ZhinTool } from '@zhin.js/core';
-import type { Message } from '@zhin.js/core';
+import { ZhinTool, type Message, getHostRootPlugin } from '@zhin.js/core';
 import type { HomeAssistantService } from './domains/home-assistant.js';
 import type { HomePolicyConfig } from './home-config.js';
 import {
@@ -11,9 +10,7 @@ import {
   toHomeOwnerSignal,
   type HomeToolDecision,
 } from './home-policy.js';
-import { getHostRootPlugin } from '@zhin.js/core';
 import { resolveToolRequesterRole } from '../security/owner-approve-always-store.js';
-
 export interface HomeToolsOptions {
   service: HomeAssistantService;
   policy: HomePolicyConfig & { requireMaster: boolean; confirmServices: string[] };

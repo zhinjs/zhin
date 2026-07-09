@@ -1,9 +1,7 @@
-import { getHostRootPlugin, hasSenderRole, resolveSubjectRoles, senderRolesFromMessage } from '@zhin.js/core';
-import type { Message, Plugin } from '@zhin.js/core';
+import { getHostRootPlugin, hasSenderRole, resolveSubjectRoles, senderRolesFromMessage, type Message, type Plugin } from '@zhin.js/core';
 import type { ZhinAgentConfig } from '../config/index.js';
 import { checkFileAccess, extractBashReadPaths } from './file-policy.js';
 import { resolveToolRequesterRole, type ToolRequesterRole } from './owner-approve-always-store.js';
-
 export interface DangerousToolDecision {
   allowed: boolean;
   needsOwnerApproval?: boolean;

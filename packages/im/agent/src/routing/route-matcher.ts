@@ -1,8 +1,6 @@
 import type { Message } from '@zhin.js/core';
 import { extractMediaParts } from '../init/message-media.js';
-import type { AgentBindingConfig, RouteMatchConfig } from '../config/types.js';
-import { DEFAULT_ZHIN_AGENT_NAME } from '../config/types.js';
-
+import { type AgentBindingConfig, type RouteMatchConfig, DEFAULT_ZHIN_AGENT_NAME } from '../config/types.js';
 export interface RouteMatchInput {
   message: Message;
   contentText: string;

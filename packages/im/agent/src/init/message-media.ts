@@ -1,7 +1,5 @@
-import type { Message, QuotedMessagePayload } from '@zhin.js/core'
+import { type Message, type QuotedMessagePayload, Message as MessageNs } from '@zhin.js/core';
 import type { ContentPart } from '@zhin.js/ai';
-import { Message as MessageNs } from '@zhin.js/core';
-
 /**
  * Extract multimodal ContentPart[] from a Message's structured $content segments.
  * Handles image, video, audio, and face/sticker types.

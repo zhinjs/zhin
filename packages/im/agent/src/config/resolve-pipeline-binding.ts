@@ -4,9 +4,7 @@
  * SSOT：`ai.agents.zhin`；可选 `ai.agents.<role>`（如 researcher）覆盖 provider/model/nickname。
  */
 import type { PipelineRole } from '../collaboration/types.js';
-import type { AgentBindingConfig, ResolvedAgentBinding } from './types.js';
-import { DEFAULT_ZHIN_AGENT_NAME } from './types.js';
-
+import { type AgentBindingConfig, type ResolvedAgentBinding, DEFAULT_ZHIN_AGENT_NAME } from './types.js';
 /** 角色昵称缺省回退（英文 role label）。 */
 export const PIPELINE_ROLE_LABELS: Record<PipelineRole, string> = {
   planner: 'Planner',

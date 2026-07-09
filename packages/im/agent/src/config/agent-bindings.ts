@@ -1,6 +1,4 @@
-import type { AgentBindingConfig, ResolvedAgentBinding } from './types.js';
-import { DEFAULT_ZHIN_AGENT_NAME } from './types.js';
-
+import { type AgentBindingConfig, type ResolvedAgentBinding, DEFAULT_ZHIN_AGENT_NAME } from './types.js';
 export function resolveAgentBinding(
   name: string,
   agents: Record<string, AgentBindingConfig>,

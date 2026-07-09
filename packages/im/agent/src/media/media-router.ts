@@ -1,7 +1,6 @@
 import { loadSpeechPipeline } from '@zhin.js/core';
 import type { ContentPart } from '@zhin.js/ai';
-import { createWarnOnce, resetWarnOnceForTests, CONTENT_CHAIN_STAGE } from '@zhin.js/logger';
-import type { ContentChainLogFields } from '@zhin.js/logger';
+import { createWarnOnce, resetWarnOnceForTests, CONTENT_CHAIN_STAGE, type ContentChainLogFields } from '@zhin.js/logger';
 import type { MediaBinaryPayload, MultimodalConfig, PreprocessInboundResult } from './media-types.js';
 import {
   normalizeContentPartsToPayloads,
@@ -9,7 +8,6 @@ import {
 } from './media-normalize.js';
 import { spoolPayloadToFile } from './media-spool.js';
 import * as path from 'node:path';
-
 function byteLengthFromBase64(b64: string): number {
   return Math.floor((b64.length * 3) / 4);
 }

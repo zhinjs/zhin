@@ -1,12 +1,10 @@
 /**
  * Assistant Runtime 全局注册表（供 Host API Event Ingress 调用）
  */
-import type { AssistantConfig } from './config.js';
-import { isAssistantEventsActive, resolveAssistantConfig, resolveAssistantEventsConfig } from './config.js';
+import { type AssistantConfig, isAssistantEventsActive, resolveAssistantConfig, resolveAssistantEventsConfig } from './config.js';
 import type { AssistantEventIngress } from './event-ingress.js';
 import type { ScheduleJobEngine } from './job-engine.js';
 import type { AssistantJobStore } from './job-store.js';
-
 export interface AssistantRuntimeHandle {
   config: AssistantConfig & { enabled: boolean };
   store: AssistantJobStore;

@@ -1,9 +1,7 @@
 /**
  * 内省指令位置参数解析：/cmd [filter] [page]
  */
-import { segment } from '@zhin.js/core';
-import type { Message } from '@zhin.js/core';
-
+import { segment, type Message } from '@zhin.js/core';
 export interface IntrospectionArgs {
   filter?: string;
   page: number;

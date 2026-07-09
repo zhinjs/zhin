@@ -2,10 +2,8 @@
  * Collaboration config normalization — DB is SSOT; yaml roster 仅供 /collab init 模板。
  */
 
-import type { CollaborationScene, CollaborationSceneConfig, CollaborationConfig, CollaborationSceneMember } from './types.js';
-import { isPipelineRole } from './types.js';
+import { type CollaborationScene, type CollaborationSceneConfig, type CollaborationConfig, type CollaborationSceneMember, isPipelineRole } from './types.js';
 import { getSceneIdentityService } from './scene-identity-service.js';
-
 export function normalizeCollaborationConfig(raw: unknown): CollaborationConfig {
   if (!raw || typeof raw !== 'object') return {};
   const obj = raw as Record<string, unknown>;

@@ -1,6 +1,5 @@
 import { formatCompact, Logger } from '@zhin.js/logger';
-import type { ContentPart } from '@zhin.js/ai';
-import { userMessagePlainText, parseOutput } from '@zhin.js/ai';
+import { userMessagePlainText, parseOutput, type ContentPart } from '@zhin.js/ai';
 import { createAIHookEvent } from '../orchestrator/hook-registry.js';
 import { providerSupportsVision } from '../media/vision-capability.js';
 import { buildMultimodalVisionSystemPrompt } from '../prompt/assembly.js';
@@ -250,8 +249,9 @@ export async function processMultimodalTurn(
 
   logPhase(host.phaseConfig, 'path.agent_loop', sessionId, { mode: 'multimodal' });
 
+  const firstPrompt = turnUser.promptMessages[0];
   const userMessage = await buildVisionUserMessage(
-    userMessagePlainText(turnUser.promptMessages[0]!),
+    firstPrompt ? userMessagePlainText(firstPrompt) : textContent,
     parts,
     supportsVision,
     DEFAULT_MULTIMODAL_CONFIG.maxFileBytes,

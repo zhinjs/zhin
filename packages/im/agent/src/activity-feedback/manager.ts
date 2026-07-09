@@ -4,9 +4,7 @@ import {
   type TypingIndicatorConfig,
   type TypingIndicatorOptions,
 } from '../typing-indicator/index.js';
-import type { ActivityFeedbackPhase } from './types.js';
-import { toTypingIndicatorConfig, type ResolvedActivityFeedbackPhaseConfig } from './types.js';
-
+import { type ActivityFeedbackPhase, toTypingIndicatorConfig, type ResolvedActivityFeedbackPhaseConfig } from './types.js';
 function phaseSessionId(sessionId: string, phase: ActivityFeedbackPhase): string {
   return `${sessionId}::phase:${phase}`;
 }

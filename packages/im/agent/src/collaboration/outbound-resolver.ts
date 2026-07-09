@@ -2,12 +2,13 @@
  * 协作出站 SSOT — parse → planner role strategy → JSON 失败兜底 → delivery 扩展。
  */
 import type { OutputElement } from '@zhin.js/ai';
-import type { Message, MessageElement } from '@zhin.js/core';
 import {
   readMentionSegmentTarget,
   extractEmbeddedAiOutboundJson,
   parseAiOutboundJson,
   rewritePlainTextMentions,
+  type Message,
+  type MessageElement,
 } from '@zhin.js/core';
 import type { CollaborationScene, PipelineRole } from './types.js';
 import { tryBuildCollaborationOutboundBatches } from './structured-ai-outbound.js';
@@ -55,8 +56,9 @@ const PLANNER_PIPELINE_ROLES: PipelineRole[] = ['researcher', 'evaluator', 'exec
 
 function batchPlainText(batch: MessageElement[]): string {
   return batch
-    .filter((seg) => seg.type === 'text' && seg.data?.text != null)
-    .map((seg) => String(seg.data!.text).trim())
+    .filter((seg): seg is MessageElement & { type: 'text'; data: { text: unknown } } =>
+      seg.type === 'text' && seg.data?.text != null)
+    .map((seg) => String(seg.data.text).trim())
     .filter(Boolean)
     .join('\n')
     .trim();
@@ -88,7 +90,8 @@ function resolveRoleCallInProse(
     const plain = new RegExp(`(?:^|[，。\\s])${role}[，,：]\\s*(?!的)(.+?)(?:[。！!]|$)`, 'i');
     const hit = text.match(bold) ?? text.match(plain);
     if (hit) {
-      return { role, task: hit[1]!.trim() || `请 ${role} 继续处理。` };
+      const task = hit[1]?.trim();
+      return { role, task: task || `请 ${role} 继续处理。` };
     }
   }
   return undefined;

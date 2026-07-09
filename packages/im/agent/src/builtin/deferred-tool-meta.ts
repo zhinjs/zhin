@@ -1,7 +1,7 @@
 /**
  * Deferred schema meta tools: discover, load_tool, load_skill
  */
-import type { AgentTool } from '@zhin.js/ai';
+import { type AgentTool, type DeferredToolSessionSnapshot, addSkillToSnapshot, touchToolInSnapshot, touchToolsInSnapshot } from '@zhin.js/ai';
 import type { Message, Tool, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import {
@@ -10,15 +10,8 @@ import {
   type DiscoverKind,
 } from '../tool-catalog/tool-catalog.js';
 import type { ToolCatalogItem } from '../tool-catalog/types.js';
-import type { DeferredToolSessionSnapshot } from '@zhin.js/ai';
-import {
-  addSkillToSnapshot,
-  touchToolInSnapshot,
-  touchToolsInSnapshot,
-} from '@zhin.js/ai';
 import { readSkillInstructions, type LoadSkillToolOptions } from './load-skill-tool.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
-
 export const TOOLS_MUTATED_MARKER = '__zhin_tools_mutated__';
 
 export interface DeferredToolRuntime {

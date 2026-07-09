@@ -2,21 +2,13 @@
  * 群/频道共享 session：未 @ 机器人的消息写入 ContextRepository，供后续 @ 时带入上下文。
  * AI 回复仍仅由 shouldTriggerAI（群/频道下主要为 @）触发。
  */
-import {
-  getPlugin,
-  isActionMessage,
-  mergeAITriggerConfig,
-  resolveSenderRoles,
-  extractTextContent,
-} from '@zhin.js/core';
-import type { Message } from '@zhin.js/core';
+import { getPlugin, isActionMessage, mergeAITriggerConfig, resolveSenderRoles, extractTextContent, type Message } from '@zhin.js/core';
 import { formatCompactLog } from '@zhin.js/logger';
 import { findCellForInbound } from '../collaboration/collaboration-config.js';
 import { getCollaborationSceneService } from '../collaboration/scene-service.js';
 import { recordPassiveGroupMessage } from '../session/passive-group-session.js';
 import { asPrivate } from '../internal/as-private.js';
 import type { AIServiceRefs } from './shared-refs.js';
-
 function isBotSelfMessage(message: Message): boolean {
   const senderId = String(message.$sender?.id ?? '');
   const endpointId = String(message.$endpoint ?? '');

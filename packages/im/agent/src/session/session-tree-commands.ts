@@ -1,9 +1,7 @@
-import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
+import { resolveIMSessionIdFromMessage, type Message } from '@zhin.js/core';
 import type { SessionBranchPoint } from '@zhin.js/ai';
-import type { Message } from '@zhin.js/core';
 import { beginTurnSession, type SessionIODeps } from '../session/session-io.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
-
 function formatBranchList(points: SessionBranchPoint[]): string {
   if (points.length === 0) return '当前会话无 user 分支点';
   return points

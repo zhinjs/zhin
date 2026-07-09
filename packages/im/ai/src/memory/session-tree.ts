@@ -1,13 +1,11 @@
 import type { AgentMessage, UserMessage } from '../llm/types/agent-message.js';
-import type { AgentMessageRow } from './agent-db-models.js';
-import { parseAgentMessageRow } from './agent-db-models.js';
+import { type AgentMessageRow, parseAgentMessageRow } from './agent-db-models.js';
 import {
   parseAgentMessageExtra,
   stripSenderPrefixFromText,
   userMessagePlainText,
   type AgentMessageExtra,
 } from './sender-extra.js';
-
 export interface SessionBranchPoint {
   index: number;
   messageId: number;

@@ -1,8 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
+import { resolveIMSessionIdFromMessage, type Plugin } from '@zhin.js/core';
 import type { AgentMessage, ImageContent, OutputElement, UserMessage } from '@zhin.js/ai';
 import type { Message } from '../orchestrator/types.js';
-import type { Plugin } from '@zhin.js/core';
 import { PromptAccessDeniedError } from './prompt-access.js';
 import { resolveToolRequesterRole } from '../security/owner-approve-always-store.js';
 import { normalizePromptMessages } from './prompt-input.js';
@@ -11,7 +10,6 @@ import type { OnChunkCallback } from '../config/index.js';
 import type { PromptController } from '../turn/prompt-controller.js';
 import type { ZhinAgentEventEmitter } from '../event/event-emitter.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
-
 export function assertMasterForPromptControl(
   emitter: ZhinAgentEventEmitter,
   commMessage: Message,

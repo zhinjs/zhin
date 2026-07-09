@@ -1,6 +1,4 @@
-import type { ModelRegistry } from '@zhin.js/ai';
-import type { AIProvider } from '@zhin.js/ai';
-import type { AgentTool } from '@zhin.js/ai';
+import type { ModelRegistry, AIProvider, AgentTool } from '@zhin.js/ai';
 import type { ZhinAgentEventEmitter } from '../event/event-emitter.js';
 import type { ZhinAgentConfig } from '../config/index.js';
 import type { ResultSink, SubagentDefinition, SubagentSystemConfig } from './contracts.js';
@@ -15,7 +13,6 @@ import {
   type SubagentResultSender,
   type SubagentRuntimeOptions,
 } from './subagent-runtime.js';
-
 export class SubagentSystem {
   private readonly resultSinks: ResultSink[] = [];
   private readonly senders: SubagentResultSender[] = [];

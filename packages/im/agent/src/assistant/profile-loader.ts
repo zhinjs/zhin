@@ -3,25 +3,12 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { BootstrapFile, BootstrapFileName } from '../bootstrap.js';
-import { BOOTSTRAP_FILENAMES, loadBootstrapFiles } from '../bootstrap.js';
-import type { AssistantProfileConfig } from './profile-types.js';
-import {
-  ASSISTANT_PROFILE_VERSION,
-  DEFAULT_HEARTBEAT_PROMPT,
-  DEFAULT_PROFILE_FILENAME,
-  PROFILE_HEARTBEAT_JOB_ID,
-  PROFILE_MORNING_BRIEF_JOB_ID,
-  PROFILE_BEDTIME_CHECK_JOB_ID,
-  type AssistantProfile,
-  type AssistantProfileRoutineCron,
-  type AssistantProfileRoutineHeartbeat,
-} from './profile-types.js';
+import { type BootstrapFile, type BootstrapFileName, BOOTSTRAP_FILENAMES, loadBootstrapFiles } from '../bootstrap.js';
+import { type AssistantProfileConfig, ASSISTANT_PROFILE_VERSION, DEFAULT_HEARTBEAT_PROMPT, DEFAULT_PROFILE_FILENAME, PROFILE_HEARTBEAT_JOB_ID, PROFILE_MORNING_BRIEF_JOB_ID, PROFILE_BEDTIME_CHECK_JOB_ID, type AssistantProfile, type AssistantProfileRoutineCron, type AssistantProfileRoutineHeartbeat } from './profile-types.js';
 import type { ScheduleJobStore } from './job-store.js';
 import type { JobNotify, ScheduleJob } from './types.js';
 import { parseJobNotify, resolveEffectiveNotify } from './notification-router.js';
 import { buildJobScheduleFromCronInput } from '../schedule-cron.js';
-
 function resolveProfileJobNotify(
   routineNotify: JobNotify | undefined,
   profileDefaults: JobNotify | undefined,

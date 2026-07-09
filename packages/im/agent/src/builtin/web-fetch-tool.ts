@@ -1,13 +1,11 @@
 /**
  * web_fetch — HTTP(S) 抓取、SSRF 防护、HTML 去标签与长度截断
  */
-import type { Tool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
-import { htmlToPlainText } from '@zhin.js/core';
+import { type Tool, type Message, type ToolParametersSchema, type ToolResult, htmlToPlainText } from '@zhin.js/core';
 import { errMsg } from '../discovery/utils.js';
 import { checkDangerousToolAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import { WEB_TOOL_FETCH_TIMEOUT_MS, ZHIN_WEB_USER_AGENT } from './web-tool-utils.js';
-
 export const WEB_FETCH_DEFAULT_MAX_LENGTH = 20 * 1024;
 
 export const WEB_FETCH_PARAMETERS: ToolParametersSchema = {

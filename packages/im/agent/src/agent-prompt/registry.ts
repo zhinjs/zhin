@@ -1,6 +1,4 @@
-import { Logger } from '@zhin.js/core';
-import type { AgentPromptContributor } from '@zhin.js/core';
-
+import { Logger, type AgentPromptContributor } from '@zhin.js/core';
 const logger = new Logger(null, 'AgentPromptRegistry');
 
 const contributors = new Map<string, AgentPromptContributor>();

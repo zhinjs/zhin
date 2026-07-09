@@ -2,8 +2,7 @@
  * CollaborationSceneRepository — cells + members 关联表持久化。
  */
 
-import type { CollaborationScene, PipelineState } from './types.js';
-import { isPipelineRole } from './types.js';
+import { type CollaborationScene, type PipelineState, isPipelineRole } from './types.js';
 import {
   memberInputToRow,
   memberRowToRecord,
@@ -13,7 +12,6 @@ import {
   type UpsertCollaborationSceneInput,
   type UpsertCollaborationMemberInput,
 } from './collaboration-db-model.js';
-
 export type {
   UpsertCollaborationSceneInput,
   UpsertCollaborationMemberInput,

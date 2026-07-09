@@ -6,13 +6,10 @@
  */
 
 import * as os from 'node:os';
-import type { AgentTurnMessage, Message } from '@zhin.js/core';
-import { getPlugin, resolveIMSessionIdFromMessage, senderRolesFromMessage } from '@zhin.js/core';
-import type { ContentPart } from '@zhin.js/ai';
-import type { AgentMessage, AssistantMessage, UserMessage } from '@zhin.js/ai';
+import { type AgentTurnMessage, type Message, getPlugin, resolveIMSessionIdFromMessage, senderRolesFromMessage } from '@zhin.js/core';
+import type { ContentPart, AgentMessage, AssistantMessage, UserMessage } from '@zhin.js/ai';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
-import type { ZhinAgentConfig } from '../config/index.js';
-import { SECTION_SEP, HISTORY_CONTEXT_MARKER, CURRENT_MESSAGE_MARKER } from '../config/index.js';
+import { type ZhinAgentConfig, SECTION_SEP, HISTORY_CONTEXT_MARKER, CURRENT_MESSAGE_MARKER } from '../config/index.js';
 import { resolveQuoteSystemHint } from '../context/turn-envelope.js';
 import { getFileMemoryContext, formatMemoryPathsHint } from '../memory-layers.js';
 import { PromptBuilder } from './prompt-builder.js';
@@ -22,7 +19,6 @@ import {
   type FileRole,
 } from '../security/file-role-policy.js';
 import { resolveWorkspacePrompt } from '../prompt/workspace-prompt.js';
-
 export const FIXED_DISCIPLINE_RULES = [
   'Never claim actions, results, or system state unless confirmed by tool output.',
   'If a capability is unavailable, state it honestly and suggest the closest valid alternative.',
