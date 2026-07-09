@@ -85,7 +85,7 @@
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
     "@eslint/js": "^10.0.1",
-    "@types/node": "^25.9.4",
+    "@types/node": "^26.1.0",
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^4.1.9",
     "@vitest/ui": "^4.1.9",

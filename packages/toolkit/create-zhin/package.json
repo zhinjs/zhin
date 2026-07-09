@@ -24,7 +24,7 @@
     "yaml": "^2.9.0"
   },
   "devDependencies": {
-    "@types/node": "^25.9.2",
+    "@types/node": "^26.1.0",
     "@types/fs-extra": "^11.0.4",
     "@types/inquirer": "^9.0.7",
     "typescript": "^6.0.3"
