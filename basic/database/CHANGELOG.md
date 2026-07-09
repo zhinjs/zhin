@@ -1,5 +1,11 @@
 # @zhin.js/database
 
+## 1.0.75
+
+### Patch Changes
+
+- 5cc9c03: fix: ai 优化
+
 ## 1.0.74
 
 ### Patch Changes

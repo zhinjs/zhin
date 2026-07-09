@@ -1,5 +1,11 @@
 # @zhin.js/schema
 
+## 1.0.71
+
+### Patch Changes
+
+- 5cc9c03: fix: ai 优化
+
 ## 1.0.70
 
 ### Patch Changes

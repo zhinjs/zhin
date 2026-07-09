@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/satori",
-  "version": "1.0.15",
+  "version": "1.0.16",
   "type": "module",
   "description": "HTML/CSS to SVG via official satori, with HTML input support and built-in fonts.",
   "module": "./lib/index.js",

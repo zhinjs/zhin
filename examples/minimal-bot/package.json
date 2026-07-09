@@ -1,7 +1,7 @@
 {
   "name": "minimal-bot",
   "private": true,
-  "version": "0.0.12",
+  "version": "0.0.13",
   "description": "Zhin.js Stable 黄金路径示例（Sandbox + 最少插件）",
   "type": "module",
   "scripts": {

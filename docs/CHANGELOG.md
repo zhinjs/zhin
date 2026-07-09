@@ -1,5 +1,13 @@
 # @zhin.js/docs
 
+## 1.0.43
+
+### Patch Changes
+
+- 5cc9c03: fix: ai 优化
+- 36d6db2: fix: agent 互联
+- 7700903: fix: 游戏强化
+
 ## 1.0.42
 
 ### Patch Changes

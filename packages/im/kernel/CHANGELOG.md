@@ -1,5 +1,16 @@
 # @zhin.js/kernel
 
+## 1.0.2
+
+### Patch Changes
+
+- 5b08052: fix: 架构优化
+- 5cc9c03: fix: ai 优化
+- Updated dependencies [5cc9c03]
+  - @zhin.js/logger@1.0.73
+  - @zhin.js/schedule@0.0.1
+  - @zhin.js/schema@1.0.71
+
 ## 1.0.1
 
 ### Patch Changes

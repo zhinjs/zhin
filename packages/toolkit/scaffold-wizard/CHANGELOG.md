@@ -1,5 +1,12 @@
 # @zhin.js/scaffold-wizard
 
+## 0.1.7
+
+### Patch Changes
+
+- 5cc9c03: fix: ai 优化
+- b9b3881: fix: 增加游戏引擎以及部分游戏
+
 ## 0.1.6
 
 ### Patch Changes

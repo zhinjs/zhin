@@ -1,5 +1,11 @@
 # @zhin.js/satori
 
+## 1.0.16
+
+### Patch Changes
+
+- 5cc9c03: fix: ai 优化
+
 ## 1.0.15
 
 ### Patch Changes
