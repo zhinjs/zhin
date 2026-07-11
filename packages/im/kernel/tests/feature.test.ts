@@ -2,8 +2,7 @@
  * Feature 基类测试（从 core/tests/feature.test.ts 迁移）
  */
 import { describe, it, expect, vi } from 'vitest';
-import { Feature } from '../src/feature.js';
-import type { FeatureJSON } from '../src/feature.js';
+import { Feature, type FeatureJSON } from '../src/feature.js';
 
 class TestFeature extends Feature<{ id: string; value: number }> {
   readonly name = 'test';

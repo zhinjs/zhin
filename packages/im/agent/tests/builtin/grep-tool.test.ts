@@ -7,8 +7,8 @@ import { mockCommMessage } from '../helpers/mock-comm-message.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type { GrepExecAsync } from '../../src/builtin/grep-tool.js';
-import { createGrepTool, GrepBuiltinTool } from '../../src/builtin/grep-tool.js';
+import { createGrepTool, GrepBuiltinTool, type GrepExecAsync } from '../../src/builtin/grep-tool.js';
+
 import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
 import type { Message } from '@zhin.js/core';
 

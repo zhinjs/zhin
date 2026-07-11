@@ -3,8 +3,7 @@ import fs from 'fs-extra'
 import os from 'node:os'
 import path from 'node:path'
 import { createConfigFile, generateDatabaseConfig, generateDatabaseEnvVars } from '../src/config'
-import { RECOMMENDED_AI_DEFAULTS } from '@zhin.js/scaffold-wizard'
-import type { DatabaseConfig, InitOptions } from '@zhin.js/scaffold-wizard'
+import { RECOMMENDED_AI_DEFAULTS, type DatabaseConfig, type InitOptions } from '@zhin.js/scaffold-wizard';
 
 describe('create-zhin config', () => {
   describe('generateDatabaseEnvVars', () => {

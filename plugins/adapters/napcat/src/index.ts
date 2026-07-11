@@ -17,9 +17,9 @@ import { registerAgentPromptContributor, unregisterAgentPromptContributor } from
 import type { Router } from '@zhin.js/host-router';
 import { PageManager } from '@zhin.js/host-api';
 import { NapCatAdapter } from './adapter.js';
-import { createNapCatTools } from './tools.js';
 import { createNapCatAgentPromptContributor } from './agent-prompt.js';
 import { registerRoutes } from './routes.js';
+import { setNapcatAgentDeps } from './napcat-agent-deps.js';
 
 export * from './types.js';
 export { NapCatWsClient } from './endpoint-ws-client.js';
@@ -59,8 +59,10 @@ provide({
   },
 } as unknown as Context<'napcat'>);
 
-// ── AI 工具注册 ────────────────────────────────────────────────────
+// ── AI 工具注册（场景治理；扩展工具见 agent/tools/）────────────────
 useContext('tool', 'napcat', (toolService: ToolFeature, napcat: NapCatAdapter) => {
+  setNapcatAgentDeps({ getAdapter: () => napcat });
+
   const disposers: (() => void)[] = [];
   disposers.push(registerDefaultScenePlatformPermitChecker('napcat'));
 
@@ -69,9 +71,6 @@ useContext('tool', 'napcat', (toolService: ToolFeature, napcat: NapCatAdapter) =
     'napcat',
   );
   disposers.push(...sceneTools.map(t => toolService.addTool(t, plugin.name)));
-
-  const napcatTools = createNapCatTools(napcat);
-  disposers.push(...napcatTools.map(t => toolService.addTool(t, plugin.name)));
 
   return () => disposers.forEach(d => d());
 });

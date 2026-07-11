@@ -16,14 +16,16 @@
   "files": [
     "src",
     "lib",
-    "skills",
+    "agent",
     "tools",
     "plugin.yml",
     "README.md"
   ],
   "scripts": {
-    "build": "tsc --build",
-    "clean": "rimraf lib"
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "test": "sh -c 'cd ../../.. && vitest run plugins/utils/group-suite/tests'",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "zhin",
@@ -48,14 +50,24 @@
   "devDependencies": {
     "typescript": "^6.0.3",
     "zhin.js": "workspace:*",
-    "@zhin.js/html-renderer": "workspace:*"
+    "@zhin.js/html-renderer": "workspace:*",
+    "@zhin.js/agent": "workspace:*",
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
     "zhin.js": "workspace:*",
-    "@zhin.js/html-renderer": "workspace:*"
+    "@zhin.js/agent": "workspace:*",
+    "@zhin.js/html-renderer": "workspace:*",
+    "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
     "@zhin.js/html-renderer": {
+      "optional": true
+    },
+    "@zhin.js/agent": {
+      "optional": true
+    },
+    "zod": {
       "optional": true
     }
   },

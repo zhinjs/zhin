@@ -16,11 +16,13 @@
   "files": [
     "src",
     "lib",
+    "agent",
     "README.md"
   ],
   "scripts": {
     "build": "tsc --build",
-    "clean": "rimraf lib"
+    "clean": "rimraf lib",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "zhin",

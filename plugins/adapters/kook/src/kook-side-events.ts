@@ -1,10 +1,15 @@
 /**
  * KOOK Gateway 非聊天入站：系统消息 (type=255) / BROADCAST → Notice
- * @see https://developer.kookapp.cn/doc/event/event-introduction
  */
-import { Notice, formatCompact, Message, type NoticeType } from "zhin.js";
+import {
+  Notice,
+  Message,
+  mapNoticeParts,
+  senderFromId,
+  buildNotice,
+  formatCompact,
+} from "zhin.js";
 
-/** KOOK WebSocket s=0 时 d 字段（kook-client Receiver 入参） */
 export interface KookGatewayEvent {
   channel_type?: string;
   type?: number;
@@ -30,7 +35,6 @@ export interface KookGatewayExtra {
 
 const SYSTEM_MESSAGE_TYPE = 255;
 
-/** 是否应由适配器作为 notice 处理（kook-client 对 notice 的 transform 为空实现） */
 export function isKookNoticeGatewayEvent(data: unknown): data is KookGatewayEvent {
   if (!data || typeof data !== "object") return false;
   const ev = data as KookGatewayEvent;
@@ -50,34 +54,12 @@ export function resolveKookSideEventDedupeKey(
   return `${kind}:${ts}_${noticeType}_${scope}`;
 }
 
-const NOTICE_TYPE_MAP: Record<string, NoticeType> = {
-  joined_guild: "group_member_increase",
-  exited_guild: "group_member_decrease",
-  deleted_message: "group_recall",
-  deleted_private_message: "friend_recall",
-  added_reaction: "group_emoji_reaction",
-  deleted_reaction: "group_emoji_reaction",
-  private_added_reaction: "group_emoji_reaction",
-  private_deleted_reaction: "group_emoji_reaction",
-};
-
-function resolveNoticeZhinType(rawType: string): NoticeType {
-  return NOTICE_TYPE_MAP[rawType] ?? rawType;
-}
-
-function senderFromId(id: unknown, name?: string) {
-  if (id == null || id === "") return undefined;
-  const s = String(id);
-  return { id: s, name: name ?? s };
-}
-
 function readString(obj: Record<string, unknown> | undefined, key: string): string | undefined {
   const v = obj?.[key];
   if (v == null || v === "") return undefined;
   return String(v);
 }
 
-/** 解析 notice 发生的频道 / 群 / 私聊 */
 export function resolveKookNoticeChannel(
   event: KookGatewayEvent,
 ): { id: string; type: "group" | "private" | "channel" } {
@@ -161,11 +143,11 @@ export function enrichKookGatewayForPlugins(event: KookGatewayEvent): KookGatewa
 export function formatKookNotice(
   event: KookGatewayEvent,
   endpointName: string,
-): ReturnType<typeof Notice.from<KookGatewayEvent>> {
+) {
   const extra = event.extra ?? {};
   const body = extra.body ?? {};
   const rawType = String(extra.type ?? "unknown");
-  const $type = resolveNoticeZhinType(rawType);
+  const { scene_type, sub_type } = mapNoticeParts('kook', rawType);
   const channel = resolveKookNoticeChannel(event);
   const ts = event.msg_timestamp ?? Date.now();
 
@@ -177,16 +159,15 @@ export function formatKookNotice(
     readString(body, "operator_id")
     ?? (event.author_id !== "1" ? event.author_id : undefined);
 
-  const mapped = NOTICE_TYPE_MAP[rawType] != null;
-
-  return Notice.from(event, {
+  return buildNotice(event, {
     $id: resolveKookSideEventDedupeKey(event, "notice"),
     $adapter: "kook",
     $endpoint: endpointName,
-    $type,
-    $subType: mapped ? rawType : undefined,
-    $channel: channel,
-    $operator: senderFromId(operatorId),
+    $type: "notice",
+    $scene_id: channel.id,
+    $scene_type: scene_type,
+    $sub_type: sub_type,
+    $actor: senderFromId(operatorId),
     $target: senderFromId(targetId),
     $timestamp: ts,
   });
@@ -194,14 +175,13 @@ export function formatKookNotice(
 
 export function formatKookNoticeLog(notice: ReturnType<typeof formatKookNotice>): string {
   return formatCompact({
-    notice: notice.$type,
-    kook_type: notice.$subType,
-    channel: `${notice.$channel.type}(${notice.$channel.id})`,
+    notice: `${notice.$type}.${notice.$scene_type}.${notice.$sub_type}`,
+    kook_type: notice.$sub_type,
+    scene: `${notice.$scene_type}(${notice.$scene_id})`,
     endpoint: notice.$endpoint,
   });
 }
 
-/** KOOK 卡片按钮点击（type=255, extra.type=message_btn_click） */
 export function isKookButtonClickEvent(event: KookGatewayEvent): boolean {
   return event.type === SYSTEM_MESSAGE_TYPE && event.extra?.type === 'message_btn_click';
 }

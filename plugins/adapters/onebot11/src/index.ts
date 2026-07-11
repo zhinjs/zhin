@@ -4,6 +4,7 @@
 import { usePlugin, type Plugin, type Context, type ISceneManagement, createSceneManagementTools, registerDefaultScenePlatformPermitChecker, type ToolFeature } from 'zhin.js';
 import type { Router } from '@zhin.js/host-router';
 import { OneBot11Adapter } from './adapter.js';
+import { setOnebot11AgentDeps } from './onebot11-agent-deps.js';
 
 export * from './types.js';
 export { OneBot11WsClient } from './endpoint-ws-client.js';
@@ -39,36 +40,18 @@ provide({
 useContext('tool', 'onebot11', (toolService: ToolFeature, onebot11: OneBot11Adapter) => {
   const disposers: (() => void)[] = [];
   disposers.push(registerDefaultScenePlatformPermitChecker('onebot11'));
+  setOnebot11AgentDeps({
+    getEndpoint: (endpointId) => {
+      const endpoint = onebot11.endpoints.get(endpointId);
+      if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+      return endpoint;
+    },
+    getAdapter: () => onebot11,
+  });
   const sceneTools = createSceneManagementTools(
     onebot11 as unknown as ISceneManagement,
     'onebot11',
   );
   disposers.push(...sceneTools.map(t => toolService.addTool(t, plugin.name)));
-
-  // Platform-specific tool: set title
-  disposers.push(toolService.addTool({
-    name: 'onebot11_set_title',
-    description: '设置 QQ 群成员的专属头衔。只有群主才能设置。',
-    parameters: {
-      type: 'object',
-      properties: {
-        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
-        group_id: { type: 'number', description: '目标群号' },
-        user_id: { type: 'number', description: '目标成员 QQ号' },
-        title: { type: 'string', description: '头衔文字' },
-      },
-      required: ['endpoint_id', 'group_id', 'user_id', 'title'],
-    },
-    platforms: ['onebot11'],
-    tags: ['onebot11'],
-    permissions: ['platform(onebot11,scene_owner)'],
-    execute: async (args: Record<string, any>) => {
-      const endpoint = onebot11.endpoints.get(args.endpoint_id);
-      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
-      const success = await endpoint.setTitle(args.group_id, args.user_id, args.title);
-      return { success, message: success ? `已将 ${args.user_id} 的头衔设为 "${args.title}"` : '设置失败' };
-    },
-  }, plugin.name));
-
   return () => disposers.forEach(d => d());
 });

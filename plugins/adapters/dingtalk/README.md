@@ -355,6 +355,16 @@ A: 确保：
 - [钉钉机器人开发文档](https://open.dingtalk.com/document/robots/robot-overview)
 - [Zhin.js 官方文档](https://github.com/zhinjs/zhin)
 
+## AI 工具
+
+| 类别 | 路径 |
+|------|------|
+| Permit 词汇 | `agent/PERMITS.md` |
+| 平台工具（8 个） | `agent/tools/`（`dingtalk_*`：部门、用户、群聊、工作通知等） |
+| 技能说明 | `agent/skills/dingtalk.md` |
+| 群管标准工具 | `createSceneManagementTools()` |
+
+
 ## 许可证
 
 MIT License

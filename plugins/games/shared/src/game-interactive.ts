@@ -1,5 +1,5 @@
-import type { Message } from 'zhin.js';
-import { getActionFromMessage, resolvePayloadFromText } from 'zhin.js';
+import { getActionFromMessage, resolvePayloadFromText, type Message } from 'zhin.js';
+
 import { channelKey } from './board-sender.js';
 import { parseChoicePayload } from './choice-keyboard.js';
 

@@ -17,8 +17,7 @@ import { handleHubChoice, openMainMenu, parseHubPayload } from './game-hub-flow.
 import { getRegisteredGames } from './game-hub-feature.js';
 import { mountGameRecordCommands } from './game-records.js';
 import { mountFirstAtHintMiddleware } from './game-onboarding.js';
-import type { CommandHelpSource } from './command-help.js';
-import { filterHelpCommands } from './command-help.js';
+import { filterHelpCommands, type CommandHelpSource } from './command-help.js';
 
 function resolveRegisteredCommands(root: Plugin): MessageCommand[] {
   const commandService = root.inject('command') as { items?: MessageCommand[] } | undefined;

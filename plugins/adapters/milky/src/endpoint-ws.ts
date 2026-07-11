@@ -60,7 +60,7 @@ export class MilkyWsClient extends EventEmitter implements Endpoint<MilkyWsConfi
         if (!this.$config.access_token) {
           this.logger.warn(formatCompact({ endpoint: this.$id, ok: false, error: 'missing access_token' }));
         }
-        this.logger.info(formatCompact({ endpoint: this.$id, mode: 'ws' }));
+        this.logger.debug(formatCompact({ endpoint: this.$id, mode: 'ws' }));
         this.startHeartbeat();
         resolve();
       });

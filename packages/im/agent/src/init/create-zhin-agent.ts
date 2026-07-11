@@ -375,7 +375,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
         engine: jobEngine,
         ingress,
       });
-      logger.info(formatCompact({
+      logger.debug(formatCompact({
         assistant_runtime: true,
         events: ingress.isEnabled(),
         profile: assistantCfg.profile?.enabled === true,

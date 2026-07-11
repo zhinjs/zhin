@@ -21,7 +21,7 @@ if (serviceConfig.enabled !== false) {
     createActivityFeedbackOrchestratorFromPlugin(plugin, serviceConfig),
   );
 } else {
-  logger.info('[ActivityFeedback] disabled by activityFeedback.enabled=false');
+  logger.debug('[ActivityFeedback] disabled by activityFeedback.enabled=false');
 }
 
 export {

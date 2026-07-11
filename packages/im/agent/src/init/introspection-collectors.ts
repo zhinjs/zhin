@@ -59,6 +59,30 @@ export function collectIntrospectionTools(root: Plugin): ToolRow[] | { error: st
   }));
 }
 
+export function collectIntrospectionAgentTools(root: Plugin): string[] {
+  const names = new Set<string>();
+  const fromFeature = collectIntrospectionTools(root);
+  if (!('error' in fromFeature)) {
+    for (const t of fromFeature) names.add(t.name);
+  }
+  const orchestrator = root.inject('agent') as AgentOrchestrator | undefined;
+  if (orchestrator) {
+    for (const t of orchestrator.tools.getAll()) {
+      if (!(t as { hidden?: boolean }).hidden) names.add(t.name);
+    }
+  }
+  return [...names].sort((a, b) => a.localeCompare(b));
+}
+
+/** Agent 编排器已注册的技能名（启动摘要 / 内省） */
+export function collectIntrospectionSkills(root: Plugin): string[] {
+  const orchestrator = root.inject('agent') as AgentOrchestrator | undefined;
+  if (!orchestrator) return [];
+  return orchestrator.skills.getAll()
+    .map((s) => s.name)
+    .sort((a, b) => a.localeCompare(b));
+}
+
 export function collectIntrospectionMcp(root: Plugin): McpServerRow[] {
   const orchestrator = root.inject('agent') as AgentOrchestrator | undefined;
   if (!orchestrator) return [];
@@ -84,4 +108,15 @@ export function collectIntrospectionMcpWithConfigFallback(root: Plugin): {
     };
   }
   return { rows };
+}
+
+/** MCP Server 展示标签（启动摘要 chip 列表） */
+export function collectIntrospectionMcpLabels(root: Plugin): string[] {
+  const { rows } = collectIntrospectionMcpWithConfigFallback(root);
+  return rows
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((s) => {
+      const detail = s.connected ? String(s.toolCount) : 'idle';
+      return `${s.name} (${detail})`;
+    });
 }

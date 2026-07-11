@@ -74,12 +74,12 @@ export class MilkyWssServer extends EventEmitter implements Endpoint<MilkyWssCon
     });
 
     this.$connected = true;
-    this.logger.info(formatCompact( { op: 'listen', endpoint: this.$id, mode: 'wss', path }));
+    this.logger.debug(formatCompact( { op: 'listen', endpoint: this.$id, mode: 'wss', path }));
 
     this.#wss.on('connection', (client, req) => {
       this.#client = client;
       this.startHeartbeat();
-      this.logger.info(formatCompact({ endpoint: this.$id, peer: req.socket?.remoteAddress }));
+      this.logger.debug(formatCompact({ endpoint: this.$id, peer: req.socket?.remoteAddress }));
 
       client.on('message', (data) => {
         try {

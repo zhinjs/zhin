@@ -10,6 +10,13 @@ import {
   type LogLevel as LogLevelType,
   type LogLevelInput,
 } from './log-level.js'
+import { formatLogTable, type LogTableColumn, type FormatLogTableOptions } from './log-table.js'
+import { formatLogPanel, type LogPanelLine } from './log-panel.js'
+
+export type { LogTableColumn, FormatLogTableOptions } from './log-table.js'
+export type { LogPanelLine } from './log-panel.js'
+export { formatLogTable, buildLogTableTotalsRow } from './log-table.js'
+export { formatLogPanel, formatLogSection, formatChipList } from './log-panel.js'
 
 export { LogLevel, LOG_LEVEL_NAMES } from './log-level.js'
 export type { LogLevelInput } from './log-level.js'
@@ -592,6 +599,36 @@ export class Logger {
    */
   success(...args: any[]): void {
     this.log(LogLevel.INFO, chalk.green('✓ '), ...args)
+  }
+
+  /**
+   * 表格日志（对齐 console.table 的纯文本输出）
+   */
+  table(
+    title: string,
+    columns: LogTableColumn[],
+    rows: Array<Record<string, string | number | undefined | null>>,
+    level: 'info' | 'debug' = 'info',
+    options?: FormatLogTableOptions,
+  ): void {
+    const tableTitle = options?.title ?? (title || undefined);
+    const body = formatLogTable(columns, rows, { style: 'box', ...options, title: tableTitle });
+    const message = tableTitle ? body : (title ? `${title}\n${body}` : body);
+    if (level === 'debug') this.debug(message);
+    else this.info(message);
+  }
+
+  /**
+   * 分节面板（多行 key-value / 结构化摘要）
+   */
+  panel(
+    title: string,
+    lines: LogPanelLine[],
+    level: 'info' | 'debug' = 'info',
+  ): void {
+    const message = formatLogPanel(title, lines);
+    if (level === 'debug') this.debug(message);
+    else this.info(message);
   }
 
   /**

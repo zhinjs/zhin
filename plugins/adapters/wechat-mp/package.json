@@ -8,7 +8,8 @@
   "scripts": {
     "build": "pnpm build:node",
     "clean": "rimraf lib",
-    "build:node": "tsc"
+    "build:node": "tsc",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "xml2js": "^0.6.2",
@@ -53,7 +54,7 @@
   "files": [
     "src",
     "lib",
-    "skills",
+    "agent",
     "README.md",
     "CHANGELOG.md"
   ],

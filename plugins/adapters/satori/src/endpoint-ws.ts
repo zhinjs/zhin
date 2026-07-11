@@ -6,8 +6,8 @@ import { EventEmitter } from 'events';
 import { clearInterval } from 'node:timers';
 import { formatCompact, Endpoint, Message, segment, SendOptions,} from 'zhin.js';
 import { callSatoriApi } from './api.js';
-import type { SatoriWsConfig, SatoriSignal, SatoriEventBody, SatoriLogin } from './types.js';
-import { SatoriOpcode } from './types.js';
+import { SatoriOpcode, type SatoriWsConfig, type SatoriSignal, type SatoriEventBody, type SatoriLogin } from './types.js';
+
 import type { SatoriAdapter } from './adapter.js';
 import { formatSatoriMessagePayload, isMessageEvent } from './utils.js';
 
@@ -82,7 +82,7 @@ export class SatoriWsClient extends EventEmitter implements Endpoint<SatoriWsCon
 
       this.ws.on('open', () => {
         this.$connected = true;
-        this.logger.info(formatCompact({ endpoint: this.$id, mode: 'ws' }));
+        this.logger.debug(formatCompact({ endpoint: this.$id, mode: 'ws' }));
         this.sendSignal(SatoriOpcode.IDENTIFY, {
           token: this.$config.token,
           sn: this.lastSn,

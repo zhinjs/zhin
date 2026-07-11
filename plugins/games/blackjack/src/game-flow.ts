@@ -8,8 +8,8 @@ import {
   TARGET,
 } from './engine.js';
 import type { BjSessionRow } from './models.js';
-import type { SessionService } from './session-service.js';
-import { parseCards, parseDeck } from './session-service.js';
+import { parseCards, parseDeck, type SessionService } from './session-service.js';
+
 import { buildBjView, naturalOutcome, playerBust } from './view.js';
 
 async function sendOrEditView(

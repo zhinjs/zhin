@@ -4,7 +4,7 @@
  * 不再直接依赖 @icqqjs/icqq 协议库。
  * 登录由 `icqq login` 完成，本 Endpoint 只负责连接守护进程并收发消息。
  */
-import { formatCompact, Endpoint, Message, segment, SendContent, SendOptions, expandInteractiveSegmentsInContent, type QuotedMessagePayload,} from 'zhin.js';
+import { formatCompact, Endpoint, Message, segment, SendContent, SendOptions, expandInteractiveSegmentsInContent, resolveSideEventDedupeKey, type QuotedMessagePayload,} from 'zhin.js';
 import type {
   IcqqEndpointConfig,
   IcqqSenderInfo,
@@ -14,20 +14,9 @@ import type {
 } from "./types.js";
 import type { IcqqAdapter } from "./adapter.js";
 import { IpcClient } from "./ipc-client.js";
-import { Actions, type IpcEvent } from "./protocol.js";
-import type { IcqqIpcMessageEvent } from "./icqq-inbound.js";
-import {
-  findIcqqNestedMessageSource,
-  InboundMessageDeduper,
-  isIcqqMessagePostType,
-  normalizeIcqqInboundMessage,
-  quotedPayloadFromIcqqSource,
-  resolveIcqqQuoteIdFromEvent,
-  resolveQuoteIdFromIcqqSource,
-  shouldSkipSelfInboundMessage,
-  unwrapIcqqIpcEventPayload,
-  type NormalizedIcqqInbound,
-} from "./icqq-inbound.js";
+import { Actions, type IpcEvent, type IpcGuildMessageEventData } from './protocol.js';
+import { findIcqqNestedMessageSource, InboundMessageDeduper, isIcqqMessagePostType, normalizeIcqqInboundMessage, quotedPayloadFromIcqqSource, resolveIcqqQuoteIdFromEvent, resolveQuoteIdFromIcqqSource, shouldSkipSelfInboundMessage, unwrapIcqqIpcEventPayload, type IcqqIpcMessageEvent, type NormalizedIcqqInbound } from './icqq-inbound.js';
+
 import {
   buildIcqqIpcMessage as buildIcqqIpcMessageImpl,
   parseCqMessage as parseCqMessageImpl,
@@ -45,7 +34,6 @@ import {
   isIcqqNoticePayload,
   isIcqqRequestPayload,
   resolveIcqqEventPostType,
-  resolveSideEventDedupeKey,
   shouldRefreshListsOnMeta,
   type IcqqIpcRawEvent,
 } from "./icqq-side-events.js";
@@ -61,7 +49,6 @@ import {
   normalizeIcqqGuildInboundMessage,
   type NormalizedIcqqGuildInbound,
 } from "./icqq-guild.js";
-import type { IpcGuildMessageEventData } from "./protocol.js";
 
 export class IcqqEndpoint implements Endpoint<IcqqEndpointConfig, IcqqIpcMessageEvent> {
   $connected = false;
@@ -115,7 +102,7 @@ export class IcqqEndpoint implements Endpoint<IcqqEndpointConfig, IcqqIpcMessage
 
     await this.rebindIpcSession();
 
-    this.logger.info(formatCompact( {
+    this.logger.debug(formatCompact( {
       机器人: this.$id,
       好友数: this.friends.size,
       群组数: this.groups.size,
@@ -192,7 +179,7 @@ export class IcqqEndpoint implements Endpoint<IcqqEndpointConfig, IcqqIpcMessage
 
         try {
           await this.rebindIpcSession();
-          this.logger.info(formatCompact( {
+          this.logger.debug(formatCompact( {
             op: "reconnect",
             endpoint: this.$id,
             friends: this.friends.size,
@@ -270,7 +257,7 @@ export class IcqqEndpoint implements Endpoint<IcqqEndpointConfig, IcqqIpcMessage
     disposeIcqqLoginAssistBridge(this.$id);
     this.ipc?.close();
     this.$connected = false;
-    this.logger.info(formatCompact( { op: "disconnect", endpoint: this.$id }));
+    this.logger.debug(formatCompact( { op: "disconnect", endpoint: this.$id }));
   }
 
   // ── 消息处理 ───────────────────────────────────────────────────────
@@ -348,7 +335,7 @@ export class IcqqEndpoint implements Endpoint<IcqqEndpointConfig, IcqqIpcMessage
 
     if (shouldSkipSelfInboundMessage(data)) {
       if (process.env.ICQQ_IPC_LOG_RAW === "1") {
-        this.logger.info(formatCompact({ ipc_skip: "self_message" }));
+        this.logger.debug(formatCompact({ ipc_skip: "self_message" }));
       }
       return;
     }
@@ -356,7 +343,7 @@ export class IcqqEndpoint implements Endpoint<IcqqEndpointConfig, IcqqIpcMessage
     const normalized = normalizeIcqqInboundMessage(data);
     if (!normalized) {
       if (process.env.ICQQ_IPC_LOG_RAW === "1") {
-        this.logger.info(formatCompact({ ipc_skip: "normalize_failed" }));
+        this.logger.debug(formatCompact({ ipc_skip: "normalize_failed" }));
       }
       return;
     }
@@ -468,18 +455,17 @@ export class IcqqEndpoint implements Endpoint<IcqqEndpointConfig, IcqqIpcMessage
     const dedupeKey = resolveSideEventDedupeKey(event, "notice");
     if (!this.inboundDeduper.shouldProcess(dedupeKey)) {
       if (process.env.ICQQ_IPC_LOG_RAW === "1") {
-        this.logger.info(formatCompact({ ipc_dedupe: dedupeKey }));
+        this.logger.debug(formatCompact({ ipc_dedupe: dedupeKey }));
       }
       return;
     }
     const notice = formatIcqqNotice(event, this.$config.name);
     this.adapter.emit("notice.receive", notice);
-    this.logger.info(
+    this.logger.debug(
       formatCompact({
-        notice: notice.$type,
-        channel: `${notice.$channel.type}(${notice.$channel.id})`,
+        notice: `${notice.$type}.${notice.$scene_type}.${notice.$sub_type}`,
+        scene: `${notice.$scene_type}(${notice.$scene_id})`,
         endpoint: this.$id,
-        sub_type: notice.$subType,
       }),
     );
   }
@@ -488,24 +474,26 @@ export class IcqqEndpoint implements Endpoint<IcqqEndpointConfig, IcqqIpcMessage
     const dedupeKey = resolveSideEventDedupeKey(event, "request");
     if (!this.inboundDeduper.shouldProcess(dedupeKey)) {
       if (process.env.ICQQ_IPC_LOG_RAW === "1") {
-        this.logger.info(formatCompact({ ipc_dedupe: dedupeKey }));
+        this.logger.debug(formatCompact({ ipc_dedupe: dedupeKey }));
       }
       return;
     }
     const request = formatIcqqRequest(event, this.$config.name, this.ipc);
     this.adapter.emit("request.receive", request);
-    this.logger.info(
+    this.logger.debug(
       formatCompact({
-        request: request.$type,
-        channel: `${request.$channel.type}(${request.$channel.id})`,
+        request: `${request.$type}.${request.$scene_type}.${request.$sub_type}`,
+        scene: `${request.$scene_type}(${request.$scene_id})`,
         endpoint: this.$id,
-        from: request.$sender.id,
+        from: request.$actor.id,
       }),
     );
   }
 
   private handleMetaEvent(event: IcqqIpcRawEvent): void {
-    const dedupeKey = resolveSideEventDedupeKey(event, "meta");
+    const time = event.time ?? 0;
+    const kind = event.meta_event_type ?? event.post_type ?? 'meta';
+    const dedupeKey = `meta:${time}_${kind}_${event.sub_type ?? ''}`;
     if (!this.inboundDeduper.shouldProcess(dedupeKey)) return;
 
     this.logger.debug(formatIcqqMetaLog(event));

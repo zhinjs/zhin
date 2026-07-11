@@ -2,9 +2,8 @@
  * 将 core keyboard 段转为 qq-official-bot 可识别的 button / markdown 段。
  * @see https://bot.q.qq.com/wiki/develop/api-v2/server-inter/message/trans/msg-btn.html
  */
-import type { ButtonData, KeyboardSegmentData } from "zhin.js";
-import type { MessageSegment, SendContent } from "zhin.js";
-import { isKeyboardSegment, KeyboardSegment } from "zhin.js";
+import { isKeyboardSegment, KeyboardSegment, type ButtonData, type KeyboardSegmentData, type MessageSegment, type SendContent } from 'zhin.js';
+
 
 function asKeyboardData(item: unknown): KeyboardSegmentData | null {
   if (item instanceof KeyboardSegment) return item.data;

@@ -1,5 +1,5 @@
-import { htmlToSvg, getAllBuiltinFonts, h } from '@zhin.js/satori';
-import type { HtmlComponent } from '@zhin.js/satori';
+import { htmlToSvg, getAllBuiltinFonts, h, type HtmlComponent } from '@zhin.js/satori';
+
 import { Resvg } from '@resvg/resvg-js';
 import type {
   FontConfig,

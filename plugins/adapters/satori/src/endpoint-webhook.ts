@@ -5,8 +5,8 @@ import { EventEmitter } from 'events';
 import { formatCompact, Endpoint, Message, segment, SendOptions,} from 'zhin.js';
 import { registerFetchRoute, type Router, type RouterContext } from '@zhin.js/host-router/router';
 import { callSatoriApi } from './api.js';
-import type { SatoriWebhookConfig, SatoriEventBody, SatoriLogin } from './types.js';
-import { SatoriOpcode } from './types.js';
+import { SatoriOpcode, type SatoriWebhookConfig, type SatoriEventBody, type SatoriLogin } from './types.js';
+
 import type { SatoriAdapter } from './adapter.js';
 import { formatSatoriMessagePayload, isMessageEvent } from './utils.js';
 
@@ -49,7 +49,7 @@ export class SatoriWebhookEndpoint extends EventEmitter implements Endpoint<Sato
       ctx.status = 200;
       ctx.body = {};
     });
-    this.logger.info(formatCompact( { op: 'webhook', path }));
+    this.logger.debug(formatCompact( { op: 'webhook', path }));
   }
 
   async $disconnect(): Promise<void> {

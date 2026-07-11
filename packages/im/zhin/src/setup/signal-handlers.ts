@@ -1,15 +1,37 @@
 import type { Plugin } from '@zhin.js/core';
-import { formatCompact } from '@zhin.js/logger';
 import { registerGracefulShutdown, gracefulShutdown } from '../shutdown.js';
+import { emitStartupSummary } from './startup-summary.js';
+import type { AppConfig } from '../types.js';
+
+export interface SignalHandlerOptions {
+  configPath?: string;
+  appConfig?: AppConfig;
+}
 
 /**
  * 启动核心上下文并注册优雅关闭与异常处理
  * 使用 ADR 0013 优雅关闭协议（带硬超时和任务 drain）。
  */
-export async function registerSignalHandlers(plugin: Plugin): Promise<void> {
+export async function registerSignalHandlers(
+  plugin: Plugin,
+  options: SignalHandlerOptions = {},
+): Promise<void> {
   const { start, logger } = plugin;
 
   await start();
+
+  if (options.configPath && options.appConfig) {
+    try {
+      await emitStartupSummary(plugin, {
+        configPath: options.configPath,
+        appConfig: options.appConfig,
+      });
+    } catch (error) {
+      logger.warn(
+        `Startup summary failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
 
   // 使用 ADR 0013 优雅关闭（10s 硬超时 + 任务 drain）
   registerGracefulShutdown(plugin);

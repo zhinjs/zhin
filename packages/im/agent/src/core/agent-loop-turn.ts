@@ -9,17 +9,7 @@ export type {
   AgentLoopVisionTurnResult,
 } from './agent-core-run.js';
 
-import type {
-  AgentLoopTurnInput,
-  AgentLoopTurnResult,
-  AgentLoopVisionTurnInput,
-  AgentLoopVisionTurnResult,
-} from './agent-core-run.js';
-import {
-  collectAgentLoopTurnRun,
-  runAgentLoopTextTurnRun,
-  runAgentLoopVisionTurnRun,
-} from './agent-core-run.js';
+import { collectAgentLoopTurnRun, runAgentLoopTextTurnRun, runAgentLoopVisionTurnRun, type AgentLoopTurnInput, type AgentLoopTurnResult, type AgentLoopVisionTurnInput, type AgentLoopVisionTurnResult } from './agent-core-run.js';
 
 export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<AgentLoopTurnResult> {
   if (input.core) {

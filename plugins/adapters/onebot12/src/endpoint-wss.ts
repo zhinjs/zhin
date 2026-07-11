@@ -78,7 +78,7 @@ export class OneBot12WssServer extends EventEmitter implements Endpoint<OneBot12
       }
       this.#client = ws;
       this.$connected = true;
-      this.logger.info(formatCompact({ endpoint: this.$config.name, mode: 'wss' }));
+      this.logger.debug(formatCompact({ endpoint: this.$config.name, mode: 'wss' }));
 
       ws.on('message', (data) => {
         try {

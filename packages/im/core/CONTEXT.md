@@ -56,6 +56,14 @@ _避免使用_：双格式 text+html 回退；Endpoint 层重复做 semantic 转
 由配置服务标记的主应用配置，运行时通过默认约定和用户差异 deep merge 得到。
 _避免使用_：zhin.config.yml、raw config file
 
+**Side Event**:
+非聊天入站的 IM 事件，分 **Notice**（只读通知）与 **Request**（可 `$approve`/`$reject`）。统一字段 `$foo_bar`；`$type` 仅存命名空间（`notice`/`request`），`$scene_id` + `$scene_type` + `$sub_type` 组合完整名。
+_避免使用_：side event、notification event（泛指）
+
+**Side Event Type**:
+完整类型名由 `formatSideEventName(event)` 生成，格式 `${$type}.${$scene_type}.${$sub_type}`（如 `notice.group.member_increase`、`request.friend.add`）。消费者用 `matchesSideEventName(event, 'notice.group.recall')` 匹配。
+_避免使用_：notice_type 字符串混用、在 `$type` 内嵌完整三段名
+
 ## 关系
 
 - 一个 **Adapter** 持有零个或多个 **Endpoint**，并声明自身支持的 **Endpoint Capability** 上限。

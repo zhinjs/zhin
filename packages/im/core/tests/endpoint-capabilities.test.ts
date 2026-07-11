@@ -1,18 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { Plugin } from '../src/plugin.js';
 import { Adapter } from '../src/adapter.js';
-import type { OutboundEndpoint } from '../src/endpoint-capabilities.js';
-import {
-  resolveEndpointCapabilities,
-  registerEndpointCapabilities,
-  hasInbound,
-  hasOutbound,
-  assertInbound,
-  assertOutbound,
-  InboundNotSupportedError,
-  OutboundNotSupportedError,
-  type InboundEndpoint,
-} from '../src/endpoint-capabilities.js';
+import { resolveEndpointCapabilities, registerEndpointCapabilities, hasInbound, hasOutbound, assertInbound, assertOutbound, InboundNotSupportedError, OutboundNotSupportedError, type OutboundEndpoint, type InboundEndpoint } from '../src/endpoint-capabilities.js';
+
 import { connectEndpointInstance } from '../src/built/connect-endpoint-instance.js';
 
 describe('endpoint-capabilities', () => {

@@ -1,12 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { createUserMessage } from '../../src/llm/types/agent-message.js';
+import { createUserMessage, type AgentMessage } from '../../src/llm/types/agent-message.js';
 import {
   findKeepRecentStartIndex,
   snapCompactionStartIndex,
 } from '../../src/compaction/agent-message-tokens.js';
 import { repairAgentMessagesForLlm } from '../../src/llm/repair-agent-messages.js';
 import { agentMessagesToOpenAi } from '../../src/llm/convert/openai-bridge.js';
-import type { AgentMessage } from '../../src/llm/types/agent-message.js';
 
 function assistantWithToolCall(id: string, name = 'echo'): AgentMessage {
   return {

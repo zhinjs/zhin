@@ -2,18 +2,14 @@
  * AI SDK streamText ↔ pi AssistantMessageEventStream bridge (ADR 0018).
  */
 
-import { generateText, streamText, type SystemModelMessage } from 'ai';
+import { generateText, streamText, type SystemModelMessage, type LanguageModel } from 'ai';
 import { formatCompact, Logger } from '@zhin.js/logger';
-import type { LanguageModel } from 'ai';
-import {
-  createAssistantMessageEventStream,
-  type StreamFn,
-  type StreamOptions,
-} from '../api-registry.js';
+
+import { createAssistantMessageEventStream, getProviderConfig, type StreamFn, type StreamOptions } from '../api-registry.js';
 import type { Model } from '../types/model.js';
 import type { Context } from '../types/context.js';
-import type { AssistantMessage } from '../types/agent-message.js';
-import { EMPTY_TOKEN_USAGE } from '../types/agent-message.js';
+import { EMPTY_TOKEN_USAGE, type AssistantMessage } from '../types/agent-message.js';
+
 import { formatRedactedJson } from '../redact-request-body.js';
 import { contextToAiSdkPrompt, llmToolsToAiSdk } from './ai-sdk-messages.js';
 import {
@@ -25,7 +21,6 @@ import {
 } from './ai-sdk-prompt-cache.js';
 import { getLanguageModel } from '../language-model-store.js';
 import { ensureLanguageModelRegistered } from '../register-api-layer.js';
-import { getProviderConfig } from '../api-registry.js';
 
 const llmContextLogger = new Logger(null, 'LLM');
 

@@ -1,8 +1,8 @@
 /**
  * 合并转发（聊天记录）解析：从 json/xml 提取 resid，经 IPC get_forward_msg 拉取正文。
  */
-import type { MessageSegment, QuotedMessagePayload } from "zhin.js";
-import { segment } from "zhin.js";
+import { segment, type MessageSegment, type QuotedMessagePayload } from 'zhin.js';
+
 import { Actions } from "./protocol.js";
 import type { IpcClient } from "./ipc-client.js";
 import {

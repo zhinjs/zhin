@@ -44,8 +44,8 @@ import { downloadMediaFromItem } from "./media-download.js";
 import { sendMessageWeixin } from "./weixin-send.js";
 import { sendWeixinMediaFile } from "./weixin-send-media.js";
 import { materializeOutboundMedia, segmentMediaRef } from "./outbound-media.js";
-import type { MessageItem, WeixinMessage } from "./ilink-types.js";
-import { MessageItemType } from "./ilink-types.js";
+import { MessageItemType, type MessageItem, type WeixinMessage } from './ilink-types.js';
+
 import { getExtensionFromMime, sniffMimeFromBuffer } from "./mime.js";
 import type { WeixinInboundMediaOpts } from "./weixin-inbound.js";
 import type { WeixinIlinkEndpointConfig } from "./types.js";

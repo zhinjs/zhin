@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import type { ContentPart } from '@zhin.js/ai';
+import { OpenAIProvider, type ContentPart } from '@zhin.js/ai';
 import { buildSubagentInboundTask } from '../../src/media/subagent-inbound.js';
 import { DEFAULT_MULTIMODAL_CONFIG } from '../../src/media/media-types.js';
-import { OpenAIProvider } from '@zhin.js/ai';
+
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';

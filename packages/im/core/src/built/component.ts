@@ -2,11 +2,10 @@
  * ComponentFeature
  * 管理所有插件注册的组件，继承自 Feature 抽象类
  */
-import { Feature, FeatureJSON } from "@zhin.js/kernel";
+import { Feature, FeatureJSON, type PluginLike } from '@zhin.js/kernel';
 import { Component, renderComponents } from "../component.js";
 import { SendOptions, MaybePromise } from "../types.js";
 import { Plugin } from "../plugin.js";
-import type { PluginLike } from '@zhin.js/kernel';
 
 type Listener = (options: SendOptions) => MaybePromise<SendOptions>;
 

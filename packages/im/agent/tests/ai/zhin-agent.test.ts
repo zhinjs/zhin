@@ -5,11 +5,10 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ZhinAgent } from '@zhin.js/agent';
-import { Plugin, SkillFeature } from '@zhin.js/core';
+import { Plugin, SkillFeature, type AIProvider, type AgentTool, type ContentPart, type Tool, type Message } from '@zhin.js/core';
 import { resetLlmApiRegistryForTests } from '@zhin.js/ai';
 import { wireMockProviderToLlmApi } from '../helpers/mock-llm-api.js';
-import type { AIProvider, AgentTool, ContentPart } from '@zhin.js/core';
-import type { Tool, Message } from '@zhin.js/core';
+
 
 // Mock AIProvider
 function createMockProvider(response: string = '你好！'): AIProvider {

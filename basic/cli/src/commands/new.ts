@@ -130,7 +130,7 @@ export const newCommand = new Command('new')
       logger.log(`  pnpm exec zhin pub ${name}`);
       logger.log(`  # 或嵌套目录: pnpm exec zhin pub adapters/<适配器名>`);
       logger.log('');
-      logger.log('🤖 AI 技能：可编辑 plugins/' + name + '/skills/' + name + '/SKILL.md（随 npm 包发布）');
+      logger.log('🤖 AI 技能：可编辑 plugins/' + name + '/agent/skills/' + name + '.md（随 npm 包发布）');
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -162,7 +162,7 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
   }
   await fs.ensureDir(path.join(pluginDir, 'lib'));
   await fs.ensureDir(path.join(pluginDir, 'tests'));
-  await fs.ensureDir(path.join(pluginDir, 'skills', pluginName));
+  await fs.ensureDir(path.join(pluginDir, 'agent', 'skills'));
 
   const zhinStack =
     tryZhinWorkspaceDevDependencies() ??
@@ -199,7 +199,7 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
     exportsMap['./client'] = { import: './dist/index.js' };
   }
 
-  const files = ['src', 'lib', 'skills', 'plugin.yml', 'README.md', 'CHANGELOG.md'];
+  const files = ['src', 'lib', 'agent', 'plugin.yml', 'README.md', 'CHANGELOG.md'];
   if (withClient) files.push('client', 'dist');
 
   const peerDependencies: Record<string, string> = { 'zhin.js': '>=1.0.0' };
@@ -214,10 +214,17 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
     peerDependenciesMeta['@zhin.js/host-router'] = { optional: true };
   }
 
+  peerDependencies['@zhin.js/agent'] = '>=1.0.0';
+  peerDependencies['zod'] = '>=3.0.0';
+  peerDependenciesMeta['@zhin.js/agent'] = { optional: true };
+  peerDependenciesMeta['zod'] = { optional: true };
+
   const devDependencies: Record<string, string> = {
     '@types/node': 'latest',
     typescript: 'latest',
     ...zhinStack,
+    '@zhin.js/agent': zhinStack['zhin.js'] === 'workspace:*' ? 'workspace:*' : 'latest',
+    zod: 'latest',
     '@zhin.js/satori': zhinStack['zhin.js'] === 'workspace:*' ? 'workspace:*' : 'latest',
     vitest: 'latest',
     '@vitest/coverage-v8': 'latest',
@@ -306,7 +313,7 @@ version: 0.1.0
       "jsxImportSource": "zhin.js",
       "types": ["node"]
     },
-    "include": ["src/**/*"],
+    "include": ["src/**/*", "agent/**/*"],
     "exclude": ["lib", "node_modules", "client"]
   } 
   ;
@@ -517,7 +524,7 @@ export type { ${capitalizedName}EndpointConfig } from './endpoint.js';
   } else {
     const indexNormal = `import { formatCompact, MessageCommand, onDispose, segment, useContext, usePlugin, ZhinTool } from 'zhin.js';
 import path from 'node:path';
-import { PageManager } from '@zhin.js/host-api';
+
 import { buildWelcomeCard } from './cards/welcome-card.js';
 
 const { addCommand, addTool, logger } = usePlugin();
@@ -663,9 +670,9 @@ pnpm add ${packageName}
 
 ${readmeUse}
 
-## AI 技能（SKILL.md）
+## AI 技能（agent/skills）
 
-本包包含 \`skills/${pluginName}/SKILL.md\`。请按实际能力修改 \`description\` / \`tools\` 等 frontmatter。
+本包包含 `agent/skills/${pluginName}.md`。请按实际能力修改 `description` / `tools` 等 frontmatter。平台 Permit 词汇可写在 `agent/PERMITS.md`（维护者参考，不参与自动发现）。
 
 ## 开发
 
@@ -700,7 +707,7 @@ tools: []
 
 - 通过本插件注册的 \`${pluginName}_*\` 等工具完成具体任务；请根据实际工具名与参数补充说明。
 `;
-  await fs.writeFile(path.join(pluginDir, 'skills', pluginName, 'SKILL.md'), skillMdContent);
+  await fs.writeFile(path.join(pluginDir, 'agent', 'skills', `${pluginName}.md`), skillMdContent);
   
   // 创建 CHANGELOG.md
   const changelogContent = `# ${packageName}
@@ -771,8 +778,7 @@ async function generateTestFiles(
  */
 async function generatePluginTest(testsDir: string, pluginName: string, capitalizedName: string) {
   const testContent = `import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { formatCompact, Plugin } from 'zhin.js'
-
+import { formatCompact, Plugin } from 'zhin.js';
 describe('${capitalizedName} Plugin', () => {
   let plugin: Plugin
   let rootPlugin: Plugin
@@ -913,7 +919,7 @@ async function generateAdapterTest(
   camelId: string,
 ) {
   const testContent = `import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { formatCompact, Plugin } from 'zhin.js';
+
 import { ${capitalizedName}Adapter } from '../src/adapter.js';
 import { ${capitalizedName}Endpoint } from '../src/endpoint.js';
 

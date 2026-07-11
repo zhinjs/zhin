@@ -183,6 +183,10 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       }
 
       if (!text) {
+        // spawn_task 委派时主回合 finalReply 为空；投递由 auto-continue + proactive 出站完成。
+        if (timeContext && typeof deps.agent.waitForIdle === 'function') {
+          await deps.agent.waitForIdle();
+        }
         dispatchSchedule('schedule.finish');
         return { success: true, responseText: '', durationMs: Date.now() - t0, executionPlan: resultPlan };
       }

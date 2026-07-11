@@ -1,5 +1,4 @@
-import type { MessageElement } from "zhin.js";
-import { readMentionSegmentTarget } from "zhin.js";
+import { readMentionSegmentTarget, type MessageElement } from 'zhin.js';
 
 function segmentAtId(seg: MessageElement): string {
   return readMentionSegmentTarget(seg);

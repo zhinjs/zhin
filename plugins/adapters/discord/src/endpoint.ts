@@ -39,8 +39,8 @@ import {
 } from 'zhin.js';
 import type { DiscordGatewayConfig, DiscordChannelMessage } from "./types.js";
 import type { DiscordAdapter } from "./adapter.js";
-import { createReadStream } from "fs";
-import { promises as fs } from "fs";
+import { createReadStream, promises as fs } from 'fs';
+
 import path from "path";
 import { fromCanonicalSegments, toCanonicalSegments } from './segment-mapper.js';
 

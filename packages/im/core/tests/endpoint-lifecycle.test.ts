@@ -3,6 +3,7 @@ import { Plugin } from '../src/plugin.js';
 import { Adapter } from '../src/adapter.js';
 import type { Endpoint } from '../src/endpoint.js';
 import { emitEndpointLifecycle } from '../src/built/endpoint-lifecycle.js';
+import { formatSideEventName } from '../src/side-event/base.js';
 import { registerEndpointCapabilities } from '../src/endpoint-capabilities.js';
 
 class LifecycleTestEndpoint implements Endpoint {
@@ -50,7 +51,13 @@ describe('emitEndpointLifecycle', () => {
     );
     expect(noticeSpy).toHaveBeenCalledWith(
       'notice.receive',
-      expect.objectContaining({ $type: 'endpoint.lifecycle', $subType: 'connect' }),
+      expect.objectContaining({
+        $type: 'notice',
+        $scene_type: 'endpoint',
+        $sub_type: 'connect',
+      }),
     );
+    const notice = noticeSpy.mock.calls[0][1];
+    expect(formatSideEventName(notice)).toBe('notice.endpoint.connect');
   });
 });

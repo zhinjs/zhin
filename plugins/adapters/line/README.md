@@ -58,6 +58,16 @@ LINE 要求 Webhook URL 以 HTTPS 开头。常见方案：
 | location | location | 位置信息 |
 | sticker | sticker | 贴纸 |
 
+## AI 工具
+
+| 类别 | 路径 |
+|------|------|
+| Permit 词汇 | `agent/PERMITS.md` |
+| 平台工具（2 个） | `agent/tools/`（`line_get_profile`、`line_get_group_members`） |
+| 技能说明 | `agent/skills/line.md` |
+| 群管标准工具 | 覆写 `ISceneManagement` 后由 `createSceneManagementTools()` 注册 |
+
+
 ## 已知限制
 
 - **不支持消息撤回**：LINE Messaging API 不提供撤回已发送消息的接口

@@ -101,7 +101,7 @@ export type {
 } from '../config/agent-interfaces.js';
 export type { ZhinAgentTurnMetrics, ZhinAgentTurnPath } from '../turn/turn-metrics.js';
 export { PromptAccessDeniedError } from '../turn/prompt-access.js';
-export { formatAiHandlerCompleteLog, formatZhinAgentTurnUsage } from '../turn/turn-metrics.js';
+export { formatAiHandlerCompleteLog, formatAiHandlerTurnTable, formatZhinAgentTurnUsage } from '../turn/turn-metrics.js';
 export * from '../prompt/prompt-builder.js';
 export * from '../prompt/templates.js';
 export * from '../turn/task-continuation.js';
@@ -578,7 +578,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     this.deferredAutoContinueDepthBySession.clear();
     this.deferredCatalog = [];
     this.lastTurnMetrics = null;
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- disposed, fields intentionally nulled
+     
     this.provider = null!;
     this.providerResolver = null;
     clearZhinAgentRuntimeModules(this.runtimeModules);

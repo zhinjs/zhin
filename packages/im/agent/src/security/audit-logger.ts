@@ -486,7 +486,7 @@ export function getAuditLogger(): AuditLogger {
   if (!globalAuditLogger) {
     const host = getHostRootPlugin();
     if (host) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const config = (host.inject('config') as any)?.getPrimary?.()?.ai?.agent?.audit;
       globalAuditLogger = new AuditLogger(config);
     } else {

@@ -1,19 +1,9 @@
 /**
  * Thin REST transport wrapper over A2ARequestHandler.
  */
-import type {
-  CancelTaskRequest,
-  GetTaskRequest,
-  ListTasksRequest,
-  SendMessageRequest,
-} from '@a2a-js/sdk';
-import {
-  RequestMalformedError,
-  UnsupportedOperationError,
-} from '@a2a-js/sdk/server';
-import type { A2ARequestHandler } from '@a2a-js/sdk/server';
-import type { ServerCallContext } from '@a2a-js/sdk/server';
-import { TaskState } from '@a2a-js/sdk';
+import { TaskState, type CancelTaskRequest, type GetTaskRequest, type ListTasksRequest, type SendMessageRequest } from '@a2a-js/sdk';
+import { RequestMalformedError, UnsupportedOperationError, type A2ARequestHandler, type ServerCallContext } from '@a2a-js/sdk/server';
+
 
 export class RestTransportHandler {
   constructor(private readonly requestHandler: A2ARequestHandler) {}

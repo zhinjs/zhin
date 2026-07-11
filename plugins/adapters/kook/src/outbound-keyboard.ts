@@ -1,8 +1,7 @@
 /**
  * core keyboard 段 → KOOK 卡片消息（action-group + button）
  */
-import type { KeyboardSegmentData, MessageElement } from "zhin.js";
-import { KeyboardSegment, isKeyboardSegment } from "zhin.js";
+import { KeyboardSegment, isKeyboardSegment, type KeyboardSegmentData, type MessageElement } from 'zhin.js';
 
 function asKeyboardElement(
   el: MessageElement,

@@ -9,18 +9,7 @@
  * 5. 命令模式生成
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { 
-  ZhinTool, 
-  defineTool, 
-  isZhinTool,
-  extractParamInfo,
-  canAccessTool,
-  roleSatisfies,
-  checkBuiltinPermitList,
-  registerDefaultScenePlatformPermitChecker,
-  clearPlatformPermitCheckers,
-} from '@zhin.js/core';
-import type { Tool } from '@zhin.js/core';
+import { ZhinTool, defineTool, isZhinTool, extractParamInfo, canAccessTool, roleSatisfies, checkBuiltinPermitList, registerDefaultScenePlatformPermitChecker, clearPlatformPermitCheckers, type Tool } from '@zhin.js/core';
 
 beforeEach(() => {
   registerDefaultScenePlatformPermitChecker('qq');

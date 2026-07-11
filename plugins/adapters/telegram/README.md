@@ -166,6 +166,15 @@ You can send files using:
 - URL
 - Local file path
 
+## AI tools
+
+| Kind | Path |
+|------|------|
+| Platform tools (10) | `agent/tools/` (`telegram_*`: invites, pins, admins, stickers, etc.) |
+| Skill doc | `agent/skills/telegram.md` |
+| Scene management | `createSceneManagementTools()` |
+
+
 ## Troubleshooting
 
 | 现象 | 排查 |

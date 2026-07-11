@@ -1,7 +1,7 @@
-import {Dialect} from "../base/index.js";
+import { Dialect, Database } from '../base/index.js';
 import {KeyValueDatabase} from "../type/keyvalue/database.js";
 import {Registry} from "../registry.js";
-import {Database} from "../base/index.js";
+
 import type { RedisClientOptions } from 'redis';
 import { 
   BuildQueryResult, 

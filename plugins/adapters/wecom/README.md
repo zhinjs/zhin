@@ -258,6 +258,16 @@ A: 检查：
 - [企业微信发送应用消息](https://developer.work.weixin.qq.com/document/path/90236)
 - [Zhin.js 官方文档](https://github.com/zhinjs/zhin)
 
+## AI 工具
+
+| 类别 | 路径 |
+|------|------|
+| Permit 词汇 | `agent/PERMITS.md` |
+| 平台工具（4 个） | `agent/tools/`（`wecom_*`：用户、部门、发消息等） |
+| 技能说明 | `agent/skills/wecom.md` |
+| 群管标准工具 | 按平台能力由 `createSceneManagementTools()` 注册 |
+
+
 ## 许可证
 
 MIT License

@@ -2,8 +2,8 @@
  * ZhinA2AExecutor — runs inbound A2A tasks via bound ZhinAgent.
  */
 import { randomUUID } from 'node:crypto';
-import type { Task } from '@a2a-js/sdk';
-import { TaskState } from '@a2a-js/sdk';
+import { TaskState, type Task } from '@a2a-js/sdk';
+
 import {
   AgentEvent,
   type AgentExecutor,

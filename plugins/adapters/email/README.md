@@ -141,6 +141,11 @@ root.addMiddleware(async (message, next) => {
 
 建议使用环境变量存储邮箱密码，勿提交到版本库。
 
+## AI 工具
+
+技能说明见 `agent/skills/email.md`（收发邮件约束与工具列表）。
+
+
 ## 文档链接
 
 - [Email 适配器文档](https://zhin.js.org/adapters/email)

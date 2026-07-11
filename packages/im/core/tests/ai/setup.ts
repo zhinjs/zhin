@@ -7,8 +7,7 @@
  * - 公共测试配置
  */
 import { vi } from 'vitest';
-import type { Message, MessageElement, Tool, ToolContext } from '@zhin.js/core';
-import type { AIConfig, ChatMessage } from '@zhin.js/core';
+import { type Message, type MessageElement, type Tool, type ToolContext, type AIConfig, type ChatMessage } from '@zhin.js/core';
 
 // ============================================================================
 // Logger Mock

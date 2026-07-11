@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { clearZonedClockCache } from '../src/utils/zoned-clock.js';
 import { getDatePartsInTimezone, getTimezoneOffsetMs } from '../src/utils/timezone.js';
 
 const TZ = 'Asia/Shanghai';
@@ -18,9 +19,11 @@ function mockDateTimeFormat(
 describe('timezone branch coverage', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    clearZonedClockCache();
   });
 
   it('uses fallbacks when formatToParts omits optional fields', () => {
+    clearZonedClockCache();
     mockDateTimeFormat(() => [{ type: 'year', value: '2025' }], () => '2025-01-01');
 
     const parts = getDatePartsInTimezone(new Date('2025-01-01T00:00:00Z'), TZ);
@@ -38,6 +41,7 @@ describe('timezone branch coverage', () => {
   });
 
   it('maps unknown weekday labels to Sunday', () => {
+    clearZonedClockCache();
     mockDateTimeFormat(() => [
       { type: 'year', value: '2025' },
       { type: 'month', value: '6' },

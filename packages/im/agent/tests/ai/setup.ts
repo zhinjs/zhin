@@ -4,8 +4,7 @@
  * 通用 AI mocks 从 @zhin.js/ai 测试 setup 导入
  */
 import { vi } from 'vitest';
-import type { Message, MessageElement, Tool } from '@zhin.js/core';
-import type { AIConfig } from '@zhin.js/core';
+import { type Message, type MessageElement, type Tool, type AIConfig } from '@zhin.js/core';
 
 // Import and re-export generic AI mocks from ai package tests
 import {

@@ -30,6 +30,7 @@ pnpm check:architecture     # 检查架构层级
 pnpm check:doc-links        # 检查文档相对链接（AGENTS、architecture 等）
 pnpm check:adapter-docs     # 适配器 README 与 docs/adapters 是否同步
 pnpm sync:adapter-docs      # 从 plugins/adapters/*/README 生成 docs/adapters/*
+pnpm check:plugin-agent-publish  # 带 agent/ 的插件 package.json files / prepublishOnly
 pnpm check:stable           # Stable smoke（Sandbox + minimal-bot 契约，无 LLM）
 ```
 

@@ -41,6 +41,19 @@ pnpm dev
 | Plugins | `@zhin.js/adapter-sandbox`、`@zhin.js/host-router`、`@zhin.js/host-api`、`hello` |
 | `ai.agent.toolSearch` | `false`（Advanced 能力在 test-bot 验证） |
 
+### 插件 `agent/` 示例（可选）
+
+启用 AI 后，本地 `hello` 插件自带最简 Eve 风格 authoring 树，可作为复制模板：
+
+```text
+src/plugins/hello/agent/
+├── agent.ts           # defineAgent()
+├── instructions.md    # 可选系统提示
+└── tools/echo.ts      # defineTool() → 运行时名 hello_echo
+```
+
+详见 [agent-authoring.md](../../docs/advanced/agent-authoring.md)。完整试点见 [`plugins/utils/lottery/agent/`](../../plugins/utils/lottery/agent/)。
+
 ### 三层记忆目录（可选）
 
 首次运行后可在 `data/memory/` 下维护 Markdown（见 [配置 — 三层文件记忆](../../docs/essentials/configuration.md)）：

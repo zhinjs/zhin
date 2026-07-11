@@ -55,7 +55,37 @@ declare module 'zhin.js' {
 
 ## AI 能力（Tool / Skill / Agent）
 
-三级 AI 能力注册，均跟随插件生命周期自动清理：
+三级 AI 能力注册，均跟随插件生命周期自动清理。
+
+> **推荐**：插件包内用 **`agent/`** 目录（`defineTool`、`defineSkill` 等），由框架 `discoverPluginAgentSurface` 自动发现。约定见仓库文档 [docs/advanced/agent-authoring.md](../../../docs/advanced/agent-authoring.md)。下文 `addTool`、`skills/` 适用于简单场景或尚未迁移的遗留代码。
+
+### 插件创作面（agent/，推荐）
+
+```text
+plugins/my-plugin/
+├── agent/
+│   ├── agent.ts              # 可选 defineAgent()
+│   ├── instructions.md       # 可选系统提示
+│   ├── tools/sync.ts         # defineTool → my_plugin_sync
+│   └── skills/my-plugin.md   # 按需技能说明
+├── evals/smoke.eval.ts       # 可选 defineEval
+└── src/index.ts
+```
+
+```typescript
+// agent/tools/sync.ts
+import { defineTool } from '@zhin.js/agent/tools';
+import { z } from 'zod';
+
+export default defineTool({
+  description: '同步数据',
+  parameters: z.object({ force: z.boolean().optional() }),
+  execute: async ({ force }) => { /* ... */ },
+});
+```
+
+- `@zhin.js/agent` / `zod` 为 **optional** `peerDependencies`（IM-only 可不装）；monorepo 放 `devDependencies`，勿写进 `dependencies`
+- 发布 npm 前须 `prepublishOnly: "npm run build"` 且 `files` 含 `agent`、`lib`；本地验证 `pnpm check:plugin-agent-publish`
 
 ### Tool（单个 AI 可调用能力）
 
@@ -138,27 +168,19 @@ export default async function(args: { expression: string }) {
 - 文件化 Tool 支持热重载（修改 .tool.md 即时生效）
 - 搜索顺序：`cwd/tools/` > `~/.zhin/tools/` > `data/tools/` > 插件包 `tools/`
 
-### Skill（标准 SKILL.md 文件，框架自动发现）
+### Skill（技能说明）
 
-把 SKILL.md 放在插件包的 `skills/<name>/SKILL.md`，框架自动扫描、注册、按需加载：
+#### 推荐：`agent/skills/*.md`
 
-```
-plugins/my-plugin/
-├── src/
-│   └── index.ts
-└── skills/
-    └── math/
-        └── SKILL.md
-```
+与 `agent/tools/` 配套，放平台/领域说明。frontmatter 示例：
 
-SKILL.md 标准格式：
 ```markdown
 ---
 name: math
 description: 数学计算相关能力
 keywords: [计算, 数学, 算术]
 tags: [utility]
-tools: [calculator, unit_convert]
+tools: [my_plugin_calculator]
 always: false
 ---
 
@@ -166,10 +188,13 @@ always: false
 使用计算器工具处理用户的数学表达式...
 ```
 
-- `tools` 声明关联的工具名，框架自动与 `addTool()` 注册的工具匹配
-- `always: true` 时技能指令常驻注入 system prompt，无需 `activate_skill` 激活
-- `keywords` 用于 AI 粗筛匹配，命中时自动注入 `activate_skill` 工具
-- 发现顺序：`cwd/skills/` → `~/.zhin/skills/` → `.agents/skills/`（向上至 git 根）→ 插件包 `skills/` → `zhin packages` 目录（**无** `data/skills/`）
+- `tools` 关联 `agent/tools/` 注册的运行时名（含插件前缀，如 `my_plugin_calculator`）
+- `always: true` 时技能指令常驻注入 system prompt
+- 见 [agent-authoring.md](../../../docs/advanced/agent-authoring.md)
+
+#### 遗留：`skills/<name>/SKILL.md`
+
+工作区或尚未迁移的插件仍可使用包内 `skills/<name>/SKILL.md`；**新插件勿再新增此目录**。框架故意保留与 `agent/skills` 并行扫描；同一 `name` 勿维护两套。见 [agent-authoring.md](../../../docs/advanced/agent-authoring.md#与遗留-skills-并存框架能力)。
 
 ### Agent 预设（标准 *.agent.md 文件，框架自动发现）
 

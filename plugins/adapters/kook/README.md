@@ -286,6 +286,7 @@ await endpoint.$removeReaction(message.$id, reactionId)
 
 ## 🔧 频道管理工具（AI 可调用）
 
+
 适配器自动注册了一系列频道管理工具，这些工具可以被 AI 调用，实现智能化的频道管理。
 
 ### 权限要求

@@ -172,6 +172,8 @@ export function matchesCron(fields: CronFields, date: Date, timezone: string): b
   return secondMatch && minuteMatch && hourMatch && monthMatch && dayMatch;
 }
 
+import { getZonedClock } from '../utils/zoned-clock.js';
+
 export function getCronDateParts(
   date: Date,
   timezone: string,
@@ -183,39 +185,5 @@ export function getCronDateParts(
   month: number;
   dayOfWeek: number;
 } {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    second: 'numeric',
-    minute: 'numeric',
-    hour: 'numeric',
-    day: 'numeric',
-    month: 'numeric',
-    weekday: 'short',
-    hour12: false,
-  });
-
-  const parts = formatter.formatToParts(date);
-  const lookup = (type: string) =>
-    parseInt(parts.find((p) => p.type === type)?.value ?? '0', 10);
-
-  const weekdayMap: Record<string, number> = {
-    Sun: 0,
-    Mon: 1,
-    Tue: 2,
-    Wed: 3,
-    Thu: 4,
-    Fri: 5,
-    Sat: 6,
-  };
-
-  const weekday = parts.find((p) => p.type === 'weekday')?.value ?? 'Sun';
-
-  return {
-    second: lookup('second'),
-    minute: lookup('minute'),
-    hour: lookup('hour') % 24,
-    day: lookup('day'),
-    month: lookup('month'),
-    dayOfWeek: weekdayMap[weekday] ?? 0,
-  };
+  return getZonedClock(timezone).cronPartsAt(date);
 }

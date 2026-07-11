@@ -3,8 +3,8 @@ import path from "node:path";
 
 import { logger } from "./ilink-logger.js";
 import { generateId } from "./ilink-random.js";
-import type { WeixinMessage, MessageItem } from "./ilink-types.js";
-import { MessageItemType } from "./ilink-types.js";
+import { MessageItemType, type WeixinMessage, type MessageItem } from './ilink-types.js';
+
 import { resolveStateDir } from "./credentials.js";
 
 // ---------------------------------------------------------------------------

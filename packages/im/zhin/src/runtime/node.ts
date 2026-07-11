@@ -8,6 +8,7 @@ import { registerHtmlRenderer } from '../setup/register-html-renderer.js';
 import { registerSpeech } from '../setup/register-speech.js';
 import { registerCoreServices } from '../setup/register-core-services.js';
 import { registerSignalHandlers } from '../setup/signal-handlers.js';
+import { markBootstrapStart, markBootstrapPhase } from '../setup/startup-summary.js';
 import { registerUnifiedInboxMessageListeners } from '../setup/register-inbox.js';
 import { registerChatMessageStore } from '../setup/register-chat-message-store.js';
 import { chdirToProjectRoot, resolveConfigPath } from './shared.js';
@@ -37,6 +38,7 @@ function registerStdinLoginAssist(plugin: Plugin): void {
  * Node / Bun Host 启动（与 legacy setup.ts 同序）；`registerSignalHandlers` 内调用 `plugin.start()`。
  */
 export async function bootstrapNode(options: BootstrapOptions = {}): Promise<BootstrapNodeResult> {
+  markBootstrapStart();
   const envRoot = process.env.ZHIN_PROJECT_ROOT?.trim();
   const root = options.projectRoot ?? envRoot;
   if (root) {
@@ -49,7 +51,9 @@ export async function bootstrapNode(options: BootstrapOptions = {}): Promise<Boo
 
   registerCoreServices(plugin, appConfig, configFeature);
   applyConfigAndDatabase(plugin, appConfig);
+  markBootstrapPhase('db');
   await registerAI();
+  markBootstrapPhase('ai');
   await registerHtmlRenderer(plugin, appConfig);
   await registerSpeech(plugin, appConfig);
   registerStdinLoginAssist(plugin);
@@ -58,7 +62,7 @@ export async function bootstrapNode(options: BootstrapOptions = {}): Promise<Boo
   await loadPlugins(plugin, appConfig);
   registerUnifiedInboxMessageListeners(plugin, appConfig);
   registerChatMessageStore(plugin, appConfig);
-  await registerSignalHandlers(plugin);
+  await registerSignalHandlers(plugin, { configPath, appConfig });
 
   return { plugin, configFeature, appConfig, configPath };
 }

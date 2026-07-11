@@ -1,0 +1,74 @@
+{
+  "name": "@zhin.js/plugin-lottery",
+  "version": "1.0.0",
+  "description": "Multi-game lottery analysis for Zhin.js — KL8, SSQ, DLT, FC3D, PL3, PL5 with stats, cron sync, and daily recommendations",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "lib",
+    "agent",
+    "evals",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "test": "sh -c 'cd ../../.. && vitest run plugins/utils/lottery/tests'",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "bot",
+    "plugin",
+    "lottery",
+    "caipiao",
+    "kl8",
+    "ssq",
+    "dlt"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "zhin.js": "workspace:*",
+    "@zhin.js/agent": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "zhin.js": "workspace:*",
+    "@zhin.js/agent": "workspace:*",
+    "zod": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/agent": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "plugins/utils/lottery"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

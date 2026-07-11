@@ -126,6 +126,7 @@ export interface AgentLoopTurnResult {
   iterations: number;
   model: string;
   toolCalls: ToolCallRecord[];
+  thinking?: string;
 }
 
 export interface AgentLoopVisionTurnInput {
@@ -686,6 +687,7 @@ export async function* runAgentLoopTextTurnRun(
     const endEvent = turnEndFromLegacyUsage('', usage);
     emitTurnEvent(endEvent);
     yield endEvent;
+    const thinking = mapperState.accumulatedThinking.trim() || undefined;
     return {
       reply: '',
       usage,
@@ -693,6 +695,7 @@ export async function* runAgentLoopTextTurnRun(
       iterations,
       model: modelId,
       toolCalls,
+      thinking,
     };
   }
 
@@ -731,6 +734,7 @@ export async function* runAgentLoopTextTurnRun(
   const endEvent = turnEndFromLegacyUsage(finalReply, usage);
   emitTurnEvent(endEvent);
   yield endEvent;
+  const thinking = mapperState.accumulatedThinking.trim() || undefined;
   return {
     reply: finalReply,
     usage,
@@ -738,5 +742,6 @@ export async function* runAgentLoopTextTurnRun(
     iterations,
     model: modelId,
     toolCalls,
+    thinking,
   };
 }

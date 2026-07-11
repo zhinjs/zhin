@@ -36,7 +36,8 @@ plugins/my-plugin/
 │   ├── index.tsx           # 页面入口
 │   ├── tsconfig.json
 │   └── pages/              # React 组件
-├── skills/my-plugin/       # 文件化 AI 技能（随包发布）
+├── agent/
+│   └── skills/<name>.md   # 插件 AI 技能（discoverPluginAgentSurface）
 │   └── SKILL.md
 ├── tests/                  # Vitest 测试
 ├── lib/                    # Node 端构建输出（tsc）
@@ -49,7 +50,7 @@ plugins/my-plugin/
 
 **自动配置：**
 - ✅ 创建完整的 npm 包结构（`files` 白名单含 `skills/`，与官方插件约定一致）
-- ✅ 生成 `skills/<插件名>/SKILL.md` 模板（frontmatter 供 Agent 扫描）
+- ✅ 创建 `agent/skills/<插件名>.md` 模板（frontmatter 供 Agent 发现）
 - ✅ 配置 TypeScript 编译
 - ✅ 自动添加到根 `package.json` 依赖（`workspace:*`）
 - ✅ 自动安装依赖

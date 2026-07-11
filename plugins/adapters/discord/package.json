@@ -34,7 +34,8 @@
   "scripts": {
     "build": "zhin build",
     "clean": "rimraf lib dist",
-    "build:node": "tsc"
+    "build:node": "tsc",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "discord.js": "^14.26.4",
@@ -51,20 +52,30 @@
     "@zhin.js/host-router": "workspace:*",
     "lucide-react": "^1.22.0",
     "typescript": "^6.0.3",
-    "zhin.js": "workspace:*"
+    "zhin.js": "workspace:*",
+    "@zhin.js/agent": "workspace:*",
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
     "@zhin.js/client": "workspace:*",
     "@zhin.js/host-api": "workspace:*",
     "@zhin.js/contract": "workspace:*",
     "@zhin.js/host-router": "workspace:*",
-    "zhin.js": "workspace:*"
+    "zhin.js": "workspace:*",
+    "@zhin.js/agent": "workspace:*",
+    "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
+    "@zhin.js/agent": {
+      "optional": true
+    },
     "@zhin.js/client": {
       "optional": true
     },
     "@zhin.js/host-api": {
+      "optional": true
+    },
+    "zod": {
       "optional": true
     }
   },
@@ -73,7 +84,7 @@
     "lib",
     "client",
     "dist",
-    "skills",
+    "agent",
     "plugin.yml",
     "README.md",
     "node",

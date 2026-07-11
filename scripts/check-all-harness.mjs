@@ -32,6 +32,11 @@ const checks = [
     description: '检查插件是否符合标准规范',
   },
   {
+    name: 'Plugin Agent Publish',
+    command: 'pnpm check:plugin-agent-publish',
+    description: '带 agent/ 的插件 npm 发布清单（files、prepublishOnly、peer 依赖）',
+  },
+  {
     name: 'Architecture Layers',
     command: 'pnpm check:architecture',
     description: '检查架构层级依赖是否正确',

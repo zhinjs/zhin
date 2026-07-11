@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getCronDateParts, matchesCron, parseCron, parseCronTime, validateCalendarCron } from '../src/parsers/cron.js';
+import { clearZonedClockCache } from '../src/utils/zoned-clock.js';
 
 const TZ = 'Asia/Shanghai';
 
@@ -187,6 +188,7 @@ describe('parseCronTime', () => {
 describe('getCronDateParts', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    clearZonedClockCache();
   });
 
   it('extracts second in timezone', () => {
@@ -201,6 +203,7 @@ describe('getCronDateParts', () => {
   });
 
   it('uses fallbacks when weekday parts are missing', () => {
+    clearZonedClockCache();
     vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(function () {
       return {
         formatToParts: () =>

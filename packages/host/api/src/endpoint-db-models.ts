@@ -9,11 +9,12 @@ export interface ConsoleBotRequestRow {
   endpoint_id: string;
   platform_request_id: string;
   type: string;
-  sender_id: string;
-  sender_name: string;
+  scene_type: string;
+  scene_id: string;
+  sub_type: string;
+  actor_id: string;
+  actor_name: string;
   comment: string;
-  channel_id: string;
-  channel_type: string;
   created_at: number;
   consumed: number;
   consumed_at?: number;
@@ -23,9 +24,15 @@ export interface ConsoleBotNoticeRow {
   id?: number;
   adapter: string;
   endpoint_id: string;
-  notice_type: string;
-  channel_type: string;
-  channel_id: string;
+  platform_notice_id: string;
+  type: string;
+  scene_type: string;
+  scene_id: string;
+  sub_type: string;
+  actor_id: string;
+  actor_name: string;
+  target_id: string;
+  target_name: string;
   payload: string;
   created_at: number;
   consumed: number;
@@ -38,11 +45,12 @@ export const ConsoleBotRequestDefinition: Definition<ConsoleBotRequestRow> = {
   endpoint_id: { type: "text", nullable: false },
   platform_request_id: { type: "text", nullable: false },
   type: { type: "text", nullable: false },
-  sender_id: { type: "text", nullable: false },
-  sender_name: { type: "text", nullable: false },
-  comment: { type: "text", nullable: false },
-  channel_id: { type: "text", nullable: false },
-  channel_type: { type: "text", nullable: false },
+  scene_type: { type: "text", nullable: false, default: "" },
+  scene_id: { type: "text", nullable: false },
+  sub_type: { type: "text", nullable: false, default: "" },
+  actor_id: { type: "text", nullable: false },
+  actor_name: { type: "text", nullable: false, default: "" },
+  comment: { type: "text", nullable: false, default: "" },
   created_at: { type: "integer", nullable: false },
   consumed: { type: "integer", nullable: false, default: 0 },
   consumed_at: { type: "integer", nullable: true },
@@ -52,9 +60,15 @@ export const ConsoleBotNoticeDefinition: Definition<ConsoleBotNoticeRow> = {
   id: { type: "integer", primary: true, autoIncrement: true },
   adapter: { type: "text", nullable: false },
   endpoint_id: { type: "text", nullable: false },
-  notice_type: { type: "text", nullable: false },
-  channel_type: { type: "text", nullable: false },
-  channel_id: { type: "text", nullable: false },
+  platform_notice_id: { type: "text", nullable: false, default: "" },
+  type: { type: "text", nullable: false },
+  scene_type: { type: "text", nullable: false, default: "" },
+  scene_id: { type: "text", nullable: false },
+  sub_type: { type: "text", nullable: false, default: "" },
+  actor_id: { type: "text", nullable: false, default: "" },
+  actor_name: { type: "text", nullable: false, default: "" },
+  target_id: { type: "text", nullable: false, default: "" },
+  target_name: { type: "text", nullable: false, default: "" },
   payload: { type: "text", nullable: false },
   created_at: { type: "integer", nullable: false },
   consumed: { type: "integer", nullable: false, default: 0 },

@@ -60,9 +60,10 @@ export async function emitEndpointLifecycle(
       $id: `endpoint-lifecycle:${endpoint.$id}:${kind}:${Date.now()}`,
       $adapter: adapter.name as never,
       $endpoint: endpoint.$id,
-      $type: 'endpoint.lifecycle',
-      $subType: kind,
-      $channel: { id: endpoint.$id, type: 'private' },
+      $type: 'notice',
+      $scene_id: endpoint.$id,
+      $scene_type: 'endpoint',
+      $sub_type: kind,
       $timestamp: Date.now(),
     },
   );

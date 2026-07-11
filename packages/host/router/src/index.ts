@@ -183,12 +183,17 @@ useContext("config", (configService) => {
 
     logger.info(
       formatCompact({
-        服务端口: listenPort,
-        接口地址: apiUrl,
-        文档地址: openapiUrl,
-        控制台: consoleUrl,
-        首跑提示: "打开 Console 后进入 Sandbox / 沙盒页，连接后发送 hello",
-        令牌前缀: tokenRegistry.primaryTokenPrefixForLog(),
+        http: apiUrl,
+        token: `${tokenRegistry.primaryTokenPrefixForLog()}…`,
+        console: REMOTE_CONSOLE_ORIGIN,
+      }),
+    );
+    logger.debug(
+      formatCompact({
+        port: listenPort,
+        openapi: openapiUrl,
+        console_link: consoleUrl,
+        hint: "Console → Sandbox / 沙盒，连接后发送 hello",
       }),
     );
   });

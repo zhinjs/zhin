@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generateAIConfigJSON, generateAIConfigToml, generateAIConfigYaml, RECOMMENDED_AI_DEFAULTS } from '../src/ai'
-import type { AISetupConfig } from '../src/ai'
+import { generateAIConfigJSON, generateAIConfigToml, generateAIConfigYaml, RECOMMENDED_AI_DEFAULTS, type AISetupConfig } from '../src/ai';
 
 const aiConfig: AISetupConfig = {
   enabled: true,

@@ -55,7 +55,7 @@ export class EmailEndpoint extends EventEmitter implements Endpoint<EmailEndpoin
 
             // 验证 SMTP 连接
             await this.smtpTransporter!.verify();
-            this.logger.info(formatCompact({ endpoint: this.$id, mode: "smtp" }));
+            this.logger.debug(formatCompact({ endpoint: this.$id, mode: "smtp" }));
 
             // 初始化 IMAP 连接
             this.imapConnection = new Imap({
@@ -76,7 +76,7 @@ export class EmailEndpoint extends EventEmitter implements Endpoint<EmailEndpoin
                 this.imapConnection!.connect();
             });
 
-            this.logger.info(formatCompact({ endpoint: this.$id, mode: "imap" }));
+            this.logger.debug(formatCompact({ endpoint: this.$id, mode: "imap" }));
 
             // 开始检查邮件
             this.startEmailCheck();
@@ -109,7 +109,7 @@ export class EmailEndpoint extends EventEmitter implements Endpoint<EmailEndpoin
             this.smtpTransporter = null;
         }
 
-        this.logger.info(formatCompact( { op: "disconnect", endpoint: this.$id }));
+        this.logger.debug(formatCompact( { op: "disconnect", endpoint: this.$id }));
     }
 
     private setupImapListeners(): void {
@@ -125,7 +125,7 @@ export class EmailEndpoint extends EventEmitter implements Endpoint<EmailEndpoin
         });
 
         this.imapConnection.on('end', () => {
-            this.logger.info(formatCompact( { op: "disconnect", endpoint: this.$id, mode: "imap" }));
+            this.logger.debug(formatCompact( { op: "disconnect", endpoint: this.$id, mode: "imap" }));
         });
     }
 

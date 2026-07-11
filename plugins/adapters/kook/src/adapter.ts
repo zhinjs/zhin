@@ -1,10 +1,9 @@
 /**
  * KOOK 适配器
  */
-import { formatCompact, Adapter, Plugin } from 'zhin.js';
+import { formatCompact, Adapter, Plugin, type OutboundRichSegmentPolicy } from 'zhin.js';
 import { KookEndpoint } from "./endpoint.js";
 import type { KookEndpointConfig } from "./types.js";
-import type { OutboundRichSegmentPolicy } from "zhin.js";
 
 export class KookAdapter extends Adapter<KookEndpoint> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;
@@ -70,7 +69,7 @@ export class KookAdapter extends Adapter<KookEndpoint> {
 
   async stop(): Promise<void> {
     await super.stop();
-    this.plugin.logger.info(formatCompact( { op: "stop" }));
+    this.plugin.logger.debug(formatCompact( { op: "stop" }));
   }
 }
 

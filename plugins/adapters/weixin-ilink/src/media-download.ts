@@ -6,8 +6,7 @@ import {
   downloadPlainCdnBuffer,
 } from "./pic-decrypt.js";
 import { silkToWav } from "./silk-transcode.js";
-import type { WeixinMessage } from "./ilink-types.js";
-import { MessageItemType } from "./ilink-types.js";
+import { MessageItemType, type WeixinMessage } from './ilink-types.js';
 
 const WEIXIN_MEDIA_MAX_BYTES = 100 * 1024 * 1024;
 

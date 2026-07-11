@@ -16,6 +16,7 @@ Agent harness engineering 是通过自动化工具和策略来强制执行 AI Ag
 此外，我们还提供了：
 - **Agent 调度器** — 角色管理和工具权限控制
 - **提示词构建器** — 分层提示词组装
+- **Plugin `agent/` authoring** — Eve 风格文件系统定义（见 [agent-authoring.md](./agent-authoring.md)）
 
 ## 快速开始
 

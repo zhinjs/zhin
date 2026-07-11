@@ -1,6 +1,6 @@
 import type { Plugin } from 'zhin.js';
 import { subscribeAIEvents, isActivityFeedbackEnabled } from '@zhin.js/agent';
-import type { ActivityFeedbackServiceConfig } from './config.js';
+import { loadActivityFeedbackServiceConfig, type ActivityFeedbackServiceConfig } from './config.js';
 import {
   ActivityFeedbackExecutor,
   createRootEndpointAccess,
@@ -8,7 +8,6 @@ import {
 } from './executor.js';
 import { ActivityFeedbackOrchestrator } from './orchestrator.js';
 import { ActivityFeedbackPolicy } from './policy.js';
-import { loadActivityFeedbackServiceConfig } from './config.js';
 
 export function bindActivityFeedbackToAIEvents(
   root: Plugin['root'],

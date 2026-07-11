@@ -203,7 +203,7 @@ useContext("router", (router: Router) => {
   const isProduction = process.env.NODE_ENV === "production";
 
   if (!enabled) {
-    logger.info(formatCompact({ enabled: false }));
+    logger.debug(formatCompact({ enabled: false }));
     return;
   }
 
@@ -268,5 +268,5 @@ useContext("router", (router: Router) => {
 
   registerMcpRoutes(router, mcpPath, mcpHandler);
 
-  logger.info(formatCompact({ MCP路径: mcpPath, 运行模式: "无状态" }));
+  logger.debug(formatCompact({ MCP路径: mcpPath, 运行模式: "无状态" }));
 });

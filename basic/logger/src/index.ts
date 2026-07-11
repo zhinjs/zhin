@@ -41,6 +41,20 @@ export {
 } from './compact-log.js'
 export type { CompactFieldValue, CompactUsage } from './compact-log.js'
 
+export { formatLogTable, buildLogTableTotalsRow, formatLogKvTable } from './log-table.js'
+export type { LogTableColumn, FormatLogTableOptions, LogKvRow, FormatLogKvTableOptions } from './log-table.js'
+
+export { formatLogPanel, formatLogSection, formatChipList, formatChipListLines, formatChipListLinesRaw, wrapCommaSeparated } from './log-panel.js'
+export type { LogPanelLine } from './log-panel.js'
+
+export {
+  displayWidth,
+  padDisplayEnd,
+  padDisplayStart,
+  truncateDisplayEnd,
+  wrapDisplayText,
+} from './terminal-width.js'
+
 export { createWarnOnce, resetWarnOnceForTests } from './warn-once.js'
 export {
   CONTENT_CHAIN_STAGE,

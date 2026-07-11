@@ -3,7 +3,7 @@ import { fetchApi } from '../api.js';
 export default async function (args: { text: string; to?: string }) {
   const params: Record<string, string> = { text: args.text };
   if (args.to) params.to = args.to;
-  const data = await fetchApi<any>('/fanyi', params);
+  const data = await fetchApi('/fanyi', params);
   const srcText = data.source?.text || args.text;
   const srcLang = data.source?.type_desc || data.source?.type || '';
   const tgtText = data.target?.text || data.result || data.translation || (typeof data === 'string' ? data : '');

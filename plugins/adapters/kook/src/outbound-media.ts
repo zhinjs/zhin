@@ -1,14 +1,7 @@
 /**
  * KOOK 出站 media：base64 / 本地文件须先走 /v3/asset/create 上传，再嵌入 KMarkdown。
  */
-import type { MessageElement, MessageSegment, SendContent } from "zhin.js";
-import {
-  asMessageElements,
-  extractBase64Buffer,
-  isMediaSegmentType,
-  isRemoteUrl,
-  resolveLocalMediaPath,
-} from "zhin.js";
+import { asMessageElements, extractBase64Buffer, isMediaSegmentType, isRemoteUrl, resolveLocalMediaPath, type MessageElement, type MessageSegment, type SendContent } from 'zhin.js';
 
 export interface KookMediaUploader {
   uploadMedia(data: string | Buffer): Promise<string>;

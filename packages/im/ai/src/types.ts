@@ -60,7 +60,7 @@ export interface JsonSchema {
   description?: string;
   default?: unknown;
   /** JSON Schema allows arbitrary extension properties */
-  [key: string]: any; // eslint-disable-line @typescript-eslint/no-explicit-any -- JSON Schema spec requires open index
+  [key: string]: any;  
 }
 
 // ============================================================================

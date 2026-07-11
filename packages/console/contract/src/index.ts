@@ -2,6 +2,11 @@ export {
   DEFAULT_CONSOLE_BASE_PATH,
   CONSOLE_HOST_REACT_NAMESPACE_KEY,
   CONSOLE_SHARED_MODULES_KEY,
+  SIDE_EVENT_PUSH,
+  SIDE_EVENT_RPC,
+  INBOX_RPC,
+  ENDPOINT_RPC,
+  SIDE_EVENT_NAMES,
 } from "./constants.js";
 
 export type RuntimeEnv = "development" | "production";

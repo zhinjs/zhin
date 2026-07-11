@@ -26,8 +26,13 @@ function resolveSendTarget(options: TypingIndicatorOptions): { type: 'private' |
   if ((options.sceneType === 'group' || options.sceneType === 'channel') && options.groupId) {
     return { type: 'group', id: options.groupId };
   }
-  if (options.userId) {
-    return { type: 'private', id: options.userId };
+  if (options.sceneType === 'private') {
+    if (options.groupId) {
+      return { type: 'private', id: options.groupId };
+    }
+    if (options.userId) {
+      return { type: 'private', id: options.userId };
+    }
   }
   const parts = (options.sessionId ?? '').split(':').filter((p) => p.length > 0);
   if (parts.length >= 3) return { type: 'group', id: parts[1]! };
@@ -95,7 +100,7 @@ export interface EndpointWithActivityFeedback extends Endpoint {
   $addReaction?(
     messageId: string,
     emoji: string,
-    hint?: { sceneType?: 'private' | 'group' | 'channel' },
+    hint?: { sceneType?: 'private' | 'group' | 'channel'; channelId?: string },
   ): Promise<string | null>;
   $removeReaction?(messageId: string, reactionId: string): Promise<void>;
 }
@@ -113,7 +118,10 @@ function registerPlatformAdapters(
       platform,
       async (messageId, emoji, options) => {
         try {
-          return await endpoint.$addReaction!(messageId, emoji, { sceneType: options.sceneType });
+          return await endpoint.$addReaction!(messageId, emoji, {
+            sceneType: options.sceneType,
+            channelId: options.groupId,
+          });
         } catch (error) {
           console.error(`[${platform}] Failed to add reaction:`, error);
           return null;

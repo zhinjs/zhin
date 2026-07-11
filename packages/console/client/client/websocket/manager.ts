@@ -1,15 +1,5 @@
-import type {
-  WebSocketMessage,
-  WebSocketConfig,
-  WebSocketCallbacks,
-} from "./types";
-import {
-  ConnectionState,
-  WebSocketError,
-  ConnectionError,
-  MessageError,
-  RequestTimeoutError,
-} from "./types";
+import { ConnectionState, WebSocketError, ConnectionError, MessageError, RequestTimeoutError, type WebSocketMessage, type WebSocketConfig, type WebSocketCallbacks } from './types';
+
 import { getApiBase, getStoredToken, resolveApiUrl } from "./remote-settings.js";
 import { applyConsoleEvent } from "../persistence/idb-store.js";
 
@@ -350,7 +340,7 @@ export class WebSocketManager {
 
   private handleBroadcast(message: WebSocketMessage): void {
     const t = message.type;
-    if (t === "endpoint:request" || t === "endpoint:notice" || t === "endpoint:message") {
+    if (t === "request.receive" || t === "notice.receive" || t === "message.receive") {
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("zhin-console-bot-push", { detail: message }));
       }

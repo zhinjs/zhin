@@ -4,7 +4,7 @@
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { clearInterval } from 'node:timers';
-import { formatCompact, Endpoint, Message, Notice, Request, segment, SendContent, SendOptions, expandInteractiveSegmentsInContent, type QuotedMessagePayload, applyQqSenderRoleToMessageSender, type MessageElement,} from 'zhin.js';
+import { formatCompact, Endpoint, Message, mapNoticeParts, mapRequestParts, buildNotice, buildRequest, senderFromId, resolveSideEventDedupeKey, segment, SendContent, SendOptions, expandInteractiveSegmentsInContent, type QuotedMessagePayload, applyQqSenderRoleToMessageSender, type MessageElement,} from 'zhin.js';
 import { parseOneBotGetMsgResponse } from './onebot-get-msg.js';
 import { fromCanonicalSegments, toCanonicalSegments } from './segment-mapper.js';
 import type {
@@ -55,7 +55,7 @@ export class OneBot11WsClient extends EventEmitter implements Endpoint<OneBot11W
         if (!this.$config.access_token) {
           this.logger.warn(formatCompact({ endpoint: this.$id, ok: false, error: 'missing access_token' }));
         }
-        this.logger.info(formatCompact({ endpoint: this.$id, mode: 'ws' }));
+        this.logger.debug(formatCompact({ endpoint: this.$id, mode: 'ws' }));
         this.startHeartbeat();
         resolve();
       });
@@ -341,55 +341,41 @@ export class OneBot11WsClient extends EventEmitter implements Endpoint<OneBot11W
   }
 
   private handleOneBot11Notice(event: any): void {
-    const noticeTypeMap: Record<string, string> = {
-      group_increase: 'group_member_increase',
-      group_decrease: 'group_member_decrease',
-      group_admin: 'group_admin_change',
-      group_ban: 'group_ban',
-      group_recall: 'group_recall',
-      friend_recall: 'friend_recall',
-      friend_add: 'friend_add',
-      notify: event.sub_type === 'poke' ? (event.group_id ? 'group_poke' : 'friend_poke') : `notify_${event.sub_type}`,
-      group_upload: 'group_upload',
-    };
-    const $type = noticeTypeMap[event.notice_type] || event.notice_type;
     const isGroup = !!event.group_id;
-    const notice = Notice.from(event, {
+    const { scene_type, sub_type } = mapNoticeParts('onebot', event.notice_type ?? '', {
+      sub_type: event.sub_type,
+      is_group: isGroup,
+    });
+    const sceneId = String((event.group_id || event.user_id) ?? '');
+    const notice = buildNotice(event, {
       $id: `${event.time}_${event.notice_type}_${event.group_id || event.user_id}`,
       $adapter: 'onebot11',
       $endpoint: this.$config.name,
-      $type,
-      $subType: event.sub_type,
-      $channel: {
-        id: (event.group_id || event.user_id)?.toString() || '',
-        type: isGroup ? 'group' : 'private',
-      },
-      $operator: event.operator_id ? { id: event.operator_id.toString(), name: event.operator_id.toString() } : undefined,
-      $target: event.user_id ? { id: event.user_id.toString(), name: event.user_id.toString() } : undefined,
-      $timestamp: event.time || Math.floor(Date.now() / 1000),
+      $type: 'notice',
+      $scene_id: sceneId,
+      $scene_type: scene_type,
+      $sub_type: sub_type,
+      $actor: senderFromId(event.operator_id),
+      $target: senderFromId(event.user_id),
+      $timestamp: (event.time || Math.floor(Date.now() / 1000)) * 1000,
     });
     this.adapter.emit('notice.receive', notice);
   }
 
   private handleOneBot11Request(event: any): void {
-    const typeMap: Record<string, string> = {
-      friend: 'friend_add',
-      group: event.sub_type === 'invite' ? 'group_invite' : 'group_add',
-    };
-    const $type = typeMap[event.request_type] || event.request_type;
-    const request = Request.from(event, {
+    const { scene_type, sub_type } = mapRequestParts('onebot', event.request_type ?? '', event.sub_type);
+    const sceneId = String((event.group_id || event.user_id) ?? '');
+    const request = buildRequest(event, {
       $id: event.flag || `${event.time}_${event.request_type}_${event.user_id}`,
       $adapter: 'onebot11',
       $endpoint: this.$config.name,
-      $type,
-      $subType: event.sub_type,
-      $channel: {
-        id: (event.group_id || event.user_id)?.toString() || '',
-        type: event.group_id ? 'group' : 'private',
-      },
-      $sender: { id: event.user_id?.toString() || '', name: event.user_id?.toString() || '' },
+      $type: 'request',
+      $scene_id: sceneId,
+      $scene_type: scene_type,
+      $sub_type: sub_type,
+      $actor: senderFromId(event.user_id) ?? { id: '', name: '' },
       $comment: event.comment,
-      $timestamp: event.time || Math.floor(Date.now() / 1000),
+      $timestamp: (event.time || Math.floor(Date.now() / 1000)) * 1000,
       $approve: async (remark?: string) => {
         await this.callApi(
           event.request_type === 'friend' ? 'set_friend_add_request' : 'set_group_add_request',

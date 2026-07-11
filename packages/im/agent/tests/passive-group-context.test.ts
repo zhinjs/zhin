@@ -11,9 +11,8 @@ import {
   pushPassiveGroupLine,
 } from '../src/session/passive-group-buffer.js';
 import { buildTurnUserMessages } from '../src/context/turn-user-message.js';
-import { CURRENT_MESSAGE_MARKER } from '../src/config/index.js';
+import { CURRENT_MESSAGE_MARKER, DEFAULT_CONFIG } from '../src/config/index.js';
 import type { ZhinAgentPrivate } from '../src/internal/agent-host.js';
-import { DEFAULT_CONFIG } from '../src/config/index.js';
 
 function groupMessage(text: string, senderId = 'u-peer') {
   return {

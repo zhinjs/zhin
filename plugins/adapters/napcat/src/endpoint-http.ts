@@ -24,7 +24,7 @@ export class NapCatHttpEndpoint extends NapCatEndpointBase {
     await this.checkConnection();
     this.startPoll();
     this.$connected = true;
-    this.logger.info(formatCompact({ endpoint: this.$id, mode: 'http' }));
+    this.logger.debug(formatCompact({ endpoint: this.$id, mode: 'http' }));
   }
 
   async $disconnect(): Promise<void> {
@@ -70,7 +70,7 @@ export class NapCatHttpEndpoint extends NapCatEndpointBase {
         this.logger.warn(formatCompact( { op: 'recv', endpoint: this.$id, ok: false, error: String(e) }));
       }
     });
-    this.logger.info(formatCompact( { op: 'webhook', endpoint: this.$id, path: postPath }));
+    this.logger.debug(formatCompact( { op: 'webhook', endpoint: this.$id, path: postPath }));
   }
 
   private async checkConnection(): Promise<void> {

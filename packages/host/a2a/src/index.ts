@@ -7,17 +7,17 @@
  *   *    /a2a/{agentName}/rest/*
  */
 import { formatCompact, usePlugin } from '@zhin.js/core';
-import type { Router, RouterContext } from '@zhin.js/host-router';
-import { paramPath } from '@zhin.js/host-router';
+import { paramPath, type Router, type RouterContext } from '@zhin.js/host-router';
+
 import {
   DefaultRequestHandler,
   InMemoryTaskStore,
   type A2ARequestHandler,
 } from '@a2a-js/sdk/server';
-import type { AgentCard } from '@a2a-js/sdk';
-import { AGENT_CARD_PATH } from '@a2a-js/sdk';
-import { getAgentRuntimeRegistry } from '@zhin.js/agent';
-import type { AIService } from '@zhin.js/agent';
+import { AGENT_CARD_PATH, type AgentCard } from '@a2a-js/sdk';
+
+import { getAgentRuntimeRegistry, type AIService } from '@zhin.js/agent';
+
 import { resolvePublicBaseUrl, a2aAgentBasePath } from './config.js';
 import { verifyA2aBearer } from './auth.js';
 import { buildAgentCardForBinding, listExposableAgentNames } from './card-builder.js';
@@ -68,7 +68,7 @@ function rebuildAgentStacks(ai: AIService): void {
   }
 
   agentStacks = next;
-  logger.info(formatCompact({ A2A: 'ready', agents: [...next.keys()].join(',') }));
+  logger.debug(formatCompact({ A2A: 'ready', agents: [...next.keys()].join(',') }));
 }
 
 function parseA2aTail(tail: string): { kind: 'card' | 'jsonrpc' | 'rest'; restSubPath?: string } | null {
@@ -149,7 +149,7 @@ useContext('router', (router: Router) => {
 
   router.all(A2A_ROUTE, a2aHandler);
 
-  logger.info(formatCompact({ A2A: 'listening', base: `${publicBaseUrl}${a2aAgentBasePath('{agent}')}` }));
+  logger.debug(formatCompact({ A2A: 'listening', base: `${publicBaseUrl}${a2aAgentBasePath('{agent}')}` }));
 
   onDispose(() => {
     agentStacks.clear();

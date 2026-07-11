@@ -5,7 +5,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
 
 import { setHostRootPlugin } from '../../../core/src/host-plugin-registry.js';
-import type { Plugin, Message } from '@zhin.js/core';
+import { type Plugin, type Message } from '@zhin.js/core';
 import {
   createWebFetchTool,
   WebFetchBuiltinTool,
@@ -13,7 +13,6 @@ import {
 } from '../../src/builtin/web-fetch-tool.js';
 import { ZHIN_WEB_USER_AGENT } from '../../src/builtin/web-tool-utils.js';
 import { normalizeTool } from '../../src/orchestrator/tool-selection.js';
-import type { Message } from '@zhin.js/core';
 
 const originalFetch = globalThis.fetch;
 

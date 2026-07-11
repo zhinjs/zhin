@@ -134,6 +134,11 @@ root.addMiddleware(async (message, next) => {
 | `48001 api unauthorized` | 未认证订阅号无客服 API；保持默认 `replyMode: passive` |
 | 加密模式报错 | `encodingAESKey`、`encrypt` 与公众平台「安全模式」设置一致 |
 
+## AI 工具
+
+技能说明见 `agent/skills/wechat-mp.md`。群管与平台工具按公众号能力在 `src/index.ts` 注册。
+
+
 ## 文档链接
 
 - [微信公众号适配器文档](https://zhin.js.org/adapters/wechat-mp)

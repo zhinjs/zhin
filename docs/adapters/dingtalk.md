@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/dingtalk/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/dingtalk/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=2fc139d471cc84ae -->
+<!-- sync-adapter-docs:sha256=751d9f95fe573d9a -->
 
 # @zhin.js/adapter-dingtalk
 
@@ -366,6 +366,16 @@ A: 确保：
 - [钉钉开放平台](https://open.dingtalk.com/)
 - [钉钉机器人开发文档](https://open.dingtalk.com/document/robots/robot-overview)
 - [Zhin.js 官方文档](https://github.com/zhinjs/zhin)
+
+## AI 工具
+
+| 类别 | 路径 |
+|------|------|
+| Permit 词汇 | `agent/PERMITS.md` |
+| 平台工具（8 个） | `agent/tools/`（`dingtalk_*`：部门、用户、群聊、工作通知等） |
+| 技能说明 | `agent/skills/dingtalk.md` |
+| 群管标准工具 | `createSceneManagementTools()` |
+
 
 ## 许可证
 

@@ -70,6 +70,41 @@
       "types": "./lib/turn/index.d.ts",
       "development": "./src/turn/index.ts",
       "import": "./lib/turn/index.js"
+    },
+    "./tools": {
+      "types": "./lib/authoring/entries/tools.d.ts",
+      "development": "./src/authoring/entries/tools.ts",
+      "import": "./lib/authoring/entries/tools.js"
+    },
+    "./skills": {
+      "types": "./lib/authoring/entries/skills.d.ts",
+      "development": "./src/authoring/entries/skills.ts",
+      "import": "./lib/authoring/entries/skills.js"
+    },
+    "./schedules": {
+      "types": "./lib/authoring/entries/schedules.d.ts",
+      "development": "./src/authoring/entries/schedules.ts",
+      "import": "./lib/authoring/entries/schedules.js"
+    },
+    "./hooks": {
+      "types": "./lib/authoring/entries/hooks.d.ts",
+      "development": "./src/authoring/entries/hooks.ts",
+      "import": "./lib/authoring/entries/hooks.js"
+    },
+    "./connections": {
+      "types": "./lib/authoring/entries/connections.d.ts",
+      "development": "./src/authoring/entries/connections.ts",
+      "import": "./lib/authoring/entries/connections.js"
+    },
+    "./evals": {
+      "types": "./lib/authoring/entries/evals.d.ts",
+      "development": "./src/authoring/entries/evals.ts",
+      "import": "./lib/authoring/entries/evals.js"
+    },
+    "./security": {
+      "types": "./lib/security/index.d.ts",
+      "development": "./src/security/index.ts",
+      "import": "./lib/security/index.js"
     }
   },
   "files": [
@@ -77,7 +112,7 @@
   ],
   "scripts": {
     "build": "tsc",
-    "clean": "rimraf lib"
+    "clean": "rimraf lib && find src -type f \\( -name '*.js' -o -name '*.d.ts' -o -name '*.js.map' -o -name '*.d.ts.map' \\) -delete 2>/dev/null || true"
   },
   "dependencies": {
     "@a2a-js/sdk": "1.0.0-beta.0",

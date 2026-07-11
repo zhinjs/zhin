@@ -65,6 +65,7 @@
     "@zhin.js/plugin-music": "workspace:*",
     "@zhin.js/plugin-repeater": "workspace:*",
     "@zhin.js/plugin-rss": "workspace:*",
+    "@zhin.js/plugin-lottery": "workspace:*",
     "@zhin.js/satori": "workspace:*",
     "@zhin.js/speech": "workspace:*",
     "@zhin.js/service-activity-feedback": "workspace:*",

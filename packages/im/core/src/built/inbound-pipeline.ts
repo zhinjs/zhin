@@ -5,8 +5,8 @@
  * Handles: event routing, logging, backpressure, pipeline execution, observer emission.
  */
 
-import type { Logger } from '@zhin.js/logger';
-import { formatCompact, truncatePreview } from '@zhin.js/logger';
+import { formatCompact, truncatePreview, type Logger } from '@zhin.js/logger';
+
 import { segment } from '../utils.js';
 import { type Message as MessageType } from '../message.js';
 import type { Plugin } from '../plugin.js';
@@ -68,7 +68,7 @@ export class InboundMessagePipeline {
   }
 
   private logIncoming(message: MessageType<any>): void {
-    this.options.logger.info(formatCompact( {
+    this.options.logger.debug(formatCompact( {
       recv: `${message.$channel.type}(${message.$channel.id})`,
       endpoint: message.$endpoint,
       preview: truncatePreview(segment.raw(message.$content)),

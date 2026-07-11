@@ -39,7 +39,7 @@ const config: Config = {
 };
 
 if (!config.enabled) {
-  logger.info(formatCompact( { op: 'load', enabled: false }));
+  logger.debug(formatCompact( { op: 'load', enabled: false }));
 }
 
 // ─── 状态管理 ────────────────────────────────────────────────────────────────
@@ -100,13 +100,13 @@ async function detectStartupReason() {
     } else {
       reason = 'restart';
       processState.restartCount++;
-      logger.info(formatCompact( { op: 'restart', abnormal: false }));
+      logger.debug(formatCompact( { op: 'restart', abnormal: false }));
     }
     
     uptime = timeSinceLastStart;
     processState.totalUptime += uptime;
   } else {
-    logger.info(formatCompact({ first: true }));
+    logger.debug(formatCompact({ first: true }));
   }
 
   processState.lastPid = currentPid;
@@ -205,11 +205,11 @@ if (config.enabled) {
   detectStartupReason();
 
   const onSigterm = () => {
-    logger.info(formatCompact( { op: 'shutdown', signal: 'SIGTERM' }));
+    logger.debug(formatCompact( { op: 'shutdown', signal: 'SIGTERM' }));
     saveProcessState();
   };
   const onSigint = () => {
-    logger.info(formatCompact( { op: 'shutdown', signal: 'SIGINT' }));
+    logger.debug(formatCompact( { op: 'shutdown', signal: 'SIGINT' }));
     saveProcessState();
   };
 

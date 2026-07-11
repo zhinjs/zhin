@@ -1,6 +1,6 @@
-import {Dialect} from '../base/index.js';
+import { Dialect, Database } from '../base/index.js';
 import {RelatedDatabase} from "../type/related/database.js";
-import {Database} from "../base/index.js";
+
 import {Registry} from "../registry.js";
 import type { ClientConfig, PoolConfig as PgPoolConfig } from 'pg';
 import {Column, Transaction, TransactionOptions, PoolConfig} from "../types.js";

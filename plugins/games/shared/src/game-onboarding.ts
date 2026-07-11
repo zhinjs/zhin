@@ -1,5 +1,4 @@
-import type { Message, Plugin } from 'zhin.js';
-import { getActionFromMessage } from 'zhin.js';
+import { getActionFromMessage, type Message, type Plugin } from 'zhin.js';
 
 const hintedChannels = new Set<string>();
 const TTL_MS = 24 * 60 * 60 * 1000;

@@ -1,5 +1,5 @@
-import type { SendContent, SendOptions } from '@zhin.js/core';
-import { segment } from '@zhin.js/core';
+import { segment, type SendContent, type SendOptions } from '@zhin.js/core';
+
 import type {
   HtmlRendererAiTextAsImageConfig,
   HtmlRendererConfig,

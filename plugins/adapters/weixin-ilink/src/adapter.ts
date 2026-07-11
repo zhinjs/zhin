@@ -1,10 +1,9 @@
 /**
  * 微信 iLink（ClawBot）适配器
  */
-import { Adapter, type Plugin } from "zhin.js";
+import { Adapter, type Plugin, type OutboundRichSegmentPolicy } from 'zhin.js';
 import { WeixinIlinkEndpoint } from "./endpoint.js";
 import type { WeixinIlinkEndpointConfig } from "./types.js";
-import type { OutboundRichSegmentPolicy } from "zhin.js";
 
 export class WeixinIlinkAdapter extends Adapter<WeixinIlinkEndpoint> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;

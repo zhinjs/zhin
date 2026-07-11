@@ -1,10 +1,6 @@
 import fs from 'fs-extra';
 import path from 'node:path';
-import type { PackageJsonLike } from './project-deps.js';
-import {
-  findMissingPackageDependencies,
-  findUnresolvedPackageInstalls,
-} from './project-deps.js';
+import { findMissingPackageDependencies, findUnresolvedPackageInstalls, type PackageJsonLike } from './project-deps.js';
 
 export const SPEECH_PACKAGE = '@zhin.js/speech';
 export const HTML_RENDERER_PACKAGE = '@zhin.js/html-renderer';

@@ -62,8 +62,7 @@ vi.mock('@zhin.js/core', async (importOriginal) => {
 // Import after mocking — AIService + builtin tools from agent; Tool/trigger from core
 import { AIService } from '@zhin.js/agent';
 import * as core from '@zhin.js/core';
-import { ToolFeature, ZhinTool, shouldTriggerAI, resolveSenderRoles } from '@zhin.js/core';
-import type { Tool, Message, AgentTool } from '@zhin.js/core';
+import { ToolFeature, ZhinTool, shouldTriggerAI, resolveSenderRoles, type Tool, type Message, type AgentTool } from '@zhin.js/core';
 
 // ============================================================================
 // AI Service 测试

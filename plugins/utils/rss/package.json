@@ -16,14 +16,16 @@
   "files": [
     "src",
     "lib",
+    "agent",
     "client",
     "dist",
-    "skills",
     "README.md"
   ],
   "scripts": {
-    "build": "tsc --build",
-    "clean": "rimraf lib"
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "test": "sh -c 'cd ../../.. && vitest run plugins/utils/rss/tests'",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "zhin",
@@ -50,10 +52,14 @@
   },
   "devDependencies": {
     "typescript": "^6.0.3",
-    "zhin.js": "workspace:*"
+    "zhin.js": "workspace:*",
+    "@zhin.js/agent": "workspace:*",
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "zhin.js": "workspace:*"
+    "zhin.js": "workspace:*",
+    "@zhin.js/agent": "workspace:*",
+    "zod": "^4.0.0"
   },
   "repository": {
     "type": "git",
@@ -63,5 +69,13 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/agent": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
   }
 }

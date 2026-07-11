@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/napcat/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/napcat/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=434499fa123e58f3 -->
+<!-- sync-adapter-docs:sha256=370b10dbd776edaa -->
 
 # @zhin.js/adapter-napcat
 
@@ -132,7 +132,6 @@ endpoints:
 
 ## AI 工具
 
-适配器自动注册 41 个 AI 工具（7 个群管理标准工具 + 34 个 NapCat 扩展工具），详见 `skills/napcat/SKILL.md`。
 
 ## full-bot L4 参考
 

@@ -30,7 +30,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { Message } from '../message.js';
 import { isActionMessage } from './interactive-segments/action.js';
-import { Plugin } from '../plugin.js';
+import { Plugin, type Context } from '../plugin.js';
 import type {
   MessageMiddleware,
   RegisteredAdapter,
@@ -42,7 +42,6 @@ import type {
   OutboundReplyStore,
   BeforeSendHandler,
 } from '../types.js';
-import type { Context } from '../plugin.js';
 
 /** Dispatcher 管理的「会话回复」异步上下文，供 `before.sendMessage` 内读取（与 Adapter.renderSendMessage 同链） */
 const outboundReplyAls = new AsyncLocalStorage<OutboundReplyStore>();

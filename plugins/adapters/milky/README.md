@@ -130,6 +130,11 @@ addCommand(new MessageCommand('pic')
 
 发消息、撤回、群管等通过适配器封装的 HTTP API 完成。群管能力通过 `ISceneManagement` 自动注册为工具，详见 [工具与技能](/advanced/tools-skills)。
 
+## AI 工具
+
+Permit 词汇见 `agent/PERMITS.md`（维护者参考）。技能说明见 `agent/skills/milky.md`。群管标准工具由 `createSceneManagementTools()` 注册。
+
+
 ## 消息 ID 格式
 
 `{message_scene}:{peer_id}:{message_seq}`（如 `group:123456:10001`）。撤回时使用该 ID。

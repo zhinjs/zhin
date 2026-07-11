@@ -75,6 +75,11 @@ Sandbox 使用 JSON 消息格式：
 - 测试命令和 AI 工具调用
 - 不依赖外部平台的功能验证
 
+## AI 工具
+
+技能说明见 `agent/skills/sandbox.md`（本地沙箱调试约束）。
+
+
 ## 许可证
 
 MIT License

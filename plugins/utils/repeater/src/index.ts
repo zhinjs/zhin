@@ -133,4 +133,4 @@ addCommand(
     }),
 );
 
-logger.info(formatCompact( { op: "load", threshold: config.threshold, cooldown_s: config.cooldown / 1000 }));
+logger.debug(formatCompact( { op: "load", threshold: config.threshold, cooldown_s: config.cooldown / 1000 }));

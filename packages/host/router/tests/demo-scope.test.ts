@@ -19,7 +19,7 @@ describe("demo-scope", () => {
   });
 
   it("allows sandbox chat and read-only config RPC under demo", () => {
-    expect(isDemoRpcAllowed("endpoint:sendMessage")).toBe(true);
+    expect(isDemoRpcAllowed("endpoint.send_message")).toBe(true);
     expect(isDemoRpcAllowed("config:get-yaml")).toBe(true);
     expect(isDemoRpcAllowed("config:set")).toBe(false);
     expect(isDemoRpcAllowed("config:save-yaml")).toBe(false);

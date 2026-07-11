@@ -9,6 +9,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import * as path from 'node:path';
 import { Logger, type Message } from '@zhin.js/core';
 import { formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
 import { type AIProvider, type AgentTool, type Usage, userMessageToFilterText, type ContentPart, type ModelRegistry } from '@zhin.js/ai';
@@ -28,7 +29,7 @@ import {
   type AgentRole,
 } from '../orchestrator/agent-dispatcher.js';
 import { buildSubagentUserDelivery } from '../media/subagent-user-delivery.js';
-import { type AgentMeta, type AgentEffortLevel, loadAgentMarkdownBody } from '../discovery/agents.js';
+import { type AgentMeta, type AgentEffortLevel, loadAgentInstructionsBody } from '../discovery/agents.js';
 const EFFORT_MAX_ITERATIONS: Record<AgentEffortLevel, number> = {
   low: 3,
   medium: 5,
@@ -255,7 +256,7 @@ export class SubagentRuntime {
     let systemPrompt = options.systemPrompt;
     if (!systemPrompt && meta?.filePath) {
       try {
-        systemPrompt = await loadAgentMarkdownBody(meta.filePath);
+        systemPrompt = await loadAgentInstructionsBody(path.dirname(meta.filePath));
       } catch {
         // ignore missing body
       }
@@ -668,11 +669,11 @@ export class SubagentRuntime {
 
   private async deliverAsyncResult(payload: SubagentCompletePayload): Promise<void> {
     if (this.onSubagentCompleteFn) {
-      try {
-        await this.onSubagentCompleteFn(payload);
-      } catch (error) {
+      // 勿 await：onSubagentComplete → auto-continue 会 waitForIdle()，而主回合仍在
+      // waitForPendingSubagents 中等待本 subagent 的 done，同步 await 会死锁。
+      void this.onSubagentCompleteFn(payload).catch((error) => {
         logger.error({ taskId: payload.taskId, error }, 'onSubagentComplete failed');
-      }
+      });
     } else {
       logger.warn(formatCompact({ task_id: payload.taskId, error: 'no_onSubagentComplete' }));
     }

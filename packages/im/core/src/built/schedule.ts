@@ -1,15 +1,8 @@
 /**
  * ScheduleFeature — 管理插件注册的内存定时任务
  */
-import {
-  Feature,
-  FeatureJSON,
-  ScheduleEngine,
-  getScheduleEngine,
-  setScheduleEngine,
-  type ScheduleKind,
-} from '@zhin.js/kernel';
-import type { HolidayInput, ScatterInput } from '@zhin.js/kernel';
+import { Feature, FeatureJSON, ScheduleEngine, getScheduleEngine, setScheduleEngine, type ScheduleKind, type HolidayInput, type ScatterInput } from '@zhin.js/kernel';
+
 import { Plugin } from '../plugin.js';
 
 export interface ScheduleDescriptor {

@@ -1,9 +1,9 @@
-import { sendMessage as sendMessageApi } from "./ilink-api.js";
-import type { WeixinApiOptions } from "./ilink-api.js";
+import { sendMessage as sendMessageApi, type WeixinApiOptions } from './ilink-api.js';
+
 import { logger } from "./ilink-logger.js";
 import { generateId } from "./ilink-random.js";
-import type { MessageItem, SendMessageReq } from "./ilink-types.js";
-import { MessageItemType, MessageState, MessageType } from "./ilink-types.js";
+import { MessageItemType, MessageState, MessageType, type MessageItem, type SendMessageReq } from './ilink-types.js';
+
 import type { UploadedFileInfo } from "./upload.js";
 
 function generateClientId(): string {

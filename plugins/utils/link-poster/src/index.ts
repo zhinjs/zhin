@@ -14,7 +14,7 @@ import { renderPoster } from './render.js'
 const { logger, root } = usePlugin()
 const renderer = createHtmlRenderer()
 
-logger.info(formatCompact({ op: 'load' }))
+logger.debug(formatCompact({ op: 'load' }))
 
 root.addMiddleware(async (message, next) => {
   const text = message.$raw || ''

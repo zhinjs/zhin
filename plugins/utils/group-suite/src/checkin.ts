@@ -36,7 +36,7 @@ export function registerCheckin(plugin: Plugin, cfg: GroupSuiteConfig): void {
       created_at: { type: "text", default: "" },
       updated_at: { type: "text", default: "" },
     });
-    logger.info(formatCompact({ 模块: "签到", 数据模型: "已就绪" }));
+    logger.debug(formatCompact({ 模块: "签到", 数据模型: "已就绪" }));
   });
 
   async function getOrCreateUser(
@@ -185,7 +185,7 @@ export function registerCheckin(plugin: Plugin, cfg: GroupSuiteConfig): void {
     if (db) _db = db;
   }
 
-  logger.info(
+  logger.debug(
     formatCompact({
       模块: "签到",
       状态: "已加载",

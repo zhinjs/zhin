@@ -2,10 +2,10 @@
  * Branch summarization helpers — ADR 0010 D3.
  */
 
-import type { AgentMessage, UserMessage } from '../llm/types/agent-message.js';
-import { createUserMessage } from '../llm/types/agent-message.js';
-import type { AgentMessageRow } from './agent-db-models.js';
-import { agentMessageRowToLlm } from './agent-db-models.js';
+import { createUserMessage, type AgentMessage, type UserMessage } from '../llm/types/agent-message.js';
+
+import { agentMessageRowToLlm, type AgentMessageRow } from './agent-db-models.js';
+
 import { buildActivePathRows } from './session-tree.js';
 
 export const BRANCH_SUMMARY_PREFIX = '[Alternate branch summary]\n';

@@ -1,8 +1,8 @@
 import type { Message, Plugin } from 'zhin.js';
 import { channelKey } from '@zhin.js/game-shared';
 import { continueGame, startGame } from './game-flow.js';
-import { idiomCount, modeLabel, promptLine } from './engine.js';
-import type { MatchMode } from './engine.js';
+import { idiomCount, modeLabel, promptLine, type MatchMode } from './engine.js';
+
 import type { SessionService } from './session-service.js';
 
 export const CHAIN_HELP = [

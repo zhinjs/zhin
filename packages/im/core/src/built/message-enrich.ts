@@ -5,8 +5,8 @@ import type { Plugin } from '../plugin.js';
 import { Message, type MessageChannel } from '../message.js';
 import type { Adapters } from '../adapter.js';
 import type { MessageElement, SendContent } from '../types.js';
-import type { SenderRole } from './roles.js';
-import { hasSenderRole } from './roles.js';
+import { hasSenderRole, type SenderRole } from './roles.js';
+
 import { resolveSubjectRoles } from './authorization.js';
 import { getHostRootPlugin } from '../host-plugin-registry.js';
 

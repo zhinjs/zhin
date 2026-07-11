@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import type { TttDatabase } from '../src/session-service.js';
-import { QueueService, SessionService } from '../src/session-service.js';
+import { QueueService, SessionService, type TttDatabase } from '../src/session-service.js';
+
 import { emptyBoard } from '../src/engine.js';
 
 type Row = Record<string, unknown>;

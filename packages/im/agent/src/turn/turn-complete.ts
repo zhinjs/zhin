@@ -63,6 +63,9 @@ export async function finalizeTurnAfterAgentLoop(p: FinalizeTurnAfterLoopParams)
     path: finalizePath,
     iterations: p.loopResult.iterations,
     model: p.loopResult.model,
+    userInput: p.rawContent.trim() || undefined,
+    thinking: p.loopResult.thinking,
+    output: p.reply.trim() || undefined,
   });
   if (p.mode === 'text') {
     p.host.orchestrator?.hooks.trigger(createAIHookEvent('message', 'sent', p.sessionId, {

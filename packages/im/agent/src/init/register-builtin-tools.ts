@@ -11,7 +11,8 @@ import type { AgentOrchestrator } from '../orchestrator/index.js';
 import { createBuiltinTools } from '../builtin-tools.js';
 import { collectPluginSkillSearchRoots } from '../discovery/utils.js';
 import { discoverWorkspaceSkills, loadAlwaysSkillsContent, buildSkillsSummaryXML } from '../discovery/skills.js';
-import { discoverWorkspaceAgents } from '../discovery/agents.js';
+import { discoverWorkspaceAgents, loadAgentInstructionsBody } from '../discovery/agents.js';
+import { registerPluginAgentSurfaces } from '../discovery/register-agent-surface.js';
 import { discoverWorkspaceTools, buildToolFromMeta } from '../discovery/tools.js';
 import { resolveSkillInstructionMaxChars, DEFAULT_CONFIG } from '../config/index.js';
 import { loadBootstrapFiles, buildContextFiles, buildStableBootstrapSection } from '../bootstrap.js';
@@ -19,6 +20,7 @@ import { loadBootstrapWithProfile, resolveAssistantConfig } from '../assistant/i
 import { createAIHookEvent } from '../orchestrator/hook-registry.js';
 import { createScheduleTools } from '../schedule-manager.js';
 import { createGenerateImageTool } from '../builtin/generate-image-tool.js';
+import { markAgentBootstrapReady } from './bootstrap-gate.js';
 import type { AIServiceRefs } from './shared-refs.js';
 
 export function registerBuiltinTools(refs: AIServiceRefs): void {
@@ -26,8 +28,14 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
   const { useContext, root, logger } = plugin;
 
   useContext('ai', 'tool', (ai, toolService) => {
-    if (!ai || !toolService) return;
-    if (!ai.isReady()) return;
+    if (!ai || !toolService) {
+      markAgentBootstrapReady();
+      return;
+    }
+    if (!ai.isReady()) {
+      markAgentBootstrapReady();
+      return;
+    }
 
     const provider = ai.getProvider();
     const agentCfg = ai.getAgentConfig();
@@ -205,8 +213,8 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
         }
         let systemPrompt: string | undefined;
         try {
-          const content = await fs.promises.readFile(meta.filePath, 'utf-8');
-          const body = content.replace(/^---\s*\n[\s\S]*?\n---\s*(?:\n|$)/, '').trim();
+          const agentDir = path.dirname(meta.filePath);
+          const body = await loadAgentInstructionsBody(agentDir);
           if (body) systemPrompt = body;
         } catch { /* ignore */ }
         orchestrator.addAgentPreset({
@@ -245,11 +253,35 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
         logger.warn(formatCompact( { error: e instanceof Error ? e.message : String(e) }));
       }
 
-      // Step 1c: discover *.agent.md agent presets
+      // Step 1c: discover fractal agents/ presets
       try {
         agentCount = await syncWorkspaceAgents();
       } catch (e: unknown) {
         logger.debug(`Failed to discover workspace agents: ${e instanceof Error ? e.message : String(e)}`);
+      }
+
+      // Step 1d: discover plugin agent/ authoring surfaces
+      try {
+        const orchestrator = root.inject?.('agent') as AgentOrchestrator | undefined;
+        const configService = root.inject('config');
+        const appConfig = configService?.getPrimary<{ connections?: Record<string, unknown> }>() ?? {};
+        if (orchestrator) {
+          const reg = await registerPluginAgentSurfaces(orchestrator, root, {
+            connectionsConfig: appConfig.connections,
+            toolService,
+          });
+          toolCount += reg.tools;
+          skillCount += reg.skills;
+          agentCount += reg.workspaceAgents;
+          logger.debug(formatCompact({
+            agentSurfaceTools: reg.tools,
+            agentSurfaceSkills: reg.skills,
+            agentSurfaceSchedules: reg.schedules,
+            agentSurfaceConnections: reg.connections,
+          }));
+        }
+      } catch (e: unknown) {
+        logger.warn(formatCompact({ agentSurface: 'fail', error: e instanceof Error ? e.message : String(e) }));
       }
 
       // Step 2: load bootstrap files
@@ -286,7 +318,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
         logger.debug(`Bootstrap files not loaded: ${e instanceof Error ? e.message : String(e)}`);
       }
 
-      logger.info(formatCompact( {
+      logger.debug(formatCompact( {
         内置工具: builtinTools.length,
         定时任务工具: scheduleTools.length,
         技能数量: skillCount,
@@ -296,7 +328,6 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
         引导文件: loadedFiles.length ? loadedFiles.join(',') : undefined,
       }));
 
-      // Trigger agent:bootstrap hook
       const orchestrator2 = root.inject?.('agent') as AgentOrchestrator | undefined;
       await orchestrator2?.hooks.trigger(createAIHookEvent('agent', 'bootstrap', undefined, {
         workspaceDir: process.cwd(),
@@ -360,7 +391,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
           }
         }
       }
-    })();
+    })().finally(() => markAgentBootstrapReady());
 
     return () => {
       disposers.forEach(d => d());

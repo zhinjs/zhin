@@ -4,8 +4,7 @@
  */
 
 import type { ProviderInstanceConfig } from '../llm/types/model.js';
-import type { ImageGenerateRequest, ImageGenerateResult } from '../image-generation.js';
-import { CLOUDFLARE_DEFAULT_IMAGE_MODEL } from '../image-generation.js';
+import { CLOUDFLARE_DEFAULT_IMAGE_MODEL, type ImageGenerateRequest, type ImageGenerateResult } from '../image-generation.js';
 
 export async function generateCloudflareImage(
   config: ProviderInstanceConfig,

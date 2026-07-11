@@ -3,8 +3,8 @@
  */
 
 import { formatCompact, Logger, truncatePreview } from '@zhin.js/logger';
-import type { AgentMessage } from '../llm/types/agent-message.js';
-import { createUserMessage } from '../llm/types/agent-message.js';
+import { createUserMessage, type AgentMessage } from '../llm/types/agent-message.js';
+
 import type { Model } from '../llm/types/model.js';
 import { completeSimple, createContext } from '../llm/index.js';
 import {

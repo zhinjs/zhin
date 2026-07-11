@@ -574,8 +574,8 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
     try {
       await this.refreshAccessToken();
       this.$connected = true;
-      this.logger.info(formatCompact({ op: 'connect', endpoint: this.$config.name }));
-      this.logger.info(formatCompact({ op: 'webhook', path: this.$config.webhookPath || '/wecom/callback' }));
+      this.logger.debug(formatCompact({ op: 'connect', endpoint: this.$config.name }));
+      this.logger.debug(formatCompact({ op: 'webhook', path: this.$config.webhookPath || '/wecom/callback' }));
     } catch (error) {
       this.logger.error('Failed to connect WeCom bot:', error);
       throw error;
@@ -584,7 +584,7 @@ export class WecomEndpoint implements Endpoint<WecomEndpointConfig, WecomMessage
 
   async $disconnect(): Promise<void> {
     this.$connected = false;
-    this.logger.info(formatCompact({ op: 'disconnect', endpoint: this.$config.name }));
+    this.logger.debug(formatCompact({ op: 'disconnect', endpoint: this.$config.name }));
   }
 
   // ── 企业微信特有 API ──

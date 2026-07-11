@@ -23,8 +23,7 @@ vi.mock('@zhin.js/logger', async (importOriginal) => {
   };
 });
 
-import { ContextManager, createContextManager, CHAT_MESSAGE_MODEL, CONTEXT_SUMMARY_MODEL } from '@zhin.js/ai';
-import type { MessageRecord } from '@zhin.js/ai';
+import { ContextManager, createContextManager, CHAT_MESSAGE_MODEL, CONTEXT_SUMMARY_MODEL, type MessageRecord } from '@zhin.js/ai';
 
 describe('ContextManager', () => {
   let manager: ContextManager;

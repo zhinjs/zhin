@@ -41,7 +41,7 @@ export class NapCatWsClient extends NapCatEndpointBase {
         if (!this.$config.access_token) {
           this.logger.warn(formatCompact({ endpoint: this.$id, ok: false, error: 'missing access_token' }));
         }
-        this.logger.info(formatCompact({ endpoint: this.$id, mode: 'ws' }));
+        this.logger.debug(formatCompact({ endpoint: this.$id, mode: 'ws' }));
         this.startHeartbeat();
         resolve();
       });
@@ -131,7 +131,7 @@ export class NapCatWsClient extends NapCatEndpointBase {
 
   protected handleMeta(event: any): void {
     if (event.meta_event_type === 'lifecycle' && event.sub_type === 'connect') {
-      this.logger.info(formatCompact({ endpoint: this.$id, lifecycle: 'connect', self_id: event.self_id }));
+      this.logger.debug(formatCompact({ endpoint: this.$id, lifecycle: 'connect', self_id: event.self_id }));
     }
   }
 }

@@ -24,7 +24,7 @@
 import { usePlugin } from 'zhin.js';
 
 const plugin = usePlugin();
-const { logger, root } = plugin;
+const { root } = plugin;
 
 // ─── 配置 ────────────────────────────────────────────────────────────────────
 

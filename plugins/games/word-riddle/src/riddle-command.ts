@@ -1,8 +1,8 @@
 import type { Message, Plugin } from 'zhin.js';
 import { channelKey } from '@zhin.js/game-shared';
 import { continueGame, startGame } from './game-flow.js';
-import { riddleCount } from './riddles-catalog.js';
-import type { RiddleType } from './riddles-catalog.js';
+import { riddleCount, type RiddleType } from './riddles-catalog.js';
+
 import { typeLabel } from './engine.js';
 import type { SessionService } from './session-service.js';
 

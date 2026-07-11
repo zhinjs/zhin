@@ -98,7 +98,13 @@ root.addMiddleware(async (message, next) => {
 
 ## AI 工具（Skill）
 
-适配器内置 Discord 服务器管理 Skill，工具供 AI 调用。
+| 类别 | 路径 |
+|------|------|
+| Permit 词汇 | `agent/PERMITS.md` |
+| 平台工具（7 个） | `agent/tools/`（`discord_*`：角色、Embed、反应等） |
+| 技能说明 | `agent/skills/discord.md` |
+| 群管标准工具 | `createSceneManagementTools()` |
+
 
 > 工具使用 Discord 的 Snowflake ID 格式标识 `guild_id`、`user_id`、`channel_id`。
 

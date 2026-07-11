@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { MessageCommand } from '@zhin.js/core';
+import { MessageCommand, type Message, type Plugin } from '@zhin.js/core';
 import {
   SceneIdentityService,
   setSceneIdentityService,
@@ -26,7 +26,6 @@ import {
   getCollaborationSceneService,
   resetCollaborationSceneService,
 } from '../../src/collaboration/scene-service.js';
-import type { Message, Plugin } from '@zhin.js/core';
 
 function makeMessage(overrides: Partial<Message> & { $content?: Array<{ type: string; data?: Record<string, unknown> }> } = {}): Message {
   return {

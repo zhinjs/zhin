@@ -6,6 +6,7 @@ import {
   isIcqqRequestPayload,
   shouldRefreshListsOnMeta,
 } from "../src/icqq-side-events.js";
+import { formatSideEventName } from "zhin.js";
 
 describe("isIcqqNoticePayload", () => {
   it("识别 OneBot notice", () => {
@@ -22,7 +23,7 @@ describe("isIcqqNoticePayload", () => {
 });
 
 describe("formatIcqqNotice", () => {
-  it("映射 group_increase → group_member_increase", () => {
+  it("映射 group_increase → notice.group.member_increase", () => {
     const n = formatIcqqNotice(
       {
         post_type: "notice",
@@ -35,14 +36,16 @@ describe("formatIcqqNotice", () => {
       },
       "8596238",
     );
-    expect(n.$type).toBe("group_member_increase");
+    expect(n.$type).toBe("notice");
+    expect(n.$scene_type).toBe("group");
+    expect(n.$sub_type).toBe("member_increase");
+    expect(formatSideEventName(n)).toBe("notice.group.member_increase");
     expect(n.$adapter).toBe("icqq");
-    expect(n.$channel.type).toBe("group");
-    expect(n.$channel.id).toBe("860669870");
-    expect(n.$subType).toBe("approve");
+    expect(n.$scene_id).toBe("860669870");
+    expect(n.sub_type).toBe("approve");
   });
 
-  it("notify poke → group_poke", () => {
+  it("notify poke → notice.group.poke", () => {
     const n = formatIcqqNotice(
       {
         post_type: "notice",
@@ -54,7 +57,7 @@ describe("formatIcqqNotice", () => {
       },
       "endpoint",
     );
-    expect(n.$type).toBe("group_poke");
+    expect(formatSideEventName(n)).toBe("notice.group.poke");
   });
 });
 
@@ -75,7 +78,7 @@ describe("formatIcqqRequest", () => {
       "8596238",
       ipc as any,
     );
-    expect(req.$type).toBe("friend_add");
+    expect(formatSideEventName(req)).toBe("request.friend.add");
     await req.$approve("备注");
     expect(ipc.request).toHaveBeenCalledWith(
       "handle_friend_request",
@@ -102,8 +105,8 @@ describe("formatIcqqRequest", () => {
       "endpoint",
       { request: vi.fn() } as any,
     );
-    expect(req.$type).toBe("group_invite");
-    expect(req.$channel.type).toBe("group");
+    expect(formatSideEventName(req)).toBe("request.group.invite");
+    expect(req.$scene_type).toBe("group");
   });
 });
 

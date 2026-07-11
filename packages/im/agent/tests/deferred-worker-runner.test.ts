@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { AgentTool, AIProvider } from '@zhin.js/ai';
-import { resetLlmApiRegistryForTests } from '@zhin.js/ai';
+import { resetLlmApiRegistryForTests, type AgentTool, type AIProvider } from '@zhin.js/ai';
+
 import { wireMockProviderToLlmApi } from './helpers/mock-llm-api.js';
 import { DeferredWorkerRunner } from '../src/deferred-worker-runner.js';
 

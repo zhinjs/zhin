@@ -355,7 +355,7 @@ export async function handleCoreRpc(
       }
       return true;
 
-    case "endpoint:list": {
+    case "endpoint.list": {
       try {
         const endpointsWithPending = await collectEndpointsListWithPending(root);
         reply(ctx, { requestId, data: { endpoints: endpointsWithPending } });
@@ -365,13 +365,13 @@ export async function handleCoreRpc(
       return true;
     }
 
-    case "endpoint:info": {
+    case "endpoint.info": {
       try {
         const d = (message.data || {}) as Record<string, unknown>;
-        const adapter = d.adapter as string;
-        const endpointId = d.endpointId as string;
+        const adapter = d.$adapter as string;
+        const endpointId = d.$endpoint as string;
         if (!adapter || !endpointId) {
-          reply(ctx, { requestId, error: "adapter and endpointId required" });
+          reply(ctx, { requestId, error: "$adapter and $endpoint required" });
           return true;
         }
         const ad = root.inject(adapter as keyof Plugin.Contexts);
@@ -399,16 +399,16 @@ export async function handleCoreRpc(
       return true;
     }
 
-    case "endpoint:sendMessage": {
+    case "endpoint.send_message": {
       try {
         const d = (message.data || {}) as Record<string, unknown>;
-        const adapter = d.adapter as string;
-        const endpointId = d.endpointId as string;
-        const id = d.id as string;
-        const msgType = d.type as string;
-        const content = d.content;
+        const adapter = d.$adapter as string;
+        const endpointId = d.$endpoint as string;
+        const id = d.$channel_id as string;
+        const msgType = d.$channel_type as string;
+        const content = d.$content;
         if (!adapter || !endpointId || !id || !msgType || content === undefined) {
-          reply(ctx, { requestId, error: "adapter, endpointId, id, type, content required" });
+          reply(ctx, { requestId, error: "$adapter, $endpoint, $channel_id, $channel_type, $content required" });
           return true;
         }
         const ad = root.inject(adapter as keyof Plugin.Contexts);
@@ -423,7 +423,7 @@ export async function handleCoreRpc(
               ? content
               : String(content);
         const parent = toConsoleChannelParent(
-          d.parent as { type?: string; id?: string; name?: string } | undefined,
+          d.$parent as { type?: string; id?: string; name?: string } | undefined,
         );
         const messageId = await ad.sendMessage({
           context: adapter,
@@ -433,7 +433,7 @@ export async function handleCoreRpc(
           ...(parent ? { parent } : {}),
           content: normalized,
         });
-        reply(ctx, { requestId, data: { messageId } });
+        reply(ctx, { requestId, data: { message_id: messageId } });
       } catch (error) {
         reply(ctx, { requestId, error: (error as Error).message });
       }

@@ -165,7 +165,7 @@ export class Scheduler implements IScheduler {
     this.recomputeNextRuns();
     this.saveStore();
     this.armTimer();
-    logger.info(formatCompact( { jobs: this.store?.jobs.length ?? 0 }));
+    logger.debug(formatCompact( { jobs: this.store?.jobs.length ?? 0 }));
   }
 
   stop(): void {

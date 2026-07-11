@@ -90,8 +90,8 @@ export class WeChatMPEndpoint extends EventEmitter implements Endpoint<WeChatMPC
             // 定期刷新access_token
             this.startTokenRefreshTimer();
             
-            this.logger.info(formatCompact({ endpoint: this.$config.name }));
-            this.logger.info(formatCompact( { op: "webhook", path: this.$config.path }));
+            this.logger.debug(formatCompact({ endpoint: this.$config.name }));
+            this.logger.debug(formatCompact( { op: "webhook", path: this.$config.path }));
             this.$connected= true;
         } catch (error) {
             this.logger.error('Failed to connect WeChat MP bot:', error);
@@ -105,7 +105,7 @@ export class WeChatMPEndpoint extends EventEmitter implements Endpoint<WeChatMPC
             this.tokenRefreshTimer = undefined;
         }
         this.$connected = false;
-        this.logger.info(formatCompact( { op: "disconnect", endpoint: this.$config.name }));
+        this.logger.debug(formatCompact( { op: "disconnect", endpoint: this.$config.name }));
     }
 
     private handleVerification(ctx: RouterContext): void {
@@ -124,7 +124,7 @@ export class WeChatMPEndpoint extends EventEmitter implements Endpoint<WeChatMPC
             : { signature, timestamp, nonce };
         const signFields = msgSignature ? 4 : 3;
 
-        this.logger.info(formatCompact({
+        this.logger.debug(formatCompact({
             op: "verify",
             stage: "recv",
             path: ctx.path,
@@ -168,7 +168,7 @@ export class WeChatMPEndpoint extends EventEmitter implements Endpoint<WeChatMPC
             return;
         }
 
-        this.logger.info(formatCompact({
+        this.logger.debug(formatCompact({
             op: "verify",
             stage: "sign",
             ok: true,
@@ -180,7 +180,7 @@ export class WeChatMPEndpoint extends EventEmitter implements Endpoint<WeChatMPC
         if (secureMode && echostr && this.isEncryptedEchostr(echostr)) {
             try {
                 body = this.decryptEchostr(echostr);
-                this.logger.info(formatCompact({
+                this.logger.debug(formatCompact({
                     op: "verify",
                     stage: "decrypt",
                     ok: true,
@@ -200,7 +200,7 @@ export class WeChatMPEndpoint extends EventEmitter implements Endpoint<WeChatMPC
                 return;
             }
         } else if (secureMode && echostr) {
-            this.logger.info(formatCompact({
+            this.logger.debug(formatCompact({
                 op: "verify",
                 stage: "decrypt",
                 ok: true,
@@ -209,7 +209,7 @@ export class WeChatMPEndpoint extends EventEmitter implements Endpoint<WeChatMPC
             }));
         }
 
-        this.logger.info(formatCompact({
+        this.logger.debug(formatCompact({
             op: "verify",
             stage: "done",
             ok: true,
@@ -255,7 +255,7 @@ export class WeChatMPEndpoint extends EventEmitter implements Endpoint<WeChatMPC
             
             if (wechatMessage) {
                 const message = this.$formatMessage(wechatMessage);
-                this.logger.info(formatCompact({
+                this.logger.debug(formatCompact({
                     recv: `private(${message.$channel.id})`,
                     endpoint: message.$endpoint,
                     preview: truncatePreview(segment.raw(message.$content)),
@@ -286,7 +286,7 @@ export class WeChatMPEndpoint extends EventEmitter implements Endpoint<WeChatMPC
                 ctx.set("Content-Type", "text/xml");
                 ctx.body = replyXML || "success";
                 if (replyXML) {
-                    this.logger.info(formatCompact({
+                    this.logger.debug(formatCompact({
                         op: "passive_reply",
                         stage: "sent",
                         encrypted: encryptReply,
@@ -622,7 +622,7 @@ export class WeChatMPEndpoint extends EventEmitter implements Endpoint<WeChatMPC
             return "";
         }
 
-        this.logger.info(formatCompact({
+        this.logger.debug(formatCompact({
             op: "passive_reply",
             ok: true,
             plainLen: text.length,
@@ -635,13 +635,13 @@ export class WeChatMPEndpoint extends EventEmitter implements Endpoint<WeChatMPC
         if (wechatMsg.MsgType === 'event') {
             switch (wechatMsg.Event) {
                 case 'subscribe':
-                    this.logger.info(formatCompact( { op: "subscribe", user: wechatMsg.FromUserName, scene: wechatMsg.EventKey }));
+                    this.logger.debug(formatCompact( { op: "subscribe", user: wechatMsg.FromUserName, scene: wechatMsg.EventKey }));
                     return this.buildTextReply(wechatMsg, '感谢关注！');
                 case 'unsubscribe':
-                    this.logger.info(formatCompact( { op: "unsubscribe", user: wechatMsg.FromUserName }));
+                    this.logger.debug(formatCompact( { op: "unsubscribe", user: wechatMsg.FromUserName }));
                     return '';
                 case 'SCAN':
-                    this.logger.info(formatCompact( { op: "scan", user: wechatMsg.FromUserName, scene: wechatMsg.EventKey }));
+                    this.logger.debug(formatCompact( { op: "scan", user: wechatMsg.FromUserName, scene: wechatMsg.EventKey }));
                     return '';
                 case 'LOCATION':
                     this.logger.debug(`User location: ${wechatMsg.FromUserName}, lat=${wechatMsg.Location_X}, lng=${wechatMsg.Location_Y}`);

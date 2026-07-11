@@ -1,10 +1,9 @@
 /**
  * Email 适配器
  */
-import { Adapter, Plugin } from "zhin.js";
+import { Adapter, Plugin, type OutboundRichSegmentPolicy } from 'zhin.js';
 import { EmailEndpoint } from "./endpoint.js";
 import type { EmailEndpointConfig } from "./types.js";
-import type { OutboundRichSegmentPolicy } from "zhin.js";
 
 export class EmailAdapter extends Adapter<EmailEndpoint> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;

@@ -21,5 +21,21 @@ describe('activity-feedback event-context', () => {
       scope: 'private',
     } as AIEventPayload);
     expect(ctx?.userId).toBe('123');
+    expect(ctx?.groupId).toBe('123');
+  });
+
+  it('Slack 私聊应保留 DM channel 为 groupId 供出站 targeting', () => {
+    const ctx = toActivityFeedbackEventContext({
+      platform: 'slack',
+      endpointId: 'zhin',
+      sessionId: 'slack:zhin:private:U0AR2NQHRFV#1783730885856-1',
+      sceneId: 'D0BGBM1S1J9',
+      userId: 'U0AR2NQHRFV',
+      scope: 'private',
+      messageId: 'D0BGBM1S1J9:1783730885856.000000',
+    } as AIEventPayload);
+    expect(ctx?.userId).toBe('U0AR2NQHRFV');
+    expect(ctx?.groupId).toBe('D0BGBM1S1J9');
+    expect(ctx?.options.groupId).toBe('D0BGBM1S1J9');
   });
 });

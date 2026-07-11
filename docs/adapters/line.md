@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/line/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/line/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=388a9e969e336bdb -->
+<!-- sync-adapter-docs:sha256=37e01ef3aa6d0778 -->
 
 # @zhin.js/adapter-line
 
@@ -69,6 +69,16 @@ LINE 要求 Webhook URL 以 HTTPS 开头。常见方案：
 | file | file | 文件 |
 | location | location | 位置信息 |
 | sticker | sticker | 贴纸 |
+
+## AI 工具
+
+| 类别 | 路径 |
+|------|------|
+| Permit 词汇 | `agent/PERMITS.md` |
+| 平台工具（2 个） | `agent/tools/`（`line_get_profile`、`line_get_group_members`） |
+| 技能说明 | `agent/skills/line.md` |
+| 群管标准工具 | 覆写 `ISceneManagement` 后由 `createSceneManagementTools()` 注册 |
+
 
 ## 已知限制
 

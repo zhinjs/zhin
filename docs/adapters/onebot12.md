@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/onebot12/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/onebot12/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=b234c9c66a924b23 -->
+<!-- sync-adapter-docs:sha256=0e3d5843bdb0d4c7 -->
 
 # @zhin.js/adapter-onebot12
 
@@ -109,6 +109,11 @@ endpoints:
 
 - 事件：`type`（meta/message/notice/request）、`detail_type`、`message`（消息段数组）等，见 [事件](https://12.onebot.dev/connect/data-protocol/event/)。
 - 动作：`send_message`（params: detail_type, user_id/group_id/channel_id, message）、`delete_message` 等，见 [动作请求](https://12.onebot.dev/connect/data-protocol/action-request/)。
+
+## AI 工具
+
+技能说明见 `agent/skills/onebot12.md`。群管标准工具由 `createSceneManagementTools()` 注册。
+
 
 ## 协议文档
 

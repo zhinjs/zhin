@@ -1,5 +1,5 @@
-import type { Plugin } from '@zhin.js/core';
-import { seedHtmlRenderer } from '@zhin.js/core';
+import { seedHtmlRenderer, type Plugin } from '@zhin.js/core';
+
 import type { AppConfig } from '../types.js';
 import { registerHtmlRendererImIntegration } from './html-renderer-im.js';
 

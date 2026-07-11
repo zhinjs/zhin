@@ -1,14 +1,5 @@
 import type { Adapter } from 'zhin.js';
-import {
-  enableActivityFeedbackForBot,
-  isGenericActivityFeedbackManager,
-  type ActivityFeedbackManager,
-  type ActivityFeedbackPhase,
-  type EndpointWithActivityFeedback,
-  type PlatformActivityFeedbackManager,
-  type ResolvedActivityFeedbackPhaseConfig,
-} from '@zhin.js/agent';
-import type { ActivityFeedbackEventContext } from '@zhin.js/agent';
+import { enableActivityFeedbackForBot, isGenericActivityFeedbackManager, type ActivityFeedbackManager, type ActivityFeedbackPhase, type EndpointWithActivityFeedback, type PlatformActivityFeedbackManager, type ResolvedActivityFeedbackPhaseConfig, type ActivityFeedbackEventContext } from '@zhin.js/agent';
 
 /** IM 侧 endpoint 访问 seam（便于测试注入 fake） */
 export interface ActivityFeedbackEndpointAccess {

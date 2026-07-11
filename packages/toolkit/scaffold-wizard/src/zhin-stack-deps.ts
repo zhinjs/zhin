@@ -2,12 +2,7 @@ import { createRequire } from 'node:module';
 import fs from 'fs-extra';
 import path from 'node:path';
 import { DATABASE_PACKAGES } from './types.js';
-import type { PackageJsonLike } from './project-deps.js';
-import {
-  findMissingPackageDependencies,
-  findUnresolvedPackageInstalls,
-  isAiEnabledInConfig,
-} from './project-deps.js';
+import { findMissingPackageDependencies, findUnresolvedPackageInstalls, isAiEnabledInConfig, type PackageJsonLike } from './project-deps.js';
 
 /**
  * User project dependency policy: scaffolded dependencies intentionally float to latest.

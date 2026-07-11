@@ -5,9 +5,9 @@
 import { Registry, Definition, Databases, Database } from "@zhin.js/database";
 import { formatCompact } from '@zhin.js/logger';
 import { DatabaseConfig, Models } from "../types.js";
-import { Feature, FeatureJSON } from "@zhin.js/kernel";
+import { Feature, FeatureJSON, type PluginLike } from '@zhin.js/kernel';
 import { Plugin } from "../plugin.js";
-import type { PluginLike } from '@zhin.js/kernel';
+
 import { SystemLogDefinition } from "../models/system-log.js";
 import { UserDefinition } from "../models/user.js";
 

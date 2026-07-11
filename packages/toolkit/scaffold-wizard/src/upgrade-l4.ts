@@ -1,15 +1,7 @@
 import fs from 'fs-extra';
 import path from 'node:path';
-import type { PackageJsonLike } from './project-deps.js';
-import {
-  diagnoseAIDependencies,
-  formatAIDependencyFixCommand,
-  getRequiredAIDependenciesForConfig,
-  isAiEnabledInConfig,
-  findMissingPackageDependencies,
-  findUnresolvedPackageInstalls,
-  packagesNeedingAiStackFix,
-} from './project-deps.js';
+import { diagnoseAIDependencies, formatAIDependencyFixCommand, getRequiredAIDependenciesForConfig, isAiEnabledInConfig, findMissingPackageDependencies, findUnresolvedPackageInstalls, packagesNeedingAiStackFix, type PackageJsonLike } from './project-deps.js';
+
 import { diagnoseOptionalPeers, formatOptionalPeerFixCommand, getOptionalPeerDependencies } from './optional-peers.js';
 
 export interface UpgradeToL4Diagnosis {

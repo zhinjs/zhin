@@ -3,7 +3,7 @@ import { Adapter, Plugin } from "@zhin.js/core";
 import { handleCoreRpc } from "../src/rpc/handlers-core.js";
 import type { ConsoleRpcContext } from "../src/rpc/context.js";
 
-describe("handlers-core endpoint:sendMessage parent", () => {
+describe("handlers-core endpoint.send_message parent", () => {
   it("forwards parent.guild to Adapter.sendMessage", async () => {
     const sendMessage = vi.fn().mockResolvedValue("msg-1");
     const root = new Plugin("/test/root.ts");
@@ -41,15 +41,15 @@ describe("handlers-core endpoint:sendMessage parent", () => {
 
     const handled = await handleCoreRpc(
       {
-        type: "endpoint:sendMessage",
+        type: "endpoint.send_message",
         requestId: "req-1",
         data: {
-          adapter: "icqq-test",
-          endpointId: "8596238",
-          id: "634415832",
-          type: "channel",
-          parent: { type: "guild", id: "650779094005186335" },
-          content: "nihao",
+          $adapter: "icqq-test",
+          $endpoint: "8596238",
+          $channel_id: "634415832",
+          $channel_type: "channel",
+          $parent: { type: "guild", id: "650779094005186335" },
+          $content: "nihao",
         },
       },
       ctx,
@@ -66,7 +66,7 @@ describe("handlers-core endpoint:sendMessage parent", () => {
     });
     expect(emitted[0]).toMatchObject({
       requestId: "req-1",
-      data: { messageId: "msg-1" },
+      data: { message_id: "msg-1" },
     });
   });
 });

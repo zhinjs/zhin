@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { clearZonedClockCache } from '../src/utils/zoned-clock.js';
 import { getNextRun, isJobDue } from '../src/dispatch.js';
 import { isSolarDue } from '../src/resolvers/solar.js';
-import { resolveSolarJob } from '../src/resolve-job.js';
+import { resolveSolarJob, resolveWorkdayJob } from '../src/resolve-job.js';
 
 const TZ = 'Asia/Shanghai';
 
@@ -61,5 +62,49 @@ describe('SolarResolver', () => {
   it('isJobDue delegates to solar resolver', () => {
     const job = resolveSolarJob('0 */15 * * * *', TZ);
     expect(isJobDue(job, at('2025-06-27T10:45:00+08:00'))).toBe(true);
+  });
+
+  it('computes next run for fixed month/day without minute scan (perf)', () => {
+    clearZonedClockCache();
+    const job = resolveSolarJob('0 0 19 9 7 *', TZ);
+    const from = at('2026-07-11T08:12:00+08:00');
+    let dtfCount = 0;
+    const Orig = Intl.DateTimeFormat;
+    Intl.DateTimeFormat = function (...args: unknown[]) {
+      dtfCount++;
+      return new (Orig as typeof Intl.DateTimeFormat)(...(args as ConstructorParameters<typeof Intl.DateTimeFormat>));
+    } as typeof Intl.DateTimeFormat;
+
+    const t0 = Date.now();
+    const next = getNextRun(job, from);
+    const ms = Date.now() - t0;
+
+    expect(next?.toISOString()).toBe(at('2027-07-09T19:00:00+08:00').toISOString());
+    expect(ms).toBeLessThan(200);
+    expect(dtfCount).toBeLessThan(20);
+  });
+
+  it('startup mix stays bounded for test-bot style crons', () => {
+    clearZonedClockCache();
+    let dtfCount = 0;
+    const Orig = Intl.DateTimeFormat;
+    Intl.DateTimeFormat = function (...args: unknown[]) {
+      dtfCount++;
+      return new (Orig as typeof Intl.DateTimeFormat)(...(args as ConstructorParameters<typeof Intl.DateTimeFormat>));
+    } as typeof Intl.DateTimeFormat;
+
+    const from = at('2026-07-11T08:12:00+08:00');
+    const t0 = Date.now();
+    for (let i = 0; i < 3; i++) {
+      getNextRun(resolveSolarJob('0 0 19 9 7 *', TZ), from);
+    }
+    for (let i = 0; i < 7; i++) {
+      getNextRun(resolveSolarJob('0 */15 * * * *', TZ), from);
+    }
+    getNextRun(resolveWorkdayJob('0 0 9 * * *', TZ), from);
+    const ms = Date.now() - t0;
+
+    expect(ms).toBeLessThan(500);
+    expect(dtfCount).toBeLessThan(200);
   });
 });

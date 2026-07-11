@@ -1,9 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as ai from '@zhin.js/ai';
 import { AiCompactionStrategy } from '../../src/memory/ai-compaction-strategy.js';
-import { createMemorySystemForHost } from '../../src/memory/memory-system.js';
+import { createMemorySystemForHost, defaultMemorySystem } from '../../src/memory/memory-system.js';
 import { getCompactionStateCount, clearCompactionStates } from '../../src/memory/compaction-runtime.js';
-import { defaultMemorySystem } from '../../src/memory/memory-system.js';
 
 describe('MemorySystem', () => {
   it('compaction runtime tracks in-memory state count', () => {

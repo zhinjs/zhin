@@ -1,7 +1,7 @@
 import path from "node:path";
 import fs from "node:fs/promises";
-import { Adapter, Message, segment, usePlugin, type SendContent } from "@zhin.js/core";
-import type { ConfigFeature } from "@zhin.js/core";
+import { Adapter, Message, segment, usePlugin, type SendContent, type ConfigFeature } from '@zhin.js/core';
+
 import type {} from "zhin.js";
 
 const plugin = usePlugin();
@@ -284,16 +284,7 @@ export function createAdapterCode(args: {
   let code = `/**
  * ${description}
  */
-import {
-  Endpoint,
-  Adapter,
-  registerAdapter,
-  Message,
-  SendOptions,
-  segment,
-  usePlugin,
-} from "zhin.js";
-
+import { Endpoint, Adapter, registerAdapter, Message, SendOptions, segment, usePlugin } from 'zhin.js';
 declare module "zhin.js" {
   interface RegisteredAdapters {
     "${name}": Adapter<${className}Endpoint>;
@@ -815,7 +806,7 @@ export function listEvents(): any {
       { name: "call.recallMessage", description: "撤回消息时触发" },
     ],
     usage: `// 监听事件示例:
-import { usePlugin } from "zhin.js";
+
 const { root, logger } = usePlugin();
 
 root.on("context.mounted", (name) => {

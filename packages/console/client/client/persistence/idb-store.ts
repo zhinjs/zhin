@@ -1,12 +1,12 @@
 const DB_NAME = "zhin-console";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_INBOX = "inbox";
 const STORE_PENDING = "pending";
 
 export type InboxRecord = {
   id: string;
   adapter: string;
-  endpointId: string;
+  endpoint_id: string;
   kind: "message" | "request" | "notice";
   payload: unknown;
   updatedAt: number;
@@ -42,7 +42,7 @@ export async function idbPutInbox(record: InboxRecord): Promise<void> {
 
 export async function idbListInbox(
   adapter: string,
-  endpointId: string,
+  endpoint_id: string,
   kind: InboxRecord["kind"],
 ): Promise<InboxRecord[]> {
   const db = await openDb();
@@ -53,22 +53,28 @@ export async function idbListInbox(
     req.onerror = () => reject(req.error);
   });
   db.close();
-  return all.filter((r) => r.adapter === adapter && r.endpointId === endpointId && r.kind === kind);
+  return all.filter(
+    (r) =>
+      r.adapter === adapter &&
+      (r.endpoint_id === endpoint_id ||
+        (r as { endpointId?: string }).endpointId === endpoint_id) &&
+      r.kind === kind,
+  );
 }
 
 export async function applyConsoleEvent(event: { type: string; data?: unknown }): Promise<void> {
   const t = event.type;
-  if (t === "endpoint:message" || t === "endpoint:request" || t === "endpoint:notice") {
+  if (t === "message.receive" || t === "request.receive" || t === "notice.receive") {
     const data = event.data as Record<string, unknown> | undefined;
     if (!data) return;
-    const adapter = String(data.adapter ?? "");
-    const endpointId = String(data.endpointId ?? data.bot ?? "");
-    const id = `${adapter}:${endpointId}:${t}:${Date.now()}`;
+    const adapter = String(data.$adapter ?? data.adapter ?? "");
+    const endpoint_id = String(data.$endpoint ?? data.endpoint_id ?? data.endpointId ?? data.bot ?? "");
+    const id = `${adapter}:${endpoint_id}:${t}:${Date.now()}`;
     await idbPutInbox({
       id,
       adapter,
-      endpointId,
-      kind: t === "endpoint:message" ? "message" : t === "endpoint:request" ? "request" : "notice",
+      endpoint_id,
+      kind: t === "message.receive" ? "message" : t === "request.receive" ? "request" : "notice",
       payload: data,
       updatedAt: Date.now(),
     });

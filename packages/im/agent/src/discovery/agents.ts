@@ -1,7 +1,7 @@
 /**
- * Agent 预设发现（*.agent.md 文件扫描）
+ * Agent 预设发现（分形 agents/<name>/ 目录）
  *
- * 加载顺序与 skills 一致：Workspace > ~/.zhin > data > 插件包
+ * 加载顺序：Workspace > ~/.zhin > data > 插件包 agent/subagents（由 register-agent-surface 处理）
  * 同名先发现者优先
  */
 
@@ -10,6 +10,11 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { Logger, type Plugin } from '@zhin.js/core';
 import { getDataDir } from './utils.js';
+import {
+  discoverWorkspaceFractalAgent,
+  resolvePluginPackageRoot,
+} from './agent-surface.js';
+import { isAuthoringDefinition, type AuthoringAgentDefinition } from '../authoring/types.js';
 
 export type SubagentContextMode = 'fork' | 'fresh';
 
@@ -19,10 +24,6 @@ const KNOWN_AGENT_ROLES = new Set([
 
 const logger = new Logger(null, 'builtin-tools');
 
-// ============================================================================
-// 类型
-// ============================================================================
-
 export type AgentEffortLevel = 'low' | 'medium' | 'high' | 'max';
 
 export interface AgentMeta {
@@ -30,38 +31,93 @@ export interface AgentMeta {
   description: string;
   keywords?: string[];
   tags?: string[];
-  /** frontmatter 中声明的工具名列表（白名单） */
   toolNames?: string[];
-  /** 工具黑名单 — 与 toolNames 互斥，从可用工具池中排除 */
   disallowedTools?: string[];
-  /** *.agent.md 文件的绝对路径 */
   filePath: string;
-  /** 首选模型名 */
   model?: string;
-  /** 首选 Provider 名 */
   provider?: string;
-  /** 最大工具调用迭代次数 */
   maxIterations?: number;
-  /** 所属插件名（从 agents/ 目录归属推断） */
   ownerPlugin?: string;
-  /** spawn_task 使用的 AgentRole（默认 subtask 或按预设名推断） */
   role?: string;
-  /** fork：注入主会话快照；fresh：空 standalone 上下文 */
   contextMode?: SubagentContextMode;
-  /** 工具名重定向映射 — key 是 LLM 看到的名字，value 是实际执行的工具名 */
   toolAliases?: Record<string, string>;
-  /** effort 级别 — 映射到 maxIterations 和 reasoning_effort */
   effort?: AgentEffortLevel;
-  /** 记忆范围 — 决定 ContextRepository key 隔离粒度 */
   memory?: 'user' | 'session' | 'agent';
 }
 
-// ============================================================================
-// 发现
-// ============================================================================
+async function importAgentDefinition(agentFile: string): Promise<AuthoringAgentDefinition | undefined> {
+  try {
+    const url = `file://${path.resolve(agentFile)}?t=${Date.now()}`;
+    const mod = await import(url);
+    const exported = mod.default ?? mod;
+    if (isAuthoringDefinition(exported, 'agent')) return exported as AuthoringAgentDefinition;
+  } catch (e) {
+    logger.debug(`Failed to import agent definition ${agentFile}: ${e}`);
+  }
+  return undefined;
+}
+
+function agentMetaFromFractal(
+  name: string,
+  agentDir: string,
+  def: AuthoringAgentDefinition | undefined,
+  instructionsBody: string | undefined,
+  ownerPlugin?: string,
+): AgentMeta | null {
+  const description = def?.description;
+  if (!description && !instructionsBody) return null;
+  const agentFile = [path.join(agentDir, 'agent.ts'), path.join(agentDir, 'agent.js')]
+    .find((p) => fs.existsSync(p)) ?? path.join(agentDir, 'agent.ts');
+  const roleRaw = def?.role?.trim();
+  return {
+    name,
+    description: description ?? name,
+    keywords: def?.keywords,
+    tags: def?.tags,
+    toolNames: def?.toolNames,
+    disallowedTools: def?.disallowedTools,
+    filePath: agentFile,
+    maxIterations: def?.maxIterations,
+    ownerPlugin,
+    role: roleRaw && KNOWN_AGENT_ROLES.has(roleRaw) ? roleRaw : undefined,
+    contextMode: def?.contextMode,
+  };
+}
+
+async function discoverFractalAgentsInDir(
+  agentsDir: string,
+  ownerPlugin?: string,
+): Promise<AgentMeta[]> {
+  const agents: AgentMeta[] = [];
+  if (!fs.existsSync(agentsDir)) return agents;
+
+  let entries: fs.Dirent[];
+  try {
+    entries = await fs.promises.readdir(agentsDir, { withFileTypes: true });
+  } catch {
+    return agents;
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const agentDir = path.join(agentsDir, entry.name);
+    const fractal = await discoverWorkspaceFractalAgent(agentDir);
+    if (!fractal) continue;
+    const def = fractal.agentDefinition ?? await importAgentDefinition(path.join(agentDir, 'agent.ts'));
+    const meta = agentMetaFromFractal(
+      fractal.name,
+      agentDir,
+      def,
+      fractal.instructionsBody,
+      ownerPlugin,
+    );
+    if (meta) agents.push(meta);
+  }
+  return agents;
+}
 
 /**
- * 扫描 agents/ 目录，发现 *.agent.md 文件
+ * 扫描 agents/ 分形目录，发现 workspace / plugin workspace agents
  */
 export async function discoverWorkspaceAgents(root?: Plugin | null): Promise<AgentMeta[]> {
   const agents: AgentMeta[] = [];
@@ -72,21 +128,15 @@ export async function discoverWorkspaceAgents(root?: Plugin | null): Promise<Age
     path.join(os.homedir(), '.zhin', 'agents'),
     path.join(getDataDir(), 'agents'),
   ];
-  // Build dir → pluginName mapping for attribution
+
   const dirToPlugin = new Map<string, string>();
   if (root) {
     const addPluginDir = (p: Plugin) => {
       if (!p?.filePath) return;
-      const dir = path.dirname(p.filePath);
-      const d = path.join(dir, 'agents');
+      const packageRoot = resolvePluginPackageRoot(p.filePath);
+      const d = path.join(packageRoot, 'agents');
       if (!agentDirs.includes(d)) agentDirs.push(d);
       dirToPlugin.set(d, p.name);
-      const dirName = path.basename(dir);
-      if (dirName === 'src' || dirName === 'lib') {
-        const d2 = path.join(path.dirname(dir), 'agents');
-        if (!agentDirs.includes(d2)) agentDirs.push(d2);
-        dirToPlugin.set(d2, p.name);
-      }
     };
     addPluginDir(root);
     for (const child of (root.children || []) as Plugin[]) {
@@ -95,91 +145,33 @@ export async function discoverWorkspaceAgents(root?: Plugin | null): Promise<Age
   }
 
   for (const agentsDir of agentDirs) {
-    if (!fs.existsSync(agentsDir)) continue;
-
-    let entries: fs.Dirent[];
-    try {
-      entries = await fs.promises.readdir(agentsDir, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-
-    for (const entry of entries) {
-      let agentMdPath: string | undefined;
-      if (entry.isFile() && entry.name.endsWith('.agent.md')) {
-        agentMdPath = path.join(agentsDir, entry.name);
-      } else if (entry.isDirectory()) {
-        const nested = path.join(agentsDir, entry.name, `${entry.name}.agent.md`);
-        if (fs.existsSync(nested)) agentMdPath = nested;
+    const found = await discoverFractalAgentsInDir(agentsDir, dirToPlugin.get(agentsDir));
+    for (const meta of found) {
+      if (seenNames.has(meta.name)) {
+        logger.debug(`Agent '${meta.name}' 已由先序目录加载，跳过: ${meta.filePath}`);
+        continue;
       }
-      if (!agentMdPath) continue;
-
-      try {
-        const content = await fs.promises.readFile(agentMdPath, 'utf-8');
-        const match = content.match(/^---\s*\n([\s\S]*?)\n---\s*(?:\n|$)/);
-        if (!match) {
-          logger.debug(`Agent文件 ${agentMdPath} 没有有效的frontmatter格式`);
-          continue;
-        }
-
-        let jsYaml: any;
-        try {
-          jsYaml = await import('js-yaml');
-          if (jsYaml.default) jsYaml = jsYaml.default;
-        } catch (e) {
-          logger.warn(`Unable to import js-yaml module: ${e}`);
-          continue;
-        }
-
-        const metadata = jsYaml.load(match[1]);
-        if (!metadata || !metadata.name || !metadata.description) {
-          logger.debug(`Agent文件 ${agentMdPath} 缺少必需的 name/description 字段`);
-          continue;
-        }
-
-        if (seenNames.has(metadata.name)) {
-          logger.debug(`Agent '${metadata.name}' 已由先序目录加载，跳过: ${agentMdPath}`);
-          continue;
-        }
-        seenNames.add(metadata.name);
-
-        const roleRaw = typeof metadata.role === 'string' ? metadata.role.trim() : undefined;
-        const contextRaw = typeof metadata.contextMode === 'string' ? metadata.contextMode.trim() : undefined;
-        const effortRaw = typeof metadata.effort === 'string' ? metadata.effort.trim() : undefined;
-        const memoryRaw = typeof metadata.memory === 'string' ? metadata.memory.trim() : undefined;
-        const VALID_EFFORT = new Set<AgentEffortLevel>(['low', 'medium', 'high', 'max']);
-        const VALID_MEMORY = new Set(['user', 'session', 'agent']);
-        agents.push({
-          name: metadata.name,
-          description: metadata.description,
-          keywords: metadata.keywords || [],
-          tags: metadata.tags || [],
-          toolNames: Array.isArray(metadata.tools) ? metadata.tools : [],
-          disallowedTools: Array.isArray(metadata.disallowedTools) ? metadata.disallowedTools : undefined,
-          filePath: agentMdPath,
-          model: metadata.model,
-          provider: metadata.provider,
-          maxIterations: typeof metadata.maxIterations === 'number' ? metadata.maxIterations : undefined,
-          ownerPlugin: dirToPlugin.get(agentsDir),
-          role: roleRaw && KNOWN_AGENT_ROLES.has(roleRaw) ? roleRaw : undefined,
-          contextMode: contextRaw === 'fork' || contextRaw === 'fresh' ? contextRaw : undefined,
-          toolAliases: metadata.toolAliases && typeof metadata.toolAliases === 'object' && !Array.isArray(metadata.toolAliases)
-            ? metadata.toolAliases as Record<string, string>
-            : undefined,
-          effort: effortRaw && VALID_EFFORT.has(effortRaw as AgentEffortLevel) ? effortRaw as AgentEffortLevel : undefined,
-          memory: memoryRaw && VALID_MEMORY.has(memoryRaw) ? memoryRaw as 'user' | 'session' | 'agent' : undefined,
-        });
-        logger.debug(`Agent发现成功: ${metadata.name}`);
-      } catch (e) {
-        logger.warn(`Failed to parse agent.md in ${agentMdPath}:`, e);
-      }
+      seenNames.add(meta.name);
+      agents.push(meta);
+      logger.debug(`Agent发现成功: ${meta.name}`);
     }
   }
   return agents;
 }
 
-/** 读取 *.agent.md 正文（去掉 frontmatter），供 subagent / route 使用 */
+/** 读取分形 agent instructions.md 正文 */
+export async function loadAgentInstructionsBody(agentDir: string): Promise<string> {
+  const instructionsPath = path.join(agentDir, 'instructions.md');
+  if (!fs.existsSync(instructionsPath)) return '';
+  const content = await fs.promises.readFile(instructionsPath, 'utf-8');
+  return content.trim();
+}
+
+/** @deprecated 使用 loadAgentInstructionsBody */
 export async function loadAgentMarkdownBody(filePath: string): Promise<string> {
+  if (filePath.endsWith('agent.ts') || filePath.endsWith('agent.js')) {
+    return loadAgentInstructionsBody(path.dirname(filePath));
+  }
   const content = await fs.promises.readFile(filePath, 'utf-8');
   return content.replace(/^---\s*\n[\s\S]*?\n---\s*(?:\n|$)/, '').trim();
 }

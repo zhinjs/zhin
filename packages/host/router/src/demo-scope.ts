@@ -18,9 +18,9 @@ export type TokenRegistryConfig = {
 export const DEMO_RPC_ALLOWLIST = new Set([
   "ping",
   "entries:get",
-  "endpoint:list",
-  "endpoint:info",
-  "endpoint:sendMessage",
+  "endpoint.list",
+  "endpoint.info",
+  "endpoint.send_message",
   // 配置只读（ADR 0016）
   "config:get",
   "config:get-all",

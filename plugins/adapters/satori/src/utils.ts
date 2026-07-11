@@ -1,8 +1,8 @@
 /**
  * Satori 事件与 zhin Message 的转换
  */
-import type { SendContent } from 'zhin.js';
-import { Message } from 'zhin.js';
+import { Message, type SendContent } from 'zhin.js';
+
 import type { SatoriEventBody, SatoriMessage, SatoriChannel } from './types.js';
 import { toCanonicalSegments } from './segment-mapper.js';
 

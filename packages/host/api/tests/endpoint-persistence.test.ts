@@ -44,9 +44,15 @@ describe("endpoint-persistence", () => {
     const row = await insertNotice({
       adapter: "icqq",
       endpoint_id: "8596238",
-      notice_type: "group_member_increase",
-      channel_type: "group",
-      channel_id: "123",
+      platform_notice_id: "n1",
+      type: "notice",
+      scene_type: "group",
+      scene_id: "123",
+      sub_type: "member_increase",
+      actor_id: "111",
+      actor_name: "管理员",
+      target_id: "222",
+      target_name: "新成员",
       payload: "{}",
       created_at: Date.now(),
     });

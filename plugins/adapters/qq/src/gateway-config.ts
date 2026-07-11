@@ -1,7 +1,7 @@
-import type { Logger } from "@zhin.js/logger";
-import { formatCompact } from "@zhin.js/logger";
-import type { Bot as QQOfficialBot } from "qq-official-bot";
-import { ReceiverMode } from "qq-official-bot";
+import { formatCompact, type Logger } from '@zhin.js/logger';
+
+import { ReceiverMode, type Bot as QQOfficialBot } from 'qq-official-bot';
+
 import type { QQEndpointConfig } from "./types.js";
 
 /** qq-official-bot 默认 token 接口 */
@@ -36,7 +36,7 @@ export function applyCustomAuthEndpoints(
     if (gatewayUrl) session.authManager.config.gatewayUrl = gatewayUrl;
   }
 
-  logger.info(formatCompact({
+  logger.debug(formatCompact({
     op: "qq_gateway",
     mode,
     accessTokenUrl: accessTokenUrl ?? DEFAULT_ACCESS_TOKEN_URL,

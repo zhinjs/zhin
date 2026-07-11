@@ -4,7 +4,8 @@
 import path from "node:path";
 import { usePlugin, type Plugin, type ISceneManagement, createSceneManagementTools, type ToolFeature } from "zhin.js";
 import { KookAdapter } from "./adapter.js";
-import { kookGroupPermitResolver, platformPermit, registerKookPlatformPermitChecker } from "./platform-permit.js";
+import { kookGroupPermitResolver, registerKookPlatformPermitChecker } from "./platform-permit.js";
+import { setKookAgentDeps } from "./kook-agent-deps.js";
 import { PageManager } from "@zhin.js/host-api";
 
 declare module "zhin.js" {
@@ -44,175 +45,20 @@ provide({
 useContext('tool', 'kook', (toolService: ToolFeature, kook: KookAdapter) => {
   const disposers: (() => void)[] = [];
   disposers.push(registerKookPlatformPermitChecker());
+  setKookAgentDeps({
+    getEndpoint: (endpointId) => {
+      const endpoint = kook.endpoints.get(endpointId);
+      if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+      return endpoint;
+    },
+    getAdapter: () => kook,
+  });
   const sceneTools = createSceneManagementTools(
     kook as unknown as ISceneManagement,
     'kook',
     { permitResolver: kookGroupPermitResolver, registerChecker: false },
   );
   disposers.push(...sceneTools.map(t => toolService.addTool(t, plugin.name)));
-
-  disposers.push(toolService.addTool({
-    name: 'kook_grant_role',
-    description: '给用户授予 KOOK 服务器角色',
-    parameters: {
-      type: 'object',
-      properties: {
-        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
-        guild_id: { type: 'string', description: '服务器 ID' },
-        user_id: { type: 'string', description: '用户 ID' },
-        role_id: { type: 'string', description: '角色 ID' },
-      },
-      required: ['endpoint_id', 'guild_id', 'user_id', 'role_id'],
-    },
-    platforms: ['kook'],
-    tags: ['kook'],
-    permissions: [platformPermit('manage_roles')],
-    execute: async (args: Record<string, any>) => {
-      const endpoint = kook.endpoints.get(args.endpoint_id);
-      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
-      const success = await endpoint.grantRole(args.guild_id, args.user_id, args.role_id);
-      return { success, message: success ? `已授予用户 ${args.user_id} 角色 ${args.role_id}` : '授予角色失败' };
-    },
-  }, plugin.name));
-
-  disposers.push(toolService.addTool({
-    name: 'kook_revoke_role',
-    description: '撤销用户的 KOOK 服务器角色',
-    parameters: {
-      type: 'object',
-      properties: {
-        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
-        guild_id: { type: 'string', description: '服务器 ID' },
-        user_id: { type: 'string', description: '用户 ID' },
-        role_id: { type: 'string', description: '角色 ID' },
-      },
-      required: ['endpoint_id', 'guild_id', 'user_id', 'role_id'],
-    },
-    platforms: ['kook'],
-    tags: ['kook'],
-    permissions: [platformPermit('manage_roles')],
-    execute: async (args: Record<string, any>) => {
-      const endpoint = kook.endpoints.get(args.endpoint_id);
-      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
-      const success = await endpoint.revokeRole(args.guild_id, args.user_id, args.role_id);
-      return { success, message: success ? `已撤销用户 ${args.user_id} 的角色 ${args.role_id}` : '撤销角色失败' };
-    },
-  }, plugin.name));
-
-  disposers.push(toolService.addTool({
-    name: 'kook_list_roles',
-    description: '获取 KOOK 服务器的角色列表',
-    parameters: {
-      type: 'object',
-      properties: {
-        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
-        guild_id: { type: 'string', description: '服务器 ID' },
-      },
-      required: ['endpoint_id', 'guild_id'],
-    },
-    platforms: ['kook'],
-    tags: ['kook'],
-    execute: async (args: Record<string, any>) => {
-      const endpoint = kook.endpoints.get(args.endpoint_id);
-      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
-      const roles = await endpoint.getRoleList(args.guild_id);
-      return {
-        roles: roles.map((r: any) => ({
-          id: r.role_id,
-          name: r.name,
-          color: r.color,
-          position: r.position,
-          permissions: r.permissions,
-        })),
-        count: roles.length,
-      };
-    },
-  }, plugin.name));
-
-  disposers.push(toolService.addTool({
-    name: 'kook_create_role',
-    description: '在 KOOK 服务器中创建新角色',
-    parameters: {
-      type: 'object',
-      properties: {
-        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
-        guild_id: { type: 'string', description: '服务器 ID' },
-        name: { type: 'string', description: '角色名称' },
-      },
-      required: ['endpoint_id', 'guild_id', 'name'],
-    },
-    platforms: ['kook'],
-    tags: ['kook'],
-    permissions: [platformPermit('guild_owner')],
-    execute: async (args: Record<string, any>) => {
-      const endpoint = kook.endpoints.get(args.endpoint_id);
-      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
-      const role = await endpoint.createRole(args.guild_id, args.name);
-      return {
-        success: true,
-        message: `已创建角色 "${args.name}"`,
-        role: { id: role.role_id, name: role.name },
-      };
-    },
-  }, plugin.name));
-
-  disposers.push(toolService.addTool({
-    name: 'kook_delete_role',
-    description: '删除 KOOK 服务器中的角色',
-    parameters: {
-      type: 'object',
-      properties: {
-        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
-        guild_id: { type: 'string', description: '服务器 ID' },
-        role_id: { type: 'string', description: '角色 ID' },
-      },
-      required: ['endpoint_id', 'guild_id', 'role_id'],
-    },
-    platforms: ['kook'],
-    tags: ['kook'],
-    permissions: [platformPermit('guild_owner')],
-    execute: async (args: Record<string, any>) => {
-      const endpoint = kook.endpoints.get(args.endpoint_id);
-      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
-      const success = await endpoint.deleteRole(args.guild_id, args.role_id);
-      return { success, message: success ? `已删除角色 ${args.role_id}` : '删除角色失败' };
-    },
-  }, plugin.name));
-
-  disposers.push(toolService.addTool({
-    name: 'kook_blacklist',
-    description: 'KOOK 服务器黑名单管理：添加/移除',
-    parameters: {
-      type: 'object',
-      properties: {
-        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
-        guild_id: { type: 'string', description: '服务器 ID' },
-        action: { type: 'string', description: 'add|remove', enum: ['add', 'remove'] },
-        user_id: { type: 'string', description: '用户 ID' },
-        remark: { type: 'string', description: '备注（add 可选）' },
-      },
-      required: ['endpoint_id', 'guild_id', 'action', 'user_id'],
-    },
-    platforms: ['kook'],
-    tags: ['kook'],
-    permissions: [platformPermit('guild_admin')],
-    execute: async (args: Record<string, any>) => {
-      const endpoint = kook.endpoints.get(args.endpoint_id);
-      if (!endpoint) throw new Error(`Endpoint ${args.endpoint_id} 不存在`);
-      switch (args.action) {
-        case 'add': {
-          const success = await endpoint.addToBlacklist(args.guild_id, args.user_id, args.remark);
-          return { success, message: success ? `已将 ${args.user_id} 加入黑名单` : '操作失败' };
-        }
-        case 'remove': {
-          const success = await endpoint.removeFromBlacklist(args.guild_id, args.user_id);
-          return { success, message: success ? `已将 ${args.user_id} 从黑名单移除` : '操作失败' };
-        }
-        default:
-          return { success: false, message: `未知操作: ${args.action}` };
-      }
-    },
-  }, plugin.name));
 
   return () => disposers.forEach(d => d());
 });

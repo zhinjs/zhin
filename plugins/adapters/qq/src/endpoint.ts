@@ -9,14 +9,8 @@ import {
 import path from "path";
 import { formatCompact } from "@zhin.js/logger";
 import { registerFetchRoute, type RouterContext } from "@zhin.js/host-router/router";
-import {
-  Endpoint,
-  Message,
-  SendOptions,
-  SendContent,
-  segment,
-} from 'zhin.js';
-import type { MessageElement } from "zhin.js";
+import { Endpoint, Message, SendOptions, SendContent, segment, type MessageElement } from 'zhin.js';
+
 import { ReceiverMode, type QQEndpointConfig, type ApplicationPlatform } from "./types.js";
 import type { QQAdapter } from "./adapter.js";
 import { normalizeQqInboundWsPayload, type QqWsPacket } from "./inbound-normalize.js";

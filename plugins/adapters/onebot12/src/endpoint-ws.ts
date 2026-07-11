@@ -88,7 +88,7 @@ export class OneBot12WsClient extends EventEmitter implements Endpoint<OneBot12W
         this.$connected = true;
         const safeUrl = new URL(connectUrl);
         safeUrl.searchParams.delete('access_token');
-        this.logger.info(formatCompact({ endpoint: this.$id, mode: 'ws' }));
+        this.logger.debug(formatCompact({ endpoint: this.$id, mode: 'ws' }));
         this.startHeartbeat();
         resolve();
       });

@@ -1,18 +1,5 @@
-import {
-  ConfigFeature,
-  CommandFeature,
-  ComponentFeature,
-  ScheduleFeature,
-  PermissionFeature,
-  SchemaFeature,
-  MessageFilterFeature,
-  createMessageDispatcher,
-  ProcessAdapter,
-  LoginAssist,
-  shouldBindProcessStdin,
-  registerEndpointManagementCommands,
-} from '@zhin.js/core';
-import type { Plugin, Message } from '@zhin.js/core';
+import { ConfigFeature, CommandFeature, ComponentFeature, ScheduleFeature, PermissionFeature, SchemaFeature, MessageFilterFeature, createMessageDispatcher, ProcessAdapter, LoginAssist, shouldBindProcessStdin, registerEndpointManagementCommands, type Plugin, type Message } from '@zhin.js/core';
+
 import type { AppConfig } from '../types.js';
 import { DEFAULT_CORE_SERVICES } from './load-config.js';
 

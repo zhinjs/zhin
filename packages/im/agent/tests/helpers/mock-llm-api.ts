@@ -1,13 +1,7 @@
 /**
  * Test helper — wire mock AIProvider.chat into ai-sdk ApiRegistry (ADR 0018).
  */
-import type { AIProvider } from '@zhin.js/ai';
-import {
-  registerApiProvider,
-  registerProviderInstance,
-  createOpenAiCompletionsStreamFn,
-  setLiveModelsResolver,
-} from '@zhin.js/ai';
+import { registerApiProvider, registerProviderInstance, createOpenAiCompletionsStreamFn, setLiveModelsResolver, type AIProvider } from '@zhin.js/ai';
 
 export function wireMockProviderToLlmApi(provider: AIProvider): void {
   registerProviderInstance(

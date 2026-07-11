@@ -1,9 +1,41 @@
 import { describe, expect, it } from 'vitest';
-import { addUsage, formatAiHandlerCompleteLog } from '../src/turn/turn-metrics.js';
+import {
+  addUsage,
+  formatAiHandlerTurnTable,
+  formatOutputElementsPreview,
+} from '../src/turn/turn-metrics.js';
 
 describe('turn-metrics', () => {
-  it('formatAiHandlerCompleteLog 紧凑格式含子 agent', () => {
-    const log = formatAiHandlerCompleteLog(
+  it('formatAiHandlerTurnTable 含指标与内容预览', () => {
+    const log = formatAiHandlerTurnTable(
+      {
+        usage: { prompt_tokens: 4298, completion_tokens: 54, total_tokens: 4352 },
+        path: 'agent',
+        iterations: 1,
+        model: 'mimo-v2.5-free',
+        userInput: '你好',
+        thinking: '用户在打招呼',
+        output: '你好！有什么可以帮你的？',
+      },
+      5172,
+    );
+    expect(log).toContain('AI Handler');
+    expect(log).toContain('5172');
+    expect(log).toContain('4352');
+    expect(log).toContain('agent');
+    expect(log).toContain('mimo-v2.5-free');
+    expect(log).toContain('用户输入');
+    expect(log).toContain('你好');
+    expect(log).toContain('思考');
+    expect(log).toContain('用户在打招呼');
+    expect(log).toContain('输出');
+    expect(log).toContain('有什么可以帮你的');
+    expect(log).toContain('╭');
+    expect(log).toContain('╯');
+  });
+
+  it('formatAiHandlerTurnTable 含子 agent token 明细', () => {
+    const log = formatAiHandlerTurnTable(
       {
         usage: { prompt_tokens: 300, completion_tokens: 200, total_tokens: 500 },
         subagentUsage: { prompt_tokens: 100, completion_tokens: 100, total_tokens: 200 },
@@ -13,13 +45,12 @@ describe('turn-metrics', () => {
       },
       12000,
     );
-    expect(log).toBe(
-      '[AI Handler] total_ms: 12000; usage: 500 (In 300 / Out 200); main 300 + sub 200; mode: agent; iter: 2; model: deepseek-v4-flash',
-    );
+    expect(log).toContain('500');
+    expect(log).toContain('main 300 + sub 200');
   });
 
-  it('formatAiHandlerCompleteLog 无子 agent 时省略 main/sub', () => {
-    const log = formatAiHandlerCompleteLog(
+  it('formatAiHandlerTurnTable 空内容显示占位', () => {
+    const log = formatAiHandlerTurnTable(
       {
         usage: { prompt_tokens: 100, completion_tokens: 50, total_tokens: 150 },
         path: 'chat',
@@ -27,9 +58,16 @@ describe('turn-metrics', () => {
       },
       800,
     );
-    expect(log).toBe(
-      '[AI Handler] total_ms: 800; usage: 150 (In 100 / Out 50); mode: chat; model: qwen3:14b',
-    );
+    expect(log).toContain('用户输入');
+    expect(log).toContain('思考');
+    expect(log).toContain('输出');
+  });
+
+  it('formatOutputElementsPreview 拼接文本与图片', () => {
+    expect(formatOutputElementsPreview([
+      { type: 'text', content: '回复' },
+      { type: 'image', url: 'https://example.com/a.png' },
+    ])).toBe('回复\n<image url="https://example.com/a.png"/>');
   });
 
   it('addUsage 应累加', () => {

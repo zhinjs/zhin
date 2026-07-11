@@ -4,9 +4,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { resetLlmApiRegistryForTests } from '@zhin.js/ai';
 import { wireMockProviderToLlmApi } from '../helpers/mock-llm-api.js';
-import { SubagentRuntime } from '@zhin.js/agent';
+import { SubagentRuntime, type SubagentOrigin, type SpawnOptions } from '@zhin.js/agent';
 import type { ZhinAgentEventEmitter } from '../../src/event/event-emitter.js';
-import type { SubagentOrigin, SpawnOptions } from '@zhin.js/agent';
+
 import type { AgentTool, ChatCompletionResponse } from '@zhin.js/core';
 
 vi.mock('@zhin.js/logger', async (importOriginal) => {
@@ -255,6 +255,32 @@ describe('SubagentRuntime', () => {
       const payload = onSubagentComplete.mock.calls[0]![0];
       expect(payload.status).toBe('ok');
       expect(payload.result).toContain('API 调用失败');
+    });
+
+    it('onSubagentComplete 不阻塞 subagent 清理，避免与主回合 waitForIdle 死锁', async () => {
+      let releaseComplete!: () => void;
+      const completeGate = new Promise<void>((resolve) => {
+        releaseComplete = resolve;
+      });
+      const blockingComplete = vi.fn(async () => {
+        await completeGate;
+      });
+      const blockingManager = new SubagentRuntime({
+        provider: provider as any,
+        workspace: '/tmp/test-workspace',
+        createTools: () => mockTools,
+        maxIterations: 5,
+        onSubagentComplete: blockingComplete,
+      });
+
+      await blockingManager.spawn({ task: '快速任务', origin: baseOrigin });
+
+      await vi.waitFor(() => expect(blockingManager.getRunningCount()).toBe(0), { timeout: 2000 });
+      expect(blockingComplete).toHaveBeenCalledTimes(1);
+
+      releaseComplete();
+      await completeGate;
+      blockingManager.dispose();
     });
 
     it('无 onSubagentComplete 时不应崩溃', async () => {

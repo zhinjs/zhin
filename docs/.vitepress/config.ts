@@ -1,6 +1,5 @@
-import { defineConfig } from 'vitepress'
+import { defineConfig, type DefaultTheme } from 'vitepress';
 import { withMermaid } from 'vitepress-plugin-mermaid'
-import type { DefaultTheme } from 'vitepress'
 
 /** 可折叠侧栏分组（默认折叠；含当前页的分组由 VitePress 自动展开） */
 function sidebarGroup(
@@ -16,6 +15,7 @@ const aiSidebar: DefaultTheme.SidebarItem[] = [
   { text: 'Agent 概念入门', link: '/advanced/agent-concepts' },
   { text: 'MCP 集成', link: '/advanced/mcp' },
   { text: '工具与技能', link: '/advanced/tools-skills' },
+  { text: 'Plugin agent/ 创作面', link: '/advanced/agent-authoring' },
   { text: 'Feature 系统', link: '/advanced/features' },
   { text: 'Agent 安全与角色', link: '/advanced/agent-harness-engineering' },
   { text: 'Agent 最佳实践', link: '/advanced/agent-best-practices' },

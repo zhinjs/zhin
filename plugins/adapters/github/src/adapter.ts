@@ -5,9 +5,8 @@ import { formatCompact, Adapter, Message, Plugin, OUTBOUND_RICH_SEGMENT_POLICY_T
 import crypto from 'node:crypto';
 import { GitHubEndpoint } from './endpoint.js';
 import type { Router } from '@zhin.js/host-router';
-import type { GitHubEndpointConfig, EventType, GenericWebhookPayload, Subscription } from './types.js';
+import { type GitHubEndpointConfig, type EventType, type GenericWebhookPayload, type Subscription, type IssueCommentPayload, type PRReviewCommentPayload, type PRReviewPayload } from './types.js';
 import type { GhClient } from './gh-client.js';
-import type { IssueCommentPayload, PRReviewCommentPayload, PRReviewPayload } from './types.js';
 
 const VALID_EVENTS: EventType[] = ['push', 'issue', 'star', 'fork', 'unstar', 'pull_request'];
 

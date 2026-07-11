@@ -1,8 +1,8 @@
 import * as fs from 'node:fs';
 import path from 'node:path';
-import { Dialect } from '../base/index.js';
+import { Dialect, Database } from '../base/index.js';
 import { Registry } from '../registry.js';
-import { Database } from '../base/index.js';
+
 import { Column, Transaction, TransactionOptions } from '../types.js';
 import { RelatedDatabase } from '../type/related/database.js';
 

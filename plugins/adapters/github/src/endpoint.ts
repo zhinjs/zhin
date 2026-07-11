@@ -5,13 +5,8 @@ import { formatCompact, Endpoint, Message, segment, SendContent, SendOptions, ty
   coerceQrcodeSegmentsToText,
   expandInteractiveSegmentsInContent,
 } from 'zhin.js';
-import type {
-  GitHubEndpointConfig,
-  IssueCommentPayload,
-  PRReviewCommentPayload,
-  PRReviewPayload,
-} from './types.js';
-import { buildChannelId, parseChannelId } from './types.js';
+import { buildChannelId, parseChannelId, type GitHubEndpointConfig, type IssueCommentPayload, type PRReviewCommentPayload, type PRReviewPayload } from './types.js';
+
 import type { GitHubAdapter } from './adapter.js';
 import { GhClient } from './gh-client.js';
 import { fromCanonicalSegments, toCanonicalSegments } from './segment-mapper.js';
@@ -67,7 +62,7 @@ export class GitHubEndpoint implements Endpoint<GitHubEndpointConfig, IssueComme
     const result = await this.gh.verifyAuth();
     if (!result.ok) throw new Error(`GitHub 认证失败: ${result.message}`);
     this.$connected = true;
-    this.logger.info(formatCompact({ endpoint: this.$id }));
+    this.logger.debug(formatCompact({ endpoint: this.$id }));
   }
 
   async $disconnect(): Promise<void> {

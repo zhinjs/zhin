@@ -1,7 +1,7 @@
 /**
  * Slack 适配器集成测试
  *
- * 策略：Mock 掉 @slack/bolt App 和 WebClient，
+ * 策略：Mock 掉 WebClient 和传输层，
  * 测试 Endpoint 接口合规性、消息格式化、发送/接收链路、生命周期的完整性。
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -56,6 +56,7 @@ class MockSlackAdapter extends SlackAdapter {
 
 function createSlackRawEvent(overrides: any = {}): any {
   return {
+    type: 'message',
     ts: '1700000000.000000',
     user: 'U12345',
     username: 'testuser',
@@ -143,7 +144,7 @@ describe('Slack 适配器特定测试', () => {
       const raw = createSlackRawEvent();
       const msg = endpoint.$formatMessage(raw);
 
-      expect(msg.$id).toBe('1700000000.000000');
+      expect(msg.$id).toBe('C001:1700000000.000000');
       expect(msg.$adapter).toBe('slack');
       expect(msg.$endpoint).toBe('test-endpoint');
       expect(msg.$sender.id).toBe('U12345');
@@ -164,6 +165,18 @@ describe('Slack 适配器特定测试', () => {
       const raw = createSlackRawEvent();
       const msg = endpoint.$formatMessage(raw);
       expect(msg.$timestamp).toBe(FIXED_TS);
+    });
+
+    it('thread_ts 应映射为 $quote_id', () => {
+      const raw = createSlackRawEvent({ thread_ts: '1699999999.000000' });
+      const msg = endpoint.$formatMessage(raw);
+      expect(msg.$quote_id).toBe('1699999999.000000');
+    });
+
+    it('thread_ts 等于 ts 时 $quote_id 应为 undefined', () => {
+      const raw = createSlackRawEvent({ thread_ts: '1700000000.000000' });
+      const msg = endpoint.$formatMessage(raw);
+      expect(msg.$quote_id).toBeUndefined();
     });
   });
 
@@ -207,6 +220,42 @@ describe('Slack 适配器特定测试', () => {
       const result = await msg.$reply('hi');
       expect(sendMessageSpy).toHaveBeenCalledTimes(1);
       expect(result).toBe('reply-id');
+    });
+  });
+
+  describe('adapter interactivePolicy', () => {
+    it('should be native', () => {
+      expect(SlackAdapter.interactivePolicy).toBe('native');
+    });
+  });
+
+  describe('editMessage', () => {
+    it('editMessage 应调用 endpoint.$editMessage', async () => {
+      const editSpy = vi.spyOn(endpoint, '$editMessage').mockResolvedValue();
+      await adapter.editMessage('test-endpoint', 'C001', '1700000000.000000', [
+        { type: 'text', data: { text: 'updated' } },
+      ]);
+      expect(editSpy).toHaveBeenCalledWith(expect.objectContaining({
+        messageId: '1700000000.000000',
+        context: 'slack',
+        endpoint: 'test-endpoint',
+        id: 'C001',
+        type: 'group',
+      }));
+    });
+
+    it('core EditMessageOptions 应委托 super.editMessage', async () => {
+      const editSpy = vi.spyOn(endpoint, '$editMessage').mockResolvedValue();
+      const result = await adapter.editMessage({
+        messageId: 'C001:1700000000.000000',
+        context: 'slack',
+        endpoint: 'test-endpoint',
+        id: 'C001',
+        type: 'group',
+        content: [{ type: 'text', data: { text: 'updated' } }],
+      });
+      expect(editSpy).toHaveBeenCalled();
+      expect(result).toBe('C001:1700000000.000000');
     });
   });
 });

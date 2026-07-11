@@ -4,8 +4,8 @@ import compose from "koa-compose";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import * as path from "node:path";
-import type { ConsoleEntry, ConsoleFileAddEntryInput } from "@zhin.js/contract";
-import { DEFAULT_CONSOLE_BASE_PATH } from "@zhin.js/contract";
+import { DEFAULT_CONSOLE_BASE_PATH, type ConsoleEntry, type ConsoleFileAddEntryInput } from '@zhin.js/contract';
+
 import { createInMemoryEntryStore, type EntryStore } from "./entryStore.js";
 import type {
   ConsoleServerOptions,

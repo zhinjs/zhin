@@ -100,7 +100,7 @@ async function dbSelect(
   }
   let total: number;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const countResult = await (db as any).aggregate(table).count("*", "total").where(where || {});
     total = countResult?.[0]?.total ?? 0;
   } catch {

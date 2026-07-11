@@ -1,5 +1,5 @@
-import type { Plugin } from '@zhin.js/core';
-import { seedSpeechPipeline } from '@zhin.js/core';
+import { seedSpeechPipeline, type Plugin } from '@zhin.js/core';
+
 import type { AppConfig } from '../types.js';
 import { registerSpeechImIntegration } from './speech-im.js';
 

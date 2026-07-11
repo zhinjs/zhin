@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/wechat-mp/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/wechat-mp/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=cffb143a2fe6745a -->
+<!-- sync-adapter-docs:sha256=29f7d6d047d051c0 -->
 
 # @zhin.js/adapter-wechat-mp
 
@@ -145,6 +145,11 @@ root.addMiddleware(async (message, next) => {
 | 回复超时 / 无回复 | 默认被动回复须在 **~4.5s** 内完成；AI 过慢会返回 `success` 无正文，可改 `replyMode: customer_service`（需客服接口权限） |
 | `48001 api unauthorized` | 未认证订阅号无客服 API；保持默认 `replyMode: passive` |
 | 加密模式报错 | `encodingAESKey`、`encrypt` 与公众平台「安全模式」设置一致 |
+
+## AI 工具
+
+技能说明见 `agent/skills/wechat-mp.md`。群管与平台工具按公众号能力在 `src/index.ts` 注册。
+
 
 ## 文档链接
 

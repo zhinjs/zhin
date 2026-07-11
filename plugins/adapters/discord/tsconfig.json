@@ -1,10 +1,12 @@
 {
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["@zhin.js/host-router"],
+    "types": ["node"],
     "outDir": "./lib",
-    "rootDir": "./src"
+    "rootDir": ".",
+    "declaration": false,
+    "declarationMap": false
   },
-  "include": ["src/**/*"],
-  "exclude": ["lib", "node_modules"]
+  "include": ["src/**/*", "agent/**/*"],
+  "exclude": ["lib", "node_modules", "client", "dist", "tests"]
 }

@@ -53,7 +53,7 @@ async function waitForStartLog(proc: ReturnType<typeof spawn>, timeoutMs: number
 
     proc.stdout?.on('data', (chunk: Buffer) => {
       output += chunk.toString();
-      if (output.includes('服务端口:')) {
+      if (output.includes('http:')) {
         clearTimeout(timer);
         resolve(output);
       }
@@ -62,7 +62,7 @@ async function waitForStartLog(proc: ReturnType<typeof spawn>, timeoutMs: number
       output += chunk.toString();
     });
     proc.on('exit', (code) => {
-      if (!output.includes('服务端口:')) {
+      if (!output.includes('http:')) {
         clearTimeout(timer);
         reject(new Error(`pnpm start exited ${code}\n${output}`));
       }
@@ -96,7 +96,7 @@ describe.skipIf(process.env.ZHIN_RUN_NETWORK_BOOTSTRAP !== '1')('create-zhin npm
       });
       try {
         const log = await waitForStartLog(proc, 60_000);
-        expect(log).toContain(`服务端口: ${DEFAULT_CREATE_BOT_HTTP_PORT}`);
+        expect(log).toContain(`http: http://127.0.0.1:${DEFAULT_CREATE_BOT_HTTP_PORT}/api`);
       } finally {
         proc.kill('SIGTERM');
       }

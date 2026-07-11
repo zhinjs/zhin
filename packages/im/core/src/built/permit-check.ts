@@ -2,8 +2,8 @@
  * 内置 permit 同步校验（adapter/group/private/channel/user/role）
  */
 import type { Message } from '../message.js';
-import type { SenderRole } from './roles.js';
-import { isFrameworkSenderRole, roleSatisfies } from './roles.js';
+import { isFrameworkSenderRole, roleSatisfies, type SenderRole } from './roles.js';
+
 import { parsePermitName } from './permit-parse.js';
 
 function channelIdMatches(id: string, channelId: string): boolean {

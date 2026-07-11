@@ -1,8 +1,8 @@
 /**
  * Milky 事件/消息段与 zhin Message 的转换
  */
-import type { MessageBase, SendContent } from 'zhin.js';
-import { Message, applyQqSenderRoleToMessageSender } from 'zhin.js';
+import { Message, applyQqSenderRoleToMessageSender, type MessageBase, type SendContent } from 'zhin.js';
+
 import type { MilkyEvent, MilkyIncomingMessage, MilkyIncomingSegment } from './types.js';
 import { toCanonicalSegments } from './segment-mapper.js';
 

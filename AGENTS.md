@@ -37,6 +37,7 @@
 - `pnpm lint`：运行 ESLint。
 - `pnpm check:doc-links`：检查文档相对链接是否断裂。
 - `pnpm sync:adapter-docs` / `pnpm check:adapter-docs`：平台适配器文档与 `plugins/adapters/*/README.md` 同步。
+- `pnpm check:plugin-agent-publish`：带 `agent/` 的插件 `package.json` 须含 `files`（`agent`、`lib` 等）与 `prepublishOnly`。
 - `pnpm --filter <pkg> build|test`：只验证单个包。
 - `pnpm check:l4`：L4 全维度验收（编排 + 语义记忆 + full-bot 契约 + MCP 鉴权；实机 IM 项 `L4_SKIP_PLATFORM=1` 跳过）。
 - `pnpm check:install-size`：zhin.js IM 核心 production `node_modules` ≤10MB（ADR 0019）。
@@ -62,6 +63,7 @@
 - 框架核心、Plugin/Adapter/Dispatcher：看 packages/im/core。
 - AI 引擎、Session、Compaction、Provider、ModelRegistry、`getModel`：看 [packages/im/ai](packages/im/ai/README.md) 与 [docs/advanced/ai.md](docs/advanced/ai.md)。
 - AI 编排、工具发现、安全策略、MCP client：看 [packages/im/agent](packages/im/agent/README.md)。
+- **插件 AI 创作面**（`agent/tools`、`agent/skills`）：看 [docs/advanced/agent-authoring.md](docs/advanced/agent-authoring.md)。
 - 应用入口（IM 核心 + 可选 agent 子路径）：看 [packages/im/zhin](packages/im/zhin/README.md)（`im_transcripts` 落库需 `@zhin.js/agent`）。
 - Host 运行时（router / api / mcp）：看 packages/host。
 - 可选服务插件：看 plugins/services。

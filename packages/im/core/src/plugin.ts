@@ -7,7 +7,7 @@
  * - 中间件系统、适配器管理、useContext 等
  */
 
-import type { PluginManifest } from "./types.js";
+import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, SendOptions, MessageSendPayload, type PluginManifest } from './types.js';
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -18,22 +18,11 @@ import {
   registerInteractiveHandler as registerInteractiveHandlerCore,
 } from "./built/interactive-segments/handlers.js";
 import type { InteractiveHandler } from "./built/interactive-segments/types.js";
-import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, SendOptions, MessageSendPayload } from "./types.js";
+
 import { Adapter, Adapters } from "./adapter.js";
-import { Feature } from "@zhin.js/kernel";
-import {
-  PluginBase,
-  BaseContext,
-  PluginBaseLifecycle,
-  resolvePluginResolveDir as _resolvePluginResolveDir,
-  pluginCreateRequire as _pluginCreateRequire,
-  getFileHash,
-  watchFile,
-  registerExtension,
-  unregisterExtensions,
-  installExtensionProxy,
-} from "@zhin.js/kernel";
-import type { PluginLike } from "@zhin.js/kernel";
+import { Feature, PluginBase, BaseContext, PluginBaseLifecycle, resolvePluginResolveDir as _resolvePluginResolveDir, pluginCreateRequire as _pluginCreateRequire, getFileHash, watchFile, registerExtension, unregisterExtensions, installExtensionProxy, type PluginLike } from '@zhin.js/kernel';
+
+
 import { storage, getCurrentFile } from "./plugin-context.js";
 
 // Re-export getPlugin from plugin-context for backward compatibility
@@ -496,7 +485,7 @@ export class Plugin extends PluginBase implements PluginLike {
       installExtensionProxy(Plugin.prototype);
       for (const [name, fn] of Object.entries(context.extensions)) {
         if (typeof fn === 'function') {
-          registerExtension(name, fn as (...args: any[]) => any); // eslint-disable-line @typescript-eslint/no-explicit-any
+          registerExtension(name, fn as (...args: any[]) => any);  
         }
       }
     }

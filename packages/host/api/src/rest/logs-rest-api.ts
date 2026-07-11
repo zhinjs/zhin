@@ -16,7 +16,7 @@ export function registerLogsRoutes(
   base: string,
   deps?: LogsRestDeps,
 ): void {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const getModel = () => deps?.getLogModel?.() as any;
 
   registerFetchRoute(router, "GET", `${base}/logs`, async (ctx: RouterContext) => {

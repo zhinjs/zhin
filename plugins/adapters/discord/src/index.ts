@@ -5,12 +5,12 @@ import path from "node:path";
 import { usePlugin, type Plugin, type Context, type ISceneManagement, createSceneManagementTools, type ToolFeature } from "zhin.js";
 import type { Router } from "@zhin.js/host-router";
 import { PageManager } from "@zhin.js/host-api";
-import { DiscordAdapter, type DiscordEndpointLike } from "./adapter.js";
+import { DiscordAdapter } from "./adapter.js";
 import {
   discordGroupPermitResolver,
-  platformPermit,
   registerDiscordPlatformPermitChecker,
 } from "./platform-permit.js";
+import { setDiscordAgentDeps } from "./discord-agent-deps.js";
 
 declare module "zhin.js" {
   namespace Plugin {
@@ -47,204 +47,28 @@ provide({
 useContext('tool', 'discord', (toolService: ToolFeature, discord: DiscordAdapter) => {
   const disposers: (() => void)[] = [];
   disposers.push(registerDiscordPlatformPermitChecker());
+  setDiscordAgentDeps({
+    getEndpoint: (endpointId) => {
+      const endpoint = discord.endpoints.get(endpointId);
+      if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+      return endpoint;
+    },
+    getGatewayEndpoint: (endpointId) => {
+      const endpoint = discord.endpoints.get(endpointId);
+      if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+      if ((endpoint.$config as { connection?: string }).connection !== 'gateway') {
+        throw new Error('此工具仅支持 connection: gateway');
+      }
+      return endpoint;
+    },
+    getAdapter: () => discord,
+  });
   const sceneTools = createSceneManagementTools(
     discord as unknown as ISceneManagement,
     'discord',
     { permitResolver: discordGroupPermitResolver, registerChecker: false },
   );
   disposers.push(...sceneTools.map(t => toolService.addTool(t, plugin.name)));
-
-  function getGatewayBot(endpointId: string): DiscordEndpointLike {
-    const endpoint = discord.endpoints.get(endpointId);
-    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
-    if ((endpoint.$config as { connection?: string }).connection !== 'gateway') {
-      throw new Error('此工具仅支持 connection: gateway');
-    }
-    return endpoint;
-  }
-
-  disposers.push(toolService.addTool({
-    name: 'discord_add_role',
-    description: '给成员添加 Discord 角色',
-    parameters: {
-      type: 'object',
-      properties: {
-        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
-        guild_id: { type: 'string', description: '服务器 ID' },
-        user_id: { type: 'string', description: '用户 ID' },
-        role_id: { type: 'string', description: '角色 ID' },
-      },
-      required: ['endpoint_id', 'guild_id', 'user_id', 'role_id'],
-    },
-    platforms: ['discord'],
-    tags: ['discord'],
-    permissions: [platformPermit('manage_roles')],
-    execute: async (args: Record<string, any>) => {
-      const endpoint = getGatewayBot(args.endpoint_id) as any;
-      const success = await endpoint.addRole(args.guild_id, args.user_id, args.role_id);
-      return { success, message: success ? `已给用户 ${args.user_id} 添加角色` : '操作失败' };
-    },
-  }, plugin.name));
-
-  disposers.push(toolService.addTool({
-    name: 'discord_remove_role',
-    description: '移除成员的 Discord 角色',
-    parameters: {
-      type: 'object',
-      properties: {
-        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
-        guild_id: { type: 'string', description: '服务器 ID' },
-        user_id: { type: 'string', description: '用户 ID' },
-        role_id: { type: 'string', description: '角色 ID' },
-      },
-      required: ['endpoint_id', 'guild_id', 'user_id', 'role_id'],
-    },
-    platforms: ['discord'],
-    tags: ['discord'],
-    permissions: [platformPermit('manage_roles')],
-    execute: async (args: Record<string, any>) => {
-      const endpoint = getGatewayBot(args.endpoint_id) as any;
-      const success = await endpoint.removeRole(args.guild_id, args.user_id, args.role_id);
-      return { success, message: success ? `已移除用户 ${args.user_id} 的角色` : '操作失败' };
-    },
-  }, plugin.name));
-
-  disposers.push(toolService.addTool({
-    name: 'discord_list_roles',
-    description: '获取 Discord 服务器角色列表',
-    parameters: {
-      type: 'object',
-      properties: {
-        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
-        guild_id: { type: 'string', description: '服务器 ID' },
-      },
-      required: ['endpoint_id', 'guild_id'],
-    },
-    platforms: ['discord'],
-    tags: ['discord'],
-    permissions: [platformPermit('manage_roles')],
-    execute: async (args: Record<string, any>) => {
-      const endpoint = getGatewayBot(args.endpoint_id) as any;
-      const roles = await endpoint.getRoles(args.guild_id);
-      return { roles, count: roles.length };
-    },
-  }, plugin.name));
-
-  disposers.push(toolService.addTool({
-    name: 'discord_create_thread',
-    description: '在 Discord 频道中创建帖子/子线程',
-    parameters: {
-      type: 'object',
-      properties: {
-        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
-        channel_id: { type: 'string', description: '频道 ID' },
-        name: { type: 'string', description: '帖子标题' },
-        message_id: { type: 'string', description: '基于某条消息创建（可选）' },
-        auto_archive_duration: {
-          type: 'number',
-          description: '自动归档时间（分钟：60/1440/4320/10080）',
-        },
-      },
-      required: ['endpoint_id', 'channel_id', 'name'],
-    },
-    platforms: ['discord'],
-    tags: ['discord'],
-    permissions: [platformPermit('manage_channels')],
-    execute: async (args: Record<string, any>) => {
-      const endpoint = getGatewayBot(args.endpoint_id) as any;
-      const thread = await endpoint.createThread(args.channel_id, args.name, args.message_id, args.auto_archive_duration);
-      return { success: true, thread_id: thread.id, message: `帖子 "${args.name}" 已创建` };
-    },
-  }, plugin.name));
-
-  disposers.push(toolService.addTool({
-    name: 'discord_react',
-    description: '对 Discord 消息添加表情反应',
-    parameters: {
-      type: 'object',
-      properties: {
-        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
-        channel_id: { type: 'string', description: '频道 ID' },
-        message_id: { type: 'string', description: '消息 ID' },
-        emoji: {
-          type: 'string',
-          description: '表情（Unicode 表情或自定义表情如 <:name:id>）',
-        },
-      },
-      required: ['endpoint_id', 'channel_id', 'message_id', 'emoji'],
-    },
-    platforms: ['discord'],
-    tags: ['discord'],
-    execute: async (args: Record<string, any>) => {
-      const endpoint = getGatewayBot(args.endpoint_id) as any;
-      await endpoint.addReaction(args.channel_id, args.message_id, args.emoji);
-      return { success: true, message: `已添加反应 ${args.emoji}` };
-    },
-  }, plugin.name));
-
-  disposers.push(toolService.addTool({
-    name: 'discord_send_embed',
-    description: '发送 Discord 富文本嵌入消息（Embed）',
-    parameters: {
-      type: 'object',
-      properties: {
-        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
-        channel_id: { type: 'string', description: '频道 ID' },
-        title: { type: 'string', description: 'Embed 标题' },
-        description: { type: 'string', description: 'Embed 描述' },
-        color: { type: 'number', description: '颜色值（十进制，如 0x00ff00 = 65280）' },
-        url: { type: 'string', description: '标题链接（可选）' },
-        fields: {
-          type: 'string',
-          description: '字段，JSON 格式: [{"name":"k","value":"v","inline":false}]',
-        },
-      },
-      required: ['endpoint_id', 'channel_id'],
-    },
-    platforms: ['discord'],
-    tags: ['discord'],
-    execute: async (args: Record<string, any>) => {
-      const endpoint = getGatewayBot(args.endpoint_id) as any;
-      const embedData: any = {};
-      if (args.title) embedData.title = args.title;
-      if (args.description) embedData.description = args.description;
-      if (args.color) embedData.color = args.color;
-      if (args.url) embedData.url = args.url;
-      if (args.fields) {
-        try {
-          embedData.fields = JSON.parse(args.fields);
-        } catch {
-          return { success: false, message: 'fields 格式错误，应为 JSON 数组' };
-        }
-      }
-      const msg = await endpoint.sendEmbed(args.channel_id, embedData);
-      return { success: true, message_id: msg.id, message: 'Embed 已发送' };
-    },
-  }, plugin.name));
-
-  disposers.push(toolService.addTool({
-    name: 'discord_forum_post',
-    description: '在 Discord 论坛频道中创建帖子',
-    parameters: {
-      type: 'object',
-      properties: {
-        endpoint_id: { type: 'string', description: 'Endpoint 名称', contextKey: 'endpointId' },
-        channel_id: { type: 'string', description: '论坛频道 ID' },
-        name: { type: 'string', description: '帖子标题' },
-        content: { type: 'string', description: '帖子内容' },
-        tags: { type: 'string', description: '标签名，逗号分隔（可选）' },
-      },
-      required: ['endpoint_id', 'channel_id', 'name', 'content'],
-    },
-    platforms: ['discord'],
-    tags: ['discord'],
-    execute: async (args: Record<string, any>) => {
-      const endpoint = getGatewayBot(args.endpoint_id) as any;
-      const tagList = args.tags ? args.tags.split(',').map((t: string) => t.trim()) : undefined;
-      const thread = await endpoint.createForumPost(args.channel_id, args.name, args.content, tagList);
-      return { success: true, thread_id: thread.id, message: `论坛帖 "${args.name}" 已创建` };
-    },
-  }, plugin.name));
 
   return () => disposers.forEach(d => d());
 });

@@ -261,6 +261,7 @@ const memberInfo = endpoint.getGroupMemberInfo(groupId, userId)
 
 ## 🔧 群管理工具（AI 可调用）
 
+
 适配器通过覆写 `ISceneManagement` 标准方法自动注册群管理工具，同时保留平台特有工具，这些工具可以被 AI 调用，实现智能化的群管理。
 
 ### 标准群管工具（自动生成）
@@ -393,7 +394,6 @@ onGroupMessage(async (message) => {
 
 ## icqq CLI 与 AI bash 安全
 
-启用 **icqq 技能**（`skills/icqq`）时，模型通常会通过 **`bash`** 调用 `icqq …` 命令行。此时由框架 **`execSecurity` / `execApprovalMode`** 与 **Owner 私聊指令**（`approve always bash`、`approve rule <正则>` 等）共同约束：在 `allowlist` 下，**非敏感**子命令多数可直接执行；**敏感**子命令（踢人、禁言、解散、支付等）在 `execApprovalMode: ask` 时需 Owner 确认，并可用 **正则匹配整条子命令** 做持久化放行（不必把 QQ 号写进配置）。持久化文件为数据目录下的 `owner-approve-always.json`。
 
 完整说明与指令表见仓库文档：[docs/advanced/ai.md](../../../docs/advanced/ai.md)（锚点：`#icqq-bash-exec`、`#owner-approve-commands`）。
 

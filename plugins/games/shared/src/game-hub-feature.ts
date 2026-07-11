@@ -1,13 +1,6 @@
-import {
-  Feature,
-  getPlugin,
-  type FeatureJSON,
-  type Plugin,
-  type PluginLike,
-} from 'zhin.js';
+import { Feature, getPlugin, type FeatureJSON, type Plugin, type PluginLike, type DatabaseFeature } from 'zhin.js';
 import { mountGameHubUi, markGameHubUiMounted } from './game-hub-mount.js';
 import { registerGameRecordModels, initGameRecordDatabase } from './game-records.js';
-import type { DatabaseFeature } from 'zhin.js';
 
 export interface GameHubContext {
   plugin: Plugin;

@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/telegram/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/telegram/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=fa8901ffb863f6b2 -->
+<!-- sync-adapter-docs:sha256=796199a5da7d1a59 -->
 
 # @zhin.js/adapter-telegram
 
@@ -177,6 +177,15 @@ You can send files using:
 - `file_id` (from received messages)
 - URL
 - Local file path
+
+## AI tools
+
+| Kind | Path |
+|------|------|
+| Platform tools (10) | `agent/tools/` (`telegram_*`: invites, pins, admins, stickers, etc.) |
+| Skill doc | `agent/skills/telegram.md` |
+| Scene management | `createSceneManagementTools()` |
+
 
 ## Troubleshooting
 

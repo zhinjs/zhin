@@ -1,25 +1,27 @@
 import {
   formatCompact,
   MessageCommand,
+  matchesSideEventName,
+  sideEventSendChannel,
   type Plugin,
-  ZhinTool,
 } from "zhin.js";
 import { adapterAllowed } from "./shared.js";
 import type { GroupSuiteConfig } from "./config.js";
 
 export function registerAdmin(plugin: Plugin, cfg: GroupSuiteConfig): void {
-  const { addCommand, addTool, logger } = plugin;
+  const { addCommand, logger } = plugin;
   const welcomeTemplate = cfg.welcome;
   const noticeAdapters = cfg.noticeAdapters;
 
   plugin.on("notice.receive", async (notice) => {
     if (!adapterAllowed(noticeAdapters, String(notice.$adapter))) return;
 
-    if (notice.$type === "group_member_increase") {
-      if (notice.$channel.type !== "group") return;
+    if (matchesSideEventName(notice, "notice.group.member_increase")) {
+      if (notice.$scene_type !== "group") return;
       const targetName =
         notice.$target?.name || notice.$target?.id || "新成员";
       const welcomeMsg = `🎉 ${targetName}，${welcomeTemplate}`;
+      const channel = sideEventSendChannel(notice);
       try {
         const adapter = plugin.inject(notice.$adapter as never) as any;
         if (!adapter?.sendMessage) return;
@@ -27,8 +29,8 @@ export function registerAdmin(plugin: Plugin, cfg: GroupSuiteConfig): void {
           context: notice.$adapter,
           endpoint: notice.$endpoint,
           content: welcomeMsg,
-          id: notice.$channel.id,
-          type: notice.$channel.type,
+          id: channel.id,
+          type: channel.type,
         });
       } catch (e: unknown) {
         logger.warn(
@@ -42,11 +44,12 @@ export function registerAdmin(plugin: Plugin, cfg: GroupSuiteConfig): void {
       return;
     }
 
-    if (cfg.recallNotify && notice.$type === "group_recall") {
-      if (notice.$channel.type !== "group") return;
+    if (cfg.recallNotify && matchesSideEventName(notice, "notice.group.recall")) {
+      if (notice.$scene_type !== "group") return;
       const operatorName =
-        notice.$operator?.name || notice.$operator?.id || "某人";
+        notice.$actor?.name || notice.$actor?.id || "某人";
       const msg = `⚠️ ${operatorName} 撤回了一条消息`;
+      const channel = sideEventSendChannel(notice);
       try {
         const adapter = plugin.inject(notice.$adapter as never) as any;
         if (!adapter?.sendMessage) return;
@@ -54,8 +57,8 @@ export function registerAdmin(plugin: Plugin, cfg: GroupSuiteConfig): void {
           context: notice.$adapter,
           endpoint: notice.$endpoint,
           content: msg,
-          id: notice.$channel.id,
-          type: notice.$channel.type,
+          id: channel.id,
+          type: channel.type,
         });
       } catch (e: unknown) {
         logger.warn(
@@ -130,16 +133,4 @@ export function registerAdmin(plugin: Plugin, cfg: GroupSuiteConfig): void {
       }),
   );
 
-  addTool(
-    new ZhinTool("group_announce")
-      .desc("向群聊发送公告/通知消息")
-      .keyword("群公告", "通知", "announce")
-      .param("message", { type: "string", description: "要发送的公告内容" }, true)
-      .execute(async (args) => {
-        const content = args.message as string;
-        if (!content?.trim()) return "公告内容不能为空";
-        return `📢 群公告：\n${content}`;
-      })
-      .toTool(),
-  );
 }

@@ -33,6 +33,12 @@ export interface HostTurnMetrics {
   path: HostTurnPath;
   iterations?: number;
   model?: string;
+  /** 本轮用户输入预览（日志表格） */
+  userInput?: string;
+  /** 模型思考链预览（日志表格） */
+  thinking?: string;
+  /** 最终回复预览（日志表格） */
+  output?: string;
 }
 
 export interface HostScheduleTurnContext {
@@ -91,6 +97,7 @@ export interface HostAgentLoopTurnResult {
   iterations: number;
   model: string;
   toolCalls: unknown[];
+  thinking?: string;
 }
 
 export interface HostTurnTracker {

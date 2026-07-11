@@ -1,5 +1,5 @@
-import { Adapter, connectEndpointInstance } from '@zhin.js/core';
-import type { Plugin } from '@zhin.js/core';
+import { Adapter, connectEndpointInstance, type Plugin } from '@zhin.js/core';
+
 import { formatCompactLog } from '@zhin.js/logger';
 import type { AppConfig } from '../types.js';
 
@@ -105,7 +105,7 @@ export async function connectEndpoints(plugin: Plugin, appConfig: AppConfig): Pr
         }
       }
 
-      adapter.logger.info(formatCompactLog('Endpoint', {
+      adapter.logger.debug(formatCompactLog('Endpoint', {
         adapter: adapter.name,
         connected,
         failed,

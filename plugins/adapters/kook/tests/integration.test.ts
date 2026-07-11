@@ -384,13 +384,15 @@ describe('Kook 适配器特定测试', () => {
         'notice.receive',
         expect.objectContaining({
           $adapter: 'kook',
-          $type: 'group_member_increase',
+          $type: 'notice',
+          $scene_type: 'group',
+          $sub_type: 'member_increase',
           $target: expect.objectContaining({ id: 'new-user-1' }),
         }),
       );
       expect(dispatchSpy).toHaveBeenCalledWith(
         'notice.receive',
-        expect.objectContaining({ $type: 'group_member_increase' }),
+        expect.objectContaining({ $scene_type: 'group', $sub_type: 'member_increase' }),
       );
 
       dispatchSpy.mockRestore();

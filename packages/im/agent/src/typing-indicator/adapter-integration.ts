@@ -80,11 +80,11 @@ export const PLATFORM_FEATURES: Record<string, PlatformFeatures> = {
   },
   slack: {
     platform: 'slack',
-    supportsReaction: false,
+    supportsReaction: true,
     supportsEdit: true,
     supportsDelete: true,
-    supportsTyping: true,
-    defaultType: 'typing',
+    supportsTyping: false,
+    defaultType: 'reaction',
   },
   lark: {
     platform: 'lark',

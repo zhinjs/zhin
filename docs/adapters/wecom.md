@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/wecom/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/wecom/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=605ea0ce73ac6aeb -->
+<!-- sync-adapter-docs:sha256=31beaacdf4b7b86c -->
 
 # @zhin.js/adapter-wecom
 
@@ -269,6 +269,16 @@ A: 检查：
 - [企业微信接收消息](https://developer.work.weixin.qq.com/document/path/90930)
 - [企业微信发送应用消息](https://developer.work.weixin.qq.com/document/path/90236)
 - [Zhin.js 官方文档](https://github.com/zhinjs/zhin)
+
+## AI 工具
+
+| 类别 | 路径 |
+|------|------|
+| Permit 词汇 | `agent/PERMITS.md` |
+| 平台工具（4 个） | `agent/tools/`（`wecom_*`：用户、部门、发消息等） |
+| 技能说明 | `agent/skills/wecom.md` |
+| 群管标准工具 | 按平台能力由 `createSceneManagementTools()` 注册 |
+
 
 ## 许可证
 

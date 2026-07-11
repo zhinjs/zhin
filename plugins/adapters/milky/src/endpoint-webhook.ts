@@ -61,7 +61,7 @@ export class MilkyWebhookEndpoint extends EventEmitter implements Endpoint<Milky
       ctx.status = 200;
       ctx.body = { retcode: 0 };
     });
-    this.logger.info(formatCompact( { op: 'webhook', path }));
+    this.logger.debug(formatCompact( { op: 'webhook', path }));
   }
 
   async $disconnect(): Promise<void> {

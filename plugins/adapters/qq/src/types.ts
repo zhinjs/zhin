@@ -1,8 +1,7 @@
 /**
  * QQ 官方机器人适配器类型定义
  */
-import type { Bot as QQOfficialBot } from "qq-official-bot";
-import type { ReceiverMode, ApplicationPlatform } from "qq-official-bot";
+import { type Bot as QQOfficialBot, type ReceiverMode, type ApplicationPlatform } from 'qq-official-bot';
 
 export { ReceiverMode } from "qq-official-bot";
 export type { ApplicationPlatform, Intent } from "qq-official-bot";

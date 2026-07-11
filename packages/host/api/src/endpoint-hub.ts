@@ -12,6 +12,7 @@ import {
   markRequestsConsumed,
   findRequestRow,
   type StoredRequestRow,
+  type StoredNoticeRow,
 } from "./endpoint-persistence.js";
 import { toConsoleChannel, toConsoleChannelParent } from "./endpoint-channel.js";
 
@@ -51,6 +52,49 @@ function evictStalePendingRequests(): void {
   }
 }
 
+export function serializeRequestPush(row: StoredRequestRow, canAct: boolean) {
+  return {
+    $row_id: row.id,
+    $id: row.platform_request_id,
+    $adapter: row.adapter,
+    $endpoint: row.endpoint_id,
+    $type: row.type,
+    $scene_id: row.scene_id,
+    $scene_type: row.scene_type || undefined,
+    $sub_type: row.sub_type || undefined,
+    $actor: { id: row.actor_id, name: row.actor_name },
+    $comment: row.comment || undefined,
+    $timestamp: row.created_at,
+    $can_act: canAct,
+  };
+}
+
+export function serializeNoticePush(row: StoredNoticeRow, notice?: {
+  $sub_type?: string;
+  $scene_type?: string;
+  $actor?: { id?: string; name?: string };
+  $target?: { id?: string; name?: string };
+}) {
+  return {
+    $row_id: row.id,
+    $id: row.platform_notice_id,
+    $adapter: row.adapter,
+    $endpoint: row.endpoint_id,
+    $type: row.type,
+    $scene_id: row.scene_id,
+    $scene_type: notice?.$scene_type ?? (row.scene_type || undefined),
+    $sub_type: notice?.$sub_type ?? (row.sub_type || undefined),
+    $actor: notice?.$actor ?? (row.actor_id
+      ? { id: row.actor_id, name: row.actor_name || undefined }
+      : undefined),
+    $target: notice?.$target ?? (row.target_id
+      ? { id: row.target_id, name: row.target_name || undefined }
+      : undefined),
+    $raw_payload: row.payload,
+    $timestamp: row.created_at,
+  };
+}
+
 export async function storePendingRequest(
   adapter: string,
   endpointId: string,
@@ -65,36 +109,22 @@ export async function storePendingRequest(
     endpoint_id: endpointId,
     platform_request_id: platformId,
     type: String(req.$type),
-    sender_id: String(req.$sender?.id ?? ""),
-    sender_name: String(req.$sender?.name ?? ""),
+    scene_type: req.$scene_type != null ? String(req.$scene_type) : "",
+    scene_id: String(req.$scene_id ?? ""),
+    sub_type: req.$sub_type != null ? String(req.$sub_type) : "",
+    actor_id: String(req.$actor?.id ?? ""),
+    actor_name: String(req.$actor?.name ?? ""),
     comment: String(req.$comment ?? ""),
-    channel_id: String(req.$channel?.id ?? ""),
-    channel_type: String(req.$channel?.type ?? "private"),
     created_at: typeof req.$timestamp === "number" ? req.$timestamp : Date.now(),
   });
   return row;
-}
-
-export function rowToRequestPushData(row: StoredRequestRow, canAct: boolean) {
-  return {
-    id: row.id,
-    adapter: row.adapter,
-    endpointId: row.endpoint_id,
-    platformRequestId: row.platform_request_id,
-    type: row.type,
-    sender: { id: row.sender_id, name: row.sender_name },
-    comment: row.comment,
-    channel: { id: row.channel_id, type: row.channel_type },
-    timestamp: row.created_at,
-    canAct,
-  };
 }
 
 export async function onRequestReceived(adapter: string, endpointId: string, req: ZhinRequest) {
   const row = await storePendingRequest(adapter, endpointId, req);
   const key = requestMemoryKey(adapter, endpointId, req.$id);
   const canAct = pendingRequestObjects.has(key);
-  broadcast({ type: "endpoint:request", data: rowToRequestPushData(row, canAct) });
+  broadcast({ type: "request.receive", data: serializeRequestPush(row, canAct) });
 }
 
 export async function onNoticeReceived(adapter: string, endpointId: string, notice: any) {
@@ -112,8 +142,11 @@ export async function onNoticeReceived(adapter: string, endpointId: string, noti
   try {
     payload = JSON.stringify({
       type: notice.$type,
-      subType: notice.$subType,
-      channel: notice.$channel,
+      scene_type: notice.$scene_type,
+      scene_id: notice.$scene_id,
+      sub_type: notice.$sub_type,
+      actor: notice.$actor,
+      target: notice.$target,
       raw,
     });
   } catch {
@@ -122,23 +155,26 @@ export async function onNoticeReceived(adapter: string, endpointId: string, noti
   const row = await insertNotice({
     adapter,
     endpoint_id: endpointId,
-    notice_type: String(notice.$type ?? "unknown"),
-    channel_type: String(notice.$channel?.type ?? ""),
-    channel_id: String(notice.$channel?.id ?? ""),
+    platform_notice_id: String(notice.$id ?? ""),
+    type: String(notice.$type ?? "unknown"),
+    scene_type: String(notice.$scene_type ?? ""),
+    scene_id: String(notice.$scene_id ?? ""),
+    sub_type: notice.$sub_type != null ? String(notice.$sub_type) : "",
+    actor_id: String(notice.$actor?.id ?? ""),
+    actor_name: String(notice.$actor?.name ?? ""),
+    target_id: String(notice.$target?.id ?? ""),
+    target_name: String(notice.$target?.name ?? ""),
     payload,
     created_at: typeof notice.$timestamp === "number" ? notice.$timestamp : Date.now(),
   });
   broadcast({
-    type: "endpoint:notice",
-    data: {
-      id: row.id,
-      adapter: row.adapter,
-      endpointId: row.endpoint_id,
-      noticeType: row.notice_type,
-      channel: { id: row.channel_id, type: row.channel_type },
-      payload: row.payload,
-      timestamp: row.created_at,
-    },
+    type: "notice.receive",
+    data: serializeNoticePush(row, {
+      $sub_type: notice.$sub_type,
+      $scene_type: notice.$scene_type,
+      $actor: notice.$actor,
+      $target: notice.$target,
+    }),
   });
 }
 
@@ -173,8 +209,8 @@ export async function sendCatchUpToClient(ws: WebSocket) {
     if (ws.readyState === 1) {
       ws.send(
         JSON.stringify({
-          type: "endpoint:request",
-          data: rowToRequestPushData(row, canAct),
+          type: "request.receive",
+          data: serializeRequestPush(row, canAct),
         })
       );
     }
@@ -184,16 +220,8 @@ export async function sendCatchUpToClient(ws: WebSocket) {
     if (ws.readyState === 1) {
       ws.send(
         JSON.stringify({
-          type: "endpoint:notice",
-          data: {
-            id: row.id,
-            adapter: row.adapter,
-            endpointId: row.endpoint_id,
-            noticeType: row.notice_type,
-            channel: { id: row.channel_id, type: row.channel_type },
-            payload: row.payload,
-            timestamp: row.created_at,
-          },
+          type: "notice.receive",
+          data: serializeNoticePush(row),
         })
       );
     }
@@ -230,14 +258,14 @@ export function initEndpointHub(root: {
     detail?: Record<string, unknown>;
   }) => {
     broadcast({
-      type: "endpoint:lifecycle",
+      type: "endpoint.lifecycle",
       data: {
-        adapter: payload.adapter,
-        endpointId: payload.endpointId,
-        kind: payload.kind,
-        error: payload.error,
-        phase: payload.phase,
-        detail: payload.detail,
+        $adapter: payload.adapter,
+        $endpoint: payload.endpointId,
+        $kind: payload.kind,
+        $error: payload.error,
+        $phase: payload.phase,
+        $detail: payload.detail,
       },
     });
   };
@@ -248,7 +276,6 @@ export function initEndpointHub(root: {
   root.on("endpoint.disconnect", handlerBotLifecycle);
   root.on("endpoint.error", handlerBotLifecycle);
 
-  // 收消息推送：向控制台广播机器人收到的消息，供「收消息展示」使用
   const adapterNames = root.adapters ? [...(root.adapters as Iterable<string>)] : [];
   const inject = root.inject;
   const adapterListeners: Array<{ adapter: any; handler: (...a: any[]) => void }> = [];
@@ -282,36 +309,32 @@ export function initEndpointHub(root: {
                 );
               }
             } catch {
-              // ignore name resolution failures
+              // ignore
             }
             const channel = toConsoleChannel(msgChannel, resolvedNames);
             const parent = toConsoleChannelParent(msgChannel?.parent);
-            const payload = {
-              type: "endpoint:message",
+            broadcast({
+              type: "message.receive",
               data: {
-                adapter: name,
-                endpointId: msg?.$endpoint,
-                channelId: msgChannel?.id,
-                channelType: msgChannel?.type,
-                channel,
-                parent,
-                sender: msg?.$sender,
-                content: msg?.$content ?? [],
-                timestamp: typeof msg?.$timestamp === "number" ? msg.$timestamp : Date.now(),
+                $adapter: name,
+                $endpoint: msg?.$endpoint,
+                $channel: channel ?? msgChannel,
+                $parent: parent,
+                $sender: msg?.$sender,
+                $content: msg?.$content ?? [],
+                $timestamp: typeof msg?.$timestamp === "number" ? msg.$timestamp : Date.now(),
               },
-            };
-            broadcast(payload);
+            });
           };
           ad.on("message.receive", handler);
           adapterListeners.push({ adapter: ad, handler });
         }
       } catch {
-        // 忽略单个适配器注册失败
+        // ignore
       }
     }
   }
 
-  // 返回清理函数
   return () => {
     root.off?.("request.receive", handlerReq);
     root.off?.("notice.receive", handlerNotice);

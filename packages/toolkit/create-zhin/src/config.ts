@@ -1,16 +1,6 @@
 import fs from 'fs-extra';
 import path from 'path';
-import { InitOptions, DatabaseConfig, DATABASE_PACKAGES } from '@zhin.js/scaffold-wizard';
-import {
-  generateAIConfigYaml,
-  generateAIConfigJSON,
-  generateAIConfigToml,
-  generateEndpointsConfigYaml,
-  generateEndpointsConfigJSON,
-  generateEndpointsConfigToml,
-  CONSOLE_HOST_PLUGINS,
-  DEFAULT_CREATE_BOT_HTTP_PORT,
-} from '@zhin.js/scaffold-wizard';
+import { InitOptions, DatabaseConfig, DATABASE_PACKAGES, generateAIConfigYaml, generateAIConfigJSON, generateAIConfigToml, generateEndpointsConfigYaml, generateEndpointsConfigJSON, generateEndpointsConfigToml, CONSOLE_HOST_PLUGINS, DEFAULT_CREATE_BOT_HTTP_PORT } from '@zhin.js/scaffold-wizard';
 
 // 生成数据库环境变量
 export function generateDatabaseEnvVars(config: DatabaseConfig): string {

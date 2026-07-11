@@ -31,8 +31,9 @@
  *   timeout: 15000
  * ```
  */
-import { formatCompact, Adapter, MessageCommand, Schema, usePlugin, ZhinTool } from 'zhin.js';
+import { formatCompact, Adapter, MessageCommand, Schema, usePlugin } from 'zhin.js';
 import Parser from "rss-parser";
+import { setRssAgentDeps } from './rss-agent-deps.js';
 
 const plugin = usePlugin();
 const { logger, root, addCommand, addSchedule, useContext, onDispose, declareConfig } = plugin;
@@ -98,6 +99,8 @@ function getSeen(): any {
   return _db?.models?.get("rss_seen_items") ?? null;
 }
 
+setRssAgentDeps({ getSubs, fetchFeed });
+
 useContext("database", (db: any) => {
   _db = db;
   db.define("rss_subscriptions", {
@@ -117,7 +120,7 @@ useContext("database", (db: any) => {
     item_title: { type: "text", default: "" },
     seen_at: { type: "text", default: "" },
   });
-  logger.info(formatCompact( { op: "model" }));
+  logger.debug(formatCompact( { op: "model" }));
 });
 
 function ts(): string {
@@ -500,57 +503,4 @@ addCommand(
     }),
 );
 
-// ─── AI 工具 ─────────────────────────────────────────────────────────────────
-
-plugin.addTool(
-  new ZhinTool("rss_list_subscriptions")
-    .desc("查询当前所有 RSS 订阅")
-    .execute(async () => {
-      const Subs = getSubs();
-      if (!Subs) return "RSS 数据库尚未就绪";
-
-      const all: any[] = await Subs.select();
-      if (all.length === 0) return "暂无任何 RSS 订阅";
-
-      const grouped = new Map<string, any[]>();
-      for (const sub of all) {
-        const key = `${sub.channel_type}:${sub.channel_id}`;
-        const list = grouped.get(key) || [];
-        list.push(sub);
-        grouped.set(key, list);
-      }
-
-      const lines: string[] = [];
-      for (const [channel, subs] of grouped) {
-        lines.push(`[${channel}]`);
-        for (const s of subs) {
-          lines.push(`  - ${s.feed_title || s.url}`);
-        }
-      }
-      return `RSS 订阅总览 (${all.length} 条):\n${lines.join("\n")}`;
-    })
-    .toTool(),
-);
-
-plugin.addTool(
-  new ZhinTool("rss_preview_feed")
-    .desc("预览一个 RSS 源的最新内容")
-    .param("url", { type: "string", description: "RSS/Atom 源地址" })
-    .execute(async (args: Record<string, any>) => {
-      const url = args.url as string;
-      if (!url) return "请提供 RSS 源 URL";
-      try {
-        const { title, items } = await fetchFeed(url);
-        if (items.length === 0) return `${title}: 无内容`;
-        return items
-          .slice(0, 5)
-          .map((item, i) => `${i + 1}. ${item.title}\n   ${item.link}`)
-          .join("\n");
-      } catch (e) {
-        return `解析失败: ${(e as Error).message}`;
-      }
-    })
-    .toTool(),
-);
-
-logger.info(formatCompact( { op: "load", poll: config.pollCron, max_per_group: config.maxPerGroup }));
+logger.debug(formatCompact( { op: "load", poll: config.pollCron, max_per_group: config.maxPerGroup }));

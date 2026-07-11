@@ -10,8 +10,8 @@
 
 import { formatCompact, Logger, truncatePreview } from '@zhin.js/logger';
 import type { AIProvider, ChatMessage } from '../types.js';
-import { microCompactMessages } from './micro-compact.js';
-import type { MicroCompactOptions } from './micro-compact.js';
+import { microCompactMessages, type MicroCompactOptions } from './micro-compact.js';
+
 import { estimateTokens, estimateMessagesTokens } from './token-counter.js';
 
 const logger = new Logger(null, 'Compaction');

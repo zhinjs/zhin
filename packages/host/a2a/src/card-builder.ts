@@ -1,8 +1,8 @@
 /**
  * Build A2A AgentCard per ai.agents binding.
  */
-import type { AgentCard, AgentSkill } from '@a2a-js/sdk';
-import { A2A_PROTOCOL_VERSION } from '@a2a-js/sdk';
+import { A2A_PROTOCOL_VERSION, type AgentCard, type AgentSkill } from '@a2a-js/sdk';
+
 import type { AgentBindingRegistry } from '@zhin.js/agent/config';
 import { a2aAgentCardUrl, a2aJsonRpcUrl, a2aRestUrl } from './config.js';
 

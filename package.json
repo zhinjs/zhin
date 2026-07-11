@@ -15,6 +15,8 @@
     "packages/host/*",
     "plugins/adapters/*",
     "plugins/features/*",
+    "plugins/games/*",
+    "plugins/services/*",
     "plugins/utils/*",
     "examples/*",
     "docs"
@@ -80,6 +82,7 @@
     "docs:api": "typedoc",
     "check:prod": "node scripts/check-production-config.js",
     "check:plugin": "node scripts/check-plugin-spec.mjs",
+    "check:plugin-agent-publish": "node scripts/check-plugin-agent-publish.mjs",
     "check:install-size": "node scripts/check-install-size.mjs"
   },
   "devDependencies": {

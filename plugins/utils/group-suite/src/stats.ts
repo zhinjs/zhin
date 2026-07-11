@@ -138,7 +138,7 @@ export function registerStats(plugin: Plugin, cfg: GroupSuiteConfig): void {
       count: { type: "integer", default: 0 },
       updated_at: { type: "text", default: "" },
     });
-    logger.info(formatCompact({ 模块: "消息统计", 数据模型: "已就绪" }));
+    logger.debug(formatCompact({ 模块: "消息统计", 数据模型: "已就绪" }));
   });
 
   const flushTimer = setInterval(flushStatsBuffer, 10_000);
@@ -287,7 +287,7 @@ export function registerStats(plugin: Plugin, cfg: GroupSuiteConfig): void {
 
   onDispose(() => clearInterval(cleanupTimer));
 
-  logger.info(
+  logger.debug(
     formatCompact({
       模块: "消息统计",
       状态: "已加载",

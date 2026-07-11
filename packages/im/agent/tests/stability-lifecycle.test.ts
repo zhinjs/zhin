@@ -3,17 +3,16 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ZhinAgent } from '../src/zhin-agent/index.js';
-import type { AIProvider } from '@zhin.js/ai';
+import { MemoryAgentSessionStore, BaseProvider, type AIProvider } from '@zhin.js/ai';
 import {
   getCompactionStateCount,
   clearCompactionStates,
 } from '../src/memory/compaction-runtime.js';
 import { MemoryOrchestrationRepository } from '../src/orchestrator/orchestration-repository.js';
-import { MemoryAgentSessionStore } from '@zhin.js/ai';
+
 import { collectStabilityMetrics, startStabilityMonitor } from '../src/stability/memory-pressure.js';
 import { Adapter } from '@zhin.js/core';
 import { pruneAdapterRegistry } from '../src/stability/registry-cleanup.js';
-import { BaseProvider } from '@zhin.js/ai';
 
 function mockProvider(): AIProvider & { dispose: ReturnType<typeof vi.fn> } {
   const dispose = vi.fn();

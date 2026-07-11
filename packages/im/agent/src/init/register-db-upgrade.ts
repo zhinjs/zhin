@@ -14,6 +14,34 @@ import {
 } from './upgrade-agent-db-schema.js';
 import { registerEndpointIdColumnMigrationHook } from './upgrade-endpoint-id-schema.js';
 
+type SessionTreeUpgradeResult = Awaited<ReturnType<typeof upgradeAgentSessionTreeData>>;
+
+function logSessionTreeUpgrade(
+  logger: { info: (...args: unknown[]) => void; debug: (...args: unknown[]) => void },
+  result: SessionTreeUpgradeResult,
+): void {
+  const changed =
+    result.columns.length > 0
+    || result.idsBackfilled > 0
+    || result.parentLinks > 0
+    || result.activeLeaves > 0;
+  const summary =
+    `AI Session: session tree upgrade checked (columns=${result.columns.length}, ids=${result.idsBackfilled}, parent_links=${result.parentLinks}, active_leaves=${result.activeLeaves})`;
+  if (!changed) {
+    logger.debug(summary);
+    return;
+  }
+  logger.info(summary);
+  if (result.columns.length > 0) {
+    logger.info(`AI Session: migrated agent_* columns: ${result.columns.join(', ')}`);
+  }
+  if (result.idsBackfilled > 0 || result.parentLinks > 0 || result.activeLeaves > 0) {
+    logger.info(
+      `AI Session: repaired session tree (ids=${result.idsBackfilled}, parent_links=${result.parentLinks}, active_leaves=${result.activeLeaves})`,
+    );
+  }
+}
+
 export function registerDbUpgrade(refs: AIServiceRefs): void {
   const plugin = getPlugin();
   const { useContext, root, logger } = plugin;
@@ -34,12 +62,7 @@ export function registerDbUpgrade(refs: AIServiceRefs): void {
     if (db && refs.zhinAgent) {
       void upgradeAgentSessionTreeData(db as AgentDbQueryable)
         .then(async (result) => {
-          logger.info(
-            `AI Session: session tree upgrade checked (columns=${result.columns.length}, ids=${result.idsBackfilled}, parent_links=${result.parentLinks}, active_leaves=${result.activeLeaves})`,
-          );
-          if (result.columns.length > 0) {
-            logger.info(`AI Session: migrated agent_* columns: ${result.columns.join(', ')}`);
-          }
+          logSessionTreeUpgrade(logger, result);
         })
         .then(() => activateAiDatabaseStorage(db, refs, appConfig.ai || {}, appConfig.collaboration))
         .catch((e) => logger.error('AI Session: database setup failed:', e))
@@ -59,17 +82,7 @@ export function registerDbUpgrade(refs: AIServiceRefs): void {
       if (config.sessions?.useDatabase === false) return;
 
       const result = await upgradeAgentSessionTreeData(db as AgentDbQueryable);
-      logger.info(
-        `AI Session: session tree upgrade checked (columns=${result.columns.length}, ids=${result.idsBackfilled}, parent_links=${result.parentLinks}, active_leaves=${result.activeLeaves})`,
-      );
-      if (result.columns.length > 0) {
-        logger.info(`AI Session: migrated agent_* columns: ${result.columns.join(', ')}`);
-      }
-      if (result.idsBackfilled > 0 || result.parentLinks > 0 || result.activeLeaves > 0) {
-        logger.info(
-          `AI Session: repaired session tree (ids=${result.idsBackfilled}, parent_links=${result.parentLinks}, active_leaves=${result.activeLeaves})`,
-        );
-      }
+      logSessionTreeUpgrade(logger, result);
       await activateAiDatabaseStorage(db, refs, config, appConfig.collaboration);
       logger.debug('AI database storage activated (agent_sessions, agent_messages, im_transcripts)');
     } catch (e) {

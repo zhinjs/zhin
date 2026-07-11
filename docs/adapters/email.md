@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/email/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/email/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=e484d94215a3317e -->
+<!-- sync-adapter-docs:sha256=21cc2de0adf69f45 -->
 
 # @zhin.js/adapter-email
 
@@ -152,6 +152,11 @@ root.addMiddleware(async (message, next) => {
 | 重复处理邮件 | 确认 `markSeen: true`；检查是否多实例同时轮询同一邮箱 |
 
 建议使用环境变量存储邮箱密码，勿提交到版本库。
+
+## AI 工具
+
+技能说明见 `agent/skills/email.md`（收发邮件约束与工具列表）。
+
 
 ## 文档链接
 

@@ -4,8 +4,8 @@
 
 import { type ModelMessage, type ToolSet, type UserModelMessage, tool } from 'ai';
 import type { Context } from '../types/context.js';
-import type { AgentMessage, AssistantMessage, ToolResultMessage, UserMessage } from '../types/agent-message.js';
-import { isLlmAgentMessage } from '../types/agent-message.js';
+import { isLlmAgentMessage, type AgentMessage, type AssistantMessage, type ToolResultMessage, type UserMessage } from '../types/agent-message.js';
+
 import { repairAgentMessagesForLlm } from '../repair-agent-messages.js';
 import type { LlmTool } from '../types/tool.js';
 

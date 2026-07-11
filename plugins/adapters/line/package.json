@@ -34,22 +34,27 @@
   "scripts": {
     "build": "zhin build",
     "clean": "rimraf lib dist",
-    "build:node": "tsc"
+    "build:node": "tsc",
+    "prepublishOnly": "npm run build"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",
+    "@zhin.js/agent": "workspace:*",
     "@zhin.js/cli": "workspace:*",
     "@zhin.js/host-api": "workspace:*",
     "@zhin.js/host-router": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "typescript": "^6.0.3",
-    "zhin.js": "workspace:*"
+    "zhin.js": "workspace:*",
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
+    "@zhin.js/agent": "workspace:*",
     "@zhin.js/host-api": "workspace:*",
     "@zhin.js/host-router": "workspace:*",
     "@zhin.js/logger": "workspace:*",
-    "zhin.js": "workspace:*"
+    "zhin.js": "workspace:*",
+    "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
     "@zhin.js/host-router": {
@@ -57,12 +62,18 @@
     },
     "@zhin.js/host-api": {
       "optional": true
+    },
+    "@zhin.js/agent": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
     }
   },
   "files": [
     "src",
     "lib",
-    "skills",
+    "agent",
     "plugin.yml",
     "README.md",
     "CHANGELOG.md"

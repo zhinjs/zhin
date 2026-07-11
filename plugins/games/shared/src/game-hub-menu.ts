@@ -1,5 +1,5 @@
-import type { SendContent } from 'zhin.js';
-import { segment } from 'zhin.js';
+import { segment, type SendContent } from 'zhin.js';
+
 import { buildChoiceKeyboard } from './choice-keyboard.js';
 import { slashCommandPrefix } from './game-commands.js';
 import type { RegisteredGame } from './game-hub-feature.js';

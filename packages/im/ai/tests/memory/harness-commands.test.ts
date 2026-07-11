@@ -6,11 +6,10 @@
  * 操作，这些是 IM 命令的底层实现。
  */
 import { describe, it, expect, beforeEach } from 'vitest'
-import { createMemoryContextRepository } from '../../src/memory/context-repository.js'
-import type { MemoryContextRepository } from '../../src/memory/context-repository.js'
+import { createMemoryContextRepository, type MemoryContextRepository } from '../../src/memory/context-repository.js';
+
 import type { MemoryAgentSessionStore } from '../../src/memory/agent-session-store.js'
-import { createUserMessage, EMPTY_TOKEN_USAGE } from '../../src/llm/types/agent-message.js'
-import type { AgentMessage, AssistantMessage } from '../../src/llm/types/agent-message.js'
+import { createUserMessage, EMPTY_TOKEN_USAGE, type AgentMessage, type AssistantMessage } from '../../src/llm/types/agent-message.js';
 
 let repo: MemoryContextRepository
 let sessionStore: MemoryAgentSessionStore

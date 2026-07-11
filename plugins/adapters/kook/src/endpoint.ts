@@ -22,8 +22,8 @@ import {
   segment,
   expandInteractiveSegmentsInContent,
   MessageType,} from 'zhin.js';
-import type { KookEndpointConfig, KookSenderInfo, KookRawMessage } from "./types.js";
-import { KookPermission } from "./types.js";
+import { KookPermission, type KookEndpointConfig, type KookSenderInfo, type KookRawMessage } from './types.js';
+
 import type { KookAdapter } from "./adapter.js";
 import { InboundMessageDeduper } from "./kook-inbound.js";
 import { normalizeKookSenderForPermit } from "./platform-permit.js";

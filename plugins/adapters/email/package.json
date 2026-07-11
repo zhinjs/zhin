@@ -8,7 +8,8 @@
   "scripts": {
     "build": "pnpm build:node",
     "clean": "rimraf lib",
-    "build:node": "tsc"
+    "build:node": "tsc",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "imap": "^0.8.19",
@@ -50,7 +51,7 @@
   "files": [
     "src",
     "lib",
-    "skills",
+    "agent",
     "README.md",
     "CHANGELOG.md"
   ],

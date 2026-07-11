@@ -55,7 +55,7 @@ segment.button({
 
 | Adapter | 出站 | callback 入站 | command 入站 |
 |---------|------|---------------|------------|
-| sandbox / telegram / discord / kook / lark | native | `action` | 仍 callback（忽略 mode） |
+| sandbox / telegram / discord / kook / lark / slack | native | `action` | 仍 callback（忽略 mode） |
 | qq（官方） | native | `notice.*.action` | 预填文本 → `resolvePayloadFromText` |
 | onebot11 / napcat / icqq | text 降级 | — | 同 text 降级 |
 | 其余 Platform Stable | text | — | — |

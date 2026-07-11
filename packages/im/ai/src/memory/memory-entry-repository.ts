@@ -2,16 +2,7 @@
  * MemoryEntryRepository — CRUD + text search for semantic memory (L4).
  */
 import { randomUUID } from 'node:crypto';
-import type {
-  MemoryEntryRecord,
-  MemoryEntryScope,
-  MemoryEntrySearchInput,
-  MemoryEntryUpsertInput,
-} from './memory-entry-models.js';
-import {
-  parseMemoryTags,
-  serializeMemoryTags,
-} from './memory-entry-models.js';
+import { parseMemoryTags, serializeMemoryTags, type MemoryEntryRecord, type MemoryEntryScope, type MemoryEntrySearchInput, type MemoryEntryUpsertInput } from './memory-entry-models.js';
 
 type DbModel = {
   select(...fields: string[]): {

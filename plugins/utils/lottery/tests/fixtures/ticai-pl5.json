@@ -1,0 +1,18 @@
+{
+  "success": true,
+  "errorCode": "0",
+  "value": {
+    "list": [
+      {
+        "lotteryDrawNum": "24150",
+        "lotteryDrawTime": "2024-06-08",
+        "lotteryDrawResult": "1 4 6 0 7"
+      },
+      {
+        "lotteryDrawNum": "24149",
+        "lotteryDrawTime": "2024-06-07",
+        "lotteryDrawResult": "3 8 1 5 2"
+      }
+    ]
+  }
+}

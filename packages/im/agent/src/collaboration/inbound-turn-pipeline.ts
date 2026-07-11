@@ -8,7 +8,8 @@ import { checkAIAccess, type Plugin, type Message, type AITriggerConfig } from '
 import { formatCompactLog, truncatePreview } from '@zhin.js/logger';
 import type { AIServiceRefs } from '../init/shared-refs.js';
 import { discoverWorkspaceAgents } from '../discovery/agents.js';
-import { formatAiHandlerCompleteLog } from '../turn/turn-metrics.js';
+import { formatAiHandlerTurnTable, formatAiHandlerFallbackLog, formatOutputElementsPreview } from '../turn/turn-metrics.js';
+import type { OutputElement } from '@zhin.js/ai';
 import type { AIService } from '../service.js';
 import { evaluateCellAtOwnership, evaluatePeerTrigger, isInboundFromCollaborationPeer } from './peer-policy.js';
 import { buildTurnPlan } from './turn-plan-resolver.js';
@@ -41,18 +42,26 @@ function logInboundHandlerComplete(
   logger: InboundTurnPipelineDeps['logger'],
   t0: number,
   zhinAgent: NonNullable<AIServiceRefs['zhinAgent']>,
-  path?: string,
+  context: {
+    path?: string;
+    userInput?: string;
+    output?: string;
+    elements?: OutputElement[];
+  } = {},
 ): void {
   const totalMs = performance.now() - t0;
   const turnMetrics = zhinAgent.getLastTurnMetrics();
+  const output = context.output
+    ?? (context.elements ? formatOutputElementsPreview(context.elements) : undefined);
+
   if (turnMetrics) {
-    logger.info(formatAiHandlerCompleteLog(turnMetrics, totalMs));
+    logger.info(formatAiHandlerTurnTable(turnMetrics, totalMs, {
+      userInput: context.userInput,
+      output,
+    }));
     return;
   }
-  logger.info(formatCompactLog('AI Handler', {
-    total_ms: Math.round(totalMs),
-    ...(path ? { path } : { usage: 'n/a' }),
-  }));
+  logger.info(formatAiHandlerFallbackLog(totalMs, context.path));
 }
 
 export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): InboundTurnPipeline {
@@ -210,7 +219,10 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
       });
 
       if (routeResult.kind === 'done') {
-        logInboundHandlerComplete(logger, t0, zhinAgent, 'routed_done');
+        logInboundHandlerComplete(logger, t0, zhinAgent, {
+          path: 'routed_done',
+          userInput: aiContent,
+        });
         return;
       }
 
@@ -226,7 +238,10 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
         logger,
       });
 
-      logInboundHandlerComplete(logger, t0, zhinAgent);
+      logInboundHandlerComplete(logger, t0, zhinAgent, {
+        userInput: aiContent,
+        elements: routeResult.elements,
+      });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       logger.warn(formatCompactLog('AI Handler', {

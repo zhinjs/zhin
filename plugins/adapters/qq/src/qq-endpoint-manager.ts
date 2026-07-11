@@ -4,8 +4,8 @@ import type {
   ProvisionContext,
 } from 'zhin.js';
 import type { QQAdapter } from './adapter.js';
-import type { QQEndpointConfig, ReceiverMode } from './types.js';
-import { ReceiverMode as QQReceiverMode } from './types.js';
+import { ReceiverMode as QQReceiverMode, type QQEndpointConfig, type ReceiverMode } from './types.js';
+
 import { startQqBindFlow } from './qq-bind-flow.js';
 import { persistQqCredentialsToEnv } from './qq-bind-persist.js';
 

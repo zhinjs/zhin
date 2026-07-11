@@ -49,6 +49,10 @@ export function resolveActivityEventTargets(
     } else if (!resolvedUserId && parts.length >= 2) {
       resolvedUserId = parts.length >= 3 ? parts[parts.length - 1]! : parts[1];
     }
+    // 私聊 sceneId 多为会话 channel（Slack D*），与 sender userId 不同，出站需用 channel id
+    if (sceneId && !sceneId.startsWith('private:') && !SYNTHETIC_SENDER_IDS.has(sceneId)) {
+      groupId = sceneId;
+    }
   }
 
   return { userId: resolvedUserId, groupId };

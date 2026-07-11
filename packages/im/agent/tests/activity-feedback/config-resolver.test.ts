@@ -31,4 +31,12 @@ describe('activity-feedback config-resolver', () => {
       type: 'none',
     });
   });
+
+  it('uses reaction defaults for slack group active', () => {
+    expect(resolveActivityFeedbackPhaseConfig('slack', undefined, 'active', 'group')).toEqual({
+      type: 'reaction',
+      emoji: '⏳',
+      autoRemove: true,
+    });
+  });
 });

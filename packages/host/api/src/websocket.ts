@@ -7,13 +7,7 @@ export interface ConsoleWebServer {
   entries?: Record<string, string>;
 }
 export type WebServer = ConsoleWebServer;
-import {
-  initEndpointHub,
-  setEndpointHubWss,
-  sendCatchUpToClient,
-  getPendingRequest,
-  markRequestConsumedByPlatformId,
-} from "./endpoint-hub.js";
+import { initEndpointHub, setEndpointHubWss, sendCatchUpToClient, getPendingRequest, markRequestConsumedByPlatformId, removePendingRequest } from './endpoint-hub.js';
 import { broadcastSse } from "./sse-hub.js";
 import {
   markRequestsConsumed,
@@ -23,7 +17,7 @@ import {
   listUnconsumedNotices,
   getRequestRowById,
 } from "./endpoint-persistence.js";
-import { removePendingRequest } from "./endpoint-hub.js";
+
 import { createNodeProjectFs } from "./rpc/project-fs.js";
 import { handleCoreRpc } from "./rpc/handlers-core.js";
 import {
@@ -425,15 +419,15 @@ export async function handleWebSocketMessage(
       }
       break;
 
-    // endpoint:list / endpoint:info / endpoint:sendMessage → rpc/handlers-core.ts
+    // endpoint.list / endpoint.info / endpoint.send_message → rpc/handlers-core.ts
 
-    case "endpoint:friends":
-    case "endpoint:groups": {
+    case "endpoint.friends":
+    case "endpoint.groups": {
       try {
         const d = message.data || {};
-        const { adapter, endpointId } = d;
+        const { $adapter: adapter, $endpoint: endpointId } = d;
         if (!adapter || !endpointId) {
-          ws.send(JSON.stringify({ requestId, error: "adapter and endpointId required" }));
+          ws.send(JSON.stringify({ requestId, error: "$adapter and $endpoint required" }));
           break;
         }
         const ad = root.inject(adapter as keyof Plugin.Contexts);
@@ -443,7 +437,7 @@ export async function handleWebSocketMessage(
           break;
         }
         const endpointAny = endpoint as unknown as Record<string, unknown>;
-        if (type === "endpoint:friends") {
+        if (type === "endpoint.friends") {
           let friends: Array<{ user_id: number; nickname: string; remark: string }> = [];
           if (isIcqqAdapterKey(adapter)) {
             const map = (endpointAny.friends ?? endpointAny.fl) as
@@ -516,12 +510,12 @@ export async function handleWebSocketMessage(
       break;
     }
 
-    case "endpoint:channels": {
+    case "endpoint.channels": {
       try {
         const d = message.data || {};
-        const { adapter, endpointId } = d;
+        const { $adapter: adapter, $endpoint: endpointId } = d;
         if (!adapter || !endpointId) {
-          ws.send(JSON.stringify({ requestId, error: "adapter and endpointId required" }));
+          ws.send(JSON.stringify({ requestId, error: "$adapter and $endpoint required" }));
           break;
         }
         const ad = root.inject(adapter as keyof Plugin.Contexts);
@@ -586,12 +580,12 @@ export async function handleWebSocketMessage(
       break;
     }
 
-    case "endpoint:deleteFriend": {
+    case "endpoint.delete_friend": {
       try {
         const d = message.data || {};
-        const { adapter, endpointId, userId } = d;
+        const { $adapter: adapter, $endpoint: endpointId, $user_id: userId } = d;
         if (!adapter || !endpointId || !userId) {
-          ws.send(JSON.stringify({ requestId, error: "adapter, endpointId, userId required" }));
+          ws.send(JSON.stringify({ requestId, error: "$adapter, $endpoint, $user_id required" }));
           break;
         }
         const ad = root.inject(adapter as keyof Plugin.Contexts);
@@ -616,12 +610,12 @@ export async function handleWebSocketMessage(
       break;
     }
 
-    case "endpoint:requests": {
+    case "request.list": {
       try {
         const d = message.data || {};
-        const { adapter, endpointId } = d;
+        const { $adapter: adapter, $endpoint: endpointId } = d;
         if (!adapter || !endpointId) {
-          ws.send(JSON.stringify({ requestId, error: "adapter and endpointId required" }));
+          ws.send(JSON.stringify({ requestId, error: "$adapter and $endpoint required" }));
           break;
         }
         const rows = await listRequestsForBot(String(adapter), String(endpointId));
@@ -629,14 +623,16 @@ export async function handleWebSocketMessage(
           JSON.stringify({
             requestId,
             data: {
-              requests: rows.map((r) => ({
-                id: r.id,
-                platformRequestId: r.platform_request_id,
-                type: r.type,
-                sender: { id: r.sender_id, name: r.sender_name },
-                comment: r.comment,
-                channel: { id: r.channel_id, type: r.channel_type },
-                timestamp: r.created_at,
+              $requests: rows.map((r) => ({
+                $row_id: r.id,
+                $id: r.platform_request_id,
+                $type: r.type,
+                $scene_id: r.scene_id,
+                $scene_type: r.scene_type || undefined,
+                $sub_type: r.sub_type || undefined,
+                $actor: { id: r.actor_id, name: r.actor_name },
+                $comment: r.comment,
+                $timestamp: r.created_at,
               })),
             },
           })
@@ -647,16 +643,22 @@ export async function handleWebSocketMessage(
       break;
     }
 
-    case "endpoint:requestApprove":
-    case "endpoint:requestReject": {
+    case "request.approve":
+    case "request.reject": {
       try {
         const d = message.data || {};
-        const { adapter, endpointId, requestId: platformReqId, remark, reason } = d;
+        const {
+          $adapter: adapter,
+          $endpoint: endpointId,
+          $id: platformReqId,
+          $remark: remark,
+          $reason: reason,
+        } = d;
         if (!adapter || !endpointId || !platformReqId) {
           ws.send(
             JSON.stringify({
               requestId,
-              error: "adapter, endpointId, requestId required",
+              error: "$adapter, $endpoint, $id required",
             })
           );
           break;
@@ -667,12 +669,12 @@ export async function handleWebSocketMessage(
             JSON.stringify({
               requestId,
               error:
-                "request not in memory (restart?) — use endpoint:requestConsumed to dismiss",
+                "request not in memory (restart?) — use request.consumed to dismiss",
             })
           );
           break;
         }
-        if (type === "endpoint:requestApprove") await req.$approve(remark);
+        if (type === "request.approve") await req.$approve(remark);
         else await req.$reject(reason);
         await markRequestConsumedByPlatformId(String(adapter), String(endpointId), String(platformReqId));
         ws.send(JSON.stringify({ requestId, data: { success: true } }));
@@ -682,10 +684,10 @@ export async function handleWebSocketMessage(
       break;
     }
 
-    case "endpoint:requestConsumed": {
+    case "request.consumed": {
       try {
         const d = message.data || {};
-        const ids = d.ids ?? (d.id != null ? [d.id] : []);
+        const ids = d.$row_ids ?? (d.$row_id != null ? [d.$row_id] : []);
         if (!Array.isArray(ids) || !ids.length) {
           ws.send(JSON.stringify({ requestId, error: "id or ids required" }));
           break;
@@ -705,10 +707,10 @@ export async function handleWebSocketMessage(
       break;
     }
 
-    case "endpoint:noticeConsumed": {
+    case "notice.consumed": {
       try {
         const d = message.data || {};
-        const ids = d.ids ?? (d.id != null ? [d.id] : []);
+        const ids = d.$row_ids ?? (d.$row_id != null ? [d.$row_id] : []);
         if (!Array.isArray(ids) || !ids.length) {
           ws.send(JSON.stringify({ requestId, error: "id or ids required" }));
           break;
@@ -721,12 +723,21 @@ export async function handleWebSocketMessage(
       break;
     }
 
-    case "endpoint:inboxMessages": {
+    case "inbox.messages": {
       try {
         const d = message.data || {};
-        const { adapter, endpointId, channelId, channelType, limit = 50, beforeId, beforeTs, parent } = d;
+        const {
+          $adapter: adapter,
+          $endpoint: endpointId,
+          $channel_id: channelId,
+          $channel_type: channelType,
+          $limit: limit = 50,
+          $before_id: beforeId,
+          $before_ts: beforeTs,
+          $parent: parent,
+        } = d;
         if (!adapter || !endpointId || !channelId || !channelType) {
-          ws.send(JSON.stringify({ requestId, error: "adapter, endpointId, channelId, channelType required" }));
+          ws.send(JSON.stringify({ requestId, error: "$adapter, $endpoint, $channel_id, $channel_type required" }));
           break;
         }
         let db: DatabaseFeature;
@@ -778,12 +789,12 @@ export async function handleWebSocketMessage(
       break;
     }
 
-    case "endpoint:inboxRequests": {
+    case "inbox.requests": {
       try {
         const d = message.data || {};
-        const { adapter, endpointId, limit = 30, offset = 0 } = d;
+        const { $adapter: adapter, $endpoint: endpointId, $limit: limit = 30, $offset: offset = 0 } = d;
         if (!adapter || !endpointId) {
-          ws.send(JSON.stringify({ requestId, error: "adapter and endpointId required" }));
+          ws.send(JSON.stringify({ requestId, error: "$adapter and $endpoint required" }));
           break;
         }
         let db: DatabaseFeature;
@@ -815,11 +826,11 @@ export async function handleWebSocketMessage(
           id: r.id,
           platform_request_id: r.platform_request_id,
           type: r.type,
+          scene_type: r.scene_type,
+          scene_id: r.scene_id,
           sub_type: r.sub_type,
-          channel_id: r.channel_id,
-          channel_type: r.channel_type,
-          sender_id: r.sender_id,
-          sender_name: r.sender_name,
+          actor_id: r.actor_id,
+          actor_name: r.actor_name,
           comment: r.comment,
           created_at: r.created_at,
           resolved: r.resolved,
@@ -832,12 +843,12 @@ export async function handleWebSocketMessage(
       break;
     }
 
-    case "endpoint:inboxNotices": {
+    case "inbox.notices": {
       try {
         const d = message.data || {};
-        const { adapter, endpointId, limit = 30, offset = 0 } = d;
+        const { $adapter: adapter, $endpoint: endpointId, $limit: limit = 30, $offset: offset = 0 } = d;
         if (!adapter || !endpointId) {
-          ws.send(JSON.stringify({ requestId, error: "adapter and endpointId required" }));
+          ws.send(JSON.stringify({ requestId, error: "$adapter and $endpoint required" }));
           break;
         }
         let db: DatabaseFeature;
@@ -869,11 +880,11 @@ export async function handleWebSocketMessage(
           id: r.id,
           platform_notice_id: r.platform_notice_id,
           type: r.type,
+          scene_type: r.scene_type,
+          scene_id: r.scene_id,
           sub_type: r.sub_type,
-          channel_id: r.channel_id,
-          channel_type: r.channel_type,
-          operator_id: r.operator_id,
-          operator_name: r.operator_name,
+          actor_id: r.actor_id,
+          actor_name: r.actor_name,
           target_id: r.target_id,
           target_name: r.target_name,
           payload: r.payload,
@@ -886,16 +897,23 @@ export async function handleWebSocketMessage(
       break;
     }
 
-    case "endpoint:groupMembers":
-    case "endpoint:groupKick":
-    case "endpoint:groupMute":
-    case "endpoint:groupAdmin": {
+    case "endpoint.group_members":
+    case "endpoint.group_kick":
+    case "endpoint.group_mute":
+    case "endpoint.group_admin": {
       try {
         const d = message.data || {};
-        const { adapter, endpointId, groupId, userId, duration, enable } = d;
+        const {
+          $adapter: adapter,
+          $endpoint: endpointId,
+          $group_id: groupId,
+          $user_id: userId,
+          $duration: duration,
+          $enable: enable,
+        } = d;
         if (!adapter || !endpointId || !groupId) {
           ws.send(
-            JSON.stringify({ requestId, error: "adapter, endpointId, groupId required" })
+            JSON.stringify({ requestId, error: "$adapter, $endpoint, $group_id required" })
           );
           break;
         }
@@ -906,16 +924,16 @@ export async function handleWebSocketMessage(
         }
         const adMethods = ad as Record<string, ((...args: unknown[]) => unknown) | undefined>;
         const gid = String(groupId);
-        if (type === "endpoint:groupMembers") {
+        if (type === "endpoint.group_members") {
           if (typeof adMethods.listMembers !== "function") {
             ws.send(JSON.stringify({ requestId, error: "adapter does not support listMembers" }));
             break;
           }
           const r = await adMethods.listMembers(endpointId, gid);
           ws.send(JSON.stringify({ requestId, data: r }));
-        } else if (type === "endpoint:groupKick") {
+        } else if (type === "endpoint.group_kick") {
           if (!userId) {
-            ws.send(JSON.stringify({ requestId, error: "userId required" }));
+            ws.send(JSON.stringify({ requestId, error: "$user_id required" }));
             break;
           }
           if (typeof adMethods.removeMember !== "function") {
@@ -924,9 +942,9 @@ export async function handleWebSocketMessage(
           }
           await adMethods.removeMember(endpointId, gid, String(userId));
           ws.send(JSON.stringify({ requestId, data: { success: true } }));
-        } else if (type === "endpoint:groupMute") {
+        } else if (type === "endpoint.group_mute") {
           if (!userId) {
-            ws.send(JSON.stringify({ requestId, error: "userId required" }));
+            ws.send(JSON.stringify({ requestId, error: "$user_id required" }));
             break;
           }
           if (typeof adMethods.muteMember !== "function") {
@@ -937,7 +955,7 @@ export async function handleWebSocketMessage(
           ws.send(JSON.stringify({ requestId, data: { success: true } }));
         } else {
           if (!userId) {
-            ws.send(JSON.stringify({ requestId, error: "userId required" }));
+            ws.send(JSON.stringify({ requestId, error: "$user_id required" }));
             break;
           }
           if (typeof adMethods.setModerator !== "function") {
@@ -959,7 +977,7 @@ export async function handleWebSocketMessage(
 
     case "system:restart": {
       try {
-        logger.info(formatCompact( { op: "restart" }));
+        logger.debug(formatCompact( { op: "restart" }));
         ws.send(JSON.stringify({ requestId, data: { success: true, message: "正在重启..." } }));
         // 广播给所有客户端
         broadcastToAll(webServer, { type: "system:restarting" });

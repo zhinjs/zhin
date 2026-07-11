@@ -63,4 +63,55 @@ describe('task executor outbound seam', () => {
       content: 'hello',
     });
   });
+
+  it('waits for agent idle when scheduled turn returns empty (spawn_task delegation)', async () => {
+    const waitForIdle = vi.fn(async () => {});
+    const process = vi.fn(async () => [] as { type: string; content: string }[]);
+    const executor = createTaskExecutor({
+      agent: {
+        process,
+        initScheduleTurnContext: vi.fn(),
+        waitForIdle,
+        getEventEmitter: () => ({
+          emit: vi.fn(),
+          createPayload: vi.fn(() => ({ sessionId: 's1', source: 'zhin-agent' })),
+        }),
+      } as any,
+      resolveAdapter: () => undefined,
+    });
+
+    const result = await executor.executeTask({
+      prompt: 'daily weather',
+      timeContext: true,
+      scheduleJobId: 'assistant-profile-weatherReport',
+      notify: { channel: 'silent' },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.responseText).toBe('');
+    expect(waitForIdle).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not wait for idle when non-scheduled turn returns empty', async () => {
+    const waitForIdle = vi.fn(async () => {});
+    const executor = createTaskExecutor({
+      agent: {
+        process: vi.fn(async () => []),
+        initScheduleTurnContext: vi.fn(),
+        waitForIdle,
+        getEventEmitter: () => ({
+          emit: vi.fn(),
+          createPayload: vi.fn(() => ({ sessionId: 's1', source: 'zhin-agent' })),
+        }),
+      } as any,
+      resolveAdapter: () => undefined,
+    });
+
+    await executor.executeTask({
+      prompt: 'hello',
+      notify: { channel: 'silent' },
+    });
+
+    expect(waitForIdle).not.toHaveBeenCalled();
+  });
 });

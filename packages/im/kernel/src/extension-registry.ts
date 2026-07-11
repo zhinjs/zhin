@@ -9,7 +9,7 @@
  * that another plugin still depends on.
  */
 
-type ExtensionFn = (...args: any[]) => any; // eslint-disable-line @typescript-eslint/no-explicit-any
+type ExtensionFn = (...args: any[]) => any;  
 
 const registry = new Map<string, { fn: ExtensionFn; refCount: number }>();
 const proxiedPrototypes = new WeakSet<object>();

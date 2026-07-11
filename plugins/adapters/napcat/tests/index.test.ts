@@ -31,10 +31,10 @@ describe('NapCat 适配器模块导出', () => {
     expect(mod.NapCatHttpEndpoint).toBeDefined();
   });
 
-  it('应导出 createNapCatTools', async () => {
-    const mod = await import('../src/tools');
-    expect(mod.createNapCatTools).toBeDefined();
-    expect(typeof mod.createNapCatTools).toBe('function');
+  it('应导出 napcat-agent-deps', async () => {
+    const mod = await import('../src/napcat-agent-deps');
+    expect(mod.setNapcatAgentDeps).toBeDefined();
+    expect(mod.getEndpoint).toBeDefined();
   });
 
   it('应导出入站模块', async () => {

@@ -268,7 +268,7 @@ export abstract class Adapter<
     const endpoint = this.endpoints.get(options.endpoint);
     if(!endpoint) throw new Error(`Endpoint ${options.endpoint} not found`);
     assertOutbound(endpoint);
-    this.logger.info(formatCompact( {
+    this.logger.debug(formatCompact( {
       send: `${options.type}(${options.id})`,
       endpoint: options.endpoint,
       preview: truncatePreview(segment.raw(options.content)),
@@ -307,7 +307,7 @@ export abstract class Adapter<
         content: options.content,
       });
       await editable.$editMessage({ ...options, content: rendered.content });
-      this.logger.info(formatCompact({
+      this.logger.debug(formatCompact({
         edit: `${options.type}(${options.id})`,
         endpoint: options.endpoint,
         messageId: options.messageId,

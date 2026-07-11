@@ -1,10 +1,9 @@
 /**
  * KOOK platform permit — guild / channel 差异化门禁
  */
-import type { Message } from 'zhin.js';
-import { registerPlatformPermitChecker } from 'zhin.js';
-import { KookPermission } from './types.js';
-import type { KookSenderInfo } from './types.js';
+import { registerPlatformPermitChecker, type Message } from 'zhin.js';
+
+import { KookPermission, type KookSenderInfo } from './types.js';
 
 const ADAPTER = 'kook';
 

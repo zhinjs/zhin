@@ -1,8 +1,7 @@
 /**
  * Discord platform permit — Guild 权限位
  */
-import type { Message } from 'zhin.js';
-import { registerPlatformPermitChecker } from 'zhin.js';
+import { registerPlatformPermitChecker, type Message } from 'zhin.js';
 
 const ADAPTER = 'discord';
 

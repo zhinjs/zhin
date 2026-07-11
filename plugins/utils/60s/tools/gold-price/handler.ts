@@ -1,13 +1,13 @@
 import { fetchApi } from '../api.js';
 
 export default async function () {
-  const data = await fetchApi<any>('/gold-price');
+  const data = await fetchApi('/gold-price');
   const lines = ['💰 今日金价', ''];
   if (data.date) lines.push(`📅 ${data.date}`);
   const metals = data.metals || (Array.isArray(data) ? data : []);
   if (metals.length > 0) {
     lines.push('');
-    metals.forEach((item: any) => {
+    metals.forEach((item: Record<string, unknown>) => {
       const name = item.name || '黄金';
       const price = item.today_price || item.sell_price || item.price || 'N/A';
       const unit = item.unit || '元/克';

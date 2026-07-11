@@ -6,11 +6,12 @@ import type { TurnEvent } from '../event/turn-event.js';
 
 export interface TurnEventMapperState {
   accumulatedText: string;
+  accumulatedThinking: string;
   toolStartTimes: Map<string, number>;
 }
 
 export function createTurnEventMapperState(): TurnEventMapperState {
-  return { accumulatedText: '', toolStartTimes: new Map() };
+  return { accumulatedText: '', accumulatedThinking: '', toolStartTimes: new Map() };
 }
 
 export function* mapAgentEventToTurnEvents(
@@ -27,6 +28,7 @@ export function* mapAgentEventToTurnEvents(
           accumulated: state.accumulatedText,
         };
       } else if (event.delta?.type === 'thinking_delta') {
+        state.accumulatedThinking += event.delta.thinking;
         yield { type: 'thinking', text: event.delta.thinking };
       }
       break;

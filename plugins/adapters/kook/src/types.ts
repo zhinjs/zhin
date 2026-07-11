@@ -1,8 +1,7 @@
 /**
  * KOOK 适配器类型与配置
  */
-import type { PrivateMessageEvent, ChannelMessageEvent } from "kook-client";
-import type { LogLevel } from "kook-client";
+import { type PrivateMessageEvent, type ChannelMessageEvent, type LogLevel } from 'kook-client';
 
 export type { LogLevel };
 

@@ -1,8 +1,7 @@
 /**
  * A2A v1.0 proto-shaped Part/Message helpers.
  */
-import type { Part } from '@a2a-js/sdk';
-import { Role } from '@a2a-js/sdk';
+import { Role, type Part } from '@a2a-js/sdk';
 
 export function textPart(text: string, mediaType = 'text/plain'): Part {
   return {

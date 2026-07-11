@@ -1,0 +1,12 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "outDir": "./lib",
+    "rootDir": ".",
+    "declaration": false,
+    "declarationMap": false,
+  },
+  "include": ["src/**/*", "agent/**/*", "evals/**/*"],
+  "exclude": ["lib", "node_modules", "tests"]
+}

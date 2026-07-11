@@ -5,6 +5,7 @@ import {
   resolveKookNoticeChannel,
   resolveKookSideEventDedupeKey,
 } from "../src/kook-side-events.js";
+import { formatSideEventName } from "zhin.js";
 
 describe("isKookNoticeGatewayEvent", () => {
   it("识别 type=255 系统消息", () => {
@@ -40,7 +41,7 @@ describe("isKookNoticeGatewayEvent", () => {
 });
 
 describe("formatKookNotice", () => {
-  it("joined_guild → group_member_increase", () => {
+  it("joined_guild → notice.group.member_increase", () => {
     const n = formatKookNotice(
       {
         channel_type: "GROUP",
@@ -55,15 +56,16 @@ describe("formatKookNotice", () => {
       },
       "my-bot",
     );
-    expect(n.$type).toBe("group_member_increase");
-    expect(n.$subType).toBe("joined_guild");
+    expect(formatSideEventName(n)).toBe("notice.group.member_increase");
+    expect(n.$type).toBe("notice");
+    expect(n.$scene_type).toBe("group");
+    expect(n.$sub_type).toBe("member_increase");
     expect(n.$adapter).toBe("kook");
-    expect(n.$channel.type).toBe("group");
-    expect(n.$channel.id).toBe("60163000000000");
+    expect(n.$scene_id).toBe("60163000000000");
     expect(n.$target?.id).toBe("3891000000");
   });
 
-  it("deleted_message → group_recall", () => {
+  it("deleted_message → notice.group.recall", () => {
     const n = formatKookNotice(
       {
         channel_type: "GROUP",
@@ -78,12 +80,11 @@ describe("formatKookNotice", () => {
       },
       "endpoint",
     );
-    expect(n.$type).toBe("group_recall");
-    expect(n.$channel.type).toBe("channel");
-    expect(n.$channel.id).toBe("ch-001");
+    expect(formatSideEventName(n)).toBe("notice.group.recall");
+    expect(n.$scene_id).toBe("ch-001");
   });
 
-  it("added_reaction → group_emoji_reaction", () => {
+  it("added_reaction → notice.group.emoji_reaction", () => {
     const n = formatKookNotice(
       {
         channel_type: "GROUP",
@@ -97,8 +98,8 @@ describe("formatKookNotice", () => {
       },
       "endpoint",
     );
-    expect(n.$type).toBe("group_emoji_reaction");
-    expect(n.$subType).toBe("added_reaction");
+    expect(formatSideEventName(n)).toBe("notice.group.emoji_reaction");
+    expect(n.$sub_type).toBe("emoji_reaction");
   });
 });
 
@@ -111,7 +112,6 @@ describe("resolveKookNoticeChannel", () => {
       extra: { type: "guild_member_online", body: { user_id: "user-88" } },
     });
     expect(ch.type).toBe("private");
-    // body.user_id 为事件主体（上线用户），target_id 为单播接收方
     expect(ch.id).toBe("user-88");
   });
 });

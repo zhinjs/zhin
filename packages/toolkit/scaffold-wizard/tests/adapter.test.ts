@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateEndpointsConfigYaml, getAdapterDependencies, getAdapterSetupNotes } from '../src/adapter.js';
-import type { AdapterSetupResult } from '../src/adapter.js';
+import { generateEndpointsConfigYaml, getAdapterDependencies, getAdapterSetupNotes, type AdapterSetupResult } from '../src/adapter.js';
 
 describe('adapter setup notes', () => {
   it('returns telegram webhook guidance when webhook mode is configured', () => {

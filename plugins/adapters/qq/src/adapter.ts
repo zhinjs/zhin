@@ -1,17 +1,13 @@
 /**
  * QQ 官方适配器
  */
-import {
-  Adapter,
-  Plugin,
-} from "zhin.js";
+import { Adapter, Plugin, QQ_AI_OUTBOUND_EXTENSIONS, type EndpointManager, type OutboundRichSegmentPolicy } from 'zhin.js';
 import type { Router } from "@zhin.js/host-router";
-import type { EndpointManager } from "zhin.js";
+
 import { QQEndpoint } from "./endpoint.js";
 import { QqEndpointManager } from "./qq-endpoint-manager.js";
 import type { QQEndpointConfig, ReceiverMode } from "./types.js";
-import type { OutboundRichSegmentPolicy } from "zhin.js";
-import { QQ_AI_OUTBOUND_EXTENSIONS } from "zhin.js";
+
 
 export class QQAdapter extends Adapter<QQEndpoint<ReceiverMode>> {
   static override readonly capabilities = ['inbound', 'outbound'] as const;

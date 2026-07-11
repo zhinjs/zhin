@@ -90,8 +90,7 @@ basic/           — 零依赖原子库：segment / segment-matcher / schema / l
 Zhin 采用 **函数式** API，在插件文件顶层调用：
 
 \`\`\`typescript
-import { usePlugin, provide, useContext, addCommand, MessageCommand } from 'zhin.js'
-
+import { usePlugin, provide, useContext, addCommand, MessageCommand, ZhinTool, defineComponent, addComponent } from 'zhin.js';
 const { root, logger, onDispose } = usePlugin()
 
 provide({
@@ -119,7 +118,6 @@ addCommand(
 插件文件通常放在 \`src/plugins/\` 或 \`plugins/\` 目录：
 
 \`\`\`typescript
-import { usePlugin, addCommand, MessageCommand } from 'zhin.js'
 
 const { logger } = usePlugin()
 
@@ -149,7 +147,6 @@ addCommand(new MessageCommand('hello <name:text>')
 ## 注册服务 (Context)
 
 \`\`\`typescript
-import { provide, useContext } from 'zhin.js'
 
 provide({
   name: 'cache',
@@ -170,7 +167,6 @@ useContext('cache', (cache) => {
 ## 注册工具 (ZhinTool)
 
 \`\`\`typescript
-import { usePlugin, ZhinTool } from 'zhin.js'
 
 const { addTool } = usePlugin()
 
@@ -234,7 +230,6 @@ addTool(
 ## 创建命令
 
 \`\`\`typescript
-import { addCommand, MessageCommand } from 'zhin.js'
 
 addCommand(
   new MessageCommand('echo <text:text>')
@@ -263,7 +258,6 @@ addCommand(
 ## 定义组件
 
 \`\`\`typescript
-import { defineComponent, addComponent } from 'zhin.js'
 
 const MyComp = defineComponent({
   name: 'my-comp',
@@ -300,7 +294,6 @@ Zhin 的 Context 系统是一个 **函数式依赖注入** 机制，允许插件
 ## 注册 Context
 
 \`\`\`typescript
-import { provide } from 'zhin.js'
 
 provide({
   name: 'database',
@@ -319,7 +312,6 @@ provide({
 ## 消费 Context
 
 \`\`\`typescript
-import { useContext } from 'zhin.js'
 
 useContext('database', (db) => {
   // db 已经就绪

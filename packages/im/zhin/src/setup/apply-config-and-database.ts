@@ -1,9 +1,10 @@
-import { DatabaseFeature } from '@zhin.js/core';
-import type { Plugin } from '@zhin.js/core';
+import { DatabaseFeature, type Plugin } from '@zhin.js/core';
+
 import { setLevel } from '@zhin.js/logger';
 import type { AppConfig } from '../types.js';
 import { DatabaseLogTransport } from '../log-transport.js';
 import { registerUnifiedInbox } from './register-inbox.js';
+import { registerSideEventSchemaMigrationHook } from './upgrade-side-event-schema.js';
 
 async function tryRegisterAgentMigrationHook(logger: Plugin['logger']): Promise<void> {
   try {
@@ -23,6 +24,7 @@ export function applyConfigAndDatabase(plugin: Plugin, appConfig: AppConfig): vo
 
   if (appConfig.database) {
     void tryRegisterAgentMigrationHook(plugin.logger);
+    registerSideEventSchemaMigrationHook(plugin.logger);
     plugin.provide(new DatabaseFeature(appConfig.database));
     const logTransport = new DatabaseLogTransport(plugin);
     const logger = plugin.logger as unknown as { transports: unknown[] };

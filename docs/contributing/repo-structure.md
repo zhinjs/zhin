@@ -194,20 +194,22 @@ pnpm install
 
 | 目录 | 文件格式 | 用途 |
 |------|---------|------|
-| `tools/` | `*.tool.md`（扁平）或 `<name>/<name>.tool.md`（嵌套 + handler） | 文件化 AI Tool：YAML frontmatter 定义参数/元数据，可选 handler 或 body 模板 |
-| `skills/` | `<name>/SKILL.md` | 文件化 Skill：粗筛描述 + 关联工具列表，`always: true` 常驻注入 |
-| `agents/` | `*.agent.md`（扁平）或 `<name>/<name>.agent.md`（嵌套） | 文件化 Agent 预设：frontmatter + body 作为 systemPrompt |
+| **插件 `agent/`** | `tools/*.ts`、`skills/*.md`、`schedules/*.ts` 等 | **推荐**：插件 AI 创作面（`defineTool` / `defineSkill`）；`discoverPluginAgentSurface` 启动扫描，路径即运行时名（`{plugin}_{slot}`） |
+| `tools/` | `*.tool.md`（扁平）或 `<name>/<name>.tool.md`（嵌套 + handler） | 工作区/遗留：文件化 AI Tool |
+| `skills/` | `<name>/SKILL.md` | 工作区/遗留：文件化 Skill（**插件包请用 `agent/skills/*.md`**） |
+| `agents/` | `*.agent.md`（扁平）或 `<name>/<name>.agent.md`（嵌套）或 `agents/<name>/agent.ts` | 文件化 / 代码化 Agent 预设 |
 | 包根 | `plugin.yml` | 插件元数据清单（`name`、`description`、`version`），通过 `plugin.manifest` 访问 |
 
 **发现优先级**（各 kind 独立，实现见 `packages/im/agent/src/discovery/`）：
 
 | kind | 顺序（先发现者优先） |
 |------|----------------------|
-| `tools` | `cwd/tools/` → `~/.zhin/tools/` → `data/tools/` → 插件包 `tools/` |
-| `skills` | `cwd/skills/` → `~/.zhin/skills/` → `.agents/skills/`（cwd 向上至 git 根）→ 插件包 `skills/` → `~/.zhin/packages/` / `.zhin/packages/` |
+| **插件 authoring** | 已加载插件包 `agent/`（`discoverPluginAgentSurface`）；生产读 `lib/agent/*.js`（见 [agent-authoring.md](../advanced/agent-authoring.md)） |
+| `tools` | `cwd/tools/` → `~/.zhin/tools/` → `data/tools/` → 插件包 `tools/`（`*.tool.md`） |
+| `skills` | `cwd/skills/` → `~/.zhin/skills/` → `.agents/skills/`（cwd 向上至 git 根）→ 插件包 `skills/`（遗留）→ `~/.zhin/packages/` / `.zhin/packages/` |
 | `agents` | `cwd/agents/` → `~/.zhin/agents/` → `data/agents/` → 插件包 `agents/` |
 
-> **`data/skills/` 已删除**（ADR 0010）；请用 `skills/`、`.agents/skills/` 或 `zhin packages install`。
+> **`data/skills/` 已删除**（ADR 0010）；工作区请用 `skills/`、`.agents/skills/` 或 `zhin packages install`。带 `agent/` 的插件发布前须 `pnpm check:plugin-agent-publish`。
 
 程序化注册的同名 Tool 优先于文件化版本。
 

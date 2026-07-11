@@ -496,8 +496,8 @@ export class LarkEndpoint implements Endpoint<LarkEndpointConfig, LarkMessage> {
             await this.refreshAccessToken();
             
             this.$connected = true;
-            this.logger.info(formatCompact({ endpoint: this.$config.name }));
-            this.logger.info(formatCompact( { op: 'webhook', path: this.$config.webhookPath }));
+            this.logger.debug(formatCompact({ endpoint: this.$config.name }));
+            this.logger.debug(formatCompact( { op: 'webhook', path: this.$config.webhookPath }));
             
         } catch (error) {
             this.logger.error('Failed to connect Lark bot:', error);
@@ -508,7 +508,7 @@ export class LarkEndpoint implements Endpoint<LarkEndpointConfig, LarkMessage> {
     async $disconnect(): Promise<void> {
         try {
             this.$connected = false;
-            this.logger.info(formatCompact( { op: 'disconnect', endpoint: this.$config.name }));
+            this.logger.debug(formatCompact( { op: 'disconnect', endpoint: this.$config.name }));
         } catch (error) {
             this.logger.error('Error disconnecting Lark bot:', error);
         }

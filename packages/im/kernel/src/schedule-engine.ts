@@ -164,13 +164,12 @@ export class ScheduleEngine {
 
     const info = this.calendar.registerResolved(resolved, (ctx: JobContext) => wrapped(ctx), { id });
     this.timers.set(id, () => info.cancel());
-    const next = getNextRun(resolved, new Date());
     this.meta.set(id, {
       id,
       kind: resolved.kind,
       expression: options?.cron ?? options?.expr,
       running: true,
-      nextExecution: next,
+      nextExecution: info.nextRunAt,
     });
     return () => this.unregister(id);
   }
@@ -186,12 +185,11 @@ export class ScheduleEngine {
     this.callbacks.set(id, wrapped);
     const info = this.calendar.registerResolved(resolved, (ctx: JobContext) => wrapped(ctx), { id });
     this.timers.set(id, () => info.cancel());
-    const next = getNextRun(resolved, new Date());
     this.meta.set(id, {
       id,
       kind: resolved.kind,
       running: true,
-      nextExecution: next,
+      nextExecution: info.nextRunAt,
     });
     return () => this.unregister(id);
   }

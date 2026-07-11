@@ -383,7 +383,7 @@ describe('Adapter Core Functionality', () => {
         const adapter = new MockAdapter(plugin, 'test', config)
         await adapter.start()
         
-        const logSpy = vi.spyOn(adapter.logger, 'info')
+        const logSpy = vi.spyOn(adapter.logger, 'debug')
         
         const options = {
           context: 'test',

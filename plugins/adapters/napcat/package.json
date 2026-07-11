@@ -14,14 +14,15 @@
   },
   "scripts": {
     "build": "zhin build",
-    "clean": "rimraf lib"
+    "clean": "rimraf lib",
+    "prepublishOnly": "npm run build"
   },
   "files": [
     "src",
     "lib",
+    "agent",
     "client",
     "dist",
-    "skills",
     "plugin.yml",
     "README.md",
     "CHANGELOG.md"
@@ -64,14 +65,16 @@
     "@zhin.js/host-router": "workspace:*",
     "lucide-react": "^1.22.0",
     "typescript": "^6.0.3",
-    "zhin.js": "workspace:*"
+    "zhin.js": "workspace:*",
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/host-api": "workspace:*",
     "@zhin.js/contract": "workspace:*",
     "@zhin.js/host-router": "workspace:*",
-    "zhin.js": "workspace:*"
+    "zhin.js": "workspace:*",
+    "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
     "@zhin.js/agent": {
@@ -81,6 +84,9 @@
       "optional": true
     },
     "@zhin.js/host-router": {
+      "optional": true
+    },
+    "zod": {
       "optional": true
     }
   },

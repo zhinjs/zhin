@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
-import { ZhinTool } from '@zhin.js/core';
-import type { Plugin } from '@zhin.js/core';
+import { ZhinTool, type Plugin } from '@zhin.js/core';
+
 import type { SpeechPipeline, TtsProviderId } from '@zhin.js/speech';
 
 /**

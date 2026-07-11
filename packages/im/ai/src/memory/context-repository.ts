@@ -3,19 +3,13 @@
  */
 
 import { Logger } from '@zhin.js/logger';
-import type { AgentMessage, UserMessage } from '../llm/types/agent-message.js';
-import { createUserMessage } from '../llm/types/agent-message.js';
-import type { Context } from '../llm/types/context.js';
-import { createContext } from '../llm/types/context.js';
-import type {
-  AgentMessageRow,
-  AgentSummaryRecord,
-} from './agent-db-models.js';
+import { createUserMessage, type AgentMessage, type UserMessage } from '../llm/types/agent-message.js';
+
+import { createContext, type Context } from '../llm/types/context.js';
+
+import { agentMessageRowToLlm, serializeAgentMessage, type AgentMessageRow, type AgentSummaryRecord } from './agent-db-models.js';
 import type { AgentMessageExtra } from './sender-extra.js';
-import {
-  agentMessageRowToLlm,
-  serializeAgentMessage,
-} from './agent-db-models.js';
+
 import { findKeepRecentStartIndex } from '../compaction/agent-message-tokens.js';
 import { AgentSessionStore, MemoryAgentSessionStore } from './agent-session-store.js';
 import { branchSummaryAsUserMessage } from './branch-summarization.js';
@@ -26,8 +20,7 @@ import {
   type SessionBranchPoint,
 } from './session-tree.js';
 import { SessionWriteLock } from './session-write-lock.js';
-import type { DeferredToolSessionSnapshot } from './deferred-tool-session.js';
-import { EMPTY_DEFERRED_TOOL_SNAPSHOT } from './deferred-tool-session.js';
+import { EMPTY_DEFERRED_TOOL_SNAPSHOT, type DeferredToolSessionSnapshot } from './deferred-tool-session.js';
 
 const logger = new Logger(null, 'ContextRepository');
 

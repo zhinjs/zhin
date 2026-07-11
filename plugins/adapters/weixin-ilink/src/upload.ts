@@ -2,8 +2,8 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { getUploadUrl } from "./ilink-api.js";
-import type { WeixinApiOptions } from "./ilink-api.js";
+import { getUploadUrl, type WeixinApiOptions } from './ilink-api.js';
+
 import { aesEcbPaddedSize } from "./aes-ecb.js";
 import { uploadBufferToCdn } from "./cdn-upload.js";
 import { logger } from "./ilink-logger.js";

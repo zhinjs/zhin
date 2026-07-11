@@ -17,7 +17,7 @@
     "lib",
     "client",
     "dist",
-    "skills",
+    "agent",
     "README.md",
     "CHANGELOG.md"
   ],
@@ -44,7 +44,8 @@
   },
   "scripts": {
     "build": "zhin build",
-    "clean": "rimraf lib"
+    "clean": "rimraf lib",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "lucide-react": "^1.22.0"

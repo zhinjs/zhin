@@ -359,6 +359,9 @@ export {
   introspectionRestTools,
 } from './init/introspection-rest.js';
 export type { IntrospectionJsonResponse } from './init/introspection-rest.js';
+export { collectIntrospectionBindings, collectIntrospectionAgentTools, collectIntrospectionSkills, collectIntrospectionMcpLabels, collectIntrospectionMcpWithConfigFallback } from './init/introspection-collectors.js';
+export { ensureMcpConnections, ensureMcpConnectionsForBinding, getMcpToolsForBinding } from './orchestrator/mcp-lifecycle.js';
+export { waitForAgentBootstrap } from './init/bootstrap-gate.js';
 
 export {
   loadBootstrapFiles, buildContextFiles, buildBootstrapContextSection,
@@ -593,3 +596,37 @@ export {
   FIVE_AGENT_WORKFLOW_STRATEGY_NAME,
   createFiveAgentWorkflowStrategy,
 } from './builtin/five-agent/index.js';
+
+export {
+  defineAgent,
+  defineSkill,
+  defineSchedule,
+  defineConnection,
+  defineHook,
+  defineEval,
+  namespaceAuthoringName,
+  slotNameFromFile,
+  slotNameFromDir,
+} from './authoring/index.js';
+export type {
+  AuthoringAgentDefinition,
+  AuthoringToolDefinition,
+  AuthoringSkillDefinition,
+  AuthoringScheduleDefinition,
+  AuthoringConnectionDefinition,
+  AuthoringHookDefinition,
+  AuthoringEvalDefinition,
+  AuthoringToolContext,
+  AuthoringEvalContext,
+  DiscoveredPluginAgentSurface,
+} from './authoring/index.js';
+export {
+  discoverAllPluginAgentSurfaces,
+  discoverPluginAgentSurface,
+  collectPluginAgentRoots,
+} from './discovery/agent-surface.js';
+export {
+  registerPluginAgentSurfaces,
+  runPluginEvals,
+  resetAuthoringRegistrationForTests,
+} from './discovery/register-agent-surface.js';

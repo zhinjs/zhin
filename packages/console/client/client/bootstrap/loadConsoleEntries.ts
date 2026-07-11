@@ -1,10 +1,4 @@
-import type {
-  ConsoleClientEntry,
-  ConsoleEntriesResponse,
-  ConsolePluginRegister,
-  PluginRegisterHostApi,
-} from "@zhin.js/contract";
-import { DEFAULT_CONSOLE_BASE_PATH } from "@zhin.js/contract";
+import { DEFAULT_CONSOLE_BASE_PATH, type ConsoleClientEntry, type ConsoleEntriesResponse, type ConsolePluginRegister, type PluginRegisterHostApi } from '@zhin.js/contract';
 
 export type FetchConsoleEntriesOptions = {
   entriesUrl?: string;

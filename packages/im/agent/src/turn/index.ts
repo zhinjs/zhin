@@ -19,6 +19,8 @@ export {
   addUsage,
   EMPTY_USAGE,
   formatAiHandlerCompleteLog,
+  formatAiHandlerTurnTable,
+  formatOutputElementsPreview,
   formatZhinAgentTurnUsage,
 } from './turn-metrics.js';
 export type { ZhinAgentTurnMetrics, ZhinAgentTurnPath } from './turn-metrics.js';

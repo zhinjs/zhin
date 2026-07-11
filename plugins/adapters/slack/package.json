@@ -34,26 +34,45 @@
   "scripts": {
     "build": "pnpm build:node",
     "clean": "rimraf lib",
-    "build:node": "tsc"
+    "build:node": "tsc",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@slack/bolt": "^4.7.3",
-    "@slack/web-api": "^7.17.0"
+    "@slack/socket-mode": "^2.0.3",
+    "@slack/web-api": "^7.17.0",
+    "@zhin.js/logger": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",
+    "@zhin.js/host-router": "workspace:*",
     "typescript": "^6.0.3",
-    "zhin.js": "workspace:*"
+    "zhin.js": "workspace:*",
+    "@zhin.js/agent": "workspace:*",
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "zhin.js": "workspace:*"
+    "zhin.js": "workspace:*",
+    "@zhin.js/agent": "workspace:*",
+    "@zhin.js/host-router": "workspace:*",
+    "zod": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/host-router": {
+      "optional": true
+    },
+    "@zhin.js/agent": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
   },
   "files": [
     "src",
     "lib",
+    "agent",
     "client",
     "dist",
-    "skills",
     "plugin.yml",
     "README.md",
     "CHANGELOG.md"

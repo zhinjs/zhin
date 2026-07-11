@@ -1,8 +1,7 @@
 import type { Message } from 'zhin.js';
 import { recordGameOutcome } from '@zhin.js/game-shared';
 import { evaluateGuess, hintText, MAX, MIN } from './engine.js';
-import type { SessionService } from './session-service.js';
-import { formatStatus } from './session-service.js';
+import { formatStatus, type SessionService } from './session-service.js';
 
 export async function startGame(
   services: SessionService,

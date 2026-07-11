@@ -3,8 +3,8 @@
  */
 import { describe, it, expect, vi } from "vitest";
 import { Plugin, segment, type SendOptions } from "zhin.js";
-import { MessageItemType } from "../src/ilink-types.js";
-import type { WeixinMessage } from "../src/ilink-types.js";
+import { MessageItemType, type WeixinMessage } from '../src/ilink-types.js';
+
 import { createAdapterTestSuite } from "../../../../packages/im/core/tests/adapter-harness.js";
 import { WeixinIlinkAdapter } from "../src/adapter.js";
 import { WeixinIlinkEndpoint } from "../src/endpoint.js";

@@ -54,7 +54,7 @@ export class OneBot12WebhookEndpoint extends EventEmitter implements Endpoint<On
       ctx.status = 204;
       ctx.body = undefined;
     });
-    this.logger.info(formatCompact( { op: 'webhook', path }));
+    this.logger.debug(formatCompact( { op: 'webhook', path }));
   }
 
   async $disconnect(): Promise<void> {

@@ -4,8 +4,7 @@ import type {
   AgentPromptSection,
   DeferredToolCatalogItem,
 } from 'zhin.js';
-import type { AgentTool } from 'zhin.js/ai';
-import { filterTools } from 'zhin.js/ai';
+import { filterTools, type AgentTool } from 'zhin.js/ai';
 
 function selectGithubDeferredTools(
   query: string,

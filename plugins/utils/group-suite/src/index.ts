@@ -30,4 +30,4 @@ registerStats(plugin, cfg);
 registerDailyAnalysis(plugin, cfg);
 registerTeach(plugin, cfg);
 
-logger.info(formatCompact({ 模块: "群组套件", 状态: "已加载" }));
+logger.debug(formatCompact({ 模块: "群组套件", 状态: "已加载" }));

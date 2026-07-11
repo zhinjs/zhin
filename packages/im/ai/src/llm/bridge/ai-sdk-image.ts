@@ -3,8 +3,8 @@
  */
 
 import { generateImage } from 'ai';
-import type { SdkId } from '../sdk-registry.js';
-import { createImageModel, sdkSupportsImageGeneration } from '../sdk-registry.js';
+import { createImageModel, sdkSupportsImageGeneration, type SdkId } from '../sdk-registry.js';
+
 import type { ProviderInstanceConfig } from '../types/model.js';
 import type { ImageGenerateRequest, ImageGenerateResult } from '../../image-generation.js';
 import { generateCloudflareImage } from '../cloudflare-image.js';

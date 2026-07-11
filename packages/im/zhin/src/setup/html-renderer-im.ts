@@ -1,5 +1,5 @@
-import { defineComponent, segment, ZhinTool } from '@zhin.js/core';
-import type { Plugin } from '@zhin.js/core';
+import { defineComponent, segment, ZhinTool, type Plugin } from '@zhin.js/core';
+
 import type {
   HtmlRendererService,
   OutputFormat,

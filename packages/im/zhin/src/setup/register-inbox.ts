@@ -2,7 +2,7 @@
  * 统一收件箱基建：按用户配置将 消息 / 请求 / 通知 归一化写入内置数据库。
  * 在 zhin.js 主包中基于 database 与 inbox.enabled 自动启用。
  */
-import type { Plugin,Message,Request,Notice,NoticeChannel,MessageSender } from '@zhin.js/core';
+import type { Plugin,Message,Request,Notice,MessageSender } from '@zhin.js/core';
 import { formatCompact } from '@zhin.js/logger';
 import type { AppConfig } from '../types.js';
 
@@ -34,11 +34,11 @@ const RequestDefinition = {
   endpoint_id: { type: 'text' as const, nullable: false },
   platform_request_id: { type: 'text' as const, nullable: false },
   type: { type: 'text' as const, nullable: false },
+  scene_type: { type: 'text' as const, nullable: true },
+  scene_id: { type: 'text' as const, nullable: false },
   sub_type: { type: 'text' as const, nullable: true },
-  channel_id: { type: 'text' as const, nullable: false },
-  channel_type: { type: 'text' as const, nullable: false },
-  sender_id: { type: 'text' as const, nullable: false },
-  sender_name: { type: 'text' as const, nullable: true },
+  actor_id: { type: 'text' as const, nullable: false },
+  actor_name: { type: 'text' as const, nullable: true },
   comment: { type: 'text' as const, nullable: true },
   created_at: { type: 'integer' as const, nullable: false },
   resolved: { type: 'integer' as const, nullable: false, default: 0 },
@@ -51,11 +51,11 @@ const NoticeDefinition = {
   endpoint_id: { type: 'text' as const, nullable: false },
   platform_notice_id: { type: 'text' as const, nullable: false },
   type: { type: 'text' as const, nullable: false },
+  scene_type: { type: 'text' as const, nullable: true },
+  scene_id: { type: 'text' as const, nullable: false },
   sub_type: { type: 'text' as const, nullable: true },
-  channel_id: { type: 'text' as const, nullable: false },
-  channel_type: { type: 'text' as const, nullable: false },
-  operator_id: { type: 'text' as const, nullable: true },
-  operator_name: { type: 'text' as const, nullable: true },
+  actor_id: { type: 'text' as const, nullable: true },
+  actor_name: { type: 'text' as const, nullable: true },
   target_id: { type: 'text' as const, nullable: true },
   target_name: { type: 'text' as const, nullable: true },
   payload: { type: 'text' as const, nullable: false },
@@ -112,18 +112,17 @@ function persistRequest(plugin: Plugin, req: Request): void {
   if (!Request) return;
   const adapter = String(req?.$adapter ?? '');
   const endpointId = String(req?.$endpoint ?? '');
-  const channel = req?.$channel ?? {};
-  const sender = req?.$sender ?? {};
+  const actor = req?.$actor ?? {};
   Request.create({
     adapter,
     endpoint_id: endpointId,
     platform_request_id: String(req?.$id ?? ''),
     type: String(req?.$type ?? ''),
-    sub_type: req?.$subType != null ? String(req.$subType) : null,
-    channel_id: String(channel?.id ?? ''),
-    channel_type: String(channel?.type ?? 'private'),
-    sender_id: String(sender?.id ?? ''),
-    sender_name: sender?.name != null ? String(sender.name) : null,
+    scene_type: req?.$scene_type != null ? String(req.$scene_type) : null,
+    scene_id: String(req?.$scene_id ?? ''),
+    sub_type: req?.$sub_type != null ? String(req.$sub_type) : null,
+    actor_id: String(actor?.id ?? ''),
+    actor_name: actor?.name != null ? String(actor.name) : null,
     comment: req?.$comment != null ? String(req.$comment) : null,
     created_at: typeof req?.$timestamp === 'number' ? req.$timestamp : Date.now(),
     resolved: 0,
@@ -138,8 +137,7 @@ function persistNotice(plugin: Plugin, notice: Notice): void {
   if (!Notice) return;
   const adapter = String(notice?.$adapter ?? '');
   const endpointId = String(notice?.$endpoint ?? '');
-  const channel = notice?.$channel ?? {} as NoticeChannel;
-  const operator = notice?.$operator ?? {} as MessageSender;
+  const actor = notice?.$actor ?? {} as MessageSender;
   const target = notice?.$target ?? {} as MessageSender;
   const payload: Record<string, unknown> = {};
   try {
@@ -155,11 +153,11 @@ function persistNotice(plugin: Plugin, notice: Notice): void {
     endpoint_id: endpointId,
     platform_notice_id: String(notice?.$id ?? ''),
     type: String(notice?.$type ?? ''),
-    sub_type: notice?.$subType != null ? String(notice.$subType) : null,
-    channel_id: String(channel?.id ?? ''),
-    channel_type: String(channel?.type ?? 'private'),
-    operator_id: operator?.id != null ? String(operator.id) : null,
-    operator_name: operator?.name != null ? String(operator.name) : null,
+    scene_type: notice?.$scene_type != null ? String(notice.$scene_type) : null,
+    scene_id: String(notice?.$scene_id ?? ''),
+    sub_type: notice?.$sub_type != null ? String(notice.$sub_type) : null,
+    actor_id: actor?.id != null ? String(actor.id) : null,
+    actor_name: actor?.name != null ? String(actor.name) : null,
     target_id: target?.id != null ? String(target.id) : null,
     target_name: target?.name != null ? String(target.name) : null,
     payload: safeJson(payload),

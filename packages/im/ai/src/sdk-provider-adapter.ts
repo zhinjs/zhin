@@ -10,12 +10,12 @@ import type {
   ProviderConfig,
 } from './types.js';
 import type { ProviderInstanceConfig } from './llm/types/model.js';
-import type { SdkId } from './llm/sdk-registry.js';
+import { createLanguageModel, normalizeGoogleBaseUrl, type SdkId } from './llm/sdk-registry.js';
 import {
   resolveSdkProviderModels,
   SDK_SUPPORTS_OPENAI_MODEL_DISCOVERY,
 } from './llm/sdk-default-models.js';
-import { createLanguageModel, normalizeGoogleBaseUrl } from './llm/sdk-registry.js';
+
 import { registerLanguageModel } from './llm/language-model-store.js';
 import { generateTextViaAiSdk } from './llm/bridge/ai-sdk-stream.js';
 import { generateImageViaAiSdk } from './llm/bridge/ai-sdk-image.js';

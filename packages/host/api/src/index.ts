@@ -159,7 +159,7 @@ if (enabled) {
 
     await hostApiPlugin.dispatch("context.mounted", "web");
 
-    logger.info(
+    logger.debug(
       formatCompact({
         服务: "Host API",
         模式: "仅API",

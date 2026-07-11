@@ -112,14 +112,9 @@ export function solarToLunar(y: number, m: number, d: number): LunarDate {
   return { year, month: i, day: offset + 1, isLeapMonth: isLeap };
 }
 
+import { getZonedClock } from '../utils/zoned-clock.js';
+
 export function solarDateToLunar(date: Date, timezone: string): LunarDate {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-  });
-  const parts = formatter.formatToParts(date);
-  const get = (type: string) => parseInt(parts.find((p) => p.type === type)?.value ?? '0', 10);
-  return solarToLunar(get('year'), get('month'), get('day'));
+  const parts = getZonedClock(timezone).partsAt(date);
+  return solarToLunar(parts.year, parts.month, parts.day);
 }

@@ -432,6 +432,16 @@ A: 使用 `platform` 配置：
 - [QQ 机器人开发文档](https://bot.q.qq.com/wiki/)
 - [Zhin.js 官方文档](https://github.com/zhinjs/zhin)
 
+## AI 工具
+
+| 类别 | 路径 |
+|------|------|
+| Permit 词汇 | `agent/PERMITS.md` |
+| 平台工具（8 个） | `agent/tools/`（`qq_*`：公会、频道、角色等） |
+| 技能说明 | `agent/skills/qq.md` |
+| 群管标准工具 | `createSceneManagementTools()` |
+
+
 ## 许可证
 
 MIT License

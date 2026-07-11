@@ -40,11 +40,11 @@ export class NapCatWsServer extends NapCatEndpointBase {
         return true;
       },
     });
-    this.logger.info(formatCompact( { op: 'listen', endpoint: this.$id, mode: 'wss', path: this.$config.path }));
+    this.logger.debug(formatCompact( { op: 'listen', endpoint: this.$id, mode: 'wss', path: this.$config.path }));
 
     this.#wss.on('connection', (client, req) => {
       this.startHeartbeat();
-      this.logger.info(formatCompact({ endpoint: this.$id, peer: req.socket.remoteAddress }));
+      this.logger.debug(formatCompact({ endpoint: this.$id, peer: req.socket.remoteAddress }));
 
       client.on('error', (err) => this.logger.warn(formatCompact( {
         op: 'ws_error',
@@ -118,7 +118,7 @@ export class NapCatWsServer extends NapCatEndpointBase {
     if (message.post_type === 'meta_event' && message.sub_type === 'connect') {
       this.#clientMap.set(String(message.self_id), client);
       this.$connected = true;
-      this.logger.info(formatCompact({ endpoint: this.$id, self_id: message.self_id }));
+      this.logger.debug(formatCompact({ endpoint: this.$id, self_id: message.self_id }));
       return;
     }
     this.dispatchEvent(message);

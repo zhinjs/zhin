@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/milky/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/milky/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=f98e5cab1385c4e9 -->
+<!-- sync-adapter-docs:sha256=1b2ffbb99319ffff -->
 
 # @zhin.js/adapter-milky
 
@@ -141,6 +141,11 @@ addCommand(new MessageCommand('pic')
 ```
 
 发消息、撤回、群管等通过适配器封装的 HTTP API 完成。群管能力通过 `ISceneManagement` 自动注册为工具，详见 [工具与技能](/advanced/tools-skills)。
+
+## AI 工具
+
+Permit 词汇见 `agent/PERMITS.md`（维护者参考）。技能说明见 `agent/skills/milky.md`。群管标准工具由 `createSceneManagementTools()` 注册。
+
 
 ## 消息 ID 格式
 

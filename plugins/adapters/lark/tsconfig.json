@@ -1,10 +1,12 @@
 {
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
-    "types": [],
+    "types": ["node"],
     "outDir": "./lib",
-    "rootDir": "./src"
+    "rootDir": ".",
+    "declaration": false,
+    "declarationMap": false
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "agent/**/*"],
   "exclude": ["lib", "node_modules", "client"]
 }

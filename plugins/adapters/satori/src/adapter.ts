@@ -6,12 +6,7 @@ import { formatCompact, Adapter, Plugin, OUTBOUND_RICH_SEGMENT_POLICY_IM_FULL } 
 import type { Router } from '@zhin.js/host-router';
 import { SatoriWsClient } from './endpoint-ws.js';
 import { SatoriWebhookEndpoint } from './endpoint-webhook.js';
-import type {
-  SatoriEndpointConfig,
-  SatoriWsConfig,
-  SatoriWebhookConfig,
-} from './types.js';
-import type { SatoriEventBody } from './types.js';
+import { type SatoriEndpointConfig, type SatoriWsConfig, type SatoriWebhookConfig, type SatoriEventBody } from './types.js';
 
 export type SatoriBot = SatoriWsClient | SatoriWebhookEndpoint;
 

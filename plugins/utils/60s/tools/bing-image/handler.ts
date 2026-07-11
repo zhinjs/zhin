@@ -1,7 +1,7 @@
 import { fetchApi } from '../api.js';
 
 export default async function () {
-  const data = await fetchApi<any>('/bing');
+  const data = await fetchApi('/bing');
   const lines = ['🖼️ Bing 每日壁纸', ''];
   if (data.title) lines.push(`📌 ${data.title}`);
   if (data.headline) lines.push(`💡 ${data.headline}`);

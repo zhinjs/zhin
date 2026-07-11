@@ -8,7 +8,7 @@ tier: Stable
 本页由 [`plugins/adapters/sandbox/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=e3b11abe4905999f -->
+<!-- sync-adapter-docs:sha256=0bf8aedd44405d33 -->
 
 # @zhin.js/adapter-sandbox
 
@@ -86,6 +86,11 @@ Sandbox 使用 JSON 消息格式：
 - 本地开发调试插件逻辑
 - 测试命令和 AI 工具调用
 - 不依赖外部平台的功能验证
+
+## AI 工具
+
+技能说明见 `agent/skills/sandbox.md`（本地沙箱调试约束）。
+
 
 ## 许可证
 

@@ -1,13 +1,12 @@
 /**
  * GitHub 适配器入口：类型扩展、模型、导出、注册
  */
-import { formatCompact, type Context, type Message, type Plugin, type Tool, type ToolFeature, usePlugin } from 'zhin.js';
+import { formatCompact, type Context, type Plugin, usePlugin } from 'zhin.js';
 import { registerAgentPromptContributor, unregisterAgentPromptContributor } from 'zhin.js/agent';
 import { createGithubAgentPromptContributor } from './agent-prompt.js';
 import { GitHubAdapter } from './adapter.js';
-import { GhClient } from './gh-client.js';
 import { registerGithubMcp } from './register-github-mcp.js';
-import type { EventType } from './types.js';
+import { setGithubAgentDeps } from './github-agent-deps.js';
 
 declare module 'zhin.js' {
   interface Adapters {
@@ -92,344 +91,31 @@ provide({
 // 混合模式：有 router + webhook_secret → Webhook 实时；否则 → 轮询降级
 useContext('github', (adapter) => {
   if (adapter.hasWebhookConfig) {
-    // 尝试注册 Webhook（需要 router Context）
     const router = plugin.inject('router');
     if (router) {
       adapter.setupWebhook(router);
-      logger.debug(formatCompact( { op: 'events', source: 'webhook' }));
+      logger.debug(formatCompact({ op: 'events', source: 'webhook' }));
     } else {
-      // router 还没就绪，等它挂载后再注册
       plugin.useContext('router', (r) => {
         adapter.setupWebhook(r);
-        logger.debug(formatCompact( { op: 'events', source: 'webhook', deferred: true }));
+        logger.debug(formatCompact({ op: 'events', source: 'webhook', deferred: true }));
       });
     }
   }
-  // Webhook 未配置或未激活时，总是启动轮询作为兜底
   if (!adapter.webhookActive) {
     adapter.startPolling();
-    logger.debug(formatCompact( { op: 'events', source: 'poll' }));
+    logger.debug(formatCompact({ op: 'events', source: 'poll' }));
   }
   return () => adapter.stopPolling();
 });
 
-// ── Tool 工具注册 ─────────────────────────────────────────────────────────
-useContext('tool', 'github', (toolService: ToolFeature, adapter: GitHubAdapter) => {
-  const tools: Tool[] = [
-    // --- Star ---
-    {
-      name: 'github_star',
-      description: 'Star 或取消 Star 一个 GitHub 仓库（使用你绑定的 GitHub 账号，未绑定则用 Endpoint 默认账号）',
-      parameters: {
-        type: 'object' as const,
-        properties: {
-          action: { type: 'string' as const, description: 'star|unstar|check', enum: ['star', 'unstar', 'check'] },
-          repo: { type: 'string' as const, description: 'owner/repo (必填)' },
-        },
-        required: ['action', 'repo'],
-      },
-      tags: ['github'],
-      execute: async (args: Record<string, any>, commMessage?: Message<any>) => {
-        const gh = await adapter.getUserOrDefaultAPI(commMessage?.$adapter, commMessage?.$sender.id);
-        if (!gh) return '❌ 没有可用的 GitHub bot';
-        const { action, repo } = args;
-        switch (action) {
-          case 'star': {
-            const r = await gh.starRepo(repo);
-            return r.ok ? `⭐ 已 Star ${repo}` : `❌ ${r.data?.message || JSON.stringify(r.data)}`;
-          }
-          case 'unstar': {
-            const r = await gh.unstarRepo(repo);
-            return r.ok ? `💔 已取消 Star ${repo}` : `❌ ${r.data?.message || JSON.stringify(r.data)}`;
-          }
-          case 'check': {
-            const starred = await gh.isStarred(repo);
-            return starred ? `⭐ 已 Star ${repo}` : `☆ 尚未 Star ${repo}`;
-          }
-          default: return `❌ 未知操作: ${action}`;
-        }
-      },
-    },
-    // --- Bind (Device Flow) ---
-    {
-      name: 'github_bind',
-      description: '绑定你的 GitHub 账号 — 使用 Device Flow 授权，无需输入密码',
-      parameters: {
-        type: 'object' as const,
-        properties: {},
-      },
-      tags: ['github'],
-      execute: async (_args: Record<string, any>, commMessage?: Message<any>) => {
-        if (!commMessage?.$adapter || !commMessage?.$sender?.id) {
-          return '❌ 无法获取当前用户信息';
-        }
-        const clientId = adapter.getClientId();
-        if (!clientId) return '❌ Endpoint 未配置 GitHub App 或 App 无 client_id，无法进行账号绑定';
-
-        const db = plugin.root?.inject('database') as any;
-        const model = db?.models?.get('github_oauth_users');
-        if (!model) return '❌ 数据库未就绪';
-
-        // 检查是否已绑定
-        const [existing] = await model.select().where({ platform: commMessage.$adapter, platform_uid: commMessage.$sender.id });
-        if (existing) {
-          return `⚠️ 你已绑定 GitHub 账号: ${existing.github_login}\n如需重新绑定，请先执行 github_unbind`;
-        }
-
-        try {
-          const host = adapter.getHost();
-          const codeResp = await GhClient.deviceFlowRequestCode(clientId, host);
-          // 异步轮询 token（最多等 codeResp.expires_in 秒）
-          const tokenPromise = GhClient.deviceFlowPollToken(
-            clientId, codeResp.device_code, codeResp.interval, codeResp.expires_in, host,
-          );
-
-          // 先回复用户授权链接
-          const replyMsg = [
-            `🔗 请在浏览器中打开以下链接进行授权：`,
-            `   ${codeResp.verification_uri}`,
-            ``,
-            `📋 输入验证码: **${codeResp.user_code}**`,
-            ``,
-            `⏳ 等待授权中…（${Math.floor(codeResp.expires_in / 60)} 分钟内有效）`,
-          ].join('\n');
-
-          // 在后台等待用户授权完成
-          tokenPromise.then(async (tokenData) => {
-            if (!tokenData) {
-              // 授权超时或被拒绝 — 由于 execute 已经返回了，这里只能通过日志记录
-              logger.warn(formatCompact( { op: 'device_flow', ok: false, platform: commMessage.$adapter, sender: commMessage.$sender.id }));
-              return;
-            }
-
-            // 使用 token 获取 GitHub 用户名
-            const userGh = new GhClient({ host, token: tokenData.access_token });
-            const authResult = await userGh.verifyAuth();
-            const login = authResult.ok ? authResult.user : 'unknown';
-
-            await model.insert({
-              id: Date.now(),
-              platform: commMessage.$adapter,
-              platform_uid: commMessage.$sender.id,
-              github_login: login,
-              access_token: tokenData.access_token,
-              created_at: Date.now(),
-            });
-            logger.info(formatCompact( { op: 'bind', platform: commMessage.$adapter, sender: commMessage.$sender.id, login }));
-
-            // 尝试回复绑定成功消息
-            if (commMessage?.$reply) {
-              await commMessage.$reply(`✅ GitHub 账号绑定成功！\n👤 ${login}`);
-            }
-          }).catch(err => {
-            logger.error('GitHub Device Flow 错误:', err);
-          });
-
-          return replyMsg;
-        } catch (e: unknown) {
-          return `❌ Device Flow 启动失败: ${e instanceof Error ? e.message : String(e)}`;
-        }
-      },
-    },
-    // --- Unbind ---
-    {
-      name: 'github_unbind',
-      description: '解除你绑定的 GitHub 账号',
-      parameters: {
-        type: 'object' as const,
-        properties: {},
-      },
-      tags: ['github'],
-      execute: async (_args: Record<string, any>, commMessage?: Message<any>) => {
-        if (!commMessage?.$adapter || !commMessage?.$sender?.id) {
-          return '❌ 无法获取当前用户信息';
-        }
-        const db = plugin.root?.inject('database') as any;
-        const model = db?.models?.get('github_oauth_users');
-        if (!model) return '❌ 数据库未就绪';
-
-        const [existing] = await model.select().where({ platform: commMessage.$adapter, platform_uid: commMessage.$sender.id });
-        if (!existing) return '📭 你尚未绑定 GitHub 账号';
-
-        await model.delete().where({ id: existing.id });
-        return `✅ 已解除 GitHub 账号绑定: ${existing.github_login}`;
-      },
-    },
-    // --- Whoami ---
-    {
-      name: 'github_whoami',
-      description: '查看你绑定的 GitHub 账号信息',
-      parameters: {
-        type: 'object' as const,
-        properties: {},
-      },
-      tags: ['github'],
-      execute: async (_args: Record<string, any>, commMessage?: Message<any>) => {
-        if (!commMessage?.$adapter || !commMessage?.$sender?.id) {
-          return '❌ 无法获取当前用户信息';
-        }
-        const db = plugin.root?.inject('database') as any;
-        const model = db?.models?.get('github_oauth_users');
-        if (!model) return '❌ 数据库未就绪';
-
-        const [existing] = await model.select().where({ platform: commMessage.$adapter, platform_uid: commMessage.$sender.id });
-        if (!existing) return '📭 你尚未绑定 GitHub 账号\n🔗 使用 github_bind 绑定你的账号';
-
-        // 验证 token 是否仍然有效
-        const userGh = new GhClient({ host: adapter.getHost(), token: existing.access_token });
-        const auth = await userGh.verifyAuth();
-        if (auth.ok) {
-          return `👤 已绑定 GitHub 账号: ${auth.user}\n📅 绑定时间: ${new Date(existing.created_at).toLocaleString('zh-CN')}`;
-        }
-        return `⚠️ 已绑定账号 ${existing.github_login}，但 Token 已失效\n🔗 请执行 github_unbind 后重新 github_bind`;
-      },
-    },
-    // --- Install App ---
-    {
-      name: 'github_install',
-      description: '获取安装 GitHub App 的链接 — 安装后 Endpoint 可以访问你的仓库，你也可以使用更多功能',
-      parameters: {
-        type: 'object' as const,
-        properties: {},
-      },
-      tags: ['github'],
-      execute: async () => {
-        const slug = adapter.getAppSlug();
-        if (!slug) return '❌ Endpoint 未配置 GitHub App';
-        const host = adapter.getHost() || 'github.com';
-        const installations = adapter.getInstallations();
-        let msg = `🔗 请点击以下链接安装 GitHub App 到你的仓库：\n   https://${host}/apps/${slug}/installations/new`;
-        if (installations.length) {
-          msg += `\n\n📋 当前已安装 (${installations.length}):`;
-          for (const inst of installations) {
-            msg += `\n  • ${inst.account.login} (${inst.account.type})`;
-          }
-        }
-        return msg;
-      },
-    },
-    // --- Subscribe ---
-    {
-      name: 'github_subscribe',
-      description: '订阅 GitHub 仓库的 Webhook 事件，事件将推送到当前聊天通道',
-      parameters: {
-        type: 'object' as const,
-        properties: {
-          repo: { type: 'string' as const, description: 'owner/repo (必填)' },
-          events: { type: 'string' as const, description: '要订阅的事件类型，逗号分隔 (push/issue/star/fork/unstar/pull_request)，默认全部' },
-        },
-        required: ['repo'],
-      },
-      platforms: ['github'],
-      tags: ['github'],
-      execute: async (args: Record<string, any>, commMessage?: Message<any>) => {
-        if (!commMessage?.$adapter || !commMessage?.$sender.id || !commMessage?.$channel?.id || !commMessage?.$endpoint) {
-          return '❌ 无法获取当前聊天通道信息';
-        }
-        const db = plugin.root?.inject('database') as any;
-        const model = db?.models?.get('github_subscriptions');
-        if (!model) return '❌ 数据库未就绪';
-
-        const validEvents: EventType[] = ['push', 'issue', 'star', 'fork', 'unstar', 'pull_request'];
-        const events: EventType[] = args.events
-          ? args.events.split(',').map((s: string) => s.trim()).filter((e: string) => validEvents.includes(e as EventType))
-          : validEvents;
-        if (!events.length) return `❌ 无效的事件类型，可选: ${validEvents.join(', ')}`;
-
-        const [existing] = await model.select().where({
-          repo: args.repo,
-          target_id: commMessage.$channel?.id,
-          adapter: commMessage.$adapter,
-          endpoint: commMessage.$endpoint,
-        });
-        if (existing) {
-          await model.update({ events, target_type: commMessage.$channel?.type || 'private' }).where({ id: existing.id });
-          return `✅ 已更新订阅 ${args.repo}\n📡 事件: ${events.join(', ')}`;
-        }
-
-        await model.insert({
-          id: Date.now(),
-          repo: args.repo,
-          events,
-          target_id: commMessage.$channel?.id,
-          target_type: commMessage.$channel?.type || 'private',
-          adapter: commMessage.$adapter,
-          endpoint: commMessage.$endpoint,
-        });
-        return `✅ 已订阅 ${args.repo}\n📡 事件: ${events.join(', ')}\n📌 通知将推送到当前通道`;
-      },
-    },
-    // --- Unsubscribe ---
-    {
-      name: 'github_unsubscribe',
-      description: '取消订阅 GitHub 仓库的 Webhook 事件',
-      parameters: {
-        type: 'object' as const,
-        properties: {
-          repo: { type: 'string' as const, description: 'owner/repo (必填)' },
-        },
-        required: ['repo'],
-      },
-      platforms: ['github'],
-      tags: ['github'],
-      execute: async (args: Record<string, any>, commMessage?: Message<any>) => {
-        if (!commMessage?.$adapter || !commMessage?.$channel?.id || !commMessage?.$endpoint) {
-          return '❌ 无法获取当前聊天通道信息';
-        }
-        const db = plugin.root?.inject('database') as any;
-        const model = db?.models?.get('github_subscriptions');
-        if (!model) return '❌ 数据库未就绪';
-
-        const [existing] = await model.select().where({
-          repo: args.repo,
-          target_id: commMessage.$channel?.id,
-          adapter: commMessage.$adapter,
-          endpoint: commMessage.$endpoint,
-        });
-        if (!existing) return `📭 当前通道未订阅 ${args.repo}`;
-
-        await model.delete().where({ id: existing.id });
-        return `✅ 已取消订阅 ${args.repo}`;
-      },
-    },
-    // --- Subscriptions ---
-    {
-      name: 'github_subscriptions',
-      description: '查看当前聊天通道的 GitHub 仓库订阅列表',
-      parameters: {
-        type: 'object' as const,
-        properties: {},
-      },
-      platforms: ['github'],
-      tags: ['github'],
-      execute: async (_args: Record<string, any>, commMessage?: Message<any>) => {
-        if (!commMessage?.$adapter || !commMessage?.$channel?.id || !commMessage?.$endpoint) {
-          return '❌ 无法获取当前聊天通道信息';
-        }
-        const db = plugin.root?.inject('database') as any;
-        const model = db?.models?.get('github_subscriptions');
-        if (!model) return '❌ 数据库未就绪';
-
-        const subs = await model.select().where({
-          target_id: commMessage.$channel?.id,
-          adapter: commMessage.$adapter,
-          endpoint: commMessage.$endpoint,
-        });
-        if (!subs?.length) return '📭 当前通道没有任何 GitHub 订阅';
-
-        return `📋 当前通道订阅 (${subs.length}):\n\n` +
-          subs.map((s: any) => {
-            const events = Array.isArray(s.events) ? s.events : [];
-            return `  📦 ${s.repo}\n     📡 ${events.join(', ') || '(无事件)'}`;
-          }).join('\n\n');
-      },
-    },
-  ];
-
-  const disposers = tools.map(t => toolService.addTool(t, plugin.name));
-  logger.debug(`GitHub 工具已注册: ${tools.map(t => t.name).join(', ')}`);
-
-  return () => disposers.forEach(d => d());
+useContext('tool', 'github', (_toolService, adapter: GitHubAdapter) => {
+  setGithubAgentDeps({
+    getAdapter: () => adapter,
+    plugin,
+  });
+  logger.debug('GitHub agent deps initialized');
+  return () => {};
 });
 
 logger.debug('GitHub 适配器已加载 (gh CLI 认证)');
