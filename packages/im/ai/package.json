@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "@zhin.js/logger": "workspace:*",
-    "undici": "^8.5.0"
+    "undici": "^8.7.0"
   },
   "peerDependencies": {
     "@ai-sdk/anthropic": "^4.0.9",
