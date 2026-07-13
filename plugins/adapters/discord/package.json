@@ -38,7 +38,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "discord.js": "^14.26.4",
+    "discord.js": "^14.26.5",
     "tweetnacl": "^1.0.3"
   },
   "devDependencies": {

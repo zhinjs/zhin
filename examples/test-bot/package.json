@@ -20,11 +20,11 @@
     "stop": "停止守护进程"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^4.0.9",
-    "@ai-sdk/deepseek": "^3.0.5",
-    "@ai-sdk/google": "^4.0.9",
-    "@ai-sdk/openai": "4.0.8",
-    "@ai-sdk/openai-compatible": "^3.0.5",
+    "@ai-sdk/anthropic": "^4.0.12",
+    "@ai-sdk/deepseek": "^3.0.7",
+    "@ai-sdk/google": "^4.0.12",
+    "@ai-sdk/openai": "4.0.11",
+    "@ai-sdk/openai-compatible": "^3.0.7",
     "@puniyu/system-info": "1.5.7",
     "@zhin.js/adapter-dingtalk": "workspace:*",
     "@zhin.js/adapter-discord": "workspace:*",
