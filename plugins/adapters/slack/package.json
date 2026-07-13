@@ -39,7 +39,7 @@
   },
   "dependencies": {
     "@slack/socket-mode": "^2.0.3",
-    "@slack/web-api": "^7.17.0",
+    "@slack/web-api": "^7.19.0",
     "@zhin.js/logger": "workspace:*"
   },
   "devDependencies": {
