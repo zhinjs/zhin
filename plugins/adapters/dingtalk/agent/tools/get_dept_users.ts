@@ -11,7 +11,7 @@ export default defineTool<{ endpoint_id: string; dept_id: string }>({
   tags: ['dingtalk'],
   async execute({ endpoint_id, dept_id    }: { endpoint_id: string; dept_id: string }) {
     const endpoint = getDingtalkAgentDeps().getEndpoint(endpoint_id);
-    const users = await endpoint.getDepartmentUsers(dept_id);
+    const users = await endpoint.getDepartmentUsers(Number(dept_id));
     return { users, count: users.length };
   },
 });

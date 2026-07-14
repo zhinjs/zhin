@@ -14,8 +14,8 @@ export default defineTool<{ endpoint_id: string; guild_id: string }>({
     const endpoint = getKookAgentDeps().getEndpoint(endpoint_id);
     const roles = await endpoint.getRoleList(guild_id);
     return {
-      roles: roles.map((r: { role_id: string; name: string; color: number; position: number; permissions: number }) => ({
-        id: r.role_id,
+      roles: roles.map((r) => ({
+        id: String(r.role_id),
         name: r.name,
         color: r.color,
         position: r.position,

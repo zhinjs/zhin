@@ -2,7 +2,12 @@ import { defineTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getEndpoint } from '../../src/napcat-agent-deps.js';
 
-export default defineTool<{ endpoint_id: string; target_id: number; message_id: number }>({
+export default defineTool<{
+  endpoint_id: string;
+  target_type: 'friend' | 'group';
+  target_id: number;
+  message_id: number;
+}>({
   description: '转发单条消息到指定好友或群。',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),
@@ -13,10 +18,15 @@ export default defineTool<{ endpoint_id: string; target_id: number; message_id: 
   platforms: ['napcat'],
   tags: ['napcat', 'qq'],
   keywords: ['转发', 'forward', '单条转发'],
-  async execute({ endpoint_id, target_id, message_id }: { endpoint_id: string; target_id: number; message_id: number }) {
+  async execute({ endpoint_id, target_type, target_id, message_id }: {
+    endpoint_id: string;
+    target_type: 'friend' | 'group';
+    target_id: number;
+    message_id: number;
+  }) {
     const endpoint = getEndpoint(endpoint_id);
-      if (input.target_type === 'friend') await endpoint.forwardFriendSingleMsg(target_id, message_id);
-      else await endpoint.forwardGroupSingleMsg(target_id, message_id);
-      return { success: true };
+    if (target_type === 'friend') await endpoint.forwardFriendSingleMsg(target_id, message_id);
+    else await endpoint.forwardGroupSingleMsg(target_id, message_id);
+    return { success: true };
   },
 });

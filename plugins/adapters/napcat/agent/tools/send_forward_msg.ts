@@ -2,7 +2,12 @@ import { defineTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getEndpoint } from '../../src/napcat-agent-deps.js';
 
-export default defineTool<{ endpoint_id: string; id: number; messages: string }>({
+export default defineTool<{
+  endpoint_id: string;
+  message_type: 'private' | 'group';
+  id: number;
+  messages: string;
+}>({
   description: '发送合并转发消息（群聊或私聊）。messages 为转发节点数组。',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),
@@ -13,10 +18,14 @@ export default defineTool<{ endpoint_id: string; id: number; messages: string }>
   platforms: ['napcat'],
   tags: ['napcat', 'qq'],
   keywords: ['合并转发', 'forward', '转发消息'],
-  async execute({ endpoint_id, id, messages }: { endpoint_id: string; id: number; messages: string }) {
+  async execute({ endpoint_id, message_type, id, messages }: {
+    endpoint_id: string;
+    message_type: 'private' | 'group';
+    id: number;
+    messages: string;
+  }) {
     const endpoint = getEndpoint(endpoint_id);
-      const messages = typeof messages === 'string' ? JSON.parse(messages) : messages;
-      const result = await endpoint.sendForwardMsg(input.message_type, id, messages);
-      return result;
+    const nodes = typeof messages === 'string' ? JSON.parse(messages) : messages;
+    return endpoint.sendForwardMsg(message_type, id, nodes);
   },
 });

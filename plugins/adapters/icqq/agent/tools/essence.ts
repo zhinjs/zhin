@@ -1,7 +1,7 @@
 import { defineTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getIcqqAgentDeps } from '../../src/icqq-agent-deps.js';
-export default defineTool<{ endpoint_id: string; message_id: string }>({
+export default defineTool<{ endpoint_id: string; message_id: string; action: 'add' | 'remove' }>({
   description: '设置或移除 QQ 群精华消息',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint QQ号'),
@@ -11,7 +11,7 @@ export default defineTool<{ endpoint_id: string; message_id: string }>({
   platforms: ['icqq'],
   tags: ['icqq'],
   permissions: ['platform(icqq,scene_admin)'],
-  async execute({ endpoint_id, message_id, action    }: { endpoint_id: string; message_id: string }) {
+  async execute({ endpoint_id, message_id, action }: { endpoint_id: string; message_id: string; action: 'add' | 'remove' }) {
     const { Actions } = await import('../../src/protocol.js');
     const endpoint = getIcqqAgentDeps().getEndpoint(endpoint_id);
     const act = action === 'add' ? Actions.GROUP_ESSENCE_ADD : Actions.GROUP_ESSENCE_REMOVE;

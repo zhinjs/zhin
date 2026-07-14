@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { platformPermit } from '../../src/platform-permit.js';
 import { getKookAgentDeps } from '../../src/kook-agent-deps.js';
 
-export default defineTool<{ endpoint_id: string; guild_id: string; user_id: string; remark?: string }>({
+export default defineTool<{ endpoint_id: string; guild_id: string; action: 'add' | 'remove'; user_id: string; remark?: string }>({
   description: 'KOOK 服务器黑名单管理：添加/移除',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),
@@ -15,7 +15,7 @@ export default defineTool<{ endpoint_id: string; guild_id: string; user_id: stri
   platforms: ['kook'],
   tags: ['kook'],
   permissions: [platformPermit('guild_admin')],
-  async execute({ endpoint_id, guild_id, action, user_id, remark  }: { endpoint_id: string; guild_id: string; user_id: string; remark?: string }) {
+  async execute({ endpoint_id, guild_id, action, user_id, remark }: { endpoint_id: string; guild_id: string; action: 'add' | 'remove'; user_id: string; remark?: string }) {
     const endpoint = getKookAgentDeps().getEndpoint(endpoint_id);
     switch (action) {
       case 'add': {
