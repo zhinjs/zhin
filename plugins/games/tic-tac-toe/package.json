@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-tic-tac-toe",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Zhin.js 跨平台井字棋 — 按钮/文本双模式，群聊排队与人机对战",
   "type": "module",
   "main": "./lib/index.js",

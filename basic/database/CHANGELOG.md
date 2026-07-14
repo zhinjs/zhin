@@ -1,5 +1,11 @@
 # @zhin.js/database
 
+## 1.0.76
+
+### Patch Changes
+
+- 872c583: fix: 代码格式优化
+
 ## 1.0.75
 
 ### Patch Changes

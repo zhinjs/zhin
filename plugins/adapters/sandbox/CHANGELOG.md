@@ -1,5 +1,18 @@
 # @zhin.js/adapter-process
 
+## 5.0.5
+
+### Patch Changes
+
+- 872c583: fix: 代码格式优化
+- Updated dependencies [872c583]
+- Updated dependencies [872c583]
+  - @zhin.js/client@2.0.5
+  - @zhin.js/contract@1.0.3
+  - @zhin.js/core@1.3.4
+  - @zhin.js/host-api@2.0.5
+  - @zhin.js/host-router@2.0.3
+
 ## 5.0.4
 
 ### Patch Changes

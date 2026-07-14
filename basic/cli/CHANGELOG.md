@@ -1,5 +1,16 @@
 # @zhin.js/cli
 
+## 1.0.93
+
+### Patch Changes
+
+- 872c583: fix: 代码格式优化
+- Updated dependencies [872c583]
+- Updated dependencies [872c583]
+  - @zhin.js/agent@1.0.3
+  - @zhin.js/logger@1.0.74
+  - @zhin.js/scaffold-wizard@0.1.8
+
 ## 1.0.92
 
 ### Patch Changes

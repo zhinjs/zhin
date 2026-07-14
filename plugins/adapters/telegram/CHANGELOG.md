@@ -1,5 +1,20 @@
 # Changelog
 
+## 5.0.2
+
+### Patch Changes
+
+- 872c583: fix: 代码格式优化
+- Updated dependencies [872c583]
+- Updated dependencies [872c583]
+  - @zhin.js/agent@1.0.3
+  - @zhin.js/client@2.0.5
+  - @zhin.js/contract@1.0.3
+  - @zhin.js/host-api@2.0.5
+  - @zhin.js/host-router@2.0.3
+  - @zhin.js/logger@1.0.74
+  - zhin.js@4.1.2
+
 ## 5.0.1
 
 ### Patch Changes

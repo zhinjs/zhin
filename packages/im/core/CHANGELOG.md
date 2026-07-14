@@ -1,5 +1,20 @@
 # @zhin.js/core
 
+## 1.3.4
+
+### Patch Changes
+
+- 872c583: Slack 适配器 Phase 1/2：mrkdwn 出站、长消息切分、斜杠/按钮 ephemeral 反馈、入站 mrkdwn→Markdown、editMessage 对齐 core。
+
+  Logger 表格日志与 string-width 列宽；Agent AI Handler 框线表格与 introspection/MCP 导出；Core side-event 归一化；Schedule 时区规划；多适配器 side-event 与 API surface 更新。
+
+- 872c583: fix: 代码格式优化
+- Updated dependencies [872c583]
+- Updated dependencies [872c583]
+  - @zhin.js/kernel@1.0.3
+  - @zhin.js/logger@1.0.74
+  - @zhin.js/database@1.0.76
+
 ## 1.3.3
 
 ### Patch Changes
