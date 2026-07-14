@@ -75,7 +75,7 @@
     "esbuild": "^0.28.1",
     "koa": "^3.2.1",
     "koa-body": "^8.0.0",
-    "lucide-react": "^1.22.0",
+    "lucide-react": "^1.24.0",
     "tsup": "^8.5.1",
     "yaml": "^2.0.0"
   },
