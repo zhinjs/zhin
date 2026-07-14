@@ -101,21 +101,82 @@ const SENSITIVE_PATTERNS = [
  * 脱敏命令中的敏感信息
  */
 function sanitizeCommand(command: string): string {
-  let sanitized = redactEnvAssignments(command);
+  return redactPasswordFlagValues(redactBasicAuthUrls(redactEnvAssignments(command)));
+}
 
-  // 脱敏 URL 中的密码
-  sanitized = sanitized.replace(
-    /(https?:\/\/[^:]+:)[^@]+(@)/g,
-    '$1***$2'
-  );
+function redactBasicAuthUrls(command: string): string {
+  let out = '';
+  let cursor = 0;
+  while (cursor < command.length) {
+    const http = command.indexOf('http://', cursor);
+    const https = command.indexOf('https://', cursor);
+    const start = firstFoundIndex(http, https);
+    if (start < 0) break;
+    out += command.slice(cursor, start);
+    const schemeEnd = command.indexOf('://', start);
+    const authorityStart = schemeEnd + 3;
+    const authorityEnd = findUrlAuthorityEnd(command, authorityStart);
+    const authority = command.slice(authorityStart, authorityEnd);
+    const colon = authority.indexOf(':');
+    const at = authority.indexOf('@', colon + 1);
+    if (colon > 0 && at > colon + 1) {
+      out += `${command.slice(start, authorityStart)}${authority.slice(0, colon + 1)}***${authority.slice(at)}`;
+    } else {
+      out += command.slice(start, authorityEnd);
+    }
+    cursor = authorityEnd;
+  }
+  return out + command.slice(cursor);
+}
 
-  // 脱敏文件内容中的敏感数据
-  sanitized = sanitized.replace(
-    /(-[a-zA-Z]*p[a-zA-Z]*\s+)([^\s]+)/gi,
-    '$1***'
-  );
+function firstFoundIndex(a: number, b: number): number {
+  if (a < 0) return b;
+  if (b < 0) return a;
+  return Math.min(a, b);
+}
 
-  return sanitized;
+function findUrlAuthorityEnd(value: string, start: number): number {
+  let i = start;
+  while (i < value.length) {
+    const ch = value[i]!;
+    if (ch === '/' || ch === '?' || ch === '#' || isCommandSeparator(ch)) break;
+    i++;
+  }
+  return i;
+}
+
+function redactPasswordFlagValues(command: string): string {
+  const parts = splitCommandPreservingSeparators(command);
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (!isPasswordFlag(parts[i]!)) continue;
+    let valueIndex = i + 1;
+    while (valueIndex < parts.length && isSeparatorToken(parts[valueIndex]!)) valueIndex++;
+    if (valueIndex < parts.length) {
+      parts[valueIndex] = '***';
+    }
+  }
+  return parts.join('');
+}
+
+function splitCommandPreservingSeparators(command: string): string[] {
+  const parts: string[] = [];
+  let i = 0;
+  while (i < command.length) {
+    const start = i;
+    const separator = isCommandSeparator(command[i]!);
+    while (i < command.length && isCommandSeparator(command[i]!) === separator) i++;
+    parts.push(command.slice(start, i));
+  }
+  return parts;
+}
+
+function isPasswordFlag(value: string): boolean {
+  if (!value.startsWith('-')) return false;
+  return value.slice(1).toLowerCase().includes('p');
+}
+
+function isSeparatorToken(value: string): boolean {
+  return value.length > 0 && isCommandSeparator(value[0]!);
 }
 
 function redactEnvAssignments(command: string): string {
