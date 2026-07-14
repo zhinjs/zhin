@@ -1,7 +1,7 @@
 /**
  * Resolve SessionInteractionPort from transport context (ADR 0041).
  */
-import { getHostRootPlugin, type Message, type Plugin } from '@zhin.js/core';
+import { type Message, type Plugin } from '@zhin.js/core';
 import type { HttpApprovalAdapter } from './http-approval-adapter.js';
 import { ImApprovalAdapter } from './im-approval-adapter.js';
 import type { SessionInteractionPort } from './session-interaction-port.js';
@@ -20,5 +20,5 @@ export function resolveSessionInteractionPort(
   if (httpSessionId && httpApprovalAdapter) {
     return httpApprovalAdapter;
   }
-  return new ImApprovalAdapter(plugin ?? getHostRootPlugin() ?? undefined, commMessage);
+  return new ImApprovalAdapter(plugin, commMessage);
 }

@@ -16,6 +16,7 @@ const aiSidebar: DefaultTheme.SidebarItem[] = [
   { text: 'MCP 集成', link: '/advanced/mcp' },
   { text: '工具与技能', link: '/advanced/tools-skills' },
   { text: 'Plugin agent/ 创作面', link: '/advanced/agent-authoring' },
+  { text: 'Eve 对照（维护者）', link: '/advanced/eve-comparison-zh' },
   { text: 'Feature 系统', link: '/advanced/features' },
   { text: 'Agent 安全与角色', link: '/advanced/agent-harness-engineering' },
   { text: 'Agent 最佳实践', link: '/advanced/agent-best-practices' },
@@ -115,10 +116,17 @@ const adrSidebar0021: DefaultTheme.SidebarItem[] = [
   { text: '0038 Activity Feedback 三相位', link: '/adr/0038-activity-feedback-schedule-phases' },
 ]
 
+const adrSidebar0039: DefaultTheme.SidebarItem[] = [
+  { text: '0039 Eve 对齐 Agent 创作面', link: '/adr/0039-eve-aligned-agent-surface-roadmap' },
+  { text: '0040 HTTP Step Checkpoint', link: '/adr/0040-http-step-checkpoint-persistence' },
+  { text: '0041 AgentStreamBus', link: '/adr/0041-agent-stream-bus-and-session-host-port' },
+]
+
 const adrSidebar: DefaultTheme.SidebarItem[] = [
   sidebarGroup('0001–0010', adrSidebar0001),
   sidebarGroup('0011–0020', adrSidebar0011),
   sidebarGroup('0021–0038', adrSidebar0021),
+  sidebarGroup('0039–0041', adrSidebar0039),
 ]
 
 /** A+B：部署、配置、写插件与 AI */
