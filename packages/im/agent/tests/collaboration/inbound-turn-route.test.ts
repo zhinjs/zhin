@@ -5,20 +5,15 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 import { routeInboundTurnExecution } from '../../src/collaboration/inbound-turn-route.js';
 import type { TurnPlan } from '../../src/collaboration/types.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
-
-vi.mock('../../src/collaboration/collaboration-dispatch.js', () => ({
-  dispatchPeerTask: vi.fn(),
-}));
-
-import { dispatchPeerTask } from '../../src/collaboration/collaboration-dispatch.js';
+import * as CollaborationDispatch from '../../src/collaboration/collaboration-dispatch.js';
 
 describe('routeInboundTurnExecution', () => {
   afterEach(() => {
-    vi.mocked(dispatchPeerTask).mockReset();
+    vi.restoreAllMocks();
   });
 
   it('returns done when kernel internal_room dispatch succeeds', async () => {
-    vi.mocked(dispatchPeerTask).mockResolvedValue({
+    vi.spyOn(CollaborationDispatch, 'dispatchPeerTask').mockResolvedValue({
       runId: 'run-1',
       taskId: 'task-1',
       task: { id: 'task-1', status: 'waiting_result' } as any,
@@ -71,7 +66,7 @@ describe('routeInboundTurnExecution', () => {
 
     expect(result).toEqual({ kind: 'done' });
     expect(process).not.toHaveBeenCalled();
-    expect(dispatchPeerTask).toHaveBeenCalledWith(expect.objectContaining({
+    expect(CollaborationDispatch.dispatchPeerTask).toHaveBeenCalledWith(expect.objectContaining({
       fromEndpointId: 'e1',
       toEndpointId: 'e2',
     }));

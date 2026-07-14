@@ -32,3 +32,20 @@ export type {
   McpConnectEvent,
   McpToolCallEvent,
 } from './turn-event.js';
+
+export {
+  mapTurnEventToAgentStreamEvents,
+} from './turn-to-agent-stream.js';
+export type { TurnToStreamContext } from './turn-to-agent-stream.js';
+
+export {
+  createAgentStreamBus,
+  DefaultAgentStreamBus,
+} from './agent-stream-bus.js';
+export type {
+  AgentStreamBus,
+  AgentStreamSink,
+  AgentStreamPublishContext,
+} from './agent-stream-bus.js';
+export { createHookStreamSink } from './hook-stream-sink.js';
+export { publishAgentStream, publishTurnStreamEvents } from './publish-agent-stream.js';

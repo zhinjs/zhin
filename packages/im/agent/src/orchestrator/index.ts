@@ -22,6 +22,9 @@ import { SkillRegistry } from './skill-registry.js';
 import { SubAgentRegistry } from './subagent-registry.js';
 import { McpRegistry } from './mcp-registry.js';
 import { HookRegistry, createAIHookEvent } from './hook-registry.js';
+import { createAgentStreamBus, type AgentStreamBus } from '../event/agent-stream-bus.js';
+import { createHookStreamSink } from '../event/hook-stream-sink.js';
+import { ToolApprovalOnceStore } from '../tool/tool-approval-once-store.js';
 import type {
   ResourceScope,
   Skill,
@@ -39,6 +42,13 @@ export class AgentOrchestrator {
   readonly subagents = new SubAgentRegistry();
   readonly mcps = new McpRegistry();
   readonly hooks = new HookRegistry();
+  readonly agentStreamBus: AgentStreamBus;
+  readonly approvalOnce = new ToolApprovalOnceStore();
+
+  constructor() {
+    this.agentStreamBus = createAgentStreamBus();
+    this.agentStreamBus.registerSink(createHookStreamSink(this.hooks));
+  }
 
   // ── Tool shortcuts ──
 
@@ -136,6 +146,7 @@ export class AgentOrchestrator {
     this.subagents.dispose();
     this.mcps.dispose();
     this.hooks.dispose();
+    this.approvalOnce.clear();
   }
 }
 

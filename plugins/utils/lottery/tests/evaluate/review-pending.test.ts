@@ -71,7 +71,8 @@ describe('evaluatePendingPredictions', () => {
 
   it('reports waiting when only today pending and no new draw', async () => {
     const { db } = mockDb();
-    await savePrediction(db, pick('ssq'), new Date('2026-07-11T12:00:00Z'));
+    const today = new Date().toISOString().slice(0, 10);
+    await savePrediction(db, pick('ssq'), new Date(`${today}T12:00:00Z`));
     const result = await evaluatePendingPredictions(db, ['ssq'], 100, []);
     expect(result.evaluated).toBe(0);
     expect(result.lines[0]).toContain('waiting for next draw');
@@ -81,8 +82,9 @@ describe('evaluatePendingPredictions', () => {
 describe('gamesNeedingPrediction', () => {
   it('excludes games with pending for today', async () => {
     const { db } = mockDb();
-    await savePrediction(db, pick('ssq'), new Date('2026-07-11T12:00:00Z'));
-    const need = await gamesNeedingPrediction(db, ['ssq', 'kl8'], new Date('2026-07-11T12:00:00Z'));
+    const today = new Date().toISOString().slice(0, 10);
+    await savePrediction(db, pick('ssq'), new Date(`${today}T12:00:00Z`));
+    const need = await gamesNeedingPrediction(db, ['ssq', 'kl8'], new Date(`${today}T12:00:00Z`));
     expect(need).toEqual(['kl8']);
   });
 });

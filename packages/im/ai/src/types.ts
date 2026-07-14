@@ -243,6 +243,10 @@ export interface AgentTool {
    * 设为 false 可强制独占执行（如写文件、发送消息）。
    */
   isConcurrencySafe?: boolean;
+  /** Per-tool approval policy (ADR 0039 P1); stacks with ExecPolicy. */
+  approval?: import('./tool-policy.js').ToolApprovalPolicy;
+  /** Shapes tool output before it enters model context (IM rich payload may differ). */
+  toModelOutput?: import('./tool-policy.js').ToolToModelOutputFn;
 }
 
 /**

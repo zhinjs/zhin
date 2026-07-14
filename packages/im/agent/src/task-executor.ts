@@ -16,6 +16,7 @@ import type {
 import { senderFromScheduleCreator } from './assistant/job-creator.js';
 import { buildScheduleTurnMessage } from './assistant/schedule-message.js';
 import { buildScheduleTurnPrompt } from './assistant/schedule-execution.js';
+import { deliverScheduleToAdapter } from './assistant/deliver-schedule-to-adapter.js';
 const logger = new Logger(null, 'task-executor');
 
 export interface TaskExecutionOptions {
@@ -46,6 +47,7 @@ export interface TaskExecutorDeps {
   router?: NotificationRouter;
   defaultNotify?: JobNotify;
   deliverIm?: (notify: JobNotify & { channel: 'im' }, content: string) => Promise<void>;
+  proactiveOutbound?: import('./outbound/send-proactive.js').ProactiveOutboundService;
 }
 
 const locks = new Map<string, Promise<unknown>>();
@@ -191,11 +193,13 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
         return { success: true, responseText: '', durationMs: Date.now() - t0, executionPlan: resultPlan };
       }
 
-      if (deps.deliverIm && effectiveNotify.channel === 'im') {
-        await deps.deliverIm(effectiveNotify, text);
-      } else {
-        await router.deliver({ notify: effectiveNotify, content: text });
-      }
+      await deliverScheduleToAdapter({
+        notify: effectiveNotify,
+        content: text,
+        proactiveOutbound: deps.proactiveOutbound,
+        router,
+        resolveAdapter: deps.resolveAdapter,
+      });
       dispatchSchedule('schedule.finish');
       return { success: true, responseText: text, durationMs: Date.now() - t0, executionPlan: resultPlan };
     } catch (e) {

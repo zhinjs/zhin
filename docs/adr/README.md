@@ -38,6 +38,9 @@
 | [0035](./0035-a2a-agent-mesh.md) | A2A Agent Mesh（替换 MCP Mesh v1） |
 | [0036](./0036-internal-room-collaboration.md) | Internal Room 层内协作（破坏性） |
 | [0038](./0038-activity-feedback-schedule-phases.md) | Activity Feedback 资格与 Schedule 三相位 |
+| [0039](./0039-eve-aligned-agent-surface-roadmap.md) | Eve 对齐 Agent 创作面 — 边界与分阶段路线 |
+| [0040](./0040-http-step-checkpoint-persistence.md) | HTTP Step Checkpoint 持久化与 session.waiting park/resume |
+| [0041](./0041-agent-stream-bus-and-session-host-port.md) | AgentStreamBus + Session 拆分 + AgentSessionHostPort |
 
 ## 相关
 

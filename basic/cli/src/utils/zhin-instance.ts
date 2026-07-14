@@ -1,4 +1,4 @@
-import { formatCompact } from '@zhin.js/logger';
+import { formatCompact, formatDisplayPath } from '@zhin.js/logger';
 import { CREATE_PROJECT_COMMAND } from './create-project.js';
 import { ensureGlobalHome } from './global-home-init.js';
 import { logger } from './logger.js';
@@ -53,7 +53,7 @@ export async function requireZhinInstance(
   }
 
   if (instance.kind === 'global') {
-    logger.info(formatCompact({ op: 'zhin_instance', kind: 'global', path: instance.root }));
+    logger.info(formatCompact({ op: 'zhin_instance', kind: 'global', path: formatDisplayPath(instance.root) }));
   }
 
   return instance;

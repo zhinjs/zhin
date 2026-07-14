@@ -45,6 +45,14 @@ describe('sanitizeToolResult', () => {
     expect(out).toBe('read ./packages/ai/src/index.ts and .');
   });
 
+  it('relativizeCwdPaths shortens paths under home when outside project root', () => {
+    const home = path.resolve('/tmp/zhin-test-home');
+    const project = path.resolve('/tmp/zhin-other-project');
+    const file = path.join(home, 'IdeaProjects', 'zhin', 'zhin.config.yml');
+    const out = relativizeCwdPaths(`config at ${file}`, project, { homeDir: home });
+    expect(out).toBe('config at ~/IdeaProjects/zhin/zhin.config.yml');
+  });
+
   it('sanitizeToolResult applies cwd relativization', () => {
     const root = path.resolve('/tmp/zhin-sanitize-root');
     const out = sanitizeToolResult(`file: ${root}/README.md`, { cwd: root });

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { AgentTool } from '@zhin.js/ai';
+import { disableTool } from '../src/authoring/disable-tool.js';
 import { resolveSubagentAgentTools, SUBAGENT_BLOCKED_TOOL_NAMES } from '../src/orchestrator/resolve-subagent-tools.js';
 import { DEFAULT_CONFIG } from '../src/config/index.js';
 import type { AgentMeta, AgentEffortLevel } from '../src/discovery/agents.js';
@@ -32,6 +33,18 @@ describe('disallowedTools filtering', () => {
 
     const result = resolveSubagentAgentTools({ ...baseParams, allTools, agentMeta: meta });
     expect(result.map(t => t.name)).toEqual(['read_file', 'write_file']);
+  });
+
+  it('accepts disableTool() sentinel via normalized AgentMeta', () => {
+    const allTools = [makeTool('bash'), makeTool('read_file')];
+    const meta: AgentMeta = {
+      name: 'test-agent',
+      description: 'Test',
+      filePath: '/tmp/test.agent.md',
+      disallowedTools: [disableTool('bash').name],
+    };
+    const result = resolveSubagentAgentTools({ ...baseParams, allTools, agentMeta: meta });
+    expect(result.map(t => t.name)).toEqual(['read_file']);
   });
 
   it('no disallowedTools means no filtering', () => {

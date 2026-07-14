@@ -4,6 +4,7 @@
 import { Logger, type AgentPromptBuildContext, resolveIMSessionIdFromMessage, type Message } from '@zhin.js/core';
 import { formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
 import { type AIProvider, type AgentTool, isOmittedToolSummary, sanitizeToolResult, stripHallucinatedToolCalls, getLlmTransportModel, type ModelRegistry } from '@zhin.js/ai';
+import { resolveMcpConnectionFromToolName } from '@zhin.js/ai/mcp-qualified-name';
 import { stripThinkBlocks } from './core/text-sanitize.js';
 import { runAgentLoopStandaloneTurn } from './core/agent-loop-standalone.js';
 import type { ToolCallRecord } from './core/tool-calls-user-format.js';
@@ -136,7 +137,7 @@ export class DeferredWorkerRunner {
       const slowTimeout = resolveWorkerSlowToolTimeout(execPolicyConfig);
       tools = tools.map((t) => ({
         ...t,
-        timeout: t.timeout ?? (t.name.startsWith('mcp_') ? slowTimeout : 60_000),
+        timeout: t.timeout ?? (resolveMcpConnectionFromToolName(t.name, t.source) ? slowTimeout : 60_000),
       }));
     }
 

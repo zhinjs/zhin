@@ -13,7 +13,7 @@ plugins/my-plugin/
 │   ├── skills/*.md           # on-demand procedures
 │   ├── schedules/*.ts        # defineSchedule()
 │   ├── connections/*.ts      # defineConnection() + schema; params in zhin.config
-│   ├── hooks/*.ts            # AI lifecycle hooks
+│   ├── hooks/*.ts            # defineHook() — subscribe to stream events (see below)
 │   └── subagents/<name>/     # fractal child agents
 └── evals/*.eval.ts           # defineEval() smoke/regression
 ```
@@ -119,3 +119,135 @@ pnpm check:plugin-agent-publish
 ```
 
 CI：`pnpm check:plugin-agent-publish`（已接入 `check:all`）。
+
+## Per-tool approval 与 toModelOutput（ADR 0039 P1）
+
+`defineTool` 支持 Eve 对齐的声明式工具策略，与 **ExecPolicy / Owner confirm 叠加**（不替代）：
+
+```ts
+import { defineTool } from '@zhin.js/agent/tools';
+import { always, once, never } from '@zhin.js/agent/tools';
+
+export default defineTool({
+  description: '危险写操作',
+  inputSchema: z.object({ path: z.string() }),
+  approval: always(), // 或 once() / never() / async ({ toolName, args }) => boolean
+  toModelOutput: ({ result }) => `已写入：${String(result)}`, // 模型可见摘要；IM 富消息仍走 execute 返回值
+  async execute({ path }) { /* ... */ },
+});
+```
+
+- **`approval`**：执行前经 `runToolApprovalGate` 发 `input.requested` / `input.completed` stream 事件，并通过内置 `ask_user` 确认。
+- **`toModelOutput`**：工具原始返回值经此钩子再写入模型上下文（便于 IM 卡片与 LLM 摘要分离）。
+
+MCP 工具名采用 **`{connection}__{tool}`**（如 `filesystem__read_file`）；`McpRegistry.listQualifiedTools()` 供发现/自省。旧 `mcp_{server}_{tool}` 仅作 legacy 解析。
+
+## Skills 渐进披露（ADR 0039 P1）
+
+技能**不会**在 turn 开始时全量注入 prompt。标准流程：
+
+1. `discover(kind=skill, query=...)` — 搜索匹配技能
+2. `load_skill(name)` — 按需加载完整 `instructions`
+3. 调用技能解锁的工具
+
+常量见 `@zhin.js/agent`：`SKILL_DISCLOSURE_TOOLS`、`SKILL_DISCLOSURE_STEPS`、`SKILL_DISCLOSURE_PROMPT_HINT`。
+
+## Connection OAuth 事件（ADR 0039 P1）
+
+交互式 connection 授权发 `authorization.required` / `authorization.completed` stream 事件。Host 完成 OAuth 后回调：
+
+```http
+POST /zhin/v1/authorization/:requestId/complete
+{ "success": true, "sessionId": "ses_..." }
+```
+
+Agent 侧 `requestConnectionAuthorization` / `completeConnectionAuthorization`（`@zhin.js/agent/connection`）。
+
+## Harness 工具禁用（ADR 0039 P2）
+
+在 `defineAgent` 中用 Eve 风格 sentinel 声明禁用的内置/编排工具：
+
+```ts
+import { defineAgent, disableTool } from '@zhin.js/agent';
+
+export default defineAgent({
+  description: '无 shell 的子 agent',
+  disallowedTools: [disableTool('bash'), disableTool('spawn_task')],
+});
+```
+
+`disableTool(name)` 与字符串等价；发现时经 `normalizeToolDenylist` 写入 `AgentMeta.disallowedTools`，子 agent 工具池自动过滤。
+
+## 维护者诊断
+
+```bash
+zhin agent info          # 人类可读
+zhin agent info --json   # 机器可读
+```
+
+扫描 `plugins/**/agent/` 与 `agents/` 文件槽位（无需启动 bot）。实现：`buildAgentSurfaceInfoReport`（`@zhin.js/agent`）。Host 快照：`GET /zhin/v1/info?cwd=...`。
+
+## defineDynamic 与 defineState（ADR 0039 P2）
+
+**动态解析**（按 turn 调整工具池与追加 instructions）：
+
+```ts
+// agent/dynamic.ts
+import { defineDynamic } from '@zhin.js/agent';
+
+export default defineDynamic({
+  async resolve({ adapter, sessionId }) {
+    if (adapter === 'cron') {
+      return { deniedToolNames: ['spawn_task'], additionalInstructions: 'Scheduled turn.' };
+    }
+  },
+});
+```
+
+**会话状态**（内存 KV，按 `sessionId`；重启不持久）：
+
+```ts
+// agent/state/budget.ts
+import { defineState } from '@zhin.js/agent';
+
+export default defineState({
+  initial: () => ({ spent: 0 }),
+});
+
+// 运行时（工具 execute 等）
+import { getAgentState, updateAgentState } from '@zhin.js/agent';
+```
+
+## Sandbox 后端（ADR 0039 P2）
+
+| 模式 | 配置 | 行为 |
+|------|------|------|
+| 进程隔离（默认） | `security/sandbox.ts` | 子进程 + ulimit + 工作目录限制 |
+| Docker | `useDocker: 'auto' \| 'always' \| 'never'` | `sandbox-docker.ts`；`auto` 检测本机 Docker |
+| 网络 | `network-policy.ts` | 域名 allow-list，与 ExecPolicy 叠加 |
+
+Authoring 工具在 agent 运行时执行；需隔离时请走内置 `bash` / `read_file` 等（经 sandbox 包装），勿在 `execute` 内直接 `exec`。
+
+## Hooks 事件词汇（ADR 0039 P0）
+
+`defineHook({ event, handler })` 的 `event` 推荐使用与 Host NDJSON stream 一致的 **Eve 对齐词汇**（`@zhin.js/ai/agent-stream`）：
+
+| 事件名 | 含义 |
+|--------|------|
+| `session.started` | 新 IM 会话或 HTTP session 开始 |
+| `session.waiting` | turn 结束，等待续聊（含 `continuationToken`） |
+| `turn.started` / `turn.completed` / `turn.failed` | turn 生命周期 |
+| `message.received` / `message.appended` / `message.completed` | 入站与助手输出 |
+| `actions.requested` / `action.result` | 工具调用与结果 |
+| `reasoning.appended` | 推理文本增量 |
+| `input.requested` / `input.completed` | HITL / per-tool approval |
+| `authorization.required` / `authorization.completed` | Connection OAuth（Host 回调完成） |
+
+**遗留 `type:action` 键**（`message:received`、`tool:call` 等）仍可用；触发时会自动映射到上表对应 stream 事件并通知订阅了 stream 名的 hook。
+
+Hooks 为 **observe-only**（与 Eve 一致）；改 prompt / 拦截工具请用 `agent:prompt` 或 PreToolUse 策略，见 orchestrator 文档。
+
+## 与 Eve 对照（维护者）
+
+- 全栈差距矩阵：[eve-comparison-zh.md](./eve-comparison-zh.md)
+- 架构决策（边界与分阶段路线）：[ADR 0039](../adr/0039-eve-aligned-agent-surface-roadmap.md)

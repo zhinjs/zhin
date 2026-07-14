@@ -10,6 +10,36 @@
       "types": "./lib/index.d.ts",
       "development": "./src/index.ts",
       "import": "./lib/index.js"
+    },
+    "./agent-stream": {
+      "types": "./lib/agent-stream.d.ts",
+      "development": "./src/agent-stream.ts",
+      "import": "./lib/agent-stream.js"
+    },
+    "./agent-stream-consumer": {
+      "types": "./lib/agent-stream-consumer.d.ts",
+      "development": "./src/agent-stream-consumer.ts",
+      "import": "./lib/agent-stream-consumer.js"
+    },
+    "./agent-step-checkpoint": {
+      "types": "./lib/agent-step-checkpoint.d.ts",
+      "development": "./src/agent-step-checkpoint.ts",
+      "import": "./lib/agent-step-checkpoint.js"
+    },
+    "./tool-policy": {
+      "types": "./lib/tool-policy.d.ts",
+      "development": "./src/tool-policy.ts",
+      "import": "./lib/tool-policy.js"
+    },
+    "./mcp-qualified-name": {
+      "types": "./lib/mcp-qualified-name.d.ts",
+      "development": "./src/mcp-qualified-name.ts",
+      "import": "./lib/mcp-qualified-name.js"
+    },
+    "./authorization-events": {
+      "types": "./lib/authorization-events.d.ts",
+      "development": "./src/authorization-events.ts",
+      "import": "./lib/authorization-events.js"
     }
   },
   "files": [

@@ -44,7 +44,16 @@
     "@types/fs-extra": "^11.0.4",
     "@types/inquirer": "^9.0.10",
     "@types/node": "^26.1.0",
+    "@zhin.js/agent": "workspace:*",
     "typescript": "^6.0.3"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/agent": {
+      "optional": true
+    }
+  },
+  "peerDependencies": {
+    "@zhin.js/agent": ">=1.0.0"
   },
   "repository": {
     "type": "git",

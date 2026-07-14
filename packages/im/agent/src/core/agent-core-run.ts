@@ -23,6 +23,9 @@ import type { AgentCore } from './agent-core.js';
 import type { ZhinAgentPrivate, OnChunkCallback, Message } from '../internal/agent-host.js';
 import { bindDeferredToolRuntime } from '../builtin/deferred-tool-meta.js';
 import { persistDeferredToolSnapshot, buildLlmToolsForProvider } from '../tool/deferred-resolution.js';
+import { runToolApprovalGate } from '../tool/tool-approval-gate.js';
+import { applyToolToModelOutput } from '../tool/tool-model-output.js';
+import { resolveSessionInteractionPort, readHttpSessionId } from '../session/resolve-session-interaction-port.js';
 import { resolveDeferredToolsConfig, resolveAlwaysLoadedSet } from '../tool-catalog/resolve-config.js';
 import { resolveDeferredApiTools } from '../tool-catalog/tool-catalog.js';
 import { buildSkillLoadOptsForAgent } from '../skill/skill-load-opts.js';
@@ -559,13 +562,36 @@ export async function* runAgentLoopTextTurnRun(
       if (!legacy) {
         return toolResultToAgentMessage(toolCall, `Unknown tool: ${resolvedName}`, true);
       }
+
+      const httpSessionId = readHttpSessionId(contextForTools);
+      const approvalDenied = await runToolApprovalGate({
+        toolName: resolvedName,
+        args: effectiveArgs,
+        sessionId,
+        commMessage: contextForTools,
+        policy: legacy.approval,
+        plugin: orchestrationPlugin,
+        bus: host.orchestrator?.agentStreamBus,
+        port: resolveSessionInteractionPort(
+          contextForTools,
+          orchestrationPlugin,
+          host.httpApprovalAdapter,
+        ),
+        publishCtx: { sessionId, httpSessionId },
+        onceStore: host.orchestrator?.approvalOnce,
+      });
+      if (approvalDenied) {
+        toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: approvalDenied });
+        return toolResultToAgentMessage(toolCall, approvalDenied, true);
+      }
+
       const t0 = performance.now();
       try {
         const raw = await runWithCommMessage(contextForTools, () =>
           legacy.execute(effectiveArgs),
         );
         const durationMs = performance.now() - t0;
-        const rawText = typeof raw === 'string' ? raw : JSON.stringify(raw ?? null);
+        const rawText = await applyToolToModelOutput(legacy, raw, effectiveArgs);
 
         // PostToolUse interception
         let resultText = rawText;

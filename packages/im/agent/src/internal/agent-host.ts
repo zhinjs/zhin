@@ -14,6 +14,7 @@ import type { ToolSystem } from '../tool/tool-system.js';
 import type { ContextSystem } from '../context/context-system.js';
 import type { MemorySystem } from '../memory/memory-system.js';
 import type { SessionSystem } from '../session/session-system.js';
+import type { HttpApprovalAdapter } from '../session/http-approval-adapter.js';
 import type { EventSystem } from '../event/event-system.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import type { ToolCatalogItem } from '../tool-catalog/types.js';
@@ -43,6 +44,8 @@ export interface ZhinAgentPrivate {
   readonly memorySystem: MemorySystem | null;
   readonly sessionSystem: SessionSystem | null;
   readonly eventSystem: EventSystem | null;
+  /** HTTP approval adapter — set when AgentSessionHostPort is wired (ADR 0041). */
+  httpApprovalAdapter?: HttpApprovalAdapter;
   readonly imSessionStore: IMSessionStore | MemoryIMSessionStore;
   readonly agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
   readonly contextRepository: ContextRepository;
@@ -69,6 +72,8 @@ export interface ZhinAgentPrivate {
   lastDeferredSnapshotBefore?: DeferredToolSessionSnapshot;
   readonly deferredWorkerRunner: DeferredWorkerRunner;
   lastToolSearchDeferredStats?: string;
+  /** Per-turn instructions from defineDynamic resolvers (ADR 0039 P2). */
+  turnDynamicInstructions?: string;
   readonly promptController: HostPromptController;
   getActiveTurnTracker(): HostTurnTracker | undefined;
   runInTurnContext<T>(turnId: string, fn: () => Promise<T>): Promise<T>;

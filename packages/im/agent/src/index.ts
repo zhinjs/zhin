@@ -295,6 +295,23 @@ export {
 export type { SessionTreeRuntimeHandle } from './session-tree-runtime-registry.js';
 
 export {
+  createAgentSessionHostPort,
+} from './session/agent-session-host-port.js';
+export type { AgentSessionHostPort, CreateAgentSessionHostPortOptions } from './session/agent-session-host-port.js';
+export { HttpAgentSessionStore } from './session/http-agent-session-store.js';
+export type {
+  HttpAgentSessionRecord,
+  HttpAgentSessionStatus,
+} from './session/http-agent-session-store.js';
+export { FileHttpSessionPersistence } from './session/http-session-persistence.js';
+export type {
+  HttpSessionPersistence,
+  PersistedHttpSessionSnapshot,
+} from './session/http-session-persistence.js';
+export { HttpStepProjector } from './session/http-step-projector.js';
+export { HttpApprovalWaiter } from './session/http-approval-waiter.js';
+
+export {
   setOrchestrationRuntime,
   getOrchestrationRuntime,
   createOrchestrationRuntimeFromService,
@@ -477,6 +494,19 @@ export type {
   ProactiveSendSource,
   ProactiveOutboundService,
 } from './outbound/send-proactive.js';
+export { deliverScheduleToAdapter } from './assistant/deliver-schedule-to-adapter.js';
+export type { DeliverScheduleToAdapterInput } from './assistant/deliver-schedule-to-adapter.js';
+export {
+  requestConnectionAuthorization,
+  completeConnectionAuthorization,
+  buildAuthorizationRequiredEvent,
+  buildAuthorizationCompletedEvent,
+} from './connection/authorization-flow.js';
+export {
+  SKILL_DISCLOSURE_TOOLS,
+  SKILL_DISCLOSURE_STEPS,
+  SKILL_DISCLOSURE_PROMPT_HINT,
+} from './skill/progressive-disclosure.js';
 export { resolveOutboundBatches, stripFakeAtTokens } from './collaboration/outbound-resolver.js';
 export { AskUserSessionService } from './builtin/ask-user-session-service.js';
 
@@ -604,6 +634,10 @@ export {
   defineConnection,
   defineHook,
   defineEval,
+  disableTool,
+  normalizeToolDenylist,
+  defineState,
+  defineDynamic,
   namespaceAuthoringName,
   slotNameFromFile,
   slotNameFromDir,
@@ -625,6 +659,31 @@ export {
   discoverPluginAgentSurface,
   collectPluginAgentRoots,
 } from './discovery/agent-surface.js';
+export {
+  buildAgentSurfaceInfoReport,
+  formatAgentSurfaceInfoReport,
+} from './discovery/agent-surface-info.js';
+export type {
+  AgentSurfaceInfoReport,
+  AgentSurfacePluginInfo,
+  AgentSurfaceWorkspaceAgentInfo,
+} from './discovery/agent-surface-info.js';
+export {
+  getAgentState,
+  updateAgentState,
+  clearAgentStateSession,
+  registerAuthoringStateFromDefinition,
+  listRegisteredAuthoringStates,
+} from './state/agent-state-store.js';
+export {
+  applyDynamicTurnOverrides,
+  registerDynamicResolver,
+  listDynamicResolvers,
+} from './dynamic/dynamic-registry.js';
+export type {
+  DynamicResolveContext,
+  DynamicResolveResult,
+} from './dynamic/dynamic-registry.js';
 export {
   registerPluginAgentSurfaces,
   runPluginEvals,

@@ -97,20 +97,20 @@ export async function executeInboundAgentTurn(
       };
     }
     try {
-      elements = await zhinAgent.process(fullContent, commMessage, externalTools, onChunk);
+      elements = (await zhinAgent.process(fullContent, commMessage, externalTools, onChunk)) ?? [];
     } catch {
       const parts: ContentPart[] = [];
       if (aiContent) parts.push({ type: 'text', text: aiContent });
       parts.push(...mediaParts);
-      elements = await zhinAgent.processMultimodal(parts, commMessage, onChunk);
+      elements = (await zhinAgent.processMultimodal(parts, commMessage, onChunk)) ?? [];
     }
   } else if (mediaParts.length > 0) {
     const parts: ContentPart[] = [];
     if (aiContent) parts.push({ type: 'text', text: aiContent });
     parts.push(...mediaParts);
-    elements = await zhinAgent.processMultimodal(parts, commMessage, onChunk);
+    elements = (await zhinAgent.processMultimodal(parts, commMessage, onChunk)) ?? [];
   } else {
-    elements = await zhinAgent.process(aiContent, commMessage, externalTools, onChunk);
+    elements = (await zhinAgent.process(aiContent, commMessage, externalTools, onChunk)) ?? [];
   }
 
   if (cell) {

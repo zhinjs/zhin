@@ -5,6 +5,7 @@
 
 import type { ToolParametersSchema } from '../orchestrator/types.js';
 import type { Message } from '@zhin.js/core';
+import type { ToolApprovalPolicy, ToolToModelOutputFn } from '@zhin.js/ai/tool-policy';
 
 export const AUTHORING_KIND = Symbol.for('zhin.authoring.kind');
 
@@ -15,7 +16,9 @@ export type AuthoringKind =
   | 'schedule'
   | 'connection'
   | 'hook'
-  | 'eval';
+  | 'eval'
+  | 'state'
+  | 'dynamic';
 
 export interface AuthoringMarker {
   [AUTHORING_KIND]: AuthoringKind;
@@ -36,7 +39,8 @@ export interface AuthoringAgentDefinition extends AuthoringMarker {
   contextMode?: 'fork' | 'fresh';
   maxIterations?: number;
   toolNames?: string[];
-  disallowedTools?: string[];
+  /** Tool names or {@link disableTool} sentinels to exclude from this agent. */
+  disallowedTools?: (string | import('./disable-tool.js').DisabledToolRef)[];
   systemPrompt?: string;
 }
 
@@ -51,6 +55,10 @@ export interface AuthoringToolDefinition<TInput = Record<string, unknown>> exten
   tags?: string[];
   keywords?: string[];
   hidden?: boolean;
+  /** `always` | `once` | `never` or custom predicate — stacks with ExecPolicy (ADR 0039 P1). */
+  approval?: ToolApprovalPolicy;
+  /** Shapes string sent to the model after execute (ADR 0039 P1). */
+  toModelOutput?: ToolToModelOutputFn<TInput>;
 }
 
 export interface AuthoringSkillDefinition extends AuthoringMarker {
@@ -108,6 +116,46 @@ export interface AuthoringEvalDefinition extends AuthoringMarker {
   [AUTHORING_KIND]: 'eval';
   description?: string;
   test: (t: AuthoringEvalContext) => void | Promise<void>;
+}
+
+export interface AuthoringStateDefinition<T = unknown> extends AuthoringMarker {
+  [AUTHORING_KIND]: 'state';
+  /** Defaults to state file slot name when discovered from agent/state/*.ts */
+  name?: string;
+  initial?: T | (() => T);
+}
+
+export interface DynamicResolveContext {
+  sessionId: string;
+  userId: string;
+  adapter: string;
+  commMessage: Message;
+  agentId?: string;
+}
+
+export interface DynamicResolveResult {
+  additionalInstructions?: string;
+  allowedToolNames?: string[];
+  deniedToolNames?: string[];
+}
+
+export interface AuthoringDynamicDefinition extends AuthoringMarker {
+  [AUTHORING_KIND]: 'dynamic';
+  resolve: (ctx: DynamicResolveContext) => DynamicResolveResult | void | Promise<DynamicResolveResult | void>;
+}
+
+export interface DiscoveredAuthoringState {
+  runtimeName: string;
+  slotName: string;
+  pluginName: string;
+  filePath: string;
+  definition: AuthoringStateDefinition;
+}
+
+export interface DiscoveredAuthoringDynamic {
+  pluginName: string;
+  filePath: string;
+  definition: AuthoringDynamicDefinition;
 }
 
 export interface DiscoveredAuthoringTool {
@@ -169,6 +217,8 @@ export interface DiscoveredPluginAgentSurface {
   schedules: DiscoveredAuthoringSchedule[];
   connections: DiscoveredAuthoringConnection[];
   hooks: DiscoveredAuthoringHook[];
+  states: DiscoveredAuthoringState[];
+  dynamic?: DiscoveredAuthoringDynamic;
   evals: DiscoveredAuthoringEval[];
   subagents: DiscoveredPluginAgentSurface[];
 }
@@ -193,4 +243,6 @@ export interface BridgedToolFromAuthoring {
   hidden?: boolean;
   source: string;
   filePath: string;
+  approval?: ToolApprovalPolicy;
+  toModelOutput?: ToolToModelOutputFn;
 }

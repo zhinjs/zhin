@@ -1,5 +1,15 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import * as proxyFetchModule from '../src/llm/proxy-fetch.js';
 import { createSdkProviderAdapter, fetchGoogleModels } from '../src/sdk-provider-adapter.js';
+
+beforeEach(() => {
+  vi.spyOn(proxyFetchModule, 'resolveProxyFetch').mockReturnValue(undefined);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe('SdkProviderAdapter models', () => {
   it('anthropic adapter gets preset models without yaml', () => {

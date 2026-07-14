@@ -10,32 +10,14 @@ import { MemoryCollaborationSceneRepository } from '../../src/collaboration/coll
 import { initOrchestrationService } from '../../src/orchestrator/orchestration-service.js';
 import { MemoryOrchestrationRepository } from '../../src/orchestrator/orchestration-repository.js';
 import { registerDefaultExecutors } from '../../src/orchestrator/bootstrap-executors.js';
-
-vi.mock('../../src/collaboration/collaboration-dispatch.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../src/collaboration/collaboration-dispatch.js')>();
-  return {
-    ...actual,
-    dispatchPeerTask: vi.fn(),
-  };
-});
-
-vi.mock('../../src/collaboration/collaboration-kernel-bridge.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../src/collaboration/collaboration-kernel-bridge.js')>();
-  return {
-    ...actual,
-    tryCompleteKernelImProjectionFromOutbound: vi.fn(async () => {}),
-  };
-});
-
-import { dispatchPeerTask } from '../../src/collaboration/collaboration-dispatch.js';
-import { tryCompleteKernelImProjectionFromOutbound } from '../../src/collaboration/collaboration-kernel-bridge.js';
+import * as CollaborationDispatch from '../../src/collaboration/collaboration-dispatch.js';
+import * as CollaborationKernelBridge from '../../src/collaboration/collaboration-kernel-bridge.js';
 
 describe('createInboundTurnPipeline', () => {
   afterEach(() => {
     resetCollaborationSceneService();
     resetAgentRuntimeRegistry();
-    vi.mocked(dispatchPeerTask).mockReset();
-    vi.mocked(tryCompleteKernelImProjectionFromOutbound).mockReset();
+    vi.restoreAllMocks();
   });
 
   it('does not inject legacy collaboration delegation tools for cell members', async () => {
@@ -481,7 +463,7 @@ describe('createInboundTurnPipeline', () => {
     getCollaborationSceneService().setRepository(repo);
     await getCollaborationSceneService().reloadFromRepository();
 
-    vi.mocked(dispatchPeerTask).mockResolvedValue({
+    vi.spyOn(CollaborationDispatch, 'dispatchPeerTask').mockResolvedValue({
       runId: 'run-1',
       taskId: 'task-1',
       task: { id: 'task-1', status: 'waiting_result' } as any,
@@ -564,7 +546,7 @@ describe('createInboundTurnPipeline', () => {
 
     await pipeline(message, 'delegate to researcher peer');
 
-    expect(dispatchPeerTask).toHaveBeenCalledWith(expect.objectContaining({
+    expect(CollaborationDispatch.dispatchPeerTask).toHaveBeenCalledWith(expect.objectContaining({
       fromEndpointId: '8596238',
       toEndpointId: '210723495',
     }));
@@ -572,6 +554,7 @@ describe('createInboundTurnPipeline', () => {
   });
 
   it('calls tryCompleteKernelImProjectionFromOutbound after local turn outbound', async () => {
+    vi.spyOn(CollaborationKernelBridge, 'tryCompleteKernelImProjectionFromOutbound').mockResolvedValue();
     resetCollaborationSceneService();
     const repo = new MemoryCollaborationSceneRepository();
     await repo.upsert({
@@ -650,7 +633,7 @@ describe('createInboundTurnPipeline', () => {
     await pipeline(message, 'hello');
 
     expect(process).toHaveBeenCalled();
-    expect(tryCompleteKernelImProjectionFromOutbound).toHaveBeenCalledWith(
+    expect(CollaborationKernelBridge.tryCompleteKernelImProjectionFromOutbound).toHaveBeenCalledWith(
       expect.objectContaining({
         endpointId: '8596238',
         cell: expect.objectContaining({ id: 'icqq-collab-room' }),

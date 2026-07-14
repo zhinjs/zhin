@@ -3,7 +3,7 @@
  * (follow-up sender, subagent manager, cron engine, scheduler).
  */
 import * as path from 'node:path';
-import { formatCompact, getPlugin, getScheduler, isZhinTool, Scheduler, setScheduler, type SendOptions, type Plugin, createSyntheticMessage, type Message } from '@zhin.js/core';
+import { formatCompact, getPlugin, getScheduler, isZhinTool, Scheduler, setScheduler, type SendOptions, type Plugin, createSyntheticMessage, type Message, defineContext } from '@zhin.js/core';
 import { createProactiveOutboundService } from '../outbound/send-proactive.js';
 import { composeZhinAgentRuntime } from './compose-zhin-agent-runtime.js';
 import { ModelRegistry, computeTierScore, InMemoryMemoryEntryRepository, type AIConfig } from '@zhin.js/ai';
@@ -48,6 +48,8 @@ import {
   createSessionTreeRuntimeFromAgent,
   setSessionTreeRuntime,
 } from '../session-tree-runtime-registry.js';
+import { createAgentSessionHostPort, type AgentSessionHostPort } from '../session/agent-session-host-port.js';
+import { getAgentRuntimeRegistry } from '../collaboration/runtime-registry.js';
 import { MemoryOrchestrationRepository } from '../orchestrator/orchestration-repository.js';
 import { initOrchestrationService } from '../orchestrator/orchestration-service.js';
 import {
@@ -173,11 +175,24 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     }
 
     const orchestrator = root.inject('agent');
+    let agentSessionHost: AgentSessionHostPort | null = null;
     if (orchestrator) {
       agent.configure({
         skillRegistry: orchestrator.skills,
         orchestrator,
       });
+
+      agentSessionHost = createAgentSessionHostPort({
+        getAgent: () => getAgentRuntimeRegistry().getDefault(),
+        bus: orchestrator.agentStreamBus,
+      });
+      asPrivate(agent).httpApprovalAdapter = agentSessionHost.httpApprovalAdapter;
+      plugin.provide(defineContext({
+        name: 'agentSessionHost',
+        description: 'HTTP agent session host port (ADR 0041)',
+        value: agentSessionHost,
+        dispose: (port) => { port?.dispose(); },
+      }));
 
       // Register security policy hooks (highest priority)
       const fullAgentConfig = asPrivate(agent).config;
@@ -291,6 +306,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
       resolveAdapter,
       defaultNotify: defaultNotifyCfg.notify,
       router: notificationRouter,
+      proactiveOutbound,
       deliverIm: async (notify, content) => {
         await proactiveOutbound.send({
           scene: notify.target.scene,
@@ -417,6 +433,7 @@ export function createZhinAgentContext(refs: AIServiceRefs): void {
     logger.debug('ZhinAgent created');
     return () => {
       setSessionTreeRuntime(null);
+      agentSessionHost = null;
       setScheduleManager(null);
       setScheduleEngine(null);
       setAssistantRuntime(null);

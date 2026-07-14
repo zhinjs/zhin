@@ -1,6 +1,8 @@
 import { formatCompact, Logger } from '@zhin.js/logger';
+import { AgentStreamEventType } from '@zhin.js/ai/agent-stream';
+import { publishAgentStream } from '../event/publish-agent-stream.js';
+import { readHttpSessionId } from '../session/resolve-session-interaction-port.js';
 import { userMessagePlainText, parseOutput, type ContentPart } from '@zhin.js/ai';
-import { createAIHookEvent } from '../orchestrator/hook-registry.js';
 import { providerSupportsVision } from '../media/vision-capability.js';
 import { buildMultimodalVisionSystemPrompt } from '../prompt/assembly.js';
 import { TurnSupersededError } from './prompt-controller.js';
@@ -67,6 +69,14 @@ export async function processTextTurn(
     });
     const { sessionKey, userId, sessionId, isNewSession, turnUser } = prep;
 
+    const httpSessionId = readHttpSessionId(commMessage);
+    if (isNewSession && !httpSessionId) {
+      publishAgentStream(host, {
+        type: AgentStreamEventType.SESSION_STARTED,
+        data: { sessionId },
+      }, { sessionId, httpSessionId });
+    }
+
     await host.emitter.dispatch('ai.processing.start', host.emitter.createPayload(sessionId, commMessage, 'text', {
       content,
     }));
@@ -115,10 +125,10 @@ export async function processTextTurn(
       deferredStats,
     } = toolsPrep;
 
-    host.orchestrator?.hooks.trigger(createAIHookEvent('message', 'received', sessionId, {
-      commMessage: contextForTools,
-      content,
-    })).catch(() => {});
+    publishAgentStream(host, {
+      type: AgentStreamEventType.MESSAGE_RECEIVED,
+      data: { message: content },
+    }, { sessionId, httpSessionId: readHttpSessionId(commMessage) });
 
     const filterMs = (now() - tFilter).toFixed(0);
     logPhase(host.phaseConfig, 'tools.collected', sessionId, { count: resolvedTools.length });

@@ -46,7 +46,7 @@ describe('CLI new command integration', () => {
     expect(await fs.pathExists(path.join(pluginDir, 'client'))).toBe(true)
     expect(await fs.pathExists(path.join(pluginDir, 'lib'))).toBe(true)
     expect(await fs.pathExists(path.join(pluginDir, 'dist'))).toBe(true)
-    expect(await fs.pathExists(path.join(pluginDir, 'skills', pluginName))).toBe(true)
+    expect(await fs.pathExists(path.join(pluginDir, 'agent', 'skills', `${pluginName}.md`))).toBe(true)
 
     // Check package.json
     const packageJsonPath = path.join(pluginDir, 'package.json')
@@ -102,8 +102,8 @@ describe('CLI new command integration', () => {
     const changelogPath = path.join(pluginDir, 'CHANGELOG.md')
     expect(await fs.pathExists(changelogPath)).toBe(true)
 
-    // Check SKILL.md
-    const skillPath = path.join(pluginDir, 'skills', pluginName, 'SKILL.md')
+    // Check agent skill template
+    const skillPath = path.join(pluginDir, 'agent', 'skills', `${pluginName}.md`)
     expect(await fs.pathExists(skillPath)).toBe(true)
     const skillMd = await fs.readFile(skillPath, 'utf-8')
     expect(skillMd).toContain(`name: ${pluginName}`)

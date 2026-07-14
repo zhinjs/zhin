@@ -9,6 +9,31 @@ export {
   SIDE_EVENT_NAMES,
 } from "./constants.js";
 
+export {
+  ZHIN_SESSION_ID_HEADER,
+  AGENT_STREAM_MEDIA_TYPE,
+  ZHIN_AGENT_SESSION_API_PREFIX,
+  AgentStreamEventType,
+  formatAgentStreamNdjsonLine,
+  createAgentStreamReduceState,
+  reduceAgentStreamEvent,
+  createAgentStreamNdjsonParserState,
+  parseAgentStreamNdjsonChunk,
+  flushAgentStreamNdjsonParser,
+  iterateAgentStreamNdjson,
+  foldAgentStreamNdjson,
+} from "./agent-stream.js";
+export type {
+  AgentStreamEvent,
+  AgentStreamEventTypeName,
+  StartAgentSessionResponse,
+  ContinueAgentSessionBody,
+  ContinueAgentSessionResponse,
+  AgentStreamReduceState,
+  AgentStreamNdjsonParserState,
+  FoldAgentStreamOptions,
+} from "./agent-stream.js";
+
 export type RuntimeEnv = "development" | "production";
 
 export type ConsoleUser = {

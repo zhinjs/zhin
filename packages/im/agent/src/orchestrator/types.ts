@@ -3,6 +3,7 @@
  */
 
 import type { AgentTool, JsonSchema } from '@zhin.js/ai';
+import type { ToolApprovalPolicy, ToolToModelOutputFn } from '@zhin.js/ai/tool-policy';
 
 // ============================================================================
 // Common
@@ -67,6 +68,10 @@ export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
   source?: string;
   preExecutable?: boolean;
   kind?: string;
+  /** Per-tool approval (ADR 0039 P1); stacks with ExecPolicy. */
+  approval?: ToolApprovalPolicy;
+  /** Model-facing output shaping (ADR 0039 P1). */
+  toModelOutput?: ToolToModelOutputFn<TArgs>;
 }
 
 export namespace Tool {
@@ -158,7 +163,16 @@ export interface McpPrompt {
 // Hook
 // ============================================================================
 
-export type AIHookEventType = 'message' | 'session' | 'agent' | 'tool';
+export type AIHookEventType =
+  | 'message'
+  | 'session'
+  | 'agent'
+  | 'tool'
+  | 'turn'
+  | 'actions'
+  | 'action'
+  | 'reasoning'
+  | 'subagent';
 
 export interface AIHookEvent {
   type: AIHookEventType;

@@ -6,10 +6,11 @@ import { DEFAULT_CONFIG } from '../src/config/index.js';
 import { mockCommMessage } from './helpers/mock-comm-message.js';
 
 const mockTool: AgentTool = {
-  name: 'mcp_fs_read',
+  name: 'fs__read',
   description: 'read',
   parameters: { type: 'object', properties: {} },
   execute: async () => 'ok',
+  source: 'mcp:fs',
 };
 
 const connectImpl = vi.hoisted(() =>
@@ -64,7 +65,7 @@ describe('McpRegistry', () => {
     isHealthyImpl.mockResolvedValueOnce(false);
     await registry.connect('fs');
     expect(connectImpl).toHaveBeenCalledTimes(2);
-    expect(registry.getAllMcpTools().map(t => t.name)).toContain('mcp_fs_read');
+    expect(registry.getAllMcpTools().map(t => t.name)).toContain('fs__read');
   });
 
   it('ensureConnected replaces stale connections', async () => {
@@ -85,7 +86,7 @@ describe('McpRegistry', () => {
     );
     await registry.connect('fs');
     expect(registry.isConnected('fs')).toBe(true);
-    expect(registry.getAllMcpTools().map(t => t.name)).toContain('mcp_fs_read');
+    expect(registry.getAllMcpTools().map(t => t.name)).toContain('fs__read');
   });
 
   it('ensureConnected continues when one server fails', async () => {
@@ -134,6 +135,21 @@ describe('McpRegistry', () => {
     expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ phase: 'start', serverName: 'bad' }));
     expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ phase: 'error', serverName: 'bad', error: 'boom' }));
   });
+
+  it('listQualifiedTools returns Eve-style catalog entries', async () => {
+    const registry = new McpRegistry();
+    registry.add({ name: 'fs', transport: 'stdio', command: 'echo', args: [] }, {}, 'test');
+    await registry.connect('fs');
+    const qualified = registry.listQualifiedTools();
+    expect(qualified).toEqual([
+      expect.objectContaining({
+        connection: 'fs',
+        qualifiedName: 'fs__read',
+        tool: 'read',
+        description: 'read',
+      }),
+    ]);
+  });
 });
 
 describe('collectRuntimeTools MCP merge', () => {
@@ -151,7 +167,7 @@ describe('collectRuntimeTools MCP merge', () => {
       userProfiles: { buildProfileSummary: async () => '' } as any,
       mcpTools: [mockTool],
     });
-    expect(tools.some(t => t.name === 'mcp_fs_read')).toBe(true);
+    expect(tools.some(t => t.name === 'fs__read')).toBe(true);
   });
 
   it('skips MCP tools that conflict with reserved names', () => {

@@ -19,6 +19,7 @@ import { migrateCommand } from './commands/migrate.js';
 import { sendCommand } from './commands/send.js';
 import { watchCommand } from './commands/watch.js';
 import { packagesCommand } from './commands/packages.js';
+import { agentCommand } from './commands/agent.js';
 
 const program = new Command();
 
@@ -49,5 +50,6 @@ program.addCommand(migrateCommand);
 program.addCommand(sendCommand);
 program.addCommand(watchCommand);
 program.addCommand(packagesCommand);
+program.addCommand(agentCommand);
 
 program.parse(); 

@@ -4,6 +4,7 @@ import chalk from 'chalk';
 import fs from 'fs-extra';
 import path from 'path';
 import yaml from 'yaml';
+import { formatDisplayPath } from '@zhin.js/logger';
 import { CREATE_PROJECT_COMMAND } from '../utils/create-project.js';
 import { ensureGlobalHome, installGlobalHomeDeps } from '../utils/global-home-init.js';
 import { globalZhinHome } from '../utils/zhin-home.js';
@@ -274,7 +275,7 @@ export const setupCommand = new Command('setup')
         await saveConfig(configPath, config);
         console.log('');
         console.log(chalk.bold.green('✅ 配置已保存'));
-        console.log(chalk.gray(`配置文件: ${configPath}`));
+        console.log(chalk.gray(`配置文件: ${formatDisplayPath(configPath)}`));
       }
 
       if (options.global) {

@@ -12,12 +12,16 @@ import {
   type AuthoringConnectionDefinition,
   type AuthoringEvalDefinition,
   type AuthoringHookDefinition,
+  type AuthoringDynamicDefinition,
+  type AuthoringStateDefinition,
   type AuthoringScheduleDefinition,
   type AuthoringSkillDefinition,
   type AuthoringToolDefinition,
   type DiscoveredAuthoringConnection,
+  type DiscoveredAuthoringDynamic,
   type DiscoveredAuthoringEval,
   type DiscoveredAuthoringHook,
+  type DiscoveredAuthoringState,
   type DiscoveredAuthoringSchedule,
   type DiscoveredAuthoringSkill,
   type DiscoveredAuthoringTool,
@@ -265,6 +269,26 @@ async function loadHookFile(
   };
 }
 
+async function loadStateFile(
+  filePath: string,
+  pluginName: string,
+  bareNames: boolean,
+  packageRoot?: string,
+): Promise<DiscoveredAuthoringState | null> {
+  const slotName = slotNameFromFile(filePath);
+  const exported = await importAuthoringModule(filePath, packageRoot);
+  if (!isAuthoringDefinition(exported, 'state')) return null;
+  const definition = exported as AuthoringStateDefinition;
+  const stateName = definition.name?.trim() || slotName;
+  return {
+    runtimeName: namespaceAuthoringName(pluginName, stateName, bareNames),
+    slotName: stateName,
+    pluginName,
+    filePath,
+    definition,
+  };
+}
+
 async function loadEvalFile(
   filePath: string,
   pluginName: string,
@@ -293,6 +317,8 @@ async function scanAgentDir(
   const schedules: DiscoveredAuthoringSchedule[] = [];
   const connections: DiscoveredAuthoringConnection[] = [];
   const hooks: DiscoveredAuthoringHook[] = [];
+  const states: DiscoveredAuthoringState[] = [];
+  let dynamic: DiscoveredAuthoringDynamic | undefined;
   const subagents: DiscoveredPluginAgentSurface[] = [];
 
   let agentDefinition: AuthoringAgentDefinition | undefined;
@@ -330,6 +356,23 @@ async function scanAgentDir(
     const item = await loadHookFile(file, pluginName, bareNames, packageRoot);
     if (item) hooks.push(item);
   }
+  for (const file of listTsFiles(path.join(agentDir, 'state'))) {
+    const item = await loadStateFile(file, pluginName, bareNames, packageRoot);
+    if (item) states.push(item);
+  }
+  const dynamicTs = path.join(agentDir, 'dynamic.ts');
+  const dynamicJs = path.join(agentDir, 'dynamic.js');
+  const dynamicFile = fs.existsSync(dynamicTs) ? dynamicTs : (fs.existsSync(dynamicJs) ? dynamicJs : undefined);
+  if (dynamicFile) {
+    const exported = await importAuthoringModule(dynamicFile, packageRoot);
+    if (isAuthoringDefinition(exported, 'dynamic')) {
+      dynamic = {
+        pluginName,
+        filePath: dynamicFile,
+        definition: exported as AuthoringDynamicDefinition,
+      };
+    }
+  }
 
   for (const subDir of listSubagentDirs(path.join(agentDir, 'subagents'))) {
     const subName = slotNameFromDir(subDir);
@@ -360,6 +403,8 @@ async function scanAgentDir(
     schedules,
     connections,
     hooks,
+    states,
+    dynamic,
     subagents,
   };
 }
@@ -377,6 +422,8 @@ export async function discoverPluginAgentSurface(
           schedules: [],
           connections: [],
           hooks: [],
+          states: [],
+          dynamic: undefined,
           subagents: [],
         };
 

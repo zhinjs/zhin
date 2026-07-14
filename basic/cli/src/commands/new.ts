@@ -672,7 +672,7 @@ ${readmeUse}
 
 ## AI 技能（agent/skills）
 
-本包包含 `agent/skills/${pluginName}.md`。请按实际能力修改 `description` / `tools` 等 frontmatter。平台 Permit 词汇可写在 `agent/PERMITS.md`（维护者参考，不参与自动发现）。
+本包包含 \`agent/skills/${pluginName}.md\`。请按实际能力修改 \`description\` / \`tools\` 等 frontmatter。平台 Permit 词汇可写在 \`agent/PERMITS.md\`（维护者参考，不参与自动发现）。
 
 ## 开发
 

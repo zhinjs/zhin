@@ -468,3 +468,77 @@ export type { StorageBackend, DbModel } from './storage.js';
 // ── Model Registry ──
 export { ModelRegistry, extractModelRoot, computeTierScore } from './model-registry.js';
 export type { AIModelInfo, ModelTask } from './model-registry.js';
+
+// ── Agent stream wire format (ADR 0039 P0) ──
+export {
+  ZHIN_SESSION_ID_HEADER,
+  AGENT_STREAM_MEDIA_TYPE,
+  ZHIN_AGENT_SESSION_API_PREFIX,
+  AgentStreamEventType,
+  formatAgentStreamNdjsonLine,
+  createAgentStreamReduceState,
+  reduceAgentStreamEvent,
+} from './agent-stream.js';
+export type {
+  AgentStreamEvent,
+  AgentStreamEventTypeName,
+  StartAgentSessionResponse,
+  ContinueAgentSessionBody,
+  ContinueAgentSessionResponse,
+  AgentStreamReduceState,
+} from './agent-stream.js';
+
+export {
+  createAgentStreamNdjsonParserState,
+  parseAgentStreamNdjsonChunk,
+  flushAgentStreamNdjsonParser,
+  iterateAgentStreamNdjson,
+  foldAgentStreamNdjson,
+} from './agent-stream-consumer.js';
+export type {
+  AgentStreamNdjsonParserState,
+  FoldAgentStreamOptions,
+} from './agent-stream-consumer.js';
+
+export {
+  AgentStepStatus,
+  createStepId,
+} from './agent-step-checkpoint.js';
+export type {
+  AgentStepCheckpoint,
+  AgentStepStatusName,
+  AgentStepInterruptKind,
+} from './agent-step-checkpoint.js';
+
+// ── Tool policy (ADR 0039 P1) ──
+export {
+  toolApprovalAlways,
+  toolApprovalOnce,
+  toolApprovalNever,
+  always,
+  once,
+  never,
+} from './tool-policy.js';
+export type {
+  ToolApprovalMode,
+  ToolApprovalPolicy,
+  ToolToModelOutputInput,
+  ToolToModelOutputFn,
+} from './tool-policy.js';
+
+// ── MCP qualified names ──
+export {
+  formatMcpQualifiedToolName,
+  parseMcpQualifiedToolName,
+  isMcpQualifiedToolName,
+  parseLegacyMcpToolName,
+  resolveMcpConnectionFromToolName,
+} from './mcp-qualified-name.js';
+
+// ── Authorization / HITL stream payloads ──
+export type {
+  AuthorizationRequiredData,
+  AuthorizationCompletedData,
+  InputRequestedData,
+  InputCompletedData,
+} from './authorization-events.js';

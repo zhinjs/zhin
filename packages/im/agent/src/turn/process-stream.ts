@@ -3,6 +3,8 @@ import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import type { OutputElement } from '@zhin.js/ai';
 import type { Message, Tool } from '../orchestrator/types.js';
 import type { TurnEvent } from '../event/turn-event.js';
+import { publishTurnStreamEvents } from '../event/publish-agent-stream.js';
+import { readHttpSessionId } from '../session/resolve-session-interaction-port.js';
 import type { InboundTurnQueue } from '../turn/inbound-turn-queue.js';
 import type { ResolvedInboundQueueConfig } from '../turn/inbound-queue-config.js';
 import { runWithInboundQueue } from '../turn/inbound-queue-runtime.js';
@@ -24,7 +26,15 @@ export async function* processTextTurnStream(
   const turnId = randomUUID();
   const sessionId = resolveIMSessionIdFromMessage(commMessage);
 
-  yield { type: 'turn_start', sessionId, turnId };
+  const streamCtx = () => ({
+    sessionId,
+    turnId,
+    httpSessionId: readHttpSessionId(commMessage),
+  });
+
+  const turnStart: TurnEvent = { type: 'turn_start', sessionId, turnId };
+  yield turnStart;
+  publishTurnStreamEvents(agent, turnStart, streamCtx());
 
   const eventQueue: TurnEvent[] = [];
   let resolveWaiting: (() => void) | undefined;
@@ -36,6 +46,7 @@ export async function* processTextTurnStream(
   const onTurnEvent = (event: TurnEvent) => {
     if (event.type === 'turn_end') sawTurnEnd = true;
     eventQueue.push(event);
+    publishTurnStreamEvents(agent, event, streamCtx());
     resolveWaiting?.();
   };
 
@@ -67,13 +78,17 @@ export async function* processTextTurnStream(
   }
 
   if (finalError) {
-    yield { type: 'error', error: finalError, recoverable: false };
+    const errorEvent: TurnEvent = { type: 'error', error: finalError, recoverable: false };
+    publishTurnStreamEvents(agent, errorEvent, streamCtx());
+    yield errorEvent;
   } else if (!sawTurnEnd) {
-    yield {
+    const syntheticEnd: TurnEvent = {
       type: 'turn_end',
       output: finalOutput,
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
     };
+    publishTurnStreamEvents(agent, syntheticEnd, streamCtx());
+    yield syntheticEnd;
   }
 
   await runPromise.catch(() => {});

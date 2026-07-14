@@ -7,6 +7,7 @@
 
 import { Logger } from '@zhin.js/core';
 import type { AgentTool } from '@zhin.js/ai';
+import { parseMcpQualifiedToolName } from '@zhin.js/ai/mcp-qualified-name';
 import { McpClientManager } from '../mcp-client/index.js';
 import { ResourceRegistry } from './resource-registry.js';
 import type { McpServerEntry, McpResource, McpPrompt, ResourceScope } from './types.js';
@@ -27,6 +28,13 @@ export interface McpEnsureConnectionEvent {
   connected?: boolean;
   toolNames?: string[];
   error?: string;
+}
+
+export interface McpQualifiedToolInfo {
+  connection: string;
+  qualifiedName: string;
+  tool: string;
+  description: string;
 }
 
 export class McpRegistry extends ResourceRegistry<McpServerEntry> {
@@ -118,6 +126,24 @@ export class McpRegistry extends ResourceRegistry<McpServerEntry> {
       if (conn.connected) tools.push(...conn.tools);
     }
     return tools;
+  }
+
+  /** Eve-style qualified catalog for discovery / introspection (ADR 0039 P1). */
+  listQualifiedTools(): McpQualifiedToolInfo[] {
+    const out: McpQualifiedToolInfo[] = [];
+    for (const conn of this.connections.values()) {
+      if (!conn.connected) continue;
+      for (const tool of conn.tools) {
+        const parsed = parseMcpQualifiedToolName(tool.name);
+        out.push({
+          connection: conn.name,
+          qualifiedName: tool.name,
+          tool: parsed?.tool ?? tool.name,
+          description: tool.description,
+        });
+      }
+    }
+    return out;
   }
 
   isConnected(name: string): boolean {

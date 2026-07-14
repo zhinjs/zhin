@@ -10,6 +10,7 @@ import {
   buildLogTableTotalsRow,
   formatChipListLines,
   formatChipListLinesRaw,
+  formatDisplayPath,
   formatLogKvTable,
   formatLogTable,
   wrapCommaSeparated,
@@ -17,6 +18,7 @@ import {
   type LogTableColumn,
 } from '@zhin.js/logger';
 import type { AppConfig } from '../types.js';
+import { getZhinProjectRoot } from './project-root.js';
 
 export type BootstrapPhase = 'db' | 'ai';
 
@@ -406,7 +408,10 @@ export async function emitStartupSummary(
   const { logger } = plugin;
   const { configPath, appConfig } = options;
   const configFile = path.basename(configPath);
-  const configDir = path.dirname(configPath);
+  const configDir = formatDisplayPath(path.dirname(configPath), {
+    projectRoot: getZhinProjectRoot(),
+    preferHome: true,
+  });
   const db = collectDatabaseFacts(plugin, appConfig);
   const ai = await collectAiFacts(plugin);
   markBootstrapReady();

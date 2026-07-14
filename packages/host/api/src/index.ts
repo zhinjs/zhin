@@ -4,10 +4,11 @@ import {
   mountConsoleRouter,
   buildEntriesResponse,
 } from '@zhin.js/pagemanager/node';
+import './types.js';
 import type { Router, RouterContext } from '@zhin.js/host-router';
 import { Schema } from '@zhin.js/schema';
 import * as path from 'node:path';
-import { DEFAULT_CONSOLE_BASE_PATH } from '@zhin.js/contract';
+import { DEFAULT_CONSOLE_BASE_PATH, ZHIN_AGENT_SESSION_API_PREFIX } from '@zhin.js/contract';
 import { initConsoleHub, notifyDataUpdate, type ConsoleWebServer } from './websocket.js';
 import { registerConsoleApi, registerConsoleRoutes } from './console-api.js';
 export { registerConsoleRoutes, type ConsoleApiOptions } from "./console-api.js";
@@ -19,6 +20,7 @@ export { registerLogsRoutes } from "./rest/logs-rest-api.js";
 export { registerAssistantEventsRoute } from "./rest/assistant-events-rest-api.js";
 export { registerAssistantJobsRoute } from "./rest/assistant-jobs-rest-api.js";
 export { registerAgentSessionsRoutes } from "./rest/agent-sessions-rest-api.js";
+export { registerZhinAgentStreamRoutes } from "./rest/zhin-agent-stream-rest-api.js";
 export { registerOrchestrationRoutes } from "./rest/orchestration-rest-api.js";
 export { registerCollaborationRoutes } from "./rest/collaboration-rest-api.js";
 export { registerIntrospectionRoutes } from "./rest/introspection-rest-api.js";
@@ -29,6 +31,7 @@ import { registerLogsRoutes } from "./rest/logs-rest-api.js";
 import { registerAssistantEventsRoute } from "./rest/assistant-events-rest-api.js";
 import { registerAssistantJobsRoute } from "./rest/assistant-jobs-rest-api.js";
 import { registerAgentSessionsRoutes } from "./rest/agent-sessions-rest-api.js";
+import { registerZhinAgentStreamRoutes } from "./rest/zhin-agent-stream-rest-api.js";
 import { registerOrchestrationRoutes } from "./rest/orchestration-rest-api.js";
 import { registerCollaborationRoutes } from "./rest/collaboration-rest-api.js";
 import { registerIntrospectionRoutes } from "./rest/introspection-rest-api.js";
@@ -127,6 +130,8 @@ if (enabled) {
     registerAssistantEventsRoute(router, apiBase);
     registerAssistantJobsRoute(router, apiBase);
     registerAgentSessionsRoutes(router, apiBase);
+    const agentSessionHost = inject('agentSessionHost');
+    registerZhinAgentStreamRoutes(router, ZHIN_AGENT_SESSION_API_PREFIX, agentSessionHost);
     registerOrchestrationRoutes(router, apiBase);
     registerCollaborationRoutes(router, apiBase);
     registerIntrospectionRoutes(router, apiBase, () => root);

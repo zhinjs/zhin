@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import path from 'node:path';
 import {
   addCompactUsage,
   formatCompact,
@@ -38,5 +39,19 @@ describe('compact-log', () => {
     const t = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
     addCompactUsage(t, { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 });
     expect(t.total_tokens).toBe(15);
+  });
+
+  it('formatCompact shortens path-like fields', () => {
+    const root = path.resolve('/tmp/zhin-compact-root');
+    const abs = path.join(root, 'zhin.config.yml');
+    expect(
+      formatCompact({ configPath: abs }, { projectRoot: root, homeDir: '/tmp/unused' }),
+    ).toBe('configPath: ./zhin.config.yml');
+  });
+
+  it('formatCompact leaves http URLs unchanged', () => {
+    expect(formatCompact({ url: 'https://example.com/webhook' })).toBe(
+      'url: https://example.com/webhook',
+    );
   });
 });

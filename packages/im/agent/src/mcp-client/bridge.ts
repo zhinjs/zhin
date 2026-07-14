@@ -6,6 +6,7 @@
  */
 
 import type { AgentTool, JsonSchema } from '@zhin.js/ai';
+import { formatMcpQualifiedToolName } from '@zhin.js/ai/mcp-qualified-name';
 import type { McpResource, McpPrompt } from '../orchestrator/types.js';
 
 export interface McpToolDefinition {
@@ -31,12 +32,13 @@ export function mcpToolToAgentTool(
   };
 
   return {
-    name: `mcp_${serverName}_${mcpTool.name}`,
+    name: formatMcpQualifiedToolName(serverName, mcpTool.name),
     description: mcpTool.description ?? `MCP tool from ${serverName}`,
     parameters,
     execute: async (args) => callTool(mcpTool.name, args),
     tags: ['mcp', serverName],
     kind: 'mcp',
+    source: `mcp:${serverName}`,
     isReadOnly: false,
   };
 }

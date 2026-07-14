@@ -150,6 +150,9 @@ importers:
       '@types/node':
         specifier: ^26.1.0
         version: 26.1.1
+      '@zhin.js/agent':
+        specifier: workspace:*
+        version: link:../../packages/im/agent
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -692,6 +695,10 @@ importers:
         version: 6.0.3
 
   packages/console/contract:
+    dependencies:
+      '@zhin.js/ai':
+        specifier: workspace:*
+        version: link:../../im/ai
     devDependencies:
       '@types/react':
         specifier: ^19.2.17
@@ -791,9 +798,6 @@ importers:
       '@zhin.js/schema':
         specifier: workspace:*
         version: link:../../../basic/schema
-      koa:
-        specifier: ^3.1.1
-        version: 3.2.1
       ws:
         specifier: ^8.21.0
         version: 8.21.0
@@ -819,6 +823,12 @@ importers:
       esbuild:
         specifier: ^0.28.1
         version: 0.28.1
+      koa:
+        specifier: ^3.2.1
+        version: 3.2.1
+      koa-body:
+        specifier: ^8.0.0
+        version: 8.0.0
       lucide-react:
         specifier: ^1.22.0
         version: 1.23.0(react@19.2.7)

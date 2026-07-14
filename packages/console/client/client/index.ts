@@ -53,3 +53,13 @@ export {
 
 export { registerOrchestrationConsole } from "./orchestration/registerOrchestrationConsole.js";
 export { default as OrchestrationRunsPage } from "./orchestration/OrchestrationRunsPage.js";
+
+export {
+  startAgentSession,
+  continueAgentSession,
+  subscribeAgentStream,
+  iterateAgentStreamNdjson,
+  foldAgentStreamNdjson,
+  type AgentStreamClientOptions,
+  type SubscribeAgentStreamOptions,
+} from "./agent-stream.js";

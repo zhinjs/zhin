@@ -1,3 +1,4 @@
+import { formatDisplayPath } from '@zhin.js/logger';
 import type { SendContent } from '../types.js';
 import { Adapter } from '../adapter.js';
 import type { Endpoint } from '../endpoint.js';
@@ -111,7 +112,7 @@ export class EndpointLifecycleService {
     const loader = configService.configs.get(configService.primaryFile)!;
     const endpoints = readAllEndpoints(this.root);
     await this.persistEndpoints(endpoints);
-    const configPath = loader.resolvedPath;
+    const configPath = formatDisplayPath(loader.resolvedPath);
     const names = endpoints.map((e) => `${e.context}/${e.name}`).join(', ') || '（无）';
     return {
       message: `✅ 已将 ${endpoints.length} 个 endpoint 写入 \`${configPath}\`：${names}`,

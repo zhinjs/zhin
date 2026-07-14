@@ -18,6 +18,8 @@ import {
   discoverAllPluginAgentSurfaces,
 } from './agent-surface.js';
 import { errMsg } from './utils.js';
+import { registerAuthoringStateFromDefinition } from '../state/agent-state-store.js';
+import { registerDynamicResolver } from '../dynamic/dynamic-registry.js';
 
 const logger = new Logger(null, 'agent-surface-register');
 
@@ -121,6 +123,21 @@ export async function registerPluginAgentSurfaces(
         const hook = bridgeAuthoringHook(discovered);
         orchestrator.addHook(hook, undefined, discovered.pluginName);
         hookCount++;
+      }
+
+      for (const discovered of flat.states) {
+        registerAuthoringStateFromDefinition(
+          discovered.runtimeName,
+          discovered.pluginName,
+          discovered.definition.initial,
+        );
+      }
+
+      if (flat.dynamic) {
+        registerDynamicResolver({
+          pluginName: flat.dynamic.pluginName,
+          resolve: flat.dynamic.definition.resolve,
+        });
       }
 
       evalCount += flat.evals.length;

@@ -9,6 +9,13 @@
  * See field conventions below; avoid a universal `op:` schema.
  */
 
+import {
+  formatDisplayPath,
+  isPathLikeField,
+  looksLikeAbsolutePath,
+  type DisplayPathOptions,
+} from './display-path.js';
+
 export type CompactFieldValue = string | number | boolean;
 
 export interface CompactUsage {
@@ -24,14 +31,28 @@ export function truncatePreview(text: string, max?: number): string {
   return `${normalized.slice(0, max)}...`;
 }
 
+function formatCompactValue(
+  key: string,
+  value: CompactFieldValue,
+  pathOptions?: DisplayPathOptions,
+): string {
+  if (typeof value !== 'string') return String(value);
+  if (/^https?:\/\//i.test(value.trim())) return value;
+  if (isPathLikeField(key) || looksLikeAbsolutePath(value)) {
+    return formatDisplayPath(value, pathOptions);
+  }
+  return value;
+}
+
 /** Body only — use when logger `name` / prefix already identifies the source. */
 export function formatCompact(
   fields: Record<string, CompactFieldValue | undefined | null>,
+  pathOptions?: DisplayPathOptions,
 ): string {
   const parts: string[] = [];
   for (const [key, value] of Object.entries(fields)) {
     if (value === undefined || value === null || value === '') continue;
-    parts.push(`${key}: ${value}`);
+    parts.push(`${key}: ${formatCompactValue(key, value, pathOptions)}`);
   }
   return parts.join('; ');
 }
@@ -40,8 +61,9 @@ export function formatCompact(
 export function formatCompactLog(
   tag: string,
   fields: Record<string, CompactFieldValue | undefined | null>,
+  pathOptions?: DisplayPathOptions,
 ): string {
-  const body = formatCompact(fields);
+  const body = formatCompact(fields, pathOptions);
   return body ? `[${tag}] ${body}` : `[${tag}]`;
 }
 

@@ -9,6 +9,7 @@
  */
 
 import { Logger } from '@zhin.js/logger';
+import type { AgentStreamEvent } from '@zhin.js/ai/agent-stream';
 import { ResourceRegistry } from './resource-registry.js';
 import type {
   ResourceScope,
@@ -17,6 +18,11 @@ import type {
   ToolHookDecision, PostToolHookDecision,
 } from './types.js';
 import { emitAIHookBusEvent } from '../plugin-ai-hook-bus.js';
+import {
+  LEGACY_HOOK_STREAM_ALIASES,
+  agentStreamEventToAIHookEvent,
+  isAgentStreamHookEventName,
+} from '../event/agent-stream-hooks.js';
 
 const logger = new Logger(null, 'HookRegistry');
 
@@ -26,7 +32,7 @@ export class HookRegistry extends ResourceRegistry<AIHook> {
 
   /**
    * Trigger all hooks matching the event.
-   * Matches both broad type ('message') and specific key ('message:received').
+   * Matches legacy `type:action`, `type`, and Eve-aligned stream names (`session.started`).
    */
   async trigger(event: AIHookEvent, agentId?: string): Promise<void> {
     emitAIHookBusEvent(event, 'orchestrator-hook', agentId);
@@ -43,11 +49,57 @@ export class HookRegistry extends ResourceRegistry<AIHook> {
         // Swallow individual hook errors to not break the pipeline
       }
     }
+
+    const streamAlias = LEGACY_HOOK_STREAM_ALIASES[`${event.type}:${event.action}`];
+    if (streamAlias) {
+      await this.triggerStream({
+        type: streamAlias,
+        data: event.context,
+        timestamp: event.timestamp.getTime(),
+      }, agentId, event.sessionId, { skipBus: true });
+    }
+  }
+
+  /**
+   * Trigger observe-only hooks subscribed to Eve-aligned stream event names.
+   */
+  async triggerStream(
+    streamEvent: AgentStreamEvent,
+    agentId?: string,
+    sessionId?: string,
+    options?: { skipBus?: boolean; fromBus?: boolean },
+  ): Promise<void> {
+    const hookEvent = agentStreamEventToAIHookEvent(streamEvent, sessionId);
+    if (options?.fromBus || !options?.skipBus) {
+      emitAIHookBusEvent(hookEvent, 'orchestrator-hook', agentId);
+    }
+
+    const legacyEvents = Object.entries(LEGACY_HOOK_STREAM_ALIASES)
+      .filter(([, stream]) => stream === streamEvent.type)
+      .map(([legacy]) => legacy);
+
+    const hooks = agentId ? this.getForAgent(agentId) : this.getAll();
+    const matching = hooks.filter((h) =>
+      h.event === streamEvent.type
+      || (options?.fromBus === true && legacyEvents.includes(h.event)),
+    );
+
+    for (const hook of matching) {
+      try {
+        await hook.handler(hookEvent);
+      } catch (err: unknown) {
+        // Swallow individual hook errors to not break the pipeline
+      }
+    }
   }
 
   getForEvent(event: string, agentId?: string): AIHook[] {
     const hooks = agentId ? this.getForAgent(agentId) : this.getAll();
-    return hooks.filter(h => h.event === event || event.startsWith(h.event + ':'));
+    return hooks.filter(h =>
+      h.event === event
+      || event.startsWith(h.event + ':')
+      || (isAgentStreamHookEventName(event) && h.event === event),
+    );
   }
 
   // ---------------------------------------------------------------------------

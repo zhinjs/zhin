@@ -41,6 +41,14 @@ export {
 } from './compact-log.js'
 export type { CompactFieldValue, CompactUsage } from './compact-log.js'
 
+export {
+  formatDisplayPath,
+  shortenPathsInText,
+  looksLikeAbsolutePath,
+  isPathLikeField,
+} from './display-path.js'
+export type { DisplayPathOptions } from './display-path.js'
+
 export { formatLogTable, buildLogTableTotalsRow, formatLogKvTable } from './log-table.js'
 export type { LogTableColumn, FormatLogTableOptions, LogKvRow, FormatLogKvTableOptions } from './log-table.js'
 

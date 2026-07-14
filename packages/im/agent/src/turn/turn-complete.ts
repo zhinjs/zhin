@@ -1,5 +1,4 @@
 import { parseOutput } from '@zhin.js/ai';
-import { createAIHookEvent } from '../orchestrator/hook-registry.js';
 import { mergeToolOutboundElements } from '../media/media-tool-bridge.js';
 import { logPhase } from '../internal/phase-trace.js';
 import { EMPTY_USAGE } from './turn-metrics.js';
@@ -67,12 +66,6 @@ export async function finalizeTurnAfterAgentLoop(p: FinalizeTurnAfterLoopParams)
     thinking: p.loopResult.thinking,
     output: p.reply.trim() || undefined,
   });
-  if (p.mode === 'text') {
-    p.host.orchestrator?.hooks.trigger(createAIHookEvent('message', 'sent', p.sessionId, {
-      commMessage: p.commMessage,
-      content: p.reply,
-    })).catch(() => {});
-  }
   await p.host.emitter.dispatch('ai.processing.finish', p.host.emitter.createPayload(p.sessionId, p.commMessage, p.mode, {
     path: reportPath,
     model: p.loopResult.model,

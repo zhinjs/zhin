@@ -35,7 +35,7 @@ const layers = {
   'packages/host/router': { level: 6, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core'] },
   'packages/host/mcp': { level: 7, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/host/router'] },
   'packages/host/api': { level: 8, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent', 'packages/host/router', 'packages/host/mcp', 'packages/console/contract', 'packages/console/pagemanager'] },
-  'packages/console/contract': { level: 10, allowedImports: ['basic'] },
+  'packages/console/contract': { level: 10, allowedImports: ['basic', 'packages/im/ai'] },
   'packages/console/pagemanager': { level: 11, allowedImports: ['basic', 'packages/console/contract'] },
   'packages/console/client': { level: 12, allowedImports: ['basic', 'packages/console/contract'] },
 };

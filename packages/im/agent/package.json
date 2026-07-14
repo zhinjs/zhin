@@ -105,6 +105,11 @@
       "types": "./lib/security/index.d.ts",
       "development": "./src/security/index.ts",
       "import": "./lib/security/index.js"
+    },
+    "./connection": {
+      "types": "./lib/connection/index.d.ts",
+      "development": "./src/connection/index.ts",
+      "import": "./lib/connection/index.js"
     }
   },
   "files": [

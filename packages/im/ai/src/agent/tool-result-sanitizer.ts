@@ -1,4 +1,4 @@
-import path from 'node:path';
+import { shortenPathsInText, type DisplayPathOptions } from '@zhin.js/logger';
 
 /**
  * Unified sanitizer for tool outputs before feeding back to model/user.
@@ -12,38 +12,15 @@ export interface ToolResultSanitizerOptions {
   cwd?: string;
 }
 
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 /**
- * 将文本中的 `cwd` 绝对路径批量替换为以 `.` 开头的相对路径（便于 IM 展示）。
+ * 将文本中的绝对路径批量缩短（项目根 → `./…`，HOME → `~/…`）。
  */
-export function relativizeCwdPaths(text: string, cwd: string = process.cwd()): string {
-  if (!text) return text;
-  const root = path.resolve(cwd);
-  if (!root || root === '/') return text;
-
-  const forward = root.replace(/\\/g, '/');
-  const prefixes: Array<[string, string]> = [
-    [root + path.sep, `.${path.sep}`],
-    [`${forward}/`, './'],
-  ];
-  let out = text;
-  for (const [from, to] of prefixes.sort((a, b) => b[0].length - a[0].length)) {
-    if (from.length <= 1) continue;
-    out = out.split(from).join(to);
-  }
-
-  for (const exact of [root, forward]) {
-    if (exact.length <= 1) continue;
-    const esc = escapeRegExp(exact);
-    out = out.replace(
-      new RegExp(`${esc}(?=["'\\s)\\]},.:;!?]|$)`, 'g'),
-      '.',
-    );
-  }
-  return out;
+export function relativizeCwdPaths(
+  text: string,
+  cwd: string = process.cwd(),
+  options?: Omit<DisplayPathOptions, 'projectRoot'>,
+): string {
+  return shortenPathsInText(text, { projectRoot: cwd, ...options });
 }
 
 export const TOOL_RESULT_OMITTED_PLAIN =

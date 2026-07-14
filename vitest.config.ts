@@ -1,8 +1,5 @@
 import { defineConfig } from 'vitest/config'
 
-/** 本地默认关闭隔离以提速；CI 开启隔离，避免 vi.spyOn(getPlugin) 跨文件泄漏（见 write-file-tool 等） */
-const isCi = process.env.CI === 'true'
-
 export default defineConfig({
   resolve: {
     conditions: ['development'],
@@ -15,7 +12,8 @@ export default defineConfig({
     setupFiles: ['./vitest.setup.ts'],
     testTimeout: 10000,
     hookTimeout: 10000,
-    isolate: isCi,
+    /** 开启文件级隔离，避免 vi.spyOn / vi.mock 跨文件泄漏导致 flaky */
+    isolate: true,
     sequence: {
       hooks: 'list',
     },

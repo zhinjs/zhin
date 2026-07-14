@@ -52,6 +52,8 @@ export function bridgeAuthoringTool(
     hidden: definition.hidden,
     source: pluginName,
     filePath,
+    approval: definition.approval,
+    toModelOutput: definition.toModelOutput,
   };
 }
 
@@ -68,6 +70,8 @@ export function bridgeAuthoringToolToOrchestratorTool(bridged: BridgedToolFromAu
     keywords: bridged.keywords,
     hidden: bridged.hidden,
     source: bridged.source,
+    approval: bridged.approval,
+    toModelOutput: bridged.toModelOutput,
   };
 }
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Plugin, CommandFeature } from '../src/index.js';
 import { PermissionFeature } from '../src/built/permission.js';
 import { MANAGEMENT_OPERATOR_PERMIT } from '../src/built/management-command-guard.js';
@@ -44,6 +44,10 @@ describe('registerEndpointManagementCommands', () => {
       stop: vi.fn(async () => ({ message: 'stopped' })),
       cancelProvision: vi.fn(() => true),
     } as never);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('registers /endpoint and /endpoints without /endpoint list', () => {

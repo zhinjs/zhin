@@ -15,6 +15,7 @@ import {
   resolvePluginPackageRoot,
 } from './agent-surface.js';
 import { isAuthoringDefinition, type AuthoringAgentDefinition } from '../authoring/types.js';
+import { normalizeToolDenylist } from '../authoring/disable-tool.js';
 
 export type SubagentContextMode = 'fork' | 'fresh';
 
@@ -75,7 +76,7 @@ function agentMetaFromFractal(
     keywords: def?.keywords,
     tags: def?.tags,
     toolNames: def?.toolNames,
-    disallowedTools: def?.disallowedTools,
+    disallowedTools: normalizeToolDenylist(def?.disallowedTools),
     filePath: agentFile,
     maxIterations: def?.maxIterations,
     ownerPlugin,

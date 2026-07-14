@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import type { Message } from '@zhin.js/core';
-import * as core from '@zhin.js/core';
+import { Adapter, setHostRootPlugin, type Message } from '@zhin.js/core';
 import {
   defaultCellId,
   handleCollabBind,
@@ -13,6 +12,7 @@ import {
   resetCollaborationSceneService,
 } from '../../src/collaboration/scene-service.js';
 import { MemoryCollaborationSceneRepository } from '../../src/collaboration/collaboration-scene-repository.js';
+import { createMockHostPlugin } from '../helpers/mock-host-plugin.js';
 
 vi.mock('../../src/collaboration/bootstrap-agent-runtimes.js', () => ({
   rebootstrapEndpointRuntimes: vi.fn(async () => {}),
@@ -32,27 +32,18 @@ function groupMessage(
   } as Message;
 }
 
-function mockMultiBotRoot() {
-  vi.spyOn(core, 'getHostRootPlugin').mockReturnValue({
-    adapters: ['icqq'],
-    inject: () => ({
-      endpoints: new Map([
-        ['8596238', { $connected: true, $platformUserId: '8596238' }],
-        ['210723495', { $connected: true, $platformUserId: '210723495' }],
-      ]),
-    }),
-  } as never);
-}
+type EndpointStub = { $connected: boolean; $platformUserId: string };
 
-function mockSingleBotRoot() {
-  vi.spyOn(core, 'getHostRootPlugin').mockReturnValue({
-    adapters: ['icqq'],
-    inject: () => ({
-      endpoints: new Map([
-        ['8596238', { $connected: true, $platformUserId: '8596238' }],
-      ]),
-    }),
-  } as never);
+function installHostRoot(endpoints: Array<[string, EndpointStub]>) {
+  const host = createMockHostPlugin();
+  const adapter = Object.create(Adapter.prototype) as Adapter & {
+    endpoints: Map<string, EndpointStub>;
+  };
+  adapter.endpoints = new Map(endpoints);
+  (host as { adapters: string[]; inject: (name: string) => Adapter | undefined }).adapters = ['icqq'];
+  (host as { inject: (name: string) => Adapter | undefined }).inject = (name: string) =>
+    name === 'icqq' ? adapter : undefined;
+  setHostRootPlugin(host);
 }
 
 async function seedEmptyCell(sceneId = '373460458') {
@@ -71,10 +62,14 @@ describe('collaboration /collab commands', () => {
     const repo = new MemoryCollaborationSceneRepository();
     getCollaborationSceneService().setRepository(repo);
     await getCollaborationSceneService().reloadFromRepository();
-    mockMultiBotRoot();
+    installHostRoot([
+      ['8596238', { $connected: true, $platformUserId: '8596238' }],
+      ['210723495', { $connected: true, $platformUserId: '210723495' }],
+    ]);
   });
 
   afterEach(() => {
+    setHostRootPlugin(null);
     resetCollaborationSceneService();
     vi.clearAllMocks();
   });
@@ -85,7 +80,9 @@ describe('collaboration /collab commands', () => {
   });
 
   it('binds and unbinds members in a single-bot group', async () => {
-    mockSingleBotRoot();
+    installHostRoot([
+      ['8596238', { $connected: true, $platformUserId: '8596238' }],
+    ]);
     await seedEmptyCell();
     const bindOut = await handleCollabBind(groupMessage('373460458', '8596238'), '1689919782', 'evaluator');
     expect(bindOut).toContain('✅ 已绑定');

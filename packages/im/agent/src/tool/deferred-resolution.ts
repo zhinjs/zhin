@@ -1,4 +1,5 @@
 import { type AgentTool, type LlmTool, getLoadedToolNamesFromSnapshot, addSkillToSnapshot, touchToolsInSnapshot, type DeferredToolSessionSnapshot } from '@zhin.js/ai';
+import { resolveMcpConnectionFromToolName } from '@zhin.js/ai/mcp-qualified-name';
 import { agentToolToLlmTool } from '../tool-bridge.js';
 import {
   buildDeferredStats,
@@ -19,16 +20,8 @@ export interface ResolvedToolsForTurn {
 function buildMcpServerMap(tools: AgentTool[]): Map<string, string> {
   const map = new Map<string, string>();
   for (const tool of tools) {
-    const src = tool.source ?? '';
-    const mcpMatch = /^mcp:([^:]+)/.exec(src);
-    if (mcpMatch) {
-      map.set(tool.name, mcpMatch[1]!);
-      continue;
-    }
-    const prefixMatch = /^mcp_([^_]+)_/.exec(tool.name);
-    if (prefixMatch) {
-      map.set(tool.name, prefixMatch[1]!);
-    }
+    const connection = resolveMcpConnectionFromToolName(tool.name, tool.source);
+    if (connection) map.set(tool.name, connection);
   }
   return map;
 }

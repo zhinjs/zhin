@@ -8,7 +8,6 @@ vi.mock('@zhin.js/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@zhin.js/core')>();
   return {
     ...actual,
-    getHostRootPlugin: vi.fn(() => null),
     resolveSubjectRoles: vi.fn((_plugin: unknown, message: { _roles?: string[] }) => ({
       scope: 'group',
       roles: message?._roles ?? ['user'],
