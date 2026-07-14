@@ -1,5 +1,15 @@
 # @zhin.js/plugin-music
 
+## 5.0.2
+
+### Patch Changes
+
+- 872c583: fix: 代码格式优化
+- Updated dependencies [872c583]
+- Updated dependencies [872c583]
+  - @zhin.js/adapter-icqq@6.0.2
+  - zhin.js@4.1.2
+
 ## 5.0.1
 
 ### Patch Changes

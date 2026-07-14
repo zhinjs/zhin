@@ -1,5 +1,18 @@
 # demo-bot
 
+## 0.0.8
+
+### Patch Changes
+
+- Updated dependencies [872c583]
+- Updated dependencies [872c583]
+  - @zhin.js/agent@1.0.3
+  - @zhin.js/host-api@2.0.5
+  - @zhin.js/host-router@2.0.3
+  - zhin.js@4.1.2
+  - @zhin.js/adapter-sandbox@5.0.5
+  - @zhin.js/cli@1.0.93
+
 ## 0.0.7
 
 ### Patch Changes

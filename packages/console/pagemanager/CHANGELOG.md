@@ -1,5 +1,14 @@
 # @zhin.js/pagemanager
 
+## 2.0.3
+
+### Patch Changes
+
+- 872c583: fix: 代码格式优化
+- Updated dependencies [872c583]
+- Updated dependencies [872c583]
+  - @zhin.js/contract@1.0.3
+
 ## 2.0.2
 
 ### Patch Changes

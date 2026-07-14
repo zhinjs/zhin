@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-rps",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Zhin.js 猜拳游戏 — 石头剪刀布三局两胜",
   "type": "module",
   "main": "./lib/index.js",
@@ -13,13 +13,25 @@
     },
     "./package.json": "./package.json"
   },
-  "files": ["src", "lib", "plugin.yml", "README.md"],
+  "files": [
+    "src",
+    "lib",
+    "plugin.yml",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc --build",
     "clean": "rimraf lib"
   },
   "license": "MIT",
-  "peerDependencies": { "zhin.js": "workspace:*" },
-  "dependencies": { "@zhin.js/game-shared": "workspace:*" },
-  "devDependencies": { "typescript": "^6.0.3", "zhin.js": "workspace:*" }
+  "peerDependencies": {
+    "zhin.js": "workspace:*"
+  },
+  "dependencies": {
+    "@zhin.js/game-shared": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "zhin.js": "workspace:*"
+  }
 }

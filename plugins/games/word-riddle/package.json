@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-word-riddle",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Zhin.js 猜谜 — 字谜与猜成语",
   "type": "module",
   "main": "./lib/index.js",
@@ -13,17 +13,27 @@
     },
     "./package.json": "./package.json"
   },
-  "files": ["src", "lib", "plugin.yml", "README.md"],
+  "files": [
+    "src",
+    "lib",
+    "plugin.yml",
+    "README.md"
+  ],
   "scripts": {
     "build:data": "node scripts/build-char-riddles.mjs",
     "build": "pnpm run build:data && tsc --build && node -e \"import('node:fs/promises').then(fs=>fs.mkdir('lib/data',{recursive:true}).then(()=>fs.copyFile('src/data/char-riddles.json','lib/data/char-riddles.json')))\"",
     "clean": "rimraf lib"
   },
   "license": "MIT",
-  "peerDependencies": { "zhin.js": "workspace:*" },
+  "peerDependencies": {
+    "zhin.js": "workspace:*"
+  },
   "dependencies": {
     "@zhin.js/game-shared": "workspace:*",
     "chinese-idiom-chengyu": "^1.1.0"
   },
-  "devDependencies": { "typescript": "^6.0.3", "zhin.js": "workspace:*" }
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "zhin.js": "workspace:*"
+  }
 }

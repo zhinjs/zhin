@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-text-adventure",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Zhin.js 交互式文字冒险 — 分支剧情与选项按钮",
   "type": "module",
   "main": "./lib/index.js",

@@ -1,5 +1,11 @@
 # @zhin.js/docs
 
+## 1.0.44
+
+### Patch Changes
+
+- 872c583: fix: 代码格式优化
+
 ## 1.0.43
 
 ### Patch Changes

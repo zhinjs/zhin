@@ -1,5 +1,11 @@
 # @zhin.js/scaffold-wizard
 
+## 0.1.8
+
+### Patch Changes
+
+- 872c583: fix: 代码格式优化
+
 ## 0.1.7
 
 ### Patch Changes

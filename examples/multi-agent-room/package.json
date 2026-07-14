@@ -1,7 +1,7 @@
 {
   "name": "multi-agent-room",
   "private": true,
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "多 Bot 同群协作示例（GroupCell + collaboration.cells，ADR 0023）",
   "type": "module",
   "scripts": {

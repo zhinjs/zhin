@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-weixin-ilink",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "type": "module",
   "description": "Zhin.js adapter for WeChat personal account via Tencent iLink Endpoint API (ClawBot)",
   "main": "./lib/index.js",

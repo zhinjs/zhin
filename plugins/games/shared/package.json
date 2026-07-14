@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/game-shared",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Zhin.js 游戏插件通用工具包",
   "type": "module",
   "main": "./lib/index.js",
@@ -16,7 +16,7 @@
     "build": "tsc"
   },
   "peerDependencies": {
-    "zhin.js": "^4.0.0",
+    "zhin.js": "^4.1.2",
     "@zhin.js/html-renderer": "workspace:*"
   },
   "peerDependenciesMeta": {

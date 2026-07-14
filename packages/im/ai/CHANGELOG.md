@@ -1,5 +1,14 @@
 # @zhin.js/ai
 
+## 1.4.4
+
+### Patch Changes
+
+- 872c583: fix: 代码格式优化
+- Updated dependencies [872c583]
+- Updated dependencies [872c583]
+  - @zhin.js/logger@1.0.74
+
 ## 1.4.3
 
 ### Patch Changes

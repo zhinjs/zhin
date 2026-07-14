@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/service-activity-feedback",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Activity Feedback 服务插件：订阅 AI 生命周期事件，按 endpoint activityFeedback 配置驱动适配器能力",
   "type": "module",
   "main": "./lib/index.js",

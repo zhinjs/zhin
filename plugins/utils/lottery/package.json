@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-lottery",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Multi-game lottery analysis for Zhin.js — KL8, SSQ, DLT, FC3D, PL3, PL5 with stats, cron sync, and daily recommendations",
   "type": "module",
   "main": "./lib/index.js",
