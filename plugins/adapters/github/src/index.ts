@@ -2,11 +2,14 @@
  * GitHub 适配器入口：类型扩展、模型、导出、注册
  */
 import { formatCompact, type Context, type Plugin, usePlugin } from 'zhin.js';
+import path from 'node:path';
 import { registerAgentPromptContributor, unregisterAgentPromptContributor } from 'zhin.js/agent';
 import { createGithubAgentPromptContributor } from './agent-prompt.js';
 import { GitHubAdapter } from './adapter.js';
 import { registerGithubMcp } from './register-github-mcp.js';
 import { setGithubAgentDeps } from './github-agent-deps.js';
+import { WorkspaceManager } from './workspace-manager.js';
+import type { GitHubEndpointConfig } from './types.js';
 
 declare module 'zhin.js' {
   interface Adapters {
@@ -38,9 +41,11 @@ declare module 'zhin.js' {
 }
 
 export * from './types.js';
-export { GitHubEndpoint, parseMarkdown, toMarkdown } from './endpoint.js';
+export { GitHubEndpoint, parseMarkdown, toMarkdown, enrichGithubInboundMessage, shouldAutoReplyRepo } from './endpoint.js';
 export { GitHubAdapter } from './adapter.js';
 export { GhClient } from './gh-client.js';
+export { WorkspaceManager } from './workspace-manager.js';
+export { parseMessageChannel, issueBranchName, resolveWorkspaceBranch } from './github-channel-context.js';
 
 const plugin = usePlugin();
 const { provide, defineModel, useContext, logger } = plugin;
@@ -110,11 +115,26 @@ useContext('github', (adapter) => {
 });
 
 useContext('tool', 'github', (_toolService, adapter: GitHubAdapter) => {
+  // Endpoint 由 App 从 zhin.config endpoints 注入，可能晚于本回调；懒解析 GhClient。
+  let workspaceManager: WorkspaceManager | null = null;
   setGithubAgentDeps({
     getAdapter: () => adapter,
+    getWorkspaceManager: () => {
+      if (workspaceManager) return workspaceManager;
+      const gh = adapter.getAPI();
+      if (!gh) {
+        throw new Error('GitHub Endpoint 尚未就绪（检查 endpoints 中 github 配置是否已连接）');
+      }
+      const endpoint = adapter.endpoints.values().next().value;
+      const cfg = endpoint?.$config as GitHubEndpointConfig | undefined;
+      const workspaceRoot = cfg?.workspace_root
+        ?? path.join(process.cwd(), 'data', 'github-workspaces');
+      workspaceManager = new WorkspaceManager(gh, workspaceRoot);
+      return workspaceManager;
+    },
     plugin,
   });
-  logger.debug('GitHub agent deps initialized');
+  logger.debug('GitHub agent deps initialized (lazy workspace)');
   return () => {};
 });
 

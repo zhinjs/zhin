@@ -60,6 +60,10 @@ tools:
   - github_subscribe
   - github_unsubscribe
   - github_subscriptions
+  - github_prepare_workspace
+  - github_patch_file
+  - github_push_branch
+  - github_create_pr
 always: false
 requires:
   bins:
@@ -72,7 +76,8 @@ requires:
 
 本技能提供三种操作方式：
 - **适配器内置工具**（`github_*`）：用户交互类操作，具备账号绑定、Device Flow 授权、频道级订阅等适配器专有逻辑
-- **MCP server-github**（`mcp_github_*`）：Issue/PR/搜索/Fork 等 GitHub API（需 `GITHUB_PERSONAL_ACCESS_TOKEN` 或 `ai.githubMcp.token`）
+- **Bot 写仓库工具**（`github_prepare_workspace` / `github_patch_file` / `github_push_branch` / `github_create_pr`）：Installation Token，UI 显示 **Bot** 身份；push/开 PR 需 HITL
+- **MCP server-github**（`mcp_github_*`，可选）：需 `ai.githubMcp.enabled: true` + PAT，**人身份**，勿用于 Bot 写仓库
 - **bash + gh CLI**：仓库自动化操作，灵活覆盖 GitHub API 全场景
 
 ## 一、适配器内置工具
@@ -94,7 +99,18 @@ requires:
 |------|------|
 | `github_star` | Star 或取消 Star 一个仓库。优先使用用户绑定的 GitHub 账号，未绑定则降级为 Endpoint 默认账号 |
 
-### MCP（server-github，单一 PAT）
+### Bot 开发工作流（App 身份）
+
+| 工具 | 说明 |
+|------|------|
+| `github_prepare_workspace` | Clone/fetch 托管工作区并 checkout Issue/PR 对应分支 |
+| `github_patch_file` | Contents API 单文件更新（小改） |
+| `github_push_branch` | git commit + push（**需 HITL**） |
+| `github_create_pr` | 创建 PR（**需 HITL**；Issue 线程常用） |
+
+Issue 线程：新分支 → 开发 → push → 开 PR。PR 线程：push 到现有 head 分支。
+
+### MCP（server-github，可选 PAT）
 
 | 工具 | 说明 |
 |------|------|
@@ -112,9 +128,10 @@ requires:
 ### 内置工具执行规则
 
 1. `github_star` 优先使用用户绑定的 GitHub 账号，未绑定则降级为 Endpoint 默认账号
-2. Fork 与通用 API 使用 `mcp_github_*`（Bot PAT，非 per-user OAuth）
-3. 当用户想操作自己的 GitHub 账号进行 Star 时，先引导用户使用 `github_bind` 绑定
-4. Webhook 订阅关联到当前聊天通道，仅在该通道接收事件通知
+2. Bot 写仓库用 `github_*` 工具，不用 `mcp_github_*` 写操作
+3. MCP 仅 opt-in（`ai.githubMcp.enabled: true`），PAT 为人身份
+4. 当用户想操作自己的 GitHub 账号进行 Star 时，先引导用户使用 `github_bind` 绑定
+5. Webhook 订阅关联到当前聊天通道，仅在该通道接收事件通知
 
 ---
 

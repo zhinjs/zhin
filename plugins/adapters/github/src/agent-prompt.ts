@@ -20,8 +20,8 @@ function selectGithubDeferredTools(
   if (bash) pinned.push(bash);
 
   const preferNames = [
-    ...pool.filter(t => t.name.startsWith('mcp_github_')).map(t => t.name),
     ...pool.filter(t => t.name.startsWith('github_')).map(t => t.name),
+    ...pool.filter(t => t.name.startsWith('mcp_github_')).map(t => t.name),
   ];
   for (const name of preferNames) {
     if (pinned.length >= maxTools) break;
@@ -46,16 +46,18 @@ function isGithubDelegatedTask(query: string, goal: string): boolean {
 }
 
 const ORCHESTRATOR_GITHUB = [
-  'On GitHub: use run_deferred_task with tool_query "github_" or "mcp_github_" or "gh issue"/"gh pr".',
-  'Discuss issues/PRs in chat context; do not call github_* or mcp_github_* tools on this orchestrator.',
-  'Skip tool_search when the user clearly names a repo, issue number, or PR.',
+  'On GitHub: use run_deferred_task with tool_query "github_".',
+  'Discuss issues/PRs in chat context; do not call github_* tools on this orchestrator.',
+  'Bot write operations use github_* tools (Installation Token), not mcp_github_*.',
 ].join('\n');
 
 const WORKER_GITHUB = [
-  'Prefer `gh` via bash for repo operations when bash is available.',
-  'Use mcp_github_* or github_* plugin tools for structured API actions.',
-  'Do not use mcp_filesystem_* or unrelated MCP servers to "discover" GitHub.',
-  'Summarize outcomes (issue link, PR state) for the orchestrator.',
+  'Use github_prepare_workspace before multi-file edits in a repo.',
+  'Small single-file change: github_patch_file (Contents API).',
+  'Multi-file / tests: workspace + bash, then github_push_branch (requires approval) and github_create_pr for Issues.',
+  'Issue thread: new branch + new PR. PR thread: push to existing PR head branch.',
+  'Do NOT use mcp_github_* for writes — PAT acts as human, not Bot.',
+  'Summarize outcomes (PR link, branch) for the orchestrator.',
 ].map(line => `- ${line}`).join('\n');
 
 export function createGithubAgentPromptContributor(): AgentPromptContributor {

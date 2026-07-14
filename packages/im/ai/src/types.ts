@@ -450,6 +450,8 @@ export interface AIConfig {
   /** PAT for adapter-github auto-registered server-github MCP (overrides env when set). */
   githubMcp?: {
     token?: string;
+    /** 为 true 时注册 server-github MCP（PAT，人身份）；默认 false，Bot 写操作用 adapter github_* 工具 */
+    enabled?: boolean;
   };
   /**
    * External MCP servers for the Agent MCP client (global, all bots).

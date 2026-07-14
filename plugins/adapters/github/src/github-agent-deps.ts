@@ -1,12 +1,13 @@
 /**
  * Shared runtime deps for github agent/ authoring tools.
- * Set once from plugin index during init — never call getPlugin() from tool execute.
  */
 import type { Plugin } from 'zhin.js';
 import type { GitHubAdapter } from './adapter.js';
+import type { WorkspaceManager } from './workspace-manager.js';
 
 export interface GithubAgentDeps {
   getAdapter: () => GitHubAdapter;
+  getWorkspaceManager: () => WorkspaceManager;
   plugin: Plugin;
 }
 

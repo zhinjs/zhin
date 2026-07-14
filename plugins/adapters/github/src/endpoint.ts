@@ -11,18 +11,48 @@ import type { GitHubAdapter } from './adapter.js';
 import { GhClient } from './gh-client.js';
 import { fromCanonicalSegments, toCanonicalSegments } from './segment-mapper.js';
 
+/** GitHub @mention：支持 zhin-ai[bot] 等 App bot 用户名 */
+const GITHUB_MENTION_RE = /@([^\s@]+(?:\[bot\])?)/g;
+
 export function parseMarkdown(md: string): MessageSegment[] {
   const segments: MessageSegment[] = [];
-  const mentionRe = /@(\w[-\w]*)/g;
   let lastIdx = 0;
   let match: RegExpExecArray | null;
-  while ((match = mentionRe.exec(md)) !== null) {
+  while ((match = GITHUB_MENTION_RE.exec(md)) !== null) {
     if (match.index > lastIdx) segments.push({ type: 'text', data: { text: md.slice(lastIdx, match.index) } });
     segments.push({ type: 'at', data: { id: match[1], name: match[1], text: match[0] } });
     lastIdx = match.index + match[0].length;
   }
   if (lastIdx < md.length) segments.push({ type: 'text', data: { text: md.slice(lastIdx) } });
   return segments.length ? segments : [{ type: 'text', data: { text: md } }];
+}
+
+export function shouldAutoReplyRepo(config: GitHubEndpointConfig, repo: string): boolean {
+  const list = config.auto_reply_repos;
+  if (!list?.length) return false;
+  const key = repo.toLowerCase();
+  return list.some((r) => r.toLowerCase() === key);
+}
+
+export function enrichGithubInboundMessage<T extends object>(
+  message: Message<T>,
+  config: GitHubEndpointConfig,
+  gh: GhClient,
+  repo: string,
+): Message<T> {
+  const botLogin = config.bot_login || gh.getBotLogin();
+  if (botLogin && shouldAutoReplyRepo(config, repo)) {
+    const hasBotAt = message.$content.some(
+      (seg) => (seg.type === 'at' || seg.type === 'mention') && seg.data?.id === botLogin,
+    );
+    if (!hasBotAt) {
+      message.$content = [
+        { type: 'at', data: { id: botLogin, name: botLogin, text: `@${botLogin}` } },
+        ...message.$content,
+      ];
+    }
+  }
+  return message;
 }
 
 export function toMarkdown(content: SendContent): string {
@@ -43,6 +73,8 @@ export function toMarkdown(content: SendContent): string {
 export class GitHubEndpoint implements Endpoint<GitHubEndpointConfig, IssueCommentPayload> {
   $connected = false;
   gh: GhClient;
+  /** App bot 登录名，供 @ 触发匹配 */
+  $platformUserId?: string;
 
   get $id() { return this.$config.name; }
 
@@ -61,8 +93,9 @@ export class GitHubEndpoint implements Endpoint<GitHubEndpointConfig, IssueComme
   async $connect(): Promise<void> {
     const result = await this.gh.verifyAuth();
     if (!result.ok) throw new Error(`GitHub 认证失败: ${result.message}`);
+    this.$platformUserId = this.$config.bot_login || this.gh.getBotLogin() || undefined;
     this.$connected = true;
-    this.logger.debug(formatCompact({ endpoint: this.$id }));
+    this.logger.debug(formatCompact({ endpoint: this.$id, bot: this.$platformUserId }));
   }
 
   async $disconnect(): Promise<void> {

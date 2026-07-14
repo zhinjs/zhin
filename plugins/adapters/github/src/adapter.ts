@@ -3,7 +3,7 @@
  */
 import { formatCompact, Adapter, Message, Plugin, OUTBOUND_RICH_SEGMENT_POLICY_TEXT_ONLY } from 'zhin.js';
 import crypto from 'node:crypto';
-import { GitHubEndpoint } from './endpoint.js';
+import { GitHubEndpoint, enrichGithubInboundMessage } from './endpoint.js';
 import type { Router } from '@zhin.js/host-router';
 import { type GitHubEndpointConfig, type EventType, type GenericWebhookPayload, type Subscription, type IssueCommentPayload, type PRReviewCommentPayload, type PRReviewPayload } from './types.js';
 import type { GhClient } from './gh-client.js';
@@ -226,7 +226,8 @@ export class GitHubAdapter extends Adapter<GitHubEndpoint> {
 
     // 处理消息类事件（Issue/PR 评论）
     if (endpoint && event === 'issue_comment' && payload.action === 'created' && payload.comment) {
-      const message = endpoint.$formatMessage(payload as IssueCommentPayload);
+      let message = endpoint.$formatMessage(payload as IssueCommentPayload);
+      message = enrichGithubInboundMessage(message, endpoint.$config, endpoint.gh, repo);
       const botUser = endpoint.gh.authenticatedUser;
       if (!(botUser && message.$sender.id === botUser)) {
         this.emit('message.receive', message);
@@ -234,7 +235,8 @@ export class GitHubAdapter extends Adapter<GitHubEndpoint> {
     }
 
     if (endpoint && event === 'pull_request_review_comment' && payload.action === 'created' && payload.comment) {
-      const message = endpoint.formatPRReviewComment(payload as PRReviewCommentPayload);
+      let message = endpoint.formatPRReviewComment(payload as PRReviewCommentPayload);
+      message = enrichGithubInboundMessage(message, endpoint.$config, endpoint.gh, repo);
       const botUser = endpoint.gh.authenticatedUser;
       if (!(botUser && message.$sender.id === botUser)) {
         this.emit('message.receive', message);
@@ -242,8 +244,10 @@ export class GitHubAdapter extends Adapter<GitHubEndpoint> {
     }
 
     if (endpoint && event === 'pull_request_review' && payload.action === 'submitted') {
-      const message = endpoint.formatPRReview(payload as PRReviewPayload);
-      if (message) {
+      const formatted = endpoint.formatPRReview(payload as PRReviewPayload);
+      if (formatted) {
+        let message = formatted;
+        message = enrichGithubInboundMessage(message, endpoint.$config, endpoint.gh, repo);
         const botUser = endpoint.gh.authenticatedUser;
         if (!(botUser && message.$sender.id === botUser)) {
           this.emit('message.receive', message);
@@ -370,7 +374,8 @@ export class GitHubAdapter extends Adapter<GitHubEndpoint> {
 
       // 处理消息类事件（Issue/PR 评论）
       if (endpoint && eventName === 'issue_comment' && ev.payload?.action === 'created' && ev.payload?.comment) {
-        const message = endpoint.$formatMessage(ev.payload as IssueCommentPayload);
+        let message = endpoint.$formatMessage(ev.payload as IssueCommentPayload);
+        message = enrichGithubInboundMessage(message, endpoint.$config, endpoint.gh, repo);
         const botUser = endpoint.gh.authenticatedUser;
         if (!(botUser && message.$sender.id === botUser)) {
           this.emit('message.receive', message);

@@ -18,6 +18,12 @@ export interface GitHubEndpointConfig {
   webhook_path?: string;
   /** 事件轮询间隔（秒，默认 60，Webhook 模式下作为降级备选） */
   poll_interval?: number;
+  /** 这些仓库的人类 Issue/PR 评论自动触发 AI（无需 @bot） */
+  auto_reply_repos?: string[];
+  /** 覆盖 App bot 登录名（默认 {slug}[bot]） */
+  bot_login?: string;
+  /** 托管 git 工作区根目录（默认 {cwd}/data/github-workspaces） */
+  workspace_root?: string;
 }
 
 // ── Channel ID ───────────────────────────────────────────────────────

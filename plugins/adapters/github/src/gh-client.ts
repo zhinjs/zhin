@@ -21,6 +21,19 @@ export interface AppAuth {
   privateKey: string;
 }
 
+export interface GitHubBotIdentity {
+  login: string;
+  email: string;
+  slug: string;
+  userId: number;
+}
+
+export interface GitHubCommitAuthor {
+  name: string;
+  email: string;
+  date?: string;
+}
+
 export interface GhClientOptions {
   /** GitHub Enterprise 主机名（默认 github.com） */
   host?: string;
@@ -201,6 +214,7 @@ export class GhClient {
           this._user = name;
           this._appSlug = appData.slug || null;
           if (appData.client_id) this._clientId = appData.client_id;
+          await this.resolveBotUserId();
           const repos = this._repoToInstallation.size;
           return { ok: true, user: name, message: `GitHub App: ${name} (${this._allInstallations.length} 安装, ${repos} 仓库)` };
         }
@@ -311,6 +325,114 @@ export class GhClient {
 
   async deletePRReviewComment(repo: string, commentId: number) {
     return this.del(`/repos/${repo}/pulls/comments/${commentId}`);
+  }
+
+  // ── Contents / Pulls（Bot 写操作）──────────────────────────────────
+
+  async getFileContent(repo: string, path: string, ref?: string) {
+    let apiPath = `/repos/${repo}/contents/${path.split('/').map(encodeURIComponent).join('/')}`;
+    if (ref) apiPath += `?ref=${encodeURIComponent(ref)}`;
+    return this.get<{ content: string; sha: string; encoding: string }>(apiPath);
+  }
+
+  async createOrUpdateFile(
+    repo: string,
+    path: string,
+    content: string,
+    message: string,
+    options?: { branch?: string; sha?: string },
+  ) {
+    const body: Record<string, unknown> = {
+      message,
+      content: Buffer.from(content, 'utf-8').toString('base64'),
+    };
+    if (options?.branch) body.branch = options.branch;
+    if (options?.sha) body.sha = options.sha;
+    const apiPath = `/repos/${repo}/contents/${path.split('/').map(encodeURIComponent).join('/')}`;
+    return this.put<{ commit: { sha: string; html_url?: string }; content: { html_url?: string } }>(
+      apiPath,
+      body,
+    );
+  }
+
+  async getRef(repo: string, ref: string) {
+    return this.get<{ ref: string; object: { sha: string; type: string } }>(
+      `/repos/${repo}/git/ref/${encodeURIComponent(ref)}`,
+    );
+  }
+
+  async createRef(repo: string, ref: string, sha: string) {
+    return this.post(`/repos/${repo}/git/refs`, { ref, sha });
+  }
+
+  async createPullRequest(
+    repo: string,
+    title: string,
+    head: string,
+    base: string,
+    body?: string,
+  ) {
+    return this.post<{ number: number; html_url: string; head: { ref: string } }>(
+      `/repos/${repo}/pulls`,
+      { title, head, base, body: body ?? '' },
+    );
+  }
+
+  getBotLogin(): string | null {
+    if (this._user) return this._user;
+    if (this._appSlug) return `${this._appSlug}[bot]`;
+    return null;
+  }
+
+  getCommitAuthor(): GitHubCommitAuthor | null {
+    const identity = this.getBotIdentitySync();
+    if (!identity) return null;
+    return { name: identity.login, email: identity.email, date: new Date().toISOString() };
+  }
+
+  getBotIdentitySync(): GitHubBotIdentity | null {
+    const slug = this._appSlug;
+    const login = this.getBotLogin();
+    if (!slug || !login || this._botUserId == null) return null;
+    return {
+      login,
+      slug,
+      userId: this._botUserId,
+      email: `${this._botUserId}+${login}@users.noreply.github.com`,
+    };
+  }
+
+  async getBotIdentity(): Promise<GitHubBotIdentity | null> {
+    if (!this._appAuth) return null;
+    if (this._botUserId == null) await this.resolveBotUserId();
+    return this.getBotIdentitySync();
+  }
+
+  buildCloneUrl(repo: string, token: string): string {
+    const host = this.host || 'github.com';
+    return `https://x-access-token:${token}@${host}/${repo}.git`;
+  }
+
+  async resolveBotUserId(): Promise<number | null> {
+    if (this._botUserId != null) return this._botUserId;
+    const slug = this._appSlug;
+    if (!slug) return null;
+    const login = `${slug}[bot]`;
+    const baseUrl = this.host ? `https://${this.host}/api/v3` : 'https://api.github.com';
+    try {
+      const res = await fetch(`${baseUrl}/users/${encodeURIComponent(login)}`, {
+        headers: { Accept: 'application/vnd.github+json' },
+      });
+      if (!res.ok) return null;
+      const data = (await res.json()) as { id?: number };
+      if (typeof data.id === 'number') {
+        this._botUserId = data.id;
+        return data.id;
+      }
+    } catch {
+      return null;
+    }
+    return null;
   }
 
   // ── Star ─────────────────────────────────────────────────────────
@@ -445,6 +567,15 @@ export class GhClient {
 
   /** App 的 client_id（verifyAuth 后从 /app 获取，用于 Device Flow） */
   private _clientId: string | null = null;
+  /** Bot 机器用户 numeric id（/users/{slug}[bot]） */
+  private _botUserId: number | null = null;
+
+  /** 确保 App 认证的 Installation Token 对指定 repo 有效，并返回 token */
+  async ensureInstallationTokenForRepo(repo: string): Promise<string | undefined> {
+    if (!this._appAuth) return this.token;
+    await this.ensureTokenForRepo(repo);
+    return this.token;
+  }
   get clientId(): string | null { return this._clientId; }
 
   // ── 事件轮询 ─────────────────────────────────────────────────────

@@ -41,6 +41,11 @@ export function registerGithubMcp(plugin: Plugin): void {
 
     const configService = root.inject('config');
     const appConfig = configService?.getPrimary<{ ai?: AIConfig }>() || {};
+    const githubMcp = appConfig.ai?.githubMcp as { token?: string; enabled?: boolean } | undefined;
+    if (githubMcp?.enabled !== true) {
+      logger.debug('[MCP] server-github skipped: set ai.githubMcp.enabled=true to opt in (PAT / human identity)');
+      return;
+    }
     const token = resolveGithubMcpToken(appConfig.ai);
     if (!token) {
       logger.debug('[MCP] server-github skipped: set GITHUB_PERSONAL_ACCESS_TOKEN or ai.githubMcp.token');
