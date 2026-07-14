@@ -8,21 +8,44 @@ export function resolveConfigEnvString(
   if (value == null) return value;
   if (value.startsWith('\\${') && value.endsWith('}')) return value.slice(1);
 
-  const whole = value.match(/^\$\{([^}]+)\}$/);
+  const whole = readWholeEnvRef(value);
   if (whole) {
-    return resolveEnvRef(whole[1], env) ?? value;
+    return resolveEnvRef(whole, env) ?? value;
   }
 
-  return value.replace(/\$\{([^}]+)\}/g, (_m, ref: string) => resolveEnvRef(ref, env) ?? _m);
+  return expandInlineEnvRefs(value, env);
+}
+
+function readWholeEnvRef(value: string): string | null {
+  return value.startsWith('${') && value.endsWith('}') && value.indexOf('${', 2) < 0
+    ? value.slice(2, -1)
+    : null;
+}
+
+function expandInlineEnvRefs(value: string, env: NodeJS.ProcessEnv): string {
+  let out = '';
+  let cursor = 0;
+  while (cursor < value.length) {
+    const start = value.indexOf('${', cursor);
+    if (start < 0) break;
+    const end = value.indexOf('}', start + 2);
+    if (end < 0) break;
+    out += value.slice(cursor, start);
+    const raw = value.slice(start, end + 1);
+    const ref = value.slice(start + 2, end);
+    out += resolveEnvRef(ref, env) ?? raw;
+    cursor = end + 1;
+  }
+  return out + value.slice(cursor);
 }
 
 function resolveEnvRef(content: string, env: NodeJS.ProcessEnv): string | undefined {
   let key: string;
   let defaultValue: string | undefined;
-  const bashDefaultMatch = content.match(/^([^:}]+):[-=](.*)$/);
-  if (bashDefaultMatch) {
-    key = bashDefaultMatch[1];
-    defaultValue = bashDefaultMatch[2];
+  const defaultSep = content.indexOf(':-') >= 0 ? content.indexOf(':-') : content.indexOf(':=');
+  if (defaultSep >= 0) {
+    key = content.slice(0, defaultSep);
+    defaultValue = content.slice(defaultSep + 2);
   } else {
     key = content;
     defaultValue = undefined;

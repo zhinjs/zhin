@@ -3,7 +3,7 @@
  * When Changesets marks a release as patch-only but bumps major (e.g. agent 0.x→1.x
  * baseline), restore the expected patch increment from main.
  */
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -22,7 +22,7 @@ function findPackageJsonFiles(dir, acc = []) {
 
 function getMainVersion(pkgPath) {
   try {
-    const content = execSync(`git show HEAD:${pkgPath}`, { encoding: 'utf8' });
+    const content = execFileSync('git', ['show', `HEAD:${pkgPath}`], { encoding: 'utf8' });
     return JSON.parse(content).version;
   } catch {
     return null;
@@ -85,7 +85,8 @@ for (const changelogPath of changelogPaths) {
   let content = readFileSync(changelogPath, 'utf8');
   let changed = false;
   for (const [from, to] of Object.entries(versionMap)) {
-    const pkgRe = new RegExp(`(zhin\\.js|@[\\w./-]+)@${from.replace(/\./g, '\\.')}`, 'g');
+    const escapedFrom = from.split('.').join('\\.');
+    const pkgRe = new RegExp(`(zhin\\.js|@[\\w./-]+)@${escapedFrom}`, 'g');
     const next = content.replace(pkgRe, `$1@${to}`);
     if (next !== content) {
       content = next;

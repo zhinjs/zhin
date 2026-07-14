@@ -116,74 +116,100 @@ export function parseOutput(raw: string): OutputElement[] {
 
    
   while (remaining.length > 0) {
-    // ── 尝试匹配 card 代码块 ──
-    const cardMatch = remaining.match(/^([\s\S]*?)```card\s*\n([\s\S]*?)```/);
-    if (cardMatch) {
-      // 前缀文本
-      if (cardMatch[1].trim()) {
-        elements.push({ type: 'text', content: cardMatch[1].trim(), format: 'markdown' });
-      }
-      // 解析卡片 JSON
+    const next = findNextOutputToken(remaining);
+    if (!next) {
+      elements.push({ type: 'text', content: remaining.trim(), format: 'markdown' });
+      break;
+    }
+
+    if (next.prefix.trim()) {
+      elements.push({ type: 'text', content: next.prefix.trim(), format: 'markdown' });
+    }
+
+    if (next.kind === 'card') {
       try {
-        const cardData = JSON.parse(cardMatch[2]);
+        const cardData = JSON.parse(next.body);
         elements.push({ ...cardData, type: 'card' });
       } catch {
-        elements.push({ type: 'text', content: cardMatch[2], format: 'plain' });
+        elements.push({ type: 'text', content: next.body, format: 'plain' });
       }
-      remaining = remaining.slice(cardMatch[0].length);
-      continue;
+    } else if (next.kind === 'image') {
+      elements.push({ type: 'image', url: next.url, alt: next.label || undefined });
+    } else if (next.kind === 'audio') {
+      elements.push({ type: 'audio', url: next.url });
+    } else if (next.kind === 'video') {
+      elements.push({ type: 'video', url: next.url });
+    } else {
+      elements.push({ type: 'file', url: next.url, name: next.label });
     }
-
-    // ── 尝试匹配 image: ![alt](url) ──
-    const imgMatch = remaining.match(/^([\s\S]*?)!\[([^\]]*)\]\(([^)]+)\)/);
-    if (imgMatch && imgMatch[1].length < 500) {
-      if (imgMatch[1].trim()) {
-        elements.push({ type: 'text', content: imgMatch[1].trim(), format: 'markdown' });
-      }
-      elements.push({ type: 'image', url: imgMatch[3], alt: imgMatch[2] || undefined });
-      remaining = remaining.slice(imgMatch[0].length);
-      continue;
-    }
-
-    // ── 尝试匹配 audio: [audio](url) ──
-    const audioMatch = remaining.match(/^([\s\S]*?)\[audio\]\(([^)]+)\)/i);
-    if (audioMatch && audioMatch[1].length < 500) {
-      if (audioMatch[1].trim()) {
-        elements.push({ type: 'text', content: audioMatch[1].trim(), format: 'markdown' });
-      }
-      elements.push({ type: 'audio', url: audioMatch[2] });
-      remaining = remaining.slice(audioMatch[0].length);
-      continue;
-    }
-
-    // ── 尝试匹配 video: [video](url) ──
-    const videoMatch = remaining.match(/^([\s\S]*?)\[video\]\(([^)]+)\)/i);
-    if (videoMatch && videoMatch[1].length < 500) {
-      if (videoMatch[1].trim()) {
-        elements.push({ type: 'text', content: videoMatch[1].trim(), format: 'markdown' });
-      }
-      elements.push({ type: 'video', url: videoMatch[2] });
-      remaining = remaining.slice(videoMatch[0].length);
-      continue;
-    }
-
-    // ── 尝试匹配 file: [file:name](url) ──
-    const fileMatch = remaining.match(/^([\s\S]*?)\[file:([^\]]+)\]\(([^)]+)\)/i);
-    if (fileMatch && fileMatch[1].length < 500) {
-      if (fileMatch[1].trim()) {
-        elements.push({ type: 'text', content: fileMatch[1].trim(), format: 'markdown' });
-      }
-      elements.push({ type: 'file', url: fileMatch[3], name: fileMatch[2] });
-      remaining = remaining.slice(fileMatch[0].length);
-      continue;
-    }
-
-    // ── 无匹配 → 全部作为文本 ──
-    elements.push({ type: 'text', content: remaining.trim(), format: 'markdown' });
-    break;
+    remaining = remaining.slice(next.end);
   }
 
   return elements.length > 0 ? elements : [{ type: 'text', content: raw, format: 'plain' }];
+}
+
+type OutputToken =
+  | { kind: 'card'; prefix: string; body: string; end: number }
+  | { kind: 'image' | 'audio' | 'video' | 'file'; prefix: string; label: string; url: string; end: number };
+
+function findNextOutputToken(text: string): OutputToken | null {
+  const candidates = [
+    parseCardToken(text),
+    parseMarkdownToken(text, 'image'),
+    parseMarkdownToken(text, 'audio'),
+    parseMarkdownToken(text, 'video'),
+    parseMarkdownToken(text, 'file'),
+  ].filter((item): item is OutputToken & { start: number } => item !== null);
+  candidates.sort((a, b) => a.start - b.start);
+  const first = candidates[0];
+  if (!first || first.prefix.length >= 500) return null;
+  const { start: _start, ...token } = first;
+  return token;
+}
+
+function parseCardToken(text: string): (OutputToken & { start: number }) | null {
+  const marker = '```card';
+  const start = text.indexOf(marker);
+  if (start < 0) return null;
+  const bodyStart = text.indexOf('\n', start + marker.length);
+  if (bodyStart < 0) return null;
+  const endMarker = text.indexOf('```', bodyStart + 1);
+  if (endMarker < 0) return null;
+  return {
+    kind: 'card',
+    start,
+    prefix: text.slice(0, start),
+    body: text.slice(bodyStart + 1, endMarker),
+    end: endMarker + 3,
+  };
+}
+
+function parseMarkdownToken(
+  text: string,
+  kind: 'image' | 'audio' | 'video' | 'file',
+): (OutputToken & { start: number }) | null {
+  const marker = kind === 'image' ? '![' : kind === 'file' ? '[file:' : `[${kind}](`;
+  const start = text.toLowerCase().indexOf(marker);
+  if (start < 0) return null;
+  if (kind === 'audio' || kind === 'video') {
+    const urlStart = start + marker.length;
+    const urlEnd = text.indexOf(')', urlStart);
+    if (urlEnd < 0) return null;
+    return { kind, start, prefix: text.slice(0, start), label: kind, url: text.slice(urlStart, urlEnd), end: urlEnd + 1 };
+  }
+  const labelStart = start + marker.length;
+  const labelEnd = text.indexOf(']', labelStart);
+  if (labelEnd < 0 || text[labelEnd + 1] !== '(') return null;
+  const urlEnd = text.indexOf(')', labelEnd + 2);
+  if (urlEnd < 0) return null;
+  return {
+    kind,
+    start,
+    prefix: text.slice(0, start),
+    label: text.slice(labelStart, labelEnd),
+    url: text.slice(labelEnd + 2, urlEnd),
+    end: urlEnd + 1,
+  };
 }
 
 // ============================================================================

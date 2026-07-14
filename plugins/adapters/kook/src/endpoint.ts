@@ -508,73 +508,17 @@ export class KookEndpoint extends Client implements Endpoint<KookEndpointConfig,
 
   private parseMarkdown(content: string): MessageElement[] {
     const elements: MessageElement[] = [];
-    
-    // KMarkdown 图片格式: ![alt](url)
-    const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
-    // KMarkdown @提及格式: (met)userId(met) 或 @用户名
-    const mentionRegex = /\(met\)(\d+)\(met\)|@([^\s]+)/g;
-    // KMarkdown 表情格式: (emj)表情名(emj)[表情ID]
-    const emojiRegex = /\(emj\)([^(]+)\(emj\)\[([^\]]+)\]/g;
-    // KMarkdown 频道格式: (chn)channelId(chn)
-    const channelRegex = /\(chn\)(\d+)\(chn\)/g;
-
     let lastIndex = 0;
-    const matches: Array<{ index: number; length: number; element: MessageElement }> = [];
-
-    // 解析图片
-    let match: RegExpExecArray | null;
-    while ((match = imageRegex.exec(content)) !== null) {
-      matches.push({
-        index: match.index,
-        length: match[0].length,
-        element: { type: "image", data: { url: match[2], alt: match[1] } }
-      });
-    }
-
-    // 解析 @提及
-    while ((match = mentionRegex.exec(content)) !== null) {
-      const userId = match[1] || match[2];
-      matches.push({
-        index: match.index,
-        length: match[0].length,
-        element: this.buildAtElement(userId),
-      });
-    }
-
-    // 解析表情
-    while ((match = emojiRegex.exec(content)) !== null) {
-      matches.push({
-        index: match.index,
-        length: match[0].length,
-        element: { type: "face", data: { id: match[2], name: match[1] } }
-      });
-    }
-
-    // 解析频道引用
-    while ((match = channelRegex.exec(content)) !== null) {
-      matches.push({
-        index: match.index,
-        length: match[0].length,
-        element: { type: "text", data: { text: `#频道:${match[1]}` } }
-      });
-    }
-
-    // 按位置排序
-    matches.sort((a, b) => a.index - b.index);
-
-    // 组装消息段
-    for (const match of matches) {
-      // 添加之前的文本
-      if (match.index > lastIndex) {
-        const text = content.slice(lastIndex, match.index);
+    for (const token of this.scanKMarkdownTokens(content)) {
+      if (token.index > lastIndex) {
+        const text = content.slice(lastIndex, token.index);
         if (text) {
           elements.push({ type: "text", data: { text } });
         }
       }
 
-      // 添加特殊元素
-      elements.push(match.element);
-      lastIndex = match.index + match.length;
+      elements.push(token.element);
+      lastIndex = token.index + token.length;
     }
 
     // 添加剩余文本
@@ -661,7 +605,76 @@ export class KookEndpoint extends Client implements Endpoint<KookEndpointConfig,
    * 检查文本是否包含 KMarkdown 特殊语法
    */
   private hasKMarkdownSyntax(text: string): boolean {
-    return /!\[.*?\]\(.*?\)|\(met\)|\(emj\)|\(chn\)|@\S+/.test(text);
+    return text.includes('![')
+      || text.includes('(met)')
+      || text.includes('(emj)')
+      || text.includes('(chn)')
+      || text.includes('@');
+  }
+
+  private scanKMarkdownTokens(content: string): Array<{ index: number; length: number; element: MessageElement }> {
+    const tokens: Array<{ index: number; length: number; element: MessageElement }> = [];
+    let i = 0;
+    while (i < content.length) {
+      const token = this.readKMarkdownToken(content, i);
+      if (token) {
+        tokens.push(token);
+        i = token.index + token.length;
+      } else {
+        i++;
+      }
+    }
+    return tokens;
+  }
+
+  private readKMarkdownToken(content: string, index: number): { index: number; length: number; element: MessageElement } | null {
+    if (content.startsWith('![', index)) {
+      const labelEnd = content.indexOf(']', index + 2);
+      if (labelEnd >= 0 && content[labelEnd + 1] === '(') {
+        const urlEnd = content.indexOf(')', labelEnd + 2);
+        if (urlEnd >= 0) {
+          return {
+            index,
+            length: urlEnd + 1 - index,
+            element: { type: "image", data: { url: content.slice(labelEnd + 2, urlEnd), alt: content.slice(index + 2, labelEnd) } },
+          };
+        }
+      }
+    }
+    if (content.startsWith('(met)', index)) {
+      const idStart = index + '(met)'.length;
+      const idEnd = content.indexOf('(met)', idStart);
+      if (idEnd > idStart) {
+        return { index, length: idEnd + '(met)'.length - index, element: this.buildAtElement(content.slice(idStart, idEnd)) };
+      }
+    }
+    if (content[index] === '@') {
+      let end = index + 1;
+      while (end < content.length && !/\s/.test(content[end]!)) end++;
+      if (end > index + 1) {
+        return { index, length: end - index, element: this.buildAtElement(content.slice(index + 1, end)) };
+      }
+    }
+    if (content.startsWith('(emj)', index)) {
+      const nameStart = index + '(emj)'.length;
+      const nameEnd = content.indexOf('(emj)[', nameStart);
+      const idEnd = nameEnd >= 0 ? content.indexOf(']', nameEnd + 6) : -1;
+      if (nameEnd > nameStart && idEnd > nameEnd) {
+        return {
+          index,
+          length: idEnd + 1 - index,
+          element: { type: "face", data: { id: content.slice(nameEnd + 6, idEnd), name: content.slice(nameStart, nameEnd) } },
+        };
+      }
+    }
+    if (content.startsWith('(chn)', index)) {
+      const idStart = index + '(chn)'.length;
+      const idEnd = content.indexOf('(chn)', idStart);
+      if (idEnd > idStart) {
+        return { index, length: idEnd + '(chn)'.length - index, element: { type: "text", data: { text: `#频道:${content.slice(idStart, idEnd)}` } } };
+      }
+    }
+    return null;
   }
 
   /**

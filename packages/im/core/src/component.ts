@@ -239,25 +239,39 @@ function parseAttributeValue(str: string, startIndex: number, context?: Componen
 function evaluateQuotedExpression(quotedValue: string, context?: ComponentContext): string {
     if (!context) return quotedValue;
     
-    // 处理引号内的表达式，将 {expr} 格式转换为 ${expr} 格式
-    let result = quotedValue;
-    const expressionRegex = /\{([^}]+)\}/g;
-    let match;
-    
-    while ((match = expressionRegex.exec(quotedValue)) !== null) {
-        const expr = match[1];
+    let result = '';
+    let cursor = 0;
+    for (const match of readBraceExpressions(quotedValue)) {
+        result += quotedValue.slice(cursor, match.start);
         try {
-            const value = context.getValue(expr);
-            if (value !== undefined && value !== expr) {
+            const value = context.getValue(match.expr);
+            if (value !== undefined && value !== match.expr) {
                 const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
-                result = result.replace(match[0], stringValue);
+                result += stringValue;
+            } else {
+                result += quotedValue.slice(match.start, match.end);
             }
         } catch (error) {
-            // 如果求值失败，保持原始表达式
+            result += quotedValue.slice(match.start, match.end);
         }
+        cursor = match.end;
     }
     
-    return result;
+    return result + quotedValue.slice(cursor);
+}
+
+function readBraceExpressions(value: string): Array<{ start: number; end: number; expr: string }> {
+    const matches: Array<{ start: number; end: number; expr: string }> = [];
+    let cursor = 0;
+    while (cursor < value.length) {
+        const start = value.indexOf('{', cursor);
+        if (start < 0) break;
+        const end = value.indexOf('}', start + 1);
+        if (end < 0) break;
+        matches.push({ start, end: end + 1, expr: value.slice(start + 1, end) });
+        cursor = end + 1;
+    }
+    return matches;
 }
 
 /**

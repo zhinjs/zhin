@@ -3,6 +3,7 @@
  * @see https://www.npmjs.com/package/chinese-idiom-chengyu
  */
 import { createRequire } from 'node:module';
+import { secureRandomItem } from '@zhin.js/game-shared';
 
 const require = createRequire(import.meta.url);
 
@@ -101,12 +102,12 @@ export function pickBotIdiom(
 ): IdiomEntry | null {
   const candidates = getValidNext(prevIdiom, mode, used);
   if (!candidates.length) return null;
-  return candidates[Math.floor(Math.random() * candidates.length)]!;
+  return secureRandomItem(candidates);
 }
 
 export function pickStarterIdiom(used: Set<string>): IdiomEntry {
   const pool = buildFourCharPool().filter((w) => !used.has(w));
-  const text = pool[Math.floor(Math.random() * pool.length)] ?? '一心一意';
+  const text = pool.length > 0 ? secureRandomItem(pool) : '一心一意';
   return { text, gloss: getGloss(text) };
 }
 

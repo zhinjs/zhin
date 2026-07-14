@@ -1,4 +1,4 @@
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { readFile, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import type { TTSConfig, TtsProvider, TtsSynthesizeInput, TtsSynthesizeResult } from '../types.js';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export function createEdgeTtsProvider(config: TTSConfig): TtsProvider {
   return {
@@ -17,11 +17,10 @@ export function createEdgeTtsProvider(config: TTSConfig): TtsProvider {
       const pitch = config.pitch || '+0Hz';
       const cmd = config.edgeTtsCommand || 'edge-tts';
       const tmpFile = join(tmpdir(), `zhin-tts-${randomBytes(8).toString('hex')}.mp3`);
-      const safeText = input.text.replace(/"/g, '\\"').replace(/'/g, "\\'");
-
       try {
-        await execAsync(
-          `${cmd} --voice "${voice}" --rate="${rate}" --pitch="${pitch}" --text "${safeText}" --write-media "${tmpFile}"`,
+        await execFileAsync(
+          cmd,
+          ['--voice', voice, `--rate=${rate}`, `--pitch=${pitch}`, '--text', input.text, '--write-media', tmpFile],
           { timeout: 30_000 },
         );
         const data = await readFile(tmpFile);

@@ -81,9 +81,18 @@ function styleToString(style: unknown): string {
 
 function escapeTextChild(child: string): string {
   const t = child.trim();
-  if (/^<[a-zA-Z][\w-]*[^>]*\/>$/.test(t)) return child;
-  if (/^<[a-zA-Z][\w-]*[^>]*>/.test(t) && t.includes("</")) return child;
+  if (looksLikeSingleHtmlElement(t)) return child;
   return e(child);
+}
+
+function looksLikeSingleHtmlElement(text: string): boolean {
+  if (!text.startsWith('<') || text.length < 3) return false;
+  const second = text.charCodeAt(1);
+  const startsWithTag = (second >= 65 && second <= 90) || (second >= 97 && second <= 122);
+  if (!startsWithTag) return false;
+  const gt = text.indexOf('>');
+  if (gt < 0) return false;
+  return text.endsWith('/>') || text.includes('</');
 }
 
 function serializeIntrinsicChildren(children: unknown): string {

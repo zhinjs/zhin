@@ -15,5 +15,9 @@ export function normalizeSlackReactionName(emoji: string): string {
   if (trimmed.startsWith(':') && trimmed.endsWith(':') && trimmed.length > 2) {
     return trimmed.slice(1, -1);
   }
-  return trimmed.replace(/^:+|:+$/g, '');
+  let start = 0;
+  let end = trimmed.length;
+  while (start < end && trimmed[start] === ':') start++;
+  while (end > start && trimmed[end - 1] === ':') end--;
+  return trimmed.slice(start, end);
 }

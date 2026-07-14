@@ -4,13 +4,33 @@
 export const SLACK_MRKDWN_TEXT_MAX = 2900;
 
 export function markdownToMrkdwn(text: string): string {
-  let result = text;
-  result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<$2|$1>');
+  let result = replaceMarkdownLinks(text);
   result = result.replace(/\*\*([^*]+)\*\*/g, '*$1*');
   result = result.replace(/__([^_]+)__/g, '*$1*');
   result = result.replace(/~~([^~]+)~~/g, '~$1~');
   result = result.replace(/^#{1,6}\s+(.+)$/gm, '*$1*');
   return result;
+}
+
+function replaceMarkdownLinks(text: string): string {
+  let out = '';
+  let cursor = 0;
+  while (cursor < text.length) {
+    const labelStart = text.indexOf('[', cursor);
+    if (labelStart < 0) break;
+    const labelEnd = text.indexOf(']', labelStart + 1);
+    if (labelEnd < 0 || text[labelEnd + 1] !== '(') {
+      out += text.slice(cursor, labelStart + 1);
+      cursor = labelStart + 1;
+      continue;
+    }
+    const urlEnd = text.indexOf(')', labelEnd + 2);
+    if (urlEnd < 0) break;
+    out += text.slice(cursor, labelStart);
+    out += `<${text.slice(labelEnd + 2, urlEnd)}|${text.slice(labelStart + 1, labelEnd)}>`;
+    cursor = urlEnd + 1;
+  }
+  return out + text.slice(cursor);
 }
 
 /** 按 Slack section mrkdwn 上限切分（尽量在换行/空格处断开） */

@@ -60,21 +60,8 @@ export function parseSlackMrkdwn(text: string): MessageSegment[] {
   const segments: MessageSegment[] = [];
   let lastIndex = 0;
 
-  const allMatches: Array<{ match: RegExpExecArray; kind: 'user' | 'channel' | 'link' }> = [];
-
-  const userRe = /<@([UW][A-Z0-9]+)(?:\|([^>]+))?>/g;
-  const chanRe = /<#([C][A-Z0-9]+)(?:\|([^>]+))?>/g;
-  const linkRe = /<(https?:\/\/[^|>]+)(?:\|([^>]+))?>/g;
-
-  let m: RegExpExecArray | null;
-  while ((m = userRe.exec(text)) !== null) allMatches.push({ match: m, kind: 'user' });
-  while ((m = chanRe.exec(text)) !== null) allMatches.push({ match: m, kind: 'channel' });
-  while ((m = linkRe.exec(text)) !== null) allMatches.push({ match: m, kind: 'link' });
-
-  allMatches.sort((a, b) => a.match.index! - b.match.index!);
-
-  for (const { match, kind } of allMatches) {
-    const start = match.index!;
+  for (const token of scanSlackTokens(text)) {
+    const start = token.start;
     if (start > lastIndex) {
       const before = text.slice(lastIndex, start);
       if (before.trim()) {
@@ -82,18 +69,18 @@ export function parseSlackMrkdwn(text: string): MessageSegment[] {
       }
     }
 
-    switch (kind) {
+    switch (token.kind) {
       case 'user':
-        segments.push({ type: 'at', data: { id: match[1], name: match[2] || match[1], text: match[0] } });
+        segments.push({ type: 'at', data: { id: token.id, name: token.label || token.id, text: token.raw } });
         break;
       case 'channel':
-        segments.push({ type: 'channel_mention', data: { id: match[1], name: match[2] || match[1], text: match[0] } });
+        segments.push({ type: 'channel_mention', data: { id: token.id, name: token.label || token.id, text: token.raw } });
         break;
       case 'link':
-        segments.push({ type: 'link', data: { url: match[1], text: match[2] || match[1] } });
+        segments.push({ type: 'link', data: { url: token.url, text: token.label || token.url } });
         break;
     }
-    lastIndex = start + match[0].length;
+    lastIndex = start + token.raw.length;
   }
 
   if (lastIndex < text.length) {
@@ -104,6 +91,47 @@ export function parseSlackMrkdwn(text: string): MessageSegment[] {
   }
 
   return segments.length > 0 ? segments : [{ type: 'text', data: { text: mrkdwnToMarkdown(text) } }];
+}
+
+type SlackToken =
+  | { kind: 'user' | 'channel'; start: number; raw: string; id: string; label?: string }
+  | { kind: 'link'; start: number; raw: string; url: string; label?: string };
+
+function scanSlackTokens(text: string): SlackToken[] {
+  const tokens: SlackToken[] = [];
+  let cursor = 0;
+  while (cursor < text.length) {
+    const start = text.indexOf('<', cursor);
+    if (start < 0) break;
+    const end = text.indexOf('>', start + 1);
+    if (end < 0) break;
+    const raw = text.slice(start, end + 1);
+    const body = raw.slice(1, -1);
+    const sep = body.indexOf('|');
+    const head = sep >= 0 ? body.slice(0, sep) : body;
+    const label = sep >= 0 ? body.slice(sep + 1) : undefined;
+
+    if ((head.startsWith('@U') || head.startsWith('@W')) && isSlackId(head.slice(1))) {
+      tokens.push({ kind: 'user', start, raw, id: head.slice(1), label });
+    } else if (head.startsWith('#C') && isSlackId(head.slice(1))) {
+      tokens.push({ kind: 'channel', start, raw, id: head.slice(1), label });
+    } else if (head.startsWith('http://') || head.startsWith('https://')) {
+      tokens.push({ kind: 'link', start, raw, url: head, label });
+    }
+    cursor = end + 1;
+  }
+  return tokens;
+}
+
+function isSlackId(value: string): boolean {
+  if (!value) return false;
+  for (const ch of value) {
+    const code = ch.charCodeAt(0);
+    const isDigit = code >= 48 && code <= 57;
+    const isUpper = code >= 65 && code <= 90;
+    if (!isDigit && !isUpper) return false;
+  }
+  return true;
 }
 
 export function resolveSlackChannelType(event: SlackEvent): 'private' | 'group' {

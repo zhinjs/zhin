@@ -8,8 +8,8 @@ const ONBOARDING_KEY = "zhin_demo_onboarding_done";
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8086";
 const API_TOKEN = import.meta.env.VITE_API_TOKEN ?? "demo-public-token-change-me";
 
-localStorage.setItem("zhin_api_base", API_BASE.replace(/\/$/, ""));
-localStorage.setItem("zhin_api_token", API_TOKEN);
+localStorage.setItem("zhin_api_base", trimTrailingSlash(API_BASE));
+window.__ZHIN_API_TOKEN = API_TOKEN;
 
 const status = document.getElementById("status");
 const main = document.getElementById("main");
@@ -149,14 +149,24 @@ async function loadSandbox() {
     }
     status.textContent = "Sandbox 已连接 — 发送 hello、card 或 ai: 你好";
     const iframe = document.createElement("iframe");
-    iframe.src = sandbox.url.startsWith("http")
-      ? sandbox.url
-      : `${base}${sandbox.url}`;
+    iframe.src = resolveSandboxFrameUrl(base, sandbox.url);
     iframe.title = "Zhin Sandbox";
     main.appendChild(iframe);
   } catch (err) {
     status.textContent = `连接失败: ${err instanceof Error ? err.message : String(err)}`;
   }
+}
+
+function trimTrailingSlash(value) {
+  return value.endsWith("/") ? value.slice(0, -1) : value;
+}
+
+function resolveSandboxFrameUrl(base, sandboxUrl) {
+  const resolved = new URL(sandboxUrl, `${base}/`);
+  if (resolved.protocol !== "https:" && resolved.origin !== window.location.origin) {
+    throw new Error("Sandbox iframe URL must be HTTPS or same-origin");
+  }
+  return resolved.href;
 }
 
 loadSandbox();

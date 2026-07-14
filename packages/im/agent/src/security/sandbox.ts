@@ -23,10 +23,9 @@ import * as fs from 'node:fs';
  * 仅在 POSIX 系统（Linux/macOS）生效。
  */
 function wrapCommandWithLimits(
-  command: string,
   config: { maxMemoryMB?: number; timeout?: number; maxCpuPercent?: number },
 ): string {
-  if (process.platform === 'win32') return command;
+  if (process.platform === 'win32') return 'exec bash -c "$ZHIN_SANDBOX_COMMAND"';
 
   const parts: string[] = [];
 
@@ -48,11 +47,11 @@ function wrapCommandWithLimits(
   // 最大进程数：ulimit -u 64
   parts.push('ulimit -u 64 2>/dev/null || true');
 
-  if (parts.length === 0) return command;
+  if (parts.length === 0) return 'exec bash -c "$ZHIN_SANDBOX_COMMAND"';
 
   // 用分号连接，ulimit 失败也继续执行
   const ulimitChain = parts.join(' ; ');
-  return `${ulimitChain} ; exec bash -c ${JSON.stringify(command)}`;
+  return `${ulimitChain} ; exec bash -c "$ZHIN_SANDBOX_COMMAND"`;
 }
 
 /**
@@ -453,7 +452,7 @@ export class Sandbox {
       let killed = false;
 
       // 包装命令：ulimit 内存/CPU/文件/进程限制
-      const wrappedCommand = wrapCommandWithLimits(command, {
+      const wrappedCommand = wrapCommandWithLimits({
         maxMemoryMB: this.config.maxMemoryMB,
         timeout,
         maxCpuPercent: this.config.maxCpuPercent,
@@ -461,7 +460,7 @@ export class Sandbox {
 
       const child = child_process.spawn('bash', ['-c', wrappedCommand], {
         cwd,
-        env: cleanEnv,
+        env: { ...cleanEnv, ZHIN_SANDBOX_COMMAND: command },
         stdio: ['pipe', 'pipe', 'pipe'],
         detached: true, // 新进程组，便于整棵进程树 kill
       });

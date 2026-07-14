@@ -11,10 +11,6 @@ function isMessageSegment(seg: MessageElement): seg is MessageSegment {
 
 export type OutboundMarkdownMode = boolean | "auto";
 
-/** 常见 AI Markdown 输出特征（auto 模式） */
-const MARKDOWN_HINT =
-  /(?:\*\*|__|`|\[.+\]\(.+\)|^#{1,6}\s|^>\s|^\s*[-*+]\s|^```|\|.+\|)/m;
-
 const BLOCKING_RICH_TYPES = new Set([
   "audio",
   "video",
@@ -137,7 +133,20 @@ function segmentToMarkdownPart(seg: MessageSegment): string {
 function shouldConvertTextOnly(mode: OutboundMarkdownMode | undefined, bodyText: string): boolean {
   if (mode === false) return false;
   if (mode === true) return bodyText.trim().length > 0;
-  return MARKDOWN_HINT.test(bodyText);
+  return hasMarkdownHint(bodyText);
+}
+
+function hasMarkdownHint(text: string): boolean {
+  if (text.includes('**') || text.includes('__') || text.includes('`')) return true;
+  if (text.includes('](') || text.includes('|')) return true;
+  return text.split('\n').some((line) => {
+    const trimmed = line.trimStart();
+    return trimmed.startsWith('# ') || trimmed.startsWith('## ')
+      || trimmed.startsWith('> ')
+      || trimmed.startsWith('- ')
+      || trimmed.startsWith('* ')
+      || trimmed.startsWith('+ ');
+  });
 }
 
 function mergeTextImageToMarkdown(

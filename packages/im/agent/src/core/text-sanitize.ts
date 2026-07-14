@@ -5,7 +5,19 @@ export { stripHallucinatedToolCalls };
 
 /** Strip `<think>...</think>` blocks that some reasoning models embed in content. */
 export function stripThinkBlocks(text: string): string {
-  return text.replace(/<think>[\s\S]*?<\/think>\s*/gi, '').trim();
+  let out = '';
+  let cursor = 0;
+  const lower = text.toLowerCase();
+  while (cursor < text.length) {
+    const start = lower.indexOf('<think>', cursor);
+    if (start < 0) break;
+    const end = lower.indexOf('</think>', start + '<think>'.length);
+    if (end < 0) break;
+    out += text.slice(cursor, start);
+    cursor = end + '</think>'.length;
+    while (cursor < text.length && /\s/.test(text[cursor]!)) cursor++;
+  }
+  return (out + text.slice(cursor)).trim();
 }
 
 const RAW_TOOL_MARKUP_RE =

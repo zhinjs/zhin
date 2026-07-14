@@ -87,22 +87,17 @@ function stripRemainingTags(html: string): string {
 }
 
 function decodeCommonEntities(text: string): string {
-  return text
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, code: string) => {
-      const n = Number(code);
-      return Number.isFinite(n) && n >= 0 && n <= 0x10ffff ? String.fromCodePoint(n) : '';
-    })
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex: string) => {
-      const n = parseInt(hex, 16);
-      return Number.isFinite(n) && n >= 0 && n <= 0x10ffff ? String.fromCodePoint(n) : '';
-    });
+  return text.replace(/&(#x[0-9a-fA-F]+|#\d+|nbsp|amp|lt|gt|quot|apos);/gi, (entity: string) => {
+    const key = entity.slice(1, -1).toLowerCase();
+    if (key === 'nbsp') return ' ';
+    if (key === 'amp') return '&';
+    if (key === 'lt') return '<';
+    if (key === 'gt') return '>';
+    if (key === 'quot') return '"';
+    if (key === 'apos') return "'";
+    const n = key.startsWith('#x') ? parseInt(key.slice(2), 16) : Number(key.slice(1));
+    return Number.isFinite(n) && n >= 0 && n <= 0x10ffff ? String.fromCodePoint(n) : '';
+  });
 }
 
 export type HtmlToPlainTextOptions = {

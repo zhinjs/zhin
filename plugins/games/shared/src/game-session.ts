@@ -3,6 +3,7 @@
  * 定义回合制游戏的基础会话结构
  */
 import type { Message } from 'zhin.js';
+import { generateCompactId } from './random.js';
 
 /** 会话状态 */
 export type GameStatus = 'active' | 'won' | 'draw' | 'aborted';
@@ -51,7 +52,7 @@ export interface TurnBasedSession extends GameSession {
 
 /** 生成会话 ID */
 export function generateSessionId(): string {
-  return `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  return generateCompactId('s');
 }
 
 /** 获取当前回合玩家 ID */

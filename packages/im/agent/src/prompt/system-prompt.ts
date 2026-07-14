@@ -124,7 +124,6 @@ export interface RichSystemPromptContext {
 
 // ── Section builders ──
 
-const SKILL_XML_ENTRY_RE = /<skill ([^>]*)><name>([^<]*)<\/name><desc>([^<]*)<\/desc><\/skill>/g;
 const ORCHESTRATOR_SKILL_DESC_MAX = 96;
 
 function prependBullets(items: (string | string[] | null)[]): string[] {
@@ -136,11 +135,12 @@ function prependBullets(items: (string | string[] | null)[]): string[] {
 }
 
 function decodeXmlEntities(text: string): string {
-  return text
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"');
+  return text.replace(/&(amp|lt|gt|quot);/g, (_m, entity: string) => {
+    if (entity === 'amp') return '&';
+    if (entity === 'lt') return '<';
+    if (entity === 'gt') return '>';
+    return '"';
+  });
 }
 
 function truncateSkillDesc(desc: string, max = ORCHESTRATOR_SKILL_DESC_MAX): string {
@@ -151,16 +151,47 @@ function truncateSkillDesc(desc: string, max = ORCHESTRATOR_SKILL_DESC_MAX): str
 
 function parseSkillsSummaryXML(xml: string): Array<{ name: string; available: boolean; requires?: string; desc: string }> {
   const entries: Array<{ name: string; available: boolean; requires?: string; desc: string }> = [];
-  for (const match of xml.matchAll(SKILL_XML_ENTRY_RE)) {
-    const attrs = match[1] ?? '';
-    entries.push({
-      name: decodeXmlEntities(match[2] ?? ''),
-      available: !attrs.includes('available="false"'),
-      requires: attrs.match(/requires="([^"]*)"/)?.[1],
-      desc: decodeXmlEntities(match[3] ?? ''),
-    });
+  let cursor = 0;
+  while (cursor < xml.length) {
+    const start = xml.indexOf('<skill ', cursor);
+    if (start < 0) break;
+    const openEnd = xml.indexOf('>', start + 7);
+    const end = openEnd >= 0 ? xml.indexOf('</skill>', openEnd + 1) : -1;
+    if (openEnd < 0 || end < 0) break;
+    const attrs = xml.slice(start + 7, openEnd);
+    const body = xml.slice(openEnd + 1, end);
+    const name = readTag(body, 'name');
+    const desc = readTag(body, 'desc');
+    if (name != null && desc != null) {
+      entries.push({
+        name: decodeXmlEntities(name),
+        available: !attrs.includes('available="false"'),
+        requires: readAttr(attrs, 'requires'),
+        desc: decodeXmlEntities(desc),
+      });
+    }
+    cursor = end + '</skill>'.length;
   }
   return entries;
+}
+
+function readTag(xml: string, tag: string): string | null {
+  const open = `<${tag}>`;
+  const close = `</${tag}>`;
+  const start = xml.indexOf(open);
+  if (start < 0) return null;
+  const bodyStart = start + open.length;
+  const end = xml.indexOf(close, bodyStart);
+  return end >= 0 ? xml.slice(bodyStart, end) : null;
+}
+
+function readAttr(attrs: string, name: string): string | undefined {
+  const prefix = `${name}="`;
+  const start = attrs.indexOf(prefix);
+  if (start < 0) return undefined;
+  const valueStart = start + prefix.length;
+  const end = attrs.indexOf('"', valueStart);
+  return end >= 0 ? attrs.slice(valueStart, end) : undefined;
 }
 
 /** toolSearch 编排层：技能目录仅 name + 短触发说明，不含全文 desc XML */

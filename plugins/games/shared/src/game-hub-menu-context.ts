@@ -1,5 +1,6 @@
 import type { Message } from 'zhin.js';
 import { channelKey } from './board-sender.js';
+import { generateCompactId } from './random.js';
 
 export interface HubMenuContext {
   channelKey: string;
@@ -31,7 +32,7 @@ function hubMenuKey(message: Message<any>): string {
 }
 
 export function createHubScope(message: Message<any>): string {
-  const scopeId = `h${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+  const scopeId = generateCompactId('h');
   contexts.set(scopeId, {
     channelKey: channelKey(message),
     openerId: message.$sender.id,

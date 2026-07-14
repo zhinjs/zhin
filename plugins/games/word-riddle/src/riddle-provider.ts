@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { secureRandomInt } from '@zhin.js/game-shared';
 
 export type RiddleType = 'char' | 'idiom';
 
@@ -98,7 +99,7 @@ export function pickRoundQueue(type: RiddleType, count = QUESTIONS_PER_ROUND): R
   const k = Math.min(count, n);
   const indices = Array.from({ length: n }, (_, i) => i);
   for (let i = 0; i < k; i++) {
-    const j = i + Math.floor(Math.random() * (n - i));
+    const j = i + secureRandomInt(n - i);
     [indices[i], indices[j]] = [indices[j]!, indices[i]!];
   }
   return indices.slice(0, k).map((i) => pool[i]!);

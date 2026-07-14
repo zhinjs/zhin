@@ -1,5 +1,5 @@
 import type { Database, DatabaseFeature, Message, Models, RelatedModel } from 'zhin.js';
-import { channelKey, boardMessageMatches } from '@zhin.js/game-shared';
+import { channelKey, boardMessageMatches, generateCompactId } from '@zhin.js/game-shared';
 import type { TttModelName, TttSessionRow } from './models.js';
 
 /** 井字棋服务使用的数据库实例（Models 经 models.ts 模块增强） */
@@ -75,7 +75,7 @@ export class QueueService {
 }
 
 export function sessionId(): string {
-  return `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  return generateCompactId('s');
 }
 
 export class SessionService {

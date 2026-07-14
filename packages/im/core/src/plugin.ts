@@ -168,15 +168,19 @@ export class Plugin extends PluginBase implements PluginLike {
   get name(): string {
     if (this.#cachedName) return this.#cachedName;
 
-    this.#cachedName = path
+    let name = path
       .relative(process.cwd(), this.filePath)
       .replace(/\?t=\d+$/, "")
       .replace(/\\/g, "/")
       .replace(/\/index\.(js|ts)x?$/, "")
-      .replace(/\/(lib|src|dist)$/, "")
-      .replace(/.*\/node_modules\//, "")
-      .replace(/.*\//, "")
-      .replace(/\.(js|ts)x?$/, "");
+      .replace(/\/(lib|src|dist)$/, "");
+
+    const nodeModulesIndex = name.indexOf("node_modules/");
+    if (nodeModulesIndex !== -1) name = name.slice(nodeModulesIndex + "node_modules/".length);
+    const slash = name.lastIndexOf("/");
+    if (slash !== -1) name = name.slice(slash + 1);
+    name = name.replace(/\.(js|ts)x?$/, "");
+    this.#cachedName = name;
 
     return this.#cachedName;
   }

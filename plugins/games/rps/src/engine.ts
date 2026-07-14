@@ -1,3 +1,5 @@
+import { secureRandomItem } from '@zhin.js/game-shared';
+
 export const RPS_PREFIX = 'rps';
 
 export type RpsMove = 'rock' | 'paper' | 'scissors';
@@ -16,7 +18,7 @@ const BEATS: Record<RpsMove, RpsMove> = {
 
 export function randomBotMove(): RpsMove {
   const moves: RpsMove[] = ['rock', 'paper', 'scissors'];
-  return moves[Math.floor(Math.random() * moves.length)]!;
+  return secureRandomItem(moves);
 }
 
 /** 1=玩家胜 2=机器人胜 0=平局 */

@@ -440,7 +440,7 @@ export function generateEndpointsConfigToml(result: AdapterSetupResult): string 
     lines.push('[[endpoints]]');
     for (const [key, value] of Object.entries(entry)) {
       if (typeof value === 'string') {
-        lines.push(`${key} = "${value.replace(/"/g, '\\"')}"`);
+        lines.push(`${key} = "${escapeTomlString(value)}"`);
       } else {
         lines.push(`${key} = ${JSON.stringify(value)}`);
       }
@@ -448,6 +448,15 @@ export function generateEndpointsConfigToml(result: AdapterSetupResult): string 
     lines.push('');
   }
   return lines.join('\n');
+}
+
+function escapeTomlString(value: string): string {
+  let out = '';
+  for (const ch of value) {
+    if (ch === '"' || ch === '\\') out += `\\${ch}`;
+    else out += ch;
+  }
+  return out;
 }
 
 /**

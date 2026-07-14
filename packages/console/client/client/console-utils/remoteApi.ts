@@ -3,13 +3,13 @@ const API_BASE_KEY = "zhin_api_base";
 
 export function getApiBase(): string {
   const stored = localStorage.getItem(API_BASE_KEY)?.trim();
-  if (stored) return stored.replace(/\/$/, "");
+  if (stored) return trimTrailingSlash(stored);
   if (typeof window !== "undefined") return window.location.origin;
   return "";
 }
 
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  return getRuntimeToken() ?? localStorage.getItem(TOKEN_KEY);
 }
 
 export function resolveApiUrl(path: string): string {
@@ -41,8 +41,19 @@ export async function apiFetch(
 
   const res = await fetch(url, { ...init, headers });
   if (res.status === 401) {
+    sessionStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(TOKEN_KEY);
     window.dispatchEvent(new CustomEvent("zhin:auth-required"));
   }
   return res;
+}
+
+function trimTrailingSlash(value: string): string {
+  return value.endsWith("/") ? value.slice(0, -1) : value;
+}
+
+function getRuntimeToken(): string | null {
+  if (typeof window === "undefined") return null;
+  const token = (window as unknown as { __ZHIN_API_TOKEN?: string }).__ZHIN_API_TOKEN;
+  return token?.trim() || null;
 }

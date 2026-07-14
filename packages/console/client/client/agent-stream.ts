@@ -33,6 +33,7 @@ async function authedFetch(
   const url = path.startsWith("/") ? resolveApiUrl(path) : path;
   const res = await fetchImpl(url, { ...init, headers });
   if (res.status === 401 && typeof localStorage !== "undefined") {
+    sessionStorage.removeItem("zhin_api_token");
     localStorage.removeItem("zhin_api_token");
     window.dispatchEvent(new CustomEvent("zhin:auth-required"));
   }

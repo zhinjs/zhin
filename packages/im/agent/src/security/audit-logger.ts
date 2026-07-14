@@ -101,18 +101,7 @@ const SENSITIVE_PATTERNS = [
  * 脱敏命令中的敏感信息
  */
 function sanitizeCommand(command: string): string {
-  let sanitized = command;
-
-  // 脱敏环境变量值
-  sanitized = sanitized.replace(
-    /([A-Za-z_][A-Za-z0-9_]*)=([^\s;|&]+)/g,
-    (match, key, value) => {
-      if (SENSITIVE_PATTERNS.some(p => p.test(key))) {
-        return `${key}=***`;
-      }
-      return match;
-    }
-  );
+  let sanitized = redactEnvAssignments(command);
 
   // 脱敏 URL 中的密码
   sanitized = sanitized.replace(
@@ -127,6 +116,46 @@ function sanitizeCommand(command: string): string {
   );
 
   return sanitized;
+}
+
+function redactEnvAssignments(command: string): string {
+  let out = '';
+  let i = 0;
+  while (i < command.length) {
+    const start = i;
+    while (i < command.length && !isCommandSeparator(command[i]!)) i++;
+    const token = command.slice(start, i);
+    out += redactEnvToken(token);
+    while (i < command.length && isCommandSeparator(command[i]!)) {
+      out += command[i]!;
+      i++;
+    }
+  }
+  return out;
+}
+
+function redactEnvToken(token: string): string {
+  const eq = token.indexOf('=');
+  if (eq <= 0) return token;
+  const key = token.slice(0, eq);
+  if (!isEnvKey(key) || !SENSITIVE_PATTERNS.some((p) => p.test(key))) return token;
+  return `${key}=***`;
+}
+
+function isEnvKey(value: string): boolean {
+  const first = value.charCodeAt(0);
+  const validFirst = first === 95 || (first >= 65 && first <= 90) || (first >= 97 && first <= 122);
+  if (!validFirst) return false;
+  for (let i = 1; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    const ok = code === 95 || (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+    if (!ok) return false;
+  }
+  return true;
+}
+
+function isCommandSeparator(ch: string): boolean {
+  return ch === ' ' || ch === '\t' || ch === '\n' || ch === ';' || ch === '|' || ch === '&';
 }
 
 /**

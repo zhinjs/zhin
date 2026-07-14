@@ -21,3 +21,4 @@ export * from './interaction-profiles.js';
 export * from './game-records.js';
 export * from './game-onboarding.js';
 export * from './command-help.js';
+export * from './random.js';

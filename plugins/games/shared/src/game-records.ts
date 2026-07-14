@@ -9,6 +9,7 @@ import {
 } from 'zhin.js';
 import { channelKey } from './board-sender.js';
 import { getRegisteredGame, getRegisteredGames } from './game-hub-feature.js';
+import { generateCompactId } from './random.js';
 
 export type GameRecordResult = 'won' | 'lost' | 'draw' | 'aborted';
 
@@ -56,7 +57,7 @@ export function initGameRecordDatabase(dbFeature: DatabaseFeature): void {
 }
 
 function recordId(): string {
-  return `gr${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  return generateCompactId('gr');
 }
 
 /** 对局结束时写入战绩（database 未就绪时静默跳过） */

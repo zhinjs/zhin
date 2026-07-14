@@ -25,13 +25,28 @@ export function shouldBlockDelegationAskUser(
   if (!cell || cell.members.length < 2) return undefined;
   const q = question.trim();
   if (questionType !== 'confirm') return undefined;
-  if (/授权|authorize|是否.*(调用|使用|委派|派遣)|allow.*(researcher|executor|delegate|agent)/i.test(q)) {
+  if (looksLikeDelegationAuthorization(q)) {
     return 'Error: In group collaboration, do not ask_owner to authorize delegation. Use orchestration_add_task (internal_room) or spawn_task with the peer endpoint.';
   }
-  if (/Researcher|Evaluator|Executor|Reviewer/i.test(q) && /是否|authorize|授权|调用/i.test(q)) {
+  if (mentionsPipelineRole(q) && containsAny(q.toLowerCase(), ['是否', 'authorize', '授权', '调用'])) {
     return 'Error: In group collaboration, dispatch peers via OrchestrationKernel (internal_room task) — do not ask_owner for role authorization.';
   }
   return undefined;
+}
+
+function looksLikeDelegationAuthorization(text: string): boolean {
+  const lower = text.toLowerCase();
+  if (text.includes('授权') || lower.includes('authorize')) return true;
+  if (text.includes('是否') && containsAny(text, ['调用', '使用', '委派', '派遣'])) return true;
+  return lower.includes('allow') && containsAny(lower, ['researcher', 'executor', 'delegate', 'agent']);
+}
+
+function mentionsPipelineRole(text: string): boolean {
+  return containsAny(text.toLowerCase(), ['researcher', 'evaluator', 'executor', 'reviewer']);
+}
+
+function containsAny(text: string, needles: readonly string[]): boolean {
+  return needles.some((needle) => text.includes(needle));
 }
 
 export function buildGroupAskUserFollowUp(commMessage: Message, answer: string): string {

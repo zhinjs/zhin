@@ -188,7 +188,7 @@ function ensureHttp(config: Record<string, unknown>, mutations: string[]): void 
     : [];
 
   let changed = false;
-  if (!corsOrigins.includes(CONSOLE_URL)) {
+  if (!hasConsoleOrigin(corsOrigins)) {
     corsOrigins.push(CONSOLE_URL);
     http.corsOrigins = corsOrigins;
     mutations.push(`added ${CONSOLE_URL} to http.corsOrigins`);
@@ -380,9 +380,19 @@ export function diagnoseConsoleConfig(config: Record<string, unknown>): ConsoleC
   return {
     missingHostPlugins: CONSOLE_HOST_PLUGINS.filter((plugin) => !plugins.includes(plugin)),
     missingSandboxPlugin: !plugins.includes(SANDBOX_PLUGIN),
-    missingConsoleOrigin: !corsOrigins.includes(CONSOLE_URL),
+    missingConsoleOrigin: !hasConsoleOrigin(corsOrigins.filter((origin): origin is string => typeof origin === 'string')),
     missingHttpToken: typeof http.token !== 'string' || http.token.trim().length === 0,
   };
+}
+
+function hasConsoleOrigin(origins: readonly string[]): boolean {
+  return origins.some((origin) => {
+    try {
+      return new URL(origin).origin === CONSOLE_URL;
+    } catch {
+      return false;
+    }
+  });
 }
 
 export function applyConsoleConfigFixes(config: Record<string, unknown>): boolean {

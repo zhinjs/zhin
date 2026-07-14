@@ -143,9 +143,22 @@ export function looksLikeInternalToolDump(text: string): boolean {
   const t = text.trim();
   if (!t) return false;
   if (/^Done\.\s+Information retrieved:/i.test(t)) return true;
-  if (/^Something went wrong:/i.test(t) && /【\w+】/.test(t)) return true;
-  const blocks = t.match(/【[^】]+】/g);
-  if ((blocks?.length ?? 0) >= 2) return true;
-  if (/【run_deferred_task】[\s\S]*"status"\s*:/i.test(t)) return true;
+  if (t.toLowerCase().startsWith('something went wrong:') && t.includes('【') && t.includes('】')) return true;
+  if (countBracketBlocks(t) >= 2) return true;
+  if (t.includes('【run_deferred_task】') && t.includes('"status"')) return true;
   return false;
+}
+
+function countBracketBlocks(text: string): number {
+  let count = 0;
+  let cursor = 0;
+  while (cursor < text.length) {
+    const start = text.indexOf('【', cursor);
+    if (start < 0) break;
+    const end = text.indexOf('】', start + 1);
+    if (end < 0) break;
+    count++;
+    cursor = end + 1;
+  }
+  return count;
 }

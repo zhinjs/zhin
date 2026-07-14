@@ -7,6 +7,7 @@
  */
 
 import type { CollaborationScene, PipelineRole } from './types.js';
+import { randomUUID } from 'node:crypto';
 import { WIZARD_STEPS, isAssignableWizardRole, type WizardStep, type AssignableWizardRole } from './collaboration-db-model.js';
 import { getSceneIdentityService, type InitSessionRecord } from './scene-identity-service.js';
 import { getCollaborationSceneService } from './scene-service.js';
@@ -66,7 +67,7 @@ export async function startInitWizard(input: StartWizardInput): Promise<StartWiz
     };
   }
 
-  const sessionId = `init-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const sessionId = `init-${Date.now().toString(36)}-${randomUUID().replaceAll('-', '').slice(0, 8)}`;
   const logicalSceneId = defaultCellId(input.plannerAdapter, input.plannerSceneId);
 
   await svc.createInitSession({

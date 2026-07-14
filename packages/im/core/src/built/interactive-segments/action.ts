@@ -29,10 +29,24 @@ const PAYLOAD_PATTERN = /^[a-z0-9_]+:[^:\s]+:[a-z0-9_-]+$/i;
 /** 去掉 @bot、XML at 段、首尾空白（QQ 指令预填文本归一化） */
 export function stripInteractiveCommandText(raw: string): string {
   let text = raw.trim();
-  text = text.replace(/<at\s[^>]*\/>/gi, ' ');
+  text = stripXmlAtSegments(text);
   text = text.replace(/^@\S+\s+/u, '');
   text = text.replace(/\s+/g, ' ').trim();
   return text;
+}
+
+function stripXmlAtSegments(text: string): string {
+  let out = '';
+  let cursor = 0;
+  while (cursor < text.length) {
+    const start = text.toLowerCase().indexOf('<at ', cursor);
+    if (start < 0) break;
+    const end = text.indexOf('/>', start + 4);
+    if (end < 0) break;
+    out += text.slice(cursor, start) + ' ';
+    cursor = end + 2;
+  }
+  return out + text.slice(cursor);
 }
 
 /** 从文本降级输入解析 payload（需在 active session 的 fallback.map 中查找） */

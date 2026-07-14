@@ -1,3 +1,5 @@
+import { secureRandomIntInclusive } from '@zhin.js/game-shared';
+
 export const GUESS_PREFIX = 'guess';
 export const MIN = 1;
 export const MAX = 100;
@@ -6,7 +8,7 @@ export const MAX_ATTEMPTS = 7;
 export type GuessResult = 'win' | 'low' | 'high' | 'invalid';
 
 export function newSecret(): number {
-  return MIN + Math.floor(Math.random() * (MAX - MIN + 1));
+  return secureRandomIntInclusive(MIN, MAX);
 }
 
 export function evaluateGuess(secret: number, value: number): GuessResult {

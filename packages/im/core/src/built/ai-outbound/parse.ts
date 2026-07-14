@@ -27,18 +27,16 @@ export function parseOutboundSegment(raw: unknown): Segment | null {
 /** 去掉嵌入 JSON 候选末尾的 markdown 围栏（模型常见 ```json … ``` 误输出）。 */
 export function trimTrailingMarkdownFence(raw: string): string {
   let s = raw.trim();
-  const trailingFence = s.match(/^([\s\S]*?)\s*```\s*$/);
-  if (trailingFence) s = trailingFence[1]!.trim();
+  if (s.endsWith('```')) s = s.slice(0, -3).trimEnd();
   return s;
 }
 
 export function unwrapAiOutboundJsonCandidate(raw: string): string {
   const trimmed = raw.trim();
-  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)```\s*$/i);
-  if (fenced) return fenced[1]!.trim();
-  const embeddedFence = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (embeddedFence && trimmed.indexOf('{') >= 0) {
-    return trimTrailingMarkdownFence(embeddedFence[1]!.trim());
+  const fenced = readMarkdownFence(trimmed);
+  if (fenced && fenced.full) return fenced.body.trim();
+  if (fenced && trimmed.indexOf('{') >= 0) {
+    return trimTrailingMarkdownFence(fenced.body.trim());
   }
   return trimTrailingMarkdownFence(trimmed);
 }
@@ -50,12 +48,12 @@ export function extractEmbeddedAiOutboundJson(
   const trimmed = plain.trim();
   if (!trimmed.includes('{')) return null;
 
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const fenced = readMarkdownFence(trimmed);
   if (fenced) {
-    const jsonRaw = trimTrailingMarkdownFence(fenced[1]!.trim());
+    const jsonRaw = trimTrailingMarkdownFence(fenced.body.trim());
     const payload = parseAiOutboundJson(jsonRaw);
     if (payload?.mentions?.length && payload.text?.trim()) {
-      const prose = trimmed.slice(0, fenced.index!).trim();
+      const prose = trimmed.slice(0, fenced.start).trim();
       return { prose, jsonRaw };
     }
   }
@@ -70,6 +68,20 @@ export function extractEmbeddedAiOutboundJson(
     idx = trimmed.indexOf('{', idx + 1);
   }
   return null;
+}
+
+function readMarkdownFence(text: string): { start: number; body: string; full: boolean } | null {
+  const start = text.indexOf('```');
+  if (start < 0) return null;
+  let bodyStart = start + 3;
+  const langEnd = text.indexOf('\n', bodyStart);
+  if (langEnd >= 0) {
+    const lang = text.slice(bodyStart, langEnd).trim().toLowerCase();
+    if (lang === '' || lang === 'json') bodyStart = langEnd + 1;
+  }
+  const end = text.indexOf('```', bodyStart);
+  if (end < 0) return null;
+  return { start, body: text.slice(bodyStart, end), full: start === 0 && text.slice(end + 3).trim() === '' };
 }
 
 export function parseAiOutboundJson(raw: string): ZhinAiOutboundPayload | null {

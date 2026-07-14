@@ -1,8 +1,10 @@
+import { secureRandomIntInclusive } from '@zhin.js/game-shared';
+
 export const DICE_PREFIX = 'dice';
 export const WIN_TARGET = 2; // best of 3 -> first to 2
 
 export function rollD6(): number {
-  return 1 + Math.floor(Math.random() * 6);
+  return secureRandomIntInclusive(1, 6);
 }
 
 export function diceEmoji(n: number): string {

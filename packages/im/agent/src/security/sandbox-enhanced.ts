@@ -329,31 +329,19 @@ function validateEnhancedCommand(
   command: string,
   config: EnhancedSandboxConfig,
 ): { valid: boolean; reason?: string } {
+  const lower = command.toLowerCase();
   // 检查是否尝试更改目录
-  if (/\bcd\s/.test(command)) {
+  if (lower.includes('cd ')) {
     return { valid: false, reason: '沙箱内禁止使用 cd 命令' };
   }
 
   // 检查是否尝试下载恶意内容（优先级最高）
-  const dangerousPatterns = [
-    /curl.*\|\s*sh/,
-    /wget.*\|\s*sh/,
-    /curl.*&&.*\./,
-    /wget.*&&.*\./,
-    /eval\s*\(/,
-    /exec\s*\(/,
-    /child_process/,
-    /spawn\s*\(/,
-    /fork\s*\(/,
-  ];
-
-  for (const pattern of dangerousPatterns) {
-    if (pattern.test(command)) {
-      return {
-        valid: false,
-        reason: `沙箱内禁止执行危险命令模式: ${pattern.source}`,
-      };
-    }
+  const dangerousReason = matchDangerousEnhancedCommand(lower);
+  if (dangerousReason) {
+    return {
+      valid: false,
+      reason: `沙箱内禁止执行危险命令模式: ${dangerousReason}`,
+    };
   }
 
   // 检查网络访问
@@ -430,6 +418,21 @@ function validateEnhancedCommand(
   }
 
   return { valid: true };
+}
+
+function matchDangerousEnhancedCommand(lowerCommand: string): string | undefined {
+  if ((lowerCommand.includes('curl') || lowerCommand.includes('wget')) && lowerCommand.includes('|') && lowerCommand.includes('sh')) {
+    return 'curl|sh / wget|sh 类管道';
+  }
+  if ((lowerCommand.includes('curl') || lowerCommand.includes('wget')) && lowerCommand.includes('&&') && lowerCommand.includes('./')) {
+    return '下载后执行本地脚本';
+  }
+  if (lowerCommand.includes('eval(')) return 'eval(';
+  if (lowerCommand.includes('exec(')) return 'exec(';
+  if (lowerCommand.includes('child_process')) return 'child_process';
+  if (lowerCommand.includes('spawn(')) return 'spawn(';
+  if (lowerCommand.includes('fork(')) return 'fork(';
+  return undefined;
 }
 
 // ── 环境变量清理 ──────────────────────────────────────────────────────

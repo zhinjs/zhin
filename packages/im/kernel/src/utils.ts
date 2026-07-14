@@ -196,14 +196,27 @@ export function getEvalCacheStats(): { size: number; maxSize: number } {
   };
 }
 export function compiler(template: string, ctx: Dict) {
-  const matched = [...template.matchAll(/\${([^}]*?)}/g)];
-  for (const item of matched) {
-    const tpl = item[1];
+  for (const item of readTemplateRefs(template)) {
+    const tpl = item.expr;
     const raw = getValueWithRuntime(tpl, ctx);
     const value = typeof raw === 'string' ? raw : (raw == null ? 'undefined' : JSON.stringify(raw, null, 2));
-    template = template.replace(`\${${item[1]}}`, value);
+    template = `${template.slice(0, item.start)}${value}${template.slice(item.end)}`;
   }
   return template;
+}
+
+function readTemplateRefs(template: string): Array<{ start: number; end: number; expr: string }> {
+  const refs: Array<{ start: number; end: number; expr: string }> = [];
+  let cursor = 0;
+  while (cursor < template.length) {
+    const start = template.indexOf('${', cursor);
+    if (start < 0) break;
+    const end = template.indexOf('}', start + 2);
+    if (end < 0) break;
+    refs.unshift({ start, end: end + 1, expr: template.slice(start + 2, end) });
+    cursor = end + 1;
+  }
+  return refs;
 }
 
 export function remove<T>(list: T[], fn: (item: T) => boolean): void;

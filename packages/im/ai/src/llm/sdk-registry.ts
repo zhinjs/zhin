@@ -43,7 +43,7 @@ function trimUrl(value: string | undefined): string | undefined {
 function normalizeAnthropicBaseUrl(baseUrl: string | undefined): string | undefined {
   const url = trimUrl(baseUrl);
   if (!url) return undefined;
-  const withoutTrailing = url.replace(/\/+$/, '');
+  const withoutTrailing = trimTrailingSlashes(url);
   if (withoutTrailing.endsWith('/v1')) return withoutTrailing;
   return `${withoutTrailing}/v1`;
 }
@@ -52,30 +52,36 @@ function normalizeAnthropicBaseUrl(baseUrl: string | undefined): string | undefi
 export function normalizeGoogleBaseUrl(baseUrl: string | undefined): string | undefined {
   const url = trimUrl(baseUrl);
   if (!url) return undefined;
-  const withoutTrailing = url.replace(/\/+$/, '');
+  const withoutTrailing = trimTrailingSlashes(url);
   if (withoutTrailing.endsWith('/v1beta')) return withoutTrailing;
   return `${withoutTrailing}/v1beta`;
 }
 
 function normalizeOpenAiCompatibleBaseUrl(baseUrl: string): string {
-  const url = baseUrl.replace(/\/+$/, '');
+  const url = trimTrailingSlashes(baseUrl);
   if (url.endsWith('/v1')) return url;
   return `${url}/v1`;
 }
 
 function resolveOllamaBaseUrl(config: ProviderInstanceConfig): string {
   const host = config.host?.trim() || 'http://127.0.0.1:11434';
-  const normalized = host.replace(/\/+$/, '');
+  const normalized = trimTrailingSlashes(host);
   return normalized.endsWith('/v1') ? normalized : `${normalized}/v1`;
 }
 
 function resolveCloudflareBaseUrl(config: ProviderInstanceConfig): string {
-  if (config.baseUrl?.trim()) return config.baseUrl.trim().replace(/\/+$/, '');
+  if (config.baseUrl?.trim()) return trimTrailingSlashes(config.baseUrl.trim());
   const accountId = config.accountId?.trim();
   if (!accountId) {
     throw new Error('cloudflare sdk requires accountId or baseUrl');
   }
   return `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/v1`;
+}
+
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === '/') end--;
+  return value.slice(0, end);
 }
 
 function buildHeaders(config: ProviderInstanceConfig): Record<string, string> | undefined {
