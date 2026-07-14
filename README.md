@@ -3,10 +3,13 @@
 TypeScript **多通道 IM Bot 框架** — 插件热重载、Sandbox 调试、Remote Console  
 可选 **Agent 栈**（`@zhin.js/agent`）— 命令与 `@` / `ai:` 对话可混用
 
-[文档](https://zhin.js.org)
-[CI](https://github.com/zhinjs/zhin/actions/workflows/ci.yml)
-[codecov](https://codecov.io/github/zhinjs/zhin)
-[License](./LICENSE)
+[![CI](https://github.com/zhinjs/zhin/actions/workflows/ci.yml/badge.svg)](https://github.com/zhinjs/zhin/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/zhin.js.svg?color=cb3837)](https://www.npmjs.com/package/zhin.js)
+[![Node](https://img.shields.io/node/v/zhin.js.svg?color=339933)](https://nodejs.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![codecov](https://codecov.io/gh/zhinjs/zhin/graph/badge.svg)](https://codecov.io/gh/zhinjs/zhin)
+[![Docs](https://img.shields.io/badge/docs-zhin.js.org-0ea5e9)](https://zhin.js.org)
+[![pnpm](https://img.shields.io/badge/maintained%20with-pnpm-f69220)](https://pnpm.io)
 
 <details>
 <summary>产品边界（展开）</summary>
