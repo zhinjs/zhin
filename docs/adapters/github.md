@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/github/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/github/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=0cf5cd390e7258ea -->
+<!-- sync-adapter-docs:sha256=6a85b9903f12b2a2 -->
 
 # @zhin.js/adapter-github
 
@@ -24,7 +24,7 @@ tier: Experimental
 - ✅ **事件通知**：Webhook 订阅，跨平台推送到任意聊天
 - ✅ **GitHub App 认证**：JWT → Installation Token，自动刷新
 - ✅ **OAuth 用户绑定**：用户可绑定自己的 GitHub 账号，star/fork 以个人身份执行
-- ✅ **AI Skill**：所有工具自动暴露给 AI 调用
+- ✅ **Bot 开发工作流**：托管 git 工作区 + App 身份 push/开 PR（HITL 确认）
 - ✅ **无 router 也能运行**：核心功能不依赖 HTTP 服务，有 router 时自动注册 Webhook 和 OAuth 路由
 
 ## 安装
@@ -49,7 +49,7 @@ pnpm add @zhin.js/adapter-github
 4. 权限设置（Permissions）：
    - **Repository → Issues**: Read & Write
    - **Repository → Pull requests**: Read & Write
-   - **Repository → Contents**: Read
+   - **Repository → Contents**: Read & Write（Bot 提交代码）
    - **Repository → Metadata**: Read
    - **Repository → Actions**: Read（查看 CI）
 5. 订阅事件（Subscribe to events）：
@@ -68,7 +68,10 @@ endpoints:
     app_id: 123456
     private_key: ./data/github-app.pem   # PEM 文件路径或直接粘贴内容
     webhook_secret: your-secret          # 可选；配置后启用 Webhook
-    webhook_path: /pub/github/webhook    # 可选；默认 /github/webhook，/pub/* 可绕过 Bearer
+    webhook_path: /pub/github/webhook    # 可选
+    auto_reply_repos:                    # 可选：这些 repo 的评论自动触发 AI
+      - zhinjs/zhin
+    workspace_root: ./data/github-workspaces  # 可选：Bot git 工作区
 
 plugins:
   - database
@@ -79,12 +82,10 @@ plugins:
 ```env
 GITHUB_APP_ID=123456
 GITHUB_WEBHOOK_SECRET=your-secret
-# MCP server-github（适配器自动 addMcp，与 App 认证独立）
-GITHUB_PERSONAL_ACCESS_TOKEN=ghp_xxxxxxxxxxxx
-# 或 ai.githubMcp.token / ai.mcpServers
+# MCP server-github（可选；PAT = 人身份，默认关闭）
+# ai.githubMcp.enabled: true
+# GITHUB_PERSONAL_ACCESS_TOKEN=ghp_xxxxxxxxxxxx
 ```
-
-或在 `zhin.config.yml` 中设置 `ai.githubMcp.token`（优先于环境变量）。
 
 `private_key` 支持两种写法：
 - 文件路径：`./data/github-app.pem`
@@ -109,12 +110,21 @@ GitHub adapter 将 Issue/PR 映射为聊天频道：
 | `github_bind` / `github_unbind` / `github_whoami` | 用户 GitHub 账号绑定 |
 | `github_install` | GitHub App 安装链接 |
 | `github_subscribe` / `github_unsubscribe` / `github_subscriptions` | 频道级 Webhook 订阅 |
+| `github_prepare_workspace` | Clone/fetch 托管工作区并 checkout 分支 |
+| `github_patch_file` | Contents API 单文件更新（Bot 身份） |
+| `github_push_branch` | git commit + push（**需 HITL**） |
+| `github_create_pr` | 创建 PR（**需 HITL**） |
 
-### MCP（`@modelcontextprotocol/server-github`）
+### Bot 工作流（App 身份）
 
-配置 `GITHUB_PERSONAL_ACCESS_TOKEN`（或 `ai.githubMcp.token`）后，适配器通过 `orchestrator.addMcp` 注册 `github` server；AI 侧工具名为 `mcp_github_*`（如 `mcp_github_fork_repository`、`mcp_github_create_issue`）。
+- 评论回复：Webhook → `$reply`，Installation Token，UI 显示 `{slug}[bot]` + **Bot** 徽章
+- 开发提交：`github_prepare_workspace` → bash 改代码 → `github_push_branch`（确认）→ Issue 场景 `github_create_pr`
+- PR 线程：push 到现有 PR head 分支，不新开 PR
+- 工作区默认：`data/github-workspaces/{owner}/{repo}`
 
-**BREAKING**：`github_fork` 已移除，请改用 `mcp_github_fork_repository`。
+### MCP（`@modelcontextprotocol/server-github`，可选）
+
+仅当 `ai.githubMcp.enabled: true` 且配置 PAT 时注册。`mcp_github_*` 以**用户 PAT** 操作，**不能**作为 Bot 写仓库。Bot 写操作请用上方 `github_*` 工具。
 
 ### 使用示例
 
@@ -165,7 +175,8 @@ Headers:
 | 操作类型 | 使用的 Token | 原因 |
 |---------|------------|------|
 | 读取 issue/PR/repo 信息 | App JWT | 不涉及用户身份 |
-| 评论（bot 发言） | App JWT | 以机器人身份发言 |
+| 评论（bot 发言） | App Installation Token | 以 `{slug}[bot]` 机器人身份发言 |
+| push / 开 PR | App Installation Token + git author | UI **Bot** 徽章（非 Member） |
 | star / unstar | User OAuth | 个人行为 |
 | fork | User OAuth | 个人行为 |
 
