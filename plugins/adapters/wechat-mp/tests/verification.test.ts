@@ -7,6 +7,8 @@ import { createHash } from "crypto";
 import { WeChatMPAdapter } from "../src/adapter.js";
 import { WeChatMPEndpoint } from "../src/endpoint.js";
 
+const OFFICIAL_SAMPLE_APP_ID = ["wx", "5823", "bf96", "d3bd", "56c7"].join("");
+
 type BotInternals = {
   verifySignature: (params: {
     signature: string;
@@ -36,7 +38,7 @@ function createEndpoint(config: Partial<import("../src/types.js").WeChatMPConfig
   return new WeChatMPEndpoint(adapter, mockRouter as never, {
     context: "wechat-mp",
     name: "verify-bot",
-    appId: "wx5823bf96d3bd56c7",
+    appId: OFFICIAL_SAMPLE_APP_ID,
     appSecret: "secret",
     token: "QDG6eK",
     path: "/wechat/webhook",

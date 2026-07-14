@@ -98,7 +98,7 @@ describe('WeChatMPEndpoint.parseMessageContent', () => {
 
 describe('WeChatMP AES encryption round-trip', () => {
   // Simulate the same algorithm used by the bot
-  const appId = 'wx1234567890abcdef'
+  const appId = 'wechat-test-app-id'
   const token = 'test_token_123'
   // 43-char base64url key → 32 bytes after Base64 decode with trailing =
   const encodingAESKey = 'abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG'

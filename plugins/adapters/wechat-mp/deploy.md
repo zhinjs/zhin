@@ -30,7 +30,7 @@ pnpm build
 
 ```bash
 # 微信公众号配置
-WECHAT_APP_ID=wx1234567890abcdef
+WECHAT_APP_ID=your-wechat-app-id
 WECHAT_APP_SECRET=your-app-secret-key
 WECHAT_TOKEN=your-verification-token
 WECHAT_ENCODING_AES_KEY=your-encoding-aes-key
