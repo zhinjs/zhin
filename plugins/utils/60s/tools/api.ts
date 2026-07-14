@@ -6,7 +6,10 @@ const API_BASE = process.env.ZHIN_60S_API || 'https://60s.viki.moe';
 
 export type ListItem = string | Record<string, unknown>;
 
-export async function fetchApi<T = unknown>(
+/** Untyped 60s API JSON payload (handlers narrow fields at runtime). */
+export type ApiPayload = Record<string, unknown>;
+
+export async function fetchApi<T = ApiPayload>(
   endpoint: string,
   params?: Record<string, string>,
 ): Promise<T> {
@@ -27,6 +30,21 @@ export async function fetchApi<T = unknown>(
     throw new Error(data.message || data.msg || `API 错误: ${data.code}`);
   }
   return (data.data ?? data) as T;
+}
+
+/** Coerce nested API JSON objects for property access in handlers. */
+export function asRecord(value: unknown): ApiPayload {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as ApiPayload)
+    : {};
+}
+
+export function asString(value: unknown): string {
+  return value == null ? '' : String(value);
+}
+
+export function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
 }
 
 export function formatList(items: ListItem[], limit = 10): string {

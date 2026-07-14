@@ -1,4 +1,4 @@
-import { fetchApi } from '../api.js';
+import { asRecord, asString, fetchApi } from '../api.js';
 
 export default async function (args: { province?: string }) {
   const params: Record<string, string> | undefined = args.province
@@ -13,7 +13,8 @@ export default async function (args: { province?: string }) {
     });
   }
   if (data.trend) {
-    lines.push('', `📊 ${data.trend.description || ''}`);
+    const trend = asRecord(data.trend);
+    lines.push('', `📊 ${asString(trend.description)}`);
   }
   return lines.join('\n');
 }

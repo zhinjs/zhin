@@ -1,4 +1,4 @@
-import { fetchApi } from '../api.js';
+import { asArray, asRecord, asString, fetchApi } from '../api.js';
 
 export default async function (args: { from?: string; to?: string }) {
   const params: Record<string, string> = {};
@@ -13,14 +13,15 @@ export default async function (args: { from?: string; to?: string }) {
   lines.push(`基准货币: ${base}`);
   if (data.updated) lines.push(`更新时间: ${data.updated}`);
   lines.push('');
-  const rates = data.rates || (Array.isArray(data) ? data : []);
+  const rates = asArray(data.rates);
   const targetCurrencies = args.to
     ? [args.to.toUpperCase()]
     : ['USD', 'EUR', 'JPY', 'GBP', 'HKD', 'KRW', 'AUD', 'CAD', 'SGD', 'CHF'];
-  rates.forEach((item: Record<string, unknown>) => {
-    const currency = String(item.currency ?? '');
+  rates.forEach((item) => {
+    const row = asRecord(item);
+    const currency = asString(row.currency);
     if (targetCurrencies.includes(currency) && currency !== base) {
-      lines.push(`${base} → ${currency}: ${item.rate}`);
+      lines.push(`${base} → ${currency}: ${row.rate}`);
     }
   });
   return lines.join('\n');

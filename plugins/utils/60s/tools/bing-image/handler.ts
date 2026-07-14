@@ -1,4 +1,4 @@
-import { fetchApi } from '../api.js';
+import { asString, fetchApi } from '../api.js';
 
 export default async function () {
   const data = await fetchApi('/bing');
@@ -6,8 +6,8 @@ export default async function () {
   if (data.title) lines.push(`📌 ${data.title}`);
   if (data.headline) lines.push(`💡 ${data.headline}`);
   if (data.copyright) lines.push(`📝 ${data.copyright}`);
-  if (data.description) lines.push('', data.description);
+  if (data.description) lines.push('', asString(data.description));
   const imgUrl = data.cover || data.cover_4k || data.url || data.image;
-  if (imgUrl) lines.push('', imgUrl);
+  if (imgUrl) lines.push('', asString(imgUrl));
   return lines.join('\n');
 }
