@@ -11,6 +11,12 @@
       "@zhin.js/schedule": ["./basic/schedule/src/index.ts"],
       "@zhin.js/kernel": ["./packages/im/kernel/src/index.ts"],
       "@zhin.js/ai": ["./packages/im/ai/src/index.ts"],
+      "@zhin.js/ai/agent-stream": ["./packages/im/ai/src/agent-stream.ts"],
+      "@zhin.js/ai/agent-stream-consumer": ["./packages/im/ai/src/agent-stream-consumer.ts"],
+      "@zhin.js/ai/agent-step-checkpoint": ["./packages/im/ai/src/agent-step-checkpoint.ts"],
+      "@zhin.js/ai/tool-policy": ["./packages/im/ai/src/tool-policy.ts"],
+      "@zhin.js/ai/mcp-qualified-name": ["./packages/im/ai/src/mcp-qualified-name.ts"],
+      "@zhin.js/ai/authorization-events": ["./packages/im/ai/src/authorization-events.ts"],
       "@zhin.js/core": ["./packages/im/core/src/index.ts"],
       "@zhin.js/core/queue-im-field-contract": [
         "./packages/im/core/src/built/queue-im-field-contract.ts"
