@@ -37,6 +37,11 @@ const checks = [
     description: '带 agent/ 的插件 npm 发布清单（files、prepublishOnly、peer 依赖）',
   },
   {
+    name: 'Publish Repository',
+    command: 'pnpm check:publish-repository',
+    description: '可发布包 repository.url 须匹配 github.com/zhinjs/zhin（npm provenance）',
+  },
+  {
     name: 'Agent Tool Schema',
     command: 'pnpm check:agent-tool-schema',
     description: 'agent/tools inputSchema 与 defineTool/execute 类型字段一致',

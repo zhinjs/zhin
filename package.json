@@ -83,6 +83,7 @@
     "check:prod": "node scripts/check-production-config.js",
     "check:plugin": "node scripts/check-plugin-spec.mjs",
     "check:plugin-agent-publish": "node scripts/check-plugin-agent-publish.mjs",
+    "check:publish-repository": "node scripts/check-publish-repository.mjs",
     "check:agent-tool-schema": "node scripts/check-agent-tool-schema.mjs",
     "check:install-size": "node scripts/check-install-size.mjs"
   },
