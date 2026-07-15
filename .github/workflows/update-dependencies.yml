@@ -73,19 +73,19 @@ jobs:
           git commit -m "chore(deps): update npm dependencies (${{ inputs.mode }})"
           git push -u origin "$BRANCH"
           MODE='${{ inputs.mode }}'
-          cat > /tmp/pr-body.md <<EOF
-## Summary
-
-Manually triggered via **Actions → Update Dependencies**.
-
-- Strategy: \`${MODE}\`
-- Command: \`pnpm update -r\` (within-range) or \`pnpm update -r --latest\`
-
-## Test plan
-
-- [ ] CI green
-- [ ] Spot-check lockfile / breaking majors if using \`latest\`
-EOF
+          {
+            echo "## Summary"
+            echo ""
+            echo "Manually triggered via **Actions → Update Dependencies**."
+            echo ""
+            echo "- Strategy: \`${MODE}\`"
+            echo "- Command: \`pnpm update -r\` (within-range) or \`pnpm update -r --latest\`"
+            echo ""
+            echo "## Test plan"
+            echo ""
+            echo "- [ ] CI green"
+            echo "- [ ] Spot-check lockfile / breaking majors if using \`latest\`"
+          } > /tmp/pr-body.md
           gh pr create \
             --title "chore(deps): update npm dependencies (${MODE})" \
             --label "dependencies" \
