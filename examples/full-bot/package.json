@@ -22,7 +22,7 @@
     "@zhin.js/mcp": "workspace:*",
     "@zhin.js/a2a": "workspace:*",
     "@zhin.js/satori": "workspace:*",
-    "ai": "^7.0.2",
+    "ai": "^7.0.28",
     "zhin.js": "workspace:*",
     "zod": "^4.4.3"
   },

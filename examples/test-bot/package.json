@@ -69,7 +69,7 @@
     "@zhin.js/satori": "workspace:*",
     "@zhin.js/speech": "workspace:*",
     "@zhin.js/service-activity-feedback": "workspace:*",
-    "ai": "^7.0.2",
+    "ai": "^7.0.28",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "sqlite3": "latest",

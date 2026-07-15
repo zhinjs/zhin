@@ -16,7 +16,7 @@
     "@zhin.js/cli": "workspace:*",
     "@zhin.js/host-api": "workspace:*",
     "@zhin.js/host-router": "workspace:*",
-    "ai": "^6.0.116",
+    "ai": "^7.0.28",
     "zod": "^4.3.6",
     "zhin.js": "workspace:*"
   },
