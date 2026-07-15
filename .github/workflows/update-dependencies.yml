@@ -1,0 +1,92 @@
+# 手动触发依赖升级（替代原 Dependabot 周更）。
+# Actions → Update Dependencies → Run workflow
+name: Update Dependencies
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'npm update strategy'
+        type: choice
+        options:
+          - within-range # pnpm update -r（遵循 package.json 已有 semver 范围）
+          - latest # pnpm update -r --latest（可能跨 major，慎用）
+        default: within-range
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-npm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v4
+        with:
+          version: 9.0.2
+
+      - name: checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
+
+      - name: setup node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: configure github packages auth
+        if: env.NPM_TOKEN != ''
+        run: echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> .npmrc
+        env:
+          NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
+
+      - name: install dependencies
+        run: pnpm install
+        env:
+          NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: update npm dependencies
+        run: |
+          if [ "${{ inputs.mode }}" = "latest" ]; then
+            pnpm update -r --latest
+          else
+            pnpm update -r
+          fi
+
+      - name: create pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "No dependency changes."
+            exit 0
+          fi
+
+          BRANCH="chore/deps-$(date -u +%Y%m%d-%H%M%S)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit -m "chore(deps): update npm dependencies (${{ inputs.mode }})"
+          git push -u origin "$BRANCH"
+          MODE='${{ inputs.mode }}'
+          cat > /tmp/pr-body.md <<EOF
+## Summary
+
+Manually triggered via **Actions → Update Dependencies**.
+
+- Strategy: \`${MODE}\`
+- Command: \`pnpm update -r\` (within-range) or \`pnpm update -r --latest\`
+
+## Test plan
+
+- [ ] CI green
+- [ ] Spot-check lockfile / breaking majors if using \`latest\`
+EOF
+          gh pr create \
+            --title "chore(deps): update npm dependencies (${MODE})" \
+            --label "dependencies" \
+            --body-file /tmp/pr-body.md

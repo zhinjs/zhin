@@ -60,7 +60,7 @@ jobs:
         run: pnpm audit --prod || true
 
       - name: check changeset
-        if: matrix.node-version == 24 && github.head_ref != 'changeset-release/main' && !startsWith(github.head_ref, 'dependabot/')
+        if: matrix.node-version == 24 && github.head_ref != 'changeset-release/main' && !startsWith(github.head_ref, 'dependabot/') && !startsWith(github.head_ref, 'chore/deps-')
         run: pnpm changeset status
 
       - name: build packages
