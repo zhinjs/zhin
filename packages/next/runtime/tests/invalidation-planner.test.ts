@@ -20,6 +20,16 @@ function ownership(): SourceOwnershipIndex {
   index.addPackageRoot('/project/plugins/child', child);
   index.addPackageRoot('/project/plugins/sibling', sibling);
   index.add({
+    source: '/project/plugin.ts',
+    role: 'plugin',
+    owner: root,
+  });
+  index.add({
+    source: '/project/schema.json',
+    role: 'schema',
+    owner: root,
+  });
+  index.add({
     source: '/project/plugins/child/commands/status.ts',
     role: 'capability',
     owner: child,
@@ -92,6 +102,19 @@ describe('InvalidationPlanner', () => {
       kind: 'generation',
       slots: [],
       subtrees: [child],
+    });
+  });
+
+  it('requires a process restart for Root setup and schema changes', () => {
+    const plan = new InvalidationPlanner(ownership()).plan([
+      '/project/plugin.ts',
+      '/project/schema.json',
+    ]);
+
+    expect(plan).toEqual({
+      kind: 'process',
+      changed: ['/project/plugin.ts', '/project/schema.json'],
+      reasons: ['Root plugin source changed', 'Root schema source changed'],
     });
   });
 

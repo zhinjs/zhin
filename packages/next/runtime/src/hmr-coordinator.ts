@@ -9,7 +9,7 @@ import type { ModuleRuntime } from './module-runtime.js';
 import type { SourceOwnershipIndex } from './source-ownership.js';
 
 export interface HmrReloadPort {
-  reload(plan: GenerationInvalidationPlan): Promise<void>;
+  reload(plan: GenerationInvalidationPlan): Promise<ProcessInvalidationPlan | void>;
 }
 
 export interface HmrCoordinatorOptions {
@@ -93,7 +93,8 @@ export class HmrCoordinator {
         for (const source of plan.changed) {
           await this.options.modules.invalidate?.(source);
         }
-        await this.options.runtime.reload(plan);
+        const restart = await this.options.runtime.reload(plan);
+        if (restart) await this.options.onRestartRequired(restart);
       }
       this.#resolveWaiters();
     } catch (error) {

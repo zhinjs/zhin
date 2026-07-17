@@ -31,6 +31,10 @@ export type ZhinPackageManifest = ZhinPluginManifest | ZhinFeatureManifest;
 export interface PackageJson {
   readonly name: string;
   readonly version?: string;
+  readonly type?: 'module' | 'commonjs';
+  readonly main?: string;
+  readonly exports?: unknown;
+  readonly imports?: unknown;
   readonly private?: boolean;
   readonly dependencies?: Readonly<Record<string, string>>;
   readonly optionalDependencies?: Readonly<Record<string, string>>;
@@ -54,6 +58,10 @@ export function parsePackageJson(value: unknown, source: string): PackageJson {
   if (name && !isPackageName(name)) issues.push(`${source}#name is not a valid package name`);
   const zhin = parseZhinManifest(record.zhin, `${source}#zhin`, issues);
   const version = optionalString(record.version, `${source}#version`, issues);
+  const moduleType = optionalModuleType(record.type, `${source}#type`, issues);
+  const main = optionalString(record.main, `${source}#main`, issues);
+  const packageExports = optionalPackageMap(record.exports, `${source}#exports`, issues);
+  const packageImports = optionalPackageMap(record.imports, `${source}#imports`, issues);
   const isPrivate = optionalBoolean(record.private, `${source}#private`, issues);
   const dependencies = stringRecord(record.dependencies, `${source}#dependencies`, issues);
   const optionalDependencies = stringRecord(
@@ -77,6 +85,10 @@ export function parsePackageJson(value: unknown, source: string): PackageJson {
   return Object.freeze({
     name,
     version,
+    type: moduleType,
+    main,
+    exports: packageExports,
+    imports: packageImports,
     private: isPrivate,
     dependencies,
     optionalDependencies,
@@ -209,6 +221,37 @@ function optionalBoolean(value: unknown, source: string, issues: string[]): bool
   if (value === undefined) return undefined;
   if (typeof value !== 'boolean') issues.push(`${source} must be a boolean`);
   return typeof value === 'boolean' ? value : undefined;
+}
+
+function optionalModuleType(
+  value: unknown,
+  source: string,
+  issues: string[],
+): 'module' | 'commonjs' | undefined {
+  if (value === undefined) return undefined;
+  if (value !== 'module' && value !== 'commonjs') {
+    issues.push(`${source} must be "module" or "commonjs"`);
+    return undefined;
+  }
+  return value;
+}
+
+function optionalPackageMap(value: unknown, source: string, issues: string[]): unknown {
+  if (value === undefined) return undefined;
+  if (value === null || typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    return Object.freeze(value.map((item, index) =>
+      optionalPackageMap(item, `${source}[${index}]`, issues)));
+  }
+  if (!value || typeof value !== 'object') {
+    issues.push(`${source} must be a string, null, array, or object`);
+    return undefined;
+  }
+  const entries = Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+    key,
+    optionalPackageMap(item, `${source}.${key}`, issues),
+  ] as const);
+  return Object.freeze(Object.fromEntries(entries));
 }
 
 function stringRecord(

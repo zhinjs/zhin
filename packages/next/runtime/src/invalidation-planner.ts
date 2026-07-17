@@ -1,5 +1,5 @@
 import { basename, resolve } from 'node:path';
-import type { CapabilityId, PluginId } from '@zhin.js/next-kernel';
+import { rootPluginId, type CapabilityId, type PluginId } from '@zhin.js/next-kernel';
 import type { SourceOwnershipIndex, SourceOwnershipRecord } from './source-ownership.js';
 
 export interface DependencyImpactPort {
@@ -57,6 +57,7 @@ export class InvalidationPlanner {
     const slots = new Map<CapabilityId, PluginId>();
     const subtrees = new Set<PluginId>();
     const reasons = new Set<string>();
+    const processReasons = new Set<string>();
 
     for (const source of changed) {
       const affected = unique(
@@ -69,7 +70,11 @@ export class InvalidationPlanner {
         const records = this.ownership.recordsFor(item);
         if (records.length > 0) matched = true;
         for (const record of records) {
-          applyRecord(record, slots, subtrees, reasons);
+          if (requiresProcessRestart(record)) {
+            processReasons.add(`Root ${record.role} source changed`);
+          } else {
+            applyRecord(record, slots, subtrees, reasons);
+          }
         }
       }
 
@@ -81,6 +86,14 @@ export class InvalidationPlanner {
           reasons.add(`untracked support source changed in ${owner}`);
         }
       }
+    }
+
+    if (processReasons.size > 0) {
+      return Object.freeze({
+        kind: 'process',
+        changed,
+        reasons: Object.freeze([...processReasons]),
+      });
     }
 
     const roots = collapseSubtrees(subtrees);
@@ -102,6 +115,13 @@ export class InvalidationPlanner {
       reasons: Object.freeze([...reasons]),
     });
   }
+}
+
+function requiresProcessRestart(record: SourceOwnershipRecord): boolean {
+  return (
+    record.owner === rootPluginId()
+    && (record.role === 'plugin' || record.role === 'schema')
+  );
 }
 
 function applyRecord(

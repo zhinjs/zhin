@@ -8,6 +8,8 @@ export * from './module-runtime.js';
 export * from './node-discovery-host.js';
 export * from './package-resolver.js';
 export * from './project-graph.js';
+export * from './process-restart.js';
+export * from './restart-boundary.js';
 export * from './root-runtime.js';
 export * from './source-ownership.js';
 export * from './topology-transaction.js';

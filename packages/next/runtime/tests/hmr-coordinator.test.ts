@@ -81,6 +81,40 @@ describe('HmrCoordinator', () => {
     expect(modules.invalidated).toEqual([]);
   });
 
+  it('routes a generation reload escalation through the process port', async () => {
+    const source = '/project/commands/status.ts';
+    const ownership = new SourceOwnershipIndex();
+    ownership.add({
+      source,
+      role: 'capability',
+      owner: root,
+      capability: capabilityId(root, command, 'status'),
+      feature: command,
+    });
+    const restarts: ProcessInvalidationPlan[] = [];
+    const errors: unknown[] = [];
+    const coordinator = new HmrCoordinator({
+      modules: new FakeModules(),
+      ownership: () => ownership,
+      runtime: {
+        async reload() {
+          return {
+            kind: 'process',
+            changed: [source],
+            reasons: ['package runtime ABI changed: @test/root'],
+          };
+        },
+      },
+      onRestartRequired(plan) { restarts.push(plan); },
+      onError(error) { errors.push(error); },
+    });
+
+    await coordinator.enqueue(source);
+
+    expect(restarts).toHaveLength(1);
+    expect(errors).toEqual([]);
+  });
+
   it('reports a failed reload and rejects every waiter in its batch', async () => {
     const ownership = new SourceOwnershipIndex();
     ownership.add({

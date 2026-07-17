@@ -39,11 +39,18 @@ import {
 } from './plugin-scope-assembler.js';
 import { ProjectGraphService, type PluginGraphNode, type ProjectGraph } from './project-graph.js';
 import { HmrCoordinator, type HmrCoordinatorOptions } from './hmr-coordinator.js';
-import type { GenerationInvalidationPlan } from './invalidation-planner.js';
+import type {
+  GenerationInvalidationPlan,
+  ProcessInvalidationPlan,
+} from './invalidation-planner.js';
 import type {
   PreparedRuntimeGeneration,
   RuntimeGenerationModel,
 } from './runtime-generation.js';
+import {
+  RootProcessRestartExecutor,
+  type ProcessRestartAdapter,
+} from './process-restart.js';
 import { SlotGenerationPreparer } from './slot-generation-preparer.js';
 import { SourceOwnershipIndex } from './source-ownership.js';
 import {
@@ -51,6 +58,7 @@ import {
   SubtreeTopologyChangedError,
 } from './subtree-generation-preparer.js';
 import { TopologyGenerationPreparer } from './topology-generation-preparer.js';
+import { RestartBoundaryPlanner } from './restart-boundary.js';
 
 export type {
   PluginConfigResolver,
@@ -141,10 +149,15 @@ export class RootRuntime {
       ownership: () => this.#ownership,
       runtime: {
         reload: async (plan) => {
-          await this.#reloadPlan(plan);
+          const result = await this.#reloadPlan(plan);
+          return isProcessPlan(result) ? result : undefined;
         },
       },
     });
+  }
+
+  createProcessRestartExecutor(adapter: ProcessRestartAdapter): RootProcessRestartExecutor {
+    return new RootProcessRestartExecutor(this, adapter);
   }
 
   async stop(): Promise<void> {
@@ -155,13 +168,22 @@ export class RootRuntime {
     }
   }
 
-  async #reloadPlan(plan: GenerationInvalidationPlan): Promise<RuntimeSnapshot> {
+  async #reloadPlan(
+    plan: GenerationInvalidationPlan,
+  ): Promise<RuntimeSnapshot | ProcessInvalidationPlan> {
     let prepared: PreparedRuntimeGeneration | undefined;
+    let restart: ProcessInvalidationPlan | undefined;
     const snapshot = await this.controller.reload(
       plan.subtrees[0] ?? plan.slots[0] ?? rootPluginId(),
       async (current) => {
         if (this.#model && this.#isManifestTopologyPlan(plan)) {
           const inspected = await this.#inspectProject();
+          restart = new RestartBoundaryPlanner().plan(
+            this.#model.graph,
+            inspected.graph,
+            plan.changed,
+          );
+          if (restart) return undefined;
           prepared = await new TopologyGenerationPreparer(
             this.#modules,
             this.#model,
@@ -182,6 +204,7 @@ export class RootRuntime {
         return prepared?.generation;
       },
     );
+    if (restart) return restart;
     if (prepared) this.#accept(prepared);
     return snapshot;
   }
@@ -455,6 +478,12 @@ function requirePrepared(
 ): PreparedRuntimeGeneration {
   if (!prepared) throw new Error('RootController committed without a prepared generation');
   return prepared;
+}
+
+function isProcessPlan(
+  value: RuntimeSnapshot | ProcessInvalidationPlan,
+): value is ProcessInvalidationPlan {
+  return 'kind' in value && value.kind === 'process';
 }
 
 async function disposePreparedParts(

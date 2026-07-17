@@ -291,6 +291,7 @@ export interface PluginDefinition<TConfig = unknown> {
 | child `plugin.ts` | child Plugin subtree |
 | child `schema.json` | child subtree config/schema/resources |
 | 任意 `package.json#zhin.plugins/features` | graph diff；局部 add/remove/move child 或 Feature mount |
+| Root setup/schema，package `type/main/exports/imports`，engine/Feature API/Plugin runtime | process restart |
 | workspace/lockfile | 整树 dependency resolution，必要时重启 Module Runtime |
 
 一次 commit 仍发布一个完整 generation；“局部”描述 prepare 和 dispose 的范围，不表示 RuntimeSnapshot 被原地修改。
