@@ -21,6 +21,11 @@ import {
 } from '@zhin.js/next-feature-kit';
 import type { ZhinFeatureManifest } from './manifest.js';
 import { ConfigComposer, type RuntimeConfigDocument } from './config-composer.js';
+import {
+  ConfigPatchPlanner,
+  type ConfigPatch,
+  type ConfigPatchPlan,
+} from './config-patch-planner.js';
 import type { RuntimeEnvironment } from './environment.js';
 import { FeatureProjector, type ProjectionState } from './feature-projector.js';
 import { GenerationAssets } from './generation-assets.js';
@@ -73,16 +78,19 @@ export class RootRuntime {
   readonly #projectRoot: string;
   readonly #modules: ModuleRuntime;
   readonly #environment: RuntimeEnvironment;
-  readonly #config: PluginConfigResolver | RuntimeConfigDocument;
+  readonly #configResolver?: PluginConfigResolver;
+  #configDocument?: RuntimeConfigDocument;
   readonly #installResources?: RootResourceInstaller;
   #ownership = SourceOwnershipIndex.empty();
   #model?: RuntimeGenerationModel;
+  #configPatchTail: Promise<unknown> = Promise.resolve();
 
   constructor(options: RootRuntimeOptions) {
     this.#projectRoot = resolve(options.projectRoot);
     this.#modules = options.modules;
     this.#environment = Object.freeze({ ...options.environment });
-    this.#config = options.config ?? Object.freeze({});
+    if (typeof options.config === 'function') this.#configResolver = options.config;
+    else this.#configDocument = structuredClone(options.config ?? {});
     this.#installResources = options.installResources;
     this.controller = new RootController(emptyState(), options.onControlError);
   }
@@ -113,6 +121,16 @@ export class RootRuntime {
     });
     this.#accept(requirePrepared(prepared));
     return snapshot;
+  }
+
+  patchConfig(patches: readonly ConfigPatch[]): Promise<RuntimeSnapshot> {
+    const operations = cloneConfigPatches(patches);
+    const result = this.#configPatchTail.then(
+      () => this.#applyConfigPatches(operations),
+      () => this.#applyConfigPatches(operations),
+    );
+    this.#configPatchTail = result.catch(() => undefined);
+    return result;
   }
 
   createHmrCoordinator(options: RootHmrOptions): HmrCoordinator {
@@ -146,19 +164,7 @@ export class RootRuntime {
             .prepare(current, plan.slots);
         } else if (this.#model && this.#canPrepareSubtrees(plan)) {
           const inspected = await this.#inspectProject();
-          try {
-            prepared = await new SubtreeGenerationPreparer(
-              this.#modules,
-              this.#model,
-              inspected.graph,
-              inspected.configResolver,
-              this.#environment,
-              this.#installResources,
-            ).prepare(current, plan.subtrees);
-          } catch (error) {
-            if (!(error instanceof SubtreeTopologyChangedError)) throw error;
-            prepared = await this.#prepareInspected(current, inspected);
-          }
+          prepared = await this.#prepareSubtrees(current, inspected, plan.subtrees);
         } else {
           prepared = await this.#prepare(current);
         }
@@ -192,12 +198,42 @@ export class RootRuntime {
     const resolver = await NodePackageResolver.create(this.#projectRoot);
     const graph = await new ProjectGraphService(resolver).inspect(this.#projectRoot);
     const configResolver =
-      typeof this.#config === 'function'
-        ? this.#config
+      this.#configResolver
+        ? this.#configResolver
         : await new ConfigComposer()
-            .compose(graph, this.#config)
+            .compose(graph, this.#configDocument)
             .then((composed) => (node: PluginGraphNode) => composed.views.get(node.id));
     return { graph, configResolver };
+  }
+
+  async #applyConfigPatches(patches: readonly ConfigPatch[]): Promise<RuntimeSnapshot> {
+    if (!this.#configDocument) {
+      throw new Error('Config patches require a document-backed RootRuntime config');
+    }
+    const currentDocument = this.#configDocument;
+    let plan: ConfigPatchPlan | undefined;
+    let prepared: PreparedRuntimeGeneration | undefined;
+    const snapshot = await this.controller.reload(rootPluginId(), async (current) => {
+      const resolver = await NodePackageResolver.create(this.#projectRoot);
+      const graph = await new ProjectGraphService(resolver).inspect(this.#projectRoot);
+      const planned = await new ConfigPatchPlanner().plan(graph, currentDocument, patches);
+      plan = planned;
+      if (planned.roots.length === 0) return undefined;
+      const inspected: InspectedProject = {
+        graph,
+        configResolver: (node) => planned.views.get(node.id),
+      };
+      if (this.#model && !planned.roots.includes(rootPluginId())) {
+        prepared = await this.#prepareSubtrees(current, inspected, planned.roots);
+      } else {
+        prepared = await this.#prepareInspected(current, inspected);
+      }
+      return prepared.generation;
+    });
+    const completed = requireConfigPatchPlan(plan);
+    if (prepared) this.#accept(prepared);
+    this.#configDocument = completed.document;
+    return snapshot;
   }
 
   #prepareInspected(
@@ -214,6 +250,40 @@ export class RootRuntime {
     );
     return assembler.prepare();
   }
+
+  async #prepareSubtrees(
+    current: RuntimeSnapshot,
+    inspected: InspectedProject,
+    roots: readonly PluginId[],
+  ): Promise<PreparedRuntimeGeneration> {
+    if (!this.#model) return this.#prepareInspected(current, inspected);
+    try {
+      return await new SubtreeGenerationPreparer(
+        this.#modules,
+        this.#model,
+        inspected.graph,
+        inspected.configResolver,
+        this.#environment,
+        this.#installResources,
+      ).prepare(current, roots);
+    } catch (error) {
+      if (!(error instanceof SubtreeTopologyChangedError)) throw error;
+      return this.#prepareInspected(current, inspected);
+    }
+  }
+}
+
+function cloneConfigPatches(patches: readonly ConfigPatch[]): readonly ConfigPatch[] {
+  return Object.freeze(patches.map((patch) => Object.freeze(
+    patch.op === 'set'
+      ? { ...patch, path: Object.freeze([...patch.path]), value: structuredClone(patch.value) }
+      : { ...patch, path: Object.freeze([...patch.path]) },
+  )));
+}
+
+function requireConfigPatchPlan(plan: ConfigPatchPlan | undefined): ConfigPatchPlan {
+  if (!plan) throw new Error('RootController completed without a Config patch plan');
+  return plan;
 }
 
 class GenerationAssembler {

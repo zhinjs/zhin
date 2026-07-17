@@ -113,6 +113,20 @@ describe('next kernel', () => {
     await root.stop();
   });
 
+  it('keeps the current generation when a transaction has no semantic work', async () => {
+    const root = new RootController(emptyState());
+    const first = await root.start(() => ({
+      snapshot: emptyState(),
+      dispose: () => undefined,
+    }));
+
+    const unchanged = await root.transact(() => undefined);
+
+    expect(unchanged).toBe(first);
+    expect(root.generation).toBe(1);
+    await root.stop();
+  });
+
   it('does not expose mutable Map methods from a RuntimeSnapshot', async () => {
     const root = new RootController(emptyState());
     const snapshot = await root.start(() => ({

@@ -4,6 +4,8 @@ import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   ConfigComposer,
+  ConfigPatchPathError,
+  ConfigPatchPlanner,
   ConfigSchemaCollisionError,
   ConfigValidationError,
   NodePackageResolver,
@@ -77,6 +79,88 @@ describe('hierarchical Plugin config', () => {
     await expect(new ConfigComposer().compose(graph, {
       plugin: { port: 'bad' },
     })).rejects.toBeInstanceOf(ConfigValidationError);
+  });
+
+  it('plans the shallowest forest whose owner views actually changed', async () => {
+    const root = await configProject({
+      rootSchema: {},
+      childSchema: {
+        type: 'object',
+        properties: { retries: { type: 'integer', default: 3 } },
+      },
+      nested: true,
+    });
+    const resolver = await NodePackageResolver.create(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const child = graph.root.children[0]!;
+    const nested = child.children[0]!;
+    const planner = new ConfigPatchPlanner();
+
+    const nestedOnly = await planner.plan(graph, {}, [{
+      op: 'set',
+      path: ['plugins', 'child', 'nested', 'enabled'],
+      value: false,
+    }]);
+    expect(nestedOnly.roots).toEqual([nested.id]);
+    expect(nestedOnly.views.get(nested.id)).toEqual({ enabled: false });
+
+    const collapsed = await planner.plan(graph, nestedOnly.document, [
+      { op: 'set', path: ['plugins', 'child', 'retries'], value: 5 },
+      { op: 'set', path: ['plugins', 'child', 'nested', 'enabled'], value: true },
+    ]);
+    expect(collapsed.roots).toEqual([child.id]);
+  });
+
+  it('does not create work when defaults make a patch semantically unchanged', async () => {
+    const root = await configProject({
+      rootSchema: {},
+      childSchema: {
+        type: 'object',
+        properties: { retries: { type: 'integer', default: 3 } },
+      },
+    });
+    const resolver = await NodePackageResolver.create(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const plan = await new ConfigPatchPlanner().plan(graph, {}, [{
+      op: 'set',
+      path: ['plugins', 'child', 'retries'],
+      value: 3,
+    }]);
+
+    expect(plan.roots).toEqual([]);
+
+    const changed = await new ConfigPatchPlanner().plan(graph, {
+      plugins: { child: { retries: 9 } },
+    }, [{
+      op: 'remove',
+      path: ['plugins', 'child', 'retries'],
+    }]);
+    expect(changed.roots).toEqual([graph.root.children[0]!.id]);
+    expect(changed.views.get(graph.root.children[0]!.id)).toEqual({ retries: 3 });
+  });
+
+  it('rejects invalid values and unsafe traversal paths before planning', async () => {
+    const root = await configProject({
+      rootSchema: {},
+      childSchema: {
+        type: 'object',
+        properties: { retries: { type: 'integer' } },
+      },
+    });
+    const resolver = await NodePackageResolver.create(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const planner = new ConfigPatchPlanner();
+
+    await expect(planner.plan(graph, {}, [{
+      op: 'set',
+      path: ['plugins', 'child', 'retries'],
+      value: 'bad',
+    }])).rejects.toBeInstanceOf(ConfigValidationError);
+    await expect(planner.plan(graph, {}, [{
+      op: 'set',
+      path: ['plugins', '__proto__', 'polluted'],
+      value: true,
+    }])).rejects.toBeInstanceOf(ConfigPatchPathError);
   });
 });
 

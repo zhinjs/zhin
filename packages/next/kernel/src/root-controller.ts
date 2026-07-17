@@ -10,6 +10,9 @@ export type RootState = 'idle' | 'running' | 'stopping' | 'stopped' | 'failed';
 export type PrepareGeneration = (
   current: RuntimeSnapshot,
 ) => PreparedGeneration | Promise<PreparedGeneration>;
+export type PrepareTransaction = (
+  current: RuntimeSnapshot,
+) => PreparedGeneration | undefined | Promise<PreparedGeneration | undefined>;
 export type ControlErrorHandler = (error: unknown) => void;
 
 export class RootController {
@@ -58,7 +61,7 @@ export class RootController {
     });
   }
 
-  transact(prepare: PrepareGeneration): Promise<RuntimeSnapshot> {
+  transact(prepare: PrepareTransaction): Promise<RuntimeSnapshot> {
     return this.#enqueue(async () => {
       if (this.#state !== 'running') {
         throw new Error(`Cannot transact RootController from ${this.#state}`);
@@ -69,6 +72,7 @@ export class RootController {
       let activated = false;
       try {
         prepared = await prepare(previous.value);
+        if (!prepared) return previous.value;
         if (prepared.handoff) {
           quiesced = true;
           await prepared.handoff.quiescePrevious(previous.value);
@@ -90,7 +94,7 @@ export class RootController {
 
   reload(
     _target: PluginId | string,
-    prepare: PrepareGeneration,
+    prepare: PrepareTransaction,
   ): Promise<RuntimeSnapshot> {
     return this.transact(prepare);
   }
