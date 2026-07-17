@@ -12,6 +12,14 @@
 | `@zhin.js/next-feature-command` | 第一套标准 Feature provider 与 generation-scoped CommandIndex |
 | `@zhin.js/next-cli` | Plugin monorepo 初始化、子包创建、inspect、build 与安全 publish plan |
 
+每个包的完整契约与示例：
+
+- [Kernel](kernel/README.md)
+- [Feature Kit](feature-kit/README.md)
+- [Command Feature](feature-command/README.md)
+- [Runtime](runtime/README.md)
+- [CLI](cli/README.md)
+
 ## 当前 Tracer Bullet
 
 ```text
