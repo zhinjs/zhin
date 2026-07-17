@@ -44,23 +44,23 @@ const packages = [
     dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
   },
   {
-    dir: 'packages/next/feature-agent',
-    name: '@zhin.js/next-feature-agent',
+    dir: 'packages/im/agent-feature',
+    name: '@zhin.js/agent-feature',
     dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
   },
   {
-    dir: 'packages/next/feature-mcp',
-    name: '@zhin.js/next-feature-mcp',
+    dir: 'packages/im/mcp-feature',
+    name: '@zhin.js/mcp-feature',
     dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
   },
   {
-    dir: 'packages/next/feature-skill',
-    name: '@zhin.js/next-feature-skill',
+    dir: 'packages/im/skill',
+    name: '@zhin.js/skill',
     dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
   },
   {
-    dir: 'packages/next/feature-tool',
-    name: '@zhin.js/next-feature-tool',
+    dir: 'packages/im/tool',
+    name: '@zhin.js/tool',
     dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
   },
   {
@@ -111,10 +111,10 @@ const packages = [
     name: '@zhin.js/next-agent',
     dependencies: [
       '@zhin.js/plugin-runtime',
-      '@zhin.js/next-feature-agent',
-      '@zhin.js/next-feature-mcp',
-      '@zhin.js/next-feature-skill',
-      '@zhin.js/next-feature-tool',
+      '@zhin.js/agent-feature',
+      '@zhin.js/mcp-feature',
+      '@zhin.js/skill',
+      '@zhin.js/tool',
     ],
   },
   {

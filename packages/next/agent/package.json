@@ -23,10 +23,10 @@
     "check:size": "node ../runtime/scripts/check-install-size.mjs @zhin.js/next-agent"
   },
   "dependencies": {
-    "@zhin.js/next-feature-agent": "workspace:*",
-    "@zhin.js/next-feature-mcp": "workspace:*",
-    "@zhin.js/next-feature-skill": "workspace:*",
-    "@zhin.js/next-feature-tool": "workspace:*",
+    "@zhin.js/agent-feature": "workspace:*",
+    "@zhin.js/mcp-feature": "workspace:*",
+    "@zhin.js/skill": "workspace:*",
+    "@zhin.js/tool": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*"
   },
   "devDependencies": {

@@ -997,6 +997,22 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
+  packages/im/agent-feature:
+    dependencies:
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../feature-kit
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../plugin-runtime
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.0
+        version: 26.1.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   packages/im/ai:
     dependencies:
       '@zhin.js/logger':
@@ -1168,6 +1184,22 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  packages/im/mcp-feature:
+    dependencies:
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../feature-kit
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../plugin-runtime
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.0
+        version: 26.1.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   packages/im/middleware:
     dependencies:
       '@zhin.js/feature-kit':
@@ -1185,6 +1217,38 @@ importers:
         version: 6.0.3
 
   packages/im/plugin-runtime:
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.0
+        version: 26.1.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/im/skill:
+    dependencies:
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../feature-kit
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../plugin-runtime
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.0
+        version: 26.1.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/im/tool:
+    dependencies:
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../feature-kit
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../plugin-runtime
     devDependencies:
       '@types/node':
         specifier: ^26.1.0
@@ -1241,21 +1305,21 @@ importers:
 
   packages/next/agent:
     dependencies:
-      '@zhin.js/next-feature-agent':
+      '@zhin.js/agent-feature':
         specifier: workspace:*
-        version: link:../feature-agent
-      '@zhin.js/next-feature-mcp':
+        version: link:../../im/agent-feature
+      '@zhin.js/mcp-feature':
         specifier: workspace:*
-        version: link:../feature-mcp
-      '@zhin.js/next-feature-skill':
-        specifier: workspace:*
-        version: link:../feature-skill
-      '@zhin.js/next-feature-tool':
-        specifier: workspace:*
-        version: link:../feature-tool
+        version: link:../../im/mcp-feature
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../../im/plugin-runtime
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../im/skill
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../im/tool
     devDependencies:
       '@types/node':
         specifier: ^26.1.0
@@ -1374,22 +1438,6 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/next/feature-agent:
-    dependencies:
-      '@zhin.js/feature-kit':
-        specifier: workspace:*
-        version: link:../../im/feature-kit
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../im/plugin-runtime
-    devDependencies:
-      '@types/node':
-        specifier: ^26.1.0
-        version: 26.1.1
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
   packages/next/feature-layout:
     dependencies:
       '@zhin.js/feature-kit':
@@ -1409,22 +1457,6 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/next/feature-mcp:
-    dependencies:
-      '@zhin.js/feature-kit':
-        specifier: workspace:*
-        version: link:../../im/feature-kit
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../im/plugin-runtime
-    devDependencies:
-      '@types/node':
-        specifier: ^26.1.0
-        version: 26.1.1
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
   packages/next/feature-page:
     dependencies:
       '@zhin.js/feature-kit':
@@ -1433,38 +1465,6 @@ importers:
       '@zhin.js/next-console-contract':
         specifier: workspace:*
         version: link:../console-contract
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../im/plugin-runtime
-    devDependencies:
-      '@types/node':
-        specifier: ^26.1.0
-        version: 26.1.1
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/next/feature-skill:
-    dependencies:
-      '@zhin.js/feature-kit':
-        specifier: workspace:*
-        version: link:../../im/feature-kit
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../im/plugin-runtime
-    devDependencies:
-      '@types/node':
-        specifier: ^26.1.0
-        version: 26.1.1
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/next/feature-tool:
-    dependencies:
-      '@zhin.js/feature-kit':
-        specifier: workspace:*
-        version: link:../../im/feature-kit
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../../im/plugin-runtime
@@ -1513,33 +1513,33 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../im/agent-feature
       '@zhin.js/command':
         specifier: workspace:*
         version: link:../../im/command
       '@zhin.js/component':
         specifier: workspace:*
         version: link:../../im/component
+      '@zhin.js/mcp-feature':
+        specifier: workspace:*
+        version: link:../../im/mcp-feature
       '@zhin.js/middleware':
         specifier: workspace:*
         version: link:../../im/middleware
-      '@zhin.js/next-feature-agent':
-        specifier: workspace:*
-        version: link:../feature-agent
       '@zhin.js/next-feature-layout':
         specifier: workspace:*
         version: link:../feature-layout
-      '@zhin.js/next-feature-mcp':
-        specifier: workspace:*
-        version: link:../feature-mcp
       '@zhin.js/next-feature-page':
         specifier: workspace:*
         version: link:../feature-page
-      '@zhin.js/next-feature-skill':
+      '@zhin.js/skill':
         specifier: workspace:*
-        version: link:../feature-skill
-      '@zhin.js/next-feature-tool':
+        version: link:../../im/skill
+      '@zhin.js/tool':
         specifier: workspace:*
-        version: link:../feature-tool
+        version: link:../../im/tool
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

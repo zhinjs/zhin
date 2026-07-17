@@ -6,21 +6,21 @@ import { definePlugin, rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugi
 import agentFeature, {
   AgentIndex,
   agentFeatureId,
-} from '@zhin.js/next-feature-agent';
+} from '@zhin.js/agent-feature';
 import mcpFeature, {
   McpIndex,
   defineMcp,
   mcpFeatureId,
-} from '@zhin.js/next-feature-mcp';
+} from '@zhin.js/mcp-feature';
 import skillFeature, {
   SkillIndex,
   skillFeatureId,
-} from '@zhin.js/next-feature-skill';
+} from '@zhin.js/skill';
 import toolFeature, {
   ToolIndex,
   defineAgentTool,
   toolFeatureId,
-} from '@zhin.js/next-feature-tool';
+} from '@zhin.js/tool';
 import { RootRuntime, type ModuleRuntime } from '../src/index.js';
 
 const temporary: string[] = [];

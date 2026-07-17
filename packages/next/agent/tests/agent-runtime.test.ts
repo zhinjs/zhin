@@ -13,22 +13,22 @@ import {
   AgentIndex,
   agentFeatureId,
   parseAgentMarkdown,
-} from '@zhin.js/next-feature-agent';
+} from '@zhin.js/agent-feature';
 import {
   McpIndex,
   defineMcp,
   mcpFeatureId,
-} from '@zhin.js/next-feature-mcp';
+} from '@zhin.js/mcp-feature';
 import {
   SkillIndex,
   parseSkillMarkdown,
   skillFeatureId,
-} from '@zhin.js/next-feature-skill';
+} from '@zhin.js/skill';
 import {
   ToolIndex,
   defineAgentTool,
   toolFeatureId,
-} from '@zhin.js/next-feature-tool';
+} from '@zhin.js/tool';
 import {
   AgentRuntime,
   CapabilityIngress,

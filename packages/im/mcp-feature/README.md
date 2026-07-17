@@ -1,4 +1,4 @@
-# @zhin.js/next-feature-mcp
+# @zhin.js/mcp-feature
 
 下一代 MCP Client Feature。它从 `mcp/<name>.ts` 发现 provider-neutral client definition，并将连接实例的创建、启动、调用和销毁绑定到 Plugin owner 与 generation lease。
 
@@ -15,7 +15,7 @@ mcp/
 ## 定义 MCP Client
 
 ```ts
-import { defineMcp } from '@zhin.js/next-feature-mcp';
+import { defineMcp } from '@zhin.js/mcp-feature';
 import { mcpTransportFactoryToken } from '../plugin.js';
 
 export default defineMcp({
@@ -51,6 +51,6 @@ MCP 没有入站 admission，因此候选连接不 quiesce 旧 client。旧 turn
 ## 验证
 
 ```bash
-pnpm --filter @zhin.js/next-feature-mcp test
-pnpm --filter @zhin.js/next-feature-mcp build
+pnpm --filter @zhin.js/mcp-feature test
+pnpm --filter @zhin.js/mcp-feature build
 ```

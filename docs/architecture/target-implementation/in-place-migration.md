@@ -26,7 +26,8 @@ package、补齐目标 package export，并把该项移入 `completed`。
 | 第三方 Feature provider interface | `@zhin.js/feature-kit` |
 | Adapter、Command、Component、Middleware provider | `@zhin.js/adapter`、`command`、`component`、`middleware` |
 | IM Runtime | `@zhin.js/core/runtime` |
-| Tool、Skill、Agent、MCP 与 Agent Runtime | `@zhin.js/agent` |
+| Tool、Skill、Agent、MCP provider | `@zhin.js/tool`、`skill`、`agent-feature`、`mcp-feature` |
+| Agent Runtime | `@zhin.js/agent/runtime` |
 | Page/Layout wire definition | `@zhin.js/contract` |
 | Console catalog、navigation、client build | `@zhin.js/pagemanager` |
 | Root、配置、发现、HMR、隔离与 compat | `zhin.js` |
@@ -34,7 +35,7 @@ package、补齐目标 package export，并把该项移入 `completed`。
 
 ## 当前进度
 
-- 已完成：Plugin Runtime、Feature Kit、四个 IM Feature，以及 Core IM Runtime。
-- 下一批：合并 Agent 的 Tool/Skill/Agent/MCP Feature 与 Agent Runtime。
+- 已完成：Plugin Runtime、Feature Kit、IM/Agent 领域 Feature，以及 Core IM Runtime。
+- 下一批：对照并合并旧 Agent Capability Ingress 与新 Agent Runtime。
 - 完成定义：`rg '@zhin.js/next-|packages/next'` 只允许出现在历史 ADR，workspace 中不存在
   `packages/next`，Stable 示例直接由新 Root Runtime 启动。

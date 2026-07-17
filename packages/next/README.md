@@ -17,10 +17,10 @@
 | `@zhin.js/component` | `components/**/*.ts|tsx`、owner override/ancestor fallback 与 ComponentIndex |
 | `@zhin.js/adapter` | `adapters/**/*.ts`、Endpoint lifecycle 与 generation handoff |
 | `@zhin.js/core/runtime` | Snapshot-coherent inbound、Command dispatch、Component render 与统一 send pipeline |
-| `@zhin.js/next-feature-tool` | `tools/*.ts`、`defineAgentTool()` 与 owner-scoped ToolIndex |
-| `@zhin.js/next-feature-skill` | `skills/*/SKILL.md` immutable Skill projection |
-| `@zhin.js/next-feature-agent` | `agents/*.agent.md` immutable Agent projection |
-| `@zhin.js/next-feature-mcp` | `mcp/*.ts`、provider-neutral MCP client lifecycle |
+| `@zhin.js/tool` | `tools/*.ts`、`defineAgentTool()` 与 owner-scoped ToolIndex |
+| `@zhin.js/skill` | `skills/*/SKILL.md` immutable Skill projection |
+| `@zhin.js/agent-feature` | `agents/*.agent.md` immutable Agent projection |
+| `@zhin.js/mcp-feature` | `mcp/*.ts`、provider-neutral MCP client lifecycle |
 | `@zhin.js/next-agent` | CapabilityIngress、owner-visible handles 与 snapshot-coherent turn lease |
 | `@zhin.js/next-console-contract` | 零依赖 Page/Layout manifest、route、Navigation 与 Shell slot contract |
 | `@zhin.js/next-feature-page` | `pages/*.ts|tsx`、Client Module artifact 边界与 PageIndex |

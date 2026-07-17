@@ -9,6 +9,12 @@
     "export * from './agent-runtime.js';",
     "export * from './capability-ingress.js';"
   ],
+  "agent-feature": [
+    "export * from './agent-index.js';",
+    "export * from './definition.js';",
+    "export * from './provider.js';",
+    "export{default}from './provider.js';"
+  ],
   "cli": [
     "export * from './project-commands.js';",
     "export * from './publish-journal.js';",
@@ -63,12 +69,6 @@
     "export * from './message-dispatcher.js';",
     "export * from './outbound-renderer.js';"
   ],
-  "feature-agent": [
-    "export * from './agent-index.js';",
-    "export * from './definition.js';",
-    "export * from './provider.js';",
-    "export{default}from './provider.js';"
-  ],
   "feature-kit": [
     "export * from './catalog.js';",
     "export * from './context.js';",
@@ -83,34 +83,22 @@
     "export * from './provider.js';",
     "export{default}from './provider.js';"
   ],
-  "feature-mcp": [
-    "export * from './definition.js';",
-    "export * from './mcp-index.js';",
-    "export * from './provider.js';",
-    "export{default}from './provider.js';"
-  ],
   "feature-page": [
     "export * from './definition.js';",
     "export * from './page-index.js';",
     "export * from './provider.js';",
     "export{default}from './provider.js';"
   ],
-  "feature-skill": [
-    "export * from './definition.js';",
-    "export * from './provider.js';",
-    "export * from './skill-index.js';",
-    "export{default}from './provider.js';"
-  ],
-  "feature-tool": [
-    "export * from './definition.js';",
-    "export * from './provider.js';",
-    "export * from './tool-index.js';",
-    "export{default}from './provider.js';"
-  ],
   "isolate": [
     "export * from './contracts.js';",
     "export * from './runtime.js';",
     "export type{IsolateMode}from './transport.js';"
+  ],
+  "mcp-feature": [
+    "export * from './definition.js';",
+    "export * from './mcp-index.js';",
+    "export * from './provider.js';",
+    "export{default}from './provider.js';"
   ],
   "middleware": [
     "export * from './definition.js';",
@@ -150,5 +138,17 @@
     "export * from './root-runtime.js';",
     "export * from './source-ownership.js';",
     "export * from './topology-transaction.js';"
+  ],
+  "skill": [
+    "export * from './definition.js';",
+    "export * from './provider.js';",
+    "export * from './skill-index.js';",
+    "export{default}from './provider.js';"
+  ],
+  "tool": [
+    "export * from './definition.js';",
+    "export * from './provider.js';",
+    "export * from './tool-index.js';",
+    "export{default}from './provider.js';"
   ]
 }

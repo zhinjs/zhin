@@ -3,23 +3,23 @@ import {
   AgentIndex,
   agentFeatureId,
   type AgentDescriptor,
-} from '@zhin.js/next-feature-agent';
+} from '@zhin.js/agent-feature';
 import {
   McpIndex,
   mcpFeatureId,
   type McpDescriptor,
   type McpToolDescriptor,
-} from '@zhin.js/next-feature-mcp';
+} from '@zhin.js/mcp-feature';
 import {
   SkillIndex,
   skillFeatureId,
   type SkillDescriptor,
-} from '@zhin.js/next-feature-skill';
+} from '@zhin.js/skill';
 import {
   ToolIndex,
   toolFeatureId,
   type ToolDescriptor,
-} from '@zhin.js/next-feature-tool';
+} from '@zhin.js/tool';
 
 export interface ToolCapability extends ToolDescriptor {
   execute<TInput = unknown, TResult = unknown>(input: TInput): Promise<TResult>;

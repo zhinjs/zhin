@@ -14,6 +14,10 @@ const migratedRoots = [
   ['component', 'packages/im/component/src'],
   ['middleware', 'packages/im/middleware/src'],
   ['core/runtime', 'packages/im/core/src/plugin-runtime/im'],
+  ['tool', 'packages/im/tool/src'],
+  ['skill', 'packages/im/skill/src'],
+  ['agent-feature', 'packages/im/agent-feature/src'],
+  ['mcp-feature', 'packages/im/mcp-feature/src'],
 ];
 
 function normalize(statement) {
