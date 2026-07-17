@@ -92,9 +92,129 @@ describe('Command Feature', () => {
       name: 'gh issue list',
       description: undefined,
       source,
+      parameters: [],
     }]);
     await expect(index.execute('gh issue list', ['open', 'closed']))
       .resolves.toBe('issues:open,closed');
+  });
+
+  it('compiles typed filename parameters and applies defaults', async () => {
+    const owner = rootPluginId();
+    const source = '/project/commands/gh/pr/[title:string=defaultTitle].ts';
+    const command = defineCommand({
+      execute: ({ params }) => `${typeof params.title}:${params.title}`,
+    });
+    const host = new MemoryDiscoveryHost({
+      '/project/commands': [{ name: 'gh', kind: 'directory' }],
+      '/project/commands/gh': [{ name: 'pr', kind: 'directory' }],
+      '/project/commands/gh/pr': [{
+        name: '[title:string=defaultTitle].ts',
+        kind: 'file',
+      }],
+    }, new Map([[source, { default: command }]]));
+    const slots = await new FeatureDiscovery(host).discover(commandFeature, [{
+      owner,
+      packageRoot: '/project',
+    }]);
+    expect(slots.map((slot) => slot.localName)).toEqual(['gh/pr/$title']);
+
+    const index = new CommandIndex(slots, snapshotFor(owner, slots));
+    expect(index.list()).toEqual([{
+      name: 'gh pr [title]',
+      description: undefined,
+      source,
+      parameters: [{
+        name: 'title',
+        type: 'string',
+        defaultValue: 'defaultTitle',
+        required: false,
+      }],
+    }]);
+    await expect(index.execute('gh pr release')).resolves.toBe('string:release');
+    await expect(index.execute('gh pr')).resolves.toBe('string:defaultTitle');
+  });
+
+  it('converts required typed parameters and diagnoses invalid values', async () => {
+    const owner = rootPluginId();
+    const definition = defineCommand({
+      execute: ({ params }) => `${typeof params.issue}:${params.issue}`,
+    });
+    const slot = createCapabilitySlot({
+      owner,
+      feature: commandFeatureId,
+      localName: 'gh/issue/$issue',
+      source: '/commands/gh/issue/[issue:number].ts',
+      definition: {
+        ...definition,
+        $parameter: { name: 'issue', type: 'number' } as const,
+      },
+    });
+    const index = new CommandIndex([slot], snapshotFor(owner, [slot]));
+
+    expect(index.list()[0]?.name).toBe('gh issue <issue>');
+    await expect(index.execute('gh issue 42')).resolves.toBe('number:42');
+    await expect(index.execute('gh issue nope')).rejects.toThrow(
+      'Invalid value for Command parameter issue:number: nope',
+    );
+    await expect(index.execute('gh issue')).rejects.toThrow('Unknown Command');
+  });
+
+  it('prefers literal commands over a matching dynamic route', async () => {
+    const owner = rootPluginId();
+    const literal = createCapabilitySlot({
+      owner,
+      feature: commandFeatureId,
+      localName: 'gh/pr/list',
+      source: '/commands/gh/pr/list.ts',
+      definition: defineCommand({ execute: () => 'literal' }),
+    });
+    const dynamic = createCapabilitySlot({
+      owner,
+      feature: commandFeatureId,
+      localName: 'gh/pr/$title',
+      source: '/commands/gh/pr/[title:string].ts',
+      definition: {
+        ...defineCommand({ execute: ({ params }) => `dynamic:${params.title}` }),
+        $parameter: { name: 'title', type: 'string' } as const,
+      },
+    });
+    const index = new CommandIndex([dynamic, literal], snapshotFor(owner, [dynamic, literal]));
+
+    await expect(index.execute('gh pr list')).resolves.toBe('literal');
+    await expect(index.execute('gh pr next')).resolves.toBe('dynamic:next');
+  });
+
+  it('rejects dynamic routes that differ only by parameter metadata', () => {
+    const owner = rootPluginId();
+    const dynamicSlot = (name: string, type: 'string' | 'number') => createCapabilitySlot({
+      owner,
+      feature: commandFeatureId,
+      localName: `gh/pr/$${name}`,
+      source: `/commands/gh/pr/[${name}:${type}].ts`,
+      definition: {
+        ...defineCommand({ execute() {} }),
+        $parameter: { name, type },
+      },
+    });
+    const title = dynamicSlot('title', 'string');
+    const number = dynamicSlot('number', 'number');
+
+    expect(() => new CommandIndex(
+      [title, number],
+      snapshotFor(owner, [title, number]),
+    )).toThrow('Duplicate runtime Command');
+  });
+
+  it('rejects malformed dynamic command filenames during discovery', async () => {
+    const owner = rootPluginId();
+    const host = new MemoryDiscoveryHost({
+      '/project/commands': [{ name: '[count:number=nope].ts', kind: 'file' }],
+    }, new Map());
+
+    await expect(new FeatureDiscovery(host).discover(commandFeature, [{
+      owner,
+      packageRoot: '/project',
+    }])).rejects.toThrow('default for count:number is invalid');
   });
 
   it('rejects command-word collisions across owner and directory namespaces', () => {
@@ -130,6 +250,27 @@ describe('Command Feature', () => {
     );
   });
 });
+
+function snapshotFor(
+  owner: ReturnType<typeof rootPluginId>,
+  slots: readonly ReturnType<typeof createCapabilitySlot>[],
+): RuntimeSnapshot {
+  return {
+    generation: 1,
+    root: owner,
+    tree: new Map([[owner, {
+      id: owner,
+      instanceKey: 'root',
+      packageName: '@test/root',
+      packageRoot: '/project',
+      children: [],
+    }]]),
+    config: new Map([[owner, {}]]),
+    resources: new Map([[owner, new Map()]]),
+    capabilities: new Map(slots.map((slot) => [slot.id, slot])),
+    projections: new Map(),
+  };
+}
 
 class MemoryDiscoveryHost implements DiscoveryHost {
   constructor(

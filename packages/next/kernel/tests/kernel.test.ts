@@ -29,7 +29,13 @@ describe('next kernel', () => {
     expect(capabilityId(root, featureId('test.command'), 'gh/issue/list')).toContain(
       'gh/issue/list',
     );
+    expect(capabilityId(root, featureId('test.command'), 'gh/pr/$title')).toContain(
+      'gh/pr/$title',
+    );
     expect(() => capabilityId(root, featureId('test.command'), 'gh//list')).toThrow(
+      'Invalid capability local name',
+    );
+    expect(() => capabilityId(root, featureId('test.command'), 'gh/pr/$Title')).toThrow(
       'Invalid capability local name',
     );
     expect(() => childPluginId(root, 'gh/issue')).toThrow('Invalid plugin instance key');

@@ -10,7 +10,10 @@ export type CapabilityId = string & { readonly [capabilityIdBrand]: true };
 
 const namespacePattern = /^[a-z][a-z0-9.-]*$/;
 const localNamePattern = /^[a-z0-9][a-z0-9-]*$/;
-const capabilityLocalNamePattern = /^[a-z0-9][a-z0-9-]*(?:\/[a-z0-9][a-z0-9-]*)*$/;
+const capabilityLocalSegment = String.raw`(?:[a-z0-9][a-z0-9-]*|\$[a-z][a-zA-Z0-9]*)`;
+const capabilityLocalNamePattern = new RegExp(
+  `^${capabilityLocalSegment}(?:/${capabilityLocalSegment})*$`,
+);
 
 function assertNamespace(value: string, label: string): void {
   if (!namespacePattern.test(value)) {

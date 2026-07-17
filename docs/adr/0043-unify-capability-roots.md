@@ -44,7 +44,7 @@ ADR 0042 已确定 Feature 是插件侧装配目录、Capability Ingress 是 Age
 
 - Page localName 来自 `<page>.ts|tsx`。
 - Layout localName 是保留文件 `$nav.tsx` 或 `$footer.tsx` 对应的 `nav`、`footer`。
-- Command localName 来自 `commands/` 下不含扩展名的相对路径；例如 `gh/issue/list.ts` 是 `gh/issue/list`，Runtime 命令词是 `gh issue list`。
+- Command localName 来自 `commands/` 下不含扩展名的相对路径；例如 `gh/issue/list.ts` 是 `gh/issue/list`，Runtime 命令词是 `gh issue list`。末尾文件也可使用 `[name:string|number|boolean=default].ts(x)` 声明类型化参数；例如 `gh/pr/[title:string=defaultTitle].ts` 编译为稳定 localName `gh/pr/$title` 与 Runtime pattern `gh pr [title]`。参数语法、类型转换和字面命令优先级均由 Command Feature 负责，Kernel 只校验 canonical Capability 身份。
 - Component localName 来自 `<component>.ts|tsx`。
 - Middleware localName 来自 `<middleware>.ts`。
 - Agent localName 来自 `<name>.md`。
