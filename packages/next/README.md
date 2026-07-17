@@ -15,6 +15,11 @@
 | `@zhin.js/next-feature-component` | `components/**/*.ts|tsx`、owner override/ancestor fallback 与 ComponentIndex |
 | `@zhin.js/next-feature-adapter` | `adapters/**/*.ts`、Endpoint lifecycle 与 generation handoff |
 | `@zhin.js/next-im` | Snapshot-coherent inbound、Command dispatch、Component render 与统一 send pipeline |
+| `@zhin.js/next-feature-tool` | `tools/*.ts`、`defineAgentTool()` 与 owner-scoped ToolIndex |
+| `@zhin.js/next-feature-skill` | `skills/*/SKILL.md` immutable Skill projection |
+| `@zhin.js/next-feature-agent` | `agents/*.agent.md` immutable Agent projection |
+| `@zhin.js/next-feature-mcp` | `mcp/*.ts`、provider-neutral MCP client lifecycle |
+| `@zhin.js/next-agent` | CapabilityIngress、owner-visible handles 与 snapshot-coherent turn lease |
 | `@zhin.js/next-cli` | Plugin monorepo 初始化、子包创建、inspect、build 与安全 publish plan |
 
 每个包的完整契约与示例：
@@ -26,6 +31,11 @@
 - [Component Feature](feature-component/README.md)
 - [Adapter Feature](feature-adapter/README.md)
 - [IM Runtime](im/README.md)
+- [Tool Feature](feature-tool/README.md)
+- [Skill Feature](feature-skill/README.md)
+- [Agent Feature](feature-agent/README.md)
+- [MCP Feature](feature-mcp/README.md)
+- [Agent Runtime](agent/README.md)
 - [Runtime](runtime/README.md)
 - [YAML Config Adapter](config-yaml/README.md)
 - [CLI](cli/README.md)
@@ -42,6 +52,12 @@ package.json#zhin
   -> RootController commit
   -> SnapshotLease IM pipeline
   -> Endpoint send
+
+AgentRuntime turn
+  -> SnapshotLease
+  -> Tool / Skill / Agent / MCP projections
+  -> owner-visible CapabilityIngress
+  -> scoped execution handles
 
 Development ModuleRuntime watcher
   -> reverse importer closure

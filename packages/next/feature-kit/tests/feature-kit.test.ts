@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest';
 import {
   capabilityId,
   childPluginId,
+  createCapabilitySlot,
   featureId,
   rootPluginId,
+  type RuntimeSnapshot,
 } from '@zhin.js/next-kernel';
 import {
   FeatureCatalog,
   FeatureConflictError,
   FeatureDiscovery,
+  OwnerCapabilityIndex,
   defineFeatureProvider,
   type DiscoveryHost,
   type SourceConvention,
@@ -111,5 +114,61 @@ describe('Feature provider kit', () => {
 
     expect(loads).toBe(1);
     expect(slots.map((slot) => slot.owner)).toEqual([second]);
+  });
+
+  it('resolves nearest-owner overrides and stable qualified names', () => {
+    const root = rootPluginId();
+    const child = childPluginId(root, 'child');
+    const id = featureId('test.owner-index');
+    const slot = (owner: typeof root, name: string, value: string) => createCapabilitySlot({
+      owner,
+      feature: id,
+      localName: name,
+      source: `/${owner}/${name}.ts`,
+      definition: value,
+    });
+    const slots = [
+      slot(root, 'shared', 'root'),
+      slot(root, 'global', 'global'),
+      slot(child, 'shared', 'child'),
+    ];
+    const snapshot: RuntimeSnapshot = {
+      generation: 1,
+      root,
+      tree: new Map([
+        [root, {
+          id: root,
+          instanceKey: 'root',
+          packageName: '@test/root',
+          packageRoot: '/project',
+          children: [child],
+        }],
+        [child, {
+          id: child,
+          instanceKey: 'child',
+          packageName: '@test/child',
+          packageRoot: '/project/plugins/child',
+          parent: root,
+          children: [],
+        }],
+      ]),
+      config: new Map([[root, {}], [child, {}]]),
+      resources: new Map([[root, new Map()], [child, new Map()]]),
+      capabilities: new Map(slots.map((entry) => [entry.id, entry])),
+      projections: new Map(),
+    };
+    const index = new OwnerCapabilityIndex(slots, snapshot);
+
+    expect(index.resolve(child, 'shared')?.slot.definition).toBe('child');
+    expect(index.resolve(child, 'global')?.slot.definition).toBe('global');
+    expect(index.visible(child).map((entry) => [entry.name, entry.slot.definition])).toEqual([
+      ['global', 'global'],
+      ['shared', 'child'],
+    ]);
+    expect(index.entries().map((entry) => entry.qualifiedName)).toEqual([
+      'child__shared',
+      'global',
+      'shared',
+    ]);
   });
 });

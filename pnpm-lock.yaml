@@ -1104,6 +1104,31 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  packages/next/agent:
+    dependencies:
+      '@zhin.js/next-feature-agent':
+        specifier: workspace:*
+        version: link:../feature-agent
+      '@zhin.js/next-feature-mcp':
+        specifier: workspace:*
+        version: link:../feature-mcp
+      '@zhin.js/next-feature-skill':
+        specifier: workspace:*
+        version: link:../feature-skill
+      '@zhin.js/next-feature-tool':
+        specifier: workspace:*
+        version: link:../feature-tool
+      '@zhin.js/next-kernel':
+        specifier: workspace:*
+        version: link:../kernel
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.0
+        version: 26.1.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   packages/next/cli:
     dependencies:
       '@zhin.js/next-runtime':
@@ -1137,6 +1162,22 @@ importers:
         version: 6.0.3
 
   packages/next/feature-adapter:
+    dependencies:
+      '@zhin.js/next-feature-kit':
+        specifier: workspace:*
+        version: link:../feature-kit
+      '@zhin.js/next-kernel':
+        specifier: workspace:*
+        version: link:../kernel
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.0
+        version: 26.1.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/next/feature-agent:
     dependencies:
       '@zhin.js/next-feature-kit':
         specifier: workspace:*
@@ -1197,7 +1238,55 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  packages/next/feature-mcp:
+    dependencies:
+      '@zhin.js/next-feature-kit':
+        specifier: workspace:*
+        version: link:../feature-kit
+      '@zhin.js/next-kernel':
+        specifier: workspace:*
+        version: link:../kernel
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.0
+        version: 26.1.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   packages/next/feature-middleware:
+    dependencies:
+      '@zhin.js/next-feature-kit':
+        specifier: workspace:*
+        version: link:../feature-kit
+      '@zhin.js/next-kernel':
+        specifier: workspace:*
+        version: link:../kernel
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.0
+        version: 26.1.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/next/feature-skill:
+    dependencies:
+      '@zhin.js/next-feature-kit':
+        specifier: workspace:*
+        version: link:../feature-kit
+      '@zhin.js/next-kernel':
+        specifier: workspace:*
+        version: link:../kernel
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.0
+        version: 26.1.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/next/feature-tool:
     dependencies:
       '@zhin.js/next-feature-kit':
         specifier: workspace:*
@@ -1265,15 +1354,27 @@ importers:
       '@types/node':
         specifier: ^26.1.0
         version: 26.1.1
+      '@zhin.js/next-feature-agent':
+        specifier: workspace:*
+        version: link:../feature-agent
       '@zhin.js/next-feature-command':
         specifier: workspace:*
         version: link:../feature-command
       '@zhin.js/next-feature-component':
         specifier: workspace:*
         version: link:../feature-component
+      '@zhin.js/next-feature-mcp':
+        specifier: workspace:*
+        version: link:../feature-mcp
       '@zhin.js/next-feature-middleware':
         specifier: workspace:*
         version: link:../feature-middleware
+      '@zhin.js/next-feature-skill':
+        specifier: workspace:*
+        version: link:../feature-skill
+      '@zhin.js/next-feature-tool':
+        specifier: workspace:*
+        version: link:../feature-tool
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

@@ -38,6 +38,8 @@ describe('next CLI project tooling', () => {
       await readFile(join(root, 'tsconfig.json'), 'utf8'),
     ) as { include: string[] };
     expect(tsconfig.include).toContain('adapters/**/*.ts');
+    expect(tsconfig.include).toContain('tools/*.ts');
+    expect(tsconfig.include).toContain('mcp/*.ts');
     const child = JSON.parse(
       await readFile(join(root, 'plugins/weather/package.json'), 'utf8'),
     ) as { zhin: { engine: string } };

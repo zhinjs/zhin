@@ -172,46 +172,24 @@ Feature projection handoff 排在 Plugin Resource handoff 之后激活、之前 
 
 ## 8. Agent Capability Index
 
-Tool、Skill、Agent、MCP 仍由各自 Feature 表达，CapabilityIngress 只做 snapshot projection：
+Tool、Skill、Agent、MCP 已由四个独立 Feature package 表达：
+
+- `tools/<name>.ts` 默认导出 `defineAgentTool()`。
+- `skills/<name>/SKILL.md` 是 immutable Skill instructions。
+- `agents/<name>.agent.md` 是 immutable Agent instructions。
+- `mcp/<name>.ts` 默认导出 provider-neutral `defineMcp()`。
+
+`@zhin.js/next-agent` 的 CapabilityIngress 只读四个 generation projection，按 requester owner 应用 nearest-ancestor inheritance，返回 Tool/MCP 执行 handles 与 Skill/Agent descriptors。缺少某个 Feature 时对应列表为空，不建立隐藏 registry。
+
+AgentRuntime 一次 turn lease 一个 snapshot：
 
 ```ts
-export interface AgentCapabilityIndex {
-  readonly tools: ReadonlyMap<string, CapabilitySlot<ToolDefinition>>;
-  readonly skills: ReadonlyMap<string, CapabilitySlot<SkillDefinition>>;
-  readonly agents: ReadonlyMap<string, CapabilitySlot<AgentDefinition>>;
-  readonly mcp: ReadonlyMap<string, CapabilitySlot<McpDefinition>>;
-}
-
-export function buildAgentCapabilityIndex(
-  snapshot: RuntimeSnapshot,
-): AgentCapabilityIndex {
-  return Object.freeze({
-    tools: qualifiedIndex(snapshot, 'tool'),
-    skills: qualifiedIndex(snapshot, 'skill'),
-    agents: qualifiedIndex(snapshot, 'agent'),
-    mcp: qualifiedIndex(snapshot, 'mcp'),
-  });
-}
-
-export class CapabilityIngress {
-  #cache = new GenerationCache<AgentCapabilityIndex>();
-
-  read(snapshot: RuntimeSnapshot): AgentCapabilityIndex {
-    return this.#cache.get(snapshot, buildAgentCapabilityIndex);
-  }
-}
-```
-
-Orchestrator 一次 turn lease 一个 snapshot：
-
-```ts
-await snapshots.using(async (snapshot) => {
-  const capabilities = ingress.read(snapshot);
-  await orchestrator.run({ request, capabilities, generation: snapshot.generation });
+await agentRuntime.runTurn(owner, async (capabilities) => {
+  await orchestrator.run({ request, capabilities, generation: capabilities.generation });
 });
 ```
 
-Tool execute 获得 owner ConfigView/Resource；Skill/Agent Markdown 是 immutable definition。MCP client connection 属于 Resource/disposer，不存入 Feature definition。
+Tool execute 获得声明 owner 的 ConfigView/Resource，不读取 requester 私有值。MCP `create()` 只构造 inert client，`start/stop` 进入 Feature generation handoff；旧 turn 连接随 lease 延迟释放。`runTurn()` 回调结束后，逃逸的 Tool/MCP handles 会失效。
 
 ## 9. Schedule 与其它 Runtime
 

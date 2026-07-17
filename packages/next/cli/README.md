@@ -49,7 +49,7 @@ zhin-next create feature task @acme/feature-task
 
 CLI 创建 `packages/task/src/provider.ts`，并更新 Root dependency 与 `zhin.features` requirement。
 
-所有新建 Root、child Plugin 与 Feature package 都声明 `zhin.engine: ^1.0.0`；Feature 同时声明具体 `featureApi: 1.0.0`，调用方 requirement 使用 `^1.0.0`。Root tsconfig 覆盖 Command、Middleware、Component、Adapter 以及一级 `plugins/*`、`packages/*` 的 TypeScript/TSX 源码。
+所有新建 Root、child Plugin 与 Feature package 都声明 `zhin.engine: ^1.0.0`；Feature 同时声明具体 `featureApi: 1.0.0`，调用方 requirement 使用 `^1.0.0`。Root tsconfig 覆盖 Command、Middleware、Component、Adapter、Tool、MCP 以及一级 `plugins/*`、`packages/*` 的 TypeScript/TSX 源码；Agent/Skill Markdown 不进入 TypeScript 编译。
 
 ### 检查、构建与发布
 

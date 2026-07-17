@@ -39,7 +39,8 @@ Canonical workspace 结构为：
 ├── middlewares/
 ├── agents/
 ├── skills/
-└── tools/
+├── tools/
+└── mcp/
 ```
 
 `pnpm-workspace.yaml` 只包含一级包：
@@ -138,9 +139,10 @@ Feature requirement 不沿 Plugin tree 隐式继承。每个 Plugin Package 声�
 commands/<name>.ts|tsx
 components/<name>.ts|tsx
 middlewares/<name>.ts
-agents/<name>.md
+agents/<name>.agent.md
 skills/<name>/SKILL.md
 tools/<name>.ts
+mcp/<name>.ts
 pages/<name>.ts|tsx
 pages/$nav.tsx
 pages/$footer.tsx

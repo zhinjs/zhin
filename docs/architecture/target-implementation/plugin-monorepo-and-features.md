@@ -43,7 +43,8 @@ my-plugin/
 │   ├── adapter/
 │   ├── skill/
 │   ├── tool/
-│   └── agent/
+│   ├── agent/
+│   └── mcp/
 ├── plugins/
 │   ├── group-suit/
 │   └── 60s/
@@ -56,8 +57,10 @@ my-plugin/
 ├── tools/
 │   └── get-weather.ts
 ├── agents/
-│   ├── planner.md
-│   └── reviewer.md
+│   ├── planner.agent.md
+│   └── reviewer.agent.md
+├── mcp/
+│   └── memory.ts
 ├── commands/
 │   ├── status.ts
 │   └── zt.ts
@@ -243,14 +246,14 @@ export const agentFeature = defineFeatureProvider<AgentDefinition, AgentIndex>({
   id: featureId('zhin.agent'),
   protocol: 1,
   conventions: [
-    markdownFiles({ directory: 'agents', extension: '.md' }),
+    markdownFiles({ directory: 'agents', extension: '.agent.md' }),
   ],
   validate: parseAgentMarkdown,
   project: (slots) => AgentIndex.create(slots),
 });
 ```
 
-`agents/<name>.md` 是标准 Agent Feature 的约定。文件名后缀不再重复表达 feature 类型。
+`agents/<name>.agent.md` 是标准 Agent Feature 的约定。显式后缀避免普通项目 Markdown 被误发现；localName 会移除 `.agent.md`。
 
 ## 7. Feature 装配流程
 
@@ -298,7 +301,10 @@ export interface PluginDefinition<TConfig = unknown> {
 | `components/**/<name>.ts|tsx` | 单个 Component Slot + owner-aware projection |
 | `middlewares/**/<name>.ts` | 单个 Middleware Slot + inbound/outbound projection |
 | `adapters/**/<name>.ts` | 单个 Adapter Slot + generation handoff；旧 Endpoint 按 lease 延迟销毁 |
-| `agents/planner.md` | 单个 Agent Slot + Agent projection |
+| `agents/planner.agent.md` | 单个 Agent Slot + Agent projection |
+| `skills/research/SKILL.md` | 单个 Skill Slot + Skill projection |
+| `tools/weather.ts` | 单个 Tool Slot + Tool projection |
+| `mcp/memory.ts` | 单个 MCP Slot + connection handoff/projection |
 | Feature package manifest 中的 provider entry | 重载 provider + 使用该 Feature package 的所有 owner Slot/projection；Plugin Scope 复用 |
 | Feature provider 源码 | 当前保守重建完整 shadow generation |
 | child `plugin.ts` | child Plugin subtree |

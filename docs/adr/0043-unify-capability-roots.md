@@ -31,9 +31,10 @@ ADR 0042 已确定 Feature 是插件侧装配目录、Capability Ingress 是 Age
 ├── commands/**/<command>.ts|tsx
 ├── components/<component>.ts|tsx
 ├── middlewares/<middleware>.ts
-├── agents/<name>.md
+├── agents/<name>.agent.md
 ├── skills/<skill>/SKILL.md
-└── tools/<tool>.ts
+├── tools/<tool>.ts
+└── mcp/<name>.ts
 ```
 
 这些是官方标准 Feature provider 的默认写入格式，不是 Kernel 内建列表。第三方 Feature 可以声明新的目录与 definition contract，详见 ADR 0048。
@@ -47,9 +48,10 @@ ADR 0042 已确定 Feature 是插件侧装配目录、Capability Ingress 是 Age
 - Command localName 来自 `commands/` 下不含扩展名的相对路径；例如 `gh/issue/list.ts` 是 `gh/issue/list`，Runtime 命令词是 `gh issue list`。末尾文件也可使用 `[name:string|number|boolean=default].ts(x)` 声明类型化参数；例如 `gh/pr/[title:string=defaultTitle].ts` 编译为稳定 localName `gh/pr/$title` 与 Runtime pattern `gh pr [title]`。参数语法、类型转换和字面命令优先级均由 Command Feature 负责，Kernel 只校验 canonical Capability 身份。
 - Component localName 来自 `<component>.ts|tsx`。
 - Middleware localName 来自 `<middleware>.ts`。
-- Agent localName 来自 `<name>.md`。
+- Agent localName 来自 `<name>.agent.md`，identity 移除完整 `.agent.md` 后缀。
 - Skill localName 来自 `<skill>` 目录。
 - Tool localName 来自 `<tool>.ts`。
+- MCP localName 来自 `<name>.ts`。
 
 Canonical identity 是 `(ownerPlugin, featureId, localName)`。项目根能力可投影为 bare runtime name；插件能力进入全局命名空间时，由框架生成 qualified runtime name。不同 owner 的同名能力不通过扫描顺序覆盖。
 
@@ -64,6 +66,7 @@ Zhin 提供：
 - `defineComponent()`
 - `defineMiddleware()`
 - `defineAgentTool()`
+- `defineMcp()`
 
 五个函数只验证并标记 definition，不定位 Plugin、不写 Feature、不产生注册副作用。
 
@@ -109,7 +112,7 @@ export default defineMiddleware({
 });
 ```
 
-`middlewares/` 在本 ADR 中只表示 IM 入站 Middleware。Agent event、HTTP、outbound polish 等不同协议不得仅因都采用洋葱模型而共用该 definition；它们应在各自领域拥有独立 Feature 与 interface。
+标准 Middleware Feature 通过必填归一化的 `target` 区分 `inbound` 与 `outbound` typed context。Agent event、HTTP 等其它协议不得仅因都采用洋葱模型而共用该 definition；它们应在各自领域拥有独立 Feature 与 interface。
 
 Middleware chain 按 `(phase, order, owner topology order, identity)` 确定性排序。同一 Runtime snapshot 内链顺序不变；一次局部热更以新 generation 整体发布重新 compose 后的链，不在进行中的消息里替换函数。
 
@@ -149,7 +152,7 @@ Capability Root
 - CommandFeature 由 Message Dispatcher 消费。
 - ComponentFeature 由 Outbound Renderer 消费。
 - MiddlewareFeature 由 Inbound Runner 消费。
-- AgentFeature、SkillFeature、ToolFeature 经 Capability Ingress 进入 Agent Orchestrator。
+- AgentFeature、SkillFeature、ToolFeature、MCPFeature 经 Capability Ingress 进入 Agent Orchestrator。
 
 `addRoute()`、`addPage()`、`addMiddleware()`、`addCommand()`、`addComponent()`、`addTool()` 不属于目标作者 interface。框架内部通过 Feature interface 完成装配。
 
@@ -157,7 +160,7 @@ Capability Root
 
 当前 `index.ts + add*`、`agent/`、`*.tool.md`、分形 `agent.ts` 和其它发现路径不属于目标架构。目标实现不承担读取、迁移或兼容这些格式的义务。
 
-MCP、Schedule、Hook、State、Dynamic、Adapter 及其它领域 Middleware 的声明式文件格式不在本 ADR 范围内；新增时必须遵守相同的 owner、identity 和单一写入面原则。
+Schedule、Hook、State、Dynamic 及其它领域 Middleware 的声明式文件格式不在本 ADR 范围内；新增时必须遵守相同的 owner、identity 和单一写入面原则。Adapter 与 MCP 格式已由后续绿地实现修订为 `adapters/**/*.ts` 与 `mcp/*.ts`。
 
 ## 与既有 ADR 的关系
 

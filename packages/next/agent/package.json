@@ -1,7 +1,7 @@
 {
-  "name": "@zhin.js/next-runtime",
+  "name": "@zhin.js/next-agent",
   "version": "0.0.0",
-  "description": "Static package graph and Root runtime for the greenfield Zhin architecture",
+  "description": "Snapshot-coherent Agent capability ingress for the next Zhin runtime",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -12,27 +12,21 @@
       "import": "./lib/index.js"
     }
   },
-  "files": ["lib"],
+  "files": ["lib", "src"],
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
-    "test": "vitest run --root ../../.. packages/next/runtime/tests",
-    "check:size": "node ./scripts/check-install-size.mjs"
+    "test": "vitest run --root ../../.. packages/next/agent/tests",
+    "check:size": "node ../runtime/scripts/check-install-size.mjs @zhin.js/next-agent"
   },
   "dependencies": {
-    "@zhin.js/next-feature-kit": "workspace:*",
-    "@zhin.js/next-kernel": "workspace:*",
-    "ajv": "8.18.0",
-    "semver": "7.8.5"
-  },
-  "devDependencies": {
-    "@zhin.js/next-feature-command": "workspace:*",
-    "@zhin.js/next-feature-component": "workspace:*",
     "@zhin.js/next-feature-agent": "workspace:*",
     "@zhin.js/next-feature-mcp": "workspace:*",
-    "@zhin.js/next-feature-middleware": "workspace:*",
     "@zhin.js/next-feature-skill": "workspace:*",
     "@zhin.js/next-feature-tool": "workspace:*",
+    "@zhin.js/next-kernel": "workspace:*"
+  },
+  "devDependencies": {
     "@types/node": "^26.1.0",
     "typescript": "^6.0.3"
   },

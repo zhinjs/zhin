@@ -282,7 +282,7 @@ async function discoverSkills(root: string): Promise<readonly DiscoveredSource[]
 }
 ```
 
-标准 Agent Feature 扫描 `agents/<name>.md`，Command Feature 递归扫描 `commands/**/*.ts|tsx`，并将相对路径 `gh/issue/list.ts` 投影为 canonical localName `gh/issue/list` 与命令词 `gh issue list`。Command 文件 basename 还可使用 `[name:type=default].ts(x)` 声明末尾参数，例如 `gh/pr/[title:string=defaultTitle].ts` 编译为 canonical localName `gh/pr/$title` 与 pattern `gh pr [title]`；参数 DSL 的解析和校验仍完全属于 Command provider。这些约定属于各自 provider，而不是此模块的常量。Discovery 只返回 source descriptors；Server/Client Module Runtime 或 Markdown parser 负责加载。完整 contract 见 [Plugin Monorepo 与 Feature Provider](./plugin-monorepo-and-features.md)。
+标准 Agent Feature 扫描 `agents/<name>.agent.md`，Command Feature 递归扫描 `commands/**/*.ts|tsx`，并将相对路径 `gh/issue/list.ts` 投影为 canonical localName `gh/issue/list` 与命令词 `gh issue list`。Command 文件 basename 还可使用 `[name:type=default].ts(x)` 声明末尾参数，例如 `gh/pr/[title:string=defaultTitle].ts` 编译为 canonical localName `gh/pr/$title` 与 pattern `gh pr [title]`；参数 DSL 的解析和校验仍完全属于 Command provider。这些约定属于各自 provider，而不是此模块的常量。Discovery 只返回 source descriptors；Server/Client Module Runtime 负责 TypeScript 模块，Agent/Skill provider 负责读取它们各自的 Markdown SSOT。完整 contract 见 [Plugin Monorepo 与 Feature Provider](./plugin-monorepo-and-features.md)。
 
 ## 6. Ownership Index
 

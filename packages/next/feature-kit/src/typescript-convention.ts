@@ -9,6 +9,7 @@ export interface TypeScriptConventionOptions {
   readonly id: string;
   readonly directory: string;
   readonly tsx?: boolean;
+  readonly recursive?: boolean;
 }
 
 /** Discovers stable, nested local names without assigning Feature semantics. */
@@ -19,7 +20,13 @@ export function typeScriptModules(
     id: options.id,
     async *discover(context) {
       const directory = join(context.packageRoot, options.directory);
-      yield* discoverDirectory(context, directory, [], Boolean(options.tsx));
+      yield* discoverDirectory(
+        context,
+        directory,
+        [],
+        Boolean(options.tsx),
+        options.recursive !== false,
+      );
     },
     async load(source, context) {
       const module = await context.host.loadModule<{ default?: unknown }>(source.source);
@@ -34,12 +41,19 @@ async function* discoverDirectory(
   directory: string,
   ancestors: readonly string[],
   tsx: boolean,
+  recursive: boolean,
 ): AsyncIterable<DiscoveredSource> {
   const entries = [...await context.host.list(directory)]
     .sort((left, right) => left.name.localeCompare(right.name));
   for (const entry of entries) {
-    if (entry.kind === 'directory' && isSegment(entry.name)) {
-      yield* discoverDirectory(context, join(directory, entry.name), [...ancestors, entry.name], tsx);
+    if (entry.kind === 'directory' && recursive && isSegment(entry.name)) {
+      yield* discoverDirectory(
+        context,
+        join(directory, entry.name),
+        [...ancestors, entry.name],
+        tsx,
+        recursive,
+      );
       continue;
     }
     if (entry.kind !== 'file' || !isModule(entry.name, tsx)) continue;
