@@ -50,6 +50,7 @@ import {
   SubtreeGenerationPreparer,
   SubtreeTopologyChangedError,
 } from './subtree-generation-preparer.js';
+import { TopologyGenerationPreparer } from './topology-generation-preparer.js';
 
 export type {
   PluginConfigResolver,
@@ -159,7 +160,17 @@ export class RootRuntime {
     const snapshot = await this.controller.reload(
       plan.subtrees[0] ?? plan.slots[0] ?? rootPluginId(),
       async (current) => {
-        if (plan.subtrees.length === 0 && plan.slots.length > 0 && this.#model) {
+        if (this.#model && this.#isManifestTopologyPlan(plan)) {
+          const inspected = await this.#inspectProject();
+          prepared = await new TopologyGenerationPreparer(
+            this.#modules,
+            this.#model,
+            inspected.graph,
+            inspected.configResolver,
+            this.#environment,
+            this.#installResources,
+          ).prepare(current);
+        } else if (plan.subtrees.length === 0 && plan.slots.length > 0 && this.#model) {
           prepared = await new SlotGenerationPreparer(this.#modules, this.#model)
             .prepare(current, plan.slots);
         } else if (this.#model && this.#canPrepareSubtrees(plan)) {
@@ -168,11 +179,21 @@ export class RootRuntime {
         } else {
           prepared = await this.#prepare(current);
         }
-        return prepared.generation;
+        return prepared?.generation;
       },
     );
-    this.#accept(requirePrepared(prepared));
+    if (prepared) this.#accept(prepared);
     return snapshot;
+  }
+
+  #isManifestTopologyPlan(plan: GenerationInvalidationPlan): boolean {
+    let manifest = false;
+    for (const source of plan.changed) {
+      const records = this.#ownership.recordsFor(source);
+      if (records.some((record) => record.role === 'manifest')) manifest = true;
+      if (records.some((record) => record.role !== 'manifest')) return false;
+    }
+    return manifest;
   }
 
   #accept(prepared: PreparedRuntimeGeneration): void {

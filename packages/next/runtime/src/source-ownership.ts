@@ -50,6 +50,13 @@ export class SourceOwnershipIndex {
       });
       for (const requirement of node.features) {
         const packageRoot = resolve(requirement.package.root);
+        index.addPackageRoot(packageRoot, node.id);
+        index.add({
+          source: resolve(packageRoot, 'package.json'),
+          role: 'manifest',
+          owner: node.id,
+          feature: featureIdsByPackageRoot.get(packageRoot),
+        });
         index.add({
           source: resolve(packageRoot, requirement.package.packageJson.zhin.entry),
           role: 'feature',

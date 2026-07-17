@@ -286,10 +286,11 @@ export interface PluginDefinition<TConfig = unknown> {
 |---|---|
 | `commands/**/<name>.ts|tsx` | 单个层级 Command Slot + Command projection |
 | `agents/planner.md` | 单个 Agent Slot + Agent projection |
-| Feature provider entry | 使用该 Feature 的所有 Slot/projection |
+| Feature package manifest 中的 provider entry | 重载 provider + 使用该 Feature package 的所有 owner Slot/projection；Plugin Scope 复用 |
+| Feature provider 源码 | 当前保守重建完整 shadow generation |
 | child `plugin.ts` | child Plugin subtree |
 | child `schema.json` | child subtree config/schema/resources |
-| 任意 `package.json#zhin.plugins` | 受影响 Plugin subtree + package graph |
+| 任意 `package.json#zhin.plugins/features` | graph diff；局部 add/remove/move child 或 Feature mount |
 | workspace/lockfile | 整树 dependency resolution，必要时重启 Module Runtime |
 
 一次 commit 仍发布一个完整 generation；“局部”描述 prepare 和 dispose 的范围，不表示 RuntimeSnapshot 被原地修改。

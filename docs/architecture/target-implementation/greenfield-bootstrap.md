@@ -50,22 +50,22 @@ flowchart LR
 16. definition 校验失败保持 active generation；删除 capability 文件会原子移除对应 Slot。
 17. 排他 Resource 可注册 generation handoff；transaction 在 commit 前 quiesce/activate，失败时 deactivate/resume，commit 后再开放 admission。
 18. `ConfigPatchPlanner` 对结构化 set/remove patch 做整树校验，比较 owner view 后计算最浅 replacement forest；patch 队列串行且 no-op 不发布 generation。
+19. manifest topology transaction 局部处理 child/Feature mount 的新增、删除和移动；稳定 Scope 复用，移动 Scope 按新 owner 重建，等价 manifest 不发布 generation。
 
 ## 3. 当前 HMR 边界
 
 当前控制面已经完整：`SourceOwnershipIndex` 从 committed generation 建索引；`InvalidationPlanner` 结合 ModuleRuntime reverse importer closure 生成 slot/subtree/process 计划；`HmrCoordinator` 合并 watcher burst 并串行调用 `RootRuntime`。lockfile/workspace 变化只发出 process restart 请求。
 
-Capability-only 计划已经进入局部执行面：FeatureDiscovery 枚举完整约定目录以保留冲突检查，但只 load 选中的 Slot；Plugin tree、配置和 Resource snapshot 直接复用。child Plugin/schema 计划通过 `PluginScopeAssembler` 只创建受影响 forest 的 shadow Scope，ancestor 和 sibling 直接复用。`FeatureProjector` 统一为三种装配路径重建全部 projection，避免 projection 捕获旧 snapshot。每个 Plugin Scope 都有独立 `SharedLifetime`；新旧 generation 分别持有 lease，最后一代释放后才 children-first dispose。
+Capability-only 计划已经进入局部执行面：FeatureDiscovery 枚举完整约定目录以保留冲突检查，但只 load 选中的 Slot；Plugin tree、配置和 Resource snapshot 直接复用。child Plugin/schema 计划通过 `PluginScopeAssembler` 只创建受影响 forest 的 shadow Scope，ancestor 和 sibling 直接复用。manifest topology transaction 在完整解析候选 graph 后，只 setup added/replaced child forest；removed child 退出候选 snapshot，旧 Scope 继续由旧 generation lease 持有；Feature mount 增删移动只刷新 owner Slot。`FeatureProjector` 统一为四种装配路径重建全部 projection，避免 projection 捕获旧 snapshot。每个 Plugin Scope 都有独立 `SharedLifetime`；新旧 generation 分别持有 lease，最后一代释放后才 children-first dispose。
 
 commit 仍然发布完整 immutable RuntimeSnapshot；“局部”只描述 prepare/load/setup/dispose 范围，不表示原地修改 snapshot。definition 加载、校验或 projection 任一步失败都销毁 shadow projection 并保持 active generation。
 
-下一阶段继续收紧拓扑与进程边界：
+下一阶段继续收紧进程与持久化边界：
 
-1. manifest topology transaction：局部处理新增、删除、移动 child 与 Feature provider 变化。
-2. Root/process executor：Root Resource 或 package ABI 变化执行受控 restart。
-3. ConfigDocument adapter：用 YAML AST 将已验证 patch 持久化并保留注释、环境变量表达式与格式。
+1. Root/process executor：Root Resource 或 package ABI 变化执行受控 restart。
+2. ConfigDocument adapter：用 YAML AST 将已验证 patch 持久化并保留注释、环境变量表达式与格式。
 
-当前可宣称 Capability 文件与 child Plugin/schema 的局部替换。Root、manifest、Feature provider、未知 importer 和 Plugin topology 变化仍采用事务化整代重建；这是明确的安全边界，不是静默降级。
+当前可宣称 Capability 文件、child Plugin/schema 与 manifest topology 的局部替换。Root setup、Feature provider 源码、未知 importer 和混合 burst 仍采用事务化整代重建；这是明确的安全边界，不是静默降级。
 
 ## 4. 有意保留的后续工作
 

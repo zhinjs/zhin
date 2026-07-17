@@ -140,6 +140,20 @@ export class PluginScopeAssembler {
     for (const child of node.children) await this.setupTree(child);
   }
 
+  synchronizeTree(node: PluginGraphNode): void {
+    const current = this.tree.get(node.id);
+    if (!current) throw new Error(`Missing Plugin tree node: ${node.id}`);
+    this.tree.set(node.id, Object.freeze({
+      ...current,
+      instanceKey: node.instanceKey,
+      packageName: node.package.name,
+      packageRoot: node.package.root,
+      parent: node.parent,
+      children: Object.freeze(node.children.map((child) => child.id)),
+    }));
+    for (const child of node.children) this.synchronizeTree(child);
+  }
+
   createdScopeDisposers(): readonly (readonly [PluginId, Dispose])[] {
     return this.#created.map((owner) => {
       const scope = this.scopes.get(owner);

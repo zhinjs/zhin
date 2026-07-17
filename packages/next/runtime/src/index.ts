@@ -10,3 +10,4 @@ export * from './package-resolver.js';
 export * from './project-graph.js';
 export * from './root-runtime.js';
 export * from './source-ownership.js';
+export * from './topology-transaction.js';
