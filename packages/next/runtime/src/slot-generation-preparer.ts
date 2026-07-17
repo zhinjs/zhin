@@ -5,9 +5,9 @@ import {
   type Dispose,
   type FeatureId,
   type RuntimeSnapshot,
-  type SnapshotState,
 } from '@zhin.js/next-kernel';
 import { FeatureDiscovery } from '@zhin.js/next-feature-kit';
+import { FeatureProjector } from './feature-projector.js';
 import type { ModuleRuntime } from './module-runtime.js';
 import { NodeDiscoveryHost } from './node-discovery-host.js';
 import type {
@@ -41,44 +41,31 @@ export class SlotGenerationPreparer {
       for (const slot of replacements) capabilities.set(slot.id, slot);
     }
 
-    const projections = new Map<FeatureId, unknown>();
-    const projectionDisposers: Dispose[] = [];
-    const state: SnapshotState = {
-      root: current.root,
-      tree: current.tree,
-      config: current.config,
-      resources: current.resources,
-      capabilities,
-      projections,
-    };
+    const projected = await new FeatureProjector(this.model.providers.values()).project(
+      current.generation + 1,
+      {
+        root: current.root,
+        tree: current.tree,
+        config: current.config,
+        resources: current.resources,
+        capabilities,
+      },
+    );
     try {
-      // Definitions are loaded selectively, but projections are generation
-      // views and may capture their snapshot. Rebuild all of them to prevent
-      // an unchanged Feature from retaining an older generation implicitly.
-      for (const provider of this.model.providers.values()) {
-        const slots = [...capabilities.values()].filter(
-          (slot) => slot.feature === provider.id,
-        );
-        const projection = await provider.runtime.project(slots, {
-          snapshot: createSnapshotView(current.generation + 1, state),
-        });
-        projections.set(provider.id, projection.value);
-        if (projection.dispose) projectionDisposers.push(projection.dispose);
-      }
-      const snapshot = createSnapshotView(current.generation + 1, state);
+      const snapshot = createSnapshotView(current.generation + 1, projected.state);
       const ownership = SourceOwnershipIndex.fromGeneration(
         this.model.graph,
         snapshot,
         this.model.featureIdsByPackageRoot,
       );
-      const assets = this.model.assets.fork(projectionDisposers);
+      const assets = this.model.assets.fork(projected.disposers);
       return {
-        generation: { snapshot: state, dispose: () => assets.dispose() },
+        generation: { snapshot: projected.state, dispose: () => assets.dispose() },
         ownership,
         model: { ...this.model, assets },
       };
     } catch (error) {
-      await disposeProjections(projectionDisposers, error);
+      await disposeProjections(projected.disposers, error);
       throw error;
     }
   }

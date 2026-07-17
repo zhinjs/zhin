@@ -2,22 +2,15 @@ import { resolve } from 'node:path';
 import {
   DisposeStack,
   RootController,
-  Scope,
   createSnapshotView,
   rootPluginId,
   type CapabilityId,
   type CapabilitySlot,
-  type ConfigView,
   type Dispose,
-  type DisposeStack as DisposeStackType,
   type FeatureId,
-  type PluginDefinition,
   type PluginId,
-  type PluginInstanceView,
-  type PluginNodeSnapshot,
   type RuntimeSnapshot,
   type SnapshotState,
-  type TokenId,
 } from '@zhin.js/next-kernel';
 import {
   FeatureCatalog,
@@ -25,13 +18,19 @@ import {
   type CapabilityRoot,
   type FeatureProvider,
 } from '@zhin.js/next-feature-kit';
-import type { ZhinFeatureManifest, ZhinPluginManifest } from './manifest.js';
+import type { ZhinFeatureManifest } from './manifest.js';
 import { ConfigComposer, type RuntimeConfigDocument } from './config-composer.js';
-import { runtimeEnvironmentToken, type RuntimeEnvironment } from './environment.js';
+import type { RuntimeEnvironment } from './environment.js';
+import { FeatureProjector, type ProjectionState } from './feature-projector.js';
 import { GenerationAssets } from './generation-assets.js';
 import type { ModuleRuntime } from './module-runtime.js';
 import { NodeDiscoveryHost } from './node-discovery-host.js';
 import { NodePackageResolver } from './package-resolver.js';
+import {
+  PluginScopeAssembler,
+  type PluginConfigResolver,
+  type RootResourceInstaller,
+} from './plugin-scope-assembler.js';
 import { ProjectGraphService, type PluginGraphNode, type ProjectGraph } from './project-graph.js';
 import { HmrCoordinator, type HmrCoordinatorOptions } from './hmr-coordinator.js';
 import type { GenerationInvalidationPlan } from './invalidation-planner.js';
@@ -41,13 +40,16 @@ import type {
 } from './runtime-generation.js';
 import { SlotGenerationPreparer } from './slot-generation-preparer.js';
 import { SourceOwnershipIndex } from './source-ownership.js';
+import {
+  SubtreeGenerationPreparer,
+  SubtreeTopologyChangedError,
+} from './subtree-generation-preparer.js';
 
-export type PluginConfigResolver = (node: PluginGraphNode) => unknown;
-export interface RootResourceContext {
-  readonly resources: Scope;
-  readonly lifecycle: DisposeStackType;
-}
-export type RootResourceInstaller = (context: RootResourceContext) => void | Promise<void>;
+export type {
+  PluginConfigResolver,
+  RootResourceContext,
+  RootResourceInstaller,
+} from './plugin-scope-assembler.js';
 
 export interface RootRuntimeOptions {
   readonly projectRoot: string;
@@ -58,6 +60,11 @@ export interface RootRuntimeOptions {
 }
 
 export type RootHmrOptions = Omit<HmrCoordinatorOptions, 'modules' | 'ownership' | 'runtime'>;
+
+interface InspectedProject {
+  readonly graph: ProjectGraph;
+  readonly configResolver: PluginConfigResolver;
+}
 
 export class RootRuntime {
   readonly controller: RootController;
@@ -132,10 +139,27 @@ export class RootRuntime {
     const snapshot = await this.controller.reload(
       plan.subtrees[0] ?? plan.slots[0] ?? rootPluginId(),
       async (current) => {
-        prepared = plan.subtrees.length === 0 && plan.slots.length > 0 && this.#model
-          ? await new SlotGenerationPreparer(this.#modules, this.#model)
-              .prepare(current, plan.slots)
-          : await this.#prepare(current);
+        if (plan.subtrees.length === 0 && plan.slots.length > 0 && this.#model) {
+          prepared = await new SlotGenerationPreparer(this.#modules, this.#model)
+            .prepare(current, plan.slots);
+        } else if (this.#model && this.#canPrepareSubtrees(plan)) {
+          const inspected = await this.#inspectProject();
+          try {
+            prepared = await new SubtreeGenerationPreparer(
+              this.#modules,
+              this.#model,
+              inspected.graph,
+              inspected.configResolver,
+              this.#environment,
+              this.#installResources,
+            ).prepare(current, plan.subtrees);
+          } catch (error) {
+            if (!(error instanceof SubtreeTopologyChangedError)) throw error;
+            prepared = await this.#prepareInspected(current, inspected);
+          }
+        } else {
+          prepared = await this.#prepare(current);
+        }
         return prepared.generation;
       },
     );
@@ -148,7 +172,21 @@ export class RootRuntime {
     this.#model = prepared.model;
   }
 
+  #canPrepareSubtrees(plan: GenerationInvalidationPlan): boolean {
+    if (plan.subtrees.length === 0 || plan.subtrees.includes(rootPluginId())) return false;
+    return plan.changed.every((source) => {
+      const records = this.#ownership.recordsFor(source);
+      return records.length > 0 && records.every(
+        (record) => record.role === 'plugin' || record.role === 'schema',
+      );
+    });
+  }
+
   async #prepare(current: RuntimeSnapshot): Promise<PreparedRuntimeGeneration> {
+    return this.#prepareInspected(current, await this.#inspectProject());
+  }
+
+  async #inspectProject(): Promise<InspectedProject> {
     const resolver = await NodePackageResolver.create(this.#projectRoot);
     const graph = await new ProjectGraphService(resolver).inspect(this.#projectRoot);
     const configResolver =
@@ -157,10 +195,17 @@ export class RootRuntime {
         : await new ConfigComposer()
             .compose(graph, this.#config)
             .then((composed) => (node: PluginGraphNode) => composed.views.get(node.id));
+    return { graph, configResolver };
+  }
+
+  #prepareInspected(
+    current: RuntimeSnapshot,
+    inspected: InspectedProject,
+  ): Promise<PreparedRuntimeGeneration> {
     const assembler = new GenerationAssembler(
-      graph,
+      inspected.graph,
       this.#modules,
-      configResolver,
+      inspected.configResolver,
       current.generation + 1,
       this.#environment,
       this.#installResources,
@@ -170,18 +215,13 @@ export class RootRuntime {
 }
 
 class GenerationAssembler {
-  readonly #scopeDisposers = new DisposeStack();
-  readonly #scopes = new Map<PluginId, Scope>();
-  readonly #tree = new Map<PluginId, PluginNodeSnapshot>();
-  readonly #config = new Map<PluginId, unknown>();
-  readonly #resources = new Map<PluginId, ReadonlyMap<TokenId, unknown>>();
   readonly #capabilities = new Map<CapabilityId, CapabilitySlot>();
-  readonly #projections = new Map<FeatureId, unknown>();
   readonly #catalog = new FeatureCatalog();
   readonly #rootsByFeature = new Map<FeatureId, CapabilityRoot[]>();
   readonly #featureIdsByPackageRoot = new Map<string, FeatureId>();
   readonly #projectionDisposers: Dispose[] = [];
   readonly #host: NodeDiscoveryHost;
+  readonly #plugins: PluginScopeAssembler;
 
   constructor(
     private readonly graph: ProjectGraph,
@@ -192,6 +232,12 @@ class GenerationAssembler {
     private readonly installResources?: RootResourceInstaller,
   ) {
     this.#host = new NodeDiscoveryHost(modules);
+    this.#plugins = new PluginScopeAssembler(
+      modules,
+      configResolver,
+      environment,
+      installResources,
+    );
   }
 
   async prepare(): Promise<PreparedRuntimeGeneration> {
@@ -199,10 +245,12 @@ class GenerationAssembler {
       // Prepare is deliberately ordered: providers define discovery, setup
       // creates owner scopes, then definitions can be projected against both.
       await this.#loadProviders(this.graph.root);
-      await this.#setupPlugin(this.graph.root);
-      await this.#discoverAndProject();
-      this.#scopeDisposers.seal();
-      const state = this.#state();
+      await this.#plugins.setupTree(this.graph.root);
+      await this.#discover();
+      const projected = await new FeatureProjector(this.#catalog.values())
+        .project(this.generation, this.#projectionState());
+      this.#projectionDisposers.push(...projected.disposers);
+      const state = projected.state;
       const snapshot = createSnapshotView(this.generation, state);
       const ownership = SourceOwnershipIndex.fromGeneration(
         this.graph,
@@ -210,7 +258,7 @@ class GenerationAssembler {
         this.#featureIdsByPackageRoot,
       );
       const assets = GenerationAssets.create(
-        () => this.#scopeDisposers.dispose(),
+        this.#plugins.createdScopeDisposers(),
         this.#projectionDisposers,
       );
       return {
@@ -231,12 +279,13 @@ class GenerationAssembler {
             ]),
           ),
           featureIdsByPackageRoot: new Map(this.#featureIdsByPackageRoot),
+          scopes: new Map(this.#plugins.scopes),
           assets,
         },
       };
     } catch (error) {
       await disposePreparedParts(
-        () => this.#scopeDisposers.dispose(),
+        this.#plugins.createdScopeDisposers().map(([, dispose]) => dispose),
         this.#projectionDisposers,
         error,
       );
@@ -272,107 +321,23 @@ class GenerationAssembler {
     for (const child of node.children) await this.#loadProviders(child);
   }
 
-  async #setupPlugin(node: PluginGraphNode): Promise<void> {
-    const manifest = node.package.packageJson.zhin as ZhinPluginManifest;
-    if (manifest.runtime === 'isolated') {
-      throw new Error(`Isolated Plugin runtime is not implemented: ${node.package.name}`);
-    }
-    const module = await this.modules.load<ModuleNamespace>(
-      resolve(node.package.root, manifest.entry),
-    );
-    const definition = module.default as PluginDefinition | undefined;
-    if (!definition || typeof definition.name !== 'string') {
-      throw new TypeError(`${node.package.name} does not default-export a Plugin definition`);
-    }
-
-    const parentScope = node.parent ? this.#scopes.get(node.parent) : undefined;
-    if (node.parent && !parentScope) throw new Error(`Missing parent scope for ${node.id}`);
-    const scope = new Scope(node.id, parentScope);
-    this.#scopes.set(node.id, scope);
-    this.#scopeDisposers.add(() => scope.disposers.dispose());
-
-    if (!node.parent) {
-      scope.provide(runtimeEnvironmentToken, this.environment);
-      await this.installResources?.({
-        resources: scope,
-        lifecycle: scope.disposers,
-      });
-    }
-
-    for (const token of definition.requires ?? []) {
-      if (!scope.has(token)) {
-        throw new Error(`Missing resource ${token.id} for Plugin ${node.id}`);
-      }
-    }
-
-    const config = Object.freeze(this.configResolver(node) ?? {});
-    const view: ConfigView<unknown> = { get: () => config };
-    const plugin: PluginInstanceView = Object.freeze({
-      id: node.id,
-      instanceKey: node.instanceKey,
-      parent: node.parent,
-      root: rootPluginId(),
-      role: node.parent ? 'child' : 'root',
-    });
-    const returned = await definition.setup?.({
-      plugin,
-      config: view,
-      resources: scope,
-      lifecycle: scope.disposers,
-    });
-    if (returned) scope.disposers.add(returned);
-    scope.seal();
-
-    this.#tree.set(
-      node.id,
-      Object.freeze({
-        id: node.id,
-        instanceKey: node.instanceKey,
-        packageName: node.package.name,
-        packageRoot: node.package.root,
-        parent: node.parent,
-        children: Object.freeze(node.children.map((child) => child.id)),
-        metadata: definition.metadata,
-      }),
-    );
-    this.#config.set(node.id, config);
-    this.#resources.set(node.id, scope.snapshot());
-
-    for (const child of node.children) await this.#setupPlugin(child);
-  }
-
-  async #discoverAndProject(): Promise<void> {
+  async #discover(): Promise<void> {
     const discovery = new FeatureDiscovery(this.#host);
-    const providers = this.#catalog.values();
-    for (const provider of providers) {
+    for (const provider of this.#catalog.values()) {
       const roots = this.#rootsByFeature.get(provider.id) ?? [];
       const slots = await discovery.discover(provider, roots);
       for (const slot of slots) this.#capabilities.set(slot.id, slot);
     }
-
-    for (const provider of providers) {
-      const slots = [...this.#capabilities.values()].filter((slot) => slot.feature === provider.id);
-      const projection = await provider.runtime.project(slots, {
-        snapshot: this.#candidateSnapshot(),
-      });
-      this.#projections.set(provider.id, projection.value);
-      if (projection.dispose) this.#projectionDisposers.push(projection.dispose);
-    }
   }
 
-  #state(): SnapshotState {
+  #projectionState(): ProjectionState {
     return {
       root: rootPluginId(),
-      tree: this.#tree,
-      config: this.#config,
-      resources: this.#resources,
+      tree: this.#plugins.tree,
+      config: this.#plugins.config,
+      resources: this.#plugins.resources,
       capabilities: this.#capabilities,
-      projections: this.#projections,
     };
-  }
-
-  #candidateSnapshot(): RuntimeSnapshot {
-    return createSnapshotView(this.generation, this.#state());
   }
 }
 
@@ -399,12 +364,12 @@ function requirePrepared(
 }
 
 async function disposePreparedParts(
-  disposeScopes: Dispose,
+  scopeDisposers: readonly Dispose[],
   projectionDisposers: readonly Dispose[],
   prepareError?: unknown,
 ): Promise<void> {
   const rollback = new DisposeStack();
-  rollback.add(disposeScopes);
+  for (const dispose of scopeDisposers) rollback.add(dispose);
   for (const dispose of projectionDisposers) rollback.add(dispose);
   try {
     await rollback.dispose();

@@ -31,7 +31,7 @@ Development ModuleRuntime watcher
   -> serialized generation transaction
 ```
 
-默认 Runtime 只提供预编译 ESM adapter，不依赖 Vite、编译器或 watcher。开发期 TS transform/watch 由独立 ModuleRuntime adapter 提供，不能进入 `zhin.js` 默认生产依赖闭包。Capability-only HMR 已只重新 load 目标 Slot，复用 Plugin Scope lifetime 并重建 generation projections；Plugin/schema/manifest 变化暂时仍采用整 generation 安全重建。
+默认 Runtime 只提供预编译 ESM adapter，不依赖 Vite、编译器或 watcher。开发期 TS transform/watch 由独立 ModuleRuntime adapter 提供，不能进入 `zhin.js` 默认生产依赖闭包。Capability-only HMR 只重新 load 目标 Slot；child `plugin.ts` / `schema.json` 变化只影子装配对应 Plugin forest。两者都复用未变化的 Plugin Scope lifetime、重建全部 generation projections，并以完整 immutable snapshot 原子发布。Root、manifest、Feature provider、未知 importer 与拓扑变化仍保守升级为整 generation 重建。
 
 ## Validate
 

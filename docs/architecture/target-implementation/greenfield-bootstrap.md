@@ -53,17 +53,17 @@ flowchart LR
 
 当前控制面已经完整：`SourceOwnershipIndex` 从 committed generation 建索引；`InvalidationPlanner` 结合 ModuleRuntime reverse importer closure 生成 slot/subtree/process 计划；`HmrCoordinator` 合并 watcher burst 并串行调用 `RootRuntime`。lockfile/workspace 变化只发出 process restart 请求。
 
-Capability-only 计划已经进入局部执行面：FeatureDiscovery 枚举完整约定目录以保留冲突检查，但只 load 选中的 Slot；Plugin tree、配置和 Resource snapshot 直接复用。所有 Feature projection 都针对新 capabilities 重建，避免 projection 捕获旧 snapshot。`SharedLifetime` 让新旧 generation 各持有 Scope lease，最后一代释放后才 children-first dispose Plugin Scope。
+Capability-only 计划已经进入局部执行面：FeatureDiscovery 枚举完整约定目录以保留冲突检查，但只 load 选中的 Slot；Plugin tree、配置和 Resource snapshot 直接复用。child Plugin/schema 计划通过 `PluginScopeAssembler` 只创建受影响 forest 的 shadow Scope，ancestor 和 sibling 直接复用。`FeatureProjector` 统一为三种装配路径重建全部 projection，避免 projection 捕获旧 snapshot。每个 Plugin Scope 都有独立 `SharedLifetime`；新旧 generation 分别持有 lease，最后一代释放后才 children-first dispose。
 
 commit 仍然发布完整 immutable RuntimeSnapshot；“局部”只描述 prepare/load/setup/dispose 范围，不表示原地修改 snapshot。definition 加载、校验或 projection 任一步失败都销毁 shadow projection 并保持 active generation。
 
-下一阶段只聚焦执行粒度：
+下一阶段继续收紧执行边界：
 
-1. subtree executor：只为受影响 Plugin forest 创建 shadow Scope，未变化 ancestor/sibling 继续持有原 lifetime。
-2. Resource handoff：需要 quiesce/activate 的连接在 commit 前后执行显式协议；普通 Resource 继续使用 lifetime lease。
-3. Root/process executor：Root Resource 或 package ABI 变化执行受控 restart。
+1. Resource handoff：需要 quiesce/activate 的连接在 commit 前后执行显式协议；普通 Resource 继续使用 lifetime lease。
+2. config patch planner：从 config path 计算最浅受影响 subtree，而不依赖文件 watcher。
+3. manifest topology transaction：局部处理新增、删除、移动 child 与 Feature provider 变化。
 
-在 subtree executor 完成前，只宣称“Capability 文件局部替换”；Plugin/schema/manifest 变化仍采用事务化整代替换。
+当前可宣称 Capability 文件与 child Plugin/schema 的局部替换。Root、manifest、Feature provider、未知 importer 和 Plugin topology 变化仍采用事务化整代重建；这是明确的安全边界，不是静默降级。
 
 ## 4. 有意保留的后续工作
 

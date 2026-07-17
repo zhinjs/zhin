@@ -1,6 +1,8 @@
 import type {
   FeatureId,
+  PluginId,
   PreparedGeneration,
+  Scope,
 } from '@zhin.js/next-kernel';
 import type {
   CapabilityRoot,
@@ -15,6 +17,7 @@ export interface RuntimeGenerationModel {
   readonly providers: ReadonlyMap<FeatureId, FeatureProvider>;
   readonly rootsByFeature: ReadonlyMap<FeatureId, readonly CapabilityRoot[]>;
   readonly featureIdsByPackageRoot: ReadonlyMap<string, FeatureId>;
+  readonly scopes: ReadonlyMap<PluginId, Scope>;
   readonly assets: GenerationAssets;
 }
 
