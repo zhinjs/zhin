@@ -21,7 +21,7 @@ export interface GenerationHandoffRegistry {
   add(participant: GenerationHandoffParticipant): GenerationHandoffParticipant;
 }
 
-/** Composes owner-ordered Resource handoffs and tracks partial progress. */
+/** Composes owner-ordered Resource handoffs and compensates partial progress. */
 export class GenerationHandoffStack implements GenerationHandoffRegistry, GenerationHandoff {
   readonly #participants: GenerationHandoffParticipant[] = [];
   readonly #quiesced: GenerationHandoffParticipant[] = [];
@@ -45,19 +45,27 @@ export class GenerationHandoffStack implements GenerationHandoffRegistry, Genera
 
   async quiescePrevious(previous: RuntimeSnapshot): Promise<void> {
     this.#assertSealed();
-    for (const participant of [...this.#participants].reverse()) {
-      if (!participant.quiescePrevious) continue;
-      await participant.quiescePrevious(previous);
-      this.#quiesced.push(participant);
+    try {
+      for (const participant of [...this.#participants].reverse()) {
+        if (!participant.quiescePrevious) continue;
+        await participant.quiescePrevious(previous);
+        this.#quiesced.push(participant);
+      }
+    } catch (error) {
+      await compensate(error, () => this.resumePrevious(), 'Quiesce and resume both failed');
     }
   }
 
   async activateNext(): Promise<void> {
     this.#assertSealed();
-    for (const participant of this.#participants) {
-      if (!participant.activateNext) continue;
-      await participant.activateNext();
-      this.#activated.push(participant);
+    try {
+      for (const participant of this.#participants) {
+        if (!participant.activateNext) continue;
+        await participant.activateNext();
+        this.#activated.push(participant);
+      }
+    } catch (error) {
+      await compensate(error, () => this.deactivateNext(), 'Activation and deactivation both failed');
     }
   }
 
@@ -92,6 +100,19 @@ export class GenerationHandoffStack implements GenerationHandoffRegistry, Genera
   #assertSealed(): void {
     if (!this.#sealed) throw new Error('GenerationHandoffStack is not sealed');
   }
+}
+
+async function compensate(
+  primary: unknown,
+  rollback: () => Promise<void>,
+  message: string,
+): Promise<never> {
+  try {
+    await rollback();
+  } catch (rollbackError) {
+    throw new AggregateError([primary, rollbackError], message, { cause: rollbackError });
+  }
+  throw primary;
 }
 
 async function unwind(

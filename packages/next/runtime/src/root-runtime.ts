@@ -1,6 +1,8 @@
 import { resolve } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import {
   DisposeStack,
+  GenerationHandoffStack,
   RootController,
   createSnapshotView,
   rootPluginId,
@@ -10,6 +12,7 @@ import {
   type Dispose,
   type FeatureId,
   type PluginId,
+  type PreparedGeneration,
   type RuntimeSnapshot,
   type SnapshotState,
 } from '@zhin.js/next-kernel';
@@ -21,6 +24,12 @@ import {
 } from '@zhin.js/next-feature-kit';
 import type { ZhinFeatureManifest } from './manifest.js';
 import { ConfigComposer, type RuntimeConfigDocument } from './config-composer.js';
+import {
+  ConfigDocumentDivergenceError,
+  type ConfigDocumentPort,
+  type ConfigDocumentSnapshot,
+  type PreparedConfigDocument,
+} from './config-document.js';
 import {
   ConfigPatchPlanner,
   type ConfigPatch,
@@ -70,7 +79,7 @@ export interface RootRuntimeOptions {
   readonly projectRoot: string;
   readonly modules: ModuleRuntime;
   readonly environment: RuntimeEnvironment;
-  readonly config?: PluginConfigResolver | RuntimeConfigDocument;
+  readonly config?: PluginConfigResolver | RuntimeConfigDocument | ConfigDocumentPort;
   readonly installResources?: RootResourceInstaller;
   readonly onControlError?: ControlErrorHandler;
 }
@@ -88,6 +97,8 @@ export class RootRuntime {
   readonly #modules: ModuleRuntime;
   readonly #environment: RuntimeEnvironment;
   readonly #configResolver?: PluginConfigResolver;
+  readonly #configPort?: ConfigDocumentPort;
+  #configSnapshot?: ConfigDocumentSnapshot;
   #configDocument?: RuntimeConfigDocument;
   readonly #installResources?: RootResourceInstaller;
   #ownership = SourceOwnershipIndex.empty();
@@ -99,6 +110,7 @@ export class RootRuntime {
     this.#modules = options.modules;
     this.#environment = Object.freeze({ ...options.environment });
     if (typeof options.config === 'function') this.#configResolver = options.config;
+    else if (isConfigDocumentPort(options.config)) this.#configPort = options.config;
     else this.#configDocument = structuredClone(options.config ?? {});
     this.#installResources = options.installResources;
     this.controller = new RootController(emptyState(), options.onControlError);
@@ -113,6 +125,11 @@ export class RootRuntime {
   }
 
   async start(): Promise<RuntimeSnapshot> {
+    if (this.#configPort) {
+      const snapshot = await this.#configPort.read();
+      this.#configSnapshot = snapshot;
+      this.#configDocument = structuredClone(snapshot.document);
+    }
     let prepared: PreparedRuntimeGeneration | undefined;
     const snapshot = await this.controller.start(async (current) => {
       prepared = await this.#prepare(current);
@@ -257,12 +274,27 @@ export class RootRuntime {
     const currentDocument = this.#configDocument;
     let plan: ConfigPatchPlan | undefined;
     let prepared: PreparedRuntimeGeneration | undefined;
+    let documentTransaction: PreparedConfigDocument | undefined;
+    let committedDocument: ConfigDocumentSnapshot | undefined;
     const snapshot = await this.controller.reload(rootPluginId(), async (current) => {
       const resolver = await NodePackageResolver.create(this.#projectRoot);
       const graph = await new ProjectGraphService(resolver).inspect(this.#projectRoot);
       const planned = await new ConfigPatchPlanner().plan(graph, currentDocument, patches);
       plan = planned;
-      if (planned.roots.length === 0) return undefined;
+      if (!planned.documentChanged) return undefined;
+      if (this.#configPort) {
+        const currentSnapshot = requireConfigDocumentSnapshot(this.#configSnapshot);
+        // Port preparation must remain inert; validation and shadow setup can
+        // still reject this candidate without touching the backing document.
+        documentTransaction = await this.#configPort.prepare(currentSnapshot, patches);
+        if (!isDeepStrictEqual(documentTransaction.document, planned.candidate)) {
+          throw new ConfigDocumentDivergenceError();
+        }
+      }
+      if (planned.roots.length === 0) {
+        if (documentTransaction) committedDocument = await documentTransaction.commit();
+        return undefined;
+      }
       const inspected: InspectedProject = {
         graph,
         configResolver: (node) => planned.views.get(node.id),
@@ -272,11 +304,18 @@ export class RootRuntime {
       } else {
         prepared = await this.#prepareInspected(current, inspected);
       }
-      return prepared.generation;
+      return documentTransaction
+        ? withConfigDocumentHandoff(
+            prepared.generation,
+            documentTransaction,
+            (committed) => { committedDocument = committed; },
+          )
+        : prepared.generation;
     });
     const completed = requireConfigPatchPlan(plan);
     if (prepared) this.#accept(prepared);
-    this.#configDocument = completed.document;
+    this.#configDocument = completed.candidate;
+    if (committedDocument) this.#configSnapshot = committedDocument;
     return snapshot;
   }
 
@@ -315,6 +354,37 @@ export class RootRuntime {
       return this.#prepareInspected(current, inspected);
     }
   }
+}
+
+function withConfigDocumentHandoff(
+  generation: PreparedGeneration,
+  document: PreparedConfigDocument,
+  committed: (snapshot: ConfigDocumentSnapshot) => void,
+): PreparedGeneration {
+  const handoffs = new GenerationHandoffStack();
+  if (generation.handoff) handoffs.add(generation.handoff);
+  // File commit follows Resource activation, so reverse compensation restores
+  // the document before it deactivates the shadow generation.
+  handoffs.add({
+    async activateNext() {
+      committed(await document.commit());
+    },
+    deactivateNext: () => document.rollback(),
+  });
+  return { ...generation, handoff: handoffs.seal() };
+}
+
+function isConfigDocumentPort(value: unknown): value is ConfigDocumentPort {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<ConfigDocumentPort>;
+  return typeof candidate.read === 'function' && typeof candidate.prepare === 'function';
+}
+
+function requireConfigDocumentSnapshot(
+  snapshot: ConfigDocumentSnapshot | undefined,
+): ConfigDocumentSnapshot {
+  if (!snapshot) throw new Error('ConfigDocumentPort has not been read');
+  return snapshot;
 }
 
 function cloneConfigPatches(patches: readonly ConfigPatch[]): readonly ConfigPatch[] {

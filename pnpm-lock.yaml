@@ -1117,6 +1117,25 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  packages/next/config-yaml:
+    dependencies:
+      '@zhin.js/next-runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.0
+        version: 26.1.1
+      '@zhin.js/next-kernel':
+        specifier: workspace:*
+        version: link:../kernel
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   packages/next/feature-command:
     dependencies:
       '@zhin.js/next-feature-kit':

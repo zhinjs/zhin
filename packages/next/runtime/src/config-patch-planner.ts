@@ -19,6 +19,8 @@ export type ConfigPatch =
     };
 
 export interface ConfigPatchPlan extends ComposedConfig {
+  readonly candidate: RuntimeConfigDocument;
+  readonly documentChanged: boolean;
   readonly roots: readonly PluginId[];
 }
 
@@ -39,7 +41,7 @@ export class ConfigPatchPlanner {
     patches: readonly ConfigPatch[],
   ): Promise<ConfigPatchPlan> {
     const previous = await this.composer.compose(graph, current);
-    let candidate = structuredClone(previous.document) as Record<string, unknown>;
+    let candidate = structuredClone(current) as Record<string, unknown>;
     for (const patch of patches) candidate = applyPatch(candidate, patch);
     const next = await this.composer.compose(graph, candidate);
     const changed = indexGraph(graph)
@@ -48,7 +50,12 @@ export class ConfigPatchPlanner {
         next.views.get(node.id),
       ))
       .map((node) => node.id);
-    return Object.freeze({ ...next, roots: Object.freeze(collapseRoots(changed)) });
+    return Object.freeze({
+      ...next,
+      candidate: Object.freeze(candidate),
+      documentChanged: !isDeepStrictEqual(current, candidate),
+      roots: Object.freeze(collapseRoots(changed)),
+    });
   }
 }
 

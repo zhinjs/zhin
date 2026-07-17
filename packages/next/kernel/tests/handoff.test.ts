@@ -51,12 +51,34 @@ describe('Generation handoff', () => {
     const handoff = stack.seal()!;
 
     await expect(handoff.activateNext()).rejects.toThrow('child failed');
-    await handoff.deactivateNext();
 
     expect(events).toEqual([
       'parent:activate',
       'child:activate',
       'parent:deactivate',
+    ]);
+  });
+
+  it('resumes only participants quiesced before a partial failure', async () => {
+    const events: string[] = [];
+    const stack = new GenerationHandoffStack();
+    stack.add({
+      quiescePrevious() {
+        events.push('parent:quiesce');
+        throw new Error('parent failed');
+      },
+      resumePrevious() { events.push('parent:resume'); },
+    });
+    stack.add(participant('child', events));
+    const handoff = stack.seal()!;
+    const root = new RootController(emptyState());
+
+    await expect(handoff.quiescePrevious(root.snapshots.current)).rejects.toThrow('parent failed');
+
+    expect(events).toEqual([
+      'child:quiesce:0',
+      'parent:quiesce',
+      'child:resume',
     ]);
   });
 

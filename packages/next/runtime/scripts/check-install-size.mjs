@@ -11,11 +11,16 @@ const packageManager = JSON.parse(
   fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'),
 ).packageManager;
 const budgetBytes = 5 * 1024 * 1024;
-const stack = [
+const packages = [
   { dir: 'packages/next/kernel', name: '@zhin.js/next-kernel' },
   { dir: 'packages/next/feature-kit', name: '@zhin.js/next-feature-kit' },
   { dir: 'packages/next/runtime', name: '@zhin.js/next-runtime' },
+  { dir: 'packages/next/config-yaml', name: '@zhin.js/next-config-yaml' },
 ];
+const targetName = process.argv[2] ?? '@zhin.js/next-runtime';
+const targetIndex = packages.findIndex((item) => item.name === targetName);
+if (targetIndex < 0) throw new Error(`Unknown Next install-size target: ${targetName}`);
+const stack = packages.slice(0, targetIndex + 1);
 const forbiddenPackages = /^(?:vite(?:@|_)|@vitejs|lightningcss(?:[-@_]|$))/u;
 
 function run(command, args, options = {}) {
@@ -68,7 +73,7 @@ function main() {
         name: 'zhin-next-size-fixture',
         private: true,
         packageManager,
-        dependencies: { '@zhin.js/next-runtime': overrides['@zhin.js/next-runtime'] },
+        dependencies: { [targetName]: overrides[targetName] },
         pnpm: { overrides },
       }, null, 2)}\n`,
     );
@@ -90,10 +95,10 @@ function main() {
     }
 
     const bytes = diskUsage(path.join(fixture, 'node_modules'));
-    console.log(`next-runtime production install: ${formatMb(bytes)}`);
+    console.log(`${targetName} production install: ${formatMb(bytes)}`);
     console.log(`budget: ${formatMb(budgetBytes)}`);
     if (bytes > budgetBytes) {
-      throw new Error(`next-runtime exceeds its ${formatMb(budgetBytes)} budget`);
+      throw new Error(`${targetName} exceeds its ${formatMb(budgetBytes)} budget`);
     }
   } finally {
     fs.rmSync(work, { recursive: true, force: true });

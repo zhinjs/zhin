@@ -62,7 +62,7 @@ flowchart TB
 - Server Module Runtime 与生产 ESM adapter。
 - 将可选 IM、Agent、Console Runtime 连接到 Kernel snapshot。
 
-YAML 和 JSON Schema compiler 的生产依赖止于此层。
+YAML 和 JSON Schema compiler 的生产依赖止于此层；YAML adapter 仍保持独立可选包，不进入默认 Runtime 闭包。
 
 ### 2.3 `@zhin.js/core`
 
