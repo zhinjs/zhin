@@ -1,7 +1,7 @@
 {
-  "name": "@zhin.js/next-feature-command",
+  "name": "@zhin.js/next-feature-component",
   "version": "0.0.0",
-  "description": "Convention-based Command Feature provider for the next Zhin runtime",
+  "description": "Convention-based Component Feature provider for the next Zhin runtime",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -16,7 +16,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
-    "test": "vitest run --root ../../.. packages/next/feature-command/tests"
+    "test": "vitest run --root ../../.. packages/next/feature-component/tests"
   },
   "dependencies": {
     "@zhin.js/next-feature-kit": "workspace:*",

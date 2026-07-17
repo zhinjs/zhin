@@ -35,6 +35,7 @@ export class ProjectScaffolder {
         protocol: 1,
         type: 'plugin',
         entry: './plugin.ts',
+        engine: '^1.0.0',
         runtime: 'trusted',
         features: [],
         plugins: [],
@@ -66,7 +67,16 @@ export class ProjectScaffolder {
         strict: true,
         noEmit: true,
       },
-      include: ['plugin.ts', 'commands/**/*.ts', 'components/**/*.tsx'],
+      include: [
+        'plugin.ts',
+        'commands/**/*.ts',
+        'commands/**/*.tsx',
+        'components/**/*.ts',
+        'components/**/*.tsx',
+        'middlewares/**/*.ts',
+        'plugins/**/*.ts',
+        'packages/**/*.ts',
+      ],
     });
   }
 
@@ -88,6 +98,7 @@ export class ProjectScaffolder {
         protocol: 1,
         type: 'plugin',
         entry: './plugin.ts',
+        engine: '^1.0.0',
         runtime: 'trusted',
         features: [],
         plugins: [],
@@ -137,6 +148,7 @@ export class ProjectScaffolder {
         protocol: 1,
         type: 'feature',
         entry: './src/provider.ts',
+        engine: '^1.0.0',
         featureApi: '1.0.0',
       },
     });

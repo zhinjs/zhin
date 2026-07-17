@@ -72,6 +72,15 @@ await runtime.stop();
 
 拓扑只来自静态 manifest，不从 `plugin.ts` 的执行副作用中发现。`runtime: isolated` 已进入协议，但当前实现会明确拒绝启动。
 
+## Compatibility Gate
+
+`ProjectGraphService` 在 import Plugin/Feature 模块之前执行两层 semver 门禁：
+
+- 每个 mounted package 的 `zhin.engine` 必须满足 Runtime Engine API `1.0.0`。
+- Plugin Feature requirement 的 `api` 必须匹配 provider package 的具体 `featureApi`。
+
+无 requirement 时，已声明的 `featureApi` 仍必须是合法版本。range/version 格式错误、缺失 provider API 或版本不满足都会抛出 `PackageCompatibilityError`，因此不会产生 setup/discovery 副作用。兼容的 engine/API contract 发生变化仍属于 process restart 边界。
+
 ## 配置模型
 
 Root 配置文档使用 `plugin` 保存自身字段、`plugins` 保存 child envelope。每个 Plugin 只收到自己的冻结 ConfigView；child 配置不会泄漏给 parent。`ConfigComposer` 使用 Draft 2020-12 JSON Schema 校验组合结果。
@@ -216,7 +225,7 @@ Planner 先在原始 document 上应用 patch，再验证 materialized 候选并
 
 ## 安装体积
 
-生产闭包预算为 5MB，当前只允许 Kernel、Feature Kit 与 AJV 等运行时必需依赖。门禁同时拒绝 Vite、`@vitejs/*` 与 lightningcss。
+生产闭包预算为 5MB，当前只允许 Kernel、Feature Kit、AJV 与 `node-semver` 等运行时必需依赖。门禁同时拒绝 Vite、`@vitejs/*` 与 lightningcss。
 
 ## 开发验证
 

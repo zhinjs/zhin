@@ -1,8 +1,8 @@
-import type {
-  PluginNodeSnapshot,
-  RuntimeSnapshot,
-  Token,
-} from '@zhin.js/next-kernel';
+import type { PluginId, RuntimeSnapshot } from '@zhin.js/next-kernel';
+import {
+  createCapabilityContext,
+  type CapabilityContext,
+} from '@zhin.js/next-feature-kit';
 
 const commandBrand = 'zhin.command/1' as const;
 
@@ -15,13 +15,9 @@ export interface CommandParameterDefinition {
   readonly defaultValue?: CommandParameterValue;
 }
 
-export interface CommandContext<TConfig = unknown> {
-  readonly owner: PluginNodeSnapshot;
-  readonly generation: number;
-  readonly config: Readonly<TConfig>;
+export interface CommandContext<TConfig = unknown> extends CapabilityContext<TConfig> {
   readonly args: readonly string[];
   readonly params: Readonly<Record<string, CommandParameterValue>>;
-  use<T>(token: Token<T>): T;
 }
 
 export interface CommandDefinition<TConfig = unknown, TResult = unknown> {
@@ -61,24 +57,14 @@ export function parseCommandDefinition(value: unknown): CommandDefinition {
 
 export function createCommandContext(
   snapshot: RuntimeSnapshot,
-  ownerId: PluginNodeSnapshot['id'],
+  ownerId: PluginId,
   args: readonly string[],
   params: Readonly<Record<string, CommandParameterValue>> = Object.freeze({}),
 ): CommandContext {
-  const owner = snapshot.tree.get(ownerId);
-  const resources = snapshot.resources.get(ownerId);
-  if (!owner || !resources) throw new Error(`Broken Command owner: ${ownerId}`);
+  const context = createCapabilityContext(snapshot, ownerId);
   return Object.freeze({
-    owner,
-    generation: snapshot.generation,
-    config: snapshot.config.get(ownerId) as Readonly<unknown>,
+    ...context,
     args: Object.freeze([...args]),
     params: Object.freeze({ ...params }),
-    use<T>(token: Token<T>): T {
-      if (!resources.has(token.id)) {
-        throw new Error(`Missing resource ${token.id} for Command owner ${ownerId}`);
-      }
-      return resources.get(token.id) as T;
-    },
   });
 }

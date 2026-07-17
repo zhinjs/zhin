@@ -22,10 +22,13 @@
   "dependencies": {
     "@zhin.js/next-feature-kit": "workspace:*",
     "@zhin.js/next-kernel": "workspace:*",
-    "ajv": "8.18.0"
+    "ajv": "8.18.0",
+    "semver": "7.8.5"
   },
   "devDependencies": {
     "@zhin.js/next-feature-command": "workspace:*",
+    "@zhin.js/next-feature-component": "workspace:*",
+    "@zhin.js/next-feature-middleware": "workspace:*",
     "@types/node": "^26.1.0",
     "typescript": "^6.0.3"
   },

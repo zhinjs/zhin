@@ -20,10 +20,11 @@ describe('next CLI project tooling', () => {
 
     const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')) as {
       dependencies: Record<string, string>;
-      zhin: { plugins: unknown[]; features: unknown[] };
+      zhin: { engine: string; plugins: unknown[]; features: unknown[] };
     };
     expect(pkg.dependencies['@acme/plugin-weather']).toBe('workspace:*');
     expect(pkg.dependencies['@acme/feature-report']).toBe('workspace:*');
+    expect(pkg.zhin.engine).toBe('^1.0.0');
     expect(pkg.zhin.plugins).toEqual([
       { package: '@acme/plugin-weather', instanceKey: 'weather' },
     ]);
@@ -33,6 +34,14 @@ describe('next CLI project tooling', () => {
 
     const workspace = await readFile(join(root, 'pnpm-workspace.yaml'), 'utf8');
     expect(workspace).toBe('packages:\n  - packages/*\n  - plugins/*\n');
+    const child = JSON.parse(
+      await readFile(join(root, 'plugins/weather/package.json'), 'utf8'),
+    ) as { zhin: { engine: string } };
+    const feature = JSON.parse(
+      await readFile(join(root, 'packages/report/package.json'), 'utf8'),
+    ) as { zhin: { engine: string; featureApi: string } };
+    expect(child.zhin.engine).toBe('^1.0.0');
+    expect(feature.zhin).toMatchObject({ engine: '^1.0.0', featureApi: '1.0.0' });
   });
 
   it('derives deterministic build and safe publish plans from the same graph', async () => {

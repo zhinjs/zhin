@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   ManifestValidationError,
   NodePackageResolver,
+  PackageCompatibilityError,
   PackageResolutionError,
   ProjectGraphService,
   parsePackageJson,
@@ -137,6 +138,81 @@ describe('static Project Graph', () => {
         plugins: [{ package: '../outside', instanceKey: 'outside' }],
       },
     }, '/project/package.json')).toThrow(ManifestValidationError);
+  });
+
+  it('rejects incompatible engine ranges before runtime module loading', async () => {
+    const root = await project({
+      root: {
+        name: '@test/root',
+        zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', engine: '^2.0.0' },
+      },
+    });
+    const resolver = await NodePackageResolver.create(root);
+
+    await expect(new ProjectGraphService(resolver).inspect(root))
+      .rejects.toMatchObject({
+        name: 'PackageCompatibilityError',
+        contract: 'engine',
+        packageName: '@test/root',
+      } satisfies Partial<PackageCompatibilityError>);
+  });
+
+  it('validates Feature API requirements against provider manifests', async () => {
+    const compatible = await project({
+      root: {
+        name: '@test/root',
+        dependencies: { '@test/command': 'workspace:*' },
+        zhin: {
+          protocol: 1,
+          type: 'plugin',
+          entry: './plugin.ts',
+          features: [{ package: '@test/command', api: '^1.2.0' }],
+        },
+      },
+      features: [{
+        directory: 'command',
+        json: {
+          name: '@test/command',
+          zhin: {
+            protocol: 1,
+            type: 'feature',
+            entry: './index.ts',
+            featureApi: '1.4.0',
+          },
+        },
+      }],
+    });
+    const compatibleResolver = await NodePackageResolver.create(compatible);
+    await expect(new ProjectGraphService(compatibleResolver).inspect(compatible)).resolves
+      .toEqual(expect.objectContaining({ root: expect.any(Object) }));
+
+    const incompatible = await project({
+      root: {
+        name: '@test/root',
+        dependencies: { '@test/command': 'workspace:*' },
+        zhin: {
+          protocol: 1,
+          type: 'plugin',
+          entry: './plugin.ts',
+          features: [{ package: '@test/command', api: '^2.0.0' }],
+        },
+      },
+      features: [{
+        directory: 'command',
+        json: {
+          name: '@test/command',
+          zhin: {
+            protocol: 1,
+            type: 'feature',
+            entry: './index.ts',
+            featureApi: '1.4.0',
+          },
+        },
+      }],
+    });
+    const incompatibleResolver = await NodePackageResolver.create(incompatible);
+    await expect(new ProjectGraphService(incompatibleResolver).inspect(incompatible))
+      .rejects.toThrow('@test/root requires ^2.0.0, provider declares 1.4.0');
   });
 });
 

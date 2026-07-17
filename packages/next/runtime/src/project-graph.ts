@@ -1,4 +1,9 @@
 import { childPluginId, rootPluginId, type PluginId } from '@zhin.js/next-kernel';
+import {
+  assertFeatureApi,
+  assertPackageEngine,
+  runtimeEngineVersion,
+} from './compatibility.js';
 import type {
   ChildPluginReference,
   PackageReference,
@@ -39,7 +44,10 @@ export class ProjectGraphError extends Error {
 }
 
 export class ProjectGraphService {
-  constructor(private readonly resolver: PackageResolver) {}
+  constructor(
+    private readonly resolver: PackageResolver,
+    private readonly engineVersion = runtimeEngineVersion,
+  ) {}
 
   async inspect(projectRoot: string): Promise<ProjectGraph> {
     const rootPackage = await this.resolver.root(projectRoot);
@@ -75,6 +83,7 @@ export class ProjectGraphService {
       );
     }
     const manifest = assertPackageType(pkg, 'plugin');
+    assertPackageEngine(pkg, this.engineVersion);
     addPackage(packages, pkg);
 
     const featurePackages = new Set<string>();
@@ -89,6 +98,8 @@ export class ProjectGraphService {
         const resolved = await resolveReference(this.resolver, pkg, reference);
         if (!resolved) return undefined;
         assertPackageType(resolved, 'feature');
+        assertPackageEngine(resolved, this.engineVersion);
+        assertFeatureApi(pkg, reference, resolved);
         addPackage(packages, resolved);
         return Object.freeze({ reference, package: resolved });
       }),

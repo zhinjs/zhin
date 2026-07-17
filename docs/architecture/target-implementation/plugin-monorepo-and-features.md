@@ -248,6 +248,10 @@ export const agentFeature = defineFeatureProvider<AgentDefinition, AgentIndex>({
 
 ## 7. Feature 装配流程
 
+### 协议兼容门禁
+
+Graph inspect 在任何模块 import 前使用标准 semver 规则校验：mounted package 的 `zhin.engine` 必须满足当前 Runtime Engine API；每个 Feature requirement `api` 必须满足 provider manifest 的具体 `featureApi`。不兼容候选直接失败并保留 active generation。只有 requirement/provider 一起升级且候选彼此兼容，contract 变化才继续提升为 process restart plan。
+
 ```mermaid
 sequenceDiagram
   participant Root as RootController
