@@ -415,6 +415,34 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(jsdom@24.1.3)(msw@2.14.5(@types/node@26.1.1)(typescript@6.0.3))(vite@6.4.3(@types/node@26.1.1)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.22.4)(yaml@2.9.0))
 
+  examples/next-migration-bot:
+    dependencies:
+      '@zhin.js/next-compat':
+        specifier: workspace:*
+        version: link:../../packages/next/compat
+      '@zhin.js/next-feature-command':
+        specifier: workspace:*
+        version: link:../../packages/next/feature-command
+      '@zhin.js/next-feature-component':
+        specifier: workspace:*
+        version: link:../../packages/next/feature-component
+      '@zhin.js/next-feature-middleware':
+        specifier: workspace:*
+        version: link:../../packages/next/feature-middleware
+      '@zhin.js/next-kernel':
+        specifier: workspace:*
+        version: link:../../packages/next/kernel
+      '@zhin.js/next-runtime':
+        specifier: workspace:*
+        version: link:../../packages/next/runtime
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../packages/im/zhin
+    devDependencies:
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   examples/qq-games-bot:
     dependencies:
       '@zhin.js/adapter-qq':
@@ -11312,7 +11340,7 @@ snapshots:
       debug: 4.4.3
       minimatch: 10.2.5
       semver: 7.8.5
-      tinyglobby: 0.2.17
+      tinyglobby: 0.2.16
       ts-api-utils: 2.5.0(typescript@6.0.3)
       typescript: 6.0.3
     transitivePeerDependencies:
@@ -13611,7 +13639,7 @@ snapshots:
       proc-log: 6.1.0
       semver: 7.8.5
       tar: 7.5.16
-      tinyglobby: 0.2.16
+      tinyglobby: 0.2.17
       which: 6.0.1
     transitivePeerDependencies:
       - supports-color

@@ -22,6 +22,8 @@ zhin-next create feature <name> [package-name]
 zhin-next inspect
 zhin-next migrate --check
 zhin-next migrate --write
+zhin-next migrate cutover --check
+zhin-next migrate cutover --write
 zhin-next build
 zhin-next publish [--execute] [--resume] [--tag <tag>]
 ```
@@ -73,16 +75,20 @@ zhin-next publish --resume
 - public package 依赖 private package 时，会在运行任何 publish step 前失败。
 - npm dependency 只参与解析，不会被 CLI build 或 publish。
 
-### 迁移旧 Command
+### 迁移旧能力
 
-`migrate --check` 使用 TypeScript AST 输出 automatic/manual/error inventory，不执行旧模块。`migrate --write` 在 plan 无 error 时，把安全的静态 `MessageCommand` builder 提取为 `commands/**/*.ts`，并使用 `@zhin.js/next-compat` 保留旧 `(message, result)` callback。
+`migrate --check` 使用 TypeScript AST 输出 automatic/manual/error inventory，不执行旧模块。`migrate --write` 在 plan 无 error 时提取可静态证明的模块顶层 Command、Middleware 和 Component，并保持旧 source 不变。
 
 ```text
 new MessageCommand('gh pr <title:text>')
   -> commands/gh/pr/[title:string].ts
 ```
 
-外部闭包、Plugin Context、`.permit()`、复杂 matcher 或路由冲突会保留为带源码位置的 manual/error diagnostic。写入先准备全部 temporary，再用排他 hard-link 发布，绝不覆盖并发创建的目标；旧 source、entry 与 manifest 不在本阶段修改。迁移命令需要项目开发环境安装 `typescript` peer；默认 CLI 与生产 Runtime 不携带编译器。
+Command 与 Middleware 分别通过 `defineLegacyCommand()` / `defineLegacyMiddleware()` 保留 callback 形状；安全的 Component 直接转为 `defineComponent()`。外部闭包、运行时注册、Plugin Context、旧 ComponentContext、`.permit()`、复杂 matcher 或路由冲突会保留为带源码位置的 manual/error diagnostic。写入先准备全部 temporary，再用排他 hard-link 发布，绝不覆盖并发创建的目标。
+
+`migrate cutover --check` 预览 Feature provider 与依赖变化；`--write` 生成 `plugin.next.ts` 并最后原子提交 `package.json#zhin`。它拒绝覆盖已有 manifest/入口，并在 package 被并发修改时中止。cutover 仍保留旧 entry/source，真正删除 legacy import 前应运行双版本行为对照，参考 [`examples/next-migration-bot`](../../../examples/next-migration-bot/README.md)。
+
+迁移命令需要项目开发环境安装 `typescript` peer；默认 CLI 与生产 Runtime 不携带编译器、Vite 或 watcher。
 
 ## 编程 API
 
@@ -103,7 +109,7 @@ await commands.execute(plan, new NodeProcessRunner());
 
 ## 当前限制
 
-- 当前 codemod 只覆盖可静态证明的 MessageCommand 子集；Middleware/Component extraction 与 entry/manifest cutover 继续按迁移矩阵推进。
+- 当前 codemod 只覆盖可静态证明且无源文件闭包的子集；复杂 permission、Context/Resource、JSX import 与动态注册仍需人工迁移。
 - npm 登录和 registry 凭据仍由 pnpm/npm 环境管理，CLI 不保存 token。
 - 不生成具体 Command/Agent/Page Feature；这些由对应 Feature package 或后续模板提供。
 

@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": [
+    "plugin.next.ts",
+    "legacy/**/*.ts",
+    "commands/**/*.ts",
+    "components/**/*.ts",
+    "middlewares/**/*.ts",
+    "tests/**/*.ts"
+  ]
+}

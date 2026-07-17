@@ -9,7 +9,8 @@
     "export * from './scaffolder.js';"
   ],
   "cli/migrate": [
-    "export * from './legacy-command-migrator.js';"
+    "export * from './legacy-command-migrator.js';",
+    "export * from './package-cutover.js';"
   ],
   "client-build": [
     "export * from './manifest-loader.js';",

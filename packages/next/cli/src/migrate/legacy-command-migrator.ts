@@ -13,9 +13,11 @@ export interface MigrationDiagnostic {
 }
 
 export interface MigrationChange {
+  readonly kind: 'command' | 'middleware' | 'component';
   readonly source: string;
   readonly target: string;
-  readonly pattern: string;
+  readonly identity: string;
+  readonly pattern?: string;
   readonly content: string;
 }
 
@@ -32,11 +34,11 @@ export interface LegacyMigrationSummary {
 }
 
 const ignoredDirectories = new Set([
-  '.git', '.zhin', 'commands', 'dist', 'lib', 'node_modules', 'coverage',
+  '.git', '.zhin', 'commands', 'components', 'coverage', 'dist', 'lib', 'middlewares', 'node_modules',
 ]);
 
-/** Extracts only commands whose callback has no source-file closure dependencies. */
-export class LegacyCommandMigrator {
+/** Extracts only capabilities whose callbacks have no source-file closure dependencies. */
+export class LegacyCapabilityMigrator {
   async plan(projectRoot: string): Promise<LegacyMigrationPlan> {
     const root = resolve(projectRoot);
     const files = await sourceFiles(root);
@@ -49,7 +51,7 @@ export class LegacyCommandMigrator {
         const previous = targets.get(change.target);
         if (previous) {
           diagnostics.push(diagnosticAt(source, 1, 1, 'error',
-            `Command target collides with ${relative(root, previous)}: ${relative(root, change.target)}`));
+            `Capability target collides with ${relative(root, previous)}: ${relative(root, change.target)}`));
           continue;
         }
         targets.set(change.target, source);
@@ -85,7 +87,7 @@ export class LegacyCommandMigrator {
     const committed: string[] = [];
     try {
       for (const [index, change] of plan.changes.entries()) {
-        assertMigrationTarget(plan.root, change.target);
+        assertMigrationTarget(plan.root, change);
         if (await exists(change.target)) {
           throw new Error(`Migration target already exists: ${relative(plan.root, change.target)}`);
         }
@@ -111,6 +113,9 @@ export class LegacyCommandMigrator {
   }
 }
 
+/** @deprecated Use LegacyCapabilityMigrator for command, middleware, and component extraction. */
+export class LegacyCommandMigrator extends LegacyCapabilityMigrator {}
+
 interface SourceAnalysis {
   readonly changes: MigrationChange[];
   readonly diagnostics: MigrationDiagnostic[];
@@ -120,17 +125,39 @@ function analyzeSource(root: string, source: string, text: string): SourceAnalys
   const file = ts.createSourceFile(source, text, ts.ScriptTarget.Latest, true, scriptKind(source));
   const changes: MigrationChange[] = [];
   const diagnostics: MigrationDiagnostic[] = [];
-  for (const statement of file.statements) {
-    const registration = commandRegistration(statement);
-    if (!registration) continue;
-    const parsed = parseBuilder(file, registration);
+  const registrations = collectRegistrations(file);
+  const componentBindings = topLevelFunctions(file);
+  const middlewareCount = registrations.filter((item) => item.kind === 'middleware').length;
+  for (const registration of registrations) {
+    if (!registration.topLevel) {
+      diagnostics.push(nodeDiagnostic(
+        file,
+        registration.call,
+        'manual',
+        `${registration.api}() runs outside module top level`,
+      ));
+      continue;
+    }
+    if (registration.kind === 'middleware') {
+      const result = analyzeMiddleware(root, file, source, registration.call, middlewareCount);
+      if ('change' in result) changes.push(result.change);
+      else diagnostics.push(nodeDiagnostic(file, registration.call, 'manual', result.message));
+      continue;
+    }
+    if (registration.kind === 'component') {
+      const result = analyzeComponent(root, file, source, registration.call, componentBindings);
+      if ('change' in result) changes.push(result.change);
+      else diagnostics.push(nodeDiagnostic(file, registration.call, 'manual', result.message));
+      continue;
+    }
+    const parsed = parseBuilder(file, registration.call);
     if ('message' in parsed) {
-      diagnostics.push(nodeDiagnostic(file, registration, 'manual', parsed.message));
+      diagnostics.push(nodeDiagnostic(file, registration.call, 'manual', parsed.message));
       continue;
     }
     const route = commandRoute(parsed.pattern);
     if (typeof route === 'string') {
-      diagnostics.push(nodeDiagnostic(file, registration, 'manual', route));
+      diagnostics.push(nodeDiagnostic(file, registration.call, 'manual', route));
       continue;
     }
     const captures = externalReferences(parsed.action);
@@ -145,8 +172,10 @@ function analyzeSource(root: string, source: string, text: string): SourceAnalys
     }
     const target = join(root, 'commands', ...route);
     changes.push({
+      kind: 'command',
       source,
       target,
+      identity: parsed.pattern,
       pattern: parsed.pattern,
       content: renderCommand(file, parsed.action, parsed.description),
     });
@@ -154,13 +183,175 @@ function analyzeSource(root: string, source: string, text: string): SourceAnalys
   return { changes, diagnostics };
 }
 
-function commandRegistration(statement: ts.Statement): ts.CallExpression | undefined {
-  if (!ts.isExpressionStatement(statement) || !ts.isCallExpression(statement.expression)) return;
-  const call = statement.expression;
-  const name = ts.isIdentifier(call.expression)
-    ? call.expression.text
-    : ts.isPropertyAccessExpression(call.expression) ? call.expression.name.text : undefined;
-  return name === 'addCommand' ? call : undefined;
+interface Registration {
+  readonly kind: MigrationChange['kind'];
+  readonly api: 'addCommand' | 'addMiddleware' | 'addComponent';
+  readonly call: ts.CallExpression;
+  readonly topLevel: boolean;
+}
+
+function collectRegistrations(file: ts.SourceFile): Registration[] {
+  const result: Registration[] = [];
+  const kinds = new Map<string, Registration['kind']>([
+    ['addCommand', 'command'],
+    ['addMiddleware', 'middleware'],
+    ['addComponent', 'component'],
+  ]);
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const api = ts.isIdentifier(node.expression)
+        ? node.expression.text
+        : ts.isPropertyAccessExpression(node.expression) ? node.expression.name.text : undefined;
+      const kind = api ? kinds.get(api) : undefined;
+      if (kind && api) {
+        const statement = node.parent;
+        // Keep nested registrations in the inventory, but never lift them out
+        // of the runtime branch that originally owned their lifecycle.
+        result.push({
+          kind,
+          api: api as Registration['api'],
+          call: node,
+          topLevel: ts.isExpressionStatement(statement)
+            && statement.expression === node
+            && ts.isSourceFile(statement.parent),
+        });
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  return result.sort((left, right) => left.call.getStart(file) - right.call.getStart(file));
+}
+
+type MigratableFunction = ts.ArrowFunction | ts.FunctionExpression | ts.FunctionDeclaration;
+
+function analyzeMiddleware(
+  root: string,
+  file: ts.SourceFile,
+  source: string,
+  registration: ts.CallExpression,
+  countInFile: number,
+): { change: MigrationChange } | { message: string } {
+  if (registration.arguments.length < 1 || registration.arguments.length > 2) {
+    return { message: 'addMiddleware() must receive a callback and optional static name' };
+  }
+  const handler = registration.arguments[0];
+  if (!handler || (!ts.isArrowFunction(handler) && !ts.isFunctionExpression(handler))) {
+    return { message: 'Middleware callback must be an inline function' };
+  }
+  const explicitName = staticString(registration.arguments[1]);
+  if (registration.arguments.length === 2 && explicitName === undefined) {
+    return { message: 'Middleware name must be a string literal' };
+  }
+  const inferredName = handler.name?.text
+    ?? (countInFile === 1 ? sourceBaseName(source) : undefined);
+  const identity = localName(explicitName ?? inferredName);
+  if (!identity) return { message: 'Middleware requires a stable static name' };
+  const captures = externalReferences(handler);
+  if (captures.length > 0) {
+    return { message: `Middleware callback captures source bindings: ${captures.join(', ')}` };
+  }
+  return { change: {
+    kind: 'middleware',
+    source,
+    target: join(root, 'middlewares', `${identity}.ts`),
+    identity,
+    content: renderMiddleware(file, handler),
+  } };
+}
+
+function analyzeComponent(
+  root: string,
+  file: ts.SourceFile,
+  source: string,
+  registration: ts.CallExpression,
+  bindings: ReadonlyMap<string, MigratableFunction>,
+): { change: MigrationChange } | { message: string } {
+  if (registration.arguments.length !== 1) {
+    return { message: 'addComponent() must receive exactly one Component function' };
+  }
+  const argument = registration.arguments[0];
+  const component = argument && ts.isIdentifier(argument)
+    ? bindings.get(argument.text)
+    : argument && (ts.isArrowFunction(argument) || ts.isFunctionExpression(argument))
+      ? argument
+      : undefined;
+  const declaredName = argument && ts.isIdentifier(argument)
+    ? argument.text
+    : component?.name?.text;
+  if (!component || !declaredName) {
+    return { message: 'Component must reference a top-level function or use a named inline function' };
+  }
+  if (component.parameters.length > 1) {
+    return { message: 'ComponentContext requires manual migration' };
+  }
+  const identity = localName(declaredName);
+  if (!identity) return { message: `Component name cannot become a capability path: ${declaredName}` };
+  const captures = externalReferences(component);
+  if (captures.length > 0) {
+    return { message: `Component function captures source bindings: ${captures.join(', ')}` };
+  }
+  const extension = source.endsWith('.tsx') ? 'tsx' : 'ts';
+  return { change: {
+    kind: 'component',
+    source,
+    target: join(root, 'components', `${identity}.${extension}`),
+    identity,
+    content: renderComponent(file, component),
+  } };
+}
+
+function topLevelFunctions(file: ts.SourceFile): ReadonlyMap<string, MigratableFunction> {
+  const result = new Map<string, MigratableFunction>();
+  for (const statement of file.statements) {
+    if (ts.isFunctionDeclaration(statement) && statement.name && statement.body) {
+      result.set(statement.name.text, statement);
+      continue;
+    }
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
+      if (ts.isArrowFunction(declaration.initializer) || ts.isFunctionExpression(declaration.initializer)) {
+        result.set(declaration.name.text, declaration.initializer);
+      }
+    }
+  }
+  return result;
+}
+
+function renderMiddleware(file: ts.SourceFile, handler: MigratableFunction): string {
+  return [
+    "import { defineLegacyMiddleware } from '@zhin.js/next-compat';",
+    '',
+    `export default defineLegacyMiddleware(${handler.getText(file)});`,
+    '',
+  ].join('\n');
+}
+
+function renderComponent(file: ts.SourceFile, component: MigratableFunction): string {
+  const source = component.getText(file).replace(/\n/gu, '\n  ');
+  return [
+    "import { defineComponent } from '@zhin.js/next-feature-component';",
+    '',
+    'export default defineComponent({',
+    `  render: ${source},`,
+    '});',
+    '',
+  ].join('\n');
+}
+
+function sourceBaseName(source: string): string {
+  return source.slice(source.lastIndexOf('/') + 1).replace(/\.tsx?$/u, '');
+}
+
+function localName(value: string | undefined): string | undefined {
+  if (!value) return;
+  const normalized = value
+    .replace(/([a-z0-9])([A-Z])/gu, '$1-$2')
+    .replace(/[^a-zA-Z0-9-]+/gu, '-')
+    .replace(/^-+|-+$/gu, '')
+    .toLowerCase();
+  return /^[a-z0-9][a-z0-9-]*$/u.test(normalized) ? normalized : undefined;
 }
 
 interface ParsedBuilder {
@@ -258,7 +449,10 @@ const allowedGlobals = new Set([
   'undefined',
 ]);
 
-function externalReferences(fn: ts.ArrowFunction | ts.FunctionExpression): string[] {
+function externalReferences(fn: MigratableFunction): string[] {
+  if (!fn.body) return [];
+  // This is intentionally a syntactic proof, not best-effort name resolution:
+  // any source binding left after local/global filtering makes migration manual.
   const declared = new Set<string>();
   if (fn.name) declared.add(fn.name.text);
   for (const parameter of fn.parameters) collectBinding(parameter.name, declared);
@@ -369,11 +563,19 @@ async function exists(path: string): Promise<boolean> {
   catch { return false; }
 }
 
-function assertMigrationTarget(root: string, target: string): void {
-  const commands = resolve(root, 'commands');
-  const targetPath = resolve(target);
-  const child = relative(commands, targetPath);
-  if (!child || child.startsWith('..') || isAbsolute(child) || !targetPath.endsWith('.ts')) {
-    throw new Error(`Invalid migration target: ${target}`);
+function assertMigrationTarget(root: string, change: MigrationChange): void {
+  const roots: Record<MigrationChange['kind'], string> = {
+    command: 'commands',
+    component: 'components',
+    middleware: 'middlewares',
+  };
+  const capabilityRoot = resolve(root, roots[change.kind]);
+  const targetPath = resolve(change.target);
+  const child = relative(capabilityRoot, targetPath);
+  const extensionAllowed = change.kind === 'component'
+    ? /\.tsx?$/u.test(targetPath)
+    : targetPath.endsWith('.ts');
+  if (!child || child.startsWith('..') || isAbsolute(child) || !extensionAllowed) {
+    throw new Error(`Invalid migration target: ${change.target}`);
   }
 }

@@ -16,13 +16,13 @@ Greenfield Runtime 已具备 Plugin tree、Feature discovery、generation transa
 
 ### D2. 自动迁移必须可静态证明
 
-CLI 使用 TypeScript AST，不执行作者模块。只有 pattern、builder chain、action 和自由变量都属于明确安全子集时才生成 capability 文件。无法证明的项产生带源码位置的 manual diagnostic。
+CLI 使用 TypeScript AST，不执行作者模块。只有模块顶层注册、静态 identity、callback/render 形状和自由变量都属于明确安全子集时才生成 Command、Middleware 或 Component 文件。无法证明的项产生带源码位置的 manual diagnostic。
 
 ### D3. Extraction 与 Cutover 分离
 
 `migrate --write` 只新增约定式 capability 文件，不修改旧 source、entry 或 manifest。全部目标先预检并写 temporary，再用排他 hard-link 发布；并发目标冲突不会覆盖文件，失败会清理本次输出。
 
-entry/manifest cutover 是后续独立 transaction。这样自动输出可 review，旧版本仍可运行，回滚不依赖反向 codemod。
+entry/manifest cutover 由 `migrate cutover --check|--write` 承担。它从 capability 目录推导 Feature dependency，以原 `package.json` 文本做乐观并发校验，排他发布 `plugin.next.ts`，最后原子替换 manifest。manifest 是 commit record；内容一致的 prepared entry 可以安全重试。这样自动输出可 review，旧版本仍可运行，回滚不依赖反向 codemod。
 
 ### D4. TypeScript 是迁移工具的可选 Peer
 
@@ -34,7 +34,7 @@ entry/manifest cutover 是后续独立 transaction。这样自动输出可 revie
 
 ## 后果
 
-- 可以批量提取简单 Command，同时准确量化 manual backlog。
+- 可以批量提取简单 Command、Middleware 和 Component，同时准确量化 manual backlog。
 - 复杂旧能力不会被伪兼容；它们必须迁移为 Token/Resource/Feature。
-- extraction 后仍需 package dependency、manifest 和 entry cutover，不将半迁移状态伪装成完成。
+- extraction、cutover、双版本行为对照仍是三个明确阶段，不将半迁移状态伪装成完成。
 - compat 包最终可在旧插件清零后整体删除。

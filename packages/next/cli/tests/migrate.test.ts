@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import ts from 'typescript';
 import { afterEach, describe, expect, it } from 'vitest';
-import { LegacyCommandMigrator } from '../src/migrate/index.js';
+import { LegacyCapabilityMigrator } from '../src/migrate/index.js';
 
 const temporary: string[] = [];
 
@@ -11,12 +11,12 @@ afterEach(async () => {
   await Promise.all(temporary.splice(0).map((path) => rm(path, { recursive: true })));
 });
 
-describe('legacy Command migration', () => {
+describe('legacy capability migration', () => {
   it('extracts static builders and inventories unsafe closures without editing legacy source', async () => {
     const root = await fixture();
     const source = join(root, 'src/legacy.ts');
     const original = await readFile(source, 'utf8');
-    const migrator = new LegacyCommandMigrator();
+    const migrator = new LegacyCapabilityMigrator();
     const plan = await migrator.plan(root);
 
     expect(migrator.summarize(plan)).toEqual({ automatic: 1, manual: 3, errors: 0 });
@@ -53,7 +53,7 @@ describe('legacy Command migration', () => {
     const root = await temp();
     await write(join(root, 'src/a.ts'), legacyCommand('status', "() => 'a'"));
     await write(join(root, 'src/b.ts'), legacyCommand('status', "() => 'b'"));
-    const migrator = new LegacyCommandMigrator();
+    const migrator = new LegacyCapabilityMigrator();
     const plan = await migrator.plan(root);
 
     expect(migrator.summarize(plan)).toEqual({ automatic: 1, manual: 0, errors: 1 });
@@ -61,15 +61,96 @@ describe('legacy Command migration', () => {
     await expect(readFile(join(root, 'commands/status.ts'), 'utf8')).rejects.toThrow();
   });
 
+  it('extracts stateless middleware and components into their feature directories', async () => {
+    const root = await temp();
+    await write(join(root, 'src/capabilities.ts'), `
+import { usePlugin } from 'zhin.js';
+const { addComponent, addMiddleware } = usePlugin();
+
+addMiddleware(async function audit(message, next) {
+  console.log(message.id);
+  await next();
+}, 'request-audit');
+
+async function StatusCard(props: { label: string }) {
+  return props.label;
+}
+addComponent(StatusCard);
+`);
+    const migrator = new LegacyCapabilityMigrator();
+    const plan = await migrator.plan(root);
+
+    expect(migrator.summarize(plan)).toEqual({ automatic: 2, manual: 0, errors: 0 });
+    expect(plan.changes.map(({ kind, identity, target }) => ({ kind, identity, target }))).toEqual([
+      {
+        kind: 'middleware',
+        identity: 'request-audit',
+        target: join(root, 'middlewares/request-audit.ts'),
+      },
+      {
+        kind: 'component',
+        identity: 'status-card',
+        target: join(root, 'components/status-card.ts'),
+      },
+    ]);
+    for (const change of plan.changes) {
+      expect(ts.transpileModule(change.content, {
+        fileName: change.target,
+        reportDiagnostics: true,
+        compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+      }).diagnostics).toEqual([]);
+    }
+
+    await migrator.apply(plan);
+    await expect(readFile(join(root, 'middlewares/request-audit.ts'), 'utf8'))
+      .resolves.toContain('defineLegacyMiddleware');
+    await expect(readFile(join(root, 'components/status-card.ts'), 'utf8'))
+      .resolves.toContain('defineComponent');
+  });
+
+  it('inventories runtime registration, captures, and ComponentContext for manual migration', async () => {
+    const root = await temp();
+    await write(join(root, 'src/unsafe.ts'), `
+import { usePlugin } from 'zhin.js';
+const { addComponent, addMiddleware } = usePlugin();
+const prefix = 'captured';
+
+addMiddleware(async (_message, next) => {
+  console.log(prefix);
+  await next();
+}, 'captured');
+
+function ContextCard(props: unknown, context: unknown) {
+  return String(props ?? context);
+}
+addComponent(ContextCard);
+
+export function registerLater() {
+  addMiddleware(async (_message, next) => next(), 'late');
+}
+`);
+    const migrator = new LegacyCapabilityMigrator();
+    const plan = await migrator.plan(root);
+
+    expect(migrator.summarize(plan)).toEqual({ automatic: 0, manual: 3, errors: 0 });
+    expect(plan.diagnostics.map((item) => item.message)).toEqual([
+      'Middleware callback captures source bindings: prefix',
+      'ComponentContext requires manual migration',
+      'addMiddleware() runs outside module top level',
+    ]);
+  });
+
   it('rejects forged output paths without touching the referenced file', async () => {
     const root = await temp();
     const protectedFile = join(root, 'protected.ts');
     await writeFile(protectedFile, 'keep');
-    const migrator = new LegacyCommandMigrator();
+    const migrator = new LegacyCapabilityMigrator();
     await expect(migrator.apply({
       root,
       diagnostics: [],
       changes: [{
+        kind: 'command',
+        identity: 'forged',
         source: join(root, 'legacy.ts'),
         target: protectedFile,
         pattern: 'forged',

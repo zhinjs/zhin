@@ -19,25 +19,39 @@ try {
     const commands = new ProjectCommands();
     process.stdout.write(`${JSON.stringify(commands.describe(await commands.inspect(root)), null, 2)}\n`);
   } else if (command === 'migrate') {
-    const migrationMode = parseMigrationMode(args);
-    const { LegacyCommandMigrator } = await import('./migrate/index.js');
-    const migrator = new LegacyCommandMigrator();
-    const plan = await migrator.plan(root);
-    const summary = migrator.summarize(plan);
-    process.stdout.write(`${JSON.stringify({
-      summary,
-      changes: plan.changes.map((change) => ({
-        source: relativePath(root, change.source),
-        target: relativePath(root, change.target),
-        pattern: change.pattern,
-      })),
-      diagnostics: plan.diagnostics.map((item) => ({
-        ...item,
-        source: relativePath(root, item.source),
-      })),
-    }, null, 2)}\n`);
-    if (migrationMode === 'write') await migrator.apply(plan);
-    if (summary.errors > 0) process.exitCode = 1;
+    const migration = parseMigrationCommand(args);
+    const migrationApi = await import('./migrate/index.js');
+    if (migration.phase === 'cutover') {
+      const cutover = new migrationApi.PackageCutover();
+      const plan = await cutover.plan(root);
+      process.stdout.write(`${JSON.stringify({
+        changed: plan.changed,
+        capabilities: plan.capabilities,
+        entry: relativePath(root, plan.entryFile),
+        dependencies: plan.dependencies,
+      }, null, 2)}\n`);
+      if (migration.mode === 'write') await cutover.apply(plan);
+    } else {
+      const migrator = new migrationApi.LegacyCapabilityMigrator();
+      const plan = await migrator.plan(root);
+      const summary = migrator.summarize(plan);
+      process.stdout.write(`${JSON.stringify({
+        summary,
+        changes: plan.changes.map((change) => ({
+          kind: change.kind,
+          identity: change.identity,
+          source: relativePath(root, change.source),
+          target: relativePath(root, change.target),
+          pattern: change.pattern,
+        })),
+        diagnostics: plan.diagnostics.map((item) => ({
+          ...item,
+          source: relativePath(root, item.source),
+        })),
+      }, null, 2)}\n`);
+      if (migration.mode === 'write') await migrator.apply(plan);
+      if (summary.errors > 0) process.exitCode = 1;
+    }
   } else if (command === 'build' || command === 'publish') {
     const commands = new ProjectCommands();
     const graph = await commands.inspect(root);
@@ -69,6 +83,7 @@ try {
       '  zhin-next create feature <name> [package-name]',
       '  zhin-next inspect',
       '  zhin-next migrate --check|--write',
+      '  zhin-next migrate cutover --check|--write',
       '  zhin-next build',
       '  zhin-next publish [--execute] [--resume] [--tag <tag>]',
     ].join('\n'));
@@ -82,11 +97,16 @@ function relativePath(root: string, value: string): string {
   return relative(root, value);
 }
 
-function parseMigrationMode(args: readonly string[]): 'check' | 'write' {
-  if (args.length !== 1 || (args[0] !== '--check' && args[0] !== '--write')) {
-    throw new Error('migrate requires exactly one of --check or --write');
+function parseMigrationCommand(args: readonly string[]): {
+  readonly phase: 'extract' | 'cutover';
+  readonly mode: 'check' | 'write';
+} {
+  const phase = args[0] === 'cutover' ? 'cutover' : 'extract';
+  const options = phase === 'cutover' ? args.slice(1) : args;
+  if (options.length !== 1 || (options[0] !== '--check' && options[0] !== '--write')) {
+    throw new Error('migrate requires [cutover] and exactly one of --check or --write');
   }
-  return args[0] === '--write' ? 'write' : 'check';
+  return { phase, mode: options[0] === '--write' ? 'write' : 'check' };
 }
 
 function parsePublishOptions(args: readonly string[]): {
