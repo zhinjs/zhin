@@ -41,6 +41,13 @@
 | [0039](./0039-eve-aligned-agent-surface-roadmap.md) | Eve 对齐 Agent 创作面 — 边界与分阶段路线 |
 | [0040](./0040-http-step-checkpoint-persistence.md) | HTTP Step Checkpoint 持久化与 session.waiting park/resume |
 | [0041](./0041-agent-stream-bus-and-session-host-port.md) | AgentStreamBus + Session 拆分 + AgentSessionHostPort |
+| [0042](./0042-capability-features-and-on-demand-ingress.md) | Capability Features 与按需 Capability Ingress |
+| [0043](./0043-unify-capability-roots.md) | 统一 Capability Root 与声明式文件接口 |
+| [0044](./0044-typescript-hmr-plugin-kernel.md) | TypeScript HMR Plugin Kernel |
+| [0045](./0045-hierarchical-plugin-config-schema.md) | 层级 Plugin 配置与 schema.json |
+| [0046](./0046-convention-pages-and-plugin-navigation.md) | 约定式 pages 与 Plugin 导航树 |
+| [0047](./0047-standalone-plugin-and-root-lifecycle-domain.md) | 独立 Plugin 项目与 Root 生命周期域 |
+| [0048](./0048-plugin-monorepo-and-feature-provider-packages.md) | Plugin Monorepo 与 Feature Provider 包 |
 
 ## 相关
 

@@ -8,6 +8,10 @@
 
 | 文档 | 说明 |
 |------|------|
+| [Plugin-first 目标架构 SSOT](../../TARGET-ARCHITECTURE.md) | TypeScript/HMR Plugin 树、PluginScope、基础 Resource、Capability、Runtime Authority 与流程图 |
+| [目标技术实现蓝图](target-implementation/) | 规范性模块分层、依赖预算与关键 TypeScript 实现 |
+| [Plugin Monorepo 与 Feature Provider](target-implementation/plugin-monorepo-and-features.md) | 一级 workspace、静态 package graph、可发布 Feature contract 与 CLI pipeline |
+| [Greenfield Bootstrap 实现状态](target-implementation/greenfield-bootstrap.md) | `feature/next` 新栈的已实现链路、验证与明确阶段边界 |
 | [架构概览](../architecture-overview.md) | 分层（basic → kernel → ai → core → agent → zhin）、消息流程图 |
 | [Segment 内容模型](segment-content-model.md) | **SSOT**：`Segment[]` 形状、MediaRef、IM 可见性、AI 出站 JSON |
 | [ADR 0019 — 安装体积分层](../adr/0019-install-size-layering.md) | zhin.js 4.x：IM <10MB、agent/provider optional peer |

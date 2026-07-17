@@ -1,0 +1,388 @@
+# Config、Discovery 与 HMR
+
+这三个模块位于 Root 组合层，共享 Plugin tree 和 source ownership，但分别保持单一职责：Config 产生 owner-scoped values，Discovery 产生 Slot，HMR 只规划并提交 generation。
+
+## 0. Root Resource Contracts
+
+基础能力通过小 interface 和稳定 Token 暴露：
+
+```ts
+export interface RuntimeEnvironment {
+  readonly mode: string;
+  readonly platform: string;
+  is(mode: string): boolean;
+}
+
+export interface EnvSchema<T> {
+  parse(source: Readonly<Record<string, string | undefined>>): T;
+  readonly secretKeys?: readonly string[];
+}
+
+export interface EnvStore {
+  parse<T>(schema: EnvSchema<T>): Readonly<T>;
+}
+
+export interface DatabaseView {
+  transaction<T>(run: (tx: Transaction) => Promise<T>): Promise<T>;
+  repository<T>(model: Model<T>): Repository<T>;
+}
+
+export interface Logger {
+  debug(event: string, fields?: Readonly<Record<string, unknown>>): void;
+  info(event: string, fields?: Readonly<Record<string, unknown>>): void;
+  warn(event: string, fields?: Readonly<Record<string, unknown>>): void;
+  error(event: string, fields?: Readonly<Record<string, unknown>>): void;
+}
+
+export const EnvironmentToken = createToken<RuntimeEnvironment>('zhin.environment');
+export const EnvToken = createToken<EnvStore>('zhin.env');
+export const DatabaseToken = createToken<DatabaseView>('zhin.database');
+export const LoggerToken = createToken<Logger>('zhin.logger');
+```
+
+Root Bootstrap 私有持有 process env、database pool 和 logger factory，并为每个 Plugin owner 生成 EnvStore/DatabaseView/Logger binding。Plugin 看不到 pool 的 `close()`；只有 Root generation disposer 能关闭物理资源。
+
+## 1. Config Ports
+
+Kernel 只需要只读 ConfigView contract：
+
+```ts
+export interface ConfigView<T = unknown> {
+  readonly owner: PluginId;
+  readonly path: readonly string[];
+  get(): Readonly<T>;
+}
+```
+
+文件格式和 Schema compiler 是组合层 adapter：
+
+```ts
+export interface ConfigDocumentPort {
+  read(): Promise<unknown>;
+  patch(operations: readonly ConfigPatch[]): Promise<void>;
+}
+
+export interface ConfigPatch {
+  readonly path: readonly string[];
+  readonly value: unknown;
+}
+
+export interface ValidationIssue {
+  readonly pointer: string;
+  readonly keyword: string;
+  readonly message: string;
+}
+
+export type ValidationResult<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly issues: readonly ValidationIssue[] };
+
+export interface SchemaCompiler {
+  compile<T>(schema: JsonSchema): (input: unknown) => ValidationResult<T>;
+  defaults(schema: JsonSchema): unknown;
+}
+```
+
+`ConfigDocumentPort` 的 YAML 实现使用 AST patch 保留注释、`${ENV}` 和格式。JSON Schema compiler 应由成熟实现适配；Kernel 与 Plugin 作者不感知具体库。
+
+## 2. Schema Composer
+
+Plugin package schema root 必须是可组合 object schema：
+
+```ts
+export interface JsonSchema {
+  readonly $schema?: string;
+  readonly $id?: string;
+  readonly $defs?: Readonly<Record<string, JsonSchema>>;
+  readonly type?: string | readonly string[];
+  readonly properties?: Readonly<Record<string, JsonSchema>>;
+  readonly required?: readonly string[];
+  readonly additionalProperties?: boolean | JsonSchema;
+  readonly [keyword: string]: unknown;
+}
+
+interface ConfigSchemaNode {
+  readonly plugin: PluginInstance;
+  readonly own: JsonSchema;
+  readonly children: readonly ConfigSchemaNode[];
+}
+
+export function composeChildSchema(node: ConfigSchemaNode): JsonSchema {
+  if (node.own.type !== 'object') {
+    throw new Error(`${node.plugin.id}/schema.json must have type=object`);
+  }
+
+  const properties: Record<string, JsonSchema> = { ...node.own.properties };
+  for (const child of node.children) {
+    const key = child.plugin.instanceKey;
+    if (key in properties) {
+      throw new Error(`Config field/child collision at ${node.plugin.id}.${key}`);
+    }
+    properties[key] = composeChildSchema(child);
+  }
+
+  return Object.freeze({ ...node.own, properties });
+}
+
+export function composeDocumentSchema(root: ConfigSchemaNode): JsonSchema {
+  const plugins = Object.fromEntries(
+    root.children.map((child) => [child.plugin.instanceKey, composeChildSchema(child)]),
+  );
+
+  return Object.freeze({
+    type: 'object',
+    properties: {
+      plugin: root.own,
+      plugins: {
+        type: 'object',
+        properties: plugins,
+        additionalProperties: false,
+      },
+    },
+    required: ['plugin', 'plugins'],
+    additionalProperties: false,
+  });
+}
+```
+
+`$ref` resolution、draft 行为和 error detail 交给 SchemaCompiler。Composer 只做 Zhin 的树投影，不尝试实现 JSON Schema。
+
+## 3. Config Projection
+
+验证成功后一次遍历产生每个 owner 的值：
+
+```ts
+interface ConfigEnvelope {
+  readonly plugin: unknown;
+  readonly plugins: Readonly<Record<string, unknown>>;
+}
+
+export function projectConfig(
+  root: ConfigSchemaNode,
+  document: ConfigEnvelope,
+): ReadonlyMap<PluginId, unknown> {
+  const result = new Map<PluginId, unknown>();
+  result.set(root.plugin.id, pickOwnFields(root.own, document.plugin));
+
+  const visit = (
+    node: ConfigSchemaNode,
+    raw: unknown,
+  ): void => {
+    result.set(node.plugin.id, pickOwnFields(node.own, raw));
+    const object = asRecord(raw);
+    for (const child of node.children) visit(child, object[child.plugin.instanceKey]);
+  };
+
+  for (const child of root.children) {
+    visit(child, document.plugins[child.plugin.instanceKey]);
+  }
+  return result;
+}
+
+function pickOwnFields(schema: JsonSchema, input: unknown): Readonly<Record<string, unknown>> {
+  const source = asRecord(input);
+  const own = Object.keys(schema.properties ?? {}).filter((key) => key in source);
+  return Object.freeze(Object.fromEntries(own.map((key) => [key, source[key]])));
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+```
+
+注意：`composeChildSchema()` 给 effective schema 注入了 child properties，因此 `pickOwnFields()` 必须接收 package 原始 `own` schema，而不是 effective schema，才能防止父 ConfigView 看到 child config。
+
+## 4. 安装时物化
+
+```ts
+export async function materializePluginTree(
+  document: ConfigDocumentPort,
+  root: ConfigSchemaNode,
+  compiler: SchemaCompiler,
+): Promise<void> {
+  const patches: ConfigPatch[] = [];
+
+  const visit = (node: ConfigSchemaNode, path: readonly string[]): void => {
+    patches.push({ path, value: compiler.defaults(node.own) ?? {} });
+    for (const child of node.children) {
+      visit(child, [...path, child.plugin.instanceKey]);
+    }
+  };
+
+  for (const child of root.children) {
+    visit(child, ['plugins', child.plugin.instanceKey]);
+  }
+  await document.patch(patches);
+}
+```
+
+真实 adapter 只写缺失 path，不覆盖用户值。required 且无 default 的字段在 patch 前由 installer 交互收集，非交互模式返回 ValidationIssue。
+
+## 5. Feature-owned Convention
+
+Kernel 与 Root Bootstrap 不维护全局目录表。只有 `package.json#zhin.features` 显式启用的 Feature provider 才能贡献 convention：
+
+```ts
+export interface SourceConvention {
+  readonly directory: string;
+  discover(context: DiscoveryContext): AsyncIterable<DiscoveredSource>;
+  load(source: DiscoveredSource, context: LoadContext): Promise<unknown>;
+}
+
+export interface FeatureProvider<T = unknown> {
+  readonly id: FeatureId;
+  readonly conventions: readonly SourceConvention[];
+  validate(value: unknown, context: ValidationContext): T;
+}
+```
+
+Skill 使用单独的一层目录扫描：
+
+```ts
+async function discoverSkills(root: string): Promise<readonly DiscoveredSource[]> {
+  const directory = resolve(root, 'skills');
+  const entries = await safeReadDir(directory);
+  return entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => ({
+      localName: entry.name,
+      source: resolve(directory, entry.name, 'SKILL.md'),
+      target: 'server' as const,
+    }));
+}
+```
+
+标准 Agent Feature 扫描 `agents/<name>.md`，Command Feature 扫描 `commands/<name>.ts|tsx`。这些约定属于各自 provider，而不是此模块的常量。Discovery 只返回 source descriptors；Server/Client Module Runtime 或 Markdown parser 负责加载。完整 contract 见 [Plugin Monorepo 与 Feature Provider](./plugin-monorepo-and-features.md)。
+
+## 6. Ownership Index
+
+```ts
+export interface SourceRecord {
+  readonly source: string;
+  readonly owner: PluginId;
+  readonly role: 'plugin' | 'schema' | 'capability' | 'support';
+  readonly capability?: CapabilityId;
+}
+
+export class SourceOwnershipIndex {
+  #records = new Map<string, SourceRecord>();
+
+  add(record: SourceRecord): void {
+    const source = normalizePath(record.source);
+    const previous = this.#records.get(source);
+    if (previous && previous.owner !== record.owner) {
+      throw new Error(`Source has multiple owners: ${source}`);
+    }
+    this.#records.set(source, { ...record, source });
+  }
+
+  get(source: string): SourceRecord | undefined {
+    return this.#records.get(normalizePath(source));
+  }
+}
+```
+
+package root 的 `plugin.ts`、`schema.json`、所有 capability entry 和它们的内部 imports 都必须归属 owner。跨 Plugin source import 默认拒绝；共享实现应发布为普通 library package 或显式 Resource。
+
+## 7. Module Runtime Ports
+
+```ts
+export interface LoadedModule<T> {
+  readonly id: string;
+  readonly exports: T;
+  readonly dependencies: readonly string[];
+}
+
+export interface ServerModuleRuntime {
+  import<T>(source: string): Promise<LoadedModule<T>>;
+  dependencies(source: string): readonly string[];
+  importers(source: string): readonly string[];
+}
+
+export interface ClientModuleRuntime {
+  build(entries: readonly ClientEntry[]): Promise<ClientManifest>;
+  invalidate(source: string): Promise<ClientUpdate>;
+}
+```
+
+- Production Server adapter 使用预编译 ESM。
+- Development adapter 封装 Vite Module Graph/Runner。
+- Client adapter 生成 Page/Layout manifest 和 browser chunks。
+- RootController 不 import Vite 类型，只依赖以上 ports。
+
+## 8. Invalidation Planner
+
+```ts
+export type ReloadPlan =
+  | { readonly kind: 'slots'; readonly ids: readonly CapabilityId[] }
+  | { readonly kind: 'subtree'; readonly root: PluginId }
+  | { readonly kind: 'process'; readonly reason: string };
+
+export function planReload(
+  changed: SourceRecord,
+  importers: (source: string) => readonly SourceRecord[],
+): ReloadPlan {
+  if (changed.role === 'plugin' || changed.role === 'schema') {
+    return { kind: 'subtree', root: changed.owner };
+  }
+  if (changed.role === 'capability' && changed.capability) {
+    return { kind: 'slots', ids: [changed.capability] };
+  }
+
+  const affected = reverseClosure(changed, importers);
+  const pluginOwners = new Set(
+    affected.filter((record) => record.role === 'plugin').map((record) => record.owner),
+  );
+  if (pluginOwners.size) return { kind: 'subtree', root: shallowest(pluginOwners) };
+
+  const ids = affected.flatMap((record) => record.capability ? [record.capability] : []);
+  return ids.length
+    ? { kind: 'slots', ids: [...new Set(ids)] }
+    : { kind: 'process', reason: `Unowned runtime source: ${changed.source}` };
+}
+```
+
+`reverseClosure`、`shallowest` 是纯图算法，应以 cycle、共享 support module、多 owner 和 Root change 覆盖测试。
+
+## 9. HMR Coordinator
+
+```ts
+export class HmrCoordinator {
+  constructor(
+    private readonly root: RootController,
+    private readonly sources: SourceOwnershipIndex,
+    private readonly modules: ServerModuleRuntime,
+    private readonly prepare: GenerationPreparer,
+  ) {}
+
+  async update(source: string): Promise<RuntimeSnapshot> {
+    const changed = this.sources.get(source);
+    if (!changed) throw new Error(`Unknown source: ${source}`);
+
+    const plan = planReload(changed, (id) =>
+      this.modules.importers(id.source)
+        .map((source) => this.sources.get(source))
+        .filter((record): record is SourceRecord => Boolean(record)),
+    );
+
+    if (plan.kind === 'process') throw new ProcessRestartRequired(plan.reason);
+    return this.root.transact((current) => this.prepare.reload(current, plan));
+  }
+}
+```
+
+Coordinator 不先 stop active Plugin。`GenerationPreparer.reload()` 在 shadow scopes 中构造 PreparedGeneration；Capability-only 更新直接 CAS。越过 Resource seam 的 subtree 更新通过 PreparedGeneration.handoff 完成 quiesce/activate/commit，失败恢复旧入口；成功后旧 generation 才进入 lease drain/dispose。
+
+## 10. Config/HMR 测试矩阵
+
+- Root `plugin` 与 children `plugins` envelope 正确投影。
+- 父 schema property 与 child instance key 冲突时启动失败。
+- ConfigView 不包含 child 字段。
+- YAML patch 保留注释、`${ENV}` 和无关节点。
+- 同一个 support module 变化会批量替换全部 importer Slot。
+- `plugin.ts`/`schema.json` 变化升级为 subtree。
+- client Page/Layout 变化不触发 Server Plugin setup。
+- shadow validation/compile/setup 任一步失败时 active generation 不变。
+- HMR burst 串行化，过期 expected generation 不可提交。

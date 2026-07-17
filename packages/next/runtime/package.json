@@ -1,0 +1,50 @@
+{
+  "name": "@zhin.js/next-runtime",
+  "version": "0.0.0",
+  "description": "Static package graph and Root runtime for the greenfield Zhin architecture",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./vite": {
+      "types": "./lib/vite-module-runtime.d.ts",
+      "development": "./src/vite-module-runtime.ts",
+      "import": "./lib/vite-module-runtime.js"
+    }
+  },
+  "files": ["lib"],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "test": "vitest run --root ../../.. packages/next/runtime/tests"
+  },
+  "dependencies": {
+    "@zhin.js/next-feature-kit": "workspace:*",
+    "@zhin.js/next-kernel": "workspace:*",
+    "ajv": "8.18.0"
+  },
+  "peerDependencies": {
+    "vite": ">=6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@zhin.js/next-feature-command": "workspace:*",
+    "@types/node": "^26.1.0",
+    "typescript": "^6.0.3",
+    "vite": "6.4.3"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "license": "MIT",
+  "private": true
+}

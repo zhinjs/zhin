@@ -1104,6 +1104,82 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  packages/next/cli:
+    dependencies:
+      '@zhin.js/next-runtime':
+        specifier: workspace:*
+        version: link:../runtime
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.0
+        version: 26.1.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/next/feature-command:
+    dependencies:
+      '@zhin.js/next-feature-kit':
+        specifier: workspace:*
+        version: link:../feature-kit
+      '@zhin.js/next-kernel':
+        specifier: workspace:*
+        version: link:../kernel
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.0
+        version: 26.1.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/next/feature-kit:
+    dependencies:
+      '@zhin.js/next-kernel':
+        specifier: workspace:*
+        version: link:../kernel
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.0
+        version: 26.1.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/next/kernel:
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.0
+        version: 26.1.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/next/runtime:
+    dependencies:
+      '@zhin.js/next-feature-kit':
+        specifier: workspace:*
+        version: link:../feature-kit
+      '@zhin.js/next-kernel':
+        specifier: workspace:*
+        version: link:../kernel
+      ajv:
+        specifier: 8.18.0
+        version: 8.18.0
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.0
+        version: 26.1.1
+      '@zhin.js/next-feature-command':
+        specifier: workspace:*
+        version: link:../feature-command
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vite:
+        specifier: ^6.4.3
+        version: 6.4.3(@types/node@26.1.1)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.22.4)(yaml@2.9.0)
+
   packages/toolkit/create-zhin:
     dependencies:
       '@zhin.js/scaffold-wizard':
@@ -13201,7 +13277,7 @@ snapshots:
       proc-log: 6.1.0
       semver: 7.8.5
       tar: 7.5.16
-      tinyglobby: 0.2.17
+      tinyglobby: 0.2.16
       which: 6.0.1
     transitivePeerDependencies:
       - supports-color
@@ -14143,7 +14219,7 @@ snapshots:
       lines-and-columns: 1.2.4
       mz: 2.7.0
       pirates: 4.0.7
-      tinyglobby: 0.2.16
+      tinyglobby: 0.2.17
       ts-interface-checker: 0.1.13
 
   superjson@2.2.6:

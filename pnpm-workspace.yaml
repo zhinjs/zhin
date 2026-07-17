@@ -4,6 +4,7 @@ packages:
   - 'packages/console/*'
   - 'packages/toolkit/*'
   - 'packages/host/*'
+  - 'packages/next/*'
   - 'plugins/adapters/*'
   - 'plugins/features/*'
   - 'plugins/utils/*'
