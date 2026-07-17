@@ -46,6 +46,7 @@ import {
   type ProjectionState,
 } from './feature-projector.js';
 import { GenerationAssets } from './generation-assets.js';
+import type { IsolatedPluginRuntimePort } from './isolation.js';
 import type { ModuleRuntime } from './module-runtime.js';
 import { NodeDiscoveryHost } from './node-discovery-host.js';
 import { NodePackageResolver } from './package-resolver.js';
@@ -90,6 +91,7 @@ export interface RootRuntimeOptions {
   readonly environmentVariables?: EnvironmentLayers;
   readonly config?: PluginConfigResolver | RuntimeConfigDocument | ConfigDocumentPort;
   readonly installResources?: RootResourceInstaller;
+  readonly isolation?: IsolatedPluginRuntimePort;
   readonly onControlError?: ControlErrorHandler;
 }
 
@@ -111,6 +113,7 @@ export class RootRuntime {
   #configSnapshot?: ConfigDocumentSnapshot;
   #configDocument?: RuntimeConfigDocument;
   readonly #installResources?: RootResourceInstaller;
+  readonly #isolation?: IsolatedPluginRuntimePort;
   #ownership = SourceOwnershipIndex.empty();
   #model?: RuntimeGenerationModel;
   #configPatchTail: Promise<unknown> = Promise.resolve();
@@ -124,6 +127,7 @@ export class RootRuntime {
     else if (isConfigDocumentPort(options.config)) this.#configPort = options.config;
     else this.#configDocument = structuredClone(options.config ?? {});
     this.#installResources = options.installResources;
+    this.#isolation = options.isolation;
     this.controller = new RootController(emptyState(), options.onControlError);
   }
 
@@ -220,6 +224,7 @@ export class RootRuntime {
             this.#environment,
             this.#installResources,
             this.#environmentLayers,
+            this.#isolation,
           ).prepare(current);
         } else if (plan.subtrees.length === 0 && plan.slots.length > 0 && this.#model) {
           prepared = await new SlotGenerationPreparer(this.#modules, this.#model)
@@ -343,6 +348,7 @@ export class RootRuntime {
       this.#environment,
       this.#installResources,
       this.#environmentLayers,
+      this.#isolation,
     );
     return assembler.prepare();
   }
@@ -362,6 +368,7 @@ export class RootRuntime {
         this.#environment,
         this.#installResources,
         this.#environmentLayers,
+        this.#isolation,
       ).prepare(current, roots);
     } catch (error) {
       if (!(error instanceof SubtreeTopologyChangedError)) throw error;
@@ -431,6 +438,7 @@ class GenerationAssembler {
     private readonly environment: RuntimeEnvironment,
     private readonly installResources?: RootResourceInstaller,
     private readonly environmentLayers: EnvironmentLayers = {},
+    private readonly isolation?: IsolatedPluginRuntimePort,
   ) {
     this.#host = new NodeDiscoveryHost(modules);
     this.#plugins = new PluginScopeAssembler(
@@ -439,6 +447,8 @@ class GenerationAssembler {
       environment,
       installResources,
       environmentLayers,
+      undefined,
+      isolation,
     );
   }
 

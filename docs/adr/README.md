@@ -48,6 +48,7 @@
 | [0046](./0046-convention-pages-and-plugin-navigation.md) | 约定式 pages 与 Plugin 导航树 |
 | [0047](./0047-standalone-plugin-and-root-lifecycle-domain.md) | 独立 Plugin 项目与 Root 生命周期域 |
 | [0048](./0048-plugin-monorepo-and-feature-provider-packages.md) | Plugin Monorepo 与 Feature Provider 包 |
+| [0049](./0049-isolated-plugin-runtime.md) | Isolated Plugin Runtime |
 
 ## 相关
 

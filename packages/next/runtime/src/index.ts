@@ -6,6 +6,7 @@ export * from './environment.js';
 export * from './environment-store.js';
 export * from './hmr-coordinator.js';
 export * from './invalidation-planner.js';
+export * from './isolation.js';
 export * from './manifest.js';
 export * from './module-runtime.js';
 export * from './node-discovery-host.js';

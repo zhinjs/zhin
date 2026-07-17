@@ -19,6 +19,7 @@ import {
 import type { RuntimeEnvironment } from './environment.js';
 import type { EnvironmentLayers } from './environment-store.js';
 import { FeatureProjector, composeGenerationHandoffs } from './feature-projector.js';
+import type { IsolatedPluginRuntimePort } from './isolation.js';
 import type { ZhinFeatureManifest } from './manifest.js';
 import type { ModuleRuntime } from './module-runtime.js';
 import { NodeDiscoveryHost } from './node-discovery-host.js';
@@ -59,6 +60,7 @@ export class TopologyGenerationPreparer {
     private readonly environment: RuntimeEnvironment,
     private readonly installResources?: RootResourceInstaller,
     private readonly environmentLayers: EnvironmentLayers = {},
+    private readonly isolation?: IsolatedPluginRuntimePort,
   ) {}
 
   async prepare(current: RuntimeSnapshot): Promise<PreparedRuntimeGeneration | undefined> {
@@ -85,6 +87,7 @@ export class TopologyGenerationPreparer {
         config: current.config,
         resources: current.resources,
       },
+      this.isolation,
     );
     const setupRoots = collapseRoots([
       ...plan.addedPluginRoots,

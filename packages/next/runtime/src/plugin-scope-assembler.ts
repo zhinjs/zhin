@@ -23,6 +23,7 @@ import {
 import type { ZhinPluginManifest } from './manifest.js';
 import type { ModuleRuntime } from './module-runtime.js';
 import type { PluginGraphNode } from './project-graph.js';
+import type { IsolatedPluginRuntimePort } from './isolation.js';
 
 export type PluginConfigResolver = (node: PluginGraphNode) => unknown;
 
@@ -60,6 +61,7 @@ export class PluginScopeAssembler {
     private readonly installResources?: RootResourceInstaller,
     environmentLayers: EnvironmentLayers = {},
     seed?: PluginAssemblySeed,
+    private readonly isolation?: IsolatedPluginRuntimePort,
   ) {
     this.#envStores = new EnvStoreFactory(environment, environmentLayers);
     this.scopes = new Map(seed?.scopes);
@@ -82,17 +84,6 @@ export class PluginScopeAssembler {
 
   async setupTree(node: PluginGraphNode): Promise<void> {
     const manifest = node.package.packageJson.zhin as ZhinPluginManifest;
-    if (manifest.runtime === 'isolated') {
-      throw new Error(`Isolated Plugin runtime is not implemented: ${node.package.name}`);
-    }
-    const module = await this.modules.load<ModuleNamespace>(
-      resolve(node.package.root, manifest.entry),
-    );
-    const definition = module.default as PluginDefinition | undefined;
-    if (!definition || typeof definition.name !== 'string') {
-      throw new TypeError(`${node.package.name} does not default-export a Plugin definition`);
-    }
-
     const parentScope = node.parent ? this.scopes.get(node.parent) : undefined;
     if (node.parent && !parentScope) throw new Error(`Missing parent scope for ${node.id}`);
     const scope = new Scope(node.id, parentScope);
@@ -110,12 +101,6 @@ export class PluginScopeAssembler {
       });
     }
 
-    for (const token of definition.requires ?? []) {
-      if (!scope.has(token)) {
-        throw new Error(`Missing resource ${token.id} for Plugin ${node.id}`);
-      }
-    }
-
     const config = Object.freeze(this.configResolver(node) ?? {});
     const view: ConfigView<unknown> = { get: () => config };
     const plugin: PluginInstanceView = Object.freeze({
@@ -125,14 +110,57 @@ export class PluginScopeAssembler {
       root: rootPluginId(),
       role: node.parent ? 'child' : 'root',
     });
-    const returned = await definition.setup?.({
-      plugin,
-      config: view,
-      resources: scope,
-      lifecycle: scope.disposers,
-      handoff: this.#handoffs,
-    });
-    if (returned) scope.disposers.add(returned);
+    let metadata: PluginDefinition['metadata'];
+    if (manifest.runtime === 'isolated') {
+      if (!node.parent) throw new Error('Root Plugin cannot use runtime: isolated');
+      if (node.features.length > 0) {
+        throw new Error(`Isolated Plugin ${node.id} cannot mount Host Feature providers`);
+      }
+      if (!this.isolation) {
+        throw new Error(`Isolated Plugin runtime adapter is required: ${node.package.name}`);
+      }
+      const prepared = await this.isolation.prepare({
+        owner: node.id,
+        parent: node.parent,
+        packageName: node.package.name,
+        entry: resolve(node.package.root, manifest.entry),
+        config,
+        environment: this.environment,
+      });
+      // Ownership transfers to the shadow Scope immediately. Every later
+      // validation or binding failure is then covered by normal rollback.
+      scope.disposers.add(prepared.dispose);
+      if (!prepared.descriptor.name) {
+        throw new TypeError(`Isolated Plugin ${node.package.name} returned an invalid descriptor`);
+      }
+      for (const binding of prepared.resources ?? []) {
+        scope.provide(binding.token, binding.value);
+      }
+      if (prepared.handoff) this.#handoffs.add(prepared.handoff);
+      metadata = prepared.descriptor.metadata;
+    } else {
+      const module = await this.modules.load<ModuleNamespace>(
+        resolve(node.package.root, manifest.entry),
+      );
+      const definition = module.default as PluginDefinition | undefined;
+      if (!definition || typeof definition.name !== 'string') {
+        throw new TypeError(`${node.package.name} does not default-export a Plugin definition`);
+      }
+      for (const token of definition.requires ?? []) {
+        if (!scope.has(token)) {
+          throw new Error(`Missing resource ${token.id} for Plugin ${node.id}`);
+        }
+      }
+      const returned = await definition.setup?.({
+        plugin,
+        config: view,
+        resources: scope,
+        lifecycle: scope.disposers,
+        handoff: this.#handoffs,
+      });
+      if (returned) scope.disposers.add(returned);
+      metadata = definition.metadata;
+    }
     scope.seal();
 
     this.tree.set(node.id, Object.freeze({
@@ -142,7 +170,7 @@ export class PluginScopeAssembler {
       packageRoot: node.package.root,
       parent: node.parent,
       children: Object.freeze(node.children.map((child) => child.id)),
-      metadata: definition.metadata,
+      metadata,
     }));
     this.config.set(node.id, config);
     this.resources.set(node.id, scope.snapshot());

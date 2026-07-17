@@ -1418,6 +1418,22 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  packages/next/isolate:
+    dependencies:
+      '@zhin.js/next-kernel':
+        specifier: workspace:*
+        version: link:../kernel
+      '@zhin.js/next-runtime':
+        specifier: workspace:*
+        version: link:../runtime
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.0
+        version: 26.1.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   packages/next/kernel:
     devDependencies:
       '@types/node':
