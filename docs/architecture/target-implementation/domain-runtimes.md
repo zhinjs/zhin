@@ -179,7 +179,7 @@ Tool、Skill、Agent、MCP 已由四个独立 Feature package 表达：
 - `agents/<name>.agent.md` 是 immutable Agent instructions。
 - `mcp/<name>.ts` 默认导出 provider-neutral `defineMcp()`。
 
-`@zhin.js/next-agent` 的 CapabilityIngress 只读四个 generation projection，按 requester owner 应用 nearest-ancestor inheritance，返回 Tool/MCP 执行 handles 与 Skill/Agent descriptors。缺少某个 Feature 时对应列表为空，不建立隐藏 registry。
+`@zhin.js/agent/runtime` 的 CapabilityIngress 只读四个 generation projection，按 requester owner 应用 nearest-ancestor inheritance，返回 Tool/MCP 执行 handles 与 Skill/Agent descriptors。缺少某个 Feature 时对应列表为空，不建立隐藏 registry。
 
 AgentRuntime 一次 turn lease 一个 snapshot：
 

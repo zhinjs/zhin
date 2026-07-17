@@ -953,6 +953,9 @@ importers:
       '@a2a-js/sdk':
         specifier: 1.0.0-beta.0
         version: 1.0.0-beta.0(express@5.2.1)
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../agent-feature
       '@zhin.js/ai':
         specifier: workspace:*
         version: link:../ai
@@ -965,9 +968,21 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/mcp-feature':
+        specifier: workspace:*
+        version: link:../mcp-feature
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../plugin-runtime
       '@zhin.js/schedule':
         specifier: workspace:*
         version: link:../../../basic/schedule
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../skill
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../tool
       he:
         specifier: ^1.2.0
         version: 1.2.0
@@ -1299,31 +1314,6 @@ importers:
       '@zhin.js/speech':
         specifier: workspace:*
         version: link:../../toolkit/speech
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/next/agent:
-    dependencies:
-      '@zhin.js/agent-feature':
-        specifier: workspace:*
-        version: link:../../im/agent-feature
-      '@zhin.js/mcp-feature':
-        specifier: workspace:*
-        version: link:../../im/mcp-feature
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../im/plugin-runtime
-      '@zhin.js/skill':
-        specifier: workspace:*
-        version: link:../../im/skill
-      '@zhin.js/tool':
-        specifier: workspace:*
-        version: link:../../im/tool
-    devDependencies:
-      '@types/node':
-        specifier: ^26.1.0
-        version: 26.1.1
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

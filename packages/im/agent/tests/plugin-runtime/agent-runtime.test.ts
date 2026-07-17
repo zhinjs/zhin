@@ -33,7 +33,7 @@ import {
   AgentRuntime,
   CapabilityIngress,
   type ToolCapability,
-} from '../src/index.js';
+} from '../../src/plugin-runtime/index.js';
 
 describe('Agent CapabilityIngress', () => {
   it('builds an owner-visible immutable view across four Feature projections', async () => {

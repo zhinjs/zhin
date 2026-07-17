@@ -4,6 +4,27 @@ Zhin AI Agent 组合层：在 `@zhin.js/core` 的类型与 Provider 之上，提
 
 领域词汇见 [CONTEXT.md](./CONTEXT.md)。用户向文档：[AI 模块](https://zhin.js.org/advanced/ai)、[消息如何流转](../../docs/essentials/message-flow.md)。
 
+## Plugin Runtime 入口
+
+`@zhin.js/agent/runtime` 提供面向新 Plugin Runtime 的 `AgentRuntime` 与
+`CapabilityIngress`。一次 `runTurn()` 在完整回调期间持有同一个 immutable snapshot，
+并从 Tool、Skill、Agent、MCP 四个 Feature projection 生成 owner-visible 能力视图：
+
+```ts
+import { AgentRuntime } from '@zhin.js/agent/runtime';
+
+const runtime = new AgentRuntime();
+runtime.attach(root.controller.snapshots);
+
+await runtime.runTurn(pluginId, async (capabilities) => {
+  return orchestrator.run({ request, capabilities });
+});
+```
+
+Tool/MCP 执行 handle 只在 turn lease 内有效，防止访问已 retire 的 generation。
+当前 `src/ingress/` 是旧 Feature registry 到 `AgentOrchestrator` 的兼容桥；迁移期间允许
+旧入口读取新投影，但 RuntimeSnapshot 是唯一权威，禁止双写两套 registry。
+
 ## 功能特性
 
 - 🤖 **agentLoop 统一路径**：ZhinAgent、Subagent、Deferred Worker、AIService 均经 `agentLoop`（legacy `Agent.run` 仅保留在 `@zhin.js/ai` 供单测）

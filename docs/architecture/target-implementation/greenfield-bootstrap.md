@@ -21,7 +21,7 @@
 | `@zhin.js/next-feature-skill` | `skills/*/SKILL.md`、immutable Markdown SkillIndex |
 | `@zhin.js/next-feature-agent` | `agents/*.agent.md`、immutable Markdown AgentIndex |
 | `@zhin.js/next-feature-mcp` | `mcp/*.ts`、provider-neutral client 与 generation lifecycle |
-| `@zhin.js/next-agent` | CapabilityIngress、owner-visible handles、snapshot-coherent turn lease |
+| `@zhin.js/agent/runtime` | CapabilityIngress、owner-visible handles、snapshot-coherent turn lease |
 | `@zhin.js/next-console-contract` | 零依赖 Page/Layout manifest、route、Navigation 与 Shell slot contract |
 | `@zhin.js/next-feature-page` | `pages/*.ts|tsx`、Client Module artifact 校验、canonical route 与 PageIndex |
 | `@zhin.js/next-feature-layout` | `$nav.tsx`/`$footer.tsx`、最近祖先继承与 renderer fallback chain |
@@ -126,7 +126,6 @@ pnpm exec vitest run packages/next
 pnpm --filter './packages/next/**' build
 pnpm --filter @zhin.js/next-runtime check:size
 pnpm --filter @zhin.js/next-im check:size
-pnpm --filter @zhin.js/next-agent check:size
 pnpm --filter @zhin.js/next-console check:size
 pnpm --filter @zhin.js/next-isolate check:size
 pnpm --filter @zhin.js/next-compat check:size

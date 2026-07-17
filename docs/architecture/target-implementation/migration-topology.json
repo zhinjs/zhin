@@ -78,10 +78,16 @@
       "targetPackage": "@zhin.js/mcp-feature",
       "targetDirectory": "packages/im/mcp-feature",
       "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-agent",
+      "sourceDirectory": "packages/next/agent",
+      "targetPackage": "@zhin.js/agent",
+      "targetDirectory": "packages/im/agent",
+      "targetExport": "./runtime"
     }
   ],
   "pending": [
-    { "sourcePackage": "@zhin.js/next-agent", "target": "@zhin.js/agent/runtime" },
     { "sourcePackage": "@zhin.js/next-console-contract", "target": "@zhin.js/contract/plugin-runtime" },
     { "sourcePackage": "@zhin.js/next-feature-page", "target": "@zhin.js/contract/features/page" },
     { "sourcePackage": "@zhin.js/next-feature-layout", "target": "@zhin.js/contract/features/layout" },

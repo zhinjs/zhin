@@ -107,17 +107,6 @@ const packages = [
     dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/next-runtime'],
   },
   {
-    dir: 'packages/next/agent',
-    name: '@zhin.js/next-agent',
-    dependencies: [
-      '@zhin.js/plugin-runtime',
-      '@zhin.js/agent-feature',
-      '@zhin.js/mcp-feature',
-      '@zhin.js/skill',
-      '@zhin.js/tool',
-    ],
-  },
-  {
     dir: 'packages/next/console',
     name: '@zhin.js/next-console',
     dependencies: [

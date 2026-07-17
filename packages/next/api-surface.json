@@ -5,15 +5,15 @@
     "export * from './provider.js';",
     "export{default}from './provider.js';"
   ],
-  "agent": [
-    "export * from './agent-runtime.js';",
-    "export * from './capability-ingress.js';"
-  ],
   "agent-feature": [
     "export * from './agent-index.js';",
     "export * from './definition.js';",
     "export * from './provider.js';",
     "export{default}from './provider.js';"
+  ],
+  "agent/runtime": [
+    "export * from './agent-runtime.js';",
+    "export * from './capability-ingress.js';"
   ],
   "cli": [
     "export * from './project-commands.js';",

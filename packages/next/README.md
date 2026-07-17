@@ -21,7 +21,7 @@
 | `@zhin.js/skill` | `skills/*/SKILL.md` immutable Skill projection |
 | `@zhin.js/agent-feature` | `agents/*.agent.md` immutable Agent projection |
 | `@zhin.js/mcp-feature` | `mcp/*.ts`、provider-neutral MCP client lifecycle |
-| `@zhin.js/next-agent` | CapabilityIngress、owner-visible handles 与 snapshot-coherent turn lease |
+| `@zhin.js/agent/runtime` | CapabilityIngress、owner-visible handles 与 snapshot-coherent turn lease |
 | `@zhin.js/next-console-contract` | 零依赖 Page/Layout manifest、route、Navigation 与 Shell slot contract |
 | `@zhin.js/next-feature-page` | `pages/*.ts|tsx`、Client Module artifact 边界与 PageIndex |
 | `@zhin.js/next-feature-layout` | `pages/$nav.tsx`、`$footer.tsx` 与最近祖先 override chain |
@@ -42,7 +42,7 @@
 - [Skill Feature](feature-skill/README.md)
 - [Agent Feature](feature-agent/README.md)
 - [MCP Feature](feature-mcp/README.md)
-- [Agent Runtime](agent/README.md)
+- [Agent Runtime](../im/agent/README.md#plugin-runtime-入口)
 - [Console Contract](console-contract/README.md)
 - [Page Feature](feature-page/README.md)
 - [Layout Feature](feature-layout/README.md)
