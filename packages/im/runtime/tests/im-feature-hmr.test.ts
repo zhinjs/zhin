@@ -126,7 +126,7 @@ class FakeModules implements ModuleRuntime {
 }
 
 async function createProject(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'zhin-next-im-features-'));
+  const root = await mkdtemp(join(tmpdir(), 'zhin-runtime-im-features-'));
   temporary.push(root);
   await writeJson(join(root, 'package.json'), {
     name: '@test/root',

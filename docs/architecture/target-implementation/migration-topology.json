@@ -127,12 +127,35 @@
       "targetPackage": "@zhin.js/runtime",
       "targetDirectory": "packages/im/runtime",
       "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-config-yaml",
+      "sourceDirectory": "packages/next/config-yaml",
+      "targetPackage": "@zhin.js/config-yaml",
+      "targetDirectory": "packages/im/config-yaml",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-isolate",
+      "sourceDirectory": "packages/next/isolate",
+      "targetPackage": "@zhin.js/isolate",
+      "targetDirectory": "packages/im/isolate",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-cli",
+      "sourceDirectory": "packages/next/cli",
+      "targetPackage": "@zhin.js/cli",
+      "targetDirectory": "basic/cli",
+      "targetExport": "."
     }
   ],
-  "pending": [
-    { "sourcePackage": "@zhin.js/next-config-yaml", "target": "zhin.js/config-yaml" },
-    { "sourcePackage": "@zhin.js/next-isolate", "target": "zhin.js/isolate" },
-    { "sourcePackage": "@zhin.js/next-compat", "target": "zhin.js/compat" },
-    { "sourcePackage": "@zhin.js/next-cli", "target": "@zhin.js/cli" }
-  ]
+  "removed": [
+    {
+      "sourcePackage": "@zhin.js/next-compat",
+      "sourceDirectory": "packages/next/compat",
+      "reason": "Breaking migration emits native Feature definitions; legacy callback adapters are not runtime dependencies."
+    }
+  ],
+  "pending": []
 }

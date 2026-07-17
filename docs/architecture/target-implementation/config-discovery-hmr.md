@@ -109,7 +109,7 @@ export interface ValidationIssue {
 
 `ConfigPatch` 是 `set/remove` 的判别联合，并拒绝 prototype pollution 路径。`ConfigDocumentPort` 的 YAML 实现使用 AST patch 保留注释、`${ENV}`、scalar style、anchor/alias、缩进与换行。JSON Schema compiler 和 YAML parser 都使用成熟实现；Kernel 与 Plugin 作者不感知具体库。
 
-当前 Runtime 已提供 `ConfigPatchPlanner`、`ConfigDocumentPort` 与 `RootRuntime.patchConfig()`；可选 `@zhin.js/next-config-yaml` 实现 YAML AST 持久化。Planner 在原始 document clone 上应用 patch，随后执行整树 schema 校验，并通过前后 owner ConfigView 的结构化比较计算最浅 forest。原始 candidate 与 AJV materialized document 分离，避免把未显式配置的 schema default 写回文件。
+当前 Runtime 已提供 `ConfigPatchPlanner`、`ConfigDocumentPort` 与 `RootRuntime.patchConfig()`；可选 `@zhin.js/config-yaml` 实现 YAML AST 持久化。Planner 在原始 document clone 上应用 patch，随后执行整树 schema 校验，并通过前后 owner ConfigView 的结构化比较计算最浅 forest。原始 candidate 与 AJV materialized document 分离，避免把未显式配置的 schema default 写回文件。
 
 Port 的 `prepare()` 不产生副作用。存在 Plugin view 变化时，Root 先完成 shadow setup，再按 Resource、ConfigDocument 的顺序 activate，最后 CAS 发布 generation；CAS 前失败按 ConfigDocument、Resource 的逆序补偿。只有原始文档变化而 owner view 不变时，Root 在同一串行控制事务内只提交文档，不发布空 generation。revision 冲突、schema 校验或 shadow setup 失败都保持 active snapshot 和原文件不变。
 

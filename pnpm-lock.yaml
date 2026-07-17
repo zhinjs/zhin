@@ -92,9 +92,15 @@ importers:
 
   basic/cli:
     dependencies:
+      '@zhin.js/config-yaml':
+        specifier: workspace:*
+        version: link:../../packages/im/config-yaml
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../logger
+      '@zhin.js/runtime':
+        specifier: workspace:*
+        version: link:../../packages/im/runtime
       '@zhin.js/scaffold-wizard':
         specifier: workspace:*
         version: link:../../packages/toolkit/scaffold-wizard
@@ -415,7 +421,7 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(jsdom@24.1.3)(msw@2.14.5(@types/node@26.1.1)(typescript@6.0.3))(vite@6.4.3(@types/node@26.1.1)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.22.4)(yaml@2.9.0))
 
-  examples/next-migration-bot:
+  examples/plugin-runtime-migration-bot:
     dependencies:
       '@zhin.js/command':
         specifier: 1.0.0
@@ -429,9 +435,6 @@ importers:
       '@zhin.js/middleware':
         specifier: 1.0.0
         version: link:../../packages/im/middleware
-      '@zhin.js/next-compat':
-        specifier: workspace:*
-        version: link:../../packages/next/compat
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../../packages/im/plugin-runtime
@@ -442,9 +445,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/im/zhin
     devDependencies:
-      '@zhin.js/next-cli':
+      '@zhin.js/cli':
         specifier: workspace:*
-        version: link:../../packages/next/cli
+        version: link:../../basic/cli
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1168,6 +1171,25 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  packages/im/config-yaml:
+    dependencies:
+      '@zhin.js/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.0
+        version: 26.1.1
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../plugin-runtime
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   packages/im/core:
     dependencies:
       '@zhin.js/adapter':
@@ -1231,6 +1253,22 @@ importers:
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../plugin-runtime
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.0
+        version: 26.1.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/im/isolate:
+    dependencies:
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../plugin-runtime
+      '@zhin.js/runtime':
+        specifier: workspace:*
+        version: link:../runtime
     devDependencies:
       '@types/node':
         specifier: ^26.1.0
@@ -1434,79 +1472,6 @@ importers:
       '@zhin.js/speech':
         specifier: workspace:*
         version: link:../../toolkit/speech
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/next/cli:
-    dependencies:
-      '@zhin.js/next-config-yaml':
-        specifier: workspace:*
-        version: link:../config-yaml
-      '@zhin.js/runtime':
-        specifier: workspace:*
-        version: link:../../im/runtime
-    devDependencies:
-      '@types/node':
-        specifier: ^26.1.0
-        version: 26.1.1
-      '@zhin.js/next-compat':
-        specifier: workspace:*
-        version: link:../compat
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/next/compat:
-    dependencies:
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../im/command
-      '@zhin.js/middleware':
-        specifier: workspace:*
-        version: link:../../im/middleware
-    devDependencies:
-      '@types/node':
-        specifier: ^26.1.0
-        version: 26.1.1
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../im/plugin-runtime
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/next/config-yaml:
-    dependencies:
-      '@zhin.js/runtime':
-        specifier: workspace:*
-        version: link:../../im/runtime
-      yaml:
-        specifier: 2.9.0
-        version: 2.9.0
-    devDependencies:
-      '@types/node':
-        specifier: ^26.1.0
-        version: 26.1.1
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../im/plugin-runtime
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/next/isolate:
-    dependencies:
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../im/plugin-runtime
-      '@zhin.js/runtime':
-        specifier: workspace:*
-        version: link:../../im/runtime
-    devDependencies:
-      '@types/node':
-        specifier: ^26.1.0
-        version: 26.1.1
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

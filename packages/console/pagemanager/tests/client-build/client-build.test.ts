@@ -117,7 +117,7 @@ function pageEntry(source: string) {
 }
 
 async function temp(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'zhin-next-client-build-'));
+  const root = await mkdtemp(join(tmpdir(), 'zhin-runtime-client-build-'));
   temporary.push(root);
   return root;
 }

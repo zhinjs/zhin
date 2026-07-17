@@ -313,7 +313,7 @@ tools/*.ts
 - [Greenfield Bootstrap 实现状态](./greenfield-bootstrap.md)
 - [Config、Discovery 与 HMR](./config-discovery-hmr.md)
 - [IM、Agent 与 Console Runtime](./domain-runtimes.md)
-- [Next 迁移契约](./migration-contract.md)
+- [Plugin Runtime 迁移契约](./migration-contract.md)
 
 ## 9. 实施顺序
 

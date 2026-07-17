@@ -223,7 +223,7 @@ interface ProjectInput {
 }
 
 async function project(input: ProjectInput): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'zhin-next-'));
+  const root = await mkdtemp(join(tmpdir(), 'zhin-runtime-'));
   temporary.push(root);
   await writeJson(join(root, 'package.json'), input.root);
   for (const feature of input.features ?? []) {

@@ -10,6 +10,27 @@ Zhin **AI Agent 运行时**的全功能命令行工具，提供项目创建、En
 - 🛠️ **进程管理**: 生产环境启动、停止、重启、后台运行
 - ⚙️ **多运行时**: 支持 Node.js 和 Bun 运行时
 
+## Plugin Runtime
+
+`zhin runtime` 是约定式 Plugin Runtime 的正式控制面：
+
+```bash
+zhin runtime init @acme/root
+zhin runtime create plugin weather @acme/plugin-weather
+zhin runtime inspect
+zhin runtime migrate extract --check
+zhin runtime migrate extract --write
+zhin runtime migrate cutover --write
+zhin runtime migrate status
+zhin runtime start --once
+zhin runtime build
+zhin runtime publish
+```
+
+静态迁移器只自动转换能够证明无外部闭包的 Command、Middleware 与 Component，并直接
+生成 `defineCommand`、`defineMiddleware`、`defineComponent`。不再提供 legacy compat
+runtime；其余语义迁移由仓库的 `migrate-zhin-plugin-runtime` Skill 完成。
+
 > **注意**: 新建 workspace 请用 `pnpm create zhin-app`（`create-zhin-app`）。`zhin setup` / `zhin onboard` 的 database / adapters / AI 向导与 create 共用 [`@zhin.js/scaffold-wizard`](../../packages/toolkit/scaffold-wizard/)。
 
 ## 命令详解

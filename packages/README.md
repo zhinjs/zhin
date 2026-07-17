@@ -17,6 +17,9 @@ packages/
     skill/
     agent-feature/
     mcp-feature/
+    runtime/         # Root control plane、配置合成、发现与 HMR
+    config-yaml/     # 保留注释与格式的 YAML ConfigDocument adapter
+    isolate/        # 可选 Worker/process 隔离运行时
     kernel/          # 旧 PluginBase / Feature / Schedule 兼容层
     ai/
     core/
@@ -58,6 +61,9 @@ Plugin 主链：`plugin-runtime` → `feature-kit` → 领域 Feature → `core`
 | [`im/ai`](im/ai/README.md) | Provider、`agentLoop`、`ModelRegistry` + `getModel` 白名单、`ContextRepository` / `im_transcripts` |
 | [`im/core`](im/core/README.md) | Plugin、Adapter、MessageDispatcher、出站 `before.sendMessage` 链 |
 | [`im/agent`](im/agent/README.md) | ZhinAgent、`AIService`、工具与安全策略、模型 `/v1/models` 发现 |
+| [`im/runtime`](im/runtime/README.md) | Root control plane、Plugin graph、配置、发现、generation transaction 与 HMR |
+| [`im/config-yaml`](im/config-yaml/README.md) | 可选 YAML AST 配置文档 adapter，保留注释、格式并校验 revision |
+| [`im/isolate`](im/isolate/README.md) | 可选 Worker/process 隔离、RPC、generation handoff 与 crash propagation |
 | [`im/zhin`](im/zhin/README.md) | 主入口 re-export、`registerChatMessageStore` |
 
 持久化与模型发现细节见 [docs/advanced/ai.md](../docs/advanced/ai.md)、[架构概览](../docs/architecture-overview.md)。

@@ -1,6 +1,6 @@
-# Greenfield Bootstrap 实现状态
+# Plugin Runtime 实现状态
 
-> 分支：`feature/next`。代码位于 `packages/next/*`，不依赖旧 Plugin、Feature registry 或兼容层。
+> Greenfield 实现已全部迁入正式 package，不依赖旧 Feature registry 或兼容层。
 
 ## 1. 当前模块
 
@@ -9,27 +9,26 @@
 | `@zhin.js/plugin-runtime` | Identity、Token/Scope、DisposeStack、CapabilitySlot、SnapshotLease、CAS generation、RootController |
 | `@zhin.js/feature-kit` | `FeatureAuthoring`、`FeatureRuntime`、可选 `FeatureBuildAdapter`、FeatureCatalog、FeatureDiscovery |
 | `@zhin.js/runtime` | Manifest parser、workspace/npm resolver、ProjectGraph、ConfigComposer、RuntimeEnvironment/owner EnvStore、RootRuntime、Node 原生开发 ModuleRuntime、source ownership、HMR 与 process restart |
-| `@zhin.js/next-isolate` | 可选 Worker/child-process adapter、structured-clone RPC、generation drain/handoff 与 crash propagation |
-| `@zhin.js/next-config-yaml` | 可选 ConfigDocumentPort、YAML AST patch、revision conflict 与原子文件替换 |
-| `@zhin.js/next-compat` | 可删除的 legacy Command/Middleware callback definition adapter |
-| `@zhin.js/next-feature-command` | `defineCommand()`、`commands/**/*.ts|tsx` convention、层级命令词、CommandIndex projection 与 owner-scoped execution context |
-| `@zhin.js/next-feature-middleware` | `defineMiddleware()`、`middlewares/**/*.ts`、确定性排序、onion compose 与 MiddlewareIndex |
-| `@zhin.js/next-feature-component` | `defineComponent()`、`components/**/*.ts|tsx`、owner override/ancestor fallback 与 ComponentIndex |
-| `@zhin.js/next-feature-adapter` | `defineAdapter()`、`adapters/**/*.ts`、Endpoint lifecycle、generation handoff 与 AdapterIndex |
-| `@zhin.js/next-im` | MessageGateway、SnapshotLease inbound、Command Dispatcher、Component Renderer、统一 outbound middleware/send |
-| `@zhin.js/next-feature-tool` | `defineAgentTool()`、`tools/*.ts`、owner-scoped ToolIndex |
-| `@zhin.js/next-feature-skill` | `skills/*/SKILL.md`、immutable Markdown SkillIndex |
-| `@zhin.js/next-feature-agent` | `agents/*.agent.md`、immutable Markdown AgentIndex |
-| `@zhin.js/next-feature-mcp` | `mcp/*.ts`、provider-neutral client 与 generation lifecycle |
+| `@zhin.js/isolate` | 可选 Worker/child-process adapter、structured-clone RPC、generation drain/handoff 与 crash propagation |
+| `@zhin.js/config-yaml` | 可选 ConfigDocumentPort、YAML AST patch、revision conflict 与原子文件替换 |
+| `@zhin.js/command` | `defineCommand()`、`commands/**/*.ts|tsx` convention、层级命令词、CommandIndex projection 与 owner-scoped execution context |
+| `@zhin.js/middleware` | `defineMiddleware()`、`middlewares/**/*.ts`、确定性排序、onion compose 与 MiddlewareIndex |
+| `@zhin.js/component` | `defineComponent()`、`components/**/*.ts|tsx`、owner override/ancestor fallback 与 ComponentIndex |
+| `@zhin.js/adapter` | `defineAdapter()`、`adapters/**/*.ts`、Endpoint lifecycle、generation handoff 与 AdapterIndex |
+| `@zhin.js/core/runtime` | MessageGateway、SnapshotLease inbound、Command Dispatcher、Component Renderer、统一 outbound middleware/send |
+| `@zhin.js/tool` | `defineAgentTool()`、`tools/*.ts`、owner-scoped ToolIndex |
+| `@zhin.js/skill` | `skills/*/SKILL.md`、immutable Markdown SkillIndex |
+| `@zhin.js/agent-feature` | `agents/*.agent.md`、immutable Markdown AgentIndex |
+| `@zhin.js/mcp-feature` | `mcp/*.ts`、provider-neutral client 与 generation lifecycle |
 | `@zhin.js/agent/runtime` | CapabilityIngress、owner-visible handles、snapshot-coherent turn lease |
 | `@zhin.js/console-contract` | 零依赖 Page/Layout manifest、route、Navigation 与 Shell slot contract |
 | `@zhin.js/page` | `pages/*.ts|tsx`、Client Module artifact 校验、canonical route 与 PageIndex |
 | `@zhin.js/layout` | `$nav.tsx`/`$footer.tsx`、最近祖先继承与 renderer fallback chain |
 | `@zhin.js/pagemanager/plugin-runtime` | permission-aware route guard、Plugin Navigation、Layout resolver 与 view lease |
 | `@zhin.js/pagemanager/client-build` | 可选 TypeScript AST metadata、content-hash ESM/manifest、development builder 与 production loader |
-| `@zhin.js/next-cli` | `init`、`create`、`inspect`、原生 TS `start`、两阶段 migrate/readiness、`build` 与安全 publish |
+| `@zhin.js/cli` | `init`、`create`、`inspect`、原生 TS `start`、两阶段 migrate/readiness、`build` 与安全 publish |
 
-临时包名使用 `next-*`，避免旧 workspace 包名冲突。迁移阶段再通过一次明确的 package rename/swap 切换正式入口，不在当前阶段增加 facade 或双写层。
+所有公共入口均使用正式包名；`migration-topology.json` 记录原位迁移与明确删除项。
 
 ## 2. 已证明的纵向链路
 
@@ -82,7 +81,7 @@ flowchart LR
 31. Client build adapter 通过 TypeScript AST 只提取 `definePage()` JSON-like literal；动态表达式带源码位置失败，构建不执行作者模块。
 32. Publish execute 先写 plan-specific staging dist-tag，全部发布后再 promote；journal 原子记录每个远程 step，resume 使用 registry probe 关闭崩溃窗口。
 33. `runtime: isolated` child 通过可选 Worker/process adapter 启动；entry 不在 Host import，旧 RPC drain 后切代，候选 setup 失败恢复旧实例，崩溃与超时使实例明确失效。
-34. Next 公开 root/subpath 导出进入 API snapshot；CLI 可 AST inventory/extract 静态 MessageCommand，compat 只转换 callback，不恢复旧 registry。
+34. 正式 Plugin Runtime root/subpath 导出进入 API snapshot；CLI 可 AST inventory/extract 静态 MessageCommand，迁移产物直接使用原生 Feature definition。
 35. Command/Middleware/Component extraction、package cutover 与 readiness 状态机已完成；真实双版本 tracer 可读取 YAML、原生加载 TS、提交 generation 并 drain/stop。
 36. 原生开发 Runtime 使用 URL revision 局部刷新直接 capability；无法清除 importer closure 的 support module 明确升级为退出码 75 的 process restart。
 
@@ -105,7 +104,7 @@ commit 仍然发布完整 immutable RuntimeSnapshot；“局部”只描述 prep
 - Page/Layout 独立 Feature、Console contract/runtime 与可选 TypeScript client build/manifest adapter 已实现。
 - YAML ConfigDocument adapter、类型化 EnvStore、环境 overlay 与 secret redaction 已实现。
 - publish journal、staging dist-tag promotion 与 registry-aware `--resume` 已实现；真实 publish 仍必须显式 `--execute` 或 `--resume`。
-- 旧 package migration 控制面已完成：三类 AST extraction、entry/manifest cutover、readiness import inventory 与双版本 Root smoke 均有测试。尚未完成的是仓库真实 Plugin 批量搬迁、Plugin 发布 JS entry 与 compat 清零。
+- 旧 package migration 控制面已完成：三类 AST extraction、entry/manifest cutover、readiness import inventory 与迁移行为 smoke 均有测试。Compat Runtime 已删除；尚未完成的是仓库真实 Plugin 批量搬迁与 Plugin 发布 JS entry。
 
 ## 5. 建设与迁移余量
 
@@ -122,12 +121,10 @@ commit 仍然发布完整 immutable RuntimeSnapshot；“局部”只描述 prep
 ## 6. 验证
 
 ```bash
-pnpm exec vitest run packages/next
-pnpm --filter './packages/next/**' build
+pnpm exec vitest run packages/im/runtime packages/im/config-yaml packages/im/isolate
+pnpm --filter @zhin.js/runtime build
 pnpm check:install-size
-pnpm --filter @zhin.js/next-isolate check:size
-pnpm --filter @zhin.js/next-compat check:size
-pnpm --filter @zhin.js/next-cli check:api
-pnpm --filter @zhin.js/next-cli check:size
+pnpm --filter @zhin.js/isolate check:size
+node scripts/check-plugin-runtime-api.mjs
 pnpm check:doc-links
 ```

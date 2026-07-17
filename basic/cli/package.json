@@ -23,6 +23,8 @@
     "clean": "rimraf lib"
   },
   "dependencies": {
+    "@zhin.js/config-yaml": "workspace:*",
+    "@zhin.js/runtime": "workspace:*",
     "@zhin.js/scaffold-wizard": "workspace:*",
     "esbuild": "^0.28.1",
     "@zhin.js/logger": "workspace:*",
@@ -50,10 +52,14 @@
   "peerDependenciesMeta": {
     "@zhin.js/agent": {
       "optional": true
+    },
+    "typescript": {
+      "optional": true
     }
   },
   "peerDependencies": {
-    "@zhin.js/agent": ">=1.0.3"
+    "@zhin.js/agent": ">=1.0.3",
+    "typescript": ">=5.8.0 <7.0.0"
   },
   "repository": {
     "type": "git",

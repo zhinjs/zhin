@@ -86,30 +86,20 @@ const packages = [
     dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
   },
   {
-    dir: 'packages/next/config-yaml',
-    name: '@zhin.js/next-config-yaml',
+    dir: 'packages/im/config-yaml',
+    name: '@zhin.js/config-yaml',
     dependencies: ['@zhin.js/runtime'],
   },
   {
-    dir: 'packages/next/cli',
-    name: '@zhin.js/next-cli',
-    dependencies: ['@zhin.js/runtime', '@zhin.js/next-config-yaml'],
-  },
-  {
-    dir: 'packages/next/compat',
-    name: '@zhin.js/next-compat',
-    dependencies: ['@zhin.js/command', '@zhin.js/middleware'],
-  },
-  {
-    dir: 'packages/next/isolate',
-    name: '@zhin.js/next-isolate',
+    dir: 'packages/im/isolate',
+    name: '@zhin.js/isolate',
     dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/runtime'],
   },
 ];
 const targetName = process.argv[2] ?? '@zhin.js/plugin-runtime';
 const packagesByName = new Map(packages.map((item) => [item.name, item]));
 if (!packagesByName.has(targetName)) {
-  throw new Error(`Unknown Next install-size target: ${targetName}`);
+  throw new Error(`Unknown Plugin Runtime install-size target: ${targetName}`);
 }
 const stack = dependencyClosure(targetName);
 const forbiddenPackages = /^(?:vite(?:@|_)|@vitejs|lightningcss(?:[-@_]|$))/u;
@@ -155,7 +145,7 @@ function largestEntries(directory, limit = 10) {
 function dependencyClosure(name, visited = new Set(), result = []) {
   if (visited.has(name)) return result;
   const item = packagesByName.get(name);
-  if (!item) throw new Error(`Unknown Next package dependency: ${name}`);
+  if (!item) throw new Error(`Unknown Plugin Runtime package dependency: ${name}`);
   visited.add(name);
   for (const dependency of item.dependencies) dependencyClosure(dependency, visited, result);
   result.push(item);
@@ -165,7 +155,7 @@ function dependencyClosure(name, visited = new Set(), result = []) {
 function main() {
   for (const item of stack) run('pnpm', ['--filter', item.name, 'build']);
 
-  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-next-size-'));
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-runtime-size-'));
   const archives = path.join(work, 'archives');
   const fixture = path.join(work, 'fixture');
   fs.mkdirSync(archives);
@@ -179,7 +169,7 @@ function main() {
     fs.writeFileSync(
       path.join(fixture, 'package.json'),
       `${JSON.stringify({
-        name: 'zhin-next-size-fixture',
+        name: 'zhin-runtime-size-fixture',
         private: true,
         packageManager,
         dependencies: { [targetName]: overrides[targetName] },

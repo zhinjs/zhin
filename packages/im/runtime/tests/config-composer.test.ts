@@ -172,7 +172,7 @@ interface ConfigProjectInput {
 }
 
 async function configProject(input: ConfigProjectInput): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'zhin-next-config-'));
+  const root = await mkdtemp(join(tmpdir(), 'zhin-runtime-config-'));
   temporary.push(root);
   await json(join(root, 'package.json'), {
     name: '@test/root',

@@ -201,7 +201,7 @@ class FakeModuleRuntime implements ModuleRuntime {
 }
 
 async function createProject(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'zhin-next-env-store-'));
+  const root = await mkdtemp(join(tmpdir(), 'zhin-runtime-env-store-'));
   temporary.push(root);
   await writeJson(join(root, 'package.json'), {
     name: '@test/root',

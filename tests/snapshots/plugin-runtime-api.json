@@ -1,0 +1,152 @@
+{
+  "adapter": [
+    "export * from './adapter-index.js';",
+    "export * from './definition.js';",
+    "export * from './provider.js';",
+    "export{default}from './provider.js';"
+  ],
+  "agent-feature": [
+    "export * from './agent-index.js';",
+    "export * from './definition.js';",
+    "export * from './provider.js';",
+    "export{default}from './provider.js';"
+  ],
+  "agent/runtime": [
+    "export * from './agent-runtime.js';",
+    "export * from './capability-ingress.js';"
+  ],
+  "cli/runtime": [
+    "export * from './migrate/index.js';",
+    "export * from './project-commands.js';",
+    "export * from './publish-journal.js';",
+    "export * from './root-host.js';",
+    "export * from './scaffolder.js';",
+    "export * from './start-command.js';"
+  ],
+  "cli/runtime/migrate": [
+    "export * from './legacy-command-migrator.js';",
+    "export * from './package-cutover.js';",
+    "export * from './readiness.js';"
+  ],
+  "command": [
+    "export * from './command-index.js';",
+    "export * from './definition.js';",
+    "export{CommandPathSyntaxError,commandFeatureId,default as commandFeature,}from './provider.js';",
+    "export{default}from './provider.js';"
+  ],
+  "component": [
+    "export * from './component-index.js';",
+    "export * from './definition.js';",
+    "export * from './provider.js';",
+    "export{default}from './provider.js';"
+  ],
+  "config-yaml": [
+    "export * from './yaml-config-document.js';"
+  ],
+  "console-contract": [
+    "export * from './layout.js';",
+    "export * from './navigation.js';",
+    "export * from './page.js';"
+  ],
+  "core/runtime": [
+    "export * from './contracts.js';",
+    "export * from './im-runtime.js';",
+    "export * from './message-dispatcher.js';",
+    "export * from './outbound-renderer.js';"
+  ],
+  "feature-kit": [
+    "export * from './catalog.js';",
+    "export * from './context.js';",
+    "export * from './discovery.js';",
+    "export * from './owner-capability-index.js';",
+    "export * from './provider.js';",
+    "export * from './typescript-convention.js';"
+  ],
+  "isolate": [
+    "export * from './contracts.js';",
+    "export * from './runtime.js';",
+    "export type{IsolateMode}from './transport.js';"
+  ],
+  "layout": [
+    "export * from './definition.js';",
+    "export * from './layout-index.js';",
+    "export * from './provider.js';",
+    "export{default}from './provider.js';"
+  ],
+  "mcp-feature": [
+    "export * from './definition.js';",
+    "export * from './mcp-index.js';",
+    "export * from './provider.js';",
+    "export{default}from './provider.js';"
+  ],
+  "middleware": [
+    "export * from './definition.js';",
+    "export * from './middleware-index.js';",
+    "export * from './provider.js';",
+    "export{default}from './provider.js';"
+  ],
+  "page": [
+    "export * from './definition.js';",
+    "export * from './page-index.js';",
+    "export * from './provider.js';",
+    "export{default}from './provider.js';"
+  ],
+  "pagemanager/client-build": [
+    "export * from './manifest-loader.js';",
+    "export * from './module-runtime.js';",
+    "export * from './static-metadata.js';",
+    "export * from './types.js';",
+    "export * from './typescript-builder.js';"
+  ],
+  "pagemanager/plugin-runtime": [
+    "export * from './access.js';",
+    "export * from './console-catalog.js';",
+    "export * from './console-runtime.js';",
+    "export * from './navigation.js';"
+  ],
+  "plugin-runtime": [
+    "export * from './capability.js';",
+    "export * from './dispose.js';",
+    "export * from './handoff.js';",
+    "export * from './identity.js';",
+    "export * from './plugin.js';",
+    "export * from './root-controller.js';",
+    "export * from './shared-lifetime.js';",
+    "export * from './snapshot.js';",
+    "export * from './token.js';"
+  ],
+  "runtime": [
+    "export * from './compatibility.js';",
+    "export * from './config-composer.js';",
+    "export * from './config-document.js';",
+    "export * from './config-patch-planner.js';",
+    "export * from './environment-store.js';",
+    "export * from './environment.js';",
+    "export * from './hmr-coordinator.js';",
+    "export * from './invalidation-planner.js';",
+    "export * from './isolation.js';",
+    "export * from './manifest.js';",
+    "export * from './module-runtime.js';",
+    "export * from './native-development-runtime.js';",
+    "export * from './node-discovery-host.js';",
+    "export * from './package-resolver.js';",
+    "export * from './process-restart.js';",
+    "export * from './project-graph.js';",
+    "export * from './restart-boundary.js';",
+    "export * from './root-runtime.js';",
+    "export * from './source-ownership.js';",
+    "export * from './topology-transaction.js';"
+  ],
+  "skill": [
+    "export * from './definition.js';",
+    "export * from './provider.js';",
+    "export * from './skill-index.js';",
+    "export{default}from './provider.js';"
+  ],
+  "tool": [
+    "export * from './definition.js';",
+    "export * from './provider.js';",
+    "export * from './tool-index.js';",
+    "export{default}from './provider.js';"
+  ]
+}

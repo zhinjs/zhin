@@ -20,6 +20,7 @@ import { sendCommand } from './commands/send.js';
 import { watchCommand } from './commands/watch.js';
 import { packagesCommand } from './commands/packages.js';
 import { agentCommand } from './commands/agent.js';
+import { runtimeCommand } from './commands/runtime.js';
 
 const program = new Command();
 
@@ -51,5 +52,6 @@ program.addCommand(sendCommand);
 program.addCommand(watchCommand);
 program.addCommand(packagesCommand);
 program.addCommand(agentCommand);
+program.addCommand(runtimeCommand);
 
-program.parse(); 
+program.parse();

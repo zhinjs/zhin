@@ -200,7 +200,7 @@ class FakeModules implements ModuleRuntime {
 }
 
 async function createProject(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'zhin-next-process-'));
+  const root = await mkdtemp(join(tmpdir(), 'zhin-runtime-process-'));
   temporary.push(root);
   await writeRootManifest(root, { runtime: 'trusted' });
   await touch(join(root, 'plugin.ts'));

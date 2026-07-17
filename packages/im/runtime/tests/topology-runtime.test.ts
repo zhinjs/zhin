@@ -214,7 +214,7 @@ class FakeModuleRuntime implements ModuleRuntime {
 }
 
 async function createProject(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'zhin-next-topology-'));
+  const root = await mkdtemp(join(tmpdir(), 'zhin-runtime-topology-'));
   temporary.push(root);
   await writeRootManifest(root, [
     { package: '@test/a', instanceKey: 'a' },

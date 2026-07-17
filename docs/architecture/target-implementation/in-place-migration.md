@@ -1,12 +1,11 @@
 # Plugin Runtime 原位迁移
 
-`packages/next` 是目标架构的实现孵化区，不是最终产品分层。迁移采用
-**replace-in-place**：代码进入已有 ownership 包，旧实现逐步降为兼容适配器，最终删除
-全部 `@zhin.js/next-*` 包和 `packages/next` 目录。
+`packages/next` 曾是目标架构的实现孵化区，不是产品分层。正式化迁移已经采用
+**replace-in-place** 完成：代码进入明确 ownership 包，全部 `@zhin.js/next-*` package、
+`packages/next` 目录和 Compat Runtime 均已删除。
 
-机器可读 SSOT 是 [migration-topology.json](./migration-topology.json)。其中 `pending`
-必须与仓库里仍存在的 `@zhin.js/next-*` package 一一对应；完成一个迁移时，同时删除源
-package、补齐目标 package export，并把该项移入 `completed`。
+机器可读迁移档案是 [migration-topology.json](./migration-topology.json)。`pending` 必须为空；
+`completed` 和 `removed` 分别记录正式归属与明确删除项，不作为继续支持旧包名的依据。
 
 ## 迁移原则
 
@@ -14,8 +13,8 @@ package、补齐目标 package export，并把该项移入 `completed`。
    Adapter 投影，不能双写。
 2. **按依赖方向搬运**：Kernel → Feature Kit → Core → Agent → Console → Root/CLI。
 3. **先归位再切流量**：每批先移动源码和测试，再切 workspace consumer，最后删除源包。
-4. **兼容只在作者入口**：`addCommand`、`addComponent` 等旧接口可以暂留；Root lifecycle、
-   discovery、generation 与 HMR 不保留两套实现。
+4. **迁移不进入运行时**：`addCommand`、`addComponent` 等旧接口由 CLI 和迁移 Skill 改写；
+   Root lifecycle、discovery、generation 与 HMR 不保留两套实现。
 5. **生产入口只指向 JS**：开发条件可直读 TypeScript，发布 manifest 必须指向 `lib/*.js`。
 
 ## 最终 Ownership
@@ -30,14 +29,17 @@ package、补齐目标 package export，并把该项移入 `completed`。
 | Agent Runtime | `@zhin.js/agent/runtime` |
 | Page/Layout wire definition | `@zhin.js/contract` |
 | Console catalog、navigation、client build | `@zhin.js/pagemanager` |
-| Root、配置、发现、HMR、隔离与 compat | `zhin.js` |
+| Root、配置、发现与 HMR | `@zhin.js/runtime`（`zhin.js/runtime` facade） |
+| YAML 保真配置文档 | `@zhin.js/config-yaml` |
+| Worker/process 隔离 | `@zhin.js/isolate` |
 | start、migrate、scaffold | `@zhin.js/cli` |
 
 ## 当前进度
 
-- 已完成：Plugin Runtime、Feature Kit、IM/Agent/Console 领域 Feature、Core IM Runtime、
-  `@zhin.js/agent/runtime` 与 `@zhin.js/pagemanager/plugin-runtime`。
-- 兼容边界：旧 Agent mutable ingress 暂作为适配器保留；Stable Root 切到 RuntimeSnapshot 后删除。
-- 下一批：YAML Config、Isolate、Compat adapter 与 CLI 原位归属，然后切换 Stable 示例。
+- 已完成：Plugin Runtime、Feature Kit、IM/Agent/Console 领域 Feature、Core/Agent/Console
+  Runtime、Root Runtime、YAML Config、Isolate 与 CLI 原位归属。
+- 已删除：Compat Runtime。旧 callback/registry 只由 CLI 与
+  `.github/skills/migrate-zhin-plugin-runtime` 迁移，不进入生产依赖闭包。
+- 下一批：按包迁移仓库旧 Plugin，切换 Stable 示例与正式启动入口，并删除被替代的旧实现。
 - 完成定义：`rg '@zhin.js/next-|packages/next'` 只允许出现在历史 ADR，workspace 中不存在
   `packages/next`，Stable 示例直接由新 Root Runtime 启动。
