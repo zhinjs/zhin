@@ -13,6 +13,7 @@ import {
 import middlewareFeature, {
   MiddlewareIndex,
   defineMiddleware,
+  isMiddlewareIndex,
   middlewareFeatureId,
   parseMiddlewareDefinition,
 } from '../src/index.js';
@@ -75,6 +76,8 @@ describe('Middleware Feature', () => {
       slot(root, 'after', 'after-dispatch', -100),
     ];
     const index = new MiddlewareIndex(slots, snapshot(root, child, slots));
+    expect(isMiddlewareIndex(index)).toBe(true);
+    expect(isMiddlewareIndex({ $projection: 'zhin.middleware-index/1' })).toBe(true);
 
     await index.run({ value: 'message' }, async () => { events.push('terminal'); });
 

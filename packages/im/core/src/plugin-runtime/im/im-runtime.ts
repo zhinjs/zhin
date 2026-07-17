@@ -4,8 +4,8 @@ import {
   type RuntimeSnapshot,
   type SnapshotStore,
 } from '@zhin.js/plugin-runtime';
-import { AdapterIndex, adapterFeatureId } from '@zhin.js/adapter';
-import { MiddlewareIndex, middlewareFeatureId } from '@zhin.js/middleware';
+import { AdapterIndex, adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
+import { MiddlewareIndex, isMiddlewareIndex, middlewareFeatureId } from '@zhin.js/middleware';
 import {
   Message,
   createOutboundEnvelope,
@@ -125,7 +125,7 @@ export class ImRuntime implements MessageGateway {
 
 function requireAdapters(snapshot: RuntimeSnapshot): AdapterIndex {
   const projection = snapshot.projections.get(adapterFeatureId);
-  if (!(projection instanceof AdapterIndex)) {
+  if (!isAdapterIndex(projection)) {
     throw new Error('Adapter Feature projection is not installed');
   }
   return projection;
@@ -133,7 +133,7 @@ function requireAdapters(snapshot: RuntimeSnapshot): AdapterIndex {
 
 function middleware(snapshot: RuntimeSnapshot): MiddlewareIndex | undefined {
   const projection = snapshot.projections.get(middlewareFeatureId);
-  return projection instanceof MiddlewareIndex ? projection : undefined;
+  return isMiddlewareIndex(projection) ? projection : undefined;
 }
 
 async function runMiddleware<TInput>(

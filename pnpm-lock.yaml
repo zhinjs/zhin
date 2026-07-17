@@ -95,6 +95,9 @@ importers:
       '@zhin.js/config-yaml':
         specifier: workspace:*
         version: link:../../packages/im/config-yaml
+      '@zhin.js/core':
+        specifier: workspace:*
+        version: link:../../packages/im/core
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../logger
@@ -358,18 +361,24 @@ importers:
 
   examples/minimal-bot:
     dependencies:
-      '@zhin.js/adapter-sandbox':
+      '@zhin.js/adapter':
+        specifier: 1.0.0
+        version: link:../../packages/im/adapter
+      '@zhin.js/command':
+        specifier: 1.0.0
+        version: link:../../packages/im/command
+      '@zhin.js/component':
+        specifier: 1.0.0
+        version: link:../../packages/im/component
+      '@zhin.js/core':
         specifier: workspace:*
-        version: link:../../plugins/adapters/sandbox
-      '@zhin.js/cli':
+        version: link:../../packages/im/core
+      '@zhin.js/plugin-runtime':
         specifier: workspace:*
-        version: link:../../basic/cli
-      '@zhin.js/host-api':
+        version: link:../../packages/im/plugin-runtime
+      '@zhin.js/runtime':
         specifier: workspace:*
-        version: link:../../packages/host/api
-      '@zhin.js/host-router':
-        specifier: workspace:*
-        version: link:../../packages/host/router
+        version: link:../../packages/im/runtime
       '@zhin.js/satori':
         specifier: workspace:*
         version: link:../../packages/toolkit/satori
@@ -377,12 +386,18 @@ importers:
         specifier: workspace:*
         version: link:../../packages/im/zhin
     devDependencies:
-      tsx:
-        specifier: ^4.22.4
-        version: 4.22.4
+      '@zhin.js/cli':
+        specifier: workspace:*
+        version: link:../../basic/cli
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../packages/im/tool
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   examples/multi-agent-room:
     dependencies:

@@ -48,6 +48,14 @@ describe('package cutover', () => {
     const repeated = await cutover.plan(root);
     expect(repeated.changed).toBe(false);
     await expect(cutover.apply(repeated)).resolves.toBeUndefined();
+
+    await writeFile(plan.entryFile, [
+      "import { definePlugin } from '@zhin.js/plugin-runtime';",
+      '',
+      "export default definePlugin({ name: 'fixture-plugin', metadata: { order: 1 } });",
+      '',
+    ].join('\n'));
+    await expect(cutover.plan(root)).resolves.toMatchObject({ changed: false });
   });
 
   it('rejects package changes after planning and rolls back its new entry', async () => {

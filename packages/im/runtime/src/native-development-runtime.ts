@@ -97,8 +97,12 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
 export function supportsNativeTypeScript(
   version = process.versions.node,
   execArguments: readonly string[] = process.execArgv,
+  nodeOptions = process.env.NODE_OPTIONS ?? '',
 ): boolean {
-  if (execArguments.includes('--experimental-strip-types')) return true;
+  if (
+    execArguments.includes('--experimental-strip-types')
+    || /(?:^|\s)--experimental-strip-types(?:\s|$)/u.test(nodeOptions)
+  ) return true;
   const [major = 0, minor = 0] = version.split('.').map(Number);
   return major > 23 || (major === 23 && minor >= 6) || (major === 22 && minor >= 18);
 }

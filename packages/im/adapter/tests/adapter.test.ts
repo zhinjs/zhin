@@ -13,6 +13,7 @@ import adapterFeature, {
   AdapterIndex,
   adapterFeatureId,
   defineAdapter,
+  isAdapterIndex,
   parseAdapterDefinition,
 } from '../src/index.js';
 
@@ -66,6 +67,8 @@ describe('Adapter Feature', () => {
     });
     const value = snapshot([slot]);
     const index = await AdapterIndex.create([slot], value);
+    expect(isAdapterIndex(index)).toBe(true);
+    expect(isAdapterIndex({ $projection: 'zhin.adapter-index/1' })).toBe(true);
 
     await index.start();
     index.open();

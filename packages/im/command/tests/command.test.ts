@@ -10,6 +10,7 @@ import {
   commandFeature,
   commandFeatureId,
   defineCommand,
+  isCommandIndex,
   parseCommandDefinition,
 } from '../src/index.js';
 import {
@@ -51,6 +52,8 @@ describe('Command Feature', () => {
       projections: new Map(),
     } satisfies RuntimeSnapshot;
     const index = new CommandIndex([slot], snapshot);
+    expect(isCommandIndex(index)).toBe(true);
+    expect(isCommandIndex({ $projection: 'zhin.command-index/1' })).toBe(true);
 
     await expect(index.execute('hello', ['world'])).resolves.toBe('hello world');
     await expect(index.execute('missing')).rejects.toThrow('Unknown Command');

@@ -42,7 +42,7 @@ export class PackageCutover {
       if (isCompletedManifest(value.zhin)) {
         const capabilities = await discoverCapabilities(root);
         await assertCompletedDependencies(root, value, value.zhin, capabilities);
-        await assertPreparedEntry(entryFile, entryContent);
+        await assertExistingEntry(entryFile);
         return freezePlan({
           root, packageFile, entryFile, originalPackage, entryContent,
           capabilities,
@@ -251,6 +251,15 @@ async function preparedEntry(file: string, expected: string): Promise<boolean> {
 
 async function assertPreparedEntry(file: string, expected: string): Promise<void> {
   if (!await preparedEntry(file, expected)) throw new Error(`${file} is missing`);
+}
+
+async function assertExistingEntry(file: string): Promise<void> {
+  try {
+    await readFile(file, 'utf8');
+  } catch (error) {
+    if (isNotFound(error)) throw new Error(`${file} is missing`, { cause: error });
+    throw error;
+  }
 }
 
 function assertPlanPaths(plan: PackageCutoverPlan): void {

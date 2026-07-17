@@ -2,6 +2,7 @@ import type { PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import {
   ComponentIndex,
   componentFeatureId,
+  isComponentIndex,
 } from '@zhin.js/component';
 import {
   isComponentCall,
@@ -46,7 +47,7 @@ export class OutboundRenderer {
 
 function requireComponents(snapshot: RuntimeSnapshot): ComponentIndex {
   const projection = snapshot.projections.get(componentFeatureId);
-  if (!(projection instanceof ComponentIndex)) {
+  if (!isComponentIndex(projection)) {
     throw new Error('Component Feature projection is not installed');
   }
   return projection;

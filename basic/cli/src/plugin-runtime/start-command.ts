@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { access, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { YamlConfigDocument } from '@zhin.js/config-yaml';
+import { ImRuntime } from '@zhin.js/core/runtime';
 import {
   supportsNativeTypeScript,
   type ConfigDocumentPort,
@@ -28,6 +29,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   const control: { stop(): Promise<void> } = {
     stop: async () => { throw new Error('RootHost stop is not bound'); },
   };
+  const im = new ImRuntime();
   const host = new RootHost({
     projectRoot: options.root,
     config,
@@ -37,6 +39,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
       mode: parsed.mode,
       platform: 'node',
     },
+    installResources: ({ resources }) => im.install(resources),
     async onRestartRequired(plan) {
       options.writeError(`${JSON.stringify({ restartRequired: plan }, null, 2)}\n`);
       process.exitCode = processRestartExitCode;
@@ -46,6 +49,9 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
       options.writeError(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
     },
   });
+  // Bind before start so Adapter definitions can resolve messageGatewayToken
+  // while the first generation is still being prepared.
+  im.attach(host.runtime.controller.snapshots);
   control.stop = async () => {
     await host.stop();
     complete();

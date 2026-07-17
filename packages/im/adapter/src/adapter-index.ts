@@ -29,6 +29,7 @@ interface AdapterRecord extends AdapterDescriptor {
 }
 
 export class AdapterIndex {
+  readonly $projection = 'zhin.adapter-index/1' as const;
   readonly #records = new Map<CapabilityId, AdapterRecord>();
   readonly #order: readonly AdapterRecord[];
 
@@ -143,6 +144,11 @@ export class AdapterIndex {
     }
     return record.endpoint.send(request);
   }
+}
+
+export function isAdapterIndex(value: unknown): value is AdapterIndex {
+  return !!value && typeof value === 'object'
+    && (value as { readonly $projection?: unknown }).$projection === 'zhin.adapter-index/1';
 }
 
 function assertEndpoint(value: unknown, id: CapabilityId): asserts value is EndpointInstance {

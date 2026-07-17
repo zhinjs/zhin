@@ -22,6 +22,7 @@ interface MiddlewareRecord extends MiddlewareDescriptor {
 }
 
 export class MiddlewareIndex {
+  readonly $projection = 'zhin.middleware-index/1' as const;
   readonly #records: readonly MiddlewareRecord[];
 
   constructor(
@@ -64,6 +65,11 @@ export class MiddlewareIndex {
     };
     await dispatch(0);
   }
+}
+
+export function isMiddlewareIndex(value: unknown): value is MiddlewareIndex {
+  return !!value && typeof value === 'object'
+    && (value as { readonly $projection?: unknown }).$projection === 'zhin.middleware-index/1';
 }
 
 function compareMiddleware(

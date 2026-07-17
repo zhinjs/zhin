@@ -15,6 +15,7 @@ import componentFeature, {
   ComponentIndex,
   componentFeatureId,
   defineComponent,
+  isComponentIndex,
   parseComponentDefinition,
 } from '../src/index.js';
 
@@ -57,6 +58,8 @@ describe('Component Feature', () => {
     const slots = [rootBadge, childBadge, shared];
     const value = snapshot(root, child, slots, greeting.id);
     const index = new ComponentIndex(slots, value);
+    expect(isComponentIndex(index)).toBe(true);
+    expect(isComponentIndex({ $projection: 'zhin.component-index/1' })).toBe(true);
 
     await expect(index.render(child, 'badge', {})).resolves.toBe(
       'root/child:root/child:child',

@@ -40,6 +40,8 @@
   Runtime、Root Runtime、YAML Config、Isolate 与 CLI 原位归属。
 - 已删除：Compat Runtime。旧 callback/registry 只由 CLI 与
   `.github/skills/migrate-zhin-plugin-runtime` 迁移，不进入生产依赖闭包。
-- 下一批：按包迁移仓库旧 Plugin，切换 Stable 示例与正式启动入口，并删除被替代的旧实现。
+- 已迁移：Stable `examples/minimal-bot` 由正式 Root + ImRuntime 启动，使用 Terminal Adapter、
+  Command 与 Component 约定目录；`check:stable` 验证统一入站/出站链路。
+- 下一批：迁移 Sandbox/Host 子插件和首批平台 Adapter，再按 services/utils 批量删除旧注册实现。
 - 完成定义：`rg '@zhin.js/next-|packages/next'` 只允许出现在历史 ADR，workspace 中不存在
-  `packages/next`，Stable 示例直接由新 Root Runtime 启动。
+  `packages/next`，Stable 示例直接由新 Root Runtime 启动（已满足）。

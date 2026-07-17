@@ -4,6 +4,7 @@ import {
   type InvalidationPlan,
   type ModuleRuntime,
   type ProcessInvalidationPlan,
+  type RootResourceInstaller,
   type RuntimeConfigDocument,
   type RuntimeEnvironment,
   type ConfigDocumentPort,
@@ -14,6 +15,7 @@ export interface RootHostOptions {
   readonly config?: RuntimeConfigDocument | ConfigDocumentPort;
   readonly environment?: RuntimeEnvironment;
   readonly modules?: ModuleRuntime;
+  readonly installResources?: RootResourceInstaller;
   readonly watch?: boolean;
   onRestartRequired?(plan: ProcessInvalidationPlan): void | Promise<void>;
   onError?(error: unknown): void | Promise<void>;
@@ -51,6 +53,7 @@ export class RootHost {
       projectRoot: options.projectRoot,
       modules,
       config: options.config,
+      installResources: options.installResources,
       environment: options.environment ?? {
         name: 'development',
         mode: 'development',

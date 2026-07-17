@@ -41,12 +41,13 @@ describe('NativeDevelopmentModuleRuntime', () => {
   });
 
   it('reports the native Node TypeScript version contract deterministically', () => {
-    expect(supportsNativeTypeScript('22.14.0', [])).toBe(false);
-    expect(supportsNativeTypeScript('22.14.0', ['--experimental-strip-types'])).toBe(true);
-    expect(supportsNativeTypeScript('22.18.0', [])).toBe(true);
-    expect(supportsNativeTypeScript('23.5.0', [])).toBe(false);
-    expect(supportsNativeTypeScript('23.6.0', [])).toBe(true);
-    expect(supportsNativeTypeScript('24.0.0', [])).toBe(true);
+    expect(supportsNativeTypeScript('22.14.0', [], '')).toBe(false);
+    expect(supportsNativeTypeScript('22.14.0', ['--experimental-strip-types'], '')).toBe(true);
+    expect(supportsNativeTypeScript('22.14.0', [], '--experimental-strip-types')).toBe(true);
+    expect(supportsNativeTypeScript('22.18.0', [], '')).toBe(true);
+    expect(supportsNativeTypeScript('23.5.0', [], '')).toBe(false);
+    expect(supportsNativeTypeScript('23.6.0', [], '')).toBe(true);
+    expect(supportsNativeTypeScript('24.0.0', [], '')).toBe(true);
   });
 
   it('reports source changes without a third-party watcher', async () => {

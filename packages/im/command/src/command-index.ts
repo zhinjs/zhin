@@ -41,6 +41,7 @@ interface CommandMatch {
 }
 
 export class CommandIndex {
+  readonly $projection = 'zhin.command-index/1' as const;
   readonly #commands: readonly CommandRecord[];
   readonly #staticCommands = new Map<string, CommandRecord>();
   readonly #dynamicCommands = new Map<string, CommandRecord>();
@@ -157,6 +158,11 @@ export class CommandIndex {
     }
     return undefined;
   }
+}
+
+export function isCommandIndex(value: unknown): value is CommandIndex {
+  return !!value && typeof value === 'object'
+    && (value as { readonly $projection?: unknown }).$projection === 'zhin.command-index/1';
 }
 
 function runtimeSegments(owner: string, localName: string): string[] {

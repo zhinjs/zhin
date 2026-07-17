@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@zhin.js/config-yaml": "workspace:*",
+    "@zhin.js/core": "workspace:*",
     "@zhin.js/runtime": "workspace:*",
     "@zhin.js/scaffold-wizard": "workspace:*",
     "esbuild": "^0.28.1",

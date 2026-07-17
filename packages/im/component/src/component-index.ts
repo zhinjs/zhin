@@ -13,6 +13,7 @@ interface ComponentRecord extends ComponentDescriptor {
 }
 
 export class ComponentIndex {
+  readonly $projection = 'zhin.component-index/1' as const;
   readonly #components = new Map<string, ComponentRecord>();
   readonly #descriptors: readonly ComponentDescriptor[];
 
@@ -74,6 +75,11 @@ export class ComponentIndex {
     }
     return undefined;
   }
+}
+
+export function isComponentIndex(value: unknown): value is ComponentIndex {
+  return !!value && typeof value === 'object'
+    && (value as { readonly $projection?: unknown }).$projection === 'zhin.component-index/1';
 }
 
 function componentKey(owner: PluginId, name: string): string {

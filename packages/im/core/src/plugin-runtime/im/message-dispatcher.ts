@@ -1,4 +1,4 @@
-import { CommandIndex, commandFeatureId } from '@zhin.js/command';
+import { commandFeatureId, isCommandIndex } from '@zhin.js/command';
 import type { RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { Message, MessageDispatchResult, SendContent } from './contracts.js';
 
@@ -12,7 +12,7 @@ export class MessageDispatcher {
     const input = message.content.slice(this.prefix.length).trim();
     if (!input) return Object.freeze({ matched: false });
     const commands = snapshot.projections.get(commandFeatureId);
-    if (!(commands instanceof CommandIndex)) return Object.freeze({ matched: false });
+    if (!isCommandIndex(commands)) return Object.freeze({ matched: false });
     const result = await commands.dispatch(input, message);
     if (result.matched && result.value !== undefined) {
       if (!result.owner) throw new Error('Matched Command is missing its owner');
