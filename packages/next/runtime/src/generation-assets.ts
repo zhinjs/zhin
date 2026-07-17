@@ -3,7 +3,7 @@ import {
   SharedLifetime,
   type Dispose,
   type PluginId,
-} from '@zhin.js/next-kernel';
+} from '@zhin.js/plugin-runtime';
 
 export class GenerationAssets {
   readonly #scopeLifetimes: ReadonlyMap<PluginId, SharedLifetime>;

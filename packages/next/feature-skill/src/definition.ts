@@ -1,4 +1,4 @@
-import type { ValidationContext } from '@zhin.js/next-feature-kit';
+import type { ValidationContext } from '@zhin.js/feature-kit';
 
 const skillBrand = 'zhin.skill/1' as const;
 

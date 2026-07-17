@@ -4,8 +4,8 @@ import {
   type PluginId,
   type PluginNodeSnapshot,
   type SnapshotState,
-} from '@zhin.js/next-kernel';
-import { FeatureDiscovery, type DiscoveryHost } from '@zhin.js/next-feature-kit';
+} from '@zhin.js/plugin-runtime';
+import { FeatureDiscovery, type DiscoveryHost } from '@zhin.js/feature-kit';
 import layoutFeature, { LayoutIndex } from '../src/index.js';
 
 describe('Layout Feature', () => {

@@ -1,5 +1,5 @@
 import { isAbsolute, relative, resolve } from 'node:path';
-import type { CapabilityId, FeatureId, PluginId, RuntimeSnapshot } from '@zhin.js/next-kernel';
+import type { CapabilityId, FeatureId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { ProjectGraph, PluginGraphNode } from './project-graph.js';
 
 export type SourceRole = 'plugin' | 'schema' | 'manifest' | 'feature' | 'capability';

@@ -1,4 +1,4 @@
-import { childPluginId, rootPluginId, type PluginId } from '@zhin.js/next-kernel';
+import { childPluginId, rootPluginId, type PluginId } from '@zhin.js/plugin-runtime';
 import {
   assertFeatureApi,
   assertPackageEngine,

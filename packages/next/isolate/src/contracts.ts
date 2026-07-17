@@ -1,4 +1,4 @@
-import { createToken, type Dispose, type PluginId } from '@zhin.js/next-kernel';
+import { createToken, type Dispose, type PluginId } from '@zhin.js/plugin-runtime';
 
 export type IsolatedPluginStatus =
   | 'prepared'

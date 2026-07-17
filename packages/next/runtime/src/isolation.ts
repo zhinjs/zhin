@@ -4,7 +4,7 @@ import type {
   PluginId,
   PluginMetadata,
   Token,
-} from '@zhin.js/next-kernel';
+} from '@zhin.js/plugin-runtime';
 import type { RuntimeEnvironment } from './environment.js';
 
 export interface IsolatedPluginPrepareRequest {

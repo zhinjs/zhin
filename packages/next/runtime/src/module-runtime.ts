@@ -1,6 +1,6 @@
 import { pathToFileURL } from 'node:url';
-import type { Dispose } from '@zhin.js/next-kernel';
-import type { ClientModuleRequest } from '@zhin.js/next-feature-kit';
+import type { Dispose } from '@zhin.js/plugin-runtime';
+import type { ClientModuleRequest } from '@zhin.js/feature-kit';
 
 export interface ModuleRuntime {
   load<T = unknown>(source: string): Promise<T>;

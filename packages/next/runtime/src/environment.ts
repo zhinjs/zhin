@@ -1,4 +1,4 @@
-import { createToken } from '@zhin.js/next-kernel';
+import { createToken } from '@zhin.js/plugin-runtime';
 
 export type RuntimeMode = 'development' | 'test' | 'production';
 

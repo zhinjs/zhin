@@ -5,8 +5,8 @@ import {
   type Dispose,
   type PluginId,
   type RuntimeSnapshot,
-} from '@zhin.js/next-kernel';
-import { FeatureDiscovery } from '@zhin.js/next-feature-kit';
+} from '@zhin.js/plugin-runtime';
+import { FeatureDiscovery } from '@zhin.js/feature-kit';
 import type { RuntimeEnvironment } from './environment.js';
 import type { EnvironmentLayers } from './environment-store.js';
 import { FeatureProjector, composeGenerationHandoffs } from './feature-projector.js';

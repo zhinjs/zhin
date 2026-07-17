@@ -3,7 +3,7 @@ import {
   normalizePageMetadata,
   type NormalizedPageMetadata,
 } from '@zhin.js/next-console-contract';
-import type { ValidationContext } from '@zhin.js/next-feature-kit';
+import type { ValidationContext } from '@zhin.js/feature-kit';
 
 export interface PageDefinition extends NormalizedPageMetadata {
   readonly module: string;

@@ -1,4 +1,4 @@
-import type { FeatureId, PluginId, RuntimeSnapshot } from '@zhin.js/next-kernel';
+import type { FeatureId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import {
   AgentIndex,
   agentFeatureId,

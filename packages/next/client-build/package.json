@@ -12,7 +12,10 @@
       "import": "./lib/index.js"
     }
   },
-  "files": ["lib", "src"],
+  "files": [
+    "lib",
+    "src"
+  ],
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
@@ -20,8 +23,8 @@
   },
   "peerDependencies": {
     "@zhin.js/next-console-contract": "*",
-    "@zhin.js/next-feature-kit": "*",
-    "@zhin.js/next-kernel": "*",
+    "@zhin.js/feature-kit": "*",
+    "@zhin.js/plugin-runtime": "*",
     "@zhin.js/next-runtime": "*",
     "typescript": ">=5.8.0 <7.0.0"
   },

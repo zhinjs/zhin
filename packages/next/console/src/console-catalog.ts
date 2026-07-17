@@ -5,7 +5,7 @@ import type {
   NavNode,
   PageManifest,
 } from '@zhin.js/next-console-contract';
-import type { FeatureId, PluginId, RuntimeSnapshot } from '@zhin.js/next-kernel';
+import type { FeatureId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { LayoutIndex, layoutFeatureId } from '@zhin.js/next-feature-layout';
 import { PageIndex, pageFeatureId } from '@zhin.js/next-feature-page';
 import { allowsPage, createAccessIndex } from './access.js';

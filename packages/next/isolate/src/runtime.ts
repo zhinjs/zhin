@@ -1,5 +1,5 @@
 import { pathToFileURL } from 'node:url';
-import type { PluginId, PluginMetadata } from '@zhin.js/next-kernel';
+import type { PluginId, PluginMetadata } from '@zhin.js/plugin-runtime';
 import type {
   IsolatedPluginPrepareRequest,
   IsolatedPluginRuntimePort,

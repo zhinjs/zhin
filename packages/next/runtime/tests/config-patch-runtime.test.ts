@@ -6,7 +6,7 @@ import {
   childPluginId,
   definePlugin,
   rootPluginId,
-} from '@zhin.js/next-kernel';
+} from '@zhin.js/plugin-runtime';
 import {
   ConfigValidationError,
   RootRuntime,

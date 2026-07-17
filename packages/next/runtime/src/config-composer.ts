@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import Ajv2020, { type ErrorObject } from 'ajv/dist/2020.js';
-import type { PluginId } from '@zhin.js/next-kernel';
+import type { PluginId } from '@zhin.js/plugin-runtime';
 import type { PluginGraphNode, ProjectGraph } from './project-graph.js';
 
 export type JsonSchema = Readonly<Record<string, unknown>>;

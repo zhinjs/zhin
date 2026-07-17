@@ -2,12 +2,12 @@ import type {
   CapabilitySlot,
   PluginId,
   RuntimeSnapshot,
-} from '@zhin.js/next-kernel';
+} from '@zhin.js/plugin-runtime';
 import {
   OwnerCapabilityIndex,
   createCapabilityContext,
   type OwnerCapabilityEntry,
-} from '@zhin.js/next-feature-kit';
+} from '@zhin.js/feature-kit';
 import type { AgentToolDefinition, ToolApproval } from './definition.js';
 
 export interface ToolDescriptor {

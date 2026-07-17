@@ -1,3 +1,3 @@
-import { definePlugin } from '@zhin.js/next-kernel';
+import { definePlugin } from '@zhin.js/plugin-runtime';
 
 export default definePlugin({ name: 'example-next-migration-bot' });

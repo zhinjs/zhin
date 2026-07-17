@@ -4,12 +4,12 @@ import {
   createCapabilitySlot,
   rootPluginId,
   type RuntimeSnapshot,
-} from '@zhin.js/next-kernel';
+} from '@zhin.js/plugin-runtime';
 import {
   FeatureDiscovery,
   type DirectoryEntry,
   type DiscoveryHost,
-} from '@zhin.js/next-feature-kit';
+} from '@zhin.js/feature-kit';
 import skillFeature, {
   SkillIndex,
   parseSkillMarkdown,

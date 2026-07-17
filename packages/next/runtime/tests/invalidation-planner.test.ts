@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { capabilityId, childPluginId, featureId, rootPluginId } from '@zhin.js/next-kernel';
+import { capabilityId, childPluginId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import {
   InvalidationPlanner,
   SourceOwnershipIndex,

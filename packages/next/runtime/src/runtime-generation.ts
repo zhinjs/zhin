@@ -3,11 +3,11 @@ import type {
   PluginId,
   PreparedGeneration,
   Scope,
-} from '@zhin.js/next-kernel';
+} from '@zhin.js/plugin-runtime';
 import type {
   CapabilityRoot,
   FeatureProvider,
-} from '@zhin.js/next-feature-kit';
+} from '@zhin.js/feature-kit';
 import type { GenerationAssets } from './generation-assets.js';
 import type { ProjectGraph } from './project-graph.js';
 import type { SourceOwnershipIndex } from './source-ownership.js';

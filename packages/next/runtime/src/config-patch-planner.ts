@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util';
-import { rootPluginId, type PluginId } from '@zhin.js/next-kernel';
+import { rootPluginId, type PluginId } from '@zhin.js/plugin-runtime';
 import {
   ConfigComposer,
   type ComposedConfig,

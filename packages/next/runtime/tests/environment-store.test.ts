@@ -8,7 +8,7 @@ import {
   rootPluginId,
   type PluginId,
   type RuntimeSnapshot,
-} from '@zhin.js/next-kernel';
+} from '@zhin.js/plugin-runtime';
 import {
   EnvSchemaParseError,
   EnvironmentVariableMissingError,

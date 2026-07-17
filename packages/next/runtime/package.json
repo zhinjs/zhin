@@ -12,7 +12,9 @@
       "import": "./lib/index.js"
     }
   },
-  "files": ["lib"],
+  "files": [
+    "lib"
+  ],
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
@@ -20,17 +22,18 @@
     "check:size": "node ./scripts/check-install-size.mjs"
   },
   "dependencies": {
-    "@zhin.js/next-feature-kit": "workspace:*",
-    "@zhin.js/next-kernel": "workspace:*",
+    "@zhin.js/feature-kit": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "ajv": "8.18.0",
     "semver": "7.8.5"
   },
   "devDependencies": {
-    "@zhin.js/next-feature-command": "workspace:*",
-    "@zhin.js/next-feature-component": "workspace:*",
+    "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/command": "workspace:*",
+    "@zhin.js/component": "workspace:*",
+    "@zhin.js/middleware": "workspace:*",
     "@zhin.js/next-feature-agent": "workspace:*",
     "@zhin.js/next-feature-mcp": "workspace:*",
-    "@zhin.js/next-feature-middleware": "workspace:*",
     "@zhin.js/next-feature-layout": "workspace:*",
     "@zhin.js/next-feature-page": "workspace:*",
     "@zhin.js/next-feature-skill": "workspace:*",

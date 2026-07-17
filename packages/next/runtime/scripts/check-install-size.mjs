@@ -12,64 +12,64 @@ const packageManager = JSON.parse(
 ).packageManager;
 const budgetBytes = 5 * 1024 * 1024;
 const packages = [
-  { dir: 'packages/next/kernel', name: '@zhin.js/next-kernel', dependencies: [] },
+  { dir: 'packages/im/plugin-runtime', name: '@zhin.js/plugin-runtime', dependencies: [] },
   {
     dir: 'packages/next/console-contract',
     name: '@zhin.js/next-console-contract',
     dependencies: [],
   },
   {
-    dir: 'packages/next/feature-kit',
-    name: '@zhin.js/next-feature-kit',
-    dependencies: ['@zhin.js/next-kernel'],
+    dir: 'packages/im/feature-kit',
+    name: '@zhin.js/feature-kit',
+    dependencies: ['@zhin.js/plugin-runtime'],
   },
   {
-    dir: 'packages/next/feature-adapter',
-    name: '@zhin.js/next-feature-adapter',
-    dependencies: ['@zhin.js/next-kernel', '@zhin.js/next-feature-kit'],
+    dir: 'packages/im/adapter',
+    name: '@zhin.js/adapter',
+    dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
   },
   {
-    dir: 'packages/next/feature-command',
-    name: '@zhin.js/next-feature-command',
-    dependencies: ['@zhin.js/next-kernel', '@zhin.js/next-feature-kit'],
+    dir: 'packages/im/command',
+    name: '@zhin.js/command',
+    dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
   },
   {
-    dir: 'packages/next/feature-component',
-    name: '@zhin.js/next-feature-component',
-    dependencies: ['@zhin.js/next-kernel', '@zhin.js/next-feature-kit'],
+    dir: 'packages/im/component',
+    name: '@zhin.js/component',
+    dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
   },
   {
-    dir: 'packages/next/feature-middleware',
-    name: '@zhin.js/next-feature-middleware',
-    dependencies: ['@zhin.js/next-kernel', '@zhin.js/next-feature-kit'],
+    dir: 'packages/im/middleware',
+    name: '@zhin.js/middleware',
+    dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
   },
   {
     dir: 'packages/next/feature-agent',
     name: '@zhin.js/next-feature-agent',
-    dependencies: ['@zhin.js/next-kernel', '@zhin.js/next-feature-kit'],
+    dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
   },
   {
     dir: 'packages/next/feature-mcp',
     name: '@zhin.js/next-feature-mcp',
-    dependencies: ['@zhin.js/next-kernel', '@zhin.js/next-feature-kit'],
+    dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
   },
   {
     dir: 'packages/next/feature-skill',
     name: '@zhin.js/next-feature-skill',
-    dependencies: ['@zhin.js/next-kernel', '@zhin.js/next-feature-kit'],
+    dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
   },
   {
     dir: 'packages/next/feature-tool',
     name: '@zhin.js/next-feature-tool',
-    dependencies: ['@zhin.js/next-kernel', '@zhin.js/next-feature-kit'],
+    dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
   },
   {
     dir: 'packages/next/feature-page',
     name: '@zhin.js/next-feature-page',
     dependencies: [
       '@zhin.js/next-console-contract',
-      '@zhin.js/next-kernel',
-      '@zhin.js/next-feature-kit',
+      '@zhin.js/plugin-runtime',
+      '@zhin.js/feature-kit',
     ],
   },
   {
@@ -77,14 +77,14 @@ const packages = [
     name: '@zhin.js/next-feature-layout',
     dependencies: [
       '@zhin.js/next-console-contract',
-      '@zhin.js/next-kernel',
-      '@zhin.js/next-feature-kit',
+      '@zhin.js/plugin-runtime',
+      '@zhin.js/feature-kit',
     ],
   },
   {
     dir: 'packages/next/runtime',
     name: '@zhin.js/next-runtime',
-    dependencies: ['@zhin.js/next-kernel', '@zhin.js/next-feature-kit'],
+    dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
   },
   {
     dir: 'packages/next/config-yaml',
@@ -99,32 +99,18 @@ const packages = [
   {
     dir: 'packages/next/compat',
     name: '@zhin.js/next-compat',
-    dependencies: [
-      '@zhin.js/next-feature-command',
-      '@zhin.js/next-feature-middleware',
-    ],
+    dependencies: ['@zhin.js/command', '@zhin.js/middleware'],
   },
   {
     dir: 'packages/next/isolate',
     name: '@zhin.js/next-isolate',
-    dependencies: ['@zhin.js/next-kernel', '@zhin.js/next-runtime'],
-  },
-  {
-    dir: 'packages/next/im',
-    name: '@zhin.js/next-im',
-    dependencies: [
-      '@zhin.js/next-kernel',
-      '@zhin.js/next-feature-adapter',
-      '@zhin.js/next-feature-command',
-      '@zhin.js/next-feature-component',
-      '@zhin.js/next-feature-middleware',
-    ],
+    dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/next-runtime'],
   },
   {
     dir: 'packages/next/agent',
     name: '@zhin.js/next-agent',
     dependencies: [
-      '@zhin.js/next-kernel',
+      '@zhin.js/plugin-runtime',
       '@zhin.js/next-feature-agent',
       '@zhin.js/next-feature-mcp',
       '@zhin.js/next-feature-skill',
@@ -136,7 +122,7 @@ const packages = [
     name: '@zhin.js/next-console',
     dependencies: [
       '@zhin.js/next-console-contract',
-      '@zhin.js/next-kernel',
+      '@zhin.js/plugin-runtime',
       '@zhin.js/next-feature-page',
       '@zhin.js/next-feature-layout',
     ],
@@ -178,6 +164,14 @@ function diskUsage(directory) {
 
 function formatMb(bytes) {
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function largestEntries(directory, limit = 10) {
+  return fs.readdirSync(directory, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => ({ name: entry.name, bytes: diskUsage(path.join(directory, entry.name)) }))
+    .sort((left, right) => right.bytes - left.bytes)
+    .slice(0, limit);
 }
 
 function dependencyClosure(name, visited = new Set(), result = []) {
@@ -235,6 +229,10 @@ function main() {
     console.log(`${targetName} production install: ${formatMb(bytes)}`);
     console.log(`budget: ${formatMb(budgetBytes)}`);
     if (bytes > budgetBytes) {
+      console.log('largest production packages:');
+      for (const entry of largestEntries(virtualStore)) {
+        console.log(`- ${entry.name}: ${formatMb(entry.bytes)}`);
+      }
       throw new Error(`${targetName} exceeds its ${formatMb(budgetBytes)} budget`);
     }
   } finally {

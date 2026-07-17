@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { childPluginId, rootPluginId } from '@zhin.js/next-kernel';
+import { childPluginId, rootPluginId } from '@zhin.js/plugin-runtime';
 import { GenerationAssets } from '../src/generation-assets.js';
 
 describe('GenerationAssets', () => {

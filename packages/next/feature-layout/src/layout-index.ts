@@ -1,9 +1,9 @@
 import type { LayoutManifest, LayoutSlot } from '@zhin.js/next-console-contract';
-import type { CapabilitySlot, PluginId, RuntimeSnapshot } from '@zhin.js/next-kernel';
+import type { CapabilitySlot, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import {
   OwnerCapabilityIndex,
   type OwnerCapabilityEntry,
-} from '@zhin.js/next-feature-kit';
+} from '@zhin.js/feature-kit';
 import type { LayoutDefinition } from './definition.js';
 
 export class LayoutIndex {

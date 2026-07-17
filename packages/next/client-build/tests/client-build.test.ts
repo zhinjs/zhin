@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ClientModuleRequest } from '@zhin.js/next-feature-kit';
+import type { ClientModuleRequest } from '@zhin.js/feature-kit';
 import type { ModuleRuntime } from '@zhin.js/next-runtime';
 import {
   ClientBuildModuleRuntime,

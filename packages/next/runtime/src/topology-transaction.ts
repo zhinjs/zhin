@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import type { PluginId } from '@zhin.js/next-kernel';
+import type { PluginId } from '@zhin.js/plugin-runtime';
 import type { ZhinFeatureManifest, ZhinPluginManifest } from './manifest.js';
 import type { PluginGraphNode, ProjectGraph } from './project-graph.js';
 

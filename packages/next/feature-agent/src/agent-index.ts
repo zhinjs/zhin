@@ -1,8 +1,8 @@
-import type { CapabilitySlot, PluginId, RuntimeSnapshot } from '@zhin.js/next-kernel';
+import type { CapabilitySlot, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import {
   OwnerCapabilityIndex,
   type OwnerCapabilityEntry,
-} from '@zhin.js/next-feature-kit';
+} from '@zhin.js/feature-kit';
 import type { AgentDefinition } from './definition.js';
 
 export interface AgentDescriptor extends AgentDefinition {

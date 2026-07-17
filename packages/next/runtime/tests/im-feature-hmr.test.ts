@@ -2,17 +2,17 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { definePlugin, rootPluginId, type RuntimeSnapshot } from '@zhin.js/next-kernel';
+import { definePlugin, rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import componentFeature, {
   ComponentIndex,
   componentFeatureId,
   defineComponent,
-} from '@zhin.js/next-feature-component';
+} from '@zhin.js/component';
 import middlewareFeature, {
   MiddlewareIndex,
   defineMiddleware,
   middlewareFeatureId,
-} from '@zhin.js/next-feature-middleware';
+} from '@zhin.js/middleware';
 import { RootRuntime, type ModuleRuntime } from '../src/index.js';
 
 const temporary: string[] = [];

@@ -6,8 +6,8 @@ import {
   ClientBuildModuleRuntime,
   TypeScriptClientBuilder,
 } from '../../client-build/src/index.js';
-import { definePlugin, type RuntimeSnapshot } from '@zhin.js/next-kernel';
-import type { ClientModuleRequest } from '@zhin.js/next-feature-kit';
+import { definePlugin, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import type { ClientModuleRequest } from '@zhin.js/feature-kit';
 import layoutFeature, {
   LayoutIndex,
   layoutFeatureId,

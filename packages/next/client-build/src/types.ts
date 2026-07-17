@@ -1,5 +1,5 @@
 import type { ClientModuleArtifact } from '@zhin.js/next-console-contract';
-import type { ClientModuleRequest } from '@zhin.js/next-feature-kit';
+import type { ClientModuleRequest } from '@zhin.js/feature-kit';
 
 export interface ClientBuildEntry extends ClientModuleRequest {
   readonly source: string;

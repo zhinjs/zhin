@@ -1,4 +1,4 @@
-import type { SnapshotStore } from '@zhin.js/next-kernel';
+import type { SnapshotStore } from '@zhin.js/plugin-runtime';
 import type { AccessSnapshot } from '@zhin.js/next-console-contract';
 import { ConsoleCatalog } from './console-catalog.js';
 

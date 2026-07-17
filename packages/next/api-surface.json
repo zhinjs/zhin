@@ -1,4 +1,10 @@
 {
+  "adapter": [
+    "export * from './adapter-index.js';",
+    "export * from './definition.js';",
+    "export * from './provider.js';",
+    "export{default}from './provider.js';"
+  ],
   "agent": [
     "export * from './agent-runtime.js';",
     "export * from './capability-ingress.js';"
@@ -21,9 +27,21 @@
     "export * from './types.js';",
     "export * from './typescript-builder.js';"
   ],
+  "command": [
+    "export * from './command-index.js';",
+    "export * from './definition.js';",
+    "export{CommandPathSyntaxError,commandFeatureId,default as commandFeature,}from './provider.js';",
+    "export{default}from './provider.js';"
+  ],
   "compat": [
     "export * from './legacy-command.js';",
     "export * from './legacy-middleware.js';"
+  ],
+  "component": [
+    "export * from './component-index.js';",
+    "export * from './definition.js';",
+    "export * from './provider.js';",
+    "export{default}from './provider.js';"
   ],
   "config-yaml": [
     "export * from './yaml-config-document.js';"
@@ -39,26 +57,14 @@
     "export * from './navigation.js';",
     "export * from './page.js';"
   ],
-  "feature-adapter": [
-    "export * from './adapter-index.js';",
-    "export * from './definition.js';",
-    "export * from './provider.js';",
-    "export{default}from './provider.js';"
+  "core/runtime": [
+    "export * from './contracts.js';",
+    "export * from './im-runtime.js';",
+    "export * from './message-dispatcher.js';",
+    "export * from './outbound-renderer.js';"
   ],
   "feature-agent": [
     "export * from './agent-index.js';",
-    "export * from './definition.js';",
-    "export * from './provider.js';",
-    "export{default}from './provider.js';"
-  ],
-  "feature-command": [
-    "export * from './command-index.js';",
-    "export * from './definition.js';",
-    "export{CommandPathSyntaxError,commandFeatureId,default as commandFeature,}from './provider.js';",
-    "export{default}from './provider.js';"
-  ],
-  "feature-component": [
-    "export * from './component-index.js';",
     "export * from './definition.js';",
     "export * from './provider.js';",
     "export{default}from './provider.js';"
@@ -83,12 +89,6 @@
     "export * from './provider.js';",
     "export{default}from './provider.js';"
   ],
-  "feature-middleware": [
-    "export * from './definition.js';",
-    "export * from './middleware-index.js';",
-    "export * from './provider.js';",
-    "export{default}from './provider.js';"
-  ],
   "feature-page": [
     "export * from './definition.js';",
     "export * from './page-index.js';",
@@ -107,18 +107,18 @@
     "export * from './tool-index.js';",
     "export{default}from './provider.js';"
   ],
-  "im": [
-    "export * from './contracts.js';",
-    "export * from './im-runtime.js';",
-    "export * from './message-dispatcher.js';",
-    "export * from './outbound-renderer.js';"
-  ],
   "isolate": [
     "export * from './contracts.js';",
     "export * from './runtime.js';",
     "export type{IsolateMode}from './transport.js';"
   ],
-  "kernel": [
+  "middleware": [
+    "export * from './definition.js';",
+    "export * from './middleware-index.js';",
+    "export * from './provider.js';",
+    "export{default}from './provider.js';"
+  ],
+  "plugin-runtime": [
     "export * from './capability.js';",
     "export * from './dispose.js';",
     "export * from './handoff.js';",

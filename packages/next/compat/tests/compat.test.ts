@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { childPluginId, rootPluginId } from '@zhin.js/next-kernel';
+import { childPluginId, rootPluginId } from '@zhin.js/plugin-runtime';
 import { defineLegacyCommand, defineLegacyMiddleware } from '../src/index.js';
 
 describe('legacy definition adapters', () => {

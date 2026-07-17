@@ -70,7 +70,7 @@ async function project(extra: Record<string, unknown> = {}): Promise<string> {
 async function completedProject(source: string): Promise<string> {
   const root = await project({
     dependencies: {
-      '@zhin.js/next-kernel': '^0.0.0',
+      '@zhin.js/plugin-runtime': '^0.0.0',
       '@zhin.js/next-runtime': '^0.0.0',
     },
     zhin: {
@@ -84,7 +84,7 @@ async function completedProject(source: string): Promise<string> {
     },
   });
   await writeFile(join(root, 'plugin.next.ts'), [
-    "import { definePlugin } from '@zhin.js/next-kernel';",
+    "import { definePlugin } from '@zhin.js/plugin-runtime';",
     '',
     "export default definePlugin({ name: 'readiness' });",
     '',

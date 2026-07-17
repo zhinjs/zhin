@@ -12,7 +12,9 @@
       "import": "./lib/index.js"
     }
   },
-  "files": ["lib"],
+  "files": [
+    "lib"
+  ],
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
@@ -20,11 +22,11 @@
     "check:size": "node ../runtime/scripts/check-install-size.mjs @zhin.js/next-compat"
   },
   "dependencies": {
-    "@zhin.js/next-feature-command": "workspace:*",
-    "@zhin.js/next-feature-middleware": "workspace:*"
+    "@zhin.js/command": "workspace:*",
+    "@zhin.js/middleware": "workspace:*"
   },
   "devDependencies": {
-    "@zhin.js/next-kernel": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "@types/node": "^26.1.0",
     "typescript": "^6.0.3"
   },

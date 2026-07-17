@@ -1,4 +1,4 @@
-import type { PluginId, SnapshotStore } from '@zhin.js/next-kernel';
+import type { PluginId, SnapshotStore } from '@zhin.js/plugin-runtime';
 import {
   CapabilityIngress,
   type AgentCapabilities,

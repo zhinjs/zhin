@@ -12,15 +12,18 @@
       "import": "./lib/index.js"
     }
   },
-  "files": ["lib", "src"],
+  "files": [
+    "lib",
+    "src"
+  ],
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
     "test": "vitest run --root ../../.. packages/next/feature-agent/tests"
   },
   "dependencies": {
-    "@zhin.js/next-feature-kit": "workspace:*",
-    "@zhin.js/next-kernel": "workspace:*"
+    "@zhin.js/feature-kit": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",

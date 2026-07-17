@@ -6,12 +6,12 @@ import {
   rootPluginId,
   type PluginId,
   type RuntimeSnapshot,
-} from '@zhin.js/next-kernel';
+} from '@zhin.js/plugin-runtime';
 import {
   FeatureDiscovery,
   type DirectoryEntry,
   type DiscoveryHost,
-} from '@zhin.js/next-feature-kit';
+} from '@zhin.js/feature-kit';
 import toolFeature, {
   ToolIndex,
   defineAgentTool,

@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { definePlugin } from '@zhin.js/next-kernel';
+import { definePlugin } from '@zhin.js/plugin-runtime';
 import { ConfigValidationError, RootRuntime, type ModuleRuntime } from '@zhin.js/next-runtime';
 import {
   ConfigDocumentConflictError,

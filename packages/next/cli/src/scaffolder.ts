@@ -28,7 +28,7 @@ export class ProjectScaffolder {
       type: 'module',
       scripts: { build: 'tsc --noEmit' },
       dependencies: {
-        '@zhin.js/next-kernel': '^0.0.0',
+        '@zhin.js/plugin-runtime': '^0.0.0',
         '@zhin.js/next-runtime': '^0.0.0',
       },
       zhin: {
@@ -54,7 +54,7 @@ export class ProjectScaffolder {
       properties: {},
     });
     await writeFile(join(this.root, 'plugin.ts'), [
-      "import { definePlugin } from '@zhin.js/next-kernel';",
+      "import { definePlugin } from '@zhin.js/plugin-runtime';",
       '',
       "export default definePlugin({ name: 'root' });",
       '',
@@ -102,7 +102,7 @@ export class ProjectScaffolder {
       version: '0.0.0',
       private: true,
       type: 'module',
-      dependencies: { '@zhin.js/next-kernel': '^0.0.0' },
+      dependencies: { '@zhin.js/plugin-runtime': '^0.0.0' },
       zhin: {
         protocol: 1,
         type: 'plugin',
@@ -114,7 +114,7 @@ export class ProjectScaffolder {
       },
     });
     await writeFile(join(packageRoot, 'plugin.ts'), [
-      "import { definePlugin } from '@zhin.js/next-kernel';",
+      "import { definePlugin } from '@zhin.js/plugin-runtime';",
       '',
       `export default definePlugin({ name: '${options.name}' });`,
       '',
@@ -150,8 +150,8 @@ export class ProjectScaffolder {
       private: true,
       type: 'module',
       dependencies: {
-        '@zhin.js/next-feature-kit': '^0.0.0',
-        '@zhin.js/next-kernel': '^0.0.0',
+        '@zhin.js/feature-kit': '^0.0.0',
+        '@zhin.js/plugin-runtime': '^0.0.0',
       },
       zhin: {
         protocol: 1,
@@ -163,8 +163,8 @@ export class ProjectScaffolder {
     });
     await mkdir(join(packageRoot, 'src'), { recursive: true });
     await writeFile(join(packageRoot, 'src/provider.ts'), [
-      "import { defineFeatureProvider } from '@zhin.js/next-feature-kit';",
-      "import { featureId } from '@zhin.js/next-kernel';",
+      "import { defineFeatureProvider } from '@zhin.js/feature-kit';",
+      "import { featureId } from '@zhin.js/plugin-runtime';",
       '',
       'export default defineFeatureProvider({',
       '  protocol: 1,',

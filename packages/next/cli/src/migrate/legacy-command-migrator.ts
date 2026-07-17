@@ -333,7 +333,7 @@ function renderComponent(file: ts.SourceFile, component: MigratableFunction): st
   // also mutate whitespace inside multiline template literals.
   const source = component.getText(file);
   return [
-    "import { defineComponent } from '@zhin.js/next-feature-component';",
+    "import { defineComponent } from '@zhin.js/component';",
     '',
     'export default defineComponent({',
     `  render: ${source},`,

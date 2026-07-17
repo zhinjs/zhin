@@ -15,13 +15,13 @@ import {
   type PreparedGeneration,
   type RuntimeSnapshot,
   type SnapshotState,
-} from '@zhin.js/next-kernel';
+} from '@zhin.js/plugin-runtime';
 import {
   FeatureCatalog,
   FeatureDiscovery,
   type CapabilityRoot,
   type FeatureProvider,
-} from '@zhin.js/next-feature-kit';
+} from '@zhin.js/feature-kit';
 import type { ZhinFeatureManifest } from './manifest.js';
 import { ConfigComposer, type RuntimeConfigDocument } from './config-composer.js';
 import {

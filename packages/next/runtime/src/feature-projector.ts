@@ -6,8 +6,8 @@ import {
   type FeatureId,
   type GenerationHandoff,
   type SnapshotState,
-} from '@zhin.js/next-kernel';
-import type { FeatureProvider } from '@zhin.js/next-feature-kit';
+} from '@zhin.js/plugin-runtime';
+import type { FeatureProvider } from '@zhin.js/feature-kit';
 
 export type ProjectionState = Omit<SnapshotState, 'projections'>;
 

@@ -1,5 +1,17 @@
 # @zhin.js/core
 
+## Plugin Runtime 子路径
+
+新的 owner-aware IM 能力已经并入 Core，作为 Plugin Runtime 的正式领域接口：
+
+- `@zhin.js/core/runtime`
+
+`@zhin.js/adapter`、`@zhin.js/command`、`@zhin.js/component` 与
+`@zhin.js/middleware` 提供纯 definition、约定发现 provider 和 generation projection；
+Core Runtime 只消费它们发布的 snapshot。
+旧根入口的 `addCommand`、`addComponent`、`addMiddleware` 暂时作为作者兼容接口保留，后续
+只向 RuntimeSnapshot 投影，不再维护第二套运行时权威。
+
 Zhin.js **IM/多通道运行时**包：Plugin、Adapter、**Endpoint**、MessageDispatcher 与统一出站链。**AI 编排（ZhinAgent、工具安全、MCP）在 [`@zhin.js/agent`](../agent/README.md)**；本包仅 selective re-export `@zhin.js/ai` 的 Provider / Agent 原语供插件直接使用。
 
 领域词汇见 [CONTEXT.md](./CONTEXT.md)；入站/出站流程见 [消息如何流转](../../docs/essentials/message-flow.md)。

@@ -2,12 +2,12 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createToken, definePlugin, type RuntimeSnapshot } from '@zhin.js/next-kernel';
+import { createToken, definePlugin, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import commandFeature, {
   CommandIndex,
   commandFeatureId,
   defineCommand,
-} from '@zhin.js/next-feature-command';
+} from '@zhin.js/command';
 import { RootRuntime, runtimeEnvironmentToken, type ModuleRuntime } from '../src/index.js';
 
 const temporary: string[] = [];

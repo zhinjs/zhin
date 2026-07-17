@@ -6,8 +6,8 @@ import {
   rootPluginId,
   type PreparedGeneration,
   type SnapshotState,
-} from '@zhin.js/next-kernel';
-import { defineFeatureProvider } from '@zhin.js/next-feature-kit';
+} from '@zhin.js/plugin-runtime';
+import { defineFeatureProvider } from '@zhin.js/feature-kit';
 import { FeatureProjector } from '../src/feature-projector.js';
 
 describe('Feature projection handoff', () => {

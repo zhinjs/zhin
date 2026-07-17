@@ -1,4 +1,4 @@
-import { createToken, type PluginId } from '@zhin.js/next-kernel';
+import { createToken, type PluginId } from '@zhin.js/plugin-runtime';
 import type { RuntimeEnvironment } from './environment.js';
 
 export type EnvironmentSource = Readonly<Record<string, string | undefined>>;

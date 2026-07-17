@@ -1,0 +1,72 @@
+{
+  "protocol": 1,
+  "strategy": "replace-in-place",
+  "completed": [
+    {
+      "sourcePackage": "@zhin.js/next-kernel",
+      "sourceDirectory": "packages/next/kernel",
+      "targetPackage": "@zhin.js/plugin-runtime",
+      "targetDirectory": "packages/im/plugin-runtime",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-feature-kit",
+      "sourceDirectory": "packages/next/feature-kit",
+      "targetPackage": "@zhin.js/feature-kit",
+      "targetDirectory": "packages/im/feature-kit",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-feature-adapter",
+      "sourceDirectory": "packages/next/feature-adapter",
+      "targetPackage": "@zhin.js/adapter",
+      "targetDirectory": "packages/im/adapter",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-feature-command",
+      "sourceDirectory": "packages/next/feature-command",
+      "targetPackage": "@zhin.js/command",
+      "targetDirectory": "packages/im/command",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-feature-component",
+      "sourceDirectory": "packages/next/feature-component",
+      "targetPackage": "@zhin.js/component",
+      "targetDirectory": "packages/im/component",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-feature-middleware",
+      "sourceDirectory": "packages/next/feature-middleware",
+      "targetPackage": "@zhin.js/middleware",
+      "targetDirectory": "packages/im/middleware",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-im",
+      "sourceDirectory": "packages/next/im",
+      "targetPackage": "@zhin.js/core",
+      "targetDirectory": "packages/im/core",
+      "targetExport": "./runtime"
+    }
+  ],
+  "pending": [
+    { "sourcePackage": "@zhin.js/next-feature-agent", "target": "@zhin.js/agent/features/agent" },
+    { "sourcePackage": "@zhin.js/next-feature-mcp", "target": "@zhin.js/agent/features/mcp" },
+    { "sourcePackage": "@zhin.js/next-feature-skill", "target": "@zhin.js/agent/features/skill" },
+    { "sourcePackage": "@zhin.js/next-feature-tool", "target": "@zhin.js/agent/features/tool" },
+    { "sourcePackage": "@zhin.js/next-agent", "target": "@zhin.js/agent/runtime" },
+    { "sourcePackage": "@zhin.js/next-console-contract", "target": "@zhin.js/contract/plugin-runtime" },
+    { "sourcePackage": "@zhin.js/next-feature-page", "target": "@zhin.js/contract/features/page" },
+    { "sourcePackage": "@zhin.js/next-feature-layout", "target": "@zhin.js/contract/features/layout" },
+    { "sourcePackage": "@zhin.js/next-console", "target": "@zhin.js/pagemanager/plugin-runtime" },
+    { "sourcePackage": "@zhin.js/next-client-build", "target": "@zhin.js/pagemanager/client-build" },
+    { "sourcePackage": "@zhin.js/next-runtime", "target": "zhin.js/runtime" },
+    { "sourcePackage": "@zhin.js/next-config-yaml", "target": "zhin.js/config-yaml" },
+    { "sourcePackage": "@zhin.js/next-isolate", "target": "zhin.js/isolate" },
+    { "sourcePackage": "@zhin.js/next-compat", "target": "zhin.js/compat" },
+    { "sourcePackage": "@zhin.js/next-cli", "target": "@zhin.js/cli" }
+  ]
+}

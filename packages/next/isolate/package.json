@@ -12,7 +12,9 @@
       "import": "./lib/index.js"
     }
   },
-  "files": ["lib"],
+  "files": [
+    "lib"
+  ],
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
@@ -20,7 +22,7 @@
     "check:size": "node ../runtime/scripts/check-install-size.mjs @zhin.js/next-isolate"
   },
   "dependencies": {
-    "@zhin.js/next-kernel": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/next-runtime": "workspace:*"
   },
   "devDependencies": {

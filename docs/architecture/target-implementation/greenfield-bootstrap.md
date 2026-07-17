@@ -6,8 +6,8 @@
 
 | Package | 已实现的深模块 |
 |---|---|
-| `@zhin.js/next-kernel` | Identity、Token/Scope、DisposeStack、CapabilitySlot、SnapshotLease、CAS generation、RootController |
-| `@zhin.js/next-feature-kit` | `FeatureAuthoring`、`FeatureRuntime`、可选 `FeatureBuildAdapter`、FeatureCatalog、FeatureDiscovery |
+| `@zhin.js/plugin-runtime` | Identity、Token/Scope、DisposeStack、CapabilitySlot、SnapshotLease、CAS generation、RootController |
+| `@zhin.js/feature-kit` | `FeatureAuthoring`、`FeatureRuntime`、可选 `FeatureBuildAdapter`、FeatureCatalog、FeatureDiscovery |
 | `@zhin.js/next-runtime` | Manifest parser、workspace/npm resolver、ProjectGraph、ConfigComposer、RuntimeEnvironment/owner EnvStore、RootRuntime、Node 原生开发 ModuleRuntime、source ownership、HMR 与 process restart |
 | `@zhin.js/next-isolate` | 可选 Worker/child-process adapter、structured-clone RPC、generation drain/handoff 与 crash propagation |
 | `@zhin.js/next-config-yaml` | 可选 ConfigDocumentPort、YAML AST patch、revision conflict 与原子文件替换 |

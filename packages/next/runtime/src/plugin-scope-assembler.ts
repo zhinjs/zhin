@@ -13,7 +13,7 @@ import {
   type PluginInstanceView,
   type PluginNodeSnapshot,
   type TokenId,
-} from '@zhin.js/next-kernel';
+} from '@zhin.js/plugin-runtime';
 import { runtimeEnvironmentToken, type RuntimeEnvironment } from './environment.js';
 import {
   EnvStoreFactory,

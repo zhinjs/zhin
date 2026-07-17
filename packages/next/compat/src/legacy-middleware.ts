@@ -4,7 +4,7 @@ import {
   type MiddlewareNext,
   type MiddlewarePhase,
   type MiddlewareTarget,
-} from '@zhin.js/next-feature-middleware';
+} from '@zhin.js/middleware';
 
 export type LegacyMiddleware<TInput = unknown> = (
   input: TInput,

@@ -1,6 +1,6 @@
 import { join } from 'node:path';
-import { featureId } from '@zhin.js/next-kernel';
-import { defineFeatureProvider, type SourceConvention } from '@zhin.js/next-feature-kit';
+import { featureId } from '@zhin.js/plugin-runtime';
+import { defineFeatureProvider, type SourceConvention } from '@zhin.js/feature-kit';
 import { parseLayoutArtifact } from './definition.js';
 import { LayoutIndex } from './layout-index.js';
 

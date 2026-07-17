@@ -6,7 +6,7 @@ import {
 } from 'node:fs';
 import { extname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { Dispose } from '@zhin.js/next-kernel';
+import type { Dispose } from '@zhin.js/plugin-runtime';
 import type { ModuleRuntime } from './module-runtime.js';
 
 export interface NativeDevelopmentModuleRuntimeOptions {

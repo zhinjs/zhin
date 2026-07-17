@@ -5,8 +5,8 @@ import {
   type Dispose,
   type FeatureId,
   type RuntimeSnapshot,
-} from '@zhin.js/next-kernel';
-import { FeatureDiscovery } from '@zhin.js/next-feature-kit';
+} from '@zhin.js/plugin-runtime';
+import { FeatureDiscovery } from '@zhin.js/feature-kit';
 import { FeatureProjector, composeGenerationHandoffs } from './feature-projector.js';
 import type { ModuleRuntime } from './module-runtime.js';
 import { NodeDiscoveryHost } from './node-discovery-host.js';

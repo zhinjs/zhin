@@ -1,9 +1,9 @@
 import { join } from 'node:path';
-import { featureId } from '@zhin.js/next-kernel';
+import { featureId } from '@zhin.js/plugin-runtime';
 import {
   defineFeatureProvider,
   type SourceConvention,
-} from '@zhin.js/next-feature-kit';
+} from '@zhin.js/feature-kit';
 import { parseSkillMarkdown } from './definition.js';
 import { SkillIndex } from './skill-index.js';
 

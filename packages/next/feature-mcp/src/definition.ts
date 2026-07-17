@@ -1,4 +1,4 @@
-import type { CapabilityContext } from '@zhin.js/next-feature-kit';
+import type { CapabilityContext } from '@zhin.js/feature-kit';
 
 const mcpBrand = 'zhin.mcp/1' as const;
 

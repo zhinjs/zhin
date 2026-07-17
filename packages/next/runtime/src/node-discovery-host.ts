@@ -3,7 +3,7 @@ import type {
   ClientModuleRequest,
   DirectoryEntry,
   DiscoveryHost,
-} from '@zhin.js/next-feature-kit';
+} from '@zhin.js/feature-kit';
 import type { ModuleRuntime } from './module-runtime.js';
 
 export class NodeDiscoveryHost implements DiscoveryHost {

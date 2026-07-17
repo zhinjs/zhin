@@ -23,12 +23,12 @@ describe('package cutover', () => {
     expect(plan.capabilities).toEqual(['command', 'component', 'middleware']);
     expect(plan.dependencies).toMatchObject({
       existing: '^1.0.0',
-      '@zhin.js/next-kernel': '^0.0.0',
+      '@zhin.js/plugin-runtime': '^0.0.0',
       '@zhin.js/next-runtime': '^0.0.0',
       '@zhin.js/next-compat': '^0.0.0',
-      '@zhin.js/next-feature-command': '^0.0.0',
-      '@zhin.js/next-feature-component': '^0.0.0',
-      '@zhin.js/next-feature-middleware': '^0.0.0',
+      '@zhin.js/command': '^0.0.0',
+      '@zhin.js/component': '^0.0.0',
+      '@zhin.js/middleware': '^0.0.0',
     });
     await expect(readFile(plan.entryFile, 'utf8')).rejects.toThrow();
 
@@ -38,9 +38,9 @@ describe('package cutover', () => {
     };
     expect(manifest.zhin.entry).toBe('./plugin.next.ts');
     expect(manifest.zhin.features.map((item) => item.package)).toEqual([
-      '@zhin.js/next-feature-command',
-      '@zhin.js/next-feature-component',
-      '@zhin.js/next-feature-middleware',
+      '@zhin.js/command',
+      '@zhin.js/component',
+      '@zhin.js/middleware',
     ]);
     await expect(readFile(plan.entryFile, 'utf8')).resolves
       .toContain("definePlugin({ name: 'fixture-plugin' })");
@@ -83,7 +83,7 @@ describe('package cutover', () => {
     });
     await writeFile(join(root, 'commands/status.ts'), legacyCommandDefinition());
     await writeFile(join(root, 'plugin.next.ts'), [
-      "import { definePlugin } from '@zhin.js/next-kernel';",
+      "import { definePlugin } from '@zhin.js/plugin-runtime';",
       '',
       "export default definePlugin({ name: 'fixture-plugin' });",
       '',
@@ -136,5 +136,5 @@ function legacyMiddlewareDefinition(): string {
 }
 
 function componentDefinition(): string {
-  return "import { defineComponent } from '@zhin.js/next-feature-component';\n";
+  return "import { defineComponent } from '@zhin.js/component';\n";
 }

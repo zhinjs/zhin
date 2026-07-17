@@ -3,7 +3,7 @@ import {
   type CommandContext,
   type CommandDefinition,
   type CommandParameterValue,
-} from '@zhin.js/next-feature-command';
+} from '@zhin.js/command';
 
 export interface LegacyCommandMatchResult {
   readonly params: Readonly<Record<string, CommandParameterValue>>;

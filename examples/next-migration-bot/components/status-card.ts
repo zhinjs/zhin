@@ -1,4 +1,4 @@
-import { defineComponent } from '@zhin.js/next-feature-component';
+import { defineComponent } from '@zhin.js/component';
 
 export default defineComponent({
   render: (props: { label: string }) => props.label,

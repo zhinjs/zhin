@@ -3,12 +3,12 @@ import {
   type CapabilitySlot,
   type PluginId,
   type RuntimeSnapshot,
-} from '@zhin.js/next-kernel';
+} from '@zhin.js/plugin-runtime';
 import {
   OwnerCapabilityIndex,
   createCapabilityContext,
   type OwnerCapabilityEntry,
-} from '@zhin.js/next-feature-kit';
+} from '@zhin.js/feature-kit';
 import {
   assertMcpClient,
   type McpClientInstance,

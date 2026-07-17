@@ -8,7 +8,7 @@ import {
   definePlugin,
   rootPluginId,
   type RuntimeSnapshot,
-} from '@zhin.js/next-kernel';
+} from '@zhin.js/plugin-runtime';
 import { RootRuntime, type ModuleRuntime } from '@zhin.js/next-runtime';
 import {
   isolatedPluginToken,

@@ -2,7 +2,7 @@ import {
   normalizeClientModuleArtifact,
   type LayoutSlot,
 } from '@zhin.js/next-console-contract';
-import type { ValidationContext } from '@zhin.js/next-feature-kit';
+import type { ValidationContext } from '@zhin.js/feature-kit';
 
 export interface LayoutDefinition {
   readonly slot: LayoutSlot;

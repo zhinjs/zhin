@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import type { ClientModuleRequest } from '@zhin.js/next-feature-kit';
+import type { ClientModuleRequest } from '@zhin.js/feature-kit';
 import type {
   ClientArtifactManifest,
   ClientArtifactRecord,

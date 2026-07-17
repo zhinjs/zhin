@@ -3,7 +3,7 @@ import {
   childPluginId,
   rootPluginId,
   type PluginId,
-} from '@zhin.js/next-kernel';
+} from '@zhin.js/plugin-runtime';
 import {
   TopologyTransactionPlanner,
   type PluginGraphNode,

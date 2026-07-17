@@ -17,9 +17,9 @@ export interface PackageCutoverPlan {
 }
 
 const capabilityProviders: Readonly<Record<CutoverCapability, string>> = Object.freeze({
-  command: '@zhin.js/next-feature-command',
-  component: '@zhin.js/next-feature-component',
-  middleware: '@zhin.js/next-feature-middleware',
+  command: '@zhin.js/command',
+  component: '@zhin.js/component',
+  middleware: '@zhin.js/middleware',
 });
 
 const capabilityDirectories: Readonly<Record<CutoverCapability, string>> = Object.freeze({
@@ -58,7 +58,7 @@ export class PackageCutover {
     const capabilities = await discoverCapabilities(root);
     const dependencies: Record<string, string> = {
       ...value.dependencies,
-      '@zhin.js/next-kernel': '^0.0.0',
+      '@zhin.js/plugin-runtime': '^0.0.0',
       '@zhin.js/next-runtime': '^0.0.0',
     };
     for (const capability of capabilities) {
@@ -168,7 +168,7 @@ function pluginName(packageName: string): string {
 
 function renderEntry(name: string): string {
   return [
-    "import { definePlugin } from '@zhin.js/next-kernel';",
+    "import { definePlugin } from '@zhin.js/plugin-runtime';",
     '',
     `export default definePlugin({ name: '${name}' });`,
     '',
@@ -249,7 +249,7 @@ async function assertCompletedDependencies(
     throw new Error('Existing zhin manifest does not match discovered capability directories');
   }
   const required = [
-    '@zhin.js/next-kernel',
+    '@zhin.js/plugin-runtime',
     '@zhin.js/next-runtime',
     ...capabilities.map((capability) => capabilityProviders[capability]),
   ];

@@ -52,7 +52,7 @@ Root Plugin 负责整个进程生命周期，因此不能使用 `runtime: isolat
 隔离 Plugin 只能要求 `isolatedChannelToken` 和 `runtimeEnvironmentToken`。Host Scope、数据库、EnvStore 与自定义 Token 不会隐式复制到隔离侧；需要的数据应进入 owner config，操作应成为显式 allowlist RPC。
 
 ```ts
-import { definePlugin } from '@zhin.js/next-kernel';
+import { definePlugin } from '@zhin.js/plugin-runtime';
 import { isolatedChannelToken } from '@zhin.js/next-isolate';
 
 export default definePlugin({

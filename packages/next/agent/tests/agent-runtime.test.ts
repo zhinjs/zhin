@@ -8,7 +8,7 @@ import {
   type CapabilitySlot,
   type RuntimeSnapshot,
   type SnapshotState,
-} from '@zhin.js/next-kernel';
+} from '@zhin.js/plugin-runtime';
 import {
   AgentIndex,
   agentFeatureId,

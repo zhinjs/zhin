@@ -1,4 +1,4 @@
-import type { CapabilityContext } from '@zhin.js/next-feature-kit';
+import type { CapabilityContext } from '@zhin.js/feature-kit';
 
 const toolBrand = 'zhin.agent-tool/1' as const;
 

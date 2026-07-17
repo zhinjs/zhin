@@ -1,4 +1,4 @@
-import type { Dispose } from '@zhin.js/next-kernel';
+import type { Dispose } from '@zhin.js/plugin-runtime';
 import {
   InvalidationPlanner,
   type GenerationInvalidationPlan,

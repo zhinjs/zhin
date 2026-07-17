@@ -7,12 +7,12 @@ import {
   createToken,
   definePlugin,
   type RuntimeSnapshot,
-} from '@zhin.js/next-kernel';
+} from '@zhin.js/plugin-runtime';
 import commandFeature, {
   CommandIndex,
   commandFeatureId,
   defineCommand,
-} from '@zhin.js/next-feature-command';
+} from '@zhin.js/command';
 import { RootRuntime, type ModuleRuntime } from '../src/index.js';
 
 const temporary: string[] = [];

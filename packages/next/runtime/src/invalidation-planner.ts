@@ -1,5 +1,5 @@
 import { basename, resolve } from 'node:path';
-import { rootPluginId, type CapabilityId, type PluginId } from '@zhin.js/next-kernel';
+import { rootPluginId, type CapabilityId, type PluginId } from '@zhin.js/plugin-runtime';
 import type { SourceOwnershipIndex, SourceOwnershipRecord } from './source-ownership.js';
 
 export interface DependencyImpactPort {

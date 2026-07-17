@@ -1,5 +1,5 @@
-import { featureId } from '@zhin.js/next-kernel';
-import { defineFeatureProvider, typeScriptModules } from '@zhin.js/next-feature-kit';
+import { featureId } from '@zhin.js/plugin-runtime';
+import { defineFeatureProvider, typeScriptModules } from '@zhin.js/feature-kit';
 import { parseMcpDefinition } from './definition.js';
 import { McpIndex } from './mcp-index.js';
 

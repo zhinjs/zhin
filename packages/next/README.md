@@ -6,17 +6,17 @@
 
 | Package | Deep module |
 |---|---|
-| `@zhin.js/next-kernel` | 稳定 identity、Scope、Slot、Snapshot lease、CAS generation 与 RootController |
-| `@zhin.js/next-feature-kit` | Feature authoring/runtime/build contract、provider catalog 与 owner-aware discovery |
+| `@zhin.js/plugin-runtime` | 稳定 identity、Scope、Slot、Snapshot lease、CAS generation 与 RootController |
+| `@zhin.js/feature-kit` | Feature authoring/runtime/build contract、provider catalog 与 owner-aware discovery |
 | `@zhin.js/next-runtime` | 静态 manifest、workspace/npm resolution、Project Graph、配置组合、RuntimeEnvironment、source ownership、失效规划、HMR、Root 装配与 process restart 边界 |
 | `@zhin.js/next-isolate` | 可选 Worker/child-process Plugin runtime、structured-clone RPC、drain 与 crash propagation |
 | `@zhin.js/next-config-yaml` | 可选 YAML AST ConfigDocument adapter、乐观并发与原子文件事务 |
 | `@zhin.js/next-compat` | 可删除的 legacy callback definition adapter，不恢复全局 registry |
-| `@zhin.js/next-feature-command` | 第一套标准 Feature provider 与 generation-scoped CommandIndex |
-| `@zhin.js/next-feature-middleware` | `middlewares/**/*.ts`、确定性 onion compose 与 MiddlewareIndex |
-| `@zhin.js/next-feature-component` | `components/**/*.ts|tsx`、owner override/ancestor fallback 与 ComponentIndex |
-| `@zhin.js/next-feature-adapter` | `adapters/**/*.ts`、Endpoint lifecycle 与 generation handoff |
-| `@zhin.js/next-im` | Snapshot-coherent inbound、Command dispatch、Component render 与统一 send pipeline |
+| `@zhin.js/command` | 第一套标准 Feature provider 与 generation-scoped CommandIndex |
+| `@zhin.js/middleware` | `middlewares/**/*.ts`、确定性 onion compose 与 MiddlewareIndex |
+| `@zhin.js/component` | `components/**/*.ts|tsx`、owner override/ancestor fallback 与 ComponentIndex |
+| `@zhin.js/adapter` | `adapters/**/*.ts`、Endpoint lifecycle 与 generation handoff |
+| `@zhin.js/core/runtime` | Snapshot-coherent inbound、Command dispatch、Component render 与统一 send pipeline |
 | `@zhin.js/next-feature-tool` | `tools/*.ts`、`defineAgentTool()` 与 owner-scoped ToolIndex |
 | `@zhin.js/next-feature-skill` | `skills/*/SKILL.md` immutable Skill projection |
 | `@zhin.js/next-feature-agent` | `agents/*.agent.md` immutable Agent projection |
@@ -135,7 +135,7 @@ Page/Layout 只通过可选 `ModuleRuntime.loadClientModule()` 接收静态 arti
 ```bash
 pnpm exec vitest run packages/next
 pnpm --filter '@zhin.js/next-*' build
-pnpm --filter @zhin.js/next-im check:size
+pnpm --filter @zhin.js/core/runtime check:size
 pnpm --filter @zhin.js/next-console check:size
 ```
 

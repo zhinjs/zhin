@@ -7,7 +7,7 @@ import {
   type PluginNodeSnapshot,
   type RuntimeSnapshot,
   type SnapshotState,
-} from '@zhin.js/next-kernel';
+} from '@zhin.js/plugin-runtime';
 import {
   LayoutIndex,
   layoutFeatureId,

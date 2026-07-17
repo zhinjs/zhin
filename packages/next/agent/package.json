@@ -12,7 +12,10 @@
       "import": "./lib/index.js"
     }
   },
-  "files": ["lib", "src"],
+  "files": [
+    "lib",
+    "src"
+  ],
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
@@ -24,7 +27,7 @@
     "@zhin.js/next-feature-mcp": "workspace:*",
     "@zhin.js/next-feature-skill": "workspace:*",
     "@zhin.js/next-feature-tool": "workspace:*",
-    "@zhin.js/next-kernel": "workspace:*"
+    "@zhin.js/plugin-runtime": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",

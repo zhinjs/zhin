@@ -1,5 +1,5 @@
-import type { Dispose } from '@zhin.js/next-kernel';
-import type { ClientModuleRequest } from '@zhin.js/next-feature-kit';
+import type { Dispose } from '@zhin.js/plugin-runtime';
+import type { ClientModuleRequest } from '@zhin.js/feature-kit';
 import type { ModuleRuntime } from '@zhin.js/next-runtime';
 import type { ClientModuleLoader } from './types.js';
 
