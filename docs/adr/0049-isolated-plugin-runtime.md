@@ -12,7 +12,7 @@ Plugin tree 需要允许高计算、易崩溃或需要独立事件循环的 chil
 
 ### D1. Runtime 只依赖 Port
 
-`@zhin.js/next-runtime` 定义 `IsolatedPluginRuntimePort`。Node Worker/child-process 实现在可选 `@zhin.js/next-isolate` 包中，默认 trusted Runtime 不增加依赖。
+`@zhin.js/runtime` 定义 `IsolatedPluginRuntimePort`。Node Worker/child-process 实现在可选 `@zhin.js/next-isolate` 包中，默认 trusted Runtime 不增加依赖。
 
 只有 child Plugin 可以声明 `runtime: isolated`。Root 负责 Host、ModuleRuntime、generation controller 与进程关闭，不能把自身移出该生命周期域。
 

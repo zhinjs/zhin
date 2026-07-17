@@ -3,13 +3,13 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ClientModuleRequest } from '@zhin.js/feature-kit';
-import type { ModuleRuntime } from '@zhin.js/next-runtime';
+import type { ModuleRuntime } from '@zhin.js/runtime';
 import {
   ClientBuildModuleRuntime,
   ClientSourceError,
   ManifestClientModuleLoader,
   TypeScriptClientBuilder,
-} from '../src/index.js';
+} from '../../src/client-build/index.js';
 
 const temporary: string[] = [];
 
@@ -22,7 +22,7 @@ describe('Client build adapter', () => {
     const root = await temp();
     const source = join(root, 'pages/status.tsx');
     await writeSource(source, [
-      "import { definePage } from '@zhin.js/next-console-contract';",
+      "import { definePage } from '@zhin.js/console-contract';",
       "export const meta = definePage({ title: 'Status', order: 10, requiredRoles: ['admin'] });",
       'export default function Status() { return <main>Status</main>; }',
     ].join('\n'));
@@ -54,7 +54,7 @@ describe('Client build adapter', () => {
     const root = await temp();
     const source = join(root, 'pages/status.tsx');
     await writeSource(source, [
-      "import { definePage } from '@zhin.js/next-console-contract';",
+      "import { definePage } from '@zhin.js/console-contract';",
       'const title = process.env.TITLE;',
       'export const meta = definePage({ title });',
       'export default function Status() { return null; }',

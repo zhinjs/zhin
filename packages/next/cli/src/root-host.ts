@@ -7,7 +7,7 @@ import {
   type RuntimeConfigDocument,
   type RuntimeEnvironment,
   type ConfigDocumentPort,
-} from '@zhin.js/next-runtime';
+} from '@zhin.js/runtime';
 
 export interface RootHostOptions {
   readonly projectRoot: string;

@@ -22,7 +22,7 @@ function assertDefinePageImport(file: ts.SourceFile, node: ts.Node): void {
   const found = file.statements.some((statement) => {
     if (!ts.isImportDeclaration(statement)
       || !ts.isStringLiteral(statement.moduleSpecifier)
-      || statement.moduleSpecifier.text !== '@zhin.js/next-console-contract') return false;
+      || statement.moduleSpecifier.text !== '@zhin.js/console-contract') return false;
     const bindings = statement.importClause?.namedBindings;
     return bindings && ts.isNamedImports(bindings)
       && bindings.elements.some((element) => element.name.text === 'definePage'
@@ -31,7 +31,7 @@ function assertDefinePageImport(file: ts.SourceFile, node: ts.Node): void {
   if (!found) fail(
     file,
     node,
-    'Page meta requires a named definePage import from @zhin.js/next-console-contract',
+    'Page meta requires a named definePage import from @zhin.js/console-contract',
   );
 }
 

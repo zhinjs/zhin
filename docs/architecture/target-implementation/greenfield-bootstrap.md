@@ -8,7 +8,7 @@
 |---|---|
 | `@zhin.js/plugin-runtime` | Identity、Token/Scope、DisposeStack、CapabilitySlot、SnapshotLease、CAS generation、RootController |
 | `@zhin.js/feature-kit` | `FeatureAuthoring`、`FeatureRuntime`、可选 `FeatureBuildAdapter`、FeatureCatalog、FeatureDiscovery |
-| `@zhin.js/next-runtime` | Manifest parser、workspace/npm resolver、ProjectGraph、ConfigComposer、RuntimeEnvironment/owner EnvStore、RootRuntime、Node 原生开发 ModuleRuntime、source ownership、HMR 与 process restart |
+| `@zhin.js/runtime` | Manifest parser、workspace/npm resolver、ProjectGraph、ConfigComposer、RuntimeEnvironment/owner EnvStore、RootRuntime、Node 原生开发 ModuleRuntime、source ownership、HMR 与 process restart |
 | `@zhin.js/next-isolate` | 可选 Worker/child-process adapter、structured-clone RPC、generation drain/handoff 与 crash propagation |
 | `@zhin.js/next-config-yaml` | 可选 ConfigDocumentPort、YAML AST patch、revision conflict 与原子文件替换 |
 | `@zhin.js/next-compat` | 可删除的 legacy Command/Middleware callback definition adapter |
@@ -26,7 +26,7 @@
 | `@zhin.js/page` | `pages/*.ts|tsx`、Client Module artifact 校验、canonical route 与 PageIndex |
 | `@zhin.js/layout` | `$nav.tsx`/`$footer.tsx`、最近祖先继承与 renderer fallback chain |
 | `@zhin.js/pagemanager/plugin-runtime` | permission-aware route guard、Plugin Navigation、Layout resolver 与 view lease |
-| `@zhin.js/next-client-build` | 可选 TypeScript AST metadata、content-hash ESM/manifest、development builder 与 production loader |
+| `@zhin.js/pagemanager/client-build` | 可选 TypeScript AST metadata、content-hash ESM/manifest、development builder 与 production loader |
 | `@zhin.js/next-cli` | `init`、`create`、`inspect`、原生 TS `start`、两阶段 migrate/readiness、`build` 与安全 publish |
 
 临时包名使用 `next-*`，避免旧 workspace 包名冲突。迁移阶段再通过一次明确的 package rename/swap 切换正式入口，不在当前阶段增加 facade 或双写层。
@@ -124,8 +124,7 @@ commit 仍然发布完整 immutable RuntimeSnapshot；“局部”只描述 prep
 ```bash
 pnpm exec vitest run packages/next
 pnpm --filter './packages/next/**' build
-pnpm --filter @zhin.js/next-runtime check:size
-pnpm --filter @zhin.js/next-im check:size
+pnpm check:install-size
 pnpm --filter @zhin.js/next-isolate check:size
 pnpm --filter @zhin.js/next-compat check:size
 pnpm --filter @zhin.js/next-cli check:api

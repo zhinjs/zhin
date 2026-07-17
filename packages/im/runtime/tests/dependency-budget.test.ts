@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-describe('next-runtime dependency budget', () => {
+describe('@zhin.js/runtime dependency budget', () => {
   it('keeps frontend build tooling out of the package contract', async () => {
     const file = fileURLToPath(new URL('../package.json', import.meta.url));
     const manifest = JSON.parse(await readFile(file, 'utf8')) as {

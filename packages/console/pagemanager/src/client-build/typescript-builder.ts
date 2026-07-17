@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import ts from 'typescript';
 import type { ClientModuleRequest } from '@zhin.js/feature-kit';
-import type { ClientModuleArtifact } from '@zhin.js/next-console-contract';
+import type { ClientModuleArtifact } from '@zhin.js/console-contract';
 import {
   assertLayoutModule,
   extractPageMetadata,

@@ -7,7 +7,7 @@ import {
   type ConfigDocumentPort,
   type RuntimeConfigDocument,
   type RuntimeMode,
-} from '@zhin.js/next-runtime';
+} from '@zhin.js/runtime';
 import { RootHost } from './root-host.js';
 
 export const processRestartExitCode = 75;

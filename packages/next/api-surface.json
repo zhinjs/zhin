@@ -26,13 +26,6 @@
     "export * from './package-cutover.js';",
     "export * from './readiness.js';"
   ],
-  "client-build": [
-    "export * from './manifest-loader.js';",
-    "export * from './module-runtime.js';",
-    "export * from './static-metadata.js';",
-    "export * from './types.js';",
-    "export * from './typescript-builder.js';"
-  ],
   "command": [
     "export * from './command-index.js';",
     "export * from './definition.js';",
@@ -99,6 +92,13 @@
     "export * from './page-index.js';",
     "export * from './provider.js';",
     "export{default}from './provider.js';"
+  ],
+  "pagemanager/client-build": [
+    "export * from './manifest-loader.js';",
+    "export * from './module-runtime.js';",
+    "export * from './static-metadata.js';",
+    "export * from './types.js';",
+    "export * from './typescript-builder.js';"
   ],
   "pagemanager/plugin-runtime": [
     "export * from './access.js';",

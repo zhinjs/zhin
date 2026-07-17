@@ -6,7 +6,7 @@ import {
   type PluginGraphNode,
   type ProjectGraph,
   type ResolvedPackage,
-} from '@zhin.js/next-runtime';
+} from '@zhin.js/runtime';
 import {
   completeJournal,
   createPublishJournal,

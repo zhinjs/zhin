@@ -6,7 +6,7 @@
 
 ## 为什么独立成包
 
-`@zhin.js/next-runtime` 只定义 `IsolatedPluginRuntimePort`，不强制默认 IM 安装携带隔离实现。需要故障或并发隔离的 Root 显式安装本包；trusted Plugin 的启动路径和生产闭包不变。
+`@zhin.js/runtime` 只定义 `IsolatedPluginRuntimePort`，不强制默认 IM 安装携带隔离实现。需要故障或并发隔离的 Root 显式安装本包；trusted Plugin 的启动路径和生产闭包不变。
 
 本包没有第三方运行时依赖，只使用 Node 的 `worker_threads`、`child_process` 和 IPC。它不依赖 Vite、编译器、CSS 工具或 native/wasm 模块。
 
@@ -14,7 +14,7 @@
 
 ```ts
 import { NodeIsolatedPluginRuntime } from '@zhin.js/next-isolate';
-import { RootRuntime } from '@zhin.js/next-runtime';
+import { RootRuntime } from '@zhin.js/runtime';
 
 const runtime = new RootRuntime({
   projectRoot: process.cwd(),

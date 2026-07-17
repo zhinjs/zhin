@@ -15,8 +15,8 @@
     "@zhin.js/next-compat": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
+    "@zhin.js/runtime": "workspace:*",
     "@zhin.js/middleware": "1.0.0",
-    "@zhin.js/next-runtime": "workspace:*",
     "zhin.js": "workspace:*"
   },
   "devDependencies": {

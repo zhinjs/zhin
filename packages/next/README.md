@@ -8,7 +8,7 @@
 |---|---|
 | `@zhin.js/plugin-runtime` | 稳定 identity、Scope、Slot、Snapshot lease、CAS generation 与 RootController |
 | `@zhin.js/feature-kit` | Feature authoring/runtime/build contract、provider catalog 与 owner-aware discovery |
-| `@zhin.js/next-runtime` | 静态 manifest、workspace/npm resolution、Project Graph、配置组合、RuntimeEnvironment、source ownership、失效规划、HMR、Root 装配与 process restart 边界 |
+| `@zhin.js/runtime` | 静态 manifest、workspace/npm resolution、Project Graph、配置组合、RuntimeEnvironment、source ownership、失效规划、HMR、Root 装配与 process restart 边界 |
 | `@zhin.js/next-isolate` | 可选 Worker/child-process Plugin runtime、structured-clone RPC、drain 与 crash propagation |
 | `@zhin.js/next-config-yaml` | 可选 YAML AST ConfigDocument adapter、乐观并发与原子文件事务 |
 | `@zhin.js/next-compat` | 可删除的 legacy callback definition adapter，不恢复全局 registry |
@@ -26,7 +26,7 @@
 | `@zhin.js/page` | `pages/*.ts|tsx`、Client Module artifact 边界与 PageIndex |
 | `@zhin.js/layout` | `pages/$nav.tsx`、`$footer.tsx` 与最近祖先 override chain |
 | `@zhin.js/pagemanager/plugin-runtime` | route guard、permission filter、Plugin Navigation 与 snapshot-coherent Console catalog |
-| `@zhin.js/next-client-build` | 可选 TypeScript AST metadata、content-hash ESM、artifact manifest 与生产 loader |
+| `@zhin.js/pagemanager/client-build` | 可选 TypeScript AST metadata、content-hash ESM、artifact manifest 与生产 loader |
 | `@zhin.js/next-cli` | Plugin monorepo 初始化、子包创建、inspect、两阶段 legacy migration、build 与安全 publish plan |
 
 每个包的完整契约与示例：
@@ -47,7 +47,7 @@
 - [Page Feature](../console/page/README.md)
 - [Layout Feature](../console/layout/README.md)
 - [Console Runtime](../console/pagemanager/README.md#plugin-runtime)
-- [Client Build Adapter](client-build/README.md)
+- [Client Build Adapter](../console/pagemanager/README.md#client-build)
 - [Runtime](runtime/README.md)
 - [Isolated Runtime](isolate/README.md)
 - [YAML Config Adapter](config-yaml/README.md)
@@ -126,7 +126,7 @@ Legacy MessageCommand source
 
 默认生产组合使用预编译 ESM adapter，不启用 YAML、watcher 或任何 TS transform。开发组合可显式选择零编译依赖的 Node 原生 TS/watcher adapter；YAML 配置仍由独立小包提供，Vite、编译器与 native/wasm transform 不进入 `zhin.js` 默认生产依赖闭包。Graph inspect 在 import/setup 前校验 Runtime engine 与 Feature API semver contract。Command、Middleware、Component、Adapter 都是独立 Feature provider；Capability-only HMR 只重新 load 目标 Slot。Adapter projection 通过 generation handoff 在 commit 前停旧流、启动候选 transport，commit 后才开放 admission。child `plugin.ts` / `schema.json` 变化只影子装配对应 Plugin forest；manifest transaction 则局部处理 child 与 Feature mount 的新增、删除、移动。结构化 config patch 先整体验证，再按实际变化的 owner view 计算最浅 forest；可选 YAML adapter 把文件替换加入同一 generation handoff。以上路径都复用未变化的 Plugin Scope lifetime、重建全部 generation projections，并以完整 immutable snapshot 原子发布。Root setup/schema 与 package ABI 变化升级为受控 process restart；Feature provider 源码、未知 importer 和原生 ESM 无法清除的 support importer closure 仍保守升级为整代或进程边界。
 
-Page/Layout 只通过可选 `ModuleRuntime.loadClientModule()` 接收静态 artifact，Node 不执行 TSX。`@zhin.js/next-client-build` 提供独立 TypeScript AST/build adapter，TypeScript 是 peer，不进入 Runtime/Console 生产闭包。
+Page/Layout 只通过可选 `ModuleRuntime.loadClientModule()` 接收静态 artifact，Node 不执行 TSX。`@zhin.js/pagemanager/client-build` 提供独立 TypeScript AST/build adapter，TypeScript 是 peer，不进入 Runtime/Console 生产闭包。
 
 `@zhin.js/next-isolate` 是同样可选的零第三方依赖 adapter。isolated child 的 config、RPC 和事件只经 structured clone；Host Scope 与普通 Feature 行为不会隐式跨边界。它提供故障/并发隔离，不宣称 OS 安全沙箱。
 

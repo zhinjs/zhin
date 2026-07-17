@@ -71,7 +71,8 @@ async function completedProject(source: string): Promise<string> {
   const root = await project({
     dependencies: {
       '@zhin.js/plugin-runtime': '^0.0.0',
-      '@zhin.js/next-runtime': '^0.0.0',
+      '@zhin.js/runtime': '^1.0.0',
+      'zhin.js': '^4.1.2',
     },
     zhin: {
       protocol: 1,

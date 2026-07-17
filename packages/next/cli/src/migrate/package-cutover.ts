@@ -59,7 +59,8 @@ export class PackageCutover {
     const dependencies: Record<string, string> = {
       ...value.dependencies,
       '@zhin.js/plugin-runtime': '^0.0.0',
-      '@zhin.js/next-runtime': '^0.0.0',
+      '@zhin.js/runtime': '^1.0.0',
+      'zhin.js': '^4.1.2',
     };
     for (const capability of capabilities) {
       dependencies[capabilityProviders[capability]] = '^0.0.0';
@@ -250,7 +251,8 @@ async function assertCompletedDependencies(
   }
   const required = [
     '@zhin.js/plugin-runtime',
-    '@zhin.js/next-runtime',
+    '@zhin.js/runtime',
+    'zhin.js',
     ...capabilities.map((capability) => capabilityProviders[capability]),
   ];
   if (await usesCompat(root, capabilities)) required.push('@zhin.js/next-compat');

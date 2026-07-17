@@ -4,7 +4,7 @@ import type {
   IsolatedPluginPrepareRequest,
   IsolatedPluginRuntimePort,
   PreparedIsolatedPlugin,
-} from '@zhin.js/next-runtime';
+} from '@zhin.js/runtime';
 import {
   isolatedPluginToken,
   type IsolatedPluginEvent,

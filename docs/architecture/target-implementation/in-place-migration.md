@@ -38,6 +38,6 @@ package、补齐目标 package export，并把该项移入 `completed`。
 - 已完成：Plugin Runtime、Feature Kit、IM/Agent/Console 领域 Feature、Core IM Runtime、
   `@zhin.js/agent/runtime` 与 `@zhin.js/pagemanager/plugin-runtime`。
 - 兼容边界：旧 Agent mutable ingress 暂作为适配器保留；Stable Root 切到 RuntimeSnapshot 后删除。
-- 下一批：Client Build adapter 与 Root Runtime 原位归属。
+- 下一批：YAML Config、Isolate、Compat adapter 与 CLI 原位归属，然后切换 Stable 示例。
 - 完成定义：`rg '@zhin.js/next-|packages/next'` 只允许出现在历史 ADR，workspace 中不存在
   `packages/next`，Stable 示例直接由新 Root Runtime 启动。

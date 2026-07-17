@@ -24,7 +24,8 @@ describe('package cutover', () => {
     expect(plan.dependencies).toMatchObject({
       existing: '^1.0.0',
       '@zhin.js/plugin-runtime': '^0.0.0',
-      '@zhin.js/next-runtime': '^0.0.0',
+      '@zhin.js/runtime': '^1.0.0',
+      'zhin.js': '^4.1.2',
       '@zhin.js/next-compat': '^0.0.0',
       '@zhin.js/command': '^0.0.0',
       '@zhin.js/component': '^0.0.0',

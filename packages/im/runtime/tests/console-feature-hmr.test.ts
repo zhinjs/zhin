@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   ClientBuildModuleRuntime,
   TypeScriptClientBuilder,
-} from '../../client-build/src/index.js';
+} from '../../../console/pagemanager/src/client-build/index.js';
 import { definePlugin, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { ClientModuleRequest } from '@zhin.js/feature-kit';
 import layoutFeature, {

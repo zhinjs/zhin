@@ -8,7 +8,7 @@ import {
   type ConfigPatch,
   type PreparedConfigDocument,
   type RuntimeConfigDocument,
-} from '@zhin.js/next-runtime';
+} from '@zhin.js/runtime';
 import { parseDocument, type Document } from 'yaml';
 
 export class YamlConfigDocumentError extends Error {

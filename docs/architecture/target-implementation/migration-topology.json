@@ -113,11 +113,23 @@
       "targetPackage": "@zhin.js/pagemanager",
       "targetDirectory": "packages/console/pagemanager",
       "targetExport": "./plugin-runtime"
+    },
+    {
+      "sourcePackage": "@zhin.js/next-client-build",
+      "sourceDirectory": "packages/next/client-build",
+      "targetPackage": "@zhin.js/pagemanager",
+      "targetDirectory": "packages/console/pagemanager",
+      "targetExport": "./client-build"
+    },
+    {
+      "sourcePackage": "@zhin.js/next-runtime",
+      "sourceDirectory": "packages/next/runtime",
+      "targetPackage": "@zhin.js/runtime",
+      "targetDirectory": "packages/im/runtime",
+      "targetExport": "."
     }
   ],
   "pending": [
-    { "sourcePackage": "@zhin.js/next-client-build", "target": "@zhin.js/pagemanager/client-build" },
-    { "sourcePackage": "@zhin.js/next-runtime", "target": "zhin.js/runtime" },
     { "sourcePackage": "@zhin.js/next-config-yaml", "target": "zhin.js/config-yaml" },
     { "sourcePackage": "@zhin.js/next-isolate", "target": "zhin.js/isolate" },
     { "sourcePackage": "@zhin.js/next-compat", "target": "zhin.js/compat" },

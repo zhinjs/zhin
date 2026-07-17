@@ -6,7 +6,7 @@
 
 ## 为什么独立成包
 
-`@zhin.js/next-runtime` 只定义 `ConfigDocumentPort`，默认生产闭包不包含 YAML parser。需要 `config.yml` 的 Root 单独安装本包；只使用内存配置或其他配置存储时无需承担这项依赖。
+`@zhin.js/runtime` 只定义 `ConfigDocumentPort`，默认生产闭包不包含 YAML parser。需要 `config.yml` 的 Root 单独安装本包；只使用内存配置或其他配置存储时无需承担这项依赖。
 
 本包只增加 `yaml@2.9.0`，不依赖 Vite、编译器、CSS 工具或 native/wasm 模块。包含 Runtime 的完整生产安装仍受 5MB 门禁约束。
 
@@ -14,7 +14,7 @@
 
 ```ts
 import { YamlConfigDocument } from '@zhin.js/next-config-yaml';
-import { RootRuntime } from '@zhin.js/next-runtime';
+import { RootRuntime } from '@zhin.js/runtime';
 
 const runtime = new RootRuntime({
   projectRoot: process.cwd(),

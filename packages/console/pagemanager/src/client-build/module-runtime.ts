@@ -1,6 +1,6 @@
 import type { Dispose } from '@zhin.js/plugin-runtime';
 import type { ClientModuleRequest } from '@zhin.js/feature-kit';
-import type { ModuleRuntime } from '@zhin.js/next-runtime';
+import type { ModuleRuntime } from '@zhin.js/runtime';
 import type { ClientModuleLoader } from './types.js';
 
 /** Adds client artifact loading while preserving the server ModuleRuntime authority. */

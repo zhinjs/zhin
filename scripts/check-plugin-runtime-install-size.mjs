@@ -5,8 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const repoRoot = path.resolve(packageRoot, '../../..');
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const packageManager = JSON.parse(
   fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'),
 ).packageManager;
@@ -82,19 +81,19 @@ const packages = [
     ],
   },
   {
-    dir: 'packages/next/runtime',
-    name: '@zhin.js/next-runtime',
+    dir: 'packages/im/runtime',
+    name: '@zhin.js/runtime',
     dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
   },
   {
     dir: 'packages/next/config-yaml',
     name: '@zhin.js/next-config-yaml',
-    dependencies: ['@zhin.js/next-runtime'],
+    dependencies: ['@zhin.js/runtime'],
   },
   {
     dir: 'packages/next/cli',
     name: '@zhin.js/next-cli',
-    dependencies: ['@zhin.js/next-runtime', '@zhin.js/next-config-yaml'],
+    dependencies: ['@zhin.js/runtime', '@zhin.js/next-config-yaml'],
   },
   {
     dir: 'packages/next/compat',
@@ -104,10 +103,10 @@ const packages = [
   {
     dir: 'packages/next/isolate',
     name: '@zhin.js/next-isolate',
-    dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/next-runtime'],
+    dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/runtime'],
   },
 ];
-const targetName = process.argv[2] ?? '@zhin.js/next-runtime';
+const targetName = process.argv[2] ?? '@zhin.js/plugin-runtime';
 const packagesByName = new Map(packages.map((item) => [item.name, item]));
 if (!packagesByName.has(targetName)) {
   throw new Error(`Unknown Next install-size target: ${targetName}`);

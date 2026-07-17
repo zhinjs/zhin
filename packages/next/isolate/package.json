@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "@zhin.js/plugin-runtime": "workspace:*",
-    "@zhin.js/next-runtime": "workspace:*"
+    "@zhin.js/runtime": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",

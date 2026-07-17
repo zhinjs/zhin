@@ -23,6 +23,8 @@ const migratedRoots = [
   ['page', 'packages/console/page/src'],
   ['layout', 'packages/console/layout/src'],
   ['pagemanager/plugin-runtime', 'packages/console/pagemanager/src/plugin-runtime'],
+  ['pagemanager/client-build', 'packages/console/pagemanager/src/client-build'],
+  ['runtime', 'packages/im/runtime/src'],
 ];
 
 function normalize(statement) {

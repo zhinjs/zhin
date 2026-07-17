@@ -9,7 +9,7 @@ import {
   rootPluginId,
   type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
-import { RootRuntime, type ModuleRuntime } from '@zhin.js/next-runtime';
+import { RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
 import {
   isolatedPluginToken,
   NodeIsolatedPluginRuntime,

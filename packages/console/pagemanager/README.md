@@ -46,6 +46,15 @@ pnpm add @zhin.js/pagemanager
 `@zhin.js/page`、`@zhin.js/layout` 提供，wire types 来自零依赖
 `@zhin.js/console-contract`。
 
+## Client Build
+
+`@zhin.js/pagemanager/client-build` 是可选的 TypeScript AST/build adapter。它静态提取
+`definePage()` 的 JSON-like metadata，生成 content-hash ESM 与
+`pages.manifest.json`，生产 loader 不记录构建机绝对路径。
+
+TypeScript 是 optional peer，不进入默认 PageManager 或 Plugin Runtime 的生产闭包。
+选择该子路径的构建 workspace 需要显式安装兼容版本的 `typescript`。
+
 ## 插件注册 Entry
 
 在插件 Node 侧通过 `web` 上下文获取 **PageManager 实例**（非静态全局）：
