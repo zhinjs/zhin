@@ -11,6 +11,10 @@
         "interactive": {
           "type": "boolean",
           "default": true
+        },
+        "prompt": {
+          "type": "string",
+          "default": "zhin> "
         }
       }
     }

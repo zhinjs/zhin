@@ -14,9 +14,10 @@ pnpm install
 pnpm --filter minimal-bot dev
 ```
 
-Type `/hello` or `/card` in the terminal. `Ctrl+C` drains the active generation and closes the
-terminal Endpoint. Editing a file under `adapters/`, `commands/` or `components/` triggers a
-generation transaction without rerunning Plugin setup.
+Wait for the `zhin> ` prompt, then type `/hello` or `/card` in the same terminal. Do not use the
+`--once` validation command for interactive sessions. `Ctrl+C` drains the active generation and
+closes the terminal Endpoint. Editing a file under `adapters/`, `commands/` or `components/`
+triggers a generation transaction without rerunning Plugin setup.
 
 ## Project layout
 

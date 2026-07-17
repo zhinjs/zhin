@@ -7,6 +7,7 @@ import type { CapabilityId } from '@zhin.js/plugin-runtime';
 interface TerminalConfig {
   readonly terminal?: {
     readonly interactive?: boolean;
+    readonly prompt?: string;
   };
 }
 
@@ -17,11 +18,13 @@ export interface TerminalEndpointOptions {
   readonly output: Writable;
   readonly error: Writable;
   readonly interactive: boolean;
+  readonly prompt: string;
 }
 
 export class TerminalEndpoint implements EndpointInstance {
   readonly #options: TerminalEndpointOptions;
   #readline?: ReadlineInterface;
+  #promptTimer?: ReturnType<typeof setTimeout>;
   #open = false;
 
   constructor(options: TerminalEndpointOptions) {
@@ -30,10 +33,20 @@ export class TerminalEndpoint implements EndpointInstance {
 
   start(): void {
     if (!this.#options.interactive || this.#readline) return;
-    const readline = createInterface({ input: this.#options.input, crlfDelay: Infinity });
+    const readline = createInterface({
+      input: this.#options.input,
+      output: this.#options.output,
+      crlfDelay: Infinity,
+      terminal: isTerminal(this.#options.input) && isTerminal(this.#options.output),
+    });
+    readline.setPrompt(this.#options.prompt);
     readline.on('line', (line) => {
       const content = line.trim();
-      if (!this.#open || !content) return;
+      if (!this.#open) return;
+      if (!content) {
+        this.#schedulePrompt();
+        return;
+      }
       void this.#options.gateway.receive({
         adapter: this.#options.id,
         target: 'terminal',
@@ -41,6 +54,8 @@ export class TerminalEndpoint implements EndpointInstance {
         sender: 'local-user',
       }).catch((error: unknown) => {
         this.#options.error.write(`${formatError(error)}\n`);
+      }).finally(() => {
+        this.#schedulePrompt();
       });
     });
     this.#readline = readline;
@@ -48,14 +63,17 @@ export class TerminalEndpoint implements EndpointInstance {
 
   open(): void {
     this.#open = true;
+    this.#schedulePrompt();
   }
 
   close(): void {
     this.#open = false;
+    this.#clearPrompt();
   }
 
   stop(): void {
     this.#open = false;
+    this.#clearPrompt();
     this.#readline?.close();
     this.#readline = undefined;
   }
@@ -63,6 +81,22 @@ export class TerminalEndpoint implements EndpointInstance {
   send({ payload }: { readonly payload: unknown }): unknown {
     this.#options.output.write(`${formatPayload(payload)}\n`);
     return payload;
+  }
+
+  #schedulePrompt(): void {
+    this.#clearPrompt();
+    // Root activation finishes before the CLI prints its startup summary. A timer keeps the
+    // interactive prompt as the final line without coupling the Adapter to the CLI.
+    this.#promptTimer = setTimeout(() => {
+      this.#promptTimer = undefined;
+      if (this.#open) this.#readline?.prompt();
+    }, 0);
+  }
+
+  #clearPrompt(): void {
+    if (!this.#promptTimer) return;
+    clearTimeout(this.#promptTimer);
+    this.#promptTimer = undefined;
   }
 }
 
@@ -76,9 +110,14 @@ export default defineAdapter<TerminalConfig>({
       output: process.stdout,
       error: process.stderr,
       interactive: context.config.terminal?.interactive ?? true,
+      prompt: context.config.terminal?.prompt ?? 'zhin> ',
     });
   },
 });
+
+function isTerminal(stream: Readable | Writable): boolean {
+  return (stream as Readable & { readonly isTTY?: boolean }).isTTY === true;
+}
 
 function formatPayload(payload: unknown): string {
   return typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);

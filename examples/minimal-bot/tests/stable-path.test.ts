@@ -1,11 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { AdapterIndex, adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
-import { ImRuntime } from '@zhin.js/core/runtime';
+import { ImRuntime, type MessageGateway } from '@zhin.js/core/runtime';
+import { capabilityId, rootPluginId } from '@zhin.js/plugin-runtime';
 import { NativeDevelopmentModuleRuntime, RootRuntime } from '@zhin.js/runtime';
 import { MigrationReadiness, runStartCommand } from '@zhin.js/cli';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { TerminalEndpoint } from '../adapters/terminal.js';
 
 const botRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const packageJson = JSON.parse(
@@ -96,6 +99,40 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
     } finally {
       await runtime.stop();
     }
+  });
+
+  it('accepts messages from the current process stream and restores the prompt', async () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const writes: string[] = [];
+    output.on('data', (chunk: Buffer) => writes.push(chunk.toString()));
+    const receive = vi.fn(async () => Object.freeze({ matched: true }));
+    const gateway: MessageGateway = {
+      receive,
+      send: vi.fn(),
+    };
+    const endpoint = new TerminalEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeatureId, 'terminal'),
+      gateway,
+      input,
+      output,
+      error: output,
+      interactive: true,
+      prompt: 'zhin> ',
+    });
+
+    endpoint.start();
+    endpoint.open();
+    await vi.waitFor(() => expect(writes.join('')).toContain('zhin> '));
+    input.write('/hello\n');
+    await vi.waitFor(() => expect(receive).toHaveBeenCalledWith(expect.objectContaining({
+      content: '/hello',
+      sender: 'local-user',
+    })));
+    await vi.waitFor(() => {
+      expect(writes.join('').match(/zhin> /gu)).toHaveLength(2);
+    });
+    endpoint.stop();
   });
 
   it('starts through the CLI composition root and is migration-ready', async () => {
