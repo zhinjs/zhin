@@ -54,6 +54,8 @@ export default defineFeatureProvider({
 
 Provider 本身应是纯 definition。`project()` 只能建立 generation-scoped 派生物，不能写入模块级 registry；若 projection 持有资源，必须返回 `dispose`。
 
+Projection 也可以返回 generation `handoff` participant。Runtime 将它排在 Plugin Resource handoff 之后激活、之前 quiesce，使 Endpoint 等 Feature 派生资源参与同一个 generation transaction；prepare 阶段仍不得开放 admission。
+
 普通 TypeScript 目录约定与 execution context 由 Feature Kit 复用，但文件语义、definition brand、排序和执行仍归具体 Feature 所有。Command、Middleware、Component 因此不需要复制扫描器和 Resource lookup，也不会把领域枚举塞回 Kernel。
 
 ## Identity 与冲突

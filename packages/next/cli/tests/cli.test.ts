@@ -34,6 +34,10 @@ describe('next CLI project tooling', () => {
 
     const workspace = await readFile(join(root, 'pnpm-workspace.yaml'), 'utf8');
     expect(workspace).toBe('packages:\n  - packages/*\n  - plugins/*\n');
+    const tsconfig = JSON.parse(
+      await readFile(join(root, 'tsconfig.json'), 'utf8'),
+    ) as { include: string[] };
+    expect(tsconfig.include).toContain('adapters/**/*.ts');
     const child = JSON.parse(
       await readFile(join(root, 'plugins/weather/package.json'), 'utf8'),
     ) as { zhin: { engine: string } };

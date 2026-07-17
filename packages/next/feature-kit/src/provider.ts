@@ -2,6 +2,7 @@ import type {
   CapabilitySlot,
   Dispose,
   FeatureId,
+  GenerationHandoffParticipant,
   PluginId,
   RuntimeSnapshot,
 } from '@zhin.js/next-kernel';
@@ -58,6 +59,8 @@ export interface ProjectionContext {
 export interface FeatureProjection<T> {
   readonly value: T;
   readonly dispose?: Dispose;
+  /** Participates in the generation transaction without opening admission in prepare. */
+  readonly handoff?: GenerationHandoffParticipant;
 }
 
 export interface FeatureRuntime<TDefinition, TProjection> {

@@ -98,6 +98,29 @@ describe('Command Feature', () => {
       .resolves.toBe('issues:open,closed');
   });
 
+  it('dispatches the longest command prefix with trailing args and source input', async () => {
+    const owner = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner,
+      feature: commandFeatureId,
+      localName: 'gh/issue/list',
+      source: '/commands/gh/issue/list.ts',
+      definition: defineCommand<{}, string, { sender: string }>({
+        execute: ({ args, input }) => `${input.sender}:${args.join(',')}`,
+      }),
+    });
+    const index = new CommandIndex([slot], snapshotFor(owner, [slot]));
+
+    await expect(index.dispatch('gh issue list open assigned', { sender: 'alice' }))
+      .resolves.toEqual({
+        matched: true,
+        command: 'gh issue list',
+        owner,
+        value: 'alice:open,assigned',
+      });
+    await expect(index.dispatch('gh issue missing')).resolves.toEqual({ matched: false });
+  });
+
   it('compiles typed filename parameters and applies defaults', async () => {
     const owner = rootPluginId();
     const source = '/project/commands/gh/pr/[title:string=defaultTitle].ts';

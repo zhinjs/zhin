@@ -12,15 +12,60 @@ const packageManager = JSON.parse(
 ).packageManager;
 const budgetBytes = 5 * 1024 * 1024;
 const packages = [
-  { dir: 'packages/next/kernel', name: '@zhin.js/next-kernel' },
-  { dir: 'packages/next/feature-kit', name: '@zhin.js/next-feature-kit' },
-  { dir: 'packages/next/runtime', name: '@zhin.js/next-runtime' },
-  { dir: 'packages/next/config-yaml', name: '@zhin.js/next-config-yaml' },
+  { dir: 'packages/next/kernel', name: '@zhin.js/next-kernel', dependencies: [] },
+  {
+    dir: 'packages/next/feature-kit',
+    name: '@zhin.js/next-feature-kit',
+    dependencies: ['@zhin.js/next-kernel'],
+  },
+  {
+    dir: 'packages/next/feature-adapter',
+    name: '@zhin.js/next-feature-adapter',
+    dependencies: ['@zhin.js/next-kernel', '@zhin.js/next-feature-kit'],
+  },
+  {
+    dir: 'packages/next/feature-command',
+    name: '@zhin.js/next-feature-command',
+    dependencies: ['@zhin.js/next-kernel', '@zhin.js/next-feature-kit'],
+  },
+  {
+    dir: 'packages/next/feature-component',
+    name: '@zhin.js/next-feature-component',
+    dependencies: ['@zhin.js/next-kernel', '@zhin.js/next-feature-kit'],
+  },
+  {
+    dir: 'packages/next/feature-middleware',
+    name: '@zhin.js/next-feature-middleware',
+    dependencies: ['@zhin.js/next-kernel', '@zhin.js/next-feature-kit'],
+  },
+  {
+    dir: 'packages/next/runtime',
+    name: '@zhin.js/next-runtime',
+    dependencies: ['@zhin.js/next-kernel', '@zhin.js/next-feature-kit'],
+  },
+  {
+    dir: 'packages/next/config-yaml',
+    name: '@zhin.js/next-config-yaml',
+    dependencies: ['@zhin.js/next-runtime'],
+  },
+  {
+    dir: 'packages/next/im',
+    name: '@zhin.js/next-im',
+    dependencies: [
+      '@zhin.js/next-kernel',
+      '@zhin.js/next-feature-adapter',
+      '@zhin.js/next-feature-command',
+      '@zhin.js/next-feature-component',
+      '@zhin.js/next-feature-middleware',
+    ],
+  },
 ];
 const targetName = process.argv[2] ?? '@zhin.js/next-runtime';
-const targetIndex = packages.findIndex((item) => item.name === targetName);
-if (targetIndex < 0) throw new Error(`Unknown Next install-size target: ${targetName}`);
-const stack = packages.slice(0, targetIndex + 1);
+const packagesByName = new Map(packages.map((item) => [item.name, item]));
+if (!packagesByName.has(targetName)) {
+  throw new Error(`Unknown Next install-size target: ${targetName}`);
+}
+const stack = dependencyClosure(targetName);
 const forbiddenPackages = /^(?:vite(?:@|_)|@vitejs|lightningcss(?:[-@_]|$))/u;
 
 function run(command, args, options = {}) {
@@ -51,6 +96,16 @@ function diskUsage(directory) {
 
 function formatMb(bytes) {
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function dependencyClosure(name, visited = new Set(), result = []) {
+  if (visited.has(name)) return result;
+  const item = packagesByName.get(name);
+  if (!item) throw new Error(`Unknown Next package dependency: ${name}`);
+  visited.add(name);
+  for (const dependency of item.dependencies) dependencyClosure(dependency, visited, result);
+  result.push(item);
+  return result;
 }
 
 function main() {

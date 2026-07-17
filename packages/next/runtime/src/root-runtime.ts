@@ -40,7 +40,11 @@ import {
   defineEnvironmentLayers,
   type EnvironmentLayers,
 } from './environment-store.js';
-import { FeatureProjector, type ProjectionState } from './feature-projector.js';
+import {
+  FeatureProjector,
+  composeGenerationHandoffs,
+  type ProjectionState,
+} from './feature-projector.js';
 import { GenerationAssets } from './generation-assets.js';
 import type { ModuleRuntime } from './module-runtime.js';
 import { NodeDiscoveryHost } from './node-discovery-host.js';
@@ -463,7 +467,10 @@ class GenerationAssembler {
         generation: {
           snapshot: state,
           dispose: () => assets.dispose(),
-          handoff: this.#plugins.generationHandoff(),
+          handoff: composeGenerationHandoffs(
+            this.#plugins.generationHandoff(),
+            projected.handoff,
+          ),
         },
         ownership,
         model: {

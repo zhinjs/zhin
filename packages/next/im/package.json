@@ -1,0 +1,38 @@
+{
+  "name": "@zhin.js/next-im",
+  "version": "0.0.0",
+  "description": "Snapshot-coherent IM runtime for the next Zhin architecture",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "files": ["lib", "src"],
+  "scripts": {
+    "build": "tsc",
+    "check:size": "node ../runtime/scripts/check-install-size.mjs @zhin.js/next-im",
+    "clean": "rimraf lib",
+    "test": "vitest run --root ../../.. packages/next/im/tests"
+  },
+  "dependencies": {
+    "@zhin.js/next-feature-adapter": "workspace:*",
+    "@zhin.js/next-feature-command": "workspace:*",
+    "@zhin.js/next-feature-component": "workspace:*",
+    "@zhin.js/next-feature-middleware": "workspace:*",
+    "@zhin.js/next-kernel": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "license": "MIT",
+  "private": true
+}

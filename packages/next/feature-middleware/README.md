@@ -25,6 +25,7 @@ middlewares/
 import { defineMiddleware } from '@zhin.js/next-feature-middleware';
 
 export default defineMiddleware<Message>({
+  target: 'inbound',
   phase: 'before-dispatch',
   order: -10,
   async handle({ input, owner, config, use }, next) {
@@ -34,7 +35,7 @@ export default defineMiddleware<Message>({
 });
 ```
 
-`phase` 默认为 `before-dispatch`，`order` 默认为 `0` 且必须是安全整数。Definition 是纯冻结值，不注册到模块全局，也不读取“当前 Plugin”。
+`target` 默认为 `inbound`，也可设为 `outbound`；`phase` 默认为 `before-dispatch`，`order` 默认为 `0` 且必须是安全整数。Definition 是纯冻结值，不注册到模块全局，也不读取“当前 Plugin”。
 
 ## 排序与组合
 
@@ -49,10 +50,12 @@ export default defineMiddleware<Message>({
 const index = snapshot.projections.get(middlewareFeatureId);
 if (!(index instanceof MiddlewareIndex)) throw new Error('Middleware is missing');
 
-await index.run(message, () => dispatcher.dispatch(message, snapshot));
+await index.run(message, () => dispatcher.dispatch(message, snapshot), 'inbound');
 ```
 
 Middleware 使用 Koa 风格 onion compose：`await next()` 前执行进入逻辑，之后执行退出逻辑。一次执行只能调用一次 `next()`；重复调用会明确失败。整个 pipeline 使用同一个 `RuntimeSnapshot`，不会在执行中跨 generation。
+
+`MiddlewareIndex.run(input, terminal, target)` 只执行对应 target。IM Runtime 用 `inbound` 包裹 Message dispatch、用 `outbound` 包裹渲染后的发送 envelope，因此中间件不会在两条链上意外重复执行。
 
 ## Execution Context
 

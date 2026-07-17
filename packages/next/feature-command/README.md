@@ -52,6 +52,7 @@ export default defineCommand({
 | `config` | owner-scoped immutable 配置 |
 | `args` | 调用参数 |
 | `params` | 由文件名 pattern 匹配并完成类型转换的命名参数 |
+| `input` | Dispatcher 注入的原始调用输入；IM Runtime 中为当前 `Message` |
 | `use(token)` | 从 owner 展平后的 Resource snapshot 读取依赖 |
 
 运行时路径不访问可变 Plugin registry，也不会调用装配期 API。
@@ -79,9 +80,12 @@ if (!(projection instanceof CommandIndex)) throw new Error('Command Feature is m
 
 console.log(projection.list());
 await projection.execute('group status', ['verbose']);
+await projection.dispatch('group status verbose', message);
 ```
 
 调用方应在一次请求开始时 lease `RuntimeSnapshot`，并只使用该 snapshot 中的 `CommandIndex`。
+
+`execute(name, args)` 适合直接调用确定命令。`dispatch(input, source)` 从最长前缀开始匹配，把剩余词交给 `args`，并把 `source` 注入 `context.input`。dispatch 返回值显式区分 matched/unmatched，不用异常表达普通未匹配。
 
 ## Plugin Manifest
 

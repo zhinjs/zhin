@@ -15,31 +15,33 @@ export interface CommandParameterDefinition {
   readonly defaultValue?: CommandParameterValue;
 }
 
-export interface CommandContext<TConfig = unknown> extends CapabilityContext<TConfig> {
+export interface CommandContext<TConfig = unknown, TInput = unknown>
+  extends CapabilityContext<TConfig> {
   readonly args: readonly string[];
   readonly params: Readonly<Record<string, CommandParameterValue>>;
+  readonly input: TInput;
 }
 
-export interface CommandDefinition<TConfig = unknown, TResult = unknown> {
+export interface CommandDefinition<TConfig = unknown, TResult = unknown, TInput = unknown> {
   readonly $feature: typeof commandBrand;
   readonly $parameter?: CommandParameterDefinition;
   readonly description?: string;
-  execute(context: CommandContext<TConfig>): TResult | Promise<TResult>;
+  execute(context: CommandContext<TConfig, TInput>): TResult | Promise<TResult>;
 }
 
-export function defineCommand<TConfig = unknown, TResult = unknown>(
-  definition: Omit<CommandDefinition<TConfig, TResult>, '$feature' | '$parameter'>,
-): Readonly<CommandDefinition<TConfig, TResult>> {
+export function defineCommand<TConfig = unknown, TResult = unknown, TInput = unknown>(
+  definition: Omit<CommandDefinition<TConfig, TResult, TInput>, '$feature' | '$parameter'>,
+): Readonly<CommandDefinition<TConfig, TResult, TInput>> {
   if (typeof definition.execute !== 'function') {
     throw new TypeError('Command execute must be a function');
   }
   return Object.freeze({ $feature: commandBrand, ...definition });
 }
 
-export function bindCommandParameter<TConfig, TResult>(
-  definition: CommandDefinition<TConfig, TResult>,
+export function bindCommandParameter<TConfig, TResult, TInput>(
+  definition: CommandDefinition<TConfig, TResult, TInput>,
   parameter: CommandParameterDefinition | undefined,
-): Readonly<CommandDefinition<TConfig, TResult>> {
+): Readonly<CommandDefinition<TConfig, TResult, TInput>> {
   if (!parameter) return definition;
   return Object.freeze({ ...definition, $parameter: Object.freeze({ ...parameter }) });
 }
@@ -60,11 +62,13 @@ export function createCommandContext(
   ownerId: PluginId,
   args: readonly string[],
   params: Readonly<Record<string, CommandParameterValue>> = Object.freeze({}),
+  input: unknown = undefined,
 ): CommandContext {
   const context = createCapabilityContext(snapshot, ownerId);
   return Object.freeze({
     ...context,
     args: Object.freeze([...args]),
     params: Object.freeze({ ...params }),
+    input,
   });
 }

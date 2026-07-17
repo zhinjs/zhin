@@ -9,7 +9,7 @@ import {
 import { FeatureDiscovery } from '@zhin.js/next-feature-kit';
 import type { RuntimeEnvironment } from './environment.js';
 import type { EnvironmentLayers } from './environment-store.js';
-import { FeatureProjector } from './feature-projector.js';
+import { FeatureProjector, composeGenerationHandoffs } from './feature-projector.js';
 import type { ModuleRuntime } from './module-runtime.js';
 import { NodeDiscoveryHost } from './node-discovery-host.js';
 import {
@@ -115,7 +115,10 @@ export class SubtreeGenerationPreparer {
         generation: {
           snapshot: projected.state,
           dispose: () => assets.dispose(),
-          handoff: plugins.generationHandoff(),
+          handoff: composeGenerationHandoffs(
+            plugins.generationHandoff(),
+            projected.handoff,
+          ),
         },
         ownership,
         model: {

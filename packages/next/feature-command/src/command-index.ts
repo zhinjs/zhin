@@ -1,5 +1,6 @@
 import type {
   CapabilitySlot,
+  PluginId,
   RuntimeSnapshot,
 } from '@zhin.js/next-kernel';
 import {
@@ -19,6 +20,13 @@ export interface CommandDescriptor {
   readonly description?: string;
   readonly source: string;
   readonly parameters: readonly CommandParameterDescriptor[];
+}
+
+export interface CommandDispatchResult {
+  readonly matched: boolean;
+  readonly command?: string;
+  readonly owner?: PluginId;
+  readonly value?: unknown;
 }
 
 interface CommandRecord extends CommandDescriptor {
@@ -97,6 +105,31 @@ export class CommandIndex {
         match.params,
       ),
     );
+  }
+
+  async dispatch(input: string, source: unknown = undefined): Promise<CommandDispatchResult> {
+    const words = splitCommand(input);
+    for (let consumed = words.length; consumed > 0; consumed -= 1) {
+      const match = this.#match(words.slice(0, consumed).join(' '));
+      if (!match) continue;
+      const args = words.slice(consumed);
+      const value = await match.command.slot.definition.execute(
+        createCommandContext(
+          this.snapshot,
+          match.command.slot.owner,
+          args,
+          match.params,
+          source,
+        ),
+      );
+      return Object.freeze({
+        matched: true,
+        command: match.command.name,
+        owner: match.command.slot.owner,
+        value,
+      });
+    }
+    return Object.freeze({ matched: false });
   }
 
   #match(name: string): CommandMatch | undefined {

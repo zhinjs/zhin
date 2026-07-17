@@ -7,7 +7,7 @@ import {
   type RuntimeSnapshot,
 } from '@zhin.js/next-kernel';
 import { FeatureDiscovery } from '@zhin.js/next-feature-kit';
-import { FeatureProjector } from './feature-projector.js';
+import { FeatureProjector, composeGenerationHandoffs } from './feature-projector.js';
 import type { ModuleRuntime } from './module-runtime.js';
 import { NodeDiscoveryHost } from './node-discovery-host.js';
 import type {
@@ -60,7 +60,11 @@ export class SlotGenerationPreparer {
       );
       const assets = this.model.assets.fork(projected.disposers);
       return {
-        generation: { snapshot: projected.state, dispose: () => assets.dispose() },
+        generation: {
+          snapshot: projected.state,
+          dispose: () => assets.dispose(),
+          handoff: composeGenerationHandoffs(projected.handoff),
+        },
         ownership,
         model: { ...this.model, assets },
       };

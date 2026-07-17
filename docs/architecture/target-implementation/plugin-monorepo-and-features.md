@@ -39,6 +39,8 @@ my-plugin/
 ├── packages/
 │   ├── command/
 │   ├── component/
+│   ├── middleware/
+│   ├── adapter/
 │   ├── skill/
 │   ├── tool/
 │   └── agent/
@@ -59,8 +61,12 @@ my-plugin/
 ├── commands/
 │   ├── status.ts
 │   └── zt.ts
-└── components/
-    └── test-err.ts
+├── components/
+│   └── test-err.ts
+├── middlewares/
+│   └── auth.ts
+└── adapters/
+    └── discord.ts
 ```
 
 `plugins/60s/skills` 是 60s package 的能力目录，不是 nested Plugin workspace。CLI 对 `plugins/*/plugins` 和子 `pnpm-workspace.yaml` 给出结构化错误。
@@ -289,6 +295,9 @@ export interface PluginDefinition<TConfig = unknown> {
 | 变更 | 最小 prepare 单元 |
 |---|---|
 | `commands/**/<name>.ts|tsx` | 单个层级 Command Slot + Command projection |
+| `components/**/<name>.ts|tsx` | 单个 Component Slot + owner-aware projection |
+| `middlewares/**/<name>.ts` | 单个 Middleware Slot + inbound/outbound projection |
+| `adapters/**/<name>.ts` | 单个 Adapter Slot + generation handoff；旧 Endpoint 按 lease 延迟销毁 |
 | `agents/planner.md` | 单个 Agent Slot + Agent projection |
 | Feature package manifest 中的 provider entry | 重载 provider + 使用该 Feature package 的所有 owner Slot/projection；Plugin Scope 复用 |
 | Feature provider 源码 | 当前保守重建完整 shadow generation |

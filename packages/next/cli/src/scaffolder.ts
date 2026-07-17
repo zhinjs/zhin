@@ -74,6 +74,7 @@ export class ProjectScaffolder {
         'components/**/*.ts',
         'components/**/*.tsx',
         'middlewares/**/*.ts',
+        'adapters/**/*.ts',
         'plugins/**/*.ts',
         'packages/**/*.ts',
       ],

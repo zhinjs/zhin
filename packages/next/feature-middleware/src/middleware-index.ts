@@ -5,6 +5,7 @@ import type {
   MiddlewareDefinition,
   MiddlewareNext,
   MiddlewarePhase,
+  MiddlewareTarget,
 } from './definition.js';
 
 export interface MiddlewareDescriptor {
@@ -12,6 +13,7 @@ export interface MiddlewareDescriptor {
   readonly name: string;
   readonly source: string;
   readonly phase: MiddlewarePhase;
+  readonly target: MiddlewareTarget;
   readonly order: number;
 }
 
@@ -32,6 +34,7 @@ export class MiddlewareIndex {
       name: slot.localName,
       source: slot.source,
       phase: slot.definition.phase,
+      target: slot.definition.target,
       order: slot.definition.order,
       slot,
     })).sort((left, right) => compareMiddleware(left, right, topology)));
@@ -44,12 +47,14 @@ export class MiddlewareIndex {
   async run<TInput>(
     input: TInput,
     terminal: MiddlewareNext = async () => undefined,
+    target: MiddlewareTarget = 'inbound',
   ): Promise<void> {
+    const records = this.#records.filter((record) => record.target === target);
     let cursor = -1;
     const dispatch = async (index: number): Promise<void> => {
       if (index <= cursor) throw new Error('Middleware next() called more than once');
       cursor = index;
-      const record = this.#records[index];
+      const record = records[index];
       if (!record) return terminal();
       const context: MiddlewareContext<TInput> = Object.freeze({
         ...createCapabilityContext(this.snapshot, record.owner),

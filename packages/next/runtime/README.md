@@ -127,6 +127,8 @@ const runtime = new RootRuntime({
 
 局部 prepare 仍发布完整 immutable snapshot。所有 Feature projection 都针对候选 snapshot 重建；失败时 shadow disposer 逆序执行，active generation 不变。
 
+Feature projection 可以返回 generation handoff participant。Runtime 按 Plugin Resource、Feature projection 的顺序组合：quiesce 逆序，activate/open 正序。Adapter Endpoint 因而能在 commit 前停旧流并启动候选 transport，在 commit 后才开放 admission。
+
 ## Topology Transaction
 
 `TopologyTransactionPlanner` 比较 committed graph 与重新解析的候选 graph，产出稳定的差异：
