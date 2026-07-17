@@ -15,16 +15,21 @@ describe('Vite TypeScript ModuleRuntime', () => {
     const root = await mkdtemp(join(tmpdir(), 'zhin-next-vite-'));
     temporary.push(root);
     await mkdir(root, { recursive: true });
+    const dependency = join(root, 'shared.ts');
     const source = join(root, 'value.ts');
-    await writeFile(source, 'export default { value: 1 };\n');
+    await writeFile(dependency, 'export const value: number = 1;\n');
+    await writeFile(source, "import { value } from './shared.js';\nexport default { value };\n");
     const runtime = await ViteModuleRuntime.create(root);
 
     try {
       const first = await runtime.load<{ default: { value: number } }>(source);
       expect(first.default.value).toBe(1);
+      expect(runtime.affectedSources(dependency)).toEqual(
+        expect.arrayContaining([dependency, source]),
+      );
 
-      await writeFile(source, 'export default { value: 2 };\n');
-      runtime.invalidate(source);
+      await writeFile(dependency, 'export const value: number = 2;\n');
+      runtime.invalidate(dependency);
       const second = await runtime.load<{ default: { value: number } }>(source);
       expect(second.default.value).toBe(2);
     } finally {

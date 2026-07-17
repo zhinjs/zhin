@@ -115,6 +115,8 @@ export class SnapshotStore {
     }
 
     const previous = this.#current;
+    // Commit only swaps the active pointer. The previous record may still be
+    // serving in-flight work, so disposal is deferred to its final lease.
     this.#current = {
       snapshot: createSnapshotView(expectedGeneration + 1, prepared.snapshot),
       dispose: prepared.dispose,
@@ -133,6 +135,8 @@ export class SnapshotStore {
     this.#current.retired = true;
     this.#retired.add(this.#current);
     this.#disposeIfReady(this.#current);
+    // A Root is not stopped while any historical generation still owns live
+    // resources. This also surfaces deferred disposer failures to the caller.
     await Promise.all([...this.#retired].map((record) => this.#waitForDisposal(record)));
     this.#retired.clear();
   }
@@ -167,6 +171,8 @@ export function createSnapshotView(
   generation: number,
   state: SnapshotState,
 ): RuntimeSnapshot {
+  // Object.freeze(Map) does not disable Map#set. ReadonlyMapView removes the
+  // mutator interface at runtime, including from provider projection hooks.
   return Object.freeze({
     ...state,
     generation,

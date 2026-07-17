@@ -26,31 +26,21 @@ import {
   type FeatureProvider,
 } from '@zhin.js/next-feature-kit';
 import type { ZhinFeatureManifest, ZhinPluginManifest } from './manifest.js';
-import {
-  ConfigComposer,
-  type RuntimeConfigDocument,
-} from './config-composer.js';
-import {
-  runtimeEnvironmentToken,
-  type RuntimeEnvironment,
-} from './environment.js';
+import { ConfigComposer, type RuntimeConfigDocument } from './config-composer.js';
+import { runtimeEnvironmentToken, type RuntimeEnvironment } from './environment.js';
 import type { ModuleRuntime } from './module-runtime.js';
 import { NodeDiscoveryHost } from './node-discovery-host.js';
 import { NodePackageResolver } from './package-resolver.js';
-import {
-  ProjectGraphService,
-  type PluginGraphNode,
-  type ProjectGraph,
-} from './project-graph.js';
+import { ProjectGraphService, type PluginGraphNode, type ProjectGraph } from './project-graph.js';
+import { HmrCoordinator, type HmrCoordinatorOptions } from './hmr-coordinator.js';
+import { SourceOwnershipIndex } from './source-ownership.js';
 
 export type PluginConfigResolver = (node: PluginGraphNode) => unknown;
 export interface RootResourceContext {
   readonly resources: Scope;
   readonly lifecycle: DisposeStackType;
 }
-export type RootResourceInstaller = (
-  context: RootResourceContext,
-) => void | Promise<void>;
+export type RootResourceInstaller = (context: RootResourceContext) => void | Promise<void>;
 
 export interface RootRuntimeOptions {
   readonly projectRoot: string;
@@ -60,6 +50,13 @@ export interface RootRuntimeOptions {
   readonly installResources?: RootResourceInstaller;
 }
 
+export type RootHmrOptions = Omit<HmrCoordinatorOptions, 'modules' | 'ownership' | 'runtime'>;
+
+interface PreparedRuntimeGeneration {
+  readonly generation: PreparedGeneration;
+  readonly ownership: SourceOwnershipIndex;
+}
+
 export class RootRuntime {
   readonly controller: RootController;
   readonly #projectRoot: string;
@@ -67,6 +64,7 @@ export class RootRuntime {
   readonly #environment: RuntimeEnvironment;
   readonly #config: PluginConfigResolver | RuntimeConfigDocument;
   readonly #installResources?: RootResourceInstaller;
+  #ownership = SourceOwnershipIndex.empty();
 
   constructor(options: RootRuntimeOptions) {
     this.#projectRoot = resolve(options.projectRoot);
@@ -81,12 +79,44 @@ export class RootRuntime {
     return this.controller.snapshots.current;
   }
 
-  start(): Promise<RuntimeSnapshot> {
-    return this.controller.start((current) => this.#prepare(current));
+  get sourceOwnership(): SourceOwnershipIndex {
+    return this.#ownership;
   }
 
-  reload(target: PluginId | string = rootPluginId()): Promise<RuntimeSnapshot> {
-    return this.controller.reload(target, (current) => this.#prepare(current));
+  async start(): Promise<RuntimeSnapshot> {
+    let prepared: PreparedRuntimeGeneration | undefined;
+    const snapshot = await this.controller.start(async (current) => {
+      prepared = await this.#prepare(current);
+      return prepared.generation;
+    });
+    this.#ownership = requirePrepared(prepared).ownership;
+    return snapshot;
+  }
+
+  async reload(target: PluginId | string = rootPluginId()): Promise<RuntimeSnapshot> {
+    let prepared: PreparedRuntimeGeneration | undefined;
+    const snapshot = await this.controller.reload(target, async (current) => {
+      prepared = await this.#prepare(current);
+      return prepared.generation;
+    });
+    this.#ownership = requirePrepared(prepared).ownership;
+    return snapshot;
+  }
+
+  createHmrCoordinator(options: RootHmrOptions): HmrCoordinator {
+    return new HmrCoordinator({
+      ...options,
+      modules: this.#modules,
+      ownership: () => this.#ownership,
+      runtime: {
+        // The planner already exposes slot/subtree intent. The first executor
+        // intentionally rebuilds the whole generation until resource handoff
+        // can preserve transactional setup and disposal at a finer granularity.
+        reload: async (plan) => {
+          await this.reload(plan.subtrees[0] ?? plan.slots[0] ?? rootPluginId());
+        },
+      },
+    });
   }
 
   async stop(): Promise<void> {
@@ -97,13 +127,15 @@ export class RootRuntime {
     }
   }
 
-  async #prepare(current: RuntimeSnapshot): Promise<PreparedGeneration> {
+  async #prepare(current: RuntimeSnapshot): Promise<PreparedRuntimeGeneration> {
     const resolver = await NodePackageResolver.create(this.#projectRoot);
     const graph = await new ProjectGraphService(resolver).inspect(this.#projectRoot);
-    const configResolver = typeof this.#config === 'function'
-      ? this.#config
-      : await new ConfigComposer().compose(graph, this.#config)
-        .then((composed) => (node: PluginGraphNode) => composed.views.get(node.id));
+    const configResolver =
+      typeof this.#config === 'function'
+        ? this.#config
+        : await new ConfigComposer()
+            .compose(graph, this.#config)
+            .then((composed) => (node: PluginGraphNode) => composed.views.get(node.id));
     const assembler = new GenerationAssembler(
       graph,
       this.#modules,
@@ -126,6 +158,7 @@ class GenerationAssembler {
   readonly #projections = new Map<FeatureId, unknown>();
   readonly #catalog = new FeatureCatalog();
   readonly #rootsByFeature = new Map<FeatureId, CapabilityRoot[]>();
+  readonly #featureIdsByPackageRoot = new Map<string, FeatureId>();
   readonly #host: NodeDiscoveryHost;
 
   constructor(
@@ -139,15 +172,25 @@ class GenerationAssembler {
     this.#host = new NodeDiscoveryHost(modules);
   }
 
-  async prepare(): Promise<PreparedGeneration> {
+  async prepare(): Promise<PreparedRuntimeGeneration> {
     try {
+      // Prepare is deliberately ordered: providers define discovery, setup
+      // creates owner scopes, then definitions can be projected against both.
       await this.#loadProviders(this.graph.root);
       await this.#setupPlugin(this.graph.root);
       await this.#discoverAndProject();
       this.#disposers.seal();
+      const state = this.#state();
       return {
-        snapshot: this.#state(),
-        dispose: () => this.#disposers.dispose(),
+        generation: {
+          snapshot: state,
+          dispose: () => this.#disposers.dispose(),
+        },
+        ownership: SourceOwnershipIndex.fromGeneration(
+          this.graph,
+          createSnapshotView(this.generation, state),
+          this.#featureIdsByPackageRoot,
+        ),
       };
     } catch (error) {
       try {
@@ -176,6 +219,14 @@ class GenerationAssembler {
         );
       }
       this.#catalog.add(provider);
+      const packageRoot = resolve(requirement.package.root);
+      const existingFeature = this.#featureIdsByPackageRoot.get(packageRoot);
+      if (existingFeature && existingFeature !== provider.id) {
+        throw new Error(
+          `Feature package ${requirement.package.name} changed identity within one generation`,
+        );
+      }
+      this.#featureIdsByPackageRoot.set(packageRoot, provider.id);
       const roots = this.#rootsByFeature.get(provider.id) ?? [];
       roots.push({ owner: node.id, packageRoot: node.package.root });
       this.#rootsByFeature.set(provider.id, roots);
@@ -204,7 +255,10 @@ class GenerationAssembler {
 
     if (!node.parent) {
       scope.provide(runtimeEnvironmentToken, this.environment);
-      await this.installResources?.({ resources: scope, lifecycle: scope.disposers });
+      await this.installResources?.({
+        resources: scope,
+        lifecycle: scope.disposers,
+      });
     }
 
     for (const token of definition.requires ?? []) {
@@ -231,15 +285,18 @@ class GenerationAssembler {
     if (returned) scope.disposers.add(returned);
     scope.seal();
 
-    this.#tree.set(node.id, Object.freeze({
-      id: node.id,
-      instanceKey: node.instanceKey,
-      packageName: node.package.name,
-      packageRoot: node.package.root,
-      parent: node.parent,
-      children: Object.freeze(node.children.map((child) => child.id)),
-      metadata: definition.metadata,
-    }));
+    this.#tree.set(
+      node.id,
+      Object.freeze({
+        id: node.id,
+        instanceKey: node.instanceKey,
+        packageName: node.package.name,
+        packageRoot: node.package.root,
+        parent: node.parent,
+        children: Object.freeze(node.children.map((child) => child.id)),
+        metadata: definition.metadata,
+      }),
+    );
     this.#config.set(node.id, config);
     this.#resources.set(node.id, scope.snapshot());
 
@@ -256,9 +313,7 @@ class GenerationAssembler {
     }
 
     for (const provider of providers) {
-      const slots = [...this.#capabilities.values()].filter(
-        (slot) => slot.feature === provider.id,
-      );
+      const slots = [...this.#capabilities.values()].filter((slot) => slot.feature === provider.id);
       const projection = await provider.runtime.project(slots, {
         snapshot: this.#candidateSnapshot(),
       });
@@ -296,4 +351,11 @@ function emptyState(): SnapshotState {
     capabilities: new Map(),
     projections: new Map(),
   };
+}
+
+function requirePrepared(
+  prepared: PreparedRuntimeGeneration | undefined,
+): PreparedRuntimeGeneration {
+  if (!prepared) throw new Error('RootController committed without a prepared generation');
+  return prepared;
 }

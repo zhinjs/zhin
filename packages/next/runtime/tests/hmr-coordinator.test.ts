@@ -1,0 +1,124 @@
+import { describe, expect, it } from 'vitest';
+import { capabilityId, childPluginId, featureId, rootPluginId } from '@zhin.js/next-kernel';
+import {
+  HmrCoordinator,
+  SourceOwnershipIndex,
+  type GenerationInvalidationPlan,
+  type ModuleRuntime,
+  type ProcessInvalidationPlan,
+} from '../src/index.js';
+
+const root = rootPluginId();
+const child = childPluginId(root, 'child');
+const command = featureId('zhin.command');
+
+describe('HmrCoordinator', () => {
+  it('batches synchronous watcher events into one serialized reload', async () => {
+    const first = capabilityId(child, command, 'first');
+    const second = capabilityId(child, command, 'second');
+    const ownership = new SourceOwnershipIndex();
+    ownership.addPackageRoot('/project/plugins/child', child);
+    ownership.add({
+      source: '/project/plugins/child/commands/first.ts',
+      role: 'capability',
+      owner: child,
+      capability: first,
+      feature: command,
+    });
+    ownership.add({
+      source: '/project/plugins/child/commands/second.ts',
+      role: 'capability',
+      owner: child,
+      capability: second,
+      feature: command,
+    });
+    const modules = new FakeModules();
+    const plans: GenerationInvalidationPlan[] = [];
+    const coordinator = new HmrCoordinator({
+      modules,
+      ownership: () => ownership,
+      runtime: {
+        async reload(plan) {
+          plans.push(plan);
+        },
+      },
+      onRestartRequired() {},
+      onError() {},
+    });
+
+    const firstEvent = coordinator.enqueue('/project/plugins/child/commands/first.ts');
+    const secondEvent = coordinator.enqueue('/project/plugins/child/commands/second.ts');
+    await Promise.all([firstEvent, secondEvent]);
+
+    expect(plans).toHaveLength(1);
+    expect(plans[0]?.slots).toEqual([first, second]);
+    expect(modules.invalidated).toEqual([
+      '/project/plugins/child/commands/first.ts',
+      '/project/plugins/child/commands/second.ts',
+    ]);
+  });
+
+  it('reports process-level changes without reloading modules', async () => {
+    const modules = new FakeModules();
+    const restarts: ProcessInvalidationPlan[] = [];
+    const coordinator = new HmrCoordinator({
+      modules,
+      ownership: () => new SourceOwnershipIndex(),
+      runtime: {
+        async reload() {
+          throw new Error('must not reload');
+        },
+      },
+      onRestartRequired(plan) {
+        restarts.push(plan);
+      },
+      onError() {},
+    });
+
+    await coordinator.enqueue('/project/pnpm-lock.yaml');
+
+    expect(restarts).toHaveLength(1);
+    expect(modules.invalidated).toEqual([]);
+  });
+
+  it('reports a failed reload and rejects every waiter in its batch', async () => {
+    const ownership = new SourceOwnershipIndex();
+    ownership.add({
+      source: '/project/commands/status.ts',
+      role: 'capability',
+      owner: root,
+      capability: capabilityId(root, command, 'status'),
+      feature: command,
+    });
+    const reported: unknown[] = [];
+    const failure = new Error('prepare failed');
+    const coordinator = new HmrCoordinator({
+      modules: new FakeModules(),
+      ownership: () => ownership,
+      runtime: { reload: async () => { throw failure; } },
+      onRestartRequired() {},
+      onError(error) { reported.push(error); },
+    });
+
+    const first = coordinator.enqueue('/project/commands/status.ts');
+    const second = coordinator.enqueue('/project/commands/status.ts');
+
+    await expect(first).rejects.toBe(failure);
+    await expect(second).rejects.toBe(failure);
+    expect(reported).toEqual([failure]);
+  });
+});
+
+class FakeModules implements ModuleRuntime {
+  readonly invalidated: string[] = [];
+
+  async load<T>(): Promise<T> {
+    throw new Error('not used');
+  }
+
+  invalidate(source: string): void {
+    this.invalidated.push(source);
+  }
+
+  async close(): Promise<void> {}
+}

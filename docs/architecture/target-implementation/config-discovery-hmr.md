@@ -262,29 +262,27 @@ async function discoverSkills(root: string): Promise<readonly DiscoveredSource[]
 export interface SourceRecord {
   readonly source: string;
   readonly owner: PluginId;
-  readonly role: 'plugin' | 'schema' | 'capability' | 'support';
+  readonly role: 'plugin' | 'schema' | 'manifest' | 'feature' | 'capability';
   readonly capability?: CapabilityId;
 }
 
 export class SourceOwnershipIndex {
-  #records = new Map<string, SourceRecord>();
+  #records = new Map<string, SourceRecord[]>();
 
   add(record: SourceRecord): void {
     const source = normalizePath(record.source);
-    const previous = this.#records.get(source);
-    if (previous && previous.owner !== record.owner) {
-      throw new Error(`Source has multiple owners: ${source}`);
-    }
-    this.#records.set(source, { ...record, source });
+    const records = this.#records.get(source) ?? [];
+    records.push({ ...record, source });
+    this.#records.set(source, records);
   }
 
-  get(source: string): SourceRecord | undefined {
-    return this.#records.get(normalizePath(source));
+  recordsFor(source: string): readonly SourceRecord[] {
+    return this.#records.get(normalizePath(source)) ?? [];
   }
 }
 ```
 
-package root 的 `plugin.ts`、`schema.json`、所有 capability entry 和它们的内部 imports 都必须归属 owner。跨 Plugin source import 默认拒绝；共享实现应发布为普通 library package 或显式 Resource。
+package root 的 `plugin.ts`、`schema.json`、manifest、Feature entry 与 capability entry 都进入索引。同一个物理 Feature package 可以挂载到多个 Plugin instance，因此 source 到 owner 是一对多关系；冲突只在同一 owner 内判定。内部 imports 由 Module Runtime 的 reverse importer closure 回溯到这些已知入口。
 
 ## 7. Module Runtime Ports
 
@@ -316,64 +314,47 @@ export interface ClientModuleRuntime {
 
 ```ts
 export type ReloadPlan =
-  | { readonly kind: 'slots'; readonly ids: readonly CapabilityId[] }
-  | { readonly kind: 'subtree'; readonly root: PluginId }
-  | { readonly kind: 'process'; readonly reason: string };
+  | { readonly kind: 'none'; readonly changed: readonly string[] }
+  | {
+      readonly kind: 'generation';
+      readonly changed: readonly string[];
+      readonly slots: readonly CapabilityId[];
+      readonly subtrees: readonly PluginId[];
+    }
+  | { readonly kind: 'process'; readonly changed: readonly string[] };
 
 export function planReload(
-  changed: SourceRecord,
-  importers: (source: string) => readonly SourceRecord[],
+  changed: readonly string[],
+  ownership: SourceOwnershipIndex,
+  affectedSources: (source: string) => readonly string[],
 ): ReloadPlan {
-  if (changed.role === 'plugin' || changed.role === 'schema') {
-    return { kind: 'subtree', root: changed.owner };
-  }
-  if (changed.role === 'capability' && changed.capability) {
-    return { kind: 'slots', ids: [changed.capability] };
-  }
-
-  const affected = reverseClosure(changed, importers);
-  const pluginOwners = new Set(
-    affected.filter((record) => record.role === 'plugin').map((record) => record.owner),
-  );
-  if (pluginOwners.size) return { kind: 'subtree', root: shallowest(pluginOwners) };
-
-  const ids = affected.flatMap((record) => record.capability ? [record.capability] : []);
-  return ids.length
-    ? { kind: 'slots', ids: [...new Set(ids)] }
-    : { kind: 'process', reason: `Unowned runtime source: ${changed.source}` };
+  // lock/workspace files -> process
+  // plugin/schema/manifest/feature entry -> owner subtree(s)
+  // capability entry or its reverse import closure -> slot(s)
+  // untracked file inside a mounted package -> nearest owner subtree
 }
 ```
 
-`reverseClosure`、`shallowest` 是纯图算法，应以 cycle、共享 support module、多 owner 和 Root change 覆盖测试。
+subtree roots 会折叠祖先/后代重复项；已被 subtree 覆盖的 slot 会被删除。共享 support module、多 owner、Root change、lockfile 与 cycle-safe reverse closure 都要覆盖测试。
 
 ## 9. HMR Coordinator
 
 ```ts
 export class HmrCoordinator {
   constructor(
-    private readonly root: RootController,
-    private readonly sources: SourceOwnershipIndex,
-    private readonly modules: ServerModuleRuntime,
-    private readonly prepare: GenerationPreparer,
+    private readonly modules: ModuleRuntime,
+    private readonly ownership: () => SourceOwnershipIndex,
+    private readonly reload: (plan: GenerationReloadPlan) => Promise<void>,
+    private readonly onRestartRequired: (plan: ProcessReloadPlan) => void,
   ) {}
 
-  async update(source: string): Promise<RuntimeSnapshot> {
-    const changed = this.sources.get(source);
-    if (!changed) throw new Error(`Unknown source: ${source}`);
-
-    const plan = planReload(changed, (id) =>
-      this.modules.importers(id.source)
-        .map((source) => this.sources.get(source))
-        .filter((record): record is SourceRecord => Boolean(record)),
-    );
-
-    if (plan.kind === 'process') throw new ProcessRestartRequired(plan.reason);
-    return this.root.transact((current) => this.prepare.reload(current, plan));
+  enqueue(source: string): Promise<void> {
+    // 同一 microtask 的 watcher burst 合并；transaction 严格串行。
   }
 }
 ```
 
-Coordinator 不先 stop active Plugin。`GenerationPreparer.reload()` 在 shadow scopes 中构造 PreparedGeneration；Capability-only 更新直接 CAS。越过 Resource seam 的 subtree 更新通过 PreparedGeneration.handoff 完成 quiesce/activate/commit，失败恢复旧入口；成功后旧 generation 才进入 lease drain/dispose。
+Coordinator 不先 stop active Plugin。当前 executor 根据精确计划构造完整 shadow generation，并通过 RootController CAS 发布；失败保持 active generation。后续 Capability/subtree executor 通过 resource handoff 缩小实际 prepare 范围，成功后旧 generation 才进入 lease drain/dispose。
 
 ## 10. Config/HMR 测试矩阵
 

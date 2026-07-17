@@ -24,6 +24,8 @@ export interface PluginGraphNode {
 }
 
 export interface ProjectGraph {
+  // root is the logical runtime tree. packages/buildOrder are the deduplicated
+  // physical package graph; one package may appear at several logical mounts.
   readonly root: PluginGraphNode;
   readonly packages: ReadonlyMap<string, ResolvedPackage>;
   readonly buildOrder: readonly ResolvedPackage[];

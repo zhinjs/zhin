@@ -1,8 +1,11 @@
 import { pathToFileURL } from 'node:url';
+import type { Dispose } from '@zhin.js/next-kernel';
 
 export interface ModuleRuntime {
   load<T = unknown>(source: string): Promise<T>;
   invalidate?(source: string): Promise<void> | void;
+  affectedSources?(source: string): readonly string[];
+  watch?(listener: (source: string) => void): Dispose;
   close(): Promise<void>;
 }
 

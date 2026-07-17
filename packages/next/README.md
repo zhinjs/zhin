@@ -8,7 +8,7 @@
 |---|---|
 | `@zhin.js/next-kernel` | 稳定 identity、Scope、Slot、Snapshot lease、CAS generation 与 RootController |
 | `@zhin.js/next-feature-kit` | Feature authoring/runtime/build contract、provider catalog 与 owner-aware discovery |
-| `@zhin.js/next-runtime` | 静态 manifest、workspace/npm resolution、Project Graph、配置组合、显式 RuntimeEnvironment、ModuleRuntime 与 Root 装配 |
+| `@zhin.js/next-runtime` | 静态 manifest、workspace/npm resolution、Project Graph、配置组合、RuntimeEnvironment、source ownership、失效规划、HMR 协调与 Root 装配 |
 | `@zhin.js/next-feature-command` | 第一套标准 Feature provider 与 generation-scoped CommandIndex |
 | `@zhin.js/next-cli` | Plugin monorepo 初始化、子包创建、inspect、build 与安全 publish plan |
 
@@ -23,9 +23,15 @@ package.json#zhin
   -> CommandIndex projection
   -> RootController commit
   -> SnapshotLease execute
+
+Vite watcher
+  -> reverse importer closure
+  -> SourceOwnershipIndex
+  -> slot / subtree / process plan
+  -> serialized generation transaction
 ```
 
-Vite ModuleRuntime 可以直接加载 TS 并使变化模块失效。当前 `RootRuntime.reload()` 采用整 generation 安全重建；文件 watcher、SourceOwnershipIndex 与最小 Slot/subtree invalidation planner 属于下一实现阶段，不以兼容旧代码为前提。
+Vite ModuleRuntime 可以直接加载 TS、追踪 reverse importer 并监听文件。当前已精确规划 slot/subtree/process 失效范围，但 `RootRuntime.reload()` 仍采用整 generation 安全重建；下一阶段实现 Scope/resource handoff 后，planner 的粒度才会成为实际替换粒度。
 
 ## Validate
 

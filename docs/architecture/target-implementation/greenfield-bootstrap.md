@@ -8,7 +8,7 @@
 |---|---|
 | `@zhin.js/next-kernel` | Identity、Token/Scope、DisposeStack、CapabilitySlot、SnapshotLease、CAS generation、RootController |
 | `@zhin.js/next-feature-kit` | `FeatureAuthoring`、`FeatureRuntime`、可选 `FeatureBuildAdapter`、FeatureCatalog、FeatureDiscovery |
-| `@zhin.js/next-runtime` | Manifest parser、扁平 workspace validator、workspace/npm resolver、ProjectGraph、ConfigComposer、显式 RuntimeEnvironment Resource、RootRuntime、ESM/Vite ModuleRuntime |
+| `@zhin.js/next-runtime` | Manifest parser、扁平 workspace validator、workspace/npm resolver、ProjectGraph、ConfigComposer、显式 RuntimeEnvironment Resource、RootRuntime、ESM/Vite ModuleRuntime、SourceOwnershipIndex、InvalidationPlanner、HmrCoordinator |
 | `@zhin.js/next-feature-command` | `defineCommand()`、`commands/*.ts|tsx` convention、CommandIndex projection 与 owner-scoped execution context |
 | `@zhin.js/next-cli` | `init`、`create plugin`、`create feature`、`inspect`、`build`、默认 dry-run 的 `publish` |
 
@@ -26,6 +26,8 @@ flowchart LR
   Slot --> Projection["CommandIndex projection"]
   Projection --> Commit["RootController CAS commit"]
   Commit --> Lease["SnapshotLease execution"]
+  Watch["Vite watcher + importer closure"] --> Plan["slot / subtree / process plan"]
+  Plan --> Commit
 ```
 
 测试覆盖以下不变量：
@@ -39,19 +41,24 @@ flowchart LR
 7. 新 generation 发布后，旧 lease 继续执行旧 Command；最后一个 lease 释放前不会 dispose。
 8. `stop()` 等待当前 generation drain。
 9. Vite adapter 可以直接加载 TS，并在失效后获得新 module exports。
+10. 同一 source 可以归属于多个 Plugin mount；Feature provider 变化会覆盖所有 owner。
+11. capability、Plugin/schema/manifest 与 lockfile 分别升级为 slot、subtree 与 process 计划。
+12. watcher burst 合并为串行 transaction，失败会通知并拒绝整批 waiter。
+13. Vite reverse importer closure 同时处理 `.js` specifier 与物理 `.ts`、软链接实路径。
 
 ## 3. 当前 HMR 边界
 
-当前 `RootRuntime.reload()` 会重新解析 graph、配置、Plugin setup、Feature discovery 与 projection，然后原子发布完整 generation。这已经提供一致性、失败回滚和新旧 lease 隔离，但还不是目标中的最小 Slot/subtree prepare。
+当前控制面已经完整：`SourceOwnershipIndex` 从 committed generation 建索引；`InvalidationPlanner` 结合 Vite reverse importer closure 生成 slot/subtree/process 计划；`HmrCoordinator` 合并 watcher burst 并串行调用 `RootRuntime`。lockfile/workspace 变化只发出 process restart 请求。
 
-下一阶段新增：
+当前执行面仍由 `RootRuntime.reload()` 重新解析 graph、配置、Plugin setup、Feature discovery 与 projection，再原子发布完整 generation。这提供一致性、失败回滚和新旧 lease 隔离；planner 的最小计划尚未等同于最小执行范围。
 
-1. `SourceOwnershipIndex`：source -> package -> Plugin -> Slot。
-2. `InvalidationPlanner`：slot / Feature projection / Plugin subtree / process 四级升级。
-3. generation resource handoff：局部 Slot 重建时复用未变化 Scope，不提前 dispose。
-4. watcher coordinator：串行合并文件事件并调用 planner。
+下一阶段只聚焦执行粒度：
 
-在这些模块完成前，不宣称“任意文件都能局部 HMR”。
+1. generation resource handoff：局部 Slot 重建时复用未变化 Scope，不提前 dispose。
+2. slot executor：只重新 load/compile 受影响 definition，并重算对应 Feature projection。
+3. subtree executor：在 shadow scopes 中 setup，commit 后才让旧 subtree 进入 lease drain。
+
+在这些执行器完成前，只宣称“精确规划、事务化整代替换”，不宣称“任意文件都能局部替换”。
 
 ## 4. 有意保留的后续工作
 

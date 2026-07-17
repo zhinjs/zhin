@@ -37,6 +37,8 @@ export class FeatureDiscovery {
       for (const convention of provider.authoring.conventions) {
         for await (const discovered of convention.discover(context)) {
           const identity = `${root.owner}\0${discovered.localName}`;
+          // One package source may back multiple mounted Plugin instances.
+          // Source conflicts are therefore owner-scoped, not path-global.
           const sourceIdentity = `${root.owner}\0${discovered.source}`;
           if (identities.has(identity) || sources.has(sourceIdentity)) {
             throw new DiscoveryConflictError(

@@ -32,6 +32,8 @@ export class ConfigComposer {
     graph: ProjectGraph,
     input: RuntimeConfigDocument = {},
   ): Promise<ComposedConfig> {
+    // Effective schemas include child namespaces for whole-tree validation;
+    // ownSchemas retain each package's private configuration contract.
     const ownSchemas = new Map<PluginId, JsonSchema>();
     const rootOwn = await readOwnSchema(graph.root);
     ownSchemas.set(graph.root.id, rootOwn);
@@ -65,6 +67,8 @@ export class ConfigComposer {
     }
 
     const views = new Map<PluginId, unknown>();
+    // A Plugin never receives its effective node object because that object
+    // also contains descendants. Re-pick fields from the owner's own schema.
     views.set(
       graph.root.id,
       pickOwnFields(document.plugin, requireOwnSchema(ownSchemas, graph.root.id)),
