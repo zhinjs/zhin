@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { join, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import { FilePublishJournalStore } from './publish-journal.js';
 import { ProjectCommands, NodeProcessRunner } from './project-commands.js';
 import { ProjectScaffolder } from './scaffolder.js';
@@ -18,6 +18,26 @@ try {
   } else if (command === 'inspect') {
     const commands = new ProjectCommands();
     process.stdout.write(`${JSON.stringify(commands.describe(await commands.inspect(root)), null, 2)}\n`);
+  } else if (command === 'migrate') {
+    const migrationMode = parseMigrationMode(args);
+    const { LegacyCommandMigrator } = await import('./migrate/index.js');
+    const migrator = new LegacyCommandMigrator();
+    const plan = await migrator.plan(root);
+    const summary = migrator.summarize(plan);
+    process.stdout.write(`${JSON.stringify({
+      summary,
+      changes: plan.changes.map((change) => ({
+        source: relativePath(root, change.source),
+        target: relativePath(root, change.target),
+        pattern: change.pattern,
+      })),
+      diagnostics: plan.diagnostics.map((item) => ({
+        ...item,
+        source: relativePath(root, item.source),
+      })),
+    }, null, 2)}\n`);
+    if (migrationMode === 'write') await migrator.apply(plan);
+    if (summary.errors > 0) process.exitCode = 1;
   } else if (command === 'build' || command === 'publish') {
     const commands = new ProjectCommands();
     const graph = await commands.inspect(root);
@@ -48,6 +68,7 @@ try {
       '  zhin-next create plugin <name> [package-name]',
       '  zhin-next create feature <name> [package-name]',
       '  zhin-next inspect',
+      '  zhin-next migrate --check|--write',
       '  zhin-next build',
       '  zhin-next publish [--execute] [--resume] [--tag <tag>]',
     ].join('\n'));
@@ -55,6 +76,17 @@ try {
 } catch (error) {
   process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
   process.exitCode = 1;
+}
+
+function relativePath(root: string, value: string): string {
+  return relative(root, value);
+}
+
+function parseMigrationMode(args: readonly string[]): 'check' | 'write' {
+  if (args.length !== 1 || (args[0] !== '--check' && args[0] !== '--write')) {
+    throw new Error('migrate requires exactly one of --check or --write');
+  }
+  return args[0] === '--write' ? 'write' : 'check';
 }
 
 function parsePublishOptions(args: readonly string[]): {

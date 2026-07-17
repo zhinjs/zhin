@@ -141,7 +141,10 @@ describe('RootRuntime isolated Plugin HMR', () => {
     await expect(firstHandle.call('version')).resolves.toBe('v1');
     expect(modules.loadCount(entry)).toBe(0);
 
-    const slow = firstHandle.call('slow', 80);
+    const slow = Promise.all(Array.from(
+      { length: 16 },
+      (_, index) => firstHandle.call('slow', 50 + index * 2),
+    ));
     await delay(10);
     await writePlugin(entry, 'v2');
     const hmr = runtime.createHmrCoordinator({
@@ -151,7 +154,7 @@ describe('RootRuntime isolated Plugin HMR', () => {
     const started = Date.now();
     await hmr.enqueue(entry);
     expect(Date.now() - started).toBeGreaterThanOrEqual(50);
-    await expect(slow).resolves.toBe('v1');
+    await expect(slow).resolves.toEqual(Array.from({ length: 16 }, () => 'v1'));
     const second = runtime.snapshot;
     const secondHandle = isolatedHandle(second);
     await expect(secondHandle.call('version')).resolves.toBe('v2');

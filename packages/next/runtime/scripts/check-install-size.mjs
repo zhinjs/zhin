@@ -92,6 +92,19 @@ const packages = [
     dependencies: ['@zhin.js/next-runtime'],
   },
   {
+    dir: 'packages/next/cli',
+    name: '@zhin.js/next-cli',
+    dependencies: ['@zhin.js/next-runtime'],
+  },
+  {
+    dir: 'packages/next/compat',
+    name: '@zhin.js/next-compat',
+    dependencies: [
+      '@zhin.js/next-feature-command',
+      '@zhin.js/next-feature-middleware',
+    ],
+  },
+  {
     dir: 'packages/next/isolate',
     name: '@zhin.js/next-isolate',
     dependencies: ['@zhin.js/next-kernel', '@zhin.js/next-runtime'],

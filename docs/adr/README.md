@@ -49,6 +49,7 @@
 | [0047](./0047-standalone-plugin-and-root-lifecycle-domain.md) | 独立 Plugin 项目与 Root 生命周期域 |
 | [0048](./0048-plugin-monorepo-and-feature-provider-packages.md) | Plugin Monorepo 与 Feature Provider 包 |
 | [0049](./0049-isolated-plugin-runtime.md) | Isolated Plugin Runtime |
+| [0050](./0050-next-migration-and-compatibility-boundary.md) | Next 迁移与 Compatibility 边界 |
 
 ## 相关
 

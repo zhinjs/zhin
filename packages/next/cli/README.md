@@ -11,7 +11,7 @@
 - `packages/*` 保存贡献给 Zhin 的 Feature provider package。
 - child 既可以来自本地 workspace，也可以来自普通 npm dependency。
 - graph、build 和 publish 使用同一份 `package.json#zhin` SSOT。
-- CLI 不实现 Runtime HMR、TypeScript 编译器或 npm registry 客户端封装。
+- CLI 不实现 Runtime HMR、内置 TypeScript 编译器或 npm registry 客户端封装。
 
 ## 命令
 
@@ -20,6 +20,8 @@ zhin-next init [package-name]
 zhin-next create plugin <name> [package-name]
 zhin-next create feature <name> [package-name]
 zhin-next inspect
+zhin-next migrate --check
+zhin-next migrate --write
 zhin-next build
 zhin-next publish [--execute] [--resume] [--tag <tag>]
 ```
@@ -71,6 +73,17 @@ zhin-next publish --resume
 - public package 依赖 private package 时，会在运行任何 publish step 前失败。
 - npm dependency 只参与解析，不会被 CLI build 或 publish。
 
+### 迁移旧 Command
+
+`migrate --check` 使用 TypeScript AST 输出 automatic/manual/error inventory，不执行旧模块。`migrate --write` 在 plan 无 error 时，把安全的静态 `MessageCommand` builder 提取为 `commands/**/*.ts`，并使用 `@zhin.js/next-compat` 保留旧 `(message, result)` callback。
+
+```text
+new MessageCommand('gh pr <title:text>')
+  -> commands/gh/pr/[title:string].ts
+```
+
+外部闭包、Plugin Context、`.permit()`、复杂 matcher 或路由冲突会保留为带源码位置的 manual/error diagnostic。写入先准备全部 temporary，再用排他 hard-link 发布，绝不覆盖并发创建的目标；旧 source、entry 与 manifest 不在本阶段修改。迁移命令需要项目开发环境安装 `typescript` peer；默认 CLI 与生产 Runtime 不携带编译器。
+
 ## 编程 API
 
 ```ts
@@ -90,7 +103,7 @@ await commands.execute(plan, new NodeProcessRunner());
 
 ## 当前限制
 
-- 复杂增量迁移、旧插件兼容 facade 和 codemod 尚未实现。
+- 当前 codemod 只覆盖可静态证明的 MessageCommand 子集；Middleware/Component extraction 与 entry/manifest cutover 继续按迁移矩阵推进。
 - npm 登录和 registry 凭据仍由 pnpm/npm 环境管理，CLI 不保存 token。
 - 不生成具体 Command/Agent/Page Feature；这些由对应 Feature package 或后续模板提供。
 
@@ -99,10 +112,13 @@ await commands.execute(plan, new NodeProcessRunner());
 ```bash
 pnpm --filter @zhin.js/next-cli test
 pnpm --filter @zhin.js/next-cli build
+pnpm --filter @zhin.js/next-cli check:api
+pnpm --filter @zhin.js/next-cli check:size
 ```
 
 ## 相关文档
 
 - [Plugin Monorepo 与 Feature Provider](../../../docs/architecture/target-implementation/plugin-monorepo-and-features.md)
 - [Greenfield Bootstrap 状态](../../../docs/architecture/target-implementation/greenfield-bootstrap.md)
+- [Next 迁移契约](../../../docs/architecture/target-implementation/migration-contract.md)
 - [Next 架构总览](../README.md)

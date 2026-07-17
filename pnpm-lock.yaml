@@ -1138,6 +1138,9 @@ importers:
       '@types/node':
         specifier: ^26.1.0
         version: 26.1.1
+      '@zhin.js/next-compat':
+        specifier: workspace:*
+        version: link:../compat
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1160,6 +1163,25 @@ importers:
       '@types/node':
         specifier: ^26.1.0
         version: 26.1.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/next/compat:
+    dependencies:
+      '@zhin.js/next-feature-command':
+        specifier: workspace:*
+        version: link:../feature-command
+      '@zhin.js/next-feature-middleware':
+        specifier: workspace:*
+        version: link:../feature-middleware
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.0
+        version: 26.1.1
+      '@zhin.js/next-kernel':
+        specifier: workspace:*
+        version: link:../kernel
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

@@ -11,6 +11,7 @@
 | `@zhin.js/next-runtime` | 静态 manifest、workspace/npm resolution、Project Graph、配置组合、RuntimeEnvironment、source ownership、失效规划、HMR、Root 装配与 process restart 边界 |
 | `@zhin.js/next-isolate` | 可选 Worker/child-process Plugin runtime、structured-clone RPC、drain 与 crash propagation |
 | `@zhin.js/next-config-yaml` | 可选 YAML AST ConfigDocument adapter、乐观并发与原子文件事务 |
+| `@zhin.js/next-compat` | 可删除的 legacy callback definition adapter，不恢复全局 registry |
 | `@zhin.js/next-feature-command` | 第一套标准 Feature provider 与 generation-scoped CommandIndex |
 | `@zhin.js/next-feature-middleware` | `middlewares/**/*.ts`、确定性 onion compose 与 MiddlewareIndex |
 | `@zhin.js/next-feature-component` | `components/**/*.ts|tsx`、owner override/ancestor fallback 与 ComponentIndex |
@@ -50,6 +51,7 @@
 - [Runtime](runtime/README.md)
 - [Isolated Runtime](isolate/README.md)
 - [YAML Config Adapter](config-yaml/README.md)
+- [Compatibility](compat/README.md)
 - [CLI](cli/README.md)
 
 ## 当前 Tracer Bullet
@@ -106,6 +108,12 @@ runtime: isolated child
   -> quiesce + drain previous RPC
   -> activate candidate setup
   -> generation commit + open admission
+
+Legacy MessageCommand source
+  -> TypeScript AST inventory
+  -> safe capability extraction
+  -> defineLegacyCommand adapter
+  -> commands/** discovery
 ```
 
 默认 Runtime 只提供预编译 ESM adapter，不依赖 YAML、Vite、编译器或 watcher。YAML 配置和开发期 TS transform/watch 都由独立 adapter 提供，不能进入 `zhin.js` 默认生产依赖闭包。Graph inspect 在 import/setup 前校验 Runtime engine 与 Feature API semver contract。Command、Middleware、Component、Adapter 都是独立 Feature provider；Capability-only HMR 只重新 load 目标 Slot。Adapter projection 通过 generation handoff 在 commit 前停旧流、启动候选 transport，commit 后才开放 admission。child `plugin.ts` / `schema.json` 变化只影子装配对应 Plugin forest；manifest transaction 则局部处理 child 与 Feature mount 的新增、删除、移动。结构化 config patch 先整体验证，再按实际变化的 owner view 计算最浅 forest；可选 YAML adapter 把文件替换加入同一 generation handoff。以上路径都复用未变化的 Plugin Scope lifetime、重建全部 generation projections，并以完整 immutable snapshot 原子发布。Root setup/schema 与 package ABI 变化升级为受控 process restart；Feature provider 源码、未知 importer 与混合变更仍保守采用完整 shadow generation。
