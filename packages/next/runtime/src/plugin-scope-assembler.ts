@@ -1,10 +1,13 @@
 import { resolve } from 'node:path';
 import {
   DisposeStack,
+  GenerationHandoffStack,
   Scope,
   rootPluginId,
   type ConfigView,
   type Dispose,
+  type GenerationHandoff,
+  type GenerationHandoffRegistry,
   type PluginDefinition,
   type PluginId,
   type PluginInstanceView,
@@ -21,6 +24,7 @@ export type PluginConfigResolver = (node: PluginGraphNode) => unknown;
 export interface RootResourceContext {
   readonly resources: Scope;
   readonly lifecycle: DisposeStack;
+  readonly handoff: GenerationHandoffRegistry;
 }
 
 export type RootResourceInstaller = (
@@ -41,6 +45,7 @@ export class PluginScopeAssembler {
   readonly config: Map<PluginId, unknown>;
   readonly resources: Map<PluginId, ReadonlyMap<TokenId, unknown>>;
   readonly #created: PluginId[] = [];
+  readonly #handoffs = new GenerationHandoffStack();
 
   constructor(
     private readonly modules: ModuleRuntime,
@@ -88,7 +93,11 @@ export class PluginScopeAssembler {
 
     if (!node.parent) {
       scope.provide(runtimeEnvironmentToken, this.environment);
-      await this.installResources?.({ resources: scope, lifecycle: scope.disposers });
+      await this.installResources?.({
+        resources: scope,
+        lifecycle: scope.disposers,
+        handoff: this.#handoffs,
+      });
     }
 
     for (const token of definition.requires ?? []) {
@@ -111,6 +120,7 @@ export class PluginScopeAssembler {
       config: view,
       resources: scope,
       lifecycle: scope.disposers,
+      handoff: this.#handoffs,
     });
     if (returned) scope.disposers.add(returned);
     scope.seal();
@@ -136,6 +146,10 @@ export class PluginScopeAssembler {
       if (!scope) throw new Error(`Missing created Scope: ${owner}`);
       return [owner, () => scope.disposers.dispose()] as const;
     });
+  }
+
+  generationHandoff(): GenerationHandoff | undefined {
+    return this.#handoffs.seal();
   }
 }
 

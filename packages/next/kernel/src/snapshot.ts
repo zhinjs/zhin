@@ -1,5 +1,6 @@
 import type { CapabilitySlot } from './capability.js';
 import type { Dispose } from './dispose.js';
+import type { GenerationHandoff } from './handoff.js';
 import type {
   CapabilityId,
   FeatureId,
@@ -33,6 +34,7 @@ export type SnapshotState = Omit<RuntimeSnapshot, 'generation'>;
 export interface PreparedGeneration {
   readonly snapshot: SnapshotState;
   readonly dispose: Dispose;
+  readonly handoff?: GenerationHandoff;
 }
 
 interface SnapshotRecord {
@@ -98,16 +100,16 @@ export class SnapshotStore {
     });
   }
 
-  async commit(
+  commit(
     expectedGeneration: number,
     prepared: PreparedGeneration,
-  ): Promise<RuntimeSnapshot> {
+  ): RuntimeSnapshot {
+    // The caller owns a candidate until this method succeeds. This lets the
+    // transaction authority undo handoff state before disposing a rejection.
     if (this.#closed) {
-      await prepared.dispose();
       throw new Error('SnapshotStore is closed');
     }
     if (this.#current.snapshot.generation !== expectedGeneration) {
-      await prepared.dispose();
       throw new GenerationConflictError(
         expectedGeneration,
         this.#current.snapshot.generation,

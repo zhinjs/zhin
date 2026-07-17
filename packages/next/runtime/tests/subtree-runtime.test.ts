@@ -30,6 +30,7 @@ describe('Plugin subtree HMR', () => {
     const siblingValue = createToken<string>('test.sibling-value');
     const setupCalls = { root: 0, child: 0, sibling: 0 };
     const disposed: string[] = [];
+    const handoffs: string[] = [];
     const rootSource = join(project, 'plugin.ts');
     const childSource = join(project, 'plugins/child/plugin.ts');
     const siblingSource = join(project, 'plugins/sibling/plugin.ts');
@@ -38,7 +39,10 @@ describe('Plugin subtree HMR', () => {
     modules.set(rootSource, {
       default: definePlugin({
         name: 'root',
-        setup() { setupCalls.root += 1; },
+        setup({ handoff }) {
+          setupCalls.root += 1;
+          handoff.add(recordHandoff('root'));
+        },
       }),
     });
     modules.set(childSource, childPlugin('v1'));
@@ -46,9 +50,10 @@ describe('Plugin subtree HMR', () => {
       default: definePlugin({
         name: 'sibling',
         requires: [shared],
-        setup({ resources }) {
+        setup({ resources, handoff }) {
           setupCalls.sibling += 1;
           resources.provide(siblingValue, 'sibling', () => { disposed.push('sibling'); });
+          handoff.add(recordHandoff('sibling'));
         },
       }),
     });
@@ -71,6 +76,14 @@ describe('Plugin subtree HMR', () => {
     const first = await runtime.start();
     const oldLease = runtime.controller.snapshots.acquire();
     await expect(commandIndex(first).execute('child/status')).resolves.toBe('v1');
+    expect(handoffs).toEqual([
+      'root:activate',
+      'child-v1:activate',
+      'sibling:activate',
+      'root:open',
+      'child-v1:open',
+      'sibling:open',
+    ]);
 
     modules.set(childSource, childPlugin('v2'));
     const errors: unknown[] = [];
@@ -88,6 +101,11 @@ describe('Plugin subtree HMR', () => {
     expect(modules.loadCount(rootSource)).toBe(1);
     expect(modules.loadCount(siblingSource)).toBe(1);
     expect(disposed).toEqual([]);
+    expect(handoffs.slice(6)).toEqual([
+      'child-v2:quiesce:1',
+      'child-v2:activate',
+      'child-v2:open',
+    ]);
 
     modules.set(childSource, {
       default: definePlugin({
@@ -122,13 +140,26 @@ describe('Plugin subtree HMR', () => {
         default: definePlugin({
           name: `child-${version}`,
           requires: [shared],
-          setup({ resources }) {
+          setup({ resources, handoff }) {
             setupCalls.child += 1;
             resources.provide(childValue, version, () => {
               disposed.push(`child-${version}`);
             });
+            handoff.add(recordHandoff(`child-${version}`));
           },
         }),
+      };
+    }
+
+    function recordHandoff(name: string) {
+      return {
+        quiescePrevious(previous: RuntimeSnapshot) {
+          handoffs.push(`${name}:quiesce:${previous.generation}`);
+        },
+        activateNext() { handoffs.push(`${name}:activate`); },
+        deactivateNext() { handoffs.push(`${name}:deactivate`); },
+        resumePrevious() { handoffs.push(`${name}:resume`); },
+        openNext() { handoffs.push(`${name}:open`); },
       };
     }
   });

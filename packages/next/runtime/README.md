@@ -31,6 +31,9 @@ const runtime = new RootRuntime({
     resources.provide(databaseToken, database);
     lifecycle.add(() => database.close());
   },
+  onControlError(error) {
+    logger.error(error, 'A committed Resource failed to open admission');
+  },
 });
 
 await runtime.start();
@@ -82,12 +85,31 @@ Root 配置文档使用 `plugin` 保存自身字段、`plugins` 保存 child env
 
 局部 prepare 仍发布完整 immutable snapshot。所有 Feature projection 都针对候选 snapshot 重建；失败时 shadow disposer 逆序执行，active generation 不变。
 
+## Resource Handoff
+
+普通 Resource 只需注册 disposer，并由 Scope lifetime 管理。不能双开或需要暂停 admission 的 socket、worker、Adapter Endpoint 可以在 Plugin `setup()` 或 `installResources()` 中调用 `handoff.add()`：
+
+```ts
+setup({ handoff }) {
+  handoff.add({
+    quiescePrevious: () => active.pause(),
+    activateNext: () => shadow.bind(),
+    openNext: () => shadow.open(),
+    deactivateNext: () => shadow.close(),
+    resumePrevious: () => active.resume(),
+  });
+}
+```
+
+Transaction 按 `quiescePrevious → activateNext → commit → openNext` 执行。commit 前失败会逆序 deactivate shadow、恢复 previous 并销毁候选 generation；commit 后的 `openNext` 错误通过 `onControlError` 报告。
+
 ## 关键扩展点
 
 | API | 用途 |
 |---|---|
 | `ModuleRuntime` | 模块加载、失效、反向 importer closure 与 watcher port |
 | `RootResourceInstaller` | 向 Root Scope 安装数据库、配置存储等共享 Resource |
+| `onControlError` | 报告 commit 后 `openNext` 的不可回滚控制面错误 |
 | `ConfigComposer` | 从 Plugin graph 与 Root document 生成 owner-scoped 配置 |
 | `ProjectGraphService` | 解析静态 Plugin/Feature package graph |
 | `InvalidationPlanner` | 将 source closure 提升为 slot/subtree/process plan |

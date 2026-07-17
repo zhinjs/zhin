@@ -6,6 +6,7 @@ import {
   rootPluginId,
   type CapabilityId,
   type CapabilitySlot,
+  type ControlErrorHandler,
   type Dispose,
   type FeatureId,
   type PluginId,
@@ -57,6 +58,7 @@ export interface RootRuntimeOptions {
   readonly environment: RuntimeEnvironment;
   readonly config?: PluginConfigResolver | RuntimeConfigDocument;
   readonly installResources?: RootResourceInstaller;
+  readonly onControlError?: ControlErrorHandler;
 }
 
 export type RootHmrOptions = Omit<HmrCoordinatorOptions, 'modules' | 'ownership' | 'runtime'>;
@@ -82,7 +84,7 @@ export class RootRuntime {
     this.#environment = Object.freeze({ ...options.environment });
     this.#config = options.config ?? Object.freeze({});
     this.#installResources = options.installResources;
-    this.controller = new RootController(emptyState());
+    this.controller = new RootController(emptyState(), options.onControlError);
   }
 
   get snapshot(): RuntimeSnapshot {
@@ -265,6 +267,7 @@ class GenerationAssembler {
         generation: {
           snapshot: state,
           dispose: () => assets.dispose(),
+          handoff: this.#plugins.generationHandoff(),
         },
         ownership,
         model: {

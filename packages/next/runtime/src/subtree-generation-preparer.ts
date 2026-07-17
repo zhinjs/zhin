@@ -109,7 +109,11 @@ export class SubtreeGenerationPreparer {
         projectionDisposers,
       );
       return {
-        generation: { snapshot: projected.state, dispose: () => assets.dispose() },
+        generation: {
+          snapshot: projected.state,
+          dispose: () => assets.dispose(),
+          handoff: plugins.generationHandoff(),
+        },
         ownership,
         model: {
           ...this.model,

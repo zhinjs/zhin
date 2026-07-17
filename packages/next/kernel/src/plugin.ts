@@ -1,4 +1,5 @@
 import type { Dispose, DisposeStack } from './dispose.js';
+import type { GenerationHandoffRegistry } from './handoff.js';
 import type { PluginId } from './identity.js';
 import type { Scope, Token } from './token.js';
 
@@ -25,6 +26,7 @@ export interface PluginSetupContext<TConfig = unknown> {
   readonly config: ConfigView<TConfig>;
   readonly resources: Scope;
   readonly lifecycle: DisposeStack;
+  readonly handoff: GenerationHandoffRegistry;
 }
 
 export interface PluginDefinition<TConfig = unknown> {

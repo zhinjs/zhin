@@ -25,6 +25,7 @@ Zhin 下一代 Plugin-first 架构的最小运行时内核。它定义稳定 ide
 | `createToken()` / `Scope` | 定义、提供和继承 owner-scoped Resource |
 | `DisposeStack` | 以严格逆序执行幂等生命周期清理 |
 | `SharedLifetime` | 让未变化 Scope 被多个 generation 安全复用 |
+| `GenerationHandoffStack` | 组合排他 Resource 的暂停、激活、开放与失败恢复 |
 | `createCapabilitySlot()` | 建立带 owner/source/feature identity 的能力记录 |
 | `RuntimeSnapshot` | 向领域 Runtime 暴露只读 generation 数据 |
 | `SnapshotStore` / `SnapshotLease` | 原子切换 snapshot，并延迟释放仍被使用的旧 generation |
@@ -48,6 +49,20 @@ export default definePlugin({
 ```
 
 `setup()` 只做 shadow generation 的装配。长期运行的 socket、worker 或 admission loop 必须由领域 Runtime Authority 管理，或注册为 Root 可编排的 generation handoff；不能成为脱离生命周期的模块级副作用。
+
+```ts
+setup({ handoff }) {
+  handoff.add({
+    quiescePrevious: () => endpoint.pauseAdmission(),
+    activateNext: () => nextEndpoint.bind(),
+    openNext: () => nextEndpoint.openAdmission(),
+    deactivateNext: () => nextEndpoint.close(),
+    resumePrevious: () => endpoint.resumeAdmission(),
+  });
+}
+```
+
+`openNext` 在 commit 后执行，失败只能报告而不能回滚；应用应通过 Runtime 的控制面错误处理器记录并告警。
 
 ## Generation 语义
 
