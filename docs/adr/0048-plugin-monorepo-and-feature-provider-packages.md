@@ -150,6 +150,8 @@ pages/$footer.tsx
 
 这些不是 Kernel 常量。Feature package 可以在保持稳定 identity 和安全边界的前提下提供其它约定。不同 Feature 声明相同 source ownership 时，Discovery 在 prepare 阶段报冲突，不采用先扫描者获胜。
 
+Page/Layout 是 client target：Feature provider 只消费 Client Module build artifact，不在 Node 中 import TSX。编译器、browser chunk 与 HMR module URL 由可选 build adapter 提供，不进入 Kernel 或默认 IM 依赖闭包。
+
 `schema.json` 不属于 Feature。它始终是 Plugin package 自身的 Config Resource contract，由 Root Config Composer 处理。
 
 ### D5. CLI 管理 Project Graph

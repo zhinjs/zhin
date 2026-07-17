@@ -1,0 +1,37 @@
+{
+  "name": "@zhin.js/next-console",
+  "version": "0.0.0",
+  "description": "Snapshot-coherent Console route, navigation and Layout catalog for Zhin Next",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "files": ["lib", "src"],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "test": "vitest run --root ../../.. packages/next/console/tests",
+    "check:size": "node ../runtime/scripts/check-install-size.mjs @zhin.js/next-console"
+  },
+  "dependencies": {
+    "@zhin.js/next-console-contract": "workspace:*",
+    "@zhin.js/next-feature-layout": "workspace:*",
+    "@zhin.js/next-feature-page": "workspace:*",
+    "@zhin.js/next-kernel": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "license": "MIT",
+  "private": true
+}

@@ -221,6 +221,10 @@ sequenceDiagram
 - 路由改名需要显式 Redirect capability 才能保留旧链接。
 - Host 与 Client 必须共享 Page manifest contract 版本。
 
+## 实现记录
+
+`feature/next` 已实现零依赖 Console contract、Page/Layout Feature、permission-aware Navigation/route catalog、Layout fallback chain 与单 slot HMR。Client 边界由可选 `ModuleRuntime.loadClientModule()` 承接；默认 ESM Runtime 不包含 TSX compiler、React、Router 或 bundler。实际 browser chunk 与 `pages.manifest.json` 生成仍属于独立 build adapter。
+
 ## 参考
 
 - [Plugin-first 目标架构](../../TARGET-ARCHITECTURE.md)

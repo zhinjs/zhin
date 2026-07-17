@@ -31,6 +31,8 @@
     "@zhin.js/next-feature-agent": "workspace:*",
     "@zhin.js/next-feature-mcp": "workspace:*",
     "@zhin.js/next-feature-middleware": "workspace:*",
+    "@zhin.js/next-feature-layout": "workspace:*",
+    "@zhin.js/next-feature-page": "workspace:*",
     "@zhin.js/next-feature-skill": "workspace:*",
     "@zhin.js/next-feature-tool": "workspace:*",
     "@types/node": "^26.1.0",

@@ -225,6 +225,8 @@ export interface DiscoveredSource {
 
 `project()` 只建立 generation-scoped 的不可变派生物，例如 Command matcher、Tool index 或 Page manifest。它不能写入全局 registry。projection disposer 进入 `PreparedGeneration`，commit 失败或旧 lease 清零后统一释放。
 
+`target: 'client'` 的 Page/Layout source 不由 Node module loader 执行。绿地 Runtime 通过可选 `ModuleRuntime.loadClientModule()` 获取预构建 artifact；未安装 Client adapter 时挂载 Page/Layout Feature 会显式失败，而不是隐式引入 bundler。
+
 ### 6.1 Command Feature 示例
 
 ```ts

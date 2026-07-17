@@ -40,6 +40,8 @@ describe('next CLI project tooling', () => {
     expect(tsconfig.include).toContain('adapters/**/*.ts');
     expect(tsconfig.include).toContain('tools/*.ts');
     expect(tsconfig.include).toContain('mcp/*.ts');
+    expect(tsconfig.include).toContain('pages/*.ts');
+    expect(tsconfig.include).toContain('pages/*.tsx');
     const child = JSON.parse(
       await readFile(join(root, 'plugins/weather/package.json'), 'utf8'),
     ) as { zhin: { engine: string } };

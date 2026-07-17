@@ -14,6 +14,11 @@ const budgetBytes = 5 * 1024 * 1024;
 const packages = [
   { dir: 'packages/next/kernel', name: '@zhin.js/next-kernel', dependencies: [] },
   {
+    dir: 'packages/next/console-contract',
+    name: '@zhin.js/next-console-contract',
+    dependencies: [],
+  },
+  {
     dir: 'packages/next/feature-kit',
     name: '@zhin.js/next-feature-kit',
     dependencies: ['@zhin.js/next-kernel'],
@@ -59,6 +64,24 @@ const packages = [
     dependencies: ['@zhin.js/next-kernel', '@zhin.js/next-feature-kit'],
   },
   {
+    dir: 'packages/next/feature-page',
+    name: '@zhin.js/next-feature-page',
+    dependencies: [
+      '@zhin.js/next-console-contract',
+      '@zhin.js/next-kernel',
+      '@zhin.js/next-feature-kit',
+    ],
+  },
+  {
+    dir: 'packages/next/feature-layout',
+    name: '@zhin.js/next-feature-layout',
+    dependencies: [
+      '@zhin.js/next-console-contract',
+      '@zhin.js/next-kernel',
+      '@zhin.js/next-feature-kit',
+    ],
+  },
+  {
     dir: 'packages/next/runtime',
     name: '@zhin.js/next-runtime',
     dependencies: ['@zhin.js/next-kernel', '@zhin.js/next-feature-kit'],
@@ -88,6 +111,16 @@ const packages = [
       '@zhin.js/next-feature-mcp',
       '@zhin.js/next-feature-skill',
       '@zhin.js/next-feature-tool',
+    ],
+  },
+  {
+    dir: 'packages/next/console',
+    name: '@zhin.js/next-console',
+    dependencies: [
+      '@zhin.js/next-console-contract',
+      '@zhin.js/next-kernel',
+      '@zhin.js/next-feature-page',
+      '@zhin.js/next-feature-layout',
     ],
   },
 ];

@@ -23,7 +23,18 @@ export interface DirectoryEntry {
 export interface DiscoveryHost {
   list(directory: string): Promise<readonly DirectoryEntry[]>;
   loadModule<T = unknown>(source: string): Promise<T>;
+  /** Loads a build artifact for browser code without executing that code in Node. */
+  loadClientModule?<T = unknown>(
+    source: string,
+    request: ClientModuleRequest,
+  ): Promise<T>;
   readText(source: string): Promise<string>;
+}
+
+export interface ClientModuleRequest {
+  readonly feature: FeatureId;
+  readonly owner: PluginId;
+  readonly localName: string;
 }
 
 export interface DiscoveryContext {

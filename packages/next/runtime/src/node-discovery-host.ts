@@ -1,5 +1,6 @@
 import { readFile, readdir } from 'node:fs/promises';
 import type {
+  ClientModuleRequest,
   DirectoryEntry,
   DiscoveryHost,
 } from '@zhin.js/next-feature-kit';
@@ -25,6 +26,15 @@ export class NodeDiscoveryHost implements DiscoveryHost {
 
   loadModule<T = unknown>(source: string): Promise<T> {
     return this.modules.load<T>(source);
+  }
+
+  loadClientModule<T = unknown>(source: string, request: ClientModuleRequest): Promise<T> {
+    if (!this.modules.loadClientModule) {
+      throw new Error(
+        `Client Module adapter is required to load ${request.feature}:${request.localName}`,
+      );
+    }
+    return this.modules.loadClientModule<T>(source, request);
   }
 
   readText(source: string): Promise<string> {

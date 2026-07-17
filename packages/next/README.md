@@ -20,6 +20,10 @@
 | `@zhin.js/next-feature-agent` | `agents/*.agent.md` immutable Agent projection |
 | `@zhin.js/next-feature-mcp` | `mcp/*.ts`、provider-neutral MCP client lifecycle |
 | `@zhin.js/next-agent` | CapabilityIngress、owner-visible handles 与 snapshot-coherent turn lease |
+| `@zhin.js/next-console-contract` | 零依赖 Page/Layout manifest、route、Navigation 与 Shell slot contract |
+| `@zhin.js/next-feature-page` | `pages/*.ts|tsx`、Client Module artifact 边界与 PageIndex |
+| `@zhin.js/next-feature-layout` | `pages/$nav.tsx`、`$footer.tsx` 与最近祖先 override chain |
+| `@zhin.js/next-console` | route guard、permission filter、Plugin Navigation 与 snapshot-coherent Console catalog |
 | `@zhin.js/next-cli` | Plugin monorepo 初始化、子包创建、inspect、build 与安全 publish plan |
 
 每个包的完整契约与示例：
@@ -36,6 +40,10 @@
 - [Agent Feature](feature-agent/README.md)
 - [MCP Feature](feature-mcp/README.md)
 - [Agent Runtime](agent/README.md)
+- [Console Contract](console-contract/README.md)
+- [Page Feature](feature-page/README.md)
+- [Layout Feature](feature-layout/README.md)
+- [Console Runtime](console/README.md)
 - [Runtime](runtime/README.md)
 - [YAML Config Adapter](config-yaml/README.md)
 - [CLI](cli/README.md)
@@ -59,6 +67,12 @@ AgentRuntime turn
   -> owner-visible CapabilityIngress
   -> scoped execution handles
 
+Client Module artifact
+  -> Page / Layout CapabilitySlot
+  -> PageIndex / LayoutIndex
+  -> ConsoleRuntime view lease
+  -> route guard / Navigation / Layout fallback
+
 Development ModuleRuntime watcher
   -> reverse importer closure
   -> SourceOwnershipIndex
@@ -81,12 +95,15 @@ Explicit EnvironmentLayers
 
 默认 Runtime 只提供预编译 ESM adapter，不依赖 YAML、Vite、编译器或 watcher。YAML 配置和开发期 TS transform/watch 都由独立 adapter 提供，不能进入 `zhin.js` 默认生产依赖闭包。Graph inspect 在 import/setup 前校验 Runtime engine 与 Feature API semver contract。Command、Middleware、Component、Adapter 都是独立 Feature provider；Capability-only HMR 只重新 load 目标 Slot。Adapter projection 通过 generation handoff 在 commit 前停旧流、启动候选 transport，commit 后才开放 admission。child `plugin.ts` / `schema.json` 变化只影子装配对应 Plugin forest；manifest transaction 则局部处理 child 与 Feature mount 的新增、删除、移动。结构化 config patch 先整体验证，再按实际变化的 owner view 计算最浅 forest；可选 YAML adapter 把文件替换加入同一 generation handoff。以上路径都复用未变化的 Plugin Scope lifetime、重建全部 generation projections，并以完整 immutable snapshot 原子发布。Root setup/schema 与 package ABI 变化升级为受控 process restart；Feature provider 源码、未知 importer 与混合变更仍保守采用完整 shadow generation。
 
+Page/Layout 只通过可选 `ModuleRuntime.loadClientModule()` 接收静态 artifact，Node 不执行 TSX。真正的 browser chunk/manifest 生成属于独立 build adapter。
+
 ## Validate
 
 ```bash
 pnpm exec vitest run packages/next
 pnpm --filter '@zhin.js/next-*' build
 pnpm --filter @zhin.js/next-im check:size
+pnpm --filter @zhin.js/next-console check:size
 ```
 
 CLI 发布默认运行 `pnpm publish --dry-run`。只有显式传入 `zhin-next publish --execute` 才执行真实发布，并且计划只包含当前 workspace package，不会操作 `node_modules` 中解析到的包。

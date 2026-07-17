@@ -225,6 +225,8 @@ export function pageRoute(owner: PluginId, root: PluginId, localName: string): s
 
 生产 manifest 是 Page source 的构建产物，不是第二份作者配置。
 
+绿地实现已落在 `packages/next/console-contract`、`feature-page`、`feature-layout` 与 `console`。Page/Layout convention 仅向 `ModuleRuntime.loadClientModule()` 请求 `{ module, hash, metadata }` artifact，不通过 Server Module Runtime 执行 TSX。
+
 ## 11. Navigation Builder
 
 ```ts
@@ -313,6 +315,8 @@ export function resolveLayout(
 ```
 
 Console Shell 负责 semantic region、responsive layout、focus、Suspense 和 Error Boundary。`$nav.tsx` 只收到已鉴权 NavNode[]；`$footer.tsx` 只收到只读 footer context。
+
+`ConsoleRuntime.runView()` 为 route guard、Navigation 和 Layout chain 持有同一 snapshot lease；回调退出后 catalog 失效。`LayoutIndex.chain()` 按最近 owner 到 Root 返回 renderer 回退顺序，Shell 仍是 Error Boundary 与内置 renderer 的 authority。
 
 ## 13. Root Bootstrap
 
