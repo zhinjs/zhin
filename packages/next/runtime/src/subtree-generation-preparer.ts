@@ -8,6 +8,7 @@ import {
 } from '@zhin.js/next-kernel';
 import { FeatureDiscovery } from '@zhin.js/next-feature-kit';
 import type { RuntimeEnvironment } from './environment.js';
+import type { EnvironmentLayers } from './environment-store.js';
 import { FeatureProjector } from './feature-projector.js';
 import type { ModuleRuntime } from './module-runtime.js';
 import { NodeDiscoveryHost } from './node-discovery-host.js';
@@ -39,6 +40,7 @@ export class SubtreeGenerationPreparer {
     private readonly configResolver: PluginConfigResolver,
     private readonly environment: RuntimeEnvironment,
     private readonly installResources?: RootResourceInstaller,
+    private readonly environmentLayers: EnvironmentLayers = {},
   ) {}
 
   async prepare(
@@ -52,6 +54,7 @@ export class SubtreeGenerationPreparer {
       this.configResolver,
       this.environment,
       this.installResources,
+      this.environmentLayers,
       {
         scopes: this.model.scopes,
         tree: current.tree,

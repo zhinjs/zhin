@@ -15,6 +15,11 @@ import {
   type TokenId,
 } from '@zhin.js/next-kernel';
 import { runtimeEnvironmentToken, type RuntimeEnvironment } from './environment.js';
+import {
+  EnvStoreFactory,
+  envStoreToken,
+  type EnvironmentLayers,
+} from './environment-store.js';
 import type { ZhinPluginManifest } from './manifest.js';
 import type { ModuleRuntime } from './module-runtime.js';
 import type { PluginGraphNode } from './project-graph.js';
@@ -46,14 +51,17 @@ export class PluginScopeAssembler {
   readonly resources: Map<PluginId, ReadonlyMap<TokenId, unknown>>;
   readonly #created: PluginId[] = [];
   readonly #handoffs = new GenerationHandoffStack();
+  readonly #envStores: EnvStoreFactory;
 
   constructor(
     private readonly modules: ModuleRuntime,
     private readonly configResolver: PluginConfigResolver,
     private readonly environment: RuntimeEnvironment,
     private readonly installResources?: RootResourceInstaller,
+    environmentLayers: EnvironmentLayers = {},
     seed?: PluginAssemblySeed,
   ) {
+    this.#envStores = new EnvStoreFactory(environment, environmentLayers);
     this.scopes = new Map(seed?.scopes);
     this.tree = new Map(seed?.tree);
     this.config = new Map(seed?.config);
@@ -90,6 +98,8 @@ export class PluginScopeAssembler {
     const scope = new Scope(node.id, parentScope);
     this.scopes.set(node.id, scope);
     this.#created.push(node.id);
+    // Every owner shadows the inherited EnvStore with its exact overlay view.
+    scope.provide(envStoreToken, this.#envStores.create(node.id));
 
     if (!node.parent) {
       scope.provide(runtimeEnvironmentToken, this.environment);

@@ -35,7 +35,11 @@ import {
   type ConfigPatch,
   type ConfigPatchPlan,
 } from './config-patch-planner.js';
-import type { RuntimeEnvironment } from './environment.js';
+import { defineRuntimeEnvironment, type RuntimeEnvironment } from './environment.js';
+import {
+  defineEnvironmentLayers,
+  type EnvironmentLayers,
+} from './environment-store.js';
 import { FeatureProjector, type ProjectionState } from './feature-projector.js';
 import { GenerationAssets } from './generation-assets.js';
 import type { ModuleRuntime } from './module-runtime.js';
@@ -79,6 +83,7 @@ export interface RootRuntimeOptions {
   readonly projectRoot: string;
   readonly modules: ModuleRuntime;
   readonly environment: RuntimeEnvironment;
+  readonly environmentVariables?: EnvironmentLayers;
   readonly config?: PluginConfigResolver | RuntimeConfigDocument | ConfigDocumentPort;
   readonly installResources?: RootResourceInstaller;
   readonly onControlError?: ControlErrorHandler;
@@ -96,6 +101,7 @@ export class RootRuntime {
   readonly #projectRoot: string;
   readonly #modules: ModuleRuntime;
   readonly #environment: RuntimeEnvironment;
+  readonly #environmentLayers: Readonly<EnvironmentLayers>;
   readonly #configResolver?: PluginConfigResolver;
   readonly #configPort?: ConfigDocumentPort;
   #configSnapshot?: ConfigDocumentSnapshot;
@@ -108,7 +114,8 @@ export class RootRuntime {
   constructor(options: RootRuntimeOptions) {
     this.#projectRoot = resolve(options.projectRoot);
     this.#modules = options.modules;
-    this.#environment = Object.freeze({ ...options.environment });
+    this.#environment = defineRuntimeEnvironment(options.environment);
+    this.#environmentLayers = defineEnvironmentLayers(options.environmentVariables);
     if (typeof options.config === 'function') this.#configResolver = options.config;
     else if (isConfigDocumentPort(options.config)) this.#configPort = options.config;
     else this.#configDocument = structuredClone(options.config ?? {});
@@ -208,6 +215,7 @@ export class RootRuntime {
             inspected.configResolver,
             this.#environment,
             this.#installResources,
+            this.#environmentLayers,
           ).prepare(current);
         } else if (plan.subtrees.length === 0 && plan.slots.length > 0 && this.#model) {
           prepared = await new SlotGenerationPreparer(this.#modules, this.#model)
@@ -330,6 +338,7 @@ export class RootRuntime {
       current.generation + 1,
       this.#environment,
       this.#installResources,
+      this.#environmentLayers,
     );
     return assembler.prepare();
   }
@@ -348,6 +357,7 @@ export class RootRuntime {
         inspected.configResolver,
         this.#environment,
         this.#installResources,
+        this.#environmentLayers,
       ).prepare(current, roots);
     } catch (error) {
       if (!(error instanceof SubtreeTopologyChangedError)) throw error;
@@ -416,6 +426,7 @@ class GenerationAssembler {
     private readonly generation: number,
     private readonly environment: RuntimeEnvironment,
     private readonly installResources?: RootResourceInstaller,
+    private readonly environmentLayers: EnvironmentLayers = {},
   ) {
     this.#host = new NodeDiscoveryHost(modules);
     this.#plugins = new PluginScopeAssembler(
@@ -423,6 +434,7 @@ class GenerationAssembler {
       configResolver,
       environment,
       installResources,
+      environmentLayers,
     );
   }
 

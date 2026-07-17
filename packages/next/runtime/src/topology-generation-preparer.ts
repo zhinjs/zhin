@@ -17,6 +17,7 @@ import {
   type FeatureProvider,
 } from '@zhin.js/next-feature-kit';
 import type { RuntimeEnvironment } from './environment.js';
+import type { EnvironmentLayers } from './environment-store.js';
 import { FeatureProjector } from './feature-projector.js';
 import type { ZhinFeatureManifest } from './manifest.js';
 import type { ModuleRuntime } from './module-runtime.js';
@@ -57,6 +58,7 @@ export class TopologyGenerationPreparer {
     private readonly configResolver: PluginConfigResolver,
     private readonly environment: RuntimeEnvironment,
     private readonly installResources?: RootResourceInstaller,
+    private readonly environmentLayers: EnvironmentLayers = {},
   ) {}
 
   async prepare(current: RuntimeSnapshot): Promise<PreparedRuntimeGeneration | undefined> {
@@ -76,6 +78,7 @@ export class TopologyGenerationPreparer {
       this.configResolver,
       this.environment,
       this.installResources,
+      this.environmentLayers,
       {
         scopes: this.model.scopes,
         tree: current.tree,

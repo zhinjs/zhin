@@ -8,9 +8,9 @@
 
 ```ts
 export interface RuntimeEnvironment {
+  readonly name: string;
   readonly mode: string;
   readonly platform: string;
-  is(mode: string): boolean;
 }
 
 export interface EnvSchema<T> {
@@ -19,7 +19,14 @@ export interface EnvSchema<T> {
 }
 
 export interface EnvStore {
+  readonly owner: PluginId;
+  readonly environment: RuntimeEnvironment;
+  has(key: string): boolean;
+  get(key: string): string | undefined;
+  require(key: string): string;
   parse<T>(schema: EnvSchema<T>): Readonly<T>;
+  expand<T>(value: T): T;
+  redact(value: unknown, secretKeys: readonly string[]): unknown;
 }
 
 export interface DatabaseView {
@@ -34,13 +41,17 @@ export interface Logger {
   error(event: string, fields?: Readonly<Record<string, unknown>>): void;
 }
 
-export const EnvironmentToken = createToken<RuntimeEnvironment>('zhin.environment');
-export const EnvToken = createToken<EnvStore>('zhin.env');
+export const runtimeEnvironmentToken = createToken<RuntimeEnvironment>(
+  'zhin.runtime-environment',
+);
+export const envStoreToken = createToken<EnvStore>('zhin.env');
 export const DatabaseToken = createToken<DatabaseView>('zhin.database');
 export const LoggerToken = createToken<Logger>('zhin.logger');
 ```
 
-Root Bootstrap 私有持有 process env、database pool 和 logger factory，并为每个 Plugin owner 生成 EnvStore/DatabaseView/Logger binding。Plugin 看不到 pool 的 `close()`；只有 Root generation disposer 能关闭物理资源。
+Root Bootstrap 显式接收 process env、database pool 和 logger factory，并为每个 Plugin owner 生成 EnvStore/DatabaseView/Logger binding。Plugin 看不到 pool 的 `close()`；只有 Root generation disposer 能关闭物理资源。
+
+EnvStore 已按 `base → environment.name → Plugin ancestors → exact owner` 实现固定 overlay 顺序。每层的 `undefined` 会删除下层值；`${KEY}` 只在 Plugin 显式调用 `expand()` 时解析，YAML AST 永远保留原表达式。环境层在 Root 构造时冻结，变化进入 process restart，不伪装成 generation HMR。`EnvSchema.secretKeys` 同时用于 parser diagnostic 和结构化日志脱敏，脱敏异常不保留原始 cause。
 
 ## 1. Config Ports
 

@@ -2,6 +2,7 @@ export * from './config-composer.js';
 export * from './config-document.js';
 export * from './config-patch-planner.js';
 export * from './environment.js';
+export * from './environment-store.js';
 export * from './hmr-coordinator.js';
 export * from './invalidation-planner.js';
 export * from './manifest.js';
