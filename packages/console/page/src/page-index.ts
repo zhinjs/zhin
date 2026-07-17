@@ -1,7 +1,7 @@
 import {
   pageRoute,
   type PageManifest,
-} from '@zhin.js/next-console-contract';
+} from '@zhin.js/console-contract';
 import type { CapabilitySlot, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { OwnerCapabilityIndex } from '@zhin.js/feature-kit';
 import type { PageDefinition } from './definition.js';

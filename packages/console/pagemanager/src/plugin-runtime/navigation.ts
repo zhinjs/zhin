@@ -1,4 +1,4 @@
-import type { NavNode, PageManifest } from '@zhin.js/next-console-contract';
+import type { NavNode, PageManifest } from '@zhin.js/console-contract';
 import type { PluginId, PluginNodeSnapshot, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 
 export function buildNavigation(

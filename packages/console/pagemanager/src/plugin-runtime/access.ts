@@ -1,4 +1,4 @@
-import type { AccessSnapshot, PageManifest } from '@zhin.js/next-console-contract';
+import type { AccessSnapshot, PageManifest } from '@zhin.js/console-contract';
 
 export interface AccessIndex {
   readonly permissions: ReadonlySet<string>;

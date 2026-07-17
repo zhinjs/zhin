@@ -52,12 +52,6 @@
   "config-yaml": [
     "export * from './yaml-config-document.js';"
   ],
-  "console": [
-    "export * from './access.js';",
-    "export * from './console-catalog.js';",
-    "export * from './console-runtime.js';",
-    "export * from './navigation.js';"
-  ],
   "console-contract": [
     "export * from './layout.js';",
     "export * from './navigation.js';",
@@ -77,22 +71,16 @@
     "export * from './provider.js';",
     "export * from './typescript-convention.js';"
   ],
-  "feature-layout": [
-    "export * from './definition.js';",
-    "export * from './layout-index.js';",
-    "export * from './provider.js';",
-    "export{default}from './provider.js';"
-  ],
-  "feature-page": [
-    "export * from './definition.js';",
-    "export * from './page-index.js';",
-    "export * from './provider.js';",
-    "export{default}from './provider.js';"
-  ],
   "isolate": [
     "export * from './contracts.js';",
     "export * from './runtime.js';",
     "export type{IsolateMode}from './transport.js';"
+  ],
+  "layout": [
+    "export * from './definition.js';",
+    "export * from './layout-index.js';",
+    "export * from './provider.js';",
+    "export{default}from './provider.js';"
   ],
   "mcp-feature": [
     "export * from './definition.js';",
@@ -105,6 +93,18 @@
     "export * from './middleware-index.js';",
     "export * from './provider.js';",
     "export{default}from './provider.js';"
+  ],
+  "page": [
+    "export * from './definition.js';",
+    "export * from './page-index.js';",
+    "export * from './provider.js';",
+    "export{default}from './provider.js';"
+  ],
+  "pagemanager/plugin-runtime": [
+    "export * from './access.js';",
+    "export * from './console-catalog.js';",
+    "export * from './console-runtime.js';",
+    "export * from './navigation.js';"
   ],
   "plugin-runtime": [
     "export * from './capability.js';",

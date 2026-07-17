@@ -1,4 +1,4 @@
-# @zhin.js/next-feature-layout
+# @zhin.js/layout
 
 Console Shell Layout slot 的标准 Feature provider。Layout 与 Page 共用 `pages/`，但只发现两个保留文件：`$nav.tsx` 和 `$footer.tsx`。
 

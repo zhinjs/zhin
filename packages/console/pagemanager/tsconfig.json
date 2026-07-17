@@ -5,6 +5,6 @@
     "rootDir": "./src",
     "ignoreDeprecations": "6.0"
   },
-  "include": ["src/node/**/*"],
+  "include": ["src/node/**/*", "src/plugin-runtime/**/*"],
   "exclude": ["**/*.test.ts"]
 }

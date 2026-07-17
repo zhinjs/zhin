@@ -1,5 +1,5 @@
 import type { SnapshotStore } from '@zhin.js/plugin-runtime';
-import type { AccessSnapshot } from '@zhin.js/next-console-contract';
+import type { AccessSnapshot } from '@zhin.js/console-contract';
 import { ConsoleCatalog } from './console-catalog.js';
 
 export class ConsoleRuntime {

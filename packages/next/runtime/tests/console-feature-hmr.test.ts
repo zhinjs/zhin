@@ -11,11 +11,11 @@ import type { ClientModuleRequest } from '@zhin.js/feature-kit';
 import layoutFeature, {
   LayoutIndex,
   layoutFeatureId,
-} from '@zhin.js/next-feature-layout';
+} from '@zhin.js/layout';
 import pageFeature, {
   PageIndex,
   pageFeatureId,
-} from '@zhin.js/next-feature-page';
+} from '@zhin.js/page';
 import {
   RootRuntime,
   type ModuleRuntime,
@@ -126,7 +126,7 @@ describe('Console Feature slot HMR', () => {
     });
 
     await writeFile(pageSource, [
-      "import { definePage } from '@zhin.js/next-console-contract';",
+      "import { definePage } from '@zhin.js/console-contract';",
       "const title = 'dynamic';",
       'export const meta = definePage({ title });',
       'export default function Status() { return null; }',
@@ -148,7 +148,7 @@ describe('Console Feature slot HMR', () => {
 
 function pageModule(title: string): string {
   return [
-    "import { definePage } from '@zhin.js/next-console-contract';",
+    "import { definePage } from '@zhin.js/console-contract';",
     `export const meta = definePage({ title: '${title}' });`,
     'export default function Status() { return null; }',
     '',

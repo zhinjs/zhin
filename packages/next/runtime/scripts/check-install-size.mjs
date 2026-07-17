@@ -14,8 +14,8 @@ const budgetBytes = 5 * 1024 * 1024;
 const packages = [
   { dir: 'packages/im/plugin-runtime', name: '@zhin.js/plugin-runtime', dependencies: [] },
   {
-    dir: 'packages/next/console-contract',
-    name: '@zhin.js/next-console-contract',
+    dir: 'packages/console/plugin-contract',
+    name: '@zhin.js/console-contract',
     dependencies: [],
   },
   {
@@ -64,19 +64,19 @@ const packages = [
     dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
   },
   {
-    dir: 'packages/next/feature-page',
-    name: '@zhin.js/next-feature-page',
+    dir: 'packages/console/page',
+    name: '@zhin.js/page',
     dependencies: [
-      '@zhin.js/next-console-contract',
+      '@zhin.js/console-contract',
       '@zhin.js/plugin-runtime',
       '@zhin.js/feature-kit',
     ],
   },
   {
-    dir: 'packages/next/feature-layout',
-    name: '@zhin.js/next-feature-layout',
+    dir: 'packages/console/layout',
+    name: '@zhin.js/layout',
     dependencies: [
-      '@zhin.js/next-console-contract',
+      '@zhin.js/console-contract',
       '@zhin.js/plugin-runtime',
       '@zhin.js/feature-kit',
     ],
@@ -105,16 +105,6 @@ const packages = [
     dir: 'packages/next/isolate',
     name: '@zhin.js/next-isolate',
     dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/next-runtime'],
-  },
-  {
-    dir: 'packages/next/console',
-    name: '@zhin.js/next-console',
-    dependencies: [
-      '@zhin.js/next-console-contract',
-      '@zhin.js/plugin-runtime',
-      '@zhin.js/next-feature-page',
-      '@zhin.js/next-feature-layout',
-    ],
   },
 ];
 const targetName = process.argv[2] ?? '@zhin.js/next-runtime';

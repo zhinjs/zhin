@@ -12,13 +12,13 @@ import {
   LayoutIndex,
   layoutFeatureId,
   type LayoutDefinition,
-} from '@zhin.js/next-feature-layout';
+} from '@zhin.js/layout';
 import {
   PageIndex,
   pageFeatureId,
   type PageDefinition,
-} from '@zhin.js/next-feature-page';
-import { ConsoleRuntime } from '../src/index.js';
+} from '@zhin.js/page';
+import { ConsoleRuntime } from '../../src/plugin-runtime/index.js';
 
 describe('Console Runtime', () => {
   it('keeps route guard, Navigation and Layout inheritance on one snapshot', async () => {

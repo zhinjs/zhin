@@ -85,13 +85,37 @@
       "targetPackage": "@zhin.js/agent",
       "targetDirectory": "packages/im/agent",
       "targetExport": "./runtime"
+    },
+    {
+      "sourcePackage": "@zhin.js/next-console-contract",
+      "sourceDirectory": "packages/next/console-contract",
+      "targetPackage": "@zhin.js/console-contract",
+      "targetDirectory": "packages/console/plugin-contract",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-feature-page",
+      "sourceDirectory": "packages/next/feature-page",
+      "targetPackage": "@zhin.js/page",
+      "targetDirectory": "packages/console/page",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-feature-layout",
+      "sourceDirectory": "packages/next/feature-layout",
+      "targetPackage": "@zhin.js/layout",
+      "targetDirectory": "packages/console/layout",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-console",
+      "sourceDirectory": "packages/next/console",
+      "targetPackage": "@zhin.js/pagemanager",
+      "targetDirectory": "packages/console/pagemanager",
+      "targetExport": "./plugin-runtime"
     }
   ],
   "pending": [
-    { "sourcePackage": "@zhin.js/next-console-contract", "target": "@zhin.js/contract/plugin-runtime" },
-    { "sourcePackage": "@zhin.js/next-feature-page", "target": "@zhin.js/contract/features/page" },
-    { "sourcePackage": "@zhin.js/next-feature-layout", "target": "@zhin.js/contract/features/layout" },
-    { "sourcePackage": "@zhin.js/next-console", "target": "@zhin.js/pagemanager/plugin-runtime" },
     { "sourcePackage": "@zhin.js/next-client-build", "target": "@zhin.js/pagemanager/client-build" },
     { "sourcePackage": "@zhin.js/next-runtime", "target": "zhin.js/runtime" },
     { "sourcePackage": "@zhin.js/next-config-yaml", "target": "zhin.js/config-yaml" },

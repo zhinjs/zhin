@@ -1,7 +1,7 @@
 import {
   normalizeClientModuleArtifact,
   type LayoutSlot,
-} from '@zhin.js/next-console-contract';
+} from '@zhin.js/console-contract';
 import type { ValidationContext } from '@zhin.js/feature-kit';
 
 export interface LayoutDefinition {

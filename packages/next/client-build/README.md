@@ -37,7 +37,8 @@ Layout 只校验 default export，不读取 metadata。TS/TSX 使用 TypeScript 
 
 ## Dependency Boundary
 
-TypeScript 是本工具包的 peer dependency。它只存在于选择安装 client build tooling 的 workspace；`@zhin.js/next-console` 的 production size gate 不包含本包。
+TypeScript 是本工具包的 peer dependency。它只存在于选择安装 client build tooling 的
+workspace；`@zhin.js/pagemanager/plugin-runtime` 不依赖本包。
 
 ## Validation
 

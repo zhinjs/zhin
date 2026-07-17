@@ -22,10 +22,10 @@
 | `@zhin.js/next-feature-agent` | `agents/*.agent.md`、immutable Markdown AgentIndex |
 | `@zhin.js/next-feature-mcp` | `mcp/*.ts`、provider-neutral client 与 generation lifecycle |
 | `@zhin.js/agent/runtime` | CapabilityIngress、owner-visible handles、snapshot-coherent turn lease |
-| `@zhin.js/next-console-contract` | 零依赖 Page/Layout manifest、route、Navigation 与 Shell slot contract |
-| `@zhin.js/next-feature-page` | `pages/*.ts|tsx`、Client Module artifact 校验、canonical route 与 PageIndex |
-| `@zhin.js/next-feature-layout` | `$nav.tsx`/`$footer.tsx`、最近祖先继承与 renderer fallback chain |
-| `@zhin.js/next-console` | permission-aware route guard、Plugin Navigation、Layout resolver 与 view lease |
+| `@zhin.js/console-contract` | 零依赖 Page/Layout manifest、route、Navigation 与 Shell slot contract |
+| `@zhin.js/page` | `pages/*.ts|tsx`、Client Module artifact 校验、canonical route 与 PageIndex |
+| `@zhin.js/layout` | `$nav.tsx`/`$footer.tsx`、最近祖先继承与 renderer fallback chain |
+| `@zhin.js/pagemanager/plugin-runtime` | permission-aware route guard、Plugin Navigation、Layout resolver 与 view lease |
 | `@zhin.js/next-client-build` | 可选 TypeScript AST metadata、content-hash ESM/manifest、development builder 与 production loader |
 | `@zhin.js/next-cli` | `init`、`create`、`inspect`、原生 TS `start`、两阶段 migrate/readiness、`build` 与安全 publish |
 
@@ -126,7 +126,6 @@ pnpm exec vitest run packages/next
 pnpm --filter './packages/next/**' build
 pnpm --filter @zhin.js/next-runtime check:size
 pnpm --filter @zhin.js/next-im check:size
-pnpm --filter @zhin.js/next-console check:size
 pnpm --filter @zhin.js/next-isolate check:size
 pnpm --filter @zhin.js/next-compat check:size
 pnpm --filter @zhin.js/next-cli check:api

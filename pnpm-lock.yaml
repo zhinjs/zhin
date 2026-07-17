@@ -744,14 +744,64 @@ importers:
         specifier: ^6.0.2
         version: 6.0.3
 
+  packages/console/layout:
+    dependencies:
+      '@zhin.js/console-contract':
+        specifier: workspace:*
+        version: link:../plugin-contract
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../im/feature-kit
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../../im/plugin-runtime
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.0
+        version: 26.1.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/console/page:
+    dependencies:
+      '@zhin.js/console-contract':
+        specifier: workspace:*
+        version: link:../plugin-contract
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../im/feature-kit
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../../im/plugin-runtime
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.0
+        version: 26.1.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   packages/console/pagemanager:
     dependencies:
       '@koa/router':
         specifier: ^15.6.0
         version: 15.6.0(koa@3.2.1)
+      '@zhin.js/console-contract':
+        specifier: workspace:*
+        version: link:../plugin-contract
       '@zhin.js/contract':
         specifier: workspace:*
         version: link:../contract
+      '@zhin.js/layout':
+        specifier: workspace:*
+        version: link:../layout
+      '@zhin.js/page':
+        specifier: workspace:*
+        version: link:../page
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../../im/plugin-runtime
       esbuild:
         specifier: ^0.28.1
         version: 0.28.1
@@ -785,6 +835,15 @@ importers:
         version: 6.1.3
       typescript:
         specifier: ^6.0.2
+        version: 6.0.3
+
+  packages/console/plugin-contract:
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.0
+        version: 26.1.1
+      typescript:
+        specifier: ^6.0.3
         version: 6.0.3
 
   packages/host/a2a:
@@ -1339,12 +1398,12 @@ importers:
 
   packages/next/client-build:
     dependencies:
+      '@zhin.js/console-contract':
+        specifier: '*'
+        version: link:../../console/plugin-contract
       '@zhin.js/feature-kit':
         specifier: '*'
         version: link:../../im/feature-kit
-      '@zhin.js/next-console-contract':
-        specifier: '*'
-        version: link:../console-contract
       '@zhin.js/next-runtime':
         specifier: '*'
         version: link:../runtime
@@ -1397,75 +1456,6 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/next/console:
-    dependencies:
-      '@zhin.js/next-console-contract':
-        specifier: workspace:*
-        version: link:../console-contract
-      '@zhin.js/next-feature-layout':
-        specifier: workspace:*
-        version: link:../feature-layout
-      '@zhin.js/next-feature-page':
-        specifier: workspace:*
-        version: link:../feature-page
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../im/plugin-runtime
-    devDependencies:
-      '@types/node':
-        specifier: ^26.1.0
-        version: 26.1.1
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/next/console-contract:
-    devDependencies:
-      '@types/node':
-        specifier: ^26.1.0
-        version: 26.1.1
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/next/feature-layout:
-    dependencies:
-      '@zhin.js/feature-kit':
-        specifier: workspace:*
-        version: link:../../im/feature-kit
-      '@zhin.js/next-console-contract':
-        specifier: workspace:*
-        version: link:../console-contract
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../im/plugin-runtime
-    devDependencies:
-      '@types/node':
-        specifier: ^26.1.0
-        version: 26.1.1
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/next/feature-page:
-    dependencies:
-      '@zhin.js/feature-kit':
-        specifier: workspace:*
-        version: link:../../im/feature-kit
-      '@zhin.js/next-console-contract':
-        specifier: workspace:*
-        version: link:../console-contract
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../im/plugin-runtime
-    devDependencies:
-      '@types/node':
-        specifier: ^26.1.0
-        version: 26.1.1
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
   packages/next/isolate:
     dependencies:
       '@zhin.js/next-runtime':
@@ -1512,18 +1502,18 @@ importers:
       '@zhin.js/component':
         specifier: workspace:*
         version: link:../../im/component
+      '@zhin.js/layout':
+        specifier: workspace:*
+        version: link:../../console/layout
       '@zhin.js/mcp-feature':
         specifier: workspace:*
         version: link:../../im/mcp-feature
       '@zhin.js/middleware':
         specifier: workspace:*
         version: link:../../im/middleware
-      '@zhin.js/next-feature-layout':
+      '@zhin.js/page':
         specifier: workspace:*
-        version: link:../feature-layout
-      '@zhin.js/next-feature-page':
-        specifier: workspace:*
-        version: link:../feature-page
+        version: link:../../console/page
       '@zhin.js/skill':
         specifier: workspace:*
         version: link:../../im/skill

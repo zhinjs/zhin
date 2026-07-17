@@ -2,7 +2,7 @@ import {
   normalizeClientModuleArtifact,
   normalizePageMetadata,
   type NormalizedPageMetadata,
-} from '@zhin.js/next-console-contract';
+} from '@zhin.js/console-contract';
 import type { ValidationContext } from '@zhin.js/feature-kit';
 
 export interface PageDefinition extends NormalizedPageMetadata {

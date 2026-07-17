@@ -225,7 +225,10 @@ export function pageRoute(owner: PluginId, root: PluginId, localName: string): s
 
 生产 manifest 是 Page source 的构建产物，不是第二份作者配置。
 
-绿地实现已落在 `packages/next/console-contract`、`feature-page`、`feature-layout` 与 `console`。Page/Layout convention 仅向 `ModuleRuntime.loadClientModule()` 请求 `{ module, hash, metadata }` artifact，不通过 Server Module Runtime 执行 TSX。
+正式实现已落在 `@zhin.js/console-contract`、`@zhin.js/page`、`@zhin.js/layout` 与
+`@zhin.js/pagemanager/plugin-runtime`。Page/Layout convention 仅向
+`ModuleRuntime.loadClientModule()` 请求 `{ module, hash, metadata }` artifact，不通过
+Server Module Runtime 执行 TSX。
 
 ## 11. Navigation Builder
 

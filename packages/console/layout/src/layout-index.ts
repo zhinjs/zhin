@@ -1,4 +1,4 @@
-import type { LayoutManifest, LayoutSlot } from '@zhin.js/next-console-contract';
+import type { LayoutManifest, LayoutSlot } from '@zhin.js/console-contract';
 import type { CapabilitySlot, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import {
   OwnerCapabilityIndex,

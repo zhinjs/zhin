@@ -4,10 +4,10 @@ import type {
   LayoutSlot,
   NavNode,
   PageManifest,
-} from '@zhin.js/next-console-contract';
+} from '@zhin.js/console-contract';
 import type { FeatureId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import { LayoutIndex, layoutFeatureId } from '@zhin.js/next-feature-layout';
-import { PageIndex, pageFeatureId } from '@zhin.js/next-feature-page';
+import { LayoutIndex, layoutFeatureId } from '@zhin.js/layout';
+import { PageIndex, pageFeatureId } from '@zhin.js/page';
 import { allowsPage, createAccessIndex } from './access.js';
 import { buildNavigation } from './navigation.js';
 

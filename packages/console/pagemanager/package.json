@@ -13,6 +13,11 @@
       "types": "./lib/node/index.d.ts",
       "import": "./lib/node/index.js",
       "default": "./lib/node/index.js"
+    },
+    "./plugin-runtime": {
+      "types": "./lib/plugin-runtime/index.d.ts",
+      "development": "./src/plugin-runtime/index.ts",
+      "import": "./lib/plugin-runtime/index.js"
     }
   },
   "scripts": {
@@ -23,6 +28,10 @@
   },
   "dependencies": {
     "@zhin.js/contract": "workspace:*",
+    "@zhin.js/console-contract": "workspace:*",
+    "@zhin.js/layout": "workspace:*",
+    "@zhin.js/page": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "@koa/router": "^15.6.0",
     "esbuild": "^0.28.1",
     "koa": "^3.2.1",

@@ -22,10 +22,10 @@
 | `@zhin.js/agent-feature` | `agents/*.agent.md` immutable Agent projection |
 | `@zhin.js/mcp-feature` | `mcp/*.ts`、provider-neutral MCP client lifecycle |
 | `@zhin.js/agent/runtime` | CapabilityIngress、owner-visible handles 与 snapshot-coherent turn lease |
-| `@zhin.js/next-console-contract` | 零依赖 Page/Layout manifest、route、Navigation 与 Shell slot contract |
-| `@zhin.js/next-feature-page` | `pages/*.ts|tsx`、Client Module artifact 边界与 PageIndex |
-| `@zhin.js/next-feature-layout` | `pages/$nav.tsx`、`$footer.tsx` 与最近祖先 override chain |
-| `@zhin.js/next-console` | route guard、permission filter、Plugin Navigation 与 snapshot-coherent Console catalog |
+| `@zhin.js/console-contract` | 零依赖 Page/Layout manifest、route、Navigation 与 Shell slot contract |
+| `@zhin.js/page` | `pages/*.ts|tsx`、Client Module artifact 边界与 PageIndex |
+| `@zhin.js/layout` | `pages/$nav.tsx`、`$footer.tsx` 与最近祖先 override chain |
+| `@zhin.js/pagemanager/plugin-runtime` | route guard、permission filter、Plugin Navigation 与 snapshot-coherent Console catalog |
 | `@zhin.js/next-client-build` | 可选 TypeScript AST metadata、content-hash ESM、artifact manifest 与生产 loader |
 | `@zhin.js/next-cli` | Plugin monorepo 初始化、子包创建、inspect、两阶段 legacy migration、build 与安全 publish plan |
 
@@ -43,10 +43,10 @@
 - [Agent Feature](feature-agent/README.md)
 - [MCP Feature](feature-mcp/README.md)
 - [Agent Runtime](../im/agent/README.md#plugin-runtime-入口)
-- [Console Contract](console-contract/README.md)
-- [Page Feature](feature-page/README.md)
-- [Layout Feature](feature-layout/README.md)
-- [Console Runtime](console/README.md)
+- [Console Contract](../console/plugin-contract/README.md)
+- [Page Feature](../console/page/README.md)
+- [Layout Feature](../console/layout/README.md)
+- [Console Runtime](../console/pagemanager/README.md#plugin-runtime)
 - [Client Build Adapter](client-build/README.md)
 - [Runtime](runtime/README.md)
 - [Isolated Runtime](isolate/README.md)
@@ -136,7 +136,6 @@ Page/Layout 只通过可选 `ModuleRuntime.loadClientModule()` 接收静态 arti
 pnpm exec vitest run packages/next
 pnpm --filter '@zhin.js/next-*' build
 pnpm --filter @zhin.js/core/runtime check:size
-pnpm --filter @zhin.js/next-console check:size
 ```
 
 CLI 发布默认运行 `pnpm publish --dry-run`。只有显式传入 `zhin-next publish --execute` 才执行真实发布，并且计划只包含当前 workspace package，不会操作 `node_modules` 中解析到的包。

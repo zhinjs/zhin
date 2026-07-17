@@ -1,7 +1,7 @@
 {
-  "name": "@zhin.js/next-feature-page",
-  "version": "0.0.0",
-  "description": "Convention Page manifest Feature for Zhin Next",
+  "name": "@zhin.js/page",
+  "version": "1.0.0",
+  "description": "Convention-based Page capability Feature for Zhin.js plugins",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -19,10 +19,10 @@
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
-    "test": "vitest run --root ../../.. packages/next/feature-page/tests"
+    "test": "vitest run --root ../../.. packages/console/page/tests"
   },
   "dependencies": {
-    "@zhin.js/next-console-contract": "workspace:*",
+    "@zhin.js/console-contract": "workspace:*",
     "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*"
   },
@@ -41,5 +41,10 @@
     "node": "^20.19.0 || >=22.12.0"
   },
   "license": "MIT",
-  "private": true
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/console/page"
+  },
+  "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org" }
 }
