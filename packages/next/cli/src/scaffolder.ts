@@ -61,11 +61,15 @@ export class ProjectScaffolder {
     ].join('\n'));
     await writeJson(join(this.root, 'tsconfig.json'), {
       compilerOptions: {
-        target: 'ES2022',
-        module: 'ESNext',
-        moduleResolution: 'Bundler',
+        target: 'ESNext',
+        module: 'NodeNext',
+        moduleResolution: 'NodeNext',
         strict: true,
         noEmit: true,
+        allowImportingTsExtensions: true,
+        rewriteRelativeImportExtensions: true,
+        erasableSyntaxOnly: true,
+        verbatimModuleSyntax: true,
       },
       include: [
         'plugin.ts',

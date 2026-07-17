@@ -1,6 +1,6 @@
 # @zhin.js/next-cli
 
-下一代 Plugin monorepo 的轻量 CLI。它初始化 Root project、创建一级 child Plugin 或 Feature package、检查静态 graph，并按依赖顺序执行 build/publish。
+下一代 Plugin monorepo 的轻量 CLI。它初始化 Root project、创建一级 child Plugin 或 Feature package、启动 Node 原生 TypeScript Root、检查静态 graph，并按依赖顺序执行 build/publish。
 
 > 当前包属于 `feature/next` 绿地实现，命令名暂为 `zhin-next`，版本仍为 `0.0.0` 且未作为稳定 CLI 发布。
 
@@ -11,7 +11,8 @@
 - `packages/*` 保存贡献给 Zhin 的 Feature provider package。
 - child 既可以来自本地 workspace，也可以来自普通 npm dependency。
 - graph、build 和 publish 使用同一份 `package.json#zhin` SSOT。
-- CLI 不实现 Runtime HMR、内置 TypeScript 编译器或 npm registry 客户端封装。
+- HMR transaction 由 Runtime 掌权；CLI 只持有 Root Host、信号与 process restart 策略。
+- CLI 不内置 TypeScript 编译器、Vite、第三方 watcher 或 npm registry 客户端封装。
 
 ## 命令
 
@@ -20,10 +21,12 @@ zhin-next init [package-name]
 zhin-next create plugin <name> [package-name]
 zhin-next create feature <name> [package-name]
 zhin-next inspect
+zhin-next start [--once] [--no-watch] [--environment <name>] [--mode <mode>]
 zhin-next migrate --check
 zhin-next migrate --write
 zhin-next migrate cutover --check
 zhin-next migrate cutover --write
+zhin-next migrate status
 zhin-next build
 zhin-next publish [--execute] [--resume] [--tag <tag>]
 ```
@@ -36,6 +39,8 @@ zhin-next init @acme/my-plugin
 ```
 
 生成 `package.json`、`plugin.ts`、`schema.json`、`tsconfig.json` 与 `pnpm-workspace.yaml`。
+
+生成的 tsconfig 对齐 Node 原生 TS：`NodeNext`、`erasableSyntaxOnly`、`verbatimModuleSyntax` 与 `rewriteRelativeImportExtensions`。Next TS 源码的本地相对 import 使用 `.ts` 扩展；构建产物由 TypeScript 重写为 `.js`。这条约定仅适用于 Next 原生开发面，不追溯修改 Stable 4.x 源码约定。
 
 ### 创建 child Plugin
 
@@ -75,6 +80,22 @@ zhin-next publish --resume
 - public package 依赖 private package 时，会在运行任何 publish step 前失败。
 - npm dependency 只参与解析，不会被 CLI build 或 publish。
 
+### 启动 Root
+
+```bash
+zhin-next start
+zhin-next start --once
+zhin-next start --environment staging --mode production
+```
+
+- `start` 读取唯一的 `config.yml`、`config.yaml`、`config.json`、`zhin.config.yml` 或 `zhin.config.yaml`；多份配置会拒绝启动。
+- `--once` 完成 graph/config/setup/discovery/generation commit 后立即 drain/stop，用于 CI smoke。
+- 默认启动 HMR；`--no-watch` 只关闭 watcher，不改变 Runtime transaction。
+- SIGINT/SIGTERM 会先停止 watcher，再等待全部 snapshot lease 与 Resource disposer。
+- process 级变化输出 restart plan、优雅停止并使用退出码 `75`，交给外层 supervisor 重启。
+
+开发启动使用 Node 原生 type stripping。Node 22.6–22.17 由 CLI 自动附加 `--experimental-strip-types` 并重启自身；22.18+ 直接运行；Node 20 仍可运行预编译生产 ESM，但不能使用原生 TS `start`。原生 Node 要求相对 import 写真实 `.ts` 扩展，不支持 TSX，也不执行 `node_modules` 中的 TS。Page/Layout TSX 继续经过 Client Build adapter；服务端 Component TSX 必须预编译。
+
 ### 迁移旧能力
 
 `migrate --check` 使用 TypeScript AST 输出 automatic/manual/error inventory，不执行旧模块。`migrate --write` 在 plan 无 error 时提取可静态证明的模块顶层 Command、Middleware 和 Component，并保持旧 source 不变。
@@ -87,6 +108,8 @@ new MessageCommand('gh pr <title:text>')
 Command 与 Middleware 分别通过 `defineLegacyCommand()` / `defineLegacyMiddleware()` 保留 callback 形状；安全的 Component 直接转为 `defineComponent()`。外部闭包、运行时注册、Plugin Context、旧 ComponentContext、`.permit()`、复杂 matcher 或路由冲突会保留为带源码位置的 manual/error diagnostic。写入先准备全部 temporary，再用排他 hard-link 发布，绝不覆盖并发创建的目标。
 
 `migrate cutover --check` 预览 Feature provider 与依赖变化；`--write` 生成 `plugin.next.ts` 并最后原子提交 `package.json#zhin`。它拒绝覆盖已有 manifest/入口，并在 package 被并发修改时中止。cutover 仍保留旧 entry/source，真正删除 legacy import 前应运行双版本行为对照，参考 [`examples/next-migration-bot`](../../../examples/next-migration-bot/README.md)。
+
+`migrate status` 输出 `blocked | extraction-required | cutover-required | dual-run | compat | ready` 状态，并列出 legacy/compat import 的文件与位置。`blocked` 返回非零退出码；其他状态由 CI 按迁移阶段决定是否允许。
 
 迁移命令需要项目开发环境安装 `typescript` peer；默认 CLI 与生产 Runtime 不携带编译器、Vite 或 watcher。
 
@@ -110,6 +133,7 @@ await commands.execute(plan, new NodeProcessRunner());
 ## 当前限制
 
 - 当前 codemod 只覆盖可静态证明且无源文件闭包的子集；复杂 permission、Context/Resource、JSX import 与动态注册仍需人工迁移。
+- 本地 Root manifest 仍可指向 TS；npm 发布前把 Plugin/Feature manifest 切换为预编译 JS 的 artifact transaction 尚待下一阶段完成。
 - npm 登录和 registry 凭据仍由 pnpm/npm 环境管理，CLI 不保存 token。
 - 不生成具体 Command/Agent/Page Feature；这些由对应 Feature package 或后续模板提供。
 

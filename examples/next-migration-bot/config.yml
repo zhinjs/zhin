@@ -1,0 +1,3 @@
+# Root Plugin values live under plugin; child Plugin envelopes live under plugins.
+plugin: {}
+plugins: {}

@@ -17,7 +17,7 @@
 - 识别 Root runtime contract 与 package ABI 边界，并执行受控进程重启。
 - 串行合并 watcher burst，并在失败时保留 active generation。
 
-Runtime 不定义具体能力语义，也不内置 TypeScript 编译器或 watcher。开发工具通过 `ModuleRuntime` adapter 接入，Vite、CSS 编译器和大型 native/wasm 依赖不得进入默认生产闭包。
+Runtime 不定义具体能力语义，也不内置 TypeScript 编译器。`NativeDevelopmentModuleRuntime` 只使用 Node ESM/type stripping、URL revision 与 `fs.watch`；Vite、CSS 编译器和大型 native/wasm 依赖不得进入默认生产闭包。
 
 ## 最小启动
 
@@ -48,11 +48,17 @@ try {
 await runtime.stop();
 ```
 
-`EsmModuleRuntime` 只适用于 Node 可直接 import 的模块。TypeScript 开发模式应提供独立 adapter，实现 `load`、`invalidate`、`affectedSources` 与 `watch`。挂载 Page/Layout Feature 时，adapter 还必须实现 `loadClientModule`，返回已静态提取的 module URL、hash 与 metadata；默认 adapter 不执行 TSX。
+`EsmModuleRuntime` 是无 watcher 的生产 ESM adapter。挂载 Page/Layout Feature 时，组合层还必须提供 `loadClientModule`，返回已静态提取的 module URL、hash 与 metadata；Node server adapter 不执行 TSX。
+
+原生开发启动使用 `NativeDevelopmentModuleRuntime`。它为直接 capability import 添加 generation query 以穿透 Node ESM cache，并使用单个 recursive watcher；系统 watcher 配额耗尽时自动降级为 100ms mtime polling。普通 support module 的完整 importer closure 无法由原生 ESM 清除，因此通过 `requiresProcessRestart()` 明确升级为 process plan，不返回可能仍引用旧 helper 的伪 HMR 成功。
+
+Node 22.18+ 默认启用 type stripping；22.6–22.17 需要 `--experimental-strip-types`。相对 import 必须使用 `.ts` 扩展；TSX、需要代码生成的 TypeScript 语法和 `node_modules` TS 不属于原生路径。生产 Runtime 继续加载预编译 ESM，内置 Feature manifest 均指向 `lib/provider.js`。
 
 可选 [`@zhin.js/next-client-build`](../client-build/README.md) 已提供该 client port 的 TypeScript AST 开发/build 实现与生产 manifest loader；它不是 Runtime dependency。
 
 ## Plugin Manifest
+
+下例是本地开发 manifest，因此 entry 可以是项目内 TS。发布到 npm 的 manifest 必须改为构建后的 JS entry。
 
 ```json
 {

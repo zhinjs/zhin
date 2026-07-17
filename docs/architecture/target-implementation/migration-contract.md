@@ -11,7 +11,8 @@ flowchart LR
   Refactor --> Preview["migrate cutover --check\nmanifest preview"]
   Preview --> Switch["migrate cutover --write\nentry + manifest transaction"]
   Switch --> Compare["dual-version behavior comparison"]
-  Compare --> Remove["remove legacy imports"]
+  Compare --> Status["migrate status\nlegacy/compat inventory"]
+  Status --> Remove["remove legacy imports"]
 ```
 
 两个阶段的 `--check` 都不写盘，所有迁移命令都不执行旧 Plugin。TypeScript AST inventory 识别 `addCommand()`、`addMiddleware()` 和 `addComponent()`；只有模块顶层且满足各自安全子集的注册才自动提取，其他调用产生按源文件、源码位置稳定排序的 diagnostic。
@@ -50,6 +51,10 @@ Component 自动提取要求 `addComponent()` 引用模块顶层函数/arrow bin
 `migrate cutover --write` 是独立事务。它从已生成的目录推导 Feature provider，在 dependencies 中补充 Kernel、Runtime、Feature 和实际使用时的 Compat，生成纯 `plugin.next.ts`，最后提交 `package.json#zhin`。原始 package 文本是乐观并发令牌；预检后或事务中发生外部修改会拒绝提交。入口使用排他 hard-link 发布，manifest 使用同目录原子 rename 最后提交；中断后留下的内容一致入口是可重试的 prepared state。已有其他 `zhin` manifest 或内容不同的 `plugin.next.ts` 必须人工处理。
 
 cutover 不删除旧 entry/source，也不声称已经切换生产启动器。完成后应运行旧版与 Next 的行为对照；仓库中的 [`examples/next-migration-bot`](../../../examples/next-migration-bot/README.md) 是可执行 tracer。
+
+`migrate status` 是迁移退出条件的机器可读 SSOT：`extraction-required`、`cutover-required`、`dual-run`、`compat` 依次收敛到 `ready`；manual/error 或冲突 cutover 为 `blocked`。报告保留 legacy/compat module specifier 的文件、行列与 extraction diagnostics。
+
+`zhin-next start --once` 是 cutover 后的最小运行验收。它必须真实读取 config、解析生产 Feature provider、原生加载本地 TS capability、提交 generation 并完成 drain/stop；仅通过语法转译不算启动完成。
 
 ## Compatibility 边界
 

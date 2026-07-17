@@ -73,6 +73,19 @@ export class HmrCoordinator {
       while (this.#pending.size > 0) {
         const changed = [...this.#pending];
         this.#pending.clear();
+        const forcedRestart = changed.filter((source) =>
+          this.options.modules.requiresProcessRestart?.(source),
+        );
+        if (forcedRestart.length > 0) {
+          await this.options.onRestartRequired(Object.freeze({
+            kind: 'process',
+            changed: Object.freeze(changed),
+            reasons: Object.freeze([
+              `Module loader cannot safely invalidate: ${forcedRestart.join(', ')}`,
+            ]),
+          }));
+          continue;
+        }
         const dependencyPort = this.options.modules.affectedSources
           ? {
               affectedSources: (source: string) =>

@@ -34,6 +34,8 @@ describe('legacy capability migration', () => {
     expect(generated).toContain("import { defineLegacyCommand } from '@zhin.js/next-compat';");
     expect(generated).toContain('description: "create\\npull request"');
     expect(generated).toContain('result.params.title');
+    expect(generated).toContain('`sender:${message.sender}\ntitle:${result.params.title}`');
+    expect(generated).not.toContain('`sender:${message.sender}\n  title:${result.params.title}`');
     expect(ts.transpileModule(generated, {
       fileName: 'command.ts',
       reportDiagnostics: true,
@@ -73,7 +75,8 @@ addMiddleware(async function audit(message, next) {
 }, 'request-audit');
 
 async function StatusCard(props: { label: string }) {
-  return props.label;
+  return \`first
+second:${'${props.label}'}\`;
 }
 addComponent(StatusCard);
 `);
@@ -106,6 +109,9 @@ addComponent(StatusCard);
       .resolves.toContain('defineLegacyMiddleware');
     await expect(readFile(join(root, 'components/status-card.ts'), 'utf8'))
       .resolves.toContain('defineComponent');
+    const component = await readFile(join(root, 'components/status-card.ts'), 'utf8');
+    expect(component).toContain('`first\nsecond:${props.label}`');
+    expect(component).not.toContain('`first\n  second:${props.label}`');
   });
 
   it('inventories runtime registration, captures, and ComponentContext for manual migration', async () => {
@@ -170,7 +176,8 @@ const { addCommand } = usePlugin();
 addCommand(
   new MessageCommand('gh pr <title:text>')
     .desc('create', 'pull request')
-    .action(async (message, result) => \`${'${message.sender}'}:${'${result.params.title}'}\`),
+    .action(async (message, result) => \`sender:${'${message.sender}'}
+title:${'${result.params.title}'}\`),
 );
 
 const prefix = 'captured';

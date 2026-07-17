@@ -329,7 +329,9 @@ function renderMiddleware(file: ts.SourceFile, handler: MigratableFunction): str
 }
 
 function renderComponent(file: ts.SourceFile, component: MigratableFunction): string {
-  const source = component.getText(file).replace(/\n/gu, '\n  ');
+  // getText() is embedded byte-for-byte. Reindenting its later lines would
+  // also mutate whitespace inside multiline template literals.
+  const source = component.getText(file);
   return [
     "import { defineComponent } from '@zhin.js/next-feature-component';",
     '',
@@ -437,7 +439,7 @@ function renderCommand(
   ];
   if (description !== undefined) lines.push(`  description: ${JSON.stringify(description)},`);
   const source = action.getText(file);
-  lines.push(`  action: ${source.replace(/\n/gu, '\n  ')},`, '});', '');
+  lines.push(`  action: ${source},`, '});', '');
   return lines.join('\n');
 }
 

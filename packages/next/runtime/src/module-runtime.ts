@@ -8,6 +8,8 @@ export interface ModuleRuntime {
   loadClientModule?<T = unknown>(source: string, request: ClientModuleRequest): Promise<T>;
   invalidate?(source: string): Promise<void> | void;
   affectedSources?(source: string): readonly string[];
+  /** True when this adapter cannot invalidate the complete importer closure safely. */
+  requiresProcessRestart?(source: string): boolean;
   watch?(listener: (source: string) => void): Dispose;
   close(): Promise<void>;
 }

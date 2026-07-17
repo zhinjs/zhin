@@ -94,7 +94,7 @@ const packages = [
   {
     dir: 'packages/next/cli',
     name: '@zhin.js/next-cli',
-    dependencies: ['@zhin.js/next-runtime'],
+    dependencies: ['@zhin.js/next-runtime', '@zhin.js/next-config-yaml'],
   },
   {
     dir: 'packages/next/compat',

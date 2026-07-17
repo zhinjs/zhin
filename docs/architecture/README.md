@@ -13,6 +13,7 @@
 | [Plugin Monorepo 与 Feature Provider](target-implementation/plugin-monorepo-and-features.md) | 一级 workspace、静态 package graph、可发布 Feature contract 与 CLI pipeline |
 | [Greenfield Bootstrap 实现状态](target-implementation/greenfield-bootstrap.md) | `feature/next` 新栈的已实现链路、验证与明确阶段边界 |
 | [Next 迁移契约](target-implementation/migration-contract.md) | AST inventory/extraction、compat 边界、cutover 与 API 冻结 |
+| [ADR 0051 — Node 原生 TypeScript Runtime](../adr/0051-native-typescript-development-runtime.md) | 零编译依赖启动、原生 TS 约束、HMR 与 process restart 边界 |
 | [架构概览](../architecture-overview.md) | 分层（basic → kernel → ai → core → agent → zhin）、消息流程图 |
 | [Segment 内容模型](segment-content-model.md) | **SSOT**：`Segment[]` 形状、MediaRef、IM 可见性、AI 出站 JSON |
 | [ADR 0019 — 安装体积分层](../adr/0019-install-size-layering.md) | zhin.js 4.x：IM <10MB、agent/provider optional peer |

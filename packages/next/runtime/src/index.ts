@@ -9,6 +9,7 @@ export * from './invalidation-planner.js';
 export * from './isolation.js';
 export * from './manifest.js';
 export * from './module-runtime.js';
+export * from './native-development-runtime.js';
 export * from './node-discovery-host.js';
 export * from './package-resolver.js';
 export * from './project-graph.js';

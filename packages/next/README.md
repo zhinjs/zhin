@@ -91,6 +91,13 @@ Development ModuleRuntime watcher
   -> serialized generation transaction
   -> optional Resource handoff
 
+Node native TypeScript Root
+  -> zhin-next start
+  -> YAML ConfigDocument + production Feature ESM
+  -> TS Plugin / capability type stripping
+  -> generation commit + HMR
+  -> signal drain or process exit 75
+
 Validated ConfigPatch
   -> YAML AST prepare
   -> shadow Plugin forest
@@ -117,7 +124,7 @@ Legacy MessageCommand source
   -> Feature discovery
 ```
 
-默认 Runtime 只提供预编译 ESM adapter，不依赖 YAML、Vite、编译器或 watcher。YAML 配置和开发期 TS transform/watch 都由独立 adapter 提供，不能进入 `zhin.js` 默认生产依赖闭包。Graph inspect 在 import/setup 前校验 Runtime engine 与 Feature API semver contract。Command、Middleware、Component、Adapter 都是独立 Feature provider；Capability-only HMR 只重新 load 目标 Slot。Adapter projection 通过 generation handoff 在 commit 前停旧流、启动候选 transport，commit 后才开放 admission。child `plugin.ts` / `schema.json` 变化只影子装配对应 Plugin forest；manifest transaction 则局部处理 child 与 Feature mount 的新增、删除、移动。结构化 config patch 先整体验证，再按实际变化的 owner view 计算最浅 forest；可选 YAML adapter 把文件替换加入同一 generation handoff。以上路径都复用未变化的 Plugin Scope lifetime、重建全部 generation projections，并以完整 immutable snapshot 原子发布。Root setup/schema 与 package ABI 变化升级为受控 process restart；Feature provider 源码、未知 importer 与混合变更仍保守采用完整 shadow generation。
+默认生产组合使用预编译 ESM adapter，不启用 YAML、watcher 或任何 TS transform。开发组合可显式选择零编译依赖的 Node 原生 TS/watcher adapter；YAML 配置仍由独立小包提供，Vite、编译器与 native/wasm transform 不进入 `zhin.js` 默认生产依赖闭包。Graph inspect 在 import/setup 前校验 Runtime engine 与 Feature API semver contract。Command、Middleware、Component、Adapter 都是独立 Feature provider；Capability-only HMR 只重新 load 目标 Slot。Adapter projection 通过 generation handoff 在 commit 前停旧流、启动候选 transport，commit 后才开放 admission。child `plugin.ts` / `schema.json` 变化只影子装配对应 Plugin forest；manifest transaction 则局部处理 child 与 Feature mount 的新增、删除、移动。结构化 config patch 先整体验证，再按实际变化的 owner view 计算最浅 forest；可选 YAML adapter 把文件替换加入同一 generation handoff。以上路径都复用未变化的 Plugin Scope lifetime、重建全部 generation projections，并以完整 immutable snapshot 原子发布。Root setup/schema 与 package ABI 变化升级为受控 process restart；Feature provider 源码、未知 importer 和原生 ESM 无法清除的 support importer closure 仍保守升级为整代或进程边界。
 
 Page/Layout 只通过可选 `ModuleRuntime.loadClientModule()` 接收静态 artifact，Node 不执行 TSX。`@zhin.js/next-client-build` 提供独立 TypeScript AST/build adapter，TypeScript 是 peer，不进入 Runtime/Console 生产闭包。
 
@@ -135,3 +142,5 @@ pnpm --filter @zhin.js/next-console check:size
 CLI 发布默认运行 `pnpm publish --dry-run`。只有显式传入 `zhin-next publish --execute` 才执行真实发布，并且计划只包含当前 workspace package，不会操作 `node_modules` 中解析到的包。
 
 旧版迁移的可执行基线位于 [`examples/next-migration-bot`](../../examples/next-migration-bot/README.md)。它不是新项目模板，而是验证 extraction、compat callback 与 cutover manifest 没有改变业务结果的双版本 tracer。
+
+开发启动不依赖 TypeScript 编译器或 Vite。Node 22.18+ 原生执行可擦除 TS；22.6–22.17 由 CLI 自动启用官方 experimental flag。已发布 Feature 的 manifest 指向 `lib/provider.js`，Node 官方拒绝执行的 `node_modules/*.ts` 不进入生产路径。

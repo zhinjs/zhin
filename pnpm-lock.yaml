@@ -421,13 +421,13 @@ importers:
         specifier: workspace:*
         version: link:../../packages/next/compat
       '@zhin.js/next-feature-command':
-        specifier: workspace:*
+        specifier: 0.0.0
         version: link:../../packages/next/feature-command
       '@zhin.js/next-feature-component':
-        specifier: workspace:*
+        specifier: 0.0.0
         version: link:../../packages/next/feature-component
       '@zhin.js/next-feature-middleware':
-        specifier: workspace:*
+        specifier: 0.0.0
         version: link:../../packages/next/feature-middleware
       '@zhin.js/next-kernel':
         specifier: workspace:*
@@ -439,6 +439,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/im/zhin
     devDependencies:
+      '@zhin.js/next-cli':
+        specifier: workspace:*
+        version: link:../../packages/next/cli
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1159,6 +1162,9 @@ importers:
 
   packages/next/cli:
     dependencies:
+      '@zhin.js/next-config-yaml':
+        specifier: workspace:*
+        version: link:../config-yaml
       '@zhin.js/next-runtime':
         specifier: workspace:*
         version: link:../runtime

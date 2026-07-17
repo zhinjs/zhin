@@ -29,6 +29,7 @@
     "check:size": "node ../runtime/scripts/check-install-size.mjs @zhin.js/next-cli"
   },
   "dependencies": {
+    "@zhin.js/next-config-yaml": "workspace:*",
     "@zhin.js/next-runtime": "workspace:*"
   },
   "peerDependencies": {

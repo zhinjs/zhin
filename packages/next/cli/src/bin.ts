@@ -18,10 +18,22 @@ try {
   } else if (command === 'inspect') {
     const commands = new ProjectCommands();
     process.stdout.write(`${JSON.stringify(commands.describe(await commands.inspect(root)), null, 2)}\n`);
+  } else if (command === 'start') {
+    const { runStartCommand } = await import('./start-command.js');
+    await runStartCommand({
+      root,
+      args,
+      writeOutput: (value) => process.stdout.write(value),
+      writeError: (value) => process.stderr.write(value),
+    });
   } else if (command === 'migrate') {
     const migration = parseMigrationCommand(args);
     const migrationApi = await import('./migrate/index.js');
-    if (migration.phase === 'cutover') {
+    if (migration.phase === 'status') {
+      const report = await new migrationApi.MigrationReadiness().inspect(root);
+      process.stdout.write(`${JSON.stringify(migrationApi.relativeReadinessReport(report), null, 2)}\n`);
+      if (report.state === 'blocked') process.exitCode = 1;
+    } else if (migration.phase === 'cutover') {
       const cutover = new migrationApi.PackageCutover();
       const plan = await cutover.plan(root);
       process.stdout.write(`${JSON.stringify({
@@ -82,8 +94,10 @@ try {
       '  zhin-next create plugin <name> [package-name]',
       '  zhin-next create feature <name> [package-name]',
       '  zhin-next inspect',
+      '  zhin-next start [--once] [--no-watch] [--environment <name>] [--mode <mode>]',
       '  zhin-next migrate --check|--write',
       '  zhin-next migrate cutover --check|--write',
+      '  zhin-next migrate status',
       '  zhin-next build',
       '  zhin-next publish [--execute] [--resume] [--tag <tag>]',
     ].join('\n'));
@@ -98,9 +112,10 @@ function relativePath(root: string, value: string): string {
 }
 
 function parseMigrationCommand(args: readonly string[]): {
-  readonly phase: 'extract' | 'cutover';
-  readonly mode: 'check' | 'write';
+  readonly phase: 'extract' | 'cutover' | 'status';
+  readonly mode?: 'check' | 'write';
 } {
+  if (args.length === 1 && args[0] === 'status') return { phase: 'status' };
   const phase = args[0] === 'cutover' ? 'cutover' : 'extract';
   const options = phase === 'cutover' ? args.slice(1) : args;
   if (options.length !== 1 || (options[0] !== '--check' && options[0] !== '--write')) {

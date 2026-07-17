@@ -6,18 +6,20 @@
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit",
+    "start:next": "zhin-next start",
     "test": "vitest run --root ../.. examples/next-migration-bot/tests"
   },
   "dependencies": {
     "@zhin.js/next-compat": "workspace:*",
-    "@zhin.js/next-feature-command": "workspace:*",
-    "@zhin.js/next-feature-component": "workspace:*",
-    "@zhin.js/next-feature-middleware": "workspace:*",
+    "@zhin.js/next-feature-command": "0.0.0",
+    "@zhin.js/next-feature-component": "0.0.0",
+    "@zhin.js/next-feature-middleware": "0.0.0",
     "@zhin.js/next-kernel": "workspace:*",
     "@zhin.js/next-runtime": "workspace:*",
     "zhin.js": "workspace:*"
   },
   "devDependencies": {
+    "@zhin.js/next-cli": "workspace:*",
     "typescript": "^6.0.3"
   },
   "engines": {

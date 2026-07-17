@@ -81,6 +81,28 @@ describe('HmrCoordinator', () => {
     expect(modules.invalidated).toEqual([]);
   });
 
+  it('honors a module loader process boundary before invalidation', async () => {
+    const source = '/project/src/helper.ts';
+    const modules = new FakeModules();
+    modules.processSources.add(source);
+    const restarts: ProcessInvalidationPlan[] = [];
+    const coordinator = new HmrCoordinator({
+      modules,
+      ownership: () => new SourceOwnershipIndex(),
+      runtime: { reload: async () => { throw new Error('must not reload'); } },
+      onRestartRequired(plan) { restarts.push(plan); },
+      onError() {},
+    });
+
+    await coordinator.enqueue(source);
+
+    expect(restarts).toEqual([expect.objectContaining({
+      kind: 'process',
+      changed: [source],
+    })]);
+    expect(modules.invalidated).toEqual([]);
+  });
+
   it('routes a generation reload escalation through the process port', async () => {
     const source = '/project/commands/status.ts';
     const ownership = new SourceOwnershipIndex();
@@ -145,6 +167,7 @@ describe('HmrCoordinator', () => {
 
 class FakeModules implements ModuleRuntime {
   readonly invalidated: string[] = [];
+  readonly processSources = new Set<string>();
 
   async load<T>(): Promise<T> {
     throw new Error('not used');
@@ -152,6 +175,10 @@ class FakeModules implements ModuleRuntime {
 
   invalidate(source: string): void {
     this.invalidated.push(source);
+  }
+
+  requiresProcessRestart(source: string): boolean {
+    return this.processSources.has(source);
   }
 
   async close(): Promise<void> {}

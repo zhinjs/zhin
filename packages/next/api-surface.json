@@ -6,11 +6,13 @@
   "cli": [
     "export * from './project-commands.js';",
     "export * from './publish-journal.js';",
+    "export * from './root-host.js';",
     "export * from './scaffolder.js';"
   ],
   "cli/migrate": [
     "export * from './legacy-command-migrator.js';",
-    "export * from './package-cutover.js';"
+    "export * from './package-cutover.js';",
+    "export * from './readiness.js';"
   ],
   "client-build": [
     "export * from './manifest-loader.js';",
@@ -139,6 +141,7 @@
     "export * from './isolation.js';",
     "export * from './manifest.js';",
     "export * from './module-runtime.js';",
+    "export * from './native-development-runtime.js';",
     "export * from './node-discovery-host.js';",
     "export * from './package-resolver.js';",
     "export * from './process-restart.js';",

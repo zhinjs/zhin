@@ -15,9 +15,12 @@
 ```bash
 pnpm --filter @zhin.js/example-next-migration-bot build
 pnpm --filter @zhin.js/example-next-migration-bot test
+pnpm --filter @zhin.js/example-next-migration-bot start:next -- --once
 ```
 
 测试对同一条消息分别执行旧 `MessageCommand` 与迁移后的 Command definition，并断言返回值一致。它还执行迁移后的 middleware 和 component，避免样例退化成只能编译、不能运行的静态文件。
+
+`start:next -- --once` 使用 Node 原生 TypeScript 启动真实 Root，读取 `config.yml`，装载三个 Feature provider，发现三个 capability，提交 generation 后再优雅停止。Node 22.6–22.17 由 CLI 自动附加官方 `--experimental-strip-types`；Node 22.18+ 直接运行。
 
 ## 迁移顺序
 

@@ -29,7 +29,7 @@
   "zhin": {
     "protocol": 1,
     "type": "feature",
-    "entry": "./src/provider.ts",
+    "entry": "./lib/provider.js",
     "engine": "^1.0.0",
     "featureApi": "1.0.0"
   },
