@@ -50,6 +50,8 @@ await runtime.stop();
 
 `EsmModuleRuntime` 只适用于 Node 可直接 import 的模块。TypeScript 开发模式应提供独立 adapter，实现 `load`、`invalidate`、`affectedSources` 与 `watch`。挂载 Page/Layout Feature 时，adapter 还必须实现 `loadClientModule`，返回已静态提取的 module URL、hash 与 metadata；默认 adapter 不执行 TSX。
 
+可选 [`@zhin.js/next-client-build`](../client-build/README.md) 已提供该 client port 的 TypeScript AST 开发/build 实现与生产 manifest loader；它不是 Runtime dependency。
+
 ## Plugin Manifest
 
 ```json

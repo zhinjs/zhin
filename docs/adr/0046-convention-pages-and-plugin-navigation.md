@@ -223,7 +223,7 @@ sequenceDiagram
 
 ## 实现记录
 
-`feature/next` 已实现零依赖 Console contract、Page/Layout Feature、permission-aware Navigation/route catalog、Layout fallback chain 与单 slot HMR。Client 边界由可选 `ModuleRuntime.loadClientModule()` 承接；默认 ESM Runtime 不包含 TSX compiler、React、Router 或 bundler。实际 browser chunk 与 `pages.manifest.json` 生成仍属于独立 build adapter。
+`feature/next` 已实现零依赖 Console contract、Page/Layout Feature、permission-aware Navigation/route catalog、Layout fallback chain 与单 slot HMR。Client 边界由可选 `ModuleRuntime.loadClientModule()` 承接；`@zhin.js/next-client-build` 已提供静态 TypeScript AST metadata、content-hash ESM、`pages.manifest.json` 与生产 loader。默认 ESM Runtime 仍不包含 TSX compiler、React、Router 或 bundler。
 
 ## 参考
 

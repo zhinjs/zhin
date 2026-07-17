@@ -364,6 +364,8 @@ export interface ProjectGraphService {
 5. 按拓扑顺序发布 Feature、child Plugin、Root。
 6. 任一步失败即停止，输出可恢复的 publish journal，不修改运行时 manifest 语义。
 
+绿地 CLI 已将真实 publish 实现为 staging dist-tag 与 journal state machine：package 先全部发布到 plan-specific `zhin-txn-*` tag，再提升目标 tag，最后清理 staging tag。每个远程步骤前后原子写 journal；恢复 running/failed step 时先查询 registry，避免在远程成功、本地未落盘的崩溃窗口重复发布。
+
 ## 11. 关键边界
 
 - Kernel 管 identity、owner、generation，不管理目录和领域 definition。

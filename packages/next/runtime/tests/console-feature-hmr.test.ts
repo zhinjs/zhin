@@ -2,6 +2,10 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import {
+  ClientBuildModuleRuntime,
+  TypeScriptClientBuilder,
+} from '../../client-build/src/index.js';
 import { definePlugin, type RuntimeSnapshot } from '@zhin.js/next-kernel';
 import type { ClientModuleRequest } from '@zhin.js/next-feature-kit';
 import layoutFeature, {
@@ -89,7 +93,67 @@ describe('Console Feature slot HMR', () => {
 
     await runtime.stop();
   });
+
+  it('uses the TypeScript AST adapter and keeps the old Page on compile failure', async () => {
+    const project = await createProject();
+    const server = new FakeModules();
+    const pluginSource = join(project, 'plugin.ts');
+    const pageProvider = join(project, 'packages/page/index.ts');
+    const layoutProvider = join(project, 'packages/layout/index.ts');
+    const pageSource = join(project, 'pages/status.tsx');
+    server.set(pluginSource, { default: definePlugin({ name: 'root' }) });
+    server.set(pageProvider, { default: pageFeature });
+    server.set(layoutProvider, { default: layoutFeature });
+    await writeFile(pageSource, pageModule('Status v1'));
+    await writeFile(join(project, 'pages/$nav.tsx'), 'export default function Nav() { return null; }\n');
+    const modules = new ClientBuildModuleRuntime(server, new TypeScriptClientBuilder({
+      projectRoot: project,
+      outDir: join(project, 'dist/client'),
+      publicBase: '/assets/client',
+    }));
+    const runtime = new RootRuntime({
+      projectRoot: project,
+      modules,
+      environment: { name: 'test', mode: 'test', platform: 'node' },
+    });
+    await runtime.start();
+    expect(pageIndex(runtime.snapshot).list()[0]).toMatchObject({ title: 'Status v1' });
+    const committed = runtime.snapshot;
+    const errors: unknown[] = [];
+    const hmr = runtime.createHmrCoordinator({
+      onRestartRequired: () => undefined,
+      onError: (error) => { errors.push(error); },
+    });
+
+    await writeFile(pageSource, [
+      "import { definePage } from '@zhin.js/next-console-contract';",
+      "const title = 'dynamic';",
+      'export const meta = definePage({ title });',
+      'export default function Status() { return null; }',
+    ].join('\n'));
+    await expect(hmr.enqueue(pageSource)).rejects.toThrow('static property assignments');
+    expect(runtime.snapshot).toBe(committed);
+
+    await writeFile(pageSource, pageModule('Status v2'));
+    await hmr.enqueue(pageSource);
+    expect(pageIndex(runtime.snapshot).list()[0]).toMatchObject({
+      title: 'Status v2',
+      module: expect.stringMatching(/^\/assets\/client\//u),
+    });
+    expect(server.serverLoadCount(pageSource)).toBe(0);
+    expect(errors).toHaveLength(1);
+    await runtime.stop();
+  });
 });
+
+function pageModule(title: string): string {
+  return [
+    "import { definePage } from '@zhin.js/next-console-contract';",
+    `export const meta = definePage({ title: '${title}' });`,
+    'export default function Status() { return null; }',
+    '',
+  ].join('\n');
+}
 
 function artifact(module: string, hash: string, metadata?: unknown) {
   return Object.freeze({ module, hash, metadata });

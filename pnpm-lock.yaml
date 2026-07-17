@@ -1142,6 +1142,28 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  packages/next/client-build:
+    dependencies:
+      '@zhin.js/next-console-contract':
+        specifier: '*'
+        version: link:../console-contract
+      '@zhin.js/next-feature-kit':
+        specifier: '*'
+        version: link:../feature-kit
+      '@zhin.js/next-kernel':
+        specifier: '*'
+        version: link:../kernel
+      '@zhin.js/next-runtime':
+        specifier: '*'
+        version: link:../runtime
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.0
+        version: 26.1.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   packages/next/config-yaml:
     dependencies:
       '@zhin.js/next-runtime':

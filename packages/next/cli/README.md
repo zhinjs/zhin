@@ -21,7 +21,7 @@ zhin-next create plugin <name> [package-name]
 zhin-next create feature <name> [package-name]
 zhin-next inspect
 zhin-next build
-zhin-next publish [--execute]
+zhin-next publish [--execute] [--resume] [--tag <tag>]
 ```
 
 ### 初始化项目
@@ -58,12 +58,16 @@ zhin-next inspect
 zhin-next build
 zhin-next publish
 zhin-next publish --execute
+zhin-next publish --resume
 ```
 
 - `inspect` 输出 Plugin tree、Feature mount 与确定性的 package build order。
 - `build` 只运行 workspace package 中存在的 `scripts.build`。
 - `publish` 默认执行 `pnpm publish --dry-run --no-git-checks`。
 - 只有显式 `--execute` 才真实发布；private package 不发布。
+- 真实发布先使用 plan-specific `zhin-txn-*` staging dist-tag，全部 package 发布后再提升到 `--tag` 指定的 tag（默认 `latest`）。
+- `.zhin/publish-journal.json` 在每个远程步骤前后原子更新；`--resume` 只恢复相同 plan fingerprint。
+- 恢复 running/failed step 前通过 npm registry 探测 version/dist-tag；状态不可判定时拒绝重试。
 - public package 依赖 private package 时，会在运行任何 publish step 前失败。
 - npm dependency 只参与解析，不会被 CLI build 或 publish。
 
@@ -87,7 +91,7 @@ await commands.execute(plan, new NodeProcessRunner());
 ## 当前限制
 
 - 复杂增量迁移、旧插件兼容 facade 和 codemod 尚未实现。
-- 不处理 npm 登录、dist-tag promotion、publish journal 或失败恢复。
+- npm 登录和 registry 凭据仍由 pnpm/npm 环境管理，CLI 不保存 token。
 - 不生成具体 Command/Agent/Page Feature；这些由对应 Feature package 或后续模板提供。
 
 ## 开发验证

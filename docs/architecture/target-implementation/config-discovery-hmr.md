@@ -337,6 +337,7 @@ export interface ClientModuleRuntime {
 - Development adapter 是独立可选包，不进入默认生产依赖闭包。
 - Client adapter 生成 Page/Layout manifest 和 browser chunks。
 - 当前绿地 Runtime 已以可选 `ModuleRuntime.loadClientModule(source, request)` 固定该 port；默认 ESM adapter 不实现它，因此不会在 Node 端执行 Page/Layout TSX。
+- `@zhin.js/next-client-build` 实现了可选 TypeScript AST/build adapter：动态 metadata 带位置失败，chunk/manifest 使用 content hash，生产 loader 不依赖构建机绝对路径。
 - RootController 不 import Vite 类型，只依赖以上 ports。
 
 ## 8. Invalidation Planner
