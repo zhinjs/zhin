@@ -45,20 +45,25 @@ flowchart LR
 11. capability、Plugin/schema/manifest 与 lockfile 分别升级为 slot、subtree 与 process 计划。
 12. watcher burst 合并为串行 transaction，失败会通知并拒绝整批 waiter。
 13. ModuleRuntime port 允许独立开发 adapter 提供 reverse importer closure，不污染生产 Runtime。
+14. Slot HMR 只 load 选中的 definition，不重新 import Feature provider 或执行 Plugin setup。
+15. Plugin Scope 通过引用计数 lifetime 跨 generation 存活；旧 lease 释放不会提前关闭共享 Resource。
+16. definition 校验失败保持 active generation；删除 capability 文件会原子移除对应 Slot。
 
 ## 3. 当前 HMR 边界
 
 当前控制面已经完整：`SourceOwnershipIndex` 从 committed generation 建索引；`InvalidationPlanner` 结合 ModuleRuntime reverse importer closure 生成 slot/subtree/process 计划；`HmrCoordinator` 合并 watcher burst 并串行调用 `RootRuntime`。lockfile/workspace 变化只发出 process restart 请求。
 
-当前执行面仍由 `RootRuntime.reload()` 重新解析 graph、配置、Plugin setup、Feature discovery 与 projection，再原子发布完整 generation。这提供一致性、失败回滚和新旧 lease 隔离；planner 的最小计划尚未等同于最小执行范围。
+Capability-only 计划已经进入局部执行面：FeatureDiscovery 枚举完整约定目录以保留冲突检查，但只 load 选中的 Slot；Plugin tree、配置和 Resource snapshot 直接复用。所有 Feature projection 都针对新 capabilities 重建，避免 projection 捕获旧 snapshot。`SharedLifetime` 让新旧 generation 各持有 Scope lease，最后一代释放后才 children-first dispose Plugin Scope。
+
+commit 仍然发布完整 immutable RuntimeSnapshot；“局部”只描述 prepare/load/setup/dispose 范围，不表示原地修改 snapshot。definition 加载、校验或 projection 任一步失败都销毁 shadow projection 并保持 active generation。
 
 下一阶段只聚焦执行粒度：
 
-1. generation resource handoff：局部 Slot 重建时复用未变化 Scope，不提前 dispose。
-2. slot executor：只重新 load/compile 受影响 definition，并重算对应 Feature projection。
-3. subtree executor：在 shadow scopes 中 setup，commit 后才让旧 subtree 进入 lease drain。
+1. subtree executor：只为受影响 Plugin forest 创建 shadow Scope，未变化 ancestor/sibling 继续持有原 lifetime。
+2. Resource handoff：需要 quiesce/activate 的连接在 commit 前后执行显式协议；普通 Resource 继续使用 lifetime lease。
+3. Root/process executor：Root Resource 或 package ABI 变化执行受控 restart。
 
-在这些执行器完成前，只宣称“精确规划、事务化整代替换”，不宣称“任意文件都能局部替换”。
+在 subtree executor 完成前，只宣称“Capability 文件局部替换”；Plugin/schema/manifest 变化仍采用事务化整代替换。
 
 ## 4. 有意保留的后续工作
 

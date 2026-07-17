@@ -3,6 +3,7 @@ import {
   DisposeStack,
   RootController,
   Scope,
+  SharedLifetime,
   childPluginId,
   createToken,
   rootPluginId,
@@ -21,6 +22,23 @@ function emptyState(): SnapshotState {
 }
 
 describe('next kernel', () => {
+  it('disposes a shared lifetime only after its final generation lease', async () => {
+    let disposed = 0;
+    const lifetime = new SharedLifetime(() => { disposed += 1; });
+    const first = lifetime.acquire();
+    const second = lifetime.acquire();
+
+    await first.release();
+    expect(disposed).toBe(0);
+    expect(lifetime.references).toBe(1);
+
+    await second.release();
+    await second.release();
+    expect(disposed).toBe(1);
+    expect(lifetime.references).toBe(0);
+    expect(() => lifetime.acquire()).toThrow('SharedLifetime is closed');
+  });
+
   it('inherits resources from the nearest ancestor and seals scopes', () => {
     const rootId = rootPluginId();
     const childId = childPluginId(rootId, 'child');

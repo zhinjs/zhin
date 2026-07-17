@@ -8,13 +8,13 @@ import {
   type CapabilityId,
   type CapabilitySlot,
   type ConfigView,
+  type Dispose,
   type DisposeStack as DisposeStackType,
   type FeatureId,
   type PluginDefinition,
   type PluginId,
   type PluginInstanceView,
   type PluginNodeSnapshot,
-  type PreparedGeneration,
   type RuntimeSnapshot,
   type SnapshotState,
   type TokenId,
@@ -28,11 +28,18 @@ import {
 import type { ZhinFeatureManifest, ZhinPluginManifest } from './manifest.js';
 import { ConfigComposer, type RuntimeConfigDocument } from './config-composer.js';
 import { runtimeEnvironmentToken, type RuntimeEnvironment } from './environment.js';
+import { GenerationAssets } from './generation-assets.js';
 import type { ModuleRuntime } from './module-runtime.js';
 import { NodeDiscoveryHost } from './node-discovery-host.js';
 import { NodePackageResolver } from './package-resolver.js';
 import { ProjectGraphService, type PluginGraphNode, type ProjectGraph } from './project-graph.js';
 import { HmrCoordinator, type HmrCoordinatorOptions } from './hmr-coordinator.js';
+import type { GenerationInvalidationPlan } from './invalidation-planner.js';
+import type {
+  PreparedRuntimeGeneration,
+  RuntimeGenerationModel,
+} from './runtime-generation.js';
+import { SlotGenerationPreparer } from './slot-generation-preparer.js';
 import { SourceOwnershipIndex } from './source-ownership.js';
 
 export type PluginConfigResolver = (node: PluginGraphNode) => unknown;
@@ -52,11 +59,6 @@ export interface RootRuntimeOptions {
 
 export type RootHmrOptions = Omit<HmrCoordinatorOptions, 'modules' | 'ownership' | 'runtime'>;
 
-interface PreparedRuntimeGeneration {
-  readonly generation: PreparedGeneration;
-  readonly ownership: SourceOwnershipIndex;
-}
-
 export class RootRuntime {
   readonly controller: RootController;
   readonly #projectRoot: string;
@@ -65,6 +67,7 @@ export class RootRuntime {
   readonly #config: PluginConfigResolver | RuntimeConfigDocument;
   readonly #installResources?: RootResourceInstaller;
   #ownership = SourceOwnershipIndex.empty();
+  #model?: RuntimeGenerationModel;
 
   constructor(options: RootRuntimeOptions) {
     this.#projectRoot = resolve(options.projectRoot);
@@ -89,7 +92,7 @@ export class RootRuntime {
       prepared = await this.#prepare(current);
       return prepared.generation;
     });
-    this.#ownership = requirePrepared(prepared).ownership;
+    this.#accept(requirePrepared(prepared));
     return snapshot;
   }
 
@@ -99,7 +102,7 @@ export class RootRuntime {
       prepared = await this.#prepare(current);
       return prepared.generation;
     });
-    this.#ownership = requirePrepared(prepared).ownership;
+    this.#accept(requirePrepared(prepared));
     return snapshot;
   }
 
@@ -109,11 +112,8 @@ export class RootRuntime {
       modules: this.#modules,
       ownership: () => this.#ownership,
       runtime: {
-        // The planner already exposes slot/subtree intent. The first executor
-        // intentionally rebuilds the whole generation until resource handoff
-        // can preserve transactional setup and disposal at a finer granularity.
         reload: async (plan) => {
-          await this.reload(plan.subtrees[0] ?? plan.slots[0] ?? rootPluginId());
+          await this.#reloadPlan(plan);
         },
       },
     });
@@ -125,6 +125,27 @@ export class RootRuntime {
     } finally {
       await this.#modules.close();
     }
+  }
+
+  async #reloadPlan(plan: GenerationInvalidationPlan): Promise<RuntimeSnapshot> {
+    let prepared: PreparedRuntimeGeneration | undefined;
+    const snapshot = await this.controller.reload(
+      plan.subtrees[0] ?? plan.slots[0] ?? rootPluginId(),
+      async (current) => {
+        prepared = plan.subtrees.length === 0 && plan.slots.length > 0 && this.#model
+          ? await new SlotGenerationPreparer(this.#modules, this.#model)
+              .prepare(current, plan.slots)
+          : await this.#prepare(current);
+        return prepared.generation;
+      },
+    );
+    this.#accept(requirePrepared(prepared));
+    return snapshot;
+  }
+
+  #accept(prepared: PreparedRuntimeGeneration): void {
+    this.#ownership = prepared.ownership;
+    this.#model = prepared.model;
   }
 
   async #prepare(current: RuntimeSnapshot): Promise<PreparedRuntimeGeneration> {
@@ -149,7 +170,7 @@ export class RootRuntime {
 }
 
 class GenerationAssembler {
-  readonly #disposers = new DisposeStack();
+  readonly #scopeDisposers = new DisposeStack();
   readonly #scopes = new Map<PluginId, Scope>();
   readonly #tree = new Map<PluginId, PluginNodeSnapshot>();
   readonly #config = new Map<PluginId, unknown>();
@@ -159,6 +180,7 @@ class GenerationAssembler {
   readonly #catalog = new FeatureCatalog();
   readonly #rootsByFeature = new Map<FeatureId, CapabilityRoot[]>();
   readonly #featureIdsByPackageRoot = new Map<string, FeatureId>();
+  readonly #projectionDisposers: Dispose[] = [];
   readonly #host: NodeDiscoveryHost;
 
   constructor(
@@ -179,29 +201,45 @@ class GenerationAssembler {
       await this.#loadProviders(this.graph.root);
       await this.#setupPlugin(this.graph.root);
       await this.#discoverAndProject();
-      this.#disposers.seal();
+      this.#scopeDisposers.seal();
       const state = this.#state();
+      const snapshot = createSnapshotView(this.generation, state);
+      const ownership = SourceOwnershipIndex.fromGeneration(
+        this.graph,
+        snapshot,
+        this.#featureIdsByPackageRoot,
+      );
+      const assets = GenerationAssets.create(
+        () => this.#scopeDisposers.dispose(),
+        this.#projectionDisposers,
+      );
       return {
         generation: {
           snapshot: state,
-          dispose: () => this.#disposers.dispose(),
+          dispose: () => assets.dispose(),
         },
-        ownership: SourceOwnershipIndex.fromGeneration(
-          this.graph,
-          createSnapshotView(this.generation, state),
-          this.#featureIdsByPackageRoot,
-        ),
+        ownership,
+        model: {
+          graph: this.graph,
+          providers: new Map(
+            this.#catalog.values().map((provider) => [provider.id, provider]),
+          ),
+          rootsByFeature: new Map(
+            [...this.#rootsByFeature].map(([feature, roots]) => [
+              feature,
+              Object.freeze([...roots]),
+            ]),
+          ),
+          featureIdsByPackageRoot: new Map(this.#featureIdsByPackageRoot),
+          assets,
+        },
       };
     } catch (error) {
-      try {
-        await this.#disposers.dispose();
-      } catch (disposeError) {
-        throw new AggregateError(
-          [error, disposeError],
-          'Generation prepare and rollback both failed',
-          { cause: disposeError },
-        );
-      }
+      await disposePreparedParts(
+        () => this.#scopeDisposers.dispose(),
+        this.#projectionDisposers,
+        error,
+      );
       throw error;
     }
   }
@@ -251,7 +289,7 @@ class GenerationAssembler {
     if (node.parent && !parentScope) throw new Error(`Missing parent scope for ${node.id}`);
     const scope = new Scope(node.id, parentScope);
     this.#scopes.set(node.id, scope);
-    this.#disposers.add(() => scope.disposers.dispose());
+    this.#scopeDisposers.add(() => scope.disposers.dispose());
 
     if (!node.parent) {
       scope.provide(runtimeEnvironmentToken, this.environment);
@@ -318,7 +356,7 @@ class GenerationAssembler {
         snapshot: this.#candidateSnapshot(),
       });
       this.#projections.set(provider.id, projection.value);
-      if (projection.dispose) this.#disposers.add(projection.dispose);
+      if (projection.dispose) this.#projectionDisposers.push(projection.dispose);
     }
   }
 
@@ -358,4 +396,26 @@ function requirePrepared(
 ): PreparedRuntimeGeneration {
   if (!prepared) throw new Error('RootController committed without a prepared generation');
   return prepared;
+}
+
+async function disposePreparedParts(
+  disposeScopes: Dispose,
+  projectionDisposers: readonly Dispose[],
+  prepareError?: unknown,
+): Promise<void> {
+  const rollback = new DisposeStack();
+  rollback.add(disposeScopes);
+  for (const dispose of projectionDisposers) rollback.add(dispose);
+  try {
+    await rollback.dispose();
+  } catch (disposeError) {
+    if (prepareError !== undefined) {
+      throw new AggregateError(
+        [prepareError, disposeError],
+        'Generation prepare and rollback both failed',
+        { cause: disposeError },
+      );
+    }
+    throw disposeError;
+  }
 }

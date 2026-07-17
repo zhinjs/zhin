@@ -354,7 +354,7 @@ export class HmrCoordinator {
 }
 ```
 
-Coordinator 不先 stop active Plugin。当前 executor 根据精确计划构造完整 shadow generation，并通过 RootController CAS 发布；失败保持 active generation。后续 Capability/subtree executor 通过 resource handoff 缩小实际 prepare 范围，成功后旧 generation 才进入 lease drain/dispose。
+Coordinator 不先 stop active Plugin。Capability executor 只选择性 load 目标 definition，复用 Plugin Scope lifetime，并重建所有 projection 后通过 RootController CAS 发布完整 snapshot；失败保持 active generation。subtree executor 暂时构造完整 shadow generation，后续通过 Resource handoff 缩小 setup 范围。成功后旧 generation 才进入 lease drain/dispose。
 
 ## 10. Config/HMR 测试矩阵
 

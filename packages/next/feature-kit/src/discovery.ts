@@ -1,5 +1,7 @@
 import {
+  capabilityId,
   createCapabilitySlot,
+  type CapabilityId,
   type CapabilitySlot,
   type PluginId,
 } from '@zhin.js/next-kernel';
@@ -12,6 +14,10 @@ import type {
 export interface CapabilityRoot {
   readonly owner: PluginId;
   readonly packageRoot: string;
+}
+
+export interface DiscoverySelection {
+  readonly capabilities: ReadonlySet<CapabilityId>;
 }
 
 export class DiscoveryConflictError extends Error {
@@ -27,6 +33,7 @@ export class FeatureDiscovery {
   async discover<TDefinition>(
     provider: FeatureProvider<TDefinition, unknown>,
     roots: readonly CapabilityRoot[],
+    selection?: DiscoverySelection,
   ): Promise<readonly Readonly<CapabilitySlot<TDefinition>>[]> {
     const slots: CapabilitySlot<TDefinition>[] = [];
     const identities = new Set<string>();
@@ -46,6 +53,10 @@ export class FeatureDiscovery {
               discovered.localName,
             );
           }
+          identities.add(identity);
+          sources.set(sourceIdentity, identity);
+          const id = capabilityId(root.owner, provider.id, discovered.localName);
+          if (selection && !selection.capabilities.has(id)) continue;
           const validation: ValidationContext = {
             owner: root.owner,
             feature: provider.id,
@@ -61,8 +72,6 @@ export class FeatureDiscovery {
             source: discovered.source,
             definition,
           });
-          identities.add(identity);
-          sources.set(sourceIdentity, identity);
           slots.push(slot);
         }
       }

@@ -21,16 +21,24 @@ describe('RootRuntime tracer bullet', () => {
     const project = await createProject();
     const modules = new FakeModuleRuntime();
     const greeting = createToken<string>('test.greeting');
-    modules.set(join(project, 'plugin.ts'), {
+    const pluginSource = join(project, 'plugin.ts');
+    const featureSource = join(project, 'packages/command/index.ts');
+    const commandSource = join(project, 'commands/status.ts');
+    let setupCalls = 0;
+    let resourceDisposals = 0;
+    modules.set(pluginSource, {
       default: definePlugin({
         name: 'root',
         requires: [greeting, runtimeEnvironmentToken],
+        setup() {
+          setupCalls += 1;
+        },
       }),
     });
-    modules.set(join(project, 'packages/command/index.ts'), {
+    modules.set(featureSource, {
       default: commandFeature,
     });
-    modules.set(join(project, 'commands/status.ts'), {
+    modules.set(commandSource, {
       default: defineCommand({
         execute: ({ use }) => `${use(greeting)} ${use(runtimeEnvironmentToken).mode} v1`,
       }),
@@ -41,14 +49,16 @@ describe('RootRuntime tracer bullet', () => {
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },
       installResources({ resources }) {
-        resources.provide(greeting, 'hello');
+        resources.provide(greeting, 'hello', () => {
+          resourceDisposals += 1;
+        });
       },
     });
     const first = await runtime.start();
     const oldLease = runtime.controller.snapshots.acquire();
-    const commandSource = join(project, 'commands/status.ts');
 
     expect(commandIndex(first).execute('status')).resolves.toBe('hello test v1');
+    expect(setupCalls).toBe(1);
     expect(runtime.sourceOwnership.recordsFor(commandSource)).toEqual([
       expect.objectContaining({ role: 'capability', owner: 'root' }),
     ]);
@@ -69,12 +79,36 @@ describe('RootRuntime tracer bullet', () => {
 
     expect(second.generation).toBe(2);
     expect(modules.invalidated).toEqual([commandSource]);
+    expect(modules.loadCount(pluginSource)).toBe(1);
+    expect(modules.loadCount(featureSource)).toBe(1);
+    expect(modules.loadCount(commandSource)).toBe(2);
+    expect(setupCalls).toBe(1);
+    expect(resourceDisposals).toBe(0);
     expect(errors).toEqual([]);
     await expect(commandIndex(second).execute('status')).resolves.toBe('hello test v2');
     await expect(commandIndex(oldLease.value).execute('status')).resolves.toBe('hello test v1');
 
+    modules.set(commandSource, { default: { execute: 'invalid' } });
+    await expect(hmr.enqueue(commandSource)).rejects.toBeInstanceOf(TypeError);
+    expect(runtime.snapshot).toBe(second);
+    expect(runtime.snapshot.generation).toBe(2);
+    expect(setupCalls).toBe(1);
+    expect(resourceDisposals).toBe(0);
+    expect(errors).toHaveLength(1);
+
+    await rm(commandSource);
+    await hmr.enqueue(commandSource);
+    expect(runtime.snapshot.generation).toBe(3);
+    expect(commandIndex(runtime.snapshot).has('status')).toBe(false);
+    expect(setupCalls).toBe(1);
+    expect(resourceDisposals).toBe(0);
+
     oldLease.release();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(resourceDisposals).toBe(0);
     await runtime.stop();
+    expect(resourceDisposals).toBe(1);
     expect(modules.closed).toBe(true);
   });
 });
@@ -87,6 +121,7 @@ function commandIndex(snapshot: RuntimeSnapshot): CommandIndex {
 
 class FakeModuleRuntime implements ModuleRuntime {
   readonly #modules = new Map<string, unknown>();
+  readonly #loads = new Map<string, number>();
   readonly invalidated: string[] = [];
   closed = false;
 
@@ -96,7 +131,12 @@ class FakeModuleRuntime implements ModuleRuntime {
 
   async load<T>(source: string): Promise<T> {
     if (!this.#modules.has(source)) throw new Error(`Missing fake module: ${source}`);
+    this.#loads.set(source, (this.#loads.get(source) ?? 0) + 1);
     return this.#modules.get(source) as T;
+  }
+
+  loadCount(source: string): number {
+    return this.#loads.get(source) ?? 0;
   }
 
   affectedSources(source: string): readonly string[] {

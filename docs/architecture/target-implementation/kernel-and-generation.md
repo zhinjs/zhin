@@ -265,6 +265,8 @@ export interface GenerationHandoff {
 }
 ```
 
+未变化 Plugin Scope 不需要执行 handoff，而是由 `SharedLifetime` 管理跨 generation 所有权：每个 PreparedGeneration acquire 一个幂等 lease，旧 generation drain 时 release；只有最后一个 lease 释放才 children-first dispose Scope。需要暂停流量或切换连接所有权的 Resource 才实现显式 `GenerationHandoff`。
+
 所有 Map 在发布前复制并且只通过 `ReadonlyMap` 暴露。Kernel 不宣称 `Object.freeze(new Map())` 能阻止 `.set()`；实现内部绝不泄漏可变 Map reference。
 
 ## 7. Snapshot Lease Store

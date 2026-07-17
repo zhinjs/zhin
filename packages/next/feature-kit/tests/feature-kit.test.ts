@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { childPluginId, featureId, rootPluginId } from '@zhin.js/next-kernel';
+import {
+  capabilityId,
+  childPluginId,
+  featureId,
+  rootPluginId,
+} from '@zhin.js/next-kernel';
 import {
   FeatureCatalog,
   FeatureConflictError,
@@ -81,5 +86,30 @@ describe('Feature provider kit', () => {
       'root/first',
       'root/second',
     ]);
+  });
+
+  it('enumerates all descriptors but only loads selected Capability slots', async () => {
+    const root = rootPluginId();
+    const first = childPluginId(root, 'first');
+    const second = childPluginId(root, 'second');
+    let loads = 0;
+    const selectiveHost: DiscoveryHost = {
+      ...host,
+      async loadModule<T>() {
+        loads += 1;
+        return (() => 'selected') as T;
+      },
+    };
+    const slots = await new FeatureDiscovery(selectiveHost).discover(
+      provider,
+      [
+        { owner: first, packageRoot: '/shared-plugin' },
+        { owner: second, packageRoot: '/shared-plugin' },
+      ],
+      { capabilities: new Set([capabilityId(second, provider.id, 'hello')]) },
+    );
+
+    expect(loads).toBe(1);
+    expect(slots.map((slot) => slot.owner)).toEqual([second]);
   });
 });
