@@ -61,14 +61,14 @@ Plugin 与 Capability 模块默认导出纯 definition。能力只能通过 Plug
 
 ## 开发模式实现
 
-`ModuleRuntime` 是可替换 adapter。首选实现使用 Vite Module Graph + Module Runner，Zhin 在其上实现：
+`ModuleRuntime` 是可替换 adapter。开发实现必须独立于默认生产闭包，并提供：
 
 - `SourceOwnershipIndex`：source file -> package -> Plugin instance -> Capability Slot。
 - `InvalidationPlanner`：反向依赖闭包与 Slot/subtree/process 升级判定。
 - `CapabilityTransaction`：shadow load、definition validation、`replaceMany` compare-and-swap。
 - `SnapshotLease`：让进行中的消息或 Agent turn 安全完成后再释放旧 generation。
 
-生产模式使用预编译 ESM adapter，不启动 watcher。入口 query-string cache busting 不是目标实现，因为它不能完整管理传递依赖失效和旧 module generation。
+生产模式使用预编译 ESM adapter，不启动 watcher。入口 query-string cache busting 不是目标实现，因为它不能完整管理传递依赖失效和旧 module generation。开发 adapter 单独执行 ≤2.5MB 安装预算，禁止引入与服务端 TS transform 无关的 CSS/前端构建依赖和大型 native binary。
 
 ## 基础 Resource 语义
 
@@ -85,8 +85,6 @@ IM、Agent、Schedule 等 Runtime 是 PluginScope snapshot 的消费者，不是
 
 - [Plugin-first 目标架构](../../TARGET-ARCHITECTURE.md)
 - [ADR 0043](./0043-unify-capability-roots.md)
-- [Vite Environment API for Runtimes](https://vite.dev/guide/api-environment-runtimes)
-- [Vite Environment API for Plugins](https://vite.dev/guide/api-environment-plugins)
 - [Node.js `vm.SourceTextModule`](https://nodejs.org/api/vm.html#class-vmsourcetextmodule)
 - [ADR 0047](./0047-standalone-plugin-and-root-lifecycle-domain.md)
 - [ADR 0048](./0048-plugin-monorepo-and-feature-provider-packages.md)

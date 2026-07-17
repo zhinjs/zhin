@@ -417,7 +417,7 @@ Module Runtime 分成两个 adapter，共享 module identity 与 source ownershi
 - Server Module Runtime 加载 Plugin、Command、Middleware、Tool 等 Node definition。
 - Client Module Runtime 编译 Page TS/TSX、提取静态 metadata，并向浏览器发布 manifest 与模块。
 
-两者的具体 transform 实现可以使用 Vite、esbuild、swc 或其它工具，但 Page 浏览器模块不得由服务端 PluginLoader 直接执行。
+两者的 transform 实现属于独立可替换 adapter，必须分别遵守服务端开发工具和客户端构建工具的体积预算；Page 浏览器模块不得由服务端 PluginLoader 直接执行。
 
 ## 10. Hot Module Replace
 
@@ -490,9 +490,9 @@ Plugin 子树替换继续遵守：
 
 ### 10.3 Module Runtime 实现
 
-开发模式建议把 Vite Module Graph 与 Module Runner 封装为 `ModuleRuntime` adapter，用它处理 TS/TSX transform、source map、依赖失效和重新执行；Zhin 自己掌握 Capability identity、事务提交和 Plugin 生命周期。生产模式使用预编译 ESM adapter，不携带 watcher 与 HMR server。
+开发模式通过独立的 `ModuleRuntime` adapter 处理 TS/TSX transform、source map、依赖失效和重新执行；具体实现必须遵守安装体积预算，不能进入 `zhin.js` 默认生产闭包。Zhin 自己掌握 Capability identity、事务提交和 Plugin 生命周期。生产模式使用预编译 ESM adapter，不携带 compiler、watcher 与 HMR server。
 
-不能继续以 `import(entry + '?t=...')` 作为完整实现：它只能可靠刷新入口，无法为 Zhin 提供可控的传递依赖失效、旧 generation 回收和长期模块缓存治理。若不采用 Vite，也必须实现等价的 content-addressed Module Graph；Node `vm.SourceTextModule` 仍是实验接口，不作为默认生产基础。
+不能继续以 `import(entry + '?t=...')` 作为完整实现：它只能可靠刷新入口，无法为 Zhin 提供可控的传递依赖失效、旧 generation 回收和长期模块缓存治理。开发 adapter 必须提供等价的 content-addressed Module Graph；Node `vm.SourceTextModule` 仍是实验接口，不作为默认生产基础。
 
 ## 11. 启动流程
 

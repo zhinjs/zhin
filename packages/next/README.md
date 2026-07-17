@@ -24,14 +24,14 @@ package.json#zhin
   -> RootController commit
   -> SnapshotLease execute
 
-Vite watcher
+Development ModuleRuntime watcher
   -> reverse importer closure
   -> SourceOwnershipIndex
   -> slot / subtree / process plan
   -> serialized generation transaction
 ```
 
-Vite ModuleRuntime 可以直接加载 TS、追踪 reverse importer 并监听文件。当前已精确规划 slot/subtree/process 失效范围，但 `RootRuntime.reload()` 仍采用整 generation 安全重建；下一阶段实现 Scope/resource handoff 后，planner 的粒度才会成为实际替换粒度。
+默认 Runtime 只提供预编译 ESM adapter，不依赖 Vite、编译器或 watcher。开发期 TS transform/watch 由独立 ModuleRuntime adapter 提供，不能进入 `zhin.js` 默认生产依赖闭包。当前已精确规划 slot/subtree/process 失效范围，但 `RootRuntime.reload()` 仍采用整 generation 安全重建；下一阶段实现 Scope/resource handoff 后，planner 的粒度才会成为实际替换粒度。
 
 ## Validate
 

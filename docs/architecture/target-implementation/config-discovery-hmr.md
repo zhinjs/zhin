@@ -306,7 +306,7 @@ export interface ClientModuleRuntime {
 ```
 
 - Production Server adapter 使用预编译 ESM。
-- Development adapter 封装 Vite Module Graph/Runner。
+- Development adapter 是独立可选包，不进入默认生产依赖闭包。
 - Client adapter 生成 Page/Layout manifest 和 browser chunks。
 - RootController 不 import Vite 类型，只依赖以上 ports。
 
