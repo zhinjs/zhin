@@ -51,5 +51,8 @@ export class CommandIndex {
 }
 
 function runtimeName(owner: string, localName: string): string {
-  return owner === 'root' ? localName : `${owner.slice('root/'.length)}/${localName}`;
+  const ownerSegments = owner === 'root'
+    ? []
+    : owner.slice('root/'.length).split('/');
+  return [...ownerSegments, ...localName.split('/')].join(' ');
 }

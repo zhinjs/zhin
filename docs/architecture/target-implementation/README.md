@@ -296,7 +296,7 @@ schema.json
 pages/*.ts|tsx
 pages/$nav.tsx
 pages/$footer.tsx
-commands/*.ts|tsx
+commands/**/*.ts|tsx
 components/*.ts|tsx
 middlewares/*.ts
 agents/*.md

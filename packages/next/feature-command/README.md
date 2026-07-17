@@ -9,11 +9,14 @@
 ```text
 commands/
   status.ts
-  admin-reset.tsx
+  gh/
+    issue/
+      list.ts
 ```
 
-- 只发现 `commands/*.ts` 与 `commands/*.tsx`，暂不递归子目录。
-- 文件名必须使用小写字母、数字和连字符，basename 是 `localName`。
+- 递归发现 `commands/**/*.ts` 与 `commands/**/*.tsx`。
+- 每级目录与文件 basename 必须使用小写字母、数字和连字符。
+- 相对路径构成 canonical localName，例如 `gh/issue/list`。
 - 模块必须 default export `defineCommand(...)` 的结果。
 
 ## 定义 Command
@@ -46,8 +49,9 @@ export default defineCommand({
 ## Runtime Name
 
 - Root 的 `commands/status.ts` 暴露为 `status`。
-- `root/group` 的同名文件暴露为 `group/status`。
-- 更深层 Plugin 继续使用 instance path，因此同一 package 的多个实例不会冲突。
+- Root 的 `commands/gh/issue/list.ts` 暴露为 `gh issue list`。
+- `root/group` 的 `commands/status.ts` 暴露为 `group status`。
+- Plugin instance path 与 Command 相对路径共同组成命令词；同名投影会明确报错，不按扫描顺序覆盖。
 
 ## 使用 Projection
 
@@ -58,7 +62,7 @@ const projection = snapshot.projections.get(commandFeatureId);
 if (!(projection instanceof CommandIndex)) throw new Error('Command Feature is missing');
 
 console.log(projection.list());
-await projection.execute('group/status', ['verbose']);
+await projection.execute('group status', ['verbose']);
 ```
 
 调用方应在一次请求开始时 lease `RuntimeSnapshot`，并只使用该 snapshot 中的 `CommandIndex`。

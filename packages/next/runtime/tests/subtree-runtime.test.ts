@@ -75,7 +75,7 @@ describe('Plugin subtree HMR', () => {
     });
     const first = await runtime.start();
     const oldLease = runtime.controller.snapshots.acquire();
-    await expect(commandIndex(first).execute('child/status')).resolves.toBe('v1');
+    await expect(commandIndex(first).execute('child status')).resolves.toBe('v1');
     expect(handoffs).toEqual([
       'root:activate',
       'child-v1:activate',
@@ -95,8 +95,8 @@ describe('Plugin subtree HMR', () => {
     const second = runtime.snapshot;
 
     expect(second.generation).toBe(2);
-    await expect(commandIndex(second).execute('child/status')).resolves.toBe('v2');
-    await expect(commandIndex(second).execute('sibling/status')).resolves.toBe('sibling');
+    await expect(commandIndex(second).execute('child status')).resolves.toBe('v2');
+    await expect(commandIndex(second).execute('sibling status')).resolves.toBe('sibling');
     expect(setupCalls).toEqual({ root: 1, child: 2, sibling: 1 });
     expect(modules.loadCount(rootSource)).toBe(1);
     expect(modules.loadCount(siblingSource)).toBe(1);
@@ -119,7 +119,7 @@ describe('Plugin subtree HMR', () => {
     await expect(hmr.enqueue(childSource)).rejects.toThrow('child setup failed');
     expect(runtime.snapshot).toBe(second);
     expect(disposed).toEqual(['broken']);
-    await expect(commandIndex(runtime.snapshot).execute('child/status')).resolves.toBe('v2');
+    await expect(commandIndex(runtime.snapshot).execute('child status')).resolves.toBe('v2');
     expect(errors).toHaveLength(1);
 
     oldLease.release();

@@ -28,7 +28,7 @@ ADR 0042 已确定 Feature 是插件侧装配目录、Capability Ingress 是 Age
 │   ├── <page>.ts|tsx
 │   ├── $nav.tsx
 │   └── $footer.tsx
-├── commands/<command>.ts|tsx
+├── commands/**/<command>.ts|tsx
 ├── components/<component>.ts|tsx
 ├── middlewares/<middleware>.ts
 ├── agents/<name>.md
@@ -44,7 +44,7 @@ ADR 0042 已确定 Feature 是插件侧装配目录、Capability Ingress 是 Age
 
 - Page localName 来自 `<page>.ts|tsx`。
 - Layout localName 是保留文件 `$nav.tsx` 或 `$footer.tsx` 对应的 `nav`、`footer`。
-- Command localName 来自 `<command>.ts|tsx`。
+- Command localName 来自 `commands/` 下不含扩展名的相对路径；例如 `gh/issue/list.ts` 是 `gh/issue/list`，Runtime 命令词是 `gh issue list`。
 - Component localName 来自 `<component>.ts|tsx`。
 - Middleware localName 来自 `<middleware>.ts`。
 - Agent localName 来自 `<name>.md`。

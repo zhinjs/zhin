@@ -10,6 +10,7 @@ export type CapabilityId = string & { readonly [capabilityIdBrand]: true };
 
 const namespacePattern = /^[a-z][a-z0-9.-]*$/;
 const localNamePattern = /^[a-z0-9][a-z0-9-]*$/;
+const capabilityLocalNamePattern = /^[a-z0-9][a-z0-9-]*(?:\/[a-z0-9][a-z0-9-]*)*$/;
 
 function assertNamespace(value: string, label: string): void {
   if (!namespacePattern.test(value)) {
@@ -43,7 +44,7 @@ export function capabilityId(
   feature: FeatureId,
   localName: string,
 ): CapabilityId {
-  if (!localNamePattern.test(localName)) {
+  if (!capabilityLocalNamePattern.test(localName)) {
     throw new TypeError(`Invalid capability local name: ${localName}`);
   }
   return `${owner}\0${feature}\0${localName}` as CapabilityId;

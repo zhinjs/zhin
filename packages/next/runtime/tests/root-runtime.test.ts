@@ -23,7 +23,7 @@ describe('RootRuntime tracer bullet', () => {
     const greeting = createToken<string>('test.greeting');
     const pluginSource = join(project, 'plugin.ts');
     const featureSource = join(project, 'packages/command/index.ts');
-    const commandSource = join(project, 'commands/status.ts');
+    const commandSource = join(project, 'commands/gh/issue/list.ts');
     let setupCalls = 0;
     let resourceDisposals = 0;
     modules.set(pluginSource, {
@@ -57,7 +57,7 @@ describe('RootRuntime tracer bullet', () => {
     const first = await runtime.start();
     const oldLease = runtime.controller.snapshots.acquire();
 
-    expect(commandIndex(first).execute('status')).resolves.toBe('hello test v1');
+    await expect(commandIndex(first).execute('gh issue list')).resolves.toBe('hello test v1');
     expect(setupCalls).toBe(1);
     expect(runtime.sourceOwnership.recordsFor(commandSource)).toEqual([
       expect.objectContaining({ role: 'capability', owner: 'root' }),
@@ -85,8 +85,10 @@ describe('RootRuntime tracer bullet', () => {
     expect(setupCalls).toBe(1);
     expect(resourceDisposals).toBe(0);
     expect(errors).toEqual([]);
-    await expect(commandIndex(second).execute('status')).resolves.toBe('hello test v2');
-    await expect(commandIndex(oldLease.value).execute('status')).resolves.toBe('hello test v1');
+    await expect(commandIndex(second).execute('gh issue list')).resolves.toBe('hello test v2');
+    await expect(commandIndex(oldLease.value).execute('gh issue list')).resolves.toBe(
+      'hello test v1',
+    );
 
     modules.set(commandSource, { default: { execute: 'invalid' } });
     await expect(hmr.enqueue(commandSource)).rejects.toBeInstanceOf(TypeError);
@@ -99,7 +101,7 @@ describe('RootRuntime tracer bullet', () => {
     await rm(commandSource);
     await hmr.enqueue(commandSource);
     expect(runtime.snapshot.generation).toBe(3);
-    expect(commandIndex(runtime.snapshot).has('status')).toBe(false);
+    expect(commandIndex(runtime.snapshot).has('gh issue list')).toBe(false);
     expect(setupCalls).toBe(1);
     expect(resourceDisposals).toBe(0);
 
@@ -171,7 +173,7 @@ async function createProject(): Promise<string> {
   });
   await touch(join(root, 'plugin.ts'));
   await touch(join(root, 'packages/command/index.ts'));
-  await touch(join(root, 'commands/status.ts'));
+  await touch(join(root, 'commands/gh/issue/list.ts'));
   return root;
 }
 

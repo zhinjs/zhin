@@ -284,7 +284,7 @@ export interface PluginDefinition<TConfig = unknown> {
 
 | 变更 | 最小 prepare 单元 |
 |---|---|
-| `commands/status.ts` | 单个 Command Slot + Command projection |
+| `commands/**/<name>.ts|tsx` | 单个层级 Command Slot + Command projection |
 | `agents/planner.md` | 单个 Agent Slot + Agent projection |
 | Feature provider entry | 使用该 Feature 的所有 Slot/projection |
 | child `plugin.ts` | child Plugin subtree |

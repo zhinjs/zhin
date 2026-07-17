@@ -4,8 +4,10 @@ import {
   RootController,
   Scope,
   SharedLifetime,
+  capabilityId,
   childPluginId,
   createToken,
+  featureId,
   rootPluginId,
   type SnapshotState,
 } from '../src/index.js';
@@ -22,6 +24,17 @@ function emptyState(): SnapshotState {
 }
 
 describe('next kernel', () => {
+  it('accepts segmented Capability local names without relaxing Plugin keys', () => {
+    const root = rootPluginId();
+    expect(capabilityId(root, featureId('test.command'), 'gh/issue/list')).toContain(
+      'gh/issue/list',
+    );
+    expect(() => capabilityId(root, featureId('test.command'), 'gh//list')).toThrow(
+      'Invalid capability local name',
+    );
+    expect(() => childPluginId(root, 'gh/issue')).toThrow('Invalid plugin instance key');
+  });
+
   it('disposes a shared lifetime only after its final generation lease', async () => {
     let disposed = 0;
     const lifetime = new SharedLifetime(() => { disposed += 1; });

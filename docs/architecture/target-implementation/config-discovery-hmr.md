@@ -256,7 +256,7 @@ async function discoverSkills(root: string): Promise<readonly DiscoveredSource[]
 }
 ```
 
-标准 Agent Feature 扫描 `agents/<name>.md`，Command Feature 扫描 `commands/<name>.ts|tsx`。这些约定属于各自 provider，而不是此模块的常量。Discovery 只返回 source descriptors；Server/Client Module Runtime 或 Markdown parser 负责加载。完整 contract 见 [Plugin Monorepo 与 Feature Provider](./plugin-monorepo-and-features.md)。
+标准 Agent Feature 扫描 `agents/<name>.md`，Command Feature 递归扫描 `commands/**/*.ts|tsx`，并将相对路径 `gh/issue/list.ts` 投影为 canonical localName `gh/issue/list` 与命令词 `gh issue list`。这些约定属于各自 provider，而不是此模块的常量。Discovery 只返回 source descriptors；Server/Client Module Runtime 或 Markdown parser 负责加载。完整 contract 见 [Plugin Monorepo 与 Feature Provider](./plugin-monorepo-and-features.md)。
 
 ## 6. Ownership Index
 

@@ -26,7 +26,7 @@
 package.json#zhin
   -> ProjectGraphService
   -> Plugin instance tree
-  -> FeatureDiscovery(commands/*.ts)
+  -> FeatureDiscovery(commands/**/*.ts|tsx)
   -> CapabilitySlot
   -> CommandIndex projection
   -> RootController commit
