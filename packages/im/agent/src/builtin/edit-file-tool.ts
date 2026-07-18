@@ -4,15 +4,11 @@
 import * as fs from 'node:fs/promises';
 import type { Tool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import {
-  checkFileAccess,
-  isBlockedDevicePath,
   MAX_EDIT_FILE_SIZE,
   isFileStale,
 } from '../security/file-policy.js';
-import { checkFilePermission, formatFilePermissionMessage, toolRequesterRoleToFileRole } from '../security/file-role-policy.js';
-import { checkFileToolAccess, checkSensitiveFilePathAccess, checkDangerousToolAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
+import { runToolPolicies, toolPolicyResultToMessage } from '../security/policy-facade.js';
 import { expandHome, nodeErrToFileMessage } from '../discovery/utils.js';
-import { checkMemoryWritePath } from '../memory-layers.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import {
   findActualStringInFile,
@@ -68,48 +64,22 @@ export class EditFileBuiltinTool extends BuiltinBaseTool {
       return 'Error: new_string is required';
     }
 
-    // 第 1 层：角色门控
-    const roleDecision = checkFileToolAccess('edit_file', commMessage);
-    if (!roleDecision.allowed) {
-      if (roleDecision.needsOwnerApproval) return toOwnerSignal(roleDecision);
-      return toDenyError(roleDecision);
+    // 统一安全策略门面（与原七层手写链等价）：
+    // role-gate → dangerous-tool-approval → file-permission-matrix(update) →
+    // memory-write-path → sensitive-path → blocked-device-path → workspace-access
+    let fp: string;
+    try {
+      fp = expandHome(filePathArg);
+    } catch (e: unknown) {
+      return nodeErrToFileMessage(e, String(filePathArg), 'edit');
     }
-
-    // 第 1.5 层：危险工具审批
-    const dangerousDecision = checkDangerousToolAccess('edit_file', commMessage);
-    if (!dangerousDecision.allowed) {
-      if (dangerousDecision.needsOwnerApproval) return toOwnerSignal(dangerousDecision);
-      return toDenyError(dangerousDecision);
-    }
-
-    // 第 2 层：文件角色权限矩阵
-    const fileRole = toolRequesterRoleToFileRole(roleDecision.role);
-    const permResult = checkFilePermission(fileRole, 'update', filePathArg);
-    if (!permResult.allowed) {
-      return formatFilePermissionMessage(permResult, 'edit_file');
-    }
-    const confirmMsg = formatFilePermissionMessage(permResult, 'edit_file');
-    if (confirmMsg) return confirmMsg;
+    const policyGate = toolPolicyResultToMessage(
+      runToolPolicies({ toolName: 'edit_file', filePath: fp, rawFilePath: filePathArg, commMessage }),
+      'edit_file',
+    );
+    if (policyGate) return policyGate;
 
     try {
-      const fp = expandHome(filePathArg);
-      const memoryDecision = checkMemoryWritePath(fp, commMessage);
-      if (!memoryDecision.allowed) {
-        return `Error: ${memoryDecision.reason}`;
-      }
-
-      const sensitiveDecision = checkSensitiveFilePathAccess('edit_file', fp, commMessage);
-      if (!sensitiveDecision.allowed) {
-        if (sensitiveDecision.needsOwnerApproval) return toOwnerSignal(sensitiveDecision);
-        return toDenyError(sensitiveDecision);
-      }
-      if (isBlockedDevicePath(fp)) {
-        return `Error: 禁止访问设备路径: ${fp}`;
-      }
-      const access = checkFileAccess(fp);
-      if (!access.allowed) {
-        return `ZHIN_NEEDS_OWNER:\n${access.reason!}\n\n（文件访问策略拒绝；仅 Owner 确认后在受控环境可重试或调整策略。）`;
-      }
       const stat = await fs.stat(fp);
       if (stat.size > MAX_EDIT_FILE_SIZE) {
         return `Error: 文件过大 (${(stat.size / 1024 / 1024).toFixed(1)} MiB)，超过 ${MAX_EDIT_FILE_SIZE / 1024 / 1024} MiB 限制。`;

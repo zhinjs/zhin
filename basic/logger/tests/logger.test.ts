@@ -225,3 +225,34 @@ describe('Logger 安全特性', () => {
     }).not.toThrow()
   })
 })
+
+describe('Logger 错误堆栈', () => {
+  const captureOutput = () => {
+    const lines: string[] = []
+    const transport = { write: (formatted: string) => lines.push(formatted) }
+    return { lines, transport }
+  }
+
+  it('logger.error(err) 输出只含一段堆栈', () => {
+    const { lines, transport } = captureOutput()
+    const logger = new Logger(null, 'test-error-first', { transports: [transport] })
+    const err = new Error('boom')
+    err.stack = 'Error: boom\n    at fake (fake.js:1:1)'
+    logger.error(err)
+    expect(lines).toHaveLength(1)
+    const occurrences = lines[0].split('Error: boom').length - 1
+    expect(occurrences).toBe(1)
+  })
+
+  it("logger.error('x:', err) 输出只含一段堆栈", () => {
+    const { lines, transport } = captureOutput()
+    const logger = new Logger(null, 'test-error-second', { transports: [transport] })
+    const err = new Error('boom')
+    err.stack = 'Error: boom\n    at fake (fake.js:1:1)'
+    logger.error('x:', err)
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toContain('x:')
+    const occurrences = lines[0].split('Error: boom').length - 1
+    expect(occurrences).toBe(1)
+  })
+})

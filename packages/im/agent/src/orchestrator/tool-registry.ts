@@ -7,7 +7,7 @@
  */
 
 import { type AgentTool, type ToolFilterOptions, isBuiltinToolSource, isReservedToolName } from '@zhin.js/ai';
-import { Logger } from '@zhin.js/core';
+import { getLogger } from '@zhin.js/core';
 import { ResourceRegistry } from './resource-registry.js';
 import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from '../reserved-tools.js';
 import type {
@@ -174,7 +174,7 @@ export type ToolInput = Tool | ZhinTool;
 // ============================================================================
 
 export class ToolRegistry extends ResourceRegistry<AgentTool> {
-  private readonly logger = new Logger(null, 'ToolRegistry');
+  private readonly logger = getLogger('ToolRegistry');
   private readonly toolPluginMap = new Map<string, string>();
 
   addTool(input: ToolInput | AgentTool | ToolLike, scope?: ResourceScope, source?: string): () => void {

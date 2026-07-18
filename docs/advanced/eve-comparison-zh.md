@@ -54,7 +54,7 @@
 
 **Instructions** — 每轮 prepend 的常驻提示；与 **Skills**（按需 `load_skill` 加载）相对。
 
-**Tools** — `defineTool({ description, inputSchema, execute, approval?, toModelOutput? })`；在**应用运行时**执行（非沙箱），可访问 `process.env`。`ctx` 提供 `session`、`getSandbox()`、`getSkill()`、`abortSignal` 等。
+**Tools** — `defineAgentTool({ description, inputSchema, execute, approval?, toModelOutput? })`；在**应用运行时**执行（非沙箱），可访问 `process.env`。`ctx` 提供 `session`、`getSandbox()`、`getSkill()`、`abortSignal` 等。
 
 **默认 Harness 内置工具**（可覆盖/禁用）：
 
@@ -159,10 +159,10 @@ POST /eve/v1/session/:sessionId  →  { continuationToken, message }
 
 | 层级 | Eve 做法 | Zhin 现状 | 借鉴建议 | 保留/替换 | 建议优先级 |
 |------|----------|-----------|----------|-----------|------------|
-| 定义 API | `defineTool` + Zod `inputSchema` | `@zhin.js/agent/tools` 的 `defineTool` + Zod | 已对齐；补充 `outputSchema` 文档 | **保留** | — |
+| 定义 API | Eve: `defineTool` + Zod；Zhin 规范名 **`defineAgentTool`**（`defineTool` 软弃用别名） | `@zhin.js/agent/tools` | 已对齐语义；Zhin 用 `defineAgentTool` 避免与 core 命令 `defineTool` 混淆 | **保留** | — |
 | 运行位置 | 应用运行时；沙箱经 `ctx.getSandbox()` | 多数工具在 agent 运行时；bash/read 等走 sandbox | 文档明确「authoring tool vs sandbox tool」边界 | 借鉴表述 | P1 |
-| Approval | per-tool `approval: always/once/never` | `defineTool({ approval })` + `runToolApprovalGate`；与 ExecPolicy / Owner confirm **叠加** | **已实现**（ADR 0039 P1） | **保留** ExecPolicy 叠加 | — |
-| 模型可见输出 | `toModelOutput` | `defineTool({ toModelOutput })` + `applyToolToModelOutput` | **已实现**（ADR 0039 P1） | 借鉴 | — |
+| Approval | per-tool `approval: always/once/never` | `defineAgentTool({ approval })` + `runToolApprovalGate`；与 ExecPolicy / Owner confirm **叠加** | **已实现**（ADR 0039 P1） | **保留** ExecPolicy 叠加 | — |
+| 模型可见输出 | `toModelOutput` | `defineAgentTool({ toModelOutput })` + `applyToolToModelOutput` | **已实现**（ADR 0039 P1） | 借鉴 | — |
 | Replay 语义 | 完成 step 不重跑；中断 step 重跑 | Turn 级处理；无 Workflow step 边界 | 文档化幂等要求；长期对齐 step 语义 | 概念借鉴 | P2 |
 | 内置工具 | harness 表（bash/todo/ask_question/…） | `web_search`、`ask_user`；bash/read/edit 等 builtin | 对照表写入 agent-authoring；缺啥补啥 | **保留** Zhin ExecPolicy 包装 | P1 |
 

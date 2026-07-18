@@ -1,9 +1,9 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { platformPermit } from '../../src/platform-permit.js';
 import { getKookAgentDeps } from '../../src/kook-agent-deps.js';
 
-export default defineTool<{ endpoint_id: string; guild_id: string; name: string }>({
+export default defineAgentTool<{ endpoint_id: string; guild_id: string; name: string }>({
   description: '在 KOOK 服务器中创建新角色',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),

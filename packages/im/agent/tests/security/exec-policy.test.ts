@@ -120,6 +120,26 @@ describe('exec-policy — splitCompoundCommand', () => {
     const parts = splitCompoundCommand('cat file | grep pattern')
     expect(parts).toEqual(['cat file | grep pattern'])
   })
+
+  it('does NOT split inside double quotes', () => {
+    const parts = splitCompoundCommand('echo "hello && rm -rf /"')
+    expect(parts).toEqual(['echo "hello && rm -rf /"'])
+  })
+
+  it('does NOT split inside single quotes', () => {
+    const parts = splitCompoundCommand("echo 'a; b' && ls")
+    expect(parts).toEqual(["echo 'a; b'", 'ls'])
+  })
+
+  it('does NOT split escaped separators', () => {
+    const parts = splitCompoundCommand('echo a\\;b && ls')
+    expect(parts).toEqual(['echo a\\;b', 'ls'])
+  })
+
+  it('fail-closed on unbalanced quotes (no split)', () => {
+    const parts = splitCompoundCommand('echo "unterminated && rm -rf /')
+    expect(parts).toEqual(['echo "unterminated && rm -rf /'])
+  })
 })
 
 describe('exec-policy — extractCommandName', () => {
@@ -142,5 +162,17 @@ describe('exec-policy — extractCommandName', () => {
 
   it('extracts first token', () => {
     expect(extractCommandName('git status --short')).toBe('git')
+  })
+
+  it('unquotes double-quoted command name', () => {
+    expect(extractCommandName('"rm" -rf /')).toBe('rm')
+  })
+
+  it('unquotes single-quoted command name', () => {
+    expect(extractCommandName("'rm' -rf /")).toBe('rm')
+  })
+
+  it('strips backslash escapes in command name', () => {
+    expect(extractCommandName('r\\m -rf /')).toBe('rm')
   })
 })

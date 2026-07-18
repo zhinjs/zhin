@@ -8,7 +8,7 @@ sidebar: false
 
 ## 状态
 
-已接受（2026-06-10）· **实现中**
+已接受（2026-06-10）· **已实现**（`demo-scope` / `TokenRegistry` / RPC `authScope`；公开 Demo 部署与 token 轮换为运维项）
 
 ## 背景
 

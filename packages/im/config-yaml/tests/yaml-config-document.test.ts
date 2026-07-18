@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -164,7 +164,8 @@ async function configFile(source: string): Promise<{ readonly root: string; read
   temporary.push(root);
   const file = join(root, 'config.yml');
   await writeFile(file, source);
-  return { root, file };
+  const resolved = await realpath(root);
+  return { root: resolved, file: join(resolved, 'config.yml') };
 }
 
 async function createProject(config: string): Promise<string> {
@@ -195,7 +196,7 @@ async function createProject(config: string): Promise<string> {
   await writeFile(join(root, 'plugin.ts'), '');
   await writeFile(join(root, 'plugins/child/plugin.ts'), '');
   await writeFile(join(root, 'config.yml'), config);
-  return root;
+  return realpath(root);
 }
 
 async function writeJson(path: string, value: unknown): Promise<void> {

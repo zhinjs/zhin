@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import { secureRandomInt } from '@zhin.js/game-shared';
+import { secureRandomInt } from '@zhin.js/game-kit';
 
 export type RiddleType = 'char' | 'idiom';
 

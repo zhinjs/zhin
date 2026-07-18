@@ -1,8 +1,8 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getDiscordAgentDeps } from '../../src/discord-agent-deps.js';
 
-export default defineTool<{ endpoint_id: string; channel_id: string; message_id: string; emoji: string }>({
+export default defineAgentTool<{ endpoint_id: string; channel_id: string; message_id: string; emoji: string }>({
   description: '对 Discord 消息添加表情反应',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),

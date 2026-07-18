@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -204,7 +204,7 @@ async function createProject(): Promise<string> {
   temporary.push(root);
   await writeRootManifest(root, { runtime: 'trusted' });
   await touch(join(root, 'plugin.ts'));
-  return root;
+  return realpath(root);
 }
 
 async function writeRootManifest(

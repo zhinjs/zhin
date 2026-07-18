@@ -7,3 +7,6 @@ export * from './root-controller.js';
 export * from './shared-lifetime.js';
 export * from './snapshot.js';
 export * from './token.js';
+export * from './schedule-host.js';
+export * from './database-host.js';
+export * from './outbound-host.js';

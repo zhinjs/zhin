@@ -6,7 +6,7 @@ import { promisify } from 'node:util';
 import * as path from 'node:path';
 import type { Tool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import { shellEscape, buildSensitiveSearchExcludeGlobs } from '../security/file-policy.js';
-import { checkFileToolAccess, checkSensitiveFilePathAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
+import { runToolPolicies, toolPolicyResultToMessage } from '../security/policy-facade.js';
 import { errMsg } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 
@@ -54,17 +54,13 @@ export class GrepBuiltinTool extends BuiltinBaseTool {
     }
     try {
       const searchPath = typeof args.path === 'string' && args.path.trim() ? args.path : '.';
-      const roleDecision = checkFileToolAccess('grep', commMessage);
-      if (!roleDecision.allowed) {
-        if (roleDecision.needsOwnerApproval) return toOwnerSignal(roleDecision);
-        return toDenyError(roleDecision);
-      }
       const absSearchPath = path.resolve(process.cwd(), searchPath);
-      const sensitiveDecision = checkSensitiveFilePathAccess('grep', absSearchPath, commMessage);
-      if (!sensitiveDecision.allowed) {
-        if (sensitiveDecision.needsOwnerApproval) return toOwnerSignal(sensitiveDecision);
-        return toDenyError(sensitiveDecision);
-      }
+      // 统一安全策略门面（与原两层手写链等价）：role-gate → sensitive-path
+      const policyGate = toolPolicyResultToMessage(
+        runToolPolicies({ toolName: 'grep', filePath: absSearchPath, commMessage }),
+        'grep',
+      );
+      if (policyGate) return policyGate;
       const safePattern = shellEscape(patternArg);
       const safePath = shellEscape(searchPath);
       const limit = typeof args.limit === 'number' && Number.isFinite(args.limit) ? args.limit : 50;

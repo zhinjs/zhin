@@ -6,12 +6,20 @@ import { findMissingPackageDependencies, findUnresolvedPackageInstalls, isAiEnab
 
 /**
  * User project dependency policy: scaffolded dependencies intentionally float to latest.
+ * WARNING: this is not reproducible; pin versions for production. See scaffold-wizard README.
  */
 export const ZHIN_STACK_VERSIONS = {
   'zhin.js': 'latest',
   '@zhin.js/cli': 'latest',
   '@zhin.js/agent': 'latest',
   '@zhin.js/database': 'latest',
+  '@zhin.js/plugin-runtime': 'latest',
+  '@zhin.js/runtime': 'latest',
+  '@zhin.js/adapter': 'latest',
+  '@zhin.js/command': 'latest',
+  '@zhin.js/component': 'latest',
+  '@zhin.js/core': 'latest',
+  '@zhin.js/tool': 'latest',
   '@zhin.js/host-router': 'latest',
   '@zhin.js/host-api': 'latest',
   '@zhin.js/client': 'latest',
@@ -81,10 +89,17 @@ function resolveStackVersion(packageName: string): string {
 }
 
 function collectZhinPluginsFromConfig(config: Record<string, unknown>): string[] {
-  const plugins = Array.isArray(config.plugins)
-    ? config.plugins.filter((p): p is string => typeof p === 'string')
-    : [];
-  return [...new Set(plugins.filter((p) => p.startsWith('@zhin.js/')))];
+  // legacy 数组形式：条目即包名
+  if (Array.isArray(config.plugins)) {
+    const plugins = config.plugins.filter((p): p is string => typeof p === 'string');
+    return [...new Set(plugins.filter((p) => p.startsWith('@zhin.js/')))];
+  }
+  // 新 runtime：plugins 为 instanceKey 映射，包名在 package.json zhin.plugins 清单中，
+  // 无法从配置推导；仅收集直接以包名出现的键（防御性）
+  if (config.plugins && typeof config.plugins === 'object') {
+    return Object.keys(config.plugins as Record<string, unknown>).filter((key) => key.startsWith('@zhin.js/'));
+  }
+  return [];
 }
 
 /** create-zhin / minimal-bot 默认 Host 端口（避免与常见 8086 占用冲突） */
@@ -100,15 +115,16 @@ export function getCreateBotPnpmConfig(_aiEnabled?: boolean): Record<string, unk
   };
 }
 
-/** create-zhin-app 默认 bot 骨架依赖（不含适配器 / AI / 数据库驱动） */
+/** create-zhin-app Plugin Runtime 骨架 production 依赖（不含适配器 / AI / 数据库驱动） */
 export function getCreateBotBaseDependencies(): Record<string, string> {
   return {
     'zhin.js': ZHIN_STACK_VERSIONS['zhin.js'],
-    '@zhin.js/cli': ZHIN_STACK_VERSIONS['@zhin.js/cli'],
-    '@zhin.js/host-router': ZHIN_STACK_VERSIONS['@zhin.js/host-router'],
-    '@zhin.js/client': ZHIN_STACK_VERSIONS['@zhin.js/client'],
-    '@zhin.js/host-api': ZHIN_STACK_VERSIONS['@zhin.js/host-api'],
-    '@zhin.js/contract': ZHIN_STACK_VERSIONS['@zhin.js/contract'],
+    '@zhin.js/plugin-runtime': ZHIN_STACK_VERSIONS['@zhin.js/plugin-runtime'],
+    '@zhin.js/runtime': ZHIN_STACK_VERSIONS['@zhin.js/runtime'],
+    '@zhin.js/adapter': ZHIN_STACK_VERSIONS['@zhin.js/adapter'],
+    '@zhin.js/command': ZHIN_STACK_VERSIONS['@zhin.js/command'],
+    '@zhin.js/component': ZHIN_STACK_VERSIONS['@zhin.js/component'],
+    '@zhin.js/core': ZHIN_STACK_VERSIONS['@zhin.js/core'],
     '@zhin.js/satori': ZHIN_STACK_VERSIONS['@zhin.js/satori'],
   };
 }

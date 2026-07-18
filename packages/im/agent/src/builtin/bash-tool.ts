@@ -4,13 +4,10 @@
 import { exec, type ExecOptions } from 'node:child_process';
 import { promisify } from 'node:util';
 import { type Plugin, type Tool, type Message, type ToolParametersSchema, type ToolResult } from '@zhin.js/core';
-import { resolveToolRequesterRole } from '../security/owner-approve-always-store.js';
-import { checkBashFilePermission, resolveFilePermissionGate, toolRequesterRoleToFileRole } from '../security/file-role-policy.js';
 import {
-  checkBashCommandSafety,
   classifyBashCommand,
 } from '../security/file-policy.js';
-import { checkBashSensitiveReadAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
+import { runToolPolicies, toolPolicyResultToMessage } from '../security/policy-facade.js';
 import { getSandbox } from '../security/sandbox.js';
 import { errMsg } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
@@ -60,22 +57,13 @@ export class BashBuiltinTool extends BuiltinBaseTool {
       const cmd = String(args.command || '');
       if (!cmd.trim()) return 'Error: command is required';
 
-      const safety = checkBashCommandSafety(cmd);
-      if (!safety.safe) return `Error: ${safety.reason}`;
-
-      const sensitiveRead = checkBashSensitiveReadAccess(cmd, commMessage);
-      if (!sensitiveRead.allowed) {
-        if (sensitiveRead.needsOwnerApproval) return toOwnerSignal(sensitiveRead);
-        return toDenyError(sensitiveRead);
-      }
-
-      const requesterRole = commMessage && this.hostPlugin
-        ? resolveToolRequesterRole(this.hostPlugin, commMessage)
-        : 'unknown';
-      const role = toolRequesterRoleToFileRole(requesterRole);
-      const filePermResult = checkBashFilePermission(role, cmd);
-      const filePermGate = resolveFilePermissionGate(filePermResult, 'bash');
-      if (filePermGate) return filePermGate;
+      // 统一安全策略门面（与原三层手写链等价；不传 config，exec-policy 层不激活）：
+      // bash-command-safety → bash-sensitive-read → bash-file-permission
+      const policyGate = toolPolicyResultToMessage(
+        runToolPolicies({ toolName: 'bash', command: cmd, commMessage, hostPlugin: this.hostPlugin }),
+        'bash',
+      );
+      if (policyGate) return policyGate;
 
       const timeout = (args.timeout as number | undefined) ?? 30000;
       const classification = classifyBashCommand(cmd);

@@ -14,7 +14,7 @@ import {
   loadAgentMemory,
 } from './evaluate/tracker.js';
 import { saveDailyReport } from './recommend/report.js';
-import { pushTextToMasters } from './push.js';
+import { pushTextToMasters, getLotteryOutboundPush } from './push.js';
 import { normalizeWeights } from './stats/weights.js';
 import { getLotteryAgentDeps } from './lottery-agent-deps.js';
 
@@ -142,7 +142,7 @@ export async function handlePublishReport(content: string, push?: boolean): Prom
   if (!text.includes(DISCLAIMER)) return 'content must include disclaimer';
   const date = new Date().toISOString().slice(0, 10);
   await saveDailyReport(db, { date, picks: [] as never[], disclaimer: DISCLAIMER, body: text }, text);
-  const doPush = push === true;
+  const doPush = push === true && Boolean(deps.plugin || getLotteryOutboundPush());
   if (doPush) await pushTextToMasters(deps.plugin, text);
   return JSON.stringify({ ok: true, date, pushed: doPush });
 }

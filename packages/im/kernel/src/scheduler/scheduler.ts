@@ -9,16 +9,10 @@ import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { getNextRun, resolveSolarJob } from '@zhin.js/schedule';
 import type {
-  Schedule,
-  ScheduledJob,
-  JobStore,
-  JobCallback,
-  AddJobOptions,
-  IScheduler,
-} from './types.js';
-import { formatCompact, Logger } from '@zhin.js/logger';
+  Schedule, ScheduledJob, JobStore, JobCallback, AddJobOptions, IScheduler, } from './types.js';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 
-const logger = new Logger(null, 'scheduler');
+const logger = getLogger('scheduler');
 
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 30 * 60 * 1000;
 

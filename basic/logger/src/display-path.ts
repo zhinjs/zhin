@@ -15,7 +15,7 @@ export interface DisplayPathOptions {
 }
 
 const FILE_URL_RE = /file:\/\/[^\s"'`,)\]}?#]+/g;
-const UNIX_ABS_IN_TEXT_RE = /(^|[\s('"[\{,])(\/(?:[\w.@$+-]|%[0-9A-Fa-f]{2})+(?:\/(?:[\w.@$+-]|%[0-9A-Fa-f]{2})+)*)/g;
+const UNIX_ABS_IN_TEXT_RE = /(^|[\s('"[{,])(\/(?:[\w.@$+-]|%[0-9A-Fa-f]{2})+(?:\/(?:[\w.@$+-]|%[0-9A-Fa-f]{2})+)*)/g;
 const WIN_ABS_IN_TEXT_RE = new RegExp(
   '(^|[\\s(\'"\\[{,])([A-Za-z]:[\\\\/][^\\s"\'`,)\\]}]+)',
   'g',

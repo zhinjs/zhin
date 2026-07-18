@@ -174,8 +174,8 @@ cd examples/test-bot && pnpm dev  # 或直接在 test-bot 运行
 
 # 其他开发命令
 pnpm start              # 生产模式启动
-pnpm daemon             # 后台守护进程模式
-pnpm stop               # 停止守护进程
+pnpm daemon:test         # test-bot 后台守护（minimal-bot 无 daemon）
+pnpm stop:test           # 停止 test-bot 守护进程
 ```
 
 ### 发布流程

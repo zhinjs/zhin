@@ -1,7 +1,7 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getIcqqAgentDeps } from '../../src/icqq-agent-deps.js';
-export default defineTool<{ endpoint_id: string; user_id: number; times?: number }>({
+export default defineAgentTool<{ endpoint_id: string; user_id: number; times?: number }>({
   description: '给用户点赞（竖大拇指），每人每天最多 20 次',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint QQ号'),

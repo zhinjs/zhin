@@ -1,4 +1,10 @@
-import type { MessageSegment, QuotedMessagePayload } from 'zhin.js';
+export interface QuotedMessagePayload {
+  messageId: string;
+  sender?: { id: string; name: string };
+  content: Array<{ type: string; data?: Record<string, unknown> }>;
+  raw?: string;
+  time?: number;
+}
 
 export function parseOneBotGetMsgResponse(
   messageId: string,
@@ -8,7 +14,7 @@ export function parseOneBotGetMsgResponse(
     data && typeof data === 'object' ? (data as Record<string, unknown>) : {};
   let content: QuotedMessagePayload['content'] = [];
   if (Array.isArray(record.message)) {
-    content = record.message as MessageSegment[];
+    content = record.message as QuotedMessagePayload['content'];
   } else if (typeof record.raw_message === 'string' && record.raw_message) {
     content = [{ type: 'text', data: { text: record.raw_message } }];
   }

@@ -2,13 +2,13 @@
  * agent_sessions CRUD — epoch-aware session metadata (ADR 0009 D4).
  */
 
-import { Logger } from '@zhin.js/logger';
+import { getLogger } from '@zhin.js/logger';
 import type {
   AgentSessionRecord,
   CreateAgentSessionInput,
 } from './agent-db-models.js';
 
-const logger = new Logger(null, 'AgentSessionStore');
+const logger = getLogger('AgentSessionStore');
 
 export interface AgentSessionStoreConfig {
   sessionIdleArchiveMs?: number;

@@ -6,12 +6,15 @@ import {
   type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import { createCapabilityContext } from '@zhin.js/feature-kit';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import type {
   AdapterCapability,
   AdapterDefinition,
   EndpointInstance,
   EndpointSendRequest,
 } from './definition.js';
+
+const logger = getLogger('Adapter');
 
 export interface AdapterDescriptor {
   readonly id: CapabilityId;
@@ -21,51 +24,91 @@ export interface AdapterDescriptor {
   readonly capabilities: readonly AdapterCapability[];
 }
 
+/** Console / Host-facing endpoint row (connected = admission open). */
+export interface AdapterEndpointSummary extends AdapterDescriptor {
+  readonly connected: boolean;
+  readonly status: 'online' | 'offline';
+  readonly phase: AdapterEndpointPhase;
+}
+
+export type AdapterEndpointPhase =
+  'pending' | 'starting' | 'online' | 'failed' | 'unconfigured';
+
 interface AdapterRecord extends AdapterDescriptor {
   readonly endpoint: EndpointInstance;
+  readonly unconfigured: boolean;
   started: boolean;
   open: boolean;
   stopped: boolean;
+  /** Start rejected or was given up on — distinguishes 'failed' from 'unconfigured'. */
+  failed: boolean;
+  /** start() was invoked at least once (may still be in flight). */
+  startAttempted: boolean;
 }
 
 export class AdapterIndex {
   readonly $projection = 'zhin.adapter-index/1' as const;
   readonly #records = new Map<CapabilityId, AdapterRecord>();
   readonly #order: readonly AdapterRecord[];
+  /** True after `open()` until `close()` / `stop()` — late starts may open themselves. */
+  #admissionOpen = false;
+  readonly #startTimeoutMs: number;
+  /** Final give-up budget for deferred starts (never-settling start promises). */
+  readonly #deferredGiveUpMs: number;
 
-  private constructor(records: readonly AdapterRecord[]) {
+  private constructor(
+    records: readonly AdapterRecord[],
+    startTimeoutMs: number,
+    deferredGiveUpMs: number,
+  ) {
     this.#order = Object.freeze([...records]);
+    this.#startTimeoutMs = startTimeoutMs;
+    this.#deferredGiveUpMs = deferredGiveUpMs;
     for (const record of records) this.#records.set(record.id, record);
   }
 
   static async create(
     slots: readonly Readonly<CapabilitySlot<AdapterDefinition>>[],
     snapshot: RuntimeSnapshot,
+    options: {
+      readonly startTimeoutMs?: number;
+      readonly deferredGiveUpMs?: number;
+    } = {},
   ): Promise<AdapterIndex> {
     const records: AdapterRecord[] = [];
+    const unconfigured: string[] = [];
     try {
       for (const slot of [...slots].sort((left, right) => left.id.localeCompare(right.id))) {
-        const endpoint = await slot.definition.create(
-          Object.freeze({
-            ...createCapabilityContext(snapshot, slot.owner),
-            id: slot.id,
-            name: slot.localName,
-          }),
-        );
-        assertEndpoint(endpoint, slot.id);
+        const endpoint = await createEndpointSoft(slot, snapshot);
+        if (endpoint.unconfigured) unconfigured.push(slot.localName);
         records.push({
           id: slot.id,
           owner: slot.owner,
           name: slot.localName,
           source: slot.source,
           capabilities: slot.definition.capabilities,
-          endpoint,
+          endpoint: endpoint.instance,
+          unconfigured: endpoint.unconfigured,
           started: false,
           open: false,
-          stopped: false,
+          failed: false,
+          startAttempted: false,
+          // Unconfigured stubs skip start/open so kitchen-sink Roots stay quiet.
+          stopped: endpoint.unconfigured,
         });
       }
-      return new AdapterIndex(records);
+      if (unconfigured.length > 0) {
+        logger.info(formatCompact({
+          op: 'adapters_unconfigured',
+          count: unconfigured.length,
+          names: unconfigured.join(','),
+        }));
+      }
+      return new AdapterIndex(
+        records,
+        options.startTimeoutMs ?? 3_000,
+        options.deferredGiveUpMs ?? 60_000,
+      );
     } catch (error) {
       await stopRecords(records, error);
       throw error;
@@ -73,8 +116,47 @@ export class AdapterIndex {
   }
 
   list(): readonly AdapterDescriptor[] {
-    return this.#order.map(({ endpoint: _endpoint, started: _started, open: _open,
-      stopped: _stopped, ...descriptor }) => Object.freeze(descriptor));
+    return this.#order.map(({ endpoint: _endpoint, unconfigured: _unconfigured,
+      started: _started, open: _open, stopped: _stopped, failed: _failed,
+      startAttempted: _startAttempted, ...descriptor }) => Object.freeze(descriptor));
+  }
+
+  /** Endpoint rows for Console `endpoint.list` / `endpoint.info`. */
+  describe(): readonly AdapterEndpointSummary[] {
+    return Object.freeze(this.#order.map((record) => Object.freeze({
+      id: record.id,
+      owner: record.owner,
+      // Console 展示用 live name（如 ICQQ uin、sandbox bot 名），缺省回退 slot localName
+      name: endpointLiveName(record.endpoint) ?? record.name,
+      source: record.source,
+      capabilities: record.capabilities,
+      connected: record.open && !record.stopped,
+      status: record.open && !record.stopped ? 'online' as const : 'offline' as const,
+      phase: endpointPhase(record),
+    })));
+  }
+
+  /**
+   * Resolve a Console `$adapter` + `$endpoint` pair to a capability id.
+   * Matches local name, capability id, or owner path segments.
+   */
+  resolve(adapter: string, endpointId: string): CapabilityId | undefined {
+    const matches = this.#order.filter((record) =>
+      matchesEndpoint(record, adapter, endpointId));
+    if (matches.length === 1) return matches[0]?.id;
+    if (matches.length === 0) return undefined;
+    // Prefer exact localName === endpointId when ambiguous.
+    const exact = matches.find((record) => record.name === endpointId);
+    return exact?.id ?? matches[0]?.id;
+  }
+
+  /**
+   * Resolve a live EndpointInstance for Host-side side channels (reactions, etc.).
+   */
+  instance(adapter: string, endpointId: string): EndpointInstance | undefined {
+    const id = this.resolve(adapter, endpointId);
+    if (!id) return undefined;
+    return this.#records.get(id)?.endpoint;
   }
 
   owner(id: CapabilityId): PluginId {
@@ -84,21 +166,102 @@ export class AdapterIndex {
   }
 
   async start(): Promise<void> {
-    const started: AdapterRecord[] = [];
-    try {
-      for (const record of this.#order) {
-        if (record.started || record.stopped) continue;
-        started.push(record);
-        await record.endpoint.start?.();
+    // Soft-start in parallel with a short wait so kitchen-sink Roots do not
+    // stall generation. Configured platforms that need longer (QQ auth, Slack
+    // socket, GitHub verify) stay in-flight instead of being stop()'d mid-connect.
+    const startTimeoutMs = this.#startTimeoutMs;
+    await Promise.all(this.#order.map(async (record) => {
+      if (record.started || record.stopped) return;
+      record.startAttempted = true;
+      const startPromise = (async () => record.endpoint.start?.())();
+      try {
+        await withTimeout(
+          startPromise,
+          startTimeoutMs,
+          `Adapter start timed out after ${startTimeoutMs}ms`,
+        );
+        if (record.stopped) return;
         record.started = true;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.includes('timed out after')) {
+          logger.info(formatCompact({
+            op: 'adapter_start_deferred',
+            id: record.id,
+            name: record.name,
+            waitMs: startTimeoutMs,
+          }));
+          // Final backstop: a deferred start promise that never settles must
+          // not keep the Endpoint in limbo forever.
+          const giveUp = setTimeout(() => {
+            if (record.stopped || record.started) return;
+            record.stopped = true;
+            record.failed = true;
+            // Swallow a late rejection so it does not become unhandled.
+            void startPromise.catch(() => undefined);
+            logger.warn(formatCompact({
+              op: 'adapter_start_give_up',
+              id: record.id,
+              name: record.name,
+              waitMs: this.#deferredGiveUpMs,
+            }));
+          }, this.#deferredGiveUpMs);
+          giveUp.unref?.();
+          void startPromise.then(
+            () => {
+              clearTimeout(giveUp);
+              if (record.stopped || record.started) return;
+              record.started = true;
+              if (this.#admissionOpen && !record.open) {
+                try {
+                  record.endpoint.open?.();
+                  record.open = true;
+                } catch (openError) {
+                  logger.warn(formatCompact({
+                    op: 'adapter_open_after_deferred_fail',
+                    id: record.id,
+                    name: record.name,
+                    error: openError instanceof Error ? openError.message : String(openError),
+                  }));
+                }
+              }
+            },
+            (startError) => {
+              clearTimeout(giveUp);
+              if (record.stopped) return;
+              record.stopped = true;
+              record.failed = true;
+              logger.warn(formatCompact({
+                op: 'adapter_start_soft_fail',
+                id: record.id,
+                name: record.name,
+                error: startError instanceof Error ? startError.message : String(startError),
+                stack: startError instanceof Error ? startError.stack : undefined,
+              }));
+            },
+          );
+          return;
+        }
+        record.stopped = true;
+        record.failed = true;
+        void startPromise.catch(() => undefined);
+        // Startup connect failures are logged once here (with stack); Endpoint
+        // implementations must NOT re-log them at error level.
+        logger.warn(formatCompact({
+          op: 'adapter_start_soft_fail',
+          id: record.id,
+          name: record.name,
+          error: message,
+          stack: error instanceof Error ? error.stack : undefined,
+        }));
+        // No endpoint.stop() here: adapter Endpoints self-stop in their start()
+        // catch by convention (verified across icqq/qq/slack/… endpoints).
       }
-    } catch (error) {
-      await stopRecords(started, error);
-      throw error;
-    }
+    }));
   }
 
   open(): void {
+    this.#admissionOpen = true;
     const errors: unknown[] = [];
     for (const record of this.#order) {
       if (!record.started || record.open || record.stopped) continue;
@@ -113,6 +276,7 @@ export class AdapterIndex {
   }
 
   async close(): Promise<void> {
+    this.#admissionOpen = false;
     const stack = new DisposeStack();
     for (const record of this.#order) {
       if (!record.open || record.stopped) continue;
@@ -151,10 +315,128 @@ export function isAdapterIndex(value: unknown): value is AdapterIndex {
     && (value as { readonly $projection?: unknown }).$projection === 'zhin.adapter-index/1';
 }
 
+function matchesEndpoint(
+  record: AdapterRecord,
+  adapter: string,
+  endpointId: string,
+): boolean {
+  const adapterOk = record.name === adapter
+    || record.id === adapter
+    || record.id.endsWith(`/${adapter}`)
+    || record.owner === adapter
+    || record.owner.endsWith(`/${adapter}`);
+  // Live EndpointInstance.name is the bot runtime id (e.g. ICQQ uin). Host /
+  // activity-feedback resolve with that id; slot.localName alone is not enough
+  // when multiple plugin instances share localName "icqq".
+  const liveName = endpointLiveName(record.endpoint);
+  const endpointOk = record.name === endpointId
+    || record.id === endpointId
+    || record.id.endsWith(`/${endpointId}`)
+    || (liveName !== undefined && liveName === endpointId);
+  return adapterOk && endpointOk;
+}
+
+function endpointLiveName(endpoint: EndpointInstance): string | undefined {
+  const name = (endpoint as { readonly name?: unknown }).name;
+  return typeof name === 'string' && name.length > 0 ? name : undefined;
+}
+
+function endpointPhase(record: AdapterRecord): AdapterEndpointPhase {
+  if (record.unconfigured) return 'unconfigured';
+  if (record.failed) return 'failed';
+  if (record.open && !record.stopped) return 'online';
+  if (record.startAttempted) return 'starting';
+  return 'pending';
+}
+
 function assertEndpoint(value: unknown, id: CapabilityId): asserts value is EndpointInstance {
   if (!value || typeof value !== 'object') {
     throw new TypeError(`Adapter ${id} create() must return an Endpoint instance`);
   }
+}
+
+/**
+ * Adapter `resolveXxxConfig` helpers report missing config/credentials as
+ * TypeError("… requires …") by convention; only those are expected failures.
+ */
+function isUnconfiguredError(error: unknown): boolean {
+  return (
+    error instanceof TypeError
+    && /requires|not configured|missing|未配置|缺少/i.test(error.message)
+  );
+}
+
+async function createEndpointSoft(
+  slot: Readonly<CapabilitySlot<AdapterDefinition>>,
+  snapshot: RuntimeSnapshot,
+): Promise<{ readonly instance: EndpointInstance; readonly unconfigured: boolean }> {
+  let endpoint: unknown;
+  try {
+    endpoint = await slot.definition.create(
+      Object.freeze({
+        ...createCapabilityContext(snapshot, slot.owner),
+        id: slot.id,
+        name: slot.localName,
+      }),
+    );
+  } catch (error) {
+    // Missing config / credentials: degrade to an inert stub so the rest of
+    // the generation still boots. Anything else (network failures, bugs in
+    // create()) is unexpected — keep the stub but surface a warning instead
+    // of silently swallowing it at debug level.
+    const message = error instanceof Error ? error.message : String(error);
+    const log = isUnconfiguredError(error) ? logger.debug.bind(logger) : logger.warn.bind(logger);
+    log(formatCompact({
+      op: 'adapter_create_soft_fail',
+      id: slot.id,
+      name: slot.localName,
+      error: message,
+    }));
+    return {
+      instance: createUnconfiguredEndpoint(message),
+      unconfigured: true,
+    };
+  }
+  // Programming errors (create() did not return an Endpoint) must surface:
+  // they propagate to AdapterIndex.create's catch, which disposes the records
+  // created so far instead of hiding the bug behind an unconfigured stub.
+  assertEndpoint(endpoint, slot.id);
+  return { instance: endpoint, unconfigured: false };
+}
+
+function createUnconfiguredEndpoint(reason: string): EndpointInstance {
+  return Object.freeze({
+    start() {
+      throw new Error(`Adapter unconfigured: ${reason}`);
+    },
+    open() {},
+    close() {},
+    stop() {},
+    send() {
+      throw new Error(`Adapter unconfigured: ${reason}`);
+    },
+  });
+}
+
+function withTimeout<T>(
+  promise: Promise<T> | T | undefined,
+  ms: number,
+  message: string,
+): Promise<T | undefined> {
+  if (promise === undefined) return Promise.resolve(undefined);
+  return new Promise<T | undefined>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    Promise.resolve(promise).then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 }
 
 async function stopRecords(

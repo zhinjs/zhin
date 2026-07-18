@@ -1,7 +1,7 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getIcqqAgentDeps } from '../../src/icqq-agent-deps.js';
-export default defineTool<{ endpoint_id: string; group_id: number }>({
+export default defineAgentTool<{ endpoint_id: string; group_id: number }>({
   description: 'QQ 群签到打卡',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint QQ号'),

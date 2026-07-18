@@ -1,4 +1,4 @@
-import { buildChoiceKeyboard } from '@zhin.js/game-shared';
+import { buildChoiceKeyboard } from '@zhin.js/game-kit';
 import type { SendContent } from 'zhin.js';
 import { BJ_PREFIX, formatHand, handValue, isBlackjack, TARGET } from './engine.js';
 import type { BjSessionRow } from './models.js';

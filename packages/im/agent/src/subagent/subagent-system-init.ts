@@ -1,4 +1,4 @@
-import { formatCompact, Logger } from '@zhin.js/logger';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import type { AgentTool, ModelRegistry, AIProvider } from '@zhin.js/ai';
 import { getAgentDispatcher } from '../orchestrator/agent-dispatcher.js';
@@ -7,7 +7,7 @@ import type { ZhinAgentEventEmitter } from '../event/event-emitter.js';
 import type { ZhinAgentConfig } from '../config/index.js';
 import { SubagentSystem } from './subagent-system.js';
 import type { SubagentCompletePayload } from './subagent-runtime.js';
-const logger = new Logger(null, 'ZhinAgent');
+const logger = getLogger('ZhinAgent');
 
 export interface SubagentSystemInitOptions {
   provider: AIProvider;

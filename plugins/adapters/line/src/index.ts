@@ -1,44 +1,53 @@
-/**
- * LINE Messaging API 适配器入口：类型扩展、导出、注册
- */
-import { usePlugin, type Plugin } from 'zhin.js';
-import { LineAdapter } from './adapter.js';
-import { setLineAgentDeps } from './line-agent-deps.js';
+export {
+  formatInboundContent,
+  formatOutboundMessages,
+  generateMessageId,
+  isMessageEvent,
+  isPostbackEvent,
+  isValidLineRecipientId,
+  normalizeWebhookPath,
+  readTextBody,
+  resolveChannel,
+  resolveLineConfig,
+  verifySignature,
+  type LineAdapterConfig,
+  type LineApiResponse,
+  type LineChannel,
+  type LineEvent,
+  type LineFollowEvent,
+  type LineJoinEvent,
+  type LineLeaveEvent,
+  type LineMessage,
+  type LineMessageEvent,
+  type LinePostbackEvent,
+  type LinePushRequest,
+  type LineReplyMessage,
+  type LineReplyRequest,
+  type LineSource,
+  type LineUnfollowEvent,
+  type LineUser,
+  type LineWebhookBody,
+  type LineWireSegment,
+  type ResolvedLineConfig,
+} from './protocol.js';
 
-declare module 'zhin.js' {
-  namespace Plugin {
-    interface Contexts {
-      router: import('@zhin.js/host-router').Router;
-    }
-  }
-  interface Adapters {
-    line: LineAdapter;
-  }
-}
+export {
+  LineEndpoint,
+  type LineEndpointOptions,
+  type LineFetch,
+} from './endpoint.js';
 
-export * from './types.js';
-export { LineEndpoint } from './endpoint.js';
-export { LineAdapter } from './adapter.js';
+export {
+  registerLineWebhookRoutes,
+  handleLineWebhookRequest,
+  type LineWebhookHandler,
+} from './webhook.js';
 
-const plugin = usePlugin();
-const { provide, useContext } = plugin;
-
-useContext('router', (router: any) => {
-  provide({
-    name: 'line',
-    description: 'LINE Messaging API Endpoint Adapter',
-    mounted: async (p: Plugin) => {
-      const adapter = new LineAdapter(p, router);
-      await adapter.start();
-      return adapter;
-    },
-    dispose: async (adapter: LineAdapter) => {
-      await adapter.stop();
-    },
-  });
-});
-
-useContext('tool', 'line', (_toolService, lineAdapter: LineAdapter) => {
-  setLineAgentDeps({ getAdapter: () => lineAdapter });
-  return () => {};
-});
+export {
+  getLineAgentDeps,
+  getLineApiConfig,
+  registerLineAgentEndpoint,
+  setLineAgentDeps,
+  type LineAgentDeps,
+  type LineAgentEndpoint,
+} from './line-agent-deps.js';

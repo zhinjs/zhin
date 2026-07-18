@@ -12,14 +12,26 @@ interface NewPluginOptions {
   type?: 'normal' | 'service' | 'adapter';
 }
 
-/** my-cool-plugin → myCoolPlugin，用作 Adapters / Contexts 键与 provide name */
-function toCamelCaseId(pluginName: string): string {
-  return pluginName.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+type PluginKind = 'normal' | 'service' | 'adapter';
+
+/**
+ * Plugin identity 约束（见 packages/im/plugin-runtime/src/plugin.ts 的 definePlugin
+ * 与 packages/im/plugin-runtime/src/identity.ts）：小写字母开头，仅小写字母/数字/横线。
+ */
+const PLUGIN_NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
+const PLUGIN_NAME_HINT = '插件名称需匹配 /^[a-z][a-z0-9-]*$/（小写字母开头，仅小写字母、数字、横线）';
+
+/** my-cool-plugin → MyCoolPlugin，用作 displayName / 类型名 */
+function toCapitalizedName(pluginName: string): string {
+  return (
+    pluginName.charAt(0).toUpperCase() +
+    pluginName.slice(1).replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())
+  );
 }
 
 /**
- * 在本仓库等「含 packages/zhin 的 pnpm workspace」根执行 zhin new 时，对齐 workspace 协议依赖。
- * 仅有 pnpm-workspace.yaml 但无 packages/zhin 时不启用，避免误写 workspace:* 导致 pnpm install 失败。
+ * 在本仓库等「含 packages/im/zhin 的 pnpm workspace」根执行 zhin new 时，对齐 workspace 协议依赖。
+ * 仅有 pnpm-workspace.yaml 但无 packages/im/zhin 时不启用，避免误写 workspace:* 导致 pnpm install 失败。
  */
 function tryZhinWorkspaceDevDependencies(): Record<string, string> | null {
   const root = process.cwd();
@@ -41,9 +53,10 @@ function tryZhinWorkspaceDevDependencies(): Record<string, string> | null {
     return {
       'zhin.js': 'workspace:*',
       '@zhin.js/cli': 'workspace:*',
-      '@zhin.js/client': 'workspace:*',
-      '@zhin.js/host-api': 'workspace:*',
-      '@zhin.js/satori': 'workspace:*',
+      '@zhin.js/plugin-runtime': 'workspace:*',
+      '@zhin.js/command': 'workspace:*',
+      '@zhin.js/adapter': 'workspace:*',
+      '@zhin.js/core': 'workspace:*',
     };
   } catch {
     return null;
@@ -51,8 +64,8 @@ function tryZhinWorkspaceDevDependencies(): Record<string, string> | null {
 }
 
 export const newCommand = new Command('new')
-  .description('创建插件包模板')
-  .argument('[plugin-name]', '插件名称（如: my-plugin）')
+  .description('创建约定式插件包模板（Plugin Runtime）')
+  .argument('[plugin-name]', '插件名称（如: my-plugin，需匹配 /^[a-z][a-z0-9-]*$/）')
   .option('--is-official', '是否为官方插件', false)
   .option('--skip-install', '跳过依赖安装', false)
   .option('--type <type>', '插件类型 (normal|service|adapter)')
@@ -70,8 +83,8 @@ export const newCommand = new Command('new')
               if (!input.trim()) {
                 return '插件名称不能为空';
               }
-              if (!/^[a-zA-Z0-9-_]+$/.test(input)) {
-                return '插件名称只能包含字母、数字、横线和下划线';
+              if (!PLUGIN_NAME_PATTERN.test(input)) {
+                return PLUGIN_NAME_HINT;
               }
               return true;
             }
@@ -80,9 +93,14 @@ export const newCommand = new Command('new')
         name = inputName;
       }
 
+      if (!PLUGIN_NAME_PATTERN.test(name)) {
+        logger.error(PLUGIN_NAME_HINT);
+        process.exit(1);
+      }
+
       // 确定插件目录
       const pluginDir = path.resolve(process.cwd(), 'plugins', name);
-      
+
       // 检查目录是否已存在
       if (fs.existsSync(pluginDir)) {
         logger.error(`插件目录已存在: ${pluginDir}`);
@@ -90,7 +108,7 @@ export const newCommand = new Command('new')
       }
 
       // 询问插件类型（未传 --type 时）
-      let resolvedType: 'normal' | 'service' | 'adapter' = options.type ?? 'normal';
+      let resolvedType: PluginKind = options.type ?? 'normal';
       if (!options.type) {
         const { type } = await inquirer.prompt([
           {
@@ -111,31 +129,32 @@ export const newCommand = new Command('new')
 
       const typeLabel = options.type === 'service' ? '服务' : options.type === 'adapter' ? '适配器' : '插件';
       logger.info(formatCompact( { cmd: 'new', op: 'create', type: typeLabel, name }));
-      
+
       // 创建插件包结构
       await createPluginPackage(pluginDir, name, options);
-      
-      // 自动添加到 app/package.json
+
+      // 自动添加到 app/package.json 并提示挂载方式
       await addPluginToApp(name, options.isOfficial);
-      
+
       const packageName = options.isOfficial ? `@zhin.js/${name}` : `zhin.js-${name}`;
-      
+
       logger.success(`✓ 插件包 ${name} 创建成功！`);
       logger.log('');
       logger.log('📝 下一步操作：');
-      logger.log(`  1. 在 zhin.config.yml 的 plugins 列表中添加 "${packageName}"`);
-      logger.log(`  2. pnpm dev  # 开发模式（热重载，自动加载插件）`);
+      logger.log('  1. 在 app 的 package.json 的 "zhin.plugins" 数组中添加：');
+      logger.log(`     { "package": "${packageName}", "instanceKey": "${name}" }`);
+      logger.log('  2. pnpm dev  # 即 zhin runtime start（约定式插件运行时）');
       logger.log('');
       logger.log('📦 发布到 npm（在项目根）：');
       logger.log(`  pnpm exec zhin pub ${name}`);
       logger.log(`  # 或嵌套目录: pnpm exec zhin pub adapters/<适配器名>`);
       logger.log('');
       logger.log('🤖 AI 技能：可编辑 plugins/' + name + '/agent/skills/' + name + '.md（随 npm 包发布）');
-      
+
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : undefined;
-      
+
       logger.error(`创建插件失败: ${errorMessage}`);
       if (errorStack && process.env.DEBUG) {
         logger.error(errorStack);
@@ -145,40 +164,37 @@ export const newCommand = new Command('new')
   });
 
 async function createPluginPackage(pluginDir: string, pluginName: string, options: NewPluginOptions) {
-  const kind = options.type ?? 'normal';
-  const capitalizedName =
-    pluginName.charAt(0).toUpperCase() +
-    pluginName.slice(1).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
-  const camelId = toCamelCaseId(pluginName);
-  const serviceCtxName = `${camelId}Service`;
+  const kind: PluginKind = options.type ?? 'normal';
+  const capitalizedName = toCapitalizedName(pluginName);
   const packageName = options.isOfficial ? `@zhin.js/${pluginName}` : `zhin.js-${pluginName}`;
-  const withClient = kind !== 'service';
 
   await fs.ensureDir(pluginDir);
-  await fs.ensureDir(path.join(pluginDir, 'src'));
-  if (withClient) {
-    await fs.ensureDir(path.join(pluginDir, 'client'));
-    await fs.ensureDir(path.join(pluginDir, 'dist'));
-  }
-  await fs.ensureDir(path.join(pluginDir, 'lib'));
   await fs.ensureDir(path.join(pluginDir, 'tests'));
   await fs.ensureDir(path.join(pluginDir, 'agent', 'skills'));
+  if (kind === 'normal') {
+    await fs.ensureDir(path.join(pluginDir, 'commands', `${pluginName}-echo`));
+  }
+  if (kind === 'adapter') {
+    await fs.ensureDir(path.join(pluginDir, 'adapters'));
+  }
 
   const zhinStack =
     tryZhinWorkspaceDevDependencies() ??
     ({
       'zhin.js': 'latest',
       '@zhin.js/cli': 'latest',
-      '@zhin.js/client': 'latest',
-      '@zhin.js/host-api': 'latest',
+      '@zhin.js/plugin-runtime': 'latest',
+      '@zhin.js/command': 'latest',
+      '@zhin.js/adapter': 'latest',
+      '@zhin.js/core': 'latest',
     } satisfies Record<string, string>);
 
   const description =
     kind === 'adapter'
-      ? `Zhin.js ${capitalizedName} 适配器`
+      ? `Zhin.js ${capitalizedName} 适配器（Plugin Runtime）`
       : kind === 'service'
-        ? `Zhin.js ${capitalizedName} 服务`
-        : `Zhin.js ${capitalizedName} 插件`;
+        ? `Zhin.js ${capitalizedName} 服务（Plugin Runtime）`
+        : `Zhin.js ${capitalizedName} 插件（Plugin Runtime）`;
 
   const keywords =
     kind === 'adapter'
@@ -187,158 +203,121 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
         ? (['zhin.js', 'service', pluginName] as string[])
         : (['zhin.js', 'plugin', pluginName] as string[]);
 
-  const exportsMap: Record<string, unknown> = {
-    '.': {
-      types: './lib/index.d.ts',
-      development: './src/index.ts',
-      import: './lib/index.js',
-    },
-    './package.json': './package.json',
+  // 运行时真实 import 的包放进 dependencies；zhin.js / cli 仅开发期需要
+  const dependencies: Record<string, string> = {
+    '@zhin.js/plugin-runtime': zhinStack['@zhin.js/plugin-runtime'],
   };
-  if (withClient) {
-    exportsMap['./client'] = { import: './dist/index.js' };
-  }
-
-  const files = ['src', 'lib', 'agent', 'plugin.yml', 'README.md', 'CHANGELOG.md'];
-  if (withClient) files.push('client', 'dist');
-
-  const peerDependencies: Record<string, string> = { 'zhin.js': '>=1.0.0' };
-  const peerDependenciesMeta: Record<string, { optional: boolean }> = {};
-  if (withClient) {
-    peerDependencies['@zhin.js/client'] = '>=1.0.0';
-    peerDependencies['@zhin.js/host-api'] = '>=1.0.0';
-    peerDependenciesMeta['@zhin.js/host-api'] = { optional: true };
+  if (kind === 'normal') {
+    dependencies['@zhin.js/command'] = zhinStack['@zhin.js/command'];
   }
   if (kind === 'adapter') {
-    peerDependencies['@zhin.js/host-router'] = '>=1.0.0';
-    peerDependenciesMeta['@zhin.js/host-router'] = { optional: true };
+    dependencies['@zhin.js/adapter'] = zhinStack['@zhin.js/adapter'];
+    dependencies['@zhin.js/core'] = zhinStack['@zhin.js/core'];
   }
-
-  peerDependencies['@zhin.js/agent'] = '>=1.0.0';
-  peerDependencies['zod'] = '>=3.0.0';
-  peerDependenciesMeta['@zhin.js/agent'] = { optional: true };
-  peerDependenciesMeta['zod'] = { optional: true };
 
   const devDependencies: Record<string, string> = {
     '@types/node': 'latest',
     typescript: 'latest',
-    ...zhinStack,
-    '@zhin.js/agent': zhinStack['zhin.js'] === 'workspace:*' ? 'workspace:*' : 'latest',
-    zod: 'latest',
-    '@zhin.js/satori': zhinStack['zhin.js'] === 'workspace:*' ? 'workspace:*' : 'latest',
     vitest: 'latest',
-    '@vitest/coverage-v8': 'latest',
     rimraf: 'latest',
+    'zhin.js': zhinStack['zhin.js'],
+    '@zhin.js/cli': zhinStack['@zhin.js/cli'],
   };
-  if (withClient) {
-    Object.assign(devDependencies, {
-      '@types/react': 'latest',
-      '@types/react-dom': 'latest',
-      react: 'latest',
-      'react-dom': 'latest',
-    });
-  }
 
   const scripts: Record<string, string> = {
-    build: 'zhin build',
-    dev: 'tsc --watch',
-    clean: withClient ? 'rimraf lib dist' : 'rimraf lib',
+    build: 'tsc',
+    clean: 'rimraf lib',
     test: 'vitest run',
     'test:watch': 'vitest',
-    'test:coverage': 'vitest run --coverage',
-    prepublishOnly: 'pnpm build',
+    // 带 agent/ 的插件发布前必须构建（见 pnpm check:plugin-agent-publish）
+    prepublishOnly: 'pnpm run build',
   };
-  if (withClient) {
-    scripts['build:client'] = 'zhin build';
-    scripts['dev:client'] = 'zhin build --watch';
-  }
+
+  const files = ['plugin.ts', 'schema.json'];
+  if (kind === 'normal') files.push('commands');
+  if (kind === 'adapter') files.push('adapters');
+  files.push('src', 'agent', 'README.md', 'CHANGELOG.md');
+
+  const features: Array<{ package: string; api: string }> = [];
+  if (kind === 'normal') features.push({ package: '@zhin.js/command', api: '^1.0.0' });
+  if (kind === 'adapter') features.push({ package: '@zhin.js/adapter', api: '^1.0.0' });
 
   const packageJson: Record<string, unknown> = {
     name: packageName,
     version: '0.1.0',
     description,
     type: 'module',
-    main: './lib/index.js',
-    types: './lib/index.d.ts',
-    exports: exportsMap,
+    exports: {
+      './package.json': './package.json',
+    },
     files,
     scripts,
     keywords,
     author: '',
     license: 'MIT',
-    peerDependencies,
+    dependencies,
     devDependencies,
     publishConfig: { access: 'public', registry: 'https://registry.npmjs.org' },
+    engines: { node: '^20.19.0 || >=22.12.0' },
+    zhin: {
+      protocol: 1,
+      type: 'plugin',
+      entry: './plugin.ts',
+      engine: '^1.0.0',
+      runtime: 'trusted',
+      features,
+      plugins: [],
+    },
   };
-  if (Object.keys(peerDependenciesMeta).length > 0) {
-    packageJson.peerDependenciesMeta = peerDependenciesMeta;
-  }
 
   await fs.writeJson(path.join(pluginDir, 'package.json'), packageJson, { spaces: 2 });
 
-  const pluginYmlDesc =
-    kind === 'adapter'
-      ? `${capitalizedName} 适配器（zhin new --type adapter）`
-      : kind === 'service'
-        ? `${capitalizedName} 服务（zhin new --type service）`
-        : `${capitalizedName} 插件（zhin new）`;
-  const pluginYml = `name: ${pluginName}
-description: ${pluginYmlDesc}，请按实际能力修改
-version: 0.1.0
-`;
-  await fs.writeFile(path.join(pluginDir, 'plugin.yml'), pluginYml, 'utf8');
+  // schema.json：plugins.<instanceKey> 配置的 JSON Schema；适配器带 name 字段
+  const schemaJson: Record<string, unknown> = {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    type: 'object',
+    additionalProperties: false,
+    properties:
+      kind === 'adapter'
+        ? {
+            name: {
+              type: 'string',
+              default: `${pluginName}-bot`,
+              description: 'Endpoint 名称',
+            },
+          }
+        : {},
+  };
+  await fs.writeJson(path.join(pluginDir, 'schema.json'), schemaJson, { spaces: 2 });
 
-  // 创建 tsconfig.json (服务端主配置)
+  // tsconfig.json：约定目录（commands/adapters/middlewares）由运行时直接加载，
+  // 无需 tsc 编译产物，但纳入 include 以便类型检查。
   const tsConfig = {
-    "compilerOptions": {
-      "target": "ES2022",
-      "module": "ESNext",
-      "moduleResolution": "bundler",
-      "outDir": "./lib",
-      "rootDir": "./src",
-      "strict": true,
-      "esModuleInterop": true,
-      "skipLibCheck": true,
-      "forceConsistentCasingInFileNames": true,
-      "resolveJsonModule": true,
-      "isolatedModules": true,
-      "allowSyntheticDefaultImports": true,
-      "experimentalDecorators": true,
-      "emitDecoratorMetadata": true,
-      "declaration": true,
-      "declarationMap": true,
-      "sourceMap": true,
-      "verbatimModuleSyntax": false,
-      "jsx": "react-jsx",
-      "jsxImportSource": "zhin.js",
-      "types": ["node"]
+    compilerOptions: {
+      target: 'ES2022',
+      module: 'ESNext',
+      moduleResolution: 'bundler',
+      outDir: './lib',
+      strict: true,
+      esModuleInterop: true,
+      skipLibCheck: true,
+      forceConsistentCasingInFileNames: true,
+      resolveJsonModule: true,
+      isolatedModules: true,
+      declaration: true,
+      declarationMap: true,
+      sourceMap: true,
+      types: ['node'],
     },
-    "include": ["src/**/*", "agent/**/*"],
-    "exclude": ["lib", "node_modules", "client"]
-  } 
-  ;
-  
+    include: [
+      'src/**/*',
+      'plugin.ts',
+      ...(kind === 'normal' ? ['commands/**/*'] : []),
+      ...(kind === 'adapter' ? ['adapters/**/*'] : []),
+    ],
+    exclude: ['lib', 'node_modules', 'tests'],
+  };
   await fs.writeJson(path.join(pluginDir, 'tsconfig.json'), tsConfig, { spaces: 2 });
-
-  if (withClient) {
-    const clientTsConfig = {
-      compilerOptions: {
-        outDir: '../dist',
-        baseUrl: '.',
-        declaration: true,
-        module: 'ESNext',
-        moduleResolution: 'bundler',
-        target: 'ES2022',
-        jsx: 'react-jsx',
-        declarationMap: true,
-        sourceMap: true,
-        skipLibCheck: true,
-        noEmit: false,
-      },
-      include: ['./**/*'],
-    };
-    await fs.writeJson(path.join(pluginDir, 'client', 'tsconfig.json'), clientTsConfig, { spaces: 2 });
-  }
 
   // Vitest：与 tests/ 目录配套
   const vitestConfig = `import { defineConfig } from 'vitest/config';
@@ -352,309 +331,198 @@ export default defineConfig({
 `;
   await fs.writeFile(path.join(pluginDir, 'vitest.config.ts'), vitestConfig, 'utf8');
 
+  // plugin.ts：约定式插件入口
   if (kind === 'service') {
-    const serviceSrc = `export interface ${capitalizedName}Service {
-  /** 占位方法：替换为你的领域 API */
-  ping(): string;
-}
+    const pluginTs = `import { definePlugin, databaseHostToken } from '@zhin.js/plugin-runtime';
 
-export function create${capitalizedName}Service(): ${capitalizedName}Service {
-  return {
-    ping() {
-      return 'pong';
-    },
-  };
-}
-`;
-    await fs.writeFile(path.join(pluginDir, 'src', 'service.ts'), serviceSrc, 'utf8');
-
-    const indexSvc = `import { formatCompact, onDispose, type Context, usePlugin } from 'zhin.js';
-import { create${capitalizedName}Service } from './service.js';
-
-declare module 'zhin.js' {
-  namespace Plugin {
-    interface Contexts {
-      ${serviceCtxName}: import('./service.js').${capitalizedName}Service;
+/**
+ * 服务型约定插件：setup(context) 在插件装配时执行。
+ * 宿主资源经 context.resources 按需取用：
+ * - databaseHostToken：结构化存储（db.define / select / insert ...）
+ * - scheduleHostToken / outboundHostToken 等同理（参考 plugins/features/process-monitor、plugins/utils/rss）
+ * 清理回调统一注册到 context.lifecycle.add(dispose)。
+ */
+export default definePlugin({
+  name: '${pluginName}',
+  metadata: {
+    displayName: '${capitalizedName}',
+  },
+  setup(context) {
+    if (context.resources.has(databaseHostToken)) {
+      // const db = context.resources.use(databaseHostToken);
+      // db.define('${pluginName}_kv', {
+      //   key: { type: 'text', nullable: false },
+      //   value: { type: 'text', default: '' },
+      // });
     }
-  }
-}
 
-const { provide, logger } = usePlugin();
-
-provide({
-  name: '${serviceCtxName}',
-  description: '${capitalizedName} 服务（其它插件通过 root.inject(\"${serviceCtxName}\") 使用）',
-  value: create${capitalizedName}Service(),
-} as unknown as Context<'${serviceCtxName}'>);
-
-onDispose(() => {
-  logger.info('${capitalizedName} 服务插件已销毁');
+    // TODO: 启动你的服务（定时器、连接、后台任务……）
+    context.lifecycle.add(() => {
+      // TODO: 插件卸载 / 热重载时释放资源
+    });
+  },
 });
-
-logger.info('${capitalizedName} 服务已加载');
-
-export { create${capitalizedName}Service } from './service.js';
-export type { ${capitalizedName}Service } from './service.js';
 `;
-    await fs.writeFile(path.join(pluginDir, 'src', 'index.ts'), indexSvc, 'utf8');
+    await fs.writeFile(path.join(pluginDir, 'plugin.ts'), pluginTs, 'utf8');
   } else if (kind === 'adapter') {
-    const endpointSrc = `import type { Endpoint, Message, SendOptions } from 'zhin.js';
-import type { ${capitalizedName}Adapter } from './adapter.js';
+    const pluginTs = `import { definePlugin } from '@zhin.js/plugin-runtime';
 
-export interface ${capitalizedName}EndpointConfig {
-  /** 与 zhin.config.yml 中 endpoints[].name 一致 */
+/**
+ * 适配器约定插件入口：适配器定义在 adapters/ 目录（defineAdapter），
+ * Endpoint 实例配置来自 app 配置 plugins.<instanceKey>（见 schema.json）。
+ */
+export default definePlugin({
+  name: '${pluginName}',
+  metadata: {
+    displayName: '${capitalizedName} Adapter',
+  },
+});
+`;
+    await fs.writeFile(path.join(pluginDir, 'plugin.ts'), pluginTs, 'utf8');
+  } else {
+    const pluginTs = `import { definePlugin } from '@zhin.js/plugin-runtime';
+
+/**
+ * 约定式插件入口（Plugin Runtime）：
+ * - commands/ 下的 defineCommand 模块即命令（文件名即命令名，支持 [param:type] 动态段目录）
+ * - 如需初始化 / 清理逻辑，添加 setup(context)（参考 zhin new --type service）
+ */
+export default definePlugin({
+  name: '${pluginName}',
+  metadata: {
+    displayName: '${capitalizedName}',
+  },
+});
+`;
+    await fs.writeFile(path.join(pluginDir, 'plugin.ts'), pluginTs, 'utf8');
+  }
+
+  if (kind === 'normal') {
+    const commandTs = `import { defineCommand } from '@zhin.js/command';
+
+export default defineCommand({
+  description: '${capitalizedName} 示例命令',
+  execute() {
+    return '${capitalizedName} 运行中！';
+  },
+});
+`;
+    await fs.writeFile(path.join(pluginDir, 'commands', `${pluginName}.ts`), commandTs, 'utf8');
+
+    const echoCommandTs = `import { defineCommand } from '@zhin.js/command';
+
+/**
+ * 动态段命令：目录名 [text:string] 声明一个 string 参数。
+ * 聊天中发送 \`${pluginName}-echo 你好\` 即可触发，params.text 为「你好」。
+ */
+export default defineCommand({
+  description: '回显一段文本（动态段示例）',
+  execute({ params }) {
+    return \`你说：\${String(params.text ?? '')}\`;
+  },
+});
+`;
+    await fs.writeFile(
+      path.join(pluginDir, 'commands', `${pluginName}-echo`, '[text:string].ts'),
+      echoCommandTs,
+      'utf8',
+    );
+  }
+
+  if (kind === 'adapter') {
+    const adapterTs = `/**
+ * Convention entry: discover \`adapters/${pluginName}.ts\` → defineAdapter.
+ * 最小形态参考 plugins/adapters/sandbox 与 plugins/adapters/email。
+ */
+import { defineAdapter, type EndpointInstance } from '@zhin.js/adapter';
+import { messageGatewayToken } from '@zhin.js/core/runtime';
+
+export interface ${capitalizedName}AdapterConfig {
+  /** Endpoint 名称（对应 schema.json 的 name 字段） */
   name: string;
   /** 平台凭证等，按实际协议扩展 */
   token?: string;
 }
 
-export class ${capitalizedName}Endpoint implements Endpoint<${capitalizedName}EndpointConfig, Record<string, never>> {
-  $id: string;
-  $config: ${capitalizedName}EndpointConfig;
-  $connected = false;
+export default defineAdapter<${capitalizedName}AdapterConfig, string>({
+  capabilities: ['inbound', 'outbound'],
+  create(context) {
+    const gateway = context.use(messageGatewayToken);
+    let opened = false;
 
-  constructor(
-    private readonly adapter: ${capitalizedName}Adapter,
-    config: ${capitalizedName}EndpointConfig,
-  ) {
-    this.$config = config;
-    this.$id = config.name;
-  }
+    /** 入站：平台事件 → 标准消息投递（仅在 open() 之后调用） */
+    const admit = async (target: string, content: string, sender?: string): Promise<void> => {
+      if (!opened) return;
+      await gateway.receive({
+        adapter: context.id,
+        target,
+        content,
+        sender,
+      });
+    };
 
-  $formatMessage(_event: Record<string, never>): Message {
-    throw new Error('[${camelId}] 请实现 $formatMessage：将平台事件转为标准 Message');
-  }
-
-  async $connect(): Promise<void> {
-    this.$connected = true;
-    this.adapter.logger.info(\`[${camelId}] endpoint \${this.$id} 已连接（占位）\`);
-  }
-
-  async $disconnect(): Promise<void> {
-    this.$connected = false;
-  }
-
-  async $recallMessage(_id: string): Promise<void> {}
-
-  async $sendMessage(options: SendOptions): Promise<string> {
-    this.adapter.logger.debug(\`[${camelId}] stub send: \${JSON.stringify(options)}\`);
-    return 'stub-message-id';
-  }
-}
-`;
-    await fs.writeFile(path.join(pluginDir, 'src', 'endpoint.ts'), endpointSrc, 'utf8');
-
-    const adapterSrc = `import { formatCompact, Adapter, type Plugin } from 'zhin.js';
-import { ${capitalizedName}Endpoint } from './endpoint.js';
-import type { ${capitalizedName}EndpointConfig } from './endpoint.js';
-
-export class ${capitalizedName}Adapter extends Adapter<${capitalizedName}Endpoint> {
-  constructor(plugin: Plugin, endpointConfigs: ${capitalizedName}EndpointConfig[]) {
-    super(plugin, '${camelId}' as keyof Plugin.Contexts, endpointConfigs);
-  }
-
-  createEndpoint(config: ${capitalizedName}EndpointConfig): ${capitalizedName}Endpoint {
-    return new ${capitalizedName}Endpoint(this, config);
-  }
-}
-`;
-    await fs.writeFile(path.join(pluginDir, 'src', 'adapter.ts'), adapterSrc, 'utf8');
-
-    const indexAd = `import { formatCompact, onDispose, type Context, type Plugin, usePlugin } from 'zhin.js';
-import path from 'node:path';
-import { PageManager } from '@zhin.js/host-api';
-import { ${capitalizedName}Adapter } from './adapter.js';
-import type { ${capitalizedName}EndpointConfig } from './endpoint.js';
-
-declare module 'zhin.js' {
-  interface Adapters {
-    ${camelId}: ${capitalizedName}Adapter;
-  }
-}
-
-const plugin = usePlugin();
-const { provide, useContext, logger } = plugin;
-
-function loadEndpointConfigsFromApp(): ${capitalizedName}EndpointConfig[] {
-  const cfg = plugin.root.inject('config') as { getPrimary?: () => unknown } | undefined;
-  const doc = cfg?.getPrimary?.() as { endpoints?: ${capitalizedName}EndpointConfig[] } | undefined;
-  const endpoints = doc?.endpoints ?? [];
-  return endpoints.filter((b) => (b as { context?: string }).context === '${camelId}');
-}
-
-provide({
-  name: '${camelId}',
-  description: '${capitalizedName} 适配器（占位，请接入真实协议）',
-  mounted: async (p: Plugin) => {
-    const configs = loadEndpointConfigsFromApp();
-    if (configs.length === 0) {
-      p.logger.warn(
-        '[${camelId}] 未在 zhin.config.yml 的 endpoints 中找到 context: \"${camelId}\" 的项，将以 0 个 Endpoint 启动',
-      );
-    }
-    const adapter = new ${capitalizedName}Adapter(p, configs);
-    await adapter.start();
-    return adapter;
+    const endpoint: EndpointInstance<string> = {
+      async start() {
+        // TODO: 建立平台连接（WebSocket / Webhook / 轮询），
+        // 收到平台消息后调用 admit(target, content, sender) 投递入站。
+        void admit;
+      },
+      open() {
+        opened = true;
+      },
+      close() {
+        opened = false;
+      },
+      async stop() {
+        opened = false;
+        // TODO: 释放平台连接（需幂等）
+      },
+      async send({ target, payload }) {
+        // TODO: 将 payload 投递到平台 target，返回平台侧消息 ID
+        return \`stub-message-id:\${target}:\${typeof payload}\`;
+      },
+    };
+    return endpoint;
   },
-  dispose: async (adapter: ${capitalizedName}Adapter) => {
-    await adapter.stop();
-  },
-} as unknown as Context<'${camelId}'>);
-
-useContext('web', (pageManager) => {
-  pageManager.addEntry({
-    id: '${pluginName}',
-    development: path.resolve(import.meta.dirname, '../client/index.tsx'),
-    production: path.resolve(import.meta.dirname, '../dist/index.js'),
-    meta: { name: '${capitalizedName}' },
-  });
 });
-
-onDispose(() => {
-  logger.info('${capitalizedName} 适配器插件已销毁');
-});
-
-logger.info('${capitalizedName} 适配器插件已加载');
-
-export { ${capitalizedName}Adapter } from './adapter.js';
-export { ${capitalizedName}Endpoint } from './endpoint.js';
-export type { ${capitalizedName}EndpointConfig } from './endpoint.js';
 `;
-    await fs.writeFile(path.join(pluginDir, 'src', 'index.ts'), indexAd, 'utf8');
-  } else {
-    const indexNormal = `import { formatCompact, MessageCommand, onDispose, segment, useContext, usePlugin, ZhinTool } from 'zhin.js';
-import path from 'node:path';
-
-import { buildWelcomeCard } from './cards/welcome-card.js';
-
-const { addCommand, addTool, logger } = usePlugin();
-
-addCommand(
-  new MessageCommand('${pluginName}')
-    .desc('${capitalizedName} 插件命令')
-    .action(() => '${capitalizedName} 运行中！')
-);
-
-addCommand(
-  new MessageCommand('${pluginName}-card')
-    .desc('示例欢迎卡片（@zhin.js/satori JSX）')
-    .action(() => segment.html({ html: buildWelcomeCard('World'), width: 540 }))
-);
-
-addTool(
-  new ZhinTool('${pluginName}_greet')
-    .desc('发送问候消息')
-    .tag('${pluginName}')
-    .param('name', { type: 'string', description: '要问候的名字' })
-    .execute(async ({ name }) => {
-      const greeting = name ? \`你好，\${name}！\` : '你好！';
-      return { success: true, message: greeting };
-    })
-);
-
-useContext('web', (pageManager) => {
-  pageManager.addEntry({
-    id: '${pluginName}',
-    development: path.resolve(import.meta.dirname, '../client/index.tsx'),
-    production: path.resolve(import.meta.dirname, '../dist/index.js'),
-    meta: { name: '${capitalizedName}' },
-  });
-});
-
-onDispose(() => {
-  logger.info('${capitalizedName} 插件已销毁');
-});
-
-logger.info('${capitalizedName} 插件已加载');
-`;
-    await fs.writeFile(path.join(pluginDir, 'src', 'index.ts'), indexNormal, 'utf8');
-
-    await fs.ensureDir(path.join(pluginDir, 'src', 'cards'));
-    const welcomeCardSrc = `/** @jsxImportSource @zhin.js/satori */
-import {
-  Card,
-  CardHeader,
-  StatChip,
-  Row,
-  wrapCardHtml,
-  DEFAULT_CARD_THEME,
-} from '@zhin.js/satori';
-
-export function buildWelcomeCard(name: string): string {
-  const body = (
-    <Card>
-      <CardHeader title={\`你好，\${name}\`} meta="${capitalizedName}" />
-      <Row gap={10}>
-        <StatChip label="状态" value="OK" accent={DEFAULT_CARD_THEME.accentMem} />
-      </Row>
-    </Card>
-  );
-  return wrapCardHtml(body, DEFAULT_CARD_THEME.canvas);
-}
-`;
-    await fs.writeFile(path.join(pluginDir, 'src', 'cards', 'welcome-card.tsx'), welcomeCardSrc, 'utf8');
-  }
-
-  if (withClient) {
-    const clientContent = `import type { PluginRegisterHostApi } from '@zhin.js/contract';
-import ${capitalizedName}Page from './pages/${capitalizedName}Page';
-
-export function register(api: PluginRegisterHostApi) {
-  api.addRoute({
-    path: '/console/plugins/${pluginName}',
-    name: '${capitalizedName}',
-    element: api.React.createElement(${capitalizedName}Page),
-  });
-  api.addTool({ id: '${pluginName}', name: '${capitalizedName}', path: '/console/plugins/${pluginName}' });
-}
-
-export { ${capitalizedName}Page };
-`;
-    await fs.writeFile(path.join(pluginDir, 'client', 'index.tsx'), clientContent, 'utf8');
-
-    await fs.ensureDir(path.join(pluginDir, 'client', 'pages'));
-    const pageContent = `import { useEffect } from 'react';
-
-export default function ${capitalizedName}Page() {
-  useEffect(() => {
-    console.log('${capitalizedName} 页面已挂载');
-  }, []);
-
-  return (
-    <div style={{ padding: 24 }}>
-      <h1 style={{ fontSize: 20, marginBottom: 16 }}>${capitalizedName}</h1>
-      <p style={{ color: '#666' }}>控制台插件页占位；可按需接入 @zhin.js/client 与宿主样式。</p>
-    </div>
-  );
-}
-`;
-    await fs.writeFile(path.join(pluginDir, 'client', 'pages', `${capitalizedName}Page.tsx`), pageContent, 'utf8');
+    await fs.writeFile(path.join(pluginDir, 'adapters', `${pluginName}.ts`), adapterTs, 'utf8');
   }
 
   const readmeIntro =
     kind === 'adapter'
-      ? `${capitalizedName} 适配器（\`zhin new --type adapter\` 生成），含占位 Endpoint / Adapter 与控制台入口。`
+      ? `${capitalizedName} 适配器（\`zhin new --type adapter\` 生成）：约定式 Plugin Runtime 形态，\`adapters/\` 下的 \`defineAdapter\` 模块即适配器，Endpoint 骨架含 start/open/close/stop/send，入站经 \`messageGatewayToken\` 投递。`
       : kind === 'service'
-        ? `${capitalizedName} 服务插件（\`zhin new --type service\`），通过 \`provide\` 注册 \`${serviceCtxName}\` 上下文。`
-        : `${capitalizedName} 普通插件（\`zhin new\` / \`--type normal\`），含命令、工具与控制台页示例。`;
+        ? `${capitalizedName} 服务插件（\`zhin new --type service\` 生成）：\`plugin.ts\` 的 \`setup(context)\` 负责初始化与清理，宿主资源（database/schedule/outbound）经 \`context.resources\` 按需取用。`
+        : `${capitalizedName} 普通插件（\`zhin new\` / \`--type normal\` 生成）：\`commands/\` 下的 \`defineCommand\` 模块即命令，含动态段 \`[text:string]\` 示例。`;
 
   const readmeUse =
     kind === 'adapter'
-      ? `在 \`zhin.config.yml\` 的 \`plugins\` 中加入 \`${packageName}\`，并配置 endpoints（\`context\` 必须为适配器键 \`${camelId}\`）：
+      ? `在 app 的 \`package.json\` 的 \`zhin.plugins\` 数组中添加（\`instanceKey\` 即实例键，可挂载多实例）：
+
+\`\`\`json
+{
+  "zhin": {
+    "plugins": [
+      { "package": "${packageName}", "instanceKey": "${pluginName}" }
+    ]
+  }
+}
+\`\`\`
+
+Endpoint 配置写在 \`zhin.config.yml\` 的 \`plugins.${pluginName}\` 下（结构见 \`schema.json\`）：
 
 \`\`\`yaml
 plugins:
-  - ${packageName}
-endpoints:
-  - context: ${camelId}
-    name: demo-bot
+  ${pluginName}:
+    name: ${pluginName}-bot
     token: your-token-here
 \`\`\`
 
-可选：安装 \`@zhin.js/host-router\` 以便后续注册 Webhook 路由。控制台页需启用 \`@zhin.js/host-api\`。`
+然后 \`pnpm dev\`（即 \`zhin runtime start\`）启动。`
       : kind === 'service'
-        ? `在 \`zhin.config.yml\` 的 \`plugins\` 中加入 \`${packageName}\`。其它插件中通过 \`root.inject(\"${serviceCtxName}\")\` 获取服务实例（类型由模板中的 declare module 提供）。`
-        : `在 \`zhin.config.yml\`（或 \`zhin.config.ts\`）的 \`plugins\` 中加入 \`${packageName}\`。若使用控制台页，请启用 \`@zhin.js/host-api\`。`;
+        ? `在 app 的 \`package.json\` 的 \`zhin.plugins\` 数组中添加 \`{ "package": "${packageName}", "instanceKey": "${pluginName}" }\`，然后 \`pnpm dev\`（即 \`zhin runtime start\`）启动。实例配置（如有）写在 \`zhin.config.yml\` 的 \`plugins.${pluginName}\` 下，结构见 \`schema.json\`。`
+        : `在 app 的 \`package.json\` 的 \`zhin.plugins\` 数组中添加 \`{ "package": "${packageName}", "instanceKey": "${pluginName}" }\`，然后 \`pnpm dev\`（即 \`zhin runtime start\`）启动。聊天中发送 \`${pluginName}\` 或 \`${pluginName}-echo 你好\` 验证命令。`;
 
   const readmeContent = `# ${packageName}
 
@@ -666,24 +534,30 @@ ${readmeIntro}
 pnpm add ${packageName}
 \`\`\`
 
-## 使用
+## 挂载与使用
 
 ${readmeUse}
 
+## 目录约定
+
+- \`plugin.ts\`：插件入口（\`definePlugin\`，package.json \`zhin.entry\` 指向它）
+- \`schema.json\`：实例配置（\`plugins.<instanceKey>\`）的 JSON Schema
+${kind === 'normal' ? '- `commands/`：命令模块（`defineCommand`），目录段 `[name:type]` 声明动态参数\n' : ''}${kind === 'adapter' ? '- `adapters/`：适配器模块（`defineAdapter`），`create(context)` 返回 Endpoint 实例\n' : ''}- \`agent/skills/\`：AI 技能（随 npm 包发布）
+- \`tests/\`：Vitest 运行时契约测试
+
 ## AI 技能（agent/skills）
 
-本包包含 \`agent/skills/${pluginName}.md\`。请按实际能力修改 \`description\` / \`tools\` 等 frontmatter。平台 Permit 词汇可写在 \`agent/PERMITS.md\`（维护者参考，不参与自动发现）。
+本包包含 \`agent/skills/${pluginName}.md\`。请按实际能力修改 \`description\` / \`tools\` 等 frontmatter。
 
 ## 开发
 
 \`\`\`bash
 pnpm install
-pnpm build
-pnpm dev
-${withClient ? 'pnpm dev:client   # 仅 client 监听\n' : ''}
+pnpm build   # tsc（src/ 与 plugin.ts；约定目录由运行时直接加载）
+pnpm test    # vitest
 \`\`\`
 
-在 **本仓库** 根执行 \`zhin new\` 时：若存在 \`pnpm-workspace.yaml\`、\`packages/im/zhin/package.json\`，且根 \`package.json\` 声明了 \`zhin.js\`，模板会将 \`zhin.js\` / \`@zhin.js/*\` 开发依赖写为 \`workspace:*\`。
+在 **本仓库** 根执行 \`zhin new\` 时：若存在 \`pnpm-workspace.yaml\`、\`packages/im/zhin/package.json\`，且根 \`package.json\` 声明了 \`zhin.js\`，模板会将 \`zhin.js\` / \`@zhin.js/*\` 依赖写为 \`workspace:*\`。
 
 ## 许可证
 
@@ -708,7 +582,7 @@ tools: []
 - 通过本插件注册的 \`${pluginName}_*\` 等工具完成具体任务；请根据实际工具名与参数补充说明。
 `;
   await fs.writeFile(path.join(pluginDir, 'agent', 'skills', `${pluginName}.md`), skillMdContent);
-  
+
   // 创建 CHANGELOG.md
   const changelogContent = `# ${packageName}
 
@@ -718,22 +592,21 @@ tools: []
 
 - 初始版本
 `;
-  
+
   await fs.writeFile(path.join(pluginDir, 'CHANGELOG.md'), changelogContent);
-  
+
   // 创建 .gitignore
   const gitignoreContent = `node_modules/
 lib/
-dist/
 coverage/
 *.log
 .DS_Store
 `;
-  
+
   await fs.writeFile(path.join(pluginDir, '.gitignore'), gitignoreContent);
-  
-  await generateTestFiles(pluginDir, pluginName, capitalizedName, camelId, options);
-  
+
+  await generateTestFile(pluginDir, pluginName, capitalizedName, kind);
+
   // 安装依赖
   if (!options.skipInstall) {
     logger.info(formatCompact( { cmd: 'new', op: 'install_deps' }));
@@ -750,235 +623,151 @@ coverage/
 }
 
 /**
- * 生成测试文件
+ * 生成运行时契约测试（形态参考 plugins/utils/repeater/tests/repeater-runtime.test.ts）
  */
-async function generateTestFiles(
+async function generateTestFile(
   pluginDir: string,
   pluginName: string,
   capitalizedName: string,
-  camelId: string,
-  options: NewPluginOptions,
+  kind: PluginKind,
 ) {
   const testsDir = path.join(pluginDir, 'tests');
-  const pluginType = options.type ?? 'normal';
+  let testContent: string;
 
-  if (pluginType === 'service') {
-    await generateServiceTest(testsDir, capitalizedName);
-  } else if (pluginType === 'adapter') {
-    await generateAdapterTest(testsDir, pluginName, capitalizedName, camelId);
+  if (kind === 'adapter') {
+    testContent = `import { describe, expect, it } from 'vitest';
+import { parseAdapterDefinition } from '@zhin.js/adapter';
+import plugin from '../plugin.ts';
+import adapter from '../adapters/${pluginName}.ts';
+
+describe('zhin.js-${pluginName}', () => {
+  it('defines a valid Plugin Runtime entry', () => {
+    expect(plugin.name).toBe('${pluginName}');
+  });
+
+  it('brands the convention adapter', () => {
+    expect(parseAdapterDefinition(adapter)).toBe(adapter);
+  });
+
+  it('creates an endpoint skeleton with lifecycle methods', async () => {
+    const endpoint = await adapter.create({
+      id: 'root/${pluginName}' as never,
+      name: '${pluginName}',
+      config: { name: 'test-bot' },
+      use: () => ({
+        receive: async () => ({ matched: false }),
+        send: async () => undefined,
+      }),
+    } as never);
+    expect(typeof endpoint.start).toBe('function');
+    expect(typeof endpoint.open).toBe('function');
+    expect(typeof endpoint.stop).toBe('function');
+    expect(typeof endpoint.send).toBe('function');
+
+    await endpoint.start?.();
+    endpoint.open?.();
+    await expect(endpoint.send?.({ target: 'c1', payload: 'hi' })).resolves.toBeTruthy();
+    await endpoint.stop?.();
+  });
+});
+`;
+  } else if (kind === 'service') {
+    testContent = `import { describe, expect, it } from 'vitest';
+import plugin from '../plugin.ts';
+
+describe('zhin.js-${pluginName}', () => {
+  it('defines a valid Plugin Runtime entry', () => {
+    expect(plugin.name).toBe('${pluginName}');
+  });
+
+  it('setup registers a lifecycle dispose', () => {
+    const disposes: Array<() => void> = [];
+    const context = {
+      config: { get: () => ({}) },
+      resources: {
+        has: () => false,
+        use: () => {
+          throw new Error('resource not available in test');
+        },
+      },
+      lifecycle: {
+        add: (dispose: () => void) => {
+          disposes.push(dispose);
+        },
+      },
+    };
+    plugin.setup?.(context as never);
+    expect(disposes.length).toBeGreaterThan(0);
+  });
+});
+`;
   } else {
-    await generatePluginTest(testsDir, pluginName, capitalizedName);
+    testContent = `import { describe, expect, it } from 'vitest';
+import { parseCommandDefinition } from '@zhin.js/command';
+import plugin from '../plugin.ts';
+import mainCommand from '../commands/${pluginName}.ts';
+import echoCommand from '../commands/${pluginName}-echo/[text:string].ts';
+
+describe('zhin.js-${pluginName}', () => {
+  it('defines a valid Plugin Runtime entry', () => {
+    expect(plugin.name).toBe('${pluginName}');
+  });
+
+  it('brands the convention commands', () => {
+    expect(parseCommandDefinition(mainCommand)).toBe(mainCommand);
+    expect(parseCommandDefinition(echoCommand)).toBe(echoCommand);
+  });
+
+  it('main command returns greeting text', async () => {
+    const result = await mainCommand.execute({ args: [], params: {}, input: undefined } as never);
+    expect(String(result)).toContain('运行中');
+  });
+
+  it('echo command echoes the dynamic segment', async () => {
+    const result = await echoCommand.execute({
+      args: ['你好'],
+      params: { text: '你好' },
+      input: undefined,
+    } as never);
+    expect(String(result)).toContain('你好');
+  });
+});
+`;
   }
-  
+
+  await fs.writeFile(path.join(testsDir, `${pluginName}-runtime.test.ts`), testContent);
   logger.success('✓ 测试文件已生成');
-}
-
-/**
- * 生成普通插件测试
- */
-async function generatePluginTest(testsDir: string, pluginName: string, capitalizedName: string) {
-  const testContent = `import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { formatCompact, Plugin } from 'zhin.js';
-describe('${capitalizedName} Plugin', () => {
-  let plugin: Plugin
-  let rootPlugin: Plugin
-
-  beforeEach(async () => {
-    rootPlugin = new Plugin('/test/root-plugin.ts')
-    plugin = new Plugin('/plugins/${pluginName}/src/index.ts', rootPlugin)
-  })
-
-  afterEach(async () => {
-    if (plugin && plugin.started) {
-      await plugin.stop()
-    }
-  })
-
-  describe('Plugin Instance', () => {
-    it('should create plugin instance', () => {
-      expect(plugin).toBeDefined()
-      expect(plugin).toBeInstanceOf(Plugin)
-    })
-
-    it('should have a non-empty name derived from entry path', () => {
-      expect(typeof plugin.name).toBe('string')
-      expect(plugin.name.length).toBeGreaterThan(0)
-    })
-
-    it('should have parent plugin', () => {
-      expect(plugin.parent).toBe(rootPlugin)
-    })
-
-    it('should have logger', () => {
-      expect(plugin.logger).toBeDefined()
-      expect(typeof plugin.logger.info).toBe('function')
-    })
-  })
-
-  describe('Plugin Lifecycle', () => {
-    it('should start successfully', async () => {
-      await expect(plugin.start()).resolves.not.toThrow()
-      expect(plugin.started).toBe(true)
-    })
-
-    it('should stop successfully', async () => {
-      await plugin.start()
-      await expect(plugin.stop()).resolves.not.toThrow()
-      expect(plugin.started).toBe(false)
-    })
-
-    it('should emit mounted event on start', async () => {
-      const mountedSpy = vi.fn()
-      plugin.on('mounted', mountedSpy)
-      
-      await plugin.start()
-      
-      expect(mountedSpy).toHaveBeenCalled()
-    })
-
-    it('should emit dispose event on stop', async () => {
-      const disposeSpy = vi.fn()
-      plugin.on('dispose', disposeSpy)
-      
-      await plugin.start()
-      await plugin.stop()
-      
-      expect(disposeSpy).toHaveBeenCalled()
-    })
-  })
-
-  describe('Plugin Features', () => {
-    it('should register middleware', () => {
-      plugin.addMiddleware(async (event, next) => {
-        return next()
-      })
-      
-      expect(plugin.middlewares.length).toBeGreaterThan(0)
-    })
-
-    it('should execute middleware', async () => {
-      const executionOrder: number[] = []
-      
-      plugin.addMiddleware(async (event, next) => {
-        executionOrder.push(1)
-        await next()
-      })
-      
-      plugin.addMiddleware(async (event, next) => {
-        executionOrder.push(2)
-        await next()
-      })
-
-      const mockEvent = {
-        $adapter: 'test',
-        $endpoint: 'test-bot',
-        $content: [],
-        $raw: 'test'
-      } as any
-
-      await plugin.middleware(mockEvent, async () => {})
-      
-      expect(executionOrder).toEqual([1, 2])
-    })
-  })
-
-  describe('Custom Tests', () => {
-    // 在这里添加你的自定义测试
-    it('should pass custom test', () => {
-      expect(true).toBe(true)
-    })
-  })
-})
-`;
-  
-  await fs.writeFile(path.join(testsDir, 'index.test.ts'), testContent);
-}
-
-/**
- * 生成服务测试（纯函数 + 工厂，不依赖完整 Endpoint 运行时）
- */
-async function generateServiceTest(testsDir: string, capitalizedName: string) {
-  const testContent = `import { describe, it, expect } from 'vitest';
-import { create${capitalizedName}Service } from '../src/service.js';
-
-describe('${capitalizedName} service', () => {
-  it('ping returns pong', () => {
-    const svc = create${capitalizedName}Service();
-    expect(svc.ping()).toBe('pong');
-  });
-});
-`;
-  await fs.writeFile(path.join(testsDir, 'index.test.ts'), testContent);
-}
-
-/** 生成适配器测试（对接模板中的 Adapter / Endpoint） */
-async function generateAdapterTest(
-  testsDir: string,
-  pluginName: string,
-  capitalizedName: string,
-  camelId: string,
-) {
-  const testContent = `import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-
-import { ${capitalizedName}Adapter } from '../src/adapter.js';
-import { ${capitalizedName}Endpoint } from '../src/endpoint.js';
-
-describe('${capitalizedName} adapter', () => {
-  let root: Plugin;
-  let plugin: Plugin;
-
-  beforeEach(() => {
-    root = new Plugin('/test/root.ts');
-    plugin = new Plugin(\`/plugins/${pluginName}/src/index.ts\`, root);
-  });
-
-  afterEach(async () => {
-    if (plugin?.started) await plugin.stop();
-  });
-
-  it('constructs with empty config and correct adapter key', () => {
-    const adapter = new ${capitalizedName}Adapter(plugin, []);
-    expect(adapter.endpoints.size).toBe(0);
-    expect(String(adapter.name)).toBe('${camelId}');
-  });
-
-  it('createEndpoint wires $id from config.name', () => {
-    const adapter = new ${capitalizedName}Adapter(plugin, []);
-    const endpoint = adapter.createEndpoint({ name: 'unit-test-endpoint' });
-    expect(endpoint).toBeInstanceOf(${capitalizedName}Endpoint);
-    expect(endpoint.$id).toBe('unit-test-endpoint');
-  });
-});
-`;
-  await fs.writeFile(path.join(testsDir, 'index.test.ts'), testContent);
 }
 
 async function addPluginToApp(pluginName: string, isOfficial?: boolean) {
   try {
     const rootPackageJsonPath = path.resolve(process.cwd(), 'package.json');
-    
+
     // 检查根 package.json 是否存在
     if (!fs.existsSync(rootPackageJsonPath)) {
       logger.warn(formatCompact( { cmd: 'new', op: 'skip_deps', reason: 'no package.json' }));
       return;
     }
-    
+
     const packageJson = await fs.readJson(rootPackageJsonPath);
     const packageName = isOfficial ? `@zhin.js/${pluginName}` : `zhin.js-${pluginName}`;
-    
+
     // 初始化 dependencies
     if (!packageJson.dependencies) {
       packageJson.dependencies = {};
     }
-    
+
     // 添加 workspace 依赖
     packageJson.dependencies[packageName] = 'workspace:*';
-    
+
     // 写回文件
     await fs.writeJson(rootPackageJsonPath, packageJson, { spaces: 2 });
-    
-    logger.success(`✓ 已将 ${packageName} 添加到 package.json`);
-    
+
+    logger.success(`✓ 已将 ${packageName} 添加到 app 的 dependencies`);
+    logger.log('  挂载方式：在 app package.json 的 "zhin.plugins" 数组中添加：');
+    logger.log(`    { "package": "${packageName}", "instanceKey": "${pluginName}" }`);
+    logger.log('  （约定式运行时不再读取 zhin.config.yml 的插件列表，请手动添加挂载项）');
+
     // 重新安装依赖
     logger.info(formatCompact( { cmd: 'new', op: 'update_deps' }));
     try {

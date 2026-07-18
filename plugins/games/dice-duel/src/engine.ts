@@ -1,4 +1,4 @@
-import { secureRandomIntInclusive } from '@zhin.js/game-shared';
+import { secureRandomIntInclusive } from '@zhin.js/game-kit';
 
 export const DICE_PREFIX = 'dice';
 export const WIN_TARGET = 2; // best of 3 -> first to 2

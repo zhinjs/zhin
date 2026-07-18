@@ -1,8 +1,8 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getLineApiConfig } from '../../src/line-agent-deps.js';
 
-export default defineTool<{ userId: string }>({
+export default defineAgentTool<{ userId: string }>({
   description: 'Get LINE user profile by userId',
   inputSchema: z.object({
     userId: z.string().min(1),

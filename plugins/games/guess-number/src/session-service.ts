@@ -1,5 +1,5 @@
-import type { Database, DatabaseFeature, Message, Models, RelatedModel } from 'zhin.js';
-import { channelKey, generateSessionId } from '@zhin.js/game-shared';
+import type { Database, Message, Models, RelatedModel } from 'zhin.js';
+import { channelKey, generateSessionId } from '@zhin.js/game-kit';
 import { MAX, MAX_ATTEMPTS, MIN, newSecret } from './engine.js';
 import type { GuessSessionRow } from './models.js';
 
@@ -79,9 +79,6 @@ export function createServices(db: GuessDatabase): SessionService {
   return new SessionService(db);
 }
 
-export function resolveGameDatabase(feature: DatabaseFeature): GuessDatabase {
-  return feature.db;
-}
 
 export function formatStatus(session: GuessSessionRow): string {
   const left = session.max_attempts - session.attempts;

@@ -1,5 +1,5 @@
 /**
- * Orchestration runtime — Host API / MCP Mesh 共用（Agent Mesh v1）。
+ * Orchestration runtime handle — Host API / A2A mesh 共享注册表。
  */
 import type { OrchestrationRunWithTasks } from './orchestrator/orchestration-repository.js';
 import type { OrchestrationService } from './orchestrator/orchestration-service.js';

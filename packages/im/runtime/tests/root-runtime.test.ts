@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -174,7 +174,7 @@ async function createProject(): Promise<string> {
   await touch(join(root, 'plugin.ts'));
   await touch(join(root, 'packages/command/index.ts'));
   await touch(join(root, 'commands/gh/issue/list.ts'));
-  return root;
+  return realpath(root);
 }
 
 async function writeJson(path: string, value: unknown): Promise<void> {

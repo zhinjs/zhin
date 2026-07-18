@@ -1,19 +1,25 @@
 import type { Plugin } from 'zhin.js';
-import { subscribeAIEvents, isActivityFeedbackEnabled } from '@zhin.js/agent';
+import {
+  subscribeAIEvents,
+  subscribeAIEventsOnTarget,
+  activityFeedbackAiBus,
+  isActivityFeedbackEnabled,
+  type AIEventHandlers,
+} from '@zhin.js/agent';
 import { loadActivityFeedbackServiceConfig, type ActivityFeedbackServiceConfig } from './config.js';
 import {
   ActivityFeedbackExecutor,
+  createNoopEndpointAccess,
   createRootEndpointAccess,
   type ActivityFeedbackEndpointAccess,
 } from './executor.js';
 import { ActivityFeedbackOrchestrator } from './orchestrator.js';
 import { ActivityFeedbackPolicy } from './policy.js';
 
-export function bindActivityFeedbackToAIEvents(
-  root: Plugin['root'],
+export function createActivityFeedbackAIEventHandlers(
   orchestrator: ActivityFeedbackOrchestrator,
-): () => void {
-  return subscribeAIEvents(root, {
+): AIEventHandlers {
+  return {
     onQueuedStart: (payload) => {
       if (!isActivityFeedbackEnabled(payload, 'queued')) return;
       return orchestrator.startPhase(payload, 'queued', 'activity.queued.start');
@@ -79,7 +85,28 @@ export function bindActivityFeedbackToAIEvents(
       await orchestrator.stopPhase(payload, 'schedule_start', 'schedule.error');
       await orchestrator.startPhase(payload, 'schedule_error', 'schedule.error');
     },
-  });
+  };
+}
+
+/** Legacy host Plugin path (ALS-aware subscribeAIEvents). */
+export function bindActivityFeedbackToAIEvents(
+  root: Plugin['root'],
+  orchestrator: ActivityFeedbackOrchestrator,
+): () => void {
+  return subscribeAIEvents(root, createActivityFeedbackAIEventHandlers(orchestrator));
+}
+
+/**
+ * Plugin Runtime path: subscribe on module-level `activityFeedbackAiBus`
+ * (fed by ZhinAgentEventEmitter.emit). No usePlugin / Adapter inject.
+ */
+export function bindActivityFeedbackToAIEventBus(
+  orchestrator: ActivityFeedbackOrchestrator,
+): () => void {
+  return subscribeAIEventsOnTarget(
+    activityFeedbackAiBus,
+    createActivityFeedbackAIEventHandlers(orchestrator),
+  );
 }
 
 export function mountActivityFeedbackService(
@@ -93,10 +120,15 @@ export function mountActivityFeedbackService(
   });
 }
 
+export type ActivityFeedbackLogger = {
+  debug: (msg: string, ...args: unknown[]) => void;
+  error: (msg: string, ...args: unknown[]) => void;
+};
+
 export interface CreateActivityFeedbackOrchestratorOptions {
   serviceConfig: ActivityFeedbackServiceConfig;
   access: ActivityFeedbackEndpointAccess;
-  logger: Plugin['logger'];
+  logger: ActivityFeedbackLogger;
 }
 
 export function createActivityFeedbackOrchestrator(
@@ -115,5 +147,18 @@ export function createActivityFeedbackOrchestratorFromPlugin(
     serviceConfig,
     access: createRootEndpointAccess(plugin.root),
     logger: plugin.logger,
+  });
+}
+
+/** Runtime: prefer OutboundHost-backed access; else noop until Host wires outbound. */
+export function createActivityFeedbackOrchestratorForRuntime(
+  serviceConfig: ActivityFeedbackServiceConfig,
+  logger: ActivityFeedbackLogger,
+  access: ActivityFeedbackEndpointAccess = createNoopEndpointAccess(),
+): ActivityFeedbackOrchestrator {
+  return createActivityFeedbackOrchestrator({
+    serviceConfig,
+    access,
+    logger,
   });
 }

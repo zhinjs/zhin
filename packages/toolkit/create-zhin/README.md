@@ -1,5 +1,9 @@
 # create-zhin-app
 
+::: warning 依赖版本
+向导默认将 `zhin.js` / `@zhin.js/*` 写成 **`latest`**（政策：`pnpm check:dependency-policy`）。开箱可跟上游，但**不保证**可复现构建；生产环境请在生成后 pin 到已知好版本。
+:::
+
 快速创建 Zhin 机器人 workspace 项目的脚手架工具，提供一键创建和配置新项目的能力。
 
 ## 核心特性

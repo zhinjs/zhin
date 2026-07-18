@@ -1,9 +1,9 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { platformPermit } from '../../src/platform-permit.js';
 import { getQqAgentDeps } from '../../src/qq-agent-deps.js';
 
-export default defineTool<{ endpoint_id: string; guild_id: string }>({
+export default defineAgentTool<{ endpoint_id: string; guild_id: string }>({
   description: '获取 QQ 频道下的子频道列表',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),

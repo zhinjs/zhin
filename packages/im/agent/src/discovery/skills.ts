@@ -9,11 +9,11 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
-import { Logger, type Plugin } from '@zhin.js/core';
+import { type Plugin, getLogger } from '@zhin.js/core';
 import { getSkillSearchDirectories } from './utils.js';
 
 const execAsync = promisify(exec);
-const logger = new Logger(null, 'builtin-tools');
+const logger = getLogger('builtin-tools');
 
 // ============================================================================
 // 类型

@@ -43,3 +43,5 @@ export type {
   PlatformActivityFeedbackStartOptions,
   BotActivityFeedbackManager,
 } from './adapter-integration.js';
+
+export { activityFeedbackAiBus, ActivityFeedbackAIBus } from './ai-bus.js';

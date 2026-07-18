@@ -1,5 +1,5 @@
 import type { Message, Plugin } from 'zhin.js';
-import { channelKey } from '@zhin.js/game-shared';
+import { channelKey } from '@zhin.js/game-kit';
 import {
   continueAdventure,
   sessionSummary,
@@ -21,7 +21,7 @@ export const ADV_HELP = [
 ].join('\n');
 
 export async function runAdvCommand(
-  plugin: Plugin,
+  plugin: Plugin | null,
   services: GameServices,
   message: Message<any>,
   action: string,
@@ -69,4 +69,13 @@ export async function runAdvCommand(
   }
 
   return `未知子命令：${action}\n\n${ADV_HELP}`;
+}
+
+/** Plugin Runtime / smoke: text-only, no Adapter.editMessage. */
+export async function runAdvCommandText(
+  services: GameServices,
+  message: Message<any>,
+  action: string,
+): Promise<string> {
+  return (await runAdvCommand(null, services, message, action)) ?? '';
 }

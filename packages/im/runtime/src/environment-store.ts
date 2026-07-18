@@ -21,7 +21,14 @@ export interface EnvStore {
   get(key: string): string | undefined;
   require(key: string): string;
   parse<T>(schema: EnvSchema<T>): Readonly<T>;
+  /** Strict expansion: missing keys throw `EnvironmentVariableMissingError`. */
   expand<T>(value: T): T;
+  /**
+   * Config-document expansion for Root compose.
+   * Missing keys become `""` so adapters that require credentials soft-fail at
+   * create instead of treating literal `${VAR}` as a real token.
+   */
+  expandMissingAsEmpty<T>(value: T): T;
   redact(value: unknown, secretKeys: readonly string[]): unknown;
 }
 
@@ -152,7 +159,13 @@ class OwnerEnvStore implements EnvStore {
   }
 
   expand<T>(value: T): T {
-    return expandValue(value, (key) => this.require(key)) as T;
+    return expandValue(value, (key) => this.get(key), (key) => {
+      throw new EnvironmentVariableMissingError(this.owner, key);
+    }) as T;
+  }
+
+  expandMissingAsEmpty<T>(value: T): T {
+    return expandValue(value, (key) => this.get(key), () => '') as T;
   }
 
   redact(value: unknown, secretKeys: readonly string[]): unknown {
@@ -197,19 +210,45 @@ function assertEnvironmentKey(key: string): void {
   }
 }
 
+/**
+ * Standalone deep expansion over an arbitrary config value (e.g. a raw `ai`
+ * config document before EnvStore scoping exists). Supports `${VAR}` and
+ * `${VAR:-default}` / `${VAR:=default}` (default applies when the variable is
+ * unset or empty). Missing plain references resolve via `onMissing`
+ * (default: `""`, matching `EnvStore.expandMissingAsEmpty`).
+ */
+export function expandEnvironmentValue<T>(
+  value: T,
+  lookup: (key: string) => string | undefined,
+  onMissing: (key: string) => string = () => '',
+): T {
+  return expandValue(value, lookup, onMissing) as T;
+}
+
 function expandValue(
   value: unknown,
-  resolve: (key: string) => string,
+  lookup: (key: string) => string | undefined,
+  onMissing: (key: string) => string,
   seen = new WeakSet<object>(),
 ): unknown {
   if (typeof value === 'string') {
-    return value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/gu, (_, key: string) => resolve(key));
+    return value.replace(
+      /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::[-=]([^}]*))?\}/gu,
+      (_match, key: string, fallback: string | undefined) => {
+        const resolved = lookup(key);
+        if (fallback !== undefined) {
+          return resolved !== undefined && resolved !== '' ? resolved : fallback;
+        }
+        if (resolved !== undefined) return resolved;
+        return onMissing(key);
+      },
+    );
   }
   if (!value || typeof value !== 'object') return value;
   if (seen.has(value)) throw new TypeError('Environment expansion input must be acyclic');
   seen.add(value);
   if (Array.isArray(value)) {
-    const result = Object.freeze(value.map((item) => expandValue(item, resolve, seen)));
+    const result = Object.freeze(value.map((item) => expandValue(item, lookup, onMissing, seen)));
     seen.delete(value);
     return result;
   }
@@ -218,7 +257,7 @@ function expandValue(
     return value;
   }
   const result = Object.freeze(Object.fromEntries(
-    Object.entries(value).map(([key, item]) => [key, expandValue(item, resolve, seen)]),
+    Object.entries(value).map(([key, item]) => [key, expandValue(item, lookup, onMissing, seen)]),
   ));
   seen.delete(value);
   return result;

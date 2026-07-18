@@ -18,11 +18,27 @@ pnpm add @zhin.js/adapter-sandbox
 
 ## 依赖
 
-Sandbox 适配器需要以下服务插件：
+### Plugin Runtime（新，`zhin runtime start`）
+
+- `@zhin.js/adapter` — 约定式 `adapters/sandbox.ts`
+- `@zhin.js/host-http` — Root 提供的 `httpHostToken`（WebSocket `/sandbox` + Console HTTP）
+- `@zhin.js/core` — `messageGatewayToken` / ImRuntime 入站出站
+- `@zhin.js/page` + `pages/sandbox.tsx` — ADR 0046 约定页（`definePage`）
+
+Root 在 `zhin runtime start` 时装载 `@zhin.js/host-http`、`ConsoleRuntime` 与
+`ClientBuildModuleRuntime`。打开 `http://<host>:<port>/console` 可浏览页面；Sandbox 页
+（路由形如 `/…/p-sandbox`）内置 WebSocket `/sandbox` 聊天壳。
+
+旧 `client/`（`register(api)` / `pageManager.addEntry`）仅保留给 legacy Host 栈参考，
+**不是** Plugin Runtime 生产入口。
+
+### 旧 Host 栈（`zhin dev` / full-bot）
 
 - `@zhin.js/host-router` — HTTP 服务（提供 Router 和 WebSocket）
 - `@zhin.js/host-api` — Host 侧 Console API（`addEntry` 注册 Sandbox 扩展）
 - `@zhin.js/client` — Remote Console 客户端 SDK（UI 在 zhin-console 仓库）
+
+出站 wire 只做 JSON 封装；旧 `segment-mapper`（canonical segments）归一化上移到 gateway/core 渲染链。
 
 ## 配置
 

@@ -1,7 +1,7 @@
 /**
  * DeferredWorkerRunner — 同步 Worker 子 Agent，在隔离上下文中执行 deferred 工具任务。
  */
-import { Logger, type AgentPromptBuildContext, resolveIMSessionIdFromMessage, type Message } from '@zhin.js/core';
+import { type AgentPromptBuildContext, resolveIMSessionIdFromMessage, type Message, getLogger } from '@zhin.js/core';
 import { formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
 import { type AIProvider, type AgentTool, isOmittedToolSummary, sanitizeToolResult, stripHallucinatedToolCalls, getLlmTransportModel, type ModelRegistry } from '@zhin.js/ai';
 import { resolveMcpConnectionFromToolName } from '@zhin.js/ai/mcp-qualified-name';
@@ -18,7 +18,7 @@ import { createOwnerOrchestratedToolResultTransform } from './orchestrator/owner
 import { applyExecPolicyToTools } from './security/exec-policy.js';
 import { logPromptComposition } from './internal/prompt-trace.js';
 import { resolveWorkspacePrompt } from './prompt/workspace-prompt.js';
-const logger = new Logger(null, 'DeferredWorker');
+const logger = getLogger('DeferredWorker');
 const ORCHESTRATOR_TOOL_SET = new Set<string>(DEFAULT_ALWAYS_LOADED_TOOLS);
 
 /** 回传给主 Agent 的摘要最大字符数 */

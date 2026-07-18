@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/plugin-lottery",
   "version": "1.0.1",
-  "description": "Multi-game lottery analysis for Zhin.js — KL8, SSQ, DLT, FC3D, PL3, PL5 with stats, cron sync, and daily recommendations",
+  "description": "Multi-game lottery analysis for Zhin.js (Plugin Runtime)",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -14,6 +14,9 @@
     "./package.json": "./package.json"
   },
   "files": [
+    "plugin.ts",
+    "schema.json",
+    "commands",
     "src",
     "lib",
     "agent",
@@ -23,8 +26,8 @@
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
-    "test": "sh -c 'cd ../../.. && vitest run plugins/utils/lottery/tests'",
-    "prepublishOnly": "npm run build"
+    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/utils/lottery/tests",
+    "prepublishOnly": "pnpm run build"
   },
   "keywords": [
     "zhin",
@@ -43,14 +46,17 @@
     "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
+  "dependencies": {
+    "@zhin.js/command": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*"
+  },
   "devDependencies": {
-    "typescript": "^6.0.3",
-    "zhin.js": "workspace:*",
     "@zhin.js/agent": "workspace:*",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "zhin.js": "workspace:*",
     "@zhin.js/agent": "workspace:*",
     "zod": "^4.0.0"
   },
@@ -70,5 +76,22 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
   }
 }

@@ -6,7 +6,7 @@
 - npm 或 pnpm
 - 可访问的域名或公网IP
 - SSL证书（推荐，微信要求HTTPS）
-- `@zhin.js/host-router` 插件（必须）
+- `@zhin.js/host-http`（Runtime Host HTTP；适配器经 `httpHostToken` 注册 Webhook）
 
 ## 部署步骤
 

@@ -21,7 +21,7 @@ sidebar: false
 
 ### 关于 nightly 长压测试
 
-RSS / 多轮对话长压冒烟测试未纳入 CI（避免 flaky）。建议在自托管 runner 上以 cron 触发，解读方式见 `.github/workflows/nightly-smoke.yml`（待创建）。
+RSS / 多轮对话长压冒烟测试未纳入 PR CI（避免 flaky）。**全量 L4** 由 [`.github/workflows/nightly-smoke.yml`](../../.github/workflows/nightly-smoke.yml) 定时/`workflow_dispatch` 跑 `pnpm check:l4`；PR 门禁使用确定性子集 `pnpm check:l4-ci`（经 `check:all`）。
 
 ## P0 — 运行时会炸（下个版本必须修）
 

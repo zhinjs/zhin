@@ -2,13 +2,13 @@
  * im_transcripts — IM audit / chat_history keyword search (ADR 0009 D4).
  */
 
-import { Logger } from '@zhin.js/logger';
+import { getLogger } from '@zhin.js/logger';
 import type {
   ImTranscriptRecord,
   ImTranscriptWriteInput,
 } from './agent-db-models.js';
 
-const logger = new Logger(null, 'ImTranscriptStore');
+const logger = getLogger('ImTranscriptStore');
 
 export interface ImTranscriptQuery {
   platform: string;

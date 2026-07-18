@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/adapter-onebot11",
   "version": "4.0.2",
-  "description": "Zhin.js adapter for OneBot v11 protocol",
+  "description": "Zhin.js OneBot 11 adapter for Plugin Runtime (WebSocket client)",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -13,19 +13,20 @@
     }
   },
   "scripts": {
-    "build": "zhin build",
+    "build": "tsc",
     "clean": "rimraf lib",
-    "prepublishOnly": "npm run build"
+    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/adapters/onebot11/tests",
+    "prepublishOnly": "pnpm run build"
   },
   "files": [
+    "adapters",
+    "plugin.ts",
+    "schema.json",
     "src",
     "lib",
-    "client",
-    "dist",
-    "plugin.yml",
+    "agent",
     "README.md",
-    "CHANGELOG.md",
-    "agent"
+    "CHANGELOG.md"
   ],
   "keywords": [
     "zhin",
@@ -37,39 +38,39 @@
     "qq",
     "chatbot"
   ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
-  },
   "license": "MIT",
   "repository": {
-    "url": "git+https://github.com/zhinjs/zhin.git",
     "type": "git",
+    "url": "https://github.com/zhinjs/zhin",
     "directory": "plugins/adapters/onebot11"
   },
   "dependencies": {
+    "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/logger": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",
     "@types/ws": "^8.18.1",
-    "@zhin.js/cli": "workspace:*",
-    "@zhin.js/client": "workspace:*",
-    "@zhin.js/host-router": "workspace:*",
-    "typescript": "^6.0.3",
-    "zhin.js": "workspace:*",
     "@zhin.js/agent": "workspace:*",
+    "@zhin.js/host-http": "workspace:*",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "@zhin.js/host-router": "workspace:*",
+    "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "zhin.js": "workspace:*",
     "@zhin.js/agent": "workspace:*",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
-    "@zhin.js/host-router": {
+    "zhin.js": {
       "optional": true
     },
     "@zhin.js/agent": {
@@ -79,11 +80,30 @@
       "optional": true
     }
   },
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/adapter",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
   }
 }

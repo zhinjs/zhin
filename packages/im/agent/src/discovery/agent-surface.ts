@@ -4,7 +4,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { Logger, type Plugin } from '@zhin.js/core';
+import { type Plugin, getLogger } from '@zhin.js/core';
 import {
   AUTHORING_KIND,
   isAuthoringDefinition,
@@ -34,7 +34,7 @@ import {
 } from '../authoring/bridge.js';
 import { errMsg } from './utils.js';
 
-const logger = new Logger(null, 'agent-surface');
+const logger = getLogger('agent-surface');
 
 export interface PluginAgentRoots {
   pluginName: string;

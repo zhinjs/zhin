@@ -2,22 +2,34 @@
   "name": "@zhin.js/adapter-email",
   "version": "3.0.2",
   "type": "module",
-  "description": "Zhin.js adapter for Email (SMTP/IMAP)",
+  "description": "Zhin.js Email adapter for Plugin Runtime (SMTP/IMAP)",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
   "scripts": {
-    "build": "pnpm build:node",
+    "build": "tsc",
     "clean": "rimraf lib",
-    "build:node": "tsc",
-    "prepublishOnly": "npm run build"
+    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/adapters/email/tests",
+    "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
+    "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/logger": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "imap": "^0.8.19",
     "mailparser": "^3.9.14",
     "nodemailer": "^9.0.3"
   },
   "peerDependencies": {
+    "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "zhin.js": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "zhin.js": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/imap": "^0.8.40",
@@ -25,7 +37,7 @@
     "@types/node": "^26.1.0",
     "@types/nodemailer": "^8.0.0",
     "typescript": "^6.0.3",
-    "zhin.js": "workspace:*"
+    "vitest": "^4.1.10"
   },
   "keywords": [
     "zhin",
@@ -49,6 +61,9 @@
     "directory": "plugins/adapters/email"
   },
   "files": [
+    "adapters",
+    "plugin.ts",
+    "schema.json",
     "src",
     "lib",
     "agent",
@@ -68,5 +83,19 @@
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/adapter",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
   }
 }

@@ -1,8 +1,8 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getEndpoint } from '../../src/napcat-agent-deps.js';
 
-export default defineTool<{ endpoint_id: string; group_id: number; character: string; text: string }>({
+export default defineAgentTool<{ endpoint_id: string; group_id: number; character: string; text: string }>({
   description: 'AI 文字转语音，在群聊中发送 AI 语音消息。',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),

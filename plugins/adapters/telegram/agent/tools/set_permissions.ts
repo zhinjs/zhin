@@ -1,9 +1,9 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { platformPermit } from '../../src/platform-permit.js';
 import { getTelegramAgentDeps } from '../../src/telegram-agent-deps.js';
 
-export default defineTool<{ endpoint_id: string; chat_id: string; can_send_messages?: boolean; can_send_photos?: boolean; can_send_videos?: boolean; can_send_polls?: boolean; can_send_other_messages?: boolean; can_add_web_page_previews?: boolean; can_change_info?: boolean; can_invite_users?: boolean; can_pin_messages?: boolean }>({
+export default defineAgentTool<{ endpoint_id: string; chat_id: string; can_send_messages?: boolean; can_send_photos?: boolean; can_send_videos?: boolean; can_send_polls?: boolean; can_send_other_messages?: boolean; can_add_web_page_previews?: boolean; can_change_info?: boolean; can_invite_users?: boolean; can_pin_messages?: boolean }>({
   description: '设置 Telegram 群组的默认成员权限',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),

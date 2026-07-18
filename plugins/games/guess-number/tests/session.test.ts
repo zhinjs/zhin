@@ -1,40 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { startGame, processGuess } from '../src/game-flow.js';
-import { createServices, type GuessDatabase, type SessionService } from '../src/session-service.js';
-
-type Row = Record<string, unknown>;
-
-function createMockDb(): GuessDatabase {
-  const tables = new Map<string, Row[]>();
-
-  function model(name: string) {
-    if (!tables.has(name)) tables.set(name, []);
-    const rows = () => tables.get(name)!;
-    const match = (row: Row, q: Record<string, unknown>) =>
-      Object.entries(q).every(([k, v]) => row[k] === v);
-
-    return {
-      findAll: async (q: Record<string, unknown> = {}) =>
-        rows().filter((row) => match(row, q)),
-      findOne: async (q: Record<string, unknown> = {}) =>
-        rows().find((row) => match(row, q)) ?? null,
-      create: async (row: Row) => {
-        rows().push({ ...row });
-        return row;
-      },
-      updateWhere: async (where: Record<string, unknown>, patch: Row) => {
-        for (const row of rows()) {
-          if (match(row, where)) Object.assign(row, patch);
-        }
-        return 1;
-      },
-    };
-  }
-
-  return {
-    models: { get: (name: string) => model(name) },
-  } as unknown as GuessDatabase;
-}
+import { createServices, type SessionService } from '../src/session-service.js';
+import { createInMemoryGuessDb } from '../src/memory-db.js';
 
 function mockMessage(userId: string, channelId = 'g1') {
   return {
@@ -49,7 +16,7 @@ describe('guess-number sessions', () => {
   let services: SessionService;
 
   beforeEach(() => {
-    services = createServices(createMockDb());
+    services = createServices(createInMemoryGuessDb());
   });
 
   it('allows two users in same channel to start separate games', async () => {

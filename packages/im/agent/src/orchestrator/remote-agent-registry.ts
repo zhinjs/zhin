@@ -2,12 +2,12 @@
  * RemoteAgentRegistry — A2A Agent Card discovery + Client cache.
  */
 import { createRequire } from 'node:module';
-import { Logger } from '@zhin.js/logger';
+import { getLogger } from '@zhin.js/logger';
 import type { AIConfig } from '@zhin.js/ai';
 import type { AgentCard } from '@a2a-js/sdk';
 import { resolveConfigEnvString } from '../utils/config-env.js';
 
-const logger = new Logger(null, 'RemoteAgentRegistry');
+const logger = getLogger('RemoteAgentRegistry');
 const requirePeer = createRequire(import.meta.url);
 
 export interface RemoteAgentEntry {

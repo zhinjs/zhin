@@ -2,11 +2,11 @@
  * IM 活跃/归档会话元数据（ai_sessions），与 chat_messages 消息正文分离。
  */
 
-import { Logger } from '@zhin.js/logger';
+import { getLogger } from '@zhin.js/logger';
 
 export type AISessionStatus = 'active' | 'archived';
 
-const logger = new Logger(null, 'IM-Session');
+const logger = getLogger('IM-Session');
 
 export interface IMSessionRecord {
   id?: number;

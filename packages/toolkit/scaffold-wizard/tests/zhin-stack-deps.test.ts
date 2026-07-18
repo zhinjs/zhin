@@ -9,8 +9,17 @@ import {
 
 describe('zhin-stack-deps', () => {
   it('uses latest for scaffolded user project dependencies', () => {
-    expect(getCreateBotBaseDependencies()['zhin.js']).toBe('latest');
-    expect(getCreateBotBaseDependencies()['@zhin.js/host-api']).toBe('latest');
+    const base = getCreateBotBaseDependencies();
+    expect(base['zhin.js']).toBe('latest');
+    expect(base['@zhin.js/plugin-runtime']).toBe('latest');
+    expect(base['@zhin.js/runtime']).toBe('latest');
+    expect(base['@zhin.js/adapter']).toBe('latest');
+    expect(base['@zhin.js/command']).toBe('latest');
+    expect(base['@zhin.js/component']).toBe('latest');
+    expect(base['@zhin.js/satori']).toBe('latest');
+    // Plugin Runtime 骨架不再预装 legacy host 插件
+    expect(base).not.toHaveProperty('@zhin.js/host-api');
+    expect(base).not.toHaveProperty('@zhin.js/host-router');
     expect(getCreateBotPnpmConfig(true)).not.toHaveProperty('peerDependencyRules');
   });
 

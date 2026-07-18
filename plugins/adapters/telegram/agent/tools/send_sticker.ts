@@ -1,8 +1,8 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getTelegramAgentDeps } from '../../src/telegram-agent-deps.js';
 
-export default defineTool<{ endpoint_id: string; chat_id: string; sticker: string }>({
+export default defineAgentTool<{ endpoint_id: string; chat_id: string; sticker: string }>({
   description: '发送 Telegram 贴纸',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),

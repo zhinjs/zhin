@@ -1,4 +1,4 @@
-import { Logger } from '@zhin.js/logger';
+import { getLogger } from '@zhin.js/logger';
 import { registerLlmApiFromProviders, sdkEntryFromProvider, AIProvider, ModelRegistry } from '@zhin.js/ai';
 import { createSkillSystem, SkillSystem } from '../skill/skill-system.js';
 import type { AgentCore } from '../core/agent-core.js';
@@ -15,7 +15,7 @@ import { bindingToModelConfig } from '../routing/runtime-binding.js';
 import type { ZhinAgentConfig, ZhinAgentDependencies } from '../config/index.js';
 import type { ZhinAgentEventEmitter } from '../event/event-emitter.js';
 import type { TurnContextBridgeState } from '../turn/turn-context-bridge.js';
-const logger = new Logger(null, 'ZhinAgent');
+const logger = getLogger('ZhinAgent');
 
 export interface ConfigureZhinAgentTarget {
   config: Required<ZhinAgentConfig>;

@@ -111,6 +111,51 @@ function matchesFilter(payload: AIEventPayload, filter?: AIEventFilter): boolean
   return true;
 }
 
+/** Plugin-agnostic on/off target (no AsyncLocalStorage). */
+export interface AIEventTarget {
+  on(event: string, listener: (payload: AIEventPayload) => void): unknown;
+  off(event: string, listener: (payload: AIEventPayload) => void): unknown;
+}
+
+function invokeHandlers(
+  eventName: AIEventName,
+  payload: AIEventPayload,
+  handlers: AIEventHandlers,
+): Promise<void> {
+  return (async () => {
+    handlers.onAny?.(eventName, payload);
+    const handlerName = EVENT_HANDLER_MAP[eventName];
+    const handler = handlerName ? handlers[handlerName] : undefined;
+    if (typeof handler === 'function') {
+      await (handler as (payload: AIEventPayload) => void | Promise<void>)(payload);
+    }
+  })();
+}
+
+/**
+ * Subscribe AI lifecycle handlers on any `{ on, off }` target.
+ * Does **not** restore Plugin ALS — safe for Plugin Runtime setup.
+ */
+export function subscribeAIEventsOnTarget(
+  target: AIEventTarget,
+  handlers: AIEventHandlers,
+  filter?: AIEventFilter,
+): () => void {
+  const disposers = AI_EVENT_NAMES.map((eventName) => {
+    const listener = (payload: AIEventPayload) => {
+      if (!matchesFilter(payload, filter)) return;
+      void invokeHandlers(eventName, payload, handlers);
+    };
+    target.on(eventName, listener);
+    return () => {
+      target.off(eventName, listener);
+    };
+  });
+  return () => {
+    for (const dispose of disposers) dispose();
+  };
+}
+
 export function subscribeAIEvents(
   plugin: Plugin,
   handlers: AIEventHandlers,
@@ -121,12 +166,7 @@ export function subscribeAIEvents(
       if (!matchesFilter(payload, filter)) return;
       // broadcast 不经过 usePlugin 加载栈；在订阅方入口恢复 ALS，避免监听里 getPlugin() 失效
       void storage.run(plugin, async () => {
-        handlers.onAny?.(eventName, payload);
-        const handlerName = EVENT_HANDLER_MAP[eventName];
-        const handler = handlerName ? handlers[handlerName] : undefined;
-        if (typeof handler === 'function') {
-          await (handler as (payload: AIEventPayload) => void | Promise<void>)(payload);
-        }
+        await invokeHandlers(eventName, payload, handlers);
       });
     };
     plugin.on(eventName, listener);

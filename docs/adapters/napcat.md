@@ -8,50 +8,43 @@ tier: Experimental
 本页由 [`plugins/adapters/napcat/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/napcat/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=370b10dbd776edaa -->
+<!-- sync-adapter-docs:sha256=0c748965f3247115 -->
 
 # @zhin.js/adapter-napcat
 
-> **QQ 群助手 + 可选 @AI** — 先在 [demo.zhin.dev](https://demo.zhin.dev) 或 Sandbox 调试，再接 NapCat。启用 AI：`npx zhin setup --ai`。接入本适配器：`npx zhin setup --adapters`。
-
-Zhin.js NapCatQQ 适配器，支持 OneBot11 标准 + go-cqhttp 扩展 + NapCat 独有 API。
+Zhin.js [NapCatQQ](https://github.com/NapNeko/NapCatQQ) 适配器（Plugin Runtime，OneBot 11 + NapCat 扩展）。默认 **正向 WebSocket 客户端**（`connection: ws`）；亦支持 **反向 WS** 与 **HTTP POST 上报**（经 `httpHostToken`）。
 
 ## 功能特性
 
-- 完整 OneBot v11 协议兼容 + go-cqhttp 扩展 + NapCat 独有 API（92+ 接口）
-- **单一适配器**：`context: napcat`，通过 `connection` 选择连接方式
-- **正向 WebSocket**（`connection: ws`）：应用连 NapCat 的 WS
-- **反向 WebSocket**（`connection: wss`）：应用开 WS 服务端，NapCat 连上来
-- **HTTP API + POST 上报**（`connection: http`）：出站 HTTP 调用，入站 webhook
-- Access Token 认证支持（Bearer / HMAC 签名）
-- 自动重连机制（WS）与心跳检测
-- 群聊和私聊消息处理
-- 入站消息去重与 bot 自发消息过滤
-- Typing Indicator（处理中提示：群聊表情回应 / 私聊输入状态）
-- 41 个 AI 工具（群管、戳一戳、表情回应、精华消息、群公告、AI 语音等）
-- Console 管理页面（`/console/napcat`）
-- Agent Prompt 贡献器（deferred 任务自动优选 napcat 工具）
+- OneBot 11 + go-cqhttp 扩展 + NapCat 独有 API
+- 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
+- **正向 WebSocket**（`connection: ws`）：应用连 NapCat WS
+- `access_token` 鉴权（Bearer + query）
+- 入站经 `messageGatewayToken`（去重 + 自发过滤）；出站 `send({ target, payload })`
+- 41 个 AI 工具（`agent/tools/`）
 
 ## 安装
 
 ```bash
-pnpm add @zhin.js/adapter-napcat ws
+pnpm add @zhin.js/adapter-napcat
 ```
 
-反向 WS / HTTP 模式需同时启用 `@zhin.js/host-router`。
+## Plugin Runtime
 
-## 配置
+- `@zhin.js/adapter` — 约定式 `adapters/napcat.ts`（`defineAdapter`）
+- `@zhin.js/core` — `messageGatewayToken` 入站/出站
+- `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
+- 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 
-所有 Endpoint 使用 **同一 context：`napcat`**，通过 **`connection`** 区分连接方式。
+入站：`gateway.receive({ adapter, target: "private:uid"|"group:gid", content, sender, metadata })`  
+出站：`send({ target, payload })` → WS `send_private_msg` / `send_group_msg`
 
-### 正向 WebSocket（connection: ws）
+## 最小配置
 
 ```yaml
+# zhin.config.yml（Plugin Runtime）
 plugins:
-  - "@zhin.js/adapter-napcat"
-
-endpoints:
-  - context: napcat
+  napcat:
     connection: ws
     name: my-bot
     url: "ws://127.0.0.1:3001"
@@ -60,85 +53,40 @@ endpoints:
     heartbeat_interval: 30000
 ```
 
-### 反向 WebSocket（connection: wss）
+根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-napcat`（`instanceKey: napcat`）。
 
-```yaml
-plugins:
-  - "@zhin.js/host-router"
-  - "@zhin.js/adapter-napcat"
+## 连接方式
 
-endpoints:
-  - context: napcat
-    connection: wss
-    name: my-bot
-    path: "/napcat/ws"
-    access_token: "${NAPCAT_TOKEN}"
-    heartbeat_interval: 30000
-```
+| connection | 状态 |
+|------------|------|
+| `ws` | 已实现（推荐） |
+| `wss` | 已实现：反向 WS（httpHostToken） |
+| `http` | 已实现：POST 入站 + `http_url/{action}` 出站 |
 
-### HTTP API + POST 上报（connection: http）
+## 鉴权
 
-```yaml
-plugins:
-  - "@zhin.js/host-router"
-  - "@zhin.js/adapter-napcat"
-
-endpoints:
-  - context: napcat
-    connection: http
-    name: my-bot
-    http_url: "http://127.0.0.1:3000"
-    post_path: "/napcat/post"
-    access_token: "${NAPCAT_TOKEN}"
-    poll_interval: 30000
-```
-
-### Typing Indicator（处理中提示）
-
-```yaml
-endpoints:
-  - context: napcat
-    connection: ws
-    name: my-bot
-    url: "ws://127.0.0.1:3001"
-    typingIndicator:
-      enabled: true
-      defaultEmoji: "128516"
-      privateConfig:
-        type: "message"
-        message: "正在思考中..."
-      groupConfig:
-        type: "reaction"
-        emoji: "128516"
-```
-
-## NapCat 独有能力
-
-相比标准 OneBot11 适配器，NapCat 额外支持：
-
-- 戳一戳（群聊 / 私聊）
-- 表情回应（贴表情）
-- 合并 / 单条消息转发
-- 精华消息管理
-- 群公告管理
-- 群文件管理
-- AI 语音 TTS
-- 图片 OCR 文字识别
-- 小程序卡片签名
-- 个人资料 / 头像 / 签名修改
-- 在线状态设置
-- 消息历史查询
-- 英译中翻译
+- **Bearer**：`Authorization: Bearer <access_token>`
+- 正向 WS 在 Upgrade 时附带请求头，并在 URL query 写入 `access_token`
 
 ## AI 工具
 
+| 类别 | 路径 |
+|------|------|
+| Permit 词汇 | `agent/PERMITS.md` |
+| 平台工具 | `agent/tools/*.ts` |
+| 技能说明 | `agent/skills/napcat.md` |
 
-## full-bot L4 参考
+## 迁移说明（Plugin Runtime）
 
-[`examples/full-bot`](https://github.com/zhinjs/zhin/tree/main/examples/full-bot/) 默认加载本适配器（`endpoints` 段需自行填写 `ONEBOT11_*` 后取消注释）。
+- **notice / request 侧事件已移除**：旧 Adapter 对 `post_type: notice|request` 构建 `notice.receive` / `request.receive` 事件（含 `$approve` / `$reject`）；新 Plugin Runtime（`messageGatewayToken`）暂无侧事件总线，入站仅处理 `post_type: message`，notice / request 事件静默丢弃。加好友 / 加群请求审批可改用 `callApi('set_friend_add_request' | 'set_group_add_request')`。
+- **群管工具暂未迁移**：旧 Adapter 经 `createSceneManagementTools` 注册踢人 / 禁言 / 群名片等成套 agent 工具；迁移后 `agent/tools/` 仅覆盖 NapCat 扩展 API，其余群管能力可通过 `callApi`（如 `set_group_kick`、`set_group_ban`）作为逃生舱调用。
+- **平台权限门禁**：`plugin.ts` setup 已注册 `registerDefaultScenePlatformPermitChecker('napcat')`，`scene_admin` / `scene_owner` 依据入站 metadata 中的 sender `role`（owner / admin）判定。
 
-- 入站 → `ZhinAgent` → 出站走 `Adapter.sendMessage` 统一链路
-- 契约测试：`plugins/adapters/napcat/tests/l4-contract.test.ts` + `integration.test.ts`（adapter-harness）
-- CI：`L4_SKIP_PLATFORM=1` 跳过实机；本地验证不设该变量并可配置 `ONEBOT11_WS_URL`
+## 文档链接
 
-详见 [full-bot ACCEPTANCE.md](https://github.com/zhinjs/zhin/tree/main/examples/full-bot/ACCEPTANCE.md)。
+- [NapCatQQ](https://github.com/NapNeko/NapCatQQ)
+- [适配器概览](https://zhin.js.org/essentials/adapters)
+
+## 许可证
+
+MIT License

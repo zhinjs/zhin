@@ -13,10 +13,14 @@
  * 钩子按注册顺序执行，错误不会中断其他钩子。
  */
 
-import { Logger } from '@zhin.js/core';
 import { emitAIHookBusEvent } from './plugin-ai-hook-bus.js';
-
-const logger = new Logger(null, 'AI-Hooks');
+import {
+  registerModuleAIHook,
+  unregisterModuleAIHook,
+  clearModuleAIHooks,
+  getRegisteredModuleAIHookKeys,
+  runModuleAIHookHandlers,
+} from './ai-hook-handlers.js';
 
 // ============================================================================
 // 类型定义
@@ -134,11 +138,8 @@ export interface ToolCallEvent extends AIHookEvent {
 export type AIHookHandler = (event: AIHookEvent) => Promise<void> | void;
 
 // ============================================================================
-// Hook 管理器
+// Hook 管理器（委托共享 module registry，供 Runtime + legacy 共用）
 // ============================================================================
-
-/** 按事件 key 存储的处理函数注册表 */
-const handlers = new Map<string, AIHookHandler[]>();
 
 /**
  * 注册 Hook 处理函数
@@ -160,64 +161,40 @@ const handlers = new Map<string, AIHookHandler[]>();
  * ```
  */
 export function registerAIHook(eventKey: string, handler: AIHookHandler): () => void {
-  if (!handlers.has(eventKey)) {
-    handlers.set(eventKey, []);
-  }
-  handlers.get(eventKey)!.push(handler);
-
-  // 返回注销函数
-  return () => unregisterAIHook(eventKey, handler);
+  return registerModuleAIHook(eventKey, handler as import('./orchestrator/types.js').AIHookHandler);
 }
 
 /**
  * 注销 Hook 处理函数
  */
 export function unregisterAIHook(eventKey: string, handler: AIHookHandler): void {
-  const eventHandlers = handlers.get(eventKey);
-  if (!eventHandlers) return;
-
-  const index = eventHandlers.indexOf(handler);
-  if (index !== -1) eventHandlers.splice(index, 1);
-  if (eventHandlers.length === 0) handlers.delete(eventKey);
+  unregisterModuleAIHook(eventKey, handler as import('./orchestrator/types.js').AIHookHandler);
 }
 
 /**
  * 清除所有 Hook（测试用）
  */
 export function clearAIHooks(): void {
-  handlers.clear();
+  clearModuleAIHooks();
 }
 
 /**
  * 获取已注册的事件 key 列表（调试用）
  */
 export function getRegisteredAIHookKeys(): string[] {
-  return Array.from(handlers.keys());
+  return getRegisteredModuleAIHookKeys();
 }
 
 /**
  * 触发 Hook 事件
  *
- * 同时调用通用类型（如 'message'）和具体动作（如 'message:received'）的处理函数。
- * 处理函数按注册顺序执行，错误被捕获并记录，不影响其他处理函数。
+ * 扇出到 Runtime bus + `registerAIHook` handlers +（若有）host Plugin。
  */
 export async function triggerAIHook(event: AIHookEvent): Promise<void> {
-  emitAIHookBusEvent(event, 'ai-hook');
-
-  const typeHandlers = handlers.get(event.type) ?? [];
-  const specificHandlers = handlers.get(`${event.type}:${event.action}`) ?? [];
-  const allHandlers = [...typeHandlers, ...specificHandlers];
-
-  if (allHandlers.length === 0) return;
-
-  for (const handler of allHandlers) {
-    try {
-      await handler(event);
-    } catch (err: unknown) {
-      logger.error(`Hook 错误 [${event.type}:${event.action}]: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
+  emitAIHookBusEvent(event as import('./orchestrator/types.js').AIHookEvent, 'ai-hook');
 }
+
+export { runModuleAIHookHandlers };
 
 /**
  * 创建 Hook 事件（辅助函数）

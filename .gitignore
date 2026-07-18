@@ -24,6 +24,8 @@ coverage/
 .turbo/
 # Production builds
 lib/
+# test-bot lib/ 存放共享 TS 源码（commands/tools 引用）；其编译产物由 examples/test-bot/.gitignore 忽略
+!examples/test-bot/lib/
 build/
 examples/**/data/
 examples/**/zhin.config.*

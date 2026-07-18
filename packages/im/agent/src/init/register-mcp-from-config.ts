@@ -1,10 +1,10 @@
 /**
- * Register MCP server entries from zhin.config ai.mcpServers (global/common scope).
+ * Register MCP server declarations from zhin.config ai.mcpServers into MCPFeature (ADR 0042).
+ * Orchestrator loading is deferred to Capability Ingress ensureForTurn.
  */
 import { getPlugin } from '@zhin.js/core';
 import { formatCompact } from '@zhin.js/logger';
 import type { AIConfig } from '@zhin.js/ai';
-import type { AgentOrchestrator } from '../orchestrator/index.js';
 import type { McpServerEntry } from '../orchestrator/types.js';
 import { resolveConfigEnvString } from '../utils/config-env.js';
 
@@ -57,9 +57,9 @@ export function registerMcpFromConfig(): void {
   useContext('ai', (ai) => {
     if (!ai?.isReady?.()) return;
 
-    const orchestrator = root.inject('agent') as AgentOrchestrator | undefined;
-    if (!orchestrator) {
-      logger.warn(formatCompact( { error: 'no_orchestrator' }));
+    const mcpFeature = root.inject('mcpFeature');
+    if (!mcpFeature) {
+      logger.warn(formatCompact({ error: 'no_mcp_feature' }));
       return;
     }
 
@@ -72,18 +72,19 @@ export function registerMcpFromConfig(): void {
     for (const raw of servers) {
       const entry = validateMcpServerEntry(raw);
       if (!entry) {
-        logger.warn(formatCompact( { error: 'invalid_entry', preview: JSON.stringify(raw) }));
+        logger.warn(formatCompact({ error: 'invalid_entry', preview: JSON.stringify(raw) }));
         continue;
       }
-      if (orchestrator.mcps.has(entry.name)) {
-        logger.warn(formatCompact( { error: 'duplicate', name: entry.name }));
+      if (mcpFeature.get(entry.name)) {
+        logger.warn(formatCompact({ error: 'duplicate', name: entry.name }));
         continue;
       }
-      orchestrator.addMcp(entry, {}, 'config');
+      mcpFeature.add(entry, 'config');
       registered++;
     }
     if (registered > 0) {
-      logger.debug(formatCompact( { count: registered, source: 'ai.mcpServers' }));
+      root.inject('capabilityIngress')?.invalidate();
+      logger.debug(formatCompact({ count: registered, source: 'ai.mcpServers' }));
     }
   });
 }

@@ -1,9 +1,12 @@
 import { Dialect, Database } from '../base/index.js';
 import {RelatedDatabase} from "../type/related/database.js";
 import {Registry} from "../registry.js";
+import { getLogger } from '@zhin.js/logger';
 import type { ConnectionOptions, PoolOptions } from 'mysql2/promise';
 
 import {Column, Transaction, TransactionOptions, IsolationLevel, PoolConfig} from "../types.js";
+
+const logger = getLogger('database');
 
 export interface MySQLDialectConfig extends ConnectionOptions {
   /**
@@ -40,13 +43,13 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
           idleTimeout: this.config.pool?.idleTimeoutMillis ?? 60000,
         };
         this.pool = createPool(poolConfig);
-        console.log(`MySQL 连接池已创建 (max: ${poolConfig.connectionLimit})`);
+        logger.info(`MySQL 连接池已创建 (max: ${poolConfig.connectionLimit})`);
       } else {
       const { createConnection } = await import('mysql2/promise');
       this.connection = await createConnection(this.config);
       }
     } catch (error) {
-      console.error('forgot install mysql2 ?');
+      logger.error('forgot install mysql2 ?');
       throw new Error(`MySQL 连接失败: ${error}`);
     }
   }
@@ -55,7 +58,7 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
     if (this.usePool && this.pool) {
       await this.pool.end();
       this.pool = null;
-      console.log('MySQL 连接池已关闭');
+      logger.info('MySQL 连接池已关闭');
     } else if (this.connection) {
       await this.connection.end();
     this.connection = null;

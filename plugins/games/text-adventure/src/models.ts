@@ -1,4 +1,4 @@
-import type { Models, Plugin } from 'zhin.js';
+import type { Models } from 'zhin.js';
 
 export type AdvSessionStatus = 'active' | 'completed' | 'aborted';
 
@@ -45,8 +45,11 @@ export type AdvSessionRow = Models['adv_sessions'];
 export type AdvProfileRow = Models['adv_profiles'];
 export type AdvModelName = 'adv_sessions' | 'adv_profiles';
 
-export function registerModels(plugin: Plugin): void {
-  plugin.defineModel('adv_sessions', {
+
+export function defineHostTables(
+  db: { define: (name: string, definition: Record<string, unknown>) => void },
+): void {
+  db.define('adv_sessions', {
     id: { type: 'text', primary: true },
     adapter: { type: 'text', nullable: false },
     endpoint: { type: 'text', nullable: false },
@@ -66,8 +69,7 @@ export function registerModels(plugin: Plugin): void {
     updated_at: { type: 'integer', default: 0 },
     created_at: { type: 'integer', default: 0 },
   });
-
-  plugin.defineModel('adv_profiles', {
+  db.define('adv_profiles', {
     player_id: { type: 'text', primary: true },
     player_name: { type: 'text', default: '' },
     visited_scenes: { type: 'text', default: '[]' },

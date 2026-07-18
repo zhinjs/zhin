@@ -1370,14 +1370,14 @@
       "peerDependencies": {}
     },
     {
-      "name": "@zhin.js/game-shared",
+      "name": "@zhin.js/game-kit",
       "displayName": "game-shared",
       "description": "Zhin.js 游戏插件通用工具包",
       "author": "lc_cn",
       "isOfficial": true,
       "category": "util",
       "version": "1.0.0",
-      "npm": "https://www.npmjs.com/package/@zhin.js/game-shared",
+      "npm": "https://www.npmjs.com/package/@zhin.js/game-kit",
       "github": "",
       "homepage": "",
       "tags": [],
@@ -1386,7 +1386,7 @@
         "weekly": 0,
         "monthly": 0
       },
-      "readme": "Zhin.js 游戏插件通用工具包，提供网格棋盘、会话管理等通用抽象。\nbash\npnpm add @zhin.js/game-shared\n构建任意尺寸的按钮网格棋盘（井字棋、五子棋等）。\n构建分支选项按钮（文字冒险、问答、剧情选择等）：\ntypescript\nimport { buildChoiceKeyboard, parseChoicePayload } from '@zhin.js/ga",
+      "readme": "Zhin.js 游戏插件通用工具包，提供网格棋盘、会话管理等通用抽象。\nbash\npnpm add @zhin.js/game-kit\n构建任意尺寸的按钮网格棋盘（井字棋、五子棋等）。\n构建分支选项按钮（文字冒险、问答、剧情选择等）：\ntypescript\nimport { buildChoiceKeyboard, parseChoicePayload } from '@zhin.js/ga",
       "license": "",
       "engines": {},
       "peerDependencies": {

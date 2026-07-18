@@ -1,7 +1,7 @@
 /**
  * 钉钉 DingTalk platform permit
  */
-import { registerPlatformPermitChecker, type Message } from 'zhin.js';
+import { registerPlatformPermitChecker, type Message } from '@zhin.js/core';
 
 const ADAPTER = 'dingtalk';
 

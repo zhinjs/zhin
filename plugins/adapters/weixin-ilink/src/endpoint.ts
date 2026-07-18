@@ -1,309 +1,236 @@
 /**
- * 微信 iLink Bot：长轮询入站 + CDN 媒体收发
+ * WeixinIlinkEndpoint — lifecycle, long-poll inbound, outbound send.
  */
-import crypto from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
-import {
-  Endpoint,
-  Message,
-  type MessageSegment,
-  type SendContent,
-  type SendOptions,
-  segment,
-  expandInteractiveSegmentsInContent,} from 'zhin.js';
-import { getUpdates, notifyStart, notifyStop, sendTyping } from "./ilink-api.js";
-import { fromCanonicalSegments, toCanonicalSegments } from './segment-mapper.js';
-import {
-  configureIlinkMeta,
-  DEFAULT_API_BASE_URL,
-  DEFAULT_CDN_BASE_URL,
-} from "./ilink-meta.js";
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import type { EndpointInstance } from '@zhin.js/adapter';
+import type { MessageGateway } from '@zhin.js/core/runtime';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+import type { CapabilityId } from '@zhin.js/plugin-runtime';
+import { getUpdates, notifyStart, notifyStop, sendTyping } from './ilink-api.js';
+import { configureIlinkMeta } from './ilink-meta.js';
 import {
   loadSyncBuf,
   resolveStateDir,
   saveSyncBuf,
   type WeixinIlinkCredentials,
-} from "./credentials.js";
-import { resolveCredentials } from "./login.js";
+} from './credentials.js';
+import { resolveCredentials } from './login.js';
 import {
-  bodyFromItemList,
   getContextToken,
-  isMediaItem,
   restoreContextTokens,
   setContextToken,
-} from "./context-store.js";
-import { WeixinConfigManager } from "./ilink-config-cache.js";
+} from './context-store.js';
+import { WeixinConfigManager } from './ilink-config-cache.js';
 import {
   getRemainingPauseMs,
   isSessionPaused,
   pauseSession,
   SESSION_EXPIRED_ERRCODE,
-} from "./ilink-session-guard.js";
-import { downloadMediaFromItem } from "./media-download.js";
-import { sendMessageWeixin } from "./weixin-send.js";
-import { sendWeixinMediaFile } from "./weixin-send-media.js";
-import { materializeOutboundMedia, segmentMediaRef } from "./outbound-media.js";
-import { MessageItemType, type MessageItem, type WeixinMessage } from './ilink-types.js';
+} from './ilink-session-guard.js';
+import { downloadMediaFromItem } from './media-download.js';
+import { sendMessageWeixin } from './weixin-send.js';
+import { sendWeixinMediaFile } from './weixin-send-media.js';
+import { materializeOutboundMedia } from './outbound-media.js';
+import { MessageItemType, type WeixinMessage } from './ilink-types.js';
+import { getExtensionFromMime, sniffMimeFromBuffer } from './mime.js';
+import type { WeixinInboundMediaOpts } from './weixin-inbound.js';
+import {
+  formatInboundContent,
+  formatOutboundSegments,
+  inboundMessageId,
+  segmentLocalPath,
+  sleep,
+  type ResolvedWeixinIlinkConfig,
+  type WeixinMessageWithMedia,
+  type WeixinWireSegment,
+} from './protocol.js';
 
-import { getExtensionFromMime, sniffMimeFromBuffer } from "./mime.js";
-import type { WeixinInboundMediaOpts } from "./weixin-inbound.js";
-import type { WeixinIlinkEndpointConfig } from "./types.js";
-import type { WeixinIlinkAdapter } from "./adapter.js";
+const logger = getLogger('weixin-ilink');
 
-const DEFAULT_LONG_POLL_TIMEOUT_MS = 35_000;
 const MAX_CONSECUTIVE_FAILURES = 3;
 const BACKOFF_DELAY_MS = 30_000;
 const RETRY_DELAY_MS = 2_000;
 const WEIXIN_MEDIA_MAX_BYTES = 100 * 1024 * 1024;
 
-export type WeixinMessageWithMedia = WeixinMessage & {
-  _media?: WeixinInboundMediaOpts;
-};
+export type WeixinIlinkSendText = typeof sendMessageWeixin;
+export type WeixinIlinkNotifyStart = typeof notifyStart;
+export type WeixinIlinkNotifyStop = typeof notifyStop;
+export type WeixinIlinkGetUpdates = typeof getUpdates;
 
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
-    if (signal?.aborted) {
-      resolve();
-      return;
-    }
-    const timer = setTimeout(resolve, ms);
-    signal?.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(timer);
-        resolve();
-      },
-      { once: true },
-    );
-  });
+export interface WeixinIlinkEndpointOptions {
+  readonly id: CapabilityId;
+  readonly gateway: MessageGateway;
+  readonly config: ResolvedWeixinIlinkConfig;
+  readonly resolveCredentials?: (
+    config: ResolvedWeixinIlinkConfig,
+  ) => Promise<WeixinIlinkCredentials>;
+  /** Test / internal: override network side effects. */
+  readonly notifyStart?: WeixinIlinkNotifyStart;
+  readonly notifyStop?: WeixinIlinkNotifyStop;
+  readonly getUpdates?: WeixinIlinkGetUpdates;
+  readonly sendText?: WeixinIlinkSendText;
 }
 
-function segmentLocalPath(seg: MessageSegment): string | undefined {
-  const ref = segmentMediaRef(seg);
-  if (!ref || ref.startsWith("base64://") || /^data:/.test(ref) || /^https?:\/\//i.test(ref)) {
-    return undefined;
-  }
-  return ref.replace(/^file:\/\//, "");
-}
+export class WeixinIlinkEndpoint implements EndpointInstance {
+  readonly #options: WeixinIlinkEndpointOptions;
+  readonly #resolveCredentials: (
+    config: ResolvedWeixinIlinkConfig,
+  ) => Promise<WeixinIlinkCredentials>;
+  readonly #notifyStart: WeixinIlinkNotifyStart;
+  readonly #notifyStop: WeixinIlinkNotifyStop;
+  readonly #getUpdates: WeixinIlinkGetUpdates;
+  readonly #sendText: WeixinIlinkSendText;
+  #creds: WeixinIlinkCredentials | null = null;
+  #pollAbort?: AbortController;
+  #pollPromise?: Promise<void>;
+  #configManager?: WeixinConfigManager;
+  #open = false;
+  #started = false;
 
-export class WeixinIlinkEndpoint implements Endpoint<WeixinIlinkEndpointConfig, WeixinMessage> {
-  $connected = false;
-
-  private creds: WeixinIlinkCredentials | null = null;
-  private pollAbort?: AbortController;
-  private pollPromise?: Promise<void>;
-  private configManager?: WeixinConfigManager;
-
-  get $id(): string {
-    return this.$config.name;
+  constructor(options: WeixinIlinkEndpointOptions) {
+    this.#options = options;
+    this.#resolveCredentials = options.resolveCredentials ?? resolveCredentials;
+    this.#notifyStart = options.notifyStart ?? notifyStart;
+    this.#notifyStop = options.notifyStop ?? notifyStop;
+    this.#getUpdates = options.getUpdates ?? getUpdates;
+    this.#sendText = options.sendText ?? sendMessageWeixin;
   }
 
   get hasCredentials(): boolean {
-    return Boolean(this.creds?.botToken);
+    return Boolean(this.#creds?.botToken);
   }
-
-  get pluginLogger() {
-    return this.adapter.plugin.logger;
-  }
-
-  constructor(
-    public adapter: WeixinIlinkAdapter,
-    public $config: WeixinIlinkEndpointConfig,
-  ) {}
 
   apiBaseUrl(): string {
-    return this.$config.baseUrl ?? this.creds?.baseUrl ?? DEFAULT_API_BASE_URL;
+    return this.#creds?.baseUrl ?? this.#options.config.baseUrl;
   }
 
   cdnBaseUrl(): string {
-    return this.$config.cdnBaseUrl ?? DEFAULT_CDN_BASE_URL;
+    return this.#options.config.cdnBaseUrl;
   }
 
-  async $connect(): Promise<void> {
-    configureIlinkMeta({ botAgent: this.$config.botAgent });
-    this.creds = await resolveCredentials(this.adapter.plugin, this.$config);
-    restoreContextTokens(this.$id);
-
-    await notifyStart({
-      baseUrl: this.apiBaseUrl(),
-      token: this.creds.botToken,
-    });
-
-    this.configManager = new WeixinConfigManager(
-      { baseUrl: this.apiBaseUrl(), token: this.creds.botToken },
-      (msg) => this.pluginLogger.debug(msg),
-    );
-
-    this.pollAbort = new AbortController();
-    this.pollPromise = this.pollLoop(this.pollAbort.signal);
-    this.$connected = true;
-    this.pluginLogger.info(`weixin-ilink endpoint ${this.$id} connected`);
-  }
-
-  async $disconnect(): Promise<void> {
-    this.pollAbort?.abort();
+  async start(): Promise<void> {
+    if (this.#started) return;
+    this.#started = true;
     try {
-      await this.pollPromise;
+      configureIlinkMeta({ botAgent: this.#options.config.botAgent });
+      this.#creds = await this.#resolveCredentials(this.#options.config);
+      restoreContextTokens(this.#options.config.name);
+
+      await this.#notifyStart({
+        baseUrl: this.apiBaseUrl(),
+        token: this.#creds.botToken,
+      });
+
+      this.#configManager = new WeixinConfigManager(
+        { baseUrl: this.apiBaseUrl(), token: this.#creds.botToken },
+        (msg) => logger.debug(msg),
+      );
+
+      this.#pollAbort = new AbortController();
+      this.#pollPromise = this.#pollLoop(this.#pollAbort.signal);
+      logger.info(formatCompact({
+        op: 'connect',
+        endpoint: this.#options.config.name,
+      }));
+    } catch (error) {
+      await this.stop();
+      logger.error('Failed to connect weixin-ilink bot:', error);
+      throw error;
+    }
+  }
+
+  open(): void {
+    this.#open = true;
+  }
+
+  close(): void {
+    this.#open = false;
+  }
+
+  async stop(): Promise<void> {
+    this.#open = false;
+    this.#pollAbort?.abort();
+    try {
+      await this.#pollPromise;
     } catch {
       /* poll loop exit */
     }
-    if (this.creds?.botToken) {
+    if (this.#creds?.botToken) {
       try {
-        await notifyStop({ baseUrl: this.apiBaseUrl(), token: this.creds.botToken });
+        await this.#notifyStop({ baseUrl: this.apiBaseUrl(), token: this.#creds.botToken });
       } catch (err) {
-        this.pluginLogger.warn(`notifyStop failed: ${String(err)}`);
+        logger.warn(formatCompact({
+          op: 'notify_stop',
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        }));
       }
     }
-    this.$connected = false;
-    this.pluginLogger.info(`weixin-ilink endpoint ${this.$id} disconnected`);
+    this.#started = false;
+    logger.debug(formatCompact({
+      op: 'disconnect',
+      endpoint: this.#options.config.name,
+    }));
   }
 
-  async sendTypingToUser(userId: string, status: number): Promise<void> {
-    if (!this.creds?.botToken || !this.configManager) return;
-    const contextToken = getContextToken(this.$id, userId);
-    const cfg = await this.configManager.getForUser(userId, contextToken);
-    if (!cfg.typingTicket) {
-      this.pluginLogger.debug(`sendTyping: no typing_ticket for user=${userId}`);
-      return;
+  async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
+    if (!this.#creds?.botToken) {
+      throw new Error('weixin-ilink bot not authenticated');
     }
-    await sendTyping({
-      baseUrl: this.apiBaseUrl(),
-      token: this.creds.botToken,
-      body: {
-        ilink_user_id: userId,
-        typing_ticket: cfg.typingTicket,
-        status,
-      },
-    });
-  }
-
-  async $recallMessage(_id: string): Promise<void> {
-    this.pluginLogger.debug("weixin-ilink does not support message recall");
-  }
-
-  $formatMessage(msg: WeixinMessageWithMedia): Message<WeixinMessage> {
-    const userId = msg.from_user_id ?? "";
-    const wire = this.buildInboundContent(msg);
-    const quoteId = Message.quoteIdFromContent(wire);
-    Message.alignReplySegments(wire, quoteId);
-    const content = toCanonicalSegments(wire);
-    const msgId = String(msg.message_id ?? msg.client_id ?? msg.seq ?? Date.now());
-
-    return Message.from(msg, {
-      $id: msgId,
-      $adapter: "weixin-ilink",
-      $endpoint: this.$config.name,
-      $sender: {
-        id: userId,
-        name: userId,
-      },
-      $channel: {
-        id: userId,
-        type: "private",
-      },
-      $content: content,
-      $quote_id: quoteId,
-      $raw: bodyFromItemList(msg.item_list),
-      $timestamp: msg.create_time_ms ?? Date.now(),
-      $recall: async () => this.$recallMessage(msgId),
-      $reply: async (replyContent: SendContent, _quote?: boolean | string) => {
-        if (!Array.isArray(replyContent)) replyContent = [replyContent];
-        return this.adapter.sendMessage({
-          context: "weixin-ilink",
-          endpoint: this.$config.name,
-          id: userId,
-          type: "private",
-          content: replyContent,
-        });
-      },
-    });
-  }
-
-  private buildInboundContent(msg: WeixinMessageWithMedia): MessageSegment[] {
-    const segments: MessageSegment[] = [];
-    const text = bodyFromItemList(msg.item_list);
-    if (text) segments.push(segment.text(text));
-
-    const media = msg._media;
-    if (media?.decryptedPicPath) {
-      segments.push(segment("image", { file: media.decryptedPicPath }));
-    } else if (media?.decryptedVideoPath) {
-      segments.push(segment("video", { file: media.decryptedVideoPath }));
-    } else if (media?.decryptedFilePath) {
-      segments.push(segment("file", {
-        file: media.decryptedFilePath,
-        name: path.basename(media.decryptedFilePath),
-      }));
-    } else if (media?.decryptedVoicePath) {
-      segments.push(segment("record", { file: media.decryptedVoicePath }));
-    } else if (!text && msg.item_list?.some((i) => isMediaItem(i))) {
-      segments.push(segment.text("[媒体消息]"));
-    }
-
-    return segments.length ? segments : [segment.text("")];
-  }
-
-  async $sendMessage(options: SendOptions): Promise<string> {
-    if (!this.creds?.botToken) {
-      throw new Error("weixin-ilink bot not authenticated");
-    }
-    const peerId = options.id;
-    const contextToken = getContextToken(this.$id, peerId);
+    const contextToken = getContextToken(this.#options.config.name, target);
     if (!contextToken) {
-      this.pluginLogger.warn(`missing context_token for peer ${peerId}, refusing send`);
-      throw new Error(`missing context_token for peer ${peerId}`);
+      logger.warn(formatCompact({
+        op: 'send',
+        ok: false,
+        reason: 'missing_context_token',
+        target,
+      }));
+      throw new Error(`missing context_token for peer ${target}`);
     }
 
     const apiOpts = {
       baseUrl: this.apiBaseUrl(),
-      token: this.creds.botToken,
+      token: this.#creds.botToken,
       contextToken,
     };
 
-    const outboundDir = path.join(resolveStateDir(), "media", "outbound");
-    const canonical = expandInteractiveSegmentsInContent(options.content);
-    const wire = fromCanonicalSegments(
-      (Array.isArray(canonical) ? canonical : [canonical]).map((s) =>
-        typeof s === 'string' ? { type: 'text' as const, data: { text: s } } : s,
-      ),
-    );
+    const outboundDir = path.join(resolveStateDir(), 'media', 'outbound');
+    const wire = formatOutboundSegments(payload);
     const materialized = await materializeOutboundMedia(wire, outboundDir);
     const segments = Array.isArray(materialized) ? materialized : [materialized];
-    let lastId = "";
-    let pendingText = "";
+    let lastId = '';
+    let pendingText = '';
 
     for (const raw of segments) {
-      if (typeof raw === "string") {
+      if (typeof raw === 'string') {
         pendingText += raw;
         continue;
       }
-      if (typeof raw !== "object" || raw === null || !("type" in raw)) {
-        continue;
-      }
-      const seg = raw as MessageSegment;
-      if (seg.type === "text" || seg.type === "markdown") {
-        const t = (seg.data as { text?: string }).text ?? "";
-        pendingText += t;
+      if (typeof raw !== 'object' || raw === null || !('type' in raw)) continue;
+      const seg = raw as WeixinWireSegment;
+      if (seg.type === 'text' || seg.type === 'markdown') {
+        pendingText += String((seg.data as { text?: string } | undefined)?.text ?? '');
         continue;
       }
 
       const filePath = segmentLocalPath(seg);
       if (filePath && fs.existsSync(filePath)) {
-        // 微信限制：单条消息不能图文混排 → 先单独发文本，再发纯媒体（不带 caption）
+        // 微信限制：单条消息不能图文混排 → 先单独发文本，再发纯媒体
         if (pendingText.trim()) {
-          const textResult = await sendMessageWeixin({
-            to: peerId,
+          const textResult = await this.#sendText({
+            to: target,
             text: pendingText,
             opts: apiOpts,
           });
-          pendingText = "";
+          pendingText = '';
           lastId = textResult.messageId;
         }
         const result = await sendWeixinMediaFile({
           filePath,
-          to: peerId,
-          text: "",
+          to: target,
+          text: '',
           opts: apiOpts,
           cdnBaseUrl: this.cdnBaseUrl(),
         });
@@ -311,14 +238,18 @@ export class WeixinIlinkEndpoint implements Endpoint<WeixinIlinkEndpointConfig, 
         continue;
       }
 
-      if (seg.type === "image" || seg.type === "video" || seg.type === "file" || seg.type === "record") {
-        this.pluginLogger.warn(`skip outbound ${seg.type}: no local file path`);
+      if (seg.type === 'image' || seg.type === 'video' || seg.type === 'file' || seg.type === 'record') {
+        logger.warn(formatCompact({
+          op: 'send',
+          skip: 'no_local_file',
+          type: seg.type,
+        }));
       }
     }
 
     if (pendingText.trim()) {
-      const result = await sendMessageWeixin({
-        to: peerId,
+      const result = await this.#sendText({
+        to: target,
         text: pendingText,
         opts: apiOpts,
       });
@@ -328,23 +259,74 @@ export class WeixinIlinkEndpoint implements Endpoint<WeixinIlinkEndpointConfig, 
     return lastId || `weixin-ilink-${Date.now()}`;
   }
 
-  private async pollLoop(abortSignal: AbortSignal): Promise<void> {
-    if (!this.creds?.botToken) return;
+  /** Test / internal: admit a parsed message when the endpoint is open. */
+  admit(msg: WeixinMessageWithMedia): void {
+    if (!this.#open) return;
+    const userId = msg.from_user_id ?? '';
+    if (msg.context_token && userId) {
+      setContextToken(this.#options.config.name, userId, msg.context_token);
+    }
+    void this.#options.gateway.receive({
+      adapter: this.#options.id,
+      target: userId,
+      content: formatInboundContent(msg),
+      sender: userId,
+      id: inboundMessageId(msg),
+      metadata: Object.freeze({
+        endpoint: this.#options.config.name,
+        messageType: msg.message_type,
+        createTimeMs: msg.create_time_ms,
+      }),
+    }).catch((err) => {
+      logger.warn(formatCompact({
+        op: 'weixin_ilink_gateway_receive_failed',
+        target: userId,
+        error: err instanceof Error ? err.message : String(err),
+      }));
+    });
+  }
 
-    let getUpdatesBuf = loadSyncBuf(this.$id);
-    let nextTimeoutMs = this.$config.longPollTimeoutMs ?? DEFAULT_LONG_POLL_TIMEOUT_MS;
+  async sendTypingToUser(userId: string, status: number): Promise<void> {
+    if (!this.#creds?.botToken || !this.#configManager) return;
+    const contextToken = getContextToken(this.#options.config.name, userId);
+    const cfg = await this.#configManager.getForUser(userId, contextToken);
+    if (!cfg.typingTicket) {
+      logger.debug(formatCompact({
+        op: 'send_typing',
+        skip: 'no_typing_ticket',
+        userId,
+      }));
+      return;
+    }
+    await sendTyping({
+      baseUrl: this.apiBaseUrl(),
+      token: this.#creds.botToken,
+      body: {
+        ilink_user_id: userId,
+        typing_ticket: cfg.typingTicket,
+        status,
+      },
+    });
+  }
+
+  async #pollLoop(abortSignal: AbortSignal): Promise<void> {
+    if (!this.#creds?.botToken) return;
+
+    const endpointName = this.#options.config.name;
+    let getUpdatesBuf = loadSyncBuf(endpointName);
+    let nextTimeoutMs = this.#options.config.longPollTimeoutMs;
     let consecutiveFailures = 0;
 
     while (!abortSignal.aborted) {
-      if (isSessionPaused(this.$id)) {
-        await sleep(getRemainingPauseMs(this.$id), abortSignal);
+      if (isSessionPaused(endpointName)) {
+        await sleep(getRemainingPauseMs(endpointName), abortSignal);
         continue;
       }
 
       try {
-        const resp = await getUpdates({
+        const resp = await this.#getUpdates({
           baseUrl: this.apiBaseUrl(),
-          token: this.creds.botToken,
+          token: this.#creds.botToken,
           get_updates_buf: getUpdatesBuf,
           timeoutMs: nextTimeoutMs,
           abortSignal,
@@ -355,16 +337,16 @@ export class WeixinIlinkEndpoint implements Endpoint<WeixinIlinkEndpointConfig, 
         }
 
         const isApiError =
-          (resp.ret !== undefined && resp.ret !== 0) ||
-          (resp.errcode !== undefined && resp.errcode !== 0);
+          (resp.ret !== undefined && resp.ret !== 0)
+          || (resp.errcode !== undefined && resp.errcode !== 0);
 
         if (isApiError) {
           const sessionExpired =
             resp.errcode === SESSION_EXPIRED_ERRCODE || resp.ret === SESSION_EXPIRED_ERRCODE;
           if (sessionExpired) {
-            pauseSession(this.$id);
+            pauseSession(endpointName);
             consecutiveFailures = 0;
-            await sleep(getRemainingPauseMs(this.$id), abortSignal);
+            await sleep(getRemainingPauseMs(endpointName), abortSignal);
             continue;
           }
           consecutiveFailures += 1;
@@ -380,16 +362,20 @@ export class WeixinIlinkEndpoint implements Endpoint<WeixinIlinkEndpointConfig, 
         consecutiveFailures = 0;
         if (resp.get_updates_buf) {
           getUpdatesBuf = resp.get_updates_buf;
-          saveSyncBuf(this.$id, getUpdatesBuf);
+          saveSyncBuf(endpointName, getUpdatesBuf);
         }
 
         for (const inbound of resp.msgs ?? []) {
-          await this.handleInboundMessage(inbound);
+          await this.#handleInboundMessage(inbound);
         }
       } catch (err) {
         if (abortSignal.aborted) return;
         consecutiveFailures += 1;
-        this.pluginLogger.error(`weixin-ilink poll error: ${String(err)}`);
+        logger.error(formatCompact({
+          op: 'poll',
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        }));
         if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
           consecutiveFailures = 0;
           await sleep(BACKOFF_DELAY_MS, abortSignal);
@@ -400,37 +386,37 @@ export class WeixinIlinkEndpoint implements Endpoint<WeixinIlinkEndpointConfig, 
     }
   }
 
-  private async handleInboundMessage(full: WeixinMessage): Promise<void> {
-    const fromUserId = full.from_user_id ?? "";
+  async #handleInboundMessage(full: WeixinMessage): Promise<void> {
+    const fromUserId = full.from_user_id ?? '';
     if (full.context_token && fromUserId) {
-      setContextToken(this.$id, fromUserId, full.context_token);
+      setContextToken(this.#options.config.name, fromUserId, full.context_token);
     }
 
-    const mediaOpts = await this.downloadInboundMedia(full);
-    // 入站保持单条 message.receive（文字+媒体同条），供 AI context / im_transcripts / agent_messages 组装。
-    // 出站才按微信限制拆分图文（见 sendMessage）。
-    const message = this.$formatMessage({ ...full, _media: mediaOpts });
-    this.adapter.emit("message.receive", message);
-    this.pluginLogger.debug(
-      `${this.$id} recv private(${message.$channel.id}): ${segment.raw(message.$content)}`,
-    );
+    const mediaOpts = await this.#downloadInboundMedia(full);
+    this.admit({ ...full, _media: mediaOpts });
+    logger.debug(formatCompact({
+      op: 'recv',
+      endpoint: this.#options.config.name,
+      target: fromUserId,
+      preview: formatInboundContent({ ...full, _media: mediaOpts }).slice(0, 80),
+    }));
   }
 
-  private async downloadInboundMedia(full: WeixinMessage): Promise<WeixinInboundMediaOpts> {
+  async #downloadInboundMedia(full: WeixinMessage): Promise<WeixinInboundMediaOpts> {
     const hasDownloadableMedia = (m?: { encrypt_query_param?: string; full_url?: string }) =>
       Boolean(m?.encrypt_query_param || m?.full_url);
 
     const mediaItem =
       full.item_list?.find(
         (i) => i.type === MessageItemType.IMAGE && hasDownloadableMedia(i.image_item?.media),
-      ) ??
-      full.item_list?.find(
+      )
+      ?? full.item_list?.find(
         (i) => i.type === MessageItemType.VIDEO && hasDownloadableMedia(i.video_item?.media),
-      ) ??
-      full.item_list?.find(
+      )
+      ?? full.item_list?.find(
         (i) => i.type === MessageItemType.FILE && hasDownloadableMedia(i.file_item?.media),
-      ) ??
-      full.item_list?.find(
+      )
+      ?? full.item_list?.find(
         (i) => i.type === MessageItemType.VOICE && hasDownloadableMedia(i.voice_item?.media),
       );
 
@@ -439,41 +425,37 @@ export class WeixinIlinkEndpoint implements Endpoint<WeixinIlinkEndpointConfig, 
     return downloadMediaFromItem(mediaItem, {
       cdnBaseUrl: this.cdnBaseUrl(),
       saveMedia: (buffer, contentType, subdir, maxBytes, originalFilename) =>
-        this.saveInboundMedia(buffer, contentType, subdir, maxBytes, originalFilename),
-      log: (msg) => this.pluginLogger.debug(msg),
-      errLog: (msg) => this.pluginLogger.warn(msg),
-      label: `inbound:${fromUserIdLabel(full)}`,
+        this.#saveInboundMedia(buffer, contentType, subdir, maxBytes, originalFilename),
+      log: (msg) => logger.debug(msg),
+      errLog: (msg) => logger.warn(msg),
+      label: `inbound:${full.from_user_id ?? 'unknown'}`,
     });
   }
 
-  private async saveInboundMedia(
+  async #saveInboundMedia(
     buffer: Buffer,
     contentType?: string,
-    subdir = "inbound",
+    subdir = 'inbound',
     maxBytes = WEIXIN_MEDIA_MAX_BYTES,
     originalFilename?: string,
   ): Promise<{ path: string }> {
     if (buffer.length > maxBytes) {
       throw new Error(`media exceeds max size ${maxBytes}`);
     }
-    const dir = path.join(resolveStateDir(), "media", subdir);
+    const dir = path.join(resolveStateDir(), 'media', subdir);
     fs.mkdirSync(dir, { recursive: true });
     const resolvedMime = contentType ?? sniffMimeFromBuffer(buffer);
     const ext = originalFilename
       ? path.extname(originalFilename)
       : resolvedMime
         ? getExtensionFromMime(resolvedMime)
-        : ".bin";
+        : '.bin';
     const base = originalFilename
       ? path.basename(originalFilename, ext)
-      : "media";
-    const fileName = `${base}-${Date.now()}-${crypto.randomBytes(4).toString("hex")}${ext}`;
+      : 'media';
+    const fileName = `${base}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}${ext}`;
     const filePath = path.join(dir, fileName);
     fs.writeFileSync(filePath, buffer);
     return { path: filePath };
   }
-}
-
-function fromUserIdLabel(msg: WeixinMessage): string {
-  return msg.from_user_id ?? "unknown";
 }

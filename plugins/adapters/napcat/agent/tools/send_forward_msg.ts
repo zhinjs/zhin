@@ -1,8 +1,8 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getEndpoint } from '../../src/napcat-agent-deps.js';
 
-export default defineTool<{
+export default defineAgentTool<{
   endpoint_id: string;
   message_type: 'private' | 'group';
   id: number;

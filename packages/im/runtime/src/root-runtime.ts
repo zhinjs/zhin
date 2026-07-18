@@ -37,6 +37,7 @@ import {
 } from './config-patch-planner.js';
 import { defineRuntimeEnvironment, type RuntimeEnvironment } from './environment.js';
 import {
+  createEnvStore,
   defineEnvironmentLayers,
   type EnvironmentLayers,
 } from './environment-store.js';
@@ -280,8 +281,19 @@ export class RootRuntime {
         ? this.#configResolver
         : await new ConfigComposer()
             .compose(graph, this.#configDocument)
-            .then((composed) => (node: PluginGraphNode) => composed.views.get(node.id));
+            .then((composed) => this.#configViewResolver(composed.views));
     return { graph, configResolver };
+  }
+
+  #configViewResolver(
+    views: ReadonlyMap<PluginId, unknown>,
+  ): PluginConfigResolver {
+    const env = createEnvStore(rootPluginId(), this.#environment, this.#environmentLayers);
+    return (node) => {
+      const view = views.get(node.id);
+      if (view === undefined) return undefined;
+      return env.expandMissingAsEmpty(view);
+    };
   }
 
   async #applyConfigPatches(patches: readonly ConfigPatch[]): Promise<RuntimeSnapshot> {
@@ -314,7 +326,7 @@ export class RootRuntime {
       }
       const inspected: InspectedProject = {
         graph,
-        configResolver: (node) => planned.views.get(node.id),
+        configResolver: this.#configViewResolver(planned.views),
       };
       if (this.#model && !planned.roots.includes(rootPluginId())) {
         prepared = await this.#prepareSubtrees(current, inspected, planned.roots);

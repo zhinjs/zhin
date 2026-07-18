@@ -211,8 +211,10 @@ export class DefaultFormatter implements LogFormatter {
     const { name, message, timestamp, error } = entry
     const level = parseLogLevel(entry.level)
 
-    // 格式化时间：MM-dd HH:MM:ss.SSS（使用自定义颜色）
-    const date = timestamp.toISOString().slice(5, 23).replace('T', ' ')
+    // 格式化时间：MM-dd HH:mm:ss.SSS（本地时间，使用自定义颜色）
+    const pad = (value: number, length = 2) => String(value).padStart(length, '0')
+    const date = `${pad(timestamp.getMonth() + 1)}-${pad(timestamp.getDate())} ` +
+      `${pad(timestamp.getHours())}:${pad(timestamp.getMinutes())}:${pad(timestamp.getSeconds())}`
     const dateStr = this.dateColor(`[${date}]`)
 
     // 格式化级别（使用自定义颜色）
@@ -544,14 +546,12 @@ export class Logger {
     // 检查是否有Error对象
     let error: Error | undefined
     if (level === LogLevel.ERROR) {
-      // 在参数中查找Error对象
-      error = args.find(arg => arg instanceof Error)
-      
-      // 如果第一个参数是Error对象，使用其message作为主要消息
-      if (args[0] instanceof Error) {
-        const err = args[0] as Error
-        error = err
-        args = args.slice(1) // 移除Error对象，避免重复显示
+      // 在任意位置查找Error对象，并从args中剔除，
+      // 避免util.format内联一次堆栈、Formatter再追加一次
+      const errorIndex = args.findIndex(arg => arg instanceof Error)
+      if (errorIndex !== -1) {
+        error = args[errorIndex] as Error
+        args = args.filter((_, index) => index !== errorIndex)
       }
     }
 
@@ -751,8 +751,8 @@ export function removeTransport(transport: LogTransport,logger:Logger=defaultLog
 export function setFormatter(formatter: LogFormatter,logger:Logger=defaultLogger) {
   return logger.setFormatter(formatter)
 }
-export function setLevel(level: LogLevelInput, logger: Logger = defaultLogger) {
-  return logger.setLevel(level)
+export function setLevel(level: LogLevelInput, logger: Logger = defaultLogger, recursive: boolean = false) {
+  return logger.setLevel(level, recursive)
 }
 export function getLevel(logger: Logger = defaultLogger) {
   return logger.getLevel()

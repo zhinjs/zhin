@@ -1,91 +1,74 @@
-/**
- * NapCat 适配器入口
- * 支持 OneBot11 标准 + go-cqhttp 扩展 + NapCat 独有 API
- * 连接方式：正向 WS / 反向 WS / HTTP
- */
-import path from 'path';
-import {
-  usePlugin,
-  type Plugin,
-  type Context,
-  type ISceneManagement,
-  createSceneManagementTools,
-  registerDefaultScenePlatformPermitChecker,
-  type ToolFeature,
-} from 'zhin.js';
-import { registerAgentPromptContributor, unregisterAgentPromptContributor } from 'zhin.js/agent';
-import type { Router } from '@zhin.js/host-router';
-import { PageManager } from '@zhin.js/host-api';
-import { NapCatAdapter } from './adapter.js';
-import { createNapCatAgentPromptContributor } from './agent-prompt.js';
-import { registerRoutes } from './routes.js';
-import { setNapcatAgentDeps } from './napcat-agent-deps.js';
+export {
+  buildSendAction,
+  buildWsConnectOptions,
+  callNapCatHttpAction,
+  formatInboundContent,
+  formatInboundTarget,
+  formatOutboundSegments,
+  getChannelId,
+  isMessageEvent,
+  parseSendTarget,
+  resolveNapCatConfig,
+  senderDisplayName,
+  type MessageSegment,
+  type NapCatActionRequest,
+  type NapCatActionResponse,
+  type NapCatAdapterConfig,
+  type NapCatConfigBase,
+  type NapCatEndpointConfig,
+  type NapCatEvent,
+  type NapCatHttpConfig,
+  type NapCatMessageEvent,
+  type NapCatSender,
+  type NapCatWireSegment,
+  type NapCatWsConfig,
+  type NapCatWssConfig,
+  type ParsedSendTarget,
+  type ResolvedNapCatConfig,
+} from './protocol.js';
 
-export * from './types.js';
-export { NapCatWsClient } from './endpoint-ws-client.js';
-export { NapCatWsServer } from './endpoint-ws-server.js';
-export { NapCatHttpEndpoint } from './endpoint-http.js';
-export { NapCatAdapter, type NapCatEndpoint } from './adapter.js';
-export { NapCatEndpointBase } from './endpoint-base.js';
+export {
+  InboundMessageDeduper,
+  isSelfMessage,
+  normalizeMessage,
+} from './napcat-inbound.js';
 
-declare module 'zhin.js' {
-  namespace Plugin {
-    interface Contexts {
-      web: PageManager;
-      router: Router;
-    }
-  }
-  interface Adapters {
-    napcat: NapCatAdapter;
-  }
-}
+export {
+  getEndpoint,
+  getNapcatAgentDeps,
+  registerNapcatAgentEndpoint,
+  setNapcatAgentDeps,
+  type NapcatAgentDeps,
+  type NapcatAgentEndpoint,
+} from './napcat-agent-deps.js';
 
-const plugin = usePlugin();
-const { provide, useContext } = plugin;
+export { parseOneBotGetMsgResponse } from './onebot-get-msg.js';
 
-// ── 适配器注册 ─────────────────────────────────────────────────────
-provide({
-  name: 'napcat',
-  description: 'NapCatQQ 适配器（OneBot11 + go-cqhttp + NapCat 扩展，正向/反向 WS + HTTP）',
-  mounted: async (p: Plugin) => {
-    registerAgentPromptContributor(createNapCatAgentPromptContributor());
-    const adapter = new NapCatAdapter(p);
-    await adapter.start();
-    return adapter;
-  },
-  dispose: async (adapter: NapCatAdapter) => {
-    unregisterAgentPromptContributor('napcat');
-    await adapter.stop();
-  },
-} as unknown as Context<'napcat'>);
+export {
+  NapCatWsEndpoint,
+  type NapCatWsEndpointOptions,
+} from './ws-endpoint.js';
 
-// ── AI 工具注册（场景治理；扩展工具见 agent/tools/）────────────────
-useContext('tool', 'napcat', (toolService: ToolFeature, napcat: NapCatAdapter) => {
-  setNapcatAgentDeps({ getAdapter: () => napcat });
+export {
+  NapCatWssEndpoint,
+  type NapCatWssEndpointOptions,
+} from './wss-endpoint.js';
 
-  const disposers: (() => void)[] = [];
-  disposers.push(registerDefaultScenePlatformPermitChecker('napcat'));
+export {
+  NapCatHttpEndpoint,
+  type NapCatHttpEndpointOptions,
+} from './http-endpoint.js';
 
-  const sceneTools = createSceneManagementTools(
-    napcat as unknown as ISceneManagement,
-    'napcat',
-  );
-  disposers.push(...sceneTools.map(t => toolService.addTool(t, plugin.name)));
+export type { NapCatWsSocket, NapCatWsCreateOptions } from './ws-types.js';
 
-  return () => disposers.forEach(d => d());
-});
+export {
+  callNapCatWsAction,
+  decodeWsPayload,
+  handleNapCatWsMessage,
+  rejectAllPending,
+  startNapCatHeartbeat,
+} from './ws-transport.js';
 
-// ── Web 控制台入口 ─────────────────────────────────────────────────
-useContext('web', (pageManager) => {
-  pageManager.addEntry({
-    id: 'napcat',
-    development: path.resolve(import.meta.dirname, '../client/index.tsx'),
-    production: path.resolve(import.meta.dirname, '../dist/index.js'),
-    meta: { name: 'NapCat' },
-  });
-});
+export { verifyNapCatAccessToken } from './wss-auth.js';
 
-// ── HTTP 路由 ──────────────────────────────────────────────────────
-useContext('router', 'napcat', async (router: Router, napcat: NapCatAdapter) => {
-  registerRoutes(router, napcat);
-});
+export { readRequestBody } from './webhook.js';

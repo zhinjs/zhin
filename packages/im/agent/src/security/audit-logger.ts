@@ -247,6 +247,11 @@ export class AuditLogger {
   private eventCount = 0;
   private sessionEvents: AuditEvent[] = [];
   private static readonly MAX_SESSION_EVENTS = 5000;
+  /** 背压：write() 返回 false 时事件先进有界队列，'drain' 后泄放 */
+  private pendingLines: string[] = [];
+  private paused = false;
+  private droppedCount = 0;
+  private static readonly MAX_PENDING_LINES = 10000;
 
   constructor(config: Partial<AuditLoggerConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -337,16 +342,67 @@ export class AuditLogger {
   }
 
   /**
-   * 写入日志文件
+   * 写入日志文件（含背压处理）
+   *
+   * write() 返回 false 表示内部缓冲已满：暂停直入、事件行进入有界队列，
+   * 'drain' 后泄放；队列超上限（MAX_PENDING_LINES）丢弃并计数，
+   * 计数定期以 warn 审计事件落盘。
    */
   private writeToFile(event: AuditEvent): void {
     if (!this.logStream) return;
 
     try {
       const logLine = JSON.stringify(event) + '\n';
-      this.logStream.write(logLine);
+      if (this.paused) {
+        this.enqueueLine(logLine);
+        return;
+      }
+      const ok = this.logStream.write(logLine);
+      if (!ok) {
+        this.paused = true;
+        this.logStream.once('drain', () => this.onDrain());
+      }
     } catch (err) {
       console.error('[AuditLogger] 写入日志失败:', err);
+    }
+  }
+
+  private enqueueLine(logLine: string): void {
+    if (this.pendingLines.length >= AuditLogger.MAX_PENDING_LINES) {
+      this.droppedCount++;
+      this.maybeLogDropWarn();
+      return;
+    }
+    this.pendingLines.push(logLine);
+  }
+
+  /** 首次丢弃及每 1000 条丢弃落一条 warn 审计事件 */
+  private maybeLogDropWarn(): void {
+    if (this.droppedCount === 1 || this.droppedCount % 1000 === 0) {
+      this.log({
+        type: 'security.violation',
+        severity: 'warn',
+        message: `审计事件写入队列超限，已丢弃 ${this.droppedCount} 条事件`,
+        blocked: true,
+        details: { droppedEvents: this.droppedCount },
+      });
+    }
+  }
+
+  private onDrain(): void {
+    this.paused = false;
+    const stream = this.logStream;
+    if (!stream) {
+      this.pendingLines.length = 0;
+      return;
+    }
+    while (this.pendingLines.length > 0) {
+      const ok = stream.write(this.pendingLines.shift()!);
+      if (!ok) {
+        this.paused = true;
+        stream.once('drain', () => this.onDrain());
+        return;
+      }
     }
   }
 
@@ -519,6 +575,7 @@ export class AuditLogger {
     totalEvents: number;
     sessionEvents: number;
     blockedEvents: number;
+    droppedEvents: number;
     byType: Record<AuditEventType, number>;
     bySeverity: Record<AuditEventSeverity, number>;
   } {
@@ -542,6 +599,7 @@ export class AuditLogger {
       totalEvents: this.eventCount,
       sessionEvents: this.sessionEvents.length,
       blockedEvents,
+      droppedEvents: this.droppedCount,
       byType,
       bySeverity,
     };
@@ -555,13 +613,34 @@ export class AuditLogger {
   }
 
   /**
-   * 关闭日志流
+   * 关闭日志流：先泄放队列，再等待 'finish'（或 error）确保全部落盘。
    */
-  close(): void {
-    if (this.logStream) {
-      this.logStream.end();
-      this.logStream = null;
+  async close(): Promise<void> {
+    const stream = this.logStream;
+    if (!stream) return;
+    this.logStream = null;
+    this.paused = false;
+
+    // 泄放背压队列中剩余事件
+    while (this.pendingLines.length > 0) {
+      try {
+        stream.write(this.pendingLines.shift()!);
+      } catch {
+        // 流已损坏，丢弃剩余队列
+        this.pendingLines.length = 0;
+        break;
+      }
     }
+
+    await new Promise<void>((resolve) => {
+      const done = () => resolve();
+      stream.once('error', done);
+      try {
+        stream.end(done);
+      } catch {
+        done();
+      }
+    });
   }
 }
 
@@ -591,18 +670,18 @@ export function getAuditLogger(): AuditLogger {
  */
 export function initAuditLogger(config: Partial<AuditLoggerConfig>): AuditLogger {
   if (globalAuditLogger) {
-    globalAuditLogger.close();
+    void globalAuditLogger.close().catch(() => {});
   }
   globalAuditLogger = new AuditLogger(config);
   return globalAuditLogger;
 }
 
 /**
- * 关闭审计日志
+ * 关闭审计日志（等待全部缓冲事件落盘）
  */
-export function closeAuditLogger(): void {
+export async function closeAuditLogger(): Promise<void> {
   if (globalAuditLogger) {
-    globalAuditLogger.close();
+    await globalAuditLogger.close();
     globalAuditLogger = null;
   }
 }

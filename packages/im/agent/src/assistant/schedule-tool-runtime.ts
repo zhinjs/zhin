@@ -3,7 +3,7 @@ import {
   touchToolsInSnapshot,
   type DeferredToolSessionSnapshot,
 } from '@zhin.js/ai';
-import { Logger } from '@zhin.js/logger';
+import { getLogger } from '@zhin.js/logger';
 import type { ToolCatalogItem } from '../tool-catalog/types.js';
 import { resolveDeferredToolsConfig } from '../tool-catalog/resolve-config.js';
 import { persistDeferredToolSnapshot } from '../tool/deferred-resolution.js';
@@ -11,7 +11,7 @@ import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import { getScheduleTurnContext } from '../internal/turn-context.js';
 import type { ScheduleJobExecutionPlan } from './types.js';
 
-const logger = new Logger(null, 'schedule-tool-runtime');
+const logger = getLogger('schedule-tool-runtime');
 
 export async function preloadScheduleTools(
   host: ZhinAgentPrivate,

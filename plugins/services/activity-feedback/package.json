@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/service-activity-feedback",
   "version": "1.0.1",
-  "description": "Activity Feedback 服务插件：订阅 AI 生命周期事件，按 endpoint activityFeedback 配置驱动适配器能力",
+  "description": "Activity Feedback 服务插件（Plugin Runtime）",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -14,15 +14,16 @@
     "./package.json": "./package.json"
   },
   "files": [
+    "plugin.ts",
+    "schema.json",
     "src",
     "lib",
-    "plugin.yml",
     "README.md"
   ],
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
-    "test": "vitest run --config ../../../vitest.config.ts plugins/services/activity-feedback/tests"
+    "test": "vitest run --root ../../.. plugins/services/activity-feedback/tests"
   },
   "keywords": [
     "zhin",
@@ -40,15 +41,35 @@
     "directory": "plugins/services/activity-feedback"
   },
   "dependencies": {
-    "@zhin.js/agent": "workspace:*"
+    "@zhin.js/agent": "workspace:*",
+    "@zhin.js/logger": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",
     "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {
     "@zhin.js/agent": "workspace:*",
     "zhin.js": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "zhin.js": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [],
+    "plugins": []
   }
 }

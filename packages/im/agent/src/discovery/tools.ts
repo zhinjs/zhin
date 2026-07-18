@@ -9,7 +9,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawn } from 'node:child_process';
-import { Logger, type Plugin, type ToolParametersSchema, type ToolScope, type SenderRole } from '@zhin.js/core';
+import { type Plugin, type ToolParametersSchema, type ToolScope, type SenderRole, getLogger } from '@zhin.js/core';
 import { getDataDir } from './utils.js';
 
 const VALID_TOOL_SCOPES: readonly ToolScope[] = ['private', 'group', 'channel'];
@@ -44,7 +44,7 @@ function parsePermissionsFromMetadata(metadata: {
   return roles.map((r) => `role(${r})`);
 }
 
-const logger = new Logger(null, 'builtin-tools');
+const logger = getLogger('builtin-tools');
 
 // ============================================================================
 // 类型

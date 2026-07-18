@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { htmlToSvg, getAllBuiltinFonts } from "../../../packages/toolkit/satori/src/index.ts";
+import { htmlToSvg, getAllBuiltinFonts } from "@zhin.js/satori";
 import {
   buildZtReportHtml,
   collectZtFallbackData,
   collectZtReportData,
   ztReportReply,
-} from "../src/plugins/zt-report.js";
+} from "../lib/zt-report.js";
 
 // 仅测试 HTML 片段能否过 Satori（开发调试用）
 async function assertSatori(fragment: string) {

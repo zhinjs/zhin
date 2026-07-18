@@ -1,8 +1,8 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { executeGithubPushBranch } from '../../src/github-bot-handlers.js';
 
-export default defineTool<{ repo?: string; branch?: string; message: string }>({
+export default defineAgentTool<{ repo?: string; branch?: string; message: string }>({
   description: '在托管工作区 git commit 并 push 到远程分支（需 HITL 确认；Bot 身份）',
   inputSchema: z.object({
     repo: z.string().optional().describe('owner/repo'),

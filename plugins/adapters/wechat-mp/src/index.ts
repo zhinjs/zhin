@@ -1,39 +1,45 @@
-/**
- * 微信公众号适配器入口：类型扩展、导出、注册
- */
-import { usePlugin, type Plugin, type Context } from "zhin.js";
-import type { Router } from "@zhin.js/host-router";
-import { WeChatMPAdapter } from "./adapter.js";
+export {
+  buildTextReply,
+  computeSignatureHash,
+  decryptEchostr,
+  decryptMessage,
+  encryptMessage,
+  extractOutboundText,
+  formatCustomerServiceBody,
+  formatInboundContent,
+  isEncryptedEchostr,
+  normalizeEchostrParam,
+  parseXMLMessage,
+  queryParam,
+  readTextBody,
+  resolveEventPassiveReply,
+  resolveWeChatMpConfig,
+  verifySignature,
+  type ResolvedWeChatMpConfig,
+  type TokenResponse,
+  type WeChatAPIResponse,
+  type WeChatMessage,
+  type WeChatMpAdapterConfig,
+  type WeChatWireSegment,
+} from './protocol.js';
 
-declare module "zhin.js" {
-  namespace Plugin {
-    interface Contexts {
-      router: import("@zhin.js/host-router").Router;
-    }
-  }
-  interface Adapters {
-    "wechat-mp": WeChatMPAdapter;
-  }
-}
+export {
+  getPassiveReplyCapture,
+  recordPassiveReplyText,
+  runWithPassiveReplyCapture,
+  type PassiveReplyCapture,
+} from './passive-reply.js';
 
-export * from "./types.js";
-export { WeChatMPEndpoint } from "./endpoint.js";
-export { WeChatMPAdapter } from "./adapter.js";
+export {
+  WeChatMpEndpoint,
+  type WeChatMpEndpointOptions,
+  type WeChatMpFetch,
+} from './endpoint.js';
 
-const plugin = usePlugin();
-const { provide, useContext } = plugin;
-
-useContext("router", (router: Router) => {
-  provide({
-    name: "wechat-mp",
-    description: "WeChat MP Endpoint Adapter",
-    mounted: async (p: Plugin) => {
-      const adapter = new WeChatMPAdapter(p, router);
-      await adapter.start();
-      return adapter;
-    },
-    dispose: async (adapter: WeChatMPAdapter) => {
-      await adapter.stop();
-    },
-  } as Context<"wechat-mp">);
-});
+export {
+  registerWeChatMpWebhookRoutes,
+  handleWeChatMpVerification,
+  handleWeChatMpMessage,
+  collectPassiveReply,
+  type WeChatMpWebhookHandler,
+} from './webhook.js';

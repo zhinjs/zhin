@@ -5,7 +5,11 @@ import { fileURLToPath } from 'node:url';
 import { AdapterIndex, adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
 import { ImRuntime, type MessageGateway } from '@zhin.js/core/runtime';
 import { capabilityId, rootPluginId } from '@zhin.js/plugin-runtime';
-import { NativeDevelopmentModuleRuntime, RootRuntime } from '@zhin.js/runtime';
+import {
+  NativeDevelopmentModuleRuntime,
+  RootRuntime,
+  supportsNativeTypeScript,
+} from '@zhin.js/runtime';
 import { MigrationReadiness, runStartCommand } from '@zhin.js/cli';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TerminalEndpoint } from '../adapters/terminal.js';
@@ -56,7 +60,9 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
       .toContain('defineAgentTool');
   });
 
-  it('runs Adapter -> ImRuntime -> Command/Component -> Endpoint in one snapshot', async () => {
+  it.skipIf(!supportsNativeTypeScript())(
+    'runs Adapter -> ImRuntime -> Command/Component -> Endpoint in one snapshot',
+    async () => {
     const writes: string[] = [];
     vi.spyOn(process.stdout, 'write').mockImplementation(((chunk: unknown) => {
       writes.push(String(chunk));
@@ -135,7 +141,67 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
     endpoint.stop();
   });
 
-  it('starts through the CLI composition root and is migration-ready', async () => {
+  it('hands the current process stream to the next Adapter generation', async () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    Object.defineProperty(input, 'isTTY', { value: true });
+    Object.defineProperty(output, 'isTTY', { value: true });
+    const previousReceive = vi.fn(async () => Object.freeze({ matched: true }));
+    const nextReceive = vi.fn(async () => Object.freeze({ matched: true }));
+    const createEndpoint = (gateway: MessageGateway) => new TerminalEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeatureId, 'terminal'),
+      gateway,
+      input,
+      output,
+      error: output,
+      interactive: true,
+      prompt: 'zhin> ',
+    });
+    const previous = createEndpoint({ receive: previousReceive, send: vi.fn() });
+    const next = createEndpoint({ receive: nextReceive, send: vi.fn() });
+
+    previous.start();
+    previous.open();
+    previous.close();
+    next.start();
+    next.open();
+    previous.stop();
+    input.write('/hello\n');
+
+    await vi.waitFor(() => expect(nextReceive).toHaveBeenCalledOnce());
+    expect(previousReceive).not.toHaveBeenCalled();
+    next.stop();
+  });
+
+  it('reopens the previous terminal Endpoint when a generation rolls back', async () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    Object.defineProperty(input, 'isTTY', { value: true });
+    Object.defineProperty(output, 'isTTY', { value: true });
+    const receive = vi.fn(async () => Object.freeze({ matched: true }));
+    const previous = new TerminalEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeatureId, 'terminal'),
+      gateway: { receive, send: vi.fn() },
+      input,
+      output,
+      error: output,
+      interactive: true,
+      prompt: 'zhin> ',
+    });
+
+    previous.start();
+    previous.open();
+    previous.close();
+    previous.open();
+    input.write('/hello\n');
+
+    await vi.waitFor(() => expect(receive).toHaveBeenCalledOnce());
+    previous.stop();
+  });
+
+  it.skipIf(!supportsNativeTypeScript())(
+    'starts through the CLI composition root and is migration-ready',
+    async () => {
     const output: string[] = [];
     const errors: string[] = [];
     await runStartCommand({

@@ -50,5 +50,4 @@ Deferred Worker：`DeferredWorkerRunner` 使用 `deferred_worker` slot + `resolv
 
 ## 参考实现
 
-- icqq: [`plugins/adapters/icqq/src/agent-prompt.ts`](../../plugins/adapters/icqq/src/agent-prompt.ts)
 - github: [`plugins/adapters/github/src/agent-prompt.ts`](../../plugins/adapters/github/src/agent-prompt.ts)

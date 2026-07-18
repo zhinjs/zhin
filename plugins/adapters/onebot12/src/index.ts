@@ -1,40 +1,47 @@
-/**
- * OneBot 12 适配器入口：单一适配器，支持正向 WS / Webhook / 反向 WS
- * 协议文档 https://12.onebot.dev/
- */
-import { usePlugin, type Plugin, type Context } from 'zhin.js';
-import type { Router } from '@zhin.js/host-router';
-import { OneBot12Adapter } from './adapter.js';
+export {
+  buildSendMessageParams,
+  buildWsConnectOptions,
+  callOneBot12Action,
+  formatInboundContent,
+  formatInboundTarget,
+  formatOutboundSegments,
+  getChannelId,
+  isMessageEvent,
+  parseSendTarget,
+  resolveOneBot12Config,
+  senderDisplayName,
+  type OneBot12ActionRequest,
+  type OneBot12ActionResponse,
+  type OneBot12AdapterConfig,
+  type OneBot12ConfigBase,
+  type OneBot12EndpointConfig,
+  type OneBot12Event,
+  type OneBot12HttpOptions,
+  type OneBot12Segment,
+  type OneBot12Self,
+  type OneBot12WebhookConfig,
+  type OneBot12WireSegment,
+  type OneBot12WsConfig,
+  type OneBot12WssConfig,
+  type ParsedSendTarget,
+  type ResolvedOneBot12Config,
+} from './protocol.js';
 
-export * from './types.js';
-export { callOneBot12Action } from './api.js';
-export * from './utils.js';
-export { OneBot12WsClient } from './endpoint-ws.js';
-export { OneBot12WebhookEndpoint } from './endpoint-webhook.js';
-export { OneBot12WssServer } from './endpoint-wss.js';
-export { OneBot12Adapter, type OneBot12Bot } from './adapter.js';
+export {
+  OneBot12WebhookEndpoint,
+  type OneBot12WebhookEndpointOptions,
+} from './webhook.js';
 
-declare module 'zhin.js' {
-  namespace Plugin {
-    interface Contexts {
-      router: import('@zhin.js/host-router').Router;
-    }
-  }
-  interface Adapters {
-    onebot12: OneBot12Adapter;
-  }
-}
+export {
+  OneBot12WsEndpoint,
+  type OneBot12WsEndpointOptions,
+} from './ws-endpoint.js';
 
-const { provide } = usePlugin();
-provide({
-  name: 'onebot12',
-  description: 'OneBot 12 协议适配器（正向 WS / Webhook / 反向 WS）',
-  mounted: async (p: Plugin) => {
-    const adapter = new OneBot12Adapter(p);
-    await adapter.start();
-    return adapter;
-  },
-  dispose: async (adapter: OneBot12Adapter) => {
-    await adapter.stop();
-  },
-} as unknown as Context<'onebot12'>);
+export {
+  OneBot12WssEndpoint,
+  type OneBot12WssEndpointOptions,
+} from './wss-endpoint.js';
+
+export type { OneBot12WsSocket, OneBot12WsCreateOptions } from './ws-types.js';
+
+export { verifyOneBotAccessToken } from './wss-auth.js';

@@ -55,6 +55,14 @@ export interface SendRequest {
   readonly target: string;
   readonly requester: PluginId;
   readonly content: SendContent;
+  readonly parent?: ChannelParent;
+}
+
+/** Console 通道的来源场景（群临时会话 parent.group / QQ 子频道 parent.guild）。 */
+export interface ChannelParent {
+  readonly type?: string;
+  readonly id?: string;
+  readonly name?: string;
 }
 
 export interface OutboundEnvelope {
@@ -63,6 +71,7 @@ export interface OutboundEnvelope {
   readonly requester: PluginId;
   readonly generation: number;
   readonly payload: unknown;
+  readonly parent?: ChannelParent;
   replace(payload: unknown): void;
 }
 

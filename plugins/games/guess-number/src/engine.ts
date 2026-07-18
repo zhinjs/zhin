@@ -1,4 +1,4 @@
-import { secureRandomIntInclusive } from '@zhin.js/game-shared';
+import { secureRandomIntInclusive } from '@zhin.js/game-kit';
 
 export const GUESS_PREFIX = 'guess';
 export const MIN = 1;

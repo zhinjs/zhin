@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { getPlugin, Plugin } from '@zhin.js/core';
-import { AI_EVENT_NAMES, subscribeAIEvents } from '../src/ai-event-subscriber.js';
+import {
+  AI_EVENT_NAMES,
+  subscribeAIEvents,
+  subscribeAIEventsOnTarget,
+} from '../src/ai-event-subscriber.js';
+import { activityFeedbackAiBus } from '../src/activity-feedback/ai-bus.js';
+import { ZhinAgentEventEmitter } from '../src/event/event-emitter.js';
 
 describe('ai-event-subscriber', () => {
   it('exposes stable event name list', () => {
@@ -63,5 +69,72 @@ describe('ai-event-subscriber', () => {
     await plugin.dispatch('ai.response', { sessionId: 's1', source: 'zhin-agent' });
 
     expect(received).toEqual(['ai.response']);
+  });
+
+  it('subscribeAIEventsOnTarget works without Plugin ALS', async () => {
+    activityFeedbackAiBus.clear();
+    const received: string[] = [];
+    const dispose = subscribeAIEventsOnTarget(activityFeedbackAiBus, {
+      onProcessingStart: (payload) => {
+        received.push(payload.sessionId);
+      },
+    });
+
+    activityFeedbackAiBus.emit('ai.processing.start', {
+      sessionId: 'runtime-s1',
+      source: 'zhin-agent',
+    });
+    await Promise.resolve();
+    dispose();
+    activityFeedbackAiBus.emit('ai.processing.start', {
+      sessionId: 'runtime-s2',
+      source: 'zhin-agent',
+    });
+    await Promise.resolve();
+
+    expect(received).toEqual(['runtime-s1']);
+    activityFeedbackAiBus.clear();
+  });
+
+  it('ZhinAgentEventEmitter.emit fans out to activityFeedbackAiBus', async () => {
+    activityFeedbackAiBus.clear();
+    const received: string[] = [];
+    const dispose = subscribeAIEventsOnTarget(activityFeedbackAiBus, {
+      onTypingStart: (payload) => {
+        received.push(payload.sessionId);
+      },
+    });
+
+    const emitter = new ZhinAgentEventEmitter();
+    emitter.emit('ai.typing.start', {
+      sessionId: 'fanout-1',
+      source: 'zhin-agent',
+    });
+    await Promise.resolve();
+    dispose();
+    activityFeedbackAiBus.clear();
+
+    expect(received).toEqual(['fanout-1']);
+  });
+
+  it('ZhinAgentEventEmitter.dispatch fans out without host plugin (Runtime)', async () => {
+    activityFeedbackAiBus.clear();
+    const received: string[] = [];
+    const dispose = subscribeAIEventsOnTarget(activityFeedbackAiBus, {
+      onProcessingStart: (payload) => {
+        received.push(payload.sessionId);
+      },
+    });
+
+    const emitter = new ZhinAgentEventEmitter();
+    await emitter.dispatch('ai.processing.start', {
+      sessionId: 'runtime-dispatch-1',
+      source: 'zhin-agent',
+      hookContext: { activityFeedbackEligible: true },
+    });
+    dispose();
+    activityFeedbackAiBus.clear();
+
+    expect(received).toEqual(['runtime-dispatch-1']);
   });
 });

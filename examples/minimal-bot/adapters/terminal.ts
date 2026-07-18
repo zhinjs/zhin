@@ -26,13 +26,14 @@ export class TerminalEndpoint implements EndpointInstance {
   #readline?: ReadlineInterface;
   #promptTimer?: ReturnType<typeof setTimeout>;
   #open = false;
+  #stopped = false;
 
   constructor(options: TerminalEndpointOptions) {
     this.#options = options;
   }
 
   start(): void {
-    if (!this.#options.interactive || this.#readline) return;
+    if (!this.#options.interactive || this.#readline || this.#stopped) return;
     const readline = createInterface({
       input: this.#options.input,
       output: this.#options.output,
@@ -62,6 +63,9 @@ export class TerminalEndpoint implements EndpointInstance {
   }
 
   open(): void {
+    if (this.#stopped) throw new Error('Terminal Endpoint cannot reopen after stop');
+    // A failed generation can resume this Endpoint after close() quiesced its readline.
+    this.start();
     this.#open = true;
     this.#schedulePrompt();
   }
@@ -69,11 +73,19 @@ export class TerminalEndpoint implements EndpointInstance {
   close(): void {
     this.#open = false;
     this.#clearPrompt();
+    // readline.close() pauses its input. Release it before the next generation starts so the
+    // old projection's deferred stop cannot pause a stream already owned by the new Endpoint.
+    this.#releaseReadline();
   }
 
   stop(): void {
     this.#open = false;
+    this.#stopped = true;
     this.#clearPrompt();
+    this.#releaseReadline();
+  }
+
+  #releaseReadline(): void {
     this.#readline?.close();
     this.#readline = undefined;
   }

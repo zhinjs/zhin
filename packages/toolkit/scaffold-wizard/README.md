@@ -2,6 +2,10 @@
 
 Zhin 项目脚手架的**共享交互向导**库。适配器、AI、数据库的分步引导与配置合并逻辑集中在此，供 `create-zhin-app` 与 `@zhin.js/cli` 的 `zhin setup` 共用，避免两套实现漂移。
 
+::: warning 依赖版本策略
+脚手架写入的 `@zhin.js/*` / `zhin.js` 版本默认为 **`latest`**（见 `zhin-stack-deps.ts` 与 `check:dependency-policy`）。新建项目可能随 npm 最新标签自动跟上 breaking；生产锁定请在生成后自行 pin 精确版本，或使用 `pnpm doctor` / 仓库 examples 的 workspace 协议作对照。
+:::
+
 ## 消费者
 
 | 包 / 命令 | 用途 |

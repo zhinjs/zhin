@@ -1,7 +1,7 @@
 /**
  * 持久化调度任务 + AI 工具
  */
-import { ZhinTool, Logger } from '@zhin.js/core';
+import { ZhinTool, getLogger } from '@zhin.js/core';
 import { captureScheduleJobCreator } from './assistant/job-creator.js';
 import {
   addScheduleJob,
@@ -11,7 +11,7 @@ import {
 import type { ScheduleJobEngine } from './assistant/job-engine.js';
 import type { TaskExecutionOptions, TaskExecutionResult } from './task-executor.js';
 
-const logger = new Logger(null, 'schedule-manager');
+const logger = getLogger('schedule-manager');
 
 export const SCHEDULE_JOBS_FILENAME = 'schedule-jobs.json';
 

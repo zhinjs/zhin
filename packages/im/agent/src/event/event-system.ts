@@ -1,4 +1,4 @@
-import { formatCompact, Logger } from '@zhin.js/logger';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import type {
   EventHandler,
   EventMiddleware,
@@ -8,7 +8,7 @@ import type {
 import { LoggingMiddleware } from './logging-middleware.js';
 import { FilteringMiddleware } from './filtering-middleware.js';
 
-const logger = new Logger(null, 'EventSystem');
+const logger = getLogger('EventSystem');
 
 export class EventSystem {
   private readonly listeners = new Map<string, Set<EventHandler>>();

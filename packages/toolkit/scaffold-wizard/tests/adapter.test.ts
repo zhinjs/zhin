@@ -1,17 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { generateEndpointsConfigYaml, getAdapterDependencies, getAdapterSetupNotes, type AdapterSetupResult } from '../src/adapter.js';
+import {
+  collectAdapterPluginConfigs,
+  collectAdapterPluginManifest,
+  getAdapterDependencies,
+  getAdapterSetupNotes,
+  type AdapterSetupResult,
+} from '../src/adapter.js';
 
 describe('adapter setup notes', () => {
   it('returns telegram webhook guidance when webhook mode is configured', () => {
     const result: AdapterSetupResult = {
       packages: ['@zhin.js/adapter-telegram'],
       plugins: ['@zhin.js/adapter-telegram'],
-      endpoints: [{
-        context: 'telegram',
-        name: 'tg',
-        token: '${TELEGRAM_TOKEN}',
-        polling: false,
-        webhook: { domain: 'https://bot.example.com', path: '/telegram-webhook', port: 8443 },
+      instances: [{
+        package: '@zhin.js/adapter-telegram',
+        instanceKey: 'telegram',
+        config: {
+          name: 'tg',
+          token: '${TELEGRAM_TOKEN}',
+          polling: false,
+          webhook: { domain: 'https://bot.example.com', path: '/telegram/webhook' },
+        },
       }],
       envVars: { TELEGRAM_TOKEN: 'secret' },
     };
@@ -24,57 +33,62 @@ describe('adapter setup notes', () => {
     const result: AdapterSetupResult = {
       packages: ['@zhin.js/adapter-github'],
       plugins: ['@zhin.js/adapter-github'],
-      endpoints: [{
-        context: 'github',
-        name: 'gh',
-        app_id: '${GITHUB_APP_ID}',
-        private_key: './data/github-app.pem',
-        webhook_secret: '${GITHUB_WEBHOOK_SECRET}',
-        webhook_path: '/pub/github/webhook',
+      instances: [{
+        package: '@zhin.js/adapter-github',
+        instanceKey: 'github',
+        config: {
+          name: 'gh',
+          app_id: '${GITHUB_APP_ID}',
+          private_key: './data/github-app.pem',
+          webhook_secret: '${GITHUB_WEBHOOK_SECRET}',
+          webhook_path: '/github/webhook',
+        },
       }],
       envVars: {},
       requiresDatabase: true,
     };
 
     const notes = getAdapterSetupNotes(result);
-    expect(notes.some(n => n.includes('/pub/github/webhook'))).toBe(true);
+    expect(notes.some(n => n.includes('/github/webhook'))).toBe(true);
     expect(notes.some(n => n.includes('SQLite'))).toBe(true);
   });
 });
 
-describe('generateEndpointsConfigYaml', () => {
-  it('emits endpoints: [] when no bot entries (Sandbox-only)', () => {
-    const yaml = generateEndpointsConfigYaml({
+describe('collectAdapterPluginConfigs', () => {
+  it('maps instances to plugins.<instanceKey> config blocks', () => {
+    const plugins = collectAdapterPluginConfigs({
       packages: ['@zhin.js/adapter-sandbox'],
       plugins: ['@zhin.js/adapter-sandbox'],
+      instances: [{
+        package: '@zhin.js/adapter-sandbox',
+        instanceKey: 'sandbox',
+        config: { endpoints: [{ context: 'sandbox', name: 'sandbox-bot', owner: 'sandbox-user' }] },
+      }],
       envVars: {},
-      endpoints: [],
     });
-    expect(yaml).toMatch(/endpoints:\s*\[\]/);
-    expect(yaml).not.toContain('context:');
-  });
 
-  it('renders nested webhook object as YAML', () => {
-    const yaml = generateEndpointsConfigYaml({
+    expect(plugins).toEqual({
+      sandbox: { endpoints: [{ context: 'sandbox', name: 'sandbox-bot', owner: 'sandbox-user' }] },
+    });
+  });
+});
+
+describe('collectAdapterPluginManifest', () => {
+  it('maps instances to package.json zhin.plugins entries', () => {
+    const manifest = collectAdapterPluginManifest({
       packages: [],
       plugins: [],
+      instances: [
+        { package: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox', config: {} },
+        { package: '@zhin.js/adapter-telegram', instanceKey: 'telegram', config: {} },
+      ],
       envVars: {},
-      endpoints: [{
-        context: 'telegram',
-        name: 'tg',
-        polling: false,
-        webhook: {
-          domain: 'https://bot.example.com',
-          path: '/telegram-webhook',
-          port: 8443,
-        },
-      }],
     });
 
-    expect(yaml).toContain('webhook:');
-    expect(yaml).toContain('domain: https://bot.example.com');
-    expect(yaml).toContain('path: /telegram-webhook');
-    expect(yaml).toContain('port: 8443');
+    expect(manifest).toEqual([
+      { package: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox' },
+      { package: '@zhin.js/adapter-telegram', instanceKey: 'telegram' },
+    ]);
   });
 });
 
@@ -83,7 +97,7 @@ describe('getAdapterDependencies', () => {
     const deps = getAdapterDependencies({
       packages: ['@zhin.js/adapter-sandbox', '@zhin.js/adapter-telegram', '@icqqjs/icqq@latest'],
       plugins: [],
-      endpoints: [],
+      instances: [],
       envVars: {},
     });
 

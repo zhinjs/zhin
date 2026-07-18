@@ -18,6 +18,7 @@ import { createRefs } from './init/shared-refs.js';
 import { registerOrchestrator } from './init/register-orchestrator.js';
 import { registerMcpFromConfig } from './init/register-mcp-from-config.js';
 import { registerToolService } from './init/register-tool-service.js';
+import { registerCapabilityFeatures } from './init/register-capability-features.js';
 import { registerDbModels } from './init/register-db-models.js';
 import { registerAIService } from './init/register-ai-service.js';
 import { createZhinAgentContext } from './init/create-zhin-agent.js';
@@ -46,8 +47,9 @@ export function initAgentModule(): void {
   const refs = createRefs();
 
   registerOrchestrator();
-  registerMcpFromConfig();
   registerToolService();
+  registerCapabilityFeatures();
+  registerMcpFromConfig();
   registerDbModels();
   registerAIService(refs);
   createZhinAgentContext(refs);

@@ -113,13 +113,16 @@ export async function readExistingProjectConfig(cwd: string): Promise<ExistingPr
   }
 
   const configFormat = loaded.format;
-  const existingPlugins = Array.isArray(config.plugins) ? config.plugins : [];
-  const existingBots = Array.isArray(config.endpoints) ? config.endpoints : [];
+  // 新 runtime：plugins 为 <instanceKey>: <配置> 映射；legacy 为字符串数组
+  const existingPlugins = Array.isArray(config.plugins)
+    ? config.plugins
+    : config.plugins && typeof config.plugins === 'object'
+      ? Object.keys(config.plugins)
+      : [];
+  const existingBots: any[] = [];
 
-  // 从 config.endpoints 和 config.plugins 推断 adapters（仅保留结构，env 从 .env 来）
-  const adapterPlugins = existingPlugins.filter(
-    (p: string) => typeof p === 'string' && p.startsWith('@zhin.js/adapter-'),
-  );
+  // 新格式下包名记录于 package.json zhin.plugins 清单，配置文件仅含 instanceKey，
+  // 此处不再反推适配器包名（回显默认值留空即可）
   const envVars: Record<string, string> = { ...env };
 
   const options: Partial<InitOptions> = {
@@ -128,9 +131,9 @@ export async function readExistingProjectConfig(cwd: string): Promise<ExistingPr
     database: mapDatabaseFromConfig(config.database),
     ai: mapAIFromConfig(config.ai, env),
     adapters: {
-      packages: adapterPlugins,
-      plugins: adapterPlugins,
-      endpoints: existingBots,
+      packages: [],
+      plugins: [],
+      instances: [],
       envVars,
     } as AdapterSetupResult,
   };

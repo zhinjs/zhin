@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "threshold": {
+      "type": "number",
+      "default": 3,
+      "minimum": 2,
+      "maximum": 10,
+      "description": "触发复读的最少人数"
+    },
+    "cooldown": {
+      "type": "number",
+      "default": 30000,
+      "minimum": 5000,
+      "maximum": 300000,
+      "description": "同一群冷却时间 (ms)"
+    },
+    "maxLength": {
+      "type": "number",
+      "default": 200,
+      "minimum": 10,
+      "maximum": 1000,
+      "description": "消息长度上限"
+    }
+  }
+}

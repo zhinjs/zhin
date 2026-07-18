@@ -1,5 +1,5 @@
-import type { Database, DatabaseFeature, Message, Models, RelatedModel } from 'zhin.js';
-import { channelKey, generateSessionId, boardMessageMatches } from '@zhin.js/game-shared';
+import type { Database, Message, Models, RelatedModel } from 'zhin.js';
+import { channelKey, generateSessionId, boardMessageMatches } from '@zhin.js/game-kit';
 import type { MatchMode } from './engine.js';
 import type { ChainSessionRow } from './models.js';
 
@@ -110,6 +110,3 @@ export function createServices(db: ChainDatabase): SessionService {
   return new SessionService(db);
 }
 
-export function resolveGameDatabase(feature: DatabaseFeature): ChainDatabase {
-  return feature.db;
-}

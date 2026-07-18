@@ -1,10 +1,10 @@
 /**
  * NotificationRouter — 按 JobNotify.channel 分发任务结果（M3）
  */
-import { type SendOptions, Logger, sceneRefToSendOptions } from '@zhin.js/core';
+import { type SendOptions, sceneRefToSendOptions, getLogger } from '@zhin.js/core';
 import { formatCompact } from '@zhin.js/logger';
 import type { JobNotify } from './types.js';
-const logger = new Logger(null, 'notification-router');
+const logger = getLogger('notification-router');
 
 export type ImJobNotify = Extract<JobNotify, { channel: 'im' }>;
 

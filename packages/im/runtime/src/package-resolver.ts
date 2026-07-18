@@ -1,4 +1,4 @@
-import { access, readFile, readdir } from 'node:fs/promises';
+import { access, readFile, readdir, realpath } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { parsePackageJson, type PackageJson } from './manifest.js';
 
@@ -69,10 +69,10 @@ export class NodePackageResolver implements PackageResolver {
     const workspace = this.#workspaceByName.get(request);
     if (specification.startsWith('workspace:')) {
       if (workspace) return workspace;
-      throw new PackageResolutionError(
-        `Workspace dependency ${request} declared by ${from.name} is missing`,
-        request,
-      );
+      // Examples live outside the monorepo packages/plugins scan roots; pnpm still
+      // links workspace:* into node_modules, so fall through before failing.
+    } else if (workspace) {
+      return workspace;
     }
 
     let current = from.root;
@@ -86,7 +86,9 @@ export class NodePackageResolver implements PackageResolver {
       current = parent;
     }
     throw new PackageResolutionError(
-      `Cannot resolve ${request} from ${from.name}`,
+      specification.startsWith('workspace:')
+        ? `Workspace dependency ${request} declared by ${from.name} is missing`
+        : `Cannot resolve ${request} from ${from.name}`,
       request,
     );
   }
@@ -95,7 +97,7 @@ export class NodePackageResolver implements PackageResolver {
     packageRoot: string,
     source: ResolvedPackage['source'],
   ): Promise<ResolvedPackage> {
-    const normalized = resolve(packageRoot);
+    const normalized = await realpath(resolve(packageRoot));
     const cached = this.#cache.get(normalized);
     if (cached) return cached;
     const file = join(normalized, 'package.json');

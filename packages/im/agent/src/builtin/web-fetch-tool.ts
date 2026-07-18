@@ -3,7 +3,7 @@
  */
 import { type Tool, type Message, type ToolParametersSchema, type ToolResult, htmlToPlainText } from '@zhin.js/core';
 import { errMsg } from '../discovery/utils.js';
-import { checkDangerousToolAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
+import { runToolPolicies, toolPolicyResultToMessage } from '../security/policy-facade.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import { WEB_TOOL_FETCH_TIMEOUT_MS, ZHIN_WEB_USER_AGENT } from './web-tool-utils.js';
 export const WEB_FETCH_DEFAULT_MAX_LENGTH = 20 * 1024;
@@ -50,13 +50,12 @@ export class WebFetchBuiltinTool extends BuiltinBaseTool {
 
   async run(args: Record<string, unknown>, commMessage?: Message): Promise<ToolResult> {
     try {
-      const accessDecision = checkDangerousToolAccess('web_fetch', commMessage);
-      if (!accessDecision.allowed) {
-        if (accessDecision.needsOwnerApproval) {
-          return toOwnerSignal(accessDecision);
-        }
-        return toDenyError(accessDecision);
-      }
+      // 统一安全策略门面（与原单层手写链等价）：dangerous-tool-approval
+      const policyGate = toolPolicyResultToMessage(
+        runToolPolicies({ toolName: 'web_fetch', commMessage }),
+        'web_fetch',
+      );
+      if (policyGate) return policyGate;
 
       let parsedUrl: URL;
       try {

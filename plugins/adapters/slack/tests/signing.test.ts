@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createHmac } from 'node:crypto';
-import { verifySlackSignature } from '../src/signing.js';
+import { verifySlackSignature } from '../src/protocol.js';
 
 const SIGNING_SECRET = 'test-signing-secret-abc123';
 

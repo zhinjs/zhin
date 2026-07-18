@@ -1,10 +1,10 @@
 /**
- * OrchestrationRepository — persistent run/task store (Agent Mesh v1).
+ * OrchestrationRepository — persistent run/task store (OrchestrationKernel / A2A).
  */
 import { randomUUID } from 'node:crypto';
-import { Logger } from '@zhin.js/logger';
+import { getLogger } from '@zhin.js/logger';
 import { type CreateOrchestrationEventInput, type CreateOrchestrationRunInput, type CreateOrchestrationTaskInput, type OrchestrationEventRecord, type OrchestrationRunRecord, type OrchestrationRunStatus, type OrchestrationTaskRecord, type OrchestrationTaskStatus, parseDependsOn, serializeDependsOn } from '@zhin.js/ai';
-const logger = new Logger(null, 'OrchestrationRepository');
+const logger = getLogger('OrchestrationRepository');
 
 type DbModel = {
   select(...fields: string[]): {

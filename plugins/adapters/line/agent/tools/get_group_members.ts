@@ -1,8 +1,8 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getLineApiConfig } from '../../src/line-agent-deps.js';
 
-export default defineTool<{ groupId: string }>({
+export default defineAgentTool<{ groupId: string }>({
   description: 'Get LINE group member IDs',
   inputSchema: z.object({
     groupId: z.string().min(1),

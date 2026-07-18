@@ -1,8 +1,8 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getDiscordAgentDeps } from '../../src/discord-agent-deps.js';
 
-export default defineTool<{ endpoint_id: string; channel_id: string; title?: string; description?: string; color?: number; url?: string; fields?: string }>({
+export default defineAgentTool<{ endpoint_id: string; channel_id: string; title?: string; description?: string; color?: number; url?: string; fields?: string }>({
   description: '发送 Discord 富文本嵌入消息（Embed）',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),

@@ -24,7 +24,11 @@ async function makeProject(options: Partial<InitOptions> = {}) {
     adapters: {
       packages: ['@zhin.js/adapter-sandbox'],
       plugins: ['@zhin.js/adapter-sandbox'],
-      endpoints: [],
+      instances: [{
+        package: '@zhin.js/adapter-sandbox',
+        instanceKey: 'sandbox',
+        config: { endpoints: [{ context: 'sandbox', name: 'sandbox-bot', owner: 'sandbox-user' }] },
+      }],
       envVars: {},
     },
     ai: { enabled: false },
@@ -51,56 +55,88 @@ describe('createWorkspace', () => {
     }
   })
 
-  it('generates a default Host workspace with config, env, README, and package dependencies aligned', async () => {
+  it('generates a Plugin Runtime project aligned with minimal-bot conventions', async () => {
     const projectPath = await makeProject()
     const pkg = await fs.readJson(path.join(projectPath, 'package.json'))
     const config = await fs.readFile(path.join(projectPath, 'zhin.config.yml'), 'utf8')
     const readme = await fs.readFile(path.join(projectPath, 'README.md'), 'utf8')
-    const clientTsconfig = await fs.readJson(path.join(projectPath, 'client', 'tsconfig.json'))
-    const examplePlugin = await fs.readFile(path.join(projectPath, 'src', 'plugins', 'example.ts'), 'utf8')
-    const statusCard = await fs.readFile(path.join(projectPath, 'src', 'plugins', 'status-card.tsx'), 'utf8')
+    const pluginEntry = await fs.readFile(path.join(projectPath, 'plugin.ts'), 'utf8')
+    const helloCommand = await fs.readFile(path.join(projectPath, 'commands', 'hello.ts'), 'utf8')
+    const cardCommand = await fs.readFile(path.join(projectPath, 'commands', 'card.ts'), 'utf8')
+    const statusCard = await fs.readFile(path.join(projectPath, 'components', 'status-card.ts'), 'utf8')
+    const schema = await fs.readJson(path.join(projectPath, 'schema.json'))
     const rootTsconfig = await fs.readJson(path.join(projectPath, 'tsconfig.json'))
 
-    expect(pkg.dependencies).toHaveProperty('@zhin.js/host-api')
-    expect(pkg.dependencies).toHaveProperty('@zhin.js/host-router')
-    expect(pkg.dependencies).toHaveProperty('@zhin.js/satori')
+    // scripts：新 runtime 启动命令
+    expect(pkg.scripts.dev).toBe('zhin runtime start')
+    expect(pkg.scripts.start).toBe('zhin runtime start --mode production --no-watch')
+
+    // 依赖：新栈，无 legacy host 插件
     expect(pkg.dependencies['zhin.js']).toBe('latest')
-    expect(pkg.dependencies['@zhin.js/cli']).toBe('latest')
-    expect(pkg.dependencies['@zhin.js/host-api']).toBe('latest')
-    expect(pkg.dependencies['@zhin.js/host-router']).toBe('latest')
-    expect(pkg.dependencies['@zhin.js/adapter-sandbox']).toBe('latest')
-    expect(pkg.dependencies['@zhin.js/client']).toBe('latest')
-    expect(pkg.dependencies['@zhin.js/contract']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/plugin-runtime']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/runtime']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/adapter']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/command']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/component']).toBe('latest')
     expect(pkg.dependencies['@zhin.js/satori']).toBe('latest')
-    expect(pkg.engines.node).toBe('^20.19.0 || >=22.12.0')
+    expect(pkg.dependencies['@zhin.js/adapter-sandbox']).toBe('latest')
+    expect(pkg.dependencies).not.toHaveProperty('@zhin.js/host-api')
+    expect(pkg.dependencies).not.toHaveProperty('@zhin.js/host-router')
+    expect(pkg.devDependencies['@zhin.js/cli']).toBe('latest')
+    expect(pkg.engines.node).toBe('>=22.6.0')
+
+    // zhin 清单：protocol 1 + features + plugins
+    expect(pkg.zhin.protocol).toBe(1)
+    expect(pkg.zhin.type).toBe('plugin')
+    expect(pkg.zhin.entry).toBe('./plugin.ts')
+    expect(pkg.zhin.features).toEqual([
+      { package: '@zhin.js/adapter', api: '^1.0.0' },
+      { package: '@zhin.js/command', api: '^1.0.0' },
+      { package: '@zhin.js/component', api: '^1.0.0' },
+    ])
+    expect(pkg.zhin.plugins).toEqual([
+      { package: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox' },
+    ])
+
+    // 配置：新 runtime 格式
+    expect(config).toContain('http:')
     expect(config).toContain('corsOrigins:')
     expect(config).toContain('https://console.zhin.dev')
-    expect(config).toContain('inbox:')
-    expect(config).toContain('enabled: true')
+    expect(config).toContain('plugins:')
+    expect(config).toContain('sandbox:')
+    expect(config).toContain('database:')
+    expect(config).not.toMatch(/^endpoints:/m)
+    expect(config).not.toContain('inbox:')
+
+    // 骨架文件
+    expect(pluginEntry).toContain("from '@zhin.js/plugin-runtime'")
+    expect(pluginEntry).toContain('definePlugin(')
+    expect(helloCommand).toContain("from '@zhin.js/command'")
+    expect(cardCommand).toContain("from '@zhin.js/core/runtime'")
+    expect(statusCard).toContain("from '@zhin.js/component'")
+    expect(statusCard).toContain("from '@zhin.js/satori'")
+    expect(schema).toMatchObject({ type: 'object', properties: {} })
+    expect(rootTsconfig.compilerOptions.noEmit).toBe(true)
+    expect(rootTsconfig.include).toContain('plugin.ts')
+    expect(rootTsconfig.include).toContain('commands/**/*.ts')
     expect(await fs.pathExists(path.join(projectPath, '.env.example'))).toBe(true)
     expect(readme).toContain('zhin.config.yml')
+    expect(readme).toContain('zhin runtime start')
     expect(readme).toContain('Remote Console')
-    expect(clientTsconfig.compilerOptions).not.toHaveProperty('jsxImportSource')
-    expect(rootTsconfig.compilerOptions.jsxImportSource).toBe('zhin.js')
-    expect(examplePlugin).toContain('type MessageElement')
-    expect(examplePlugin).toContain('segment.html')
-    expect(statusCard).toContain('@jsxImportSource @zhin.js/satori')
-    expect(statusCard).toContain('buildStatusCard')
-    expect(examplePlugin).toContain('setup --ai')
-    expect(examplePlugin).toContain('card')
   })
 
   it('uses the real generated config filename for JSON projects', async () => {
     const projectPath = await makeProject({ config: 'json' })
     const readme = await fs.readFile(path.join(projectPath, 'README.md'), 'utf8')
-    const client = await fs.readFile(path.join(projectPath, 'client', 'index.tsx'), 'utf8')
 
     expect(await fs.pathExists(path.join(projectPath, 'zhin.config.json'))).toBe(true)
     expect(readme).toContain('zhin.config.json')
-    expect(client).toContain('zhin.config.json')
+    const parsed = await fs.readJson(path.join(projectPath, 'zhin.config.json'))
+    expect(parsed.plugins.sandbox).toBeDefined()
+    expect(parsed.http.token).toBe('${HTTP_TOKEN}')
   })
 
-  it('writes AI stack dependencies when AI is enabled', async () => {
+  it('writes AI stack dependencies and tool feature when AI is enabled', async () => {
     const projectPath = await makeProject({
       ai: {
         enabled: true,
@@ -112,7 +148,14 @@ describe('createWorkspace', () => {
     expect(pkg.dependencies['@zhin.js/agent']).toBe('latest')
     expect(pkg.dependencies['@modelcontextprotocol/sdk']).toBe('latest')
     expect(pkg.dependencies['@ai-sdk/openai-compatible']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/tool']).toBe('latest')
     expect(pkg.dependencies.zod).toBe('latest')
     expect(pkg.dependencies.ai).toBe('latest')
+    expect(pkg.zhin.features).toContainEqual({ package: '@zhin.js/tool', api: '^1.0.0' })
+    expect(await fs.pathExists(path.join(projectPath, 'tools', 'echo.ts'))).toBe(true)
+    expect(await fs.pathExists(path.join(projectPath, 'SOUL.md'))).toBe(true)
+    const config = await fs.readFile(path.join(projectPath, 'zhin.config.yml'), 'utf8')
+    expect(config).toContain('ai:')
+    expect(config).toContain('provider: ollama')
   })
 })

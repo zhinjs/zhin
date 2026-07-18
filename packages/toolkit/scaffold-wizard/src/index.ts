@@ -1,13 +1,12 @@
 export type { InitOptions, DatabaseConfig } from './types.js';
 export { DATABASE_PACKAGES } from './types.js';
 
-export type { AdapterSetupResult } from './adapter.js';
+export type { AdapterSetupResult, AdapterPluginInstance } from './adapter.js';
 export {
   configureAdapters,
   generateAdapterEnvVars,
-  generateEndpointsConfigYaml,
-  generateEndpointsConfigJSON,
-  generateEndpointsConfigToml,
+  collectAdapterPluginConfigs,
+  collectAdapterPluginManifest,
   getAdapterDependencies,
   getAdapterSetupNotes,
 } from './adapter.js';
@@ -89,6 +88,7 @@ export {
   migrateAiLegacyConfig,
   diagnoseConsoleConfig,
   applyConsoleConfigFixes,
+  packageToInstanceKey,
 } from './project-config-plan.js';
 export type {
   LoadedProjectConfig,
@@ -106,6 +106,11 @@ export {
   appendWizardEnvVars,
   collectWizardDependencies,
   mergeDependenciesIntoPackageJson,
+  mergePluginManifestIntoPackageJson,
   finalizeWizardOptions,
   applyWizardOptionsToConfig,
+  normalizePluginsMap,
+  materializeDatabaseConfig,
+  buildRuntimeConfigDocument,
+  serializeRuntimeConfig,
 } from './apply.js';

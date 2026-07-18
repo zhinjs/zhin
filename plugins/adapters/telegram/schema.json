@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "default": "telegram-bot"
+    },
+    "token": {
+      "type": "string"
+    },
+    "polling": {
+      "type": "boolean",
+      "default": true,
+      "description": "Long-poll getUpdates (default). Set false for webhook via httpHostToken."
+    },
+    "webhook": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Webhook settings when polling is false.",
+      "properties": {
+        "domain": { "type": "string" },
+        "path": { "type": "string", "default": "/telegram/webhook" },
+        "secretToken": { "type": "string", "description": "Verified via X-Telegram-Bot-Api-Secret-Token." }
+      }
+    },
+    "allowedUpdates": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": ["message", "callback_query"]
+    },
+    "apiBaseUrl": {
+      "type": "string",
+      "default": "https://api.telegram.org"
+    }
+  },
+  "required": ["token"]
+}

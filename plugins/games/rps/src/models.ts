@@ -1,4 +1,4 @@
-import type { Models, Plugin } from 'zhin.js';
+import type { Models } from 'zhin.js';
 
 export type RpsSessionStatus = 'active' | 'won' | 'lost' | 'aborted';
 
@@ -26,8 +26,11 @@ declare module 'zhin.js' {
 
 export type RpsSessionRow = Models['rps_sessions'];
 
-export function registerModels(plugin: Plugin): void {
-  plugin.defineModel('rps_sessions', {
+
+export function defineHostTables(
+  db: { define: (name: string, definition: Record<string, unknown>) => void },
+): void {
+  db.define('rps_sessions', {
     id: { type: 'text', primary: true },
     adapter: { type: 'text', nullable: false },
     endpoint: { type: 'text', nullable: false },

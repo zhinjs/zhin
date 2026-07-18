@@ -65,6 +65,42 @@ describe('hierarchical Plugin config', () => {
     );
   });
 
+  it('accepts opaque host keys http/database/ai/speech/assistant/collaboration/log_level without projecting them', async () => {
+    const root = await configProject({
+      rootSchema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { endpoint: { type: 'string', default: 'local' } },
+      },
+      childSchema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { retries: { type: 'integer', default: 3 } },
+      },
+    });
+    const resolver = await NodePackageResolver.create(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const config = await new ConfigComposer().compose(graph, {
+      http: { port: 8086, token: 'dev' },
+      database: { dialect: 'sqlite', filename: './data.db' },
+      ai: { providers: {} },
+      speech: { stt: { provider: 'ollama' } },
+      assistant: { enabled: true },
+      collaboration: { enabled: true },
+      log_level: 'debug',
+    });
+
+    expect(config.document.http).toEqual({ port: 8086, token: 'dev' });
+    expect(config.document.database).toEqual({ dialect: 'sqlite', filename: './data.db' });
+    expect(config.document.ai).toEqual({ providers: {} });
+    expect(config.document.speech).toEqual({ stt: { provider: 'ollama' } });
+    expect(config.document.assistant).toEqual({ enabled: true });
+    expect(config.document.collaboration).toEqual({ enabled: true });
+    expect(config.document.log_level).toBe('debug');
+    expect(config.views.get(graph.root.id)).toEqual({ endpoint: 'local' });
+    expect(config.views.get(graph.root.children[0]!.id)).toEqual({ retries: 3 });
+  });
+
   it('returns structured validation issues', async () => {
     const root = await configProject({
       rootSchema: {
@@ -79,6 +115,50 @@ describe('hierarchical Plugin config', () => {
     await expect(new ConfigComposer().compose(graph, {
       plugin: { port: 'bad' },
     })).rejects.toBeInstanceOf(ConfigValidationError);
+  });
+
+  it('pinpoints the offending additionalProperty key in validation issues', async () => {
+    const root = await configProject({
+      rootSchema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { port: { type: 'integer' } },
+      },
+      childSchema: {},
+    });
+    const resolver = await NodePackageResolver.create(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root);
+
+    const failure = await new ConfigComposer().compose(graph, {
+      plugin: { port: 8080, prto: 8081 },
+    }).then(
+      () => { throw new Error('expected ConfigValidationError'); },
+      (error: unknown) => error,
+    );
+    expect(failure).toBeInstanceOf(ConfigValidationError);
+    const issues = (failure as ConfigValidationError).issues;
+    expect(issues.some((issue) => issue.includes('additionalProperty: prto'))).toBe(true);
+  });
+
+  it('annotates the source config file name when provided', async () => {
+    const root = await configProject({
+      rootSchema: {
+        type: 'object',
+        properties: { port: { type: 'integer' } },
+      },
+      childSchema: {},
+    });
+    const resolver = await NodePackageResolver.create(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root);
+
+    const failure = await new ConfigComposer().compose(graph, {
+      plugin: { port: 'bad' },
+    }, 'zhin.config.yml').then(
+      () => { throw new Error('expected ConfigValidationError'); },
+      (error: unknown) => error,
+    );
+    expect(failure).toBeInstanceOf(ConfigValidationError);
+    expect((failure as ConfigValidationError).message).toContain('zhin.config.yml');
   });
 
   it('plans the shallowest forest whose owner views actually changed', async () => {

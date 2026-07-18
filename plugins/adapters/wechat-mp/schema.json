@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "default": "wechat-mp-bot"
+    },
+    "appId": { "type": "string" },
+    "appSecret": { "type": "string" },
+    "token": { "type": "string" },
+    "encodingAESKey": { "type": "string" },
+    "path": {
+      "type": "string",
+      "default": "/wechat/webhook"
+    },
+    "encrypt": {
+      "type": "boolean",
+      "default": false
+    },
+    "encryptMode": {
+      "type": "string",
+      "enum": ["plain", "compatible", "secure"],
+      "description": "Default follows encrypt: 'plain' when encrypt=false, 'compatible' when encrypt=true"
+    },
+    "replyMode": {
+      "type": "string",
+      "enum": ["passive", "customer_service"],
+      "default": "passive"
+    },
+    "passiveReplyTimeoutMs": {
+      "type": "number",
+      "default": 4500
+    }
+  },
+  "required": ["appId", "appSecret", "token"]
+}

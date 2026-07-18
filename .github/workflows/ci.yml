@@ -16,7 +16,7 @@ env:
 
 jobs:
   test:
-    timeout-minutes: 15
+    timeout-minutes: 25
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -66,17 +66,12 @@ jobs:
       - name: build packages
         run: pnpm build
 
-      - name: type check
-        if: matrix.node-version == 24
-        run: pnpm type-check
-
-      - name: lint
-        if: matrix.node-version == 24
-        run: pnpm lint
-
-      - name: harness checks
+      # type-check / lint 在 check:all；unit tests 由下方 coverage 覆盖（HARNESS_SKIP_TEST 避免双跑）
+      - name: harness checks (incl. type-check, lint)
         if: matrix.node-version == 24
         run: pnpm check:all
+        env:
+          HARNESS_SKIP_TEST: '1'
 
       - name: run tests with coverage
         if: matrix.node-version == 24

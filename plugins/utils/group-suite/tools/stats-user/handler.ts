@@ -1,5 +1,6 @@
-import { flushStatsBuffer, getStatsModel, weekStartStr } from '../../src/stats.js';
-import { todayStr } from '../../src/shared.js';
+import { flushStatsBuffer, weekStartStr } from '../../src/stats-lib.js';
+import { getStatsModel } from '../../src/db-store.js';
+import { todayStr } from '../../src/shared-runtime.js';
 
 export default async function (args: { user_id: string }) {
   await flushStatsBuffer();

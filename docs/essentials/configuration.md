@@ -23,15 +23,18 @@ my-bot/
 控制输出的日志详细程度：
 
 ```yaml
-# 日志级别 (0=debug, 1=info, 2=warn, 3=error)
-log_level: 1
+# 日志级别：debug | info | warn | error | silent
+log_level: info
 ```
 
 **级别说明**：
-- `0` (debug) - 输出所有日志，包括调试信息（开发时使用）
-- `1` (info) - 输出普通信息和以上（**推荐**）
-- `2` (warn) - 只输出警告和错误
-- `3` (error) - 只输出错误信息
+- `debug` - 输出所有日志，包括调试信息（开发时使用）
+- `info` - 输出普通信息和以上（**推荐**）
+- `warn` - 只输出警告和错误
+- `error` - 只输出错误信息
+- `silent` - 完全静默
+
+> 数字 `0`–`4`（0=debug … 4=silent）仅为旧配置兼容，新配置请使用字符串级别。
 
 ### 调试模式
 
@@ -692,7 +695,7 @@ plugins:
 ```yaml
 assistant:
   enabled: true
-  legacyDualWrite: false   # 默认；迁移期可 true 双写 cron-jobs.json
+  legacyDualWrite: false   # 默认关闭；迁移窗口已结束，勿再开启双写 cron-jobs.json
   queue:                   # TaskQueue 并发 / 重试（默认 enabled 随 assistant.enabled）
     enabled: true
     maxConcurrency: 3
@@ -716,7 +719,7 @@ assistant:
 | 字段 | 说明 |
 |------|------|
 | `enabled` | 启用 `data/assistant-jobs.json` 作为定时任务 SSOT |
-| `legacyDualWrite` | 写入 assistant-jobs 后是否镜像 `cron-jobs.json`（默认 false） |
+| `legacyDualWrite` | 写入后是否镜像 `cron-jobs.json`（**默认 false；迁移已结束，保持关闭**） |
 | `queue` | JobWorker → TaskQueue：`maxConcurrency`、`maxRetries`、`defaultTimeoutMs` |
 | `defaults.notify` | 执行阶段合并的默认 IM 目标；**持久化 JSON 中每条 Job 仍须显式 `notify`** |
 | `home` | Home Assistant 别名与 `home_*` 工具，见 [assistant-home](/advanced/assistant-home) |
@@ -744,7 +747,7 @@ Zhin.js 支持配置热重载，修改配置文件后自动生效（仅在 `zhin
 ## 完整示例
 
 ```yaml
-log_level: 1
+log_level: info
 debug: false
 
 database:

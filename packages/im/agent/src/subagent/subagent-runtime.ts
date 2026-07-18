@@ -10,7 +10,7 @@
 
 import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
-import { Logger, type Message } from '@zhin.js/core';
+import { type Message, getLogger } from '@zhin.js/core';
 import { formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
 import { type AIProvider, type AgentTool, type Usage, userMessageToFilterText, type ContentPart, type ModelRegistry } from '@zhin.js/ai';
 import type { ResolvedAgentBinding } from '../config/types.js';
@@ -53,7 +53,7 @@ import {
 import { SubagentAiEventReporter } from '../subagent-ai-events.js';
 import type { ZhinAgentEventEmitter } from '../event/event-emitter.js';
 
-const logger = new Logger(null, 'Subagent');
+const logger = getLogger('Subagent');
 
 // ============================================================================
 // 类型

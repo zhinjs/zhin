@@ -2,13 +2,13 @@
  * Tool selection — normalization, permission checks, context injection and relevance caching.
  */
 
-import { Logger, canAccessTool as coreCanAccessTool, checkBuiltinPermitList, isBuiltinPermit, resolveContextKey, senderRolesFromMessage, type Message } from '@zhin.js/core';
+import { canAccessTool as coreCanAccessTool, checkBuiltinPermitList, isBuiltinPermit, resolveContextKey, senderRolesFromMessage, type Message, getLogger } from '@zhin.js/core';
 import { formatCompact } from '@zhin.js/logger';
 import { type AgentTool, type ToolFilterOptions, CachedToolFilter } from '@zhin.js/ai';
 import type { SkillRegistry } from './skill-registry.js';
 import type { Skill, Tool } from './types.js';
 import type { ZhinAgentConfig } from '../config/index.js';
-const logger = new Logger(null, 'ZhinAgent:ToolSelection');
+const logger = getLogger('ZhinAgent:ToolSelection');
 
 /** 技能在 frontmatter 中声明了 `platforms` 且包含当前会话平台时，视为「来源平台绑定」，无需用户消息里写出技能名。 */
 function skillDeclaresPlatform(skill: { platforms?: string[] }, platform: string | undefined): boolean {

@@ -1,8 +1,8 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getEndpoint } from '../../src/napcat-agent-deps.js';
 
-export default defineTool<{ endpoint_id: string; url: string; thread_count?: number }>({
+export default defineAgentTool<{ endpoint_id: string; url: string; thread_count?: number }>({
   description: '下载文件到 NapCat 缓存目录，返回本地路径。',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),

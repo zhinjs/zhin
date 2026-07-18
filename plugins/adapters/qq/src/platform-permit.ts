@@ -1,7 +1,7 @@
 /**
  * QQ 官方频道 platform permit（guild/channel，非 QQ 群 group_*）
  */
-import { registerPlatformPermitChecker, type Message } from 'zhin.js';
+import { registerPlatformPermitChecker, type Message } from '@zhin.js/core';
 
 const ADAPTER = 'qq';
 

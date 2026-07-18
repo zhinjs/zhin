@@ -1,8 +1,8 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { formatResult, runCode } from '../../src/run-code.js';
 
-export default defineTool<{ language: string; code: string }>({
+export default defineAgentTool<{ language: string; code: string }>({
   description: '在沙箱中运行代码片段，返回 stdout/stderr/error',
   inputSchema: z.object({
     language: z.string().min(1),

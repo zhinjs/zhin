@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "default": "dingtalk-bot"
+    },
+    "appKey": { "type": "string" },
+    "appSecret": { "type": "string" },
+    "webhookPath": {
+      "type": "string",
+      "default": "/dingtalk/webhook"
+    },
+    "robotCode": { "type": "string" },
+    "apiBaseUrl": {
+      "type": "string",
+      "default": "https://oapi.dingtalk.com"
+    }
+  },
+  "required": ["appKey", "appSecret"]
+}

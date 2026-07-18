@@ -1,6 +1,7 @@
 {
   "adapter": [
     "export * from './adapter-index.js';",
+    "export * from './credentials.js';",
     "export * from './definition.js';",
     "export * from './provider.js';",
     "export{default}from './provider.js';"
@@ -106,11 +107,14 @@
   ],
   "plugin-runtime": [
     "export * from './capability.js';",
+    "export * from './database-host.js';",
     "export * from './dispose.js';",
     "export * from './handoff.js';",
     "export * from './identity.js';",
+    "export * from './outbound-host.js';",
     "export * from './plugin.js';",
     "export * from './root-controller.js';",
+    "export * from './schedule-host.js';",
     "export * from './shared-lifetime.js';",
     "export * from './snapshot.js';",
     "export * from './token.js';"
@@ -135,7 +139,8 @@
     "export * from './restart-boundary.js';",
     "export * from './root-runtime.js';",
     "export * from './source-ownership.js';",
-    "export * from './topology-transaction.js';"
+    "export * from './topology-transaction.js';",
+    "export * from './typescript-specifier-remap.js';"
   ],
   "skill": [
     "export * from './definition.js';",

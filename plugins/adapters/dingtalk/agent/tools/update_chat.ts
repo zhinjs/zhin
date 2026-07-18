@@ -1,7 +1,7 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getDingtalkAgentDeps } from '../../src/dingtalk-agent-deps.js';
-export default defineTool<{ endpoint_id: string; chat_id: string; name?: string; owner?: string; add_members?: string; remove_members?: string }>({
+export default defineAgentTool<{ endpoint_id: string; chat_id: string; name?: string; owner?: string; add_members?: string; remove_members?: string }>({
   description: '更新钉钉群聊设置（改名、换群主、增减成员）',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),

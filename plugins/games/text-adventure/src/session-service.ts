@@ -1,5 +1,5 @@
-import type { Database, DatabaseFeature, Message, Models, RelatedModel } from 'zhin.js';
-import { channelKey, generateSessionId, boardMessageMatches } from '@zhin.js/game-shared';
+import type { Database, Message, Models, RelatedModel } from 'zhin.js';
+import { channelKey, generateSessionId, boardMessageMatches } from '@zhin.js/game-kit';
 import type { AdvModelName, AdvSessionRow } from './models.js';
 import { createProfileService, ProfileService } from './profile-service.js';
 
@@ -103,6 +103,3 @@ export function createServices(db: AdvDatabase): GameServices {
   };
 }
 
-export function resolveGameDatabase(feature: DatabaseFeature): AdvDatabase {
-  return feature.db;
-}

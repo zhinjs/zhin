@@ -1,6 +1,35 @@
 import type { Plugin } from 'zhin.js';
 
-export async function pushTextToMasters(plugin: Plugin, text: string): Promise<void> {
+export interface LotteryPushTarget {
+  readonly adapter: string;
+  readonly endpointId: string;
+  readonly channelType?: string;
+  readonly channelId: string;
+}
+
+export type LotteryOutboundPush = (text: string) => Promise<void>;
+
+let _outboundPush: LotteryOutboundPush | null = null;
+
+export function setLotteryOutboundPush(push: LotteryOutboundPush | null): void {
+  _outboundPush = push;
+}
+
+export function getLotteryOutboundPush(): LotteryOutboundPush | null {
+  return _outboundPush;
+}
+
+/**
+ * Push report text: prefer Plugin Runtime OutboundHost wiring; else legacy
+ * endpoint.master via Plugin.inject.
+ */
+export async function pushTextToMasters(plugin: Plugin | null, text: string): Promise<void> {
+  if (_outboundPush) {
+    await _outboundPush(text);
+    return;
+  }
+  if (!plugin) return;
+
   const root = plugin.root as {
     adapters?: string[];
     inject?: (key: string) => unknown;

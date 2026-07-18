@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "connection": {
+      "type": "string",
+      "enum": ["ws", "sse", "webhook", "wss"],
+      "default": "ws",
+      "description": "ws (default), sse (EventSource client), webhook or wss (webhook/wss via httpHostToken)"
+    },
+    "name": {
+      "type": "string",
+      "default": "milky-bot"
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Milky HTTP API base URL (required); WS event path is derived as ws(s)://host/event"
+    },
+    "path": {
+      "type": "string",
+      "description": "Path for webhook / reverse-wss"
+    },
+    "access_token": {
+      "type": "string"
+    },
+    "reconnect_interval": {
+      "type": "number",
+      "default": 5000
+    },
+    "heartbeat_interval": {
+      "type": "number",
+      "default": 30000
+    }
+  }
+}

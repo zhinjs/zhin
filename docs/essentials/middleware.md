@@ -2,180 +2,166 @@
 
 > **级别：L2～L3**。若尚未了解消息如何进入框架，请先读 [消息如何流转](./message-flow.md)。
 
-## 消息处理架构 {#消息处理架构}
+中间件是 `middlewares/` 目录下的 `.ts` 文件，默认导出 `defineMiddleware(...)`。它以**洋葱模型**包裹消息的入站/出站处理：每个中间件可以放行（`next()`）、改写、或直接终止链路。
 
-Zhin.js 使用 **MessageDispatcher**（消息调度器）处理所有收到的消息。调度器将消息处理分为三个阶段：
+## 消息处理架构
 
-```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '14px' }}}%%
-flowchart LR
-  A([" 📨 消息到达 "]) ==> B
-
-  subgraph pipeline [" MessageDispatcher 三阶段管线 "]
-    direction LR
-    B(" 🛡️ Guardrail\n守卫 ") ==> C(" 🔀 Route\n路由 ") ==> D(" ⚡ Handle\n处理 ")
-  end
-
-  D ==> E(["📤 返回结果"])
-
-  classDef input fill:#e3f2fd,stroke:#1565c0,color:#0d47a1,rx:20
-  classDef output fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20,rx:20
-  classDef guard fill:#d32f2f,stroke:#b71c1c,color:#fff,rx:8
-  classDef route fill:#f57c00,stroke:#e65100,color:#fff,rx:8
-  classDef handle fill:#2e7d32,stroke:#1b5e20,color:#fff,rx:8
-
-  class A input
-  class E output
-  class B guard
-  class C route
-  class D handle
-
-  linkStyle 0,1,2,3 stroke:#42a5f5,stroke-width:2.5px
-```
-
-1. **Guardrail（守卫阶段）** - 安全检查、频率限制、日志记录等前置过滤
-2. **Route（路由阶段）** - 判断消息应走「命令路径」还是「AI 路径」
-3. **Handle（处理阶段）** - 交由命令系统或 AI Agent 处理
-
-正式运行时须 **`inject('dispatcher').dispatch` 可用**（`zhin.js` 默认会注册）。若缺失，入站命令/AI 不会执行，且 **`addMiddleware` 链也不会运行**（见 `runInboundMessage`）。
-
-**入站总顺序**（在 MessageDispatcher 三阶段**之前**还有一层根 `middleware`）：
+入站消息的处理顺序：
 
 ```
-root.middleware（addMiddleware 洋葱链）
-  └─ 终端 next() → MessageDispatcher.dispatch
-       ├─ Guardrail → Route → Handle
-       └─ …
-→ plugin.dispatch('message.receive')
-→ adapter 观察者
+平台 Adapter → Runtime Message
+  → inbound 中间件链（洋葱模型，中间件注册的插件各自提供一段）
+      → 终端：MessageDispatcher —— 以 / 开头的消息匹配命令并回复
+          → 未命中命令 → AI（如已启用）
 ```
 
-因此：`addMiddleware` **包裹** Dispatcher，而不是在 Dispatcher **之后**再跑一遍。路由前拦截请优先 **`dispatcher.addGuardrail`** 或 [消息过滤](./message-filter.md)。
+出站回复（命令返回值、`$reply`、Host 主动推送）统一走：
 
-**路由阶段默认 `exclusive`**（命令与 AI 互斥）。需要「指令 + AI」同时判定时，在配置里显式设置 `dispatcher.mode: dual` 等，详见 [AI 模块：MessageDispatcher 路由](/advanced/ai.html#messagedispatcher-指令与-ai-路由)。
+```
+SendContent → 渲染（Rich Segment 等）→ outbound 中间件链 → Adapter 发送到平台
+```
 
-## 中间件（Middleware）何时运行 {#中间件-middleware-何时运行}
+要点：
 
-`addMiddleware` 注册到**根插件**的洋葱链（应用插件请用 **`root.addMiddleware`**），在 **`MessageDispatcher.dispatch` 之前**执行（`runInboundMessage` 将 Dispatcher 作为链的终端 `next()`）。
+- 中间件在**命令匹配之前**运行，因此可以拦截、改写或吞掉一条消息。
+- 不调用 `next()` 即终止链路：命令不会执行，AI 也不会触发。
+- `next()` 最多调用一次，重复调用会抛错。
 
-因此：
+## 写一个中间件
 
-- **路由前拦截、过滤、限流**：优先 **`dispatcher.addGuardrail`** 或框架内置的 [消息过滤](./message-filter.md)。
-- **中间件更适合**：`Prompt` 等待用户下一条输入、`ask_user` 一次性监听、日志与耗时统计等**包裹整条 dispatch** 的场景。
-
-中间件以洋葱模型运行：每个中间件可选择不调用 `next()` 以终止本条链路（Dispatcher 与后续生命周期均不会执行）。
-
-### 基础用法
+在插件（或项目根）创建 `middlewares/` 目录：
 
 ```typescript
-import { usePlugin } from 'zhin.js'
+// middlewares/logger.ts
+import { defineMiddleware } from '@zhin.js/middleware'
+import type { Message } from '@zhin.js/core/runtime'
 
-const { root } = usePlugin()
-
-root.addMiddleware(async (message, next) => {
-  console.log('收到消息:', message.$raw)
-  return next()
+export default defineMiddleware<Message>({
+  target: 'inbound',
+  async handle({ input }, next) {
+    const start = Date.now()
+    await next()
+    console.log(`[${input.target}] 处理耗时 ${Date.now() - start}ms`)
+  },
 })
 ```
 
-### 拦截消息
+目录可以嵌套组织（如 `middlewares/admin/guard.ts`）；目录与文件名只认 `[a-z0-9][a-z0-9-]*`。文件即中间件，无需手动注册，热重载自动生效。
+
+`defineMiddleware` 的选项：
+
+| 字段 | 取值 | 默认值 | 说明 |
+|------|------|--------|------|
+| `target` | `'inbound'` / `'outbound'` | `'inbound'` | 入站消息链 / 出站发送链 |
+| `phase` | `'before-dispatch'` / `'after-dispatch'` | `'before-dispatch'` | 在调度处理之前还是之后执行本段 |
+| `order` | 整数 | `0` | 同 phase 内的执行顺序（小在前） |
+
+## Runtime Message
+
+入站中间件的 `context.input` 是 Runtime `Message`，与旧 API 的字段不同：
+
+| 字段 | 说明 |
+|------|------|
+| `content` | 消息文本（**没有 `$raw`**，用它代替） |
+| `target` | 会话标识（群/私聊目标） |
+| `sender` | 发送者 id（可空；**没有 `$sender` 对象**） |
+| `metadata` | 平台附加信息（如 `type` / `channelType`，因适配器而异；**没有 `$channel`**） |
+| `adapter` | 来源适配器的 Capability id |
+| `$reply(content)` | 在入站处理期间回复本会话 |
+
+::: warning 迁移注意
+旧中间件里的 `message.$raw` / `message.$channel` / `message.$sender.id` 在 Runtime Message 上**不存在**：文本用 `content`，会话类型从 `metadata` 判断，发送者用 `sender`。
+:::
+
+`context` 上还带着能力通用字段：`config`（本插件配置）、`owner`、`generation`、`use(token)`（Host Resources，见 [插件系统](./plugins#host-resources)）。
+
+## 拦截与回复
+
+不调用 `next()` 即可吞掉消息；`input.$reply(...)` 回复后直接结束：
 
 ```typescript
-root.addMiddleware(async (message, next) => {
-  // 拦截特定消息，不再传递
-  if (message.$raw === 'stop') {
-    return  // 不调用 next()，消息到此为止
-  }
-  
-  return next()
-})
-```
+// middlewares/echo-guard.ts（形态参考 plugins/utils/repeater）
+import { defineMiddleware } from '@zhin.js/middleware'
+import type { Message } from '@zhin.js/core/runtime'
 
-### 日志记录
-
-```typescript
-root.addMiddleware(async (message, next) => {
-  const start = Date.now()
-  const result = await next()
-  const time = Date.now() - start
-  
-  console.log(`处理耗时: ${time}ms`)
-  
-  return result
-})
-```
-
-## 守卫（Guardrail）
-
-守卫是 MessageDispatcher 提供的前置过滤机制，在路由之前执行。用于全局的安全检查、频率限制等。
-
-```typescript
-import { usePlugin } from 'zhin.js'
-
-const { useContext } = usePlugin()
-
-useContext('dispatcher', (dispatcher) => {
-  // 添加守卫：频率限制
-  dispatcher.addGuardrail(async (message, next) => {
-    const key = message.$sender?.id
-    if (isRateLimited(key)) {
-      return  // 丢弃消息
+export default defineMiddleware<Message>({
+  async handle({ input }, next) {
+    if (input.content.trim() === 'stop') {
+      await input.$reply('已停止')
+      return // 终止链路：命令与 AI 都不会执行
     }
-    return next()
-  })
+    await next()
+  },
 })
 ```
 
-## 消息路由
+## 出站中间件
 
-MessageDispatcher 在路由阶段判断消息应该怎么处理：
+`target: 'outbound'` 的中间件包裹每一次发送，`input` 是 `OutboundEnvelope`：
 
-- **命令路径**：消息匹配到已注册的命令 → 交给 `CommandFeature` 处理
-- **AI 路径**：消息满足 AI 触发条件（如 @机器人、私聊、前缀）→ 交给 AI Handler / ZhinAgent
-- **无双路径命中**（`skip`）：可能写入群/频道旁听上下文（`maybeRecordGroupPassiveContext`），通常无回复；**不会**在 Dispatcher 之后再执行 `addMiddleware`
+| 字段 | 说明 |
+|------|------|
+| `payload` | 渲染后的待发内容（平台段结构） |
+| `replace(payload)` | 整体替换待发内容（润色、审查改写） |
+| `adapter` / `target` / `requester` | 目标适配器、会话、发起方插件 |
 
-### AI 触发条件
+```typescript
+// middlewares/outbound-censor.ts
+import { defineMiddleware } from '@zhin.js/middleware'
+import type { OutboundEnvelope } from '@zhin.js/core/runtime'
 
-AI 触发由以下条件决定（可在配置文件中调整）：
+export default defineMiddleware<OutboundEnvelope>({
+  target: 'outbound',
+  async handle({ input }, next) {
+    if (typeof input.payload === 'string' && input.payload.includes('敏感词')) {
+      input.replace('（内容已折叠）')
+    }
+    await next()
+  },
+})
+```
 
-- `respondToAt: true` — @机器人 时触发
-- `respondToPrivate: true` — 私聊时触发
-- `prefixes: ["ai "]` — 消息以指定前缀开头时触发
-- `ignorePrefixes: ["/", "!"]` — 以这些前缀开头的消息不触发 AI
+## 排序规则
+
+多条中间件的执行顺序依次按以下键排序（见 `MiddlewareIndex`）：
+
+1. **phase**：`before-dispatch` 全部先于 `after-dispatch`；
+2. **order**：数值小的在前（默认 `0`）；
+3. **插件拓扑序**：父插件的中间件先于子插件；
+4. **capability id**：字典序兜底。
+
+经验法则：日志/计时用默认 order；需要在其他中间件之前拦截的（如鉴权）给负数 order。
 
 ## 完整示例
 
 ```typescript
-import { usePlugin } from 'zhin.js'
+// middlewares/access-log.ts
+import { defineMiddleware } from '@zhin.js/middleware'
+import type { Message } from '@zhin.js/core/runtime'
 
-const { root, useContext, logger } = usePlugin()
+interface Config {
+  blockedSenders?: string[]
+}
 
-// 全局日志中间件（须挂在根插件链上）
-root.addMiddleware(async (message, next) => {
-  logger.info(`[${message.$adapter}] ${message.$sender?.id}: ${message.$raw}`)
-  return next()
-})
-
-// 敏感词过滤 — 更推荐 dispatcher.addGuardrail（见 [内容审查](/advanced/content-moderation)）
-root.addMiddleware(async (message, next) => {
-  if (message.$raw?.includes('敏感词')) {
-    logger.warn('消息包含敏感词，已拦截')
-    return
-  }
-  return next()
-})
-
-// 使用 Dispatcher 守卫
-useContext('dispatcher', (dispatcher) => {
-  // 添加守卫：只处理群聊消息
-  const dispose = dispatcher.addGuardrail(async (message, next) => {
-    if (message.$channel?.type !== 'group') {
-      return  // 非群聊消息不处理
+export default defineMiddleware<Message, Config>({
+  order: -10,
+  async handle({ input, config }, next) {
+    const blocked = config.blockedSenders ?? []
+    if (input.sender && blocked.includes(input.sender)) {
+      return // 静默丢弃
     }
-    return next()
-  })
-  
-  // 返回 dispose 函数，插件卸载时自动移除守卫
-  return dispose
+    console.log(`[inbound] ${input.sender ?? 'unknown'}: ${input.content}`)
+    await next()
+  },
 })
 ```
+
+::: info legacy 路径
+旧的 `root.addMiddleware` / `dispatcher.addGuardrail`（`$raw` / `$channel` 形态）属于旧 Feature registry（`zhin dev` 路径）；新项目请使用 `middlewares/` 约定目录。
+:::
+
+## 下一步
+
+- [命令系统](./commands) — 中间件链终端的命令匹配
+- [消息如何流转](./message-flow) — 入站/出站全链路
+- [plugins/utils/repeater](https://github.com/zhinjs/zhin/tree/main/plugins/utils/repeater) — middleware + command 的真实插件

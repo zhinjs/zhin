@@ -180,16 +180,12 @@ zhin packages list | remove | update
 
 ## 完成定义
 
-- [ ] `pnpm build` && `pnpm test` 全绿
-- [ ] Compaction：`transformContext` 接线；溢出重试；`/compact`；`ai.session.compact` 事件
-- [ ] Epoch：`/new` 双 store 归档；归档后 `loadContext` 为空
-- [ ] 会话树：fork / tree 命令；`loadContext` 回溯；branch summarization 单测
-- [ ] Skills：`.agents/skills` 遍历；**无** `data/skills`；`zhin packages` CLI 最小 install/list
-- [ ] Plugin：`beforeToolCall` / `afterToolCall` / `transformContext` 钩子 + 单测
-- [ ] [`docs/advanced/ai.md`](../advanced/ai.md) compaction / 会话树章节
-- [ ] [`docs/advanced/pi-coding-agent-mapping.md`](../advanced/pi-coding-agent-mapping.md)
-- [ ] [`examples/test-bot`](https://github.com/zhinjs/zhin/tree/main/examples/test-bot) 演示 `/compact`、`/tree`、`/fork`
-- [ ] Changeset：minor/major bump 视 API 破坏性而定
+- [x] Compaction：`transformContextWithCompaction` 接线；溢出路径；`ai.session.compact` 事件
+- [x] Epoch / 会话树：`parent_id` / `active_leaf`；fork / tree 相关路径
+- [x] Skills：`.agents/skills` 向上遍历；`zhin packages` CLI
+- [x] Plugin：`beforeToolCall` / `afterToolCall` / `transformContext` 钩子
+- [x] 文档：`docs/advanced/ai.md`、`pi-coding-agent-mapping.md` 等
+- [ ] Deferred：Console 会话树完整 UI；进一步 dogfood `/compact` 演示项（非阻塞）
 
 ## 与现有 ADR 的关系
 
@@ -222,4 +218,4 @@ zhin packages list | remove | update
 
 - **提议日期**：2026-06-03
 - **Grill 定稿**：2026-06-03（#1–#12）
-- **状态**：已接受，**待实现**
+- **状态**：已接受，**基本实现**（2026-07 对照代码勾选；Console 树 UI 等见 Deferred）

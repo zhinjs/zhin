@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { formatCompact, Logger } from '@zhin.js/logger';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { UserMessage } from '@zhin.js/ai';
 import type { Message } from '../orchestrator/types.js';
 import type { SubagentCompletePayload, SubagentResultSender } from '../subagent/index.js';
@@ -15,7 +15,7 @@ import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import type { PromptController } from './prompt-controller.js';
 import type { ZhinAgentConfig } from '../config/index.js';
 
-const logger = new Logger(null, 'ZhinAgent');
+const logger = getLogger('ZhinAgent');
 
 export interface AutoContinueHost {
   config: Required<ZhinAgentConfig>;

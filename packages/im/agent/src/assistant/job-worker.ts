@@ -1,12 +1,12 @@
 /**
  * JobWorker — 执行 Agent 任务（TaskQueue：重试 / 并发 / 死信）
  */
-import { Logger } from '@zhin.js/core';
+import { getLogger } from '@zhin.js/core';
 import { getTaskQueue, initTaskQueue } from '../orchestrator/task-queue.js';
 import type { TaskExecutionResult, TaskExecutor } from '../task-executor.js';
 import { type AssistantQueueConfig, resolveAssistantQueueConfig } from './config.js';
 import type { JobNotify, ScheduleJobCreator, ScheduleJobExecutionPlan } from './types.js';
-const logger = new Logger(null, 'assistant-job-worker');
+const logger = getLogger('assistant-job-worker');
 
 export interface JobWorkerOptions {
   executor: TaskExecutor;

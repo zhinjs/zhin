@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -215,7 +215,7 @@ async function createProject(): Promise<string> {
     },
   });
   await writeFile(join(root, 'plugin.ts'), '');
-  return root;
+  return realpath(root);
 }
 
 async function writePlugin(path: string, version: string): Promise<void> {
@@ -253,7 +253,7 @@ export default {
 async function temporaryDirectory(): Promise<string> {
   const path = await mkdtemp(join(tmpdir(), 'zhin-runtime-isolate-'));
   temporary.push(path);
-  return path;
+  return realpath(path);
 }
 
 async function writeJson(path: string, value: unknown): Promise<void> {

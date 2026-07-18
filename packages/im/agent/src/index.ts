@@ -63,6 +63,14 @@ export {
 } from './orchestrator/owner-confirm-orchestration.js';
 export type { OwnerOrchestrationOptions } from './orchestrator/owner-confirm-orchestration.js';
 export {
+  OWNER_APPROVE_ALWAYS_TOOL,
+  handleRuntimeOwnerApproveCommand,
+  getEndpointMaster,
+  hasOwnerApproveAlways,
+  addOwnerApproveAlways,
+  formatBashApproveList,
+} from './security/owner-approve-always-store.js';
+export {
   buildRichSystemPrompt,
   buildLiteSystemPromptWithPlatform,
   buildContextHint,
@@ -326,6 +334,12 @@ export {
   OrchestrationKernel,
   OrchestrationService,
 } from './orchestrator/orchestration-service.js';
+export {
+  MemoryOrchestrationRepository,
+  DatabaseOrchestrationRepository,
+} from './orchestrator/orchestration-repository.js';
+export { registerDefaultExecutors } from './orchestrator/bootstrap-executors.js';
+export type { RegisterExecutorsDeps } from './orchestrator/bootstrap-executors.js';
 export type {
   OrchestrationStartInput,
   OrchestrationAddTaskInput,
@@ -379,6 +393,11 @@ export type { IntrospectionJsonResponse } from './init/introspection-rest.js';
 export { collectIntrospectionBindings, collectIntrospectionAgentTools, collectIntrospectionSkills, collectIntrospectionMcpLabels, collectIntrospectionMcpWithConfigFallback } from './init/introspection-collectors.js';
 export { ensureMcpConnections, ensureMcpConnectionsForBinding, getMcpToolsForBinding } from './orchestrator/mcp-lifecycle.js';
 export { waitForAgentBootstrap } from './init/bootstrap-gate.js';
+export { composeZhinAgentRuntime } from './init/compose-zhin-agent-runtime.js';
+export type { ComposedZhinAgentRuntime } from './init/compose-zhin-agent-runtime.js';
+export { activateAiDatabaseStorage } from './init/activate-ai-database-storage.js';
+export { defineAiDatabaseModels } from './init/define-ai-database-models.js';
+export type { AiDatabaseModelDefiner } from './init/define-ai-database-models.js';
 
 export {
   loadBootstrapFiles, buildContextFiles, buildBootstrapContextSection,
@@ -430,6 +449,8 @@ export type {
   SessionNewEvent, AgentBootstrapEvent, ToolCallEvent,
 } from './hooks.js';
 
+export { aiHookRuntimeBus, AIHookRuntimeBus } from './ai-hook-runtime-bus.js';
+
 export {
   createAIHookBusPayload,
   isAISessionNewPayload,
@@ -446,12 +467,14 @@ export type {
 export {
   AI_EVENT_NAMES,
   subscribeAIEvents,
+  subscribeAIEventsOnTarget,
 } from './ai-event-subscriber.js';
 export { originFromMessage } from './builtin/spawn-task-tool.js';
 export type {
   AIEventName,
   AIEventFilter,
   AIEventHandlers,
+  AIEventTarget,
 } from './ai-event-subscriber.js';
 
 export { initAgentModule } from './init.js';
@@ -471,6 +494,8 @@ export {
   getAdapterActivityFeedbackManager,
   initAdapterActivityFeedbackManager,
   isGenericActivityFeedbackManager,
+  activityFeedbackAiBus,
+  ActivityFeedbackAIBus,
 } from './activity-feedback/index.js';
 export type {
   ActivityFeedbackType,
@@ -496,6 +521,13 @@ export type {
 } from './outbound/send-proactive.js';
 export { deliverScheduleToAdapter } from './assistant/deliver-schedule-to-adapter.js';
 export type { DeliverScheduleToAdapterInput } from './assistant/deliver-schedule-to-adapter.js';
+export { createTaskExecutor, drainTaskExecutorLocks } from './task-executor.js';
+export type {
+  TaskExecutor,
+  TaskExecutionOptions,
+  TaskExecutionResult,
+  TaskExecutorDeps,
+} from './task-executor.js';
 export {
   requestConnectionAuthorization,
   completeConnectionAuthorization,
@@ -603,6 +635,7 @@ export {
   bootstrapEndpointRuntimes,
   buildTurnPlan,
   evaluatePeerTrigger,
+  applyRuntimeCollaborationInbound,
   resolveCollaborationSceneContextKey,
   resolveCollaborationSceneContextKeyFromMessage,
 } from './collaboration/index.js';
@@ -615,6 +648,8 @@ export type {
   PeerTriggerMode,
   InboundTurnPipeline,
   InboundTurnPipelineDeps,
+  RuntimeCollaborationInboundInput,
+  RuntimeCollaborationInboundResult,
 } from './collaboration/index.js';
 export {
   resolveMemberBySender,
@@ -629,6 +664,7 @@ export {
 
 export {
   defineAgent,
+  defineAgentTool,
   defineSkill,
   defineSchedule,
   defineConnection,
@@ -653,12 +689,17 @@ export type {
   AuthoringToolContext,
   AuthoringEvalContext,
   DiscoveredPluginAgentSurface,
+  DefineAgentToolInput,
 } from './authoring/index.js';
 export {
   discoverAllPluginAgentSurfaces,
   discoverPluginAgentSurface,
   collectPluginAgentRoots,
 } from './discovery/agent-surface.js';
+export {
+  discoverWorkspaceAgents,
+  type AgentMeta,
+} from './discovery/agents.js';
 export {
   buildAgentSurfaceInfoReport,
   formatAgentSurfaceInfoReport,
@@ -689,3 +730,17 @@ export {
   runPluginEvals,
   resetAuthoringRegistrationForTests,
 } from './discovery/register-agent-surface.js';
+export {
+  AgentFeature,
+  MCPFeature,
+} from './features/index.js';
+export type { McpFeatureEntry } from './features/index.js';
+export {
+  FeatureCapabilityIngress,
+  createFeatureCapabilityIngress,
+} from './ingress/index.js';
+export type {
+  CapabilityFeatureBundle,
+  IngressTurnContext,
+  IngressTurnLease,
+} from './ingress/index.js';

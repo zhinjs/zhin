@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createCapabilitySlot,
+  childPluginId,
   rootPluginId,
   type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
@@ -90,7 +91,7 @@ describe('Adapter Feature', () => {
     ]);
   });
 
-  it('compensates already-created Endpoints when candidate creation fails', async () => {
+  it('soft-fails Endpoint create and keeps other Endpoints', async () => {
     const events: string[] = [];
     const root = rootPluginId();
     const good = createCapabilitySlot({
@@ -100,7 +101,10 @@ describe('Adapter Feature', () => {
       source: '/adapters/a-good.ts',
       definition: defineAdapter({
         capabilities: ['inbound'],
-        create: () => ({ stop: () => { events.push('stop-good'); } }),
+        create: () => ({
+          start: () => { events.push('start-good'); },
+          stop: () => { events.push('stop-good'); },
+        }),
       }),
     });
     const broken = createCapabilitySlot({
@@ -114,9 +118,98 @@ describe('Adapter Feature', () => {
       }),
     });
 
-    await expect(AdapterIndex.create([broken, good], snapshot([good, broken])))
-      .rejects.toThrow('create failed');
-    expect(events).toEqual(['stop-good']);
+    const index = await AdapterIndex.create([broken, good], snapshot([good, broken]));
+    await index.start();
+    expect(events).toEqual(['start-good']);
+    await index.stop();
+    expect(events).toEqual(['start-good', 'stop-good']);
+  });
+
+  it('defers slow Endpoint start instead of stop()-ing mid-connect', async () => {
+    const events: string[] = [];
+    let resolveStart!: () => void;
+    const started = new Promise<void>((resolve) => { resolveStart = resolve; });
+    const root = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'slow',
+      source: '/adapters/slow.ts',
+      definition: defineAdapter({
+        capabilities: ['inbound', 'outbound'],
+        create: () => ({
+          async start() {
+            events.push('start-begin');
+            await started;
+            events.push('start-done');
+          },
+          open() { events.push('open'); },
+          stop() { events.push('stop'); },
+        }),
+      }),
+    });
+    const index = await AdapterIndex.create([slot], snapshot([slot]), { startTimeoutMs: 20 });
+    await index.start();
+    expect(events).toEqual(['start-begin']);
+    index.open();
+    expect(events).toEqual(['start-begin']);
+    resolveStart();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(events).toEqual(['start-begin', 'start-done', 'open']);
+    await index.stop();
+    expect(events.at(-1)).toBe('stop');
+  });
+
+  it('gives up on a never-settling deferred start and reports the failed phase', async () => {
+    const root = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'wedged',
+      source: '/adapters/wedged.ts',
+      definition: defineAdapter({
+        capabilities: ['inbound'],
+        create: () => ({
+          // Never settles — the deferred give-up budget must close it out.
+          start: () => new Promise<void>(() => undefined),
+          stop: () => undefined,
+        }),
+      }),
+    });
+    const index = await AdapterIndex.create([slot], snapshot([slot]), {
+      startTimeoutMs: 20,
+      deferredGiveUpMs: 60,
+    });
+    expect(index.describe()[0]).toMatchObject({ phase: 'pending', connected: false });
+
+    await index.start();
+    expect(index.describe()[0]).toMatchObject({ phase: 'starting', connected: false });
+
+    await new Promise((resolve) => { setTimeout(resolve, 150); });
+    expect(index.describe()[0]).toMatchObject({
+      phase: 'failed',
+      connected: false,
+      status: 'offline',
+    });
+    await index.stop();
+  });
+
+  it('reports the unconfigured phase for soft-failed Endpoint create', async () => {
+    const root = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'broken',
+      source: '/adapters/broken.ts',
+      definition: defineAdapter({
+        capabilities: ['inbound'],
+        create: () => { throw new TypeError('icqq requires uin'); },
+      }),
+    });
+    const index = await AdapterIndex.create([slot], snapshot([slot]));
+    await index.start();
+    expect(index.describe()[0]).toMatchObject({ phase: 'unconfigured', status: 'offline' });
+    await index.stop();
   });
 
   it('hands admission from the previous projection to the candidate and can resume it', async () => {
@@ -170,24 +263,105 @@ describe('Adapter Feature', () => {
       'old:stop',
     ]);
   });
+
+  it('describes endpoint status and resolves Console adapter/endpoint pairs', async () => {
+    const root = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'sandbox',
+      source: '/adapters/sandbox.ts',
+      definition: defineAdapter({
+        capabilities: ['inbound', 'outbound'],
+        create: () => ({
+          send: async () => 'ok',
+        }),
+      }),
+    });
+    const index = await AdapterIndex.create([slot], snapshot([slot]));
+    expect(index.describe()).toEqual([expect.objectContaining({
+      name: 'sandbox',
+      connected: false,
+      status: 'offline',
+    })]);
+    await index.start();
+    index.open();
+    expect(index.describe()[0]).toMatchObject({ connected: true, status: 'online' });
+    expect(index.resolve('sandbox', 'sandbox')).toBe(slot.id);
+    expect(index.resolve('missing', 'sandbox')).toBeUndefined();
+  });
+
+  it('resolves Console pairs by live EndpointInstance.name (bot uin)', async () => {
+    const root = rootPluginId();
+    const slotA = createCapabilitySlot({
+      owner: childPluginId(root, 'icqq'),
+      feature: adapterFeatureId,
+      localName: 'icqq',
+      source: '/adapters/icqq-a.ts',
+      definition: defineAdapter({
+        capabilities: ['inbound', 'outbound'],
+        create: () => ({
+          name: '111111',
+          send: async () => 'a',
+        }),
+      }),
+    });
+    const slotB = createCapabilitySlot({
+      owner: childPluginId(root, 'icqq-2'),
+      feature: adapterFeatureId,
+      localName: 'icqq',
+      source: '/adapters/icqq-b.ts',
+      definition: defineAdapter({
+        capabilities: ['inbound', 'outbound'],
+        create: () => ({
+          name: '222222',
+          send: async () => 'b',
+        }),
+      }),
+    });
+    const index = await AdapterIndex.create([slotA, slotB], snapshot([slotA, slotB]));
+    expect(index.resolve('icqq', '111111')).toBe(slotA.id);
+    expect(index.resolve('icqq', '222222')).toBe(slotB.id);
+    expect(index.resolve('icqq', '999999')).toBeUndefined();
+    expect(index.instance('icqq', '222222')).toMatchObject({ name: '222222' });
+  });
 });
 
 function snapshot(
   slots: readonly ReturnType<typeof createCapabilitySlot>[],
 ): RuntimeSnapshot {
   const root = rootPluginId();
+  const tree = new Map<string, {
+    id: typeof root;
+    instanceKey: string;
+    packageName: string;
+    packageRoot: string;
+    children: string[];
+  }>([[root, {
+    id: root,
+    instanceKey: 'root',
+    packageName: '@test/root',
+    packageRoot: '/project',
+    children: [],
+  }]]);
+  for (const slot of slots) {
+    if (tree.has(slot.owner)) continue;
+    const instanceKey = String(slot.owner).split('/').pop() ?? 'child';
+    tree.set(slot.owner, {
+      id: slot.owner,
+      instanceKey,
+      packageName: `@test/${instanceKey}`,
+      packageRoot: '/project',
+      children: [],
+    });
+    tree.get(root)!.children.push(slot.owner);
+  }
   return {
     generation: 1,
     root,
-    tree: new Map([[root, {
-      id: root,
-      instanceKey: 'root',
-      packageName: '@test/root',
-      packageRoot: '/project',
-      children: [],
-    }]]),
-    config: new Map([[root, {}]]),
-    resources: new Map([[root, new Map()]]),
+    tree: tree as RuntimeSnapshot['tree'],
+    config: new Map([[root, {}], ...slots.map((slot) => [slot.owner, {}] as const)]),
+    resources: new Map([[root, new Map()], ...slots.map((slot) => [slot.owner, new Map()] as const)]),
     capabilities: new Map(slots.map((slot) => [slot.id, slot])),
     projections: new Map(),
   };

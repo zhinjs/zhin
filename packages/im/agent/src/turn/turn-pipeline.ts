@@ -1,4 +1,4 @@
-import { formatCompact, Logger } from '@zhin.js/logger';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import { AgentStreamEventType } from '@zhin.js/ai/agent-stream';
 import { publishAgentStream } from '../event/publish-agent-stream.js';
 import { readHttpSessionId } from '../session/resolve-session-interaction-port.js';
@@ -43,7 +43,7 @@ function requireContextSystem(host: ZhinAgentPrivate): ContextSystem {
   return host.contextSystem;
 }
 
-const logger = new Logger(null, 'ZhinAgent');
+const logger = getLogger('ZhinAgent');
 const now = () => performance.now();
 
 export interface ProcessTextTurnOptions {

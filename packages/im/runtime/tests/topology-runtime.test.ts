@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { setImmediate as waitForImmediate } from 'node:timers/promises';
@@ -246,7 +246,7 @@ async function createProject(): Promise<string> {
     'plugins/broken/plugin.ts',
     'packages/command/index.ts',
   ]) await touch(join(root, file));
-  return root;
+  return realpath(root);
 }
 
 interface PluginManifestOptions {

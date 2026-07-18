@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/plugin-guess-number",
   "version": "1.0.1",
-  "description": "Zhin.js 猜数字 — 1~100 七步之内猜中",
+  "description": "Zhin.js 猜数字 — 1~100 七步之内猜中 (Plugin Runtime)",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -14,25 +14,40 @@
     "./package.json": "./package.json"
   },
   "files": [
+    "plugin.ts",
+    "schema.json",
+    "commands",
+    "middlewares",
     "src",
     "lib",
-    "plugin.yml",
     "README.md"
   ],
   "scripts": {
-    "build": "tsc --build",
-    "clean": "rimraf lib"
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/games/guess-number/tests",
+    "prepublishOnly": "pnpm run build"
   },
   "license": "MIT",
-  "peerDependencies": {
-    "zhin.js": "workspace:*"
-  },
   "dependencies": {
-    "@zhin.js/game-shared": "workspace:*"
+    "@zhin.js/command": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/game-kit": "workspace:*",
+    "@zhin.js/middleware": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
     "zhin.js": "workspace:*"
+  },
+  "peerDependencies": {
+    "zhin.js": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "zhin.js": {
+      "optional": true
+    }
   },
   "repository": {
     "type": "git",
@@ -42,5 +57,26 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/middleware",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
   }
 }

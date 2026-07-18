@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import fs from 'fs-extra'
 import os from 'node:os'
 import path from 'node:path'
-import { createConfigFile, generateDatabaseConfig, generateDatabaseEnvVars } from '../src/config'
-import { RECOMMENDED_AI_DEFAULTS, type DatabaseConfig, type InitOptions } from '@zhin.js/scaffold-wizard';
+import { createConfigFile, generateDatabaseEnvVars } from '../src/config'
+import { RECOMMENDED_AI_DEFAULTS, materializeDatabaseConfig, type DatabaseConfig, type InitOptions } from '@zhin.js/scaffold-wizard';
 
 describe('create-zhin config', () => {
   describe('generateDatabaseEnvVars', () => {
@@ -16,9 +16,9 @@ describe('create-zhin config', () => {
         password: 'password',
         database: 'test_db'
       }
-      
+
       const envVars = generateDatabaseEnvVars(config)
-      
+
       expect(envVars).toContain('# MySQL 数据库配置')
       expect(envVars).toContain('DB_HOST=localhost')
       expect(envVars).toContain('DB_PORT=3306')
@@ -36,9 +36,9 @@ describe('create-zhin config', () => {
         password: 'password',
         database: 'test_db'
       }
-      
+
       const envVars = generateDatabaseEnvVars(config)
-      
+
       expect(envVars).toContain('# PostgreSQL 数据库配置')
       expect(envVars).toContain('DB_HOST=localhost')
       expect(envVars).toContain('DB_PORT=5432')
@@ -50,9 +50,9 @@ describe('create-zhin config', () => {
         url: 'mongodb://localhost:27017',
         dbName: 'test_db'
       }
-      
+
       const envVars = generateDatabaseEnvVars(config)
-      
+
       expect(envVars).toContain('# MongoDB 数据库配置')
       expect(envVars).toContain('DB_URL=mongodb://localhost:27017')
       expect(envVars).toContain('DB_NAME=test_db')
@@ -68,9 +68,9 @@ describe('create-zhin config', () => {
         password: 'password',
         database: 0
       }
-      
+
       const envVars = generateDatabaseEnvVars(config)
-      
+
       expect(envVars).toContain('# Redis 数据库配置')
       expect(envVars).toContain('REDIS_HOST=localhost')
       expect(envVars).toContain('REDIS_PORT=6379')
@@ -83,84 +83,29 @@ describe('create-zhin config', () => {
         dialect: 'sqlite',
         filename: './data/bot.db'
       }
-      
+
       const envVars = generateDatabaseEnvVars(config)
-      
+
       expect(envVars).toBe('')
     })
   })
 
-  describe('generateDatabaseConfig', () => {
-    it('should generate YAML config for SQLite with mode', () => {
-      const config: DatabaseConfig = {
-        dialect: 'sqlite',
-        filename: './data/bot.db',
-        mode: 'wal'
-      }
-      
-      const yamlConfig = generateDatabaseConfig(config, 'yaml')
-      
-      expect(yamlConfig).toContain('dialect: sqlite')
-      expect(yamlConfig).toContain('filename: ./data/bot.db')
-      expect(yamlConfig).toContain('mode: wal')
+  describe('materializeDatabaseConfig', () => {
+    it('keeps sqlite fields as-is', () => {
+      expect(materializeDatabaseConfig({ dialect: 'sqlite', filename: './data/bot.db', mode: 'wal' }))
+        .toEqual({ dialect: 'sqlite', filename: './data/bot.db', mode: 'wal' })
     })
 
-    it('should generate YAML config for MySQL', () => {
-      const config: DatabaseConfig = {
-        dialect: 'mysql',
-        host: 'localhost',
-        port: 3306,
-        user: 'root',
-        password: 'password',
-        database: 'test_db'
-      }
-      
-      const yamlConfig = generateDatabaseConfig(config, 'yaml')
-      
-      expect(yamlConfig).toContain('dialect: mysql')
-      expect(yamlConfig).toContain('${DB_HOST}')
-      expect(yamlConfig).toContain('${DB_PORT}')
-    })
-
-    it('should generate YAML config for SQLite', () => {
-      const config: DatabaseConfig = {
-        dialect: 'sqlite',
-        filename: './data/bot.db'
-      }
-      
-      const yamlConfig = generateDatabaseConfig(config, 'yaml')
-      
-      expect(yamlConfig).toContain('dialect: sqlite')
-      expect(yamlConfig).toContain('filename: ./data/bot.db')
-    })
-
-    it('should generate JSON config for SQLite', () => {
-      const config: DatabaseConfig = {
-        dialect: 'sqlite',
-        filename: './data/bot.db'
-      }
-      
-      const jsonConfig = generateDatabaseConfig(config, 'json')
-      
-      expect(jsonConfig).toContain('"database":')
-      expect(jsonConfig).toContain('"dialect": "sqlite"')
-    })
-
-    it('should generate TOML config for SQLite', () => {
-      const config: DatabaseConfig = {
-        dialect: 'sqlite',
-        filename: './data/bot.db'
-      }
-      
-      const tomlConfig = generateDatabaseConfig(config, 'toml')
-      
-      expect(tomlConfig).toContain('[database]')
-      expect(tomlConfig).toContain('dialect = "sqlite"')
+    it('references env vars for mysql', () => {
+      const config = materializeDatabaseConfig({ dialect: 'mysql', host: 'localhost', port: 3306 })
+      expect(config.dialect).toBe('mysql')
+      expect(config.host).toBe('${DB_HOST}')
+      expect(config.port).toBe('${DB_PORT}')
     })
   })
 
   describe('createConfigFile', () => {
-    it('generates parseable JSON when adapters are configured and AI is disabled', async () => {
+    it('generates new runtime JSON config with plugins.<instanceKey> map', async () => {
       const root = await fs.mkdtemp(path.join(os.tmpdir(), 'create-zhin-config-'))
       try {
         const options: InitOptions = {
@@ -175,7 +120,11 @@ describe('create-zhin config', () => {
           adapters: {
             packages: ['@zhin.js/adapter-sandbox'],
             plugins: ['@zhin.js/adapter-sandbox'],
-            endpoints: [],
+            instances: [{
+              package: '@zhin.js/adapter-sandbox',
+              instanceKey: 'sandbox',
+              config: { endpoints: [{ context: 'sandbox', name: 'sandbox-bot', owner: 'sandbox-user' }] }
+            }],
             envVars: {}
           },
           ai: { enabled: false }
@@ -187,8 +136,11 @@ describe('create-zhin config', () => {
 
         expect(parsed.http.base).toBe('/api')
         expect(parsed.http.corsOrigins).toEqual(['https://console.zhin.dev'])
-        expect(parsed.inbox.enabled).toBe(true)
-        expect(parsed.plugins).toContain('@zhin.js/adapter-sandbox')
+        expect(parsed.plugins.sandbox.endpoints).toHaveLength(1)
+        // legacy 顶层键不得出现（runtime config-composer additionalProperties: false）
+        expect(parsed.inbox).toBeUndefined()
+        expect(parsed.endpoints).toBeUndefined()
+        expect(Array.isArray(parsed.plugins)).toBe(false)
       } finally {
         await fs.remove(root)
       }

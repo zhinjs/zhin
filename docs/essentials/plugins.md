@@ -1,391 +1,226 @@
 # 插件系统
 
-插件是 Zhin.js 的最小功能单元。每个 `.ts` 文件就是一个插件，通过 `usePlugin()` 获取插件 API。
+插件是 Zhin.js 的功能单元：一个带 `plugin.ts`（`definePlugin`）和一组**约定目录**的包。运行时按目录发现能力（命令、中间件、组件……），无需手动注册。
 
-## 创建插件
+## 插件长什么样
 
-在 `src/plugins/` 目录创建文件：
-
-```typescript
-// src/plugins/my-plugin.ts
-import { usePlugin, MessageCommand } from 'zhin.js'
-
-const { addCommand, logger } = usePlugin()
-
-logger.info('插件已加载')
-
-addCommand(
-  new MessageCommand('test')
-    .desc('测试命令')
-    .action(() => '测试成功')
-)
+```
+my-plugin/
+├── package.json      # zhin.entry / zhin.features / files（见下文）
+├── plugin.ts         # definePlugin —— 插件入口
+├── schema.json       # 配置 JSON Schema（可选，含默认值）
+├── commands/         # 命令（defineCommand）
+├── middlewares/      # 中间件（defineMiddleware）
+├── components/       # 消息组件（defineComponent）
+├── adapters/         # 平台适配器（defineAdapter）
+├── tools/            # AI 工具（defineAgentTool）
+├── skills/           # 技能（skills/<name>/SKILL.md）
+├── agents/           # Agent 预设（<name>.agent.md）
+├── mcp/              # MCP 定义（defineMcp）
+├── pages/            # Console 客户端页面
+└── src/              # 插件自己的业务代码（被以上文件 import）
 ```
 
-在 `zhin.config.yml` 中启用：
+只有 `package.json` 和 `plugin.ts` 是必需的；约定目录按需添加。
 
-```yaml
-plugins:
-  - my-plugin
-```
+## definePlugin
 
-## usePlugin API
-
-`usePlugin()` 返回当前插件的完整 API：
+`plugin.ts` 默认导出一个 `definePlugin(...)`：
 
 ```typescript
-const {
-  // 命令系统
-  addCommand,      // 添加命令（CommandFeature 扩展）
-  
-  // 中间件（入站链见下方「中间件」说明）
-  addMiddleware,   // 注册到**当前**插件实例；应用插件请用 root.addMiddleware
-  
-  // 组件系统
-  addComponent,    // 添加消息组件（ComponentFeature 扩展）
-  
-  // 工具系统
-  addTool,         // 添加 AI 工具（ToolFeature 扩展）
-  
-  // 定时任务
-  addCron,         // 添加定时任务（CronFeature 扩展）
-  
-  // 配置
-  addConfig,       // 注册插件配置项（ConfigFeature 扩展）
-  
-  // 权限与入站过滤
-  addPermission,   // 权限规则（PermissionFeature 扩展）
-  addFilterRule,   // 入站消息过滤（MessageFilterFeature，Guardrail 阶段）
-  
-  // 数据库
-  defineModel,     // 定义数据库模型（DatabaseFeature 扩展）
-  
-  // 上下文与服务
-  useContext,       // 等待上下文就绪并执行回调
-  provide,          // 注册服务/上下文
-  inject,           // 注入已注册的服务
-  
-  // 生命周期
-  onMounted,       // 插件挂载完成回调
-  onDispose,       // 插件卸载回调
-  
-  // 工具属性
-  logger,          // 日志对象
-  root,            // 根插件实例
-  name,            // 插件名称
-  manifest,        // 插件清单（plugin.yml / package.json）
-  filePath,        // 插件文件路径
-} = usePlugin()
+// plugin.ts（形态参考 plugins/utils/repeater）
+import { definePlugin } from '@zhin.js/plugin-runtime'
 
-// 实例方法（在 usePlugin() 返回值上调用）
-usePlugin().getFeatures()  // Array<{ name, count }>，汇总已注册功能数量
-```
-
-::: tip
-上面的 `addCommand`、`addTool`、`addCron`、`addConfig` 等方法都是由对应的 Feature 注入到插件上的扩展方法。技能请使用包内 `skills/`（无 `declareSkill` API）。详见 [Feature 系统](/advanced/features)。
-:::
-
-::: info 文件化 AI 能力
-除了程序化 `addTool()`，工具还可以通过 `*.tool.md` 文件声明；技能用 `skills/<name>/SKILL.md`；Agent 预设用 `agents/<name>.agent.md`。框架自动扫描、注册、热重载。详见 [工具与技能](/advanced/tools-skills)。
-:::
-
-## getPlugin 与 usePlugin
-
-| API | 用途 | 调用时机 |
-|-----|------|----------|
-| `usePlugin()` | 获取**当前文件**的插件实例（不存在则创建） | **模块顶层** |
-| `getPlugin()` | 读取 AsyncLocalStorage 中**当前上下文**的插件 | **仅初始化/装配阶段** |
-
-插件作者日常只需 `usePlugin()`。`getPlugin()` 多用于框架扩展、跨模块 init 函数。
-
-**线上常见故障**：在中间件、命令 `.action()`、工具 `.execute()`、Cron、`on()` / `once()` 等**运行时回调**里调用 `getPlugin()`。跨 `await` 或部分平台回调时 AsyncLocalStorage 上下文可能丢失，抛出 `getPlugin() must be called within a plugin context`。
-
-**中间件注册位置**：`zhin.config.yml` 加载的应用插件是根插件的**子插件**；入站执行 `runInboundMessage` 时只走 **`plugin.root.middleware`**（见 `inbound-runner.ts`）。因此应用插件应使用 **`root.addMiddleware()`**，子插件实例上的 `addMiddleware` **不会**进入入站管道。须已注册 `inject('dispatcher')`，否则中间件链与 Dispatcher 均不执行。
-
-`addMiddleware` 在 **MessageDispatcher 之前**执行（洋葱链包裹 `dispatch`）；路由前拦截请优先 `dispatcher.addGuardrail` 或 `addFilterRule`，见 [中间件与消息调度](/essentials/middleware)。
-
-**正确做法**：在注册回调**之前**捕获引用，回调内使用闭包：
-
-```typescript
-const { addCommand, logger, root } = usePlugin()
-
-root.addMiddleware(async (message, next) => {
-  logger.info('收到消息') // ✅ 使用顶层捕获的 logger
-  await next()
-})
-
-addCommand(
-  new MessageCommand('ping')
-    .action(() => {
-      const ai = root.inject('ai') // ✅ 使用顶层捕获的 root
-      return ai ? 'pong' : 'no ai'
-    })
-)
-```
-
-```typescript
-// ❌ 运行时回调内 getPlugin() — 线上易炸（CI：check:get-plugin-runtime）
-addMiddleware(async (message, next) => {
-  getPlugin().logger.info('...') // 禁止
-  await next()
+export default definePlugin({
+  name: 'my-plugin', // 规则：^[a-z][a-z0-9-]*$
+  metadata: { displayName: 'My Plugin' },
+  setup(context) {
+    // 初始化资源；注册需要在卸载时执行的清理
+    const timer = setInterval(() => {/* ... */}, 60_000)
+    context.lifecycle.add(() => clearInterval(timer))
+  },
 })
 ```
 
-::: info Harness 检查
-`pnpm check:use-plugin-top-level` 检测 `usePlugin()` 是否在模块顶层；`pnpm check:get-plugin-runtime` 检测 `.action` / `.execute` / `addMiddleware` / `addCron` / `.on(` / `.once(` 回调内是否误用 `getPlugin()`。
-:::
+- `name` 是包内标识；**用户可见的实例名（instanceKey）在挂载方决定**，见下文「挂载子插件」。
+- `metadata`：`displayName` / `icon` / `order`，用于 Console 展示。
+- `requires`：声明本插件**必须存在**的 Host Resource token；缺失时插件不会启动（见下文「Host Resources」）。
 
-详见 [插件开发指南 — getPlugin 与 usePlugin](/guide/plugin-development#getplugin-与-useplugin)。
+## 约定目录全表
 
-## 生命周期
+每个约定目录对应一个 Feature 包，且必须在 `package.json` 的 `zhin.features` 里声明依赖才会生效：
 
-```typescript
-const { onMounted, onDispose } = usePlugin()
+| 目录 | Feature 包 | 文件形态 | 说明 |
+|------|-----------|----------|------|
+| `commands/` | `@zhin.js/command` | `defineCommand`，支持嵌套目录与 `[name:type=default].ts` 动态参数 | 见 [命令系统](./commands) |
+| `middlewares/` | `@zhin.js/middleware` | `defineMiddleware`，目录可嵌套 | 见 [中间件](./middleware) |
+| `components/` | `@zhin.js/component` | `defineComponent`，`.ts` / `.tsx`，目录可嵌套 | 命令返回 `component(name, props)` 时渲染 |
+| `adapters/` | `@zhin.js/adapter` | `defineAdapter`，目录可嵌套 | 平台适配器，见 [平台适配器](/adapters/) |
+| `tools/` | `@zhin.js/tool` | `defineAgentTool`，**仅顶层文件**（不递归） | AI 工具，见 [Agent 创作面](/advanced/agent-authoring) |
+| `skills/` | `@zhin.js/skill` | `skills/<name>/SKILL.md` | 技能，Markdown 声明 |
+| `agents/` | `@zhin.js/agent-feature` | `agents/<name>.agent.md` | Agent 预设，Markdown 声明 |
+| `mcp/` | `@zhin.js/mcp-feature` | `defineMcp`，**仅顶层文件** | MCP server 定义，见 [MCP 集成](/advanced/mcp) |
+| `pages/` | `@zhin.js/page`（Console） | 客户端模块，仅顶层文件 | Console 自定义页面 |
 
-onMounted(() => {
-  console.log('插件启动')
-})
+通用规则：TypeScript 类约定目录里，目录名与文件名只认 `[a-z0-9][a-z0-9-]*`，嵌套层级以 `/` 计入本地名（命令系统再映射为空格分隔的子命令）。
 
-onDispose(() => {
-  console.log('插件卸载，清理资源')
-})
-```
+## 配置：schema.json
 
-热重载时，框架会依次执行 `onDispose` → 重新加载文件 → `onMounted`（子插件 `reload`；**根插件**热更将 `process.exit(51)` 由 CLI 重启）。
+`schema.json` 用 JSON Schema（draft 2020-12）声明本插件的配置项与默认值：
 
-`addMiddleware` 返回的 `dispose` 会在插件 `stop` / 热重载时自动调用（经 `onDispose` 注册）。
-
-## 使用数据库
-
-```typescript
-import { usePlugin } from 'zhin.js'
-
-// 1. 声明模型类型
-declare module 'zhin.js' {
-  interface Models {
-    users: {
-      id: number
-      name: string
-    }
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "timeout": { "type": "number", "default": 15000, "minimum": 1000 },
+    "masters": { "type": "array", "items": { "type": "string" }, "default": [] }
   }
 }
-
-const { defineModel, useContext } = usePlugin()
-
-// 2. 定义模型（数据库启动前即可调用）
-defineModel('users', {
-  id: { type: 'integer', primary: true },
-  name: { type: 'string' }
-})
-
-// 3. 使用模型（数据库就绪后）
-useContext('database', async (db) => {
-  const users = db.models.get('users')
-  const result = await users.select()
-  console.log(result)
-})
 ```
 
-## 注册工具（AI 可调用）
-
-插件可以注册工具，供 AI Agent 调用：
+读取配置的两种位置：
 
 ```typescript
-import { usePlugin } from 'zhin.js'
+// plugin.ts —— setup 阶段（ConfigView，get() 取当前值）
+setup(context) {
+  const config = context.config.get()
+}
 
-const { addTool } = usePlugin()
-
-addTool({
-  name: 'get_weather',
-  description: '查询指定城市的天气',
-  parameters: {
-    type: 'object',
-    properties: {
-      city: { type: 'string', description: '城市名称' },
-    },
-    required: ['city'],
-  },
-  execute: async (args) => {
-    const data = await fetchWeather(args.city)
-    return { temp: data.temp, desc: data.description }
-  },
-})
-```
-
-也可以使用链式 DSL 风格：
-
-```typescript
-import { usePlugin, ZhinTool } from 'zhin.js'
-
-const { addTool } = usePlugin()
-
-addTool(
-  new ZhinTool('get_weather')
-    .desc('查询指定城市的天气')
-    .param('city', 'string', '城市名称', true)
-    .execute(async (args) => {
-      return await fetchWeather(args.city)
-    })
-)
-```
-
-详见 [工具与技能](/advanced/tools-skills)。
-
-> **安全提示**：涉及 bash 命令执行或文件操作的工具受 `execSecurity` 策略约束；通过 bash 调用 `icqq` 时另有敏感子命令与 Owner `approve` 机制，详见 [执行安全](/advanced/ai#执行安全-execsecurity) 与 [icqq / approve](/advanced/ai#icqq-bash-exec)。
-
-## 技能（Skill，文件化）
-
-在插件包目录下添加 `skills/<技能名>/SKILL.md`（含 `name`、`description`、`keywords`、`tags` 等）。详见 [工具与技能](/advanced/tools-skills)。
-
-## 提供服务
-
-```typescript
-const { provide } = usePlugin()
-
-provide({
-  name: 'myService',
-  description: '我的服务',
-  value: {
-    doSomething() {
-      return 'done'
-    }
-  },
-  dispose: (service) => {
-    // 清理资源
-  }
-})
-```
-
-## 注入服务
-
-```typescript
-const { inject } = usePlugin()
-
-const myService = inject('myService')
-if (myService) {
-  myService.doSomething()
+// commands/*.ts —— 运行时（execute 上下文里的已解析配置）
+execute({ config }) {
+  if (config.timeout > 10000) { /* ... */ }
 }
 ```
 
-## 等待上下文就绪
+用户侧在 `zhin.config.yml` 的 `plugins.<instanceKey>` 下覆盖默认值。
 
-`useContext` 会在指定的服务/上下文就绪后执行回调，并在上下文销毁时自动清理：
+## setup 生命周期
+
+`setup(context)` 在插件装配完成、能力（命令等）生效前调用，可同步、返回 `Promise`，或返回一个 `Dispose` 清理函数：
 
 ```typescript
-const { useContext } = usePlugin()
-
-// 等待数据库就绪
-useContext('database', (db) => {
-  // db 可用
-})
-
-// 等待多个上下文
-useContext('database', 'router', (db, router) => {
-  // 两者都就绪
+export default definePlugin({
+  name: 'my-plugin',
+  async setup(context) {
+    const connection = await connect()
+    // 两种等价清理方式：返回 dispose，或登记到 lifecycle
+    return () => connection.close()
+  },
 })
 ```
 
-## 插件配置
+| `context` 字段 | 说明 |
+|----------------|------|
+| `plugin` | 实例视图：`id` / `instanceKey` / `parent` / `root` / `role` |
+| `config` | `ConfigView<T>`，`get()` 取当前配置 |
+| `resources` | Host Resource 作用域（`has` / `use`） |
+| `lifecycle` | `DisposeStack`，`add(dispose)` 登记卸载清理 |
+| `handoff` | 热重载代际交接注册表（跨代迁移状态用） |
 
-通过 `addConfig` 向主配置文件注册插件自己的配置项：
+热重载（HMR）时框架会执行所有已登记的 dispose，再按新代码重新装配。
 
-```typescript
-const { addConfig, inject } = usePlugin()
+## Host Resources
 
-// 注册默认配置（如果配置文件中没有，会自动写入默认值）
-addConfig('my-plugin', { apiKey: '', timeout: 5000 })
-
-// 读取配置
-const config = inject('config')
-const myConfig = config?.get('my-plugin')
-```
-
-## 完整示例
+数据库、定时任务、主动出站等能力由 Host 以 **token** 形式注入，插件在 `setup` 里按 token 取用（形态参考 `plugins/utils/rss`、`plugins/games/blackjack`）：
 
 ```typescript
-import { usePlugin, MessageCommand } from 'zhin.js'
+import {
+  definePlugin,
+  databaseHostToken,
+  scheduleHostToken,
+  outboundHostToken,
+} from '@zhin.js/plugin-runtime'
 
-// 声明类型
-declare module 'zhin.js' {
-  interface Models {
-    todos: {
-      id: number
-      text: string
-      done: boolean
+export default definePlugin({
+  name: 'my-plugin',
+  setup(context) {
+    // 可选资源：先 has 再 use，缺失时降级
+    if (context.resources.has(databaseHostToken)) {
+      const db = context.resources.use(databaseHostToken)
+      db.define('todos', { text: { type: 'text', nullable: false } })
     }
-  }
-}
 
-const {
-  defineModel,
-  addCommand,
-  addTool,
-  useContext,
-  onMounted,
-  onDispose,
-  logger
-} = usePlugin()
-
-// 挂载时执行
-onMounted(() => {
-  logger.info('插件已启动')
-})
-
-// 定义模型
-defineModel('todos', {
-  id: { type: 'integer', primary: true },
-  text: { type: 'string' },
-  done: { type: 'boolean', default: false }
-})
-
-// 注册 AI 工具
-addTool({
-  name: 'add_todo',
-  description: '添加一条待办事项',
-  parameters: {
-    type: 'object',
-    properties: {
-      text: { type: 'string', description: '待办内容' },
-    },
-    required: ['text'],
-  },
-  execute: async (args) => {
-    // 实际实现...
-    return { success: true }
-  },
-})
-
-// 使用数据库
-useContext('database', (db) => {
-  const todos = db.models.get('todos')
-  
-  addCommand(
-    new MessageCommand('todo <text:text>')
-      .desc('添加待办')
-      .action(async (_, result) => {
-        await todos.insert({ text: result.params.text })
-        return '已添加'
+    if (context.resources.has(scheduleHostToken)) {
+      const schedule = context.resources.use(scheduleHostToken)
+      const dispose = schedule.register({
+        id: 'my-plugin/tick',
+        cron: '0 */5 * * * *', // 6 段 cron：秒 分 时 日 月 周
+        async execute() { /* ... */ },
       })
-  )
-  
-  addCommand(
-    new MessageCommand('todos')
-      .desc('查看待办')
-      .action(async () => {
-        const list = await todos.select()
-        return list.map(t => `${t.id}. ${t.text}`).join('\n')
-      })
-  )
-})
-
-// 卸载时清理
-onDispose(() => {
-  logger.info('插件已卸载')
+      context.lifecycle.add(dispose)
+    }
+  },
 })
 ```
+
+| Token | 包 | 能力 |
+|-------|-----|------|
+| `databaseHostToken` | `@zhin.js/plugin-runtime` | 表定义与增删改查（`define` / `models.get`） |
+| `scheduleHostToken` | `@zhin.js/plugin-runtime` | 6 段 cron 定时任务（`register` 返回 dispose） |
+| `outboundHostToken` | `@zhin.js/plugin-runtime` | 主动出站推送（`send` / 可选 reaction、recall） |
+| `httpHostToken` | `@zhin.js/host-http` | HTTP/WS 服务（Console API、自定义路由） |
+
+资源**可选时用 `has` + `use` 降级**；**必需时**在 `definePlugin` 里声明 `requires: [databaseHostToken]`，缺失即拒绝启动。
+
+## package.json 要求
+
+插件包必须携带 `zhin` 清单（protocol 1）并把能力目录放进 `files`：
+
+```json
+{
+  "name": "@zhin.js/plugin-my-plugin",
+  "type": "module",
+  "files": ["plugin.ts", "schema.json", "commands", "middlewares", "src", "lib"],
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      { "package": "@zhin.js/command", "api": "^1.0.0" },
+      { "package": "@zhin.js/middleware", "api": "^1.0.0" }
+    ],
+    "plugins": []
+  }
+}
+```
+
+- `entry` 指向 `plugin.ts`（源码形态，运行时按需编译）。
+- `features` 声明本插件使用的约定目录对应的 Feature 包；`plugins` 声明内嵌子插件。
+- 发布到 npm 时确保 `files` 覆盖 `plugin.ts`、`schema.json` 与所有约定目录，并配 `prepublishOnly` 构建（仓库有对应 harness 检查）。
+
+## 挂载子插件
+
+使用方在**项目** `package.json` 的 `zhin.plugins` 里声明挂载，`instanceKey` 决定实例身份：
+
+```json
+{
+  "zhin": {
+    "plugins": [
+      { "package": "@zhin.js/plugin-qrcode", "instanceKey": "qrcode" },
+      { "package": "@zhin.js/adapter-icqq", "instanceKey": "icqq-2" }
+    ]
+  }
+}
+```
+
+instanceKey 的规则与影响：
+
+- 命名规则 `[a-z0-9][a-z0-9-]*`；同一包可挂多个实例（`icqq` / `icqq-2`）。
+- 它是插件命令的前缀（`qrcode` 插件的 `commands/scan/[url:string].ts` → `/qrcode scan <url>`）。
+- 它是 `zhin.config.yml` 里 `plugins.<instanceKey>` 的配置键。
+
+::: info legacy 路径
+旧的 `usePlugin()` / `plugin.yml` / `addCommand` 写法属于旧 Feature registry（`zhin dev` 路径）；新插件请使用本文的 `definePlugin` + 约定目录结构。
+:::
 
 ## 下一步
 
-- [插件开发、测试与发布](/guide/plugin-development) — 完整的插件生命周期指南（创建 → 测试 → 构建 → 发布到 npm）
-- [命令系统](./commands) — 深入学习命令语法和参数类型
-- [工具与技能](/advanced/tools-skills) — 注册 AI 可调用工具和声明技能
-- [Feature 系统](/advanced/features) — 了解 Feature 抽象和自定义扩展
+- [命令系统](./commands) — `defineCommand`、文件路由参数与返回值
+- [中间件与消息调度](./middleware) — `defineMiddleware` 与 Runtime Message
+- [配置文件](./configuration) — `zhin.config.yml` 全量配置项
+- [examples/minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot) — 最小可运行插件项目
+- [plugins/utils/rss](https://github.com/zhinjs/zhin/tree/main/plugins/utils/rss) — schema.json + schedule + outbound 的真实插件

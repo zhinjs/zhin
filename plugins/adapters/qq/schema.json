@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "default": "qq-bot"
+    },
+    "appid": {
+      "type": "string"
+    },
+    "secret": {
+      "type": "string"
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["websocket", "webhook", "middleware"],
+      "default": "websocket",
+      "description": "WebSocket gateway (default). webhook/middleware use httpHostToken POST."
+    },
+    "sandbox": {
+      "type": "boolean",
+      "default": false
+    },
+    "intents": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "accessTokenUrl": {
+      "type": "string"
+    },
+    "gatewayUrl": {
+      "type": "string"
+    },
+    "webhookPath": {
+      "type": "string",
+      "default": "/qq/webhook",
+      "description": "POST path on httpHostToken for webhook/middleware modes."
+    },
+    "port": {
+      "type": "number",
+      "description": "Legacy standalone webhook port (unused with httpHostToken)."
+    },
+    "path": {
+      "type": "string",
+      "description": "Legacy standalone webhook path (unused with httpHostToken)."
+    }
+  },
+  "required": ["appid", "secret"]
+}

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "default": "weixin-ilink-bot"
+    },
+    "botAgent": {
+      "type": "string"
+    },
+    "baseUrl": {
+      "type": "string",
+      "default": "https://ilinkai.weixin.qq.com"
+    },
+    "cdnBaseUrl": {
+      "type": "string",
+      "default": "https://novac2c.cdn.weixin.qq.com/c2c"
+    },
+    "longPollTimeoutMs": {
+      "type": "number",
+      "default": 35000
+    },
+    "botToken": {
+      "type": "string",
+      "description": "iLink bot token (prefer env WEIXIN_ILINK_TOKEN or sidecar credential file)"
+    }
+  }
+}

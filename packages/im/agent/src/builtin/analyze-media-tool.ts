@@ -4,8 +4,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type { Tool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
-import { checkFileToolAccess, checkSensitiveFilePathAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
-import { checkFilePermission, resolveFilePermissionGate, toolRequesterRoleToFileRole } from '../security/file-role-policy.js';
+import { runToolPolicies, toolPolicyResultToMessage } from '../security/policy-facade.js';
 import { expandHome, nodeErrToFileMessage } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 import { normalizeContentPartsToPayloads } from '../media/media-normalize.js';
@@ -50,24 +49,27 @@ export class AnalyzeMediaBuiltinTool extends BuiltinBaseTool {
       return 'Error: file_path is required';
     }
 
-    const roleDecision = checkFileToolAccess('read_file', commMessage);
-    if (!roleDecision.allowed) {
-      if (roleDecision.needsOwnerApproval) return toOwnerSignal(roleDecision);
-      return toDenyError(roleDecision);
+    // 统一安全策略门面（与原三层手写链等价，旧链以 read_file 身份执行）：
+    // role-gate(read_file) → file-permission-matrix(read) → sensitive-path
+    let fp: string;
+    try {
+      fp = expandHome(filePathArg);
+    } catch (e: unknown) {
+      return nodeErrToFileMessage(e, String(filePathArg), 'read');
     }
-
-    const fileRole = toolRequesterRoleToFileRole(roleDecision.role);
-    const permResult = checkFilePermission(fileRole, 'read', filePathArg);
-    const permGate = resolveFilePermissionGate(permResult, 'analyze_media');
-    if (permGate) return permGate;
+    const policyGate = toolPolicyResultToMessage(
+      runToolPolicies({
+        toolName: 'read_file',
+        filePath: fp,
+        rawFilePath: filePathArg,
+        fileOperation: 'read',
+        commMessage,
+      }),
+      'analyze_media',
+    );
+    if (policyGate) return policyGate;
 
     try {
-      const fp = expandHome(filePathArg);
-      const sensitiveDecision = checkSensitiveFilePathAccess('read_file', fp, commMessage);
-      if (!sensitiveDecision.allowed) {
-        if (sensitiveDecision.needsOwnerApproval) return toOwnerSignal(sensitiveDecision);
-        return toDenyError(sensitiveDecision);
-      }
       if (!isMediaPath(fp)) {
         return 'Error: analyze_media 仅支持图片/音频/视频扩展名；文本请用 read_file。';
       }

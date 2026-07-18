@@ -2,7 +2,7 @@
  * AgentMessage compaction — ADR 0010 D1 (pi coding-agent aligned).
  */
 
-import { formatCompact, Logger, truncatePreview } from '@zhin.js/logger';
+import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
 import { createUserMessage, type AgentMessage } from '../llm/types/agent-message.js';
 
 import type { Model } from '../llm/types/model.js';
@@ -19,7 +19,7 @@ import {
 } from './agent-message-tokens.js';
 import { microCompactAgentMessages } from './agent-micro-compact.js';
 
-const logger = new Logger(null, 'AgentCompaction');
+const logger = getLogger('AgentCompaction');
 
 const DEFAULT_SUMMARY_FALLBACK = '无历史记录。';
 const SUMMARY_USER_PREFIX = '[Previous conversation summary]\n';

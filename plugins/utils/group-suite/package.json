@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/plugin-group-suite",
   "version": "3.0.2",
-  "description": "Zhin.js 群运营套件 — 群管、签到、统计、日常分析、问答（合并原 5 个插件）",
+  "description": "Zhin.js 群运营套件 — slice-2 checkin/teach/stats + keywords (Plugin Runtime, in-memory)",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -14,18 +14,21 @@
     "./package.json": "./package.json"
   },
   "files": [
+    "plugin.ts",
+    "schema.json",
+    "commands",
+    "middlewares",
     "src",
     "lib",
     "agent",
     "tools",
-    "plugin.yml",
     "README.md"
   ],
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
-    "test": "sh -c 'cd ../../.. && vitest run plugins/utils/group-suite/tests'",
-    "prepublishOnly": "npm run build"
+    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/utils/group-suite/tests",
+    "prepublishOnly": "pnpm run build"
   },
   "keywords": [
     "zhin",
@@ -45,17 +48,21 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@zhin.js/command": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/middleware": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/satori": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^6.0.3",
-    "zhin.js": "workspace:*",
-    "@zhin.js/html-renderer": "workspace:*",
     "@zhin.js/agent": "workspace:*",
+    "@zhin.js/html-renderer": "workspace:*",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
+    "zhin.js": "workspace:*",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "zhin.js": "workspace:*",
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/html-renderer": "workspace:*",
     "zod": "^4.0.0"
@@ -79,5 +86,26 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/middleware",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
   }
 }

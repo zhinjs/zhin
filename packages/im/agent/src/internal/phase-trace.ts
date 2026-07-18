@@ -1,10 +1,10 @@
 import type { Usage, TokenUsage } from '@zhin.js/ai';
-import { formatCompact, Logger } from '@zhin.js/logger';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 
 export type { HostPhaseTraceConfig as PhaseTraceConfig } from './host-types.js';
 import type { HostPhaseTraceConfig as PhaseTraceConfig } from './host-types.js';
 
-const logger = new Logger(null, 'ZhinAgent');
+const logger = getLogger('ZhinAgent');
 
 export function logPhase(
   config: PhaseTraceConfig,

@@ -1,4 +1,4 @@
-import { getCheckinModel } from '../../src/checkin.js';
+import { getCheckinModel } from '../../src/db-store.js';
 
 export default async function (args: { limit?: number }) {
   const M = getCheckinModel();

@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/adapter-discord",
   "version": "5.0.2",
-  "description": "Zhin.js adapter for Discord",
+  "description": "Zhin.js Discord adapter for Plugin Runtime (Gateway WebSocket)",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -32,62 +32,55 @@
     "directory": "plugins/adapters/discord"
   },
   "scripts": {
-    "build": "zhin build",
-    "clean": "rimraf lib dist",
-    "build:node": "tsc",
-    "prepublishOnly": "npm run build"
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/adapters/discord/tests",
+    "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
-    "discord.js": "^14.26.4",
-    "tweetnacl": "^1.0.3"
-  },
-  "devDependencies": {
-    "@types/node": "^26.1.0",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "@zhin.js/cli": "workspace:*",
-    "@zhin.js/client": "workspace:*",
-    "@zhin.js/contract": "workspace:*",
-    "@zhin.js/host-api": "workspace:*",
-    "@zhin.js/host-router": "workspace:*",
-    "lucide-react": "^1.22.0",
-    "typescript": "^6.0.3",
-    "zhin.js": "workspace:*",
-    "@zhin.js/agent": "workspace:*",
-    "zod": "^4.4.3"
+    "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/logger": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
+    "discord.js": "^14.26.4"
   },
   "peerDependencies": {
-    "@zhin.js/client": "workspace:*",
-    "@zhin.js/host-api": "workspace:*",
-    "@zhin.js/contract": "workspace:*",
-    "@zhin.js/host-router": "workspace:*",
-    "zhin.js": "workspace:*",
+    "@zhin.js/adapter": "workspace:*",
     "@zhin.js/agent": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
+    "zhin.js": "workspace:*",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
+    "zhin.js": {
+      "optional": true
+    },
     "@zhin.js/agent": {
-      "optional": true
-    },
-    "@zhin.js/client": {
-      "optional": true
-    },
-    "@zhin.js/host-api": {
       "optional": true
     },
     "zod": {
       "optional": true
     }
   },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "@zhin.js/agent": "workspace:*",
+    "@zhin.js/host-http": "workspace:*",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
+    "zhin.js": "workspace:*",
+    "zod": "^4.4.3"
+  },
   "files": [
+    "adapters",
+    "plugin.ts",
+    "schema.json",
     "src",
     "lib",
-    "client",
-    "dist",
     "agent",
-    "plugin.yml",
     "README.md",
-    "node",
     "CHANGELOG.md"
   ],
   "publishConfig": {
@@ -96,5 +89,19 @@
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/adapter",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
   }
 }

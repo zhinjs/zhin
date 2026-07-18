@@ -1,5 +1,5 @@
-import type { Database, DatabaseFeature, Message, Models, RelatedModel } from 'zhin.js';
-import { channelKey, generateSessionId } from '@zhin.js/game-shared';
+import type { Database, Message, Models, RelatedModel } from 'zhin.js';
+import { channelKey, generateSessionId } from '@zhin.js/game-kit';
 import type { BjSessionRow } from './models.js';
 import { freshDeck } from './engine.js';
 
@@ -11,9 +11,6 @@ function getModel(db: BjDatabase): RelatedModel<unknown, Models, 'bj_sessions'> 
   return model as RelatedModel<unknown, Models, 'bj_sessions'>;
 }
 
-export function resolveGameDatabase(feature: DatabaseFeature): BjDatabase {
-  return feature.db;
-}
 
 export class SessionService {
   constructor(private readonly db: BjDatabase) {}

@@ -2,7 +2,8 @@ export { defineAgent } from './define-agent.js';
 export type { DefineAgentInput } from './define-agent.js';
 export { disableTool, normalizeToolDenylist, isDisabledToolRef } from './disable-tool.js';
 export type { DisabledToolRef } from './disable-tool.js';
-export { defineTool } from './define-tool.js';
+export { defineAgentTool, defineTool } from './define-tool.js';
+export type { DefineAgentToolInput, DefineToolInput, AuthoringToolContext } from './define-tool.js';
 export {
   toolApprovalAlways,
   toolApprovalOnce,
@@ -12,7 +13,6 @@ export {
   never,
 } from './tool-policy.js';
 export type { ToolApprovalPolicy, ToolToModelOutputFn } from './tool-policy.js';
-export type { DefineToolInput, AuthoringToolContext } from './define-tool.js';
 export { defineSkill } from './define-skill.js';
 export type { DefineSkillInput } from './define-skill.js';
 export { defineSchedule } from './define-schedule.js';

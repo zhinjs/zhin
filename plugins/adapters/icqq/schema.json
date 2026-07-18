@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "QQ uin (must match icqq login account)"
+    },
+    "master": {
+      "type": ["string", "number"],
+      "description": "Endpoint Owner QQ uin (for /approve bash and master role)"
+    },
+    "autoReconnect": {
+      "type": "boolean",
+      "default": true
+    },
+    "outboundMedia": {
+      "type": "string",
+      "enum": ["file", "base64"],
+      "description": "file=local path (same host as daemon); base64=CQ base64:// (default when rpc set)"
+    },
+    "rpc": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "host": { "type": "string" },
+        "port": { "type": "number" },
+        "token": { "type": "string" }
+      },
+      "required": ["host", "port", "token"]
+    }
+  },
+  "required": ["name"]
+}

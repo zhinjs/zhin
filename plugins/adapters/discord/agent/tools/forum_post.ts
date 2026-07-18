@@ -1,8 +1,8 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getDiscordAgentDeps } from '../../src/discord-agent-deps.js';
 
-export default defineTool<{ endpoint_id: string; channel_id: string; name: string; content: string; tags?: string }>({
+export default defineAgentTool<{ endpoint_id: string; channel_id: string; name: string; content: string; tags?: string }>({
   description: '在 Discord 论坛频道中创建帖子',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),

@@ -1,8 +1,8 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getSlackAgentDeps } from '../../src/slack-agent-deps.js';
 
-export default defineTool<{
+export default defineAgentTool<{
   endpoint_id: string;
   channel: string;
   message_ts: string;
@@ -18,8 +18,9 @@ export default defineTool<{
   platforms: ['slack'],
   tags: ['slack'],
   async execute({ endpoint_id, channel, message_ts, text }) {
-    const { getAdapter } = getSlackAgentDeps();
-    await getAdapter().editMessage(endpoint_id, channel, message_ts, [
+    const { getEndpoint } = getSlackAgentDeps();
+    const endpoint = getEndpoint(endpoint_id);
+    await endpoint.editMessage(channel, message_ts, [
       { type: 'text', data: { text } },
     ]);
     return { success: true, message: '消息已编辑' };

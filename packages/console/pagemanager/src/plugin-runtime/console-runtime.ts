@@ -1,6 +1,8 @@
-import type { SnapshotStore } from '@zhin.js/plugin-runtime';
+import { createToken, type SnapshotStore } from '@zhin.js/plugin-runtime';
 import type { AccessSnapshot } from '@zhin.js/console-contract';
 import { ConsoleCatalog } from './console-catalog.js';
+
+export const consoleRuntimeToken = createToken<ConsoleRuntime>('zhin.console.runtime');
 
 export class ConsoleRuntime {
   #snapshots?: SnapshotStore;

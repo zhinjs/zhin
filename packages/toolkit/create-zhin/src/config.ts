@@ -1,11 +1,11 @@
 import fs from 'fs-extra';
 import path from 'path';
-import { InitOptions, DatabaseConfig, DATABASE_PACKAGES, generateAIConfigYaml, generateAIConfigJSON, generateAIConfigToml, generateEndpointsConfigYaml, generateEndpointsConfigJSON, generateEndpointsConfigToml, CONSOLE_HOST_PLUGINS, DEFAULT_CREATE_BOT_HTTP_PORT } from '@zhin.js/scaffold-wizard';
+import { InitOptions, DatabaseConfig, buildRuntimeConfigDocument, serializeRuntimeConfig } from '@zhin.js/scaffold-wizard';
 
 // 生成数据库环境变量
 export function generateDatabaseEnvVars(config: DatabaseConfig): string {
   const envVars: string[] = [];
-  
+
   switch (config.dialect) {
     case 'mysql':
       envVars.push(
@@ -48,231 +48,21 @@ export function generateDatabaseEnvVars(config: DatabaseConfig): string {
       // SQLite 不需要额外的环境变量
       break;
   }
-  
+
   return envVars.length > 0 ? `\n\n${envVars.join('\n')}` : '';
 }
 
-// 数据库配置对象类型
-type DatabaseConfigObject = {
-  dialect: string;
-  [key: string]: string | number | { [key: string]: string | number } | undefined;
-};
-
-// 生成数据库配置代码（仅支持 yaml / json / toml）
-export function generateDatabaseConfig(config: DatabaseConfig, format: 'yaml' | 'json' | 'toml'): string {
-  const useEnvRef = format === 'yaml' || format === 'toml';
-  let configObj: DatabaseConfigObject = { dialect: config.dialect };
-
-  switch (config.dialect) {
-    case 'mysql':
-      configObj = {
-        dialect: 'mysql',
-        host: useEnvRef ? '${DB_HOST}' : 'env.DB_HOST',
-        port: useEnvRef ? '${DB_PORT}' : 'parseInt(env.DB_PORT || "3306")',
-        user: useEnvRef ? '${DB_USER}' : 'env.DB_USER',
-        password: useEnvRef ? '${DB_PASSWORD}' : 'env.DB_PASSWORD',
-        database: useEnvRef ? '${DB_DATABASE}' : 'env.DB_DATABASE'
-      };
-      break;
-    case 'pg':
-      configObj = {
-        dialect: 'pg',
-        host: useEnvRef ? '${DB_HOST}' : 'env.DB_HOST',
-        port: useEnvRef ? '${DB_PORT}' : 'parseInt(env.DB_PORT || "5432")',
-        user: useEnvRef ? '${DB_USER}' : 'env.DB_USER',
-        password: useEnvRef ? '${DB_PASSWORD}' : 'env.DB_PASSWORD',
-        database: useEnvRef ? '${DB_DATABASE}' : 'env.DB_DATABASE'
-      };
-      break;
-    case 'mongodb':
-      configObj = {
-        dialect: 'mongodb',
-        url: useEnvRef ? '${DB_URL}' : 'env.DB_URL',
-        dbName: useEnvRef ? '${DB_NAME}' : 'env.DB_NAME'
-      };
-      break;
-    case 'redis':
-      configObj = {
-        dialect: 'redis',
-        socket: {
-          host: useEnvRef ? '${REDIS_HOST}' : 'env.REDIS_HOST',
-          port: useEnvRef ? '${REDIS_PORT}' : 'parseInt(env.REDIS_PORT || "6379")'
-        },
-        password: useEnvRef ? '${REDIS_PASSWORD}' : 'env.REDIS_PASSWORD || undefined',
-        database: useEnvRef ? '${REDIS_DB}' : 'parseInt(env.REDIS_DB || "0")'
-      };
-      break;
-    case 'sqlite':
-    default:
-      configObj = config;
-      break;
-  }
-
-  switch (format) {
-    case 'yaml': {
-      const yamlLines: string[] = [];
-      Object.entries(configObj).forEach(([key, value]) => {
-        if (typeof value === 'object' && value !== null) {
-          yamlLines.push(`  ${key}:`);
-          Object.entries(value).forEach(([subKey, subValue]) => {
-            yamlLines.push(`    ${subKey}: ${subValue}`);
-          });
-        } else {
-          yamlLines.push(`  ${key}: ${value}`);
-        }
-      });
-      return yamlLines.join('\n');
-    }
-    case 'json': {
-      const jsonStr = JSON.stringify(configObj, null, 2).replace(/^/gm, '  ');
-      return `  "database": ${jsonStr},`;
-    }
-    case 'toml': {
-      const tomlLines: string[] = ['', '[database]'];
-      if (configObj.dialect === 'sqlite') {
-        tomlLines.push(`dialect = "${configObj.dialect}"`);
-        if ((configObj as any).filename) tomlLines.push(`filename = "${(configObj as any).filename}"`);
-        if ((configObj as any).mode) tomlLines.push(`mode = "${(configObj as any).mode}"`);
-      } else {
-        tomlLines.push(`dialect = "${configObj.dialect}"`);
-        Object.entries(configObj).forEach(([key, value]) => {
-          if (key === 'dialect') return;
-          if (typeof value === 'object' && value !== null) {
-            tomlLines.push('', `[database.${key}]`);
-            Object.entries(value).forEach(([k, v]) => tomlLines.push(`${k} = "${v}"`));
-          } else {
-            tomlLines.push(`${key} = "${value}"`);
-          }
-        });
-      }
-      return tomlLines.join('\n');
-    }
-    default:
-      return '';
-  }
-}
-
-// 构建 plugins 列表（根据用户选择的适配器）
-/** Remote Console / HTTP Host 插件（由脚手架写入项目，不随 zhin.js 安装） */
-export { CONSOLE_HOST_PLUGINS } from '@zhin.js/scaffold-wizard';
-
-function buildPluginsList(options: InitOptions): string[] {
-  if (options.yes) {
-    const base = [...CONSOLE_HOST_PLUGINS, '@zhin.js/adapter-sandbox'];
-    if (options.template === 'life-assistant') base.push('assistant');
-    return base;
-  }
-
-  const plugins: string[] = ['example', ...CONSOLE_HOST_PLUGINS];
-
-  // 生活助手模板添加 assistant 插件
-  if (options.template === 'life-assistant') {
-    plugins.push('assistant');
-  }
-
-  if (options.adapters?.plugins) {
-    for (const plugin of options.adapters.plugins) {
-      if (!plugins.includes(plugin)) {
-        plugins.push(plugin);
-      }
-    }
-  } else {
-    // 默认只添加 sandbox
-    if (!plugins.includes('@zhin.js/adapter-sandbox')) {
-      plugins.push('@zhin.js/adapter-sandbox');
-    }
-  }
-
-  return plugins;
-}
-
-// 创建配置文件（仅支持 yaml / json / toml）
+/**
+ * 创建新 Plugin Runtime 配置文件（顶层 http/database/ai + plugins.<instanceKey>，
+ * 与 packages/im/runtime/src/config-composer.ts 的 effectiveSchema 对齐）
+ */
 export async function createConfigFile(appPath: string, format: string, options: InitOptions): Promise<void> {
-  const configFormat = format as 'yaml' | 'json' | 'toml';
-  const databaseConfig = options.database ? generateDatabaseConfig(options.database, configFormat) : '';
-  const plugins = buildPluginsList(options);
-
-  const endpointsYaml = options.adapters ? generateEndpointsConfigYaml(options.adapters) : '';
-  const endpointsJSON = options.adapters ? generateEndpointsConfigJSON(options.adapters) : '';
-  const endpointsToml = options.adapters ? generateEndpointsConfigToml(options.adapters) : '';
-  const aiYaml = options.ai ? generateAIConfigYaml(options.ai) : '';
-  const aiJSON = options.ai ? generateAIConfigJSON(options.ai) : '';
-  const aiToml = options.ai ? generateAIConfigToml(options.ai) : '';
-  const enableInbox = !!options.database;
-
-  const pluginsYamlLines = plugins.map(p => `  - "${p}"`).join('\n');
-  const pluginsJsonLines = plugins.map(p => `    "${p}"`).join(',\n');
-  const pluginsTomlLines = plugins.map(p => `  "${p}"`).join(',\n');
-
-  let yamlExtraConfig = '';
-  if (enableInbox) yamlExtraConfig += '\ninbox:\n  enabled: true\n';
-  if (endpointsYaml) yamlExtraConfig += endpointsYaml;
-  if (aiYaml) yamlExtraConfig += aiYaml;
-
-  // 生活助手模板：添加知识库和 compaction 配置
-  if (options.template === 'life-assistant') {
-    yamlExtraConfig += '\n  knowledge:\n    baseDir: knowledge\n';
-    yamlExtraConfig += '  agent:\n    execSecurity: allowlist\n    execApprovalMode: ask\n    compaction:\n      enabled: true\n      auto: true\n      keepRecentTokens: 20000\n';
-  }
-
-  const jsonSections: string[] = [];
-  if (databaseConfig) jsonSections.push(databaseConfig.trim().replace(/,$/, ''));
-  jsonSections.push(`"plugins": [
-${pluginsJsonLines}
-  ]`);
-  jsonSections.push(`"http": {
-    "token": "\${HTTP_TOKEN}",
-    "port": ${DEFAULT_CREATE_BOT_HTTP_PORT},
-    "base": "/api",
-    "corsOrigins": [
-      "https://console.zhin.dev"
-    ]
-  }`);
-  if (enableInbox) {
-    jsonSections.push(`"inbox": {
-    "enabled": true
-  }`);
-  }
-  if (endpointsJSON) jsonSections.push(endpointsJSON.trim().replace(/,$/, ''));
-  if (aiJSON) jsonSections.push(aiJSON.trim());
-
-  let tomlExtraConfig = '';
-  if (enableInbox) tomlExtraConfig += '\n[inbox]\nenabled = true\n';
-  if (endpointsToml) tomlExtraConfig += endpointsToml;
-  if (aiToml) tomlExtraConfig += aiToml;
-
-  const configMap: Record<string, [string, string]> = {
-    yaml: ['zhin.config.yml',
-`${databaseConfig ? `database:\n${databaseConfig}\n\n` : ''}plugins:
-${pluginsYamlLines}
-
-http:
-  token: \${HTTP_TOKEN}
-  port: ${DEFAULT_CREATE_BOT_HTTP_PORT}
-  base: /api
-  corsOrigins:
-    - "https://console.zhin.dev"
-${yamlExtraConfig}
-`],
-    json: ['zhin.config.json',
-`{
-  ${jsonSections.join(',\n  ')}
-}
-`],
-    toml: ['zhin.config.toml',
-`${databaseConfig ? `${databaseConfig}\n\n` : ''}plugins = [
-${pluginsTomlLines}
-]
-
-[http]
-token = "\${HTTP_TOKEN}"
-port = ${DEFAULT_CREATE_BOT_HTTP_PORT}
-base = "/api"
-corsOrigins = ["https://console.zhin.dev"]
-${tomlExtraConfig}
-`]
-  };
-
-  const [filename, content] = configMap[format] || configMap.yaml;
-  await fs.writeFile(path.join(appPath, filename), content);
+  const configFormat = (format === 'json' || format === 'toml' ? format : 'yaml') as 'yaml' | 'json' | 'toml';
+  const doc = buildRuntimeConfigDocument(options);
+  const filename = configFormat === 'json'
+    ? 'zhin.config.json'
+    : configFormat === 'toml'
+      ? 'zhin.config.toml'
+      : 'zhin.config.yml';
+  await fs.writeFile(path.join(appPath, filename), serializeRuntimeConfig(doc, configFormat));
 }

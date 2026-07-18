@@ -3,12 +3,8 @@
   "compilerOptions": {
     "types": ["node"],
     "outDir": "./lib",
-    "rootDir": ".",
-    "declaration": false,
-    "declarationMap": false,
-    "jsx": "react-jsx",
-    "jsxImportSource": "zhin.js"
+    "rootDir": "./src"
   },
-  "include": ["src/**/*", "agent/**/*"],
-  "exclude": ["lib", "node_modules", "client", "dist"]
+  "include": ["src/**/*"],
+  "exclude": ["lib", "node_modules", "tests", "commands", "agent"]
 }

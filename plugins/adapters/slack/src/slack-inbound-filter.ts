@@ -1,4 +1,4 @@
-import type { SlackMessageEvent } from './types.js';
+import type { SlackMessageEvent } from './protocol.js';
 
 const DEDUPE_TTL_MS = 60_000;
 

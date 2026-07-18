@@ -1,7 +1,7 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getLarkAgentDeps } from '../../src/lark-agent-deps.js';
-export default defineTool<{ endpoint_id: string; name: string; members: string; owner?: string }>({
+export default defineAgentTool<{ endpoint_id: string; name: string; members: string; owner?: string }>({
   description: '创建飞书群聊',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),

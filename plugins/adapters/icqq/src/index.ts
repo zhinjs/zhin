@@ -1,73 +1,39 @@
-/**
- * ICQQ 适配器入口：类型扩展、导出、注册
- */
-import path from "path";
-import {
-  usePlugin,
-  type Plugin,
-  type ToolFeature,
-} from "zhin.js";
-import { registerAgentPromptContributor, unregisterAgentPromptContributor } from "zhin.js/agent";
-import { createIcqqAgentPromptContributor } from "./agent-prompt.js";
-import type { Router } from "@zhin.js/host-router";
-import { PageManager } from "@zhin.js/host-api";
-import { IcqqAdapter } from "./adapter.js";
-import { registerTools } from "./tools/index.js";
-import { registerRoutes } from "./routes.js";
-import { registerLoginAssistRoutes } from "./login-assist-routes.js";
+export {
+  Actions,
+  formatInboundContent,
+  formatInboundTarget,
+  formatOutboundBody,
+  parseSendTarget,
+  resolveIcqqConfig,
+  type IcqqAdapterConfig,
+  type IcqqInboundMessage,
+  type IcqqWireSegment,
+  type IpcEvent,
+  type IpcMessage,
+  type IpcRequest,
+  type IpcResponse,
+  type ParsedIcqqSendTarget,
+  type ResolvedIcqqConfig,
+} from './protocol.js';
 
-declare module "zhin.js" {
-  namespace Plugin {
-    interface Contexts {
-      web: PageManager;
-      router: Router;
-    }
-  }
-  interface Adapters {
-    icqq: IcqqAdapter;
-  }
-}
+export {
+  IcqqIpcEndpoint,
+  type CreateIcqqIpc,
+  type IcqqEndpointOptions,
+  type IcqqIpcTransport,
+} from './endpoint.js';
 
-export * from "./types.js";
-export { IcqqEndpoint } from "./endpoint.js";
-export { IcqqAdapter } from "./adapter.js";
+export * from './types.js';
 
-const plugin = usePlugin();
-const { provide, useContext, addCommand, root } = plugin;
+export {
+  getIcqqAgentDeps,
+  registerIcqqAgentEndpoint,
+  setIcqqAgentDeps,
+  type IcqqAgentDeps,
+  type IcqqAgentEndpoint,
+} from './icqq-agent-deps.js';
 
-// ── 适配器注册 ─────────────────────────────────────────────────────
-provide({
-  name: "icqq",
-  description: "ICQQ Adapter",
-  mounted: async (p: Plugin) => {
-    registerAgentPromptContributor(createIcqqAgentPromptContributor());
-    const adapter = new IcqqAdapter(p);
-    await adapter.start();
-    return adapter;
-  },
-  dispose: async (adapter: IcqqAdapter) => {
-    unregisterAgentPromptContributor("icqq");
-    await adapter.stop();
-  },
-} as any);
-
-// ── AI 工具注册 ────────────────────────────────────────────────────
-useContext("tool", "icqq", (toolService: ToolFeature, icqq: IcqqAdapter) => {
-  return registerTools(toolService, icqq, plugin.name);
-});
-
-// ── Web 控制台入口 ─────────────────────────────────────────────────
-useContext("web", (pageManager) => {
-  pageManager.addEntry({
-    id: "icqq",
-    development: path.resolve(import.meta.dirname, "../client/index.tsx"),
-    production: path.resolve(import.meta.dirname, "../dist/index.js"),
-    meta: { name: "ICQQ" },
-  });
-});
-
-// ── HTTP 路由 ──────────────────────────────────────────────────────
-useContext("router", "icqq", async (router: Router, icqq: IcqqAdapter) => {
-  registerRoutes(router, icqq, root);
-  registerLoginAssistRoutes(router, root);
-});
+export { IpcClient } from './ipc-client.js';
+export {
+  resolveIcqqInboundMessageId,
+} from './icqq-inbound.js';

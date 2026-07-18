@@ -2,7 +2,7 @@
 
 ## 状态
 
-Accepted（P3 最小可交付）；agent loop 级细粒度 checkpoint 为后续 follow-up。
+Accepted（P3 最小可交付）；跨重启 mid-turn durable / agent loop 级细粒度 checkpoint = **Deferred**（客户端重发契约；本硬稳定化轮次不实现）。
 
 ## 背景
 

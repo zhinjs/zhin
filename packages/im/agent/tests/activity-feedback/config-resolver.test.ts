@@ -39,4 +39,23 @@ describe('activity-feedback config-resolver', () => {
       autoRemove: true,
     });
   });
+
+  it('coerces icqq private active/thinking from reaction to message', () => {
+    expect(resolveActivityFeedbackPhaseConfig('icqq', undefined, 'active', 'private')).toEqual({
+      type: 'message',
+      message: '正在处理中...',
+      autoRemove: true,
+    });
+    expect(resolveActivityFeedbackPhaseConfig('icqq', undefined, 'thinking', 'private')).toEqual({
+      type: 'message',
+      message: '思考中...',
+      autoRemove: true,
+    });
+    // group still reaction
+    expect(resolveActivityFeedbackPhaseConfig('icqq', undefined, 'active', 'group')).toEqual({
+      type: 'reaction',
+      emoji: '⏳',
+      autoRemove: true,
+    });
+  });
 });

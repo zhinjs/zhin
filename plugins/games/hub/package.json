@@ -1,0 +1,75 @@
+{
+  "name": "@zhin.js/plugin-game-hub",
+  "version": "1.0.0",
+  "description": "Zhin.js 游戏大厅 — 列出已加载的游戏插件 (Plugin Runtime)",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "plugin.ts",
+    "schema.json",
+    "commands",
+    "src",
+    "lib",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/games/hub/tests",
+    "prepublishOnly": "pnpm run build"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@zhin.js/command": "workspace:*",
+    "@zhin.js/game-kit": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
+    "zhin.js": "workspace:*"
+  },
+  "peerDependencies": {
+    "zhin.js": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "zhin.js": {
+      "optional": true
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "plugins/games/hub"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
+  }
+}

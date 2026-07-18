@@ -37,9 +37,13 @@ export function loadConfig(
     options.projectRoot ?? envRoot ?? runtimeCwd(),
   );
   setZhinProjectRoot(root);
-  const configFile = options.projectRoot
-    ? (discoverConfigInRoot(root, 'zhin.config') ?? 'zhin.config.yml')
-    : (ConfigLoader.discover('zhin.config', root) ?? 'zhin.config.yml');
+  // CLI `zhin dev/start --config <path>` 通过 ZHIN_CONFIG 指定配置文件；未设置时保持默认发现逻辑
+  const envConfig = envLookup('ZHIN_CONFIG')?.trim();
+  const configFile = envConfig
+    ? path.resolve(root, envConfig)
+    : options.projectRoot
+      ? (discoverConfigInRoot(root, 'zhin.config') ?? 'zhin.config.yml')
+      : (ConfigLoader.discover('zhin.config', root) ?? 'zhin.config.yml');
   const configPath = path.resolve(root, configFile);
   const configFeature = new ConfigFeature();
   const defaults = options.defaults ?? DEFAULT_APP_CONFIG;

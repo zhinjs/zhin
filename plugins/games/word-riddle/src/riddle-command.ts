@@ -1,5 +1,5 @@
 import type { Message, Plugin } from 'zhin.js';
-import { channelKey } from '@zhin.js/game-shared';
+import { channelKey } from '@zhin.js/game-kit';
 import { continueGame, startGame } from './game-flow.js';
 import { riddleCount, type RiddleType } from './riddles-catalog.js';
 
@@ -29,7 +29,7 @@ function parseMode(action: string): RiddleType | null {
 }
 
 export async function runRiddleCommand(
-  plugin: Plugin,
+  plugin: Plugin | null,
   services: SessionService,
   message: Message<any>,
   action: string,
@@ -63,4 +63,13 @@ export async function runRiddleCommand(
   }
 
   return `未知子命令：${action}\n\n${RIDDLE_HELP}`;
+}
+
+/** Plugin Runtime / smoke: text-only, no Adapter.editMessage. */
+export async function runRiddleCommandText(
+  services: SessionService,
+  message: Message<any>,
+  action: string,
+): Promise<string> {
+  return (await runRiddleCommand(null, services, message, action)) ?? '';
 }

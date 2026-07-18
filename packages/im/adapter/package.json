@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@zhin.js/feature-kit": "workspace:*",
+    "@zhin.js/logger": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*"
   },
   "devDependencies": {

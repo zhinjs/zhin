@@ -1,7 +1,7 @@
-import { formatCompact, Logger } from '@zhin.js/logger';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { EventMiddleware, EventSystemAgentEvent } from './contracts.js';
 
-const logger = new Logger(null, 'EventSystem:Logging');
+const logger = getLogger('EventSystem:Logging');
 
 export class LoggingMiddleware implements EventMiddleware {
   name = 'logging';

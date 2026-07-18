@@ -1,5 +1,5 @@
 import type { Message, Plugin } from 'zhin.js';
-import { continueGame, handleChoice, startGame } from './game-flow.js';
+import { continueGame, startGame } from './game-flow.js';
 import type { SessionService } from './session-service.js';
 
 export const BJ_HELP = [
@@ -13,7 +13,7 @@ export const BJ_HELP = [
 ].join('\n');
 
 export async function runBjCommand(
-  plugin: Plugin,
+  plugin: Plugin | null,
   services: SessionService,
   message: Message<any>,
   action: string,
@@ -23,4 +23,13 @@ export async function runBjCommand(
   if (a === 'start' || a === '开始') return startGame(plugin, services, message);
   if (a === 'continue' || a === '继续') return continueGame(plugin, services, message);
   return `未知操作「${action}」。发送 \`/21点 帮助\`。`;
+}
+
+/** Plugin Runtime / smoke: text-only, no Adapter.editMessage. */
+export async function runBjCommandText(
+  services: SessionService,
+  message: Message<any>,
+  action: string,
+): Promise<string> {
+  return (await runBjCommand(null, services, message, action)) ?? '';
 }

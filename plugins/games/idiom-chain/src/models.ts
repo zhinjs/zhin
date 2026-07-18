@@ -1,4 +1,4 @@
-import type { Models, Plugin } from 'zhin.js';
+import type { Models } from 'zhin.js';
 import type { MatchMode } from './engine.js';
 
 export type ChainSessionStatus = 'active' | 'won' | 'lost' | 'aborted';
@@ -35,8 +35,11 @@ declare module 'zhin.js' {
 
 export type ChainSessionRow = Models['idiom_chain_sessions'];
 
-export function registerModels(plugin: Plugin): void {
-  plugin.defineModel('idiom_chain_sessions', {
+
+export function defineHostTables(
+  db: { define: (name: string, definition: Record<string, unknown>) => void },
+): void {
+  db.define('idiom_chain_sessions', {
     id: { type: 'text', primary: true },
     adapter: { type: 'text', nullable: false },
     endpoint: { type: 'text', nullable: false },

@@ -8,9 +8,9 @@
  *   2. 优雅降级 — 超限时返回友好提示而非静默丢弃
  */
 
-import { Logger } from '@zhin.js/logger';
+import { getLogger } from '@zhin.js/logger';
 
-const logger = new Logger(null, 'RateLimiter');
+const logger = getLogger('RateLimiter');
 
 // ============================================================================
 // 配置

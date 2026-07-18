@@ -1,7 +1,7 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getIcqqAgentDeps } from '../../src/icqq-agent-deps.js';
-export default defineTool<{ endpoint_id: string; group_id: number; enable?: boolean }>({
+export default defineAgentTool<{ endpoint_id: string; group_id: number; enable?: boolean }>({
   description: '开启或关闭 QQ 群的匿名聊天功能',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint QQ号'),

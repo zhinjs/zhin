@@ -1,4 +1,4 @@
-import { buildChoiceKeyboard } from '@zhin.js/game-shared';
+import { buildChoiceKeyboard } from '@zhin.js/game-kit';
 import type { SendContent } from 'zhin.js';
 import type { ChainSessionRow } from './models.js';
 import { CHAIN_PREFIX, getGloss, idiomCount, modeLabel, promptLine } from './engine.js';

@@ -2,8 +2,11 @@ import { Dialect, Database } from '../base/index.js';
 import {RelatedDatabase} from "../type/related/database.js";
 
 import {Registry} from "../registry.js";
+import { getLogger } from '@zhin.js/logger';
 import type { ClientConfig, PoolConfig as PgPoolConfig } from 'pg';
 import {Column, Transaction, TransactionOptions, PoolConfig} from "../types.js";
+
+const logger = getLogger('database');
 
 export interface PostgreSQLDialectConfig extends ClientConfig {
   /**
@@ -40,14 +43,14 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
           connectionTimeoutMillis: this.config.pool?.acquireTimeoutMillis ?? 10000,
         };
         this.pool = new Pool(poolConfig);
-        console.log(`PostgreSQL 连接池已创建 (max: ${poolConfig.max})`);
+        logger.info(`PostgreSQL 连接池已创建 (max: ${poolConfig.max})`);
       } else {
       const { Client } = await import('pg');
       this.connection = new Client(this.config);
       await this.connection.connect();
       }
     } catch (error) {
-      console.error('forgot install pg ?');
+      logger.error('forgot install pg ?');
       throw new Error(`PostgreSQL 连接失败: ${error}`);
     }
   }
@@ -56,7 +59,7 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
     if (this.usePool && this.pool) {
       await this.pool.end();
       this.pool = null;
-      console.log('PostgreSQL 连接池已关闭');
+      logger.info('PostgreSQL 连接池已关闭');
     } else if (this.connection) {
       await this.connection.end();
     this.connection = null;

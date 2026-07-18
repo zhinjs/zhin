@@ -2,7 +2,7 @@
  * ContextRepository — epoch-only LLM context load/save (ADR 0009 D4 / Grill #15).
  */
 
-import { Logger } from '@zhin.js/logger';
+import { getLogger } from '@zhin.js/logger';
 import { createUserMessage, type AgentMessage, type UserMessage } from '../llm/types/agent-message.js';
 
 import { createContext, type Context } from '../llm/types/context.js';
@@ -22,7 +22,7 @@ import {
 import { SessionWriteLock } from './session-write-lock.js';
 import { EMPTY_DEFERRED_TOOL_SNAPSHOT, type DeferredToolSessionSnapshot } from './deferred-tool-session.js';
 
-const logger = new Logger(null, 'ContextRepository');
+const logger = getLogger('ContextRepository');
 
 export interface ContextRepositoryConfig {
   /** Max messages loaded per session epoch (tail). */

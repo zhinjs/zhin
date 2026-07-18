@@ -59,7 +59,7 @@ describe('config documentation alignment', () => {
 
   it('minimal-bot 与 Stable 文档契约一致', () => {
     expect(minimalConfig).not.toMatch(/toolSearch:/);
-    expect(minimalConfig).toMatch(/endpoints:\s*\[\]/);
+    expect(minimalConfig).toMatch(/plugins:\s*\{\}/);
   });
 
   it('configuration.md 文档化语义记忆与弃用 memoryMcp', () => {

@@ -2,7 +2,7 @@
  * openai-completions ApiProvider — bridges legacy OpenAIProvider.chat (ADR 0009).
  */
 
-import { formatCompact, Logger } from '@zhin.js/logger';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { AIProvider } from '../../types.js';
 import { OpenAIProvider } from '../../providers/openai.js';
 import { formatRedactedJson } from '../redact-request-body.js';
@@ -15,7 +15,7 @@ import {
   type StreamFn,
 } from '../api-registry.js';
 
-const llmContextLogger = new Logger(null, 'LLM');
+const llmContextLogger = getLogger('LLM');
 
 export function createOpenAiCompletionsStreamFn(
   getResolver: () => ((alias: string) => AIProvider | undefined) | undefined,

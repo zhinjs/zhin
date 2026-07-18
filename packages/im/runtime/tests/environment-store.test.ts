@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -17,6 +17,7 @@ import {
   defineEnvSchema,
   defineRuntimeEnvironment,
   envStoreToken,
+  expandEnvironmentValue,
   type EnvStore,
   type ModuleRuntime,
 } from '../src/index.js';
@@ -69,6 +70,62 @@ describe('EnvStore', () => {
     expect(input.endpoint).toBe('https://${HOST}/v1');
     expect(Object.isFrozen(expanded)).toBe(true);
     expect(() => store.expand('${MISSING}')).toThrow(EnvironmentVariableMissingError);
+  });
+
+  it('expands missing config placeholders to empty strings for soft-fail create', () => {
+    const store = createEnvStore(
+      rootPluginId(),
+      { name: 'development', mode: 'development', platform: 'node' },
+      { base: { HOST: 'api.example.com' } },
+    );
+
+    expect(store.expandMissingAsEmpty({
+      token: '${MISSING_TOKEN}',
+      url: 'https://${HOST}/v1',
+    })).toEqual({
+      token: '',
+      url: 'https://api.example.com/v1',
+    });
+  });
+
+  it('supports ${VAR:-default} and ${VAR:=default} fallbacks', () => {
+    const store = createEnvStore(
+      rootPluginId(),
+      { name: 'development', mode: 'development', platform: 'node' },
+      { base: { HOST: 'api.example.com', EMPTY: '' } },
+    );
+
+    expect(store.expandMissingAsEmpty({
+      host: '${HOST:-fallback.example.com}',
+      missing: '${MISSING:-fallback}',
+      assign: '${MISSING:=fallback}',
+      empty: '${EMPTY:-fallback}',
+    })).toEqual({
+      host: 'api.example.com',
+      missing: 'fallback',
+      assign: 'fallback',
+      empty: 'fallback',
+    });
+
+    // Strict expand honors the fallback instead of throwing…
+    expect(store.expand('${MISSING:-fallback}')).toBe('fallback');
+    // …but a plain missing reference still throws.
+    expect(() => store.expand('${MISSING}')).toThrow(EnvironmentVariableMissingError);
+  });
+
+  it('expandEnvironmentValue expands arbitrary config from a lookup source', () => {
+    const lookup = (key: string) => ({ KEY: 'value' } as Record<string, string>)[key];
+    expect(expandEnvironmentValue({
+      plain: '${KEY}',
+      missing: '${NOPE}',
+      fallback: '${NOPE:-d}',
+      nested: ['x-${KEY:-y}'],
+    }, lookup)).toEqual({
+      plain: 'value',
+      missing: '',
+      fallback: 'd',
+      nested: ['x-value'],
+    });
   });
 
   it('redacts declared secrets from parser diagnostics and structured values', () => {
@@ -227,7 +284,7 @@ async function createProject(): Promise<string> {
   });
   await writeFile(join(root, 'plugin.ts'), '');
   await writeFile(join(root, 'plugins/child/plugin.ts'), '');
-  return root;
+  return realpath(root);
 }
 
 async function writeJson(path: string, value: unknown): Promise<void> {

@@ -1,5 +1,5 @@
 import type { Message, Plugin } from 'zhin.js';
-import { channelKey } from '@zhin.js/game-shared';
+import { channelKey } from '@zhin.js/game-kit';
 import { continueGame, startGame } from './game-flow.js';
 import type { SessionService } from './session-service.js';
 
@@ -12,7 +12,7 @@ export const RPS_HELP = [
 ].join('\n');
 
 export async function runRpsCommand(
-  plugin: Plugin,
+  plugin: Plugin | null,
   services: SessionService,
   message: Message<any>,
   action: string,
@@ -42,4 +42,13 @@ export async function runRpsCommand(
   }
 
   return `未知子命令：${action}\n\n${RPS_HELP}`;
+}
+
+/** Plugin Runtime / smoke: text-only, no Adapter.editMessage. */
+export async function runRpsCommandText(
+  services: SessionService,
+  message: Message<any>,
+  action: string,
+): Promise<string> {
+  return (await runRpsCommand(null, services, message, action)) ?? '';
 }

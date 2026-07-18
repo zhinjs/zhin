@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/adapter-wecom",
   "version": "2.0.2",
-  "description": "Zhin.js adapter for WeCom (企业微信)",
+  "description": "Zhin.js WeCom (企业微信) adapter for Plugin Runtime (HTTP webhook)",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -34,29 +34,30 @@
     "directory": "plugins/adapters/wecom"
   },
   "scripts": {
-    "build": "pnpm build:node",
+    "build": "tsc",
     "clean": "rimraf lib",
-    "build:node": "tsc",
-    "prepublishOnly": "npm run build"
+    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/adapters/wecom/tests",
+    "prepublishOnly": "pnpm run build"
   },
-  "devDependencies": {
-    "@types/koa": "^3.0.3",
-    "@types/node": "^26.1.0",
-    "@zhin.js/host-router": "workspace:*",
-    "typescript": "^6.0.3",
-    "zhin.js": "workspace:*",
-    "@zhin.js/agent": "workspace:*",
-    "zod": "^4.4.3"
+  "dependencies": {
+    "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/logger": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*"
   },
   "peerDependencies": {
-    "@zhin.js/host-router": "workspace:*",
-    "zhin.js": "workspace:*",
+    "@zhin.js/adapter": "workspace:*",
     "@zhin.js/agent": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
+    "zhin.js": "workspace:*",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
-    "@zhin.js/host-router": {
-      "optional": false
+    "zhin.js": {
+      "optional": true
     },
     "@zhin.js/agent": {
       "optional": true
@@ -65,13 +66,23 @@
       "optional": true
     }
   },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "@zhin.js/agent": "workspace:*",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
+    "zod": "^4.4.3",
+    "zhin.js": "workspace:*"
+  },
   "files": [
+    "adapters",
+    "plugin.ts",
+    "schema.json",
     "src",
     "lib",
-    "plugin.yml",
+    "agent",
     "README.md",
-    "CHANGELOG.md",
-    "agent"
+    "CHANGELOG.md"
   ],
   "publishConfig": {
     "access": "public",
@@ -79,5 +90,19 @@
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/adapter",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
   }
 }

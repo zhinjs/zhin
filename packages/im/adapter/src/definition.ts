@@ -8,6 +8,7 @@ export type AdapterCapability = 'inbound' | 'outbound';
 export interface EndpointSendRequest {
   readonly target: string;
   readonly payload: unknown;
+  readonly parent?: { readonly type?: string; readonly id?: string; readonly name?: string };
 }
 
 export interface EndpointInstance<TResult = unknown> {

@@ -1,8 +1,8 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getTelegramAgentDeps } from '../../src/telegram-agent-deps.js';
 
-export default defineTool<{ endpoint_id: string; chat_id: string; message_id: string; reaction: string }>({
+export default defineAgentTool<{ endpoint_id: string; chat_id: string; message_id: string; reaction: string }>({
   description: '对 Telegram 消息添加表情反应',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),

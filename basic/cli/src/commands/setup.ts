@@ -221,8 +221,9 @@ export const setupCommand = new Command('setup')
       console.log(chalk.yellow('未找到配置文件，将创建 zhin.config.yml\n'));
       config = {
         log_level: 'INFO',
-        endpoints: [],
-        plugins: []
+        // Plugin Runtime 配置形态：plugins 为 instanceKey → 配置 的映射
+        // （adapter/插件挂载清单在 package.json 的 zhin.plugins）
+        plugins: {}
       };
     }
 

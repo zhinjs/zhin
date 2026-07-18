@@ -1,5 +1,5 @@
-import type { Database, DatabaseFeature, Message, Models, RelatedModel } from 'zhin.js';
-import { channelKey, generateSessionId, boardMessageMatches } from '@zhin.js/game-shared';
+import type { Database, Message, Models, RelatedModel } from 'zhin.js';
+import { channelKey, generateSessionId, boardMessageMatches } from '@zhin.js/game-kit';
 import { pickRoundQueue, type RiddleType } from './riddles-catalog.js';
 import type { RiddleSessionRow } from './models.js';
 
@@ -101,9 +101,6 @@ export function createServices(db: RiddleDatabase): SessionService {
   return new SessionService(db);
 }
 
-export function resolveGameDatabase(feature: DatabaseFeature): RiddleDatabase {
-  return feature.db;
-}
 
 export function currentRiddleId(session: RiddleSessionRow): string | null {
   const queue = parseQueue(session.queue);

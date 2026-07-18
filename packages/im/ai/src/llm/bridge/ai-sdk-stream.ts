@@ -3,7 +3,7 @@
  */
 
 import { generateText, streamText, type SystemModelMessage, type LanguageModel } from 'ai';
-import { formatCompact, Logger } from '@zhin.js/logger';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 
 import { createAssistantMessageEventStream, getProviderConfig, type StreamFn, type StreamOptions } from '../api-registry.js';
 import type { Model } from '../types/model.js';
@@ -22,7 +22,7 @@ import {
 import { getLanguageModel } from '../language-model-store.js';
 import { ensureLanguageModelRegistered } from '../register-api-layer.js';
 
-const llmContextLogger = new Logger(null, 'LLM');
+const llmContextLogger = getLogger('LLM');
 
 function mapFinishReason(
   reason: string | undefined,

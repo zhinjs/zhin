@@ -1,4 +1,5 @@
 import type { Adapter, Message, Plugin } from 'zhin.js';
+import { plainTextFromSendContent } from '@zhin.js/game-kit';
 import {
   checkAnswer,
   getRiddleById,
@@ -15,17 +16,19 @@ import {
 import { buildRiddleView, MAX_WRONG } from './view.js';
 
 export async function sendOrEditView(
-  plugin: Plugin,
+  plugin: Plugin | null,
   services: SessionService,
   message: Message<any>,
   session: RiddleSessionRow,
   eventLines: string[] = [],
-): Promise<void> {
+): Promise<string | void> {
   const content = buildRiddleView(session, eventLines, message.$channel.type);
   if (typeof content === 'string') {
+    if (!plugin) return content;
     await message.$reply?.(content);
     return;
   }
+  if (!plugin) return plainTextFromSendContent(content);
 
   const adapter = plugin.root.inject(message.$adapter) as Adapter;
   if (session.board_message_id) {
@@ -62,7 +65,7 @@ async function advanceQuestion(
 }
 
 export async function startGame(
-  plugin: Plugin,
+  plugin: Plugin | null,
   services: SessionService,
   message: Message<any>,
   mode: RiddleType,
@@ -77,12 +80,12 @@ export async function startGame(
   }
 
   const session = await services.createSession(message, mode);
-  await sendOrEditView(plugin, services, message, session);
-  return undefined;
+  const text = await sendOrEditView(plugin, services, message, session);
+  return typeof text === 'string' ? text : undefined;
 }
 
 export async function continueGame(
-  plugin: Plugin,
+  plugin: Plugin | null,
   services: SessionService,
   message: Message<any>,
 ): Promise<string> {
@@ -91,12 +94,13 @@ export async function continueGame(
     message.$sender.id,
   );
   if (!session) return '你没有进行中的猜谜，发送「猜谜 开始」。';
-  await sendOrEditView(plugin, services, message, session);
+  const text = await sendOrEditView(plugin, services, message, session);
+  if (typeof text === 'string') return text;
   return '已刷新猜谜界面。';
 }
 
 export async function processAnswerText(
-  plugin: Plugin,
+  plugin: Plugin | null,
   services: SessionService,
   message: Message<any>,
   raw: string,
@@ -120,32 +124,29 @@ export async function processAnswerText(
     });
     const after = await advanceQuestion(services, (await services.getById(session.id))!);
     const explain = entry.explanation ? `\n📖 ${entry.explanation}` : '';
-    await sendOrEditView(plugin, services, message, after, [
+    return (await sendOrEditView(plugin, services, message, after, [
       `✅ 正确！答案：**${entry.answer}**${explain}`,
       `+${10 + Math.min(streak, 5)} 分`,
-    ]);
-    return null;
+    ])) ?? null;
   }
 
   const wrong = session.wrong_count + 1;
   if (wrong >= MAX_WRONG) {
     await services.updateSession(session.id, { wrong_count: wrong, streak: 0 });
     const after = await advanceQuestion(services, (await services.getById(session.id))!);
-    await sendOrEditView(plugin, services, message, after, [
+    return (await sendOrEditView(plugin, services, message, after, [
       `❌ 本题答案：**${entry.answer}**`,
       '失误过多，自动下一题。',
-    ]);
-    return null;
+    ])) ?? null;
   }
 
   await services.updateSession(session.id, { wrong_count: wrong, streak: 0 });
   const updated = (await services.getById(session.id))!;
-  await sendOrEditView(plugin, services, message, updated, ['❌ 不对，再想想！']);
-  return null;
+  return (await sendOrEditView(plugin, services, message, updated, ['❌ 不对，再想想！'])) ?? null;
 }
 
 export async function handleChoice(
-  plugin: Plugin,
+  plugin: Plugin | null,
   services: SessionService,
   message: Message<any>,
   sessionId: string,
@@ -174,15 +175,18 @@ export async function handleChoice(
     const hint = entry.hint ?? `答案共 ${entry.answer.length} 个字`;
     await services.updateSession(session.id, { hints_used: session.hints_used + 1, streak: 0 });
     const updated = (await services.getById(session.id))!;
-    await sendOrEditView(plugin, services, message, updated, [`💡 提示：${hint}`, '（连击清零）']);
-    return null;
+    return (await sendOrEditView(plugin, services, message, updated, [
+      `💡 提示：${hint}`,
+      '（连击清零）',
+    ])) ?? null;
   }
 
   if (choiceId === 'skip') {
     await services.updateSession(session.id, { streak: 0 });
     const after = await advanceQuestion(services, session);
-    await sendOrEditView(plugin, services, message, after, [`⏭️ 跳过，答案：**${entry.answer}**`]);
-    return null;
+    return (await sendOrEditView(plugin, services, message, after, [
+      `⏭️ 跳过，答案：**${entry.answer}**`,
+    ])) ?? null;
   }
 
   if (choiceId === 'quit') {

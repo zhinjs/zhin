@@ -3,10 +3,10 @@
   "compilerOptions": {
     "types": ["node"],
     "outDir": "./lib",
-    "rootDir": ".",
-    "declaration": false,
+    "rootDir": "./src",
+    "sourceMap": false,
     "declarationMap": false
   },
-  "include": ["src/**/*", "agent/**/*"],
-  "exclude": ["lib", "node_modules"]
+  "include": ["src/**/*"],
+  "exclude": ["lib", "node_modules", "tests", "adapters"]
 }

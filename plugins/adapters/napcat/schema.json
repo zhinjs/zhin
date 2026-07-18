@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "connection": {
+      "type": "string",
+      "enum": ["ws", "wss", "http"],
+      "default": "ws",
+      "description": "ws (default), wss (reverse WS), or http (POST webhook + HTTP API outbound)"
+    },
+    "name": {
+      "type": "string",
+      "default": "napcat-bot"
+    },
+    "url": {
+      "type": "string",
+      "description": "NapCat WebSocket URL (required for connection: ws)"
+    },
+    "path": {
+      "type": "string",
+      "description": "WS path for reverse-wss"
+    },
+    "http_url": {
+      "type": "string",
+      "description": "HTTP API base URL (connection: http outbound)"
+    },
+    "post_path": {
+      "type": "string",
+      "description": "HTTP POST event path (connection: http inbound)"
+    },
+    "access_token": {
+      "type": "string"
+    },
+    "reconnect_interval": {
+      "type": "number",
+      "default": 5000
+    },
+    "heartbeat_interval": {
+      "type": "number",
+      "default": 30000
+    },
+    "poll_interval": {
+      "type": "number",
+      "default": 30000
+    }
+  }
+}

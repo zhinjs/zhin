@@ -1,5 +1,5 @@
-import { getCheckinModel } from '../../src/checkin.js';
-import { todayStr } from '../../src/shared.js';
+import { getCheckinModel } from '../../src/db-store.js';
+import { todayStr } from '../../src/shared-runtime.js';
 
 export default async function (args: { user_id?: string }) {
   const M = getCheckinModel();

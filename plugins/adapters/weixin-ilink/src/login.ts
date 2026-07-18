@@ -1,15 +1,18 @@
-import type { Plugin } from "zhin.js";
-import { apiGetFetch, apiPostFetch } from "./ilink-api.js";
-import { buildBaseInfo, DEFAULT_API_BASE_URL } from "./ilink-meta.js";
-import { logger } from "./ilink-logger.js";
+/**
+ * Resolve iLink bot credentials (env / config / sidecar file / QR login).
+ * No legacy Plugin / loginAssist dependency — QR URL is logged for manual scan.
+ */
+import { apiGetFetch, apiPostFetch } from './ilink-api.js';
+import { buildBaseInfo, DEFAULT_API_BASE_URL } from './ilink-meta.js';
+import { logger } from './ilink-logger.js';
 import {
   loadCredentials,
   saveCredentials,
   type WeixinIlinkCredentials,
-} from "./credentials.js";
-import type { WeixinIlinkEndpointConfig } from "./types.js";
+} from './credentials.js';
+import type { ResolvedWeixinIlinkConfig } from './protocol.js';
 
-const DEFAULT_ILINK_BOT_TYPE = "3";
+const DEFAULT_ILINK_BOT_TYPE = '3';
 const QR_LONG_POLL_TIMEOUT_MS = 35_000;
 const LOGIN_TIMEOUT_MS = 480_000;
 
@@ -20,14 +23,14 @@ interface QRCodeResponse {
 
 interface StatusResponse {
   status:
-    | "wait"
-    | "scaned"
-    | "confirmed"
-    | "expired"
-    | "scaned_but_redirect"
-    | "need_verifycode"
-    | "verify_code_blocked"
-    | "binded_redirect";
+    | 'wait'
+    | 'scaned'
+    | 'confirmed'
+    | 'expired'
+    | 'scaned_but_redirect'
+    | 'need_verifycode'
+    | 'verify_code_blocked'
+    | 'binded_redirect';
   bot_token?: string;
   ilink_endpoint_id?: string;
   baseurl?: string;
@@ -44,7 +47,7 @@ async function fetchQRCode(apiBaseUrl: string, botType: string): Promise<QRCodeR
     baseUrl: apiBaseUrl,
     endpoint: `ilink/bot/get_bot_qrcode?bot_type=${encodeURIComponent(botType)}`,
     body: JSON.stringify({ local_token_list: getLocalBotTokenList(), base_info: buildBaseInfo() }),
-    label: "fetchQRCode",
+    label: 'fetchQRCode',
   });
   return JSON.parse(rawText) as QRCodeResponse;
 }
@@ -59,21 +62,20 @@ async function pollQRStatus(
       baseUrl: apiBaseUrl,
       endpoint,
       timeoutMs: QR_LONG_POLL_TIMEOUT_MS,
-      label: "pollQRStatus",
+      label: 'pollQRStatus',
     });
     return JSON.parse(rawText) as StatusResponse;
   } catch (err) {
-    if (err instanceof Error && err.name === "AbortError") {
-      return { status: "wait" };
+    if (err instanceof Error && err.name === 'AbortError') {
+      return { status: 'wait' };
     }
     logger.warn(`pollQRStatus error: ${String(err)}`);
-    return { status: "wait" };
+    return { status: 'wait' };
   }
 }
 
 export async function resolveCredentials(
-  plugin: Plugin,
-  config: WeixinIlinkEndpointConfig,
+  config: ResolvedWeixinIlinkConfig,
 ): Promise<WeixinIlinkCredentials> {
   const envToken = process.env.WEIXIN_ILINK_TOKEN?.trim() || config.botToken?.trim();
   if (envToken) {
@@ -94,73 +96,55 @@ export async function resolveCredentials(
     };
   }
 
-  return loginWithQr(plugin, config);
+  return loginWithQr(config);
 }
 
 export async function loginWithQr(
-  plugin: Plugin,
-  config: WeixinIlinkEndpointConfig,
+  config: ResolvedWeixinIlinkConfig,
 ): Promise<WeixinIlinkCredentials> {
   const apiBaseUrl = config.baseUrl ?? DEFAULT_API_BASE_URL;
   const qr = await fetchQRCode(apiBaseUrl, DEFAULT_ILINK_BOT_TYPE);
   const qrcodeUrl = qr.qrcode_img_content || qr.qrcode;
 
-  const loginAssist = plugin.inject("loginAssist");
-  if (!loginAssist) {
-    throw new Error("loginAssist 服务不可用，请确保已加载 zhin 核心服务");
-  }
-  void loginAssist.waitForInput("weixin-ilink", config.name, "qrcode", {
-    message: "请用微信扫描 ClawBot 二维码完成登录",
-    image: qrcodeUrl.startsWith("data:") ? qrcodeUrl : undefined,
-    url: qrcodeUrl.startsWith("http") ? qrcodeUrl : undefined,
-    qrcode: qr.qrcode,
-  });
-  const assistTask = loginAssist
-    .listPending()
-    .find((t) => t.adapter === "weixin-ilink" && t.endpointId === config.name);
+  logger.info(
+    `weixin-ilink QR login for ${config.name}: scan with WeChat ClawBot entry — ${qrcodeUrl.slice(0, 120)}${qrcodeUrl.length > 120 ? '…' : ''}`,
+  );
 
   const deadline = Date.now() + LOGIN_TIMEOUT_MS;
   let currentBaseUrl = apiBaseUrl;
 
-  try {
-    while (Date.now() < deadline) {
-      const status = await pollQRStatus(currentBaseUrl, qr.qrcode);
+  while (Date.now() < deadline) {
+    const status = await pollQRStatus(currentBaseUrl, qr.qrcode);
 
-      if (status.status === "scaned_but_redirect" && status.redirect_host) {
-        currentBaseUrl = status.redirect_host.startsWith("http")
-          ? status.redirect_host
-          : `https://${status.redirect_host}`;
-      }
-
-      if (status.status === "confirmed" || status.status === "binded_redirect") {
-        if (!status.bot_token && status.status !== "binded_redirect") {
-          throw new Error("扫码成功但未返回 bot_token");
-        }
-        const creds: WeixinIlinkCredentials = {
-          botToken: status.bot_token ?? loadCredentials(config.name)?.botToken ?? "",
-          ilinkUserId: status.ilink_user_id,
-          ilinkBotId: status.ilink_endpoint_id,
-          baseUrl: status.baseurl ?? currentBaseUrl,
-        };
-        if (!creds.botToken) {
-          throw new Error("binded_redirect 但本地无有效 bot_token");
-        }
-        saveCredentials(config.name, creds);
-        if (assistTask) loginAssist.submit(assistTask.id, "confirmed");
-        return creds;
-      }
-
-      if (status.status === "expired") {
-        if (assistTask) loginAssist.cancel(assistTask.id, "expired");
-        throw new Error("二维码已过期，请重启 bot 重新登录");
-      }
-
-      await new Promise((r) => setTimeout(r, 500));
+    if (status.status === 'scaned_but_redirect' && status.redirect_host) {
+      currentBaseUrl = status.redirect_host.startsWith('http')
+        ? status.redirect_host
+        : `https://${status.redirect_host}`;
     }
-    if (assistTask) loginAssist.cancel(assistTask.id, "timeout");
-    throw new Error("微信扫码登录超时");
-  } catch (err) {
-    if (assistTask) loginAssist.cancel(assistTask.id, String(err));
-    throw err;
+
+    if (status.status === 'confirmed' || status.status === 'binded_redirect') {
+      if (!status.bot_token && status.status !== 'binded_redirect') {
+        throw new Error('扫码成功但未返回 bot_token');
+      }
+      const creds: WeixinIlinkCredentials = {
+        botToken: status.bot_token ?? loadCredentials(config.name)?.botToken ?? '',
+        ilinkUserId: status.ilink_user_id,
+        ilinkBotId: status.ilink_endpoint_id,
+        baseUrl: status.baseurl ?? currentBaseUrl,
+      };
+      if (!creds.botToken) {
+        throw new Error('binded_redirect 但本地无有效 bot_token');
+      }
+      saveCredentials(config.name, creds);
+      return creds;
+    }
+
+    if (status.status === 'expired') {
+      throw new Error('二维码已过期，请重启 bot 重新登录');
+    }
+
+    await new Promise((r) => setTimeout(r, 500));
   }
+
+  throw new Error('微信扫码登录超时');
 }

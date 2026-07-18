@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "default": "lark-bot"
+    },
+    "appId": { "type": "string" },
+    "appSecret": { "type": "string" },
+    "encryptKey": { "type": "string" },
+    "verificationToken": { "type": "string" },
+    "webhookPath": {
+      "type": "string",
+      "default": "/lark/webhook"
+    },
+    "apiBaseUrl": { "type": "string" },
+    "isFeishu": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": ["appId", "appSecret"]
+}

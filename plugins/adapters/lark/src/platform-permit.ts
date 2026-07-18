@@ -1,7 +1,7 @@
 /**
  * 飞书 Lark platform permit
  */
-import { registerPlatformPermitChecker, type Message } from 'zhin.js';
+import { registerPlatformPermitChecker, type Message } from '@zhin.js/core';
 
 const ADAPTER = 'lark';
 

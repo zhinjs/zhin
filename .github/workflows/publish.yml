@@ -16,7 +16,7 @@ env:
 
 jobs:
   publish:
-    timeout-minutes: 15
+    timeout-minutes: 25
     runs-on: ubuntu-latest
     steps:
       - name: setup pnpm
@@ -50,14 +50,9 @@ jobs:
       - name: build packages
         run: pnpm build
 
-      - name: type check
-        run: pnpm type-check
-
-      - name: run harness checks
+      # type-check / lint / unit tests 已纳入 pnpm check:all
+      - name: run harness checks (incl. type-check, lint, test)
         run: pnpm check:all
-
-      - name: run tests
-        run: pnpm test
 
       - name: init new packages (first-time publish)
         run: node scripts/init-new-packages.mjs

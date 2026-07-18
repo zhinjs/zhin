@@ -1,31 +1,29 @@
-/**
- * Email 适配器入口：类型扩展、导出、注册
- */
-import { usePlugin, type Plugin, type Context } from "zhin.js";
-import { EmailAdapter } from "./adapter.js";
+export {
+  addressListText,
+  formatInboundContent,
+  formatOutboundMail,
+  htmlToText,
+  parseEmailMessage,
+  resolveEmailConfig,
+  senderDisplayName,
+  type EmailAdapterConfig,
+  type EmailAttachmentsConfig,
+  type EmailMessage,
+  type EmailWireSegment,
+  type ImapConfig,
+  type ResolvedEmailConfig,
+  type SmtpConfig,
+} from './protocol.js';
 
-declare module "zhin.js" {
-  interface Adapters {
-    email: EmailAdapter;
-  }
-}
+export {
+  EmailEndpoint,
+  type EmailEndpointOptions,
+} from './endpoint.js';
 
-export * from "./types.js";
-export { EmailEndpoint } from "./endpoint.js";
-export { EmailAdapter } from "./adapter.js";
-
-const plugin = usePlugin();
-const { provide } = plugin;
-
-provide({
-  name: "email",
-  description: "Email Endpoint Adapter",
-  mounted: async (p: Plugin) => {
-    const adapter = new EmailAdapter(p);
-    await adapter.start();
-    return adapter;
-  },
-  dispose: async (adapter: EmailAdapter) => {
-    await adapter.stop();
-  },
-} as Context<"email">);
+export {
+  defaultCreateImap,
+  defaultCreateSmtp,
+  type EmailImapFetchMessage,
+  type EmailImapTransport,
+  type EmailSmtpTransport,
+} from './transport.js';

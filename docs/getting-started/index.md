@@ -53,9 +53,9 @@ pnpm dev
 
 1. API Base 填 `http://127.0.0.1:8086`
 2. Token 填 `.env` 里的 `HTTP_TOKEN`
-3. 进入 **Sandbox / 沙盒** 页，连接后发送 `hello`，再试 `card`
+3. 进入 **Sandbox / 沙盒** 页，连接后发送 `/hello`，再试 `/card`
 
-收到回复说明一切正常。`hello` 回复会提示如何启用 AI（`npx zhin setup --ai`）。
+收到回复说明一切正常。
 
 如果 Console 连不上，先在项目根运行：
 
@@ -65,23 +65,35 @@ npx zhin doctor
 
 常见问题见 [疑难排查](/troubleshooting/)。
 
-## 4. 写你的第一个插件
+## 4. 写你的第一个命令
 
-在 `src/plugins/` 下创建 `hello.ts`：
+项目根就是一个插件包（`package.json` 的 `zhin.entry` 指向 `plugin.ts`）。在 `commands/` 目录下创建 `hello.ts`：
 
 ```typescript
-import { usePlugin, MessageCommand } from "zhin.js"
+// commands/hello.ts
+import { defineCommand } from '@zhin.js/command'
 
-const { addCommand } = usePlugin()
-
-addCommand(new MessageCommand("hello").desc("打招呼").action(() => "你好！🤖"))
-
-addCommand(new MessageCommand("echo <text>").desc("复读").action((_, r) => r.params.text))
+export default defineCommand({
+  description: '打招呼',
+  execute: () => '你好！🤖',
+})
 ```
 
-保存文件，机器人自动热重载。在沙盒发送 `hello` 或 `echo 测试`，立刻收到回复。
+保存文件，运行时自动热重载。在沙盒发送 `/hello`，立刻收到回复。再来一个带参数的：
 
-> **注意**：`usePlugin()` 必须在文件顶层调用，不能放在函数或回调里。详见 [常见陷阱](#常见陷阱)。
+```typescript
+// commands/echo/[text:string].ts
+import { defineCommand } from '@zhin.js/command'
+
+export default defineCommand({
+  description: '复读',
+  execute: ({ params }) => `你说：${params.text}`,
+})
+```
+
+发送 `/echo 测试`。命令由 `commands/` 目录约定自动发现，目录与文件名规则、参数写法详见 [命令系统](/essentials/commands)。
+
+> **注意**：项目根 `commands/` 下的命令是 bare 名（`/hello`）；发布成插件包被挂载后，命令会自动带上 instanceKey 前缀（如 `/my-plugin hello`）。
 
 ## 下一步任务
 
@@ -117,10 +129,10 @@ pnpm dev
 
 | 陷阱 | 说明 |
 |------|------|
-| `usePlugin()` 放在函数里 | ❌ 必须在文件顶层调用，否则 AsyncLocalStorage 上下文丢失 |
-| `getPlugin()` 在运行时调用 | ❌ 只能在插件初始化时调用，不能在命令回调、中间件里调用 |
+| 命令文件名不合规 | ❌ 目录与文件名只认小写字母、数字、连字符（`[a-z0-9][a-z0-9-]*`），大写/下划线不会被发现 |
+| 参数写成目录段 | ❌ 动态参数只支持单个文件段且必须在末尾：`[name:string].ts`，`commands/[id]/x.ts` 不会被发现 |
 | 导入路径没加 `.js` | ❌ TypeScript 本地导入必须写 `import { x } from './y.js'` |
-| 直接调 `bot.$sendMessage()` | ❌ 必须走 `Message.$reply` 或 `Adapter.sendMessage` 发送链路 |
+| 绕过发送链路 | ❌ 回复走 `execute` 返回值或 `Message.$reply`，不要直接调平台 SDK 发送 |
 
 ## 下一步
 

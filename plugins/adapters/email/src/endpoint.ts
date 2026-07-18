@@ -1,425 +1,258 @@
 /**
- * Email Endpoint 实现
+ * EmailEndpoint — lifecycle, SMTP outbound, IMAP inbound polling.
  */
-import nodemailer from "nodemailer";
-import Imap from "imap";
-import { simpleParser, type ParsedMail, type Attachment } from "mailparser";
-import { formatCompact, Endpoint, Message, MessageSegment, segment, SendContent, SendOptions, htmlToPlainTextWithBlockBreaks, expandInteractiveSegmentsInContent,
-} from 'zhin.js';
-import { EventEmitter } from "events";
-import { createWriteStream, promises as fs } from "fs";
-import path from "path";
-import type { EmailEndpointConfig, EmailMessage } from "./types.js";
-import type { EmailAdapter } from "./adapter.js";
-import { fromCanonicalSegments, toCanonicalSegments } from './segment-mapper.js';
-
-export class EmailEndpoint extends EventEmitter implements Endpoint<EmailEndpointConfig, EmailMessage> {
-    $config: EmailEndpointConfig;
-    $connected: boolean = false;
-    private smtpTransporter: nodemailer.Transporter | null = null;
-    private imapConnection: Imap | null = null;
-    private checkTimer: NodeJS.Timeout | null = null;
-
-    get logger() {
-    return this.adapter.plugin.logger;
-  }
-
-  get $id() {
-        return this.$config.name;
-    }
-
-    constructor(public adapter: EmailAdapter, config: EmailEndpointConfig) {
-        super();
-        this.$config = config;
-
-        // 设置默认值
-        this.$config.imap.checkInterval = this.$config.imap.checkInterval || 60000; // 1分钟
-        this.$config.imap.mailbox = this.$config.imap.mailbox || 'INBOX';
-        this.$config.imap.markSeen = this.$config.imap.markSeen !== false;
-
-        if (this.$config.attachments?.enabled) {
-            this.$config.attachments.downloadPath = this.$config.attachments.downloadPath || './downloads/email';
-            this.$config.attachments.maxFileSize = this.$config.attachments.maxFileSize || 10 * 1024 * 1024; // 10MB
-        }
-    }
-
-    async $connect(): Promise<void> {
-        try {
-            // 初始化 SMTP 传输器
-            this.smtpTransporter = nodemailer.createTransport({
-                host: this.$config.smtp.host,
-                port: this.$config.smtp.port,
-                secure: this.$config.smtp.secure,
-                auth: this.$config.smtp.auth
-            });
-
-            // 验证 SMTP 连接
-            await this.smtpTransporter!.verify();
-            this.logger.debug(formatCompact({ endpoint: this.$id, mode: "smtp" }));
-
-            // 初始化 IMAP 连接
-            this.imapConnection = new Imap({
-                user: this.$config.imap.user,
-                password: this.$config.imap.password,
-                host: this.$config.imap.host,
-                port: this.$config.imap.port,
-                tls: this.$config.imap.tls
-            });
-
-            // 设置 IMAP 事件监听
-            this.setupImapListeners();
-
-            // 连接 IMAP
-            await new Promise<void>((resolve, reject) => {
-                this.imapConnection!.once('ready', resolve);
-                this.imapConnection!.once('error', reject);
-                this.imapConnection!.connect();
-            });
-
-            this.logger.debug(formatCompact({ endpoint: this.$id, mode: "imap" }));
-
-            // 开始检查邮件
-            this.startEmailCheck();
-            this.$connected = true;
-
-        } catch (error) {
-            this.logger.error('Failed to connect email services:', error);
-            throw error;
-        }
-    }
-
-    async $disconnect(): Promise<void> {
-        this.$connected = false;
-
-        // 停止定时检查
-        if (this.checkTimer) {
-            clearInterval(this.checkTimer);
-            this.checkTimer = null;
-        }
-
-        // 关闭 IMAP 连接
-        if (this.imapConnection) {
-            this.imapConnection.end();
-            this.imapConnection = null;
-        }
-
-        // 关闭 SMTP 连接
-        if (this.smtpTransporter) {
-            this.smtpTransporter.close();
-            this.smtpTransporter = null;
-        }
-
-        this.logger.debug(formatCompact( { op: "disconnect", endpoint: this.$id }));
-    }
-
-    private setupImapListeners(): void {
-        if (!this.imapConnection) return;
-
-        this.imapConnection.on('mail', (numNewMsgs: number) => {
-            this.logger.debug(`Received ${numNewMsgs} new emails`);
-            this.checkForNewEmails();
-        });
-
-        this.imapConnection.on('error', (error: any) => {
-            this.logger.error('IMAP error:', error);
-        });
-
-        this.imapConnection.on('end', () => {
-            this.logger.debug(formatCompact( { op: "disconnect", endpoint: this.$id, mode: "imap" }));
-        });
-    }
-
-    private startEmailCheck(): void {
-        if (this.checkTimer) return;
-
-        this.checkTimer = setInterval(() => {
-            this.checkForNewEmails();
-        }, this.$config.imap.checkInterval!);
-
-        // 立即检查一次
-        this.checkForNewEmails();
-    }
-
-    private async checkForNewEmails(): Promise<void> {
-        if (!this.imapConnection || !this.$connected) return;
-
-        try {
-            await new Promise<void>((resolve, reject) => {
-                this.imapConnection!.openBox(this.$config.imap.mailbox!, false, (error, box) => {
-                    if (error) return reject(error);
-
-                    // 搜索未读邮件
-                    this.imapConnection!.search(['UNSEEN'], (error, results) => {
-                        if (error) return reject(error);
-
-                        if (results.length === 0) {
-                            return resolve();
-                        }
-
-                        // 获取邮件
-                        const fetch = this.imapConnection!.fetch(results, {
-                            bodies: '',
-                            markSeen: this.$config.imap.markSeen
-                        });
-
-                        fetch.on('message', (msg, seqno) => {
-                            this.handleImapMessage(msg, seqno);
-                        });
-
-                        fetch.once('error', reject);
-                        fetch.once('end', resolve);
-                    });
-                });
-            });
-        } catch (error) {
-            this.logger.error('Error checking for new emails:', error);
-        }
-    }
-
-    private handleImapMessage(msg: any, seqno: number): void {
-        let body = '';
-        let uid = 0;
-
-        msg.on('body', (stream: any) => {
-            stream.on('data', (chunk: any) => {
-                body += chunk.toString('utf8');
-            });
-        });
-
-        msg.once('attributes', (attrs: any) => {
-            uid = attrs.uid;
-        });
-
-        msg.once('end', async () => {
-            try {
-                const parsed = await simpleParser(body);
-                const emailMessage = this.parseEmailMessage(parsed, uid);
-                const formattedMessage = this.$formatMessage(emailMessage);
-                this.adapter.emit('message.receive', formattedMessage);
-            } catch (error) {
-                this.logger.error('Error parsing email:', error);
-            }
-        });
-    }
-
-    private parseEmailMessage(parsed: ParsedMail, uid: number): EmailMessage {
-        const getAddressText = (addr: any): string[] => {
-            if (!addr) return [];
-            if (Array.isArray(addr)) {
-                return addr.map((a: any) => a.text || a.address || a.toString());
-            }
-            return [addr.text || addr.address || addr.toString()];
-        };
-
-        return {
-            messageId: parsed.messageId || '',
-            from: parsed.from ? getAddressText(parsed.from)[0] || '' : '',
-            to: getAddressText(parsed.to),
-            cc: getAddressText(parsed.cc),
-            bcc: getAddressText(parsed.bcc),
-            subject: parsed.subject || '',
-            text: parsed.text || '',
-            html: parsed.html ? parsed.html.toString() : '',
-            attachments: parsed.attachments || [],
-            date: parsed.date || new Date(),
-            uid
-        };
-    }
-
-    $formatMessage(emailMsg: EmailMessage): Message<EmailMessage> {
-        // 确定频道类型和ID
-        const channelType = 'private';
-        const channelId = emailMsg.from;
-
-        // 解析邮件内容
-        const wire = EmailEndpoint.parseEmailContent(emailMsg);
-        const content = toCanonicalSegments(wire);
-
-        const result = Message.from(emailMsg, {
-            $id: emailMsg.messageId,
-            $adapter: 'email',
-            $endpoint: this.$config.name,
-            $sender: {
-                id: emailMsg.from,
-                name: emailMsg.from.split('<')[0].trim() || emailMsg.from
-            },
-            $channel: {
-                id: channelId,
-                type: channelType as any
-            },
-            $raw: JSON.stringify(emailMsg),
-            $timestamp: emailMsg.date.getTime(),
-            $content: content,
-            $recall: async () => {
-                // 邮件适配器暂时不支持撤回消息
-            },
-            $reply: async (content: SendContent): Promise<string> => {
-                return await this.adapter.sendMessage({
-                    context: this.$config.context,
-                    endpoint: this.$config.name,
-                    id: emailMsg.from,
-                    type: 'private',
-                    content
-                });
-            }
-        });
-
-        return result;
-    }
-
-    static parseEmailContent(email: EmailMessage): MessageSegment[] {
-        const segments: MessageSegment[] = [];
-
-        // 添加主题（如果有且不为空）
-        if (email.subject) {
-            segments.push(segment.text(`Subject: ${email.subject}\n\n`));
-        }
-
-        // 添加文本内容
-        if (email.text) {
-            segments.push(segment.text(email.text));
-        }
-
-        // 如果没有纯文本但有HTML，尝试转换
-        if (!email.text && email.html) {
-            const textFromHtml = EmailEndpoint.htmlToText(email.html);
-            if (textFromHtml) {
-                segments.push(segment.text(textFromHtml));
-            }
-        }
-
-        // 处理附件
-        for (const attachment of email.attachments) {
-            if (attachment.contentType?.startsWith('image/')) {
-                segments.push(segment('image', {
-                    filename: attachment.filename,
-                    contentType: attachment.contentType,
-                    size: attachment.size
-                }));
-            } else {
-                segments.push(segment('file', {
-                    filename: attachment.filename,
-                    contentType: attachment.contentType,
-                    size: attachment.size
-                }));
-            }
-        }
-
-        return segments.length > 0 ? segments : [segment.text('(Empty email)')];
-    }
-
-    async $sendMessage(options: SendOptions): Promise<string> {
-        if (!this.smtpTransporter) {
-            throw new Error('SMTP transporter not initialized');
-        }
-
-        try {
-            const canonical = expandInteractiveSegmentsInContent(options.content);
-            const wire = fromCanonicalSegments(canonical);
-            const mailOptions = await this.formatSendContent({ ...options, content: wire });
-            const info = await this.smtpTransporter.sendMail(mailOptions);
-            this.logger.debug('Email sent:', info.messageId);
-            return info.messageId || '';
-        } catch (error) {
-            this.logger.error('Failed to send email:', error);
-            throw error;
-        }
-    }
-
-    async $recallMessage(id: string): Promise<void> {
-        // 邮件适配器暂时不支持撤回消息
-    }
-
-    private async formatSendContent(options: SendOptions): Promise<nodemailer.SendMailOptions> {
-        const mailOptions: nodemailer.SendMailOptions = {
-            from: this.$config.smtp.auth.user,
-            to: options.id,
-            subject: 'Message from Bot'
-        };
-
-        if (typeof options.content === 'string') {
-            mailOptions.text = options.content;
-        } else if (Array.isArray(options.content)) {
-            const textParts: string[] = [];
-            const htmlParts: string[] = [];
-            const attachments: any[] = [];
-
-            for (const item of options.content) {
-                if (typeof item === 'string') {
-                    textParts.push(item);
-                    htmlParts.push(item.replace(/\n/g, '<br>'));
-                } else {
-                    const segment = item as MessageSegment;
-                    switch (segment.type) {
-                        case 'text':
-                            const textContent = segment.data.text || segment.data.content || '';
-                            textParts.push(textContent);
-                            htmlParts.push(textContent.replace(/\n/g, '<br>'));
-                            break;
-                        case 'image':
-                            if (segment.data.url) {
-                                attachments.push({
-                                    filename: segment.data.filename || 'image.png',
-                                    path: segment.data.url
-                                });
-                            }
-                            break;
-                        case 'file':
-                            if (segment.data.url) {
-                                attachments.push({
-                                    filename: segment.data.filename || 'file',
-                                    path: segment.data.url
-                                });
-                            }
-                            break;
-                    }
-                }
-            }
-
-            if (textParts.length > 0) {
-                mailOptions.text = textParts.join('\n');
-                mailOptions.html = htmlParts.join('<br>');
-            }
-
-            if (attachments.length > 0) {
-                mailOptions.attachments = attachments;
-            }
-        }
-
-        // 如果有回复对象，可以在这里处理
-        // 邮件适配器暂时不支持回复对象
-
-        return mailOptions;
-    }
-
-    // 下载附件到本地
-    private async downloadAttachment(attachment: Attachment): Promise<string> {
-        if (!this.$config.attachments?.enabled || !this.$config.attachments.downloadPath) {
-            throw new Error('Attachment download is not enabled');
-        }
-
-        const downloadPath = this.$config.attachments.downloadPath;
-        await fs.mkdir(downloadPath, { recursive: true });
-
-        const filename = attachment.filename || `attachment_${Date.now()}`;
-        const filepath = path.join(downloadPath, filename);
-
-        return new Promise((resolve, reject) => {
-            const writeStream = createWriteStream(filepath);
-            writeStream.write(attachment.content);
-            writeStream.end();
-
-            writeStream.on('finish', () => resolve(filepath));
-            writeStream.on('error', reject);
-        });
-    }
-
-    /**
-     * HTML → 纯文本转换，处理常见标签和实体
-     */
-    static htmlToText(html: string): string {
-        return htmlToPlainTextWithBlockBreaks(html);
-    }
+import { mkdir, writeFile } from 'node:fs/promises';
+import * as path from 'node:path';
+import { simpleParser } from 'mailparser';
+import type { EndpointInstance } from '@zhin.js/adapter';
+import type { MessageGateway } from '@zhin.js/core/runtime';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+import type { CapabilityId } from '@zhin.js/plugin-runtime';
+import {
+  formatInboundContent,
+  formatOutboundMail,
+  parseEmailMessage,
+  senderDisplayName,
+  type EmailMessage,
+  type ResolvedEmailConfig,
+} from './protocol.js';
+import {
+  defaultCreateImap,
+  defaultCreateSmtp,
+  type EmailImapFetchMessage,
+  type EmailImapTransport,
+  type EmailSmtpTransport,
+} from './transport.js';
+
+const logger = getLogger('email');
+
+export interface EmailEndpointOptions {
+  readonly id: CapabilityId;
+  readonly gateway: MessageGateway;
+  readonly config: ResolvedEmailConfig;
+  readonly createSmtp?: (config: ResolvedEmailConfig['smtp']) => EmailSmtpTransport | Promise<EmailSmtpTransport>;
+  readonly createImap?: (config: ResolvedEmailConfig['imap']) => EmailImapTransport;
 }
 
-// 创建和注册适配器
+export class EmailEndpoint implements EndpointInstance {
+  readonly #options: EmailEndpointOptions;
+  #smtp: EmailSmtpTransport | null = null;
+  #imap: EmailImapTransport | null = null;
+  #checkTimer: NodeJS.Timeout | null = null;
+  #open = false;
+  #started = false;
+
+  constructor(options: EmailEndpointOptions) {
+    this.#options = options;
+  }
+
+  async start(): Promise<void> {
+    if (this.#started) return;
+    this.#started = true;
+    const { smtp, imap, name } = this.#options.config;
+    try {
+      this.#smtp = await (this.#options.createSmtp?.(smtp) ?? defaultCreateSmtp(smtp));
+      await this.#smtp.verify();
+      logger.debug(formatCompact({ endpoint: name, mode: 'smtp' }));
+
+      this.#imap = this.#options.createImap?.(imap) ?? defaultCreateImap(imap);
+      this.#setupImapListeners(this.#imap);
+      await new Promise<void>((resolve, reject) => {
+        this.#imap!.once('ready', () => resolve());
+        this.#imap!.once('error', (error) => reject(error));
+        this.#imap!.connect();
+      });
+      logger.debug(formatCompact({ endpoint: name, mode: 'imap' }));
+      this.#startEmailCheck();
+    } catch (error) {
+      await this.stop();
+      logger.error('Failed to connect email services:', error);
+      throw error;
+    }
+  }
+
+  open(): void {
+    this.#open = true;
+  }
+
+  close(): void {
+    this.#open = false;
+  }
+
+  async stop(): Promise<void> {
+    this.#open = false;
+    if (this.#checkTimer) {
+      clearInterval(this.#checkTimer);
+      this.#checkTimer = null;
+    }
+    if (this.#imap) {
+      try {
+        this.#imap.end();
+      } catch {
+        /* ignore */
+      }
+      this.#imap = null;
+    }
+    if (this.#smtp) {
+      try {
+        this.#smtp.close();
+      } catch {
+        /* ignore */
+      }
+      this.#smtp = null;
+    }
+    this.#started = false;
+    logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
+  }
+
+  async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
+    if (!this.#smtp) throw new Error('SMTP transporter not initialized');
+    const mailOptions = formatOutboundMail(payload, {
+      from: this.#options.config.smtp.auth.user,
+      to: target,
+    });
+    const info = await this.#smtp.sendMail(mailOptions);
+    logger.debug(formatCompact({ op: 'email_send', target, messageId: info.messageId }));
+    return info.messageId || '';
+  }
+
+  /** Test / internal: admit a parsed mail when the endpoint is open. */
+  admit(email: EmailMessage): void {
+    if (!this.#open) return;
+    void this.#admitWithAttachments(email).catch((err) => {
+      logger.warn(formatCompact({
+        op: 'email_gateway_receive_failed',
+        target: email.from,
+        error: err instanceof Error ? err.message : String(err),
+      }));
+    });
+  }
+
+  async #admitWithAttachments(email: EmailMessage): Promise<void> {
+    const savedAttachments = await this.#downloadAttachments(email);
+    const content = formatInboundContent(email);
+    const sender = email.from;
+    await this.#options.gateway.receive({
+      adapter: this.#options.id,
+      target: sender,
+      content,
+      sender: senderDisplayName(sender),
+      id: email.messageId || undefined,
+      metadata: Object.freeze({
+        subject: email.subject,
+        to: email.to,
+        cc: email.cc,
+        uid: email.uid,
+        date: email.date.toISOString(),
+        endpoint: this.#options.config.name,
+        ...(savedAttachments.length ? { attachments: savedAttachments } : {}),
+      }),
+    });
+  }
+
+  /**
+   * attachments.enabled 时把入站附件落盘（恢复旧 downloadAttachment 行为，
+   * 附加 maxFileSize / allowedTypes 过滤）；返回落盘结果供 admit metadata 使用。
+   */
+  async #downloadAttachments(
+    email: EmailMessage,
+  ): Promise<Array<{ filename: string; path: string; contentType?: string; size?: number }>> {
+    const config = this.#options.config.attachments;
+    if (!config?.enabled || email.attachments.length === 0) return [];
+    await mkdir(config.downloadPath, { recursive: true });
+    const saved: Array<{ filename: string; path: string; contentType?: string; size?: number }> = [];
+    for (const attachment of email.attachments) {
+      const filename = attachment.filename || `attachment_${Date.now()}`;
+      if (config.allowedTypes?.length && !config.allowedTypes.includes(attachment.contentType ?? '')) {
+        logger.debug(formatCompact({ op: 'email_attachment_skipped', filename, reason: 'type' }));
+        continue;
+      }
+      if (attachment.size != null && attachment.size > config.maxFileSize) {
+        logger.debug(formatCompact({ op: 'email_attachment_skipped', filename, reason: 'size' }));
+        continue;
+      }
+      const filepath = path.join(config.downloadPath, filename);
+      try {
+        await writeFile(filepath, attachment.content);
+        saved.push({ filename, path: filepath, contentType: attachment.contentType, size: attachment.size });
+      } catch (error) {
+        logger.warn(formatCompact({
+          op: 'email_attachment_download_failed',
+          filename,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+      }
+    }
+    return saved;
+  }
+
+  #setupImapListeners(imap: EmailImapTransport): void {
+    imap.on('mail', () => {
+      void this.#checkForNewEmails();
+    });
+    imap.on('error', (error) => {
+      logger.error('IMAP error:', error);
+    });
+    imap.on('end', () => {
+      logger.debug(formatCompact({
+        op: 'disconnect',
+        endpoint: this.#options.config.name,
+        mode: 'imap',
+      }));
+    });
+  }
+
+  #startEmailCheck(): void {
+    if (this.#checkTimer) return;
+    this.#checkTimer = setInterval(() => {
+      void this.#checkForNewEmails();
+    }, this.#options.config.imap.checkInterval);
+    void this.#checkForNewEmails();
+  }
+
+  async #checkForNewEmails(): Promise<void> {
+    if (!this.#imap || !this.#started) return;
+    try {
+      await new Promise<void>((resolve, reject) => {
+        this.#imap!.openBox(this.#options.config.imap.mailbox, false, (error) => {
+          if (error) return reject(error);
+          this.#imap!.search(['UNSEEN'], (searchError, results) => {
+            if (searchError) return reject(searchError);
+            if (!results.length) return resolve();
+            const fetch = this.#imap!.fetch(results, {
+              bodies: '',
+              markSeen: this.#options.config.imap.markSeen,
+            });
+            fetch.on('message', (msg, seqno) => {
+              this.#handleImapMessage(msg, seqno);
+            });
+            fetch.once('error', (fetchError) => reject(fetchError));
+            fetch.once('end', () => resolve());
+          });
+        });
+      });
+    } catch (error) {
+      logger.error('Error checking for new emails:', error);
+    }
+  }
+
+  #handleImapMessage(msg: EmailImapFetchMessage, _seqno: number): void {
+    let body = '';
+    let uid = 0;
+    msg.on('body', (stream) => {
+      stream.on('data', (chunk: Buffer | string) => {
+        body += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+      });
+    });
+    msg.once('attributes', (attrs) => {
+      uid = attrs.uid ?? 0;
+    });
+    msg.once('end', () => {
+      void simpleParser(body).then((parsed) => {
+        this.admit(parseEmailMessage(parsed, uid));
+      }).catch((error) => {
+        logger.error('Error parsing email:', error);
+      });
+    });
+  }
+}

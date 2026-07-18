@@ -21,8 +21,12 @@ export class ConfigSchemaCollisionError extends Error {
 }
 
 export class ConfigValidationError extends Error {
-  constructor(readonly issues: readonly string[]) {
-    super(`Invalid Plugin config:\n${issues.map((issue) => `- ${issue}`).join('\n')}`);
+  constructor(
+    readonly issues: readonly string[],
+    /** Source config file name, when known (e.g. `zhin.config.yml`). */
+    readonly source?: string,
+  ) {
+    super(`Invalid Plugin config${source ? ` in ${source}` : ''}:\n${issues.map((issue) => `- ${issue}`).join('\n')}`);
     this.name = 'ConfigValidationError';
   }
 }
@@ -31,6 +35,8 @@ export class ConfigComposer {
   async compose(
     graph: ProjectGraph,
     input: RuntimeConfigDocument = {},
+    /** Source config file name, annotated on ConfigValidationError. */
+    source?: string,
   ): Promise<ComposedConfig> {
     // Effective schemas include child namespaces for whole-tree validation;
     // ownSchemas retain each package's private configuration contract.
@@ -43,6 +49,9 @@ export class ConfigComposer {
         await composeNode(child, ownSchemas),
       ] as const),
     );
+    // Host-level keys (`http`, `database`, `ai`, `speech`, `assistant`,
+    // `collaboration`, `log_level`) are consumed by CLI Root installers /
+    // start-command, not Plugin ConfigViews.
     const effectiveSchema: JsonSchema = Object.freeze({
       type: 'object',
       additionalProperties: false,
@@ -56,14 +65,48 @@ export class ConfigComposer {
             childSchemas.map(([key, schema]) => [key, withDefault(schema)]),
           ),
         },
+        http: Object.freeze({
+          type: 'object',
+          additionalProperties: true,
+        }),
+        database: Object.freeze({
+          type: 'object',
+          additionalProperties: true,
+        }),
+        ai: Object.freeze({
+          type: 'object',
+          additionalProperties: true,
+        }),
+        speech: Object.freeze({
+          type: 'object',
+          additionalProperties: true,
+        }),
+        assistant: Object.freeze({
+          type: 'object',
+          additionalProperties: true,
+        }),
+        collaboration: Object.freeze({
+          type: 'object',
+          additionalProperties: true,
+        }),
+        log_level: Object.freeze({
+          type: ['string', 'number'],
+        }),
       },
     });
 
     const document = structuredClone(input) as Record<string, unknown>;
-    const validate = new Ajv2020({ allErrors: true, useDefaults: true, strict: true })
-      .compile(effectiveSchema);
+    const validate = new Ajv2020({
+      allErrors: true,
+      useDefaults: true,
+      strict: true,
+      // 当前内置 schema 无需 union（log_level 的 ['string','number'] 是 type 数组，
+      // 不触发 allowUnionTypes）；保留此项是面向未来插件 schema 可能出现的
+      // anyOf/oneOf 标量 union，避免届时 Ajv strict 模式直接报错。
+      allowUnionTypes: true,
+    }).compile(effectiveSchema);
     if (!validate(document)) {
-      throw new ConfigValidationError(formatErrors(validate.errors ?? []));
+      throw new ConfigValidationError(formatErrors(validate.errors ?? []), source);
     }
 
     const views = new Map<PluginId, unknown>();
@@ -175,5 +218,17 @@ function requireOwnSchema(
 }
 
 function formatErrors(errors: readonly ErrorObject[]): readonly string[] {
-  return errors.map((error) => `${error.instancePath || '/'} ${error.message ?? error.keyword}`);
+  return errors.map((error) => {
+    const base = `${error.instancePath || '/'} ${error.message ?? error.keyword}`;
+    // Ajv params pinpoint the offending key / allowed enum so users can find
+    // the typo'd field instead of a bare "must NOT have additional properties".
+    const params = error.params as Record<string, unknown> | undefined;
+    if (typeof params?.additionalProperty === 'string') {
+      return `${base} (additionalProperty: ${params.additionalProperty})`;
+    }
+    if (Array.isArray(params?.allowedValues)) {
+      return `${base} (allowedValues: ${JSON.stringify(params.allowedValues)})`;
+    }
+    return base;
+  });
 }

@@ -1,5 +1,5 @@
 import type { SendContent } from 'zhin.js';
-import { buildChoiceKeyboard } from '@zhin.js/game-shared';
+import { buildChoiceKeyboard } from '@zhin.js/game-kit';
 import type { AdvProfileRow, AdvSessionRow } from './models.js';
 import { formatProgressCompact } from './profile-format.js';
 import {

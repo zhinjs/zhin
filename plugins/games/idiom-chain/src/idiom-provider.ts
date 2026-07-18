@@ -3,7 +3,7 @@
  * @see https://www.npmjs.com/package/chinese-idiom-chengyu
  */
 import { createRequire } from 'node:module';
-import { secureRandomItem } from '@zhin.js/game-shared';
+import { secureRandomItem } from '@zhin.js/game-kit';
 
 const require = createRequire(import.meta.url);
 

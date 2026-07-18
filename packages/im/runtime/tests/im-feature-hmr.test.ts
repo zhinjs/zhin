@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -153,7 +153,7 @@ async function createProject(): Promise<string> {
     'middlewares/trace.ts',
     'components/status.tsx',
   ]) await touch(join(root, file));
-  return root;
+  return realpath(root);
 }
 
 async function featurePackage(root: string, directory: string, name: string): Promise<void> {

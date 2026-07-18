@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -55,7 +55,9 @@ describe('NativeDevelopmentModuleRuntime', () => {
     const source = join(root, 'commands/status.ts');
     const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root });
     const observed = new Promise<string>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('watch timeout')), 2_000);
+      // fs events can be delayed for seconds when the harness runs suites in
+      // parallel; keep the budget well above that instead of a tight 2s.
+      const timeout = setTimeout(() => reject(new Error('watch timeout')), 15_000);
       const dispose = runtime.watch((changed) => {
         if (changed !== source) return;
         clearTimeout(timeout);
@@ -64,9 +66,18 @@ describe('NativeDevelopmentModuleRuntime', () => {
       });
     });
 
-    await writeFile(source, 'export default 1;\n');
-    await expect(observed).resolves.toBe(source);
-    await runtime.close();
+    // fs.watch attaches asynchronously on some platforms; keep rewriting until
+    // the watcher observes a change so the attach race cannot lose the event.
+    const writer = setInterval(() => {
+      void writeFile(source, `export default ${Date.now()};\n`).catch(() => {});
+    }, 200);
+    try {
+      await writeFile(source, 'export default 1;\n');
+      await expect(observed).resolves.toBe(source);
+    } finally {
+      clearInterval(writer);
+      await runtime.close();
+    }
   });
 });
 
@@ -75,5 +86,5 @@ async function fixture(): Promise<string> {
   temporary.push(root);
   await mkdir(join(root, 'commands'), { recursive: true });
   await writeFile(join(root, 'package.json'), '{"type":"module"}\n');
-  return root;
+  return realpath(root);
 }
