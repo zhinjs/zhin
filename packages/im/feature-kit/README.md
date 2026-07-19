@@ -87,4 +87,4 @@ pnpm --filter @zhin.js/feature-kit build
 
 - [Plugin Monorepo 与 Feature Provider](../../../docs/architecture/target-implementation/plugin-monorepo-and-features.md)
 - [Config、Discovery 与 HMR](../../../docs/architecture/target-implementation/config-discovery-hmr.md)
-- [Plugin-first 目标架构](../../../TARGET-ARCHITECTURE.md)
+- [Plugin-first 目标架构](../../docs/target-architecture.md)

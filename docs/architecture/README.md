@@ -8,7 +8,7 @@
 
 | 文档 | 说明 |
 |------|------|
-| [Plugin-first 目标架构 SSOT](../../TARGET-ARCHITECTURE.md) | TypeScript/HMR Plugin 树、PluginScope、基础 Resource、Capability、Runtime Authority 与流程图 |
+| [Plugin-first 目标架构 SSOT](../target-architecture.md) | TypeScript/HMR Plugin 树、PluginScope、基础 Resource、Capability、Runtime Authority 与流程图 |
 | [目标技术实现蓝图](target-implementation/) | 规范性模块分层、依赖预算与关键 TypeScript 实现 |
 | [Plugin Monorepo 与 Feature Provider](target-implementation/plugin-monorepo-and-features.md) | 一级 workspace、静态 package graph、可发布 Feature contract 与 CLI pipeline |
 | [Plugin Runtime 实现状态](target-implementation/greenfield-bootstrap.md) | 正式 Runtime 已实现链路、验证与明确迁移边界 |

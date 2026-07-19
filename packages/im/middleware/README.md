@@ -17,4 +17,4 @@ Middleware 不直接持有 Root 或运行时 registry；每次执行使用同一
 
 验证：`pnpm --filter @zhin.js/middleware test && pnpm --filter @zhin.js/middleware build`。
 
-生命周期与 HMR 说明见 [目标架构](../../../TARGET-ARCHITECTURE.md)。
+生命周期与 HMR 说明见 [目标架构](../../docs/target-architecture.md)。

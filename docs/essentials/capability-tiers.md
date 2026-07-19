@@ -73,7 +73,7 @@ flowchart LR
 
 ## Stable（Core）还包含什么
 
-除 Sandbox 外，下列**不**需要开启 Advanced 开关。**Agent / MCP 相关能力需已安装 `@zhin.js/agent`**（脚手架启用 AI 时会写入）；4.x 默认 `zhin.js` 为 **IM-only**（见 [安装分档](/snippets/install-tiers)）：
+除 Sandbox 外，下列**不**需要开启 Advanced 开关。**Agent / MCP 相关能力需已安装 `@zhin.js/agent`**（脚手架启用 AI 时会写入）；4.x 默认 `zhin.js` 为 **IM-only**（见 [安装分档](/essentials/install-tiers)）：
 
 - 插件化（`definePlugin`）、热重载、TypeScript
 - Feature：Tool / Skill / Schedule / 数据库（见 [ADR 0031](/adr/0031-schedule-facility-replace-cron)）

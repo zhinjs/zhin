@@ -1,6 +1,6 @@
 # Target Implementation Blueprint
 
-> 状态：Plugin-first 目标架构的规范性技术实现蓝图。领域目标见 [TARGET-ARCHITECTURE.md](../../../TARGET-ARCHITECTURE.md)，本目录回答模块放在哪里、interface 如何设计、关键代码如何实现。
+> 状态：Plugin-first 目标架构的规范性技术实现蓝图。领域目标见 [target-architecture.md](../../target-architecture.md)，本目录回答模块放在哪里、interface 如何设计、关键代码如何实现。
 
 ## 1. 设计目标
 

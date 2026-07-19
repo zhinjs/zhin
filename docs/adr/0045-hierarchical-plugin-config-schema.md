@@ -206,7 +206,7 @@ Capability snapshot 与 ConfigView 必须来自同一 Plugin generation，不能
 
 ## 参考
 
-- [Plugin-first 目标架构](../../TARGET-ARCHITECTURE.md)
+- [Plugin-first 目标架构](../target-architecture.md)
 - [ADR 0043](./0043-unify-capability-roots.md)
 - [ADR 0044](./0044-typescript-hmr-plugin-kernel.md)
 - [ADR 0047](./0047-standalone-plugin-and-root-lifecycle-domain.md)

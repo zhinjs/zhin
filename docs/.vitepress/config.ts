@@ -153,6 +153,7 @@ const useDocsSidebar: DefaultTheme.SidebarItem[] = [
       { text: '生态与资源', link: '/ecosystem' },
       { text: 'Docker 部署', link: '/getting-started/docker' },
       { text: '能力分档与定位', link: '/essentials/capability-tiers' },
+      { text: '安装分档', link: '/essentials/install-tiers' },
       { text: '学习路径', link: '/essentials/learning-paths' },
       { text: '疑难排查', link: '/troubleshooting/' },
   ]),
@@ -202,6 +203,7 @@ const devDocsSidebar: DefaultTheme.SidebarItem[] = [
       { text: 'Monorepo（无 submodule）', link: '/contributing/monorepo-no-submodules' },
   ]),
   sidebarGroup('架构深读', [
+      { text: '目标架构 SSOT', link: '/target-architecture' },
       { text: '架构索引', link: '/architecture/' },
       { text: '架构概览（用户向）', link: '/architecture-overview' },
       { text: 'Segment 内容模型', link: '/architecture/segment-content-model' },

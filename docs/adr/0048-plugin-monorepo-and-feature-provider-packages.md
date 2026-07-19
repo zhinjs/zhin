@@ -202,7 +202,7 @@ CLI 只扫描 `packages/*` 和 `plugins/*` 的直接子目录。发布过程通�
 
 ## 参考
 
-- [Plugin-first 目标架构](../../TARGET-ARCHITECTURE.md)
+- [Plugin-first 目标架构](../target-architecture.md)
 - [目标实现蓝图](../architecture/target-implementation/README.md)
 - [Plugin Monorepo 与 Feature 技术实现](../architecture/target-implementation/plugin-monorepo-and-features.md)
 - [ADR 0043](./0043-unify-capability-roots.md)

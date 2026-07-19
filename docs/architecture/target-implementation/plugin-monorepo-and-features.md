@@ -299,8 +299,8 @@ export interface PluginDefinition<TConfig = unknown> {
 
 | 变更 | 最小 prepare 单元 |
 |---|---|
-| `commands/**/<name>.ts|tsx` | 单个层级 Command Slot + Command projection |
-| `components/**/<name>.ts|tsx` | 单个 Component Slot + owner-aware projection |
+| `commands/**/<name>.ts\|tsx` | 单个层级 Command Slot + Command projection |
+| `components/**/<name>.ts\|tsx` | 单个 Component Slot + owner-aware projection |
 | `middlewares/**/<name>.ts` | 单个 Middleware Slot + inbound/outbound projection |
 | `adapters/**/<name>.ts` | 单个 Adapter Slot + generation handoff；旧 Endpoint 按 lease 延迟销毁 |
 | `agents/planner.agent.md` | 单个 Agent Slot + Agent projection |

@@ -16,4 +16,4 @@ Node 运行时不执行 TSX；客户端构建 adapter 负责静态产物。Compo
 
 验证：`pnpm --filter @zhin.js/component test && pnpm --filter @zhin.js/component build`。
 
-出站契约见 [目标架构](../../../TARGET-ARCHITECTURE.md)。
+出站契约见 [目标架构](../../docs/target-architecture.md)。

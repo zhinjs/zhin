@@ -173,7 +173,7 @@ Host 不保存第二份 Plugin registry，不跨过 Root 直接 stop child，也
 
 ## 参考
 
-- [Plugin-first 目标架构](../../TARGET-ARCHITECTURE.md)
+- [Plugin-first 目标架构](../target-architecture.md)
 - [ADR 0044](./0044-typescript-hmr-plugin-kernel.md)
 - [ADR 0045](./0045-hierarchical-plugin-config-schema.md)
 - [ADR 0046](./0046-convention-pages-and-plugin-navigation.md)

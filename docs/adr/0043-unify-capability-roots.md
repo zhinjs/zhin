@@ -198,7 +198,7 @@ ADR 0048 取代本 ADR 中“八类能力由框架固定”“Feature 由 Root P
 
 ## 参考
 
-- [目标架构 SSOT](../../TARGET-ARCHITECTURE.md)
+- [目标架构 SSOT](../target-architecture.md)
 - [ADR 0042](./0042-capability-features-and-on-demand-ingress.md)
 - [ADR 0045](./0045-hierarchical-plugin-config-schema.md)
 - [ADR 0046](./0046-convention-pages-and-plugin-navigation.md)
