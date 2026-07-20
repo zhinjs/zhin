@@ -282,13 +282,21 @@ export function extractInboundAudioUrl(data: MilkyIncomingMessage): string | und
   return undefined;
 }
 
-export function senderDisplayName(data: MilkyIncomingMessage): string {
+/** 发送者显示名（群名片/群昵称/好友昵称）；没有可靠的显示名时返回 undefined。 */
+export function senderNickname(data: MilkyIncomingMessage): string | undefined {
   const isGroup = data.message_scene === 'group';
   const name = isGroup
     ? data.group_member?.card ?? data.group_member?.nickname
     : data.friend?.nickname;
-  if (typeof name === 'string' && name) return name;
-  return String(data.sender_id);
+  return typeof name === 'string' && name ? name : undefined;
+}
+
+/** 消息段中含 @ 本机（mention 段 user_id 等于协议端上报的 self_id）。 */
+export function isMentioned(data: MilkyIncomingMessage, selfId: number | undefined): boolean {
+  if (selfId == null) return false;
+  return data.segments.some(
+    (seg) => seg.type === 'mention' && Number(seg.data?.user_id) === selfId,
+  );
 }
 
 export function formatInboundMessageId(data: MilkyIncomingMessage): string {

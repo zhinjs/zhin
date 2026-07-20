@@ -9,7 +9,8 @@ export {
   isMessageEvent,
   parseSendTarget,
   resolveNapCatConfig,
-  senderDisplayName,
+  senderNickname,
+  senderUserId,
   type MessageSegment,
   type NapCatActionRequest,
   type NapCatActionResponse,
@@ -29,6 +30,7 @@ export {
 
 export {
   InboundMessageDeduper,
+  isNapCatBotMentioned,
   isSelfMessage,
   normalizeMessage,
 } from './napcat-inbound.js';

@@ -41,6 +41,7 @@ function textMessage(overrides: Partial<DiscordInboundMessage> = {}): DiscordInb
 function createMockClient(): DiscordClientTransport & {
   emitReady: () => void;
   emitError: (error: Error) => void;
+  emitMessage: (raw: unknown) => void;
   sent: Array<{ channelId: string; options: unknown }>;
 } {
   const listeners = new Map<string, Array<(...args: unknown[]) => void>>();
@@ -152,6 +153,9 @@ function createMockClient(): DiscordClientTransport & {
       for (const listener of onceListeners.get('clientReady') ?? []) listener();
       onceListeners.delete('clientReady');
     },
+    emitMessage(raw: unknown) {
+      for (const listener of listeners.get('messageCreate') ?? []) listener(raw);
+    },
     emitError(error: Error) {
       for (const listener of listeners.get('error') ?? []) listener(error);
     },
@@ -260,6 +264,75 @@ describe('discord plugin runtime adapter', () => {
     await endpoint.stop();
     expect(mock.login).toHaveBeenCalledWith('test-token');
     expect(mock.destroy).toHaveBeenCalled();
+  });
+
+  it('marks metadata.mentioned when inbound mentions include the bot user', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const mock = createMockClient();
+    const endpoint = new DiscordGatewayEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
+      gateway,
+      config: baseConfig,
+      createClient: () => mock,
+    });
+
+    await endpoint.start();
+    endpoint.open();
+    mock.emitMessage({
+      id: 'msg-at',
+      content: '<@bot-1> hi',
+      author: { id: 'user-1', username: 'alice', displayName: 'alice', bot: false },
+      channel: { id: 'chan-1', type: 0 },
+      member: null,
+      guild: null,
+      createdTimestamp: 1_700_000_000_000,
+      attachments: new Map(),
+      embeds: [],
+      stickers: new Map(),
+      mentions: { users: { has: (id: string) => id === 'bot-1' } },
+    });
+
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    expect(receive).toHaveBeenCalledWith(expect.objectContaining({
+      target: 'chan-1',
+      metadata: expect.objectContaining({ mentioned: true }),
+    }));
+
+    await endpoint.stop();
+  });
+
+  it('does not mark metadata.mentioned when mentions target someone else', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: false }));
+    const mock = createMockClient();
+    const endpoint = new DiscordGatewayEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
+      gateway: { receive, send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createClient: () => mock,
+    });
+
+    await endpoint.start();
+    endpoint.open();
+    mock.emitMessage({
+      id: 'msg-at-other',
+      content: '<@user-2> hi',
+      author: { id: 'user-1', username: 'alice', displayName: 'alice', bot: false },
+      channel: { id: 'chan-1', type: 0 },
+      member: null,
+      guild: null,
+      createdTimestamp: 1_700_000_000_000,
+      attachments: new Map(),
+      embeds: [],
+      stickers: new Map(),
+      mentions: { users: { has: (id: string) => id === 'user-2' } },
+    });
+
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    const metadata = receive.mock.calls[0]?.[0]?.metadata as Record<string, unknown> | undefined;
+    expect(metadata?.mentioned).toBeUndefined();
+
+    await endpoint.stop();
   });
 
   it('does not admit inbound while closed', async () => {

@@ -53,6 +53,24 @@ export interface DingTalkEvent extends DingTalkMessage {
   readonly [key: string]: unknown;
 }
 
+/**
+ * 钉钉回调消息 @ 机器人判定：机器人被 @ 时回调带 `isInAtList: true`；
+ * 部分回调形态的 `atUserIds` / `atUsers[].dingtalkId` 会包含机器人 robotCode（来自配置）。
+ * 两者都不满足则不标注。
+ */
+export function isDingtalkBotMentioned(event: DingTalkMessage, robotCode?: string): boolean {
+  const extra = event as DingTalkMessage & {
+    readonly isInAtList?: unknown;
+    readonly atUserIds?: unknown;
+  };
+  if (extra.isInAtList === true) return true;
+  if (!robotCode) return false;
+  if (Array.isArray(extra.atUserIds) && extra.atUserIds.some((id) => String(id) === robotCode)) {
+    return true;
+  }
+  return (event.atUsers ?? []).some((user) => user.dingtalkId === robotCode);
+}
+
 export interface AccessToken {
   token: string;
   expires_in: number;

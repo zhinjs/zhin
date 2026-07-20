@@ -193,8 +193,9 @@ describe('napcat plugin runtime adapter', () => {
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       target: 'private:10001',
       content: '你好',
-      sender: 'Alice',
+      sender: '10001',
       id: '42',
+      metadata: expect.objectContaining({ nickname: 'Alice' }),
     }));
 
     await endpoint.stop();
@@ -248,6 +249,107 @@ describe('napcat plugin runtime adapter', () => {
       raw_message: 'self',
     });
     expect(receive).not.toHaveBeenCalled();
+    await endpoint.stop();
+  });
+
+  it('marks metadata.mentioned when group message @s the bot uin (self_id)', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+    const ws = createMockWs();
+    const endpoint = new NapCatWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'napcat'),
+      gateway: { receive, send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createWebSocket: () => {
+        queueMicrotask(() => ws.emitOpen());
+        return ws;
+      },
+    });
+    await endpoint.start();
+    endpoint.open();
+    endpoint.admit({
+      post_type: 'message',
+      message_type: 'group',
+      message_id: 101,
+      group_id: 200,
+      user_id: 2,
+      self_id: 10001,
+      raw_message: '在吗',
+      message: [
+        { type: 'at', data: { qq: 10001 } },
+        { type: 'text', data: { text: ' 在吗' } },
+      ],
+      sender: { user_id: 2, nickname: 'bob', role: 'member' },
+    });
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    expect(receive).toHaveBeenCalledWith(expect.objectContaining({
+      target: 'group:200',
+      sender: '2',
+      metadata: expect.objectContaining({ mentioned: true }),
+    }));
+    await endpoint.stop();
+  });
+
+  it('does not mark metadata.mentioned when @ targets someone else', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: false }));
+    const ws = createMockWs();
+    const endpoint = new NapCatWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'napcat'),
+      gateway: { receive, send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createWebSocket: () => {
+        queueMicrotask(() => ws.emitOpen());
+        return ws;
+      },
+    });
+    await endpoint.start();
+    endpoint.open();
+    endpoint.admit({
+      post_type: 'message',
+      message_type: 'group',
+      message_id: 102,
+      group_id: 200,
+      user_id: 2,
+      self_id: 10001,
+      message: [
+        { type: 'at', data: { qq: 10002 } },
+        { type: 'text', data: { text: ' 在吗' } },
+      ],
+    });
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    const metadata = receive.mock.calls[0]?.[0]?.metadata as Record<string, unknown>;
+    expect(metadata?.mentioned).toBeUndefined();
+    await endpoint.stop();
+  });
+
+  it("does not mark metadata.mentioned for qq='all'", async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: false }));
+    const ws = createMockWs();
+    const endpoint = new NapCatWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'napcat'),
+      gateway: { receive, send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createWebSocket: () => {
+        queueMicrotask(() => ws.emitOpen());
+        return ws;
+      },
+    });
+    await endpoint.start();
+    endpoint.open();
+    endpoint.admit({
+      post_type: 'message',
+      message_type: 'group',
+      message_id: 103,
+      group_id: 200,
+      user_id: 2,
+      self_id: 10001,
+      message: [
+        { type: 'at', data: { qq: 'all' } },
+        { type: 'text', data: { text: ' 通知' } },
+      ],
+    });
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    const metadata = receive.mock.calls[0]?.[0]?.metadata as Record<string, unknown>;
+    expect(metadata?.mentioned).toBeUndefined();
     await endpoint.stop();
   });
 

@@ -8,8 +8,12 @@ import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { registerIcqqAgentEndpoint } from './icqq-agent-deps.js';
 import {
   InboundMessageDeduper,
+  findIcqqNestedMessageSource,
+  isIcqqBotMentioned,
   isIcqqMessagePostType,
   normalizeIcqqInboundMessage,
+  quotedPayloadFromIcqqSource,
+  resolveIcqqQuoteIdFromEvent,
   shouldSkipSelfInboundMessage,
   unwrapIcqqIpcEventPayload,
   type IcqqIpcMessageEvent,
@@ -403,6 +407,8 @@ export class IcqqIpcEndpoint implements EndpointInstance {
   /** Test / internal: admit when open. */
   admit(msg: IcqqInboundMessage): void {
     if (!this.#open) return;
+    // 新 Runtime Message.content 为纯文本：@ 本机（uin = name）只能经 metadata 传递
+    const mentioned = isIcqqBotMentioned({ uin: this.name, rawMessage: msg.content });
     void this.#options.gateway.receive({
       adapter: this.#options.id,
       target: msg.target,
@@ -413,6 +419,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
         endpoint: this.name,
         channelType: msg.channelType,
         ...msg.metadata,
+        ...(mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       logger.warn(formatCompact({
@@ -465,10 +472,10 @@ export class IcqqIpcEndpoint implements EndpointInstance {
       content: formatInboundContent(normalized.rawMessage),
       sender: normalized.userId,
       channelType: normalized.channelType,
-      metadata: {
+      metadata: buildIcqqQuoteMetadata(data, {
         nickname: normalized.nickname,
         senderRole: normalized.senderRole,
-      },
+      }),
     });
   }
 
@@ -496,6 +503,37 @@ export class IcqqIpcEndpoint implements EndpointInstance {
       },
     });
   }
+}
+
+/**
+ * 组装入站 metadata：在基础字段上补充 quote 链路信息。
+ * - quote_id：被引用消息 id（resolveIcqqQuoteIdFromEvent，无则不写）
+ * - quote_sender_id / quote_sender_name / quote_content：source 可用时的平铺摘要
+ */
+function buildIcqqQuoteMetadata(
+  data: IcqqIpcMessageEvent,
+  base: Record<string, unknown>,
+): Record<string, unknown> {
+  const metadata: Record<string, unknown> = { ...base };
+  const quoteId = resolveIcqqQuoteIdFromEvent(data);
+  if (quoteId) metadata.quote_id = quoteId;
+  const quoted = quotedPayloadFromIcqqSource(findIcqqNestedMessageSource(data));
+  if (quoted?.sender?.id) metadata.quote_sender_id = quoted.sender.id;
+  if (quoted?.sender?.name) metadata.quote_sender_name = quoted.sender.name;
+  const quoteText = quoted
+    ? (typeof quoted.content === 'string'
+        ? quoted.content
+        : quoted.content
+            .map((seg) =>
+              seg && typeof seg === 'object' && seg.type === 'text'
+                ? String((seg.data as { text?: unknown } | undefined)?.text ?? '')
+                : '',
+            )
+            .join('')
+      ).trim() || quoted.raw || ''
+    : '';
+  if (quoteText) metadata.quote_content = quoteText;
+  return metadata;
 }
 
 async function defaultCreateIpc(config: ResolvedIcqqConfig): Promise<IcqqIpcTransport> {

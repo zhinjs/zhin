@@ -47,3 +47,35 @@ export function normalizeMessage(message: MessageSegment[] | string): MessageSeg
   }
   return [];
 }
+
+const CQ_AT_RE = /\[CQ:at,qq=([^\],\s]+)\]/g;
+
+function atTargetMatchesUin(target: unknown, uin: string): boolean {
+  const qq = String(target ?? '').trim();
+  return Boolean(qq) && qq !== 'all' && Number(qq) === Number(uin);
+}
+
+/**
+ * OneBot11 mentioned 判定：消息段 {type:'at', data:{qq}} 的 qq 等于本机 uin
+ * （事件 self_id）时为 true；`qq === 'all'` 不算。兼容 CQ 字符串形式。
+ */
+export function isNapCatBotMentioned(ev: {
+  self_id?: number | string;
+  message?: MessageSegment[] | string;
+}): boolean {
+  if (ev.self_id == null) return false;
+  const uin = String(ev.self_id).trim();
+  if (!uin) return false;
+  const segments = normalizeMessage(ev.message ?? []);
+  for (const seg of segments) {
+    if (seg.type === 'at' && atTargetMatchesUin(seg.data?.qq, uin)) return true;
+  }
+  const text = segments
+    .map((seg) => (seg.type === 'text' ? String(seg.data?.text ?? '') : ''))
+    .join('');
+  if (!text) return false;
+  for (const match of text.matchAll(CQ_AT_RE)) {
+    if (atTargetMatchesUin(match[1], uin)) return true;
+  }
+  return false;
+}

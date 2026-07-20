@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   InboundMessageDeduper,
   icqqElementsToSegments,
+  isIcqqBotMentioned,
   isIcqqGroupTempPrivateMessage,
   isIcqqMessagePostType,
   normalizeIcqqInboundMessage,
@@ -329,5 +330,50 @@ describe("group temp session", () => {
     expect(normalized?.channelType).toBe("private");
     expect(normalized?.channelId).toBe("1659488338");
     expect(normalized?.channelParentGroupId).toBe("123456789");
+  });
+});
+
+
+describe("isIcqqBotMentioned", () => {
+  const uin = "10001";
+
+  it("raw_message CQ 码命中本机 uin", () => {
+    expect(isIcqqBotMentioned({ uin, rawMessage: "[CQ:at,qq=10001] 在吗" })).toBe(true);
+    expect(isIcqqBotMentioned({ uin, rawMessage: "[CQ:at,qq=10001]" })).toBe(true);
+  });
+
+  it("raw_message CQ 码 @ 他人 / @all 不命中", () => {
+    expect(isIcqqBotMentioned({ uin, rawMessage: "[CQ:at,qq=10002] 在吗" })).toBe(false);
+    expect(isIcqqBotMentioned({ uin, rawMessage: "[CQ:at,qq=all]" })).toBe(false);
+    expect(isIcqqBotMentioned({ uin, rawMessage: "普通消息" })).toBe(false);
+  });
+
+  it("QQ 频道 <@!uin> 形态命中", () => {
+    expect(isIcqqBotMentioned({ uin, rawMessage: "<@!10001> 在吗" })).toBe(true);
+    expect(isIcqqBotMentioned({ uin, rawMessage: "<@!10002> 在吗" })).toBe(false);
+  });
+
+  it("content at 段命中本机 uin", () => {
+    const content = [
+      { type: "at", data: { qq: "10001", user_id: "10001", id: "10001" } },
+      { type: "text", data: { text: " 在吗" } },
+    ];
+    expect(isIcqqBotMentioned({ uin, content })).toBe(true);
+    expect(
+      isIcqqBotMentioned({
+        uin,
+        content: [{ type: "at", data: { qq: "10002" } }],
+      }),
+    ).toBe(false);
+    expect(
+      isIcqqBotMentioned({
+        uin,
+        content: [{ type: "at", data: { qq: "all" } }],
+      }),
+    ).toBe(false);
+  });
+
+  it("uin 为空时不命中", () => {
+    expect(isIcqqBotMentioned({ uin: "", rawMessage: "[CQ:at,qq=10001]" })).toBe(false);
   });
 });

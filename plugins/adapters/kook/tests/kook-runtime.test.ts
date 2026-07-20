@@ -220,6 +220,33 @@ describe('kook plugin runtime adapter', () => {
     expect(mock.disconnect).toHaveBeenCalled();
   });
 
+  it('marks metadata.mentioned when channel message @s the bot', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const mock = createMockClient(); // self_id = 'bot-1'
+    const endpoint = new KookWebsocketEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
+      gateway,
+      config: baseConfig,
+      createClient: () => mock,
+    });
+    await endpoint.start();
+    endpoint.open();
+
+    endpoint.admit(textMessage({ content: '(met)bot-1(met) 在吗' }));
+    await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
+    expect(receive).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      target: 'channel:chan-1',
+      metadata: expect.objectContaining({ mentioned: true }),
+    }));
+
+    endpoint.admit(textMessage({ id: 'msg-2', content: '(met)someone-else(met) 在吗' }));
+    await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
+    const metadata = receive.mock.calls[1]?.[0]?.metadata as Record<string, unknown>;
+    expect(metadata?.mentioned).toBeUndefined();
+    await endpoint.stop();
+  });
+
   it('does not admit inbound while closed', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const mock = createMockClient();

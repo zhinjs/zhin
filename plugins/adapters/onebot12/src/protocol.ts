@@ -244,11 +244,33 @@ export function formatInboundContent(ev: OneBot12Event): string {
   return '';
 }
 
-export function senderDisplayName(ev: OneBot12Event): string {
+/**
+ * Runtime Message sender 必须是用户 ID（agent bridge 以 sender 与 endpointMaster 比对）。
+ * 显示名经 {@link senderNickname} 放入 metadata.nickname。
+ */
+export function senderUserId(ev: OneBot12Event): string {
+  return ev.user_id ?? '';
+}
+
+/** 事件携带的发送者显示名（`user.name` / `qq.nickname`），没有则返回 undefined。 */
+export function senderNickname(ev: OneBot12Event): string | undefined {
   const record = ev as Record<string, unknown>;
   const name = record['user.name'] ?? record['qq.nickname'];
   if (typeof name === 'string' && name) return name;
-  return ev.user_id ?? '';
+  return undefined;
+}
+
+/**
+ * 判断入站消息是否 @ 了本机：OneBot12 提及段为 `{type:'mention', data:{user_id}}`，
+ * 目标 user_id 等于事件 self.user_id（self 为 {platform, user_id} 对象）时视为提及。
+ * 新 Plugin Runtime 的 Message.content 为纯文本，mention 信息只能经 metadata.mentioned 传递。
+ */
+export function isBotMentioned(ev: OneBot12Event): boolean {
+  const selfId = ev.self?.user_id;
+  if (!selfId || !Array.isArray(ev.message)) return false;
+  return ev.message.some(
+    (seg) => seg.type === 'mention' && String(seg.data?.['user_id'] ?? '') === selfId,
+  );
 }
 
 /**

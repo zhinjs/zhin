@@ -2,7 +2,12 @@
  * NapCat 入站消息治理测试：去重、自发过滤、消息归一化
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { InboundMessageDeduper, isSelfMessage, normalizeMessage } from '../src/napcat-inbound.js';
+import {
+  InboundMessageDeduper,
+  isNapCatBotMentioned,
+  isSelfMessage,
+  normalizeMessage,
+} from '../src/napcat-inbound.js';
 import type { NapCatMessageEvent, MessageSegment } from '../src/protocol.js';
 
 describe('InboundMessageDeduper', () => {
@@ -67,5 +72,58 @@ describe('normalizeMessage', () => {
   it('非法输入返回空数组', () => {
     expect(normalizeMessage(null as any)).toEqual([]);
     expect(normalizeMessage(undefined as any)).toEqual([]);
+  });
+});
+
+describe('isNapCatBotMentioned', () => {
+  it('at 段 qq 等于 self_id 时应判为 mentioned', () => {
+    expect(isNapCatBotMentioned({
+      self_id: 10001,
+      message: [
+        { type: 'at', data: { qq: 10001 } },
+        { type: 'text', data: { text: ' 在吗' } },
+      ],
+    })).toBe(true);
+  });
+
+  it('qq 为字符串形式时同样匹配', () => {
+    expect(isNapCatBotMentioned({
+      self_id: '10001',
+      message: [{ type: 'at', data: { qq: '10001' } }],
+    })).toBe(true);
+  });
+
+  it('at 其他人不应判为 mentioned', () => {
+    expect(isNapCatBotMentioned({
+      self_id: 10001,
+      message: [{ type: 'at', data: { qq: 10002 } }],
+    })).toBe(false);
+  });
+
+  it("qq='all' 不算 mentioned", () => {
+    expect(isNapCatBotMentioned({
+      self_id: 10001,
+      message: [{ type: 'at', data: { qq: 'all' } }],
+    })).toBe(false);
+  });
+
+  it('缺少 self_id 时返回 false', () => {
+    expect(isNapCatBotMentioned({
+      message: [{ type: 'at', data: { qq: 10001 } }],
+    })).toBe(false);
+  });
+
+  it('CQ 字符串形式 [CQ:at,qq=uin] 也应判为 mentioned', () => {
+    expect(isNapCatBotMentioned({
+      self_id: 10001,
+      message: '[CQ:at,qq=10001] 在吗',
+    })).toBe(true);
+  });
+
+  it('CQ 字符串 @全体 不算 mentioned', () => {
+    expect(isNapCatBotMentioned({
+      self_id: 10001,
+      message: '[CQ:at,qq=all] 通知',
+    })).toBe(false);
   });
 });

@@ -18,6 +18,7 @@ import {
   type ContextRepository,
   type IMSessionStore,
   type ImTranscriptStore,
+  type ImTranscriptWriteInput,
   type MemoryAgentSessionStore,
   MemoryIMSessionStore,
   ConversationMemory,
@@ -53,6 +54,8 @@ import {
 import { processTextTurn, processMultimodalTurn } from '../turn/turn-pipeline.js';
 import { resolveContextTailMessageLimit } from '../context/context-tail-limit.js';
 import { archiveSessionByKey } from '../session/session-io.js';
+import { recordPassiveGroupMessage as recordPassiveGroupMessageInternal } from '../session/passive-group-session.js';
+import type { CollaborationScene } from '../collaboration/types.js';
 import { asPrivate } from '../internal/as-private.js';
 import { PromptController } from '../turn/prompt-controller.js';
 import { getActiveTurnTracker, type ScheduleTurnContext } from '../internal/turn-context.js';
@@ -324,6 +327,31 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   upgradeProfilesToDatabase(model: Parameters<UserProfileStore['upgradeToDatabase']>[0]): void {
     this.userProfiles.upgradeToDatabase(model);
+  }
+
+  /** 当前 im_transcripts store（activateAiDatabaseStorage 后切换为 Database 实现）。 */
+  getImTranscriptStore(): ImTranscriptStore {
+    return this.imTranscriptStore;
+  }
+
+  /**
+   * 写入一条 IM 流水（im_transcripts，ADR 0009 D4）。
+   * Plugin Runtime Agent Host 在入站/回复出站处调用；调用方负责 fire-and-forget。
+   */
+  async recordImTranscript(input: ImTranscriptWriteInput): Promise<void> {
+    await this.imTranscriptStore.record(input);
+  }
+
+  /**
+   * 群/频道旁听：未触发 AI 的共享会话消息写入会话背景（Passive Group Context），
+   * 供后续 @ 触发时带入上下文。仅群/频道场景调用（私聊/sandbox 由 Host 侧过滤）。
+   */
+  async recordPassiveGroupMessage(
+    commMessage: Message,
+    rawText: string,
+    cell?: CollaborationScene,
+  ): Promise<void> {
+    await recordPassiveGroupMessageInternal(asPrivate(this), commMessage, rawText, cell);
   }
 
   initSubagentSystem(createTools: () => AgentTool[]): void {

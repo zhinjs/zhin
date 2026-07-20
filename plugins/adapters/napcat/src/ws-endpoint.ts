@@ -10,6 +10,7 @@ import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { registerNapcatAgentEndpoint } from './napcat-agent-deps.js';
 import {
   InboundMessageDeduper,
+  isNapCatBotMentioned,
   isSelfMessage,
   normalizeMessage,
 } from './napcat-inbound.js';
@@ -20,7 +21,8 @@ import {
   formatInboundTarget,
   formatOutboundSegments,
   isMessageEvent,
-  senderDisplayName,
+  senderNickname,
+  senderUserId,
   type NapCatEvent,
   type NapCatWsConfig,
 } from './protocol.js';
@@ -318,11 +320,13 @@ export class NapCatWsEndpoint implements EndpointInstance {
     }
     const target = formatInboundTarget(ev);
     const content = formatInboundContent(ev);
+    const nickname = senderNickname(ev);
+    const mentioned = isNapCatBotMentioned(ev);
     void this.#options.gateway.receive({
       adapter: this.#options.id,
       target,
       content,
-      sender: senderDisplayName(ev),
+      sender: senderUserId(ev),
       id: msgId,
       metadata: Object.freeze({
         message_type: ev.message_type,
@@ -332,6 +336,8 @@ export class NapCatWsEndpoint implements EndpointInstance {
         time: ev.time,
         self_id: ev.self_id != null ? String(ev.self_id) : undefined,
         role: ev.sender?.role,
+        ...(nickname ? { nickname } : {}),
+        ...(mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       logger.warn(formatCompact({

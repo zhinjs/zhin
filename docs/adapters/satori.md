@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/satori/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/satori/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=7b3ffe91a82fdadc -->
+<!-- sync-adapter-docs:sha256=d30f25fc8c223a0f -->
 
 # @zhin.js/adapter-satori
 
@@ -41,6 +41,8 @@ pnpm add @zhin.js/adapter-satori
 
 入站：`gateway.receive({ adapter, target: channelId, content: text, sender, id, metadata })`  
 出站：`send({ target: channelId, payload })` → Satori `message.create`（payload 已由 gateway/core 渲染；无 segment-mapper）
+
+入站 `metadata.mentioned`：消息 content 中 `<at id="…"/>` 元素的 id 等于登录 selfId（READY/事件 `login.user.id`）时置 `true`。
 
 ## 最小配置
 

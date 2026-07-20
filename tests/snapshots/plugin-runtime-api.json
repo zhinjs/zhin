@@ -53,7 +53,8 @@
     "export * from './contracts.js';",
     "export * from './im-runtime.js';",
     "export * from './message-dispatcher.js';",
-    "export * from './outbound-renderer.js';"
+    "export * from './outbound-renderer.js';",
+    "export * from './outbound-segments.js';"
   ],
   "feature-kit": [
     "export * from './catalog.js';",
@@ -110,6 +111,7 @@
     "export * from './database-host.js';",
     "export * from './dispose.js';",
     "export * from './handoff.js';",
+    "export * from './html-renderer.js';",
     "export * from './identity.js';",
     "export * from './outbound-host.js';",
     "export * from './plugin.js';",

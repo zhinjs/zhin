@@ -19,6 +19,7 @@ import { createConsoleHostModules, installConsoleHttp } from './console-host-ins
 import { installConsoleApi } from './console-api-installer.js';
 import { installHttpHost, resolveHttpConfig } from './http-host-installer.js';
 import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from './database-host-installer.js';
+import { installHtmlRendererHost, prepareHtmlRendererHost } from './html-renderer-host-installer.js';
 import { installOutboundHost } from './outbound-host-installer.js';
 import { installScheduleHost } from './schedule-host-installer.js';
 import { installAgentHost, resolveAiConfig, resolveAssistantConfigDocument, resolveCollaborationConfigDocument } from './agent-host-installer.js';
@@ -82,8 +83,9 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   const aiConfig = await resolveAiConfig(config);
   const assistantConfig = await resolveAssistantConfigDocument(config);
   const collaborationConfig = await resolveCollaborationConfigDocument(config);
-  const resolveEndpointOwner = await createEndpointOwnerResolver(config);
+  const endpointRoles = await createEndpointRoleResolver(config);
   const speechHandle = await prepareSpeechHost(await resolveSpeechConfig(config));
+  const htmlRendererHost = await prepareHtmlRendererHost();
   let complete!: () => void;
   const completed = new Promise<void>((resolve) => { complete = resolve; });
   const control: { stop(): Promise<void> } = {
@@ -111,6 +113,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
       installDatabaseHost(databaseHost)(context);
       installOutboundHost(im)(context);
       installScheduleHost()(context);
+      installHtmlRendererHost(htmlRendererHost)(context);
       installSpeechHost(speechHandle)(context);
       // Agent Host seeds presets async — must await so unmatched handler
       // and dispose hooks are registered before generation commit.
@@ -120,7 +123,8 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
         collaboration: collaborationConfig,
         im,
         projectRoot: options.root,
-        resolveEndpointOwner,
+        resolveEndpointOwner: endpointRoles.resolveOwner,
+        resolveEndpointTrusted: endpointRoles.resolveTrusted,
         extraTools: speechHandle?.tools,
         transcribeUrl: speechHandle
           ? (url) => speechHandle.transcribeUrl(url)
@@ -422,44 +426,77 @@ function parseMode(value: string | undefined): RuntimeMode {
   throw new Error(`Invalid Runtime mode: ${value || '<empty>'}`);
 }
 
-async function createEndpointOwnerResolver(
+/**
+ * Endpoint Owner（master）/ trusted 解析器。
+ * Owner 来源：plugins.<key>.master、plugins.<key>.endpoints[].owner（+ name 别名键）。
+ * trusted 来源：plugins.<key>.trusted、plugins.<key>.endpoints[].trusted（数组或空白/逗号分隔字符串），
+ * 对齐 legacy resolveSenderRoles 的 endpoint $config.trusted 语义。
+ */
+export async function createEndpointRoleResolver(
   config: RuntimeConfigDocument | ConfigDocumentPort,
-): Promise<(adapterLocalName: string, endpointId: string) => string | undefined> {
+): Promise<{
+  resolveOwner: (adapterLocalName: string, endpointId: string) => string | undefined;
+  resolveTrusted: (adapterLocalName: string, endpointId: string) => readonly string[];
+}> {
   const document = await readConfigDocumentValue(config);
   const map = new Map<string, string>();
+  const trustedMap = new Map<string, string[]>();
   if (!document || typeof document !== 'object') {
-    return () => undefined;
+    return { resolveOwner: () => undefined, resolveTrusted: () => [] };
   }
   const plugins = (document as Record<string, unknown>).plugins;
   if (!plugins || typeof plugins !== 'object' || Array.isArray(plugins)) {
-    return () => undefined;
+    return { resolveOwner: () => undefined, resolveTrusted: () => [] };
   }
+  const addTrusted = (key: string, raw: unknown) => {
+    const ids = normalizeTrustedIdList(raw);
+    if (ids.length === 0) return;
+    trustedMap.set(key, [...new Set([...(trustedMap.get(key) ?? []), ...ids])]);
+  };
   const expanded = expandEnvironmentValue(plugins, (key) => process.env[key]) as Record<string, unknown>;
   for (const [pluginKey, raw] of Object.entries(expanded)) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
     const cfg = raw as Record<string, unknown>;
+    const nameKey = cfg.name != null && String(cfg.name).trim() !== '' ? String(cfg.name) : undefined;
     if (cfg.master != null && String(cfg.master).trim() !== '') {
       const master = String(cfg.master);
       map.set(pluginKey, master);
-      if (cfg.name != null && String(cfg.name).trim() !== '') {
-        map.set(String(cfg.name), master);
-      }
+      if (nameKey) map.set(nameKey, master);
     }
+    addTrusted(pluginKey, cfg.trusted);
+    if (nameKey) addTrusted(nameKey, cfg.trusted);
     if (Array.isArray(cfg.endpoints)) {
       for (const entry of cfg.endpoints) {
         if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
         const ep = entry as Record<string, unknown>;
-        if (ep.owner == null || String(ep.owner).trim() === '') continue;
-        const owner = String(ep.owner);
-        map.set(pluginKey, owner);
-        if (ep.name != null && String(ep.name).trim() !== '') {
-          map.set(String(ep.name), owner);
+        const epName = ep.name != null && String(ep.name).trim() !== '' ? String(ep.name) : undefined;
+        if (ep.owner != null && String(ep.owner).trim() !== '') {
+          const owner = String(ep.owner);
+          map.set(pluginKey, owner);
+          if (epName) map.set(epName, owner);
         }
+        addTrusted(pluginKey, ep.trusted);
+        if (epName) addTrusted(epName, ep.trusted);
       }
     }
   }
-  return (adapterLocalName, endpointId) =>
-    map.get(adapterLocalName) ?? map.get(endpointId);
+  return {
+    resolveOwner: (adapterLocalName, endpointId) =>
+      map.get(adapterLocalName) ?? map.get(endpointId),
+    resolveTrusted: (adapterLocalName, endpointId) => [
+      ...(trustedMap.get(adapterLocalName) ?? []),
+      ...(trustedMap.get(endpointId) ?? []),
+    ],
+  };
+}
+
+/** trusted id 归一：数组逐项、字符串按空白/逗号拆分（对齐 legacy normalizeEndpointIdList）。 */
+function normalizeTrustedIdList(input: unknown): string[] {
+  if (Array.isArray(input)) return input.map((v) => String(v).trim()).filter(Boolean);
+  if (typeof input === 'string') {
+    return input.split(/[\s,]+/).map((v) => v.trim()).filter(Boolean);
+  }
+  return [];
 }
 
 async function applyRuntimeLogLevel(

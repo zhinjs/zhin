@@ -104,6 +104,17 @@ describe('icqq protocol helpers', () => {
       { type: 'at', data: { qq: '2' } },
     ])).toBe('hi[at:2]');
   });
+
+  it('treats a single segment object (non-array) as a one-element array', () => {
+    expect(formatOutboundBody({ type: 'text', data: { text: 'hi' } })).toBe('hi');
+    expect(formatOutboundBody({ type: 'image', data: { base64: 'YQ==' } }))
+      .toBe('[image:base64://YQ==]');
+    // 未知段类型不会退化为 '[object Object]'，而是按空文本段兜底
+    expect(formatOutboundBody({ type: 'html', data: { html: '<b>x</b>' } }))
+      .toBe('​');
+    // legacy { text } 简写保持原行为
+    expect(formatOutboundBody({ text: 'legacy' })).toBe('legacy');
+  });
 });
 
 describe('icqq plugin runtime adapter', () => {
@@ -138,6 +149,145 @@ describe('icqq plugin runtime adapter', () => {
       sender: '2',
       id: 'm1',
     }));
+    await endpoint.stop();
+  });
+
+  it('passes quote metadata to gateway when event carries a source', async () => {
+    const mock = createMockIpc();
+    const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const endpoint = new IcqqIpcEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
+      gateway,
+      config: baseConfig,
+      createIpc: async () => mock,
+    });
+    await endpoint.start();
+    endpoint.open();
+
+    mock.emitEvent('message.group.normal', {
+      post_type: 'message',
+      message_type: 'group',
+      group_id: 100,
+      user_id: 2,
+      message_id: 'm-quote',
+      raw_message: '收到',
+      time: 1_700_000_000,
+      sender: { user_id: 2, nickname: 'bob', role: 'member' },
+      source: {
+        message_id: 'quoted-1',
+        user_id: 3,
+        sender: { user_id: 3, nickname: 'alice' },
+        message: [{ type: 'text', text: '原文内容' }],
+        time: 1_699_999_000,
+      },
+    });
+
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    expect(receive).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'm-quote',
+      metadata: expect.objectContaining({
+        quote_id: 'quoted-1',
+        quote_sender_id: '3',
+        quote_sender_name: 'alice',
+        quote_content: '原文内容',
+      }),
+    }));
+    await endpoint.stop();
+  });
+
+  it('omits quote metadata when event has no quote source', async () => {
+    const mock = createMockIpc();
+    const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const endpoint = new IcqqIpcEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
+      gateway,
+      config: baseConfig,
+      createIpc: async () => mock,
+    });
+    await endpoint.start();
+    endpoint.open();
+
+    mock.emitEvent('message.group.normal', {
+      post_type: 'message',
+      message_type: 'group',
+      group_id: 100,
+      user_id: 2,
+      message_id: 'm-plain',
+      raw_message: 'plain',
+      time: 1_700_000_000,
+      sender: { user_id: 2, nickname: 'bob', role: 'member' },
+    });
+
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    const metadata = receive.mock.calls[0]?.[0]?.metadata as Record<string, unknown>;
+    expect(metadata?.quote_id).toBeUndefined();
+    expect(metadata?.quote_sender_id).toBeUndefined();
+    expect(metadata?.quote_content).toBeUndefined();
+    await endpoint.stop();
+  });
+
+  it('marks metadata.mentioned when group message @s the bot uin', async () => {
+    const mock = createMockIpc();
+    const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const endpoint = new IcqqIpcEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
+      gateway,
+      config: baseConfig, // name = '10001'（本机 uin）
+      createIpc: async () => mock,
+    });
+    await endpoint.start();
+    endpoint.open();
+
+    mock.emitEvent('message.group.normal', {
+      post_type: 'message',
+      message_type: 'group',
+      group_id: 100,
+      user_id: 2,
+      message_id: 'm-at',
+      raw_message: '[CQ:at,qq=10001] 在吗',
+      time: 1_700_000_000,
+      sender: { user_id: 2, nickname: 'bob', role: 'member' },
+    });
+
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    expect(receive).toHaveBeenCalledWith(expect.objectContaining({
+      target: 'group:100',
+      content: '[CQ:at,qq=10001] 在吗',
+      metadata: expect.objectContaining({ mentioned: true }),
+    }));
+    await endpoint.stop();
+  });
+
+  it('does not mark metadata.mentioned when @ targets someone else', async () => {
+    const mock = createMockIpc();
+    const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const endpoint = new IcqqIpcEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
+      gateway,
+      config: baseConfig,
+      createIpc: async () => mock,
+    });
+    await endpoint.start();
+    endpoint.open();
+
+    mock.emitEvent('message.group.normal', {
+      post_type: 'message',
+      message_type: 'group',
+      group_id: 100,
+      user_id: 2,
+      message_id: 'm-other',
+      raw_message: '[CQ:at,qq=10002] 在吗',
+      time: 1_700_000_000,
+      sender: { user_id: 2, nickname: 'bob', role: 'member' },
+    });
+
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    const metadata = receive.mock.calls[0]?.[0]?.metadata as Record<string, unknown>;
+    expect(metadata?.mentioned).toBeUndefined();
     await endpoint.stop();
   });
 

@@ -91,6 +91,8 @@ export interface DiscordInboundMessage {
   readonly embedTitles?: readonly string[];
   readonly stickerNames?: readonly string[];
   readonly replyToId?: string;
+  /** 入站 mentions 数组含 bot 用户时由 gateway connect 装配标注（Message.content 纯文本，@ 只能走 metadata）。 */
+  readonly mentionedBot?: boolean;
 }
 
 export interface DiscordButtonInbound {

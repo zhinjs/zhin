@@ -191,6 +191,39 @@ describe('dingtalk plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
+  it('marks metadata.mentioned when the robot is @ed', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const endpoint = new DingTalkEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'dingtalk'),
+      gateway,
+      http,
+      config: baseConfig, // robotCode = 'robot-1'
+      fetch: mockFetchOk(),
+    });
+    await endpoint.start();
+    endpoint.open();
+    await http.listen();
+
+    endpoint.admit({
+      ...textMessage({ conversationType: '2' }),
+      atUserIds: ['robot-1'],
+    });
+    await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
+    expect(receive).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      target: 'cid-1',
+      metadata: expect.objectContaining({ mentioned: true }),
+    }));
+
+    endpoint.admit({ ...textMessage({ msgId: 'msg-2', conversationType: '2' }), isInAtList: false });
+    await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
+    const metadata = receive.mock.calls[1]?.[0]?.metadata as Record<string, unknown>;
+    expect(metadata?.mentioned).toBeUndefined();
+    await endpoint.stop();
+  });
+
   it('does not admit inbound while closed', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);

@@ -13,8 +13,10 @@ import {
   formatInboundContent,
   formatInboundTarget,
   formatOutboundSegments,
+  isBotMentioned,
   isMessageEvent,
-  senderDisplayName,
+  senderNickname,
+  senderUserId,
   type OneBot12ActionRequest,
   type OneBot12ActionResponse,
   type OneBot12Event,
@@ -119,11 +121,13 @@ export class OneBot12WsEndpoint implements EndpointInstance {
     if (!this.#open || !isMessageEvent(ev)) return;
     const target = formatInboundTarget(ev);
     const content = formatInboundContent(ev);
+    const nickname = senderNickname(ev);
+    const mentioned = isBotMentioned(ev);
     void this.#options.gateway.receive({
       adapter: this.#options.id,
       target,
       content,
-      sender: senderDisplayName(ev),
+      sender: senderUserId(ev),
       id: ev.message_id,
       metadata: Object.freeze({
         detail_type: ev.detail_type,
@@ -133,6 +137,8 @@ export class OneBot12WsEndpoint implements EndpointInstance {
         guild_id: ev.guild_id,
         endpoint: this.#options.config.name,
         time: ev.time,
+        ...(nickname ? { nickname } : {}),
+        ...(mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       logger.warn(formatCompact({

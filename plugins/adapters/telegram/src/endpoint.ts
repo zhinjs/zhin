@@ -80,6 +80,8 @@ export class TelegramEndpoint implements EndpointInstance {
   #started = false;
   #unregisterAgent?: () => void;
   #updateOffset = 0;
+  #botUserId?: number;
+  #botUsername?: string;
   readonly #chatMemberCache = new Map<string, ChatMemberPermit>();
 
   constructor(options: TelegramEndpointOptions) {
@@ -113,7 +115,9 @@ export class TelegramEndpoint implements EndpointInstance {
     this.#started = true;
     try {
       this.#unregisterAgent = registerTelegramAgentEndpoint(this.#options.config.name, this);
-      const me = await this.callApi<{ username?: string; first_name?: string }>('getMe');
+      const me = await this.callApi<{ id?: number; username?: string; first_name?: string }>('getMe');
+      this.#botUserId = me.id;
+      this.#botUsername = me.username;
 
       if (this.#options.config.mode === 'webhook') {
         if (!this.#options.http) {
@@ -202,6 +206,8 @@ export class TelegramEndpoint implements EndpointInstance {
 
   async #admitWithSenderRole(msg: TelegramMessage, channelId: string): Promise<void> {
     const permit = await this.#resolveGroupSenderPermit(msg);
+    // 新 Runtime Message.content 为纯文本：@ 本机只能经 metadata 传递
+    const mentioned = this.#isBotMentioned(msg);
     await this.#options.gateway.receive({
       adapter: this.#options.id,
       target: channelId,
@@ -215,8 +221,24 @@ export class TelegramEndpoint implements EndpointInstance {
         date: msg.date,
         ...(permit?.role ? { senderRole: permit.role } : {}),
         ...(permit?.permissions.length ? { senderPermissions: [...permit.permissions] } : {}),
+        ...(mentioned ? { mentioned: true } : {}),
       }),
     });
+  }
+
+  /** entities 里 mention 文本命中 bot username（getMe 缓存），或 text_mention 指向 bot 用户。 */
+  #isBotMentioned(msg: TelegramMessage): boolean {
+    if (!msg.entities?.length) return false;
+    for (const entity of msg.entities) {
+      if (entity.type === 'text_mention') {
+        if (this.#botUserId != null && entity.user?.id === this.#botUserId) return true;
+        continue;
+      }
+      if (entity.type !== 'mention' || !this.#botUsername) continue;
+      const slice = (msg.text ?? '').slice(entity.offset, entity.offset + entity.length);
+      if (slice.toLowerCase() === `@${this.#botUsername.toLowerCase()}`) return true;
+    }
+    return false;
   }
 
   /** 群消息 sender role 解析：getChatMember + 60s 缓存（对齐旧 enrichGroupSender）。 */

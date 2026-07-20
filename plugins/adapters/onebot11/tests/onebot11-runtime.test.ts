@@ -6,11 +6,15 @@ import { OneBot11WsEndpoint } from '../src/ws-endpoint.js';
 import type { OneBot11WsSocket } from '../src/ws-types.js';
 import {
   buildSendAction,
+  extractQuoteId,
   formatInboundContent,
   formatInboundTarget,
   formatOutboundSegments,
+  isOneBot11BotMentioned,
   parseSendTarget,
   resolveOneBot11Config,
+  senderNickname,
+  senderUserId,
   type OneBot11Event,
   type OneBot11WsConfig,
 } from '../src/protocol.js';
@@ -150,6 +154,54 @@ describe('onebot11 protocol helpers', () => {
       { type: 'image', data: { file: 'https://x/a.png' } },
     ]);
   });
+
+  it('resolves sender as user id and nickname separately', () => {
+    const ev: OneBot11Event = {
+      post_type: 'message',
+      message_id: 1,
+      user_id: 42,
+      sender: { card: '群名片', nickname: 'nick' },
+    };
+    expect(senderUserId(ev)).toBe('42');
+    expect(senderNickname(ev)).toBe('群名片');
+    expect(senderUserId({ post_type: 'message', message_id: 1 })).toBe('');
+    expect(senderNickname({
+      post_type: 'message',
+      message_id: 1,
+      user_id: 7,
+      sender: { nickname: 'nick' },
+    })).toBe('nick');
+  });
+
+  it('extracts quote id from reply segment or top-level reply', () => {
+    expect(extractQuoteId({
+      post_type: 'message',
+      message_id: 1,
+      message: [{ type: 'reply', data: { id: 555 } }],
+    })).toBe('555');
+    expect(extractQuoteId({ post_type: 'message', message_id: 1, reply: 777 })).toBe('777');
+    expect(extractQuoteId({
+      post_type: 'message',
+      message_id: 1,
+      reply: { message_id: 'm-9' },
+    })).toBe('m-9');
+    expect(extractQuoteId({ post_type: 'message', message_id: 1 })).toBeUndefined();
+  });
+
+  it('detects bot mention by self_id, excluding @all', () => {
+    const message = [
+      { type: 'at', data: { qq: '10001' } },
+      { type: 'text', data: { text: ' hi' } },
+    ];
+    expect(isOneBot11BotMentioned({ selfId: '10001', message })).toBe(true);
+    expect(isOneBot11BotMentioned({ selfId: '10002', message })).toBe(false);
+    expect(isOneBot11BotMentioned({
+      selfId: '10001',
+      message: [{ type: 'at', data: { qq: 'all' } }],
+    })).toBe(false);
+    expect(isOneBot11BotMentioned({ selfId: undefined, message })).toBe(false);
+    expect(isOneBot11BotMentioned({ selfId: '10001' })).toBe(false);
+  });
 });
 
 describe('onebot11 plugin runtime adapter', () => {
@@ -184,12 +236,134 @@ describe('onebot11 plugin runtime adapter', () => {
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       target: 'private:10001',
       content: '你好',
-      sender: 'Alice',
+      sender: '10001',
       id: '42',
+      metadata: expect.objectContaining({ nickname: 'Alice' }),
     }));
 
     await endpoint.stop();
     expect(ws.close).toHaveBeenCalled();
+  });
+
+  it('marks metadata.mentioned when a group message @s the bot self_id', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+    const ws = createMockWs();
+    const endpoint = new OneBot11WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
+      gateway: { receive, send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createWebSocket: () => {
+        queueMicrotask(() => ws.emitOpen());
+        return ws;
+      },
+    });
+    await endpoint.start();
+    endpoint.open();
+    endpoint.admit({
+      post_type: 'message',
+      message_type: 'group',
+      message_id: 100,
+      self_id: 10001,
+      group_id: 200,
+      user_id: 9,
+      raw_message: '在吗',
+      message: [
+        { type: 'at', data: { qq: '10001' } },
+        { type: 'text', data: { text: ' 在吗' } },
+      ],
+      sender: { nickname: 'bob', role: 'member' },
+      time: 1_700_000_000,
+    });
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    expect(receive).toHaveBeenCalledWith(expect.objectContaining({
+      target: 'group:200',
+      sender: '9',
+      metadata: expect.objectContaining({ mentioned: true, nickname: 'bob' }),
+    }));
+    await endpoint.stop();
+  });
+
+  it('does not mark metadata.mentioned when @ targets someone else or @all', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+    const ws = createMockWs();
+    const endpoint = new OneBot11WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
+      gateway: { receive, send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createWebSocket: () => {
+        queueMicrotask(() => ws.emitOpen());
+        return ws;
+      },
+    });
+    await endpoint.start();
+    endpoint.open();
+
+    endpoint.admit({
+      post_type: 'message',
+      message_type: 'group',
+      message_id: 101,
+      self_id: 10001,
+      group_id: 200,
+      user_id: 9,
+      message: [
+        { type: 'at', data: { qq: '10002' } },
+        { type: 'text', data: { text: ' 在吗' } },
+      ],
+    });
+    await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
+    let metadata = receive.mock.calls[0]?.[0]?.metadata as Record<string, unknown>;
+    expect(metadata?.mentioned).toBeUndefined();
+
+    endpoint.admit({
+      post_type: 'message',
+      message_type: 'group',
+      message_id: 102,
+      self_id: 10001,
+      group_id: 200,
+      user_id: 9,
+      message: [
+        { type: 'at', data: { qq: 'all' } },
+        { type: 'text', data: { text: ' 通知' } },
+      ],
+    });
+    await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
+    metadata = receive.mock.calls[1]?.[0]?.metadata as Record<string, unknown>;
+    expect(metadata?.mentioned).toBeUndefined();
+    await endpoint.stop();
+  });
+
+  it('forwards reply segment id as metadata.quote_id', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+    const ws = createMockWs();
+    const endpoint = new OneBot11WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
+      gateway: { receive, send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createWebSocket: () => {
+        queueMicrotask(() => ws.emitOpen());
+        return ws;
+      },
+    });
+    await endpoint.start();
+    endpoint.open();
+    endpoint.admit({
+      post_type: 'message',
+      message_type: 'group',
+      message_id: 103,
+      self_id: 10001,
+      group_id: 200,
+      user_id: 9,
+      raw_message: '引用回复',
+      message: [
+        { type: 'reply', data: { id: 555 } },
+        { type: 'text', data: { text: '引用回复' } },
+      ],
+    });
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    expect(receive).toHaveBeenCalledWith(expect.objectContaining({
+      metadata: expect.objectContaining({ quote_id: '555' }),
+    }));
+    await endpoint.stop();
   });
 
   it('does not admit inbound while closed', async () => {

@@ -141,6 +141,7 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
         guildId: msg.guildId,
         permissions: msg.permissionTokens,
         role: resolveSenderRole(msg),
+        ...(msg.mentionedBot ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       logger.warn(formatCompact({

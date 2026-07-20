@@ -11,10 +11,11 @@ import { registerOnebot11AgentEndpoint } from './onebot11-agent-deps.js';
 import {
   buildSendAction,
   formatInboundContent,
+  formatInboundMetadata,
   formatInboundTarget,
   formatOutboundSegments,
   isMessageEvent,
-  senderDisplayName,
+  senderUserId,
   type OneBot11Event,
   type OneBot11WssConfig,
 } from './protocol.js';
@@ -132,17 +133,9 @@ export class OneBot11WssEndpoint implements EndpointInstance {
       adapter: this.#options.id,
       target,
       content: formatInboundContent(ev),
-      sender: senderDisplayName(ev),
+      sender: senderUserId(ev),
       id: String(ev.message_id),
-      metadata: Object.freeze({
-        message_type: ev.message_type,
-        user_id: ev.user_id != null ? String(ev.user_id) : undefined,
-        group_id: ev.group_id != null ? String(ev.group_id) : undefined,
-        endpoint: this.#options.config.name,
-        time: ev.time,
-        self_id: ev.self_id != null ? String(ev.self_id) : undefined,
-        role: ev.sender?.role,
-      }),
+      metadata: formatInboundMetadata(ev, this.#options.config.name),
     }).catch((err) => {
       logger.warn(formatCompact({
         op: 'onebot11_gateway_receive_failed',

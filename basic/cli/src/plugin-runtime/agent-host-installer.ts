@@ -2,7 +2,12 @@ import { readFile } from 'node:fs/promises';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import { createSyntheticMessage, type AITriggerConfig, type Tool } from '@zhin.js/core';
+import {
+  createSyntheticMessage,
+  resolveSceneFieldsFromMessage,
+  type AITriggerConfig,
+  type Tool,
+} from '@zhin.js/core';
 import type { ImRuntime, Message, SendContent } from '@zhin.js/core/runtime';
 import {
   expandEnvironmentValue,
@@ -53,9 +58,12 @@ import {
   getAgentRuntimeRegistry,
   wireCollaborationStorage,
   applyRuntimeCollaborationInbound,
+  findCellForInbound,
+  getCollaborationSceneService,
   handleRuntimeOwnerApproveCommand,
   type ProactiveOutboundService,
   type AssistantConfig,
+  type ImTranscriptWriteInput,
   type PeerTriggerMode,
 } from '@zhin.js/agent';
 import {
@@ -145,6 +153,11 @@ export interface InstallAgentHostOptions {
    * Key: `localName` (e.g. icqq) or live endpoint name (uin).
    */
   readonly resolveEndpointOwner?: (adapterLocalName: string, endpointId: string) => string | undefined;
+  /**
+   * Resolve Endpoint trusted id 列表（plugins.<key>.trusted / endpoints[].trusted）。
+   * 对齐 legacy resolveSenderRoles：trusted 角色弱于 master（不参与 Owner 审批放行）。
+   */
+  readonly resolveEndpointTrusted?: (adapterLocalName: string, endpointId: string) => readonly string[];
   /** Extra Host tools (e.g. Speech Host voice_stt / voice_tts). */
   readonly extraTools?: readonly AgentToolLike[];
   /** Optional inbound STT (Speech Host). */
@@ -325,22 +338,50 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     const presetCount = await seedPresets();
 
     options.im.setUnmatchedHandler(async (message, snapshot, requester) => {
-      const matched = matchAiTrigger(message, service.getTriggerConfig());
-      if (!matched) return false;
+      const trigger = service.getTriggerConfig();
+      const matched = matchAiTrigger(message, trigger);
 
       const ownerId = resolveOwnerForRuntimeMessage(message, options.resolveEndpointOwner);
-      const commMessage = bridgeRuntimeMessage(message, ownerId);
+      const endpointTrusted = resolveTrustedForRuntimeMessage(message, options.resolveEndpointTrusted);
+      const senderRoles = resolveRuntimeSenderRoles(message, ownerId, endpointTrusted, trigger);
+      const commMessage = bridgeRuntimeMessage(message, ownerId, senderRoles);
+
+      // 入站流水 → im_transcripts（ADR 0009 D4；fire-and-forget，失败仅 debug）。
+      recordRuntimeTranscript(zhinAgent, commMessage, {
+        direction: 'inbound',
+        body: message.content,
+        messageId: message.id,
+        senderId: message.sender ?? '',
+        senderName: message.sender ?? '',
+        senderRole: senderRoles.isMaster ? 'master' : senderRoles.isTrusted ? 'trusted' : 'user',
+      });
+
+      /** 回复并记录出站流水（assistant 角色，对齐 legacy message.send 收集）。 */
+      const replyAndRecord = async (content: string) => {
+        await message.$reply(content);
+        recordRuntimeTranscript(zhinAgent, commMessage, {
+          direction: 'outbound',
+          body: content,
+          senderRole: 'assistant',
+        });
+      };
+
+      if (!matched) {
+        // 群/频道旁听：未触发 AI 的共享会话消息写入会话背景（Passive Group Context）。
+        void recordPassiveGroupContext(zhinAgent, message, commMessage);
+        return false;
+      }
 
       const approveReply = handleRuntimeOwnerApproveCommand(commMessage, matched.content);
       if (approveReply != null) {
-        await message.$reply(approveReply);
+        await replyAndRecord(approveReply);
         logger.info(formatCompact({ op: 'agent_host_approve', handled: true }));
         return true;
       }
 
       if (isClearCommand(matched.content)) {
         await zhinAgent.archiveSessionForCommMessage(commMessage);
-        await message.$reply('已清空本会话的 AI 多轮上下文。');
+        await replyAndRecord('已清空本会话的 AI 多轮上下文。');
         return true;
       }
 
@@ -373,7 +414,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           peerMode: resolvePeerMode(service.getTriggerConfig()),
           discoveredAgentNames: new Set(capabilities.agents.map((agent) => agent.name)),
           replyAi: async (payload) => {
-            await message.$reply(typeof payload === 'string' ? payload : String(payload));
+            await replyAndRecord(typeof payload === 'string' ? payload : String(payload));
           },
           logger,
         });
@@ -404,10 +445,18 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           bashTool,
         ];
 
+        // thinkingMessage：进入 AI 处理前先回占位（对齐 legacy inbound-turn-pipeline）。
+        if (trigger.thinkingMessage) {
+          await replyAndRecord(trigger.thinkingMessage);
+        }
+
         zhinAgent.initInboundTurnContext();
-        const elements = await zhinAgent.process(routed.userText, commMessage, tools);
+        const elements = await withTriggerTimeout(
+          zhinAgent.process(routed.userText, commMessage, tools),
+          resolveTriggerTimeoutMs(trigger),
+        );
         const text = flattenOutputElements(elements).trim() || '(empty AI response)';
-        await message.$reply(text);
+        await replyAndRecord(text);
         logger.debug(formatCompact({
           op: 'agent_host_turn',
           turnMode: 'zhin_agent.process',
@@ -424,7 +473,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         const detail = error instanceof Error ? error.message : String(error);
         logger.warn(formatCompact({ op: 'agent_host_turn_fail', error: detail }));
         try {
-          await message.$reply(`AI 调用失败: ${detail}`);
+          await replyAndRecord(renderTriggerError(trigger, detail));
         } catch {
           /* ignore reply failure */
         }
@@ -742,7 +791,38 @@ function createRuntimeProactiveOutbound(im: ImRuntime): ProactiveOutboundService
   };
 }
 
-function bridgeRuntimeMessage(message: Message, endpointMaster?: string) {
+interface RuntimeSenderRoles {
+  readonly isMaster: boolean;
+  readonly isTrusted: boolean;
+}
+
+/**
+ * 对齐 legacy resolveSenderRoles（ai-trigger.ts:260）：
+ * trigger.masters ∪ endpoint master → master 角色（审批放行）；
+ * trigger.trusted ∪ endpoint trusted → trusted 角色（弱于 master，不参与 Owner 审批）。
+ */
+export function resolveRuntimeSenderRoles(
+  message: Message,
+  endpointMaster: string | undefined,
+  endpointTrusted: readonly string[],
+  trigger?: AITriggerConfig,
+): RuntimeSenderRoles {
+  const senderId = String(message.sender ?? '');
+  const triggerMasters = (trigger?.masters ?? []).map(String);
+  const triggerTrusted = (trigger?.trusted ?? []).map(String);
+  const isMaster = senderId !== ''
+    && ((endpointMaster != null && senderId === String(endpointMaster))
+      || triggerMasters.includes(senderId));
+  const isTrusted = !isMaster && senderId !== ''
+    && (triggerTrusted.includes(senderId) || endpointTrusted.map(String).includes(senderId));
+  return { isMaster, isTrusted };
+}
+
+export function bridgeRuntimeMessage(
+  message: Message,
+  endpointMaster: string | undefined,
+  roles: RuntimeSenderRoles,
+) {
   const localName = capabilityLocalName(message.adapter);
   const channelType = resolveChannelType(message.metadata);
   const channelId = resolveChannelId(message);
@@ -753,15 +833,17 @@ function bridgeRuntimeMessage(message: Message, endpointMaster?: string) {
     ?? localName,
   );
   const senderId = message.sender ?? 'anon';
-  const isMaster = endpointMaster != null && String(senderId) === String(endpointMaster);
+  const quoteId = message.metadata?.quote_id;
   return createSyntheticMessage({
     adapter: localName,
     endpoint: endpointId,
     id: message.id,
+    ...(typeof quoteId === 'string' && quoteId ? { quote_id: quoteId } : {}),
     sender: {
       id: senderId,
       name: message.sender,
-      isMaster,
+      isMaster: roles.isMaster,
+      isTrusted: roles.isTrusted,
     },
     channel: {
       type: channelType,
@@ -792,6 +874,144 @@ function resolveOwnerForRuntimeMessage(
     ?? localName,
   );
   return resolve(localName, endpointId) ?? resolve(endpointId, endpointId);
+}
+
+function resolveTrustedForRuntimeMessage(
+  message: Message,
+  resolve?: InstallAgentHostOptions['resolveEndpointTrusted'],
+): readonly string[] {
+  if (!resolve) return [];
+  const localName = capabilityLocalName(message.adapter);
+  const endpointId = String(
+    message.metadata?.endpoint
+    ?? message.metadata?.endpointId
+    ?? localName,
+  );
+  const merged = [...resolve(localName, endpointId), ...resolve(endpointId, endpointId)];
+  return [...new Set(merged.map((id) => String(id).trim()).filter(Boolean))];
+}
+
+interface RuntimeTranscriptDraft {
+  readonly direction: 'inbound' | 'outbound';
+  readonly body: string;
+  readonly messageId?: string;
+  readonly senderId?: string;
+  readonly senderName?: string;
+  readonly senderRole?: string;
+}
+
+/**
+ * im_transcripts 落库（缺口 1，对齐 legacy register-chat-message-store）。
+ * scene 字段经 resolveSceneFieldsFromMessage 计算，与 chat_history 工具查询
+ * （buildImTranscriptQuery）保持同一 SSOT；fire-and-forget，失败仅 debug。
+ */
+export function recordRuntimeTranscript(
+  agent: Pick<ZhinAgent, 'recordImTranscript'>,
+  commMessage: ReturnType<typeof createSyntheticMessage>,
+  draft: RuntimeTranscriptDraft,
+): void {
+  const body = draft.body ?? '';
+  if (!body.trim()) return;
+  const scene = resolveSceneFieldsFromMessage(commMessage);
+  const input: ImTranscriptWriteInput = {
+    message_id: draft.messageId ?? '',
+    platform: scene.platform,
+    endpoint_id: scene.endpointId,
+    scene_id: scene.sceneId,
+    scene_type: scene.sceneType,
+    sender_id: draft.senderId ?? scene.endpointId,
+    sender_name: draft.senderName ?? scene.endpointId,
+    sender_role: draft.senderRole ?? 'user',
+    direction: draft.direction,
+    body,
+    time: Date.now(),
+  };
+  void agent.recordImTranscript(input).catch((error) => {
+    logger.debug(formatCompact({
+      op: 'agent_host_transcript_fail',
+      direction: draft.direction,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  });
+}
+
+/**
+ * 群/频道旁听（缺口 2，对齐 legacy register-group-session-passive）：
+ * 未触发 AI 的共享会话消息写入 Passive Group Context，供后续 @ 时带入上下文。
+ * 仅群/频道生效（私聊 / sandbox 不旁听，与 legacy dispatcher 适用范围一致）。
+ */
+export async function recordPassiveGroupContext(
+  agent: Pick<ZhinAgent, 'recordPassiveGroupMessage'>,
+  message: Message,
+  commMessage: ReturnType<typeof createSyntheticMessage>,
+): Promise<void> {
+  const channelType = resolveChannelType(message.metadata);
+  if (channelType !== 'group' && channelType !== 'channel') return;
+  const rawText = message.content.trim();
+  if (!rawText) return;
+  // 机器人自身消息不旁听（对齐 legacy isBotSelfMessage）。
+  const senderId = String(message.sender ?? '');
+  const endpointId = String(commMessage.$endpoint ?? '');
+  if (senderId !== '' && endpointId !== '' && senderId === endpointId) return;
+  try {
+    const sceneService = getCollaborationSceneService();
+    let cell = findCellForInbound(
+      sceneService.listScenes(),
+      String(commMessage.$adapter),
+      String(commMessage.$channel?.id ?? ''),
+      endpointId,
+    );
+    if (cell) {
+      cell = (await sceneService.getSceneFresh(cell.id)) ?? cell;
+    }
+    await agent.recordPassiveGroupMessage(commMessage, rawText, cell);
+  } catch (error) {
+    logger.debug(formatCompact({
+      op: 'agent_host_passive_fail',
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+}
+
+/** ai.trigger.timeout（默认 60000，对齐 legacy DEFAULT_AI_TRIGGER_CONFIG）。 */
+const DEFAULT_TRIGGER_TIMEOUT_MS = 60_000;
+/** ai.trigger.errorTemplate 默认值，对齐 legacy DEFAULT_AI_TRIGGER_CONFIG。 */
+const DEFAULT_TRIGGER_ERROR_TEMPLATE = '❌ AI 处理失败: {error}';
+
+export function resolveTriggerTimeoutMs(trigger?: AITriggerConfig): number {
+  const raw = trigger?.timeout;
+  return typeof raw === 'number' && Number.isFinite(raw) && raw > 0
+    ? raw
+    : DEFAULT_TRIGGER_TIMEOUT_MS;
+}
+
+export function renderTriggerError(trigger: AITriggerConfig | undefined, detail: string): string {
+  const template = trigger?.errorTemplate?.trim()
+    ? trigger.errorTemplate
+    : DEFAULT_TRIGGER_ERROR_TEMPLATE;
+  return template.replace('{error}', detail);
+}
+
+/**
+ * ai.trigger.timeout 包装：超时即 reject（不取消底层 generation）。
+ * promise 立即挂 then/catch，超时后迟到的 settle 不会成为 unhandledRejection。
+ */
+export function withTriggerTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`AI 处理超时（${timeoutMs}ms）`));
+    }, timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 }
 
 function resolveChannelId(message: Message): string {
@@ -1213,7 +1433,23 @@ function zodFieldToJsonSchema(z: unknown): Record<string, unknown> {
   return { type: 'string' };
 }
 
-function matchAiTrigger(
+/**
+ * 默认值与 legacy `DEFAULT_AI_TRIGGER_CONFIG`
+ * （packages/im/core/src/built/ai-trigger.ts）对齐。
+ */
+const DEFAULT_AI_TRIGGER_PREFIXES = ['#', 'AI:', 'ai:'];
+const DEFAULT_AI_TRIGGER_IGNORE_PREFIXES = ['/', '!', '！'];
+
+/**
+ * 新 Plugin Runtime 的 AI 触发判定，对齐 legacy `shouldTriggerAI` 的顺序：
+ * ignorePrefixes → 前缀 → @(群/频道，metadata.mentioned) → 私聊 → 关键词(仅单人会话)。
+ *
+ * 与 legacy 的差异：Runtime Message.content 为纯文本，at 信息由适配器经
+ * `metadata.mentioned: true` 标注（icqq 扫 CQ 码、QQ 官方看 AT 事件、slack 看
+ * app_mention）；且前缀触发对群聊同样生效（test-bot 群聊依赖 `ai:` 前缀，
+ * legacy 群/频道仅 @ 触发）。
+ */
+export function matchAiTrigger(
   message: Message,
   trigger: AITriggerConfig | undefined,
 ): { content: string } | null {
@@ -1221,7 +1457,18 @@ function matchAiTrigger(
   const text = message.content.trim();
   if (!text) return null;
 
-  const prefixes = trigger?.prefixes?.length ? trigger.prefixes : ['ai:'];
+  // 0. 忽略前缀（命令前缀，避免与命令冲突）
+  const ignorePrefixes = trigger?.ignorePrefixes?.length
+    ? trigger.ignorePrefixes
+    : DEFAULT_AI_TRIGGER_IGNORE_PREFIXES;
+  for (const prefix of ignorePrefixes) {
+    if (prefix && text.startsWith(prefix)) return null;
+  }
+
+  const isPrivate = isPrivateRuntimeMessage(message);
+
+  // 1. 前缀触发（与 legacy 差异：群聊同样生效，见 docs/advanced/ai.md）
+  const prefixes = trigger?.prefixes?.length ? trigger.prefixes : DEFAULT_AI_TRIGGER_PREFIXES;
   for (const prefix of prefixes) {
     if (!prefix) continue;
     if (text.startsWith(prefix)) {
@@ -1230,13 +1477,39 @@ function matchAiTrigger(
     }
   }
 
-  if (trigger?.respondToPrivate) {
-    if (isPrivateRuntimeMessage(message) && !text.startsWith('/')) {
-      return { content: text };
+  // 2. @ 触发（群/频道主路径；剥离提及后为空也触发，与 legacy 一致）
+  const respondToAt = trigger?.respondToAt !== false;
+  if (respondToAt && !isPrivate && message.metadata?.mentioned === true) {
+    return { content: stripMentionMarkup(text) };
+  }
+
+  // 3. 私聊直接对话
+  const respondToPrivate = trigger?.respondToPrivate !== false;
+  if (respondToPrivate && isPrivate) {
+    return { content: text };
+  }
+
+  // 4. 关键词触发（仅私聊等单人会话，避免群聊旁听误触发，与 legacy 一致）
+  const keywords = trigger?.keywords ?? [];
+  if (isPrivate && keywords.length > 0) {
+    const lowerText = text.toLowerCase();
+    for (const keyword of keywords) {
+      if (keyword && lowerText.includes(keyword.toLowerCase())) {
+        return { content: text };
+      }
     }
   }
 
   return null;
+}
+
+/** 剥离 @ 触发后残留的提及标记：icqq CQ 码、QQ 官方/频道与 Slack 的 `<@!id>`。 */
+function stripMentionMarkup(text: string): string {
+  return text
+    .replace(/\[CQ:(?:at|mention),[^\]]*\]/giu, '')
+    .replace(/<@!?[^>\s]+>/gu, '')
+    .replace(/\[(?:at|mention):[^\]]*\]/giu, '')
+    .trim();
 }
 
 function isPrivateRuntimeMessage(message: Message): boolean {

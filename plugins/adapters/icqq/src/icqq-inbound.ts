@@ -109,6 +109,36 @@ export function parseIcqqSenderGroupRole(
   return ICQQ_GROUP_ROLES.has(role) ? role : undefined;
 }
 
+/**
+ * 判断入站消息是否 @ 了本机账号（uin = endpoint 配置 name，即 QQ 号）。
+ * 新 Plugin Runtime 的 Message.content 为纯文本，at 信息只能经 metadata 传递，
+ * endpoint 在 admit 时用本函数标注 `metadata.mentioned`（供 Agent Host 的 @ 触发）。
+ */
+export function isIcqqBotMentioned(input: {
+  readonly uin: string;
+  readonly content?: readonly MessageSegment[] | null;
+  readonly rawMessage?: string;
+}): boolean {
+  const uin = String(input.uin ?? "").trim();
+  if (!uin) return false;
+  for (const seg of input.content ?? []) {
+    if (!seg || (seg.type !== "at" && seg.type !== "mention")) continue;
+    const data = (seg.data ?? {}) as Record<string, unknown>;
+    const target = String(
+      data.qq ?? data.user_id ?? data.id ?? data.target ?? "",
+    ).trim();
+    if (target && target !== "all" && Number(target) === Number(uin)) {
+      return true;
+    }
+  }
+  const raw = input.rawMessage ?? "";
+  if (!raw) return false;
+  const escaped = uin.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // OneBot CQ 码 `[CQ:at,qq=uin]`；QQ 频道 markdown `<@!uin>`
+  return new RegExp(`\\[CQ:at,qq=${escaped}\\]`, "u").test(raw)
+    || new RegExp(`<@!?${escaped}>`, "u").test(raw);
+}
+
 const MESSAGE_POST_TYPES = new Set(["message"]);
 
 function isMessagePostType(postType: unknown): boolean {

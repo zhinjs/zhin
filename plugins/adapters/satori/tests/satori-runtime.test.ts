@@ -183,6 +183,63 @@ describe('satori plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
+  it('marks metadata.mentioned when an at element targets the login selfId', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const socket = createMockSocket();
+    const endpoint = new SatoriWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
+      gateway,
+      config: baseConfig,
+      createWebSocket: createWsFactory(socket),
+    });
+    await endpoint.start();
+    endpoint.open();
+    endpoint.setLogin({ platform: 'test', user: { id: 'bot-1' } });
+
+    endpoint.admit({
+      type: 'message-created',
+      message: { id: 'm-at', content: '<at id="bot-1"/> 在吗' },
+      channel: { id: 'ch-1', type: 0 },
+      user: { id: 'u-1', name: 'alice' },
+    });
+
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    expect(receive).toHaveBeenCalledWith(expect.objectContaining({
+      target: 'ch-1',
+      content: '<at id="bot-1"/> 在吗',
+      metadata: expect.objectContaining({ mentioned: true }),
+    }));
+    await endpoint.stop();
+  });
+
+  it('does not mark metadata.mentioned when the at element targets someone else', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const socket = createMockSocket();
+    const endpoint = new SatoriWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
+      gateway,
+      config: baseConfig,
+      createWebSocket: createWsFactory(socket),
+    });
+    await endpoint.start();
+    endpoint.open();
+    endpoint.setLogin({ platform: 'test', user: { id: 'bot-1' } });
+
+    endpoint.admit({
+      type: 'message-created',
+      message: { id: 'm-other', content: '<at id="user-2"/> 在吗' },
+      channel: { id: 'ch-1', type: 0 },
+      user: { id: 'u-1', name: 'alice' },
+    });
+
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    const metadata = receive.mock.calls[0]?.[0]?.metadata as Record<string, unknown>;
+    expect(metadata?.mentioned).toBeUndefined();
+    await endpoint.stop();
+  });
+
   it('sends IDENTIFY on ws open', async () => {
     const socket = createMockSocket();
     const endpoint = new SatoriWsEndpoint({

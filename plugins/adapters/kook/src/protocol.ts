@@ -219,6 +219,16 @@ export function formatInboundContent(msg: KookInboundMessage): string {
 }
 
 /**
+ * KOOK @ 用户标记为 `(met)<userId>(met)`；content 含 `(met)<botId>(met)` 时视为 @ 机器人。
+ * botId 取 client 缓存的 self_id（/me 类接口），拿不到则不标注。
+ */
+export function isKookBotMentioned(msg: KookInboundMessage, selfId?: string): boolean {
+  if (!selfId) return false;
+  const marker = `(met)${selfId}(met)`;
+  return (msg.content || '').includes(marker) || (msg.rawMessage || '').includes(marker);
+}
+
+/**
  * Wire-encode an already-rendered outbound payload into KOOK KMarkdown.
  * Segment canonicalization is intentionally not done here.
  */

@@ -295,6 +295,8 @@ AI 不会处理所有消息。只有满足以下条件之一时才会触发：
 以下消息会被排除：
 - 以 `ignorePrefixes` 中的前缀开头的消息（通常是命令）
 
+> **新 Plugin Runtime（`zhin runtime start`）差异**：Runtime `Message.content` 为纯文本，`@` 信息由适配器经 `metadata.mentioned: true` 标注（icqq 扫描 CQ 码 `[CQ:at,qq=uin]` / `<@!uin>`、QQ 官方看 AT 事件、Slack 看 `app_mention`），判定顺序与 legacy `shouldTriggerAI` 一致（ignorePrefixes → 前缀 → @ → 私聊 → 关键词）；但**前缀触发对群聊同样生效**（legacy 群/频道仅 @ 触发），群聊可继续用 `ai:` 前缀。
+
 ### MessageDispatcher：指令与 AI 路由
 
 `Adapter.emit('message.receive')` 经 **`runInboundMessage`**：先走根 **`middleware`**（`addMiddleware` 洋葱链），终端 `next()` 内 **`await MessageDispatcher.dispatch`**，再进入根插件生命周期 `message.receive`（详见 [消息如何流转](/essentials/message-flow)）。

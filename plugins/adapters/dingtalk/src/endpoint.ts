@@ -12,6 +12,7 @@ import {
   formatInboundContent,
   formatOutboundBody,
   generateMessageId,
+  isDingtalkBotMentioned,
   resolveChatType,
   resolveSender,
   resolveTarget,
@@ -172,6 +173,7 @@ export class DingTalkEndpoint implements EndpointInstance {
         role: permit.role,
         permissions: permit.permissions,
         conversationType: event.conversationType,
+        ...(isDingtalkBotMentioned(event, this.#options.config.robotCode) ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       logger.warn(formatCompact({

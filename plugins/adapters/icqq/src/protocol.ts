@@ -401,6 +401,10 @@ export function formatOutboundBody(payload: unknown): string {
   }
   if (payload == null) return '\u200b';
   if (!Array.isArray(payload)) {
+    // 单个段对象（非数组）按单元素数组处理，杜绝 String(object) → '[object Object]'
+    if (isWireSegment(payload)) {
+      return formatOutboundBody([payload]);
+    }
     if (typeof payload === 'object' && payload !== null && 'text' in payload) {
       const text = String((payload as { text?: unknown }).text ?? '').trim();
       return text || '\u200b';
@@ -443,4 +447,11 @@ export function formatInboundContent(rawMessage: string): string {
 function base64Media(data: Record<string, unknown> | undefined): string | undefined {
   const b64 = data?.base64;
   return typeof b64 === 'string' && b64 ? `base64://${b64}` : undefined;
+}
+
+/** 段对象判定：`{ type: string, data? }`（非数组 payload 的防御入口）。 */
+function isWireSegment(value: unknown): value is IcqqWireSegment {
+  return typeof value === 'object'
+    && value !== null
+    && typeof (value as { type?: unknown }).type === 'string';
 }

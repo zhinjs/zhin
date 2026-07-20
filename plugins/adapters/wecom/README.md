@@ -26,6 +26,8 @@ pnpm add @zhin.js/adapter-wecom
 入站：`gateway.receive({ adapter, target: FromUserName, content: text, sender, metadata })`  
 出站：`send({ target, payload })` → 企业微信 `message/send` API
 
+入站 `metadata.mentioned`：**未接线**。企业微信应用消息回调的 XML 事件不含 mentions/@ 字段，回调里的 `ToUserName` 是 CorpID（企业 ID）而非可比较的 bot 用户 id，配置中也没有 bot id/name 可作可靠判据，故无法可靠识别 @ 机器人。
+
 ## 前置条件
 
 ### 企业微信管理后台配置

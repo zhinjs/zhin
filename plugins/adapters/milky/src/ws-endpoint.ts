@@ -18,9 +18,10 @@ import {
   formatInboundTarget,
   formatOutboundMessageId,
   formatOutboundSegments,
+  isMentioned,
   parseMessageReceiveData,
   parseMilkyMessageId,
-  senderDisplayName,
+  senderNickname,
   type MilkyEvent,
   type MilkyIncomingMessage,
   type MilkyWsConfig,
@@ -214,11 +215,13 @@ export class MilkyWsEndpoint implements EndpointInstance {
     const target = formatInboundTarget(data);
     const content = formatInboundContent(data);
     const audioUrl = extractInboundAudioUrl(data);
+    const nickname = senderNickname(data);
+    const mentioned = isMentioned(data, event.self_id);
     void this.#options.gateway.receive({
       adapter: this.#options.id,
       target,
       content,
-      sender: senderDisplayName(data),
+      sender: String(data.sender_id),
       id: formatInboundMessageId(data),
       metadata: Object.freeze({
         message_scene: data.message_scene,
@@ -228,6 +231,8 @@ export class MilkyWsEndpoint implements EndpointInstance {
         endpoint: this.#options.config.name,
         time: data.time ?? event.time,
         self_id: event.self_id != null ? String(event.self_id) : undefined,
+        ...(nickname ? { nickname } : {}),
+        ...(mentioned ? { mentioned: true } : {}),
         ...(audioUrl ? { audio_url: audioUrl } : {}),
       }),
     }).catch((err) => {

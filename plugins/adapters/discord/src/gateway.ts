@@ -258,7 +258,12 @@ export async function connectDiscordGatewayClient(
 
     client.on('messageCreate', (raw) => {
       const msg = normalizeDiscordMessage(raw);
-      if (msg) handlers.onMessage(msg);
+      if (!msg) return;
+      // clientReady 之后 client.user 一定可用；消息事件只会在此之后到达
+      const botId = client.user?.id;
+      const mentions = (raw as DiscordMessage).mentions;
+      const mentionedBot = !!botId && mentions?.users?.has?.(botId) === true;
+      handlers.onMessage(mentionedBot ? { ...msg, mentionedBot: true } : msg);
     });
 
     client.on('interactionCreate', (raw) => {

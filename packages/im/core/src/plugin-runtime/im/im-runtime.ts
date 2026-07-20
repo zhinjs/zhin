@@ -1,6 +1,9 @@
 import {
   Scope,
   createToken,
+  htmlRendererToken,
+  type CapabilityId,
+  type HtmlRendererHost,
   type PluginId,
   type RuntimeSnapshot,
   type SnapshotStore,
@@ -20,6 +23,7 @@ import {
 } from './contracts.js';
 import { MessageDispatcher } from './message-dispatcher.js';
 import { OutboundRenderer } from './outbound-renderer.js';
+import { normalizeOutboundPayload } from './outbound-segments.js';
 
 export const messageGatewayToken = createToken<MessageGateway>('zhin.im.message-gateway');
 
@@ -283,7 +287,12 @@ export class ImRuntime implements MessageGateway {
   }
 
   async #sendWithSnapshot(request: SendRequest, snapshot: RuntimeSnapshot): Promise<unknown> {
-    const payload = await this.#renderer.render(request.content, request.requester, snapshot);
+    const rendered = await this.#renderer.render(request.content, request.requester, snapshot);
+    // 单段对象 / html 段在此归一为适配器可消费的 wire 段数组；
+    // sandbox 适配器（控制台 UI）直接消费 html 段，跳过规范化。
+    const payload = isDirectHtmlConsumer(snapshot, request.adapter)
+      ? rendered
+      : await normalizeOutboundPayload(rendered, resolveHtmlRenderer(snapshot));
     const envelope = createOutboundEnvelope({
       adapter: request.adapter,
       target: request.target,
@@ -319,6 +328,23 @@ function requireAdapters(snapshot: RuntimeSnapshot): AdapterIndex {
     throw new Error('Adapter Feature projection is not installed');
   }
   return projection;
+}
+
+/** Root resources 上的可选 html-renderer Host（未安装时降级为文本）。 */
+function resolveHtmlRenderer(snapshot: RuntimeSnapshot): HtmlRendererHost | undefined {
+  const host = snapshot.resources.get(snapshot.root)?.get(htmlRendererToken.id);
+  return host && typeof (host as HtmlRendererHost).render === 'function'
+    ? host as HtmlRendererHost
+    : undefined;
+}
+
+/**
+ * Sandbox（控制台 UI）按设计直接消费 html 段，不做 html→image/text 规范化。
+ * 通过 adapter 能力 slot 的 owner 包名判断平台类型。
+ */
+function isDirectHtmlConsumer(snapshot: RuntimeSnapshot, adapter: CapabilityId): boolean {
+  const owner = snapshot.capabilities.get(adapter)?.owner;
+  return adapterTypeName(snapshot.tree.get(owner as PluginId)?.packageName) === 'sandbox';
 }
 
 /** Duck-typed reaction / recall surface on Runtime EndpointInstance (icqq, …). */

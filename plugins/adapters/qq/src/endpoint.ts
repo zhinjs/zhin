@@ -151,6 +151,8 @@ export class QqWebsocketEndpoint implements EndpointInstance {
         userId: msg.authorId,
         guildId: msg.guildId,
         roles: msg.authorRoles,
+        // AT 事件本身即 @ 机器人；新 Runtime 纯文本 content 需经 metadata 传递
+        ...(msg.mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       logger.warn(formatCompact({
@@ -322,6 +324,8 @@ export class QqHttpEndpoint implements EndpointInstance {
         userId: msg.authorId,
         guildId: msg.guildId,
         roles: msg.authorRoles,
+        // AT 事件本身即 @ 机器人；新 Runtime 纯文本 content 需经 metadata 传递
+        ...(msg.mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       logger.warn(formatCompact({

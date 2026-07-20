@@ -73,6 +73,11 @@ export interface QqInboundMessage {
   readonly timestamp: number;
   readonly guildId?: string;
   readonly rawMessage?: string;
+  /**
+   * 入站即 @ 机器人（AT_MESSAGE_CREATE 的 mentions[].bot，或群 GROUP_AT_MESSAGE_CREATE
+   * 事件本身仅 @ 时下发）。新 Runtime 纯文本 content 需经 metadata 传递。
+   */
+  readonly mentioned?: boolean;
 }
 
 export interface QqWireSegment {

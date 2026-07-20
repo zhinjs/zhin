@@ -15,6 +15,7 @@ import {
   formatMessageId,
   formatSatoriOutbound,
   isMessageEvent,
+  isSelfMentioned,
   parseMessageRef,
   resolveInboundSender,
   resolveInboundTarget,
@@ -120,6 +121,8 @@ export class SatoriWsEndpoint implements EndpointInstance {
     const content = formatInboundContent(body);
     const sender = resolveInboundSender(body);
     const messageId = formatMessageId(target, body.message.id);
+    const selfId = this.#login?.user?.id ?? body.login?.user?.id;
+    const mentioned = isSelfMentioned(body, selfId);
     void this.#options.gateway.receive({
       adapter: this.#options.id,
       target,
@@ -132,6 +135,7 @@ export class SatoriWsEndpoint implements EndpointInstance {
         sn: body.sn,
         platform: this.#login?.platform,
         endpoint: this.#options.config.name,
+        ...(mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       logger.warn(formatCompact({
@@ -393,6 +397,8 @@ export class SatoriWebhookEndpoint implements EndpointInstance {
     const content = formatInboundContent(body);
     const sender = resolveInboundSender(body);
     const messageId = formatMessageId(target, body.message.id);
+    const selfId = this.#login?.user?.id ?? body.login?.user?.id;
+    const mentioned = isSelfMentioned(body, selfId);
     void this.#options.gateway.receive({
       adapter: this.#options.id,
       target,
@@ -405,6 +411,7 @@ export class SatoriWebhookEndpoint implements EndpointInstance {
         sn: body.sn,
         platform: this.#login?.platform,
         endpoint: this.#options.config.name,
+        ...(mentioned ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       logger.warn(formatCompact({

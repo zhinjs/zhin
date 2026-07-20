@@ -9,6 +9,7 @@ Zhin.js QQ 官方机器人适配器（Plugin Runtime），默认通过 **WebSock
 - 出站 `send({ target, payload })` → QQ API（`private:` / `group:` / `channel:` / `direct:`）
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 - Webhook / middleware 模式已实现（经 `httpHostToken` 注册 POST 路由）
+- AI `@` 触发标注：群消息（GROUP_AT_MESSAGE_CREATE 仅 @ 时下发）与频道 `mentions[].bot` 会在入站 metadata 标 `mentioned: true`（新 Plugin Runtime 纯文本 content 经 metadata 传递 @）
 
 ## 安装
 

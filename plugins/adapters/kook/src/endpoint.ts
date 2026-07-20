@@ -12,6 +12,7 @@ import {
   formatInboundContent,
   formatInboundTarget,
   formatOutboundKmarkdown,
+  isKookBotMentioned,
   parseSendTarget,
   senderDisplayName,
   type KookInboundMessage,
@@ -117,6 +118,7 @@ export class KookWebsocketEndpoint implements EndpointInstance {
     if (!this.#open) return;
     if (msg.authorBot) return;
     const target = formatInboundTarget(msg);
+    const selfId = this.#client?.self_id != null ? String(this.#client.self_id) : undefined;
     void this.#options.gateway.receive({
       adapter: this.#options.id,
       target,
@@ -129,6 +131,7 @@ export class KookWebsocketEndpoint implements EndpointInstance {
         userId: msg.authorId,
         guildId: msg.guildId,
         roles: msg.authorRoles,
+        ...(isKookBotMentioned(msg, selfId) ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       logger.warn(formatCompact({
@@ -289,6 +292,7 @@ export class KookWebhookEndpoint implements EndpointInstance {
     if (!this.#open) return;
     if (msg.authorBot) return;
     const target = formatInboundTarget(msg);
+    const selfId = this.#client?.self_id != null ? String(this.#client.self_id) : undefined;
     void this.#options.gateway.receive({
       adapter: this.#options.id,
       target,
@@ -301,6 +305,7 @@ export class KookWebhookEndpoint implements EndpointInstance {
         userId: msg.authorId,
         guildId: msg.guildId,
         roles: msg.authorRoles,
+        ...(isKookBotMentioned(msg, selfId) ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       logger.warn(formatCompact({

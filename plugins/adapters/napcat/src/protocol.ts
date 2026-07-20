@@ -239,10 +239,18 @@ export function formatInboundContent(ev: NapCatEvent): string {
   return '';
 }
 
-export function senderDisplayName(ev: NapCatEvent): string {
-  const name = ev.sender?.card || ev.sender?.nickname;
-  if (typeof name === 'string' && name) return name;
+/**
+ * 入站 sender 语义：必须是用户 ID（Runtime Message contract）。
+ * 显示名走 metadata.nickname，见 senderNickname。
+ */
+export function senderUserId(ev: NapCatEvent): string {
   return ev.user_id != null ? String(ev.user_id) : '';
+}
+
+/** 显示名（群名片 card 优先于 nickname），没有则 undefined。 */
+export function senderNickname(ev: NapCatEvent): string | undefined {
+  const name = ev.sender?.card || ev.sender?.nickname;
+  return typeof name === 'string' && name ? name : undefined;
 }
 
 /**

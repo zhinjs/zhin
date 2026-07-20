@@ -27,6 +27,8 @@ pnpm add @zhin.js/adapter-lark
 入站：`gateway.receive({ adapter, target: chat_id, content: text, sender, metadata })`  
 出站：`send({ target, payload })` → `im/v1/messages`
 
+入站 `metadata.mentioned`：**未接线**。消息事件的 `mentions[]` 元素含 `id.open_id`，但本适配器拿不到 bot 自身的 open_id——配置（`appId` / `appSecret` / `name` 等）不含 bot open_id，代码也未调用 `bot/v3/info` 获取应用信息，故无可靠判据比对 mentions。
+
 ## 前置条件
 
 1. 在 [飞书开放平台](https://open.feishu.cn/)（或 Lark）创建企业自建应用

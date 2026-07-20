@@ -205,6 +205,55 @@ describe('telegram plugin runtime adapter', () => {
     expect(fetch.calls.some((c) => c.method === 'deleteWebhook')).toBe(true);
   });
 
+  it('marks metadata.mentioned when entities @ the bot username', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const endpoint = new TelegramEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
+      gateway,
+      config: baseConfig,
+      fetch: mockApiFetch(),
+    });
+
+    await endpoint.start();
+    endpoint.open();
+    endpoint.admit(textMessage({
+      text: '@test_bot hello',
+      entities: [{ type: 'mention', offset: 0, length: 9 }],
+    }));
+
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    expect(receive).toHaveBeenCalledWith(expect.objectContaining({
+      target: '1001',
+      metadata: expect.objectContaining({ mentioned: true }),
+    }));
+
+    await endpoint.stop();
+  });
+
+  it('does not mark metadata.mentioned when @ targets someone else', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: false }));
+    const endpoint = new TelegramEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
+      gateway: { receive, send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      fetch: mockApiFetch(),
+    });
+
+    await endpoint.start();
+    endpoint.open();
+    endpoint.admit(textMessage({
+      text: '@someone_else hello',
+      entities: [{ type: 'mention', offset: 0, length: 13 }],
+    }));
+
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    const metadata = receive.mock.calls[0]?.[0]?.metadata as Record<string, unknown> | undefined;
+    expect(metadata?.mentioned).toBeUndefined();
+
+    await endpoint.stop();
+  });
+
   it('does not admit inbound while closed', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const endpoint = new TelegramEndpoint({

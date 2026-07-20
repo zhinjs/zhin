@@ -233,6 +233,21 @@ export function resolveInboundSender(body: SatoriEventBody & { message: SatoriMe
   return user?.name ?? body.message.member?.nick ?? user?.id ?? '';
 }
 
+/**
+ * Detect `<at id="…"/>` elements in message content targeting the bot selfId.
+ * selfId 来源：READY/事件携带的 `login.user.id`。
+ */
+export function isSelfMentioned(
+  body: SatoriEventBody & { message: SatoriMessage },
+  selfId?: string,
+): boolean {
+  if (!selfId) return false;
+  const content = body.message.content;
+  if (typeof content !== 'string' || !content.includes('<at')) return false;
+  const tags = content.match(/<at\b[^>]*>/gi) ?? [];
+  return tags.some((tag) => /\bid\s*=\s*["']([^"']+)["']/i.exec(tag)?.[1] === selfId);
+}
+
 export function formatMessageId(channelId: string, messageId: string): string {
   return `${channelId}:${messageId}`;
 }

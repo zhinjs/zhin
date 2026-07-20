@@ -224,6 +224,75 @@ export function senderDisplayName(ev: OneBot11Event): string {
 }
 
 /**
+ * Runtime Message.sender 必须是用户 ID（agent bridge 用它与 endpointMaster 比对）。
+ * user_id 缺失时兜底为空串，绝不回退到显示名。
+ */
+export function senderUserId(ev: OneBot11Event): string {
+  return ev.user_id != null ? String(ev.user_id) : '';
+}
+
+/** 显示名（群名片优先）放 metadata.nickname；没有则返回 undefined，不写该字段。 */
+export function senderNickname(ev: OneBot11Event): string | undefined {
+  const name = ev.sender?.card || ev.sender?.nickname;
+  return typeof name === 'string' && name ? name : undefined;
+}
+
+/**
+ * 回复引用 id：优先取 message 数组中的 {type:'reply', data:{id}} 段；
+ * 兼容部分实现把 reply 放在事件顶层（标量或带 message_id 的对象）。
+ */
+export function extractQuoteId(ev: OneBot11Event): string | undefined {
+  if (Array.isArray(ev.message)) {
+    for (const seg of ev.message) {
+      if (seg?.type === 'reply' && seg.data?.id != null) return String(seg.data.id);
+    }
+  }
+  const reply = ev.reply;
+  if (typeof reply === 'number' || typeof reply === 'string') return String(reply);
+  if (reply && typeof reply === 'object' && 'message_id' in reply) {
+    const id = (reply as { message_id?: unknown }).message_id;
+    if (id != null) return String(id);
+  }
+  return undefined;
+}
+
+/** 扫描 message 段中的 at，qq 等于本机 uin（self_id）即视为被 @；`qq:'all'`（@全体）不算。 */
+export function isOneBot11BotMentioned(input: {
+  readonly selfId: string | undefined;
+  readonly message?: readonly OneBot11Segment[];
+}): boolean {
+  if (!input.selfId || !Array.isArray(input.message)) return false;
+  return input.message.some((seg) => {
+    if (seg?.type !== 'at' || seg.data?.qq == null) return false;
+    const qq = String(seg.data.qq);
+    return qq !== 'all' && qq === input.selfId;
+  });
+}
+
+/** 构造 gateway.receive 的 metadata（ws / wss 两个 endpoint 共用）。 */
+export function formatInboundMetadata(
+  ev: OneBot11Event,
+  endpoint: string,
+): Readonly<Record<string, unknown>> {
+  const selfId = ev.self_id != null ? String(ev.self_id) : undefined;
+  const nickname = senderNickname(ev);
+  const quoteId = extractQuoteId(ev);
+  const mentioned = isOneBot11BotMentioned({ selfId, message: ev.message });
+  return Object.freeze({
+    message_type: ev.message_type,
+    user_id: ev.user_id != null ? String(ev.user_id) : undefined,
+    group_id: ev.group_id != null ? String(ev.group_id) : undefined,
+    endpoint,
+    time: ev.time,
+    self_id: selfId,
+    role: ev.sender?.role,
+    ...(nickname ? { nickname } : {}),
+    ...(quoteId ? { quote_id: quoteId } : {}),
+    ...(mentioned ? { mentioned: true } : {}),
+  });
+}
+
+/**
  * Wire-encode an already-rendered outbound payload into OneBot 11 message segments.
  * Segment canonicalization is intentionally not done here.
  */

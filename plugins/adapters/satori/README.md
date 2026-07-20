@@ -30,6 +30,8 @@ pnpm add @zhin.js/adapter-satori
 入站：`gateway.receive({ adapter, target: channelId, content: text, sender, id, metadata })`  
 出站：`send({ target: channelId, payload })` → Satori `message.create`（payload 已由 gateway/core 渲染；无 segment-mapper）
 
+入站 `metadata.mentioned`：消息 content 中 `<at id="…"/>` 元素的 id 等于登录 selfId（READY/事件 `login.user.id`）时置 `true`。
+
 ## 最小配置
 
 ```yaml

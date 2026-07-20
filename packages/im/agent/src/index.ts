@@ -103,6 +103,7 @@ export {
 } from './agent-prompt/index.js';
 export type { ResolveAgentPromptOptions } from './agent-prompt/index.js';
 export { createImTranscriptHistoryTool, createUserProfileTool } from './tool/context-tools.js';
+export type { ImTranscriptWriteInput, ImTranscriptStore } from '@zhin.js/ai';
 export { createSpawnTaskTool } from './builtin/spawn-task-tool.js';
 
 export { UserProfileStore, AI_USER_PROFILE_MODEL } from './user-profile.js';
@@ -636,6 +637,7 @@ export {
   buildTurnPlan,
   evaluatePeerTrigger,
   applyRuntimeCollaborationInbound,
+  findCellForInbound,
   resolveCollaborationSceneContextKey,
   resolveCollaborationSceneContextKeyFromMessage,
 } from './collaboration/index.js';

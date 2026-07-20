@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/qq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/qq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=f946f7a5d4159179 -->
+<!-- sync-adapter-docs:sha256=58ad3f4061b8c900 -->
 
 # @zhin.js/adapter-qq
 
@@ -21,6 +21,7 @@ Zhin.js QQ 官方机器人适配器（Plugin Runtime），默认通过 **WebSock
 - 出站 `send({ target, payload })` → QQ API（`private:` / `group:` / `channel:` / `direct:`）
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 - Webhook / middleware 模式已实现（经 `httpHostToken` 注册 POST 路由）
+- AI `@` 触发标注：群消息（GROUP_AT_MESSAGE_CREATE 仅 @ 时下发）与频道 `mentions[].bot` 会在入站 metadata 标 `mentioned: true`（新 Plugin Runtime 纯文本 content 经 metadata 传递 @）
 
 ## 安装
 

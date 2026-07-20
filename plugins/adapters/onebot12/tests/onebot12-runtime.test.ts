@@ -170,6 +170,7 @@ describe('onebot12 plugin runtime adapter', () => {
       user_id: '10001',
       alt_message: '你好',
       message: [{ type: 'text', data: { text: '你好' } }],
+      'user.name': 'Alice',
     });
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
@@ -178,10 +179,90 @@ describe('onebot12 plugin runtime adapter', () => {
       content: '你好',
       sender: '10001',
       id: 'msg-1',
+      metadata: expect.objectContaining({ nickname: 'Alice' }),
     }));
 
     await endpoint.stop();
     expect(ws.close).toHaveBeenCalled();
+  });
+
+  it('marks metadata.mentioned when a mention segment targets self.user_id', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const ws = createMockWs();
+    const endpoint = new OneBot12WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
+      gateway,
+      config: baseConfig,
+      createWebSocket: () => {
+        queueMicrotask(() => ws.emitOpen());
+        return ws;
+      },
+    });
+    await endpoint.start();
+    endpoint.open();
+    endpoint.admit({
+      id: 'e-at',
+      time: 1_700_000_000,
+      type: 'message',
+      detail_type: 'group',
+      sub_type: '',
+      self: { platform: 'qq', user_id: 'bot-1' },
+      message_id: 'm-at',
+      group_id: '200',
+      user_id: '9',
+      message: [
+        { type: 'mention', data: { user_id: 'bot-1' } },
+        { type: 'text', data: { text: ' 在吗' } },
+      ],
+      alt_message: '@bot 在吗',
+    });
+
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    expect(receive).toHaveBeenCalledWith(expect.objectContaining({
+      target: 'group:200',
+      sender: '9',
+      metadata: expect.objectContaining({ mentioned: true }),
+    }));
+    await endpoint.stop();
+  });
+
+  it('does not mark metadata.mentioned when the mention targets someone else', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const ws = createMockWs();
+    const endpoint = new OneBot12WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
+      gateway,
+      config: baseConfig,
+      createWebSocket: () => {
+        queueMicrotask(() => ws.emitOpen());
+        return ws;
+      },
+    });
+    await endpoint.start();
+    endpoint.open();
+    endpoint.admit({
+      id: 'e-other',
+      time: 1_700_000_000,
+      type: 'message',
+      detail_type: 'group',
+      sub_type: '',
+      self: { platform: 'qq', user_id: 'bot-1' },
+      message_id: 'm-other',
+      group_id: '200',
+      user_id: '9',
+      message: [
+        { type: 'mention', data: { user_id: 'someone-else' } },
+        { type: 'text', data: { text: ' 在吗' } },
+      ],
+      alt_message: '@other 在吗',
+    });
+
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    const metadata = receive.mock.calls[0]?.[0]?.metadata as Record<string, unknown>;
+    expect(metadata?.mentioned).toBeUndefined();
+    await endpoint.stop();
   });
 
   it('does not admit inbound while closed', async () => {

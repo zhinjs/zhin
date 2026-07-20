@@ -215,6 +215,8 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
         userId: msg.user,
         threadTs: msg.thread_ts && msg.thread_ts !== msg.ts ? msg.thread_ts : undefined,
         ts: msg.ts,
+        // app_mention 事件本身即 @ 机器人；新 Runtime 纯文本 content 需经 metadata 传递
+        ...(msg.type === 'app_mention' ? { mentioned: true } : {}),
       }),
     }).catch((err) => {
       logger.warn(formatCompact({
