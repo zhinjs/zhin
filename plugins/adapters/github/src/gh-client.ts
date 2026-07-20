@@ -410,7 +410,7 @@ export class GhClient {
 
   buildCloneUrl(repo: string, token: string): string {
     const host = this.host || 'github.com';
-    return `https://x-access-token:${token}@${host}/${repo}.git`;
+    return `https://x-access-token:${encodeURIComponent(token)}@${host}/${repo}.git`;
   }
 
   async resolveBotUserId(): Promise<number | null> {
