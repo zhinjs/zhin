@@ -1,34 +1,30 @@
 import { defineCommand } from '@zhin.js/command';
-import { component } from '@zhin.js/core/runtime';
-import * as os from 'node:os';
+import { raw } from '@zhin.js/core/runtime';
+import { buildZtReportHtml, ZT_REPORT_CANVAS } from '../lib/zt-report-card.js';
+import { buildZtReportText, collectZtFallbackData, collectZtReportData } from '../lib/zt-report-data.js';
 
-function formatSize(size: number): string {
-  const units = ['B', 'KB', 'MB', 'GB'];
-  let value = size;
-  let index = 0;
-  while (value > 1024 && index < units.length - 1) {
-    value /= 1024;
-    index += 1;
-  }
-  return `${value.toFixed(1)}${units[index]}`;
-}
+/** Runtime 环境无 legacy Plugin root；报告数据只用它做计数展示。 */
+const rootStub = { adapters: [], children: [] } as never;
 
-/** Runtime zt：Satori 状态卡（legacy JSX 见 src/plugins/test-jsx）。 */
+/** Runtime zt：富系统报告卡（legacy /zt 同款布局）。 */
 export default defineCommand({
-  description: '系统状态卡片',
+  description: '系统状态卡片（富报告）',
   execute: () => {
-    const mem = process.memoryUsage();
-    const load = os.loadavg().map((n) => n.toFixed(2)).join(' ');
-    return component('status-card', {
-      title: os.hostname(),
-      lines: [
-        { label: 'OS', value: `${os.type()} ${os.release()}` },
-        { label: 'CPU', value: `${os.cpus().length} · ${load}` },
-        { label: 'RAM', value: `${formatSize(os.totalmem() - os.freemem())}/${formatSize(os.totalmem())}` },
-        { label: 'RSS', value: formatSize(mem.rss) },
-        { label: 'Heap', value: formatSize(mem.heapUsed) },
-        { label: 'Up', value: `${Math.floor(process.uptime() / 60)}m` },
-      ],
+    let data;
+    try {
+      data = collectZtReportData(rootStub);
+    } catch {
+      data = collectZtFallbackData(rootStub);
+    }
+    return raw({
+      type: 'html',
+      data: {
+        html: buildZtReportHtml(data),
+        width: 540,
+        backgroundColor: ZT_REPORT_CANVAS,
+        fileName: 'system-status.png',
+        text: buildZtReportText(data),
+      },
     });
   },
 });
