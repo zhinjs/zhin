@@ -74,6 +74,7 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
         config: resolved.a2a,
         fallbackToken: resolved.httpToken,
         fallbackPublicUrl: resolved.publicBaseUrl,
+        production: options.production,
       }));
     }
   };

@@ -26,6 +26,7 @@ export interface InstallRuntimeA2aOptions {
   readonly config?: RuntimeA2aConfig;
   readonly fallbackToken?: string;
   readonly fallbackPublicUrl: string;
+  readonly production?: boolean;
 }
 
 interface AgentStack {
@@ -38,6 +39,10 @@ export function installRuntimeA2a(options: InstallRuntimeA2aOptions): () => void
   if (options.config?.enabled === false) return () => undefined;
   const basePath = normalizePath(options.config?.path ?? '/a2a');
   const publicBaseUrl = (options.config?.publicUrl ?? options.fallbackPublicUrl).replace(/\/+$/u, '');
+  const token = options.config?.token ?? options.fallbackToken ?? '';
+  if (options.production === true && !token) {
+    throw new Error('A2A requires a2a.token or http.token in production');
+  }
   const service = options.agentHost.service as {
     getBindingRegistry(): AgentBindingRegistry;
   };
@@ -59,7 +64,6 @@ export function installRuntimeA2a(options: InstallRuntimeA2aOptions): () => void
     });
   }
 
-  const token = options.config?.token ?? options.fallbackToken ?? '';
   const unregister = options.http.route('ALL', `${basePath}/*`, async (request, response, url) => {
     if (token && !verifyA2aBearer(request, token)) {
       writeJson(response, 401, { error: 'Unauthorized - Bearer token required' });

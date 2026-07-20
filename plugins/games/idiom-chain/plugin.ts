@@ -6,7 +6,7 @@ import {
   DEFAULT_GAME_STALE_IDLE_MS,
 } from '@zhin.js/game-kit';
 import { mountChainHostServices, mountChainMemoryServices } from './src/memory-db.js';
-import { getGameServices } from './src/runtime-store.js';
+import { gameServicesToken } from './src/runtime-store.js';
 import type { SessionService } from './src/session-service.js';
 
 /**
@@ -21,13 +21,15 @@ export default definePlugin({
     displayName: 'Idiom Chain',
   },
   setup(context) {
+    let services: SessionService;
     if (context.resources.has(databaseHostToken)) {
       const host = context.resources.use(databaseHostToken);
-      mountChainHostServices(host);
-      initGameRecordHost(host);
+      services = mountChainHostServices(host);
+      context.lifecycle.add(initGameRecordHost(host));
     } else {
-      mountChainMemoryServices();
+      services = mountChainMemoryServices();
     }
+    context.resources.provide(gameServicesToken, services);
     const disposeHub = registerRuntimeGame({
       id: 'chain',
       title: '成语接龙',
@@ -52,8 +54,7 @@ export default definePlugin({
         cron: DEFAULT_GAME_STALE_CRON,
         description: 'Abort stale idiom-chain sessions',
         async execute() {
-          const services = getGameServices<SessionService>();
-          if (!services?.abortStale) return;
+          if (!services.abortStale) return;
           await services.abortStale(DEFAULT_GAME_STALE_IDLE_MS);
         },
       });

@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import middleware from '../middlewares/adv-choice.ts';
 import { startAdventure } from '../src/game-flow.js';
 import { mountAdvMemoryServices } from '../src/memory-db.js';
-import { setGameServices } from '../src/runtime-store.js';
 import type { GameServices } from '../src/session-service.js';
 
 const replies: string[] = [];
 let nextCalls = 0;
+let services: GameServices;
 
 function makeInput(content: string, senderId = 'u1') {
   return {
@@ -28,9 +28,7 @@ function makeCtx(input: unknown) {
     owner: {},
     generation: 0,
     config: {},
-    use: () => {
-      throw new Error('unused');
-    },
+    use: () => services,
   } as never;
 }
 
@@ -39,12 +37,9 @@ const next = async () => {
 };
 
 describe('text-adventure adv-choice middleware (text fallback)', () => {
-  let services: GameServices;
-
   beforeEach(() => {
     replies.length = 0;
     nextCalls = 0;
-    setGameServices(null);
     services = mountAdvMemoryServices();
   });
 

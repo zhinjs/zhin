@@ -6,24 +6,28 @@
 import type { ZhinAgent } from '../zhin-agent/index.js';
 
 export class AgentRuntimeRegistry {
-  private defaultRuntime: ZhinAgent | null = null;
+  private defaultRuntimes: ZhinAgent[] = [];
   private byEndpoint = new Map<string, ZhinAgent>();
 
-  registerDefault(agent: ZhinAgent): void {
-    this.defaultRuntime = agent;
+  registerDefault(agent: ZhinAgent): () => void {
+    this.defaultRuntimes.push(agent);
+    return () => {
+      const index = this.defaultRuntimes.lastIndexOf(agent);
+      if (index >= 0) this.defaultRuntimes.splice(index, 1);
+    };
   }
 
   registerForEndpoint(endpointId: string, agent: ZhinAgent): void {
     this.byEndpoint.set(endpointId, agent);
-    if (!this.defaultRuntime) this.defaultRuntime = agent;
+    if (this.defaultRuntimes.length === 0) this.defaultRuntimes.push(agent);
   }
 
   getDefault(): ZhinAgent | null {
-    return this.defaultRuntime;
+    return this.defaultRuntimes[this.defaultRuntimes.length - 1] ?? null;
   }
 
   getForEndpoint(endpointId: string): ZhinAgent | null {
-    return this.byEndpoint.get(endpointId) ?? this.defaultRuntime;
+    return this.byEndpoint.get(endpointId) ?? this.getDefault();
   }
 
   listEndpointIds(): string[] {
@@ -31,7 +35,7 @@ export class AgentRuntimeRegistry {
   }
 
   clear(): void {
-    this.defaultRuntime = null;
+    this.defaultRuntimes = [];
     this.byEndpoint.clear();
   }
 }

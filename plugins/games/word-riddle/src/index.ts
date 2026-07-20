@@ -1,5 +1,5 @@
 export { RIDDLE_HELP } from './riddle-command.js';
-export { getGameServices, setGameServices } from './runtime-store.js';
+export { gameServicesToken, resolveGameServices } from './runtime-store.js';
 export { createInMemoryRiddleDb, mountRiddleMemoryServices } from './memory-db.js';
 
 /**

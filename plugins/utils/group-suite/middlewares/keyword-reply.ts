@@ -2,6 +2,7 @@ import { defineMiddleware } from '@zhin.js/middleware';
 import type { Message } from '@zhin.js/core/runtime';
 import { resolveGroupSuiteConfig, type GroupSuiteConfig } from '../src/config.js';
 import { matchKeyword } from '../src/keyword-store.js';
+import { resolveGroupSuiteRuntime } from '../src/runtime-state.js';
 
 /**
  * Keyword auto-reply (enabled via config.keywordReply).
@@ -26,7 +27,7 @@ export default defineMiddleware<Message, GroupSuiteConfig>({
       await next();
       return;
     }
-    const reply = matchKeyword(text);
+    const reply = matchKeyword(text, resolveGroupSuiteRuntime(context)?.keywords);
     if (reply) {
       await context.input.$reply(reply);
       return;

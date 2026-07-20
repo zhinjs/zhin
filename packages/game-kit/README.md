@@ -20,6 +20,8 @@ import { registerRuntimeGame } from '@zhin.js/game-kit';
 export default definePlugin({
   name: 'my-game',
   setup(context) {
+    const services = createMyGameServices();
+    context.resources.provide(myGameServicesToken, services);
     const dispose = registerRuntimeGame({
       id: 'my-game',
       title: 'My Game',
@@ -37,6 +39,8 @@ export default definePlugin({
 - `middlewares/` 处理按钮 payload、裸文本答案和旧命令别名。
 - `registerRuntimeGame()` / `getRuntimeGames()` 是大厅 SSOT，dispose 时对称移除。
 - `DEFAULT_GAME_STALE_CRON` 与 `scheduleHostToken` 用于清理超时会话。
+- 每个游戏包定义自己的 typed service token；`plugin.ts` 提供资源，command/middleware
+  通过 Capability Context 的 `use(token)` 消费。禁止以模块变量保存当前 SessionService。
 
 ## 交互消息
 
@@ -75,7 +79,8 @@ const board = buildGridKeyboard({
 - `initGameRecordHost()` / `recordGameOutcome()`：统一战绩表与结果写入。
 - `channelKey()` / `generateSessionId()`：稳定会话身份。
 
-游戏包应优先使用 `databaseHostToken`，缺失时显式回退内存；不从模块全局读取旧 Plugin。
+游戏包应优先使用 `databaseHostToken`，缺失时为每个插件实例创建独立内存库。数据库、
+SessionService、cron 闭包都属于同一个 owner generation；热更卸载旧代不会覆盖新代状态。
 
 ## 验证
 

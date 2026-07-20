@@ -13,21 +13,35 @@ export interface AssistantRuntimeHandle {
 }
 
 let runtime: AssistantRuntimeHandle | null = null;
+const registrations: Array<{ readonly value: AssistantRuntimeHandle | null }> = [];
 
 export function setAssistantRuntime(handle: AssistantRuntimeHandle | null): void {
   runtime = handle;
 }
 
+/** Registers an explicit generation value, including `null` to disable Assistant. */
+export function registerAssistantRuntime(handle: AssistantRuntimeHandle | null): () => void {
+  const registration = Object.freeze({ value: handle });
+  registrations.push(registration);
+  return () => {
+    const index = registrations.lastIndexOf(registration);
+    if (index >= 0) registrations.splice(index, 1);
+  };
+}
+
 export function getAssistantRuntime(): AssistantRuntimeHandle | null {
-  return runtime;
+  const current = registrations[registrations.length - 1];
+  return current ? current.value : runtime;
 }
 
 export function isAssistantEventsEndpointActive(): boolean {
-  if (!runtime) return false;
-  return isAssistantEventsActive(runtime.config);
+  const current = getAssistantRuntime();
+  if (!current) return false;
+  return isAssistantEventsActive(current.config);
 }
 
 export function getAssistantEventsTokenFallback(): string | undefined {
-  if (!runtime) return undefined;
-  return resolveAssistantEventsConfig(runtime.config.events).token;
+  const current = getAssistantRuntime();
+  if (!current) return undefined;
+  return resolveAssistantEventsConfig(current.config.events).token;
 }

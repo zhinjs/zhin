@@ -1,19 +1,19 @@
 const keywords = new Map<string, string>();
 
-export function addKeyword(keyword: string, reply: string): void {
-  keywords.set(keyword, reply);
+export function addKeyword(keyword: string, reply: string, store = keywords): void {
+  store.set(keyword, reply);
 }
 
-export function removeKeyword(keyword: string): boolean {
-  return keywords.delete(keyword);
+export function removeKeyword(keyword: string, store = keywords): boolean {
+  return store.delete(keyword);
 }
 
-export function listKeywords(): Array<[string, string]> {
-  return Array.from(keywords.entries());
+export function listKeywords(store = keywords): Array<[string, string]> {
+  return Array.from(store.entries());
 }
 
-export function matchKeyword(text: string): string | null {
-  for (const [keyword, reply] of keywords) {
+export function matchKeyword(text: string, store = keywords): string | null {
+  for (const [keyword, reply] of store) {
     if (text.includes(keyword)) return reply;
   }
   return null;

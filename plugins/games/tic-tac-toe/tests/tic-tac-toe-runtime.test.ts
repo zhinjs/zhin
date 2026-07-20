@@ -4,15 +4,13 @@ import plugin from '../plugin.ts';
 import gameCommand from '../commands/ttt/[action:string=].ts';
 import { TTT_HELP } from '../src/index.js';
 import { mountTttMemoryServices } from '../src/memory-db.js';
-import { setGameServices } from '../src/runtime-store.js';
+let services: ReturnType<typeof mountTttMemoryServices>;
 
 const emptyCtx = {
   owner: {} as never,
   generation: 0,
   config: {},
-  use: () => {
-    throw new Error('unused');
-  },
+  use: () => services,
   args: [] as string[],
   params: {} as Record<string, string | number | boolean>,
   input: undefined as never,
@@ -20,8 +18,7 @@ const emptyCtx = {
 
 describe('@zhin.js/plugin-tic-tac-toe runtime (slice-2)', () => {
   beforeEach(() => {
-    setGameServices(null);
-    mountTttMemoryServices();
+    services = mountTttMemoryServices();
   });
 
   it('defines a valid Plugin Runtime entry', () => {

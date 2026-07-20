@@ -1,8 +1,6 @@
 import { defineGameCommandAliasMiddleware, messageFromCommandInput } from '@zhin.js/game-kit';
 import { BJ_HELP, runBjCommandText } from '../src/bj-command.js';
-import { getGameServices } from '../src/runtime-store.js';
-import { mountBjMemoryServices } from '../src/memory-db.js';
-import type { SessionService } from '../src/session-service.js';
+import { resolveGameServices } from '../src/runtime-store.js';
 
 function normalizeBjAction(raw: string): string {
   const a = raw.trim().toLowerCase() || 'help';
@@ -12,16 +10,12 @@ function normalizeBjAction(raw: string): string {
   return a;
 }
 
-function requireServices(): SessionService {
-  return getGameServices<SessionService>() ?? mountBjMemoryServices();
-}
-
 export default defineGameCommandAliasMiddleware({
   aliases: ['21点', 'bj'],
-  async run(action, input) {
+  async run(action, input, context) {
     const normalized = normalizeBjAction(String(action ?? ''));
     if (!normalized || normalized === 'help') return BJ_HELP;
-    const services = requireServices();
+    const services = resolveGameServices(context);
     const message = messageFromCommandInput(input);
     return runBjCommandText(services, message, normalized);
   },

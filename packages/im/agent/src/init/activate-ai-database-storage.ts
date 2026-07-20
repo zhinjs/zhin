@@ -8,7 +8,10 @@ import {
   DatabaseOrchestrationRepository,
   MemoryOrchestrationRepository,
 } from '../orchestrator/orchestration-repository.js';
-import { upgradeOrchestrationRepository } from '../orchestrator/orchestration-service.js';
+import {
+  upgradeOrchestrationRepository,
+  type OrchestrationService,
+} from '../orchestrator/orchestration-service.js';
 import type { AIServiceRefs } from './shared-refs.js';
 import { wireCollaborationStorage } from '../collaboration/wire-collaboration-storage.js';
 export async function activateAiDatabaseStorage(
@@ -16,6 +19,7 @@ export async function activateAiDatabaseStorage(
   refs: AIServiceRefs,
   config: AIConfig,
   collaborationRaw?: unknown,
+  orchestrationService?: OrchestrationService,
 ): Promise<void> {
   if (!refs.zhinAgent) return;
   if (config.sessions?.useDatabase === false) return;
@@ -68,7 +72,7 @@ export async function activateAiDatabaseStorage(
   // initialised with a Memory placeholder during create-zhinAgent; this swaps
   // it to the Database repository while preserving registered executors and
   // workflow strategies (ADR 0027 — single state-transition authority).
-  upgradeOrchestrationRepository(orchRepo);
+  upgradeOrchestrationRepository(orchRepo, orchestrationService);
 
   const semanticEnabled = config.memory?.semantic?.enabled === true;
   if (semanticEnabled) {

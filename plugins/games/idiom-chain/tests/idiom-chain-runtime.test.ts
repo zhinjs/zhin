@@ -4,15 +4,13 @@ import plugin from '../plugin.ts';
 import gameCommand from '../commands/chain/[action:string=].ts';
 import { CHAIN_HELP } from '../src/index.js';
 import { mountChainMemoryServices } from '../src/memory-db.js';
-import { setGameServices } from '../src/runtime-store.js';
+let services: ReturnType<typeof mountChainMemoryServices>;
 
 const emptyCtx = {
   owner: {} as never,
   generation: 0,
   config: {},
-  use: () => {
-    throw new Error('unused');
-  },
+  use: () => services,
   args: [] as string[],
   params: {} as Record<string, string | number | boolean>,
   input: undefined as never,
@@ -20,8 +18,7 @@ const emptyCtx = {
 
 describe('@zhin.js/plugin-idiom-chain runtime (slice-2)', () => {
   beforeEach(() => {
-    setGameServices(null);
-    mountChainMemoryServices();
+    services = mountChainMemoryServices();
   });
 
   it('defines a valid Plugin Runtime entry', () => {

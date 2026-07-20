@@ -6,11 +6,10 @@ import {
   parseChoicePayload,
   resolveGameTextPayload,
 } from '@zhin.js/game-kit';
-import { getGameServices } from '../src/runtime-store.js';
+import { resolveGameServices } from '../src/runtime-store.js';
 import { buildFallbackMap, TTT_PREFIX, parseTttPayload } from '../src/board-view.js';
 import { parseBoard } from '../src/engine.js';
 import { handleMove, restartFromTerminal } from '../src/game-flow.js';
-import type { SessionServices } from '../src/session-service.js';
 
 /**
  * 文本入口：按钮 payload（`ttt:session:0-8` 或 `ttt:session:restart`）
@@ -24,11 +23,7 @@ export default defineMiddleware<Message>({
       await next();
       return;
     }
-    const services = getGameServices<SessionServices>();
-    if (!services) {
-      await next();
-      return;
-    }
+    const services = resolveGameServices(context);
     const message = messageFromCommandInput(context.input);
     const ch = channelKey(message);
 

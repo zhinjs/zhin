@@ -7,9 +7,8 @@ import {
   parseChoicePayload,
   resolveGameTextPayload,
 } from '@zhin.js/game-kit';
-import { getGameServices } from '../src/runtime-store.js';
+import { resolveGameServices } from '../src/runtime-store.js';
 import { handleChoice, RPS_PREFIX } from '../src/game-flow.js';
-import type { SessionService } from '../src/session-service.js';
 
 /**
  * 文本入口：按钮 payload（`rps:session:rock|paper|scissors|restart`）与数字 fallback
@@ -23,11 +22,7 @@ export default defineMiddleware<Message>({
       await next();
       return;
     }
-    const services = getGameServices<SessionService>();
-    if (!services) {
-      await next();
-      return;
-    }
+    const services = resolveGameServices(context);
     const message = messageFromCommandInput(context.input);
     const ch = channelKey(message);
 

@@ -6,7 +6,7 @@ import {
   DEFAULT_GAME_STALE_IDLE_MS,
 } from '@zhin.js/game-kit';
 import { mountDiceHostServices, mountDiceMemoryServices } from './src/memory-db.js';
-import { getGameServices } from './src/runtime-store.js';
+import { gameServicesToken } from './src/runtime-store.js';
 import type { SessionService } from './src/session-service.js';
 
 /**
@@ -21,13 +21,15 @@ export default definePlugin({
     displayName: 'Dice Duel',
   },
   setup(context) {
+    let services: SessionService;
     if (context.resources.has(databaseHostToken)) {
       const host = context.resources.use(databaseHostToken);
-      mountDiceHostServices(host);
-      initGameRecordHost(host);
+      services = mountDiceHostServices(host);
+      context.lifecycle.add(initGameRecordHost(host));
     } else {
-      mountDiceMemoryServices();
+      services = mountDiceMemoryServices();
     }
+    context.resources.provide(gameServicesToken, services);
     const disposeHub = registerRuntimeGame({
       id: 'dice',
       title: '骰子对决',
@@ -51,8 +53,7 @@ export default definePlugin({
         cron: DEFAULT_GAME_STALE_CRON,
         description: 'Abort stale dice-duel sessions',
         async execute() {
-          const services = getGameServices<SessionService>();
-          if (!services?.abortStale) return;
+          if (!services.abortStale) return;
           await services.abortStale(DEFAULT_GAME_STALE_IDLE_MS);
         },
       });

@@ -22,4 +22,16 @@ describe('AgentRuntimeRegistry', () => {
     expect(registry.getForEndpoint('bot-a')).toBe(primary);
     expect(registry.getForEndpoint('bot-b')).toBe(secondary);
   });
+
+  it('reveals the previous generation after the current one is disposed', () => {
+    const previous = { id: 'previous' } as never;
+    const next = { id: 'next' } as never;
+    const disposePrevious = registry.registerDefault(previous);
+    const disposeNext = registry.registerDefault(next);
+
+    disposePrevious();
+    expect(registry.getDefault()).toBe(next);
+    disposeNext();
+    expect(registry.getDefault()).toBeNull();
+  });
 });

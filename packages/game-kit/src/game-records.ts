@@ -32,7 +32,16 @@ declare module '@zhin.js/core' {
 export type GameRecordRow = Models['game_records'];
 type GameRecordDb = Database<unknown, Models, string>;
 
-let db: GameRecordDb | null = null;
+let legacyDb: GameRecordDb | null = null;
+let hostDatabases = new WeakMap<GameRecordDatabaseHost, GameRecordDb>();
+const hostRegistrations: Array<{
+  readonly host: GameRecordDatabaseHost;
+  readonly database: GameRecordDb;
+}> = [];
+
+function activeDatabase(): GameRecordDb | null {
+  return hostRegistrations[hostRegistrations.length - 1]?.database ?? legacyDb;
+}
 
 function getRecordModel(database: GameRecordDb): RelatedModel<unknown, Models, 'game_records'> {
   const model = database.models.get('game_records');
@@ -54,7 +63,7 @@ export function registerGameRecordModels(plugin: Plugin): void {
 }
 
 export function initGameRecordDatabase(dbFeature: DatabaseFeature): void {
-  db = dbFeature.db as GameRecordDb;
+  legacyDb = dbFeature.db as GameRecordDb;
 }
 
 const GAME_RECORDS_DEFINITION: Record<string, unknown> = {
@@ -77,10 +86,19 @@ export interface GameRecordDatabaseHost extends HostGameDbSource {
  * Plugin Runtime 下用 databaseHostToken 初始化战绩库。
  * 幂等：多个游戏插件 setup 都会调用，只建一次；无 token 时保持跳过（内存/静默）。
  */
-export function initGameRecordHost(host: GameRecordDatabaseHost): void {
-  if (db) return;
-  host.define('game_records', GAME_RECORDS_DEFINITION);
-  db = createHostGameDb(host, ['game_records']) as unknown as GameRecordDb;
+export function initGameRecordHost(host: GameRecordDatabaseHost): () => void {
+  let database = hostDatabases.get(host);
+  if (!database) {
+    host.define('game_records', GAME_RECORDS_DEFINITION);
+    database = createHostGameDb(host, ['game_records']) as unknown as GameRecordDb;
+    hostDatabases.set(host, database);
+  }
+  const registration = Object.freeze({ host, database });
+  hostRegistrations.push(registration);
+  return () => {
+    const index = hostRegistrations.lastIndexOf(registration);
+    if (index >= 0) hostRegistrations.splice(index, 1);
+  };
 }
 
 function recordId(): string {
@@ -94,6 +112,7 @@ export async function recordGameOutcome(
   result: GameRecordResult,
   score = 0,
 ): Promise<void> {
+  const db = activeDatabase();
   if (!db) return;
   const row: GameRecordRow = {
     id: recordId(),
@@ -121,6 +140,7 @@ export async function getUserGameStats(
   userId: string,
   channelKeyFilter?: string,
 ): Promise<UserGameStats[]> {
+  const db = activeDatabase();
   if (!db) return [];
   const where = channelKeyFilter
     ? { user_id: userId, channel_key: channelKeyFilter }
@@ -162,6 +182,7 @@ export async function getGameLeaderboard(
   channelKeyFilter: string,
   limit = 10,
 ): Promise<LeaderboardEntry[]> {
+  const db = activeDatabase();
   if (!db) return [];
   const rows = await getRecordModel(db).findAll({
     game_id: gameId,
@@ -260,5 +281,7 @@ export function mountGameRecordCommands(root: Plugin): () => void {
 
 /** 测试专用 */
 export function resetGameRecordsForTests(): void {
-  db = null;
+  legacyDb = null;
+  hostDatabases = new WeakMap();
+  hostRegistrations.splice(0);
 }

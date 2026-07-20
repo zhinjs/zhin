@@ -32,13 +32,24 @@ export interface ScheduleManager {
 }
 
 let scheduleManager: ScheduleManager | null = null;
+const scheduleManagerRegistrations: ScheduleManager[] = [];
 
 export function setScheduleManager(m: ScheduleManager | null): void {
   scheduleManager = m;
 }
 
+/** Generation-safe registration; disposing an older owner cannot clear a newer manager. */
+export function registerScheduleManager(manager: ScheduleManager): () => void {
+  scheduleManagerRegistrations.push(manager);
+  return () => {
+    const index = scheduleManagerRegistrations.lastIndexOf(manager);
+    if (index >= 0) scheduleManagerRegistrations.splice(index, 1);
+  };
+}
+
 export function getScheduleManager(): ScheduleManager | null {
-  return scheduleManager;
+  return scheduleManagerRegistrations[scheduleManagerRegistrations.length - 1]
+    ?? scheduleManager;
 }
 
 export { generateScheduleJobId };

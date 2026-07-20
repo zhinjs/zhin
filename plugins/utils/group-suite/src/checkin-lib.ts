@@ -8,6 +8,7 @@ import {
   ts,
   yesterdayStr,
 } from './shared-runtime.js';
+import type { GroupSuiteRuntime } from './runtime-state.js';
 
 async function getOrCreateUser(
   model: any,
@@ -48,8 +49,9 @@ async function getOrCreateUser(
 export async function doCheckin(
   input: { sender?: string; target?: string; metadata?: Readonly<Record<string, unknown>> },
   cfg: GroupSuiteConfig,
+  runtime?: GroupSuiteRuntime,
 ): Promise<string> {
-  const M = getCheckinModel();
+  const M = getCheckinModel(runtime?.db);
   if (!M) return '签到数据库尚未就绪，请稍后重试';
 
   const { id: userId, name: userName } = resolveSender(input);
@@ -93,8 +95,9 @@ export async function doCheckin(
 
 export async function myPoints(
   input: { sender?: string; target?: string; metadata?: Readonly<Record<string, unknown>> },
+  runtime?: GroupSuiteRuntime,
 ): Promise<string> {
-  const M = getCheckinModel();
+  const M = getCheckinModel(runtime?.db);
   if (!M) return '签到数据库尚未就绪';
   const { id: userId } = resolveSender(input);
   const { type: ctxType, id: ctxId } = resolveContextKey(input);
@@ -119,8 +122,9 @@ export async function myPoints(
 export async function pointsRank(
   input: { sender?: string; target?: string; metadata?: Readonly<Record<string, unknown>> },
   cfg: GroupSuiteConfig,
+  runtime?: GroupSuiteRuntime,
 ): Promise<string> {
-  const M = getCheckinModel();
+  const M = getCheckinModel(runtime?.db);
   if (!M) return '签到数据库尚未就绪';
   const { type: ctxType, id: ctxId } = resolveContextKey(input);
   const all = (await M.select().where(

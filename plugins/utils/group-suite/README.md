@@ -36,7 +36,11 @@ plugins:
 ```
 
 完整约束以 [`schema.json`](./schema.json) 为 SSOT。数据优先写入 Runtime
-`DatabaseHost`；未配置数据库时使用进程内存存储，适合测试。
+`DatabaseHost`；未配置数据库时使用插件实例私有的内存存储，适合测试。
+
+数据库、关键词、教学冷却和消息统计缓冲统一封装为 owner-scoped
+`GroupSuiteRuntime`。commands/middlewares 只通过 Capability Context 解析该资源；因此同一
+进程中的多个实例、HMR 新旧 generation 不会共享可变状态。
 
 ## 能力
 

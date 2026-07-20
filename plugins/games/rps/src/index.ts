@@ -1,5 +1,5 @@
 export { RPS_HELP } from './rps-command.js';
-export { getGameServices, setGameServices } from './runtime-store.js';
+export { gameServicesToken, resolveGameServices } from './runtime-store.js';
 export { createInMemoryRpsDb, mountRpsMemoryServices } from './memory-db.js';
 
 /**

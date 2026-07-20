@@ -223,6 +223,7 @@ export { ZHIN_WEB_USER_AGENT, WEB_TOOL_FETCH_TIMEOUT_MS } from './builtin/web-to
 export {
   createScheduleTools,
   setScheduleManager,
+  registerScheduleManager,
   getScheduleManager,
   generateScheduleJobId,
   SCHEDULE_JOBS_FILENAME,
@@ -248,6 +249,7 @@ export {
   imNotifyToSendOptions,
   parseJobNotify,
   setAssistantRuntime,
+  registerAssistantRuntime,
   getAssistantRuntime,
   isAssistantEventsEndpointActive,
   getAssistantEventsTokenFallback,
@@ -331,6 +333,7 @@ export {
   getOrchestrationService,
   getOrchestrationKernel,
   initOrchestrationService,
+  registerOrchestrationService,
   upgradeOrchestrationRepository,
   OrchestrationKernel,
   OrchestrationService,

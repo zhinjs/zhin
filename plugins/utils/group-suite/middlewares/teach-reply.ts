@@ -2,6 +2,7 @@ import { defineMiddleware } from '@zhin.js/middleware';
 import type { Message } from '@zhin.js/core/runtime';
 import { resolveGroupSuiteConfig, type GroupSuiteConfig } from '../src/config.js';
 import { tryTeachReply } from '../src/teach-lib.js';
+import { resolveGroupSuiteRuntime } from '../src/runtime-state.js';
 
 /**
  * Teach Q&A auto-reply (exact / optional regex).
@@ -11,7 +12,7 @@ export default defineMiddleware<Message, GroupSuiteConfig>({
   target: 'inbound',
   async handle(context, next) {
     const config = resolveGroupSuiteConfig(context.config);
-    const reply = await tryTeachReply(context.input, config);
+    const reply = await tryTeachReply(context.input, config, resolveGroupSuiteRuntime(context));
     if (reply) {
       await context.input.$reply(reply);
       return;

@@ -8,6 +8,9 @@
 - 频率 + 遗漏 + 趋势综合统计；开奖后自动调权
 - 按 `games` 配置过滤，经 Runtime `OutboundHost` 推送到显式 `pushTargets`
 - 手动触发：`lottery`（不推送，结果在会话内返回）
+- IM commands 通过 owner-scoped `LotteryRuntime` 使用实例 DB。Agent deps 与 Outbound
+  sender 使用 generation-owned 注册；配置关闭推送时会显式遮蔽旧 generation，回滚时再
+  恢复仍存活的上一代。
 
 ## 安装
 

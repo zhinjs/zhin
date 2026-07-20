@@ -9,7 +9,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { type Plugin, getLogger } from '@zhin.js/core';
-import { getDataDir } from './utils.js';
+import { workspaceRoot } from './utils.js';
 import {
   discoverWorkspaceFractalAgent,
   resolvePluginPackageRoot,
@@ -120,14 +120,17 @@ async function discoverFractalAgentsInDir(
 /**
  * 扫描 agents/ 分形目录，发现 workspace / plugin workspace agents
  */
-export async function discoverWorkspaceAgents(root?: Plugin | null): Promise<AgentMeta[]> {
+export async function discoverWorkspaceAgents(
+  root?: Plugin | null,
+  projectRoot = workspaceRoot(),
+): Promise<AgentMeta[]> {
   const agents: AgentMeta[] = [];
   const seenNames = new Set<string>();
 
   const agentDirs: string[] = [
-    path.join(process.cwd(), 'agents'),
+    path.join(projectRoot, 'agents'),
     path.join(os.homedir(), '.zhin', 'agents'),
-    path.join(getDataDir(), 'agents'),
+    path.join(projectRoot, 'data', 'agents'),
   ];
 
   const dirToPlugin = new Map<string, string>();

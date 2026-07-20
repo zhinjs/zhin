@@ -1,4 +1,4 @@
-import { defineMiddleware } from '@zhin.js/middleware';
+import { defineMiddleware, type MiddlewareContext } from '@zhin.js/middleware';
 import type { Message } from '@zhin.js/core/runtime';
 
 /**
@@ -16,7 +16,11 @@ export interface GameCommandAliasRoute {
    * 与 `commands/<cmd>/[action:string=].ts` 的 execute 逻辑保持一致：
    * action 为别名后剩余文本（无参数时为 ''）；返回回复文本，null/undefined 表示放行。
    */
-  run(action: string, input: unknown): Promise<string | null | undefined>;
+  run(
+    action: string,
+    input: unknown,
+    context: MiddlewareContext<Message>,
+  ): Promise<string | null | undefined>;
 }
 
 export function defineGameCommandAliasMiddleware(route: GameCommandAliasRoute) {
@@ -30,7 +34,7 @@ export function defineGameCommandAliasMiddleware(route: GameCommandAliasRoute) {
         await next();
         return;
       }
-      const reply = await route.run(rest.join(' '), context.input);
+      const reply = await route.run(rest.join(' '), context.input, context);
       if (reply) {
         await context.input.$reply(reply);
         return;

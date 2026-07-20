@@ -18,24 +18,37 @@ export interface RuntimeRegisteredGame {
   readonly menus?: readonly RuntimeGameMenuAction[];
 }
 
-const games = new Map<string, RuntimeRegisteredGame>();
+const games = new Map<string, RuntimeRegisteredGame[]>();
 
 export function registerRuntimeGame(game: RuntimeRegisteredGame): () => void {
-  games.set(game.id, Object.freeze({ ...game }));
+  const registered = Object.freeze({ ...game });
+  const registrations = games.get(game.id) ?? [];
+  registrations.push(registered);
+  games.set(game.id, registrations);
   return () => {
-    games.delete(game.id);
+    const current = games.get(game.id);
+    if (!current) return;
+    const index = current.lastIndexOf(registered);
+    if (index >= 0) current.splice(index, 1);
+    if (current.length === 0) games.delete(game.id);
   };
 }
 
 export function getRuntimeGames(): readonly RuntimeRegisteredGame[] {
-  return Object.freeze([...games.values()].sort((a, b) => a.id.localeCompare(b.id)));
+  const active = [...games.values()]
+    .map((registrations) => registrations[registrations.length - 1])
+    .filter((game): game is RuntimeRegisteredGame => Boolean(game));
+  return Object.freeze(active.sort((a, b) => a.id.localeCompare(b.id)));
 }
 
 export function getRuntimeGame(id: string): RuntimeRegisteredGame | undefined {
-  const direct = games.get(id);
+  const directRegistrations = games.get(id);
+  const direct = directRegistrations?.[directRegistrations.length - 1];
   if (direct) return direct;
   // 别名解析（如 bj、ttt、21点）
-  for (const game of games.values()) {
+  for (const registrations of games.values()) {
+    const game = registrations[registrations.length - 1];
+    if (!game) continue;
     if (game.aliases?.includes(id)) return game;
   }
   return undefined;

@@ -76,4 +76,39 @@ describe('@zhin.js/plugin-game-hub runtime', () => {
     const fromCommand = await gamesCommand.execute({ ...emptyCtx, params: {} });
     expect(String(fromCommand)).toBe(formatRuntimeGamesHelp());
   });
+
+  it('does not let an old generation unregister its replacement', () => {
+    const disposePrevious = registerRuntimeGame({
+      id: 'guess',
+      title: 'old',
+      icon: '',
+      description: '',
+      commandPrefix: '/guess',
+    });
+    const disposeNext = registerRuntimeGame({
+      id: 'guess',
+      title: 'next',
+      icon: '',
+      description: '',
+      commandPrefix: '/guess',
+    });
+
+    disposePrevious();
+    expect(getRuntimeGame('guess')?.title).toBe('next');
+    disposeNext();
+    expect(getRuntimeGame('guess')).toBeUndefined();
+  });
+
+  it('restores the old game when replacement preparation rolls back', () => {
+    const disposePrevious = registerRuntimeGame({
+      id: 'guess', title: 'old', icon: '', description: '', commandPrefix: '/guess',
+    });
+    const disposeNext = registerRuntimeGame({
+      id: 'guess', title: 'next', icon: '', description: '', commandPrefix: '/guess',
+    });
+
+    disposeNext();
+    expect(getRuntimeGame('guess')?.title).toBe('old');
+    disposePrevious();
+  });
 });

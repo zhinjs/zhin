@@ -11,10 +11,12 @@ import {
   type LotteryConfig,
 } from './src/config.js';
 import { defineLotteryTables } from './src/db.js';
-import { ensureLotteryMemoryDb, getLotteryDb, setLotteryDb } from './src/db-store.js';
-import { setLotteryAgentDeps } from './src/lottery-agent-deps.js';
+import { registerLotteryDb } from './src/db-store.js';
+import { registerLotteryAgentDeps } from './src/lottery-agent-deps.js';
+import { createInMemoryLotteryDb } from './src/memory-db.js';
+import { lotteryRuntimeToken } from './src/runtime-state.js';
 import { runLotteryPipeline } from './src/pipeline.js';
-import { setLotteryOutboundPush } from './src/push.js';
+import { registerLotteryOutboundPush } from './src/push.js';
 
 /**
  * Plugin Runtime:
@@ -29,17 +31,19 @@ export default definePlugin<LotteryConfig>({
   },
   setup(context) {
     const config = resolveLotteryConfig(context.config.get());
+    const db = context.resources.has(databaseHostToken)
+      ? context.resources.use(databaseHostToken)
+      : createInMemoryLotteryDb();
     if (context.resources.has(databaseHostToken)) {
-      const host = context.resources.use(databaseHostToken);
-      defineLotteryTables(host);
-      setLotteryDb(host);
-    } else {
-      ensureLotteryMemoryDb();
+      defineLotteryTables(db);
     }
+    context.resources.provide(lotteryRuntimeToken, { db });
+    context.lifecycle.add(registerLotteryDb(db));
 
+    let outboundPush: ((text: string) => Promise<void>) | null = null;
     if (context.resources.has(outboundHostToken) && config.pushTargets.length > 0) {
       const outbound = context.resources.use(outboundHostToken);
-      setLotteryOutboundPush(async (text) => {
+      outboundPush = async (text) => {
         for (const target of config.pushTargets) {
           try {
             await outbound.send({
@@ -53,12 +57,12 @@ export default definePlugin<LotteryConfig>({
             // OutboundHost logs; continue remaining targets.
           }
         }
-      });
-      context.lifecycle.add(() => setLotteryOutboundPush(null));
+      };
     }
+    context.lifecycle.add(registerLotteryOutboundPush(outboundPush));
 
-    setLotteryAgentDeps({
-      getDb: getLotteryDb,
+    context.lifecycle.add(registerLotteryAgentDeps({
+      getDb: () => db,
       getConfig: () => ({
         pickCount: config.pickCount,
         historyLimit: config.historyLimit,
@@ -68,7 +72,7 @@ export default definePlugin<LotteryConfig>({
       scheduleCron: () => config.scheduleCron,
       scheduleEnabled: () => config.scheduleEnabled,
       pipelinePush: config.pushTargets.length > 0,
-    });
+    }));
 
     if (!context.resources.has(scheduleHostToken) || !config.scheduleEnabled) {
       return;
@@ -80,7 +84,7 @@ export default definePlugin<LotteryConfig>({
       description: 'Daily lottery pipeline',
       async execute() {
         await runLotteryPipeline({
-          getDb: getLotteryDb,
+          getDb: () => db,
           enabledGames: () => lotteryEnabledGames(config),
           historyLimit: config.historyLimit,
           pickCount: config.pickCount,

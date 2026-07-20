@@ -19,7 +19,7 @@ describe('defineGameCommandAliasMiddleware', () => {
 
     await mw.handle(context as never, next);
 
-    expect(run).toHaveBeenCalledWith('', context.input);
+    expect(run).toHaveBeenCalledWith('', context.input, context);
     expect(context.input.$reply).toHaveBeenCalledWith('HELP');
     expect(next).not.toHaveBeenCalled();
   });
@@ -32,7 +32,7 @@ describe('defineGameCommandAliasMiddleware', () => {
 
     await mw.handle(context as never, next);
 
-    expect(run).toHaveBeenCalledWith('开始 加倍', context.input);
+    expect(run).toHaveBeenCalledWith('开始 加倍', context.input, context);
     expect(context.input.$reply).toHaveBeenCalledWith('OK');
     expect(next).not.toHaveBeenCalled();
   });
@@ -58,7 +58,7 @@ describe('defineGameCommandAliasMiddleware', () => {
 
     await mw.handle(context as never, next);
 
-    expect(run).toHaveBeenCalledWith('开始', context.input);
+    expect(run).toHaveBeenCalledWith('开始', context.input, context);
     expect(context.input.$reply).toHaveBeenCalledWith('STARTED');
     expect(next).not.toHaveBeenCalled();
   });
@@ -71,7 +71,7 @@ describe('defineGameCommandAliasMiddleware', () => {
 
     await mw.handle(context as never, next);
 
-    expect(run).toHaveBeenCalledWith('开始', context.input);
+    expect(run).toHaveBeenCalledWith('开始', context.input, context);
     expect(context.input.$reply).not.toHaveBeenCalled();
     expect(next).toHaveBeenCalledTimes(1);
   });

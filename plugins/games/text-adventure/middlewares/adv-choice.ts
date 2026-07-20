@@ -7,10 +7,9 @@ import {
   parseChoicePayload,
   resolveGameTextPayload,
 } from '@zhin.js/game-kit';
-import { getGameServices } from '../src/runtime-store.js';
+import { resolveGameServices } from '../src/runtime-store.js';
 import { handleChoice } from '../src/game-flow.js';
 import { ADV_PREFIX, getScene, stateFromSession, visibleChoices } from '../src/story.js';
-import type { GameServices } from '../src/session-service.js';
 
 /**
  * 文本入口：按钮 payload（`adv:session:choiceId`）与数字 fallback
@@ -24,11 +23,7 @@ export default defineMiddleware<Message>({
       await next();
       return;
     }
-    const services = getGameServices<GameServices>();
-    if (!services) {
-      await next();
-      return;
-    }
+    const services = resolveGameServices(context);
     const message = messageFromCommandInput(context.input);
     const ch = channelKey(message);
 

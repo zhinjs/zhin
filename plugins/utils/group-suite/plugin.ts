@@ -1,6 +1,8 @@
 import { definePlugin, databaseHostToken } from '@zhin.js/plugin-runtime';
 import type { GroupSuiteConfig } from './src/config.js';
-import { ensureGroupSuiteMemoryDb, setGroupSuiteDb } from './src/db-store.js';
+import { registerGroupSuiteDb } from './src/db-store.js';
+import { createInMemoryGroupSuiteDb } from './src/memory-store.js';
+import { createGroupSuiteRuntime, groupSuiteRuntimeToken } from './src/runtime-state.js';
 import { flushStatsBuffer } from './src/stats-lib.js';
 import { defineGroupSuiteTables } from './src/tables.js';
 
@@ -16,20 +18,22 @@ export default definePlugin<GroupSuiteConfig>({
     displayName: 'Group Suite',
   },
   setup(context) {
+    const db = context.resources.has(databaseHostToken)
+      ? context.resources.use(databaseHostToken)
+      : createInMemoryGroupSuiteDb();
     if (context.resources.has(databaseHostToken)) {
-      const host = context.resources.use(databaseHostToken);
-      defineGroupSuiteTables(host);
-      setGroupSuiteDb(host);
-    } else {
-      ensureGroupSuiteMemoryDb();
+      defineGroupSuiteTables(db);
     }
+    const runtime = createGroupSuiteRuntime(db);
+    context.resources.provide(groupSuiteRuntimeToken, runtime);
+    context.lifecycle.add(registerGroupSuiteDb(db));
 
     const flushTimer = setInterval(() => {
-      void flushStatsBuffer();
+      void flushStatsBuffer(runtime);
     }, 10_000);
     context.lifecycle.add(async () => {
       clearInterval(flushTimer);
-      await flushStatsBuffer();
+      await flushStatsBuffer(runtime);
     });
   },
 });

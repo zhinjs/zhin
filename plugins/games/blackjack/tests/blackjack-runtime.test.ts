@@ -4,15 +4,13 @@ import plugin from '../plugin.ts';
 import gameCommand from '../commands/bj/[action:string=].ts';
 import { BJ_HELP } from '../src/index.js';
 import { mountBjMemoryServices } from '../src/memory-db.js';
-import { setGameServices } from '../src/runtime-store.js';
+let services: ReturnType<typeof mountBjMemoryServices>;
 
 const emptyCtx = {
   owner: {} as never,
   generation: 0,
   config: {},
-  use: () => {
-    throw new Error('unused');
-  },
+  use: () => services,
   args: [] as string[],
   params: {} as Record<string, string | number | boolean>,
   input: undefined as never,
@@ -20,8 +18,7 @@ const emptyCtx = {
 
 describe('@zhin.js/plugin-blackjack runtime (slice-2)', () => {
   beforeEach(() => {
-    setGameServices(null);
-    mountBjMemoryServices();
+    services = mountBjMemoryServices();
   });
 
   it('defines a valid Plugin Runtime entry', () => {

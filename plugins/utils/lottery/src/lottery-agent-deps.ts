@@ -16,12 +16,24 @@ export interface LotteryAgentDeps {
 }
 
 let _deps: LotteryAgentDeps | null = null;
+const registrations: Array<{ readonly value: LotteryAgentDeps }> = [];
 
 export function setLotteryAgentDeps(deps: LotteryAgentDeps): void {
   _deps = deps;
 }
 
+/** Generation-owned Agent dependency binding used by Plugin Runtime setup(). */
+export function registerLotteryAgentDeps(deps: LotteryAgentDeps): () => void {
+  const registration = Object.freeze({ value: deps });
+  registrations.push(registration);
+  return () => {
+    const index = registrations.lastIndexOf(registration);
+    if (index >= 0) registrations.splice(index, 1);
+  };
+}
+
 export function getLotteryAgentDeps(): LotteryAgentDeps {
-  if (!_deps) throw new Error('lottery agent deps not initialized');
-  return _deps;
+  const deps = registrations[registrations.length - 1]?.value ?? _deps;
+  if (!deps) throw new Error('lottery agent deps not initialized');
+  return deps;
 }

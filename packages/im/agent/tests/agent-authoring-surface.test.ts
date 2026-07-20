@@ -88,14 +88,13 @@ describe('discoverWorkspaceAgents fractal', () => {
       `const KIND = Symbol.for('zhin.authoring.kind');\nexport default { [KIND]: 'agent', description: 'Research specialist', role: 'researcher' };\n`,
     );
     fs.writeFileSync(path.join(researcher, 'instructions.md'), 'You research things.\n');
-    const cwd = process.cwd();
-    process.chdir(tmp);
     try {
       const { discoverWorkspaceAgents } = await import('../src/discovery/agents.js');
-      const metas = await discoverWorkspaceAgents();
+      const cwd = process.cwd();
+      const metas = await discoverWorkspaceAgents(null, tmp);
       expect(metas.some((m) => m.name === 'researcher' && m.description.includes('Research'))).toBe(true);
+      expect(process.cwd()).toBe(cwd);
     } finally {
-      process.chdir(cwd);
       fs.rmSync(tmp, { recursive: true, force: true });
     }
   });

@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import middleware from '../middlewares/chain-text.ts';
 import { startGame } from '../src/game-flow.js';
 import { mountChainMemoryServices } from '../src/memory-db.js';
-import { setGameServices } from '../src/runtime-store.js';
 import type { SessionService } from '../src/session-service.js';
 
 const replies: string[] = [];
 let nextCalls = 0;
+let services: SessionService;
 
 function makeInput(content: string, senderId = 'u1') {
   return {
@@ -28,9 +28,7 @@ function makeCtx(input: unknown) {
     owner: {},
     generation: 0,
     config: {},
-    use: () => {
-      throw new Error('unused');
-    },
+    use: () => services,
   } as never;
 }
 
@@ -39,12 +37,9 @@ const next = async () => {
 };
 
 describe('idiom-chain chain-text middleware (text fallback)', () => {
-  let services: SessionService;
-
   beforeEach(async () => {
     replies.length = 0;
     nextCalls = 0;
-    setGameServices(null);
     services = mountChainMemoryServices();
     await startGame(null, services, makeInput('') as never);
     replies.length = 0;

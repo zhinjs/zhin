@@ -4,20 +4,14 @@ import {
   normalizeAdvAction,
 } from '@zhin.js/game-kit';
 import { ADV_HELP, runAdvCommandText } from '../src/adv-command.js';
-import { getGameServices } from '../src/runtime-store.js';
-import { mountAdvMemoryServices } from '../src/memory-db.js';
-import type { GameServices } from '../src/session-service.js';
-
-function requireServices(): GameServices {
-  return getGameServices<GameServices>() ?? mountAdvMemoryServices();
-}
+import { resolveGameServices } from '../src/runtime-store.js';
 
 export default defineGameCommandAliasMiddleware({
   aliases: ['冒险', 'adv', '秘境'],
-  async run(action, input) {
+  async run(action, input, context) {
     const normalized = normalizeAdvAction(String(action ?? ''));
     if (!normalized || normalized === 'help') return ADV_HELP;
-    const services = requireServices();
+    const services = resolveGameServices(context);
     const message = messageFromCommandInput(input);
     return runAdvCommandText(services, message, normalized);
   },

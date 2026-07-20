@@ -1,5 +1,5 @@
 export { BJ_HELP } from './bj-command.js';
-export { getGameServices, setGameServices } from './runtime-store.js';
+export { gameServicesToken, resolveGameServices } from './runtime-store.js';
 export { createInMemoryBjDb, mountBjMemoryServices } from './memory-db.js';
 
 /**

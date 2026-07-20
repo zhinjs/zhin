@@ -25,6 +25,11 @@ Tool/MCP 执行 handle 只在 turn lease 内有效，防止访问已 retire 的 
 当前 `src/ingress/` 是旧 Feature registry 到 `AgentOrchestrator` 的兼容桥；迁移期间允许
 旧入口读取新投影，但 RuntimeSnapshot 是唯一权威，禁止双写两套 registry。
 
+Composition root 挂载进程级调度或 Assistant 入口时，应使用
+`registerScheduleManager()` / `registerAssistantRuntime()` 并把返回的 disposer 交给当前
+generation lifecycle。旧式 `set*` API 仅供非 HMR 的 legacy bootstrap 使用；它不表达
+跨 generation 所有权。
+
 ## 功能特性
 
 - 🤖 **agentLoop 统一路径**：ZhinAgent、Subagent、Deferred Worker、AIService 均经 `agentLoop`（legacy `Agent.run` 仅保留在 `@zhin.js/ai` 供单测）

@@ -5,6 +5,7 @@ import {
   resolveSender,
   ts,
 } from './shared-runtime.js';
+import type { GroupSuiteRuntime } from './runtime-state.js';
 
 const cooldownMap = new Map<string, number>();
 
@@ -83,8 +84,9 @@ async function findMatch(
   ctxType: string,
   ctxId: string,
   cfg: GroupSuiteConfig,
+  runtime?: GroupSuiteRuntime,
 ): Promise<Record<string, unknown> | null> {
-  const QA = getTeachModel();
+  const QA = getTeachModel(runtime?.db);
   if (!QA) return null;
   const allItems = (await QA.select()) as Record<string, unknown>[];
   const candidates = allItems.filter(
@@ -113,8 +115,9 @@ export async function teachAdd(
   cfg: GroupSuiteConfig,
   payload: string,
   regex = false,
+  runtime?: GroupSuiteRuntime,
 ): Promise<string> {
-  const QA = getTeachModel();
+  const QA = getTeachModel(runtime?.db);
   if (!QA) return '问答数据库尚未就绪，请稍后重试';
   if (regex && !cfg.teachAllowRegex) return '管理员已禁用正则问答';
 
@@ -188,8 +191,9 @@ export async function teachList(
   input: MessageInput,
   cfg: GroupSuiteConfig,
   page = 1,
+  runtime?: GroupSuiteRuntime,
 ): Promise<string> {
-  const QA = getTeachModel();
+  const QA = getTeachModel(runtime?.db);
   if (!QA) return '问答数据库尚未就绪';
   const safePage = Math.max(1, page);
   const { type: ctxType, id: ctxId } = resolveContextKey(input);
@@ -212,8 +216,12 @@ export async function teachList(
   return `${header}\n${lines.join('\n')}\n第 ${pageNum}/${totalPages} 页 · 共 ${allItems.length} 条`;
 }
 
-export async function teachForget(input: MessageInput, questionRaw: string): Promise<string> {
-  const QA = getTeachModel();
+export async function teachForget(
+  input: MessageInput,
+  questionRaw: string,
+  runtime?: GroupSuiteRuntime,
+): Promise<string> {
+  const QA = getTeachModel(runtime?.db);
   if (!QA) return '问答数据库尚未就绪';
   const question = questionRaw.trim();
   if (!question) return '请提供要删除的问题';
@@ -239,19 +247,21 @@ export async function teachForget(input: MessageInput, questionRaw: string): Pro
 export async function tryTeachReply(
   input: MessageInput,
   cfg: GroupSuiteConfig,
+  runtime?: GroupSuiteRuntime,
 ): Promise<string | null> {
   const content = typeof input.content === 'string' ? input.content.trim() : '';
   if (!content) return null;
   const { type: ctxType, id: ctxId } = resolveContextKey(input);
-  const matched = await findMatch(content, ctxType, ctxId, cfg);
+  const matched = await findMatch(content, ctxType, ctxId, cfg, runtime);
   if (!matched) return null;
 
   const cooldownKey = `${matched.question}:${ctxType}:${ctxId}:${matched.is_regex ?? 0}`;
-  const last = cooldownMap.get(cooldownKey);
+  const cooldowns = runtime?.teachCooldowns ?? cooldownMap;
+  const last = cooldowns.get(cooldownKey);
   if (last && Date.now() - last < cfg.teachCooldownMs) return null;
-  cooldownMap.set(cooldownKey, Date.now());
+  cooldowns.set(cooldownKey, Date.now());
 
-  const QA = getTeachModel();
+  const QA = getTeachModel(runtime?.db);
   if (QA) {
     try {
       await QA.update({

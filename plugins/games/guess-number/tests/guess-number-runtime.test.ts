@@ -9,15 +9,13 @@ import plugin from '../plugin.ts';
 import gameCommand from '../commands/guess/[action:string=].ts';
 import { GUESS_HELP } from '../src/index.js';
 import { mountGuessMemoryServices } from '../src/memory-db.js';
-import { setGameServices } from '../src/runtime-store.js';
+let services: ReturnType<typeof mountGuessMemoryServices>;
 
 const emptyCtx = {
   owner: {} as never,
   generation: 0,
   config: {},
-  use: () => {
-    throw new Error('unused');
-  },
+  use: () => services,
   args: [] as string[],
   params: {} as Record<string, string | number | boolean>,
   input: undefined as never,
@@ -27,6 +25,7 @@ function mockSetupContext(options?: { schedule?: boolean }) {
   const lifecycle = new DisposeStack();
   const register = vi.fn(() => vi.fn());
   const resources = {
+    provide: vi.fn(),
     has: (token: unknown) => options?.schedule === true && token === scheduleHostToken,
     use: (token: unknown) => {
       if (options?.schedule === true && token === scheduleHostToken) {
@@ -41,13 +40,11 @@ function mockSetupContext(options?: { schedule?: boolean }) {
 describe('@zhin.js/plugin-guess-number runtime (slice-2)', () => {
   beforeEach(() => {
     resetRuntimeGamesForTests();
-    setGameServices(null);
-    mountGuessMemoryServices();
+    services = mountGuessMemoryServices();
   });
 
   afterEach(() => {
     resetRuntimeGamesForTests();
-    setGameServices(null);
   });
 
   it('defines a valid Plugin Runtime entry', () => {

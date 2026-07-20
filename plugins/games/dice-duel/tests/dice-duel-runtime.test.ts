@@ -4,15 +4,13 @@ import plugin from '../plugin.ts';
 import gameCommand from '../commands/dice/[action:string=].ts';
 import { DICE_HELP } from '../src/index.js';
 import { mountDiceMemoryServices } from '../src/memory-db.js';
-import { setGameServices } from '../src/runtime-store.js';
+let services: ReturnType<typeof mountDiceMemoryServices>;
 
 const emptyCtx = {
   owner: {} as never,
   generation: 0,
   config: {},
-  use: () => {
-    throw new Error('unused');
-  },
+  use: () => services,
   args: [] as string[],
   params: {} as Record<string, string | number | boolean>,
   input: undefined as never,
@@ -20,8 +18,7 @@ const emptyCtx = {
 
 describe('@zhin.js/plugin-dice-duel runtime (slice-2)', () => {
   beforeEach(() => {
-    setGameServices(null);
-    mountDiceMemoryServices();
+    services = mountDiceMemoryServices();
   });
 
   it('defines a valid Plugin Runtime entry', () => {

@@ -1,9 +1,8 @@
 import { defineMiddleware } from '@zhin.js/middleware';
 import type { Message } from '@zhin.js/core/runtime';
 import { messageFromCommandInput } from '@zhin.js/game-kit';
-import { getGameServices } from '../src/runtime-store.js';
+import { resolveGameServices } from '../src/runtime-store.js';
 import { processGuess } from '../src/game-flow.js';
-import type { SessionService } from '../src/session-service.js';
 
 export default defineMiddleware<Message>({
   target: 'inbound',
@@ -13,11 +12,7 @@ export default defineMiddleware<Message>({
       await next();
       return;
     }
-    const services = getGameServices<SessionService>();
-    if (!services) {
-      await next();
-      return;
-    }
+    const services = resolveGameServices(context);
     const message = messageFromCommandInput(context.input) as never;
     const reply = await processGuess(services, message, Number(raw));
     if (reply) {

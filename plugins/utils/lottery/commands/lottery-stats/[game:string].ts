@@ -9,13 +9,14 @@ import {
   type LotteryConfig,
 } from '../../src/command-helpers.js';
 import { lotteryKl8 } from '../../src/config.js';
+import { resolveLotteryRuntime } from '../../src/runtime-state.js';
 
 export default defineCommand<LotteryConfig>({
   description: 'Single-game stats snapshot',
-  async execute({ params, config }) {
+  async execute({ params, config, owner, use }) {
     const gid = parseGameId(String(params.game ?? ''));
     if (!gid) return '请指定玩法';
-    const db = getLotteryDb();
+    const db = resolveLotteryRuntime({ owner, use })?.db ?? getLotteryDb();
     if (!db) return '数据库未就绪';
     const cfg = resolveLotteryConfig(config);
     const draws = await loadDraws(db, gid, cfg.historyLimit);

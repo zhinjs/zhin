@@ -6,7 +6,7 @@ import {
   DEFAULT_GAME_STALE_IDLE_MS,
 } from '@zhin.js/game-kit';
 import { mountBjHostServices, mountBjMemoryServices } from './src/memory-db.js';
-import { getGameServices } from './src/runtime-store.js';
+import { gameServicesToken } from './src/runtime-store.js';
 import type { SessionService } from './src/session-service.js';
 
 /**
@@ -21,13 +21,15 @@ export default definePlugin({
     displayName: 'Blackjack',
   },
   setup(context) {
+    let services: SessionService;
     if (context.resources.has(databaseHostToken)) {
       const host = context.resources.use(databaseHostToken);
-      mountBjHostServices(host);
-      initGameRecordHost(host);
+      services = mountBjHostServices(host);
+      context.lifecycle.add(initGameRecordHost(host));
     } else {
-      mountBjMemoryServices();
+      services = mountBjMemoryServices();
     }
+    context.resources.provide(gameServicesToken, services);
     const disposeHub = registerRuntimeGame({
       id: 'blackjack',
       title: '21 点',
@@ -50,8 +52,7 @@ export default definePlugin({
         cron: DEFAULT_GAME_STALE_CRON,
         description: 'Abort stale blackjack sessions',
         async execute() {
-          const services = getGameServices<SessionService>();
-          if (!services?.abortStale) return;
+          if (!services.abortStale) return;
           await services.abortStale(DEFAULT_GAME_STALE_IDLE_MS);
         },
       });

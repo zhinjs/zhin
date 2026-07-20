@@ -107,7 +107,7 @@ describe('runtime console RPC', () => {
     expect(document.http).toEqual({ port: 8080 });
   });
 
-  it('handles files and env RPCs with allowlist semantics', async () => {
+  it('keeps project files and environment values outside demo scope', async () => {
     const tree = await dispatchRuntimeConsoleRpc(
       { type: 'files:tree', requestId: 20 },
       {
@@ -116,10 +116,30 @@ describe('runtime console RPC', () => {
         listProjectFiles: async () => [{ name: 'README.md', path: 'README.md', type: 'file' }],
       },
     );
-    expect(pickRpcReply({ type: 'files:tree', requestId: 20 }, tree)).toMatchObject({
-      requestId: 20,
-      data: { tree: [{ name: 'README.md', type: 'file' }] },
-    });
+    expect(pickRpcReply({ type: 'files:tree', requestId: 20 }, tree)?.error)
+      .toMatch(/Demo scope/);
+
+    const deniedEnv = await dispatchRuntimeConsoleRpc(
+      { type: 'env:get', requestId: 23, filename: '.env' },
+      {
+        authScope: 'demo',
+        listPages: async () => [],
+        readEnvFile: async () => 'SECRET=exposed',
+      },
+    );
+    expect(pickRpcReply({ type: 'env:get', requestId: 23 }, deniedEnv)?.error)
+      .toMatch(/Demo scope/);
+
+    const deniedEnvViaFiles = await dispatchRuntimeConsoleRpc(
+      { type: 'files:read', requestId: 24, filePath: '.env' },
+      {
+        authScope: 'demo',
+        listPages: async () => [],
+        readProjectFile: async () => ({ content: 'SECRET=exposed', size: 14 }),
+      },
+    );
+    expect(pickRpcReply({ type: 'files:read', requestId: 24 }, deniedEnvViaFiles)?.error)
+      .toMatch(/Demo scope/);
 
     const deniedSave = await dispatchRuntimeConsoleRpc(
       { type: 'files:save', requestId: 21, filePath: 'README.md', content: 'x' },
@@ -157,7 +177,7 @@ describe('runtime console RPC', () => {
 
     const dbInfo = await dispatchRuntimeConsoleRpc(
       { type: 'db:info', requestId: 31 },
-      { authScope: 'demo', listPages: async () => [] },
+      { authScope: 'full', listPages: async () => [] },
     );
     expect(pickRpcReply({ type: 'db:info', requestId: 31 }, dbInfo)).toMatchObject({
       requestId: 31,
@@ -174,7 +194,7 @@ describe('runtime console RPC', () => {
 
   it('serves db:info and db:tables from the wired Database host', async () => {
     const ctx = {
-      authScope: 'demo' as const,
+      authScope: 'full' as const,
       listPages: async () => [],
       dbInfo: () => ({ dialect: 'sqlite', connected: true, tables: 2 }),
       dbTables: () => ['im_messages', 'github_oauth_users'],

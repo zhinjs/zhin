@@ -52,6 +52,7 @@ export { AssistantEventIngress } from './event-ingress.js';
 export type { AssistantEventIngressOptions } from './event-ingress.js';
 export {
   setAssistantRuntime,
+  registerAssistantRuntime,
   getAssistantRuntime,
   isAssistantEventsEndpointActive,
   getAssistantEventsTokenFallback,

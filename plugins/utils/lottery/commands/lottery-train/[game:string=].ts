@@ -10,11 +10,12 @@ import {
   type LotteryConfig,
 } from '../../src/command-helpers.js';
 import { lotteryEnabledGames } from '../../src/config.js';
+import { resolveLotteryRuntime } from '../../src/runtime-state.js';
 
 export default defineCommand<LotteryConfig>({
   description: 'Full-history weight training',
-  async execute({ params, config }) {
-    const db = getLotteryDb();
+  async execute({ params, config, owner, use }) {
+    const db = resolveLotteryRuntime({ owner, use })?.db ?? getLotteryDb();
     if (!db) return '数据库未就绪';
     const cfg = resolveLotteryConfig(config);
     const gid = parseGameId(String(params.game ?? ''));

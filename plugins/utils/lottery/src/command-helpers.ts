@@ -5,12 +5,16 @@ import {
   type LotteryConfig,
 } from './config.js';
 import { getLotteryDb } from './db-store.js';
+import type { LotteryDb } from './db.js';
 import { formatPipelineReply, runLotteryPipeline, type PipelineDeps } from './pipeline.js';
 
-export function buildPipelineDeps(raw: Partial<LotteryConfig> | undefined): PipelineDeps {
+export function buildPipelineDeps(
+  raw: Partial<LotteryConfig> | undefined,
+  db: LotteryDb | null = getLotteryDb(),
+): PipelineDeps {
   const config = resolveLotteryConfig(raw);
   return {
-    getDb: getLotteryDb,
+    getDb: () => db,
     enabledGames: () => lotteryEnabledGames(config),
     historyLimit: config.historyLimit,
     pickCount: config.pickCount,

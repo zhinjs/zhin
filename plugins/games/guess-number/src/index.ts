@@ -1,5 +1,5 @@
 export { GUESS_HELP } from './guess-command.js';
-export { getGameServices, setGameServices } from './runtime-store.js';
+export { gameServicesToken, resolveGameServices } from './runtime-store.js';
 export { createInMemoryGuessDb, mountGuessMemoryServices } from './memory-db.js';
 
 /**

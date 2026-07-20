@@ -1,5 +1,5 @@
 export { DICE_HELP } from './dice-command.js';
-export { getGameServices, setGameServices } from './runtime-store.js';
+export { gameServicesToken, resolveGameServices } from './runtime-store.js';
 export { createInMemoryDiceDb, mountDiceMemoryServices } from './memory-db.js';
 
 /**

@@ -6,7 +6,7 @@ import {
   DEFAULT_GAME_STALE_IDLE_MS,
 } from '@zhin.js/game-kit';
 import { mountTttHostServices, mountTttMemoryServices } from './src/memory-db.js';
-import { getGameServices } from './src/runtime-store.js';
+import { gameServicesToken } from './src/runtime-store.js';
 import type { SessionServices } from './src/session-service.js';
 
 /**
@@ -21,13 +21,15 @@ export default definePlugin({
     displayName: 'Tic Tac Toe',
   },
   setup(context) {
+    let services: SessionServices;
     if (context.resources.has(databaseHostToken)) {
       const host = context.resources.use(databaseHostToken);
-      mountTttHostServices(host);
-      initGameRecordHost(host);
+      services = mountTttHostServices(host);
+      context.lifecycle.add(initGameRecordHost(host));
     } else {
-      mountTttMemoryServices();
+      services = mountTttMemoryServices();
     }
+    context.resources.provide(gameServicesToken, services);
     const disposeHub = registerRuntimeGame({
       id: 'ttt',
       title: '井字棋',
@@ -52,8 +54,7 @@ export default definePlugin({
         cron: DEFAULT_GAME_STALE_CRON,
         description: 'Abort stale tic-tac-toe sessions',
         async execute() {
-          const services = getGameServices<SessionServices>();
-          if (!services?.session?.abortStale) return;
+          if (!services.session.abortStale) return;
           await services.session.abortStale(DEFAULT_GAME_STALE_IDLE_MS);
         },
       });

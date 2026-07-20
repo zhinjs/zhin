@@ -2,7 +2,6 @@ import { createHostGameDb, createInMemoryGameDb } from '@zhin.js/game-kit';
 import type { DatabaseHost } from '@zhin.js/plugin-runtime';
 import { defineHostTables } from './models.js';
 import { createServices, type AdvDatabase, type GameServices } from './session-service.js';
-import { setGameServices } from './runtime-store.js';
 
 const ADV_TABLES = ['adv_sessions', 'adv_profiles'] as const;
 
@@ -13,13 +12,11 @@ export function createInMemoryAdvDb(): AdvDatabase {
 
 export function mountAdvMemoryServices(): GameServices {
   const services = createServices(createInMemoryAdvDb());
-  setGameServices(services);
   return services;
 }
 
 export function mountAdvHostServices(host: DatabaseHost): GameServices {
   defineHostTables(host);
   const services = createServices(createHostGameDb(host, ADV_TABLES) as unknown as AdvDatabase);
-  setGameServices(services);
   return services;
 }

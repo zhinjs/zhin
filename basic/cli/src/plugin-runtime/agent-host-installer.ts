@@ -37,7 +37,7 @@ import {
   defineAiDatabaseModels,
   createScheduleJobStoreFromConfig,
   createScheduleTools,
-  setScheduleManager,
+  registerScheduleManager,
   ScheduleJobEngine,
   JobWorker,
   createTaskExecutor,
@@ -45,14 +45,15 @@ import {
   resolveAssistantConfig,
   resolveAssistantDefaultsConfig,
   parseJobNotify,
-  setAssistantRuntime,
+  registerAssistantRuntime,
   AssistantEventIngress,
   loadAssistantProfileFile,
   validateAssistantProfile,
   syncProfileHeartbeatToStore,
   syncProfileRoutinesToStore,
   pruneStaleProfileCronJobs,
-  initOrchestrationService,
+  OrchestrationService,
+  registerOrchestrationService,
   MemoryOrchestrationRepository,
   registerDefaultExecutors,
   getAgentRuntimeRegistry,
@@ -218,16 +219,19 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     let scheduleTools: Tool[] = [];
     let assistantEnabled = false;
     let collaborationReady = false;
+    let orchService: OrchestrationService;
     try {
       const created = createRuntimeZhinAgent(service, options.im, options.projectRoot);
       zhinAgent = created.agent;
       seedPresets = created.seedPresets;
 
-      const orchService = initOrchestrationService(new MemoryOrchestrationRepository());
+      orchService = new OrchestrationService(new MemoryOrchestrationRepository());
+      lifecycle.add(registerOrchestrationService(orchService));
       registerDefaultExecutors(orchService, {
         refs: { zhinAgent, aiService: service },
       });
-      getAgentRuntimeRegistry().registerDefault(zhinAgent);
+      const disposeDefaultAgent = getAgentRuntimeRegistry().registerDefault(zhinAgent);
+      lifecycle.add(disposeDefaultAgent);
 
       const schedule = wireRuntimeSchedule(
         zhinAgent,
@@ -276,6 +280,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
                 { aiService: service, zhinAgent },
                 config,
                 options.collaboration,
+                orchService,
               );
               collaborationReady = true;
               logger.info(formatCompact({
@@ -577,7 +582,7 @@ function wireRuntimeSchedule(
     defaultNotify,
   });
 
-  setScheduleManager({
+  const disposeScheduleManager = registerScheduleManager({
     scheduleFeature: {
       getStatus: () => [],
     },
@@ -588,6 +593,7 @@ function wireRuntimeSchedule(
       timeContext: false,
     }),
   });
+  let disposeAssistantRuntime: () => void;
 
   if (assistantCfg.enabled) {
     const ingress = new AssistantEventIngress({
@@ -595,7 +601,7 @@ function wireRuntimeSchedule(
       engine: jobEngine,
       eventsConfig: assistantCfg.events,
     });
-    setAssistantRuntime({
+    disposeAssistantRuntime = registerAssistantRuntime({
       config: assistantCfg,
       store,
       engine: jobEngine,
@@ -626,7 +632,7 @@ function wireRuntimeSchedule(
       profile: assistantCfg.profile?.enabled === true,
     }));
   } else {
-    setAssistantRuntime(null);
+    disposeAssistantRuntime = registerAssistantRuntime(null);
     jobEngine.load();
   }
 
@@ -647,8 +653,8 @@ function wireRuntimeSchedule(
     tools,
     assistantEnabled: assistantCfg.enabled,
     dispose: () => {
-      setScheduleManager(null);
-      setAssistantRuntime(null);
+      disposeAssistantRuntime();
+      disposeScheduleManager();
       jobEngine.unload();
       jobWorker.stop();
     },
@@ -694,14 +700,8 @@ function createRuntimeZhinAgent(
     resolveBinding: (name) => service.getBindingRegistry().getBinding(name),
     getMcpRegistry: () => null,
     resolveAgentMeta: async (name) => {
-      const previousCwd = process.cwd();
-      try {
-        if (previousCwd !== projectRoot) process.chdir(projectRoot);
-        const metas = await discoverWorkspaceAgents(null);
-        return metas.find((meta) => meta.name === name) ?? null;
-      } finally {
-        if (process.cwd() !== previousCwd) process.chdir(previousCwd);
-      }
+      const metas = await discoverWorkspaceAgents(null, projectRoot);
+      return metas.find((meta) => meta.name === name) ?? null;
     },
     getParentContextSnapshot: (origin) => agent.buildParentContextSnapshotForSubagent(origin),
   });
@@ -745,10 +745,8 @@ async function seedOrchestratorAgentPresets(
   orchestrator: AgentOrchestrator,
   projectRoot: string,
 ): Promise<number> {
-  const previousCwd = process.cwd();
   try {
-    if (previousCwd !== projectRoot) process.chdir(projectRoot);
-    const metas = await discoverWorkspaceAgents(null);
+    const metas = await discoverWorkspaceAgents(null, projectRoot);
     for (const meta of metas) {
       if (orchestrator.subagents.getPreset(meta.name)) continue;
       orchestrator.addAgentPreset({
@@ -775,8 +773,6 @@ async function seedOrchestratorAgentPresets(
       error: error instanceof Error ? error.message : String(error),
     }));
     return 0;
-  } finally {
-    if (process.cwd() !== previousCwd) process.chdir(previousCwd);
   }
 }
 

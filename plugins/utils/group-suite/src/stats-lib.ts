@@ -11,6 +11,7 @@ import {
   formatRankText,
   type MyStatsReportData,
 } from './stats-data.js';
+import type { GroupSuiteRuntime, PendingStatsIncrement } from './runtime-state.js';
 
 export function weekStartStr(): string {
   const d = new Date();
@@ -24,15 +25,7 @@ export function monthStartStr(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
 }
 
-interface PendingIncrement {
-  user_id: string;
-  user_name: string;
-  group_id: string;
-  date: string;
-  count: number;
-}
-
-const buffer = new Map<string, PendingIncrement>();
+const buffer = new Map<string, PendingStatsIncrement>();
 
 function bufferKey(userId: string, groupId: string, date: string): string {
   return `${userId}:${groupId}:${date}`;
@@ -57,17 +50,18 @@ export function recordMessage(input: {
   sender?: string;
   target?: string;
   metadata?: Readonly<Record<string, unknown>>;
-}): void {
+}, runtime?: GroupSuiteRuntime): void {
+  const targetBuffer = runtime?.statsBuffer ?? buffer;
   const { id: userId, name: userName } = resolveSender(input);
   if (!userId) return;
   const groupId = resolveGroupId(input);
   const key = bufferKey(userId, groupId, todayStr());
-  const pending = buffer.get(key);
+  const pending = targetBuffer.get(key);
   if (pending) {
     pending.count++;
     pending.user_name = userName;
   } else {
-    buffer.set(key, {
+    targetBuffer.set(key, {
       user_id: userId,
       user_name: userName,
       group_id: groupId,
@@ -77,11 +71,12 @@ export function recordMessage(input: {
   }
 }
 
-export async function flushStatsBuffer(): Promise<void> {
-  const M = getStatsModel();
-  if (!M || buffer.size === 0) return;
-  const entries = [...buffer.values()];
-  buffer.clear();
+export async function flushStatsBuffer(runtime?: GroupSuiteRuntime): Promise<void> {
+  const targetBuffer = runtime?.statsBuffer ?? buffer;
+  const M = getStatsModel(runtime?.db);
+  if (!M || targetBuffer.size === 0) return;
+  const entries = [...targetBuffer.values()];
+  targetBuffer.clear();
   for (const entry of entries) {
     try {
       const existing = (await M.select().where({
@@ -118,8 +113,9 @@ export async function flushStatsBuffer(): Promise<void> {
 export async function queryStats(
   groupId: string,
   fromDate: string,
+  runtime?: GroupSuiteRuntime,
 ): Promise<Map<string, { name: string; count: number }>> {
-  const M = getStatsModel();
+  const M = getStatsModel(runtime?.db);
   if (!M) return new Map();
   const all = (groupId
     ? await M.select().where({ group_id: groupId })
@@ -153,18 +149,19 @@ export async function statsRankText(
   cfg: GroupSuiteConfig,
   fromDate: string,
   title: string,
+  runtime?: GroupSuiteRuntime,
 ): Promise<string> {
-  await flushStatsBuffer();
+  await flushStatsBuffer(runtime);
   const groupId = resolveGroupId(input);
-  const stats = await queryStats(groupId, fromDate);
+  const stats = await queryStats(groupId, fromDate, runtime);
   const { id: userId } = resolveSender(input);
   const data = buildStatsRankReportData(stats, title, cfg.rankSize, userId);
   return formatRankText(data);
 }
 
-export async function myStatsText(input: MessageInput): Promise<string> {
-  await flushStatsBuffer();
-  const M = getStatsModel();
+export async function myStatsText(input: MessageInput, runtime?: GroupSuiteRuntime): Promise<string> {
+  await flushStatsBuffer(runtime);
+  const M = getStatsModel(runtime?.db);
   if (!M) return '统计数据库尚未就绪';
   const { id: userId, name: userName } = resolveSender(input);
   if (!userId) return '无法获取用户信息';

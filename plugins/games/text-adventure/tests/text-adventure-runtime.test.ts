@@ -4,15 +4,13 @@ import plugin from '../plugin.ts';
 import gameCommand from '../commands/adv/[action:string=].ts';
 import { ADV_HELP } from '../src/index.js';
 import { mountAdvMemoryServices } from '../src/memory-db.js';
-import { setGameServices } from '../src/runtime-store.js';
+let services: ReturnType<typeof mountAdvMemoryServices>;
 
 const emptyCtx = {
   owner: {} as never,
   generation: 0,
   config: {},
-  use: () => {
-    throw new Error('unused');
-  },
+  use: () => services,
   args: [] as string[],
   params: {} as Record<string, string | number | boolean>,
   input: undefined as never,
@@ -20,8 +18,7 @@ const emptyCtx = {
 
 describe('@zhin.js/plugin-text-adventure runtime (slice-2)', () => {
   beforeEach(() => {
-    setGameServices(null);
-    mountAdvMemoryServices();
+    services = mountAdvMemoryServices();
   });
 
   it('defines a valid Plugin Runtime entry', () => {

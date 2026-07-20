@@ -1,5 +1,5 @@
 export { CHAIN_HELP } from './chain-command.js';
-export { getGameServices, setGameServices } from './runtime-store.js';
+export { gameServicesToken, resolveGameServices } from './runtime-store.js';
 export { createInMemoryChainDb, mountChainMemoryServices } from './memory-db.js';
 
 /**

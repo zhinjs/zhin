@@ -18,8 +18,15 @@ export {
   getStatsModel,
   getTeachModel,
   resetGroupSuiteDb,
+  registerGroupSuiteDb,
   setGroupSuiteDb,
 } from './db-store.js';
+export {
+  createGroupSuiteRuntime,
+  groupSuiteRuntimeToken,
+  resolveGroupSuiteRuntime,
+} from './runtime-state.js';
+export type { GroupSuiteRuntime, PendingStatsIncrement } from './runtime-state.js';
 export {
   parseTeachPair,
   resetTeachCooldown,

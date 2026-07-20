@@ -6,7 +6,7 @@ import {
   DEFAULT_GAME_STALE_IDLE_MS,
 } from '@zhin.js/game-kit';
 import { mountAdvHostServices, mountAdvMemoryServices } from './src/memory-db.js';
-import { getGameServices } from './src/runtime-store.js';
+import { gameServicesToken } from './src/runtime-store.js';
 import type { GameServices } from './src/session-service.js';
 
 /**
@@ -21,13 +21,15 @@ export default definePlugin({
     displayName: 'Text Adventure',
   },
   setup(context) {
+    let services: GameServices;
     if (context.resources.has(databaseHostToken)) {
       const host = context.resources.use(databaseHostToken);
-      mountAdvHostServices(host);
-      initGameRecordHost(host);
+      services = mountAdvHostServices(host);
+      context.lifecycle.add(initGameRecordHost(host));
     } else {
-      mountAdvMemoryServices();
+      services = mountAdvMemoryServices();
     }
+    context.resources.provide(gameServicesToken, services);
     const disposeHub = registerRuntimeGame({
       id: 'adv',
       title: '秘境探险',
@@ -53,8 +55,7 @@ export default definePlugin({
         cron: DEFAULT_GAME_STALE_CRON,
         description: 'Abort stale text-adventure sessions',
         async execute() {
-          const services = getGameServices<GameServices>();
-          if (!services?.sessions?.abortStale) return;
+          if (!services.sessions.abortStale) return;
           await services.sessions.abortStale(DEFAULT_GAME_STALE_IDLE_MS);
         },
       });

@@ -11,6 +11,8 @@ import {
   ToolFeature,
 } from '../src/built/tool.js';
 import {
+  checkPlatformPermit,
+  registerPlatformPermitChecker,
   registerDefaultScenePlatformPermitChecker,
   clearPlatformPermitCheckers,
 } from '../src/built/platform-permit.js';
@@ -95,6 +97,33 @@ describe('canAccessTool', () => {
     } as any;
     expect(canAccessTool(tool, mockCommMessage({ adapter: 'qq', endpoint: 'bot1', senderId: 'user1', sceneId: 'scene1' }))).toBe(false);
     expect(canAccessTool(tool, msg)).toBe(true);
+  });
+});
+
+describe('platform permit registration lifecycle', () => {
+  it('keeps the checker while a newer generation still owns it', () => {
+    clearPlatformPermitCheckers();
+    const disposePrevious = registerDefaultScenePlatformPermitChecker('qq');
+    const disposeNext = registerDefaultScenePlatformPermitChecker('qq');
+    const message = mockCommMessage({ role: 'admin' }) as never;
+
+    disposePrevious();
+    expect(checkPlatformPermit('platform(qq,scene_admin)', message)).toBe(true);
+
+    disposeNext();
+    expect(checkPlatformPermit('platform(qq,scene_admin)', message)).toBe(false);
+  });
+
+  it('restores a custom checker when replacement preparation rolls back', () => {
+    clearPlatformPermitCheckers();
+    const message = mockCommMessage({ role: 'admin' }) as never;
+    const disposePrevious = registerPlatformPermitChecker('qq', () => true);
+    const disposeNext = registerPlatformPermitChecker('qq', () => false);
+
+    expect(checkPlatformPermit('platform(qq,scene_admin)', message)).toBe(false);
+    disposeNext();
+    expect(checkPlatformPermit('platform(qq,scene_admin)', message)).toBe(true);
+    disposePrevious();
   });
 });
 

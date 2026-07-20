@@ -619,11 +619,31 @@ export class OrchestrationKernel {
 export class OrchestrationService extends OrchestrationKernel {}
 
 let globalService: OrchestrationService | null = null;
+const serviceRegistrations: OrchestrationService[] = [];
+
+function activeOrchestrationService(): OrchestrationService | null {
+  return serviceRegistrations[serviceRegistrations.length - 1] ?? globalService;
+}
+
+function synchronizeDispatcherRepository(): void {
+  getAgentDispatcher().setRepository(activeOrchestrationService()?.repositoryHandle ?? null);
+}
 
 export function initOrchestrationService(repository: OrchestrationRepository): OrchestrationService {
   globalService = new OrchestrationService(repository);
-  getAgentDispatcher().setRepository(repository);
+  synchronizeDispatcherRepository();
   return globalService;
+}
+
+/** Generation-owned registration for Plugin Runtime composition roots. */
+export function registerOrchestrationService(service: OrchestrationService): () => void {
+  serviceRegistrations.push(service);
+  synchronizeDispatcherRepository();
+  return () => {
+    const index = serviceRegistrations.lastIndexOf(service);
+    if (index >= 0) serviceRegistrations.splice(index, 1);
+    synchronizeDispatcherRepository();
+  };
 }
 
 /**
@@ -633,20 +653,23 @@ export function initOrchestrationService(repository: OrchestrationRepository): O
  * used by the DB activation path to move from the Memory placeholder to a
  * Database repository without losing bootstrap-time registrations.
  */
-export function upgradeOrchestrationRepository(repository: OrchestrationRepository): OrchestrationService {
-  const existing = globalService;
+export function upgradeOrchestrationRepository(
+  repository: OrchestrationRepository,
+  target: OrchestrationService | null = activeOrchestrationService(),
+): OrchestrationService {
+  const existing = target;
   if (existing) {
     existing.replaceRepository(repository);
-    getAgentDispatcher().setRepository(repository);
+    if (existing === activeOrchestrationService()) synchronizeDispatcherRepository();
     return existing;
   }
   return initOrchestrationService(repository);
 }
 
 export function getOrchestrationService(): OrchestrationService | null {
-  return globalService;
+  return activeOrchestrationService();
 }
 
 export function getOrchestrationKernel(): OrchestrationKernel | null {
-  return globalService;
+  return activeOrchestrationService();
 }

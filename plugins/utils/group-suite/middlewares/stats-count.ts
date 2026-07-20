@@ -2,6 +2,7 @@ import { defineMiddleware } from '@zhin.js/middleware';
 import type { Message } from '@zhin.js/core/runtime';
 import type { GroupSuiteConfig } from '../src/config.js';
 import { recordMessage } from '../src/stats-lib.js';
+import { resolveGroupSuiteRuntime } from '../src/runtime-state.js';
 
 /**
  * Buffer inbound messages into in-memory message_stats (flushed on query).
@@ -14,7 +15,7 @@ export default defineMiddleware<Message, GroupSuiteConfig>({
   async handle(context, next) {
     const content = typeof context.input.content === 'string' ? context.input.content : '';
     if (!content.startsWith('/')) {
-      recordMessage(context.input);
+      recordMessage(context.input, resolveGroupSuiteRuntime(context));
     }
     await next();
   },

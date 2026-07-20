@@ -1,5 +1,5 @@
 export { TTT_HELP } from './ttt-command.js';
-export { getGameServices, setGameServices } from './runtime-store.js';
+export { gameServicesToken, resolveGameServices } from './runtime-store.js';
 export { createInMemoryTttDb, mountTttMemoryServices } from './memory-db.js';
 
 /**

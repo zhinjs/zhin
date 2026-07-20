@@ -2,14 +2,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { smokeGameMessage } from '@zhin.js/game-kit';
 import { processIdiomText, startGame } from '../src/game-flow.js';
 import { mountChainMemoryServices } from '../src/memory-db.js';
-import { setGameServices } from '../src/runtime-store.js';
 import type { SessionService } from '../src/session-service.js';
 
 describe('idiom-chain game-flow (plugin=null)', () => {
   let services: SessionService;
 
   beforeEach(() => {
-    setGameServices(null);
     services = mountChainMemoryServices();
   });
 

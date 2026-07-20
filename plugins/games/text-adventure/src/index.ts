@@ -1,5 +1,5 @@
 export { ADV_HELP } from './adv-command.js';
-export { getGameServices, setGameServices } from './runtime-store.js';
+export { gameServicesToken, resolveGameServices } from './runtime-store.js';
 export { createInMemoryAdvDb, mountAdvMemoryServices } from './memory-db.js';
 
 /**

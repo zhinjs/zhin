@@ -1,20 +1,14 @@
 import { defineCommand } from '@zhin.js/command';
 import { messageFromCommandInput, normalizeChainAction } from '@zhin.js/game-kit';
 import { CHAIN_HELP, runChainCommandText } from '../../src/chain-command.js';
-import { getGameServices } from '../../src/runtime-store.js';
-import { mountChainMemoryServices } from '../../src/memory-db.js';
-import type { SessionService } from '../../src/session-service.js';
-
-function requireServices(): SessionService {
-  return getGameServices<SessionService>() ?? mountChainMemoryServices();
-}
+import { resolveGameServices } from '../../src/runtime-store.js';
 
 export default defineCommand({
   description: 'Idiom Chain',
-  async execute({ params, input }) {
+  async execute({ params, input, use, owner }) {
     const action = normalizeChainAction(String(params.action ?? ''));
     if (!action || action === 'help') return CHAIN_HELP;
-    const services = requireServices();
+    const services = resolveGameServices({ use, owner });
     const message = messageFromCommandInput(input);
     return runChainCommandText(services, message, action);
   },

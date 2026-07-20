@@ -11,6 +11,24 @@ afterEach(async () => {
 });
 
 describe('Runtime A2A Host', () => {
+  it('rejects an unauthenticated production endpoint', () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const registry = new AgentBindingRegistry({
+      zhin: { provider: 'ollama', model: 'qwen3:8b' },
+    });
+    expect(() => installRuntimeA2a({
+      http,
+      agentHost: {
+        service: { getBindingRegistry: () => registry },
+        agent: {},
+      } as unknown as AgentHostPort,
+      config: { path: '/mesh' },
+      fallbackPublicUrl: 'https://bot.example.test',
+      production: true,
+    })).toThrow('requires a2a.token or http.token');
+  });
+
   it('serves authenticated Agent Cards from the active binding registry', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
