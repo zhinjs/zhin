@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/adapter-sandbox",
   "version": "5.0.5",
-  "description": "Zhin.js adapter for local testing and development",
+  "description": "Zhin.js Sandbox adapter for Plugin Runtime (WebSocket /sandbox)",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -13,9 +13,12 @@
     }
   },
   "files": [
+    "adapters",
+    "pages",
+    "plugin.ts",
+    "schema.json",
     "src",
     "lib",
-    "client",
     "dist",
     "agent",
     "README.md",
@@ -43,40 +46,40 @@
     "directory": "plugins/adapters/sandbox"
   },
   "scripts": {
-    "build": "zhin build",
+    "build": "tsc",
     "clean": "rimraf lib",
-    "prepublishOnly": "npm run build"
+    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/adapters/sandbox/tests",
+    "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
-    "lucide-react": "^1.22.0"
+    "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/console-contract": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/logger": "workspace:*",
+    "@zhin.js/page": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
+    "react": "^19.1.0"
   },
   "devDependencies": {
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "@zhin.js/cli": "workspace:*",
-    "@zhin.js/client": "workspace:*",
-    "@zhin.js/contract": "workspace:*",
-    "@zhin.js/core": "workspace:*",
-    "@zhin.js/host-api": "workspace:*",
-    "@zhin.js/host-router": "workspace:*",
+    "@types/ws": "^8.18.1",
+    "@zhin.js/pagemanager": "workspace:*",
+    "@zhin.js/runtime": "workspace:*",
     "typescript": "^6.0.3",
-    "zhin.js": "workspace:*"
+    "vitest": "^4.1.10",
+    "ws": "^8.21.0"
   },
   "peerDependencies": {
+    "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/console-contract": "workspace:*",
     "@zhin.js/core": "workspace:*",
-    "@zhin.js/client": "workspace:*",
-    "@zhin.js/host-router": "workspace:*",
-    "@zhin.js/host-api": "workspace:*",
-    "@zhin.js/contract": "workspace:*"
+    "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/page": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
+    "react": "^19.0.0"
   },
   "peerDependenciesMeta": {
-    "@zhin.js/host-router": {
-      "optional": true
-    },
-    "@zhin.js/host-api": {
-      "optional": true
-    },
-    "@zhin.js/client": {
+    "react": {
       "optional": true
     }
   },
@@ -86,5 +89,23 @@
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/adapter",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/page",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
   }
 }

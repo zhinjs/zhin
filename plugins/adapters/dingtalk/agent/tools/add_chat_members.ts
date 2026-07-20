@@ -1,9 +1,9 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getDingtalkAgentDeps } from '../../src/dingtalk-agent-deps.js';
 import { platformPermit } from '../../src/platform-permit.js';
 
-export default defineTool<{ endpoint_id: string; chat_id: string; user_ids: string }>({
+export default defineAgentTool<{ endpoint_id: string; chat_id: string; user_ids: string }>({
   description: '向钉钉群聊添加成员',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),

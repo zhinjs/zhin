@@ -1,9 +1,9 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { platformPermit } from '../../src/platform-permit.js';
 import { getDiscordAgentDeps } from '../../src/discord-agent-deps.js';
 
-export default defineTool<{ endpoint_id: string; guild_id: string }>({
+export default defineAgentTool<{ endpoint_id: string; guild_id: string }>({
   description: '获取 Discord 服务器角色列表',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),

@@ -1,4 +1,4 @@
-import { secureShuffleInPlace } from '@zhin.js/game-shared';
+import { secureShuffleInPlace } from '@zhin.js/game-kit';
 
 export const BJ_PREFIX = 'bj';
 export const TARGET = 21;

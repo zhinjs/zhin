@@ -51,8 +51,67 @@ export function splitMrkdwnText(text: string, maxLen = SLACK_MRKDWN_TEXT_MAX): s
 
 /** 通知栏 / 无障碍 fallback 用的纯文本 */
 export function mrkdwnToPlainFallback(text: string): string {
-  return text
-    .replace(/<([^|>]+)\|([^>]+)>/g, '$2 ($1)')
-    .replace(/<([^>]+)>/g, '$1')
-    .replace(/[*_~`]/g, '');
+  return stripMrkdwnMarkers(stripAngleBrackets(rewriteAngleLinks(text)));
+}
+
+/**
+ * `<url|text>` → `text (url)`。
+ * 线性扫描，语义等价于 `/<([^|>]+)\|([^>]+)>/g`（分组一不含 `|`，
+ * 因此切分点恒为首个 `|`），但避免量词重叠在超长 `<...` 输入上的
+ * 二次方回溯（js/polynomial-redos）。
+ */
+function rewriteAngleLinks(text: string): string {
+  let out = '';
+  let i = 0;
+  while (i < text.length) {
+    const open = text.indexOf('<', i);
+    if (open < 0) break;
+    const close = text.indexOf('>', open + 1);
+    if (close < 0) break;
+    const inner = text.slice(open + 1, close);
+    const pipe = inner.indexOf('|');
+    if (pipe > 0 && pipe < inner.length - 1) {
+      out += text.slice(i, open);
+      out += `${inner.slice(pipe + 1)} (${inner.slice(0, pipe)})`;
+      i = close + 1;
+      continue;
+    }
+    // 非链接形态：本趟不匹配，原样保留 `<` 并继续（与原正则行为一致）。
+    out += text.slice(i, open + 1);
+    i = open + 1;
+  }
+  return out + text.slice(i);
+}
+
+/**
+ * 剥掉剩余 `<...>` 的尖括号。线性扫描，等价于 `/<([^>]+)>/g`
+ * （空内容 `<>` 不匹配、原样保留）。
+ */
+function stripAngleBrackets(text: string): string {
+  let out = '';
+  let i = 0;
+  while (i < text.length) {
+    const open = text.indexOf('<', i);
+    if (open < 0) break;
+    const close = text.indexOf('>', open + 1);
+    if (close < 0) break;
+    if (close === open + 1) {
+      out += text.slice(i, open + 1);
+      i = open + 1;
+      continue;
+    }
+    out += text.slice(i, open);
+    out += text.slice(open + 1, close);
+    i = close + 1;
+  }
+  return out + text.slice(i);
+}
+
+/** 去掉 `*` `_` `~` `` ` `` 样式符号（等价于 `/[*_~`]/g`，逐字符线性）。 */
+function stripMrkdwnMarkers(text: string): string {
+  let out = '';
+  for (const ch of text) {
+    if (ch !== '*' && ch !== '_' && ch !== '~' && ch !== '`') out += ch;
+  }
+  return out;
 }

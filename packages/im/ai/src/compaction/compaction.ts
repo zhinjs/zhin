@@ -8,13 +8,13 @@
  *   5. 降级策略：摘要失败时使用更粗糙的摘要
  */
 
-import { formatCompact, Logger, truncatePreview } from '@zhin.js/logger';
+import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
 import type { AIProvider, ChatMessage } from '../types.js';
 import { microCompactMessages, type MicroCompactOptions } from './micro-compact.js';
 
 import { estimateTokens, estimateMessagesTokens } from './token-counter.js';
 
-const logger = new Logger(null, 'Compaction');
+const logger = getLogger('Compaction');
 
 // ============================================================================
 // 常量

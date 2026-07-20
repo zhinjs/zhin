@@ -1,4 +1,4 @@
-import type { Models, Plugin } from 'zhin.js';
+import type { Models } from 'zhin.js';
 
 export type TttSessionStatus = 'active' | 'won' | 'draw' | 'aborted';
 
@@ -56,8 +56,11 @@ export type TttSpectatorRow = Models['ttt_spectators'];
 /** 井字棋插件注册的表名 */
 export type TttModelName = 'ttt_sessions' | 'ttt_queue' | 'ttt_moves' | 'ttt_spectators';
 
-export function registerModels(plugin: Plugin): void {
-  plugin.defineModel('ttt_sessions', {
+
+export function defineHostTables(
+  db: { define: (name: string, definition: Record<string, unknown>) => void },
+): void {
+  db.define('ttt_sessions', {
     id: { type: 'text', primary: true },
     adapter: { type: 'text', nullable: false },
     endpoint: { type: 'text', nullable: false },
@@ -77,16 +80,14 @@ export function registerModels(plugin: Plugin): void {
     updated_at: { type: 'integer', default: 0 },
     created_at: { type: 'integer', default: 0 },
   });
-
-  plugin.defineModel('ttt_queue', {
+  db.define('ttt_queue', {
     id: { type: 'integer', primary: true },
     channel_key: { type: 'text', nullable: false },
     user_id: { type: 'text', nullable: false },
     user_name: { type: 'text', default: '' },
     joined_at: { type: 'integer', default: 0 },
   });
-
-  plugin.defineModel('ttt_moves', {
+  db.define('ttt_moves', {
     id: { type: 'integer', primary: true },
     session_id: { type: 'text', nullable: false },
     player_id: { type: 'text', nullable: false },
@@ -94,8 +95,7 @@ export function registerModels(plugin: Plugin): void {
     move_index: { type: 'integer', nullable: false },
     created_at: { type: 'integer', default: 0 },
   });
-
-  plugin.defineModel('ttt_spectators', {
+  db.define('ttt_spectators', {
     id: { type: 'integer', primary: true },
     session_id: { type: 'text', nullable: false },
     user_id: { type: 'text', nullable: false },

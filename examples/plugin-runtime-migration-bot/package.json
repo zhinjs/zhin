@@ -1,0 +1,50 @@
+{
+  "name": "@zhin.js/example-plugin-runtime-migration-bot",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Executable behavior tracer for migration to the Zhin Plugin Runtime",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "start": "zhin runtime start",
+    "test": "vitest run --root ../.. examples/plugin-runtime-migration-bot/tests"
+  },
+  "dependencies": {
+    "@zhin.js/command": "1.0.0",
+    "@zhin.js/component": "1.0.0",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
+    "@zhin.js/runtime": "workspace:*",
+    "@zhin.js/middleware": "1.0.0",
+    "zhin.js": "workspace:*"
+  },
+  "devDependencies": {
+    "@zhin.js/cli": "workspace:*",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/component",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/middleware",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
+  }
+}

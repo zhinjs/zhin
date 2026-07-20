@@ -1,10 +1,10 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { parseGameId } from '../../src/games/registry.js';
 import { loadDraws } from '../../src/db.js';
 import { getLotteryAgentDeps } from '../../src/lottery-agent-deps.js';
 
-export default defineTool<{ game: string; count?: number }>({
+export default defineAgentTool<{ game: string; count?: number }>({
   description: 'Query historical lottery draws',
   inputSchema: z.object({
     game: z.string().min(1),

@@ -1,8 +1,8 @@
 import type { AgentMessage, AgentTool } from '@zhin.js/ai';
-import { formatCompact, Logger, truncatePreview } from '@zhin.js/logger';
+import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
 import type { PromptSectionDebugInfo } from '../prompt/system-prompt.js';
 
-const logger = new Logger(null, 'ZhinAgent');
+const logger = getLogger('ZhinAgent');
 
 export type { HostPromptTraceConfig as PromptTraceConfig } from '../internal/host-types.js';
 import type { HostPromptTraceConfig as PromptTraceConfig } from '../internal/host-types.js';

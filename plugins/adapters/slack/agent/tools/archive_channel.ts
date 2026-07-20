@@ -1,9 +1,9 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { platformPermit } from '../../src/platform-permit.js';
 import { getSlackAgentDeps } from '../../src/slack-agent-deps.js';
 
-export default defineTool<{
+export default defineAgentTool<{
   endpoint_id: string;
   channel: string;
 }>({

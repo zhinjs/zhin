@@ -9,10 +9,10 @@
  * - 支持多平台、多场景
  */
 
-import { Logger } from '@zhin.js/logger';
+import { getLogger } from '@zhin.js/logger';
 import type { ChatMessage, AIProvider } from '../types.js';
 
-const logger = new Logger(null, 'ContextManager');
+const logger = getLogger('ContextManager');
 
 // ============================================================================
 // 数据库模型定义

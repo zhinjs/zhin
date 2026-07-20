@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/plugin-link-poster",
   "version": "3.0.2",
-  "description": "Auto-detect Bilibili/GitHub/Douyin/Xiaohongshu links and generate beautiful poster cards",
+  "description": "Auto-detect link posters for Zhin.js (Plugin Runtime)",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -14,15 +14,19 @@
     "./package.json": "./package.json"
   },
   "files": [
+    "plugin.ts",
+    "schema.json",
+    "middlewares",
     "src",
     "lib",
     "agent",
     "README.md"
   ],
   "scripts": {
-    "build": "tsc --build",
+    "build": "tsc",
     "clean": "rimraf lib",
-    "prepublishOnly": "npm run build"
+    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/utils/link-poster/tests",
+    "prepublishOnly": "pnpm run build"
   },
   "keywords": [
     "zhin",
@@ -42,15 +46,14 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@zhin.js/html-renderer": "workspace:*"
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/html-renderer": "workspace:*",
+    "@zhin.js/middleware": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6.0.3",
-    "zhin.js": "workspace:*"
-  },
-  "peerDependencies": {
-    "zhin.js": "workspace:*",
-    "@zhin.js/html-renderer": "workspace:*"
+    "vitest": "^4.1.10"
   },
   "repository": {
     "type": "git",
@@ -60,5 +63,22 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/middleware",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
   }
 }

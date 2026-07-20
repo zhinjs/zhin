@@ -1,5 +1,7 @@
 # Plugin `agent/` Authoring Surface
 
+> 本页只描述当前实现。全新项目的目标创作面由 [ADR 0043](../adr/0043-unify-capability-roots.md) 定义为项目根或插件根下的 `commands/`、`components/`、`agents/`、`skills/`、`tools/`；目标架构不承担本页格式的兼容义务。
+
 Eve-style filesystem-first agent definitions for zhin plugins.
 
 ## Layout
@@ -9,8 +11,8 @@ plugins/my-plugin/
 ├── agent/
 │   ├── agent.ts              # defineAgent() — identity/strategy (no model, optional)
 │   ├── instructions.md       # optional system prompt
-│   ├── tools/*.ts            # defineTool() — path → lottery_sync
-│   ├── skills/*.md           # on-demand procedures
+│   ├── tools/*.ts            # defineAgentTool() — path → lottery_sync
+│   ├── skills/*.md           # Markdown procedures (SSOT; not TS modules)
 │   ├── schedules/*.ts        # defineSchedule()
 │   ├── connections/*.ts      # defineConnection() + schema; params in zhin.config
 │   ├── hooks/*.ts            # defineHook() — subscribe to stream events (see below)
@@ -21,6 +23,9 @@ plugins/my-plugin/
 ## Rules
 
 - **Path is identity**: `agent/tools/sync.ts` → runtime tool `lottery_sync` (plugin prefix `lottery_`).
+- **Tools SSOT**: `agent/tools/*.ts` + `defineAgentTool`（`defineTool` from `@zhin.js/agent/tools` is a soft-deprecated alias）。
+- **Skills SSOT**: `agent/skills/*.md`（Markdown）。`defineSkill` TS 仅为程序化遗留，文档不作为推荐主路径。
+- **Legacy（soft-deprecate）**: `plugin.addTool` / workspace `*.tool.md` — 仍运行，新代码勿新增。
 - **Workspace agents**: `agents/<name>/agent.ts` + `instructions.md` (bare names for routing).
 - **Model** stays in `zhin.config.yml` `ai` section, not `agent.ts`.
 - **Plugin tsconfig**: `rootDir: "."`, `include: ["src/**/*", "agent/**/*"]`, `declaration: false` when shipping agent tools alongside src.
@@ -68,7 +73,7 @@ Tool file slot name strips the adapter prefix: `invite_to_channel.ts` → `slack
 ## Utils migration patterns
 
 - **Inline `addTool`**: move to `agent/tools/*.ts`, delete `plugin.addTool` / `ZhinTool` registration.
-- **60s `*.tool.md`**: one `defineTool` per tool; `execute` delegates to existing `tools/<name>/handler.ts`; delete `*.tool.md`.
+- **60s `*.tool.md`**: one `defineAgentTool` per tool; `execute` delegates to existing `tools/<name>/handler.ts`; delete `*.tool.md`.
 - **Skills**: 新代码用 `agent/skills/<name>.md`；本 monorepo 官方插件已移除包内 `skills/`（工作区 `cwd/skills/` 仍支持）。
 - **PERMITS**（可选）：平台 Permit 词汇表放在 `agent/PERMITS.md`（维护者文档，**不参与** `discoverPluginAgentSurface` 自动发现）。
 
@@ -76,7 +81,7 @@ Tool file slot name strips the adapter prefix: `invite_to_channel.ts` → `slack
 
 ```ts
 import { defineAgent } from '@zhin.js/agent';
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { defineSchedule } from '@zhin.js/agent/schedules';
 ```
 
@@ -122,13 +127,13 @@ CI：`pnpm check:plugin-agent-publish`（已接入 `check:all`）。
 
 ## Per-tool approval 与 toModelOutput（ADR 0039 P1）
 
-`defineTool` 支持 Eve 对齐的声明式工具策略，与 **ExecPolicy / Owner confirm 叠加**（不替代）：
+`defineAgentTool` 支持 Eve 对齐的声明式工具策略，与 **ExecPolicy / Owner confirm 叠加**（不替代）：
 
 ```ts
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { always, once, never } from '@zhin.js/agent/tools';
 
-export default defineTool({
+export default defineAgentTool({
   description: '危险写操作',
   inputSchema: z.object({ path: z.string() }),
   approval: always(), // 或 once() / never() / async ({ toolName, args }) => boolean
@@ -245,9 +250,30 @@ Authoring 工具在 agent 运行时执行；需隔离时请走内置 `bash` / `r
 
 **遗留 `type:action` 键**（`message:received`、`tool:call` 等）仍可用；触发时会自动映射到上表对应 stream 事件并通知订阅了 stream 名的 hook。
 
+### 对外订阅：经 Plugin 总线广播（冻结契约）
+
+插件作者应通过 **Plugin 事件总线** 订阅生命周期，而不是直接挂 HookRegistry：
+
+| 方式 | 说明 |
+|------|------|
+| `onAIHook(plugin, listener)` / `plugin.on('ai.hook', …)` | 推荐 |
+| `ai.session.new` / `ai.session.compact` | 会话新建 / compaction |
+
+内部：`HookRegistry` →（StreamBus sink）→ **`emitAIHookBusEvent` → `root.dispatch('ai.hook')`**（[`plugin-ai-hook-bus.ts`](https://github.com/zhinjs/zhin/blob/main/packages/im/agent/src/plugin-ai-hook-bus.ts)）。**禁止**新增绕过 Plugin `dispatch` 的平行 hook 总线。
+
 Hooks 为 **observe-only**（与 Eve 一致）；改 prompt / 拦截工具请用 `agent:prompt` 或 PreToolUse 策略，见 orchestrator 文档。
 
 ## 与 Eve 对照（维护者）
 
 - 全栈差距矩阵：[eve-comparison-zh.md](./eve-comparison-zh.md)
 - 架构决策（边界与分阶段路线）：[ADR 0039](../adr/0039-eve-aligned-agent-surface-roadmap.md)
+
+## 下一 major 清扫清单（软弃用 → 硬删）
+
+本轮仅软弃用 + harness 禁新增；计划在下一 major 删除：
+
+- `@zhin.js/agent/tools` 的 **`defineTool` 别名**（保留 `defineAgentTool`）
+- 程序化平台工具：`plugin.addTool` / `*.tool.md` 作者路径（仅保留 `agent/tools/*.ts`）
+- 插件包顶层 `skills/` 发现（仅 `agent/skills/*.md` + 工作区 skills）
+- 配置项 `legacyDualWrite` 与 `cron-jobs.json` 镜像写入
+- 其余已 `@deprecated` 的 AI outbound/`kind`、legacy hooks 别名等（见各包 CHANGELOG）

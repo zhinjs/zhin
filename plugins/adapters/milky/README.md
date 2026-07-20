@@ -1,44 +1,37 @@
 # @zhin.js/adapter-milky
 
-Zhin.js [Milky](https://milky.ntqqrev.org/) 协议适配器，**一个适配器**支持 WebSocket 正向/反向、SSE、Webhook 四种连接方式，由配置项 `connection` 区分；支持 HTTP API 调用与 `access_token` 鉴权。
+Zhin.js [Milky](https://milky.ntqqrev.org/) 协议适配器（Plugin Runtime）。默认 **正向 WebSocket 客户端**（`connection: ws`）；亦支持 **Webhook**、**反向 WS**（经 `httpHostToken`）与 **SSE**（HTTP GET `/event`，fetch 解析 `text/event-stream`）。
 
 ## 功能特性
 
-- 🔌 Milky 协议兼容（[通信说明](https://milky.ntqqrev.org/guide/communication)）
-- 📦 **单一适配器**：`context: milky`，通过 `connection` 选择连接方式
-- 🌐 **WebSocket 正向**（`connection: ws`）：应用连协议端 `ws(s)://baseUrl/event`
-- 📡 **SSE**（`connection: sse`）：应用 GET 协议端 `/event`
-- 📮 **Webhook**（`connection: webhook`）：应用提供 POST 端点收事件
-- 🔄 **WebSocket 反向**（`connection: wss`）：应用开 WS 服务端，协议端来连
-- 🔐 `access_token` 鉴权（Header 或 query）
-- 📨 群聊 / 私聊消息收发与消息段映射
-- 🛠️ HTTP API 封装，供发消息、撤回、群管等复用
+- [Milky 协议](https://milky.ntqqrev.org/guide/communication) 兼容（事件 + HTTP API）
+- 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
+- **正向 WebSocket**（`connection: ws`）：应用连协议端 `ws(s)://baseUrl/event`
+- `access_token` 鉴权（Bearer + query）
+- 入站经 `messageGatewayToken`；出站 `send({ target, payload })` → HTTP `send_*_message`
 
 ## 安装
 
 ```bash
-pnpm add @zhin.js/adapter-milky ws eventsource
+pnpm add @zhin.js/adapter-milky
 ```
 
-适配器依赖 `@zhin.js/host-router` 提供的 `router` 才能注册（Webhook/反向 WS 需挂路由），请同时启用 HTTP 服务：
+## Plugin Runtime
 
-```bash
-pnpm add @zhin.js/host-router
-```
+- `@zhin.js/adapter` — 约定式 `adapters/milky.ts`（`defineAdapter`）
+- `@zhin.js/core` — `messageGatewayToken` 入站/出站
+- `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
+- 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 
-## 配置
+入站：`gateway.receive({ adapter, target: "private:uid"|"group:gid", content, sender, metadata })`  
+出站：`send({ target, payload })` → HTTP `send_private_message` / `send_group_message`（payload 已由 gateway/core 渲染；无 segment-mapper）
 
-所有 Endpoint 使用 **同一 context：`milky`**，通过 **`connection`** 区分连接方式。
-
-### WebSocket 正向
+## 最小配置
 
 ```yaml
+# zhin.config.yml（Plugin Runtime）
 plugins:
-  - "@zhin.js/host-router"
-  - "@zhin.js/adapter-milky"
-
-endpoints:
-  - context: milky
+  milky:
     connection: ws
     name: milky-bot
     baseUrl: "http://127.0.0.1:8080"
@@ -47,117 +40,38 @@ endpoints:
     heartbeat_interval: 30000
 ```
 
-### SSE
+根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-milky`（`instanceKey: milky`）。
 
-```yaml
-endpoints:
-  - context: milky
-    connection: sse
-    name: milky-sse-bot
-    baseUrl: "http://127.0.0.1:8080"
-    access_token: "${MILKY_ACCESS_TOKEN}"
-```
+## 连接方式
 
-### Webhook
-
-```yaml
-endpoints:
-  - context: milky
-    connection: webhook
-    name: milky-webhook-bot
-    baseUrl: "http://协议端地址"
-    path: "/milky/webhook"               # 应用接收事件的 POST 路径
-    access_token: "${MILKY_ACCESS_TOKEN}"
-```
-
-### WebSocket 反向
-
-```yaml
-endpoints:
-  - context: milky
-    connection: wss
-    name: milky-wss-bot
-    baseUrl: "http://协议端地址"
-    path: "/milky/event"                 # 应用 WS 服务端路径
-    access_token: "${MILKY_ACCESS_TOKEN}"
-    heartbeat_interval: 30000
-```
+| connection | 状态 |
+|------------|------|
+| `ws` | 已实现（推荐） |
+| `sse` | HTTP GET `/event`（`Accept: text/event-stream`） || `webhook` | 已实现：POST 入站 + baseUrl HTTP API 出站 |
+| `wss` | 已实现：反向 WS（httpHostToken） |
 
 ## 鉴权
 
-所有连接方式统一支持：
+- **Bearer**：`Authorization: Bearer <access_token>`
+- 正向 WS 在 Upgrade 时附带请求头，并在 URL query 写入 `access_token`
+- HTTP API 同样使用 Header / query 鉴权
 
-- **Header**：`Authorization: Bearer {access_token}`
-- **Query**：`access_token=xxx`
+## 消息 ID
 
-建议配置 `access_token`，并与协议端一致。
-
-## 连接方式对比
-
-| connection | 说明                           |
-|------------|--------------------------------|
-| `ws`       | 应用主动连协议端 `/event`      |
-| `sse`      | 应用 GET `/event` 拉取事件流   |
-| `webhook`  | 协议端 POST 到应用配置的 path  |
-| `wss`      | 协议端连应用提供的 WS path     |
-
-## 使用示例
-
-### 消息处理
-
-```typescript
-import { addCommand, MessageCommand } from 'zhin.js'
-
-addCommand(new MessageCommand('hello <name:text>')
-  .action(async (message, result) => {
-    return `你好，${result.params.name}！`
-  })
-)
-```
-
-### 发送消息段
-
-```typescript
-addCommand(new MessageCommand('pic')
-  .action(async () => {
-    return [
-      { type: 'text', data: { text: '图片：' } },
-      { type: 'image', data: { url: 'https://example.com/img.png' } }
-    ]
-  })
-)
-```
-
-发消息、撤回、群管等通过适配器封装的 HTTP API 完成。群管能力通过 `ISceneManagement` 自动注册为工具，详见 [工具与技能](/advanced/tools-skills)。
+`{message_scene}:{peer_id}:{message_seq}`（如 `group:123456:10001`）。
 
 ## AI 工具
 
-Permit 词汇见 `agent/PERMITS.md`（维护者参考）。技能说明见 `agent/skills/milky.md`。群管标准工具由 `createSceneManagementTools()` 注册。
+| 类别 | 路径 |
+|------|------|
+| Permit 词汇 | `agent/PERMITS.md` |
+| 技能说明 | `agent/skills/milky.md` |
 
-
-## 消息 ID 格式
-
-`{message_scene}:{peer_id}:{message_seq}`（如 `group:123456:10001`）。撤回时使用该 ID。
-
-## 协议与 API 参考
+## 文档链接
 
 - [Milky 快速开始](https://milky.ntqqrev.org/)
 - [Milky 通信](https://milky.ntqqrev.org/guide/communication)
-- [事件结构](https://milky.ntqqrev.org/struct/Event)、[接收消息](https://milky.ntqqrev.org/struct/IncomingMessage)、[消息 API](https://milky.ntqqrev.org/api/message)、[群聊 API](https://milky.ntqqrev.org/api/group)
-
-## 依赖项
-
-- `ws` - WebSocket 客户端/服务端
-- `eventsource` - SSE 客户端
-- `zhin.js` - Zhin 核心
-- `@zhin.js/host-router` - 提供 router，适配器注册依赖
-
-## 开发
-
-```bash
-pnpm build   # 构建
-pnpm clean   # 清理
-```
+- [适配器概览](https://zhin.js.org/essentials/adapters)
 
 ## 许可证
 

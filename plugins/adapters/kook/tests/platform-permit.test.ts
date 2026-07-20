@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { canAccessTool, clearPlatformPermitCheckers } from 'zhin.js';
-import { KookPermission } from '../src/types.js';
+import { KookPermission } from '../src/protocol.js';
 import {
   checkKookPlatformPermit,
   normalizeKookSenderForPermit,

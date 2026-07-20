@@ -3,12 +3,12 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { formatCompact, Logger } from '@zhin.js/logger';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import { type ScheduleJob, type ScheduleJobFile, type JobAction, type JobNotify, SCHEDULE_JOBS_FILENAME, SCHEDULE_JOBS_VERSION } from './types.js';
 import { parseScheduleJobCreator } from './job-creator.js';
 import { parseScheduleJobExecutionPlan } from './schedule-execution.js';
 import { parseJobNotify, resolveEffectiveNotify } from './notification-router.js';
-const logger = new Logger(null, 'schedule-job-store');
+const logger = getLogger('schedule-job-store');
 
 export type AssistantJobStore = ScheduleJobStore;
 export type AssistantJob = ScheduleJob;

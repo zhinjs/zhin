@@ -3,7 +3,7 @@
  */
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { Logger, type Tool, type Message, type ToolParametersSchema, type ToolResult } from '@zhin.js/core';
+import { type Tool, type Message, type ToolParametersSchema, type ToolResult, getLogger } from '@zhin.js/core';
 import { errMsg } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 
@@ -28,7 +28,7 @@ export const INSTALL_SKILL_PARAMETERS: ToolParametersSchema = {
   required: ['url'],
 };
 
-const logger = new Logger(null, 'install-skill-tool');
+const logger = getLogger('install-skill-tool');
 
 export class InstallSkillBuiltinTool extends BuiltinBaseTool {
   readonly name = 'install_skill';

@@ -1,10 +1,10 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { parseGameId } from '../../src/games/registry.js';
 import { getLotteryAgentDeps } from '../../src/lottery-agent-deps.js';
 import { runDataSync } from '../../src/sync/run-sync.js';
 
-export default defineTool<{ game?: string }>({
+export default defineAgentTool<{ game?: string }>({
   description: 'Sync official lottery draws into DB',
   inputSchema: z.object({ game: z.string().optional() }),
   async execute({ game }) {

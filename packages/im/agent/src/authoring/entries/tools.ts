@@ -1,5 +1,9 @@
-export { defineTool } from '../define-tool.js';
-export type { DefineToolInput, AuthoringToolContext } from '../define-tool.js';
+export { defineAgentTool, defineTool } from '../define-tool.js';
+export type {
+  DefineAgentToolInput,
+  DefineToolInput,
+  AuthoringToolContext,
+} from '../define-tool.js';
 export {
   toolApprovalAlways,
   toolApprovalOnce,

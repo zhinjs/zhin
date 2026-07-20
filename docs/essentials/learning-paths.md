@@ -3,6 +3,7 @@
 <div class="path-start">
 
 **推荐起点**：从未用过 Zhin → [快速开始](/getting-started/) → Sandbox 发 `hello` → 再按下方 L1 往下读。  
+示例项目进阶路径：**minimal-bot（Stable 黄金路径）→ full-bot（L4 全维度）→ test-bot（维护者厨房水槽，非用户模板）**。  
 文档站顶栏 **使用文档** 面向部署与插件作者；**框架开发** 面向 monorepo 贡献者。
 
 </div>
@@ -21,11 +22,11 @@
 
 ## L2 — 写插件
 
-**目标**：用 `usePlugin` 写命令、处理消息、用数据库。
+**目标**：用 `definePlugin` + 约定目录写命令、中间件，使用配置与 Host 资源。
 
 1. [核心概念速查](/essentials/) — 6 个核心概念一页看完
-2. [插件开发指南](/guide/plugin-development) — 从创建到发布
-3. [命令系统](/essentials/commands) — 命令参数、权限、帮助
+2. [插件系统](/essentials/plugins) — `definePlugin`、约定目录全表、schema.json
+3. [命令系统](/essentials/commands) — 目录约定、文件路由参数、返回值
 
 **可选**：
 - [中间件](/essentials/middleware) — 拦截消息流

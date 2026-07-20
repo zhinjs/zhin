@@ -1,7 +1,7 @@
 /**
  * NapCat 入站消息治理：去重、自发过滤、消息归一化
  */
-import type { NapCatMessageEvent, MessageSegment } from './types.js';
+import type { NapCatMessageEvent, MessageSegment } from './protocol.js';
 
 const DEDUPE_TTL_MS = 120_000;
 
@@ -24,7 +24,11 @@ export class InboundMessageDeduper {
 }
 
 /** 判断是否为 bot 自身发出的消息 */
-export function isSelfMessage(event: NapCatMessageEvent): boolean {
+export function isSelfMessage(event: NapCatMessageEvent | {
+  post_type?: string;
+  self_id?: number | string;
+  user_id?: number | string;
+}): boolean {
   if (event.post_type === 'message_sent') return true;
   if (event.self_id != null && event.user_id != null) {
     return Number(event.self_id) === Number(event.user_id);
@@ -42,16 +46,4 @@ export function normalizeMessage(message: MessageSegment[] | string): MessageSeg
     return [{ type: 'text', data: { text: message } }];
   }
   return [];
-}
-
-/**
- * 生成用于 notice / request 事件的去重 key
- */
-export function resolveSideEventDedupeKey(event: any, prefix: string): string {
-  const parts = [prefix, event.time, event.notice_type || event.request_type];
-  if (event.group_id) parts.push(event.group_id);
-  if (event.user_id) parts.push(event.user_id);
-  if (event.message_id) parts.push(event.message_id);
-  if (event.flag) parts.push(event.flag);
-  return parts.join(':');
 }

@@ -10,7 +10,8 @@ import type { Kl8Config } from './games/kl8-groups.js';
 export interface LotteryAgentDeps {
   getDb: () => LotteryDb | null;
   getConfig: () => { pickCount: number; historyLimit: number; kl8: Kl8Config };
-  plugin: Plugin;
+  /** Legacy Plugin host; null until Runtime database/host wiring lands. */
+  plugin: Plugin | null;
   enabledGames: () => GameId[];
   scheduleCron: () => string;
   scheduleEnabled: () => boolean;

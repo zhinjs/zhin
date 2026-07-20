@@ -6,10 +6,11 @@ Zhin.js 命令行工具完整说明。Stable 上手只需 `dev` / `start` / `sto
 
 | 命令           | 说明                                                              |
 | -------------- | ----------------------------------------------------------------- |
-| `zhin dev`     | 开发模式启动（热重载），支持 `-p/--port`、`--verbose`、`--bun`    |
-| `zhin start`   | 生产模式启动，支持 `-d/--daemon`、`--log-file`、`--bun`           |
-| `zhin restart` | 重启后台运行的机器人                                              |
+| `zhin runtime start` | 启动（开发模式，watch 热重载）；`--no-watch` 生产、`--once` 单次 |
+| `zhin runtime start --daemon` | 后台守护（写 `.zhin.pid`，崩溃自动拉起；`--log-file` 指定日志） |
 | `zhin stop`    | 停止后台运行的机器人                                              |
+
+> `zhin dev` / `zhin start`（legacy Feature registry 路径）已移除；旧项目请先按 [Plugin Runtime 原位迁移](../architecture/target-implementation/in-place-migration.md) 迁移。
 | `zhin build`   | 构建插件，支持 `--clean`、`--production`、`--analyze`             |
 
 ### 全局实例（`~/.zhin`）
@@ -17,7 +18,7 @@ Zhin.js 命令行工具完整说明。Stable 上手只需 `dev` / `start` / `sto
 安装 CLI 后可在**任意目录**启动机器人，数据与配置集中在 `~/.zhin`：
 
 1. 首次配置：`zhin setup --global`（写入 `zhin.config.yml`、`.env`、`data/` 等并安装依赖）
-2. 启动：`zhin start` 或 `zhin dev`（当前目录无 Zhin 项目时自动使用 `~/.zhin`；首次 `start` 也会自动初始化）
+2. 启动：在项目根运行 `zhin runtime start --daemon`（`~/.zhin` 全局实例的自动回退随 legacy 路径一并移除，`zhin stop` 仍兼容 `.zhin.pid`）
 3. 停止：`zhin stop`（同样解析 `~/.zhin` 上的 PID）
 
 当前工作目录已是 Zhin 项目时，仍**优先使用本地项目**；skills / tools / agents / packages 的 `~/.zhin` 路径与项目内路径并存（发现链第二优先级）。

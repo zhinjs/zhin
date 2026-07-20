@@ -1,9 +1,8 @@
 /**
  * KOOK platform permit — guild / channel 差异化门禁
  */
-import { registerPlatformPermitChecker, type Message } from 'zhin.js';
-
-import { KookPermission, type KookSenderInfo } from './types.js';
+import { registerPlatformPermitChecker, type Message } from '@zhin.js/core';
+import { KookPermission } from './protocol.js';
 
 const ADAPTER = 'kook';
 
@@ -18,6 +17,17 @@ const FACTORY_PERM_MAP: Record<string, string> = {
 
 export function kookGroupPermitResolver(logicalPerm: string): string {
   return platformPermit(FACTORY_PERM_MAP[logicalPerm] ?? logicalPerm);
+}
+
+export interface KookSenderInfo {
+  id: string;
+  name: string;
+  permission?: KookPermission;
+  roles?: number[];
+  isGuildOwner?: boolean;
+  isAdmin?: boolean;
+  role?: string;
+  permissions?: string[];
 }
 
 export function normalizeKookSenderForPermit(

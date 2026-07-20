@@ -49,6 +49,11 @@
     "./contexts": {
       "types": "./lib/zhin-contexts.d.ts",
       "development": "./zhin-contexts.d.ts"
+    },
+    "./runtime": {
+      "types": "./lib/plugin-runtime.d.ts",
+      "development": "./src/plugin-runtime.ts",
+      "import": "./lib/plugin-runtime.js"
     }
   },
   "files": [
@@ -71,7 +76,8 @@
     "@zhin.js/html-renderer": "workspace:^",
     "@zhin.js/speech": "workspace:^",
     "@zhin.js/host-api": "workspace:^",
-    "@zhin.js/host-router": "workspace:^"
+    "@zhin.js/host-router": "workspace:^",
+    "@zhin.js/runtime": "^1.0.0"
   },
   "peerDependenciesMeta": {
     "@zhin.js/agent": {
@@ -88,6 +94,9 @@
     },
     "@zhin.js/host-router": {
       "optional": true
+    },
+    "@zhin.js/runtime": {
+      "optional": true
     }
   },
   "devDependencies": {
@@ -98,6 +107,7 @@
     "@zhin.js/host-router": "workspace:*",
     "@zhin.js/html-renderer": "workspace:*",
     "@zhin.js/speech": "workspace:*",
+    "@zhin.js/runtime": "workspace:*",
     "typescript": "^6.0.3"
   },
   "repository": {

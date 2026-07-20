@@ -6,7 +6,7 @@ import {
   parseCellButtonId as parseButtonId,
   channelKey,
   type GridCell,
-} from '@zhin.js/game-shared';
+} from '@zhin.js/game-kit';
 import {
   asciiBoard,
   cellLabel,

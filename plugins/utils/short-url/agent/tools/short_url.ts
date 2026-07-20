@@ -1,8 +1,8 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { isValidUrl, shortenUrl } from '../../src/short-url-lib.js';
 
-export default defineTool<{ url: string }>({
+export default defineAgentTool<{ url: string }>({
   description: '缩短一个 URL，返回短链接',
   inputSchema: z.object({ url: z.string().min(1) }),
   keywords: ['短链', '缩短', 'shorten', 'short url'],

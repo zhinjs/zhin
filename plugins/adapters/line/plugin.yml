@@ -1,3 +1,0 @@
-name: adapter-line
-description: LINE Messaging API 适配器：Webhook 接收、Reply/Push 发送、签名验证
-version: 0.1.0

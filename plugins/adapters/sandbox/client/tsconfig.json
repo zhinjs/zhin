@@ -1,7 +1,0 @@
-{
-  "extends": "../node_modules/@zhin.js/host-api/browser.tsconfig.json",
-  "compilerOptions": {
-    "outDir": "../dist"
-  },
-  "include": ["./**/*"]
-}

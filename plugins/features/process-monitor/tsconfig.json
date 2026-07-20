@@ -2,10 +2,9 @@
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
     "types": ["node"],
-    "moduleResolution": "node",
-    "strict": false,
     "outDir": "./lib",
     "rootDir": "./src"
   },
-  "include": ["src"]
+  "include": ["src/**/*"],
+  "exclude": ["lib", "node_modules", "tests", "commands", "tools"]
 }

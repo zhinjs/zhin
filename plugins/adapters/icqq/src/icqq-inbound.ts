@@ -1,9 +1,8 @@
 /**
  * icqq 守护进程 IPC 入站事件归一化（post_type / message_type / message 段）
  */
-import { Message, type MessageSegment, type QuotedMessagePayload } from "zhin.js";
+import { Message, toCanonicalSegments, type MessageSegment, type QuotedMessagePayload } from "zhin.js";
 import { parseCqMessage } from "./cq-message.js";
-import { toCanonicalSegments } from "./segment-mapper.js";
 import { extractForwardResidFromJsonElement } from "./forward-msg.js";
 import type { GroupRole } from "./types.js";
 

@@ -3,15 +3,10 @@
  */
 import type { Plugin } from '../plugin.js';
 import type { Message } from '../message.js';
-import {
-  mergeAITriggerConfig,
-  resolveSenderRoles,
-  type AITriggerConfig,
-  type SenderRolesResult,
-} from './ai-trigger.js';
-import { formatCompact, Logger } from '@zhin.js/logger';
+import { mergeAITriggerConfig, resolveSenderRoles, type AITriggerConfig, type SenderRolesResult, } from './ai-trigger.js';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 
-const logger = new Logger(null, 'Authorization');
+const logger = getLogger('Authorization');
 
 interface YamlEndpointEntry {
   context?: string;

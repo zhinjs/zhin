@@ -1,38 +1,50 @@
-/**
- * Satori 适配器入口：单一适配器，支持 WS / Webhook，协议文档 https://satori.chat/zh-CN/introduction.html
- */
-import { usePlugin, type Plugin, type Context } from 'zhin.js';
-import type { Router } from '@zhin.js/host-router';
-import { SatoriAdapter } from './adapter.js';
+export {
+  SatoriOpcode,
+  buildWsUrl,
+  callSatoriApi,
+  extractCreatedMessageId,
+  formatInboundContent,
+  formatMessageId,
+  formatSatoriOutbound,
+  isMessageEvent,
+  isPrivateChannel,
+  parseMessageRef,
+  resolveInboundSender,
+  resolveInboundTarget,
+  resolveSatoriConfig,
+  type ResolvedSatoriWebhookConfig,
+  type ResolvedSatoriWsConfig,
+  type SatoriAdapterConfig,
+  type SatoriApiOptions,
+  type SatoriChannel,
+  type SatoriEventBody,
+  type SatoriLogin,
+  type SatoriMessage,
+  type SatoriSignal,
+  type SatoriUser,
+  type SatoriWireSegment,
+} from './protocol.js';
 
-export * from './types.js';
-export { callSatoriApi } from './api.js';
-export * from './utils.js';
-export { SatoriWsClient } from './endpoint-ws.js';
-export { SatoriWebhookEndpoint } from './endpoint-webhook.js';
-export { SatoriAdapter, type SatoriBot } from './adapter.js';
+export {
+  SatoriWebhookEndpoint,
+  SatoriWsEndpoint,
+  type CreateSatoriWebSocket,
+  type SatoriApiCaller,
+  type SatoriWebhookEndpointOptions,
+  type SatoriWsEndpointOptions,
+  type SatoriWsSocket,
+} from './endpoint.js';
 
-declare module 'zhin.js' {
-  namespace Plugin {
-    interface Contexts {
-      router: import('@zhin.js/host-router').Router;
-    }
-  }
-  interface Adapters {
-    satori: SatoriAdapter;
-  }
-}
+export {
+  handleSatoriWebhookRequest,
+  readRequestBody,
+  registerSatoriWebhookRoutes,
+  resolveSatoriOpcode,
+  verifySatoriToken,
+  type SatoriWebhookHandler,
+} from './webhook.js';
 
-const { provide } = usePlugin();
-provide({
-  name: 'satori',
-  description: 'Satori 协议适配器（WS 正向 / Webhook）',
-  mounted: async (p: Plugin) => {
-    const adapter = new SatoriAdapter(p);
-    await adapter.start();
-    return adapter;
-  },
-  dispose: async (adapter: SatoriAdapter) => {
-    await adapter.stop();
-  },
-} as unknown as Context<'satori'>);
+export {
+  WS_OPEN,
+  defaultCreateWebSocket,
+} from './ws.js';

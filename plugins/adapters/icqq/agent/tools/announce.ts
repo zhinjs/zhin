@@ -1,7 +1,7 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getIcqqAgentDeps } from '../../src/icqq-agent-deps.js';
-export default defineTool<{ endpoint_id: string; group_id: number; content: string }>({
+export default defineAgentTool<{ endpoint_id: string; group_id: number; content: string }>({
   description: '发送 QQ 群公告（需要管理员权限）',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint QQ号'),

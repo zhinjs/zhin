@@ -15,6 +15,11 @@ export function chdirToProjectRoot(root: string): void {
 
 export function resolveConfigPath(): string {
   const root = getZhinProjectRoot();
+  // 与 loadConfig 一致：CLI --config 经 ZHIN_CONFIG 指定时优先
+  const envConfig = process.env.ZHIN_CONFIG?.trim();
+  if (envConfig) {
+    return path.resolve(root, envConfig);
+  }
   const configFile = ConfigLoader.discover('zhin.config', root) || 'zhin.config.yml';
   return path.join(root, configFile);
 }

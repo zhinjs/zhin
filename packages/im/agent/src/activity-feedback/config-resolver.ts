@@ -58,14 +58,39 @@ function resolvePlatformPhaseDefault(
   }
 
   // active
-  const type = features.defaultType === 'none' ? 'message' : features.defaultType;
-  if (type === 'reaction') {
+  // Group-oriented reaction APIs (icqq GROUP_SET_REACTION, etc.) do not work in
+  // private chats — fall back to a short status message (classic typingIndicator).
+  if (features.defaultType === 'reaction') {
     return { type: 'reaction', emoji: PHASE_DEFAULT_MESSAGE.queued, autoRemove: true };
   }
-  if (type === 'typing') {
+  if (features.defaultType === 'typing') {
     return { type: 'typing', autoRemove: true };
   }
+  if (features.defaultType === 'none') {
+    return { type: 'message', message: PHASE_DEFAULT_MESSAGE.active, autoRemove: true };
+  }
   return { type: 'message', message: PHASE_DEFAULT_MESSAGE.active, autoRemove: true };
+}
+
+function resolvePrivateSceneDefault(
+  platform: string,
+  phase: ActivityFeedbackPhase,
+): ResolvedActivityFeedbackPhaseConfig {
+  const groupDefault = resolvePlatformPhaseDefault(platform, phase);
+  if (groupDefault.type !== 'reaction') return groupDefault;
+  // Private: reaction → status message (icqq / napcat group-only emoji APIs).
+  if (phase === 'queued' || phase === 'active' || phase === 'thinking') {
+    return {
+      type: 'message',
+      message: phase === 'thinking'
+        ? PHASE_DEFAULT_MESSAGE.thinking
+        : phase === 'queued'
+          ? '⏳'
+          : PHASE_DEFAULT_MESSAGE.active,
+      autoRemove: true,
+    };
+  }
+  return groupDefault;
 }
 
 export function resolveActivityFeedbackPhaseConfig(
@@ -79,14 +104,22 @@ export function resolveActivityFeedbackPhaseConfig(
   }
 
   const sceneCfg = endpointConfig?.phases?.[phase]?.[sceneKey(sceneType)];
-  const defaults = resolvePlatformPhaseDefault(platform, phase);
+  const defaults = sceneType === 'private'
+    ? resolvePrivateSceneDefault(platform, phase)
+    : resolvePlatformPhaseDefault(platform, phase);
   const merged: ActivityFeedbackPhaseConfig = { ...defaults, ...sceneCfg };
 
   if (merged.type === 'none') {
     return { type: 'none' };
   }
 
-  const type = merged.type ?? defaults.type;
+  // Private + reaction only when the scene config explicitly asks for it.
+  // Otherwise coerce to message (icqq GROUP_SET_REACTION is group-only).
+  let type = merged.type ?? defaults.type;
+  if (type === 'reaction' && sceneType === 'private' && sceneCfg?.type !== 'reaction') {
+    type = 'message';
+  }
+
   if (type === 'reaction') {
     return {
       type: 'reaction',

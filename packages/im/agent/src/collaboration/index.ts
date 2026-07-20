@@ -49,6 +49,13 @@ export { executeInboundOutboundStage } from './inbound-turn-outbound-stage.js';
 export { prepareInboundTurnEnrichment } from './inbound-turn-enrich.js';
 export { resolveEndpointConfig, resolveEndpointAtIds, resolveEndpointAiAccess } from './inbound-turn-endpoint.js';
 export { resolvePlannerEndpointId } from './collaboration-delegation.js';
+export {
+  applyRuntimeCollaborationInbound,
+} from './runtime-inbound-gate.js';
+export type {
+  RuntimeCollaborationInboundInput,
+  RuntimeCollaborationInboundResult,
+} from './runtime-inbound-gate.js';
 export type {
   InboundTurnPipeline,
   InboundTurnPipelineDeps,

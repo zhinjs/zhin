@@ -27,5 +27,5 @@
 
 ## 不做
 
-- toolSearch / MCP Mesh / 多 bot 同开
+- toolSearch / A2A Mesh / 多 bot 同开
 - plan mode / 终端 coding harness

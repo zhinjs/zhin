@@ -1,4 +1,4 @@
-import type { Models, Plugin } from 'zhin.js';
+import type { Models } from 'zhin.js';
 
 export type BjSessionStatus = 'active' | 'won' | 'lost' | 'draw' | 'aborted';
 
@@ -26,8 +26,11 @@ declare module 'zhin.js' {
 
 export type BjSessionRow = Models['bj_sessions'];
 
-export function registerModels(plugin: Plugin): void {
-  plugin.defineModel('bj_sessions', {
+
+export function defineHostTables(
+  db: { define: (name: string, definition: Record<string, unknown>) => void },
+): void {
+  db.define('bj_sessions', {
     id: { type: 'text', primary: true },
     adapter: { type: 'text', nullable: false },
     endpoint: { type: 'text', nullable: false },

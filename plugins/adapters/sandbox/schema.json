@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "endpoints": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "context": { "type": "string" },
+          "name": { "type": "string" },
+          "owner": { "type": "string" }
+        }
+      }
+    }
+  }
+}

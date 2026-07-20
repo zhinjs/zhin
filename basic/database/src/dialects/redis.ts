@@ -1,6 +1,7 @@
 import { Dialect, Database } from '../base/index.js';
 import {KeyValueDatabase} from "../type/keyvalue/database.js";
 import {Registry} from "../registry.js";
+import { getLogger } from '@zhin.js/logger';
 
 import type { RedisClientOptions } from 'redis';
 import { 
@@ -17,6 +18,8 @@ import {
   DropTableQueryParams,
   DropIndexQueryParams
 } from "../types.js";
+
+const logger = getLogger('database');
 
 export interface RedisDialectConfig extends RedisClientOptions {}
 export class RedisDialect<S extends Record<string, object> = Record<string, object>> extends Dialect<RedisDialectConfig, S, KeyValueQueryResult> {
@@ -73,24 +76,24 @@ export class RedisDialect<S extends Record<string, object> = Record<string, obje
       this.client = createClient(this.config);
 
       this.client.on('error', (err: Error) => {
-        console.error('Redis 客户端错误:', err);
+        logger.error('Redis 客户端错误:', err);
       });
 
       this.client.on('connect', () => {
-        console.log('Redis 连接已建立');
+        logger.info('Redis 连接已建立');
       });
 
       this.client.on('ready', () => {
-        console.log('Redis 客户端已准备就绪');
+        logger.info('Redis 客户端已准备就绪');
       });
 
       this.client.on('end', () => {
-        console.log('Redis 连接已关闭');
+        logger.info('Redis 连接已关闭');
       });
 
       await this.client.connect();
     } catch (error) {
-      console.error('forgot install redis ?');
+      logger.error('forgot install redis ?');
       throw new Error(`Redis 连接失败: ${error}`);
     }
   }
@@ -102,7 +105,7 @@ export class RedisDialect<S extends Record<string, object> = Record<string, obje
     if (this.client) {
       await this.client.quit();
       this.client = null;
-      console.log('Redis 连接已关闭');
+      logger.info('Redis 连接已关闭');
     }
   }
 

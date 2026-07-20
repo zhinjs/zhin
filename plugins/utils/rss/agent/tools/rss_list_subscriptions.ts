@@ -1,8 +1,8 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getRssAgentDeps } from '../../src/rss-agent-deps.js';
 
-export default defineTool({
+export default defineAgentTool({
   description: '查询当前所有 RSS 订阅',
   inputSchema: z.object({}),
   async execute() {

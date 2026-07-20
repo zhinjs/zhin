@@ -54,6 +54,8 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       skillInstructionMaxChars: resolveSkillInstructionMaxChars(fullCfg, modelName),
       pluginSkillRootsResolver: () => collectPluginSkillSearchRoots(root),
       skillFileLookup: (name: string) => {
+        const fromFeature = root.inject?.('skill')?.get(name)?.filePath;
+        if (fromFeature) return fromFeature;
         const orchestrator = root.inject?.('agent') as AgentOrchestrator | undefined;
         return orchestrator?.skills.getByName(name)?.filePath;
       },
@@ -72,6 +74,14 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       const plain = tool.toTool();
       disposers.push(toolService.addTool({ ...plain, source: 'builtin' }, root.name));
     }
+
+    // Boot: reserved/builtin → Orchestrator via Capability Ingress
+    const orchestratorBoot = root.inject?.('agent') as AgentOrchestrator | undefined;
+    const ingress = root.inject?.('capabilityIngress');
+    if (orchestratorBoot && ingress) {
+      ingress.ensureCore(orchestratorBoot, { tools: toolService });
+    }
+
     let skillWatchers: fs.FSWatcher[] = [];
     let skillReloadDebounce: ReturnType<typeof setTimeout> | null = null;
     let toolReloadDebounce: ReturnType<typeof setTimeout> | null = null;
@@ -96,25 +106,32 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       return result;
     }
 
-    /** 重新关联所有已注册 Skill 的 tools（适配器 tool 后注册时调用） */
+    /** 重新关联 SkillFeature 中技能的 tools（适配器 tool 后注册时调用） */
     function relinkSkillTools(): void {
-      const orchestrator = root.inject?.('agent') as AgentOrchestrator | undefined;
-      if (!orchestrator) return;
-      for (const skill of orchestrator.skills.getAll()) {
+      const skillFeature = root.inject?.('skill');
+      if (!skillFeature) return;
+      let changed = false;
+      for (const skill of skillFeature.getAll()) {
         const declaredNames = skillToolNames.get(skill.name);
         if (!declaredNames || declaredNames.length === 0) continue;
         const newTools = resolveSkillTools(declaredNames);
         if (newTools.length > skill.tools.length) {
-          skill.tools = newTools;
+          skill.tools = newTools as typeof skill.tools;
+          changed = true;
         }
       }
+      if (changed) root.inject?.('capabilityIngress')?.invalidate();
     }
+
+    /**
+     * Discover workspace skills → SkillFeature (ADR 0042); Orchestrator via Ingress.
+     */
     async function syncWorkspaceSkills(): Promise<{ count: number; pluginTools: string }> {
-      const orchestrator = root.inject?.('agent') as AgentOrchestrator | undefined;
-      if (!orchestrator) return { count: 0, pluginTools: '' };
-      // Remove previously discovered skills
-      for (const existing of orchestrator.skills.getAll()) {
-        orchestrator.skills.remove(existing.name);
+      const skillFeature = root.inject?.('skill');
+      if (!skillFeature) return { count: 0, pluginTools: '' };
+
+      for (const existing of [...skillFeature.getAll()]) {
+        skillFeature.remove(existing);
       }
       skillToolNames.clear();
       const skills = await discoverWorkspaceSkills(root);
@@ -125,23 +142,24 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
           const toolNames = s.toolNames || [];
           skillToolNames.set(s.name, toolNames);
           const associatedTools = resolveSkillTools(toolNames);
-          orchestrator.addSkill({
+          skillFeature.add({
             name: s.name,
             description: s.description,
-            tools: associatedTools,
+            tools: associatedTools as import('@zhin.js/core').Tool[],
             keywords: s.keywords || [],
             tags: s.tags || [],
             platforms: s.platforms,
             pluginName: ownerName,
             filePath: s.filePath,
             always: s.always,
-          }, undefined, ownerName);
+          }, ownerName);
           if (associatedTools.length) {
             const label = s.platforms?.length ? s.platforms.join('+') : 'generic';
             pluginToolCounts.push(`${label}:${associatedTools.length}`);
           }
         }
       }
+      root.inject?.('capabilityIngress')?.invalidate();
       // Inject always-on skills content + XML summary into agent
       if (refs.zhinAgent) {
         const alwaysContent = await loadAlwaysSkillsContent(skills);
@@ -183,20 +201,22 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
     }
 
     /**
-     * Discover *.agent.md files and register agent presets into AgentPresetFeature.
+     * Discover *.agent.md → AgentFeature (ADR 0042); Orchestrator via Ingress.
      */
     async function syncWorkspaceAgents(): Promise<number> {
-      const orchestrator = root.inject?.('agent') as AgentOrchestrator | undefined;
-      if (!orchestrator) return 0;
+      const agentFeature = root.inject?.('agentFeature');
+      if (!agentFeature) return 0;
 
-      // Remove previously discovered presets
-      for (const existing of orchestrator.subagents.getAllPresets()) {
-        orchestrator.subagents.removePreset(existing.name);
+      for (const existing of [...agentFeature.getAll()]) {
+        agentFeature.remove(existing);
       }
 
       const agentMetas = await discoverWorkspaceAgents(root);
       ai.setDiscoveredAgents(agentMetas);
-      if (agentMetas.length === 0) return 0;
+      if (agentMetas.length === 0) {
+        root.inject?.('capabilityIngress')?.invalidate();
+        return 0;
+      }
 
       const allRegisteredTools = toolService.getAll();
       const toolNameIndex = new Map<string, Tool>();
@@ -205,7 +225,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       }
       let added = 0;
       for (const meta of agentMetas) {
-        if (orchestrator.subagents.getPreset(meta.name)) continue;
+        if (agentFeature.get(meta.name)) continue;
         const toolNames: string[] = [];
         for (const toolName of meta.toolNames || []) {
           const tool = toolService.get(toolName) || toolNameIndex.get(toolName);
@@ -217,7 +237,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
           const body = await loadAgentInstructionsBody(agentDir);
           if (body) systemPrompt = body;
         } catch { /* ignore */ }
-        orchestrator.addAgentPreset({
+        agentFeature.add({
           name: meta.name,
           description: meta.description,
           systemPrompt: systemPrompt || '',
@@ -225,9 +245,10 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
           model: meta.model,
           filePath: meta.filePath,
           pluginName: meta.ownerPlugin || root.name,
-        }, undefined, meta.ownerPlugin || root.name);
+        }, meta.ownerPlugin || root.name);
         added++;
       }
+      root.inject?.('capabilityIngress')?.invalidate();
       return added;
     }
 
@@ -332,7 +353,7 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
       await orchestrator2?.hooks.trigger(createAIHookEvent('agent', 'bootstrap', undefined, {
         workspaceDir: process.cwd(),
         toolCount: builtinTools.length,
-        skillCount: orchestrator2?.skills.size ?? 0,
+        skillCount: root.inject?.('skill')?.getAll().length ?? orchestrator2?.skills.size ?? 0,
         bootstrapFiles: loadedFiles,
       }));
 

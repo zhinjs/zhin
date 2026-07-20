@@ -30,11 +30,11 @@
  *      → 不连续：丢弃 summary，仅用 [window]
  */
 
-import { formatCompact, Logger } from '@zhin.js/logger';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import { formatAuxiliaryUserContentForLlm } from './sender-extra.js';
 import type { AIProvider, ChatMessage } from '../types.js';
 
-const logger = new Logger(null, 'ConvMemory');
+const logger = getLogger('ConvMemory');
 
 function providerErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);

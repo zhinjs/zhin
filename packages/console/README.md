@@ -17,6 +17,9 @@ zhin-console（独立仓库）    壳层 UI、登录、内置页；依赖 @zhin.
 | 目录 | npm 包 | 职责 |
 |------|--------|------|
 | [contract](./contract/) | `@zhin.js/contract` | Console Entry、`PluginRegisterHostApi` 等契约 |
+| [plugin-contract](./plugin-contract/) | `@zhin.js/console-contract` | 零依赖 Page/Layout、route 与 Navigation 契约 |
+| [page](./page/) | `@zhin.js/page` | `pages/*.ts|tsx` 约定式 Feature provider |
+| [layout](./layout/) | `@zhin.js/layout` | `$nav.tsx` / `$footer.tsx` Layout Feature provider |
 | [pagemanager](./pagemanager/) | `@zhin.js/pagemanager` | 服务端 PageManager、entries 路由与 esbuild 管线 |
 | [client](./client/) | `@zhin.js/client` | Remote Console 客户端 SDK（无 UI） |
 

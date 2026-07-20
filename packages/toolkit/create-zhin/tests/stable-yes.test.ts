@@ -25,7 +25,7 @@ afterEach(async () => {
 });
 
 describe('create-zhin -y Stable 默认值', () => {
-  it('bots 为空（Sandbox 由 Console 连接时自动创建）、IM-only、无 inbox', async () => {
+  it('Sandbox 实例 + IM-only、无 database', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'create-zhin-stable-'));
     tmpRoots.push(root);
     const projectPath = path.join(root, 'stable-bot');
@@ -33,8 +33,11 @@ describe('create-zhin -y Stable 默认值', () => {
     await createWorkspace(projectPath, 'stable-bot', stableYesOptions());
 
     const config = await fs.readFile(path.join(projectPath, 'zhin.config.yml'), 'utf8');
-    expect(config).toMatch(/endpoints:\s*\[\]/);
-    expect(config).not.toMatch(/context:\s*sandbox/);
+    // 新 runtime 格式：plugins.<instanceKey> 映射，sandbox 带默认 Endpoint
+    expect(config).toContain('plugins:');
+    expect(config).toContain('sandbox:');
+    expect(config).toContain('context: sandbox');
+    expect(config).not.toMatch(/^endpoints:/m);
     expect(config).not.toContain('toolSearch:');
     expect(config).not.toContain('ai:');
     expect(config).not.toContain('agents:');
@@ -71,5 +74,9 @@ describe('create-zhin -y Stable 默认值', () => {
     expect(pkg.dependencies['@modelcontextprotocol/sdk']).toBeUndefined();
     expect(pkg.dependencies.ai).toBeUndefined();
     expect(pkg.dependencies.zod).toBeUndefined();
+    expect(pkg.zhin.plugins).toEqual([
+      { package: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox' },
+    ]);
+    expect(pkg.scripts.dev).toBe('zhin runtime start');
   });
 });

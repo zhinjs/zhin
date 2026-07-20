@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "default": "wecom-bot"
+    },
+    "corpId": { "type": "string" },
+    "agentSecret": { "type": "string" },
+    "token": { "type": "string" },
+    "encodingAESKey": { "type": "string" },
+    "webhookPath": {
+      "type": "string",
+      "default": "/wecom/callback"
+    },
+    "apiBaseUrl": {
+      "type": "string",
+      "default": "https://qyapi.weixin.qq.com"
+    }
+  },
+  "required": ["corpId", "agentSecret", "token", "encodingAESKey"]
+}

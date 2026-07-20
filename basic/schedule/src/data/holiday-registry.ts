@@ -1,12 +1,12 @@
 // AUTO-GENERATED BUNDLED IMPORTS START
-import data2019 from './holidays/2019.json';
-import data2020 from './holidays/2020.json';
-import data2021 from './holidays/2021.json';
-import data2022 from './holidays/2022.json';
-import data2023 from './holidays/2023.json';
-import data2024 from './holidays/2024.json';
-import data2025 from './holidays/2025.json';
-import data2026 from './holidays/2026.json';
+import data2019 from './holidays/2019.json' with { type: 'json' };
+import data2020 from './holidays/2020.json' with { type: 'json' };
+import data2021 from './holidays/2021.json' with { type: 'json' };
+import data2022 from './holidays/2022.json' with { type: 'json' };
+import data2023 from './holidays/2023.json' with { type: 'json' };
+import data2024 from './holidays/2024.json' with { type: 'json' };
+import data2025 from './holidays/2025.json' with { type: 'json' };
+import data2026 from './holidays/2026.json' with { type: 'json' };
 // AUTO-GENERATED BUNDLED IMPORTS END
 import { fetchHolidayYearData } from './holiday-fetcher.js';
 

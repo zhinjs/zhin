@@ -29,6 +29,7 @@ const ALLOWLIST = new Set([
   '/advanced/typing-indicator-adapters/',
   '/snippets/',
   '/snippets/install-tiers/',
+  '/snippets/platform-tiers/',
 ]);
 
 /**

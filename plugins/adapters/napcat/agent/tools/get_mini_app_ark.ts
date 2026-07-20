@@ -1,8 +1,8 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getEndpoint } from '../../src/napcat-agent-deps.js';
 
-export default defineTool<{ endpoint_id: string; type: string; title: string; desc: string; pic_url: string; jump_url: string }>({
+export default defineAgentTool<{ endpoint_id: string; type: string; title: string; desc: string; pic_url: string; jump_url: string }>({
   description: '签名小程序卡片（如 B 站分享卡片等）。',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),

@@ -1,18 +1,46 @@
-import type { WecomAdapter } from './adapter.js';
-import type { WecomEndpoint } from './endpoint.js';
+/**
+ * Agent tool deps for wecom (get_user / departments / send_text).
+ * Endpoints register themselves on start; tools look up by endpoint id.
+ */
 
-export interface WecomAgentDeps {
-  getEndpoint: (endpointId: string) => WecomEndpoint;
-  getAdapter: () => WecomAdapter;
+export interface WecomAgentEndpoint {
+  getUserInfo(userId: string): Promise<unknown>;
+  getDepartmentUsers(deptId: number): Promise<unknown[]>;
+  getDepartmentList(deptId?: number): Promise<unknown[]>;
+  sendTextMessage(userId: string, content: string): Promise<boolean>;
 }
 
-let _deps: WecomAgentDeps | null = null;
+export interface WecomAgentDeps {
+  getEndpoint: (endpointId: string) => WecomAgentEndpoint;
+}
 
-export function setWecomAgentDeps(deps: WecomAgentDeps): void {
-  _deps = deps;
+const endpoints = new Map<string, WecomAgentEndpoint>();
+let override: WecomAgentDeps | null = null;
+
+export function registerWecomAgentEndpoint(
+  endpointId: string,
+  endpoint: WecomAgentEndpoint,
+): () => void {
+  endpoints.set(endpointId, endpoint);
+  return () => {
+    if (endpoints.get(endpointId) === endpoint) {
+      endpoints.delete(endpointId);
+    }
+  };
+}
+
+/** Optional override used by tests / transitional callers. Pass `null` to clear. */
+export function setWecomAgentDeps(deps: WecomAgentDeps | null): void {
+  override = deps;
 }
 
 export function getWecomAgentDeps(): WecomAgentDeps {
-  if (!_deps) throw new Error('wecom agent deps not initialized');
-  return _deps;
+  if (override) return override;
+  return {
+    getEndpoint(endpointId) {
+      const endpoint = endpoints.get(endpointId);
+      if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`);
+      return endpoint;
+    },
+  };
 }

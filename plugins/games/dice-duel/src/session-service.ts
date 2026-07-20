@@ -1,5 +1,5 @@
-import type { Database, DatabaseFeature, Message, Models, RelatedModel } from 'zhin.js';
-import { channelKey, generateSessionId, boardMessageMatches } from '@zhin.js/game-shared';
+import type { Database, Message, Models, RelatedModel } from 'zhin.js';
+import { channelKey, generateSessionId, boardMessageMatches } from '@zhin.js/game-kit';
 import type { DiceSessionRow } from './models.js';
 
 export type DiceDatabase = Database<unknown, Models, string>;
@@ -85,6 +85,3 @@ export function createServices(db: DiceDatabase): SessionService {
   return new SessionService(db);
 }
 
-export function resolveGameDatabase(feature: DatabaseFeature): DiceDatabase {
-  return feature.db;
-}

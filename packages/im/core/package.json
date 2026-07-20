@@ -21,6 +21,11 @@
       "development": "./src/built/queue-im-field-contract.ts",
       "import": "./lib/built/queue-im-field-contract.js"
     },
+    "./runtime": {
+      "types": "./lib/plugin-runtime/im/index.d.ts",
+      "development": "./src/plugin-runtime/im/index.ts",
+      "import": "./lib/plugin-runtime/im/index.js"
+    },
     "./jsx": {
       "types": "./lib/jsx.d.ts",
       "development": "./src/jsx.ts",
@@ -45,9 +50,14 @@
     "clean": "rimraf lib"
   },
   "dependencies": {
+    "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/command": "workspace:*",
+    "@zhin.js/component": "workspace:*",
     "@zhin.js/database": "workspace:*",
     "@zhin.js/kernel": "workspace:*",
     "@zhin.js/logger": "workspace:*",
+    "@zhin.js/middleware": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/schema": "workspace:*",
     "qrcode": "^1.5.4",
     "segment-matcher": "^1.0.5",

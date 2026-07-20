@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "default": "github-bot"
+    },
+    "host": {
+      "type": "string",
+      "description": "GitHub Enterprise hostname (default github.com)"
+    },
+    "app_id": {
+      "type": ["string", "number"],
+      "description": "GitHub App ID"
+    },
+    "appId": {
+      "type": ["string", "number"],
+      "description": "GitHub App ID (camelCase alias)"
+    },
+    "private_key": {
+      "type": "string",
+      "description": "GitHub App private key (PEM content or file path)"
+    },
+    "privateKey": {
+      "type": "string",
+      "description": "GitHub App private key (camelCase alias)"
+    },
+    "webhook_secret": {
+      "type": "string",
+      "description": "Webhook HMAC secret; enables httpHostToken POST route"
+    },
+    "webhookSecret": {
+      "type": "string",
+      "description": "Webhook HMAC secret (camelCase alias)"
+    },
+    "webhook_path": {
+      "type": "string",
+      "default": "/github/webhook"
+    },
+    "webhookPath": {
+      "type": "string",
+      "default": "/github/webhook"
+    },
+    "poll_interval": {
+      "type": "number",
+      "default": 60,
+      "description": "Deferred: polling fallback was removed in the Plugin Runtime migration; currently parsed but unused"
+    },
+    "auto_reply_repos": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Repos whose Issue/PR comments auto-trigger AI without @bot"
+    },
+    "bot_login": {
+      "type": "string",
+      "description": "Override App bot login (default {slug}[bot])"
+    },
+    "workspace_root": {
+      "type": "string",
+      "description": "Managed git workspace root"
+    }
+  }
+}

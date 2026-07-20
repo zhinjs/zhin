@@ -7,7 +7,7 @@
 ```bash
 # 仓库根目录
 pnpm install
-pnpm --filter @zhin.js/game-shared build
+pnpm --filter @zhin.js/game-kit build
 pnpm --filter @zhin.js/adapter-qq build
 
 cd examples/qq-games-bot

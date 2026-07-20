@@ -122,11 +122,26 @@ const adrSidebar0039: DefaultTheme.SidebarItem[] = [
   { text: '0041 AgentStreamBus', link: '/adr/0041-agent-stream-bus-and-session-host-port' },
 ]
 
+const adrSidebar0042: DefaultTheme.SidebarItem[] = [
+  { text: '0042 Capability Features', link: '/adr/0042-capability-features-and-on-demand-ingress' },
+  { text: '0043 统一 Capability Root', link: '/adr/0043-unify-capability-roots' },
+  { text: '0044 TS HMR Plugin Kernel', link: '/adr/0044-typescript-hmr-plugin-kernel' },
+  { text: '0045 层级 Plugin 配置', link: '/adr/0045-hierarchical-plugin-config-schema' },
+  { text: '0046 约定式 pages', link: '/adr/0046-convention-pages-and-plugin-navigation' },
+  { text: '0047 独立 Plugin 项目', link: '/adr/0047-standalone-plugin-and-root-lifecycle-domain' },
+  { text: '0048 Plugin Monorepo', link: '/adr/0048-plugin-monorepo-and-feature-provider-packages' },
+  { text: '0049 Isolated Plugin Runtime', link: '/adr/0049-isolated-plugin-runtime' },
+  { text: '0050 Plugin Runtime 迁移边界', link: '/adr/0050-plugin-runtime-migration-boundary' },
+  { text: '0051 原生 TS 开发 Runtime', link: '/adr/0051-native-typescript-development-runtime' },
+  { text: '0052 Plugin Runtime 包边界', link: '/adr/0052-plugin-runtime-package-boundary' },
+]
+
 const adrSidebar: DefaultTheme.SidebarItem[] = [
   sidebarGroup('0001–0010', adrSidebar0001),
   sidebarGroup('0011–0020', adrSidebar0011),
   sidebarGroup('0021–0038', adrSidebar0021),
   sidebarGroup('0039–0041', adrSidebar0039),
+  sidebarGroup('0042–0052', adrSidebar0042),
 ]
 
 /** A+B：部署、配置、写插件与 AI */
@@ -138,6 +153,7 @@ const useDocsSidebar: DefaultTheme.SidebarItem[] = [
       { text: '生态与资源', link: '/ecosystem' },
       { text: 'Docker 部署', link: '/getting-started/docker' },
       { text: '能力分档与定位', link: '/essentials/capability-tiers' },
+      { text: '安装分档', link: '/essentials/install-tiers' },
       { text: '学习路径', link: '/essentials/learning-paths' },
       { text: '疑难排查', link: '/troubleshooting/' },
   ]),
@@ -187,6 +203,7 @@ const devDocsSidebar: DefaultTheme.SidebarItem[] = [
       { text: 'Monorepo（无 submodule）', link: '/contributing/monorepo-no-submodules' },
   ]),
   sidebarGroup('架构深读', [
+      { text: '目标架构 SSOT', link: '/target-architecture' },
       { text: '架构索引', link: '/architecture/' },
       { text: '架构概览（用户向）', link: '/architecture-overview' },
       { text: 'Segment 内容模型', link: '/architecture/segment-content-model' },
@@ -195,6 +212,16 @@ const devDocsSidebar: DefaultTheme.SidebarItem[] = [
       { text: 'Agent 提示词贡献者', link: '/architecture/agent-prompt-contributors' },
       { text: 'HTTP 路由编写', link: '/architecture/fetch-router-authoring' },
       { text: 'Harness 检查来源', link: '/architecture/harness-engineering-sources' },
+  ]),
+  sidebarGroup('目标实现蓝图', [
+      { text: '蓝图总览', link: '/architecture/target-implementation/' },
+      { text: 'Config、Discovery 与 HMR', link: '/architecture/target-implementation/config-discovery-hmr' },
+      { text: 'IM、Agent 与 Console Runtime', link: '/architecture/target-implementation/domain-runtimes' },
+      { text: 'Plugin Runtime 实现状态', link: '/architecture/target-implementation/greenfield-bootstrap' },
+      { text: 'Plugin Runtime 原位迁移', link: '/architecture/target-implementation/in-place-migration' },
+      { text: 'Kernel 与原子 Generation', link: '/architecture/target-implementation/kernel-and-generation' },
+      { text: 'Plugin Runtime 迁移契约', link: '/architecture/target-implementation/migration-contract' },
+      { text: 'Plugin Monorepo 与 Feature Provider', link: '/architecture/target-implementation/plugin-monorepo-and-features' },
   ]),
   sidebarGroup('ADR', adrSidebar),
   sidebarGroup('维护者', [

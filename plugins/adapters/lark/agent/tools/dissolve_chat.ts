@@ -1,7 +1,7 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getLarkAgentDeps } from '../../src/lark-agent-deps.js';
-export default defineTool<{ endpoint_id: string; chat_id: string }>({
+export default defineAgentTool<{ endpoint_id: string; chat_id: string }>({
   description: '解散飞书群聊（需要群主权限）',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),

@@ -2,8 +2,8 @@
  * NapCat 入站消息治理测试：去重、自发过滤、消息归一化
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { InboundMessageDeduper, isSelfMessage, normalizeMessage } from '../src/napcat-inbound';
-import type { NapCatMessageEvent, MessageSegment } from '../src/types';
+import { InboundMessageDeduper, isSelfMessage, normalizeMessage } from '../src/napcat-inbound.js';
+import type { NapCatMessageEvent, MessageSegment } from '../src/protocol.js';
 
 describe('InboundMessageDeduper', () => {
   let deduper: InboundMessageDeduper;

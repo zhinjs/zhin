@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseCellButtonId, parseTttPayload, buildBoardInteractive, TTT_PREFIX } from '../src/board-view.js';
-import { buildGridFallbackMap } from '@zhin.js/game-shared';
+import { buildGridFallbackMap } from '@zhin.js/game-kit';
 import { emptyBoard, EMPTY } from '../src/engine.js';
 
 describe('board-view', () => {

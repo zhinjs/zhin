@@ -67,7 +67,7 @@ segment.button({
 1. **payload SSOT** — `fallback.map` 值与 `segment.button({ payload })` 一致。
 2. **双注册** — `registerInteractiveHandler('prefix:', …)` + 文本中间件（`resolvePayloadFromText`）。
 3. **统计边界** — callback 入站由 `isActionMessage` 排除；command 文本计入正常发言。
-4. **游戏插件** — 优先用 `@zhin.js/game-shared` 的 `interactionProfile`（`menu` / `gameplay` / `terminal`）。
+4. **游戏插件** — 优先用 `@zhin.js/game-kit` 的 `interactionProfile`（`menu` / `gameplay` / `terminal`）。
 
 ```typescript
 import { resolvePayloadFromText } from 'zhin.js';

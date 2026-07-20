@@ -1,4 +1,4 @@
-import type { Models, Plugin } from 'zhin.js';
+import type { Models } from 'zhin.js';
 
 export type GuessSessionStatus = 'active' | 'won' | 'lost' | 'aborted';
 
@@ -27,8 +27,11 @@ declare module 'zhin.js' {
 
 export type GuessSessionRow = Models['guess_sessions'];
 
-export function registerModels(plugin: Plugin): void {
-  plugin.defineModel('guess_sessions', {
+
+export function defineHostTables(
+  db: { define: (name: string, definition: Record<string, unknown>) => void },
+): void {
+  db.define('guess_sessions', {
     id: { type: 'text', primary: true },
     adapter: { type: 'text', nullable: false },
     endpoint: { type: 'text', nullable: false },

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "default": "slack-bot"
+    },
+    "token": {
+      "type": "string",
+      "description": "Bot User OAuth Token (xoxb-...)"
+    },
+    "signingSecret": {
+      "type": "string",
+      "description": "Required for HTTP Events API (socketMode: false)"
+    },
+    "appToken": {
+      "type": "string",
+      "description": "App-Level Token (xapp-...) for Socket Mode"
+    },
+    "socketMode": {
+      "type": "boolean",
+      "default": true,
+      "description": "Prefer Socket Mode (default). Set false for HTTP Events via httpHostToken."
+    },
+    "webhookPath": {
+      "type": "string",
+      "default": "/slack/events"
+    },
+    "clientPingTimeout": {
+      "type": "number",
+      "default": 15000,
+      "description": "Socket Mode client ping timeout (ms)"
+    }
+  },
+  "required": ["token"]
+}

@@ -2,31 +2,41 @@
   "name": "@zhin.js/adapter-wechat-mp",
   "version": "3.0.2",
   "type": "module",
-  "description": "Zhin.js adapter for WeChat Official Account (微信公众号)",
+  "description": "Zhin.js WeChat Official Account adapter for Plugin Runtime (HTTP webhook)",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
   "scripts": {
-    "build": "pnpm build:node",
+    "build": "tsc",
     "clean": "rimraf lib",
-    "build:node": "tsc",
-    "prepublishOnly": "npm run build"
+    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/adapters/wechat-mp/tests",
+    "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
-    "xml2js": "^0.6.2",
+    "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/logger": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "axios": "^1.18.0",
-    "form-data": "^4.0.6"
+    "xml2js": "^0.6.2"
   },
   "peerDependencies": {
-    "@zhin.js/host-router": "workspace:*",
+    "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "zhin.js": "workspace:*"
   },
+  "peerDependenciesMeta": {
+    "zhin.js": {
+      "optional": true
+    }
+  },
   "devDependencies": {
-    "@types/koa": "^3.0.3",
     "@types/node": "^26.1.0",
     "@types/xml2js": "^0.4.14",
-    "@zhin.js/host-router": "workspace:*",
     "typescript": "^6.0.3",
-    "zhin.js": "workspace:*"
+    "vitest": "^4.1.10"
   },
   "keywords": [
     "zhin",
@@ -52,6 +62,9 @@
     "directory": "plugins/adapters/wechat-mp"
   },
   "files": [
+    "adapters",
+    "plugin.ts",
+    "schema.json",
     "src",
     "lib",
     "agent",
@@ -71,5 +84,19 @@
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/adapter",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
   }
 }

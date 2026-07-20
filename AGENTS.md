@@ -22,24 +22,26 @@
 - 主要分层：basic → kernel → ai → core → agent → zhin。
 - **推荐首跑**： [examples/minimal-bot](examples/minimal-bot/)（Stable 黄金路径）。
 - **L4 参考**： [examples/full-bot](examples/full-bot/)（分维度 L4 DoD；`pnpm check:l4`）。
-- [examples/test-bot](examples/test-bot/) 为维护者厨房水槽（多 Endpoint / Advanced 能力），**非默认模板**；根目录 `pnpm dev` 指向它，仅供本仓库回归。
+- [examples/test-bot](examples/test-bot/) 为维护者厨房水槽（多 Endpoint / Advanced 能力），**非默认模板**；根目录用 `pnpm dev:test` 进入。
 - 进阶路径：**Stable（minimal-bot，仅 IM）→ L4（full-bot，含 AI）→ 厨房水槽（test-bot）**。
 - **zhin.js 4.x**：默认安装仅 IM（<10MB）；AI 另装 `@zhin.js/agent` + `zod` + `ai` + 所选 `@ai-sdk/*`。用户向分档表 SSOT：[`docs/snippets/install-tiers.md`](docs/snippets/install-tiers.md)。见 [ADR 0019](docs/adr/0019-install-size-layering.md)。
 - **项目脚手架**：新建 workspace 用 `pnpm create zhin-app`（`create-zhin-app`）；已有项目增量配置用 `zhin setup`。二者共用 [`@zhin.js/scaffold-wizard`](packages/toolkit/scaffold-wizard/)。
 
 ## 常用命令
 
-- 在仓库根 `pnpm install` 后，进入 `examples/minimal-bot` 执行 `pnpm dev`（Sandbox + 控制台）。
-- `pnpm dev`（根目录）仍指向 test-bot 热重载，用于全功能回归。**勿将 test-bot 配置当作用户模板**；对外文档与脚手架以 minimal-bot / full-bot 为准。
+- 在仓库根 `pnpm install` 后执行 `pnpm dev`（指向 [examples/minimal-bot](examples/minimal-bot/)，Sandbox + 控制台）。
+- `pnpm dev:test` / `pnpm dev:full`：维护者厨房水槽 test-bot / L4 full-bot。**勿将 test-bot 配置当作用户模板**；对外文档与脚手架以 minimal-bot / full-bot 为准。
 - `pnpm build`：按 basic → packages → plugins 的顺序构建全部包。
 - `pnpm test`：运行 Vitest。
-- `pnpm type-check`：运行 TypeScript 类型检查。
-- `pnpm lint`：运行 ESLint。
+- `pnpm check:all`：全套 harness（**含** `type-check` / `lint` / `test`）+ 架构门禁；CI coverage 作业可用 `HARNESS_SKIP_TEST=1` 跳过其中单测。
+- `pnpm type-check` / `pnpm lint` / `pnpm test`：也可单独跑（已含于 check:all）。
 - `pnpm check:doc-links`：检查文档相对链接是否断裂。
 - `pnpm sync:adapter-docs` / `pnpm check:adapter-docs`：平台适配器文档与 `plugins/adapters/*/README.md` 同步。
 - `pnpm check:plugin-agent-publish`：带 `agent/` 的插件 `package.json` 须含 `files`（`agent`、`lib` 等）与 `prepublishOnly`。
 - `pnpm --filter <pkg> build|test`：只验证单个包。
-- `pnpm check:l4`：L4 全维度验收（编排 + 语义记忆 + full-bot 契约 + MCP 鉴权；实机 IM 项 `L4_SKIP_PLATFORM=1` 跳过）。
+- `pnpm check:l4-ci`：PR 门禁 L4 确定性子集（编排/记忆/full-bot 契约）。
+- `pnpm check:l4`：L4 全维度验收（编排 + 语义记忆 + full-bot 契约 + MCP 鉴权 + adapter L4；实机 IM 项 `L4_SKIP_PLATFORM=1` 跳过）；nightly workflow 跑全量。
+- 暂无官方 Docker 镜像；自建容器见 [docs/getting-started/docker.md](docs/getting-started/docker.md)。
 - `pnpm check:install-size`：zhin.js IM 核心 production `node_modules` ≤10MB（ADR 0019）。
 - `pnpm check:install-tiers-ssot`：根 `README` Install tiers 表与 `docs/snippets/install-tiers.md` 一致。
 - 改 **CLI** 或 **create-zhin-app** 前，若报找不到 `@zhin.js/scaffold-wizard`，先执行 `pnpm --filter @zhin.js/scaffold-wizard build`（或 `pnpm prepare:cli` / 全量 `pnpm build`）。该包产物在 `lib/`，未构建时 Node 无法解析。
@@ -54,7 +56,7 @@
 - getPlugin() 只能在插件初始化/装配阶段调用；中间件、命令 action、工具 execute、Cron、事件回调等运行时路径严禁 getPlugin()，应在注册时捕获 plugin/root 闭包。
 - 发送消息不能绕过统一链路：Message.$reply 或 Adapter.sendMessage → renderSendMessage → before.sendMessage → 平台 Endpoint。
 - Endpoint 可按 `capabilities`（`inbound` / `outbound`）拆分 IO；跨平台出站用 `inject(adapter).sendMessage`，见 `docs/essentials/message-flow.md`。
-- 保持依赖方向单向：basic → kernel → ai → core → agent → zhin；不要让低层依赖 IM 概念。
+- 保持依赖方向单向：basic → kernel → ai → core → agent → zhin；不要让低层依赖 IM 概念。例外：`basic/cli` 是 Plugin Runtime composition root（`zhin runtime start` 装配 IM/Agent/Console Host），允许导入 packages/im 各层，仅限 basic/cli。
 - Node 侧源码放 src/，产物放 lib/；浏览器侧源码放 client/，产物放 dist/。
 - 新增 workspace 包必须落在 pnpm-workspace.yaml 覆盖的目录里，并带独立 package.json。
 
@@ -77,7 +79,7 @@
 - packages/im/core/src/adapter.ts
 - packages/im/core/src/built/dispatcher.ts
 - packages/im/agent/src/orchestrator/
-- packages/im/agent/src/security/
+- packages/im/agent/src/security/（工具安全检查统一走 `policy-facade.ts` 的 `runToolPolicies`；新增策略只在声明式策略表注册，builtin 工具不再手写策略链）
 - packages/im/agent/src/bootstrap.ts
 - packages/im/zhin/src/index.ts
 - packages/im/zhin/src/setup/register-chat-message-store.ts

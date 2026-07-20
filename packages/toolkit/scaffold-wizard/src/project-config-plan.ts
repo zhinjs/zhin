@@ -12,9 +12,18 @@ const CONFIG_CANDIDATES = [
   'zhin.config.toml',
   'zhin.config.ts',
 ] as const;
+/** @deprecated Plugin Runtime 由 CLI 装配 Console Host，无需在配置中声明；仅用于 legacy 数组配置诊断 */
 const CONSOLE_HOST_PLUGINS = ['@zhin.js/host-router', '@zhin.js/host-api'] as const;
 const SANDBOX_PLUGIN = '@zhin.js/adapter-sandbox';
 const LEGACY_AI_PROVIDER_FIELDS = ['driver', 'api', 'preset', 'spec'] as const;
+
+/** 由插件包名推导默认 instanceKey（@zhin.js/adapter-telegram → telegram） */
+export function packageToInstanceKey(packageName: string): string {
+  const name = packageName.includes('/')
+    ? packageName.split('/').pop() ?? packageName
+    : packageName;
+  return name.replace(/^(adapter|plugin|service)-/, '');
+}
 
 export type ProjectConfigFormat = 'yaml' | 'json' | 'toml' | 'ts';
 
@@ -164,17 +173,34 @@ export function loadProjectConfig(cwd = process.cwd(), configPath?: string): Loa
 }
 
 function ensurePlugins(config: Record<string, unknown>, pluginsToAdd: readonly string[], mutations: string[]): void {
-  const plugins = Array.isArray(config.plugins)
-    ? config.plugins.filter((p): p is string => typeof p === 'string')
-    : [];
+  if (Array.isArray(config.plugins)) {
+    // legacy 数组形式：保持原形态追加，避免改写旧项目结构
+    const plugins = config.plugins.filter((p): p is string => typeof p === 'string');
+    let changed = false;
+    for (const plugin of pluginsToAdd) {
+      if (plugins.includes(plugin)) continue;
+      plugins.push(plugin);
+      mutations.push(`added ${plugin} to plugins`);
+      changed = true;
+    }
+    if (changed) {
+      config.plugins = plugins;
+    }
+    return;
+  }
+  // 新 Plugin Runtime：plugins 为 <instanceKey>: <配置> 映射
+  const plugins = config.plugins && typeof config.plugins === 'object'
+    ? { ...(config.plugins as Record<string, unknown>) }
+    : {};
   let changed = false;
-  for (const plugin of pluginsToAdd) {
-    if (plugins.includes(plugin)) continue;
-    plugins.push(plugin);
-    mutations.push(`added ${plugin} to plugins`);
+  for (const pkg of pluginsToAdd) {
+    const instanceKey = packageToInstanceKey(pkg);
+    if (instanceKey in plugins) continue;
+    plugins[instanceKey] = {};
+    mutations.push(`added ${instanceKey} (${pkg}) to plugins`);
     changed = true;
   }
-  if (changed || !Array.isArray(config.plugins)) {
+  if (changed || !config.plugins || typeof config.plugins !== 'object') {
     config.plugins = plugins;
   }
 }
@@ -318,7 +344,8 @@ export function createProjectConfigPlan(options: ProjectConfigPlanOptions): Proj
   const mutations: string[] = [];
 
   if (loaded.status === 'loaded' || options.config) {
-    if (options.ensureConsole) {
+    if (options.ensureConsole && Array.isArray(after.plugins)) {
+      // legacy 数组形态：host 插件仍需写入列表（旧项目行为不变）
       ensurePlugins(after, CONSOLE_HOST_PLUGINS, mutations);
     }
     if (options.ensureSandbox) {
@@ -327,7 +354,8 @@ export function createProjectConfigPlan(options: ProjectConfigPlanOptions): Proj
     if (options.enablePlugins?.length) {
       ensurePlugins(after, options.enablePlugins, mutations);
     }
-    if (options.ensureHttp) {
+    if (options.ensureConsole || options.ensureHttp) {
+      // 新形态下 Console Host 由 CLI composition root 装配；Console 可达只需 http.token + corsOrigins
       ensureHttp(after, mutations);
     }
     if (options.migrateAiLegacy) {
@@ -369,17 +397,29 @@ export async function applyProjectConfigPlan(plan: ProjectConfigPlan): Promise<b
 }
 
 export function diagnoseConsoleConfig(config: Record<string, unknown>): ConsoleConfigDiagnosis {
-  const plugins = Array.isArray(config.plugins)
-    ? config.plugins.filter((p): p is string => typeof p === 'string')
-    : [];
   const http = config.http && typeof config.http === 'object' && !Array.isArray(config.http)
     ? config.http as Record<string, unknown>
     : {};
   const corsOrigins = Array.isArray(http.corsOrigins) ? http.corsOrigins : [];
 
+  if (Array.isArray(config.plugins)) {
+    // legacy 数组形式配置
+    const plugins = config.plugins.filter((p): p is string => typeof p === 'string');
+    return {
+      missingHostPlugins: CONSOLE_HOST_PLUGINS.filter((plugin) => !plugins.includes(plugin)),
+      missingSandboxPlugin: !plugins.includes(SANDBOX_PLUGIN),
+      missingConsoleOrigin: !hasConsoleOrigin(corsOrigins.filter((origin): origin is string => typeof origin === 'string')),
+      missingHttpToken: typeof http.token !== 'string' || http.token.trim().length === 0,
+    };
+  }
+
+  // 新 Plugin Runtime：Console Host 由 CLI 装配，无需 host 插件；Sandbox 为 plugins.sandbox 实例
+  const plugins = config.plugins && typeof config.plugins === 'object'
+    ? config.plugins as Record<string, unknown>
+    : {};
   return {
-    missingHostPlugins: CONSOLE_HOST_PLUGINS.filter((plugin) => !plugins.includes(plugin)),
-    missingSandboxPlugin: !plugins.includes(SANDBOX_PLUGIN),
+    missingHostPlugins: [],
+    missingSandboxPlugin: !('sandbox' in plugins),
     missingConsoleOrigin: !hasConsoleOrigin(corsOrigins.filter((origin): origin is string => typeof origin === 'string')),
     missingHttpToken: typeof http.token !== 'string' || http.token.trim().length === 0,
   };

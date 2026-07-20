@@ -20,7 +20,7 @@ async function tryRegisterAgentMigrationHook(logger: Plugin['logger']): Promise<
  * 若配置 inbox.enabled，则注册统一收件箱（消息/请求/通知写入内置库）。
  */
 export function applyConfigAndDatabase(plugin: Plugin, appConfig: AppConfig): void {
-  setLevel(appConfig.log_level);
+  setLevel(appConfig.log_level, undefined, true);
 
   if (appConfig.database) {
     void tryRegisterAgentMigrationHook(plugin.logger);

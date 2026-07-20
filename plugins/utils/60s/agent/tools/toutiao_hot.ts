@@ -1,13 +1,13 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 
-export default defineTool<{ limit?: number }>({
+export default defineAgentTool<{ limit?: number }>({
   description: "获取今日头条热搜榜",
   inputSchema: z.object({ limit: z.number().optional() }),
   keywords: ["头条", "今日头条", "热搜", "toutiao", "tt"],
   tags: ["热搜", "资讯", "头条"],
   async execute(input) {
-    const handler = (await import('../../tools/toutiao-hot/handler.js')).default;
+    const handler = (await import('../../src/handlers/toutiao-hot.js')).default;
     return handler(input);
   },
 });

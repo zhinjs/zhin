@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "welcome": { "type": "string", "default": "欢迎新成员加入本群！", "description": "（暂未接线）新成员欢迎语，notice 欢迎功能尚未迁移" },
+    "recallNotify": { "type": "boolean", "default": true, "description": "（暂未接线）撤回提醒，notice 功能尚未迁移" },
+    "keywordReply": { "type": "boolean", "default": false },
+    "noticeAdapters": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": ["icqq"],
+      "description": "（暂未接线）notice 事件适配器白名单，notice 功能尚未迁移"
+    },
+    "basePointsMin": { "type": "number", "default": 10 },
+    "basePointsMax": { "type": "number", "default": 30 },
+    "streakBonus": { "type": "number", "default": 5 },
+    "streakCap": { "type": "number", "default": 50 },
+    "rankSize": { "type": "number", "default": 10 },
+    "statsRetentionDays": { "type": "number", "default": 90, "description": "（暂未接线）统计保留天数，定期清理尚未迁移" },
+    "analysisDays": { "type": "number", "default": 1, "description": "（暂未接线）群日常分析尚未迁移" },
+    "autoAnalysisEnabled": { "type": "boolean", "default": false, "description": "（暂未接线）群日常分析尚未迁移" },
+    "autoAnalysisCron": { "type": "string", "default": "0 0 9 * * *", "description": "（暂未接线）群日常分析尚未迁移" },
+    "analysisGroups": { "type": "array", "items": { "type": "string" }, "default": [], "description": "（暂未接线）群日常分析尚未迁移" },
+    "analysisGroupsBlock": { "type": "array", "items": { "type": "string" }, "default": [], "description": "（暂未接线）群日常分析尚未迁移" },
+    "analysisMaxMessages": { "type": "number", "default": 500, "description": "（暂未接线）群日常分析尚未迁移" },
+    "teachMaxPerGroup": { "type": "number", "default": 200 },
+    "teachCooldownMs": { "type": "number", "default": 3000 },
+    "teachAllowRegex": { "type": "boolean", "default": true },
+    "teachPageSize": { "type": "number", "default": 10 }
+  }
+}

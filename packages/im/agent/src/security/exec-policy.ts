@@ -158,14 +158,59 @@ export function stripSafeWrappers(command: string): string {
  * 将复合命令按 `&&`, `||`, `;` 拆分为独立子命令。
  * 管道 `|` 不拆分 — 管道中的只读性由 classifyBashCommand 判断。
  *
+ * 引号/转义感知：单引号内为字面量；双引号与裸文本内 `\` 转义下一个字符；
+ * 引号内的分隔符不拆分（`echo "a && b"` 是单命令）。
+ * 引号未闭合时 fail-closed：整条按单命令返回（不拆分），
+ * 避免把藏在残缺引号后的危险段漏检。
+ *
  * 注意：不处理 subshell `$(...)` 和反引号 — 这些场景由危险黑名单覆盖。
  */
 export function splitCompoundCommand(command: string): string[] {
   const parts: string[] = [];
   let current = '';
+  let quote: 'single' | 'double' | null = null;
+  let escaped = false;
   let i = 0;
   while (i < command.length) {
-    if (command.startsWith('&&', i) || command.startsWith('||', i) || command[i] === ';') {
+    const ch = command[i]!;
+    if (escaped) {
+      current += ch;
+      escaped = false;
+      i++;
+      continue;
+    }
+    // 单引号内没有转义；双引号/裸文本内 \ 转义下一字符
+    if (ch === '\\' && quote !== 'single') {
+      current += ch;
+      escaped = true;
+      i++;
+      continue;
+    }
+    if (quote === 'single') {
+      if (ch === "'") quote = null;
+      current += ch;
+      i++;
+      continue;
+    }
+    if (quote === 'double') {
+      if (ch === '"') quote = null;
+      current += ch;
+      i++;
+      continue;
+    }
+    if (ch === "'") {
+      quote = 'single';
+      current += ch;
+      i++;
+      continue;
+    }
+    if (ch === '"') {
+      quote = 'double';
+      current += ch;
+      i++;
+      continue;
+    }
+    if (command.startsWith('&&', i) || command.startsWith('||', i) || ch === ';') {
       const trimmed = current.trim();
       if (trimmed) parts.push(trimmed);
       current = '';
@@ -175,9 +220,10 @@ export function splitCompoundCommand(command: string): string[] {
       while (i < command.length && /\s/.test(command[i])) i++;
       continue;
     }
-    current += command[i];
+    current += ch;
     i++;
   }
+  if (quote !== null || escaped) return [command];
   const tail = current.trim();
   if (tail) parts.push(tail);
   return parts;
@@ -185,13 +231,48 @@ export function splitCompoundCommand(command: string): string[] {
 
 /**
  * 从命令字符串中提取实际的可执行程序名。
- * 先剥离环境变量前缀和 safe wrapper。
+ * 先剥离环境变量前缀和 safe wrapper，再对首 token 去引号/转义，
+ * 防止 `"rm"`、`'rm'`、`r\m` 这类引号变体绕过黑名单精确匹配。
  */
 export function extractCommandName(command: string): string {
   const stripped = stripSafeWrappers(stripEnvVarPrefix(command));
   // 取第一个非管道 token
   const name = stripped.split(/[\s|]/)[0] || '';
-  return name;
+  return unquoteToken(name);
+}
+
+/** 去除 token 外层的引号与转义（POSIX 风格：单引号字面、双引号内 \\ 仅转义 " \ $ `）。 */
+function unquoteToken(token: string): string {
+  let out = '';
+  let quote: 'single' | 'double' | null = null;
+  for (let i = 0; i < token.length; i++) {
+    const ch = token[i]!;
+    if (quote === 'single') {
+      if (ch === "'") quote = null;
+      else out += ch;
+      continue;
+    }
+    if (quote === 'double') {
+      if (ch === '"') quote = null;
+      else if (ch === '\\' && i + 1 < token.length && '"\\$`'.includes(token[i + 1]!)) out += token[++i];
+      else out += ch;
+      continue;
+    }
+    if (ch === "'") {
+      quote = 'single';
+      continue;
+    }
+    if (ch === '"') {
+      quote = 'double';
+      continue;
+    }
+    if (ch === '\\' && i + 1 < token.length) {
+      out += token[++i];
+      continue;
+    }
+    out += ch;
+  }
+  return out;
 }
 
 // ── 策略检查结果 ────────────────────────────────────────────────────

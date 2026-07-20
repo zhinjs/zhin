@@ -1,8 +1,8 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getEndpoint } from '../../src/napcat-agent-deps.js';
 
-export default defineTool<{ endpoint_id: string; group_id: number; file: string; name: string; folder?: string }>({
+export default defineAgentTool<{ endpoint_id: string; group_id: number; file: string; name: string; folder?: string }>({
   description: '上传文件到群。file 为本地路径或 URL。',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),

@@ -1,188 +1,105 @@
 # @zhin.js/adapter-telegram
 
-Telegram adapter for zhin.js framework.
+Zhin.js Telegram Bot API 适配器（Plugin Runtime），默认通过 **长轮询 `getUpdates`** 收发消息（无需 host）。
 
-## Installation
+## 功能
+
+- 长轮询 `getUpdates` 入站（默认；无需公网 IP / host-http）
+- 解析 text / image / video / audio / voice / document / sticker / location / callback_query
+- 支持私聊与群组
+- 出站 `send({ target, payload })` → Bot API（text / media / keyboard）
+- 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
+- Webhook 模式延期（需 `httpHostToken`）；配置 `polling: false` 会明确报错
+
+## 安装
 
 ```bash
 pnpm add @zhin.js/adapter-telegram
 ```
 
-## Prerequisites
+## Plugin Runtime
+
+- `@zhin.js/adapter` — 约定式 `adapters/telegram.ts`（`defineAdapter`）
+- `@zhin.js/core` — `messageGatewayToken` 入站/出站
+- `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
+- 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
+- **无需** `@zhin.js/host-http`（polling 路径）
+
+入站：`gateway.receive({ adapter, target: chatId, content: text, sender, metadata })`  
+出站：`send({ target, payload })` → Telegram Bot API
+
+### 平台权限（platform permit）
+
+- sender role 已恢复：群消息入站时经 `getChatMember`（60s 缓存）解析，写入 `metadata.senderRole` / `metadata.senderPermissions`。
+- **TODO**：`registerTelegramPlatformPermitChecker()` 暂无注册点——Plugin Runtime 的命令分发没有 platform permit 消费端（旧 checker 只服务于 legacy Tool/Message 门禁），待 runtime 提供门禁挂钩后再在 `plugin.ts` 接线。`src/platform-permit.ts` 的 checker 与单测保留。
+
+## 前置条件
 
 | 要求 | 说明 |
 |------|------|
-| **Bot Token** | 通过 [@BotFather](https://t.me/botfather) 创建 Endpoint 并获取 Token |
-| **Polling（默认）** | 本地开发无需公网 IP；`polling: true`（默认） |
-| **Webhook（可选）** | 生产环境：`polling: false` + 公网 **HTTPS** 域名与有效 TLS；Telegraf 在 `webhook.port` 监听 |
-| **host-router** | 不需要；本适配器自行处理 polling / webhook |
+| **Bot Token** | 通过 [@BotFather](https://t.me/botfather) 创建并获取 Token |
+| **Polling（默认）** | 本地/生产均可；主动拉取更新，无需公网 HTTPS |
+| **网络** | 出站可访问 `api.telegram.org` |
+| **host-http** | Polling **不需要**；Webhook 延期至下一棒 |
 
-必填字段见 `TelegramEndpointConfig`：`context`、`name`、`token`；`polling` 默认为 `true`。
+必填字段：`token`。
 
-## Minimal configuration
+## 最小配置
 
 ```yaml
+# zhin.config.yml（Plugin Runtime）
 plugins:
-  - "@zhin.js/adapter-telegram"
-
-endpoints:
-  - context: telegram
+  telegram:
     name: my-telegram-bot
-    token: "${TELEGRAM_TOKEN}"
-    polling: true
+    token: ${TELEGRAM_TOKEN}
+    # polling: true   # 默认
 ```
 
-## Configuration
+根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-telegram`（`instanceKey: telegram`）。
 
-### 长轮询 Polling（默认，本地开发）
+## 环境变量
 
-无需公网 IP 或 HTTPS，Bot 主动向 Telegram 拉取更新：
-
-```yaml
-plugins:
-  - "@zhin.js/adapter-telegram"
-
-endpoints:
-  - context: telegram
-    name: my-telegram-bot
-    token: "${TELEGRAM_TOKEN}"
-    polling: true
-```
-
-### Webhook（生产环境）
-
-设置 `polling: false` 并配置 `webhook` 对象；Telegraf 在 `webhook.port` 上启动 HTTPS 服务：
-
-```yaml
-endpoints:
-  - context: telegram
-    name: my-telegram-bot
-    token: "${TELEGRAM_TOKEN}"
-    polling: false
-    webhook:
-      domain: https://bot.example.com
-      path: /telegram-webhook
-      port: 8443
-```
-
-#### Webhook 前置条件
-
-| 要求 | 说明 |
+| 变量 | 说明 |
 |------|------|
-| **HTTPS 公网域名** | `webhook.domain` 须为 Telegram 可访问的 `https://` 地址（有效 TLS 证书） |
-| **端口可达** | `webhook.port`（如 8443）须从公网可连，或通过反向代理转发 |
-| **Bot Token** | 通过 [@BotFather](https://t.me/botfather) 获取 |
-| **无需 host-router** | 本适配器由 Telegraf 自行监听 webhook，不依赖 `@zhin.js/host-router` |
+| `TELEGRAM_TOKEN` / `TELEGRAM_BOT_TOKEN` | Bot Token |
+| `TELEGRAM_BOT_NAME` | 可选，默认 endpoint 名 |
 
-> 本地开发建议先用 **polling**；上线后再切 webhook 并在 BotFather 或 launch 时注册 webhook URL。
+## Webhook（延期）
 
-TypeScript 等价配置：
+`polling: false` + `webhook` 目前会抛出明确错误：
 
-```typescript
-import { defineConfig } from 'zhin.js'
+> Telegram webhook mode is deferred until httpHostToken wiring; use polling: true (default) for now
 
-export default defineConfig({
-  endpoints: [
-    {
-      name: 'my-telegram-bot',
-      context: 'telegram',
-      token: 'YOUR_BOT_TOKEN',
-      polling: true,
-      // polling: false,
-      // webhook: { domain: 'https://yourdomain.com', path: '/telegram-webhook', port: 8443 },
-    }
-  ]
-})
-```
+下一棒将用 `httpHostToken` 注册 POST 路由，不再使用 Telegraf 自建监听或 legacy host-router。
 
-## Features
+## 消息类型映射
 
-- ✅ Send and receive text messages
-- ✅ Support for rich media (images, videos, audio, documents)
-- ✅ Message formatting (bold, italic, code, links)
-- ✅ Reply to messages
-- ✅ Mentions (@username)
-- ✅ Stickers and locations
-- ✅ Callback queries (inline buttons)
-- ✅ Long polling and webhook modes
-- ✅ Private and group chats
-
-## Getting Your Endpoint Token
-
-1. Talk to [@BotFather](https://t.me/botfather) on Telegram
-2. Send `/newbot` and follow the instructions
-3. Copy the bot token provided
-4. Add the token to your configuration
-
-## Usage Examples
-
-### Basic Message Handling
-
-```typescript
-import { usePlugin, MessageCommand } from 'zhin.js'
-
-const { addCommand } = usePlugin()
-
-addCommand(new MessageCommand('hello')
-  .action(async (message) => {
-    return 'Hello from Telegram!'
-  })
-)
-```
-
-### Send Rich Media
-
-```typescript
-addCommand(new MessageCommand('photo')
-  .action(async (message) => {
-    return [
-      { type: 'image', data: { url: 'https://example.com/photo.jpg' } },
-      { type: 'text', data: { text: 'Check out this photo!' } }
-    ]
-  })
-)
-```
-
-### Reply to Messages
-
-```typescript
-addCommand(new MessageCommand('quote <text:text>')
-  .action(async (message, result) => {
-    await message.$reply(`You said: ${result.params.text}`, true) // true = quote original message
-  })
-)
-```
-
-## Telegram-Specific Features
-
-### Callback Queries
-
-The adapter automatically handles callback queries (from inline keyboards) as special messages.
-
-### File Handling
-
-You can send files using:
-- `file_id` (from received messages)
-- URL
-- Local file path
+| Telegram | 入站 content（文本摘要） | 出站 wire |
+|----------|--------------------------|-----------|
+| text | 原文 | sendMessage |
+| photo | `[image]` / caption | sendPhoto（`file_id` / `url`） |
+| video | `[video]` | sendVideo |
+| audio / voice | `[audio]` / `[voice]` | sendAudio / sendVoice |
+| document | `[file: name]` | sendDocument |
+| sticker | `[sticker: …]` | sendSticker |
+| location | `[location: lat,lon]` | sendLocation |
+| callback_query | `[action: data]` | — |
 
 ## AI tools
 
 | Kind | Path |
 |------|------|
-| Platform tools (10) | `agent/tools/` (`telegram_*`: invites, pins, admins, stickers, etc.) |
+| Platform tools (10) | `agent/tools/`（invite / pin / admins / sticker / poll 等） |
 | Skill doc | `agent/skills/telegram.md` |
-| Scene management | `createSceneManagementTools()` |
 
-
-## Troubleshooting
+## 故障排查
 
 | 现象 | 排查 |
 |------|------|
-| Endpoint 无响应 / 收不到消息 | 确认 Token 正确；进程已启动；私聊 Endpoint 或将其加入群组 |
-| Polling 报错 | 检查网络能否访问 `api.telegram.org`；同一 Token 勿多进程同时 polling |
-| Webhook 不工作 | `webhook.domain` 须为 Telegram 可访问的 `https://`；放行 `webhook.port`；BotFather 或 launch 时注册 URL |
-| 发送失败 | Token  revoked 或 Endpoint 被限制；查看日志中的 Telegraf 错误 |
+| 收不到消息 | Token 是否正确；进程已 `open()`；同一 Token 勿多进程同时 polling |
+| Polling 报错 | 检查能否访问 `api.telegram.org`；查看日志 `op: poll` |
+| Webhook 配置报错 | 当前仅支持 polling；去掉 `polling: false` |
+| 发送失败 | Token 是否被撤销；查看 Bot API 错误描述 |
 
 ## Documentation
 

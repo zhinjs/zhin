@@ -1,4 +1,4 @@
-import type { Models, Plugin } from 'zhin.js';
+import type { Models } from 'zhin.js';
 
 export type RiddleSessionStatus = 'active' | 'completed' | 'aborted';
 
@@ -31,8 +31,11 @@ declare module 'zhin.js' {
 
 export type RiddleSessionRow = Models['word_riddle_sessions'];
 
-export function registerModels(plugin: Plugin): void {
-  plugin.defineModel('word_riddle_sessions', {
+
+export function defineHostTables(
+  db: { define: (name: string, definition: Record<string, unknown>) => void },
+): void {
+  db.define('word_riddle_sessions', {
     id: { type: 'text', primary: true },
     adapter: { type: 'text', nullable: false },
     endpoint: { type: 'text', nullable: false },

@@ -1,221 +1,196 @@
 # 命令系统
 
-命令是用户与机器人交互的主要方式。使用 `MessageCommand` 创建命令，由 `CommandFeature` 统一管理。
+命令是用户与机器人交互的主要方式。一个命令就是 `commands/` 目录下的一个 `.ts` 文件，默认导出 `defineCommand(...)`；运行时按目录结构自动生成命令名，用户以 `/` 前缀触发。
 
-::: tip 与 AI 触发前缀区分
-群/频道里以 `/` 开头的消息默认走 **CommandFeature**（`ai.trigger.ignorePrefixes` 含 `/`），**不会**触发 @ Agent。内置运维命令同样以 `/` 开头，需 **master** 或配置中的 **trusted** 用户方可执行。
+::: tip 与 AI 触发区分
+入站消息以 `/` 开头时先走命令索引（`CommandIndex`）匹配；**未命中**任何命令时才会交给 AI（如已启用）。命令命中且 `execute` 返回了内容，框架会自动回复该内容。
 :::
 
-## 内置 IM 运维命令（ADR 0010）
+## 第一个命令
 
-`@zhin.js/core` 注册 **Endpoint 运行时管理**（`registerEndpointManagementCommands`）；`@zhin.js/agent` 在启用 AI 时注册会话运维与内省命令（实现见 `register-management-tools.ts`、`register-introspection-commands.ts`）。完整行为说明见 [AI 模块 — IM 运维与内省](/advanced/ai#im-运维与内省命令)。
-
-### Endpoint 管理（core）
-
-| 命令 | 说明 |
-|------|------|
-| `/endpoint add [adapter]` | 添加 endpoint（adapter 交互或 schema 向导） |
-| `/endpoint remove <adapter> <name>` | 从配置移除 |
-| `/endpoint edit <adapter> <name>` | 编辑配置 |
-| `/endpoint start <adapter> <name>` | 连接 |
-| `/endpoint stop <adapter> <name>` | 断开（保留配置） |
-| `/endpoint cancel` | 取消进行中的添加/绑定 |
-| `/endpoint help` | 帮助 |
-
-### 会话
-
-| 命令 | 说明 |
-|------|------|
-| `/compact` | 手动 L2 压缩当前 epoch（yaml：`ai.agent.compaction`） |
-| `/tree` | 列出当前会话树分支点 |
-| `/tree N` | 跳转到第 N 个分支点并从此继续 |
-| `/reset` | 归档当前 epoch；下次 @ 新上下文（`im_transcripts` 旁听行保留） |
-
-### 运维
-
-| 命令 | 说明 |
-|------|------|
-| `/models` | 列出已发现/配置的可用模型 |
-| `/health` | AI Provider 健康检查 |
-
-### 内省
-
-| 命令 | 说明 |
-|------|------|
-| `/cmd` | 已注册 IM 命令列表 |
-| `/endpoints` | Endpoint 与在线状态（含 adapter 列；由 core 注册） |
-| `/bindings` | `ai.agents` 绑定 |
-| `/tools` | 已注册 ZhinTool |
-| `/mcp` | MCP Client 连接状态 |
-
-内省命令支持 **`[filter] [page]`**（例：`/tools github 2`）；单页仍过长时按行拆成多条 IM 消息。完整列表：`GET /api/introspection/{commands|endpoints|bindings|tools|mcp}`（Bearer，query：`page`、`filter`、`pageSize`）。
-
-Console 亦可查询会话树：`GET /api/agent/sessions/:sessionKey/tree`、`POST .../leaf`（Bearer Token）。示例项目清单见 [test-bot TOOLS.md](https://github.com/zhinjs/zhin/blob/main/examples/test-bot/TOOLS.md)。
-
-zhin-package 管理：`zhin packages` — 见 [CLI 命令参考](/reference/cli)。
-
-## 基础命令
+在项目根目录创建 `commands/ping.ts`：
 
 ```typescript
-import { usePlugin, MessageCommand } from 'zhin.js'
+// commands/ping.ts
+import { defineCommand } from '@zhin.js/command'
 
-const { addCommand } = usePlugin()
-
-addCommand(
-  new MessageCommand('hello')
-    .desc('打个招呼')
-    .action(() => '你好！')
-)
+export default defineCommand({
+  description: '测试连通性',
+  execute: () => 'Pong!',
+})
 ```
 
-`addCommand` 是 CommandFeature 注入到插件上的扩展方法，返回一个 dispose 函数用于移除命令。
+用户发送 `/ping`，机器人回复 `Pong!`。无需手动注册——`zhin runtime start` 会扫描 `commands/` 目录并自动挂载、热重载。
 
-## 命令参数
+## 目录约定
+
+- `commands/` 是固定目录名，位于**项目根**或**插件包根**。
+- 目录名与文件（去扩展名）只认小写字母、数字、连字符：正则 `[a-z0-9][a-z0-9-]*`，支持 `.ts` / `.tsx`。
+- **嵌套目录生成子命令**，层级以空格连接：
+
+```
+commands/
+  ping.ts            → /ping
+  user/
+    list.ts          → /user list
+    ban.ts           → /user ban
+```
+
+- 同名命令（同一 qualified 名被注册两次）会在启动时直接报错，不会静默覆盖。
+- 字面文件**优先于**动态参数文件：`commands/user/list.ts` 与 `commands/user/[name:string].ts` 并存时，`/user list` 永远命中前者。
+
+## 参数：动态文件段
+
+命令参数用**文件名**声明，格式为 `[name:type=default].ts`：
 
 ```typescript
-// 单词参数（不含空格，如子命令、QQ 号、UUID）
-addCommand(
-  new MessageCommand('/icqq <action:word> [requestId:text]')
-    .action((_, result) => {
-      const { action, requestId } = result.params
-      // /icqq approve dff51432-... → action=approve, requestId=dff51432-...
-    })
-)
+// commands/echo/[text:string].ts
+import { defineCommand } from '@zhin.js/command'
 
-// 贪婪文本（吃掉当前文本段剩余内容，含空格）
-addCommand(
-  new MessageCommand('echo <message:text>')
-    .action((_, result) => result.params.message)
-)
-
-// 可选参数
-addCommand(
-  new MessageCommand('greet [name:word]')
-    .action((_, result) => {
-      const name = result.params.name
-      return name ? `你好，${name}！` : '你好！'
-    })
-)
-
-// 剩余参数（跨多个词/段）
-addCommand(
-  new MessageCommand('say [...content:text]')
-    .action((_, result) => {
-      return result.params.content.join(' ')
-    })
-)
+export default defineCommand({
+  description: '回显一段文本',
+  execute({ params }) {
+    return `你说：${params.text}`
+  },
+})
 ```
 
-### 参数类型
-
-命令模式由 [`segment-matcher`](https://github.com/zhinjs/segment-matcher) 解析。**没有 `:string` 类型**；旧文档里的 `:string` 应改为下表中的实际类型。
-
-| 类型 | 说明 | 示例 |
+| 文件 | 命令 | 说明 |
 |------|------|------|
-| `word` | 单个词（不含空格）；多参数时只取第一个 token | `<action:word>`、`[name:word]` |
-| `text` | 贪婪匹配当前文本段剩余内容（可含空格）；也可用引号 `'...'` / `"..."` 界定边界 | `<message:text>`、`[requestId:text]` |
-| `number` | 整数或小数 | `<count:number>` |
-| `integer` | 整数 | `<index:integer>` |
-| `float` | 必须带小数点的浮点数 | `<ratio:float>` |
-| `boolean` | `true` / `false` | `<force:boolean>` |
-| `face` / `image` / `at` 等 | 对应消息段类型 | `<emoji:face>` |
+| `[url:string].ts` | `... <url>` | 必填 string 参数 |
+| `[count:number].ts` | `... <count>` | 必填 number 参数（运行时解析失败则命令不命中） |
+| `[force:boolean].ts` | `... <force>` | 必填 boolean 参数（只接受 `true` / `false`） |
+| `[url:string=].ts` | `... [url]` | 带默认值（这里是空串）→ 参数**可选** |
 
-::: warning 常见踩坑
-- **`:string` 无效** — 不会匹配任何文本，命令表现为「完全不触发」。单词用 **`word`**。
-- **`<param:text>` 是贪婪的** — `cmd <a:text> [b:text]` 会把整句都塞进 `a`，后面的 `b` 永远为空。子命令 + 后续 ID 应写 `<action:word> [id:text]`。
-- **多个 `:text` 连用** — 只有第一个会吃到剩余文本；需要「后面所有词」时用 `[...rest:text]`。
+类型只有三种：`string` / `number` / `boolean`。默认值写在 `=` 之后，且必须能解析为对应类型，否则启动报错。
+
+::: warning 动态段的两个硬约束
+- **整条命令路径只允许一个动态文件段，且必须在末尾**。`commands/a/[x:string].ts/b.ts` 这类「动态段后面还有段」的写法不会被正确识别。
+- **目录段不支持动态参数**——`commands/[id]/profile.ts` 中的 `[id]` 目录不会被发现（目录段只认字面名）。需要动态参数时，把它放到最后的文件名里。
 :::
 
-默认类型：参数未写类型时等价于 `text`（`<name>` = `<name:text>`）。
-
-## 命令描述
+**`args` 兜底**：动态参数之外的剩余输入不会丢失。匹配时框架从最长的命令名开始逐词匹配，`execute` 会拿到命令词之后的全部剩余词：
 
 ```typescript
-addCommand(
-  new MessageCommand('status')
-    .desc('查看状态', '显示系统运行状态')
-    .usage('status')
-    .examples('status')
-    .action(() => '系统正常')
-)
+// commands/say.ts
+export default defineCommand({
+  execute({ args }) {
+    // /say 今天 天气 不错 → args = ['今天', '天气', '不错']
+    return args.join(' ')
+  },
+})
 ```
 
-## Action 函数
+## 命令上下文
+
+`execute` 收到一个冻结的上下文对象：
+
+| 字段 | 说明 |
+|------|------|
+| `params` | 解析后的动态参数（`Record<string, string \| number \| boolean>`），键名即文件名里的 `name` |
+| `args` | 命令词之后剩余的词数组（兜底自由文本） |
+| `input` | 触发本条命令的 Runtime `Message`（`content` / `sender` / `target` / `metadata` / `$reply`），非 IM 触发时可能为 `undefined` |
+| `config` | 本插件实例的配置（`schema.json` 默认值 + `zhin.config.yml` 的 `plugins.<instanceKey>` 覆盖） |
+| `owner` / `generation` | 所属插件实例快照与当前运行代次 |
+| `use(token)` | 取 Host Resource（见 [插件系统](./plugins#host-resources)） |
 
 ```typescript
-addCommand(
-  new MessageCommand('test')
-    .action((message, result) => {
-      // message: 消息对象（包含 $sender、$channel、$adapter 等）
-      console.log('发送者:', message.$sender?.id)
-      console.log('频道:', message.$channel)
-      
-      // result: 匹配与解析结果
-      console.log('参数:', result.params)
-      
-      return '处理完成'
-    })
-)
+export default defineCommand({
+  description: '查看当前会话信息',
+  execute({ input }) {
+    if (!input) return '此命令需要在会话中触发'
+    return `target=${input.target} sender=${input.sender ?? '未知'}`
+  },
+})
 ```
 
-## 权限控制
+## 返回值
+
+`execute` 的返回值是 `SendContent`，框架会代你回复（返回 `undefined` 则不回复）：
+
+| 形态 | 写法 | 说明 |
+|------|------|------|
+| 纯文本 | `return 'Pong!'` | 最常用 |
+| 组件渲染 | `return component('status-card', props)` | 交给 `components/` 里注册的组件渲染（如 Satori 卡片） |
+| 原始段 | `return raw(segment)` | 需要平台原生消息段时 |
+| 数组 | `return ['第一行', component(...)]` | 混合多段 |
 
 ```typescript
-addCommand(
-  new MessageCommand('ban <user:word>')
-    .desc('封禁用户')
-    .permit('admin')  // 需要 admin 权限
-    .action((_, result) => {
-      return `已封禁 ${result.params.user}`
-    })
-)
+// commands/card.ts（出自 examples/minimal-bot）
+import { defineCommand } from '@zhin.js/command'
+import { component } from '@zhin.js/core/runtime'
+
+export default defineCommand({
+  description: '渲染状态卡片',
+  execute: () => component('status-card', {
+    title: 'minimal-bot',
+    lines: [{ label: 'RSS', value: '42MB' }],
+  }),
+})
 ```
 
-## 异步命令
+也可以在 `execute` 内直接 `await input.$reply(...)` 主动回复（此时让 `execute` 返回 `undefined`，避免重复回复）。
+
+## 命令命名：bare 与 qualified
+
+命令的最终名字 = **插件实例路径** + **本地路径**：
+
+- **项目根** `commands/` → bare 名：`commands/ping.ts` → `/ping`。
+- **插件包** `commands/` → 自动带 **instanceKey 前缀**：qrcode 插件（instanceKey 为 `qrcode`）的 `commands/scan/[url:string].ts` → `/qrcode scan <url>`。
+- 同一插件挂多个实例（如 `icqq` / `icqq-2`），各自的命令前缀互不冲突。
+
+instanceKey 来自项目 `package.json` 的 `zhin.plugins[].instanceKey`，同时它也是 `zhin.config.yml` 里 `plugins.<instanceKey>` 的配置键。
+
+## 权限
+
+新命令系统（Plugin Runtime）**没有内置的声明式权限字段**。需要权限控制时，在 `execute` 内基于 `input.sender` 与 `config`（例如配置里的 master 列表）自行判断：
 
 ```typescript
-addCommand(
-  new MessageCommand('weather <city:word>')
-    .action(async (_, result) => {
-      const data = await fetchWeather(result.params.city)
-      return `${result.params.city}: ${data.temp}°C`
-    })
-)
+export default defineCommand<MyConfig>({
+  execute({ config, input }) {
+    const masters = (config as { masters?: string[] }).masters ?? []
+    if (!masters.includes(String(input?.sender))) return '仅管理员可用'
+    // ...
+  },
+})
 ```
 
-## Tool 与 Command 互转
-
-Zhin.js 支持 Tool 和 Command 之间的自动转换，使同一个功能既能被用户通过命令调用，也能被 AI Agent 通过工具调用。
+::: info legacy 路径
+旧的 `usePlugin()` + `MessageCommand`（含 `.permit()`、内置 `/endpoint` 等运维命令）属于旧 Feature registry，由 `zhin dev` 路径提供；新项目请使用本文的 `defineCommand` 约定目录写法。
+:::
 
 ## 完整示例
 
-```typescript
-import { usePlugin, MessageCommand } from 'zhin.js'
-
-const { addCommand } = usePlugin()
-
-// 简单命令
-addCommand(
-  new MessageCommand('ping')
-    .desc('测试延迟')
-    .action(() => 'Pong!')
-)
-
-// 带参数
-addCommand(
-  new MessageCommand('echo <message:text>')
-    .desc('回显消息')
-    .action((_, result) => result.params.message)
-)
-
-// 多个参数
-addCommand(
-  new MessageCommand('add <a:number> <b:number>')
-    .desc('计算和')
-    .action((_, result) => {
-      const { a, b } = result.params
-      return `${a} + ${b} = ${a + b}`
-    })
-)
+一个带必填参数、使用配置的命令（形态参考 `plugins/utils/rss`）：
 
 ```
+commands/
+  subscribe/
+    [url:string].ts
+```
+
+```typescript
+// commands/subscribe/[url:string].ts
+import { defineCommand } from '@zhin.js/command'
+
+interface Config {
+  maxPerGroup?: number
+}
+
+export default defineCommand<Config>({
+  description: '订阅一个 RSS/Atom 源',
+  async execute({ params, config, input }) {
+    const url = String(params.url ?? '').trim()
+    if (!/^https?:\/\//i.test(url)) return '请提供有效的 HTTP/HTTPS 地址'
+    // …持久化、推送等逻辑…
+    return `已订阅：${url}（会话 ${input?.target ?? 'unknown'}）`
+  },
+})
+```
+
+## 下一步
+
+- [插件系统](./plugins) — `definePlugin`、约定目录全表与 Host Resources
+- [中间件与消息调度](./middleware) — 在命令之前拦截/包裹消息
+- [消息如何流转](./message-flow) — 入站/出站全链路
+- [examples/minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot) — 可运行的最小命令示例

@@ -13,6 +13,16 @@
       "types": "./lib/node/index.d.ts",
       "import": "./lib/node/index.js",
       "default": "./lib/node/index.js"
+    },
+    "./plugin-runtime": {
+      "types": "./lib/plugin-runtime/index.d.ts",
+      "development": "./src/plugin-runtime/index.ts",
+      "import": "./lib/plugin-runtime/index.js"
+    },
+    "./client-build": {
+      "types": "./lib/client-build/index.d.ts",
+      "development": "./src/client-build/index.ts",
+      "import": "./lib/client-build/index.js"
     }
   },
   "scripts": {
@@ -23,6 +33,10 @@
   },
   "dependencies": {
     "@zhin.js/contract": "workspace:*",
+    "@zhin.js/console-contract": "workspace:*",
+    "@zhin.js/layout": "workspace:*",
+    "@zhin.js/page": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "@koa/router": "^15.6.0",
     "esbuild": "^0.28.1",
     "koa": "^3.2.1",
@@ -30,6 +44,8 @@
     "koa-static": "^5.0.0"
   },
   "devDependencies": {
+    "@zhin.js/feature-kit": "workspace:*",
+    "@zhin.js/runtime": "workspace:*",
     "@types/koa": "^3.0.3",
     "@types/koa-compose": "^3.2.9",
     "@types/koa-static": "^4.0.4",
@@ -37,6 +53,12 @@
     "@types/node": "^26.1.0",
     "rimraf": "^6.0.1",
     "typescript": "^6.0.2"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.8.0 <7.0.0"
+  },
+  "peerDependenciesMeta": {
+    "typescript": { "optional": true }
   },
   "files": [
     "lib"

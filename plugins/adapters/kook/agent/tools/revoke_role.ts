@@ -1,9 +1,9 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { platformPermit } from '../../src/platform-permit.js';
 import { getKookAgentDeps } from '../../src/kook-agent-deps.js';
 
-export default defineTool<{ endpoint_id: string; guild_id: string; user_id: string; role_id: string }>({
+export default defineAgentTool<{ endpoint_id: string; guild_id: string; user_id: string; role_id: string }>({
   description: '撤销用户的 KOOK 服务器角色',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),

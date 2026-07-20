@@ -5,6 +5,7 @@ import './types.js';
 import { formatCompact, getPlugin, setHostRootPlugin, type Plugin } from '@zhin.js/core';
 import type { AIConfig } from '@zhin.js/ai';
 import { AIService } from '../service.js';
+import { closeAuditLogger } from '../security/audit-logger.js';
 import type { AIServiceRefs } from './shared-refs.js';
 
 export function registerAIService(refs: AIServiceRefs): void {
@@ -45,6 +46,8 @@ export function registerAIService(refs: AIServiceRefs): void {
         refs.aiService = null;
         logger.debug(formatCompact( { stopped: true }));
       }
+      // 关停前 flush 审计日志，避免进程快退丢事件
+      await closeAuditLogger();
     },
   });
 }

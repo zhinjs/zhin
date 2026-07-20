@@ -4,10 +4,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type { Tool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
-import { checkFileAccess, isBlockedDevicePath } from '../security/file-policy.js';
-import { checkMemoryWritePath } from '../memory-layers.js';
-import { checkFilePermission, formatFilePermissionMessage, toolRequesterRoleToFileRole } from '../security/file-role-policy.js';
-import { checkFileToolAccess, checkSensitiveFilePathAccess, checkDangerousToolAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
+import { runToolPolicies, toolPolicyResultToMessage } from '../security/policy-facade.js';
 import { expandHome, nodeErrToFileMessage } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 
@@ -52,49 +49,22 @@ export class WriteFileBuiltinTool extends BuiltinBaseTool {
       return 'Error: content is required';
     }
 
-    // 第 1 层：角色门控（dangerous-tool-policy 从 bot 配置动态获取角色）
-    const roleDecision = checkFileToolAccess('write_file', commMessage);
-    if (!roleDecision.allowed) {
-      if (roleDecision.needsOwnerApproval) return toOwnerSignal(roleDecision);
-      return toDenyError(roleDecision);
+    // 统一安全策略门面（与原七层手写链等价）：
+    // role-gate → dangerous-tool-approval → file-permission-matrix(create) →
+    // memory-write-path → sensitive-path → blocked-device-path → workspace-access
+    let fp: string;
+    try {
+      fp = expandHome(filePathArg);
+    } catch (e: unknown) {
+      return nodeErrToFileMessage(e, String(filePathArg), 'write');
     }
-
-    // 第 1.5 层：危险工具审批（admin 调用 write_file 需 execAllowlist 或 Owner 确认）
-    const dangerousDecision = checkDangerousToolAccess('write_file', commMessage);
-    if (!dangerousDecision.allowed) {
-      if (dangerousDecision.needsOwnerApproval) return toOwnerSignal(dangerousDecision);
-      return toDenyError(dangerousDecision);
-    }
-
-    // 第 2 层：文件角色权限矩阵（file-role-policy）
-    const fileRole = toolRequesterRoleToFileRole(roleDecision.role);
-    const permResult = checkFilePermission(fileRole, 'create', filePathArg);
-    if (!permResult.allowed) {
-      return formatFilePermissionMessage(permResult, 'write_file');
-    }
-    const confirmMsg = formatFilePermissionMessage(permResult, 'write_file');
-    if (confirmMsg) return confirmMsg;
+    const policyGate = toolPolicyResultToMessage(
+      runToolPolicies({ toolName: 'write_file', filePath: fp, rawFilePath: filePathArg, commMessage }),
+      'write_file',
+    );
+    if (policyGate) return policyGate;
 
     try {
-      const fp = expandHome(filePathArg);
-      const memoryDecision = checkMemoryWritePath(fp, commMessage);
-      if (!memoryDecision.allowed) {
-        return `Error: ${memoryDecision.reason}`;
-      }
-
-      // 第 3 层：敏感路径检测（dangerous-tool-policy + file-policy）
-      const sensitiveDecision = checkSensitiveFilePathAccess('write_file', fp, commMessage);
-      if (!sensitiveDecision.allowed) {
-        if (sensitiveDecision.needsOwnerApproval) return toOwnerSignal(sensitiveDecision);
-        return toDenyError(sensitiveDecision);
-      }
-      if (isBlockedDevicePath(fp)) {
-        return `Error: 禁止访问设备路径: ${fp}`;
-      }
-      const access = checkFileAccess(fp);
-      if (!access.allowed) {
-        return `ZHIN_NEEDS_OWNER:\n${access.reason!}\n\n（文件访问策略拒绝；仅 Owner 确认后在受控环境可重试或调整策略。）`;
-      }
       await fs.mkdir(path.dirname(fp), { recursive: true });
       await fs.writeFile(fp, contentArg, 'utf-8');
       return `✅ Wrote ${Buffer.byteLength(contentArg)} bytes to ${fp}`;

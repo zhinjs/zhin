@@ -1,4 +1,4 @@
-import { buildChoiceKeyboard } from '@zhin.js/game-shared';
+import { buildChoiceKeyboard } from '@zhin.js/game-kit';
 import type { SendContent } from 'zhin.js';
 import type { DiceSessionRow } from './models.js';
 import { DICE_PREFIX, diceEmoji, WIN_TARGET } from './engine.js';

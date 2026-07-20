@@ -8,19 +8,19 @@ tier: Experimental
 本页由 [`plugins/adapters/email/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/email/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=21cc2de0adf69f45 -->
+<!-- sync-adapter-docs:sha256=997fd6d2ed57c2b6 -->
 
 # @zhin.js/adapter-email
 
-Zhin.js 邮件适配器，通过 SMTP 发送和 IMAP 接收邮件，将邮箱作为聊天平台接入。
+Zhin.js 邮件适配器（Plugin Runtime），通过 SMTP 发送和 IMAP 接收邮件，将邮箱作为聊天通道接入。
 
 ## 功能特性
 
 - SMTP 邮件发送（基于 nodemailer）
 - IMAP 邮件接收（基于 imap + mailparser）
-- 支持附件处理
-- 定时轮询新邮件
+- 定时轮询未读邮件
 - TLS/SSL 加密连接
+- 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 
 ## 安装
 
@@ -28,25 +28,31 @@ Zhin.js 邮件适配器，通过 SMTP 发送和 IMAP 接收邮件，将邮箱作
 pnpm add @zhin.js/adapter-email
 ```
 
+## Plugin Runtime
+
+- `@zhin.js/adapter` — 约定式 `adapters/email.ts`（`defineAdapter`）
+- `@zhin.js/core` — `messageGatewayToken` 入站/出站
+- `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
+- 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`（`smtp` / `imap`）
+
+入站：`gateway.receive({ adapter, target: fromEmail, content: text, sender, metadata })`  
+出站：`send({ target, payload })` → nodemailer（payload 已由 gateway/core 渲染；无 segment-mapper）
+
 ## 前置条件
 
 | 要求 | 说明 |
 |------|------|
-| **邮箱账号** | 可用的 SMTP 发信与 IMAP 收信账号（或同一邮箱双协议） |
-| **应用专用密码** | Gmail、Outlook 等常需开启「第三方应用访问」或生成应用密码 |
+| **邮箱账号** | 可用的 SMTP 发信与 IMAP 收信账号 |
+| **应用专用密码** | Gmail、Outlook 等常需应用密码 |
 | **网络** | 出站可连 SMTP/IMAP 端口（465/587/993 等） |
-| **host-router** | 不需要；IMAP 轮询在适配器内完成 |
-
-必填字段见 `EmailEndpointConfig`：`context`、`name`、`smtp`、`imap`（含 `auth.user` / `auth.pass` 与 `user` / `password`）。
+| **host-http** | 不需要；IMAP 轮询在适配器内完成 |
 
 ## 最小配置
 
 ```yaml
+# zhin.config.yml（Plugin Runtime）
 plugins:
-  - "@zhin.js/adapter-email"
-
-endpoints:
-  - context: email
+  email:
     name: my-email-bot
     smtp:
       host: smtp.example.com
@@ -63,100 +69,36 @@ endpoints:
       password: "${EMAIL_PASSWORD}"
 ```
 
-## 配置
+根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-email`（`instanceKey: email`）。
 
 ### 可选 IMAP 字段
 
-```yaml
-    imap:
-      host: imap.example.com
-      port: 993
-      tls: true
-      user: bot@example.com
-      password: "${EMAIL_PASSWORD}"
-      # checkInterval: 30000     # 轮询间隔（毫秒），默认 30 秒
-      # mailbox: INBOX           # 监听的邮箱文件夹
-      # markSeen: true           # 已读标记
-```
+- `checkInterval`：轮询间隔（毫秒），默认 `60000`
+- `mailbox`：默认 `INBOX`
+- `markSeen`：默认 `true`
 
-### TypeScript 配置
+### 附件下载
 
-```typescript
-import { defineConfig } from 'zhin.js'
+`attachments.enabled: true` 时，入站邮件附件会落盘并把保存信息写入消息 metadata（`attachments: [{ filename, path, contentType, size }]`）：
 
-export default defineConfig({
-  endpoints: [
-    {
-      context: 'email',
-      name: 'my-email-bot',
-      smtp: {
-        host: 'smtp.example.com',
-        port: 465,
-        secure: true,
-        auth: {
-          user: 'bot@example.com',
-          pass: process.env.EMAIL_PASSWORD!,
-        },
-      },
-      imap: {
-        host: 'imap.example.com',
-        port: 993,
-        tls: true,
-        user: 'bot@example.com',
-        password: process.env.EMAIL_PASSWORD!,
-      },
-    }
-  ],
-  plugins: ['@zhin.js/adapter-email']
-})
-```
-
-## 使用示例
-
-### 注册命令
-
-```typescript
-import { usePlugin, MessageCommand } from 'zhin.js'
-
-const { addCommand } = usePlugin()
-
-addCommand(
-  new MessageCommand('status')
-    .desc('查询状态')
-    .action(() => 'Agent 运行中')
-)
-```
-
-### 消息处理
-
-```typescript
-import { usePlugin } from 'zhin.js'
-
-const { root } = usePlugin()
-
-root.addMiddleware(async (message, next) => {
-  if (message.$adapter === 'email') {
-    console.log('收到邮件:', message.$sender.name, message.$content)
-  }
-  await next()
-})
-```
+- `downloadPath`：保存目录，默认 `./downloads/email`
+- `maxFileSize`：单附件上限（字节），默认 10MB，超限跳过
+- `allowedTypes`：允许的 MIME 类型白名单，不在列表内跳过
 
 ## 故障排查
 
 | 现象 | 排查 |
 |------|------|
-| IMAP 连接失败 | 主机/端口/TLS 是否正确；是否需应用专用密码而非登录密码 |
-| 收不到新邮件 | 默认轮询间隔 30s（`checkInterval`）；检查 `mailbox` 是否为 `INBOX` |
-| SMTP 发送失败 | `secure` 与端口匹配（465 通常 `secure: true`）；发信地址与 `auth.user` 一致 |
-| 重复处理邮件 | 确认 `markSeen: true`；检查是否多实例同时轮询同一邮箱 |
+| IMAP 连接失败 | 主机/端口/TLS；是否需应用专用密码 |
+| 收不到新邮件 | `checkInterval` / `mailbox`；确认 `open()` 后才准入入站 |
+| SMTP 发送失败 | `secure` 与端口匹配；发信地址与 `auth.user` 一致 |
+| 重复处理邮件 | `markSeen: true`；避免多实例轮询同一邮箱 |
 
 建议使用环境变量存储邮箱密码，勿提交到版本库。
 
 ## AI 工具
 
-技能说明见 `agent/skills/email.md`（收发邮件约束与工具列表）。
-
+技能说明见 `agent/skills/email.md`。
 
 ## 文档链接
 

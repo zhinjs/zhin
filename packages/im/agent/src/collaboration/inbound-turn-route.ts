@@ -128,24 +128,45 @@ export async function routeInboundTurnExecution(
     ?? bindingRegistry?.getBinding(DEFAULT_ZHIN_AGENT_NAME)
     ?? bindingRegistry?.requireZhinBinding();
 
-  const externalTools = collectInboundTurnTools({ root, ai, commMessage, cell });
-  const localResult = await executeInboundAgentTurn({
-    zhinAgent,
-    commMessage,
-    aiContent,
-    externalTools,
-    mediaParts,
-    handlerBinding: handlerBinding ?? null,
-    refs,
-    cell,
-    endpointId,
-    onChunk,
-    logger,
-  });
+  const orchestrator = root.inject('agent');
+  const ingress = root.inject('capabilityIngress');
+  const projection = orchestrator && ingress && handlerBinding
+    ? ingress.ensureForTurn(
+      orchestrator,
+      {
+        tools: root.inject('tool'),
+        skills: root.inject('skill'),
+        agents: root.inject('agentFeature'),
+        mcps: root.inject('mcpFeature'),
+      },
+      { binding: handlerBinding, message: commMessage },
+    )
+    : null;
 
-  return {
-    kind: 'local',
-    elements: localResult.elements,
-    cell: localResult.cell,
-  };
+  const externalTools = collectInboundTurnTools({ root, ai, commMessage, cell });
+  try {
+    const localResult = await executeInboundAgentTurn({
+      zhinAgent,
+      commMessage,
+      aiContent,
+      externalTools,
+      mediaParts,
+      handlerBinding: handlerBinding ?? null,
+      refs,
+      cell,
+      endpointId,
+      onChunk,
+      logger,
+    });
+
+    return {
+      kind: 'local',
+      elements: localResult.elements,
+      cell: localResult.cell,
+    };
+  } finally {
+    // Release the projection lease so a deferred purge of the previous
+    // on-demand set can run once no turn is executing against it.
+    projection?.release();
+  }
 }

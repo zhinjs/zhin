@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "connection": {
+      "type": "string",
+      "enum": ["ws", "wss"],
+      "default": "ws",
+      "description": "connection: ws (forward WS client, default) or wss (reverse WS via httpHostToken)"
+    },
+    "name": {
+      "type": "string",
+      "default": "onebot11-bot"
+    },
+    "url": {
+      "type": "string",
+      "description": "OneBot implementation WebSocket URL (required for connection: ws)"
+    },
+    "path": {
+      "type": "string",
+      "description": "WS path for reverse-wss (connection: wss)"
+    },
+    "access_token": {
+      "type": "string"
+    },
+    "reconnect_interval": {
+      "type": "number",
+      "default": 5000
+    },
+    "heartbeat_interval": {
+      "type": "number",
+      "default": 30000
+    }
+  }
+}

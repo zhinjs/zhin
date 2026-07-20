@@ -1,33 +1,48 @@
+export {
+  DEFAULT_GROUP_SUITE_CONFIG,
+  resolveGroupSuiteConfig,
+} from './config.js';
+export type { GroupSuiteConfig } from './config.js';
+export { doCheckin, myPoints, pointsRank } from './checkin-lib.js';
+export {
+  addKeyword,
+  listKeywords,
+  matchKeyword,
+  removeKeyword,
+  resetKeywords,
+} from './keyword-store.js';
+export {
+  ensureGroupSuiteMemoryDb,
+  getCheckinModel,
+  getGroupSuiteDb,
+  getStatsModel,
+  getTeachModel,
+  resetGroupSuiteDb,
+  setGroupSuiteDb,
+} from './db-store.js';
+export {
+  parseTeachPair,
+  resetTeachCooldown,
+  teachAdd,
+  teachForget,
+  teachList,
+  tryTeachReply,
+} from './teach-lib.js';
+export {
+  flushStatsBuffer,
+  monthStartStr,
+  myStatsText,
+  queryStats,
+  recordMessage,
+  resetStatsBuffer,
+  statsRankText,
+  weekStartStr,
+} from './stats-lib.js';
+
 /**
- * @zhin.js/plugin-group-suite
- *
- * ```yaml
- * plugins:
- *   - "@zhin.js/plugin-group-suite"
- * inbox:
- *   enabled: true
- * groupSuite:
- *   noticeAdapters: [icqq]
- *   autoAnalysisEnabled: true
- * ```
+ * Still TODO (not mounted in Plugin Runtime):
+ * - admin.ts — notice welcome / recall (needs Adapter side-event wiring)
+ * - daily-analysis.ts — AI daily report (inbox + LLM + cron)
+ * - host DatabaseFeature Resource persistence (swap memory store)
+ * - HTML stats/analysis cards (text replies for slice-2)
  */
-import { formatCompact, usePlugin } from "zhin.js";
-import { groupSuiteSchema } from "./config.js";
-import { registerAdmin } from "./admin.js";
-import { registerCheckin } from "./checkin.js";
-import { registerDailyAnalysis } from "./daily-analysis.js";
-import { registerStats } from "./stats.js";
-import { registerTeach } from "./teach.js";
-
-const plugin = usePlugin();
-const { logger, declareConfig } = plugin;
-
-const cfg = declareConfig("groupSuite", groupSuiteSchema);
-
-registerAdmin(plugin, cfg);
-registerCheckin(plugin, cfg);
-registerStats(plugin, cfg);
-registerDailyAnalysis(plugin, cfg);
-registerTeach(plugin, cfg);
-
-logger.debug(formatCompact({ 模块: "群组套件", 状态: "已加载" }));

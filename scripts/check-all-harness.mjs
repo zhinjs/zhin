@@ -10,7 +10,20 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
 
+/** CI 若另跑 coverage，可设 HARNESS_SKIP_TEST=1 跳过本脚本内的 pnpm test，避免双跑 */
+const skipUnitTests = process.env.HARNESS_SKIP_TEST === '1';
+
 const checks = [
+  {
+    name: 'Type Check',
+    command: 'pnpm type-check',
+    description: 'tsc --noEmit（tsconfig.typecheck.json）',
+  },
+  {
+    name: 'Lint',
+    command: 'pnpm lint',
+    description: 'ESLint（.ts/.tsx）',
+  },
   {
     name: 'IM Send Path',
     command: 'pnpm check:harness-paths',
@@ -44,7 +57,12 @@ const checks = [
   {
     name: 'Agent Tool Schema',
     command: 'pnpm check:agent-tool-schema',
-    description: 'agent/tools inputSchema 与 defineTool/execute 类型字段一致',
+    description: 'agent/tools inputSchema 与 defineAgentTool/execute 类型字段一致',
+  },
+  {
+    name: 'No Package-Root skills/',
+    command: 'pnpm check:no-package-skills',
+    description: '插件包禁止顶层 skills/，须用 agent/skills/*.md',
   },
   {
     name: 'Architecture Layers',
@@ -72,6 +90,11 @@ const checks = [
     description: '检查平台适配器文档是否与 plugins/adapters README 同步',
   },
   {
+    name: 'Platform Tiers SSOT',
+    command: 'pnpm check:platform-tiers-ssot',
+    description: '能力分档/适配器索引与 scripts/adapter-meta.mjs 一致',
+  },
+  {
     name: 'Doc Links',
     command: 'pnpm check:doc-links',
     description: '检查文档相对链接是否断裂',
@@ -90,6 +113,11 @@ const checks = [
     name: 'API Surface',
     command: 'pnpm check:api-surface',
     description: '检查 public API surface 快照',
+  },
+  {
+    name: 'Plugin Runtime API',
+    command: 'pnpm check:plugin-runtime-api',
+    description: '检查约定式插件运行时 API surface 快照',
   },
   {
     name: 'Doc Orphans',
@@ -115,6 +143,11 @@ const checks = [
     name: 'Stable Smoke',
     command: 'pnpm check:stable',
     description: 'Stable 路径 smoke（Sandbox + Agent 核心单测 + minimal-bot 契约）',
+  },
+  {
+    name: 'L4-CI (deterministic subset)',
+    command: 'pnpm check:l4-ci',
+    description: 'PR 门禁 L4 子集；全量 check:l4 见 nightly-smoke',
   },
   {
     name: 'usePlugin Top-Level',
@@ -166,7 +199,16 @@ const checks = [
     command: 'pnpm check:a2a-mesh',
     description: '禁止残留 MCP Agent Mesh v1 符号',
   },
-];
+  {
+    name: 'Unit Tests',
+    command: 'pnpm test',
+    description: '全量 Vitest（pnpm test）',
+  },
+].filter((c) => !(skipUnitTests && c.name === 'Unit Tests'));
+
+if (skipUnitTests) {
+  console.log('HARNESS_SKIP_TEST=1 — skipping Unit Tests (expect a separate coverage/test job)\n');
+}
 
 console.log('Running all harness checks...\n');
 

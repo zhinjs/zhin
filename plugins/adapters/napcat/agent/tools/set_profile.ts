@@ -1,8 +1,8 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getEndpoint } from '../../src/napcat-agent-deps.js';
 
-export default defineTool<{ endpoint_id: string; nickname: string; company?: string; email?: string; college?: string; personal_note?: string }>({
+export default defineAgentTool<{ endpoint_id: string; nickname: string; company?: string; email?: string; college?: string; personal_note?: string }>({
   description: '修改 QQ 资料（昵称等）。',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),

@@ -4,7 +4,7 @@
 
 | 插件 | 说明 |
 |------|------|
-| [@zhin.js/game-shared](./shared/) | 通用游戏工具包（网格键盘、选项键盘、会话、`game` 服务 / 游戏大厅） |
+| [@zhin.js/game-kit](./shared/) | 通用游戏工具包（网格键盘、选项键盘、会话、`game` 服务 / 游戏大厅） |
 | [@zhin.js/plugin-tic-tac-toe](./tic-tac-toe/) | 井字棋（`井字棋` / `ttt`） |
 | [@zhin.js/plugin-rps](./rps/) | 猜拳对决（`猜拳` / `rps` · 三局两胜） |
 | [@zhin.js/plugin-guess-number](./guess-number/) | 猜数字（`猜数` / `guess` · 1~100） |
@@ -26,7 +26,7 @@ plugins/games/
     └── ...
 ```
 
-新游戏开发推荐使用 `@zhin.js/game-shared` 工具包，提供：
+新游戏开发推荐使用 `@zhin.js/game-kit` 工具包，提供：
 
 - **网格键盘** - 任意尺寸按钮棋盘（3×3、15×15 等）
 - **发送策略** - 自动处理平台差异（QQ 新发、其他编辑）

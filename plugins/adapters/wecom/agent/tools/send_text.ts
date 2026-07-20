@@ -1,7 +1,7 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getWecomAgentDeps } from '../../src/wecom-agent-deps.js';
-export default defineTool<{ endpoint_id: string; user_id: string; content: string }>({
+export default defineAgentTool<{ endpoint_id: string; user_id: string; content: string }>({
   description: '向指定企业微信用户发送文本消息',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),

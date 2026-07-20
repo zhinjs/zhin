@@ -1,20 +1,6 @@
-log_level: 1
+# Root Plugin configuration. Child Plugin values live under plugins.<instanceKey>.
+plugin:
+  terminal:
+    interactive: true
 
-# 无需在 yaml 中配置 sandbox bot：Remote Console 打开「沙盒」页并通过 /sandbox WebSocket 连接时自动创建（如 sandbox-xxxx）
-endpoints: []
-
-plugins:
-  - "@zhin.js/adapter-sandbox"
-  - "@zhin.js/host-router"
-  - "@zhin.js/host-api"
-  - hello
-
-hostApi:
-  lazyLoad: true
-
-ai:
-  enabled: false
-
-http:
-  token: ${HTTP_TOKEN:-minimal-dev-token}
-  port: 8068
+plugins: {}

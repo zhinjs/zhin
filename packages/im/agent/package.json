@@ -110,6 +110,11 @@
       "types": "./lib/connection/index.d.ts",
       "development": "./src/connection/index.ts",
       "import": "./lib/connection/index.js"
+    },
+    "./runtime": {
+      "types": "./lib/plugin-runtime/index.d.ts",
+      "development": "./src/plugin-runtime/index.ts",
+      "import": "./lib/plugin-runtime/index.js"
     }
   },
   "files": [
@@ -122,10 +127,15 @@
   "dependencies": {
     "@a2a-js/sdk": "1.0.0-beta.0",
     "@zhin.js/ai": "workspace:*",
+    "@zhin.js/agent-feature": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/kernel": "workspace:*",
+    "@zhin.js/mcp-feature": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/schedule": "workspace:*",
     "@zhin.js/logger": "workspace:*",
+    "@zhin.js/skill": "workspace:*",
+    "@zhin.js/tool": "workspace:*",
     "he": "^1.2.0",
     "js-yaml": "^5.2.1"
   },

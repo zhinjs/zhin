@@ -28,17 +28,45 @@ _避免使用_：tool collection、tool filtering
 在 Tool Selection 之后决定最终运行时工具列表、上下文工具注入和 Pre-executable Tool 路径的 Agent Runtime 模块。
 _避免使用_：tool glue、runtime helper
 
+**Capability Feature**:
+Plugin 侧可写能力表（Tool / Skill / Agent / MCP），承载装配与生命周期；**不是**回合执行时的运行时权威。
+_避免使用_：tool service 真相源、双注册、registry bag
+
+**ToolFeature** / **SkillFeature**:
+Core IM 中的能力 Feature；插件与文件发现在装配期写入此处。
+_避免使用_：Orchestrator 直写、回合 SSOT
+
+**AgentFeature**:
+Agent Runtime 中的专长 / 子代理预设 Feature（对齐 `*.agent.md`）；**不**替代配置里的主 Agent 选用。
+_避免使用_：AgentPresetFeature（作为唯一对外名）、主绑定 SSOT
+
+**MCPFeature**:
+Agent Runtime 中的 MCP server **声明** Feature；不含已连接后的工具列表。
+_避免使用_：已连接工具池、MCP host server
+
+**Capability Ingress**:
+把 Capability Feature（及常驻核心）按需装入 **Agent Orchestrator** 的 seam；Boot 装 reserved/builtin，入站按 `canAccessTool`（platforms / scopes / permissions）装载并按可达投影缓存；换出上一轮 on-demand 条目（有活动回合持有时延迟到 lease 释放再清除）。实现类为 `FeatureCapabilityIngress`（`src/ingress/`），与 `@zhin.js/agent/runtime` 的 Plugin Runtime `CapabilityIngress`（`src/plugin-runtime/`）区分。
+_避免使用_：双写 bridge、mount 全量同步、作者侧第二套 adapter/scene/role 声明语言
+
+**Tool Ingress**:
+历史称呼；现由 **Capability Ingress** 覆盖 Tool 路径（作者写 Feature → Ingress → Orchestrator）。
+_避免使用_：tool service、双注册、Feature 当回合 SSOT
+
 **Permission Level**:
-Tool 进入模型前用于比较调用者和工具权限的有序权限词汇。
-_避免使用_：role、ACL、rank
+Tool 进入模型前用于比较调用者和工具权限的有序权限词汇；装载过滤复用 `platforms` / `scopes` / `permissions`。
+_避免使用_：role、ACL、rank、独立的 adapter/scene_type/sender_role 轴
 
 **Skill**:
 面向任务的能力包，可以为用户请求浮现配套 Tool。
 _避免使用_：plugin、prompt、recipe
 
 **Subagent**:
-用于更窄任务或角色的委派 Agent 预设。
+用于更窄任务或角色的委派 Agent 预设（常来自 **AgentFeature**）。
 _避免使用_：worker、child bot、helper
+
+**Agent Binding**:
+配置 `agents[].match` 解析出的主路径选用结果；入站选用权威在配置，不在 AgentFeature。
+_避免使用_：Feature match、preset 当主绑定
 
 **Context Budget**:
 用于裁剪历史并配置底层 AI Agent 的已解析上下文窗口。
@@ -98,8 +126,10 @@ _避免使用_：私有 `resolveTurnSessionKey`、snapshot 与 cell 双轨 key
 
 ## 关系
 
-- **ZhinAgent** 通过 **Agent Orchestrator** 发现 **Tool**、**Skill**、**Subagent** 与 Hook；MCP 条目经 `addMcp` / `ai.mcpServers` / 可选 `ai.memoryMcp`（`server-memory`）注册，在每次 AI 回合前懒连接，工具以 `mcp_{server}_{tool}` 并入工具池（不再使用内置 `read_memory`/`write_memory`）。
-- **Tool Selection** 在 **Permission Level** 检查后把 **Tool** 转换为 **AgentTool**。
+- 插件与文件发现向 **Capability Feature** 写入；**Capability Ingress** 在 Boot（常驻核心）与入站（命中 **Agent Binding** 作用域）把能力装入 **Agent Orchestrator**；回合只读 Orchestrator。
+- **ZhinAgent** 通过 **Agent Orchestrator** 发现已装载的 **Tool**、**Skill**、**Subagent** 与 Hook；MCP **声明** 在 **MCPFeature**，入站按 **Agent Binding** 的 `mcpServers` 装入 Orchestrator 后再懒连接，工具以 `mcp_{server}_{tool}` 并入工具池。
+- 主路径 Agent 选用由配置 **Agent Binding**（`agents[].match`）决定；**AgentFeature** 仅提供专长 / **Subagent** 预设。
+- **Tool Selection** 在 **Permission Level** 检查后把 **Tool** 转换为 **AgentTool**；装载过滤与 Selection 共用 `platforms` / `scopes` / `permissions`。
 - **Tool Runtime** 基于 **Tool Selection** 的结果补充上下文工具，并决定 **Pre-executable Tool** 是走快速路径还是完整 Agent 路径。
 - **Skill** 可以在通用相关性过滤前贡献 Tool。
 - **Context Budget** 同时约束提示词历史裁剪和底层 `@zhin.js/ai` Agent 配置。
@@ -110,7 +140,7 @@ _避免使用_：私有 `resolveTurnSessionKey`、snapshot 与 cell 双轨 key
 ## 示例对话
 
 > **开发者：** “我可以直接注册一个模型函数作为 **AgentTool** 吗？”
-> **领域专家：** “优先向 **Agent Orchestrator** 注册 **Tool**。**Tool Selection** 负责权限检查、上下文注入，以及转换为 **AgentTool**。”
+> **领域专家：** “装配期写入 **ToolFeature**（或 `defineAgentTool` 发现）。**Capability Ingress** 再装入 **Agent Orchestrator**；**Tool Selection** 负责权限检查、上下文注入，以及转换为 **AgentTool**。”
 
 ## 已标记歧义
 

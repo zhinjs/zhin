@@ -14,7 +14,7 @@ describe("plugin inspection", () => {
   const repoRoot = path.resolve(fileURLToPath(import.meta.url), "../../../../../");
   const testPluginPath = path.join(
     repoRoot,
-    "examples/test-bot/src/plugins/test-plugin.ts",
+    "packages/host/api/tests/fixtures/test-plugin.ts",
   );
 
   it("collects command feature and attributes addCommand to child plugin name", async () => {

@@ -1,33 +1,9 @@
-import { formatCompact, usePlugin, type DatabaseFeature } from 'zhin.js';
-import { registerModels } from './models.js';
-import {
-  createServices,
-  resolveGameDatabase,
-  type SessionService,
-} from './session-service.js';
-import { registerCommands, registerGuessMiddleware } from './commands.js';
-import { registerGuessHub } from './hub-register.js';
+export { GUESS_HELP } from './guess-command.js';
+export { getGameServices, setGameServices } from './runtime-store.js';
+export { createInMemoryGuessDb, mountGuessMemoryServices } from './memory-db.js';
 
-const plugin = usePlugin();
-const { logger, useContext, addSchedule } = plugin;
-
-registerModels(plugin);
-
-let services: SessionService | null = null;
-
-useContext('database', (dbFeature: DatabaseFeature) => {
-  services = createServices(resolveGameDatabase(dbFeature));
-  logger.debug(formatCompact({ 模块: '猜数字', 数据模型: '已就绪' }));
-});
-
-registerGuessHub(() => services);
-registerCommands(plugin, () => services);
-registerGuessMiddleware(plugin, () => services);
-
-addSchedule({ kind: 'solar', cron: '0 */15 * * * *' }, async () => {
-    if (!services) return;
-    const n = await services.abortStale(30 * 60 * 1000);
-    if (n > 0) logger.debug(formatCompact({ 猜数字: '清理超时局', count: n }));
-  });
-
-logger.debug(formatCompact({ 模块: '猜数字', 状态: '已加载' }));
+/**
+ * 已由 plugin.ts 接线：commands/ 命令、middlewares/ 文本与选项中间件、
+ * 游戏大厅注册（registerRuntimeGame）、过期会话 cron（scheduleHostToken）、
+ * host DatabaseHost（databaseHostToken）。仍未接：interactive 按钮回调。
+ */

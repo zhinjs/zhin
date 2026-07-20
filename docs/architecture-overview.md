@@ -17,7 +17,7 @@ graph TB
     L3B("Provider · agentLoop · 会话 · 记忆")
   end
   subgraph L2["⚙️ 运行时内核 @zhin.js/kernel"]
-    L2A("PluginBase · Feature · Cron · 错误体系")
+    L2A("PluginBase · Feature · Schedule · 错误体系")
   end
   subgraph L1["📦 基础层 basic/"]
     L1A("logger · database · schema · cli")

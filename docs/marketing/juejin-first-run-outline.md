@@ -49,7 +49,7 @@ sidebar: false
 - **引流 CTA**：文首放 [demo.zhin.dev](https://demo.zhin.dev)「30 秒在线试」
 - Zhin.js 是 **TypeScript IM 聊天/生活助手框架**，不是 Cursor 类写代码 Agent。
 - **命令 Bot** 与 **AI Agent** 走同一套消息链路，可混合使用。
-- 支持 QQ、Telegram、Discord、飞书等（Platform Stable）；本文先跑 **Sandbox**，零平台风控。
+- 支持 QQ、Telegram、Discord、飞书等（多数为 Advanced/Experimental，见适配器索引 SSOT）；本文先跑 **Sandbox**（Stable），零平台风控。
 
 **可配图**：消息流转简图（入站 → Dispatcher → Command / AI → 统一发送链）。
 
@@ -311,7 +311,7 @@ ai: 今天天气怎么样   → 走 ZhinAgent
 
 1. **接真机 IM**：`zhin setup` 或编辑 `zhin.config.yml` 加适配器（ICQQ、Telegram、Discord…）  
 2. **写业务插件**：`zhin new my-plugin`  
-3. **看能力分档**：Stable / Platform Stable / Advanced，避免把 test-bot 当默认模板  
+3. **看能力分档**：Stable / Advanced / Experimental（Platform Stable 当前空表，见 `scripts/adapter-meta.mjs`），避免把 test-bot 当默认模板
 4. **贡献与提问**：GitHub Discussions  
 
 **代码块：已有项目加配置**

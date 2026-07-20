@@ -1,7 +1,7 @@
 /**
  * Slack platform permit — workspace + channel 权限
  */
-import { registerPlatformPermitChecker, type Message } from 'zhin.js';
+import { registerPlatformPermitChecker, type Message } from '@zhin.js/core';
 
 const ADAPTER = 'slack';
 

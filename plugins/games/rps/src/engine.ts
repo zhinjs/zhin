@@ -1,4 +1,4 @@
-import { secureRandomItem } from '@zhin.js/game-shared';
+import { secureRandomItem } from '@zhin.js/game-kit';
 
 export const RPS_PREFIX = 'rps';
 

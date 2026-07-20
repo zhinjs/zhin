@@ -61,7 +61,6 @@ export async function configureTelegramEndpoint(ctx: EndpointConfigureContext): 
   ]);
 
   const endpointConfig: Record<string, unknown> = {
-    context: 'telegram',
     name: endpointName.trim(),
     token: '${TELEGRAM_TOKEN}',
     polling: transport === 'polling',
@@ -71,8 +70,7 @@ export async function configureTelegramEndpoint(ctx: EndpointConfigureContext): 
     console.log('');
     console.log(chalk.yellow('     Webhook 前置条件：'));
     console.log(chalk.gray('     • Endpoint 进程需绑定可被 Telegram 访问的 HTTPS 域名（有效 TLS 证书）'));
-    console.log(chalk.gray('     • 在 @BotFather 可配合 setWebhook，或由 Telegraf 在 launch 时注册'));
-    console.log(chalk.gray('     • 防火墙/反向代理需放行 webhook.port（默认由 Telegraf 监听）'));
+    console.log(chalk.gray('     • Webhook 由内置 HTTP Host（zhin runtime start）承接，防火墙/反向代理需放行 http 端口'));
 
     const webhook = await inquirer.prompt([
       {
@@ -89,18 +87,7 @@ export async function configureTelegramEndpoint(ctx: EndpointConfigureContext): 
         type: 'input',
         name: 'path',
         message: '  Webhook 路径:',
-        default: '/telegram-webhook',
-      },
-      {
-        type: 'input',
-        name: 'port',
-        message: '  本地监听端口（Telegraf webhook server）:',
-        default: '8443',
-        validate: (v: string) => {
-          const p = parseInt(v, 10);
-          if (Number.isNaN(p) || p < 1 || p > 65535) return '请输入 1–65535 端口';
-          return true;
-        },
+        default: '/telegram/webhook',
       },
     ]);
 
@@ -108,7 +95,6 @@ export async function configureTelegramEndpoint(ctx: EndpointConfigureContext): 
     endpointConfig.webhook = {
       domain: webhook.domain.trim(),
       path: webhook.path.trim(),
-      port: parseInt(webhook.port, 10),
     };
   }
 
@@ -149,7 +135,6 @@ export async function configureGitHubEndpoint(ctx: EndpointConfigureContext): Pr
   ]);
 
   const endpointConfig: Record<string, unknown> = {
-    context: 'github',
     name: endpointName.trim(),
   };
 
@@ -186,7 +171,7 @@ export async function configureGitHubEndpoint(ctx: EndpointConfigureContext): Pr
       message: '  事件接收方式:',
       choices: [
         {
-          name: 'Webhook 实时推送（需 @zhin.js/host-router + 公网 URL）',
+          name: 'Webhook 实时推送（由内置 HTTP Host 承接，需公网 URL）',
           value: 'webhook',
         },
         {
@@ -201,9 +186,8 @@ export async function configureGitHubEndpoint(ctx: EndpointConfigureContext): Pr
   if (eventsMode === 'webhook') {
     console.log('');
     console.log(chalk.yellow('     Webhook 前置条件：'));
-    console.log(chalk.gray('     • plugins 需包含 @zhin.js/host-router（脚手架已默认写入）'));
-    console.log(chalk.gray('     • GitHub App Webhook URL 填 https://<你的域名>/pub/github/webhook'));
-    console.log(chalk.gray('     • /pub/* 路径绕过 Bearer 认证，供 GitHub 回调'));
+    console.log(chalk.gray('     • Webhook 由内置 HTTP Host（zhin runtime start 的 http 配置）承接'));
+    console.log(chalk.gray('     • GitHub App Webhook URL 填 https://<你的域名>/github/webhook'));
 
     const webhook = await inquirer.prompt([
       {
@@ -216,7 +200,7 @@ export async function configureGitHubEndpoint(ctx: EndpointConfigureContext): Pr
         type: 'input',
         name: 'webhook_path',
         message: '  Webhook 路径:',
-        default: '/pub/github/webhook',
+        default: '/github/webhook',
       },
     ]);
 
@@ -274,7 +258,7 @@ export async function configureOneBot11Bot(ctx: EndpointConfigureContext): Promi
       message: '  连接方式:',
       choices: [
         { name: '正向 WebSocket (ws) — 本 Endpoint 连接 OneBot 实现', value: 'ws' },
-        { name: '反向 WebSocket (wss) — OneBot 实现连本 Bot（需 host-router）', value: 'wss' },
+        { name: '反向 WebSocket (wss) — OneBot 实现连本 Bot（由内置 HTTP Host 承接）', value: 'wss' },
       ],
       default: 'ws',
     },
@@ -291,7 +275,6 @@ export async function configureOneBot11Bot(ctx: EndpointConfigureContext): Promi
   ]);
 
   const endpointConfig: Record<string, unknown> = {
-    context: 'onebot11',
     connection,
     name: endpointName.trim(),
   };
@@ -308,7 +291,7 @@ export async function configureOneBot11Bot(ctx: EndpointConfigureContext): Promi
     ]);
     endpointConfig.url = url.trim();
   } else {
-    console.log(chalk.gray('     反向 WS 需启用 @zhin.js/host-router，OneBot 实现配置连接到此 Bot'));
+    console.log(chalk.gray('     反向 WS 由内置 HTTP Host 承接，OneBot 实现配置连接到此 Bot'));
     const { path: wsPath } = await inquirer.prompt([
       {
         type: 'input',
@@ -356,12 +339,6 @@ export async function configureQQBot(ctx: EndpointConfigureContext): Promise<Rec
     },
     {
       type: 'password',
-      name: 'token',
-      message: '  Token:',
-      validate: (v: string) => (v.trim() ? true : 'Token 不能为空'),
-    },
-    {
-      type: 'password',
       name: 'secret',
       message: '  Secret:',
       validate: (v: string) => (v.trim() ? true : 'Secret 不能为空'),
@@ -369,7 +346,6 @@ export async function configureQQBot(ctx: EndpointConfigureContext): Promise<Rec
   ]);
 
   ctx.envVars.QQ_APP_ID = credentials.appID.trim();
-  ctx.envVars.QQ_TOKEN = credentials.token;
   ctx.envVars.QQ_SECRET = credentials.secret;
 
   const { mode, sandbox } = await inquirer.prompt([
@@ -378,10 +354,10 @@ export async function configureQQBot(ctx: EndpointConfigureContext): Promise<Rec
       name: 'mode',
       message: '  消息接收模式 (mode):',
       choices: [
-        { name: 'public — 公域消息', value: 'public' },
-        { name: 'private — 私域消息', value: 'private' },
+        { name: 'websocket — WebSocket 网关（默认，无需公网）', value: 'websocket' },
+        { name: 'webhook — HTTP 回调（需公网可达的内置 HTTP Host）', value: 'webhook' },
       ],
-      default: 'public',
+      default: 'websocket',
     },
     {
       type: 'confirm',
@@ -392,13 +368,10 @@ export async function configureQQBot(ctx: EndpointConfigureContext): Promise<Rec
   ]);
 
   return {
-    context: 'qq',
     name: credentials.name.trim(),
-    appID: '${QQ_APP_ID}',
-    token: '${QQ_TOKEN}',
+    appid: '${QQ_APP_ID}',
     secret: '${QQ_SECRET}',
     mode,
-    platform: 'qq',
     sandbox,
   };
 }
@@ -437,14 +410,13 @@ export async function configureDiscordEndpoint(ctx: EndpointConfigureContext): P
   ctx.envVars.DISCORD_TOKEN = token;
 
   const endpointConfig: Record<string, unknown> = {
-    context: 'discord',
     connection,
     name: endpointName.trim(),
     token: '${DISCORD_TOKEN}',
   };
 
   if (connection === 'interactions') {
-    console.log(chalk.gray('     Interactions 模式需 @zhin.js/host-router 与 Developer Portal 中的公钥'));
+    console.log(chalk.gray('     Interactions 模式由内置 HTTP Host 承接，需 Developer Portal 中的公钥'));
     const interactions = await inquirer.prompt([
       {
         type: 'input',
@@ -515,7 +487,6 @@ export async function configureSlackEndpoint(ctx: EndpointConfigureContext): Pro
   ctx.envVars.SLACK_SIGNING_SECRET = signingSecret;
 
   const endpointConfig: Record<string, unknown> = {
-    context: 'slack',
     name: endpointName.trim(),
     token: '${SLACK_BOT_TOKEN}',
     signingSecret: '${SLACK_SIGNING_SECRET}',
@@ -534,16 +505,7 @@ export async function configureSlackEndpoint(ctx: EndpointConfigureContext): Pro
     ctx.envVars.SLACK_APP_TOKEN = appToken;
     endpointConfig.appToken = '${SLACK_APP_TOKEN}';
   } else {
-    console.log(chalk.yellow('     HTTP 模式需公网可达并配置 Slack Event Subscriptions URL'));
-    const { port } = await inquirer.prompt([
-      {
-        type: 'input',
-        name: 'port',
-        message: '  监听端口:',
-        default: '3000',
-      },
-    ]);
-    endpointConfig.port = parseInt(port, 10);
+    console.log(chalk.yellow('     HTTP 模式由内置 HTTP Host 承接，需公网可达并配置 Slack Event Subscriptions URL'));
   }
 
   return endpointConfig;

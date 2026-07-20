@@ -17,7 +17,7 @@ pnpm test:watch         # Watch mode
 pnpm test:coverage      # Coverage report
 pnpm lint               # ESLint (.ts,.tsx)
 pnpm type-check         # tsc --noEmit -p tsconfig.typecheck.json
-pnpm dev                # Start test-bot (examples/test-bot) with hot-reload
+pnpm dev                # Start minimal-bot (examples/minimal-bot); use pnpm dev:test for test-bot
 pnpm clean              # Clean all lib/ dist/ directories
 
 # Bootstrap (first-time or after clean)
@@ -40,7 +40,7 @@ Custom lint checks:
 - `pnpm check:use-plugin-top-level` — 检测 usePlugin() 是否在模块顶层调用
 - `pnpm check:get-plugin-runtime` — 检测 getPlugin() 是否在运行时回调中调用
 - `pnpm check:plugin-agent-publish` — 带 agent/ 的插件发布清单（files、prepublishOnly）
-- `pnpm check:all` — 运行所有 harness 检查
+- `pnpm check:all` — 运行所有 harness 检查（含 type-check / lint / test）
 
 ## Architecture
 
@@ -194,7 +194,7 @@ Agent harness engineering 提供多层安全防护：执行策略（5 层防御�
 These rules are non-negotiable — violating them will break the project:
 
 1. **Never bypass the send chain** — All outbound messages must flow through `Message.$reply` or `Adapter.sendMessage` → `renderSendMessage` → `before.sendMessage` → platform Endpoint.
-2. **Respect the dependency direction** — `basic → kernel → ai → core → agent → zhin`. Lower layers must never import from higher layers.
+2. **Respect the dependency direction** — `basic → kernel → ai → core → agent → zhin`. Lower layers must never import from higher layers. Exception: `basic/cli` is the Plugin Runtime composition root (`zhin runtime start` assembles IM/Agent/Console hosts) and may import `packages/im` layers; this exception is scoped to `basic/cli` only.
 3. **`usePlugin()` at module top-level only** — Never inside async functions, callbacks, or lazy init paths (AsyncLocalStorage context will be lost).
 4. **`getPlugin()` at plugin init only** — Capture `plugin`/`root` when registering middleware, commands, tools, and events; never call `getPlugin()` inside those runtime callbacks (common production failure mode).
 5. **Use `.js` extensions in imports** — TypeScript local imports require `.js` suffix (`import { x } from './y.js'`).

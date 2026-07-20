@@ -1,10 +1,10 @@
 /**
  * HomeAssistantService — 别名解析 + HA REST（M4）
  */
-import { Logger } from '@zhin.js/core';
+import { getLogger } from '@zhin.js/core';
 import { formatCompact } from '@zhin.js/logger';
 import { type AssistantHomeConfig, resolveAssistantHomeConfig } from '../home-config.js';
-const logger = new Logger(null, 'home-assistant');
+const logger = getLogger('home-assistant');
 
 export type HaFetch = (url: string, init?: RequestInit) => Promise<Response>;
 

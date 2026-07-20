@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/adapter-line",
   "version": "2.0.2",
-  "description": "Zhin.js adapter for LINE Messaging API",
+  "description": "Zhin.js LINE Messaging API adapter for Plugin Runtime (HTTP webhook)",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -32,35 +32,29 @@
     "directory": "plugins/adapters/line"
   },
   "scripts": {
-    "build": "zhin build",
-    "clean": "rimraf lib dist",
-    "build:node": "tsc",
-    "prepublishOnly": "npm run build"
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/adapters/line/tests",
+    "prepublishOnly": "pnpm run build"
   },
-  "devDependencies": {
-    "@types/node": "^26.1.0",
-    "@zhin.js/agent": "workspace:*",
-    "@zhin.js/cli": "workspace:*",
-    "@zhin.js/host-api": "workspace:*",
-    "@zhin.js/host-router": "workspace:*",
+  "dependencies": {
+    "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/host-http": "workspace:*",
     "@zhin.js/logger": "workspace:*",
-    "typescript": "^6.0.3",
-    "zhin.js": "workspace:*",
-    "zod": "^4.4.3"
+    "@zhin.js/plugin-runtime": "workspace:*"
   },
   "peerDependencies": {
+    "@zhin.js/adapter": "workspace:*",
     "@zhin.js/agent": "workspace:*",
-    "@zhin.js/host-api": "workspace:*",
-    "@zhin.js/host-router": "workspace:*",
-    "@zhin.js/logger": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "zhin.js": "workspace:*",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
-    "@zhin.js/host-router": {
-      "optional": true
-    },
-    "@zhin.js/host-api": {
+    "zhin.js": {
       "optional": true
     },
     "@zhin.js/agent": {
@@ -70,11 +64,20 @@
       "optional": true
     }
   },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "@zhin.js/agent": "workspace:*",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
+    "zod": "^4.4.3"
+  },
   "files": [
+    "adapters",
+    "plugin.ts",
+    "schema.json",
     "src",
     "lib",
     "agent",
-    "plugin.yml",
     "README.md",
     "CHANGELOG.md"
   ],
@@ -84,5 +87,19 @@
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/adapter",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
   }
 }

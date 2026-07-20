@@ -1,8 +1,8 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getEndpoint } from '../../src/napcat-agent-deps.js';
 
-export default defineTool<{ endpoint_id: string; message_id: number; emoji_id: string }>({
+export default defineAgentTool<{ endpoint_id: string; message_id: number; emoji_id: string }>({
   description: '为消息添加表情回应（贴表情）。',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),

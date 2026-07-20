@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/plugin-rss",
   "version": "3.0.2",
-  "description": "RSS/Atom feed subscription & push plugin for Zhin.js — subscribe feeds, auto-poll, push new items to groups",
+  "description": "RSS/Atom feed subscription plugin for Zhin.js (Plugin Runtime)",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -14,18 +14,19 @@
     "./package.json": "./package.json"
   },
   "files": [
+    "plugin.ts",
+    "schema.json",
+    "commands",
     "src",
     "lib",
     "agent",
-    "client",
-    "dist",
     "README.md"
   ],
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
-    "test": "sh -c 'cd ../../.. && vitest run plugins/utils/rss/tests'",
-    "prepublishOnly": "npm run build"
+    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/utils/rss/tests",
+    "prepublishOnly": "pnpm run build"
   },
   "keywords": [
     "zhin",
@@ -36,10 +37,7 @@
     "atom",
     "feed",
     "subscription",
-    "push",
-    "notify",
-    "chatbot",
-    "im"
+    "push"
   ],
   "author": {
     "name": "lc-cn",
@@ -48,18 +46,27 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@zhin.js/command": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "rss-parser": "^3.13.0"
   },
   "devDependencies": {
-    "typescript": "^6.0.3",
-    "zhin.js": "workspace:*",
     "@zhin.js/agent": "workspace:*",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "zhin.js": "workspace:*",
     "@zhin.js/agent": "workspace:*",
     "zod": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/agent": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
   },
   "repository": {
     "type": "git",
@@ -70,12 +77,21 @@
     "access": "public",
     "registry": "https://registry.npmjs.org"
   },
-  "peerDependenciesMeta": {
-    "@zhin.js/agent": {
-      "optional": true
-    },
-    "zod": {
-      "optional": true
-    }
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
   }
 }

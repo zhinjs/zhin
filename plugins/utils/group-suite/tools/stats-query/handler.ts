@@ -3,8 +3,8 @@ import {
   queryStats,
   weekStartStr,
   monthStartStr,
-} from '../../src/stats.js';
-import { todayStr } from '../../src/shared.js';
+} from '../../src/stats-lib.js';
+import { todayStr } from '../../src/shared-runtime.js';
 
 export default async function (args: { group_id?: string; period?: string }) {
   await flushStatsBuffer();

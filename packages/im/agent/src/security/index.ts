@@ -24,3 +24,4 @@ export * from './sandbox-enhanced.js';
 export * from './anomaly-detection.js';
 export * from './file-role-policy.js';
 export * from './dangerous-tool-policy.js';
+export * from './policy-facade.js';

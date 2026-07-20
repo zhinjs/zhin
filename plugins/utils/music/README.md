@@ -286,6 +286,7 @@ export type MusicSource = 'qq' | 'netease' | 'mymusic'
 2. **版权问题**：仅用于搜索和分享链接，不提供下载功能
 3. **网络问题**：部分 API 可能需要稳定的网络连接
 4. **平台兼容**：ICQQ 特定功能仅在 ICQQ 适配器下可用
+5. **AI 工具平台限制**：旧版 `music-search` / `music-share` 工具曾通过 `.platform('icqq')` 限制仅 icqq 平台可用；现行 `defineAgentTool`（`@zhin.js/tool`）不支持 platform 约束，迁移后工具对所有平台可见
 
 ## 🐛 故障排除
 

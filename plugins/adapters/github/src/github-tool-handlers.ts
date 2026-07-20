@@ -1,11 +1,14 @@
-import { formatCompact, type Message } from 'zhin.js';
+import { formatCompact } from '@zhin.js/logger';
+import type { Message } from 'zhin.js';
 import { getCurrentCommMessage } from '@zhin.js/agent/security';
 import { GhClient } from './gh-client.js';
 import type { EventType } from './types.js';
 import { getAdapter, getGithubAgentDeps } from './github-agent-deps.js';
 
 function oauthModel() {
-  const db = getGithubAgentDeps().plugin.root?.inject('database') as any;
+  const db = getGithubAgentDeps().getDatabase?.() as {
+    models?: Map<string, unknown>;
+  } | null | undefined;
   return db?.models?.get('github_oauth_users') as {
     select: () => { where: (q: object) => Promise<any[]> };
     insert: (row: object) => Promise<void>;
@@ -14,13 +17,23 @@ function oauthModel() {
 }
 
 function subscriptionsModel() {
-  const db = getGithubAgentDeps().plugin.root?.inject('database') as any;
+  const db = getGithubAgentDeps().getDatabase?.() as {
+    models?: Map<string, unknown>;
+  } | null | undefined;
   return db?.models?.get('github_subscriptions') as {
     select: () => { where: (q: object) => Promise<any[]> };
     insert: (row: object) => Promise<void>;
     update: (row: object) => { where: (q: object) => Promise<void> };
     delete: () => { where: (q: object) => Promise<void> };
   } | undefined;
+}
+
+function depsLogger() {
+  return getGithubAgentDeps().logger ?? {
+    debug: (...args: unknown[]) => console.debug(...args),
+    warn: (...args: unknown[]) => console.warn(...args),
+    error: (...args: unknown[]) => console.error(...args),
+  };
 }
 
 export async function executeGithubStar(args: { action: 'star' | 'unstar' | 'check'; repo: string }, commMessage?: Message) {
@@ -48,7 +61,7 @@ export async function executeGithubStar(args: { action: 'star' | 'unstar' | 'che
 
 export async function executeGithubBind(_args: Record<string, never>, commMessage?: Message) {
   const adapter = getAdapter();
-  const { plugin } = getGithubAgentDeps();
+  const log = depsLogger();
   const msg = commMessage ?? getCurrentCommMessage();
   if (!msg?.$adapter || !msg?.$sender?.id) return '❌ 无法获取当前用户信息';
 
@@ -81,7 +94,7 @@ export async function executeGithubBind(_args: Record<string, never>, commMessag
 
     tokenPromise.then(async (tokenData) => {
       if (!tokenData) {
-        plugin.logger.warn(formatCompact({ op: 'device_flow', ok: false, platform: msg.$adapter, sender: msg.$sender.id }));
+        log.warn(formatCompact({ op: 'device_flow', ok: false, platform: msg.$adapter, sender: msg.$sender.id }));
         return;
       }
 
@@ -97,13 +110,13 @@ export async function executeGithubBind(_args: Record<string, never>, commMessag
         access_token: tokenData.access_token,
         created_at: Date.now(),
       });
-      plugin.logger.debug(formatCompact({ op: 'bind', platform: msg.$adapter, sender: msg.$sender.id, login }));
+      log.debug(formatCompact({ op: 'bind', platform: msg.$adapter, sender: msg.$sender.id, login }));
 
       if (msg?.$reply) {
         await msg.$reply(`✅ GitHub 账号绑定成功！\n👤 ${login}`);
       }
     }).catch((err) => {
-      plugin.logger.error('GitHub Device Flow 错误:', err);
+      log.error('GitHub Device Flow 错误:', err);
     });
 
     return replyMsg;

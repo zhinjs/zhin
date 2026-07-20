@@ -14,7 +14,13 @@ export function applyStableYesDefaults(options: InitOptions): void {
   options.adapters = {
     packages: ['@zhin.js/adapter-sandbox'],
     plugins: ['@zhin.js/adapter-sandbox'],
-    endpoints: [],
+    instances: [{
+      package: '@zhin.js/adapter-sandbox',
+      instanceKey: 'sandbox',
+      config: {
+        endpoints: [{ context: 'sandbox', name: 'sandbox-bot', owner: 'sandbox-user' }],
+      },
+    }],
     envVars: {},
   };
 

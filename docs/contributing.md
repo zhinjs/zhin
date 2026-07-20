@@ -81,10 +81,11 @@ pnpm test:coverage
 ```bash
 # Stable 黄金路径（推荐）
 cd examples/minimal-bot && pnpm dev
+# 或在仓库根目录：pnpm dev
 
 # 全功能厨房水槽（维护者回归）
 cd examples/test-bot && pnpm dev
-# 或在仓库根目录：pnpm dev  # 等价于 test-bot
+# 或：pnpm dev:test
 ```
 
 ## 📝 代码规范

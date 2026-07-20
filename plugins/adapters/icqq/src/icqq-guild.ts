@@ -1,11 +1,10 @@
 /**
  * ICQQ guild (QQ 频道) catalog sync, inbound normalize, Console channel list.
  */
-import type { MessageSegment } from "zhin.js";
+import { toCanonicalSegments, type MessageSegment } from "zhin.js";
 import { Actions, type IpcGuildMessageEventData } from "./protocol.js";
 import type { IpcClient } from "./ipc-client.js";
 import { parseCqMessage } from "./cq-message.js";
-import { toCanonicalSegments } from "./segment-mapper.js";
 
 export interface IcqqGuildChannelEntry {
   channel_id: string;

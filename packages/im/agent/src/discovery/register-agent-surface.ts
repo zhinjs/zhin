@@ -1,8 +1,9 @@
 /**
- * Register discovered plugin agent/ surfaces into AgentOrchestrator and schedules.
+ * Register discovered plugin agent/ surfaces into Capability Features (ADR 0042).
+ * Orchestrator loading is deferred to Capability Ingress (ensureCore / ensureForTurn).
  */
 
-import { Logger, type Plugin, type Tool as CoreTool } from '@zhin.js/core';
+import { type Plugin, type Tool as CoreTool, type Skill as CoreSkill, type ToolFeature, type SkillFeature, getLogger } from '@zhin.js/core';
 import { ScheduleEngine, getScheduleEngine, setScheduleEngine } from '@zhin.js/kernel';
 import type { AgentOrchestrator } from '../orchestrator/index.js';
 import type { Tool as OrchestratorTool } from '../orchestrator/types.js';
@@ -20,8 +21,9 @@ import {
 import { errMsg } from './utils.js';
 import { registerAuthoringStateFromDefinition } from '../state/agent-state-store.js';
 import { registerDynamicResolver } from '../dynamic/dynamic-registry.js';
+import type { MCPFeature } from '../features/mcp-feature.js';
 
-const logger = new Logger(null, 'agent-surface-register');
+const logger = getLogger('agent-surface-register');
 
 const registeredScheduleIds = new Set<string>();
 const registeredAuthoringToolNames = new Set<string>();
@@ -38,7 +40,11 @@ function ensureScheduleEngine(): ScheduleEngine {
 
 export interface RegisterAgentSurfaceOptions {
   connectionsConfig?: Record<string, unknown>;
+  /** @deprecated Prefer root.inject('tool'); kept for call-site compatibility */
   toolService?: { addTool: (tool: CoreTool, pluginName: string) => () => void } | null;
+  toolFeature?: ToolFeature | null;
+  skillFeature?: SkillFeature | null;
+  mcpFeature?: MCPFeature | null;
 }
 
 function flattenSurfaces(surface: DiscoveredPluginAgentSurface): DiscoveredPluginAgentSurface[] {
@@ -65,6 +71,13 @@ export async function registerPluginAgentSurfaces(
   let hookCount = 0;
   let evalCount = 0;
 
+  const toolFeature = options.toolFeature
+    ?? root.inject('tool')
+    ?? (options.toolService as ToolFeature | null | undefined)
+    ?? null;
+  const skillFeature = options.skillFeature ?? root.inject('skill') ?? null;
+  const mcpFeature = options.mcpFeature ?? root.inject('mcpFeature') ?? null;
+
   const surfaces = await discoverAllPluginAgentSurfaces(root);
   const allBridgedTools: OrchestratorTool[] = [];
 
@@ -75,8 +88,10 @@ export async function registerPluginAgentSurfaces(
         try {
           const bridged = bridgeAuthoringTool(discovered);
           const tool = bridgeAuthoringToolToOrchestratorTool(bridged);
-          orchestrator.addTool(tool, undefined, discovered.pluginName);
-          options.toolService?.addTool(tool as CoreTool, discovered.pluginName);
+          // Feature-only write (Ingress loads Orchestrator on demand)
+          if (toolFeature) {
+            toolFeature.addTool(tool as CoreTool, discovered.pluginName);
+          }
           allBridgedTools.push(tool);
           registeredAuthoringToolNames.add(discovered.runtimeName);
           toolCount++;
@@ -115,12 +130,15 @@ export async function registerPluginAgentSurfaces(
           logger.warn(bridged.error);
           continue;
         }
-        orchestrator.addMcp(bridged.entry, undefined, discovered.pluginName);
+        if (mcpFeature) {
+          mcpFeature.add(bridged.entry, discovered.pluginName);
+        }
         connectionCount++;
       }
 
       for (const discovered of flat.hooks) {
         const hook = bridgeAuthoringHook(discovered);
+        // Hooks remain on Orchestrator until a HookFeature exists
         orchestrator.addHook(hook, undefined, discovered.pluginName);
         hookCount++;
       }
@@ -151,7 +169,9 @@ export async function registerPluginAgentSurfaces(
         if (registeredAuthoringSkillNames.has(discovered.runtimeName)) continue;
         try {
           const skill = bridgeAuthoringSkill(discovered, allBridgedTools);
-          orchestrator.addSkill(skill, undefined, discovered.pluginName);
+          if (skillFeature) {
+            skillFeature.add(skill as unknown as CoreSkill, discovered.pluginName);
+          }
           registeredAuthoringSkillNames.add(discovered.runtimeName);
           skillCount++;
         } catch (e) {
@@ -160,6 +180,8 @@ export async function registerPluginAgentSurfaces(
       }
     }
   }
+
+  root.inject('capabilityIngress')?.invalidate();
 
   return {
     tools: toolCount,

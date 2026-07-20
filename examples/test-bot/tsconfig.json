@@ -1,7 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["@types/node", "zhin.js", "@zhin.js/adapter-sandbox", "@zhin.js/host-api", "@zhin.js/host-router"],
+    "types": ["@types/node", "@types/bun", "zhin.js", "@zhin.js/adapter-sandbox", "@zhin.js/host-api", "@zhin.js/host-router"],
     "outDir": "./lib",
     "rootDir": "./src",
     "jsx": "react-jsx",

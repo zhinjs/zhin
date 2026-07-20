@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/process-monitor",
   "version": "3.0.2",
-  "description": "进程监控与重启通知插件",
+  "description": "进程监控与重启通知插件 (Plugin Runtime)",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -14,18 +14,19 @@
     "./package.json": "./package.json"
   },
   "files": [
+    "plugin.ts",
+    "schema.json",
+    "commands",
+    "tools",
     "src",
     "lib",
-    "client",
-    "dist",
-    "skills",
-    "tools",
-    "plugin.yml",
     "README.md"
   ],
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "clean": "rimraf lib",
+    "test": "vitest run --root ../../.. plugins/features/process-monitor/tests",
+    "prepublishOnly": "pnpm run build"
   },
   "keywords": [
     "zhin",
@@ -43,14 +44,38 @@
     "directory": "plugins/features/process-monitor"
   },
   "dependencies": {
-    "zhin.js": "workspace:*"
+    "@zhin.js/command": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
+    "@zhin.js/tool": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",
     "typescript": "^6.0.3",
-    "zhin.js": "workspace:*"
+    "vitest": "^4.1.10"
   },
-  "peerDependencies": {
-    "zhin.js": "workspace:*"
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/tool",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
   }
 }

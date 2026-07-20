@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "default": "line-bot"
+    },
+    "channelSecret": { "type": "string" },
+    "channelAccessToken": { "type": "string" },
+    "webhookPath": {
+      "type": "string",
+      "default": "/line/webhook"
+    },
+    "apiBaseUrl": {
+      "type": "string",
+      "default": "https://api.line.me"
+    }
+  },
+  "required": ["channelSecret", "channelAccessToken"]
+}

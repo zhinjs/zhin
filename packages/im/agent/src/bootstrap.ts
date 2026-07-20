@@ -16,9 +16,9 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { Logger } from '@zhin.js/core';
+import { getLogger } from '@zhin.js/core';
 
-const logger = new Logger(null, 'Bootstrap');
+const logger = getLogger('Bootstrap');
 
 // ============================================================================
 // 常量

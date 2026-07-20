@@ -1,4 +1,4 @@
-import { buildChoiceKeyboard } from '@zhin.js/game-shared';
+import { buildChoiceKeyboard } from '@zhin.js/game-kit';
 import type { SendContent } from 'zhin.js';
 import { getRiddleById, RIDDLE_PREFIX, typeLabel } from './engine.js';
 import type { RiddleSessionRow } from './models.js';

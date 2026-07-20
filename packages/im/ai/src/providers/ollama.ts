@@ -3,7 +3,7 @@
  * 支持本地 Ollama 模型
  */
 
-import { formatCompact, Logger } from '@zhin.js/logger';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import { BaseProvider } from './base.js';
 import type {
   ProviderConfig,
@@ -14,7 +14,7 @@ import type {
   ToolDefinition,
 } from '../types.js';
 
-const logger = new Logger(null, 'Ollama');
+const logger = getLogger('Ollama');
 
 export interface OllamaConfig extends ProviderConfig {
   host?: string;

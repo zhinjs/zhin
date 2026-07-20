@@ -1,4 +1,4 @@
-import { buildChoiceKeyboard } from '@zhin.js/game-shared';
+import { buildChoiceKeyboard } from '@zhin.js/game-kit';
 import type { SendContent } from 'zhin.js';
 import type { RpsSessionRow } from './models.js';
 import { MOVE_LABELS, RPS_PREFIX, WIN_TARGET, type RpsMove } from './engine.js';

@@ -9,8 +9,10 @@
  * 2. 认证通过后发送 IpcRequest → 等待 IpcResponse
  * 3. 认证通过后自动接收 icqq 事件推送（IpcEvent），断开连接自动停止
  *
- * 登录相关：**推送**走 IpcEvent（`system.login.*`），续传 invoke 见 `login-ipc-contract.ts`。
+ * 登录相关：**推送**走 IpcEvent（`system.login.*`）。
  */
+
+import { pickCredential } from '@zhin.js/adapter';
 
 /** CLI → Daemon 请求 */
 export type IpcRequest = {
@@ -265,3 +267,180 @@ export const Actions = {
   SET_NOTIFY: "set_notify",
   GET_NOTIFY: "get_notify",
 } as const;
+
+/** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
+export interface IcqqAdapterConfig {
+  readonly name?: string;
+  readonly autoReconnect?: boolean;
+  readonly outboundMedia?: 'file' | 'base64';
+  readonly rpc?: {
+    readonly host?: string;
+    readonly port?: number;
+    readonly token?: string;
+  };
+  /** Transitional: legacy root `endpoints[]` with `context: icqq`. */
+  readonly endpoints?: ReadonlyArray<{
+    readonly context?: string;
+    readonly name?: string;
+    readonly autoReconnect?: boolean;
+    readonly outboundMedia?: 'file' | 'base64';
+    readonly rpc?: {
+      readonly host?: string;
+      readonly port?: number;
+      readonly token?: string;
+    };
+  }>;
+}
+
+export interface ResolvedIcqqConfig {
+  readonly context: 'icqq';
+  readonly name: string;
+  readonly autoReconnect: boolean;
+  readonly outboundMedia?: 'file' | 'base64';
+  readonly rpc?: {
+    readonly host: string;
+    readonly port: number;
+    readonly token: string;
+  };
+}
+
+export interface IcqqWireSegment {
+  readonly type: string;
+  readonly data?: Record<string, unknown>;
+}
+
+export interface IcqqInboundMessage {
+  readonly id: string;
+  readonly target: string;
+  readonly content: string;
+  readonly sender: string;
+  readonly channelType: 'private' | 'group' | 'channel';
+  readonly metadata?: Record<string, unknown>;
+}
+
+export type ParsedIcqqSendTarget =
+  | { readonly kind: 'private'; readonly userId: number }
+  | { readonly kind: 'group'; readonly groupId: number }
+  | { readonly kind: 'temp'; readonly groupId: number; readonly userId: number }
+  | { readonly kind: 'channel'; readonly guildId: string; readonly channelId: string };
+
+export function resolveIcqqConfig(config: IcqqAdapterConfig = {}): ResolvedIcqqConfig {
+  const entry = config.endpoints?.find((item) => item.context === 'icqq');
+  const name = pickCredential(config.name, entry?.name, process.env.ICQQ_ACCOUNT);
+  if (!/^\d+$/.test(name)) {
+    throw new TypeError(
+      'ICQQ adapter requires numeric name (QQ uin) via plugins.<key>.name or ICQQ_ACCOUNT',
+    );
+  }
+  const autoReconnect = config.autoReconnect ?? entry?.autoReconnect ?? true;
+  const outboundMedia = config.outboundMedia ?? entry?.outboundMedia;
+  const rpcRaw = config.rpc ?? entry?.rpc;
+  const rpc = rpcRaw?.host && rpcRaw.port != null && rpcRaw.token
+    ? { host: rpcRaw.host, port: Number(rpcRaw.port), token: rpcRaw.token }
+    : undefined;
+  return {
+    context: 'icqq',
+    name,
+    autoReconnect,
+    ...(outboundMedia ? { outboundMedia } : {}),
+    ...(rpc ? { rpc } : {}),
+  };
+}
+
+/** Gateway reply target: `private:uid` / `group:gid` / `temp:gid:uid` / `channel:guild:channel`. */
+export function formatInboundTarget(input: {
+  readonly channelType: 'private' | 'group' | 'channel';
+  readonly channelId: string;
+  readonly channelParentGroupId?: string;
+  readonly guildId?: string;
+}): string {
+  if (input.channelType === 'private' && input.channelParentGroupId) {
+    return `temp:${input.channelParentGroupId}:${input.channelId}`;
+  }
+  if (input.channelType === 'channel' && input.guildId) {
+    return `channel:${input.guildId}:${input.channelId}`;
+  }
+  return `${input.channelType}:${input.channelId}`;
+}
+
+export function parseSendTarget(target: string): ParsedIcqqSendTarget {
+  const trimmed = target.trim();
+  if (trimmed.startsWith('temp:')) {
+    const rest = trimmed.slice(5);
+    const [groupId, userId] = rest.split(':');
+    if (!groupId || !userId) throw new TypeError(`Invalid icqq temp target: ${target}`);
+    return { kind: 'temp', groupId: Number(groupId), userId: Number(userId) };
+  }
+  if (trimmed.startsWith('channel:')) {
+    const rest = trimmed.slice(8);
+    const idx = rest.indexOf(':');
+    if (idx <= 0) throw new TypeError(`Invalid icqq channel target: ${target}`);
+    return {
+      kind: 'channel',
+      guildId: rest.slice(0, idx),
+      channelId: rest.slice(idx + 1),
+    };
+  }
+  if (trimmed.startsWith('private:')) {
+    return { kind: 'private', userId: Number(trimmed.slice(8)) };
+  }
+  if (trimmed.startsWith('group:')) {
+    return { kind: 'group', groupId: Number(trimmed.slice(6)) };
+  }
+  // Bare numeric id → private (common reply path)
+  if (/^\d+$/.test(trimmed)) {
+    return { kind: 'private', userId: Number(trimmed) };
+  }
+  throw new TypeError(`Invalid icqq send target: ${target}`);
+}
+
+export function formatOutboundBody(payload: unknown): string {
+  if (typeof payload === 'string') {
+    const text = payload.trim();
+    return text || '\u200b';
+  }
+  if (payload == null) return '\u200b';
+  if (!Array.isArray(payload)) {
+    if (typeof payload === 'object' && payload !== null && 'text' in payload) {
+      const text = String((payload as { text?: unknown }).text ?? '').trim();
+      return text || '\u200b';
+    }
+    const text = String(payload).trim();
+    return text || '\u200b';
+  }
+  const joined = payload.map((seg) => {
+    if (typeof seg === 'string') return seg;
+    const item = seg as IcqqWireSegment;
+    switch (item.type) {
+      case 'text':
+        return String(item.data?.text ?? '');
+      case 'at':
+      case 'mention':
+        return `[at:${item.data?.qq ?? item.data?.id ?? item.data?.target ?? ''}]`;
+      case 'image':
+        return `[image:${item.data?.file || item.data?.url || base64Media(item.data) || ''}]`;
+      case 'face':
+        return `[face:${item.data?.id ?? ''}]`;
+      case 'reply':
+        return `[reply:${item.data?.message_id ?? item.data?.id ?? ''}]`;
+      case 'record':
+      case 'audio':
+        return `[record:${item.data?.file || item.data?.url || base64Media(item.data) || ''}]`;
+      case 'video':
+        return `[video:${item.data?.file || item.data?.url || base64Media(item.data) || ''}]`;
+      default:
+        return String(item.data?.text ?? '');
+    }
+  }).join('').trim();
+  return joined || '\u200b';
+}
+
+export function formatInboundContent(rawMessage: string): string {
+  return rawMessage;
+}
+
+/** base64 媒体回退：CQ `base64://` 由守护进程解码（异机 RPC 场景）。 */
+function base64Media(data: Record<string, unknown> | undefined): string | undefined {
+  const b64 = data?.base64;
+  return typeof b64 === 'string' && b64 ? `base64://${b64}` : undefined;
+}

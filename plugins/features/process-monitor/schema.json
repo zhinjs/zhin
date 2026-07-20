@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "是否启用进程监控"
+    },
+    "notifyOnStart": {
+      "type": "boolean",
+      "default": true,
+      "description": "首次启动时通知"
+    },
+    "notifyOnRestart": {
+      "type": "boolean",
+      "default": true,
+      "description": "正常重启时通知"
+    },
+    "notifyOnCrash": {
+      "type": "boolean",
+      "default": true,
+      "description": "异常崩溃重启时通知"
+    },
+    "notifyChannels": {
+      "type": "array",
+      "default": [],
+      "description": "通知渠道（slice-1 仅 webhook 生效）",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "target"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["user", "group", "webhook"]
+          },
+          "target": { "type": "string" },
+          "platform": { "type": "string" }
+        }
+      }
+    }
+  }
+}

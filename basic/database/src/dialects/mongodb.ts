@@ -9,7 +9,10 @@ import {
 } from "../types.js";
 import {DocumentDatabase} from "../type/document/database.js";
 import {Registry} from "../registry.js";
+import { getLogger } from '@zhin.js/logger';
 import type { MongoClientOptions } from 'mongodb';
+
+const logger = getLogger('database');
 
 
 export interface MongoDBDialectConfig extends MongoClientOptions {
@@ -72,7 +75,7 @@ export class MongoDBDialect<S extends Record<string, object> = Record<string, ob
       await this.client.connect();
       this.db = this.client.db(this.config.dbName);
     } catch (error) {
-      console.error('forgot install mongodb ?');
+      logger.error('forgot install mongodb ?');
       throw new Error(`MongoDB 连接失败: ${error}`);
     }
   }
@@ -85,7 +88,7 @@ export class MongoDBDialect<S extends Record<string, object> = Record<string, ob
       await this.client.close();
       this.client = null;
       this.db = null;
-      console.log('MongoDB 连接已关闭');
+      logger.info('MongoDB 连接已关闭');
     }
   }
 

@@ -2,13 +2,14 @@
   "name": "@zhin.js/adapter-weixin-ilink",
   "version": "3.0.2",
   "type": "module",
-  "description": "Zhin.js adapter for WeChat personal account via Tencent iLink Endpoint API (ClawBot)",
+  "description": "Zhin.js Weixin iLink (ClawBot) adapter for Plugin Runtime (long-poll)",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
   "scripts": {
-    "build": "zhin build",
-    "build:node": "tsc",
-    "clean": "rimraf lib dist"
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/adapters/weixin-ilink/tests",
+    "prepublishOnly": "pnpm run build"
   },
   "keywords": [
     "zhin",
@@ -32,11 +33,11 @@
     "directory": "plugins/adapters/weixin-ilink"
   },
   "files": [
+    "adapters",
+    "plugin.ts",
+    "schema.json",
     "src",
     "lib",
-    "client",
-    "dist",
-    "skills",
     "README.md",
     "CHANGELOG.md"
   ],
@@ -51,53 +52,44 @@
       "import": "./lib/index.js"
     }
   },
-  "dependencies": {},
-  "devDependencies": {
-    "@radix-ui/themes": "^3.2.1",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "@zhin.js/agent": "workspace:*",
-    "@zhin.js/cli": "workspace:*",
-    "@zhin.js/client": "workspace:*",
-    "@zhin.js/contract": "workspace:*",
+  "dependencies": {
+    "@zhin.js/adapter": "workspace:*",
     "@zhin.js/core": "workspace:*",
-    "@zhin.js/host-api": "workspace:*",
-    "@zhin.js/host-router": "workspace:*",
-    "lucide-react": "^1.22.0",
-    "radix-ui": "^1.6.2",
-    "typescript": "^6.0.3",
-    "zhin.js": "workspace:*",
-    "zod": "^4.4.3"
+    "@zhin.js/logger": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*"
   },
   "peerDependencies": {
-    "@zhin.js/agent": "workspace:*",
-    "@zhin.js/client": "workspace:*",
-    "@zhin.js/contract": "workspace:*",
+    "@zhin.js/adapter": "workspace:*",
     "@zhin.js/core": "workspace:*",
-    "@zhin.js/host-api": "workspace:*",
-    "@zhin.js/host-router": "workspace:*",
-    "zhin.js": "workspace:*",
-    "zod": "^4.0.0"
+    "@zhin.js/plugin-runtime": "workspace:*",
+    "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {
-    "@zhin.js/agent": {
-      "optional": true
-    },
-    "@zhin.js/client": {
-      "optional": true
-    },
-    "@zhin.js/host-api": {
-      "optional": true
-    },
-    "@zhin.js/host-router": {
-      "optional": true
-    },
-    "zod": {
+    "zhin.js": {
       "optional": true
     }
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
   },
   "ilink_appid": "bot",
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/adapter",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
   }
 }

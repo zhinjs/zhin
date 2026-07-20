@@ -1,12 +1,12 @@
 /**
  * RemoteTaskPoller — 轮询远程 A2A 任务状态（Get Task fallback）。
  */
-import { Logger } from '@zhin.js/logger';
+import { getLogger } from '@zhin.js/logger';
 import { getOrchestrationService } from './orchestration-service.js';
 import { getAgentDispatcher } from './agent-dispatcher.js';
 import { pollRemoteTaskStatus } from './remote-task-executor.js';
 
-const logger = new Logger(null, 'RemoteTaskPoller');
+const logger = getLogger('RemoteTaskPoller');
 
 export interface RemoteTaskPollerConfig {
   intervalMs?: number;

@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/adapter-napcat",
-  "version": "3.0.2",
-  "description": "Zhin.js adapter for NapCatQQ (OneBot11 superset with go-cqhttp & NapCat extensions)",
+  "version": "4.0.0",
+  "description": "Zhin.js NapCat adapter for Plugin Runtime (WebSocket client, OneBot11 + NapCat extensions)",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -13,17 +13,18 @@
     }
   },
   "scripts": {
-    "build": "zhin build",
+    "build": "tsc",
     "clean": "rimraf lib",
-    "prepublishOnly": "npm run build"
+    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/adapters/napcat/tests",
+    "prepublishOnly": "pnpm run build"
   },
   "files": [
+    "adapters",
+    "plugin.ts",
+    "schema.json",
     "src",
     "lib",
     "agent",
-    "client",
-    "dist",
-    "plugin.yml",
     "README.md",
     "CHANGELOG.md"
   ],
@@ -39,56 +40,52 @@
     "qq",
     "chatbot"
   ],
-  "author": {
-    "name": "lc-cn",
-    "email": "admin@liucl.cn",
-    "url": "https://github.com/lc-cn"
-  },
   "license": "MIT",
   "repository": {
-    "url": "git+https://github.com/zhinjs/zhin.git",
     "type": "git",
+    "url": "https://github.com/zhinjs/zhin",
     "directory": "plugins/adapters/napcat"
   },
   "dependencies": {
+    "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/logger": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
     "@types/ws": "^8.18.1",
     "@zhin.js/agent": "workspace:*",
-    "@zhin.js/cli": "workspace:*",
-    "@zhin.js/contract": "workspace:*",
-    "@zhin.js/host-api": "workspace:*",
-    "@zhin.js/host-router": "workspace:*",
-    "lucide-react": "^1.22.0",
+    "@zhin.js/host-http": "workspace:*",
     "typescript": "^6.0.3",
-    "zhin.js": "workspace:*",
+    "vitest": "^4.1.10",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "@zhin.js/agent": "workspace:*",
-    "@zhin.js/host-api": "workspace:*",
-    "@zhin.js/contract": "workspace:*",
-    "@zhin.js/host-router": "workspace:*",
+    "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "zhin.js": "workspace:*",
+    "@zhin.js/agent": "workspace:*",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
+    "zhin.js": {
+      "optional": true
+    },
     "@zhin.js/agent": {
-      "optional": true
-    },
-    "@zhin.js/host-api": {
-      "optional": true
-    },
-    "@zhin.js/host-router": {
       "optional": true
     },
     "zod": {
       "optional": true
     }
+  },
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
   },
   "publishConfig": {
     "access": "public",
@@ -96,5 +93,19 @@
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/adapter",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
   }
 }

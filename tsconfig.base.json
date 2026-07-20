@@ -16,6 +16,5 @@
     "declarationMap": true,
     "sourceMap": true,
     "verbatimModuleSyntax": false,
-    "ignoreDeprecations": "6.0"
   }
 }

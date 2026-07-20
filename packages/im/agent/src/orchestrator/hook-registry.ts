@@ -8,7 +8,7 @@
  *   - PreToolUse/PostToolUse interception (allow/deny/modify/skip)
  */
 
-import { Logger } from '@zhin.js/logger';
+import { getLogger } from '@zhin.js/logger';
 import type { AgentStreamEvent } from '@zhin.js/ai/agent-stream';
 import { ResourceRegistry } from './resource-registry.js';
 import type {
@@ -24,7 +24,7 @@ import {
   isAgentStreamHookEventName,
 } from '../event/agent-stream-hooks.js';
 
-const logger = new Logger(null, 'HookRegistry');
+const logger = getLogger('HookRegistry');
 
 export class HookRegistry extends ResourceRegistry<AIHook> {
   private readonly preToolUseHooks: PreToolUseHook[] = [];

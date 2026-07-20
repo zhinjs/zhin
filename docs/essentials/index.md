@@ -1,92 +1,132 @@
 # 核心概念速查
 
-一页看完 Zhin.js 的 6 个核心概念。代码示例见 [插件开发指南](/guide/plugin-development)。
+一页看完 Zhin.js 的 6 个核心概念。完整说明见各专题页。
 
 ## 插件（Plugin）
 
-机器人的功能单元。每个 `.ts` 文件调用 `usePlugin()` 就是一个插件。
+机器人的功能单元：一个带 `plugin.ts` 和约定目录的包。
 
 ```typescript
-import { usePlugin } from 'zhin.js'
-const { addCommand, logger, onDispose } = usePlugin()
+// plugin.ts
+import { definePlugin } from '@zhin.js/plugin-runtime'
+
+export default definePlugin({
+  name: 'my-plugin',
+  setup(context) {
+    context.lifecycle.add(() => { /* 卸载清理 */ })
+  },
+})
 ```
 
-- **必须在文件顶层调用**，不能放在函数或回调里（AsyncLocalStorage 限制）
-- 插件自动挂载到 `start()`，卸载到 `stop()`
+- 能力靠**约定目录**发现（`commands/`、`middlewares/`…），无需手动注册
+- 挂载与实例名由使用方 `package.json` 的 `zhin.plugins[].instanceKey` 决定
 - 详见 [插件系统](/essentials/plugins)
 
 ## 命令（Command）
 
-用户触发机器人动作的方式。
+用户触发机器人动作的方式。`commands/` 下的文件即命令，`/` 前缀触发。
 
 ```typescript
-addCommand(new MessageCommand('echo <text>').desc('复读').action((_, r) => r.params.text))
+// commands/echo/[text:string].ts
+import { defineCommand } from '@zhin.js/command'
+
+export default defineCommand({
+  description: '复读',
+  execute: ({ params }) => `你说：${params.text}`,
+})
 ```
 
-- `<text>` 必填参数，`[text]` 可选参数
-- 参数类型：`text`（整段）、`word`（单词）、`number`、`at`（@某人）
+- 嵌套目录 → 子命令：`commands/user/list.ts` → `/user list`
+- 参数写在文件名里：`[name:string|number|boolean=default].ts`，单个动态段且必须在末尾
+- 项目根命令是 bare 名（`/ping`）；插件命令自动带 instanceKey 前缀（`/qrcode scan <url>`）
 - 详见 [命令系统](/essentials/commands)
 
 ## 中间件（Middleware）
 
-拦截消息流，在 Dispatcher **之前**包裹整条入站处理（命令 / AI 路由在其后的 `next()` 内执行）。
+拦截消息流，在命令匹配/AI **之前**包裹整条入站处理。
 
 ```typescript
-const { logger, root } = usePlugin()
-root.addMiddleware(async (message, next) => {
-  logger.debug(`收到: ${message.$raw}`)
-  return next()
+// middlewares/logger.ts
+import { defineMiddleware } from '@zhin.js/middleware'
+import type { Message } from '@zhin.js/core/runtime'
+
+export default defineMiddleware<Message>({
+  async handle({ input }, next) {
+    console.log(`收到: ${input.content}`)
+    await next() // 不调用 next() 即终止链路
+  },
 })
 ```
 
-> **注意**：`zhin.config.yml` 加载的应用插件是根插件的**子插件**，须使用 **`root.addMiddleware`**。路由前过滤请优先 `dispatcher.addGuardrail` 或 [消息过滤](/essentials/message-filter)。
->
-> 详见 [中间件](/essentials/middleware)
+- `target: 'inbound' | 'outbound'`，`order` 控制顺序
+- Runtime `Message`：`content` / `sender` / `target` / `metadata` / `$reply`（没有 `$raw` / `$channel`）
+- 详见 [中间件](/essentials/middleware)
 
-## 上下文（Context）
+## 配置（Config）
 
-依赖注入系统。确保服务就绪后再使用。
-
-```typescript
-const { useContext, inject } = usePlugin()
-
-// 等待数据库就绪后执行
-useContext('database', (db) => { /* ... */ })
-
-// 立刻获取（可能为 null）
-const db = inject('database')
-```
-
-## 服务（Service）
-
-跨插件共享功能。`provide` 注册，`inject` 或 `useContext` 消费。
+插件用 `schema.json` 声明配置项与默认值，用户在 `zhin.config.yml` 的 `plugins.<instanceKey>` 覆盖。
 
 ```typescript
-// 提供方
-provide({ name: 'cache', value: new Map() })
+// setup 阶段
+setup(context) {
+  const { timeout } = context.config.get()
+}
 
-// 使用方
-const cache = inject('cache')
+// 命令/中间件运行时
+execute({ config }) { /* config 已解析合并 */ }
 ```
 
-返回清理函数可在卸载时自动回收。
+- `schema.json` 是 JSON Schema（draft 2020-12），`default` 即默认值
+- 详见 [配置文件](/essentials/configuration)
+
+## Host 资源（Resources）
+
+数据库、定时任务、主动出站由 Host 以 token 注入，`setup` 里取用：
+
+```typescript
+import { definePlugin, databaseHostToken, scheduleHostToken } from '@zhin.js/plugin-runtime'
+
+export default definePlugin({
+  name: 'my-plugin',
+  setup(context) {
+    if (context.resources.has(scheduleHostToken)) {
+      const dispose = context.resources.use(scheduleHostToken).register({
+        id: 'my-plugin/tick',
+        cron: '0 */5 * * * *',
+        execute: () => { /* ... */ },
+      })
+      context.lifecycle.add(dispose)
+    }
+  },
+})
+```
+
+- 可选资源：`has` + `use` 降级；必需资源：`definePlugin({ requires: [token] })`
+- 内置 token：`databaseHostToken` / `scheduleHostToken` / `outboundHostToken` / `httpHostToken`
 
 ## 生命周期（Lifecycle）
 
+`setup(context)` 装配即启动；清理用返回 dispose 或 `lifecycle.add`：
+
 ```typescript
-onMounted(() => { /* 插件启动，初始化资源 */ })
-onDispose(() => { /* 插件卸载，清理资源 */ })
+export default definePlugin({
+  name: 'my-plugin',
+  setup(context) {
+    const timer = setInterval(() => {}, 1000)
+    context.lifecycle.add(() => clearInterval(timer))
+    // 或：return () => clearInterval(timer)
+  },
+})
 ```
 
-`onMounted` 回调中创建的定时器、连接等，应在 `onDispose` 中清理。
+热重载时先执行全部 dispose，再按新代码重新装配。
 
 ## 消息流转简图
 
 ```
-用户消息 → Adapter → MessageDispatcher → Guardrail → 路由
-                                                  ├→ 命令 → 回复
-                                                  └→ AI Agent → 回复
-回复 → renderSendMessage → before.sendMessage → Endpoint → 平台
+用户消息 → Adapter → inbound 中间件链 → MessageDispatcher（/ 命令匹配）
+                                          └→ 未命中 → AI Agent（如启用）
+回复（SendContent）→ 渲染 → outbound 中间件链 → Adapter → 平台
 ```
 
 完整流程见 [消息如何流转](/essentials/message-flow)。
@@ -94,5 +134,5 @@ onDispose(() => { /* 插件卸载，清理资源 */ })
 ## 下一步
 
 - [消息如何流转](/essentials/message-flow) — 入站/出站一页弄清
-- [插件开发指南](/guide/plugin-development) — 从创建到发布的完整流程
 - [配置文件](/essentials/configuration) — 所有配置项
+- [examples/minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot) — 最小可运行项目

@@ -1,30 +1,33 @@
 {
   "name": "@zhin.js/plugin-music",
   "version": "5.0.2",
-  "description": "Music search and sharing plugin for Zhin.js",
+  "description": "Music search and sharing plugin for Zhin.js (Plugin Runtime)",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",
-      "development": "./src/index.tsx",
+      "development": "./src/index.ts",
       "import": "./lib/index.js"
     },
     "./package.json": "./package.json"
   },
   "files": [
+    "plugin.ts",
+    "schema.json",
+    "components",
+    "tools",
     "src",
     "lib",
-    "client",
-    "dist",
     "agent",
     "README.md"
   ],
   "scripts": {
-    "build": "tsc --build",
+    "build": "tsc",
     "clean": "rimraf lib",
-    "prepublishOnly": "npm run build"
+    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/utils/music/tests",
+    "prepublishOnly": "pnpm run build"
   },
   "keywords": [
     "zhin",
@@ -43,15 +46,17 @@
     "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
-  "dependencies": {},
+  "dependencies": {
+    "@zhin.js/component": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
+    "@zhin.js/tool": "workspace:*"
+  },
   "devDependencies": {
     "typescript": "^6.0.3",
-    "zhin.js": "workspace:*",
-    "@zhin.js/adapter-icqq": "workspace:*"
+    "vitest": "^4.1.10"
   },
   "peerDependencies": {
-    "@zhin.js/adapter-icqq": "workspace:*",
-    "zhin.js": "workspace:*"
+    "@zhin.js/adapter-icqq": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@zhin.js/adapter-icqq": {
@@ -66,5 +71,26 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/component",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/tool",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
   }
 }

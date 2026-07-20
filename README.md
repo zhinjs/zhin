@@ -171,7 +171,7 @@ ai:
 ## CLI
 
 ```bash
-pnpm dev                 # 开发（本仓默认 test-bot；用户项目用 create 生成物）
+pnpm dev                 # 开发（本仓默认 minimal-bot；维护者回归用 pnpm dev:test）
 npx zhin new my-plugin   # 插件模板
 npx zhin setup           # 增量配置向导
 npx zhin doctor          # 环境诊断
@@ -187,7 +187,7 @@ pnpm install && pnpm build
 cd examples/minimal-bot && pnpm dev
 ```
 
-见 [贡献指南](./docs/contributing.md)。根目录 `pnpm dev` 指向维护者厨房水槽 `test-bot`，**非**用户模板。
+见 [贡献指南](./docs/contributing.md)。根目录 `pnpm dev` 指向 Stable 黄金路径 `minimal-bot`；厨房水槽用 `pnpm dev:test`（`test-bot`），**非**用户模板。
 
 <p align="center">
   <a href="https://github.com/zhinjs/zhin/graphs/contributors">

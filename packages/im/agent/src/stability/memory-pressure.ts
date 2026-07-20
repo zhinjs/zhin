@@ -1,14 +1,14 @@
 /**
  * ADR 0014 P2-1 — 关键全局 Map / RSS 内存压力监控
  */
-import { formatCompact, Logger } from '@zhin.js/logger';
+import { formatCompact, Logger, getLogger } from '@zhin.js/logger';
 import { getCompactionStateCount, evictCompactionStatesIfOverPressure } from '../memory/compaction-runtime.js';
 import {
   getPendingOrchestrationCount,
   evictPendingOrchestrationIfOverPressure,
 } from '../security/owner-approve-always-store.js';
 
-const defaultLogger = new Logger(null, 'StabilityMonitor');
+const defaultLogger = getLogger('StabilityMonitor');
 
 export interface StabilityMetricCollector {
   name: string;

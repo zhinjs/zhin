@@ -1,7 +1,7 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getIcqqAgentDeps } from '../../src/icqq-agent-deps.js';
-export default defineTool<{ endpoint_id: string; group_id: number; user_id: number; title: string; duration?: number }>({
+export default defineAgentTool<{ endpoint_id: string; group_id: number; user_id: number; title: string; duration?: number }>({
   description: '设置 QQ 群成员的专属头衔',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint QQ号'),

@@ -1,7 +1,7 @@
 /**
  * Telegram platform permit — ChatMember 状态 + 细粒度权限
  */
-import { registerPlatformPermitChecker, type Message } from 'zhin.js';
+import { registerPlatformPermitChecker, type Message } from '@zhin.js/core';
 
 const ADAPTER = 'telegram';
 

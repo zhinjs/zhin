@@ -1,749 +1,398 @@
 /**
- * 飞书/Lark Endpoint 实现
+ * LarkEndpoint — lifecycle, outbound, admit, OpenAPI helpers for agent tools.
  */
-import { registerFetchRoute, type Router, type RouterContext } from "@zhin.js/host-router/router";
-import axios, { type AxiosInstance } from "axios";
-import { createHash } from "crypto";
-import { formatCompact, Endpoint, Message, MessageSegment, segment, SendContent, SendOptions, expandInteractiveSegmentsInContent,} from 'zhin.js';
-import type { LarkEndpointConfig, LarkMessage, LarkEvent, AccessToken } from "./types.js";
-import type { LarkAdapter } from "./adapter.js";
-import { normalizeLarkSenderForPermit } from "./platform-permit.js";
-import { fromCanonicalSegments, toCanonicalSegments } from './segment-mapper.js';
+import { readFile } from 'node:fs/promises';
+import { basename } from 'node:path';
+import type { EndpointInstance } from '@zhin.js/adapter';
+import type { MessageGateway } from '@zhin.js/core/runtime';
+import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+import type { CapabilityId } from '@zhin.js/plugin-runtime';
+import { registerLarkAgentEndpoint } from './lark-agent-deps.js';
+import {
+  formatInboundContent,
+  formatOutboundBody,
+  generateMessageId,
+  resolveChatType,
+  resolveSender,
+  resolveTarget,
+  type AccessToken,
+  type LarkApiResponse,
+  type LarkMessage,
+  type ResolvedLarkConfig,
+} from './protocol.js';
+import { registerLarkWebhookRoutes } from './webhook.js';
 
-export class LarkEndpoint implements Endpoint<LarkEndpointConfig, LarkMessage> {
-    $connected: boolean
-    private router: any
-    private accessToken: AccessToken
-    private axiosInstance: AxiosInstance
+const logger = getLogger('lark');
 
-    get logger() {
-    return this.adapter.plugin.logger;
-  }
+export type LarkFetch = (
+  url: string,
+  init?: {
+    readonly method?: string;
+    readonly headers?: Record<string, string>;
+    readonly body?: string | FormData;
+  },
+) => Promise<{
+  readonly ok: boolean;
+  readonly status: number;
+  text(): Promise<string>;
+  json(): Promise<unknown>;
+}>;
 
-  get $id() {
-        return this.$config.name;
-    }
-
-    constructor(public adapter: LarkAdapter, router: any, public $config: LarkEndpointConfig) {
-        this.router = router;
-        this.$connected = false;
-        this.accessToken = { token: '', expires_in: 0, timestamp: 0 };
-        
-        // 设置 API 基础 URL
-        const baseURL = $config.apiBaseUrl || ($config.isFeishu ? 
-            'https://open.feishu.cn/open-apis' : 
-            'https://open.larksuite.com/open-apis'
-        );
-        
-        this.axiosInstance = axios.create({
-            baseURL,
-            timeout: 30000,
-            headers: {
-                'Content-Type': 'application/json; charset=utf-8'
-            }
-        });
-        
-        // 设置请求拦截器，自动添加 access_token
-        this.axiosInstance.interceptors.request.use(async (config) => {
-            await this.ensureAccessToken();
-            config.headers = config.headers ?? {};
-            config.headers['Authorization'] = `Bearer ${this.accessToken.token}`;
-            return config;
-        });
-        
-        // 设置 webhook 路由
-        this.setupWebhookRoute();
-    }
-
-    private setupWebhookRoute(): void {
-        registerFetchRoute(this.router, "POST", this.$config.webhookPath, (ctx: RouterContext) => {
-            void this.handleWebhook(ctx);
-        });
-    }
-
-    private async handleWebhook(ctx: RouterContext): Promise<void> {
-        try {
-            const body = ctx.request.body;
-            
-            // 验证请求（如果配置了验证令牌）
-            if (this.$config.verificationToken) {
-                const token = ctx.get('x-lark-request-token');
-                if (token !== this.$config.verificationToken) {
-                    this.logger.warn(formatCompact( { op: 'webhook', ok: false, error: 'invalid verification token' }));
-                    ctx.status = 403;
-                    ctx.body = 'Forbidden';
-                    return;
-                }
-            }
-            
-            // 签名验证（如果配置了加密密钥）
-            if (this.$config.encryptKey) {
-                const timestamp = ctx.get('x-lark-request-timestamp');
-                const nonce = ctx.get('x-lark-request-nonce');
-                const signature = ctx.get('x-lark-signature');
-                const bodyStr = JSON.stringify(body);
-                
-                if (!timestamp || !nonce || !signature || !this.verifySignature(timestamp, nonce, bodyStr, signature)) {
-                    this.logger.warn(formatCompact( { op: 'webhook', ok: false, error: 'invalid signature' }));
-                    ctx.status = 403;
-                    ctx.body = 'Forbidden';
-                    return;
-                }
-            }
-            
-            const event = body as LarkEvent;
-            
-            // URL 验证挑战（首次配置 webhook 时）
-            if (event.type === 'url_verification') {
-                ctx.body = { challenge: (event as any).challenge };
-                return;
-            }
-            
-            // 处理消息事件
-            if (event.type === 'event_callback' && event.event) {
-                await this.handleEvent(event.event);
-            }
-            
-            ctx.status = 200;
-            ctx.body = { code: 0, msg: 'success' };
-            
-        } catch (error) {
-            this.logger.error('Webhook error:', error);
-            ctx.status = 500;
-            ctx.body = { code: -1, msg: 'Internal Server Error' };
-        }
-    }
-
-    private verifySignature(timestamp: string, nonce: string, body: string, signature: string): boolean {
-        if (!this.$config.encryptKey) return true;
-        
-        try {
-            const stringToSign = `${timestamp}${nonce}${this.$config.encryptKey}${body}`;
-            const calculatedSignature = createHash('sha256').update(stringToSign).digest('hex');
-            return calculatedSignature === signature;
-        } catch (error) {
-            this.logger.error('Signature verification error:', error);
-            return false;
-        }
-    }
-
-    private chatPermitCache = new Map<string, { at: number; ownerId?: string; managers: string[] }>();
-
-    private async enrichGroupSender(message: Message<LarkMessage>, msg: LarkMessage): Promise<void> {
-        if (message.$channel.type !== 'group' || !msg.chat_id) return;
-        const senderId = msg.sender?.sender_id?.open_id;
-        if (!senderId) return;
-        const now = Date.now();
-        let ownerId: string | undefined;
-        let managers: string[] = [];
-        const cached = this.chatPermitCache.get(msg.chat_id);
-        if (cached && now - cached.at < 60_000) {
-            ownerId = cached.ownerId;
-            managers = cached.managers;
-        } else {
-            try {
-                const chat = await this.getChatInfo(msg.chat_id);
-                ownerId = chat?.owner_id;
-                managers = Array.isArray(chat?.user_manager_id_list) ? chat.user_manager_id_list : [];
-                this.chatPermitCache.set(msg.chat_id, { at: now, ownerId, managers });
-            } catch {
-                return;
-            }
-        }
-        const permit = normalizeLarkSenderForPermit({
-            isOwner: ownerId === senderId,
-            isAdmin: managers.includes(senderId),
-        });
-        message.$sender.role = permit.role;
-        message.$sender.permissions = permit.permissions;
-    }
-
-    private async handleEvent(event: any): Promise<void> {
-        // 处理消息事件
-        if (event.message) {
-            const message = this.$formatMessage(event.message, event);
-            await this.enrichGroupSender(message, event.message);
-            this.adapter.emit('message.receive', message);
-            this.logger.debug(formatCompact( {
-              op: 'recv',
-              endpoint: this.$config.name,
-              channel: message.$channel.type,
-              id: message.$channel.id,
-              len: segment.raw(message.$content).length,
-            }));
-        }
-    }
-
-    // ================================================================================================
-    // Token 管理
-    // ================================================================================================
-
-    private async ensureAccessToken(): Promise<void> {
-        const now = Date.now();
-        // 提前 5 分钟刷新 token
-        if (this.accessToken.token && now < (this.accessToken.timestamp + (this.accessToken.expires_in - 300) * 1000)) {
-            return;
-        }
-        
-        await this.refreshAccessToken();
-    }
-
-    private async refreshAccessToken(): Promise<void> {
-        try {
-            const response = await axios.post(
-                `${this.$config.apiBaseUrl || (this.$config.isFeishu ? 
-                    'https://open.feishu.cn/open-apis' : 
-                    'https://open.larksuite.com/open-apis'
-                )}/auth/v3/tenant_access_token/internal`,
-                {
-                    app_id: this.$config.appId,
-                    app_secret: this.$config.appSecret
-                }
-            );
-            
-            if (response.data.code === 0) {
-                this.accessToken = {
-                    token: response.data.tenant_access_token,
-                    expires_in: response.data.expire,
-                    timestamp: Date.now()
-                };
-                this.logger.debug('Access token refreshed successfully');
-            } else {
-                throw new Error(`Failed to get access token: ${response.data.msg}`);
-            }
-        } catch (error) {
-            this.logger.error('Failed to refresh access token:', error);
-            throw error;
-        }
-    }
-
-    // ================================================================================================
-    // 消息格式化
-    // ================================================================================================
-
-    $formatMessage(msg: LarkMessage, event?: any): Message<LarkMessage> {
-        const wire = this.parseMessageContent(msg);
-        const content = toCanonicalSegments(wire);
-        
-        // 确定聊天类型
-        const chatType = msg.chat_id?.startsWith('oc_') ? 'group' : 'private';
-        
-        return Message.from(msg, {
-            $id: msg.message_id || Date.now().toString(),
-            $adapter: 'lark',
-            $endpoint: this.$config.name,
-            $sender: {
-                id: msg.sender?.sender_id?.open_id || 'unknown',
-                name: msg.sender?.sender_id?.user_id || msg.sender?.sender_id?.open_id || 'Unknown User'
-            },
-            $channel: {
-                id: msg.chat_id || 'unknown',
-                type: chatType as any
-            },
-            $content: content,
-            $raw: JSON.stringify(msg),
-            $timestamp: msg.create_time ? parseInt(msg.create_time) : Date.now(),
-            $recall: async () => {
-                await this.$recallMessage(msg.message_id || '');
-            },
-            $reply: async (content: SendContent): Promise<string> => {
-                return await this.adapter.sendMessage({
-                    context: 'lark',
-                    endpoint: this.$config.name,
-                    id: msg.chat_id || 'unknown',
-                    type: chatType,
-                    content: content
-                });
-            }
-        });
-    }
-
-    private parseMessageContent(msg: LarkMessage): MessageSegment[] {
-        const content: MessageSegment[] = [];
-        
-        if (!msg.content || !msg.message_type) {
-            return content;
-        }
-        
-        try {
-            const messageContent = JSON.parse(msg.content);
-            
-            switch (msg.message_type) {
-                case 'text':
-                    if (messageContent.text) {
-                        content.push(segment('text', { content: messageContent.text }));
-                        
-                        // 处理 @提及
-                        if (msg.mentions) {
-                            for (const mention of msg.mentions) {
-                                if (mention.key && messageContent.text.includes(mention.key)) {
-                                    content.push(segment('at', {
-                                        id: mention.id?.open_id,
-                                        name: mention.name
-                                    }));
-                                }
-                            }
-                        }
-                    }
-                    break;
-                    
-                case 'image':
-                    content.push(segment('image', {
-                        file_key: messageContent.image_key,
-                        url: `https://open.feishu.cn/open-apis/im/v1/messages/${msg.message_id}/resources/${messageContent.image_key}`
-                    }));
-                    break;
-                    
-                case 'file':
-                    content.push(segment('file', {
-                        file_key: messageContent.file_key,
-                        file_name: messageContent.file_name,
-                        file_size: messageContent.file_size
-                    }));
-                    break;
-                    
-                case 'audio':
-                    content.push(segment('audio', {
-                        file_key: messageContent.file_key,
-                        duration: messageContent.duration
-                    }));
-                    break;
-                    
-                case 'video':
-                    content.push(segment('video', {
-                        file_key: messageContent.file_key,
-                        duration: messageContent.duration,
-                        width: messageContent.width,
-                        height: messageContent.height
-                    }));
-                    break;
-                    
-                case 'sticker':
-                    content.push(segment('sticker', {
-                        file_key: messageContent.file_key
-                    }));
-                    break;
-                    
-                case 'rich_text':
-                    // 富文本消息处理（简化）
-                    if (messageContent.content) {
-                        this.parseRichTextContent(messageContent.content, content);
-                    }
-                    break;
-                    
-                case 'post':
-                    // 卡片消息处理
-                    content.push(segment('card', messageContent));
-                    break;
-                    
-                default:
-                    content.push(segment('text', { content: `[不支持的消息类型: ${msg.message_type}]` }));
-                    break;
-            }
-        } catch (error) {
-            this.logger.error('Failed to parse message content:', error);
-            content.push(segment('text', { content: '[消息解析失败]' }));
-        }
-        
-        return content;
-    }
-
-    private parseRichTextContent(richContent: any, content: MessageSegment[]): void {
-        // 简化的富文本解析
-        if (Array.isArray(richContent)) {
-            for (const block of richContent) {
-                if (block.tag === 'text' && block.text) {
-                    content.push(segment('text', { content: block.text }));
-                } else if (block.tag === 'a' && block.href) {
-                    content.push(segment('link', { 
-                        url: block.href, 
-                        text: block.text || block.href 
-                    }));
-                } else if (block.tag === 'at' && block.user_id) {
-                    content.push(segment('at', { 
-                        id: block.user_id,
-                        name: block.user_name 
-                    }));
-                }
-            }
-        }
-    }
-
-    // ================================================================================================
-    // 消息发送
-    // ================================================================================================
-
-    async $sendMessage(options: SendOptions): Promise<string> {
-        const chatId = options.id;
-        const canonical = expandInteractiveSegmentsInContent(options.content);
-        const wire = fromCanonicalSegments(canonical);
-        const content = this.formatSendContent(wire);
-        
-        try {
-            const response = await this.axiosInstance.post('/im/v1/messages', {
-                receive_id: chatId,
-                receive_id_type: 'chat_id',
-                msg_type: content.msg_type,
-                content: content.content
-            });
-            
-            if (response.data.code !== 0) {
-                throw new Error(`Failed to send message: ${response.data.msg}`);
-            }
-            
-            this.logger.debug('Message sent successfully:', response.data.data?.message_id);
-            return response.data.data?.message_id || '';
-        } catch (error) {
-            this.logger.error('Failed to send message:', error);
-            throw error;
-        }
-    }
-    async $recallMessage(id:string):Promise<void> {
-        await this.axiosInstance.post('/im/v1/messages/recall', {
-            message_id: id
-        });
-    }
-
-    private formatSendContent(content: SendContent): { msg_type: string, content: string } {
-        if (typeof content === 'string') {
-            return {
-                msg_type: 'text',
-                content: JSON.stringify({ text: content })
-            };
-        }
-        
-        if (Array.isArray(content)) {
-            const textParts: string[] = [];
-            let hasMedia = false;
-            let mediaContent: any = null;
-            
-            for (const item of content) {
-                if (typeof item === 'string') {
-                    textParts.push(item);
-                } else {
-                    const segment = item as MessageSegment;
-                    switch (segment.type) {
-                        case 'text':
-                            textParts.push(segment.data.content || segment.data.text || '');
-                            break;
-                            
-                        case 'at':
-                            textParts.push(`<at user_id="${segment.data.id}">${segment.data.name || segment.data.id}</at>`);
-                            break;
-                            
-                        case 'image':
-                            if (!hasMedia) {
-                                hasMedia = true;
-                                mediaContent = {
-                                    msg_type: 'image',
-                                    content: JSON.stringify({
-                                        image_key: segment.data.file_key || segment.data.key
-                                    })
-                                };
-                            }
-                            break;
-                            
-                        case 'file':
-                            if (!hasMedia) {
-                                hasMedia = true;
-                                mediaContent = {
-                                    msg_type: 'file',
-                                    content: JSON.stringify({
-                                        file_key: segment.data.file_key || segment.data.key
-                                    })
-                                };
-                            }
-                            break;
-                            
-                        case 'card':
-                            if (!hasMedia) {
-                                hasMedia = true;
-                                mediaContent = {
-                                    msg_type: 'interactive',
-                                    content: JSON.stringify(segment.data)
-                                };
-                            }
-                            break;
-                    }
-                }
-            }
-            
-            // 优先发送媒体内容
-            if (hasMedia && mediaContent) {
-                return mediaContent;
-            }
-            
-            // 否则发送文本内容
-            return {
-                msg_type: 'text',
-                content: JSON.stringify({ text: textParts.join('') })
-            };
-        }
-        
-        return {
-            msg_type: 'text',
-            content: JSON.stringify({ text: String(content) })
-        };
-    }
-
-    // ================================================================================================
-    // Endpoint 生命周期
-    // ================================================================================================
-
-    async $connect(): Promise<void> {
-        try {
-            // 获取 access token
-            await this.refreshAccessToken();
-            
-            this.$connected = true;
-            this.logger.debug(formatCompact({ endpoint: this.$config.name }));
-            this.logger.debug(formatCompact( { op: 'webhook', path: this.$config.webhookPath }));
-            
-        } catch (error) {
-            this.logger.error('Failed to connect Lark bot:', error);
-            throw error;
-        }
-    }
-
-    async $disconnect(): Promise<void> {
-        try {
-            this.$connected = false;
-            this.logger.debug(formatCompact( { op: 'disconnect', endpoint: this.$config.name }));
-        } catch (error) {
-            this.logger.error('Error disconnecting Lark bot:', error);
-        }
-    }
-
-    // ================================================================================================
-    // 工具方法
-    // ================================================================================================
-
-    // 获取用户信息
-    async getUserInfo(userId: string, userIdType: 'open_id' | 'user_id' | 'union_id' = 'open_id'): Promise<any> {
-        try {
-            const response = await this.axiosInstance.get(`/contact/v3/users/${userId}`, {
-                params: { user_id_type: userIdType }
-            });
-            
-            return response.data.data?.user;
-        } catch (error) {
-            this.logger.error('Failed to get user info:', error);
-            return null;
-        }
-    }
-
-    // 获取群聊信息
-    async getChatInfo(chatId: string): Promise<any> {
-        try {
-            const response = await this.axiosInstance.get(`/im/v1/chats/${chatId}`);
-            return response.data.data;
-        } catch (error) {
-            this.logger.error('Failed to get chat info:', error);
-            return null;
-        }
-    }
-
-    // 上传文件
-    async uploadFile(filePath: string, fileType: 'image' | 'file' | 'video' | 'audio' = 'file'): Promise<string | null> {
-        try {
-            const FormData = require('form-data');
-            const fs = require('fs');
-            
-            const form = new FormData();
-            form.append('file', fs.createReadStream(filePath));
-            form.append('file_type', fileType);
-            
-            const response = await this.axiosInstance.post('/im/v1/files', form, {
-                headers: {
-                    ...form.getHeaders()
-                }
-            });
-            
-            if (response.data.code === 0) {
-                return response.data.data.file_key;
-            }
-            
-            throw new Error(`Upload failed: ${response.data.msg}`);
-        } catch (error) {
-            this.logger.error('Failed to upload file:', error);
-            return null;
-        }
-    }
-
-    // ==================== 群组管理 API ====================
-
-    /**
-     * 创建群聊
-     * @param name 群名
-     * @param userIds 成员 open_id 列表
-     * @param ownerId 群主 open_id
-     */
-    async createChat(name: string, userIds: string[], ownerId?: string): Promise<string | null> {
-        try {
-            const response = await this.axiosInstance.post('/im/v1/chats', {
-                name,
-                user_id_list: userIds,
-                owner_id: ownerId
-            });
-
-            if (response.data.code === 0) {
-                this.logger.debug(formatCompact( { op: 'create_chat', chat: response.data.data.chat_id }));
-                return response.data.data.chat_id;
-            }
-            throw new Error(`Failed to create chat: ${response.data.msg}`);
-        } catch (error) {
-            this.logger.error('Failed to create chat:', error);
-            return null;
-        }
-    }
-
-    /**
-     * 更新群信息
-     * @param chatId 群聊 ID
-     * @param options 更新选项
-     */
-    async updateChatInfo(chatId: string, options: {
-        name?: string;
-        description?: string;
-    }): Promise<boolean> {
-        try {
-            const response = await this.axiosInstance.put(`/im/v1/chats/${chatId}`, options);
-
-            if (response.data.code === 0) {
-                this.logger.debug(formatCompact( { op: 'update_chat', chat: chatId }));
-                return true;
-            }
-            throw new Error(`Failed to update chat: ${response.data.msg}`);
-        } catch (error) {
-            this.logger.error('Failed to update chat:', error);
-            return false;
-        }
-    }
-
-    /**
-     * 添加群成员
-     * @param chatId 群聊 ID
-     * @param userIds 用户 ID 列表
-     */
-    async addChatMembers(chatId: string, userIds: string[]): Promise<boolean> {
-        try {
-            const response = await this.axiosInstance.post(`/im/v1/chats/${chatId}/members`, {
-                id_list: userIds
-            });
-
-            if (response.data.code === 0) {
-                this.logger.debug(formatCompact( { op: 'add_member', chat: chatId }));
-                return true;
-            }
-            throw new Error(`Failed to add members: ${response.data.msg}`);
-        } catch (error) {
-            this.logger.error('Failed to add chat members:', error);
-            return false;
-        }
-    }
-
-    /**
-     * 移除群成员
-     * @param chatId 群聊 ID
-     * @param userIds 用户 ID 列表
-     */
-    async removeChatMembers(chatId: string, userIds: string[]): Promise<boolean> {
-        try {
-            const response = await this.axiosInstance.delete(`/im/v1/chats/${chatId}/members`, {
-                data: { id_list: userIds }
-            });
-
-            if (response.data.code === 0) {
-                this.logger.debug(formatCompact( { op: 'remove_member', chat: chatId }));
-                return true;
-            }
-            throw new Error(`Failed to remove members: ${response.data.msg}`);
-        } catch (error) {
-            this.logger.error('Failed to remove chat members:', error);
-            return false;
-        }
-    }
-
-    /**
-     * 获取群成员列表
-     * @param chatId 群聊 ID
-     */
-    async getChatMembers(chatId: string): Promise<any[]> {
-        try {
-            const response = await this.axiosInstance.get(`/im/v1/chats/${chatId}/members`);
-
-            if (response.data.code === 0) {
-                return response.data.data.items || [];
-            }
-            throw new Error(`Failed to get members: ${response.data.msg}`);
-        } catch (error) {
-            this.logger.error('Failed to get chat members:', error);
-            return [];
-        }
-    }
-
-    /**
-     * 解散群聊
-     * @param chatId 群聊 ID
-     */
-    async dissolveChat(chatId: string): Promise<boolean> {
-        try {
-            const response = await this.axiosInstance.delete(`/im/v1/chats/${chatId}`);
-
-            if (response.data.code === 0) {
-                this.logger.debug(formatCompact( { op: 'delete_chat', chat: chatId }));
-                return true;
-            }
-            throw new Error(`Failed to dissolve chat: ${response.data.msg}`);
-        } catch (error) {
-            this.logger.error('Failed to dissolve chat:', error);
-            return false;
-        }
-    }
-
-    /**
-     * 设置群管理员
-     * @param chatId 群聊 ID
-     * @param userIds 用户 ID 列表
-     */
-    async setChatManagers(chatId: string, userIds: string[]): Promise<boolean> {
-        try {
-            const response = await this.axiosInstance.post(`/im/v1/chats/${chatId}/managers/add_managers`, {
-                manager_ids: userIds
-            });
-
-            if (response.data.code === 0) {
-                this.logger.debug(formatCompact( { op: 'set_admin', chat: chatId }));
-                return true;
-            }
-            throw new Error(`Failed to set managers: ${response.data.msg}`);
-        } catch (error) {
-            this.logger.error('Failed to set chat managers:', error);
-            return false;
-        }
-    }
-
-    /**
-     * 移除群管理员
-     * @param chatId 群聊 ID
-     * @param userIds 用户 ID 列表
-     */
-    async removeChatManagers(chatId: string, userIds: string[]): Promise<boolean> {
-        try {
-            const response = await this.axiosInstance.post(`/im/v1/chats/${chatId}/managers/delete_managers`, {
-                manager_ids: userIds
-            });
-
-            if (response.data.code === 0) {
-                this.logger.debug(formatCompact( { op: 'remove_admin', chat: chatId }));
-                return true;
-            }
-            throw new Error(`Failed to remove managers: ${response.data.msg}`);
-        } catch (error) {
-            this.logger.error('Failed to remove chat managers:', error);
-            return false;
-        }
-    }
+export interface LarkEndpointOptions {
+  readonly id: CapabilityId;
+  readonly gateway: MessageGateway;
+  readonly http: HttpHost;
+  readonly config: ResolvedLarkConfig;
+  readonly fetch?: LarkFetch;
 }
 
-// 定义 Adapter 类
+export class LarkEndpoint implements EndpointInstance {
+  readonly #options: LarkEndpointOptions;
+  readonly #fetch: LarkFetch;
+  #routeReleases: HttpRouteRegistration[] = [];
+  #accessToken: AccessToken = { token: '', expires_in: 0, timestamp: 0 };
+  #refreshPromise: Promise<string> | null = null;
+  #open = false;
+  #started = false;
+  #unregisterAgent?: () => void;
+
+  constructor(options: LarkEndpointOptions) {
+    this.#options = options;
+    this.#fetch = options.fetch ?? globalThis.fetch;
+  }
+
+  /** Used by webhook handler. */
+  get isOpen(): boolean {
+    return this.#open;
+  }
+
+  get config(): ResolvedLarkConfig {
+    return this.#options.config;
+  }
+
+  async start(): Promise<void> {
+    if (this.#started) return;
+    this.#started = true;
+    try {
+      await this.#refreshAccessToken();
+      this.#unregisterAgent = registerLarkAgentEndpoint(this.#options.config.name, this);
+      this.#routeReleases.push(...registerLarkWebhookRoutes(this.#options.http, this));
+      logger.debug(formatCompact({
+        endpoint: this.#options.config.name,
+        op: 'webhook',
+        path: this.#options.config.webhookPath,
+      }));
+    } catch (error) {
+      await this.stop();
+      logger.error('Failed to connect Lark endpoint:', error);
+      throw error;
+    }
+  }
+
+  open(): void {
+    this.#open = true;
+  }
+
+  close(): void {
+    this.#open = false;
+  }
+
+  async stop(): Promise<void> {
+    this.#open = false;
+    for (const release of this.#routeReleases.splice(0)) release();
+    this.#unregisterAgent?.();
+    this.#unregisterAgent = undefined;
+    this.#started = false;
+    logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
+  }
+
+  async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
+    const content = formatOutboundBody(payload);
+    const data = await this.#request('/im/v1/messages', {
+      method: 'POST',
+      params: { receive_id_type: 'chat_id' },
+      body: {
+        receive_id: target,
+        msg_type: content.msg_type,
+        content: content.content,
+      },
+    });
+    if (data.code !== 0) {
+      throw new Error(`Failed to send message: ${data.msg}`);
+    }
+    const messageId = (data.data?.message_id as string) || `${Date.now()}`;
+    logger.debug(formatCompact({
+      op: 'send',
+      endpoint: this.#options.config.name,
+      to: target,
+      id: messageId,
+    }));
+    return messageId;
+  }
+
+  /** Test / internal: admit a parsed message when open (non-webhook path). */
+  admit(msg: LarkMessage): void {
+    if (!this.#open) return;
+    const target = resolveTarget(msg);
+    void this.#options.gateway.receive({
+      adapter: this.#options.id,
+      target,
+      content: formatInboundContent(msg),
+      sender: resolveSender(msg),
+      id: generateMessageId(msg),
+      metadata: Object.freeze({
+        messageType: msg.message_type,
+        chatType: resolveChatType(msg.chat_id),
+        endpoint: this.#options.config.name,
+      }),
+    }).catch((err) => {
+      logger.warn(formatCompact({
+        op: 'lark_gateway_receive_failed',
+        target,
+        error: err instanceof Error ? err.message : String(err),
+      }));
+    });
+  }
+
+  async getUserInfo(
+    userId: string,
+    userIdType: 'open_id' | 'user_id' | 'union_id' = 'open_id',
+  ): Promise<unknown> {
+    try {
+      const data = await this.#request(`/contact/v3/users/${userId}`, {
+        method: 'GET',
+        params: { user_id_type: userIdType },
+      });
+      return data.data?.user ?? null;
+    } catch (error) {
+      logger.error('Failed to get user info:', error);
+      return null;
+    }
+  }
+
+  async getChatInfo(chatId: string): Promise<unknown> {
+    try {
+      const data = await this.#request(`/im/v1/chats/${chatId}`, { method: 'GET' });
+      return data.data ?? null;
+    } catch (error) {
+      logger.error('Failed to get chat info:', error);
+      return null;
+    }
+  }
+
+  async uploadFile(
+    filePath: string,
+    fileType: 'image' | 'file' | 'video' | 'audio' = 'file',
+  ): Promise<string | null> {
+    try {
+      await this.#ensureAccessToken();
+      const buf = await readFile(filePath);
+      const form = new FormData();
+      form.append('file', new Blob([buf]), basename(filePath));
+      form.append('file_type', fileType);
+      const url = `${this.#options.config.apiBaseUrl}/im/v1/files`;
+      const response = await this.#fetch(url, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${this.#accessToken.token}` },
+        body: form,
+      });
+      const data = await response.json() as LarkApiResponse;
+      if (data.code === 0) {
+        return (data.data?.file_key as string) || null;
+      }
+      throw new Error(`Upload failed: ${data.msg}`);
+    } catch (error) {
+      logger.error('Failed to upload file:', error);
+      return null;
+    }
+  }
+
+  async createChat(
+    name: string,
+    userIds: string[],
+    ownerId?: string,
+  ): Promise<string | null> {
+    try {
+      const data = await this.#request('/im/v1/chats', {
+        method: 'POST',
+        body: {
+          name,
+          user_id_list: userIds,
+          ...(ownerId ? { owner_id: ownerId } : {}),
+        },
+      });
+      if (data.code === 0) return (data.data?.chat_id as string) || null;
+      throw new Error(`Failed to create chat: ${data.msg}`);
+    } catch (error) {
+      logger.error('Failed to create chat:', error);
+      return null;
+    }
+  }
+
+  async updateChatInfo(
+    chatId: string,
+    options: { name?: string; description?: string },
+  ): Promise<boolean> {
+    try {
+      const data = await this.#request(`/im/v1/chats/${chatId}`, {
+        method: 'PUT',
+        body: options,
+      });
+      if (data.code === 0) return true;
+      throw new Error(`Failed to update chat: ${data.msg}`);
+    } catch (error) {
+      logger.error('Failed to update chat:', error);
+      return false;
+    }
+  }
+
+  async addChatMembers(chatId: string, userIds: string[]): Promise<boolean> {
+    try {
+      const data = await this.#request(`/im/v1/chats/${chatId}/members`, {
+        method: 'POST',
+        body: { id_list: userIds },
+      });
+      if (data.code === 0) return true;
+      throw new Error(`Failed to add members: ${data.msg}`);
+    } catch (error) {
+      logger.error('Failed to add chat members:', error);
+      return false;
+    }
+  }
+
+  async removeChatMembers(chatId: string, userIds: string[]): Promise<boolean> {
+    try {
+      const data = await this.#request(`/im/v1/chats/${chatId}/members`, {
+        method: 'DELETE',
+        body: { id_list: userIds },
+      });
+      if (data.code === 0) return true;
+      throw new Error(`Failed to remove members: ${data.msg}`);
+    } catch (error) {
+      logger.error('Failed to remove chat members:', error);
+      return false;
+    }
+  }
+
+  async getChatMembers(chatId: string): Promise<unknown[]> {
+    try {
+      const data = await this.#request(`/im/v1/chats/${chatId}/members`, { method: 'GET' });
+      if (data.code === 0) return (data.data?.items as unknown[]) || [];
+      throw new Error(`Failed to get members: ${data.msg}`);
+    } catch (error) {
+      logger.error('Failed to get chat members:', error);
+      return [];
+    }
+  }
+
+  async dissolveChat(chatId: string): Promise<boolean> {
+    try {
+      const data = await this.#request(`/im/v1/chats/${chatId}`, { method: 'DELETE' });
+      if (data.code === 0) return true;
+      throw new Error(`Failed to dissolve chat: ${data.msg}`);
+    } catch (error) {
+      logger.error('Failed to dissolve chat:', error);
+      return false;
+    }
+  }
+
+  async setChatManagers(chatId: string, userIds: string[]): Promise<boolean> {
+    try {
+      const data = await this.#request(`/im/v1/chats/${chatId}/managers/add_managers`, {
+        method: 'POST',
+        body: { manager_ids: userIds },
+      });
+      if (data.code === 0) return true;
+      throw new Error(`Failed to set managers: ${data.msg}`);
+    } catch (error) {
+      logger.error('Failed to set chat managers:', error);
+      return false;
+    }
+  }
+
+  async removeChatManagers(chatId: string, userIds: string[]): Promise<boolean> {
+    try {
+      const data = await this.#request(`/im/v1/chats/${chatId}/managers/delete_managers`, {
+        method: 'POST',
+        body: { manager_ids: userIds },
+      });
+      if (data.code === 0) return true;
+      throw new Error(`Failed to remove managers: ${data.msg}`);
+    } catch (error) {
+      logger.error('Failed to remove chat managers:', error);
+      return false;
+    }
+  }
+
+  async #request(
+    path: string,
+    options: {
+      method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+      params?: Record<string, string | number>;
+      body?: Record<string, unknown>;
+    } = {},
+  ): Promise<LarkApiResponse> {
+    await this.#ensureAccessToken();
+    const { method = 'GET', params = {}, body } = options;
+    const urlParams = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).map(([key, value]) => [key, String(value)]),
+      ),
+    );
+    const query = urlParams.toString();
+    const url = `${this.#options.config.apiBaseUrl}${path}${query ? `?${query}` : ''}`;
+    const response = await this.#fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        Authorization: `Bearer ${this.#accessToken.token}`,
+      },
+      body: body && method !== 'GET' ? JSON.stringify(body) : undefined,
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(`Lark API error ${response.status}: ${text}`);
+    }
+    return await response.json() as LarkApiResponse;
+  }
+
+  async #ensureAccessToken(): Promise<void> {
+    const now = Date.now();
+    if (
+      this.#accessToken.token
+      && now < this.#accessToken.timestamp + (this.#accessToken.expires_in - 300) * 1000
+    ) {
+      return;
+    }
+    if (this.#refreshPromise) {
+      await this.#refreshPromise;
+      return;
+    }
+    this.#refreshPromise = this.#refreshAccessToken()
+      .then(() => this.#accessToken.token)
+      .finally(() => { this.#refreshPromise = null; });
+    await this.#refreshPromise;
+  }
+
+  async #refreshAccessToken(): Promise<void> {
+    const { appId, appSecret, apiBaseUrl } = this.#options.config;
+    const url = `${apiBaseUrl}/auth/v3/tenant_access_token/internal`;
+    const response = await this.#fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({ app_id: appId, app_secret: appSecret }),
+    });
+    const data = await response.json() as LarkApiResponse;
+    if (data.code === 0 && data.tenant_access_token) {
+      this.#accessToken = {
+        token: data.tenant_access_token,
+        expires_in: data.expire ?? 7200,
+        timestamp: Date.now(),
+      };
+      logger.debug('Access token refreshed successfully');
+      return;
+    }
+    throw new Error(`Failed to get access token: ${data.msg} (${data.code})`);
+  }
+}

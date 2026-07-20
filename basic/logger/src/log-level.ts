@@ -30,11 +30,11 @@ export type LogLevelInput = LogLevel | Log4jsLevel | number | string;
 
 /** 控制台展示用大写名 */
 export const LOG_LEVEL_NAMES: Record<LogLevel, string> = {
-  debug: 'DEBUG',
-  info: 'INFO',
-  warn: 'WARN',
-  error: 'ERROR',
-  silent: 'SILENT',
+  debug: 'DBG',
+  info: 'INF',
+  warn: 'WRN',
+  error: 'ERR',
+  silent: 'OFF',
 };
 
 const LEGACY_NUMERIC: Record<number, LogLevel> = {

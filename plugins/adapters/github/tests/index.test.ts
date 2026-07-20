@@ -1,24 +1,20 @@
-import { describe, it, expect } from 'vitest'
-import fs from 'fs'
-import path from 'path'
+import { describe, it, expect } from 'vitest';
+import fs from 'fs';
+import path from 'path';
 
-describe('Zhin.js adapter for GitHub — treat issues/PRs as chat channels, full repo management, webhook notifications', () => {
-  const entryPath = path.resolve(__dirname, '../src/index.ts')
+describe('@zhin.js/adapter-github package', () => {
+  it('should have plugin entry and adapter module', () => {
+    expect(fs.existsSync(path.resolve(__dirname, '../plugin.ts'))).toBe(true);
+    expect(fs.existsSync(path.resolve(__dirname, '../adapters/github.ts'))).toBe(true);
+    expect(fs.existsSync(path.resolve(__dirname, '../schema.json'))).toBe(true);
+  });
 
-  it('should have entry file', () => {
-    expect(fs.existsSync(entryPath)).toBe(true)
-  })
-
-  it('entry file should not be empty', () => {
-    const content = fs.readFileSync(entryPath, 'utf8')
-    expect(content.length).toBeGreaterThan(0)
-  })
-
-  it('package.json should have correct exports', () => {
-    const pkgPath = path.resolve(__dirname, '../package.json')
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
-    expect(pkg.exports).toBeDefined()
-    expect(pkg.exports['.']).toBeDefined()
-    expect(pkg.exports['.'].development).toBe('./src/index.ts')
-  })
-})
+  it('package.json should have runtime exports and zhin manifest', () => {
+    const pkgPath = path.resolve(__dirname, '../package.json');
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    expect(pkg.exports['.'].development).toBe('./src/index.ts');
+    expect(pkg.zhin?.entry).toBe('./plugin.ts');
+    expect(pkg.dependencies['@zhin.js/adapter']).toBe('workspace:*');
+    expect(pkg.dependencies['@zhin.js/host-http']).toBe('workspace:*');
+  });
+});

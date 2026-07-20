@@ -1,8 +1,8 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getEndpoint } from '../../src/napcat-agent-deps.js';
 
-export default defineTool<{ endpoint_id: string; signature: string }>({
+export default defineAgentTool<{ endpoint_id: string; signature: string }>({
   description: '设置个人签名（个性签名）。',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),

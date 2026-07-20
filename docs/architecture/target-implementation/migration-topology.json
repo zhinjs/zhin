@@ -1,0 +1,161 @@
+{
+  "protocol": 1,
+  "strategy": "replace-in-place",
+  "completed": [
+    {
+      "sourcePackage": "@zhin.js/next-kernel",
+      "sourceDirectory": "packages/next/kernel",
+      "targetPackage": "@zhin.js/plugin-runtime",
+      "targetDirectory": "packages/im/plugin-runtime",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-feature-kit",
+      "sourceDirectory": "packages/next/feature-kit",
+      "targetPackage": "@zhin.js/feature-kit",
+      "targetDirectory": "packages/im/feature-kit",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-feature-adapter",
+      "sourceDirectory": "packages/next/feature-adapter",
+      "targetPackage": "@zhin.js/adapter",
+      "targetDirectory": "packages/im/adapter",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-feature-command",
+      "sourceDirectory": "packages/next/feature-command",
+      "targetPackage": "@zhin.js/command",
+      "targetDirectory": "packages/im/command",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-feature-component",
+      "sourceDirectory": "packages/next/feature-component",
+      "targetPackage": "@zhin.js/component",
+      "targetDirectory": "packages/im/component",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-feature-middleware",
+      "sourceDirectory": "packages/next/feature-middleware",
+      "targetPackage": "@zhin.js/middleware",
+      "targetDirectory": "packages/im/middleware",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-im",
+      "sourceDirectory": "packages/next/im",
+      "targetPackage": "@zhin.js/core",
+      "targetDirectory": "packages/im/core",
+      "targetExport": "./runtime"
+    },
+    {
+      "sourcePackage": "@zhin.js/next-feature-tool",
+      "sourceDirectory": "packages/next/feature-tool",
+      "targetPackage": "@zhin.js/tool",
+      "targetDirectory": "packages/im/tool",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-feature-skill",
+      "sourceDirectory": "packages/next/feature-skill",
+      "targetPackage": "@zhin.js/skill",
+      "targetDirectory": "packages/im/skill",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-feature-agent",
+      "sourceDirectory": "packages/next/feature-agent",
+      "targetPackage": "@zhin.js/agent-feature",
+      "targetDirectory": "packages/im/agent-feature",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-feature-mcp",
+      "sourceDirectory": "packages/next/feature-mcp",
+      "targetPackage": "@zhin.js/mcp-feature",
+      "targetDirectory": "packages/im/mcp-feature",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-agent",
+      "sourceDirectory": "packages/next/agent",
+      "targetPackage": "@zhin.js/agent",
+      "targetDirectory": "packages/im/agent",
+      "targetExport": "./runtime"
+    },
+    {
+      "sourcePackage": "@zhin.js/next-console-contract",
+      "sourceDirectory": "packages/next/console-contract",
+      "targetPackage": "@zhin.js/console-contract",
+      "targetDirectory": "packages/console/plugin-contract",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-feature-page",
+      "sourceDirectory": "packages/next/feature-page",
+      "targetPackage": "@zhin.js/page",
+      "targetDirectory": "packages/console/page",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-feature-layout",
+      "sourceDirectory": "packages/next/feature-layout",
+      "targetPackage": "@zhin.js/layout",
+      "targetDirectory": "packages/console/layout",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-console",
+      "sourceDirectory": "packages/next/console",
+      "targetPackage": "@zhin.js/pagemanager",
+      "targetDirectory": "packages/console/pagemanager",
+      "targetExport": "./plugin-runtime"
+    },
+    {
+      "sourcePackage": "@zhin.js/next-client-build",
+      "sourceDirectory": "packages/next/client-build",
+      "targetPackage": "@zhin.js/pagemanager",
+      "targetDirectory": "packages/console/pagemanager",
+      "targetExport": "./client-build"
+    },
+    {
+      "sourcePackage": "@zhin.js/next-runtime",
+      "sourceDirectory": "packages/next/runtime",
+      "targetPackage": "@zhin.js/runtime",
+      "targetDirectory": "packages/im/runtime",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-config-yaml",
+      "sourceDirectory": "packages/next/config-yaml",
+      "targetPackage": "@zhin.js/config-yaml",
+      "targetDirectory": "packages/im/config-yaml",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-isolate",
+      "sourceDirectory": "packages/next/isolate",
+      "targetPackage": "@zhin.js/isolate",
+      "targetDirectory": "packages/im/isolate",
+      "targetExport": "."
+    },
+    {
+      "sourcePackage": "@zhin.js/next-cli",
+      "sourceDirectory": "packages/next/cli",
+      "targetPackage": "@zhin.js/cli",
+      "targetDirectory": "basic/cli",
+      "targetExport": "."
+    }
+  ],
+  "removed": [
+    {
+      "sourcePackage": "@zhin.js/next-compat",
+      "sourceDirectory": "packages/next/compat",
+      "reason": "Breaking migration emits native Feature definitions; legacy callback adapters are not runtime dependencies."
+    }
+  ],
+  "pending": []
+}

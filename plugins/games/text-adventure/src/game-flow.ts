@@ -1,4 +1,5 @@
 import type { Adapter, Message, Plugin } from 'zhin.js';
+import { plainTextFromSendContent } from '@zhin.js/game-kit';
 import type { AdvProfileRow, AdvSessionRow } from './models.js';
 import { formatNewAchievements } from './profile-format.js';
 import { buildSceneInteractive } from './scene-view.js';
@@ -11,7 +12,7 @@ import {
 import type { GameServices } from './session-service.js';
 
 export async function sendOrEditScene(
-  plugin: Plugin,
+  plugin: Plugin | null,
   services: GameServices,
   message: Message<any>,
   session: AdvSessionRow,
@@ -24,6 +25,7 @@ export async function sendOrEditScene(
   if (!content) {
     return '场景数据异常，请 adv quit 后重新开始。';
   }
+  if (!plugin) return plainTextFromSendContent(content);
 
   const adapter = plugin.root.inject(message.$adapter) as Adapter;
 
@@ -50,7 +52,7 @@ export async function sendOrEditScene(
 }
 
 export async function startAdventure(
-  plugin: Plugin,
+  plugin: Plugin | null,
   services: GameServices,
   message: Message<any>,
 ): Promise<string | undefined> {
@@ -71,12 +73,12 @@ export async function startAdventure(
     'start',
     [],
   );
-  await sendOrEditScene(plugin, services, message, session);
-  return undefined;
+  const text = await sendOrEditScene(plugin, services, message, session);
+  return plugin ? undefined : text;
 }
 
 export async function handleChoice(
-  plugin: Plugin,
+  plugin: Plugin | null,
   services: GameServices,
   message: Message<any>,
   sessionId: string,
@@ -111,8 +113,9 @@ export async function handleChoice(
     });
     const updated = (await services.sessions.getById(session.id))!;
     await services.profiles.onStep(updated.player_id, updated.player_name, 'start', []);
-    await sendOrEditScene(plugin, services, message, updated);
-    return null;
+    const text = await sendOrEditScene(plugin, services, message, updated);
+    // text-only 模式（plugin===null）下 sendOrEditScene 的唯一输出就是返回文本
+    return plugin ? null : text;
   }
 
   const result = resolveChoice(state, choiceId);
@@ -160,12 +163,13 @@ export async function handleChoice(
 
   const updated = (await services.sessions.getById(session.id))!;
   const extra = formatNewAchievements(newAchievements);
-  await sendOrEditScene(plugin, services, message, updated, extra);
-  return null;
+  const text = await sendOrEditScene(plugin, services, message, updated, extra);
+  // text-only 模式（plugin===null）下 sendOrEditScene 的唯一输出就是返回文本
+  return plugin ? null : text;
 }
 
 export async function continueAdventure(
-  plugin: Plugin,
+  plugin: Plugin | null,
   services: GameServices,
   message: Message<any>,
 ): Promise<string> {
@@ -174,7 +178,8 @@ export async function continueAdventure(
     message.$sender.id,
   );
   if (!session) return '你没有进行中的冒险，发送 adv start 开始。';
-  await sendOrEditScene(plugin, services, message, session);
+  const text = await sendOrEditScene(plugin, services, message, session);
+  if (!plugin) return text;
   return '已刷新当前场景。';
 }
 

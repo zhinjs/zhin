@@ -3,6 +3,9 @@ import { Model } from './model.js';
 import { Definition, QueryParams, AlterDefinition, Condition, BuildQueryResult, Transaction, TransactionOptions, TransactionContext } from '../types.js';
 import * as QueryClasses from './query-classes.js';
 import { TransactionContextImpl } from './transaction.js';
+import { getLogger } from '@zhin.js/logger';
+
+const logger = getLogger('database');
 
 /**
  * 查询日志处理器类型
@@ -20,7 +23,7 @@ export type QueryLogger = (info: {
 const defaultLogger: QueryLogger = ({ sql, params, duration, error }) => {
   const paramStr = params?.length ? ` [${JSON.stringify(params)}]` : '';
   const status = error ? `❌ ERROR: ${error instanceof Error ? error.message : String(error)}` : `✅ ${duration}ms`;
-  console.log(`[SQL] ${sql}${paramStr} → ${status}`);
+  logger.debug(`[SQL] ${sql}${paramStr} → ${status}`);
 };
 
 /**
@@ -103,7 +106,7 @@ export abstract class Database<D=any,S extends Record<string, object>=Record<str
   async stop(): Promise<void> {
     await this.dialect.disconnect();
     this.hasStarted = false;
-    console.log(`Database disconnected from dialect: ${this.dialect.name}`);
+    logger.info(`Database disconnected from dialect: ${this.dialect.name}`);
   }
 
   /**

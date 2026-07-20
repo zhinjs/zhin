@@ -1,8 +1,8 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getEndpoint } from '../../src/napcat-agent-deps.js';
 
-export default defineTool<{ endpoint_id: string; group_id: number; message_seq?: number; count?: number }>({
+export default defineAgentTool<{ endpoint_id: string; group_id: number; message_seq?: number; count?: number }>({
   description: '获取群消息历史记录。',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),

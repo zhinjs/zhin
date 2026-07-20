@@ -35,6 +35,26 @@ pnpm add @zhin.js/pagemanager
 
 类型（`ConsoleServerOptions`、`PluginServerRegisterHostApi` 等）自 `./consoleServerOptions.js` 导出。
 
+## Plugin Runtime
+
+`@zhin.js/pagemanager/plugin-runtime` 提供 snapshot-coherent 的 `ConsoleRuntime`。一次
+`runView()` 在完整回调期间持有同一 generation lease，route guard、权限过滤、Navigation
+树和 Layout fallback chain 都从同一个 Page/Layout projection 读取；回调结束后 catalog
+失效，避免浏览器模块 URL 跨 generation 逃逸。
+
+该子路径不引入 React、Router 或客户端编译器。Page 与 Layout 的约定式发现分别由
+`@zhin.js/page`、`@zhin.js/layout` 提供，wire types 来自零依赖
+`@zhin.js/console-contract`。
+
+## Client Build
+
+`@zhin.js/pagemanager/client-build` 是可选的 TypeScript AST/build adapter。它静态提取
+`definePage()` 的 JSON-like metadata，生成 content-hash ESM 与
+`pages.manifest.json`，生产 loader 不记录构建机绝对路径。
+
+TypeScript 是 optional peer，不进入默认 PageManager 或 Plugin Runtime 的生产闭包。
+选择该子路径的构建 workspace 需要显式安装兼容版本的 `typescript`。
+
 ## 插件注册 Entry
 
 在插件 Node 侧通过 `web` 上下文获取 **PageManager 实例**（非静态全局）：

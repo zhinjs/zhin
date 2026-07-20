@@ -24,7 +24,7 @@ async function listYears() {
 }
 
 function renderImports(years) {
-  return years.map((year) => `import data${year} from './holidays/${year}.json';`).join('\n');
+  return years.map((year) => `import data${year} from './holidays/${year}.json' with { type: 'json' };`).join('\n');
 }
 
 function renderBundledData(years) {

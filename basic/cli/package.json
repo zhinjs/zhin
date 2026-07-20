@@ -23,9 +23,17 @@
     "clean": "rimraf lib"
   },
   "dependencies": {
+    "@zhin.js/config-yaml": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/database": "workspace:*",
+    "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/pagemanager": "workspace:*",
+    "@zhin.js/runtime": "workspace:*",
     "@zhin.js/scaffold-wizard": "workspace:*",
     "esbuild": "^0.28.1",
     "@zhin.js/logger": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
+    "@zhin.js/schedule": "workspace:*",
     "adm-zip": "^0.5.18",
     "chalk": "^5.6.2",
     "commander": "^15.0.0",
@@ -45,15 +53,24 @@
     "@types/inquirer": "^9.0.10",
     "@types/node": "^26.1.0",
     "@zhin.js/agent": "workspace:*",
+    "@zhin.js/speech": "workspace:*",
     "typescript": "^6.0.3"
   },
   "peerDependenciesMeta": {
     "@zhin.js/agent": {
       "optional": true
+    },
+    "@zhin.js/speech": {
+      "optional": true
+    },
+    "typescript": {
+      "optional": true
     }
   },
   "peerDependencies": {
-    "@zhin.js/agent": ">=1.0.3"
+    "@zhin.js/agent": ">=1.0.3",
+    "@zhin.js/speech": ">=1.0.0",
+    "typescript": ">=5.8.0 <7.0.0"
   },
   "repository": {
     "type": "git",

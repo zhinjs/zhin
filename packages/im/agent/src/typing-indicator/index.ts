@@ -103,7 +103,11 @@ export class ReactionTypingIndicator implements TypingIndicator {
   ) {}
 
   async start(): Promise<void> {
-    if (this.active || !this.options.messageId) {
+    if (this.active) return;
+    if (!this.options.messageId) {
+      console.warn(
+        `[TypingIndicator] reaction skipped: missing messageId (platform=${this.options.platform} scene=${this.options.sceneType})`,
+      );
       return;
     }
 
@@ -114,6 +118,12 @@ export class ReactionTypingIndicator implements TypingIndicator {
         this.config.emoji || '⏳',
         this.options,
       );
+      if (!this.reactionId) {
+        this.active = false;
+        console.warn(
+          `[TypingIndicator] reaction add returned null (platform=${this.options.platform} messageId=${this.options.messageId})`,
+        );
+      }
     } catch (error) {
       this.active = false;
       this.reactionId = null;

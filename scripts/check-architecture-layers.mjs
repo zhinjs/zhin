@@ -25,20 +25,50 @@ const repoRoot = path.resolve(__dirname, '..');
 
 // 定义层级和允许的依赖关系
 // basic/ 内部的包可以相互导入
+// 注意：basic/cli 是 Plugin Runtime 的 composition root（`zhin runtime start`
+// 直接装配 ImRuntime / Agent Host / Console Host，见
+// docs/architecture/target-implementation/in-place-migration.md「start、migrate、
+// scaffold | @zhin.js/cli」），因此它必须能导入 packages/im 各层。
+// 该例外只适用于 basic/cli，basic/{logger,schema,database} 仍保持最底层约束。
+// Plugin Runtime 新层（约定式插件运行时迁移引入）：
+// plugin-runtime（契约/宿主 token，零 zhin 依赖）→ feature-kit（feature provider 基座）
+// → 8 个 provider 包（adapter/command/component/middleware/tool/skill/agent-feature/mcp-feature）
+// → runtime（RootHost 装配）→ isolate / config-yaml（依赖 runtime，仅契约）。
+// packages/host/http 是 HTTP Host 实现，仅依赖 basic + plugin-runtime。
+const providerLayerAllowed = ['basic', 'packages/im/plugin-runtime', 'packages/im/feature-kit'];
 const layers = {
+  'basic/cli': { level: 0, allowedImports: ['basic', 'packages/im', 'packages/host', 'packages/console'] },
   'basic': { level: 0, allowedImports: ['basic'] },
+  'packages/im/plugin-runtime': { level: 1, allowedImports: ['basic'] },
+  'packages/im/feature-kit': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime'] },
+  'packages/im/adapter': { level: 1, allowedImports: providerLayerAllowed },
+  'packages/im/command': { level: 1, allowedImports: providerLayerAllowed },
+  'packages/im/component': { level: 1, allowedImports: providerLayerAllowed },
+  'packages/im/middleware': { level: 1, allowedImports: providerLayerAllowed },
+  'packages/im/tool': { level: 1, allowedImports: providerLayerAllowed },
+  'packages/im/skill': { level: 1, allowedImports: providerLayerAllowed },
+  'packages/im/agent-feature': { level: 1, allowedImports: providerLayerAllowed },
+  'packages/im/mcp-feature': { level: 1, allowedImports: providerLayerAllowed },
+  'packages/im/runtime': { level: 1, allowedImports: [...providerLayerAllowed, 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware', 'packages/im/tool', 'packages/im/skill', 'packages/im/agent-feature', 'packages/im/mcp-feature'] },
+  'packages/im/isolate': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/im/runtime'] },
+  'packages/im/config-yaml': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/im/runtime'] },
+  'packages/host/http': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime'] },
   'packages/im/kernel': { level: 1, allowedImports: ['basic'] },
   'packages/im/ai': { level: 2, allowedImports: ['basic', 'packages/im/kernel'] },
-  'packages/im/core': { level: 3, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai'] },
-  'packages/im/agent': { level: 4, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core'] },
-  'packages/im/zhin': { level: 5, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent'] },
+  'packages/im/core': { level: 3, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/plugin-runtime', 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware'] },
+  'packages/im/agent': { level: 4, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/plugin-runtime', 'packages/im/agent-feature', 'packages/im/mcp-feature', 'packages/im/skill', 'packages/im/tool'] },
+  // zhin 是应用伞包：shutdown.ts 以 try/catch 可选动态导入 @zhin.js/host-api（stopSseHub），无环，允许。
+  'packages/im/zhin': { level: 5, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent', 'packages/im/runtime', 'packages/host/api'] },
   'packages/host/router': { level: 6, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core'] },
   'packages/host/mcp': { level: 7, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/host/router'] },
   'packages/host/api': { level: 8, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent', 'packages/host/router', 'packages/host/mcp', 'packages/console/contract', 'packages/console/pagemanager'] },
   'packages/console/contract': { level: 10, allowedImports: ['basic', 'packages/im/ai'] },
-  'packages/console/pagemanager': { level: 11, allowedImports: ['basic', 'packages/console/contract'] },
+  'packages/console/pagemanager': { level: 11, allowedImports: ['basic', 'packages/console/contract', 'packages/im/plugin-runtime', 'packages/im/feature-kit', 'packages/im/runtime'] },
   'packages/console/client': { level: 12, allowedImports: ['basic', 'packages/console/contract'] },
 };
+
+// 重叠层级（basic/cli ⊂ basic）按最长路径优先解析
+const layerPathsBySpecificity = Object.keys(layers).sort((a, b) => b.length - a.length);
 
 // 包名到路径的映射
 const packageNameToPath = {
@@ -53,7 +83,21 @@ const packageNameToPath = {
   'zhin.js': 'packages/im/zhin',
   '@zhin.js/host-router': 'packages/host/router',
   '@zhin.js/host-api': 'packages/host/api',
+  '@zhin.js/host-http': 'packages/host/http',
   '@zhin.js/mcp': 'packages/host/mcp',
+  '@zhin.js/plugin-runtime': 'packages/im/plugin-runtime',
+  '@zhin.js/feature-kit': 'packages/im/feature-kit',
+  '@zhin.js/adapter': 'packages/im/adapter',
+  '@zhin.js/command': 'packages/im/command',
+  '@zhin.js/component': 'packages/im/component',
+  '@zhin.js/middleware': 'packages/im/middleware',
+  '@zhin.js/tool': 'packages/im/tool',
+  '@zhin.js/skill': 'packages/im/skill',
+  '@zhin.js/agent-feature': 'packages/im/agent-feature',
+  '@zhin.js/mcp-feature': 'packages/im/mcp-feature',
+  '@zhin.js/runtime': 'packages/im/runtime',
+  '@zhin.js/isolate': 'packages/im/isolate',
+  '@zhin.js/config-yaml': 'packages/im/config-yaml',
   '@zhin.js/contract': 'packages/console/contract',
   '@zhin.js/pagemanager': 'packages/console/pagemanager',
   '@zhin.js/client': 'packages/console/client',
@@ -83,7 +127,7 @@ function walkTs(dir, acc) {
 function getLayerForFile(filePath) {
   const relativePath = path.relative(repoRoot, filePath);
 
-  for (const layerPath of Object.keys(layers)) {
+  for (const layerPath of layerPathsBySpecificity) {
     if (relativePath.startsWith(layerPath + '/') || relativePath.startsWith(layerPath + '\\')) {
       return layerPath;
     }
@@ -93,61 +137,96 @@ function getLayerForFile(filePath) {
 }
 
 /**
- * 解析导入语句（忽略注释和模板字符串中的导入）
+ * 抹掉注释与模板字符串内容（替换为空格、保留换行），
+ * 使后续正则不会匹配到注释里或代码生成模板（如 packages/host/mcp
+ * handlers.ts 生成插件源码的模板字符串）里的 "import ... from" 文本。
+ * 普通字符串保留原样（模块说明符本身就在字符串里）。
+ * @param {string} content
+ * @returns {string}
+ */
+function maskCommentsAndTemplates(content) {
+  const out = content.split('');
+  // 状态栈：'code' | 'line' | 'block' | 'squote' | 'dquote' | 'template'
+  // template 内的 ${ ... } 以括号深度回到 code 处理（支持嵌套模板）。
+  const stack = [{ mode: 'code', braceDepth: 0 }];
+  const top = () => stack[stack.length - 1];
+  const mask = (i) => { if (out[i] !== '\n') out[i] = ' '; };
+
+  for (let i = 0; i < content.length; i++) {
+    const ch = content[i];
+    const next = content[i + 1];
+    const st = top();
+
+    if (st.mode === 'line') {
+      mask(i);
+      if (ch === '\n') stack.pop();
+      continue;
+    }
+    if (st.mode === 'block') {
+      mask(i);
+      if (ch === '*' && next === '/') { mask(i + 1); i++; stack.pop(); }
+      continue;
+    }
+    if (st.mode === 'squote' || st.mode === 'dquote') {
+      if (ch === '\\') { i++; continue; }
+      if ((st.mode === 'squote' && ch === "'") || (st.mode === 'dquote' && ch === '"')) stack.pop();
+      continue;
+    }
+    if (st.mode === 'template') {
+      if (ch === '\\') { mask(i); mask(i + 1); i++; continue; }
+      if (ch === '`') { mask(i); stack.pop(); continue; }
+      if (ch === '$' && next === '{') {
+        mask(i); mask(i + 1); i++;
+        stack.push({ mode: 'code', braceDepth: 0 });
+        continue;
+      }
+      mask(i);
+      continue;
+    }
+
+    // code 模式
+    if (ch === '/' && next === '/') { mask(i); mask(i + 1); i++; stack.push({ mode: 'line' }); continue; }
+    if (ch === '/' && next === '*') { mask(i); mask(i + 1); i++; stack.push({ mode: 'block' }); continue; }
+    if (ch === "'") { stack.push({ mode: 'squote' }); continue; }
+    if (ch === '"') { stack.push({ mode: 'dquote' }); continue; }
+    if (ch === '`') { mask(i); stack.push({ mode: 'template' }); continue; }
+    if (ch === '{') { st.braceDepth++; continue; }
+    if (ch === '}' && stack.length > 1) {
+      if (st.braceDepth === 0) stack.pop(); // ${ } 结束，回到 template
+      else st.braceDepth--;
+    }
+  }
+  return out.join('');
+}
+
+/**
+ * 解析导入语句（忽略注释和模板字符串中的导入）。
+ * 覆盖：单行/多行静态 import、bare import（import 'x'）、
+ * export ... from '...' 再导出、动态 import('...')、require('...')。
+ * 纯类型导入（import type / export type）不产生运行时依赖，跳过。
  * @param {string} content - 文件内容
  * @returns {string[]} - 导入的包名列表
  */
 function parseImports(content) {
   const imports = [];
-  const lines = content.split(/\r?\n/);
+  const masked = maskCommentsAndTemplates(content);
 
-  let inTemplateString = false;
-  let inComment = false;
+  const patterns = [
+    // 静态 import（含多行 import 块与 bare import），跳过 import type
+    /import\s+(?!type\s)[\s\S]*?\bfrom\s*['"]([^'"]+)['"]/g,
+    /import\s*['"]([^'"]+)['"]/g,
+    // export { ... } from / export * from（含多行），跳过 export type
+    /export\s+(?!type\s)(?:\*|\{[\s\S]*?\})\s*\bfrom\s*['"]([^'"]+)['"]/g,
+    // 动态 import('...')（含 import('x').Type 内联类型；相对路径本就放行）
+    /import\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
+    // require('...')
+    /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
+  ];
 
-  for (const line of lines) {
-    const trimmedLine = line.trim();
-
-    // 处理多行注释
-    if (trimmedLine.startsWith('/*')) {
-      inComment = true;
-    }
-    if (inComment) {
-      if (trimmedLine.includes('*/')) {
-        inComment = false;
-      }
-      continue;
-    }
-
-    // 跳过单行注释
-    if (trimmedLine.startsWith('//')) {
-      continue;
-    }
-
-    // 处理模板字符串
-    // 只计算非转义的反引号（\` 不算）
-    const backtickCount = (line.match(/(?<!\\)`/g) || []).length;
-    if (backtickCount % 2 === 1) {
-      inTemplateString = !inTemplateString;
-    }
-
-    // 如果在模板字符串中，跳过导入检测
-    if (inTemplateString) {
-      continue;
-    }
-
-    // 匹配 import 语句（只匹配行首的导入，避免匹配字符串中的导入）
-    // 跳过 import type（纯类型导入不产生运行时依赖）
-    const importRegex = /^import\s+(?!type\s)(?:.*?\s+from\s+)?['"]([^'"]+)['"]/;
-    const match = importRegex.exec(trimmedLine);
-    if (match) {
+  for (const re of patterns) {
+    let match;
+    while ((match = re.exec(masked)) !== null) {
       imports.push(match[1]);
-    }
-
-    // 匹配 require 语句
-    const requireRegex = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
-    let requireMatch;
-    while ((requireMatch = requireRegex.exec(line)) !== null) {
-      imports.push(requireMatch[1]);
     }
   }
 
@@ -215,20 +294,24 @@ function checkImport(sourceLayer, sourceFile, importPath) {
 }
 
 const violations = [];
+const seenFiles = new Set();
 
-// 扫描所有源文件
-for (const [layerPath, layerInfo] of Object.entries(layers)) {
+// 扫描所有源文件（重叠层级只按最具体层级检查一次）
+for (const layerPath of layerPathsBySpecificity) {
   const absPath = path.join(repoRoot, layerPath);
   const files = [];
   walkTs(absPath, files);
 
   for (const file of files) {
+    const relativeFilePath = path.relative(repoRoot, file);
+    if (seenFiles.has(relativeFilePath)) continue;
+    seenFiles.add(relativeFilePath);
+    const sourceLayer = getLayerForFile(file) ?? layerPath;
     const content = fs.readFileSync(file, 'utf8');
     const imports = parseImports(content);
-    const relativeFilePath = path.relative(repoRoot, file);
 
     for (const importPath of imports) {
-      const result = checkImport(layerPath, relativeFilePath, importPath);
+      const result = checkImport(sourceLayer, relativeFilePath, importPath);
       if (!result.valid) {
         violations.push({
           file: relativeFilePath,

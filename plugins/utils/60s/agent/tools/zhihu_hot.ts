@@ -1,13 +1,13 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 
-export default defineTool<{ limit?: number }>({
+export default defineAgentTool<{ limit?: number }>({
   description: "获取知乎热榜",
   inputSchema: z.object({ limit: z.number().optional() }),
   keywords: ["知乎", "热榜", "zhihu", "zh"],
   tags: ["热搜", "社交", "知乎"],
   async execute(input) {
-    const handler = (await import('../../tools/zhihu-hot/handler.js')).default;
+    const handler = (await import('../../src/handlers/zhihu-hot.js')).default;
     return handler(input);
   },
 });

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "default": "kook-bot"
+    },
+    "token": {
+      "type": "string"
+    },
+    "connection": {
+      "type": "string",
+      "enum": ["websocket", "webhook"],
+      "default": "websocket",
+      "description": "WebSocket gateway (default). webhook requires httpHostToken, verify_token, and a public HTTPS callback URL."
+    },
+    "webhookPath": {
+      "type": "string",
+      "default": "/kook/webhook",
+      "description": "POST path registered via httpHostToken when connection is webhook."
+    },
+    "verify_token": {
+      "type": "string",
+      "description": "KOOK developer console verify token (required for webhook mode)."
+    },
+    "encrypt_key": {
+      "type": "string",
+      "description": "Optional Encrypt Key when message encryption is enabled in KOOK console."
+    },
+    "data_dir": {
+      "type": "string"
+    },
+    "timeout": {
+      "type": "number",
+      "default": 10000
+    },
+    "max_retry": {
+      "type": "number",
+      "default": 3
+    },
+    "ignore": {
+      "type": "string",
+      "enum": ["bot", "self"],
+      "default": "bot"
+    },
+    "logLevel": {
+      "type": "string",
+      "enum": ["trace", "debug", "info", "warn", "error", "fatal", "mark", "off"],
+      "default": "info"
+    }
+  },
+  "required": ["token"]
+}

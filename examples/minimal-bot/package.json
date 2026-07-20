@@ -2,26 +2,53 @@
   "name": "minimal-bot",
   "private": true,
   "version": "0.0.14",
-  "description": "Zhin.js Stable 黄金路径示例（Sandbox + 最少插件）",
+  "description": "Zhin.js Plugin Runtime Stable golden path",
   "type": "module",
   "scripts": {
-    "dev": "zhin dev",
-    "start": "zhin start",
-    "build": "zhin build"
+    "dev": "zhin runtime start",
+    "start": "zhin runtime start --mode production --no-watch",
+    "build": "tsc --noEmit",
+    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../.. examples/minimal-bot/tests"
   },
   "dependencies": {
-    "@zhin.js/adapter-sandbox": "workspace:*",
-    "@zhin.js/cli": "workspace:*",
-    "@zhin.js/host-api": "workspace:*",
-    "@zhin.js/host-router": "workspace:*",
+    "@zhin.js/adapter": "1.0.0",
+    "@zhin.js/command": "1.0.0",
+    "@zhin.js/component": "1.0.0",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
+    "@zhin.js/runtime": "workspace:*",
     "@zhin.js/satori": "workspace:*",
     "zhin.js": "workspace:*"
   },
   "devDependencies": {
-    "tsx": "^4.22.4",
-    "typescript": "^6.0.3"
+    "@zhin.js/cli": "workspace:*",
+    "@zhin.js/tool": "workspace:*",
+    "typescript": "^6.0.3",
+    "zod": "^4.4.3"
   },
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": ">=22.6.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/adapter",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/component",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
   }
 }

@@ -1,18 +1,20 @@
 import type { Adapter, Message, Plugin } from 'zhin.js';
-import { recordGameOutcome } from '@zhin.js/game-shared';
+import { plainTextFromSendContent, recordGameOutcome } from '@zhin.js/game-kit';
 import type { DiceSessionRow } from './models.js';
 import { compareRolls, DICE_PREFIX, rollD6, WIN_TARGET } from './engine.js';
 import type { SessionService } from './session-service.js';
 import { buildDiceView } from './view.js';
 
 export async function sendOrEditView(
-  plugin: Plugin,
+  plugin: Plugin | null,
   services: SessionService,
   message: Message<any>,
   session: DiceSessionRow,
   lastRound?: { player: number; bot: number; result: 0 | 1 | 2 },
-): Promise<void> {
+): Promise<string | void> {
   const content = buildDiceView(session, lastRound, message.$channel.type);
+  if (!plugin) return plainTextFromSendContent(content);
+
   const adapter = plugin.root.inject(message.$adapter) as Adapter;
 
   if (session.board_message_id) {
@@ -35,7 +37,7 @@ export async function sendOrEditView(
 }
 
 export async function startGame(
-  plugin: Plugin,
+  plugin: Plugin | null,
   services: SessionService,
   message: Message<any>,
 ): Promise<string | undefined> {
@@ -48,12 +50,12 @@ export async function startGame(
     return `本频道 ${active.player_name} 正在掷骰对决中。`;
   }
   const session = await services.createSession(message);
-  await sendOrEditView(plugin, services, message, session);
-  return undefined;
+  const text = await sendOrEditView(plugin, services, message, session);
+  return typeof text === 'string' ? text : undefined;
 }
 
 export async function continueGame(
-  plugin: Plugin,
+  plugin: Plugin | null,
   services: SessionService,
   message: Message<any>,
 ): Promise<string> {
@@ -62,12 +64,13 @@ export async function continueGame(
     message.$sender.id,
   );
   if (!session) return '你没有进行中的骰子对决，发送「骰子 开始」。';
-  await sendOrEditView(plugin, services, message, session);
+  const text = await sendOrEditView(plugin, services, message, session);
+  if (typeof text === 'string') return text;
   return '已刷新骰子界面。';
 }
 
 export async function handleChoice(
-  plugin: Plugin,
+  plugin: Plugin | null,
   services: SessionService,
   message: Message<any>,
   sessionId: string,
@@ -83,8 +86,8 @@ export async function handleChoice(
 
   if (choiceId === 'restart') {
     await services.updateSession(session.id, { status: 'aborted' });
-    await startGame(plugin, services, message);
-    return null;
+    // text-only 模式（plugin===null）下 startGame 的唯一输出就是返回文本
+    return (await startGame(plugin, services, message)) ?? null;
   }
 
   if (choiceId !== 'roll') return '无效操作。';
@@ -114,8 +117,8 @@ export async function handleChoice(
   const updated = (await services.getById(session.id))!;
   if (status === 'won') void recordGameOutcome(message, 'dice', 'won', playerWins * 10);
   else if (status === 'lost') void recordGameOutcome(message, 'dice', 'lost');
-  await sendOrEditView(plugin, services, message, updated, { player, bot, result });
-  return null;
+  const text = await sendOrEditView(plugin, services, message, updated, { player, bot, result });
+  return typeof text === 'string' ? text : null;
 }
 
 export { DICE_PREFIX };

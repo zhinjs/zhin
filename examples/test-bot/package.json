@@ -2,22 +2,21 @@
   "name": "test-bot",
   "private": true,
   "version": "0.1.113",
-  "description": "test-bot 机器人",
+  "description": "Zhin.js Plugin Runtime 厨房水槽（对齐 legacy endpoints：icqq×5 / slack / github / qq×2 / sandbox + games）",
   "type": "module",
-  "main": "src/index.ts",
   "scripts": {
-    "dev": "zhin dev",
-    "start": "zhin start",
-    "daemon": "zhin start --daemon",
-    "build": "zhin build",
+    "dev": "zhin runtime start",
+    "start": "zhin runtime start --mode production --no-watch",
+    "daemon": "zhin runtime start --daemon --mode production --no-watch",
+    "build": "tsc --noEmit -p tsconfig.runtime.json",
     "stop": "zhin stop"
   },
   "_scripts-info": {
-    "dev": "启动开发服务器（推荐）。Console UI: https://console.zhin.dev ，API Base http://127.0.0.1:8086",
-    "start": "生产环境启动，不支持热重载",
-    "daemon": "后台守护进程启动（Linux/macOS），子进程异常会自动重启",
-    "build": "编译 TypeScript 并构建 Web 控制台",
-    "stop": "停止守护进程"
+    "dev": "Plugin Runtime（推荐）。Console: https://console.zhin.dev ，API Base http://127.0.0.1:8086",
+    "start": "Plugin Runtime 生产模式（无 watch）",
+    "daemon": "后台守护（Plugin Runtime，zhin stop 停止）",
+    "build": "类型检查",
+    "stop": "停止守护进程（legacy）"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.9",
@@ -26,6 +25,7 @@
     "@ai-sdk/openai": "4.0.8",
     "@ai-sdk/openai-compatible": "^3.0.5",
     "@puniyu/system-info": "1.5.7",
+    "@zhin.js/adapter": "workspace:*",
     "@zhin.js/adapter-dingtalk": "workspace:*",
     "@zhin.js/adapter-discord": "workspace:*",
     "@zhin.js/adapter-email": "workspace:*",
@@ -33,6 +33,7 @@
     "@zhin.js/adapter-icqq": "workspace:*",
     "@zhin.js/adapter-kook": "workspace:*",
     "@zhin.js/adapter-lark": "workspace:*",
+    "@zhin.js/adapter-line": "workspace:*",
     "@zhin.js/adapter-milky": "workspace:*",
     "@zhin.js/adapter-napcat": "workspace:*",
     "@zhin.js/adapter-onebot11": "workspace:*",
@@ -43,32 +44,51 @@
     "@zhin.js/adapter-slack": "workspace:*",
     "@zhin.js/adapter-telegram": "workspace:*",
     "@zhin.js/adapter-wechat-mp": "workspace:*",
+    "@zhin.js/adapter-wecom": "workspace:*",
     "@zhin.js/adapter-weixin-ilink": "workspace:*",
     "@zhin.js/agent": "workspace:*",
+    "@zhin.js/agent-feature": "workspace:*",
     "@zhin.js/cli": "workspace:*",
     "@zhin.js/client": "workspace:*",
+    "@zhin.js/command": "workspace:*",
+    "@zhin.js/component": "workspace:*",
     "@zhin.js/contract": "workspace:*",
+    "@zhin.js/core": "workspace:*",
     "@zhin.js/host-api": "workspace:*",
     "@zhin.js/host-router": "workspace:*",
     "@zhin.js/html-renderer": "workspace:*",
     "@zhin.js/kernel": "workspace:*",
     "@zhin.js/mcp": "workspace:*",
+    "@zhin.js/mcp-feature": "workspace:*",
+    "@zhin.js/middleware": "workspace:*",
+    "@zhin.js/page": "workspace:*",
     "@zhin.js/plugin-60s": "workspace:*",
-    "@zhin.js/plugin-group-suite": "workspace:*",
-    "@zhin.js/plugin-tic-tac-toe": "workspace:*",
-    "@zhin.js/plugin-rps": "workspace:*",
-    "@zhin.js/plugin-guess-number": "workspace:*",
+    "@zhin.js/plugin-blackjack": "workspace:*",
+    "@zhin.js/plugin-code-runner": "workspace:*",
     "@zhin.js/plugin-dice-duel": "workspace:*",
+    "@zhin.js/plugin-game-hub": "workspace:*",
+    "@zhin.js/plugin-group-suite": "workspace:*",
+    "@zhin.js/plugin-guess-number": "workspace:*",
     "@zhin.js/plugin-idiom-chain": "workspace:*",
-    "@zhin.js/plugin-word-riddle": "workspace:*",
-    "@zhin.js/plugin-text-adventure": "workspace:*",
-    "@zhin.js/plugin-music": "workspace:*",
-    "@zhin.js/plugin-repeater": "workspace:*",
-    "@zhin.js/plugin-rss": "workspace:*",
+    "@zhin.js/plugin-link-poster": "workspace:*",
     "@zhin.js/plugin-lottery": "workspace:*",
+    "@zhin.js/plugin-music": "workspace:*",
+    "@zhin.js/plugin-qrcode": "workspace:*",
+    "@zhin.js/plugin-repeater": "workspace:*",
+    "@zhin.js/plugin-rps": "workspace:*",
+    "@zhin.js/plugin-rss": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
+    "@zhin.js/plugin-short-url": "workspace:*",
+    "@zhin.js/plugin-text-adventure": "workspace:*",
+    "@zhin.js/plugin-tic-tac-toe": "workspace:*",
+    "@zhin.js/plugin-word-riddle": "workspace:*",
+    "@zhin.js/process-monitor": "workspace:*",
+    "@zhin.js/runtime": "workspace:*",
     "@zhin.js/satori": "workspace:*",
-    "@zhin.js/speech": "workspace:*",
     "@zhin.js/service-activity-feedback": "workspace:*",
+    "@zhin.js/skill": "workspace:*",
+    "@zhin.js/speech": "workspace:*",
+    "@zhin.js/tool": "workspace:*",
     "ai": "^7.0.2",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
@@ -87,6 +107,161 @@
     "typescript": "^6.0.3"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.18.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/adapter",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/component",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/middleware",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/tool",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/skill",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/agent-feature",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/mcp-feature",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/page",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": [
+      {
+        "package": "@zhin.js/adapter-sandbox",
+        "instanceKey": "sandbox"
+      },
+      {
+        "package": "@zhin.js/adapter-icqq",
+        "instanceKey": "icqq"
+      },
+      {
+        "package": "@zhin.js/adapter-icqq",
+        "instanceKey": "icqq-2"
+      },
+      {
+        "package": "@zhin.js/adapter-icqq",
+        "instanceKey": "icqq-3"
+      },
+      {
+        "package": "@zhin.js/adapter-icqq",
+        "instanceKey": "icqq-4"
+      },
+      {
+        "package": "@zhin.js/adapter-icqq",
+        "instanceKey": "icqq-5"
+      },
+      {
+        "package": "@zhin.js/adapter-slack",
+        "instanceKey": "slack"
+      },
+      {
+        "package": "@zhin.js/adapter-github",
+        "instanceKey": "github"
+      },
+      {
+        "package": "@zhin.js/adapter-qq",
+        "instanceKey": "qq"
+      },
+      {
+        "package": "@zhin.js/adapter-qq",
+        "instanceKey": "qq-sandbox"
+      },
+      {
+        "package": "@zhin.js/plugin-game-hub",
+        "instanceKey": "game-hub"
+      },
+      {
+        "package": "@zhin.js/plugin-guess-number",
+        "instanceKey": "guess-number"
+      },
+      {
+        "package": "@zhin.js/plugin-dice-duel",
+        "instanceKey": "dice-duel"
+      },
+      {
+        "package": "@zhin.js/plugin-rps",
+        "instanceKey": "rps"
+      },
+      {
+        "package": "@zhin.js/plugin-tic-tac-toe",
+        "instanceKey": "tic-tac-toe"
+      },
+      {
+        "package": "@zhin.js/plugin-idiom-chain",
+        "instanceKey": "idiom-chain"
+      },
+      {
+        "package": "@zhin.js/plugin-word-riddle",
+        "instanceKey": "word-riddle"
+      },
+      {
+        "package": "@zhin.js/plugin-text-adventure",
+        "instanceKey": "text-adventure"
+      },
+      {
+        "package": "@zhin.js/plugin-blackjack",
+        "instanceKey": "blackjack"
+      },
+      {
+        "package": "@zhin.js/plugin-qrcode",
+        "instanceKey": "qrcode"
+      },
+      {
+        "package": "@zhin.js/plugin-short-url",
+        "instanceKey": "short-url"
+      },
+      {
+        "package": "@zhin.js/plugin-link-poster",
+        "instanceKey": "link-poster"
+      },
+      {
+        "package": "@zhin.js/plugin-code-runner",
+        "instanceKey": "code-runner"
+      },
+      {
+        "package": "@zhin.js/plugin-lottery",
+        "instanceKey": "lottery"
+      },
+      {
+        "package": "@zhin.js/plugin-group-suite",
+        "instanceKey": "group-suite"
+      },
+      {
+        "package": "@zhin.js/service-activity-feedback",
+        "instanceKey": "activity-feedback"
+      },
+      {
+        "package": "@zhin.js/process-monitor",
+        "instanceKey": "process-monitor"
+      }
+    ]
   }
 }

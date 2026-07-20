@@ -1,4 +1,4 @@
-import { Logger, type AgentPromptBuildContext, type AgentPromptSection, getHostRootPlugin } from '@zhin.js/core';
+import { type AgentPromptBuildContext, type AgentPromptSection, getHostRootPlugin, getLogger } from '@zhin.js/core';
 import type { AgentTool } from '@zhin.js/ai';
 import { type ZhinAgentConfig, DEFAULT_CONFIG } from '../config/index.js';
 import { createAIHookEvent, triggerAIHook } from '../hooks.js';
@@ -9,7 +9,7 @@ import {
   sortAgentPromptSections,
 } from './format.js';
 import { getAgentPromptContributor } from './registry.js';
-const logger = new Logger(null, 'AgentPromptResolver');
+const logger = getLogger('AgentPromptResolver');
 
 export interface ResolveAgentPromptOptions {
   ctx: AgentPromptBuildContext;

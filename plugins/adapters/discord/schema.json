@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "default": "discord-bot"
+    },
+    "token": {
+      "type": "string"
+    },
+    "connection": {
+      "type": "string",
+      "enum": ["gateway", "interactions"],
+      "default": "gateway",
+      "description": "Gateway WebSocket (default). interactions uses httpHostToken POST + Ed25519 verify."
+    },
+    "intents": {
+      "type": "array",
+      "items": { "type": "number" }
+    },
+    "enableSlashCommands": {
+      "type": "boolean",
+      "default": false
+    },
+    "globalCommands": {
+      "type": "boolean",
+      "default": false
+    },
+    "defaultActivity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "type": {
+          "type": "string",
+          "enum": ["PLAYING", "STREAMING", "LISTENING", "WATCHING", "COMPETING"]
+        },
+        "url": { "type": "string" }
+      },
+      "required": ["name", "type"]
+    },
+    "slashCommands": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "applicationId": {
+      "type": "string",
+      "description": "Required when connection is interactions."
+    },
+    "publicKey": {
+      "type": "string",
+      "description": "Required when connection is interactions (hex Ed25519 public key)."
+    },
+    "interactionsPath": {
+      "type": "string",
+      "default": "/discord/interactions",
+      "description": "POST path on httpHostToken when connection is interactions."
+    }
+  },
+  "required": ["token"]
+}

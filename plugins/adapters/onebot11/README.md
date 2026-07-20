@@ -1,423 +1,83 @@
 # @zhin.js/adapter-onebot11
 
-Zhin.js OneBot v11 协议适配器，通过 WebSocket 连接各种支持 OneBot 协议的 QQ 机器人实现（如 go-cqhttp、Shamrock、LagrangeGo 等）。
+Zhin.js [OneBot 11](https://github.com/botuniverse/onebot-11) 适配器（Plugin Runtime）。生产路径为正向 WebSocket 客户端（`connection: ws`）；亦支持反向 WS（`connection: wss`，经 `httpHostToken`）。
 
 ## 功能特性
 
-- 🔌 完整 OneBot v11 协议兼容
-- 📦 **单一适配器**：`context: onebot11`，通过 `connection` 选择连接方式
-- 🌐 **正向 WebSocket**（`connection: ws`）：应用连 OneBot 实现的 WS
-- 🔄 **反向 WebSocket**（`connection: wss`）：应用开 WS 服务端，实现连上来
-- 🔐 Access Token 认证支持
-- 🔄 自动重连机制
-- 💓 心跳检测
-- 📨 群聊和私聊消息处理
-- 🛠️ 完整的 API 调用支持
-- 📝 消息段（Message Segment）完整支持
+- [OneBot 11 标准](https://github.com/botuniverse/onebot-11) 兼容（事件 + 动作）
+- 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
+- **正向 WebSocket**（`connection: ws`）：应用连 OneBot 实现的 WS 服务器
+- `access_token` 鉴权（Bearer + query）
+- 入站经 `messageGatewayToken`；出站 `send({ target, payload })`
 
 ## 安装
 
 ```bash
-pnpm add @zhin.js/adapter-onebot11 ws
+pnpm add @zhin.js/adapter-onebot11
 ```
 
-反向 WS 需同时启用 `@zhin.js/host-router`。
+## Plugin Runtime
 
-## 前置条件
+- `@zhin.js/adapter` — 约定式 `adapters/onebot11.ts`（`defineAdapter`）
+- `@zhin.js/core` — `messageGatewayToken` 入站/出站
+- `@zhin.js/plugin-runtime` — `plugin.ts`（`definePlugin`）
+- 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 
-| 要求 | 说明 |
-|------|------|
-| **OneBot 实现** | 已运行 go-cqhttp、Lagrange、Shamrock 等，并开启 WS 服务 |
-| **正向 WS（`connection: ws`）** | 配置 OneBot 实现的 WS 地址；应用主动连接 |
-| **反向 WS（`connection: wss`）** | 需 `@zhin.js/host-router`；OneBot 实现连到本 Endpoint 的 `path` |
-| **access_token** | 可选；须与 OneBot 实现侧配置一致 |
-
-必填字段见 `OneBot11EndpointConfig`：`context`、`name`、`connection`；`ws` 需 `url`，`wss` 需 `path`。
+入站：`gateway.receive({ adapter, target: "private:uid"|"group:gid", content, sender, metadata })`  
+出站：`send({ target, payload })` → WS `send_private_msg` / `send_group_msg`（payload 已由 gateway/core 渲染；无 segment-mapper）
 
 ## 最小配置
 
-正向 WebSocket（本地开发推荐）：
-
 ```yaml
+# zhin.config.yml（Plugin Runtime）
 plugins:
-  - "@zhin.js/adapter-onebot11"
-
-endpoints:
-  - context: onebot11
+  onebot11:
     connection: ws
-    name: my-bot
+    name: ob11-bot
     url: "ws://127.0.0.1:6700"
     access_token: "${ONEBOT11_ACCESS_TOKEN}"
-```
-
-## 配置
-
-所有 Endpoint 使用 **同一 context：`onebot11`**，通过 **`connection`** 区分连接方式。
-
-### 正向 WebSocket（connection: ws）
-
-```yaml
-plugins:
-  - "@zhin.js/adapter-onebot11"
-
-endpoints:
-  - context: onebot11
-    connection: ws
-    name: my-bot
-    url: "ws://localhost:8080"
-    access_token: "${ONEBOT_TOKEN}"
     reconnect_interval: 5000
     heartbeat_interval: 30000
 ```
 
-### 反向 WebSocket（connection: wss）
+根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-onebot11`（`instanceKey: onebot11`）。
 
-```yaml
-plugins:
-  - "@zhin.js/host-router"
-  - "@zhin.js/adapter-onebot11"
+## 连接方式
 
-endpoints:
-  - context: onebot11
-    connection: wss
-    name: my-bot
-    path: "/onebot/ws"
-    access_token: "${ONEBOT_TOKEN}"
-    heartbeat_interval: 30000
-```
+| connection | 状态 |
+|------------|----------------|
+| `ws` | 已实现（推荐） |
+| `wss` | 已实现：反向 WS（`httpHostToken`） |
 
-兼容旧配置：若使用 `type: 'ws'` / `type: 'ws_reverse'` 而未写 `connection`，适配器会自动映射为 `ws` / `wss`。
+## 鉴权
 
-## 支持的 OneBot 实现
+- **Bearer**：`Authorization: Bearer <access_token>`
+- 正向 WS 在 Upgrade 时附带请求头，并在 URL query 写入 `access_token`
 
-### 推荐实现
+## 动作与事件
 
-| 实现 | 协议支持 | 稳定性 | 推荐度 |
-|------|---------|--------|--------|
-| [go-cqhttp](https://github.com/Mrs4s/go-cqhttp) | ✅ 完整 | ⭐⭐⭐⭐⭐ | 高 |
-| [LagrangeGo](https://github.com/LagrangeDev/Lagrange.Core) | ✅ 完整 | ⭐⭐⭐⭐ | 高 |
-| [Shamrock](https://github.com/whitechi73/OpenShamrock) | ✅ 完整 | ⭐⭐⭐⭐ | 中 |
-| [NapCat](https://github.com/NapNeko/NapCatQQ) | ✅ 完整 | ⭐⭐⭐⭐ | 中 |
-
-### 配置示例
-
-#### go-cqhttp
-
-```yaml
-# config.yml
-servers:
-  - ws:
-      host: 0.0.0.0
-      port: 8080
-      access-token: "your_token_here"
-```
-
-#### Shamrock
-
-在 Shamrock 设置中：
-1. 启用 WebSocket 服务
-2. 设置端口（默认 5800）
-3. 配置 Access Token（可选）
-
-## 使用示例
-
-### 基础消息处理
-
-```typescript
-import { addCommand, MessageCommand } from 'zhin.js'
-
-addCommand(new MessageCommand('hello <name:text>')
-  .action(async (message, result) => {
-    return `你好，${result.params.name}！`
-  })
-)
-```
-
-### 群聊消息
-
-```typescript
-import { onGroupMessage } from 'zhin.js'
-
-onGroupMessage(async (message) => {
-  console.log(`群 ${message.$channel.id} 收到消息`)
-  await message.$reply('收到了！')
-})
-```
-
-### 私聊消息
-
-```typescript
-import { onPrivateMessage } from 'zhin.js'
-
-onPrivateMessage(async (message) => {
-  await message.$reply('你好！')
-})
-```
-
-### 发送图片
-
-```typescript
-addCommand(new MessageCommand('pic <url:text>')
-  .action(async (message, result) => {
-    return [
-      { type: 'image', data: { file: result.params.url } }
-    ]
-  })
-)
-```
-
-### 使用 CQ 码
-
-```typescript
-addCommand(new MessageCommand('cq')
-  .action(async (message) => {
-    return [
-      { type: 'face', data: { id: '123' } },
-      { type: 'text', data: { text: '表情' } }
-    ]
-  })
-)
-```
-
-## 消息类型支持
-
-### 接收消息类型
-
-- ✅ 文本消息（text）
-- ✅ 图片消息（image）
-- ✅ 语音消息（record）
-- ✅ 视频消息（video）
-- ✅ @ 提及（at）
-- ✅ 表情（face）
-- ✅ 引用回复（reply）
-- ✅ 戳一戳（poke）
-- ✅ 分享（share）
-- ✅ 位置（location）
-- ✅ 音乐分享（music）
-- ✅ JSON 卡片（json）
-- ✅ XML 卡片（xml）
-
-### 发送消息类型
-
-- ✅ 文本消息
-- ✅ 图片消息（支持 URL、Base64、本地文件）
-- ✅ 语音消息
-- ✅ 视频消息
-- ✅ @ 提及
-- ✅ 表情
-- ✅ 引用回复
-- ✅ 戳一戳
-- ✅ 分享卡片
-- ✅ 音乐分享
-- ✅ JSON/XML 卡片
-
-## API 方法
-
-### 消息相关
-
-```typescript
-const endpoint = app.adapters.get('onebot11')?.endpoints.get('my-bot')
-
-// 发送群消息
-await endpoint.callApi('send_group_msg', {
-  group_id: 123456,
-  message: '消息内容'
-})
-
-// 发送私聊消息
-await endpoint.callApi('send_private_msg', {
-  user_id: 123456,
-  message: '消息内容'
-})
-
-// 撤回消息
-await endpoint.callApi('delete_msg', {
-  message_id: 123456
-})
-```
-
-### 信息获取
-
-```typescript
-// 获取登录信息
-const loginInfo = await endpoint.callApi('get_login_info')
-
-// 获取用户信息
-const userInfo = await endpoint.callApi('get_stranger_info', {
-  user_id: 123456
-})
-
-// 获取群信息
-const groupInfo = await endpoint.callApi('get_group_info', {
-  group_id: 123456
-})
-
-// 获取群成员列表
-const memberList = await endpoint.callApi('get_group_member_list', {
-  group_id: 123456
-})
-```
-
-### 群管理
-
-```typescript
-// 踢出群成员
-await endpoint.callApi('set_group_kick', {
-  group_id: 123456,
-  user_id: 654321
-})
-
-// 禁言群成员
-await endpoint.callApi('set_group_ban', {
-  group_id: 123456,
-  user_id: 654321,
-  duration: 600 // 秒
-})
-
-// 设置群名片
-await endpoint.callApi('set_group_card', {
-  group_id: 123456,
-  user_id: 654321,
-  card: '新名片'
-})
-```
-
-## 连接模式对比
-
-### 正向 WebSocket（客户端模式）
-
-**优点：**
-- ✅ 配置简单
-- ✅ 主动连接，无需开放端口
-- ✅ 适合本地开发
-
-**缺点：**
-- ❌ 需要 OneBot 实现提供 WebSocket 服务
-
-### 反向 WebSocket（服务器模式）
-
-**优点：**
-- ✅ OneBot 实现主动连接
-- ✅ 支持多个客户端连接
-- ✅ 适合生产环境
-
-**缺点：**
-- ❌ 需要开放端口或使用内网穿透
-- ❌ 配置相对复杂
-
-## 消息 ID 格式
-
-OneBot11 适配器的消息 ID 格式：`{message_id}`
-
-撤回消息时直接使用数字 ID。
-
-## 注意事项
-
-### Access Token
-
-建议配置 Access Token 增强安全性：
-```typescript
-{
-  access_token: process.env.ONEBOT_TOKEN
-}
-```
-
-OneBot 实现需要配置相同的 Token。
-
-### 重连机制
-
-适配器会自动重连，可配置重连间隔：
-```typescript
-{
-  reconnect_interval: 5000  // 5秒后重连
-}
-```
-
-### 心跳检测
-
-心跳机制确保连接活跃：
-```typescript
-{
-  heartbeat_interval: 30000  // 30秒发送一次心跳
-}
-```
-
-### API 超时
-
-API 调用默认 30 秒超时，可在代码中调整。
-
-## 故障排查
-
-### 连接不上 OneBot 服务
-
-1. OneBot 服务是否已启动
-2. WebSocket 地址（`url`）或反向路径（`path`）是否正确
-3. `access_token` 是否与实现侧一致
-4. 防火墙是否阻止连接
-
-### 消息发送失败
-
-1. QQ 未登录或登录失效
-2. 账号风控限制
-3. 群/好友不存在
-4. 消息段格式错误
-
-### 反向 WS 无法连接
-
-1. `@zhin.js/host-router` 已启用且 HTTP 服务正常
-2. `path` 与 OneBot 实现配置的反向 WS 地址一致
-3. 端口已从公网或内网可达
-
-### CQ 码与消息段
-
-适配器自动处理 CQ 码转换；发送时使用消息段格式即可：
-
-```typescript
-[
-  { type: 'text', data: { text: '文本' } },
-  { type: 'image', data: { file: 'url' } }
-]
-```
-
-## 文档链接
-
-- [OneBot v11 适配器文档](https://zhin.js.org/adapters/onebot11)
-- [适配器概览](https://zhin.js.org/essentials/adapters)
-- [OneBot 11 标准](https://github.com/botuniverse/onebot-11)
-
-## 相关链接
-
-- [OneBot 标准](https://github.com/botuniverse/onebot-11)
-- [go-cqhttp](https://github.com/Mrs4s/go-cqhttp)
-- [LagrangeGo](https://github.com/LagrangeDev/Lagrange.Core)
-- [Shamrock](https://github.com/whitechi73/OpenShamrock)
-
-## 依赖项
-
-- `ws` - WebSocket 客户端/服务器库
-- `zhin.js` - Zhin 核心框架
+- 事件：`post_type`（message/notice/request/meta_event）、`message_type`、`message` 等
+- 动作：`send_private_msg`、`send_group_msg`、`delete_msg`、`set_group_special_title` 等
 
 ## AI 工具
 
 | 类别 | 路径 |
 |------|------|
 | Permit 词汇 | `agent/PERMITS.md` |
-| 平台工具（1 个） | `agent/tools/set_title.ts` → `onebot11_set_title` |
+| 平台工具 | `agent/tools/set_title.ts` → `onebot11_set_title` |
 | 技能说明 | `agent/skills/onebot11.md` |
-| 群管标准工具 | `createSceneManagementTools()` |
 
+## 迁移说明（Plugin Runtime）
 
-## 开发
+- **notice / request 侧事件已移除**：旧 Adapter 对 `post_type: notice|request` 构建 `notice.receive` / `request.receive` 事件；新 Plugin Runtime（`messageGatewayToken`）暂无侧事件总线，入站仅处理 `post_type: message`，notice / request 事件静默丢弃。
+- **群管工具暂未迁移**：旧 Adapter 经 `createSceneManagementTools` 注册踢人 / 禁言 / 群名片等成套 agent 工具；迁移后仅保留 `onebot11_set_title`，其余群管能力可通过 `callApi`（如 `set_group_kick`、`set_group_ban`）作为逃生舱调用。
+- **平台权限门禁**：`plugin.ts` setup 已注册 `registerDefaultScenePlatformPermitChecker('onebot11')`，`scene_admin` / `scene_owner` 依据入站 metadata 中的 sender `role`（owner / admin）判定。
 
-```bash
-pnpm build  # 构建
-pnpm clean  # 清理构建文件
-```
+## 文档链接
+
+- [OneBot 11 标准](https://github.com/botuniverse/onebot-11)
+- [适配器概览](https://zhin.js.org/essentials/adapters)
 
 ## 许可证
 
 MIT License
-
-## 贡献
-
-欢迎提交 Issue 和 Pull Request！

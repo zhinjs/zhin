@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/adapter-satori",
   "version": "3.0.2",
-  "description": "Zhin.js adapter for Satori protocol",
+  "description": "Zhin.js Satori adapter for Plugin Runtime (WebSocket client)",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -13,17 +13,20 @@
     }
   },
   "scripts": {
-    "build": "zhin build",
+    "build": "tsc",
     "clean": "rimraf lib",
-    "prepublishOnly": "npm run build"
+    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/adapters/satori/tests",
+    "prepublishOnly": "pnpm run build"
   },
   "files": [
+    "adapters",
+    "plugin.ts",
+    "schema.json",
     "src",
     "lib",
-    "client",
-    "dist",
     "agent",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "keywords": [
     "zhin",
@@ -40,23 +43,28 @@
     "directory": "plugins/adapters/satori"
   },
   "dependencies": {
+    "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/logger": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",
     "@types/ws": "^8.18.1",
-    "@zhin.js/cli": "workspace:*",
-    "@zhin.js/client": "workspace:*",
-    "@zhin.js/host-router": "workspace:*",
+    "@zhin.js/host-http": "workspace:*",
     "typescript": "^6.0.3",
-    "zhin.js": "workspace:*"
+    "vitest": "^4.1.10"
   },
   "peerDependencies": {
-    "zhin.js": "workspace:*",
-    "@zhin.js/host-router": "workspace:*"
+    "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
+    "zhin.js": "workspace:*"
   },
   "peerDependenciesMeta": {
-    "@zhin.js/host-router": {
+    "zhin.js": {
       "optional": true
     }
   },
@@ -67,5 +75,23 @@
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/adapter",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
   }
 }

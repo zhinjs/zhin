@@ -12,9 +12,9 @@
  *   └──────────────────────────────────────────────────────────┘
  */
 
-import { Logger } from '@zhin.js/core';
+import { getLogger } from '@zhin.js/core';
 
-const logger = new Logger(null, 'UserProfile');
+const logger = getLogger('UserProfile');
 
 // ============================================================================
 // 数据库模型

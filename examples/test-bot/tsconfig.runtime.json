@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": [
+    "plugin.ts",
+    "commands/**/*",
+    "tools/**/*",
+    "components/**/*",
+    "lib/**/*.ts",
+    "lib/**/*.tsx",
+    "tests/**/*"
+  ],
+  "exclude": ["node_modules", "lib/plugins"]
+}

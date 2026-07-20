@@ -5,27 +5,14 @@
 
 import { BaseProvider } from './base.js';
 import type {
-  ProviderConfig,
-  ChatCompletionRequest,
-  ChatCompletionResponse,
-  ChatCompletionChunk,
-  ChatMessage,
-  ContentPart,
-} from '../types.js';
+  ProviderConfig, ChatCompletionRequest, ChatCompletionResponse, ChatCompletionChunk, ChatMessage, ContentPart, } from '../types.js';
 import {
-  OPENAI_DEFAULT_IMAGE_MODEL,
-  resolveOpenAIImagesGenerationItem,
-  ZHIPU_DEFAULT_IMAGE_MODEL,
-  type ImageGenerationDefaults,
-  type ImageGenerateRequest,
-  type ImageGenerateResult,
-  type OpenAIImagesGenerationItem,
-} from '../image-generation.js';
-import { formatCompact, Logger } from '@zhin.js/logger';
+  OPENAI_DEFAULT_IMAGE_MODEL, resolveOpenAIImagesGenerationItem, ZHIPU_DEFAULT_IMAGE_MODEL, type ImageGenerationDefaults, type ImageGenerateRequest, type ImageGenerateResult, type OpenAIImagesGenerationItem, } from '../image-generation.js';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import { formatRedactedJson } from '../llm/redact-request-body.js';
 import { parseOpenAIChatCompletionBody } from './openai-sse.js';
 
-const llmRequestLogger = new Logger(null, 'LLM');
+const llmRequestLogger = getLogger('LLM');
 
 export interface OpenAIConfig extends ProviderConfig {
   organization?: string;

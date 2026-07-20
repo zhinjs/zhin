@@ -4,6 +4,8 @@
 
 Accepted（架构边界与分阶段路线）；各 Phase 实现项随 PR 逐步闭合。
 
+> 2026-07 修订：D1 的插件 `agent/` 创作面目标已被 [ADR 0043](./0043-unify-capability-roots.md) 取代。当前 `agent/` 实现只作为领域参考；其余 IM、安装分层、安全和 Host 决策继续有效。
+
 ## 背景
 
 [Eve](https://eve.dev/docs/introduction) 是以 **filesystem-first** 组织 Agent 能力的 TypeScript 框架：instructions、tools、skills、connections、hooks、subagents 等均有固定目录槽位，并在运行时提供 **durable session**（Workflow SDK）、统一 **HTTP session/stream 契约** 与 **HITL/OAuth 事件流**。

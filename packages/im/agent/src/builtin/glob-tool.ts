@@ -5,7 +5,7 @@ import { exec, type ExecOptions } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { Tool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import { shellEscape } from '../security/file-policy.js';
-import { checkFileToolAccess, checkSensitiveFilePathAccess, toDenyError, toOwnerSignal } from '../security/dangerous-tool-policy.js';
+import { runToolPolicies, toolPolicyResultToMessage } from '../security/policy-facade.js';
 import { errMsg } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 
@@ -47,16 +47,12 @@ export class GlobBuiltinTool extends BuiltinBaseTool {
     try {
       const cwdRaw = args.cwd;
       const cwd = typeof cwdRaw === 'string' && cwdRaw.trim() ? cwdRaw : process.cwd();
-      const roleDecision = checkFileToolAccess('glob', commMessage);
-      if (!roleDecision.allowed) {
-        if (roleDecision.needsOwnerApproval) return toOwnerSignal(roleDecision);
-        return toDenyError(roleDecision);
-      }
-      const sensitiveDecision = checkSensitiveFilePathAccess('glob', cwd, commMessage);
-      if (!sensitiveDecision.allowed) {
-        if (sensitiveDecision.needsOwnerApproval) return toOwnerSignal(sensitiveDecision);
-        return toDenyError(sensitiveDecision);
-      }
+      // 统一安全策略门面（与原两层手写链等价）：role-gate → sensitive-path
+      const policyGate = toolPolicyResultToMessage(
+        runToolPolicies({ toolName: 'glob', filePath: cwd, commMessage }),
+        'glob',
+      );
+      if (policyGate) return policyGate;
       const safePattern = shellEscape(patternArg);
       const { stdout } = await this.execAsync(
         `find . -path ./${safePattern} -type f 2>/dev/null | head -100`,

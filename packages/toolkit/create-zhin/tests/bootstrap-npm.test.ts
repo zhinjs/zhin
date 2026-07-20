@@ -31,7 +31,11 @@ function aiEnabledOptions(): InitOptions {
     adapters: {
       packages: ['@zhin.js/adapter-sandbox'],
       plugins: ['@zhin.js/adapter-sandbox'],
-      endpoints: [],
+      instances: [{
+        package: '@zhin.js/adapter-sandbox',
+        instanceKey: 'sandbox',
+        config: { endpoints: [{ context: 'sandbox', name: 'sandbox-bot', owner: 'sandbox-user' }] },
+      }],
       envVars: {},
     },
     ai: {
@@ -53,7 +57,7 @@ async function waitForStartLog(proc: ReturnType<typeof spawn>, timeoutMs: number
 
     proc.stdout?.on('data', (chunk: Buffer) => {
       output += chunk.toString();
-      if (output.includes('http:')) {
+      if (output.includes('http=')) {
         clearTimeout(timer);
         resolve(output);
       }
@@ -62,7 +66,7 @@ async function waitForStartLog(proc: ReturnType<typeof spawn>, timeoutMs: number
       output += chunk.toString();
     });
     proc.on('exit', (code) => {
-      if (!output.includes('http:')) {
+      if (!output.includes('http=')) {
         clearTimeout(timer);
         reject(new Error(`pnpm start exited ${code}\n${output}`));
       }
@@ -76,7 +80,7 @@ afterEach(async () => {
 
 describe.skipIf(process.env.ZHIN_RUN_NETWORK_BOOTSTRAP !== '1')('create-zhin npm bootstrap', () => {
   it(
-    'create -y → pnpm install → pnpm start 可启动 Host',
+    'create -y → pnpm install → pnpm start 可启动 Runtime',
     async () => {
       const root = await fs.mkdtemp(path.join(os.tmpdir(), 'create-zhin-bootstrap-'));
       tmpRoots.push(root);
@@ -96,7 +100,7 @@ describe.skipIf(process.env.ZHIN_RUN_NETWORK_BOOTSTRAP !== '1')('create-zhin npm
       });
       try {
         const log = await waitForStartLog(proc, 60_000);
-        expect(log).toContain(`http: http://127.0.0.1:${DEFAULT_CREATE_BOT_HTTP_PORT}/api`);
+        expect(log).toContain(`http=http://127.0.0.1:${DEFAULT_CREATE_BOT_HTTP_PORT}`);
       } finally {
         proc.kill('SIGTERM');
       }

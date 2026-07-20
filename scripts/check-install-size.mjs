@@ -11,6 +11,9 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
+const packageManager = JSON.parse(
+  fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'),
+).packageManager;
 
 const IM_BUDGET_BYTES = 10 * 1024 * 1024;
 
@@ -19,6 +22,12 @@ const IM_STACK = [
   { dir: 'basic/schema', name: '@zhin.js/schema' },
   { dir: 'basic/logger', name: '@zhin.js/logger' },
   { dir: 'basic/schedule', name: '@zhin.js/schedule' },
+  { dir: 'packages/im/plugin-runtime', name: '@zhin.js/plugin-runtime' },
+  { dir: 'packages/im/feature-kit', name: '@zhin.js/feature-kit' },
+  { dir: 'packages/im/adapter', name: '@zhin.js/adapter' },
+  { dir: 'packages/im/command', name: '@zhin.js/command' },
+  { dir: 'packages/im/component', name: '@zhin.js/component' },
+  { dir: 'packages/im/middleware', name: '@zhin.js/middleware' },
   { dir: 'packages/im/kernel', name: '@zhin.js/kernel' },
   { dir: 'basic/database', name: '@zhin.js/database' },
   { dir: 'packages/im/core', name: '@zhin.js/core' },
@@ -68,6 +77,7 @@ function measureInstall(overrides) {
     const pkg = {
       name: 'zhin-install-size-fixture',
       private: true,
+      packageManager,
       dependencies: {
         'zhin.js': overrides['zhin.js'],
       },
@@ -76,7 +86,7 @@ function measureInstall(overrides) {
     fs.writeFileSync(path.join(work, 'package.json'), JSON.stringify(pkg, null, 2));
     run('pnpm install --prod', {
       cwd: work,
-      stdio: 'pipe',
+      stdio: 'inherit',
       env: { ...process.env, NODE_ENV: 'production' },
     });
     return duBytes(path.join(work, 'node_modules'));

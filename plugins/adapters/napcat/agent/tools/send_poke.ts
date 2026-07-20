@@ -1,8 +1,8 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getEndpoint } from '../../src/napcat-agent-deps.js';
 
-export default defineTool<{ endpoint_id: string; user_id: number; group_id?: number }>({
+export default defineAgentTool<{ endpoint_id: string; user_id: number; group_id?: number }>({
   description: '戳一戳（群聊或私聊）。group_id 不传时为私聊戳一戳。',
   inputSchema: z.object({
     endpoint_id: z.string().describe('Endpoint 名称'),

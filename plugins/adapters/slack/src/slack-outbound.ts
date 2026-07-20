@@ -1,10 +1,9 @@
 /**
- * Slack 出站消息构造 — mrkdwn + Block Kit + files.uploadV2
+ * Slack outbound — chat.postMessage + Block Kit + files.uploadV2
  */
-import type { WebClient } from '@slack/web-api';
-import type { MessageSegment, SendContent } from 'zhin.js';
 import type { Logger } from '@zhin.js/logger';
 import { markdownToMrkdwn, mrkdwnToPlainFallback, splitMrkdwnText } from './markdown-to-mrkdwn.js';
+import { formatOutboundWire, keyboardToBlockKitBlocks } from './protocol.js';
 
 export interface SlackOutboundResult {
   ts: string;
@@ -15,71 +14,27 @@ export interface SlackSendOptions {
   threadTs?: string;
 }
 
+export interface SlackChatClient {
+  chat: {
+    postMessage(opts: Record<string, unknown>): Promise<{ ts?: string }>;
+    update(opts: Record<string, unknown>): Promise<unknown>;
+  };
+  filesUploadV2?(opts: Record<string, unknown>): Promise<unknown>;
+}
+
 const SLACK_MAX_BLOCKS_PER_MESSAGE = 48;
 
 export async function sendSlackContent(
-  client: WebClient,
-  content: SendContent,
+  client: SlackChatClient,
+  content: unknown,
   opts: SlackSendOptions,
   logger: Logger,
 ): Promise<SlackOutboundResult> {
-  const segments = normalizeContent(content);
-  let textContent = '';
-  const blocks: Record<string, unknown>[] = [];
-  const attachments: Record<string, unknown>[] = [];
-  const pendingFiles: Array<{ buffer?: Buffer; url?: string; path?: string; name?: string }> = [];
+  const wire = formatOutboundWire(content);
+  const blocks = [...wire.blocks];
+  const textDelivery = applyTextMrkdwnBlocks(wire.text, blocks);
 
-  for (const seg of segments) {
-    if (typeof seg === 'string') {
-      textContent += seg;
-      continue;
-    }
-    const { type, data } = seg as MessageSegment;
-    switch (type) {
-      case 'text':
-        textContent += data.text ?? '';
-        break;
-      case 'at':
-      case 'mention':
-        textContent += `<@${data.id ?? data.target}>`;
-        break;
-      case 'channel_mention':
-        textContent += `<#${data.id}>`;
-        break;
-      case 'link':
-        if (data.text && data.text !== data.url) {
-          textContent += `<${data.url}|${data.text}>`;
-        } else {
-          textContent += `<${data.url}>`;
-        }
-        break;
-      case 'image':
-        if (data.url) {
-          attachments.push({ image_url: data.url, title: data.name ?? data.title ?? '' });
-        } else if (data.media) {
-          pendingFiles.push(resolveMediaToFile(data.media, data.alt ?? 'image'));
-        }
-        break;
-      case 'audio':
-      case 'video':
-      case 'file':
-        if (data.media) {
-          pendingFiles.push(resolveMediaToFile(data.media, data.name ?? type));
-        } else if (data.file || data.url) {
-          pendingFiles.push({ path: data.file, url: data.url, name: data.name ?? type });
-        }
-        break;
-      case 'keyboard':
-        blocks.push(...keyboardToBlockKitBlocks(data));
-        break;
-      default:
-        textContent += data.text ?? `[${type}]`;
-    }
-  }
-
-  const textDelivery = applyTextMrkdwnBlocks(textContent, blocks);
-
-  for (const pf of pendingFiles) {
+  for (const pf of wire.files) {
     try {
       await uploadFile(client, opts.channel, pf, opts.threadTs, logger);
     } catch (e) {
@@ -91,39 +46,20 @@ export async function sendSlackContent(
     channel: opts.channel,
     threadTs: opts.threadTs,
     blocks,
-    attachments,
+    attachments: wire.attachments,
     fallbackText: textDelivery.fallbackText,
   });
 }
 
 export async function editSlackContent(
-  client: WebClient,
+  client: SlackChatClient,
   channel: string,
   ts: string,
-  content: SendContent,
+  content: unknown,
 ): Promise<void> {
-  const segments = normalizeContent(content);
-  let textContent = '';
-  const blocks: Record<string, unknown>[] = [];
-
-  for (const seg of segments) {
-    if (typeof seg === 'string') { textContent += seg; continue; }
-    const { type, data } = seg as MessageSegment;
-    switch (type) {
-      case 'text': textContent += data.text ?? ''; break;
-      case 'at': case 'mention': textContent += `<@${data.id ?? data.target}>`; break;
-      case 'channel_mention': textContent += `<#${data.id}>`; break;
-      case 'link':
-        textContent += data.text && data.text !== data.url ? `<${data.url}|${data.text}>` : `<${data.url}>`;
-        break;
-      case 'keyboard':
-        blocks.push(...keyboardToBlockKitBlocks(data));
-        break;
-      default: textContent += data.text ?? `[${type}]`;
-    }
-  }
-
-  const textDelivery = applyTextMrkdwnBlocks(textContent, blocks);
+  const wire = formatOutboundWire(content);
+  const blocks = [...wire.blocks];
+  const textDelivery = applyTextMrkdwnBlocks(wire.text, blocks);
   const payloadBlocks = blocks.slice(0, SLACK_MAX_BLOCKS_PER_MESSAGE);
 
   const updateOpts: Record<string, unknown> = {
@@ -132,13 +68,7 @@ export async function editSlackContent(
     text: textDelivery.fallbackText || ' ',
   };
   if (payloadBlocks.length > 0) updateOpts.blocks = payloadBlocks;
-  await client.chat.update(updateOpts as any);
-}
-
-function normalizeContent(content: SendContent): Array<string | MessageSegment> {
-  if (typeof content === 'string') return [content];
-  if (!Array.isArray(content)) return [content as MessageSegment];
-  return content as Array<string | MessageSegment>;
+  await client.chat.update(updateOpts);
 }
 
 function applyTextMrkdwnBlocks(
@@ -163,7 +93,7 @@ function applyTextMrkdwnBlocks(
 }
 
 async function postSlackMessage(
-  client: WebClient,
+  client: SlackChatClient,
   opts: {
     channel: string;
     threadTs?: string;
@@ -182,8 +112,8 @@ async function postSlackMessage(
       text: fallbackText || 'Message',
       ...(threadTs ? { thread_ts: threadTs } : {}),
       ...(attachments.length > 0 ? { attachments } : {}),
-    } as any);
-    return { ts: (result as any).ts ?? '' };
+    });
+    return { ts: result.ts ?? '' };
   }
 
   for (let offset = 0; offset < blocks.length; offset += SLACK_MAX_BLOCKS_PER_MESSAGE) {
@@ -194,8 +124,8 @@ async function postSlackMessage(
       blocks: chunk,
       ...(threadTs ? { thread_ts: threadTs } : {}),
       ...(offset === 0 && attachments.length > 0 ? { attachments } : {}),
-    } as any);
-    const ts = (result as any).ts ?? '';
+    });
+    const ts = result.ts ?? '';
     if (!firstTs) firstTs = ts;
     if (!threadTs) threadTs = ts;
   }
@@ -203,48 +133,14 @@ async function postSlackMessage(
   return { ts: firstTs };
 }
 
-function resolveMediaToFile(
-  media: { kind: string; value: string; mime_type?: string },
-  name: string,
-): { buffer?: Buffer; url?: string; name: string } {
-  if (media.kind === 'base64') {
-    return { buffer: Buffer.from(media.value, 'base64'), name };
-  }
-  if (media.kind === 'url') {
-    return { url: media.value, name };
-  }
-  return { url: media.value, name };
-}
-
-/** 每行 keyboard → 独立 actions block（Slack 每 block 最多 5 个按钮） */
-export function keyboardToBlockKitBlocks(data: Record<string, unknown>): Record<string, unknown>[] {
-  const rows = data.rows as Array<Array<Record<string, unknown>>> | undefined;
-  if (!rows?.length) return [];
-
-  const blocks: Record<string, unknown>[] = [];
-  for (const row of rows) {
-    const elements = row.slice(0, 5).map((btn, index) => ({
-      type: 'button',
-      text: { type: 'plain_text', text: String(btn.label ?? btn.text ?? 'button').slice(0, 75) },
-      action_id: String(btn.id ?? btn.action_id ?? `btn_${blocks.length}_${index}`),
-      ...(btn.value != null ? { value: String(btn.value) } : {}),
-      ...(btn.style === 'primary' ? { style: 'primary' } : {}),
-      ...(btn.style === 'danger' ? { style: 'danger' } : {}),
-    }));
-    if (elements.length > 0) {
-      blocks.push({ type: 'actions', elements });
-    }
-  }
-  return blocks;
-}
-
 async function uploadFile(
-  client: WebClient,
+  client: SlackChatClient,
   channel: string,
   file: { buffer?: Buffer; url?: string; path?: string; name?: string },
   threadTs?: string,
   logger?: Logger,
 ): Promise<void> {
+  if (!client.filesUploadV2) return;
   try {
     let buffer = file.buffer;
     if (!buffer && file.path) {
@@ -267,3 +163,5 @@ async function uploadFile(
     logger?.error('File upload failed:', e);
   }
 }
+
+export { keyboardToBlockKitBlocks };

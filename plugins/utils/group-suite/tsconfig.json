@@ -3,10 +3,22 @@
   "compilerOptions": {
     "types": ["node"],
     "outDir": "./lib",
-    "rootDir": ".",
-    "declaration": false,
-    "declarationMap": false,
+    "rootDir": "./src"
   },
-  "include": ["src/**/*", "agent/**/*"],
-  "exclude": ["lib", "node_modules"]
+  "include": [
+    "src/index.ts",
+    "src/config.ts",
+    "src/shared-runtime.ts",
+    "src/db-store.ts",
+    "src/tables.ts",
+    "src/memory-store.ts",
+    "src/checkin-lib.ts",
+    "src/keyword-store.ts",
+    "src/analysis-card.ts",
+    "src/analysis.ts",
+    "src/card-layout.ts",
+    "src/stats-card.ts",
+    "src/stats-data.ts"
+  ],
+  "exclude": ["lib", "node_modules", "tests", "commands", "middlewares", "agent", "tools"]
 }

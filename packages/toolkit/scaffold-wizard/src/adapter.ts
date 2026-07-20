@@ -12,10 +12,20 @@ import {
 } from './adapter-configurers.js';
 import { ZHIN_STACK_VERSIONS } from './zhin-stack-deps.js';
 
+/** 一个待挂载的子插件实例（package.json zhin.plugins 清单 + zhin.config plugins.<instanceKey> 配置） */
+export interface AdapterPluginInstance {
+  /** 适配器/插件包名，如 @zhin.js/adapter-sandbox */
+  package: string;
+  /** 运行时实例键，如 sandbox / telegram；同名包多实例时需区分 */
+  instanceKey: string;
+  /** 写入 zhin.config plugins.<instanceKey> 的配置（对齐该插件 schema.json） */
+  config: Record<string, unknown>;
+}
+
 export interface AdapterSetupResult {
   packages: string[];
   plugins: string[];
-  endpoints: Array<Record<string, any>>;
+  instances: AdapterPluginInstance[];
   envVars: Record<string, string>;
   /** 所选适配器需要 database 插件（如 GitHub 订阅/OAuth 表） */
   requiresDatabase?: boolean;
@@ -56,7 +66,7 @@ const ADAPTERS: AdapterDefinition[] = [
     plugin: '@zhin.js/adapter-sandbox',
     needsHttp: true,
     description: '终端 + Remote Console 沙盒页，本地开发首选',
-    setupHint: '无需额外凭据；pnpm dev 后可在终端或 Console 沙盒页直接对话。',
+    setupHint: '无需额外凭据；pnpm dev（zhin runtime start）后可在 Console 沙盒页直接对话。',
     fields: [],
   },
   {
@@ -167,7 +177,7 @@ const ADAPTERS: AdapterDefinition[] = [
     plugin: '@zhin.js/adapter-onebot11',
     needsHttp: false,
     description: 'OneBot v11（ws 正向 / wss 反向）',
-    setupHint: 'connection: ws 连 OneBot 实现；connection: wss 反向连接（需 host-router）。',
+    setupHint: 'connection: ws 连 OneBot 实现；connection: wss 反向连接（由内置 HTTP Host 承接）。',
     docUrl: adapterDocsUrl('onebot11'),
     configure: configureOneBot11Bot,
     fields: [],
@@ -211,7 +221,7 @@ const ADAPTERS: AdapterDefinition[] = [
     plugin: '@zhin.js/adapter-github',
     needsHttp: true,
     description: 'GitHub Issue/PR 聊天 + App 认证',
-    setupHint: 'GitHub App 或 gh CLI；Webhook 用 /pub/github/webhook；需 database 存订阅与 OAuth。',
+    setupHint: 'GitHub App 或 gh CLI；Webhook 由内置 HTTP Host 承接（默认 /github/webhook）；需 database 存订阅与 OAuth。',
     docUrl: adapterDocsUrl('github'),
     requiresDatabase: true,
     configure: configureGitHubEndpoint,
@@ -261,13 +271,13 @@ export async function configureAdapters(): Promise<AdapterSetupResult> {
     for (const adapter of httpAdapters) {
       console.log(chalk.gray(`    • ${adapter.name.split(' (')[0]}`));
     }
-    console.log(chalk.gray('    开发时可先用 Sandbox；上线前请确保 http 端口（默认 8086）可从平台回调。'));
+    console.log(chalk.gray('    开发时可先用 Sandbox；上线前请确保 http 端口（默认 8068）可从平台回调。'));
   }
 
   const result: AdapterSetupResult = {
     packages: [],
     plugins: [],
-    endpoints: [],
+    instances: [],
     envVars: {},
     requiresDatabase: false,
   };
@@ -287,10 +297,23 @@ export async function configureAdapters(): Promise<AdapterSetupResult> {
       result.requiresDatabase = true;
     }
 
-    if (adapterValue === 'sandbox') continue;
+    if (adapterValue === 'sandbox') {
+      // 对齐 examples/test-bot：Console 沙盒页与本地调试共用的默认 Endpoint
+      result.instances.push({
+        package: adapterDef.package,
+        instanceKey: 'sandbox',
+        config: {
+          endpoints: [{ context: 'sandbox', name: 'sandbox-bot', owner: 'sandbox-user' }],
+        },
+      });
+      continue;
+    }
 
     const hasConfig = adapterDef.configure || adapterDef.fields.length > 0;
-    if (!hasConfig) continue;
+    if (!hasConfig) {
+      result.instances.push({ package: adapterDef.package, instanceKey: adapterDef.value, config: {} });
+      continue;
+    }
 
     console.log('');
     console.log(chalk.yellow(`  📝 配置 ${adapterDef.name.split(' (')[0]} Bot`));
@@ -304,7 +327,7 @@ export async function configureAdapters(): Promise<AdapterSetupResult> {
 
     if (adapterDef.configure) {
       let markedDb = false;
-      const endpointConfig = await adapterDef.configure({
+      const instanceConfig = await adapterDef.configure({
         envVars: result.envVars,
         markRequiresDatabase: () => {
           markedDb = true;
@@ -312,13 +335,11 @@ export async function configureAdapters(): Promise<AdapterSetupResult> {
         },
       });
       if (markedDb) result.requiresDatabase = true;
-      result.endpoints.push(endpointConfig);
+      result.instances.push({ package: adapterDef.package, instanceKey: adapterDef.value, config: instanceConfig });
       continue;
     }
 
-    const endpointConfig: Record<string, any> = {
-      context: adapterDef.value,
-    };
+    const fieldValues: Record<string, any> = {};
 
     for (const field of adapterDef.fields) {
       const promptConfig: any = {
@@ -344,16 +365,53 @@ export async function configureAdapters(): Promise<AdapterSetupResult> {
       if (field.envKey) {
         // 敏感信息存 .env，配置引用环境变量
         result.envVars[field.envKey] = value || '';
-        endpointConfig[field.key] = `\${${field.envKey}}`;
+        fieldValues[field.key] = `\${${field.envKey}}`;
       } else {
-        endpointConfig[field.key] = value;
+        fieldValues[field.key] = value;
       }
     }
 
-    result.endpoints.push(endpointConfig);
+    result.instances.push({
+      package: adapterDef.package,
+      instanceKey: adapterDef.value,
+      config: buildFieldBasedInstanceConfig(adapterDef.value, fieldValues),
+    });
   }
 
   return result;
+}
+
+/**
+ * 字段式适配器（无自定义 configure）的实例配置整形，对齐各插件 schema.json：
+ * - wechat-mp：webhookPath → path
+ * - email：smtp/imap 平铺字段 → smtp/imap 嵌套对象
+ * - 其余：字段直传
+ */
+function buildFieldBasedInstanceConfig(adapterValue: string, values: Record<string, any>): Record<string, unknown> {
+  if (adapterValue === 'wechat-mp') {
+    const { webhookPath, ...rest } = values;
+    return { ...rest, path: webhookPath ?? '/wechat/webhook' };
+  }
+  if (adapterValue === 'email') {
+    const user = values.user ?? '';
+    const password = values.password ?? '';
+    return {
+      smtp: {
+        host: values.smtpHost,
+        port: Number(values.smtpPort) || 465,
+        secure: true,
+        auth: { user, pass: password },
+      },
+      imap: {
+        host: values.imapHost,
+        port: Number(values.imapPort) || 993,
+        tls: true,
+        user,
+        password,
+      },
+    };
+  }
+  return values;
 }
 
 /**
@@ -371,100 +429,24 @@ export function generateAdapterEnvVars(result: AdapterSetupResult): string {
 }
 
 /**
- * 将 Endpoint 配置项格式化为 YAML 行
+ * 汇总适配器实例为 zhin.config `plugins.<instanceKey>` 配置映射（新 Plugin Runtime 格式）
  */
-function appendYamlValue(lines: string[], key: string, value: unknown, indent: number): void {
-  const pad = '  '.repeat(indent);
-  if (value === undefined || value === null) return;
-
-  if (typeof value === 'object' && !Array.isArray(value)) {
-    lines.push(`${pad}${key}:`);
-    for (const [subKey, subValue] of Object.entries(value)) {
-      appendYamlValue(lines, subKey, subValue, indent + 1);
-    }
-    return;
+export function collectAdapterPluginConfigs(result: AdapterSetupResult): Record<string, Record<string, unknown>> {
+  const plugins: Record<string, Record<string, unknown>> = {};
+  for (const instance of result.instances) {
+    plugins[instance.instanceKey] = instance.config;
   }
-
-  if (Array.isArray(value)) {
-    lines.push(`${pad}${key}:`);
-    for (const item of value) {
-      if (typeof item === 'string') {
-        lines.push(`${pad}  - "${item}"`);
-      } else {
-        lines.push(`${pad}  - ${item}`);
-      }
-    }
-    return;
-  }
-
-  if (typeof value === 'boolean' || typeof value === 'number') {
-    lines.push(`${pad}${key}: ${value}`);
-    return;
-  }
-
-  lines.push(`${pad}${key}: ${value}`);
+  return plugins;
 }
 
 /**
- * 生成 YAML 格式的 endpoints 配置段
+ * 汇总适配器实例为 package.json `zhin.plugins` 清单条目
  */
-export function generateEndpointsConfigYaml(result: AdapterSetupResult): string {
-  if (result.endpoints.length === 0) {
-    return `
-
-# Sandbox：Remote Console 打开「沙盒」页并通过 WebSocket 连接时自动创建 Endpoint
-endpoints: []
-`;
-  }
-
-  const lines: string[] = ['', 'endpoints:'];
-  for (const entry of result.endpoints) {
-    const { context, ...config } = entry;
-    lines.push(`  - context: ${context}`);
-    for (const [key, value] of Object.entries(config)) {
-      appendYamlValue(lines, key, value, 2);
-    }
-  }
-
-  return lines.join('\n');
-}
-
-/**
- * 生成 TOML 格式的 endpoints 配置段
- */
-export function generateEndpointsConfigToml(result: AdapterSetupResult): string {
-  if (result.endpoints.length === 0) return '';
-
-  const lines: string[] = [''];
-  for (const entry of result.endpoints) {
-    lines.push('[[endpoints]]');
-    for (const [key, value] of Object.entries(entry)) {
-      if (typeof value === 'string') {
-        lines.push(`${key} = "${escapeTomlString(value)}"`);
-      } else {
-        lines.push(`${key} = ${JSON.stringify(value)}`);
-      }
-    }
-    lines.push('');
-  }
-  return lines.join('\n');
-}
-
-function escapeTomlString(value: string): string {
-  let out = '';
-  for (const ch of value) {
-    if (ch === '"' || ch === '\\') out += `\\${ch}`;
-    else out += ch;
-  }
-  return out;
-}
-
-/**
- * 生成 JSON 格式的 endpoints 配置段
- */
-export function generateEndpointsConfigJSON(result: AdapterSetupResult): string {
-  if (result.endpoints.length === 0) return '';
-  return `  "endpoints": ${JSON.stringify(result.endpoints, null, 4).replace(/^/gm, '  ').trimStart()},`;
+export function collectAdapterPluginManifest(result: AdapterSetupResult): Array<{ package: string; instanceKey: string }> {
+  return result.instances.map((instance) => ({
+    package: instance.package,
+    instanceKey: instance.instanceKey,
+  }));
 }
 
 /**
@@ -472,17 +454,18 @@ export function generateEndpointsConfigJSON(result: AdapterSetupResult): string 
  */
 export function getAdapterSetupNotes(result: AdapterSetupResult): string[] {
   const notes: string[] = [];
-  for (const entry of result.endpoints) {
-    const context = entry.context as string;
+  for (const instance of result.instances) {
+    const context = instance.instanceKey;
+    const entry = instance.config;
     if (context === 'telegram' && entry.polling === false) {
-      notes.push('Telegram Webhook: 确保 HTTPS 域名可从公网访问，且 webhook.port 已放行');
+      notes.push('Telegram Webhook: 确保 HTTPS 域名可从公网访问，且 http 端口已放行');
     }
     if (context === 'telegram' && entry.polling !== false) {
       notes.push('Telegram polling: 本地开发可直接 pnpm dev，无需公网');
     }
     if (context === 'github') {
       if (entry.webhook_secret) {
-        notes.push('GitHub Webhook: App 设置 URL 为 https://<域名>/pub/github/webhook');
+        notes.push('GitHub Webhook: App 设置 URL 为 https://<域名>/github/webhook');
       } else {
         notes.push('GitHub polling: 无 Webhook 时将轮询 Events API（默认 60s）');
       }

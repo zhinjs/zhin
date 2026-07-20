@@ -1,5 +1,5 @@
 import type { Message, Plugin } from 'zhin.js';
-import { channelKey } from '@zhin.js/game-shared';
+import { channelKey } from '@zhin.js/game-kit';
 import { continueGame, startGame } from './game-flow.js';
 import { idiomCount, modeLabel, promptLine, type MatchMode } from './engine.js';
 
@@ -19,7 +19,7 @@ export const CHAIN_HELP = [
 ].join('\n');
 
 export async function runChainCommand(
-  plugin: Plugin,
+  plugin: Plugin | null,
   services: SessionService,
   message: Message<any>,
   action: string,
@@ -54,4 +54,13 @@ export async function runChainCommand(
   }
 
   return `未知子命令：${action}\n\n${CHAIN_HELP}`;
+}
+
+/** Plugin Runtime / smoke: text-only, no Adapter.editMessage. */
+export async function runChainCommandText(
+  services: SessionService,
+  message: Message<any>,
+  action: string,
+): Promise<string> {
+  return (await runChainCommand(null, services, message, action)) ?? '';
 }

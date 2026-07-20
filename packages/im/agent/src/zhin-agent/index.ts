@@ -3,7 +3,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
-import { Logger } from '@zhin.js/logger';
+import { getLogger } from '@zhin.js/logger';
 import {
   type AIProvider,
   type AgentTool,
@@ -106,7 +106,7 @@ export * from '../prompt/prompt-builder.js';
 export * from '../prompt/templates.js';
 export * from '../turn/task-continuation.js';
 
-const logger = new Logger(null, 'ZhinAgent');
+const logger = getLogger('ZhinAgent');
 
 export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAgentDiagnostics, IAgentConfigurator {
   private provider: AIProvider;

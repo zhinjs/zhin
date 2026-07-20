@@ -1,8 +1,8 @@
-import { defineTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 import { getLarkAgentDeps } from '../../src/lark-agent-deps.js';
 
-export default defineTool<{
+export default defineAgentTool<{
   endpoint_id: string;
   file_path: string;
   file_type: 'image' | 'file' | 'video' | 'audio';

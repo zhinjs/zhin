@@ -1,0 +1,53 @@
+{
+  "name": "@zhin.js/middleware",
+  "version": "1.0.0",
+  "description": "Convention-based Middleware Feature for Zhin Plugin Runtime",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "files": [
+    "lib",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "test": "vitest run --root ../../.. packages/im/middleware/tests"
+  },
+  "dependencies": {
+    "@zhin.js/feature-kit": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "typescript": "^6.0.3"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "feature",
+    "entry": "./lib/provider.js",
+    "engine": "^1.0.0",
+    "featureApi": "1.0.0"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/im/middleware"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "license": "MIT",
+  "private": false
+}

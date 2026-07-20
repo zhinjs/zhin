@@ -1,8 +1,10 @@
 # Dependencies
 node_modules/
 
-# Production builds
-lib/
+# Production builds（lib/ 下有手写 .ts 运行时源码，只忽略编译产物）
+lib/**/*.js
+lib/**/*.js.map
+lib/**/*.d.ts
 
 # Environment variables
 .env
@@ -30,6 +32,7 @@ pnpm-debug.log*
 .zhin-dev.pid
 
 # Runtime data
+.zhin/
 pids
 *.pid
 *.seed
@@ -75,7 +78,14 @@ jspm_packages/
 
 # Nuxt.js build / generate output
 .nuxt
-lib
+
+# lib/ 存放共享 TS 源码（commands/tools 引用），只忽略其中的编译产物
+lib/*.js
+lib/*.js.map
+lib/*.d.ts
+lib/*.d.ts.map
+# legacy tsc 构建产物（tsconfig outDir=lib, rootDir=src）
+lib/plugins/
 
 # Gatsby files
 .cache/

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "default": "satori-bot"
+    },
+    "connection": {
+      "type": "string",
+      "enum": ["ws", "webhook"],
+      "default": "ws",
+      "description": "ws (default) or webhook (httpHostToken POST route)"
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Satori SDK HTTP/WS base URL (e.g. http://127.0.0.1:5140)"
+    },
+    "token": {
+      "type": "string",
+      "description": "Bearer token for API and WS IDENTIFY"
+    },
+    "heartbeat_interval": {
+      "type": "number",
+      "default": 10000,
+      "description": "WS PING interval in milliseconds"
+    },
+    "path": {
+      "type": "string",
+      "description": "Webhook POST path (connection: webhook)"
+    }
+  },
+  "required": ["baseUrl"]
+}

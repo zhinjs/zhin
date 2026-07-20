@@ -4,7 +4,7 @@
 
 import type { Plugin } from '@zhin.js/core';
 import type { AIService } from '../service.js';
-import { formatCompact, Logger, truncatePreview } from '@zhin.js/logger';
+import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
 import { type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, getLlmTransportModel, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, getLoadedToolNamesFromSnapshot } from '@zhin.js/ai';
 import { runWithCommMessage } from '../security/comm-message-context.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
@@ -34,7 +34,7 @@ import {
   createTurnEventMapperState,
   mapAgentEventToTurnEvents,
 } from './turn-event-mapper.js';
-const logger = new Logger(null, 'ZhinAgent:AgentLoopTurn');
+const logger = getLogger('ZhinAgent:AgentLoopTurn');
 
 function resolveAssistantReplyText(assistant: AssistantMessage): string {
   const text = assistantText(assistant);
@@ -433,14 +433,19 @@ export async function* runAgentLoopTextTurnRun(
     ? (harness.maxIterations ?? host.config.maxIterations)
     : 1;
 
+  // Plugin Runtime Agent Host has no Feature root Plugin — skip owner hard-orch.
   const orchestrationPlugin = host.emitter.getHostPlugin() ?? undefined;
-  if (!orchestrationPlugin) {
-    logger.warn(formatCompact({ warn: 'no_host_plugin' }));
+  const disableHardOrchestration = !orchestrationPlugin;
+  if (disableHardOrchestration) {
+    logger.debug(formatCompact({
+      note: 'no_host_plugin',
+      hint: 'runtime_agent_host; owner hard-orchestration disabled',
+    }));
   }
 
   const transformToolResult = createOwnerOrchestratedToolResultTransform({
     commMessage: contextForTools,
-    disableHardOrchestration: false,
+    disableHardOrchestration,
     plugin: orchestrationPlugin,
   });
 

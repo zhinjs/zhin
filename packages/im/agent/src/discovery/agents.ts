@@ -8,7 +8,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { Logger, type Plugin } from '@zhin.js/core';
+import { type Plugin, getLogger } from '@zhin.js/core';
 import { getDataDir } from './utils.js';
 import {
   discoverWorkspaceFractalAgent,
@@ -23,7 +23,7 @@ const KNOWN_AGENT_ROLES = new Set([
   'subtask', 'worker', 'researcher', 'evaluator', 'executor', 'reviewer', 'planner',
 ]);
 
-const logger = new Logger(null, 'builtin-tools');
+const logger = getLogger('builtin-tools');
 
 export type AgentEffortLevel = 'low' | 'medium' | 'high' | 'max';
 

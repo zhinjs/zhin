@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/adapter-github",
   "version": "3.0.2",
-  "description": "Zhin.js adapter for GitHub (gh CLI) — treat issues/PRs as chat channels, full repo management, webhook notifications",
+  "description": "Zhin.js GitHub adapter for Plugin Runtime (App auth + webhook)",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -17,20 +17,6 @@
       "import": "./lib/gh-client.js"
     },
     "./package.json": "./package.json"
-  },
-  "files": [
-    "src",
-    "lib",
-    "agent",
-    "client",
-    "dist",
-    "plugin.yml",
-    "README.md"
-  ],
-  "scripts": {
-    "build": "tsc",
-    "clean": "rimraf lib",
-    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "zhin",
@@ -49,21 +35,35 @@
     "url": "https://github.com/lc-cn"
   },
   "license": "MIT",
-  "devDependencies": {
-    "@zhin.js/agent": "workspace:*",
-    "@zhin.js/host-router": "workspace:*",
-    "typescript": "^6.0.3",
-    "zhin.js": "workspace:*",
-    "zod": "^4.4.3"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "plugins/adapters/github"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/adapters/github/tests",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/logger": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*"
   },
   "peerDependencies": {
-    "@zhin.js/host-router": "workspace:*",
-    "zhin.js": "workspace:*",
+    "@zhin.js/adapter": "workspace:*",
     "@zhin.js/agent": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
+    "zhin.js": "workspace:*",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
-    "@zhin.js/host-router": {
+    "zhin.js": {
       "optional": true
     },
     "@zhin.js/agent": {
@@ -73,16 +73,43 @@
       "optional": true
     }
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/zhinjs/zhin.git",
-    "directory": "plugins/adapters/github"
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "@zhin.js/agent": "workspace:*",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
+    "zhin.js": "workspace:*",
+    "zod": "^4.4.3"
   },
+  "files": [
+    "adapters",
+    "plugin.ts",
+    "schema.json",
+    "src",
+    "lib",
+    "agent",
+    "README.md",
+    "CHANGELOG.md"
+  ],
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/adapter",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
   }
 }

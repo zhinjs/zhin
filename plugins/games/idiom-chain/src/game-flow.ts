@@ -1,4 +1,5 @@
 import type { Adapter, Message, Plugin } from 'zhin.js';
+import { plainTextFromSendContent } from '@zhin.js/game-kit';
 import {
   CHAIN_PREFIX,
   getGloss,
@@ -21,13 +22,15 @@ function sessionMode(session: ChainSessionRow): MatchMode {
 }
 
 export async function sendOrEditView(
-  plugin: Plugin,
+  plugin: Plugin | null,
   services: SessionService,
   message: Message<any>,
   session: ChainSessionRow,
   eventLines: string[] = [],
-): Promise<void> {
+): Promise<string | void> {
   const content = buildChainView(session, eventLines, message.$channel.type);
+  if (!plugin) return plainTextFromSendContent(content);
+
   const adapter = plugin.root.inject(message.$adapter) as Adapter;
 
   if (session.board_message_id) {
@@ -83,7 +86,7 @@ async function botTurn(
 }
 
 export async function startGame(
-  plugin: Plugin,
+  plugin: Plugin | null,
   services: SessionService,
   message: Message<any>,
   matchMode: MatchMode = 'pinyin',
@@ -108,15 +111,15 @@ export async function startGame(
   });
 
   const gloss = starter.gloss ?? getGloss(starter.text);
-  await sendOrEditView(plugin, services, message, session, [
+  const text = await sendOrEditView(plugin, services, message, session, [
     `🎬 ${modeLabel(matchMode)}开局！我先出：**${starter.text}**${gloss ? `（${gloss}）` : ''}`,
     promptLine(starter.text, matchMode),
   ]);
-  return undefined;
+  return typeof text === 'string' ? text : undefined;
 }
 
 export async function continueGame(
-  plugin: Plugin,
+  plugin: Plugin | null,
   services: SessionService,
   message: Message<any>,
 ): Promise<string> {
@@ -125,12 +128,13 @@ export async function continueGame(
     message.$sender.id,
   );
   if (!session) return '你没有进行中的接龙，发送「接龙 开始」。';
-  await sendOrEditView(plugin, services, message, session);
+  const text = await sendOrEditView(plugin, services, message, session);
+  if (typeof text === 'string') return text;
   return '已刷新接龙界面。';
 }
 
 export async function processIdiomText(
-  plugin: Plugin,
+  plugin: Plugin | null,
   services: SessionService,
   message: Message<any>,
   raw: string,
@@ -153,13 +157,14 @@ export async function processIdiomText(
         streak: 0,
       });
       const updated = (await services.getById(session.id))!;
-      await sendOrEditView(plugin, services, message, updated, [check.reason!, '失误过多，本局结束。']);
-      return null;
+      return (await sendOrEditView(plugin, services, message, updated, [
+        check.reason!,
+        '失误过多，本局结束。',
+      ])) ?? null;
     }
     await services.updateSession(session.id, { wrong_count: wrong, streak: 0 });
     const updated = (await services.getById(session.id))!;
-    await sendOrEditView(plugin, services, message, updated, [check.reason!]);
-    return null;
+    return (await sendOrEditView(plugin, services, message, updated, [check.reason!])) ?? null;
   }
 
   used.add(idiom);
@@ -181,12 +186,14 @@ export async function processIdiomText(
   const userLine = `✅ 你：${idiom}${gloss ? `（${gloss}）` : ''}`;
 
   const botResult = await botTurn(services, current, used);
-  await sendOrEditView(plugin, services, message, botResult.session, [userLine, ...botResult.lines]);
-  return null;
+  return (await sendOrEditView(plugin, services, message, botResult.session, [
+    userLine,
+    ...botResult.lines,
+  ])) ?? null;
 }
 
 export async function handleChoice(
-  plugin: Plugin,
+  plugin: Plugin | null,
   services: SessionService,
   message: Message<any>,
   sessionId: string,
@@ -214,11 +221,10 @@ export async function handleChoice(
     });
     const updated = (await services.getById(session.id))!;
     const gloss = starter.gloss ?? getGloss(starter.text);
-    await sendOrEditView(plugin, services, message, updated, [
+    return (await sendOrEditView(plugin, services, message, updated, [
       `🎬 新一局！我先出：**${starter.text}**${gloss ? `（${gloss}）` : ''}`,
       promptLine(starter.text, mode),
-    ]);
-    return null;
+    ])) ?? null;
   }
 
   if (session.status !== 'active') {
@@ -233,17 +239,15 @@ export async function handleChoice(
       await sendOrEditView(plugin, services, message, session, ['💡 词库中暂无可用提示，你赢了！']);
       await services.updateSession(session.id, { status: 'won', player_score: session.player_score + 1 });
       const updated = (await services.getById(session.id))!;
-      await sendOrEditView(plugin, services, message, updated);
-      return null;
+      return (await sendOrEditView(plugin, services, message, updated)) ?? null;
     }
     const gloss = getGloss(hint);
     await services.updateSession(session.id, { hints_used: session.hints_used + 1, streak: 0 });
     const updated = (await services.getById(session.id))!;
-    await sendOrEditView(plugin, services, message, updated, [
+    return (await sendOrEditView(plugin, services, message, updated, [
       `💡 提示：可试 **${hint}**${gloss ? `（${gloss}）` : ''}`,
       '（使用提示会清零连击）',
-    ]);
-    return null;
+    ])) ?? null;
   }
 
   if (choiceId === 'skip') {
@@ -253,15 +257,15 @@ export async function handleChoice(
       streak: 0,
     });
     const updated = (await services.getById(session.id))!;
-    await sendOrEditView(plugin, services, message, updated, ['⏭️ 你选择跳过，机器人得一分。']);
-    return null;
+    return (await sendOrEditView(plugin, services, message, updated, [
+      '⏭️ 你选择跳过，机器人得一分。',
+    ])) ?? null;
   }
 
   if (choiceId === 'quit') {
     await services.updateSession(session.id, { status: 'lost', bot_score: session.bot_score + 1 });
     const updated = (await services.getById(session.id))!;
-    await sendOrEditView(plugin, services, message, updated, ['🏳️ 你认输了。']);
-    return null;
+    return (await sendOrEditView(plugin, services, message, updated, ['🏳️ 你认输了。'])) ?? null;
   }
 
   return '未知操作。';

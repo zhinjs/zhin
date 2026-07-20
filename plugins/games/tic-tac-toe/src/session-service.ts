@@ -1,5 +1,5 @@
-import type { Database, DatabaseFeature, Message, Models, RelatedModel } from 'zhin.js';
-import { channelKey, boardMessageMatches, generateCompactId } from '@zhin.js/game-shared';
+import type { Database, Message, Models, RelatedModel } from 'zhin.js';
+import { channelKey, boardMessageMatches, generateCompactId } from '@zhin.js/game-kit';
 import type { TttModelName, TttSessionRow } from './models.js';
 
 /** 井字棋服务使用的数据库实例（Models 经 models.ts 模块增强） */
@@ -195,6 +195,3 @@ export function createServices(db: TttDatabase): SessionServices {
   return { queue: new QueueService(db), session: new SessionService(db) };
 }
 
-export function resolveGameDatabase(feature: DatabaseFeature): TttDatabase {
-  return feature.db;
-}
