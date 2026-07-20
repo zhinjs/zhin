@@ -517,7 +517,11 @@ function matchHttpRoute(routes: readonly HttpRoute[], method: string, pathname: 
 
 function normalizePath(pathname: string): string {
   if (!pathname.startsWith('/')) return `/${pathname}`;
-  return pathname.replace(/\/+$/u, '') || '/';
+  // 线性裁剪尾部斜杠（等价于 /\/+$/u，但避免长串 `/` 无匹配时的
+  // 二次方回溯 — js/polynomial-redos）。
+  let end = pathname.length;
+  while (end > 0 && pathname[end - 1] === '/') end -= 1;
+  return pathname.slice(0, end) || '/';
 }
 
 function upgradePath(url: string | undefined): string {

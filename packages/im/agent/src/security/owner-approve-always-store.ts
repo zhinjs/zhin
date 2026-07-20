@@ -488,6 +488,32 @@ function usageLines(): string {
   ].join('\n');
 }
 
+const LINE_TERMINATOR_RE = /[\n\r\u2028\u2029]/u;
+/**
+ * 线性解析 `/approve rule <内容>`，返回捕获内容（未 trim），不匹配返回 null。
+ * 语义等价于正则 `/^\/approve\s+rule\s+(.+)$/iu`（无 m 时 `$` 仅匹配全文末尾、
+ * `.` 不含换行符；`\s+` 贪婪、必要时回退一个非换行空白给 `.+`），
+ * 但避免 `\s+` 与 `.+` 在空白字符上的量词重叠回溯（js/polynomial-redos）。
+ */
+function matchApproveRuleArgument(text: string): string | null {
+  const head = /^\/approve\s+rule/iu.exec(text);
+  if (!head) return null;
+  const wsStart = head[0].length;
+  let wsEnd = wsStart;
+  while (wsEnd < text.length && /\s/u.test(text[wsEnd]!)) wsEnd += 1;
+  if (wsEnd === wsStart) return null; // `rule` 后必须跟 \s+
+  const rest = text.slice(wsEnd);
+  // 捕获段必须延伸到全文末尾且不含换行符，否则任何切分点都不可能匹配。
+  if (LINE_TERMINATOR_RE.test(rest)) return null;
+  if (rest.length > 0) return rest;
+  // 剩余全是空白：`\s+` 回退一个字符给 `.+`（该字符不能是换行符）。
+  if (wsEnd - wsStart >= 2) {
+    const last = text[wsEnd - 1]!;
+    if (!LINE_TERMINATOR_RE.test(last)) return last;
+  }
+  return null;
+}
+
 /**
  * Plugin Runtime Owner `/approve` 命令面（无 host Plugin / CommandFeature）。
  * @returns reply text when handled; null when not an approve command.
@@ -528,9 +554,9 @@ export function handleRuntimeOwnerApproveCommand(
     return '✅ 已删除该放行规则。';
   }
 
-  const rule = text.match(/^\/approve\s+rule\s+(.+)$/iu);
-  if (rule) {
-    const r = addBashApproveRule(null, ctx, rule[1]!.trim());
+  const ruleArgument = matchApproveRuleArgument(text);
+  if (ruleArgument !== null) {
+    const r = addBashApproveRule(null, ctx, ruleArgument.trim());
     if (!r.ok) return `⚠️ ${r.error}`;
     return `✅ 已添加规则 id=${r.id.slice(0, 8)}… ，匹配子命令时将不再要求 Owner 确认（仍受危险命令黑名单等约束）。`;
   }

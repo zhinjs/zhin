@@ -36,4 +36,29 @@ describe('mrkdwnToPlainFallback', () => {
   it('strips mrkdwn markers', () => {
     expect(mrkdwnToPlainFallback('*日常工具*')).toBe('日常工具');
   });
+
+  it('rewrites <url|text> links as "text (url)"', () => {
+    expect(mrkdwnToPlainFallback('<https://a.com|A 站点>')).toBe('A 站点 (https://a.com)');
+    expect(mrkdwnToPlainFallback('看 <https://a.com|这里> 吧')).toBe('看 这里 (https://a.com) 吧');
+  });
+
+  it('strips angle brackets without a pipe', () => {
+    expect(mrkdwnToPlainFallback('<@U123> 好')).toBe('@U123 好');
+  });
+
+  it('keeps legacy edge-case semantics (empty <> / edge pipes / multi pipe)', () => {
+    expect(mrkdwnToPlainFallback('<>')).toBe('<>');
+    expect(mrkdwnToPlainFallback('<|x>')).toBe('|x');
+    expect(mrkdwnToPlainFallback('<x|>')).toBe('x|');
+    expect(mrkdwnToPlainFallback('<a|b|c>')).toBe('b|c (a)');
+    expect(mrkdwnToPlainFallback('<x <y|z> w>')).toBe('z (x y) w');
+  });
+
+  it('handles 100k adversarial angle input in linear time (no ReDoS)', () => {
+    const input = `<${'a|'.repeat(50_000)}`;
+    const start = performance.now();
+    const result = mrkdwnToPlainFallback(input);
+    expect(performance.now() - start).toBeLessThan(100);
+    expect(result.length).toBeGreaterThan(0);
+  });
 });

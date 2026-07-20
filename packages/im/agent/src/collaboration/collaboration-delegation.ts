@@ -51,12 +51,45 @@ export function isCellToolResultJson(text: string): boolean {
   }
 }
 
+/**
+ * 线性扫描 ``` 围栏块并对每个块调用 transform。
+ * 语义等价于带回调的 `/```(?:json)?\s*([\s\S]*?)```/gi` replace
+ * （`json` 标记大小写不敏感；inner 为首个闭合围栏前的最小内容；
+ * 无闭合围栏时从 open+1 重试，等价于正则引擎逐位后移），
+ * 但避免 `[\s\S]*?` 与 `\s*` 重叠在超长无闭合输入上的二次方回溯
+ * （js/polynomial-redos）。
+ */
+function replaceFencedBlocks(
+  text: string,
+  transform: (full: string, inner: string) => string,
+): string {
+  let out = '';
+  let cursor = 0;
+  let searchFrom = 0;
+  while (searchFrom < text.length) {
+    const open = text.indexOf('```', searchFrom);
+    if (open < 0) break;
+    let innerStart = open + 3;
+    if (text.slice(innerStart, innerStart + 4).toLowerCase() === 'json') innerStart += 4;
+    while (innerStart < text.length && /\s/u.test(text[innerStart]!)) innerStart += 1;
+    const close = text.indexOf('```', innerStart);
+    if (close < 0) {
+      searchFrom = open + 1;
+      continue;
+    }
+    out += text.slice(cursor, open);
+    out += transform(text.slice(open, close + 3), text.slice(innerStart, close));
+    cursor = close + 3;
+    searchFrom = cursor;
+  }
+  return out + text.slice(cursor);
+}
+
 /** 从混合正文中剥离内嵌的 legacy cell_* 工具 JSON（保留其余可读文本）。 */
 export function removeEmbeddedCellToolJsonFromText(text: string): string {
-  const result = text.replace(/```(?:json)?\s*([\s\S]*?)```/gi, (full, inner: string) => {
-    if (isCellToolResultJson(String(inner).trim())) return ' ';
-    return full;
-  });
+  const result = replaceFencedBlocks(text, (full, inner) =>
+    isCellToolResultJson(inner.trim()) ? ' ' : full,
+  );
 
   let out = '';
   let i = 0;
@@ -99,7 +132,7 @@ export function summarizeDelegateeReply(text: string): string {
   let t = removeEmbeddedCellToolJsonFromText(text.trim());
   if (!t) return '已完成。';
   if (isCellToolResultJson(t)) return '已完成。';
-  t = t.replace(/```(?:json)?\s*[\s\S]*?```/gi, ' ').replace(/\s+/g, ' ').trim();
+  t = replaceFencedBlocks(t, () => ' ').replace(/\s+/g, ' ').trim();
   const embedded = extractEmbeddedAiOutboundJson(t);
   if (embedded?.prose) t = embedded.prose.trim();
   t = removeEmbeddedCellToolJsonFromText(t);

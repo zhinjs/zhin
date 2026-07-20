@@ -74,6 +74,36 @@ describe('HttpHost', () => {
     expect(missing.status).toBe(404);
   });
 
+  it('normalizes trailing slashes when matching routes', async () => {
+    const host = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(host);
+    host.route('GET', '/console/api/pages', (_request, response) => {
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end('{"pages":[]}');
+    });
+    const { port } = await host.listen();
+
+    const pages = await fetch(`http://127.0.0.1:${port}/console/api/pages///`);
+    expect(pages.status).toBe(200);
+  });
+
+  it('handles paths with long slash runs in linear time (no ReDoS)', async () => {
+    const host = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(host);
+    host.route('GET', '/console/api/pages', (_request, response) => {
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end('{"pages":[]}');
+    });
+    const { port } = await host.listen();
+
+    // 中段长串 `/` 不以字符串结尾：旧正则 /\/+$/ 在此呈二次方回溯。
+    const path = `/x${'/'.repeat(8_000)}tail`;
+    const start = performance.now();
+    const response = await fetch(`http://127.0.0.1:${port}${path}`);
+    expect(performance.now() - start).toBeLessThan(100);
+    expect(response.status).toBe(404);
+  });
+
   it('serves /pub/health without auth and protects /api when token is configured', async () => {
     const host = createHttpHost({
       host: '127.0.0.1',

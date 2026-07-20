@@ -105,6 +105,29 @@ describe('Client build adapter', () => {
     };
     await expect(builder.load(source, request)).rejects.toThrow('must have a default export');
   });
+
+  it('sanitizes adversarial localName/publicBase in linear time (no ReDoS)', async () => {
+    const root = await temp();
+    const source = join(root, 'pages/status.tsx');
+    await writeSource(source, [
+      "import { definePage } from '@zhin.js/console-contract';",
+      "export const meta = definePage({ title: 'Status' });",
+      'export default function Status() { return null; }',
+    ].join('\n'));
+    const builder = new TypeScriptClientBuilder({
+      projectRoot: root,
+      outDir: join(root, 'dist/client'),
+      publicBase: `/${'/'.repeat(100_000)}assets`,
+    });
+    // 预热 TS transpile，随后仅计时对抗输入路径。
+    await builder.load(source, pageEntry(source));
+
+    const entry = { ...pageEntry(source), localName: '-'.repeat(100_000) };
+    const start = performance.now();
+    const artifact = await builder.load<{ module: string }>(source, entry);
+    expect(performance.now() - start).toBeLessThan(100);
+    expect(artifact.module).toMatch(/^\/assets\/root-root-[a-f0-9]{16}\.js$/u);
+  });
 });
 
 function pageEntry(source: string) {

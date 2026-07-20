@@ -66,4 +66,24 @@ describe('handleRuntimeOwnerApproveCommand', () => {
     expect(handleRuntimeOwnerApproveCommand(msg, '/approve revoke')).toMatch(/已撤销/);
     expect(hasOwnerApproveAlways(null, msg, OWNER_APPROVE_ALWAYS_TOOL)).toBe(false);
   });
+
+  it('adds an approve rule via /approve rule <pattern>', () => {
+    const msg = ownerMessage();
+    expect(handleRuntimeOwnerApproveCommand(msg, '/approve rule ^ls')).toMatch(/已添加规则/);
+    expect(handleRuntimeOwnerApproveCommand(msg, '/approve  rule   ^git status')).toMatch(/已添加规则/);
+  });
+
+  it('rejects /approve rule without argument (legacy semantics)', () => {
+    const msg = ownerMessage();
+    expect(handleRuntimeOwnerApproveCommand(msg, '/approve rule')).toMatch(/无法解析指令/);
+    expect(handleRuntimeOwnerApproveCommand(msg, '/approve rule ')).toMatch(/无法解析指令/);
+  });
+
+  it('parses /approve rule with 100k whitespace in linear time (no ReDoS)', () => {
+    const msg = ownerMessage();
+    const start = performance.now();
+    const reply = handleRuntimeOwnerApproveCommand(msg, `/approve rule ${' '.repeat(100_000)}x`);
+    expect(performance.now() - start).toBeLessThan(100);
+    expect(reply).toMatch(/已添加规则/);
+  });
 });

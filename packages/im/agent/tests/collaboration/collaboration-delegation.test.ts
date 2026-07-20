@@ -36,4 +36,30 @@ describe('collaboration-delegation outbound hygiene', () => {
     expect(summarizeDelegateeReply(raw)).toBe('已完成。');
     expect(summarizeDelegateeReply('调研完成，已写入 report。')).toContain('调研完成');
   });
+
+  it('removeEmbeddedCellToolJsonFromText drops fenced cell tool JSON', () => {
+    const json = JSON.stringify({ ok: true, collaborationSceneId: 'sc-1' });
+    const mixed = `前言。\n\`\`\`json\n${json}\n\`\`\`\n后文。`;
+    expect(removeEmbeddedCellToolJsonFromText(mixed)).toBe('前言。 后文。');
+  });
+
+  it('removeEmbeddedCellToolJsonFromText keeps non-cell fenced blocks verbatim', () => {
+    const mixed = '看这里 ```json {"a":1}``` 完毕';
+    expect(removeEmbeddedCellToolJsonFromText(mixed)).toBe('看这里 ```json {"a":1}``` 完毕');
+  });
+
+  it('removeEmbeddedCellToolJsonFromText handles 100k chars after unclosed fence in linear time', () => {
+    const input = `\`\`\`json\n${'x'.repeat(100_000)}`;
+    const start = performance.now();
+    const result = removeEmbeddedCellToolJsonFromText(input);
+    expect(performance.now() - start).toBeLessThan(100);
+    expect(result).toContain('xxx');
+  });
+
+  it('summarizeDelegateeReply strips fenced blocks with 100k adversarial fences in linear time', () => {
+    const input = '```a'.repeat(25_000);
+    const start = performance.now();
+    summarizeDelegateeReply(input);
+    expect(performance.now() - start).toBeLessThan(100);
+  });
 });

@@ -6,6 +6,40 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { GhClient, GitHubBotIdentity } from './gh-client.js';
 
+const REPO_FULL_NAME_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const GIT_REF_ILLEGAL_RE = /[\s\x00-\x1f\x7f~^:?*[\\`;]/;
+
+/**
+ * 校验 GitHub "owner/name" 全名，防止路径穿越与 git 选项注入。
+ */
+export function assertRepoFullName(repo: string): void {
+  if (
+    typeof repo !== 'string' ||
+    !REPO_FULL_NAME_RE.test(repo) ||
+    repo.split('/').some((seg) => seg === '' || seg.startsWith('-') || /^\.+$/.test(seg))
+  ) {
+    throw new TypeError(`非法的仓库全名: ${JSON.stringify(repo)}`);
+  }
+}
+
+/**
+ * 校验 git ref 名称，拒绝选项注入（`-` 前缀）与 git 非法字符。
+ */
+export function assertGitRefName(ref: string): void {
+  if (typeof ref !== 'string' || ref.length === 0) {
+    throw new TypeError(`非法的 git ref: ${JSON.stringify(ref)}`);
+  }
+  if (
+    ref.startsWith('-') ||
+    ref.includes('..') ||
+    GIT_REF_ILLEGAL_RE.test(ref) ||
+    ref.endsWith('/') ||
+    ref.endsWith('.')
+  ) {
+    throw new TypeError(`非法的 git ref: ${JSON.stringify(ref)}`);
+  }
+}
+
 export class WorkspaceManager {
   constructor(
     private readonly gh: GhClient,
@@ -13,6 +47,7 @@ export class WorkspaceManager {
   ) {}
 
   getRepoPath(repo: string): string {
+    assertRepoFullName(repo);
     const [owner, name] = repo.split('/');
     return path.join(this.rootDir, owner, name);
   }
@@ -47,6 +82,7 @@ export class WorkspaceManager {
   }
 
   async ensureRepo(repo: string): Promise<string> {
+    assertRepoFullName(repo);
     if (!this.gh.isAppAuth) {
       throw new Error('GitHub App 认证未配置，无法托管工作区');
     }
@@ -72,6 +108,9 @@ export class WorkspaceManager {
   }
 
   async checkoutBranch(repo: string, branch: string, baseRef: string): Promise<string> {
+    assertRepoFullName(repo);
+    assertGitRefName(branch);
+    assertGitRefName(baseRef);
     const repoPath = await this.ensureRepo(repo);
     const localBranches = await this.runGit(repoPath, ['branch', '--list', branch]);
     if (localBranches.trim()) {
@@ -94,6 +133,8 @@ export class WorkspaceManager {
   }
 
   async commitAndPush(repo: string, branch: string, message: string): Promise<string> {
+    assertRepoFullName(repo);
+    assertGitRefName(branch);
     const repoPath = this.getRepoPath(repo);
     if (!fs.existsSync(repoPath)) {
       throw new Error(`工作区不存在: ${repoPath}，请先 github_prepare_workspace`);

@@ -232,17 +232,7 @@ function expandValue(
   seen = new WeakSet<object>(),
 ): unknown {
   if (typeof value === 'string') {
-    return value.replace(
-      /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::[-=]([^}]*))?\}/gu,
-      (_match, key: string, fallback: string | undefined) => {
-        const resolved = lookup(key);
-        if (fallback !== undefined) {
-          return resolved !== undefined && resolved !== '' ? resolved : fallback;
-        }
-        if (resolved !== undefined) return resolved;
-        return onMissing(key);
-      },
-    );
+    return expandString(value, lookup, onMissing);
   }
   if (!value || typeof value !== 'object') return value;
   if (seen.has(value)) throw new TypeError('Environment expansion input must be acyclic');
@@ -261,6 +251,69 @@ function expandValue(
   ));
   seen.delete(value);
   return result;
+}
+
+function isEnvKeyStart(ch: string): boolean {
+  return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || ch === '_';
+}
+
+function isEnvKeyChar(ch: string): boolean {
+  return isEnvKeyStart(ch) || (ch >= '0' && ch <= '9');
+}
+
+/**
+ * 线性扫描展开 `${VAR}` 与 `${VAR:-default}` / `${VAR:=default}`。
+ * 语义与正则 `/\$\{([A-Za-z_][A-Za-z0-9_]*)(?::[-=]([^}]*))?\}/gu` 完全一致
+ * （解析失败时从 `${` 之后重新找下一个候选，等价于正则引擎逐位后移），
+ * 但全程无回溯（js/polynomial-redos）。
+ */
+function expandString(
+  input: string,
+  lookup: (key: string) => string | undefined,
+  onMissing: (key: string) => string,
+): string {
+  let out = '';
+  let i = 0;
+  while (i < input.length) {
+    const start = input.indexOf('${', i);
+    if (start < 0) break;
+    let j = start + 2;
+    if (j >= input.length || !isEnvKeyStart(input[j]!)) {
+      out += input.slice(i, start + 1);
+      i = start + 1;
+      continue;
+    }
+    j += 1;
+    while (j < input.length && isEnvKeyChar(input[j]!)) j += 1;
+    const key = input.slice(start + 2, j);
+    let fallback: string | undefined;
+    if (input[j] === ':' && (input[j + 1] === '-' || input[j + 1] === '=')) {
+      const close = input.indexOf('}', j + 2);
+      if (close < 0) {
+        out += input.slice(i, start + 1);
+        i = start + 1;
+        continue;
+      }
+      fallback = input.slice(j + 2, close);
+      j = close;
+    }
+    if (input[j] !== '}') {
+      out += input.slice(i, start + 1);
+      i = start + 1;
+      continue;
+    }
+    out += input.slice(i, start);
+    const resolved = lookup(key);
+    if (fallback !== undefined) {
+      out += resolved !== undefined && resolved !== '' ? resolved : fallback;
+    } else if (resolved !== undefined) {
+      out += resolved;
+    } else {
+      out += onMissing(key);
+    }
+    i = j + 1;
+  }
+  return out + input.slice(i);
 }
 
 function redactValue(

@@ -291,3 +291,33 @@ async function writeJson(path: string, value: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
 }
+
+describe('expandEnvironmentValue linear scanner (no ReDoS)', () => {
+  const empty = () => undefined;
+
+  it('keeps legacy semantics for malformed placeholders', () => {
+    expect(expandEnvironmentValue('${}', empty)).toBe('${}');
+    expect(expandEnvironmentValue('${1A}', empty)).toBe('${1A}');
+    expect(expandEnvironmentValue('${A', empty)).toBe('${A');
+    expect(expandEnvironmentValue('${A:x}', empty)).toBe('${A:x}');
+    expect(expandEnvironmentValue('${A:-}', empty)).toBe('');
+    expect(expandEnvironmentValue('${A:-x}y}', empty)).toBe('xy}');
+    expect(expandEnvironmentValue('${${A}}', (k) => (k === 'A' ? 'v' : undefined))).toBe('${v}');
+  });
+
+  it('keeps :- / := fallback semantics', () => {
+    const lookup = (key: string) => ({ SET: 'v', EMPTY: '' } as Record<string, string>)[key];
+    expect(expandEnvironmentValue('${SET:-d}', lookup)).toBe('v');
+    expect(expandEnvironmentValue('${EMPTY:-d}', lookup)).toBe('d');
+    expect(expandEnvironmentValue('${EMPTY:=d}', lookup)).toBe('d');
+    expect(expandEnvironmentValue('${NOPE:-a}b}', lookup)).toBe('ab}');
+  });
+
+  it('expands 100k adversarial placeholders in linear time', () => {
+    const input = `${'${'.repeat(50_000)}${'A'.repeat(50_000)}`;
+    const start = performance.now();
+    const result = expandEnvironmentValue(input, empty);
+    expect(performance.now() - start).toBeLessThan(100);
+    expect(typeof result).toBe('string');
+  });
+});

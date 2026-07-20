@@ -29,8 +29,45 @@ export function resolveRssConfig(raw: Partial<RssConfig> | undefined): RssConfig
   return { ...DEFAULT_RSS_CONFIG, ...raw };
 }
 
+/**
+ * 剔除 HTML 标签与 `&nbsp;` 实体并折叠空白。
+ * 线性单遍扫描实现（手写状态机），语义等价于原先的
+ * `/<[^>]*>/g` → `/&nbsp;/g` → `/\s+/g` 三步 replace，但避免：
+ * - js/polynomial-redos：大量 `<` 无闭合时正则逐位重扫的二次方回溯；
+ * - js/incomplete-multi-character-sanitization：多趟 replace 的残留问题。
+ */
 export function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+  let out = '';
+  let pendingSpace = false;
+  let mayHaveTagEnd = html.includes('>');
+  let i = 0;
+  while (i < html.length) {
+    const ch = html[i]!;
+    if (ch === '<' && mayHaveTagEnd) {
+      const end = html.indexOf('>', i + 1);
+      if (end >= 0) {
+        i = end + 1;
+        continue;
+      }
+      // 后续不再有 `>`：剩余的 `<` 都是字面字符，不再重复扫描。
+      mayHaveTagEnd = false;
+    }
+    if (ch === '&' && html.startsWith('&nbsp;', i)) {
+      pendingSpace = true;
+      i += '&nbsp;'.length;
+      continue;
+    }
+    if (/\s/u.test(ch)) {
+      pendingSpace = true;
+      i += 1;
+      continue;
+    }
+    if (pendingSpace && out.length > 0) out += ' ';
+    pendingSpace = false;
+    out += ch;
+    i += 1;
+  }
+  return out;
 }
 
 export async function fetchFeed(

@@ -28,7 +28,7 @@ export class TypeScriptClientBuilder implements ClientModuleLoader {
   constructor(options: TypeScriptClientBuilderOptions) {
     this.#outDir = resolve(options.outDir);
     this.#projectRoot = resolve(options.projectRoot ?? process.cwd());
-    this.#publicBase = `/${(options.publicBase ?? '@zhin/client').replace(/^\/+|\/+$/gu, '')}`;
+    this.#publicBase = `/${trimSlashes(options.publicBase ?? '@zhin/client')}`;
     this.#manifestFile = resolve(options.manifestFile ?? join(this.#outDir, 'pages.manifest.json'));
   }
 
@@ -114,8 +114,26 @@ function contentHash(source: string): string {
 }
 
 function safe(value: string): string {
-  const result = value.replace(/[^a-z0-9-]+/giu, '-').replace(/^-+|-+$/gu, '').toLowerCase();
+  const result = trimDashes(value.replace(/[^a-z0-9-]+/giu, '-')).toLowerCase();
   return result || 'root';
+}
+
+/** 线性裁剪首尾 `/`（等价于 /^\/+|\/+$/gu，无回溯 — js/polynomial-redos）。 */
+function trimSlashes(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value[start] === '/') start += 1;
+  while (end > start && value[end - 1] === '/') end -= 1;
+  return value.slice(start, end);
+}
+
+/** 线性裁剪首尾 `-`（等价于 /^-+|-+$/gu，无回溯 — js/polynomial-redos）。 */
+function trimDashes(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value[start] === '-') start += 1;
+  while (end > start && value[end - 1] === '-') end -= 1;
+  return value.slice(start, end);
 }
 
 function compareEntry(left: ClientBuildEntry, right: ClientBuildEntry): number {
