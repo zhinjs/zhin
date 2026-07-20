@@ -91,6 +91,45 @@
       ],
       "@zhin.js/tool": [
         "./packages/im/tool/src/index.ts"
+      ],
+      "@zhin.js/config-yaml": [
+        "./packages/im/config-yaml/src/index.ts"
+      ],
+      "@zhin.js/feature-kit": [
+        "./packages/im/feature-kit/src/index.ts"
+      ],
+      "@zhin.js/isolate": [
+        "./packages/im/isolate/src/index.ts"
+      ],
+      "@zhin.js/runtime": [
+        "./packages/im/runtime/src/index.ts"
+      ],
+      "@zhin.js/contract": [
+        "./packages/console/contract/src/index.ts"
+      ],
+      "@zhin.js/layout": [
+        "./packages/console/layout/src/index.ts"
+      ],
+      "@zhin.js/page": [
+        "./packages/console/page/src/index.ts"
+      ],
+      "@zhin.js/console-contract": [
+        "./packages/console/plugin-contract/src/index.ts"
+      ],
+      "@zhin.js/a2a": [
+        "./packages/host/a2a/src/index.ts"
+      ],
+      "@zhin.js/host-api": [
+        "./packages/host/api/src/index.ts"
+      ],
+      "@zhin.js/host-http": [
+        "./packages/host/http/src/index.ts"
+      ],
+      "@zhin.js/mcp": [
+        "./packages/host/mcp/src/index.ts"
+      ],
+      "@zhin.js/host-router": [
+        "./packages/host/router/src/index.ts"
       ]
     }
   },
