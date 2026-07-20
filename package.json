@@ -13,6 +13,7 @@
     "packages/console/*",
     "packages/toolkit/*",
     "packages/host/*",
+    "packages/game-kit",
     "plugins/adapters/*",
     "plugins/features/*",
     "plugins/games/*",
