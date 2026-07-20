@@ -1,7 +1,9 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "outDir": "./docs/api-void",
     "rootDir": ".",
     "declaration": true,
@@ -9,22 +11,87 @@
     "skipLibCheck": true,
     "noEmit": true,
     "paths": {
-      "@zhin.js/logger": ["./basic/logger/src/index.ts"],
-      "@zhin.js/schema": ["./basic/schema/src/index.ts"],
-      "@zhin.js/database": ["./basic/database/src/index.ts"],
-      "@zhin.js/schedule": ["./basic/schedule/src/index.ts"],
-      "@zhin.js/kernel": ["./packages/im/kernel/src/index.ts"],
-      "@zhin.js/ai": ["./packages/im/ai/src/index.ts"],
-      "@zhin.js/ai/agent-stream": ["./packages/im/ai/src/agent-stream.ts"],
-      "@zhin.js/ai/agent-stream-consumer": ["./packages/im/ai/src/agent-stream-consumer.ts"],
-      "@zhin.js/ai/agent-step-checkpoint": ["./packages/im/ai/src/agent-step-checkpoint.ts"],
-      "@zhin.js/ai/tool-policy": ["./packages/im/ai/src/tool-policy.ts"],
-      "@zhin.js/ai/mcp-qualified-name": ["./packages/im/ai/src/mcp-qualified-name.ts"],
-      "@zhin.js/ai/authorization-events": ["./packages/im/ai/src/authorization-events.ts"],
-      "@zhin.js/core": ["./packages/im/core/src/index.ts"],
-      "@zhin.js/core/queue-im-field-contract": ["./packages/im/core/src/built/queue-im-field-contract.ts"],
-      "@zhin.js/agent": ["./packages/im/agent/src/index.ts"],
-      "@zhin.js/cli": ["./basic/cli/src/index.ts"]
+      "@zhin.js/logger": [
+        "./basic/logger/src/index.ts"
+      ],
+      "@zhin.js/schema": [
+        "./basic/schema/src/index.ts"
+      ],
+      "@zhin.js/database": [
+        "./basic/database/src/index.ts"
+      ],
+      "@zhin.js/schedule": [
+        "./basic/schedule/src/index.ts"
+      ],
+      "@zhin.js/kernel": [
+        "./packages/im/kernel/src/index.ts"
+      ],
+      "@zhin.js/ai": [
+        "./packages/im/ai/src/index.ts"
+      ],
+      "@zhin.js/ai/agent-stream": [
+        "./packages/im/ai/src/agent-stream.ts"
+      ],
+      "@zhin.js/ai/agent-stream-consumer": [
+        "./packages/im/ai/src/agent-stream-consumer.ts"
+      ],
+      "@zhin.js/ai/agent-step-checkpoint": [
+        "./packages/im/ai/src/agent-step-checkpoint.ts"
+      ],
+      "@zhin.js/ai/tool-policy": [
+        "./packages/im/ai/src/tool-policy.ts"
+      ],
+      "@zhin.js/ai/mcp-qualified-name": [
+        "./packages/im/ai/src/mcp-qualified-name.ts"
+      ],
+      "@zhin.js/ai/authorization-events": [
+        "./packages/im/ai/src/authorization-events.ts"
+      ],
+      "@zhin.js/core": [
+        "./packages/im/core/src/index.ts"
+      ],
+      "@zhin.js/core/queue-im-field-contract": [
+        "./packages/im/core/src/built/queue-im-field-contract.ts"
+      ],
+      "@zhin.js/agent": [
+        "./packages/im/agent/src/index.ts"
+      ],
+      "@zhin.js/cli": [
+        "./basic/cli/src/index.ts"
+      ],
+      "@zhin.js/adapter": [
+        "./packages/im/adapter/src/index.ts"
+      ],
+      "@zhin.js/agent-feature": [
+        "./packages/im/agent-feature/src/index.ts"
+      ],
+      "@zhin.js/command": [
+        "./packages/im/command/src/index.ts"
+      ],
+      "@zhin.js/component": [
+        "./packages/im/component/src/index.ts"
+      ],
+      "@zhin.js/core/tool-zod": [
+        "./packages/im/core/src/tool-zod.ts"
+      ],
+      "@zhin.js/core/runtime": [
+        "./packages/im/core/src/plugin-runtime/im/index.ts"
+      ],
+      "@zhin.js/mcp-feature": [
+        "./packages/im/mcp-feature/src/index.ts"
+      ],
+      "@zhin.js/middleware": [
+        "./packages/im/middleware/src/index.ts"
+      ],
+      "@zhin.js/plugin-runtime": [
+        "./packages/im/plugin-runtime/src/index.ts"
+      ],
+      "@zhin.js/skill": [
+        "./packages/im/skill/src/index.ts"
+      ],
+      "@zhin.js/tool": [
+        "./packages/im/tool/src/index.ts"
+      ]
     }
   },
   "include": [
