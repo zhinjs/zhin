@@ -1,4 +1,4 @@
-import type { Adapter, Message, Plugin } from 'zhin.js';
+import type { Adapter, Message, Plugin } from '@zhin.js/core';
 import { plainTextFromSendContent, recordGameOutcome } from '@zhin.js/game-kit';
 import type { TttSessionRow } from './models.js';
 import { buildBoardInteractive } from './board-view.js';

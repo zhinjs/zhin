@@ -92,7 +92,7 @@ import { defineSchedule } from '@zhin.js/agent/schedules';
 | Full utils pilot | [`plugins/utils/lottery/agent/`](https://github.com/zhinjs/zhin/tree/main/plugins/utils/lottery/agent) |
 | 60s tools (17) | [`plugins/utils/60s/agent/tools/`](https://github.com/zhinjs/zhin/tree/main/plugins/utils/60s/agent/tools) |
 | Adapter platform tools | [`plugins/adapters/slack/agent/tools/`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/slack/agent/tools) |
-| Minimal hello | [`examples/minimal-bot/src/plugins/hello/agent/`](../../../examples/minimal-bot/src/plugins/hello/agent/) |
+| Minimal agent | [`examples/minimal-bot/agents/`](../../../examples/minimal-bot/agents/) |
 | Workspace presets | [`examples/test-bot/agents/`](../../../examples/test-bot/agents/) |
 
 ## npm publish

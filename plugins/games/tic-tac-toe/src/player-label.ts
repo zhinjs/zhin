@@ -1,4 +1,4 @@
-import type { MessageSender } from 'zhin.js';
+import type { MessageSender } from '@zhin.js/core';
 import type { TttSessionRow } from './models.js';
 import { X, O, type Cell, cellLabel } from './engine.js';
 

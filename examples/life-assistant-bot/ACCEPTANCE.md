@@ -3,7 +3,7 @@
 ## Stable（Core）
 
 - [ ] `pnpm install && cd examples/life-assistant-bot && pnpm dev` 可启动
-- [ ] Sandbox 入站 `hello` 返回回复
+- [ ] Sandbox 入站 `/remind 喝水` 返回确认
 - [ ] `ai:` 前缀触发 AI 对话（需 Ollama）
 - [ ] `knowledge_search` 工具可检索 `knowledge/faq.md`
 - [ ] Remote Console 连接 `http://127.0.0.1:8086`

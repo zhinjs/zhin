@@ -4,5 +4,5 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": []
+  "include": ["plugin.ts", "tests/**/*.ts"]
 }

@@ -38,11 +38,3 @@ export {
   statsRankText,
   weekStartStr,
 } from './stats-lib.js';
-
-/**
- * Still TODO (not mounted in Plugin Runtime):
- * - admin.ts — notice welcome / recall (needs Adapter side-event wiring)
- * - daily-analysis.ts — AI daily report (inbox + LLM + cron)
- * - host DatabaseFeature Resource persistence (swap memory store)
- * - HTML stats/analysis cards (text replies for slice-2)
- */

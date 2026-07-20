@@ -29,6 +29,15 @@ describe('multi-agent-room 协作契约', () => {
     expect(endpointMatches.length).toBeGreaterThanOrEqual(2);
   });
 
+  it('uses the Plugin Runtime topology manifest', () => {
+    const manifest = JSON.parse(fs.readFileSync(path.join(botRoot, 'package.json'), 'utf8'));
+    expect(manifest.scripts.dev).toBe('zhin runtime start');
+    expect(manifest.zhin.entry).toBe('./plugin.ts');
+    expect(manifest.zhin.plugins).toEqual([
+      { package: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox' },
+    ]);
+  });
+
   it('README 说明 REST 与数据库 SSOT', () => {
     const readme = fs.readFileSync(path.join(botRoot, 'README.md'), 'utf8');
     expect(readme).toContain('collaboration/scenes');

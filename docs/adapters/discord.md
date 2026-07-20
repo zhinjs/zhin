@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/discord/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/discord/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=635c5f4fba7ea6f7 -->
+<!-- sync-adapter-docs:sha256=a7206ed57b8affb1 -->
 
 # @zhin.js/adapter-discord
 
@@ -43,7 +43,7 @@ pnpm add @zhin.js/adapter-discord discord.js
 ### 平台权限（platform permit）
 
 - sender role 已恢复：Gateway 入站 `metadata.role` / `metadata.permissions`（来自 member 权限位与 guild owner 判定，见 `src/gateway.ts` `resolveSenderRole`）。
-- **TODO**：`registerDiscordPlatformPermitChecker()` 暂无注册点——Plugin Runtime 的命令分发没有 platform permit 消费端（旧 checker 只服务于 legacy Tool/Message 门禁），待 runtime 提供门禁挂钩后再接线。`src/platform-permit.ts` 的 checker 与单测保留。
+- `plugin.ts` 在 generation setup 注册 checker，并在 dispose 注销；Plugin Runtime CapabilityIngress 与 ToolSystem 统一经 Core `canAccessTool()` 消费 `permissions`。
 
 ## 前置条件
 

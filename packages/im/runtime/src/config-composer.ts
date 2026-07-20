@@ -49,8 +49,8 @@ export class ConfigComposer {
         await composeNode(child, ownSchemas),
       ] as const),
     );
-    // Host-level keys (`http`, `database`, `ai`, `speech`, `assistant`,
-    // `collaboration`, `log_level`) are consumed by CLI Root installers /
+    // Host-level keys (`http`, `database`, `ai`, `mcp`, `a2a`, `speech`,
+    // `htmlRenderer`, `assistant`, `collaboration`, `log_level`) are consumed by CLI Root installers /
     // start-command, not Plugin ConfigViews.
     const effectiveSchema: JsonSchema = Object.freeze({
       type: 'object',
@@ -77,7 +77,19 @@ export class ConfigComposer {
           type: 'object',
           additionalProperties: true,
         }),
+        mcp: Object.freeze({
+          type: 'object',
+          additionalProperties: true,
+        }),
+        a2a: Object.freeze({
+          type: 'object',
+          additionalProperties: true,
+        }),
         speech: Object.freeze({
+          type: 'object',
+          additionalProperties: true,
+        }),
+        htmlRenderer: Object.freeze({
           type: 'object',
           additionalProperties: true,
         }),

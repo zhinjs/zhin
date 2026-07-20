@@ -15,6 +15,11 @@
       "types": "./lib/adapter-tools-helper.d.ts",
       "development": "./src/adapter-tools-helper.ts",
       "import": "./lib/adapter-tools-helper.js"
+    },
+    "./runtime": {
+      "types": "./lib/runtime.d.ts",
+      "development": "./src/runtime.ts",
+      "import": "./lib/runtime.js"
     }
   },
   "keywords": [
@@ -46,6 +51,8 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@zhin.js/core": "workspace:*",
+    "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/tool": "workspace:*",
     "zod": "^4.4.3"
   },
   "peerDependencies": {

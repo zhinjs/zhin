@@ -1,9 +1,9 @@
-import type { Models } from 'zhin.js';
+import type { Models } from '@zhin.js/core';
 import type { MatchMode } from './engine.js';
 
 export type ChainSessionStatus = 'active' | 'won' | 'lost' | 'aborted';
 
-declare module 'zhin.js' {
+declare module '@zhin.js/core' {
   interface Models {
     idiom_chain_sessions: {
       id: string;

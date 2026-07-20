@@ -1,5 +1,5 @@
 import { buildChoiceKeyboard } from '@zhin.js/game-kit';
-import type { SendContent } from 'zhin.js';
+import type { SendContent } from '@zhin.js/core';
 import { BJ_PREFIX, formatHand, handValue, isBlackjack, TARGET } from './engine.js';
 import type { BjSessionRow } from './models.js';
 import { parseCards } from './session-service.js';

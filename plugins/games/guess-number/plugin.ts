@@ -14,7 +14,6 @@ import type { SessionService } from './src/session-service.js';
  * - Commands under `commands/` are authoritative (help + start/quit via in-memory DB).
  * - DB: prefer databaseHostToken; else in-memory SessionService.
  * - Digit middleware under `middlewares/` handles bare-number guesses.
- * - TODO: interactive handlers (buttons still deferred).
  */
 export default definePlugin({
   name: 'guess-number',

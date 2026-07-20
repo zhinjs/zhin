@@ -1,4 +1,4 @@
-import type { Database, Message, Models, RelatedModel } from 'zhin.js';
+import type { Database, Message, Models, RelatedModel } from '@zhin.js/core';
 import { channelKey, generateSessionId, boardMessageMatches } from '@zhin.js/game-kit';
 import type { RpsSessionRow } from './models.js';
 

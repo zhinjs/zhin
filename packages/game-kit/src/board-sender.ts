@@ -6,7 +6,7 @@
  * - 支持编辑的平台：调用平台 API 编辑
  * - 不支持编辑的平台：自动 fallback 到发送新消息
  */
-import type { Message } from 'zhin.js';
+import type { Message } from '@zhin.js/core';
 
 /**
  * 构建频道唯一键（用于会话查找）

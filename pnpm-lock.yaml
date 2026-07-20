@@ -174,9 +174,15 @@ importers:
       '@types/node':
         specifier: ^26.1.0
         version: 26.1.1
+      '@zhin.js/a2a':
+        specifier: workspace:*
+        version: link:../../packages/host/a2a
       '@zhin.js/agent':
         specifier: workspace:*
         version: link:../../packages/im/agent
+      '@zhin.js/mcp':
+        specifier: workspace:*
+        version: link:../../packages/host/mcp
       '@zhin.js/speech':
         specifier: workspace:*
         version: link:../../packages/toolkit/speech
@@ -272,28 +278,31 @@ importers:
       '@zhin.js/agent':
         specifier: workspace:*
         version: link:../../packages/im/agent
-      '@zhin.js/cli':
+      '@zhin.js/command':
         specifier: workspace:*
-        version: link:../../basic/cli
-      '@zhin.js/host-api':
+        version: link:../../packages/im/command
+      '@zhin.js/component':
         specifier: workspace:*
-        version: link:../../packages/host/api
-      '@zhin.js/host-router':
+        version: link:../../packages/im/component
+      '@zhin.js/core':
         specifier: workspace:*
-        version: link:../../packages/host/router
+        version: link:../../packages/im/core
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../../packages/im/plugin-runtime
       '@zhin.js/satori':
         specifier: workspace:*
         version: link:../../packages/toolkit/satori
       ai:
         specifier: ^7.0.2
         version: 7.0.2(zod@4.4.3)
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../packages/im/zhin
       zod:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@zhin.js/cli':
+        specifier: workspace:*
+        version: link:../../basic/cli
       tsx:
         specifier: ^4.22.4
         version: 4.22.4
@@ -306,6 +315,9 @@ importers:
       '@ai-sdk/openai-compatible':
         specifier: ^3.0.5
         version: 3.0.6(zod@4.4.3)
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.29.0
+        version: 1.29.0(zod@4.4.3)
       '@zhin.js/a2a':
         specifier: workspace:*
         version: link:../../packages/host/a2a
@@ -321,59 +333,89 @@ importers:
       '@zhin.js/agent':
         specifier: workspace:*
         version: link:../../packages/im/agent
-      '@zhin.js/cli':
-        specifier: workspace:*
-        version: link:../../basic/cli
       '@zhin.js/client':
         specifier: workspace:*
         version: link:../../packages/console/client
-      '@zhin.js/host-api':
+      '@zhin.js/command':
+        specifier: 1.0.0
+        version: link:../../packages/im/command
+      '@zhin.js/component':
+        specifier: 1.0.0
+        version: link:../../packages/im/component
+      '@zhin.js/console-contract':
         specifier: workspace:*
-        version: link:../../packages/host/api
-      '@zhin.js/host-router':
+        version: link:../../packages/console/plugin-contract
+      '@zhin.js/core':
         specifier: workspace:*
-        version: link:../../packages/host/router
+        version: link:../../packages/im/core
       '@zhin.js/mcp':
         specifier: workspace:*
         version: link:../../packages/host/mcp
+      '@zhin.js/page':
+        specifier: 1.0.0
+        version: link:../../packages/console/page
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../../packages/im/plugin-runtime
       '@zhin.js/satori':
         specifier: workspace:*
         version: link:../../packages/toolkit/satori
+      '@zhin.js/skill':
+        specifier: 1.0.0
+        version: link:../../packages/im/skill
+      '@zhin.js/tool':
+        specifier: 1.0.0
+        version: link:../../packages/im/tool
       ai:
         specifier: ^7.0.2
         version: 7.0.2(zod@4.4.3)
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../packages/im/zhin
+      react:
+        specifier: ^19.2.7
+        version: 19.2.7
       zod:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      tsx:
-        specifier: ^4.22.4
-        version: 4.22.4
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      '@zhin.js/cli':
+        specifier: workspace:*
+        version: link:../../basic/cli
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
 
   examples/life-assistant-bot:
     dependencies:
+      '@ai-sdk/openai-compatible':
+        specifier: ^3.0.5
+        version: 3.0.6(zod@4.4.3)
       '@zhin.js/adapter-sandbox':
         specifier: workspace:*
         version: link:../../plugins/adapters/sandbox
+      '@zhin.js/agent':
+        specifier: workspace:*
+        version: link:../../packages/im/agent
+      '@zhin.js/command':
+        specifier: workspace:*
+        version: link:../../packages/im/command
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../../packages/im/plugin-runtime
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../packages/im/tool
+      ai:
+        specifier: ^7.0.2
+        version: 7.0.2(zod@4.4.3)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
       '@zhin.js/cli':
         specifier: workspace:*
         version: link:../../basic/cli
-      '@zhin.js/host-api':
-        specifier: workspace:*
-        version: link:../../packages/host/api
-      '@zhin.js/host-router':
-        specifier: workspace:*
-        version: link:../../packages/host/router
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../packages/im/zhin
-    devDependencies:
       tsx:
         specifier: ^4.22.4
         version: 4.22.4
@@ -429,25 +471,19 @@ importers:
       '@zhin.js/agent':
         specifier: workspace:*
         version: link:../../packages/im/agent
-      '@zhin.js/cli':
+      '@zhin.js/plugin-runtime':
         specifier: workspace:*
-        version: link:../../basic/cli
-      '@zhin.js/host-api':
-        specifier: workspace:*
-        version: link:../../packages/host/api
-      '@zhin.js/host-router':
-        specifier: workspace:*
-        version: link:../../packages/host/router
+        version: link:../../packages/im/plugin-runtime
       ai:
         specifier: ^6.0.116
         version: 6.0.219(zod@4.4.3)
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../packages/im/zhin
       zod:
         specifier: ^4.3.6
         version: 4.4.3
     devDependencies:
+      '@zhin.js/cli':
+        specifier: workspace:*
+        version: link:../../basic/cli
       tsx:
         specifier: ^4.22.4
         version: 4.22.4
@@ -494,24 +530,15 @@ importers:
       '@zhin.js/adapter-qq':
         specifier: workspace:*
         version: link:../../plugins/adapters/qq
-      '@zhin.js/cli':
-        specifier: workspace:*
-        version: link:../../basic/cli
-      '@zhin.js/host-api':
-        specifier: workspace:*
-        version: link:../../packages/host/api
-      '@zhin.js/host-router':
-        specifier: workspace:*
-        version: link:../../packages/host/router
-      '@zhin.js/html-renderer':
-        specifier: workspace:*
-        version: link:../../packages/toolkit/html-renderer
       '@zhin.js/plugin-blackjack':
         specifier: workspace:*
         version: link:../../plugins/games/blackjack
       '@zhin.js/plugin-dice-duel':
         specifier: workspace:*
         version: link:../../plugins/games/dice-duel
+      '@zhin.js/plugin-game-hub':
+        specifier: workspace:*
+        version: link:../../plugins/games/hub
       '@zhin.js/plugin-group-suite':
         specifier: workspace:*
         version: link:../../plugins/utils/group-suite
@@ -524,6 +551,9 @@ importers:
       '@zhin.js/plugin-rps':
         specifier: workspace:*
         version: link:../../plugins/games/rps
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../../packages/im/plugin-runtime
       '@zhin.js/plugin-text-adventure':
         specifier: workspace:*
         version: link:../../plugins/games/text-adventure
@@ -536,16 +566,16 @@ importers:
       sqlite3:
         specifier: latest
         version: 6.0.1
-      tsx:
-        specifier: ^4.22.4
-        version: 4.22.4
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../packages/im/zhin
     devDependencies:
+      '@zhin.js/cli':
+        specifier: workspace:*
+        version: link:../../basic/cli
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(jsdom@24.1.3)(msw@2.14.5(@types/node@26.1.1)(typescript@6.0.3))(vite@6.4.3(@types/node@26.1.1)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.22.4)(yaml@2.9.0))
 
   examples/test-bot:
     dependencies:
@@ -973,9 +1003,6 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
-      zhin.js:
-        specifier: workspace:*
-        version: link:../im/zhin
 
   packages/host/a2a:
     dependencies:
@@ -985,6 +1012,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../im/core
+      '@zhin.js/host-http':
+        specifier: workspace:*
+        version: link:../http
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
@@ -1093,6 +1123,12 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../im/core
+      '@zhin.js/host-http':
+        specifier: workspace:*
+        version: link:../http
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../im/tool
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -2560,9 +2596,6 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(jsdom@24.1.3)(msw@2.14.5(@types/node@26.1.1)(typescript@6.0.3))(vite@6.4.3(@types/node@26.1.1)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.22.4)(yaml@2.9.0))
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/im/zhin
 
   plugins/games/dice-duel:
     dependencies:
@@ -2588,9 +2621,6 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(jsdom@24.1.3)(msw@2.14.5(@types/node@26.1.1)(typescript@6.0.3))(vite@6.4.3(@types/node@26.1.1)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.22.4)(yaml@2.9.0))
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/im/zhin
 
   plugins/games/guess-number:
     dependencies:
@@ -2616,9 +2646,6 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(jsdom@24.1.3)(msw@2.14.5(@types/node@26.1.1)(typescript@6.0.3))(vite@6.4.3(@types/node@26.1.1)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.22.4)(yaml@2.9.0))
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/im/zhin
 
   plugins/games/hub:
     dependencies:
@@ -2638,9 +2665,6 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(jsdom@24.1.3)(msw@2.14.5(@types/node@26.1.1)(typescript@6.0.3))(vite@6.4.3(@types/node@26.1.1)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.22.4)(yaml@2.9.0))
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/im/zhin
 
   plugins/games/idiom-chain:
     dependencies:
@@ -2669,9 +2693,6 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(jsdom@24.1.3)(msw@2.14.5(@types/node@26.1.1)(typescript@6.0.3))(vite@6.4.3(@types/node@26.1.1)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.22.4)(yaml@2.9.0))
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/im/zhin
 
   plugins/games/rps:
     dependencies:
@@ -2697,9 +2718,6 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(jsdom@24.1.3)(msw@2.14.5(@types/node@26.1.1)(typescript@6.0.3))(vite@6.4.3(@types/node@26.1.1)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.22.4)(yaml@2.9.0))
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/im/zhin
 
   plugins/games/text-adventure:
     dependencies:
@@ -2725,9 +2743,6 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(jsdom@24.1.3)(msw@2.14.5(@types/node@26.1.1)(typescript@6.0.3))(vite@6.4.3(@types/node@26.1.1)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.22.4)(yaml@2.9.0))
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/im/zhin
 
   plugins/games/tic-tac-toe:
     dependencies:
@@ -2753,9 +2768,6 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(jsdom@24.1.3)(msw@2.14.5(@types/node@26.1.1)(typescript@6.0.3))(vite@6.4.3(@types/node@26.1.1)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.22.4)(yaml@2.9.0))
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/im/zhin
 
   plugins/games/word-riddle:
     dependencies:
@@ -2784,9 +2796,6 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(jsdom@24.1.3)(msw@2.14.5(@types/node@26.1.1)(typescript@6.0.3))(vite@6.4.3(@types/node@26.1.1)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.22.4)(yaml@2.9.0))
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/im/zhin
 
   plugins/services/activity-feedback:
     dependencies:
@@ -2881,9 +2890,6 @@ importers:
       '@zhin.js/agent':
         specifier: workspace:*
         version: link:../../../packages/im/agent
-      '@zhin.js/html-renderer':
-        specifier: workspace:*
-        version: link:../../../packages/toolkit/html-renderer
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -2937,9 +2943,6 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(jsdom@24.1.3)(msw@2.14.5(@types/node@26.1.1)(typescript@6.0.3))(vite@6.4.3(@types/node@26.1.1)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.22.4)(yaml@2.9.0))
-      zhin.js:
-        specifier: workspace:*
-        version: link:../../../packages/im/zhin
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -6663,10 +6666,6 @@ packages:
   eventemitter3@5.0.4:
     resolution: {integrity: sha512-mlsTRyGaPBjPedk6Bvw+aqbsXDtoAyAzm5MO7JgU+yVRyMQ5O8bD4Kcci7BS85f93veegeCPkL8R4GLClnjLFw==}
 
-  eventsource-parser@3.0.8:
-    resolution: {integrity: sha512-70QWGkr4snxr0OXLRWsFLeRBIRPuQOvt4s8QYjmUlmlkyTZkRqS7EDVRZtzU3TiyDbXSzaOeF0XUKy8PchzukQ==}
-    engines: {node: '>=18.0.0'}
-
   eventsource-parser@3.1.0:
     resolution: {integrity: sha512-kJezFj9YFAMLeORyi7aCLxLbD5/qWMQnoMVlVPyHIll7lgRJCc3JVln9Vgl9nwQi0YkMnhdGTMNn7CkRRAptMg==}
     engines: {node: '>=18.0.0'}
@@ -7175,9 +7174,6 @@ packages:
   jiti@2.6.1:
     resolution: {integrity: sha512-ekilCSN1jwRvIbgeg/57YFh8qQDNbwDb9xT/qu2DAHbFFZUicIl4ygVaAvzveMhMVr3LnpSKTNnwt8PoOfmKhQ==}
     hasBin: true
-
-  jose@6.2.2:
-    resolution: {integrity: sha512-d7kPDd34KO/YnzaDOlikGpOurfF0ByC2sEV4cANCtdqLlTfBlw2p14O/5d/zv40gJPbIQxfES3nSx1/oYNyuZQ==}
 
   jose@6.2.3:
     resolution: {integrity: sha512-YYVDInQKFJfR/xa3ojUTl8c2KoTwiL1R5Wg9YCydwH0x0B9grbzlg5HC7mMjCtUJjbQ/YnGEZIhI5tCgfTb4Hw==}
@@ -9857,14 +9853,14 @@ snapshots:
   '@inquirer/external-editor@1.0.3(@types/node@26.1.1)':
     dependencies:
       chardet: 2.2.0
-      iconv-lite: 0.7.2
+      iconv-lite: 0.7.3
     optionalDependencies:
       '@types/node': 26.1.1
 
   '@inquirer/external-editor@3.0.3(@types/node@26.1.1)':
     dependencies:
       chardet: 2.1.1
-      iconv-lite: 0.7.2
+      iconv-lite: 0.7.3
     optionalDependencies:
       '@types/node': 26.1.1
 
@@ -10009,11 +10005,11 @@ snapshots:
       cors: 2.8.6
       cross-spawn: 7.0.6
       eventsource: 3.0.7
-      eventsource-parser: 3.0.8
+      eventsource-parser: 3.1.0
       express: 5.2.1
       express-rate-limit: 8.3.2(express@5.2.1)
       hono: 4.12.27
-      jose: 6.2.2
+      jose: 6.2.3
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
@@ -11653,7 +11649,7 @@ snapshots:
       debug: 4.4.3
       minimatch: 10.2.5
       semver: 7.8.5
-      tinyglobby: 0.2.16
+      tinyglobby: 0.2.17
       ts-api-utils: 2.5.0(typescript@6.0.3)
       typescript: 6.0.3
     transitivePeerDependencies:
@@ -12043,7 +12039,7 @@ snapshots:
       content-type: 1.0.5
       debug: 4.4.3
       http-errors: 2.0.1
-      iconv-lite: 0.7.2
+      iconv-lite: 0.7.3
       on-finished: 2.4.1
       qs: 6.15.3
       raw-body: 3.0.2
@@ -12816,13 +12812,11 @@ snapshots:
 
   eventemitter3@5.0.4: {}
 
-  eventsource-parser@3.0.8: {}
-
   eventsource-parser@3.1.0: {}
 
   eventsource@3.0.7:
     dependencies:
-      eventsource-parser: 3.0.8
+      eventsource-parser: 3.1.0
 
   expand-template@2.0.3: {}
 
@@ -13348,8 +13342,6 @@ snapshots:
   jiti@2.6.1:
     optional: true
 
-  jose@6.2.2: {}
-
   jose@6.2.3: {}
 
   joycon@3.1.1: {}
@@ -13794,7 +13786,7 @@ snapshots:
       minipass-sized: 2.0.0
       minizlib: 3.1.0
     optionalDependencies:
-      iconv-lite: 0.7.2
+      iconv-lite: 0.7.3
     optional: true
 
   minipass-flush@1.0.5:
@@ -14355,7 +14347,7 @@ snapshots:
     dependencies:
       bytes: 3.1.2
       http-errors: 2.0.1
-      iconv-lite: 0.7.2
+      iconv-lite: 0.7.3
       unpipe: 1.0.0
 
   rc@1.2.8:

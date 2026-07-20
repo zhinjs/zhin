@@ -1,0 +1,57 @@
+log_level: info
+
+# QQ 端点与 test-bot 的 `zhin` 一致；插件栈为游戏专用（无 AI）
+plugin: {}
+
+plugins:
+  qq:
+    name: zhin
+    appid: ${QQ_APPID}
+    secret: ${QQ_SECRET}
+    master: 0F7AB3CA76511C10E9B9C7A548548CD7
+    mode: websocket
+    sandbox: true
+    timeout: 10000
+    outboundMarkdown: auto
+    intents:
+      - GUILDS
+      - GUILD_MEMBERS
+      - GUILD_MESSAGE_REACTIONS
+      - DIRECT_MESSAGE
+      - GROUP_AND_C2C_EVENT
+      - INTERACTION
+      - MESSAGE_AUDIT
+      - AUDIO_ACTION
+      - PUBLIC_GUILD_MESSAGES
+    data_dir: ./data
+
+  group-suite:
+    keywordReply: false
+    rankSize: 10
+    teachCooldownMs: 3000
+
+  game-hub: {}
+  tic-tac-toe: {}
+  rps: {}
+  guess-number: {}
+  dice-duel: {}
+  idiom-chain: {}
+  word-riddle: {}
+  text-adventure: {}
+  blackjack: {}
+
+database:
+  dialect: sqlite
+  filename: ./data/bot.db
+
+http:
+  token: ${HTTP_TOKEN}
+  port: 8070
+  base: /api
+  corsOrigins:
+    - https://console.zhin.dev
+    - http://127.0.0.1:9000
+    - http://localhost:9000
+
+ai:
+  enabled: false

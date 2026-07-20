@@ -1,4 +1,4 @@
-import type { Message } from 'zhin.js';
+import type { Message } from '@zhin.js/core';
 import { recordGameOutcome } from '@zhin.js/game-kit';
 import { evaluateGuess, hintText, MAX, MIN } from './engine.js';
 import { formatStatus, type SessionService } from './session-service.js';

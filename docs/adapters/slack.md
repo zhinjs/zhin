@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/slack/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/slack/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=c8b184403069b4cf -->
+<!-- sync-adapter-docs:sha256=dd8696ff943fd609 -->
 
 # @zhin.js/adapter-slack
 
@@ -41,7 +41,7 @@ pnpm add @zhin.js/adapter-slack
 
 ### 平台权限（platform permit）
 
-- **TODO**：`registerSlackPlatformPermitChecker()` 暂无注册点——Plugin Runtime 的命令分发没有 platform permit 消费端（旧 checker 只服务于 legacy Tool/Message 门禁），待 runtime 提供门禁挂钩后再接线。`src/platform-permit.ts` 的 checker 与单测保留。旧实现本就没有入站 sender role 解析（`senderPermitCache` 从未被消费），故 metadata 无 role 字段可恢复。
+- `plugin.ts` 已注册 checker，Runtime Tool 权限统一经 Core `canAccessTool()`；当前 Slack 入站没有可靠 sender role 时，受限工具按 fail-closed 拒绝，不会静默放行。
 
 ## 模式对比
 

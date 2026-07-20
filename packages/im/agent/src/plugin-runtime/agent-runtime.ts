@@ -1,4 +1,5 @@
 import type { PluginId, SnapshotStore } from '@zhin.js/plugin-runtime';
+import type { Message } from '@zhin.js/core';
 import {
   CapabilityIngress,
   type AgentCapabilities,
@@ -18,12 +19,18 @@ export class AgentRuntime {
   async runTurn<TResult>(
     owner: PluginId,
     operation: (capabilities: AgentCapabilities) => TResult | Promise<TResult>,
+    options?: { readonly message?: Message },
   ): Promise<TResult> {
     if (!this.#snapshots) throw new Error('AgentRuntime is not attached to a Root');
     const lease = this.#snapshots.acquire();
     let active = true;
     try {
-      return await operation(this.#ingress.read(lease.value, owner, () => active));
+      return await operation(this.#ingress.read(
+        lease.value,
+        owner,
+        () => active,
+        options?.message,
+      ));
     } finally {
       active = false;
       lease.release();

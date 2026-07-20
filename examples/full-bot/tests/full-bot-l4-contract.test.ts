@@ -8,8 +8,49 @@ import { describe, it, expect } from 'vitest';
 
 const botRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const configText = fs.readFileSync(path.join(botRoot, 'zhin.config.yml'), 'utf8');
+const packageJson = JSON.parse(
+  fs.readFileSync(path.join(botRoot, 'package.json'), 'utf8'),
+) as {
+  scripts: Record<string, string>;
+  zhin?: {
+    entry: string;
+    features: Array<{ package: string }>;
+    plugins: Array<{ package: string; instanceKey: string }>;
+  };
+};
 
 describe('full-bot L4 配置契约', () => {
+  it('由 Plugin Runtime 与约定式能力目录启动', () => {
+    expect(packageJson.scripts.dev).toBe('zhin runtime start');
+    expect(packageJson.scripts.start).toContain('zhin runtime start');
+    expect(packageJson.zhin?.entry).toBe('./plugin.ts');
+    expect(packageJson.zhin?.features.map((feature) => feature.package)).toEqual([
+      '@zhin.js/command',
+      '@zhin.js/component',
+      '@zhin.js/skill',
+      '@zhin.js/tool',
+      '@zhin.js/page',
+    ]);
+    expect(packageJson.zhin?.plugins).toEqual([
+      { package: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox' },
+      { package: '@zhin.js/adapter-napcat', instanceKey: 'napcat' },
+      { package: '@zhin.js/adapter-kook', instanceKey: 'kook' },
+    ]);
+
+    for (const source of [
+      'plugin.ts',
+      'schema.json',
+      'commands/hello.ts',
+      'commands/card.ts',
+      'components/status-card.ts',
+      'tools/runtime-status.ts',
+      'pages/orchestration.tsx',
+    ]) {
+      expect(fs.existsSync(path.join(botRoot, source)), source).toBe(true);
+    }
+    expect(fs.existsSync(path.join(botRoot, 'src', 'plugins'))).toBe(false);
+  });
+
   it('ADR 0024 Pipeline 取代 Missions 配置开关', () => {
     expect(configText).not.toMatch(/hardMode:/);
     expect(configText).not.toMatch(/autoAdvance:/);
@@ -23,14 +64,14 @@ describe('full-bot L4 配置契约', () => {
     expect(configText).toMatch(/autoConsolidate:\s*false/);
   });
 
-  it('三适配器 + MCP + A2A + host', () => {
-    expect(configText).toContain('@zhin.js/adapter-sandbox');
-    expect(configText).toContain('@zhin.js/adapter-napcat');
-    expect(configText).toContain('@zhin.js/adapter-kook');
-    expect(configText).toContain('@zhin.js/mcp');
-    expect(configText).toContain('@zhin.js/a2a');
-    expect(configText).toContain('@zhin.js/host-router');
-    expect(configText).toContain('@zhin.js/host-api');
+  it('三适配器使用层级 Plugin 配置且不再声明 legacy Host 插件', () => {
+    expect(configText).toMatch(/plugins:\s*\n\s+sandbox:/u);
+    expect(configText).toMatch(/\n\s+napcat:/u);
+    expect(configText).toMatch(/\n\s+kook:/u);
+    expect(configText).not.toContain('@zhin.js/host-router');
+    expect(configText).not.toContain('@zhin.js/host-api');
+    expect(configText).not.toContain('@zhin.js/mcp');
+    expect(configText).not.toContain('@zhin.js/a2a');
   });
 
   it('loopback remoteAgents 指向本机 A2A Agent Card', () => {

@@ -6,7 +6,7 @@ import {
   type Models,
   type Plugin,
   type RelatedModel,
-} from 'zhin.js';
+} from '@zhin.js/core';
 import { channelKey } from './board-sender.js';
 import { getRegisteredGame, getRegisteredGames } from './game-hub-feature.js';
 import { createHostGameDb, type HostGameDbSource } from './memory-db.js';
@@ -14,7 +14,7 @@ import { generateCompactId } from './random.js';
 
 export type GameRecordResult = 'won' | 'lost' | 'draw' | 'aborted';
 
-declare module 'zhin.js' {
+declare module '@zhin.js/core' {
   interface Models {
     game_records: {
       id: string;

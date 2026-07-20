@@ -1,4 +1,4 @@
-import type { Message, Plugin } from 'zhin.js';
+import type { Message, Plugin } from '@zhin.js/core';
 import { channelKey } from '@zhin.js/game-kit';
 import { continueGame, startGame } from './game-flow.js';
 import { riddleCount, type RiddleType } from './riddles-catalog.js';

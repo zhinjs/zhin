@@ -1,9 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "./lib",
-    "rootDir": "./src"
+    "types": ["node"],
+    "noEmit": true,
+    "rootDir": "."
   },
-  "include": ["src/**/*"],
+  "include": ["plugin.ts", "commands/**/*.ts", "tools/**/*.ts"],
   "exclude": ["lib", "node_modules"]
 }

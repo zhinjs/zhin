@@ -6,7 +6,7 @@
 
 - **单条定时流水线**：同步 → 复盘 → 推荐 → 推送（默认 18:00）
 - 频率 + 遗漏 + 趋势综合统计；开奖后自动调权
-- 按 `games` 配置过滤后推送给各 `endpoint.master`
+- 按 `games` 配置过滤，经 Runtime `OutboundHost` 推送到显式 `pushTargets`
 - 手动触发：`lottery`（不推送，结果在会话内返回）
 
 ## 安装
@@ -23,7 +23,7 @@ scheduleCron (18:00)
   2. review pending picks vs new issues → tune weights → **lottery_model_weights**
   3. if no new review: replay history simulation → refresh **lottery_model_weights**
   4. compute next-period picks (reads weights from DB) → lottery_predictions
-  5. push report to masters (enabled games only)
+  5. push report to configured targets (enabled games only)
 ```
 
 权重表 `lottery_model_weights` 每玩法一行，字段 `freq_weight` / `omit_weight` / `trend_weight` + `eval_count` / `avg_hit_rate`：
@@ -33,35 +33,31 @@ scheduleCron (18:00)
 - **推荐**：`loadGameWeights` 读库中最新权重算号
 
 - **代码层**：官网同步、F/O/T 引擎、复盘调权
-- **Agent 可选**（`agentEnabled`）：在日报上附加 AI 解读，不参与主流程编排
+- **确定性报告**：主流水线不依赖 legacy Plugin 或 LLM，Agent 可通过独立 tools 读取结果
 
 ## 配置
 
 ```yaml
-lottery:
-  scheduleCron: "0 0 18 * * *"
-  scheduleEnabled: true
-  agentEnabled: true
-  backtestEnabled: true
-  backtestWindow: 50
-  backtestRandomTrials: 64
-  backtestMinHistory: 30
-  pickCount: 5
-  historyLimit: 500
-  kl8:
+plugins:
+  lottery:
+    scheduleCron: "0 0 18 * * *"
+    scheduleEnabled: true
+    backtestEnabled: true
+    backtestWindow: 50
+    backtestRandomTrials: 64
+    backtestMinHistory: 30
     pickCount: 5
-    recommendGroups: 3
-    groupStrategies:
-      - balanced
-      - hot
-      - cold
-  games:
-    - kl8
-    - ssq
-    - dlt
-    - fc3d
-    - pl3
-    - pl5
+    historyLimit: 500
+    kl8:
+      pickCount: 5
+      recommendGroups: 3
+      groupStrategies: [balanced, hot, cold]
+    games: [kl8, ssq, dlt, fc3d, pl3, pl5]
+    pushTargets:
+      - adapter: sandbox
+        endpointId: sandbox-bot
+        channelType: private
+        channelId: operator
 ```
 
 ## 权重训练（模拟盘）

@@ -10,6 +10,11 @@
       "types": "./lib/index.d.ts",
       "development": "./src/index.ts",
       "import": "./lib/index.js"
+    },
+    "./runtime": {
+      "types": "./lib/runtime.d.ts",
+      "development": "./src/runtime.ts",
+      "import": "./lib/runtime.js"
     }
   },
   "keywords": [
@@ -36,6 +41,7 @@
   "dependencies": {
     "@a2a-js/sdk": "1.0.0-beta.0",
     "@zhin.js/core": "workspace:*",
+    "@zhin.js/host-http": "workspace:*",
     "@zhin.js/logger": "workspace:*"
   },
   "peerDependencies": {

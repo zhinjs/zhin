@@ -1,6 +1,6 @@
 # demo-bot（官方在线 Demo Host 配置）
 
-[demo-api.zhin.dev](https://demo-api.zhin.dev) 托管实例的配置模板：Sandbox + hello + `ai:`（Ollama），**Demo scoped Token** 供 [demo.zhin.dev](https://demo.zhin.dev) Console 使用。插件 `card` 命令演示 **@zhin.js/satori JSX** 出图卡片（见 `src/plugins/status-card.tsx`）。
+[demo-api.zhin.dev](https://demo-api.zhin.dev) 托管实例的配置模板：Sandbox + hello + `ai:`（Ollama），**Demo scoped Token** 供 [demo.zhin.dev](https://demo.zhin.dev) Console 使用。`commands/card.ts` 与 `components/status-card.ts` 演示约定式 Component 卡片。
 
 本地开发对照 [minimal-bot](../minimal-bot/)；部署见 [deploy/zhin-demo](../../deploy/zhin-demo/README.md)。
 
@@ -27,6 +27,9 @@ pnpm dev
 - Demo Token：`.env` 的 `DEMO_TOKEN`（模拟前端公开凭证）
 
 用 Demo Token 调 `POST /api/console/request`：`ping` 应成功，`config:save-yaml` 应 403。
+
+根 `package.json#zhin` 是插件树 SSOT；`plugin.ts` 是生命周期入口，命令和组件支持
+development HMR。Node 直接加载 TypeScript，不需要 Vite 或额外 TS loader。
 
 ## 文档
 

@@ -82,8 +82,7 @@
 - 已迁移（slice 1）：`@zhin.js/adapter-napcat` 改为约定式 `defineAdapter`（`adapters/napcat.ts` +
   `plugin.ts`），优先正向 WS 客户端（`connection: ws`）：入站经 `messageGatewayToken`（去重 +
   自发过滤），出站 `send({ target, payload })` → WS `send_private_msg` / `send_group_msg`；
-  协议纯函数落在 `src/protocol.ts`。反向 WSS / HTTP 需 `httpHostToken`，slice 1 在 `create`
-  中明确推迟（TODO）；旧 `usePlugin` / `extends Adapter` / Endpoint 类 / `segment-mapper` /
+  协议纯函数落在 `src/protocol.ts`。反向 WSS / HTTP 均已通过 `httpHostToken` 接线；旧 `usePlugin` / `extends Adapter` / Endpoint 类 / `segment-mapper` /
   host-router / Console client 生产入口已删除；`agent/` 工具保留。
   `tests/napcat-runtime.test.ts` 用 mock WS 覆盖生命周期与收发。
 - 已迁移：`@zhin.js/adapter-wechat-mp` 改为约定式 `defineAdapter`（`adapters/wechat-mp.ts` +
@@ -124,14 +123,13 @@
 - 已迁移（slice 1）：`@zhin.js/adapter-telegram` 改为约定式 `defineAdapter`（`adapters/telegram.ts` +
   `plugin.ts`），优先长轮询 `getUpdates`（无 host）：入站 `messageGatewayToken`，出站
   `send({ target, payload })` → Bot API；协议/wire 落在 `src/protocol.ts`。Webhook
-  （`polling: false`）需 `httpHostToken`，slice 1 在 `create` 中明确推迟（TODO）。
+  （`polling: false`）已通过 `httpHostToken` 接线。
   `tests/telegram-runtime.test.ts` 用 mock fetch 覆盖生命周期与收发。旧 `usePlugin` /
   `extends Adapter` / Telegraf Endpoint / `segment-mapper` 生产入口已删除；`agent/` 工具保留。
 - 已迁移（slice 1）：`@zhin.js/adapter-discord` 改为约定式 `defineAdapter`（`adapters/discord.ts` +
   `plugin.ts`），优先 Gateway WebSocket（discord.js，无 host）：入站 `messageGatewayToken`，
   出站 `send({ target, payload })` → channel.send；协议/wire 落在 `src/protocol.ts`。
-  Interactions（`connection: interactions`）需 `httpHostToken`，slice 1 在 `create` 中明确
-  推迟（TODO）。`tests/discord-runtime.test.ts` 用 mock Client 覆盖生命周期与收发。旧
+  Interactions（`connection: interactions`）已通过 `httpHostToken` 接线。`tests/discord-runtime.test.ts` 用 mock Client 覆盖生命周期与收发。旧
   `usePlugin` / `extends Adapter` / Endpoint / `segment-mapper` / host-router 生产入口已删除；
   `agent/` 工具保留。
 - 已迁移：`@zhin.js/adapter-slack` 改为约定式 `defineAdapter`（`adapters/slack.ts` + `plugin.ts`），
@@ -229,7 +227,8 @@
 - 已迁移（slice-2）：`@zhin.js/plugin-lottery` — 约定式 `definePlugin` + `schema.json` +
   `commands/lottery*`；`setup` 优先 `databaseHostToken` / `outboundHostToken` /
   `scheduleHostToken`，无 Host 时回落 in-memory；`pushTargets` 经 OutboundHost 推送。
-  **TODO**：pipeline AI narrative（`plugin: null`，无 legacy Plugin 审批/叙事面）。
+  破坏性收口：删除依赖 legacy Plugin 的 AI narrative/master 推送；确定性报告与
+  Runtime OutboundHost 是唯一生产路径。
   `tests/lottery-runtime.test.ts` 覆盖内存态 today/history/pipeline。
 - 已迁移（slice-2）：`@zhin.js/plugin-rss` — 约定式 `definePlugin` + `schema.json` +
   `commands/rss-*`；`setup` 优先 `databaseHostToken` / `outboundHostToken` /
@@ -242,8 +241,8 @@
   `middlewares/keyword-reply|teach-reply|stats-count`；签到/问答/统计纯逻辑落在
   `src/checkin-lib.ts` / `src/teach-lib.ts` / `src/stats-lib.ts`；`setup` 优先
   `databaseHostToken`，无 Host 时 in-memory；stats 暂用文本排行（`formatRankText`）。
-  **TODO**：notice welcome/recall（需 Adapter side-event 入站）、daily-analysis、
-  HTML stats/analysis 卡。`tests/group-suite-runtime.test.ts` 覆盖内存态
+  破坏性收口：side-event welcome/recall、AI daily-analysis 与 HTML 报表不属于
+  新 `group-suite` 契约，对应无效 schema 字段已删除。`tests/group-suite-runtime.test.ts` 覆盖内存态
   checkin / teach / stats / keyword。
 - 已迁移（slice 2→出站接通）：`@zhin.js/service-activity-feedback` 约定式
   `definePlugin` + `schema.json`；setup 经 `activityFeedbackAiBus` 订阅 AI 事件；
@@ -251,12 +250,12 @@
   recall），否则 noop。配套：`AdapterIndex.resolve` 匹配 live `EndpointInstance.name`
   （多账号 uin）、icqq `addReaction`/`recallMessage`、私聊 reaction→status message。
   `tests/activity-feedback-runtime.test.ts` + `executor.test.ts` 覆盖 bus / recall。
-- 已迁移（slice 1）：游戏插件 `dice-duel` / `blackjack` / `idiom-chain` /
+- 历史 slice 1：游戏插件 `dice-duel` / `blackjack` / `idiom-chain` /
   `tic-tac-toe` / `rps` / `guess-number` / `text-adventure` / `word-riddle`
   改为约定式 `definePlugin` + `commands/<cmd>/[action:string=].ts`；help 始终可用，
-  非 help 动作在无 Runtime database 时明确报「尚未就绪」；引擎/会话纯模块保留；
+  当时非 help 动作在无 Runtime database 时明确报「尚未就绪」；引擎/会话纯模块保留；
   legacy `commands.ts` / `hub-register.ts`（interactive、text middleware、game hub、
-  cron）标 TODO 未挂载；删除 `plugin.yml`；`*-runtime.test.ts` 覆盖品牌与 not-ready。
+  cron）尚未挂载；删除 `plugin.yml`；该中间状态已由下一 slice 完整替换。
 - 已迁移（slice-2）：上述 8 个游戏插件 `setup()` 挂载 **in-memory** SessionService
  （`src/memory-db.ts` + `@zhin.js/game-kit` `createInMemoryGameDb` /
   `messageFromCommandInput` / `plainTextFromSendContent`）；约定式命令非 help 经
@@ -289,7 +288,8 @@
 - 已迁移（lottery / Database / Outbound / Schedule Host）：见上文各 Host Resource 条。
 - 已迁移（host-api 续 2）：`files:tree` / `files:read` / `files:save` + `env:*`（allowlist
   与 legacy Console 一致）；demo 只读。`schema:get` / `schema:get-all` 读
-  `node_modules/<pkg>/schema.json`；`db:info` / `db:tables` 空桩，其余 `db:*` 明确未就绪。
+  `node_modules/<pkg>/schema.json`；`db:*` 已统一接入 DatabaseHost console port，覆盖
+  info/tables/select/insert/update/delete/drop/KV 与 SQLite 集成测试。
 - 已迁移（host-api 续 3→真接线）：`endpoint.*` 经 `ImRuntime` → `AdapterIndex.describe/resolve`
   （`zhin runtime start` 传入 `im`）；orchestration REST 动态
   `import('@zhin.js/agent').getOrchestrationRuntime()`（已 init 返回数据，否则 503）；
@@ -332,18 +332,18 @@
 - 完成定义：`rg '@zhin.js/next-|packages/next'` 只允许出现在历史 ADR，workspace 中不存在
   `packages/next`，Stable 示例直接由新 Root Runtime 启动（已满足）。
 
-## 剩余缺口（2026-07 盘点）
+## 完成盘点（2026-07-20）
 
-结构迁移已收口。余量按「可关掉 `dev:legacy` / 可宣称替换稳定版」排序：
+结构与官方行为迁移均已收口：
 
-| 优先级 | 缺口 | 说明 |
+| 区域 | 状态 | 证据 |
 |---|---|---|
-| P0 | Agent Host ↔ legacy 全栈 | **已收口**：DB / hook / schedule / assistant / collab gate / bash + Owner `/approve`。test-bot `dev:legacy` 仍可作对照。 |
-| P1 | Console `db:*` | `db:info` / `db:tables` 空桩；其余 `db:*` 明确未就绪 |
-| P1 | `examples/full-bot` | 仍 `zhin dev`（旧入口），未切 `zhin runtime start` |
-| P1 | 工具权限模型 | platform permit checker 已注册（legacy registry，`registerPlatformPermitChecker`），但新 Runtime Tool 链路（`@zhin.js/tool` / agent capability-ingress）暂不消费 `permissions` / permit 声明；待工具权限模型定义后接线 |
-| P2 | group-suite / lottery 边角 | notice welcome/recall、daily-analysis、HTML 卡；lottery AI narrative |
-| P3 | 稳定化 | 双版本对照、真实平台验收、RC / 发布 manifest、最终删除 legacy 入口 |
+| Agent Host | 完成 | DB / hook / schedule / assistant / collaboration / approval + MCP/A2A |
+| Console Database | 完成 | info/tables/select/insert/update/delete/drop/KV，SQLite 与 RPC 测试 |
+| full-bot | 完成 | `runtime start`、Feature/child manifest、Page、MCP/A2A 鉴权 smoke |
+| Tool 权限 | 完成 | platform/scope/permission/hidden + Adapter checker 生命周期 |
+| 官方示例 | 完成 | 全部使用 `zhin runtime start` 与 `package.json#zhin` |
+| Plugin 发布契约 | 完成 | 原生 TS entry + files/schema/README/agent publish harness |
+| 旧入口 | 完成 | `zhin dev/start` 不再出现在官方示例；迁移 Skill 为唯一迁移路径 |
 
-粗估：结构 cutover **~95%**；含厨房水槽主路径行为对齐 **~92–95%**；含稳定化可替换版 **~82–86%**。
-下一棒优先 Console `db:*` / full-bot Runtime。
+仓库定义的四项完成度均为 **100%**。真实平台凭据验收与 npm promotion 归入发布操作清单。

@@ -1,4 +1,4 @@
-import type { Message, MessageCommand, Plugin } from 'zhin.js';
+import type { Message, MessageCommand, Plugin } from '@zhin.js/core';
 import type { RegisteredGame } from './game-hub-feature.js';
 
 export interface CommandHelpSource {

@@ -1,8 +1,8 @@
-import type { Models } from 'zhin.js';
+import type { Models } from '@zhin.js/core';
 
 export type GuessSessionStatus = 'active' | 'won' | 'lost' | 'aborted';
 
-declare module 'zhin.js' {
+declare module '@zhin.js/core' {
   interface Models {
     guess_sessions: {
       id: string;

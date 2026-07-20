@@ -1,4 +1,4 @@
-import type { ButtonCommandOptions, ButtonData, ButtonInteractionMode } from 'zhin.js';
+import type { ButtonCommandOptions, ButtonData, ButtonInteractionMode } from '@zhin.js/core';
 
 /** 交互模式预设：见 ADR 0022 / docs/essentials/interactive-segments.md */
 export type InteractionProfile = 'menu' | 'gameplay' | 'terminal';

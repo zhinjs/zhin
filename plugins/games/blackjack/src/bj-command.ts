@@ -1,4 +1,4 @@
-import type { Message, Plugin } from 'zhin.js';
+import type { Message, Plugin } from '@zhin.js/core';
 import { continueGame, startGame } from './game-flow.js';
 import type { SessionService } from './session-service.js';
 

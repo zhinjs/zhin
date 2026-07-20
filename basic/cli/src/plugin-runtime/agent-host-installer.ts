@@ -67,6 +67,7 @@ import {
   type PeerTriggerMode,
 } from '@zhin.js/agent';
 import {
+  agentHostToken,
   CapabilityIngress,
   type AgentCapabilities,
   type ToolCapability,
@@ -96,6 +97,11 @@ interface AgentToolLike {
   };
   execute(args: Record<string, unknown>): Promise<unknown>;
   readonly source?: string;
+  readonly platforms?: readonly string[];
+  readonly scopes?: readonly ('private' | 'group' | 'channel')[];
+  readonly permissions?: readonly string[];
+  readonly hidden?: boolean;
+  readonly approval?: 'always' | 'once' | 'never';
 }
 
 interface McpServerEntry {
@@ -335,6 +341,11 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       service.dispose();
     });
 
+    // Protocol Hosts (MCP/A2A) consume this narrow generation-owned port.
+    // The Scope is sealed after all Root installers finish, so publication must
+    // happen here rather than through a mutable process-global registry.
+    resources.provide(agentHostToken, Object.freeze({ service, agent: zhinAgent }));
+
     const presetCount = await seedPresets();
 
     options.im.setUnmatchedHandler(async (message, snapshot, requester) => {
@@ -400,7 +411,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           message.metadata,
           options.transcribeUrl,
         );
-        const capabilities = readCapabilities(ingress, snapshot, requester);
+        const capabilities = readCapabilities(ingress, snapshot, requester, commMessage);
         const routed = routeSpecialistAgent(inbound.text, capabilities);
         const binding = service.getBindingRegistry().requireZhinBinding();
         zhinAgent.configure({
@@ -1072,9 +1083,10 @@ function readCapabilities(
   ingress: CapabilityIngress,
   snapshot: RuntimeSnapshot,
   requester: PluginId,
+  message: ReturnType<typeof createSyntheticMessage>,
 ): AgentCapabilities {
   try {
-    return ingress.read(snapshot, requester);
+    return ingress.read(snapshot, requester, () => true, message);
   } catch {
     return Object.freeze({
       generation: snapshot.generation,
@@ -1092,7 +1104,7 @@ function toTool(tool: AgentToolLike | ToolCapability): Tool {
     ? parametersFromInputSchema(tool.inputSchema)
     : tool.parameters;
   const source = isToolCapability(tool) ? tool.owner : tool.source;
-  return {
+  const result: AgentToolLike = {
     name: tool.name,
     description: tool.description,
     parameters: {
@@ -1101,10 +1113,26 @@ function toTool(tool: AgentToolLike | ToolCapability): Tool {
       required: parameters.required,
     },
     source,
+    platforms: tool.platforms,
+    scopes: tool.scopes,
+    permissions: tool.permissions,
+    hidden: tool.hidden,
+    approval: isToolCapability(tool)
+      ? runtimeApprovalPolicy(tool.approval)
+      : tool.approval,
     async execute(args) {
       return await tool.execute(args as Record<string, unknown>) as Awaited<ReturnType<Tool['execute']>>;
     },
   };
+  // ZhinAgent accepts the richer orchestrator Tool structurally; Core Tool is
+  // the common transport shape and intentionally does not own approval policy.
+  return result as Tool;
+}
+
+export function runtimeApprovalPolicy(
+  approval: ToolCapability['approval'],
+): 'never' | 'always' {
+  return approval === 'never' ? 'never' : 'always';
 }
 
 function isToolCapability(tool: AgentToolLike | ToolCapability): tool is ToolCapability {

@@ -13,9 +13,19 @@ describe('demo-bot config', () => {
     expect(configText).toMatch(/host:\s*0\.0\.0\.0/);
   });
 
-  it('hello 插件含 card 与 ai 引导', () => {
-    const hello = readFileSync(resolve(dir, '../src/plugins/hello.ts'), 'utf8');
+  it('conventional hello command contains card and AI guidance', () => {
+    const hello = readFileSync(resolve(dir, '../commands/hello.ts'), 'utf8');
     expect(hello).toContain('card');
     expect(hello).toContain('ai:');
+  });
+
+  it('uses the Plugin Runtime manifest', () => {
+    const manifest = JSON.parse(readFileSync(resolve(dir, '../package.json'), 'utf8'));
+    expect(manifest.scripts.dev).toBe('zhin runtime start');
+    expect(manifest.zhin.entry).toBe('./plugin.ts');
+    expect(manifest.zhin.plugins).toContainEqual({
+      package: '@zhin.js/adapter-sandbox',
+      instanceKey: 'sandbox',
+    });
   });
 });

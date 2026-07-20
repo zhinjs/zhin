@@ -1,4 +1,4 @@
-import type { Message, SendContent } from 'zhin.js';
+import type { Message, SendContent } from '@zhin.js/core';
 import {
   buildGridKeyboard,
   buildGridFallbackMap,

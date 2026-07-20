@@ -10,11 +10,20 @@ import {
   resolveRuntimeSenderRoles,
   resolveTriggerTimeoutMs,
   renderTriggerError,
+  runtimeApprovalPolicy,
   withTriggerTimeout,
 } from '../../src/plugin-runtime/agent-host-installer.js';
 import { createEndpointRoleResolver } from '../../src/plugin-runtime/start-command.js';
 
 const adapter = capabilityId(rootPluginId(), featureId('zhin.adapter'), 'icqq');
+
+describe('Plugin Runtime Tool policy bridge', () => {
+  it('keeps never explicit and treats on-risk/always as interactive approval', () => {
+    expect(runtimeApprovalPolicy('never')).toBe('never');
+    expect(runtimeApprovalPolicy('on-risk')).toBe('always');
+    expect(runtimeApprovalPolicy('always')).toBe('always');
+  });
+});
 
 function makeMessage(input: {
   content: string;

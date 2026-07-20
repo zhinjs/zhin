@@ -192,6 +192,44 @@ describe('runtime console RPC', () => {
     });
   });
 
+  it('routes all Database CRUD and KV operations through one administration port', async () => {
+    const calls: string[] = [];
+    const database = {
+      info: () => ({ dialect: 'redis', type: 'keyvalue' as const, tables: ['cache'], connected: true }),
+      tables: () => [{ name: 'cache' }],
+      select: async () => ({ rows: [], total: 0, page: 1, pageSize: 50 }),
+      insert: async () => { calls.push('insert'); },
+      update: async () => { calls.push('update'); return 1; },
+      delete: async () => { calls.push('delete'); return 1; },
+      dropTable: async () => { calls.push('drop'); },
+      kvGet: async () => 'value',
+      kvSet: async () => { calls.push('kv-set'); },
+      kvDelete: async () => { calls.push('kv-delete'); },
+      kvEntries: async () => [{ key: 'key', value: 'value' }],
+    };
+    const ctx = { authScope: 'full' as const, listPages: async () => [], database };
+
+    for (const message of [
+      { type: 'db:insert', table: 'cache', row: { key: 'key', value: 'value' } },
+      { type: 'db:update', table: 'cache', row: { value: 'next' }, where: { key: 'key' } },
+      { type: 'db:delete', table: 'cache', where: { key: 'key' } },
+      { type: 'db:drop-table', table: 'cache' },
+      { type: 'db:kv:set', table: 'cache', key: 'key', value: 'value' },
+      { type: 'db:kv:delete', table: 'cache', key: 'key' },
+    ]) {
+      const reply = pickRpcReply(message, await dispatchRuntimeConsoleRpc(message, ctx));
+      expect(reply?.error).toBeUndefined();
+    }
+    expect(calls).toEqual(['insert', 'update', 'delete', 'drop', 'kv-set', 'kv-delete']);
+
+    const get = await dispatchRuntimeConsoleRpc({ type: 'db:kv:get', table: 'cache', key: 'key' }, ctx);
+    expect(pickRpcReply({ type: 'db:kv:get' }, get)?.data).toEqual({ key: 'key', value: 'value' });
+    const entries = await dispatchRuntimeConsoleRpc({ type: 'db:kv:entries', table: 'cache' }, ctx);
+    expect(pickRpcReply({ type: 'db:kv:entries' }, entries)?.data).toEqual({
+      entries: [{ key: 'key', value: 'value' }],
+    });
+  });
+
   it('lists endpoints when registry callbacks are provided', async () => {
     const listed = await dispatchRuntimeConsoleRpc(
       { type: 'endpoint.list', requestId: 40 },

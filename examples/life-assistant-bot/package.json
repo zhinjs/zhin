@@ -5,19 +5,38 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "zhin dev",
-    "start": "zhin start",
+    "dev": "zhin runtime start",
+    "start": "zhin runtime start --mode production --no-watch",
     "build": "tsc --noEmit"
   },
   "dependencies": {
-    "zhin.js": "workspace:*",
-    "@zhin.js/cli": "workspace:*",
-    "@zhin.js/host-api": "workspace:*",
-    "@zhin.js/host-router": "workspace:*",
-    "@zhin.js/adapter-sandbox": "workspace:*"
+    "@ai-sdk/openai-compatible": "^3.0.5",
+    "@zhin.js/adapter-sandbox": "workspace:*",
+    "@zhin.js/agent": "workspace:*",
+    "@zhin.js/command": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
+    "@zhin.js/tool": "workspace:*",
+    "ai": "^7.0.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@zhin.js/cli": "workspace:*",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
+  },
+  "engines": { "node": ">=22.18.0" },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      { "package": "@zhin.js/command", "api": "^1.0.0" },
+      { "package": "@zhin.js/tool", "api": "^1.0.0" }
+    ],
+    "plugins": [
+      { "package": "@zhin.js/adapter-sandbox", "instanceKey": "sandbox" }
+    ]
   }
 }

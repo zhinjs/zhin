@@ -1,10 +1,8 @@
-import type { Plugin } from 'zhin.js';
 import type { GameId } from './types.js';
 import { syncGame, type LotteryDb } from './db.js';
 
 import {
   buildDailyReport,
-  explainReportWithAi,
   formatDailyReportText,
   hydrateReportPickWeights,
   resolveTodayReport,
@@ -18,18 +16,15 @@ import {
   runHoldoutBacktest,
 } from './evaluate/weight-guard.js';
 import { cancelTodayPendingPredictions } from './evaluate/tracker.js';
-import { pushTextToMasters, getLotteryOutboundPush } from './push.js';
+import { pushLotteryReport, getLotteryOutboundPush } from './push.js';
 import type { Kl8Config } from './games/kl8-groups.js';
 
 export interface PipelineDeps {
   getDb: () => LotteryDb | null;
-  /** Legacy Plugin host for AI narrative / master push; null in Plugin Runtime slice-1. */
-  plugin: Plugin | null;
   enabledGames: () => GameId[];
   historyLimit: number;
   pickCount: number;
   kl8: Kl8Config;
-  agentEnabled: boolean;
   backtest: {
     enabled: boolean;
     window: number;
@@ -175,10 +170,7 @@ export async function runLotteryPipeline(
     }
     report.picks = await hydrateReportPickWeights(db, report.picks);
 
-    let aiNote = '';
-    if (deps.agentEnabled && deps.plugin) {
-      aiNote = await explainReportWithAi(deps.plugin, report);
-    }
+    const aiNote = '';
     reportText = formatDailyReportText(report, aiNote);
     await saveDailyReport(db, report, aiNote);
     recommendText = weightPlan.fallbacks.some((g) => needPredict.includes(g))
@@ -187,8 +179,8 @@ export async function runLotteryPipeline(
   }
 
   let pushed = false;
-  if (options.push && reportText && (deps.plugin || getLotteryOutboundPush())) {
-    await pushTextToMasters(deps.plugin, reportText);
+  if (options.push && reportText && getLotteryOutboundPush()) {
+    await pushLotteryReport(reportText);
     pushed = true;
   }
 

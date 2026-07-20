@@ -1,4 +1,4 @@
-import type { Adapter, Message, Plugin } from 'zhin.js';
+import type { Adapter, Message, Plugin } from '@zhin.js/core';
 import { plainTextFromSendContent, recordGameOutcome } from '@zhin.js/game-kit';
 import type { DiceSessionRow } from './models.js';
 import { compareRolls, DICE_PREFIX, rollD6, WIN_TARGET } from './engine.js';

@@ -1,4 +1,4 @@
-import type { MessageMiddleware, Plugin, RegisteredAdapter } from 'zhin.js';
+import type { MessageMiddleware, Plugin, RegisteredAdapter } from '@zhin.js/core';
 
 /**
  * 在 root 插件上注册游戏文本中间件（入站管线只走 root.middleware）。

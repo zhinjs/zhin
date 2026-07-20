@@ -32,7 +32,7 @@ pnpm check:l4
 
 - [ ] `GET /api/agent/orchestration/runs?sessionKey=` 与 DB 一致
 - [ ] `GET /api/agent/orchestration/runs/:runId` 含 tasks + events
-- [ ] Remote Console「编排」页可查看 Run / Task / Event（full-bot `client/` 入口）
+- [ ] Remote Console「编排」页可查看 Run / Task / Event（`pages/orchestration.tsx`）
 
 ## 手工验收
 

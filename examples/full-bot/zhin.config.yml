@@ -1,38 +1,22 @@
-log_level: 1
-
-# Sandbox：Console 沙盒页连接时自动创建；NapCat/KOOK 按需取消注释 bots 段
-endpoints: []
-#  - context: napcat
-#    name: "YOUR_QQ"
-#    access_token: ${ONEBOT11_ACCESS_TOKEN}
-#    connection: ws
-#    url: ${ONEBOT11_WS_URL}
-#  - context: kook
-#    name: main
-#    token: ${KOOK_TOKEN}
-
-plugins:
-  - "@zhin.js/adapter-sandbox"
-  - "@zhin.js/adapter-napcat"
-  - "@zhin.js/adapter-kook"
-  - "@zhin.js/host-router"
-  - "@zhin.js/host-api"
-  - "@zhin.js/mcp"
-  - "@zhin.js/a2a"
-  - hello
-  - orchestration-console
-
-hostApi:
-  lazyLoad: true
+log_level: info
 
 http:
   token: ${HTTP_TOKEN:-full-bot-dev-token}
   port: 8069
 
+database:
+  dialect: sqlite
+  filename: ./data/full-bot.db
+
 mcp:
   enabled: true
   path: /mcp
   token: ${HTTP_TOKEN:-full-bot-dev-token}
+  allowUnauthenticatedLocalhost: false
+
+a2a:
+  enabled: true
+  path: /a2a
 
 ai:
   enabled: true
@@ -73,3 +57,22 @@ ai:
 #     provider: edge
 # htmlRenderer:
 #   width: 540
+
+# Root 与 child Plugin 配置严格按 manifest topology 分层。
+plugin: {}
+
+plugins:
+  sandbox:
+    endpoints:
+      - context: sandbox
+        name: full-bot-sandbox
+        owner: local-user
+  napcat:
+    name: full-bot-napcat
+    connection: ws
+    url: ${ONEBOT11_WS_URL}
+    access_token: ${ONEBOT11_ACCESS_TOKEN}
+  kook:
+    name: full-bot-kook
+    connection: websocket
+    token: ${KOOK_TOKEN}

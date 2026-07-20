@@ -30,13 +30,19 @@ export function buildAgentCardForBinding(
   agentName: string,
   registry: AgentBindingRegistry,
   publicBaseUrl: string,
+  basePath = '/a2a',
 ): AgentCard | null {
   const binding = registry.getBinding(agentName);
   if (!binding) return null;
 
   const nickname = binding.nickname ?? agentName;
-  const jsonRpcUrl = a2aJsonRpcUrl(publicBaseUrl, agentName);
-  const restUrl = a2aRestUrl(publicBaseUrl, agentName);
+  const normalizedBasePath = basePath === '/a2a' ? undefined : basePath;
+  const jsonRpcUrl = normalizedBasePath
+    ? `${publicBaseUrl}${normalizedBasePath}/${encodeURIComponent(agentName)}/jsonrpc`
+    : a2aJsonRpcUrl(publicBaseUrl, agentName);
+  const restUrl = normalizedBasePath
+    ? `${publicBaseUrl}${normalizedBasePath}/${encodeURIComponent(agentName)}/rest`
+    : a2aRestUrl(publicBaseUrl, agentName);
 
   const skills: AgentSkill[] = [
     makeSkill({
@@ -92,7 +98,9 @@ export function buildAgentCardForBinding(
     defaultOutputModes: ['text/plain'],
     skills,
     signatures: [],
-    documentationUrl: a2aAgentCardUrl(publicBaseUrl, agentName),
+    documentationUrl: normalizedBasePath
+      ? `${publicBaseUrl}${normalizedBasePath}/${encodeURIComponent(agentName)}/.well-known/agent-card.json`
+      : a2aAgentCardUrl(publicBaseUrl, agentName),
   };
 }
 

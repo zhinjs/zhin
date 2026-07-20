@@ -7,7 +7,6 @@
     "scheduleCron": { "type": "string", "default": "0 0 18 * * *" },
     "historyLimit": { "type": "number", "default": 500, "minimum": 50, "maximum": 2000 },
     "scheduleEnabled": { "type": "boolean", "default": true },
-    "agentEnabled": { "type": "boolean", "default": true },
     "backtestEnabled": { "type": "boolean", "default": true },
     "backtestWindow": { "type": "number", "default": 50 },
     "backtestRandomTrials": { "type": "number", "default": 64 },

@@ -20,9 +20,15 @@ const l4CiTestFiles = [
   'packages/im/agent/tests/orchestration-dispatcher.test.ts',
   'packages/im/agent/tests/orchestrator/executor-contract.test.ts',
   'packages/im/agent/tests/memory-entry.test.ts',
+  'packages/host/mcp/tests/runtime.test.ts',
+  'packages/host/a2a/tests/runtime.test.ts',
+  'basic/cli/tests/plugin-runtime/database-host.test.ts',
+  'packages/im/agent/tests/plugin-runtime/agent-runtime.test.ts',
+  'packages/im/tool/tests/tool.test.ts',
   'examples/full-bot/tests/full-bot-l4-contract.test.ts',
   'examples/full-bot/tests/provider-gateway-contract.test.ts',
   'examples/full-bot/tests/multimodal-peers-contract.test.ts',
+  'examples/qq-games-bot/tests/runtime-contract.test.ts',
   'packages/im/core/tests/multimodal-chain-contract.test.ts',
 ];
 

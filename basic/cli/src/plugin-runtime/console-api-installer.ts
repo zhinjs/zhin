@@ -15,11 +15,6 @@ import {
   type HttpHost,
   type RuntimeConsolePage,
 } from '@zhin.js/host-http';
-import {
-  getAssistantRuntime,
-  isAssistantEventsEndpointActive,
-  isAssistantEventsActive,
-} from '@zhin.js/agent';
 import type { ImRuntime } from '@zhin.js/core/runtime';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import type { DatabaseHost } from '@zhin.js/plugin-runtime';
@@ -104,6 +99,7 @@ export function registerConsoleApiRoutes(
         dbTables: databaseHost
           ? () => databaseHost.tables()
           : undefined,
+        database: databaseHost?.console,
         listPluginKeys: async () => {
           const document = await readProjectConfigDocument(projectRoot);
           const plugins = document.plugins;
@@ -183,11 +179,12 @@ export function registerConsoleApiRoutes(
 
   // Assistant Event Ingress (M2) — needs Agent Host setAssistantRuntime.
   http.route('POST', `${base}/assistant/events`, async (request, response) => {
-    if (!isAssistantEventsEndpointActive()) {
+    const agent = await loadAgentConsoleApi();
+    if (!agent?.isAssistantEventsEndpointActive()) {
       writeJson(response, 404, { success: false, error: 'assistant.events is not enabled' });
       return;
     }
-    const runtime = getAssistantRuntime();
+    const runtime = agent.getAssistantRuntime();
     if (!runtime?.ingress) {
       writeJson(response, 503, { success: false, error: 'assistant runtime unavailable' });
       return;
@@ -215,7 +212,8 @@ export function registerConsoleApiRoutes(
   });
 
   http.route('GET', `${base}/assistant/jobs`, async (_request, response) => {
-    const runtime = getAssistantRuntime();
+    const agent = await loadAgentConsoleApi();
+    const runtime = agent?.getAssistantRuntime();
     if (!runtime?.config.enabled) {
       writeJson(response, 404, { success: false, error: 'assistant.enabled is false' });
       return;
@@ -226,7 +224,7 @@ export function registerConsoleApiRoutes(
         success: true,
         data: {
           jobs,
-          eventsActive: isAssistantEventsActive(runtime.config),
+          eventsActive: agent?.isAssistantEventsActive(runtime.config) ?? false,
         },
       });
     } catch (error) {
@@ -476,6 +474,28 @@ type OrchestrationRuntime = {
   listRuns(sessionKey?: string): Promise<unknown[]>;
   getRun(runId: string): Promise<unknown | null>;
 };
+
+type AssistantRuntime = {
+  readonly config: { readonly enabled?: boolean };
+  readonly ingress?: {
+    handle(body: unknown): Promise<{ ok: boolean; deduped?: boolean; error?: string }>;
+  };
+  readonly engine: { listJobs(): Promise<unknown[]> };
+};
+
+type AgentConsoleApi = {
+  getAssistantRuntime(): AssistantRuntime | null;
+  isAssistantEventsEndpointActive(): boolean;
+  isAssistantEventsActive(config: AssistantRuntime['config']): boolean;
+};
+
+async function loadAgentConsoleApi(): Promise<AgentConsoleApi | null> {
+  try {
+    return await import('@zhin.js/agent') as unknown as AgentConsoleApi;
+  } catch {
+    return null;
+  }
+}
 
 async function loadOrchestrationRuntime(): Promise<OrchestrationRuntime | null> {
   try {

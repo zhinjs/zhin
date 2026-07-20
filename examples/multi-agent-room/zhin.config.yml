@@ -10,20 +10,18 @@ collaboration:
   enabled: true
   defaultGoal: 演示多 Bot 协作
 
-plugins:
-  - "@zhin.js/adapter-sandbox"
-  - "@zhin.js/host-router"
-  - "@zhin.js/host-api"
-
-hostApi:
-  lazyLoad: true
+plugin: {}
 
 # 双 Sandbox Endpoint：/collab init 后在群内 bind 成员
-endpoints:
-  - context: sandbox
-    name: planner-bot
-  - context: sandbox
-    name: researcher-bot
+plugins:
+  sandbox:
+    endpoints:
+      - context: sandbox
+        name: planner-bot
+        owner: planner-user
+      - context: sandbox
+        name: researcher-bot
+        owner: researcher-user
 
 http:
   token: ${HTTP_TOKEN:-multi-agent-room-dev-token}

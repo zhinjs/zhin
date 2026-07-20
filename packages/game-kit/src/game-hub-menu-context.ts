@@ -1,4 +1,4 @@
-import type { Message } from 'zhin.js';
+import type { Message } from '@zhin.js/core';
 import { channelKey } from './board-sender.js';
 import { generateCompactId } from './random.js';
 

@@ -5,27 +5,42 @@
   "description": "Zhin.js 官方 demo-api.zhin.dev 托管配置（Sandbox + Demo scoped token）",
   "type": "module",
   "scripts": {
-    "dev": "zhin dev",
-    "start": "zhin start",
-    "build": "zhin build"
+    "dev": "zhin runtime start",
+    "start": "zhin runtime start --mode production --no-watch",
+    "build": "tsc --noEmit"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.5",
     "@zhin.js/adapter-sandbox": "workspace:*",
     "@zhin.js/agent": "workspace:*",
-    "@zhin.js/cli": "workspace:*",
-    "@zhin.js/host-api": "workspace:*",
-    "@zhin.js/host-router": "workspace:*",
+    "@zhin.js/command": "workspace:*",
+    "@zhin.js/component": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/satori": "workspace:*",
     "ai": "^7.0.2",
-    "zhin.js": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@zhin.js/cli": "workspace:*",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   },
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": ">=22.18.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      { "package": "@zhin.js/command", "api": "^1.0.0" },
+      { "package": "@zhin.js/component", "api": "^1.0.0" }
+    ],
+    "plugins": [
+      { "package": "@zhin.js/adapter-sandbox", "instanceKey": "sandbox" }
+    ]
   }
 }

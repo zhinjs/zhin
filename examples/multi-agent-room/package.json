@@ -5,27 +5,36 @@
   "description": "多 Bot 同群协作示例（GroupCell + collaboration.cells，ADR 0023）",
   "type": "module",
   "scripts": {
-    "dev": "zhin dev",
-    "start": "zhin start",
-    "build": "zhin build",
+    "dev": "zhin runtime start",
+    "start": "zhin runtime start --mode production --no-watch",
+    "build": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
     "@zhin.js/adapter-sandbox": "workspace:*",
     "@zhin.js/agent": "workspace:*",
-    "@zhin.js/cli": "workspace:*",
-    "@zhin.js/host-api": "workspace:*",
-    "@zhin.js/host-router": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "ai": "^6.0.116",
-    "zod": "^4.3.6",
-    "zhin.js": "workspace:*"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@zhin.js/cli": "workspace:*",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   },
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": ">=22.18.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [],
+    "plugins": [
+      { "package": "@zhin.js/adapter-sandbox", "instanceKey": "sandbox" }
+    ]
   }
 }

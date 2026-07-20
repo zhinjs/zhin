@@ -29,6 +29,7 @@ import {
   defineAgentTool,
   toolFeatureId,
 } from '@zhin.js/tool';
+import { createSyntheticMessage } from '@zhin.js/core';
 import {
   AgentRuntime,
   CapabilityIngress,
@@ -99,9 +100,55 @@ describe('Agent CapabilityIngress', () => {
     await fixture.mcp.stop();
     await store.close();
   });
+
+  it('filters hidden and context-restricted tools through the canonical permit checker', async () => {
+    const restricted = await createFixture({
+      platforms: ['qq'],
+      scopes: ['group'],
+      permissions: ['role(trusted)'],
+    });
+    const ingress = new CapabilityIngress();
+    expect(ingress.read(restricted.snapshot, restricted.child).tools).toEqual([]);
+
+    const allowedMessage = createSyntheticMessage({
+      adapter: 'qq',
+      endpoint: 'bot',
+      sender: { id: 'trusted-user', isTrusted: true },
+      channel: { type: 'group', id: '100' },
+    });
+    expect(ingress.read(
+      restricted.snapshot,
+      restricted.child,
+      () => true,
+      allowedMessage,
+    ).tools.map((tool) => tool.name)).toEqual(['lookup']);
+
+    const wrongPlatform = createSyntheticMessage({
+      adapter: 'telegram',
+      endpoint: 'bot',
+      sender: { id: 'trusted-user', isTrusted: true },
+      channel: { type: 'group', id: '100' },
+    });
+    expect(ingress.read(
+      restricted.snapshot,
+      restricted.child,
+      () => true,
+      wrongPlatform,
+    ).tools).toEqual([]);
+    await restricted.mcp.stop();
+
+    const hidden = await createFixture({ hidden: true });
+    expect(ingress.read(hidden.snapshot, hidden.child).tools).toEqual([]);
+    await hidden.mcp.stop();
+  });
 });
 
-async function createFixture() {
+async function createFixture(access: {
+  readonly platforms?: readonly string[];
+  readonly scopes?: readonly ('private' | 'group' | 'channel')[];
+  readonly permissions?: readonly string[];
+  readonly hidden?: boolean;
+} = {}) {
   const root = rootPluginId();
   const child = childPluginId(root, 'child');
   const validation = (owner: typeof root, feature: typeof agentFeatureId, name: string, source: string) => ({
@@ -114,6 +161,7 @@ async function createFixture() {
     source: '/plugins/child/tools/lookup.ts',
     definition: defineAgentTool<{ value: string }>({
       description: 'Lookup',
+      ...access,
       execute(input) { return `old:${input.value}`; },
     }),
   });

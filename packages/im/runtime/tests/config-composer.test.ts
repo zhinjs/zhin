@@ -65,7 +65,7 @@ describe('hierarchical Plugin config', () => {
     );
   });
 
-  it('accepts opaque host keys http/database/ai/speech/assistant/collaboration/log_level without projecting them', async () => {
+  it('accepts opaque Host keys without projecting them into Plugin views', async () => {
     const root = await configProject({
       rootSchema: {
         type: 'object',
@@ -84,7 +84,10 @@ describe('hierarchical Plugin config', () => {
       http: { port: 8086, token: 'dev' },
       database: { dialect: 'sqlite', filename: './data.db' },
       ai: { providers: {} },
+      mcp: { enabled: true, path: '/mcp' },
+      a2a: { enabled: true },
       speech: { stt: { provider: 'ollama' } },
+      htmlRenderer: { width: 540 },
       assistant: { enabled: true },
       collaboration: { enabled: true },
       log_level: 'debug',
@@ -93,7 +96,10 @@ describe('hierarchical Plugin config', () => {
     expect(config.document.http).toEqual({ port: 8086, token: 'dev' });
     expect(config.document.database).toEqual({ dialect: 'sqlite', filename: './data.db' });
     expect(config.document.ai).toEqual({ providers: {} });
+    expect(config.document.mcp).toEqual({ enabled: true, path: '/mcp' });
+    expect(config.document.a2a).toEqual({ enabled: true });
     expect(config.document.speech).toEqual({ stt: { provider: 'ollama' } });
+    expect(config.document.htmlRenderer).toEqual({ width: 540 });
     expect(config.document.assistant).toEqual({ enabled: true });
     expect(config.document.collaboration).toEqual({ enabled: true });
     expect(config.document.log_level).toBe('debug');

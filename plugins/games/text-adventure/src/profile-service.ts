@@ -1,4 +1,4 @@
-import type { Database, Models, RelatedModel } from 'zhin.js';
+import type { Database, Models, RelatedModel } from '@zhin.js/core';
 import { evaluateAchievements, type AchievementContext } from './achievements.js';
 import type { AdvModelName, AdvProfileRow } from './models.js';
 import { parseStringSet, serializeStringSet } from './profile-parse.js';

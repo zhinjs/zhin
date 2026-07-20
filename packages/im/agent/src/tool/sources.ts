@@ -1,5 +1,5 @@
 import { isReservedToolName, type AgentTool, type ImTranscriptStore, type MemoryImTranscriptStore } from '@zhin.js/ai';
-import { sceneRefFromMessage, getLogger } from '@zhin.js/core';
+import { canAccessTool, getLogger, type Tool as CoreTool } from '@zhin.js/core';
 import type { Tool, Message } from '../orchestrator/types.js';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { ZhinAgentConfig } from '../config/zhin-agent-config.js';
@@ -29,14 +29,6 @@ export interface CollectToolsContext {
   mcpTools?: AgentTool[];
 }
 
-function canAccessTool(tool: Tool, message: Message): boolean {
-  const perms = tool.permissions;
-  if (!perms?.length) return true;
-  const adapter = String(message.$adapter ?? '');
-  const scene = sceneRefFromMessage(message)?.kind ?? '';
-  return perms.some(p => p === adapter || p === scene || p === '*');
-}
-
 export class ExternalToolSource implements ToolSource {
   name = 'external';
   priority = 200;
@@ -46,7 +38,7 @@ export class ExternalToolSource implements ToolSource {
   collectTools(context: CollectToolsContext): AgentTool[] {
     const tools: AgentTool[] = [];
     for (const tool of this.externalTools) {
-      if (!canAccessTool(tool, context.message)) continue;
+      if (!canAccessTool(tool as unknown as CoreTool, context.message)) continue;
       tools.push(sharedToolSelection.normalize(tool, context.message));
     }
     return tools;

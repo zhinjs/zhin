@@ -1,4 +1,5 @@
 import type { FeatureId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { canAccessTool, type Message, type Tool as CoreTool } from '@zhin.js/core';
 import {
   AgentIndex,
   agentFeatureId,
@@ -44,6 +45,7 @@ export class CapabilityIngress {
     snapshot: RuntimeSnapshot,
     owner: PluginId,
     isActive: () => boolean = () => true,
+    message?: Message,
   ): AgentCapabilities {
     if (!snapshot.tree.has(owner)) throw new Error(`Unknown Agent capability owner: ${owner}`);
     const tools = projection(snapshot, toolFeatureId, ToolIndex);
@@ -51,7 +53,7 @@ export class CapabilityIngress {
     return Object.freeze({
       generation: snapshot.generation,
       owner,
-      tools: bindTools(tools, owner, isActive),
+      tools: bindTools(tools, owner, isActive, message),
       skills: Object.freeze([
         ...(projection(snapshot, skillFeatureId, SkillIndex)?.visible(owner) ?? []),
       ]),
@@ -67,15 +69,33 @@ function bindTools(
   index: ToolIndex | undefined,
   owner: PluginId,
   isActive: () => boolean,
+  message?: Message,
 ): readonly ToolCapability[] {
   if (!index) return Object.freeze([]);
-  return Object.freeze(index.visible(owner).map((descriptor) => Object.freeze({
+  return Object.freeze(index.visible(owner)
+    .filter((descriptor) => !descriptor.hidden && canAccessDescriptor(descriptor, message))
+    .map((descriptor) => Object.freeze({
     ...descriptor,
     execute: <TInput, TResult>(input: TInput) => {
       assertActive(isActive);
       return index.execute<TInput, TResult>(owner, descriptor.name, input);
     },
-  })));
+    })));
+}
+
+function canAccessDescriptor(
+  descriptor: ToolDescriptor,
+  message: Message | undefined,
+): boolean {
+  return canAccessTool({
+    name: descriptor.name,
+    description: descriptor.description,
+    parameters: { type: 'object', properties: {} },
+    execute: () => undefined,
+    platforms: descriptor.platforms ? [...descriptor.platforms] : undefined,
+    scopes: descriptor.scopes ? [...descriptor.scopes] : undefined,
+    permissions: descriptor.permissions ? [...descriptor.permissions] : undefined,
+  } satisfies CoreTool, message);
 }
 
 function bindMcp(

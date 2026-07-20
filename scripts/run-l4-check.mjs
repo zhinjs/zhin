@@ -22,12 +22,22 @@ const l4TestFiles = [
   'packages/im/agent/tests/remote-loopback.test.ts',
   'packages/im/agent/tests/memory-entry.test.ts',
   'packages/host/mcp/tests/mesh-auth.test.ts',
+  'packages/host/mcp/tests/runtime.test.ts',
+  'packages/host/a2a/tests/runtime.test.ts',
+  'basic/cli/tests/plugin-runtime/database-host.test.ts',
+  'packages/im/agent/tests/plugin-runtime/agent-runtime.test.ts',
+  'packages/im/agent/tests/tool/tool-system.test.ts',
+  'packages/im/tool/tests/tool.test.ts',
   'examples/full-bot/tests/full-bot-l4-contract.test.ts',
   'examples/full-bot/tests/provider-gateway-contract.test.ts',
   'examples/full-bot/tests/multimodal-peers-contract.test.ts',
   'packages/im/core/tests/multimodal-chain-contract.test.ts',
   'plugins/adapters/napcat/tests/napcat-runtime.test.ts',
   'plugins/adapters/kook/tests/kook-runtime.test.ts',
+  'examples/demo-bot/tests/demo-config.test.ts',
+  'examples/life-assistant-bot/tests/config-contract.test.ts',
+  'examples/multi-agent-room/tests/multi-agent-room-contract.test.ts',
+  'examples/qq-games-bot/tests/runtime-contract.test.ts',
 ];
 
 // 防再犯：列出的测试文件必须真实存在，否则 vitest 会静默把缺失路径当过滤器跳过

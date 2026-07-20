@@ -13,6 +13,7 @@
     "export{default}from './provider.js';"
   ],
   "agent/runtime": [
+    "export * from './agent-host-port.js';",
     "export * from './agent-runtime.js';",
     "export * from './capability-ingress.js';"
   ],

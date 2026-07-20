@@ -1,8 +1,8 @@
-import type { Models } from 'zhin.js';
+import type { Models } from '@zhin.js/core';
 
 export type BjSessionStatus = 'active' | 'won' | 'lost' | 'draw' | 'aborted';
 
-declare module 'zhin.js' {
+declare module '@zhin.js/core' {
   interface Models {
     bj_sessions: {
       id: string;

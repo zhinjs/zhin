@@ -11,12 +11,10 @@ export function buildPipelineDeps(raw: Partial<LotteryConfig> | undefined): Pipe
   const config = resolveLotteryConfig(raw);
   return {
     getDb: getLotteryDb,
-    plugin: null,
     enabledGames: () => lotteryEnabledGames(config),
     historyLimit: config.historyLimit,
     pickCount: config.pickCount,
     kl8: lotteryKl8(config),
-    agentEnabled: config.agentEnabled,
     backtest: {
       enabled: config.backtestEnabled,
       window: config.backtestWindow,

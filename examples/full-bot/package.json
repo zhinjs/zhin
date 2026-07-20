@@ -2,35 +2,85 @@
   "name": "full-bot",
   "private": true,
   "version": "0.0.9",
-  "description": "Zhin.js L4 全维度参考实例（Sandbox + NapCat + KOOK + 硬编排 + 语义记忆）",
+  "description": "Zhin.js Plugin Runtime L4 reference (Sandbox + NapCat + KOOK + Agent)",
   "type": "module",
   "scripts": {
-    "dev": "zhin dev",
-    "start": "zhin start",
-    "build": "zhin build"
+    "dev": "zhin runtime start",
+    "start": "zhin runtime start --mode production --no-watch",
+    "build": "tsc --noEmit && tsc -p tsconfig.client.json"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.5",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@zhin.js/adapter-kook": "workspace:*",
     "@zhin.js/adapter-napcat": "workspace:*",
     "@zhin.js/adapter-sandbox": "workspace:*",
-    "@zhin.js/agent": "workspace:*",
-    "@zhin.js/cli": "workspace:*",
-    "@zhin.js/client": "workspace:*",
-    "@zhin.js/host-api": "workspace:*",
-    "@zhin.js/host-router": "workspace:*",
-    "@zhin.js/mcp": "workspace:*",
     "@zhin.js/a2a": "workspace:*",
+    "@zhin.js/agent": "workspace:*",
+    "@zhin.js/client": "workspace:*",
+    "@zhin.js/command": "1.0.0",
+    "@zhin.js/component": "1.0.0",
+    "@zhin.js/console-contract": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/mcp": "workspace:*",
+    "@zhin.js/page": "1.0.0",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/satori": "workspace:*",
+    "@zhin.js/skill": "1.0.0",
+    "@zhin.js/tool": "1.0.0",
     "ai": "^7.0.2",
-    "zhin.js": "workspace:*",
+    "react": "^19.2.7",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "tsx": "^4.22.4",
+    "@types/react": "^19.2.17",
+    "@zhin.js/cli": "workspace:*",
     "typescript": "^6.0.3"
   },
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": ">=22.18.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/component",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/skill",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/tool",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/page",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": [
+      {
+        "package": "@zhin.js/adapter-sandbox",
+        "instanceKey": "sandbox"
+      },
+      {
+        "package": "@zhin.js/adapter-napcat",
+        "instanceKey": "napcat"
+      },
+      {
+        "package": "@zhin.js/adapter-kook",
+        "instanceKey": "kook"
+      }
+    ]
   }
 }

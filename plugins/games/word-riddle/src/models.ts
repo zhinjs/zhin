@@ -1,8 +1,8 @@
-import type { Models } from 'zhin.js';
+import type { Models } from '@zhin.js/core';
 
 export type RiddleSessionStatus = 'active' | 'completed' | 'aborted';
 
-declare module 'zhin.js' {
+declare module '@zhin.js/core' {
   interface Models {
     word_riddle_sessions: {
       id: string;

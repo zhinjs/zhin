@@ -14,7 +14,6 @@ import type { SessionService } from './src/session-service.js';
  * - Commands under `commands/` are authoritative (help + start/continue/quit via in-memory DB).
  * - DB: prefer databaseHostToken; else in-memory SessionService.
  * - Text middleware under `middlewares/` handles idiom answer payloads.
- * - TODO: interactive handlers (buttons still deferred).
  */
 export default definePlugin({
   name: 'idiom-chain',

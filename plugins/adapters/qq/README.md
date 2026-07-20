@@ -74,7 +74,7 @@ plugins:
 
 ## 平台权限（platform permit）
 
-platform permit checker 已在 `plugin.ts` 注册到 legacy registry（`registerPlatformPermitChecker`），但新 Runtime Tool 链路（`@zhin.js/tool` / capability-ingress）暂不消费 `permissions` / permit 声明，待工具权限模型定义后接线。`agent/tools` 中的 `platformPermit(...)` 声明目前不产生门禁效果。
+platform permit checker 由 `plugin.ts` 的 generation 生命周期注册；`@zhin.js/tool` descriptor 保留 `platforms` / `scopes` / `permissions`，CapabilityIngress 与 ToolSystem 统一经 Core `canAccessTool()` 执行门禁。
 
 ## 迁移后出站能力变化
 

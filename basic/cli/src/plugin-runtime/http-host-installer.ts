@@ -1,9 +1,10 @@
 import { Logger, formatCompact } from '@zhin.js/logger';
 import { createHttpHost, httpHostToken, type HttpHostOptions, type ScopedTokenConfig } from '@zhin.js/host-http';
-import type {
-  ConfigDocumentPort,
-  RootResourceInstaller,
-  RuntimeConfigDocument,
+import {
+  expandEnvironmentValue,
+  type ConfigDocumentPort,
+  type RootResourceInstaller,
+  type RuntimeConfigDocument,
 } from '@zhin.js/runtime';
 
 const logger = new Logger(null, 'HttpHost');
@@ -15,7 +16,10 @@ export async function resolveHttpConfig(
   if (!document || typeof document !== 'object') return {};
   const http = (document as Record<string, unknown>).http;
   if (!http || typeof http !== 'object') return {};
-  const value = http as Record<string, unknown>;
+  const value = expandEnvironmentValue(
+    http,
+    (key) => process.env[key],
+  ) as Record<string, unknown>;
   return Object.freeze({
     host: typeof value.host === 'string' ? value.host : undefined,
     port: typeof value.port === 'number' ? value.port : undefined,

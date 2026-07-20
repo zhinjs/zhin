@@ -31,7 +31,7 @@ pnpm add @zhin.js/adapter-discord discord.js
 ### 平台权限（platform permit）
 
 - sender role 已恢复：Gateway 入站 `metadata.role` / `metadata.permissions`（来自 member 权限位与 guild owner 判定，见 `src/gateway.ts` `resolveSenderRole`）。
-- **TODO**：`registerDiscordPlatformPermitChecker()` 暂无注册点——Plugin Runtime 的命令分发没有 platform permit 消费端（旧 checker 只服务于 legacy Tool/Message 门禁），待 runtime 提供门禁挂钩后再接线。`src/platform-permit.ts` 的 checker 与单测保留。
+- `plugin.ts` 在 generation setup 注册 checker，并在 dispose 注销；Plugin Runtime CapabilityIngress 与 ToolSystem 统一经 Core `canAccessTool()` 消费 `permissions`。
 
 ## 前置条件
 

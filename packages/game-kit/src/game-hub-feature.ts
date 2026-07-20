@@ -1,4 +1,4 @@
-import { Feature, getPlugin, type FeatureJSON, type Plugin, type PluginLike, type DatabaseFeature } from 'zhin.js';
+import { Feature, getPlugin, type FeatureJSON, type Plugin, type PluginLike, type DatabaseFeature } from '@zhin.js/core';
 import { mountGameHubUi, markGameHubUiMounted } from './game-hub-mount.js';
 import { registerGameRecordModels, initGameRecordDatabase } from './game-records.js';
 
@@ -31,7 +31,7 @@ export interface GameHubContextExtensions {
   registerGame(game: RegisteredGame): () => void;
 }
 
-declare module 'zhin.js' {
+declare module '@zhin.js/core' {
   namespace Plugin {
     interface Extensions extends GameHubContextExtensions {}
     interface Contexts {

@@ -6,7 +6,6 @@ import { resolveKl8Config, type Kl8Config } from '../games/kl8-groups.js';
 import { loadDraws, REPORTS_TABLE, parseStoredJson, type LotteryDb } from '../db.js';
 
 import { listPendingPredictions, loadAccuracySnapshot, loadGameWeights, savePrediction } from '../evaluate/tracker.js';
-import { formatWeights } from '../stats/weights.js';
 
 export interface LotteryConfigSlice {
   pickCount: number;
@@ -179,33 +178,4 @@ export async function hydrateReportPickWeights(db: LotteryDb, picks: GamePick[])
     out.push({ ...pick, weights: await loadGameWeights(db, pick.gameId) });
   }
   return out;
-}
-
-export async function explainReportWithAi(
-  root: { inject?: (key: string) => unknown },
-  report: DailyReport,
-): Promise<string> {
-  const ai = root.inject?.('ai') as
-    | { ask?: (prompt: string, opts?: { systemPrompt?: string }) => Promise<string> }
-    | undefined;
-  if (!ai?.ask) return '';
-  const summary = report.picks
-    .map((p) => {
-      const acc = p.stats.accuracy
-        ? `历史命中${(p.stats.accuracy.avgHitRate * 100).toFixed(1)}%`
-        : '';
-      const w = p.stats.pro?.modelWeights ?? formatWeights(p.weights);
-      const nums = p.gameId === 'kl8' && p.kl8Groups?.length
-        ? p.kl8Groups.map((g) => `组${g.index}(${g.label}) ${g.numbers.join(',')}`).join('; ')
-        : formatPickLine(p).replace('■ ', '').replace(/\n/g, ' ');
-      return `${p.label}: ${nums} | ${p.stats.detail} | ${w} | ${acc}`;
-    })
-    .join('\n');
-  const systemPrompt =
-    '你是专业彩票数据分析师。根据统计形态、模型权重与历史命中率写解读（250字内）。不得修改推荐号码。';
-  try {
-    return await ai.ask(`请专业解读以下推荐：\n\n${summary}`, { systemPrompt });
-  } catch {
-    return '';
-  }
 }

@@ -4,7 +4,7 @@ import {
   getActionFromMessage,
   resolvePayloadFromText,
   type Plugin,
-} from 'zhin.js';
+} from '@zhin.js/core';
 import { buildChoiceFallbackMap, parseChoicePayload } from './choice-keyboard.js';
 import {
   formatHubEmptyMessage,

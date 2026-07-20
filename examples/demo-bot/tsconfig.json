@@ -2,11 +2,9 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "types": ["node"],
-    "outDir": "./lib",
-    "rootDir": "./src",
-    "jsx": "react-jsx",
-    "jsxImportSource": "zhin.js"
+    "noEmit": true,
+    "rootDir": "."
   },
-  "include": ["src/**/*"],
+  "include": ["plugin.ts", "commands/**/*.ts", "components/**/*.ts"],
   "exclude": ["lib", "node_modules", "**/*.test.ts"]
 }

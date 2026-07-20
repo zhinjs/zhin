@@ -14,7 +14,6 @@ import type { GameServices } from './src/session-service.js';
  * - Commands under `commands/` are authoritative (help + start/continue/…).
  * - DB: prefer databaseHostToken; else in-memory GameServices.
  * - Choice middleware under `middlewares/` handles adv choice payloads (Sandbox action→text).
- * - TODO: interactive handlers (buttons still deferred).
  */
 export default definePlugin({
   name: 'text-adventure',

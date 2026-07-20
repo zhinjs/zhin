@@ -1,8 +1,8 @@
-import type { Models } from 'zhin.js';
+import type { Models } from '@zhin.js/core';
 
 export type TttSessionStatus = 'active' | 'won' | 'draw' | 'aborted';
 
-declare module 'zhin.js' {
+declare module '@zhin.js/core' {
   interface Models {
     ttt_sessions: {
       id: string;

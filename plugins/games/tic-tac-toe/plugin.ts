@@ -14,7 +14,6 @@ import type { SessionServices } from './src/session-service.js';
  * - Commands under `commands/` are authoritative (help + bot/join/…).
  * - DB: prefer databaseHostToken; else in-memory SessionServices.
  * - Choice middleware under `middlewares/` handles ttt grid / restart payloads (Sandbox action→text).
- * - TODO: interactive handlers (buttons still deferred).
  */
 export default definePlugin({
   name: 'tic-tac-toe',

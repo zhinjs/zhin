@@ -8,7 +8,6 @@ export interface LotteryConfig {
   readonly scheduleCron: string;
   readonly historyLimit: number;
   readonly scheduleEnabled: boolean;
-  readonly agentEnabled: boolean;
   readonly backtestEnabled: boolean;
   readonly backtestWindow: number;
   readonly backtestRandomTrials: number;
@@ -34,7 +33,6 @@ export const DEFAULT_LOTTERY_CONFIG: LotteryConfig = {
   scheduleCron: '0 0 18 * * *',
   historyLimit: 500,
   scheduleEnabled: true,
-  agentEnabled: true,
   backtestEnabled: true,
   backtestWindow: 50,
   backtestRandomTrials: 64,

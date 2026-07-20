@@ -2,7 +2,6 @@
  * Shared runtime deps for lottery agent/ authoring tools.
  * Set once from plugin index during init — never call getPlugin() from tool execute.
  */
-import type { Plugin } from 'zhin.js';
 import type { GameId } from './types.js';
 import type { LotteryDb } from './db.js';
 import type { Kl8Config } from './games/kl8-groups.js';
@@ -10,8 +9,6 @@ import type { Kl8Config } from './games/kl8-groups.js';
 export interface LotteryAgentDeps {
   getDb: () => LotteryDb | null;
   getConfig: () => { pickCount: number; historyLimit: number; kl8: Kl8Config };
-  /** Legacy Plugin host; null until Runtime database/host wiring lands. */
-  plugin: Plugin | null;
   enabledGames: () => GameId[];
   scheduleCron: () => string;
   scheduleEnabled: () => boolean;

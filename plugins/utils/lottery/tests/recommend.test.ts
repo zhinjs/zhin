@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   buildDailyReport,
   formatDailyReportText,
-  explainReportWithAi,
 } from '../src/recommend/report.js';
 import { DISCLAIMER, type NormalizedDraw } from '../src/types.js';
 import type { LotteryDb } from '../src/db.js';
@@ -61,11 +60,9 @@ describe('daily report', () => {
     expect(text).toContain(DISCLAIMER);
   });
 
-  it('uses template when AI unavailable', async () => {
+  it('uses the deterministic template', async () => {
     const report = await buildDailyReport(makeDb({ kl8: sampleDraws }), ['kl8'], { pickCount: 5, historyLimit: 100 });
-    const ai = await explainReportWithAi({}, report);
-    expect(ai).toBe('');
-    const text = formatDailyReportText(report, ai);
+    const text = formatDailyReportText(report);
     expect(text).toContain('【统计说明】');
   });
 

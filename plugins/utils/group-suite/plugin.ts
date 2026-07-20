@@ -9,8 +9,6 @@ import { defineGroupSuiteTables } from './src/tables.js';
  * - checkin / teach / stats commands + keyword middleware
  * - DB: prefer `databaseHostToken`; else in-memory fallback
  * - Stats buffer: periodic flush every 10s + final flush on dispose
- *
- * TODO: notice welcome/recall, daily-analysis, HTML stats cards.
  */
 export default definePlugin<GroupSuiteConfig>({
   name: 'group-suite',

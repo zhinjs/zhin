@@ -3,17 +3,14 @@
 
 log_level: 1
 
-# --- 插件 ---
-plugins:
-  - "@zhin.js/host-router"
-  - "@zhin.js/host-api"
-  - "@zhin.js/adapter-sandbox"
-  - assistant
+plugin: {}
 
-# --- Endpoint ---
-endpoints:
-  - context: sandbox
-    name: assistant
+plugins:
+  sandbox:
+    endpoints:
+      - context: sandbox
+        name: assistant
+        owner: assistant-user
 
 # --- HTTP 服务 ---
 http:

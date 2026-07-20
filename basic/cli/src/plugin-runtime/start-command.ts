@@ -11,6 +11,7 @@ import {
   type ConfigDocumentPort,
   type RuntimeConfigDocument,
   type RuntimeMode,
+  type RootResourceInstaller,
   ensureTypeScriptSpecifierRemap,
   expandEnvironmentValue,
 } from '@zhin.js/runtime';
@@ -22,8 +23,8 @@ import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from '
 import { installHtmlRendererHost, prepareHtmlRendererHost } from './html-renderer-host-installer.js';
 import { installOutboundHost } from './outbound-host-installer.js';
 import { installScheduleHost } from './schedule-host-installer.js';
-import { installAgentHost, resolveAiConfig, resolveAssistantConfigDocument, resolveCollaborationConfigDocument } from './agent-host-installer.js';
 import { installSpeechHost, prepareSpeechHost, resolveSpeechConfig } from './speech-host-installer.js';
+import { installProtocolHosts } from './protocol-host-installer.js';
 import { RootHost } from './root-host.js';
 
 export const processRestartExitCode = 75;
@@ -80,9 +81,9 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   await applyRuntimeLogLevel(config);
   const httpConfig = await resolveHttpConfig(config);
   const databaseConfig = await resolveDatabaseConfig(options.root, config);
-  const aiConfig = await resolveAiConfig(config);
-  const assistantConfig = await resolveAssistantConfigDocument(config);
-  const collaborationConfig = await resolveCollaborationConfigDocument(config);
+  // Agent is an optional install tier. Do not resolve its module from the
+  // IM-only startup graph unless the project actually configures Agent state.
+  const agentHost = await loadConfiguredAgentHost(config);
   const endpointRoles = await createEndpointRoleResolver(config);
   const speechHandle = await prepareSpeechHost(await resolveSpeechConfig(config));
   const htmlRendererHost = await prepareHtmlRendererHost();
@@ -117,18 +118,23 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
       installSpeechHost(speechHandle)(context);
       // Agent Host seeds presets async — must await so unmatched handler
       // and dispose hooks are registered before generation commit.
-      await installAgentHost({
-        ai: aiConfig,
-        assistant: assistantConfig,
-        collaboration: collaborationConfig,
-        im,
-        projectRoot: options.root,
-        resolveEndpointOwner: endpointRoles.resolveOwner,
-        resolveEndpointTrusted: endpointRoles.resolveTrusted,
-        extraTools: speechHandle?.tools,
-        transcribeUrl: speechHandle
-          ? (url) => speechHandle.transcribeUrl(url)
-          : undefined,
+      if (agentHost) {
+        await agentHost.install({
+          im,
+          projectRoot: options.root,
+          resolveEndpointOwner: endpointRoles.resolveOwner,
+          resolveEndpointTrusted: endpointRoles.resolveTrusted,
+          extraTools: speechHandle?.tools,
+          transcribeUrl: speechHandle
+            ? (url) => speechHandle.transcribeUrl(url)
+            : undefined,
+        })(context);
+      }
+      await installProtocolHosts({
+        config,
+        http: httpConfig,
+        snapshots: host.runtime.controller.snapshots,
+        production: parsed.mode === 'production',
       })(context);
       installConsoleHttp({
         console: consoleHost.console,
@@ -213,6 +219,53 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
     process.off('SIGTERM', onSignal);
     process.off('SIGHUP', onSignal);
   }
+}
+
+interface ConfiguredAgentHost {
+  install(options: {
+    readonly im: ImRuntime;
+    readonly projectRoot: string;
+    readonly resolveEndpointOwner: (adapter: string, endpoint: string) => string | undefined;
+    readonly resolveEndpointTrusted: (adapter: string, endpoint: string) => readonly string[];
+    readonly extraTools?: readonly unknown[];
+    readonly transcribeUrl?: (url: string) => Promise<string | null>;
+  }): RootResourceInstaller;
+}
+
+async function loadConfiguredAgentHost(
+  config: RuntimeConfigDocument | ConfigDocumentPort,
+): Promise<ConfiguredAgentHost | undefined> {
+  const document = isConfigDocumentPort(config) ? (await config.read()).document : config;
+  if (!hasAgentConfiguration(document)) return undefined;
+  const module = await import('./agent-host-installer.js');
+  const [ai, assistant, collaboration] = await Promise.all([
+    module.resolveAiConfig(config),
+    module.resolveAssistantConfigDocument(config),
+    module.resolveCollaborationConfigDocument(config),
+  ]);
+  const configured: ConfiguredAgentHost = {
+    install: (options) => module.installAgentHost({
+      ...options,
+      extraTools: options.extraTools as Parameters<typeof module.installAgentHost>[0]['extraTools'],
+      ai,
+      assistant,
+      collaboration,
+    }),
+  };
+  return Object.freeze(configured);
+}
+
+function hasAgentConfiguration(document: RuntimeConfigDocument): boolean {
+  const value = document as Record<string, unknown>;
+  return ['ai', 'assistant', 'collaboration'].some((key) => {
+    const section = value[key];
+    return section != null && typeof section === 'object';
+  });
+}
+
+function isConfigDocumentPort(value: unknown): value is ConfigDocumentPort {
+  return Boolean(value && typeof value === 'object'
+    && typeof (value as Partial<ConfigDocumentPort>).read === 'function');
 }
 
 /** Poll parent liveness; when the supervisor (or any parent) is gone, shut down. */

@@ -2,7 +2,7 @@
  * 通用游戏会话接口
  * 定义回合制游戏的基础会话结构
  */
-import type { Message } from 'zhin.js';
+import type { Message } from '@zhin.js/core';
 import { generateCompactId } from './random.js';
 
 /** 会话状态 */

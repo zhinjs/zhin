@@ -15,17 +15,17 @@ describe('life-assistant-bot 配置契约', () => {
     expect(configText).toMatch(/ai:\s*\n/)
   })
 
-  it('包含 sandbox 适配器', () => {
-    expect(configText).toContain('@zhin.js/adapter-sandbox')
+  it('uses hierarchical Sandbox child config', () => {
+    expect(configText).toMatch(/plugins:\s*\n\s+sandbox:/)
+    expect(configText).toMatch(/context:\s*sandbox/)
   })
 
-  it('包含 host-router 和 host-api', () => {
-    expect(configText).toContain('@zhin.js/host-router')
-    expect(configText).toContain('@zhin.js/host-api')
-  })
-
-  it('包含 assistant 插件', () => {
-    expect(configText).toMatch(/- assistant/)
+  it('uses the Plugin Runtime manifest and conventional capabilities', () => {
+    const manifest = JSON.parse(fs.readFileSync(path.join(botRoot, 'package.json'), 'utf8'))
+    expect(manifest.scripts.dev).toBe('zhin runtime start')
+    expect(manifest.zhin.entry).toBe('./plugin.ts')
+    expect(fs.existsSync(path.join(botRoot, 'commands/remind/[text:string].ts'))).toBe(true)
+    expect(fs.existsSync(path.join(botRoot, 'tools/get-current-time.ts'))).toBe(true)
   })
 
   it('配置了 AI provider', () => {

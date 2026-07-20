@@ -8,7 +8,7 @@ import {
   createCapabilityContext,
   type OwnerCapabilityEntry,
 } from '@zhin.js/feature-kit';
-import type { AgentToolDefinition, ToolApproval } from './definition.js';
+import type { AgentToolDefinition, ToolApproval, ToolScope } from './definition.js';
 
 export interface ToolDescriptor {
   readonly owner: PluginId;
@@ -17,6 +17,10 @@ export interface ToolDescriptor {
   readonly description: string;
   readonly inputSchema?: unknown;
   readonly approval: ToolApproval;
+  readonly platforms?: readonly string[];
+  readonly scopes?: readonly ToolScope[];
+  readonly permissions?: readonly string[];
+  readonly hidden?: boolean;
   readonly source: string;
 }
 
@@ -65,6 +69,10 @@ function toDescriptor(entry: OwnerCapabilityEntry<AgentToolDefinition>): ToolDes
     description: definition.description,
     inputSchema: definition.inputSchema,
     approval: definition.approval,
+    platforms: definition.platforms,
+    scopes: definition.scopes,
+    permissions: definition.permissions,
+    hidden: definition.hidden,
     source: entry.source,
   });
 }

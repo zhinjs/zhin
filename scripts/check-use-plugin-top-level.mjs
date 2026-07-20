@@ -14,8 +14,8 @@ const scanRoots = [
   'plugins/features',
   'plugins/utils',
   'plugins/games',
-  'examples/minimal-bot/src/plugins',
-  'examples/test-bot/src/plugins',
+  'examples/minimal-bot',
+  'examples/test-bot',
 ];
 
 /** @param {string} line */

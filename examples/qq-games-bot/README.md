@@ -2,6 +2,10 @@
 
 面向 **QQ 公域群** 的游戏机器人示例：游戏大厅 + 8 款游戏 + 签到统计，**默认关闭 AI**。
 
+`package.json#zhin.plugins` 声明 QQ Adapter、Group Suite、Game Hub 与全部游戏子插件；
+`zhin.config.yml` 只按 `plugins.<instanceKey>` 提供各自配置。运行入口统一为
+`zhin runtime start`，不依赖 legacy host-router/host-api。
+
 ## 快速开始
 
 ```bash

@@ -40,6 +40,37 @@ describe('Tool Feature', () => {
     expect(slots.map((slot) => slot.localName)).toEqual(['weather']);
   });
 
+  it('keeps immutable visibility, permit, and approval metadata in the Tool index', () => {
+    const root = rootPluginId();
+    const definition = defineAgentTool({
+      description: 'Moderate a QQ group',
+      platforms: ['qq'],
+      scopes: ['group'],
+      permissions: ['platform(qq,scene_admin)'],
+      hidden: true,
+      approval: 'always',
+      execute: () => 'ok',
+    });
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: toolFeatureId,
+      localName: 'moderate',
+      source: '/tools/moderate.ts',
+      definition,
+    });
+    const snapshot = createSnapshot([slot], createToken('unused').id);
+    const [descriptor] = new ToolIndex([slot], snapshot).visible(root);
+
+    expect(descriptor).toMatchObject({
+      platforms: ['qq'],
+      scopes: ['group'],
+      permissions: ['platform(qq,scene_admin)'],
+      hidden: true,
+      approval: 'always',
+    });
+    expect(Object.isFrozen(definition.permissions)).toBe(true);
+  });
+
   it('executes the nearest owner Tool with its own config and resources', async () => {
     const root = rootPluginId();
     const child = childPluginId(root, 'child');

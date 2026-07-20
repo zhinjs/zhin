@@ -64,7 +64,6 @@ export default definePlugin<LotteryConfig>({
         historyLimit: config.historyLimit,
         kl8: lotteryKl8(config),
       }),
-      plugin: null,
       enabledGames: () => lotteryEnabledGames(config),
       scheduleCron: () => config.scheduleCron,
       scheduleEnabled: () => config.scheduleEnabled,
@@ -82,12 +81,10 @@ export default definePlugin<LotteryConfig>({
       async execute() {
         await runLotteryPipeline({
           getDb: getLotteryDb,
-          plugin: null,
           enabledGames: () => lotteryEnabledGames(config),
           historyLimit: config.historyLimit,
           pickCount: config.pickCount,
           kl8: lotteryKl8(config),
-          agentEnabled: config.agentEnabled,
           backtest: {
             enabled: config.backtestEnabled,
             window: config.backtestWindow,

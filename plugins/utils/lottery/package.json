@@ -54,22 +54,17 @@
     "@zhin.js/agent": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
-    "zod": "^4.4.3",
-    "zhin.js": "workspace:*"
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
     "@zhin.js/agent": "workspace:*",
-    "zod": "^4.0.0",
-    "zhin.js": "workspace:*"
+    "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
     "@zhin.js/agent": {
       "optional": true
     },
     "zod": {
-      "optional": true
-    },
-    "zhin.js": {
       "optional": true
     }
   },

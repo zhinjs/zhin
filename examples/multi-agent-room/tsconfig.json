@@ -5,6 +5,6 @@
     "outDir": "./lib",
     "rootDir": "."
   },
-  "include": ["tests/**/*"],
+  "include": ["plugin.ts", "tests/**/*"],
   "exclude": ["node_modules"]
 }

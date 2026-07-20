@@ -1,4 +1,4 @@
-import type { Database, Message, Models, RelatedModel } from 'zhin.js';
+import type { Database, Message, Models, RelatedModel } from '@zhin.js/core';
 import { channelKey, generateSessionId } from '@zhin.js/game-kit';
 import type { BjSessionRow } from './models.js';
 import { freshDeck } from './engine.js';

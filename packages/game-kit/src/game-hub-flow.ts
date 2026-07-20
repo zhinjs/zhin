@@ -1,4 +1,4 @@
-import type { Message, Plugin } from 'zhin.js';
+import type { Message, Plugin } from '@zhin.js/core';
 import { parseChoicePayload } from './choice-keyboard.js';
 import {
   buildGameHubMenu,

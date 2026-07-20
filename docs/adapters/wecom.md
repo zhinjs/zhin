@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/wecom/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/wecom/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=f2362a4e3519e55f -->
+<!-- sync-adapter-docs:sha256=6c55e03646c76ae8 -->
 
 # @zhin.js/adapter-wecom
 
@@ -125,7 +125,7 @@ Access Token 在过期前 5 分钟自动刷新。
 
 ## 平台权限（platform permit）
 
-`src/platform-permit.ts` 的 checker 保留并从 `src/index.ts` 导出，`plugin.ts` 暂无注册点；新 Runtime Tool 链路（`@zhin.js/tool` / capability-ingress）亦不消费 `permissions` / permit 声明，待工具权限模型定义后接线。`agent/tools` 中的 `platformPermit(...)` 声明目前不产生门禁效果。
+`plugin.ts` 在 generation setup 注册 `src/platform-permit.ts` checker，并在 dispose 注销；CapabilityIngress 与 ToolSystem 统一经 Core `canAccessTool()` 消费工具权限。
 
 ## 相关链接
 

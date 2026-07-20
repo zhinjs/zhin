@@ -5,6 +5,7 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   databaseHostToken,
   type DatabaseHost,
+  type DatabaseHostConsole,
   type DatabaseHostModel,
 } from '@zhin.js/plugin-runtime';
 import type {
@@ -31,6 +32,30 @@ type RawModel = {
   };
 };
 
+type RawConsoleModel = RawModel & {
+  create?: (row: Record<string, unknown>) => unknown;
+  updateById?: (id: string, row: Record<string, unknown>) => unknown;
+  deleteById?: (id: string) => unknown;
+  get?: (key: string) => Promise<unknown>;
+  set?: (key: string, value: unknown, ttl?: number) => Promise<void>;
+  deleteByKey?: (key: string) => Promise<unknown>;
+  entries?: () => Promise<Array<[string, unknown]>>;
+};
+
+type RawDatabase = {
+  define: (name: string, definition: unknown) => void;
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  models: Map<string, RawConsoleModel>;
+  definitions: Map<string, Record<string, unknown>>;
+  dialect: { name: string; formatDropTable(name: string, ifExists?: boolean): unknown };
+  dialectName: string;
+  aggregate(name: string): {
+    count(field: string, alias: string): { where(query: Record<string, unknown>): Promise<Array<{ total: number }>> };
+  };
+  query(query: unknown): Promise<unknown>;
+};
+
 function wrapModel(model: RawModel): DatabaseHostModel {
   return {
     select: () => {
@@ -55,15 +80,21 @@ function wrapModel(model: RawModel): DatabaseHostModel {
 export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
   readonly db: { define: (name: string, definition: unknown) => void; start(): Promise<void>; stop(): Promise<void>; models: Map<string, unknown> };
 } {
-  const db = Registry.create(config.dialect as keyof Registry.Config, config as never) as {
-    define: (name: string, definition: unknown) => void;
-    start(): Promise<void>;
-    stop(): Promise<void>;
-    models: Map<string, unknown>;
-  };
+  const db = Registry.create(
+    config.dialect as keyof Registry.Config,
+    config as never,
+  ) as unknown as RawDatabase;
   let started = false;
   const wrapped = new Map<string, DatabaseHostModel>();
   const definedTables = new Set<string>();
+  const definitions = new Map<string, Record<string, unknown>>();
+  const consolePort = createDatabaseConsole(
+    db,
+    config.dialect,
+    () => started,
+    definedTables,
+    definitions,
+  );
 
   return {
     db,
@@ -78,6 +109,7 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
         throw new Error(`DatabaseHost already started; cannot define table ${name}`);
       }
       definedTables.add(name);
+      definitions.set(name, definition);
       db.define(name, definition);
     },
     tables() {
@@ -95,6 +127,7 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
         return model;
       },
     },
+    console: consolePort,
     getRawDatabase() {
       if (!started) return undefined;
       return db;
@@ -113,6 +146,135 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
       wrapped.clear();
     },
   };
+}
+
+function createDatabaseConsole(
+  db: RawDatabase,
+  configuredDialect: string,
+  isStarted: () => boolean,
+  tableNames: Set<string>,
+  definitions: Map<string, Record<string, unknown>>,
+): DatabaseHostConsole {
+  const type = databaseType(configuredDialect);
+  const requireModel = (table: string): RawConsoleModel => {
+    if (!isStarted()) throw new Error('Database is not connected');
+    const model = db.models.get(table);
+    if (!model) throw new Error(`Table '${table}' not found`);
+    return model;
+  };
+  const port: DatabaseHostConsole = {
+    info: () => ({
+      dialect: configuredDialect,
+      type,
+      tables: [...tableNames],
+      connected: isStarted(),
+    }),
+    tables: () => [...tableNames].map((name) => ({
+      name,
+      columns: definitions.get(name),
+    })),
+    async select(table, page, pageSize, where) {
+      const model = requireModel(table);
+      if (type === 'keyvalue') {
+        if (!model.entries) throw new Error(`Table '${table}' is not a key-value bucket`);
+        const all = await model.entries();
+        const start = (page - 1) * pageSize;
+        return {
+          rows: all.slice(start, start + pageSize).map(([key, value]) => ({ key, value })),
+          total: all.length,
+          page,
+          pageSize,
+        };
+      }
+      const filter = where ?? {};
+      let total: number;
+      try {
+        const counted = await db.aggregate(table).count('*', 'total').where(filter);
+        total = Number(counted[0]?.total ?? 0);
+      } catch {
+        const all = await (model.select() as unknown as PromiseLike<unknown[]>);
+        total = all.length;
+      }
+      let selection = model.select() as unknown as {
+        where(query: Record<string, unknown>): typeof selection;
+        limit(value: number): typeof selection;
+        offset(value: number): Promise<unknown[]>;
+      };
+      if (Object.keys(filter).length > 0) selection = selection.where(filter);
+      const rows = await selection.limit(pageSize).offset((page - 1) * pageSize);
+      return { rows, total, page, pageSize };
+    },
+    async insert(table, row) {
+      const model = requireModel(table);
+      if (type === 'keyvalue') {
+        if (!model.set || row.key == null) throw new Error('key is required for KV insert');
+        await model.set(String(row.key), row.value);
+      } else if (type === 'document' && model.create) {
+        await model.create(row);
+      } else {
+        await model.insert(row);
+      }
+    },
+    async update(table, row, where) {
+      const model = requireModel(table);
+      if (type === 'keyvalue') {
+        if (!model.set || where.key == null) throw new Error('key is required for KV update');
+        await model.set(String(where.key), row.value);
+        return 1;
+      }
+      if (type === 'document' && where._id != null && model.updateById) {
+        return await model.updateById(String(where._id), row);
+      }
+      return await model.update(row).where(where);
+    },
+    async delete(table, where) {
+      const model = requireModel(table);
+      if (type === 'keyvalue') {
+        if (!model.deleteByKey || where.key == null) throw new Error('key is required for KV delete');
+        await model.deleteByKey(String(where.key));
+        return 1;
+      }
+      if (type === 'document' && where._id != null && model.deleteById) {
+        return await model.deleteById(String(where._id));
+      }
+      return await model.delete(where);
+    },
+    async dropTable(table) {
+      requireModel(table);
+      await db.query(db.dialect.formatDropTable(table, true));
+      db.models.delete(table);
+      db.definitions.delete(table);
+      tableNames.delete(table);
+      definitions.delete(table);
+    },
+    async kvGet(table, key) {
+      const model = requireModel(table);
+      if (!model.get) throw new Error(`Table '${table}' is not a key-value bucket`);
+      return await model.get(key);
+    },
+    async kvSet(table, key, value, ttl) {
+      const model = requireModel(table);
+      if (!model.set) throw new Error(`Table '${table}' is not a key-value bucket`);
+      await model.set(key, value, ttl);
+    },
+    async kvDelete(table, key) {
+      const model = requireModel(table);
+      if (!model.deleteByKey) throw new Error(`Table '${table}' is not a key-value bucket`);
+      await model.deleteByKey(key);
+    },
+    async kvEntries(table) {
+      const model = requireModel(table);
+      if (!model.entries) throw new Error(`Table '${table}' is not a key-value bucket`);
+      return (await model.entries()).map(([key, value]) => ({ key, value }));
+    },
+  };
+  return Object.freeze(port);
+}
+
+function databaseType(dialect: string): 'related' | 'document' | 'keyvalue' {
+  if (dialect === 'mongodb') return 'document';
+  if (dialect === 'redis') return 'keyvalue';
+  return 'related';
 }
 
 export async function resolveDatabaseConfig(

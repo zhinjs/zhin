@@ -1,4 +1,5 @@
 import type { AuthScope } from './token-registry.js';
+import type { DatabaseHostConsole } from '@zhin.js/plugin-runtime';
 
 export type RuntimeConsoleRpcMessage = {
   readonly type?: unknown;
@@ -52,6 +53,7 @@ export type RuntimeConsoleRpcContext = {
   /** Optional Database host surface (CLI wires DatabaseHost from plugin-runtime). */
   dbInfo?(): Promise<RuntimeDatabaseInfo> | RuntimeDatabaseInfo;
   dbTables?(): Promise<readonly string[]> | readonly string[];
+  database?: DatabaseHostConsole;
   /** Full-scope: request process restart (CLI daemon watches exit code). */
   requestRestart?(): Promise<void> | void;
 };
@@ -401,6 +403,10 @@ export async function dispatchRuntimeConsoleRpc(
       return payloads;
     }
     case 'db:info': {
+      if (ctx.database) {
+        emit({ requestId, data: ctx.database.info() });
+        return payloads;
+      }
       if (ctx.dbInfo) {
         try {
           emit({ requestId, data: await ctx.dbInfo() });
@@ -420,6 +426,10 @@ export async function dispatchRuntimeConsoleRpc(
     }
     case 'db:tables': {
       try {
+        if (ctx.database) {
+          emit({ requestId, data: { tables: ctx.database.tables() } });
+          return payloads;
+        }
         const tables = ctx.dbTables ? await ctx.dbTables() : [];
         emit({ requestId, data: tables });
       } catch (error) {
@@ -427,6 +437,135 @@ export async function dispatchRuntimeConsoleRpc(
           requestId,
           error: error instanceof Error ? error.message : String(error),
         });
+      }
+      return payloads;
+    }
+    case 'db:select': {
+      const table = stringField(message, 'table');
+      if (!table) return errorReply(payloads, requestId, 'table is required');
+      const page = positiveInteger(message.page, 1);
+      const pageSize = Math.min(positiveInteger(message.pageSize, 50), 500);
+      const where = recordField(message.where);
+      if (!ctx.database) {
+        emit({ requestId, data: { rows: [], total: 0, page, pageSize } });
+        return payloads;
+      }
+      try {
+        emit({ requestId, data: await ctx.database.select(table, page, pageSize, where) });
+      } catch (error) {
+        emit({ requestId, error: `Failed to select: ${errorMessage(error)}` });
+      }
+      return payloads;
+    }
+    case 'db:insert': {
+      if (!ctx.database) return errorReply(payloads, requestId, 'Database RPC is not available on Plugin Runtime Host');
+      const table = stringField(message, 'table');
+      const row = recordField(message.row);
+      if (!table || !row) return errorReply(payloads, requestId, 'table and row are required');
+      try {
+        await ctx.database.insert(table, row);
+        emit({ requestId, data: { success: true } });
+      } catch (error) {
+        emit({ requestId, error: `Failed to insert: ${errorMessage(error)}` });
+      }
+      return payloads;
+    }
+    case 'db:update': {
+      if (!ctx.database) return errorReply(payloads, requestId, 'Database RPC is not available on Plugin Runtime Host');
+      const table = stringField(message, 'table');
+      const row = recordField(message.row);
+      const where = recordField(message.where);
+      if (!table || !row || !where) {
+        return errorReply(payloads, requestId, 'table, row, and where are required');
+      }
+      try {
+        const affected = await ctx.database.update(table, row, where);
+        emit({ requestId, data: { success: true, affected } });
+      } catch (error) {
+        emit({ requestId, error: `Failed to update: ${errorMessage(error)}` });
+      }
+      return payloads;
+    }
+    case 'db:delete': {
+      if (!ctx.database) return errorReply(payloads, requestId, 'Database RPC is not available on Plugin Runtime Host');
+      const table = stringField(message, 'table');
+      const where = recordField(message.where);
+      if (!table || !where) return errorReply(payloads, requestId, 'table and where are required');
+      try {
+        const deleted = await ctx.database.delete(table, where);
+        emit({ requestId, data: { success: true, deleted } });
+      } catch (error) {
+        emit({ requestId, error: `Failed to delete: ${errorMessage(error)}` });
+      }
+      return payloads;
+    }
+    case 'db:drop-table': {
+      if (!ctx.database) return errorReply(payloads, requestId, 'Database RPC is not available on Plugin Runtime Host');
+      const table = stringField(message, 'table');
+      if (!table) return errorReply(payloads, requestId, 'table is required');
+      try {
+        await ctx.database.dropTable(table);
+        emit({ requestId, data: { success: true } });
+      } catch (error) {
+        emit({ requestId, error: `Failed to drop table: ${errorMessage(error)}` });
+      }
+      return payloads;
+    }
+    case 'db:kv:get': {
+      const table = stringField(message, 'table');
+      const key = stringField(message, 'key');
+      if (!table || !key) return errorReply(payloads, requestId, 'table and key are required');
+      if (!ctx.database) {
+        emit({ requestId, data: { key, value: null } });
+        return payloads;
+      }
+      try {
+        emit({ requestId, data: { key, value: await ctx.database.kvGet(table, key) } });
+      } catch (error) {
+        emit({ requestId, error: `Failed to get kv: ${errorMessage(error)}` });
+      }
+      return payloads;
+    }
+    case 'db:kv:set': {
+      if (!ctx.database) return errorReply(payloads, requestId, 'Database RPC is not available on Plugin Runtime Host');
+      const table = stringField(message, 'table');
+      const key = stringField(message, 'key');
+      if (!table || !key) return errorReply(payloads, requestId, 'table and key are required');
+      try {
+        const ttl = typeof message.ttl === 'number' && Number.isFinite(message.ttl)
+          ? message.ttl
+          : undefined;
+        await ctx.database.kvSet(table, key, message.value, ttl);
+        emit({ requestId, data: { success: true } });
+      } catch (error) {
+        emit({ requestId, error: `Failed to set kv: ${errorMessage(error)}` });
+      }
+      return payloads;
+    }
+    case 'db:kv:delete': {
+      if (!ctx.database) return errorReply(payloads, requestId, 'Database RPC is not available on Plugin Runtime Host');
+      const table = stringField(message, 'table');
+      const key = stringField(message, 'key');
+      if (!table || !key) return errorReply(payloads, requestId, 'table and key are required');
+      try {
+        await ctx.database.kvDelete(table, key);
+        emit({ requestId, data: { success: true } });
+      } catch (error) {
+        emit({ requestId, error: `Failed to delete kv: ${errorMessage(error)}` });
+      }
+      return payloads;
+    }
+    case 'db:kv:entries': {
+      const table = stringField(message, 'table');
+      if (!table) return errorReply(payloads, requestId, 'table is required');
+      if (!ctx.database) {
+        emit({ requestId, data: { entries: [] } });
+        return payloads;
+      }
+      try {
+        emit({ requestId, data: { entries: await ctx.database.kvEntries(table) } });
+      } catch (error) {
+        emit({ requestId, error: `Failed to get entries: ${errorMessage(error)}` });
       }
       return payloads;
     }
@@ -540,6 +679,35 @@ export async function dispatchRuntimeConsoleRpc(
       emit({ requestId, error: `Unknown RPC type: ${type || '<empty>'}` });
       return payloads;
   }
+}
+
+function stringField(message: RuntimeConsoleRpcMessage, key: string): string {
+  const value = message[key];
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function recordField(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function positiveInteger(value: unknown, fallback: number): number {
+  const parsed = Number(value ?? fallback);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function errorReply(
+  payloads: RuntimeConsoleRpcReply[],
+  requestId: number | string | undefined,
+  error: string,
+): RuntimeConsoleRpcReply[] {
+  payloads.push({ requestId, error });
+  return payloads;
 }
 
 /** HTTP paths under apiBase that demo scope may call (ADR 0016). */

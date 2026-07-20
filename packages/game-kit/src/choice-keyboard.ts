@@ -1,7 +1,7 @@
 /**
  * 选项式交互键盘（文字冒险、问答、剧情分支等）
  */
-import { segment, type SendContent } from 'zhin.js';
+import { segment, type SendContent } from '@zhin.js/core';
 import { applyInteractionProfile, type InteractionProfile } from './interaction-profiles.js';
 
 export interface ChoiceOption {

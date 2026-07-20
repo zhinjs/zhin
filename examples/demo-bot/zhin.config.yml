@@ -1,15 +1,13 @@
 log_level: 1
 
-endpoints: []
+plugin: {}
 
 plugins:
-  - "@zhin.js/adapter-sandbox"
-  - "@zhin.js/host-router"
-  - "@zhin.js/host-api"
-  - hello
-
-hostApi:
-  lazyLoad: true
+  sandbox:
+    endpoints:
+      - context: sandbox
+        name: demo
+        owner: demo-user
 
 ai:
   enabled: true

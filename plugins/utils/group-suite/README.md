@@ -1,80 +1,60 @@
 # @zhin.js/plugin-group-suite
 
-群运营一体化插件（**破坏性合并**，替代以下独立包，不再维护）：
+Plugin Runtime 群运营能力包，提供签到积分、消息统计、关键词回复与群问答。所有能力
+由 `commands/`、`middlewares/` 和 `agent/` 约定目录发现，不注册 legacy Plugin 回调。
 
-- `@zhin.js/plugin-group-admin`
-- `@zhin.js/plugin-checkin`
-- `@zhin.js/plugin-stats`
-- `@zhin.js/plugin-group-daily-analysis`
-- `@zhin.js/plugin-teach`
-
-## 安装
+## 安装与拓扑
 
 ```bash
 pnpm add @zhin.js/plugin-group-suite
 ```
 
-旧包已在 npm 标记废弃（维护者执行）：
+父插件在 `package.json#zhin.plugins` 中声明子插件：
 
-```bash
-npm login   # 或 export NODE_AUTH_TOKEN=...
-node scripts/deprecate-group-legacy-packages.mjs
+```json
+{
+  "package": "@zhin.js/plugin-group-suite",
+  "instanceKey": "group-suite"
+}
 ```
 
-## 配置（扁平 `groupSuite`，多数项有默认值）
+配置位于该实例的层级节点：
 
 ```yaml
 plugins:
-  - "@zhin.js/plugin-group-suite"
-
-# 可选：stats / 群分析 等 html 段自动出图（pnpm add @zhin.js/html-renderer，无需写 plugins 列表）
-
-database:
-  dialect: sqlite
-  filename: ./data/bot.db
-
-inbox:
-  enabled: true   # 群日报需要
-
-# 可整段省略，使用默认值
-groupSuite:
-  noticeAdapters: [icqq]
-  autoAnalysisEnabled: true
-  autoAnalysisCron: "0 9 * * *"
+  group-suite:
+    keywordReply: false
+    basePointsMin: 10
+    basePointsMax: 30
+    streakBonus: 5
+    streakCap: 50
+    rankSize: 10
+    teachMaxPerGroup: 200
+    teachCooldownMs: 3000
+    teachAllowRegex: true
+    teachPageSize: 10
 ```
 
-常用可选字段（单层，无需 `admin:` / `checkin:` 等嵌套）：
+完整约束以 [`schema.json`](./schema.json) 为 SSOT。数据优先写入 Runtime
+`DatabaseHost`；未配置数据库时使用进程内存存储，适合测试。
 
-| 字段 | 默认 | 说明 |
-|------|------|------|
-| `welcome` | 欢迎新成员… | 入群欢迎语 |
-| `recallNotify` | `true` | 撤回提示 |
-| `keywordReply` | `false` | 内置关键词（建议用 teach） |
-| `noticeAdapters` | `[icqq]` | 处理 notice 的适配器 |
-| `basePointsMin` / `basePointsMax` | 10 / 30 | 签到积分 |
-| `rankSize` | 10 | 签到与统计排行人数 |
-| `statsRetentionDays` | 90 | 统计保留天数 |
-| `analysisDays` | 1 | 群分析天数 |
-| `analysisGroups` | `[]` | 日报白名单（空=不限制） |
-| `analysisGroupsBlock` | `[]` | 日报黑名单 |
-| `teachMaxPerGroup` | 200 | 每群问答上限 |
-| `teachCooldownMs` | 3000 | 问答冷却（毫秒） |
+## 能力
 
-## 统计与群分析出图
+| 路径 | 说明 |
+|---|---|
+| `checkin` / `mypoints` / `rank` | 签到、积分与排行 |
+| `stats` / `stats-week` / `stats-rank` / `mystats` | 消息统计 |
+| `teach` / `teach-regex` / `teach-list` / `forget` | 群问答管理 |
+| `keyword-add` / `keyword-list` / `keyword-remove` | 关键词回复管理 |
+| `middlewares/*` | 入站统计、关键词和问答匹配 |
+| `agent/tools/group_announce.ts` | 可选 Agent 群公告工具 |
 
-`stats`、`mystats`、`群分析` 等命令返回 **`segment.html({ html })`**，由出站链统一处理：
+本 major 不包含 Adapter side-event 欢迎/撤回、AI 群日报或 HTML 报表。这些旧能力
+需要独立的事件与渲染 Feature，已从 schema 移除，避免出现“可配置但不生效”的字段。
 
-- 安装 **`@zhin.js/html-renderer`**（`pnpm add`，无需 plugins 列表）→ 自动渲染为 PNG 卡片
-- 未安装 → core 从 HTML 自动剥离纯文本（零业务侧 detect）
+## 验证
 
-卡片 HTML 在 `stats-card.ts` / `analysis-card.ts` 中用 **`@zhin.js/satori`** 的 `h()` 与内置组件构建，视觉对齐 test-bot 的 `zt-report-card`。
-
-## 命令
-
-| 命令 | 模块 |
-|------|------|
-| `签到` / `checkin` / `mypoints` / `rank` | 签到 |
-| `stats` / `stats-week` / `stats-rank` / `mystats` | 统计 |
-| `群分析` / `分析设置` | 日报 |
-| `teach` / `teach-regex` / `forget` / `teach-list` | 问答（`teach 问题 回答` 或 `teach 问题\|答案`） |
-| `添加关键词` … | 仅 `keywordReply: true` |
+```bash
+pnpm --filter @zhin.js/plugin-group-suite build
+pnpm --filter @zhin.js/plugin-group-suite test
+```

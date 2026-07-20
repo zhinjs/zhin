@@ -1,4 +1,4 @@
-import type { Message, Plugin } from 'zhin.js';
+import type { Message, Plugin } from '@zhin.js/core';
 import { channelKey } from '@zhin.js/game-kit';
 import { continueGame, startGame } from './game-flow.js';
 import { idiomCount, modeLabel, promptLine, type MatchMode } from './engine.js';

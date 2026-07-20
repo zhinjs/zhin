@@ -38,8 +38,7 @@
     "group",
     "checkin",
     "stats",
-    "teach",
-    "welcome"
+    "teach"
   ],
   "author": {
     "name": "lc-cn",
@@ -56,7 +55,6 @@
   },
   "devDependencies": {
     "@zhin.js/agent": "workspace:*",
-    "@zhin.js/html-renderer": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
     "zhin.js": "workspace:*",
@@ -64,13 +62,9 @@
   },
   "peerDependencies": {
     "@zhin.js/agent": "workspace:*",
-    "@zhin.js/html-renderer": "workspace:*",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
-    "@zhin.js/html-renderer": {
-      "optional": true
-    },
     "@zhin.js/agent": {
       "optional": true
     },

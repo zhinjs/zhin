@@ -5,18 +5,17 @@
   "description": "QQ 群游戏机器人（大厅 + 群工具，无 AI）",
   "type": "module",
   "scripts": {
-    "dev": "zhin dev",
-    "start": "zhin start",
-    "build": "zhin build"
+    "dev": "zhin runtime start",
+    "start": "zhin runtime start --mode production --no-watch",
+    "build": "tsc --noEmit",
+    "test": "vitest run --root ../.. examples/qq-games-bot/tests"
   },
   "dependencies": {
     "@zhin.js/adapter-qq": "workspace:*",
-    "@zhin.js/cli": "workspace:*",
-    "@zhin.js/host-api": "workspace:*",
-    "@zhin.js/host-router": "workspace:*",
-    "@zhin.js/html-renderer": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/plugin-blackjack": "workspace:*",
     "@zhin.js/plugin-dice-duel": "workspace:*",
+    "@zhin.js/plugin-game-hub": "workspace:*",
     "@zhin.js/plugin-group-suite": "workspace:*",
     "@zhin.js/plugin-guess-number": "workspace:*",
     "@zhin.js/plugin-idiom-chain": "workspace:*",
@@ -24,14 +23,35 @@
     "@zhin.js/plugin-text-adventure": "workspace:*",
     "@zhin.js/plugin-tic-tac-toe": "workspace:*",
     "@zhin.js/plugin-word-riddle": "workspace:*",
-    "sqlite3": "latest",
-    "tsx": "^4.22.4",
-    "zhin.js": "workspace:*"
+    "sqlite3": "latest"
   },
   "devDependencies": {
-    "typescript": "^6.0.3"
+    "@zhin.js/cli": "workspace:*",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
   },
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": ">=22.18.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [],
+    "plugins": [
+      { "package": "@zhin.js/adapter-qq", "instanceKey": "qq" },
+      { "package": "@zhin.js/plugin-group-suite", "instanceKey": "group-suite" },
+      { "package": "@zhin.js/plugin-game-hub", "instanceKey": "game-hub" },
+      { "package": "@zhin.js/plugin-tic-tac-toe", "instanceKey": "tic-tac-toe" },
+      { "package": "@zhin.js/plugin-rps", "instanceKey": "rps" },
+      { "package": "@zhin.js/plugin-guess-number", "instanceKey": "guess-number" },
+      { "package": "@zhin.js/plugin-dice-duel", "instanceKey": "dice-duel" },
+      { "package": "@zhin.js/plugin-idiom-chain", "instanceKey": "idiom-chain" },
+      { "package": "@zhin.js/plugin-word-riddle", "instanceKey": "word-riddle" },
+      { "package": "@zhin.js/plugin-text-adventure", "instanceKey": "text-adventure" },
+      { "package": "@zhin.js/plugin-blackjack", "instanceKey": "blackjack" }
+    ]
   }
 }

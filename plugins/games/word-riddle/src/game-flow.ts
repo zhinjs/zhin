@@ -1,4 +1,4 @@
-import type { Adapter, Message, Plugin } from 'zhin.js';
+import type { Adapter, Message, Plugin } from '@zhin.js/core';
 import { plainTextFromSendContent } from '@zhin.js/game-kit';
 import {
   checkAnswer,

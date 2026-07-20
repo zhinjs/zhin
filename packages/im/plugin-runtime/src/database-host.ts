@@ -19,6 +19,49 @@ export interface DatabaseHostModel {
   };
 }
 
+export type DatabaseHostType = 'related' | 'document' | 'keyvalue';
+
+export interface DatabaseHostTable {
+  readonly name: string;
+  readonly columns?: Readonly<Record<string, unknown>>;
+}
+
+export interface DatabaseHostSelectResult {
+  readonly rows: readonly unknown[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+}
+
+/** Root-only database administration surface used by Console RPC. */
+export interface DatabaseHostConsole {
+  info(): {
+    readonly dialect: string;
+    readonly type: DatabaseHostType;
+    readonly tables: readonly string[];
+    readonly connected: boolean;
+  };
+  tables(): readonly DatabaseHostTable[];
+  select(
+    table: string,
+    page: number,
+    pageSize: number,
+    where?: Record<string, unknown>,
+  ): Promise<DatabaseHostSelectResult>;
+  insert(table: string, row: Record<string, unknown>): Promise<void>;
+  update(
+    table: string,
+    row: Record<string, unknown>,
+    where: Record<string, unknown>,
+  ): Promise<unknown>;
+  delete(table: string, where: Record<string, unknown>): Promise<unknown>;
+  dropTable(table: string): Promise<void>;
+  kvGet(table: string, key: string): Promise<unknown>;
+  kvSet(table: string, key: string, value: unknown, ttl?: number): Promise<void>;
+  kvDelete(table: string, key: string): Promise<void>;
+  kvEntries(table: string): Promise<readonly { key: string; value: unknown }[]>;
+}
+
 /**
  * Thin Host Resource for Plugin Runtime persistence.
  * Plugins call `define` during `setup()`; Host starts the dialect on generation
@@ -34,6 +77,8 @@ export interface DatabaseHost {
   models: {
     get(name: string): DatabaseHostModel | undefined;
   };
+  /** Root-only management port; absent on lightweight test/memory hosts. */
+  readonly console?: DatabaseHostConsole;
   /**
    * Raw `@zhin.js/database` registry (full `create` / `select` API).
    * Available after `start()` — used by Agent Host ADR 0009 persistence.

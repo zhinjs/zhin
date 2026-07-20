@@ -77,7 +77,7 @@ plugins:
 
 ## 平台权限（platform permit）
 
-`src/platform-permit.ts` 的 checker 保留并从 `src/index.ts` 导出，`plugin.ts` 暂无注册点；新 Runtime Tool 链路（`@zhin.js/tool` / capability-ingress）亦不消费 `permissions` / permit 声明，待工具权限模型定义后接线。`agent/tools` 中的 `platformPermit(...)` 声明目前不产生门禁效果。
+`plugin.ts` 在 generation setup 注册 `src/platform-permit.ts` checker，并在 dispose 注销；CapabilityIngress 与 ToolSystem 统一经 Core `canAccessTool()` 消费工具权限。
 
 ## 测试
 
