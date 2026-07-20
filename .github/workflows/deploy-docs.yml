@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'docs/**'
+      - 'typedoc.json'
+      - 'tsconfig.typedoc.json'
       - '.github/workflows/deploy-docs.yml'
   workflow_dispatch:
 
