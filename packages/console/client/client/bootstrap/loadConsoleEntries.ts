@@ -1,4 +1,5 @@
 import { DEFAULT_CONSOLE_BASE_PATH, type ConsoleClientEntry, type ConsoleEntriesResponse, type ConsolePluginRegister, type PluginRegisterHostApi } from '@zhin.js/contract';
+import type * as React from 'react';
 
 export type FetchConsoleEntriesOptions = {
   entriesUrl?: string;
@@ -91,6 +92,43 @@ export function getRegisterFn(mod: Record<string, unknown> | null | undefined): 
   return null;
 }
 
+/**
+ * Convention pages (ADR 0046) export a React component as `default` + optional `meta`,
+ * without a legacy `register(api)`. Synthesize register from entry.route / entry meta
+ * so Remote Console can still mount them.
+ */
+export function resolveEntryRegister(
+  mod: Record<string, unknown> | null | undefined,
+  entry: ConsoleClientEntry & { readonly route?: string; readonly title?: string },
+): ConsolePluginRegister | null {
+  const named = getRegisterFn(mod);
+  if (named) return named;
+  if (!mod) return null;
+  const Component = mod["default"];
+  if (typeof Component !== "function" && !(Component && typeof Component === "object")) {
+    return null;
+  }
+  const path = typeof entry.route === "string" && entry.route
+    ? entry.route
+    : `/${entry.id}`;
+  const meta = mod["meta"] && typeof mod["meta"] === "object"
+    ? mod["meta"] as { title?: string; icon?: unknown; hideInNav?: boolean }
+    : undefined;
+  const name = (typeof meta?.title === "string" && meta.title)
+    || (typeof entry.title === "string" && entry.title)
+    || entry.meta?.name
+    || entry.id;
+  return (api) => {
+    api.addRoute({
+      path,
+      name,
+      element: api.React.createElement(Component as React.ComponentType),
+      ...(meta?.icon != null ? { icon: meta.icon } : {}),
+      meta: { hideInMenu: meta?.hideInNav === true },
+    });
+  };
+}
+
 export async function registerConsolePluginsFromEntries(
   entries: ConsoleClientEntry[],
   hostApi: PluginRegisterHostApi,
@@ -103,7 +141,7 @@ export async function registerConsolePluginsFromEntries(
       try {
         const specifier = resolvePluginImportUrl(entry.resolvedModule, assetOrigin);
         const mod = (await import(/* @vite-ignore */ specifier)) as Record<string, unknown>;
-        const register = getRegisterFn(mod);
+        const register = resolveEntryRegister(mod, entry);
         if (register) await register(hostApi);
         else throw new Error(`entry "${entry.id}" has no register export`);
       } catch (error) {

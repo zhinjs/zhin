@@ -288,9 +288,18 @@ const log = document.getElementById('log');
 const status = document.getElementById('ws-status');
 const form = document.getElementById('form');
 const input = document.getElementById('input');
-const wsUrl = new URL('/sandbox', location.href);
-wsUrl.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-const ws = new WebSocket(wsUrl);
+function resolveSandboxWsUrl() {
+  const token = (typeof localStorage !== 'undefined' && (localStorage.getItem('zhin_api_token') || ''))
+    || (typeof window !== 'undefined' && window.__ZHIN_API_TOKEN)
+    || '';
+  const base = (typeof localStorage !== 'undefined' && localStorage.getItem('zhin_api_base')?.trim())
+    || location.origin;
+  const url = new URL('/sandbox', base.endsWith('/') ? base : base + '/');
+  url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  if (token) url.searchParams.set('token', token);
+  return url.href;
+}
+const ws = new WebSocket(resolveSandboxWsUrl());
 function push(kind, text) {
   const el = document.createElement('div');
   el.className = 'bubble ' + kind;
@@ -300,7 +309,7 @@ function push(kind, text) {
 }
 ws.addEventListener('open', () => { status.textContent = 'connected'; });
 ws.addEventListener('close', () => { status.textContent = 'disconnected'; });
-ws.addEventListener('error', () => { status.textContent = 'error'; });
+ws.addEventListener('error', () => { status.textContent = 'error (check token / Host)'; });
 ws.addEventListener('message', (event) => {
   try {
     const data = JSON.parse(String(event.data));

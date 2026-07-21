@@ -1,6 +1,24 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getWebSocketManager } from "./instance";
 import type { UseWebSocketOptions } from "./types";
+
+/**
+ * 每次连接会话只对同一 key 自动加载一次：失败后不再零退避死循环
+ * （旧行为：加载失败 → 状态保持空 → effect 反复立即重试，打爆 /api/console/request）。
+ * 断连后重置；key 变化（如 pluginName 切换）视为新目标重新尝试；手动重试走各 hook 返回的 load 函数。
+ */
+function useAutoLoadOnce(connected: boolean, key: unknown, ready: boolean, fire: () => void) {
+  const attemptedRef = useRef<unknown>(undefined);
+  useEffect(() => {
+    if (!connected) {
+      attemptedRef.current = undefined;
+      return;
+    }
+    if (ready || attemptedRef.current === key) return;
+    attemptedRef.current = key;
+    fire();
+  });
+}
 
 export function useWebSocket(options: UseWebSocketOptions = {}) {
   const { autoConnect = true } = options;
@@ -78,13 +96,12 @@ export function useConfig(pluginName: string, options?: { autoLoad?: boolean; au
     }
   }, [pluginName, wsManager]);
 
-  useEffect(() => {
-    if (connected && autoLoad && !config && !loading) getConfig().catch(() => {});
-  }, [connected, autoLoad, config, loading, getConfig]);
-
-  useEffect(() => {
-    if (connected && autoLoadSchema && !schema) getSchema().catch(() => {});
-  }, [connected, autoLoadSchema, schema, getSchema]);
+  useAutoLoadOnce(connected, `config:${pluginName}`, !autoLoad || config != null || loading, () => {
+    getConfig().catch(() => {});
+  });
+  useAutoLoadOnce(connected, `schema:${pluginName}`, !autoLoadSchema || schema != null, () => {
+    getSchema().catch(() => {});
+  });
 
   return useMemo(
     () => ({ config, schema, loading, error, connected, getConfig, setConfig, getSchema }),
@@ -136,9 +153,9 @@ export function useConfigYaml() {
     [wsManager],
   );
 
-  useEffect(() => {
-    if (connected && !yaml && !loading) load().catch(() => {});
-  }, [connected, yaml, loading, load]);
+  useAutoLoadOnce(connected, "config-yaml", !!yaml || loading, () => {
+    load().catch(() => {});
+  });
 
   return useMemo(() => ({ yaml, pluginKeys, loading, error, load, save }), [yaml, pluginKeys, loading, error, load, save]);
 }
@@ -173,9 +190,9 @@ export function useFiles() {
     [wsManager],
   );
 
-  useEffect(() => {
-    if (connected && tree.length === 0 && !loading) loadTree().catch(() => {});
-  }, [connected, tree.length, loading, loadTree]);
+  useAutoLoadOnce(connected, "file-tree", tree.length > 0 || loading, () => {
+    loadTree().catch(() => {});
+  });
 
   return useMemo(() => ({ tree, loading, error, loadTree, readFile, saveFile }), [tree, loading, error, loadTree, readFile, saveFile]);
 }
@@ -217,9 +234,9 @@ export function useEnvFiles() {
     [wsManager],
   );
 
-  useEffect(() => {
-    if (connected && files.length === 0 && !loading) listFiles().catch(() => {});
-  }, [connected, files.length, loading, listFiles]);
+  useAutoLoadOnce(connected, "env-files", files.length > 0 || loading, () => {
+    listFiles().catch(() => {});
+  });
 
   return useMemo(
     () => ({ files, loading, error, listFiles, getFile, saveFile }),
@@ -275,12 +292,10 @@ export function useDatabase() {
   const kvDelete = useCallback(async (table: string, key: string) => wsManager.kvDelete(table, key), [wsManager]);
   const kvEntries = useCallback(async (table: string) => wsManager.kvGetEntries(table), [wsManager]);
 
-  useEffect(() => {
-    if (connected && !info && !loading) {
-      loadInfo().catch(() => {});
-      loadTables().catch(() => {});
-    }
-  }, [connected, info, loading, loadInfo, loadTables]);
+  useAutoLoadOnce(connected, "db-info", info != null || loading, () => {
+    loadInfo().catch(() => {});
+    loadTables().catch(() => {});
+  });
 
   return useMemo(
     () => ({ info, tables, loading, error, loadInfo, loadTables, dropTable, select, insert, update, remove, kvGet, kvSet, kvDelete, kvEntries }),

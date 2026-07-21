@@ -445,7 +445,8 @@ export function registerConsoleApiRoutes(
         authScope,
         listPages: () => listPages(consoleRuntime),
         readConfigYaml: () => readProjectConfigYaml(projectRoot),
-        readConfigDocument: () => readProjectConfigDocument(projectRoot),
+        // Flattened view: host keys + plugins.<key>，与 Console 表单/legacy config:get 对齐
+        readConfigDocument: () => readConsoleConfigDocument(projectRoot),
         writeConfigYaml: (yaml) => writeProjectConfigYaml(projectRoot, yaml),
         setConfigKey: (pluginName, data) => setProjectConfigKey(projectRoot, pluginName, data),
         listProjectFiles: () => buildProjectFileTree(projectRoot),
@@ -490,15 +491,7 @@ export function registerConsoleApiRoutes(
             : undefined,
           resolveScheduleEngine: () => agentModule?.getAssistantRuntime?.()?.engine ?? null,
         },
-        listPluginKeys: async () => {
-          const document = await readProjectConfigDocument(projectRoot);
-          const plugins = document.plugins;
-          if (Array.isArray(plugins)) return plugins.map((item) => String(item));
-          if (plugins && typeof plugins === 'object') {
-            return Object.keys(plugins as Record<string, unknown>);
-          }
-          return [];
-        },
+        listPluginKeys: () => listConsoleConfigKeys(projectRoot),
         publishEvent: (type, data) => hub.publish(type, data),
       });
       const match = pickRpcReply(message, payloads);
@@ -1024,6 +1017,72 @@ async function readProjectConfigDocument(projectRoot: string): Promise<Record<st
     : {};
 }
 
+/**
+ * Host 级配置键（与 ConfigComposer 对齐）。
+ * 这些键在文档顶层；插件配置在 `plugins.<instanceKey>`。
+ */
+export const HOST_CONFIG_KEYS = Object.freeze([
+  'http',
+  'database',
+  'ai',
+  'mcp',
+  'a2a',
+  'speech',
+  'htmlRenderer',
+  'assistant',
+  'collaboration',
+  'log_level',
+  'plugin',
+] as const);
+
+const HOST_CONFIG_KEY_SET = new Set<string>(HOST_CONFIG_KEYS);
+
+/**
+ * Console 视角的扁平配置：
+ * - 顶层 host 键（http / database / …）原样
+ * - `plugins.<key>` 展开为顶层 `key`（与 legacy `config:get(pluginName)` 契约一致）
+ */
+export async function readConsoleConfigDocument(
+  projectRoot: string,
+): Promise<Record<string, unknown>> {
+  return flattenConfigDocument(await readProjectConfigDocument(projectRoot));
+}
+
+export function flattenConfigDocument(
+  document: Record<string, unknown>,
+): Record<string, unknown> {
+  const flat: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(document)) {
+    if (key === 'plugins') continue;
+    flat[key] = value;
+  }
+  const plugins = document.plugins;
+  if (plugins && typeof plugins === 'object' && !Array.isArray(plugins)) {
+    for (const [key, value] of Object.entries(plugins as Record<string, unknown>)) {
+      // 插件命名空间优先：同名 host 键极少冲突；若冲突以 plugins 为准
+      flat[key] = value;
+    }
+  }
+  return flat;
+}
+
+/** 配置 Tab 列表：host 键（有值）+ plugins 键 + package.json zhin.plugins。 */
+export async function listConsoleConfigKeys(projectRoot: string): Promise<string[]> {
+  const document = await readProjectConfigDocument(projectRoot);
+  const keys = new Set<string>();
+  for (const key of HOST_CONFIG_KEYS) {
+    if (key in document) keys.add(key);
+  }
+  const plugins = document.plugins;
+  if (plugins && typeof plugins === 'object' && !Array.isArray(plugins)) {
+    for (const key of Object.keys(plugins as Record<string, unknown>)) keys.add(key);
+  } else if (Array.isArray(plugins)) {
+    for (const item of plugins) keys.add(String(item));
+  }
+  for (const key of (await readPluginPackageMap(projectRoot)).keys()) keys.add(key);
+  return [...keys].sort((a, b) => a.localeCompare(b));
+}
+
 async function findConfigFile(projectRoot: string): Promise<string | undefined> {
   for (const candidate of [
     'config.yml', 'config.yaml', 'config.json', 'zhin.config.yml', 'zhin.config.yaml',
@@ -1050,20 +1109,48 @@ async function writeProjectConfigYaml(projectRoot: string, yaml: string): Promis
   await writeFile(file, yaml, 'utf8');
 }
 
-async function setProjectConfigKey(
+/**
+ * 写入配置键：
+ * - host 键 / 已在顶层的键 → 顶层
+ * - 其余（插件 instanceKey）→ `plugins.<name>`
+ */
+export async function setProjectConfigKey(
   projectRoot: string,
   pluginName: string,
   data: unknown,
 ): Promise<{ restartRequired: boolean }> {
   const file = await ensureConfigFile(projectRoot);
   const document = await readProjectConfigDocument(projectRoot);
-  document[pluginName] = data;
+  writeConfigKey(document, pluginName, data);
   if (file.endsWith('.json')) {
     await writeFile(file, `${JSON.stringify(document, null, 2)}\n`, 'utf8');
   } else {
     await writeFile(file, stringifyYaml(document), 'utf8');
   }
   return { restartRequired: true };
+}
+
+export function writeConfigKey(
+  document: Record<string, unknown>,
+  key: string,
+  data: unknown,
+): void {
+  const plugins = document.plugins;
+  const inPlugins = plugins
+    && typeof plugins === 'object'
+    && !Array.isArray(plugins)
+    && Object.prototype.hasOwnProperty.call(plugins, key);
+
+  // Host 键或非 plugins 命名空间的顶层键写顶层；其余写 plugins.<key>
+  if (HOST_CONFIG_KEY_SET.has(key) || (key in document && key !== 'plugins' && !inPlugins)) {
+    document[key] = data;
+    return;
+  }
+  const bucket = (plugins && typeof plugins === 'object' && !Array.isArray(plugins))
+    ? plugins as Record<string, unknown>
+    : {};
+  bucket[key] = data;
+  document.plugins = bucket;
 }
 
 const ENV_FILES = new Set(['.env', '.env.development', '.env.production']);
@@ -1083,30 +1170,219 @@ async function writeEnvFile(projectRoot: string, filename: string, content: stri
   await writeFile(join(projectRoot, filename), content, 'utf8');
 }
 
-async function readPluginSchema(
+/**
+ * 读取插件 schema.json，并转换为 Console 表单使用的 `@zhin.js/schema` toJSON 形态。
+ * `pluginName` 支持 instanceKey（`icqq`）或包名（`@zhin.js/adapter-icqq`）。
+ */
+export async function readPluginSchema(
   projectRoot: string,
   pluginName?: string,
 ): Promise<unknown> {
   if (!pluginName) return null;
-  const direct = join(projectRoot, 'node_modules', pluginName, 'schema.json');
-  try {
-    const text = await readFile(direct, 'utf8');
-    return JSON.parse(text) as unknown;
-  } catch {
-    // pluginName 可能是 instanceKey（如 `icqq-2`），经 zhin.plugins 映射到包名再试
+  if (HOST_CONFIG_KEY_SET.has(pluginName)) {
+    // Host 键无插件 schema.json；返回宽松 object，避免表单空白
+    return jsonSchemaToConsoleSchema({ type: 'object', additionalProperties: true });
   }
+  const raw = await loadRawPluginSchemaJson(projectRoot, pluginName);
+  if (raw == null) return null;
+  return jsonSchemaToConsoleSchema(raw);
+}
+
+async function loadRawPluginSchemaJson(
+  projectRoot: string,
+  pluginName: string,
+): Promise<unknown> {
+  const candidates: string[] = [
+    join(projectRoot, 'node_modules', pluginName, 'schema.json'),
+  ];
   const packageName = (await readPluginPackageMap(projectRoot)).get(pluginName);
-  if (!packageName) return null;
-  try {
-    const text = await readFile(join(projectRoot, 'node_modules', packageName, 'schema.json'), 'utf8');
-    return JSON.parse(text) as unknown;
-  } catch {
-    return null;
+  if (packageName && packageName !== pluginName) {
+    candidates.push(join(projectRoot, 'node_modules', packageName, 'schema.json'));
   }
+  // 本地 workspace 插件（package.json 里没映射时，按常见 plugins/* 路径尝试无意义；仅 node_modules）
+  for (const file of candidates) {
+    try {
+      const text = await readFile(file, 'utf8');
+      return JSON.parse(text) as unknown;
+    } catch {
+      /* try next */
+    }
+  }
+  return null;
+}
+
+/**
+ * JSON Schema (draft-2020 / 插件 schema.json) → Console Schema JSON
+ * （`@zhin.js/schema` `toJSON()`：`{ type, object?, list?, inner?, key?, description?, ... }`）。
+ *
+ * Remote Console 表单按该形态渲染；直接返回 JSON Schema 会导致字段无法展开。
+ */
+export function jsonSchemaToConsoleSchema(
+  input: unknown,
+  key?: string,
+): Record<string, unknown> | null {
+  if (input == null) return null;
+  if (typeof input !== 'object' || Array.isArray(input)) return null;
+  const schema = input as Record<string, unknown>;
+
+  // 已是 Console Schema 形态则透传；勿把 JSON Schema 的 enum/integer/properties 误判为已转换
+  if (isConsoleSchemaJson(schema)) {
+    return key && schema.key == null ? { ...schema, key } : { ...schema };
+  }
+
+  const typeField = schema.type;
+  const description = typeof schema.description === 'string' ? schema.description : undefined;
+  const defaultValue = schema.default;
+  const requiredFlag = schema.required === true ? true : undefined;
+
+  // type: ["string","number"] → union of scalars
+  if (Array.isArray(typeField)) {
+    const list = typeField
+      .filter((t): t is string => typeof t === 'string')
+      .map((t) => jsonSchemaToConsoleSchema({ type: t }, undefined))
+      .filter((s): s is Record<string, unknown> => s != null);
+    return compactMeta({
+      type: 'union',
+      key,
+      description,
+      default: defaultValue,
+      list,
+    });
+  }
+
+  const type = typeof typeField === 'string' ? typeField : inferJsonSchemaType(schema);
+
+  if (type === 'object' || schema.properties != null) {
+    const properties = (schema.properties && typeof schema.properties === 'object'
+      && !Array.isArray(schema.properties))
+      ? schema.properties as Record<string, unknown>
+      : {};
+    const requiredList = Array.isArray(schema.required)
+      ? new Set(schema.required.map(String))
+      : new Set<string>();
+    const object: Record<string, unknown> = {};
+    for (const [propKey, propSchema] of Object.entries(properties)) {
+      const converted = jsonSchemaToConsoleSchema(propSchema, propKey);
+      if (!converted) continue;
+      if (requiredList.has(propKey)) converted.required = true;
+      object[propKey] = converted;
+    }
+    // additionalProperties: Schema → dict
+    if (
+      Object.keys(object).length === 0
+      && schema.additionalProperties
+      && typeof schema.additionalProperties === 'object'
+    ) {
+      const inner = jsonSchemaToConsoleSchema(schema.additionalProperties);
+      return compactMeta({
+        type: 'dict',
+        key,
+        description,
+        default: defaultValue,
+        inner: inner ?? { type: 'any' },
+      });
+    }
+    // Dual-emit: @zhin.js/schema toJSON uses `object`; PluginConfigForm nested
+    // renderers historically read `dict` / `properties`. Emit all three so list
+    // item forms (endpoints[]) can expand fields and support add/remove.
+    return compactMeta({
+      type: 'object',
+      key,
+      description,
+      default: defaultValue,
+      required: requiredFlag,
+      object,
+      properties: object,
+      dict: object,
+    });
+  }
+
+  if (type === 'array') {
+    const items = schema.items;
+    const inner = Array.isArray(items)
+      ? { type: 'any' as const }
+      : (jsonSchemaToConsoleSchema(items) ?? { type: 'any' });
+    return compactMeta({
+      type: 'list',
+      key,
+      description,
+      default: defaultValue,
+      required: requiredFlag,
+      inner,
+      ...(Array.isArray(schema.enum)
+        ? { options: schema.enum.map((value) => ({ label: String(value), value })) }
+        : {}),
+    });
+  }
+
+  // enum on scalar → options
+  const options = Array.isArray(schema.enum)
+    ? schema.enum.map((value) => ({ label: String(value), value }))
+    : undefined;
+
+  const mappedType = type === 'integer' ? 'number' : (type ?? 'any');
+  return compactMeta({
+    type: mappedType,
+    key,
+    description,
+    default: defaultValue,
+    required: requiredFlag,
+    min: typeof schema.minimum === 'number' ? schema.minimum : undefined,
+    max: typeof schema.maximum === 'number' ? schema.maximum : undefined,
+    options,
+  });
+}
+
+/** Console Schema JSON（@zhin.js/schema toJSON）vs 插件 schema.json（JSON Schema）。 */
+function isConsoleSchemaJson(schema: Record<string, unknown>): boolean {
+  if (schema.object != null || schema.list != null || schema.inner != null) return true;
+  // Console-only types
+  if (typeof schema.type === 'string'
+    && ['dict', 'union', 'tuple', 'intersect', 'const', 'any', 'date', 'regexp'].includes(schema.type)) {
+    return true;
+  }
+  // JSON Schema markers → not Console Schema
+  if (
+    schema.properties != null
+    || schema.items != null
+    || schema.$schema != null
+    || schema.additionalProperties != null
+    || schema.anyOf != null
+    || schema.oneOf != null
+    || schema.allOf != null
+    || schema.enum != null
+    || schema.minimum != null
+    || schema.maximum != null
+    || schema.type === 'integer'
+    || Array.isArray(schema.type)
+  ) {
+    return false;
+  }
+  // Bare Console scalar e.g. { type: 'string', key: 'name', description: '…' }
+  return typeof schema.type === 'string';
+}
+
+function inferJsonSchemaType(schema: Record<string, unknown>): string | undefined {
+  if (schema.properties != null) return 'object';
+  if (schema.items != null) return 'array';
+  if (schema.enum != null) return typeof schema.enum === 'object'
+    && Array.isArray(schema.enum)
+    && schema.enum.length > 0
+    ? typeof schema.enum[0]
+    : 'string';
+  return undefined;
+}
+
+function compactMeta(meta: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(meta).filter(([, value]) => value !== undefined),
+  );
 }
 
 /** instanceKey → package 映射（来自项目 package.json 的 `zhin.plugins`）。 */
-async function readPluginPackageMap(projectRoot: string): Promise<ReadonlyMap<string, string>> {
+export async function readPluginPackageMap(
+  projectRoot: string,
+): Promise<ReadonlyMap<string, string>> {
   const map = new Map<string, string>();
   try {
     const pkg = JSON.parse(await readFile(join(projectRoot, 'package.json'), 'utf8')) as {
@@ -1127,16 +1403,10 @@ async function readPluginPackageMap(projectRoot: string): Promise<ReadonlyMap<st
   return map;
 }
 
-async function readAllPluginSchemas(
+export async function readAllPluginSchemas(
   projectRoot: string,
 ): Promise<Record<string, unknown>> {
-  const document = await readProjectConfigDocument(projectRoot);
-  const plugins = document.plugins;
-  const keys: string[] = [];
-  if (Array.isArray(plugins)) keys.push(...plugins.map((item) => String(item)));
-  else if (plugins && typeof plugins === 'object') {
-    keys.push(...Object.keys(plugins as Record<string, unknown>));
-  }
+  const keys = await listConsoleConfigKeys(projectRoot);
   const schemas: Record<string, unknown> = {};
   for (const key of keys) {
     const schema = await readPluginSchema(projectRoot, key);

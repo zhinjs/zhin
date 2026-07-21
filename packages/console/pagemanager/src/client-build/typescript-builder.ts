@@ -3,8 +3,9 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { build as esbuild } from 'esbuild';
 import type { Plugin as EsbuildPlugin } from 'esbuild';
+import { pageRoute, type ClientModuleArtifact } from '@zhin.js/console-contract';
 import type { ClientModuleRequest } from '@zhin.js/feature-kit';
-import type { ClientModuleArtifact } from '@zhin.js/console-contract';
+import { rootPluginId } from '@zhin.js/plugin-runtime';
 import {
   assertLayoutModule,
   extractPageMetadata,
@@ -62,9 +63,10 @@ export class TypeScriptClientBuilder implements ClientModuleLoader {
     const hash = contentHash(text);
     const fileName = `${safe(request.owner)}-${safe(request.localName)}-${hash}.js`;
     const output = join(this.#outDir, fileName);
-    // Bundle page TSX (inlines `@zhin.js/console-contract` stubs) then rewrite React
-    // bare imports to Host `/esm/<enc>.mjs` (browser cannot resolve package names).
-    const bundled = await bundlePageEntry(absSource, this.#projectRoot);
+    // Bundle page TSX (inlines `@zhin.js/console-contract` stubs) + wrap with
+    // `export function register(api)` so Remote Console loadConsoleEntries can mount it.
+    // Then rewrite React bare imports to Host `/esm/<enc>.mjs`.
+    const bundled = await bundlePageEntry(absSource, this.#projectRoot, request, metadata);
     const code = rewriteBareImportsForBrowser(bundled, this.#consoleBasePath, '');
     await atomicWrite(output, code);
     return Object.freeze({
@@ -93,7 +95,63 @@ export class TypeScriptClientBuilder implements ClientModuleLoader {
   }
 }
 
-async function bundlePageEntry(absSource: string, projectRoot: string): Promise<string> {
+type PageMeta = {
+  readonly title?: string;
+  readonly icon?: string;
+  readonly hideInNav?: boolean;
+};
+
+async function bundlePageEntry(
+  absSource: string,
+  projectRoot: string,
+  request: ClientModuleRequest,
+  metadata: unknown,
+): Promise<string> {
+  // Layout modules stay bare components (no Console shell register contract).
+  if (String(request.feature) === layoutFeature) {
+    return bundleSource(absSource, projectRoot);
+  }
+  const meta = (metadata && typeof metadata === 'object' ? metadata : {}) as PageMeta;
+  const route = safePageRoute(request.owner, request.localName);
+  const title = meta.title ?? request.localName;
+  const icon = meta.icon;
+  const hideInNav = meta.hideInNav === true;
+  const wrapperSource = buildPageRegisterWrapper(absSource, {
+    route,
+    title,
+    icon,
+    hideInNav,
+    localName: request.localName,
+  });
+  const result = await esbuild({
+    stdin: {
+      contents: wrapperSource,
+      resolveDir: dirname(absSource),
+      sourcefile: `${request.localName}.register.tsx`,
+      loader: 'tsx',
+    },
+    bundle: true,
+    write: false,
+    format: 'esm',
+    platform: 'browser',
+    target: 'es2022',
+    jsx: 'automatic',
+    sourcemap: false,
+    logLevel: 'silent',
+    absWorkingDir: projectRoot,
+    nodePaths: [
+      join(dirname(absSource), 'node_modules'),
+      join(projectRoot, 'node_modules'),
+    ],
+    external: BROWSER_EXTERNALS,
+    plugins: [consoleContractStubPlugin()],
+  });
+  const file = result.outputFiles?.[0];
+  if (!file) throw new Error(`esbuild produced no output for ${absSource}`);
+  return file.text;
+}
+
+async function bundleSource(absSource: string, projectRoot: string): Promise<string> {
   const result = await esbuild({
     entryPoints: [absSource],
     bundle: true,
@@ -105,7 +163,6 @@ async function bundlePageEntry(absSource: string, projectRoot: string): Promise<
     sourcemap: false,
     logLevel: 'silent',
     absWorkingDir: projectRoot,
-    // Prefer the page's directory, then project Root node_modules (workspace packages).
     nodePaths: [
       join(dirname(absSource), 'node_modules'),
       join(projectRoot, 'node_modules'),
@@ -116,6 +173,71 @@ async function bundlePageEntry(absSource: string, projectRoot: string): Promise<
   const file = result.outputFiles?.[0];
   if (!file) throw new Error(`esbuild produced no output for ${absSource}`);
   return file.text;
+}
+
+/**
+ * Wrap a convention page (default export component + optional meta) into the
+ * Remote Console entry contract: `export function register(api)`.
+ */
+function buildPageRegisterWrapper(
+  absSource: string,
+  options: {
+    readonly route: string;
+    readonly title: string;
+    readonly icon?: string;
+    readonly hideInNav: boolean;
+    readonly localName: string;
+  },
+): string {
+  // abs path import so esbuild resolves the real page regardless of stdin dir.
+  const pageImport = JSON.stringify(absSource);
+  const route = JSON.stringify(options.route);
+  const title = JSON.stringify(options.title);
+  const icon = options.icon === undefined ? 'undefined' : JSON.stringify(options.icon);
+  const hideInNav = options.hideInNav ? 'true' : 'false';
+  const toolId = JSON.stringify(options.localName);
+  return `
+import Page, * as pageNs from ${pageImport};
+export { default } from ${pageImport};
+export { meta } from ${pageImport};
+
+export function register(api) {
+  const Component = Page?.default ?? Page;
+  if (typeof Component !== 'function' && (typeof Component !== 'object' || Component == null)) {
+    throw new Error('Page module default export is not a React component');
+  }
+  const m = pageNs.meta && typeof pageNs.meta === 'object' ? pageNs.meta : {};
+  const route = ${route};
+  const name = typeof m.title === 'string' && m.title ? m.title : ${title};
+  const icon = m.icon ?? ${icon};
+  const element = api.React.createElement(Component);
+  api.addRoute({
+    path: route,
+    name,
+    element,
+    ...(icon != null ? { icon } : {}),
+    meta: { hideInMenu: m.hideInNav === true || ${hideInNav} },
+  });
+  if (typeof api.addTool === 'function') {
+    api.addTool({
+      id: ${toolId},
+      name,
+      path: route,
+      ...(icon != null ? { icon } : {}),
+    });
+  }
+}
+`;
+}
+
+/** Safe pageRoute — adversarial/invalid localName falls back to a sanitized path. */
+function safePageRoute(owner: string, localName: string): string {
+  try {
+    return pageRoute(owner, rootPluginId(), localName);
+  } catch {
+    const slug = safe(localName) || 'page';
+    return `/p-${slug}`;
+  }
 }
 
 function consoleContractStubPlugin(): EsbuildPlugin {

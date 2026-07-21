@@ -49,6 +49,10 @@ describe('Client build adapter', () => {
     expect(chunk).not.toMatch(/from\s+["']react\/jsx-runtime["']/);
     // `@zhin.js/console-contract` is stubbed/inlined — never left as a bare import.
     expect(chunk).not.toMatch(/from\s+["']@zhin\.js\/console-contract["']/);
+    // Remote Console loadConsoleEntries requires `register(api)`.
+    expect(chunk).toMatch(/export\s+(?:async\s+)?function\s+register\b|export\s*\{\s*[^}]*\bregister\b/);
+    expect(chunk).toContain('addRoute');
+
     const persisted = JSON.parse(
       await readFile(join(root, 'dist/client/pages.manifest.json'), 'utf8'),
     ) as { protocol: number; entries: unknown[] };

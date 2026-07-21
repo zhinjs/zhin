@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { createPluginRegisterHostApi, getRegisterFn } from "./loadConsoleEntries.js";
+import {
+  createPluginRegisterHostApi,
+  getRegisterFn,
+  resolveEntryRegister,
+} from "./loadConsoleEntries.js";
 
 describe("console entries bootstrap", () => {
   it("resolves named register export", () => {
@@ -16,6 +20,29 @@ describe("console entries bootstrap", () => {
     expect(getRegisterFn({ default: {} })).toBeNull();
   });
 
+  it("synthesizes register from default component + entry.route", () => {
+    const Page = () => null;
+    const register = resolveEntryRegister(
+      { default: Page, meta: { title: "Sandbox", icon: "Box" } },
+      { id: "sandbox", resolvedModule: "/assets/client/sandbox.js", route: "/p-sandbox" } as any,
+    );
+    expect(typeof register).toBe("function");
+    const addRoute = vi.fn();
+    const createElement = vi.fn((c: unknown) => ({ type: c }));
+    register!({
+      React: { createElement } as any,
+      addRoute,
+      addPage: addRoute,
+      addTool: vi.fn(),
+    });
+    expect(addRoute).toHaveBeenCalledWith(expect.objectContaining({
+      path: "/p-sandbox",
+      name: "Sandbox",
+      icon: "Box",
+    }));
+    expect(createElement).toHaveBeenCalledWith(Page);
+  });
+
   it("creates a host API with addPage aliased to addRoute", () => {
     const React = {} as any;
     const addRoute = vi.fn();
@@ -29,4 +56,3 @@ describe("console entries bootstrap", () => {
     expect(api.addTool({ id: "t", name: "T" })).toBe("tool-id");
   });
 });
-

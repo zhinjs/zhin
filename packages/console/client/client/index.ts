@@ -46,6 +46,7 @@ export {
   getRegisterFn,
   loadConsoleEntries,
   registerConsolePluginsFromEntries,
+  resolveEntryRegister,
   type CreatePluginRegisterHostApiOptions,
   type FetchConsoleEntriesOptions,
   type LoadConsoleEntriesOptions,

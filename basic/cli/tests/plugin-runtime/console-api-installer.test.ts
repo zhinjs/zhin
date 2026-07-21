@@ -17,9 +17,12 @@ import {
   buildPluginFeatures,
   buildPluginListItem,
   displayConsolePath,
+  flattenConfigDocument,
   getSystemStatusData,
+  jsonSchemaToConsoleSchema,
   listSnapshotPlugins,
   registerConsoleApiRoutes,
+  writeConfigKey,
 } from '../../src/plugin-runtime/console-api-installer.js';
 
 const hosts: HttpHost[] = [];
@@ -606,5 +609,109 @@ describe('console SSE events', () => {
     expect(frames).toContain('"keys":["port"]');
 
     reader.cancel().catch(() => undefined);
+  });
+});
+
+describe('config document flatten / write namespace', () => {
+  it('flattens plugins.<key> to top-level for Console config:get-all', () => {
+    const flat = flattenConfigDocument({
+      http: { port: 8086 },
+      plugins: {
+        sandbox: { endpoints: [{ name: 'bot' }] },
+        icqq: { name: '123' },
+      },
+    });
+    expect(flat.http).toEqual({ port: 8086 });
+    expect(flat.sandbox).toEqual({ endpoints: [{ name: 'bot' }] });
+    expect(flat.icqq).toEqual({ name: '123' });
+    expect(flat.plugins).toBeUndefined();
+  });
+
+  it('writes host keys to top-level and plugins under plugins.*', () => {
+    const document: Record<string, unknown> = { plugins: { sandbox: {} } };
+    writeConfigKey(document, 'http', { port: 9 });
+    writeConfigKey(document, 'sandbox', { endpoints: [] });
+    writeConfigKey(document, 'new-plugin', { enabled: true });
+    expect(document.http).toEqual({ port: 9 });
+    expect((document.plugins as Record<string, unknown>).sandbox).toEqual({ endpoints: [] });
+    expect((document.plugins as Record<string, unknown>)['new-plugin']).toEqual({ enabled: true });
+  });
+});
+
+describe('jsonSchemaToConsoleSchema', () => {
+  it('converts object properties to Console Schema object map', () => {
+    const consoleSchema = jsonSchemaToConsoleSchema({
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'QQ uin' },
+        autoReconnect: { type: 'boolean', default: true },
+        endpoints: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { name: { type: 'string' } },
+            required: ['name'],
+          },
+        },
+      },
+      required: ['name'],
+    });
+    expect(consoleSchema).toMatchObject({
+      type: 'object',
+      object: {
+        name: { type: 'string', key: 'name', description: 'QQ uin', required: true },
+        autoReconnect: { type: 'boolean', key: 'autoReconnect', default: true },
+        endpoints: {
+          type: 'list',
+          key: 'endpoints',
+          inner: {
+            type: 'object',
+            object: {
+              name: { type: 'string', key: 'name', required: true },
+            },
+            // dual-emit for PluginConfigForm nested list items
+            dict: {
+              name: { type: 'string', key: 'name', required: true },
+            },
+            properties: {
+              name: { type: 'string', key: 'name', required: true },
+            },
+          },
+        },
+      },
+      // top-level dual-emit
+      dict: expect.any(Object),
+      properties: expect.any(Object),
+    });
+    expect(consoleSchema?.dict).toEqual(consoleSchema?.object);
+    expect(consoleSchema?.properties).toEqual(consoleSchema?.object);
+  });
+
+  it('maps enum to options and integer to number', () => {
+    const consoleSchema = jsonSchemaToConsoleSchema({
+      type: 'object',
+      properties: {
+        outboundMedia: { type: 'string', enum: ['file', 'base64'] },
+        port: { type: 'integer', minimum: 1, maximum: 65535 },
+      },
+    });
+    expect(consoleSchema?.object).toMatchObject({
+      outboundMedia: {
+        type: 'string',
+        options: [
+          { label: 'file', value: 'file' },
+          { label: 'base64', value: 'base64' },
+        ],
+      },
+      port: { type: 'number', min: 1, max: 65535 },
+    });
+  });
+
+  it('passes through already-converted Console Schema JSON', () => {
+    const input = {
+      type: 'object',
+      object: { name: { type: 'string', key: 'name' } },
+    };
+    expect(jsonSchemaToConsoleSchema(input)).toEqual(input);
   });
 });
