@@ -36,6 +36,7 @@ import {
   component,
   raw,
   type OutboundEnvelope,
+  type RuntimeMessageEvent,
   type SendContent,
 } from '../../src/plugin-runtime/im/index.js';
 
@@ -155,6 +156,117 @@ describe('IM Runtime', () => {
     await fixture.store.close();
   });
 
+  it('emits inbound and outbound message events via onMessage', async () => {
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent);
+    const events: RuntimeMessageEvent[] = [];
+    const unsubscribe = fixture.im.onMessage((event) => events.push(event));
+
+    await fixture.im.receive({
+      adapter: fixture.adapter.id,
+      target: 'group:room-1',
+      content: 'hello console',
+      sender: 'alice',
+      id: 'msg-1',
+    });
+
+    const inbound = events.find((event) => event.direction === 'inbound');
+    expect(inbound).toMatchObject({
+      direction: 'inbound',
+      adapter: fixture.adapter.id,
+      target: 'group:room-1',
+      sender: 'alice',
+      channelType: 'group',
+      contentPreview: 'hello console',
+      messageId: 'msg-1',
+    });
+    expect(typeof inbound?.timestamp).toBe('number');
+
+    // 未匹配消息也触发入站事件（无回复时仅有 inbound 一条）
+    events.length = 0;
+    await fixture.im.receive({
+      adapter: fixture.adapter.id,
+      target: 'room-2',
+      content: 'no command here',
+    });
+    expect(events.map((event) => event.direction)).toEqual(['inbound']);
+
+    await fixture.im.send({
+      adapter: fixture.adapter.id,
+      target: 'room-3',
+      requester: rootPluginId(),
+      content: raw({ text: 'outbound hello' }),
+    });
+    const outbound = events.find((event) => event.direction === 'outbound');
+    expect(outbound).toMatchObject({
+      direction: 'outbound',
+      adapter: fixture.adapter.id,
+      target: 'room-3',
+      requester: rootPluginId(),
+      contentPreview: 'outbound hello',
+    });
+
+    unsubscribe();
+    events.length = 0;
+    await fixture.im.receive({
+      adapter: fixture.adapter.id,
+      target: 'room-4',
+      content: 'after unsubscribe',
+    });
+    expect(events).toEqual([]);
+
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
+  it('truncates content previews to 200 chars and survives listener errors', async () => {
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent);
+    const events: RuntimeMessageEvent[] = [];
+    fixture.im.onMessage(() => { throw new Error('broken listener'); });
+    fixture.im.onMessage((event) => events.push(event));
+
+    const longContent = 'x'.repeat(500);
+    await fixture.im.receive({
+      adapter: fixture.adapter.id,
+      target: 'room-1',
+      content: longContent,
+    });
+
+    const inbound = events.find((event) => event.direction === 'inbound');
+    expect(inbound?.contentPreview).toHaveLength(201);
+    expect(inbound?.contentPreview.endsWith('…')).toBe(true);
+    expect(inbound?.contentPreview.startsWith('x'.repeat(200))).toBe(true);
+
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
+  it('previews outbound wire segments as text', async () => {
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      middleware: false,
+    });
+    const events: RuntimeMessageEvent[] = [];
+    fixture.im.onMessage((event) => events.push(event));
+
+    await fixture.im.send({
+      adapter: fixture.adapter.id,
+      target: 'room-1',
+      requester: rootPluginId(),
+      content: raw([
+        { type: 'text', data: { text: 'part-a' } },
+        { type: 'image', data: { base64: 'AAAA' } },
+      ]),
+    });
+
+    const outbound = events.find((event) => event.direction === 'outbound');
+    expect(outbound?.contentPreview).toBe('part-a[image]');
+
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
   it('keeps one generation for an in-flight inbound pipeline during commit', async () => {
     const sent: unknown[] = [];
     let releaseCommand!: () => void;
@@ -203,6 +315,7 @@ async function createFixture(
   capture?: (message: Message) => void,
   commandGate?: Promise<void>,
   commandStarted?: () => void,
+  options?: { middleware?: boolean },
 ) {
   const root = rootPluginId();
   const adapter = createCapabilitySlot({
@@ -285,12 +398,12 @@ async function createFixture(
       },
     }),
   });
+  const withMiddleware = options?.middleware !== false;
   const slots: readonly CapabilitySlot[] = [
     adapter,
     command,
     resultComponent,
-    inbound,
-    outbound,
+    ...(withMiddleware ? [inbound, outbound] : []),
   ];
   const base = baseState(slots);
   const view = createSnapshotView(0, base);
@@ -299,7 +412,9 @@ async function createFixture(
     [adapterFeatureId, adapters],
     [commandFeatureId, new CommandIndex([command], view)],
     [componentFeatureId, new ComponentIndex([resultComponent], view)],
-    [middlewareFeatureId, new MiddlewareIndex([inbound, outbound], view)],
+    ...(withMiddleware
+      ? [[middlewareFeatureId, new MiddlewareIndex([inbound, outbound], view)] as const]
+      : []),
   ]);
   const store = new SnapshotStore({ ...base, projections });
   const im = new ImRuntime();

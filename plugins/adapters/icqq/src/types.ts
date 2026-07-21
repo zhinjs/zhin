@@ -76,3 +76,19 @@ export interface IpcMemberInfo {
   last_sent_time?: number;
   shutup_time?: number;
 }
+
+/**
+ * GET_SYSTEM_MSG 归一后的待处理请求（@icqqjs/cli NormalizedSystemMessage）。
+ * friendRequests 与 groupRequests 均为该形状，按 flag 处理。
+ */
+export interface IpcSystemMessage {
+  type: string;
+  user_id?: number;
+  nickname?: string;
+  group_id?: number;
+  group_name?: string;
+  comment?: string;
+  flag?: string;
+  seq?: number;
+  time?: number;
+}

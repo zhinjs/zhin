@@ -38,7 +38,7 @@ import {
   type IpcResponse,
   type ResolvedIcqqConfig,
 } from './protocol.js';
-import type { IpcFriendInfo, IpcGroupInfo } from './types.js';
+import type { IpcFriendInfo, IpcGroupInfo, IpcMemberInfo, IpcSystemMessage } from './types.js';
 
 const logger = getLogger('icqq');
 
@@ -404,6 +404,181 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     }
   }
 
+  // ── 社交/群管（Console endpoint RPC 探测面）────────────────────────
+  // console-rpc-extended.ts 按方法名探测这些接口；全部薄封装走 IPC daemon。
+
+  /** Console endpoint:friends —— 好友列表（LIST_FRIENDS，归一为 {user_id, nickname, remark}）。 */
+  async getFriendList(): Promise<Array<{ user_id: number; nickname: string; remark: string }>> {
+    const resp = await this.#mustRequest(Actions.LIST_FRIENDS, undefined, '获取好友列表');
+    const list = Array.isArray(resp.data) ? (resp.data as IpcFriendInfo[]) : [];
+    return list.map((f) => ({
+      user_id: f.user_id,
+      nickname: f.nickname,
+      remark: f.remark ?? '',
+    }));
+  }
+
+  /** Console endpoint:groups —— 群列表（LIST_GROUPS，归一为 {group_id, name}）。 */
+  async getGroupList(): Promise<Array<{ group_id: number; name: string }>> {
+    const resp = await this.#mustRequest(Actions.LIST_GROUPS, undefined, '获取群列表');
+    const list = Array.isArray(resp.data) ? (resp.data as IpcGroupInfo[]) : [];
+    return list.map((g) => ({
+      group_id: g.group_id,
+      name: g.group_name,
+    }));
+  }
+
+  /** Console endpoint:groupMembers —— 群成员列表（LIST_GROUP_MEMBERS，字段对齐 daemon 返回）。 */
+  async getGroupMemberList(groupId: number | string): Promise<IpcMemberInfo[]> {
+    const resp = await this.#mustRequest(
+      Actions.LIST_GROUP_MEMBERS,
+      { group_id: toNumericId(groupId, 'group_id') },
+      '获取群成员列表',
+    );
+    return Array.isArray(resp.data) ? (resp.data as IpcMemberInfo[]) : [];
+  }
+
+  /** getGroupMemberList 别名（console 探测 listMembers / getMemberList）。 */
+  listMembers(groupId: number | string): Promise<IpcMemberInfo[]> {
+    return this.getGroupMemberList(groupId);
+  }
+
+  getMemberList(groupId: number | string): Promise<IpcMemberInfo[]> {
+    return this.getGroupMemberList(groupId);
+  }
+
+  /**
+   * Console endpoint:requestApprove —— id 为 console inbox 行的 platform_request_id。
+   * 先 GET_SYSTEM_MSG 按 flag（回退 seq）定位请求，再按类型路由 handle_friend/group_request。
+   */
+  async approveRequest(id: string, remark?: string): Promise<void> {
+    await this.#handleSystemRequest(id, true, { remark });
+  }
+
+  async rejectRequest(id: string, reason?: string): Promise<void> {
+    await this.#handleSystemRequest(id, false, { reason });
+  }
+
+  /** Console endpoint:deleteFriend —— FRIEND_DELETE。 */
+  async deleteFriend(userId: number | string): Promise<void> {
+    await this.#mustRequest(
+      Actions.FRIEND_DELETE,
+      { user_id: toNumericId(userId, 'user_id') },
+      '删除好友',
+    );
+  }
+
+  /** deleteFriend 别名（console 探测 delete_friend）。 */
+  delete_friend(userId: number | string): Promise<void> {
+    return this.deleteFriend(userId);
+  }
+
+  /** Console endpoint:groupKick —— GROUP_KICK。 */
+  async removeMember(groupId: number | string, userId: number | string): Promise<void> {
+    await this.#mustRequest(
+      Actions.GROUP_KICK,
+      { group_id: toNumericId(groupId, 'group_id'), user_id: toNumericId(userId, 'user_id') },
+      '踢出群成员',
+    );
+  }
+
+  kickMember(groupId: number | string, userId: number | string): Promise<void> {
+    return this.removeMember(groupId, userId);
+  }
+
+  setGroupKick(groupId: number | string, userId: number | string): Promise<void> {
+    return this.removeMember(groupId, userId);
+  }
+
+  /** Console endpoint:groupMute —— GROUP_MUTE（duration 秒，默认 600）。 */
+  async muteMember(groupId: number | string, userId: number | string, duration = 600): Promise<void> {
+    await this.#mustRequest(
+      Actions.GROUP_MUTE,
+      {
+        group_id: toNumericId(groupId, 'group_id'),
+        user_id: toNumericId(userId, 'user_id'),
+        duration,
+      },
+      '禁言群成员',
+    );
+  }
+
+  banMember(groupId: number | string, userId: number | string, duration = 600): Promise<void> {
+    return this.muteMember(groupId, userId, duration);
+  }
+
+  setGroupMute(groupId: number | string, userId: number | string, duration = 600): Promise<void> {
+    return this.muteMember(groupId, userId, duration);
+  }
+
+  /** Console endpoint:groupAdmin —— SET_GROUP_ADMIN（enable 默认 true）。 */
+  async setModerator(groupId: number | string, userId: number | string, enable = true): Promise<void> {
+    await this.#mustRequest(
+      Actions.SET_GROUP_ADMIN,
+      {
+        group_id: toNumericId(groupId, 'group_id'),
+        user_id: toNumericId(userId, 'user_id'),
+        enable,
+      },
+      '设置群管理员',
+    );
+  }
+
+  setAdmin(groupId: number | string, userId: number | string, enable = true): Promise<void> {
+    return this.setModerator(groupId, userId, enable);
+  }
+
+  setGroupAdmin(groupId: number | string, userId: number | string, enable = true): Promise<void> {
+    return this.setModerator(groupId, userId, enable);
+  }
+
+  /** IPC 请求并统一错误上下文：daemon 返回 ok=false 时抛出带操作名的错误。 */
+  async #mustRequest(
+    action: string,
+    params: Record<string, unknown> | undefined,
+    label: string,
+  ): Promise<IpcResponse> {
+    const resp = await this.request(action, params);
+    if (!resp.ok) {
+      throw new Error(`icqq ${label}失败: ${resp.error ?? 'daemon 未返回错误详情'}`);
+    }
+    return resp;
+  }
+
+  /** 按 flag/seq 在 GET_SYSTEM_MSG 中定位请求，路由到好友/群请求处理 action。 */
+  async #handleSystemRequest(
+    id: string,
+    approve: boolean,
+    extra: { remark?: string; reason?: string },
+  ): Promise<void> {
+    const resp = await this.#mustRequest(Actions.GET_SYSTEM_MSG, undefined, '获取待处理请求');
+    const data = resp.data as
+      | { friendRequests?: unknown; groupRequests?: unknown }
+      | undefined;
+    const friendRequests = Array.isArray(data?.friendRequests)
+      ? (data.friendRequests as IpcSystemMessage[])
+      : [];
+    const groupRequests = Array.isArray(data?.groupRequests)
+      ? (data.groupRequests as IpcSystemMessage[])
+      : [];
+    const matches = (m: IpcSystemMessage): boolean =>
+      m.flag === id || (m.seq != null && String(m.seq) === id);
+    const friend = friendRequests.find(matches);
+    const group = friend ? undefined : groupRequests.find(matches);
+    const target = friend ?? group;
+    if (!target?.flag) {
+      throw new Error(`icqq 未找到待处理请求: ${id}（GET_SYSTEM_MSG 中无匹配 flag/seq）`);
+    }
+    const params: Record<string, unknown> = { flag: target.flag, approve };
+    if (friend) {
+      if (extra.remark) params.remark = extra.remark;
+      await this.#mustRequest(Actions.HANDLE_FRIEND_REQUEST, params, '处理好友请求');
+    } else {
+      if (extra.reason) params.reason = extra.reason;
+      await this.#mustRequest(Actions.HANDLE_GROUP_REQUEST, params, '处理群请求');
+    }
+  }
+
   /** Test / internal: admit when open. */
   admit(msg: IcqqInboundMessage): void {
     if (!this.#open) return;
@@ -534,6 +709,15 @@ function buildIcqqQuoteMetadata(
     : '';
   if (quoteText) metadata.quote_content = quoteText;
   return metadata;
+}
+
+/** console RPC 传入的 gid/uid 可能是字符串，统一收敛为数字。 */
+function toNumericId(value: number | string, label: string): number {
+  const n = Number(value);
+  if (!Number.isFinite(n) || String(value).trim() === '') {
+    throw new TypeError(`icqq ${label} 必须是数字: ${String(value)}`);
+  }
+  return n;
 }
 
 async function defaultCreateIpc(config: ResolvedIcqqConfig): Promise<IcqqIpcTransport> {

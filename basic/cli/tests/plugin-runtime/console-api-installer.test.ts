@@ -2,9 +2,9 @@ import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createHttpHost, type HttpHost } from '@zhin.js/host-http';
+import { createHttpHost, createConsoleEventHub, type HttpHost } from '@zhin.js/host-http';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
-import type { ImRuntime } from '@zhin.js/core/runtime';
+import type { ImRuntime, RuntimeMessageEvent } from '@zhin.js/core/runtime';
 import type { RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import {
   buildConsoleEntriesBody,
@@ -328,5 +328,152 @@ describe('console REST routes', () => {
     const body = await res.json() as { total: number; data: unknown[] };
     expect(body.total).toBe(0);
     expect(body.data).toEqual([]);
+  });
+});
+
+describe('console SSE events', () => {
+  let projectRoot: string;
+
+  beforeEach(async () => {
+    await makePackageRoot();
+    projectRoot = tempRoots[tempRoots.length - 1];
+  });
+
+  it('streams sync/init-data then fans out message events from ImRuntime', async () => {
+    let messageListener: ((event: RuntimeMessageEvent) => void) | undefined;
+    const im = {
+      listEndpoints: () => [],
+      onMessage(listener: (event: RuntimeMessageEvent) => void) {
+        messageListener = listener;
+        return () => { messageListener = undefined; };
+      },
+    } as unknown as ImRuntime;
+    const hub = createConsoleEventHub();
+    const host = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(host);
+    registerConsoleApiRoutes(
+      host, stubConsoleRuntime(), projectRoot, '/api',
+      im, undefined, undefined, undefined, undefined, hub,
+    );
+    const { port } = await host.listen();
+
+    const res = await fetch(`http://127.0.0.1:${port}/api/events`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/event-stream');
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+
+    const readUntil = async (marker: string): Promise<string> => {
+      let buffer = '';
+      for (let attempt = 0; attempt < 50 && !buffer.includes(marker); attempt += 1) {
+        const { value, done } = await Promise.race([
+          reader.read(),
+          new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error(`timeout waiting for ${marker}`)), 5_000);
+          }),
+        ]);
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+      }
+      expect(buffer).toContain(marker);
+      return buffer;
+    };
+
+    const first = await readUntil('event: init-data');
+    expect(first).toContain('event: sync');
+    expect(first).toContain('"key":"pages"');
+
+    // 等 hub 订阅挂上再发事件
+    for (let attempt = 0; attempt < 50 && hub.subscriberCount === 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(hub.subscriberCount).toBe(1);
+
+    messageListener?.({
+      direction: 'inbound',
+      adapter: 'root\0zhin.adapter\0icqq' as RuntimeMessageEvent['adapter'],
+      target: 'group:42',
+      sender: 'alice',
+      channelType: 'group',
+      contentPreview: 'hello console',
+      messageId: 'msg-1',
+      timestamp: 1_700_000_000_000,
+    });
+
+    const frames = await readUntil('event: message.receive');
+    expect(frames).toContain('event: endpoint:message');
+    expect(frames).toContain('"adapter":"icqq"');
+    expect(frames).toContain('"endpoint":"icqq"');
+    expect(frames).toContain('"sender":"alice"');
+    expect(frames).toContain('"content":"hello console"');
+    expect(frames).toContain('"direction":"inbound"');
+
+    // 出站 → message.receive（direction: outbound）
+    messageListener?.({
+      direction: 'outbound',
+      adapter: 'root\0zhin.adapter\0icqq' as RuntimeMessageEvent['adapter'],
+      target: 'group:42',
+      requester: 'root' as RuntimeMessageEvent['requester'],
+      contentPreview: 'reply text',
+      timestamp: 1_700_000_000_001,
+    });
+    const outbound = await readUntil('"direction":"outbound"');
+    expect(outbound).toContain('"content":"reply text"');
+
+    reader.cancel().catch(() => undefined);
+  });
+
+  it('publishes config:updated over SSE after config:set RPC', async () => {
+    const hub = createConsoleEventHub();
+    const host = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(host);
+    registerConsoleApiRoutes(
+      host, stubConsoleRuntime(), projectRoot, '/api',
+      undefined, undefined, undefined, undefined, undefined, hub,
+    );
+    const { port } = await host.listen();
+
+    const res = await fetch(`http://127.0.0.1:${port}/api/events`);
+    expect(res.status).toBe(200);
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    const pending = (async () => {
+      let buffer = '';
+      for (let attempt = 0; attempt < 50 && !buffer.includes('event: config:updated'); attempt += 1) {
+        const { value, done } = await Promise.race([
+          reader.read(),
+          new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('timeout waiting for config:updated')), 5_000);
+          }),
+        ]);
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+      }
+      return buffer;
+    })();
+
+    for (let attempt = 0; attempt < 50 && hub.subscriberCount === 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(hub.subscriberCount).toBe(1);
+
+    const rpc = await fetch(`http://127.0.0.1:${port}/api/console/request`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        type: 'config:set',
+        requestId: 1,
+        pluginName: 'http',
+        data: { port: 8086 },
+      }),
+    });
+    expect(rpc.status).toBe(200);
+
+    const frames = await pending;
+    expect(frames).toContain('event: config:updated');
+    expect(frames).toContain('"pluginName":"http"');
+    expect(frames).toContain('"keys":["port"]');
+
+    reader.cancel().catch(() => undefined);
   });
 });

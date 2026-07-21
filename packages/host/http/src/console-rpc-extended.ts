@@ -29,6 +29,16 @@ export interface ConsoleRpcExtendedCtx {
   resolveEndpoint?: (adapter: string, endpointId: string) => unknown;
   /** Plugin Runtime DatabaseHost 的 models 视图。 */
   databaseHost?: { models: { get(name: string): unknown } };
+  /** Agent Host 持久化调度引擎（@zhin.js/agent getAssistantRuntime().engine），未 init 时返回 null。 */
+  resolveScheduleEngine?: () => ConsoleScheduleEngine | null | undefined;
+}
+
+export interface ConsoleScheduleEngine {
+  addJob(job: Record<string, unknown>): Promise<Record<string, unknown>>;
+  removeJob(id: string): Promise<boolean>;
+  pauseJob(id: string): Promise<boolean>;
+  resumeJob(id: string): Promise<boolean>;
+  listJobs(): Promise<Record<string, unknown>[]>;
 }
 
 export type ExtendedRpcResult = { data: unknown } | { error: string };
@@ -87,10 +97,11 @@ export async function dispatchExtendedConsoleRpc(
       return listSchedule(ctx);
 
     case 'cron:add':
+      return addCron(d, ctx);
     case 'cron:remove':
     case 'cron:pause':
     case 'cron:resume':
-      return { error: CRON_NOT_WIRED };
+      return mutateCron(type, d, ctx);
 
     case 'endpoint:requests':
       return listPendingRequests(d, ctx);
@@ -149,7 +160,7 @@ export async function dispatchExtendedConsoleRpc(
 
 // ---------------------------------------------------------------- cron
 
-function listSchedule(ctx: ConsoleRpcExtendedCtx): ExtendedRpcResult {
+function listSchedule(ctx: ConsoleScheduleListCtx): Promise<ExtendedRpcResult> | ExtendedRpcResult {
   const host = ctx.scheduleHost as { list?: () => unknown } | undefined;
   if (!host || typeof host.list !== 'function') {
     return { error: '调度服务未配置（scheduleHost 未挂载）' };
@@ -166,8 +177,83 @@ function listSchedule(ctx: ConsoleRpcExtendedCtx): ExtendedRpcResult {
         cron: job.cron,
         ...(typeof job.description === 'string' ? { description: job.description } : {}),
       }));
-    // persistent 引擎未接入新 Runtime，返回空数组保持 legacy 形状。
-    return { data: { memory, persistent: [] } };
+    return listPersistentJobs(ctx).then((persistent) => ({ data: { memory, persistent } }));
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+}
+
+type ConsoleScheduleListCtx = ConsoleRpcExtendedCtx;
+
+/** 持久化任务（Agent Host ScheduleJobEngine）→ 前端 PersistentCron 形状。 */
+async function listPersistentJobs(ctx: ConsoleRpcExtendedCtx): Promise<Record<string, unknown>[]> {
+  const engine = ctx.resolveScheduleEngine?.();
+  if (!engine) return [];
+  try {
+    const jobs = await engine.listJobs();
+    return jobs.map((job) => ({
+      id: job.id,
+      label: job.label ?? job.id,
+      cronExpression: (job.schedule as { cron?: string } | undefined)?.cron ?? '',
+      prompt: (job.action as { prompt?: string } | undefined)?.prompt ?? '',
+      enabled: job.enabled !== false,
+      source: job.source ?? 'manual',
+      lastExecutedAt: (job.state as { lastExecutedAt?: number } | undefined)?.lastExecutedAt,
+      lastStatus: (job.state as { lastStatus?: string } | undefined)?.lastStatus,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function addCron(
+  d: Record<string, unknown>,
+  ctx: ConsoleRpcExtendedCtx,
+): Promise<ExtendedRpcResult> {
+  const engine = ctx.resolveScheduleEngine?.();
+  if (!engine) return { error: CRON_NOT_WIRED };
+  const cronExpression = String(d.cronExpression ?? '').trim();
+  const prompt = String(d.prompt ?? '').trim();
+  if (!cronExpression) return { error: 'cronExpression is required' };
+  if (!prompt) return { error: 'prompt is required' };
+  const label = typeof d.label === 'string' && d.label.trim() ? d.label.trim() : undefined;
+  const context = (d.context ?? {}) as Record<string, unknown>;
+  const target = context.target ?? context.channel;
+  const job = {
+    id: `console-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    ...(label ? { label } : {}),
+    enabled: true,
+    schedule: { kind: 'solar', cron: cronExpression },
+    action: { kind: 'agent', prompt },
+    notify: target
+      ? { channel: 'im', target }
+      : { channel: 'silent' },
+    source: 'manual',
+  };
+  try {
+    const created = await engine.addJob(job);
+    return { data: { job: created, success: true } };
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+}
+
+async function mutateCron(
+  type: 'cron:remove' | 'cron:pause' | 'cron:resume',
+  d: Record<string, unknown>,
+  ctx: ConsoleRpcExtendedCtx,
+): Promise<ExtendedRpcResult> {
+  const engine = ctx.resolveScheduleEngine?.();
+  if (!engine) return { error: CRON_NOT_WIRED };
+  const id = String(d.id ?? '').trim();
+  if (!id) return { error: 'id is required' };
+  try {
+    const ok = type === 'cron:remove'
+      ? await engine.removeJob(id)
+      : type === 'cron:pause'
+        ? await engine.pauseJob(id)
+        : await engine.resumeJob(id);
+    return ok ? { data: { success: true } } : { error: `任务不存在: ${id}` };
   } catch (error) {
     return { error: errorMessage(error) };
   }

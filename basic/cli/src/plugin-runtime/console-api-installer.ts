@@ -13,11 +13,13 @@ import {
   listEnvFiles,
   readProjectFile,
   saveProjectFile,
+  createConsoleEventHub,
+  type ConsoleEventHub,
   type HttpHost,
   type RuntimeConsolePage,
   type RuntimeEndpointSummary,
 } from '@zhin.js/host-http';
-import type { ImRuntime } from '@zhin.js/core/runtime';
+import type { ImRuntime, RuntimeMessageEvent } from '@zhin.js/core/runtime';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import type { DatabaseHost, PluginNodeSnapshot, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
@@ -30,6 +32,9 @@ import { registerConsoleRestPages, type ConsoleAgentRuntime } from '@zhin.js/hos
  */
 let agentModule: {
   getSessionTreeRuntime?: () => ConsoleAgentRuntime['sessionTree'];
+  getAssistantRuntime?: () => {
+    engine: import('@zhin.js/host-http').ConsoleScheduleEngine;
+  } | null;
 } | null | undefined;
 
 void import('@zhin.js/agent')
@@ -45,6 +50,42 @@ function resolveConsoleAgentRuntime(): ConsoleAgentRuntime | undefined {
 
 const publicAccess = Object.freeze({ permissions: [] as string[], roles: [] as string[] });
 
+/** 已挂消息桥的 ImRuntime（installResources 按 generation 重跑，订阅只挂一次）。 */
+const messageBridgeInstallations = new WeakSet<ImRuntime>();
+
+/**
+ * ImRuntime 消息事件 → SSE 事件映射（对齐 console 前端消费形态；
+ * content 只发截断预览，不发完整原始段）。
+ */
+export function publishMessageEvent(hub: ConsoleEventHub, event: RuntimeMessageEvent): void {
+  // CapabilityId 形如 `${owner}\0${feature}\0${localName}`；localName 即 endpoint 槽名。
+  const localName = String(event.adapter).split('\0').pop() ?? String(event.adapter);
+  if (event.direction === 'inbound') {
+    const data = {
+      direction: 'inbound' as const,
+      adapter: localName,
+      endpoint: localName,
+      sender: event.sender,
+      target: event.target,
+      content: event.contentPreview,
+      messageId: event.messageId,
+      timestamp: event.timestamp,
+    };
+    hub.publish('endpoint:message', data);
+    hub.publish('message.receive', data);
+    return;
+  }
+  hub.publish('message.receive', {
+    direction: 'outbound' as const,
+    adapter: localName,
+    endpoint: localName,
+    requester: event.requester,
+    target: event.target,
+    content: event.contentPreview,
+    timestamp: event.timestamp,
+  });
+}
+
 export function installConsoleApi(options: {
   readonly console: ConsoleRuntime;
   readonly projectRoot: string;
@@ -59,6 +100,8 @@ export function installConsoleApi(options: {
   readonly scheduleHost?: unknown;
   /** Full-scope `system:restart` — typically `process.exit(51)` for CLI daemon. */
   readonly onRestart?: () => void;
+  /** Shared console event hub (`hmr:reload` 等由 RootHost 层 publish）。 */
+  readonly eventHub?: ConsoleEventHub;
 }): RootResourceInstaller {
   const apiBase = normalizeBase(options.apiBase ?? '/api');
   return ({ resources }) => {
@@ -73,6 +116,7 @@ export function installConsoleApi(options: {
       options.databaseHost,
       options.snapshot,
       options.scheduleHost,
+      options.eventHub,
     );
   };
 }
@@ -87,8 +131,17 @@ export function registerConsoleApiRoutes(
   databaseHost?: DatabaseHost,
   snapshot?: () => RuntimeSnapshot | undefined,
   scheduleHost?: unknown,
+  eventHub?: ConsoleEventHub,
 ): void {
   const base = normalizeBase(apiBase);
+  const hub = eventHub ?? createConsoleEventHub();
+
+  // 消息事件桥（demo scope 同样推送；content 仅截断预览）。
+  // installResources 每个 generation 都会重跑，订阅只挂一次，避免重复推送。
+  if (im && typeof im.onMessage === 'function' && !messageBridgeInstallations.has(im)) {
+    messageBridgeInstallations.add(im);
+    im.onMessage((event) => publishMessageEvent(hub, event));
+  }
 
   // REST 六组（logs / marketplace / introspection / agent sessions 等，host-http 实现）
   registerConsoleRestPages(http, {
@@ -251,6 +304,7 @@ export function registerConsoleApiRoutes(
           databaseHost: databaseHost
             ? { models: databaseHost.models }
             : undefined,
+          resolveScheduleEngine: () => agentModule?.getAssistantRuntime?.()?.engine ?? null,
         },
         listPluginKeys: async () => {
           const document = await readProjectConfigDocument(projectRoot);
@@ -261,6 +315,7 @@ export function registerConsoleApiRoutes(
           }
           return [];
         },
+        publishEvent: (type, data) => hub.publish(type, data),
       });
       const match = pickRpcReply(message, payloads);
       if (!match) {
@@ -309,6 +364,7 @@ export function registerConsoleApiRoutes(
     });
     writeSse(response, 'sync', { key: 'pages', value: pages }, lastEventId ? undefined : '1');
     writeSse(response, 'init-data', { timestamp: Date.now() }, '2');
+    const unsubscribe = hub.subscribe(response);
     const timer = setInterval(() => {
       try {
         response.write(': keepalive\n\n');
@@ -318,6 +374,7 @@ export function registerConsoleApiRoutes(
     }, 15_000);
     request.once('close', () => {
       clearInterval(timer);
+      unsubscribe();
       try {
         response.end();
       } catch {

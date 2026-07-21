@@ -4,6 +4,7 @@ import { access, mkdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { YamlConfigDocument } from '@zhin.js/config-yaml';
 import { ImRuntime } from '@zhin.js/core/runtime';
+import { createConsoleEventHub } from '@zhin.js/host-http';
 import { setLevel, getLogger, formatCompact, type LogLevelInput } from '@zhin.js/logger';
 import {
   ConfigValidationError,
@@ -98,11 +99,16 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   const databaseHost = createDatabaseHost(databaseConfig);
   const scheduleHost = createScheduleHost();
   const consoleHost = createConsoleHostModules(options.root, !parsed.once && !parsed.noWatch);
+  // Console SSE 事件枢纽：/api/events 订阅方 + HMR/消息/配置事件 publish 方共享。
+  const consoleEventHub = createConsoleEventHub();
   const host = new RootHost({
     projectRoot: options.root,
     config,
     modules: consoleHost.modules,
     watch: !parsed.once && !parsed.noWatch,
+    onGenerationCommit: (generation) => {
+      consoleEventHub.publish('hmr:reload', { generation });
+    },
     environment: {
       name: parsed.environment,
       mode: parsed.mode,
@@ -150,6 +156,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
         im,
         databaseHost,
         scheduleHost,
+        eventHub: consoleEventHub,
         snapshot: () => host.runtime.controller.snapshots.current,
         onRestart: () => {
           // Exit 51: CLI daemon (`zhin start` / `zhin dev`) auto-restarts the process.

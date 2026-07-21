@@ -22,6 +22,11 @@ export interface RootHostOptions {
   onRestartRequired?(plan: ProcessInvalidationPlan): void | Promise<void>;
   onError?(error: unknown): void | Promise<void>;
   onPlan?(plan: InvalidationPlan): void | Promise<void>;
+  /**
+   * Generation commit 回调（初始 start 不触发；HMR reload / config patch
+   * 提交新 generation 后触发）。用于 Console `hmr:reload` SSE 推送。
+   */
+  onGenerationCommit?(generation: number): void;
 }
 
 export interface RootHostSnapshot {
@@ -66,6 +71,22 @@ export class RootHost {
         void Promise.resolve(this.#onError(error)).catch(() => undefined);
       },
     });
+    // plugin-runtime 没有 commit 钩子：在 CLI 层包装 controller.transact，
+    // 仅当 generation 号变化（真实 commit）时通知。初始 start 不经 transact。
+    const controller = this.runtime.controller;
+    const transact = controller.transact.bind(controller);
+    controller.transact = async (prepare) => {
+      const before = controller.generation;
+      const snapshot = await transact(prepare);
+      if (snapshot.generation !== before) {
+        try {
+          options.onGenerationCommit?.(snapshot.generation);
+        } catch {
+          // 通知失败不得影响已提交的 generation
+        }
+      }
+      return snapshot;
+    };
   }
 
   async start(): Promise<RootHostSnapshot> {

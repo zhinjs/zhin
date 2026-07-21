@@ -20,6 +20,10 @@ export {
 } from './token-registry.js';
 export { timingSafeEqualString } from './timing-safe-equal.js';
 export {
+  createConsoleEventHub,
+  type ConsoleEventHub,
+} from './console-events.js';
+export {
   buildOpenApiDocument,
   patternToOpenApiPath,
   routeRequiresBearerAuth,
@@ -61,3 +65,9 @@ export {
   type ConsoleRestCtx,
   type ConsoleRestPagesOptions,
 } from './console-rest-pages.js';
+export {
+  dispatchExtendedConsoleRpc,
+  type ConsoleRpcExtendedCtx,
+  type ConsoleScheduleEngine,
+  type ExtendedRpcResult,
+} from './console-rpc-extended.js';

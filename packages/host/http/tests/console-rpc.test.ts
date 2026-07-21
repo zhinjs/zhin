@@ -210,6 +210,56 @@ describe('runtime console RPC', () => {
     expect(document.http).toEqual({ port: 8080 });
   });
 
+  it('publishes config:updated after config:set / config:save-yaml and system:restarting on restart', async () => {
+    const published: Array<{ type: string; data: unknown }> = [];
+    const publishEvent = (type: string, data: unknown) => {
+      published.push({ type, data });
+    };
+
+    const set = await dispatchRuntimeConsoleRpc(
+      { type: 'config:set', requestId: 60, pluginName: 'http', data: { port: 8080, host: '0.0.0.0' } },
+      {
+        authScope: 'full',
+        listPages: async () => [],
+        setConfigKey: async () => ({ restartRequired: true }),
+        publishEvent,
+      },
+    );
+    expect(pickRpcReply({ type: 'config:set', requestId: 60 }, set)?.data).toMatchObject({
+      success: true,
+    });
+    expect(published).toEqual([
+      { type: 'config:updated', data: { pluginName: 'http', keys: ['port', 'host'] } },
+    ]);
+
+    published.length = 0;
+    await dispatchRuntimeConsoleRpc(
+      { type: 'config:save-yaml', requestId: 61, yaml: 'plugins: []\n' },
+      {
+        authScope: 'full',
+        listPages: async () => [],
+        writeConfigYaml: async () => undefined,
+        publishEvent,
+      },
+    );
+    expect(published).toEqual([
+      { type: 'config:updated', data: { pluginName: null, keys: [] } },
+    ]);
+
+    published.length = 0;
+    await dispatchRuntimeConsoleRpc(
+      { type: 'system:restart', requestId: 62 },
+      {
+        authScope: 'full',
+        listPages: async () => [],
+        requestRestart: () => undefined,
+        publishEvent,
+      },
+    );
+    expect(published).toHaveLength(1);
+    expect(published[0]?.type).toBe('system:restarting');
+  });
+
   it('keeps project files and environment values outside demo scope', async () => {
     const tree = await dispatchRuntimeConsoleRpc(
       { type: 'files:tree', requestId: 20 },

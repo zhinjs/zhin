@@ -57,6 +57,11 @@ export type RuntimeConsoleRpcContext = {
   database?: DatabaseHostConsole;
   /** Full-scope: request process restart (CLI daemon watches exit code). */
   requestRestart?(): Promise<void> | void;
+  /**
+   * Optional console event sink (`/api/events` SSE fan-out). Called after
+   * successful mutations: `config:updated` / `system:restarting`.
+   */
+  publishEvent?(type: string, data: unknown): void;
   /** Extended RPC surface（cron/schedule、endpoint 社交/inbox），fullScope 由 authScope 推导。 */
   extended?: Omit<ConsoleRpcExtendedCtx, 'fullScope'>;
 };
@@ -247,6 +252,7 @@ export async function dispatchRuntimeConsoleRpc(
           return payloads;
         }
         await ctx.writeConfigYaml(yaml);
+        ctx.publishEvent?.('config:updated', { pluginName: null, keys: [] });
         emit({
           requestId,
           data: { success: true, message: '配置已保存，需重启生效' },
@@ -271,6 +277,12 @@ export async function dispatchRuntimeConsoleRpc(
           return payloads;
         }
         const result = await ctx.setConfigKey(pluginName, message.data);
+        ctx.publishEvent?.('config:updated', {
+          pluginName,
+          keys: message.data && typeof message.data === 'object' && !Array.isArray(message.data)
+            ? Object.keys(message.data as Record<string, unknown>)
+            : [],
+        });
         emit({
           requestId,
           data: {
@@ -687,6 +699,7 @@ export async function dispatchRuntimeConsoleRpc(
           emit({ requestId, error: 'Process restart is not configured' });
           return payloads;
         }
+        ctx.publishEvent?.('system:restarting', { timestamp: Date.now() });
         emit({ requestId, data: { success: true, message: '正在重启...' } });
         // Delay so the HTTP response can flush (parity with legacy host-api).
         setTimeout(() => {

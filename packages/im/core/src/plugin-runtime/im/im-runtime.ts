@@ -27,6 +27,25 @@ import { normalizeOutboundPayload } from './outbound-segments.js';
 
 export const messageGatewayToken = createToken<MessageGateway>('zhin.im.message-gateway');
 
+/** Console 实时消息事件（SSE 推送源；content 仅为截断预览，不含完整原始段）。 */
+export interface RuntimeMessageEvent {
+  readonly direction: 'inbound' | 'outbound';
+  readonly adapter: CapabilityId;
+  readonly target: string;
+  /** inbound：发送者 id。 */
+  readonly sender?: string;
+  /** outbound：发起方插件。 */
+  readonly requester?: PluginId;
+  /** inbound：从 target 前缀解析的场景（`group:xx` → `group`）。 */
+  readonly channelType?: string;
+  /** 预览文本，截断至 200 字。 */
+  readonly contentPreview: string;
+  readonly messageId?: string;
+  readonly timestamp: number;
+}
+
+export const messagePreviewLimit = 200;
+
 export interface ImRuntimeOptions {
   readonly commandPrefix?: string;
   readonly renderer?: OutboundRenderer;
@@ -35,6 +54,7 @@ export interface ImRuntimeOptions {
 export class ImRuntime implements MessageGateway {
   readonly #dispatcher: MessageDispatcher;
   readonly #renderer: OutboundRenderer;
+  readonly #messageListeners = new Set<(event: RuntimeMessageEvent) => void>();
   #snapshots?: SnapshotStore;
   #unmatchedHandler?: (
     message: Message,
@@ -71,6 +91,25 @@ export class ImRuntime implements MessageGateway {
 
   install(resources: Scope): void {
     resources.provide(messageGatewayToken, this);
+  }
+
+  /**
+   * 订阅消息事件（入站 dispatch 完成后 / 出站发送成功后回调）。
+   * 返回注销函数。listener 抛错不会阻断消息链路。
+   */
+  onMessage(listener: (event: RuntimeMessageEvent) => void): () => void {
+    this.#messageListeners.add(listener);
+    return () => { this.#messageListeners.delete(listener); };
+  }
+
+  #emitMessage(event: RuntimeMessageEvent): void {
+    for (const listener of this.#messageListeners) {
+      try {
+        listener(event);
+      } catch {
+        // listener 异常不得影响消息收发
+      }
+    }
   }
 
   async receive(input: IncomingMessage): Promise<MessageDispatchResult> {
@@ -111,6 +150,18 @@ export class ImRuntime implements MessageGateway {
         },
         'inbound',
       );
+      this.#emitMessage({
+        direction: 'inbound',
+        adapter: input.adapter,
+        target: input.target,
+        ...(input.sender !== undefined ? { sender: input.sender } : {}),
+        ...(channelTypeOf(input.target)
+          ? { channelType: channelTypeOf(input.target) }
+          : {}),
+        contentPreview: previewText(input.content),
+        ...(input.id !== undefined ? { messageId: input.id } : {}),
+        timestamp: Date.now(),
+      });
       return result;
     } finally {
       active = false;
@@ -318,6 +369,14 @@ export class ImRuntime implements MessageGateway {
       },
       'outbound',
     );
+    this.#emitMessage({
+      direction: 'outbound',
+      adapter: request.adapter,
+      target: request.target,
+      requester: request.requester,
+      contentPreview: previewText(envelope.payload),
+      timestamp: Date.now(),
+    });
     return result;
   }
 
@@ -408,5 +467,42 @@ function normalizeConsoleContent(content: unknown): SendContent {
   // Array content passes through untouched, matching the legacy console RPC
   // contract (element arrays must not be stringified to '[object Object]').
   if (Array.isArray(content)) return content as SendContent;
+  return String(content);
+}
+
+/** target 前缀场景：`group:123` → `group`；无前缀返回 undefined。 */
+function channelTypeOf(target: string): string | undefined {
+  const match = /^([a-z0-9-]+):/iu.exec(target);
+  return match?.[1];
+}
+
+/** 消息内容 → 预览文本（截断 200 字）；wire 段取 `data.text`，其余段记 `[type]`。 */
+function previewText(content: unknown): string {
+  const text = flattenContent(content);
+  return text.length > messagePreviewLimit
+    ? `${text.slice(0, messagePreviewLimit)}…`
+    : text;
+}
+
+function flattenContent(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (content == null) return '';
+  if (Array.isArray(content)) {
+    return content.map((item) => flattenContent(item)).join('');
+  }
+  if (typeof content === 'object') {
+    const record = content as Record<string, unknown>;
+    const data = record.data as Record<string, unknown> | undefined;
+    if (typeof record.type === 'string') {
+      if (data && typeof data.text === 'string') return data.text;
+      return `[${record.type}]`;
+    }
+    if (typeof record.text === 'string') return record.text;
+    try {
+      return JSON.stringify(content) ?? '';
+    } catch {
+      return String(content);
+    }
+  }
   return String(content);
 }
