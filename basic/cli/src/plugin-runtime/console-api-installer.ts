@@ -6,6 +6,10 @@ import type { ServerResponse } from 'node:http';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { commandFeatureId, isCommandIndex } from '@zhin.js/command';
 import {
+  formatDisplayPath,
+  looksLikeAbsolutePath,
+} from '@zhin.js/logger';
+import {
   HttpBodyError,
   httpHostToken,
   readJsonBody,
@@ -57,6 +61,7 @@ function createAgentRuntimeResolver(
   projectRoot: string,
   getSnapshot?: () => RuntimeSnapshot | undefined,
 ): () => ConsoleAgentRuntime | undefined {
+  const display = (value: string) => displayConsolePath(value, projectRoot);
   return () => ({
     sessionTree: agentModule?.getSessionTreeRuntime?.() ?? undefined,
     introspection: {
@@ -68,7 +73,8 @@ function createAgentRuntimeResolver(
         return index.list().map((command) => ({
           pattern: command.name,
           desc: command.description ?? '',
-          plugin: command.source,
+          // source 常为绝对路径；控制台展示遵循 workspace→./…、HOME→~/…
+          plugin: display(command.source),
         }));
       },
       bindings: () => listIntrospectionBindings(projectRoot),
@@ -85,7 +91,7 @@ function createAgentRuntimeResolver(
               if (tool.hidden) continue;
               seen.set(tool.name, {
                 name: tool.name,
-                source: tool.source,
+                source: display(tool.source),
                 description: tool.description ?? '',
               });
             }
@@ -124,6 +130,15 @@ function createAgentRuntimeResolver(
       },
     },
   });
+}
+
+/**
+ * Console 返回给前端的路径字段：项目根内 → `./…`，HOME 内 → `~/…`。
+ * 逻辑名（`agent` / `builtin`）与相对虚路径原样返回，避免 path.resolve 误伤。
+ */
+export function displayConsolePath(value: string, projectRoot: string): string {
+  if (!value || !looksLikeAbsolutePath(value)) return value;
+  return formatDisplayPath(value, { projectRoot });
 }
 
 function resolveOrchestrator(): {
@@ -363,7 +378,10 @@ export function registerConsoleApiRoutes(
 
   http.route('GET', `${base}/plugins`, async (_request, response) => {
     try {
-      const plugins = listSnapshotPlugins(readSnapshot(snapshot)).map(buildPluginListItem);
+      const snap = readSnapshot(snapshot);
+      const endpointRows = im?.listEndpoints() ?? [];
+      const plugins = listSnapshotPlugins(snap)
+        .map((node) => buildPluginListItem(node, snap, endpointRows));
       writeJson(response, 200, { success: true, data: plugins, total: plugins.length });
     } catch (error) {
       writeJson(response, 500, {
@@ -392,7 +410,8 @@ export function registerConsoleApiRoutes(
       return;
     }
     try {
-      const node = listSnapshotPlugins(readSnapshot(snapshot))
+      const snap = readSnapshot(snapshot);
+      const node = listSnapshotPlugins(snap)
         .find((item) => item.instanceKey === name || item.packageName === name);
       if (!node) {
         writeJson(response, 404, { success: false, error: '插件不存在' });
@@ -400,7 +419,13 @@ export function registerConsoleApiRoutes(
       }
       writeJson(response, 200, {
         success: true,
-        data: buildPluginDetail(node, await readPackageVersion(node.packageRoot)),
+        data: buildPluginDetail(
+          node,
+          await readPackageVersion(node.packageRoot),
+          snap,
+          im?.listEndpoints(),
+          projectRoot,
+        ),
       });
     } catch (error) {
       writeJson(response, 500, {
@@ -815,26 +840,111 @@ export function buildConsoleStats(
   };
 }
 
-/** `GET /api/plugins` 列表项（legacy buildPluginListItem 对齐；features 暂无新 Runtime 数据源，给空数组）。 */
+/** Console 卡片单条 Feature 分组（对齐 legacy FeatureJSON）。 */
+export type ConsolePluginFeature = {
+  readonly name: string;
+  readonly icon: string;
+  readonly desc: string;
+  readonly count: number;
+  readonly items: readonly { readonly name: string; readonly desc?: string }[];
+};
+
+/**
+ * listEndpoints 返回形态：无 owner，用 adapter 平台类型（`@scope/adapter-icqq` → `icqq`）归属插件。
+ * 与 ImRuntime.listEndpoints / RuntimeEndpointSummary 对齐。
+ */
+export type ConsoleEndpointHint = {
+  readonly name: string;
+  readonly adapter: string;
+  readonly connected: boolean;
+};
+
+/** `GET /api/plugins` 列表项（legacy buildPluginListItem 对齐）。 */
 export type ConsolePluginListItem = {
   readonly name: string;
   readonly status: 'active' | 'inactive';
   readonly description: string;
-  readonly features: readonly unknown[];
+  readonly features: readonly ConsolePluginFeature[];
   readonly packageName: string;
   readonly instanceKey: string;
 };
 
-export function buildPluginListItem(node: PluginNodeSnapshot): ConsolePluginListItem {
+export function buildPluginListItem(
+  node: PluginNodeSnapshot,
+  snapshot?: RuntimeSnapshot,
+  endpoints?: readonly ConsoleEndpointHint[],
+): ConsolePluginListItem {
   return {
     name: node.instanceKey,
     // Snapshot 中的节点均为当前 generation 已加载插件。
     status: 'active',
     description: node.metadata?.displayName ?? node.packageName,
-    features: Object.freeze([]),
+    features: buildPluginFeatures(node, snapshot, endpoints),
     packageName: node.packageName,
     instanceKey: node.instanceKey,
   };
+}
+
+/**
+ * Console 卡片 Feature 分组（icon 与 legacy Feature 类 / 前端 iconMap 对齐）。
+ * key = FeatureId 字符串（capability.feature）。
+ */
+const FEATURE_GROUPS: Record<string, { name: string; icon: string; desc: string }> = {
+  'zhin.adapter': { name: 'adapter', icon: 'Cable', desc: '适配器' },
+  'zhin.command': { name: 'command', icon: 'Terminal', desc: '命令' },
+  'zhin.component': { name: 'component', icon: 'Box', desc: '组件' },
+  'zhin.middleware': { name: 'middleware', icon: 'Layers', desc: '中间件' },
+  'zhin.agent-tool': { name: 'tool', icon: 'Wrench', desc: '工具' },
+  'zhin.skill': { name: 'skill', icon: 'Brain', desc: '技能' },
+  'zhin.agent': { name: 'agent', icon: 'Bot', desc: 'Agent' },
+  'zhin.mcp': { name: 'mcp', icon: 'Plug', desc: 'MCP' },
+  'zhin.page': { name: 'page', icon: 'Layout', desc: '页面' },
+  'zhin.layout': { name: 'layout', icon: 'PanelTop', desc: '布局' },
+};
+
+/** 从 snapshot.capabilities 按 owner 聚合插件 Feature（对齐 legacy Feature.toJSON）。 */
+export function buildPluginFeatures(
+  node: PluginNodeSnapshot,
+  snapshot?: RuntimeSnapshot,
+  endpoints?: readonly ConsoleEndpointHint[],
+): readonly ConsolePluginFeature[] {
+  if (!snapshot) return Object.freeze([]);
+  const groups = new Map<string, {
+    name: string;
+    icon: string;
+    desc: string;
+    items: { name: string; desc?: string }[];
+  }>();
+  for (const slot of snapshot.capabilities.values()) {
+    if (slot.owner !== node.id) continue;
+    const group = FEATURE_GROUPS[String(slot.feature)];
+    if (!group) continue;
+    const entry = groups.get(group.name) ?? { ...group, items: [] };
+    entry.items.push({ name: slot.localName });
+    groups.set(group.name, entry);
+  }
+  // adapter Feature 的 items 用真实 endpoint 名（uin / bot 名）；listEndpoints 无 owner，
+  // adapter Feature 的 items 用真实 endpoint 名（uin / bot 名）。
+  // 按 endpoint 的 owner PluginId 精确归属实例——不能按平台类型匹配，
+  // 否则多实例适配器（icqq×N）的每个实例都会分到全部 endpoint。
+  const adapterGroup = groups.get('adapter');
+  if (adapterGroup && endpoints) {
+    const owned = endpoints.filter((endpoint) =>
+      (endpoint as { owner?: string }).owner === node.id);
+    if (owned.length > 0) {
+      adapterGroup.items = owned.map((endpoint) => ({
+        name: endpoint.name,
+        desc: endpoint.connected ? 'online' : 'offline',
+      }));
+    }
+  }
+  return Object.freeze([...groups.values()].map((group) => Object.freeze({
+    name: group.name,
+    icon: group.icon,
+    desc: group.desc,
+    count: group.items.length,
+    items: Object.freeze(group.items),
+  })));
 }
 
 /** `GET /api/plugins/:name` 详情（legacy host-rest-api 对齐）。 */
@@ -846,11 +956,20 @@ export type ConsolePluginDetail = ConsolePluginListItem & {
   readonly contexts: readonly unknown[];
 };
 
-export function buildPluginDetail(node: PluginNodeSnapshot, version?: string): ConsolePluginDetail {
+export function buildPluginDetail(
+  node: PluginNodeSnapshot,
+  version?: string,
+  snapshot?: RuntimeSnapshot,
+  endpoints?: readonly ConsoleEndpointHint[],
+  projectRoot?: string,
+): ConsolePluginDetail {
+  const packageRoot = projectRoot
+    ? displayConsolePath(node.packageRoot, projectRoot)
+    : node.packageRoot;
   return {
-    ...buildPluginListItem(node),
-    filename: node.packageRoot,
-    filePath: node.packageRoot,
+    ...buildPluginListItem(node, snapshot, endpoints),
+    filename: packageRoot,
+    filePath: packageRoot,
     ...(version ? { version } : {}),
     contextCount: 0,
     contexts: Object.freeze([]),

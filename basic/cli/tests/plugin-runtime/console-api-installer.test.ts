@@ -5,11 +5,18 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHttpHost, createConsoleEventHub, type HttpHost } from '@zhin.js/host-http';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import type { ImRuntime, RuntimeMessageEvent } from '@zhin.js/core/runtime';
-import type { RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import {
+  createCapabilitySlot,
+  featureId,
+  type RuntimeSnapshot,
+} from '@zhin.js/plugin-runtime';
 import {
   buildConsoleEntriesBody,
   buildConsoleStats,
+  buildPluginDetail,
+  buildPluginFeatures,
   buildPluginListItem,
+  displayConsolePath,
   getSystemStatusData,
   listSnapshotPlugins,
   registerConsoleApiRoutes,
@@ -54,13 +61,41 @@ function stubConsoleRuntime(): ConsoleRuntime {
 function stubIm(): ImRuntime {
   return {
     listEndpoints: () => [
-      { name: 'bot', adapter: 'sandbox', connected: true, status: 'online' },
-      { name: 'bot-2', adapter: 'icqq', connected: false, status: 'offline' },
+      { name: 'bot', adapter: 'sandbox', owner: 'root/sandbox', connected: true, status: 'online' },
+      { name: '123456', adapter: 'icqq', owner: 'plugin-1', connected: false, status: 'offline' },
     ],
   } as unknown as ImRuntime;
 }
 
-function stubSnapshot(packageRoot: string): () => RuntimeSnapshot {
+function stubSnapshot(packageRoot: string, withFeatures = true): () => RuntimeSnapshot {
+  const adapterSlot = createCapabilitySlot({
+    owner: 'plugin-1' as RuntimeSnapshot['root'],
+    feature: featureId('zhin.adapter'),
+    localName: 'default',
+    source: join(packageRoot, 'adapters/default.ts'),
+    definition: {},
+  });
+  const commandSlot = createCapabilitySlot({
+    owner: 'plugin-1' as RuntimeSnapshot['root'],
+    feature: featureId('zhin.command'),
+    localName: 'ping',
+    source: join(packageRoot, 'commands/ping.ts'),
+    definition: {},
+  });
+  const otherCommand = createCapabilitySlot({
+    owner: 'root' as RuntimeSnapshot['root'],
+    feature: featureId('zhin.command'),
+    localName: 'help',
+    source: join(packageRoot, 'commands/help.ts'),
+    definition: {},
+  });
+  const capabilities = withFeatures
+    ? new Map([
+      [adapterSlot.id, adapterSlot],
+      [commandSlot.id, commandSlot],
+      [otherCommand.id, otherCommand],
+    ])
+    : new Map();
   const snapshot = {
     generation: 1,
     root: 'root',
@@ -84,7 +119,7 @@ function stubSnapshot(packageRoot: string): () => RuntimeSnapshot {
     ]),
     config: new Map(),
     resources: new Map(),
-    capabilities: new Map(),
+    capabilities,
     projections: new Map(),
   } as unknown as RuntimeSnapshot;
   return () => snapshot;
@@ -176,20 +211,104 @@ describe('system status / stats builders', () => {
 describe('plugin list helpers', () => {
   it('excludes the root node and maps snapshot nodes to list items', async () => {
     const packageRoot = await makePackageRoot();
-    const nodes = listSnapshotPlugins(stubSnapshot(packageRoot)());
+    const snap = stubSnapshot(packageRoot)();
+    const nodes = listSnapshotPlugins(snap);
     expect(nodes).toHaveLength(1);
-    expect(buildPluginListItem(nodes[0])).toEqual({
+    expect(buildPluginListItem(nodes[0], snap)).toEqual({
       name: 'icqq',
       status: 'active',
       description: 'ICQQ',
-      features: [],
+      features: [
+        {
+          name: 'adapter',
+          icon: 'Cable',
+          desc: '适配器',
+          count: 1,
+          items: [{ name: 'default' }],
+        },
+        {
+          name: 'command',
+          icon: 'Terminal',
+          desc: '命令',
+          count: 1,
+          items: [{ name: 'ping' }],
+        },
+      ],
       packageName: '@zhin.js/adapter-icqq',
       instanceKey: 'icqq',
     });
   });
 
+  it('returns empty features without a snapshot argument', async () => {
+    const packageRoot = await makePackageRoot();
+    const nodes = listSnapshotPlugins(stubSnapshot(packageRoot)());
+    expect(buildPluginListItem(nodes[0])).toMatchObject({ features: [] });
+  });
+
+  it('enriches adapter feature items with live endpoint names', async () => {
+    const packageRoot = await makePackageRoot();
+    const snap = stubSnapshot(packageRoot)();
+    const node = listSnapshotPlugins(snap)[0]!;
+    const features = buildPluginFeatures(node, snap, [
+      { name: '123456', adapter: 'icqq', owner: 'plugin-1', connected: true },
+      { name: 'sandbox-bot', adapter: 'sandbox', owner: 'root/sandbox', connected: false },
+    ]);
+    const adapter = features.find((f) => f.name === 'adapter');
+    expect(adapter).toMatchObject({
+      count: 1,
+      items: [{ name: '123456', desc: 'online' }],
+    });
+  });
+
+  it('does not attribute other plugins\' capabilities', async () => {
+    const packageRoot = await makePackageRoot();
+    const snap = stubSnapshot(packageRoot)();
+    const node = listSnapshotPlugins(snap)[0]!;
+    const features = buildPluginFeatures(node, snap);
+    const command = features.find((f) => f.name === 'command');
+    expect(command?.items.map((i) => i.name)).toEqual(['ping']);
+    expect(command?.items.map((i) => i.name)).not.toContain('help');
+  });
+
   it('returns an empty list without a snapshot', () => {
     expect(listSnapshotPlugins(undefined)).toEqual([]);
+  });
+
+  it('shortens absolute packageRoot to ./… under project root', async () => {
+    const packageRoot = await makePackageRoot();
+    const projectRoot = tempRoots[tempRoots.length - 1];
+    const node = listSnapshotPlugins(stubSnapshot(packageRoot)())[0]!;
+    const detail = buildPluginDetail(node, '1.0.0', undefined, undefined, projectRoot);
+    expect(detail.filePath).toBe('./node_modules/fake');
+    expect(detail.filename).toBe('./node_modules/fake');
+    expect(detail.version).toBe('1.0.0');
+  });
+});
+
+describe('displayConsolePath', () => {
+  const projectRoot = '/Users/demo/IdeaProjects/zhin/examples/test-bot';
+  const homeDir = '/Users/demo';
+
+  it('maps workspace paths to ./…', () => {
+    expect(displayConsolePath(
+      `${projectRoot}/plugins/hello/commands/ping.ts`,
+      projectRoot,
+    )).toBe('./plugins/hello/commands/ping.ts');
+  });
+
+  it('leaves logical source names untouched', () => {
+    expect(displayConsolePath('agent', projectRoot)).toBe('agent');
+    expect(displayConsolePath('builtin', projectRoot)).toBe('builtin');
+    expect(displayConsolePath('./relative.ts', projectRoot)).toBe('./relative.ts');
+  });
+
+  it('maps paths under home (outside project) via formatDisplayPath default home', () => {
+    // 依赖当前进程 HOME；若 project 不在 home 下则保留绝对路径也合法
+    const outside = join(homeDir, 'IdeaProjects/zhin/zhin.config.yml');
+    const out = displayConsolePath(outside, projectRoot);
+    // 在常见 mac 开发机 home 下会变成 ~/…；否则至少不是 project 前缀泄露
+    expect(out === outside || out.startsWith('~/')).toBe(true);
+    expect(out.includes(projectRoot)).toBe(false);
   });
 });
 
@@ -262,6 +381,13 @@ describe('console REST routes', () => {
       description: 'ICQQ',
       packageName: '@zhin.js/adapter-icqq',
     });
+    // features 从 snapshot.capabilities 聚合；adapter items 用 live endpoint 名
+    const listFeatures = pluginsBody.data[0].features as Array<Record<string, unknown>>;
+    expect(listFeatures.some((f) => f.name === 'command')).toBe(true);
+    const listAdapter = listFeatures.find((f) => f.name === 'adapter') as {
+      items: Array<{ name: string; desc?: string }>;
+    };
+    expect(listAdapter.items).toEqual([{ name: '123456', desc: 'offline' }]);
 
     const detail = await fetch(`http://127.0.0.1:${port}/api/plugins/icqq`, { headers });
     expect(detail.status).toBe(200);
@@ -270,8 +396,13 @@ describe('console REST routes', () => {
       name: 'icqq',
       status: 'active',
       version: '1.2.3',
-      filePath: packageRoot,
+      // 绝对 packageRoot 按 workspace 规则缩短为 ./…
+      filePath: './node_modules/fake',
+      filename: './node_modules/fake',
     });
+    const detailFeatures = detailBody.data.features as Array<Record<string, unknown>>;
+    expect(detailFeatures.some((f) => f.name === 'command')).toBe(true);
+    expect(detailFeatures.some((f) => f.name === 'adapter')).toBe(true);
 
     const missing = await fetch(`http://127.0.0.1:${port}/api/plugins/nope`, { headers });
     expect(missing.status).toBe(404);

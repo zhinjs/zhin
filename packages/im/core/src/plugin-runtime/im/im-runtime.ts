@@ -182,6 +182,7 @@ export class ImRuntime implements MessageGateway {
   listEndpoints(): readonly {
     readonly name: string;
     readonly adapter: string;
+    readonly owner: string;
     readonly connected: boolean;
     readonly status: 'online' | 'offline';
     readonly phase: 'pending' | 'starting' | 'online' | 'failed' | 'unconfigured';
@@ -193,6 +194,7 @@ export class ImRuntime implements MessageGateway {
           name: row.name,
           // adapter 列显示平台类型（owner 包名去 scope/adapter- 前缀），不是 slot localName
           adapter: adapterTypeName(lease.value.tree.get(row.owner)?.packageName) ?? row.name,
+          owner: row.owner,
           connected: row.connected,
           status: row.status,
           phase: row.phase,

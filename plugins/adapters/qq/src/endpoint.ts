@@ -57,6 +57,11 @@ export class QqWebsocketEndpoint implements EndpointInstance {
     this.#createBot = options.createBot ?? defaultCreateBot;
   }
 
+  /** Live endpoint 名（Console/AdapterIndex 展示用，如 bot appid 别名）。 */
+  get name(): string {
+    return this.#options.config.name;
+  }
+
   async start(): Promise<void> {
     if (this.#started) return;
     this.#started = true;
@@ -231,6 +236,11 @@ export class QqHttpEndpoint implements EndpointInstance {
   constructor(options: QqHttpEndpointOptions) {
     this.#options = options;
     this.#createBot = options.createBot ?? defaultCreateHttpBot;
+  }
+
+  /** Live endpoint 名（Console/AdapterIndex 展示用）。 */
+  get name(): string {
+    return this.#options.config.name;
   }
 
   async start(): Promise<void> {
