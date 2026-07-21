@@ -6,6 +6,11 @@ import {
   TypeScriptClientBuilder,
 } from '@zhin.js/pagemanager/client-build';
 import {
+  ALLOWED_ESM_CANONICAL,
+  decodeSpecifierSegment,
+  getOrBuildCanonicalEsmBundle,
+} from '@zhin.js/pagemanager/node';
+import {
   ConsoleRuntime,
   consoleRuntimeToken,
 } from '@zhin.js/pagemanager/plugin-runtime';
@@ -23,6 +28,7 @@ export interface ConsoleHostModules {
   readonly modules: ModuleRuntime;
   readonly console: ConsoleRuntime;
   readonly clientOutDir: string;
+  readonly projectRoot: string;
 }
 
 export function createConsoleHostModules(projectRoot: string, watch: boolean): ConsoleHostModules {
@@ -32,21 +38,29 @@ export function createConsoleHostModules(projectRoot: string, watch: boolean): C
     projectRoot,
     outDir: clientOutDir,
     publicBase: clientPublicBase,
+    consoleBasePath: '/',
   });
   return Object.freeze({
     modules: new ClientBuildModuleRuntime(server, client),
     console: new ConsoleRuntime(),
     clientOutDir,
+    projectRoot,
   });
 }
 
 export function installConsoleHttp(options: {
   readonly console: ConsoleRuntime;
   readonly clientOutDir: string;
+  /** Resolve directory for Host React ESM proxies (`react` package resolution). */
+  readonly projectRoot: string;
 }): RootResourceInstaller {
   return ({ resources }) => {
     resources.provide(consoleRuntimeToken, options.console);
     const http = resources.use(httpHostToken);
+    // Browser ESM 裸导入（react/jsx-runtime 等）由 TypeScriptClientBuilder 改写为 /esm/<enc>.mjs
+    http.route('GET', '/esm/*', async (_request, response, url) => {
+      await serveCanonicalEsm(options.projectRoot, url.pathname, response);
+    });
     http.route('GET', `${clientPublicBase}/*`, async (_request, response, url) => {
       await serveClientAsset(options.clientOutDir, clientPublicBase, url.pathname, response);
     });
@@ -62,7 +76,8 @@ export function installConsoleHttp(options: {
     // matchHttpRoute prefers longest prefix, exact page routes win over shorter prefixes.
     http.route('GET', '/*', async (_request, response, url) => {
       if (url.pathname === '/console' || url.pathname.startsWith('/console/')
-        || url.pathname.startsWith(`${clientPublicBase}/`)) {
+        || url.pathname.startsWith(`${clientPublicBase}/`)
+        || url.pathname.startsWith('/esm/')) {
         response.writeHead(404);
         response.end();
         return;
@@ -86,6 +101,49 @@ export function installConsoleHttp(options: {
       }
     });
   };
+}
+
+/**
+ * Serve Host-proxied React/router ESM modules (legacy `consoleApiRouter` `/esm/:enc.mjs` parity).
+ * Path: `/esm/<encodeURIComponent(canonical).replace(/%2F/g,'~')>.mjs`
+ */
+async function serveCanonicalEsm(
+  resolveDir: string,
+  pathname: string,
+  response: ServerResponse,
+): Promise<void> {
+  const match = pathname.match(/^\/esm\/(.+)\.mjs$/u);
+  if (!match) {
+    response.writeHead(404);
+    response.end();
+    return;
+  }
+  let canonical: string;
+  try {
+    canonical = decodeSpecifierSegment(match[1]!);
+  } catch {
+    response.writeHead(400, { 'content-type': 'application/json; charset=utf-8' });
+    response.end(JSON.stringify({ message: 'Invalid esm enc' }));
+    return;
+  }
+  if (!ALLOWED_ESM_CANONICAL.has(canonical)) {
+    response.writeHead(403, { 'content-type': 'application/json; charset=utf-8' });
+    response.end(JSON.stringify({ message: 'ESM canonical not allowed' }));
+    return;
+  }
+  try {
+    const code = await getOrBuildCanonicalEsmBundle(canonical, resolveDir, '/');
+    response.writeHead(200, {
+      'content-type': 'text/javascript; charset=utf-8',
+      'cache-control': 'public, max-age=3600',
+    });
+    response.end(code);
+  } catch (error) {
+    response.writeHead(500, { 'content-type': 'application/json; charset=utf-8' });
+    response.end(JSON.stringify({
+      message: error instanceof Error ? error.message : 'Failed to build ESM',
+    }));
+  }
 }
 
 async function serveClientAsset(

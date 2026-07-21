@@ -109,7 +109,10 @@ function resolveNamedExports(canonical: string, resolveDir: string): string[] {
 function buildHostProxyModule(canonical: string, namedExports: string[]): string {
   const lines = [
     `const _m = globalThis[${JSON.stringify(CONSOLE_SHARED_MODULES_KEY)}]?.get(${JSON.stringify(canonical)});`,
-    `if (!_m) throw new Error("[zhin-console] Host module not registered: ${canonical}");`,
+    // Prefer Host-registered React (single instance with shell). If the shell has not
+    // populated SHARED_MODULES yet, fall through is not possible at static ESM time —
+    // throw a clear error pointing operators at the shell/Host contract.
+    `if (!_m) throw new Error("[zhin-console] Host module not registered: ${canonical}. Remote Console must set globalThis.${CONSOLE_SHARED_MODULES_KEY} before loading plugin entries.");`,
     `export default _m;`,
     ...namedExports.map((n) => `export const ${n} = _m.${n};`),
   ];

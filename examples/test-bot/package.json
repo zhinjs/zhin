@@ -163,22 +163,6 @@
         "instanceKey": "icqq"
       },
       {
-        "package": "@zhin.js/adapter-icqq",
-        "instanceKey": "icqq-2"
-      },
-      {
-        "package": "@zhin.js/adapter-icqq",
-        "instanceKey": "icqq-3"
-      },
-      {
-        "package": "@zhin.js/adapter-icqq",
-        "instanceKey": "icqq-4"
-      },
-      {
-        "package": "@zhin.js/adapter-icqq",
-        "instanceKey": "icqq-5"
-      },
-      {
         "package": "@zhin.js/adapter-slack",
         "instanceKey": "slack"
       },
@@ -189,10 +173,6 @@
       {
         "package": "@zhin.js/adapter-qq",
         "instanceKey": "qq"
-      },
-      {
-        "package": "@zhin.js/adapter-qq",
-        "instanceKey": "qq-sandbox"
       },
       {
         "package": "@zhin.js/plugin-game-hub",

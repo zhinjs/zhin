@@ -299,8 +299,13 @@
   [migration-topology.json](./migration-topology.json) 的 `pending` 为空。
 - 已迁移（厨房水槽验证入口）：`examples/test-bot` 默认 `zhin runtime start`，
   **平台配置对齐** `zhin.config.legacy.yml` 可运行 endpoints：
-  Sandbox + icqq×5 + slack + github + qq×2（含 `bots.l2cl.link` 代理）+ legacy 同款 games；
-  `${ENV}` 由 runtime start load `.env` 后展开。冒烟：`plugins: 22`、无 `adapters_unconfigured`。
+  Sandbox + icqq（单实例 `endpoints` 数组挂 5 账号）+ slack + github + qq（单实例
+  `endpoints` 挂主 bot + 102069707 沙箱 bot，含 `bots.l2cl.link` 代理）+ legacy 同款 games；
+  `${ENV}` 由 runtime start load `.env` 后展开。冒烟：`plugins: 23`、无 `adapters_unconfigured`。
+  多账号机制：实例 config 的 `endpoints: [{name, ...覆盖}]` 由
+  `@zhin.js/adapter` 的 `expandEndpointConfigs` 展开为多条 endpoint record
+  （id 为 `<slotId>~<name>`，顶层字段共享、逐项覆盖），替代旧的多 `instanceKey` 方案，
+  Console `/api/plugins` 收敛为一个插件卡片 + 多 endpoint。
   本地约定已补：`/ping` `/mem` `/status` `/heap` `/send` `/zt`(卡片) `/weather`；
   **`gh *` 聊天子命令**已迁（含 `bind`/`unbind`/`whoami`：DatabaseHost `github_oauth_users` +
   GithubEndpoint 用户 token 解析）。

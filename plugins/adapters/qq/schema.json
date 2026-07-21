@@ -33,6 +33,18 @@
     "gatewayUrl": {
       "type": "string"
     },
+    "endpoints": {
+      "type": "array",
+      "description": "多账号：一个插件实例挂多个 endpoint；每项以实例配置为基础逐项覆盖，name 必填",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" }
+        },
+        "required": ["name"],
+        "additionalProperties": true
+      }
+    },
     "webhookPath": {
       "type": "string",
       "default": "/qq/webhook",

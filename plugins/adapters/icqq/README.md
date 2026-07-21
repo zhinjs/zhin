@@ -30,6 +30,18 @@ plugins:
     #   token: ${ICQQ_RPC_TOKEN}
 ```
 
+多账号：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`name` 必填）：
+
+```yaml
+plugins:
+  icqq:
+    master: "1659488338"      # 顶层字段所有 endpoint 共享
+    endpoints:
+      - name: "${ICQQ_ACCOUNT}"
+      - name: "${ICQQ_ACCOUNT_2}"
+      - name: "${ICQQ_ACCOUNT_3}"   # 各账号须分别 icqq login
+```
+
 先执行 `icqq login`，再启动 Zhin。
 
 ## Send target

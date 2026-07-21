@@ -79,23 +79,25 @@ export class AdapterIndex {
     const unconfigured: string[] = [];
     try {
       for (const slot of [...slots].sort((left, right) => left.id.localeCompare(right.id))) {
-        const endpoint = await createEndpointSoft(slot, snapshot);
-        if (endpoint.unconfigured) unconfigured.push(slot.localName);
-        records.push({
-          id: slot.id,
-          owner: slot.owner,
-          name: slot.localName,
-          source: slot.source,
-          capabilities: slot.definition.capabilities,
-          endpoint: endpoint.instance,
-          unconfigured: endpoint.unconfigured,
-          started: false,
-          open: false,
-          failed: false,
-          startAttempted: false,
-          // Unconfigured stubs skip start/open so kitchen-sink Roots stay quiet.
-          stopped: endpoint.unconfigured,
-        });
+        for (const expansion of expandEndpointConfigs(slot, snapshot)) {
+          const endpoint = await createEndpointSoft(slot, snapshot, expansion);
+          if (endpoint.unconfigured) unconfigured.push(expansion.name);
+          records.push({
+            id: expansion.id,
+            owner: slot.owner,
+            name: slot.localName,
+            source: slot.source,
+            capabilities: slot.definition.capabilities,
+            endpoint: endpoint.instance,
+            unconfigured: endpoint.unconfigured,
+            started: false,
+            open: false,
+            failed: false,
+            startAttempted: false,
+            // Unconfigured stubs skip start/open so kitchen-sink Roots stay quiet.
+            stopped: endpoint.unconfigured,
+          });
+        }
       }
       if (unconfigured.length > 0) {
         logger.info(formatCompact({
@@ -366,16 +368,55 @@ function isUnconfiguredError(error: unknown): boolean {
   );
 }
 
+/** 单个实例配置展开的 endpoint 描述（多账号适配器经 `endpoints` 数组声明）。 */
+interface EndpointExpansion {
+  readonly id: CapabilityId;
+  readonly name: string;
+  readonly config?: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * 实例配置的 endpoint 展开：插件实例 config 含非空 `endpoints: [{name, ...覆盖}]` 时
+ * 按数组一一创建 endpoint（基础配置为实例 config 去掉 `endpoints` 键，逐项合并），
+ * 否则按实例 config 创建单个 endpoint（历史行为）。
+ */
+function expandEndpointConfigs(
+  slot: Readonly<CapabilitySlot<AdapterDefinition>>,
+  snapshot: RuntimeSnapshot,
+): readonly EndpointExpansion[] {
+  const config = snapshot.config.get(slot.owner) as
+    | { endpoints?: unknown }
+    | undefined;
+  const raw = config?.endpoints;
+  const entries = Array.isArray(raw)
+    ? raw.filter((entry): entry is Record<string, unknown> & { name: string } =>
+      !!entry && typeof entry === 'object'
+      && typeof (entry as { name?: unknown }).name === 'string'
+      && (entry as { name: string }).name.length > 0)
+    : [];
+  if (entries.length === 0) {
+    return Object.freeze([{ id: slot.id, name: slot.localName }]);
+  }
+  const { endpoints: _drop, ...base } = (config ?? {}) as Record<string, unknown>;
+  return Object.freeze(entries.map((entry) => Object.freeze({
+    id: `${slot.id}~${entry.name}` as CapabilityId,
+    name: entry.name,
+    config: Object.freeze({ ...base, ...entry, name: entry.name }),
+  })));
+}
+
 async function createEndpointSoft(
   slot: Readonly<CapabilitySlot<AdapterDefinition>>,
   snapshot: RuntimeSnapshot,
+  expansion?: EndpointExpansion,
 ): Promise<{ readonly instance: EndpointInstance; readonly unconfigured: boolean }> {
   let endpoint: unknown;
   try {
     endpoint = await slot.definition.create(
       Object.freeze({
         ...createCapabilityContext(snapshot, slot.owner),
-        id: slot.id,
+        ...(expansion?.config ? { config: expansion.config } : {}),
+        id: expansion?.id ?? slot.id,
         name: slot.localName,
       }),
     );
@@ -388,8 +429,8 @@ async function createEndpointSoft(
     const log = isUnconfiguredError(error) ? logger.debug.bind(logger) : logger.warn.bind(logger);
     log(formatCompact({
       op: 'adapter_create_soft_fail',
-      id: slot.id,
-      name: slot.localName,
+      id: expansion?.id ?? slot.id,
+      name: expansion?.name ?? slot.localName,
       error: message,
     }));
     return {
@@ -400,7 +441,7 @@ async function createEndpointSoft(
   // Programming errors (create() did not return an Endpoint) must surface:
   // they propagate to AdapterIndex.create's catch, which disposes the records
   // created so far instead of hiding the bug behind an unconfigured stub.
-  assertEndpoint(endpoint, slot.id);
+  assertEndpoint(endpoint, expansion?.id ?? slot.id);
   return { instance: endpoint, unconfigured: false };
 }
 

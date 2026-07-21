@@ -50,6 +50,23 @@ plugins:
     # mode: websocket   # 默认
 ```
 
+多账号：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`name` 必填）：
+
+```yaml
+plugins:
+  qq:
+    mode: websocket
+    intents: [GUILDS, GROUP_AND_C2C_EVENT]
+    endpoints:
+      - name: main-bot
+        appid: ${QQ_APPID}
+        secret: ${QQ_SECRET}
+      - name: sandbox-bot
+        appid: ${QQ_APPID_2}
+        secret: ${QQ_SECRET_2}
+        sandbox: true
+```
+
 根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-qq`（`instanceKey: qq`）。
 
 ## 环境变量

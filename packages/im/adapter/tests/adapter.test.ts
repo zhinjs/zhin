@@ -325,10 +325,46 @@ describe('Adapter Feature', () => {
     expect(index.resolve('icqq', '999999')).toBeUndefined();
     expect(index.instance('icqq', '222222')).toMatchObject({ name: '222222' });
   });
+
+  it('expands an endpoints array into one record per entry with merged config', async () => {
+    const root = rootPluginId();
+    const seen: Array<{ id: string; config: Record<string, unknown> }> = [];
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'icqq',
+      source: '/adapters/icqq.ts',
+      definition: defineAdapter({
+        capabilities: ['inbound'],
+        create(context) {
+          seen.push({ id: String(context.id), config: context.config as Record<string, unknown> });
+          return { start() {}, stop() {} };
+        },
+      }),
+    });
+    const index = await AdapterIndex.create([slot], snapshot([slot], new Map([[root, {
+      master: '1659488338',
+      endpoints: [
+        { name: '111111' },
+        { name: '222222', outboundMedia: 'base64' },
+      ],
+    }]])));
+
+    expect(index.describe()).toHaveLength(2);
+    expect(new Set(index.describe().map((summary) => summary.id)).size).toBe(2);
+    expect(seen).toHaveLength(2);
+    // 顶层字段共享，entry 逐项覆盖；endpoints 键不传给适配器
+    expect(seen[0].config).toMatchObject({ name: '111111', master: '1659488338' });
+    expect(seen[1].config).toMatchObject({ name: '222222', master: '1659488338', outboundMedia: 'base64' });
+    expect(seen[0].config).not.toHaveProperty('endpoints');
+    expect(seen[0].id).toContain('~111111');
+    expect(seen[1].id).toContain('~222222');
+  });
 });
 
 function snapshot(
   slots: readonly ReturnType<typeof createCapabilitySlot>[],
+  configs?: ReadonlyMap<ReturnType<typeof rootPluginId>, Record<string, unknown>>,
 ): RuntimeSnapshot {
   const root = rootPluginId();
   const tree = new Map<string, {
@@ -360,7 +396,7 @@ function snapshot(
     generation: 1,
     root,
     tree: tree as RuntimeSnapshot['tree'],
-    config: new Map([[root, {}], ...slots.map((slot) => [slot.owner, {}] as const)]),
+    config: new Map([[root, configs?.get(root) ?? {}], ...slots.map((slot) => [slot.owner, configs?.get(slot.owner as ReturnType<typeof rootPluginId>) ?? {}] as const)]),
     resources: new Map([[root, new Map()], ...slots.map((slot) => [slot.owner, new Map()] as const)]),
     capabilities: new Map(slots.map((slot) => [slot.id, slot])),
     projections: new Map(),

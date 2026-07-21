@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/qq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/qq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=e58e4fd5ffe70634 -->
+<!-- sync-adapter-docs:sha256=aca701741912071b -->
 
 # @zhin.js/adapter-qq
 
@@ -60,6 +60,23 @@ plugins:
     appid: ${QQ_APPID}
     secret: ${QQ_SECRET}
     # mode: websocket   # 默认
+```
+
+多账号：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`name` 必填）：
+
+```yaml
+plugins:
+  qq:
+    mode: websocket
+    intents: [GUILDS, GROUP_AND_C2C_EVENT]
+    endpoints:
+      - name: main-bot
+        appid: ${QQ_APPID}
+        secret: ${QQ_SECRET}
+      - name: sandbox-bot
+        appid: ${QQ_APPID_2}
+        secret: ${QQ_SECRET_2}
+        sandbox: true
 ```
 
 根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-qq`（`instanceKey: qq`）。

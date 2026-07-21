@@ -20,5 +20,10 @@ export interface TypeScriptClientBuilderOptions {
   readonly outDir: string;
   readonly projectRoot?: string;
   readonly publicBase?: string;
+  /**
+   * Console public base used when rewriting bare React imports to `/esm/…`.
+   * Defaults to `/` (Host root). Must match the base passed to `GET /esm/:enc.mjs`.
+   */
+  readonly consoleBasePath?: string;
   readonly manifestFile?: string;
 }

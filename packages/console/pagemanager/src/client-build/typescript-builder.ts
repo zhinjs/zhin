@@ -8,6 +8,7 @@ import {
   assertLayoutModule,
   extractPageMetadata,
 } from './static-metadata.js';
+import { rewriteBareImportsForBrowser } from '../node/esmForBrowser.js';
 import type {
   ClientArtifactManifest,
   ClientArtifactRecord,
@@ -23,12 +24,15 @@ export class TypeScriptClientBuilder implements ClientModuleLoader {
   readonly #outDir: string;
   readonly #projectRoot: string;
   readonly #publicBase: string;
+  /** Console public base for rewritten bare imports (`/esm/…`); defaults to `/`. */
+  readonly #consoleBasePath: string;
   readonly #manifestFile: string;
 
   constructor(options: TypeScriptClientBuilderOptions) {
     this.#outDir = resolve(options.outDir);
     this.#projectRoot = resolve(options.projectRoot ?? process.cwd());
     this.#publicBase = `/${trimSlashes(options.publicBase ?? '@zhin/client')}`;
+    this.#consoleBasePath = options.consoleBasePath ?? '/';
     this.#manifestFile = resolve(options.manifestFile ?? join(this.#outDir, 'pages.manifest.json'));
   }
 
@@ -38,7 +42,9 @@ export class TypeScriptClientBuilder implements ClientModuleLoader {
     const hash = contentHash(text);
     const fileName = `${safe(request.owner)}-${safe(request.localName)}-${hash}.js`;
     const output = join(this.#outDir, fileName);
-    const code = transpile(text, source);
+    // JSX 产物含 `from "react/jsx-runtime"` 等裸导入；浏览器 ESM 无法解析，
+    // 改写为 Host `/esm/<enc>.mjs`（与 legacy consoleApiRouter 对齐）。
+    const code = rewriteBareImportsForBrowser(transpile(text, source), this.#consoleBasePath, '');
     await atomicWrite(output, code);
     return Object.freeze({
       module: `${this.#publicBase}/${fileName}`,

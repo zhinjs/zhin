@@ -152,6 +152,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
       installConsoleHttp({
         console: consoleHost.console,
         clientOutDir: consoleHost.clientOutDir,
+        projectRoot: options.root,
       })(context);
       installConsoleApi({
         console: consoleHost.console,

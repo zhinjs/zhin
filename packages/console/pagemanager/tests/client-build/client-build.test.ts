@@ -43,7 +43,10 @@ describe('Client build adapter', () => {
       metadata: { title: 'Status', order: 10, requiredRoles: ['admin'] },
     });
     const chunk = await readFile(join(root, 'dist/client', artifact!.module.split('/').at(-1)!), 'utf8');
-    expect(chunk).toContain('react/jsx-runtime');
+    // Bare `react/jsx-runtime` is rewritten to Host `/esm/…` so browsers can resolve it.
+    expect(chunk).toContain('/esm/');
+    expect(chunk).toMatch(/from\s+"\/esm\/react(?:%7E|~)jsx-runtime\.mjs/);
+    expect(chunk).not.toMatch(/from\s+["']react\/jsx-runtime["']/);
     const persisted = JSON.parse(
       await readFile(join(root, 'dist/client/pages.manifest.json'), 'utf8'),
     ) as { protocol: number; entries: unknown[] };

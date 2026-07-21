@@ -47,6 +47,8 @@ const DEMO_HTTP_GET_PREFIXES = [
   "/entries",
   "/@dev/",
   "/@assets/",
+  "/esm/",
+  "/assets/client/",
 ] as const;
 
 export class TokenRegistry {

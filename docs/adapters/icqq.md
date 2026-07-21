@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=f5059113c42b8ab2 -->
+<!-- sync-adapter-docs:sha256=3c99ac74519c6956 -->
 
 # @zhin.js/adapter-icqq
 
@@ -40,6 +40,18 @@ plugins:
     #   host: 10.0.0.2
     #   port: 9527
     #   token: ${ICQQ_RPC_TOKEN}
+```
+
+多账号：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`name` 必填）：
+
+```yaml
+plugins:
+  icqq:
+    master: "1659488338"      # 顶层字段所有 endpoint 共享
+    endpoints:
+      - name: "${ICQQ_ACCOUNT}"
+      - name: "${ICQQ_ACCOUNT_2}"
+      - name: "${ICQQ_ACCOUNT_3}"   # 各账号须分别 icqq login
 ```
 
 先执行 `icqq login`，再启动 Zhin。
