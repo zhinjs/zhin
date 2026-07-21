@@ -41,6 +41,20 @@ GITHUB_WEBHOOK_SECRET=your-secret
 
 `private_key` 支持文件路径或 PEM 内容。未配置 `webhook_secret` 时仅 API 出站 / agent 工具可用（无入站）。
 
+多 App：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`name` 必填）：
+
+```yaml
+plugins:
+  github:
+    endpoints:
+      - name: app-a
+        app_id: 123456
+        private_key: ./data/app-a.pem
+      - name: app-b
+        app_id: 234567
+        private_key: ./data/app-b.pem
+```
+
 ## 已移除的配置
 
 - **`ai.githubMcp.enabled` / `ai.githubMcp.token`**：Plugin Runtime 迁移后 `register-github-mcp`（stdio `@modelcontextprotocol/server-github`，PAT 人身份）已移除，该配置不再生效。如需 MCP 工具，请按新运行时 `mcp/<name>.ts`（`@zhin.js/mcp-feature`）约定自行装配。

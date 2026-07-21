@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/github/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/github/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=deeb870297994ff6 -->
+<!-- sync-adapter-docs:sha256=8e1758fa485319e6 -->
 
 # @zhin.js/adapter-github
 
@@ -52,6 +52,20 @@ GITHUB_WEBHOOK_SECRET=your-secret
 ```
 
 `private_key` 支持文件路径或 PEM 内容。未配置 `webhook_secret` 时仅 API 出站 / agent 工具可用（无入站）。
+
+多 App：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`name` 必填）：
+
+```yaml
+plugins:
+  github:
+    endpoints:
+      - name: app-a
+        app_id: 123456
+        private_key: ./data/app-a.pem
+      - name: app-b
+        app_id: 234567
+        private_key: ./data/app-b.pem
+```
 
 ## 已移除的配置
 

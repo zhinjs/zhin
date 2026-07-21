@@ -60,6 +60,18 @@
     "workspace_root": {
       "type": "string",
       "description": "Managed git workspace root"
+    },
+    "endpoints": {
+      "type": "array",
+      "description": "多 App：一个插件实例挂多个 endpoint；每项以实例配置为基础逐项覆盖，name 必填",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" }
+        },
+        "required": ["name"],
+        "additionalProperties": true
+      }
     }
   }
 }

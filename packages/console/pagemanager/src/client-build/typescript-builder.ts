@@ -1,14 +1,18 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
-import ts from 'typescript';
+import { build as esbuild } from 'esbuild';
+import type { Plugin as EsbuildPlugin } from 'esbuild';
 import type { ClientModuleRequest } from '@zhin.js/feature-kit';
 import type { ClientModuleArtifact } from '@zhin.js/console-contract';
 import {
   assertLayoutModule,
   extractPageMetadata,
 } from './static-metadata.js';
-import { rewriteBareImportsForBrowser } from '../node/esmForBrowser.js';
+import {
+  ALLOWED_ESM_CANONICAL,
+  rewriteBareImportsForBrowser,
+} from '../node/esmForBrowser.js';
 import type {
   ClientArtifactManifest,
   ClientArtifactRecord,
@@ -19,6 +23,21 @@ import type {
 
 const pageFeature = 'zhin.page';
 const layoutFeature = 'zhin.layout';
+
+/** Host-shared React/router graph — never bundle (single instance via `/esm/*`). */
+const BROWSER_EXTERNALS = [...ALLOWED_ESM_CANONICAL];
+
+/**
+ * Browser-only stubs for build-time contracts. Page `meta` is already extracted by
+ * static-metadata; the runtime only needs `definePage`/`defineLayout` as identity so
+ * we never leave a bare `@zhin.js/*` import for the browser to resolve.
+ */
+const CONSOLE_CONTRACT_STUB = [
+  'export function definePage(metadata = {}) { return metadata; }',
+  'export function defineLayout(metadata = {}) { return metadata; }',
+  'export function normalizePageMetadata(_name, metadata) { return metadata; }',
+  'export function normalizeClientModuleArtifact(value) { return value; }',
+].join('\n');
 
 export class TypeScriptClientBuilder implements ClientModuleLoader {
   readonly #outDir: string;
@@ -37,14 +56,16 @@ export class TypeScriptClientBuilder implements ClientModuleLoader {
   }
 
   async load<T = unknown>(source: string, request: ClientModuleRequest): Promise<T> {
-    const text = await readFile(source, 'utf8');
-    const metadata = metadataFor(text, source, request);
+    const absSource = resolve(source);
+    const text = await readFile(absSource, 'utf8');
+    const metadata = metadataFor(text, absSource, request);
     const hash = contentHash(text);
     const fileName = `${safe(request.owner)}-${safe(request.localName)}-${hash}.js`;
     const output = join(this.#outDir, fileName);
-    // JSX 产物含 `from "react/jsx-runtime"` 等裸导入；浏览器 ESM 无法解析，
-    // 改写为 Host `/esm/<enc>.mjs`（与 legacy consoleApiRouter 对齐）。
-    const code = rewriteBareImportsForBrowser(transpile(text, source), this.#consoleBasePath, '');
+    // Bundle page TSX (inlines `@zhin.js/console-contract` stubs) then rewrite React
+    // bare imports to Host `/esm/<enc>.mjs` (browser cannot resolve package names).
+    const bundled = await bundlePageEntry(absSource, this.#projectRoot);
+    const code = rewriteBareImportsForBrowser(bundled, this.#consoleBasePath, '');
     await atomicWrite(output, code);
     return Object.freeze({
       module: `${this.#publicBase}/${fileName}`,
@@ -72,6 +93,47 @@ export class TypeScriptClientBuilder implements ClientModuleLoader {
   }
 }
 
+async function bundlePageEntry(absSource: string, projectRoot: string): Promise<string> {
+  const result = await esbuild({
+    entryPoints: [absSource],
+    bundle: true,
+    write: false,
+    format: 'esm',
+    platform: 'browser',
+    target: 'es2022',
+    jsx: 'automatic',
+    sourcemap: false,
+    logLevel: 'silent',
+    absWorkingDir: projectRoot,
+    // Prefer the page's directory, then project Root node_modules (workspace packages).
+    nodePaths: [
+      join(dirname(absSource), 'node_modules'),
+      join(projectRoot, 'node_modules'),
+    ],
+    external: BROWSER_EXTERNALS,
+    plugins: [consoleContractStubPlugin()],
+  });
+  const file = result.outputFiles?.[0];
+  if (!file) throw new Error(`esbuild produced no output for ${absSource}`);
+  return file.text;
+}
+
+function consoleContractStubPlugin(): EsbuildPlugin {
+  return {
+    name: 'zhin-console-contract-stub',
+    setup(build) {
+      build.onResolve({ filter: /^@zhin\.js\/console-contract$/ }, () => ({
+        path: 'zhin-console-contract-stub',
+        namespace: 'zhin-virtual',
+      }));
+      build.onLoad({ filter: /.*/, namespace: 'zhin-virtual' }, () => ({
+        contents: CONSOLE_CONTRACT_STUB,
+        loader: 'js',
+      }));
+    },
+  };
+}
+
 function manifestSource(root: string, source: string): string {
   const result = relative(root, resolve(source));
   if (!result || result === '..' || result.startsWith(`..${sep}`)) {
@@ -87,32 +149,6 @@ function metadataFor(source: string, fileName: string, request: ClientModuleRequ
     return undefined;
   }
   throw new Error(`Unsupported client Feature: ${request.feature}`);
-}
-
-function transpile(source: string, fileName: string): string {
-  const result = ts.transpileModule(source, {
-    fileName,
-    reportDiagnostics: true,
-    compilerOptions: {
-      target: ts.ScriptTarget.ES2022,
-      module: ts.ModuleKind.ESNext,
-      moduleResolution: ts.ModuleResolutionKind.Bundler,
-      jsx: ts.JsxEmit.ReactJSX,
-      isolatedModules: true,
-      sourceMap: false,
-    },
-  });
-  const errors = (result.diagnostics ?? []).filter(
-    (diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error,
-  );
-  if (errors.length > 0) {
-    throw new Error(ts.formatDiagnostics(errors, {
-      getCanonicalFileName: (name) => name,
-      getCurrentDirectory: () => process.cwd(),
-      getNewLine: () => '\n',
-    }));
-  }
-  return result.outputText;
 }
 
 function contentHash(source: string): string {

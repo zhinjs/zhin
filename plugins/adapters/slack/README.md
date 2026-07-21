@@ -50,6 +50,20 @@ plugins:
     socketMode: true          # 默认 true，可省略
 ```
 
+多 workspace：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`name` 必填）：
+
+```yaml
+plugins:
+  slack:
+    endpoints:
+      - name: team-a
+        token: ${SLACK_BOT_TOKEN_A}
+        appToken: ${SLACK_APP_TOKEN_A}
+      - name: team-b
+        token: ${SLACK_BOT_TOKEN_B}
+        appToken: ${SLACK_APP_TOKEN_B}
+```
+
 ## HTTP Events 配置
 
 ```yaml

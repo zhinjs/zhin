@@ -47,6 +47,8 @@ describe('Client build adapter', () => {
     expect(chunk).toContain('/esm/');
     expect(chunk).toMatch(/from\s+"\/esm\/react(?:%7E|~)jsx-runtime\.mjs/);
     expect(chunk).not.toMatch(/from\s+["']react\/jsx-runtime["']/);
+    // `@zhin.js/console-contract` is stubbed/inlined — never left as a bare import.
+    expect(chunk).not.toMatch(/from\s+["']@zhin\.js\/console-contract["']/);
     const persisted = JSON.parse(
       await readFile(join(root, 'dist/client/pages.manifest.json'), 'utf8'),
     ) as { protocol: number; entries: unknown[] };
