@@ -20,6 +20,7 @@ export {
   IcqqIpcEndpoint,
   type CreateIcqqIpc,
   type IcqqEndpointOptions,
+  type IcqqInboxHooks,
   type IcqqIpcTransport,
 } from './endpoint.js';
 

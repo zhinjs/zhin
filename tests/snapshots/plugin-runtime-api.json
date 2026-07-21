@@ -114,6 +114,7 @@
     "export * from './handoff.js';",
     "export * from './html-renderer.js';",
     "export * from './identity.js';",
+    "export * from './inbox.js';",
     "export * from './outbound-host.js';",
     "export * from './plugin.js';",
     "export * from './root-controller.js';",

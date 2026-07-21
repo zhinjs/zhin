@@ -9,12 +9,13 @@
  * - cron：`ctx.scheduleHost`（Plugin Runtime ScheduleHost，仅 register/list，
  *   无持久化引擎，故 cron:add/remove/pause/resume 报"未接线"）。
  * - inbox：`ctx.databaseHost.models`（unified_inbox_message/request/notice 三张表，
- *   表不存在或查询失败 → 空数组 + inboxEnabled:false）。
+ *   表不存在或查询失败 → 空数组 + inboxEnabled:false；requestConsumed/noticeConsumed
+ *   按行 id update consumed=1，表/model 缺失时报"未接线"）。
  * - 社交/群管：`ctx.resolveEndpoint` 拿 live endpoint 实例，
  *   实例上探测到对应方法才调用，否则报"该平台不支持"。
  */
 
-/** 新 Runtime 统一收件箱表名（与 packages/im/zhin/src/setup/register-inbox.ts 一致）。 */
+/** 新 Runtime 统一收件箱表名（SSOT：@zhin.js/plugin-runtime inbox.js）。 */
 const TABLE_MESSAGE = 'unified_inbox_message';
 const TABLE_REQUEST = 'unified_inbox_request';
 const TABLE_NOTICE = 'unified_inbox_notice';
@@ -64,7 +65,7 @@ const CRON_NOT_WIRED =
   '不支持 add/remove/pause/resume（需要 @zhin.js/agent 持久化调度引擎）';
 
 const CONSUMED_NOT_WIRED =
-  '收件箱已读标记未接线：新 Runtime 尚未提供 request/notice 的 consumed 写路径';
+  '收件箱已读标记未接线：unified_inbox_request/notice 表未注册或 DatabaseHost 未启动';
 
 interface ScheduleJobRow {
   id: string;
@@ -75,6 +76,9 @@ interface ScheduleJobRow {
 interface InboxModel {
   select(): {
     where(query: Record<string, unknown>): Promise<Record<string, unknown>[]> | Record<string, unknown>[];
+  };
+  update?(patch: Record<string, unknown>): {
+    where(query: Record<string, unknown>): Promise<unknown> | unknown;
   };
 }
 
@@ -117,8 +121,9 @@ export async function dispatchExtendedConsoleRpc(
       return actOnRequest(type, d, ctx);
 
     case 'endpoint:requestConsumed':
+      return markInboxConsumed(d, ctx, TABLE_REQUEST);
     case 'endpoint:noticeConsumed':
-      return { error: CONSUMED_NOT_WIRED };
+      return markInboxConsumed(d, ctx, TABLE_NOTICE);
 
     case 'endpoint:friends':
       return listFriends(d, ctx);
@@ -403,6 +408,32 @@ function mapNoticeRow(row: Record<string, unknown>): Record<string, unknown> {
     payload: row.payload,
     created_at: row.created_at,
   };
+}
+
+// ---------------------------------------------------------------- consumed 标记
+
+/**
+ * endpoint:requestConsumed / endpoint:noticeConsumed —— 按行 id 置 consumed=1。
+ * 表未注册（或 model 无 update）时保持"未接线"报错。
+ */
+async function markInboxConsumed(
+  d: Record<string, unknown>,
+  ctx: ConsoleRpcExtendedCtx,
+  table: string,
+): Promise<ExtendedRpcResult> {
+  const ids = numArrayField(d, '$row_ids', 'row_ids', 'rowIds', '$ids', 'ids');
+  if (ids.length === 0) return { error: '$row_ids required' };
+  const model = getInboxModel(ctx, table);
+  if (!model || typeof model.update !== 'function') return { error: CONSUMED_NOT_WIRED };
+  const now = Date.now();
+  try {
+    for (const id of ids) {
+      await model.update({ consumed: 1, consumed_at: now }).where({ id });
+    }
+    return { data: { success: true, updated: ids.length } };
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
 }
 
 // ---------------------------------------------------------------- 请求审批
@@ -693,6 +724,18 @@ function optionalNum(d: Record<string, unknown>, ...keys: string[]): number | un
     if (Number.isFinite(parsed)) return parsed;
   }
   return undefined;
+}
+
+/** 数字数组字段（$row_ids 等）：取首个数组值，收敛为有限数字。 */
+function numArrayField(d: Record<string, unknown>, ...keys: string[]): number[] {
+  for (const key of keys) {
+    const value = d[key];
+    if (!Array.isArray(value)) continue;
+    return value
+      .map((item) => Number(item))
+      .filter((item) => Number.isFinite(item));
+  }
+  return [];
 }
 
 function pickMethod(

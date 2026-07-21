@@ -26,6 +26,19 @@ function makeInboxDb(tables: Record<string, Record<string, unknown>[] | Error>) 
                 Object.entries(query).every(([key, value]) => row[key] === value));
             },
           }),
+          update: (patch: Record<string, unknown>) => ({
+            where: async (query: Record<string, unknown>) => {
+              if (entry instanceof Error) throw entry;
+              let count = 0;
+              for (const row of entry) {
+                if (Object.entries(query).every(([key, value]) => row[key] === value)) {
+                  Object.assign(row, patch);
+                  count += 1;
+                }
+              }
+              return count;
+            },
+          }),
         };
       },
     },
@@ -315,6 +328,49 @@ describe('dispatchExtendedConsoleRpc', () => {
         );
         expect(demo).toEqual({ error: `Demo scope: RPC "${type}" is forbidden` });
       }
+    });
+
+    it('requestConsumed / noticeConsumed update consumed=1 on matching rows', async () => {
+      const requestRows = [
+        { id: 1, adapter: 'icqq', endpoint_id: '1234', consumed: 0, consumed_at: null },
+        { id: 2, adapter: 'icqq', endpoint_id: '1234', consumed: 0, consumed_at: null },
+      ];
+      const noticeRows = [
+        { id: 7, adapter: 'icqq', endpoint_id: '1234', consumed: 0, consumed_at: null },
+      ];
+      const ctx = makeCtx({
+        databaseHost: makeInboxDb({
+          unified_inbox_request: requestRows,
+          unified_inbox_notice: noticeRows,
+        }),
+      });
+
+      await expect(
+        dispatchExtendedConsoleRpc('endpoint:requestConsumed', { $row_ids: [1, 2] }, ctx),
+      ).resolves.toEqual({ data: { success: true, updated: 2 } });
+      expect(requestRows[0]?.consumed).toBe(1);
+      expect(requestRows[1]?.consumed).toBe(1);
+      expect(typeof requestRows[0]?.consumed_at).toBe('number');
+
+      await expect(
+        dispatchExtendedConsoleRpc('endpoint:noticeConsumed', { $row_ids: [7] }, ctx),
+      ).resolves.toEqual({ data: { success: true, updated: 1 } });
+      expect(noticeRows[0]?.consumed).toBe(1);
+    });
+
+    it('requestConsumed requires $row_ids and reports 未接线 when the table is missing', async () => {
+      const ctx = makeCtx({
+        databaseHost: makeInboxDb({ unified_inbox_notice: [] }),
+      });
+      await expect(
+        dispatchExtendedConsoleRpc('endpoint:requestConsumed', {}, ctx),
+      ).resolves.toEqual({ error: '$row_ids required' });
+      const missing = await dispatchExtendedConsoleRpc(
+        'endpoint:requestConsumed',
+        { $row_ids: [1] },
+        ctx,
+      );
+      expect((missing as { error: string }).error).toContain('未接线');
     });
 
     it('approve/reject call endpoint methods when present', async () => {

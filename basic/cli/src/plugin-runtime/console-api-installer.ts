@@ -14,6 +14,8 @@ import {
   readProjectFile,
   saveProjectFile,
   createConsoleEventHub,
+  registerConsoleRestPages,
+  type ConsoleAgentRuntime,
   type ConsoleEventHub,
   type HttpHost,
   type RuntimeConsolePage,
@@ -21,9 +23,14 @@ import {
 } from '@zhin.js/host-http';
 import type { ImRuntime, RuntimeMessageEvent } from '@zhin.js/core/runtime';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
-import type { DatabaseHost, PluginNodeSnapshot, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import {
+  runtimeEventPublisherToken,
+  type DatabaseHost,
+  type PluginNodeSnapshot,
+  type RuntimeSnapshot,
+} from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
-import { registerConsoleRestPages, type ConsoleAgentRuntime } from '@zhin.js/host-http';
+import { installInboxMessageRecorder } from './inbox-installer.js';
 
 /**
  * 新 Runtime 的 agent 门面。agent 包在 init 时已向 registry 注册 session tree
@@ -106,6 +113,10 @@ export function installConsoleApi(options: {
   const apiBase = normalizeBase(options.apiBase ?? '/api');
   return ({ resources }) => {
     const http = resources.use(httpHostToken);
+    // Console SSE hub 同时作为 Root 级事件发布口（插件经 runtimeEventPublisherToken
+    // publish endpoint:request/endpoint:notice 等收件箱事件）。
+    const hub = options.eventHub ?? createConsoleEventHub();
+    resources.provide(runtimeEventPublisherToken, hub);
     registerConsoleApiRoutes(
       http,
       options.console,
@@ -116,7 +127,7 @@ export function installConsoleApi(options: {
       options.databaseHost,
       options.snapshot,
       options.scheduleHost,
-      options.eventHub,
+      hub,
     );
   };
 }
@@ -141,6 +152,12 @@ export function registerConsoleApiRoutes(
   if (im && typeof im.onMessage === 'function' && !messageBridgeInstallations.has(im)) {
     messageBridgeInstallations.add(im);
     im.onMessage((event) => publishMessageEvent(hub, event));
+  }
+
+  // 收件箱写路径：onMessage → unified_inbox_message（表由 start-command 在
+  // createDatabaseHost 后 defineInboxTables 注册；此处仅订阅写入）。
+  if (im && databaseHost && typeof im.onMessage === 'function') {
+    installInboxMessageRecorder(im, databaseHost);
   }
 
   // REST 六组（logs / marketplace / introspection / agent sessions 等，host-http 实现）

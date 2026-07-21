@@ -19,6 +19,13 @@ import {
   type IcqqIpcMessageEvent,
 } from './icqq-inbound.js';
 import {
+  buildIcqqInboxNoticeRow,
+  buildIcqqInboxRequestRow,
+  buildIcqqSystemRequestRow,
+  isIcqqNoticePayload,
+  isIcqqRequestPayload,
+} from './icqq-inbox.js';
+import {
   isIcqqGuildIpcEvent,
   normalizeIcqqGuildInboundMessage,
 } from './icqq-guild.js';
@@ -56,11 +63,23 @@ export interface IcqqIpcTransport {
 
 export type CreateIcqqIpc = (config: ResolvedIcqqConfig) => Promise<IcqqIpcTransport>;
 
+/**
+ * 收件箱写/推钩子（由装配层注入，见 adapters/icqq.ts）。
+ * record* 写 unified_inbox_request/notice；publish 向 console hub 推送实时事件。
+ */
+export interface IcqqInboxHooks {
+  recordRequest(row: Record<string, unknown>): void | Promise<void>;
+  recordNotice(row: Record<string, unknown>): void | Promise<void>;
+  publish?(type: string, data: unknown): void;
+}
+
 export interface IcqqEndpointOptions {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
   readonly config: ResolvedIcqqConfig;
   readonly createIpc?: CreateIcqqIpc;
+  /** 未注入时 request/notice 事件仅按非消息载荷忽略（不报错）。 */
+  readonly inbox?: IcqqInboxHooks;
 }
 
 export class IcqqIpcEndpoint implements EndpointInstance {
@@ -75,6 +94,8 @@ export class IcqqIpcEndpoint implements EndpointInstance {
   #started = false;
   #subscriptions: Array<{ unsubscribe: () => Promise<void> }> = [];
   #inboundDeduper = new InboundMessageDeduper();
+  /** request/notice 去重（推送事件与 GET_SYSTEM_MSG 首拉可能重复同一 flag）。 */
+  #inboxDeduper = new InboundMessageDeduper();
   #unregisterAgent?: () => void;
   /** 用户主动 stop 时为 true，阻止自动重连 */
   #intentionalDisconnect = false;
@@ -130,6 +151,9 @@ export class IcqqIpcEndpoint implements EndpointInstance {
       this.#handleEvent(event);
     });
     this.#subscriptions.push(sub);
+    // daemon 推送 client.em 全部事件，request/notice 实时到达；
+    // 启动时补一次 GET_SYSTEM_MSG，捞离线期间积存的待处理请求。
+    void this.#pullPendingSystemMessages();
   }
 
   /** IPC/RPC 意外断开时调度重连（指数退避） */
@@ -203,6 +227,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     this.#unregisterAgent?.();
     this.#unregisterAgent = undefined;
     this.#inboundDeduper.clear();
+    this.#inboxDeduper.clear();
     this.friends.clear();
     this.groups.clear();
     try {
@@ -631,6 +656,14 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     }
     const payload = unwrapIcqqIpcEventPayload(event);
     if (!payload || typeof payload !== 'object') return;
+    if (isIcqqRequestPayload(payload)) {
+      this.#recordInboxRequest(payload as Record<string, unknown>);
+      return;
+    }
+    if (isIcqqNoticePayload(payload)) {
+      this.#recordInboxNotice(payload as Record<string, unknown>);
+      return;
+    }
     if (!isIcqqMessagePostType(payload)) return;
     const data = payload as IcqqIpcMessageEvent;
     if (shouldSkipSelfInboundMessage(data)) return;
@@ -677,6 +710,68 @@ export class IcqqIpcEndpoint implements EndpointInstance {
         nickname: normalized.nickname,
       },
     });
+  }
+
+  /** 收件箱行公共前缀：adapter 槽 localName + endpoint live 名（uin）。 */
+  #inboxBase(): { adapter: string; endpointId: string } {
+    const id = String(this.#options.id);
+    return { adapter: id.split('\0').pop() ?? id, endpointId: this.name };
+  }
+
+  #recordInboxRequest(payload: Record<string, unknown>): void {
+    const hooks = this.#options.inbox;
+    if (!hooks) return;
+    const row = buildIcqqInboxRequestRow(payload, this.#inboxBase());
+    if (!row) return;
+    if (!this.#inboxDeduper.shouldProcess(`request:${String(row.platform_request_id)}`)) return;
+    void hooks.recordRequest(row);
+    hooks.publish?.('endpoint:request', row);
+  }
+
+  #recordInboxNotice(payload: Record<string, unknown>): void {
+    const hooks = this.#options.inbox;
+    if (!hooks) return;
+    const row = buildIcqqInboxNoticeRow(payload, this.#inboxBase());
+    if (!row) return;
+    if (!this.#inboxDeduper.shouldProcess(`notice:${String(row.platform_notice_id)}`)) return;
+    void hooks.recordNotice(row);
+    hooks.publish?.('endpoint:notice', row);
+  }
+
+  /** 启动/重连后首拉 GET_SYSTEM_MSG：补录离线期间的好友/群待处理请求。 */
+  async #pullPendingSystemMessages(): Promise<void> {
+    const hooks = this.#options.inbox;
+    if (!hooks || !this.ipc) return;
+    try {
+      const resp = await this.ipc.request(Actions.GET_SYSTEM_MSG);
+      if (!resp.ok) return;
+      const data = resp.data as
+        | { friendRequests?: unknown; groupRequests?: unknown }
+        | undefined;
+      const base = this.#inboxBase();
+      const rows = [
+        ...(Array.isArray(data?.friendRequests)
+          ? (data.friendRequests as IpcSystemMessage[]).map((m) =>
+            buildIcqqSystemRequestRow(m, 'friend', base))
+          : []),
+        ...(Array.isArray(data?.groupRequests)
+          ? (data.groupRequests as IpcSystemMessage[]).map((m) =>
+            buildIcqqSystemRequestRow(m, 'group', base))
+          : []),
+      ];
+      for (const row of rows) {
+        if (!row) continue;
+        if (!this.#inboxDeduper.shouldProcess(`request:${String(row.platform_request_id)}`)) continue;
+        void hooks.recordRequest(row);
+        hooks.publish?.('endpoint:request', row);
+      }
+    } catch (error) {
+      logger.debug(formatCompact({
+        op: 'inbox_pull_system_msg',
+        endpoint: this.name,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
   }
 }
 

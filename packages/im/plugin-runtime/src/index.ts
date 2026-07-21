@@ -11,3 +11,4 @@ export * from './schedule-host.js';
 export * from './database-host.js';
 export * from './html-renderer.js';
 export * from './outbound-host.js';
+export * from './inbox.js';

@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { YamlConfigDocument } from '@zhin.js/config-yaml';
 import { ImRuntime } from '@zhin.js/core/runtime';
 import { createConsoleEventHub } from '@zhin.js/host-http';
+import { defineInboxTables } from '@zhin.js/plugin-runtime';
 import { setLevel, getLogger, formatCompact, type LogLevelInput } from '@zhin.js/logger';
 import {
   ConfigValidationError,
@@ -97,6 +98,9 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   };
   const im = new ImRuntime();
   const databaseHost = createDatabaseHost(databaseConfig);
+  // console endpoint-detail 收件箱三张表（unified_inbox_message/request/notice）；
+  // 必须在 installResources（host.start）之前 define，写入订阅在 console-api-installer 挂载。
+  defineInboxTables(databaseHost);
   const scheduleHost = createScheduleHost();
   const consoleHost = createConsoleHostModules(options.root, !parsed.once && !parsed.noWatch);
   // Console SSE 事件枢纽：/api/events 订阅方 + HMR/消息/配置事件 publish 方共享。
