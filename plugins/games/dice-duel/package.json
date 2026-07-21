@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-dice-duel",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Zhin.js 骰子对决 — 三局两胜比大小 (Plugin Runtime)",
   "type": "module",
   "main": "./lib/index.js",

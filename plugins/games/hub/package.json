@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-game-hub",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Zhin.js 游戏大厅 — 列出已加载的游戏插件 (Plugin Runtime)",
   "type": "module",
   "main": "./lib/index.js",

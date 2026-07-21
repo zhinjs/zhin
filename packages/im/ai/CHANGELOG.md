@@ -1,5 +1,12 @@
 # @zhin.js/ai
 
+## 1.4.5
+
+### Patch Changes
+
+- Updated dependencies [cc5c94d]
+  - @zhin.js/logger@1.0.75
+
 ## 1.4.4
 
 ### Patch Changes

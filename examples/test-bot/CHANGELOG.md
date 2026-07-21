@@ -1,5 +1,77 @@
 # test-bot
 
+## 0.1.114
+
+### Patch Changes
+
+- Updated dependencies [16ec4e8]
+- Updated dependencies [cc5c94d]
+- Updated dependencies [447f3e2]
+  - @zhin.js/core@1.3.5
+  - @zhin.js/agent@1.0.4
+  - @zhin.js/cli@1.0.94
+  - @zhin.js/plugin-blackjack@0.0.2
+  - @zhin.js/plugin-dice-duel@1.0.2
+  - @zhin.js/plugin-guess-number@1.0.2
+  - @zhin.js/plugin-idiom-chain@1.0.2
+  - @zhin.js/plugin-rps@1.0.2
+  - @zhin.js/plugin-text-adventure@1.0.2
+  - @zhin.js/plugin-tic-tac-toe@1.0.2
+  - @zhin.js/plugin-word-riddle@1.0.2
+  - @zhin.js/plugin-group-suite@3.0.3
+  - @zhin.js/plugin-lottery@1.0.2
+  - zhin.js@4.1.3
+  - @zhin.js/process-monitor@3.0.3
+  - @zhin.js/service-activity-feedback@1.0.2
+  - @zhin.js/adapter-dingtalk@4.0.3
+  - @zhin.js/adapter-discord@5.0.3
+  - @zhin.js/adapter-email@3.0.3
+  - @zhin.js/adapter-github@3.0.3
+  - @zhin.js/adapter-icqq@6.0.3
+  - @zhin.js/adapter-kook@5.0.3
+  - @zhin.js/adapter-lark@4.0.3
+  - @zhin.js/adapter-line@2.0.3
+  - @zhin.js/adapter-milky@4.0.1
+  - @zhin.js/adapter-napcat@4.0.1
+  - @zhin.js/adapter-onebot11@4.0.3
+  - @zhin.js/adapter-onebot12@3.0.3
+  - @zhin.js/adapter-qq@5.0.3
+  - @zhin.js/adapter-sandbox@5.0.6
+  - @zhin.js/adapter-satori@3.0.3
+  - @zhin.js/adapter-slack@4.1.1
+  - @zhin.js/adapter-telegram@5.0.3
+  - @zhin.js/adapter-wechat-mp@3.0.3
+  - @zhin.js/adapter-wecom@2.0.3
+  - @zhin.js/adapter-weixin-ilink@3.0.3
+  - @zhin.js/plugin-60s@3.0.3
+  - @zhin.js/plugin-code-runner@3.0.3
+  - @zhin.js/plugin-game-hub@1.0.1
+  - @zhin.js/plugin-link-poster@3.0.3
+  - @zhin.js/plugin-music@5.0.3
+  - @zhin.js/plugin-qrcode@3.0.3
+  - @zhin.js/plugin-repeater@3.0.3
+  - @zhin.js/plugin-rss@3.0.3
+  - @zhin.js/plugin-short-url@3.0.3
+  - @zhin.js/plugin-runtime@1.0.1
+  - @zhin.js/host-api@2.0.6
+  - @zhin.js/mcp@4.0.3
+  - @zhin.js/host-router@2.0.4
+  - @zhin.js/html-renderer@1.0.4
+  - @zhin.js/speech@1.0.4
+  - @zhin.js/kernel@1.0.4
+  - @zhin.js/adapter@1.0.1
+  - @zhin.js/page@1.0.1
+  - @zhin.js/agent-feature@1.0.1
+  - @zhin.js/command@1.0.1
+  - @zhin.js/component@1.0.1
+  - @zhin.js/mcp-feature@1.0.1
+  - @zhin.js/middleware@1.0.1
+  - @zhin.js/runtime@1.0.1
+  - @zhin.js/skill@1.0.1
+  - @zhin.js/tool@1.0.1
+  - @zhin.js/contract@1.0.4
+  - @zhin.js/client@2.0.6
+
 ## 0.1.113
 
 ### Patch Changes

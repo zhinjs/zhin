@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-telegram",
-  "version": "5.0.2",
+  "version": "5.0.3",
   "description": "Zhin.js Telegram Bot API adapter for Plugin Runtime (long-poll getUpdates)",
   "type": "module",
   "main": "./lib/index.js",

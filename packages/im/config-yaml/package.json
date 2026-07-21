@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/config-yaml",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Comment-preserving YAML ConfigDocument adapter for the Zhin Plugin Runtime",
   "type": "module",
   "main": "./lib/index.js",
@@ -39,5 +39,8 @@
     "url": "git+https://github.com/zhinjs/zhin.git",
     "directory": "packages/im/config-yaml"
   },
-  "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org" }
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
 }

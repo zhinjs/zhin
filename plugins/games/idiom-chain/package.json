@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-idiom-chain",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Zhin.js 成语接龙 — 四字成语文字接龙 (Plugin Runtime)",
   "type": "module",
   "main": "./lib/index.js",

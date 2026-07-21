@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/runtime",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Static Plugin graph, generation transaction and HMR Root runtime for Zhin.js",
   "type": "module",
   "main": "./lib/index.js",
@@ -12,7 +12,9 @@
       "import": "./lib/index.js"
     }
   },
-  "files": ["lib"],
+  "files": [
+    "lib"
+  ],
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
@@ -44,7 +46,12 @@
     "url": "git+https://github.com/zhinjs/zhin.git",
     "directory": "packages/im/runtime"
   },
-  "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org" },
-  "engines": { "node": "^20.19.0 || >=22.12.0" },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
   "license": "MIT"
 }

@@ -1,5 +1,20 @@
 # @zhin.js/host-api
 
+## 2.0.6
+
+### Patch Changes
+
+- Updated dependencies [16ec4e8]
+- Updated dependencies [cc5c94d]
+- Updated dependencies [447f3e2]
+  - @zhin.js/core@1.3.5
+  - @zhin.js/agent@1.0.4
+  - @zhin.js/pagemanager@2.0.4
+  - @zhin.js/database@1.0.77
+  - @zhin.js/host-router@2.0.4
+  - @zhin.js/contract@1.0.4
+  - @zhin.js/client@2.0.6
+
 ## 2.0.5
 
 ### Patch Changes

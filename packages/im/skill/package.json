@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/skill",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Convention-based Markdown Skill Feature for Zhin Plugin Runtime",
   "type": "module",
   "main": "./lib/index.js",

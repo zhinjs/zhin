@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/host-http",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Minimal HTTP and WebSocket host for Plugin Runtime (no Koa)",
   "type": "module",
   "main": "./lib/index.js",
@@ -12,7 +12,10 @@
       "import": "./lib/index.js"
     }
   },
-  "files": ["lib", "src"],
+  "files": [
+    "lib",
+    "src"
+  ],
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
@@ -28,13 +31,18 @@
     "@types/ws": "^8.18.1",
     "typescript": "^6.0.3"
   },
-  "engines": { "node": "^20.19.0 || >=22.12.0" },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/zhinjs/zhin.git",
     "directory": "packages/host/http"
   },
-  "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org" },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
   "license": "MIT",
   "private": false
 }

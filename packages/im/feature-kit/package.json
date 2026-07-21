@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/feature-kit",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Feature provider contract and owner-aware capability discovery for Zhin Plugin Runtime",
   "type": "module",
   "main": "./lib/index.js",
