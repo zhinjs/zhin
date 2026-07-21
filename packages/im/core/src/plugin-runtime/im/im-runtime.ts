@@ -220,9 +220,11 @@ export class ImRuntime implements MessageGateway {
         if (!id) return null;
         const row = index.describe().find((item) => item.id === id);
         if (!row) return null;
+        // adapter 与 listEndpoints 对齐：平台类型（owner 包名去 scope/adapter- 前缀），
+        // 不是 live name（如 ICQQ uin）。此前误写 row.name 导致 endpoint.info 与 list 不一致。
         return Object.freeze({
           name: row.name,
-          adapter: row.name,
+          adapter: adapterTypeName(lease.value.tree.get(row.owner)?.packageName) ?? row.name,
           connected: row.connected,
           status: row.status,
           phase: row.phase,

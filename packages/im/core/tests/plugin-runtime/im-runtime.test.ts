@@ -156,6 +156,75 @@ describe('IM Runtime', () => {
     await fixture.store.close();
   });
 
+  it('getEndpoint returns the same adapter type as listEndpoints (not live name)', async () => {
+    const root = rootPluginId();
+    const adapter = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'icqq',
+      source: '/adapters/icqq.ts',
+      definition: defineAdapter({
+        capabilities: ['inbound', 'outbound'],
+        create: () => ({
+          name: '111111',
+          start() {},
+          open() {},
+          close() {},
+          stop() {},
+          send() { return { id: 'sent-1' }; },
+        }),
+      }),
+    });
+    const state: SnapshotState = {
+      root,
+      tree: new Map([[root, {
+        id: root,
+        instanceKey: 'root',
+        packageName: '@zhin.js/adapter-icqq',
+        packageRoot: '/project',
+        children: [],
+      }]]),
+      config: new Map([[root, {}]]),
+      resources: new Map([[root, new Map()]]),
+      capabilities: new Map([[adapter.id, adapter]]),
+      projections: new Map(),
+    };
+    const view = createSnapshotView(0, state);
+    const adapters = await AdapterIndex.create([adapter], view);
+    const store = new SnapshotStore({
+      ...state,
+      projections: new Map([[adapterFeatureId, adapters]]),
+    });
+    const im = new ImRuntime();
+    im.attach(store);
+    await adapters.start();
+    adapters.open();
+
+    const listed = im.listEndpoints();
+    expect(listed).toEqual([expect.objectContaining({
+      name: '111111',
+      adapter: 'icqq',
+      connected: true,
+      status: 'online',
+    })]);
+
+    // 用 slot localName 解析（inbox-installer 路径）
+    expect(im.getEndpoint('icqq', 'icqq')).toEqual(expect.objectContaining({
+      name: '111111',
+      adapter: 'icqq',
+      connected: true,
+      status: 'online',
+    }));
+    // 用 live name 解析（console endpoint.info 路径）
+    expect(im.getEndpoint('icqq', '111111')).toEqual(expect.objectContaining({
+      name: '111111',
+      adapter: 'icqq',
+    }));
+
+    await adapters.stop();
+    await store.close();
+  });
+
   it('emits inbound and outbound message events via onMessage', async () => {
     const sent: unknown[] = [];
     const fixture = await createFixture([], sent);

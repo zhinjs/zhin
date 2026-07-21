@@ -92,6 +92,9 @@ importers:
 
   basic/cli:
     dependencies:
+      '@zhin.js/command':
+        specifier: workspace:*
+        version: link:../../packages/im/command
       '@zhin.js/config-yaml':
         specifier: workspace:*
         version: link:../../packages/im/config-yaml

@@ -1,8 +1,10 @@
 import { access, readFile, writeFile } from 'node:fs/promises';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import os from 'node:os';
 import type { ServerResponse } from 'node:http';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { commandFeatureId, isCommandIndex } from '@zhin.js/command';
 import {
   HttpBodyError,
   httpHostToken,
@@ -42,17 +44,157 @@ let agentModule: {
   getAssistantRuntime?: () => {
     engine: import('@zhin.js/host-http').ConsoleScheduleEngine;
   } | null;
+  getAgentRuntimeRegistry?: () => {
+    getDefault(): { orchestrator?: unknown } | null;
+  };
 } | null | undefined;
 
 void import('@zhin.js/agent')
   .then((mod) => { agentModule = mod as typeof agentModule; })
   .catch(() => { agentModule = null; });
 
-function resolveConsoleAgentRuntime(): ConsoleAgentRuntime | undefined {
-  return {
+function createAgentRuntimeResolver(
+  projectRoot: string,
+  getSnapshot?: () => RuntimeSnapshot | undefined,
+): () => ConsoleAgentRuntime | undefined {
+  return () => ({
     sessionTree: agentModule?.getSessionTreeRuntime?.() ?? undefined,
-    introspection: undefined,
+    introspection: {
+      commands: () => {
+        const snap = getSnapshot?.();
+        if (!snap) return [];
+        const index = snap.projections.get(commandFeatureId);
+        if (!isCommandIndex(index)) return [];
+        return index.list().map((command) => ({
+          pattern: command.name,
+          desc: command.description ?? '',
+          plugin: command.source,
+        }));
+      },
+      bindings: () => listIntrospectionBindings(projectRoot),
+      tools: () => {
+        // 静态目录（snapshot ToolIndex，约定式 tools/*.ts）+ orchestrator 回合内装载的实时工具（去重）
+        const seen = new Map<string, Record<string, unknown>>();
+        const snap = getSnapshot?.();
+        if (snap) {
+          for (const [feature, projection] of snap.projections) {
+            // 只取 Tool Feature（zhin.agent-tool / 同族），排除 AdapterIndex 等同样带 list() 的投影
+            if (!String(feature).includes('tool')) continue;
+            if (!isToolIndexLike(projection)) continue;
+            for (const tool of projection.list()) {
+              if (tool.hidden) continue;
+              seen.set(tool.name, {
+                name: tool.name,
+                source: tool.source,
+                description: tool.description ?? '',
+              });
+            }
+          }
+        }
+        const orchestrator = resolveOrchestrator();
+        if (orchestrator) {
+          for (const tool of orchestrator.tools.getAll()) {
+            if ((tool as { hidden?: boolean }).hidden || seen.has(tool.name)) continue;
+            seen.set(tool.name, {
+              name: tool.name,
+              source: 'agent',
+              description: (tool as { description?: string }).description ?? '',
+            });
+          }
+        }
+        return [...seen.values()];
+      },
+      mcp: () => {
+        const rows = new Map<string, Record<string, unknown>>();
+        // 配置面（ai.mcpServers）始终可见；连接状态在 orchestrator 可用时补
+        for (const entry of listConfigMcpServers(projectRoot)) {
+          rows.set(entry.name, { name: entry.name, connected: false, toolCount: 0, transport: entry.transport });
+        }
+        const orchestrator = resolveOrchestrator();
+        if (orchestrator) {
+          for (const entry of orchestrator.mcps.getAll()) {
+            rows.set(entry.name, {
+              name: entry.name,
+              connected: orchestrator.mcps.isConnected(entry.name),
+              toolCount: orchestrator.mcps.getToolsFromServer(entry.name).length,
+            });
+          }
+        }
+        return { rows: [...rows.values()] };
+      },
+    },
+  });
+}
+
+function resolveOrchestrator(): {
+  tools: { getAll(): { name: string; hidden?: boolean; description?: string }[] };
+  mcps: {
+    getAll(): { name: string }[];
+    isConnected(name: string): boolean;
+    getToolsFromServer(name: string): readonly unknown[];
   };
+} | null {
+  try {
+    const registry = agentModule?.getAgentRuntimeRegistry?.();
+    const orchestrator = registry?.getDefault?.()?.orchestrator;
+    return (orchestrator as never) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function isToolIndexLike(value: unknown): value is {
+  list(): { name: string; description?: string; source: string; hidden?: boolean }[];
+} {
+  return !!value && typeof value === 'object' && typeof (value as { list?: unknown }).list === 'function';
+}
+
+function listConfigMcpServers(projectRoot: string): { name: string; transport?: string }[] {
+  const file = findConfigFileSync(projectRoot);
+  if (!file) return [];
+  try {
+    const text = readFileSync(file, 'utf8');
+    const doc = (file.endsWith('.json') ? JSON.parse(text) : parseYaml(text)) as Record<string, unknown>;
+    const servers = (doc?.ai as { mcpServers?: { name?: string; transport?: string }[] } | undefined)?.mcpServers;
+    if (!Array.isArray(servers)) return [];
+    return servers
+      .filter((entry) => entry && typeof entry.name === 'string')
+      .map((entry) => ({ name: entry.name as string, transport: entry.transport }));
+  } catch {
+    return [];
+  }
+}
+
+function listIntrospectionBindings(projectRoot: string): Record<string, unknown>[] {
+  const file = findConfigFileSync(projectRoot);
+  if (!file) return [];
+  try {
+    const text = readFileSync(file, 'utf8');
+    const doc = (file.endsWith('.json') ? JSON.parse(text) : parseYaml(text)) as Record<string, unknown>;
+    const agents = (doc?.ai as { agents?: Record<string, {
+      provider?: string; model?: string; nickname?: string; mcpServers?: string[];
+    }> } | undefined)?.agents;
+    if (!agents || typeof agents !== 'object') return [];
+    return Object.entries(agents).map(([name, binding]) => ({
+      name,
+      provider: binding?.provider ?? '-',
+      model: binding?.model ?? '-',
+      mcpServers: binding?.mcpServers ?? [],
+      hasAgentFile: false,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function findConfigFileSync(projectRoot: string): string | undefined {
+  for (const candidate of [
+    'config.yml', 'config.yaml', 'config.json', 'zhin.config.yml', 'zhin.config.yaml',
+  ]) {
+    const file = join(projectRoot, candidate);
+    if (existsSync(file)) return file;
+  }
+  return undefined;
 }
 
 const publicAccess = Object.freeze({ permissions: [] as string[], roles: [] as string[] });
@@ -167,7 +309,7 @@ export function registerConsoleApiRoutes(
     getEndpoints: im
       ? () => im.listEndpoints()
       : undefined,
-    getAgentRuntime: () => resolveConsoleAgentRuntime(),
+    getAgentRuntime: createAgentRuntimeResolver(projectRoot, snapshot),
     databaseHost: databaseHost
       ? {
         dialect: databaseHost.dialect,
