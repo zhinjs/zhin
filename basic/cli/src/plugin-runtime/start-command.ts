@@ -183,9 +183,8 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
     }
     throw error;
   }
-  options.writeOutput(`${JSON.stringify({ started: true, ...snapshot }, null, 2)}\n`);
-  if (process.stdout.isTTY) {
-    // 人可读启动总结；裸 JSON 保留给 stable-path 测试与脚本消费
+  // TTY 交互启动：统一走 logger；裸 JSON 留给 --once / 管道（stable-path、脚本）
+  if (process.stdout.isTTY && !parsed.once) {
     const endpoints = im.listEndpoints();
     const online = endpoints.filter((ep) => ep.status === 'online').map((ep) => ep.name);
     const offline = endpoints.filter((ep) => ep.status !== 'online').map((ep) => ep.name);
@@ -194,6 +193,8 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
       `zhin runtime started (plugins=${snapshot.plugins}, http=http://${httpAddress}, ` +
       `adapters online=[${online.join(', ')}] offline=[${offline.join(', ')}])`,
     );
+  } else {
+    options.writeOutput(`${JSON.stringify({ started: true, ...snapshot }, null, 2)}\n`);
   }
   if (parsed.once) {
     await control.stop();
