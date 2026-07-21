@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-wecom",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "Zhin.js WeCom (企业微信) adapter for Plugin Runtime (HTTP webhook)",
   "type": "module",
   "main": "./lib/index.js",

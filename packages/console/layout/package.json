@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/layout",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Convention-based Console Layout capability Feature for Zhin.js plugins",
   "type": "module",
   "main": "./lib/index.js",
@@ -46,5 +46,8 @@
     "url": "git+https://github.com/zhinjs/zhin.git",
     "directory": "packages/console/layout"
   },
-  "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org" }
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
 }

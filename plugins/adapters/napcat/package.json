@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-napcat",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "description": "Zhin.js NapCat adapter for Plugin Runtime (WebSocket client, OneBot11 + NapCat extensions)",
   "type": "module",
   "main": "./lib/index.js",

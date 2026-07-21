@@ -1,5 +1,19 @@
 # demo-bot
 
+## 0.0.9
+
+### Patch Changes
+
+- Updated dependencies [16ec4e8]
+- Updated dependencies [cc5c94d]
+- Updated dependencies [447f3e2]
+  - @zhin.js/core@1.3.5
+  - @zhin.js/agent@1.0.4
+  - @zhin.js/adapter-sandbox@5.0.6
+  - @zhin.js/plugin-runtime@1.0.1
+  - @zhin.js/command@1.0.1
+  - @zhin.js/component@1.0.1
+
 ## 0.0.8
 
 ### Patch Changes

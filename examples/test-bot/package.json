@@ -1,7 +1,7 @@
 {
   "name": "test-bot",
   "private": true,
-  "version": "0.1.113",
+  "version": "0.1.114",
   "description": "Zhin.js Plugin Runtime 厨房水槽（对齐 legacy endpoints：icqq×5 / slack / github / qq×2 / sandbox + games）",
   "type": "module",
   "scripts": {

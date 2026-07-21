@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/html-renderer",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "HTML to PNG/SVG for Zhin.js (satori + resvg); optional peer of zhin.js",
   "type": "module",
   "main": "./lib/index.js",

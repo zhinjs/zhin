@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-blackjack",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Zhin.js 21 点（Blackjack）(Plugin Runtime)",
   "type": "module",
   "main": "./lib/index.js",

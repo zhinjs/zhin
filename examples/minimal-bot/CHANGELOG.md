@@ -1,5 +1,20 @@
 # minimal-bot
 
+## 0.0.15
+
+### Patch Changes
+
+- Updated dependencies [16ec4e8]
+- Updated dependencies [cc5c94d]
+- Updated dependencies [447f3e2]
+  - @zhin.js/core@1.3.5
+  - zhin.js@4.1.3
+  - @zhin.js/plugin-runtime@1.0.1
+  - @zhin.js/adapter@1.0.1
+  - @zhin.js/command@1.0.1
+  - @zhin.js/component@1.0.1
+  - @zhin.js/runtime@1.0.1
+
 ## 0.0.14
 
 ### Patch Changes

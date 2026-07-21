@@ -337,10 +337,10 @@ importers:
         specifier: workspace:*
         version: link:../../packages/console/client
       '@zhin.js/command':
-        specifier: 1.0.0
+        specifier: 1.0.1
         version: link:../../packages/im/command
       '@zhin.js/component':
-        specifier: 1.0.0
+        specifier: 1.0.1
         version: link:../../packages/im/component
       '@zhin.js/console-contract':
         specifier: workspace:*
@@ -352,7 +352,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/host/mcp
       '@zhin.js/page':
-        specifier: 1.0.0
+        specifier: 1.0.1
         version: link:../../packages/console/page
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
@@ -361,10 +361,10 @@ importers:
         specifier: workspace:*
         version: link:../../packages/toolkit/satori
       '@zhin.js/skill':
-        specifier: 1.0.0
+        specifier: 1.0.1
         version: link:../../packages/im/skill
       '@zhin.js/tool':
-        specifier: 1.0.0
+        specifier: 1.0.1
         version: link:../../packages/im/tool
       ai:
         specifier: ^7.0.2
@@ -426,13 +426,13 @@ importers:
   examples/minimal-bot:
     dependencies:
       '@zhin.js/adapter':
-        specifier: 1.0.0
+        specifier: 1.0.1
         version: link:../../packages/im/adapter
       '@zhin.js/command':
-        specifier: 1.0.0
+        specifier: 1.0.1
         version: link:../../packages/im/command
       '@zhin.js/component':
-        specifier: 1.0.0
+        specifier: 1.0.1
         version: link:../../packages/im/component
       '@zhin.js/core':
         specifier: workspace:*
@@ -497,16 +497,16 @@ importers:
   examples/plugin-runtime-migration-bot:
     dependencies:
       '@zhin.js/command':
-        specifier: 1.0.0
+        specifier: 1.0.1
         version: link:../../packages/im/command
       '@zhin.js/component':
-        specifier: 1.0.0
+        specifier: 1.0.1
         version: link:../../packages/im/component
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../packages/im/core
       '@zhin.js/middleware':
-        specifier: 1.0.0
+        specifier: 1.0.1
         version: link:../../packages/im/middleware
       '@zhin.js/plugin-runtime':
         specifier: workspace:*

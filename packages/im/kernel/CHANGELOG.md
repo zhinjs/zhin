@@ -1,5 +1,13 @@
 # @zhin.js/kernel
 
+## 1.0.4
+
+### Patch Changes
+
+- Updated dependencies [cc5c94d]
+  - @zhin.js/schedule@0.0.3
+  - @zhin.js/logger@1.0.75
+
 ## 1.0.3
 
 ### Patch Changes

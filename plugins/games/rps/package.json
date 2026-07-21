@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-rps",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Zhin.js 猜拳游戏 — 石头剪刀布三局两胜 (Plugin Runtime)",
   "type": "module",
   "main": "./lib/index.js",

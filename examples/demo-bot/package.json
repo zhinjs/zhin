@@ -1,7 +1,7 @@
 {
   "name": "demo-bot",
   "private": true,
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "Zhin.js 官方 demo-api.zhin.dev 托管配置（Sandbox + Demo scoped token）",
   "type": "module",
   "scripts": {
@@ -36,11 +36,20 @@
     "engine": "^1.0.0",
     "runtime": "trusted",
     "features": [
-      { "package": "@zhin.js/command", "api": "^1.0.0" },
-      { "package": "@zhin.js/component", "api": "^1.0.0" }
+      {
+        "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/component",
+        "api": "^1.0.0"
+      }
     ],
     "plugins": [
-      { "package": "@zhin.js/adapter-sandbox", "instanceKey": "sandbox" }
+      {
+        "package": "@zhin.js/adapter-sandbox",
+        "instanceKey": "sandbox"
+      }
     ]
   }
 }
