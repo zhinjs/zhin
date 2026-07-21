@@ -1,5 +1,11 @@
 # @zhin.js/cli
 
+## 1.0.95
+
+### Patch Changes
+
+- 90f301d: fix: log format
+
 ## 1.0.94
 
 ### Patch Changes
