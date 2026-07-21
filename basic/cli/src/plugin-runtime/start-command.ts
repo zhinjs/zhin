@@ -26,6 +26,7 @@ import { installScheduleHost, createScheduleHost } from './schedule-host-install
 import { installSpeechHost, prepareSpeechHost, resolveSpeechConfig } from './speech-host-installer.js';
 import { installProtocolHosts } from './protocol-host-installer.js';
 import { RootHost } from './root-host.js';
+import { DISABLE_EXPERIMENTAL_WARNING_FLAG, suppressNodeExperimentalWarnings } from '../utils/node-warnings.js';
 
 export const processRestartExitCode = 75;
 
@@ -72,6 +73,7 @@ export interface StartCommandOptions {
 }
 
 export async function runStartCommand(options: StartCommandOptions): Promise<void> {
+  suppressNodeExperimentalWarnings();
   // Parse before any relaunch so invalid options fail fast instead of looping.
   const parsed = parseStartOptions(options.args);
   if (await relaunchWithNativeTypeScript(parsed, options.root)) return;
@@ -374,6 +376,7 @@ async function relaunchWithNativeTypeScript(parsed: StartOptions, root: string):
     for (;;) {
       const child = spawn(process.execPath, [
         '--experimental-strip-types',
+        DISABLE_EXPERIMENTAL_WARNING_FLAG,
         entry,
         ...process.argv.slice(2),
       ], {
