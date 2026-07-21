@@ -286,6 +286,11 @@ export class ImRuntime implements MessageGateway {
     }
   }
 
+  /** Console endpoint 社交/群管 RPC：解析 live Endpoint 实例（无则 null）。 */
+  getLiveEndpoint(adapter: string, endpointId: string): unknown | null {
+    return this.#liveEndpoint(adapter, endpointId);
+  }
+
   async #sendWithSnapshot(request: SendRequest, snapshot: RuntimeSnapshot): Promise<unknown> {
     const rendered = await this.#renderer.render(request.content, request.requester, snapshot);
     // 单段对象 / html 段在此归一为适配器可消费的 wire 段数组；

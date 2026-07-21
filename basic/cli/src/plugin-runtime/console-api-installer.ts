@@ -1,5 +1,6 @@
 import { access, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import os from 'node:os';
 import type { ServerResponse } from 'node:http';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import {
@@ -14,11 +15,33 @@ import {
   saveProjectFile,
   type HttpHost,
   type RuntimeConsolePage,
+  type RuntimeEndpointSummary,
 } from '@zhin.js/host-http';
 import type { ImRuntime } from '@zhin.js/core/runtime';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
-import type { DatabaseHost } from '@zhin.js/plugin-runtime';
+import type { DatabaseHost, PluginNodeSnapshot, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
+import { registerConsoleRestPages, type ConsoleAgentRuntime } from '@zhin.js/host-http';
+
+/**
+ * 新 Runtime 的 agent 门面。agent 包在 init 时已向 registry 注册 session tree
+ * （create-zhin-agent.ts setSessionTreeRuntime）；模块加载后按请求惰性解析，
+ * agent 未安装/未 init 时降级（host-http 返回 503 / 空列表 + note）。
+ */
+let agentModule: {
+  getSessionTreeRuntime?: () => ConsoleAgentRuntime['sessionTree'];
+} | null | undefined;
+
+void import('@zhin.js/agent')
+  .then((mod) => { agentModule = mod as typeof agentModule; })
+  .catch(() => { agentModule = null; });
+
+function resolveConsoleAgentRuntime(): ConsoleAgentRuntime | undefined {
+  return {
+    sessionTree: agentModule?.getSessionTreeRuntime?.() ?? undefined,
+    introspection: undefined,
+  };
+}
 
 const publicAccess = Object.freeze({ permissions: [] as string[], roles: [] as string[] });
 
@@ -30,6 +53,10 @@ export function installConsoleApi(options: {
   readonly im?: ImRuntime;
   /** When provided, wires `db:info` / `db:tables` RPC to the Database host. */
   readonly databaseHost?: DatabaseHost;
+  /** Snapshot accessor backing `/api/stats` and `/api/plugins*`. */
+  readonly snapshot?: () => RuntimeSnapshot | undefined;
+  /** ScheduleHost — wires `schedule:list`/`cron:list` extended RPC. */
+  readonly scheduleHost?: unknown;
   /** Full-scope `system:restart` — typically `process.exit(51)` for CLI daemon. */
   readonly onRestart?: () => void;
 }): RootResourceInstaller {
@@ -44,6 +71,8 @@ export function installConsoleApi(options: {
       options.im,
       options.onRestart,
       options.databaseHost,
+      options.snapshot,
+      options.scheduleHost,
     );
   };
 }
@@ -56,8 +85,121 @@ export function registerConsoleApiRoutes(
   im?: ImRuntime,
   onRestart?: () => void,
   databaseHost?: DatabaseHost,
+  snapshot?: () => RuntimeSnapshot | undefined,
+  scheduleHost?: unknown,
 ): void {
   const base = normalizeBase(apiBase);
+
+  // REST 六组（logs / marketplace / introspection / agent sessions 等，host-http 实现）
+  registerConsoleRestPages(http, {
+    fullScope: true,
+    projectRoot,
+    getEndpoints: im
+      ? () => im.listEndpoints()
+      : undefined,
+    getAgentRuntime: () => resolveConsoleAgentRuntime(),
+    databaseHost: databaseHost
+      ? {
+        dialect: databaseHost.dialect,
+        started: databaseHost.started,
+        models: databaseHost.models,
+      }
+      : undefined,
+  }, { apiBase: base });
+
+  // Remote Console shell plugin discovery (legacy host-api `GET /entries` parity).
+  // Public path (outside apiBase) — the loader still sends Bearer when present.
+  http.route('GET', '/entries', async (_request, response) => {
+    try {
+      const pages = await listPages(consoleRuntime);
+      writeJson(response, 200, buildConsoleEntriesBody(pages));
+    } catch (error) {
+      writeJson(response, 503, {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, {
+    summary: 'Console entries (plugin discovery)',
+    tags: ['console'],
+  });
+
+  http.route('GET', `${base}/system/status`, (_request, response) => {
+    writeJson(response, 200, { success: true, data: getSystemStatusData() });
+  }, {
+    summary: 'System status snapshot',
+    tags: ['system'],
+  });
+
+  http.route('GET', `${base}/stats`, async (_request, response) => {
+    try {
+      const endpoints = im ? im.listEndpoints() : [];
+      writeJson(response, 200, {
+        success: true,
+        data: buildConsoleStats(listSnapshotPlugins(readSnapshot(snapshot)).length, endpoints),
+      });
+    } catch (error) {
+      writeJson(response, 500, {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, {
+    summary: 'Dashboard statistics',
+    tags: ['system'],
+  });
+
+  http.route('GET', `${base}/plugins`, async (_request, response) => {
+    try {
+      const plugins = listSnapshotPlugins(readSnapshot(snapshot)).map(buildPluginListItem);
+      writeJson(response, 200, { success: true, data: plugins, total: plugins.length });
+    } catch (error) {
+      writeJson(response, 500, {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, {
+    summary: 'List loaded plugins',
+    tags: ['plugins'],
+  });
+
+  http.route('GET', `${base}/plugins/*`, async (_request, response, url) => {
+    const prefix = `${base}/plugins/`;
+    const raw = url.pathname.startsWith(prefix) ? url.pathname.slice(prefix.length) : '';
+    // 未解码段内不允许嵌套路径；scoped 包名（%40scope%2Fname）解码后含 '/' 属正常。
+    if (!raw || raw.includes('/')) {
+      writeJson(response, 404, { success: false, error: '插件不存在' });
+      return;
+    }
+    let name = '';
+    try {
+      name = decodeURIComponent(raw);
+    } catch {
+      writeJson(response, 400, { success: false, error: 'Invalid plugin name' });
+      return;
+    }
+    try {
+      const node = listSnapshotPlugins(readSnapshot(snapshot))
+        .find((item) => item.instanceKey === name || item.packageName === name);
+      if (!node) {
+        writeJson(response, 404, { success: false, error: '插件不存在' });
+        return;
+      }
+      writeJson(response, 200, {
+        success: true,
+        data: buildPluginDetail(node, await readPackageVersion(node.packageRoot)),
+      });
+    } catch (error) {
+      writeJson(response, 500, {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, {
+    summary: 'Plugin detail',
+    tags: ['plugins'],
+  });
 
   http.route('POST', `${base}/console/request`, async (request, response, _url, authScope) => {
     try {
@@ -100,6 +242,16 @@ export function registerConsoleApiRoutes(
           ? () => databaseHost.tables()
           : undefined,
         database: databaseHost?.console,
+        extended: {
+          projectRoot,
+          scheduleHost,
+          resolveEndpoint: im
+            ? (adapter, endpointId) => im.getLiveEndpoint(adapter, endpointId)
+            : undefined,
+          databaseHost: databaseHost
+            ? { models: databaseHost.models }
+            : undefined,
+        },
         listPluginKeys: async () => {
           const document = await readProjectConfigDocument(projectRoot);
           const plugins = document.plugins;
@@ -301,6 +453,219 @@ async function listPages(consoleRuntime: ConsoleRuntime): Promise<readonly Runti
     hash: page.hash,
   })));
 }
+
+/** Console shell entry shape (`@zhin.js/contract` ConsoleClientEntry 兼容）。 */
+export type ConsoleEntryBody = {
+  readonly id: string;
+  readonly name: string;
+  readonly title: string;
+  readonly module: string;
+  readonly resolvedModule: string;
+  readonly order: number;
+  readonly enabled: boolean;
+  readonly meta: { readonly name: string };
+  readonly route: string;
+  readonly hash: string;
+};
+
+export type ConsoleEntriesBody = {
+  readonly entries: readonly ConsoleEntryBody[];
+  readonly runtimeEnvHint: 'development' | 'production';
+};
+
+/**
+ * 映射 Console catalog pages → `GET /entries` 响应（legacy host-api 对齐）。
+ * SDK `loadConsoleEntries` 消费 `{ entries, runtimeEnvHint }`，动态 import
+ * 每项的 `resolvedModule`（`/assets/client/*` 由 Console Host 静态服务）。
+ */
+export function buildConsoleEntriesBody(
+  pages: readonly RuntimeConsolePage[],
+  runtimeEnvHint: 'development' | 'production' = defaultRuntimeEnvHint(),
+): ConsoleEntriesBody {
+  const entries = [...pages]
+    .sort((a, b) => a.order - b.order)
+    .map((page) => Object.freeze({
+      id: page.localName,
+      name: page.localName,
+      title: page.title,
+      module: page.module,
+      resolvedModule: page.module,
+      order: page.order,
+      enabled: true,
+      meta: Object.freeze({ name: page.title }),
+      route: page.route,
+      hash: page.hash,
+    }));
+  return Object.freeze({ entries: Object.freeze(entries), runtimeEnvHint });
+}
+
+function defaultRuntimeEnvHint(): 'development' | 'production' {
+  return typeof process !== 'undefined' && process.env?.NODE_ENV === 'production'
+    ? 'production'
+    : 'development';
+}
+
+export type SystemOsMemory = {
+  readonly freeMem: number;
+  readonly totalMem: number;
+};
+
+/** `GET /api/system/status` 的 data（legacy host-api system-routes 对齐）。 */
+export type SystemStatusData = {
+  readonly uptime: number;
+  readonly memory: NodeJS.MemoryUsage | Record<string, number>;
+  readonly osMemory?: SystemOsMemory;
+  readonly cpu?: { readonly user: number; readonly system: number };
+  readonly platform: string;
+  readonly nodeVersion?: string;
+  readonly runtime: 'node' | 'unknown';
+  readonly pid?: number;
+  readonly timestamp: string;
+};
+
+/** Host (Node) 系统状态快照 — 移植自 legacy rest/system-routes.ts。 */
+export function getSystemStatusData(): SystemStatusData {
+  if (typeof process !== 'undefined' && process.versions?.node) {
+    return {
+      uptime: process.uptime(),
+      memory: safeProcessMemory(),
+      osMemory: safeOsMemory(),
+      cpu: safeProcessCpu(),
+      platform: process.platform,
+      nodeVersion: process.version,
+      runtime: 'node',
+      pid: process.pid,
+      timestamp: new Date().toISOString(),
+    };
+  }
+  return {
+    uptime: 0,
+    memory: {},
+    platform: 'unknown',
+    runtime: 'unknown',
+    timestamp: new Date().toISOString(),
+  };
+}
+
+function safeProcessMemory(): NodeJS.MemoryUsage | Record<string, number> {
+  try {
+    return process.memoryUsage();
+  } catch {
+    return {};
+  }
+}
+
+function safeProcessCpu(): { user: number; system: number } | undefined {
+  try {
+    return typeof process.cpuUsage === 'function' ? process.cpuUsage() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function safeOsMemory(): SystemOsMemory | undefined {
+  try {
+    return { freeMem: os.freemem(), totalMem: os.totalmem() };
+  } catch {
+    return undefined;
+  }
+}
+
+/** `GET /api/stats` 的 data（legacy host-rest-api 对齐；commands/components 暂无新 Runtime 数据源，省略）。 */
+export type ConsoleStatsData = {
+  readonly plugins: { readonly total: number; readonly active: number };
+  readonly endpoints: { readonly total: number; readonly online: number };
+  readonly uptime: number;
+  /** heapUsed，单位 MB（legacy 契约，dashboard 直接 toFixed 展示）。 */
+  readonly memory: number;
+  readonly runtime: 'node' | 'unknown';
+};
+
+export function buildConsoleStats(
+  pluginCount: number,
+  endpoints: readonly Pick<RuntimeEndpointSummary, 'status'>[],
+): ConsoleStatsData {
+  const status = getSystemStatusData();
+  const heapUsed = typeof status.memory.heapUsed === 'number' ? status.memory.heapUsed : 0;
+  return {
+    plugins: { total: pluginCount, active: pluginCount },
+    endpoints: {
+      total: endpoints.length,
+      online: endpoints.filter((endpoint) => endpoint.status === 'online').length,
+    },
+    uptime: status.uptime,
+    memory: heapUsed / 1024 / 1024,
+    runtime: status.runtime,
+  };
+}
+
+/** `GET /api/plugins` 列表项（legacy buildPluginListItem 对齐；features 暂无新 Runtime 数据源，给空数组）。 */
+export type ConsolePluginListItem = {
+  readonly name: string;
+  readonly status: 'active' | 'inactive';
+  readonly description: string;
+  readonly features: readonly unknown[];
+  readonly packageName: string;
+  readonly instanceKey: string;
+};
+
+export function buildPluginListItem(node: PluginNodeSnapshot): ConsolePluginListItem {
+  return {
+    name: node.instanceKey,
+    // Snapshot 中的节点均为当前 generation 已加载插件。
+    status: 'active',
+    description: node.metadata?.displayName ?? node.packageName,
+    features: Object.freeze([]),
+    packageName: node.packageName,
+    instanceKey: node.instanceKey,
+  };
+}
+
+/** `GET /api/plugins/:name` 详情（legacy host-rest-api 对齐）。 */
+export type ConsolePluginDetail = ConsolePluginListItem & {
+  readonly filename: string;
+  readonly filePath: string;
+  readonly version?: string;
+  readonly contextCount: number;
+  readonly contexts: readonly unknown[];
+};
+
+export function buildPluginDetail(node: PluginNodeSnapshot, version?: string): ConsolePluginDetail {
+  return {
+    ...buildPluginListItem(node),
+    filename: node.packageRoot,
+    filePath: node.packageRoot,
+    ...(version ? { version } : {}),
+    contextCount: 0,
+    contexts: Object.freeze([]),
+  };
+}
+
+/** Snapshot 中非 root 的插件节点（root 无 parent，对应 legacy root.children）。 */
+export function listSnapshotPlugins(snapshot: RuntimeSnapshot | undefined): PluginNodeSnapshot[] {
+  if (!snapshot) return [];
+  return [...snapshot.tree.values()].filter((node) => node.parent !== undefined);
+}
+
+function readSnapshot(accessor?: () => RuntimeSnapshot | undefined): RuntimeSnapshot | undefined {
+  try {
+    return accessor?.();
+  } catch {
+    return undefined;
+  }
+}
+
+async function readPackageVersion(packageRoot: string): Promise<string | undefined> {
+  try {
+    const pkg = JSON.parse(await readFile(join(packageRoot, 'package.json'), 'utf8')) as {
+      readonly version?: unknown;
+    };
+    return typeof pkg.version === 'string' ? pkg.version : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 
 async function readProjectConfigYaml(projectRoot: string): Promise<string> {
   const file = await findConfigFile(projectRoot);

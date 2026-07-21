@@ -22,7 +22,7 @@ import { installHttpHost, resolveHttpConfig } from './http-host-installer.js';
 import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from './database-host-installer.js';
 import { installHtmlRendererHost, prepareHtmlRendererHost } from './html-renderer-host-installer.js';
 import { installOutboundHost } from './outbound-host-installer.js';
-import { installScheduleHost } from './schedule-host-installer.js';
+import { installScheduleHost, createScheduleHost } from './schedule-host-installer.js';
 import { installSpeechHost, prepareSpeechHost, resolveSpeechConfig } from './speech-host-installer.js';
 import { installProtocolHosts } from './protocol-host-installer.js';
 import { RootHost } from './root-host.js';
@@ -94,6 +94,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   };
   const im = new ImRuntime();
   const databaseHost = createDatabaseHost(databaseConfig);
+  const scheduleHost = createScheduleHost();
   const consoleHost = createConsoleHostModules(options.root, !parsed.once && !parsed.noWatch);
   const host = new RootHost({
     projectRoot: options.root,
@@ -113,7 +114,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
       installHttpHost(httpConfig)(context);
       installDatabaseHost(databaseHost)(context);
       installOutboundHost(im)(context);
-      installScheduleHost()(context);
+      installScheduleHost(scheduleHost)(context);
       installHtmlRendererHost(htmlRendererHost)(context);
       installSpeechHost(speechHandle)(context);
       // Agent Host seeds presets async — must await so unmatched handler
@@ -146,6 +147,8 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
         apiBase: httpConfig.apiBase,
         im,
         databaseHost,
+        scheduleHost,
+        snapshot: () => host.runtime.controller.snapshots.current,
         onRestart: () => {
           // Exit 51: CLI daemon (`zhin start` / `zhin dev`) auto-restarts the process.
           process.exit(51);

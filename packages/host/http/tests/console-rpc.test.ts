@@ -69,6 +69,109 @@ describe('runtime console RPC', () => {
     expect(isDemoHttpAllowed('POST', '/api/plugins', '/api')).toBe(false);
   });
 
+  it('allows read-only status/stats/plugins GETs in demo scope', () => {
+    expect(isDemoHttpAllowed('GET', '/api/system/status', '/api')).toBe(true);
+    expect(isDemoHttpAllowed('GET', '/api/stats', '/api')).toBe(true);
+    expect(isDemoHttpAllowed('GET', '/api/plugins', '/api')).toBe(true);
+    expect(isDemoHttpAllowed('GET', '/api/plugins/icqq', '/api')).toBe(true);
+    expect(isDemoHttpAllowed('GET', '/api/plugins/%40zhin.js%2Fadapter-icqq', '/api')).toBe(true);
+    expect(isDemoHttpAllowed('POST', '/api/system/status', '/api')).toBe(false);
+    expect(isDemoHttpAllowed('POST', '/api/plugins', '/api')).toBe(false);
+    expect(isDemoHttpAllowed('DELETE', '/api/plugins/icqq', '/api')).toBe(false);
+    expect(isDemoHttpAllowed('GET', '/api/config', '/api')).toBe(false);
+  });
+
+  it('maps colon-named SDK aliases onto the canonical endpoint RPCs', async () => {
+    const endpoints = [{
+      name: 'bot',
+      adapter: 'sandbox',
+      connected: true,
+      status: 'online' as const,
+    }];
+    const sent: unknown[] = [];
+    const ctx = {
+      authScope: 'full' as const,
+      listPages: async () => [],
+      listEndpoints: async () => endpoints,
+      getEndpoint: async (adapter: string, endpointId: string) =>
+        (adapter === 'sandbox' && endpointId === 'bot' ? endpoints[0] : null),
+      sendEndpointMessage: async (input: unknown) => {
+        sent.push(input);
+        return { messageId: 'msg-1' };
+      },
+    };
+
+    const listed = await dispatchRuntimeConsoleRpc({ type: 'endpoint:list', requestId: 60 }, ctx);
+    expect(pickRpcReply({ type: 'endpoint:list', requestId: 60 }, listed)).toMatchObject({
+      requestId: 60,
+      data: { endpoints: [{ name: 'bot', adapter: 'sandbox' }] },
+    });
+
+    const info = await dispatchRuntimeConsoleRpc(
+      { type: 'endpoint:info', requestId: 61, data: { adapter: 'sandbox', endpointId: 'bot' } },
+      ctx,
+    );
+    expect(pickRpcReply({ type: 'endpoint:info', requestId: 61 }, info)).toMatchObject({
+      requestId: 61,
+      data: { name: 'bot', adapter: 'sandbox', status: 'online' },
+    });
+
+    const canonicalInfo = await dispatchRuntimeConsoleRpc(
+      { type: 'endpoint.info', requestId: 62, data: { $adapter: 'sandbox', $endpoint: 'bot' } },
+      ctx,
+    );
+    expect(pickRpcReply({ type: 'endpoint.info', requestId: 62 }, canonicalInfo))
+      .toMatchObject({ requestId: 62, data: { name: 'bot' } });
+
+    const sent_reply = await dispatchRuntimeConsoleRpc(
+      {
+        type: 'endpoint:sendMessage',
+        requestId: 63,
+        data: {
+          adapter: 'sandbox',
+          endpointId: 'bot',
+          id: '10001',
+          type: 'private',
+          content: [{ type: 'text', data: { text: 'hi' } }],
+          parent: { type: 'group', id: 'g1' },
+        },
+      },
+      ctx,
+    );
+    expect(pickRpcReply({ type: 'endpoint:sendMessage', requestId: 63 }, sent_reply))
+      .toMatchObject({ requestId: 63, data: { message_id: 'msg-1', messageId: 'msg-1' } });
+    expect(sent).toEqual([{
+      adapter: 'sandbox',
+      endpointId: 'bot',
+      channelId: '10001',
+      channelType: 'private',
+      content: [{ type: 'text', data: { text: 'hi' } }],
+      parent: { type: 'group', id: 'g1' },
+    }]);
+  });
+
+  it('normalizes aliases before the demo scope check', async () => {
+    const ctx = {
+      authScope: 'demo' as const,
+      listPages: async () => [],
+      listEndpoints: async () => [],
+      sendEndpointMessage: async () => ({ messageId: 'msg-demo' }),
+    };
+    const listed = await dispatchRuntimeConsoleRpc({ type: 'endpoint:list', requestId: 70 }, ctx);
+    expect(pickRpcReply({ type: 'endpoint:list', requestId: 70 }, listed)?.error).toBeUndefined();
+
+    const sentReply = await dispatchRuntimeConsoleRpc(
+      {
+        type: 'endpoint:sendMessage',
+        requestId: 71,
+        data: { adapter: 'sandbox', endpointId: 'bot', id: '1', type: 'private', content: 'hi' },
+      },
+      ctx,
+    );
+    expect(pickRpcReply({ type: 'endpoint:sendMessage', requestId: 71 }, sentReply))
+      .toMatchObject({ requestId: 71, data: { messageId: 'msg-demo' } });
+  });
+
   it('writes config via config:save-yaml and config:set on full scope', async () => {
     let stored = 'plugins: []\n';
     const document: Record<string, unknown> = { plugins: [] };

@@ -60,10 +60,10 @@ export function createScheduleHost(): ScheduleHost & { stop(): void } {
   };
 }
 
-export function installScheduleHost(): RootResourceInstaller {
+export function installScheduleHost(host?: ScheduleHost & { stop(): void }): RootResourceInstaller {
   return ({ resources, lifecycle }) => {
-    const host = createScheduleHost();
-    resources.provide(scheduleHostToken, host);
-    lifecycle.add(() => host.stop());
+    const instance = host ?? createScheduleHost();
+    resources.provide(scheduleHostToken, instance);
+    lifecycle.add(() => instance.stop());
   };
 }

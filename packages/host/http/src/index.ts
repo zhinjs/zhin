@@ -53,3 +53,11 @@ export {
   saveProjectFile,
   type FileTreeNode,
 } from './project-files.js';
+export {
+  registerConsoleRestPages,
+  type ConsoleAgentIntrospection,
+  type ConsoleAgentRuntime,
+  type ConsoleAgentSessionTree,
+  type ConsoleRestCtx,
+  type ConsoleRestPagesOptions,
+} from './console-rest-pages.js';
