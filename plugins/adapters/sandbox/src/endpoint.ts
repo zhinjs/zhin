@@ -18,6 +18,11 @@ import {
 
 const logger = getLogger('sandbox');
 
+interface SandboxChannel {
+  readonly type: string;
+  readonly id: string;
+}
+
 interface SandboxConnection {
   readonly target: string;
   readonly owner: string;
@@ -25,6 +30,11 @@ interface SandboxConnection {
   readonly release: () => void;
   /** true = 占位连接（尚无真实 WS 客户端），send 命中时按 miss 处理。 */
   readonly placeholder?: boolean;
+  /**
+   * 最近一条入站频道（Console UI 按 type+id 过滤气泡）。
+   * 出站必须带回，否则回复石沉大海。
+   */
+  lastChannel?: SandboxChannel;
 }
 
 export interface SandboxEndpointOptions {
@@ -79,7 +89,16 @@ export class SandboxWsEndpoint implements EndpointInstance {
     this.#open = false;
     this.#wsHandleRelease?.();
     this.#wsHandleRelease = undefined;
-    for (const connection of this.#connections.values()) connection.release();
+    for (const connection of this.#connections.values()) {
+      connection.release();
+      if (!connection.placeholder) {
+        try {
+          connection.socket.close(1001, 'sandbox endpoint stopped');
+        } catch {
+          /* already closed */
+        }
+      }
+    }
     this.#connections.clear();
     this.#started = false;
     logger.debug(formatCompact({ op: 'sandbox_stopped' }));
@@ -87,7 +106,9 @@ export class SandboxWsEndpoint implements EndpointInstance {
 
   send({ target, payload }: { readonly target: string; readonly payload: unknown }): unknown {
     if (!this.#open) return undefined;
-    const connection = this.#connections.get(target);
+    // Reply target is the connection key (bot name / sandbox-uuid), not private:channelId.
+    const connection = this.#connections.get(target)
+      ?? this.#findLiveConnection();
     if (!connection) {
       logger.debug(formatCompact({ op: 'sandbox_send_miss', target }));
       return undefined;
@@ -96,9 +117,32 @@ export class SandboxWsEndpoint implements EndpointInstance {
       logger.debug(formatCompact({ op: 'sandbox_send_placeholder', target }));
       return undefined;
     }
-    connection.socket.send(formatSandboxOutbound(payload));
-    logger.debug(formatCompact({ op: 'sandbox_send', target }));
+    // Console UI filters by type+id; stamp last inbound channel onto outbound wire.
+    const channel = connection.lastChannel ?? {
+      type: 'private',
+      id: connection.owner,
+    };
+    connection.socket.send(formatSandboxOutbound(payload, {
+      type: channel.type,
+      id: channel.id,
+      bot: this.#options.defaults.name,
+      endpoint: connection.target,
+    }));
+    logger.debug(formatCompact({
+      op: 'sandbox_send',
+      target: connection.target,
+      channelType: channel.type,
+      channelId: channel.id,
+    }));
     return payload;
+  }
+
+  /** Prefer a real (non-placeholder) socket when reply target key is wrong/stale. */
+  #findLiveConnection(): SandboxConnection | undefined {
+    for (const connection of this.#connections.values()) {
+      if (!connection.placeholder) return connection;
+    }
+    return undefined;
   }
 
   #acceptConnection(connection: WsConnection): void {
@@ -107,20 +151,41 @@ export class SandboxWsEndpoint implements EndpointInstance {
       : this.#options.defaults.name;
     const owner = this.#options.defaults.owner;
     const socket = connection.socket as SandboxWsSocket;
-    if (this.#connections.has(target)) {
-      this.#connections.get(target)?.release();
+    // Fixed-name mode reuses `target`; dropping the prior entry without
+    // closing its socket leaves a zombie browser tab that still looks
+    // connected but never receives outbound traffic.
+    const previous = this.#connections.get(target);
+    if (previous) {
+      previous.release();
+      if (!previous.placeholder) {
+        try {
+          previous.socket.close(4000, 'replaced by new sandbox client');
+        } catch {
+          /* already closed */
+        }
+      }
       this.#connections.delete(target);
     }
     const release = bindSandboxWsSocket(socket, {
       onMessage: (raw) => {
-        if (!this.#open) return;
         const parsed = parseSandboxWsPayload(raw);
+        const conn = this.#connections.get(target);
+        if (conn && !conn.placeholder) {
+          conn.lastChannel = {
+            type: parsed.type,
+            id: parsed.id || owner,
+          };
+        }
         logger.debug(formatCompact({
           op: 'sandbox_recv',
           target,
           sender: parsed.id || owner,
+          channelType: parsed.type,
+          channelId: parsed.id || owner,
           text: parsed.text.slice(0, 80),
         }));
+        // Don't gate on #open — inbound must always reach the gateway so
+        // Command/AI dispatch and outbound replies work.
         void this.#options.gateway.receive({
           adapter: this.#options.id,
           target,
@@ -128,6 +193,9 @@ export class SandboxWsEndpoint implements EndpointInstance {
           sender: parsed.id || owner,
           metadata: Object.freeze({
             type: parsed.type,
+            channelType: parsed.type,
+            channelId: parsed.id || owner,
+            endpoint: target,
             elements: parsed.content,
             timestamp: parsed.timestamp,
             ...(parsed.action ? { action: parsed.action } : {}),
@@ -141,8 +209,13 @@ export class SandboxWsEndpoint implements EndpointInstance {
         });
       },
       onClose: () => {
-        this.#connections.delete(target);
-        logger.debug(formatCompact({ op: 'sandbox_ws_closed', target }));
+        // Only drop the map entry if we still own this socket — a replace
+        // may have already swapped in a newer connection for the same target.
+        const current = this.#connections.get(target);
+        if (current && current.socket === socket) {
+          this.#connections.delete(target);
+          logger.debug(formatCompact({ op: 'sandbox_ws_closed', target }));
+        }
       },
       onError: (err) => {
         logger.warn(formatCompact({
@@ -152,7 +225,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
         }));
       },
     });
-    this.#connections.set(target, Object.freeze({ target, owner, socket, release }));
+    this.#connections.set(target, { target, owner, socket, release });
     logger.debug(formatCompact({ op: 'sandbox_ws_connected', target, owner }));
     if (!this.#options.defaults.randomNamePerConnection) {
       const readyPayload = JSON.stringify({
@@ -177,12 +250,12 @@ export class SandboxWsEndpoint implements EndpointInstance {
 
   #ensurePlaceholder(name: string, owner: string): void {
     if (this.#connections.has(name)) return;
-    this.#connections.set(name, Object.freeze({
+    this.#connections.set(name, {
       target: name,
       owner,
       socket: { send: () => undefined, close: () => undefined },
       release: () => undefined,
       placeholder: true,
-    }));
+    });
   }
 }

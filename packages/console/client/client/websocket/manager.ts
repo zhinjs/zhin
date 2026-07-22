@@ -50,25 +50,27 @@ export class WebSocketManager {
       this.attachEventHandlers();
     } catch (error) {
       this.handleConnectionError(new ConnectionError("Failed to create WebSocket", error as Error));
+      this.setState(ConnectionState.RECONNECTING);
+      this.notifyConnection(false);
+      this.scheduleReconnect();
     }
   }
 
   private async connectRestSse(): Promise<void> {
+    // Host without http.token allows unauthenticated SSE (authenticateHttp
+    // returns full when TokenRegistry is empty). Still open the stream so
+    // local dev Console receives hmr:reload / message.receive broadcasts.
     const token = getStoredToken();
-    if (!token) {
-      this.setState(ConnectionState.DISCONNECTED);
-      this.notifyConnection(false);
-      return;
-    }
     this.setState(ConnectionState.CONNECTING);
     this.sseAbort?.abort();
     this.sseAbort = new AbortController();
     try {
+      const headers: Record<string, string> = {
+        Accept: "text/event-stream",
+      };
+      if (token) headers.Authorization = `Bearer ${token}`;
       const res = await fetch(resolveApiUrl("/api/events"), {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "text/event-stream",
-        },
+        headers,
         signal: this.sseAbort.signal,
       });
       if (!res.ok || !res.body) {
@@ -81,9 +83,13 @@ export class WebSocketManager {
       void this.pumpSse(res.body);
     } catch (error) {
       if ((error as Error).name === "AbortError") return;
-      this.handleConnectionError(
-        error instanceof ConnectionError ? error : new ConnectionError("SSE connect failed", error as Error),
-      );
+      // Must set RECONNECTING (not ERROR) before scheduleReconnect — the timer
+      // only fires when state === RECONNECTING; handleConnectionError(ERROR)
+      // previously deadlocked reconnect after any transient SSE failure.
+      this.callbacks.onError?.(error as unknown as Event);
+      console.error("[Console transport] SSE connect error:", error);
+      this.setState(ConnectionState.RECONNECTING);
+      this.notifyConnection(false);
       this.scheduleReconnect();
     }
   }
@@ -174,24 +180,23 @@ export class WebSocketManager {
   }
 
   private async sendRestRequest<T>(message: unknown): Promise<T> {
+    // Host may run without http.token (local smoke). Only require a token when
+    // one is configured client-side; otherwise POST without Authorization and
+    // let the Host accept (TokenRegistry empty → full scope).
     const token = getStoredToken();
-    if (!token) throw new WebSocketError("Not authenticated", "NOT_CONNECTED");
     const requestId = ++this.requestId;
     const body = { ...(message as Record<string, unknown>), requestId };
-    const timer = setTimeout(() => {
-      /* handled below */
-    }, this.config.requestTimeout);
     try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (token) headers.Authorization = `Bearer ${token}`;
       const res = await fetch(resolveApiUrl("/api/console/request"), {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(this.config.requestTimeout),
       });
-      clearTimeout(timer);
       const json = (await res.json()) as {
         success?: boolean;
         data?: T;
@@ -203,7 +208,6 @@ export class WebSocketManager {
       }
       return json.data as T;
     } catch (error) {
-      clearTimeout(timer);
       if (error instanceof WebSocketError) throw error;
       throw new MessageError("REST request failed", error as Error);
     }
@@ -381,8 +385,10 @@ export class WebSocketManager {
   }
 
   private handleConnectionError(error: Error): void {
-    this.clearReconnectTimer();
-    this.setState(ConnectionState.ERROR);
+    // Used by the legacy WS path. Do NOT clear the reconnect timer here —
+    // callers that still want to retry should set RECONNECTING then call
+    // scheduleReconnect(). Terminal failures go through scheduleReconnect's
+    // maxAttempts branch which sets ERROR.
     console.error("[Console transport] Connection error:", error);
     this.callbacks.onError?.(error as unknown as Event);
   }
@@ -390,12 +396,23 @@ export class WebSocketManager {
   private scheduleReconnect(): void {
     if (this.reconnectAttempts >= this.config.maxReconnectAttempts) {
       this.setState(ConnectionState.ERROR);
+      this.notifyConnection(false);
       return;
     }
     this.reconnectAttempts++;
+    // Keep / restore RECONNECTING so the timer callback's state guard passes.
+    if (this.state !== ConnectionState.RECONNECTING) {
+      this.setState(ConnectionState.RECONNECTING);
+    }
     const delay = this.config.reconnectInterval * this.reconnectAttempts;
+    this.clearReconnectTimer();
     this.reconnectTimer = setTimeout(() => {
-      if (this.state === ConnectionState.RECONNECTING) this.connect();
+      if (
+        this.state === ConnectionState.RECONNECTING
+        || this.state === ConnectionState.DISCONNECTED
+      ) {
+        this.connect();
+      }
     }, delay);
   }
 

@@ -15,7 +15,19 @@ export function setApiBase(base: string): void {
 }
 
 export function getStoredToken(): string | null {
-  return getRuntimeToken() ?? localStorage.getItem(TOKEN_KEY);
+  const runtime = getRuntimeToken();
+  if (runtime) return runtime;
+  if (typeof localStorage !== "undefined") {
+    const local = localStorage.getItem(TOKEN_KEY)?.trim();
+    if (local) return local;
+  }
+  // Some login flows only persist to sessionStorage; keep transport in sync
+  // with sandbox page / agent-stream which already read both stores.
+  if (typeof sessionStorage !== "undefined") {
+    const session = sessionStorage.getItem(TOKEN_KEY)?.trim();
+    if (session) return session;
+  }
+  return null;
 }
 
 export function resolveApiUrl(path: string): string {

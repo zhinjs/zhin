@@ -85,7 +85,9 @@ export class AdapterIndex {
           records.push({
             id: expansion.id,
             owner: slot.owner,
-            name: slot.localName,
+            // 展开模式下 record name 即 endpoint 名（entry.name），
+            // 保证 Console 展示与 resolve/instance 按 entry name 命中唯一 record
+            name: expansion.name,
             source: slot.source,
             capabilities: slot.definition.capabilities,
             endpoint: endpoint.instance,
@@ -322,8 +324,13 @@ function matchesEndpoint(
   adapter: string,
   endpointId: string,
 ): boolean {
+  // 消息上的 $adapter 是 CapabilityId 的 localName 段（多 endpoint 展开后形如
+  // `icqq~8596238`）。CapabilityId 段分隔符是 \0（owner\0feature\0localName），
+  // 不能用 `/` 去 endsWith，否则永远匹配不上（endpoint not found）。
+  const localName = record.id.split('\0').pop() ?? record.id;
   const adapterOk = record.name === adapter
     || record.id === adapter
+    || localName === adapter
     || record.id.endsWith(`/${adapter}`)
     || record.owner === adapter
     || record.owner.endsWith(`/${adapter}`);
@@ -395,10 +402,46 @@ function expandEndpointConfigs(
       && (entry as { name: string }).name.length > 0)
     : [];
   if (entries.length === 0) {
+    if (Array.isArray(raw) && raw.length > 0) {
+      logger.warn(formatCompact({
+        op: 'adapter_endpoints_entries_dropped',
+        id: slot.id,
+        reason: 'every endpoints entry is missing a non-empty string name',
+      }));
+    }
+    return Object.freeze([{ id: slot.id, name: slot.localName }]);
+  }
+  // `~` 是 record id 的分隔符、\0 是 CapabilityId 的分隔符，混入会破坏解析
+  const valid = entries.filter((entry) => {
+    if (/[~\0]/u.test(entry.name)) {
+      logger.warn(formatCompact({
+        op: 'adapter_endpoint_name_invalid',
+        id: slot.id,
+        name: entry.name,
+      }));
+      return false;
+    }
+    return true;
+  });
+  // 重名会让 #records 覆盖与 #order/resolve 三者不一致；保留首个并告警
+  const seen = new Set<string>();
+  const deduped = valid.filter((entry) => {
+    if (seen.has(entry.name)) {
+      logger.warn(formatCompact({
+        op: 'adapter_endpoint_name_duplicate',
+        id: slot.id,
+        name: entry.name,
+      }));
+      return false;
+    }
+    seen.add(entry.name);
+    return true;
+  });
+  if (deduped.length === 0) {
     return Object.freeze([{ id: slot.id, name: slot.localName }]);
   }
   const { endpoints: _drop, ...base } = (config ?? {}) as Record<string, unknown>;
-  return Object.freeze(entries.map((entry) => Object.freeze({
+  return Object.freeze(deduped.map((entry) => Object.freeze({
     id: `${slot.id}~${entry.name}` as CapabilityId,
     name: entry.name,
     config: Object.freeze({ ...base, ...entry, name: entry.name }),

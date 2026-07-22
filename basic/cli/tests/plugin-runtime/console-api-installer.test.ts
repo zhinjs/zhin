@@ -636,6 +636,15 @@ describe('config document flatten / write namespace', () => {
     expect((document.plugins as Record<string, unknown>).sandbox).toEqual({ endpoints: [] });
     expect((document.plugins as Record<string, unknown>)['new-plugin']).toEqual({ enabled: true });
   });
+
+  it('promotes plugins:[] array form to a map without dropping listed names', () => {
+    const document: Record<string, unknown> = { plugins: ['sandbox', 'icqq'] };
+    writeConfigKey(document, 'sandbox', { endpoints: [{ name: 'bot' }] });
+    expect(document.plugins).toEqual({
+      sandbox: { endpoints: [{ name: 'bot' }] },
+      icqq: {},
+    });
+  });
 });
 
 describe('jsonSchemaToConsoleSchema', () => {

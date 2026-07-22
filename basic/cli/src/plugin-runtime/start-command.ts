@@ -22,6 +22,7 @@ import { createConsoleHostModules, installConsoleHttp } from './console-host-ins
 import { installConsoleApi } from './console-api-installer.js';
 import { installHttpHost, resolveHttpConfig } from './http-host-installer.js';
 import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from './database-host-installer.js';
+import { installSystemLogStore, resolveSystemLogConfig } from './log-transport.js';
 import { installHtmlRendererHost, prepareHtmlRendererHost } from './html-renderer-host-installer.js';
 import { installOutboundHost } from './outbound-host-installer.js';
 import { installScheduleHost, createScheduleHost } from './schedule-host-installer.js';
@@ -101,6 +102,9 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   // console endpoint-detail 收件箱三张表（unified_inbox_message/request/notice）；
   // 必须在 installResources（host.start）之前 define，写入订阅在 console-api-installer 挂载。
   defineInboxTables(databaseHost);
+  // console logs 页数据源（SystemLog 表 + 根 logger transport）；
+  // 表必须在 installResources（host.start）之前 define，写入在 host started 后才生效。
+  installSystemLogStore(databaseHost, await resolveSystemLogConfig(config));
   const scheduleHost = createScheduleHost();
   const consoleHost = createConsoleHostModules(options.root, !parsed.once && !parsed.noWatch);
   // Console SSE 事件枢纽：/api/events 订阅方 + HMR/消息/配置事件 publish 方共享。
@@ -221,15 +225,24 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   const orphanWatchdog = startOrphanWatchdog(() => { initiateShutdown(); });
 
   const onSignal = (): void => { initiateShutdown(); };
-  // Force-exit backstop: stuck sockets (SSE /api/events, WS) or a wedged
+  // force-exit backstop: stuck sockets (SSE /api/events, WS) or a wedged
   // Endpoint must not hang shutdown forever — whichever path initiates it.
   function initiateShutdown(): void {
     setTimeout(() => process.exit(0), 5_000).unref();
     void control.stop();
   }
+  // signal-handlers.ts registers a second SIGINT handler via gracefulShutdown.
+  // If both fire, two concurrent stop() calls race against adapter reconnect
+  // timers — the first Ctrl+C triggers closes that schedule reconnects that
+  // then keep the process alive. Flush the duplicate handler so only one path
+  // runs, and escalate subsequent signals to immediate exit.
+  process.removeAllListeners('SIGINT');
+  process.removeAllListeners('SIGTERM');
   process.once('SIGINT', onSignal);
   process.once('SIGTERM', onSignal);
   process.once('SIGHUP', onSignal);
+  process.once('SIGINT', () => process.exit(130)); // second Ctrl+C kills immediately
+  process.once('SIGTERM', () => process.exit(130));
   try { await completed; }
   finally {
     clearInterval(orphanWatchdog);

@@ -7,6 +7,7 @@ import {
   type DatabaseHost,
   type DatabaseHostConsole,
   type DatabaseHostModel,
+  type DatabaseHostSelection,
 } from '@zhin.js/plugin-runtime';
 import type {
   ConfigDocumentPort,
@@ -58,14 +59,22 @@ type RawDatabase = {
 
 function wrapModel(model: RawModel): DatabaseHostModel {
   return {
-    select: () => {
-      const selection = model.select();
-      return {
-        where: (query) => Promise.resolve(selection.where(query)) as Promise<Record<string, unknown>[]>,
+    select: (...fields) => {
+      const selection = (model.select as (...args: string[]) => unknown)(...fields) as {
+        where(query: Record<string, unknown>): unknown;
+        orderBy?(field: string, direction?: 'ASC' | 'DESC'): unknown;
+        limit?(count: number): unknown;
+      };
+      // 链式 + 可 await：console logs 页需要 orderBy/limit，插件侧 `await select().where(q)` 不变
+      const chain: DatabaseHostSelection = {
+        where: (query) => { selection.where(query); return chain; },
+        orderBy: (field, direction) => { selection.orderBy?.(field, direction); return chain; },
+        limit: (count) => { selection.limit?.(count); return chain; },
         then: (onfulfilled, onrejected) =>
-          Promise.resolve(selection as PromiseLike<Record<string, unknown>[]>)
+          Promise.resolve(selection as unknown as PromiseLike<Record<string, unknown>[]>)
             .then(onfulfilled, onrejected),
       };
+      return chain;
     },
     insert: (row) => Promise.resolve(model.insert(row)),
     delete: () => ({

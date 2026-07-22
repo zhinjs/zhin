@@ -28,6 +28,9 @@ export default defineAdapter({
 
 展开由 `expandEndpointConfigs`（`src/adapter-index.ts`）完成：endpoint record id 为
 `<slotId>~<name>`，合并顺序 `{...通用, ...项}`（项优先），`endpoints` 键不下传给适配器。
+record name 即 entry.name——Console 展示、`resolve`/`instance` 查找、inbox 落库都按它命中
+唯一 endpoint（适配器实例的 live name 如 icqq uin 优先于它展示）。entry.name 不得含
+`~`/`\0`（会破坏 id 结构），重名/缺名的 entry 会被丢弃并 warn。
 多账号示例见 `plugins/adapters/icqq` / `plugins/adapters/qq` 的 README 与 schema。
 
 验证：`pnpm --filter @zhin.js/adapter test && pnpm --filter @zhin.js/adapter build`。

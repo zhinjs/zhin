@@ -80,8 +80,8 @@ describe('dispatchExtendedConsoleRpc', () => {
       ).resolves.toEqual({
         data: {
           memory: [
-            { id: 'job-1', cron: '0 0 8 * * *', description: '早安' },
-            { id: 'job-2', cron: '0 */5 * * * *' },
+            { id: 'job-1', cron: '0 0 8 * * *', description: '早安', expression: '0 0 8 * * *', running: true },
+            { id: 'job-2', cron: '0 */5 * * * *', expression: '0 */5 * * * *', running: true },
           ],
           persistent: [],
         },
@@ -194,13 +194,21 @@ describe('dispatchExtendedConsoleRpc', () => {
             {
               id: 1,
               platform_request_id: 'req-1',
+              platformRequestId: 'req-1',
               type: 'friend',
               scene_type: undefined,
               scene_id: '10001',
+              channel_id: '10001',
+              channel_type: undefined,
+              channel: { id: '10001', type: undefined },
               sub_type: undefined,
               actor: { id: '10001', name: '张三' },
+              sender: { id: '10001', name: '张三' },
+              sender_id: '10001',
+              sender_name: '张三',
               comment: '加个好友',
               created_at: 1000,
+              timestamp: 1000,
               resolved: 0,
               resolved_at: undefined,
             },

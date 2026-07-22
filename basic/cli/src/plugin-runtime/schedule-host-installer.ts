@@ -47,11 +47,19 @@ export function createScheduleHost(): ScheduleHost & { stop(): void } {
       };
     },
     list() {
-      return Object.freeze([...jobs.entries()].map(([id, meta]) => Object.freeze({
-        id,
-        cron: meta.cron,
-        description: meta.description,
-      })));
+      return Object.freeze([...jobs.entries()].map(([id, meta]) => {
+        const snap = scheduler.get(id);
+        return Object.freeze({
+          id,
+          cron: meta.cron,
+          description: meta.description,
+          // console cron 页字段：expression/running/plugin/nextExecution
+          expression: meta.cron,
+          running: snap ? !snap.paused && !snap.cancelled : true,
+          nextExecution: snap?.nextRunAt ? snap.nextRunAt.getTime() : undefined,
+          plugin: id.split('/')[0],
+        });
+      }));
     },
     stop() {
       scheduler.stop();

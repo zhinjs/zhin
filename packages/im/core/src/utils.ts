@@ -42,18 +42,21 @@ import type { MediaRef } from "./built/segment-contract/types.js";
 
 /**
  * 组合中间件,洋葱模型
+ *
+ * 空中间件列表时必须仍调用 `next`——入站管线把 MessageDispatcher
+ * 作为 terminal next 传入；吞掉 next 会导致命令/AI 永远不跑。
  */
 export function compose<P extends RegisteredAdapter=RegisteredAdapter>(
   middlewares: MessageMiddleware<P>[]
 ) {
-  if (middlewares.length === 0) {
-    return () => Promise.resolve();
-  }
-
   return function (
     message: Message<AdapterMessage<P>>,
     next: () => Promise<void> = () => Promise.resolve()
   ) {
+    if (middlewares.length === 0) {
+      return next();
+    }
+
     let index = -1;
     const dispatch = async (i: number = 0): Promise<void> => {
       if (i <= index) {

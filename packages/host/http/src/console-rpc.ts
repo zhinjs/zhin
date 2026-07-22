@@ -159,9 +159,15 @@ export async function dispatchRuntimeConsoleRpc(
 
   // Extended RPC surface (cron/schedule、endpoint 社交/inbox) — 自带 scope 矩阵
   if (ctx.extended) {
+    // 参数形状兼容：SDK 放 data，console UI 部分页面放顶层 —— 合并后 data 优先
+    const { data: extData, ...extRest } = message as Record<string, unknown>;
+    const extendedArgs = {
+      ...extRest,
+      ...((extData ?? {}) as Record<string, unknown>),
+    };
     const extended = await dispatchExtendedConsoleRpc(
       type,
-      message.data as Record<string, unknown> | undefined,
+      extendedArgs,
       { ...ctx.extended, fullScope: ctx.authScope === 'full' },
     );
     if (extended !== undefined) {
@@ -229,7 +235,9 @@ export async function dispatchRuntimeConsoleRpc(
     }
     case 'config:get': {
       try {
-        const key = String(message.key ?? message.pluginName ?? '');
+        // 兼容 console UI 的 data:{plugin} / data:{key} 形状
+        const data = (message.data ?? {}) as Record<string, unknown>;
+        const key = String(message.key ?? message.pluginName ?? data.pluginName ?? data.plugin ?? data.key ?? '');
         const document = ctx.readConfigDocument ? await ctx.readConfigDocument() : {};
         emit({ requestId, data: key ? document[key] : document });
       } catch (error) {
@@ -421,7 +429,10 @@ export async function dispatchRuntimeConsoleRpc(
     }
     case 'schema:get': {
       try {
-        const pluginName = typeof message.pluginName === 'string' ? message.pluginName : undefined;
+        // 兼容 console UI 的 data:{plugin} / data:{pluginName} 形状（SDK 发顶层 pluginName）
+        const data = (message.data ?? {}) as Record<string, unknown>;
+        const candidate = message.pluginName ?? data.pluginName ?? data.plugin;
+        const pluginName = typeof candidate === 'string' ? candidate : undefined;
         const schema = ctx.getSchema ? await ctx.getSchema(pluginName) : null;
         emit({ requestId, data: schema });
       } catch (error) {

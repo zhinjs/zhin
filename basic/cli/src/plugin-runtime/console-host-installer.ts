@@ -289,13 +289,20 @@ const status = document.getElementById('ws-status');
 const form = document.getElementById('form');
 const input = document.getElementById('input');
 function resolveSandboxWsUrl() {
-  const token = (typeof localStorage !== 'undefined' && (localStorage.getItem('zhin_api_token') || ''))
-    || (typeof window !== 'undefined' && window.__ZHIN_API_TOKEN)
+  // Prefer the stored Host base (Remote Console) over page origin, then
+  // flip http(s) → ws(s) from the *resolved base*, not location.protocol —
+  // otherwise a https UI page + http Host would produce wss://http-host and fail.
+  const storedToken = (typeof localStorage !== 'undefined' && localStorage.getItem('zhin_api_token'))
+    || (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('zhin_api_token'))
     || '';
-  const base = (typeof localStorage !== 'undefined' && localStorage.getItem('zhin_api_base')?.trim())
-    || location.origin;
+  const token = (typeof window !== 'undefined' && window.__ZHIN_API_TOKEN)
+    || storedToken
+    || '';
+  const stored = (typeof localStorage !== 'undefined' && localStorage.getItem('zhin_api_base')?.trim())
+    || '';
+  const base = stored || location.origin;
   const url = new URL('/sandbox', base.endsWith('/') ? base : base + '/');
-  url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
   if (token) url.searchParams.set('token', token);
   return url.href;
 }

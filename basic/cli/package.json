@@ -46,7 +46,8 @@
     "ora": "^9.4.1",
     "smol-toml": "^1.7.0",
     "yaml": "^2.9.0",
-    "@zhin.js/command": "workspace:*"
+    "@zhin.js/command": "workspace:*",
+    "@zhin.js/component": "workspace:*"
   },
   "devDependencies": {
     "@types/cross-spawn": "^6.0.6",

@@ -5,6 +5,7 @@ import os from 'node:os';
 import type { ServerResponse } from 'node:http';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { commandFeatureId, isCommandIndex } from '@zhin.js/command';
+import { componentFeatureId, isComponentIndex } from '@zhin.js/component';
 import {
   formatDisplayPath,
   looksLikeAbsolutePath,
@@ -328,7 +329,8 @@ export function registerConsoleApiRoutes(
     databaseHost: databaseHost
       ? {
         dialect: databaseHost.dialect,
-        started: databaseHost.started,
+        // 动态 getter：路由注册早于 DatabaseHost.start()，静态快照会恒为 false
+        get started() { return databaseHost.started; },
         models: databaseHost.models,
       }
       : undefined,
@@ -361,9 +363,19 @@ export function registerConsoleApiRoutes(
   http.route('GET', `${base}/stats`, async (_request, response) => {
     try {
       const endpoints = im ? im.listEndpoints() : [];
+      const snap = readSnapshot(snapshot);
+      // dashboard 命令/组件卡片：CommandIndex / ComponentIndex 投影计数
+      const commandIndex = snap?.projections.get(commandFeatureId);
+      const commandCount = isCommandIndex(commandIndex) ? commandIndex.list().length : 0;
+      const componentIndex = snap?.projections.get(componentFeatureId);
+      const componentCount = isComponentIndex(componentIndex) ? componentIndex.list().length : 0;
       writeJson(response, 200, {
         success: true,
-        data: buildConsoleStats(listSnapshotPlugins(readSnapshot(snapshot)).length, endpoints),
+        data: {
+          ...buildConsoleStats(listSnapshotPlugins(snap).length, endpoints),
+          commands: commandCount,
+          components: componentCount,
+        },
       });
     } catch (error) {
       writeJson(response, 500, {
@@ -1136,9 +1148,10 @@ export function writeConfigKey(
   data: unknown,
 ): void {
   const plugins = document.plugins;
-  const inPlugins = plugins
+  const pluginsIsObject = plugins
     && typeof plugins === 'object'
-    && !Array.isArray(plugins)
+    && !Array.isArray(plugins);
+  const inPlugins = pluginsIsObject
     && Object.prototype.hasOwnProperty.call(plugins, key);
 
   // Host 键或非 plugins 命名空间的顶层键写顶层；其余写 plugins.<key>
@@ -1146,9 +1159,20 @@ export function writeConfigKey(
     document[key] = data;
     return;
   }
-  const bucket = (plugins && typeof plugins === 'object' && !Array.isArray(plugins))
-    ? plugins as Record<string, unknown>
-    : {};
+  // plugins: [] (array form) must not be clobbered into an object — promote
+  // to a map while preserving previously listed bare names as empty objects.
+  let bucket: Record<string, unknown>;
+  if (pluginsIsObject) {
+    bucket = plugins as Record<string, unknown>;
+  } else if (Array.isArray(plugins)) {
+    bucket = {};
+    for (const item of plugins) {
+      const name = String(item);
+      if (name && !(name in bucket)) bucket[name] = {};
+    }
+  } else {
+    bucket = {};
+  }
   bucket[key] = data;
   document.plugins = bucket;
 }

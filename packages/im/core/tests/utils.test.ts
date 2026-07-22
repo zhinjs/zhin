@@ -5,9 +5,11 @@ import { describe, it, expect } from 'vitest'
 import { compose, segment } from '../src/utils'
 
 describe('compose middleware', () => {
-  it('should return empty function for empty middlewares', async () => {
+  it('should invoke terminal next for empty middlewares', async () => {
+    let nextCalled = false
     const composed = compose([])
-    await expect(composed({} as any, async () => {})).resolves.toBeUndefined()
+    await composed({} as any, async () => { nextCalled = true })
+    expect(nextCalled).toBe(true)
   })
 
   it('should handle single middleware', async () => {

@@ -102,6 +102,11 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
     this.#options = options;
   }
 
+  /** Console 展示 / AdapterIndex live name（多 endpoint 时与 entry name 一致）。 */
+  get name(): string {
+    return this.#options.config.name;
+  }
+
   get client(): SlackWebClientLike | undefined {
     return this.#client;
   }

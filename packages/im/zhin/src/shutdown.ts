@@ -83,6 +83,12 @@ export function registerGracefulShutdown(plugin: Plugin): void {
     void gracefulShutdown(signal, { plugin });
   };
 
+  // Note: start-command.ts owns the process-level signal handler and will
+  // process.removeAllListeners('SIGINT') + removeAllListeners('SIGTERM')
+  // before installing its own path. Do NOT install an additional handler
+  // that could race against the CLI handler — two concurrent stop() calls
+  // trigger adapter disconnects whose close callbacks re-schedule reconnects,
+  // keeping the process alive past the first Ctrl+C.
   process.once('SIGTERM', () => onSignal('SIGTERM'));
   process.once('SIGINT', () => onSignal('SIGINT'));
 }

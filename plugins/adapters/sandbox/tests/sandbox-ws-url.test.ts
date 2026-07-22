@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { resolveSandboxWsUrl } from '../pages/sandbox.tsx';
+import { buildSandboxWebSocketUrl } from '../pages/sandboxTransport.js';
 
 const originalWindow = globalThis.window;
 const originalLocalStorage = globalThis.localStorage;
@@ -20,7 +20,7 @@ afterEach(() => {
   Object.defineProperty(globalThis, 'localStorage', { value: originalLocalStorage, configurable: true });
 });
 
-describe('resolveSandboxWsUrl', () => {
+describe('buildSandboxWebSocketUrl', () => {
   it('uses stored API base + token query', () => {
     const store: Record<string, string> = {
       zhin_api_base: 'http://127.0.0.1:8086',
@@ -31,8 +31,7 @@ describe('resolveSandboxWsUrl', () => {
       value: { location: { origin: 'https://console.zhin.dev' } },
       configurable: true,
     });
-    const href = resolveSandboxWsUrl();
-    expect(href).toBe('ws://127.0.0.1:8086/sandbox?token=secret');
+    expect(buildSandboxWebSocketUrl()).toBe('ws://127.0.0.1:8086/sandbox?token=secret');
   });
 
   it('falls back to window origin without token', () => {
@@ -41,6 +40,6 @@ describe('resolveSandboxWsUrl', () => {
       value: { location: { origin: 'http://localhost:5173' } },
       configurable: true,
     });
-    expect(resolveSandboxWsUrl()).toBe('ws://localhost:5173/sandbox');
+    expect(buildSandboxWebSocketUrl()).toBe('ws://localhost:5173/sandbox');
   });
 });

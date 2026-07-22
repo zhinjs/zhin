@@ -161,26 +161,66 @@ export function parseSandboxWsPayload(raw: string): {
   return { type, id, content, timestamp: payload.timestamp ?? Date.now(), text, action };
 }
 
+export type SandboxOutboundChannel = {
+  readonly type?: string;
+  readonly id?: string;
+  readonly bot?: string;
+  readonly endpoint?: string;
+  readonly messageId?: string;
+};
+
 /**
  * Wire-encode an already-rendered outbound payload.
- * Canonical segment mapping (old `segment-mapper` re-export of `to/fromCanonicalSegments`
- * from legacy `zhin.js`) is intentionally not done here — the gateway/core render path
- * owns that before `endpoint.send`.
+ * Stamps `channel` so Console SandboxChat can filter by type+id (otherwise
+ * replies look like they disappeared).
  */
-export function formatSandboxOutbound(payload: unknown): string {
+export function formatSandboxOutbound(
+  payload: unknown,
+  channel: SandboxOutboundChannel = {},
+): string {
+  const stamp: Record<string, unknown> = {};
+  if (channel.type) stamp.type = channel.type;
+  if (channel.id) stamp.id = channel.id;
+  if (channel.bot) stamp.bot = channel.bot;
+  if (channel.endpoint) stamp.endpoint = channel.endpoint;
+  if (channel.messageId) stamp.messageId = channel.messageId;
+
   if (typeof payload === 'string') {
     return JSON.stringify({
+      ...stamp,
       content: [{ type: 'text', data: { text: payload } }],
       timestamp: Date.now(),
     });
   }
   if (Array.isArray(payload)) {
     return JSON.stringify({
+      ...stamp,
       content: payload,
       timestamp: Date.now(),
     });
   }
-  return JSON.stringify({ content: payload, timestamp: Date.now() });
+  // Already a wire envelope ({ content, type, … }) — pass through so the
+  // Console UI can read `content` / `type` without an extra nesting layer.
+  // Bare segment objects ({ type: 'text', data: … }) still need wrapping.
+  if (
+    payload
+    && typeof payload === 'object'
+    && !Array.isArray(payload)
+    && (
+      'content' in (payload as object)
+      || 'type' in (payload as object) && 'timestamp' in (payload as object)
+    )
+  ) {
+    const envelope = payload as Record<string, unknown>;
+    return JSON.stringify({
+      ...stamp,
+      ...envelope,
+      type: envelope.type ?? stamp.type,
+      id: envelope.id ?? stamp.id,
+      timestamp: typeof envelope.timestamp === 'number' ? envelope.timestamp : Date.now(),
+    });
+  }
+  return JSON.stringify({ ...stamp, content: payload, timestamp: Date.now() });
 }
 
 /** WebSocket.OPEN 常量值；Node <22 无全局 WebSocket，不能用 WebSocket.OPEN。 */

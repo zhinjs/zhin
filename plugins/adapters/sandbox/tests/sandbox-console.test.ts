@@ -30,7 +30,7 @@ describe('sandbox console page', () => {
   it('exposes static definePage metadata for convention discovery', async () => {
     const source = await readFile(sandboxPageSource, 'utf8');
     expect(extractPageMetadata(source, sandboxPageSource)).toMatchObject({
-      title: 'Sandbox',
+      title: '沙盒',
       order: 10,
     });
   });
@@ -38,8 +38,9 @@ describe('sandbox console page', () => {
   it('compiles the sandbox page into a client module artifact', async () => {
     const project = await mkdtemp(join(tmpdir(), 'zhin-sandbox-page-build-'));
     temporary.push(project);
+    const sandboxPackageRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
     const builder = new TypeScriptClientBuilder({
-      projectRoot: project,
+      projectRoot: sandboxPackageRoot,
       outDir: join(project, 'dist/client'),
       publicBase: '/assets/client',
     });
@@ -50,14 +51,12 @@ describe('sandbox console page', () => {
     });
     expect(artifact).toMatchObject({
       module: expect.stringMatching(/^\/assets\/client\//u),
-      metadata: expect.objectContaining({ title: 'Sandbox' }),
+      metadata: expect.objectContaining({ title: '沙盒' }),
     });
   });
 
   it('projects the sandbox page into Console catalog and serves its shell', async () => {
     const project = await createProject();
-    const pageSource = join(project, 'pages/sandbox.tsx');
-    await writeFile(pageSource, await readFile(sandboxPageSource, 'utf8'));
     const pluginSource = join(project, 'plugin.ts');
     const pageProvider = join(project, 'packages/page/index.ts');
     const server = new FakeModules();
@@ -65,8 +64,10 @@ describe('sandbox console page', () => {
       default: definePlugin({ name: 'root' }),
     });
     server.set(pageProvider, { default: pageFeature });
+    // Compile against the real adapter package root so @zhin.js/client / lucide-react resolve.
+    const sandboxPackageRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
     const modules = new ClientBuildModuleRuntime(server, new TypeScriptClientBuilder({
-      projectRoot: project,
+      projectRoot: sandboxPackageRoot,
       outDir: join(project, 'dist/client'),
       publicBase: '/assets/client',
     }));
@@ -86,7 +87,7 @@ describe('sandbox console page', () => {
     expect(pages).toEqual(expect.arrayContaining([
       expect.objectContaining({
         localName: 'sandbox',
-        title: 'Sandbox',
+        title: '沙盒',
         route: '/p-sandbox',
       }),
     ]));
@@ -148,7 +149,14 @@ async function createProject(): Promise<string> {
   });
   await touch(join(root, 'plugin.ts'));
   await touch(join(root, 'packages/page/index.ts'));
-  await touch(join(root, 'pages/sandbox.tsx'));
+  // Copy full pages/ so relative imports (SandboxChat, RichTextEditor, transport) resolve.
+  const pagesDir = join(dirname(fileURLToPath(import.meta.url)), '../pages');
+  const pageFiles = ['sandbox.tsx', 'SandboxChat.tsx', 'RichTextEditor.tsx', 'sandboxTransport.ts'];
+  for (const name of pageFiles) {
+    const dest = join(root, 'pages', name);
+    await mkdir(dirname(dest), { recursive: true });
+    await writeFile(dest, await readFile(join(pagesDir, name), 'utf8'));
+  }
   return realpath(root);
 }
 

@@ -9,7 +9,17 @@ export function getApiBase(): string {
 }
 
 export function getToken(): string | null {
-  return getRuntimeToken() ?? localStorage.getItem(TOKEN_KEY);
+  const runtime = getRuntimeToken();
+  if (runtime) return runtime;
+  if (typeof localStorage !== "undefined") {
+    const local = localStorage.getItem(TOKEN_KEY)?.trim();
+    if (local) return local;
+  }
+  if (typeof sessionStorage !== "undefined") {
+    const session = sessionStorage.getItem(TOKEN_KEY)?.trim();
+    if (session) return session;
+  }
+  return null;
 }
 
 export function resolveApiUrl(path: string): string {

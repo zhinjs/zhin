@@ -53,15 +53,18 @@
   },
   "dependencies": {
     "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/client": "workspace:*",
     "@zhin.js/console-contract": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/page": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
+    "lucide-react": "^0.525.0",
     "react": "^19.1.0"
   },
   "devDependencies": {
+    "@types/react": "^19.1.8",
     "@types/ws": "^8.18.1",
     "@zhin.js/pagemanager": "workspace:*",
     "@zhin.js/runtime": "workspace:*",
@@ -71,6 +74,7 @@
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/client": "workspace:*",
     "@zhin.js/console-contract": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
@@ -80,6 +84,9 @@
   },
   "peerDependenciesMeta": {
     "react": {
+      "optional": true
+    },
+    "@zhin.js/client": {
       "optional": true
     }
   },

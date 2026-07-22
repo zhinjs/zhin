@@ -22,13 +22,18 @@ export function createOutboundHost(im: ImRuntime): OutboundHost {
         });
         return result.messageId || null;
       } catch (error) {
-        logger.warn(formatCompact({
+        // activity-feedback typing text is best-effort; the adapter/endpoint
+        // may not be resolvable when the AI event carries a capability id
+        // instead of the short platform name (sandbox console smoke, etc.).
+        logger.debug(formatCompact({
           op: 'outbound_send_failed',
           adapter: input.adapter,
           endpointId: input.endpointId,
           error: error instanceof Error ? error.message : String(error),
         }));
-        throw error;
+        // Do NOT re-throw — a failed typing indicator must never fail the
+        // AI turn pipeline that triggered it.
+        return null;
       }
     },
     async addReaction(input) {

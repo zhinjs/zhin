@@ -56,6 +56,11 @@ import {
   registerOrchestrationService,
   MemoryOrchestrationRepository,
   registerDefaultExecutors,
+  setOrchestrationRuntime,
+  createOrchestrationRuntimeFromService,
+  setSessionTreeRuntime,
+  createSessionTreeRuntimeFromAgent,
+  asPrivate,
   getAgentRuntimeRegistry,
   wireCollaborationStorage,
   applyRuntimeCollaborationInbound,
@@ -230,6 +235,10 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       registerDefaultExecutors(orchService, {
         refs: { zhinAgent, aiService: service },
       });
+      // Console REST（/api/agent/orchestration/*、session tree）读这两个 registry；
+      // 与 legacy create-zhin-agent 对齐，此前 Runtime 路径漏接 → 两个页面 503
+      setOrchestrationRuntime(createOrchestrationRuntimeFromService(orchService));
+      setSessionTreeRuntime(createSessionTreeRuntimeFromAgent(asPrivate(zhinAgent)));
       const disposeDefaultAgent = getAgentRuntimeRegistry().registerDefault(zhinAgent);
       lifecycle.add(disposeDefaultAgent);
 
@@ -361,6 +370,17 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       const endpointTrusted = resolveTrustedForRuntimeMessage(message, options.resolveEndpointTrusted);
       const senderRoles = resolveRuntimeSenderRoles(message, ownerId, endpointTrusted, trigger);
       const commMessage = bridgeRuntimeMessage(message, ownerId, senderRoles);
+
+      // Record the adapter name and endpoint id on the synthetic commMessage
+      // so activity-feedback's typing indicator can resolve OutboundHost.
+      // Runtime message.adapter is a CapabilityId (\0-separated); strip it and
+      // use Endpoint liveName so the OutboundHost resolve() succeeds.
+      const effectiveAdapter = capabilityLocalName(message.adapter);
+      const effectiveEndpoint = adapterLiveEndpointName(message);
+      if (effectiveAdapter && effectiveEndpoint) {
+        (commMessage as { $adapter?: string }).$adapter = effectiveAdapter;
+        (commMessage as { $endpoint?: string }).$endpoint = effectiveEndpoint;
+      }
 
       // 入站流水 → im_transcripts（ADR 0009 D4；fire-and-forget，失败仅 debug）。
       recordRuntimeTranscript(zhinAgent, commMessage, {
@@ -1035,7 +1055,17 @@ function resolveChannelId(message: Message): string {
 
 function capabilityLocalName(id: string): string {
   const parts = id.split('\0');
-  return parts.length >= 3 ? parts[2]! : id;
+  const local = parts.length >= 3 ? parts[2]! : id;
+  // 展开 id 形如 `slot~entry`（多 endpoint）：adapter 名取 slot localName
+  return local.split('~')[0]!;
+}
+
+/** Endpoint liveName (e.g. ICQQ uin, sandbox bot name) from metadata or sendEndpointMessage adapter. */
+function adapterLiveEndpointName(message: { metadata: Readonly<Record<string, unknown>>; target?: string }): string {
+  const live = String(message.metadata?.endpoint ?? message.metadata?.endpointId ?? '');
+  if (live) return live;
+  // sandbox sends endpoint as metadata.endpoint; fall back to target (connection key)
+  return String(message.target ?? '');
 }
 
 function resolveChannelType(

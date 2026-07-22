@@ -108,6 +108,7 @@
     "export{activateAiDatabaseStorage}from './init/activate-ai-database-storage.js';",
     "export{aiHookRuntimeBus,AIHookRuntimeBus}from './ai-hook-runtime-bus.js';",
     "export{applyDynamicTurnOverrides,registerDynamicResolver,listDynamicResolvers,}from './dynamic/dynamic-registry.js';",
+    "export{asPrivate}from './internal/as-private.js';",
     "export{bingSearchFetchHeaders,buildBingSearchUrl}from './builtin/bing-search-html.js';",
     "export{buildAgentSurfaceInfoReport,formatAgentSurfaceInfoReport,}from './discovery/agent-surface-info.js';",
     "export{buildAgentsEnvelopeContext,collectAgentsInstructionChain,clearAgentsInstructionCache,}from './context/agents-instruction.js';",

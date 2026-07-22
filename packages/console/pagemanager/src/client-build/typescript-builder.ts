@@ -196,10 +196,13 @@ function buildPageRegisterWrapper(
   const icon = options.icon === undefined ? 'undefined' : JSON.stringify(options.icon);
   const hideInNav = options.hideInNav ? 'true' : 'false';
   const toolId = JSON.stringify(options.localName);
+  // Re-export `meta` only when present via namespace — a hard
+  // `export { meta } from page` fails esbuild for pages that only
+  // export a default component (no meta).
   return `
 import Page, * as pageNs from ${pageImport};
 export { default } from ${pageImport};
-export { meta } from ${pageImport};
+export const meta = pageNs.meta;
 
 export function register(api) {
   const Component = Page?.default ?? Page;

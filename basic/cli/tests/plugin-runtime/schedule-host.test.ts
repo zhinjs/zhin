@@ -11,9 +11,17 @@ describe('ScheduleHost', () => {
       description: 'morning',
       execute,
     });
-    expect(host.list()).toEqual([
-      { id: 'test/job', cron: '0 0 9 * * *', description: 'morning' },
-    ]);
+    const listed = host.list();
+    expect(listed).toHaveLength(1);
+    expect(listed[0]).toMatchObject({
+      id: 'test/job',
+      cron: '0 0 9 * * *',
+      description: 'morning',
+      expression: '0 0 9 * * *',
+      running: true,
+      plugin: 'test',
+    });
+    expect(typeof listed[0]!.nextExecution).toBe('number');
     dispose();
     expect(host.list()).toEqual([]);
     host.stop();

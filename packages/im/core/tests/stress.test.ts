@@ -468,10 +468,11 @@ describe('Stress: 事件 dispatch/broadcast 风暴', () => {
 // ────────────────────── 7. 边界/极端场景 ──────────────────────
 
 describe('Stress: 边界场景', () => {
-  it('compose 空中间件数组应正常返回', async () => {
+  it('compose 空中间件数组仍应调用 terminal next（dispatcher）', async () => {
+    let nextCalled = false;
     const fn = compose([]);
-    await fn(makeMsg('empty'), async () => {});
-    // No error thrown
+    await fn(makeMsg('empty'), async () => { nextCalled = true; });
+    expect(nextCalled).toBe(true);
   });
 
   it('compose 单中间件应正常工作', async () => {

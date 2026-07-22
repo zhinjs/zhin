@@ -705,6 +705,7 @@ export namespace Plugin {
     'message.send': [MessageSendPayload];
     "message.receive": [import('./message.js').Message];
     "endpoint.login.pending": [import('./built/login-assist.js').PendingLoginTask];
+    "endpoint.login.expired": [import('./built/login-assist.js').PendingLoginTask];
     'endpoint.connect': [import('./built/endpoint-lifecycle.js').EndpointLifecyclePayload];
     'endpoint.disconnect': [import('./built/endpoint-lifecycle.js').EndpointLifecyclePayload];
     'endpoint.error': [import('./built/endpoint-lifecycle.js').EndpointLifecyclePayload];

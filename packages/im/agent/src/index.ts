@@ -304,6 +304,8 @@ export {
   createSessionTreeRuntimeFromAgent,
 } from './session-tree-runtime-registry.js';
 export type { SessionTreeRuntimeHandle } from './session-tree-runtime-registry.js';
+/** Runtime Host（basic/cli）装配 session tree runtime 时的门面收窄（同 legacy create-zhin-agent）。 */
+export { asPrivate } from './internal/as-private.js';
 
 export {
   createAgentSessionHostPort,

@@ -181,6 +181,12 @@ function listSchedule(ctx: ConsoleScheduleListCtx): Promise<ExtendedRpcResult> |
         id: job.id,
         cron: job.cron,
         ...(typeof job.description === 'string' ? { description: job.description } : {}),
+        // console cron 页渲染字段（由 schedule host 提供时透传）
+        expression: (job as { expression?: string }).expression ?? job.cron,
+        running: (job as { running?: boolean }).running ?? true,
+        ...((job as { plugin?: string }).plugin ? { plugin: (job as { plugin?: string }).plugin } : {}),
+        ...((job as { nextExecution?: number }).nextExecution
+          ? { nextExecution: (job as { nextExecution?: number }).nextExecution } : {}),
       }));
     return listPersistentJobs(ctx).then((persistent) => ({ data: { memory, persistent } }));
   } catch (error) {
@@ -203,6 +209,10 @@ async function listPersistentJobs(ctx: ConsoleRpcExtendedCtx): Promise<Record<st
       prompt: (job.action as { prompt?: string } | undefined)?.prompt ?? '',
       enabled: job.enabled !== false,
       source: job.source ?? 'manual',
+      createdAt: (job as { createdAt?: number }).createdAt,
+      nextExecution: (job.state as { nextRunAtMs?: number } | undefined)?.nextRunAtMs,
+      ...((job.notify as { target?: unknown } | undefined)?.target
+        ? { context: { target: (job.notify as { target?: unknown }).target } } : {}),
       lastExecutedAt: (job.state as { lastExecutedAt?: number } | undefined)?.lastExecutedAt,
       lastStatus: (job.state as { lastStatus?: string } | undefined)?.lastStatus,
     }));
@@ -378,35 +388,58 @@ async function listInboxMessages(
 }
 
 function mapRequestRow(row: Record<string, unknown>): Record<string, unknown> {
+  const actorId = row.actor_id;
+  const actorName = row.actor_name ?? undefined;
+  const sceneId = row.scene_id;
+  const sceneType = row.scene_type ?? undefined;
   return {
     id: row.id,
     platform_request_id: row.platform_request_id,
+    // console endpoint-detail 期望的 camelCase/扁平别名（SSE 推送路径同款形状）
+    platformRequestId: row.platform_request_id,
     type: row.type,
-    scene_type: row.scene_type ?? undefined,
-    scene_id: row.scene_id,
+    scene_type: sceneType,
+    scene_id: sceneId,
+    channel_id: sceneId,
+    channel_type: sceneType,
+    channel: { id: sceneId, type: sceneType },
     sub_type: row.sub_type ?? undefined,
-    actor: { id: row.actor_id, name: row.actor_name ?? undefined },
+    actor: { id: actorId, name: actorName },
+    sender: { id: actorId, name: actorName },
+    sender_id: actorId,
+    sender_name: actorName,
     comment: row.comment ?? undefined,
     created_at: row.created_at,
+    timestamp: row.created_at,
     resolved: row.resolved,
     resolved_at: row.resolved_at ?? undefined,
   };
 }
 
 function mapNoticeRow(row: Record<string, unknown>): Record<string, unknown> {
+  const actorId = row.actor_id ?? undefined;
+  const actorName = row.actor_name ?? undefined;
+  const sceneId = row.scene_id;
+  const sceneType = row.scene_type ?? undefined;
   return {
     id: row.id,
     platform_notice_id: row.platform_notice_id,
     type: row.type,
-    scene_type: row.scene_type ?? undefined,
-    scene_id: row.scene_id,
+    scene_type: sceneType,
+    scene_id: sceneId,
+    channel_id: sceneId,
+    channel_type: sceneType,
     sub_type: row.sub_type ?? undefined,
-    actor_id: row.actor_id ?? undefined,
-    actor_name: row.actor_name ?? undefined,
+    actor_id: actorId,
+    actor_name: actorName,
+    // console endpoint-detail 期望的操作人字段别名
+    operator_id: actorId,
+    operator_name: actorName,
     target_id: row.target_id ?? undefined,
     target_name: row.target_name ?? undefined,
     payload: row.payload,
     created_at: row.created_at,
+    timestamp: row.created_at,
   };
 }
 
@@ -422,6 +455,11 @@ async function markInboxConsumed(
   table: string,
 ): Promise<ExtendedRpcResult> {
   const ids = numArrayField(d, '$row_ids', 'row_ids', 'rowIds', '$ids', 'ids');
+  // console UI 单条已读发 data:{id}，归一为数组
+  if (ids.length === 0) {
+    const single = Number(d.id ?? d.$id);
+    if (Number.isFinite(single) && single > 0) ids.push(single);
+  }
   if (ids.length === 0) return { error: '$row_ids required' };
   const model = getInboxModel(ctx, table);
   if (!model || typeof model.update !== 'function') return { error: CONSUMED_NOT_WIRED };
@@ -445,7 +483,7 @@ async function actOnRequest(
 ): Promise<ExtendedRpcResult> {
   const adapter = strField(d, '$adapter', 'adapter');
   const endpointId = strField(d, '$endpoint', 'endpointId', 'endpoint');
-  const requestId = strField(d, '$id', 'id', 'platformRequestId', 'platform_request_id');
+  const requestId = strField(d, '$id', 'id', 'platformRequestId', 'platform_request_id', 'requestId');
   if (!adapter || !endpointId || !requestId) {
     return { error: '$adapter, $endpoint, $id required' };
   }

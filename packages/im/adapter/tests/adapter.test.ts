@@ -360,6 +360,35 @@ describe('Adapter Feature', () => {
     expect(seen[0].id).toContain('~111111');
     expect(seen[1].id).toContain('~222222');
   });
+
+  it('resolves expanded endpoints by slot~entry localName ($adapter from messages)', async () => {
+    // 入站消息的 $adapter 是 CapabilityId 的 localName 段（展开后形如 `icqq~8596238`），
+    // activity-feedback / OutboundHost 用它 + live endpoint 名回解析。
+    const root = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'icqq',
+      source: '/adapters/icqq.ts',
+      definition: defineAdapter({
+        capabilities: ['inbound', 'outbound'],
+        create: (context) => ({
+          name: (context.config as { name?: string }).name,
+          send: async () => 'ok',
+        }),
+      }),
+    });
+    const index = await AdapterIndex.create([slot], snapshot([slot], new Map([[root, {
+      endpoints: [{ name: '8596238' }, { name: '1234567' }],
+    }]])));
+
+    expect(index.resolve('icqq~8596238', '8596238')).toBe(`${slot.id}~8596238`);
+    expect(index.resolve('icqq~1234567', '1234567')).toBe(`${slot.id}~1234567`);
+    // 错误的 adapter/endpoint 组合不得命中其它 record
+    expect(index.resolve('icqq~8596238', '1234567')).toBeUndefined();
+    expect(index.resolve('missing~8596238', '8596238')).toBeUndefined();
+    expect(index.instance('icqq~8596238', '8596238')).toMatchObject({ name: '8596238' });
+  });
 });
 
 function snapshot(

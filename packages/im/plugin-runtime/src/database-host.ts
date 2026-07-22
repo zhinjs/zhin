@@ -1,17 +1,21 @@
 import { createToken } from './token.js';
 
+export interface DatabaseHostSelection {
+  where(query: Record<string, unknown>): DatabaseHostSelection;
+  orderBy(field: string, direction?: 'ASC' | 'DESC'): DatabaseHostSelection;
+  limit(count: number): DatabaseHostSelection;
+  then<TResult1 = Record<string, unknown>[], TResult2 = never>(
+    onfulfilled?: ((value: Record<string, unknown>[]) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ): Promise<TResult1 | TResult2>;
+}
+
 /**
  * Minimal model surface shared by lottery / rss / group-suite memory stores
  * and the Host-backed `@zhin.js/database` adapter.
  */
 export interface DatabaseHostModel {
-  select(): {
-    where(query: Record<string, unknown>): Promise<Record<string, unknown>[]>;
-    then<TResult1 = Record<string, unknown>[], TResult2 = never>(
-      onfulfilled?: ((value: Record<string, unknown>[]) => TResult1 | PromiseLike<TResult1>) | null,
-      onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
-    ): Promise<TResult1 | TResult2>;
-  };
+  select(...fields: string[]): DatabaseHostSelection;
   insert(row: Record<string, unknown>): Promise<unknown>;
   delete(): { where(query: Record<string, unknown>): Promise<unknown> };
   update(patch: Record<string, unknown>): {

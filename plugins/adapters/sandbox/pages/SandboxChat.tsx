@@ -1,10 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSegment, cn, resolveMediaSrc, pickMediaRawUrl } from '@zhin.js/client';
 import {
-    buildSandboxWebSocketUrl,
-} from './sandboxTransport';
-import { User, Bot, Users, Trash2, Send, Hash, MessageSquare, Wifi, WifiOff, Smile, Image, X, Check, Info, Search, Endpoint, UserPlus, Bell, Video, Music } from 'lucide-react';
-import RichTextEditor, { RichTextEditorRef } from './RichTextEditor';
+  cn,
+  resolveMediaSrc,
+  pickMediaRawUrl,
+  type MessageSegment,
+} from '@zhin.js/client';
+import { buildSandboxWebSocketUrl } from './sandboxTransport';
+import {
+  User, Bot, Users, Trash2, Send, Hash, MessageSquare,
+  Wifi, WifiOff, Smile, Image, X, Check, Info, Search,
+  UserPlus, Bell, Video, Music,
+} from 'lucide-react';
+import RichTextEditor, { type RichTextEditorRef } from './RichTextEditor';
 
 interface Message {
     id: string; type: 'sent' | 'received'; channelType: 'private' | 'group' | 'channel';
@@ -99,16 +106,91 @@ export default function Sandbox() {
     }
 
     useEffect(() => {
-        const wsUrl = buildSandboxWebSocketUrl()
-        wsRef.current = new WebSocket(wsUrl)
-        wsRef.current.onopen = () => setConnected(true)
-        wsRef.current.onmessage = (event) => {
-            try { handleInboundPayload(JSON.parse(event.data)) }
-            catch (err) { console.error('[Sandbox] Failed to parse message:', err) }
-        }
-        wsRef.current.onclose = () => setConnected(false)
+        let closed = false
+        let retryTimer: ReturnType<typeof setTimeout> | undefined
+        let attempt = 0
+        /** Ignore close events from a socket we intentionally replaced (login/base change). */
+        let replaceInFlight = false
 
+        const connect = () => {
+            if (closed) return
+            if (retryTimer) {
+                clearTimeout(retryTimer)
+                retryTimer = undefined
+            }
+            const wsUrl = buildSandboxWebSocketUrl()
+            // Tear down previous socket before opening a new one so we don't
+            // leave two concurrent /sandbox sessions for fixed-name endpoints.
+            const previous = wsRef.current
+            if (previous) {
+                replaceInFlight = true
+                previous.onclose = null
+                previous.onerror = null
+                previous.onmessage = null
+                previous.onopen = null
+                try { previous.close() } catch { /* already closed */ }
+                replaceInFlight = false
+            }
+            const ws = new WebSocket(wsUrl)
+            wsRef.current = ws
+            ws.onopen = () => {
+                attempt = 0
+                setConnected(true)
+            }
+            ws.onmessage = (event) => {
+                try { handleInboundPayload(JSON.parse(String(event.data))) }
+                catch (err) { console.error('[Sandbox] Failed to parse message:', err) }
+            }
+            ws.onclose = () => {
+                if (wsRef.current !== ws) return
+                setConnected(false)
+                wsRef.current = null
+                if (closed || replaceInFlight) return
+                const delay = Math.min(8_000, 500 * 2 ** attempt)
+                attempt += 1
+                retryTimer = setTimeout(connect, delay)
+            }
+            ws.onerror = () => {
+                /* close handler reconnects */
+            }
+        }
+
+        const onAuthOrStorage = (event?: Event) => {
+            // storage fires for other tabs; same-tab login sets localStorage then
+            // dispatches zhin:auth-required / custom login events.
+            if (event && event.type === 'storage') {
+                const key = (event as StorageEvent).key
+                if (
+                    key != null
+                    && key !== 'zhin_api_token'
+                    && key !== 'zhin_api_base'
+                    && key !== 'HTTP_TOKEN'
+                    && key !== 'zhin_http_token'
+                ) {
+                    return
+                }
+            }
+            attempt = 0
+            connect()
+        }
+
+        connect()
+        if (typeof window !== 'undefined') {
+            window.addEventListener('storage', onAuthOrStorage)
+            window.addEventListener('zhin:auth-required', onAuthOrStorage)
+            // Remote Console may fire this after successful login (token written).
+            window.addEventListener('zhin:auth-changed', onAuthOrStorage)
+            window.addEventListener('zhin:api-base-changed', onAuthOrStorage)
+        }
         return () => {
+            closed = true
+            if (retryTimer) clearTimeout(retryTimer)
+            if (typeof window !== 'undefined') {
+                window.removeEventListener('storage', onAuthOrStorage)
+                window.removeEventListener('zhin:auth-required', onAuthOrStorage)
+                window.removeEventListener('zhin:auth-changed', onAuthOrStorage)
+                window.removeEventListener('zhin:api-base-changed', onAuthOrStorage)
+            }
             wsRef.current?.close()
             wsRef.current = null
             setConnected(false)
@@ -279,9 +361,11 @@ export default function Sandbox() {
         const newMessage: Message = { id: `msg_${Date.now()}`, type: 'sent', channelType: activeChannel.type, channelId: activeChannel.id, channelName: activeChannel.name, senderId: 'test_user', senderName: '测试用户', content: segments, timestamp: Date.now() }
         setMessages((prev) => [...prev, newMessage]); setInputText(''); setPreviewSegments([])
         editorRef.current?.clear()
+        // Stamp type+id so Host sandbox endpoint preserves channel context for outbound replies.
         const payload = JSON.stringify({ type: activeChannel.type, id: activeChannel.id, content: segments, timestamp: Date.now() })
         wsRef.current?.send(payload)
     }
+
 
     const clearMessages = () => { if (confirm('确定清空所有消息记录？')) setMessages([]) }
     const switchChannel = (channel: Channel) => { setViewMode('chat'); setActiveChannel(channel); setChannels((prev) => prev.map((c) => c.id === channel.id ? { ...c, unread: 0 } : c)); if (window.innerWidth < 768) setShowChannelList(false) }

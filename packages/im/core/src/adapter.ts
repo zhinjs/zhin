@@ -111,7 +111,11 @@ export abstract class Adapter<
       logger: this.logger,
       getMaxConcurrentMessages: () => this.maxConcurrentMessages,
       getPendingMessages: () => this.#pendingMessages,
-      decrementPending: () => { this.#pendingMessages--; },
+      decrementPending: () => {
+        // stop() may zero the counter while in-flight receives still finish;
+        // never let the budget go negative.
+        this.#pendingMessages = Math.max(0, this.#pendingMessages - 1);
+      },
     });
   }
 
@@ -368,13 +372,16 @@ export abstract class Adapter<
     }
     // 无论是否有错误，始终完成清理
     this.endpoints.clear();
-    
+    // Drop in-flight concurrency counter so a subsequent start() does not
+    // inherit a stale backpressure budget from the previous generation.
+    this.#pendingMessages = 0;
+
     // 从 adapters 数组中移除（可能因重复 start 出现多条同名，需全部删掉）
     const rootAdapters = this.plugin.root.adapters;
     for (let i = rootAdapters.length - 1; i >= 0; i--) {
       if (rootAdapters[i] === this.name) rootAdapters.splice(i, 1);
     }
-    
+
     // 移除所有事件监听器
     this.removeAllListeners();
     this.recallMessageHandler = async(endpoint_id: string, id: string) => {
@@ -385,9 +392,9 @@ export abstract class Adapter<
       await endpoint.$recallMessage(id);
     };
     this.on('call.recallMessage', this.recallMessageHandler);
-    
+
     this.logger.debug(formatCompact( { stop: this.name }));
-    
+
     if (errors.length) {
       throw new AggregateError(errors, `adapter ${this.name}: ${errors.length} endpoint(s) failed to disconnect`);
     }

@@ -121,6 +121,7 @@
     "export * from './schedule-host.js';",
     "export * from './shared-lifetime.js';",
     "export * from './snapshot.js';",
+    "export * from './system-log.js';",
     "export * from './token.js';"
   ],
   "runtime": [

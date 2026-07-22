@@ -78,10 +78,12 @@ function resolveEndpointName(
   const cached = cache.get(capabilityId);
   if (cached !== undefined) return cached;
   const localName = capabilityId.split('\0').pop() ?? capabilityId;
-  let resolved = localName;
+  // 展开 id 形如 `icqq~8596238`（slot~entry）：adapter 段取 slot localName，endpoint 段取 entry name
+  const [slotName, entryName] = localName.split('~');
+  let resolved = entryName ?? localName;
   try {
     const summary = typeof im.getEndpoint === 'function'
-      ? im.getEndpoint(localName, localName)
+      ? im.getEndpoint(slotName ?? localName, entryName ?? slotName ?? localName)
       : null;
     if (summary?.name) resolved = summary.name;
   } catch {
