@@ -195,6 +195,9 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   basic/database:
     dependencies:
@@ -841,6 +844,9 @@ importers:
 
   packages/console/client:
     dependencies:
+      '@zhin.js/console-protocol':
+        specifier: workspace:*
+        version: link:../protocol
       '@zhin.js/contract':
         specifier: workspace:*
         version: link:../contract
@@ -872,6 +878,9 @@ importers:
       '@zhin.js/ai':
         specifier: workspace:*
         version: link:../../im/ai
+      '@zhin.js/console-protocol':
+        specifier: workspace:*
+        version: link:../protocol
     devDependencies:
       '@types/react':
         specifier: ^19.2.17
@@ -991,6 +1000,12 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  packages/console/protocol:
+    devDependencies:
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   packages/game-kit:
     dependencies:
       '@zhin.js/core':
@@ -1052,6 +1067,9 @@ importers:
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
+      '@zhin.js/console-protocol':
+        specifier: workspace:*
+        version: link:../../console/protocol
       '@zhin.js/contract':
         specifier: workspace:*
         version: link:../../console/contract
@@ -1104,6 +1122,9 @@ importers:
 
   packages/host/http:
     dependencies:
+      '@zhin.js/console-protocol':
+        specifier: workspace:*
+        version: link:../../console/protocol
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
@@ -1157,6 +1178,9 @@ importers:
       '@koa/router':
         specifier: ^15.6.0
         version: 15.6.0(koa@3.2.1)
+      '@zhin.js/console-protocol':
+        specifier: workspace:*
+        version: link:../../console/protocol
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger

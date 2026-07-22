@@ -8,7 +8,7 @@ sidebar: false
 > **权威方**：Zhin Host（`@zhin.js/host-api` + `@zhin.js/host-router`）  
 > **版本**：与 Host API 同步演进；机器可读契约见运行时 `GET /pub/openapi.json`
 
-本文档描述 Remote Console（独立静态站）应实现的全部功能、API 契约与验收标准。Host **不提供** Console UI，仅暴露 API；UI 在 [zhin-console](https://github.com/zhinjs/zhin-console) 维护并部署（如 [console.zhin.dev](https://console.zhin.dev)）。
+本文档描述 Remote Console（独立静态站）应实现的全部功能、API 契约与验收标准。Host **不提供** Console UI，仅暴露 API；UI 在 [zhinjs/console](https://github.com/zhinjs/console) 维护并部署（如 [console.zhin.dev](https://console.zhin.dev)）。
 
 快速上手见 [console-remote.md](../console-remote.md)。本地联调见 [examples/test-bot/REMOTE_CONSOLE.md](../../examples/test-bot/REMOTE_CONSOLE.md)。
 
@@ -292,9 +292,9 @@ GET {API_BASE}/pub/openapi.json
 | `env:list` | — | `{ files: string[] }` |
 | `env:get` | `filename` | `{ content }` |
 | `env:save` | `filename`, `content` | `{ success }` |
-| `endpoint:list` | — | `{ endpoints: EndpointRow[] }`（含 pending 状态） |
-| `endpoint:info` | `data: { adapter, endpointId }` | Endpoint 详情 |
-| `endpoint:sendMessage` | `data: { adapter, endpointId, id, type, content, parent? }` — `parent` 可选：`{ type: "group" \| "guild", id }`（QQ 子频道发消息需 `type: "channel"` + `parent: { type: "guild", id: guild_id }`） | `{ messageId }` |
+| `endpoint.list` | — | `{ endpoints: EndpointRow[] }`（含 pending 状态） |
+| `endpoint.info` | `data: { adapter, endpointId }` | Endpoint 详情 |
+| `endpoint.send_message` | `data: { adapter, endpointId, id, type, content, parent? }` — `parent` 可选：`{ type: "group" \| "guild", id }`（QQ 子频道发消息需 `type: "channel"` + `parent: { type: "guild", id: guild_id }`） | `{ message_id, messageId }` |
 | `cron:list` | — | `{ memory[], persistent[] }` |
 | `cron:add` | `cronExpression`, `prompt`, `label?`, `notify?` | 新建 persistent 任务记录 |
 | `cron:remove` | `id` | `{ success }` |
@@ -321,28 +321,28 @@ GET {API_BASE}/pub/openapi.json
 
 `type` 为 `related` \| `document` \| `keyvalue`，UI 应按类型展示不同编辑器。
 
-#### Endpoint 社交 / Inbox RPC（websocket 回落）
+#### Endpoint 社交 / Inbox RPC
 
 以下方法通过同一 `POST /api/console/request` 调用，`data` 字段承载参数：
 
 | type | 用途 |
 |------|------|
-| `endpoint:friends` | 好友列表 |
-| `endpoint:groups` | 群列表 |
-| `endpoint:channels` | 频道列表；每项 `{ id, name?, parent?: { type: "guild", id, name? } }` |
-| `endpoint:requests` | 好友/群请求 |
-| `endpoint:requestApprove` / `endpoint:requestReject` | 处理请求 |
-| `endpoint:requestConsumed` | 标记请求已读 |
-| `endpoint:noticeConsumed` | 标记通知已读 |
-| `endpoint:inboxMessages` | 收件箱消息；可选 `parent: { type, id }` 按 guild 精确过滤 |
-| `endpoint:inboxRequests` | 收件箱请求 |
-| `endpoint:inboxNotices` | 收件箱通知 |
-| `endpoint:deleteFriend` | 删除好友 |
-| `endpoint:groupMembers` | 群成员 |
-| `endpoint:groupKick` / `endpoint:groupMute` / `endpoint:groupAdmin` | 群管理 |
+| `endpoint.friends` | 好友列表 |
+| `endpoint.groups` | 群列表 |
+| `endpoint.channels` | 频道列表；每项 `{ id, name?, parent?: { type: "guild", id, name? } }` |
+| `request.list` | 好友/群请求 |
+| `request.approve` / `request.reject` | 处理请求 |
+| `request.consumed` | 标记请求已读 |
+| `notice.consumed` | 标记通知已读 |
+| `inbox.messages` | 收件箱消息；可选 `parent: { type, id }` 按 guild 精确过滤 |
+| `inbox.requests` | 收件箱请求 |
+| `inbox.notices` | 收件箱通知 |
+| `endpoint.delete_friend` | 删除好友 |
+| `endpoint.group_members` | 群成员 |
+| `endpoint.group_kick` / `endpoint.group_mute` / `endpoint.group_admin` | 群管理 |
 | `system:restart` | 触发 Host 重启 |
 
-具体 `data` 字段因适配器而异；Console 应按 adapter 能力降级展示。
+名称与 payload 的单一事实源是 `@zhin.js/console-protocol`，Console 应从 `@zhin.js/client` 使用其重导出的常量。Host 暂时接受旧 `endpoint:*` camelCase 名称作为入站兼容别名，但 UI 与新插件不得继续生成这些别名。Endpoint 管理结果来自 Adapter 的 `EndpointManagement` 语义端口；未声明能力时 Console 应隐藏操作或使用收件箱历史降级，不能在 Host/UI 猜测平台方法名。
 
 ---
 
@@ -366,9 +366,9 @@ GET {API_BASE}/pub/openapi.json
 | type | 说明 | data 形状（概要） |
 |------|------|-------------------|
 | `config:updated` | 配置变更 | `{ pluginName, config }` |
-| `endpoint:message` | 新收件消息 | 消息行字段（adapter, endpoint_id, sender, channel 等） |
-| `endpoint:request` | 好友/群请求 | 请求行 + `canAct` |
-| `endpoint:notice` | 平台通知 | notice 行 |
+| `message.receive` | 新收件消息 | 消息行字段（adapter, endpointId, sender, channel 等） |
+| `request.receive` | 好友/群请求 | 请求行 + `canAct` |
+| `notice.receive` | 平台通知 | notice 行 |
 | `system:restarting` | 即将重启 | — |
 | `data-update` | 通用刷新信号 | `{ timestamp }` |
 
@@ -456,23 +456,24 @@ GET /entries
 ### 4.4 Endpoint 管理
 
 - **路由建议**：`/endpoints`、`/endpoints/:adapter/:endpointId`
-- **数据**：`GET /api/endpoints`、RPC `endpoint:list` / `endpoint:info` / `endpoint:sendMessage`、`POST /api/message/send`
+- **数据**：`GET /api/endpoints`、RPC `endpoint.list` / `endpoint.info` / `endpoint.send_message`、`POST /api/message/send`
 - **展示**：在线状态、发消息表单（私聊/群/频道）
-- **实时**：SSE `endpoint:message`
+- **实时**：SSE `message.receive`
 
 ### 4.5 收件箱
 
 - **路由建议**：`/inbox` 或 Endpoint 详情子 Tab
-- **数据**：RPC `endpoint:inboxMessages` / `endpoint:inboxRequests` / `endpoint:inboxNotices` 及消费/审批方法
+- **数据**：RPC `inbox.messages` / `inbox.requests` / `inbox.notices` 及消费/审批方法
 - **展示**：消息、好友请求、通知分栏；未读标记
 - **持久化**：IndexedDB 缓存列表，刷新后仍可浏览（见验收 §8）
-- **实时**：SSE `endpoint:message` / `endpoint:request` / `endpoint:notice`
+- **实时**：SSE `message.receive` / `request.receive` / `notice.receive`
 
 ### 4.6 配置编辑器
 
 - **路由建议**：`/config`
 - **数据**：RPC `config:get-all`、`config:set`、`config:get-yaml`、`config:save-yaml`、`schema:get-all`
 - **展示**：按插件分 Tab；YAML 与表单双模式（若有 Schema）
+- **读取语义**：结构化配置来自当前 generation 的 Primary Config `document`，保留 `${ENV}` 占位符且不得展示 `expanded` 密钥值；YAML 端点仅用于源码编辑
 - **保存反馈**：区分 `reloaded: true`（热重载）与需重启提示
 - **实时**：SSE `config:updated`
 

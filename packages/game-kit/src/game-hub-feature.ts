@@ -1,10 +1,10 @@
-import { Feature, getPlugin, type FeatureJSON, type Plugin, type PluginLike, type DatabaseFeature } from '@zhin.js/core';
+import { Feature, getPlugin, type FeatureJSON, type Message, type Plugin, type PluginLike, type DatabaseFeature } from '@zhin.js/core';
 import { mountGameHubUi, markGameHubUiMounted } from './game-hub-mount.js';
 import { registerGameRecordModels, initGameRecordDatabase } from './game-records.js';
 
 export interface GameHubContext {
   plugin: Plugin;
-  message: import('zhin.js').Message<any>;
+  message: Message;
 }
 
 export interface GameMenuAction {
@@ -41,6 +41,10 @@ declare module '@zhin.js/core' {
 }
 
 let activeFeature: GameHubFeature | null = null;
+
+function setActiveFeature(feature: GameHubFeature | null): void {
+  activeFeature = feature;
+}
 
 export class GameHubFeature extends Feature<RegisteredGame> {
   readonly name = 'game' as const;
@@ -84,13 +88,12 @@ export class GameHubFeature extends Feature<RegisteredGame> {
   }
 
   get extensions() {
-    const feature = this;
     return {
-      registerGame(game: RegisteredGame) {
+      registerGame: (game: RegisteredGame) => {
         const plugin = getPlugin();
         ensureGameHubService(plugin);
-        const dispose = feature.register(game, plugin.name);
-        plugin.recordFeatureContribution(feature.name, game.id);
+        const dispose = this.register(game, plugin.name);
+        plugin.recordFeatureContribution(this.name, game.id);
         plugin.onDispose(dispose);
         return dispose;
       },
@@ -98,7 +101,7 @@ export class GameHubFeature extends Feature<RegisteredGame> {
   }
 
   mounted(plugin: PluginLike): void {
-    activeFeature = this;
+    setActiveFeature(this);
     const root = plugin as Plugin;
     const host = root.root ?? root;
     registerGameRecordModels(host);
@@ -117,7 +120,7 @@ export class GameHubFeature extends Feature<RegisteredGame> {
     for (const d of this.hubDisposers) d();
     this.hubDisposers = [];
     if (activeFeature === this) {
-      activeFeature = null;
+      setActiveFeature(null);
     }
   }
 }
@@ -133,7 +136,7 @@ export function ensureGameHubService(plugin: Plugin): GameHubFeature {
 
   const feature = new GameHubFeature();
   root.provide(feature);
-  activeFeature = feature;
+  setActiveFeature(feature);
 
   if (root.started && feature.mounted) {
     feature.mounted(root);

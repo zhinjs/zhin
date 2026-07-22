@@ -8,6 +8,10 @@ import {
   type AITriggerConfig,
   type Tool,
 } from '@zhin.js/core';
+import {
+  parseToolInputSchema,
+  toolInputSchemaToParameters,
+} from '@zhin.js/core/tool-zod';
 import type { ImRuntime, Message, SendContent } from '@zhin.js/core/runtime';
 import {
   expandEnvironmentValue,
@@ -155,8 +159,11 @@ export async function resolveCollaborationConfigDocument(
 }
 
 export interface InstallAgentHostOptions {
+  /** @deprecated Prefer the generation-owned Primary Config. Test overrides only. */
   readonly ai?: AIConfig;
+  /** @deprecated Prefer the generation-owned Primary Config. Test overrides only. */
   readonly assistant?: AssistantConfig;
+  /** @deprecated Prefer the generation-owned Primary Config. Test overrides only. */
   readonly collaboration?: unknown;
   readonly im: ImRuntime;
   readonly projectRoot: string;
@@ -189,13 +196,18 @@ export interface InstallAgentHostOptions {
  * - Subagent/main-turn `bash` (sandbox + safety) + Owner `/approve` 命令面
  */
 export function installAgentHost(options: InstallAgentHostOptions): RootResourceInstaller {
-  return async ({ resources, lifecycle, handoff }) => {
-    const config = options.ai;
-    if (!config || typeof config !== 'object') return;
+  return async ({ resources, lifecycle, handoff, config: primaryConfig }) => {
+    const configuredAi = options.ai ?? primaryConfig.get<AIConfig>('ai');
+    const aiConfig = configuredAi ? softPruneAiConfig(configuredAi) : undefined;
+    const assistantConfig = options.assistant
+      ?? primaryConfig.get<AssistantConfig>('assistant');
+    const collaborationConfig = options.collaboration
+      ?? primaryConfig.get('collaboration');
+    if (!aiConfig || typeof aiConfig !== 'object') return;
 
     let service: AIService;
     try {
-      service = new AIService(config);
+      service = new AIService(aiConfig);
     } catch (error) {
       logger.warn(formatCompact({
         op: 'agent_host_skip',
@@ -246,7 +258,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         zhinAgent,
         options.im,
         options.projectRoot,
-        options.assistant,
+        assistantConfig,
       );
       scheduleTools = schedule.tools;
       assistantEnabled = schedule.assistantEnabled;
@@ -261,7 +273,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       return;
     }
 
-    const useDatabase = config.sessions?.useDatabase !== false;
+    const useDatabase = aiConfig.sessions?.useDatabase !== false;
     let persistencePendingActivate = false;
     if (useDatabase && resources.has(databaseHostToken)) {
       const database = resources.use(databaseHostToken);
@@ -280,15 +292,15 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
                   mode: 'memory',
                   reason: 'database_not_started',
                 }));
-                await wireCollaborationStorage(undefined, options.collaboration);
+                await wireCollaborationStorage(undefined, collaborationConfig);
                 collaborationReady = true;
                 return;
               }
               await activateAiDatabaseStorage(
                 raw,
                 { aiService: service, zhinAgent },
-                config,
-                options.collaboration,
+                aiConfig,
+                collaborationConfig,
                 orchService,
               );
               collaborationReady = true;
@@ -306,7 +318,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
                 error: error instanceof Error ? error.message : String(error),
               }));
               try {
-                await wireCollaborationStorage(undefined, options.collaboration);
+                await wireCollaborationStorage(undefined, collaborationConfig);
                 collaborationReady = true;
               } catch {
                 /* ignore */
@@ -324,13 +336,13 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           error: error instanceof Error ? error.message : String(error),
         }));
         zhinAgent.markMemoryPersistenceReady();
-        void wireCollaborationStorage(undefined, options.collaboration).then(() => {
+        void wireCollaborationStorage(undefined, collaborationConfig).then(() => {
           collaborationReady = true;
         });
       }
     } else {
       zhinAgent.markMemoryPersistenceReady();
-      void wireCollaborationStorage(undefined, options.collaboration).then(() => {
+      void wireCollaborationStorage(undefined, collaborationConfig).then(() => {
         collaborationReady = true;
       });
     }
@@ -343,7 +355,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
 
     const ingress = new CapabilityIngress();
     const mcp = new McpClientManager();
-    const mcpEntries = parseMcpServers(config.mcpServers);
+    const mcpEntries = parseMcpServers(aiConfig.mcpServers);
     let bootstrapText = '';
     let bootstrapLoaded = false;
     let mcpEnsured = false;
@@ -1135,7 +1147,7 @@ function readCapabilities(
 
 function toTool(tool: AgentToolLike | ToolCapability): Tool {
   const parameters = isToolCapability(tool)
-    ? parametersFromInputSchema(tool.inputSchema)
+    ? toolInputSchemaToParameters(tool.inputSchema)
     : tool.parameters;
   const source = isToolCapability(tool) ? tool.owner : tool.source;
   const result: AgentToolLike = {
@@ -1173,27 +1185,6 @@ function isToolCapability(tool: AgentToolLike | ToolCapability): tool is ToolCap
   return 'inputSchema' in tool && 'owner' in tool;
 }
 
-interface ZodLikeParseError {
-  readonly issues?: readonly { readonly path?: readonly PropertyKey[]; readonly message?: string }[];
-  readonly errors?: readonly { readonly path?: readonly PropertyKey[]; readonly message?: string }[];
-}
-
-interface ZodLikeSchema {
-  safeParse(value: unknown): {
-    readonly success: boolean;
-    readonly data?: unknown;
-    readonly error?: ZodLikeParseError;
-  };
-}
-
-function formatZodLikeError(error: ZodLikeParseError | undefined): string {
-  const issues = error?.issues ?? error?.errors ?? [];
-  const text = issues
-    .map((issue) => `${(issue.path ?? []).join('.') || 'root'}: ${issue.message ?? 'invalid'}`)
-    .join('; ');
-  return text || 'Invalid arguments';
-}
-
 /**
  * Bridge a plugin-registered tool (agentToolsHostToken) into the per-turn
  * catalog shape. zod-like inputSchemas are reused for argument validation,
@@ -1202,7 +1193,7 @@ function formatZodLikeError(error: ZodLikeParseError | undefined): string {
 export function toRegisteredAgentTool(
   registration: AgentToolRegistration,
 ): Parameters<ZhinAgent['registerTool']>[0] {
-  const parameters = parametersFromInputSchema(registration.inputSchema);
+  const parameters = toolInputSchemaToParameters(registration.inputSchema);
   const result: Parameters<ZhinAgent['registerTool']>[0] = {
     name: registration.name,
     description: registration.description,
@@ -1217,13 +1208,12 @@ export function toRegisteredAgentTool(
     ...(registration.permissions ? { permissions: registration.permissions } : {}),
     ...(registration.approval ? { approval: registration.approval } : {}),
     async execute(args) {
-      const schema = registration.inputSchema as ZodLikeSchema | undefined;
-      if (schema && typeof schema.safeParse === 'function') {
-        const parsed = schema.safeParse(args ?? {});
-        if (!parsed.success) return `Error: ${formatZodLikeError(parsed.error)}`;
-        return await registration.execute((parsed.data ?? args ?? {}) as Record<string, unknown>);
-      }
-      return await registration.execute(args ?? {});
+      const parsed = parseToolInputSchema<Record<string, unknown>>(
+        registration.inputSchema,
+        args ?? {},
+      );
+      if (!parsed.ok) return `Error: ${parsed.error}`;
+      return await registration.execute(parsed.data);
     },
   };
   return result;
@@ -1249,7 +1239,7 @@ async function mcpToolsAsTools(capabilities: AgentCapabilities): Promise<Tool[]>
     }
     for (const tool of listed) {
       const qualified = `${connection.name}__${tool.name}`;
-      const parameters = parametersFromInputSchema(tool.inputSchema);
+      const parameters = toolInputSchemaToParameters(tool.inputSchema);
       tools.push({
         name: qualified,
         description: tool.description ?? `MCP ${connection.name}/${tool.name}`,
@@ -1476,79 +1466,6 @@ function routeSpecialistAgent(
     userText: userText.slice(match[0].length).trim() || userText,
     agent,
   };
-}
-
-function parametersFromInputSchema(schema: unknown): AgentToolLike['parameters'] {
-  if (isJsonSchemaObject(schema)) {
-    return {
-      type: 'object',
-      properties: schema.properties ?? {},
-      required: schema.required,
-    };
-  }
-  return zodLikeToParameters(schema);
-}
-
-function isJsonSchemaObject(value: unknown): value is {
-  type?: string;
-  properties?: Record<string, unknown>;
-  required?: string[];
-} {
-  return !!value
-    && typeof value === 'object'
-    && !Array.isArray(value)
-    && (value as { type?: unknown }).type === 'object';
-}
-
-function zodLikeToParameters(schema: unknown): AgentToolLike['parameters'] {
-  const result: AgentToolLike['parameters'] = {
-    type: 'object',
-    properties: {},
-    required: [],
-  };
-  const shape = (schema as { shape?: Record<string, unknown> } | null)?.shape;
-  if (!shape) return result;
-  const required: string[] = [];
-  const properties: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(shape)) {
-    properties[key] = zodFieldToJsonSchema(value);
-    const typeName = (value as { _def?: { typeName?: string } })?._def?.typeName;
-    if (typeName !== 'ZodOptional' && typeName !== 'ZodDefault') required.push(key);
-  }
-  return { type: 'object', properties, required };
-}
-
-function zodFieldToJsonSchema(z: unknown): Record<string, unknown> {
-  const zod = z as {
-    _def?: {
-      typeName?: string;
-      innerType?: unknown;
-      type?: unknown;
-      element?: unknown;
-      description?: string;
-      values?: string[];
-    };
-  };
-  if (!zod?._def) return { type: 'string' };
-  const def = zod._def;
-  const typeName = def.typeName;
-  if (typeName === 'ZodOptional' || typeName === 'ZodDefault') {
-    return zodFieldToJsonSchema(def.innerType ?? def.type);
-  }
-  if (typeName === 'ZodString') {
-    return def.description ? { type: 'string', description: def.description } : { type: 'string' };
-  }
-  if (typeName === 'ZodNumber') {
-    return def.description ? { type: 'number', description: def.description } : { type: 'number' };
-  }
-  if (typeName === 'ZodBoolean') {
-    return def.description ? { type: 'boolean', description: def.description } : { type: 'boolean' };
-  }
-  if (typeName === 'ZodEnum') return { type: 'string', enum: def.values };
-  if (typeName === 'ZodArray') {
-    return { type: 'array', items: zodFieldToJsonSchema(def.type ?? def.element) };
-  }
-  return { type: 'string' };
 }
 
 /**

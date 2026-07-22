@@ -278,13 +278,18 @@ function expandString(
     const start = input.indexOf('${', i);
     if (start < 0) break;
     let j = start + 2;
-    if (j >= input.length || !isEnvKeyStart(input[j]!)) {
+    const first = input[j];
+    if (first === undefined || !isEnvKeyStart(first)) {
       out += input.slice(i, start + 1);
       i = start + 1;
       continue;
     }
     j += 1;
-    while (j < input.length && isEnvKeyChar(input[j]!)) j += 1;
+    while (j < input.length) {
+      const character = input[j];
+      if (character === undefined || !isEnvKeyChar(character)) break;
+      j += 1;
+    }
     const key = input.slice(start + 2, j);
     let fallback: string | undefined;
     if (input[j] === ':' && (input[j + 1] === '-' || input[j + 1] === '=')) {

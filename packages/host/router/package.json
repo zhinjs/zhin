@@ -46,6 +46,7 @@
   },
   "dependencies": {
     "@koa/router": "^15.6.0",
+    "@zhin.js/console-protocol": "workspace:*",
     "@zhin.js/schema": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "koa": "^3.2.1",

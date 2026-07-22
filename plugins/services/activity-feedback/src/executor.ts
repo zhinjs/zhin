@@ -69,6 +69,8 @@ export function createOutboundEndpointAccess(
       const key = `${platform}:${endpointId}`;
       const cached = cache.get(key);
       if (cached) return cached;
+      const addReaction = outbound.addReaction;
+      const removeReaction = outbound.removeReaction;
       const endpoint = {
         $id: endpointId,
         // Prefer real OutboundHost.recall when available (icqq RECALL_MSG).
@@ -89,12 +91,12 @@ export function createOutboundEndpointAccess(
             `[ActivityFeedback] recall not supported via OutboundHost (${key}, messageId=${messageId})`,
           );
         },
-        $addReaction: outbound.addReaction
+        $addReaction: addReaction
           ? async (
             messageId: string,
             emoji: string,
             hint?: { sceneType?: 'private' | 'group' | 'channel'; channelId?: string },
-          ) => outbound.addReaction!({
+          ) => addReaction({
             adapter: platform,
             endpointId,
             messageId,
@@ -103,9 +105,9 @@ export function createOutboundEndpointAccess(
             channelId: hint?.channelId,
           })
           : undefined,
-        $removeReaction: outbound.removeReaction
+        $removeReaction: removeReaction
           ? async (messageId: string, reactionId: string) => {
-            await outbound.removeReaction!({
+            await removeReaction({
               adapter: platform,
               endpointId,
               messageId,

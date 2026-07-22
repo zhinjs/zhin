@@ -20,7 +20,8 @@
     "src"
   ],
   "dependencies": {
-    "@zhin.js/ai": "workspace:*"
+    "@zhin.js/ai": "workspace:*",
+    "@zhin.js/console-protocol": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",

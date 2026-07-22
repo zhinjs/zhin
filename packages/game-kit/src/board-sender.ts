@@ -11,6 +11,6 @@ import type { Message } from '@zhin.js/core';
 /**
  * 构建频道唯一键（用于会话查找）
  */
-export function channelKey(message: Message<any>): string {
+export function channelKey(message: Message): string {
   return `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
 }

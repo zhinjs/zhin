@@ -587,7 +587,7 @@ scoop install nssm
 
 ## Web 控制台配置
 
-`@zhin.js/host-api` 在 `@zhin.js/host-router` 的 Router 上注册 **管理面 API**（系统/插件/Bot REST、`PageManager`、`/api/console/*`、`/api/events` 等）。UI 在 **[Remote Console](https://console.zhin.dev)**（独立仓库 [zhin-console](https://github.com/zhinjs/zhin-console)）。详见 [console-remote.md](../console-remote.md)。
+`@zhin.js/host-api` 在 `@zhin.js/host-router` 的 Router 上注册 **管理面 API**（系统/插件/Bot REST、`PageManager`、`/api/console/*`、`/api/events` 等）。UI 在 **[Remote Console](https://console.zhin.dev)**（独立仓库 [zhinjs/console](https://github.com/zhinjs/console)）。详见 [console-remote.md](../console-remote.md)。
 
 ```yaml
 hostApi:

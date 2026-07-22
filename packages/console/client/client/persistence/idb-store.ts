@@ -1,3 +1,8 @@
+import {
+  SIDE_EVENT_PUSH,
+  normalizeConsolePushType,
+} from "@zhin.js/console-protocol";
+
 const DB_NAME = "zhin-console";
 const DB_VERSION = 2;
 const STORE_INBOX = "inbox";
@@ -63,8 +68,12 @@ export async function idbListInbox(
 }
 
 export async function applyConsoleEvent(event: { type: string; data?: unknown }): Promise<void> {
-  const t = event.type;
-  if (t === "message.receive" || t === "request.receive" || t === "notice.receive") {
+  const t = normalizeConsolePushType(event.type);
+  if (
+    t === SIDE_EVENT_PUSH.MESSAGE_RECEIVE
+    || t === SIDE_EVENT_PUSH.REQUEST_RECEIVE
+    || t === SIDE_EVENT_PUSH.NOTICE_RECEIVE
+  ) {
     const data = event.data as Record<string, unknown> | undefined;
     if (!data) return;
     const adapter = String(data.$adapter ?? data.adapter ?? "");
@@ -74,7 +83,9 @@ export async function applyConsoleEvent(event: { type: string; data?: unknown })
       id,
       adapter,
       endpoint_id,
-      kind: t === "message.receive" ? "message" : t === "request.receive" ? "request" : "notice",
+      kind: t === SIDE_EVENT_PUSH.MESSAGE_RECEIVE
+        ? "message"
+        : t === SIDE_EVENT_PUSH.REQUEST_RECEIVE ? "request" : "notice",
       payload: data,
       updatedAt: Date.now(),
     });

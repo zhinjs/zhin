@@ -9,6 +9,7 @@ import {
 import { FeatureDiscovery } from '@zhin.js/feature-kit';
 import type { RuntimeEnvironment } from './environment.js';
 import type { EnvironmentLayers } from './environment-store.js';
+import type { RuntimeConfigDocument } from './config-composer.js';
 import { FeatureProjector, composeGenerationHandoffs } from './feature-projector.js';
 import type { IsolatedPluginRuntimePort } from './isolation.js';
 import type { ModuleRuntime } from './module-runtime.js';
@@ -39,6 +40,7 @@ export class SubtreeGenerationPreparer {
     private readonly model: RuntimeGenerationModel,
     private readonly graph: ProjectGraph,
     private readonly configResolver: PluginConfigResolver,
+    private readonly primaryConfigDocument: RuntimeConfigDocument,
     private readonly environment: RuntimeEnvironment,
     private readonly installResources?: RootResourceInstaller,
     private readonly environmentLayers: EnvironmentLayers = {},
@@ -55,6 +57,7 @@ export class SubtreeGenerationPreparer {
       this.modules,
       this.configResolver,
       this.environment,
+      this.primaryConfigDocument,
       this.installResources,
       this.environmentLayers,
       {

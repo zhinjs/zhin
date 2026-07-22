@@ -101,6 +101,7 @@ export type RootHmrOptions = Omit<HmrCoordinatorOptions, 'modules' | 'ownership'
 interface InspectedProject {
   readonly graph: ProjectGraph;
   readonly configResolver: PluginConfigResolver;
+  readonly primaryConfigDocument: RuntimeConfigDocument;
 }
 
 export class RootRuntime {
@@ -222,6 +223,7 @@ export class RootRuntime {
             this.#model,
             inspected.graph,
             inspected.configResolver,
+            inspected.primaryConfigDocument,
             this.#environment,
             this.#installResources,
             this.#environmentLayers,
@@ -276,13 +278,19 @@ export class RootRuntime {
   async #inspectProject(): Promise<InspectedProject> {
     const resolver = await NodePackageResolver.create(this.#projectRoot);
     const graph = await new ProjectGraphService(resolver).inspect(this.#projectRoot);
-    const configResolver =
-      this.#configResolver
-        ? this.#configResolver
-        : await new ConfigComposer()
-            .compose(graph, this.#configDocument)
-            .then((composed) => this.#configViewResolver(composed.views));
-    return { graph, configResolver };
+    if (this.#configResolver) {
+      return {
+        graph,
+        configResolver: this.#configResolver,
+        primaryConfigDocument: Object.freeze({}),
+      };
+    }
+    const composed = await new ConfigComposer().compose(graph, this.#configDocument);
+    return {
+      graph,
+      configResolver: this.#configViewResolver(composed.views),
+      primaryConfigDocument: composed.document,
+    };
   }
 
   #configViewResolver(
@@ -327,8 +335,12 @@ export class RootRuntime {
       const inspected: InspectedProject = {
         graph,
         configResolver: this.#configViewResolver(planned.views),
+        primaryConfigDocument: planned.document,
       };
-      if (this.#model && !planned.roots.includes(rootPluginId())) {
+      // Root resources may consume any Primary Config section. Reinstall them
+      // when present so a committed patch cannot leave Host services on the
+      // previous generation's document.
+      if (!this.#installResources && this.#model && !planned.roots.includes(rootPluginId())) {
         prepared = await this.#prepareSubtrees(current, inspected, planned.roots);
       } else {
         prepared = await this.#prepareInspected(current, inspected);
@@ -356,6 +368,7 @@ export class RootRuntime {
       inspected.graph,
       this.#modules,
       inspected.configResolver,
+      inspected.primaryConfigDocument,
       current.generation + 1,
       this.#environment,
       this.#installResources,
@@ -377,6 +390,7 @@ export class RootRuntime {
         this.#model,
         inspected.graph,
         inspected.configResolver,
+        inspected.primaryConfigDocument,
         this.#environment,
         this.#installResources,
         this.#environmentLayers,
@@ -446,6 +460,7 @@ class GenerationAssembler {
     private readonly graph: ProjectGraph,
     private readonly modules: ModuleRuntime,
     private readonly configResolver: PluginConfigResolver,
+    private readonly primaryConfigDocument: RuntimeConfigDocument,
     private readonly generation: number,
     private readonly environment: RuntimeEnvironment,
     private readonly installResources?: RootResourceInstaller,
@@ -457,6 +472,7 @@ class GenerationAssembler {
       modules,
       configResolver,
       environment,
+      primaryConfigDocument,
       installResources,
       environmentLayers,
       undefined,

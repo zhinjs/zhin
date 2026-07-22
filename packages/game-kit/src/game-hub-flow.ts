@@ -42,7 +42,7 @@ function gameMenuChoices(gameId: string, channelType: string): HubMenuChoice[] {
   ];
 }
 
-export function openMainMenu(message: Message<any>): ReturnType<typeof buildMainHubMenu> | string {
+export function openMainMenu(message: Message): ReturnType<typeof buildMainHubMenu> | string {
   const games = getRegisteredGames();
   if (!games.length) {
     return formatHubEmptyMessage();
@@ -55,7 +55,7 @@ export function openMainMenu(message: Message<any>): ReturnType<typeof buildMain
 
 export async function handleHubChoice(
   plugin: Plugin,
-  message: Message<any>,
+  message: Message,
   scopeId: string,
   choiceId: string,
 ): Promise<boolean> {

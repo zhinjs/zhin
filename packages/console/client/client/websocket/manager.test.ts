@@ -7,7 +7,7 @@ vi.mock("../persistence/idb-store.js", () => ({
 }));
 
 import { WebSocketManager } from "./manager.js";
-import { ConnectionState } from "./types.js";
+import { ConnectionState, type WebSocketMessage } from "./types.js";
 
 function mockStorage(map: Record<string, string> = {}): Storage {
   return {
@@ -97,7 +97,9 @@ describe("WebSocketManager REST/SSE transport", () => {
     const manager = new WebSocketManager();
     manager.connect();
     await vi.advanceTimersByTimeAsync(0);
-    await Promise.resolve();
+    for (let turn = 0; turn < 5 && received.length === 0; turn += 1) {
+      await Promise.resolve();
+    }
     await Promise.resolve();
 
     const init = fetchMock.mock.calls[0]![1] as RequestInit;
@@ -168,6 +170,37 @@ describe("WebSocketManager REST/SSE transport", () => {
     await manager.setConfig("sandbox", { endpoints: [] });
     const init = fetchMock.mock.calls[0]![1] as RequestInit;
     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer t");
+  });
+
+  it("normalizes legacy endpoint push names and payload aliases before callbacks", async () => {
+    installBrowserGlobals();
+    const payload = new TextEncoder().encode(
+      'event: endpoint:message\ndata: {"type":"endpoint:message","data":{"$adapter":"sandbox","endpoint":"bot"}}\n\n',
+    );
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(payload);
+        controller.close();
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => sseResponse(200, body)));
+    const received: WebSocketMessage[] = [];
+    const manager = new WebSocketManager({}, {
+      onMessage: (message) => received.push(message),
+    });
+
+    manager.connect();
+    await vi.advanceTimersByTimeAsync(0);
+    await Promise.resolve();
+
+    expect(received).toEqual([expect.objectContaining({
+      type: "message.receive",
+      data: expect.objectContaining({ adapter: "sandbox", endpointId: "bot" }),
+    })]);
+    expect(mockApplyConsoleEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: "message.receive",
+    }));
+    manager.disconnect();
   });
 
   it("stops reconnecting after maxReconnectAttempts", async () => {

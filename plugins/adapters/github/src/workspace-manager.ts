@@ -7,7 +7,17 @@ import path from 'node:path';
 import type { GhClient, GitHubBotIdentity } from './gh-client.js';
 
 const REPO_FULL_NAME_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
-const GIT_REF_ILLEGAL_RE = /[\s\x00-\x1f\x7f~^:?*[\\`;]/;
+const GIT_REF_ILLEGAL_CHARS = new Set('~^:?*[\\`;');
+
+function containsIllegalGitRefCharacter(ref: string): boolean {
+  return [...ref].some((character) => {
+    const code = character.charCodeAt(0);
+    return code <= 31
+      || code === 127
+      || /\s/u.test(character)
+      || GIT_REF_ILLEGAL_CHARS.has(character);
+  });
+}
 
 /**
  * 校验 GitHub "owner/name" 全名，防止路径穿越与 git 选项注入。
@@ -34,7 +44,7 @@ export function assertGitRefName(ref: string): string {
   if (
     ref.startsWith('-') ||
     ref.includes('..') ||
-    GIT_REF_ILLEGAL_RE.test(ref) ||
+    containsIllegalGitRefCharacter(ref) ||
     ref.endsWith('/') ||
     ref.endsWith('.')
   ) {

@@ -1,7 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import WebSocket from 'ws';
-import { formatCompact, Adapter, Plugin, usePlugin, type ConfigFeature, type DatabaseFeature } from '@zhin.js/core';
+import {
+  formatCompact,
+  Adapter,
+  Plugin,
+  usePlugin,
+  type ConfigFeature,
+  type DatabaseFeature,
+  type EndpointManagement,
+} from '@zhin.js/core';
 export interface ConsoleWebServer {
   ws: import("ws").WebSocketServer;
   entries?: Record<string, string>;
@@ -24,15 +32,21 @@ import {
   channelFromStoredRow,
   inboxChannelWhere,
   parentFromStoredRow,
-  toConsoleChannel,
   toConsoleChannelParent,
 } from "./endpoint-channel.js";
+import { normalizeConsoleRpcMessage } from '@zhin.js/console-protocol';
 
 const plugin = usePlugin();
 const { root, logger } = plugin;
 
-function isIcqqAdapterKey(adapter: string): boolean {
-  return adapter === "icqq" || adapter.endsWith("/icqq") || adapter.includes("adapter-icqq");
+function resolveEndpointManagement(
+  adapterName: string,
+  endpointId: string,
+): EndpointManagement | undefined {
+  const adapter = root.inject(adapterName as keyof Plugin.Contexts);
+  const endpoint = adapter instanceof Adapter ? adapter.endpoints.get(endpointId) : undefined;
+  if (!endpoint) return undefined;
+  return (endpoint as unknown as { management?: EndpointManagement }).management ?? {};
 }
 
 function collectEndpointsList(): Array<{
@@ -218,6 +232,7 @@ export async function handleWebSocketMessage(
   webServer: WebServer,
   hostOnly = false,
 ) {
+  message = normalizeConsoleRpcMessage(message);
   const { type, requestId, pluginName } = message;
 
   if (!hostOnly) {
@@ -430,78 +445,30 @@ export async function handleWebSocketMessage(
           ws.send(JSON.stringify({ requestId, error: "$adapter and $endpoint required" }));
           break;
         }
-        const ad = root.inject(adapter as keyof Plugin.Contexts);
-        const endpoint = ad instanceof Adapter ? ad.endpoints.get(endpointId) : undefined;
-        if (!endpoint) {
+        const management = resolveEndpointManagement(String(adapter), String(endpointId));
+        if (!management) {
           ws.send(JSON.stringify({ requestId, error: "endpoint not found" }));
           break;
         }
-        const endpointAny = endpoint as unknown as Record<string, unknown>;
         if (type === "endpoint.friends") {
-          let friends: Array<{ user_id: number; nickname: string; remark: string }> = [];
-          if (isIcqqAdapterKey(adapter)) {
-            const map = (endpointAny.friends ?? endpointAny.fl) as
-              | Map<number | string, Record<string, unknown>>
-              | undefined;
-            friends = Array.from((map || new Map()).values()).map((f) => ({
-              user_id: Number(f.user_id),
-              nickname: String(f.nickname ?? ""),
-              remark: String(f.remark ?? ""),
-            }));
-          } else if (typeof endpointAny.getFriendList === "function") {
-            const raw = await (endpointAny.getFriendList as () => Promise<unknown>)();
-            const arr = Array.isArray(raw)
-              ? raw
-              : raw && typeof raw === "object" && "data" in raw
-                ? (raw as { data: unknown }).data
-                : [];
-            friends = (Array.isArray(arr) ? arr : []).map((f) => {
-              const row = f as Record<string, unknown>;
-              return {
-                user_id: Number(row.user_id ?? row.userId ?? row.id ?? 0),
-                nickname: String(row.nickname ?? row.name ?? row.user_id ?? ""),
-                remark: String(row.remark ?? ""),
-              };
-            });
-          } else {
+          if (!management.listFriends) {
             ws.send(JSON.stringify({
               requestId,
               error: `当前适配器（${adapter}）不支持好友列表`,
             }));
             break;
           }
+          const friends = [...await management.listFriends()];
           ws.send(JSON.stringify({ requestId, data: { friends, count: friends.length } }));
         } else {
-          let groups: Array<{ group_id: number; name: string }> = [];
-          if (isIcqqAdapterKey(adapter)) {
-            const map = (endpointAny.groups ?? endpointAny.gl) as
-              | Map<number | string, Record<string, unknown>>
-              | undefined;
-            groups = Array.from((map || new Map()).values()).map((g) => ({
-              group_id: Number(g.group_id),
-              name: String(g.group_name ?? g.name ?? g.group_id ?? ""),
-            }));
-          } else if (typeof endpointAny.getGroupList === "function") {
-            const raw = await (endpointAny.getGroupList as () => Promise<unknown>)();
-            const arr = Array.isArray(raw)
-              ? raw
-              : raw && typeof raw === "object" && "data" in raw
-                ? (raw as { data: unknown }).data
-                : [];
-            groups = (Array.isArray(arr) ? arr : []).map((g) => {
-              const row = g as Record<string, unknown>;
-              return {
-                group_id: Number(row.group_id ?? row.groupId ?? row.id ?? 0),
-                name: String(row.name ?? row.group_name ?? row.group_id ?? ""),
-              };
-            });
-          } else {
+          if (!management.listGroups) {
             ws.send(JSON.stringify({
               requestId,
               error: `当前适配器（${adapter}）不支持群列表`,
             }));
             break;
           }
+          const groups = [...await management.listGroups()];
           ws.send(JSON.stringify({ requestId, data: { groups, count: groups.length } }));
         }
       } catch (error: unknown) {
@@ -518,61 +485,19 @@ export async function handleWebSocketMessage(
           ws.send(JSON.stringify({ requestId, error: "$adapter and $endpoint required" }));
           break;
         }
-        const ad = root.inject(adapter as keyof Plugin.Contexts);
-        const endpoint = ad instanceof Adapter ? ad.endpoints.get(endpointId) : undefined;
-        if (!endpoint) {
+        const management = resolveEndpointManagement(String(adapter), String(endpointId));
+        if (!management) {
           ws.send(JSON.stringify({ requestId, error: "endpoint not found" }));
           break;
         }
-        const channels: Array<{ id: string; name?: string; parent?: { type: string; id: string; name?: string } }> = [];
-        const endpointMethods = endpoint as unknown as Record<string, unknown>;
-        if (isIcqqAdapterKey(adapter) && typeof endpointMethods.getGuildChannelList === "function") {
-          const list = (endpointMethods.getGuildChannelList as () => Array<{
-            id: string;
-            name: string;
-            parent: { type: "guild"; id: string; name: string };
-          }>)();
-          channels.push(...list);
-        } else if (adapter === "qq" && typeof endpointMethods.getGuilds === "function" && typeof endpointMethods.getChannels === "function") {
-          const qqEndpoint = endpoint as unknown as {
-            getGuilds(): Promise<Array<Record<string, unknown>>>;
-            getChannels(guildId: string): Promise<Array<Record<string, unknown>>>;
-          };
-          const guilds = (await qqEndpoint.getGuilds()) || [];
-          for (const g of guilds) {
-            const gid = String(g?.id ?? g?.guild_id ?? g);
-            const guildName = String(g?.name ?? g?.guild_name ?? gid);
-            const chs = (await qqEndpoint.getChannels(gid)) || [];
-            for (const c of chs) {
-              channels.push({
-                id: String(c?.id ?? c?.channel_id ?? c),
-                name: String(c?.name ?? c?.channel_name ?? c?.id ?? ""),
-                parent: { type: "guild", id: gid, name: guildName },
-              });
-            }
-          }
-        } else if (ad && typeof (ad as Record<string, unknown>).listChannels === "function") {
-          const adMethods = ad as Record<string, (...args: unknown[]) => unknown>;
-          const result = await adMethods.listChannels(endpointId) as Record<string, unknown> | unknown[];
-          if (Array.isArray(result)) {
-            channels.push(...result.map((c) => {
-              const row = c as Record<string, unknown>;
-              const normalized = toConsoleChannel({
-                id: String(row?.id ?? c),
-                parent: row?.parent as { type?: string; id?: string; name?: string } | undefined,
-              }, { channelName: String(row?.name ?? row?.id ?? "") });
-              return normalized ?? { id: String(row?.id ?? c), name: String(row?.name ?? row?.id ?? "") };
-            }));
-          } else if (result && typeof result === "object" && "channels" in result) {
-            channels.push(...((result as Record<string, unknown>).channels as Array<Record<string, unknown>>).map((c) => {
-              const normalized = toConsoleChannel({
-                id: String(c?.id ?? ""),
-                parent: c?.parent as { type?: string; id?: string; name?: string } | undefined,
-              }, { channelName: String(c?.name ?? c?.id ?? "") });
-              return normalized ?? { id: String(c?.id ?? ""), name: String(c?.name ?? c?.id ?? "") };
-            }));
-          }
+        if (!management.listChannels) {
+          ws.send(JSON.stringify({
+            requestId,
+            error: `当前适配器（${adapter}）不支持频道列表`,
+          }));
+          break;
         }
+        const channels = [...await management.listChannels()];
         ws.send(JSON.stringify({ requestId, data: { channels, count: channels.length } }));
       } catch (error: unknown) {
         ws.send(JSON.stringify({ requestId, error: error instanceof Error ? error.message : String(error) }));
@@ -588,18 +513,13 @@ export async function handleWebSocketMessage(
           ws.send(JSON.stringify({ requestId, error: "$adapter, $endpoint, $user_id required" }));
           break;
         }
-        const ad = root.inject(adapter as keyof Plugin.Contexts);
-        const endpoint = ad instanceof Adapter ? ad.endpoints.get(endpointId) : undefined;
-        if (!endpoint) {
+        const management = resolveEndpointManagement(String(adapter), String(endpointId));
+        if (!management) {
           ws.send(JSON.stringify({ requestId, error: "endpoint not found" }));
           break;
         }
-        const endpointAny = endpoint as unknown as Record<string, unknown>;
-        if (adapter === "icqq" && typeof endpointAny.deleteFriend === "function") {
-          await (endpointAny.deleteFriend as (id: number) => Promise<void>)(Number(userId));
-          ws.send(JSON.stringify({ requestId, data: { success: true } }));
-        } else if (adapter === "icqq" && typeof endpointAny.delete_friend === "function") {
-          await (endpointAny.delete_friend as (id: number) => Promise<void>)(Number(userId));
+        if (management.deleteFriend) {
+          await management.deleteFriend(String(userId));
           ws.send(JSON.stringify({ requestId, data: { success: true } }));
         } else {
           ws.send(JSON.stringify({ requestId, error: "当前适配器暂不支持删除好友" }));
@@ -917,52 +837,51 @@ export async function handleWebSocketMessage(
           );
           break;
         }
-        const ad = root.inject(adapter as keyof Plugin.Contexts);
-        if (!ad) {
-          ws.send(JSON.stringify({ requestId, error: "adapter not found" }));
+        const management = resolveEndpointManagement(String(adapter), String(endpointId));
+        if (!management) {
+          ws.send(JSON.stringify({ requestId, error: "endpoint not found" }));
           break;
         }
-        const adMethods = ad as Record<string, ((...args: unknown[]) => unknown) | undefined>;
         const gid = String(groupId);
         if (type === "endpoint.group_members") {
-          if (typeof adMethods.listMembers !== "function") {
+          if (!management.listGroupMembers) {
             ws.send(JSON.stringify({ requestId, error: "adapter does not support listMembers" }));
             break;
           }
-          const r = await adMethods.listMembers(endpointId, gid);
-          ws.send(JSON.stringify({ requestId, data: r }));
+          const members = [...await management.listGroupMembers(gid)];
+          ws.send(JSON.stringify({ requestId, data: members }));
         } else if (type === "endpoint.group_kick") {
           if (!userId) {
             ws.send(JSON.stringify({ requestId, error: "$user_id required" }));
             break;
           }
-          if (typeof adMethods.removeMember !== "function") {
+          if (!management.kickGroupMember) {
             ws.send(JSON.stringify({ requestId, error: "adapter does not support removeMember" }));
             break;
           }
-          await adMethods.removeMember(endpointId, gid, String(userId));
+          await management.kickGroupMember(gid, String(userId));
           ws.send(JSON.stringify({ requestId, data: { success: true } }));
         } else if (type === "endpoint.group_mute") {
           if (!userId) {
             ws.send(JSON.stringify({ requestId, error: "$user_id required" }));
             break;
           }
-          if (typeof adMethods.muteMember !== "function") {
+          if (!management.muteGroupMember) {
             ws.send(JSON.stringify({ requestId, error: "adapter does not support muteMember" }));
             break;
           }
-          await adMethods.muteMember(endpointId, gid, String(userId), duration ?? 600);
+          await management.muteGroupMember(gid, String(userId), Number(duration ?? 600));
           ws.send(JSON.stringify({ requestId, data: { success: true } }));
         } else {
           if (!userId) {
             ws.send(JSON.stringify({ requestId, error: "$user_id required" }));
             break;
           }
-          if (typeof adMethods.setModerator !== "function") {
+          if (!management.setGroupAdmin) {
             ws.send(JSON.stringify({ requestId, error: "adapter does not support setModerator" }));
             break;
           }
-          await adMethods.setModerator(endpointId, gid, String(userId), enable !== false);
+          await management.setGroupAdmin(gid, String(userId), enable !== false);
           ws.send(JSON.stringify({ requestId, data: { success: true } }));
         }
       } catch (error: unknown) {

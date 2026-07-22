@@ -196,6 +196,24 @@ describe('qq plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
+  it('normalizes guild channels through endpoint management', async () => {
+    const endpoint = new QqWebsocketEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createBot: () => createMockBot(),
+    });
+    await endpoint.start();
+    await expect(endpoint.management.listChannels?.()).resolves.toEqual([
+      {
+        id: 'chan-1',
+        name: 'general',
+        parent: { type: 'guild', id: 'guild-1', name: 'Guild' },
+      },
+    ]);
+    await endpoint.stop();
+  });
+
   it('creates http endpoint when httpHostToken provided', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     const endpoint = defineQqAdapter.create({

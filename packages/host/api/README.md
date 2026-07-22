@@ -2,7 +2,7 @@
 
 Zhin Host 上的 **官方管理面 API**（路线 A：`@zhin.js/host-router` 仅传输，本包注册 REST / Console 协议 / entries）。
 
-包含：`PageManager`、`POST /api/console/request`、SSE `/api/events`、`GET /entries`、系统/插件/Bot REST、市场与日志 API 等。**聊天与管理 UI 不在本 Host 提供**（`serveClientHost: false`），请使用 **[Remote Console](https://console.zhin.dev)**（仓库 [zhin-console](https://github.com/zhinjs/zhin-console)）。说明见 [docs/console-remote.md](../../../docs/console-remote.md)；完整 Console 需求见 [docs/console/requirements.md](../../../docs/console/requirements.md)。
+包含：`PageManager`、`POST /api/console/request`、SSE `/api/events`、`GET /entries`、系统/插件/Bot REST、市场与日志 API 等。**聊天与管理 UI 不在本 Host 提供**（`serveClientHost: false`），请使用 **[Remote Console](https://console.zhin.dev)**（仓库 [zhinjs/console](https://github.com/zhinjs/console)）。说明见 [docs/console-remote.md](../../../docs/console-remote.md)；完整 Console 需求见 [docs/console/requirements.md](../../../docs/console/requirements.md)。
 
 ## 功能特性（Host 侧）
 
@@ -71,7 +71,7 @@ import '@zhin.js/host-api'
 ### 访问 UI（Remote Console）
 
 1. 启动 Host：`pnpm dev` / `pnpm start`。
-2. 浏览器打开 **https://console.zhin.dev**（或本地 [zhin-console](https://github.com/zhinjs/zhin-console) 开发服，如 `http://127.0.0.1:5173`）。
+2. 浏览器打开 **https://console.zhin.dev**（或本地 [zhinjs/console](https://github.com/zhinjs/console) 开发服，如 `http://127.0.0.1:5173`）。
 3. 登录：**API Base** 填 Host 监听地址（如 `http://127.0.0.1:8086`），**Token** 与 `.env` 中 `HTTP_TOKEN` 一致。
 
 UI 在 Remote Console 打开，不在本机 `:8086` 上。健康检查：`GET http://127.0.0.1:8086/pub/health`。

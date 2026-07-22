@@ -132,6 +132,7 @@ async function startHost(options: {
   withTokens?: boolean;
   projectRoot: string;
   snapshot?: () => RuntimeSnapshot;
+  primaryConfigDocument?: Readonly<Record<string, unknown>>;
 }): Promise<{ port: number }> {
   const host = createHttpHost({
     host: '127.0.0.1',
@@ -150,6 +151,9 @@ async function startHost(options: {
     undefined,
     undefined,
     options.snapshot,
+    undefined,
+    undefined,
+    options.primaryConfigDocument,
   );
   return host.listen();
 }
@@ -462,6 +466,27 @@ describe('console REST routes', () => {
     const body = await res.json() as { total: number; data: unknown[] };
     expect(body.total).toBe(0);
     expect(body.data).toEqual([]);
+  });
+
+  it('serves config from the generation Primary Config instead of stale disk state', async () => {
+    await writeFile(join(projectRoot, 'zhin.config.yml'), 'http:\n  port: 1000\n');
+    const { port } = await startHost({
+      projectRoot,
+      primaryConfigDocument: {
+        http: { port: 8086, token: '${HTTP_TOKEN}' },
+        plugins: { sandbox: { endpoints: [] } },
+      },
+    });
+    const response = await fetch(`http://127.0.0.1:${port}/api/console/request`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'config:get-all', requestId: 7 }),
+    });
+    const body = await response.json() as { data: Record<string, unknown> };
+    expect(body.data).toEqual({
+      http: { port: 8086, token: '${HTTP_TOKEN}' },
+      sandbox: { endpoints: [] },
+    });
   });
 });
 

@@ -43,7 +43,8 @@ function createMemoryModel(): InMemoryGameModel {
     deleteWhere: async (where: Record<string, unknown>) => {
       let n = 0;
       for (let i = rows.length - 1; i >= 0; i -= 1) {
-        if (match(rows[i]!, where)) {
+        const row = rows[i];
+        if (row && match(row, where)) {
           rows.splice(i, 1);
           n += 1;
         }

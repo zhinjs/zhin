@@ -83,7 +83,7 @@ export function nextTurn(current: 1 | 2): 1 | 2 {
 }
 
 /** 从 Message 提取发送者显示名 */
-export function senderDisplayName(message: Message<any>): string {
+export function senderDisplayName(message: Message): string {
   const name = message.$sender.name?.trim();
   return name || message.$sender.id;
 }

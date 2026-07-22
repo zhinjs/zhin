@@ -32,7 +32,8 @@ export const DEFAULT_SYSTEM_LOG_CONFIG: SystemLogStoreConfig = Object.freeze({
   cleanupInterval: 24,
 });
 
-const ANSI_REGEX = /\x1b\[[0-9;]*[mGKHF]/g;
+const ANSI_ESCAPE = String.fromCharCode(27);
+const ANSI_REGEX = new RegExp(`${ANSI_ESCAPE}\\[[0-9;]*[mGKHF]`, 'g');
 /** DefaultFormatter 输出：`[MM-dd HH:mm:ss] [INF] [name]: message`（毫秒可带可不带）。 */
 const LOG_LINE_REGEX = /\[[\d-]+ [\d:.]+\] \[(\w+)\] \[([^\]]+)\]: ([\s\S]+)/;
 

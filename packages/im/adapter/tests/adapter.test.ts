@@ -16,9 +16,20 @@ import adapterFeature, {
   defineAdapter,
   isAdapterIndex,
   parseAdapterDefinition,
+  resolveEndpointManagement,
 } from '../src/index.js';
 
 describe('Adapter Feature', () => {
+  it('exposes endpoint management only through the explicit semantic port', async () => {
+    const listFriends = async () => [{ user_id: 1, nickname: 'Ada', remark: '' }];
+    const management = resolveEndpointManagement({ management: { listFriends } });
+
+    await expect(management?.listFriends?.()).resolves.toEqual([
+      { user_id: 1, nickname: 'Ada', remark: '' },
+    ]);
+    expect(resolveEndpointManagement({ friends: new Map() })).toBeUndefined();
+  });
+
   it('brands definitions and discovers nested TypeScript modules', async () => {
     const definition = defineAdapter({
       capabilities: ['inbound', 'outbound'],

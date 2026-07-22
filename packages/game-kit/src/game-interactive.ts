@@ -28,7 +28,7 @@ export interface GameSessionRef {
 }
 
 export interface ResolveGameChoiceOptions {
-  message: Message<any>;
+  message: Message;
   gamePrefix: string;
   validChoiceIds: readonly string[];
   getById: (sessionId: string) => Promise<GameSessionRef | null>;

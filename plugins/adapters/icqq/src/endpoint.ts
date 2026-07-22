@@ -1,7 +1,7 @@
 /**
  * IcqqIpcEndpoint — lifecycle, outbound, IPC subscribe/admit for ICQQ daemon.
  */
-import type { EndpointInstance } from '@zhin.js/adapter';
+import type { EndpointInstance, EndpointManagement } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
@@ -90,6 +90,17 @@ export class IcqqIpcEndpoint implements EndpointInstance {
   ipc!: IcqqIpcTransport;
   readonly friends = new Map<number, IpcFriendInfo>();
   readonly groups = new Map<number, IpcGroupInfo>();
+  readonly management: EndpointManagement = Object.freeze<EndpointManagement>({
+    listFriends: () => this.getFriendList(),
+    listGroups: () => this.getGroupList(),
+    listGroupMembers: (groupId) => this.getGroupMemberList(groupId),
+    approveRequest: (requestId, remark) => this.approveRequest(requestId, remark),
+    rejectRequest: (requestId, reason) => this.rejectRequest(requestId, reason),
+    kickGroupMember: (groupId, userId) => this.removeMember(groupId, userId),
+    muteGroupMember: (groupId, userId, duration) => this.muteMember(groupId, userId, duration),
+    setGroupAdmin: (groupId, userId, enabled) => this.setModerator(groupId, userId, enabled),
+    deleteFriend: (userId) => this.deleteFriend(userId),
+  });
   #open = false;
   #started = false;
   #subscriptions: Array<{ unsubscribe: () => Promise<void> }> = [];

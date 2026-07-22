@@ -14,11 +14,17 @@ export type PrepareTransaction = (
   current: RuntimeSnapshot,
 ) => PreparedGeneration | undefined | Promise<PreparedGeneration | undefined>;
 export type ControlErrorHandler = (error: unknown) => void;
+export interface GenerationCommitEvent {
+  readonly previous: RuntimeSnapshot;
+  readonly current: RuntimeSnapshot;
+}
+export type GenerationCommitListener = (event: GenerationCommitEvent) => void;
 
 export class RootController {
   readonly snapshots: SnapshotStore;
   #state: RootState = 'idle';
   #tail: Promise<unknown> = Promise.resolve();
+  readonly #generationCommitListeners = new Set<GenerationCommitListener>();
 
   constructor(
     initial: SnapshotState,
@@ -35,6 +41,14 @@ export class RootController {
     return this.snapshots.current.generation;
   }
 
+  /** Observe successful generation commits, including the initial start. */
+  onGenerationCommit(listener: GenerationCommitListener): () => void {
+    this.#generationCommitListeners.add(listener);
+    return () => {
+      this.#generationCommitListeners.delete(listener);
+    };
+  }
+
   start(prepare: PrepareGeneration): Promise<RuntimeSnapshot> {
     return this.#enqueue(async () => {
       if (this.#state !== 'idle') {
@@ -48,11 +62,9 @@ export class RootController {
           activated = true;
           await prepared.handoff.activateNext();
         }
-        const handoff = prepared.handoff;
-        const snapshot = this.snapshots.commit(0, prepared);
-        prepared = undefined;
         this.#state = 'running';
-        this.#openNext(handoff);
+        const snapshot = this.#commitGeneration(0, prepared);
+        prepared = undefined;
         return snapshot;
       } catch (error) {
         this.#state = 'failed';
@@ -79,10 +91,8 @@ export class RootController {
           activated = true;
           await prepared.handoff.activateNext();
         }
-        const handoff = prepared.handoff;
-        const snapshot = this.snapshots.commit(previous.value.generation, prepared);
+        const snapshot = this.#commitGeneration(previous.value.generation, prepared);
         prepared = undefined;
-        this.#openNext(handoff);
         return snapshot;
       } catch (error) {
         return this.#rollback(prepared, { quiesced, activated }, error);
@@ -117,15 +127,40 @@ export class RootController {
     return result;
   }
 
+  #commitGeneration(
+    expectedGeneration: number,
+    prepared: PreparedGeneration,
+  ): RuntimeSnapshot {
+    const previous = this.snapshots.current;
+    const snapshot = this.snapshots.commit(expectedGeneration, prepared);
+    this.#openNext(prepared.handoff);
+    const event = Object.freeze({ previous, current: snapshot });
+    const listeners = [...this.#generationCommitListeners];
+    queueMicrotask(() => {
+      for (const listener of listeners) {
+        try {
+          listener(event);
+        } catch (error) {
+          this.#reportControlError(error);
+        }
+      }
+    });
+    return snapshot;
+  }
+
   #openNext(handoff: PreparedGeneration['handoff']): void {
     try {
       handoff?.openNext();
     } catch (error) {
-      try {
-        this.onControlError(error);
-      } catch {
-        // Error reporting cannot roll back an already committed generation.
-      }
+      this.#reportControlError(error);
+    }
+  }
+
+  #reportControlError(error: unknown): void {
+    try {
+      this.onControlError(error);
+    } catch {
+      // Error reporting cannot roll back an already committed generation.
     }
   }
 

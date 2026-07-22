@@ -107,7 +107,7 @@ function recordId(): string {
 
 /** 对局结束时写入战绩（database 未就绪时静默跳过） */
 export async function recordGameOutcome(
-  message: Message<any>,
+  message: Message,
   gameId: string,
   result: GameRecordResult,
   score = 0,
@@ -254,7 +254,9 @@ export function mountGameRecordCommands(root: Plugin): () => void {
           const query = args.join(' ').trim();
           const games = getRegisteredGames();
           if (!games.length) return '暂无已注册游戏。';
-          let gameId = games[0]!.id;
+          const firstGame = games[0];
+          if (!firstGame) return '暂无已注册游戏。';
+          let gameId = firstGame.id;
           if (query) {
             const hit = games.find(
               (g) => g.id === query

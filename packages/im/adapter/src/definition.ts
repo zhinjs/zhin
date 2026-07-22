@@ -1,5 +1,6 @@
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import type { CapabilityContext } from '@zhin.js/feature-kit';
+import type { EndpointManagement } from './endpoint-management.js';
 
 const adapterBrand = 'zhin.adapter/1' as const;
 
@@ -12,6 +13,8 @@ export interface EndpointSendRequest {
 }
 
 export interface EndpointInstance<TResult = unknown> {
+  /** Optional platform-neutral Console/Host management surface. */
+  readonly management?: EndpointManagement;
   /** Allocates transport resources but must not admit inbound events yet. */
   start?(): void | Promise<void>;
   /** Opens admission after the candidate generation has committed. */

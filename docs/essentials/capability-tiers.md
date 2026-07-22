@@ -83,7 +83,7 @@ flowchart LR
 
 ## Remote Console = 官方管理界面
 
-Host（`:8086`）**故意不提供**内嵌网页 UI；**[console.zhin.dev](https://console.zhin.dev)** 即为官方管理面板（独立仓库 [zhin-console](https://github.com/zhinjs/zhin-console)）。
+Host（`:8086`）**故意不提供**内嵌网页 UI；**[console.zhin.dev](https://console.zhin.dev)** 即为官方管理面板（独立仓库 [zhinjs/console](https://github.com/zhinjs/console)）。
 
 这不是「少做了一个 GUI」，而是 **UI 与 Endpoint 解耦**：
 

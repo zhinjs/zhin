@@ -16,15 +16,23 @@ export function secureRandomIntInclusive(min: number, max: number): number {
 
 export function secureRandomItem<T>(items: readonly T[]): T {
   if (items.length === 0) throw new RangeError('cannot choose from an empty array');
-  return items[secureRandomInt(items.length)]!;
+  return itemAt(items, secureRandomInt(items.length));
 }
 
 export function secureShuffleInPlace<T>(items: T[]): T[] {
   for (let i = items.length - 1; i > 0; i--) {
     const j = secureRandomInt(i + 1);
-    [items[i], items[j]] = [items[j]!, items[i]!];
+    const current = itemAt(items, i);
+    const selected = itemAt(items, j);
+    items[i] = selected;
+    items[j] = current;
   }
   return items;
+}
+
+function itemAt<T>(items: readonly T[], index: number): T {
+  if (!(index in items)) throw new RangeError(`missing array item at index ${index}`);
+  return items[index] as T;
 }
 
 export function generateCompactId(prefix: string): string {

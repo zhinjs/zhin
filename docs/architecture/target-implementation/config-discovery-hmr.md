@@ -111,6 +111,8 @@ export interface ValidationIssue {
 
 当前 Runtime 已提供 `ConfigPatchPlanner`、`ConfigDocumentPort` 与 `RootRuntime.patchConfig()`；可选 `@zhin.js/config-yaml` 实现 YAML AST 持久化。Planner 在原始 document clone 上应用 patch，随后执行整树 schema 校验，并通过前后 owner ConfigView 的结构化比较计算最浅 forest。原始 candidate 与 AJV materialized document 分离，避免把未显式配置的 schema default 写回文件。
 
+Root Resource 安装阶段还会收到 generation-owned `PrimaryConfig`：`document` 是经整树 schema 校验、保留 `${ENV}` 占位符的安全文档，`expanded` / `get()` 是只通过 Root `EnvStore` 展开的运行时投影。Agent、Console 等 Host 消费者不得再次读取 `process.env` 或猜测配置文件名。Console 展示 `document`，避免泄露展开后的密钥；Agent 等执行面消费 `expanded`。存在 Root Resource installer 时，配置 patch 会重建完整资源代，保证已提交 generation 不会继续持有旧的 Host 配置。
+
 Port 的 `prepare()` 不产生副作用。存在 Plugin view 变化时，Root 先完成 shadow setup，再按 Resource、ConfigDocument 的顺序 activate，最后 CAS 发布 generation；CAS 前失败按 ConfigDocument、Resource 的逆序补偿。只有原始文档变化而 owner view 不变时，Root 在同一串行控制事务内只提交文档，不发布空 generation。revision 冲突、schema 校验或 shadow setup 失败都保持 active snapshot 和原文件不变。
 
 ## 2. Schema Composer

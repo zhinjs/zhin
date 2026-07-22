@@ -6,7 +6,6 @@
 export const DISABLE_EXPERIMENTAL_WARNING_FLAG = '--disable-warning=ExperimentalWarning';
 
 declare global {
-  // eslint-disable-next-line no-var
   var __zhinExperimentalWarningsSuppressed: boolean | undefined;
 }
 

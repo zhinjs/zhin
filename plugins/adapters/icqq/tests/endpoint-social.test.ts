@@ -99,6 +99,17 @@ describe('icqq endpoint 社交/群管（console RPC 面）', () => {
     await endpoint.stop();
   });
 
+  it('publishes normalized social operations through management', async () => {
+    const endpoint = await startEndpoint(createMockIpc());
+    await expect(endpoint.management.listFriends?.()).resolves.toEqual([
+      { user_id: 2, nickname: 'bob', remark: '小博' },
+    ]);
+    await expect(endpoint.management.listGroups?.()).resolves.toEqual([
+      { group_id: 100, name: 'g' },
+    ]);
+    await endpoint.stop();
+  });
+
   it('getGroupMemberList 走 LIST_GROUP_MEMBERS 并透传 group_id；listMembers/getMemberList 为别名', async () => {
     const member = {
       user_id: 7, nickname: 'n7', card: 'c7', role: 'member', title: '',

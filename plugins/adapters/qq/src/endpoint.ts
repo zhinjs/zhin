@@ -1,7 +1,11 @@
 /**
  * QQ endpoints — lifecycle, outbound, admit, agent tool surface.
  */
-import type { EndpointInstance } from '@zhin.js/adapter';
+import type {
+  EndpointChannel,
+  EndpointInstance,
+  EndpointManagement,
+} from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -51,6 +55,7 @@ export class QqWebsocketEndpoint implements EndpointInstance {
   #open = false;
   #started = false;
   #unregisterAgent?: () => void;
+  readonly management: EndpointManagement = createQqEndpointManagement(this);
 
   constructor(options: QqEndpointOptions) {
     this.#options = options;
@@ -232,6 +237,7 @@ export class QqHttpEndpoint implements EndpointInstance {
   #open = false;
   #started = false;
   #unregisterAgent?: () => void;
+  readonly management: EndpointManagement = createQqEndpointManagement(this);
 
   constructor(options: QqHttpEndpointOptions) {
     this.#options = options;
@@ -396,4 +402,40 @@ export class QqHttpEndpoint implements EndpointInstance {
     if (!this.#bot) throw new Error('QQ bot not connected');
     return this.#bot;
   }
+}
+
+function createQqEndpointManagement(endpoint: {
+  getGuilds(): Promise<unknown[]>;
+  getChannels(guildId: string): Promise<unknown[]>;
+}): EndpointManagement {
+  return Object.freeze<EndpointManagement>({
+    async listChannels(): Promise<readonly EndpointChannel[]> {
+      const channels: EndpointChannel[] = [];
+      const guilds = await endpoint.getGuilds();
+      for (const guildValue of Array.isArray(guilds) ? guilds : []) {
+        const guild = asRecord(guildValue);
+        const guildId = String(guild.id ?? guild.guild_id ?? guildValue ?? '');
+        if (!guildId) continue;
+        const guildName = String(guild.name ?? guild.guild_name ?? guildId);
+        const rows = await endpoint.getChannels(guildId);
+        for (const channelValue of Array.isArray(rows) ? rows : []) {
+          const channel = asRecord(channelValue);
+          const id = String(channel.id ?? channel.channel_id ?? channelValue ?? '');
+          if (!id) continue;
+          channels.push({
+            id,
+            name: String(channel.name ?? channel.channel_name ?? id),
+            parent: { type: 'guild', id: guildId, name: guildName },
+          });
+        }
+      }
+      return channels;
+    },
+  });
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object'
+    ? value as Record<string, unknown>
+    : {};
 }

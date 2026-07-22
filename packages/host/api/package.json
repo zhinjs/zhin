@@ -60,6 +60,7 @@
     "clean": "rimraf lib"
   },
   "dependencies": {
+    "@zhin.js/console-protocol": "workspace:*",
     "@zhin.js/contract": "workspace:*",
     "@zhin.js/pagemanager": "workspace:*",
     "@zhin.js/schema": "workspace:*",

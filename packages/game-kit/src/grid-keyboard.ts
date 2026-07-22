@@ -60,7 +60,8 @@ export function buildGridFallbackMap(
   const map: Record<string, string> = {};
   let n = 1;
   for (let i = 0; i < cells.length; i++) {
-    if (!cells[i]!.disabled) {
+    const cell = cells[i];
+    if (cell && !cell.disabled) {
       map[String(n)] = `${gamePrefix}:${sessionId}:${i}`;
       n++;
     }
@@ -95,7 +96,10 @@ export function buildGridKeyboard<T>(options: GridKeyboardOptions<T>): SendConte
     const row: ReturnType<typeof segment.button>[] = [];
     for (let c = 0; c < cols; c++) {
       const i = r * cols + c;
-      const cell = cells[i]!;
+      const cell = cells[i];
+      if (!cell) {
+        throw new RangeError(`Missing grid cell at index ${i}`);
+      }
       row.push(
         segment.button({
           id: `c${i}`,
@@ -161,11 +165,12 @@ export function parseGridPayload(
 ): { prefix: string; sessionId: string; cell: number } | null {
   const m = /^([a-z0-9_]+):([^:]+):(\d+)$/i.exec(payload);
   if (!m) return null;
-  const prefix = m[1]!;
+  const [, prefix, sessionId, rawCell] = m;
+  if (!prefix || !sessionId || rawCell === undefined) return null;
   if (expectedPrefix && prefix !== expectedPrefix) return null;
-  const cell = Number(m[3]);
+  const cell = Number(rawCell);
   if (!Number.isInteger(cell) || cell < 0) return null;
-  return { prefix, sessionId: m[2]!, cell };
+  return { prefix, sessionId, cell };
 }
 
 /**
@@ -174,7 +179,9 @@ export function parseGridPayload(
 export function parseCellButtonId(value: string): number | null {
   const m = /^c(\d+)$/.exec(value);
   if (!m) return null;
-  const cell = Number(m[1]);
+  const rawCell = m[1];
+  if (rawCell === undefined) return null;
+  const cell = Number(rawCell);
   if (!Number.isInteger(cell) || cell < 0) return null;
   return cell;
 }

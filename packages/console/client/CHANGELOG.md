@@ -83,7 +83,7 @@
 
 ### Minor Changes
 
-- Remote Console 与 Host 分离：zhin 主仓仅保留 Console **API**，静态 UI 迁至独立仓库 [zhinjs/zhin-console](https://github.com/zhinjs/zhin-console)。
+- Remote Console 与 Host 分离：zhin 主仓仅保留 Console **API**，静态 UI 迁至独立仓库 [zhinjs/console](https://github.com/zhinjs/console)。
 
   ### @zhin.js/console-core (major)
 

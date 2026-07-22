@@ -47,7 +47,7 @@ pnpm install
   - **`zhin.js` 4.x**：主入口仅依赖 `core`；`@zhin.js/agent` 为 **optional peer**（安装分层见 [ADR 0019](../adr/0019-install-size-layering.md)）
   - `ai`：通用 AI 引擎（`agent/`、`memory/`、`compaction/`）
   - `agent`：IM Agent 编排（`orchestrator/`、`discovery/`、`security/`、`mcp-client/`、`defaults/`）
-- `packages/console/*` — 控制台：`contract`、`pagemanager`、`client`（npm 名均为单词包名）
+- `packages/console/*` — 控制台：`protocol`、`contract`、`pagemanager`、`client`
 - `packages/toolkit/*` — 脚手架与独立工具库：`create-zhin`、`scaffold-wizard`、`satori`
 - `packages/host/*` — Host 运行时：`host-router`、`host-api`、`mcp`
 - `plugins/adapters/*` — 平台适配器
@@ -113,6 +113,7 @@ pnpm install
 
 | 包 | 源码 → 产物 | 职责 |
 |---|---|---|
+| `@zhin.js/console-protocol` | `src/` → tsc → `lib/` | 零依赖 Console wire SSOT：RPC 名称、payload 兼容、scope 策略 |
 | `@zhin.js/contract` | `src/` → tsc → `lib/` | Console / PageManager **契约**（`PluginRegisterHostApi`、`ConsoleEntry`、常量） |
 | `@zhin.js/pagemanager` | `src/node/` → tsc → `lib/` | PageManager、EntryStore、esbuild 管线（Host 运行时） |
 | `@zhin.js/client` | `client/` → tsc → `dist/` | Remote Console SDK：`app`、REST/SSE、`loadConsoleEntries` |
@@ -126,7 +127,7 @@ pnpm install
 
 **共享依赖**：`/console/esm/*.mjs` 提供 canonical ESM（react、react-dom 等），esbuild 按需打包 + 缓存，无需 import map / farm-peer-shim。
 
-**构建顺序（Host）**：`contract` (tsc) → `pagemanager` (tsc) → `client` (tsc) → `host-router` (tsc) → `host-api` (tsup)。
+**构建顺序（Host）**：`console-protocol` (tsc) → `contract` (tsc) → `pagemanager` (tsc) → `client` (tsc) → `host-router` (tsc) → `host-api` (tsup)。
 
 **类型导入**：适配器 `client/` 使用 `import type { PluginRegisterHostApi } from '@zhin.js/contract'`（类型勿从 `host-api` 主入口副作用 import；`PageManager` 类型可 `import type { PageManager } from '@zhin.js/host-api'`）。
 

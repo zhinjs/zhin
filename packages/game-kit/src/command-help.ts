@@ -17,7 +17,7 @@ export function commandToHelpSource(cmd: Pick<MessageCommand, 'pattern' | 'helpI
 /** 按 MessageCommand.permit 与当前消息上下文过滤（与 handle 一致） */
 export async function filterHelpCommands(
   commands: readonly MessageCommand[],
-  message: Message<any>,
+  message: Message,
   plugin: Plugin,
 ): Promise<CommandHelpSource[]> {
   const out: CommandHelpSource[] = [];

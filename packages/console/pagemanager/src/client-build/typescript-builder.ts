@@ -1,8 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
-import { build as esbuild } from 'esbuild';
-import type { Plugin as EsbuildPlugin } from 'esbuild';
+import { build as esbuild, type Plugin as EsbuildPlugin } from 'esbuild';
 import { pageRoute, type ClientModuleArtifact } from '@zhin.js/console-contract';
 import type { ClientModuleRequest } from '@zhin.js/feature-kit';
 import { rootPluginId } from '@zhin.js/plugin-runtime';

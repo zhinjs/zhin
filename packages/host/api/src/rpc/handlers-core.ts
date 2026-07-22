@@ -18,6 +18,10 @@ import {
 import { handleDbRpc } from "./handlers-db.js";
 import { assertDemoRpcAllowed } from "@zhin.js/host-router/router";
 import { parseJobNotify, type JobNotify } from "@zhin.js/agent";
+import {
+  endpointSendResult,
+  normalizeConsoleRpcMessage,
+} from '@zhin.js/console-protocol';
 
 function reply(ctx: ConsoleRpcContext, payload: Record<string, unknown>) {
   ctx.emit(payload);
@@ -101,6 +105,7 @@ export async function handleCoreRpc(
   message: Record<string, unknown>,
   ctx: ConsoleRpcContext,
 ): Promise<boolean> {
+  message = normalizeConsoleRpcMessage(message);
   const type = String(message.type ?? "");
   const requestId = message.requestId as number | undefined;
   const pluginName = message.pluginName as string | undefined;
@@ -367,7 +372,7 @@ export async function handleCoreRpc(
 
     case "endpoint.info": {
       try {
-        const d = (message.data || {}) as Record<string, unknown>;
+        const d = message;
         const adapter = d.$adapter as string;
         const endpointId = d.$endpoint as string;
         if (!adapter || !endpointId) {
@@ -401,7 +406,7 @@ export async function handleCoreRpc(
 
     case "endpoint.send_message": {
       try {
-        const d = (message.data || {}) as Record<string, unknown>;
+        const d = message;
         const adapter = d.$adapter as string;
         const endpointId = d.$endpoint as string;
         const id = d.$channel_id as string;
@@ -433,7 +438,7 @@ export async function handleCoreRpc(
           ...(parent ? { parent } : {}),
           content: normalized,
         });
-        reply(ctx, { requestId, data: { message_id: messageId } });
+        reply(ctx, { requestId, data: endpointSendResult(messageId) });
       } catch (error) {
         reply(ctx, { requestId, error: (error as Error).message });
       }

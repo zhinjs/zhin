@@ -24,7 +24,7 @@ function resolveRegisteredCommands(root: Plugin): MessageCommand[] {
   return commandService?.items ?? [];
 }
 
-async function resolveHelpCommands(root: Plugin, message: Message<any>): Promise<CommandHelpSource[]> {
+async function resolveHelpCommands(root: Plugin, message: Message): Promise<CommandHelpSource[]> {
   return filterHelpCommands(resolveRegisteredCommands(root), message, root);
 }
 
@@ -34,7 +34,7 @@ async function resolveHelpCommands(root: Plugin, message: Message<any>): Promise
 export function mountGameHubUi(root: Plugin): (() => void)[] {
   const disposers: (() => void)[] = [];
 
-  const openHandler = async (message: Message<any>) => {
+  const openHandler = async (message: Message) => {
     const games = getRegisteredGames();
     if (!games.length) {
       return formatHubEmptyMessage();
@@ -147,7 +147,7 @@ export function mountGameHubUi(root: Plugin): (() => void)[] {
   return disposers;
 }
 
-async function handleHubInteractive(root: Plugin, message: Message<any>): Promise<boolean> {
+async function handleHubInteractive(root: Plugin, message: Message): Promise<boolean> {
   const action = getActionFromMessage(message);
   if (!action) return false;
 

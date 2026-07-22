@@ -68,6 +68,7 @@ interface RootController {
   start(): Promise<void>;
   transact(change: TreeChange): Promise<Generation>;
   reload(target: PluginId | CapabilityIdentity): Promise<Generation>;
+  onGenerationCommit(listener: GenerationCommitListener): () => void;
   stop(reason: StopReason): Promise<void>;
 }
 ```
@@ -80,6 +81,11 @@ RootController 负责：
 - Server/Client Module Runtime 和 HMR transaction。
 - Runtime admission、quiesce、drain、cancel 与 shutdown。
 - children-first dispose 和 Root Resource 最终回收。
+
+generation 观察也由 RootController 的原子 commit 点发布，覆盖初始 start 和后续真实事务；
+无语义变化的事务不发布。观察者在 microtask 中运行，异常进入 control error port，不能回滚或
+阻塞已经提交的 generation。Host/Console 只能通过该观察口消费提交结果，不得改写
+`transact()` 或在调用方推断 commit。
 
 Child Plugin 可以通过受控 command 请求装载、卸载或重载，但不能直接更新 parent children、全局 registry 或 generation。
 

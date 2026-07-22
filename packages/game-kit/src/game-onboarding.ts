@@ -1,10 +1,12 @@
 import { getActionFromMessage, type Message, type Plugin } from '@zhin.js/core';
 
+type BotAwareMessage = Message<{ readonly $bot?: { readonly id?: string } }>;
+
 const hintedChannels = new Set<string>();
 const TTL_MS = 24 * 60 * 60 * 1000;
 const channelHintAt = new Map<string, number>();
 
-function channelHintKey(message: Message<any>): string {
+function channelHintKey(message: Message): string {
   return `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
 }
 
@@ -18,7 +20,7 @@ function pruneHintCache(): void {
   }
 }
 
-function messageMentionsBot(message: Message<any>): boolean {
+function messageMentionsBot(message: BotAwareMessage): boolean {
   const raw = message.$raw ?? '';
   if (/@(?:everyone|all)/i.test(raw)) return false;
   const botId = message.$bot?.id;

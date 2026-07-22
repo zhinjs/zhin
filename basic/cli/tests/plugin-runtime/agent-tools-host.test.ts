@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { toRegisteredAgentTool } from '../../src/plugin-runtime/agent-host-installer.js';
 
 const zodLikeSchema = {
@@ -47,6 +48,30 @@ describe('toRegisteredAgentTool', () => {
 
     await expect(tool.execute({})).resolves.toBe('Error: game: Required');
     await expect(tool.execute({ game: 'ssq' })).resolves.toBe('ok:ssq');
+  });
+
+  it('preserves types, optional fields, and validation errors from Zod 4', async () => {
+    const tool = toRegisteredAgentTool({
+      name: 'search',
+      description: 'Search records',
+      inputSchema: z.object({
+        query: z.string().min(1),
+        limit: z.number().int().optional(),
+        mode: z.enum(['fast', 'safe']),
+      }),
+      execute: (input) => input,
+    });
+
+    expect(tool.parameters).toMatchObject({
+      type: 'object',
+      properties: {
+        query: { type: 'string' },
+        limit: { type: 'integer' },
+        mode: { type: 'string', enum: ['fast', 'safe'] },
+      },
+      required: ['query', 'mode'],
+    });
+    await expect(tool.execute({ query: '', mode: 'fast' })).resolves.toContain('query:');
   });
 
   it('passes args through when inputSchema is not zod-like', async () => {

@@ -58,7 +58,8 @@
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/mcp": "workspace:*",
     "@zhin.js/speech": "workspace:*",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "zod": "^4.4.3"
   },
   "peerDependenciesMeta": {
     "@zhin.js/agent": {

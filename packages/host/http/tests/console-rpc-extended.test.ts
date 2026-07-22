@@ -3,6 +3,7 @@ import {
   dispatchExtendedConsoleRpc,
   type ConsoleRpcExtendedCtx,
 } from '../src/console-rpc-extended.js';
+import { normalizeConsoleRpcType } from '@zhin.js/console-protocol';
 
 function makeCtx(overrides: Partial<ConsoleRpcExtendedCtx> = {}): ConsoleRpcExtendedCtx {
   return {
@@ -99,7 +100,9 @@ describe('dispatchExtendedConsoleRpc', () => {
           {},
           makeCtx({ fullScope: false }),
         );
-        expect(demo).toEqual({ error: `Demo scope: RPC "${type}" is forbidden` });
+        expect(demo).toEqual({
+          error: `Demo scope: RPC "${normalizeConsoleRpcType(type)}" is forbidden`,
+        });
       }
     });
   });
@@ -334,7 +337,9 @@ describe('dispatchExtendedConsoleRpc', () => {
           { $row_ids: [1] },
           makeCtx({ fullScope: false }),
         );
-        expect(demo).toEqual({ error: `Demo scope: RPC "${type}" is forbidden` });
+        expect(demo).toEqual({
+          error: `Demo scope: RPC "${normalizeConsoleRpcType(type)}" is forbidden`,
+        });
       }
     });
 
@@ -385,7 +390,7 @@ describe('dispatchExtendedConsoleRpc', () => {
       const approveRequest = vi.fn().mockResolvedValue(undefined);
       const rejectRequest = vi.fn().mockResolvedValue(undefined);
       const ctx = makeCtx({
-        resolveEndpoint: () => ({ approveRequest, rejectRequest }),
+        resolveEndpoint: () => ({ management: { approveRequest, rejectRequest } }),
       });
       await expect(
         dispatchExtendedConsoleRpc(
@@ -434,18 +439,23 @@ describe('dispatchExtendedConsoleRpc', () => {
           makeCtx({ fullScope: false }),
         ),
       ).resolves.toEqual({
-        error: 'Demo scope: RPC "endpoint:requestApprove" is forbidden',
+        error: 'Demo scope: RPC "request.approve" is forbidden',
       });
     });
   });
 
   describe('endpoint social reads', () => {
-    it('friends reads the icqq-style friends map', async () => {
-      const friends = new Map([
-        [10001, { user_id: 10001, nickname: '张三', remark: '老张' }],
-        [10002, { user_id: 10002, nickname: '李四' }],
-      ]);
-      const ctx = makeCtx({ resolveEndpoint: () => ({ friends }) });
+    it('friends consumes the normalized endpoint management port', async () => {
+      const ctx = makeCtx({
+        resolveEndpoint: () => ({
+          management: {
+            listFriends: async () => [
+              { user_id: 10001, nickname: '张三', remark: '老张' },
+              { user_id: 10002, nickname: '李四', remark: '' },
+            ],
+          },
+        }),
+      });
       await expect(
         dispatchExtendedConsoleRpc(
           'endpoint:friends',
@@ -463,7 +473,7 @@ describe('dispatchExtendedConsoleRpc', () => {
       });
     });
 
-    it('friends falls back to getFriendList and normalizes { data } envelopes', async () => {
+    it('friends does not probe transport-specific methods outside the management port', async () => {
       const ctx = makeCtx({
         resolveEndpoint: () => ({
           getFriendList: async () => ({ data: [{ userId: 7, name: '王五' }] }),
@@ -475,9 +485,7 @@ describe('dispatchExtendedConsoleRpc', () => {
           { adapter: 'weixin', endpointId: 'bot' },
           ctx,
         ),
-      ).resolves.toEqual({
-        data: { friends: [{ user_id: 7, nickname: '王五', remark: '' }], count: 1 },
-      });
+      ).resolves.toEqual({ error: '当前适配器（weixin）不支持好友列表' });
     });
 
     it('friends/groups/channels/groupMembers report 该平台不支持 without methods', async () => {
@@ -497,11 +505,12 @@ describe('dispatchExtendedConsoleRpc', () => {
       ).resolves.toEqual({ error: '当前适配器（sandbox）不支持群成员列表' });
     });
 
-    it('groups reads the icqq-style groups map', async () => {
-      const groups = new Map([
-        [888, { group_id: 888, group_name: '测试群' }],
-      ]);
-      const ctx = makeCtx({ resolveEndpoint: () => ({ gl: groups }) });
+    it('groups consumes normalized adapter data', async () => {
+      const ctx = makeCtx({
+        resolveEndpoint: () => ({
+          management: { listGroups: async () => [{ group_id: 888, name: '测试群' }] },
+        }),
+      });
       await expect(
         dispatchExtendedConsoleRpc(
           'endpoint:groups',
@@ -516,9 +525,13 @@ describe('dispatchExtendedConsoleRpc', () => {
     it('channels combines getGuilds + getChannels with guild parent', async () => {
       const ctx = makeCtx({
         resolveEndpoint: () => ({
-          getGuilds: async () => [{ id: 'g-1', name: '频道一' }],
-          getChannels: async (gid: string) =>
-            gid === 'g-1' ? [{ id: 'c-1', name: '子频道' }] : [],
+          management: {
+            listChannels: async () => [{
+              id: 'c-1',
+              name: '子频道',
+              parent: { type: 'guild', id: 'g-1', name: '频道一' },
+            }],
+          },
         }),
       });
       await expect(
@@ -539,7 +552,9 @@ describe('dispatchExtendedConsoleRpc', () => {
 
     it('groupMembers returns arrays from getGroupMemberList', async () => {
       const getGroupMemberList = vi.fn().mockResolvedValue([{ user_id: 1 }, { user_id: 2 }]);
-      const ctx = makeCtx({ resolveEndpoint: () => ({ getGroupMemberList }) });
+      const ctx = makeCtx({
+        resolveEndpoint: () => ({ management: { listGroupMembers: getGroupMemberList } }),
+      });
       const result = await dispatchExtendedConsoleRpc(
         'endpoint:groupMembers',
         { $adapter: 'icqq', $endpoint: '1234', $group_id: '888' },
@@ -552,8 +567,14 @@ describe('dispatchExtendedConsoleRpc', () => {
     });
 
     it('social reads are allowed in demo scope', async () => {
-      const friends = new Map([[1, { user_id: 1, nickname: 'a', remark: '' }]]);
-      const ctx = makeCtx({ fullScope: false, resolveEndpoint: () => ({ friends }) });
+      const ctx = makeCtx({
+        fullScope: false,
+        resolveEndpoint: () => ({
+          management: {
+            listFriends: async () => [{ user_id: 1, nickname: 'a', remark: '' }],
+          },
+        }),
+      });
       const result = await dispatchExtendedConsoleRpc(
         'endpoint:friends',
         { $adapter: 'icqq', $endpoint: '1' },
@@ -600,28 +621,28 @@ describe('dispatchExtendedConsoleRpc', () => {
       {
         type: 'endpoint:groupKick',
         data: { $adapter: 'icqq', $endpoint: '1', $group_id: '888', $user_id: '10001' },
-        method: 'removeMember',
+        method: 'kickGroupMember',
         expectedArgs: ['888', '10001'],
         unsupported: '当前适配器（icqq）不支持踢出群成员',
       },
       {
         type: 'endpoint:groupMute',
         data: { $adapter: 'icqq', $endpoint: '1', $group_id: '888', $user_id: '10001' },
-        method: 'muteMember',
+        method: 'muteGroupMember',
         expectedArgs: ['888', '10001', 600],
         unsupported: '当前适配器（icqq）不支持禁言群成员',
       },
       {
         type: 'endpoint:groupMute',
         data: { $adapter: 'icqq', $endpoint: '1', $group_id: '888', $user_id: '10001', $duration: 3600 },
-        method: 'muteMember',
+        method: 'muteGroupMember',
         expectedArgs: ['888', '10001', 3600],
         unsupported: '当前适配器（icqq）不支持禁言群成员',
       },
       {
         type: 'endpoint:groupAdmin',
         data: { $adapter: 'icqq', $endpoint: '1', $group_id: '888', $user_id: '10001', $enable: false },
-        method: 'setModerator',
+        method: 'setGroupAdmin',
         expectedArgs: ['888', '10001', false],
         unsupported: '当前适配器（icqq）不支持设置群管理员',
       },
@@ -629,7 +650,7 @@ describe('dispatchExtendedConsoleRpc', () => {
         type: 'endpoint:deleteFriend',
         data: { $adapter: 'icqq', $endpoint: '1', $user_id: '10001' },
         method: 'deleteFriend',
-        expectedArgs: [10001],
+        expectedArgs: ['10001'],
         unsupported: '当前适配器暂不支持删除好友',
       },
     ];
@@ -637,7 +658,7 @@ describe('dispatchExtendedConsoleRpc', () => {
     it('full scope invokes endpoint methods with normalized args', async () => {
       for (const c of writeCases) {
         const fn = vi.fn().mockResolvedValue(undefined);
-        const ctx = makeCtx({ resolveEndpoint: () => ({ [c.method]: fn }) });
+        const ctx = makeCtx({ resolveEndpoint: () => ({ management: { [c.method]: fn } }) });
         await expect(
           dispatchExtendedConsoleRpc(c.type, c.data, ctx),
         ).resolves.toEqual({ data: { success: true } });
@@ -657,11 +678,13 @@ describe('dispatchExtendedConsoleRpc', () => {
       for (const c of writeCases) {
         const ctx = makeCtx({
           fullScope: false,
-          resolveEndpoint: () => ({ [c.method]: async () => undefined }),
+          resolveEndpoint: () => ({ management: { [c.method]: async () => undefined } }),
         });
         await expect(
           dispatchExtendedConsoleRpc(c.type, c.data, ctx),
-        ).resolves.toEqual({ error: `Demo scope: RPC "${c.type}" is forbidden` });
+        ).resolves.toEqual({
+          error: `Demo scope: RPC "${normalizeConsoleRpcType(c.type)}" is forbidden`,
+        });
       }
     });
 

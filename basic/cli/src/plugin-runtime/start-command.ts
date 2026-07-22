@@ -267,18 +267,10 @@ async function loadConfiguredAgentHost(
   const document = isConfigDocumentPort(config) ? (await config.read()).document : config;
   if (!hasAgentConfiguration(document)) return undefined;
   const module = await import('./agent-host-installer.js');
-  const [ai, assistant, collaboration] = await Promise.all([
-    module.resolveAiConfig(config),
-    module.resolveAssistantConfigDocument(config),
-    module.resolveCollaborationConfigDocument(config),
-  ]);
   const configured: ConfiguredAgentHost = {
     install: (options) => module.installAgentHost({
       ...options,
       extraTools: options.extraTools as Parameters<typeof module.installAgentHost>[0]['extraTools'],
-      ai,
-      assistant,
-      collaboration,
     }),
   };
   return Object.freeze(configured);

@@ -16,6 +16,7 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
+    "@zhin.js/console-protocol": "workspace:*",
     "@zhin.js/contract": "workspace:*",
     "clsx": "^2.1.1",
     "tailwind-merge": "^3.6.0"

@@ -24,6 +24,12 @@ import type { ZhinPluginManifest } from './manifest.js';
 import type { ModuleRuntime } from './module-runtime.js';
 import type { PluginGraphNode } from './project-graph.js';
 import type { IsolatedPluginRuntimePort } from './isolation.js';
+import {
+  createPrimaryConfig,
+  primaryConfigToken,
+  type PrimaryConfig,
+} from './primary-config.js';
+import type { RuntimeConfigDocument } from './config-composer.js';
 
 export type PluginConfigResolver = (node: PluginGraphNode) => unknown;
 
@@ -31,6 +37,7 @@ export interface RootResourceContext {
   readonly resources: Scope;
   readonly lifecycle: DisposeStack;
   readonly handoff: GenerationHandoffRegistry;
+  readonly config: PrimaryConfig;
 }
 
 export type RootResourceInstaller = (
@@ -58,6 +65,7 @@ export class PluginScopeAssembler {
     private readonly modules: ModuleRuntime,
     private readonly configResolver: PluginConfigResolver,
     private readonly environment: RuntimeEnvironment,
+    private readonly primaryConfigDocument: RuntimeConfigDocument,
     private readonly installResources?: RootResourceInstaller,
     environmentLayers: EnvironmentLayers = {},
     seed?: PluginAssemblySeed,
@@ -90,14 +98,18 @@ export class PluginScopeAssembler {
     this.scopes.set(node.id, scope);
     this.#created.push(node.id);
     // Every owner shadows the inherited EnvStore with its exact overlay view.
-    scope.provide(envStoreToken, this.#envStores.create(node.id));
+    const environment = this.#envStores.create(node.id);
+    scope.provide(envStoreToken, environment);
 
     if (!node.parent) {
       scope.provide(runtimeEnvironmentToken, this.environment);
+      const config = createPrimaryConfig(this.primaryConfigDocument, environment);
+      scope.provide(primaryConfigToken, config);
       await this.installResources?.({
         resources: scope,
         lifecycle: scope.disposers,
         handoff: this.#handoffs,
+        config,
       });
     }
 

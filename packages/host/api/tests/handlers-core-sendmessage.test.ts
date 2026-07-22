@@ -41,15 +41,15 @@ describe("handlers-core endpoint.send_message parent", () => {
 
     const handled = await handleCoreRpc(
       {
-        type: "endpoint.send_message",
+        type: "endpoint:sendMessage",
         requestId: "req-1",
         data: {
-          $adapter: "icqq-test",
-          $endpoint: "8596238",
-          $channel_id: "634415832",
-          $channel_type: "channel",
-          $parent: { type: "guild", id: "650779094005186335" },
-          $content: "nihao",
+          adapter: "icqq-test",
+          endpointId: "8596238",
+          id: "634415832",
+          type: "channel",
+          parent: { type: "guild", id: "650779094005186335" },
+          content: "nihao",
         },
       },
       ctx,

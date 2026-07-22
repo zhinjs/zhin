@@ -3,6 +3,7 @@ import type { ConsoleRpcContext, ConsoleWebServer, ProjectFs } from "./context.j
 import { createNodeProjectFs } from "./project-fs.js";
 import { assertDemoRpcAllowed } from "@zhin.js/host-router/router";
 import { handleCoreRpc } from "./handlers-core.js";
+import { normalizeConsoleRpcMessage } from '@zhin.js/console-protocol';
 
 /** REST 等路径须通过 options.root 注入；仅在已有 ALS 插件上下文时回退 getPlugin().root */
 function resolveRpcRoot(options: DispatchConsoleRpcOptions): Plugin {
@@ -55,6 +56,7 @@ export async function dispatchConsoleRpc(
   getWebServer: () => ConsoleWebServer,
   options: DispatchConsoleRpcOptions,
 ): Promise<Record<string, unknown>[]> {
+  message = normalizeConsoleRpcMessage(message);
   const payloads: Record<string, unknown>[] = [];
   const ctx = buildConsoleRpcContext(getWebServer, options, (p) => payloads.push(p));
 
@@ -62,16 +64,17 @@ export async function dispatchConsoleRpc(
     return payloads;
   }
 
-  // demo scope 禁止回落 websocket handler（system:restart、files:* 等）
+  // Canonical protocol policy decides whether demo requests may reach the
+  // legacy execution adapter; the adapter no longer owns a second allowlist.
   if (options.authScope === "demo") {
-    const denied =
-      assertDemoRpcAllowed(String(message.type ?? "")) ??
-      "Demo scope: RPC is forbidden";
-    payloads.push({
-      requestId: message.requestId as number | undefined,
-      error: denied,
-    });
-    return payloads;
+    const denied = assertDemoRpcAllowed(String(message.type ?? ""));
+    if (denied) {
+      payloads.push({
+        requestId: message.requestId as number | undefined,
+        error: denied,
+      });
+      return payloads;
+    }
   }
 
   const { handleWebSocketMessage } = await import("../websocket.js");

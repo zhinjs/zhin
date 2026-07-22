@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=3e21a938117cd84f -->
+<!-- sync-adapter-docs:sha256=d2fc8a756013bf56 -->
 
 # @zhin.js/adapter-icqq
 
@@ -20,7 +20,7 @@ ICQQ Plugin Runtime 适配器 — 通过 [@icqqjs/cli](https://github.com/icqqjs
 - 入站：`messageGatewayToken`（IPC 事件订阅）
 - 出站：`send({ target, payload })` → `send_group_msg` / `send_private_msg` / …
 - Agent 工具：`agent/tools/`（戳一戳、群管、好友列表等）保留
-- Console endpoint RPC：`src/endpoint.ts` 已实现社交/群管探测面（好友/群/群成员列表、请求审批、删好友、踢人、禁言、设管理），console 的 `endpoint:friends/groups/groupMembers/requestApprove/...` 对 icqq 可用
+- Console Endpoint 管理：`src/endpoint.ts` 显式实现 `EndpointManagement`（好友/群/群成员列表、请求审批、删好友、踢人、禁言、设管理），Console 使用 `endpoint.friends` / `endpoint.groups` / `endpoint.group_members` 等规范 RPC
 
 ## 安装
 
@@ -81,7 +81,7 @@ plugins:
 
 - `autoReconnect` 已恢复实现：IPC/RPC 意外断开后按指数退避自动重连（`stop()` 为主动断开，不触发重连）。
 - `outboundMedia: file | base64` 已恢复实现：`file` 模式把 segment base64 落盘为临时文件后发 `[image:path]`；`base64` 模式（配置 `rpc` 时默认）发 `[image:base64://...]` 由守护进程解码。
-- **Console 社交/群管 RPC 已接线**：endpoint 实例暴露 `getFriendList` / `getGroupList` / `getGroupMemberList`（含 `listMembers` / `getMemberList` 别名）、`approveRequest` / `rejectRequest`（经 `get_system_msg` 按 flag/seq 定位后路由 `handle_friend_request` / `handle_group_request`）、`deleteFriend`（别名 `delete_friend`）、`removeMember`（别名 `kickMember` / `setGroupKick`）、`muteMember`（别名 `banMember` / `setGroupMute`，duration 秒）、`setModerator`（别名 `setAdmin` / `setGroupAdmin`），另有 `friends` / `groups` Map 缓存，均被 console-rpc-extended 按名探测调用。
+- **Console 社交/群管 RPC 已接线**：endpoint 在 Adapter 内把 ICQQ 的 `get_friend_list` / `get_group_list` / `get_group_member_list`、请求审批和群管操作归一化为冻结的 `EndpointManagement` 对象。Host 只消费该语义端口，不再探测方法别名或读取 `friends` / `groups` SDK 缓存。
 - **notice / request 入站事件已移除**：Plugin Runtime 的 `MessageGateway` 仅有 message 通道，没有 `notice.receive` / `request.receive` 事件机制，旧 `icqq-side-events.ts` / `get-msg.ts` / `login-ipc-contract.ts` / `agent-prompt.ts` 随之删除。需要好友/入群请求处理能力时请等待 runtime 提供事件通道后再恢复。
 
 ## License

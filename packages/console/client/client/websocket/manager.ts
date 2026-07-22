@@ -2,6 +2,10 @@ import { ConnectionState, WebSocketError, ConnectionError, MessageError, Request
 
 import { getApiBase, getStoredToken, resolveApiUrl } from "./remote-settings.js";
 import { applyConsoleEvent } from "../persistence/idb-store.js";
+import {
+  SIDE_EVENT_PUSH,
+  normalizeConsolePushMessage,
+} from "@zhin.js/console-protocol";
 
 export class WebSocketManager {
   private ws: WebSocket | null = null;
@@ -110,7 +114,9 @@ export class WebSocketManager {
           if (!line) continue;
           const json = line.slice(6);
           try {
-            const message = JSON.parse(json) as WebSocketMessage;
+            const message = normalizeConsolePushMessage(
+              JSON.parse(json) as WebSocketMessage,
+            ) as WebSocketMessage;
             void applyConsoleEvent(message);
             this.handleBroadcast(message);
             this.callbacks.onMessage?.(message);
@@ -329,7 +335,9 @@ export class WebSocketManager {
 
   private handleMessage(event: MessageEvent): void {
     try {
-      const message = JSON.parse(event.data) as WebSocketMessage;
+      const message = normalizeConsolePushMessage(
+        JSON.parse(event.data) as WebSocketMessage,
+      ) as WebSocketMessage;
       if (message.requestId && this.pendingRequests.has(message.requestId)) {
         this.handleRequestResponse(message);
         return;
@@ -344,7 +352,11 @@ export class WebSocketManager {
 
   private handleBroadcast(message: WebSocketMessage): void {
     const t = message.type;
-    if (t === "request.receive" || t === "notice.receive" || t === "message.receive") {
+    if (
+      t === SIDE_EVENT_PUSH.REQUEST_RECEIVE
+      || t === SIDE_EVENT_PUSH.NOTICE_RECEIVE
+      || t === SIDE_EVENT_PUSH.MESSAGE_RECEIVE
+    ) {
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("zhin-console-bot-push", { detail: message }));
       }

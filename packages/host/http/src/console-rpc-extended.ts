@@ -11,11 +11,16 @@
  * - inbox：`ctx.databaseHost.models`（unified_inbox_message/request/notice 三张表，
  *   表不存在或查询失败 → 空数组 + inboxEnabled:false；requestConsumed/noticeConsumed
  *   按行 id update consumed=1，表/model 缺失时报"未接线"）。
- * - 社交/群管：`ctx.resolveEndpoint` 拿 live endpoint 实例，
- *   实例上探测到对应方法才调用，否则报"该平台不支持"。
+ * - 社交/群管：`ctx.resolveEndpoint` 拿 live endpoint 实例，只消费其
+ *   `management` 语义端口；平台 SDK 兼容与字段归一化由 Adapter 负责。
  */
 
 /** 新 Runtime 统一收件箱表名（SSOT：@zhin.js/plugin-runtime inbox.js）。 */
+import {
+  assertDemoConsoleRpcAllowed,
+  normalizeConsoleRpcType,
+} from '@zhin.js/console-protocol';
+
 const TABLE_MESSAGE = 'unified_inbox_message';
 const TABLE_REQUEST = 'unified_inbox_request';
 const TABLE_NOTICE = 'unified_inbox_notice';
@@ -44,22 +49,6 @@ export interface ConsoleScheduleEngine {
 
 export type ExtendedRpcResult = { data: unknown } | { error: string };
 
-/** demo scope 只读放行清单之外的写操作 type。 */
-const WRITE_TYPES = new Set([
-  'cron:add',
-  'cron:remove',
-  'cron:pause',
-  'cron:resume',
-  'endpoint:requestApprove',
-  'endpoint:requestReject',
-  'endpoint:requestConsumed',
-  'endpoint:noticeConsumed',
-  'endpoint:groupKick',
-  'endpoint:groupMute',
-  'endpoint:groupAdmin',
-  'endpoint:deleteFriend',
-]);
-
 const CRON_NOT_WIRED =
   '持久化调度未接线：当前 Plugin Runtime ScheduleHost 仅支持插件注册的内存任务（list），' +
   '不支持 add/remove/pause/resume（需要 @zhin.js/agent 持久化调度引擎）';
@@ -82,7 +71,22 @@ interface InboxModel {
   };
 }
 
-type EndpointAny = Record<string, unknown>;
+interface EndpointManagementPort {
+  listFriends?(): Promise<readonly { user_id: number; nickname: string; remark: string }[]>;
+  listGroups?(): Promise<readonly { group_id: number; name: string }[]>;
+  listChannels?(): Promise<readonly {
+    id: string;
+    name?: string;
+    parent?: { type: string; id: string; name?: string };
+  }[]>;
+  listGroupMembers?(groupId: string): Promise<readonly unknown[]>;
+  approveRequest?(requestId: string, remark?: string): Promise<void>;
+  rejectRequest?(requestId: string, reason?: string): Promise<void>;
+  kickGroupMember?(groupId: string, userId: string): Promise<void>;
+  muteGroupMember?(groupId: string, userId: string, durationSeconds: number): Promise<void>;
+  setGroupAdmin?(groupId: string, userId: string, enabled: boolean): Promise<void>;
+  deleteFriend?(userId: string): Promise<void>;
+}
 
 export async function dispatchExtendedConsoleRpc(
   type: string,
@@ -90,9 +94,11 @@ export async function dispatchExtendedConsoleRpc(
   ctx: ConsoleRpcExtendedCtx,
 ): Promise<ExtendedRpcResult | undefined> {
   const d = data ?? {};
+  type = normalizeConsoleRpcType(type);
 
-  if (WRITE_TYPES.has(type) && !ctx.fullScope) {
-    return { error: `Demo scope: RPC "${type}" is forbidden` };
+  if (!ctx.fullScope) {
+    const denied = assertDemoConsoleRpcAllowed(type);
+    if (denied) return { error: denied };
   }
 
   switch (type) {
@@ -107,55 +113,55 @@ export async function dispatchExtendedConsoleRpc(
     case 'cron:resume':
       return mutateCron(type, d, ctx);
 
-    case 'endpoint:requests':
+    case 'request.list':
       return listPendingRequests(d, ctx);
-    case 'endpoint:inboxRequests':
+    case 'inbox.requests':
       return listInbox(d, ctx, TABLE_REQUEST, 'requests', mapRequestRow);
-    case 'endpoint:inboxNotices':
+    case 'inbox.notices':
       return listInbox(d, ctx, TABLE_NOTICE, 'notices', mapNoticeRow);
-    case 'endpoint:inboxMessages':
+    case 'inbox.messages':
       return listInboxMessages(d, ctx);
 
-    case 'endpoint:requestApprove':
-    case 'endpoint:requestReject':
+    case 'request.approve':
+    case 'request.reject':
       return actOnRequest(type, d, ctx);
 
-    case 'endpoint:requestConsumed':
+    case 'request.consumed':
       return markInboxConsumed(d, ctx, TABLE_REQUEST);
-    case 'endpoint:noticeConsumed':
+    case 'notice.consumed':
       return markInboxConsumed(d, ctx, TABLE_NOTICE);
 
-    case 'endpoint:friends':
+    case 'endpoint.friends':
       return listFriends(d, ctx);
-    case 'endpoint:groups':
+    case 'endpoint.groups':
       return listGroups(d, ctx);
-    case 'endpoint:channels':
+    case 'endpoint.channels':
       return listChannels(d, ctx);
-    case 'endpoint:groupMembers':
+    case 'endpoint.group_members':
       return listGroupMembers(d, ctx);
 
-    case 'endpoint:groupKick':
+    case 'endpoint.group_kick':
       return groupWriteOp(d, ctx, {
-        methods: ['removeMember', 'kickMember', 'setGroupKick'],
+        method: 'kickGroupMember',
         buildArgs: (gid, uid) => [gid, uid],
         requireUser: true,
         unsupported: '踢出群成员',
       });
-    case 'endpoint:groupMute':
+    case 'endpoint.group_mute':
       return groupWriteOp(d, ctx, {
-        methods: ['muteMember', 'setGroupBan', 'banMember'],
+        method: 'muteGroupMember',
         buildArgs: (gid, uid, extra) => [gid, uid, extra.duration ?? 600],
         requireUser: true,
         unsupported: '禁言群成员',
       });
-    case 'endpoint:groupAdmin':
+    case 'endpoint.group_admin':
       return groupWriteOp(d, ctx, {
-        methods: ['setModerator', 'setGroupAdmin', 'setAdmin'],
+        method: 'setGroupAdmin',
         buildArgs: (gid, uid, extra) => [gid, uid, extra.enable !== false],
         requireUser: true,
         unsupported: '设置群管理员',
       });
-    case 'endpoint:deleteFriend':
+    case 'endpoint.delete_friend':
       return deleteFriend(d, ctx);
 
     default:
@@ -477,7 +483,7 @@ async function markInboxConsumed(
 // ---------------------------------------------------------------- 请求审批
 
 async function actOnRequest(
-  type: 'endpoint:requestApprove' | 'endpoint:requestReject',
+  type: 'request.approve' | 'request.reject',
   d: Record<string, unknown>,
   ctx: ConsoleRpcExtendedCtx,
 ): Promise<ExtendedRpcResult> {
@@ -489,15 +495,12 @@ async function actOnRequest(
   }
   const resolved = resolveLiveEndpoint(ctx, adapter, endpointId);
   if ('error' in resolved) return resolved;
-  const endpoint = resolved.endpoint;
-  const approve = type === 'endpoint:requestApprove';
-  const methodNames = approve
-    ? ['approveRequest', 'approve_request', '$approveRequest']
-    : ['rejectRequest', 'reject_request', '$rejectRequest'];
-  const method = pickMethod(endpoint, methodNames);
+  const management = resolved.management;
+  const approve = type === 'request.approve';
+  const method = approve ? management.approveRequest : management.rejectRequest;
   if (!method) {
     return {
-      error: `请求审批未接线：当前平台（${adapter}）endpoint 不支持 ${methodNames[0]}，` +
+      error: `请求审批未接线：当前平台（${adapter}）endpoint 不支持 ${approve ? 'approveRequest' : 'rejectRequest'}，` +
         '且新 Runtime 尚未挂载 pending request 注册表',
     };
   }
@@ -505,7 +508,7 @@ async function actOnRequest(
     const extra = approve
       ? strField(d, '$remark', 'remark')
       : strField(d, '$reason', 'reason');
-    await method.call(endpoint, requestId, extra || undefined);
+    await method.call(management, requestId, extra || undefined);
     return { data: { success: true } };
   } catch (error) {
     return { error: errorMessage(error) };
@@ -520,25 +523,10 @@ async function listFriends(
 ): Promise<ExtendedRpcResult> {
   const resolved = requireEndpoint(d, ctx);
   if ('error' in resolved) return resolved;
-  const { endpoint, adapter } = resolved;
+  const { management, adapter } = resolved;
   try {
-    const map = (endpoint.friends ?? endpoint.fl) as Map<unknown, Record<string, unknown>> | undefined;
-    if (map && typeof map.values === 'function') {
-      const friends = Array.from(map.values()).map((f) => ({
-        user_id: Number(f.user_id),
-        nickname: String(f.nickname ?? ''),
-        remark: String(f.remark ?? ''),
-      }));
-      return { data: { friends, count: friends.length } };
-    }
-    const getFriendList = pickMethod(endpoint, ['getFriendList', 'getFriends', 'listFriends']);
-    if (getFriendList) {
-      const raw = await getFriendList.call(endpoint);
-      const friends = unwrapList(raw).map((row) => ({
-        user_id: Number(row.user_id ?? row.userId ?? row.id ?? 0),
-        nickname: String(row.nickname ?? row.name ?? row.user_id ?? ''),
-        remark: String(row.remark ?? ''),
-      }));
+    if (management.listFriends) {
+      const friends = [...await management.listFriends()];
       return { data: { friends, count: friends.length } };
     }
     return { error: `当前适配器（${adapter}）不支持好友列表` };
@@ -553,23 +541,10 @@ async function listGroups(
 ): Promise<ExtendedRpcResult> {
   const resolved = requireEndpoint(d, ctx);
   if ('error' in resolved) return resolved;
-  const { endpoint, adapter } = resolved;
+  const { management, adapter } = resolved;
   try {
-    const map = (endpoint.groups ?? endpoint.gl) as Map<unknown, Record<string, unknown>> | undefined;
-    if (map && typeof map.values === 'function') {
-      const groups = Array.from(map.values()).map((g) => ({
-        group_id: Number(g.group_id),
-        name: String(g.group_name ?? g.name ?? g.group_id ?? ''),
-      }));
-      return { data: { groups, count: groups.length } };
-    }
-    const getGroupList = pickMethod(endpoint, ['getGroupList', 'getGroups', 'listGroups']);
-    if (getGroupList) {
-      const raw = await getGroupList.call(endpoint);
-      const groups = unwrapList(raw).map((row) => ({
-        group_id: Number(row.group_id ?? row.groupId ?? row.id ?? 0),
-        name: String(row.name ?? row.group_name ?? row.group_id ?? ''),
-      }));
+    if (management.listGroups) {
+      const groups = [...await management.listGroups()];
       return { data: { groups, count: groups.length } };
     }
     return { error: `当前适配器（${adapter}）不支持群列表` };
@@ -584,43 +559,10 @@ async function listChannels(
 ): Promise<ExtendedRpcResult> {
   const resolved = requireEndpoint(d, ctx);
   if ('error' in resolved) return resolved;
-  const { endpoint, adapter } = resolved;
+  const { management, adapter } = resolved;
   try {
-    const channels: Array<{
-      id: string;
-      name?: string;
-      parent?: { type: string; id: string; name?: string };
-    }> = [];
-    const getGuildChannelList = pickMethod(endpoint, ['getGuildChannelList']);
-    if (getGuildChannelList) {
-      const list = await getGuildChannelList.call(endpoint) as Array<Record<string, unknown>>;
-      for (const item of Array.isArray(list) ? list : []) {
-        const parent = normalizeParent(item.parent);
-        channels.push({
-          id: String(item.id ?? ''),
-          ...(item.name != null ? { name: String(item.name) } : {}),
-          ...(parent ? { parent } : {}),
-        });
-      }
-      return { data: { channels, count: channels.length } };
-    }
-    const getGuilds = pickMethod(endpoint, ['getGuilds', 'listGuilds']);
-    const getChannels = pickMethod(endpoint, ['getChannels', 'listChannels']);
-    if (getGuilds && getChannels) {
-      const guilds = unwrapList(await getGuilds.call(endpoint));
-      for (const g of guilds) {
-        const gid = String(g.id ?? g.guild_id ?? '');
-        if (!gid) continue;
-        const guildName = String(g.name ?? g.guild_name ?? gid);
-        const chs = unwrapList(await getChannels.call(endpoint, gid));
-        for (const c of chs) {
-          channels.push({
-            id: String(c.id ?? c.channel_id ?? ''),
-            name: String(c.name ?? c.channel_name ?? c.id ?? ''),
-            parent: { type: 'guild', id: gid, name: guildName },
-          });
-        }
-      }
+    if (management.listChannels) {
+      const channels = [...await management.listChannels()];
       return { data: { channels, count: channels.length } };
     }
     return { error: `当前适配器（${adapter}）不支持频道列表` };
@@ -641,22 +583,14 @@ async function listGroupMembers(
   }
   const resolved = resolveLiveEndpoint(ctx, adapter, endpointId);
   if ('error' in resolved) return resolved;
-  const { endpoint } = resolved;
+  const { management } = resolved;
   try {
-    const method = pickMethod(endpoint, ['getGroupMemberList', 'listMembers', 'getMemberList']);
+    const method = management.listGroupMembers;
     if (!method) {
       return { error: `当前适配器（${adapter}）不支持群成员列表` };
     }
-    const raw = await method.call(endpoint, groupId);
-    if (Array.isArray(raw)) {
-      return { data: { members: raw, count: raw.length } };
-    }
-    // Map（icqq 风格 gml）→ values 数组
-    if (raw && typeof (raw as Map<unknown, unknown>).values === 'function') {
-      const members = Array.from((raw as Map<unknown, unknown>).values());
-      return { data: { members, count: members.length } };
-    }
-    return { data: raw ?? { members: [], count: 0 } };
+    const members = [...await method(groupId)];
+    return { data: { members, count: members.length } };
   } catch (error) {
     return { error: errorMessage(error) };
   }
@@ -665,7 +599,7 @@ async function listGroupMembers(
 // ---------------------------------------------------------------- 群管/好友写操作
 
 interface GroupWriteSpec {
-  methods: string[];
+  method: 'kickGroupMember' | 'muteGroupMember' | 'setGroupAdmin';
   buildArgs(groupId: string, userId: string, extra: { duration?: number; enable?: boolean }): unknown[];
   requireUser: boolean;
   /** 中文操作名，用于"该平台不支持 xxx"。 */
@@ -689,8 +623,8 @@ async function groupWriteOp(
   }
   const resolved = resolveLiveEndpoint(ctx, adapter, endpointId);
   if ('error' in resolved) return resolved;
-  const { endpoint } = resolved;
-  const method = pickMethod(endpoint, spec.methods);
+  const { management } = resolved;
+  const method = management[spec.method];
   if (!method) {
     return { error: `当前适配器（${adapter}）不支持${spec.unsupported}` };
   }
@@ -703,7 +637,7 @@ async function groupWriteOp(
         : undefined,
       enable: typeof enableRaw === 'boolean' ? enableRaw : undefined,
     });
-    await method.call(endpoint, ...args);
+    await (method as (...args: unknown[]) => Promise<void>).call(management, ...args);
     return { data: { success: true } };
   } catch (error) {
     return { error: errorMessage(error) };
@@ -722,14 +656,13 @@ async function deleteFriend(
   }
   const resolved = resolveLiveEndpoint(ctx, adapter, endpointId);
   if ('error' in resolved) return resolved;
-  const { endpoint } = resolved;
-  const method = pickMethod(endpoint, ['deleteFriend', 'delete_friend']);
+  const { management } = resolved;
+  const method = management.deleteFriend;
   if (!method) {
     return { error: '当前适配器暂不支持删除好友' };
   }
   try {
-    const numeric = Number(userId);
-    await method.call(endpoint, Number.isFinite(numeric) && userId.trim() !== '' ? numeric : userId);
+    await method(userId);
     return { data: { success: true } };
   } catch (error) {
     return { error: errorMessage(error) };
@@ -776,18 +709,11 @@ function numArrayField(d: Record<string, unknown>, ...keys: string[]): number[] 
   return [];
 }
 
-function pickMethod(
-  endpoint: EndpointAny,
-  names: readonly string[],
-): ((...args: unknown[]) => unknown) | undefined {
-  for (const name of names) {
-    const fn = endpoint[name];
-    if (typeof fn === 'function') return fn as (...args: unknown[]) => unknown;
-  }
-  return undefined;
-}
-
-type ResolveOk = { endpoint: EndpointAny; adapter: string; endpointId: string };
+type ResolveOk = {
+  management: EndpointManagementPort;
+  adapter: string;
+  endpointId: string;
+};
 
 function resolveLiveEndpoint(
   ctx: ConsoleRpcExtendedCtx,
@@ -801,7 +727,14 @@ function resolveLiveEndpoint(
   if (!endpoint || typeof endpoint !== 'object') {
     return { error: 'endpoint not found' };
   }
-  return { endpoint: endpoint as EndpointAny, adapter, endpointId };
+  const management = (endpoint as { management?: unknown }).management;
+  return {
+    management: management && typeof management === 'object'
+      ? management as EndpointManagementPort
+      : {},
+    adapter,
+    endpointId,
+  };
 }
 
 function requireEndpoint(
@@ -812,18 +745,6 @@ function requireEndpoint(
   const endpointId = strField(d, '$endpoint', 'endpointId', 'endpoint');
   if (!adapter || !endpointId) return { error: '$adapter and $endpoint required' };
   return resolveLiveEndpoint(ctx, adapter, endpointId);
-}
-
-/** 兼容数组 / `{ data: [...] }` / `{ list: [...] }` 的列表返回。 */
-function unwrapList(raw: unknown): Record<string, unknown>[] {
-  const arr = Array.isArray(raw)
-    ? raw
-    : raw && typeof raw === 'object'
-      ? ((raw as Record<string, unknown>).data ?? (raw as Record<string, unknown>).list)
-      : undefined;
-  return (Array.isArray(arr) ? arr : []).filter(
-    (item): item is Record<string, unknown> => !!item && typeof item === 'object',
-  );
 }
 
 function normalizeParent(raw: unknown): { type: 'group' | 'guild'; id: string; name?: string } | undefined {

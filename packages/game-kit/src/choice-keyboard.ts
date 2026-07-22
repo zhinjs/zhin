@@ -111,7 +111,8 @@ export function parseChoicePayload(
 ): { prefix: string; sessionId: string; choiceId: string } | null {
   const m = /^([a-z0-9_]+):([^:]+):([a-z0-9_-]+)$/i.exec(payload);
   if (!m) return null;
-  const prefix = m[1]!;
+  const [, prefix, sessionId, choiceId] = m;
+  if (!prefix || !sessionId || !choiceId) return null;
   if (expectedPrefix && prefix !== expectedPrefix) return null;
-  return { prefix, sessionId: m[2]!, choiceId: m[3]! };
+  return { prefix, sessionId, choiceId };
 }

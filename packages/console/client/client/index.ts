@@ -1,5 +1,13 @@
 // Types
 export * from "./types";
+export {
+  ENDPOINT_RPC,
+  INBOX_RPC,
+  SIDE_EVENT_PUSH,
+  SIDE_EVENT_RPC,
+  normalizeConsolePushMessage,
+  normalizeConsolePushType,
+} from "@zhin.js/console-protocol";
 
 // Media URL resolution
 export { resolveMediaSrc, pickMediaRawUrl, type MediaKind } from "./mediaSrc";

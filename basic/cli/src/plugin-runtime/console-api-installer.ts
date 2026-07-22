@@ -36,7 +36,7 @@ import {
   type PluginNodeSnapshot,
   type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
-import type { RootResourceInstaller } from '@zhin.js/runtime';
+import type { RootResourceInstaller, RuntimeConfigDocument } from '@zhin.js/runtime';
 import { installInboxMessageRecorder } from './inbox-installer.js';
 
 /**
@@ -260,6 +260,7 @@ export function publishMessageEvent(hub: ConsoleEventHub, event: RuntimeMessageE
     const data = {
       direction: 'inbound' as const,
       adapter: localName,
+      endpointId: localName,
       endpoint: localName,
       sender: event.sender,
       target: event.target,
@@ -267,13 +268,13 @@ export function publishMessageEvent(hub: ConsoleEventHub, event: RuntimeMessageE
       messageId: event.messageId,
       timestamp: event.timestamp,
     };
-    hub.publish('endpoint:message', data);
     hub.publish('message.receive', data);
     return;
   }
   hub.publish('message.receive', {
     direction: 'outbound' as const,
     adapter: localName,
+    endpointId: localName,
     endpoint: localName,
     requester: event.requester,
     target: event.target,
@@ -300,7 +301,7 @@ export function installConsoleApi(options: {
   readonly eventHub?: ConsoleEventHub;
 }): RootResourceInstaller {
   const apiBase = normalizeBase(options.apiBase ?? '/api');
-  return ({ resources }) => {
+  return ({ resources, config }) => {
     const http = resources.use(httpHostToken);
     // Console SSE hub 同时作为 Root 级事件发布口（插件经 runtimeEventPublisherToken
     // publish endpoint:request/endpoint:notice 等收件箱事件）。
@@ -317,6 +318,7 @@ export function installConsoleApi(options: {
       options.snapshot,
       options.scheduleHost,
       hub,
+      config.document,
     );
   };
 }
@@ -332,6 +334,7 @@ export function registerConsoleApiRoutes(
   snapshot?: () => RuntimeSnapshot | undefined,
   scheduleHost?: unknown,
   eventHub?: ConsoleEventHub,
+  primaryConfigDocument?: RuntimeConfigDocument,
 ): void {
   const base = normalizeBase(apiBase);
   const hub = eventHub ?? createConsoleEventHub();
@@ -488,8 +491,11 @@ export function registerConsoleApiRoutes(
         authScope,
         listPages: () => listPages(consoleRuntime),
         readConfigYaml: () => readProjectConfigYaml(projectRoot),
-        // Flattened view: host keys + plugins.<key>，与 Console 表单/legacy config:get 对齐
-        readConfigDocument: () => readConsoleConfigDocument(projectRoot),
+        // Read from the validated generation projection. Keep environment
+        // placeholders intact so Console cannot reveal expanded secrets.
+        readConfigDocument: async () => flattenConfigDocument(
+          primaryConfigDocument ?? await readProjectConfigDocument(projectRoot),
+        ),
         writeConfigYaml: (yaml) => writeProjectConfigYaml(projectRoot, yaml),
         setConfigKey: (pluginName, data) => setProjectConfigKey(projectRoot, pluginName, data),
         listProjectFiles: () => buildProjectFileTree(projectRoot),
@@ -534,7 +540,7 @@ export function registerConsoleApiRoutes(
             : undefined,
           resolveScheduleEngine: () => agentModule?.getAssistantRuntime?.()?.engine ?? null,
         },
-        listPluginKeys: () => listConsoleConfigKeys(projectRoot),
+        listPluginKeys: () => listConsoleConfigKeys(projectRoot, primaryConfigDocument),
         publishEvent: (type, data) => hub.publish(type, data),
       });
       const match = pickRpcReply(message, payloads);
@@ -1110,8 +1116,11 @@ export function flattenConfigDocument(
 }
 
 /** 配置 Tab 列表：host 键（有值）+ plugins 键 + package.json zhin.plugins。 */
-export async function listConsoleConfigKeys(projectRoot: string): Promise<string[]> {
-  const document = await readProjectConfigDocument(projectRoot);
+export async function listConsoleConfigKeys(
+  projectRoot: string,
+  primaryConfigDocument?: RuntimeConfigDocument,
+): Promise<string[]> {
+  const document = primaryConfigDocument ?? await readProjectConfigDocument(projectRoot);
   const keys = new Set<string>();
   for (const key of HOST_CONFIG_KEYS) {
     if (key in document) keys.add(key);

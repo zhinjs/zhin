@@ -1,5 +1,10 @@
 import type { AuthScope } from './token-registry.js';
 import type { DatabaseHostConsole } from '@zhin.js/plugin-runtime';
+import {
+  assertDemoConsoleRpcAllowed,
+  endpointSendResult,
+  normalizeConsoleRpcMessage,
+} from '@zhin.js/console-protocol';
 import { dispatchExtendedConsoleRpc, type ConsoleRpcExtendedCtx } from './console-rpc-extended.js';
 
 export type RuntimeConsoleRpcMessage = {
@@ -93,47 +98,6 @@ export type RuntimeEndpointSendInput = {
   readonly parent?: { type?: string; id?: string; name?: string };
 };
 
-/**
- * Frontend SDK (@zhin.js/client) calls colon-named aliases; normalize to the
- * canonical dot names before scope checks and dispatch. Alias parameter shapes
- * (`data.{adapter, endpointId, id, type, content, parent}`) are mapped onto the
- * `$`-prefixed fields inside each endpoint case.
- */
-const RPC_TYPE_ALIASES: Readonly<Record<string, string>> = Object.freeze({
-  'endpoint:list': 'endpoint.list',
-  'endpoint:info': 'endpoint.info',
-  'endpoint:sendMessage': 'endpoint.send_message',
-});
-
-/** ADR 0016 demo allowlist subset available on Plugin Runtime Host. */
-const DEMO_RPC_ALLOWLIST = new Set([
-  'ping',
-  'entries:get',
-  'pages:list',
-  'config:get',
-  'config:get-all',
-  'config:get-yaml',
-  'schema:get',
-  'schema:get-all',
-  'endpoint.list',
-  'endpoint.info',
-  'endpoint.send_message',
-]);
-
-const DEMO_RPC_WRITE_BLOCKLIST = new Set([
-  'config:set',
-  'config:save-yaml',
-  'files:save',
-  'env:save',
-  'db:insert',
-  'db:update',
-  'db:delete',
-  'db:drop-table',
-  'db:kv:set',
-  'db:kv:delete',
-  'system:restart',
-]);
-
 export function pickRpcReply(
   message: RuntimeConsoleRpcMessage,
   payloads: readonly RuntimeConsoleRpcReply[],
@@ -154,20 +118,23 @@ export async function dispatchRuntimeConsoleRpc(
   const emit = (payload: RuntimeConsoleRpcReply) => {
     payloads.push(payload);
   };
-  const type = RPC_TYPE_ALIASES[String(message.type ?? '')] ?? String(message.type ?? '');
+  message = normalizeConsoleRpcMessage(message);
+  const type = String(message.type ?? '');
   const requestId = message.requestId as number | string | undefined;
 
-  // Extended RPC surface (cron/schedule、endpoint 社交/inbox) — 自带 scope 矩阵
+  if (ctx.authScope === 'demo') {
+    const denied = assertDemoConsoleRpcAllowed(type);
+    if (denied) {
+      emit({ requestId, error: denied });
+      return payloads;
+    }
+  }
+
+  // Extended RPC surface (cron/schedule、endpoint 社交/inbox)
   if (ctx.extended) {
-    // 参数形状兼容：SDK 放 data，console UI 部分页面放顶层 —— 合并后 data 优先
-    const { data: extData, ...extRest } = message as Record<string, unknown>;
-    const extendedArgs = {
-      ...extRest,
-      ...((extData ?? {}) as Record<string, unknown>),
-    };
     const extended = await dispatchExtendedConsoleRpc(
       type,
-      extendedArgs,
+      message as Record<string, unknown>,
       { ...ctx.extended, fullScope: ctx.authScope === 'full' },
     );
     if (extended !== undefined) {
@@ -176,11 +143,6 @@ export async function dispatchRuntimeConsoleRpc(
         : { requestId, data: extended.data });
       return payloads;
     }
-  }
-
-  if (ctx.authScope === 'demo' && (DEMO_RPC_WRITE_BLOCKLIST.has(type) || !DEMO_RPC_ALLOWLIST.has(type))) {
-    emit({ requestId, error: `Demo scope: RPC "${type}" is forbidden` });
-    return payloads;
   }
 
   switch (type) {
@@ -636,10 +598,9 @@ export async function dispatchRuntimeConsoleRpc(
     }
     case 'endpoint.info': {
       try {
-        const data = (message.data ?? {}) as Record<string, unknown>;
-        // Accept both canonical `$`-fields and the SDK colon-alias shape.
-        const adapter = String(data.$adapter ?? data.adapter ?? '');
-        const endpointId = String(data.$endpoint ?? data.endpointId ?? '');
+        const data = message as Record<string, unknown>;
+        const adapter = String(data.$adapter ?? '');
+        const endpointId = String(data.$endpoint ?? '');
         if (!adapter || !endpointId) {
           emit({ requestId, error: '$adapter and $endpoint required' });
           return payloads;
@@ -664,14 +625,12 @@ export async function dispatchRuntimeConsoleRpc(
     }
     case 'endpoint.send_message': {
       try {
-        const data = (message.data ?? {}) as Record<string, unknown>;
-        // Accept both canonical `$`-fields and the SDK colon-alias shape
-        // (`endpoint:sendMessage` → data.{adapter, endpointId, id, type, content, parent}).
-        const adapter = String(data.$adapter ?? data.adapter ?? '');
-        const endpointId = String(data.$endpoint ?? data.endpointId ?? '');
-        const channelId = String(data.$channel_id ?? data.id ?? '');
-        const channelType = String(data.$channel_type ?? data.type ?? '');
-        const content = data.$content !== undefined ? data.$content : data.content;
+        const data = message as Record<string, unknown>;
+        const adapter = String(data.$adapter ?? '');
+        const endpointId = String(data.$endpoint ?? '');
+        const channelId = String(data.$channel_id ?? '');
+        const channelType = String(data.$channel_type ?? '');
+        const content = data.$content;
         // channelType is optional: ImRuntime tolerates an empty value and
         // targets the bare channel id (parity with the legacy RPC handler).
         if (!adapter || !endpointId || !channelId || content === undefined) {
@@ -691,11 +650,11 @@ export async function dispatchRuntimeConsoleRpc(
           channelId,
           channelType,
           content,
-          parent: (data.$parent ?? data.parent) as
+          parent: data.$parent as
             { type?: string; id?: string; name?: string } | undefined,
         });
         // Legacy contract: { message_id }. Keep messageId for new callers.
-        emit({ requestId, data: { message_id: result.messageId, messageId: result.messageId } });
+        emit({ requestId, data: endpointSendResult(result.messageId) });
       } catch (error) {
         emit({
           requestId,

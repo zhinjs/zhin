@@ -132,6 +132,41 @@ describe('Plugin Runtime kernel', () => {
     await root.stop();
   });
 
+  it('observes every committed generation but skips no-op transactions', async () => {
+    const root = new RootController(emptyState());
+    const commits: Array<[number, number]> = [];
+    const unsubscribe = root.onGenerationCommit((event) => {
+      commits.push([event.previous.generation, event.current.generation]);
+    });
+
+    await root.start(() => ({ snapshot: emptyState(), dispose: () => undefined }));
+    await root.transact(() => undefined);
+    await root.transact(() => ({ snapshot: emptyState(), dispose: () => undefined }));
+    unsubscribe();
+    await root.transact(() => ({ snapshot: emptyState(), dispose: () => undefined }));
+
+    expect(commits).toEqual([[0, 1], [1, 2]]);
+    await root.stop();
+  });
+
+  it('isolates generation observers from an already committed transaction', async () => {
+    const reported: unknown[] = [];
+    const root = new RootController(emptyState(), (error) => { reported.push(error); });
+    root.onGenerationCommit(() => { throw new Error('observer failed'); });
+
+    const snapshot = await root.start(() => ({
+      snapshot: emptyState(),
+      dispose: () => undefined,
+    }));
+
+    expect(snapshot.generation).toBe(1);
+    expect(root.state).toBe('running');
+    expect(reported).toEqual([
+      expect.objectContaining({ message: 'observer failed' }),
+    ]);
+    await root.stop();
+  });
+
   it('keeps the current generation when a transaction has no semantic work', async () => {
     const root = new RootController(emptyState());
     const first = await root.start(() => ({

@@ -18,6 +18,7 @@ import {
   defineRuntimeEnvironment,
   envStoreToken,
   expandEnvironmentValue,
+  primaryConfigToken,
   type EnvStore,
   type ModuleRuntime,
 } from '../src/index.js';
@@ -189,6 +190,57 @@ describe('EnvStore', () => {
 });
 
 describe('RootRuntime EnvStore ownership', () => {
+  it('publishes one validated Primary Config projection per resource generation', async () => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    modules.set(join(project, 'plugin.ts'), {
+      default: definePlugin({ name: 'root' }),
+    });
+    modules.set(join(project, 'plugins/child/plugin.ts'), {
+      default: definePlugin({ name: 'child' }),
+    });
+    const observed: Array<{
+      raw: unknown;
+      expanded: unknown;
+      defaults: unknown;
+      injected: unknown;
+    }> = [];
+    const runtime = new RootRuntime({
+      projectRoot: project,
+      modules,
+      environment: { name: 'test', mode: 'test', platform: 'node' },
+      environmentVariables: { base: { AI_KEY: 'secret-value' } },
+      config: {
+        ai: { apiKey: '${AI_KEY}' },
+        plugins: { child: { label: 'v1' } },
+      },
+      installResources({ resources, config }) {
+        observed.push({
+          raw: config.document.ai,
+          expanded: config.get('ai'),
+          defaults: config.document.plugin,
+          injected: resources.use(primaryConfigToken),
+        });
+      },
+    });
+
+    await runtime.start();
+    await runtime.patchConfig([{
+      op: 'set', path: ['plugins', 'child', 'label'], value: 'v2',
+    }]);
+
+    expect(observed).toHaveLength(2);
+    expect(observed[0]).toMatchObject({
+      raw: { apiKey: '${AI_KEY}' },
+      expanded: { apiKey: 'secret-value' },
+      defaults: {},
+    });
+    expect(observed[1]?.defaults).toEqual({});
+    expect(observed[0]?.injected).toBeDefined();
+    expect(observed[1]?.injected).not.toBe(observed[0]?.injected);
+    await runtime.stop();
+  });
+
   it('injects exact owner views and recreates only the changed subtree view', async () => {
     const project = await createProject();
     const modules = new FakeModuleRuntime();

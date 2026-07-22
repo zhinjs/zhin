@@ -6,7 +6,7 @@ export interface HubMenuContext {
   channelKey: string;
   /** 打开菜单的用户（仅记录，大厅导航不限制点击者） */
   openerId: string;
-  message: Message<any>;
+  message: Message;
   expiresAt: number;
 }
 
@@ -27,11 +27,11 @@ const contexts = new Map<string, HubMenuContext>();
 const lastMenus = new Map<string, LastHubMenu>();
 
 /** 大厅 fallback 按频道共享，任意成员可回复数字或点按钮 */
-function hubMenuKey(message: Message<any>): string {
+function hubMenuKey(message: Message): string {
   return channelKey(message);
 }
 
-export function createHubScope(message: Message<any>): string {
+export function createHubScope(message: Message): string {
   const scopeId = generateCompactId('h');
   contexts.set(scopeId, {
     channelKey: channelKey(message),
@@ -44,7 +44,7 @@ export function createHubScope(message: Message<any>): string {
 }
 
 export function rememberHubMenu(
-  message: Message<any>,
+  message: Message,
   scopeId: string,
   choices: HubMenuChoice[],
 ): void {
@@ -56,7 +56,7 @@ export function rememberHubMenu(
   pruneExpired();
 }
 
-export function getLastHubMenu(message: Message<any>): LastHubMenu | null {
+export function getLastHubMenu(message: Message): LastHubMenu | null {
   pruneExpired();
   const key = hubMenuKey(message);
   const last = lastMenus.get(key);
