@@ -5,14 +5,8 @@ plugin: {}
 
 plugins:
   qq:
-    name: zhin
-    appid: ${QQ_APPID}
-    secret: ${QQ_SECRET}
-    master: 0F7AB3CA76511C10E9B9C7A548548CD7
     mode: websocket
     sandbox: true
-    timeout: 10000
-    outboundMarkdown: auto
     intents:
       - GUILDS
       - GUILD_MEMBERS
@@ -23,7 +17,10 @@ plugins:
       - MESSAGE_AUDIT
       - AUDIO_ACTION
       - PUBLIC_GUILD_MESSAGES
-    data_dir: ./data
+    endpoints:
+      - name: zhin
+        appid: ${QQ_APPID}
+        secret: ${QQ_SECRET}
 
   group-suite:
     keywordReply: false

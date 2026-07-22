@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/onebot12/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/onebot12/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=914c69c4358cc148 -->
+<!-- sync-adapter-docs:sha256=a0508889b09dd967 -->
 
 # @zhin.js/adapter-onebot12
 
@@ -45,11 +45,12 @@ pnpm add @zhin.js/adapter-onebot12
 plugins:
   onebot12:
     connection: ws
-    name: ob12-bot
-    url: "ws://127.0.0.1:6700"
-    access_token: "${ONEBOT12_ACCESS_TOKEN}"
     reconnect_interval: 5000
     heartbeat_interval: 30000
+    endpoints:
+      - name: ob12-bot
+        url: "ws://127.0.0.1:6700"
+        access_token: "${ONEBOT12_ACCESS_TOKEN}"
 ```
 
 根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-onebot12`（`instanceKey: onebot12`）。

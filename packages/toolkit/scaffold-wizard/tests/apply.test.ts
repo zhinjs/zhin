@@ -18,7 +18,7 @@ describe('apply wizard to config', () => {
         instances: [{
           package: '@zhin.js/adapter-telegram',
           instanceKey: 'telegram',
-          config: { name: 'tg', polling: true, token: '${TELEGRAM_TOKEN}' },
+          config: { polling: true, endpoints: [{ name: 'tg', token: '${TELEGRAM_TOKEN}' }] },
         }],
         envVars: { TELEGRAM_TOKEN: 'x' },
       },
@@ -32,7 +32,7 @@ describe('apply wizard to config', () => {
     expect(config.endpoints).toBeUndefined();
     const plugins = config.plugins as Record<string, unknown>;
     expect(plugins.example).toEqual({});
-    expect(plugins.telegram).toEqual({ name: 'tg', polling: true, token: '${TELEGRAM_TOKEN}' });
+    expect(plugins.telegram).toEqual({ polling: true, endpoints: [{ name: 'tg', token: '${TELEGRAM_TOKEN}' }] });
     expect(config.database).toEqual({ dialect: 'sqlite', filename: './data/bot.db', mode: 'wal' });
     expect(config.inbox).toBeUndefined();
     expect(config.ai).toMatchObject({

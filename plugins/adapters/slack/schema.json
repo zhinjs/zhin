@@ -3,22 +3,6 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "name": {
-      "type": "string",
-      "default": "slack-bot"
-    },
-    "token": {
-      "type": "string",
-      "description": "Bot User OAuth Token (xoxb-...)"
-    },
-    "signingSecret": {
-      "type": "string",
-      "description": "Required for HTTP Events API (socketMode: false)"
-    },
-    "appToken": {
-      "type": "string",
-      "description": "App-Level Token (xapp-...) for Socket Mode"
-    },
     "socketMode": {
       "type": "boolean",
       "default": true,
@@ -35,18 +19,32 @@
     },
     "endpoints": {
       "type": "array",
-      "description": "多 workspace：一个插件实例挂多个 endpoint；每项以实例配置为基础逐项覆盖，name 必填",
+      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（name 必填，其余覆盖顶层）",
       "items": {
         "type": "object",
+        "additionalProperties": true,
         "properties": {
           "name": {
-            "type": "string"
+            "type": "string",
+            "description": "Slack bot name"
+          },
+          "token": {
+            "type": "string",
+            "description": "Bot User OAuth Token (xoxb-...)"
+          },
+          "signingSecret": {
+            "type": "string",
+            "description": "Required for HTTP Events API (socketMode: false)"
+          },
+          "appToken": {
+            "type": "string",
+            "description": "App-Level Token (xapp-...) for Socket Mode"
           }
         },
         "required": [
-          "name"
-        ],
-        "additionalProperties": true
+          "name",
+          "token"
+        ]
       }
     },
     "commandPrefix": {
@@ -55,28 +53,7 @@
       "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖"
     }
   },
-  "anyOf": [
-    {
-      "properties": {
-        "token": {
-          "type": "string",
-          "minLength": 1
-        }
-      },
-      "required": [
-        "token"
-      ]
-    },
-    {
-      "properties": {
-        "endpoints": {
-          "type": "array",
-          "minItems": 1
-        }
-      },
-      "required": [
-        "endpoints"
-      ]
-    }
+  "required": [
+    "endpoints"
   ]
 }

@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/slack/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/slack/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=4d12a986c3379f56 -->
+<!-- sync-adapter-docs:sha256=893adf860ad70fcb -->
 
 # @zhin.js/adapter-slack
 
@@ -56,10 +56,11 @@ pnpm add @zhin.js/adapter-slack
 # zhin.config.yml（Plugin Runtime）
 plugins:
   slack:
-    name: my-slack-bot
-    token: ${SLACK_BOT_TOKEN}
-    appToken: ${SLACK_APP_TOKEN}
     socketMode: true          # 默认 true，可省略
+    endpoints:
+      - name: my-slack-bot
+        token: ${SLACK_BOT_TOKEN}
+        appToken: ${SLACK_APP_TOKEN}
 ```
 
 多 workspace：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`name` 必填）：
@@ -81,11 +82,12 @@ plugins:
 ```yaml
 plugins:
   slack:
-    name: my-slack-bot
-    token: ${SLACK_BOT_TOKEN}
-    signingSecret: ${SLACK_SIGNING_SECRET}
     socketMode: false
     webhookPath: /slack/events   # 可选，默认 /slack/events
+    endpoints:
+      - name: my-slack-bot
+        token: ${SLACK_BOT_TOKEN}
+        signingSecret: ${SLACK_SIGNING_SECRET}
 ```
 
 根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-slack`（`instanceKey: slack`）。  

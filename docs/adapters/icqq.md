@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=3c99ac74519c6956 -->
+<!-- sync-adapter-docs:sha256=3e21a938117cd84f -->
 
 # @zhin.js/adapter-icqq
 
@@ -34,12 +34,16 @@ pnpm add -g @icqqjs/cli   # 或 npx icqq login
 ```yaml
 plugins:
   icqq:
-    name: "${ICQQ_ACCOUNT}"   # QQ 号，须与 icqq login 一致
+    master: "1659488338"        # 必填，顶层共享（/approve 与 master 角色）
     autoReconnect: true
-    # rpc:                    # 可选远程守护进程
-    #   host: 10.0.0.2
-    #   port: 9527
-    #   token: ${ICQQ_RPC_TOKEN}
+    endpoints:
+      - name: "${ICQQ_ACCOUNT}"   # QQ 号，须与 icqq login 一致
+      # rpc 为 endpoint 级字段：
+      # - name: "${ICQQ_ACCOUNT_2}"
+      #   rpc:
+      #     host: 10.0.0.2
+      #     port: 9527
+      #     token: ${ICQQ_RPC_TOKEN}
 ```
 
 多账号：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`name` 必填）：

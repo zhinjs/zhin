@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/weixin-ilink/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/weixin-ilink/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=8923695db7e98cdb -->
+<!-- sync-adapter-docs:sha256=36c986830b317252 -->
 
 # @zhin.js/adapter-weixin-ilink
 
@@ -37,11 +37,12 @@ tier: Experimental
 ```yaml
 plugins:
   weixin-ilink:
-    name: my-wechat
-    # botToken: "..."                 # 或环境变量 WEIXIN_ILINK_TOKEN
     # botAgent: "Zhin.js/1.0.0"
     # longPollTimeoutMs: 35000
     # baseUrl: https://ilinkai.weixin.qq.com
+    endpoints:
+      - name: my-wechat
+        # botToken: "..."                 # 或环境变量 WEIXIN_ILINK_TOKEN
 ```
 
 `botToken` 也可保存在侧车文件（不进 git）：

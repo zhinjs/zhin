@@ -35,7 +35,7 @@ pnpm add @zhin.js/adapter-line
 4. 在 Console 中启用 **Use webhooks** 并关闭 **Auto-reply messages**
 5. Runtime Host（`http`）须已 listen，Webhook 才可达
 
-必填字段：`channelSecret`、`channelAccessToken`。
+必填字段（`endpoints[i]`）：`name`、`channelSecret`、`channelAccessToken`。
 
 ## 最小配置
 
@@ -43,11 +43,12 @@ pnpm add @zhin.js/adapter-line
 # zhin.config.yml（Plugin Runtime）
 plugins:
   line:
-    name: my-line-bot
-    channelSecret: ${LINE_CHANNEL_SECRET}
-    channelAccessToken: ${LINE_CHANNEL_ACCESS_TOKEN}
     webhookPath: /line/webhook       # 可选，默认 /line/webhook
     apiBaseUrl: https://api.line.me   # 可选，调试时可改为 LINE API 沙盒地址
+    endpoints:
+      - name: my-line-bot
+        channelSecret: ${LINE_CHANNEL_SECRET}
+        channelAccessToken: ${LINE_CHANNEL_ACCESS_TOKEN}
 ```
 
 根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-line`（`instanceKey: line`）。

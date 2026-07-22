@@ -3,13 +3,6 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "name": {
-      "type": "string",
-      "default": "discord-bot"
-    },
-    "token": {
-      "type": "string"
-    },
     "connection": {
       "type": "string",
       "enum": [
@@ -78,6 +71,28 @@
       "default": "/discord/interactions",
       "description": "POST path on httpHostToken when connection is interactions."
     },
+    "endpoints": {
+      "type": "array",
+      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（name 必填，其余覆盖顶层）",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Discord bot name"
+          },
+          "token": {
+            "type": "string",
+            "description": "Discord bot token"
+          }
+        },
+        "required": [
+          "name",
+          "token"
+        ]
+      }
+    },
     "commandPrefix": {
       "type": "string",
       "default": "",
@@ -85,6 +100,6 @@
     }
   },
   "required": [
-    "token"
+    "endpoints"
   ]
 }

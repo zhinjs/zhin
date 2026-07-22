@@ -25,11 +25,12 @@
 ```yaml
 plugins:
   weixin-ilink:
-    name: my-wechat
-    # botToken: "..."                 # 或环境变量 WEIXIN_ILINK_TOKEN
     # botAgent: "Zhin.js/1.0.0"
     # longPollTimeoutMs: 35000
     # baseUrl: https://ilinkai.weixin.qq.com
+    endpoints:
+      - name: my-wechat
+        # botToken: "..."                 # 或环境变量 WEIXIN_ILINK_TOKEN
 ```
 
 `botToken` 也可保存在侧车文件（不进 git）：

@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/github/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/github/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=8e1758fa485319e6 -->
+<!-- sync-adapter-docs:sha256=dfc5b10c5f19d69e -->
 
 # @zhin.js/adapter-github
 
@@ -36,14 +36,15 @@ Webhook 需要 Root 提供 `@zhin.js/host-http`（`zhin runtime start` 默认装
 # zhin.config.yml
 plugins:
   github:
-    name: my-github-bot
-    app_id: 123456
-    private_key: ./data/github-app.pem
-    webhook_secret: your-secret
     webhook_path: /github/webhook
     auto_reply_repos:
       - zhinjs/zhin
     workspace_root: ./data/github-workspaces
+    endpoints:
+      - name: my-github-bot
+        app_id: 123456
+        private_key: ./data/github-app.pem
+        webhook_secret: your-secret
 ```
 
 ```env

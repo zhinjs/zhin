@@ -60,10 +60,10 @@ export async function configureTelegramEndpoint(ctx: EndpointConfigureContext): 
     },
   ]);
 
-  const endpointConfig: Record<string, unknown> = {
-    name: endpointName.trim(),
-    token: '${TELEGRAM_TOKEN}',
+  // schema：polling / webhook 为顶层共享字段；name / token 为 endpoint 级
+  const config: Record<string, unknown> = {
     polling: transport === 'polling',
+    endpoints: [{ name: endpointName.trim(), token: '${TELEGRAM_TOKEN}' }],
   };
 
   if (transport === 'webhook') {
@@ -91,14 +91,14 @@ export async function configureTelegramEndpoint(ctx: EndpointConfigureContext): 
       },
     ]);
 
-    endpointConfig.polling = false;
-    endpointConfig.webhook = {
+    config.polling = false;
+    config.webhook = {
       domain: webhook.domain.trim(),
       path: webhook.path.trim(),
     };
   }
 
-  return endpointConfig;
+  return config;
 }
 
 export async function configureGitHubEndpoint(ctx: EndpointConfigureContext): Promise<Record<string, unknown>> {
@@ -134,9 +134,11 @@ export async function configureGitHubEndpoint(ctx: EndpointConfigureContext): Pr
     },
   ]);
 
+  // schema：app_id / private_key / webhook_secret 为 endpoint 级；webhook_path / poll_interval 为顶层共享字段
   const endpointConfig: Record<string, unknown> = {
     name: endpointName.trim(),
   };
+  const sharedConfig: Record<string, unknown> = {};
 
   if (authMode === 'github_app') {
     console.log(chalk.gray('     在 github.com/settings/apps 创建 App，记录 App ID 并下载 .pem 私钥'));
@@ -206,7 +208,7 @@ export async function configureGitHubEndpoint(ctx: EndpointConfigureContext): Pr
 
     ctx.envVars.GITHUB_WEBHOOK_SECRET = webhook.webhook_secret;
     endpointConfig.webhook_secret = '${GITHUB_WEBHOOK_SECRET}';
-    endpointConfig.webhook_path = webhook.webhook_path.trim();
+    sharedConfig.webhook_path = webhook.webhook_path.trim();
   } else {
     const { poll_interval } = await inquirer.prompt([
       {
@@ -221,7 +223,7 @@ export async function configureGitHubEndpoint(ctx: EndpointConfigureContext): Pr
         },
       },
     ]);
-    endpointConfig.poll_interval = parseInt(poll_interval, 10);
+    sharedConfig.poll_interval = parseInt(poll_interval, 10);
   }
 
   const { enableMcp } = await inquirer.prompt([
@@ -245,7 +247,7 @@ export async function configureGitHubEndpoint(ctx: EndpointConfigureContext): Pr
     ctx.envVars.GITHUB_PERSONAL_ACCESS_TOKEN = pat;
   }
 
-  return endpointConfig;
+  return { ...sharedConfig, endpoints: [endpointConfig] };
 }
 
 export async function configureOneBot11Bot(ctx: EndpointConfigureContext): Promise<Record<string, unknown>> {
@@ -274,8 +276,8 @@ export async function configureOneBot11Bot(ctx: EndpointConfigureContext): Promi
     },
   ]);
 
+  // schema：connection 为顶层共享字段；name / url / path / access_token 为 endpoint 级
   const endpointConfig: Record<string, unknown> = {
-    connection,
     name: endpointName.trim(),
   };
 
@@ -317,7 +319,7 @@ export async function configureOneBot11Bot(ctx: EndpointConfigureContext): Promi
     endpointConfig.access_token = '${ONEBOT11_ACCESS_TOKEN}';
   }
 
-  return endpointConfig;
+  return { connection, endpoints: [endpointConfig] };
 }
 
 export async function configureQQBot(ctx: EndpointConfigureContext): Promise<Record<string, unknown>> {
@@ -367,12 +369,15 @@ export async function configureQQBot(ctx: EndpointConfigureContext): Promise<Rec
     },
   ]);
 
+  // schema：mode / sandbox 为顶层共享字段；name / appid / secret 为 endpoint 级
   return {
-    name: credentials.name.trim(),
-    appid: '${QQ_APP_ID}',
-    secret: '${QQ_SECRET}',
     mode,
     sandbox,
+    endpoints: [{
+      name: credentials.name.trim(),
+      appid: '${QQ_APP_ID}',
+      secret: '${QQ_SECRET}',
+    }],
   };
 }
 
@@ -409,10 +414,10 @@ export async function configureDiscordEndpoint(ctx: EndpointConfigureContext): P
   ]);
   ctx.envVars.DISCORD_TOKEN = token;
 
-  const endpointConfig: Record<string, unknown> = {
+  // schema：connection / applicationId / publicKey / interactionsPath 为顶层共享字段；name / token 为 endpoint 级
+  const config: Record<string, unknown> = {
     connection,
-    name: endpointName.trim(),
-    token: '${DISCORD_TOKEN}',
+    endpoints: [{ name: endpointName.trim(), token: '${DISCORD_TOKEN}' }],
   };
 
   if (connection === 'interactions') {
@@ -437,12 +442,12 @@ export async function configureDiscordEndpoint(ctx: EndpointConfigureContext): P
         default: '/discord/interactions',
       },
     ]);
-    endpointConfig.applicationId = interactions.applicationId.trim();
-    endpointConfig.publicKey = interactions.publicKey.trim();
-    endpointConfig.interactionsPath = interactions.interactionsPath.trim();
+    config.applicationId = interactions.applicationId.trim();
+    config.publicKey = interactions.publicKey.trim();
+    config.interactionsPath = interactions.interactionsPath.trim();
   }
 
-  return endpointConfig;
+  return config;
 }
 
 export async function configureSlackEndpoint(ctx: EndpointConfigureContext): Promise<Record<string, unknown>> {
@@ -486,11 +491,11 @@ export async function configureSlackEndpoint(ctx: EndpointConfigureContext): Pro
   ctx.envVars.SLACK_BOT_TOKEN = token;
   ctx.envVars.SLACK_SIGNING_SECRET = signingSecret;
 
+  // schema：socketMode 为顶层共享字段；name / token / signingSecret / appToken 为 endpoint 级
   const endpointConfig: Record<string, unknown> = {
     name: endpointName.trim(),
     token: '${SLACK_BOT_TOKEN}',
     signingSecret: '${SLACK_SIGNING_SECRET}',
-    socketMode: socketMode === 'true',
   };
 
   if (socketMode === 'true') {
@@ -508,5 +513,5 @@ export async function configureSlackEndpoint(ctx: EndpointConfigureContext): Pro
     console.log(chalk.yellow('     HTTP 模式由内置 HTTP Host 承接，需公网可达并配置 Slack Event Subscriptions URL'));
   }
 
-  return endpointConfig;
+  return { socketMode: socketMode === 'true', endpoints: [endpointConfig] };
 }

@@ -3,10 +3,6 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "name": {
-      "type": "string",
-      "default": "satori-bot"
-    },
     "connection": {
       "type": "string",
       "enum": [
@@ -16,22 +12,40 @@
       "default": "ws",
       "description": "ws (default) or webhook (httpHostToken POST route)"
     },
-    "baseUrl": {
-      "type": "string",
-      "description": "Satori SDK HTTP/WS base URL (e.g. http://127.0.0.1:5140)"
-    },
-    "token": {
-      "type": "string",
-      "description": "Bearer token for API and WS IDENTIFY"
-    },
     "heartbeat_interval": {
       "type": "number",
       "default": 10000,
       "description": "WS PING interval in milliseconds"
     },
-    "path": {
-      "type": "string",
-      "description": "Webhook POST path (connection: webhook)"
+    "endpoints": {
+      "type": "array",
+      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（name 必填，其余覆盖顶层）",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Satori bot name"
+          },
+          "baseUrl": {
+            "type": "string",
+            "description": "Satori SDK HTTP/WS base URL (e.g. http://127.0.0.1:5140)"
+          },
+          "token": {
+            "type": "string",
+            "description": "Bearer token for API and WS IDENTIFY"
+          },
+          "path": {
+            "type": "string",
+            "description": "Webhook POST path (connection: webhook)"
+          }
+        },
+        "required": [
+          "name",
+          "baseUrl"
+        ]
+      }
     },
     "commandPrefix": {
       "type": "string",
@@ -40,6 +54,6 @@
     }
   },
   "required": [
-    "baseUrl"
+    "endpoints"
   ]
 }

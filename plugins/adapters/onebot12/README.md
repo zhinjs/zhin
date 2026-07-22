@@ -33,11 +33,12 @@ pnpm add @zhin.js/adapter-onebot12
 plugins:
   onebot12:
     connection: ws
-    name: ob12-bot
-    url: "ws://127.0.0.1:6700"
-    access_token: "${ONEBOT12_ACCESS_TOKEN}"
     reconnect_interval: 5000
     heartbeat_interval: 30000
+    endpoints:
+      - name: ob12-bot
+        url: "ws://127.0.0.1:6700"
+        access_token: "${ONEBOT12_ACCESS_TOKEN}"
 ```
 
 根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-onebot12`（`instanceKey: onebot12`）。

@@ -39,7 +39,7 @@ pnpm add @zhin.js/adapter-wecom
    - **Token** / **EncodingAESKey** 与配置一致
 4. Runtime Host（`http`）须已 listen，Webhook 才可达
 
-必填字段：`corpId`、`agentSecret`、`token`、`encodingAESKey`。
+必填字段（`endpoints[i]`）：`name`、`corpId`、`agentSecret`、`token`、`encodingAESKey`。
 
 ## 最小配置
 
@@ -47,13 +47,14 @@ pnpm add @zhin.js/adapter-wecom
 # zhin.config.yml（Plugin Runtime）
 plugins:
   wecom:
-    name: wecom-bot
-    corpId: ${WECOM_CORP_ID}
-    agentSecret: ${WECOM_AGENT_SECRET}
-    token: ${WECOM_TOKEN}
-    encodingAESKey: ${WECOM_AES_KEY}
     webhookPath: /wecom/callback       # 可选，默认 /wecom/callback
     apiBaseUrl: https://qyapi.weixin.qq.com  # 可选
+    endpoints:
+      - name: wecom-bot
+        corpId: ${WECOM_CORP_ID}
+        agentSecret: ${WECOM_AGENT_SECRET}
+        token: ${WECOM_TOKEN}
+        encodingAESKey: ${WECOM_AES_KEY}
 ```
 
 根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-wecom`（`instanceKey: wecom`）。

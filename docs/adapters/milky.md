@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/milky/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/milky/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=c95850d3fb36c679 -->
+<!-- sync-adapter-docs:sha256=28156c308b7af5ab -->
 
 # @zhin.js/adapter-milky
 
@@ -45,11 +45,12 @@ pnpm add @zhin.js/adapter-milky
 plugins:
   milky:
     connection: ws
-    name: milky-bot
-    baseUrl: "http://127.0.0.1:8080"
-    access_token: "${MILKY_ACCESS_TOKEN}"
     reconnect_interval: 5000
     heartbeat_interval: 30000
+    endpoints:
+      - name: milky-bot
+        baseUrl: "http://127.0.0.1:8080"
+        access_token: "${MILKY_ACCESS_TOKEN}"
 ```
 
 根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-milky`（`instanceKey: milky`）。

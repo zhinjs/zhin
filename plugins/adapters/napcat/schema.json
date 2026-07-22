@@ -13,29 +13,6 @@
       "default": "ws",
       "description": "ws (default), wss (reverse WS), or http (POST webhook + HTTP API outbound)"
     },
-    "name": {
-      "type": "string",
-      "default": "napcat-bot"
-    },
-    "url": {
-      "type": "string",
-      "description": "NapCat WebSocket URL (required for connection: ws)"
-    },
-    "path": {
-      "type": "string",
-      "description": "WS path for reverse-wss"
-    },
-    "http_url": {
-      "type": "string",
-      "description": "HTTP API base URL (connection: http outbound)"
-    },
-    "post_path": {
-      "type": "string",
-      "description": "HTTP POST event path (connection: http inbound)"
-    },
-    "access_token": {
-      "type": "string"
-    },
     "reconnect_interval": {
       "type": "number",
       "default": 5000
@@ -48,10 +25,50 @@
       "type": "number",
       "default": 30000
     },
+    "endpoints": {
+      "type": "array",
+      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（name 必填，其余覆盖顶层）",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "NapCat bot name"
+          },
+          "url": {
+            "type": "string",
+            "description": "NapCat WebSocket URL (required for connection: ws)"
+          },
+          "path": {
+            "type": "string",
+            "description": "WS path for reverse-wss"
+          },
+          "http_url": {
+            "type": "string",
+            "description": "HTTP API base URL (connection: http outbound)"
+          },
+          "post_path": {
+            "type": "string",
+            "description": "HTTP POST event path (connection: http inbound)"
+          },
+          "access_token": {
+            "type": "string",
+            "description": "NapCat access token"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
     "commandPrefix": {
       "type": "string",
       "default": "",
       "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖"
     }
-  }
+  },
+  "required": [
+    "endpoints"
+  ]
 }

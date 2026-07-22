@@ -42,24 +42,24 @@ Root 在 `zhin runtime start` 时装载 `@zhin.js/host-http`、`ConsoleRuntime` 
 
 ## 配置
 
-**推荐（与 [minimal-bot](../../../examples/minimal-bot/) 一致）**：`endpoints: []`，在 Remote Console 打开「沙盒」页时经 `/sandbox` WebSocket **自动创建** bot（如 `sandbox-xxxx`），无需在 yaml 里写 `context: sandbox`。
+**推荐（与 [minimal-bot](../../../examples/minimal-bot/) 一致）**：`plugins.sandbox.endpoints: []`，在 Remote Console 打开「沙盒」页时经 `/sandbox` WebSocket **自动创建** bot（如 `sandbox-xxxx`），无需在 yaml 里写 `context: sandbox`。
 
 ```yaml
-# zhin.config.yml
-endpoints: []
-
+# zhin.config.yml（Plugin Runtime）
 plugins:
-  - "@zhin.js/adapter-sandbox"
-  - "@zhin.js/host-router"
-  - "@zhin.js/host-api"
+  sandbox:
+    endpoints: []
 ```
 
 可选：若需在启动时即在 bot 列表显示**固定名称**的离线占位 bot，可显式配置：
 
 ```yaml
-endpoints:
-  - context: sandbox
-    name: sandbox-bot
+plugins:
+  sandbox:
+    endpoints:
+      - name: sandbox-bot
+        context: sandbox
+        owner: sandbox-user
 ```
 
 ## 使用方式

@@ -38,7 +38,7 @@ pnpm add @zhin.js/adapter-wechat-mp
 | **回复模式** | 默认 `replyMode: passive`（订阅号被动回复）；服务号可设 `customer_service` |
 | **消息加密** | 可选；`encrypt: true` + `encodingAESKey`；`encryptMode: compatible`（默认）或 `secure` |
 
-必填字段：`appId`、`appSecret`、`token`。
+必填字段（`endpoints[i]`）：`name`、`appId`、`appSecret`、`token`。
 
 ## 最小配置
 
@@ -46,11 +46,12 @@ pnpm add @zhin.js/adapter-wechat-mp
 # zhin.config.yml（Plugin Runtime）
 plugins:
   wechat-mp:
-    name: my-wechat-bot
-    appId: "${WECHAT_APP_ID}"
-    appSecret: "${WECHAT_APP_SECRET}"
-    token: "${WECHAT_TOKEN}"
     path: /wechat/webhook
+    endpoints:
+      - name: my-wechat-bot
+        appId: "${WECHAT_APP_ID}"
+        appSecret: "${WECHAT_APP_SECRET}"
+        token: "${WECHAT_TOKEN}"
 ```
 
 根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-wechat-mp`（`instanceKey: wechat-mp`）。

@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/dingtalk/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/dingtalk/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=93a45d0a71ad6cf7 -->
+<!-- sync-adapter-docs:sha256=699f5114b36d07c9 -->
 
 # @zhin.js/adapter-dingtalk
 
@@ -46,7 +46,7 @@ pnpm add @zhin.js/adapter-dingtalk
 3. 设置消息接收 URL 为 `https://your-domain/dingtalk/webhook`
 4. Runtime Host（`http`）须已 listen，Webhook 才可达
 
-必填字段：`appKey`、`appSecret`。
+必填字段（`endpoints[i]`）：`name`、`appKey`、`appSecret`、`webhookPath`、`robotCode`。
 
 ## 最小配置
 
@@ -54,12 +54,13 @@ pnpm add @zhin.js/adapter-dingtalk
 # zhin.config.yml（Plugin Runtime）
 plugins:
   dingtalk:
-    name: my-dingtalk-bot
-    appKey: ${DINGTALK_APP_KEY}
-    appSecret: ${DINGTALK_APP_SECRET}
-    robotCode: ${DINGTALK_ROBOT_CODE}   # 可选
-    webhookPath: /dingtalk/webhook       # 可选，默认 /dingtalk/webhook
-    apiBaseUrl: https://oapi.dingtalk.com # 可选
+    apiBaseUrl: https://oapi.dingtalk.com # 可选，顶层共享
+    endpoints:
+      - name: my-dingtalk-bot
+        appKey: ${DINGTALK_APP_KEY}
+        appSecret: ${DINGTALK_APP_SECRET}
+        robotCode: ${DINGTALK_ROBOT_CODE}
+        webhookPath: /dingtalk/webhook   # 可选，默认 /dingtalk/webhook
 ```
 
 根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-dingtalk`（`instanceKey: dingtalk`）。
@@ -70,7 +71,7 @@ plugins:
 |------|------|
 | `DINGTALK_APP_KEY` | 应用 AppKey |
 | `DINGTALK_APP_SECRET` | 应用 AppSecret |
-| `DINGTALK_BOT_NAME` | 默认 endpoint 名称（可选） |
+| `DINGTALK_ROBOT_CODE` | RobotCode（主动发送 `/robot/send`） |
 
 ## 消息类型映射
 

@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/onebot11/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/onebot11/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=12bfa27ac8586bca -->
+<!-- sync-adapter-docs:sha256=e78465fa47745ef0 -->
 
 # @zhin.js/adapter-onebot11
 
@@ -45,11 +45,12 @@ pnpm add @zhin.js/adapter-onebot11
 plugins:
   onebot11:
     connection: ws
-    name: ob11-bot
-    url: "ws://127.0.0.1:6700"
-    access_token: "${ONEBOT11_ACCESS_TOKEN}"
     reconnect_interval: 5000
     heartbeat_interval: 30000
+    endpoints:
+      - name: ob11-bot
+        url: "ws://127.0.0.1:6700"
+        access_token: "${ONEBOT11_ACCESS_TOKEN}"
 ```
 
 根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-onebot11`（`instanceKey: onebot11`）。

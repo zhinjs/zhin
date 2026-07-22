@@ -3,22 +3,6 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "name": {
-      "type": "string",
-      "default": "wechat-mp-bot"
-    },
-    "appId": {
-      "type": "string"
-    },
-    "appSecret": {
-      "type": "string"
-    },
-    "token": {
-      "type": "string"
-    },
-    "encodingAESKey": {
-      "type": "string"
-    },
     "path": {
       "type": "string",
       "default": "/wechat/webhook"
@@ -48,6 +32,42 @@
       "type": "number",
       "default": 4500
     },
+    "endpoints": {
+      "type": "array",
+      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（name 必填，其余覆盖顶层）",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "WeChat MP bot name"
+          },
+          "appId": {
+            "type": "string",
+            "description": "WeChat MP app ID"
+          },
+          "appSecret": {
+            "type": "string",
+            "description": "WeChat MP app secret"
+          },
+          "token": {
+            "type": "string",
+            "description": "WeChat MP callback token"
+          },
+          "encodingAESKey": {
+            "type": "string",
+            "description": "WeChat MP encoding AES key"
+          }
+        },
+        "required": [
+          "name",
+          "appId",
+          "appSecret",
+          "token"
+        ]
+      }
+    },
     "commandPrefix": {
       "type": "string",
       "default": "",
@@ -55,8 +75,6 @@
     }
   },
   "required": [
-    "appId",
-    "appSecret",
-    "token"
+    "endpoints"
   ]
 }

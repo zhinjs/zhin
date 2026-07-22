@@ -33,11 +33,12 @@ pnpm add @zhin.js/adapter-milky
 plugins:
   milky:
     connection: ws
-    name: milky-bot
-    baseUrl: "http://127.0.0.1:8080"
-    access_token: "${MILKY_ACCESS_TOKEN}"
     reconnect_interval: 5000
     heartbeat_interval: 30000
+    endpoints:
+      - name: milky-bot
+        baseUrl: "http://127.0.0.1:8080"
+        access_token: "${MILKY_ACCESS_TOKEN}"
 ```
 
 根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-milky`（`instanceKey: milky`）。

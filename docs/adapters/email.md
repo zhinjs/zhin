@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/email/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/email/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=997fd6d2ed57c2b6 -->
+<!-- sync-adapter-docs:sha256=75b5de0301a147f8 -->
 
 # @zhin.js/adapter-email
 
@@ -53,20 +53,21 @@ pnpm add @zhin.js/adapter-email
 # zhin.config.yml（Plugin Runtime）
 plugins:
   email:
-    name: my-email-bot
-    smtp:
-      host: smtp.example.com
-      port: 465
-      secure: true
-      auth:
-        user: bot@example.com
-        pass: "${EMAIL_PASSWORD}"
-    imap:
-      host: imap.example.com
-      port: 993
-      tls: true
-      user: bot@example.com
-      password: "${EMAIL_PASSWORD}"
+    endpoints:
+      - name: my-email-bot
+        smtp:
+          host: smtp.example.com
+          port: 465
+          secure: true
+          auth:
+            user: bot@example.com
+            pass: "${EMAIL_PASSWORD}"
+        imap:
+          host: imap.example.com
+          port: 993
+          tls: true
+          user: bot@example.com
+          password: "${EMAIL_PASSWORD}"
 ```
 
 根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-email`（`instanceKey: email`）。

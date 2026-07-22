@@ -3,16 +3,6 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "name": {
-      "type": "string",
-      "default": "line-bot"
-    },
-    "channelSecret": {
-      "type": "string"
-    },
-    "channelAccessToken": {
-      "type": "string"
-    },
     "webhookPath": {
       "type": "string",
       "default": "/line/webhook"
@@ -21,6 +11,33 @@
       "type": "string",
       "default": "https://api.line.me"
     },
+    "endpoints": {
+      "type": "array",
+      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（name 必填，其余覆盖顶层）",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "LINE bot name"
+          },
+          "channelSecret": {
+            "type": "string",
+            "description": "LINE channel secret"
+          },
+          "channelAccessToken": {
+            "type": "string",
+            "description": "LINE channel access token"
+          }
+        },
+        "required": [
+          "name",
+          "channelSecret",
+          "channelAccessToken"
+        ]
+      }
+    },
     "commandPrefix": {
       "type": "string",
       "default": "",
@@ -28,7 +45,6 @@
     }
   },
   "required": [
-    "channelSecret",
-    "channelAccessToken"
+    "endpoints"
   ]
 }

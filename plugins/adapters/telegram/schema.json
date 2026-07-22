@@ -3,13 +3,6 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "name": {
-      "type": "string",
-      "default": "telegram-bot"
-    },
-    "token": {
-      "type": "string"
-    },
     "polling": {
       "type": "boolean",
       "default": true,
@@ -47,6 +40,28 @@
       "type": "string",
       "default": "https://api.telegram.org"
     },
+    "endpoints": {
+      "type": "array",
+      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（name 必填，其余覆盖顶层）",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Telegram bot name"
+          },
+          "token": {
+            "type": "string",
+            "description": "Telegram bot token"
+          }
+        },
+        "required": [
+          "name",
+          "token"
+        ]
+      }
+    },
     "commandPrefix": {
       "type": "string",
       "default": "",
@@ -54,6 +69,6 @@
     }
   },
   "required": [
-    "token"
+    "endpoints"
   ]
 }

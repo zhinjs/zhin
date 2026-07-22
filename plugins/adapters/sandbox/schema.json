@@ -5,21 +5,27 @@
   "properties": {
     "endpoints": {
       "type": "array",
-      "default": [],
+      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（name 必填，其余覆盖顶层）",
       "items": {
         "type": "object",
-        "additionalProperties": false,
+        "additionalProperties": true,
         "properties": {
-          "context": {
-            "type": "string"
-          },
           "name": {
-            "type": "string"
+            "type": "string",
+            "description": "Sandbox bot name"
+          },
+          "context": {
+            "type": "string",
+            "description": "Sandbox context identifier"
           },
           "owner": {
-            "type": "string"
+            "type": "string",
+            "description": "Sandbox owner user ID"
           }
-        }
+        },
+        "required": [
+          "name"
+        ]
       }
     },
     "commandPrefix": {
@@ -27,5 +33,8 @@
       "default": "",
       "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖"
     }
-  }
+  },
+  "required": [
+    "endpoints"
+  ]
 }

@@ -34,11 +34,12 @@ pnpm add @zhin.js/adapter-napcat
 plugins:
   napcat:
     connection: ws
-    name: my-bot
-    url: "ws://127.0.0.1:3001"
-    access_token: "${NAPCAT_TOKEN}"
     reconnect_interval: 5000
     heartbeat_interval: 30000
+    endpoints:
+      - name: my-bot
+        url: "ws://127.0.0.1:3001"
+        access_token: "${NAPCAT_TOKEN}"
 ```
 
 根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-napcat`（`instanceKey: napcat`）。

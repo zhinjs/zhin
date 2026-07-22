@@ -3,16 +3,23 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "name": {
-      "type": "string",
-      "description": "QQ uin (must match icqq login account)"
-    },
     "master": {
       "type": [
         "string",
         "number"
       ],
       "description": "Endpoint Owner QQ uin (for /approve bash and master role)"
+    },
+    "trusted": {
+      "type": "array",
+      "items": {
+        "type": [
+          "string",
+          "number"
+        ],
+        "description": "Trusted QQ uin"
+      },
+      "description": "Trusted QQ uin list"
     },
     "autoReconnect": {
       "type": "boolean",
@@ -26,26 +33,6 @@
       ],
       "description": "file=local path (same host as daemon); base64=CQ base64:// (default when rpc set)"
     },
-    "rpc": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "host": {
-          "type": "string"
-        },
-        "port": {
-          "type": "number"
-        },
-        "token": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "host",
-        "port",
-        "token"
-      ]
-    },
     "endpoints": {
       "type": "array",
       "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（name 必填，其余覆盖顶层）",
@@ -55,7 +42,48 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "QQ uin"
+            "description": "QQ uin (must match icqq login account)"
+          },
+          "master": {
+            "type": [
+              "string",
+              "number"
+            ],
+            "description": "Endpoint Owner QQ uin (for /approve bash and master role)"
+          },
+          "trusted": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "number"
+              ],
+              "description": "Trusted QQ uin"
+            },
+            "description": "Trusted QQ uin list"
+          },
+          "rpc": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "host": {
+                "type": "string",
+                "description": "RPC host"
+              },
+              "port": {
+                "type": "number",
+                "description": "RPC port"
+              },
+              "token": {
+                "type": "string",
+                "description": "RPC token"
+              }
+            },
+            "required": [
+              "host",
+              "port",
+              "token"
+            ]
           }
         },
         "required": [
@@ -69,28 +97,8 @@
       "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖"
     }
   },
-  "anyOf": [
-    {
-      "properties": {
-        "name": {
-          "type": "string",
-          "minLength": 1
-        }
-      },
-      "required": [
-        "name"
-      ]
-    },
-    {
-      "properties": {
-        "endpoints": {
-          "type": "array",
-          "minItems": 1
-        }
-      },
-      "required": [
-        "endpoints"
-      ]
-    }
+  "required": [
+    "master",
+    "endpoints"
   ]
 }

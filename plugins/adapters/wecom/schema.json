@@ -3,22 +3,6 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "name": {
-      "type": "string",
-      "default": "wecom-bot"
-    },
-    "corpId": {
-      "type": "string"
-    },
-    "agentSecret": {
-      "type": "string"
-    },
-    "token": {
-      "type": "string"
-    },
-    "encodingAESKey": {
-      "type": "string"
-    },
     "webhookPath": {
       "type": "string",
       "default": "/wecom/callback"
@@ -27,6 +11,43 @@
       "type": "string",
       "default": "https://qyapi.weixin.qq.com"
     },
+    "endpoints": {
+      "type": "array",
+      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（name 必填，其余覆盖顶层）",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "WeCom bot name"
+          },
+          "corpId": {
+            "type": "string",
+            "description": "WeCom corp ID"
+          },
+          "agentSecret": {
+            "type": "string",
+            "description": "WeCom agent secret"
+          },
+          "token": {
+            "type": "string",
+            "description": "WeCom callback token"
+          },
+          "encodingAESKey": {
+            "type": "string",
+            "description": "WeCom encoding AES key"
+          }
+        },
+        "required": [
+          "name",
+          "corpId",
+          "agentSecret",
+          "token",
+          "encodingAESKey"
+        ]
+      }
+    },
     "commandPrefix": {
       "type": "string",
       "default": "",
@@ -34,9 +55,6 @@
     }
   },
   "required": [
-    "corpId",
-    "agentSecret",
-    "token",
-    "encodingAESKey"
+    "endpoints"
   ]
 }

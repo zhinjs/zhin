@@ -36,7 +36,7 @@ pnpm add @zhin.js/adapter-qq
 | **WebSocket（默认）** | `qq-official-bot` 正向连接；无需公网回调 |
 | **host-http** | WebSocket **不需要**；Webhook / middleware 模式需要（经 `httpHostToken`） |
 
-必填字段：`appid`、`secret`。
+必填字段（`endpoints[i]`）：`name`、`appid`、`secret`。
 
 ## 最小配置
 
@@ -44,10 +44,11 @@ pnpm add @zhin.js/adapter-qq
 # zhin.config.yml（Plugin Runtime）
 plugins:
   qq:
-    name: my-qq-bot
-    appid: ${QQ_APPID}
-    secret: ${QQ_SECRET}
     # mode: websocket   # 默认
+    endpoints:
+      - name: my-qq-bot
+        appid: ${QQ_APPID}
+        secret: ${QQ_SECRET}
 ```
 
 多账号：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`name` 必填）：
@@ -61,10 +62,9 @@ plugins:
       - name: main-bot
         appid: ${QQ_APPID}
         secret: ${QQ_SECRET}
-      - name: sandbox-bot
+      - name: second-bot
         appid: ${QQ_APPID_2}
         secret: ${QQ_SECRET_2}
-        sandbox: true
 ```
 
 根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-qq`（`instanceKey: qq`）。

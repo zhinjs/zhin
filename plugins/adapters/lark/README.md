@@ -36,7 +36,7 @@ pnpm add @zhin.js/adapter-lark
 3. 启用机器人能力并配置事件订阅 URL：`https://your-domain/lark/webhook`
 4. Runtime Host（`http`）须已 listen，Webhook 才可达
 
-必填字段：`appId`、`appSecret`。
+必填字段（`endpoints[i]`）：`name`、`appId`、`appSecret`。
 
 ## 最小配置
 
@@ -44,14 +44,15 @@ pnpm add @zhin.js/adapter-lark
 # zhin.config.yml（Plugin Runtime）
 plugins:
   lark:
-    name: my-lark-bot
-    appId: ${LARK_APP_ID}
-    appSecret: ${LARK_APP_SECRET}
     webhookPath: /lark/webhook          # 可选，默认 /lark/webhook
-    encryptKey: ${LARK_ENCRYPT_KEY}     # 可选
-    verificationToken: ${LARK_VERIFY_TOKEN}  # 可选
     isFeishu: true                      # 可选，默认 true
     # apiBaseUrl: https://open.feishu.cn/open-apis
+    endpoints:
+      - name: my-lark-bot
+        appId: ${LARK_APP_ID}
+        appSecret: ${LARK_APP_SECRET}
+        # encryptKey: ${LARK_ENCRYPT_KEY}          # 可选
+        # verificationToken: ${LARK_VERIFY_TOKEN}  # 可选
 ```
 
 根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-lark`（`instanceKey: lark`）。

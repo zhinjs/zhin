@@ -24,14 +24,15 @@ Webhook 需要 Root 提供 `@zhin.js/host-http`（`zhin runtime start` 默认装
 # zhin.config.yml
 plugins:
   github:
-    name: my-github-bot
-    app_id: 123456
-    private_key: ./data/github-app.pem
-    webhook_secret: your-secret
     webhook_path: /github/webhook
     auto_reply_repos:
       - zhinjs/zhin
     workspace_root: ./data/github-workspaces
+    endpoints:
+      - name: my-github-bot
+        app_id: 123456
+        private_key: ./data/github-app.pem
+        webhook_secret: your-secret
 ```
 
 ```env

@@ -32,7 +32,7 @@ export interface AdapterSetupResult {
 }
 
 // 适配器定义
-interface AdapterDefinition {
+export interface AdapterDefinition {
   name: string;
   value: string;
   package: string;
@@ -48,7 +48,7 @@ interface AdapterDefinition {
   fields: AdapterField[];
 }
 
-interface AdapterField {
+export interface AdapterField {
   key: string;
   message: string;
   type?: 'input' | 'password' | 'select';
@@ -56,6 +56,8 @@ interface AdapterField {
   required?: boolean;
   envKey?: string;       // 如果是敏感信息，对应的环境变量名
   choices?: { name: string; value: string }[];
+  /** 字段归属：endpoint 级（默认，进 endpoints[i]）或 shared（顶层共享字段） */
+  scope?: 'endpoint' | 'shared';
 }
 
 const ADAPTERS: AdapterDefinition[] = [
@@ -80,6 +82,8 @@ const ADAPTERS: AdapterDefinition[] = [
     docUrl: adapterDocsUrl('icqq'),
     fields: [
       { key: 'name', message: 'QQ 号（与 icqq login 时一致）:', required: true, envKey: 'ICQQ_ACCOUNT' },
+      // schema 顶层 required: master（所有 endpoint 共享）
+      { key: 'master', message: '主人 QQ 号（master，/approve 等管理命令）:', required: true, scope: 'shared' },
     ],
   },
   {
@@ -153,6 +157,8 @@ const ADAPTERS: AdapterDefinition[] = [
     fields: [
       { key: 'appKey', message: 'App Key:', required: true, envKey: 'DINGTALK_APP_KEY' },
       { key: 'appSecret', message: 'App Secret:', required: true, type: 'password', envKey: 'DINGTALK_APP_SECRET' },
+      // schema endpoints[i] required 含 robotCode（主动发送 /robot/send 需要）
+      { key: 'robotCode', message: 'Robot Code:', required: true, envKey: 'DINGTALK_ROBOT_CODE' },
       { key: 'webhookPath', message: 'Webhook 路径:', default: '/dingtalk/webhook' },
     ],
   },
@@ -167,7 +173,8 @@ const ADAPTERS: AdapterDefinition[] = [
     fields: [
       { key: 'appId', message: 'App ID:', required: true, envKey: 'LARK_APP_ID' },
       { key: 'appSecret', message: 'App Secret:', required: true, type: 'password', envKey: 'LARK_APP_SECRET' },
-      { key: 'webhookPath', message: 'Webhook 路径:', default: '/lark/webhook' },
+      // schema 顶层共享字段（endpoints[i] 不含 webhookPath）
+      { key: 'webhookPath', message: 'Webhook 路径:', default: '/lark/webhook', scope: 'shared' },
     ],
   },
   {
@@ -194,7 +201,8 @@ const ADAPTERS: AdapterDefinition[] = [
       { key: 'appId', message: 'App ID:', required: true, envKey: 'WECHAT_APP_ID' },
       { key: 'appSecret', message: 'App Secret:', required: true, type: 'password', envKey: 'WECHAT_APP_SECRET' },
       { key: 'token', message: '验证 Token:', required: true, envKey: 'WECHAT_TOKEN' },
-      { key: 'webhookPath', message: 'Webhook 路径:', default: '/wechat/webhook' },
+      // schema 顶层共享字段名为 path（endpoints[i] 不含此项）
+      { key: 'webhookPath', message: 'Webhook 路径:', default: '/wechat/webhook', scope: 'shared' },
     ],
   },
   {
@@ -374,7 +382,7 @@ export async function configureAdapters(): Promise<AdapterSetupResult> {
     result.instances.push({
       package: adapterDef.package,
       instanceKey: adapterDef.value,
-      config: buildFieldBasedInstanceConfig(adapterDef.value, fieldValues),
+      config: buildFieldBasedInstanceConfig(adapterDef, fieldValues),
     });
   }
 
@@ -382,36 +390,56 @@ export async function configureAdapters(): Promise<AdapterSetupResult> {
 }
 
 /**
- * 字段式适配器（无自定义 configure）的实例配置整形，对齐各插件 schema.json：
- * - wechat-mp：webhookPath → path
- * - email：smtp/imap 平铺字段 → smtp/imap 嵌套对象
- * - 其余：字段直传
+ * 字段式适配器（无自定义 configure）的实例配置整形，对齐各插件 schema.json 新格式：
+ * - endpoint 级字段（name + 凭据等，字段默认 scope: 'endpoint'）进 `endpoints: [{ name, ... }]`
+ * - scope: 'shared' 的字段（如 lark/wechat-mp 的 webhookPath）留顶层
+ * - wechat-mp：顶层字段名为 path（向导沿用 webhookPath 提问）
+ * - email：smtp/imap 平铺字段 → endpoint 内 smtp/imap 嵌套对象
+ * - 未单独询问 name 的适配器用 `<adapter>-bot` 兜底
  */
-function buildFieldBasedInstanceConfig(adapterValue: string, values: Record<string, any>): Record<string, unknown> {
-  if (adapterValue === 'wechat-mp') {
-    const { webhookPath, ...rest } = values;
-    return { ...rest, path: webhookPath ?? '/wechat/webhook' };
-  }
-  if (adapterValue === 'email') {
+export function buildFieldBasedInstanceConfig(adapter: AdapterDefinition, values: Record<string, any>): Record<string, unknown> {
+  if (adapter.value === 'email') {
     const user = values.user ?? '';
     const password = values.password ?? '';
     return {
-      smtp: {
-        host: values.smtpHost,
-        port: Number(values.smtpPort) || 465,
-        secure: true,
-        auth: { user, pass: password },
-      },
-      imap: {
-        host: values.imapHost,
-        port: Number(values.imapPort) || 993,
-        tls: true,
-        user,
-        password,
-      },
+      endpoints: [{
+        name: 'email-bot',
+        smtp: {
+          host: values.smtpHost,
+          port: Number(values.smtpPort) || 465,
+          secure: true,
+          auth: { user, pass: password },
+        },
+        imap: {
+          host: values.imapHost,
+          port: Number(values.imapPort) || 993,
+          tls: true,
+          user,
+          password,
+        },
+      }],
     };
   }
-  return values;
+
+  const endpoint: Record<string, unknown> = {};
+  const shared: Record<string, unknown> = {};
+  for (const field of adapter.fields) {
+    const value = values[field.key];
+    if (value === undefined) continue;
+    if (field.scope === 'shared') {
+      shared[field.key] = value;
+    } else {
+      endpoint[field.key] = value;
+    }
+  }
+  if (adapter.value === 'wechat-mp' && shared.webhookPath !== undefined) {
+    shared.path = shared.webhookPath;
+    delete shared.webhookPath;
+  }
+  if (!endpoint.name) {
+    endpoint.name = `${adapter.value}-bot`;
+  }
+  return { ...shared, endpoints: [endpoint] };
 }
 
 /**
@@ -464,12 +492,14 @@ export function getAdapterSetupNotes(result: AdapterSetupResult): string[] {
       notes.push('Telegram polling: 本地开发可直接 pnpm dev，无需公网');
     }
     if (context === 'github') {
-      if (entry.webhook_secret) {
+      const endpoints = Array.isArray(entry.endpoints) ? entry.endpoints as Array<Record<string, unknown>> : [];
+      const firstEndpoint = endpoints[0] ?? {};
+      if (firstEndpoint.webhook_secret) {
         notes.push('GitHub Webhook: App 设置 URL 为 https://<域名>/github/webhook');
       } else {
         notes.push('GitHub polling: 无 Webhook 时将轮询 Events API（默认 60s）');
       }
-      if (entry.app_id) {
+      if (firstEndpoint.app_id) {
         notes.push('GitHub App: 私钥路径需存在，且 App 已安装到目标仓库');
       } else {
         notes.push('GitHub gh CLI: 运行 gh auth login 完成认证');

@@ -42,7 +42,7 @@ pnpm add @zhin.js/adapter-telegram
 | **网络** | 出站可访问 `api.telegram.org` |
 | **host-http** | Polling **不需要**；Webhook 延期至下一棒 |
 
-必填字段：`token`。
+必填字段（`endpoints[i]`）：`name`、`token`。
 
 ## 最小配置
 
@@ -50,9 +50,10 @@ pnpm add @zhin.js/adapter-telegram
 # zhin.config.yml（Plugin Runtime）
 plugins:
   telegram:
-    name: my-telegram-bot
-    token: ${TELEGRAM_TOKEN}
     # polling: true   # 默认
+    endpoints:
+      - name: my-telegram-bot
+        token: ${TELEGRAM_TOKEN}
 ```
 
 根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-telegram`（`instanceKey: telegram`）。

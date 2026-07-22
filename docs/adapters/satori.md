@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/satori/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/satori/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=d30f25fc8c223a0f -->
+<!-- sync-adapter-docs:sha256=c700b782d7d3ce67 -->
 
 # @zhin.js/adapter-satori
 
@@ -50,11 +50,12 @@ pnpm add @zhin.js/adapter-satori
 # zhin.config.yml（Plugin Runtime）
 plugins:
   satori:
-    name: satori-bot
     connection: ws
-    baseUrl: "http://127.0.0.1:5140"
-    token: "${SATORI_TOKEN}"
     heartbeat_interval: 10000
+    endpoints:
+      - name: satori-bot
+        baseUrl: "http://127.0.0.1:5140"
+        token: "${SATORI_TOKEN}"
 ```
 
 根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-satori`（`instanceKey: satori`）。
@@ -72,9 +73,11 @@ plugins:
 plugins:
   satori:
     connection: webhook
-    baseUrl: "http://127.0.0.1:5140"
-    path: "/satori/webhook"
-    token: "${SATORI_TOKEN}"
+    endpoints:
+      - name: satori-bot
+        baseUrl: "http://127.0.0.1:5140"
+        path: "/satori/webhook"
+        token: "${SATORI_TOKEN}"
 ```
 
 SDK 会向 `path` 发送 POST，请求头 `Satori-Opcode: 0` 表示事件；适配器从首个事件的 `login` 取得 platform / userId 用于后续 API 调用。

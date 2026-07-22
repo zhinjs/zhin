@@ -3,43 +3,9 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "name": {
-      "type": "string",
-      "default": "github-bot"
-    },
     "host": {
       "type": "string",
       "description": "GitHub Enterprise hostname (default github.com)"
-    },
-    "app_id": {
-      "type": [
-        "string",
-        "number"
-      ],
-      "description": "GitHub App ID"
-    },
-    "appId": {
-      "type": [
-        "string",
-        "number"
-      ],
-      "description": "GitHub App ID (camelCase alias)"
-    },
-    "private_key": {
-      "type": "string",
-      "description": "GitHub App private key (PEM content or file path)"
-    },
-    "privateKey": {
-      "type": "string",
-      "description": "GitHub App private key (camelCase alias)"
-    },
-    "webhook_secret": {
-      "type": "string",
-      "description": "Webhook HMAC secret; enables httpHostToken POST route"
-    },
-    "webhookSecret": {
-      "type": "string",
-      "description": "Webhook HMAC secret (camelCase alias)"
     },
     "webhook_path": {
       "type": "string",
@@ -71,18 +37,49 @@
     },
     "endpoints": {
       "type": "array",
-      "description": "多 App：一个插件实例挂多个 endpoint；每项以实例配置为基础逐项覆盖，name 必填",
+      "description": "多账号：一个插件实例挂多个 endpoint",
       "items": {
         "type": "object",
+        "additionalProperties": true,
         "properties": {
           "name": {
-            "type": "string"
+            "type": "string",
+            "description": "GitHub App bot name"
+          },
+          "app_id": {
+            "type": [
+              "string",
+              "number"
+            ],
+            "description": "GitHub App ID"
+          },
+          "appId": {
+            "type": [
+              "string",
+              "number"
+            ],
+            "description": "GitHub App ID (camelCase alias)"
+          },
+          "private_key": {
+            "type": "string",
+            "description": "GitHub App private key (PEM content or file path)"
+          },
+          "privateKey": {
+            "type": "string",
+            "description": "GitHub App private key (camelCase alias)"
+          },
+          "webhook_secret": {
+            "type": "string",
+            "description": "Webhook HMAC secret; enables httpHostToken POST route"
+          },
+          "webhookSecret": {
+            "type": "string",
+            "description": "Webhook HMAC secret (camelCase alias)"
           }
         },
         "required": [
           "name"
-        ],
-        "additionalProperties": true
+        ]
       }
     },
     "commandPrefix": {
@@ -90,5 +87,8 @@
       "default": "",
       "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖"
     }
-  }
+  },
+  "required": [
+    "endpoints"
+  ]
 }

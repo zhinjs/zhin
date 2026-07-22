@@ -3,13 +3,6 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "name": {
-      "type": "string",
-      "default": "kook-bot"
-    },
-    "token": {
-      "type": "string"
-    },
     "connection": {
       "type": "string",
       "enum": [
@@ -23,14 +16,6 @@
       "type": "string",
       "default": "/kook/webhook",
       "description": "POST path registered via httpHostToken when connection is webhook."
-    },
-    "verify_token": {
-      "type": "string",
-      "description": "KOOK developer console verify token (required for webhook mode)."
-    },
-    "encrypt_key": {
-      "type": "string",
-      "description": "Optional Encrypt Key when message encryption is enabled in KOOK console."
     },
     "data_dir": {
       "type": "string"
@@ -65,6 +50,36 @@
       ],
       "default": "info"
     },
+    "endpoints": {
+      "type": "array",
+      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（name 必填，其余覆盖顶层）",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "KOOK bot name"
+          },
+          "token": {
+            "type": "string",
+            "description": "KOOK bot token"
+          },
+          "verify_token": {
+            "type": "string",
+            "description": "KOOK developer console verify token (required for webhook mode)."
+          },
+          "encrypt_key": {
+            "type": "string",
+            "description": "Optional Encrypt Key when message encryption is enabled in KOOK console."
+          }
+        },
+        "required": [
+          "name",
+          "token"
+        ]
+      }
+    },
     "commandPrefix": {
       "type": "string",
       "default": "",
@@ -72,6 +87,6 @@
     }
   },
   "required": [
-    "token"
+    "endpoints"
   ]
 }

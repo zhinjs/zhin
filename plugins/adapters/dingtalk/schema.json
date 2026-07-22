@@ -3,26 +3,46 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "name": {
-      "type": "string",
-      "default": "dingtalk-bot"
-    },
-    "appKey": {
-      "type": "string"
-    },
-    "appSecret": {
-      "type": "string"
-    },
-    "webhookPath": {
-      "type": "string",
-      "default": "/dingtalk/webhook"
-    },
-    "robotCode": {
-      "type": "string"
-    },
     "apiBaseUrl": {
       "type": "string",
       "default": "https://oapi.dingtalk.com"
+    },
+    "endpoints": {
+      "type": "array",
+      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（name 必填，其余覆盖顶层）",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Dingtalk bot name"
+          },
+          "appKey": {
+            "type": "string",
+            "description": "Dingtalk app key"
+          },
+          "appSecret": {
+            "type": "string",
+            "description": "Dingtalk app secret"
+          },
+          "webhookPath": {
+            "type": "string",
+            "description": "Dingtalk webhook path"
+          },
+          "robotCode": {
+            "type": "string",
+            "description": "Dingtalk robot code"
+          }
+        },
+        "required": [
+          "name",
+          "appKey",
+          "appSecret",
+          "webhookPath",
+          "robotCode"
+        ]
+      }
     },
     "commandPrefix": {
       "type": "string",
@@ -31,7 +51,6 @@
     }
   },
   "required": [
-    "appKey",
-    "appSecret"
+    "endpoints"
   ]
 }

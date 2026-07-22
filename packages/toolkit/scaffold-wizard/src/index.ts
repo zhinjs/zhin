@@ -4,6 +4,7 @@ export { DATABASE_PACKAGES } from './types.js';
 export type { AdapterSetupResult, AdapterPluginInstance } from './adapter.js';
 export {
   configureAdapters,
+  buildFieldBasedInstanceConfig,
   generateAdapterEnvVars,
   collectAdapterPluginConfigs,
   collectAdapterPluginManifest,

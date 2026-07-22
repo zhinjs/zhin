@@ -38,7 +38,7 @@ pnpm add @zhin.js/adapter-kook
 | **Webhook** | 需公网 HTTPS + Host `httpHostToken`；与 WebSocket 互斥 |
 | **host-http** | 仅 Webhook 模式需要 |
 
-必填字段：`token`。
+必填字段（`endpoints[i]`）：`name`、`token`。
 
 ## 最小配置
 
@@ -46,9 +46,10 @@ pnpm add @zhin.js/adapter-kook
 # zhin.config.yml（Plugin Runtime）
 plugins:
   kook:
-    name: my-kook-bot
-    token: ${KOOK_TOKEN}
     # connection: websocket   # 默认
+    endpoints:
+      - name: my-kook-bot
+        token: ${KOOK_TOKEN}
 ```
 
 根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-kook`（`instanceKey: kook`）。
@@ -70,12 +71,13 @@ plugins:
 ```yaml
 plugins:
   kook:
-    name: my-kook-bot
-    token: ${KOOK_TOKEN}
     connection: webhook
-    verify_token: ${KOOK_VERIFY_TOKEN}
     webhookPath: /kook/webhook
-    # encrypt_key: ${KOOK_ENCRYPT_KEY}   # 启用消息加密时必填
+    endpoints:
+      - name: my-kook-bot
+        token: ${KOOK_TOKEN}
+        verify_token: ${KOOK_VERIFY_TOKEN}
+        # encrypt_key: ${KOOK_ENCRYPT_KEY}   # 启用消息加密时必填
 ```
 
 Host 需注入 `httpHostToken`。Challenge（`type: 255`）会校验 `verify_token` 并回显 `challenge`；普通事件经 `gateway.receive` 入站，出站仍走 KOOK HTTP API。

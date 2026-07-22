@@ -3,107 +3,122 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "name": {
-      "type": "string",
-      "default": "email-bot"
-    },
-    "smtp": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "host": {
-          "type": "string"
-        },
-        "port": {
-          "type": "number"
-        },
-        "secure": {
-          "type": "boolean"
-        },
-        "auth": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "user": {
-              "type": "string"
-            },
-            "pass": {
-              "type": "string"
-            }
+    "endpoints": {
+      "type": "array",
+      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（name 必填，其余覆盖顶层）",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Email bot name"
           },
-          "required": [
-            "user",
-            "pass"
-          ]
-        }
-      },
-      "required": [
-        "host",
-        "port",
-        "secure",
-        "auth"
-      ]
-    },
-    "imap": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "host": {
-          "type": "string"
-        },
-        "port": {
-          "type": "number"
-        },
-        "tls": {
-          "type": "boolean"
-        },
-        "user": {
-          "type": "string"
-        },
-        "password": {
-          "type": "string"
-        },
-        "checkInterval": {
-          "type": "number",
-          "default": 60000
-        },
-        "mailbox": {
-          "type": "string",
-          "default": "INBOX"
-        },
-        "markSeen": {
-          "type": "boolean",
-          "default": true
-        }
-      },
-      "required": [
-        "host",
-        "port",
-        "tls",
-        "user",
-        "password"
-      ]
-    },
-    "attachments": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "default": false
-        },
-        "downloadPath": {
-          "type": "string"
-        },
-        "maxFileSize": {
-          "type": "number"
-        },
-        "allowedTypes": {
-          "type": "array",
-          "items": {
-            "type": "string"
+          "smtp": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "host": {
+                "type": "string"
+              },
+              "port": {
+                "type": "number"
+              },
+              "secure": {
+                "type": "boolean"
+              },
+              "auth": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "user": {
+                    "type": "string"
+                  },
+                  "pass": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "user",
+                  "pass"
+                ]
+              }
+            },
+            "required": [
+              "host",
+              "port",
+              "secure",
+              "auth"
+            ]
+          },
+          "imap": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "host": {
+                "type": "string"
+              },
+              "port": {
+                "type": "number"
+              },
+              "tls": {
+                "type": "boolean"
+              },
+              "user": {
+                "type": "string"
+              },
+              "password": {
+                "type": "string"
+              },
+              "checkInterval": {
+                "type": "number",
+                "default": 60000
+              },
+              "mailbox": {
+                "type": "string",
+                "default": "INBOX"
+              },
+              "markSeen": {
+                "type": "boolean",
+                "default": true
+              }
+            },
+            "required": [
+              "host",
+              "port",
+              "tls",
+              "user",
+              "password"
+            ]
+          },
+          "attachments": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "default": false
+              },
+              "downloadPath": {
+                "type": "string"
+              },
+              "maxFileSize": {
+                "type": "number"
+              },
+              "allowedTypes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
           }
-        }
+        },
+        "required": [
+          "name",
+          "smtp",
+          "imap"
+        ]
       }
     },
     "commandPrefix": {
@@ -111,5 +126,8 @@
       "default": "",
       "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖"
     }
-  }
+  },
+  "required": [
+    "endpoints"
+  ]
 }

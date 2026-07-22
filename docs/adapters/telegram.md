@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/telegram/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/telegram/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=fac3f09274a947d0 -->
+<!-- sync-adapter-docs:sha256=a0b9238c53c55450 -->
 
 # @zhin.js/adapter-telegram
 
@@ -54,7 +54,7 @@ pnpm add @zhin.js/adapter-telegram
 | **网络** | 出站可访问 `api.telegram.org` |
 | **host-http** | Polling **不需要**；Webhook 延期至下一棒 |
 
-必填字段：`token`。
+必填字段（`endpoints[i]`）：`name`、`token`。
 
 ## 最小配置
 
@@ -62,9 +62,10 @@ pnpm add @zhin.js/adapter-telegram
 # zhin.config.yml（Plugin Runtime）
 plugins:
   telegram:
-    name: my-telegram-bot
-    token: ${TELEGRAM_TOKEN}
     # polling: true   # 默认
+    endpoints:
+      - name: my-telegram-bot
+        token: ${TELEGRAM_TOKEN}
 ```
 
 根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-telegram`（`instanceKey: telegram`）。

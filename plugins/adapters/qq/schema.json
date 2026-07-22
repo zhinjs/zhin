@@ -3,16 +3,6 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "name": {
-      "type": "string",
-      "default": "qq-bot"
-    },
-    "appid": {
-      "type": "string"
-    },
-    "secret": {
-      "type": "string"
-    },
     "mode": {
       "type": "string",
       "enum": [
@@ -39,22 +29,6 @@
     "gatewayUrl": {
       "type": "string"
     },
-    "endpoints": {
-      "type": "array",
-      "description": "多账号：一个插件实例挂多个 endpoint；每项以实例配置为基础逐项覆盖，name 必填",
-      "items": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "additionalProperties": true
-      }
-    },
     "webhookPath": {
       "type": "string",
       "default": "/qq/webhook",
@@ -68,39 +42,40 @@
       "type": "string",
       "description": "Legacy standalone webhook path (unused with httpHostToken)."
     },
+    "endpoints": {
+      "type": "array",
+      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（name 必填，其余覆盖顶层）",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "QQ bot name"
+          },
+          "appid": {
+            "type": "string",
+            "description": "QQ official bot app ID"
+          },
+          "secret": {
+            "type": "string",
+            "description": "QQ official bot secret"
+          }
+        },
+        "required": [
+          "name",
+          "appid",
+          "secret"
+        ]
+      }
+    },
     "commandPrefix": {
       "type": "string",
       "default": "",
       "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖"
     }
   },
-  "anyOf": [
-    {
-      "properties": {
-        "appid": {
-          "type": "string",
-          "minLength": 1
-        },
-        "secret": {
-          "type": "string",
-          "minLength": 1
-        }
-      },
-      "required": [
-        "appid",
-        "secret"
-      ]
-    },
-    {
-      "properties": {
-        "endpoints": {
-          "type": "array",
-          "minItems": 1
-        }
-      },
-      "required": [
-        "endpoints"
-      ]
-    }
+  "required": [
+    "endpoints"
   ]
 }
