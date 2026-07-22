@@ -1751,6 +1751,9 @@ importers:
       inquirer:
         specifier: ^14.0.2
         version: 14.0.2(@types/node@26.1.1)
+      qrcode:
+        specifier: ^1.5.4
+        version: 1.5.4
       smol-toml:
         specifier: ^1.7.0
         version: 1.7.0
@@ -1767,6 +1770,9 @@ importers:
       '@types/node':
         specifier: ^26.1.0
         version: 26.1.1
+      '@types/qrcode':
+        specifier: ^1.5.5
+        version: 1.5.6
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

@@ -1,5 +1,6 @@
 import inquirer from 'inquirer';
 import chalk from 'chalk';
+import { IlinkQrLoginError, loginWithIlinkQr } from './weixin-ilink-login.js';
 
 /** 平台适配器文档索引 */
 export const ADAPTERS_DOCS_URL = 'https://zhin.js.org/adapters/';
@@ -836,4 +837,108 @@ export async function configureSatoriBot(ctx: EndpointConfigureContext): Promise
   }
 
   return { connection, endpoints: [endpointConfig] };
+}
+
+/**
+ * 微信 iLink（个人微信 / ClawBot）配置：默认走扫码绑定 —— 终端展示二维码，
+ * 微信扫码确认后 bot_token 写入 .env（`WEIXIN_ILINK_TOKEN`），
+ * zhin.config.yml 只留 `${WEIXIN_ILINK_TOKEN}` 引用；扫码失败可降级手动输入 token。
+ */
+export async function configureWeixinIlinkBot(ctx: EndpointConfigureContext): Promise<Record<string, unknown>> {
+  console.log(chalk.gray('     文档: ' + adapterDocsUrl('weixin-ilink')));
+  console.log(chalk.gray('     需最新版微信 + ClawBot 灰度资格（仅私聊）'));
+
+  const { endpointName } = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'endpointName',
+      message: '  Endpoint 标识名称:',
+      default: 'weixin-bot',
+      validate: (v: string) => (v.trim() ? true : '名称不能为空'),
+    },
+  ]);
+
+  const { method } = await inquirer.prompt([
+    {
+      type: 'select',
+      name: 'method',
+      message: '  登录方式:',
+      choices: [
+        { name: '扫码绑定（微信 ClawBot 入口扫码，自动获取 bot_token）', value: 'qr' },
+        { name: '手动输入 bot_token', value: 'manual' },
+      ],
+      default: 'qr',
+    },
+  ]);
+
+  if (method === 'qr') {
+    const scanned = await tryQrLogin(ctx);
+    if (scanned) {
+      return {
+        endpoints: [{ name: endpointName.trim(), botToken: '${WEIXIN_ILINK_TOKEN}' }],
+      };
+    }
+    console.log(chalk.yellow('     扫码未完成，降级为手动输入 bot_token'));
+  }
+
+  const { token } = await inquirer.prompt([
+    {
+      type: 'password',
+      name: 'token',
+      message: '  iLink Bot Token:',
+      validate: (v: string) => (v.trim() ? true : 'Token 不能为空'),
+    },
+  ]);
+  ctx.envVars.WEIXIN_ILINK_TOKEN = token.trim();
+  return {
+    endpoints: [{ name: endpointName.trim(), botToken: '${WEIXIN_ILINK_TOKEN}' }],
+  };
+}
+
+/** 扫码尝试：成功写入 envVars 并返回 true；用户放弃/过期/超时返回 false。 */
+async function tryQrLogin(ctx: EndpointConfigureContext): Promise<boolean> {
+  // 动态加载 qrcode：扫码路径才需要，失败则降级为纯链接展示
+  let renderQr: ((text: string) => Promise<string>) | undefined;
+  try {
+    const qrcode = await import('qrcode');
+    renderQr = (text) => qrcode.toString(text, { type: 'terminal', small: true });
+  } catch {
+    renderQr = undefined;
+  }
+
+  for (;;) {
+    try {
+      const creds = await loginWithIlinkQr({
+        onQrCode: async (url) => {
+          console.log('');
+          if (renderQr) {
+            console.log(await renderQr(url));
+          }
+          console.log(chalk.cyan('     请用微信扫描上方二维码（或打开链接完成绑定）:'));
+          console.log(chalk.cyan(`     ${url}`));
+          console.log('');
+        },
+        onStatus: (status) => {
+          if (status === 'scaned') {
+            console.log(chalk.green('     已扫码，请在微信中确认…'));
+          }
+        },
+      });
+      ctx.envVars.WEIXIN_ILINK_TOKEN = creds.botToken;
+      console.log(chalk.green('     绑定成功，bot_token 已写入 .env（WEIXIN_ILINK_TOKEN）'));
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.log(chalk.yellow(`     扫码登录失败：${message}`));
+      const { retry } = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'retry',
+          message: '  重新获取二维码再试一次？（选否则手动输入 token）',
+          default: error instanceof IlinkQrLoginError && error.reason === 'expired',
+        },
+      ]);
+      if (!retry) return false;
+    }
+  }
 }

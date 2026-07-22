@@ -13,6 +13,7 @@ import {
   configureSatoriBot,
   configureSlackEndpoint,
   configureTelegramEndpoint,
+  configureWeixinIlinkBot,
 } from './adapter-configurers.js';
 import { ZHIN_STACK_VERSIONS } from './zhin-stack-deps.js';
 
@@ -328,11 +329,10 @@ const ADAPTERS: AdapterDefinition[] = [
     plugin: '@zhin.js/adapter-weixin-ilink',
     needsHttp: false,
     description: '个人微信（iLink / ClawBot 灰度入口，长轮询，仅私聊）',
-    setupHint: '需最新版微信 + ClawBot 灰度资格；botToken 也可放 data/weixin-ilink/<name>.json 侧车凭证文件。',
+    setupHint: '需最新版微信 + ClawBot 灰度资格；默认扫码绑定（bot_token 写入 .env），也可手动输入或放 data/weixin-ilink/<name>.json 侧车凭证文件。',
     docUrl: adapterDocsUrl('weixin-ilink'),
-    fields: [
-      { key: 'botToken', message: 'iLink Bot Token:', required: true, type: 'password', envKey: 'WEIXIN_ILINK_TOKEN' },
-    ],
+    configure: configureWeixinIlinkBot,
+    fields: [],
   },
 ];
 
