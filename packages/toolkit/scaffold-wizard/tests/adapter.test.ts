@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import inquirer from 'inquirer';
 import {
   buildFieldBasedInstanceConfig,
   collectAdapterPluginConfigs,
@@ -8,6 +9,28 @@ import {
   type AdapterDefinition,
   type AdapterSetupResult,
 } from '../src/adapter.js';
+import {
+  configureMilkyBot,
+  configureNapcatBot,
+  configureOneBot12Bot,
+  configureSatoriBot,
+} from '../src/adapter-configurers.js';
+
+/** 按 question name 应答的 inquirer.prompt mock */
+function mockPrompt(answers: Record<string, unknown>) {
+  return vi.spyOn(inquirer, 'prompt').mockImplementation(async (questions: any) => {
+    const list = Array.isArray(questions) ? questions : [questions];
+    const out: Record<string, unknown> = {};
+    for (const q of list) out[q.name] = answers[q.name];
+    return out as any;
+  });
+}
+
+const configureCtx = () => ({ envVars: {} as Record<string, string>, markRequiresDatabase: () => {} });
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('adapter setup notes', () => {
   it('returns telegram webhook guidance when webhook mode is configured', () => {
@@ -213,5 +236,181 @@ describe('getAdapterDependencies', () => {
     expect(deps['@zhin.js/adapter-sandbox']).toBe('latest');
     expect(deps['@zhin.js/adapter-telegram']).toBe('latest');
     expect(deps['@icqqjs/icqq']).toBe('latest');
+  });
+});
+
+describe('field-based adapters (line / wecom / weixin-ilink)', () => {
+  const def = (value: string, fields: AdapterDefinition['fields']): AdapterDefinition => ({
+    name: value,
+    value,
+    package: `@zhin.js/adapter-${value}`,
+    plugin: `@zhin.js/adapter-${value}`,
+    needsHttp: false,
+    fields,
+  });
+
+  it('line：凭据进 endpoints[0]，webhookPath 留顶层', () => {
+    const config = buildFieldBasedInstanceConfig(
+      def('line', [
+        { key: 'channelSecret', message: '' },
+        { key: 'channelAccessToken', message: '' },
+        { key: 'webhookPath', message: '', scope: 'shared' },
+      ]),
+      {
+        channelSecret: '${LINE_CHANNEL_SECRET}',
+        channelAccessToken: '${LINE_CHANNEL_ACCESS_TOKEN}',
+        webhookPath: '/line/webhook',
+      },
+    );
+
+    expect(config).toEqual({
+      webhookPath: '/line/webhook',
+      endpoints: [{
+        name: 'line-bot',
+        channelSecret: '${LINE_CHANNEL_SECRET}',
+        channelAccessToken: '${LINE_CHANNEL_ACCESS_TOKEN}',
+      }],
+    });
+  });
+
+  it('wecom：四个凭据进 endpoints[0]，webhookPath 留顶层', () => {
+    const config = buildFieldBasedInstanceConfig(
+      def('wecom', [
+        { key: 'corpId', message: '' },
+        { key: 'agentSecret', message: '' },
+        { key: 'token', message: '' },
+        { key: 'encodingAESKey', message: '' },
+        { key: 'webhookPath', message: '', scope: 'shared' },
+      ]),
+      {
+        corpId: '${WECOM_CORP_ID}',
+        agentSecret: '${WECOM_AGENT_SECRET}',
+        token: '${WECOM_TOKEN}',
+        encodingAESKey: '${WECOM_AES_KEY}',
+        webhookPath: '/wecom/callback',
+      },
+    );
+
+    expect(config).toEqual({
+      webhookPath: '/wecom/callback',
+      endpoints: [{
+        name: 'wecom-bot',
+        corpId: '${WECOM_CORP_ID}',
+        agentSecret: '${WECOM_AGENT_SECRET}',
+        token: '${WECOM_TOKEN}',
+        encodingAESKey: '${WECOM_AES_KEY}',
+      }],
+    });
+  });
+
+  it('weixin-ilink：botToken 进 endpoints[0]', () => {
+    const config = buildFieldBasedInstanceConfig(
+      def('weixin-ilink', [{ key: 'botToken', message: '' }]),
+      { botToken: '${WEIXIN_ILINK_TOKEN}' },
+    );
+
+    expect(config).toEqual({
+      endpoints: [{ name: 'weixin-ilink-bot', botToken: '${WEIXIN_ILINK_TOKEN}' }],
+    });
+  });
+});
+
+describe('connection-aware configurers (napcat / onebot12 / milky / satori)', () => {
+  it('napcat ws：connection 顶层，url/access_token 进 endpoints[0]', async () => {
+    mockPrompt({
+      connection: 'ws',
+      endpointName: 'napcat-bot',
+      url: 'ws://127.0.0.1:3001',
+      accessToken: 'tok',
+    });
+    const ctx = configureCtx();
+    const config = await configureNapcatBot(ctx);
+
+    expect(config).toEqual({
+      connection: 'ws',
+      endpoints: [{ name: 'napcat-bot', url: 'ws://127.0.0.1:3001', access_token: '${NAPCAT_TOKEN}' }],
+    });
+    expect(ctx.envVars.NAPCAT_TOKEN).toBe('tok');
+  });
+
+  it('napcat http：http_url/post_path 进 endpoints[0]', async () => {
+    mockPrompt({
+      connection: 'http',
+      endpointName: 'napcat-bot',
+      http_url: 'http://127.0.0.1:3000',
+      post_path: '/napcat/post',
+      accessToken: '',
+    });
+    const ctx = configureCtx();
+    const config = await configureNapcatBot(ctx);
+
+    expect(config).toEqual({
+      connection: 'http',
+      endpoints: [{ name: 'napcat-bot', http_url: 'http://127.0.0.1:3000', post_path: '/napcat/post' }],
+    });
+    expect(ctx.envVars.NAPCAT_TOKEN).toBeUndefined();
+  });
+
+  it('onebot12 webhook：path/api_url 进 endpoints[0]', async () => {
+    mockPrompt({
+      connection: 'webhook',
+      endpointName: 'ob12-bot',
+      path: '/onebot12/webhook',
+      api_url: 'http://127.0.0.1:6700',
+      accessToken: 'x',
+    });
+    const ctx = configureCtx();
+    const config = await configureOneBot12Bot(ctx);
+
+    expect(config).toEqual({
+      connection: 'webhook',
+      endpoints: [{
+        name: 'ob12-bot',
+        path: '/onebot12/webhook',
+        api_url: 'http://127.0.0.1:6700',
+        access_token: '${ONEBOT12_ACCESS_TOKEN}',
+      }],
+    });
+    expect(ctx.envVars.ONEBOT12_ACCESS_TOKEN).toBe('x');
+  });
+
+  it('milky ws：baseUrl 进 endpoints[0]，无 path', async () => {
+    mockPrompt({
+      connection: 'ws',
+      endpointName: 'milky-bot',
+      baseUrl: 'http://127.0.0.1:8080',
+      accessToken: 'm',
+    });
+    const ctx = configureCtx();
+    const config = await configureMilkyBot(ctx);
+
+    expect(config).toEqual({
+      connection: 'ws',
+      endpoints: [{ name: 'milky-bot', baseUrl: 'http://127.0.0.1:8080', access_token: '${MILKY_ACCESS_TOKEN}' }],
+    });
+    expect(ctx.envVars.MILKY_ACCESS_TOKEN).toBe('m');
+  });
+
+  it('satori webhook：baseUrl/path/token 进 endpoints[0]', async () => {
+    mockPrompt({
+      connection: 'webhook',
+      endpointName: 'satori-bot',
+      baseUrl: 'http://127.0.0.1:5140',
+      path: '/satori/webhook',
+      token: 't',
+    });
+    const ctx = configureCtx();
+    const config = await configureSatoriBot(ctx);
+
+    expect(config).toEqual({
+      connection: 'webhook',
+      endpoints: [{
+        name: 'satori-bot',
+        baseUrl: 'http://127.0.0.1:5140',
+        path: '/satori/webhook',
+        token: '${SATORI_TOKEN}',
+      }],
+    });
+    expect(ctx.envVars.SATORI_TOKEN).toBe('t');
   });
 });

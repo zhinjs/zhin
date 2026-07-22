@@ -515,3 +515,325 @@ export async function configureSlackEndpoint(ctx: EndpointConfigureContext): Pro
 
   return { socketMode: socketMode === 'true', endpoints: [endpointConfig] };
 }
+
+export async function configureNapcatBot(ctx: EndpointConfigureContext): Promise<Record<string, unknown>> {
+  console.log(chalk.gray('     文档: ' + adapterDocsUrl('napcat')));
+
+  const { connection } = await inquirer.prompt([
+    {
+      type: 'select',
+      name: 'connection',
+      message: '  连接方式:',
+      choices: [
+        { name: '正向 WebSocket (ws) — 本 Bot 连接 NapCat', value: 'ws' },
+        { name: '反向 WebSocket (wss) — NapCat 连本 Bot（由内置 HTTP Host 承接）', value: 'wss' },
+        { name: 'HTTP (http) — POST 上报入站 + HTTP API 出站（由内置 HTTP Host 承接）', value: 'http' },
+      ],
+      default: 'ws',
+    },
+  ]);
+
+  const { endpointName } = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'endpointName',
+      message: '  Endpoint 标识名称:',
+      default: 'napcat-bot',
+      validate: (v: string) => (v.trim() ? true : '名称不能为空'),
+    },
+  ]);
+
+  // schema：connection 为顶层共享字段；name / url / path / http_url / post_path / access_token 为 endpoint 级
+  const endpointConfig: Record<string, unknown> = {
+    name: endpointName.trim(),
+  };
+
+  if (connection === 'ws') {
+    const { url } = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'url',
+        message: '  NapCat WS 地址:',
+        default: 'ws://127.0.0.1:3001',
+        validate: (v: string) => (v.trim() ? true : '地址不能为空'),
+      },
+    ]);
+    endpointConfig.url = url.trim();
+  } else if (connection === 'wss') {
+    console.log(chalk.gray('     反向 WS 由内置 HTTP Host 承接，NapCat 配置连接到此 Bot'));
+    const { path: wsPath } = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'path',
+        message: '  反向 WS 路径:',
+        default: '/napcat/ws',
+        validate: (v: string) => (v.trim() ? true : '路径不能为空'),
+      },
+    ]);
+    endpointConfig.path = wsPath.trim();
+  } else {
+    const http = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'http_url',
+        message: '  NapCat HTTP API 地址（出站）:',
+        default: 'http://127.0.0.1:3000',
+        validate: (v: string) => (v.trim() ? true : '地址不能为空'),
+      },
+      {
+        type: 'input',
+        name: 'post_path',
+        message: '  HTTP POST 上报路径（入站）:',
+        default: '/napcat/post',
+        validate: (v: string) => (v.trim() ? true : '路径不能为空'),
+      },
+    ]);
+    endpointConfig.http_url = http.http_url.trim();
+    endpointConfig.post_path = http.post_path.trim();
+  }
+
+  const { accessToken } = await inquirer.prompt([
+    {
+      type: 'password',
+      name: 'accessToken',
+      message: '  access_token（无则留空）:',
+      default: '',
+    },
+  ]);
+  if (accessToken?.trim()) {
+    ctx.envVars.NAPCAT_TOKEN = accessToken.trim();
+    endpointConfig.access_token = '${NAPCAT_TOKEN}';
+  }
+
+  return { connection, endpoints: [endpointConfig] };
+}
+
+export async function configureOneBot12Bot(ctx: EndpointConfigureContext): Promise<Record<string, unknown>> {
+  console.log(chalk.gray('     文档: ' + adapterDocsUrl('onebot12')));
+
+  const { connection } = await inquirer.prompt([
+    {
+      type: 'select',
+      name: 'connection',
+      message: '  连接方式:',
+      choices: [
+        { name: '正向 WebSocket (ws) — 本 Bot 连接 OneBot 实现', value: 'ws' },
+        { name: 'HTTP Webhook (webhook) — POST 入站 + api_url HTTP 出站（由内置 HTTP Host 承接）', value: 'webhook' },
+        { name: '反向 WebSocket (wss) — OneBot 实现连本 Bot（由内置 HTTP Host 承接）', value: 'wss' },
+      ],
+      default: 'ws',
+    },
+  ]);
+
+  const { endpointName } = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'endpointName',
+      message: '  Endpoint 标识名称:',
+      default: 'onebot12-bot',
+      validate: (v: string) => (v.trim() ? true : '名称不能为空'),
+    },
+  ]);
+
+  // schema：connection 为顶层共享字段；name / url / path / api_url / access_token 为 endpoint 级
+  const endpointConfig: Record<string, unknown> = {
+    name: endpointName.trim(),
+  };
+
+  if (connection === 'ws') {
+    const { url } = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'url',
+        message: '  OneBot WS 地址:',
+        default: 'ws://127.0.0.1:6700',
+        validate: (v: string) => (v.trim() ? true : '地址不能为空'),
+      },
+    ]);
+    endpointConfig.url = url.trim();
+  } else if (connection === 'webhook') {
+    const webhook = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'path',
+        message: '  Webhook POST 路径（入站）:',
+        default: '/onebot12/webhook',
+        validate: (v: string) => (v.trim() ? true : '路径不能为空'),
+      },
+      {
+        type: 'input',
+        name: 'api_url',
+        message: '  HTTP action 地址（出站）:',
+        default: 'http://127.0.0.1:6700',
+        validate: (v: string) => (v.trim() ? true : '地址不能为空'),
+      },
+    ]);
+    endpointConfig.path = webhook.path.trim();
+    endpointConfig.api_url = webhook.api_url.trim();
+  } else {
+    console.log(chalk.gray('     反向 WS 由内置 HTTP Host 承接，OneBot 实现配置连接到此 Bot'));
+    const { path: wsPath } = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'path',
+        message: '  反向 WS 路径:',
+        default: '/onebot12/ws',
+        validate: (v: string) => (v.trim() ? true : '路径不能为空'),
+      },
+    ]);
+    endpointConfig.path = wsPath.trim();
+  }
+
+  const { accessToken } = await inquirer.prompt([
+    {
+      type: 'password',
+      name: 'accessToken',
+      message: '  access_token（无则留空）:',
+      default: '',
+    },
+  ]);
+  if (accessToken?.trim()) {
+    ctx.envVars.ONEBOT12_ACCESS_TOKEN = accessToken.trim();
+    endpointConfig.access_token = '${ONEBOT12_ACCESS_TOKEN}';
+  }
+
+  return { connection, endpoints: [endpointConfig] };
+}
+
+export async function configureMilkyBot(ctx: EndpointConfigureContext): Promise<Record<string, unknown>> {
+  console.log(chalk.gray('     文档: ' + adapterDocsUrl('milky')));
+
+  const { connection } = await inquirer.prompt([
+    {
+      type: 'select',
+      name: 'connection',
+      message: '  连接方式:',
+      choices: [
+        { name: '正向 WebSocket (ws) — 本 Bot 连协议端 ws(s)://baseUrl/event', value: 'ws' },
+        { name: 'SSE (sse) — HTTP GET baseUrl/event（text/event-stream）', value: 'sse' },
+        { name: 'Webhook (webhook) — POST 入站 + baseUrl HTTP API 出站（由内置 HTTP Host 承接）', value: 'webhook' },
+        { name: '反向 WebSocket (wss) — 由内置 HTTP Host 承接', value: 'wss' },
+      ],
+      default: 'ws',
+    },
+  ]);
+
+  const { endpointName, baseUrl } = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'endpointName',
+      message: '  Endpoint 标识名称:',
+      default: 'milky-bot',
+      validate: (v: string) => (v.trim() ? true : '名称不能为空'),
+    },
+    {
+      type: 'input',
+      name: 'baseUrl',
+      message: '  Milky HTTP API baseUrl:',
+      default: 'http://127.0.0.1:8080',
+      validate: (v: string) => (v.trim() ? true : 'baseUrl 不能为空'),
+    },
+  ]);
+
+  // schema：connection 为顶层共享字段；name / baseUrl / path / access_token 为 endpoint 级
+  const endpointConfig: Record<string, unknown> = {
+    name: endpointName.trim(),
+    baseUrl: baseUrl.trim(),
+  };
+
+  if (connection === 'webhook' || connection === 'wss') {
+    const { path: hookPath } = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'path',
+        message: `  ${connection === 'webhook' ? 'Webhook POST' : '反向 WS'} 路径:`,
+        default: connection === 'webhook' ? '/milky/webhook' : '/milky/ws',
+        validate: (v: string) => (v.trim() ? true : '路径不能为空'),
+      },
+    ]);
+    endpointConfig.path = hookPath.trim();
+  }
+
+  const { accessToken } = await inquirer.prompt([
+    {
+      type: 'password',
+      name: 'accessToken',
+      message: '  access_token（无则留空）:',
+      default: '',
+    },
+  ]);
+  if (accessToken?.trim()) {
+    ctx.envVars.MILKY_ACCESS_TOKEN = accessToken.trim();
+    endpointConfig.access_token = '${MILKY_ACCESS_TOKEN}';
+  }
+
+  return { connection, endpoints: [endpointConfig] };
+}
+
+export async function configureSatoriBot(ctx: EndpointConfigureContext): Promise<Record<string, unknown>> {
+  console.log(chalk.gray('     文档: ' + adapterDocsUrl('satori')));
+
+  const { connection } = await inquirer.prompt([
+    {
+      type: 'select',
+      name: 'connection',
+      message: '  连接方式:',
+      choices: [
+        { name: '正向 WebSocket (ws) — 本 Bot 连 Satori SDK', value: 'ws' },
+        { name: 'Webhook (webhook) — SDK POST 事件到 path（由内置 HTTP Host 承接）', value: 'webhook' },
+      ],
+      default: 'ws',
+    },
+  ]);
+
+  const { endpointName, baseUrl } = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'endpointName',
+      message: '  Endpoint 标识名称:',
+      default: 'satori-bot',
+      validate: (v: string) => (v.trim() ? true : '名称不能为空'),
+    },
+    {
+      type: 'input',
+      name: 'baseUrl',
+      message: '  Satori SDK baseUrl:',
+      default: 'http://127.0.0.1:5140',
+      validate: (v: string) => (v.trim() ? true : 'baseUrl 不能为空'),
+    },
+  ]);
+
+  // schema：connection 为顶层共享字段；name / baseUrl / token / path 为 endpoint 级
+  const endpointConfig: Record<string, unknown> = {
+    name: endpointName.trim(),
+    baseUrl: baseUrl.trim(),
+  };
+
+  if (connection === 'webhook') {
+    const { path: hookPath } = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'path',
+        message: '  Webhook POST 路径:',
+        default: '/satori/webhook',
+        validate: (v: string) => (v.trim() ? true : '路径不能为空'),
+      },
+    ]);
+    endpointConfig.path = hookPath.trim();
+  }
+
+  const { token } = await inquirer.prompt([
+    {
+      type: 'password',
+      name: 'token',
+      message: '  Bearer Token（无则留空）:',
+      default: '',
+    },
+  ]);
+  if (token?.trim()) {
+    ctx.envVars.SATORI_TOKEN = token.trim();
+    endpointConfig.token = '${SATORI_TOKEN}';
+  }
+
+  return { connection, endpoints: [endpointConfig] };
+}

@@ -5,8 +5,12 @@ import {
   adapterDocsUrl,
   configureDiscordEndpoint,
   configureGitHubEndpoint,
+  configureMilkyBot,
+  configureNapcatBot,
   configureOneBot11Bot,
+  configureOneBot12Bot,
   configureQQBot,
+  configureSatoriBot,
   configureSlackEndpoint,
   configureTelegramEndpoint,
 } from './adapter-configurers.js';
@@ -178,6 +182,22 @@ const ADAPTERS: AdapterDefinition[] = [
     ],
   },
   {
+    name: 'LINE',
+    value: 'line',
+    package: '@zhin.js/adapter-line',
+    plugin: '@zhin.js/adapter-line',
+    needsHttp: true,
+    description: 'LINE Messaging API',
+    setupHint: '在 LINE Developers Console 创建 Messaging API Channel；Webhook URL 需 HTTPS 公网可达，并关闭 Auto-reply。',
+    docUrl: adapterDocsUrl('line'),
+    fields: [
+      { key: 'channelSecret', message: 'Channel Secret:', required: true, type: 'password', envKey: 'LINE_CHANNEL_SECRET' },
+      { key: 'channelAccessToken', message: 'Channel Access Token:', required: true, type: 'password', envKey: 'LINE_CHANNEL_ACCESS_TOKEN' },
+      // schema 顶层共享字段（endpoints[i] 不含 webhookPath）
+      { key: 'webhookPath', message: 'Webhook 路径:', default: '/line/webhook', scope: 'shared' },
+    ],
+  },
+  {
     name: 'OneBot v11',
     value: 'onebot11',
     package: '@zhin.js/adapter-onebot11',
@@ -187,6 +207,54 @@ const ADAPTERS: AdapterDefinition[] = [
     setupHint: 'connection: ws 连 OneBot 实现；connection: wss 反向连接（由内置 HTTP Host 承接）。',
     docUrl: adapterDocsUrl('onebot11'),
     configure: configureOneBot11Bot,
+    fields: [],
+  },
+  {
+    name: 'OneBot v12',
+    value: 'onebot12',
+    package: '@zhin.js/adapter-onebot12',
+    plugin: '@zhin.js/adapter-onebot12',
+    needsHttp: false,
+    description: 'OneBot v12（ws / webhook / wss）',
+    setupHint: 'connection: ws 连 OneBot 实现；webhook / wss 由内置 HTTP Host 承接。',
+    docUrl: adapterDocsUrl('onebot12'),
+    configure: configureOneBot12Bot,
+    fields: [],
+  },
+  {
+    name: 'NapCat',
+    value: 'napcat',
+    package: '@zhin.js/adapter-napcat',
+    plugin: '@zhin.js/adapter-napcat',
+    needsHttp: false,
+    description: 'NapCat（OneBot 11 + NapCat 扩展）',
+    setupHint: 'connection: ws 连 NapCat（默认 ws://127.0.0.1:3001）；wss / http 由内置 HTTP Host 承接。',
+    docUrl: adapterDocsUrl('napcat'),
+    configure: configureNapcatBot,
+    fields: [],
+  },
+  {
+    name: 'Milky',
+    value: 'milky',
+    package: '@zhin.js/adapter-milky',
+    plugin: '@zhin.js/adapter-milky',
+    needsHttp: false,
+    description: 'Milky 协议（ws / sse / webhook / wss）',
+    setupHint: 'connection: ws 连协议端 ws(s)://baseUrl/event；webhook / wss 由内置 HTTP Host 承接。',
+    docUrl: adapterDocsUrl('milky'),
+    configure: configureMilkyBot,
+    fields: [],
+  },
+  {
+    name: 'Satori',
+    value: 'satori',
+    package: '@zhin.js/adapter-satori',
+    plugin: '@zhin.js/adapter-satori',
+    needsHttp: false,
+    description: 'Satori 聊天协议（ws / webhook）',
+    setupHint: 'connection: ws 连 Satori SDK（默认 http://127.0.0.1:5140）；webhook 由内置 HTTP Host 承接。',
+    docUrl: adapterDocsUrl('satori'),
+    configure: configureSatoriBot,
     fields: [],
   },
   {
@@ -203,6 +271,24 @@ const ADAPTERS: AdapterDefinition[] = [
       { key: 'token', message: '验证 Token:', required: true, envKey: 'WECHAT_TOKEN' },
       // schema 顶层共享字段名为 path（endpoints[i] 不含此项）
       { key: 'webhookPath', message: 'Webhook 路径:', default: '/wechat/webhook', scope: 'shared' },
+    ],
+  },
+  {
+    name: '企业微信',
+    value: 'wecom',
+    package: '@zhin.js/adapter-wecom',
+    plugin: '@zhin.js/adapter-wecom',
+    needsHttp: true,
+    description: '企业微信自建应用',
+    setupHint: '管理后台创建自建应用并配置「接收消息」URL（需公网可达）；Token / EncodingAESKey 与后台一致。',
+    docUrl: adapterDocsUrl('wecom'),
+    fields: [
+      { key: 'corpId', message: 'Corp ID:', required: true, envKey: 'WECOM_CORP_ID' },
+      { key: 'agentSecret', message: '应用 Secret:', required: true, type: 'password', envKey: 'WECOM_AGENT_SECRET' },
+      { key: 'token', message: '回调 Token:', required: true, type: 'password', envKey: 'WECOM_TOKEN' },
+      { key: 'encodingAESKey', message: 'EncodingAESKey（43 字符）:', required: true, type: 'password', envKey: 'WECOM_AES_KEY' },
+      // schema 顶层共享字段（endpoints[i] 不含 webhookPath）
+      { key: 'webhookPath', message: '回调路径:', default: '/wecom/callback', scope: 'shared' },
     ],
   },
   {
@@ -235,6 +321,19 @@ const ADAPTERS: AdapterDefinition[] = [
     configure: configureGitHubEndpoint,
     fields: [],
   },
+  {
+    name: '微信 iLink（个人微信）',
+    value: 'weixin-ilink',
+    package: '@zhin.js/adapter-weixin-ilink',
+    plugin: '@zhin.js/adapter-weixin-ilink',
+    needsHttp: false,
+    description: '个人微信（iLink / ClawBot 灰度入口，长轮询，仅私聊）',
+    setupHint: '需最新版微信 + ClawBot 灰度资格；botToken 也可放 data/weixin-ilink/<name>.json 侧车凭证文件。',
+    docUrl: adapterDocsUrl('weixin-ilink'),
+    fields: [
+      { key: 'botToken', message: 'iLink Bot Token:', required: true, type: 'password', envKey: 'WEIXIN_ILINK_TOKEN' },
+    ],
+  },
 ];
 
 /**
@@ -261,7 +360,7 @@ export async function configureAdapters(): Promise<AdapterSetupResult> {
         if (input.length === 0) return '至少选择一个适配器';
         return true;
       },
-      pageSize: 14,
+      pageSize: 22,
     }
   ]);
 
