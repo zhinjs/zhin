@@ -7,10 +7,18 @@
       "type": "string",
       "default": "wechat-mp-bot"
     },
-    "appId": { "type": "string" },
-    "appSecret": { "type": "string" },
-    "token": { "type": "string" },
-    "encodingAESKey": { "type": "string" },
+    "appId": {
+      "type": "string"
+    },
+    "appSecret": {
+      "type": "string"
+    },
+    "token": {
+      "type": "string"
+    },
+    "encodingAESKey": {
+      "type": "string"
+    },
     "path": {
       "type": "string",
       "default": "/wechat/webhook"
@@ -21,18 +29,34 @@
     },
     "encryptMode": {
       "type": "string",
-      "enum": ["plain", "compatible", "secure"],
+      "enum": [
+        "plain",
+        "compatible",
+        "secure"
+      ],
       "description": "Default follows encrypt: 'plain' when encrypt=false, 'compatible' when encrypt=true"
     },
     "replyMode": {
       "type": "string",
-      "enum": ["passive", "customer_service"],
+      "enum": [
+        "passive",
+        "customer_service"
+      ],
       "default": "passive"
     },
     "passiveReplyTimeoutMs": {
       "type": "number",
       "default": 4500
+    },
+    "commandPrefix": {
+      "type": "string",
+      "default": "",
+      "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖"
     }
   },
-  "required": ["appId", "appSecret", "token"]
+  "required": [
+    "appId",
+    "appSecret",
+    "token"
+  ]
 }

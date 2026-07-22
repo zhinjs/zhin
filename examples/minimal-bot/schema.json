@@ -3,6 +3,11 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "commandPrefix": {
+      "type": "string",
+      "default": "/",
+      "description": "Stable 黄金路径保留 / 前缀命令（terminal 输入 /hello）；默认 '' 无前缀"
+    },
     "terminal": {
       "type": "object",
       "additionalProperties": false,

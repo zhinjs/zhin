@@ -8,7 +8,10 @@
       "description": "QQ uin (must match icqq login account)"
     },
     "master": {
-      "type": ["string", "number"],
+      "type": [
+        "string",
+        "number"
+      ],
       "description": "Endpoint Owner QQ uin (for /approve bash and master role)"
     },
     "autoReconnect": {
@@ -17,18 +20,31 @@
     },
     "outboundMedia": {
       "type": "string",
-      "enum": ["file", "base64"],
+      "enum": [
+        "file",
+        "base64"
+      ],
       "description": "file=local path (same host as daemon); base64=CQ base64:// (default when rpc set)"
     },
     "rpc": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "host": { "type": "string" },
-        "port": { "type": "number" },
-        "token": { "type": "string" }
+        "host": {
+          "type": "string"
+        },
+        "port": {
+          "type": "number"
+        },
+        "token": {
+          "type": "string"
+        }
       },
-      "required": ["host", "port", "token"]
+      "required": [
+        "host",
+        "port",
+        "token"
+      ]
     },
     "endpoints": {
       "type": "array",
@@ -37,14 +53,44 @@
         "type": "object",
         "additionalProperties": true,
         "properties": {
-          "name": { "type": "string", "description": "QQ uin" }
+          "name": {
+            "type": "string",
+            "description": "QQ uin"
+          }
         },
-        "required": ["name"]
+        "required": [
+          "name"
+        ]
       }
+    },
+    "commandPrefix": {
+      "type": "string",
+      "default": "",
+      "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖"
     }
   },
   "anyOf": [
-    { "properties": { "name": { "type": "string", "minLength": 1 } }, "required": ["name"] },
-    { "properties": { "endpoints": { "type": "array", "minItems": 1 } }, "required": ["endpoints"] }
+    {
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    {
+      "properties": {
+        "endpoints": {
+          "type": "array",
+          "minItems": 1
+        }
+      },
+      "required": [
+        "endpoints"
+      ]
+    }
   ]
 }

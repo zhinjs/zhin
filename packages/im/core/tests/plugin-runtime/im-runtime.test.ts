@@ -70,7 +70,7 @@ describe('IM Runtime', () => {
           children: [],
         }],
       ]),
-      config: new Map([[root, {}], [child, {}]]),
+      config: new Map([[root, { commandPrefix: '/' }], [child, {}]]),
       resources: new Map([[root, new Map()], [child, new Map()]]),
       capabilities: new Map([[command.id, command]]),
       projections: new Map(),
@@ -94,6 +94,72 @@ describe('IM Runtime', () => {
       owner: child,
     });
     expect(requester).toBe(child);
+  });
+
+  it('resolves commandPrefix from the adapter instance config (default empty, endpoints override)', async () => {
+    const root = rootPluginId();
+    const command = createCapabilitySlot({
+      owner: root,
+      feature: commandFeatureId,
+      localName: 'zt',
+      source: '/commands/zt.ts',
+      definition: defineCommand({ execute: () => 'card' }),
+    });
+    const makeSnapshot = (config: Record<string, unknown>) => {
+      const state: SnapshotState = {
+        root,
+        tree: new Map([[root, {
+          id: root,
+          instanceKey: 'root',
+          packageName: '@test/root',
+          packageRoot: '/project',
+          children: [],
+        }]]),
+        config: new Map([[root, config]]),
+        resources: new Map([[root, new Map()]]),
+        capabilities: new Map([[command.id, command]]),
+        projections: new Map(),
+      };
+      const base = createSnapshotView(1, state);
+      return createSnapshotView(1, {
+        ...state,
+        projections: new Map([[commandFeatureId, new CommandIndex([command], base)]]),
+      });
+    };
+    const send = (content: string, metadata?: Record<string, unknown>) => new Message(
+      capabilityId(root, adapterFeatureId, 'memory'),
+      'room',
+      content,
+      1,
+      async () => 'ok',
+      undefined,
+      undefined,
+      metadata ? Object.freeze({ ...metadata }) : undefined,
+    );
+
+    // 默认 ''：无前缀直接匹配；带 / 反而不匹配
+    await expect(new MessageDispatcher().dispatch(send('zt'), makeSnapshot({})))
+      .resolves.toMatchObject({ matched: true });
+    await expect(new MessageDispatcher().dispatch(send('/zt'), makeSnapshot({})))
+      .resolves.toMatchObject({ matched: false });
+
+    // 实例 config '/'：要求斜杠
+    await expect(new MessageDispatcher().dispatch(send('/zt'), makeSnapshot({ commandPrefix: '/' })))
+      .resolves.toMatchObject({ matched: true });
+    await expect(new MessageDispatcher().dispatch(send('zt'), makeSnapshot({ commandPrefix: '/' })))
+      .resolves.toMatchObject({ matched: false });
+
+    // endpoints[i].commandPrefix 逐项覆盖顶层
+    const snapshot = makeSnapshot({
+      commandPrefix: '/',
+      endpoints: [{ name: 'bot-1', commandPrefix: '!' }, { name: 'bot-2' }],
+    });
+    await expect(new MessageDispatcher().dispatch(send('!zt', { endpoint: 'bot-1' }), snapshot))
+      .resolves.toMatchObject({ matched: true });
+    await expect(new MessageDispatcher().dispatch(send('/zt', { endpoint: 'bot-2' }), snapshot))
+      .resolves.toMatchObject({ matched: true });
+    await expect(new MessageDispatcher().dispatch(send('!zt', { endpoint: 'bot-2' }), snapshot))
+      .resolves.toMatchObject({ matched: false });
   });
 
   it('runs command, component, outbound middleware and Endpoint send in one lease', async () => {
@@ -504,7 +570,7 @@ function baseState(slots: readonly CapabilitySlot[]): SnapshotState {
       packageRoot: '/project',
       children: [],
     }]]),
-    config: new Map([[root, {}]]),
+    config: new Map([[root, { commandPrefix: '/' }]]),
     resources: new Map([[root, new Map()]]),
     capabilities: new Map(slots.map((slot) => [slot.id, slot])),
     projections: new Map(),

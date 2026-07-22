@@ -7,8 +7,12 @@
       "type": "string",
       "default": "line-bot"
     },
-    "channelSecret": { "type": "string" },
-    "channelAccessToken": { "type": "string" },
+    "channelSecret": {
+      "type": "string"
+    },
+    "channelAccessToken": {
+      "type": "string"
+    },
     "webhookPath": {
       "type": "string",
       "default": "/line/webhook"
@@ -16,7 +20,15 @@
     "apiBaseUrl": {
       "type": "string",
       "default": "https://api.line.me"
+    },
+    "commandPrefix": {
+      "type": "string",
+      "default": "",
+      "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖"
     }
   },
-  "required": ["channelSecret", "channelAccessToken"]
+  "required": [
+    "channelSecret",
+    "channelAccessToken"
+  ]
 }

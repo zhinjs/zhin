@@ -12,11 +12,17 @@
       "description": "GitHub Enterprise hostname (default github.com)"
     },
     "app_id": {
-      "type": ["string", "number"],
+      "type": [
+        "string",
+        "number"
+      ],
       "description": "GitHub App ID"
     },
     "appId": {
-      "type": ["string", "number"],
+      "type": [
+        "string",
+        "number"
+      ],
       "description": "GitHub App ID (camelCase alias)"
     },
     "private_key": {
@@ -50,7 +56,9 @@
     },
     "auto_reply_repos": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "description": "Repos whose Issue/PR comments auto-trigger AI without @bot"
     },
     "bot_login": {
@@ -67,11 +75,20 @@
       "items": {
         "type": "object",
         "properties": {
-          "name": { "type": "string" }
+          "name": {
+            "type": "string"
+          }
         },
-        "required": ["name"],
+        "required": [
+          "name"
+        ],
         "additionalProperties": true
       }
+    },
+    "commandPrefix": {
+      "type": "string",
+      "default": "",
+      "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖"
     }
   }
 }

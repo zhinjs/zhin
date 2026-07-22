@@ -10,11 +10,22 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "context": { "type": "string" },
-          "name": { "type": "string" },
-          "owner": { "type": "string" }
+          "context": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          }
         }
       }
+    },
+    "commandPrefix": {
+      "type": "string",
+      "default": "",
+      "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖"
     }
   }
 }

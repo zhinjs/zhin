@@ -12,7 +12,10 @@
     },
     "connection": {
       "type": "string",
-      "enum": ["websocket", "webhook"],
+      "enum": [
+        "websocket",
+        "webhook"
+      ],
       "default": "websocket",
       "description": "WebSocket gateway (default). webhook requires httpHostToken, verify_token, and a public HTTPS callback URL."
     },
@@ -42,14 +45,33 @@
     },
     "ignore": {
       "type": "string",
-      "enum": ["bot", "self"],
+      "enum": [
+        "bot",
+        "self"
+      ],
       "default": "bot"
     },
     "logLevel": {
       "type": "string",
-      "enum": ["trace", "debug", "info", "warn", "error", "fatal", "mark", "off"],
+      "enum": [
+        "trace",
+        "debug",
+        "info",
+        "warn",
+        "error",
+        "fatal",
+        "mark",
+        "off"
+      ],
       "default": "info"
+    },
+    "commandPrefix": {
+      "type": "string",
+      "default": "",
+      "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖"
     }
   },
-  "required": ["token"]
+  "required": [
+    "token"
+  ]
 }

@@ -21,7 +21,7 @@ import {
   type SendContent,
   type SendRequest,
 } from './contracts.js';
-import { MessageDispatcher } from './message-dispatcher.js';
+import { defaultCommandPrefixResolver, MessageDispatcher } from './message-dispatcher.js';
 import { OutboundRenderer } from './outbound-renderer.js';
 import { normalizeOutboundPayload } from './outbound-segments.js';
 
@@ -47,6 +47,10 @@ export interface RuntimeMessageEvent {
 export const messagePreviewLimit = 200;
 
 export interface ImRuntimeOptions {
+  /**
+   * 全局静态命令前缀（如 `'/'`）。缺省时按适配器实例 config 的
+   * `commandPrefix` 解析（`endpoints[i]` 可逐项覆盖），默认 `''` 无前缀。
+   */
   readonly commandPrefix?: string;
   readonly renderer?: OutboundRenderer;
 }
@@ -63,7 +67,11 @@ export class ImRuntime implements MessageGateway {
   ) => Promise<boolean>;
 
   constructor(options: ImRuntimeOptions = {}) {
-    this.#dispatcher = new MessageDispatcher(options.commandPrefix);
+    this.#dispatcher = new MessageDispatcher(
+      options.commandPrefix === undefined
+        ? defaultCommandPrefixResolver
+        : () => options.commandPrefix ?? '',
+    );
     this.#renderer = options.renderer ?? new OutboundRenderer();
   }
 

@@ -33,6 +33,13 @@ record name 即 entry.name——Console 展示、`resolve`/`instance` 查找、i
 `~`/`\0`（会破坏 id 结构），重名/缺名的 entry 会被丢弃并 warn。
 多账号示例见 `plugins/adapters/icqq` / `plugins/adapters/qq` 的 README 与 schema。
 
+## 命令前缀（commandPrefix）
+
+适配器实例 config 支持 `commandPrefix`（默认 `''`）：`''` 表示任意文本都按命令匹配；
+`'/'` 则要求消息以 `/` 开头才进命令分发。`endpoints[i].commandPrefix` 可逐项覆盖。
+解析在 `@zhin.js/core` 的 `MessageDispatcher`（`defaultCommandPrefixResolver`）；
+`ImRuntime({ commandPrefix })` 可设全局静态前缀覆盖该行为。
+
 验证：`pnpm --filter @zhin.js/adapter test && pnpm --filter @zhin.js/adapter build`。
 
 架构说明见 [Plugin Monorepo 与 Feature Provider](../../../docs/architecture/target-implementation/plugin-monorepo-and-features.md)。

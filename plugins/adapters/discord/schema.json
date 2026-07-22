@@ -12,13 +12,18 @@
     },
     "connection": {
       "type": "string",
-      "enum": ["gateway", "interactions"],
+      "enum": [
+        "gateway",
+        "interactions"
+      ],
       "default": "gateway",
       "description": "Gateway WebSocket (default). interactions uses httpHostToken POST + Ed25519 verify."
     },
     "intents": {
       "type": "array",
-      "items": { "type": "number" }
+      "items": {
+        "type": "number"
+      }
     },
     "enableSlashCommands": {
       "type": "boolean",
@@ -32,18 +37,33 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "name": { "type": "string" },
+        "name": {
+          "type": "string"
+        },
         "type": {
           "type": "string",
-          "enum": ["PLAYING", "STREAMING", "LISTENING", "WATCHING", "COMPETING"]
+          "enum": [
+            "PLAYING",
+            "STREAMING",
+            "LISTENING",
+            "WATCHING",
+            "COMPETING"
+          ]
         },
-        "url": { "type": "string" }
+        "url": {
+          "type": "string"
+        }
       },
-      "required": ["name", "type"]
+      "required": [
+        "name",
+        "type"
+      ]
     },
     "slashCommands": {
       "type": "array",
-      "items": { "type": "object" }
+      "items": {
+        "type": "object"
+      }
     },
     "applicationId": {
       "type": "string",
@@ -57,7 +77,14 @@
       "type": "string",
       "default": "/discord/interactions",
       "description": "POST path on httpHostToken when connection is interactions."
+    },
+    "commandPrefix": {
+      "type": "string",
+      "default": "",
+      "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖"
     }
   },
-  "required": ["token"]
+  "required": [
+    "token"
+  ]
 }
