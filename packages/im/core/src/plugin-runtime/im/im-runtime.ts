@@ -194,6 +194,7 @@ export class ImRuntime implements MessageGateway {
     readonly connected: boolean;
     readonly status: 'online' | 'offline';
     readonly phase: 'pending' | 'starting' | 'online' | 'failed' | 'unconfigured';
+    readonly managementCapabilities: readonly string[];
   }[] {
     try {
       const lease = this.#acquire();
@@ -206,6 +207,7 @@ export class ImRuntime implements MessageGateway {
           connected: row.connected,
           status: row.status,
           phase: row.phase,
+          managementCapabilities: row.managementCapabilities,
         }));
       } finally {
         lease.release();
@@ -221,6 +223,7 @@ export class ImRuntime implements MessageGateway {
     readonly connected: boolean;
     readonly status: 'online' | 'offline';
     readonly phase: 'pending' | 'starting' | 'online' | 'failed' | 'unconfigured';
+    readonly managementCapabilities: readonly string[];
   } | null {
     try {
       const lease = this.#acquire();
@@ -238,6 +241,7 @@ export class ImRuntime implements MessageGateway {
           connected: row.connected,
           status: row.status,
           phase: row.phase,
+          managementCapabilities: row.managementCapabilities,
         });
       } finally {
         lease.release();

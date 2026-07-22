@@ -55,9 +55,10 @@ export function normalizeConsolePushType(type: unknown): string {
 export function normalizeConsolePushMessage<T extends { readonly type?: unknown }>(
   message: T,
 ): Readonly<T & { type: string }> {
-  const data = isRecord((message as { readonly data?: unknown }).data)
-    ? normalizeConsolePushData((message as { readonly data: Record<string, unknown> }).data)
-    : (message as { readonly data?: unknown }).data;
+  const candidate = message as { readonly data?: unknown };
+  const data = isRecord(candidate.data)
+    ? normalizeConsolePushData(candidate.data)
+    : candidate.data;
   return Object.freeze({
     ...message,
     type: normalizeConsolePushType(message.type),

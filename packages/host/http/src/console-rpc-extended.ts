@@ -328,7 +328,7 @@ async function listInbox(
   return { data: { [key]: sorted, inboxEnabled: enabled } };
 }
 
-/** endpoint:requests —— 未处理的好友/群请求（unified_inbox_request 中 resolved=0）。 */
+/** request.list —— 未处理的好友/群请求（unified_inbox_request 中 resolved=0）。 */
 async function listPendingRequests(
   d: Record<string, unknown>,
   ctx: ConsoleRpcExtendedCtx,
@@ -452,7 +452,7 @@ function mapNoticeRow(row: Record<string, unknown>): Record<string, unknown> {
 // ---------------------------------------------------------------- consumed 标记
 
 /**
- * endpoint:requestConsumed / endpoint:noticeConsumed —— 按行 id 置 consumed=1。
+ * request.consumed / notice.consumed —— 按行 id 置 consumed=1。
  * 表未注册（或 model 无 update）时保持"未接线"报错。
  */
 async function markInboxConsumed(

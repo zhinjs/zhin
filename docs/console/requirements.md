@@ -292,8 +292,8 @@ GET {API_BASE}/pub/openapi.json
 | `env:list` | — | `{ files: string[] }` |
 | `env:get` | `filename` | `{ content }` |
 | `env:save` | `filename`, `content` | `{ success }` |
-| `endpoint.list` | — | `{ endpoints: EndpointRow[] }`（含 pending 状态） |
-| `endpoint.info` | `data: { adapter, endpointId }` | Endpoint 详情 |
+| `endpoint.list` | — | `{ endpoints: EndpointRow[] }`（含 pending 状态与 `managementCapabilities`） |
+| `endpoint.info` | `data: { adapter, endpointId }` | Endpoint 详情（含 `managementCapabilities`） |
 | `endpoint.send_message` | `data: { adapter, endpointId, id, type, content, parent? }` — `parent` 可选：`{ type: "group" \| "guild", id }`（QQ 子频道发消息需 `type: "channel"` + `parent: { type: "guild", id: guild_id }`） | `{ message_id, messageId }` |
 | `cron:list` | — | `{ memory[], persistent[] }` |
 | `cron:add` | `cronExpression`, `prompt`, `label?`, `notify?` | 新建 persistent 任务记录 |
@@ -343,6 +343,8 @@ GET {API_BASE}/pub/openapi.json
 | `system:restart` | 触发 Host 重启 |
 
 名称与 payload 的单一事实源是 `@zhin.js/console-protocol`，Console 应从 `@zhin.js/client` 使用其重导出的常量。Host 暂时接受旧 `endpoint:*` camelCase 名称作为入站兼容别名，但 UI 与新插件不得继续生成这些别名。Endpoint 管理结果来自 Adapter 的 `EndpointManagement` 语义端口；未声明能力时 Console 应隐藏操作或使用收件箱历史降级，不能在 Host/UI 猜测平台方法名。
+
+`managementCapabilities` 由运行时根据 Endpoint 实际实现的方法自动推导，当前稳定值为 `listFriends`、`listGroups`、`listChannels`、`listGroupMembers`、`approveRequest`、`rejectRequest`、`kickGroupMember`、`muteGroupMember`、`setGroupAdmin`、`deleteFriend`。Console 必须按这些能力值渲染目录和操作，不能用 `adapter === 'icqq'` 等平台白名单替代能力判断。
 
 ---
 

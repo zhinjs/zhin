@@ -233,6 +233,11 @@ describe('IM Runtime', () => {
         capabilities: ['inbound', 'outbound'],
         create: () => ({
           name: '111111',
+          management: {
+            async listFriends() { return []; },
+            async listGroups() { return []; },
+            async kickGroupMember() {},
+          },
           start() {},
           open() {},
           close() {},
@@ -272,6 +277,7 @@ describe('IM Runtime', () => {
       adapter: 'icqq',
       connected: true,
       status: 'online',
+      managementCapabilities: ['listFriends', 'listGroups', 'kickGroupMember'],
     })]);
 
     // 用 slot localName 解析（inbox-installer 路径）
@@ -280,6 +286,7 @@ describe('IM Runtime', () => {
       adapter: 'icqq',
       connected: true,
       status: 'online',
+      managementCapabilities: ['listFriends', 'listGroups', 'kickGroupMember'],
     }));
     // 用 live name 解析（console endpoint.info 路径）
     expect(im.getEndpoint('icqq', '111111')).toEqual(expect.objectContaining({

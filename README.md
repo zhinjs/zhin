@@ -7,8 +7,10 @@
 <h1 align="center">Zhin.js</h1>
 
 <p align="center">
-  <strong>TypeScript 多通道 IM Bot 框架</strong><br />
-  插件热重载 · Sandbox · Remote Console · 可选 Agent 栈
+  <strong>为生产环境构建 agent 产品的 TypeScript 框架</strong><br />
+  <strong>The TypeScript framework for building production-grade agent products</strong><br />
+  分层可组合 · Agent-first · 安全内置 · 工程纪律由 harness 强制<br />
+  <sub>Composable layers · Agent-first runtime · Built-in security · Harness-enforced discipline</sub>
 </p>
 
 <p align="center">
@@ -30,7 +32,14 @@
 
 ---
 
-多通道 **生活 / 工作助手** Bot 框架（私聊、群聊、记忆、定时、通知）——**不是** Cursor / Claude Code 类 coding agent。默认仅 IM 核心（`<10MB`）；AI 按需加装。详见 [能力分档](./docs/essentials/capability-tiers.md)。
+Zhin.js 为**在生产环境构建严肃 bot / agent 产品**的开发者和团队而生——多通道 IM 接入（私聊、群聊、记忆、定时、通知），**不是** Cursor / Claude Code 类 coding agent。四根支柱：
+
+- **分层可组合** — `basic → kernel → ai → core → agent → zhin` 单向依赖由 harness 强制；`@zhin.js/kernel` 可脱离 IM 作纯插件内核，`@zhin.js/ai` 可独立作 LLM 引擎
+- **Agent-first** — 完整 agent runtime（编排、工具、MCP、记忆与压缩、子代理），不是"接 LLM SDK"的插件
+- **安全内置** — exec 白名单 / 文件策略 / 网络白名单 / 资源预算 / 审计日志五层防御 + 声明式策略表
+- **工程纪律即产品** — 50+ harness 门禁守护架构分层、消息发送链路、安装体积（IM 核心 `<10MB`）、依赖策略
+
+> **EN**: Built for developers and teams running serious bot/agent products in production. Composable layers (kernel works standalone as a plugin engine, `@zhin.js/ai` as an IM-free LLM engine), an agent-first runtime (orchestration, tools, MCP, memory & compaction, subagents), five-layer built-in security, and 50+ harness gates enforcing architecture, message paths, and install size. **Not** a Cursor/Claude Code-style coding agent. See [capability tiers](./docs/essentials/capability-tiers.md).
 
 ```ts
 import { usePlugin, MessageCommand } from 'zhin.js'

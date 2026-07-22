@@ -45,8 +45,40 @@ export interface EndpointWithManagement {
   readonly management?: EndpointManagement;
 }
 
+/**
+ * Stable, transport-neutral capability ids exposed to Host/Console clients.
+ * Values intentionally mirror EndpointManagement method names so adapters only
+ * need to implement the semantic port; no second capability declaration exists.
+ */
+export const endpointManagementCapabilityIds = [
+  'listFriends',
+  'listGroups',
+  'listChannels',
+  'listGroupMembers',
+  'approveRequest',
+  'rejectRequest',
+  'kickGroupMember',
+  'muteGroupMember',
+  'setGroupAdmin',
+  'deleteFriend',
+] as const;
+
+export type EndpointManagementCapability =
+  (typeof endpointManagementCapabilityIds)[number];
+
 export function resolveEndpointManagement(endpoint: unknown): EndpointManagement | undefined {
   if (!endpoint || typeof endpoint !== 'object') return undefined;
   const management = (endpoint as EndpointWithManagement).management;
   return management && typeof management === 'object' ? management : undefined;
+}
+
+/** Derive advertised capabilities from the live semantic port implementation. */
+export function listEndpointManagementCapabilities(
+  endpoint: unknown,
+): readonly EndpointManagementCapability[] {
+  const management = resolveEndpointManagement(endpoint);
+  if (!management) return Object.freeze([]);
+  return Object.freeze(endpointManagementCapabilityIds.filter(
+    (capability) => typeof management[capability] === 'function',
+  ));
 }

@@ -81,6 +81,8 @@ export type RuntimeEndpointSummary = {
   readonly status: 'online' | 'offline';
   readonly phase?: RuntimeEndpointPhase;
   readonly pendingLogin?: boolean;
+  /** Methods implemented by the EndpointManagement semantic port. */
+  readonly managementCapabilities?: readonly string[];
 };
 
 export type RuntimeDatabaseInfo = {

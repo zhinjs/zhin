@@ -13,6 +13,10 @@ import type {
   EndpointInstance,
   EndpointSendRequest,
 } from './definition.js';
+import {
+  listEndpointManagementCapabilities,
+  type EndpointManagementCapability,
+} from './endpoint-management.js';
 
 const logger = getLogger('Adapter');
 
@@ -29,6 +33,7 @@ export interface AdapterEndpointSummary extends AdapterDescriptor {
   readonly connected: boolean;
   readonly status: 'online' | 'offline';
   readonly phase: AdapterEndpointPhase;
+  readonly managementCapabilities: readonly EndpointManagementCapability[];
 }
 
 export type AdapterEndpointPhase =
@@ -137,6 +142,7 @@ export class AdapterIndex {
       connected: record.open && !record.stopped,
       status: record.open && !record.stopped ? 'online' as const : 'offline' as const,
       phase: endpointPhase(record),
+      managementCapabilities: listEndpointManagementCapabilities(record.endpoint),
     })));
   }
 

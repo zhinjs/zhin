@@ -30,6 +30,7 @@ function installBrowserGlobals(storage: Storage = mockStorage()) {
   const win = {
     location: { origin: "http://localhost:5173", protocol: "http:", host: "localhost:5173" },
     __ZHIN_API_TOKEN: undefined as string | undefined,
+    dispatchEvent: vi.fn(),
   };
   vi.stubGlobal("window", win);
   vi.stubGlobal("localStorage", storage);
@@ -97,9 +98,7 @@ describe("WebSocketManager REST/SSE transport", () => {
     const manager = new WebSocketManager();
     manager.connect();
     await vi.advanceTimersByTimeAsync(0);
-    for (let turn = 0; turn < 5 && received.length === 0; turn += 1) {
-      await Promise.resolve();
-    }
+    await Promise.resolve();
     await Promise.resolve();
 
     const init = fetchMock.mock.calls[0]![1] as RequestInit;
@@ -174,23 +173,14 @@ describe("WebSocketManager REST/SSE transport", () => {
 
   it("normalizes legacy endpoint push names and payload aliases before callbacks", async () => {
     installBrowserGlobals();
-    const payload = new TextEncoder().encode(
-      'event: endpoint:message\ndata: {"type":"endpoint:message","data":{"$adapter":"sandbox","endpoint":"bot"}}\n\n',
-    );
-    const body = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(payload);
-        controller.close();
-      },
-    });
-    vi.stubGlobal("fetch", vi.fn(async () => sseResponse(200, body)));
     const received: WebSocketMessage[] = [];
     const manager = new WebSocketManager({}, {
       onMessage: (message) => received.push(message),
     });
 
-    manager.connect();
-    await vi.advanceTimersByTimeAsync(0);
+    (manager as unknown as { handleMessage(event: MessageEvent): void }).handleMessage({
+      data: '{"type":"endpoint:message","data":{"$adapter":"sandbox","endpoint":"bot"}}',
+    } as MessageEvent);
     await Promise.resolve();
 
     expect(received).toEqual([expect.objectContaining({
@@ -200,7 +190,6 @@ describe("WebSocketManager REST/SSE transport", () => {
     expect(mockApplyConsoleEvent).toHaveBeenCalledWith(expect.objectContaining({
       type: "message.receive",
     }));
-    manager.disconnect();
   });
 
   it("stops reconnecting after maxReconnectAttempts", async () => {

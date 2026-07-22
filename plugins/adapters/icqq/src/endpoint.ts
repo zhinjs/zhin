@@ -443,7 +443,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
   // ── 社交/群管（Console endpoint RPC 探测面）────────────────────────
   // console-rpc-extended.ts 按方法名探测这些接口；全部薄封装走 IPC daemon。
 
-  /** Console endpoint:friends —— 好友列表（LIST_FRIENDS，归一为 {user_id, nickname, remark}）。 */
+  /** EndpointManagement.listFriends —— 好友列表（LIST_FRIENDS，归一为 {user_id, nickname, remark}）。 */
   async getFriendList(): Promise<Array<{ user_id: number; nickname: string; remark: string }>> {
     const resp = await this.#mustRequest(Actions.LIST_FRIENDS, undefined, '获取好友列表');
     const list = Array.isArray(resp.data) ? (resp.data as IpcFriendInfo[]) : [];
@@ -454,7 +454,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     }));
   }
 
-  /** Console endpoint:groups —— 群列表（LIST_GROUPS，归一为 {group_id, name}）。 */
+  /** EndpointManagement.listGroups —— 群列表（LIST_GROUPS，归一为 {group_id, name}）。 */
   async getGroupList(): Promise<Array<{ group_id: number; name: string }>> {
     const resp = await this.#mustRequest(Actions.LIST_GROUPS, undefined, '获取群列表');
     const list = Array.isArray(resp.data) ? (resp.data as IpcGroupInfo[]) : [];
@@ -464,7 +464,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     }));
   }
 
-  /** Console endpoint:groupMembers —— 群成员列表（LIST_GROUP_MEMBERS，字段对齐 daemon 返回）。 */
+  /** EndpointManagement.listGroupMembers —— 群成员列表（字段对齐 daemon 返回）。 */
   async getGroupMemberList(groupId: number | string): Promise<IpcMemberInfo[]> {
     const resp = await this.#mustRequest(
       Actions.LIST_GROUP_MEMBERS,
@@ -484,7 +484,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
   }
 
   /**
-   * Console endpoint:requestApprove —— id 为 console inbox 行的 platform_request_id。
+   * EndpointManagement.resolveRequest —— id 为 inbox 行的 platform_request_id。
    * 先 GET_SYSTEM_MSG 按 flag（回退 seq）定位请求，再按类型路由 handle_friend/group_request。
    */
   async approveRequest(id: string, remark?: string): Promise<void> {
@@ -495,7 +495,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     await this.#handleSystemRequest(id, false, { reason });
   }
 
-  /** Console endpoint:deleteFriend —— FRIEND_DELETE。 */
+  /** EndpointManagement.deleteFriend —— FRIEND_DELETE。 */
   async deleteFriend(userId: number | string): Promise<void> {
     await this.#mustRequest(
       Actions.FRIEND_DELETE,
@@ -509,7 +509,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     return this.deleteFriend(userId);
   }
 
-  /** Console endpoint:groupKick —— GROUP_KICK。 */
+  /** EndpointManagement.kickGroupMember —— GROUP_KICK。 */
   async removeMember(groupId: number | string, userId: number | string): Promise<void> {
     await this.#mustRequest(
       Actions.GROUP_KICK,
@@ -526,7 +526,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     return this.removeMember(groupId, userId);
   }
 
-  /** Console endpoint:groupMute —— GROUP_MUTE（duration 秒，默认 600）。 */
+  /** EndpointManagement.muteGroupMember —— GROUP_MUTE（duration 秒，默认 600）。 */
   async muteMember(groupId: number | string, userId: number | string, duration = 600): Promise<void> {
     await this.#mustRequest(
       Actions.GROUP_MUTE,
@@ -547,7 +547,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     return this.muteMember(groupId, userId, duration);
   }
 
-  /** Console endpoint:groupAdmin —— SET_GROUP_ADMIN（enable 默认 true）。 */
+  /** EndpointManagement.setGroupAdmin —— SET_GROUP_ADMIN（enable 默认 true）。 */
   async setModerator(groupId: number | string, userId: number | string, enable = true): Promise<void> {
     await this.#mustRequest(
       Actions.SET_GROUP_ADMIN,
