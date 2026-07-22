@@ -108,6 +108,7 @@
     "export * from './navigation.js';"
   ],
   "plugin-runtime": [
+    "export * from './agent-tools-host.js';",
     "export * from './capability.js';",
     "export * from './database-host.js';",
     "export * from './dispose.js';",

@@ -37,8 +37,10 @@ Zhin **故意保留两条技能发现路径**，便于渐进迁移：
 
 | 路径 | 发现器 | 扫描时机 | 典型用途 |
 |------|--------|----------|----------|
-| `agent/skills/*.md` + `agent/tools/*.ts` | `discoverPluginAgentSurface` → `registerPluginAgentSurfaces` | 启动 Step 1d | **推荐**：插件包新代码 |
+| `agent/skills/*.md` + `agent/tools/*.ts` | `discoverPluginAgentSurface` → `registerPluginAgentSurfaces` | 启动 Step 1d（**legacy boot**） | **推荐**：插件包新代码 |
 | `skills/<name>/SKILL.md` | `discoverWorkspaceSkills` | 启动 Step 1（先于 agent/） | 工作区技能、**遗留**插件包 |
+
+> **Plugin Runtime（`zhin runtime start`）**：`registerPluginAgentSurfaces` 只在 legacy boot 运行。Runtime 下插件改为在 `setup()` 里经 `agentToolsHostToken`（`@zhin.js/plugin-runtime`）把 `agent/tools` 的定义注册进 Agent Host（`ZhinAgent.registerTool`，逐 turn 进 deferred catalog），参考 `plugins/utils/lottery/plugin.ts` + `agent/runtime-tools.ts`。延迟导入该桥接模块，避免 IM-only 安装强拉 `@zhin.js/agent`。
 
 二者**可以同时存在**于工作区与未迁移的第三方插件包。本仓库官方 `plugins/` 已完成迁移并**删除**包内 `skills/`（`PERMITS.md` 迁至 `agent/PERMITS.md`）。注意：
 

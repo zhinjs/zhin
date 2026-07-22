@@ -9,6 +9,7 @@ export * from './snapshot.js';
 export * from './token.js';
 export * from './schedule-host.js';
 export * from './database-host.js';
+export * from './agent-tools-host.js';
 export * from './html-renderer.js';
 export * from './outbound-host.js';
 export * from './inbox.js';

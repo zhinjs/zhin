@@ -52,5 +52,20 @@ export function pickMediaRawUrl(data: Record<string, unknown> | undefined): stri
     if (typeof value === 'string' && value.trim()) return value.trim()
   }
   const v = data.url ?? data.file ?? data.src ?? data.href
-  return typeof v === 'string' && v.trim() ? v.trim() : undefined
+  if (typeof v === 'string' && v.trim()) return v.trim()
+  // agent 出站媒体段（media-publisher）直接携带纯 base64，无 url/file；
+  // 有 mime 时拼成 data: URL 透传，否则走 base64:// 让 resolveMediaSrc 按 kind 补默认 MIME
+  const b64 = data.base64
+  if (typeof b64 === 'string' && b64.trim()) {
+    const payload = b64.trim()
+    if (payload.startsWith('data:') || payload.startsWith('base64://')
+      || payload.startsWith('http://') || payload.startsWith('https://')) {
+      return payload
+    }
+    const mime = typeof data.mime === 'string' && data.mime.trim() ? data.mime.trim() : ''
+    return mime
+      ? `data:${mime};base64,${payload.replace(/\s/g, '')}`
+      : `base64://${payload}`
+  }
+  return undefined
 }

@@ -69,7 +69,8 @@ export function createInMemoryGameDb(tableNames: readonly string[]): InMemoryGam
 /** Minimal DatabaseHost model surface (structural typing; no plugin-runtime dep). */
 export interface HostGameModelSource {
   select(): {
-    where(query: Record<string, unknown>): Promise<Record<string, unknown>[]>;
+    // DatabaseHostSelection is a thenable, not an instance of Promise; accept both.
+    where(query: Record<string, unknown>): PromiseLike<Record<string, unknown>[]>;
   };
   insert(row: Record<string, unknown>): Promise<unknown>;
   delete(): { where(query: Record<string, unknown>): Promise<unknown> };

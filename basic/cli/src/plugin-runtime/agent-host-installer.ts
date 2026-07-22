@@ -15,7 +15,7 @@ import {
   type RootResourceInstaller,
   type RuntimeConfigDocument,
 } from '@zhin.js/runtime';
-import { databaseHostToken, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { databaseHostToken, agentToolsHostToken, type AgentToolRegistration, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import {
   AIService,
   McpClientManager,
@@ -359,6 +359,14 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     // The Scope is sealed after all Root installers finish, so publication must
     // happen here rather than through a mutable process-global registry.
     resources.provide(agentHostToken, Object.freeze({ service, agent: zhinAgent }));
+
+    // Plugin agent tools (e.g. lottery agent/tools): plugins register during
+    // setup() against this generation-owned host; every turn's deferred catalog
+    // picks them up via ZhinAgent's RegisteredToolSource.
+    resources.provide(agentToolsHostToken, Object.freeze({
+      register: (registration: AgentToolRegistration) =>
+        zhinAgent.registerTool(toRegisteredAgentTool(registration)),
+    }));
 
     const presetCount = await seedPresets();
 
@@ -1163,6 +1171,62 @@ export function runtimeApprovalPolicy(
 
 function isToolCapability(tool: AgentToolLike | ToolCapability): tool is ToolCapability {
   return 'inputSchema' in tool && 'owner' in tool;
+}
+
+interface ZodLikeParseError {
+  readonly issues?: readonly { readonly path?: readonly PropertyKey[]; readonly message?: string }[];
+  readonly errors?: readonly { readonly path?: readonly PropertyKey[]; readonly message?: string }[];
+}
+
+interface ZodLikeSchema {
+  safeParse(value: unknown): {
+    readonly success: boolean;
+    readonly data?: unknown;
+    readonly error?: ZodLikeParseError;
+  };
+}
+
+function formatZodLikeError(error: ZodLikeParseError | undefined): string {
+  const issues = error?.issues ?? error?.errors ?? [];
+  const text = issues
+    .map((issue) => `${(issue.path ?? []).join('.') || 'root'}: ${issue.message ?? 'invalid'}`)
+    .join('; ');
+  return text || 'Invalid arguments';
+}
+
+/**
+ * Bridge a plugin-registered tool (agentToolsHostToken) into the per-turn
+ * catalog shape. zod-like inputSchemas are reused for argument validation,
+ * mirroring the legacy authoring bridge (parseWithZodSchema).
+ */
+export function toRegisteredAgentTool(
+  registration: AgentToolRegistration,
+): Parameters<ZhinAgent['registerTool']>[0] {
+  const parameters = parametersFromInputSchema(registration.inputSchema);
+  const result: Parameters<ZhinAgent['registerTool']>[0] = {
+    name: registration.name,
+    description: registration.description,
+    parameters: {
+      type: 'object',
+      properties: (parameters.properties ?? {}) as Parameters<ZhinAgent['registerTool']>[0]['parameters']['properties'],
+      required: parameters.required,
+    },
+    source: registration.source ?? 'plugin',
+    ...(registration.keywords ? { keywords: [...registration.keywords] } : {}),
+    ...(registration.tags ? { tags: [...registration.tags] } : {}),
+    ...(registration.permissions ? { permissions: registration.permissions } : {}),
+    ...(registration.approval ? { approval: registration.approval } : {}),
+    async execute(args) {
+      const schema = registration.inputSchema as ZodLikeSchema | undefined;
+      if (schema && typeof schema.safeParse === 'function') {
+        const parsed = schema.safeParse(args ?? {});
+        if (!parsed.success) return `Error: ${formatZodLikeError(parsed.error)}`;
+        return await registration.execute((parsed.data ?? args ?? {}) as Record<string, unknown>);
+      }
+      return await registration.execute(args ?? {});
+    },
+  };
+  return result;
 }
 
 async function mcpToolsAsTools(capabilities: AgentCapabilities): Promise<Tool[]> {

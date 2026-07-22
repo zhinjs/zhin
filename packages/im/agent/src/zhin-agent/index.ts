@@ -431,6 +431,11 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     return () => { this.externalTools.delete(tool.name); };
   }
 
+  /** Tools registered via registerTool (e.g. Runtime plugin agent tools) — for introspection. */
+  listRegisteredTools(): readonly AgentTool[] {
+    return [...this.externalTools.values()];
+  }
+
   getLastTurnMetrics(): ZhinAgentTurnMetrics | null {
     return this.lastTurnMetrics;
   }

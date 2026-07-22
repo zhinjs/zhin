@@ -1,5 +1,6 @@
 import {
   definePlugin,
+  agentToolsHostToken,
   databaseHostToken,
   outboundHostToken,
   scheduleHostToken,
@@ -29,7 +30,7 @@ export default definePlugin<LotteryConfig>({
   metadata: {
     displayName: 'Lottery',
   },
-  setup(context) {
+  async setup(context) {
     const config = resolveLotteryConfig(context.config.get());
     const db = context.resources.has(databaseHostToken)
       ? context.resources.use(databaseHostToken)
@@ -73,6 +74,14 @@ export default definePlugin<LotteryConfig>({
       scheduleEnabled: () => config.scheduleEnabled,
       pipelinePush: config.pushTargets.length > 0,
     }));
+
+    // Agent tools (agent/tools/*): register into the Runtime Agent Host when AI
+    // is installed. Lazy import keeps @zhin.js/agent out of IM-only installs.
+    if (context.resources.has(agentToolsHostToken)) {
+      const agentTools = context.resources.use(agentToolsHostToken);
+      const { registerLotteryAgentTools } = await import('./agent/runtime-tools.js');
+      context.lifecycle.add(registerLotteryAgentTools(agentTools));
+    }
 
     if (!context.resources.has(scheduleHostToken) || !config.scheduleEnabled) {
       return;
