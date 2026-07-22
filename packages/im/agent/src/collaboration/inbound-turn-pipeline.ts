@@ -234,6 +234,7 @@ export function createInboundTurnPipeline(deps: InboundTurnPipelineDeps): Inboun
         cell: routeResult.cell,
         endpointId,
         peerInbound,
+        outputSchemaRequired: Boolean(ai.getAgentConfig?.()?.outputSchema),
         replyOutbound,
         logger,
       });

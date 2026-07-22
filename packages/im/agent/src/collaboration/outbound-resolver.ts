@@ -36,6 +36,8 @@ export interface ResolveOutboundBatchesInput {
   selfMember?: CollaborationScene['members'][number];
   warn?: (message: string) => void;
   root?: import('@zhin.js/core').Plugin;
+  /** ai.agent.outputSchema 开启时强制走 JSON DSL 结构化解析 */
+  outputSchemaRequired?: boolean;
 }
 
 export interface ResolveOutboundBatchesResult {
@@ -231,6 +233,7 @@ export async function resolveOutboundBatches(
     inboundContent,
     warn,
     root: input.root,
+    outputSchemaRequired: input.outputSchemaRequired,
   });
 
   let batches: MessageElement[][] = collabBatches ?? [

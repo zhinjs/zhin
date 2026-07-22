@@ -64,4 +64,5 @@ export const DEFAULT_CONFIG = {
   policyDenialStopAfter: 2,
   deferredAutoContinue: false,
   deferredAutoContinueMaxDepth: 8,
+  outputSchema: false,
 } as unknown as Required<ZhinAgentConfig>;

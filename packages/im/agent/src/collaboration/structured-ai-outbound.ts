@@ -72,6 +72,8 @@ async function payloadToSegments(
 export interface TryResolveStructuredAiOutboundOptions {
   inboundContent?: string;
   toolRequiresStructured?: boolean;
+  /** ai.agent.outputSchema 开启：模型回复即出站 JSON，强制结构化解析 */
+  outputSchemaRequired?: boolean;
   warn?: (message: string) => void;
   /** Init-time root plugin; avoids getHostRootPlugin in inbound pipeline path */
   root?: import('@zhin.js/core').Plugin;
@@ -138,14 +140,15 @@ export async function tryResolveStructuredAiOutbound(
   const plugin = options.root ?? getHostRootPlugin();
   const adapterInstance = plugin?.inject(message.$adapter) as object | undefined;
   const extensions = adapterInstance ? getAdapterAiOutboundExtensions(adapterInstance) : [];
-  const structuredRequired = isStructuredOutboundRequired({
-    collaborationCell: Boolean(cell),
-    toolRequiresStructured: options.toolRequiresStructured,
-    inboundHandoffIntent: options.inboundContent
-      ? detectInboundHandoffIntent(options.inboundContent)
-      : false,
-    adapterHasExtensions: extensions.length > 0,
-  });
+  const structuredRequired = options.outputSchemaRequired === true
+    || isStructuredOutboundRequired({
+      collaborationCell: Boolean(cell),
+      toolRequiresStructured: options.toolRequiresStructured,
+      inboundHandoffIntent: options.inboundContent
+        ? detectInboundHandoffIntent(options.inboundContent)
+        : false,
+      adapterHasExtensions: extensions.length > 0,
+    });
 
   if (!structuredRequired && !cell) return null;
 

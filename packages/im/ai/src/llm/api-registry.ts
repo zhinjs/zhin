@@ -15,6 +15,11 @@ export interface StreamOptions {
   /** OpenAI routing hint；同 key 提高前缀命中率 */
   promptCacheKey?: string;
   promptCacheRetention?: import('./bridge/ai-sdk-prompt-cache.js').PromptCacheRetention;
+  /**
+   * 结构化输出 JSON Schema（AI SDK `Output.object`）。
+   * 存在时约束模型文本回复为该 schema 的 JSON；tool-call 中间步自动回退原文本。
+   */
+  outputSchema?: Record<string, unknown>;
   onPayload?: (payload: unknown) => void;
   onResponse?: (response: unknown) => void;
 }

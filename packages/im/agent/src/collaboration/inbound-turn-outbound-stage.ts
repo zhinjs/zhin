@@ -30,6 +30,8 @@ export interface ExecuteInboundOutboundStageInput {
   cell?: CollaborationScene;
   endpointId: string;
   peerInbound: boolean;
+  /** ai.agent.outputSchema 开启时强制走 JSON DSL 结构化解析 */
+  outputSchemaRequired?: boolean;
   replyOutbound: (payload: unknown, options?: { quote?: boolean }) => Promise<unknown>;
   logger: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void };
 }
@@ -68,6 +70,7 @@ export async function executeInboundOutboundStage(
     selfMember,
     warn: (msg) => logger.warn(msg),
     root,
+    outputSchemaRequired: input.outputSchemaRequired,
   });
   let outboundBatches: MessageElement[][] = collabResolved.batches;
 

@@ -78,6 +78,13 @@ export interface ZhinAgentConfig {
   deferredToolMaxResults?: number;
   deferredTools?: DeferredToolsConfig;
   workerBaseTools?: string[];
+  /**
+   * AI 结构化输出（AI SDK Output.object）：
+   * - false/缺省：纯文本回复（现状）；
+   * - true | 'segments'：约束最终回复为 zhin AI 出站 JSON（text/mentions/segments 消息段数组）；
+   * - 对象：自定义 JSON Schema 原样透传给模型。
+   */
+  outputSchema?: boolean | 'segments' | Record<string, unknown>;
   platformPromptSectionMaxChars?: number;
   platformPromptMaxChars?: number;
   steeringMode?: QueueMode;

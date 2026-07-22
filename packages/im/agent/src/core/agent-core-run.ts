@@ -2,7 +2,7 @@
  * agentLoop turn runner (ADR 0009) — used when ContextRepository is wired.
  */
 
-import type { Plugin } from '@zhin.js/core';
+import { aiOutboundJsonSchema, buildAiOutboundPromptHint, type Plugin } from '@zhin.js/core';
 import type { AIService } from '../service.js';
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
 import { type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, getLlmTransportModel, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, getLoadedToolNamesFromSnapshot } from '@zhin.js/ai';
@@ -66,6 +66,15 @@ function resolveAIService(plugin?: Plugin): AIService | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** ai.agent.outputSchema 配置 → 传给 LLM 的 JSON Schema（true/'segments' 用 zhin 出站契约）。 */
+function resolveAgentOutputSchema(
+  value: boolean | 'segments' | Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!value) return undefined;
+  if (value === true || value === 'segments') return aiOutboundJsonSchema;
+  return value;
 }
 
 function tokenUsageToLegacy(usage: TokenUsage): Usage {
@@ -349,7 +358,8 @@ export async function* runAgentLoopTextTurnRun(
 
   const preData = toolRun.preExecution.data;
   const hasTools = allTools.length > 0;
-  const systemPrompt = hasTools
+  const outputSchema = resolveAgentOutputSchema(host.config.outputSchema);
+  let systemPrompt = hasTools
     ? await buildAgentPathSystemPrompt(host, {
         content: input.rawContent,
         commMessage: contextForTools,
@@ -360,6 +370,9 @@ export async function* runAgentLoopTextTurnRun(
         modelSdk: llmModel.sdk,
       })
     : buildChatPathSystemPrompt(host, personaEnhanced, contextForTools);
+  if (outputSchema) {
+    systemPrompt = `${systemPrompt}\n\n${buildAiOutboundPromptHint({})}`;
+  }
 
   const agentTools = hasTools
     ? applyExecPolicyToTools(host.config, resolvedTools, {
@@ -505,12 +518,15 @@ export async function* runAgentLoopTextTurnRun(
     model: llmModel,
     maxIterations,
     sessionId,
-    streamOptions: buildAgentPromptCacheStreamOptions(host.config, {
-      modelSdk: llmModel.sdk,
-      provider: providerAlias,
-      modelId,
-      label: hasTools ? 'orchestrator' : 'chat',
-    }),
+    streamOptions: {
+      ...buildAgentPromptCacheStreamOptions(host.config, {
+        modelSdk: llmModel.sdk,
+        provider: providerAlias,
+        modelId,
+        label: hasTools ? 'orchestrator' : 'chat',
+      }),
+      ...(outputSchema ? { outputSchema } : {}),
+    },
     convertToLlm: (messages: AgentMessage[]) => messages,
     transformContext: async (messages: AgentMessage[], ctxSignal?: AbortSignal) =>
       transformContextWithCompaction(messages, ctxSignal, {

@@ -25,6 +25,12 @@ export {
   segmentArraySchema,
 } from './validate.js';
 export { assertCanonicalSegments, isCanonicalSegment } from './assert.js';
+export {
+  mediaRefJsonSchema,
+  outboundSegmentJsonSchema,
+  aiOutboundJsonSchema,
+  STRICT_OUTBOUND_SEGMENT_TYPES,
+} from './json-schema.js';
 export { segmentsForImDelivery } from './delivery.js';
 export { isMediaRef, mediaRefFromLegacyData, mediaRefToLegacyFields } from './media.js';
 export { createImageSegment } from './image.js';

@@ -255,6 +255,7 @@ ai:
 | `execPreset` | string | 'custom' | 预设命令白名单：readonly / network / development / custom |
 | `execAllowlist` | string[] | [] | 白名单匹配**首段命令名**（见 exec-policy）；`allowlist` 下 **`icqq` 非敏感子命令**另有单独放行，见下文 [icqq 与 allowlist](#icqq-bash-exec) |
 | `execApprovalMode` | `'ask' \| 'allow' \| 'deny'` | `'deny'` | 主 Agent 对白名单外 bash 的处理：`ask` 触发 Owner 确认（`ask_user` / `ZHIN_NEEDS_OWNER`）；见 [icqq 与 allowlist](#icqq-bash-exec) |
+| `outputSchema` | `boolean \| 'segments' \| object` | `false` | AI 结构化输出（生成期约束）：`true`/`'segments'` 约束最终回复为 zhin 出站 JSON（`text`/`mentions`/`segments` 消息段数组）；对象则作为自定义 JSON Schema 透传。详见 [结构化输出（outputSchema）](#结构化输出-outputschema) |
 | `rateLimit` | object | {} | 速率限制配置 |
 | `modelSizeHint` | string | '' | 模型大小提示（影响技能截断） |
 | `skillInstructionMaxChars` | number | 0 | 技能指令最大字符数（覆盖自动推断） |
@@ -775,6 +776,28 @@ ai:
 
 - `renderToPlainText(elements)` — 渲染为纯文本
 - `renderToSatori(elements)` — 渲染为 Satori XML
+
+## 结构化输出（outputSchema）
+
+默认情况下模型回复是纯文本，由 `parseOutput` / AI 出站 JSON DSL（ADR 0025）在**生成后**解析成消息段。`ai.agent.outputSchema` 提供**生成期**约束：通过 AI SDK 结构化输出（`Output.object`）把 JSON Schema 下发给模型，让最终回复直接满足 zhin 的出站格式。
+
+```yaml
+ai:
+  agent:
+    outputSchema: segments   # 或 true；也可以是一个自定义 JSON Schema 对象
+```
+
+- `false`（默认）：现状，纯文本回复。
+- `true` / `'segments'`：约束回复为 zhin 出站 JSON —— `{ "text"?, "mentions"?, "segments"? }`，其中 `segments` 即消息段数组（如 `[{"type":"image","data":{"media":{"kind":"url","value":"https://…"}}},{"type":"text","data":{"text":"…"}},{"type":"mention","data":{"target":"…"}}]`）。段的 `data` 约束 SSOT 为 `packages/im/core/src/built/segment-contract/json-schema.ts`，与 canonical segment 契约（`validate.ts`）保持一致并有交叉测试防漂移。
+- 自定义对象：原样作为 JSON Schema 传给模型（此时出站解析仍走既有管线）。
+
+开启后模型回复即出站 JSON，出站阶段会**强制**走结构化解析（无需协作 Cell 等触发条件）；解析失败时回退原有纯文本链路。
+
+**注意**：
+
+- 结构化输出能力取决于 provider；不支持的 provider 由 AI SDK 降级处理，行为与现状一致。
+- 开启后 typing 流式过程展示的是 JSON 文本（段渲染在完成后进行），属预期行为。
+- 工具调用中间步不受影响（仅在产出文本回复的步骤应用 schema）。
 
 ## 权限控制（SenderRole）
 
