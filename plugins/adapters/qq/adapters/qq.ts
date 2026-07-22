@@ -9,6 +9,7 @@ import {
   resolveQqConfig,
   type QqAdapterConfig,
 } from '../src/protocol.js';
+import { qqRuntimeStateToken } from '../src/qq-runtime-state.js';
 
 export {
   QqHttpEndpoint,
@@ -28,6 +29,11 @@ export default defineAdapter<QqAdapterConfig>({
   create(context) {
     const config = resolveQqConfig(context.config);
     const gateway = context.use(messageGatewayToken);
+    // 注册到插件运行时状态（qq endpoint list 的"运行中"数据源）
+    context.use(qqRuntimeStateToken).endpoints.set(config.name, {
+      name: config.name,
+      mode: config.mode,
+    });
     if (config.mode === 'webhook' || config.mode === 'middleware') {
       return new QqHttpEndpoint({
         id: context.id,

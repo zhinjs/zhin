@@ -8,7 +8,7 @@ sidebar: false
 
 ## 状态
 
-已接受（2026-06-10）· **已实现**（`packages/im/zhin/src/shutdown.ts`、`signal-handlers.ts`、`task-executor.drainTaskExecutorLocks`）
+已接受（2026-06-10）· **已实现**（legacy：`packages/im/zhin/src/shutdown.ts`；Plugin Runtime：`basic/cli/src/plugin-runtime/process-lifecycle.ts`）
 
 ## 背景
 
@@ -65,6 +65,18 @@ SIGTERM/SIGINT
 
 ### D3 — Shutdown 入口
 
+进程级信号与退出只由 Process Host 拥有。Plugin Runtime 的
+`RootRuntime.stop()` 保持可嵌入：它等待 generation lease 并释放资源，但不注册
+操作系统信号，也不调用 `process.exit()`。`zhin runtime start` 的 CLI Process Host
+负责 10 秒硬超时、二次信号升级和最终退出状态；legacy standalone bootstrap 继续由
+`packages/im/zhin/src/shutdown.ts` 承担自己的进程入口。
+
+Plugin Runtime 首次 SIGINT/SIGTERM/SIGHUP 执行 Runtime Stop；干净停止设置退出状态 0，
+聚合失败或超时为 1。停止期间再次收到 SIGINT/SIGTERM 时分别立即退出 130/143。
+正常完成不强制 `process.exit()`，以便日志与标准输出刷新。
+
+legacy 入口示例：
+
 在 `packages/im/zhin/src/index.ts`（或新建 `packages/im/zhin/src/shutdown.ts`）添加：
 
 ```typescript
@@ -106,6 +118,7 @@ export function registerGracefulShutdown(agent: ZhinAgent, host?: { wss: WebSock
 | `dispose()` 可以是 async | 调用方用 `await` 等待 |
 | `dispose()` 必须取消所有 timers | `clearInterval` / `clearTimeout` |
 | `dispose()` 必须关闭所有网络连接 | MCP, SSE, WS |
+| async 清理必须由 lifecycle 等待 | 禁止 fire-and-forget disposer |
 | `dispose()` 必须清空集合 | Map, Set, Array |
 | `dispose()` 必须设 `this.disposed = true` | 阻止 dispose 后的新操作 |
 

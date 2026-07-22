@@ -19,6 +19,7 @@ import {
   type QqInboundMessage,
 } from '../src/protocol.js';
 import { getQqAgentDeps, setQqAgentDeps } from '../src/qq-agent-deps.js';
+import { createQqRuntimeState, qqRuntimeStateToken } from '../src/qq-runtime-state.js';
 
 const adapterFeature = featureId('zhin.adapter');
 
@@ -206,6 +207,7 @@ describe('qq plugin runtime adapter', () => {
         if (token === messageGatewayToken) {
           return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
         }
+        if (token === qqRuntimeStateToken) return createQqRuntimeState();
         throw new Error(`unexpected token: ${String(token)}`);
       },
     } as never);

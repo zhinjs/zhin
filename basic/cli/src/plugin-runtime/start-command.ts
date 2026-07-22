@@ -29,6 +29,10 @@ import { installScheduleHost, createScheduleHost } from './schedule-host-install
 import { installSpeechHost, prepareSpeechHost, resolveSpeechConfig } from './speech-host-installer.js';
 import { installProtocolHosts } from './protocol-host-installer.js';
 import { RootHost } from './root-host.js';
+import {
+  installProcessLifecycle,
+  nodeProcessLifecycleAdapter,
+} from './process-lifecycle.js';
 import { DISABLE_EXPERIMENTAL_WARNING_FLAG, suppressNodeExperimentalWarnings } from '../utils/node-warnings.js';
 
 export const processRestartExitCode = 75;
@@ -187,8 +191,11 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   im.attach(host.runtime.controller.snapshots);
   consoleHost.console.attach(host.runtime.controller.snapshots);
   control.stop = async () => {
-    await host.stop();
-    complete();
+    try {
+      await host.stop();
+    } finally {
+      complete();
+    }
   };
 
   let snapshot: Awaited<ReturnType<typeof host.start>>;
@@ -222,33 +229,24 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   // Orphan watchdog: if the supervising CLI wrapper died (kill -9, terminal
   // closed, wrapper crashed) this bot must not outlive it — a zombie keeps
   // platform connections alive and keeps watching project files.
-  const orphanWatchdog = startOrphanWatchdog(() => { initiateShutdown(); });
-
-  const onSignal = (): void => { initiateShutdown(); };
-  // force-exit backstop: stuck sockets (SSE /api/events, WS) or a wedged
-  // Endpoint must not hang shutdown forever — whichever path initiates it.
-  function initiateShutdown(): void {
-    setTimeout(() => process.exit(0), 5_000).unref();
-    void control.stop();
-  }
-  // signal-handlers.ts registers a second SIGINT handler via gracefulShutdown.
-  // If both fire, two concurrent stop() calls race against adapter reconnect
-  // timers — the first Ctrl+C triggers closes that schedule reconnects that
-  // then keep the process alive. Flush the duplicate handler so only one path
-  // runs, and escalate subsequent signals to immediate exit.
-  process.removeAllListeners('SIGINT');
-  process.removeAllListeners('SIGTERM');
-  process.once('SIGINT', onSignal);
-  process.once('SIGTERM', onSignal);
-  process.once('SIGHUP', onSignal);
-  process.once('SIGINT', () => process.exit(130)); // second Ctrl+C kills immediately
-  process.once('SIGTERM', () => process.exit(130));
+  const reportStopError = (error: unknown): void => {
+    options.writeError(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+  };
+  const orphanWatchdog = startOrphanWatchdog(() => {
+    void control.stop().catch((error) => {
+      process.exitCode = 1;
+      reportStopError(error);
+    });
+  });
+  const disposeProcessLifecycle = installProcessLifecycle({
+    process: nodeProcessLifecycleAdapter,
+    requestStop: () => control.stop(),
+    reportError: reportStopError,
+  });
   try { await completed; }
   finally {
     clearInterval(orphanWatchdog);
-    process.off('SIGINT', onSignal);
-    process.off('SIGTERM', onSignal);
-    process.off('SIGHUP', onSignal);
+    disposeProcessLifecycle();
   }
 }
 

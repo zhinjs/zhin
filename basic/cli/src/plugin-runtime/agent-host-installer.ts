@@ -348,12 +348,12 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     let bootstrapLoaded = false;
     let mcpEnsured = false;
 
-    // Dispose before any await so a cancelled generation cannot leak AIService.
-    lifecycle.add(() => {
-      void mcp.disconnectAll();
-      zhinAgent.dispose();
-      service.dispose();
-    });
+    // Register before any await so a cancelled generation cannot leak Agent
+    // Resources. Separate disposers let DisposeStack await MCP shutdown and
+    // continue through later cleanup when one Resource fails.
+    lifecycle.add(() => service.dispose());
+    lifecycle.add(() => zhinAgent.dispose());
+    lifecycle.add(() => mcp.disconnectAll());
 
     // Protocol Hosts (MCP/A2A) consume this narrow generation-owned port.
     // The Scope is sealed after all Root installers finish, so publication must

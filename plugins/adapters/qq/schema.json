@@ -17,6 +17,10 @@
       "type": "boolean",
       "default": false
     },
+    "master": {
+      "type": ["string", "number"],
+      "description": "Endpoint Owner（qq endpoint 管理命令权限、AI master 角色）；endpoints[i] 可逐项覆盖"
+    },
     "intents": {
       "type": "array",
       "items": {
