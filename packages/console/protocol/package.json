@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/console-protocol",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Canonical Zhin Console RPC names, payload normalization, and scope policy",
   "type": "module",
   "main": "./lib/index.js",
@@ -12,7 +12,10 @@
       "import": "./lib/index.js"
     }
   },
-  "files": ["lib", "src"],
+  "files": [
+    "lib",
+    "src"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "rimraf lib"

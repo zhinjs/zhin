@@ -1,5 +1,13 @@
 # @zhin.js/scaffold-wizard
 
+## 0.2.0
+
+### Minor Changes
+
+- 713445c: 适配器配置格式定稿（不兼容旧格式）：`plugins.<adapter>` 顶层仅共享字段 + `commandPrefix`，`endpoints[i]` 携带 endpoint 级字段（`name` + 凭据，各 schema 已类型化），`endpoints` 为必填（icqq 另需顶层 `master`）；icqq 新增 `trusted` 列表（顶层/逐项均可）。scaffold-wizard 全部字段式与自定义 configure() 产出改为新格式，examples（full-bot / qq-games-bot）与 20 个适配器 README 同步迁移。
+- 15bbdb3: weixin-ilink 向导支持扫码绑定：默认展示终端二维码（`qrcode` 渲染 + 链接兜底），微信 ClawBot 扫码确认后自动获取 `bot_token` 写入 `.env`（`WEIXIN_ILINK_TOKEN`），`zhin.config.yml` 只生成 `${WEIXIN_ILINK_TOKEN}` 引用；支持过期/超时重试与手动输入 token 降级。扫码 HTTP 流程内联实现（协议对齐 `adapter-weixin-ilink` 的 `login.ts`），向导在适配器包安装前即可运行。
+- 0356aa1: 适配器向导入口补全至 20 个：新增 line / wecom / weixin-ilink（字段式）与 napcat / onebot12 / milky / satori（自定义 configure，按 connection 分流 endpoint 字段）；字段 scope 分层对齐定稿 schema（凭据进 `endpoints[0]`，共享字段留顶层），产出经 Ajv strict 对照全部 20 个 schema 校验。
+
 ## 0.1.9
 
 ### Patch Changes

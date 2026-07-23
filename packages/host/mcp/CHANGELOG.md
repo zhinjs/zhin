@@ -1,5 +1,19 @@
 # @zhin.js/mcp
 
+## 5.0.0
+
+### Patch Changes
+
+- Updated dependencies [7db69c1]
+- Updated dependencies [e5c84ed]
+- Updated dependencies [1ddcd70]
+- Updated dependencies [ac9da66]
+  - @zhin.js/core@1.4.0
+  - @zhin.js/host-router@3.0.0
+  - @zhin.js/host-http@1.0.2
+  - zhin.js@5.0.0
+  - @zhin.js/tool@1.0.2
+
 ## 4.0.3
 
 ### Patch Changes

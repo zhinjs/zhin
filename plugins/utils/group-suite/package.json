@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-group-suite",
-  "version": "3.0.3",
+  "version": "3.0.4",
   "description": "Zhin.js 群运营套件 — slice-2 checkin/teach/stats + keywords (Plugin Runtime, in-memory)",
   "type": "module",
   "main": "./lib/index.js",

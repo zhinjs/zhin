@@ -1,7 +1,7 @@
 {
   "name": "minimal-bot",
   "private": true,
-  "version": "0.0.15",
+  "version": "0.0.16",
   "description": "Zhin.js Plugin Runtime Stable golden path",
   "type": "module",
   "scripts": {
@@ -11,9 +11,9 @@
     "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../.. examples/minimal-bot/tests"
   },
   "dependencies": {
-    "@zhin.js/adapter": "1.0.1",
-    "@zhin.js/command": "1.0.1",
-    "@zhin.js/component": "1.0.1",
+    "@zhin.js/adapter": "1.1.0",
+    "@zhin.js/command": "1.0.2",
+    "@zhin.js/component": "1.0.2",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/runtime": "workspace:*",

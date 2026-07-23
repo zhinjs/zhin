@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-lark",
-  "version": "4.0.3",
+  "version": "5.0.0",
   "description": "Zhin.js Lark/Feishu (飞书) adapter for Plugin Runtime (HTTP webhook)",
   "type": "module",
   "main": "./lib/index.js",

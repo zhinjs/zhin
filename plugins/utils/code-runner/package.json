@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-code-runner",
-  "version": "3.0.3",
+  "version": "3.0.4",
   "description": "Sandboxed code execution plugin for Zhin.js (Plugin Runtime)",
   "type": "module",
   "main": "./lib/index.js",

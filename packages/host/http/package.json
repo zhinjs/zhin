@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/host-http",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Minimal HTTP and WebSocket host for Plugin Runtime (no Koa)",
   "type": "module",
   "main": "./lib/index.js",

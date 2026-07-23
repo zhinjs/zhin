@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-kook",
-  "version": "5.0.3",
+  "version": "6.0.0",
   "description": "Zhin.js KOOK adapter for Plugin Runtime (WebSocket gateway or Webhook)",
   "type": "module",
   "main": "./lib/index.js",
