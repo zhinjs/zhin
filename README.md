@@ -170,7 +170,7 @@ ai:
 
 | | |
 |--|--|
-| **入门** | [快速开始](./docs/getting-started/index.md) · [Docker](./docs/getting-started/docker.md) · [Windows](./docs/essentials/windows-setup.md) |
+| **入门** | [快速开始](./docs/getting-started/index.md) · [路线与边界](./docs/vision.md) · [稳定性承诺](./docs/stability.md) · [Docker](./docs/getting-started/docker.md) · [Windows](./docs/essentials/windows-setup.md) |
 | **基础** | [核心概念](./docs/essentials/index.md) · [配置](./docs/essentials/configuration.md) · [命令](./docs/essentials/commands.md) · [插件](./docs/essentials/plugins.md) |
 | **进阶** | [AI](./docs/advanced/ai.md) · [Agent 创作面](./docs/advanced/agent-authoring.md) · [消息流](./docs/essentials/message-flow.md) |
 | **开发** | [插件开发](./docs/guide/plugin-development.md) · [贡献](./docs/contributing.md) · [架构](./docs/architecture/README.md) |

@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: "Zhin.js"
-  text: "跨平台 IM 机器人框架"
-  tagline: TypeScript 原生 · 插件热重载 · 20+ 平台一套代码 · 可选 AI Agent（&lt;10MB IM 核心）
+  text: "为生产环境构建 agent 产品的 TypeScript 框架"
+  tagline: 分层可组合 · Agent-first runtime · 安全内置 · 50+ Harness 门禁 · 20+ 平台一套代码
   image:
     src: /logo.svg
     alt: Zhin

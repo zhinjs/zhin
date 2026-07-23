@@ -2,6 +2,8 @@
 
 本目录是 Zhin.js **架构与契约** 的入口。修改 IM 消息链或出站路径时，先读此处再改代码。
 
+> 项目的定位与边界宣言见 [路线与边界（Vision）](../vision.md)。
+
 ## IM 主栈（Stable）
 
 默认开发与对外承诺范围以 [examples/minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot) 为准（**IM 核心**；AI 见 [ADR 0019](../adr/0019-install-size-layering.md) 与 [full-bot](https://github.com/zhinjs/zhin/tree/main/examples/full-bot)）。

@@ -148,6 +148,8 @@ const adrSidebar: DefaultTheme.SidebarItem[] = [
 const useDocsSidebar: DefaultTheme.SidebarItem[] = [
   sidebarGroup('入门', [
       { text: '这是什么？', link: '/what-is-zhin' },
+      { text: '路线与边界（Vision）', link: '/vision' },
+      { text: '稳定性承诺', link: '/stability' },
       { text: '安装与启动', link: '/getting-started/' },
       { text: '5 分钟首跑', link: '/getting-started/first-run' },
       { text: '生态与资源', link: '/ecosystem' },
