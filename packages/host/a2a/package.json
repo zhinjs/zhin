@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/a2a",
-  "version": "1.0.3",
+  "version": "2.0.0",
   "description": "A2A Protocol server for Zhin.js — multi-agent Agent Cards and task delegation",
   "type": "module",
   "main": "./lib/index.js",

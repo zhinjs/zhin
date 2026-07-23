@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/example-plugin-runtime-migration-bot",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "description": "Executable behavior tracer for migration to the Zhin Plugin Runtime",
   "type": "module",
@@ -10,12 +10,12 @@
     "test": "vitest run --root ../.. examples/plugin-runtime-migration-bot/tests"
   },
   "dependencies": {
-    "@zhin.js/command": "1.0.1",
-    "@zhin.js/component": "1.0.1",
+    "@zhin.js/command": "1.0.2",
+    "@zhin.js/component": "1.0.2",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/runtime": "workspace:*",
-    "@zhin.js/middleware": "1.0.1",
+    "@zhin.js/middleware": "1.0.2",
     "zhin.js": "workspace:*"
   },
   "devDependencies": {

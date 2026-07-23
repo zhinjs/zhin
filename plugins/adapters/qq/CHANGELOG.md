@@ -1,5 +1,36 @@
 # @zhin.js/adapter-qq
 
+## 6.0.0
+
+### Minor Changes
+
+- 3ea88d8: 恢复 legacy 的聊天命令添加 endpoint 能力（随适配器发布）：`qq endpoint add [name]`（手机 QQ 扫码绑定 → 凭据写 `.env` 的 `QQ_<NAME>_APPID/SECRET` → 追加 `plugins.qq.endpoints` 配置，重启生效）、`qq endpoint cancel`（中止绑定）、`qq endpoint list`（运行中 + 配置内 endpoints）、`qq endpoint remove <name>`（移除配置项）。add/cancel/remove 受 `master` 限制（顶层或 `endpoints[i]` 声明时仅 master 可执行，未配置则放行）；schema 新增顶层共享字段 `master`。绑定协议（create_bind_task / poll_bind_result / AES-256-GCM 解密）自 legacy 移植，二维码当前以链接文本下发（QQ 出站富媒体待迁移）。
+
+### Patch Changes
+
+- 7db69c1: 命令前缀改为适配器配置项：`MessageDispatcher` 不再硬编码 `/`，默认按消息所属适配器实例 config 的 `commandPrefix` 解析（默认 `''` 无前缀，任意文本按命令匹配），`endpoints[i].commandPrefix` 逐项覆盖；`ImRuntime({ commandPrefix })` 仍可设全局静态前缀。全部 20 个平台适配器 schema 新增 `commandPrefix` 属性。
+
+  BREAKING（行为变化）：未配置时命令不再需要 `/` 前缀——原 `/zt` 写法不再命中，直接发 `zt` 即可；需要斜杠风格的适配器请在配置里显式设 `commandPrefix: '/'`。
+
+- e5c84ed: Adapter 多账号：插件实例 config 支持 `endpoints: [{name, ...覆盖}]` 数组，`expandEndpointConfigs` 将一个实例展开为多个 endpoint record（id 为 `<slotId>~<name>`，顶层字段共享、逐项覆盖），替代多 `instanceKey` 方案；Console `/api/plugins` 收敛为一个插件卡片 + 多 endpoint。icqq / qq schema 与 README 补 `endpoints` 配置。
+
+  Plugin Runtime Console Host：补 `/esm/*` React/router ESM 代理路由（legacy `consoleApiRouter` 对齐），TypeScriptClientBuilder 裸导入改写为 `/esm/<enc>.mjs`。
+
+- 713445c: 适配器配置格式定稿（不兼容旧格式）：`plugins.<adapter>` 顶层仅共享字段 + `commandPrefix`，`endpoints[i]` 携带 endpoint 级字段（`name` + 凭据，各 schema 已类型化），`endpoints` 为必填（icqq 另需顶层 `master`）；icqq 新增 `trusted` 列表（顶层/逐项均可）。scaffold-wizard 全部字段式与自定义 configure() 产出改为新格式，examples（full-bot / qq-games-bot）与 20 个适配器 README 同步迁移。
+- f32c424: 适配器配置统一为 endpoints 数组格式：`plugins.<adapter>` 为该 adapter 所有 endpoint 的通用配置，`plugins.<adapter>.endpoints[i]` 为单个 endpoint 的特殊配置（逐项覆盖，`name` 必填）。slack / github schema 新增 `endpoints` 属性；icqq / qq / slack 顶层必填改为 `anyOf`（单 endpoint 字段或 `endpoints` 数组二选一，兼容 Ajv strictRequired）。
+- Updated dependencies [7db69c1]
+- Updated dependencies [e5c84ed]
+- Updated dependencies [3ea84a0]
+- Updated dependencies [1ddcd70]
+- Updated dependencies [ac9da66]
+  - @zhin.js/core@1.4.0
+  - @zhin.js/adapter@1.1.0
+  - @zhin.js/plugin-runtime@1.1.0
+  - @zhin.js/agent@1.0.5
+  - @zhin.js/host-http@1.0.2
+  - zhin.js@5.0.0
+  - @zhin.js/command@1.0.2
+
 ## 5.0.3
 
 ### Patch Changes

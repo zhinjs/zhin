@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-wechat-mp",
-  "version": "3.0.3",
+  "version": "4.0.0",
   "type": "module",
   "description": "Zhin.js WeChat Official Account adapter for Plugin Runtime (HTTP webhook)",
   "main": "./lib/index.js",

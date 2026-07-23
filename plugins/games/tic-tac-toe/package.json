@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-tic-tac-toe",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Zhin.js 跨平台井字棋 (Plugin Runtime)",
   "type": "module",
   "main": "./lib/index.js",

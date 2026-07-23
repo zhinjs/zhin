@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-text-adventure",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Zhin.js 交互式文字冒险 (Plugin Runtime)",
   "type": "module",
   "main": "./lib/index.js",

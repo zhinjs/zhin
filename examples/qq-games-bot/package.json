@@ -1,7 +1,7 @@
 {
   "name": "qq-games-bot",
   "private": true,
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "QQ 群游戏机器人（大厅 + 群工具，无 AI）",
   "type": "module",
   "scripts": {

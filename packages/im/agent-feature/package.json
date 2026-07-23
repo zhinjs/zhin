@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/agent-feature",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Convention-based Markdown Agent Feature for Zhin Plugin Runtime",
   "type": "module",
   "main": "./lib/index.js",

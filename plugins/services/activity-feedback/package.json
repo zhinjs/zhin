@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/service-activity-feedback",
-  "version": "1.0.2",
+  "version": "2.0.0",
   "description": "Activity Feedback 服务插件（Plugin Runtime）",
   "type": "module",
   "main": "./lib/index.js",
