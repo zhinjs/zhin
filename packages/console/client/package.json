@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/client",
-  "version": "2.0.6",
+  "version": "2.1.0",
   "description": "Zhin Remote Console client SDK (entries loader, app registry, REST/SSE) — UI lives in zhin-console repo",
   "type": "module",
   "main": "./dist/index.js",

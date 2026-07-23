@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-sandbox",
-  "version": "5.0.6",
+  "version": "6.0.0",
   "description": "Zhin.js Sandbox adapter for Plugin Runtime (WebSocket /sandbox)",
   "type": "module",
   "main": "./lib/index.js",

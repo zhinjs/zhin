@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-qq",
-  "version": "5.0.3",
+  "version": "6.0.0",
   "description": "Zhin.js QQ Official adapter for Plugin Runtime (WebSocket gateway)",
   "type": "module",
   "main": "./lib/index.js",

@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-guess-number",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Zhin.js 猜数字 — 1~100 七步之内猜中 (Plugin Runtime)",
   "type": "module",
   "main": "./lib/index.js",

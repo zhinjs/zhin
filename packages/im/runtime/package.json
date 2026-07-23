@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/runtime",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Static Plugin graph, generation transaction and HMR Root runtime for Zhin.js",
   "type": "module",
   "main": "./lib/index.js",

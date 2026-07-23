@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-repeater",
-  "version": "3.0.3",
+  "version": "3.0.4",
   "description": "Repeater plugin for Zhin.js — auto-repeat when group members echo the same content (Plugin Runtime)",
   "type": "module",
   "main": "./lib/index.js",
