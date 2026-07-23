@@ -1,5 +1,69 @@
 # Changelog
 
+> **说明**：4.x 起，本仓库采用 changesets 逐包发布，逐版本的发布记录维护在各包目录的 `CHANGELOG.md` 中（如主包 [packages/im/zhin/CHANGELOG.md](./packages/im/zhin/CHANGELOG.md)、全仓 changeset 摘要 [docs/CHANGELOG.md](./docs/CHANGELOG.md)）。本文件只记录跨版本的重要里程碑。
+
+## [4.1.x] - 2026-06 ~ 2026-07
+
+当前主线。4.1.0 引入语音管线，4.1.3 完成约定式插件运行时（Plugin Runtime）迁移。
+
+### 💥 破坏性变更（4.1.3，按仓库惯例以 patch 形式发布）
+
+- **约定式插件运行时迁移**：插件与适配器由 `usePlugin()` / `extends Adapter` 迁移为 `definePlugin` / `defineAdapter` + `plugin.ts` 入口 + 约定目录（`adapters/`、`commands/`、`components/`、`tools/` 等），旧 `usePlugin` / `extends Adapter` 生产入口已删除；全部 20 个平台适配器完成迁移。迁移边界见 [ADR 0050](./docs/adr/0050-plugin-runtime-migration-boundary.md)，开发形态见 [examples/plugin-runtime-migration-bot](./examples/plugin-runtime-migration-bot/)。
+- **CLI daemon 化**：`zhin runtime start --daemon`（pidfile / 崩溃拉起 / 风暴保护 / orphan watchdog）；legacy `zhin dev` / `zhin start`（含 `zhin restart`）已移除，`zhin stop` 兼容新 daemon。命令参考见 [docs/reference/cli.md](./docs/reference/cli.md)。
+- 注：为避免 zhin.js 5.0 级联，本次 breaking 迁移统一以 patch 版本发布（见 [docs/CHANGELOG.md](./docs/CHANGELOG.md) 1.0.45 条）。
+
+### ✨ 新能力主线
+
+- **语音管线（4.1.0）**：可选 peer `@zhin.js/speech`，入站 STT（`audio.strategy: transcribe`）、出站 TTS（`segment.tts` + `voice_stt` / `voice_tts` 工具），edge / openai / azure / custom 提供商；移除 `@zhin.js/plugin-voice`，配置键 `voice:` 改为 `speech:`。见 [ADR 0020](./docs/adr/0020-speech-pipeline-stt-tts.md)。
+- **约定式运行时新包**：`@zhin.js/plugin-runtime`、`@zhin.js/adapter`、`@zhin.js/runtime`、`@zhin.js/host-http`；onebot11 反向 WSS、onebot12 webhook/wss、milky sse/webhook 等连接模式补齐。
+- **安全加固**：builtin 工具统一走 `security/policy-facade.ts` 的 `runToolPolicies`（声明式策略表，deny 优先）；审计日志 close flush + 背压队列；命令拆分引号感知、堵绕过。
+- **Console 与可观测性**：Remote Console 接入 Plugin Runtime Host；Logger 表格日志、本地时区、第三方库（log4js / discord）桥接。
+- **脚手架同步**：`create-zhin-app` / `zhin new` / scaffold-wizard 生成物改为 Plugin Runtime 形态；Slack 适配器 mrkdwn 收发与交互反馈。
+
+## [4.0.x] - 2026-06
+
+安装分层主线（首个 4.x 发布为 4.0.1）。
+
+### 💥 破坏性变更
+
+- **`import from 'zhin.js'` 不再导出 `ZhinAgent` / `AIService`**：AI 能力拆分为可选子路径，请改用 `import from 'zhin.js/agent'` 或 `zhin.js/ai`，并按需安装 `@zhin.js/agent` + `zod` + `ai` + 所选 `@ai-sdk/*`。
+- **安装分档**：默认安装仅 IM 核心（production `node_modules` ≤ 10MB），AI 按需加装。分档表见 [docs/snippets/install-tiers.md](./docs/snippets/install-tiers.md)，决策见 [ADR 0019](./docs/adr/0019-install-size-layering.md)。
+
+### ✨ 新能力主线
+
+- 核心包瘦身与依赖分层治理；`@zhin.js/agent` 走向 1.0（多模型编排、安全沙箱、MCP 工具）。
+
+## [3.0.0] - 2026-06
+
+短周期过渡主版本。注意：zhin.js 包在 2026 年 6 月内由 2.0.x → 3.0.0 → 4.0.x 快速递进，此处的 2.x / 3.x 是 zhin.js 包的过渡版本号，与下方 2024 年的 2.0.0 里程碑及更早的旧主包 `zhin` 3.x 线均不是同一条线。
+
+### 🔄 变更
+
+- **架构分层落地（2.0.x）**：抽离 `@zhin.js/kernel`（插件系统 / 定时任务 / 错误体系，无 IM 概念），依赖方向收敛为 basic → kernel → ai → core → agent → zhin，由架构门禁强制。见 [docs/architecture/README.md](./docs/architecture/README.md)。
+- **概念更名 Bot → Endpoint（2.0.1）**：统一角色权限，适配多 Endpoint 业务场景。
+- **AI 双代 API 统一 + Plugin 类拆分（3.0.0）**：`@zhin.js/ai` 1.3 / `@zhin.js/agent` 0.3，为 4.x 安装分层铺路。
+
+## [zhin.js 1.0.x（zhin-next 重写）] - 2025-10 ~ 2026-06
+
+2025-10 的 "zhin-next" 重写开启新主线，主包 `zhin.js` 从 1.0.0 重新开始版本计数，至 1.0.93 共 90 余个迭代版本。
+
+### 💥 破坏性变更
+
+- **npm 命名空间迁移**：`@zhinjs/*` → `@zhin.js/*`，主包 `zhin` → `zhin.js`（版本计数随之重置为 1.0.x）。
+
+### ✨ 新能力主线
+
+- **AI Agent 技术栈从无到有**（2026-02 起）：`@zhin.js/ai`（Provider / agentLoop / 会话 / 记忆）与 `@zhin.js/agent`（ZhinAgent、多模型编排、安全沙箱、MCP）落地；harness 对齐系列决策见 [docs/adr/](./docs/adr/README.md)（ADR 0001 ~ 0031）。
+- **Remote Console**（2026-05）：Host 提供 API，UI 托管在 console.zhin.dev。
+- **Host 运行时分层**：`@zhin.js/host-api` / `@zhin.js/host-router` 从主包拆出。
+- 平台适配器持续扩充与迭代（QQ / ICQQ / NapCat / OneBot11·12 / Discord / Telegram / Slack / KOOK / 钉钉 / 飞书 / 企微 / GitHub / Email 等）；多智能体协作等实验性能力。
+
+## [zhin 3.x（旧主包维护线）] - 2024-12 ~ 2025-10
+
+2.0.0 里程碑之后、zhin-next 重写之前，旧主包 `zhin`（`@zhinjs/*` 命名空间）进入维护性迭代：3.0.x → 3.1.x 以缺陷修复与适配器维护为主，2025-02 后发布频次显著放缓，2025-03 ~ 2025-09 基本处于发布静默期，为 zhin-next 重写做准备。该线的逐版本细节未完整保留在本仓库 git 历史中，此处仅作概括，不逐项罗列；`zhin` 包最终停留在 3.1.x，随后被 `zhin.js` 取代。
+
+---
+
 ## [2.0.0] - 2024-12-26
 
 ### 🎉 重大架构升级
