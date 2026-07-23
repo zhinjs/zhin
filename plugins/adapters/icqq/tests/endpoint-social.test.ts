@@ -5,7 +5,7 @@ import {
   IcqqIpcEndpoint,
   type IcqqIpcTransport,
 } from '../src/endpoint.js';
-import { Actions, resolveIcqqConfig } from '../src/protocol.js';
+import { Actions, resolveIcqqConfig, type IpcEvent } from '../src/protocol.js';
 import { setIcqqAgentDeps } from '../src/icqq-agent-deps.js';
 
 const adapterFeature = featureId('zhin.adapter');
@@ -22,10 +22,15 @@ interface MockHandlers {
 
 function createMockIpc(handlers: MockHandlers = {}): IcqqIpcTransport & {
   sent: Array<{ action: string; params?: Record<string, unknown> }>;
+  emit(event: IpcEvent): void;
 } {
   const sent: Array<{ action: string; params?: Record<string, unknown> }> = [];
+  let eventHandler: ((event: IpcEvent) => void) | undefined;
   return {
     sent,
+    emit(event) {
+      eventHandler?.(event);
+    },
     request: vi.fn(async (action: string, params?: Record<string, unknown>) => {
       sent.push({ action, params });
       if (handlers.onRequest) return handlers.onRequest(action, params);
@@ -41,9 +46,10 @@ function createMockIpc(handlers: MockHandlers = {}): IcqqIpcTransport & {
       }
       return { id: '1', ok: true, data: {} };
     }),
-    subscribe: vi.fn((_action, _params, _handler) => ({
-      unsubscribe: vi.fn(async () => undefined),
-    })),
+    subscribe: vi.fn((_action, _params, handler) => {
+      eventHandler = handler;
+      return { unsubscribe: vi.fn(async () => undefined) };
+    }),
     setOnRemoteDisconnect: vi.fn(),
     close: vi.fn(),
   };
@@ -107,6 +113,65 @@ describe('icqq endpoint 社交/群管（console RPC 面）', () => {
     await expect(endpoint.management.listGroups?.()).resolves.toEqual([
       { group_id: 100, name: 'g' },
     ]);
+    await endpoint.stop();
+  });
+
+  it('publishes the QQ guild channel catalog through management', async () => {
+    const endpoint = await startEndpoint(createMockIpc({
+      onRequest(action, params) {
+        if (action === Actions.LIST_FRIENDS || action === Actions.LIST_GROUPS) {
+          return { id: '1', ok: true, data: [] };
+        }
+        if (action === Actions.GUILD_LIST) {
+          return { id: '1', ok: true, data: [{ guild_id: 'g1', guild_name: 'Guild' }] };
+        }
+        if (action === Actions.GUILD_CHANNELS) {
+          expect(params).toEqual({ guild_id: 'g1' });
+          return { id: '1', ok: true, data: [{ channel_id: 'c1', channel_name: 'chat' }] };
+        }
+        return { id: '1', ok: true, data: {} };
+      },
+    }));
+    await expect(endpoint.management.listChannels?.()).resolves.toEqual([{
+      id: 'c1',
+      name: 'chat',
+      parent: { type: 'guild', id: 'g1', name: 'Guild' },
+    }]);
+    await endpoint.stop();
+  });
+
+  it('adds inbound QQ guild channels to the management catalog', async () => {
+    const mock = createMockIpc({
+      onRequest(action) {
+        if (action === Actions.LIST_FRIENDS || action === Actions.LIST_GROUPS) {
+          return { id: '1', ok: true, data: [] };
+        }
+        if (action === Actions.GUILD_LIST) return { id: '1', ok: true, data: [] };
+        return { id: '1', ok: true, data: {} };
+      },
+    });
+    const endpoint = await startEndpoint(mock);
+    mock.emit({
+      id: '*',
+      event: 'message.guild.normal',
+      data: {
+        type: 'guild',
+        guild_id: 'g-live',
+        guild_name: 'Live Guild',
+        channel_id: 'c-live',
+        channel_name: 'live-chat',
+        nickname: 'Alice',
+        tiny_id: '42',
+        raw_message: 'hello',
+        time: 1_700_000_000,
+        seq: 7,
+      },
+    });
+    await expect(endpoint.management.listChannels?.()).resolves.toEqual([{
+      id: 'c-live',
+      name: 'live-chat',
+      parent: { type: 'guild', id: 'g-live', name: 'Live Guild' },
+    }]);
     await endpoint.stop();
   });
 

@@ -59,6 +59,7 @@
     "check:adr-manifest": "node scripts/check-adr-manifest.mjs",
     "check:doc-orphans": "node scripts/check-doc-orphans.mjs",
     "check:readme-exports": "node scripts/check-readme-exports.mjs",
+    "check:console-contract": "node scripts/check-console-contract.mjs",
     "check:config-docs": "vitest run tests/docs/config-docs-alignment.test.ts",
     "check:adapter-docs": "node scripts/sync-adapter-docs.mjs --check",
     "check:platform-tiers-ssot": "node scripts/check-platform-tiers-ssot.mjs",

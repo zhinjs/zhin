@@ -32,6 +32,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: checkout official Console contract consumer
+        if: matrix.node-version == 24
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
+        with:
+          repository: zhinjs/console
+          path: .tmp/console
+
       - name: setup node.js
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
@@ -65,6 +72,12 @@ jobs:
 
       - name: build packages
         run: pnpm build
+
+      - name: verify packed Console publish contract
+        if: matrix.node-version == 24
+        run: pnpm check:console-contract
+        env:
+          ZHIN_CONSOLE_DIR: .tmp/console
 
       # type-check / lint 在 check:all；unit tests 由下方 coverage 覆盖（HARNESS_SKIP_TEST 避免双跑）
       - name: harness checks (incl. type-check, lint)

@@ -26,6 +26,7 @@ import {
   isIcqqRequestPayload,
 } from './icqq-inbox.js';
 import {
+  IcqqGuildCatalog,
   isIcqqGuildIpcEvent,
   normalizeIcqqGuildInboundMessage,
 } from './icqq-guild.js';
@@ -90,9 +91,14 @@ export class IcqqIpcEndpoint implements EndpointInstance {
   ipc!: IcqqIpcTransport;
   readonly friends = new Map<number, IpcFriendInfo>();
   readonly groups = new Map<number, IpcGroupInfo>();
+  readonly #guildCatalog = new IcqqGuildCatalog();
   readonly management: EndpointManagement = Object.freeze<EndpointManagement>({
     listFriends: () => this.getFriendList(),
     listGroups: () => this.getGroupList(),
+    listChannels: async () => {
+      await this.#guildCatalog.syncAll(this.ipc);
+      return this.#guildCatalog.getGuildChannelList();
+    },
     listGroupMembers: (groupId) => this.getGroupMemberList(groupId),
     approveRequest: (requestId, remark) => this.approveRequest(requestId, remark),
     rejectRequest: (requestId, reason) => this.rejectRequest(requestId, reason),
@@ -241,6 +247,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     this.#inboxDeduper.clear();
     this.friends.clear();
     this.groups.clear();
+    this.#guildCatalog.clear();
     try {
       this.ipc?.close();
     } catch {
@@ -705,6 +712,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
       payload as Parameters<typeof normalizeIcqqGuildInboundMessage>[0],
     );
     if (!normalized) return;
+    this.#guildCatalog.upsertFromInbound(normalized.raw);
     if (!this.#inboundDeduper.shouldProcess(`guild:${normalized.messageId}`)) return;
     this.admit({
       id: normalized.messageId,

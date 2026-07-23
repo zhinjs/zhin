@@ -17,9 +17,9 @@
 
 ## Stable
 
-| 适配器 | 包名 | 文档 |
-|--------|------|------|
-| Sandbox | `@zhin.js/adapter-sandbox` | [Sandbox](/adapters/sandbox) |
+| 适配器 | 包名 | Endpoint 管理能力 | 文档 |
+|--------|------|-------------------|------|
+| Sandbox | `@zhin.js/adapter-sandbox` | — | [Sandbox](/adapters/sandbox) |
 
 ## Platform Stable
 
@@ -27,32 +27,32 @@ _（当前无）_
 
 ## Advanced
 
-| 适配器 | 包名 | 文档 |
-|--------|------|------|
-| 钉钉 | `@zhin.js/adapter-dingtalk` | [钉钉](/adapters/dingtalk) |
-| 飞书 | `@zhin.js/adapter-lark` | [飞书](/adapters/lark) |
-| 微信公众号 | `@zhin.js/adapter-wechat-mp` | [微信公众号](/adapters/wechat-mp) |
-| Discord | `@zhin.js/adapter-discord` | [Discord](/adapters/discord) |
-| ICQQ (QQ) | `@zhin.js/adapter-icqq` | [ICQQ (QQ)](/adapters/icqq) |
-| KOOK | `@zhin.js/adapter-kook` | [KOOK](/adapters/kook) |
-| OneBot v11 | `@zhin.js/adapter-onebot11` | [OneBot v11](/adapters/onebot11) |
-| QQ 官方 | `@zhin.js/adapter-qq` | [QQ 官方](/adapters/qq) |
-| Slack | `@zhin.js/adapter-slack` | [Slack](/adapters/slack) |
-| Telegram | `@zhin.js/adapter-telegram` | [Telegram](/adapters/telegram) |
+| 适配器 | 包名 | Endpoint 管理能力 | 文档 |
+|--------|------|-------------------|------|
+| 钉钉 | `@zhin.js/adapter-dingtalk` | — | [钉钉](/adapters/dingtalk) |
+| 飞书 | `@zhin.js/adapter-lark` | — | [飞书](/adapters/lark) |
+| 微信公众号 | `@zhin.js/adapter-wechat-mp` | — | [微信公众号](/adapters/wechat-mp) |
+| Discord | `@zhin.js/adapter-discord` | — | [Discord](/adapters/discord) |
+| ICQQ (QQ) | `@zhin.js/adapter-icqq` | listFriends, listGroups, listChannels, listGroupMembers, approveRequest, rejectRequest, kickGroupMember, muteGroupMember, setGroupAdmin, deleteFriend | [ICQQ (QQ)](/adapters/icqq) |
+| KOOK | `@zhin.js/adapter-kook` | — | [KOOK](/adapters/kook) |
+| OneBot v11 | `@zhin.js/adapter-onebot11` | — | [OneBot v11](/adapters/onebot11) |
+| QQ 官方 | `@zhin.js/adapter-qq` | listChannels | [QQ 官方](/adapters/qq) |
+| Slack | `@zhin.js/adapter-slack` | — | [Slack](/adapters/slack) |
+| Telegram | `@zhin.js/adapter-telegram` | — | [Telegram](/adapters/telegram) |
 
 ## Experimental
 
-| 适配器 | 包名 | 文档 |
-|--------|------|------|
-| 企业微信 | `@zhin.js/adapter-wecom` | [企业微信](/adapters/wecom) |
-| 微信 iLink | `@zhin.js/adapter-weixin-ilink` | [微信 iLink](/adapters/weixin-ilink) |
-| Email | `@zhin.js/adapter-email` | [Email](/adapters/email) |
-| GitHub | `@zhin.js/adapter-github` | [GitHub](/adapters/github) |
-| LINE | `@zhin.js/adapter-line` | [LINE](/adapters/line) |
-| Milky | `@zhin.js/adapter-milky` | [Milky](/adapters/milky) |
-| NapCat | `@zhin.js/adapter-napcat` | [NapCat](/adapters/napcat) |
-| OneBot v12 | `@zhin.js/adapter-onebot12` | [OneBot v12](/adapters/onebot12) |
-| Satori | `@zhin.js/adapter-satori` | [Satori](/adapters/satori) |
+| 适配器 | 包名 | Endpoint 管理能力 | 文档 |
+|--------|------|-------------------|------|
+| 企业微信 | `@zhin.js/adapter-wecom` | — | [企业微信](/adapters/wecom) |
+| 微信 iLink | `@zhin.js/adapter-weixin-ilink` | — | [微信 iLink](/adapters/weixin-ilink) |
+| Email | `@zhin.js/adapter-email` | — | [Email](/adapters/email) |
+| GitHub | `@zhin.js/adapter-github` | — | [GitHub](/adapters/github) |
+| LINE | `@zhin.js/adapter-line` | — | [LINE](/adapters/line) |
+| Milky | `@zhin.js/adapter-milky` | — | [Milky](/adapters/milky) |
+| NapCat | `@zhin.js/adapter-napcat` | — | [NapCat](/adapters/napcat) |
+| OneBot v12 | `@zhin.js/adapter-onebot12` | — | [OneBot v12](/adapters/onebot12) |
+| Satori | `@zhin.js/adapter-satori` | — | [Satori](/adapters/satori) |
 
 ## 维护说明
 

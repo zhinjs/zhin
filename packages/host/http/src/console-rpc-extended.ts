@@ -31,7 +31,12 @@ export interface ConsoleRpcExtendedCtx {
   projectRoot: string;
   /** Plugin Runtime ScheduleHost（basic/cli schedule-host-installer 提供）。 */
   scheduleHost?: unknown;
-  /** 经 ImRuntime / AdapterEndpointIndex 解析 live endpoint 实例。 */
+  /** 经 ImRuntime / AdapterEndpointIndex 解析管理语义端口。 */
+  resolveEndpointManagement?: (
+    adapter: string,
+    endpointId: string,
+  ) => EndpointManagementPort | null | undefined;
+  /** @deprecated Use `resolveEndpointManagement`; accepted for one compatibility cycle. */
   resolveEndpoint?: (adapter: string, endpointId: string) => unknown;
   /** Plugin Runtime DatabaseHost 的 models 视图。 */
   databaseHost?: { models: { get(name: string): unknown } };
@@ -720,6 +725,11 @@ function resolveLiveEndpoint(
   adapter: string,
   endpointId: string,
 ): ResolveOk | { error: string } {
+  if (ctx.resolveEndpointManagement) {
+    const management = ctx.resolveEndpointManagement(adapter, endpointId);
+    if (!management) return { error: 'endpoint not found' };
+    return { management, adapter, endpointId };
+  }
   if (!ctx.resolveEndpoint) {
     return { error: 'Endpoint registry is not configured' };
   }

@@ -346,6 +346,10 @@ GET {API_BASE}/pub/openapi.json
 
 `managementCapabilities` 由运行时根据 Endpoint 实际实现的方法自动推导，当前稳定值为 `listFriends`、`listGroups`、`listChannels`、`listGroupMembers`、`approveRequest`、`rejectRequest`、`kickGroupMember`、`muteGroupMember`、`setGroupAdmin`、`deleteFriend`。Console 必须按这些能力值渲染目录和操作，不能用 `adapter === 'icqq'` 等平台白名单替代能力判断。
 
+wire 类型使用 `@zhin.js/client` 重导出的 `ConsoleEndpointSummary` 与 `EndpointManagementCapability`，不得在 Remote Console 复制本地 `EndpointInfo` union。Plugin Runtime Host 通过 `getEndpointManagement()` 向管理面提供窄 seam；raw live Endpoint 解析仅为旧 Host 装配保留兼容入口。
+
+`@zhin.js/console-protocol` 与 `@zhin.js/client` 必须配套发布。CI 使用 `pnpm check:console-contract` 将两个包打成真实 tarball，并在干净的官方 Console checkout 中安装和构建，禁止以复制 workspace `node_modules` 作为发布验证。
+
 ---
 
 ### 3.4 SSE 实时

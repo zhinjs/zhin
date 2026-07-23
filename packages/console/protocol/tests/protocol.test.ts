@@ -6,6 +6,7 @@ import {
   normalizeConsolePushType,
   normalizeConsoleRpcMessage,
   normalizeConsoleRpcType,
+  parseConsoleInboxEvent,
 } from '../src/index.js';
 
 describe('Console RPC protocol', () => {
@@ -27,6 +28,27 @@ describe('Console RPC protocol', () => {
         channelId: 'room',
       },
     });
+  });
+
+  it('parses inbox pushes once at the protocol seam', () => {
+    expect(parseConsoleInboxEvent({
+      type: 'endpoint:request',
+      data: { $adapter: 'icqq', bot: '10001', comment: 'hello' },
+    })).toEqual({
+      type: 'request.receive',
+      kind: 'request',
+      adapter: 'icqq',
+      endpointId: '10001',
+      payload: {
+        $adapter: 'icqq',
+        adapter: 'icqq',
+        bot: '10001',
+        endpointId: '10001',
+        comment: 'hello',
+      },
+    });
+    expect(parseConsoleInboxEvent({ type: 'hmr:reload', data: {} })).toBeNull();
+    expect(parseConsoleInboxEvent({ type: 'message.receive', data: {} })).toBeNull();
   });
 
   it('normalizes colon/camel aliases to canonical dot/snake names', () => {

@@ -8,7 +8,14 @@ import {
   type RuntimeSnapshot,
   type SnapshotStore,
 } from '@zhin.js/plugin-runtime';
-import { AdapterIndex, adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
+import {
+  AdapterIndex,
+  adapterFeatureId,
+  isAdapterIndex,
+  resolveEndpointManagement,
+  type EndpointManagement,
+  type EndpointManagementCapability,
+} from '@zhin.js/adapter';
 import { MiddlewareIndex, isMiddlewareIndex, middlewareFeatureId } from '@zhin.js/middleware';
 import {
   Message,
@@ -194,7 +201,7 @@ export class ImRuntime implements MessageGateway {
     readonly connected: boolean;
     readonly status: 'online' | 'offline';
     readonly phase: 'pending' | 'starting' | 'online' | 'failed' | 'unconfigured';
-    readonly managementCapabilities: readonly string[];
+    readonly managementCapabilities: readonly EndpointManagementCapability[];
   }[] {
     try {
       const lease = this.#acquire();
@@ -223,7 +230,7 @@ export class ImRuntime implements MessageGateway {
     readonly connected: boolean;
     readonly status: 'online' | 'offline';
     readonly phase: 'pending' | 'starting' | 'online' | 'failed' | 'unconfigured';
-    readonly managementCapabilities: readonly string[];
+    readonly managementCapabilities: readonly EndpointManagementCapability[];
   } | null {
     try {
       const lease = this.#acquire();
@@ -353,9 +360,23 @@ export class ImRuntime implements MessageGateway {
     }
   }
 
-  /** Console endpoint 社交/群管 RPC：解析 live Endpoint 实例（无则 null）。 */
+  /**
+   * Console endpoint 社交/群管 RPC：解析 live Endpoint 实例（无则 null）。
+   * @deprecated Host callers should use `getEndpointManagement()`.
+   */
   getLiveEndpoint(adapter: string, endpointId: string): unknown | null {
     return this.#liveEndpoint(adapter, endpointId);
+  }
+
+  /**
+   * Narrow Host seam for Console social/group management. An empty object means
+   * the Endpoint exists but implements no management operations; null means it
+   * cannot be resolved.
+   */
+  getEndpointManagement(adapter: string, endpointId: string): EndpointManagement | null {
+    const endpoint = this.#liveEndpoint(adapter, endpointId);
+    if (!endpoint) return null;
+    return resolveEndpointManagement(endpoint) ?? Object.freeze({});
   }
 
   async #sendWithSnapshot(request: SendRequest, snapshot: RuntimeSnapshot): Promise<unknown> {

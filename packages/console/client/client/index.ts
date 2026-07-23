@@ -2,11 +2,18 @@
 export * from "./types";
 export {
   ENDPOINT_RPC,
+  ENDPOINT_MANAGEMENT_CAPABILITIES,
   INBOX_RPC,
   SIDE_EVENT_PUSH,
   SIDE_EVENT_RPC,
   normalizeConsolePushMessage,
   normalizeConsolePushType,
+  parseConsoleInboxEvent,
+  type ConsoleInboxEvent,
+  type ConsoleInboxEventKind,
+  type ConsoleEndpointPhase,
+  type ConsoleEndpointSummary,
+  type EndpointManagementCapability,
 } from "@zhin.js/console-protocol";
 
 // Media URL resolution

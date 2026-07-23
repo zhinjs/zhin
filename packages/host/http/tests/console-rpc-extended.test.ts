@@ -390,7 +390,7 @@ describe('dispatchExtendedConsoleRpc', () => {
       const approveRequest = vi.fn().mockResolvedValue(undefined);
       const rejectRequest = vi.fn().mockResolvedValue(undefined);
       const ctx = makeCtx({
-        resolveEndpoint: () => ({ management: { approveRequest, rejectRequest } }),
+        resolveEndpointManagement: () => ({ approveRequest, rejectRequest }),
       });
       await expect(
         dispatchExtendedConsoleRpc(
@@ -412,7 +412,7 @@ describe('dispatchExtendedConsoleRpc', () => {
     });
 
     it('approve reports 未接线 when the endpoint lacks approval methods', async () => {
-      const ctx = makeCtx({ resolveEndpoint: () => ({ send: async () => 'x' }) });
+      const ctx = makeCtx({ resolveEndpointManagement: () => ({}) });
       const result = await dispatchExtendedConsoleRpc(
         'endpoint:requestApprove',
         { $adapter: 'sandbox', $endpoint: 'bot', $id: 'req-1' },
@@ -423,7 +423,7 @@ describe('dispatchExtendedConsoleRpc', () => {
     });
 
     it('approve requires $adapter/$endpoint/$id and is demo-forbidden', async () => {
-      const ctx = makeCtx({ resolveEndpoint: () => ({}) });
+      const ctx = makeCtx({ resolveEndpointManagement: () => ({}) });
       await expect(
         dispatchExtendedConsoleRpc(
           'endpoint:requestApprove',
@@ -447,13 +447,11 @@ describe('dispatchExtendedConsoleRpc', () => {
   describe('endpoint social reads', () => {
     it('friends consumes the normalized endpoint management port', async () => {
       const ctx = makeCtx({
-        resolveEndpoint: () => ({
-          management: {
-            listFriends: async () => [
-              { user_id: 10001, nickname: '张三', remark: '老张' },
-              { user_id: 10002, nickname: '李四', remark: '' },
-            ],
-          },
+        resolveEndpointManagement: () => ({
+          listFriends: async () => [
+            { user_id: 10001, nickname: '张三', remark: '老张' },
+            { user_id: 10002, nickname: '李四', remark: '' },
+          ],
         }),
       });
       await expect(
@@ -473,7 +471,7 @@ describe('dispatchExtendedConsoleRpc', () => {
       });
     });
 
-    it('friends does not probe transport-specific methods outside the management port', async () => {
+    it('keeps the legacy raw-endpoint resolver as an inbound-only compatibility seam', async () => {
       const ctx = makeCtx({
         resolveEndpoint: () => ({
           getFriendList: async () => ({ data: [{ userId: 7, name: '王五' }] }),
@@ -489,7 +487,7 @@ describe('dispatchExtendedConsoleRpc', () => {
     });
 
     it('friends/groups/channels/groupMembers report 该平台不支持 without methods', async () => {
-      const ctx = makeCtx({ resolveEndpoint: () => ({ send: async () => 'x' }) });
+      const ctx = makeCtx({ resolveEndpointManagement: () => ({}) });
       const base = { $adapter: 'sandbox', $endpoint: 'bot' };
       await expect(
         dispatchExtendedConsoleRpc('endpoint:friends', base, ctx),
@@ -507,8 +505,8 @@ describe('dispatchExtendedConsoleRpc', () => {
 
     it('groups consumes normalized adapter data', async () => {
       const ctx = makeCtx({
-        resolveEndpoint: () => ({
-          management: { listGroups: async () => [{ group_id: 888, name: '测试群' }] },
+        resolveEndpointManagement: () => ({
+          listGroups: async () => [{ group_id: 888, name: '测试群' }],
         }),
       });
       await expect(
@@ -524,14 +522,12 @@ describe('dispatchExtendedConsoleRpc', () => {
 
     it('channels combines getGuilds + getChannels with guild parent', async () => {
       const ctx = makeCtx({
-        resolveEndpoint: () => ({
-          management: {
-            listChannels: async () => [{
-              id: 'c-1',
-              name: '子频道',
-              parent: { type: 'guild', id: 'g-1', name: '频道一' },
-            }],
-          },
+        resolveEndpointManagement: () => ({
+          listChannels: async () => [{
+            id: 'c-1',
+            name: '子频道',
+            parent: { type: 'guild', id: 'g-1', name: '频道一' },
+          }],
         }),
       });
       await expect(
@@ -553,7 +549,7 @@ describe('dispatchExtendedConsoleRpc', () => {
     it('groupMembers returns arrays from getGroupMemberList', async () => {
       const getGroupMemberList = vi.fn().mockResolvedValue([{ user_id: 1 }, { user_id: 2 }]);
       const ctx = makeCtx({
-        resolveEndpoint: () => ({ management: { listGroupMembers: getGroupMemberList } }),
+        resolveEndpointManagement: () => ({ listGroupMembers: getGroupMemberList }),
       });
       const result = await dispatchExtendedConsoleRpc(
         'endpoint:groupMembers',
@@ -569,10 +565,8 @@ describe('dispatchExtendedConsoleRpc', () => {
     it('social reads are allowed in demo scope', async () => {
       const ctx = makeCtx({
         fullScope: false,
-        resolveEndpoint: () => ({
-          management: {
-            listFriends: async () => [{ user_id: 1, nickname: 'a', remark: '' }],
-          },
+        resolveEndpointManagement: () => ({
+          listFriends: async () => [{ user_id: 1, nickname: 'a', remark: '' }],
         }),
       });
       const result = await dispatchExtendedConsoleRpc(
@@ -596,7 +590,7 @@ describe('dispatchExtendedConsoleRpc', () => {
         dispatchExtendedConsoleRpc(
           'endpoint:friends',
           { $adapter: 'icqq', $endpoint: '9999' },
-          makeCtx({ resolveEndpoint: () => undefined }),
+          makeCtx({ resolveEndpointManagement: () => undefined }),
         ),
       ).resolves.toEqual({ error: 'endpoint not found' });
 
@@ -604,7 +598,7 @@ describe('dispatchExtendedConsoleRpc', () => {
         dispatchExtendedConsoleRpc(
           'endpoint:friends',
           {},
-          makeCtx({ resolveEndpoint: () => ({}) }),
+          makeCtx({ resolveEndpointManagement: () => ({}) }),
         ),
       ).resolves.toEqual({ error: '$adapter and $endpoint required' });
     });
@@ -658,7 +652,7 @@ describe('dispatchExtendedConsoleRpc', () => {
     it('full scope invokes endpoint methods with normalized args', async () => {
       for (const c of writeCases) {
         const fn = vi.fn().mockResolvedValue(undefined);
-        const ctx = makeCtx({ resolveEndpoint: () => ({ management: { [c.method]: fn } }) });
+        const ctx = makeCtx({ resolveEndpointManagement: () => ({ [c.method]: fn }) });
         await expect(
           dispatchExtendedConsoleRpc(c.type, c.data, ctx),
         ).resolves.toEqual({ data: { success: true } });
@@ -668,7 +662,7 @@ describe('dispatchExtendedConsoleRpc', () => {
 
     it('full scope reports 该平台不支持 when methods are absent', async () => {
       for (const c of writeCases) {
-        const ctx = makeCtx({ resolveEndpoint: () => ({}) });
+        const ctx = makeCtx({ resolveEndpointManagement: () => ({}) });
         const result = await dispatchExtendedConsoleRpc(c.type, c.data, ctx);
         expect(result).toEqual({ error: c.unsupported });
       }
@@ -678,7 +672,7 @@ describe('dispatchExtendedConsoleRpc', () => {
       for (const c of writeCases) {
         const ctx = makeCtx({
           fullScope: false,
-          resolveEndpoint: () => ({ management: { [c.method]: async () => undefined } }),
+          resolveEndpointManagement: () => ({ [c.method]: async () => undefined }),
         });
         await expect(
           dispatchExtendedConsoleRpc(c.type, c.data, ctx),
@@ -689,7 +683,7 @@ describe('dispatchExtendedConsoleRpc', () => {
     });
 
     it('write ops validate required fields', async () => {
-      const ctx = makeCtx({ resolveEndpoint: () => ({}) });
+      const ctx = makeCtx({ resolveEndpointManagement: () => ({}) });
       await expect(
         dispatchExtendedConsoleRpc(
           'endpoint:groupKick',

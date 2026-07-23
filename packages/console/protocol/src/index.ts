@@ -33,6 +33,47 @@ export const ENDPOINT_RPC = {
   GROUP_ADMIN: 'endpoint.group_admin',
 } as const;
 
+/** Stable capability ids advertised by `endpoint.list` / `endpoint.info`. */
+export const ENDPOINT_MANAGEMENT_CAPABILITIES = [
+  'listFriends',
+  'listGroups',
+  'listChannels',
+  'listGroupMembers',
+  'approveRequest',
+  'rejectRequest',
+  'kickGroupMember',
+  'muteGroupMember',
+  'setGroupAdmin',
+  'deleteFriend',
+] as const;
+
+export type EndpointManagementCapability =
+  (typeof ENDPOINT_MANAGEMENT_CAPABILITIES)[number];
+
+export type ConsoleEndpointPhase =
+  | 'pending'
+  | 'starting'
+  | 'online'
+  | 'failed'
+  | 'unconfigured';
+
+/**
+ * Forward-compatible Endpoint row shared by both Host implementations and the
+ * Remote Console. Optional fields allow clients to consume older Hosts.
+ */
+export interface ConsoleEndpointSummary {
+  readonly name: string;
+  readonly adapter: string;
+  readonly connected: boolean;
+  readonly status: 'online' | 'offline';
+  readonly owner?: string;
+  readonly phase?: ConsoleEndpointPhase;
+  readonly pendingLogin?: boolean;
+  readonly pendingRequestCount?: number;
+  readonly pendingNoticeCount?: number;
+  readonly managementCapabilities?: readonly EndpointManagementCapability[];
+}
+
 export const SIDE_EVENT_NAMES = {
   ...SIDE_EVENT_PUSH,
   ...SIDE_EVENT_RPC,
@@ -64,6 +105,46 @@ export function normalizeConsolePushMessage<T extends { readonly type?: unknown 
     type: normalizeConsolePushType(message.type),
     ...(data === undefined ? {} : { data }),
   });
+}
+
+export type ConsoleInboxEventKind = 'message' | 'request' | 'notice';
+
+export interface ConsoleInboxEvent {
+  readonly type: string;
+  readonly kind: ConsoleInboxEventKind;
+  readonly adapter: string;
+  readonly endpointId: string;
+  readonly payload: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * Normalize and classify a persistence-worthy push at the transport seam.
+ * Callers never need to understand legacy event names or identity aliases.
+ */
+export function parseConsoleInboxEvent(
+  input: { readonly type?: unknown; readonly data?: unknown },
+): ConsoleInboxEvent | null {
+  const message = normalizeConsolePushMessage(input);
+  if (!isRecord(message.data)) return null;
+  const kind = inboxKindForPushType(message.type);
+  if (!kind) return null;
+  const adapter = nonEmptyString(message.data.adapter);
+  const endpointId = nonEmptyString(message.data.endpointId);
+  if (!adapter || !endpointId) return null;
+  return Object.freeze({
+    type: message.type,
+    kind,
+    adapter,
+    endpointId,
+    payload: message.data,
+  });
+}
+
+function inboxKindForPushType(type: string): ConsoleInboxEventKind | null {
+  if (type === SIDE_EVENT_PUSH.MESSAGE_RECEIVE) return 'message';
+  if (type === SIDE_EVENT_PUSH.REQUEST_RECEIVE) return 'request';
+  if (type === SIDE_EVENT_PUSH.NOTICE_RECEIVE) return 'notice';
+  return null;
 }
 
 function normalizeConsolePushData(
@@ -236,4 +317,9 @@ function aliasField(target: Record<string, unknown>, key: string, ...values: unk
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function nonEmptyString(value: unknown): string | null {
+  const result = value == null ? '' : String(value).trim();
+  return result || null;
 }

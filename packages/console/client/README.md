@@ -25,10 +25,12 @@ Peer：`react >= 18`（`createPluginRegisterHostApi` 需要 React 引用）。
 | `createRegistryStore` / `useRegistry` | 可选 registry store |
 | `ENDPOINT_RPC` / `INBOX_RPC` / `SIDE_EVENT_RPC` / `SIDE_EVENT_PUSH` | `@zhin.js/console-protocol` 的规范 RPC 与推送名称 |
 | `normalizeConsolePushType` / `normalizeConsolePushMessage` | 在 SDK 边界兼容旧 `endpoint:*` 推送并输出规范事件与 payload |
+| `parseConsoleInboxEvent` | 一次完成 Inbox 推送名称、身份别名和 message/request/notice 分类 |
+| `ConsoleEndpointSummary` / `EndpointManagementCapability` | Host 与 Remote Console 共享的 Endpoint wire 类型 |
 
 类型与 Entry 契约来自 `@zhin.js/contract`。
 
-业务 UI 应使用 SDK 导出的协议常量，不要硬编码旧 `endpoint:list`、`endpoint:sendMessage` 等名称。SDK 会把旧 Host 推送别名归一化为 `message.receive` / `request.receive` / `notice.receive`，并统一 `endpointId`、`channelId` 字段。
+业务 UI 应使用 SDK 导出的协议常量和 Endpoint 类型，不要硬编码旧 `endpoint:list`、`endpoint:sendMessage` 等名称，也不要复制 `EndpointInfo`。SDK 会把旧 Host 推送别名归一化为 `message.receive` / `request.receive` / `notice.receive`，并统一 `endpointId`、`channelId` 字段。
 
 ## 启动：加载插件 Console Entry
 

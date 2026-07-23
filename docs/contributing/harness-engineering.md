@@ -31,6 +31,7 @@ pnpm check:no-koa           # 检查 koa 导入
 pnpm check:prod             # 检查生产配置
 pnpm check:plugin           # 检查插件规范
 pnpm check:architecture     # 检查架构层级
+ZHIN_CONSOLE_DIR=/path/to/console pnpm check:console-contract # pack SDK 后构建官方 Remote Console
 pnpm check:doc-links        # 检查文档相对链接（AGENTS、architecture 等）
 pnpm check:adapter-docs     # 适配器 README 与 docs/adapters 是否同步
 pnpm sync:adapter-docs      # 从 plugins/adapters/*/README 生成 docs/adapters/*

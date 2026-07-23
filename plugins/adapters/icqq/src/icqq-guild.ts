@@ -3,8 +3,15 @@
  */
 import { toCanonicalSegments, type MessageSegment } from "zhin.js";
 import { Actions, type IpcGuildMessageEventData } from "./protocol.js";
-import type { IpcClient } from "./ipc-client.js";
 import { parseCqMessage } from "./cq-message.js";
+
+/** Narrow request port shared by the real IPC client and endpoint test transports. */
+export interface IcqqGuildRpc {
+  request(
+    action: string,
+    params?: Record<string, unknown>,
+  ): Promise<{ ok: boolean; data?: unknown }>;
+}
 
 export interface IcqqGuildChannelEntry {
   channel_id: string;
@@ -36,7 +43,7 @@ export class IcqqGuildCatalog {
     this.guilds.clear();
   }
 
-  async syncAll(ipc: IpcClient): Promise<void> {
+  async syncAll(ipc: IcqqGuildRpc): Promise<void> {
     const listResp = await ipc.request(Actions.GUILD_LIST);
     if (!listResp.ok) return;
 

@@ -21,8 +21,6 @@ import {
   markRequestsConsumed,
   markNoticesConsumed,
   listRequestsForBot,
-  listUnconsumedRequests,
-  listUnconsumedNotices,
   getRequestRowById,
 } from "./endpoint-persistence.js";
 
@@ -47,73 +45,6 @@ function resolveEndpointManagement(
   const endpoint = adapter instanceof Adapter ? adapter.endpoints.get(endpointId) : undefined;
   if (!endpoint) return undefined;
   return (endpoint as unknown as { management?: EndpointManagement }).management ?? {};
-}
-
-function collectEndpointsList(): Array<{
-  name: string;
-  adapter: string;
-  connected: boolean;
-  status: "online" | "offline";
-  pendingRequestCount?: number;
-  pendingNoticeCount?: number;
-}> {
-  const endpoints: Array<{
-    name: string;
-    adapter: string;
-    connected: boolean;
-    status: "online" | "offline";
-  }> = [];
-  const seenAdapterNames = new Set<string>();
-  for (const name of root.adapters) {
-    const key = String(name);
-    if (seenAdapterNames.has(key)) continue;
-    seenAdapterNames.add(key);
-    const adapter = root.inject(name as keyof Plugin.Contexts);
-    if (adapter instanceof Adapter) {
-      for (const [endpointId, endpoint] of adapter.endpoints.entries()) {
-        endpoints.push({
-          name: endpointId,
-          adapter: key,
-          connected: !!(endpoint as { $connected?: boolean }).$connected,
-          status: (endpoint as { $connected?: boolean }).$connected ? "online" : "offline",
-        });
-      }
-    }
-  }
-  return endpoints;
-}
-
-async function collectEndpointsListWithPending(): Promise<
-  Array<{
-    name: string;
-    adapter: string;
-    connected: boolean;
-    status: "online" | "offline";
-    pendingRequestCount: number;
-    pendingNoticeCount: number;
-  }>
-> {
-  const endpoints = collectEndpointsList();
-  let reqs: Awaited<ReturnType<typeof listUnconsumedRequests>> = [];
-  let notices: Awaited<ReturnType<typeof listUnconsumedNotices>> = [];
-  try {
-    [reqs, notices] = await Promise.all([listUnconsumedRequests(), listUnconsumedNotices()]);
-  } catch {
-    // ignore
-  }
-  return endpoints.map((ep) => {
-    const pendingRequestCount = reqs.filter(
-      (r) => r.adapter === ep.adapter && r.endpoint_id === ep.name
-    ).length;
-    const pendingNoticeCount = notices.filter(
-      (n) => n.adapter === ep.adapter && n.endpoint_id === ep.name
-    ).length;
-    return {
-      ...ep,
-      pendingRequestCount,
-      pendingNoticeCount,
-    };
-  });
 }
 
 const ENV_WHITELIST = [".env", ".env.development", ".env.production"];

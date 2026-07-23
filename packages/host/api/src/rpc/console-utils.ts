@@ -1,5 +1,11 @@
 import path from 'node:path';
-import { Adapter, type Plugin, type ConfigFeature } from '@zhin.js/core';
+import {
+  Adapter,
+  listEndpointManagementCapabilities,
+  type Plugin,
+  type ConfigFeature,
+} from '@zhin.js/core';
+import type { ConsoleEndpointSummary } from '@zhin.js/console-protocol';
 import type { ConsoleRpcContext } from './context.js';
 export function resolveConfigKey(root: Plugin, pluginName: string): string {
   const schemaService = root.inject("schema");
@@ -33,18 +39,8 @@ export function findPluginByConfigKey(rootPlugin: Plugin, configKey: string): Pl
   return null;
 }
 
-export function collectEndpointsList(root: Plugin): Array<{
-  name: string;
-  adapter: string;
-  connected: boolean;
-  status: "online" | "offline";
-}> {
-  const endpoints: Array<{
-    name: string;
-    adapter: string;
-    connected: boolean;
-    status: "online" | "offline";
-  }> = [];
+export function collectEndpointsList(root: Plugin): ConsoleEndpointSummary[] {
+  const endpoints: ConsoleEndpointSummary[] = [];
   const seenAdapterNames = new Set<string>();
   for (const name of root.adapters) {
     const key = String(name);
@@ -58,6 +54,7 @@ export function collectEndpointsList(root: Plugin): Array<{
           adapter: key,
           connected: !!(endpoint as { $connected?: boolean }).$connected,
           status: (endpoint as { $connected?: boolean }).$connected ? "online" : "offline",
+          managementCapabilities: listEndpointManagementCapabilities(endpoint),
         });
       }
     }

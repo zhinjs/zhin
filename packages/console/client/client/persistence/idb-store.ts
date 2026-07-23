@@ -1,7 +1,4 @@
-import {
-  SIDE_EVENT_PUSH,
-  normalizeConsolePushType,
-} from "@zhin.js/console-protocol";
+import { parseConsoleInboxEvent } from "@zhin.js/console-protocol";
 
 const DB_NAME = "zhin-console";
 const DB_VERSION = 2;
@@ -68,26 +65,15 @@ export async function idbListInbox(
 }
 
 export async function applyConsoleEvent(event: { type: string; data?: unknown }): Promise<void> {
-  const t = normalizeConsolePushType(event.type);
-  if (
-    t === SIDE_EVENT_PUSH.MESSAGE_RECEIVE
-    || t === SIDE_EVENT_PUSH.REQUEST_RECEIVE
-    || t === SIDE_EVENT_PUSH.NOTICE_RECEIVE
-  ) {
-    const data = event.data as Record<string, unknown> | undefined;
-    if (!data) return;
-    const adapter = String(data.$adapter ?? data.adapter ?? "");
-    const endpoint_id = String(data.$endpoint ?? data.endpoint_id ?? data.endpointId ?? data.bot ?? "");
-    const id = `${adapter}:${endpoint_id}:${t}:${Date.now()}`;
-    await idbPutInbox({
-      id,
-      adapter,
-      endpoint_id,
-      kind: t === SIDE_EVENT_PUSH.MESSAGE_RECEIVE
-        ? "message"
-        : t === SIDE_EVENT_PUSH.REQUEST_RECEIVE ? "request" : "notice",
-      payload: data,
-      updatedAt: Date.now(),
-    });
-  }
+  const parsed = parseConsoleInboxEvent(event);
+  if (!parsed) return;
+  const updatedAt = Date.now();
+  await idbPutInbox({
+    id: `${parsed.adapter}:${parsed.endpointId}:${parsed.type}:${updatedAt}`,
+    adapter: parsed.adapter,
+    endpoint_id: parsed.endpointId,
+    kind: parsed.kind,
+    payload: parsed.payload,
+    updatedAt,
+  });
 }

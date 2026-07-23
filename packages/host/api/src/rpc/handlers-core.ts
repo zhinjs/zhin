@@ -1,4 +1,9 @@
-import { Adapter, type Plugin, type ConfigFeature } from "@zhin.js/core";
+import {
+  Adapter,
+  listEndpointManagementCapabilities,
+  type Plugin,
+  type ConfigFeature,
+} from "@zhin.js/core";
 import { toConsoleChannelParent } from "../endpoint-channel.js";
 import { broadcastSse } from "../sse-hub.js";
 import type { ConsoleRpcContext } from "./context.js";
@@ -396,6 +401,7 @@ export async function handleCoreRpc(
             adapter: String(adapter),
             connected: !!endpoint.$connected,
             status: endpoint.$connected ? "online" : "offline",
+            managementCapabilities: listEndpointManagementCapabilities(endpoint),
           },
         });
       } catch (error) {

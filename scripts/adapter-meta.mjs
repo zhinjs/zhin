@@ -9,12 +9,28 @@
 /** @typedef {'Stable' | 'PlatformStable' | 'Advanced' | 'Experimental'} AdapterTier */
 
 /**
- * @type {Record<string, { tier: AdapterTier, label: string, packageName: string }>}
+ * `management` is the published EndpointManagement promise used by generated
+ * docs; runtime capabilities are still derived from live methods.
+ * @type {Record<string, { tier: AdapterTier, label: string, packageName: string, management?: string[] }>}
  */
 export const ADAPTER_META = {
   sandbox: { tier: 'Stable', label: 'Sandbox', packageName: '@zhin.js/adapter-sandbox' },
-  icqq: { tier: 'Advanced', label: 'ICQQ (QQ)', packageName: '@zhin.js/adapter-icqq' },
-  qq: { tier: 'Advanced', label: 'QQ 官方', packageName: '@zhin.js/adapter-qq' },
+  icqq: {
+    tier: 'Advanced',
+    label: 'ICQQ (QQ)',
+    packageName: '@zhin.js/adapter-icqq',
+    management: [
+      'listFriends', 'listGroups', 'listChannels', 'listGroupMembers',
+      'approveRequest', 'rejectRequest', 'kickGroupMember', 'muteGroupMember',
+      'setGroupAdmin', 'deleteFriend',
+    ],
+  },
+  qq: {
+    tier: 'Advanced',
+    label: 'QQ 官方',
+    packageName: '@zhin.js/adapter-qq',
+    management: ['listChannels'],
+  },
   napcat: { tier: 'Experimental', label: 'NapCat', packageName: '@zhin.js/adapter-napcat' },
   onebot11: { tier: 'Advanced', label: 'OneBot v11', packageName: '@zhin.js/adapter-onebot11' },
   onebot12: { tier: 'Experimental', label: 'OneBot v12', packageName: '@zhin.js/adapter-onebot12' },

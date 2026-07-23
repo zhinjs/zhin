@@ -1,6 +1,7 @@
 import type { AuthScope } from './token-registry.js';
 import type { DatabaseHostConsole } from '@zhin.js/plugin-runtime';
 import {
+  type ConsoleEndpointSummary,
   assertDemoConsoleRpcAllowed,
   endpointSendResult,
   normalizeConsoleRpcMessage,
@@ -71,19 +72,10 @@ export type RuntimeConsoleRpcContext = {
   extended?: Omit<ConsoleRpcExtendedCtx, 'fullScope'>;
 };
 
-export type RuntimeEndpointPhase =
-  'pending' | 'starting' | 'online' | 'failed' | 'unconfigured';
+export type RuntimeEndpointPhase = NonNullable<ConsoleEndpointSummary['phase']>;
 
-export type RuntimeEndpointSummary = {
-  readonly name: string;
-  readonly adapter: string;
-  readonly connected: boolean;
-  readonly status: 'online' | 'offline';
-  readonly phase?: RuntimeEndpointPhase;
-  readonly pendingLogin?: boolean;
-  /** Methods implemented by the EndpointManagement semantic port. */
-  readonly managementCapabilities?: readonly string[];
-};
+/** @deprecated Prefer `ConsoleEndpointSummary` from `@zhin.js/console-protocol`. */
+export type RuntimeEndpointSummary = ConsoleEndpointSummary;
 
 export type RuntimeDatabaseInfo = {
   readonly dialect: string | null;

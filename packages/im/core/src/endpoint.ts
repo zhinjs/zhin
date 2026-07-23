@@ -9,6 +9,12 @@ export type {
   EndpointGroup,
   EndpointManagement,
   EndpointWithManagement,
+  EndpointManagementCapability,
+} from '@zhin.js/adapter';
+export {
+  endpointManagementCapabilityIds,
+  listEndpointManagementCapabilities,
+  resolveEndpointManagement,
 } from '@zhin.js/adapter';
 
 export type {

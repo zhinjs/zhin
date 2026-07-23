@@ -14,6 +14,19 @@ const snippetPath = path.join(repoRoot, 'docs/snippets/platform-tiers.md');
 const indexPath = path.join(repoRoot, 'docs/adapters/index.md');
 
 const errors = [];
+const endpointManagementCapabilities = new Set([
+  'listFriends', 'listGroups', 'listChannels', 'listGroupMembers',
+  'approveRequest', 'rejectRequest', 'kickGroupMember', 'muteGroupMember',
+  'setGroupAdmin', 'deleteFriend',
+]);
+
+for (const [slug, meta] of Object.entries(ADAPTER_META)) {
+  for (const capability of meta.management ?? []) {
+    if (!endpointManagementCapabilities.has(capability)) {
+      errors.push(`adapter-meta.mjs ${slug} has unknown Endpoint management capability: ${capability}`);
+    }
+  }
+}
 
 const capability = fs.readFileSync(capabilityPath, 'utf8');
 

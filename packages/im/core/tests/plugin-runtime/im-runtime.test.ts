@@ -293,6 +293,12 @@ describe('IM Runtime', () => {
       name: '111111',
       adapter: 'icqq',
     }));
+    expect(im.getEndpointManagement('icqq', '111111')).toEqual(expect.objectContaining({
+      listFriends: expect.any(Function),
+      listGroups: expect.any(Function),
+      kickGroupMember: expect.any(Function),
+    }));
+    expect(im.getEndpointManagement('missing', 'missing')).toBeNull();
 
     await adapters.stop();
     await store.close();
