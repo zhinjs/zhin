@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import * as os from 'node:os';
 import { formatBytes } from '../lib/bytes.js';
 

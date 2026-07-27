@@ -18,18 +18,15 @@
     "@zhin.js/a2a": "workspace:*",
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/client": "workspace:*",
-    "@zhin.js/command": "1.0.2",
-    "@zhin.js/component": "1.0.2",
     "@zhin.js/console-contract": "workspace:*",
-    "@zhin.js/core": "workspace:*",
     "@zhin.js/mcp": "workspace:*",
     "@zhin.js/page": "1.0.2",
-    "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/satori": "workspace:*",
     "@zhin.js/skill": "1.0.2",
     "@zhin.js/tool": "1.0.2",
     "ai": "^7.0.2",
     "react": "^19.2.7",
+    "zhin.js": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -47,14 +44,6 @@
     "engine": "^1.0.0",
     "runtime": "trusted",
     "features": [
-      {
-        "package": "@zhin.js/command",
-        "api": "^1.0.0"
-      },
-      {
-        "package": "@zhin.js/component",
-        "api": "^1.0.0"
-      },
       {
         "package": "@zhin.js/skill",
         "api": "^1.0.0"

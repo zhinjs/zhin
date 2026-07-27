@@ -1,5 +1,5 @@
-import { defineCommand } from '@zhin.js/command';
-import { raw } from '@zhin.js/core/runtime';
+import { defineCommand } from 'zhin.js/command';
+import { raw } from 'zhin.js/core/runtime';
 import { buildZtReportHtml, ZT_REPORT_CANVAS } from '../lib/zt-report-card.js';
 import { buildZtReportText, collectZtFallbackData, collectZtReportData } from '../lib/zt-report-data.js';
 

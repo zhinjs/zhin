@@ -1,5 +1,5 @@
-import { defineComponent } from '@zhin.js/component';
-import { raw } from '@zhin.js/core/runtime';
+import { defineComponent } from 'zhin.js/component';
+import { raw } from 'zhin.js/core/runtime';
 import {
   Card,
   CardHeader,

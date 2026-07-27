@@ -12,6 +12,8 @@ export interface ResolvedPackage {
 export interface PackageResolver {
   root(root: string): Promise<ResolvedPackage>;
   resolve(request: string, from: ResolvedPackage): Promise<ResolvedPackage>;
+  /** Load a package from an absolute package root (skips dependency declaration checks). */
+  loadPackage?(packageRoot: string): Promise<ResolvedPackage>;
   workspacePackages(): readonly ResolvedPackage[];
 }
 
@@ -58,6 +60,10 @@ export class NodePackageResolver implements PackageResolver {
 
   async root(root: string): Promise<ResolvedPackage> {
     return this.#readPackage(root, 'workspace');
+  }
+
+  async loadPackage(packageRoot: string): Promise<ResolvedPackage> {
+    return this.#readPackage(packageRoot, 'node_modules');
   }
 
   workspacePackages(): readonly ResolvedPackage[] {
@@ -118,6 +124,9 @@ function declaredDependency(request: string, pkg: PackageJson): string {
   const specification = (
     pkg.dependencies?.[request]
     ?? pkg.optionalDependencies?.[request]
+    // 可选 peer（如 zhin.js 门面的 host-api/host-router）同样是合法声明：
+    // 未安装时 resolve 会以 'Cannot resolve' 失败，由 reference.optional 容错
+    ?? pkg.peerDependencies?.[request]
   );
   if (!specification) {
     throw new PackageResolutionError(

@@ -11,17 +11,12 @@
     "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../.. examples/minimal-bot/tests"
   },
   "dependencies": {
-    "@zhin.js/adapter": "1.1.0",
-    "@zhin.js/command": "1.0.2",
-    "@zhin.js/component": "1.0.2",
-    "@zhin.js/core": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*",
-    "@zhin.js/runtime": "workspace:*",
     "@zhin.js/satori": "workspace:*",
     "zhin.js": "workspace:*"
   },
   "devDependencies": {
     "@zhin.js/cli": "workspace:*",
+    "@zhin.js/runtime": "workspace:*",
     "@zhin.js/tool": "workspace:*",
     "typescript": "^6.0.3",
     "zod": "^4.4.3"
@@ -35,20 +30,7 @@
     "entry": "./plugin.ts",
     "engine": "^1.0.0",
     "runtime": "trusted",
-    "features": [
-      {
-        "package": "@zhin.js/adapter",
-        "api": "^1.0.0"
-      },
-      {
-        "package": "@zhin.js/command",
-        "api": "^1.0.0"
-      },
-      {
-        "package": "@zhin.js/component",
-        "api": "^1.0.0"
-      }
-    ],
+    "features": [],
     "plugins": []
   }
 }

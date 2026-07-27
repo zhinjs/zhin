@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { writeHeapSnapshot } from 'node:v8';
 import path from 'node:path';
 import * as os from 'node:os';

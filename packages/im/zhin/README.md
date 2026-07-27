@@ -13,7 +13,7 @@ AI / Agent 能力在 **`@zhin.js/agent`**（及 `@zhin.js/ai`），须显式安�
 | **IM** | `pnpm add zhin.js` | `@zhin.js/core` 全部 API |
 | **AI** | `+ @zhin.js/agent zod ai` | ZhinAgent、`ctx.ai`、会话与工具 |
 | **Provider** | `+ @ai-sdk/openai` 等 | 大模型调用 |
-| **Host** | `+ @zhin.js/host-router @zhin.js/host-api` | Console API（可选 peer） |
+| **Host** | `+ @zhin.js/host-router @zhin.js/host-api`（或由 `@zhin.js/cli` 装配） | Console API（可选 peer） |
 
 ## 子路径导出
 

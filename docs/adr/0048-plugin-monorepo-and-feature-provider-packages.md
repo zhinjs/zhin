@@ -131,6 +131,8 @@ Feature requirement 不沿 Plugin tree 隐式继承。每个 Plugin Package 声�
 
 `defineCommand()` 由 Command Feature 包导出；`defineAgentTool()` 由 Tool Feature 包导出。`zhin.js` 可以提供经过 package exports 显式映射的便利入口，但不能重新实现这些 definition。
 
+> **补充（[ADR 0053](./0053-platform-stable-features.md)）**：对 **Root 应用项目**，官方 Stable Features 写在 `@zhin.js/core` 的 `package.json#zhin.features` 中；Root 直列 core 或经 `zhin.js` facade 间接依赖时由 Project Graph 继承。用户不必在 Root 重复声明。非 Root Plugin 包与第三方 Feature 仍遵守本 ADR 的成对声明不变量。
+
 ### D4. 发现约定归 Feature 所有
 
 标准 Feature 默认约定为：

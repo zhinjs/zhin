@@ -2,9 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
-import { AdapterIndex, adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
-import { ImRuntime, type MessageGateway } from '@zhin.js/core/runtime';
-import { capabilityId, rootPluginId } from '@zhin.js/plugin-runtime';
+import { AdapterIndex, adapterFeatureId, isAdapterIndex } from 'zhin.js/adapter';
+import { ImRuntime, type MessageGateway } from 'zhin.js/core/runtime';
+import { capabilityId, rootPluginId } from 'zhin.js/plugin-runtime';
 import {
   NativeDevelopmentModuleRuntime,
   RootRuntime,
@@ -34,12 +34,11 @@ afterEach(() => {
 describe('minimal-bot Stable Plugin Runtime contract', () => {
   it('uses a static manifest and convention directories without legacy registration', () => {
     expect(packageJson.zhin.entry).toBe('./plugin.ts');
-    expect(packageJson.zhin.features.map((feature) => feature.package)).toEqual([
-      '@zhin.js/adapter',
-      '@zhin.js/command',
-      '@zhin.js/component',
-    ]);
+    // Stable Features are shipped with zhin.js and mounted by RootRuntime by default.
+    expect(packageJson.zhin.features).toEqual([]);
     expect(packageJson.zhin.plugins).toEqual([]);
+    expect(packageJson.dependencies).toHaveProperty('zhin.js');
+    expect(packageJson.dependencies).not.toHaveProperty('@zhin.js/command');
     expect(packageJson.dependencies).not.toHaveProperty('@zhin.js/adapter-sandbox');
     expect(packageJson.dependencies).not.toHaveProperty('@zhin.js/host-api');
     expect(packageJson.dependencies).not.toHaveProperty('@zhin.js/host-router');
@@ -217,7 +216,8 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
       generation: 1,
       plugins: 1,
       capabilities: 4,
-      projections: 3,
+      // adapter + command + component + middleware（platformFeatures 继承四件套）
+      projections: 4,
     });
     expect((await new MigrationReadiness().inspect(botRoot)).state).toBe('ready');
   });

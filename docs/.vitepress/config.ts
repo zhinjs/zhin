@@ -134,6 +134,7 @@ const adrSidebar0042: DefaultTheme.SidebarItem[] = [
   { text: '0050 Plugin Runtime 迁移边界', link: '/adr/0050-plugin-runtime-migration-boundary' },
   { text: '0051 原生 TS 开发 Runtime', link: '/adr/0051-native-typescript-development-runtime' },
   { text: '0052 Plugin Runtime 包边界', link: '/adr/0052-plugin-runtime-package-boundary' },
+  { text: '0053 Platform Stable Features', link: '/adr/0053-platform-stable-features' },
 ]
 
 const adrSidebar: DefaultTheme.SidebarItem[] = [
@@ -208,6 +209,7 @@ const devDocsSidebar: DefaultTheme.SidebarItem[] = [
       { text: '目标架构 SSOT', link: '/target-architecture' },
       { text: '架构索引', link: '/architecture/' },
       { text: '架构概览（用户向）', link: '/architecture-overview' },
+      { text: '包结构与 zhin 字段指南', link: '/architecture/package-topology' },
       { text: 'Segment 内容模型', link: '/architecture/segment-content-model' },
       { text: 'Assistant Runtime', link: '/architecture/assistant-runtime' },
       { text: 'Agent 上下文块', link: '/architecture/agent-context-blocks' },

@@ -222,16 +222,26 @@ async function assertCompletedDependencies(
 ): Promise<void> {
   const declared = capabilitiesFromManifest(manifest).sort();
   const discovered = [...capabilities].sort();
-  if (declared.length !== discovered.length
-    || declared.some((value, index) => value !== discovered[index])) {
+  if (declared.some((value) => !discovered.includes(value))) {
     throw new Error('Existing zhin manifest does not match discovered capability directories');
   }
-  const required = [
-    '@zhin.js/plugin-runtime',
-    '@zhin.js/runtime',
-    'zhin.js',
-    ...capabilities.map((capability) => capabilityProviders[capability]),
-  ];
+  // ADR 0053 platformFeatures 继承：依赖 zhin.js（facade）或 @zhin.js/core（carrier）时，
+  // command/component/middleware 可省略声明（Root 缺省继承四件套）
+  const hasFacadeOrCarrier = typeof pkg.dependencies?.['zhin.js'] === 'string'
+    || typeof pkg.dependencies?.['@zhin.js/core'] === 'string';
+  if (!hasFacadeOrCarrier
+    && (declared.length !== discovered.length
+      || declared.some((value, index) => value !== discovered[index]))) {
+    throw new Error('Existing zhin manifest does not match discovered capability directories');
+  }
+  const required = hasFacadeOrCarrier
+    ? []
+    : [
+      '@zhin.js/plugin-runtime',
+      '@zhin.js/runtime',
+      'zhin.js',
+      ...capabilities.map((capability) => capabilityProviders[capability]),
+    ];
   const missing = required.filter((dependency) => typeof pkg.dependencies?.[dependency] !== 'string');
   if (missing.length > 0) {
     throw new Error(`Existing cutover is missing dependencies: ${missing.join(', ')}`);

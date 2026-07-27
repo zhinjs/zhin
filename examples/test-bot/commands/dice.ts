@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { rollDice } from '../lib/dice.js';
 
 export default defineCommand({

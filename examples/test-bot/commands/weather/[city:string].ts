@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { fetchWttrWeather } from '../../lib/wttr.js';
 
 /** Live weather (wttr.in); same source as tools/weather.ts. */

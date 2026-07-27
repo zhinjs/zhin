@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { ghApiMessage, resolveGhClient } from '../../../lib/github-api.js';
 
 export default defineCommand({

@@ -54,6 +54,31 @@
       "types": "./lib/plugin-runtime.d.ts",
       "development": "./src/plugin-runtime.ts",
       "import": "./lib/plugin-runtime.js"
+    },
+    "./plugin-runtime": {
+      "types": "./lib/define-plugin.d.ts",
+      "development": "./src/define-plugin.ts",
+      "import": "./lib/define-plugin.js"
+    },
+    "./command": {
+      "types": "./lib/command.d.ts",
+      "development": "./src/command.ts",
+      "import": "./lib/command.js"
+    },
+    "./adapter": {
+      "types": "./lib/adapter.d.ts",
+      "development": "./src/adapter.ts",
+      "import": "./lib/adapter.js"
+    },
+    "./component": {
+      "types": "./lib/component.d.ts",
+      "development": "./src/component.ts",
+      "import": "./lib/component.js"
+    },
+    "./core/runtime": {
+      "types": "./lib/core-runtime.d.ts",
+      "development": "./src/core-runtime.ts",
+      "import": "./lib/core-runtime.js"
     }
   },
   "files": [
@@ -65,14 +90,13 @@
   },
   "dependencies": {
     "@zhin.js/core": "workspace:*",
-    "@zhin.js/kernel": "workspace:*",
     "@zhin.js/logger": "workspace:*",
-    "@zhin.js/schema": "workspace:*",
-    "yaml": "^2.9.0",
-    "dotenv": "^17.4.2"
+    "@zhin.js/plugin-runtime": "workspace:*",
+    "chalk": "^5.6.0"
   },
   "peerDependencies": {
     "@zhin.js/agent": "^1.0.5",
+    "@zhin.js/ai": "^1.4.5",
     "@zhin.js/html-renderer": "workspace:^",
     "@zhin.js/speech": "workspace:^",
     "@zhin.js/host-api": "workspace:^",
@@ -81,6 +105,9 @@
   },
   "peerDependenciesMeta": {
     "@zhin.js/agent": {
+      "optional": true
+    },
+    "@zhin.js/ai": {
       "optional": true
     },
     "@zhin.js/html-renderer": {
@@ -106,9 +133,11 @@
     "@zhin.js/host-api": "workspace:*",
     "@zhin.js/host-router": "workspace:*",
     "@zhin.js/html-renderer": "workspace:*",
-    "@zhin.js/speech": "workspace:*",
+    "@zhin.js/kernel": "workspace:*",
     "@zhin.js/runtime": "workspace:*",
-    "typescript": "^6.0.3"
+    "@zhin.js/speech": "workspace:*",
+    "typescript": "^6.0.3",
+    "yaml": "^2.9.0"
   },
   "repository": {
     "type": "git",
@@ -127,5 +156,14 @@
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./lib/index.js",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [],
+    "plugins": []
   }
 }

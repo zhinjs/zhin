@@ -29,7 +29,7 @@ my-plugin/
 
 ```typescript
 // plugin.ts（形态参考 plugins/utils/repeater）
-import { definePlugin } from '@zhin.js/plugin-runtime'
+import { definePlugin } from 'zhin.js/plugin-runtime'
 
 export default definePlugin({
   name: 'my-plugin', // 规则：^[a-z][a-z0-9-]*$
@@ -48,14 +48,16 @@ export default definePlugin({
 
 ## 约定目录全表
 
-每个约定目录对应一个 Feature 包，且必须在 `package.json` 的 `zhin.features` 里声明依赖才会生效：
+每个约定目录对应一个 Feature 包。对 **Root 应用项目**，官方 Stable Features（`adapter` / `command` / `component` / `middleware`）写在 `@zhin.js/core` 的 `package.json#zhin.features` 中；Root 直列 core 或经 `zhin.js` 间接依赖时由 Project Graph 继承，不必在 Root 重复声明（见 [ADR 0053](/adr/0053-platform-stable-features)）。其余 Feature，以及所有非 Root Plugin 包，仍须在 `dependencies` + `zhin.features` 中成对声明。
+
+创作面 import 推荐走 `zhin.js/*` 便利入口（如 `zhin.js/command`），勿再直列 `@zhin.js/command` 等零件包。
 
 | 目录 | Feature 包 | 文件形态 | 说明 |
 |------|-----------|----------|------|
-| `commands/` | `@zhin.js/command` | `defineCommand`，支持嵌套目录与 `[name:type=default].ts` 动态参数 | 见 [命令系统](./commands) |
+| `commands/` | `@zhin.js/command`（Root 平台默认） | `defineCommand`，支持嵌套目录与 `[name:type=default].ts` 动态参数 | 见 [命令系统](./commands) |
 | `middlewares/` | `@zhin.js/middleware` | `defineMiddleware`，目录可嵌套 | 见 [中间件](./middleware) |
-| `components/` | `@zhin.js/component` | `defineComponent`，`.ts` / `.tsx`，目录可嵌套 | 命令返回 `component(name, props)` 时渲染 |
-| `adapters/` | `@zhin.js/adapter` | `defineAdapter`，目录可嵌套 | 平台适配器，见 [平台适配器](/adapters/) |
+| `components/` | `@zhin.js/component`（Root 平台默认） | `defineComponent`，`.ts` / `.tsx`，目录可嵌套 | 命令返回 `component(name, props)` 时渲染 |
+| `adapters/` | `@zhin.js/adapter`（Root 平台默认） | `defineAdapter`，目录可嵌套 | 平台适配器，见 [平台适配器](/adapters/) |
 | `tools/` | `@zhin.js/tool` | `defineAgentTool`，**仅顶层文件**（不递归） | AI 工具，见 [Agent 创作面](/advanced/agent-authoring) |
 | `skills/` | `@zhin.js/skill` | `skills/<name>/SKILL.md` | 技能，Markdown 声明 |
 | `agents/` | `@zhin.js/agent-feature` | `agents/<name>.agent.md` | Agent 预设，Markdown 声明 |
@@ -131,7 +133,7 @@ import {
   databaseHostToken,
   scheduleHostToken,
   outboundHostToken,
-} from '@zhin.js/plugin-runtime'
+} from 'zhin.js/plugin-runtime'
 
 export default definePlugin({
   name: 'my-plugin',

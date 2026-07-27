@@ -92,6 +92,9 @@ importers:
 
   basic/cli:
     dependencies:
+      '@zhin.js/adapter':
+        specifier: workspace:*
+        version: link:../../packages/im/adapter
       '@zhin.js/command':
         specifier: workspace:*
         version: link:../../packages/im/command
@@ -345,27 +348,15 @@ importers:
       '@zhin.js/client':
         specifier: workspace:*
         version: link:../../packages/console/client
-      '@zhin.js/command':
-        specifier: 1.0.2
-        version: link:../../packages/im/command
-      '@zhin.js/component':
-        specifier: 1.0.2
-        version: link:../../packages/im/component
       '@zhin.js/console-contract':
         specifier: workspace:*
         version: link:../../packages/console/plugin-contract
-      '@zhin.js/core':
-        specifier: workspace:*
-        version: link:../../packages/im/core
       '@zhin.js/mcp':
         specifier: workspace:*
         version: link:../../packages/host/mcp
       '@zhin.js/page':
         specifier: 1.0.2
         version: link:../../packages/console/page
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../packages/im/plugin-runtime
       '@zhin.js/satori':
         specifier: workspace:*
         version: link:../../packages/toolkit/satori
@@ -381,6 +372,9 @@ importers:
       react:
         specifier: ^19.2.7
         version: 19.2.7
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../packages/im/zhin
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -434,24 +428,6 @@ importers:
 
   examples/minimal-bot:
     dependencies:
-      '@zhin.js/adapter':
-        specifier: 1.1.0
-        version: link:../../packages/im/adapter
-      '@zhin.js/command':
-        specifier: 1.0.2
-        version: link:../../packages/im/command
-      '@zhin.js/component':
-        specifier: 1.0.2
-        version: link:../../packages/im/component
-      '@zhin.js/core':
-        specifier: workspace:*
-        version: link:../../packages/im/core
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../packages/im/plugin-runtime
-      '@zhin.js/runtime':
-        specifier: workspace:*
-        version: link:../../packages/im/runtime
       '@zhin.js/satori':
         specifier: workspace:*
         version: link:../../packages/toolkit/satori
@@ -462,6 +438,9 @@ importers:
       '@zhin.js/cli':
         specifier: workspace:*
         version: link:../../basic/cli
+      '@zhin.js/runtime':
+        specifier: workspace:*
+        version: link:../../packages/im/runtime
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../packages/im/tool
@@ -606,9 +585,6 @@ importers:
       '@puniyu/system-info':
         specifier: 1.5.7
         version: 1.5.7
-      '@zhin.js/adapter':
-        specifier: workspace:*
-        version: link:../../packages/im/adapter
       '@zhin.js/adapter-dingtalk':
         specifier: workspace:*
         version: link:../../plugins/adapters/dingtalk
@@ -681,30 +657,12 @@ importers:
       '@zhin.js/client':
         specifier: workspace:*
         version: link:../../packages/console/client
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../packages/im/command
-      '@zhin.js/component':
-        specifier: workspace:*
-        version: link:../../packages/im/component
       '@zhin.js/contract':
         specifier: workspace:*
         version: link:../../packages/console/contract
-      '@zhin.js/core':
-        specifier: workspace:*
-        version: link:../../packages/im/core
-      '@zhin.js/host-api':
-        specifier: workspace:*
-        version: link:../../packages/host/api
-      '@zhin.js/host-router':
-        specifier: workspace:*
-        version: link:../../packages/host/router
       '@zhin.js/html-renderer':
         specifier: workspace:*
         version: link:../../packages/toolkit/html-renderer
-      '@zhin.js/kernel':
-        specifier: workspace:*
-        version: link:../../packages/im/kernel
       '@zhin.js/mcp':
         specifier: workspace:*
         version: link:../../packages/host/mcp
@@ -762,9 +720,6 @@ importers:
       '@zhin.js/plugin-rss':
         specifier: workspace:*
         version: link:../../plugins/utils/rss
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../packages/im/plugin-runtime
       '@zhin.js/plugin-short-url':
         specifier: workspace:*
         version: link:../../plugins/utils/short-url
@@ -780,9 +735,6 @@ importers:
       '@zhin.js/process-monitor':
         specifier: workspace:*
         version: link:../../plugins/features/process-monitor
-      '@zhin.js/runtime':
-        specifier: workspace:*
-        version: link:../../packages/im/runtime
       '@zhin.js/satori':
         specifier: workspace:*
         version: link:../../packages/toolkit/satori
@@ -1651,21 +1603,15 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../core
-      '@zhin.js/kernel':
-        specifier: workspace:*
-        version: link:../kernel
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
-      '@zhin.js/schema':
+      '@zhin.js/plugin-runtime':
         specifier: workspace:*
-        version: link:../../../basic/schema
-      dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
-      yaml:
-        specifier: ^2.9.0
-        version: 2.9.0
+        version: link:../plugin-runtime
+      chalk:
+        specifier: ^5.6.0
+        version: 5.6.2
     devDependencies:
       '@types/node':
         specifier: ^26.1.0
@@ -1685,6 +1631,9 @@ importers:
       '@zhin.js/html-renderer':
         specifier: workspace:*
         version: link:../../toolkit/html-renderer
+      '@zhin.js/kernel':
+        specifier: workspace:*
+        version: link:../kernel
       '@zhin.js/runtime':
         specifier: workspace:*
         version: link:../runtime
@@ -1694,6 +1643,9 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+      yaml:
+        specifier: ^2.9.0
+        version: 2.9.0
 
   packages/toolkit/create-zhin:
     dependencies:

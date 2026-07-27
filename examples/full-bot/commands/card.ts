@@ -1,5 +1,5 @@
-import { defineCommand } from '@zhin.js/command';
-import { component } from '@zhin.js/core/runtime';
+import { defineCommand } from 'zhin.js/command';
+import { component } from 'zhin.js/core/runtime';
 
 export default defineCommand({
   description: 'Render the L4 status card',

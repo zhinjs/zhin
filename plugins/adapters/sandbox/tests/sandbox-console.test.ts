@@ -18,7 +18,7 @@ const temporary: string[] = [];
 const hosts: Array<ReturnType<typeof createHttpHost>> = [];
 const sandboxPageSource = join(
   dirname(fileURLToPath(import.meta.url)),
-  '../pages/sandbox.tsx',
+  '../pages/index.tsx',
 );
 
 afterEach(async () => {
@@ -47,7 +47,7 @@ describe('sandbox console page', () => {
     const artifact = await builder.load(sandboxPageSource, {
       feature: pageFeatureId,
       owner: 'root/sandbox',
-      localName: 'sandbox',
+      localName: 'index',
     });
     expect(artifact).toMatchObject({
       module: expect.stringMatching(/^\/assets\/client\//u),
@@ -86,27 +86,27 @@ describe('sandbox console page', () => {
     );
     expect(pages).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        localName: 'sandbox',
+        localName: 'index',
         title: '沙盒',
-        route: '/p-sandbox',
+        route: '/',
       }),
     ]));
-    expect(pageIndex(runtime.snapshot).route('/p-sandbox')?.module)
+    expect(pageIndex(runtime.snapshot).route('/')?.module)
       .toMatch(/^\/assets\/client\//u);
 
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    http.route('GET', '/p-sandbox', async (_request, response) => {
+    http.route('GET', '/', async (_request, response) => {
       const match = await consoleRuntime.runView(
         { permissions: [], roles: [] },
-        (catalog) => catalog.match('/p-sandbox'),
+        (catalog) => catalog.match('/'),
       );
       expect(match.status).toBe('found');
       response.writeHead(200, { 'content-type': 'text/html' });
       response.end('<html>sandbox-shell</html>');
     });
     const { port } = await http.listen();
-    const shell = await fetch(`http://127.0.0.1:${port}/p-sandbox`);
+    const shell = await fetch(`http://127.0.0.1:${port}/`);
     expect(shell.status).toBe(200);
     expect(await shell.text()).toContain('sandbox-shell');
 
@@ -151,7 +151,7 @@ async function createProject(): Promise<string> {
   await touch(join(root, 'packages/page/index.ts'));
   // Copy full pages/ so relative imports (SandboxChat, RichTextEditor, transport) resolve.
   const pagesDir = join(dirname(fileURLToPath(import.meta.url)), '../pages');
-  const pageFiles = ['sandbox.tsx', 'SandboxChat.tsx', 'RichTextEditor.tsx', 'sandboxTransport.ts'];
+  const pageFiles = ['index.tsx', 'SandboxChat.tsx', 'RichTextEditor.tsx', 'sandboxTransport.ts'];
   for (const name of pageFiles) {
     const dest = join(root, 'pages', name);
     await mkdir(dirname(dest), { recursive: true });

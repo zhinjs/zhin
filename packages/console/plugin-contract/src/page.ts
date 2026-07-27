@@ -87,6 +87,11 @@ export function pageRoute(owner: string, root: string, localName: string): strin
     throw new Error(`Page owner ${owner} is outside Root ${root}`);
   }
   const relative = owner === root ? '' : owner.slice(root.length + 1);
+  // `pages/index.tsx` maps to the plugin path itself (e.g. sandbox → `/sandbox`),
+  // so demos can open the chat UI without the `/p-` leaf segment.
+  if (localName === 'index') {
+    return relative ? `/${relative}` : '/';
+  }
   return `/${relative ? `${relative}/` : ''}p-${localName}`;
 }
 

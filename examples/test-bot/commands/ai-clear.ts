@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 
 /** 提示：会话清空走 `ai: clear`（ZhinAgent IM session）。 */
 export default defineCommand({

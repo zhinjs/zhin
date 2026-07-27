@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 
 /** 对齐 legacy `send`：把剩余参数原样回显。 */
 export default defineCommand({

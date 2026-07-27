@@ -23,11 +23,11 @@ pnpm add @zhin.js/adapter-sandbox
 - `@zhin.js/adapter` — 约定式 `adapters/sandbox.ts`
 - `@zhin.js/host-http` — Root 提供的 `httpHostToken`（WebSocket `/sandbox` + Console HTTP）
 - `@zhin.js/core` — `messageGatewayToken` / ImRuntime 入站出站
-- `@zhin.js/page` + `pages/sandbox.tsx` — ADR 0046 约定页（`definePage`）
+- `@zhin.js/page` + `pages/index.tsx` — ADR 0046 约定页（`definePage`；路由 `/sandbox`）
 
 Root 在 `zhin runtime start` 时装载 `@zhin.js/host-http`、`ConsoleRuntime` 与
 `ClientBuildModuleRuntime`。打开 `http://<host>:<port>/console` 可浏览页面；Sandbox 页
-（路由形如 `/…/p-sandbox`）内置 WebSocket `/sandbox` 聊天壳。
+（路由 `/sandbox`，与 WebSocket `/sandbox` 同 path：GET 开页、Upgrade 走 WS）内置聊天壳。
 
 旧 `client/`（`register(api)` / `pageManager.addEntry`）仅保留给 legacy Host 栈参考，
 **不是** Plugin Runtime 生产入口。

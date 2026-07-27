@@ -71,29 +71,23 @@ describe('createWorkspace', () => {
     expect(pkg.scripts.dev).toBe('zhin runtime start')
     expect(pkg.scripts.start).toBe('zhin runtime start --mode production --no-watch')
 
-    // 依赖：新栈，无 legacy host 插件
+    // 依赖：用户面只直列 zhin.js + 适配器 +（卡片示例）satori；无 legacy host
     expect(pkg.dependencies['zhin.js']).toBe('latest')
-    expect(pkg.dependencies['@zhin.js/plugin-runtime']).toBe('latest')
-    expect(pkg.dependencies['@zhin.js/runtime']).toBe('latest')
-    expect(pkg.dependencies['@zhin.js/adapter']).toBe('latest')
-    expect(pkg.dependencies['@zhin.js/command']).toBe('latest')
-    expect(pkg.dependencies['@zhin.js/component']).toBe('latest')
-    expect(pkg.dependencies['@zhin.js/satori']).toBe('latest')
     expect(pkg.dependencies['@zhin.js/adapter-sandbox']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/satori']).toBe('latest')
+    expect(pkg.dependencies).not.toHaveProperty('@zhin.js/plugin-runtime')
+    expect(pkg.dependencies).not.toHaveProperty('@zhin.js/runtime')
+    expect(pkg.dependencies).not.toHaveProperty('@zhin.js/command')
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/host-api')
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/host-router')
     expect(pkg.devDependencies['@zhin.js/cli']).toBe('latest')
     expect(pkg.engines.node).toBe('>=22.6.0')
 
-    // zhin 清单：protocol 1 + features + plugins
+    // zhin 清单：Stable Features 随 zhin.js 默认挂载，骨架无需声明
     expect(pkg.zhin.protocol).toBe(1)
     expect(pkg.zhin.type).toBe('plugin')
     expect(pkg.zhin.entry).toBe('./plugin.ts')
-    expect(pkg.zhin.features).toEqual([
-      { package: '@zhin.js/adapter', api: '^1.0.0' },
-      { package: '@zhin.js/command', api: '^1.0.0' },
-      { package: '@zhin.js/component', api: '^1.0.0' },
-    ])
+    expect(pkg.zhin.features).toEqual([])
     expect(pkg.zhin.plugins).toEqual([
       { package: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox' },
     ])
@@ -108,12 +102,12 @@ describe('createWorkspace', () => {
     expect(config).not.toMatch(/^endpoints:/m)
     expect(config).not.toContain('inbox:')
 
-    // 骨架文件
-    expect(pluginEntry).toContain("from '@zhin.js/plugin-runtime'")
+    // 骨架文件：创作面 import 走 zhin.js 便利入口
+    expect(pluginEntry).toContain("from 'zhin.js/plugin-runtime'")
     expect(pluginEntry).toContain('definePlugin(')
-    expect(helloCommand).toContain("from '@zhin.js/command'")
-    expect(cardCommand).toContain("from '@zhin.js/core/runtime'")
-    expect(statusCard).toContain("from '@zhin.js/component'")
+    expect(helloCommand).toContain("from 'zhin.js/command'")
+    expect(cardCommand).toContain("from 'zhin.js/core/runtime'")
+    expect(statusCard).toContain("from 'zhin.js/component'")
     expect(statusCard).toContain("from '@zhin.js/satori'")
     expect(schema).toMatchObject({ type: 'object', properties: {} })
     expect(rootTsconfig.compilerOptions.noEmit).toBe(true)
@@ -146,12 +140,12 @@ describe('createWorkspace', () => {
     })
     const pkg = await fs.readJson(path.join(projectPath, 'package.json'))
     expect(pkg.dependencies['@zhin.js/agent']).toBe('latest')
-    expect(pkg.dependencies['@modelcontextprotocol/sdk']).toBe('latest')
+    expect(pkg.dependencies).not.toHaveProperty('@modelcontextprotocol/sdk')
     expect(pkg.dependencies['@ai-sdk/openai-compatible']).toBe('latest')
     expect(pkg.dependencies['@zhin.js/tool']).toBe('latest')
     expect(pkg.dependencies.zod).toBe('latest')
     expect(pkg.dependencies.ai).toBe('latest')
-    expect(pkg.zhin.features).toContainEqual({ package: '@zhin.js/tool', api: '^1.0.0' })
+    expect(pkg.zhin.features).toEqual([{ package: '@zhin.js/tool', api: '^1.0.0' }])
     expect(await fs.pathExists(path.join(projectPath, 'tools', 'echo.ts'))).toBe(true)
     expect(await fs.pathExists(path.join(projectPath, 'SOUL.md'))).toBe(true)
     const config = await fs.readFile(path.join(projectPath, 'zhin.config.yml'), 'utf8')

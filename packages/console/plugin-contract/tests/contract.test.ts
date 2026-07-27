@@ -24,6 +24,12 @@ describe('Console contract', () => {
     expect(() => pageRoute('other/a', 'root', 'status')).toThrow('outside Root');
   });
 
+  it('maps pages/index to the plugin path (no p- leaf)', () => {
+    expect(pageRoute('root', 'root', 'index')).toBe('/');
+    expect(pageRoute('root/sandbox', 'root', 'index')).toBe('/sandbox');
+    expect(pageRoute('root/a/b', 'root', 'index')).toBe('/a/b');
+  });
+
   it('rejects metadata that would otherwise be silently ignored', () => {
     expect(() => definePage({ route: '/custom' } as never)).toThrow('Unknown Page metadata: route');
   });

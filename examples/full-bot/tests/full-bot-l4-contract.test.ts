@@ -24,13 +24,14 @@ describe('full-bot L4 配置契约', () => {
     expect(packageJson.scripts.dev).toBe('zhin runtime start');
     expect(packageJson.scripts.start).toContain('zhin runtime start');
     expect(packageJson.zhin?.entry).toBe('./plugin.ts');
+    // command/component 经 zhin.js 门面的 platformFeatures 继承（ADR 0053），
+    // 静态声明只保留门面不覆盖的 skill/tool/page
     expect(packageJson.zhin?.features.map((feature) => feature.package)).toEqual([
-      '@zhin.js/command',
-      '@zhin.js/component',
       '@zhin.js/skill',
       '@zhin.js/tool',
       '@zhin.js/page',
     ]);
+    expect(packageJson.dependencies?.['zhin.js']).toBeDefined();
     expect(packageJson.zhin?.plugins).toEqual([
       { package: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox' },
       { package: '@zhin.js/adapter-napcat', instanceKey: 'napcat' },

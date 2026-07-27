@@ -25,7 +25,6 @@
     "@ai-sdk/openai": "4.0.8",
     "@ai-sdk/openai-compatible": "^3.0.5",
     "@puniyu/system-info": "1.5.7",
-    "@zhin.js/adapter": "workspace:*",
     "@zhin.js/adapter-dingtalk": "workspace:*",
     "@zhin.js/adapter-discord": "workspace:*",
     "@zhin.js/adapter-email": "workspace:*",
@@ -50,14 +49,8 @@
     "@zhin.js/agent-feature": "workspace:*",
     "@zhin.js/cli": "workspace:*",
     "@zhin.js/client": "workspace:*",
-    "@zhin.js/command": "workspace:*",
-    "@zhin.js/component": "workspace:*",
     "@zhin.js/contract": "workspace:*",
-    "@zhin.js/core": "workspace:*",
-    "@zhin.js/host-api": "workspace:*",
-    "@zhin.js/host-router": "workspace:*",
     "@zhin.js/html-renderer": "workspace:*",
-    "@zhin.js/kernel": "workspace:*",
     "@zhin.js/mcp": "workspace:*",
     "@zhin.js/mcp-feature": "workspace:*",
     "@zhin.js/middleware": "workspace:*",
@@ -77,13 +70,11 @@
     "@zhin.js/plugin-repeater": "workspace:*",
     "@zhin.js/plugin-rps": "workspace:*",
     "@zhin.js/plugin-rss": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/plugin-short-url": "workspace:*",
     "@zhin.js/plugin-text-adventure": "workspace:*",
     "@zhin.js/plugin-tic-tac-toe": "workspace:*",
     "@zhin.js/plugin-word-riddle": "workspace:*",
     "@zhin.js/process-monitor": "workspace:*",
-    "@zhin.js/runtime": "workspace:*",
     "@zhin.js/satori": "workspace:*",
     "@zhin.js/service-activity-feedback": "workspace:*",
     "@zhin.js/skill": "workspace:*",
@@ -116,18 +107,6 @@
     "engine": "^1.0.0",
     "runtime": "trusted",
     "features": [
-      {
-        "package": "@zhin.js/adapter",
-        "api": "^1.0.0"
-      },
-      {
-        "package": "@zhin.js/command",
-        "api": "^1.0.0"
-      },
-      {
-        "package": "@zhin.js/component",
-        "api": "^1.0.0"
-      },
       {
         "package": "@zhin.js/middleware",
         "api": "^1.0.0"

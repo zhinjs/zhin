@@ -1,0 +1,44 @@
+{
+  "name": "zhin-playground",
+  "private": true,
+  "version": "4.0.0",
+  "description": "Zhin.js Plugin Runtime Playground — Hugging Face Spaces (Sandbox + OpenRouter free)",
+  "type": "module",
+  "scripts": {
+    "dev": "zhin runtime start",
+    "start": "zhin runtime start --mode production --no-watch",
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "latest",
+    "@zhin.js/adapter-sandbox": "latest",
+    "@zhin.js/agent": "latest",
+    "@zhin.js/cli": "latest",
+    "ai": "latest",
+    "tsx": "latest",
+    "zhin.js": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.0",
+    "typescript": "^6.0.0"
+  },
+  "packageManager": "pnpm@9.0.2",
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [],
+    "plugins": [
+      {
+        "package": "@zhin.js/adapter-sandbox",
+        "instanceKey": "sandbox"
+      }
+    ]
+  }
+}

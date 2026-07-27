@@ -23,7 +23,7 @@ Plugin 的客户端页面应当和 Command、Tool 一样由目录约定发现。
     └── $footer.tsx
 ```
 
-普通页面发现 `pages/*.ts` 与 `pages/*.tsx`。首版不赋予嵌套目录、`index`、`[param]` 等特殊路由语义；普通文件 stem 必须满足稳定 slug 约束。
+普通页面发现 `pages/*.ts` 与 `pages/*.tsx`。`pages/index.tsx`（localName `index`）映射为 **Plugin path 本身**（Root → `/`，child `sandbox` → `/sandbox`），不再带 `/p-` 叶段；其它普通文件 stem 仍为 `/…/p-<name>`，且必须满足稳定 slug 约束。
 
 `pages/$nav.tsx` 与 `pages/$footer.tsx` 是保留的 Layout Slot 文件，不产生 Page route。其他以 `$` 开头的文件拒绝发现，直到对应 slot 形成正式决策。
 
@@ -59,7 +59,9 @@ route(plugin, page) = '/' + pluginPathWithoutRoot + '/p-' + pageLocalName
 | Owner | Source | Route |
 |---|---|---|
 | Root | `pages/home.tsx` | `/p-home` |
+| Root | `pages/index.tsx` | `/` |
 | A | `pages/name.tsx` | `/a/p-name` |
+| A | `pages/index.tsx` | `/a` |
 | A/B | `pages/foo.tsx` | `/a/b/p-foo` |
 | A/B/C | `pages/settings.tsx` | `/a/b/c/p-settings` |
 

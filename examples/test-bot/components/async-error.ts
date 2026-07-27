@@ -1,4 +1,4 @@
-import { defineComponent } from '@zhin.js/component';
+import { defineComponent } from 'zhin.js/component';
 
 /**
  * Async component that rejects — verifies Runtime component error handling.

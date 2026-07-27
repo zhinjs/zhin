@@ -1,4 +1,4 @@
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 import { formatBytes } from '../lib/bytes.js';
 
 /** Trigger V8 GC when process was started with --expose-gc. */

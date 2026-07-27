@@ -40,6 +40,26 @@
       "types": "./lib/jsx-dev-runtime.d.ts",
       "development": "./src/jsx-dev-runtime.ts",
       "import": "./lib/jsx-dev-runtime.js"
+    },
+    "./feature/adapter": {
+      "types": "./lib/feature/adapter.d.ts",
+      "development": "./src/feature/adapter.ts",
+      "import": "./lib/feature/adapter.js"
+    },
+    "./feature/command": {
+      "types": "./lib/feature/command.d.ts",
+      "development": "./src/feature/command.ts",
+      "import": "./lib/feature/command.js"
+    },
+    "./feature/component": {
+      "types": "./lib/feature/component.d.ts",
+      "development": "./src/feature/component.ts",
+      "import": "./lib/feature/component.js"
+    },
+    "./feature/middleware": {
+      "types": "./lib/feature/middleware.d.ts",
+      "development": "./src/feature/middleware.ts",
+      "import": "./lib/feature/middleware.js"
     }
   },
   "files": [
@@ -96,5 +116,31 @@
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./lib/index.js",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/adapter",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/component",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/middleware",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
   }
 }

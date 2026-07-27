@@ -54,6 +54,7 @@
 | [0050](./0050-plugin-runtime-migration-boundary.md) | Plugin Runtime 迁移与 Compatibility 边界 |
 | [0051](./0051-native-typescript-development-runtime.md) | Node 原生 TypeScript 开发 Runtime |
 | [0052](./0052-plugin-runtime-package-boundary.md) | Plugin Runtime 独立于旧 Kernel |
+| [0053](./0053-platform-stable-features.md) | Platform Stable Features（用户依赖面收敛） |
 
 ## 相关
 

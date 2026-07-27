@@ -192,7 +192,7 @@ export const RECOMMENDED_AI_DEFAULTS = {
 export async function configureAI(): Promise<AISetupConfig> {
   console.log('');
   console.log(chalk.blue('🤖 配置 AI 智能体'));
-  console.log(chalk.gray('  启用后将自动写入 package.json：@zhin.js/agent、zod、ai、所选 @ai-sdk/*、@modelcontextprotocol/sdk。'));
+  console.log(chalk.gray('  启用后将自动写入 package.json：@zhin.js/agent、zod、ai、所选 @ai-sdk/*（启用 memory MCP 时另加 @modelcontextprotocol/sdk）。'));
   console.log(chalk.gray('  会话持久化默认开启，将自动配置 SQLite 数据库（若尚未选择）。'));
 
   const { enableAI } = await inquirer.prompt([

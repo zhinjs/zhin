@@ -115,17 +115,13 @@ export function getCreateBotPnpmConfig(_aiEnabled?: boolean): Record<string, unk
   };
 }
 
-/** create-zhin-app Plugin Runtime 骨架 production 依赖（不含适配器 / AI / 数据库驱动） */
+/**
+ * create-zhin-app Plugin Runtime 骨架 production 依赖（不含适配器 / AI / 数据库驱动）。
+ * Stable Features（adapter/command/component/middleware）由 `@zhin.js/core` 的 `package.json#zhin.features` 继承；创作面 API 经 `zhin.js/*` 便利入口。
+ */
 export function getCreateBotBaseDependencies(): Record<string, string> {
   return {
     'zhin.js': ZHIN_STACK_VERSIONS['zhin.js'],
-    '@zhin.js/plugin-runtime': ZHIN_STACK_VERSIONS['@zhin.js/plugin-runtime'],
-    '@zhin.js/runtime': ZHIN_STACK_VERSIONS['@zhin.js/runtime'],
-    '@zhin.js/adapter': ZHIN_STACK_VERSIONS['@zhin.js/adapter'],
-    '@zhin.js/command': ZHIN_STACK_VERSIONS['@zhin.js/command'],
-    '@zhin.js/component': ZHIN_STACK_VERSIONS['@zhin.js/component'],
-    '@zhin.js/core': ZHIN_STACK_VERSIONS['@zhin.js/core'],
-    '@zhin.js/satori': ZHIN_STACK_VERSIONS['@zhin.js/satori'],
   };
 }
 

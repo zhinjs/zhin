@@ -18,9 +18,11 @@ describe('project-deps', () => {
       '@zhin.js/agent',
       'zod',
       'ai',
-      '@modelcontextprotocol/sdk',
       '@ai-sdk/openai',
     ]);
+    expect(listAIDependencyNames('openai', { includeMcp: true })).toContain(
+      '@modelcontextprotocol/sdk',
+    );
     expect(formatAIDependencyHint('ollama')).toContain('@ai-sdk/openai-compatible');
   });
 
@@ -77,14 +79,20 @@ describe('project-deps', () => {
     expect(diagnosis?.missingFromPackageJson).toContain('@modelcontextprotocol/sdk');
   });
 
-  it('returns agent stack + MCP SDK + provider sdk when AI is enabled', () => {
+  it('returns agent stack + provider sdk when AI is enabled (MCP only when requested)', () => {
     expect(getAIDependencies({ enabled: false })).toEqual({});
     expect(getAIDependencies({ enabled: true, agentProvider: 'openai' })).toEqual({
       '@zhin.js/agent': 'latest',
       zod: 'latest',
       ai: 'latest',
-      '@modelcontextprotocol/sdk': 'latest',
       '@ai-sdk/openai': 'latest',
+    });
+    expect(getAIDependencies({
+      enabled: true,
+      agentProvider: 'openai',
+      memoryMcp: true,
+    })).toMatchObject({
+      '@modelcontextprotocol/sdk': 'latest',
     });
     expect(getAIDependencies({ enabled: true, agentProvider: 'ollama' })).toMatchObject({
       '@ai-sdk/openai-compatible': 'latest',

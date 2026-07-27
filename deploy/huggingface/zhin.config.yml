@@ -1,0 +1,49 @@
+plugins:
+  sandbox:
+    endpoints:
+      - context: sandbox
+        name: demo
+        owner: demo-user
+http:
+  host: 0.0.0.0
+  port: 7860
+  token: zhin-demo
+  corsOrigins:
+    - "https://console.zhin.dev"
+    - "https://zhinjs-demo.hf.space"
+  trustProxy: true
+
+# OpenRouter free tier — API key via Space Secret OPENROUTER_API_KEY
+ai:
+  enabled: true
+  providers:
+    openrouter:
+      sdk: openai-compatible
+      baseUrl: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      apiKey: ${OPENROUTER_API_KEY}
+      models:
+        - openrouter/free
+  agents:
+    zhin:
+      provider: openrouter
+      model: openrouter/free
+  agent:
+    execSecurity: deny
+    execApprovalMode: deny
+    maxIterations: 8
+  sessions:
+    useDatabase: false
+    maxHistory: 30
+    expireMs: 3600000
+  trigger:
+    respondToAt: true
+    respondToPrivate: true
+    prefixes:
+      - "ai:"
+      - "AI:"
+      - "#"
+    ignorePrefixes:
+      - "/"
+      - "!"
+      - "！"
+    timeout: 90000

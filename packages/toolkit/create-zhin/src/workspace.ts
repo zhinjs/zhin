@@ -95,6 +95,10 @@ export async function createWorkspace(projectPath: string, projectName: string, 
   if (aiEnabled) {
     aiDeps['@zhin.js/tool'] = ZHIN_STACK_VERSIONS['@zhin.js/tool'];
   }
+  // 脚手架默认生成 Satori 卡片组件示例
+  const cardDeps = {
+    '@zhin.js/satori': ZHIN_STACK_VERSIONS['@zhin.js/satori'],
+  };
 
   // package.json：zhin 清单是 Plugin Runtime 拓扑 SSOT（features + plugins）
   await fs.writeJson(path.join(projectPath, 'package.json'), {
@@ -118,7 +122,8 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       ...getCreateBotBaseDependencies(),
       ...adapterDeps,
       ...databaseDeps,
-      ...aiDeps
+      ...aiDeps,
+      ...cardDeps,
     },
     devDependencies: {
       '@zhin.js/cli': ZHIN_STACK_VERSIONS['@zhin.js/cli'],
@@ -136,10 +141,8 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       entry: './plugin.ts',
       engine: '^1.0.0',
       runtime: 'trusted',
+      // Stable Features（adapter/command/component/middleware）由 @zhin.js/core 的 package.json#zhin.features 继承
       features: [
-        { package: '@zhin.js/adapter', api: '^1.0.0' },
-        { package: '@zhin.js/command', api: '^1.0.0' },
-        { package: '@zhin.js/component', api: '^1.0.0' },
         ...(aiEnabled ? [{ package: '@zhin.js/tool', api: '^1.0.0' }] : []),
       ],
       plugins: collectAdapterPluginManifest(adapters),
@@ -480,7 +483,7 @@ pnpm dev
 在 \`commands/\` 下创建 \`.ts\` 文件（默认导出 \`defineCommand\`）：
 
 \`\`\`typescript
-import { defineCommand } from '@zhin.js/command';
+import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
   description: '打招呼',
@@ -575,7 +578,7 @@ HTTP_TOKEN=change-me
 
   // plugin.ts（根插件入口）
   await fs.writeFile(path.join(projectPath, 'plugin.ts'),
-`import { definePlugin } from '@zhin.js/plugin-runtime';
+`import { definePlugin } from 'zhin.js/plugin-runtime';
 
 export default definePlugin({
   name: '${projectName}',
@@ -595,7 +598,7 @@ export default definePlugin({
 
   // commands/hello.ts
   await fs.writeFile(path.join(projectPath, 'commands', 'hello.ts'),
-`import { defineCommand } from '@zhin.js/command';
+`import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
   description: '打招呼',
@@ -609,8 +612,8 @@ export default defineCommand({
 
   // commands/card.ts（组件渲染示例，对齐 examples/minimal-bot）
   await fs.writeFile(path.join(projectPath, 'commands', 'card.ts'),
-`import { defineCommand } from '@zhin.js/command';
-import { component } from '@zhin.js/core/runtime';
+`import { defineCommand } from 'zhin.js/command';
+import { component } from 'zhin.js/core/runtime';
 
 export default defineCommand({
   description: '渲染 Satori 状态卡片',
@@ -629,8 +632,8 @@ export default defineCommand({
 
   // components/status-card.ts
   await fs.writeFile(path.join(projectPath, 'components', 'status-card.ts'),
-`import { defineComponent } from '@zhin.js/component';
-import { raw } from '@zhin.js/core/runtime';
+`import { defineComponent } from 'zhin.js/component';
+import { raw } from 'zhin.js/core/runtime';
 import {
   Card,
   CardHeader,
@@ -740,7 +743,7 @@ export default defineAgentTool<{ message: string }>({
 
     // 生活助手命令与工具（工具需 AI 启用才挂载 @zhin.js/tool feature）
     await fs.writeFile(path.join(projectPath, 'commands', 'remind.ts'),
-`import { defineCommand } from '@zhin.js/command';
+`import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
   description: '设置提醒',

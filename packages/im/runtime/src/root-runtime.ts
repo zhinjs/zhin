@@ -56,7 +56,11 @@ import {
   type PluginConfigResolver,
   type RootResourceInstaller,
 } from './plugin-scope-assembler.js';
-import { ProjectGraphService, type PluginGraphNode, type ProjectGraph } from './project-graph.js';
+import {
+  ProjectGraphService,
+  type PluginGraphNode,
+  type ProjectGraph,
+} from './project-graph.js';
 import { HmrCoordinator, type HmrCoordinatorOptions } from './hmr-coordinator.js';
 import type {
   GenerationInvalidationPlan,

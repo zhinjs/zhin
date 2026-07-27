@@ -14,6 +14,12 @@ export interface ZhinPluginManifest {
   readonly entry: string;
   readonly engine?: string;
   readonly runtime?: 'trusted' | 'isolated';
+  /**
+   * When true (default), Root plugins receive official Stable Features
+   * (`@zhin.js/adapter|command|component`) from the platform/CLI even if they
+   * are omitted from `features` / project dependencies. Set false to opt out.
+   */
+  readonly platformFeatures?: boolean;
   readonly features: readonly PackageReference[];
   readonly plugins: readonly ChildPluginReference[];
 }
@@ -130,12 +136,18 @@ function parseZhinManifest(
   if (runtime !== undefined && runtime !== 'trusted' && runtime !== 'isolated') {
     issues.push(`${source}.runtime must be "trusted" or "isolated"`);
   }
+  const platformFeatures = optionalBoolean(
+    record.platformFeatures,
+    `${source}.platformFeatures`,
+    issues,
+  );
   return Object.freeze({
     protocol: 1,
     type,
     entry,
     engine,
     runtime: runtime as 'trusted' | 'isolated' | undefined,
+    platformFeatures,
     features: parseReferences(record.features, `${source}.features`, issues, false),
     plugins: parseReferences(record.plugins, `${source}.plugins`, issues, true),
   });

@@ -211,7 +211,7 @@ export function findInstalledAiStackIncompatibilities(
 /** 启用 AI 时将写入 package.json 的依赖名（用于向导提示与 CLI 输出） */
 export function listAIDependencyNames(provider?: string, options?: { includeMcp?: boolean }): string[] {
   const names = ['@zhin.js/agent', 'zod', 'ai'];
-  if (options?.includeMcp !== false) {
+  if (options?.includeMcp === true) {
     names.push('@modelcontextprotocol/sdk');
   }
   const sdk = providerSdkPackage(provider);
@@ -376,7 +376,8 @@ export function formatAIDependencyFixCommand(packages: string[], required: Recor
 }
 
 /**
- * AI 启用时安装 agent 栈 + 所选 provider 的 @ai-sdk/* + 可选 MCP SDK。
+ * AI 启用时安装 agent 栈 + 所选 provider 的 @ai-sdk/*。
+ * `@modelcontextprotocol/sdk` 仅在 memoryMcp / mcpServers 时写入（与 doctor 对齐）。
  */
 export function getAIDependencies(ai?: AISetupConfig): Record<string, string> {
   if (!ai?.enabled) return {};
@@ -385,9 +386,13 @@ export function getAIDependencies(ai?: AISetupConfig): Record<string, string> {
     '@zhin.js/agent': AI_STACK_VERSIONS['@zhin.js/agent'],
     zod: AI_STACK_VERSIONS.zod,
     ai: AI_STACK_VERSIONS.ai,
-    '@modelcontextprotocol/sdk': AI_STACK_VERSIONS['@modelcontextprotocol/sdk'],
     ...collectSdkPackagesFromSetup(ai),
   };
+  const needsMcp = ai.memoryMcp === true
+    || (Array.isArray(ai.mcpServers) && ai.mcpServers.length > 0);
+  if (needsMcp) {
+    deps['@modelcontextprotocol/sdk'] = AI_STACK_VERSIONS['@modelcontextprotocol/sdk'];
+  }
 
   return deps;
 }
