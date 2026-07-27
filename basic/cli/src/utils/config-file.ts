@@ -49,9 +49,9 @@ export async function readConfig(filePath: string): Promise<Record<string, unkno
       : {};
   }
   if (ext === '.ts') {
-    return {};
+    throw new Error('zhin.config.ts 已不再被支持，请迁移为 zhin.config.yml');
   }
-  return {};
+  throw new Error(`不支持的配置文件格式: ${ext || '(无扩展名)'}`);
 }
 
 export async function saveConfig(filePath: string, config: Record<string, unknown>): Promise<void> {

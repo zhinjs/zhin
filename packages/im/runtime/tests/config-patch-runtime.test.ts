@@ -8,9 +8,15 @@ import {
   rootPluginId,
 } from '@zhin.js/plugin-runtime';
 import {
+  ConfigDocumentDivergenceError,
   ConfigValidationError,
   RootRuntime,
+  type ConfigDocumentPort,
+  type ConfigDocumentSnapshot,
+  type ConfigPatch,
   type ModuleRuntime,
+  type PreparedConfigDocument,
+  type RuntimeConfigDocument,
 } from '../src/index.js';
 
 const temporary: string[] = [];
@@ -126,7 +132,179 @@ describe('RootRuntime config patches', () => {
 
     await runtime.stop();
   });
+
+  it('rebuilds the full generation for host-level patches when an installer exists', async () => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    modules.set(join(project, 'plugin.ts'), {
+      default: definePlugin({ name: 'root', setup() {} }),
+    });
+    modules.set(join(project, 'plugins/child/plugin.ts'), {
+      default: definePlugin({ name: 'child', setup() {} }),
+    });
+    modules.set(join(project, 'plugins/sibling/plugin.ts'), {
+      default: definePlugin({ name: 'sibling', setup() {} }),
+    });
+    const installed: unknown[] = [];
+    const runtime = new RootRuntime({
+      projectRoot: project,
+      modules,
+      environment: { name: 'test', mode: 'test', platform: 'node' },
+      installResources: ({ config }) => {
+        installed.push(structuredClone(config.document));
+      },
+    });
+    const started = await runtime.start();
+    expect(installed).toHaveLength(1);
+
+    // http never lands in a Plugin ConfigView, so the patch plans zero roots;
+    // the Root Resource installer must still be rebuilt on the new document.
+    const patched = await runtime.patchConfig([{
+      op: 'set',
+      path: ['http', 'port'],
+      value: 8080,
+    }]);
+    expect(patched.generation).toBe(started.generation + 1);
+    expect(installed).toHaveLength(2);
+    expect(installed[1]).toMatchObject({ http: { port: 8080 } });
+
+    await runtime.stop();
+  });
+
+  it('keeps the commit-only shortcut for host-level patches without an installer', async () => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    modules.set(join(project, 'plugin.ts'), {
+      default: definePlugin({ name: 'root', setup() {} }),
+    });
+    modules.set(join(project, 'plugins/child/plugin.ts'), {
+      default: definePlugin({ name: 'child', setup() {} }),
+    });
+    modules.set(join(project, 'plugins/sibling/plugin.ts'), {
+      default: definePlugin({ name: 'sibling', setup() {} }),
+    });
+    const port = new FakeConfigDocumentPort({});
+    const runtime = new RootRuntime({
+      projectRoot: project,
+      modules,
+      environment: { name: 'test', mode: 'test', platform: 'node' },
+      config: port,
+    });
+    const started = await runtime.start();
+
+    const patched = await runtime.patchConfig([{
+      op: 'set',
+      path: ['http', 'port'],
+      value: 8080,
+    }]);
+    expect(patched).toBe(started);
+    expect(port.commits).toBe(1);
+    expect(port.rollbacks).toBe(0);
+    expect(port.document).toEqual({ http: { port: 8080 } });
+
+    await runtime.stop();
+  });
+
+  it('rolls back a prepared document transaction when the shadow phase fails', async () => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    modules.set(join(project, 'plugin.ts'), {
+      default: definePlugin({ name: 'root', setup() {} }),
+    });
+    modules.set(join(project, 'plugins/child/plugin.ts'), {
+      default: definePlugin({
+        name: 'child',
+        setup({ config }) {
+          if ((config.get() as { readonly label: string }).label === 'broken') {
+            throw new Error('child config setup failed');
+          }
+        },
+      }),
+    });
+    modules.set(join(project, 'plugins/sibling/plugin.ts'), {
+      default: definePlugin({ name: 'sibling', setup() {} }),
+    });
+    const port = new FakeConfigDocumentPort({});
+    const runtime = new RootRuntime({
+      projectRoot: project,
+      modules,
+      environment: { name: 'test', mode: 'test', platform: 'node' },
+      config: port,
+    });
+    const started = await runtime.start();
+
+    await expect(runtime.patchConfig([{
+      op: 'set',
+      path: ['plugins', 'child', 'label'],
+      value: 'broken',
+    }])).rejects.toThrow('child config setup failed');
+    expect(runtime.snapshot).toBe(started);
+    expect(port.commits).toBe(0);
+    expect(port.rollbacks).toBe(1);
+    expect(port.document).toEqual({});
+
+    port.diverge = true;
+    await expect(runtime.patchConfig([{
+      op: 'set',
+      path: ['plugins', 'child', 'label'],
+      value: 'v2',
+    }])).rejects.toBeInstanceOf(ConfigDocumentDivergenceError);
+    expect(runtime.snapshot).toBe(started);
+    expect(port.commits).toBe(0);
+    expect(port.rollbacks).toBe(2);
+    expect(port.document).toEqual({});
+
+    await runtime.stop();
+  });
 });
+
+class FakeConfigDocumentPort implements ConfigDocumentPort {
+  commits = 0;
+  rollbacks = 0;
+  diverge = false;
+  #document: RuntimeConfigDocument;
+
+  constructor(document: RuntimeConfigDocument) {
+    this.#document = structuredClone(document);
+  }
+
+  get document(): RuntimeConfigDocument {
+    return this.#document;
+  }
+
+  async read(): Promise<ConfigDocumentSnapshot> {
+    return { document: structuredClone(this.#document), revision: `r${this.commits}` };
+  }
+
+  async prepare(
+    current: ConfigDocumentSnapshot,
+    patches: readonly ConfigPatch[],
+  ): Promise<PreparedConfigDocument> {
+    const document = structuredClone(current.document) as Record<string, unknown>;
+    if (this.diverge) document.diverged = true;
+    else {
+      for (const patch of patches) {
+        if (patch.op !== 'set') continue;
+        let target = document;
+        for (const segment of patch.path.slice(0, -1)) {
+          target = (target[segment] ??= {}) as Record<string, unknown>;
+        }
+        target[patch.path[patch.path.length - 1]!] = structuredClone(patch.value);
+      }
+    }
+    return {
+      document,
+      commit: async () => {
+        this.commits += 1;
+        this.#document = structuredClone(document);
+        return { document, revision: `r${this.commits}` };
+      },
+      rollback: async () => {
+        this.rollbacks += 1;
+      },
+    };
+  }
+}
 
 class FakeModuleRuntime implements ModuleRuntime {
   readonly #modules = new Map<string, unknown>();

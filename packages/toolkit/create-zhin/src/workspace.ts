@@ -5,6 +5,7 @@ import {
   DATABASE_PACKAGES,
   ZHIN_STACK_VERSIONS,
   collectAdapterPluginManifest,
+  formatEnvValue,
   generateAdapterEnvVars,
   generateAIEnvVars,
   getAdapterDependencies,
@@ -533,7 +534,7 @@ async function createRuntimeProjectFiles(projectPath: string, projectName: strin
   const aiEnvVars = options.ai ? generateAIEnvVars(options.ai) : '';
   await fs.writeFile(path.join(projectPath, '.env'),
 `# HTTP 服务配置（Web 控制台 Token 认证）
-HTTP_TOKEN=${options.httpToken}${databaseEnvVars}${adapterEnvVars}${aiEnvVars}
+HTTP_TOKEN=${formatEnvValue(options.httpToken)}${databaseEnvVars}${adapterEnvVars}${aiEnvVars}
 `);
   await fs.writeFile(path.join(projectPath, '.env.development'),
 `# 调试模式

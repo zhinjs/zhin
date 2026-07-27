@@ -47,7 +47,13 @@ export function writeLock(root: string, lock: ZhinPackagesLock): void {
 
 export function normalizePackageName(source: string): string {
   const s = source.trim();
-  if (s.startsWith('npm:')) return s.slice(4).split('@')[0].replace(/^@/, '').replace(/\//g, '-');
+  if (s.startsWith('npm:')) {
+    const spec = s.slice(4);
+    // 版本按最后一个 @ 切分（scoped 包的前导 @ 不是版本分隔符），/ 转 -
+    const at = spec.lastIndexOf('@');
+    const name = at > 0 ? spec.slice(0, at) : spec;
+    return name.replace(/^@/, '').replace(/\//g, '-');
+  }
   if (s.startsWith('git:')) return path.basename(s.replace(/\.git$/, '')).replace(/@.*/, '');
   return s.replace(/[^a-zA-Z0-9._-]/g, '-');
 }
@@ -55,6 +61,8 @@ export function normalizePackageName(source: string): string {
 export function installZhinPackage(source: string, options: { local?: boolean; cwd?: string }): string {
   const root = resolvePackagesRoot(!!options.local, options.cwd);
   const name = normalizePackageName(source);
+  // 空 name 会让 target 退化为 packages 根目录，后续 remove 会 rm -rf 整个根
+  if (!name) throw new Error(`无法解析包名: ${source}`);
   const target = path.join(root, name);
   fs.mkdirSync(target, { recursive: true });
 
@@ -88,6 +96,8 @@ export function installZhinPackage(source: string, options: { local?: boolean; c
 }
 
 export function removeZhinPackage(name: string, options: { local?: boolean; cwd?: string }): boolean {
+  // 空 name 会让 target 退化为 packages 根目录，rm -rf 会清空整个根
+  if (!name.trim()) throw new Error('包名不能为空');
   const root = resolvePackagesRoot(!!options.local, options.cwd);
   const target = path.join(root, name);
   if (!fs.existsSync(target)) return false;

@@ -42,9 +42,9 @@ Agent 层 `ScheduleJobEngine` 在启动时加载该文件（**不**再读取 `cr
 
 ```bash
 zhin schedule list
-zhin schedule add "0 0 9 * * *" "早报" --notify-channel silent
-zhin schedule add --at "2025-12-31T09:00:00" "年终提醒"
-zhin schedule add --every 30m "检查待办"
+zhin schedule add "0 0 9 * * *" --prompt "早报" --notify-channel silent
+zhin schedule add --at "2025-12-31T09:00:00" --prompt "年终提醒"
+zhin schedule add --every 30m --prompt "检查待办"
 ```
 
 `zhin cron` 为兼容别名，指向同一命令。

@@ -32,6 +32,12 @@ export {
 export { configureDatabaseOptions } from './database.js';
 
 export {
+  formatEnvValue,
+  mergeEnvText,
+  generateDatabaseEnvVars,
+} from './env.js';
+
+export {
   AI_STACK_VERSIONS,
   MCP_SDK_VERSION,
   getAIDependencies,

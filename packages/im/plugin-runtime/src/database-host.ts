@@ -21,6 +21,11 @@ export interface DatabaseHostModel {
   update(patch: Record<string, unknown>): {
     where(query: Record<string, unknown>): Promise<unknown>;
   };
+  /**
+   * DB 侧计数（聚合下推，避免为计数整表加载）。
+   * 可选：轻量 test/memory host 可不实现，调用方降级为 select 计数。
+   */
+  count?(where?: Record<string, unknown>): Promise<number>;
 }
 
 export type DatabaseHostType = 'related' | 'document' | 'keyvalue';

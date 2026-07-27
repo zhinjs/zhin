@@ -346,7 +346,11 @@ function splitShellOperatorParts(command: string): string[] {
   let current = '';
   let i = 0;
   while (i < command.length) {
-    if (command.startsWith('&&', i) || command.startsWith('||', i) || command[i] === ';' || command[i] === '|') {
+    // 换行也是命令分隔符 — 防止 `cat a.txt\nrm -rf x` 这类换行夹带绕过
+    if (
+      command.startsWith('&&', i) || command.startsWith('||', i) ||
+      command[i] === ';' || command[i] === '|' || command[i] === '\n' || command[i] === '\r'
+    ) {
       const trimmed = current.trim();
       if (trimmed) parts.push(trimmed);
       current = '';
@@ -371,8 +375,8 @@ function splitShellOperatorParts(command: string): string[] {
 export function checkBashCommandSafety(command: string): { safe: boolean; reason?: string } {
   const trimmed = command.trim();
 
-  // 拆管道，检查每段
-  const segments = splitPipeSegments(trimmed);
+  // 按复合运算符（&&/||/;/|/换行）拆段，逐段检查 — 防止 `echo ok && printenv` 绕过
+  const segments = splitShellOperatorParts(trimmed);
   for (const seg of segments) {
     if (ENV_DUMP_COMMANDS.test(seg)) {
       return { safe: false, reason: '禁止执行环境变量导出命令（env/printenv/export/set），可能泄漏密钥' };

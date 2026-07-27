@@ -147,6 +147,28 @@ describe('console-rest-pages logs', () => {
     });
   });
 
+  it('GET /api/logs/stats 优先使用模型 DB 侧 count 聚合', async () => {
+    const model = fakeLogModel(sampleLogs);
+    const countCalls: Array<Record<string, unknown> | undefined> = [];
+    const countingModel = {
+      ...model,
+      count: async (where?: Record<string, unknown>) => {
+        countCalls.push(where);
+        if (!where) return 42;
+        return where.level === 'info' ? 40 : 1;
+      },
+    };
+    const base = await startHost(baseCtx({ databaseHost: fakeDatabaseHost(countingModel) }));
+    const body = await json(await fetch(`${base}/api/logs/stats`));
+    expect(body.data).toMatchObject({
+      total: 42,
+      byLevel: { info: 40, warn: 1, error: 1 },
+      oldestTimestamp: '2026-01-01T00:00:00.000Z',
+    });
+    // total + info/warn/error 四次计数全部走 count 聚合
+    expect(countCalls).toHaveLength(4);
+  });
+
   it('DELETE /api/logs 清空日志（full scope）', async () => {
     const model = fakeLogModel(sampleLogs);
     const base = await startHost(baseCtx({ databaseHost: fakeDatabaseHost(model) }));

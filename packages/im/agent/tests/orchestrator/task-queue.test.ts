@@ -325,6 +325,62 @@ describe('TaskQueue', () => {
     });
   });
 
+  describe('enqueueAndWait', () => {
+    it('task:started 等中间事件不应摘除监听器，完成时正常 resolve', async () => {
+      const result = await queue.enqueueAndWait({
+        name: 'Wait Task',
+        priority: 'medium',
+        execute: async () => {
+          await new Promise(resolve => setTimeout(resolve, 50));
+          return 'done';
+        },
+      });
+
+      expect(result).toBe('done');
+    });
+
+    it('重试后成功应 resolve 最终结果', async () => {
+      let attempts = 0;
+
+      const result = await queue.enqueueAndWait({
+        name: 'Retry Task',
+        priority: 'medium',
+        execute: async () => {
+          attempts++;
+          if (attempts < 2) {
+            throw new Error('flaky');
+          }
+          return 'recovered';
+        },
+        maxRetries: 2,
+      });
+
+      expect(result).toBe('recovered');
+      expect(attempts).toBe(2);
+    });
+
+    it('超时后迟到的完成不应覆盖 timeout 终态', async () => {
+      const waitPromise = queue.enqueueAndWait({
+        name: 'Slow Task',
+        priority: 'medium',
+        execute: () => new Promise<string>(resolve => {
+          setTimeout(() => resolve('late'), 150);
+        }),
+        timeout: 50,
+      });
+
+      await expect(waitPromise).rejects.toThrow('timeout');
+
+      const slowTask = queue.getAllTasks().find(t => t.name === 'Slow Task');
+      expect(slowTask?.status).toBe('timeout');
+
+      // 等待 execute 迟到的返回落地，终态不得被覆盖为 completed。
+      await new Promise(resolve => setTimeout(resolve, 200));
+      expect(slowTask?.status).toBe('timeout');
+      expect(slowTask?.result).toBeUndefined();
+    });
+  });
+
   describe('全局实例', () => {
     it('应该获取全局实例', () => {
       const instance = getTaskQueue();

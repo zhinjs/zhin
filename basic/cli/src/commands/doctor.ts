@@ -53,9 +53,14 @@ export const doctorCommand = new Command('doctor')
 
     if (options.upgradeL4) {
       const configPath = findConfigFile(cwd);
-      const config = configPath
-        ? await readConfig(path.join(cwd, configPath)) as Record<string, unknown>
-        : {};
+      let config: Record<string, unknown> = {};
+      if (configPath) {
+        try {
+          config = await readConfig(path.join(cwd, configPath)) as Record<string, unknown>;
+        } catch {
+          config = {};
+        }
+      }
       const upgrade = diagnoseUpgradeToL4(cwd, config);
       console.log(chalk.cyan('L4 升级诊断'));
       if (upgrade.missingAiDeps.length > 0) {
@@ -475,26 +480,38 @@ export const doctorCommand = new Command('doctor')
       });
     }
 
-    // 8. 检查端口占用（8086）
+    // 8. 检查端口占用（读取已加载配置的 http.port，默认 8086）
+    let httpPort = 8086;
     try {
-      const { stdout } = await execAsync('lsof -i:8086 || (ss -lntp | grep :8086) 2>/dev/null');
+      const configForPort: Record<string, unknown> | null = loadedConfig
+        ?? (existingConfig ? await readConfig(path.join(cwd, existingConfig)) as Record<string, unknown> : null);
+      const http = configForPort?.http;
+      if (http && typeof http === 'object' && !Array.isArray(http)
+        && typeof (http as Record<string, unknown>).port === 'number') {
+        httpPort = (http as Record<string, unknown>).port as number;
+      }
+    } catch {
+      // 配置不可读时使用默认端口
+    }
+    try {
+      const { stdout } = await execAsync(`lsof -i:${httpPort} || (ss -lntp | grep :${httpPort}) 2>/dev/null`);
       if (stdout.trim()) {
         results.push({
-          name: '端口 8086',
+          name: `端口 ${httpPort}`,
           status: 'warn',
           message: '已被占用',
-          fix: 'lsof -ti:8086 | xargs kill -9'
+          fix: `lsof -ti:${httpPort} | xargs kill -9`
         });
       } else {
         results.push({
-          name: '端口 8086',
+          name: `端口 ${httpPort}`,
           status: 'ok',
           message: '可用'
         });
       }
     } catch {
       results.push({
-        name: '端口 8086',
+        name: `端口 ${httpPort}`,
         status: 'ok',
         message: '可用'
       });
@@ -575,12 +592,11 @@ export const doctorCommand = new Command('doctor')
     }
   });
 
-async function createDefaultConfig(cwd: string): Promise<void> {
-  const configContent = `endpoints: []
-plugins:
-  - "@zhin.js/host-router"
-  - "@zhin.js/host-api"
-  - "@zhin.js/adapter-sandbox"
+export async function createDefaultConfig(cwd: string): Promise<void> {
+  // 新 Plugin Runtime 形态：plugins 为 instanceKey → 配置 映射；
+  // Console Host 由 CLI composition root 装配，无需 host-router/host-api 插件
+  const configContent = `plugins:
+  sandbox: {}
 http:
   token: \${HTTP_TOKEN}
   corsOrigins:

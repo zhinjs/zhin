@@ -195,12 +195,19 @@ export function formatInboundContent(msg: DingTalkMessage): string {
   }
 }
 
+/** DingTalk timestamps are epoch milliseconds; reject replays outside ±1 hour. */
+export const MAX_TIMESTAMP_DRIFT_MS = 60 * 60 * 1000;
+
 export function verifySignature(
   appSecret: string,
   timestamp: string,
   sign: string,
 ): boolean {
   try {
+    const ts = Number(timestamp);
+    if (!Number.isFinite(ts) || Math.abs(Date.now() - ts) > MAX_TIMESTAMP_DRIFT_MS) {
+      return false;
+    }
     const stringToSign = `${timestamp}\n${appSecret}`;
     const hmac = createHmac('sha256', appSecret);
     hmac.update(stringToSign);

@@ -111,7 +111,14 @@ export class CommandIndex {
   async dispatch(input: string, source: unknown = undefined): Promise<CommandDispatchResult> {
     const words = splitCommand(input);
     for (let consumed = words.length; consumed > 0; consumed -= 1) {
-      const match = this.#match(words.slice(0, consumed).join(' '));
+      let match: CommandMatch | undefined;
+      try {
+        match = this.#match(words.slice(0, consumed).join(' '));
+      } catch (error) {
+        // A typed parameter rejecting the input means "no match", same as has().
+        if (error instanceof CommandParameterValueError) continue;
+        throw error;
+      }
       if (!match) continue;
       const args = words.slice(consumed);
       const value = await match.command.slot.definition.execute(
@@ -135,11 +142,15 @@ export class CommandIndex {
 
   #match(name: string): CommandMatch | undefined {
     const words = splitCommand(name);
+    if (words.length === 0) return undefined;
     // A literal file such as list.ts always wins over [name:string].ts.
     const staticCommand = this.#staticCommands.get(words.join(' '));
     if (staticCommand) return { command: staticCommand, params: Object.freeze({}) };
 
-    for (const command of this.#dynamicCommands.values()) {
+    // More specific routes (more static segments) win over generic ones.
+    const dynamicCommands = [...this.#dynamicCommands.values()]
+      .sort((a, b) => staticSegmentCount(b.segments) - staticSegmentCount(a.segments));
+    for (const command of dynamicCommands) {
       const parameter = command.parameter as CommandParameterDefinition;
       const optional = parameter.defaultValue !== undefined;
       if (words.length !== command.segments.length &&
@@ -199,6 +210,10 @@ function displayName(
 
 function routeShape(segments: readonly string[]): string {
   return segments.map((segment) => segment.startsWith('$') ? '$' : segment).join(' ');
+}
+
+function staticSegmentCount(segments: readonly string[]): number {
+  return segments.filter((segment) => !segment.startsWith('$')).length;
 }
 
 function splitCommand(value: string): readonly string[] {

@@ -68,7 +68,11 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     if (root === 'pages') return false;
     if (root === 'skills' || root === 'agents') return extname(normalized) !== '.md';
     if (root === 'tools' || root === 'mcp') return parts.length !== capability + 2;
-    return false;
+    if (isCapabilityEntry(parts.slice(capability + 1))) return false;
+    // Support files inside capability directories (e.g. commands/_utils.ts)
+    // are not discovery entries: reloading the entry URL only bumps that
+    // entry's zhin-generation, so the importer closure keeps the old code.
+    return ['.js', '.json', '.ts'].includes(extname(normalized));
   }
 
   watch(listener: (source: string) => void): Dispose {
@@ -141,7 +145,7 @@ class PortableSourceWatcher {
       this.#watcher = watchDirectory(this.root, { recursive: true }, (_event, name) => {
         if (!name) return;
         const source = resolve(this.root, name.toString());
-        if (isWatchedSource(source)) this.listener(source);
+        if (isWatchedSource(source) && !isIgnoredSource(this.root, source)) this.listener(source);
       });
       this.#watcher.on('error', () => this.#startPolling());
     } catch {
@@ -188,6 +192,29 @@ function sourceSnapshot(root: string): ReadonlyMap<string, number> {
 function isWatchedSource(source: string): boolean {
   const name = source.slice(source.lastIndexOf(sep) + 1);
   return watchedExtensions.has(extname(source)) || name.startsWith('.env');
+}
+
+/** Mirrors sourceSnapshot: any path segment matching an ignored directory opts out. */
+function isIgnoredSource(root: string, source: string): boolean {
+  return relative(root, source).split(sep).some((segment) => ignoredDirectories.has(segment));
+}
+
+/**
+ * Discovery entries follow the typeScriptModules convention
+ * (feature-kit typescript-convention.ts): lowercase segment directories and
+ * lowercase .ts/.tsx module names only.
+ */
+function isCapabilityEntry(segments: readonly string[]): boolean {
+  const file = segments[segments.length - 1] ?? '';
+  return segments.slice(0, -1).every(isCapabilitySegment) && isCapabilityModule(file);
+}
+
+function isCapabilitySegment(value: string): boolean {
+  return /^[a-z0-9][a-z0-9-]*$/u.test(value);
+}
+
+function isCapabilityModule(value: string): boolean {
+  return /^[a-z0-9][a-z0-9-]*\.tsx?$/u.test(value);
 }
 
 function isExecutableSource(source: string): boolean {

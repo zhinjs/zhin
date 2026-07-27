@@ -88,6 +88,19 @@ describe('create-zhin config', () => {
 
       expect(envVars).toBe('')
     })
+
+    it('should quote values containing # or spaces', () => {
+      const envVars = generateDatabaseEnvVars({
+        dialect: 'mysql',
+        host: 'localhost',
+        port: 3306,
+        user: 'root',
+        password: 'p#ss word',
+        database: 'test_db'
+      })
+
+      expect(envVars).toContain('DB_PASSWORD="p#ss word"')
+    })
   })
 
   describe('materializeDatabaseConfig', () => {

@@ -3,6 +3,7 @@ import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import { messageGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import defineNapCatAdapter from '../adapters/napcat.js';
+import { getNapcatAgentDeps } from '../src/napcat-agent-deps.js';
 import {
   NapCatHttpEndpoint,
   NapCatWssEndpoint,
@@ -522,6 +523,87 @@ describe('napcat plugin runtime adapter', () => {
       'send_private_msg',
       expect.objectContaining({ user_id: 10001 }),
     );
+
+    await endpoint.stop();
+  });
+});
+
+describe('napcat ws lifecycle', () => {
+  function pingCalls(ws: ReturnType<typeof createMockWs>): number {
+    return (ws.ping as unknown as { mock: { calls: unknown[] } }).mock.calls.length;
+  }
+
+  it('does not arm reconnect when the initial connect closes before open', async () => {
+    let creates = 0;
+    const endpoint = new NapCatWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'napcat'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig, // reconnect_interval: 50
+      createWebSocket: () => {
+        creates += 1;
+        const ws = createMockWs();
+        queueMicrotask(() => ws.emitClose(1006, 'refused'));
+        return ws;
+      },
+    });
+
+    await expect(endpoint.start()).rejects.toThrow('NapCat WS closed');
+    // 等超过一个 reconnect_interval，不应有重连（僵尸连接）发生
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(creates).toBe(1);
+    // start 失败后 agent endpoint 已反注册
+    expect(() => getNapcatAgentDeps().getEndpoint('test-napcat')).toThrow();
+  });
+
+  it('reconnects only after an established connection closes', async () => {
+    const sockets: ReturnType<typeof createMockWs>[] = [];
+    const endpoint = new NapCatWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'napcat'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createWebSocket: () => {
+        const ws = createMockWs();
+        sockets.push(ws);
+        queueMicrotask(() => {
+          if (sockets.length === 1) ws.emitOpen();
+        });
+        return ws;
+      },
+    });
+
+    await endpoint.start();
+    sockets[0]!.emitClose(1006, 'lost');
+    await vi.waitFor(() => expect(sockets.length).toBe(2));
+    await endpoint.stop();
+  });
+
+  it('clears the heartbeat interval when the socket closes', async () => {
+    const ws = createMockWs();
+    const endpoint = new NapCatWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'napcat'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: resolveNapCatConfig({
+        connection: 'ws',
+        name: 'hb-napcat',
+        url: 'ws://127.0.0.1:3001',
+        access_token: 'secret',
+        reconnect_interval: 10_000,
+        heartbeat_interval: 20,
+      }) as NapCatWsConfig,
+      createWebSocket: () => {
+        queueMicrotask(() => ws.emitOpen());
+        return ws;
+      },
+    });
+
+    await endpoint.start();
+    await new Promise((resolve) => setTimeout(resolve, 70));
+    const pingsBeforeClose = pingCalls(ws);
+    expect(pingsBeforeClose).toBeGreaterThan(0);
+
+    ws.emitClose(1006, 'lost');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(pingCalls(ws)).toBe(pingsBeforeClose);
 
     await endpoint.stop();
   });

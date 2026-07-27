@@ -1,5 +1,6 @@
 import inquirer from 'inquirer';
 import chalk from 'chalk';
+import { formatEnvValue } from './env.js';
 
 export interface AISetupConfig {
   enabled: boolean;
@@ -102,6 +103,16 @@ export function providerSdkFor(name: string): string {
       return 'openai';
   }
 }
+
+/**
+ * openai-compatible sdk 在 runtime 无 baseUrl 无法建 provider
+ * （packages/im/ai sdk-provider-adapter 直接拒绝），这些 provider 的 baseUrl 必填，
+ * 向导预填官方地址。
+ */
+export const PROVIDER_DEFAULT_BASE_URLS: Readonly<Record<string, string>> = Object.freeze({
+  zhipu: 'https://open.bigmodel.cn/api/paas/v4',
+  moonshot: 'https://api.moonshot.cn/v1',
+});
 
 function defaultModelForProvider(driver: string): string {
   const entry = PROVIDERS.find(p => p.value === driver);
@@ -253,6 +264,7 @@ export async function configureAI(): Promise<AISetupConfig> {
       models: [ollamaConfig.model.trim()],
     };
   } else {
+    const defaultBaseUrl = PROVIDER_DEFAULT_BASE_URLS[provider];
     const cloudConfig = await inquirer.prompt([
       {
         type: 'input',
@@ -272,8 +284,13 @@ export async function configureAI(): Promise<AISetupConfig> {
       {
         type: 'input',
         name: 'baseUrl',
-        message: '自定义 API 地址（留空使用官方默认）:',
-        default: '',
+        message: defaultBaseUrl
+          ? 'API 地址（该提供商 sdk 为 openai-compatible，baseUrl 必填）:'
+          : '自定义 API 地址（留空使用官方默认）:',
+        default: defaultBaseUrl ?? '',
+        validate: defaultBaseUrl
+          ? (input: string) => (input.trim() ? true : 'baseUrl 不能为空（openai-compatible 无默认地址）')
+          : undefined,
       }
     ]);
 
@@ -389,7 +406,7 @@ export function generateAIEnvVars(config: AISetupConfig): string {
   for (const [, providerConfig] of Object.entries(config.providers)) {
     const realKey = (providerConfig as any).__envApiKey;
     if (realKey) {
-      envVars.push(`AI_API_KEY=${realKey}`);
+      envVars.push(`AI_API_KEY=${formatEnvValue(realKey)}`);
     }
   }
 

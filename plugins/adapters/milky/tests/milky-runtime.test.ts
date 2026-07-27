@@ -3,6 +3,7 @@ import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import { messageGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import defineMilkyAdapter from '../adapters/milky.js';
+import { getMilkyAgentDeps } from '../src/milky-agent-deps.js';
 import {
   MilkySseEndpoint,
   MilkyWebhookEndpoint,
@@ -572,5 +573,124 @@ describe('milky plugin runtime adapter', () => {
     }));
 
     await endpoint.stop();
+  });
+});
+
+describe('milky ws lifecycle', () => {
+  function pingCalls(ws: ReturnType<typeof createMockWs>): number {
+    return (ws.ping as unknown as { mock: { calls: unknown[] } }).mock.calls.length;
+  }
+
+  it('resets state and does not reconnect when the initial connect closes before open', async () => {
+    let attempt = 0;
+    const endpoint = new MilkyWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'milky'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig, // reconnect_interval: 50
+      callApi: vi.fn(async () => ({})),
+      createWebSocket: () => {
+        attempt += 1;
+        const ws = createMockWs();
+        queueMicrotask(() => {
+          if (attempt === 1) ws.emitClose(1006, 'refused');
+          else ws.emitOpen();
+        });
+        return ws;
+      },
+    });
+
+    await expect(endpoint.start()).rejects.toThrow('Milky WS 关闭');
+    // 等超过一个 reconnect_interval，不应武装重连
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(attempt).toBe(1);
+    // start 失败后 agent endpoint 已反注册
+    expect(() => getMilkyAgentDeps().getEndpoint('test-milky')).toThrow();
+    // #started 已复位，可重新 start
+    await endpoint.start();
+    expect(attempt).toBe(2);
+    await endpoint.stop();
+  });
+
+  it('reconnects only after an established connection closes', async () => {
+    const sockets: ReturnType<typeof createMockWs>[] = [];
+    const endpoint = new MilkyWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'milky'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      callApi: vi.fn(async () => ({})),
+      createWebSocket: () => {
+        const ws = createMockWs();
+        sockets.push(ws);
+        queueMicrotask(() => {
+          if (sockets.length === 1) ws.emitOpen();
+        });
+        return ws;
+      },
+    });
+
+    await endpoint.start();
+    sockets[0]!.emitClose(1006, 'lost');
+    await vi.waitFor(() => expect(sockets.length).toBe(2));
+    await endpoint.stop();
+  });
+
+  it('clears the heartbeat interval when the socket closes', async () => {
+    const ws = createMockWs();
+    const endpoint = new MilkyWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'milky'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: resolveMilkyConfig({
+        connection: 'ws',
+        name: 'hb-milky',
+        baseUrl: 'http://127.0.0.1:8080',
+        access_token: 'secret',
+        reconnect_interval: 10_000,
+        heartbeat_interval: 20,
+      }) as MilkyWsConfig,
+      callApi: vi.fn(async () => ({})),
+      createWebSocket: () => {
+        queueMicrotask(() => ws.emitOpen());
+        return ws;
+      },
+    });
+
+    await endpoint.start();
+    await new Promise((resolve) => setTimeout(resolve, 70));
+    const pingsBeforeClose = pingCalls(ws);
+    expect(pingsBeforeClose).toBeGreaterThan(0);
+
+    ws.emitClose(1006, 'lost');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(pingCalls(ws)).toBe(pingsBeforeClose);
+
+    await endpoint.stop();
+  });
+});
+
+describe('milky sse lifecycle', () => {
+  it('rejects start when the stream is stopped during connect', async () => {
+    let resolveClosed!: () => void;
+    const closed = new Promise<void>((resolve) => {
+      resolveClosed = resolve;
+    });
+    const endpoint = new MilkySseEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'milky'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: resolveMilkyConfig({
+        connection: 'sse',
+        name: 'sse-stop-bot',
+        baseUrl: 'http://127.0.0.1:8080',
+      }) as never,
+      createSseStream: () => ({
+        closed,
+        close() {
+          queueMicrotask(() => resolveClosed());
+        },
+      }),
+    });
+
+    const assertion = expect(endpoint.start()).rejects.toThrow('stopped during connect');
+    await endpoint.stop();
+    await assertion;
   });
 });

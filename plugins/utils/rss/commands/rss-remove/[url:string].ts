@@ -23,7 +23,13 @@ export default defineCommand<RssConfig>({
     if (rows.length === 0) return '未找到该订阅';
 
     const row = rows[0]!;
-    await Subs.delete().where({ id: row.id });
+    // 表结构没有 id 列，删除必须按业务键匹配（与上面的 select 条件一致）。
+    await Subs.delete().where({
+      url,
+      adapter_name: channel.adapterName,
+      channel_type: channel.channelType,
+      channel_id: channel.channelId,
+    });
     return `已取消订阅: ${String(row.feed_title || url)}`;
   },
 });

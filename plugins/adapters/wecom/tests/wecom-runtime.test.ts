@@ -112,6 +112,10 @@ describe('wecom protocol helpers', () => {
     const signature = msgSignature(encrypt, timestamp, nonce);
     expect(verifySignature(TOKEN, timestamp, nonce, encrypt, signature)).toBe(true);
     expect(verifySignature(TOKEN, timestamp, nonce, encrypt, 'bad')).toBe(false);
+    // 等长但内容被篡改 / 长度不符 / 大小写不一致均须拒绝（timingSafeEqual）
+    expect(verifySignature(TOKEN, timestamp, nonce, encrypt, '0'.repeat(40))).toBe(false);
+    expect(verifySignature(TOKEN, timestamp, nonce, encrypt, signature.slice(2))).toBe(false);
+    expect(verifySignature(TOKEN, timestamp, nonce, encrypt, signature.toUpperCase())).toBe(false);
   });
 
   it('parses XML text messages', () => {

@@ -1,42 +1,15 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
-import fs from 'fs-extra';
 import path from 'path';
-import yaml from 'yaml';
-import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
 import { configCheckCommand } from './config-check.js';
+import { findConfigFile, readConfig, saveConfig } from '../utils/config-file.js';
 
-function findConfigFile(cwd: string): string | null {
-  const candidates = ['zhin.config.yml', 'zhin.config.yaml', 'zhin.config.json', 'zhin.config.toml', 'zhin.config.ts'];
-  return candidates.find(f => fs.existsSync(path.join(cwd, f))) || null;
-}
-
-async function readConfig(filePath: string): Promise<any> {
-  const ext = path.extname(filePath);
-  const content = await fs.readFile(filePath, 'utf-8');
-
-  if (ext === '.yml' || ext === '.yaml') {
-    return yaml.parse(content);
-  } else if (ext === '.json') {
-    return JSON.parse(content);
-  } else if (ext === '.ts') {
-    // TODO: 支持 TypeScript 配置文件
-    logger.warn(formatCompact( { cmd: 'config', op: 'unsupported_ts', hint: 'zhin build' }));
-    return {};
-  }
-  return {};
-}
-
-async function saveConfig(filePath: string, config: any): Promise<void> {
-  const ext = path.extname(filePath);
-
-  if (ext === '.yml' || ext === '.yaml') {
-    await fs.writeFile(filePath, yaml.stringify(config));
-  } else if (ext === '.json') {
-    await fs.writeFile(filePath, JSON.stringify(config, null, 2));
-  } else if (ext === '.ts') {
-    logger.error('不支持直接修改 TypeScript 配置文件，请手动编辑');
+async function loadConfigOrExit(configPath: string): Promise<Record<string, unknown>> {
+  try {
+    return await readConfig(configPath);
+  } catch (error) {
+    logger.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
 }
@@ -119,7 +92,7 @@ const listCommand = new Command('list')
     }
     
     const configPath = path.join(cwd, configFile);
-    const config = await readConfig(configPath);
+    const config = await loadConfigOrExit(configPath);
     
     console.log(chalk.bold(`\n📋 配置文件: ${configFile}\n`));
     console.log(formatValue(config));
@@ -139,7 +112,7 @@ const getCommand = new Command('get')
     }
     
     const configPath = path.join(cwd, configFile);
-    const config = await readConfig(configPath);
+    const config = await loadConfigOrExit(configPath);
     const value = getNestedValue(config, key);
     
     if (value === undefined) {
@@ -164,7 +137,7 @@ const setCommand = new Command('set')
     }
     
     const configPath = path.join(cwd, configFile);
-    const config = await readConfig(configPath);
+    const config = await loadConfigOrExit(configPath);
     const value = parseValue(valueStr);
     
     setNestedValue(config, key, value);
@@ -187,11 +160,11 @@ const deleteCommand = new Command('delete')
     }
     
     const configPath = path.join(cwd, configFile);
-    const config = await readConfig(configPath);
+    const config = await loadConfigOrExit(configPath);
     
     const keys = key.split('.');
     const lastKey = keys.pop()!;
-    let current = config;
+    let current: any = config;
     
     for (const k of keys) {
       if (!(k in current) || typeof current[k] !== 'object') {

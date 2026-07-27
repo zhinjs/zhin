@@ -1,4 +1,5 @@
-import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, mkdir, readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -468,6 +469,46 @@ describe('console REST routes', () => {
     expect(body.data).toEqual([]);
   });
 
+  it('rejects config:save-yaml with invalid YAML (400) and persists valid YAML', async () => {
+    const { port } = await startHost({ projectRoot });
+    const post = (yaml: string) => fetch(`http://127.0.0.1:${port}/api/console/request`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'config:save-yaml', requestId: 1, yaml }),
+    });
+
+    const bad = await post('http: [unclosed\n  port: }');
+    expect(bad.status).toBe(400);
+    const badBody = await bad.json() as { success: boolean; error: string };
+    expect(badBody.success).toBe(false);
+    expect(badBody.error).toContain('Invalid YAML');
+    // 非法 YAML 不得落盘
+    expect(existsSync(join(projectRoot, 'zhin.config.yml'))).toBe(false);
+
+    const good = await post('http:\n  port: 8086\n');
+    expect(good.status).toBe(200);
+    const saved = await readFile(join(projectRoot, 'zhin.config.yml'), 'utf8');
+    expect(saved).toContain('port: 8086');
+  });
+
+  it('rejects config:set with __proto__ as pluginName (400)', async () => {
+    const { port } = await startHost({ projectRoot });
+    const res = await fetch(`http://127.0.0.1:${port}/api/console/request`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        type: 'config:set',
+        requestId: 2,
+        pluginName: '__proto__',
+        data: { polluted: true },
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json() as { success: boolean; error: string };
+    expect(body.error).toContain('Invalid config key');
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+
   it('serves config from the generation Primary Config instead of stale disk state', async () => {
     await writeFile(join(projectRoot, 'zhin.config.yml'), 'http:\n  port: 1000\n');
     const { port } = await startHost({
@@ -653,6 +694,26 @@ describe('config document flatten / write namespace', () => {
     expect(flat.plugins).toBeUndefined();
   });
 
+  it('prefers top-level host keys over same-named plugins.<key>', () => {
+    const flat = flattenConfigDocument({
+      ai: { providers: { openai: {} } },
+      plugins: {
+        ai: { pluginConfig: true },
+        sandbox: { endpoints: [] },
+      },
+    });
+    // instanceKey 叫 ai 时不得覆盖顶层 host 的 ai 键
+    expect(flat.ai).toEqual({ providers: { openai: {} } });
+    expect(flat.sandbox).toEqual({ endpoints: [] });
+  });
+
+  it('does not pollute the prototype when flattening documents with __proto__ keys', () => {
+    const document = JSON.parse('{"plugins": {"__proto__": {"polluted": true}}}');
+    const flat = flattenConfigDocument(document);
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(flat, '__proto__')).toBe(false);
+  });
+
   it('writes host keys to top-level and plugins under plugins.*', () => {
     const document: Record<string, unknown> = { plugins: { sandbox: {} } };
     writeConfigKey(document, 'http', { port: 9 });
@@ -661,6 +722,23 @@ describe('config document flatten / write namespace', () => {
     expect(document.http).toEqual({ port: 9 });
     expect((document.plugins as Record<string, unknown>).sandbox).toEqual({ endpoints: [] });
     expect((document.plugins as Record<string, unknown>)['new-plugin']).toEqual({ enabled: true });
+  });
+
+  it('rejects __proto__/constructor/prototype as config keys', () => {
+    const document: Record<string, unknown> = {};
+    for (const key of ['__proto__', 'constructor', 'prototype']) {
+      expect(() => writeConfigKey(document, key, { polluted: true })).toThrow(/Invalid config key/);
+    }
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+    expect(document.plugins).toBeUndefined();
+  });
+
+  it('treats prototype-inherited names (toString) as plugin keys, not top-level keys', () => {
+    const document: Record<string, unknown> = {};
+    writeConfigKey(document, 'toString', { enabled: true });
+    // 'toString' in document 为 true（原型链），但不得写到顶层
+    expect(Object.prototype.hasOwnProperty.call(document, 'toString')).toBe(false);
+    expect((document.plugins as Record<string, unknown>).toString).toEqual({ enabled: true });
   });
 
   it('promotes plugins:[] array form to a map without dropping listed names', () => {

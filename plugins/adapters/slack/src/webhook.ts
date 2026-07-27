@@ -56,9 +56,10 @@ export async function handleSlackWebhookRequest(
       const params = new URLSearchParams(rawBody);
       const payloadStr = params.get('payload');
       if (payloadStr) {
+        const payload = JSON.parse(payloadStr) as SlackInteractionPayload;
         response.writeHead(200);
         response.end('');
-        handler.admitInteraction(JSON.parse(payloadStr) as SlackInteractionPayload);
+        handler.admitInteraction(payload);
         return;
       }
       const body = Object.fromEntries(params) as unknown as SlackSlashCommand;
@@ -97,7 +98,9 @@ export async function handleSlackWebhookRequest(
     response.end('');
   } catch (error) {
     logger.error('Slack webhook error:', error);
-    response.writeHead(200);
-    response.end('');
+    if (!response.headersSent) {
+      response.writeHead(200);
+      response.end('');
+    }
   }
 }

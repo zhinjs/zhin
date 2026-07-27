@@ -3,12 +3,12 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 import fs from 'fs-extra';
 import path from 'path';
-import yaml from 'yaml';
 import { formatDisplayPath } from '@zhin.js/logger';
 import { CREATE_PROJECT_COMMAND } from '../utils/create-project.js';
 import { ensureGlobalHome, installGlobalHomeDeps } from '../utils/global-home-init.js';
 import { globalZhinHome } from '../utils/zhin-home.js';
 import { logger } from '../utils/logger.js';
+import { findConfigFile, readConfig, saveConfig } from '../utils/config-file.js';
 import {
   configureDatabaseOptions,
   configureAdapters,
@@ -152,34 +152,6 @@ async function setupBootstrapFiles(cwd: string): Promise<void> {
   }
 }
 
-function findConfigFile(cwd: string): string | null {
-  const candidates = ['zhin.config.yml', 'zhin.config.yaml', 'zhin.config.json', 'zhin.config.toml', 'zhin.config.ts'];
-  return candidates.find(f => fs.existsSync(path.join(cwd, f))) || null;
-}
-
-async function readConfig(filePath: string): Promise<any> {
-  const ext = path.extname(filePath);
-  const content = await fs.readFile(filePath, 'utf-8');
-
-  if (ext === '.yml' || ext === '.yaml') {
-    return yaml.parse(content);
-  } else if (ext === '.json') {
-    return JSON.parse(content);
-  }
-  // TODO: 支持 TOML 和 TS
-  return {};
-}
-
-async function saveConfig(filePath: string, config: any): Promise<void> {
-  const ext = path.extname(filePath);
-
-  if (ext === '.yml' || ext === '.yaml') {
-    await fs.writeFile(filePath, yaml.stringify(config));
-  } else if (ext === '.json') {
-    await fs.writeFile(filePath, JSON.stringify(config, null, 2));
-  }
-}
-
 export const setupCommand = new Command('setup')
   .description('交互式配置向导')
   .option('--global', '在 ~/.zhin 初始化并配置全局实例')
@@ -215,7 +187,12 @@ export const setupCommand = new Command('setup')
 
     if (configFile) {
       configPath = path.join(cwd, configFile);
-      config = await readConfig(configPath);
+      try {
+        config = await readConfig(configPath);
+      } catch (error) {
+        logger.error(error instanceof Error ? error.message : String(error));
+        process.exit(1);
+      }
       console.log(chalk.gray(`已加载配置文件: ${configFile}\n`));
     } else {
       console.log(chalk.yellow('未找到配置文件，将创建 zhin.config.yml\n'));
@@ -229,6 +206,7 @@ export const setupCommand = new Command('setup')
 
     try {
       const wizardOptions: InitOptions = {};
+      const configBefore = JSON.stringify(config);
 
       if (options.bootstrap || (!options.database && !options.adapters && !options.ai)) {
         await setupBootstrapFiles(cwd);
@@ -248,7 +226,7 @@ export const setupCommand = new Command('setup')
 
       finalizeWizardOptions(wizardOptions);
       applyWizardOptionsToConfig(config, wizardOptions);
-      await appendWizardEnvVars(cwd, wizardOptions.adapters, wizardOptions.ai);
+      await appendWizardEnvVars(cwd, wizardOptions.adapters, wizardOptions.ai, wizardOptions.database);
 
       const deps = collectWizardDependencies(wizardOptions);
       const depsChanged = await mergeDependenciesIntoPackageJson(cwd, deps);
@@ -271,8 +249,9 @@ export const setupCommand = new Command('setup')
         }
       }
 
-      // 保存配置
-      if (!options.bootstrap) {
+      // 保存配置：仅在配置实际有变更时落盘（--bootstrap 等组合不再静默跳过）
+      const configChanged = JSON.stringify(config) !== configBefore;
+      if (configChanged) {
         await saveConfig(configPath, config);
         console.log('');
         console.log(chalk.bold.green('✅ 配置已保存'));

@@ -234,6 +234,37 @@ describe('dispatchExtendedConsoleRpc', () => {
       expect(data.requests.map((r) => r.id)).toEqual([1]);
     });
 
+    it('endpoint:inboxRequests pushes sort/limit down to the model when supported', async () => {
+      const orderByCalls: Array<{ field: string; direction?: string }> = [];
+      const limitCalls: number[] = [];
+      const rows = requestRows.filter((row) => row.adapter === 'icqq' && row.endpoint_id === '1234');
+      const selection: Record<string, unknown> = {};
+      selection.where = () => selection;
+      selection.orderBy = (field: string, direction?: string) => {
+        orderByCalls.push({ field, direction });
+        return selection;
+      };
+      selection.limit = (count: number) => {
+        limitCalls.push(count);
+        return selection;
+      };
+      selection.then = (onfulfilled: (value: unknown) => unknown) =>
+        Promise.resolve(rows).then(onfulfilled);
+      const ctx = makeCtx({
+        databaseHost: { models: { get: () => ({ select: () => selection }) } },
+      });
+      const result = await dispatchExtendedConsoleRpc(
+        'endpoint:inboxRequests',
+        { $adapter: 'icqq', $endpoint: '1234', $limit: 5, $offset: 3 },
+        ctx,
+      );
+      // sort/limit 下推：created_at DESC，limit = offset + limit
+      expect(orderByCalls).toEqual([{ field: 'created_at', direction: 'DESC' }]);
+      expect(limitCalls).toEqual([8]);
+      const data = (result as { data: { requests: unknown[]; inboxEnabled: boolean } }).data;
+      expect(data.inboxEnabled).toBe(true);
+    });
+
     it('endpoint:inboxMessages filters by channel, parent and before cursors', async () => {
       const messageRows = [
         {

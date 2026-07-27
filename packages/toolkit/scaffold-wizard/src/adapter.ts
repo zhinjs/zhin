@@ -16,6 +16,7 @@ import {
   configureWeixinIlinkBot,
 } from './adapter-configurers.js';
 import { ZHIN_STACK_VERSIONS } from './zhin-stack-deps.js';
+import { formatEnvValue } from './env.js';
 
 /** 一个待挂载的子插件实例（package.json zhin.plugins 清单 + zhin.config plugins.<instanceKey> 配置） */
 export interface AdapterPluginInstance {
@@ -550,7 +551,7 @@ export function generateAdapterEnvVars(result: AdapterSetupResult): string {
 
   const lines: string[] = ['', '# 适配器配置'];
   for (const [key, value] of entries) {
-    lines.push(`${key}=${value}`);
+    lines.push(`${key}=${formatEnvValue(value)}`);
   }
   return lines.join('\n');
 }

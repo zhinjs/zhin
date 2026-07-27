@@ -14,6 +14,7 @@ import path from 'path';
 import { execSync } from 'child_process';
 import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
+import { NODE_ENGINES_HINT } from '../utils/node-requirements.js';
 
 const cwd = process.cwd();
 
@@ -60,7 +61,7 @@ function collectZhinDeps(pkg: any): { dep: string; current: string; inDev: boole
   return out;
 }
 
-function upgradePackageJson(pkgPath: string, options: { toLatest: boolean; dryRun: boolean }): boolean {
+export function upgradePackageJson(pkgPath: string, options: { toLatest: boolean; dryRun: boolean }): boolean {
   const pkg = fs.readJsonSync(pkgPath);
   const isWorkspace = isWorkspaceProject(path.dirname(pkgPath));
 
@@ -106,10 +107,10 @@ function upgradePackageJson(pkgPath: string, options: { toLatest: boolean; dryRu
   // 确保 engines.node
   if (!pkg.engines?.node) {
     if (options.dryRun) {
-      console.log(chalk.cyan('  [dry-run] engines.node = ">=18.0.0"'));
+      console.log(chalk.cyan(`  [dry-run] engines.node = "${NODE_ENGINES_HINT}"`));
     } else {
       pkg.engines = pkg.engines || {};
-      pkg.engines.node = '>=18.0.0';
+      pkg.engines.node = NODE_ENGINES_HINT;
     }
     changed = true;
   }
@@ -201,19 +202,21 @@ Long-term memory for conversation history, user preferences, and system state.`;
 
 /**
  * Detect whether a file is using the old Chinese template.
- * Checks for common Chinese header phrases from the original templates.
+ * 需同时命中多个特异短语，避免单个高频词（如「记忆」「工具组合」）误伤用户自定义文件。
  */
-function isOldChineseTemplate(content: string): boolean {
+export function isOldChineseTemplate(content: string): boolean {
   const markers = [
     '我是一个能力出众',
     '行动导向的 AI 助手',
-    '性格', '价值观', '工作方式',
-    '工具使用原则', '调用风格',
+    '工具使用原则',
+    '调用风格',
     '你是得力的 AI 助手',
-    '可用工具', '记忆',
-    '工具组合', '常用工具场景',
+    '常用工具场景',
+    '记忆与学习',
+    '激活专业技能',
   ];
-  return markers.some(m => content.includes(m));
+  const hits = markers.filter(m => content.includes(m)).length;
+  return hits >= 2;
 }
 
 /**
@@ -291,7 +294,12 @@ ${todo}
 `;
 }
 
-function upgradeBootstrapFiles(dir: string, dryRun: boolean): number {
+/** 覆盖已有文件前备份为 <file>.bak */
+function backupBeforeOverwrite(filePath: string): void {
+  fs.copyFileSync(filePath, `${filePath}.bak`);
+}
+
+export function upgradeBootstrapFiles(dir: string, dryRun: boolean): number {
   let upgraded = 0;
   const files = [
     { name: 'SOUL.md', newContent: NEW_SOUL_MD },
@@ -306,8 +314,9 @@ function upgradeBootstrapFiles(dir: string, dryRun: boolean): number {
         if (dryRun) {
           console.log(chalk.cyan(`  [dry-run] ${name}: upgrade to English template`));
         } else {
+          backupBeforeOverwrite(filePath);
           fs.writeFileSync(filePath, newContent, 'utf-8');
-          console.log(chalk.green(`  ✓ ${name} upgraded to English template`));
+          console.log(chalk.green(`  ✓ ${name} upgraded to English template (backup: ${name}.bak)`));
         }
         upgraded++;
       } else {
@@ -333,8 +342,9 @@ function upgradeBootstrapFiles(dir: string, dryRun: boolean): number {
       if (dryRun) {
         console.log(chalk.cyan(`  [dry-run] AGENTS.md: upgrade to English (user data preserved)`));
       } else {
+        backupBeforeOverwrite(agentsPath);
         fs.writeFileSync(agentsPath, merged, 'utf-8');
-        console.log(chalk.green(`  ✓ AGENTS.md upgraded to English (user data preserved)`));
+        console.log(chalk.green(`  ✓ AGENTS.md upgraded to English (user data preserved, backup: AGENTS.md.bak)`));
       }
       upgraded++;
     } else {

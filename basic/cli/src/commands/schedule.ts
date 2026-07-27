@@ -72,13 +72,14 @@ const listCommand = new Command('list')
 const addCommand = new Command('add')
   .description('添加持久化调度任务（6 段 cron，或 --at / --every）')
   .argument('[cronExpression]', 'Cron 表达式，如 "0 0 9 * * *"（与 --at/--every 二选一）')
-  .argument('<prompt>', '到点触发时发给 AI 的提示词')
+  .option('--prompt <prompt>', '到点触发时发给 AI 的提示词（必填）')
   .option('-l, --label <label>', '可选标签')
   .option('--kind <kind>', 'solar|lunar|workday|freeDay（默认 solar）', 'solar')
   .option('--notify-channel <channel>', '结果投递：im | silent | log（默认 silent）', 'silent')
   .option('--at <iso8601>', '单次执行时间，ISO8601')
   .option('--every <interval>', '固定间隔，如 30m, 1h, 1d')
-  .action(async (cronExpression: string, prompt: string, opts: {
+  .action(async (cronExpression: string | undefined, opts: {
+    prompt?: string;
     label?: string;
     kind?: string;
     notifyChannel?: string;
@@ -86,6 +87,13 @@ const addCommand = new Command('add')
     every?: string;
   }) => {
     const now = Date.now();
+
+    const prompt = opts.prompt?.trim();
+    if (!prompt) {
+      logger.error('请通过 --prompt 提供提示词');
+      process.exit(1);
+    }
+
     let notify;
     try {
       notify = parseNotifyChannel(opts.notifyChannel ?? 'silent');
@@ -95,27 +103,32 @@ const addCommand = new Command('add')
     }
 
     let schedule: JobScheduleCli;
-    if (opts.at) {
-      const atMs = new Date(opts.at).getTime();
-      if (Number.isNaN(atMs) || atMs <= now) {
-        logger.error('--at 必须是未来的有效 ISO8601 时间');
-        process.exit(1);
+    try {
+      if (opts.at) {
+        const atMs = new Date(opts.at).getTime();
+        if (Number.isNaN(atMs) || atMs <= now) {
+          logger.error('--at 必须是未来的有效 ISO8601 时间');
+          process.exit(1);
+        }
+        schedule = { kind: 'at', atMs, deleteAfterRun: true };
+      } else if (opts.every) {
+        schedule = { kind: 'every', everyMs: parseEveryMs(opts.every) };
+      } else {
+        if (!cronExpression?.trim()) {
+          logger.error('请提供 Cron 表达式，或使用 --at / --every');
+          process.exit(1);
+        }
+        const kind = (opts.kind ?? 'solar').trim() as JobScheduleCli['kind'];
+        if (!['solar', 'lunar', 'workday', 'freeDay'].includes(kind)) {
+          logger.error('--kind 无效');
+          process.exit(1);
+        }
+        const cron = normalizeCronExpression(cronExpression);
+        schedule = { kind, cron } as JobScheduleCli;
       }
-      schedule = { kind: 'at', atMs, deleteAfterRun: true };
-    } else if (opts.every) {
-      schedule = { kind: 'every', everyMs: parseEveryMs(opts.every) };
-    } else {
-      if (!cronExpression?.trim()) {
-        logger.error('请提供 Cron 表达式，或使用 --at / --every');
-        process.exit(1);
-      }
-      const kind = (opts.kind ?? 'solar').trim() as JobScheduleCli['kind'];
-      if (!['solar', 'lunar', 'workday', 'freeDay'].includes(kind)) {
-        logger.error('--kind 无效');
-        process.exit(1);
-      }
-      const cron = normalizeCronExpression(cronExpression);
-      schedule = { kind, cron } as JobScheduleCli;
+    } catch (e) {
+      logger.error((e as Error).message);
+      process.exit(1);
     }
 
     const jobs = await readScheduleJobs();

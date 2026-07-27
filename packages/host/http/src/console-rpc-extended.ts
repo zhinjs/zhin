@@ -67,10 +67,20 @@ interface ScheduleJobRow {
   description?: string;
 }
 
+interface InboxSelection {
+  where(query: Record<string, unknown>): InboxSelection;
+  /** 可选：DB 侧排序下推（wrapModel 链具备该能力，轻量 fake 可缺失）。 */
+  orderBy?(field: string, direction?: 'ASC' | 'DESC'): InboxSelection;
+  /** 可选：DB 侧 limit 下推。 */
+  limit?(count: number): InboxSelection;
+  then<TResult1 = Record<string, unknown>[], TResult2 = never>(
+    onfulfilled?: ((value: Record<string, unknown>[]) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ): Promise<TResult1 | TResult2>;
+}
+
 interface InboxModel {
-  select(): {
-    where(query: Record<string, unknown>): Promise<Record<string, unknown>[]> | Record<string, unknown>[];
-  };
+  select(): InboxSelection;
   update?(patch: Record<string, unknown>): {
     where(query: Record<string, unknown>): Promise<unknown> | unknown;
   };
@@ -297,11 +307,24 @@ async function readInboxRows(
   ctx: ConsoleRpcExtendedCtx,
   table: string,
   where: Record<string, unknown>,
+  options?: {
+    /** DB 侧排序下推（模型不支持时由调用方内存排序兜底）。 */
+    orderBy?: { field: string; direction?: 'ASC' | 'DESC' };
+    /** DB 侧 limit 下推（模型不支持时由调用方内存分页兜底）。 */
+    limit?: number;
+  },
 ): Promise<{ rows: Record<string, unknown>[]; enabled: boolean }> {
   const model = getInboxModel(ctx, table);
   if (!model) return { rows: [], enabled: false };
   try {
-    const rows = await model.select().where(where);
+    let selection: InboxSelection = model.select().where(where);
+    if (options?.orderBy && typeof selection.orderBy === 'function') {
+      selection = selection.orderBy(options.orderBy.field, options.orderBy.direction ?? 'DESC');
+    }
+    if (options?.limit != null && typeof selection.limit === 'function') {
+      selection = selection.limit(options.limit);
+    }
+    const rows = await selection;
     return { rows: Array.isArray(rows) ? rows : [], enabled: true };
   } catch {
     // 表未创建 / 方言未启动等场景降级为空，不向上抛。
@@ -324,6 +347,10 @@ async function listInbox(
   const { rows, enabled } = await readInboxRows(ctx, table, {
     adapter,
     endpoint_id: endpointId,
+  }, {
+    // sort/limit 下推到 DB 侧（内存 sort/slice 保留，作为无下推能力模型的兜底）
+    orderBy: { field: 'created_at', direction: 'DESC' },
+    limit: offset + limit,
   });
   const sorted = rows
     .slice()
@@ -344,6 +371,8 @@ async function listPendingRequests(
   const { rows, enabled } = await readInboxRows(ctx, TABLE_REQUEST, {
     adapter,
     endpoint_id: endpointId,
+  }, {
+    orderBy: { field: 'created_at', direction: 'ASC' },
   });
   const requests = rows
     .filter((row) => Number(row.resolved ?? 0) === 0)
@@ -378,7 +407,10 @@ async function listInboxMessages(
     where.channel_parent_type = parent.type;
     where.channel_parent_id = parent.id;
   }
-  const { rows, enabled } = await readInboxRows(ctx, TABLE_MESSAGE, where);
+  const { rows, enabled } = await readInboxRows(ctx, TABLE_MESSAGE, where, {
+    // before_ts/before_id 过滤保留在内存（涉及双字段比较），排序下推 DB 侧
+    orderBy: { field: 'created_at', direction: 'DESC' },
+  });
   const messages = rows
     .filter((row) => (beforeTs == null || Number(row.created_at ?? 0) < beforeTs)
       && (beforeId == null || Number(row.id ?? 0) < beforeId))

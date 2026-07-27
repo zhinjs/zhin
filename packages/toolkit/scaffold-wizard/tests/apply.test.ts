@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import fs from 'fs-extra';
+import os from 'node:os';
+import path from 'node:path';
 import {
+  appendWizardEnvVars,
+  applyDatabaseToConfig,
   applyWizardOptionsToConfig,
   buildRuntimeConfigDocument,
   finalizeWizardOptions,
@@ -40,6 +45,81 @@ describe('apply wizard to config', () => {
       agents: { zhin: { provider: 'ollama' } },
     });
     expect(config.ai).not.toHaveProperty('defaultProvider');
+  });
+});
+
+describe('applyDatabaseToConfig', () => {
+  it('keeps sqlite config as-is', () => {
+    const config: Record<string, unknown> = {};
+    applyDatabaseToConfig(config, { dialect: 'sqlite', filename: './data/bot.db', mode: 'wal' });
+    expect(config.database).toEqual({ dialect: 'sqlite', filename: './data/bot.db', mode: 'wal' });
+  });
+
+  it('references env vars instead of writing plaintext passwords for mysql', () => {
+    const config: Record<string, unknown> = {};
+    applyDatabaseToConfig(config, {
+      dialect: 'mysql',
+      host: 'db.internal',
+      port: 3306,
+      user: 'root',
+      password: 'super-secret',
+      database: 'zhin_bot',
+    });
+    expect(config.database).toEqual({
+      dialect: 'mysql',
+      host: '${DB_HOST}',
+      port: '${DB_PORT}',
+      user: '${DB_USER}',
+      password: '${DB_PASSWORD}',
+      database: '${DB_DATABASE}',
+    });
+    expect(JSON.stringify(config)).not.toContain('super-secret');
+    expect(JSON.stringify(config)).not.toContain('db.internal');
+  });
+});
+
+describe('appendWizardEnvVars', () => {
+  it('writes database/adapter/ai env vars and is idempotent per KEY', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'zhin-wizard-env-'));
+    try {
+      await fs.writeFile(path.join(dir, '.env'), '# HTTP 服务配置\nHTTP_TOKEN=tok\n');
+      const database = {
+        dialect: 'mysql',
+        host: 'localhost',
+        port: 3306,
+        user: 'root',
+        password: 'p#ss',
+        database: 'zhin_bot',
+      } as const;
+      const adapters = {
+        packages: [],
+        plugins: [],
+        instances: [],
+        envVars: { TELEGRAM_TOKEN: 'tok #1' },
+      };
+      const ai = {
+        enabled: true,
+        agentProvider: 'openai',
+        providers: { openai: { apiKey: '${AI_API_KEY}', __envApiKey: 'sk-real key' } },
+      } as never;
+
+      await appendWizardEnvVars(dir, adapters, ai, database);
+      const first = await fs.readFile(path.join(dir, '.env'), 'utf-8');
+      expect(first).toContain('HTTP_TOKEN=tok');
+      expect(first).toContain('DB_PASSWORD="p#ss"');
+      expect(first).toContain('TELEGRAM_TOKEN="tok #1"');
+      expect(first).toContain('AI_API_KEY="sk-real key"');
+
+      // 重复运行：同 KEY 覆盖，不产生重复行；新值生效
+      await appendWizardEnvVars(dir, { ...adapters, envVars: { TELEGRAM_TOKEN: 'tok-2' } }, ai, database);
+      const second = await fs.readFile(path.join(dir, '.env'), 'utf-8');
+      expect(second).toContain('TELEGRAM_TOKEN=tok-2');
+      expect(second).not.toContain('tok #1');
+      expect(second.split('DB_PASSWORD=')).toHaveLength(2);
+      expect(second.split('AI_API_KEY=')).toHaveLength(2);
+    } finally {
+      await fs.remove(dir);
+    }
   });
 });
 

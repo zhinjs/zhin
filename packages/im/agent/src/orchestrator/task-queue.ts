@@ -127,12 +127,15 @@ export class TaskQueue {
     return new Promise<T>((resolve, reject) => {
       const handler = (event: string, t: Task) => {
         if (t.id !== fullTask.id) return;
-        this.off(handler);
+        // 只在终态事件摘除并 settle；started/queued/retrying 等中间事件不处理，
+        // 否则监听器会在首个事件（task:started）即自摘除，等待方永久挂死。
         if (event === 'task:completed') {
+          this.off(handler);
           resolve(t.result as T);
           return;
         }
-        if (event === 'task:failed' || event === 'task:timeout') {
+        if (event === 'task:failed' || event === 'task:timeout' || event === 'task:cancelled') {
+          this.off(handler);
           reject(t.error ?? new Error(`Task ${event}`));
         }
       };
@@ -432,6 +435,12 @@ export class TaskQueue {
 
       if (timeoutId) {
         clearTimeout(timeoutId);
+      }
+
+      // 超时/取消可能已先到终态，迟到的完成不得覆盖终态、放行依赖任务。
+      if (task.status !== 'running') {
+        this.processQueue();
+        return;
       }
 
       task.status = 'completed';

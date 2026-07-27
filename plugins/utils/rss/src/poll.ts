@@ -149,10 +149,12 @@ export async function cleanOldSeen(): Promise<void> {
     const all = await Seen.select();
     const expired = all.filter((r) => typeof r.seen_at === 'string' && r.seen_at < cutoffStr);
     for (const row of expired) {
-      await Seen.delete().where({ id: row.id });
+      // 表结构没有 id 列，按业务键 (feed_url, item_guid) 删除。
+      await Seen.delete().where({ feed_url: row.feed_url, item_guid: row.item_guid });
     }
-  } catch {
-    // Cleanup failure must not break the main flow.
+  } catch (e) {
+    // Cleanup failure must not break the main flow, but it must be visible.
+    console.warn(`[rss] cleanOldSeen failed: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 

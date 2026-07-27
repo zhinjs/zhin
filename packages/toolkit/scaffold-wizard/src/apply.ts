@@ -10,6 +10,7 @@ import {
   getAdapterDependencies,
 } from './adapter.js';
 import { generateAIEnvVars, materializeAIConfig } from './ai.js';
+import { generateDatabaseEnvVars, mergeEnvText } from './env.js';
 import { ensureDatabaseForAdapters, ensureDatabaseForAI, getAIDependencies } from './project-deps.js';
 import { DEFAULT_CREATE_BOT_HTTP_PORT } from './zhin-stack-deps.js';
 import { packageToInstanceKey } from './project-config-plan.js';
@@ -24,7 +25,8 @@ export const CONSOLE_HOST_PLUGINS = [
 ] as const;
 
 export function applyDatabaseToConfig(config: Record<string, unknown>, database: DatabaseConfig): void {
-  config.database = database;
+  // 物化为可落盘对象：非 SQLite 连接参数引用 .env（${VAR}），明文密码不进配置文件
+  config.database = materializeDatabaseConfig(database);
 }
 
 /** 将 legacy 数组形式 plugins 归一化为新 runtime 的 instanceKey 映射 */
@@ -90,14 +92,17 @@ export async function appendWizardEnvVars(
   projectDir: string,
   adapters?: AdapterSetupResult,
   ai?: AISetupConfig,
+  database?: DatabaseConfig,
 ): Promise<void> {
   const extra =
+    (database ? generateDatabaseEnvVars(database) : '') +
     (adapters ? generateAdapterEnvVars(adapters) : '') +
     (ai ? generateAIEnvVars(ai) : '');
-  if (extra) {
+  if (extra.trim()) {
     const envPath = path.join(projectDir, '.env');
     const existing = (await fs.pathExists(envPath)) ? await fs.readFile(envPath, 'utf-8') : '';
-    await fs.writeFile(envPath, existing.replace(/\s*$/, '') + extra + '\n');
+    // 按 KEY 覆盖而非追加：重复运行向导幂等，不产生重复行
+    await fs.writeFile(envPath, mergeEnvText(existing, extra));
   }
 
   // 新 Plugin Runtime 通过 package.json zhin.plugins 清单挂载子插件，与依赖一起落盘

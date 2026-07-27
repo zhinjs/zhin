@@ -1,5 +1,6 @@
 import { mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { Registry } from '@zhin.js/database';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
@@ -57,7 +58,7 @@ type RawDatabase = {
   query(query: unknown): Promise<unknown>;
 };
 
-function wrapModel(model: RawModel): DatabaseHostModel {
+function wrapModel(model: RawModel, db?: RawDatabase, tableName?: string): DatabaseHostModel {
   return {
     select: (...fields) => {
       const selection = (model.select as (...args: string[]) => unknown)(...fields) as {
@@ -83,6 +84,26 @@ function wrapModel(model: RawModel): DatabaseHostModel {
     update: (patch) => ({
       where: (query) => Promise.resolve(model.update(patch).where(query)),
     }),
+    // DB 侧 count 聚合（console /api/logs/stats 不再为计数整表加载）；
+    // 方言不支持 aggregate（如 redis/mongodb）时降级为 select('id') 计数。
+    count: async (where) => {
+      const filter = where ?? {};
+      if (db && tableName) {
+        try {
+          const counted = await db.aggregate(tableName).count('*', 'total').where(filter);
+          const total = Number(counted[0]?.total);
+          if (Number.isFinite(total)) return total;
+        } catch {
+          /* fall through to select('id') */
+        }
+      }
+      const selection = (model.select as (...args: string[]) => unknown)('id') as {
+        where(query: Record<string, unknown>): unknown;
+      };
+      const result = Object.keys(filter).length > 0 ? selection.where(filter) : selection;
+      const rows = await Promise.resolve(result as PromiseLike<unknown[]>);
+      return rows.length;
+    },
   };
 }
 
@@ -114,6 +135,13 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
       return started;
     },
     define(name, definition) {
+      const existing = definitions.get(name);
+      // Host 跨世代共享：reload 后新世代会重复 define 同名表，
+      // 定义一致则幂等跳过（即使已 started），不一致才报错。
+      if (existing !== undefined) {
+        if (isDeepStrictEqual(existing, definition)) return;
+        throw new Error(`Table '${name}' already defined with a different definition`);
+      }
       if (started) {
         throw new Error(`DatabaseHost already started; cannot define table ${name}`);
       }
@@ -131,7 +159,7 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
         if (cached) return cached;
         const raw = db.models.get(name) as RawModel | undefined;
         if (!raw) return undefined;
-        const model = wrapModel(raw);
+        const model = wrapModel(raw, db, name);
         wrapped.set(name, model);
         return model;
       },
@@ -305,16 +333,14 @@ export async function resolveDatabaseConfig(
 }
 
 export function installDatabaseHost(host: DatabaseHost): RootResourceInstaller {
-  return ({ resources, lifecycle, handoff }) => {
+  return ({ resources, handoff }) => {
     // Domain tables (e.g. github_oauth_users) are defined by owning plugins in setup().
     resources.provide(databaseHostToken, host);
-    lifecycle.add(() => host.stop());
+    // Host 是进程级共享资源：不能随世代 dispose / 回滚 stop（旧世代仍在用）。
+    // start 幂等，stop 由进程退出路径（start-command control.stop）统一触发。
     handoff.add({
       activateNext: async () => {
         await host.start();
-      },
-      deactivateNext: async () => {
-        await host.stop();
       },
     });
   };

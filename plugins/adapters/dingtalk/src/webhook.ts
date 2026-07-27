@@ -43,13 +43,12 @@ export async function handleDingTalkWebhookRequest(
     const query = new URL(request.url ?? '/', 'http://localhost').searchParams;
     const timestamp = query.get('timestamp') || headerValue(request.headers, 'timestamp');
     const sign = query.get('sign') || headerValue(request.headers, 'sign');
-    if (timestamp && sign) {
-      if (!verifySignature(handler.config.appSecret, timestamp, sign)) {
-        logger.warn(formatCompact({ op: 'webhook', ok: false, error: 'invalid signature' }));
-        response.writeHead(403, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify({ code: -1, msg: 'Forbidden' }));
-        return;
-      }
+    // Missing credentials must never be admitted: verify unconditionally.
+    if (!timestamp || !sign || !verifySignature(handler.config.appSecret, timestamp, sign)) {
+      logger.warn(formatCompact({ op: 'webhook', ok: false, error: 'invalid signature' }));
+      response.writeHead(403, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ code: -1, msg: 'Forbidden' }));
+      return;
     }
 
     const rawBody = await readTextBody(request);

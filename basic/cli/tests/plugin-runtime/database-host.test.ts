@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createDatabaseHost } from '../../src/plugin-runtime/database-host-installer.js';
+import { createDatabaseHost, installDatabaseHost } from '../../src/plugin-runtime/database-host-installer.js';
 import { dispatchRuntimeConsoleRpc, pickRpcReply } from '@zhin.js/host-http';
+import { GenerationHandoffStack, Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 
 describe('DatabaseHost', () => {
   it('tracks defined table names via tables()', async () => {
@@ -32,6 +33,26 @@ describe('DatabaseHost', () => {
     await model!.insert({ name: 'a', value: '1' });
     const rows = await model!.select().where({ name: 'a' });
     expect(rows).toEqual([expect.objectContaining({ name: 'a', value: '1' })]);
+    await host.stop();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('count aggregates on the DB side and supports where filters', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'zhin-db-count-'));
+    const host = createDatabaseHost({ dialect: 'sqlite', filename: join(dir, 'count.sqlite') });
+    host.define('logs', {
+      level: { type: 'text', nullable: false },
+      message: { type: 'text', default: '' },
+    });
+    await host.start();
+    const model = host.models.get('logs')!;
+    expect(typeof model.count).toBe('function');
+    await model.insert({ level: 'info', message: 'a' });
+    await model.insert({ level: 'error', message: 'b' });
+    await model.insert({ level: 'error', message: 'c' });
+    expect(await model.count!()).toBe(3);
+    expect(await model.count!({ level: 'error' })).toBe(2);
+    expect(await model.count!({ level: 'warn' })).toBe(0);
     await host.stop();
     await rm(dir, { recursive: true, force: true });
   });
@@ -93,6 +114,65 @@ describe('DatabaseHost', () => {
     expect(await rpc({ type: 'db:drop-table', requestId: 6, table: 'notes' }))
       .toMatchObject({ data: { success: true } });
     expect(database.tables()).toEqual([]);
+
+    await host.stop();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('define is idempotent across generations and rejects conflicting definitions', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'zhin-db-idem-'));
+    const host = createDatabaseHost({ dialect: 'sqlite', filename: join(dir, 'idem.sqlite') });
+    host.define('alpha', { id: { type: 'integer' } });
+    // 同名同定义：幂等跳过（reload 后新世代会重复 define）
+    expect(() => host.define('alpha', { id: { type: 'integer' } })).not.toThrow();
+    expect(host.tables()).toEqual(['alpha']);
+    // 同名不同定义：报错
+    expect(() => host.define('alpha', { id: { type: 'text' } })).toThrow(/different definition/);
+    await host.start();
+    // started 后同名同定义仍幂等；新表仍拒绝
+    expect(() => host.define('alpha', { id: { type: 'integer' } })).not.toThrow();
+    expect(() => host.define('beta', { id: { type: 'integer' } })).toThrow(/already started/);
+    await host.stop();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('keeps the shared host running across generation handoff, rollback and disposal', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'zhin-db-reload-'));
+    const host = createDatabaseHost({ dialect: 'sqlite', filename: join(dir, 'reload.sqlite') });
+    const installer = installDatabaseHost(host);
+    const runGeneration = () => {
+      const scope = new Scope(rootPluginId());
+      const handoffs = new GenerationHandoffStack();
+      installer({
+        resources: scope,
+        lifecycle: scope.disposers,
+        handoff: handoffs,
+        config: undefined as never,
+      });
+      return { scope, handoff: handoffs.seal()! };
+    };
+
+    // 世代 1：定义表并激活
+    host.define('smoke', { name: { type: 'text' } });
+    const gen1 = runGeneration();
+    await gen1.handoff.activateNext();
+    expect(host.started).toBe(true);
+
+    // 世代 2（reload）：同名表幂等 define，激活
+    host.define('smoke', { name: { type: 'text' } });
+    const gen2 = runGeneration();
+    await gen2.handoff.activateNext();
+
+    // 旧世代 dispose + 新世代回滚都不能停掉共享 Host
+    await gen1.scope.disposers.dispose();
+    await gen2.handoff.deactivateNext();
+    expect(host.started).toBe(true);
+
+    // reload 后 models.get 仍可用
+    const model = host.models.get('smoke');
+    expect(model).toBeDefined();
+    await model!.insert({ name: 'x' });
+    expect(await model!.select().where({ name: 'x' })).toHaveLength(1);
 
     await host.stop();
     await rm(dir, { recursive: true, force: true });

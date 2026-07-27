@@ -3,7 +3,7 @@
  * Canonicalization is owned by gateway/core before endpoint.send.
  */
 
-import { createHash, createDecipheriv } from 'node:crypto';
+import { createHash, createDecipheriv, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
@@ -149,7 +149,10 @@ export function verifySignature(
     const hash = createHash('sha1')
       .update([token, timestamp, nonce, encrypt].sort().join(''))
       .digest('hex');
-    return hash === signature;
+    const a = Buffer.from(hash);
+    const b = Buffer.from(signature);
+    if (a.length !== b.length) return false;
+    return timingSafeEqual(a, b);
   } catch {
     return false;
   }

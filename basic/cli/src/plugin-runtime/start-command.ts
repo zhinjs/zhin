@@ -194,7 +194,12 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
     try {
       await host.stop();
     } finally {
-      complete();
+      // DatabaseHost 跨世代共享，世代 dispose 不再 stop；进程退出时统一关闭。
+      try {
+        await databaseHost.stop();
+      } finally {
+        complete();
+      }
     }
   };
 

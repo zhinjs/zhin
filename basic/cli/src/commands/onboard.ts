@@ -120,14 +120,13 @@ async function loadExistingState(dir: string): Promise<{
 // ---------------------------------------------------------------------------
 
 function getMinimalConfig(): any {
+  // 新 Plugin Runtime 形态：plugins 为 instanceKey → 配置 映射；
+  // Console Host 由 CLI composition root 装配，无需 services/hostApi/plugin_dirs
   return {
     log_level: 1,
     database: { dialect: 'sqlite', filename: './data/bot.db', mode: 'wal' },
-    plugin_dirs: ['node_modules', './src/plugins'],
-    services: ['process', 'config', 'command', 'component', 'permission', 'schedule'],
-    plugins: ['@zhin.js/adapter-sandbox'],
+    plugins: { sandbox: {} },
     http: { port: 8086, token: '${HTTP_TOKEN}', base: '/api' },
-    hostApi: { enabled: true, lazyLoad: true },
     endpoints: [],
   };
 }
@@ -151,8 +150,14 @@ function printSummary(state: NonNullable<Awaited<ReturnType<typeof loadExistingS
   if (state.config.database?.dialect) {
     console.log(chalk.gray('  数据库: ') + chalk.cyan(state.config.database.dialect + (state.config.database.filename ? ` (${state.config.database.filename})` : '')));
   }
-  const plugins = state.config.plugins as string[] | undefined;
-  if (Array.isArray(plugins) && plugins.length > 0) {
+  const plugins = state.config.plugins;
+  if (plugins && typeof plugins === 'object' && !Array.isArray(plugins)) {
+    // 新 Plugin Runtime：plugins 为 instanceKey → 配置 映射
+    const instanceKeys = Object.keys(plugins as Record<string, unknown>);
+    if (instanceKeys.length > 0) {
+      console.log(chalk.gray('  插件: ') + chalk.cyan(instanceKeys.join(', ')));
+    }
+  } else if (Array.isArray(plugins) && plugins.length > 0) {
     const adapters = plugins.filter((p: string) => typeof p === 'string' && p.includes('adapter-'));
     if (adapters.length > 0) {
       console.log(chalk.gray('  适配器: ') + chalk.cyan(adapters.map((p: string) => p.replace('@zhin.js/adapter-', '')).join(', ')));

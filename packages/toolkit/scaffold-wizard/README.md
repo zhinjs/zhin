@@ -25,6 +25,7 @@ Zhin 项目脚手架的**共享交互向导**库。适配器、AI、数据库的
 | `database.ts` | 数据库类型与连接参数 |
 | `project-deps.ts` | 依赖收集（启用 AI 时写入 `@zhin.js/agent`、`zod`、`ai`、所选 `@ai-sdk/*`；启用 memory MCP 时另加 `@modelcontextprotocol/sdk`）、SQLite 前置条件 |
 | `apply.ts` | 将向导结果写入 `zhin.config.*`、`.env`、`package.json` |
+| `env.ts` | `.env` 值转义（`formatEnvValue`）、幂等合并（`mergeEnvText`）与数据库环境变量生成（`generateDatabaseEnvVars`） |
 | `types.ts` | `InitOptions` 等共享类型 |
 
 ## 主要 API

@@ -293,7 +293,14 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
   }
 
   trackMessageChannel(ts: string, channel: string): void {
-    if (ts && channel) this.#messageChannelMap.set(ts, channel);
+    if (!ts || !channel) return;
+    // LRU：超 1024 条淘汰最久未更新的记录，避免无界增长。
+    if (this.#messageChannelMap.has(ts)) this.#messageChannelMap.delete(ts);
+    this.#messageChannelMap.set(ts, channel);
+    if (this.#messageChannelMap.size > 1024) {
+      const oldest = this.#messageChannelMap.keys().next().value;
+      if (oldest != null) this.#messageChannelMap.delete(oldest);
+    }
   }
 
   resolveMessageRef(messageId: string, channelHint?: string): { channel: string; ts: string } | null {

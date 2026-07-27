@@ -80,10 +80,18 @@ describe('dingtalk protocol helpers', () => {
   });
 
   it('verifies HMAC-SHA256 signatures', () => {
-    const timestamp = '1700000000000';
+    const timestamp = String(Date.now());
     const sign = signTimestamp(timestamp);
     expect(verifySignature(APP_SECRET, timestamp, sign)).toBe(true);
     expect(verifySignature(APP_SECRET, timestamp, 'bad')).toBe(false);
+  });
+
+  it('rejects signatures with stale or malformed timestamps', () => {
+    const stale = String(Date.now() - 2 * 60 * 60 * 1000);
+    expect(verifySignature(APP_SECRET, stale, signTimestamp(stale))).toBe(false);
+    const future = String(Date.now() + 2 * 60 * 60 * 1000);
+    expect(verifySignature(APP_SECRET, future, signTimestamp(future))).toBe(false);
+    expect(verifySignature(APP_SECRET, 'not-a-number', signTimestamp('not-a-number'))).toBe(false);
   });
 
   it('formats inbound content by msg type', () => {
@@ -137,7 +145,7 @@ describe('dingtalk plugin runtime adapter', () => {
 
     const event = textMessage();
     const body = JSON.stringify(event);
-    const timestamp = '1700000000000';
+    const timestamp = String(Date.now());
     // Real DingTalk outgoing callbacks carry timestamp/sign on the URL query.
     const query = new URLSearchParams({
       timestamp,
@@ -181,9 +189,64 @@ describe('dingtalk plugin runtime adapter', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        timestamp: '1700000000000',
+        timestamp: String(Date.now()),
         sign: 'invalid',
       },
+      body: JSON.stringify(textMessage()),
+    });
+    expect(res.status).toBe(403);
+    expect(receive).not.toHaveBeenCalled();
+    await endpoint.stop();
+  });
+
+  it('rejects webhook without timestamp/sign credentials', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const receive = vi.fn(async () => Object.freeze({ matched: false }));
+    const endpoint = new DingTalkEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'dingtalk'),
+      gateway: { receive, send: vi.fn(async () => 'sent') },
+      http,
+      config: baseConfig,
+      fetch: mockFetchOk(),
+    });
+    await endpoint.start();
+    endpoint.open();
+    const { port } = await http.listen();
+
+    const res = await fetch(`http://127.0.0.1:${port}/dingtalk/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(textMessage()),
+    });
+    expect(res.status).toBe(403);
+    expect(receive).not.toHaveBeenCalled();
+    await endpoint.stop();
+  });
+
+  it('rejects webhook with an expired timestamp', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const receive = vi.fn(async () => Object.freeze({ matched: false }));
+    const endpoint = new DingTalkEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'dingtalk'),
+      gateway: { receive, send: vi.fn(async () => 'sent') },
+      http,
+      config: baseConfig,
+      fetch: mockFetchOk(),
+    });
+    await endpoint.start();
+    endpoint.open();
+    const { port } = await http.listen();
+
+    const stale = String(Date.now() - 2 * 60 * 60 * 1000);
+    const query = new URLSearchParams({
+      timestamp: stale,
+      sign: signTimestamp(stale),
+    });
+    const res = await fetch(`http://127.0.0.1:${port}/dingtalk/webhook?${query}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(textMessage()),
     });
     expect(res.status).toBe(403);

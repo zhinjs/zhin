@@ -17,7 +17,23 @@ export async function fetchApi<T = ApiPayload>(
   if (params) {
     Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
   }
-  const res = await fetch(url.toString());
+  let res: Response;
+  try {
+    res = await fetch(url.toString(), { signal: AbortSignal.timeout(30_000) });
+  } catch (e) {
+    const err = e as Error;
+    throw new Error(
+      err.name === 'TimeoutError' ? '请求超时（30s）' : `请求失败: ${err.message}`,
+      { cause: e },
+    );
+  }
+  if (!res.ok) {
+    throw new Error(`API 请求失败: ${res.status} ${res.statusText}`);
+  }
+  const contentType = res.headers.get('content-type') ?? '';
+  if (!contentType.includes('application/json')) {
+    throw new Error(`API 返回非 JSON 响应 (content-type: ${contentType || 'unknown'})`);
+  }
   const data = (await res.json()) as {
     error?: string;
     code?: number;

@@ -367,3 +367,35 @@ describe('slack plugin runtime adapter (http)', () => {
     await endpoint.stop();
   });
 });
+
+describe('slack messageChannelMap LRU', () => {
+  it('evicts the oldest entries beyond 1024', () => {
+    const endpoint = new SlackEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      config: socketConfig,
+      createClient: () => mockClient(),
+    });
+    for (let i = 0; i < 1100; i += 1) {
+      endpoint.trackMessageChannel(`1700000000.${String(i).padStart(6, '0')}`, 'C001');
+    }
+    // 最早写入的 76 条已被淘汰
+    expect(endpoint.resolveMessageRef('1700000000.000000')).toBeNull();
+    expect(endpoint.resolveMessageRef('1700000000.000075')).toBeNull();
+    // 最新写入的仍可解析
+    expect(endpoint.resolveMessageRef('1700000000.001099')).toEqual({
+      channel: 'C001',
+      ts: '1700000000.001099',
+    });
+    // 重复 track 同一条刷新热度，不重复计数
+    endpoint.trackMessageChannel('1700000000.001099', 'C001');
+    endpoint.trackMessageChannel('1700000001.000000', 'C001');
+    expect(endpoint.resolveMessageRef('1700000000.001099')).toEqual({
+      channel: 'C001',
+      ts: '1700000000.001099',
+    });
+  });
+});

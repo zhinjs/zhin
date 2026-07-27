@@ -323,39 +323,51 @@ export class RootRuntime {
       const planned = await new ConfigPatchPlanner().plan(graph, currentDocument, patches);
       plan = planned;
       if (!planned.documentChanged) return undefined;
-      if (this.#configPort) {
-        const currentSnapshot = requireConfigDocumentSnapshot(this.#configSnapshot);
-        // Port preparation must remain inert; validation and shadow setup can
-        // still reject this candidate without touching the backing document.
-        documentTransaction = await this.#configPort.prepare(currentSnapshot, patches);
-        if (!isDeepStrictEqual(documentTransaction.document, planned.candidate)) {
-          throw new ConfigDocumentDivergenceError();
+      try {
+        if (this.#configPort) {
+          const currentSnapshot = requireConfigDocumentSnapshot(this.#configSnapshot);
+          // Port preparation must remain inert; validation and shadow setup can
+          // still reject this candidate without touching the backing document.
+          documentTransaction = await this.#configPort.prepare(currentSnapshot, patches);
+          if (!isDeepStrictEqual(documentTransaction.document, planned.candidate)) {
+            throw new ConfigDocumentDivergenceError();
+          }
         }
+        // Host-level sections (http/database/ai/...) never land in a Plugin
+        // view, so their patches plan zero roots. With a Root Resource
+        // installer the whole generation must still be rebuilt; only an
+        // installer-less runtime may take the commit-only shortcut.
+        if (!this.#installResources && planned.roots.length === 0) {
+          if (documentTransaction) committedDocument = await documentTransaction.commit();
+          return undefined;
+        }
+        const inspected: InspectedProject = {
+          graph,
+          configResolver: this.#configViewResolver(planned.views),
+          primaryConfigDocument: planned.document,
+        };
+        // Root resources may consume any Primary Config section. Reinstall them
+        // when present so a committed patch cannot leave Host services on the
+        // previous generation's document.
+        if (!this.#installResources && this.#model && !planned.roots.includes(rootPluginId())) {
+          prepared = await this.#prepareSubtrees(current, inspected, planned.roots);
+        } else {
+          prepared = await this.#prepareInspected(current, inspected);
+        }
+        return documentTransaction
+          ? withConfigDocumentHandoff(
+              prepared.generation,
+              documentTransaction,
+              (committed) => { committedDocument = committed; },
+            )
+          : prepared.generation;
+      } catch (error) {
+        // A prepared document transaction is inert until handoff; roll it back
+        // before any shadow-phase failure escapes so the port never leaks a
+        // pending write.
+        if (documentTransaction) await documentTransaction.rollback().catch(() => undefined);
+        throw error;
       }
-      if (planned.roots.length === 0) {
-        if (documentTransaction) committedDocument = await documentTransaction.commit();
-        return undefined;
-      }
-      const inspected: InspectedProject = {
-        graph,
-        configResolver: this.#configViewResolver(planned.views),
-        primaryConfigDocument: planned.document,
-      };
-      // Root resources may consume any Primary Config section. Reinstall them
-      // when present so a committed patch cannot leave Host services on the
-      // previous generation's document.
-      if (!this.#installResources && this.#model && !planned.roots.includes(rootPluginId())) {
-        prepared = await this.#prepareSubtrees(current, inspected, planned.roots);
-      } else {
-        prepared = await this.#prepareInspected(current, inspected);
-      }
-      return documentTransaction
-        ? withConfigDocumentHandoff(
-            prepared.generation,
-            documentTransaction,
-            (committed) => { committedDocument = committed; },
-          )
-        : prepared.generation;
     });
     const completed = requireConfigPatchPlan(plan);
     if (prepared) this.#accept(prepared);

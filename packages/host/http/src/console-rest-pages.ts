@@ -85,6 +85,8 @@ export interface ConsoleRestPagesOptions {
 type LogModelLike = {
   select(...fields: string[]): LogSelectionLike;
   delete(where: Record<string, unknown>): Promise<unknown>;
+  /** DB 侧 count 聚合（可选；缺失时降级为 select('id') 计数）。 */
+  count?(where?: Record<string, unknown>): Promise<number>;
 };
 
 type LogSelectionLike = PromiseLike<LogRow[]> & {
@@ -223,13 +225,20 @@ function registerLogsRoutes(
       return;
     }
 
-    const total = await LogModel.select();
+    // 计数走 DB 侧聚合（count）；模型未实现 count 时降级为 select('id') 只取主键列
+    const countRows = async (where?: Record<string, unknown>): Promise<number> => {
+      if (typeof LogModel.count === 'function') return LogModel.count(where);
+      const selection = LogModel.select('id');
+      const rows = await (where ? selection.where(where) : selection);
+      return rows.length;
+    };
+
+    const total = await countRows();
     const levels = ['info', 'warn', 'error'];
     const levelCounts: Record<string, number> = {};
 
     for (const level of levels) {
-      const count = await LogModel.select().where({ level });
-      levelCounts[level] = count.length;
+      levelCounts[level] = await countRows({ level });
     }
 
     const oldestLog = await LogModel.select('timestamp')
@@ -244,7 +253,7 @@ function registerLogsRoutes(
 
     writeJson(response, 200, {
       success: true,
-      data: { total: total.length, byLevel: levelCounts, oldestTimestamp },
+      data: { total, byLevel: levelCounts, oldestTimestamp },
     });
   }, { summary: 'System log stats', tags: ['console', 'logs'] });
 

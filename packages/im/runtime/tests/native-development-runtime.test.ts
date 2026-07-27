@@ -40,6 +40,20 @@ describe('NativeDevelopmentModuleRuntime', () => {
     await runtime.close();
   });
 
+  it('escalates non-entry support files inside capability directories', async () => {
+    const root = await fixture();
+    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
+
+    expect(runtime.requiresProcessRestart(join(root, 'commands/_utils.ts'))).toBe(true);
+    expect(runtime.requiresProcessRestart(join(root, 'commands/_utils/format.ts'))).toBe(true);
+    expect(runtime.requiresProcessRestart(join(root, 'commands/utils.js'))).toBe(true);
+    expect(runtime.requiresProcessRestart(join(root, 'commands/format.json'))).toBe(true);
+    expect(runtime.requiresProcessRestart(join(root, 'components/Card.ts'))).toBe(true);
+    expect(runtime.requiresProcessRestart(join(root, 'commands/notes.md'))).toBe(false);
+    expect(runtime.requiresProcessRestart(join(root, 'commands/gh/status.ts'))).toBe(false);
+    await runtime.close();
+  });
+
   it('reports the native Node TypeScript version contract deterministically', () => {
     expect(supportsNativeTypeScript('22.14.0', [], '')).toBe(false);
     expect(supportsNativeTypeScript('22.14.0', ['--experimental-strip-types'], '')).toBe(true);
@@ -74,6 +88,42 @@ describe('NativeDevelopmentModuleRuntime', () => {
     try {
       await writeFile(source, 'export default 1;\n');
       await expect(observed).resolves.toBe(source);
+    } finally {
+      clearInterval(writer);
+      await runtime.close();
+    }
+  });
+
+  it('ignores build output directories like the polling snapshot does', async () => {
+    const root = await fixture();
+    await mkdir(join(root, 'lib'), { recursive: true });
+    const ignored = join(root, 'lib/bundle.js');
+    const source = join(root, 'commands/status.ts');
+    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root });
+    const reported: string[] = [];
+    const observed = new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('watch timeout')), 15_000);
+      const dispose = runtime.watch((changed) => {
+        reported.push(changed);
+        if (changed !== source) return;
+        clearTimeout(timeout);
+        dispose();
+        resolve();
+      });
+    });
+
+    // Write both the ignored build output and a real source until the watcher
+    // observes the source; any native event for lib/ would arrive first.
+    const writer = setInterval(() => {
+      void writeFile(ignored, `export default ${Date.now()};\n`).catch(() => {});
+      void writeFile(source, `export default ${Date.now()};\n`).catch(() => {});
+    }, 200);
+    try {
+      await writeFile(ignored, 'export default 0;\n');
+      await writeFile(source, 'export default 1;\n');
+      await observed;
+      expect(reported).toContain(source);
+      expect(reported).not.toContain(ignored);
     } finally {
       clearInterval(writer);
       await runtime.close();

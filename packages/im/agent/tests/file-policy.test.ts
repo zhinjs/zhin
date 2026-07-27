@@ -136,6 +136,12 @@ describe('file-policy', () => {
         'env | grep SECRET',
         'printenv TOKEN',
         '  env  ',
+        // 复合命令夹带（&&/||/;/换行）— 不能只按 | 拆段
+        'echo ok && printenv',
+        'ls; env',
+        'true || set',
+        'echo ok && export',
+        'echo ok\nprintenv',
       ];
 
       for (const cmd of blocked) {
@@ -365,6 +371,10 @@ describe('file-policy', () => {
 
       it('混合管道 cat | xargs rm 不是只读', () => {
         expect(classifyBashCommand('cat files.txt | xargs rm').isReadOnly).toBe(false);
+      });
+
+      it('换行夹带的写命令不是只读: cat a.txt\\nrm -rf x', () => {
+        expect(classifyBashCommand('cat a.txt\nrm -rf x').isReadOnly).toBe(false);
       });
     });
 

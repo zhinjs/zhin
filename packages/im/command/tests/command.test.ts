@@ -275,6 +275,77 @@ describe('Command Feature', () => {
       'Duplicate runtime Command: child status',
     );
   });
+
+  it('treats typed parameter rejection as no match during dispatch', async () => {
+    const owner = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner,
+      feature: commandFeatureId,
+      localName: '$delay',
+      source: '/commands/[delay:number].ts',
+      definition: {
+        ...defineCommand({ execute: ({ params }) => `wait:${params.delay}` }),
+        $parameter: { name: 'delay', type: 'number' } as const,
+      },
+    });
+    const index = new CommandIndex([slot], snapshotFor(owner, [slot]));
+
+    // 普通文本命中数字参数路由时不得抛出，应视为未命中。
+    await expect(index.dispatch('hello')).resolves.toEqual({ matched: false });
+    await expect(index.dispatch('30')).resolves.toMatchObject({
+      matched: true,
+      value: 'wait:30',
+    });
+  });
+
+  it('does not match empty input against optional-parameter commands', async () => {
+    const owner = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner,
+      feature: commandFeatureId,
+      localName: 'gh/pr/$title',
+      source: '/commands/gh/pr/[title:string=defaultTitle].ts',
+      definition: {
+        ...defineCommand({ execute: ({ params }) => `pr:${params.title}` }),
+        $parameter: { name: 'title', type: 'string', defaultValue: 'defaultTitle' } as const,
+      },
+    });
+    const index = new CommandIndex([slot], snapshotFor(owner, [slot]));
+
+    await expect(index.dispatch('')).resolves.toEqual({ matched: false });
+    expect(index.has('')).toBe(false);
+    await expect(index.execute('gh pr')).resolves.toBe('pr:defaultTitle');
+  });
+
+  it('prefers the dynamic route with more static segments', async () => {
+    const owner = rootPluginId();
+    const generic = createCapabilitySlot({
+      owner,
+      feature: commandFeatureId,
+      localName: 'foo/$value',
+      source: '/commands/foo/[value:string].ts',
+      definition: {
+        ...defineCommand({ execute: ({ params }) => `generic:${params.value}` }),
+        $parameter: { name: 'value', type: 'string' } as const,
+      },
+    });
+    const specific = createCapabilitySlot({
+      owner,
+      feature: commandFeatureId,
+      localName: 'foo/bar/$value',
+      source: '/commands/foo/bar/[value:string=fallback].ts',
+      definition: {
+        ...defineCommand({ execute: ({ params }) => `specific:${params.value}` }),
+        $parameter: { name: 'value', type: 'string', defaultValue: 'fallback' } as const,
+      },
+    });
+    // generic 先注册，若按插入顺序遍历会遮蔽 specific。
+    const index = new CommandIndex([generic, specific], snapshotFor(owner, [generic, specific]));
+
+    await expect(index.execute('foo bar')).resolves.toBe('specific:fallback');
+    await expect(index.execute('foo bar baz')).resolves.toBe('specific:baz');
+    await expect(index.execute('foo other')).resolves.toBe('generic:other');
+  });
 });
 
 function snapshotFor(

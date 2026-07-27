@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generateAIConfigJSON, generateAIConfigToml, generateAIConfigYaml, RECOMMENDED_AI_DEFAULTS, type AISetupConfig } from '../src/ai';
+import { generateAIConfigJSON, generateAIConfigToml, generateAIConfigYaml, generateAIEnvVars, PROVIDER_DEFAULT_BASE_URLS, providerSdkFor, RECOMMENDED_AI_DEFAULTS, type AISetupConfig } from '../src/ai';
 
 const aiConfig: AISetupConfig = {
   enabled: true,
@@ -78,5 +78,32 @@ describe('create-zhin ai config', () => {
     expect(parsed.ai.defaultProvider).toBeUndefined()
     expect(parsed.ai.providers.ollama.sdk).toBe('ollama')
     expect(parsed.ai.agents.zhin.provider).toBe('ollama')
+  })
+})
+
+describe('openai-compatible providers baseUrl', () => {
+  it('requires prefilled official baseUrl for zhipu/moonshot (runtime rejects empty baseUrl)', () => {
+    expect(PROVIDER_DEFAULT_BASE_URLS.zhipu).toBe('https://open.bigmodel.cn/api/paas/v4')
+    expect(PROVIDER_DEFAULT_BASE_URLS.moonshot).toBe('https://api.moonshot.cn/v1')
+    // 这两个 provider 的 sdk 为 openai-compatible，runtime 无 baseUrl 无法建 provider
+    expect(providerSdkFor('zhipu')).toBe('openai-compatible')
+    expect(providerSdkFor('moonshot')).toBe('openai-compatible')
+    expect(PROVIDER_DEFAULT_BASE_URLS.openai).toBeUndefined()
+  })
+})
+
+describe('generateAIEnvVars', () => {
+  it('escapes API keys containing special characters', () => {
+    const env = generateAIEnvVars({
+      enabled: true,
+      providers: {
+        openai: { apiKey: '${AI_API_KEY}', __envApiKey: 'sk-with space#hash' },
+      },
+    } as unknown as AISetupConfig)
+    expect(env).toContain('AI_API_KEY="sk-with space#hash"')
+  })
+
+  it('returns empty string when disabled', () => {
+    expect(generateAIEnvVars({ enabled: false })).toBe('')
   })
 })

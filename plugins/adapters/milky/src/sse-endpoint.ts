@@ -269,7 +269,13 @@ export class MilkySseEndpoint implements EndpointInstance {
       });
       this.#stream = stream;
       void stream.closed.then(() => {
-        if (this.#stopping) return;
+        if (this.#stopping) {
+          if (!settled) {
+            settled = true;
+            reject(new Error('stopped during connect'));
+          }
+          return;
+        }
         logger.warn(formatCompact({
           op: 'disconnect',
           endpoint: this.#options.config.name,

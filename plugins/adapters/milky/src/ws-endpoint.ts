@@ -63,7 +63,14 @@ export class MilkyWsEndpoint implements EndpointInstance {
     this.#started = true;
     this.#stopping = false;
     this.#unregisterAgent = registerMilkyAgentEndpoint(this.#options.config.name, this);
-    await this.#connect();
+    try {
+      await this.#connect();
+    } catch (err) {
+      this.#started = false;
+      this.#unregisterAgent?.();
+      this.#unregisterAgent = undefined;
+      throw err;
+    }
   }
 
   open(): void {
@@ -252,12 +259,14 @@ export class MilkyWsEndpoint implements EndpointInstance {
 
     await new Promise<void>((resolve, reject) => {
       let settled = false;
+      let opened = false;
       const ws = create(url, { headers });
       this.#ws = ws;
 
       ws.on('open', () => {
         if (settled) return;
         settled = true;
+        opened = true;
         if (!this.#options.config.access_token) {
           logger.warn(formatCompact({
             endpoint: this.#options.config.name,
@@ -297,11 +306,16 @@ export class MilkyWsEndpoint implements EndpointInstance {
           error: `${reasonStr || 'closed'}${codeHint}`,
           reconnect_ms: this.#options.config.reconnect_interval,
         }));
+        if (this.#heartbeatTimer) {
+          clearInterval(this.#heartbeatTimer);
+          this.#heartbeatTimer = undefined;
+        }
         if (!settled) {
           settled = true;
           reject(new Error(`Milky WS 关闭: ${codeNum} ${reasonStr}`));
         }
-        this.#scheduleReconnect();
+        // 仅在曾成功 open 的连接上调度重连；初始连接失败由 start() 的 catch 复位。
+        if (opened) this.#scheduleReconnect();
       });
 
       ws.on('error', (err) => {
@@ -360,6 +374,7 @@ export class MilkyWsEndpoint implements EndpointInstance {
     const delay = this.#options.config.reconnect_interval;
     this.#reconnectTimer = setTimeout(() => {
       this.#reconnectTimer = undefined;
+      if (this.#stopping || !this.#started) return;
       void this.#connect().catch((err) => {
         logger.warn(formatCompact({
           op: 'reconnect',
