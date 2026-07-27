@@ -22,7 +22,6 @@ export interface StabilityMetricCollector {
 export interface StabilityMetricSnapshot {
   compactionStates: number;
   pendingOrchestration: number;
-  sseSubscribers?: number;
   rssMb?: number;
   [key: string]: number | undefined;
 }
@@ -49,34 +48,13 @@ const DEFAULT_COLLECTORS: StabilityMetricCollector[] = [
   },
 ];
 
-type HostApiMetrics = { sseSubscriberCount?: () => number };
-
-async function collectSseSubscriberCount(): Promise<number | undefined> {
-  try {
-    // 可选依赖：避免 @zhin.js/agent 编译期硬依赖 host-api
-    const dynamicImport = new Function(
-      'specifier',
-      'return import(specifier)',
-    ) as (specifier: string) => Promise<HostApiMetrics>;
-    const mod = await dynamicImport('@zhin.js/host-api');
-    return mod.sseSubscriberCount?.();
-  } catch {
-    return undefined;
-  }
-}
-
 export async function collectStabilityMetrics(
-  options: { includeRss?: boolean; includeSse?: boolean } = {},
+  options: { includeRss?: boolean } = {},
 ): Promise<StabilityMetricSnapshot> {
   const snapshot: StabilityMetricSnapshot = {
     compactionStates: getCompactionStateCount(),
     pendingOrchestration: getPendingOrchestrationCount(),
   };
-
-  if (options.includeSse !== false) {
-    const sse = await collectSseSubscriberCount();
-    if (sse !== undefined) snapshot.sseSubscribers = sse;
-  }
 
   if (options.includeRss !== false && typeof process.memoryUsage === 'function') {
     snapshot.rssMb = Math.round(process.memoryUsage().rss / (1024 * 1024));
@@ -116,15 +94,7 @@ export function startStabilityMonitor(options: StabilityMonitorOptions = {}): ()
         }
 
         if (includeRss) {
-          const metrics = await collectStabilityMetrics({ includeSse: true, includeRss: true });
-          if (metrics.sseSubscribers !== undefined && metrics.sseSubscribers >= 500) {
-            log.warn(formatCompact({
-              code: 'memory_pressure_warn',
-              metric: 'sseSubscribers',
-              size: metrics.sseSubscribers,
-              threshold: 500,
-            }));
-          }
+          const metrics = await collectStabilityMetrics({ includeRss: true });
           log.debug(formatCompact({
             code: 'stability_metrics',
             ...metrics,

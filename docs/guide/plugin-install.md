@@ -54,11 +54,11 @@ YAML 项目会得到类似配置：
 
 ```yaml
 plugins:
-  - "@zhin.js/host-router"
-  - "@zhin.js/host-api"
   - "@zhin.js/adapter-sandbox"
   - "@scope/plugin"
 ```
+
+> Console/HTTP Host 由 `@zhin.js/cli` 自动装配，无需（也不能）再安装 `host-router` / `host-api` 插件。
 
 JSON 项目会写入 `plugins` 数组。
 

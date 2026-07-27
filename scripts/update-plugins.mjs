@@ -44,8 +44,6 @@ const CORE_PACKAGES = new Set([
   '@zhin.js/create-zhin',
   '@zhin.js/queue-runtime',
   '@zhin.js/storage-port',
-  '@zhin.js/host-router',
-  '@zhin.js/host-api',
   '@zhin.js/adapter-process', // 已废弃，见 @zhin.js/adapter-sandbox
   'zhin.js',
 ]);
@@ -61,7 +59,7 @@ function getPluginCategory(name, keywords = []) {
   if (lowerName.includes('adapter-')) return 'adapter';
 
   // 已知服务（packages/host 为内置；plugins/services 为可选第三方）
-  if (['@zhin.js/host-router', '@zhin.js/host-api', '@zhin.js/mcp'].includes(lowerName)) return 'service';
+  if (['@zhin.js/mcp'].includes(lowerName)) return 'service';
 
   // 已知特性插件（与 plugins/features/ 目录对应）
   if (['@zhin.js/process-monitor'].includes(lowerName)) return 'feature';

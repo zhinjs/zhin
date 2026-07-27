@@ -71,10 +71,11 @@ describe('agent-message-compaction 失败语义', () => {
   it('摘要返回空文本视为失败，同样保留原文并计数', async () => {
     completeSimpleMock.mockResolvedValue(assistantOf('   '));
     const state = createAgentCompactionState();
+    const messages = makeMessages();
 
     const result = await autoCompactAgentMessagesIfNeeded({
       model,
-      messages: makeMessages(),
+      messages,
       state,
       force: true,
       config: { keepRecentTokens: 5, minKeepCount: 1 },
@@ -82,7 +83,7 @@ describe('agent-message-compaction 失败语义', () => {
 
     expect(state.consecutiveFailures).toBe(1);
     expect(result.summary).toBeUndefined();
-    expect(result.messages).toEqual(makeMessages());
+    expect(result.messages).toEqual(messages);
   });
 
   it('连续失败达到上限后熔断器生效，不再尝试 auto-compact', async () => {

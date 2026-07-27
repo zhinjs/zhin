@@ -45,5 +45,6 @@ http:
   base: /api                    # auth prefix
 ```
 
-Still deferred to later host migration: full `@zhin.js/host-api` management-plane REST/RPC/SSE
-and retiring the legacy Koa `@zhin.js/host-router` stack.
+The legacy Koa `@zhin.js/host-router` stack and the `@zhin.js/host-api` management-plane plugin have
+been removed; the management-plane REST/RPC/SSE is now assembled by `@zhin.js/cli` (Console Host) on
+top of this package — no Host plugins need to be installed or enabled.

@@ -274,7 +274,8 @@ zhin new my-awesome-plugin
 # 插件会自动添加到 package.json 依赖
 # 在配置文件中启用插件
 # 编辑 zhin.config.yml，添加到 plugins 数组：
-# plugins: ['@zhin.js/host-router', '@zhin.js/host-api', 'my-awesome-plugin']
+# plugins: ['my-awesome-plugin']
+# （Console/HTTP Host 由 CLI 自动装配，无需再启用 host 插件）
 ```
 
 ### 4. 构建插件
@@ -348,8 +349,6 @@ export default defineConfig(async (env) => {
     ],
     plugins: [
       '@zhin.js/adapter-sandbox',
-      '@zhin.js/host-router',
-      '@zhin.js/host-api',
       'test-plugin',
     ],
     debug: !isProduction
@@ -575,7 +574,7 @@ zhin onboard [options]
 
 ### send - 向运行中的机器人发送消息
 
-在 daemon 运行时，通过 HTTP API 向指定适配器/场景发送一条消息（需启用 `@zhin.js/host-router`，借鉴 OpenClaw `message send`）。
+在 daemon 运行时，通过 HTTP API 向指定适配器/场景发送一条消息（HTTP Host 由 CLI 自动装配，借鉴 OpenClaw `message send`）。
 
 ```bash
 zhin send <scene_id> [内容...] [options]
@@ -599,7 +598,7 @@ echo "长内容" | zhin send 1659488338 --adapter sandbox
 
 ### watch - 监视运行中实例
 
-连接 Host API，展示 runtime / bots / assistant jobs（需 `zhin dev` 或 `zhin start` 且启用 host-router + host-api）。
+连接 Host API，展示 runtime / bots / assistant jobs（需 `zhin dev` 或 `zhin start`；Console/HTTP Host 由 CLI 自动装配）。
 
 ```bash
 zhin watch              # TTY 下每 3 秒刷新

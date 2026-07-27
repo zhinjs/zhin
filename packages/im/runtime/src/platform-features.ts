@@ -10,8 +10,8 @@ import type { ChildPluginReference, PackageReference } from './manifest.js';
 export const PLATFORM_FEATURE_CARRIER = '@zhin.js/core';
 
 /**
- * Install facade that may declare default child plugins (e.g. host-router / host-api)
- * and re-exports core authoring surfaces.
+ * Install facade that may declare default child plugins and re-exports core
+ * authoring surfaces.
  */
 export const PLATFORM_FEATURE_FACADE = 'zhin.js';
 

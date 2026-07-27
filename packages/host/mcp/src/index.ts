@@ -2,10 +2,29 @@
 // 外部 MCP Server：从 ToolFeature 读取所有注册工具，暴露给外部开发者
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import type { IncomingMessage } from "node:http";
-import type { Router, RouterContext } from "@zhin.js/host-router";
-import type {} from "@zhin.js/host-router";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { formatCompact, type Tool, type ToolFeature, usePlugin } from '@zhin.js/core';
+
+// Legacy usePlugin 入口：`router` context 原由已删除的 @zhin.js/host-router（koa 风格）提供。
+// 新 Plugin Runtime 走 ./runtime.ts（@zhin.js/host-http），本入口仅保留结构类型以便编译。
+interface RouterContext {
+  req: IncomingMessage;
+  res: ServerResponse;
+  request: { body?: unknown };
+  respond: boolean;
+}
+
+interface Router {
+  all(path: string, handler: (ctx: RouterContext) => void | Promise<void>): void;
+}
+
+declare module '@zhin.js/core' {
+  namespace Plugin {
+    interface Contexts {
+      router: Router;
+    }
+  }
+}
 import { z } from "zod";
 import { registerTools } from "./tools.js";
 import {

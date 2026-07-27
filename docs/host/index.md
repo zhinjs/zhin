@@ -6,9 +6,10 @@ Zhin **Host** 与 `packages/im`、`packages/console` 并列，提供 HTTP 监听
 
 | 包 | npm | 职责 |
 |----|-----|------|
-| [host-router](https://github.com/zhinjs/zhin/tree/main/packages/host/router) | `@zhin.js/host-router` | Koa 监听、`Router`/WebSocket、Bearer、CORS |
-| [host-api](https://github.com/zhinjs/zhin/tree/main/packages/host/api) | `@zhin.js/host-api` | 管理面 REST、Console 协议、`PageManager` / `entries` |
+| [host-http](https://github.com/zhinjs/zhin/tree/main/packages/host/http) | `@zhin.js/host-http` | HTTP/WebSocket 监听、Bearer、CORS |
 | [host-mcp](https://github.com/zhinjs/zhin/tree/main/packages/host/mcp) | `@zhin.js/mcp` | MCP **Server**（向外暴露 Zhin 工具） |
+
+> 原 legacy 插件包 `@zhin.js/host-router`（Koa 传输）与 `@zhin.js/host-api`（管理面 REST）已删除；Console/HTTP Host 由 `@zhin.js/cli` 自动装配（`@zhin.js/host-http` + `@zhin.js/pagemanager`），无需在 `plugins` 列表中启用。
 
 Console 前端栈（contract → pagemanager → client → [zhin-console](https://github.com/zhinjs/console)）见仓库 [packages/console](https://github.com/zhinjs/zhin/tree/main/packages/console)。
 
@@ -23,11 +24,9 @@ http:
 hostApi:
   enabled: true
 
-plugins:
-  - "@zhin.js/host-router"
-  - "@zhin.js/host-api"
-  # 可选：向外暴露 MCP
-  # - "@zhin.js/mcp"
+# 可选：向外暴露 MCP（由 CLI 装配，无需列入 plugins）
+mcp:
+  enabled: true
 ```
 
 - **`http:`** — 传输层（端口、Token、CORS）
@@ -43,7 +42,7 @@ plugins:
 
 ## MCP Server
 
-在 Host 上启用 `@zhin.js/mcp` 后，IDE 等 MCP Client 可通过 Streamable HTTP 调用 Zhin 内置工具。配置与工具列表见 [MCP 集成 — Server 模式](../advanced/mcp#server-模式zhin-作为-mcp-server)。
+启用 MCP（`mcp.enabled`，由 CLI 自动装配）后，IDE 等 MCP Client 可通过 Streamable HTTP 调用 Zhin 内置工具。配置与工具列表见 [MCP 集成 — Server 模式](../advanced/mcp#server-模式zhin-作为-mcp-server)。
 
 ## 相关文档
 

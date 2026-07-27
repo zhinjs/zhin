@@ -5,7 +5,7 @@ sidebar: false
 # Remote Console 需求文档
 
 > **受众**：zhin-console 仓库维护者与贡献者  
-> **权威方**：Zhin Host（`@zhin.js/host-api` + `@zhin.js/host-router`）  
+> **权威方**：Zhin Host（`@zhin.js/host-http` + `@zhin.js/pagemanager`，由 `@zhin.js/cli` 自动装配）  
 > **版本**：与 Host API 同步演进；机器可读契约见运行时 `GET /pub/openapi.json`
 
 本文档描述 Remote Console（独立静态站）应实现的全部功能、API 契约与验收标准。Host **不提供** Console UI，仅暴露 API；UI 在 [zhinjs/console](https://github.com/zhinjs/console) 维护并部署（如 [console.zhin.dev](https://console.zhin.dev)）。
@@ -21,8 +21,8 @@ sidebar: false
 | 仓库 / 包 | 职责 |
 |-----------|------|
 | **zhin-console** | Console 壳层、登录、内置管理页、构建与部署 |
-| **@zhin.js/host-router** | Koa 监听、Router、Bearer 认证、CORS |
-| **@zhin.js/host-api** | 管理面 REST、Console RPC、SSE、PageManager |
+| **@zhin.js/host-http** | HTTP/WebSocket 监听、Bearer 认证、CORS |
+| **@zhin.js/cli（Console Host 装配）** | 管理面 REST、Console RPC、SSE |
 | **@zhin.js/pagemanager** | Console Entry 注册、`GET /entries`、`/@dev` 资源 |
 | **@zhin.js/contract** | Entry、`PluginRegisterHostApi` 等共享类型 |
 | **@zhin.js/client** | 浏览器 SDK：`apiFetch`、`loadConsoleEntries` |
@@ -35,11 +35,11 @@ flowchart LR
     PluginUI[插件Entry_UI]
   end
   subgraph host [Zhin_Host]
-    Router[host_router]
-    HostApi[host_api]
+    Http[host_http]
+    ConsoleHost[console_host_cli]
     PageMgr[pagemanager]
   end
-  Shell -->|Bearer_REST_RPC_SSE| Router
+  Shell -->|Bearer_REST_RPC_SSE| Http
   Shell -->|GET_entries_dynamic_import| PageMgr
   PluginUI -->|register_hostApi| Shell
 ```
@@ -799,10 +799,10 @@ cd zhin-console && pnpm install && pnpm dev
 | 文档 / 代码 | 说明 |
 |-------------|------|
 | [console-remote.md](../console-remote.md) | Remote Console 使用说明 |
-| [packages/host/api/README.md](../../packages/host/api/README.md) | Host API 功能列表 |
+| [packages/host/http/README.md](../../packages/host/http/README.md) | Host HTTP（传输层）功能列表 |
 | [packages/console/client/README.md](../../packages/console/client/README.md) | 浏览器 SDK |
 | [packages/console/contract/src/index.ts](../../packages/console/contract/src/index.ts) | Entry 与 Host API 类型 |
-| [packages/host/router/src/introspection-openapi.ts](../../packages/host/router/src/introspection-openapi.ts) | 内省 OpenAPI schema |
+| [packages/host/http/src/openapi.ts](../../packages/host/http/src/openapi.ts) | 内省 OpenAPI schema |
 | [ADR 0010](../adr/0010-pi-coding-agent-harness-alignment.md) | 会话树决策 |
 | `{API_BASE}/pub/openapi.json` | 运行时 OpenAPI |
 

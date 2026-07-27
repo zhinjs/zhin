@@ -24,16 +24,12 @@ pnpm add @zhin.js/mcp
 
 ### 1. 启用插件
 
-在 `zhin.config.ts` 中添加 MCP 插件：
+MCP Server 由 `@zhin.js/cli` 作为 composition root 经 `@zhin.js/mcp/runtime` 自动装配，无需在 `plugins` 列表中启用 Host 插件；只需在 `zhin.config.ts` 中配置：
 
 ```typescript
 import { defineConfig } from 'zhin.js'
 
 export default defineConfig({
-  plugins: [
-    '@zhin.js/host-router',
-    '@zhin.js/mcp',
-  ],
   mcp: {
     enabled: true,    // 启用 MCP
     path: '/mcp',     // HTTP Stream 端点路径
@@ -61,7 +57,7 @@ export default defineConfig({
 
 Claude Desktop 配置文件路径因平台而异（macOS 常见 `~/Library/Application Support/Claude/claude_desktop_config.json`）。Cursor 使用项目或全局 `.cursor/mcp.json` 同类字段。
 
-确保 Zhin 应用已启动，且 **`@zhin.js/host-router`** 与 **`@zhin.js/mcp`** 均已启用（`http.port` 默认 8086）。
+确保 Zhin 应用已启动，且 MCP Server 已启用（HTTP Host 由 CLI 自动装配，`http.port` 默认 8086）。
 
 #### 手动 smoke test（POST）
 
@@ -156,7 +152,7 @@ AI: 好的！我会使用 create_plugin 工具为你创建插件...
 
 **示例:**
 ```
-查询 host-router 插件的信息
+查询 sandbox 适配器插件的信息
 ```
 
 ### 7. list_plugins
@@ -272,10 +268,6 @@ export default defineConfig({
 
 ```typescript
 export default defineConfig({
-  plugins: [
-    '@zhin.js/host-router',
-    '@zhin.js/mcp',
-  ],
   http: {
     port: 8086,  // HTTP 服务器端口
   },

@@ -130,7 +130,7 @@ function declaredDependency(request: string, pkg: PackageJson): string {
   const specification = (
     pkg.dependencies?.[request]
     ?? pkg.optionalDependencies?.[request]
-    // 可选 peer（如 zhin.js 门面的 host-api/host-router）同样是合法声明：
+    // 可选 peer 同样是合法声明：
     // 未安装时 resolve 会以 'Cannot resolve' 失败，由 reference.optional 容错
     ?? pkg.peerDependencies?.[request]
   );

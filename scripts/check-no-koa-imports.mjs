@@ -1,18 +1,12 @@
 #!/usr/bin/env node
 /**
- * Fail if plugins import Koa types directly (use RouterContext / registerFetchRoute).
+ * Fail if plugins import Koa types directly (use the Runtime Host HTTP API / registerFetchRoute).
  */
 import fs from "node:fs";
 import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "..");
 const pluginsDir = path.join(root, "plugins");
-/** host-router 插件内部允许直接 import koa */
-const hostRouterSrc = path.join(root, "packages", "host", "router", "src");
-function isHostRouterInternal(file) {
-  const rel = path.relative(hostRouterSrc, file);
-  return rel && !rel.startsWith("..") && !path.isAbsolute(rel);
-}
 const bad = /from\s+['"]koa['"]|require\s*\(\s*['"]koa['"]\s*\)/;
 
 function walk(dir, out = []) {
@@ -32,11 +26,11 @@ function walk(dir, out = []) {
 const violations = [];
 for (const file of walk(pluginsDir)) {
   const text = fs.readFileSync(file, "utf8");
-  if (bad.test(text) && !isHostRouterInternal(file)) violations.push(path.relative(root, file));
+  if (bad.test(text)) violations.push(path.relative(root, file));
 }
 
 if (violations.length) {
-  console.error("Koa imports found in plugins (use @zhin.js/host-router RouterContext):");
+  console.error("Koa imports found in plugins (use the Runtime Host HTTP API / registerFetchRoute):");
   for (const v of violations) console.error("  " + v);
   process.exit(1);
 }

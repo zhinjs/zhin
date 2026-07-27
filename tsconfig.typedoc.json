@@ -119,17 +119,11 @@
       "@zhin.js/a2a": [
         "./packages/host/a2a/src/index.ts"
       ],
-      "@zhin.js/host-api": [
-        "./packages/host/api/src/index.ts"
-      ],
       "@zhin.js/host-http": [
         "./packages/host/http/src/index.ts"
       ],
       "@zhin.js/mcp": [
         "./packages/host/mcp/src/index.ts"
-      ],
-      "@zhin.js/host-router": [
-        "./packages/host/router/src/index.ts"
       ]
     }
   },

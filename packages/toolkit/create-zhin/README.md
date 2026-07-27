@@ -226,8 +226,6 @@ endpoints: []
 
 plugins:
   - "@zhin.js/adapter-sandbox"
-  - "@zhin.js/host-router"
-  - "@zhin.js/host-api"
   - example
 
 http:
@@ -324,8 +322,6 @@ zhin build my-awesome-plugin
 ```yaml
 plugins:
   - "@zhin.js/adapter-sandbox"
-  - "@zhin.js/host-router"
-  - "@zhin.js/host-api"
   - example
   - my-awesome-plugin
 ```

@@ -166,7 +166,7 @@ describe('ConfigLoader', () => {
           filename: './data/bot.db',
         },
         plugin_dirs: ['node_modules', './src/plugins'],
-        plugins: ['@zhin.js/host-router'],
+        plugins: ['@zhin.js/adapter-sandbox'],
       }
       fs.writeFileSync(testConfigPath, JSON.stringify({
         database: { filename: './data/custom.db' },

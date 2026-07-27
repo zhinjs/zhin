@@ -148,7 +148,7 @@ pnpm --filter @zhin.js/core build
 # 构建流程（CI 中的实际顺序）
 # 1. basic/** (logger, schema, cli, database)
 # 2. packages/** (core, client, zhin, create-zhin)  
-# 3. packages/host/** (host-router, host-api, mcp)
+# 3. packages/host/** (http, mcp, a2a)
 # 4. plugins/adapters/** (icqq, kook, discord, qq, onebot11, process)
 # 5. plugins/utils/** (music、rss 等工具插件)
 ```
@@ -402,24 +402,26 @@ plugin.useContext('database', async (db) => {
 ```
 
 ### 6. HTTP 路由
-启用 `@zhin.js/host-router` 后通过 `router` Context 挂路由：
+HTTP Host 由 `@zhin.js/cli` 自动装配（`@zhin.js/host-http`），通过 `httpHostToken` 挂路由：
 
 ```typescript
-useContext('router', (router) => {
-  router.get('/pub/health', (ctx) => {
-    ctx.body = { status: 'ok' }
-  })
-  
-  // WebSocket 路由
-  const ws = router.ws('/api/realtime')
-  ws.on('connection', (socket) => {
-    socket.send('连接成功')
-  })
+import { httpHostToken } from '@zhin.js/host-http'
+
+const http = context.use(httpHostToken)
+http.route('GET', '/pub/health', (_req, res) => {
+  res.writeHead(200, { 'content-type': 'application/json' })
+  res.end(JSON.stringify({ status: 'ok' }))
+})
+
+// WebSocket 路由
+const handle = http.ws('/api/realtime')
+handle.onConnection(({ socket }) => {
+  socket.send('连接成功')
 })
 ```
 
 ### 5. Remote Console 扩展（Host API）
-`@zhin.js/host-api` 提供 `web`（PageManager）上下文；聊天 UI 在 **[console.zhin.dev](https://console.zhin.dev)**，插件可注册 Console 扩展入口：
+Console Host 由 `@zhin.js/cli` 自动装配（`@zhin.js/pagemanager`），提供 `web`（PageManager）上下文；聊天 UI 在 **[console.zhin.dev](https://console.zhin.dev)**，插件可注册 Console 扩展入口：
 
 ```typescript
 useContext('web', (web) => {
@@ -513,14 +515,12 @@ useContext('database', (db) => {
 ```
 
 ### 4. 插件加载顺序
-确保依赖的插件先加载：
+确保依赖的插件先加载（Console/HTTP Host 由 CLI 自动装配，不在 `plugins` 列表中）：
 ```typescript
 // ✅ 正确的顺序
 plugins: [
-  '@zhin.js/host-router',  // 先加载 Host HTTP / Router
-  '@zhin.js/host-api',     // Console 管理面 API（可选）
   '@zhin.js/adapter-sandbox',
-  'my-plugin',             // 最后加载依赖 router 的插件
+  'my-plugin',             // 依赖 HTTP/Console 能力的插件可直接用（Host 已装配）
 ]
 ```
 
@@ -542,8 +542,8 @@ async function setup() {
 **按以下顺序进行重构**（从高到低）：
 1. **packages/** - 核心框架层，所有插件的基础
    - core, client, create-zhin, zhin
-2. **packages/host/** - Host 运行时（router / api / mcp），其他插件常作 peer 依赖
-   - host-router, host-api, mcp
+2. **packages/host/** - Host 运行时（http / mcp / a2a，由 cli 装配）
+   - http, mcp, a2a
 3. **plugins/adapters/** - 平台适配器
    - process（`services` 内置，非 adapter 包）, icqq, kook, discord, qq, onebot11, telegram, slack 等
 4. **plugins/utils/** - 工具插件
@@ -677,15 +677,12 @@ declare module 'zhin.js' {
 
 ## 插件系统
 
-### Host Router (`@zhin.js/host-router`)
-- Koa + `Router`（`useContext('router')` 挂路由）、Bearer、CORS
-- 提供 `koa`、`router`、`server` Context；配置段 **`http:`**（port/token/base）
+### Host（`@zhin.js/cli` 自动装配）
+- 传输层 `@zhin.js/host-http`：HTTP/WebSocket 监听（`httpHostToken` 挂路由）、Bearer、CORS；配置段 **`http:`**（port/token/base）
+- 管理面由 CLI 的 Console Host 装配（`@zhin.js/pagemanager`）：管理面 REST（plugins/endpoints/config 等）、Console RPC/SSE、`PageManager` / `GET /entries`
 - 公开路由：`GET /pub/health`、`GET /pub/openapi.json`
-
-### Host API (`@zhin.js/host-api`)
-- 管理面 REST（plugins/endpoints/config 等）、Console RPC/SSE、`PageManager` / `GET /entries`
-- Host **无内置 SPA**（`serveClientHost: false`）；UI 在 **Remote Console**（[console.zhin.dev](https://console.zhin.dev) / `zhin-console`）
-- 需与 `@zhin.js/host-router` 同启
+- Host **无内置 SPA**；UI 在 **Remote Console**（[console.zhin.dev](https://console.zhin.dev) / `zhin-console`）
+- 原 legacy 插件包 `@zhin.js/host-router` / `@zhin.js/host-api` 已删除，无需（也不能）在 `plugins` 中启用
 - 见 `docs/console-remote.md`
 
 ### Client 插件 (`@zhin.js/client`)
@@ -718,8 +715,6 @@ export default defineConfig(async (env) => {
       path.join('node_modules', '@zhin.js')
     ],
     plugins: [
-      '@zhin.js/host-router',
-      '@zhin.js/host-api',
       '@zhin.js/adapter-sandbox',
       'my-plugin',
     ],
@@ -729,10 +724,9 @@ export default defineConfig(async (env) => {
 ```
 
 **插件加载顺序**：
-1. `@zhin.js/host-router` — HTTP 监听与 `router` 上下文
-2. `@zhin.js/host-api` — 管理面 API / PageManager（可选）
-3. 适配器插件 — 平台消息与扩展路由（如 `/api/icqq/*`）
-4. 业务插件 — 依赖 `router` / `ai` 等上下文
+1. Console/HTTP Host — 由 `@zhin.js/cli` 自动装配（`httpHostToken` / `web` 上下文），不在 `plugins` 列表
+2. 适配器插件 — 平台消息与扩展路由（如 `/api/icqq/*`）
+3. 业务插件 — 依赖 `httpHostToken` / `ai` 等上下文
 
 ## 环境要求
 

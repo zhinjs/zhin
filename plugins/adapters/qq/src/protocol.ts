@@ -198,16 +198,16 @@ export function formatOutboundText(payload: unknown): string {
         }
         case 'image': {
           const src = String(data.url || data.file || '');
-          // QQ 文本链路承载不了非 URL 图片（base64/本地路径），丢弃时必须留痕，
-          // 否则出站静默降级排障无头绪。
-          if (!src || !/^https?:\/\//.test(src)) {
+          // base64/本地路径由 formatOutbound 走媒体上传，文本视图静默省略；
+          // 仅当彻底缺少来源时留痕，避免出站静默降级排障无头绪。
+          if (!src) {
             logger.warn(formatCompact({
               op: 'qq_outbound_image_dropped',
-              reason: src ? 'non_url_source' : 'missing_source',
+              reason: 'missing_source',
             }));
             return '';
           }
-          return src;
+          return /^https?:\/\//.test(src) ? src : '';
         }
         case 'reply':
           return '';

@@ -24,17 +24,6 @@ async function drainTaskExecutorLocks(timeoutMs: number): Promise<void> {
   }
 }
 
-async function stopHostLayer(): Promise<void> {
-  try {
-    const mod = await import('@zhin.js/host-api');
-    if (typeof mod.stopSseHub === 'function') {
-      mod.stopSseHub();
-    }
-  } catch {
-    // host-api 未安装
-  }
-}
-
 /**
  * ADR 0013 — 进程级优雅关闭：先 drain 任务，再 plugin.stop()（Agent / DB / 适配器），最后 Host 资源。
  */
@@ -62,7 +51,6 @@ export async function gracefulShutdown(
   try {
     await drainTaskExecutorLocks(TASK_DRAIN_MS);
     await plugin.stop();
-    await stopHostLayer();
   } catch (err) {
     code = code || 1;
     plugin.logger.error(

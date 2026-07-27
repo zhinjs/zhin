@@ -115,14 +115,12 @@ ai:
 
 ### 1. 启用插件
 
+MCP Server 由 `@zhin.js/cli` 自动装配（`@zhin.js/mcp/runtime`），无需在 `plugins` 中启用 Host 插件：
+
 ```typescript
 import { defineConfig } from 'zhin.js'
 
 export default defineConfig({
-  plugins: [
-    '@zhin.js/host-router',
-    '@zhin.js/mcp',
-  ],
   mcp: {
     enabled: true,
     path: '/mcp',

@@ -14,9 +14,6 @@ vi.spyOn(process, 'kill').mockImplementation(() => true as any)
 vi.mock('@zhin.js/agent/task-executor', () => ({
   drainTaskExecutorLocks: vi.fn().mockResolvedValue(undefined),
 }))
-vi.mock('@zhin.js/host-api', () => ({
-  stopSseHub: vi.fn(),
-}))
 
 async function importShutdown() {
   vi.resetModules()
@@ -29,9 +26,6 @@ async function importShutdown() {
   vi.spyOn(process, 'kill').mockImplementation(() => true as any)
   vi.doMock('@zhin.js/agent/task-executor', () => ({
     drainTaskExecutorLocks: vi.fn().mockResolvedValue(undefined),
-  }))
-  vi.doMock('@zhin.js/host-api', () => ({
-    stopSseHub: vi.fn(),
   }))
   return import('../src/shutdown.js')
 }

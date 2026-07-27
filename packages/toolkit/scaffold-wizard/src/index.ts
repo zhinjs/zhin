@@ -106,7 +106,6 @@ export type {
 } from './project-config-plan.js';
 
 export {
-  CONSOLE_HOST_PLUGINS,
   applyDatabaseToConfig,
   applyAdaptersToConfig,
   applyAIToConfig,

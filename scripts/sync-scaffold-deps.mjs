@@ -23,8 +23,6 @@ const ZHIN_PACKAGE_PATHS = {
   '@zhin.js/cli': 'basic/cli/package.json',
   '@zhin.js/agent': 'packages/im/agent/package.json',
   '@zhin.js/database': 'basic/database/package.json',
-  '@zhin.js/host-router': 'packages/host/router/package.json',
-  '@zhin.js/host-api': 'packages/host/api/package.json',
   '@zhin.js/client': 'packages/console/client/package.json',
   '@zhin.js/contract': 'packages/console/contract/package.json',
   '@zhin.js/satori': 'packages/toolkit/satori/package.json',

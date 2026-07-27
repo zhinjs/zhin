@@ -8,7 +8,7 @@ tier: Stable
 本页由 [`plugins/adapters/sandbox/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=70875aa8a0199aba -->
+<!-- sync-adapter-docs:sha256=a6fa99a21ab163aa -->
 
 # @zhin.js/adapter-sandbox
 
@@ -44,10 +44,10 @@ Root 在 `zhin runtime start` 时装载 `@zhin.js/host-http`、`ConsoleRuntime` 
 旧 `client/`（`register(api)` / `pageManager.addEntry`）仅保留给 legacy Host 栈参考，
 **不是** Plugin Runtime 生产入口。
 
-### 旧 Host 栈（`zhin dev` / full-bot）
+### 旧 Host 栈（已删除）
 
-- `@zhin.js/host-router` — HTTP 服务（提供 Router 和 WebSocket）
-- `@zhin.js/host-api` — Host 侧 Console API（`addEntry` 注册 Sandbox 扩展）
+原 legacy 插件包 `@zhin.js/host-router`（HTTP 服务）与 `@zhin.js/host-api`（Host 侧 Console API，`addEntry` 注册 Sandbox 扩展）已删除；`zhin dev` 现由 `@zhin.js/cli` 自动装配 Console/HTTP Host（`@zhin.js/host-http` + `@zhin.js/pagemanager`），无需安装任何 Host 插件。
+
 - `@zhin.js/client` — Remote Console 客户端 SDK（UI 在 zhin-console 仓库）
 
 出站 wire 只做 JSON 封装；旧 `segment-mapper`（canonical segments）归一化上移到 gateway/core 渲染链。

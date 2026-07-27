@@ -123,4 +123,4 @@ pnpm --filter @zhin.js/client build
 
 - [Remote Console 使用说明](../../../docs/console-remote.md)
 - [Console 栈概览](../README.md)
-- [@zhin.js/host-api 管理面 API](../../host/api/README.md)
+- [@zhin.js/host-http（Console/HTTP Host 传输）](../../host/http/README.md)

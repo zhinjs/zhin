@@ -1,5 +1,5 @@
 /**
- * Host REST 内省 API 数据层（供 @zhin.js/host-api 注册路由）
+ * Host REST 内省 API 数据层（供 Console Host 装配层注册路由；legacy @zhin.js/host-api 已删除）
  */
 import type { Plugin } from '@zhin.js/core';
 import {

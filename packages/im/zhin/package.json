@@ -99,8 +99,6 @@
     "@zhin.js/ai": "^1.4.5",
     "@zhin.js/html-renderer": "workspace:^",
     "@zhin.js/speech": "workspace:^",
-    "@zhin.js/host-api": "workspace:^",
-    "@zhin.js/host-router": "workspace:^",
     "@zhin.js/runtime": "^1.0.2"
   },
   "peerDependenciesMeta": {
@@ -116,12 +114,6 @@
     "@zhin.js/speech": {
       "optional": true
     },
-    "@zhin.js/host-api": {
-      "optional": true
-    },
-    "@zhin.js/host-router": {
-      "optional": true
-    },
     "@zhin.js/runtime": {
       "optional": true
     }
@@ -130,8 +122,6 @@
     "@types/node": "^26.1.0",
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/ai": "workspace:*",
-    "@zhin.js/host-api": "workspace:*",
-    "@zhin.js/host-router": "workspace:*",
     "@zhin.js/html-renderer": "workspace:*",
     "@zhin.js/kernel": "workspace:*",
     "@zhin.js/runtime": "workspace:*",

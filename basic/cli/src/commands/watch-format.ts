@@ -203,7 +203,7 @@ export function renderWatchText(options: {
   if (options.error) {
     lines.push(`⚠ ${options.error}`);
     lines.push('');
-    lines.push('提示: 在项目根运行 zhin dev / zhin start，并启用 @zhin.js/host-router + host-api');
+    lines.push('提示: 在项目根运行 zhin dev / zhin start（Console Host 由 CLI 自动装配）');
     return lines.join('\n');
   }
 

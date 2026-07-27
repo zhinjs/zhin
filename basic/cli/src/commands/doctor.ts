@@ -176,23 +176,6 @@ export const doctorCommand = new Command('doctor')
           }
         }
 
-        if (diagnosis.missingHostPlugins.length === 0) {
-          results.push({
-            name: 'Remote Console Host',
-            status: 'ok',
-            message: 'host-router / host-api 已启用',
-          });
-        } else {
-          results.push({
-            name: 'Remote Console Host',
-            status: 'warn',
-            message: `缺少插件: ${diagnosis.missingHostPlugins.join(', ')}（Console 无法连接 Host API）`,
-            fix: options.fix
-              ? (canFixConfig ? '已写入配置' : `请手动添加到 ${existingConfig}`)
-              : `zhin install ${diagnosis.missingHostPlugins.join(' ')} 或查看 ${TROUBLESHOOTING_URL}`,
-          });
-        }
-
         if (diagnosis.missingSandboxPlugin) {
           results.push({
             name: 'Sandbox 首跑',

@@ -4,21 +4,22 @@ Zhin **Host 运行时**（与 `packages/im`、`packages/console` 并列的常驻
 
 | 目录 | npm 包 | 职责 |
 |------|--------|------|
-| [router](./router/) | `@zhin.js/host-router` | Koa 监听、`Router`/WS、Bearer、CORS |
-| [api](./api/) | `@zhin.js/host-api` | 管理面 REST、Console 协议、`PageManager` / `entries` |
+| [http](./http/) | `@zhin.js/host-http` | 极简 HTTP/WS Host（`httpHostToken`、Bearer、CORS） |
 | [mcp](./mcp/) | `@zhin.js/mcp` | MCP **Server**（向外暴露 Zhin 工具） |
 | [a2a](./a2a/) | `@zhin.js/a2a` | A2A v1.0 **Server**（Agent Card + 跨实例委派） |
 
-配置：`zhin.config` 中 **`http:`**（传输）、**`hostApi:`**（管理面）；`plugins` 列表启用上述包名。
+> 原 legacy 插件包 `@zhin.js/host-router`（Koa 传输）与 `@zhin.js/host-api`（管理面 REST）已删除；Console/HTTP Host 现由 `@zhin.js/cli` 作为 composition root 自动装配，无需在 `plugins` 列表中启用任何 Host 插件。
+
+配置：`zhin.config` 中 **`http:`**（传输）、**`hostApi:`**（管理面）；Host 能力由 CLI 自动装配。
 
 ## Remote Console（快速路径）
 
 Host **不提供**内置管理页 UI，仅暴露 Console API。官方 UI 在独立仓库 **[zhin-console](https://github.com/zhinjs/console)**（如 [console.zhin.dev](https://console.zhin.dev)）。
 
-1. 启动应用，启用 `@zhin.js/host-router` + `@zhin.js/host-api`（默认 `hostApi.enabled: true`）。
+1. 启动应用（Console/HTTP Host 由 `@zhin.js/cli` 自动装配，默认 `hostApi.enabled: true`，无需安装任何插件）。
 2. 浏览器打开 **https://console.zhin.dev**（或本地 `zhin-console/` 开发服）。
 3. 登录页填写 **API Base URL**（如 `http://127.0.0.1:8086`）与 **Bearer Token**（`.env` 中 `HTTP_TOKEN` / `http.token`）。
 
 协议：`POST /api/console/request` + SSE `GET /api/events`；插件扩展经 `GET /entries` 动态加载。完整说明见 **[docs/console-remote.md](../../docs/console-remote.md)**。
 
-构建顺序（Host 栈）：`packages/console/*` → `packages/host/router` → `packages/host/api`（见 [repo-structure](../../docs/contributing/repo-structure.md)）。
+构建顺序（Host 栈）：`packages/console/*` → `packages/host/http`（见 [repo-structure](../../docs/contributing/repo-structure.md)）。

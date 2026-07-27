@@ -100,7 +100,7 @@ describe('stability lifecycle (ADR 0014 P2-2)', () => {
   describe('memory-pressure', () => {
     it('collectStabilityMetrics 返回关键计数', async () => {
       clearCompactionStates();
-      const metrics = await collectStabilityMetrics({ includeSse: false, includeRss: true });
+      const metrics = await collectStabilityMetrics({ includeRss: true });
       expect(metrics.compactionStates).toBeGreaterThanOrEqual(0);
       expect(typeof metrics.pendingOrchestration).toBe('number');
       expect(metrics.rssMb).toBeGreaterThan(0);

@@ -480,7 +480,7 @@ describe('static Project Graph', () => {
     ]);
   });
 
-  it('inherits host child plugins declared on the zhin.js facade', async () => {
+  it('inherits child plugins declared on the zhin.js facade', async () => {
     const root = await project({
       root: {
         name: '@test/root',
@@ -494,8 +494,8 @@ describe('static Project Graph', () => {
             name: 'zhin.js',
             dependencies: {
               '@zhin.js/core': 'workspace:*',
-              '@zhin.js/host-router': 'workspace:*',
-              '@zhin.js/host-api': 'workspace:*',
+              '@test/plugin-router': 'workspace:*',
+              '@test/plugin-host': 'workspace:*',
             },
             zhin: {
               protocol: 1,
@@ -503,8 +503,8 @@ describe('static Project Graph', () => {
               entry: './index.ts',
               features: [],
               plugins: [
-                { package: '@zhin.js/host-router', instanceKey: 'router' },
-                { package: '@zhin.js/host-api', instanceKey: 'host' },
+                { package: '@test/plugin-router', instanceKey: 'router' },
+                { package: '@test/plugin-host', instanceKey: 'host' },
               ],
             },
           },
@@ -530,16 +530,16 @@ describe('static Project Graph', () => {
           },
         },
         {
-          directory: 'host-router',
+          directory: 'plugin-router',
           json: {
-            name: '@zhin.js/host-router',
+            name: '@test/plugin-router',
             zhin: { protocol: 1, type: 'plugin', entry: './index.ts' },
           },
         },
         {
-          directory: 'host-api',
+          directory: 'plugin-host',
           json: {
-            name: '@zhin.js/host-api',
+            name: '@test/plugin-host',
             zhin: { protocol: 1, type: 'plugin', entry: './index.ts' },
           },
         },

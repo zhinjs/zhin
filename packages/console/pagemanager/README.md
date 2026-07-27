@@ -83,4 +83,4 @@ pnpm --filter @zhin.js/pagemanager build
 - [Remote Console 使用说明](../../../docs/console-remote.md)
 - [@zhin.js/contract](../contract/README.md)
 - [@zhin.js/client](../client/README.md)
-- [@zhin.js/host-api 管理面 API](../../host/api/README.md)
+- [@zhin.js/host-http（Console/HTTP Host 传输）](../../host/http/README.md)

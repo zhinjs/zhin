@@ -7,7 +7,7 @@
  *   *    /a2a/{agentName}/rest/*
  */
 import { formatCompact, usePlugin } from '@zhin.js/core';
-import { paramPath, type Router, type RouterContext } from '@zhin.js/host-router';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import {
   DefaultRequestHandler,
@@ -23,6 +23,37 @@ import { verifyA2aBearer } from './auth.js';
 import { buildAgentCardForBinding, listExposableAgentNames } from './card-builder.js';
 import { ZhinA2AExecutor } from './agent-executor.js';
 import { handleAgentCard, handleJsonRpc, handleRest } from './http-handlers.js';
+
+// Legacy usePlugin 入口：`router` context 原由已删除的 @zhin.js/host-router（koa 风格）提供。
+// 新 Plugin Runtime 走 ./runtime.ts（@zhin.js/host-http），本入口仅保留结构类型以便编译。
+interface RouterContext {
+  req: IncomingMessage;
+  res: ServerResponse;
+  request: { body?: unknown };
+  method: string;
+  params: Record<string, string | string[] | undefined>;
+  respond: boolean;
+}
+
+interface Router {
+  all(path: string, handler: (ctx: RouterContext) => void | Promise<void>): void;
+}
+
+declare module '@zhin.js/core' {
+  namespace Plugin {
+    interface Contexts {
+      router: Router;
+    }
+  }
+}
+
+/** 路径参数（含 `*name` 通配时可能返回 string[]）。 */
+function paramPath(ctx: RouterContext, key: string): string {
+  const v = ctx.params[key];
+  if (v === undefined || v === null) return '';
+  if (Array.isArray(v)) return v.map(String).join('/');
+  return String(v);
+}
 
 interface AgentA2AStack {
   agentName: string;
@@ -107,7 +138,7 @@ useContext('router', (router: Router) => {
   if (ai?.isReady()) rebuildAgentStacks(ai);
 
   const a2aHandler = async (ctx: RouterContext): Promise<void> => {
-    const agentName = decodeURIComponent(ctx.params.agentName ?? '');
+    const agentName = decodeURIComponent(paramPath(ctx, 'agentName'));
     const parsed = parseA2aTail(paramPath(ctx, 'tail'));
     if (!parsed) {
       sendJsonViaRawRes(ctx, 404, { error: 'Not found' });
@@ -163,5 +194,3 @@ useContext('ai', (ai: AIService) => {
     agentStacks.clear();
   };
 });
-
-import type {} from '@zhin.js/host-router';

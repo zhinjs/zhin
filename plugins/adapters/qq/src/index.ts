@@ -17,6 +17,13 @@ export {
 } from './protocol.js';
 
 export {
+  formatOutbound,
+  resolveMediaFile,
+  type QqOutboundElem,
+  type QqOutboundMessage,
+} from './outbound.js';
+
+export {
   QqHttpEndpoint,
   QqWebsocketEndpoint,
   type CreateQqBot,

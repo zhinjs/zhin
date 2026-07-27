@@ -60,12 +60,9 @@ const layers = {
   'packages/im/ai': { level: 2, allowedImports: ['basic', 'packages/im/kernel'] },
   'packages/im/core': { level: 3, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/plugin-runtime', 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware'] },
   'packages/im/agent': { level: 4, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/plugin-runtime', 'packages/im/agent-feature', 'packages/im/mcp-feature', 'packages/im/skill', 'packages/im/tool'] },
-  // zhin 是应用伞包：shutdown.ts 以 try/catch 可选动态导入 @zhin.js/host-api（stopSseHub），无环，允许。
   // define-plugin.ts 是 @zhin.js/plugin-runtime 的门面 re-export（zhin.js/plugin-runtime 子路径），允许。
-  'packages/im/zhin': { level: 5, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent', 'packages/im/runtime', 'packages/im/plugin-runtime', 'packages/host/api'] },
-  'packages/host/router': { level: 6, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/console/protocol'] },
-  'packages/host/mcp': { level: 7, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/host/router'] },
-  'packages/host/api': { level: 8, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent', 'packages/host/router', 'packages/host/mcp', 'packages/console/protocol', 'packages/console/contract', 'packages/console/pagemanager'] },
+  'packages/im/zhin': { level: 5, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent', 'packages/im/runtime', 'packages/im/plugin-runtime'] },
+  'packages/host/mcp': { level: 7, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core'] },
   'packages/console/contract': { level: 10, allowedImports: ['basic', 'packages/im/ai', 'packages/console/protocol'] },
   'packages/console/pagemanager': { level: 11, allowedImports: ['basic', 'packages/console/contract', 'packages/im/plugin-runtime', 'packages/im/feature-kit', 'packages/im/runtime'] },
   'packages/console/client': { level: 12, allowedImports: ['basic', 'packages/console/protocol', 'packages/console/contract'] },
@@ -85,8 +82,6 @@ const packageNameToPath = {
   '@zhin.js/core': 'packages/im/core',
   '@zhin.js/agent': 'packages/im/agent',
   'zhin.js': 'packages/im/zhin',
-  '@zhin.js/host-router': 'packages/host/router',
-  '@zhin.js/host-api': 'packages/host/api',
   '@zhin.js/host-http': 'packages/host/http',
   '@zhin.js/mcp': 'packages/host/mcp',
   '@zhin.js/plugin-runtime': 'packages/im/plugin-runtime',

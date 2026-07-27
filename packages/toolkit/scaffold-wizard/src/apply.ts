@@ -15,15 +15,6 @@ import { ensureDatabaseForAdapters, ensureDatabaseForAI, getAIDependencies } fro
 import { DEFAULT_CREATE_BOT_HTTP_PORT, ZHIN_STACK_VERSIONS } from './zhin-stack-deps.js';
 import { packageToInstanceKey } from './project-config-plan.js';
 
-/**
- * @deprecated Plugin Runtime 由 CLI composition root 装配 Console/HTTP Host，
- * 不再需要在 plugins 清单中声明 host 插件；保留导出仅为兼容。
- */
-export const CONSOLE_HOST_PLUGINS = [
-  '@zhin.js/host-router',
-  '@zhin.js/host-api',
-] as const;
-
 export function applyDatabaseToConfig(config: Record<string, unknown>, database: DatabaseConfig): void {
   // 物化为可落盘对象：非 SQLite 连接参数引用 .env（${VAR}），明文密码不进配置文件
   config.database = materializeDatabaseConfig(database);

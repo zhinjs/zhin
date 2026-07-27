@@ -17,8 +17,6 @@ const GLOBAL_PACKAGE_JSON = {
   dependencies: {
     'zhin.js': 'latest',
     '@zhin.js/adapter-sandbox': 'latest',
-    '@zhin.js/host-api': 'latest',
-    '@zhin.js/host-router': 'latest',
   },
   devDependencies: {
     tsx: '^4.22.4',
@@ -34,14 +32,9 @@ endpoints: []
 
 plugins:
   - "@zhin.js/adapter-sandbox"
-  - "@zhin.js/host-router"
-  - "@zhin.js/host-api"
 
 plugin_dirs:
   - node_modules
-
-hostApi:
-  lazyLoad: true
 
 ai:
   enabled: true

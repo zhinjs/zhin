@@ -2,8 +2,9 @@
  * QQ WebSocket transport: bot factory and inbound message normalization.
  */
 import path from 'node:path';
-import { Bot, ReceiverMode } from 'qq-official-bot';
+import { Bot, ReceiverMode, type Sendable } from 'qq-official-bot';
 import { getLevel, toLog4jsLevel } from '@zhin.js/logger';
+import type { QqOutboundMessage } from './outbound.js';
 import type { QqChannelKind, QqInboundMessage, ResolvedQqWebsocketConfig } from './protocol.js';
 
 /** Minimal bot surface used by the endpoint (real qq-official-bot or test mock). */
@@ -12,10 +13,10 @@ export interface QqBotTransport {
   stop(): Promise<void>;
   on(event: string, listener: (...args: unknown[]) => void): void;
   removeAllListeners(): void;
-  sendPrivateMessage(userId: string, message: string): Promise<unknown>;
-  sendGroupMessage(groupId: string, message: string): Promise<unknown>;
-  sendGuildMessage(channelId: string, message: string): Promise<unknown>;
-  sendDirectMessage?(guildId: string, message: string): Promise<unknown>;
+  sendPrivateMessage(userId: string, message: QqOutboundMessage): Promise<unknown>;
+  sendGroupMessage(groupId: string, message: QqOutboundMessage): Promise<unknown>;
+  sendGuildMessage(channelId: string, message: QqOutboundMessage): Promise<unknown>;
+  sendDirectMessage?(guildId: string, message: QqOutboundMessage): Promise<unknown>;
   getGuilds(): Promise<unknown[]>;
   getChannels(guildId: string): Promise<unknown[]>;
   getChannelInfo(channelId: string): Promise<unknown>;
@@ -149,10 +150,10 @@ export function defaultCreateBot(config: ResolvedQqWebsocketConfig): QqBotTransp
     removeAllListeners: () => {
       bot.removeAllListeners(undefined as never);
     },
-    sendPrivateMessage: (userId, message) => bot.sendPrivateMessage(userId, message),
-    sendGroupMessage: (groupId, message) => bot.sendGroupMessage(groupId, message),
-    sendGuildMessage: (channelId, message) => bot.sendGuildMessage(channelId, message),
-    sendDirectMessage: (guildId, message) => bot.sendDirectMessage(guildId, message),
+    sendPrivateMessage: (userId, message) => bot.sendPrivateMessage(userId, message as Sendable),
+    sendGroupMessage: (groupId, message) => bot.sendGroupMessage(groupId, message as Sendable),
+    sendGuildMessage: (channelId, message) => bot.sendGuildMessage(channelId, message as Sendable),
+    sendDirectMessage: (guildId, message) => bot.sendDirectMessage(guildId, message as Sendable),
     getGuilds: () => bot.guildService.getList(),
     getChannels: (guildId) => bot.channelService.getList(guildId),
     getChannelInfo: (channelId) => bot.channelService.getInfo(channelId),

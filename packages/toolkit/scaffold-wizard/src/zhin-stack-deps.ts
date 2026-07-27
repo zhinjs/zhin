@@ -20,8 +20,6 @@ export const ZHIN_STACK_VERSIONS = {
   '@zhin.js/component': 'latest',
   '@zhin.js/core': 'latest',
   '@zhin.js/tool': 'latest',
-  '@zhin.js/host-router': 'latest',
-  '@zhin.js/host-api': 'latest',
   '@zhin.js/client': 'latest',
   '@zhin.js/contract': 'latest',
   '@zhin.js/satori': 'latest',
@@ -51,11 +49,6 @@ export const ZHIN_STACK_VERSIONS = {
 } as const;
 
 export type ZhinStackPackage = keyof typeof ZHIN_STACK_VERSIONS;
-
-const HOST_CONSOLE_PLUGINS = new Set([
-  '@zhin.js/host-router',
-  '@zhin.js/host-api',
-]);
 
 function parseMajor(versionSpec: string | undefined): number | undefined {
   if (!versionSpec?.trim()) return undefined;
@@ -142,13 +135,6 @@ export function getRequiredZhinDependenciesForConfig(config: Record<string, unkn
     const driver = DATABASE_PACKAGES[dialect as keyof typeof DATABASE_PACKAGES];
     if (driver) {
       deps[driver] = 'latest';
-    }
-  }
-
-  const usesHost = collectZhinPluginsFromConfig(config).some((p) => HOST_CONSOLE_PLUGINS.has(p));
-  if (usesHost) {
-    for (const pkg of ['@zhin.js/host-router', '@zhin.js/host-api'] as const) {
-      deps[pkg] = ZHIN_STACK_VERSIONS[pkg];
     }
   }
 

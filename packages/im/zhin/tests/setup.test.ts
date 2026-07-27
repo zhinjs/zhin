@@ -78,13 +78,13 @@ describe('Setup - Default Configuration', () => {
     expect(config.services).toEqual([...DEFAULT_APP_CONFIG.services])
   })
 
-  it('should preserve host plugin order when explicitly configured', async () => {
+  it('should preserve plugin order when explicitly configured', async () => {
     const { ConfigService } = await import('@zhin.js/core')
 
     const plugins = [
-      '@zhin.js/host-router',
-      '@zhin.js/host-api',
       '@zhin.js/adapter-sandbox',
+      '@zhin.js/mcp',
+      'some-community-plugin',
     ]
     const configService = new ConfigService()
     await configService.load('test-zhin-config.yml', withTestDefaults({ plugins }))
@@ -93,8 +93,8 @@ describe('Setup - Default Configuration', () => {
     const config = parseYaml(content)
 
     expect(config.plugins).toEqual(plugins)
-    expect(config.plugins.indexOf('@zhin.js/host-router')).toBeLessThan(
-      config.plugins.indexOf('@zhin.js/host-api'),
+    expect(config.plugins.indexOf('@zhin.js/adapter-sandbox')).toBeLessThan(
+      config.plugins.indexOf('@zhin.js/mcp'),
     )
   })
 

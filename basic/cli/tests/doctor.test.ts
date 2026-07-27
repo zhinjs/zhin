@@ -2,10 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { applyConsoleConfigFixes, diagnoseConsoleConfig } from '@zhin.js/scaffold-wizard';
 
 describe('doctor console diagnostics', () => {
-  it('detects missing Console host, Sandbox, CORS, and token config', () => {
+  it('detects missing Sandbox, CORS, and token config', () => {
     const diagnosis = diagnoseConsoleConfig({ plugins: ['example'], http: {} });
 
-    expect(diagnosis.missingHostPlugins).toEqual(['@zhin.js/host-router', '@zhin.js/host-api']);
     expect(diagnosis.missingSandboxPlugin).toBe(true);
     expect(diagnosis.missingConsoleOrigin).toBe(true);
     expect(diagnosis.missingHttpToken).toBe(true);
@@ -21,10 +20,9 @@ describe('doctor console diagnostics', () => {
     const diagnosis = diagnoseConsoleConfig(config);
 
     expect(changed).toBe(true);
+    // legacy host-api / host-router 插件栈已删除，不再写入配置
     expect(config.plugins).toEqual([
       'example',
-      '@zhin.js/host-router',
-      '@zhin.js/host-api',
       '@zhin.js/adapter-sandbox',
     ]);
     expect(config.http).toMatchObject({
@@ -33,7 +31,6 @@ describe('doctor console diagnostics', () => {
       corsOrigins: ['https://console.zhin.dev'],
     });
     expect(diagnosis).toEqual({
-      missingHostPlugins: [],
       missingSandboxPlugin: false,
       missingConsoleOrigin: false,
       missingHttpToken: false,
@@ -42,7 +39,7 @@ describe('doctor console diagnostics', () => {
 
   it('does not rewrite already healthy config', () => {
     const config: Record<string, unknown> = {
-      plugins: ['@zhin.js/host-router', '@zhin.js/host-api', '@zhin.js/adapter-sandbox'],
+      plugins: ['@zhin.js/adapter-sandbox'],
       http: { token: '${HTTP_TOKEN}', corsOrigins: ['https://console.zhin.dev'] },
     };
 

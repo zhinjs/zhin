@@ -23,11 +23,11 @@ zhin-console（独立仓库）    壳层 UI、登录、内置页；依赖 @zhin.
 | [pagemanager](./pagemanager/) | `@zhin.js/pagemanager` | 服务端 PageManager、entries 路由与 esbuild 管线 |
 | [client](./client/) | `@zhin.js/client` | Remote Console 客户端 SDK（无 UI） |
 
-`@zhin.js/host-api` 在 Host 上挂载 PageManager 与管理面 REST；传输由 `@zhin.js/host-router` 提供。
+Console Host（PageManager 与管理面 REST）由 `@zhin.js/cli` 作为 composition root 基于 `@zhin.js/host-http` + `@zhin.js/pagemanager` 自动装配，无需安装任何 Host 插件。
 
 ## Remote Console 快速路径
 
-1. Host 启用 `@zhin.js/host-router` + `@zhin.js/host-api`。
+1. 启动应用（Console/HTTP Host 由 `@zhin.js/cli` 自动装配，无需安装插件）。
 2. 打开 **https://console.zhin.dev**（或本地 `zhin-console/` 开发服）。
 3. 登录页填写 API Base 与 Bearer Token。
 

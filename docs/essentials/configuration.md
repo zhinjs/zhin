@@ -80,17 +80,15 @@ services:
 
 ```yaml
 plugins:
-  - "@zhin.js/host-router"            # HTTP 服务
-  - "@zhin.js/host-api"        # Host 管理面 API（REST + Console 协议）
   - "@zhin.js/adapter-sandbox" # 终端适配器
   - "@zhin.js/adapter-icqq"   # ICQQ 适配器
   - my-plugin                  # 你的本地插件
 ```
 
 **注意**：
-- npm 插件使用完整包名（如 `@zhin.js/host-router`）
+- npm 插件使用完整包名（如 `@zhin.js/adapter-sandbox`）
 - 本地插件使用文件名（如 `my-plugin` 对应 `src/plugins/my-plugin.ts`）
-- 一旦写出 `plugins` 数组，就表示完整插件列表；如果要保留默认 HTTP、Console、Sandbox 插件，需要一并写出。
+- 一旦写出 `plugins` 数组，就表示完整插件列表；HTTP / Console Host 由 `@zhin.js/cli` 自动装配，无需（也不能）在 `plugins` 中启用 `host-router` / `host-api` 插件。
 
 ## 机器人配置（bots）
 
@@ -587,7 +585,7 @@ scoop install nssm
 
 ## Web 控制台配置
 
-`@zhin.js/host-api` 在 `@zhin.js/host-router` 的 Router 上注册 **管理面 API**（系统/插件/Bot REST、`PageManager`、`/api/console/*`、`/api/events` 等）。UI 在 **[Remote Console](https://console.zhin.dev)**（独立仓库 [zhinjs/console](https://github.com/zhinjs/console)）。详见 [console-remote.md](../console-remote.md)。
+Console/HTTP Host 由 `@zhin.js/cli` 自动装配（`@zhin.js/host-http` + `@zhin.js/pagemanager`），向 Host 注册 **管理面 API**（系统/插件/Bot REST、`PageManager`、`/api/console/*`、`/api/events` 等），无需安装任何插件。UI 在 **[Remote Console](https://console.zhin.dev)**（独立仓库 [zhinjs/console](https://github.com/zhinjs/console)）。详见 [console-remote.md](../console-remote.md)。
 
 ```yaml
 hostApi:
@@ -655,7 +653,6 @@ pnpm add @zhin.js/plugin-music
 **配置**：
 ```yaml
 plugins:
-  - "@zhin.js/host-router"          # HTTP 服务
   - "@zhin.js/plugin-music"  # 音乐插件
 ```
 
@@ -664,11 +661,11 @@ plugins:
 部分插件支持在主配置文件中设置自己的配置，键名为插件名：
 
 ```yaml
-# HTTP 插件配置
+# HTTP 配置（Host 由 CLI 自动装配）
 http:
   port: 8086
 
-# Host API 插件配置
+# Host API 配置（管理面，由 CLI 自动装配）
 hostApi:
   enabled: true
 
@@ -684,7 +681,6 @@ my-plugin:
 
 ```yaml
 plugins:
-  - "@zhin.js/host-router"
   # - "@zhin.js/plugin-music"  # 已禁用
 ```
 
@@ -768,8 +764,6 @@ services:
 
 plugins:
   - my-plugin
-  - "@zhin.js/host-router"
-  - "@zhin.js/host-api"
   - "@zhin.js/adapter-sandbox"
   - "@zhin.js/adapter-icqq"
 

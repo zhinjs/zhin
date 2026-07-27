@@ -30,7 +30,7 @@
 - workspace 覆盖：`basic/*`、`packages/im/*`、`packages/console/*`、`packages/toolkit/*`、`packages/host/*`、`packages/game-kit`、`plugins/{adapters,features,games,services,utils}/*`、`examples/*`、`docs`。
 - `basic/`：基础层（cli / database / logger / schedule / schema）。
 - `packages/im/`：IM 核心层（adapter、agent、ai、command、component、config-yaml、core、feature-kit、isolate、kernel、mcp-feature、middleware、plugin-runtime、runtime、skill、tool、zhin 等子包）。
-- `packages/host/`：Host 运行时（http / router / api / mcp / a2a）。
+- `packages/host/`：Host 运行时（http / mcp / a2a；legacy router / api 插件包已删除，Console Host 由 basic/cli 装配）。
 - `packages/console/`：Remote Console（Host 只提供 API，UI 在 console.zhin.dev）。
 - `packages/toolkit/`：create-zhin（`pnpm create zhin-app`）、scaffold-wizard（配置向导）、satori、html-renderer、speech。
 - `plugins/adapters/`：平台适配器（Sandbox / QQ / ICQQ / NapCat / OneBot11·12 / Discord / Telegram / Slack / KOOK / 钉钉 / 飞书 / GitHub / Email / 企微 / LINE / Satori 等）。
@@ -40,7 +40,7 @@
 ### 分层架构（依赖方向单向，由 harness 强制）
 
 ```
-basic → kernel → ai → core → agent → zhin（→ host/router → host/mcp → host/api）
+basic → kernel → ai → core → agent → zhin（→ host/http → host/mcp）
 ```
 
 | 层 | 包 | 一句话 |
@@ -126,7 +126,7 @@ basic → kernel → ai → core → agent → zhin（→ host/router → host/m
 - AI 编排、工具发现、安全策略、MCP client：看 [packages/im/agent](packages/im/agent/README.md)。
 - **插件 AI 创作面**（`agent/tools`、`agent/skills`）：看 [docs/advanced/agent-authoring.md](docs/advanced/agent-authoring.md)。
 - 应用入口（IM 核心 + 可选 agent 子路径）：看 [packages/im/zhin](packages/im/zhin/README.md)（`im_transcripts` 落库需 `@zhin.js/agent`）。
-- Host 运行时（router / api / mcp）：看 packages/host。
+- Host 运行时（http / mcp / a2a）：看 packages/host。
 - 可选服务插件：看 plugins/services。
 - 平台适配器：看 plugins/adapters。
 - 插件开发样例和本地验证：优先 examples/minimal-bot；L4 全维度见 examples/full-bot；全量见 examples/test-bot。

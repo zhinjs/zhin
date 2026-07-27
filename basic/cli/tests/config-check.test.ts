@@ -73,7 +73,7 @@ ai:
 
   it('--fix 应迁移旧版 ai 段', async () => {
     const config = {
-      plugins: ['@zhin.js/adapter-process', '@zhin.js/host-router'],
+      plugins: ['@zhin.js/adapter-process', '@zhin.js/adapter-sandbox'],
       endpoints: [{ context: 'sandbox', name: 'bot' }],
       database: { dialect: 'postgres' },
       ai: {

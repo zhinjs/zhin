@@ -87,7 +87,6 @@ describe('doctor createDefaultConfig', () => {
     expect(config.plugins).toEqual({ sandbox: {} });
     const diagnosis = diagnoseConsoleConfig(config);
     expect(diagnosis).toEqual({
-      missingHostPlugins: [],
       missingSandboxPlugin: false,
       missingConsoleOrigin: false,
       missingHttpToken: false,

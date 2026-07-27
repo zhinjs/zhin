@@ -49,7 +49,7 @@ pnpm install
   - `agent`：IM Agent 编排（`orchestrator/`、`discovery/`、`security/`、`mcp-client/`、`defaults/`）
 - `packages/console/*` — 控制台：`protocol`、`contract`、`pagemanager`、`client`
 - `packages/toolkit/*` — 脚手架与独立工具库：`create-zhin`、`scaffold-wizard`、`satori`
-- `packages/host/*` — Host 运行时：`host-router`、`host-api`、`mcp`
+- `packages/host/*` — Host 运行时：`http`（host-http）、`mcp`、`a2a`（Console/HTTP Host 由 `basic/cli` 装配；原 `host-router`、`host-api` legacy 插件包已删除）
 - `plugins/adapters/*` — 平台适配器
 - `plugins/services/*` — **可选**服务类插件（内置 Host 栈见 `packages/host/`）
 - `plugins/features/*` — 特性类插件
@@ -67,7 +67,7 @@ pnpm install
 | 核心/共享库 | `@zhin.js/<短名>` | `@zhin.js/core`、`@zhin.js/kernel` |
 | 适配器 | `@zhin.js/adapter-<平台>` | `@zhin.js/adapter-icqq` |
 | 工具插件 | `@zhin.js/plugin-<名称>` | `@zhin.js/plugin-rss` |
-| 服务 | `@zhin.js/<服务名>` | `@zhin.js/host-api`、`@zhin.js/host-router` |
+| 服务 | `@zhin.js/<服务名>` | `@zhin.js/host-http`、`@zhin.js/mcp` |
 
 目录名（文件夹）优先 **kebab-case**；与平台强相关的缩写（如 `icqq`、`qq`）可保持小写短名。
 
@@ -117,8 +117,7 @@ pnpm install
 | `@zhin.js/contract` | `src/` → tsc → `lib/` | Console / PageManager **契约**（`PluginRegisterHostApi`、`ConsoleEntry`、常量） |
 | `@zhin.js/pagemanager` | `src/node/` → tsc → `lib/` | PageManager、EntryStore、esbuild 管线（Host 运行时） |
 | `@zhin.js/client` | `client/` → tsc → `dist/` | Remote Console SDK：`app`、REST/SSE、`loadConsoleEntries` |
-| `@zhin.js/host-router` | `src/` → tsc → `lib/` | Host 传输：Koa、Router、Bearer、CORS |
-| `@zhin.js/host-api` | `src/` → tsup → `lib/` | Host 管理面：REST + Console 协议（`api_only`） |
+| `@zhin.js/host-http` | `src/` → tsc → `lib/` | Host 传输：HTTP/WebSocket、Bearer、CORS（由 `basic/cli` 装配） |
 | **zhin-console**（独立仓库） | Farm / 未来 Vite | 全部 Console UI；依赖 npm 上的 `@zhin.js/client` 等 |
 
 **插件注册契约**：
@@ -127,11 +126,11 @@ pnpm install
 
 **共享依赖**：`/console/esm/*.mjs` 提供 canonical ESM（react、react-dom 等），esbuild 按需打包 + 缓存，无需 import map / farm-peer-shim。
 
-**构建顺序（Host）**：`console-protocol` (tsc) → `contract` (tsc) → `pagemanager` (tsc) → `client` (tsc) → `host-router` (tsc) → `host-api` (tsup)。
+**构建顺序（Host）**：`console-protocol` (tsc) → `contract` (tsc) → `pagemanager` (tsc) → `client` (tsc) → `host-http` (tsc)（Console/管理面由 `basic/cli` 在运行时装配）。
 
-**类型导入**：适配器 `client/` 使用 `import type { PluginRegisterHostApi } from '@zhin.js/contract'`（类型勿从 `host-api` 主入口副作用 import；`PageManager` 类型可 `import type { PageManager } from '@zhin.js/host-api'`）。
+**类型导入**：适配器 `client/` 使用 `import type { PluginRegisterHostApi } from '@zhin.js/contract'`（类型勿从 Host 装配入口副作用 import；`PageManager` 类型可 `import type { PageManager } from '@zhin.js/pagemanager'`）。
 
-**约定**：Host 传输在 `packages/host/router/src/`；管理面 API 在 `packages/host/api/src/`；适配器控制台扩展仍在各适配器包根 `client/`（由 Host `/@dev` 打包）。**内置仪表盘等 UI** 仅在 **zhin-console** 仓库维护。
+**约定**：Host 传输在 `packages/host/http/src/`；管理面 API 由 `basic/cli` 的 Console Host 装配（PageManager 在 `packages/console/pagemanager/`）；适配器控制台扩展仍在各适配器包根 `client/`（由 Host `/@dev` 打包）。**内置仪表盘等 UI** 仅在 **zhin-console** 仓库维护。
 
 ### 3.4 `@zhin.js/client`（`packages/console/client`）
 
@@ -171,8 +170,7 @@ pnpm install
 | 多数 `plugins/*`、`packages/*`、`basic/*`（仅 Node） | ✅ | `src/` → `lib/`，与约定一致。 |
 | `@zhin.js/client` | ✅ | 浏览器源码在 `client/`，发布入口在 `dist/`。 |
 | 含 `client/` 的适配器 | ✅ | 扩展构建输出目标为包根 `dist/`（`zhin build`）。 |
-| `@zhin.js/host-router` | ✅ | `src/` → `lib/`；Koa + Router + 鉴权。 |
-| `@zhin.js/host-api` | ✅ | `src/` → `lib/`；Host **api_only**（无内置 SPA）。 |
+| `@zhin.js/host-http` | ✅ | `src/` → `lib/`；HTTP/WebSocket + 鉴权（无内置 SPA，管理面由 CLI 装配）。 |
 | `@zhin.js/satori`（`packages/toolkit/satori`） | ✅ | Node 库：`src/` → **`lib/`**（tsup），与全局约定一致。 |
 | `examples/*` | ℹ️ | 示例工程可能直接运行 `src`，不强制 `lib`/`dist`，不纳入插件包约定。 |
 

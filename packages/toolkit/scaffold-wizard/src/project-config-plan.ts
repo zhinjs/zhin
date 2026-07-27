@@ -12,8 +12,6 @@ const CONFIG_CANDIDATES = [
   'zhin.config.toml',
   'zhin.config.ts',
 ] as const;
-/** @deprecated Plugin Runtime 由 CLI 装配 Console Host，无需在配置中声明；仅用于 legacy 数组配置诊断 */
-const CONSOLE_HOST_PLUGINS = ['@zhin.js/host-router', '@zhin.js/host-api'] as const;
 const SANDBOX_PLUGIN = '@zhin.js/adapter-sandbox';
 const LEGACY_AI_PROVIDER_FIELDS = ['driver', 'api', 'preset', 'spec'] as const;
 
@@ -66,7 +64,6 @@ export interface ProjectConfigPlan {
 }
 
 export interface ConsoleConfigDiagnosis {
-  missingHostPlugins: string[];
   missingSandboxPlugin: boolean;
   missingConsoleOrigin: boolean;
   missingHttpToken: boolean;
@@ -344,10 +341,6 @@ export function createProjectConfigPlan(options: ProjectConfigPlanOptions): Proj
   const mutations: string[] = [];
 
   if (loaded.status === 'loaded' || options.config) {
-    if (options.ensureConsole && Array.isArray(after.plugins)) {
-      // legacy 数组形态：host 插件仍需写入列表（旧项目行为不变）
-      ensurePlugins(after, CONSOLE_HOST_PLUGINS, mutations);
-    }
     if (options.ensureSandbox) {
       ensurePlugins(after, [SANDBOX_PLUGIN], mutations);
     }
@@ -406,7 +399,6 @@ export function diagnoseConsoleConfig(config: Record<string, unknown>): ConsoleC
     // legacy 数组形式配置
     const plugins = config.plugins.filter((p): p is string => typeof p === 'string');
     return {
-      missingHostPlugins: CONSOLE_HOST_PLUGINS.filter((plugin) => !plugins.includes(plugin)),
       missingSandboxPlugin: !plugins.includes(SANDBOX_PLUGIN),
       missingConsoleOrigin: !hasConsoleOrigin(corsOrigins.filter((origin): origin is string => typeof origin === 'string')),
       missingHttpToken: typeof http.token !== 'string' || http.token.trim().length === 0,
@@ -418,7 +410,6 @@ export function diagnoseConsoleConfig(config: Record<string, unknown>): ConsoleC
     ? config.plugins as Record<string, unknown>
     : {};
   return {
-    missingHostPlugins: [],
     missingSandboxPlugin: !('sandbox' in plugins),
     missingConsoleOrigin: !hasConsoleOrigin(corsOrigins.filter((origin): origin is string => typeof origin === 'string')),
     missingHttpToken: typeof http.token !== 'string' || http.token.trim().length === 0,

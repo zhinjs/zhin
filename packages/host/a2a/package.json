@@ -46,13 +46,11 @@
   },
   "peerDependencies": {
     "@zhin.js/agent": "workspace:*",
-    "@zhin.js/host-router": "workspace:*",
     "zhin.js": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",
     "@zhin.js/agent": "workspace:*",
-    "@zhin.js/host-router": "workspace:*",
     "rimraf": "^6.0.0",
     "typescript": "^6.0.3",
     "zhin.js": "workspace:*"

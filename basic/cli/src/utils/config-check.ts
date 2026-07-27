@@ -37,8 +37,6 @@ const RENAMED_PLUGINS: Record<string, string> = {
   '@zhin.js/adapter-process': '@zhin.js/adapter-sandbox',
 };
 
-const HOST_PLUGINS = ['@zhin.js/host-router', '@zhin.js/host-api'] as const;
-
 function adapterPluginForContext(context: string): string {
   return `@zhin.js/adapter-${context}`;
 }
@@ -184,27 +182,6 @@ function checkPlugins(config: Record<string, unknown>, issues: ConfigIssue[]): s
         fixable: true,
         fixHint: 'zhin config check --fix',
       });
-    }
-  }
-
-  const endpoints = Array.isArray(config.endpoints) ? config.endpoints : [];
-  const needsHttp = endpoints.some((entry) => {
-    const context = entry && typeof entry === 'object' ? String((entry as Record<string, unknown>).context ?? '') : '';
-    return context === 'sandbox' || context === 'wechat-mp';
-  }) || config.http != null || config.hostApi != null;
-
-  if (needsHttp) {
-    for (const hostPlugin of HOST_PLUGINS) {
-      if (!plugins.includes(hostPlugin)) {
-        pushIssue(issues, {
-          severity: 'warn',
-          code: 'plugins.host_missing',
-          path: 'plugins',
-          message: `建议启用 ${hostPlugin} 以使用控制台 / HTTP 能力`,
-          fixable: true,
-          fixHint: 'zhin config check --fix',
-        });
-      }
     }
   }
 
@@ -509,19 +486,6 @@ export function applyConfigFixes(
       }
     }
     const endpoints = Array.isArray(next.endpoints) ? next.endpoints : [];
-    const needsHttp = endpoints.some((entry) => {
-      const context = entry && typeof entry === 'object' ? String((entry as Record<string, unknown>).context ?? '') : '';
-      return context === 'sandbox' || context === 'wechat-mp';
-    }) || next.http != null || next.hostApi != null;
-    if (needsHttp) {
-      for (const hostPlugin of HOST_PLUGINS) {
-        if (!plugins.includes(hostPlugin)) {
-          plugins.push(hostPlugin);
-          fixes.push(`added ${hostPlugin} to plugins`);
-          changed = true;
-        }
-      }
-    }
     for (const entry of endpoints) {
       if (!entry || typeof entry !== 'object') continue;
       const context = String((entry as Record<string, unknown>).context ?? '');

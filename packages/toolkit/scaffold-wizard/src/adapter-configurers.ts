@@ -392,7 +392,7 @@ export async function configureDiscordEndpoint(ctx: EndpointConfigureContext): P
       message: '  连接方式:',
       choices: [
         { name: 'Gateway WebSocket（常规 Bot，推荐）', value: 'gateway' },
-        { name: 'Interactions HTTP（斜杠命令，需 host-router）', value: 'interactions' },
+        { name: 'Interactions HTTP（斜杠命令，经 Runtime Host HTTP 入站）', value: 'interactions' },
       ],
       default: 'gateway',
     },

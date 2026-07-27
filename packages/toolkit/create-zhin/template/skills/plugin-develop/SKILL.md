@@ -47,8 +47,8 @@ tags:
 | AI 工具 | `plugin.addTool({ name, execute, ... })` | Agent 已启用 |
 | 定时任务 | `addCron(new Cron(expr, fn))` | `cron` 服务 |
 | 消息过滤 | `addMiddleware(fn)` | 无 |
-| HTTP 路由 | `useContext('router', ...)` | `@zhin.js/host-router` |
-| 控制台页 | `useContext('web', ...)` + `web.addEntry()` | `@zhin.js/host-api` |
+| HTTP 路由 | `context.use(httpHostToken)` + `http.route(...)` | `@zhin.js/host-http`（Host 由 CLI 自动装配） |
+| 控制台页 | `useContext('web', ...)` + `web.addEntry()` | Console Host 由 CLI 自动装配（`@zhin.js/pagemanager`） |
 
 - `usePlugin()` 仅在模块顶层调用
 - TS 本地导入使用 `.js` 扩展名
@@ -180,11 +180,11 @@ plugin.addCommand(
 
 | 触发条件 | 一线处理 | 仍失败 |
 |----------|----------|--------|
-| `useContext` 回调不执行 | 确认依赖 Context 的插件已 `start()`；检查 `plugins` 列表是否包含 host-router/host-api | 查启动日志里 Context `provided` 顺序 |
+| `useContext` 回调不执行 | 确认依赖 Context 的插件已 `start()`；Host 能力（`httpHostToken` / `web`）由 CLI 自动装配，无需列入 `plugins` | 查启动日志里 Context `provided` 顺序 |
 | `addCron` 无效果 | 确认配置里启用了 `cron` 服务 | 在入口临时 `logger.info` 验证 Cron 是否注册 |
 | 命令不匹配 | 检查 `MessageCommand` 模板与 `result.params` 类型 | 用 `tests/commands.test.ts` 单独测 action |
 | `tsc` 报导入错误 | 互导路径加 `.js`；`exports.development` 指向 `src/` | 对照同仓库官方插件 `package.json` |
-| 控制台页 404 | 确认 `@zhin.js/host-api` 已加载且 `web.addEntry` 在 `web` Context 就绪后调用 | 查 `/entries` 是否列出该 entry |
+| 控制台页 404 | 确认 Console Host 已装配（CLI 自动完成）且 `web.addEntry` 在 `web` Context 就绪后调用 | 查 `/entries` 是否列出该 entry |
 
 ## 🔴 CHECKPOINT · 范围确认
 

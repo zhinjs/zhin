@@ -10,11 +10,11 @@ import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
+import { formatOutbound } from './outbound.js';
 import { registerQqAgentEndpoint } from './qq-agent-deps.js';
 import {
   formatInboundContent,
   formatInboundTarget,
-  formatOutboundText,
   parseSendTarget,
   resolveOutboundMessageId,
   senderDisplayName,
@@ -114,7 +114,7 @@ export class QqWebsocketEndpoint implements EndpointInstance {
   }
 
   async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
-    const body = formatOutboundText(payload);
+    const body = formatOutbound(payload);
     const parsed = parseSendTarget(target);
     const bot = this.#requireBot();
     let result: unknown;
@@ -301,7 +301,7 @@ export class QqHttpEndpoint implements EndpointInstance {
   }
 
   async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
-    const body = formatOutboundText(payload);
+    const body = formatOutbound(payload);
     const parsed = parseSendTarget(target);
     const bot = this.#requireBot();
     let result: unknown;

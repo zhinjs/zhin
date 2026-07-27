@@ -55,7 +55,7 @@ flowchart BT
 - **① → ② → ③ → ④ → ⑤** 是主干依赖链，自下而上单向；任何一层只依赖比它低的层。
 - **⑥ 业务插件**只依赖 ③ features 和 ④ core（不依赖 ⑤ 门面）——可以被任何维度的应用复用。
 - **⑦ `@zhin.js/cli` 是唯一的 composition root**：只有它被允许导入各层并装配成进程（`zhin runtime start`）；Console/Host 维度（host-http + pagemanager）也在这一层装配，不是插件图节点。业务代码永远不要依赖 cli。
-- **`zhin.js` 主包是门面（facade）**：re-export core/logger，自身 `plugins: []`——它是可以嵌进任何 Root 的纯积木。`@zhin.js/host-api` / `@zhin.js/host-router` 是 legacy 插件包，新 Runtime 不经 graph 加载它们。
+- **`zhin.js` 主包是门面（facade）**：re-export core/logger，自身 `plugins: []`——它是可以嵌进任何 Root 的纯积木。`@zhin.js/host-api` / `@zhin.js/host-router` 是已删除的 legacy 插件包，新 Runtime 不经 graph 加载它们。
 - **业务插件（adapters/games/utils）不依赖 zhin.js 主包**，只依赖自己用的 feature 包和 core——这样它们可以被任何维度（IM-only、L4、厨房水槽）复用。
 
 ## 2. zhin 字段 schema 速查
@@ -170,8 +170,8 @@ Root 依赖里有 `@zhin.js/core`（或 `zhin.js`）时，Root 自动获得 IM �
 
 `@zhin.js/host-http` / `@zhin.js/mcp` / `@zhin.js/a2a` / `@zhin.js/pagemanager` 是**库**（无 zhin 字段），
 由 `@zhin.js/cli` 在 `zhin runtime start` 时装配成 HTTP Host、Console API、MCP/A2A 端点。
-`@zhin.js/host-router` / `@zhin.js/host-api` 是 legacy 插件包（`usePlugin` 入口），
-保留给旧应用栈，新 Runtime 不要把它们写进 `plugins`。
+`@zhin.js/host-router` / `@zhin.js/host-api` 是已删除的 legacy 插件包（`usePlugin` 入口），
+新 Runtime 不要把它们写进 `plugins`。
 
 ### 3.6 业务插件（adapters / games / utils / services）
 

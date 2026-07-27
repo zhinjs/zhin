@@ -89,8 +89,8 @@ describe('zhin-home', () => {
 
     expect(pkg.dependencies['zhin.js']).toBe('latest');
     expect(pkg.dependencies['@zhin.js/adapter-sandbox']).toBe('latest');
-    expect(pkg.dependencies['@zhin.js/host-api']).toBe('latest');
-    expect(pkg.dependencies['@zhin.js/host-router']).toBe('latest');
+    expect(pkg.dependencies).not.toHaveProperty('@zhin.js/host-api');
+    expect(pkg.dependencies).not.toHaveProperty('@zhin.js/host-router');
   });
 
   it('buildSpawnEnv sets ZHIN_PROJECT_ROOT', async () => {

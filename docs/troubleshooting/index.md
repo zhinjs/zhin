@@ -25,13 +25,7 @@ npx zhin doctor --fix
 1. `pnpm dev` 是否仍在运行。
 2. API Base 是否是 Host 地址，例如 `http://127.0.0.1:8086`。
 3. Token 是否来自项目 `.env` 的 `HTTP_TOKEN`。
-4. `zhin.config.yml` 的 `plugins` 是否包含：
-
-```yaml
-plugins:
-  - "@zhin.js/host-router"
-  - "@zhin.js/host-api"
-```
+4. Console/HTTP Host 由 `@zhin.js/cli` 自动装配，无需在 `plugins` 中启用任何 Host 插件；确认启动日志中 Host 已监听（默认 `127.0.0.1:8086`）。
 
 5. `http.corsOrigins` 是否包含：
 

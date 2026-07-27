@@ -3,7 +3,7 @@
  */
 import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { Bot, ReceiverMode } from 'qq-official-bot';
+import { Bot, ReceiverMode, type Sendable } from 'qq-official-bot';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { ResolvedQqHttpConfig } from './protocol.js';
@@ -97,10 +97,10 @@ export function defaultCreateHttpBot(config: ResolvedQqHttpConfig): QqHttpBotTra
     removeAllListeners: () => {
       bot.removeAllListeners(undefined as never);
     },
-    sendPrivateMessage: (userId, message) => bot.sendPrivateMessage(userId, message),
-    sendGroupMessage: (groupId, message) => bot.sendGroupMessage(groupId, message),
-    sendGuildMessage: (channelId, message) => bot.sendGuildMessage(channelId, message),
-    sendDirectMessage: (guildId, message) => bot.sendDirectMessage(guildId, message),
+    sendPrivateMessage: (userId, message) => bot.sendPrivateMessage(userId, message as Sendable),
+    sendGroupMessage: (groupId, message) => bot.sendGroupMessage(groupId, message as Sendable),
+    sendGuildMessage: (channelId, message) => bot.sendGuildMessage(channelId, message as Sendable),
+    sendDirectMessage: (guildId, message) => bot.sendDirectMessage(guildId, message as Sendable),
     getGuilds: () => bot.guildService.getList(),
     getChannels: (guildId) => bot.channelService.getList(guildId),
     getChannelInfo: (channelId) => bot.channelService.getInfo(channelId),

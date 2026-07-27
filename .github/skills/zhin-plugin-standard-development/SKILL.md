@@ -23,8 +23,6 @@ user-invocable: true
 - [AI 工具骨架](./assets/ai-tool-template.ts)
 - [模型定义骨架](./assets/model-definition-template.ts)
 - [数据库服务骨架](./assets/database-service-template.ts)
-- [Router 服务骨架](./assets/router-service-template.ts)
-- [Web 入口挂载骨架](./assets/web-entry-service-template.ts)
 - [控制台前端入口骨架](./assets/plugin-web-entry-template.tsx)
 
 ## 何时使用
@@ -212,8 +210,6 @@ Web 相关：
 常用起步资产：
 
 - 数据库装配参考 [数据库服务骨架](./assets/database-service-template.ts)
-- HTTP 路由装配参考 [Router 服务骨架](./assets/router-service-template.ts)
-- 控制台入口挂载参考 [Web 入口挂载骨架](./assets/web-entry-service-template.ts)
 - 客户端页面参考 [控制台前端入口骨架](./assets/plugin-web-entry-template.tsx)
 
 如果任务在“单文件实现”与“拆模块”之间不明确，先看 [实现分支参考](./references/implementation-branches.md) 再决定结构。
@@ -267,7 +263,7 @@ Web 相关：
 | `useContext` 永不执行 | 核对依赖插件是否在 `zhin.config` 的 `plugins` 列表 | 查启动日志 Context `provided` 顺序 |
 | 命令注册无响应 | 核对 `MessageCommand` 模板与 `result.params` | 对照 [实现分支参考](./references/implementation-branches.md) |
 | `tsc` 导入报错 | 互导路径加 `.js`；检查 `exports.development` | 对照官方插件 `package.json` |
-| 控制台页 404 | 确认 `@zhin.js/host-api` + `web.addEntry` 时机 | 查 `GET /entries` 是否列出 entry |
+| 控制台页 404 | 确认 Console catalog page 注册时机（Host 由 CLI 装配） | 查 `GET /entries` 是否列出 entry |
 | 结构已混乱难下手 | 停止扩写本 skill | 改用 `zhin-plugin-refactoring` |
 
 ## 🔴 CHECKPOINT · 大范围改动前

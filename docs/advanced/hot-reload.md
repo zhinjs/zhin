@@ -28,7 +28,7 @@ addCommand(
 # zhin.config.yml
 plugins:
   - my-plugin
-  - "@zhin.js/host-router"
+  - "@zhin.js/plugin-music"
 
 # 修改配置后自动重载
 ```

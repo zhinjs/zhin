@@ -18,6 +18,7 @@ import {
   resolveQqConfig,
   type QqInboundMessage,
 } from '../src/protocol.js';
+import { formatOutbound, type QqOutboundMessage } from '../src/outbound.js';
 import { getQqAgentDeps, setQqAgentDeps } from '../src/qq-agent-deps.js';
 import { createQqRuntimeState, qqRuntimeStateToken } from '../src/qq-runtime-state.js';
 
@@ -44,10 +45,10 @@ function textMessage(overrides: Partial<QqInboundMessage> = {}): QqInboundMessag
 }
 
 function createMockBot(): QqBotTransport & {
-  sent: Array<{ kind: string; id: string; message: string }>;
+  sent: Array<{ kind: string; id: string; message: QqOutboundMessage }>;
 } {
   const listeners = new Map<string, Array<(...args: unknown[]) => void>>();
-  const sent: Array<{ kind: string; id: string; message: string }> = [];
+  const sent: Array<{ kind: string; id: string; message: QqOutboundMessage }> = [];
 
   return {
     sent,
@@ -61,19 +62,19 @@ function createMockBot(): QqBotTransport & {
     removeAllListeners: vi.fn(() => {
       listeners.clear();
     }),
-    sendPrivateMessage: vi.fn(async (id: string, message: string) => {
+    sendPrivateMessage: vi.fn(async (id: string, message: QqOutboundMessage) => {
       sent.push({ kind: 'private', id, message });
       return { id: `sent-${sent.length}` };
     }),
-    sendGroupMessage: vi.fn(async (id: string, message: string) => {
+    sendGroupMessage: vi.fn(async (id: string, message: QqOutboundMessage) => {
       sent.push({ kind: 'group', id, message });
       return { id: `sent-${sent.length}` };
     }),
-    sendGuildMessage: vi.fn(async (id: string, message: string) => {
+    sendGuildMessage: vi.fn(async (id: string, message: QqOutboundMessage) => {
       sent.push({ kind: 'channel', id, message });
       return { id: `sent-${sent.length}` };
     }),
-    sendDirectMessage: vi.fn(async (id: string, message: string) => {
+    sendDirectMessage: vi.fn(async (id: string, message: QqOutboundMessage) => {
       sent.push({ kind: 'direct', id, message });
       return { id: `sent-${sent.length}` };
     }),
@@ -233,7 +234,7 @@ describe('qq plugin runtime adapter', () => {
     expect(state.endpoints.has('ep-stop')).toBe(false);
   });
 
-  it('drops non-URL image segments with a warn instead of leaking raw sources', () => {
+  it('keeps URL images in the text view and drops source-less images with a warn', () => {
     expect(formatOutboundText([{ type: 'image', data: { url: 'https://example.com/a.png' } }]))
       .toBe('https://example.com/a.png');
     expect(formatOutboundText([
@@ -241,6 +242,182 @@ describe('qq plugin runtime adapter', () => {
       { type: 'image', data: { file: 'base64-blob' } },
     ])).toBe('hi');
     expect(formatOutboundText([{ type: 'image', data: {} }])).toBe('');
+  });
+
+  it('sends http(s) image segments directly as URL media', async () => {
+    const mock = createMockBot();
+    const endpoint = new QqWebsocketEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createBot: () => mock,
+    });
+    await endpoint.start();
+    await endpoint.send({
+      target: 'group:group-1',
+      payload: [{ type: 'image', data: { url: 'https://example.com/a.png' } }],
+    });
+    expect(mock.sent[0]).toEqual({
+      kind: 'group',
+      id: 'group-1',
+      message: { type: 'image', data: { url: 'https://example.com/a.png' } },
+    });
+    await endpoint.stop();
+  });
+
+  it('uploads base64 / local image segments via the media file field', async () => {
+    const mock = createMockBot();
+    const endpoint = new QqWebsocketEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createBot: () => mock,
+    });
+    await endpoint.start();
+    await endpoint.send({
+      target: 'private:user-1',
+      payload: [
+        { type: 'text', data: { text: '看图' } },
+        { type: 'image', data: { url: 'data:image/png;base64,aGk=' } },
+      ],
+    });
+    await endpoint.send({
+      target: 'private:user-1',
+      payload: [{ type: 'image', data: { file: '/tmp/a.png' } }],
+    });
+    expect(mock.sent[0]?.message).toEqual([
+      '看图',
+      { type: 'image', data: { file: 'data:image/png;base64,aGk=' } },
+    ]);
+    expect(mock.sent[1]?.message).toEqual({
+      type: 'image',
+      data: { file: '/tmp/a.png' },
+    });
+    await endpoint.stop();
+  });
+
+  it('sends markdown segments as msg_type=2 payloads', async () => {
+    const mock = createMockBot();
+    const endpoint = new QqWebsocketEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createBot: () => mock,
+    });
+    await endpoint.start();
+    await endpoint.send({
+      target: 'group:group-1',
+      payload: [{ type: 'markdown', data: { content: '**粗体**' } }],
+    });
+    await endpoint.send({
+      target: 'group:group-1',
+      payload: [{
+        type: 'markdown',
+        data: { custom_template_id: 'tpl-1', params: [{ key: 'k', values: 'v' }] },
+      }],
+    });
+    expect(mock.sent[0]?.message).toEqual({
+      type: 'markdown',
+      data: { content: '**粗体**' },
+    });
+    expect(mock.sent[1]?.message).toEqual({
+      type: 'markdown',
+      data: { custom_template_id: 'tpl-1', params: [{ key: 'k', values: 'v' }] },
+    });
+    await endpoint.stop();
+  });
+
+  it('expands keyboard rows into button segments with preceding text as markdown', async () => {
+    const mock = createMockBot();
+    const endpoint = new QqWebsocketEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createBot: () => mock,
+    });
+    await endpoint.start();
+    await endpoint.send({
+      target: 'group:group-1',
+      payload: [
+        { type: 'text', data: { text: '请操作' } },
+        {
+          type: 'keyboard',
+          data: {
+            rows: [
+              [
+                { id: 'b1', label: '确认', payload: 'ok', mode: 'command', command: { enter: true } },
+                { id: 'b2', label: '取消', payload: 'cancel' },
+              ],
+            ],
+          },
+        },
+      ],
+    });
+    expect(mock.sent[0]?.message).toEqual([
+      { type: 'markdown', data: { content: '请操作' } },
+      {
+        type: 'button',
+        data: {
+          buttons: [
+            expect.objectContaining({
+              id: 'b1',
+              action: expect.objectContaining({ type: 2, data: 'ok', enter: true }),
+            }),
+            expect.objectContaining({
+              id: 'b2',
+              action: expect.objectContaining({ type: 1, data: 'cancel' }),
+            }),
+          ],
+        },
+      },
+    ]);
+    await endpoint.stop();
+  });
+
+  it('passes template keyboards through as-is', () => {
+    expect(formatOutbound([{ type: 'keyboard', data: { id: 'kbd-1' } }]))
+      .toEqual({ type: 'keyboard', data: { id: 'kbd-1' } });
+  });
+
+  it('degrades unknown segments to text and drops unusable media with a warn', () => {
+    expect(formatOutbound([
+      { type: 'text', data: { text: 'a' } },
+      { type: 'music', data: { text: 'b' } },
+    ])).toBe('ab');
+    expect(formatOutbound([{ type: 'image', data: {} }])).toBe('');
+    expect(formatOutbound([{ type: 'markdown', data: {} }])).toBe('');
+  });
+
+  it('propagates SDK send failures to the caller', async () => {
+    const mock = createMockBot();
+    mock.sendGroupMessage = vi.fn(async () => {
+      throw new Error('QQ API 500');
+    });
+    const endpoint = new QqWebsocketEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createBot: () => mock,
+    });
+    await endpoint.start();
+    await expect(endpoint.send({ target: 'group:group-1', payload: 'pong' }))
+      .rejects.toThrow('QQ API 500');
+    await endpoint.stop();
+  });
+
+  it('rejects when the send result carries no message id', async () => {
+    const mock = createMockBot();
+    mock.sendGroupMessage = vi.fn(async () => ({ code: 304023, message: 'audit rejected' }));
+    const endpoint = new QqWebsocketEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createBot: () => mock,
+    });
+    await endpoint.start();
+    await expect(endpoint.send({ target: 'group:group-1', payload: 'pong' }))
+      .rejects.toThrow('QQ 发送消息失败（304023）: audit rejected');
+    await endpoint.stop();
   });
 
   it('creates http endpoint when httpHostToken provided', () => {

@@ -22,7 +22,7 @@ describe('zhin-stack-deps', () => {
 
   it('requires plugins declared in zhin.config', () => {
     const required = getRequiredZhinDependenciesForConfig({
-      plugins: ['@zhin.js/adapter-sandbox', '@zhin.js/host-router', '@zhin.js/mcp'],
+      plugins: ['@zhin.js/adapter-sandbox', '@zhin.js/mcp'],
       database: { dialect: 'sqlite', filename: './data/bot.db' },
     });
     expect(required['@zhin.js/adapter-sandbox']).toBe('latest');
@@ -33,14 +33,13 @@ describe('zhin-stack-deps', () => {
   it('diagnoses zhin.js below workspace major when AI enabled', () => {
     const config = {
       ai: { enabled: true, agents: { zhin: { provider: 'openai' } }, providers: { openai: { sdk: 'openai' } } },
-      plugins: ['@zhin.js/adapter-sandbox', '@zhin.js/host-router', '@zhin.js/host-api'],
+      plugins: ['@zhin.js/adapter-sandbox', '@zhin.js/mcp'],
     };
     const pkg = {
       dependencies: {
         'zhin.js': '^3.0.0',
         '@zhin.js/adapter-sandbox': 'latest',
-        '@zhin.js/host-router': 'latest',
-        '@zhin.js/host-api': 'latest',
+        '@zhin.js/mcp': 'latest',
       },
     };
     const diagnosis = diagnoseZhinStackDependencies('/tmp', config, pkg);

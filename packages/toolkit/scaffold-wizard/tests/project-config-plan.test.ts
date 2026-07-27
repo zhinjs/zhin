@@ -39,8 +39,8 @@ describe('ProjectConfigPlan', () => {
     const patch = renderProjectConfigPatch(plan);
 
     expect(plan.changed).toBe(true);
-    // legacy 数组形态保持旧行为：host 插件与 sandbox 追加到列表
-    expect(patch).toContain('@zhin.js/host-api');
+    // legacy 数组形态：sandbox 等插件追加到列表；host 插件栈已删除，不再写入
+    expect(patch).not.toContain('@zhin.js/host-api');
     expect(patch).toContain('@zhin.js/adapter-sandbox');
     expect(patch).toContain('@zhin.js/adapter-telegram');
     expect(patch).toContain('https://console.zhin.dev');
