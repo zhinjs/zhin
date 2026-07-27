@@ -12,73 +12,50 @@ zhin.js 的设计是乐高式的：应用从零散的碎片（feature、plugin�
 
 ```mermaid
 flowchart BT
-  subgraph basic["basic/ 基础库（无 zhin 字段）"]
-    logger["@zhin.js/logger"]
-    schema["@zhin.js/schema"]
-    database["@zhin.js/database"]
-    schedule["@zhin.js/schedule"]
+  subgraph L1["① basic 基础库（纯库，无 zhin 字段）"]
+    A["logger · schema · database · schedule"]
   end
 
-  subgraph kernel["kernel / runtime（无 zhin 字段）"]
-    krn["@zhin.js/kernel"]
-    prt["@zhin.js/plugin-runtime"]
-    fk["@zhin.js/feature-kit"]
-    rt["@zhin.js/runtime"]
-    iso["@zhin.js/isolate"]
-    cy["@zhin.js/config-yaml"]
+  subgraph L2["② kernel / runtime（运行时原语，无 zhin 字段）"]
+    B["kernel · plugin-runtime · feature-kit · runtime · isolate · config-yaml"]
   end
 
-  subgraph features["features（zhin.type = feature）"]
-    fadp["@zhin.js/adapter"]
-    fcmd["@zhin.js/command"]
-    fcmp["@zhin.js/component"]
-    fmid["@zhin.js/middleware"]
-    ftool["@zhin.js/tool"]
-    fskill["@zhin.js/skill"]
-    fagent["@zhin.js/agent-feature"]
-    fmcp["@zhin.js/mcp-feature"]
-    fpage["@zhin.js/page"]
-    flayout["@zhin.js/layout"]
+  subgraph L3["③ features（zhin.type = feature，共 10 个）"]
+    C["adapter · command · component · middleware · tool · skill · agent-feature · mcp-feature · page · layout"]
   end
 
-  subgraph im["IM / AI 能力层"]
-    core["@zhin.js/core"]
-    ai["@zhin.js/ai"]
-    agent["@zhin.js/agent"]
+  subgraph L4["④ IM / AI 能力层"]
+    D["core"]
+    E["ai → agent"]
   end
 
-  subgraph facade["门面"]
-    zhin["zhin.js 主包"]
+  subgraph L5["⑤ 门面（zhin.type = plugin）"]
+    F["zhin.js 主包 · 纯 re-export · plugins: []"]
   end
 
-  subgraph cli["composition root（Console/Host 在此装配）"]
-    clibin["@zhin.js/cli（zhin runtime start）"]
-    hhttp["@zhin.js/host-http · pagemanager · host-router/api(legacy)"]
+  subgraph L6["⑥ 业务插件（zhin.type = plugin）"]
+    G["adapters ×20 · games ×10 · utils ×11 · services / features"]
   end
 
-  subgraph plugins["业务插件（zhin.type = plugin）"]
-    adapters["plugins/adapters ×20"]
-    games["plugins/games ×9 + hub"]
-    utils["plugins/utils ×11"]
-    services["plugins/services · features"]
+  subgraph L7["⑦ composition root（应用装配处）"]
+    H["@zhin.js/cli · host-http · pagemanager"]
   end
 
-  basic --> kernel --> features --> core --> zhin
-  ai --> agent --> zhin
-  features --> agent
-  core --> clibin
-  agent -.peer.-> clibin
-  features --> plugins
-  core --> plugins
-  plugins --> clibin
+  A --> B --> C --> D --> F
+  E --> F
+  C --> E
+  C --> G
+  D --> G
+  D --> H
+  G --> H
 ```
 
 要点：
 
-- **basic → kernel → features → core → zhin** 是主干依赖链；任何一层只依赖比它低的层。
-- **`@zhin.js/cli` 是唯一的 composition root**：只有它被允许导入各层并把它们装配成进程（`zhin runtime start`）。业务代码永远不要依赖 cli。
-- **`zhin.js` 主包是门面（facade）**：re-export core/logger，自身 `plugins: []`——它是可以嵌进任何 Root 的纯积木。
-- **Console / Host 维度由 cli 装配**，不是插件图节点：`@zhin.js/cli` 直接用 `@zhin.js/host-http` + pagemanager 组装 Console API 与页面宿主；`@zhin.js/host-api` / `@zhin.js/host-router` 是 legacy 插件包，新 Runtime 不经 graph 加载它们。
+- **① → ② → ③ → ④ → ⑤** 是主干依赖链，自下而上单向；任何一层只依赖比它低的层。
+- **⑥ 业务插件**只依赖 ③ features 和 ④ core（不依赖 ⑤ 门面）——可以被任何维度的应用复用。
+- **⑦ `@zhin.js/cli` 是唯一的 composition root**：只有它被允许导入各层并装配成进程（`zhin runtime start`）；Console/Host 维度（host-http + pagemanager）也在这一层装配，不是插件图节点。业务代码永远不要依赖 cli。
+- **`zhin.js` 主包是门面（facade）**：re-export core/logger，自身 `plugins: []`——它是可以嵌进任何 Root 的纯积木。`@zhin.js/host-api` / `@zhin.js/host-router` 是 legacy 插件包，新 Runtime 不经 graph 加载它们。
 - **业务插件（adapters/games/utils）不依赖 zhin.js 主包**，只依赖自己用的 feature 包和 core——这样它们可以被任何维度（IM-only、L4、厨房水槽）复用。
 
 ## 2. zhin 字段 schema 速查
