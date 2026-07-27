@@ -66,6 +66,68 @@ describe('static Project Graph', () => {
     ]);
   });
 
+  it('resolves ./-relative local plugin directories from the declaring package root', async () => {
+    const root = await project({
+      root: {
+        name: '@test/root',
+        dependencies: { '@test/command': 'workspace:*' },
+        zhin: {
+          protocol: 1,
+          type: 'plugin',
+          entry: './plugin.ts',
+          features: [{ package: '@test/command' }],
+          plugins: [{ package: './plugins/greeter', instanceKey: 'greeter' }],
+        },
+      },
+      features: [{
+        directory: 'command',
+        json: {
+          name: '@test/command',
+          zhin: { protocol: 1, type: 'feature', entry: './index.ts' },
+        },
+      }],
+      plugins: [{
+        directory: 'greeter',
+        json: {
+          name: 'greeter',
+          zhin: {
+            protocol: 1,
+            type: 'plugin',
+            entry: './plugin.ts',
+            plugins: [{ package: './plugins/nested', instanceKey: 'nested' }],
+          },
+        },
+      }],
+    });
+    // greeter 的嵌套本地子插件
+    await writeJson(join(root, 'plugins/greeter/plugins/nested/package.json'), {
+      name: 'nested',
+      zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts' },
+    });
+
+    const resolver = await NodePackageResolver.create(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root);
+
+    const greeter = graph.root.children.find((child) => child.instanceKey === 'greeter');
+    expect(greeter?.id).toBe('root/greeter');
+    // 顶层 plugins/ 下的包已被 workspace 扫描登记，source 为 workspace；
+    // 更深一层（不在扫描面内）的 ./ 引用才是 local
+    expect(greeter?.children.map((child) => child.id)).toEqual(['root/greeter/nested']);
+    expect(greeter?.children[0]?.package.source).toBe('local');
+  });
+
+  it('rejects local plugin paths that escape the package root', () => {
+    expect(() => parsePackageJson({
+      name: '@test/root',
+      zhin: {
+        protocol: 1,
+        type: 'plugin',
+        entry: './plugin.ts',
+        plugins: [{ package: '../outside', instanceKey: 'outside' }],
+      },
+    }, 'pkg')).toThrow(ManifestValidationError);
+  });
+
   it('rejects a manifest reference that is not a package dependency', async () => {
     const root = await project({
       root: {

@@ -83,6 +83,7 @@ flowchart BT
 ```
 
 - `features[].api` 与 feature 包的 `featureApi` 做 semver 兼容检查。
+- `plugins[].package` 支持两种来源：npm 包名（dependencies）或 `./` 相对路径（monorepo 本地插件目录，相对声明方包根，可嵌套）。
 - `plugins[].instanceKey` 必填，`^[a-z0-9][a-z0-9-]*$`；配置落在 `zhin.config.yml` 的 `plugins.<instanceKey>`。
 - `plugins[].optional: true`：依赖缺失时跳过该实例（用于"装了才启用"的可选维度）。
 
@@ -270,6 +271,6 @@ zhin.js 自身 `plugins: []`，不会把任何额外维度强加给上层 Root�
 1. `entry` 必须 `./` 开头且不越包根；feature 的 entry 指向 `./lib/provider.js`（生产），plugin 指向 `./plugin.ts`。
 2. `features` 里引的包必须 `type: feature`，且 `api` 与其 `featureApi` semver 兼容。
 3. `plugins[].instanceKey` 全图唯一、小写横杠；同包多实例靠不同 instanceKey（同实例多账号改用适配器 `endpoints` 数组，见 `@zhin.js/adapter` README）。
-4. 业务插件 `plugins: []`——只有门面/应用层才挂子插件。
+4. 业务插件 `plugins: []`——只有门面/应用层才挂子插件；子插件可来自 npm 依赖，也可来自 `./` 本地目录（monorepo 内插件，免发布）。
 5. Root 想完全自管 feature 面：`platformFeatures: false`。
 6. 跑 `pnpm check:all` 的 Plugin Spec / Plugin Runtime API / Install Size 门禁验证。

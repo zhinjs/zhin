@@ -6,7 +6,7 @@ export interface ResolvedPackage {
   readonly name: string;
   readonly root: string;
   readonly packageJson: PackageJson;
-  readonly source: 'workspace' | 'node_modules';
+  readonly source: 'workspace' | 'node_modules' | 'local';
 }
 
 export interface PackageResolver {
@@ -42,11 +42,8 @@ export class NodePackageResolver implements PackageResolver {
             `Nested workspace is not allowed: ${packageRoot}`,
           );
         }
-        if (directory === 'plugins' && await exists(join(packageRoot, 'plugins'))) {
-          throw new PackageResolutionError(
-            `Nested local Plugin directory is not allowed: ${join(packageRoot, 'plugins')}`,
-          );
-        }
+        // 注意：plugins/<x>/plugins/ 嵌套目录不再报错——顶层扫描只注册一层
+        // workspace 包；更深的本地插件经 manifest 的 './' 相对路径显式引用。
         if (!await exists(join(packageRoot, 'package.json'))) continue;
         const pkg = await resolver.#readPackage(packageRoot, 'workspace');
         if (resolver.#workspaceByName.has(pkg.name)) {
@@ -71,6 +68,15 @@ export class NodePackageResolver implements PackageResolver {
   }
 
   async resolve(request: string, from: ResolvedPackage): Promise<ResolvedPackage> {
+    // 本地路径（./plugins/foo）：monorepo 本地插件目录，相对声明包根解析，
+    // 跳过依赖声明检查（目录即声明，不入 node_modules）
+    if (request.startsWith('./')) {
+      const packageRoot = join(from.root, request);
+      if (await exists(join(packageRoot, 'package.json'))) {
+        return this.#readPackage(packageRoot, 'local');
+      }
+      throw new PackageResolutionError(`Cannot resolve ${request} from ${from.name}`, request);
+    }
     const specification = declaredDependency(request, from.packageJson);
     const workspace = this.#workspaceByName.get(request);
     if (specification.startsWith('workspace:')) {

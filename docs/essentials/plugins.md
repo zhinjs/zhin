@@ -162,6 +162,9 @@ export default definePlugin({
 | `databaseHostToken` | `@zhin.js/plugin-runtime` | 表定义与增删改查（`define` / `models.get`） |
 | `scheduleHostToken` | `@zhin.js/plugin-runtime` | 6 段 cron 定时任务（`register` 返回 dispose） |
 | `outboundHostToken` | `@zhin.js/plugin-runtime` | 主动出站推送（`send` / 可选 reaction、recall） |
+| `agentToolsHostToken` | `@zhin.js/plugin-runtime` | 向 Agent Host 注册 AI 工具（`register(tool)`；形态参考 `plugins/utils/lottery/agent/runtime-tools.ts`） |
+| `htmlRendererToken` | `@zhin.js/plugin-runtime` | HTML/组件渲染为图片（卡片类出站） |
+| `runtimeEventPublisherToken` | `@zhin.js/plugin-runtime` | 向 Console SSE 发布运行时事件（`endpoint:message` 等） |
 | `httpHostToken` | `@zhin.js/host-http` | HTTP/WS 服务（Console API、自定义路由） |
 
 资源**可选时用 `has` + `use` 降级**；**必需时**在 `definePlugin` 里声明 `requires: [databaseHostToken]`，缺失即拒绝启动。
@@ -196,24 +199,74 @@ export default definePlugin({
 
 ## 挂载子插件
 
-使用方在**项目** `package.json` 的 `zhin.plugins` 里声明挂载，`instanceKey` 决定实例身份：
+使用方在**项目** `package.json` 的 `zhin.plugins` 里声明挂载，`instanceKey` 决定实例身份。`package` 支持**两种来源**：
 
 ```json
 {
   "zhin": {
     "plugins": [
       { "package": "@zhin.js/plugin-qrcode", "instanceKey": "qrcode" },
-      { "package": "@zhin.js/adapter-icqq", "instanceKey": "icqq-2" }
+      { "package": "@zhin.js/adapter-icqq", "instanceKey": "icqq-2" },
+      { "package": "./plugins/greeter", "instanceKey": "greeter" }
     ]
   }
 }
 ```
+
+- **npm 包名**：来自 `dependencies`（workspace 协议或 registry 版本均可），按 node_modules 解析。
+- **`./` 相对路径**：monorepo 本地插件目录（相对声明方的包根，不可 `..` 越界），目录里就是一个带 `package.json`（含 zhin 清单）的插件包，**无需**写进 dependencies、无需发 npm。嵌套也可以——子插件自己还能用 `./` 再挂本地子插件。
 
 instanceKey 的规则与影响：
 
 - 命名规则 `[a-z0-9][a-z0-9-]*`；同一包可挂多个实例（`icqq` / `icqq-2`）。
 - 它是插件命令的前缀（`qrcode` 插件的 `commands/scan/[url:string].ts` → `/qrcode scan <url>`）。
 - 它是 `zhin.config.yml` 里 `plugins.<instanceKey>` 的配置键。
+
+## 独立启动：插件即应用
+
+任何 `type: "plugin"` 的包本身就是合法 Root——**一个插件 + 一个 `zhin.config.yml` 就能启动**，不需要再包一层项目壳：
+
+```bash
+cd plugins/adapters/sandbox   # 或任何插件包目录
+# zhin.config.yml 里用 plugin: 段配置自己（Root 读自己的 schema.json）
+zhin runtime start
+```
+
+```yaml
+# plugins/adapters/sandbox/zhin.config.yml
+log_level: info
+http:
+  port: 18099
+  token: dev-token
+plugin:                    # Root 自己的配置（对应本包 schema.json）
+  endpoints:
+    - context: sandbox
+      name: sb
+      owner: sb-user
+```
+
+此时插件自己的 `zhin.features` 就是它需要的全部 Feature 面（不依赖 Root 继承），
+`zhin.plugins` 里的子插件照常挂载——"插件 = 最小可运行单元"由此成立。
+
+## definePlugin 能力全景
+
+`plugin.ts` 不只是一个名字声明——它是插件的**装配入口**，可以调动整个 Host 能力面：
+
+| 能力 | 入口 | 真实示例 |
+|------|------|----------|
+| 声明式能力目录 | `commands/` `tools/` `pages/` … | 无需 setup 代码，目录即能力（plugins/games/*） |
+| 数据库表 + 模型 | `databaseHostToken` | lottery 定义开奖/预测表（`plugins/utils/lottery/plugin.ts`） |
+| 定时任务 | `scheduleHostToken` | lottery 每日 pipeline、process-monitor 心跳 |
+| 主动推送 | `outboundHostToken` | lottery 把推荐报告推到配置的目标群/私聊 |
+| Agent 工具注册 | `agentToolsHostToken` | lottery 把 7 个 `lottery_*` 工具注入 AI（`agent/runtime-tools.ts`） |
+| HTTP 路由 | `httpHostToken` | github 适配器注册 `/github/webhook` |
+| 配置 Schema + 校验 | `schema.json` | 20 个适配器的 `endpoints` 数组 + `commandPrefix` |
+| 权限/角色语义 | 配置 `master` / `trusted` | qq endpoint 管理命令仅 master 可用 |
+| 实例视图与配置 | `context.plugin` / `context.config` | 多实例按 instanceKey 隔离配置 |
+| 代际交接 | `context.handoff`（`activateNext`） | 等 Database 启动后再激活持久化（agent-host） |
+| 卸载清理 | `context.lifecycle.add` / setup 返回 Dispose | HMR 重载时安全释放连接/定时器 |
+| 硬依赖门控 | `requires: [...]` | 缺 database 直接拒绝启动（而非运行时才报错） |
+| Console 展示 | `metadata.displayName/icon/order` | /api/plugins 卡片 |
 
 ::: info legacy 路径
 旧的 `usePlugin()` / `plugin.yml` / `addCommand` 写法属于旧 Feature registry（`zhin dev` 路径）；新插件请使用本文的 `definePlugin` + 约定目录结构。

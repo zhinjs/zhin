@@ -172,8 +172,14 @@ function parseReferences(
       ? readString(record, 'instanceKey', itemSource, issues)
       : undefined;
     if (!packageName || (child && !instanceKey)) return [];
-    if (!isPackageName(packageName)) {
+    // 支持两种来源：npm 包名（package 依赖）或 ./ 相对路径（monorepo 本地插件目录）
+    const isLocalPath = packageName.startsWith('./');
+    if (!isLocalPath && !isPackageName(packageName)) {
       issues.push(`${itemSource}.package is not a valid package name`);
+      return [];
+    }
+    if (isLocalPath && packageName.split('/').includes('..')) {
+      issues.push(`${itemSource}.package must not escape the package root`);
       return [];
     }
     if (instanceKey && !/^[a-z0-9][a-z0-9-]*$/.test(instanceKey)) {
