@@ -4,3 +4,6 @@ dist/
 *.tsbuildinfo
 .DS_Store
 coverage/
+
+# Plugin Runtime 运行产物
+.zhin/
