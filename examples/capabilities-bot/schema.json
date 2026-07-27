@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "greeting": {
+      "type": "string",
+      "default": "你好",
+      "description": "stats 命令的问候语前缀"
+    },
+    "heartbeatCron": {
+      "type": "string",
+      "default": "0 */5 * * * *",
+      "description": "心跳定时任务（6 段 cron）；空串关闭"
+    },
+    "pushOnBoot": {
+      "type": "boolean",
+      "default": false,
+      "description": "启动后向 pushTarget 主动推送一条上线消息（演示 outboundHostToken）"
+    },
+    "pushTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "adapter": { "type": "string", "default": "sandbox" },
+        "endpointId": { "type": "string", "default": "sandbox-bot" },
+        "channelType": { "type": "string", "default": "private" },
+        "channelId": { "type": "string", "default": "sandbox-user" }
+      }
+    }
+  }
+}

@@ -279,6 +279,34 @@ importers:
         specifier: ^2.9.0
         version: 2.9.0
 
+  examples/capabilities-bot:
+    dependencies:
+      '@zhin.js/adapter-sandbox':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/sandbox
+      '@zhin.js/agent':
+        specifier: workspace:*
+        version: link:../../packages/im/agent
+      '@zhin.js/command':
+        specifier: workspace:*
+        version: link:../../packages/im/command
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../../packages/im/plugin-runtime
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@zhin.js/cli':
+        specifier: workspace:*
+        version: link:../../basic/cli
+      '@zhin.js/runtime':
+        specifier: workspace:*
+        version: link:../../packages/im/runtime
+      vitest:
+        specifier: ^4.0.0
+        version: 4.1.10(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(jsdom@24.1.3)(msw@2.14.5(@types/node@26.1.1)(typescript@6.0.3))(vite@6.4.3(@types/node@26.1.1)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.22.4)(yaml@2.9.0))
+
   examples/demo-bot:
     dependencies:
       '@ai-sdk/openai-compatible':

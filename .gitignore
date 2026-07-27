@@ -30,6 +30,7 @@ build/
 examples/**/data/
 examples/**/zhin.config.*
 !examples/minimal-bot/zhin.config.yml
+!examples/capabilities-bot/zhin.config.yml
 !examples/full-bot/zhin.config.yml
 !examples/demo-bot/zhin.config.yml
 !examples/life-assistant-bot/zhin.config.yml
@@ -143,3 +144,5 @@ apps/**/config.*
 *.heapsnapshot
 # Generated API reference (run pnpm docs:api)
 docs/api/
+# Plugin Runtime 运行产物
+.zhin/

@@ -250,7 +250,9 @@ plugin:                    # Root 自己的配置（对应本包 schema.json）
 
 ## definePlugin 能力全景
 
-`plugin.ts` 不只是一个名字声明——它是插件的**装配入口**，可以调动整个 Host 能力面：
+`plugin.ts` 不只是一个名字声明——它是插件的**装配入口**，可以调动整个 Host 能力面。
+可运行的完整样板见 [examples/capabilities-bot](https://github.com/zhinjs/zhin/tree/main/examples/capabilities-bot)
+（一个插件 + 一个 `zhin.config.yml` 启动，setup 里逐项演示下表）：
 
 | 能力 | 入口 | 真实示例 |
 |------|------|----------|
@@ -278,4 +280,5 @@ plugin:                    # Root 自己的配置（对应本包 schema.json）
 - [中间件与消息调度](./middleware) — `defineMiddleware` 与 Runtime Message
 - [配置文件](./configuration) — `zhin.config.yml` 全量配置项
 - [examples/minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot) — 最小可运行插件项目
+- [examples/capabilities-bot](https://github.com/zhinjs/zhin/tree/main/examples/capabilities-bot) — definePlugin 能力展示样板
 - [plugins/utils/rss](https://github.com/zhinjs/zhin/tree/main/plugins/utils/rss) — schema.json + schedule + outbound 的真实插件

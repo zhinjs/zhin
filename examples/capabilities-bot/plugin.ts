@@ -1,0 +1,97 @@
+/**
+ * capabilities-bot —— definePlugin 能力展示样板。
+ * 一个 setup() 调动全部常用 Host 面；每一项都对应 docs/essentials/plugins.md
+ * 的「definePlugin 能力全景」表。所有 Host 资源均为可选（has + use 降级），
+ * 硬依赖请改用 `requires: [databaseHostToken]`（缺失即拒绝启动）。
+ */
+import {
+  agentToolsHostToken,
+  databaseHostToken,
+  definePlugin,
+  outboundHostToken,
+  scheduleHostToken,
+} from '@zhin.js/plugin-runtime';
+
+interface ShowcaseConfig {
+  greeting: string;
+  heartbeatCron: string;
+  pushOnBoot?: boolean;
+  pushTarget?: {
+    adapter: string;
+    endpointId: string;
+    channelType: string;
+    channelId: string;
+  };
+}
+
+export default definePlugin<ShowcaseConfig>({
+  name: 'capabilities-bot',
+  // Console /api/plugins 卡片展示：displayName / icon / order
+  metadata: { displayName: 'Capabilities Bot', icon: 'Blocks', order: 10 },
+
+  async setup(context) {
+    // ① 实例视图：instanceKey / role / parent（多实例部署时按实例隔离）
+    const { instanceKey } = context.plugin;
+
+    // ② 配置视图：schema.json 声明默认值，zhin.config.yml 的 plugin: 段覆盖
+    const config = context.config.get();
+    const log = (text: string) => console.log(`[capabilities-bot] ${text}`);
+    log(`setup: instance=${instanceKey} greeting=${config.greeting}`);
+
+    // ③ 数据库（databaseHostToken）：define 表 + 计数器模型
+    //    stats 命令经 command context 的 use(databaseHostToken) 复用同一张表
+    if (context.resources.has(databaseHostToken)) {
+      const db = context.resources.use(databaseHostToken);
+      db.define('showcase_counter', {
+        name: { type: 'text', nullable: false },
+        count: { type: 'integer', nullable: false },
+      });
+      log('database: table showcase_counter defined');
+    }
+
+    // ④ 定时任务（scheduleHostToken）：6 段 cron；dispose 挂 lifecycle，HMR 安全回收
+    if (config.heartbeatCron && context.resources.has(scheduleHostToken)) {
+      const schedule = context.resources.use(scheduleHostToken);
+      context.lifecycle.add(schedule.register({
+        id: 'capabilities-bot/heartbeat',
+        cron: config.heartbeatCron,
+        description: 'Showcase heartbeat',
+        execute: () => log('heartbeat ♥'),
+      }));
+      log(`schedule: heartbeat @ ${config.heartbeatCron}`);
+    }
+
+    // ⑤ Agent 工具（agentToolsHostToken）：装了 Agent Host 才存在，未装静默跳过
+    if (context.resources.has(agentToolsHostToken)) {
+      const agentTools = context.resources.use(agentToolsHostToken);
+      context.lifecycle.add(agentTools.register({
+        name: 'showcase_greet',
+        description: 'Return the configured greeting for a name',
+        source: 'capabilities-bot',
+        inputSchema: {
+          type: 'object',
+          properties: { name: { type: 'string' } },
+          required: ['name'],
+        },
+        execute: (input) => `${config.greeting}，${String(input.name ?? 'world')}！`,
+      }));
+      log('agent-tools: showcase_greet registered');
+    }
+
+    // ⑥ 主动出站（outboundHostToken）：启动后向配置目标推送上线消息
+    if (config.pushOnBoot && config.pushTarget && context.resources.has(outboundHostToken)) {
+      const outbound = context.resources.use(outboundHostToken);
+      const target = config.pushTarget;
+      // ⑦ 代际交接（handoff）：endpoint 就绪后再发，避免启动时序竞争
+      context.handoff.add({
+        activateNext: async () => {
+          await outbound.send({ ...target, content: `${config.greeting}，capabilities-bot 已上线` });
+          log('outbound: boot message pushed');
+        },
+      });
+    }
+
+    // ⑧ 卸载清理：setup 返回的 Dispose 会在 generation 结束时执行
+    return () => log('disposed');
+  },
+});

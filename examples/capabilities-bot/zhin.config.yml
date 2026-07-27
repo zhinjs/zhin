@@ -1,0 +1,30 @@
+# capabilities-bot 自己的配置（Root 读本包 schema.json）
+log_level: info
+
+http:
+  port: 18099
+  token: capabilities-dev-token
+  corsOrigins:
+    - "http://127.0.0.1:5173"
+    - "http://localhost:5173"
+
+database:
+  dialect: sqlite
+  filename: ./data/bot.db
+
+plugin:
+  greeting: 你好呀
+  heartbeatCron: "0 */5 * * * *"
+  pushOnBoot: true
+  pushTarget:
+    adapter: sandbox
+    endpointId: sandbox-bot
+    channelType: private
+    channelId: sandbox-user
+
+plugins:
+  sandbox:
+    endpoints:
+      - context: sandbox
+        name: sandbox-bot
+        owner: sandbox-user
