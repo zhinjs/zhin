@@ -12,7 +12,7 @@ import {
 import { generateAIEnvVars, materializeAIConfig } from './ai.js';
 import { generateDatabaseEnvVars, mergeEnvText } from './env.js';
 import { ensureDatabaseForAdapters, ensureDatabaseForAI, getAIDependencies } from './project-deps.js';
-import { DEFAULT_CREATE_BOT_HTTP_PORT } from './zhin-stack-deps.js';
+import { DEFAULT_CREATE_BOT_HTTP_PORT, ZHIN_STACK_VERSIONS } from './zhin-stack-deps.js';
 import { packageToInstanceKey } from './project-config-plan.js';
 
 /**
@@ -48,11 +48,61 @@ export function normalizePluginsMap(value: unknown): Record<string, unknown> {
 export function applyAdaptersToConfig(config: Record<string, unknown>, result: AdapterSetupResult): void {
   const plugins = normalizePluginsMap(config.plugins);
   for (const instance of result.instances) {
-    plugins[instance.instanceKey] = instance.config;
+    plugins[instance.instanceKey] = mergeAdapterInstanceConfig(
+      instance.instanceKey,
+      plugins[instance.instanceKey],
+      instance.config,
+    );
   }
   config.plugins = plugins;
   // legacy endpoints 列表不被 runtime 配置 schema 接受（additionalProperties: false）
   delete config.endpoints;
+}
+
+function endpointName(endpoint: unknown): string | undefined {
+  if (!endpoint || typeof endpoint !== 'object' || Array.isArray(endpoint)) return undefined;
+  const name = (endpoint as Record<string, unknown>).name;
+  return typeof name === 'string' ? name : undefined;
+}
+
+/**
+ * 重跑向导时按实例合并配置而非整体覆盖：保留现有 endpoints 中 name 不冲突的项
+ * 与其他实例级键；被向导结果覆盖的 endpoints / 键在覆盖前打印提示。
+ */
+function mergeAdapterInstanceConfig(
+  instanceKey: string,
+  existing: unknown,
+  next: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!existing || typeof existing !== 'object' || Array.isArray(existing)) return next;
+  const current = existing as Record<string, unknown>;
+  const dropped: string[] = [];
+
+  const merged: Record<string, unknown> = { ...current, ...next };
+
+  const currentEndpoints = Array.isArray(current.endpoints) ? current.endpoints : [];
+  const nextEndpoints = Array.isArray(next.endpoints) ? next.endpoints : [];
+  if (currentEndpoints.length > 0 && nextEndpoints.length > 0) {
+    const nextNames = new Set(nextEndpoints.map(endpointName));
+    const kept = currentEndpoints.filter((endpoint) => {
+      const name = endpointName(endpoint);
+      if (name != null && nextNames.has(name)) {
+        dropped.push(`endpoint "${name}"`);
+        return false;
+      }
+      return true;
+    });
+    merged.endpoints = [...nextEndpoints, ...kept];
+  }
+
+  for (const key of Object.keys(next)) {
+    if (key !== 'endpoints' && key in current) dropped.push(`键 "${key}"`);
+  }
+
+  if (dropped.length > 0) {
+    console.warn(`[zhin setup] plugins.${instanceKey} 的 ${dropped.join('、')} 已被向导结果覆盖`);
+  }
+  return merged;
 }
 
 export function applyAIToConfig(config: Record<string, unknown>, ai: AISetupConfig): void {
@@ -117,7 +167,45 @@ export function collectWizardDependencies(
   return {
     ...(options.adapters ? getAdapterDependencies(options.adapters) : {}),
     ...getAIDependencies(options.ai),
+    // tools/ 约定需要 @zhin.js/tool（与 create-zhin 路径对齐）
+    ...(options.ai?.enabled ? { '@zhin.js/tool': ZHIN_STACK_VERSIONS['@zhin.js/tool'] } : {}),
   };
+}
+
+/** 向导结果需要合并进 package.json zhin.features 的条目（与 create-zhin 路径对齐） */
+export function collectWizardFeatures(
+  options: Pick<InitOptions, 'ai'>,
+): Array<{ package: string; api: string }> {
+  return options.ai?.enabled ? [{ package: '@zhin.js/tool', api: '^1.0.0' }] : [];
+}
+
+/** 把 features 清单条目合并进项目 package.json 的 zhin.features（zhin setup 路径） */
+export async function mergeFeaturesIntoPackageJson(
+  projectDir: string,
+  entries: Array<{ package: string; api: string }>,
+): Promise<boolean> {
+  if (entries.length === 0) return false;
+  const pkgPath = path.join(projectDir, 'package.json');
+  if (!(await fs.pathExists(pkgPath))) return false;
+
+  const pkg = await fs.readJson(pkgPath);
+  const zhin = pkg.zhin && typeof pkg.zhin === 'object' && !Array.isArray(pkg.zhin)
+    ? pkg.zhin
+    : { protocol: 1, type: 'plugin', entry: './plugin.ts' };
+  const features: Array<{ package: string; api?: string }> = Array.isArray(zhin.features)
+    ? [...zhin.features]
+    : [];
+  let changed = false;
+  for (const entry of entries) {
+    if (features.some((item) => item?.package === entry.package)) continue;
+    features.push(entry);
+    changed = true;
+  }
+  if (!changed && pkg.zhin) return false;
+  zhin.features = features;
+  pkg.zhin = zhin;
+  await fs.writeJson(pkgPath, pkg, { spaces: 2 });
+  return true;
 }
 
 export async function mergeDependenciesIntoPackageJson(

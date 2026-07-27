@@ -6,7 +6,7 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 
 import { InitOptions } from './types.js';
-import { generateToken, getDatabaseDisplayName } from './utils.js';
+import { generateToken, getDatabaseDisplayName, isValidProjectName } from './utils.js';
 import {
   configureDatabaseOptions,
   configureAdapters,
@@ -51,7 +51,7 @@ async function main() {
           default: 'my-zhin-bot',
           validate: (input: string) => {
             if (!input.trim()) return '项目名称不能为空';
-            if (!/^[a-zA-Z0-9-_]+$/.test(input)) {
+            if (!isValidProjectName(input)) {
               return '项目名称只能包含字母、数字、横线和下划线';
             }
             return true;
@@ -59,6 +59,9 @@ async function main() {
         }
       ]);
       name = inputName;
+    } else if (!isValidProjectName(name)) {
+      console.error(chalk.red('项目名称只能包含字母、数字、横线和下划线'));
+      process.exit(1);
     }
 
     // 模板选择

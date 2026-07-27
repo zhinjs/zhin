@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { parse as parseYaml } from 'yaml';
 import { createHttpHost, createConsoleEventHub, type HttpHost } from '@zhin.js/host-http';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import type { ImRuntime, RuntimeMessageEvent } from '@zhin.js/core/runtime';
@@ -23,6 +24,7 @@ import {
   jsonSchemaToConsoleSchema,
   listSnapshotPlugins,
   registerConsoleApiRoutes,
+  setProjectConfigKey,
   writeConfigKey,
 } from '../../src/plugin-runtime/console-api-installer.js';
 
@@ -509,25 +511,40 @@ describe('console REST routes', () => {
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
   });
 
-  it('serves config from the generation Primary Config instead of stale disk state', async () => {
-    await writeFile(join(projectRoot, 'zhin.config.yml'), 'http:\n  port: 1000\n');
+  it('serves config:get-all from the on-disk file so it stays consistent with config:set', async () => {
+    // 磁盘文件是唯一数据源：即使 generation 内存快照不同，get-all 也读文件，
+    // 且环境变量占位符原样保留。
+    await writeFile(join(projectRoot, 'zhin.config.yml'), 'http:\n  port: 1000\n  token: ${HTTP_TOKEN}\n');
     const { port } = await startHost({
       projectRoot,
       primaryConfigDocument: {
-        http: { port: 8086, token: '${HTTP_TOKEN}' },
+        http: { port: 8086 },
         plugins: { sandbox: { endpoints: [] } },
       },
     });
-    const response = await fetch(`http://127.0.0.1:${port}/api/console/request`, {
+    const getAll = (requestId: number) => fetch(`http://127.0.0.1:${port}/api/console/request`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ type: 'config:get-all', requestId: 7 }),
+      body: JSON.stringify({ type: 'config:get-all', requestId }),
+    }).then((res) => res.json() as Promise<{ data: Record<string, unknown> }>);
+
+    const before = await getAll(7);
+    expect(before.data).toEqual({ http: { port: 1000, token: '${HTTP_TOKEN}' } });
+
+    // config:set 写文件后 get-all 立即读回新值（不再停留在 generation 快照）。
+    const set = await fetch(`http://127.0.0.1:${port}/api/console/request`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        type: 'config:set',
+        requestId: 8,
+        pluginName: 'http',
+        data: { port: 9090 },
+      }),
     });
-    const body = await response.json() as { data: Record<string, unknown> };
-    expect(body.data).toEqual({
-      http: { port: 8086, token: '${HTTP_TOKEN}' },
-      sandbox: { endpoints: [] },
-    });
+    expect(set.status).toBe(200);
+    const after = await getAll(9);
+    expect(after.data).toEqual({ http: { port: 9090 } });
   });
 });
 
@@ -748,6 +765,34 @@ describe('config document flatten / write namespace', () => {
       sandbox: { endpoints: [{ name: 'bot' }] },
       icqq: {},
     });
+  });
+
+  it('serializes concurrent setProjectConfigKey writes without losing keys', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-console-config-lock-'));
+    tempRoots.push(root);
+    await writeFile(join(root, 'zhin.config.yml'), 'plugins:\n  a: {}\n');
+
+    // 无锁时两次 读-改-写 基于同一份旧文档，后写覆盖先写（丢一个键）。
+    await Promise.all([
+      setProjectConfigKey(root, 'a', { x: 1 }),
+      setProjectConfigKey(root, 'b', { y: 2 }),
+      setProjectConfigKey(root, 'c', { z: 3 }),
+    ]);
+
+    const saved = await readFile(join(root, 'zhin.config.yml'), 'utf8');
+    const parsed = parseYaml(saved) as { plugins: Record<string, unknown> };
+    expect(parsed.plugins.a).toEqual({ x: 1 });
+    expect(parsed.plugins.b).toEqual({ y: 2 });
+    expect(parsed.plugins.c).toEqual({ z: 3 });
+
+    // 失败不断链：后续写仍可成功。
+    await expect(setProjectConfigKey(root, '__proto__', { polluted: true }))
+      .rejects.toThrow(/Invalid config key/);
+    await setProjectConfigKey(root, 'd', { ok: true });
+    const after = parseYaml(await readFile(join(root, 'zhin.config.yml'), 'utf8')) as {
+      plugins: Record<string, unknown>;
+    };
+    expect(after.plugins.d).toEqual({ ok: true });
   });
 });
 

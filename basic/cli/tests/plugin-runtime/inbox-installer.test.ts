@@ -203,6 +203,41 @@ describe('installInboxMessageRecorder', () => {
     expect(listenerCount()).toBe(1);
   });
 
+  it('does not cache the localName fallback while the endpoint is not ready', async () => {
+    const { host, rows } = fakeDatabaseHost([INBOX_TABLE_MESSAGE]);
+    const listeners = new Set<(event: RuntimeMessageEvent) => void>();
+    let endpointName: string | null = null;
+    let getEndpointCalls = 0;
+    const im = {
+      onMessage(listener: (event: RuntimeMessageEvent) => void) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      getEndpoint: () => {
+        getEndpointCalls += 1;
+        return endpointName ? { name: endpointName } : null;
+      },
+    } as unknown as ImRuntime;
+    const emit = (event: RuntimeMessageEvent) => {
+      for (const listener of listeners) listener(event);
+    };
+    installInboxMessageRecorder(im, host);
+
+    // 启动早期 endpoint 未就绪：回退 localName，但不写缓存。
+    emit(inboundEvent({ timestamp: 1_700_000_000_000 }));
+    // endpoint 上线后：应解析出 live 名而不是被固化的回退值。
+    endpointName = '8596238';
+    emit(inboundEvent({ timestamp: 1_700_000_000_001 }));
+    // 命中后写缓存：之后即使 getEndpoint 不再可用也用缓存值。
+    endpointName = null;
+    emit(inboundEvent({ timestamp: 1_700_000_000_002 }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const table = rows.get(INBOX_TABLE_MESSAGE)!;
+    expect(table.map((row) => row.endpoint_id)).toEqual(['icqq', '8596238', '8596238']);
+    expect(getEndpointCalls).toBe(2);
+  });
+
   it('end-to-end: rows written by the recorder are readable via console-rpc-extended', async () => {
     const { host, rows } = fakeDatabaseHost([INBOX_TABLE_MESSAGE, INBOX_TABLE_REQUEST]);
     const { im, emit } = fakeIm('1234');

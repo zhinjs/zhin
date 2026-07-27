@@ -1,5 +1,12 @@
 import { randomBytes } from 'node:crypto';
 
+// 项目名称只能包含字母、数字、横线和下划线
+export const PROJECT_NAME_PATTERN = /^[a-zA-Z0-9-_]+$/;
+
+export function isValidProjectName(name: string): boolean {
+  return PROJECT_NAME_PATTERN.test(name);
+}
+
 // 生成随机 token（hex 格式）
 export function generateToken(bytes: number = 16): string {
   if (bytes < 1) {

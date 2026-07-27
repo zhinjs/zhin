@@ -53,6 +53,8 @@ export default definePlugin<RssConfig>({
       const host = context.resources.use(databaseHostToken);
       defineRssTables(host);
       setRssDb(host);
+      // 卸载时清掉模块级 _db，避免悬挂到上一代的 host
+      context.lifecycle.add(() => setRssDb(null));
     } else {
       ensureRssMemoryDb();
     }

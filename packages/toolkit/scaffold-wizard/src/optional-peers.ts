@@ -46,6 +46,15 @@ function configUsesHtmlImageAdapter(config: Record<string, unknown>): boolean {
       if (plugin.includes(`adapter-${ctx}`)) return true;
     }
   }
+  // 新 runtime 配置形态：plugins 为 instanceKey → 配置 的映射，instanceKey 即适配器 context
+  if (config.plugins && typeof config.plugins === 'object' && !Array.isArray(config.plugins)) {
+    for (const instanceKey of Object.keys(config.plugins as Record<string, unknown>)) {
+      if (ADAPTERS_PREFER_HTML_IMAGE.has(instanceKey)) return true;
+      for (const ctx of ADAPTERS_PREFER_HTML_IMAGE) {
+        if (instanceKey.includes(`adapter-${ctx}`)) return true;
+      }
+    }
+  }
   const endpoints = Array.isArray(config.endpoints) ? config.endpoints : [];
   for (const ep of endpoints) {
     if (!ep || typeof ep !== 'object' || Array.isArray(ep)) continue;

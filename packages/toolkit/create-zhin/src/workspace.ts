@@ -257,8 +257,8 @@ WantedBy=multi-user.target
 `# Windows 服务安装脚本（使用 NSSM）
 # 需要管理员权限运行
 
-$ServiceName = "${projectName}"
-$ProjectPath = "${path.resolve(projectPath).replace(/\\/g, '\\\\')}"
+$ServiceName = '${projectName}'
+$ProjectPath = '${path.resolve(projectPath)}'
 
 # 当前目录使用 npx 启动，不依赖 nvm 等固定 node 路径
 $NpxArgs = "runtime start --mode production --no-watch"
@@ -319,7 +319,7 @@ Write-Host "  nssm start $ServiceName" -ForegroundColor Cyan
 
   // 创建 Windows Task Scheduler XML（备选方案）
   await fs.writeFile(path.join(projectPath, `${projectName}-task.xml`),
-`<?xml version="1.0" encoding="UTF-16"?>
+`<?xml version="1.0" encoding="UTF-8"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
     <Description>Zhin.js Endpoint - ${projectName}</Description>

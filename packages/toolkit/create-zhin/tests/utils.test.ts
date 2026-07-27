@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generateToken, getDatabaseDisplayName } from '../src/utils'
+import { generateToken, getDatabaseDisplayName, isValidProjectName } from '../src/utils'
 
 describe('create-zhin utils', () => {
   describe('generateToken', () => {
@@ -26,6 +26,22 @@ describe('create-zhin utils', () => {
       const token = generateToken(32)
       const validChars = /^[0-9a-f]+$/
       expect(validChars.test(token)).toBe(true)
+    })
+  })
+
+  describe('isValidProjectName', () => {
+    it('accepts letters, digits, dashes and underscores', () => {
+      expect(isValidProjectName('my-zhin-bot')).toBe(true)
+      expect(isValidProjectName('bot_01')).toBe(true)
+      expect(isValidProjectName('Bot')).toBe(true)
+    })
+
+    it('rejects names with spaces or special characters', () => {
+      expect(isValidProjectName('my bot')).toBe(false)
+      expect(isValidProjectName('bot!')).toBe(false)
+      expect(isValidProjectName('bot$name')).toBe(false)
+      expect(isValidProjectName('../bot')).toBe(false)
+      expect(isValidProjectName('')).toBe(false)
     })
   })
 

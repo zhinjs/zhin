@@ -2,7 +2,7 @@
  * 60s API 共享模块 — 供 *.tool.md handler 使用
  */
 
-const API_BASE = process.env.ZHIN_60S_API || 'https://60s.viki.moe';
+import { resolveApiBase } from './runtime-deps.js';
 
 export type ListItem = string | Record<string, unknown>;
 
@@ -13,7 +13,7 @@ export async function fetchApi<T = ApiPayload>(
   endpoint: string,
   params?: Record<string, string>,
 ): Promise<T> {
-  const url = new URL(`${API_BASE}/v2${endpoint}`);
+  const url = new URL(`${resolveApiBase()}/v2${endpoint}`);
   if (params) {
     Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
   }

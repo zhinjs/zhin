@@ -80,6 +80,50 @@ plugins:
     await expect(new YamlConfigDocument(file).read())
       .rejects.toBeInstanceOf(ConfigDocumentParseError);
   });
+
+  it('addresses sequence elements with numeric path segments', async () => {
+    const { file } = await configFile(`# endpoints comment
+http:
+    endpoints: # keep
+        - url: 'a' # first
+          token: "\${TOKEN_A}"
+        - url: 'b'
+plugins: {}
+`);
+    const adapter = new YamlConfigDocument(file);
+    const current = await adapter.read();
+    const prepared = await adapter.prepare(current, [
+      { op: 'set', path: ['http', 'endpoints', '0', 'url'], value: 'a2' },
+      { op: 'remove', path: ['http', 'endpoints', '1'] },
+    ]);
+    const committed = await prepared.commit();
+    const output = await readFile(file, 'utf8');
+
+    expect(committed.document).toMatchObject({
+      http: { endpoints: [{ url: 'a2', token: '${TOKEN_A}' }] },
+    });
+    expect(output).toContain('# endpoints comment');
+    expect(output).toContain("url: 'a2' # first");
+    expect(output).toContain('"${TOKEN_A}"');
+    expect(output).not.toContain("url: 'b'");
+  });
+
+  it('rejects non-numeric and out-of-bounds sequence segments', async () => {
+    const { file } = await configFile('http:\n  endpoints:\n    - url: a\nplugins: {}\n');
+    const adapter = new YamlConfigDocument(file);
+    const current = await adapter.read();
+
+    await expect(adapter.prepare(current, [
+      { op: 'set', path: ['http', 'endpoints', 'foo', 'url'], value: 'x' },
+    ])).rejects.toThrow(/requires an array index/);
+    await expect(adapter.prepare(current, [
+      { op: 'set', path: ['http', 'endpoints', '3', 'url'], value: 'x' },
+    ])).rejects.toThrow(/out of bounds/);
+    await expect(adapter.prepare(current, [
+      { op: 'remove', path: ['http', 'endpoints', '3'] },
+    ])).rejects.toThrow(/out of bounds/);
+    expect(await readFile(file, 'utf8')).toContain('url: a');
+  });
 });
 
 describe('RootRuntime with YamlConfigDocument', () => {

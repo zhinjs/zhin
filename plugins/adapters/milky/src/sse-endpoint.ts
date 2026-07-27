@@ -64,7 +64,15 @@ export class MilkySseEndpoint implements EndpointInstance {
     this.#started = true;
     this.#stopping = false;
     this.#unregisterAgent = registerMilkyAgentEndpoint(this.#options.config.name, this);
-    await this.#connect();
+    try {
+      await this.#connect();
+    } catch (err) {
+      // 与 WS 对齐：start 失败复位状态并反注册，允许重试
+      this.#started = false;
+      this.#unregisterAgent?.();
+      this.#unregisterAgent = undefined;
+      throw err;
+    }
   }
 
   open(): void {

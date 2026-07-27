@@ -108,6 +108,8 @@ const SENSITIVE_BASENAME_PATTERNS: RegExp[] = [
 
 /**
  * 被完全禁止访问的目录名（在路径中任何位置出现即拦截）。
+ * 注意：工作区 data/ 不走这里 — 它锚定工作区根判断（见 checkFileAccess），
+ * 避免误伤 src/data/fixtures 之类的普通目录。
  */
 const SENSITIVE_DIR_NAMES: ReadonlySet<string> = new Set([
   '.ssh',
@@ -115,7 +117,6 @@ const SENSITIVE_DIR_NAMES: ReadonlySet<string> = new Set([
   '.gpg',
   '.aws',
   '.azure',
-  'data',
   '.gcloud',
   '.config/gcloud',
   '.kube',
@@ -212,12 +213,6 @@ export function checkFileAccess(filePath: string, workspaceDir?: string): FileAc
   // 2. 检查敏感目录
   const parts = normalizePathSeparators(resolved).split('/');
   for (let i = 0; i < parts.length; i++) {
-    if (underMemoryData && parts[i] === 'data' && parts[i + 1] === 'memory') {
-      continue;
-    }
-    if (underMediaData && parts[i] === 'data' && parts[i + 1] === 'media') {
-      continue;
-    }
     if (SENSITIVE_DIR_NAMES.has(parts[i])) {
       const result = { allowed: false, reason: `拒绝访问敏感目录: ${parts[i]}` };
 
@@ -248,6 +243,27 @@ export function checkFileAccess(filePath: string, workspaceDir?: string): FileAc
         return result;
       }
     }
+  }
+
+  // 2b. 工作区根 data/ 目录（锚定工作区根，豁免 memory/media 子树；
+  //     其他位置的 data 目录如 src/data/fixtures 不受影响）
+  const workspaceDataRoot = path.resolve(workspaceDir || process.cwd(), 'data');
+  if (
+    (resolved === workspaceDataRoot || resolved.startsWith(workspaceDataRoot + path.sep))
+    && !underMemoryData
+    && !underMediaData
+  ) {
+    const result = { allowed: false, reason: '拒绝访问敏感目录: data' };
+
+    // 记录审计日志
+    try {
+      const auditLogger = getAuditLogger();
+      auditLogger.logFileAccess(filePath, false, result.reason);
+    } catch {
+      // 忽略审计日志错误
+    }
+
+    return result;
   }
 
   // 3. 检查敏感文件名

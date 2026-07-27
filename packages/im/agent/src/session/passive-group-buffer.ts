@@ -26,6 +26,10 @@ export function pushPassiveGroupLine(sessionKey: string, line: PassiveGroupLine)
   const list = buffers.get(sessionKey) ?? [];
   list.push(line);
   buffers.set(sessionKey, prunePassiveLines(list));
+  // 顺手清扫整体过期的 key：不再被 @ 的死 session 不会永久驻留
+  for (const [key, lines] of buffers) {
+    if (prunePassiveLines(lines).length === 0) buffers.delete(key);
+  }
 }
 
 export function drainPassiveGroupBuffer(sessionKey: string): PassiveGroupLine[] {

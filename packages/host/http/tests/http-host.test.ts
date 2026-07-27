@@ -246,6 +246,49 @@ describe('HttpHost', () => {
     expect(await echo.json()).toEqual({ scope: 'full', message: 'hi' });
   });
 
+  it('returns HttpBodyError status codes for handlers that do not catch them', async () => {
+    const host = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(host);
+    const { readJsonBody } = await import('../src/json-body.js');
+    // 模拟 console-rest-pages / console-api-installer 中未捕获 HttpBodyError 的端点。
+    host.route('POST', '/api/body', async (request, response) => {
+      const body = await readJsonBody(request, { limit: 16 });
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ body: body ?? null }));
+    });
+    const { port } = await host.listen();
+
+    // 超限：连接保留，客户端能实际收到 413 JSON（旧实现 destroy socket 后客户端收不到）。
+    const tooLarge = await fetch(`http://127.0.0.1:${port}/api/body`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ payload: 'x'.repeat(1024) }),
+    });
+    expect(tooLarge.status).toBe(413);
+    expect(await tooLarge.json()).toEqual({
+      success: false,
+      error: 'Request body exceeds 16 bytes',
+    });
+
+    // 非法 JSON：统一映射 400 而非 500 空响应。
+    const invalid = await fetch(`http://127.0.0.1:${port}/api/body`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{bad',
+    });
+    expect(invalid.status).toBe(400);
+    expect(await invalid.json()).toEqual({ success: false, error: 'Invalid JSON body' });
+
+    // 正常小 body 仍可用（连接未被前两次请求破坏）。
+    const ok = await fetch(`http://127.0.0.1:${port}/api/body`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{"a":1}',
+    });
+    expect(ok.status).toBe(200);
+    expect(await ok.json()).toEqual({ body: { a: 1 } });
+  });
+
   it('allows demo scope on console RPC path and rejects other /api routes', async () => {
     const host = createHttpHost({
       host: '127.0.0.1',

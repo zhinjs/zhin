@@ -80,32 +80,91 @@ function setValue(
   path: readonly string[],
   value: unknown,
 ): void {
-  let target = document;
+  let target: Record<string, unknown> | unknown[] = document;
   for (const [index, segment] of path.slice(0, -1).entries()) {
-    const existing = target[segment];
+    const existing = readChild(target, segment, path.slice(0, index + 1));
     if (existing === undefined) {
+      // Missing intermediates are always created as records; arrays only ever
+      // come from the existing document (numeric segments index into them).
       const created: Record<string, unknown> = {};
-      target[segment] = created;
+      (target as Record<string, unknown>)[segment] = created;
       target = created;
     } else {
-      target = requireRecord(existing, path.slice(0, index + 1));
+      target = requireContainer(existing, path.slice(0, index + 1));
     }
   }
-  target[lastSegment(path)] = value;
+  writeChild(target, lastSegment(path), value, path);
 }
 
 function removeValue(document: Record<string, unknown>, path: readonly string[]): void {
-  let target = document;
+  let target: Record<string, unknown> | unknown[] = document;
   for (const [index, segment] of path.slice(0, -1).entries()) {
-    const existing = target[segment];
+    const existing = readChild(target, segment, path.slice(0, index + 1));
     if (existing === undefined) return;
-    target = requireRecord(existing, path.slice(0, index + 1));
+    target = requireContainer(existing, path.slice(0, index + 1));
   }
-  delete target[lastSegment(path)];
+  const segment = lastSegment(path);
+  if (Array.isArray(target)) {
+    target.splice(arrayIndex(segment, target, path), 1);
+    return;
+  }
+  delete target[segment];
 }
 
 function cloneDocument(value: unknown): Record<string, unknown> {
   return requireRecord(structuredClone(value), []);
+}
+
+function readChild(
+  container: Record<string, unknown> | unknown[],
+  segment: string,
+  path: readonly string[],
+): unknown {
+  if (Array.isArray(container)) return container[arrayIndex(segment, container, path)];
+  return container[segment];
+}
+
+function writeChild(
+  container: Record<string, unknown> | unknown[],
+  segment: string,
+  value: unknown,
+  path: readonly string[],
+): void {
+  if (Array.isArray(container)) {
+    container[arrayIndex(segment, container, path)] = value;
+    return;
+  }
+  container[segment] = value;
+}
+
+/** Resolves a numeric path segment against an array, rejecting non-numeric segments and out-of-bounds indexes. */
+function arrayIndex(
+  segment: string,
+  container: readonly unknown[],
+  path: readonly string[],
+): number {
+  if (!/^(0|[1-9]\d*)$/.test(segment)) {
+    throw new ConfigPatchPathError(
+      `Config path ${pointer(path)} requires an array index, got "${segment}"`,
+    );
+  }
+  const index = Number(segment);
+  if (index >= container.length) {
+    throw new ConfigPatchPathError(
+      `Config path ${pointer(path)} is out of bounds (array length ${container.length})`,
+    );
+  }
+  return index;
+}
+
+function requireContainer(
+  value: unknown,
+  path: readonly string[],
+): Record<string, unknown> | unknown[] {
+  if (!value || typeof value !== 'object') {
+    throw new ConfigPatchPathError(`Config path ${pointer(path)} is not an object`);
+  }
+  return value as Record<string, unknown> | unknown[];
 }
 
 function requireRecord(value: unknown, path: readonly string[]): Record<string, unknown> {

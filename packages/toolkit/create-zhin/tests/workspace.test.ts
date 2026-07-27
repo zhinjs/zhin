@@ -130,6 +130,22 @@ describe('createWorkspace', () => {
     expect(parsed.http.token).toBe('${HTTP_TOKEN}')
   })
 
+  it('generates Windows scripts with matching encoding and interpolation-safe quoting', async () => {
+    const projectPath = await makeProject()
+
+    // Task Scheduler XML 以 UTF-8 写入，声明必须一致（否则 Windows 拒绝导入）
+    const taskXml = await fs.readFile(path.join(projectPath, 'bot-task.xml'), 'utf8')
+    expect(taskXml).toContain('<?xml version="1.0" encoding="UTF-8"?>')
+    expect(taskXml).not.toContain('UTF-16')
+
+    // NSSM PowerShell 脚本：单引号防止项目名/路径中的 $ 被 PowerShell 插值
+    const ps1 = await fs.readFile(path.join(projectPath, 'install-service.ps1'), 'utf8')
+    expect(ps1).toContain("$ServiceName = 'bot'")
+    expect(ps1).toContain(`$ProjectPath = '${path.resolve(projectPath)}'`)
+    expect(ps1).not.toContain('$ServiceName = "')
+    expect(ps1).not.toContain('$ProjectPath = "')
+  })
+
   it('writes AI stack dependencies and tool feature when AI is enabled', async () => {
     const projectPath = await makeProject({
       ai: {

@@ -18,6 +18,20 @@ describe('diagnoseOptionalPeers', () => {
     expect(result.htmlRenderer?.required).toBe(true);
   });
 
+  it('requires html-renderer for new runtime plugins map with html-image adapter instanceKey', () => {
+    const result = diagnoseOptionalPeers('/tmp', {
+      plugins: { kook: { endpoints: [{ name: 'kook-bot', token: '${KOOK_TOKEN}' }] } },
+    }, { dependencies: {} });
+    expect(result.htmlRenderer?.required).toBe(true);
+  });
+
+  it('does not require html-renderer for plugins map without html-image adapters', () => {
+    const result = diagnoseOptionalPeers('/tmp', {
+      plugins: { sandbox: { endpoints: [{ name: 'sandbox-bot' }] } },
+    }, { dependencies: {} });
+    expect(result.htmlRenderer).toBeUndefined();
+  });
+
   it('does not require peers for minimal IM-only config', () => {
     const result = diagnoseOptionalPeers('/tmp', { ai: { enabled: false } }, { dependencies: {} });
     expect(result.speech).toBeUndefined();

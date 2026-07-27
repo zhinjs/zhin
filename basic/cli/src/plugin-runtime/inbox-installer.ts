@@ -69,7 +69,7 @@ export function buildInboxMessageRow(
   };
 }
 
-/** capabilityId → live endpoint 名（uin 等），按实例缓存；解析失败回退 localName。 */
+/** capabilityId → live endpoint 名（uin 等）；仅命中时写缓存，解析失败回退 localName（不写缓存，待下次重试）。 */
 function resolveEndpointName(
   im: ImRuntime,
   capabilityId: string,
@@ -85,11 +85,13 @@ function resolveEndpointName(
     const summary = typeof im.getEndpoint === 'function'
       ? im.getEndpoint(slotName ?? localName, entryName ?? slotName ?? localName)
       : null;
-    if (summary?.name) resolved = summary.name;
+    if (summary?.name) {
+      resolved = summary.name;
+      cache.set(capabilityId, resolved);
+    }
   } catch {
-    // endpoint 尚未上线 / AdapterIndex 未就绪 → 回退 localName
+    // endpoint 尚未上线 / AdapterIndex 未就绪 → 回退 localName（不写缓存，下次消息再解析）
   }
-  cache.set(capabilityId, resolved);
   return resolved;
 }
 

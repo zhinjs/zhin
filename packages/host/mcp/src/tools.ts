@@ -33,7 +33,7 @@ export function registerTools(server: McpServer) {
   server.registerTool(
     "create_plugin",
     {
-      description: "创建一个新的 Zhin 插件文件，包含基础结构和示例代码",
+      description: "创建一个新的 Zhin 插件（新 Runtime 格式：plugin.ts definePlugin + 约定目录），含示例代码",
       inputSchema: z.object({
         name: z.string().describe("插件名称 (例如: my-plugin)"),
         description: z.string().describe("插件描述"),

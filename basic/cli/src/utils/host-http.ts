@@ -79,6 +79,8 @@ export async function hostGet<T>(
   try {
     const res = await fetch(url, {
       headers: http.token ? { Authorization: `Bearer ${http.token}` } : {},
+      // Host 无响应时 5s 超时，避免 watch/send 等命令无限挂起。
+      signal: AbortSignal.timeout(5_000),
     });
     const body = (await res.json().catch(() => ({}))) as {
       success?: boolean;
@@ -96,9 +98,11 @@ export async function hostGet<T>(
   } catch (e: unknown) {
     const err = e as NodeJS.ErrnoException;
     const msg =
-      err?.code === 'ECONNREFUSED'
-        ? `无法连接 ${http.baseUrl}（请先 zhin dev / zhin start）`
-        : (err?.message ?? String(e));
+      err?.name === 'TimeoutError'
+        ? `请求 ${http.baseUrl} 超时（5s 无响应）`
+        : err?.code === 'ECONNREFUSED'
+          ? `无法连接 ${http.baseUrl}（请先 zhin dev / zhin start）`
+          : (err?.message ?? String(e));
     return { ok: false, status: 0, error: msg };
   }
 }

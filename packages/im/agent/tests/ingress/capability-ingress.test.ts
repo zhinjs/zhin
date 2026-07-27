@@ -248,6 +248,53 @@ describe('FeatureCapabilityIngress', () => {
     again.release();
   });
 
+  it('key oscillation A→B→A keeps per-projection lease accounting', () => {
+    tools.addTool(makeTool('icqq_only', {
+      source: 'plugin:a',
+      platforms: ['icqq'],
+    }), 'a');
+    tools.addTool(makeTool('process_only', {
+      source: 'plugin:a',
+      platforms: ['process'],
+    }), 'a');
+    tools.addTool(makeTool('shared', { source: 'plugin:a' }), 'a');
+
+    const icqqCtx = { binding: makeBinding(), message: makeMessage({ adapter: 'icqq' }) };
+    const processCtx = { binding: makeBinding(), message: makeMessage({ adapter: 'process' }) };
+
+    // K1 (icqq) live → K2 (process) retires K1 → K1 again retires K2.
+    const turnA = ingress.ensureForTurn(orch, bundle(), icqqCtx);
+    const turnB = ingress.ensureForTurn(orch, bundle(), processCtx);
+    const turnC = ingress.ensureForTurn(orch, bundle(), icqqCtx);
+    expect(turnC.cacheHit).toBe(false);
+
+    // Turn A belongs to the *retired* K1 projection, not the live one:
+    // its release must not decrement the live projection's in-flight count.
+    turnA.release();
+
+    // Next miss must still defer the purge — turn C is executing with K1.
+    const turnD = ingress.ensureForTurn(orch, bundle(), processCtx);
+    expect(turnD.cacheHit).toBe(false);
+    expect(orch.tools.get('icqq_only')).toBeDefined();
+
+    // Turn C drains the second K1 projection: its unique entries purge,
+    // names re-registered by the live projection survive.
+    turnC.release();
+    expect(orch.tools.get('icqq_only')).toBeUndefined();
+    expect(orch.tools.get('process_only')).toBeDefined();
+    expect(orch.tools.get('shared')).toBeDefined();
+
+    // Retired K2 (turn B) drains; live K2' keeps its names.
+    turnB.release();
+    expect(orch.tools.get('process_only')).toBeDefined();
+
+    // Live projection stays cached once every lease is released.
+    turnD.release();
+    const again = ingress.ensureForTurn(orch, bundle(), processCtx);
+    expect(again.cacheHit).toBe(true);
+    again.release();
+  });
+
   it('fingerprint change (tool meta) invalidates prior cache key', () => {
     tools.addTool(makeTool('a1', { source: 'plugin:a' }), 'a');
     const binding = makeBinding();
@@ -366,7 +413,7 @@ describe('FeatureCapabilityIngress', () => {
     expect(hit.skills).toBe(1);
   });
 
-  it('invalidate clears lastCacheKey; ensureCore net stays 0 for same builtins', () => {
+  it('invalidate drops the live cache key; ensureCore net stays 0 for same builtins', () => {
     tools.addTool(makeTool('bash', { source: 'builtin' }), 'root');
     expect(ingress.ensureCore(orch, { tools }).tools).toBe(1);
     ingress.invalidate();

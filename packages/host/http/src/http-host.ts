@@ -22,6 +22,7 @@ import {
   type RouteMeta,
 } from './openapi.js';
 import { isDemoHttpAllowed } from './console-rpc.js';
+import { HttpBodyError } from './json-body.js';
 
 const logger = getLogger('HttpHost');
 
@@ -276,6 +277,14 @@ export function createHttpHost(options: HttpHostOptions = {}): HttpHost {
       response.setHeader('X-Frame-Options', 'SAMEORIGIN');
       await route.handler(request, response, url, auth.scope);
     } catch (err) {
+      // 统一把请求体错误（400/413）映射回对应状态码，
+      // 避免个别端点未捕获时退化成 500 空响应。
+      if (err instanceof HttpBodyError) {
+        if (!response.headersSent) {
+          writeJson(response, err.statusCode, { success: false, error: err.message });
+        }
+        return;
+      }
       logger.warn(formatCompact({
         op: 'http_handler_failed',
         path: pathname,

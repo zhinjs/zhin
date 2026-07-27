@@ -1,10 +1,9 @@
 import { definePlugin } from '@zhin.js/plugin-runtime';
+import { DEFAULT_API_BASE, registerSixtySApiBase } from './src/runtime-deps.js';
 
 export interface SixtySConfig {
   readonly apiBase?: string;
 }
-
-const DEFAULT_API_BASE = 'https://60s.viki.moe';
 
 export default definePlugin<SixtySConfig>({
   name: 'sixty-s',
@@ -12,7 +11,9 @@ export default definePlugin<SixtySConfig>({
     displayName: '60s API',
   },
   setup(context) {
-    const apiBase = context.config.get().apiBase?.trim() || DEFAULT_API_BASE;
-    process.env.ZHIN_60S_API = apiBase;
+    // 运行时读取配置：config patch 即时生效；卸载时 lifecycle 反注册，无 process.env 残留
+    context.lifecycle.add(
+      registerSixtySApiBase(() => context.config.get().apiBase?.trim() || DEFAULT_API_BASE),
+    );
   },
 });

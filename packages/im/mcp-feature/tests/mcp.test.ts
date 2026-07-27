@@ -107,6 +107,112 @@ describe('MCP Feature', () => {
       'a-first:stop',
     ]);
   });
+
+  it('keeps the record unstopped when stop fails so a later stop retries', async () => {
+    const events: string[] = [];
+    const root = rootPluginId();
+    let failStop = true;
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: mcpFeatureId,
+      localName: 'flaky',
+      source: '/mcp/flaky.ts',
+      definition: defineMcp({
+        create: () => ({
+          start() { events.push('start'); },
+          stop() {
+            events.push('stop');
+            if (failStop) throw new Error('disconnect failed');
+          },
+          listTools: () => [{ name: 'search' }],
+          callTool: () => undefined,
+        }),
+      }),
+    });
+    const index = await McpIndex.create([slot], snapshot([slot]));
+    await index.start();
+
+    await expect(index.stop()).rejects.toThrow('One or more disposers failed');
+    // stop 失败不标记 stopped：连接仍视为活跃，且下次 stop 会重试。
+    await expect(index.listTools(root, 'flaky')).resolves.toEqual([{ name: 'search' }]);
+
+    failStop = false;
+    await index.stop();
+    await index.stop();
+    expect(events).toEqual(['start', 'stop', 'stop']);
+  });
+
+  it('quiesces the previous generation before activating the next', async () => {
+    const events: string[] = [];
+    const root = rootPluginId();
+    const slot = (tag: string) => createCapabilitySlot({
+      owner: root,
+      feature: mcpFeatureId,
+      localName: 'server',
+      source: `/mcp/server-${tag}.ts`,
+      definition: defineMcp({
+        create: () => ({
+          start() { events.push(`${tag}:start`); },
+          stop() { events.push(`${tag}:stop`); },
+          listTools: () => [],
+          callTool: () => undefined,
+        }),
+      }),
+    });
+    const oldSlot = slot('old');
+    const oldSnapshot = snapshot([oldSlot]);
+    const oldProjection = await mcpFeature.runtime.project([oldSlot], { snapshot: oldSnapshot });
+    oldSnapshot.projections.set(mcpFeatureId, oldProjection.value);
+    await oldProjection.handoff?.activateNext?.();
+
+    const newSlot = slot('new');
+    const newProjection = await mcpFeature.runtime.project([newSlot], { snapshot: snapshot([newSlot]) });
+    // RootController.transact 顺序：quiescePrevious → activateNext。
+    await newProjection.handoff?.quiescePrevious?.(oldSnapshot);
+    await newProjection.handoff?.activateNext?.();
+
+    expect(events).toEqual(['old:start', 'old:stop', 'new:start']);
+  });
+
+  it('resumes the previous generation when activation of the next fails', async () => {
+    const events: string[] = [];
+    const root = rootPluginId();
+    let failStart = false;
+    const slot = (tag: string) => createCapabilitySlot({
+      owner: root,
+      feature: mcpFeatureId,
+      localName: 'server',
+      source: `/mcp/server-${tag}.ts`,
+      definition: defineMcp({
+        create: () => ({
+          start() {
+            events.push(`${tag}:start`);
+            if (tag === 'new' && failStart) throw new Error('bind failed');
+          },
+          stop() { events.push(`${tag}:stop`); },
+          listTools: () => [],
+          callTool: () => undefined,
+        }),
+      }),
+    });
+    const oldSlot = slot('old');
+    const oldSnapshot = snapshot([oldSlot]);
+    const oldProjection = await mcpFeature.runtime.project([oldSlot], { snapshot: oldSnapshot });
+    oldSnapshot.projections.set(mcpFeatureId, oldProjection.value);
+    await oldProjection.handoff?.activateNext?.();
+
+    failStart = true;
+    const newSlot = slot('new');
+    const newProjection = await mcpFeature.runtime.project([newSlot], { snapshot: snapshot([newSlot]) });
+    // RootController 回滚顺序：deactivateNext（未激活则跳过）→ resumePrevious → dispose。
+    await newProjection.handoff?.quiescePrevious?.(oldSnapshot);
+    await expect(newProjection.handoff?.activateNext?.()).rejects.toThrow('bind failed');
+    await newProjection.handoff?.resumePrevious?.();
+    await newProjection.dispose?.();
+
+    expect(events).toEqual(['old:start', 'old:stop', 'new:start', 'new:stop', 'old:start']);
+    await expect((oldProjection.value as McpIndex).listTools(root, 'server')).resolves.toEqual([]);
+  });
 });
 
 function snapshot(slots: readonly ReturnType<typeof createCapabilitySlot>[]): RuntimeSnapshot {

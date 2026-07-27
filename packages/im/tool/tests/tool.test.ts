@@ -71,6 +71,34 @@ describe('Tool Feature', () => {
     expect(Object.isFrozen(definition.permissions)).toBe(true);
   });
 
+  it('rejects non-array scopes instead of throwing a bare TypeError', () => {
+    // defineAgentTool: 对象 / 字符串形式的 scopes 走统一校验错误
+    expect(() => defineAgentTool({
+      description: 'Bad scopes object',
+      scopes: {} as unknown as ['group'],
+      execute: () => 'ok',
+    })).toThrow('Agent Tool scopes must be an array');
+    expect(() => defineAgentTool({
+      description: 'Bad scopes string',
+      scopes: 'group' as unknown as ['group'],
+      execute: () => 'ok',
+    })).toThrow('Agent Tool scopes must be an array');
+
+    // parseAgentToolDefinition: 非数组 scopes 走统一 invalidTool
+    const valid = defineAgentTool({ description: 'Valid', execute: () => 'ok' });
+    expect(() => parseAgentToolDefinition({ ...valid, scopes: {} }))
+      .toThrow('Tool module must default-export defineAgentTool(...)');
+    expect(() => parseAgentToolDefinition({ ...valid, scopes: 'group' }))
+      .toThrow('Tool module must default-export defineAgentTool(...)');
+
+    // 数组但取值非法仍然拒绝
+    expect(() => defineAgentTool({
+      description: 'Bad scope value',
+      scopes: ['dm'] as unknown as ['group'],
+      execute: () => 'ok',
+    })).toThrow('Agent Tool scopes must be private, group, or channel');
+  });
+
   it('executes the nearest owner Tool with its own config and resources', async () => {
     const root = rootPluginId();
     const child = childPluginId(root, 'child');

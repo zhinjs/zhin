@@ -81,6 +81,24 @@ describe('blackjack bj-choice middleware (text fallback)', () => {
     if (fresh) expect(fresh.id).not.toBe(session.id);
   });
 
+  it('终局后回复 1 可再来一局（restart 分支可达）', async () => {
+    const probe = makeInput('');
+    const session = await services.createSession(probe as never);
+    await services.updateSession(session.id, { status: 'won' });
+    const input = makeInput('1');
+
+    await middleware.handle(makeCtx(input), next);
+
+    expect(nextCalls).toBe(0);
+    expect(replies.length).toBe(1);
+    // 旧局被废弃，最近一局是新局
+    const old = await services.getById(session.id);
+    expect(old?.status).toBe('aborted');
+    const latest = await services.getLatestForUser(session.channel_key, 'u1');
+    expect(latest).not.toBeNull();
+    expect(latest!.id).not.toBe(session.id);
+  });
+
   it('直接 payload 文本走 payload 分支', async () => {
     const probe = makeInput('');
     const session = await services.createSession(probe as never);

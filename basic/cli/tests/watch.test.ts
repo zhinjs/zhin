@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { createSerialTick } from '../src/commands/watch.js';
 import {
   formatBytes,
   formatJobSchedule,
@@ -89,5 +90,43 @@ describe('zhin watch format', () => {
     });
     expect(text).toContain('无法连接');
     expect(text).toContain('zhin dev');
+  });
+});
+
+describe('createSerialTick', () => {
+  it('skips overlapping triggers while a tick is in flight', async () => {
+    let calls = 0;
+    let release!: () => void;
+    const tick = () => {
+      calls += 1;
+      return new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    };
+    const guarded = createSerialTick(tick);
+
+    guarded();
+    guarded();
+    guarded();
+    expect(calls).toBe(1);
+
+    release();
+    await Promise.resolve();
+    guarded();
+    expect(calls).toBe(2);
+    release();
+    await Promise.resolve();
+  });
+
+  it('recovers after a rejected tick', async () => {
+    let calls = 0;
+    const guarded = createSerialTick(() => {
+      calls += 1;
+      return Promise.reject(new Error('boom'));
+    });
+    guarded();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    guarded();
+    expect(calls).toBe(2);
   });
 });

@@ -46,6 +46,21 @@ async function getOrCreateUser(
   return created[0] ?? null;
 }
 
+/**
+ * 同一 user_id+context 的签到串行化（per-user promise 链），
+ * 避免 check-then-act 竞态导致连发两条都签到成功。
+ */
+const checkinChains = new Map<string, Promise<unknown>>();
+
+function serializedCheckin<T>(key: string, task: () => Promise<T>): Promise<T> {
+  const prev = checkinChains.get(key) ?? Promise.resolve();
+  const next = prev.then(task, task);
+  checkinChains.set(key, next);
+  return next.finally(() => {
+    if (checkinChains.get(key) === next) checkinChains.delete(key);
+  });
+}
+
 export async function doCheckin(
   input: { sender?: string; target?: string; metadata?: Readonly<Record<string, unknown>> },
   cfg: GroupSuiteConfig,
@@ -58,39 +73,41 @@ export async function doCheckin(
   if (!userId) return '无法获取用户信息';
 
   const { type: ctxType, id: ctxId } = resolveContextKey(input);
-  const user = await getOrCreateUser(M, userId, userName, ctxType, ctxId);
-  if (!user) return '签到失败，请重试';
+  return serializedCheckin(`${userId}:${ctxType}:${ctxId}`, async () => {
+    const user = await getOrCreateUser(M, userId, userName, ctxType, ctxId);
+    if (!user) return '签到失败，请重试';
 
-  const today = todayStr();
-  if (user.last_checkin === today) {
-    return `你今天已经签到过了哦～\n当前积分: ${user.points}\n连续签到: ${user.streak} 天`;
-  }
+    const today = todayStr();
+    if (user.last_checkin === today) {
+      return `你今天已经签到过了哦～\n当前积分: ${user.points}\n连续签到: ${user.streak} 天`;
+    }
 
-  const isConsecutive = user.last_checkin === yesterdayStr();
-  const newStreak = isConsecutive ? Number(user.streak) + 1 : 1;
-  const base = randomInt(cfg.basePointsMin, cfg.basePointsMax);
-  const bonus = Math.min(newStreak * cfg.streakBonus, cfg.streakCap);
-  const earned = base + bonus;
-  const newPoints = Number(user.points || 0) + earned;
+    const isConsecutive = user.last_checkin === yesterdayStr();
+    const newStreak = isConsecutive ? Number(user.streak) + 1 : 1;
+    const base = randomInt(cfg.basePointsMin, cfg.basePointsMax);
+    const bonus = Math.min(newStreak * cfg.streakBonus, cfg.streakCap);
+    const earned = base + bonus;
+    const newPoints = Number(user.points || 0) + earned;
 
-  await M.update({
-    points: newPoints,
-    total_checkins: Number(user.total_checkins || 0) + 1,
-    streak: newStreak,
-    max_streak: Math.max(Number(user.max_streak || 0), newStreak),
-    last_checkin: today,
-    user_name: userName,
-    updated_at: ts(),
-  }).where({
-    user_id: userId,
-    context_type: ctxType,
-    context_id: ctxId,
+    await M.update({
+      points: newPoints,
+      total_checkins: Number(user.total_checkins || 0) + 1,
+      streak: newStreak,
+      max_streak: Math.max(Number(user.max_streak || 0), newStreak),
+      last_checkin: today,
+      user_name: userName,
+      updated_at: ts(),
+    }).where({
+      user_id: userId,
+      context_type: ctxType,
+      context_id: ctxId,
+    });
+
+    const lines = [`签到成功！`, `基础积分: +${base}`];
+    if (bonus > 0) lines.push(`连续奖励: +${bonus} (连续${newStreak}天)`);
+    lines.push(`本次获得: +${earned}`, `当前积分: ${newPoints}`);
+    return lines.join('\n');
   });
-
-  const lines = [`签到成功！`, `基础积分: +${base}`];
-  if (bonus > 0) lines.push(`连续奖励: +${bonus} (连续${newStreak}天)`);
-  lines.push(`本次获得: +${earned}`, `当前积分: ${newPoints}`);
-  return lines.join('\n');
 }
 
 export async function myPoints(

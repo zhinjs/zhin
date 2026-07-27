@@ -54,6 +54,17 @@ export class SessionService {
     return rows[0] ?? null;
   }
 
+  /** 本频道本人最近一局（不按 status 过滤），供终局「回复 1 再来一局」restart 用。 */
+  async getLatestForUser(channelKeyValue: string, userId: string): Promise<BjSessionRow | null> {
+    const rows = await getModel(this.db).findAll({
+      channel_key: channelKeyValue,
+      player_id: userId,
+    });
+    if (rows.length === 0) return null;
+    // updated_at 可能同毫秒平局，此时取靠后的行（更接近最近创建的一局）
+    return rows.reduce((latest, row) => (row.updated_at >= latest.updated_at ? row : latest));
+  }
+
   async getActiveByChannel(channelKeyValue: string): Promise<BjSessionRow | null> {
     const rows = await getModel(this.db).findAll({
       channel_key: channelKeyValue,

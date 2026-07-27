@@ -78,10 +78,11 @@ export class McpIndex {
     const started: McpRecord[] = [];
     try {
       for (const record of this.#order) {
-        if (record.started || record.stopped) continue;
+        if (record.started) continue;
         started.push(record);
         await record.client.start?.();
         record.started = true;
+        record.stopped = false;
       }
     } catch (error) {
       await stopRecords(started, error);
@@ -137,8 +138,11 @@ async function stopRecords(records: readonly McpRecord[], primary?: unknown): Pr
   for (const record of records) {
     if (record.stopped) continue;
     stack.add(async () => {
-      record.stopped = true;
+      // 先 await stop 成功再标记 stopped：stop 失败时保持未标记，
+      // 下次 stop()（或代际 resume 后的再次 quiesce）可重试，不会永久泄漏。
       await record.client.stop?.();
+      record.started = false;
+      record.stopped = true;
     });
   }
   try {

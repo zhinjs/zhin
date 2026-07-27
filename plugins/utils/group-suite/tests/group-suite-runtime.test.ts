@@ -29,6 +29,11 @@ import {
   tryTeachReply,
   doCheckin,
   myPoints,
+  createGroupSuiteRuntime,
+  flushStatsBuffer,
+  getStatsModel,
+  queryStats,
+  type GroupSuiteRuntime,
 } from '../src/index.js';
 
 const emptyCtx = {
@@ -98,6 +103,19 @@ describe('@zhin.js/plugin-group-suite runtime (slice-2)', () => {
     const points = await myPoints(groupInput);
     expect(points).toContain('积分');
     expect(points).toContain('今日已签到');
+  });
+
+  it('并发双签只成功一次（per-user 串行化）', async () => {
+    const cfg = resolveGroupSuiteConfig({});
+    const results = await Promise.all([
+      doCheckin(groupInput, cfg),
+      doCheckin(groupInput, cfg),
+    ]);
+    expect(results.filter((r) => r.includes('签到成功'))).toHaveLength(1);
+    expect(results.filter((r) => r.includes('已经签到'))).toHaveLength(1);
+
+    const points = await myPoints(groupInput);
+    expect(points).toContain('累计签到: 1 天');
   });
 
   it('mypoints / rank commands brand and run', async () => {
@@ -170,5 +188,45 @@ describe('@zhin.js/plugin-group-suite runtime (slice-2)', () => {
     });
     expect(String(result)).toContain('已添加');
     expect(matchKeyword('say hi')).toBe('hello there');
+  });
+
+  it('flushStatsBuffer 只移除写成功的 key，失败行留缓冲不丢计数', async () => {
+    const db = ensureGroupSuiteMemoryDb();
+    const stats = getStatsModel(db)!;
+    const runtime = createGroupSuiteRuntime(db);
+    const bobInput = { ...groupInput, sender: 'u2', metadata: { type: 'group', senderName: 'Bob' } };
+    recordMessage(groupInput, runtime);
+    recordMessage(groupInput, runtime);
+    recordMessage(bobInput, runtime);
+
+    // u2 的 insert 持续失败，u1 正常
+    const brokenStats = {
+      ...stats,
+      insert: async (row: Record<string, unknown>) => {
+        if (row.user_id === 'u2') throw new Error('db down');
+        return stats.insert(row);
+      },
+    };
+    const brokenDb = {
+      models: {
+        get: (name: string) => (name === 'message_stats' ? brokenStats : db.models.get(name)),
+      },
+    };
+    const brokenRuntime: GroupSuiteRuntime = { ...runtime, db: brokenDb };
+
+    await flushStatsBuffer(brokenRuntime);
+    // u1 落库并出缓冲；u2 失败留缓冲
+    expect(runtime.statsBuffer.size).toBe(1);
+    expect([...runtime.statsBuffer.values()][0]).toMatchObject({ user_id: 'u2', count: 1 });
+    let stats1 = await queryStats('g1', '0000-00-00', runtime);
+    expect(stats1.get('u1')?.count).toBe(2);
+    expect(stats1.get('u2')).toBeUndefined();
+
+    // 恢复后重试，u2 计数不丢
+    await flushStatsBuffer(runtime);
+    expect(runtime.statsBuffer.size).toBe(0);
+    stats1 = await queryStats('g1', '0000-00-00', runtime);
+    expect(stats1.get('u1')?.count).toBe(2);
+    expect(stats1.get('u2')?.count).toBe(1);
   });
 });

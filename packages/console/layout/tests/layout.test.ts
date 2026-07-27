@@ -9,7 +9,7 @@ import { FeatureDiscovery, type DiscoveryHost } from '@zhin.js/feature-kit';
 import layoutFeature, { LayoutIndex } from '../src/index.js';
 
 describe('Layout Feature', () => {
-  it('discovers only the two reserved TSX slots without executing them', async () => {
+  it('discovers only the two reserved TS/TSX slots without executing them', async () => {
     const host: DiscoveryHost = {
       async list(directory) {
         return directory === '/app/pages'
@@ -28,6 +28,49 @@ describe('Layout Feature', () => {
       packageRoot: '/app',
     }]);
     expect(slots.map((slot) => slot.localName)).toEqual(['footer', 'nav']);
+  });
+
+  it('discovers .ts layout slots alongside .tsx', async () => {
+    const host: DiscoveryHost = {
+      async list(directory) {
+        return directory === '/app/pages'
+          ? ['$footer.ts', '$nav.ts', 'home.tsx']
+              .map((name) => ({ name, kind: 'file' as const }))
+          : [];
+      },
+      async loadModule<T>(): Promise<T> { throw new Error('Layout source must not execute in Node'); },
+      async loadClientModule<T>(source): Promise<T> {
+        return { module: `/assets/${source.split('/').at(-1)}.js`, hash: 'hash' } as T;
+      },
+      async readText(): Promise<string> { throw new Error('Not used'); },
+    };
+    const slots = await new FeatureDiscovery(host).discover(layoutFeature, [{
+      owner: rootPluginId(),
+      packageRoot: '/app',
+    }]);
+    expect(slots.map((slot) => slot.localName)).toEqual(['footer', 'nav']);
+    expect(slots.map((slot) => slot.source)).toEqual(['/app/pages/$footer.ts', '/app/pages/$nav.ts']);
+  });
+
+  it('prefers .tsx over .ts when both exist for the same slot', async () => {
+    const host: DiscoveryHost = {
+      async list(directory) {
+        return directory === '/app/pages'
+          ? ['$nav.ts', '$nav.tsx']
+              .map((name) => ({ name, kind: 'file' as const }))
+          : [];
+      },
+      async loadModule<T>(): Promise<T> { throw new Error('Layout source must not execute in Node'); },
+      async loadClientModule<T>(source): Promise<T> {
+        return { module: `/assets/${source.split('/').at(-1)}.js`, hash: 'hash' } as T;
+      },
+      async readText(): Promise<string> { throw new Error('Not used'); },
+    };
+    const slots = await new FeatureDiscovery(host).discover(layoutFeature, [{
+      owner: rootPluginId(),
+      packageRoot: '/app',
+    }]);
+    expect(slots.map((slot) => slot.source)).toEqual(['/app/pages/$nav.tsx']);
   });
 
   it('returns nearest-ancestor and ordered fallback layouts', () => {

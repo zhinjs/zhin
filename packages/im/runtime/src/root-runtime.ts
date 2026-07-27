@@ -282,6 +282,7 @@ export class RootRuntime {
   async #inspectProject(): Promise<InspectedProject> {
     const resolver = await NodePackageResolver.create(this.#projectRoot);
     const graph = await new ProjectGraphService(resolver).inspect(this.#projectRoot);
+    await this.#refreshConfigDocument();
     if (this.#configResolver) {
       return {
         graph,
@@ -295,6 +296,21 @@ export class RootRuntime {
       configResolver: this.#configViewResolver(composed.views),
       primaryConfigDocument: composed.document,
     };
+  }
+
+  /**
+   * The config file itself is watched, so an external edit triggers a full
+   * reload. Re-read through the port before composing: without this the reload
+   * would rebuild the whole generation from the stale in-memory document read
+   * at start, the edit would silently not apply, and the next patchConfig
+   * would hit a revision conflict. On drift the file is authoritative.
+   */
+  async #refreshConfigDocument(): Promise<void> {
+    if (!this.#configPort) return;
+    const snapshot = await this.#configPort.read();
+    if (snapshot.revision === this.#configSnapshot?.revision) return;
+    this.#configSnapshot = snapshot;
+    this.#configDocument = structuredClone(snapshot.document);
   }
 
   #configViewResolver(
@@ -312,7 +328,10 @@ export class RootRuntime {
     if (!this.#configDocument) {
       throw new Error('Config patches require a document-backed RootRuntime config');
     }
-    const currentDocument = this.#configDocument;
+    // Adopt any external edit before planning so the port's revision check
+    // cannot conflict and the patch applies on top of the on-disk document.
+    await this.#refreshConfigDocument();
+    const currentDocument = requireConfigDocument(this.#configDocument);
     let plan: ConfigPatchPlan | undefined;
     let prepared: PreparedRuntimeGeneration | undefined;
     let documentTransaction: PreparedConfigDocument | undefined;
@@ -448,6 +467,13 @@ function requireConfigDocumentSnapshot(
 ): ConfigDocumentSnapshot {
   if (!snapshot) throw new Error('ConfigDocumentPort has not been read');
   return snapshot;
+}
+
+function requireConfigDocument(
+  document: RuntimeConfigDocument | undefined,
+): RuntimeConfigDocument {
+  if (!document) throw new Error('Config patches require a document-backed RootRuntime config');
+  return document;
 }
 
 function cloneConfigPatches(patches: readonly ConfigPatch[]): readonly ConfigPatch[] {

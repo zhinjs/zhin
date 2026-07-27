@@ -9,7 +9,7 @@ import {
   type PreparedConfigDocument,
   type RuntimeConfigDocument,
 } from '@zhin.js/runtime';
-import { parseDocument, type Document } from 'yaml';
+import { isMap, isSeq, parseDocument, type Document } from 'yaml';
 
 export class YamlConfigDocumentError extends Error {
   constructor(message: string, options?: ErrorOptions) {
@@ -158,8 +158,54 @@ function applyPatch(document: Document, patch: ConfigPatch): void {
     document.contents = document.createNode(structuredClone(patch.value));
     return;
   }
-  if (patch.op === 'set') document.setIn(patch.path, structuredClone(patch.value));
-  else document.deleteIn(patch.path);
+  if (patch.op === 'set') document.setIn(resolvePath(document, patch.path), structuredClone(patch.value));
+  else document.deleteIn(resolvePath(document, patch.path));
+}
+
+/**
+ * Walks the AST so numeric segments address sequence elements (`endpoints.0.url`).
+ * Non-numeric segments on a sequence and out-of-bounds indexes are rejected
+ * with the same errors as the Runtime planner; missing intermediates are left
+ * for `setIn` to create as mappings (matching planner semantics).
+ */
+function resolvePath(document: Document, path: readonly string[]): (string | number)[] {
+  const resolved: (string | number)[] = [];
+  let node: unknown = document.contents;
+  for (const [index, segment] of path.entries()) {
+    const isLast = index === path.length - 1;
+    if (isSeq(node)) {
+      if (!/^(0|[1-9]\d*)$/.test(segment)) {
+        throw new ConfigPatchPathError(
+          `Config path ${pointer(path.slice(0, index + 1))} requires an array index, got "${segment}"`,
+        );
+      }
+      const arrayIndex = Number(segment);
+      if (arrayIndex >= node.items.length) {
+        throw new ConfigPatchPathError(
+          `Config path ${pointer(path.slice(0, index + 1))} is out of bounds (array length ${node.items.length})`,
+        );
+      }
+      resolved.push(arrayIndex);
+      node = isLast ? undefined : node.get(arrayIndex, false);
+    } else if (isMap(node)) {
+      resolved.push(segment);
+      node = isLast ? undefined : node.get(segment, false);
+    } else if (node == null) {
+      // Missing intermediate mapping (setIn creates it).
+      resolved.push(segment);
+      node = undefined;
+    } else {
+      throw new ConfigPatchPathError(
+        `Config path ${pointer(path.slice(0, index + 1))} is not an object`,
+      );
+    }
+  }
+  return resolved;
+}
+
+function pointer(path: readonly string[]): string {
+  if (path.length === 0) return '/';
+  return `/${path.map((segment) => segment.replaceAll('~', '~0').replaceAll('/', '~1')).join('/')}`;
 }
 
 function assertPath(path: readonly string[]): void {

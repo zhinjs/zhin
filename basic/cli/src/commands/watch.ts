@@ -126,6 +126,23 @@ function snapshotToScreen(snapshot: WatchSnapshot): string {
   });
 }
 
+/**
+ * 定时刷新守卫：上一次 tick 未完成时跳过本次触发，
+ * 避免慢请求下 setInterval 造成重叠抓取。
+ */
+export function createSerialTick(tick: () => Promise<void>): () => void {
+  let inFlight = false;
+  return () => {
+    if (inFlight) return;
+    inFlight = true;
+    // 双分支 then：复位守卫并吞掉异常，避免产生 unhandled rejection。
+    void tick().then(
+      () => { inFlight = false; },
+      () => { inFlight = false; },
+    );
+  };
+}
+
 export const watchCommand = new Command('watch')
   .description('监视运行中实例（Host API：stats / bots / assistant jobs）')
   .option('-i, --interval <seconds>', '刷新间隔（秒）', '3')
@@ -158,9 +175,7 @@ export const watchCommand = new Command('watch')
     await tick();
     if (once) return;
 
-    const timer = setInterval(() => {
-      void tick();
-    }, intervalSec * 1000);
+    const timer = setInterval(createSerialTick(tick), intervalSec * 1000);
 
     const stop = () => {
       clearInterval(timer);

@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { parseCommandDefinition } from '@zhin.js/command';
+import { databaseHostToken } from '@zhin.js/plugin-runtime';
 import plugin from '../plugin.ts';
 import previewCommand from '../commands/rss-preview/[url:string].ts';
 import listCommand from '../commands/rss-list.ts';
@@ -7,7 +8,7 @@ import addCommand from '../commands/rss-add/[url:string].ts';
 import removeCommand from '../commands/rss-remove/[url:string].ts';
 import checkCommand from '../commands/rss-check/[url:string=].ts';
 import { formatFeedPreview, resolveRssConfig, stripHtml } from '../src/feed.js';
-import { getRssSubs, resetRssDb, ensureRssMemoryDb } from '../src/db-store.js';
+import { getRssDb, getRssSubs, resetRssDb, ensureRssMemoryDb } from '../src/db-store.js';
 import { SMOKE_CHANNEL } from '../src/channel.js';
 
 const emptyCtx = {
@@ -96,6 +97,27 @@ describe('@zhin.js/plugin-rss runtime', () => {
   it('rss-check with no subscriptions returns clear message', async () => {
     const result = await checkCommand.execute({ ...emptyCtx, params: {} });
     expect(String(result)).toContain('没有任何订阅');
+  });
+
+  it('setup with databaseHostToken registers lifecycle cleanup for module _db', async () => {
+    const disposers: Array<() => void> = [];
+    const fakeHost = { define: () => undefined } as never;
+    const context = {
+      config: { get: () => ({}) },
+      resources: {
+        has: (token: unknown) => token === databaseHostToken,
+        use: () => fakeHost,
+      },
+      lifecycle: { add: (d: () => void) => disposers.push(d) },
+    };
+
+    await (plugin as unknown as { setup: (ctx: unknown) => Promise<void> }).setup(context);
+    expect(getRssDb()).toBe(fakeHost);
+    expect(disposers.length).toBeGreaterThan(0);
+
+    disposers.forEach((d) => d());
+    // dispose 后不再悬挂到上一代 host，回落到新的内存库
+    expect(getRssDb()).not.toBe(fakeHost);
   });
 
   it('outbound push is invoked for subscribers when wired', async () => {

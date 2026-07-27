@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { parseCommandDefinition } from '@zhin.js/command';
 import { fetchApi, formatList } from '../src/api.js';
+import { DEFAULT_API_BASE, registerSixtySApiBase, resolveApiBase } from '../src/runtime-deps.js';
 import plugin from '../plugin.ts';
 import weatherTool from '../agent/tools/weather.ts';
 import newsTool from '../agent/tools/60s_news.ts';
@@ -96,5 +97,66 @@ describe('fetchApi guards', () => {
       throw err;
     }));
     await expect(fetchApi('/test')).rejects.toThrow('请求超时（30s）');
+  });
+});
+
+describe('60s runtime apiBase injection', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function stubFetchOk() {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: { get: (name: string) => (name === 'content-type' ? 'application/json' : null) },
+      json: async () => ({ code: 200, data: {} }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('resolves apiBase at call time (config patch 生效)，unregister 后回落默认', async () => {
+    const fetchMock = stubFetchOk();
+
+    let base = 'https://a.example.com';
+    const unregister = registerSixtySApiBase(() => base);
+    await fetchApi('/x');
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe('https://a.example.com/v2/x');
+
+    base = 'https://b.example.com';
+    await fetchApi('/x');
+    expect(String(fetchMock.mock.calls[1]?.[0])).toBe('https://b.example.com/v2/x');
+
+    unregister();
+    expect(resolveApiBase()).toBe(DEFAULT_API_BASE);
+    await fetchApi('/x');
+    expect(String(fetchMock.mock.calls[2]?.[0])).toBe(`${DEFAULT_API_BASE}/v2/x`);
+  });
+
+  it('plugin setup 注册运行时 getter，lifecycle dispose 后恢复默认且不写 process.env', async () => {
+    const fetchMock = stubFetchOk();
+    const disposers: Array<() => void> = [];
+    let cfg = { apiBase: 'https://cfg.example.com' };
+    const context = {
+      config: { get: () => cfg },
+      lifecycle: { add: (d: () => void) => disposers.push(d) },
+    };
+
+    await (plugin as unknown as { setup: (ctx: unknown) => Promise<void> }).setup(context);
+    expect(disposers).toHaveLength(1);
+    expect(process.env.ZHIN_60S_API).toBeUndefined();
+
+    await fetchApi('/y');
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe('https://cfg.example.com/v2/y');
+
+    // config patch：getter 每次调用重新求值
+    cfg = { apiBase: 'https://cfg2.example.com' };
+    await fetchApi('/y');
+    expect(String(fetchMock.mock.calls[1]?.[0])).toBe('https://cfg2.example.com/v2/y');
+
+    disposers.forEach((d) => d());
+    expect(resolveApiBase()).toBe(DEFAULT_API_BASE);
   });
 });

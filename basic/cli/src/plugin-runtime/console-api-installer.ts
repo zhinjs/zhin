@@ -492,10 +492,13 @@ export function registerConsoleApiRoutes(
         authScope,
         listPages: () => listPages(consoleRuntime),
         readConfigYaml: () => readProjectConfigYaml(projectRoot),
-        // Read from the validated generation projection. Keep environment
-        // placeholders intact so Console cannot reveal expanded secrets.
+        // config:get-all 与 config:get-yaml 共用磁盘配置文件这单一数据源：
+        // config:set / save-yaml 写文件后二者立即读回一致的新值（此前 get-all
+        // 读 generation 内存快照，写后双数据源分裂）。注意运行时生效语义：
+        // Bot 仍运行其 generation 内存配置，改动需 restart/reload 后才生效。
+        // 直接读原始文件也保证环境变量占位符不被展开，避免泄露密钥。
         readConfigDocument: async () => flattenConfigDocument(
-          primaryConfigDocument ?? await readProjectConfigDocument(projectRoot),
+          await readProjectConfigDocument(projectRoot),
         ),
         writeConfigYaml: (yaml) => writeProjectConfigYaml(projectRoot, yaml),
         setConfigKey: (pluginName, data) => setProjectConfigKey(projectRoot, pluginName, data),
@@ -1203,11 +1206,31 @@ async function writeProjectConfigYaml(projectRoot: string, yaml: string): Promis
 }
 
 /**
+ * 进程内配置写串行化锁：setProjectConfigKey 是 读-改-写，
+ * 并发调用会基于同一份旧文档各自回写、后写覆盖先写（丢键）。
+ * 用 promise 链把写操作串行化；失败不断链。
+ */
+let configWriteTail: Promise<unknown> = Promise.resolve();
+
+/**
  * 写入配置键：
  * - host 键 / 已在顶层的键 → 顶层
  * - 其余（插件 instanceKey）→ `plugins.<name>`
  */
-export async function setProjectConfigKey(
+export function setProjectConfigKey(
+  projectRoot: string,
+  pluginName: string,
+  data: unknown,
+): Promise<{ restartRequired: boolean }> {
+  const run = configWriteTail.then(
+    () => applyProjectConfigKey(projectRoot, pluginName, data),
+    () => applyProjectConfigKey(projectRoot, pluginName, data),
+  );
+  configWriteTail = run.catch(() => undefined);
+  return run;
+}
+
+async function applyProjectConfigKey(
   projectRoot: string,
   pluginName: string,
   data: unknown,

@@ -17,7 +17,9 @@ import {
   applyWizardOptionsToConfig,
   appendWizardEnvVars,
   collectWizardDependencies,
+  collectWizardFeatures,
   mergeDependenciesIntoPackageJson,
+  mergeFeaturesIntoPackageJson,
   finalizeWizardOptions,
   formatAIDependencyHint,
   type InitOptions,
@@ -230,8 +232,9 @@ export const setupCommand = new Command('setup')
 
       const deps = collectWizardDependencies(wizardOptions);
       const depsChanged = await mergeDependenciesIntoPackageJson(cwd, deps);
-      if (depsChanged) {
-        console.log(chalk.gray('  ✓ 已更新 package.json 依赖，请运行 pnpm install'));
+      const featuresChanged = await mergeFeaturesIntoPackageJson(cwd, collectWizardFeatures(wizardOptions));
+      if (depsChanged || featuresChanged) {
+        console.log(chalk.gray('  ✓ 已更新 package.json 依赖/features 清单，请运行 pnpm install'));
         if (wizardOptions.ai?.enabled) {
           const agentProvider = wizardOptions.ai.agentProvider ?? wizardOptions.ai.defaultProvider;
           console.log(chalk.gray(`    AI 栈: ${formatAIDependencyHint(agentProvider)}`));

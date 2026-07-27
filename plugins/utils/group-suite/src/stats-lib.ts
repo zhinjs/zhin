@@ -75,9 +75,9 @@ export async function flushStatsBuffer(runtime?: GroupSuiteRuntime): Promise<voi
   const targetBuffer = runtime?.statsBuffer ?? buffer;
   const M = getStatsModel(runtime?.db);
   if (!M || targetBuffer.size === 0) return;
-  const entries = [...targetBuffer.values()];
-  targetBuffer.clear();
-  for (const entry of entries) {
+  for (const [key, entry] of [...targetBuffer.entries()]) {
+    // 快照本次要落库的计数；flush 期间新累计的部分留在缓冲
+    const countSnapshot = entry.count;
     try {
       const existing = (await M.select().where({
         user_id: entry.user_id,
@@ -86,7 +86,7 @@ export async function flushStatsBuffer(runtime?: GroupSuiteRuntime): Promise<voi
       })) as Record<string, unknown>[];
       if (existing.length > 0) {
         await M.update({
-          count: Number(existing[0]!.count || 0) + entry.count,
+          count: Number(existing[0]!.count || 0) + countSnapshot,
           user_name: entry.user_name,
           updated_at: ts(),
         }).where({
@@ -100,12 +100,15 @@ export async function flushStatsBuffer(runtime?: GroupSuiteRuntime): Promise<voi
           user_name: entry.user_name,
           group_id: entry.group_id,
           date: entry.date,
-          count: entry.count,
+          count: countSnapshot,
           updated_at: ts(),
         });
       }
+      // 只移除写入成功的部分；失败的 key 留在缓冲等下一轮重试
+      entry.count -= countSnapshot;
+      if (entry.count <= 0 && targetBuffer.get(key) === entry) targetBuffer.delete(key);
     } catch {
-      /* single row failure */
+      /* single row failure: keep entry in buffer for next flush */
     }
   }
 }

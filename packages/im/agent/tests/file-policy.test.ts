@@ -78,6 +78,20 @@ describe('file-policy', () => {
         expect(checkFileAccess('data/media/inbound/tmp.png').allowed).toBe(true);
         expect(checkFileAccess('data/media/outbound/voice.mp3').allowed).toBe(true);
       });
+
+      it('data 拦截锚定工作区根（显式 workspaceDir）', () => {
+        expect(checkFileAccess('/tmp/ws/data/bot.db', '/tmp/ws').allowed).toBe(false);
+        expect(checkFileAccess('/tmp/ws/data/other/secret.txt', '/tmp/ws').allowed).toBe(false);
+        // 豁免子树仍然放行
+        expect(checkFileAccess('/tmp/ws/data/memory/global/MEMORY.md', '/tmp/ws').allowed).toBe(true);
+        expect(checkFileAccess('/tmp/ws/data/media/inbound/tmp.png', '/tmp/ws').allowed).toBe(true);
+      });
+
+      it('放行非工作区根的 data 目录（如 src/data/fixtures）', () => {
+        expect(checkFileAccess('src/data/fixtures/data/sample.json').allowed).toBe(true);
+        expect(checkFileAccess('/home/user/project/src/data/fixtures.ts').allowed).toBe(true);
+        expect(checkFileAccess('/home/user/data/notes.txt', '/tmp/ws').allowed).toBe(true);
+      });
     });
 
     describe('应阻止系统敏感路径', () => {

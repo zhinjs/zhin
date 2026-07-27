@@ -172,6 +172,18 @@ async function readOwnSchema(node: PluginGraphNode): Promise<JsonSchema> {
   if (schema.type !== undefined && schema.type !== 'object') {
     throw new TypeError(`${file} root schema type must be object`);
   }
+  // A compositional root (anyOf/oneOf/allOf/$ref without properties) would
+  // validate but pickOwnFields only copies top-level properties, silently
+  // projecting an empty ConfigView. Reject it explicitly instead.
+  if (
+    schema.properties === undefined
+    && (schema.anyOf !== undefined || schema.oneOf !== undefined
+      || schema.allOf !== undefined || schema.$ref !== undefined)
+  ) {
+    throw new TypeError(
+      `${file} root schema must declare properties; composition keywords (anyOf/oneOf/allOf/$ref) are not supported`,
+    );
+  }
   return Object.freeze({
     type: 'object',
     additionalProperties: false,

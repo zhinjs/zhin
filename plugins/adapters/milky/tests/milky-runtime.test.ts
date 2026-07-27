@@ -668,6 +668,40 @@ describe('milky ws lifecycle', () => {
 });
 
 describe('milky sse lifecycle', () => {
+  it('resets state and does not reconnect when the initial connect fails before open', async () => {
+    let attempt = 0;
+    const endpoint = new MilkySseEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'milky'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: resolveMilkyConfig({
+        connection: 'sse',
+        name: 'sse-retry-bot',
+        baseUrl: 'http://127.0.0.1:8080',
+        reconnect_interval: 50,
+      }) as never,
+      createSseStream: (options) => {
+        attempt += 1;
+        if (attempt === 1) queueMicrotask(() => options.onError?.(new Error('boom')));
+        else queueMicrotask(() => options.onOpen?.());
+        return {
+          closed: new Promise(() => undefined),
+          close() { /* noop */ },
+        };
+      },
+    });
+
+    await expect(endpoint.start()).rejects.toThrow('boom');
+    // 等超过一个 reconnect_interval，不应武装重连
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(attempt).toBe(1);
+    // start 失败后 agent endpoint 已反注册
+    expect(() => getMilkyAgentDeps().getEndpoint('sse-retry-bot')).toThrow();
+    // #started 已复位，可重新 start
+    await endpoint.start();
+    expect(attempt).toBe(2);
+    await endpoint.stop();
+  });
+
   it('rejects start when the stream is stopped during connect', async () => {
     let resolveClosed!: () => void;
     const closed = new Promise<void>((resolve) => {

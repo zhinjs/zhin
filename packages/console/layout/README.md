@@ -1,11 +1,11 @@
 # @zhin.js/layout
 
-Console Shell Layout slot 的标准 Feature provider。Layout 与 Page 共用 `pages/`，但只发现两个保留文件：`$nav.tsx` 和 `$footer.tsx`。
+Console Shell Layout slot 的标准 Feature provider。Layout 与 Page 共用 `pages/`，但只发现两个保留文件：`$nav.tsx` / `$nav.ts` 和 `$footer.tsx` / `$footer.ts`（同一 slot 同时存在时以 `.tsx` 为准）。
 
 ## Semantics
 
-- `$nav.tsx` -> slot `nav`。
-- `$footer.tsx` -> slot `footer`。
+- `$nav.tsx` / `$nav.ts` -> slot `nav`。
+- `$footer.tsx` / `$footer.ts` -> slot `footer`。
 - slot 按当前 route owner 向最近祖先继承。
 - `LayoutIndex.chain()` 返回从最近 override 到 Root override 的完整回退链，供 Shell Error Boundary 逐级回退。
 

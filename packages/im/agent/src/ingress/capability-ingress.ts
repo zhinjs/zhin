@@ -5,11 +5,13 @@
  * (same vocabulary as Tool Selection). Cache keys use the same message
  * projections `canAccessTool` reads — not a second authoring vocabulary.
  *
- * Ownership: only one on-demand set is live at a time (`lastCacheKey`);
+ * Ownership: only one on-demand set is live at a time (`live` projection);
  * a cache miss purges previous owned entries then reloads. While a turn is
  * still in flight (holding the previous projection), the purge is deferred
  * until that turn releases its lease, so a concurrent turn never loses the
- * tools it is executing with.
+ * tools it is executing with. Leases release against the projection object
+ * they acquired — not the cache key — so an A→B→A key oscillation can never
+ * decrement the wrong projection's in-flight count.
  *
  * Named `FeatureCapabilityIngress` to disambiguate from the Plugin Runtime
  * `CapabilityIngress` exported by `@zhin.js/agent/runtime`.
@@ -169,25 +171,29 @@ export interface IngressTurnLease {
   release(): void;
 }
 
-interface RetiredProjection {
+interface Projection {
+  /** Cache key this projection was loaded for (mutated to a stale sentinel by invalidate()). */
+  key: string;
   owned: IngressOwned;
   inFlight: number;
+  /** True once a cache miss retired this projection while turns were in flight. */
+  retired: boolean;
 }
 
 export class FeatureCapabilityIngress {
-  /** Live on-demand set key; ownership is single-slot (purge on miss). */
-  private lastCacheKey: string | null = null;
-  private owned = emptyOwned();
-  /** Turns currently executing against the live projection. */
-  private inFlight = 0;
+  /** Live on-demand projection; ownership is single-slot (purge on miss). */
+  private live: Projection | null = null;
   /** Previous projections kept alive until their in-flight turns release. */
-  private retired = new Map<string, RetiredProjection>();
+  private retired = new Set<Projection>();
   private staleCounter = 0;
   private coreToolNames = new Set<string>();
 
   /** Test / hot-reload: drop cache so next ensureForTurn re-loads. */
   invalidate(): void {
-    this.lastCacheKey = null;
+    // Sentinel key: the next ensureForTurn misses and retires/purges the
+    // live projection through the normal path (in-flight leases stay valid
+    // because they release against the projection object, not the key).
+    if (this.live) this.live.key = `stale-${this.staleCounter++}`;
   }
 
   /**
@@ -233,28 +239,31 @@ export class FeatureCapabilityIngress {
   ): IngressTurnLease {
     const fp = featureFingerprint(features);
     const key = buildTurnCacheKey(ctx, fp);
-    if (this.lastCacheKey === key) {
-      this.inFlight++;
+    if (this.live && this.live.key === key) {
+      const projection = this.live;
+      projection.inFlight++;
       return {
         tools: 0,
         skills: 0,
         agents: 0,
         mcps: 0,
         cacheHit: true,
-        release: () => this.#releaseTurn(orchestrator, key),
+        release: () => this.#releaseTurn(orchestrator, projection),
       };
     }
 
     // Cache miss: a turn still executing against the live projection keeps
     // its entries; retire the projection and purge once it drains.
-    if (this.inFlight > 0) {
-      const retiredKey = this.lastCacheKey ?? `stale-${this.staleCounter++}`;
-      this.retired.set(retiredKey, { owned: this.owned, inFlight: this.inFlight });
-    } else {
-      purgeOwned(orchestrator, this.owned);
+    if (this.live) {
+      if (this.live.inFlight > 0) {
+        this.live.retired = true;
+        this.retired.add(this.live);
+      } else {
+        purgeOwned(orchestrator, this.live.owned);
+      }
     }
-    this.owned = emptyOwned();
-    this.inFlight = 0;
+    const projection: Projection = { key, owned: emptyOwned(), inFlight: 1, retired: false };
+    this.live = projection;
 
     let tools = 0;
     let skills = 0;
@@ -269,7 +278,7 @@ export class FeatureCapabilityIngress {
       if (isBuiltinToolSource(tool.source)) continue;
       if (!canAccessTool(tool, ctx.message)) continue;
       orchestrator.addTool(toolToOrchestrator(tool), undefined, tool.source ?? 'feature');
-      this.owned.tools.add(tool.name);
+      projection.owned.tools.add(tool.name);
       tools++;
     }
 
@@ -280,7 +289,7 @@ export class FeatureCapabilityIngress {
         canAccessTool(t as unknown as CoreTool, ctx.message),
       );
       orchestrator.addSkill(orchSkill, undefined, skill.pluginName);
-      this.owned.skills.add(skill.name);
+      projection.owned.skills.add(skill.name);
       skills++;
     }
 
@@ -290,7 +299,7 @@ export class FeatureCapabilityIngress {
         undefined,
         preset.pluginName ?? 'feature',
       );
-      this.owned.agents.add(preset.name);
+      projection.owned.agents.add(preset.name);
       agents++;
     }
 
@@ -298,41 +307,38 @@ export class FeatureCapabilityIngress {
       if (!allowedMcp.has(entry.name)) continue;
       const { pluginName: _p, ...mcp } = entry;
       orchestrator.addMcp(mcp as McpServerEntry, undefined, entry.pluginName ?? 'feature');
-      this.owned.mcps.add(entry.name);
+      projection.owned.mcps.add(entry.name);
       mcps++;
     }
 
-    this.lastCacheKey = key;
-    this.inFlight = 1;
     return {
       tools,
       skills,
       agents,
       mcps,
       cacheHit: false,
-      release: () => this.#releaseTurn(orchestrator, key),
+      release: () => this.#releaseTurn(orchestrator, projection),
     };
   }
 
-  #releaseTurn(orchestrator: AgentOrchestrator, key: string): void {
-    if (key === this.lastCacheKey) {
+  #releaseTurn(orchestrator: AgentOrchestrator, projection: Projection): void {
+    if (!projection.retired) {
       // Live projection: keep the cache even when no turn is in flight.
-      this.inFlight = Math.max(0, this.inFlight - 1);
+      projection.inFlight = Math.max(0, projection.inFlight - 1);
       return;
     }
-    const retired = this.retired.get(key);
-    if (!retired) return;
-    retired.inFlight--;
-    if (retired.inFlight > 0) return;
-    this.retired.delete(key);
+    if (!this.retired.has(projection)) return; // already purged (double release)
+    projection.inFlight--;
+    if (projection.inFlight > 0) return;
+    this.retired.delete(projection);
     // Skip names the live projection (or another still-active retired
     // projection) re-registered under the same name.
     const retained = emptyOwned();
-    mergeOwned(retained, this.owned);
-    for (const other of this.retired.values()) {
+    if (this.live) mergeOwned(retained, this.live.owned);
+    for (const other of this.retired) {
       if (other.inFlight > 0) mergeOwned(retained, other.owned);
     }
-    purgeOwned(orchestrator, retired.owned, retained);
+    purgeOwned(orchestrator, projection.owned, retained);
   }
 }
 

@@ -248,6 +248,75 @@ describe('hierarchical Plugin config', () => {
       value: true,
     }])).rejects.toBeInstanceOf(ConfigPatchPathError);
   });
+
+  it('rejects a compositional root schema instead of silently projecting an empty view', async () => {
+    for (const rootSchema of [
+      { anyOf: [{ type: 'object', properties: { endpoint: { type: 'string' } } }] },
+      { oneOf: [{ type: 'object', properties: { endpoint: { type: 'string' } } }] },
+      { allOf: [{ type: 'object', properties: { endpoint: { type: 'string' } } }] },
+      { $ref: '#/definitions/config' },
+    ]) {
+      const root = await configProject({
+        rootSchema,
+        childSchema: { type: 'object', properties: {} },
+      });
+      const resolver = await NodePackageResolver.create(root);
+      const graph = await new ProjectGraphService(resolver).inspect(root);
+      await expect(new ConfigComposer().compose(graph, { plugin: { endpoint: 'local' } }))
+        .rejects.toThrow(/root schema must declare properties/);
+    }
+  });
+
+  it('addresses array elements in patch paths and rejects bad indexes', async () => {
+    const root = await configProject({
+      rootSchema: {},
+      childSchema: { type: 'object', properties: {} },
+    });
+    const resolver = await NodePackageResolver.create(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const planner = new ConfigPatchPlanner();
+    const current = {
+      http: { endpoints: [{ url: 'a', token: 't0' }, { url: 'b' }] },
+    };
+
+    const updated = await planner.plan(graph, current, [{
+      op: 'set',
+      path: ['http', 'endpoints', '0', 'url'],
+      value: 'a2',
+    }]);
+    expect(updated.candidate).toEqual({
+      http: { endpoints: [{ url: 'a2', token: 't0' }, { url: 'b' }] },
+    });
+
+    const removed = await planner.plan(graph, current, [{
+      op: 'remove',
+      path: ['http', 'endpoints', '1'],
+    }]);
+    expect(removed.candidate).toEqual({
+      http: { endpoints: [{ url: 'a', token: 't0' }] },
+    });
+
+    await expect(planner.plan(graph, current, [{
+      op: 'set',
+      path: ['http', 'endpoints', 'foo', 'url'],
+      value: 'x',
+    }])).rejects.toThrow(/requires an array index/);
+    await expect(planner.plan(graph, current, [{
+      op: 'set',
+      path: ['http', 'endpoints', '5', 'url'],
+      value: 'x',
+    }])).rejects.toThrow(/out of bounds/);
+    await expect(planner.plan(graph, current, [{
+      op: 'remove',
+      path: ['http', 'endpoints', '5'],
+    }])).rejects.toThrow(/out of bounds/);
+    // A numeric segment cannot index a plain object traversal target either.
+    await expect(planner.plan(graph, current, [{
+      op: 'set',
+      path: ['http', 'endpoints', '0', 'url', '0'],
+      value: 'x',
+    }])).rejects.toBeInstanceOf(ConfigPatchPathError);
+  });
 });
 
 interface ConfigProjectInput {

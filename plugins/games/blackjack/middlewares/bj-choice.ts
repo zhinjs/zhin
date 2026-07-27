@@ -42,7 +42,8 @@ export default defineMiddleware<Message>({
       return;
     }
 
-    const session = await services.getActiveForUser(ch, message.$sender.id);
+    // 不按 status 过滤取本频道本人最近一局：终局 session 也要能命中 restart 分支
+    const session = await services.getLatestForUser(ch, message.$sender.id);
     if (!session) {
       await next();
       return;

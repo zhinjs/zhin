@@ -40,6 +40,9 @@ export function defineAgentTool<
   }
   validateStringList('platforms', definition.platforms);
   validateStringList('permissions', definition.permissions);
+  if (definition.scopes !== undefined && !Array.isArray(definition.scopes)) {
+    throw new TypeError('Agent Tool scopes must be an array');
+  }
   if (definition.scopes?.some((scope) => scope !== 'private' && scope !== 'group' && scope !== 'channel')) {
     throw new TypeError('Agent Tool scopes must be private, group, or channel');
   }
@@ -66,6 +69,7 @@ export function parseAgentToolDefinition(value: unknown): AgentToolDefinition {
       && definition.approval !== 'always')
     || !validStringList(definition.platforms)
     || !validStringList(definition.permissions)
+    || (definition.scopes !== undefined && !Array.isArray(definition.scopes))
     || (definition.scopes?.some((scope) => scope !== 'private' && scope !== 'group' && scope !== 'channel') ?? false)
     || (definition.hidden !== undefined && typeof definition.hidden !== 'boolean')
   ) throw invalidTool();

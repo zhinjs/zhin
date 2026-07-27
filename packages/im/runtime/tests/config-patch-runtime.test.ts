@@ -205,6 +205,64 @@ describe('RootRuntime config patches', () => {
     await runtime.stop();
   });
 
+  it('adopts an externally edited config document on reload and on patchConfig', async () => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    modules.set(join(project, 'plugin.ts'), {
+      default: definePlugin({ name: 'root', setup() {} }),
+    });
+    modules.set(join(project, 'plugins/child/plugin.ts'), {
+      default: definePlugin({ name: 'child', setup() {} }),
+    });
+    modules.set(join(project, 'plugins/sibling/plugin.ts'), {
+      default: definePlugin({ name: 'sibling', setup() {} }),
+    });
+    const port = new FakeConfigDocumentPort({});
+    const runtime = new RootRuntime({
+      projectRoot: project,
+      modules,
+      environment: { name: 'test', mode: 'test', platform: 'node' },
+      config: port,
+    });
+    await runtime.start();
+    const child = childPluginId(rootPluginId(), 'child');
+
+    // External edit (e.g. hand-edited zhin.config.yml picked up by the file
+    // watcher): a reload must rebuild from the file, not the stale start-up
+    // in-memory document.
+    port.writeExternal({ http: { port: 9090 }, plugins: { child: { label: 'external' } } });
+    await runtime.reload();
+    expect(runtime.snapshot.config.get(child)).toEqual({ label: 'external' });
+
+    // A subsequent patch must apply on top of the external edit instead of
+    // hitting a revision conflict or dropping it.
+    await runtime.patchConfig([{
+      op: 'set',
+      path: ['plugins', 'child', 'label'],
+      value: 'patched',
+    }]);
+    expect(runtime.snapshot.config.get(child)).toEqual({ label: 'patched' });
+    expect(port.document).toEqual({
+      http: { port: 9090 },
+      plugins: { child: { label: 'patched' } },
+    });
+
+    // patchConfig right after an external edit (no reload in between) also
+    // adopts the file first.
+    port.writeExternal({ http: { port: 7070 }, plugins: { child: { label: 'again' } } });
+    await runtime.patchConfig([{
+      op: 'set',
+      path: ['plugins', 'sibling', 'label'],
+      value: 's9',
+    }]);
+    expect(port.document).toEqual({
+      http: { port: 7070 },
+      plugins: { child: { label: 'again' }, sibling: { label: 's9' } },
+    });
+
+    await runtime.stop();
+  });
+
   it('rolls back a prepared document transaction when the shadow phase fails', async () => {
     const project = await createProject();
     const modules = new FakeModuleRuntime();
@@ -263,6 +321,7 @@ class FakeConfigDocumentPort implements ConfigDocumentPort {
   rollbacks = 0;
   diverge = false;
   #document: RuntimeConfigDocument;
+  #revision = 0;
 
   constructor(document: RuntimeConfigDocument) {
     this.#document = structuredClone(document);
@@ -272,8 +331,14 @@ class FakeConfigDocumentPort implements ConfigDocumentPort {
     return this.#document;
   }
 
+  /** Simulates an external edit of the backing config file. */
+  writeExternal(document: RuntimeConfigDocument): void {
+    this.#document = structuredClone(document);
+    this.#revision += 1;
+  }
+
   async read(): Promise<ConfigDocumentSnapshot> {
-    return { document: structuredClone(this.#document), revision: `r${this.commits}` };
+    return { document: structuredClone(this.#document), revision: `r${this.#revision}` };
   }
 
   async prepare(
@@ -296,8 +361,9 @@ class FakeConfigDocumentPort implements ConfigDocumentPort {
       document,
       commit: async () => {
         this.commits += 1;
+        this.#revision += 1;
         this.#document = structuredClone(document);
-        return { document, revision: `r${this.commits}` };
+        return { document, revision: `r${this.#revision}` };
       },
       rollback: async () => {
         this.rollbacks += 1;

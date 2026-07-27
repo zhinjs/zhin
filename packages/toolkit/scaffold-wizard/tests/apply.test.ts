@@ -1,16 +1,20 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
 import {
   appendWizardEnvVars,
+  applyAdaptersToConfig,
   applyDatabaseToConfig,
   applyWizardOptionsToConfig,
   buildRuntimeConfigDocument,
+  collectWizardDependencies,
+  collectWizardFeatures,
   finalizeWizardOptions,
+  mergeFeaturesIntoPackageJson,
   serializeRuntimeConfig,
 } from '../src/apply.js';
-import type { InitOptions } from '../src/types.js';
+import type { AdapterSetupResult, InitOptions } from '../src/types.js';
 
 describe('apply wizard to config', () => {
   it('merges database, adapters, and ai into new runtime config format', () => {
@@ -169,5 +173,132 @@ describe('buildRuntimeConfigDocument', () => {
     const doc = buildRuntimeConfigDocument(aiOptions);
     expect(doc.ai).toMatchObject({ agents: { zhin: { provider: 'ollama' } } });
     expect(buildRuntimeConfigDocument(options)).not.toHaveProperty('ai');
+  });
+});
+
+describe('applyAdaptersToConfig', () => {
+  const sandboxResult = (endpoints: unknown[]): AdapterSetupResult => ({
+    packages: ['@zhin.js/adapter-sandbox'],
+    plugins: ['@zhin.js/adapter-sandbox'],
+    instances: [{
+      package: '@zhin.js/adapter-sandbox',
+      instanceKey: 'sandbox',
+      config: { endpoints },
+    }],
+    envVars: {},
+  });
+
+  it('rerun keeps manually added endpoints and other instance-level keys', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const config: Record<string, unknown> = {
+        plugins: {
+          sandbox: {
+            commandPrefix: '/',
+            endpoints: [
+              { context: 'sandbox', name: 'sandbox-bot', owner: 'sandbox-user' },
+              { context: 'sandbox', name: 'manual-bot', owner: 'someone-else' },
+            ],
+          },
+        },
+      };
+
+      applyAdaptersToConfig(config, sandboxResult([
+        { context: 'sandbox', name: 'sandbox-bot', owner: 'sandbox-user' },
+      ]));
+
+      const plugins = config.plugins as Record<string, Record<string, unknown>>;
+      expect(plugins.sandbox.commandPrefix).toBe('/');
+      expect(plugins.sandbox.endpoints).toEqual([
+        { context: 'sandbox', name: 'sandbox-bot', owner: 'sandbox-user' },
+        { context: 'sandbox', name: 'manual-bot', owner: 'someone-else' },
+      ]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('wizard result wins on endpoint name conflicts and warns about dropped entries', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const config: Record<string, unknown> = {
+        plugins: {
+          sandbox: {
+            endpoints: [{ context: 'sandbox', name: 'sandbox-bot', owner: 'stale-owner' }],
+          },
+        },
+      };
+
+      applyAdaptersToConfig(config, sandboxResult([
+        { context: 'sandbox', name: 'sandbox-bot', owner: 'sandbox-user' },
+      ]));
+
+      const plugins = config.plugins as Record<string, Record<string, unknown>>;
+      expect(plugins.sandbox.endpoints).toEqual([
+        { context: 'sandbox', name: 'sandbox-bot', owner: 'sandbox-user' },
+      ]);
+      expect(warn).toHaveBeenCalledOnce();
+      expect(String(warn.mock.calls[0]?.[0])).toContain('sandbox-bot');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('adds new instances without touching existing ones', () => {
+    const config: Record<string, unknown> = {
+      plugins: { telegram: { polling: true } },
+    };
+
+    applyAdaptersToConfig(config, sandboxResult([{ context: 'sandbox', name: 'sandbox-bot' }]));
+
+    const plugins = config.plugins as Record<string, unknown>;
+    expect(plugins.telegram).toEqual({ polling: true });
+    expect(plugins.sandbox).toEqual({ endpoints: [{ context: 'sandbox', name: 'sandbox-bot' }] });
+  });
+});
+
+describe('collectWizardDependencies / collectWizardFeatures', () => {
+  it('adds @zhin.js/tool dependency and feature entry when AI is enabled', () => {
+    const ai = {
+      enabled: true,
+      agentProvider: 'ollama',
+      providers: { ollama: { host: 'http://127.0.0.1:11434' } },
+    };
+
+    const deps = collectWizardDependencies({ ai });
+    expect(deps['@zhin.js/agent']).toBe('latest');
+    expect(deps['@zhin.js/tool']).toBe('latest');
+    expect(collectWizardFeatures({ ai })).toEqual([{ package: '@zhin.js/tool', api: '^1.0.0' }]);
+  });
+
+  it('does not add @zhin.js/tool when AI is disabled', () => {
+    const deps = collectWizardDependencies({ ai: { enabled: false } });
+    expect(deps).not.toHaveProperty('@zhin.js/tool');
+    expect(deps).not.toHaveProperty('@zhin.js/agent');
+    expect(collectWizardFeatures({ ai: { enabled: false } })).toEqual([]);
+  });
+});
+
+describe('mergeFeaturesIntoPackageJson', () => {
+  it('merges feature entries into zhin.features idempotently', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'zhin-wizard-features-'));
+    try {
+      await fs.writeJson(path.join(dir, 'package.json'), {
+        name: 'bot',
+        zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', features: [] },
+      });
+
+      const changed = await mergeFeaturesIntoPackageJson(dir, [{ package: '@zhin.js/tool', api: '^1.0.0' }]);
+      expect(changed).toBe(true);
+      let pkg = await fs.readJson(path.join(dir, 'package.json'));
+      expect(pkg.zhin.features).toEqual([{ package: '@zhin.js/tool', api: '^1.0.0' }]);
+
+      // 重复运行不重复追加
+      expect(await mergeFeaturesIntoPackageJson(dir, [{ package: '@zhin.js/tool', api: '^1.0.0' }])).toBe(false);
+      pkg = await fs.readJson(path.join(dir, 'package.json'));
+      expect(pkg.zhin.features).toHaveLength(1);
+    } finally {
+      await fs.remove(dir);
+    }
   });
 });
