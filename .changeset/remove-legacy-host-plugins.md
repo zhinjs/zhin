@@ -1,10 +1,10 @@
 ---
-"zhin.js": major
-"@zhin.js/mcp": major
-"@zhin.js/a2a": major
-"@zhin.js/cli": major
-"@zhin.js/scaffold-wizard": major
-"@zhin.js/agent": minor
+"zhin.js": patch
+"@zhin.js/mcp": patch
+"@zhin.js/a2a": patch
+"@zhin.js/cli": patch
+"@zhin.js/scaffold-wizard": patch
+"@zhin.js/agent": patch
 ---
 
 删除 legacy 插件包 `@zhin.js/host-api` 与 `@zhin.js/host-router`（legacy `usePlugin` 插件栈下线）：
