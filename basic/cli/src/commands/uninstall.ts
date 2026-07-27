@@ -146,69 +146,51 @@ const serviceCommand = new Command('service')
 
 const pluginCommand = new Command('plugin')
   .description('卸载插件')
-  .argument('<name>', '插件名称')
+  .argument('<name>', '插件名称（npm 包名或 instanceKey）')
   .option('--remove-pkg', '同时从 package.json 中移除依赖')
   .action(async (name: string, options: { removePkg?: boolean }) => {
     const cwd = process.cwd();
     const pkgPath = path.join(cwd, 'package.json');
-    
+
     if (!fs.existsSync(pkgPath)) {
       logger.error('当前目录不是有效的项目');
       process.exit(1);
     }
 
-    // 从配置文件中移除
-    const configFile = await findConfigFile(cwd);
-    if (configFile) {
-      const configPath = path.join(cwd, configFile);
-      const config = await readConfig(configPath);
-      
-      if (config.plugins && Array.isArray(config.plugins)) {
-        const index = config.plugins.indexOf(name);
-        if (index !== -1) {
-          config.plugins.splice(index, 1);
-          await saveConfig(configPath, config);
-          logger.success(`已从配置文件中移除插件 "${name}"`);
-        } else {
-          logger.warn(formatCompact( { cmd: 'uninstall', op: 'plugin_not_in_config', name }));
+    await removePluginFromConfig(cwd, name);
+
+    const pkg = await fs.readJson(pkgPath);
+    const removedFromManifest = removeFromZhinManifest(pkg, name);
+    let removedDep = false;
+    if (options.removePkg) {
+      for (const depName of depNamesFor(name)) {
+        for (const field of ['dependencies', 'devDependencies'] as const) {
+          if (pkg[field]?.[depName]) {
+            delete pkg[field][depName];
+            removedDep = true;
+          }
         }
       }
     }
-
-    // 从 package.json 中移除依赖
-    if (options.removePkg) {
-      const pkg = await fs.readJson(pkgPath);
-      let removed = false;
-      
-      if (pkg.dependencies && pkg.dependencies[name]) {
-        delete pkg.dependencies[name];
-        removed = true;
-      }
-      
-      if (pkg.devDependencies && pkg.devDependencies[name]) {
-        delete pkg.devDependencies[name];
-        removed = true;
-      }
-      
-      if (removed) {
-        await fs.writeJson(pkgPath, pkg, { spaces: 2 });
+    if (removedFromManifest || removedDep) {
+      await fs.writeJson(pkgPath, pkg, { spaces: 2 });
+      if (removedFromManifest) logger.success(`已从 package.json 的 zhin.plugins 清单中移除 "${name}"`);
+      if (removedDep) {
         logger.success(`已从 package.json 中移除依赖 "${name}"`);
-        
-        // 提示用户重新安装依赖
         console.log(chalk.yellow('\n请运行 "pnpm install" 更新依赖'));
-      } else {
-        logger.warn(formatCompact( { cmd: 'uninstall', op: 'dep_not_found', name }));
       }
+    } else if (!options.removePkg) {
+      logger.warn(formatCompact({ cmd: 'uninstall', op: 'manifest_not_found', name }));
     }
 
-    // 删除插件目录（如果在 src/plugins 中）
-    const pluginDir = path.join(cwd, 'src', 'plugins', name);
+    // 本地插件目录（./plugins/<name>）：默认不删，确认后删除
+    const pluginDir = path.join(cwd, 'plugins', name);
     if (fs.existsSync(pluginDir)) {
       const { confirmDelete } = await inquirer.prompt([
         {
           type: 'confirm',
           name: 'confirmDelete',
-          message: `是否删除插件目录 "${pluginDir}"?`,
+          message: `是否删除本地插件目录 "${pluginDir}"?`,
           default: false
         }
       ]);
@@ -227,7 +209,7 @@ const adapterCommand = new Command('adapter')
   .action(async (name: string, options: { removePkg?: boolean }) => {
     const cwd = process.cwd();
     const pkgPath = path.join(cwd, 'package.json');
-    
+
     if (!fs.existsSync(pkgPath)) {
       logger.error('当前目录不是有效的项目');
       process.exit(1);
@@ -235,64 +217,79 @@ const adapterCommand = new Command('adapter')
 
     const adapterName = name.startsWith('adapter-') ? name : `adapter-${name}`;
     const pkgName = `@zhin.js/${adapterName}`;
+    const shortName = name.replace(/^adapter-/, '');
 
-    // 从配置文件中移除
-    const configFile = await findConfigFile(cwd);
-    if (configFile) {
-      const configPath = path.join(cwd, configFile);
-      const config = await readConfig(configPath);
-      
-      // 移除插件引用
-      if (config.plugins && Array.isArray(config.plugins)) {
-        const pluginNames = [name, adapterName, pkgName];
-        let removed = false;
-        
-        config.plugins = config.plugins.filter((p: string) => {
-          if (pluginNames.includes(p)) {
-            removed = true;
-            return false;
+    // 配置：plugins.<instanceKey> 映射（key 通常是短名）；legacy 数组形态按包名过滤
+    await removePluginFromConfig(cwd, shortName, [name, adapterName, pkgName]);
+
+    const pkg = await fs.readJson(pkgPath);
+    const removedFromManifest = removeFromZhinManifest(pkg, shortName, [name, adapterName, pkgName]);
+    let removedDep = false;
+    if (options.removePkg) {
+      for (const depName of [name, adapterName, pkgName]) {
+        for (const field of ['dependencies', 'devDependencies'] as const) {
+          if (pkg[field]?.[depName]) {
+            delete pkg[field][depName];
+            removedDep = true;
           }
-          return true;
-        });
-        
-        if (removed) {
-          await saveConfig(configPath, config);
-          logger.success(`已从配置文件中移除适配器 "${name}"`);
         }
-      }
-      
-      // 移除 bot 配置
-      if (config.endpoints && Array.isArray(config.endpoints)) {
-        const context = name.replace(/^adapter-/, '');
-        config.endpoints = config.endpoints.filter((endpoint: { context?: string }) => endpoint.context !== context);
-        await saveConfig(configPath, config);
       }
     }
-
-    // 从 package.json 中移除依赖
-    if (options.removePkg) {
-      const pkg = await fs.readJson(pkgPath);
-      let removed = false;
-      
-      for (const depName of [name, adapterName, pkgName]) {
-        if (pkg.dependencies && pkg.dependencies[depName]) {
-          delete pkg.dependencies[depName];
-          removed = true;
-        }
-        
-        if (pkg.devDependencies && pkg.devDependencies[depName]) {
-          delete pkg.devDependencies[depName];
-          removed = true;
-        }
-      }
-      
-      if (removed) {
-        await fs.writeJson(pkgPath, pkg, { spaces: 2 });
+    if (removedFromManifest || removedDep) {
+      await fs.writeJson(pkgPath, pkg, { spaces: 2 });
+      if (removedFromManifest) logger.success(`已从 package.json 的 zhin.plugins 清单中移除适配器 "${shortName}"`);
+      if (removedDep) {
         logger.success(`已从 package.json 中移除依赖`);
         console.log(chalk.yellow('\n请运行 "pnpm install" 更新依赖'));
       }
     }
   });
+
+/** 从 zhin.config.* 移除插件配置：新形态删 plugins.<instanceKey> 键；legacy 数组按名过滤。 */
+async function removePluginFromConfig(cwd: string, key: string, aliases: string[] = [key]): Promise<void> {
+  const configFile = await findConfigFile(cwd);
+  if (!configFile) return;
+  const configPath = path.join(cwd, configFile);
+  const config = await readConfig(configPath);
+  let changed = false;
+
+  if (Array.isArray(config.plugins)) {
+    const before = config.plugins.length;
+    config.plugins = config.plugins.filter((p: string) => !aliases.includes(p));
+    changed = config.plugins.length !== before;
+  } else if (config.plugins && typeof config.plugins === 'object') {
+    const map = config.plugins as Record<string, unknown>;
+    for (const candidate of [key, ...aliases]) {
+      if (candidate in map) {
+        delete map[candidate];
+        changed = true;
+      }
+    }
+  }
+
+  if (changed) {
+    await saveConfig(configPath, config);
+    logger.success(`已从 ${configFile} 中移除 "${key}" 的配置`);
+  }
+}
+
+/** 从 package.json 的 zhin.plugins 清单移除条目（按 package 或 instanceKey 匹配）。 */
+function removeFromZhinManifest(pkg: Record<string, any>, key: string, aliases: string[] = [key]): boolean {
+  const zhin = pkg.zhin;
+  if (!zhin || typeof zhin !== 'object' || !Array.isArray(zhin.plugins)) return false;
+  const candidates = [key, ...aliases];
+  const before = zhin.plugins.length;
+  zhin.plugins = zhin.plugins.filter((item: { package?: string; instanceKey?: string }) =>
+    !candidates.includes(item?.package ?? '') && !candidates.includes(item?.instanceKey ?? ''));
+  return zhin.plugins.length !== before;
+}
+
+/** 依赖候选名：原名 + @zhin.js/ 前缀包名。 */
+function depNamesFor(name: string): string[] {
+  const names = [name];
+  if (!name.startsWith('@') && !name.startsWith('.')) names.push(`@zhin.js/${name}`);
+  return names;
+}
 
 export const uninstallCommand = new Command('uninstall')
   .description('卸载服务、插件或适配器')

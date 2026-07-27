@@ -9,6 +9,8 @@ import {
   applyProjectConfigPlan,
   createProjectConfigPlan,
   loadProjectConfig,
+  mergePluginManifestIntoPackageJson,
+  packageToInstanceKey,
   renderProjectConfigPatch,
 } from '@zhin.js/scaffold-wizard';
 
@@ -75,6 +77,7 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
       if (shouldEnable && pluginName) {
         const preview = previewEnablePlugin(process.cwd(), pluginName);
         logger.log(`将启用: ${preview.message}`);
+        logger.log(`将挂载: package.json 的 zhin.plugins 清单添加 ${pluginName}（instanceKey: ${packageToInstanceKey(pluginName)}）`);
         if (preview.patch) {
           logger.log('');
           logger.log(preview.patch);
@@ -102,6 +105,14 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
       if (shouldEnable && pluginName) {
         const enableResult = await enablePluginInProjectConfig(process.cwd(), pluginName);
         logger.log(`🔌 ${enableResult.message}`);
+        // 新 Plugin Runtime 按 package.json 的 zhin.plugins 清单挂载——光写配置不会加载
+        const manifestMerged = await mergePluginManifestIntoPackageJson(process.cwd(), [{
+          package: pluginName,
+          instanceKey: packageToInstanceKey(pluginName),
+        }]);
+        if (manifestMerged) {
+          logger.log(`🧩 已在 package.json 的 zhin.plugins 清单中挂载 ${pluginName}`);
+        }
         if (enableResult.status === 'missing-config' || enableResult.status === 'unsupported-config') {
           logger.log('可手动添加到 zhin.config.yml:');
           logger.log('plugins:');
