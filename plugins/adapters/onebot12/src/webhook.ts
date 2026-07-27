@@ -47,6 +47,15 @@ export class OneBot12WebhookEndpoint implements EndpointInstance {
   async start(): Promise<void> {
     if (this.#started) return;
     this.#started = true;
+    if (!this.#options.config.access_token) {
+      // webhook 模式未配 access_token 时任何 POST 都会被放行（verifyOneBotAccessToken 直接 return true）
+      logger.warn(formatCompact({
+        endpoint: this.#options.config.name,
+        mode: 'webhook',
+        ok: false,
+        error: 'missing access_token',
+      }));
+    }
     this.#setupRoutes();
     logger.info(formatCompact({
       op: 'listen',

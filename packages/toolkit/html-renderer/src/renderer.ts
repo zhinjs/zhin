@@ -1,4 +1,4 @@
-import { htmlToSvg, getAllBuiltinFonts, h, type HtmlComponent } from '@zhin.js/satori';
+import { htmlToSvg, getAllBuiltinFonts, h, e, type HtmlComponent } from '@zhin.js/satori';
 
 import { Resvg } from '@resvg/resvg-js';
 import type {
@@ -14,12 +14,25 @@ const DEFAULT_CONFIG: Required<Omit<HtmlRendererConfig, 'aiTextAsImage'>> = {
   defaultWidth: 800,
   defaultFonts: [],
   defaultBackgroundColor: '#ffffff',
-  cacheFonts: true,
-  fontUrls: [],
 };
+
+/** 外部资源（twemoji CDN）拉取超时 */
+const EMOJI_FETCH_TIMEOUT_MS = 10_000;
+
+/** 渲染并发上限，防止渲染任务堆积拖垮进程 */
+const MAX_CONCURRENT_RENDERS = 2;
 
 const fontCache: Map<string, FontConfig> = new Map();
 let defaultFontLoaded = false;
+
+/** fontCache 键：name + weight + style（缺 style 会让 italic 覆盖 normal） */
+function fontCacheKey(
+  name: string,
+  weight?: FontConfig['weight'],
+  style?: FontConfig['style'],
+): string {
+  return `${name}-${weight ?? 400}-${style ?? 'normal'}`;
+}
 
 function toFontConfig(f: {
   name: string;
@@ -53,7 +66,7 @@ function ensureBuiltinFontsCached(logger?: HtmlRendererLogger): void {
     if (builtinFonts.length > 0) {
       for (const font of builtinFonts) {
         const fc = toFontConfig(font);
-        fontCache.set(`${font.name}-${font.weight}`, fc);
+        fontCache.set(fontCacheKey(font.name, font.weight, font.style), fc);
         logger?.debug?.(`Builtin font: ${font.name} (${Math.round(font.data.byteLength / 1024)}KB)`);
       }
       fontCache.set('default', toFontConfig(builtinFonts[0]));
@@ -79,7 +92,7 @@ function emojiToTwemojiUrl(emoji: string): string {
 async function loadEmojiImage(emoji: string, logger?: HtmlRendererLogger): Promise<string | null> {
   try {
     const url = emojiToTwemojiUrl(emoji);
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: AbortSignal.timeout(EMOJI_FETCH_TIMEOUT_MS) });
     if (!response.ok) {
       logger?.debug?.(`Failed to load emoji ${emoji}: ${response.status}`);
       return null;
@@ -92,7 +105,40 @@ async function loadEmojiImage(emoji: string, logger?: HtmlRendererLogger): Promi
   }
 }
 
-const emojiCache: Map<string, string> = new Map();
+const EMOJI_CACHE_MAX = 200;
+/** 失败（null）结果的负缓存 TTL，避免每次渲染都重试失败的 emoji */
+const EMOJI_NEGATIVE_TTL_MS = 60_000;
+
+interface EmojiCacheEntry {
+  value: string | null;
+  ts: number;
+}
+
+/** LRU：Map 迭代顺序即插入顺序，命中时移到末尾，超容量时淘汰最旧项 */
+const emojiCache: Map<string, EmojiCacheEntry> = new Map();
+
+function getCachedEmoji(segment: string): { hit: boolean; value: string | null } {
+  const entry = emojiCache.get(segment);
+  if (!entry) return { hit: false, value: null };
+  if (entry.value === null && Date.now() - entry.ts > EMOJI_NEGATIVE_TTL_MS) {
+    emojiCache.delete(segment);
+    return { hit: false, value: null };
+  }
+  // LRU touch：重新插入到末尾
+  emojiCache.delete(segment);
+  emojiCache.set(segment, entry);
+  return { hit: true, value: entry.value };
+}
+
+function setCachedEmoji(segment: string, value: string | null): void {
+  emojiCache.delete(segment);
+  emojiCache.set(segment, { value, ts: Date.now() });
+  while (emojiCache.size > EMOJI_CACHE_MAX) {
+    const oldest = emojiCache.keys().next().value;
+    if (oldest === undefined) break;
+    emojiCache.delete(oldest);
+  }
+}
 
 async function loadAdditionalAsset(
   languageCode: string,
@@ -100,9 +146,11 @@ async function loadAdditionalAsset(
   logger?: HtmlRendererLogger,
 ): Promise<string | null> {
   if (languageCode === 'emoji') {
-    if (emojiCache.has(segment)) return emojiCache.get(segment)!;
+    const cached = getCachedEmoji(segment);
+    if (cached.hit) return cached.value;
     const result = await loadEmojiImage(segment, logger);
-    if (result) emojiCache.set(segment, result);
+    // 失败也缓存（短 TTL 负缓存），防止同一 emoji 反复打爆 CDN
+    setCachedEmoji(segment, result);
     return result;
   }
   return null;
@@ -120,6 +168,7 @@ async function renderHtmlToSvg(
   fonts: FontConfig[],
   backgroundColor: string | undefined,
   logger?: HtmlRendererLogger,
+  enableEmoji: boolean = true,
 ): Promise<{ svg: string; width: number; height: number }> {
   ensureBuiltinFontsCached(logger);
   const finalFonts = mergeFontLists(getAllBuiltinFonts().map(toFontConfig), fonts);
@@ -137,7 +186,7 @@ async function renderHtmlToSvg(
       style: f.style,
     })),
     loadAdditionalAsset: async (code, seg) =>
-      (await loadAdditionalAsset(code, seg, logger)) ?? '',
+      enableEmoji ? ((await loadAdditionalAsset(code, seg, logger)) ?? '') : '',
   });
 
   const wm = svg.match(/width="(\d+)"/);
@@ -163,11 +212,11 @@ function svgToPng(svg: string, scale: number = 1): Buffer {
   return Buffer.from(pngData.asPng());
 }
 
-function serializeJsxToHtml(element: unknown): string {
-  if (typeof element === 'string' || typeof element === 'number') {
-    return String(element);
-  }
-  if (element == null) return '';
+export function serializeJsxToHtml(element: unknown): string {
+  if (typeof element === 'string') return e(element);
+  if (typeof element === 'number') return String(element);
+  // boolean / null / undefined 一律渲染为空串
+  if (element == null || typeof element === 'boolean') return '';
   if (Array.isArray(element)) {
     return element.map(serializeJsxToHtml).join('');
   }
@@ -187,18 +236,19 @@ function serializeJsxToHtml(element: unknown): string {
     }
 
     const attrs = Object.entries(restProps)
-      .filter(([key]) => key !== 'dangerouslySetInnerHTML')
-      .map(([key, value]) => `${key}="${value}"`)
+      .filter(([key, value]) => key !== 'dangerouslySetInnerHTML' && value != null && value !== false)
+      .map(([key, value]) => `${key}="${e(String(value))}"`)
       .join(' ');
 
-    const styleAttr = styleStr ? ` style="${styleStr}"` : '';
+    const styleAttr = styleStr ? ` style="${e(styleStr)}"` : '';
     const attrStr = attrs ? ` ${attrs}` : '';
 
+    // Raw HTML 只走显式通道 dangerouslySetInnerHTML
     if (dangerouslySetInnerHTML?.__html) {
       return `<${type}${attrStr}${styleAttr}>${dangerouslySetInnerHTML.__html}</${type}>`;
     }
 
-    const childrenHtml = children ? serializeJsxToHtml(children) : '';
+    const childrenHtml = serializeJsxToHtml(children);
     const selfClosingTags = ['img', 'br', 'hr', 'input', 'meta', 'link'];
     if (selfClosingTags.includes(type) && !childrenHtml) {
       return `<${type}${attrStr}${styleAttr} />`;
@@ -215,9 +265,31 @@ export function createHtmlRenderer(
   logger?: HtmlRendererLogger,
 ): HtmlRendererService {
   const mergedConfig = { ...DEFAULT_CONFIG, ...config };
+
+  function cacheDefaultFonts(): void {
+    for (const font of mergedConfig.defaultFonts) {
+      fontCache.set(fontCacheKey(font.name, font.weight, font.style), font);
+    }
+  }
+
   ensureBuiltinFontsCached(logger);
-  for (const font of mergedConfig.defaultFonts) {
-    fontCache.set(`${font.name}-${font.weight || 400}`, font);
+  cacheDefaultFonts();
+
+  // 渲染并发闸：最多 MAX_CONCURRENT_RENDERS 个并发，其余排队
+  let activeRenders = 0;
+  const renderQueue: Array<() => void> = [];
+
+  async function acquireRenderSlot(): Promise<void> {
+    if (activeRenders >= MAX_CONCURRENT_RENDERS) {
+      await new Promise<void>((resolve) => renderQueue.push(resolve));
+    }
+    activeRenders++;
+  }
+
+  function releaseRenderSlot(): void {
+    activeRenders--;
+    const next = renderQueue.shift();
+    if (next) next();
   }
 
   return {
@@ -228,39 +300,46 @@ export function createHtmlRenderer(
         format = 'png',
         backgroundColor = mergedConfig.defaultBackgroundColor,
         fonts = [],
+        enableEmoji = true,
         scale = 1,
       } = options;
 
-      ensureBuiltinFontsCached(logger);
-      const allFonts = uniqueFontsForRender([...fontCache.values(), ...fonts]);
+      await acquireRenderSlot();
+      try {
+        ensureBuiltinFontsCached(logger);
+        const allFonts = uniqueFontsForRender([...fontCache.values(), ...fonts]);
 
-      const { svg, width: actualWidth, height: actualHeight } = await renderHtmlToSvg(
-        html,
-        width,
-        height,
-        allFonts,
-        backgroundColor,
-        logger,
-      );
+        const { svg, width: actualWidth, height: actualHeight } = await renderHtmlToSvg(
+          html,
+          width,
+          height,
+          allFonts,
+          backgroundColor,
+          logger,
+          enableEmoji,
+        );
 
-      if (format === 'svg') {
+        if (format === 'svg') {
+          return {
+            data: svg,
+            format: 'svg',
+            width: actualWidth,
+            height: actualHeight,
+            mimeType: 'image/svg+xml',
+          };
+        }
+
+        const png = svgToPng(svg, scale);
         return {
-          data: svg,
-          format: 'svg',
-          width: actualWidth,
-          height: actualHeight,
-          mimeType: 'image/svg+xml',
+          data: png,
+          format: 'png',
+          width: Math.round(actualWidth * scale),
+          height: Math.round(actualHeight * scale),
+          mimeType: 'image/png',
         };
+      } finally {
+        releaseRenderSlot();
       }
-
-      const png = svgToPng(svg, scale);
-      return {
-        data: png,
-        format: 'png',
-        width: Math.round(actualWidth * scale),
-        height: Math.round(actualHeight * scale),
-        mimeType: 'image/png',
-      };
     },
 
     async renderJsx(element: unknown, options: RenderOptions = {}): Promise<RenderResult> {
@@ -276,7 +355,7 @@ export function createHtmlRenderer(
     },
 
     registerFont(font: FontConfig): void {
-      fontCache.set(`${font.name}-${font.weight || 400}`, font);
+      fontCache.set(fontCacheKey(font.name, font.weight, font.style), font);
       logger?.debug?.(`Font registered: ${font.name}`);
     },
 
@@ -287,6 +366,8 @@ export function createHtmlRenderer(
     clearFonts(): void {
       fontCache.clear();
       defaultFontLoaded = false;
+      // clear 后重新合并 defaultFonts，避免用户配置的默认字体永久丢失
+      cacheDefaultFonts();
       logger?.debug?.('Font cache cleared');
     },
   };

@@ -40,4 +40,23 @@ describe('@zhin.js/plugin-qrcode', () => {
       data: { url: buildQrImageUrl('ping') },
     });
   });
+
+  it('joins args so text with spaces is fully encoded', async () => {
+    const content = await qrcodeCommand.execute({
+      owner: {} as never,
+      generation: 0,
+      config: {},
+      use: () => {
+        throw new Error('unused');
+      },
+      args: ['beautiful', 'world'],
+      params: { text: 'hello' },
+      input: undefined,
+    });
+    expect(isRawContent(content)).toBe(true);
+    expect(isRawContent(content) && content.payload).toEqual({
+      type: 'image',
+      data: { url: buildQrImageUrl('hello beautiful world') },
+    });
+  });
 });

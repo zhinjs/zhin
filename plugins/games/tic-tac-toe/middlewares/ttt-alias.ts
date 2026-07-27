@@ -1,5 +1,6 @@
 import {
   defineGameCommandAliasMiddleware,
+  isTttAction,
   messageFromCommandInput,
   normalizeTttAction,
 } from '@zhin.js/game-kit';
@@ -10,7 +11,9 @@ export default defineGameCommandAliasMiddleware({
   aliases: ['井字棋', 'ttt'],
   async run(action, input, context) {
     const normalized = normalizeTttAction(String(action ?? ''));
-    if (!normalized || normalized === 'help') return TTT_HELP;
+    if (normalized === 'help') return TTT_HELP;
+    // action 无法识别：放行给后续中间件，避免劫持普通聊天
+    if (!isTttAction(normalized)) return null;
     const services = resolveGameServices(context);
     const message = messageFromCommandInput(input);
     return runTttCommandText(services, message, normalized);

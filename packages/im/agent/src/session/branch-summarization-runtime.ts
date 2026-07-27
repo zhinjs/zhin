@@ -44,15 +44,21 @@ export async function summarizeAbandonedBranchIfNeeded(
   const llmModel = getLlmTransportModel(provider.name, modelId);
   const contextWindow = options.contextWindow ?? llmModel.contextWindow ?? host.config.contextTokens;
 
-  const result = await compactAgentMessages({
-    model: llmModel,
-    messages,
-    contextWindow,
-    keepRecentTokens: Math.min(keepRecentTokens, Math.max(500, Math.floor(messages.length * 200))),
-    minKeepCount: 1,
-    customInstructions:
-      'Summarize this abandoned conversation branch so it can be recalled later if the user returns to it.',
-  });
+  let result: Awaited<ReturnType<typeof compactAgentMessages>>;
+  try {
+    result = await compactAgentMessages({
+      model: llmModel,
+      messages,
+      contextWindow,
+      keepRecentTokens: Math.min(keepRecentTokens, Math.max(500, Math.floor(messages.length * 200))),
+      minKeepCount: 1,
+      customInstructions:
+        'Summarize this abandoned conversation branch so it can be recalled later if the user returns to it.',
+    });
+  } catch {
+    // 分支摘要是 best-effort：摘要失败（限流/断网）时跳过，不阻断分支切换、不丢原始消息
+    return;
+  }
 
   if (!result.summary?.trim()) return;
 

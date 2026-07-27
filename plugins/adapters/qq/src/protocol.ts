@@ -4,6 +4,9 @@
  */
 
 import { pickCredential } from '@zhin.js/adapter';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+
+const logger = getLogger('qq');
 
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface QqAdapterConfig {
@@ -193,8 +196,19 @@ export function formatOutboundText(payload: unknown): string {
           const id = String(data.user_id ?? data.qq ?? data.id ?? '');
           return id ? `<@!${id}>` : '';
         }
-        case 'image':
-          return String(data.url || data.file || '');
+        case 'image': {
+          const src = String(data.url || data.file || '');
+          // QQ 文本链路承载不了非 URL 图片（base64/本地路径），丢弃时必须留痕，
+          // 否则出站静默降级排障无头绪。
+          if (!src || !/^https?:\/\//.test(src)) {
+            logger.warn(formatCompact({
+              op: 'qq_outbound_image_dropped',
+              reason: src ? 'non_url_source' : 'missing_source',
+            }));
+            return '';
+          }
+          return src;
+        }
         case 'reply':
           return '';
         default:

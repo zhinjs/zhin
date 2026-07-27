@@ -47,8 +47,6 @@ export interface HtmlRendererConfig {
   defaultWidth?: number;
   defaultFonts?: FontConfig[];
   defaultBackgroundColor?: string;
-  cacheFonts?: boolean;
-  fontUrls?: string[];
   aiTextAsImage?: boolean | HtmlRendererAiTextAsImageConfig;
 }
 

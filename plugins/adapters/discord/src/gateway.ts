@@ -223,6 +223,7 @@ export async function toMessageCreateOptions(body: DiscordOutboundBody): Promise
 async function registerSlashCommands(
   config: ResolvedDiscordGatewayConfig,
   applicationId: string,
+  guildIds: readonly string[] = [],
 ): Promise<void> {
   if (!config.slashCommands?.length) return;
   const rest = new REST({ version: '10' }).setToken(config.token);
@@ -231,7 +232,23 @@ async function registerSlashCommands(
       body: config.slashCommands,
     });
     logger.info(formatCompact({ op: 'slash_commands', scope: 'global' }));
+    return;
   }
+  // globalCommands=false 时按 guild 注册，否则 enableSlashCommands 会是静默 no-op
+  if (guildIds.length === 0) {
+    logger.warn(formatCompact({
+      op: 'slash_commands',
+      ok: false,
+      error: 'enableSlashCommands=true but globalCommands=false and no guilds cached; slash commands not registered',
+    }));
+    return;
+  }
+  for (const guildId of guildIds) {
+    await rest.put(Routes.applicationGuildCommands(applicationId, guildId), {
+      body: config.slashCommands,
+    });
+  }
+  logger.info(formatCompact({ op: 'slash_commands', scope: 'guild', guilds: guildIds.length }));
 }
 
 async function fileExists(filePath: string): Promise<boolean> {
@@ -300,7 +317,8 @@ export async function connectDiscordGatewayClient(
             });
           }
           if (config.enableSlashCommands && config.slashCommands?.length && client.user) {
-            await registerSlashCommands(config, client.user.id);
+            const guildIds = [...client.guilds.cache.values()].map((guild) => guild.id);
+            await registerSlashCommands(config, client.user.id, guildIds);
           }
           if (!settled) {
             settled = true;

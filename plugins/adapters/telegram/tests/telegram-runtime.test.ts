@@ -3,6 +3,8 @@ import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import { messageGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
 import { TelegramEndpoint, type TelegramFetch } from '../src/endpoint.js';
+import { runTelegramPollLoop, type TelegramPollingHost } from '../src/polling.js';
+import { safeTokenEqual } from '../src/webhook.js';
 import {
   buildWebhookUrl,
   formatCallbackContent,
@@ -405,5 +407,88 @@ describe('telegram plugin runtime adapter', () => {
     } as never);
     expect(endpoint).toBeInstanceOf(TelegramEndpoint);
     await http.close().catch(() => undefined);
+  });
+});
+
+describe('telegram webhook auth', () => {
+  it('safeTokenEqual compares constant-time and tolerates length mismatch', () => {
+    expect(safeTokenEqual('hook-secret', 'hook-secret')).toBe(true);
+    expect(safeTokenEqual('hook-secret', 'hook-secrex')).toBe(false);
+    expect(safeTokenEqual('hook-secret', 'hook-secret-longer')).toBe(false);
+    expect(safeTokenEqual('hook-secret', '')).toBe(false);
+  });
+
+  it('warns once at startup when webhook has no secretToken', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const { getLogger } = await import('@zhin.js/logger');
+    const warn = vi.spyOn(getLogger('telegram'), 'warn');
+    const endpoint = new TelegramEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      http,
+      config: resolveTelegramConfig({
+        name: 'no-secret-bot',
+        token: '123456:TEST-TOKEN',
+        apiBaseUrl: 'https://api.telegram.test',
+        polling: false,
+        webhook: { domain: 'https://bot.example.com', path: '/telegram/webhook' },
+      }),
+      fetch: mockApiFetch(),
+    });
+    try {
+      await endpoint.start();
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('webhook_no_secret'),
+      );
+    } finally {
+      warn.mockRestore();
+      await endpoint.stop();
+    }
+  });
+});
+
+describe('telegram polling backoff', () => {
+  it('keeps BACKOFF delay after max consecutive failures (no reset to RETRY)', async () => {
+    vi.useFakeTimers();
+    try {
+      const delays: number[] = [];
+      const fakeSetTimeout = globalThis.setTimeout;
+      vi.spyOn(globalThis, 'setTimeout').mockImplementation(((
+        handler: Parameters<typeof setTimeout>[0],
+        timeout?: number,
+        ...args: unknown[]
+      ) => {
+        if (typeof timeout === 'number') delays.push(timeout);
+        return fakeSetTimeout(handler, timeout as never, ...(args as never[]));
+      }) as never);
+      const host: TelegramPollingHost = {
+        allowedUpdates: [],
+        callApi: vi.fn(async () => {
+          throw new Error('peer down');
+        }),
+        getUpdateOffset: () => 0,
+        setUpdateOffset: () => undefined,
+        handleUpdate: () => undefined,
+      };
+      const abort = new AbortController();
+      const loop = runTelegramPollLoop(host, abort.signal);
+      // 7 次连续失败：前 4 次 RETRY(2s)，第 5 次起持续 BACKOFF(10s)
+      for (let i = 0; i < 7; i += 1) {
+        await vi.advanceTimersByTimeAsync(20_000);
+      }
+      abort.abort();
+      await vi.advanceTimersByTimeAsync(0);
+      await loop;
+      // vitest 推进 fake timer 时可能注入自己的 setTimeout，只采退避档位的值。
+      const pollDelays = delays.filter((d) => d === 2_000 || d === 10_000);
+      expect(pollDelays.slice(0, 4)).toEqual([2_000, 2_000, 2_000, 2_000]);
+      expect(pollDelays.slice(4, 7)).toEqual([10_000, 10_000, 10_000]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

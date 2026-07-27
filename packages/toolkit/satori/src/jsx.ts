@@ -80,25 +80,14 @@ function styleToString(style: unknown): string {
 }
 
 function escapeTextChild(child: string): string {
-  const t = child.trim();
-  if (looksLikeSingleHtmlElement(t)) return child;
+  // 文本一律转义；Raw HTML 只走显式通道（dangerouslySetInnerHTML / Raw 组件）
   return e(child);
 }
 
-function looksLikeSingleHtmlElement(text: string): boolean {
-  if (!text.startsWith('<') || text.length < 3) return false;
-  const second = text.charCodeAt(1);
-  const startsWithTag = (second >= 65 && second <= 90) || (second >= 97 && second <= 122);
-  if (!startsWithTag) return false;
-  const gt = text.indexOf('>');
-  if (gt < 0) return false;
-  return text.endsWith('/>') || text.includes('</');
-}
-
 function serializeIntrinsicChildren(children: unknown): string {
-  if (children == null || children === false) return "";
+  if (children == null || typeof children === "boolean") return "";
   if (typeof children === "string") return escapeTextChild(children);
-  if (typeof children === "number" || typeof children === "boolean") return String(children);
+  if (typeof children === "number") return String(children);
   if (Array.isArray(children)) return children.map(serializeIntrinsicChildren).join("");
   return "";
 }

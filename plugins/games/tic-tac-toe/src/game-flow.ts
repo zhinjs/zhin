@@ -87,12 +87,25 @@ export async function restartFromTerminal(
 ): Promise<string | null> {
   const session = await services.session.getById(sessionId);
   if (!session) return '对局不存在。';
+  if (session.status === 'active') return '对局尚未结束，无法重开。';
   const mark = playerMark(message.$sender.id, {
     playerX: session.player_x,
     playerO: session.player_o,
   });
   if (!mark) return '你不是本局玩家。';
   await services.session.updateSession(session.id, { status: 'aborted', winner: 0 });
+  // PvP 局重开仍是 PvP（原班人马），不静默降级为人机
+  if (!isBotSession(session)) {
+    const board = await startPvpGame(
+      plugin,
+      services,
+      message,
+      { id: session.player_x, displayName: session.player_x_name },
+      { id: session.player_o, displayName: session.player_o_name },
+    );
+    if (typeof board === 'string' && board.includes('已有')) return board;
+    return plugin ? null : (board ?? null);
+  }
   const hint = await startBotGame(plugin, services, message);
   if (hint.includes('已有')) return hint;
   // text-only 模式（plugin===null）下 startBotGame 的唯一输出就是返回文本
@@ -252,6 +265,10 @@ export async function startPvpGame(
   playerX: TttPlayerRef,
   playerO: TttPlayerRef,
 ): Promise<string | void> {
+  const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
+  const active = await services.session.getActiveByChannel(ch);
+  if (active) return '当前频道已有进行中的对局。';
+
   const session = await services.session.createSession({
     message,
     playerX: playerX.id,

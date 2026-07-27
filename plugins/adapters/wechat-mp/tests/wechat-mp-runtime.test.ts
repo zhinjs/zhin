@@ -11,6 +11,7 @@ import {
   decryptMessage,
   encryptMessage,
   formatInboundContent,
+  formatInboundId,
   isEncryptedEchostr,
   resolveWeChatMpConfig,
   verifySignature,
@@ -336,5 +337,164 @@ describe('wechat-mp plugin runtime adapter', () => {
       }),
     );
     await endpoint.stop();
+  });
+
+  it('客服消息遇 40001 刷新 token 后重试一次', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    let tokenCalls = 0;
+    let sendCalls = 0;
+    const fetchFn = vi.fn(async (url: string) => {
+      if (String(url).includes('/token')) {
+        tokenCalls += 1;
+        return { data: { access_token: `tok-${tokenCalls}`, expires_in: 7200 } };
+      }
+      sendCalls += 1;
+      // 第一次发送返回 token 失效，刷新后重试成功。
+      return sendCalls === 1
+        ? { data: { errcode: 40001, errmsg: 'invalid credential' } }
+        : { data: { errcode: 0, msgid: 77 } };
+    });
+    const endpoint = new WeChatMpEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'wechat-mp'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      http,
+      config: resolveWeChatMpConfig({
+        name: 'bot',
+        appId: 'wx',
+        appSecret: 'sec',
+        token: 'tok',
+        encrypt: false,
+        replyMode: 'customer_service',
+      }),
+      fetch: fetchFn,
+    });
+    await endpoint.start();
+    await http.listen();
+    endpoint.open();
+    const messageId = await endpoint.send({ target: 'oUser', payload: 'hi' });
+    expect(messageId).toBe('77');
+    expect(sendCalls).toBe(2);
+    expect(tokenCalls).toBe(2);
+    // 重试用的是刷新后的 token（调用序：token → send → token 刷新 → send 重试）
+    const retryUrl = String(fetchFn.mock.calls[3][0]);
+    expect(retryUrl).toContain('access_token=tok-2');
+    await endpoint.stop();
+  });
+
+  it('发送前发现 token 已过期会先刷新', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    let tokenCalls = 0;
+    const fetchFn = vi.fn(async (url: string) => {
+      if (String(url).includes('/token')) {
+        tokenCalls += 1;
+        // expires_in < 300 → #tokenExpireTime 立即过期
+        return { data: { access_token: `tok-${tokenCalls}`, expires_in: 100 } };
+      }
+      return { data: { errcode: 0, msgid: 88 } };
+    });
+    const endpoint = new WeChatMpEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'wechat-mp'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      http,
+      config: resolveWeChatMpConfig({
+        name: 'bot',
+        appId: 'wx',
+        appSecret: 'sec',
+        token: 'tok',
+        encrypt: false,
+        replyMode: 'customer_service',
+      }),
+      fetch: fetchFn,
+    });
+    await endpoint.start();
+    await http.listen();
+    endpoint.open();
+    const messageId = await endpoint.send({ target: 'oUser', payload: 'hi' });
+    expect(messageId).toBe('88');
+    // start 一次 + 发送前过期刷新一次
+    expect(tokenCalls).toBe(2);
+    await endpoint.stop();
+  });
+
+  it('同一 MsgId 重推直接回放首次回复，不二次 admit', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    // eslint-disable-next-line prefer-const -- assigned after `receive` closes over it
+    let endpoint!: WeChatMpEndpoint;
+    const receive = vi.fn(async () => {
+      await endpoint.send({ target: 'oUser', payload: 'pong' });
+      return Object.freeze({ matched: true, value: 'pong' });
+    });
+    const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+    const config = resolveWeChatMpConfig({
+      name: 'bot',
+      appId: 'wx-app',
+      appSecret: 'sec',
+      token: 'plain-token',
+      path: '/wechat/webhook',
+      encrypt: false,
+      replyMode: 'passive',
+      passiveReplyTimeoutMs: 2000,
+    });
+    endpoint = new WeChatMpEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'wechat-mp'),
+      gateway,
+      http,
+      config,
+      fetch: mockFetchOk(),
+    });
+    await endpoint.start();
+    endpoint.open();
+    const { port } = await http.listen();
+
+    const timestamp = '1409659589';
+    const nonce = '263014780';
+    const signature = computeSignatureHash(config.token, { timestamp, nonce });
+    const xml = [
+      '<xml>',
+      '<ToUserName><![CDATA[gh_bot]]></ToUserName>',
+      '<FromUserName><![CDATA[oUser]]></FromUserName>',
+      '<CreateTime>1409659589</CreateTime>',
+      '<MsgType><![CDATA[text]]></MsgType>',
+      '<Content><![CDATA[hello]]></Content>',
+      '<MsgId>dup-1</MsgId>',
+      '</xml>',
+    ].join('');
+    const url = `http://127.0.0.1:${port}/wechat/webhook?signature=${signature}&timestamp=${timestamp}&nonce=${nonce}`;
+    const post = () => fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/xml' },
+      body: xml,
+    });
+
+    const first = await post();
+    const firstBody = await first.text();
+    expect(firstBody).toContain('<Content><![CDATA[pong]]></Content>');
+
+    const second = await post();
+    const secondBody = await second.text();
+    expect(secondBody).toBe(firstBody);
+    expect(receive).toHaveBeenCalledTimes(1);
+    await endpoint.stop();
+  });
+
+  it('无 MsgId 事件消息 id 拼 Event/EventKey 防秒级碰撞', () => {
+    const base = { ToUserName: 'gh', FromUserName: 'u', CreateTime: 1700000000 };
+    expect(formatInboundId({ ...base, MsgType: 'text', MsgId: 'm-1' })).toBe('m-1');
+    expect(formatInboundId({ ...base, MsgType: 'event', Event: 'CLICK', EventKey: 'k1' }))
+      .toBe('1700000000:CLICK:k1');
+    expect(formatInboundId({ ...base, MsgType: 'event', Event: 'subscribe' }))
+      .toBe('1700000000:subscribe');
+    // 同秒两个不同事件不再碰撞
+    expect(formatInboundId({ ...base, MsgType: 'event', Event: 'CLICK', EventKey: 'k1' }))
+      .not.toBe(formatInboundId({ ...base, MsgType: 'event', Event: 'VIEW', EventKey: 'k2' }));
   });
 });

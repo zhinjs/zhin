@@ -1,12 +1,20 @@
 /**
  * Telegram webhook HTTP: secret token → parse → handle update.
  */
+import { timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { getLogger } from '@zhin.js/logger';
 import { readTextBody, type ResolvedTelegramConfig, type TelegramUpdate } from './protocol.js';
 
 const logger = getLogger('telegram');
+
+/** 等长时才 timingSafeEqual，避免长度差异直接抛异常。 */
+export function safeTokenEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, 'utf8');
+  const bufB = Buffer.from(b, 'utf8');
+  return bufA.length === bufB.length && timingSafeEqual(bufA, bufB);
+}
 
 export interface TelegramWebhookHandler {
   readonly config: ResolvedTelegramConfig;
@@ -36,7 +44,7 @@ export async function handleTelegramWebhookRequest(
     if (secret) {
       const header = request.headers['x-telegram-bot-api-secret-token'];
       const token = Array.isArray(header) ? header[0] : header;
-      if (token !== secret) {
+      if (!token || !safeTokenEqual(token, secret)) {
         response.writeHead(403, { 'Content-Type': 'application/json' });
         response.end(JSON.stringify({ ok: false, description: 'Invalid secret token' }));
         return;

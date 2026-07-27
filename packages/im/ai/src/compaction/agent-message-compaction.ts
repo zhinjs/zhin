@@ -115,11 +115,16 @@ async function summarizeAgentMessages(
       .map(b => (b.type === 'text' ? b.text : ''))
       .join('\n')
       .trim();
-    return text || DEFAULT_SUMMARY_FALLBACK;
+    // 空摘要视为失败：不能把占位文本当真摘要注入（会静默丢历史）
+    if (!text) {
+      throw new Error('Summarization returned empty content');
+    }
+    return text;
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);
     logger.warn(formatCompact({ summarize: 'fail', error: truncatePreview(message) }));
-    return DEFAULT_SUMMARY_FALLBACK;
+    // 摘要失败必须抛错：由上层 catch 保留原文并计入熔断（fallback 仅限消息为空）
+    throw e;
   }
 }
 

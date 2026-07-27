@@ -18,6 +18,18 @@ describe('session-tree', () => {
     expect(path.map(r => r.id)).toEqual([1, 2, 3, 4]);
   });
 
+  it('buildActivePathRows falls back to default leaf when activeLeafId is stale', () => {
+    const rows = [
+      { id: 1, session_id: 's', role: 'user', payload: '{}', parent_id: null, timestamp: 1 },
+      { id: 2, session_id: 's', role: 'assistant', payload: '{}', parent_id: 1, timestamp: 2 },
+      { id: 3, session_id: 's', role: 'user', payload: '{}', parent_id: 2, timestamp: 3 },
+      { id: 4, session_id: 's', role: 'assistant', payload: '{}', parent_id: 3, timestamp: 4 },
+    ];
+    // 999 不存在于 rows：应回退到默认叶子（最新一条），而不是返回空链
+    const path = buildActivePathRows(rows, 999);
+    expect(path.map(r => r.id)).toEqual([1, 2, 3, 4]);
+  });
+
   it('listUserBranchPoints indexes user messages on path', () => {
     const u1 = serializeAgentMessage(createUserMessage('hello'));
     u1.id = 1;

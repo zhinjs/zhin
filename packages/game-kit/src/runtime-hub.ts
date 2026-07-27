@@ -2,6 +2,8 @@
  * Plugin Runtime game hub — module-level registry (no legacy Feature / getPlugin).
  * Games call `registerRuntimeGame` from `setup()`; hub plugin lists them.
  */
+import { bindGameRecordDatabase } from './game-records.js';
+
 export interface RuntimeGameMenuAction {
   readonly id: string;
   readonly label: string;
@@ -25,7 +27,10 @@ export function registerRuntimeGame(game: RuntimeRegisteredGame): () => void {
   const registrations = games.get(game.id) ?? [];
   registrations.push(registered);
   games.set(game.id, registrations);
+  // 把游戏绑定到其插件刚注册的战绩库（按 Host/插件作用域取库）
+  const unbindRecords = bindGameRecordDatabase(game.id);
   return () => {
+    unbindRecords();
     const current = games.get(game.id);
     if (!current) return;
     const index = current.lastIndexOf(registered);

@@ -146,6 +146,10 @@ export async function processIdiomText(
   const mode = sessionMode(session);
   const used = parseUsed(session.used_idioms);
   const idiom = normalizeInput(raw);
+  // 格式不合规（非四字）只提示、不扣失误：避免闲聊（「好的」「谢谢」）被累计判负
+  if (!/^[\u4e00-\u9fff]{4}$/.test(idiom)) {
+    return '接龙请输入**四字成语**（这条不算失误）。';
+  }
   const check = validatePlayerIdiom(idiom, session.last_idiom, mode, used);
   if (!check.ok) {
     const wrong = session.wrong_count + 1;
@@ -236,10 +240,12 @@ export async function handleChoice(
   if (choiceId === 'hint') {
     const hint = pickHintIdiom(session.last_idiom, mode, used);
     if (!hint) {
-      await sendOrEditView(plugin, services, message, session, ['💡 词库中暂无可用提示，你赢了！']);
+      // 先更新状态再单次发送终局视图，避免旧 session「你赢了」与终局视图双发
       await services.updateSession(session.id, { status: 'won', player_score: session.player_score + 1 });
       const updated = (await services.getById(session.id))!;
-      return (await sendOrEditView(plugin, services, message, updated)) ?? null;
+      return (await sendOrEditView(plugin, services, message, updated, [
+        '💡 词库中暂无可用提示，你赢了！',
+      ])) ?? null;
     }
     const gloss = getGloss(hint);
     await services.updateSession(session.id, { hints_used: session.hints_used + 1, streak: 0 });

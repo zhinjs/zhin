@@ -349,6 +349,7 @@ export async function callOneBot12Action(
     method: 'POST',
     headers,
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(30_000),
   });
 
   const text = await res.text();

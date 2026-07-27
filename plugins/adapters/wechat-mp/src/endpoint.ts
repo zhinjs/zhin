@@ -11,6 +11,7 @@ import {
   extractOutboundText,
   formatCustomerServiceBody,
   formatInboundContent,
+  formatInboundId,
   type ResolvedWeChatMpConfig,
   type TokenResponse,
   type WeChatAPIResponse,
@@ -23,6 +24,9 @@ import {
 import { registerWeChatMpWebhookRoutes } from './webhook.js';
 
 const logger = getLogger('wechat-mp');
+
+/** token 失效类错误码：40001/40014 invalid access_token、42001 access_token expired。 */
+const TOKEN_INVALID_ERRCODES = new Set([40001, 40014, 42001]);
 
 export type WeChatMpFetch = (
   url: string,
@@ -56,6 +60,9 @@ export class WeChatMpEndpoint implements EndpointInstance {
   #accessToken: string | null = null;
   #tokenExpireTime = 0;
   #tokenRefreshTimer?: ReturnType<typeof setInterval>;
+  /** MsgId → 首次回复 XML（微信 5s 重推去重，有界 LRU）。 */
+  readonly #replyCache = new Map<string, string>();
+  static readonly #REPLY_CACHE_LIMIT = 1000;
   #open = false;
   #started = false;
 
@@ -79,6 +86,21 @@ export class WeChatMpEndpoint implements EndpointInstance {
 
   get gateway(): MessageGateway {
     return this.#options.gateway;
+  }
+
+  /** 微信 5s 重推去重：见过该 MsgId 时返回首次回复 XML（含空串=success）。 */
+  getCachedReply(msgId: string): string | undefined {
+    return this.#replyCache.get(msgId);
+  }
+
+  cacheReply(msgId: string, replyXML: string): void {
+    if (this.#replyCache.has(msgId)) this.#replyCache.delete(msgId);
+    this.#replyCache.set(msgId, replyXML);
+    while (this.#replyCache.size > WeChatMpEndpoint.#REPLY_CACHE_LIMIT) {
+      const oldest = this.#replyCache.keys().next().value;
+      if (oldest === undefined) break;
+      this.#replyCache.delete(oldest);
+    }
   }
 
   async start(): Promise<void> {
@@ -147,7 +169,7 @@ export class WeChatMpEndpoint implements EndpointInstance {
       target: msg.FromUserName,
       content: formatInboundContent(msg),
       sender: msg.FromUserName,
-      id: msg.MsgId || `${msg.CreateTime}`,
+      id: formatInboundId(msg),
       metadata: Object.freeze({
         msgType: msg.MsgType,
         event: msg.Event,
@@ -164,16 +186,32 @@ export class WeChatMpEndpoint implements EndpointInstance {
   }
 
   async #sendCustomerService(target: string, payload: unknown): Promise<string> {
-    if (!this.#accessToken) await this.#refreshAccessToken();
-    const url = `https://api.weixin.qq.com/cgi-bin/message/custom/send?access_token=${this.#accessToken}`;
+    // 发送前检查过期（不只判 null）：过期 token 直接刷新，不白跑一次 40001。
+    if (!this.#accessToken || Date.now() >= this.#tokenExpireTime) {
+      await this.#refreshAccessToken();
+    }
     const messageData = formatCustomerServiceBody(target, payload);
-    const response = await this.#fetch(url, { method: 'POST', body: messageData });
-    const result = response.data as WeChatAPIResponse;
+    let result = await this.#postCustomerService(messageData);
+    if (result.errcode && TOKEN_INVALID_ERRCODES.has(Number(result.errcode))) {
+      // 对端提前作废 token（多端共用等）：刷新后重试一次。
+      logger.warn(formatCompact({
+        op: 'wechat_mp_token_invalid_retry',
+        errcode: result.errcode,
+      }));
+      await this.#refreshAccessToken();
+      result = await this.#postCustomerService(messageData);
+    }
     if (result.errcode && result.errcode !== 0) {
       throw new Error(`WeChat API error: ${result.errcode} - ${result.errmsg}`);
     }
     logger.debug(formatCompact({ op: 'wechat_mp_send', target, messageId: result.msgid }));
     return result.msgid?.toString() || `cs_${Date.now()}`;
+  }
+
+  async #postCustomerService(messageData: unknown): Promise<WeChatAPIResponse> {
+    const url = `https://api.weixin.qq.com/cgi-bin/message/custom/send?access_token=${this.#accessToken}`;
+    const response = await this.#fetch(url, { method: 'POST', body: messageData });
+    return response.data as WeChatAPIResponse;
   }
 
   async #refreshAccessToken(): Promise<void> {

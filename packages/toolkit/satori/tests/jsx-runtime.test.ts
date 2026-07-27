@@ -34,11 +34,12 @@ describe("satori jsx-runtime", () => {
     expect(html).toContain("<div");
   });
 
-  it("Fragment 展平子节点", () => {
-    const html = jsx(Fragment, {
-      children: [jsx("span", { children: "a" }), jsx("span", { children: "b" })],
-    });
-    expect(html).toBe("<span>a</span><span>b</span>");
+  it("Fragment 展平子节点（文本一律转义）", () => {
+    expect(jsx(Fragment, { children: ["a", "b"] })).toBe("ab");
+    // HTML 片段组合走显式通道：函数组件（如 Raw）在顶层使用
+    expect(jsx(Fragment, { children: "<span>a</span>" })).toBe(
+      "&lt;span&gt;a&lt;/span&gt;",
+    );
   });
 
   it("原生标签支持 style 对象与转义", () => {
@@ -64,5 +65,23 @@ describe("satori jsx-runtime", () => {
     });
     const svg = await htmlToSvg(html, { width: 540, fonts: getAllBuiltinFonts() });
     expect(svg).toContain("<svg");
+  });
+
+  it("boolean children 一律渲染为空串", () => {
+    expect(jsx("div", { children: true })).toBe("<div></div>");
+    expect(jsx("div", { children: ["a", true, false, "b"] })).toBe("<div>ab</div>");
+  });
+
+  it("文本子节点一律转义，不再启发式放行 HTML", () => {
+    // 该字符串在旧启发式下会被当作「单个 HTML 元素」原样放行
+    expect(jsx("div", { children: "<b>hi</b>" })).toBe(
+      "<div>&lt;b&gt;hi&lt;/b&gt;</div>",
+    );
+  });
+
+  it("Raw HTML 只走显式通道 dangerouslySetInnerHTML", () => {
+    expect(
+      jsx("div", { dangerouslySetInnerHTML: { __html: "<b>raw</b>" } }),
+    ).toBe("<div><b>raw</b></div>");
   });
 });

@@ -231,8 +231,7 @@ const TAG_REMAP: Record<string, { tag: string; style?: Record<string, string> }>
   figure: { tag: 'div', style: { display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '16px 40px' } },
   figcaption: { tag: 'div', style: { display: 'flex', fontSize: '14px', color: '#666', justifyContent: 'center' } },
   blockquote: { tag: 'div', style: { display: 'flex', flexDirection: 'column', borderLeft: '3px solid #ccc', paddingLeft: '12px', margin: '16px 0' } },
-  // 表单类（渲染为静态占位）
-  form: { tag: 'div', style: { display: 'flex', flexDirection: 'column' } },
+  // 表单类（渲染为静态占位；form/input 在 sanitize 阶段已剥标签保留文本）
   fieldset: { tag: 'div', style: { display: 'flex', flexDirection: 'column', border: '1px solid #ccc', padding: '8px', margin: '8px 0' } },
   legend: { tag: 'div', style: { display: 'flex', fontWeight: '700', padding: '0 4px' } },
   // 其他
@@ -331,9 +330,15 @@ function normalizeRoot(parsed: unknown): SatoriElement {
  */
 const DANGEROUS_TAGS = [
   'script', 'iframe', 'object', 'embed', 'applet',
-  'form', 'input', 'textarea', 'button', 'select',
+  'textarea', 'button', 'select',
   'link', 'meta', 'base', 'noscript',
 ];
+
+/**
+ * 降级标签：剥掉标签本身但保留文本内容（不删除子内容）。
+ * form/input 不是 XSS 向量，只是 satori 无法渲染，因此只剥标签。
+ */
+const STRIP_TAGS = ['form', 'input'];
 
 /** 预编译：带内容的危险标签（如 <script>...</script>） */
 const DANGEROUS_TAG_PAIR_RES = DANGEROUS_TAGS.map(
@@ -343,6 +348,12 @@ const DANGEROUS_TAG_PAIR_RES = DANGEROUS_TAGS.map(
 /** 自闭合或未闭合的危险标签 */
 const DANGEROUS_TAG_RE = new RegExp(
   `<\\/?\\s*(${DANGEROUS_TAGS.join('|')})[^>]*>`,
+  'gi',
+);
+
+/** 降级标签（form/input）：只剥标签，保留内容 */
+const STRIP_TAG_RE = new RegExp(
+  `<\\/?\\s*(${STRIP_TAGS.join('|')})[^>]*>`,
   'gi',
 );
 
@@ -377,6 +388,9 @@ export function sanitizeHtml(html: string): string {
 
   // 移除自闭合或未闭合的危险标签
   result = result.replace(DANGEROUS_TAG_RE, '');
+
+  // 降级标签：剥标签但保留文本内容
+  result = result.replace(STRIP_TAG_RE, '');
 
   // 移除事件处理属性（循环直到没有更多匹配，防止嵌套如 ononclick）
   let prev: string;

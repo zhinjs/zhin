@@ -1,5 +1,6 @@
 import type { AgentMessage, AssistantMessage, ToolResultMessage } from '../llm/types/agent-message.js';
 import { assistantText } from '../llm/convert/openai-bridge.js';
+import { estimateTextTokens } from './token-counter.js';
 
 function blockText(block: { type: string; text?: string; thinking?: string }): string {
   if (block.type === 'text' && block.text) return block.text;
@@ -24,7 +25,7 @@ export function estimateAgentMessageTokens(message: AgentMessage): number {
   } else {
     text = JSON.stringify(message);
   }
-  return Math.ceil(text.length / 4) + 4;
+  return estimateTextTokens(text) + 4;
 }
 
 export function estimateAgentMessagesTokens(messages: AgentMessage[]): number {

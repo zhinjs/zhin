@@ -254,7 +254,7 @@ describe('ContextManager', () => {
       expect(chatMessages[0].content).toContain('这是之前的总结');
     });
 
-    it('应该识别机器人消息', () => {
+    it('应该按 direction 识别机器人消息（outbound → assistant）', () => {
       const messages: MessageRecord[] = [
         {
           id: 1,
@@ -262,8 +262,9 @@ describe('ContextManager', () => {
           scene_id: 'group-123',
           scene_type: 'group',
           scene_name: '',
-          sender_id: 'bot-123',
+          sender_id: 'assistant-endpoint',
           sender_name: 'MyEndpoint',
+          direction: 'outbound',
           message: '我是机器人',
           time: Date.now(),
         },
@@ -272,6 +273,27 @@ describe('ContextManager', () => {
       const chatMessages = manager.formatToChatMessages([], messages);
 
       expect(chatMessages[0].role).toBe('assistant');
+    });
+
+    it('inbound 消息即使 sender 含 bot 也不误判为 assistant', () => {
+      const messages: MessageRecord[] = [
+        {
+          id: 1,
+          platform: 'qq',
+          scene_id: 'group-123',
+          scene_type: 'group',
+          scene_name: '',
+          sender_id: 'bot-lover-42',
+          sender_name: 'botfan',
+          direction: 'inbound',
+          message: '我只是用户名里带 bot',
+          time: Date.now(),
+        },
+      ];
+
+      const chatMessages = manager.formatToChatMessages([], messages);
+
+      expect(chatMessages[0].role).toBe('user');
     });
   });
 

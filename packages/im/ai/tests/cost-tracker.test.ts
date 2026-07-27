@@ -152,4 +152,12 @@ describe('CostTracker', () => {
     const pricing = tracker.getModelPricing('gpt-4o-2024-05-13');
     expect(pricing.inputPricePerMToken).toBeGreaterThan(0);
   });
+
+  it('should match longest prefix (gpt-4o-mini variant 不误判为 gpt-4o)', () => {
+    const tracker = new CostTracker();
+    // "gpt-4o-mini-2024-07-18" 同时命中 "gpt-4o" 与 "gpt-4o-mini" 前缀，应取最长的 gpt-4o-mini
+    const pricing = tracker.getModelPricing('gpt-4o-mini-2024-07-18');
+    expect(pricing.inputPricePerMToken).toBe(0.15);
+    expect(pricing.outputPricePerMToken).toBe(0.6);
+  });
 });

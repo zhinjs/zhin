@@ -16,7 +16,11 @@ import { RelatedDatabase } from './type/related/database.js';
 class RecordingMigrationContext implements MigrationContext {
   private _operations: MigrationOperation[] = [];
   
-  constructor(private readonly baseContext: MigrationContext) {}
+  /**
+   * @param baseContext 实际执行的上下文
+   * @param execute 是否真正执行操作；false 时为 dry-run，仅记录操作不触碰数据库
+   */
+  constructor(private readonly baseContext: MigrationContext, private readonly execute: boolean = true) {}
   
   get operations(): MigrationOperation[] {
     return this._operations;
@@ -24,48 +28,49 @@ class RecordingMigrationContext implements MigrationContext {
   
   async createTable(tableName: string, columns: Record<string, Column>): Promise<void> {
     this._operations.push({ type: 'createTable', tableName, columns });
-    await this.baseContext.createTable(tableName, columns);
+    if (this.execute) await this.baseContext.createTable(tableName, columns);
   }
   
   async dropTable(tableName: string): Promise<void> {
     this._operations.push({ type: 'dropTable', tableName });
-    await this.baseContext.dropTable(tableName);
+    if (this.execute) await this.baseContext.dropTable(tableName);
   }
   
   async addColumn(tableName: string, columnName: string, column: Column): Promise<void> {
     this._operations.push({ type: 'addColumn', tableName, columnName, column });
-    await this.baseContext.addColumn(tableName, columnName, column);
+    if (this.execute) await this.baseContext.addColumn(tableName, columnName, column);
   }
   
   async dropColumn(tableName: string, columnName: string): Promise<void> {
     this._operations.push({ type: 'dropColumn', tableName, columnName });
-    await this.baseContext.dropColumn(tableName, columnName);
+    if (this.execute) await this.baseContext.dropColumn(tableName, columnName);
   }
   
   async modifyColumn(tableName: string, columnName: string, column: Column): Promise<void> {
     // modifyColumn 不能自动反向，需要原始列定义
-    await this.baseContext.modifyColumn(tableName, columnName, column);
+    if (this.execute) await this.baseContext.modifyColumn(tableName, columnName, column);
   }
   
   async renameColumn(tableName: string, oldName: string, newName: string): Promise<void> {
     this._operations.push({ type: 'renameColumn', tableName, oldName, newName });
-    await this.baseContext.renameColumn(tableName, oldName, newName);
+    if (this.execute) await this.baseContext.renameColumn(tableName, oldName, newName);
   }
   
   async addIndex(tableName: string, indexName: string, columns: string[], unique?: boolean): Promise<void> {
     this._operations.push({ type: 'addIndex', tableName, indexName, columns, unique });
-    await this.baseContext.addIndex(tableName, indexName, columns, unique);
+    if (this.execute) await this.baseContext.addIndex(tableName, indexName, columns, unique);
   }
   
   async dropIndex(tableName: string, indexName: string): Promise<void> {
     this._operations.push({ type: 'dropIndex', tableName, indexName });
-    await this.baseContext.dropIndex(tableName, indexName);
+    if (this.execute) await this.baseContext.dropIndex(tableName, indexName);
   }
   
   async query<T = any>(sql: string, params?: any[]): Promise<T> {
     // query 操作记录但无法自动反向
     this._operations.push({ type: 'query', sql, params });
-    return this.baseContext.query<T>(sql, params);
+    if (this.execute) return this.baseContext.query<T>(sql, params);
+    return undefined as T;
   }
 }
 
@@ -389,12 +394,15 @@ export class MigrationRunner<D = any, S extends Record<string, object> = Record<
     
     for (const migration of pending) {
       try {
-        // 如果没有显式的 down，使用记录型上下文来记录操作
+        // 如果没有显式的 down，先 dry-run 记录操作并验证可以自动反向，通过后再真正执行
         if (!migration.down) {
+          const dryRunContext = new RecordingMigrationContext(baseContext, false);
+          await migration.up(dryRunContext);
+          // 提前校验操作可反向（不可反向时抛错，此时数据库尚未被修改）
+          generateReverseOperations(dryRunContext.operations);
+          // 校验通过，真正执行并记录操作
           const recordingContext = new RecordingMigrationContext(baseContext);
           await migration.up(recordingContext);
-          // 验证操作可以反向（提前检查）
-          generateReverseOperations(recordingContext.operations);
           await this.recordMigration(migration.name, batch, recordingContext.operations);
         } else {
           await migration.up(baseContext);
@@ -503,7 +511,8 @@ function mapColumnType(type: string): string {
  */
 function formatDefault(value: any): string {
   if (value === null) return 'NULL';
-  if (typeof value === 'string') return `'${value}'`;
+  // 与各方言 escapeString 一致：单引号 doubling，避免默认值中的引号破坏 SQL
+  if (typeof value === 'string') return `'${value.replace(/'/g, "''")}'`;
   if (typeof value === 'boolean') return value ? '1' : '0';
   return String(value);
 }

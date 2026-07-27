@@ -41,8 +41,14 @@ function providerErrorMessage(err: unknown): string {
 }
 
 function isProviderRateLimitError(err: unknown): boolean {
+  // AI SDK APICallError 等结构化错误：直接看 status/statusCode
+  const status = (err as { status?: unknown; statusCode?: unknown } | null)?.status
+    ?? (err as { statusCode?: unknown } | null)?.statusCode;
+  if (status === 429) return true;
   const msg = providerErrorMessage(err);
-  return /API Error \(429\)/i.test(msg) || /"code"\s*:\s*"?1305"?/i.test(msg);
+  return /API Error \(429\)/i.test(msg)
+    || /"code"\s*:\s*"?1305"?/i.test(msg)
+    || /too many requests|rate.?limit/i.test(msg);
 }
 
 function sleep(ms: number): Promise<void> {

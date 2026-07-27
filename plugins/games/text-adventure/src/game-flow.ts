@@ -8,6 +8,7 @@ import {
   getScene,
   resolveChoice,
   stateFromSession,
+  visibleChoices,
 } from './story.js';
 import type { GameServices } from './session-service.js';
 
@@ -85,7 +86,8 @@ export async function handleChoice(
   choiceId: string,
 ): Promise<string | null> {
   const session = await services.sessions.getById(sessionId);
-  if (!session || session.status !== 'active') {
+  // 踏进 terminal 场景时 status 必为 completed，终局需放行「再玩一次」（restart）
+  if (!session || (session.status !== 'active' && !(session.status === 'completed' && choiceId === 'restart'))) {
     return '冒险不存在或已结束。';
   }
   if (session.player_id !== message.$sender.id) {
@@ -112,10 +114,16 @@ export async function handleChoice(
       board_message_id: '',
     });
     const updated = (await services.sessions.getById(session.id))!;
+    await services.profiles.onRunStarted(updated.player_id, updated.player_name);
     await services.profiles.onStep(updated.player_id, updated.player_name, 'start', []);
     const text = await sendOrEditScene(plugin, services, message, updated);
     // text-only 模式（plugin===null）下 sendOrEditScene 的唯一输出就是返回文本
     return plugin ? null : text;
+  }
+
+  // 服务端校验：选项必须当前可见（requires 门槛不能只靠视图层过滤，payload 可绕过）
+  if (!visibleChoices(scene, state).some((c) => c.id === choiceId)) {
+    return '该选项不可用。';
   }
 
   const result = resolveChoice(state, choiceId);

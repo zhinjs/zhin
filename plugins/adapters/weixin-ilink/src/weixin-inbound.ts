@@ -50,6 +50,35 @@ function persistContextTokens(accountId: string): void {
 }
 
 /**
+ * 每条入站消息都会 setContextToken；全量同步写盘在消息高峰时是纯浪费。
+ * 按 account 防抖合并，500ms 内多次写入只落盘一次。
+ */
+const PERSIST_DEBOUNCE_MS = 500;
+const persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function schedulePersistContextTokens(accountId: string): void {
+  const existing = persistTimers.get(accountId);
+  if (existing) clearTimeout(existing);
+  const timer = setTimeout(() => {
+    persistTimers.delete(accountId);
+    persistContextTokens(accountId);
+  }, PERSIST_DEBOUNCE_MS);
+  // 不让防抖定时器拖住进程退出
+  (timer as { unref?: () => void }).unref?.();
+  persistTimers.set(accountId, timer);
+}
+
+/** 立即落盘所有待写（endpoint stop / 测试用）。 */
+export function flushContextTokenPersist(accountId?: string): void {
+  for (const [id, timer] of [...persistTimers]) {
+    if (accountId !== undefined && id !== accountId) continue;
+    clearTimeout(timer);
+    persistTimers.delete(id);
+    persistContextTokens(id);
+  }
+}
+
+/**
  * Restore persisted context tokens for an account into the in-memory map.
  * Called once during gateway startAccount to survive restarts.
  */
@@ -89,12 +118,12 @@ export function clearContextTokensForAccount(accountId: string): void {
   logger.info(`clearContextTokensForAccount: cleared tokens for account=${accountId}`);
 }
 
-/** Store a context token for a given account+user pair (memory + disk). */
+/** Store a context token for a given account+user pair (memory + debounced disk). */
 export function setContextToken(accountId: string, userId: string, token: string): void {
   const k = contextTokenKey(accountId, userId);
   logger.debug(`setContextToken: key=${k}`);
   contextTokenStore.set(k, token);
-  persistContextTokens(accountId);
+  schedulePersistContextTokens(accountId);
 }
 
 /** Retrieve the cached context token for a given account+user pair. */

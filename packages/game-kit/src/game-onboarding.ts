@@ -58,6 +58,8 @@ export function mountFirstAtHintMiddleware(root: Plugin): () => void {
     hintedChannels.add(key);
     channelHintAt.set(key, Date.now());
 
+    await message.$reply?.('发送「游戏」查看游戏列表，发送「帮助」查看可用命令');
+
     return next();
   });
 }

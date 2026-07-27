@@ -23,6 +23,8 @@ export interface ImapConfig {
   readonly user: string;
   readonly password: string;
   readonly checkInterval?: number;
+  /** IMAP 断线重连基础间隔（指数退避基数），毫秒。 */
+  readonly reconnectInterval?: number;
   readonly mailbox?: string;
   readonly markSeen?: boolean;
 }
@@ -50,7 +52,7 @@ export interface ResolvedEmailConfig {
   readonly context: 'email';
   readonly name: string;
   readonly smtp: SmtpConfig;
-  readonly imap: Required<Pick<ImapConfig, 'checkInterval' | 'mailbox' | 'markSeen'>> & ImapConfig;
+  readonly imap: Required<Pick<ImapConfig, 'checkInterval' | 'reconnectInterval' | 'mailbox' | 'markSeen'>> & ImapConfig;
   readonly attachments?: {
     readonly enabled: boolean;
     readonly downloadPath: string;
@@ -96,7 +98,7 @@ export function resolveEmailConfig(config: EmailAdapterConfig = {}): ResolvedEma
     ? {
       enabled: true as const,
       downloadPath: attachmentsSource.downloadPath || './downloads/email',
-      maxFileSize: attachmentsSource.maxFileSize || 10 * 1024 * 1024,
+      maxFileSize: Math.max(attachmentsSource.maxFileSize || 10 * 1024 * 1024, 1),
       allowedTypes: attachmentsSource.allowedTypes,
     }
     : undefined;
@@ -106,7 +108,9 @@ export function resolveEmailConfig(config: EmailAdapterConfig = {}): ResolvedEma
     smtp,
     imap: {
       ...imap,
-      checkInterval: imap.checkInterval ?? 60_000,
+      // 数值下限：0/负数会导致 setInterval(0) 风暴
+      checkInterval: Math.max(imap.checkInterval ?? 60_000, 1_000),
+      reconnectInterval: Math.max(imap.reconnectInterval ?? 5_000, 1_000),
       mailbox: imap.mailbox ?? 'INBOX',
       markSeen: imap.markSeen !== false,
     },

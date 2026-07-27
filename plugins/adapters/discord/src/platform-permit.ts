@@ -49,7 +49,7 @@ export function checkDiscordPlatformPermit(perm: string, message: Message<any>):
     case 'guild_owner':
       return role === 'owner' || has('guild_owner');
     case 'moderate_members':
-      return role === 'owner' || has('ADMINISTRATOR') || has('MODERATE_MEMBERS');
+      return role === 'owner' || role === 'admin' || has('ADMINISTRATOR') || has('MODERATE_MEMBERS');
     case 'manage_roles':
       return role === 'owner' || has('ADMINISTRATOR') || has('MANAGE_ROLES');
     case 'manage_channels':

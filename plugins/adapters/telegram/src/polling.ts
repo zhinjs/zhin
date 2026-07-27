@@ -47,11 +47,12 @@ export async function runTelegramPollLoop(
         ok: false,
         error: err instanceof Error ? err.message : String(err),
       }));
+      // 不在退避后清零：对端持续挂时清零会让重试固定打满 RETRY_DELAY_MS，
+      // 保持计数才能让 BACKOFF_DELAY_MS 持续生效（成功时上面才清零）。
       await sleep(
         consecutiveFailures >= MAX_CONSECUTIVE_FAILURES ? BACKOFF_DELAY_MS : RETRY_DELAY_MS,
         abortSignal,
       );
-      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) consecutiveFailures = 0;
     }
   }
 }

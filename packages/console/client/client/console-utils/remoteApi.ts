@@ -51,6 +51,9 @@ export async function apiFetch(
 
   const res = await fetch(url, { ...init, headers });
   if (res.status === 401) {
+    // runtime token（Demo 预置）过期后也必须失效，否则 getToken() 永远优先命中它，
+    // local/sessionStorage 清理不掉，造成 401 死循环。
+    clearRuntimeToken();
     sessionStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(TOKEN_KEY);
     window.dispatchEvent(new CustomEvent("zhin:auth-required"));
@@ -66,4 +69,9 @@ function getRuntimeToken(): string | null {
   if (typeof window === "undefined") return null;
   const token = (window as unknown as { __ZHIN_API_TOKEN?: string }).__ZHIN_API_TOKEN;
   return token?.trim() || null;
+}
+
+function clearRuntimeToken(): void {
+  if (typeof window === "undefined") return;
+  delete (window as unknown as { __ZHIN_API_TOKEN?: string }).__ZHIN_API_TOKEN;
 }

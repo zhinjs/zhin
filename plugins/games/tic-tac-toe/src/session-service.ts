@@ -9,6 +9,9 @@ type TttModel<K extends TttModelName> = RelatedModel<unknown, Models, K>;
 
 export type TttPlayerRef = { id: string; displayName: string };
 
+/** 排队行过期时间（超时未匹配的排队视为失效） */
+export const QUEUE_TTL_MS = 10 * 60 * 1000;
+
 function getModel<K extends TttModelName>(db: TttDatabase, name: K): TttModel<K> {
   const model = db.models.get(name);
   if (!model) {
@@ -20,12 +23,25 @@ function getModel<K extends TttModelName>(db: TttDatabase, name: K): TttModel<K>
 export class QueueService {
   constructor(private readonly db: TttDatabase) {}
 
+  /** 清掉频道内过期排队行（ttt_queue 无 TTL，靠 join 时顺带清理） */
+  private async pruneExpired(channel: string): Promise<void> {
+    const q = getModel(this.db, 'ttt_queue');
+    const cutoff = Date.now() - QUEUE_TTL_MS;
+    const rows = await q.findAll({ channel_key: channel });
+    for (const row of rows) {
+      if (row.joined_at < cutoff) {
+        await q.deleteWhere({ channel_key: channel, user_id: row.user_id });
+      }
+    }
+  }
+
   async join(
     channel: string,
     userId: string,
     displayName?: string,
   ): Promise<{ queued: boolean; position: number }> {
     const q = getModel(this.db, 'ttt_queue');
+    await this.pruneExpired(channel);
     const existing = await q.findAll({ channel_key: channel, user_id: userId });
     const all = await q.findAll({ channel_key: channel });
     all.sort((a, b) => a.joined_at - b.joined_at);
@@ -57,7 +73,9 @@ export class QueueService {
     const rows = await q.findAll({ channel_key: channel });
     rows.sort((a, b) => a.joined_at - b.joined_at);
     if (rows.length < 2) return null;
-    await q.deleteWhere({ channel_key: channel });
+    // 只删除匹配到的两人，保留队列中其余的等待者
+    await q.deleteWhere({ channel_key: channel, user_id: rows[0]!.user_id });
+    await q.deleteWhere({ channel_key: channel, user_id: rows[1]!.user_id });
     const toRef = (userId: string, userName: string) => ({
       id: userId,
       displayName: userName.trim() || userId,

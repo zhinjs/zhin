@@ -30,6 +30,14 @@ describe('discord platform-permit', () => {
     expect(checkDiscordPlatformPermit('guild_owner', mockMsg({ role: 'owner', permissions: ['guild_owner'] }))).toBe(true);
   });
 
+  it('moderate_members includes admin role (aligned with normalize)', () => {
+    // normalizeDiscordSenderForPermit 会把 MODERATE_MEMBERS/MANAGE_GUILD 归一为 role: 'admin'，
+    // 即便 permissions 未透传，admin 也应通过 moderate_members
+    expect(checkDiscordPlatformPermit('moderate_members', mockMsg({ role: 'admin', permissions: [] }))).toBe(true);
+    expect(checkDiscordPlatformPermit('moderate_members', mockMsg({ role: 'owner', permissions: [] }))).toBe(true);
+    expect(checkDiscordPlatformPermit('moderate_members', mockMsg({ role: 'member', permissions: [] }))).toBe(false);
+  });
+
   it('canAccessTool', () => {
     const tool = {
       name: 't',

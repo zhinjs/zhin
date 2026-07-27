@@ -39,8 +39,31 @@ const hostRegistrations: Array<{
   readonly database: GameRecordDb;
 }> = [];
 
+/** gameId → 该游戏插件 setup 时注册的战绩库（按插件作用域取库，避免多 Host 时全局最后注册者胜） */
+const gameDatabases = new Map<string, GameRecordDb>();
+/** 最近一次 initGameRecordHost 注册的库；registerRuntimeGame 借此把游戏绑定到所属 Host 的库 */
+let latestHostDatabase: GameRecordDb | null = null;
+
 function activeDatabase(): GameRecordDb | null {
   return hostRegistrations[hostRegistrations.length - 1]?.database ?? legacyDb;
+}
+
+/** 按游戏作用域取库：优先该游戏插件注册时绑定的 Host 库，回退到全局活跃库 */
+function databaseForGame(gameId: string): GameRecordDb | null {
+  return gameDatabases.get(gameId) ?? activeDatabase();
+}
+
+/**
+ * 由 registerRuntimeGame 在游戏注册时调用：把游戏绑定到当前插件刚通过 initGameRecordHost 注册的战绩库。
+ * 返回解绑函数（随游戏注销一并解绑）。
+ */
+export function bindGameRecordDatabase(gameId: string): () => void {
+  const db = latestHostDatabase;
+  if (!db) return () => {};
+  gameDatabases.set(gameId, db);
+  return () => {
+    if (gameDatabases.get(gameId) === db) gameDatabases.delete(gameId);
+  };
 }
 
 function getRecordModel(database: GameRecordDb): RelatedModel<unknown, Models, 'game_records'> {
@@ -93,6 +116,7 @@ export function initGameRecordHost(host: GameRecordDatabaseHost): () => void {
     database = createHostGameDb(host, ['game_records']) as unknown as GameRecordDb;
     hostDatabases.set(host, database);
   }
+  latestHostDatabase = database;
   const registration = Object.freeze({ host, database });
   hostRegistrations.push(registration);
   return () => {
@@ -112,7 +136,7 @@ export async function recordGameOutcome(
   result: GameRecordResult,
   score = 0,
 ): Promise<void> {
-  const db = activeDatabase();
+  const db = databaseForGame(gameId);
   if (!db) return;
   const row: GameRecordRow = {
     id: recordId(),
@@ -182,7 +206,7 @@ export async function getGameLeaderboard(
   channelKeyFilter: string,
   limit = 10,
 ): Promise<LeaderboardEntry[]> {
-  const db = activeDatabase();
+  const db = databaseForGame(gameId);
   if (!db) return [];
   const rows = await getRecordModel(db).findAll({
     game_id: gameId,
@@ -286,4 +310,6 @@ export function resetGameRecordsForTests(): void {
   legacyDb = null;
   hostDatabases = new WeakMap();
   hostRegistrations.splice(0);
+  gameDatabases.clear();
+  latestHostDatabase = null;
 }

@@ -138,7 +138,8 @@ export function buildGridKeyboard<T>(options: GridKeyboardOptions<T>): SendConte
         );
       }),
     );
-    Object.assign(fallback, buildChoiceFallbackMap(gamePrefix, sessionId, postChoices));
+    // postChoices 编号从可落子格子数后续起，避免覆盖格子数字映射
+    Object.assign(fallback, buildChoiceFallbackMap(gamePrefix, sessionId, postChoices, Object.keys(fallback).length + 1));
   }
 
   const parts = [

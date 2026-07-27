@@ -22,12 +22,18 @@ import { registerLineWebhookRoutes } from './webhook.js';
 
 const logger = getLogger('line');
 
+/** LINE replyToken 有效期短，过期后 reply 必 400；缓存带时间戳，超时弃用改走 push。 */
+const REPLY_TOKEN_TTL_MS = 60_000;
+/** 出站 HTTP 调用统一 30s 超时。 */
+const OUTBOUND_TIMEOUT_MS = 30_000;
+
 export type LineFetch = (
   url: string,
   init?: {
     readonly method?: string;
     readonly headers?: Record<string, string>;
     readonly body?: string;
+    readonly signal?: AbortSignal;
   },
 ) => Promise<{
   readonly ok: boolean;
@@ -48,7 +54,7 @@ export class LineEndpoint implements EndpointInstance {
   readonly #options: LineEndpointOptions;
   readonly #fetch: LineFetch;
   #routeReleases: HttpRouteRegistration[] = [];
-  #replyTokenCache = new Map<string, string>();
+  #replyTokenCache = new Map<string, { token: string; timestamp: number }>();
   #open = false;
   #started = false;
   #unregisterAgent?: () => void;
@@ -116,10 +122,22 @@ export class LineEndpoint implements EndpointInstance {
       throw new Error('No valid LINE messages to send');
     }
 
-    const replyToken = this.#replyTokenCache.get(target);
-    if (replyToken) {
+    const cached = this.#replyTokenCache.get(target);
+    if (cached) {
       this.#replyTokenCache.delete(target);
-      return this.#replyMessage(replyToken, messages);
+      if (Date.now() - cached.timestamp <= REPLY_TOKEN_TTL_MS) {
+        try {
+          return await this.#replyMessage(cached.token, messages);
+        } catch (error) {
+          // replyToken 过期/失效时 LINE 返回 400，回退 push 保证消息不丢
+          if ((error as { status?: number }).status !== 400) throw error;
+          logger.warn(formatCompact({
+            op: 'line_reply_fallback_push',
+            endpoint: this.#options.config.name,
+            target,
+          }));
+        }
+      }
     }
 
     if (!isValidLineRecipientId(target)) {
@@ -135,7 +153,7 @@ export class LineEndpoint implements EndpointInstance {
     if (!this.#open) return;
     const { channelId } = resolveChannel(event.source);
     if ('replyToken' in event && typeof event.replyToken === 'string') {
-      this.#replyTokenCache.set(channelId, event.replyToken);
+      this.#replyTokenCache.set(channelId, { token: event.replyToken, timestamp: Date.now() });
     }
     void this.#options.gateway.receive({
       adapter: this.#options.id,
@@ -171,10 +189,13 @@ export class LineEndpoint implements EndpointInstance {
         Authorization: `Bearer ${this.#options.config.channelAccessToken}`,
       },
       body: JSON.stringify({ replyToken, messages }),
+      signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
     });
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`LINE Reply API error ${response.status}: ${errorText}`);
+      const error = new Error(`LINE Reply API error ${response.status}: ${errorText}`) as Error & { status?: number };
+      error.status = response.status;
+      throw error;
     }
     const result = await response.json() as LineApiResponse;
     return result.sentMessages?.[0]?.id || `reply-${Date.now()}`;
@@ -192,6 +213,7 @@ export class LineEndpoint implements EndpointInstance {
         Authorization: `Bearer ${this.#options.config.channelAccessToken}`,
       },
       body: JSON.stringify({ to, messages }),
+      signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
     });
     if (!response.ok) {
       const errorText = await response.text();

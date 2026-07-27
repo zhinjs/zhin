@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { QueueService, SessionService, type TttDatabase } from '../src/session-service.js';
+import {
+  QUEUE_TTL_MS,
+  QueueService,
+  SessionService,
+  type TttDatabase,
+} from '../src/session-service.js';
 
 import { emptyBoard } from '../src/engine.js';
 
@@ -80,6 +85,28 @@ describe('QueueService', () => {
     await queue.join('ch1', 'alice');
     const { position } = await queue.join('ch1', 'alice');
     expect(position).toBe(1);
+  });
+
+  it('tryMatch 只移除匹配到的两人，队列其余玩家保留', async () => {
+    await queue.join('ch1', 'alice');
+    await queue.join('ch1', 'bob');
+    await queue.join('ch1', 'carol');
+    const pair = await queue.tryMatch('ch1');
+    expect(pair?.map((p) => p.id)).toEqual(['alice', 'bob']);
+    expect(await queue.list('ch1')).toEqual(['carol']);
+  });
+
+  it('join 时清理过期排队行（TTL）', async () => {
+    const db = createMockDb();
+    const q = new QueueService(db);
+    await q.join('ch1', 'alice');
+    const model = db.models.get('ttt_queue') as unknown as {
+      findAll: (q: Record<string, unknown>) => Promise<Row[]>;
+    };
+    const rows = await model.findAll({ channel_key: 'ch1' });
+    (rows[0] as Row).joined_at = Date.now() - QUEUE_TTL_MS - 1000;
+    await q.join('ch1', 'bob');
+    expect(await q.list('ch1')).toEqual(['bob']);
   });
 });
 

@@ -53,6 +53,8 @@ export class SatoriWsEndpoint implements EndpointInstance {
   #lastSn: number | undefined;
   #reconnectTimer: NodeJS.Timeout | null = null;
   #heartbeatTimer: NodeJS.Timeout | null = null;
+  /** 连续未收到 PONG 的心跳轮数；≥2 主动 close 触发重连。 */
+  #missedPongs = 0;
   #open = false;
   #started = false;
   #stopping = false;
@@ -240,6 +242,10 @@ export class SatoriWsEndpoint implements EndpointInstance {
   }
 
   #handleSignal(signal: SatoriSignal): void {
+    if (signal.op === SatoriOpcode.PONG) {
+      this.#missedPongs = 0;
+      return;
+    }
     if (signal.op === SatoriOpcode.READY && signal.body?.logins) {
       const logins = signal.body.logins as SatoriLogin[];
       this.#login = logins[0];
@@ -261,8 +267,25 @@ export class SatoriWsEndpoint implements EndpointInstance {
 
   #startHeartbeat(): void {
     this.#clearHeartbeat();
+    this.#missedPongs = 0;
     const interval = this.#options.config.heartbeat_interval;
     this.#heartbeatTimer = setInterval(() => {
+      // 上一轮 PING 没收到 PONG 就记一次 miss；连续两轮无回包说明
+      // 连接已假死（TCP 半开），主动 close 走重连而不是无限心跳。
+      if (this.#missedPongs >= 2) {
+        logger.warn(formatCompact({
+          op: 'heartbeat_timeout',
+          endpoint: this.#options.config.name,
+        }));
+        this.#clearHeartbeat();
+        try {
+          this.#ws?.close();
+        } catch {
+          /* already closed */
+        }
+        return;
+      }
+      this.#missedPongs += 1;
       this.#sendSignal(SatoriOpcode.PING);
     }, interval);
   }
@@ -346,6 +369,15 @@ export class SatoriWebhookEndpoint implements EndpointInstance {
   async start(): Promise<void> {
     if (this.#started) return;
     this.#started = true;
+    if (!this.#options.config.token) {
+      // 未配 token 时 webhook 无鉴权：任何人知道 path 即可注入假事件。
+      logger.warn(formatCompact({
+        op: 'webhook_no_token',
+        endpoint: this.#options.config.name,
+        path: this.#options.config.path,
+        hint: 'set token to authenticate Satori webhook callbacks',
+      }));
+    }
     this.#routeReleases.push(...registerSatoriWebhookRoutes(this.#options.http, this));
     logger.info(formatCompact({
       op: 'listen',

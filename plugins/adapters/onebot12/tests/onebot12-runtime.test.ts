@@ -476,3 +476,95 @@ describe('onebot12 plugin runtime adapter', () => {
     await endpoint.stop();
   });
 });
+
+describe('onebot12 ws lifecycle', () => {
+  it('does not arm reconnect when the initial connect closes before open', async () => {
+    let creates = 0;
+    const endpoint = new OneBot12WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig, // reconnect_interval: 50
+      createWebSocket: () => {
+        creates += 1;
+        const ws = createMockWs();
+        queueMicrotask(() => ws.emitClose(1006, 'refused'));
+        return ws;
+      },
+    });
+
+    await expect(endpoint.start()).rejects.toThrow('OneBot12 WS 关闭');
+    // 等超过一个 reconnect_interval，不应有幽灵重连发生
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(creates).toBe(1);
+  });
+
+  it('reconnects only after an established connection closes', async () => {
+    const sockets: Array<ReturnType<typeof createMockWs>> = [];
+    const endpoint = new OneBot12WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createWebSocket: () => {
+        const ws = createMockWs();
+        sockets.push(ws);
+        queueMicrotask(() => {
+          if (sockets.length === 1) ws.emitOpen();
+        });
+        return ws;
+      },
+    });
+
+    await endpoint.start();
+    sockets[0]!.emitClose(1006, 'lost');
+    await vi.waitFor(() => expect(sockets.length).toBe(2));
+    await endpoint.stop();
+  });
+
+  it('warns loudly when wss starts without access_token', async () => {
+    const { getLogger } = await import('@zhin.js/logger');
+    const warnSpy = vi.spyOn(getLogger('onebot12'), 'warn');
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    try {
+      const endpoint = new OneBot12WssEndpoint({
+        id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
+        gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+        http,
+        config: resolveOneBot12Config({
+          connection: 'wss',
+          name: 'wss-noauth',
+          path: '/ob12/ws',
+        }) as import('../src/protocol.js').OneBot12WssConfig,
+      });
+      await endpoint.start();
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('missing access_token'));
+      await endpoint.stop();
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('warns loudly when webhook starts without access_token', async () => {
+    const { getLogger } = await import('@zhin.js/logger');
+    const warnSpy = vi.spyOn(getLogger('onebot12'), 'warn');
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    try {
+      const endpoint = new OneBot12WebhookEndpoint({
+        id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
+        gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+        http,
+        config: resolveOneBot12Config({
+          connection: 'webhook',
+          name: 'hook-noauth',
+          path: '/ob12/hook',
+        }) as ReturnType<typeof resolveOneBot12Config> & { connection: 'webhook' },
+      });
+      await endpoint.start();
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('missing access_token'));
+      await endpoint.stop();
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+});

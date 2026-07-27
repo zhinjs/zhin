@@ -1,5 +1,8 @@
 import type { SpeechConfig, TTSConfig, TtsProvider, TtsSynthesizeInput, TtsSynthesizeResult } from '../types.js';
 
+/** TTS 请求超时 */
+const TTS_FETCH_TIMEOUT_MS = 30_000;
+
 function resolveOpenAiApiKey(config: SpeechConfig): string {
   return config.tts?.apiKey || config.stt?.apiKey || '';
 }
@@ -31,6 +34,7 @@ export function createOpenAiTtsProvider(config: SpeechConfig): TtsProvider {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(TTS_FETCH_TIMEOUT_MS),
       });
 
       if (!response.ok) {

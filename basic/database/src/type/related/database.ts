@@ -496,7 +496,14 @@ export class RelatedDatabase<
         }
       } else {
         const value = (condition as any)[key];
-        if (value && typeof value === 'object' && !Array.isArray(value)) {
+        // 只有普通对象才视为操作符集合；Date 等带原型的对象按标量等值处理，避免条件被静默丢弃
+        const isPlainObject =
+          value !== null &&
+          typeof value === 'object' &&
+          !Array.isArray(value) &&
+          !isSubquery(value) &&
+          (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
+        if (isPlainObject) {
           for (const op in value) {
             const quotedKey = formatField(key);
             const placeholder = this.dialect.getParameterPlaceholder(params.length);
@@ -568,6 +575,8 @@ export class RelatedDatabase<
                 clauses.push(`${quotedKey} NOT LIKE ${placeholder}`);
                 params.push(value[op]);
                 break;
+              default:
+                throw new Error(`parseCondition: unknown operator "${op}" for field "${String(key)}"`);
             }
           }
         } else {

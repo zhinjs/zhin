@@ -1,4 +1,5 @@
 export {
+  classifyStartup,
   formatProcessStatus,
   formatUptime,
   processState,
@@ -7,4 +8,4 @@ export {
   startProcessMonitor,
   startTime,
 } from './monitor.js';
-export type { NotifyChannel, ProcessMonitorConfig, ProcessState } from './monitor.js';
+export type { NotifyChannel, ProcessMonitorConfig, ProcessState, StartupReason } from './monitor.js';

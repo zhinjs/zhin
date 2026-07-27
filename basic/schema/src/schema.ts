@@ -235,7 +235,7 @@ export namespace Schema {
         : [];
     export function checkDefault<T>(schema: Schema, key: string, value: T, fallback: T = value) {
         if (isEmpty(value)) {
-            value = schema.meta.default || fallback;
+            value = schema.meta.default ?? fallback;
         }
         const validateType = (schema: Schema, key: string, value: any) => {
             switch (schema.meta.type) {
@@ -360,6 +360,7 @@ Schema.extend('regexp', function (this: Schema, key: string, value: any) {
 });
 Schema.extend('date', function (this: Schema, key: string, value: any) {
     value = Schema.checkDefault(this, key, value);
+    if (typeof value === 'undefined') return value;
     return new Date(value);
 });
 Schema.extend('const', function (this: Schema, key: string, value: any) {
@@ -371,16 +372,24 @@ Schema.extend('const', function (this: Schema, key: string, value: any) {
 });
 Schema.extend('tuple', function (this: Schema, key: string, value: any) {
     value = Schema.checkDefault(this, key, value, []);
+    if (value.length > 0 && value.length !== this.options.list!.length) throw new TypeError(`${key} tuple length mismatch`);
     return value.map((item: any, index: number) => this.options.list![index](item, `${key}[${index}]`));
 });
 Schema.extend('union', function (this: Schema, key: string, value: any) {
     value = Schema.checkDefault(this, key, value);
+    let lastError: unknown;
+    const issues: string[] = [];
     for (const schema of this.options.list!) {
         try {
             return (schema as any)(value, key);
-        } catch { /* schema mismatch, try next variant */ }
+        } catch (e) {
+            lastError = e;
+            issues.push(e instanceof Error ? e.message : String(e));
+        }
     }
-    throw new Error(`${key} union type not match`);
+    const error = new Error(`${key} union type not match: ${issues.join('; ')}`);
+    (error as any).lastError = lastError;
+    throw error;
 });
 Schema.extend('intersect', function (this: Schema, key: string, value: any) {
     value = Schema.checkDefault(this, key, value);

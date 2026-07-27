@@ -66,13 +66,29 @@ export class LocalJsonJobStore implements JobStore {
       .slice(0, limit);
   }
 
+  /** 首次 load 的共享 Promise：并发 ensureLoaded 只加载一次，避免多路 load 互覆盖内存数据 */
+  private loadPromise?: Promise<StoredJob[]>;
+
   private async ensureLoaded(): Promise<void> {
     if (!this.loaded) {
-      await this.load();
+      this.loadPromise ??= this.load();
+      await this.loadPromise;
     }
   }
 
-  private async flush(): Promise<void> {
+  /** flush 串行化链：多路并发 flush 依次执行，避免同时写同一 tmp 文件再 rename 的竞态 */
+  private flushQueue: Promise<void> = Promise.resolve();
+
+  private flush(): Promise<void> {
+    const run = this.flushQueue.then(() => this.doFlush());
+    // 链本身吞掉错误并记录日志，保证后续 flush 不被前一次失败中断
+    this.flushQueue = run.catch((err) => {
+      console.error(`[schedule] LocalJsonJobStore flush failed:`, err);
+    });
+    return run;
+  }
+
+  private async doFlush(): Promise<void> {
     const fs = await import('node:fs/promises');
     const nodePath = await import('node:path');
     const dir = nodePath.dirname(this.path);

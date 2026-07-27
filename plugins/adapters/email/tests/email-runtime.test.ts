@@ -46,6 +46,7 @@ function createMockSmtp(): EmailSmtpTransport & { sendMail: ReturnType<typeof vi
 }
 
 function createMockImap(): EmailImapTransport & {
+  emit: (event: string, ...args: unknown[]) => void;
   emitReady: () => void;
   emitError: (error: Error) => void;
 } {
@@ -67,6 +68,9 @@ function createMockImap(): EmailImapTransport & {
     openBox: vi.fn((_mailbox, _rw, callback) => callback(null, {})),
     search: vi.fn((_criteria, callback) => callback(null, [])),
     fetch: vi.fn(),
+    emit(event: string, ...args: unknown[]) {
+      for (const listener of listeners.get(event) ?? []) listener(...args);
+    },
     emitReady() {
       for (const listener of listeners.get('ready') ?? []) listener();
     },
@@ -90,6 +94,23 @@ describe('email protocol helpers', () => {
     expect(resolved.name).toBe('mail-bot');
     expect(resolved.imap.mailbox).toBe('INBOX');
     expect(resolved.imap.markSeen).toBe(true);
+  });
+
+  it('clamps checkInterval/reconnectInterval to a minimum to avoid setInterval storms', () => {
+    const resolved = resolveEmailConfig({
+      smtp: baseConfig.smtp,
+      imap: { ...baseConfig.imap, checkInterval: 0, reconnectInterval: -5 },
+    });
+    expect(resolved.imap.checkInterval).toBe(1_000);
+    expect(resolved.imap.reconnectInterval).toBe(1_000);
+  });
+
+  it('defaults reconnectInterval when not configured', () => {
+    const resolved = resolveEmailConfig({
+      smtp: baseConfig.smtp,
+      imap: baseConfig.imap,
+    });
+    expect(resolved.imap.reconnectInterval).toBe(5_000);
   });
 
   it('formats inbound content from subject + text', () => {
@@ -259,6 +280,146 @@ describe('email plugin runtime adapter', () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+
+  it('neutralizes attachment filename path traversal', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'zhin-email-traversal-'));
+    try {
+      const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+      const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+      const config = resolveEmailConfig({
+        name: 'test-endpoint',
+        smtp: {
+          host: 'smtp.mock',
+          port: 465,
+          secure: true,
+          auth: { user: 'bot@mock.com', pass: 'pass' },
+        },
+        imap: {
+          host: 'imap.mock',
+          port: 993,
+          tls: true,
+          user: 'bot@mock.com',
+          password: 'pass',
+        },
+        attachments: { enabled: true, downloadPath: dir },
+      });
+      const endpoint = new EmailEndpoint({
+        id: capabilityId(rootPluginId(), adapterFeature, 'email'),
+        gateway,
+        config,
+        createSmtp: () => createMockSmtp(),
+        createImap: () => createMockImap(),
+      });
+
+      await endpoint.start();
+      endpoint.open();
+      endpoint.admit({
+        messageId: '<evil@mock.com>',
+        from: 'attacker@example.com',
+        to: ['bot@mock.com'],
+        subject: '穿越',
+        text: 'x',
+        attachments: [
+          { filename: '../../evil.txt', contentType: 'text/plain', size: 4, content: Buffer.from('evil') },
+          { filename: '..', contentType: 'text/plain', size: 4, content: Buffer.from('evil') },
+        ] as unknown as import('mailparser').Attachment[],
+        date: new Date(1_700_000_000_000),
+        uid: 3,
+      });
+
+      await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+      // 穿越文件名被 basename 化后落进 downloadPath；目录外不落盘
+      await expect(readFile(path.resolve(dir, '../evil.txt'), 'utf8')).rejects.toThrow();
+      await expect(readFile(path.join(dir, 'evil.txt'), 'utf8')).resolves.toBe('evil');
+      const metadata = receive.mock.calls[0]?.[0]?.metadata as {
+        attachments?: Array<{ filename: string; path: string }>;
+      };
+      expect(metadata.attachments).toHaveLength(1);
+      expect(metadata.attachments?.[0]?.path).toBe(path.join(dir, 'evil.txt'));
+      await endpoint.stop();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+      await rm(path.resolve(dir, '../evil.txt'), { force: true });
+    }
+  });
+
+  it('reconnects IMAP after end with backoff and resumes listening', async () => {
+    const imaps: Array<ReturnType<typeof createMockImap>> = [];
+    const endpoint = new EmailEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'email'),
+      gateway: { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') },
+      config: {
+        ...baseConfig,
+        imap: { ...baseConfig.imap, reconnectInterval: 50 },
+      },
+      createSmtp: () => createMockSmtp(),
+      createImap: () => {
+        const imap = createMockImap();
+        imaps.push(imap);
+        return imap;
+      },
+    });
+
+    await endpoint.start();
+    expect(imaps).toHaveLength(1);
+    imaps[0]!.emit('end');
+    await vi.waitFor(() => expect(imaps.length).toBe(2));
+    await endpoint.stop();
+
+    // stop 之后再 end 不再触发重连
+    imaps[1]!.emit('end');
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(imaps).toHaveLength(2);
+  });
+
+  it('disarms pending reconnect when stop runs before the backoff fires', async () => {
+    const imaps: Array<ReturnType<typeof createMockImap>> = [];
+    const endpoint = new EmailEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'email'),
+      gateway: { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') },
+      config: {
+        ...baseConfig,
+        imap: { ...baseConfig.imap, reconnectInterval: 60 },
+      },
+      createSmtp: () => createMockSmtp(),
+      createImap: () => {
+        const imap = createMockImap();
+        imaps.push(imap);
+        return imap;
+      },
+    });
+
+    await endpoint.start();
+    imaps[0]!.emit('end');
+    await endpoint.stop();
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(imaps).toHaveLength(1);
+  });
+
+  it('serializes concurrent new-mail checks with an in-flight guard', async () => {
+    let releaseSearch: (() => void) | null = null;
+    const imap = createMockImap();
+    imap.openBox = vi.fn((_mailbox, _rw, callback) => callback(null, {}));
+    imap.search = vi.fn((_criteria, callback) => {
+      releaseSearch = () => callback(null, []);
+    });
+
+    const endpoint = new EmailEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'email'),
+      gateway: { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createSmtp: () => createMockSmtp(),
+      createImap: () => imap,
+    });
+
+    await endpoint.start();
+    // start 触发的首次 check 卡在 search 上；mail 事件触发的第二次必须被在飞锁跳过
+    await vi.waitFor(() => expect(imap.search).toHaveBeenCalledTimes(1));
+    imap.emit('mail');
+    expect(imap.search).toHaveBeenCalledTimes(1);
+    releaseSearch!();
+    await endpoint.stop();
   });
 
   it('does not admit inbound while closed', async () => {

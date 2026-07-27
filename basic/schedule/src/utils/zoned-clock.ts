@@ -1,5 +1,3 @@
-const MS_PER_DAY = 86_400_000;
-
 const WEEKDAY_MAP: Record<string, number> = {
   Sun: 0,
   Mon: 1,
@@ -160,8 +158,8 @@ export class ZonedClock {
   /** 跳转到墙钟次日 00:00:00（用于按日扫描） */
   nextLocalDayStart(date: Date): Date {
     const p = this.partsAt(date);
-    const midnight = this.toUtc(p.year, p.month, p.day, 0, 0, 0);
-    return new Date(midnight.getTime() + MS_PER_DAY);
+    // 用墙钟日期 +1 天换算（而非当日零点 + 固定 24h），避免 DST 秋季回拨日（25h 的一天）原地踏步
+    return this.toUtc(p.year, p.month, p.day + 1, 0, 0, 0);
   }
 }
 

@@ -136,12 +136,9 @@ export class QQMusicService implements MusicSearchService {
       
       if (!data.lyric) return null
       
-      // QQ 音乐返回的歌词需要 base64 解码
-      try {
-        return Buffer.from(data.lyric, 'base64').toString('utf-8')
-      } catch {
-        return data.lyric
-      }
+      // 请求已带 nobase64=1，返回的是明文歌词，直接返回；
+      // 再按 base64 解码会得到乱码（Buffer.from(x,'base64') 对明文也不会抛错）
+      return data.lyric
     } catch (error) {
       console.error('QQ Music get lyric failed:', error)
       return null

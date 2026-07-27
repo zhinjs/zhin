@@ -342,14 +342,23 @@ export function activityTypeCode(
   return map[type] ?? 0;
 }
 
+/** interactions 验签时间戳时效窗口（防重放）。 */
+export const DISCORD_SIGNATURE_MAX_AGE_MS = 5 * 60_000;
+
 export function verifyDiscordInteractionSignature(
   publicKeyHex: string,
   body: string,
   signature: string,
   timestamp: string,
+  nowMs: number = Date.now(),
 ): boolean {
   if (!publicKeyHex || !signature || !timestamp) return false;
   try {
+    // 时效窗口 ±5min，超出直接拒绝（timestamp 为秒）
+    const ts = Number(timestamp);
+    if (!Number.isFinite(ts) || Math.abs(nowMs - ts * 1000) > DISCORD_SIGNATURE_MAX_AGE_MS) {
+      return false;
+    }
     const key = createPublicKey({
       key: Buffer.concat([
         Buffer.from('302a300506032b6570032100', 'hex'),

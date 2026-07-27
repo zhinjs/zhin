@@ -507,7 +507,8 @@ export const RadarChart: HtmlComponent<RadarChartProps> = ({
   const T = DEFAULT_CARD_THEME;
   const areaFill = fill ?? tint(accent, 0.25);
   const n = Math.min(labels.length, values.length);
-  const peak = max ?? Math.max(...values.slice(0, n), 1);
+  // max 显式传入 0/负数时回退到自动峰值，避免除零产生 Infinity 坐标
+  const peak = max != null && max > 0 ? max : Math.max(...values.slice(0, n), 1);
   const cx = size / 2;
   const cy = size / 2;
   const radius = size * 0.38;

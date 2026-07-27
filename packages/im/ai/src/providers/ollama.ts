@@ -170,7 +170,7 @@ export class OllamaProvider extends BaseProvider {
     return {
       id: `ollama-${Date.now()}`,
       object: 'chat.completion',
-      created: Date.now(),
+      created: Math.floor(Date.now() / 1000),
       model: response.model,
       choices: [{
         index: 0,
@@ -211,8 +211,18 @@ export class OllamaProvider extends BaseProvider {
       ollamaRequest.options.top_p = request.top_p;
     }
 
+    if (request.max_tokens !== undefined) {
+      ollamaRequest.options.num_predict = request.max_tokens;
+    }
+
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
+    // 空闲超时：每收到一个 chunk 重置，避免长流式响应被总时长超时误杀
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const armIdleTimeout = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
+    };
+    armIdleTimeout();
     let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
     try {
@@ -240,6 +250,7 @@ export class OllamaProvider extends BaseProvider {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        armIdleTimeout();
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
@@ -278,7 +289,7 @@ export class OllamaProvider extends BaseProvider {
       if (reader) {
         try { reader.releaseLock(); } catch { /* already released */ }
       }
-      clearTimeout(timeoutId);
+      if (timeoutId) clearTimeout(timeoutId);
     }
   }
 

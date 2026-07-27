@@ -17,6 +17,7 @@ import {
   decryptMessage,
   encryptMessage,
   formatInboundContent,
+  formatInboundId,
   isEncryptedEchostr,
   normalizeEchostrParam,
   parseXMLMessage,
@@ -36,6 +37,9 @@ export interface WeChatMpWebhookHandler {
   readonly id: CapabilityId;
   readonly gateway: MessageGateway;
   admit(msg: WeChatMessage): void;
+  /** MsgId 去重缓存（可选；实现见 WeChatMpEndpoint）。 */
+  getCachedReply?(msgId: string): string | undefined;
+  cacheReply?(msgId: string, replyXML: string): void;
 }
 
 export function registerWeChatMpWebhookRoutes(
@@ -157,6 +161,18 @@ export async function handleWeChatMpMessage(
       return;
     }
 
+    // 微信 5s 重推去重：同一 MsgId 直接回放首次回复，避免二次 admit。
+    const msgId = wechatMessage.MsgId;
+    if (msgId && handler.getCachedReply) {
+      const cached = handler.getCachedReply(msgId);
+      if (cached !== undefined) {
+        logger.debug(formatCompact({ op: 'wechat_mp_dedup_replay', msgId }));
+        response.writeHead(200, { 'Content-Type': cached ? 'text/xml' : 'text/plain' });
+        response.end(cached || 'success');
+        return;
+      }
+    }
+
     let replyXML = resolveEventPassiveReply(wechatMessage);
 
     if (!replyXML && handler.isOpen) {
@@ -183,6 +199,10 @@ export async function handleWeChatMpMessage(
       );
     }
 
+    if (msgId && handler.cacheReply) {
+      handler.cacheReply(msgId, replyXML || '');
+    }
+
     response.writeHead(200, { 'Content-Type': 'text/xml' });
     response.end(replyXML || 'success');
   } catch (error) {
@@ -204,7 +224,7 @@ export async function collectPassiveReply(
         target: wechatMsg.FromUserName,
         content: formatInboundContent(wechatMsg),
         sender: wechatMsg.FromUserName,
-        id: wechatMsg.MsgId || `${wechatMsg.CreateTime}`,
+        id: formatInboundId(wechatMsg),
         metadata: Object.freeze({
           msgType: wechatMsg.MsgType,
           event: wechatMsg.Event,

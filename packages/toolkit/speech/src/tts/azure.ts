@@ -1,5 +1,8 @@
 import type { TTSConfig, TtsProvider, TtsSynthesizeInput, TtsSynthesizeResult } from '../types.js';
 
+/** TTS 请求超时 */
+const TTS_FETCH_TIMEOUT_MS = 30_000;
+
 /** Azure Cognitive Services text-to-speech REST (output format: audio-16khz-128kbitrate-mono-mp3) */
 export function createAzureTtsProvider(config: TTSConfig): TtsProvider {
   return {
@@ -20,6 +23,7 @@ export function createAzureTtsProvider(config: TTSConfig): TtsProvider {
           'X-Microsoft-OutputFormat': 'audio-16khz-128kbitrate-mono-mp3',
         },
         body: ssml,
+        signal: AbortSignal.timeout(TTS_FETCH_TIMEOUT_MS),
       });
 
       if (!response.ok) {

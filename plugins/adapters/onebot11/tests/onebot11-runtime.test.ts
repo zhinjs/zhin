@@ -484,3 +484,75 @@ describe('onebot11 plugin runtime adapter', () => {
     expect(endpoint).toBeDefined();
   });
 });
+
+describe('onebot11 ws lifecycle', () => {
+  it('does not arm reconnect when the initial connect closes before open', async () => {
+    const { getOnebot11AgentDeps } = await import('../src/onebot11-agent-deps.js');
+    let creates = 0;
+    const endpoint = new OneBot11WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig, // reconnect_interval: 50
+      createWebSocket: () => {
+        creates += 1;
+        const ws = createMockWs();
+        queueMicrotask(() => ws.emitClose(1006, 'refused'));
+        return ws;
+      },
+    });
+
+    await expect(endpoint.start()).rejects.toThrow('OneBot11 WS 关闭');
+    // 等超过一个 reconnect_interval，不应有幽灵重连发生
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(creates).toBe(1);
+    // start 失败后 agent endpoint 已反注册
+    expect(() => getOnebot11AgentDeps().getEndpoint('test-ob11')).toThrow();
+  });
+
+  it('reconnects only after an established connection closes', async () => {
+    const sockets: Array<ReturnType<typeof createMockWs>> = [];
+    const endpoint = new OneBot11WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createWebSocket: () => {
+        const ws = createMockWs();
+        sockets.push(ws);
+        queueMicrotask(() => {
+          if (sockets.length === 1) ws.emitOpen();
+        });
+        return ws;
+      },
+    });
+
+    await endpoint.start();
+    sockets[0]!.emitClose(1006, 'lost');
+    await vi.waitFor(() => expect(sockets.length).toBe(2));
+    await endpoint.stop();
+  });
+
+  it('warns loudly when wss starts without access_token', async () => {
+    const { getLogger } = await import('@zhin.js/logger');
+    const { OneBot11WssEndpoint } = await import('../src/wss-endpoint.js');
+    const warnSpy = vi.spyOn(getLogger('onebot11'), 'warn');
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    try {
+      const endpoint = new OneBot11WssEndpoint({
+        id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
+        gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+        http,
+        config: resolveOneBot11Config({
+          connection: 'wss',
+          name: 'wss-noauth',
+          path: '/ob11/ws',
+        }) as import('../src/protocol.js').OneBot11WssConfig,
+      });
+      await endpoint.start();
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('missing access_token'));
+      await endpoint.stop();
+    } finally {
+      warnSpy.mockRestore();
+      await http.close().catch(() => undefined);
+    }
+  });
+});

@@ -67,8 +67,8 @@ interface AnthropicResponse {
 interface AnthropicStreamEvent {
   type: string;
   index?: number;
-  delta?: { type: string; text?: string; stop_reason?: string };
-  content_block?: { type: string; id?: string; name?: string; input?: string };
+  delta?: { type?: string; text?: string; partial_json?: string; stop_reason?: string };
+  content_block?: { type: string; id?: string; name?: string; input?: unknown };
   message?: { id: string; model: string; usage: { input_tokens: number; output_tokens: number } };
   usage?: { input_tokens: number; output_tokens: number };
 }
@@ -102,9 +102,11 @@ function toAnthropicMessages(messages: ChatMessage[]): {
 
   for (const msg of messages) {
     if (msg.role === 'system') {
-      system = typeof msg.content === 'string' 
-        ? msg.content 
+      // 多条 system 不能互相覆盖，拼接为一条
+      const text = typeof msg.content === 'string'
+        ? msg.content
         : msg.content.map(p => p.type === 'text' ? p.text : '').join('');
+      system = system ? `${system}\n\n${text}` : text;
       continue;
     }
 
@@ -227,7 +229,7 @@ function fromAnthropicResponse(response: AnthropicResponse): ChatCompletionRespo
   return {
     id: response.id,
     object: 'chat.completion',
-    created: Date.now(),
+    created: Math.floor(Date.now() / 1000),
     model: response.model,
     choices: [{
       index: 0,
@@ -383,7 +385,13 @@ export class AnthropicProvider extends BaseProvider {
     };
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
+    // 空闲超时：每收到一个 chunk 重置，避免长流式响应被总时长超时误杀
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const armIdleTimeout = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
+    };
+    armIdleTimeout();
     let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
     try {
@@ -408,10 +416,13 @@ export class AnthropicProvider extends BaseProvider {
       let buffer = '';
       let messageId = '';
       let model = request.model;
+      // 累积流式 tool_use 块（content_block_start → input_json_delta* → content_block_stop）
+      let currentToolUse: { id: string; name: string; arguments: string } | null = null;
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        armIdleTimeout();
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
@@ -429,6 +440,14 @@ export class AnthropicProvider extends BaseProvider {
               if (event.type === 'message_start') {
                 messageId = event.message?.id || '';
                 model = event.message?.model || model;
+              } else if (event.type === 'content_block_start') {
+                if (event.content_block?.type === 'tool_use') {
+                  currentToolUse = {
+                    id: event.content_block.id || '',
+                    name: event.content_block.name || '',
+                    arguments: '',
+                  };
+                }
               } else if (event.type === 'content_block_delta') {
                 if (event.delta?.type === 'text_delta') {
                   yield {
@@ -439,6 +458,31 @@ export class AnthropicProvider extends BaseProvider {
                     choices: [{
                       index: 0,
                       delta: { content: event.delta.text },
+                      finish_reason: null,
+                    }],
+                  };
+                } else if (event.delta?.type === 'input_json_delta' && currentToolUse) {
+                  currentToolUse.arguments += event.delta.partial_json ?? '';
+                }
+              } else if (event.type === 'content_block_stop') {
+                // 工具参数 JSON 累积完毕，yield 完整 tool_calls
+                if (currentToolUse) {
+                  const finished = currentToolUse;
+                  currentToolUse = null;
+                  yield {
+                    id: messageId,
+                    object: 'chat.completion.chunk',
+                    created: Date.now(),
+                    model,
+                    choices: [{
+                      index: 0,
+                      delta: {
+                        tool_calls: [{
+                          id: finished.id,
+                          type: 'function' as const,
+                          function: { name: finished.name, arguments: finished.arguments },
+                        }],
+                      },
                       finish_reason: null,
                     }],
                   };
@@ -467,11 +511,33 @@ export class AnthropicProvider extends BaseProvider {
           }
         }
       }
+
+      // 流结束仍滞留的 tool_use 块（缺 content_block_stop）也一并吐出
+      if (currentToolUse) {
+        const finished = currentToolUse;
+        yield {
+          id: messageId,
+          object: 'chat.completion.chunk',
+          created: Date.now(),
+          model,
+          choices: [{
+            index: 0,
+            delta: {
+              tool_calls: [{
+                id: finished.id,
+                type: 'function' as const,
+                function: { name: finished.name, arguments: finished.arguments },
+              }],
+            },
+            finish_reason: null,
+          }],
+        };
+      }
     } finally {
       if (reader) {
         try { reader.releaseLock(); } catch { /* already released */ }
       }
-      clearTimeout(timeoutId);
+      if (timeoutId) clearTimeout(timeoutId);
     }
   }
 

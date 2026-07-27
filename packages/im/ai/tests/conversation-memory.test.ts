@@ -255,4 +255,55 @@ describe('ConversationMemory（内存模式）', () => {
       expect(context).toEqual([]);
     });
   });
+
+  describe('限流识别（isProviderRateLimitError 经 detectTopicChangeByLLM 重试）', () => {
+    function callDetect(err: unknown) {
+      const chat = vi.fn().mockRejectedValue(err);
+      memory.setProvider({
+        name: 'mock',
+        models: ['mock-model'],
+        chat,
+      } as any);
+      const detect = (memory as any).detectTopicChangeByLLM.bind(memory) as (
+        prev: string[],
+        cur: string,
+      ) => Promise<boolean>;
+      return { chat, detect };
+    }
+
+    it('statusCode 429（AI SDK APICallError）应识别为限流并重试', async () => {
+      vi.useFakeTimers();
+      try {
+        const err = Object.assign(new Error('Too Many Requests'), { statusCode: 429 });
+        const { chat, detect } = callDetect(err);
+        const p = detect(['旧话题'], '新话题');
+        const assertion = expect(p).rejects.toThrow('Too Many Requests');
+        await vi.advanceTimersByTimeAsync(10_000);
+        await assertion;
+        expect(chat).toHaveBeenCalledTimes(3);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('消息含 "Too Many Requests"（无 status 字段）也应识别为限流', async () => {
+      vi.useFakeTimers();
+      try {
+        const { chat, detect } = callDetect(new Error('429 Too Many Requests'));
+        const p = detect(['旧话题'], '新话题');
+        const assertion = expect(p).rejects.toThrow('429 Too Many Requests');
+        await vi.advanceTimersByTimeAsync(10_000);
+        await assertion;
+        expect(chat).toHaveBeenCalledTimes(3);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('非限流错误不重试', async () => {
+      const { chat, detect } = callDetect(new Error('boom'));
+      await expect(detect(['旧话题'], '新话题')).rejects.toThrow('boom');
+      expect(chat).toHaveBeenCalledTimes(1);
+    });
+  });
 });

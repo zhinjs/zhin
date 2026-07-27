@@ -28,7 +28,11 @@ export function parseAgentStreamNdjsonChunk(
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed) continue;
-    events.push(JSON.parse(trimmed) as AgentStreamEvent);
+    try {
+      events.push(JSON.parse(trimmed) as AgentStreamEvent);
+    } catch {
+      // 兜底：单行损坏不崩掉整个流，跳过该行继续消费
+    }
   }
   return { events, state: { remainder } };
 }
@@ -41,10 +45,15 @@ export function flushAgentStreamNdjsonParser(
   if (!trimmed) {
     return { events: [], state: { remainder: "" } };
   }
-  return {
-    events: [JSON.parse(trimmed) as AgentStreamEvent],
-    state: { remainder: "" },
-  };
+  try {
+    return {
+      events: [JSON.parse(trimmed) as AgentStreamEvent],
+      state: { remainder: "" },
+    };
+  } catch {
+    // 兜底：末尾残行无法解析时丢弃，不崩流
+    return { events: [], state: { remainder: "" } };
+  }
 }
 
 type NdjsonBody =
@@ -55,10 +64,12 @@ async function* chunksFromBody(body: NdjsonBody): AsyncGenerator<string> {
   if (Symbol.asyncIterator in body) {
     const decoder = new TextDecoder();
     for await (const chunk of body as AsyncIterable<Uint8Array | Buffer | string>) {
+      // stream 模式：多字节字符跨 chunk 时必须保留未完成的字节序，否则产生 U+FFFD 并崩 JSON.parse
       if (typeof chunk === "string") yield chunk;
-      else if (Buffer.isBuffer(chunk)) yield decoder.decode(chunk);
-      else yield decoder.decode(chunk);
+      else yield decoder.decode(chunk, { stream: true });
     }
+    const tail = decoder.decode();
+    if (tail) yield tail;
     return;
   }
   const reader = (body as ReadableStream<Uint8Array>).getReader();
@@ -67,8 +78,10 @@ async function* chunksFromBody(body: NdjsonBody): AsyncGenerator<string> {
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
-      yield decoder.decode(value);
+      yield decoder.decode(value, { stream: true });
     }
+    const tail = decoder.decode();
+    if (tail) yield tail;
   } finally {
     reader.releaseLock();
   }

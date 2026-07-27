@@ -31,6 +31,8 @@ import {
 import { registerDiscordInteractionRoutes } from './webhook.js';
 
 const DISCORD_API = 'https://discord.com/api/v10';
+/** 出站 HTTP 调用统一 30s 超时。 */
+const OUTBOUND_TIMEOUT_MS = 30_000;
 const logger = getLogger('discord');
 
 export type {
@@ -52,7 +54,6 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
   #open = false;
   #started = false;
   #unregisterAgent?: () => void;
-  readonly #messageChannelMap = new Map<string, string>();
 
   constructor(options: DiscordEndpointOptions) {
     this.#options = options;
@@ -113,7 +114,6 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
   async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
     const body = formatOutboundBody(payload);
     const messageId = await this.#sendBody(target, body);
-    this.#messageChannelMap.set(messageId, target);
     logger.debug(formatCompact({
       op: 'discord_send',
       endpoint: this.#options.config.name,
@@ -127,7 +127,6 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
   admit(msg: DiscordInboundMessage): void {
     if (!this.#open) return;
     if (msg.authorBot) return;
-    this.#messageChannelMap.set(msg.id, msg.channelId);
     void this.#options.gateway.receive({
       adapter: this.#options.id,
       target: msg.channelId,
@@ -422,6 +421,7 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
     });
     const text = await response.text();
     if (!response.ok) {

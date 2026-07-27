@@ -17,9 +17,10 @@ export async function shortenUrl(url: string): Promise<string> {
 }
 
 export async function expandUrl(url: string): Promise<string> {
-  const res = await fetch(url, { redirect: 'manual' });
-  const location = res.headers.get('location');
-  if (location) return location;
+  // 不能用 redirect:'manual'：undici 下返回 opaqueredirect（status 0、headers 空），
+  // 拿不到 location。改为跟随重定向后比较最终 URL。
+  const res = await fetch(url, { redirect: 'follow' });
+  if (res.url && res.url !== url) return res.url;
   if (res.ok) return url;
   throw new Error(`无法展开链接 (${res.status})`);
 }

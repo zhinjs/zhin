@@ -83,6 +83,7 @@ export async function apiGetFetch(params: {
   endpoint: string;
   timeoutMs?: number;
   label: string;
+  abortSignal?: AbortSignal;
 }): Promise<string> {
   const base = ensureTrailingSlash(params.baseUrl);
   const url = new URL(params.endpoint, base);
@@ -96,11 +97,12 @@ export async function apiGetFetch(params: {
     controller != null && timeoutMs != null
       ? setTimeout(() => controller.abort(), timeoutMs)
       : undefined;
+  const { signal, cleanup } = combineAbortSignals(controller, params.abortSignal);
   try {
     const res = await fetch(url.toString(), {
       method: "GET",
       headers: hdrs,
-      ...(controller ? { signal: controller.signal } : {}),
+      ...(signal ? { signal } : {}),
     });
     if (t !== undefined) clearTimeout(t);
     const rawText = await res.text();
@@ -112,6 +114,8 @@ export async function apiGetFetch(params: {
   } catch (err) {
     if (t !== undefined) clearTimeout(t);
     throw err;
+  } finally {
+    cleanup();
   }
 }
 

@@ -1,10 +1,12 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
+import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import { messageGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import defineDiscordAdapter from '../adapters/discord.js';
 import {
   DiscordGatewayEndpoint,
+  DiscordInteractionsEndpoint,
   type CreateDiscordClient,
   type DiscordClientTransport,
 } from '../src/endpoint.js';
@@ -13,6 +15,7 @@ import {
   formatInboundContent,
   formatOutboundBody,
   resolveDiscordConfig,
+  verifyDiscordInteractionSignature,
   type DiscordInboundMessage,
 } from '../src/protocol.js';
 import { getDiscordAgentDeps, setDiscordAgentDeps } from '../src/discord-agent-deps.js';
@@ -167,6 +170,31 @@ afterEach(() => {
 });
 
 describe('discord protocol helpers', () => {
+  function ed25519Fixture() {
+    const { publicKey, privateKey } = generateKeyPairSync('ed25519');
+    const publicKeyHex = publicKey.export({ format: 'der', type: 'spki' }).subarray(-32).toString('hex');
+    const sign = (timestamp: string, body: string) =>
+      cryptoSign(null, Buffer.from(timestamp + body), privateKey).toString('hex');
+    return { publicKeyHex, sign };
+  }
+
+  it('verifies ed25519 interaction signatures within the freshness window', () => {
+    const { publicKeyHex, sign } = ed25519Fixture();
+    const body = '{"type":1}';
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    expect(verifyDiscordInteractionSignature(publicKeyHex, body, sign(timestamp, body), timestamp)).toBe(true);
+    expect(verifyDiscordInteractionSignature(publicKeyHex, body, 'bad', timestamp)).toBe(false);
+  });
+
+  it('rejects interaction signatures outside the ±5min freshness window', () => {
+    const { publicKeyHex, sign } = ed25519Fixture();
+    const body = '{"type":1}';
+    const stale = String(Math.floor(Date.now() / 1000) - 600);
+    // 签名本身有效，仅时间戳过期
+    expect(verifyDiscordInteractionSignature(publicKeyHex, body, sign(stale, body), stale)).toBe(false);
+    expect(verifyDiscordInteractionSignature(publicKeyHex, body, sign('x', body), 'not-a-number')).toBe(false);
+  });
+
   it('resolves plugin config with gateway default', () => {
     const resolved = resolveDiscordConfig({ token: 'tok' });
     expect(resolved.connection).toBe('gateway');
@@ -403,5 +431,73 @@ describe('discord plugin runtime adapter', () => {
       },
     } as never);
     expect(endpoint).toBeDefined();
+  });
+
+  it('interactions webhook rejects stale timestamps but accepts fresh signed pings', async () => {
+    const { publicKey, privateKey } = generateKeyPairSync('ed25519');
+    const publicKeyHex = publicKey.export({ format: 'der', type: 'spki' }).subarray(-32).toString('hex');
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    const endpoint = new DiscordInteractionsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
+      gateway: { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') },
+      http,
+      config: resolveDiscordConfig({
+        token: 'tok',
+        connection: 'interactions',
+        applicationId: 'app',
+        publicKey: publicKeyHex,
+      }) as ReturnType<typeof resolveDiscordConfig> & { connection: 'interactions' },
+    });
+    await endpoint.start();
+    const { port } = await http.listen();
+
+    const body = JSON.stringify({ type: 1 });
+    const post = (timestamp: string) => fetch(`http://127.0.0.1:${port}/discord/interactions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-signature-ed25519': cryptoSign(null, Buffer.from(timestamp + body), privateKey).toString('hex'),
+        'x-signature-timestamp': timestamp,
+      },
+      body,
+    });
+
+    const fresh = String(Math.floor(Date.now() / 1000));
+    const okRes = await post(fresh);
+    expect(okRes.status).toBe(200);
+    expect(await okRes.json()).toEqual({ type: 1 });
+
+    const stale = String(Math.floor(Date.now() / 1000) - 600);
+    const staleRes = await post(stale);
+    expect(staleRes.status).toBe(401);
+
+    await endpoint.stop();
+    await http.close();
+  });
+
+  it('warns instead of silent no-op when slash commands enabled without global scope and no guilds', async () => {
+    const { getLogger } = await import('@zhin.js/logger');
+    const warnSpy = vi.spyOn(getLogger('discord'), 'warn');
+    try {
+      const mock = createMockClient(); // guilds.cache 为空
+      const endpoint = new DiscordGatewayEndpoint({
+        id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
+        gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+        config: resolveDiscordConfig({
+          name: 'slash-bot',
+          token: 'tok',
+          connection: 'gateway',
+          enableSlashCommands: true,
+          globalCommands: false,
+          slashCommands: [{ name: 'ping', description: 'pong' }],
+        }) as ReturnType<typeof resolveDiscordConfig> & { connection: 'gateway' },
+        createClient: () => mock,
+      });
+      await endpoint.start();
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('slash'));
+      await endpoint.stop();
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 });

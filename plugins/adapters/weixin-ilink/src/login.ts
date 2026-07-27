@@ -55,6 +55,7 @@ async function fetchQRCode(apiBaseUrl: string, botType: string): Promise<QRCodeR
 async function pollQRStatus(
   apiBaseUrl: string,
   qrcode: string,
+  signal?: AbortSignal,
 ): Promise<StatusResponse> {
   try {
     const endpoint = `ilink/bot/get_qrcode_status?qrcode=${encodeURIComponent(qrcode)}`;
@@ -63,10 +64,13 @@ async function pollQRStatus(
       endpoint,
       timeoutMs: QR_LONG_POLL_TIMEOUT_MS,
       label: 'pollQRStatus',
+      abortSignal: signal,
     });
     return JSON.parse(rawText) as StatusResponse;
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
+      // 外部 stop 的 abort 不能吞掉当普通长轮询超时
+      if (signal?.aborted) throw err;
       return { status: 'wait' };
     }
     logger.warn(`pollQRStatus error: ${String(err)}`);
@@ -74,8 +78,31 @@ async function pollQRStatus(
   }
 }
 
+function abortError(): Error {
+  return Object.assign(new Error('扫码登录已取消'), { name: 'AbortError' });
+}
+
+function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(abortError());
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(abortError());
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 export async function resolveCredentials(
   config: ResolvedWeixinIlinkConfig,
+  signal?: AbortSignal,
 ): Promise<WeixinIlinkCredentials> {
   const envToken = process.env.WEIXIN_ILINK_TOKEN?.trim() || config.botToken?.trim();
   if (envToken) {
@@ -96,11 +123,12 @@ export async function resolveCredentials(
     };
   }
 
-  return loginWithQr(config);
+  return loginWithQr(config, signal);
 }
 
 export async function loginWithQr(
   config: ResolvedWeixinIlinkConfig,
+  signal?: AbortSignal,
 ): Promise<WeixinIlinkCredentials> {
   const apiBaseUrl = config.baseUrl ?? DEFAULT_API_BASE_URL;
   const qr = await fetchQRCode(apiBaseUrl, DEFAULT_ILINK_BOT_TYPE);
@@ -114,7 +142,9 @@ export async function loginWithQr(
   let currentBaseUrl = apiBaseUrl;
 
   while (Date.now() < deadline) {
-    const status = await pollQRStatus(currentBaseUrl, qr.qrcode);
+    // stop() 的 AbortSignal：不打满 8 分钟，立即退出登录循环
+    if (signal?.aborted) throw abortError();
+    const status = await pollQRStatus(currentBaseUrl, qr.qrcode, signal);
 
     if (status.status === 'scaned_but_redirect' && status.redirect_host) {
       currentBaseUrl = status.redirect_host.startsWith('http')
@@ -143,7 +173,7 @@ export async function loginWithQr(
       throw new Error('二维码已过期，请重启 bot 重新登录');
     }
 
-    await new Promise((r) => setTimeout(r, 500));
+    await sleepWithAbort(500, signal);
   }
 
   throw new Error('微信扫码登录超时');

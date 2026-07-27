@@ -1,8 +1,10 @@
 import type { Adapter, Message, Plugin } from '@zhin.js/core';
 import { plainTextFromSendContent } from '@zhin.js/game-kit';
 import {
+  answersFor,
   checkAnswer,
   getRiddleById,
+  normalizeAnswer,
   RIDDLE_PREFIX,
   typeLabel,
 } from './engine.js';
@@ -112,6 +114,12 @@ export async function processAnswerText(
   const riddleId = currentRiddleId(session);
   const entry = riddleId ? getRiddleById(riddleId) : undefined;
   if (!entry) return null;
+
+  // 格式不合规（字数与答案不符）只提示、不扣失误：避免闲聊（「好的」「谢谢」）被累计判负
+  const normalized = normalizeAnswer(raw);
+  if (!answersFor(entry).some((a) => a.length === normalized.length)) {
+    return `本题答案应为 ${entry.answer.length} 个字（这条不算失误）。`;
+  }
 
   if (checkAnswer(entry, raw)) {
     const streak = session.streak + 1;

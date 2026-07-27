@@ -23,6 +23,8 @@ export interface ProcessMonitorConfig {
 export interface ProcessState {
   lastPid?: number;
   lastStartTime?: number;
+  /** SIGTERM/SIGINT 正常退出时置 true，下次启动据此归为 restart 而非 crash。 */
+  cleanExit?: boolean;
   restartCount: number;
   crashCount: number;
   totalUptime: number;
@@ -184,27 +186,39 @@ async function sendNotification(
   }
 }
 
+export type StartupReason = 'start' | 'restart' | 'crash';
+
+/**
+ * Classify this startup from persisted state.
+ * - 同 PID（热重载，进程未退出）跳过判定，不算 restart/crash。
+ * - 上次为 SIGTERM/SIGINT 正常退出（cleanExit）时归为 restart，即使间隔 <5min。
+ */
+export function classifyStartup(
+  state: ProcessState,
+  currentPid: number,
+  now = Date.now(),
+): { reason: StartupReason; uptime?: number } {
+  if (!state.lastPid || !state.lastStartTime) return { reason: 'start' };
+  if (state.lastPid === currentPid) return { reason: 'start' };
+  const uptime = now - state.lastStartTime;
+  if (state.cleanExit === true || uptime >= 5 * 60 * 1000) {
+    return { reason: 'restart', uptime };
+  }
+  return { reason: 'crash', uptime };
+}
+
 async function detectStartupReason(
   config: ReturnType<typeof resolveProcessMonitorConfig>,
 ): Promise<void> {
   const currentPid = process.pid;
   const currentTime = Date.now();
-  let reason: 'start' | 'restart' | 'crash' = 'start';
-  let uptime: number | undefined;
 
-  if (processState.lastPid && processState.lastStartTime) {
-    const timeSinceLastStart = currentTime - processState.lastStartTime;
-    if (timeSinceLastStart < 5 * 60 * 1000) {
-      reason = 'crash';
-      processState.crashCount++;
-    } else {
-      reason = 'restart';
-      processState.restartCount++;
-    }
-    uptime = timeSinceLastStart;
-    processState.totalUptime += uptime;
-  }
+  const { reason, uptime } = classifyStartup(processState, currentPid, currentTime);
+  if (reason === 'crash') processState.crashCount++;
+  else if (reason === 'restart') processState.restartCount++;
+  if (uptime) processState.totalUptime += uptime;
 
+  processState.cleanExit = false;
   processState.lastPid = currentPid;
   processState.lastStartTime = currentTime;
   saveProcessState();
@@ -241,9 +255,11 @@ export function startProcessMonitor(rawConfig?: ProcessMonitorConfig): () => voi
   void detectStartupReason(config);
 
   const onSigterm = () => {
+    processState.cleanExit = true;
     saveProcessState();
   };
   const onSigint = () => {
+    processState.cleanExit = true;
     saveProcessState();
   };
   process.on('SIGTERM', onSigterm);

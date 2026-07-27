@@ -403,8 +403,9 @@ export class RelatedModel<D=any,S extends Record<string, object> = Record<string
         const targetKey = relation.targetKey || 'id';
         
         // 查询中间表获取关联的目标ID
+        const pivotDialect = targetDb.dialect;
         const pivotRecords = await targetDb.query<any[]>(
-          `SELECT * FROM "${pivotTable}" WHERE "${foreignPivotKey}" = ?`,
+          `SELECT * FROM ${pivotDialect.quoteIdentifier(pivotTable)} WHERE ${pivotDialect.quoteIdentifier(foreignPivotKey)} = ${pivotDialect.getParameterPlaceholder(0)}`,
           [localValue]
         );
         
@@ -529,9 +530,10 @@ export class RelatedModel<D=any,S extends Record<string, object> = Record<string
         }
         
         // 批量查询中间表
-        const placeholders = localValues.map(() => '?').join(', ');
+        const batchDialect = targetDb.dialect;
+        const placeholders = localValues.map((_, i) => batchDialect.getParameterPlaceholder(i)).join(', ');
         const pivotRecords = await targetDb.query<any[]>(
-          `SELECT * FROM "${pivotTable}" WHERE "${foreignPivotKey}" IN (${placeholders})`,
+          `SELECT * FROM ${batchDialect.quoteIdentifier(pivotTable)} WHERE ${batchDialect.quoteIdentifier(foreignPivotKey)} IN (${placeholders})`,
           localValues
         );
         

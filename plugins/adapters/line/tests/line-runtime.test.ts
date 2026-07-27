@@ -261,6 +261,79 @@ describe('line plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
+  it('falls back to Push API when cached replyToken expired (TTL)', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const fetchFn = mockFetchOk('push-id');
+    const endpoint = new LineEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'line'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      http,
+      config: baseConfig,
+      fetch: fetchFn,
+    });
+    await endpoint.start();
+    await http.listen();
+    endpoint.open();
+    endpoint.admit(textEvent());
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(Date.now() + 61_000);
+      const messageId = await endpoint.send({ target: 'U1234567890abcdef', payload: 'pong' });
+      expect(messageId).toBe('push-id');
+      expect(fetchFn).toHaveBeenCalledWith(
+        'https://api.line.me/v2/bot/message/push',
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(fetchFn).not.toHaveBeenCalledWith(
+        'https://api.line.me/v2/bot/message/reply',
+        expect.anything(),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+    await endpoint.stop();
+  });
+
+  it('falls back to Push API when Reply API returns 400 (invalid/expired token)', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const fetchFn = vi.fn(async (url: string) => {
+      if (String(url).includes('/message/reply')) {
+        return { ok: false, status: 400, text: async () => 'Invalid reply token', json: async () => ({}) };
+      }
+      return {
+        ok: true,
+        status: 200,
+        text: async () => '',
+        json: async () => ({ sentMessages: [{ id: 'push-id' }] }),
+      };
+    });
+    const endpoint = new LineEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'line'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      http,
+      config: baseConfig,
+      fetch: fetchFn,
+    });
+    await endpoint.start();
+    await http.listen();
+    endpoint.open();
+    endpoint.admit(textEvent());
+    const messageId = await endpoint.send({ target: 'U1234567890abcdef', payload: 'pong' });
+    expect(messageId).toBe('push-id');
+    const calledUrls = fetchFn.mock.calls.map((call) => String(call[0]));
+    expect(calledUrls.some((url) => url.includes('/message/reply'))).toBe(true);
+    expect(calledUrls.some((url) => url.includes('/message/push'))).toBe(true);
+    await endpoint.stop();
+  });
+
   it('registers agent API config on start', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);

@@ -5,6 +5,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { OpenAIProvider } from '../src/providers/openai.js';
 import { AnthropicProvider } from '../src/providers/anthropic.js';
+import { OllamaProvider } from '../src/providers/ollama.js';
 import type {
   AIProvider,
   ChatCompletionRequest,
@@ -497,6 +498,61 @@ describe('AI Providers', () => {
         expect(result.choices[0].finish_reason).toBe('stop');
         expect(result.usage?.total_tokens).toBe(15);
       });
+
+      it('should return created as unix seconds (not milliseconds)', async () => {
+        const anthropicResponse = {
+          id: 'msg_123',
+          model: 'claude-3-5-sonnet-20241022',
+          content: [{ type: 'text', text: 'hi' }],
+          stop_reason: 'end_turn',
+          usage: { input_tokens: 1, output_tokens: 1 },
+        };
+
+        fetchSpy.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(anthropicResponse),
+          text: () => Promise.resolve(''),
+        } as Response);
+
+        const provider = new AnthropicProvider({ apiKey: 'sk-ant-test' });
+        const result = await provider.chat({
+          model: 'claude-3-5-sonnet-20241022',
+          messages: [{ role: 'user', content: 'Hi' }],
+        });
+
+        expect(result.created).toBeLessThan(1e12); // 毫秒时间戳约 1.7e12，秒级约 1.7e9
+        expect(result.created).toBeGreaterThan(1e9);
+      });
+
+      it('should concatenate multiple system messages into one', async () => {
+        const anthropicResponse = {
+          id: 'msg_123',
+          model: 'claude-3-5-sonnet-20241022',
+          content: [{ type: 'text', text: 'ok' }],
+          stop_reason: 'end_turn',
+          usage: { input_tokens: 1, output_tokens: 1 },
+        };
+
+        fetchSpy.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(anthropicResponse),
+          text: () => Promise.resolve(''),
+        } as Response);
+
+        const provider = new AnthropicProvider({ apiKey: 'sk-ant-test' });
+        await provider.chat({
+          model: 'claude-3-5-sonnet-20241022',
+          messages: [
+            { role: 'system', content: '第一段指令' },
+            { role: 'system', content: '第二段指令' },
+            { role: 'user', content: 'Hi' },
+          ],
+        });
+
+        const body = JSON.parse(fetchSpy.mock.calls[0][1]?.body as string);
+        expect(body.system).toHaveLength(1);
+        expect(body.system[0].text).toBe('第一段指令\n\n第二段指令');
+      });
     });
 
     describe('chatStream()', () => {
@@ -593,6 +649,64 @@ describe('AI Providers', () => {
           collectChunks(provider.chatStream(request))
         ).rejects.toThrow(/Anthropic API Error \(401\)/);
       });
+
+      it('should accumulate tool_use blocks and yield complete tool_calls', async () => {
+        const sseLines = [
+          'data: ' +
+            JSON.stringify({
+              type: 'message_start',
+              message: { id: 'msg_tool', model: 'claude-3-5-sonnet' },
+            }),
+          'data: ' +
+            JSON.stringify({
+              type: 'content_block_start',
+              index: 0,
+              content_block: { type: 'tool_use', id: 'toolu_1', name: 'get_weather' },
+            }),
+          'data: ' +
+            JSON.stringify({
+              type: 'content_block_delta',
+              index: 0,
+              delta: { type: 'input_json_delta', partial_json: '{"city":' },
+            }),
+          'data: ' +
+            JSON.stringify({
+              type: 'content_block_delta',
+              index: 0,
+              delta: { type: 'input_json_delta', partial_json: '"Tokyo"}' },
+            }),
+          'data: ' + JSON.stringify({ type: 'content_block_stop', index: 0 }),
+          'data: ' +
+            JSON.stringify({
+              type: 'message_delta',
+              delta: { stop_reason: 'tool_use' },
+            }),
+        ];
+
+        fetchSpy.mockResolvedValueOnce({
+          ok: true,
+          body: createSSEStream(sseLines),
+          text: () => Promise.resolve(''),
+        } as Response);
+
+        const provider = new AnthropicProvider({ apiKey: 'sk-ant-test' });
+        const request: ChatCompletionRequest = {
+          model: 'claude-3-5-sonnet-20241022',
+          messages: [{ role: 'user', content: '天气如何' }],
+        };
+
+        const chunks = await collectChunks(provider.chatStream(request));
+
+        expect(chunks).toHaveLength(2);
+        const toolCalls = chunks[0].choices[0].delta.tool_calls;
+        expect(toolCalls).toHaveLength(1);
+        expect(toolCalls![0]).toMatchObject({
+          id: 'toolu_1',
+          type: 'function',
+          function: { name: 'get_weather', arguments: '{"city":"Tokyo"}' },
+        });
+        expect(chunks[1].choices[0].finish_reason).toBe('tool_calls');
+      });
     });
 
     describe('healthCheck()', () => {
@@ -602,6 +716,53 @@ describe('AI Providers', () => {
 
         expect(result).toBe(true);
       });
+    });
+  });
+
+  describe('OllamaProvider', () => {
+    it('chat() 返回的 created 为 unix 秒', async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            model: 'llama3.2',
+            message: { content: 'hi' },
+            prompt_eval_count: 1,
+            eval_count: 1,
+          }),
+        text: () => Promise.resolve(''),
+      } as Response);
+
+      const provider = new OllamaProvider({ host: 'http://localhost:11434' });
+      const result = await provider.chat({
+        model: 'llama3.2',
+        messages: [{ role: 'user', content: 'Hi' }],
+      });
+
+      expect(result.created).toBeLessThan(1e12);
+      expect(result.created).toBeGreaterThan(1e9);
+    });
+
+    it('chatStream() 透传 max_tokens 为 options.num_predict', async () => {
+      const ndjson = JSON.stringify({ model: 'llama3.2', done: true }) + '\n';
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        body: createSSEStream([ndjson.trim()]),
+        text: () => Promise.resolve(''),
+      } as Response);
+
+      const provider = new OllamaProvider({ host: 'http://localhost:11434' });
+      const chunks = await collectChunks(
+        provider.chatStream({
+          model: 'llama3.2',
+          messages: [{ role: 'user', content: 'Hi' }],
+          max_tokens: 42,
+        }),
+      );
+
+      expect(chunks.length).toBeGreaterThan(0);
+      const body = JSON.parse(fetchSpy.mock.calls[0][1]?.body as string);
+      expect(body.options.num_predict).toBe(42);
     });
   });
 });

@@ -25,6 +25,7 @@ vi.mock('@zhin.js/logger', async (importOriginal) => {
 import {
   estimateTokens,
   estimateMessagesTokens,
+  estimateTextTokens,
   splitMessagesByTokenShare,
   chunkMessagesByMaxTokens,
   computeAdaptiveChunkRatio,
@@ -32,6 +33,10 @@ import {
   evaluateContextWindowGuard,
   pruneHistoryForContext,
   compactSession,
+  autoCompactIfNeeded,
+  shouldAutoCompact,
+  createAutoCompactTracking,
+  MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES,
   DEFAULT_CONTEXT_TOKENS,
   CONTEXT_WINDOW_HARD_MIN_TOKENS,
   CONTEXT_WINDOW_WARN_BELOW_TOKENS,
@@ -58,6 +63,19 @@ describe('estimateTokens', () => {
     const a = createMsg('assistant', 'hi');
     const b: ChatMessage = { ...a, reasoning_content: 'x'.repeat(40) };
     expect(estimateTokens(b)).toBeGreaterThan(estimateTokens(a));
+  });
+
+  it('should weight CJK chars ~1 token each (不再按 length/4 低估)', () => {
+    // 4 个汉字：旧实现 length/4 只估 1 token，现在应约 4 token + 4 固定开销
+    expect(estimateTokens(createMsg('user', '你好世界'))).toBe(8);
+    expect(estimateTextTokens('你好世界')).toBe(4);
+  });
+
+  it('should weight mixed CJK/ASCII text by segment', () => {
+    // 'hello'(5 ascii) + '你好'(2 CJK) → ceil(2 + 5/4) = 4
+    expect(estimateTextTokens('hello你好')).toBe(4);
+    // 纯 ASCII 保持 4 字符 ≈ 1 token
+    expect(estimateTextTokens('a'.repeat(40))).toBe(10);
   });
 });
 
@@ -312,5 +330,64 @@ describe('compactSession', () => {
     });
     expect(result.keptMessages).toHaveLength(6);
     expect(result.compactedCount).toBe(4);
+  });
+});
+
+describe('压缩失败语义（不得静默吞错丢历史）', () => {
+  let failingProvider: { chat: ReturnType<typeof vi.fn>; models: string[] };
+
+  beforeEach(() => {
+    failingProvider = {
+      models: ['mock-model'],
+      chat: vi.fn().mockRejectedValue(new Error('429 Too Many Requests')),
+    };
+  });
+
+  it('compactSession 在摘要持续失败时抛错', async () => {
+    const messages = Array.from({ length: 12 }, (_, i) =>
+      createMsg(i % 2 === 0 ? 'user' : 'assistant', `message ${i}`),
+    );
+    await expect(
+      compactSession({ provider: failingProvider as any, messages, keepRecentCount: 6 }),
+    ).rejects.toThrow('429 Too Many Requests');
+  });
+
+  it('autoCompactIfNeeded 失败时保留原文、不注入占位摘要、熔断计数 +1', async () => {
+    const tracking = createAutoCompactTracking();
+    const messages = Array.from({ length: 12 }, (_, i) =>
+      createMsg(i % 2 === 0 ? 'user' : 'assistant', `message ${i}`),
+    );
+
+    const result = await autoCompactIfNeeded({
+      provider: failingProvider as any,
+      messages,
+      contextWindow: 13_050,
+      tracking,
+    });
+
+    expect(tracking.consecutiveFailures).toBe(1);
+    expect(result.summary).toBeUndefined();
+    expect(result.messages).toEqual(messages);
+    expect(JSON.stringify(result.messages)).not.toContain('无历史记录');
+    expect(JSON.stringify(result.messages)).not.toContain('会话历史摘要');
+  });
+
+  it('连续失败达到上限后熔断器生效', async () => {
+    const tracking = createAutoCompactTracking();
+    const messages = Array.from({ length: 12 }, (_, i) =>
+      createMsg(i % 2 === 0 ? 'user' : 'assistant', `message ${i}`),
+    );
+
+    for (let i = 0; i < MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES; i++) {
+      await autoCompactIfNeeded({
+        provider: failingProvider as any,
+        messages,
+        contextWindow: 13_050,
+        tracking,
+      });
+    }
+
+    expect(tracking.consecutiveFailures).toBe(MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES);
+    expect(shouldAutoCompact(messages, 13_050, tracking)).toBe(false);
   });
 });

@@ -39,6 +39,9 @@ export class EmailEndpoint implements EndpointInstance {
   #smtp: EmailSmtpTransport | null = null;
   #imap: EmailImapTransport | null = null;
   #checkTimer: NodeJS.Timeout | null = null;
+  #reconnectTimer: NodeJS.Timeout | null = null;
+  #reconnectAttempts = 0;
+  #checking = false;
   #open = false;
   #started = false;
 
@@ -63,6 +66,7 @@ export class EmailEndpoint implements EndpointInstance {
         this.#imap!.connect();
       });
       logger.debug(formatCompact({ endpoint: name, mode: 'imap' }));
+      this.#reconnectAttempts = 0;
       this.#startEmailCheck();
     } catch (error) {
       await this.stop();
@@ -81,9 +85,15 @@ export class EmailEndpoint implements EndpointInstance {
 
   async stop(): Promise<void> {
     this.#open = false;
+    // 先复位 #started，避免 imap.end() 触发的 'end' 事件又武装重连定时器
+    this.#started = false;
     if (this.#checkTimer) {
       clearInterval(this.#checkTimer);
       this.#checkTimer = null;
+    }
+    if (this.#reconnectTimer) {
+      clearTimeout(this.#reconnectTimer);
+      this.#reconnectTimer = null;
     }
     if (this.#imap) {
       try {
@@ -101,7 +111,6 @@ export class EmailEndpoint implements EndpointInstance {
       }
       this.#smtp = null;
     }
-    this.#started = false;
     logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
   }
 
@@ -160,9 +169,17 @@ export class EmailEndpoint implements EndpointInstance {
     const config = this.#options.config.attachments;
     if (!config?.enabled || email.attachments.length === 0) return [];
     await mkdir(config.downloadPath, { recursive: true });
+    const downloadRoot = path.resolve(config.downloadPath);
     const saved: Array<{ filename: string; path: string; contentType?: string; size?: number }> = [];
     for (const attachment of email.attachments) {
-      const filename = attachment.filename || `attachment_${Date.now()}`;
+      // 防路径穿越：发件人可构造 ../../ 等文件名，basename + resolve 后必须落在 downloadPath 内
+      const rawName = attachment.filename || `attachment_${Date.now()}`;
+      const filename = path.basename(rawName) || `attachment_${Date.now()}`;
+      const filepath = path.resolve(downloadRoot, filename);
+      if (filepath !== downloadRoot && !filepath.startsWith(downloadRoot + path.sep)) {
+        logger.warn(formatCompact({ op: 'email_attachment_skipped', filename: rawName, reason: 'path' }));
+        continue;
+      }
       if (config.allowedTypes?.length && !config.allowedTypes.includes(attachment.contentType ?? '')) {
         logger.debug(formatCompact({ op: 'email_attachment_skipped', filename, reason: 'type' }));
         continue;
@@ -171,7 +188,6 @@ export class EmailEndpoint implements EndpointInstance {
         logger.debug(formatCompact({ op: 'email_attachment_skipped', filename, reason: 'size' }));
         continue;
       }
-      const filepath = path.join(config.downloadPath, filename);
       try {
         await writeFile(filepath, attachment.content);
         saved.push({ filename, path: filepath, contentType: attachment.contentType, size: attachment.size });
@@ -192,6 +208,8 @@ export class EmailEndpoint implements EndpointInstance {
     });
     imap.on('error', (error) => {
       logger.error('IMAP error:', error);
+      // imap 通常在 error 后紧跟 end；两处都调度，靠已有定时器去重
+      this.#scheduleImapReconnect();
     });
     imap.on('end', () => {
       logger.debug(formatCompact({
@@ -199,7 +217,55 @@ export class EmailEndpoint implements EndpointInstance {
         endpoint: this.#options.config.name,
         mode: 'imap',
       }));
+      this.#scheduleImapReconnect();
     });
+  }
+
+  /** IMAP 断线后按指数退避重建连接并恢复监听（基数 reconnectInterval，封顶 5 分钟）。 */
+  #scheduleImapReconnect(): void {
+    if (!this.#started || this.#reconnectTimer) return;
+    const base = this.#options.config.imap.reconnectInterval;
+    const delay = Math.min(base * 2 ** this.#reconnectAttempts, 300_000);
+    this.#reconnectAttempts += 1;
+    logger.warn(formatCompact({
+      op: 'imap_reconnect_scheduled',
+      endpoint: this.#options.config.name,
+      reconnect_ms: delay,
+    }));
+    this.#reconnectTimer = setTimeout(() => {
+      this.#reconnectTimer = null;
+      void this.#reconnectImap();
+    }, delay);
+  }
+
+  async #reconnectImap(): Promise<void> {
+    if (!this.#started) return;
+    try {
+      const imap = this.#options.createImap?.(this.#options.config.imap)
+        ?? defaultCreateImap(this.#options.config.imap);
+      this.#imap = imap;
+      this.#setupImapListeners(imap);
+      await new Promise<void>((resolve, reject) => {
+        imap.once('ready', () => resolve());
+        imap.once('error', (error) => reject(error));
+        imap.connect();
+      });
+      this.#reconnectAttempts = 0;
+      logger.info(formatCompact({
+        op: 'imap_reconnect',
+        endpoint: this.#options.config.name,
+        ok: true,
+      }));
+      void this.#checkForNewEmails();
+    } catch (error) {
+      logger.warn(formatCompact({
+        op: 'imap_reconnect',
+        endpoint: this.#options.config.name,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+      this.#scheduleImapReconnect();
+    }
   }
 
   #startEmailCheck(): void {
@@ -211,7 +277,9 @@ export class EmailEndpoint implements EndpointInstance {
   }
 
   async #checkForNewEmails(): Promise<void> {
-    if (!this.#imap || !this.#started) return;
+    if (!this.#imap || !this.#started || this.#checking) return;
+    // 在飞锁：定时器与 mail 事件可能并发触发，串行化避免重复 admit
+    this.#checking = true;
     try {
       await new Promise<void>((resolve, reject) => {
         this.#imap!.openBox(this.#options.config.imap.mailbox, false, (error) => {
@@ -233,6 +301,8 @@ export class EmailEndpoint implements EndpointInstance {
       });
     } catch (error) {
       logger.error('Error checking for new emails:', error);
+    } finally {
+      this.#checking = false;
     }
   }
 

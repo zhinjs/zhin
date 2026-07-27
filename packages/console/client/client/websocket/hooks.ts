@@ -44,14 +44,28 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   return { connected, connect, disconnect, send, sendRequest, manager: wsManager };
 }
 
+/**
+ * 按 key 绑定异步加载结果：key（如 pluginName）切换后，旧 key 的残留值视为 null，
+ * 避免 useConfig 的 ready 判断（config != null）被上一插件的 state 挡住而不再加载新配置。
+ * @internal
+ */
+export function resolveKeyedValue<T>(
+  entry: { readonly key: string; readonly value: T } | null,
+  key: string,
+): T | null {
+  return entry && entry.key === key ? entry.value : null;
+}
+
 export function useConfig(pluginName: string, options?: { autoLoad?: boolean; autoLoadSchema?: boolean }) {
   const { autoLoad = true, autoLoadSchema = true } = options ?? {};
   const wsManager = getWebSocketManager();
   const [connected, setConnected] = useState(wsManager.isConnected());
-  const [config, setConfigState] = useState<unknown>(null);
-  const [schema, setSchemaState] = useState<unknown>(null);
+  const [configEntry, setConfigEntry] = useState<{ key: string; value: unknown } | null>(null);
+  const [schemaEntry, setSchemaEntry] = useState<{ key: string; value: unknown } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const config = resolveKeyedValue(configEntry, pluginName);
+  const schema = resolveKeyedValue(schemaEntry, pluginName);
 
   useEffect(() => wsManager.onConnectionChange(setConnected), [wsManager]);
 
@@ -60,7 +74,7 @@ export function useConfig(pluginName: string, options?: { autoLoad?: boolean; au
     setError(null);
     try {
       const result = await wsManager.getConfig(pluginName);
-      setConfigState(result);
+      setConfigEntry({ key: pluginName, value: result });
       return result;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
@@ -89,7 +103,7 @@ export function useConfig(pluginName: string, options?: { autoLoad?: boolean; au
   const getSchema = useCallback(async () => {
     try {
       const result = await wsManager.getSchema(pluginName);
-      if (result) setSchemaState(result);
+      if (result) setSchemaEntry({ key: pluginName, value: result });
       return result;
     } catch (e) {
       throw e;

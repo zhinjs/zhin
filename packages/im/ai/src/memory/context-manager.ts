@@ -259,8 +259,8 @@ export class ContextManager {
 
     // 添加最近消息
     for (const msg of messages) {
-      // 判断是否是机器人消息（通常 sender_id 包含 bot 标识）
-      const isBot = msg.sender_id.includes('bot') || msg.sender_name.toLowerCase().includes('bot');
+      // 出站消息即机器人自己发的消息，映射为 assistant
+      const isBot = msg.direction === 'outbound';
       
       chatMessages.push({
         role: isBot ? 'assistant' : 'user',

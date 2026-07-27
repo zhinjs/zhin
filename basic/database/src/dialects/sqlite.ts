@@ -68,37 +68,46 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
   async query<U = any>(sql: string, params?: any[]): Promise<U> {
     if (!this.db) throw new Error('SQLite 未连接');
     const trimmedSql = sql.trim().toLowerCase();
-    const isSelect = trimmedSql.startsWith('select');
     const isInsert = trimmedSql.startsWith('insert');
     const isUpdateOrDelete = trimmedSql.startsWith('update') || trimmedSql.startsWith('delete');
+    // 带 RETURNING 的 DML 有结果集，不能走 run 丢行
+    const hasReturning = /\breturning\b/.test(trimmedSql);
     const args = this.prepareBindParams(params ?? []);
 
-    try {
-      const stmt = this.db.prepare(sql);
-      if (isSelect) {
-        const rows = stmt.all(...args) as any[];
-        return this.processQueryResults(rows) as U;
+    const stmt = this.db.prepare(sql);
+    if (isInsert && !hasReturning) {
+      const result = stmt.run(...args) as { changes: number | bigint; lastInsertRowid: number | bigint };
+      return {
+        lastID: Number(result.lastInsertRowid),
+        changes: Number(result.changes),
+      } as U;
+    }
+    if (isUpdateOrDelete && !hasReturning) {
+      const result = stmt.run(...args) as { changes: number | bigint };
+      return Number(result.changes) as U;
+    }
+    // SELECT / WITH / PRAGMA / DDL / 带 RETURNING 的 DML：按可能有结果集处理。
+    // node:sqlite 的 all() 对无结果集语句返回空数组，不会抛错。
+    const rows = stmt.all(...args) as any[];
+    return this.processQueryResults(rows) as U;
+  }
+
+  /** 声明为 json 的列名集合（由 Database 层注册表结构时填充），读路径仅对这些列做 JSON 反序列化 */
+  private readonly jsonColumns = new Set<string>();
+
+  /**
+   * 注册表的列声明类型，用于读路径按声明类型反序列化（避免对 TEXT 列做启发式 JSON 解析破坏往返）
+   */
+  registerTableSchema(table: string, definition: Record<string, { type: string }>): void {
+    for (const [columnName, column] of Object.entries(definition)) {
+      if (column && column.type === 'json') {
+        this.jsonColumns.add(columnName);
       }
-      if (isInsert) {
-        const result = stmt.run(...args) as { changes: number | bigint; lastInsertRowid: number | bigint };
-        return {
-          lastID: Number(result.lastInsertRowid),
-          changes: Number(result.changes),
-        } as U;
-      }
-      if (isUpdateOrDelete) {
-        const result = stmt.run(...args) as { changes: number | bigint };
-        return Number(result.changes) as U;
-      }
-      stmt.run(...args);
-      return undefined as U;
-    } catch (err) {
-      throw err;
     }
   }
 
   /**
-   * 处理查询结果，移除字符串字段的多余引号
+   * 处理查询结果，按列声明类型反序列化（json 列）
    */
   private processQueryResults(data: any): any {
     if (!data) return data;
@@ -121,46 +130,25 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
     const processedRow: any = {};
     
     for (const [key, value] of Object.entries(row)) {
-      processedRow[key] = this.processFieldValue(value);
+      processedRow[key] = this.processFieldValue(key, value);
     }
     
     return processedRow;
   }
 
   /**
-   * 处理字段值，移除多余的引号并解析 JSON
+   * 处理字段值：仅对声明为 json 的列做 JSON 反序列化；
+   * 普通 TEXT 列原样返回，保证写入什么读出什么（不剥离引号、不启发式 JSON.parse）
    */
-  private processFieldValue(value: any): any {
+  private processFieldValue(key: string, value: any): any {
     if (typeof value !== 'string') return value;
-    
-    // 移除字符串两端的引号（如果存在）
-    if ((value.startsWith("'") && value.endsWith("'")) || 
-        (value.startsWith('"') && value.endsWith('"'))) {
-      const unquoted = value.slice(1, -1);
-      
-      // 尝试解析为 JSON（用于 json 类型字段）
-      if (unquoted.startsWith('{') || unquoted.startsWith('[')) {
-        try {
-          return JSON.parse(unquoted);
-        } catch {
-          // 如果解析失败，返回去除引号的字符串
-          return unquoted;
-        }
-      }
-      
-      return unquoted;
+    if (!this.jsonColumns.has(key)) return value;
+    try {
+      return JSON.parse(value);
+    } catch {
+      // 解析失败，返回原始字符串
+      return value;
     }
-    
-    // 尝试解析没有引号包裹但看起来像 JSON 的值（SQLite 驱动返回的 json 类型字段）
-    if (value.startsWith('{') || value.startsWith('[')) {
-      try {
-        return JSON.parse(value);
-      } catch {
-        // 解析失败，返回原始字符串
-      }
-    }
-    
-    return value;
   }
 
   async dispose(): Promise<void> {

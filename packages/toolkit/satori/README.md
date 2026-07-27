@@ -128,6 +128,8 @@ export function buildStatsCard() {
 - 测试：直接 `htmlToSvg(wrapCardHtml(...))`
 - IM 出站：`segment.html({ html })` + 可选 `@zhin.js/html-renderer` 自动转 PNG
 
+> 转义约定：原生标签（`div`/`span` 等）的字符串 children 一律 HTML 转义，`boolean` children 渲染为空串（与 React 语义一致）。组合 HTML 片段请用函数组件（如内置 `Card`/`Raw`），或在原生标签上显式使用 `dangerouslySetInnerHTML`——不要相信「看起来像 HTML 就放行」的隐式行为。
+
 ### 4. 内置字体
 
 从包内 `fonts/` 读取，与 satori 的 `fonts` 选项格式一致：

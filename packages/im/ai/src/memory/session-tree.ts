@@ -35,8 +35,13 @@ export function buildActivePathRows(
 ): AgentMessageRow[] {
   if (rows.length === 0) return [];
   const byId = rowById(rows);
-  const leafId = activeLeafId ?? resolveDefaultLeafId(rows);
+  let leafId = activeLeafId ?? resolveDefaultLeafId(rows);
   if (leafId == null) return rows;
+  // activeLeafId 失效（消息已被删除/不属于本会话）时回退到默认叶子，避免返回空链
+  if (!byId.has(leafId)) {
+    leafId = resolveDefaultLeafId(rows);
+    if (leafId == null || !byId.has(leafId)) return rows;
+  }
 
   const chain: AgentMessageRow[] = [];
   const visited = new Set<number>();

@@ -134,11 +134,12 @@ export class CostTracker {
     const defaultPricing = DEFAULT_PRICING[model];
     if (defaultPricing) return defaultPricing;
 
-    // 模糊匹配（前缀）
-    for (const [key, pricing] of Object.entries(DEFAULT_PRICING)) {
-      if (model.startsWith(key) || key.startsWith(model)) {
-        return pricing;
-      }
+    // 模糊匹配（前缀）：按键长降序取最长前缀，避免 "gpt-4o-mini-*" 误命中 "gpt-4o" 定价
+    const candidates = Object.keys(DEFAULT_PRICING)
+      .filter(key => model.startsWith(key) || key.startsWith(model))
+      .sort((a, b) => b.length - a.length);
+    if (candidates.length > 0) {
+      return DEFAULT_PRICING[candidates[0]];
     }
 
     // 未知模型，返回 0 价格

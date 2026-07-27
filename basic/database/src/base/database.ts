@@ -44,6 +44,17 @@ export abstract class Database<D=any,S extends Record<string, object>=Record<str
   ) {
     for (const key in definitions) {
       this.definitions.set(key, definitions[key]);
+      this.registerDialectSchema(key, definitions[key]);
+    }
+  }
+
+  /**
+   * 若方言支持按列声明类型处理（如 SQLite 读路径的 json 反序列化），向其注册表结构
+   */
+  private registerDialectSchema(name: keyof S, definition: Definition<S[keyof S]>): void {
+    const d = this.dialect as unknown as { registerTableSchema?: (table: string, definition: Record<string, { type: string }>) => void };
+    if (typeof d.registerTableSchema === 'function') {
+      d.registerTableSchema(String(name), definition as Record<string, { type: string }>);
     }
   }
   
@@ -160,6 +171,7 @@ export abstract class Database<D=any,S extends Record<string, object>=Record<str
   protected abstract initialize(): Promise<void>;
   define<K extends keyof S>(name: K, definition: Definition<S[K]>) {
     this.definitions.set(name, definition);
+    this.registerDialectSchema(name, definition);
   }
   /**
    * 删除表定义

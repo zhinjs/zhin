@@ -1,6 +1,7 @@
 /**
  * Satori webhook HTTP: token → opcode → parse → admit.
  */
+import { timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { getLogger } from '@zhin.js/logger';
@@ -85,7 +86,9 @@ export function resolveSatoriOpcode(request: IncomingMessage): number | undefine
 export function verifySatoriToken(token: string | undefined, request: IncomingMessage): boolean {
   if (!token) return true;
   const auth = request.headers.authorization ?? '';
-  return auth === `Bearer ${token}`;
+  const expected = Buffer.from(`Bearer ${token}`, 'utf8');
+  const actual = Buffer.from(auth, 'utf8');
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
 export async function readRequestBody(request: IncomingMessage): Promise<string> {

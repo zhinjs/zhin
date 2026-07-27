@@ -125,6 +125,15 @@ export class TelegramEndpoint implements EndpointInstance {
         }
         this.#routeReleases.push(...registerTelegramWebhookRoutes(this.#options.http, this));
         const webhook = this.#options.config.webhook!;
+        if (!webhook.secretToken) {
+          // 未配 secretToken 时 webhook 无鉴权：任何人知道 path 即可注入假 update。
+          logger.warn(formatCompact({
+            op: 'webhook_no_secret',
+            endpoint: this.#options.config.name,
+            path: webhook.path,
+            hint: 'set webhook.secretToken to authenticate Telegram callbacks',
+          }));
+        }
         const url = buildWebhookUrl(webhook);
         await this.callApi('setWebhook', {
           url,

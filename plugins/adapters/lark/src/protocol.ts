@@ -41,6 +41,8 @@ export interface LarkMessage {
   readonly create_time?: string;
   readonly update_time?: string;
   readonly chat_id?: string;
+  /** 事件携带的会话类型（'p2p' | 'group'）；p2p 的 chat_id 也是 oc_ 开头。 */
+  readonly chat_type?: string;
   readonly sender?: {
     readonly sender_id?: {
       readonly user_id?: string;
@@ -145,7 +147,10 @@ export function normalizeWebhookPath(path: string): string {
   return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
 }
 
-export function resolveChatType(chatId?: string): 'group' | 'private' {
+export function resolveChatType(chatId?: string, chatType?: string): 'group' | 'private' {
+  // 优先使用事件里的 chat_type：p2p 会话的 chat_id 同样以 oc_ 开头，不能靠前缀判断
+  if (chatType === 'group') return 'group';
+  if (chatType === 'p2p') return 'private';
   return chatId?.startsWith('oc_') ? 'group' : 'private';
 }
 
@@ -196,18 +201,39 @@ export function formatInboundContent(msg: LarkMessage): string {
   }
 }
 
+/** 验签时间戳时效窗口（防重放）。 */
+export const LARK_SIGNATURE_MAX_AGE_MS = 5 * 60_000;
+
 export function verifySignature(
   encryptKey: string,
   timestamp: string,
   nonce: string,
   body: string,
   signature: string,
+  nowMs: number = Date.now(),
 ): boolean {
   try {
+    // 时效窗口 ±5min，超出直接拒绝（timestamp 为秒）
+    const ts = Number(timestamp);
+    if (!Number.isFinite(ts) || Math.abs(nowMs - ts * 1000) > LARK_SIGNATURE_MAX_AGE_MS) {
+      return false;
+    }
     const stringToSign = `${timestamp}${nonce}${encryptKey}${body}`;
     const calculated = createHash('sha256').update(stringToSign).digest('hex');
     const a = Buffer.from(calculated);
     const b = Buffer.from(signature);
+    if (a.length !== b.length) return false;
+    return timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
+}
+
+/** timing-safe 比较 webhook verification token（长度不同快速失败）。 */
+export function verifyToken(token: string, expected: string): boolean {
+  try {
+    const a = Buffer.from(token);
+    const b = Buffer.from(expected);
     if (a.length !== b.length) return false;
     return timingSafeEqual(a, b);
   } catch {

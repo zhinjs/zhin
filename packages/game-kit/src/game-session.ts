@@ -93,5 +93,6 @@ export function boardMessageMatches(stored: string, messageId: string): boolean 
   if (!stored || !messageId) return false;
   if (stored === messageId || stored.endsWith(`:${messageId}`)) return true;
   const tail = stored.split(':').pop();
-  return !!(tail && messageId.endsWith(tail));
+  // 尾段匹配要求全等或以 `:tail` 结尾（段边界），避免 x99912345 误中 12345
+  return !!tail && (messageId === tail || messageId.endsWith(`:${tail}`));
 }

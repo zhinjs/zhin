@@ -68,7 +68,22 @@ export class OneBot11WsEndpoint implements EndpointInstance {
     try {
       await this.#connect();
     } catch (err) {
+      // start 失败必须清理现场，避免幽灵重连 / #started 残留 / agent 注册泄漏
       this.#started = false;
+      if (this.#reconnectTimer) {
+        clearTimeout(this.#reconnectTimer);
+        this.#reconnectTimer = undefined;
+      }
+      if (this.#ws) {
+        try {
+          this.#ws.close();
+        } catch {
+          /* ignore */
+        }
+        this.#ws = undefined;
+      }
+      this.#unregisterAgent?.();
+      this.#unregisterAgent = undefined;
       throw err;
     }
   }
@@ -170,12 +185,14 @@ export class OneBot11WsEndpoint implements EndpointInstance {
 
     await new Promise<void>((resolve, reject) => {
       let settled = false;
+      let opened = false;
       const ws = create(url, { headers });
       this.#ws = ws;
 
       ws.on('open', () => {
         if (settled) return;
         settled = true;
+        opened = true;
         if (!this.#options.config.access_token) {
           logger.warn(formatCompact({
             endpoint: this.#options.config.name,
@@ -229,7 +246,9 @@ export class OneBot11WsEndpoint implements EndpointInstance {
           settled = true;
           reject(new Error(`OneBot11 WS 关闭: ${codeNum} ${reasonStr}`));
         }
-        this.#scheduleReconnect();
+        // 仅在曾成功 open 的连接上调度重连；初始连接失败由 start() 的 catch 清理，
+        // 避免在 #started 复位前武装重连定时器产生僵尸连接。
+        if (opened) this.#scheduleReconnect();
       });
 
       ws.on('error', (err) => {
@@ -253,6 +272,7 @@ export class OneBot11WsEndpoint implements EndpointInstance {
     const delay = this.#options.config.reconnect_interval;
     this.#reconnectTimer = setTimeout(() => {
       this.#reconnectTimer = undefined;
+      if (this.#stopping || !this.#started) return;
       void this.#connect().catch((err) => {
         logger.warn(formatCompact({
           op: 'reconnect',

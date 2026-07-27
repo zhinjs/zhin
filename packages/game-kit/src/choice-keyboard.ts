@@ -35,9 +35,11 @@ export function buildChoiceFallbackMap(
   gamePrefix: string,
   sessionId: string,
   choices: ChoiceOption[],
+  /** 起始编号（默认 1）；拼在网格 fallback 之后时传空格数 +1，避免覆盖格子映射 */
+  startIndex = 1,
 ): Record<string, string> {
   const map: Record<string, string> = {};
-  let n = 1;
+  let n = startIndex;
   for (const choice of choices) {
     if (!choice.disabled) {
       map[String(n)] = `${gamePrefix}:${sessionId}:${choice.id}`;

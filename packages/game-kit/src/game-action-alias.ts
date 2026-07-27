@@ -72,20 +72,45 @@ export function normalizeTttAction(raw: string): string {
   return lookup(TTT_ACTIONS, raw);
 }
 
+/** 判断 normalize*Action 的结果是否为已知 action（未知名应放行，避免劫持普通聊天） */
+function isKnownAction(map: Record<string, string>, action: string): boolean {
+  return Object.values(map).includes(action);
+}
+
+export function isTttAction(action: string): boolean {
+  return isKnownAction(TTT_ACTIONS, action);
+}
+
 export function normalizeAdvAction(raw: string): string {
   return lookup(ADV_ACTIONS, raw);
+}
+
+export function isAdvAction(action: string): boolean {
+  return isKnownAction(ADV_ACTIONS, action);
 }
 
 export function normalizeRpsAction(raw: string): string {
   return lookup(RPS_ACTIONS, raw);
 }
 
+export function isRpsAction(action: string): boolean {
+  return isKnownAction(RPS_ACTIONS, action);
+}
+
 export function normalizeGuessAction(raw: string): string {
   return lookup(GUESS_ACTIONS, raw);
 }
 
+export function isGuessAction(action: string): boolean {
+  return isKnownAction(GUESS_ACTIONS, action);
+}
+
 export function normalizeDiceAction(raw: string): string {
   return lookup(DICE_ACTIONS, raw);
+}
+
+export function isDiceAction(action: string): boolean {
+  return isKnownAction(DICE_ACTIONS, action);
 }
 
 const CHAIN_ACTIONS: Record<string, string> = {
@@ -122,6 +147,14 @@ const RIDDLE_ACTIONS: Record<string, string> = {
 
 export function normalizeChainAction(raw: string): string {
   return lookup(CHAIN_ACTIONS, raw);
+}
+
+export function isChainAction(action: string): boolean {
+  return isKnownAction(CHAIN_ACTIONS, action);
+}
+
+export function isRiddleAction(action: string): boolean {
+  return isKnownAction(RIDDLE_ACTIONS, action);
 }
 
 export function normalizeRiddleAction(raw: string): string {

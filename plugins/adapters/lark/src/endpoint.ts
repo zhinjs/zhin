@@ -25,12 +25,16 @@ import { registerLarkWebhookRoutes } from './webhook.js';
 
 const logger = getLogger('lark');
 
+/** 出站 HTTP 调用统一 30s 超时。 */
+const OUTBOUND_TIMEOUT_MS = 30_000;
+
 export type LarkFetch = (
   url: string,
   init?: {
     readonly method?: string;
     readonly headers?: Record<string, string>;
     readonly body?: string | FormData;
+    readonly signal?: AbortSignal;
   },
 ) => Promise<{
   readonly ok: boolean;
@@ -75,6 +79,15 @@ export class LarkEndpoint implements EndpointInstance {
     if (this.#started) return;
     this.#started = true;
     try {
+      if (!this.#options.config.encryptKey && !this.#options.config.verificationToken) {
+        // encryptKey / verificationToken 都未配置时 webhook 完全无鉴权，任何人可伪造事件
+        logger.warn(formatCompact({
+          endpoint: this.#options.config.name,
+          op: 'webhook',
+          ok: false,
+          error: 'neither encryptKey nor verificationToken configured; webhook is unauthenticated',
+        }));
+      }
       await this.#refreshAccessToken();
       this.#unregisterAgent = registerLarkAgentEndpoint(this.#options.config.name, this);
       this.#routeReleases.push(...registerLarkWebhookRoutes(this.#options.http, this));
@@ -143,7 +156,7 @@ export class LarkEndpoint implements EndpointInstance {
       id: generateMessageId(msg),
       metadata: Object.freeze({
         messageType: msg.message_type,
-        chatType: resolveChatType(msg.chat_id),
+        chatType: resolveChatType(msg.chat_id, msg.chat_type),
         endpoint: this.#options.config.name,
       }),
     }).catch((err) => {
@@ -349,6 +362,7 @@ export class LarkEndpoint implements EndpointInstance {
         Authorization: `Bearer ${this.#accessToken.token}`,
       },
       body: body && method !== 'GET' ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
     });
     if (!response.ok) {
       const text = await response.text().catch(() => '');

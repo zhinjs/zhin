@@ -66,6 +66,8 @@ export class RepeaterEngine {
   readonly #cooldownSet = new Map<string, number>();
   #totalRepeats = 0;
   #cleanupTimer?: ReturnType<typeof setInterval>;
+  /** 最近一次 tick 的配置冷却，供 pruneStale 用实际配置而非默认值清理。 */
+  #lastCooldown = DEFAULT_REPEATER_CONFIG.cooldown;
 
   constructor() {
     this.#cleanupTimer = setInterval(() => this.pruneStale(), 120_000);
@@ -83,6 +85,7 @@ export class RepeaterEngine {
   }
 
   tick(message: RepeaterInboundFields, config: RepeaterConfig): RepeaterTickResult {
+    this.#lastCooldown = config.cooldown;
     const groupId = resolveGroupId(message);
     if (!groupId) return { action: 'next' };
 
@@ -130,7 +133,7 @@ export class RepeaterEngine {
     ].join('\n');
   }
 
-  pruneStale(now = Date.now(), expiry = 5 * 60_000, cooldown = DEFAULT_REPEATER_CONFIG.cooldown): void {
+  pruneStale(now = Date.now(), expiry = 5 * 60_000, cooldown = this.#lastCooldown): void {
     for (const [key, state] of this.#groupStates) {
       if (now - state.lastTime > expiry) this.#groupStates.delete(key);
     }
@@ -144,6 +147,8 @@ export class RepeaterEngine {
     this.#cleanupTimer = undefined;
     this.#groupStates.clear();
     this.#cooldownSet.clear();
+    // 单例 dispose 后不得继续服役：下个 getRepeaterEngine() 必须拿到新实例。
+    if (shared === this) shared = undefined;
   }
 }
 

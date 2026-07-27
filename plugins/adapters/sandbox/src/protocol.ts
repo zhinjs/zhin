@@ -33,6 +33,11 @@ export type ResolvedSandboxBot = {
 };
 
 export interface SandboxAdapterConfig {
+  /** Runtime expands `endpoints[i]` onto the top level — prefer these. */
+  readonly context?: string;
+  readonly name?: string;
+  readonly owner?: string;
+  /** Legacy shape: endpoint entries nested under `endpoints[]`. */
   readonly endpoints?: ReadonlyArray<{
     readonly context?: string;
     readonly name?: string;
@@ -44,9 +49,14 @@ export function resolveSandboxEndpoint(
   appConfig: SandboxAdapterConfig,
 ): ResolvedSandboxBot {
   const entry = appConfig.endpoints?.find((item) => item.context === 'sandbox');
-  const fixedName = typeof entry?.name === 'string' ? entry.name : undefined;
+  const fixedName = typeof appConfig.name === 'string' && appConfig.name
+    ? appConfig.name
+    : typeof entry?.name === 'string' && entry.name
+      ? entry.name
+      : undefined;
   const name = fixedName || process.env.SANDBOX_BOT_NAME || 'sandbox-bot';
-  const owner = (typeof entry?.owner === 'string' && entry.owner)
+  const owner = (typeof appConfig.owner === 'string' && appConfig.owner)
+    || (typeof entry?.owner === 'string' && entry.owner)
     || process.env.SANDBOX_BOT_OWNER
     || 'sandbox-user';
   return {

@@ -46,19 +46,13 @@ export async function handleQqWebhookRequest(
     return;
   }
   try {
-    let parsedBody: unknown;
-    const raw = await readRequestBodyText(request);
-    if (raw) {
-      try {
-        parsedBody = JSON.parse(raw);
-      } catch {
-        parsedBody = undefined;
-      }
-    }
+    // 不预消费请求流：库的验签必须基于原始字节（JSON.parse → JSON.stringify
+    // 会改变空白/转义/键序导致 401），body 留 undefined 让库自己读流；
+    // 预消费还会让非 JSON body 时库监听已结束的 end 事件而挂死。
     await bot.middleware({
       req: request,
       res: response,
-      request: { body: parsedBody },
+      request: { body: undefined },
     }, async () => undefined);
   } catch (error) {
     logger.error('QQ webhook error:', error);

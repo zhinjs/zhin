@@ -24,8 +24,13 @@ function createMemoryModel(): InMemoryGameModel {
     Object.entries(q).every(([k, v]) => row[k] === v);
 
   return {
-    findAll: async (q: Record<string, unknown> = {}) => rows.filter((row) => match(row, q)),
-    findOne: async (q: Record<string, unknown> = {}) => rows.find((row) => match(row, q)) ?? null,
+    // 返回行拷贝，避免调用方直接改字段绕过 updateWhere
+    findAll: async (q: Record<string, unknown> = {}) =>
+      rows.filter((row) => match(row, q)).map((row) => ({ ...row })),
+    findOne: async (q: Record<string, unknown> = {}) => {
+      const found = rows.find((row) => match(row, q));
+      return found ? { ...found } : null;
+    },
     create: async (row: Row) => {
       rows.push({ ...row });
       return row;

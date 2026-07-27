@@ -18,6 +18,46 @@ import {
 
 const logger = getLogger('sandbox');
 
+/**
+ * 多 sandbox endpoint 共用同一个 HttpHost 时，同 path 的所有 WS listener
+ * 都会被回调（入站重复、出站互窜）。按 endpoint 名隔离挂载路径：
+ * 首个占用 `/sandbox`（保持 Console 默认兼容），其余退到 `/sandbox/<name>`。
+ * 认领记录按 HttpHost 隔离，endpoint stop() 时必须 release。
+ */
+const claimedWsPaths = new WeakMap<HttpHost, Map<string, string>>();
+
+function claimSandboxWsPath(
+  http: HttpHost,
+  name: string,
+): { readonly path: string; readonly release: () => void } {
+  let claims = claimedWsPaths.get(http);
+  if (!claims) {
+    claims = new Map();
+    claimedWsPaths.set(http, claims);
+  }
+  const candidates = ['/sandbox', `/sandbox/${encodeURIComponent(name)}`];
+  let path = candidates.find(
+    (candidate) => !claims!.has(candidate) || claims!.get(candidate) === name,
+  );
+  if (!path) {
+    let index = 2;
+    path = `/sandbox/${encodeURIComponent(name)}-${index}`;
+    while (claims.has(path)) {
+      index += 1;
+      path = `/sandbox/${encodeURIComponent(name)}-${index}`;
+    }
+  }
+  claims.set(path, name);
+  const claimed = path;
+  const registry = claims;
+  return {
+    path: claimed,
+    release: () => {
+      if (registry.get(claimed) === name) registry.delete(claimed);
+    },
+  };
+}
+
 interface SandboxChannel {
   readonly type: string;
   readonly id: string;
@@ -48,6 +88,8 @@ export class SandboxWsEndpoint implements EndpointInstance {
   readonly #options: SandboxEndpointOptions;
   readonly #connections = new Map<string, SandboxConnection>();
   #wsHandleRelease?: () => void;
+  #wsPathRelease?: () => void;
+  #wsPath = '/sandbox';
   #open = false;
   #started = false;
 
@@ -63,7 +105,11 @@ export class SandboxWsEndpoint implements EndpointInstance {
   start(): void {
     if (this.#started) return;
     this.#started = true;
-    const handle = this.#options.http.ws('/sandbox');
+    // 多 endpoint 同 path 会被全部回调（入站重复、出站互窜），按名隔离。
+    const claim = claimSandboxWsPath(this.#options.http, this.#options.defaults.name);
+    this.#wsPathRelease = claim.release;
+    this.#wsPath = claim.path;
+    const handle = this.#options.http.ws(claim.path);
     this.#wsHandleRelease = handle.onConnection((connection) => {
       this.#acceptConnection(connection);
     });
@@ -72,7 +118,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
     }
     logger.info(formatCompact({
       op: 'sandbox_ws_mounted',
-      path: '/sandbox',
+      path: claim.path,
       endpoint: this.#options.defaults.name,
     }));
   }
@@ -89,6 +135,8 @@ export class SandboxWsEndpoint implements EndpointInstance {
     this.#open = false;
     this.#wsHandleRelease?.();
     this.#wsHandleRelease = undefined;
+    this.#wsPathRelease?.();
+    this.#wsPathRelease = undefined;
     for (const connection of this.#connections.values()) {
       connection.release();
       if (!connection.placeholder) {
@@ -237,7 +285,7 @@ export class SandboxWsEndpoint implements EndpointInstance {
           data: {
             text: [
               `已连接 Sandbox「${target}」`,
-              '与 Node Host 控制台沙盒协议一致（/sandbox）',
+              `与 Node Host 控制台沙盒协议一致（${this.#wsPath}）`,
               '命令: help · ping · zt · status',
             ].join('\n'),
           },

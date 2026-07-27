@@ -5,6 +5,8 @@ const DB_VERSION = 2;
 const STORE_INBOX = "inbox";
 const STORE_PENDING = "pending";
 
+let inboxEventSeq = 0;
+
 export type InboxRecord = {
   id: string;
   adapter: string;
@@ -69,7 +71,8 @@ export async function applyConsoleEvent(event: { type: string; data?: unknown })
   if (!parsed) return;
   const updatedAt = Date.now();
   await idbPutInbox({
-    id: `${parsed.adapter}:${parsed.endpointId}:${parsed.type}:${updatedAt}`,
+    // 追加自增+随机后缀：同毫秒同会话的两条事件不会因主键相同而互相覆盖
+    id: `${parsed.adapter}:${parsed.endpointId}:${parsed.type}:${updatedAt}:${inboxEventSeq++}:${Math.random().toString(36).slice(2, 8)}`,
     adapter: parsed.adapter,
     endpoint_id: parsed.endpointId,
     kind: parsed.kind,

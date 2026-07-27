@@ -1,4 +1,4 @@
-export { createHtmlRenderer } from './renderer.js';
+export { createHtmlRenderer, serializeJsxToHtml } from './renderer.js';
 export { registerAiTextAsImageOutput, extractPlainTextForImage } from './ai-text-as-image.js';
 export type {
   FontConfig,

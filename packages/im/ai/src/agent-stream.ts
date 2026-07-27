@@ -120,20 +120,30 @@ export function reduceAgentStreamEvent(
       const cumulative =
         typeof event.data?.message === "string" ? event.data.message : state.assistantText + delta;
       next.assistantText = cumulative;
+      next.waiting = false;
       break;
     }
     case AgentStreamEventType.MESSAGE_COMPLETED: {
       if (typeof event.data?.message === "string") {
         next.assistantText = event.data.message;
       }
+      next.waiting = false;
       break;
     }
+    case AgentStreamEventType.SESSION_STARTED:
+    case AgentStreamEventType.TURN_STARTED:
+    case AgentStreamEventType.SESSION_COMPLETED:
+    case AgentStreamEventType.TURN_COMPLETED:
+      // 有新的会话/轮次活动即不再处于 waiting
+      next.waiting = false;
+      break;
     case AgentStreamEventType.SESSION_WAITING:
       next.waiting = true;
       break;
     case AgentStreamEventType.SESSION_FAILED:
     case AgentStreamEventType.TURN_FAILED:
       next.failed = true;
+      next.waiting = false;
       break;
     case AgentStreamEventType.INPUT_REQUESTED: {
       const requestId = typeof event.data?.requestId === "string" ? event.data.requestId : "";

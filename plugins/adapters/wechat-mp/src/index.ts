@@ -7,6 +7,7 @@ export {
   extractOutboundText,
   formatCustomerServiceBody,
   formatInboundContent,
+  formatInboundId,
   isEncryptedEchostr,
   normalizeEchostrParam,
   parseXMLMessage,

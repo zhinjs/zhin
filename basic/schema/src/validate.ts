@@ -134,7 +134,17 @@ function validateOnly(schema: Schema, path: string, value: unknown): unknown {
       return current;
     }
     case 'regexp':
+      if (value !== undefined && typeof value !== 'string' && !(value instanceof RegExp)) {
+        throw issue(path, `${path} is not a RegExp|string`);
+      }
+      return value;
     case 'date':
+      if (value !== undefined && typeof value !== 'number' && !(value instanceof Date)) {
+        throw issue(path, `${path} is not a Date|number`);
+      }
+      if (value instanceof Date && isNaN(value.getTime())) {
+        throw issue(path, `${path} is not a valid Date`);
+      }
       return value;
     default:
       throw issue(path, `${path} has unsupported schema type ${schema.meta.type}`);

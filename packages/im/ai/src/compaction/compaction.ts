@@ -229,20 +229,25 @@ The summary should be brief but informative so that later turns can quickly reco
   }
   userContent += `New conversation:\n${conversation}\n\nGenerate the updated full summary.`;
 
+  let response: Awaited<ReturnType<AIProvider['chat']>>;
   try {
-    const response = await provider.chat({
+    response = await provider.chat({
       model: provider.models[0],
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userContent },
       ],
     });
-    const result = response.choices?.[0]?.message?.content;
-    return typeof result === 'string' ? result : DEFAULT_SUMMARY_FALLBACK;
   } catch (e: unknown) {
     logger.warn(formatCompact( { summarize: 'fail', error: truncatePreview(e instanceof Error ? e.message : String(e)) }));
-    return DEFAULT_SUMMARY_FALLBACK;
+    // 摘要失败必须抛错：吞错返回占位文本会让上层把占位当真摘要注入、静默丢历史
+    throw e;
   }
+  const result = response.choices?.[0]?.message?.content;
+  if (typeof result !== 'string' || !result.trim()) {
+    throw new Error('Summarization returned empty content');
+  }
+  return result;
 }
 
 /**
@@ -278,7 +283,7 @@ async function summarizeChunks(params: {
 /**
  * 带降级的摘要生成
  *
- * 完整摘要失败时，尝试排除超大消息再摘要
+ * 完整摘要失败时，尝试排除超大消息再摘要；全部失败时抛错（由上层熔断并保留原文）
  */
 export async function summarizeWithFallback(params: {
   provider: AIProvider;
@@ -293,10 +298,12 @@ export async function summarizeWithFallback(params: {
   }
 
   // 尝试完整摘要
+  let fullError: unknown;
   try {
     return await summarizeChunks(params);
-  } catch (fullError: unknown) {
-    logger.warn(formatCompact( { summarize: 'partial_fail', error: truncatePreview(fullError instanceof Error ? fullError.message : String(fullError)) }));
+  } catch (e: unknown) {
+    fullError = e;
+    logger.warn(formatCompact( { summarize: 'partial_fail', error: truncatePreview(e instanceof Error ? e.message : String(e)) }));
   }
 
   // 降级：排除超大消息
@@ -324,8 +331,9 @@ export async function summarizeWithFallback(params: {
     }
   }
 
-  // 最终降级
-  return `上下文包含 ${params.messages.length} 条消息（${oversizedNotes.length} 条超大）。由于大小限制，摘要不可用。`;
+  // 全部降级路径都失败 → 抛错，由上层 catch 保留原文并计入熔断，
+  // 不能返回占位摘要（会被当真摘要注入、静默丢历史）
+  throw fullError instanceof Error ? fullError : new Error(String(fullError));
 }
 
 /**

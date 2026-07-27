@@ -21,6 +21,7 @@ import {
   getContextToken,
   restoreContextTokens,
   setContextToken,
+  flushContextTokenPersist,
 } from './context-store.js';
 import { WeixinConfigManager } from './ilink-config-cache.js';
 import {
@@ -53,6 +54,9 @@ const MAX_CONSECUTIVE_FAILURES = 3;
 const BACKOFF_DELAY_MS = 30_000;
 const RETRY_DELAY_MS = 2_000;
 const WEIXIN_MEDIA_MAX_BYTES = 100 * 1024 * 1024;
+/** 入站媒体保留 24h，每小时清扫一次。 */
+const INBOUND_MEDIA_TTL_MS = 24 * 60 * 60 * 1000;
+const MEDIA_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 
 export type WeixinIlinkSendText = typeof sendMessageWeixin;
 export type WeixinIlinkNotifyStart = typeof notifyStart;
@@ -65,6 +69,7 @@ export interface WeixinIlinkEndpointOptions {
   readonly config: ResolvedWeixinIlinkConfig;
   readonly resolveCredentials?: (
     config: ResolvedWeixinIlinkConfig,
+    signal?: AbortSignal,
   ) => Promise<WeixinIlinkCredentials>;
   /** Test / internal: override network side effects. */
   readonly notifyStart?: WeixinIlinkNotifyStart;
@@ -77,6 +82,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
   readonly #options: WeixinIlinkEndpointOptions;
   readonly #resolveCredentials: (
     config: ResolvedWeixinIlinkConfig,
+    signal?: AbortSignal,
   ) => Promise<WeixinIlinkCredentials>;
   readonly #notifyStart: WeixinIlinkNotifyStart;
   readonly #notifyStop: WeixinIlinkNotifyStop;
@@ -85,7 +91,9 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
   #creds: WeixinIlinkCredentials | null = null;
   #pollAbort?: AbortController;
   #pollPromise?: Promise<void>;
+  #loginAbort?: AbortController;
   #configManager?: WeixinConfigManager;
+  #mediaSweepTimer?: ReturnType<typeof setInterval>;
   #open = false;
   #started = false;
 
@@ -115,7 +123,9 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
     this.#started = true;
     try {
       configureIlinkMeta({ botAgent: this.#options.config.botAgent });
-      this.#creds = await this.#resolveCredentials(this.#options.config);
+      // QR 登录最长 8 分钟：stop() 必须能打断
+      this.#loginAbort = new AbortController();
+      this.#creds = await this.#resolveCredentials(this.#options.config, this.#loginAbort.signal);
       restoreContextTokens(this.#options.config.name);
 
       await this.#notifyStart({
@@ -130,6 +140,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
 
       this.#pollAbort = new AbortController();
       this.#pollPromise = this.#pollLoop(this.#pollAbort.signal);
+      this.#startMediaSweep();
       logger.info(formatCompact({
         op: 'connect',
         endpoint: this.#options.config.name,
@@ -151,12 +162,16 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
 
   async stop(): Promise<void> {
     this.#open = false;
+    this.#loginAbort?.abort();
     this.#pollAbort?.abort();
     try {
       await this.#pollPromise;
     } catch {
       /* poll loop exit */
     }
+    this.#stopMediaSweep();
+    // 防抖中的 context token 落盘，避免 stop 丢尾部写入
+    flushContextTokenPersist(this.#options.config.name);
     if (this.#creds?.botToken) {
       try {
         await this.#notifyStop({ baseUrl: this.apiBaseUrl(), token: this.#creds.botToken });
@@ -350,8 +365,8 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
             continue;
           }
           consecutiveFailures += 1;
+          // 退避后不清零：对端持续挂时清零会让重试固定打满 RETRY_DELAY_MS。
           if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-            consecutiveFailures = 0;
             await sleep(BACKOFF_DELAY_MS, abortSignal);
           } else {
             await sleep(RETRY_DELAY_MS, abortSignal);
@@ -360,13 +375,14 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
         }
 
         consecutiveFailures = 0;
-        if (resp.get_updates_buf) {
-          getUpdatesBuf = resp.get_updates_buf;
-          saveSyncBuf(endpointName, getUpdatesBuf);
-        }
-
+        // 先分发再推进 buf：分发途中崩溃时 buf 未推进，下一轮重拉不丢消息。
+        const nextBuf = resp.get_updates_buf;
         for (const inbound of resp.msgs ?? []) {
           await this.#handleInboundMessage(inbound);
+        }
+        if (nextBuf) {
+          getUpdatesBuf = nextBuf;
+          saveSyncBuf(endpointName, getUpdatesBuf);
         }
       } catch (err) {
         if (abortSignal.aborted) return;
@@ -377,7 +393,6 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
           error: err instanceof Error ? err.message : String(err),
         }));
         if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-          consecutiveFailures = 0;
           await sleep(BACKOFF_DELAY_MS, abortSignal);
         } else {
           await sleep(RETRY_DELAY_MS, abortSignal);
@@ -457,5 +472,48 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
     const filePath = path.join(dir, fileName);
     fs.writeFileSync(filePath, buffer);
     return { path: filePath };
+  }
+
+  /** 入站媒体 TTL 清扫：start 时立即扫一次，之后每小时扫一次。 */
+  #startMediaSweep(): void {
+    this.#stopMediaSweep();
+    const sweep = () => this.#sweepInboundMedia();
+    sweep();
+    this.#mediaSweepTimer = setInterval(sweep, MEDIA_SWEEP_INTERVAL_MS);
+    (this.#mediaSweepTimer as { unref?: () => void }).unref?.();
+  }
+
+  #stopMediaSweep(): void {
+    if (this.#mediaSweepTimer) {
+      clearInterval(this.#mediaSweepTimer);
+      this.#mediaSweepTimer = undefined;
+    }
+  }
+
+  #sweepInboundMedia(): void {
+    const dir = path.join(resolveStateDir(), 'media', 'inbound');
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    const now = Date.now();
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+      const filePath = path.join(dir, entry.name);
+      try {
+        const stat = fs.statSync(filePath);
+        if (now - stat.mtimeMs <= INBOUND_MEDIA_TTL_MS) continue;
+        fs.unlinkSync(filePath);
+        logger.debug(formatCompact({
+          op: 'media_sweep',
+          endpoint: this.#options.config.name,
+          file: entry.name,
+        }));
+      } catch {
+        /* 单个文件失败不阻塞整体清扫 */
+      }
+    }
   }
 }

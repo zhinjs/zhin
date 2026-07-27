@@ -18,9 +18,14 @@ export async function registerSpeech(
     seedSpeechPipeline(pipeline);
 
     plugin.onDispose(registerSpeechImIntegration(plugin, pipeline));
-  } catch {
-    plugin.logger.warn(
-      '未安装 @zhin.js/speech，已跳过 voice_stt/voice_tts。安装: pnpm add @zhin.js/speech',
-    );
+  } catch (err) {
+    // 只有「包未安装」才降级为警告跳过；其余错误（配置错误、初始化 bug 等）原样抛出
+    if ((err as NodeJS.ErrnoException | undefined)?.code === 'ERR_MODULE_NOT_FOUND') {
+      plugin.logger.warn(
+        '未安装 @zhin.js/speech，已跳过 voice_stt/voice_tts。安装: pnpm add @zhin.js/speech',
+      );
+      return;
+    }
+    throw err;
   }
 }

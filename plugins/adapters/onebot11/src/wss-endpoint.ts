@@ -59,6 +59,15 @@ export class OneBot11WssEndpoint implements EndpointInstance {
   async start(): Promise<void> {
     if (this.#started) return;
     this.#started = true;
+    if (!this.#options.config.access_token) {
+      // wss 模式未配 access_token 时任何连接都会被放行（verifyOneBotAccessToken 直接 return true）
+      logger.warn(formatCompact({
+        endpoint: this.#options.config.name,
+        mode: 'wss',
+        ok: false,
+        error: 'missing access_token',
+      }));
+    }
     this.#unregisterAgent = registerOnebot11AgentEndpoint(
       this.#options.config.name,
       this as unknown as OneBot11WsEndpoint,

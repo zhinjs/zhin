@@ -58,7 +58,8 @@ describe('word-riddle riddle-text middleware (text fallback)', () => {
 
     expect(nextCalls).toBe(0);
     expect(replies.length).toBe(1);
-    expect(replies[0]).toMatch(/不对|猜谜/);
+    // char 模式答案为单字，多字输入只提示格式、不扣失误
+    expect(replies[0]).toMatch(/不对|猜谜|不算失误/);
   });
 
   it('非中文文本不放行到作答，交给后续中间件', async () => {

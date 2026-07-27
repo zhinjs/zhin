@@ -76,4 +76,17 @@ describe('weixin-ilink login fallback (no botToken)', () => {
       botToken: 'qr-token',
     }));
   });
+
+  it('QR 登录循环响应 AbortSignal（stop 后不再跑满 8 分钟）', async () => {
+    delete process.env.WEIXIN_ILINK_TOKEN;
+    // 一直 wait：不 abort 就要跑到 8 分钟超时
+    mockedApiGetFetch.mockResolvedValue(JSON.stringify({ status: 'wait' }));
+    const config = resolveWeixinIlinkConfig({ name: 'qr-abort-bot' });
+    const abort = new AbortController();
+    const started = Date.now();
+    const promise = resolveCredentials(config, abort.signal);
+    setTimeout(() => abort.abort(), 50);
+    await expect(promise).rejects.toThrow('扫码登录已取消');
+    expect(Date.now() - started).toBeLessThan(5_000);
+  });
 });

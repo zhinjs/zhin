@@ -18,6 +18,7 @@ import {
   resolveSatoriConfig,
   type SatoriEventBody,
 } from '../src/protocol.js';
+import { verifySatoriToken } from '../src/webhook.js';
 
 const adapterFeature = featureId('zhin.adapter');
 const hosts: ReturnType<typeof createHttpHost>[] = [];
@@ -391,6 +392,64 @@ describe('satori plugin runtime adapter', () => {
 
     const messageId = await endpoint.send({ target: 'ch-9', payload: 'pong' });
     expect(messageId).toBe('ch-9:out-1');
+
+    await endpoint.stop();
+  });
+});
+
+describe('satori webhook auth', () => {
+  it('verifySatoriToken compares constant-time and tolerates length mismatch', () => {
+    const req = (auth?: string) => ({
+      headers: auth === undefined ? {} : { authorization: auth },
+    }) as never;
+    expect(verifySatoriToken(undefined, req())).toBe(true);
+    expect(verifySatoriToken('secret', req('Bearer secret'))).toBe(true);
+    expect(verifySatoriToken('secret', req('Bearer wrong!'))).toBe(false);
+    // 长度不一致不能抛异常（timingSafeEqual 等长前置检查）
+    expect(verifySatoriToken('secret', req('Bearer secret-longer'))).toBe(false);
+    expect(verifySatoriToken('secret', req())).toBe(false);
+  });
+});
+
+describe('satori ws heartbeat', () => {
+  it('closes the socket after two heartbeat rounds without PONG', async () => {
+    vi.useFakeTimers();
+    const socket = createMockSocket();
+    const closeSpy = vi.fn(() => socket.emit('close', 1000, 'heartbeat timeout'));
+    socket.close = closeSpy;
+    const endpoint = new SatoriWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      config: resolveSatoriConfig({
+        name: 'test-satori',
+        connection: 'ws',
+        baseUrl: 'http://127.0.0.1:5140',
+        token: 'secret',
+        heartbeat_interval: 1_000,
+      }),
+      createWebSocket: createWsFactory(socket),
+    });
+    await endpoint.start();
+
+    // 第 1 轮：发出 PING，未超时
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(closeSpy).not.toHaveBeenCalled();
+    expect(socket.sent.some((raw) => (JSON.parse(raw) as { op: number }).op === SatoriOpcode.PING))
+      .toBe(true);
+
+    // PONG 回包重置计数
+    socket.emit('message', JSON.stringify({ op: SatoriOpcode.PONG, body: {} }));
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(closeSpy).not.toHaveBeenCalled();
+
+    // 连续两轮无回包 → 下一轮心跳主动 close 触发重连
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(closeSpy).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(closeSpy).toHaveBeenCalledTimes(1);
 
     await endpoint.stop();
   });

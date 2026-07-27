@@ -214,6 +214,35 @@ describe('qq plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
+  it('removes the endpoint from runtime state on stop', async () => {
+    const state = createQqRuntimeState();
+    const endpoint = defineQqAdapter.create({
+      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+      name: 'qq',
+      config: { appid: 'a', secret: 's', mode: 'websocket', name: 'ep-stop' },
+      use: (token: unknown) => {
+        if (token === messageGatewayToken) {
+          return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
+        }
+        if (token === qqRuntimeStateToken) return state;
+        throw new Error(`unexpected token: ${String(token)}`);
+      },
+    } as never);
+    expect(state.endpoints.has('ep-stop')).toBe(true);
+    await endpoint.stop?.();
+    expect(state.endpoints.has('ep-stop')).toBe(false);
+  });
+
+  it('drops non-URL image segments with a warn instead of leaking raw sources', () => {
+    expect(formatOutboundText([{ type: 'image', data: { url: 'https://example.com/a.png' } }]))
+      .toBe('https://example.com/a.png');
+    expect(formatOutboundText([
+      { type: 'text', data: { text: 'hi' } },
+      { type: 'image', data: { file: 'base64-blob' } },
+    ])).toBe('hi');
+    expect(formatOutboundText([{ type: 'image', data: {} }])).toBe('');
+  });
+
   it('creates http endpoint when httpHostToken provided', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     const endpoint = defineQqAdapter.create({

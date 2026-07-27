@@ -49,6 +49,10 @@ export class JobHeap {
   }
 
   push(job: InternalJob): void {
+    // 同 id 任务重复注册时先移除堆中旧条目，避免新旧条目并存导致双重触发
+    if (this.indexById.has(job.id)) {
+      this.remove(job.id);
+    }
     this.items.push(job);
     this.indexById.set(job.id, this.items.length - 1);
     this.bubbleUp(this.items.length - 1);

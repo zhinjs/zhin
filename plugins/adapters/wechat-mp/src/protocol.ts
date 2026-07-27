@@ -310,6 +310,17 @@ export function buildTextReply(
   ].join('');
 }
 
+/**
+ * 入站消息 id：普通消息用 MsgId；无 MsgId 的事件消息拼 Event/EventKey，
+ * 避免只用秒级 CreateTime 时同秒多事件 id 碰撞。
+ */
+export function formatInboundId(msg: WeChatMessage): string {
+  if (msg.MsgId) return msg.MsgId;
+  return [msg.CreateTime, msg.Event, msg.EventKey]
+    .filter((part) => part != null && part !== '')
+    .join(':');
+}
+
 /** Build inbound text for MessageGateway.receive. */
 export function formatInboundContent(msg: WeChatMessage): string {
   switch (msg.MsgType) {

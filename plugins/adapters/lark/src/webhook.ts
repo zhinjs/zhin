@@ -8,6 +8,7 @@ import {
   headerValue,
   readTextBody,
   verifySignature,
+  verifyToken,
   type LarkEventBody,
   type LarkMessage,
   type ResolvedLarkConfig,
@@ -43,7 +44,7 @@ export async function handleLarkWebhookRequest(
 
     if (handler.config.verificationToken) {
       const token = headerValue(request.headers, 'x-lark-request-token');
-      if (token !== handler.config.verificationToken) {
+      if (!verifyToken(token, handler.config.verificationToken)) {
         logger.warn(formatCompact({ op: 'webhook', ok: false, error: 'invalid verification token' }));
         response.writeHead(403, { 'Content-Type': 'text/plain' });
         response.end('Forbidden');
