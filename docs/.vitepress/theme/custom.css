@@ -219,13 +219,6 @@ button {
   -webkit-overflow-scrolling: touch;
 }
 
-.vp-doc table thead,
-.vp-doc table tbody {
-  display: table;
-  width: 100%;
-  min-width: max-content;
-}
-
 .vp-doc table th {
   background: var(--vp-c-bg-soft);
   font-weight: 600;
