@@ -40,7 +40,7 @@ withDefaults(defineProps<{ heading?: string }>(), { heading: '' })
   height: 3px;
   margin-top: 10px;
   border-radius: 2px;
-  background: linear-gradient(90deg, var(--vp-c-brand), var(--vp-c-brand-lighter));
+  background: var(--zhin-rainbow, linear-gradient(90deg, var(--vp-c-brand), var(--vp-c-brand-lighter)));
 }
 
 .zhin-duo {

@@ -161,6 +161,47 @@ button {
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.vp-doc [class*='language-ts'] .lang,
+.vp-doc [class*='language-typescript'] .lang {
+  color: var(--zhin-c2);
+  background: var(--zhin-c2-bg);
+}
+
+.vp-doc [class*='language-js'] .lang,
+.vp-doc [class*='language-vue'] .lang {
+  color: var(--zhin-c4);
+  background: var(--zhin-c4-bg);
+}
+
+.vp-doc [class*='language-yaml'] .lang,
+.vp-doc [class*='language-yml'] .lang {
+  color: var(--zhin-c5);
+  background: var(--zhin-c5-bg);
+}
+
+.vp-doc [class*='language-bash'] .lang,
+.vp-doc [class*='language-shell'] .lang,
+.vp-doc [class*='language-zsh'] .lang {
+  color: var(--zhin-c1);
+  background: var(--zhin-c1-bg);
+}
+
+.vp-doc [class*='language-json'] .lang,
+.vp-doc [class*='language-md'] .lang,
+.vp-doc [class*='language-markdown'] .lang {
+  color: var(--zhin-c3);
+  background: var(--zhin-c3-bg);
+}
+
+.vp-doc [class*='language-env'] .lang,
+.vp-doc [class*='language-text'] .lang,
+.vp-doc [class*='language-txt'] .lang {
+  color: var(--zhin-c6);
+  background: var(--zhin-c6-bg);
 }
 
 /* 表格（小屏横向滚动，不裁切内容） */
@@ -209,10 +250,10 @@ button {
 /* 引用与容器 */
 
 .vp-doc blockquote {
-  border-left: 3px solid var(--vp-c-brand);
+  border-left: 3px solid var(--zhin-c1);
   padding: 12px 16px;
   border-radius: 0 8px 8px 0;
-  background: var(--vp-c-bg-soft);
+  background: linear-gradient(90deg, var(--zhin-c1-bg), transparent 70%);
   color: var(--zhin-ink-2);
 }
 
@@ -221,19 +262,29 @@ button {
   border: 1px solid var(--zhin-line);
 }
 
+.vp-doc .custom-block.info {
+  border-color: var(--zhin-c2);
+  background: var(--zhin-c2-bg);
+}
+
 .vp-doc .custom-block.tip {
   border-color: var(--vp-c-brand-lighter);
-  background: rgba(76, 195, 138, 0.08);
+  background: var(--zhin-c1-bg);
 }
 
 .vp-doc .custom-block.warning {
-  border-color: #e0b45e;
-  background: rgba(224, 180, 94, 0.08);
+  border-color: var(--zhin-c4);
+  background: var(--zhin-c4-bg);
 }
 
 .vp-doc .custom-block.danger {
-  border-color: #e0655e;
-  background: rgba(224, 101, 94, 0.07);
+  border-color: var(--zhin-c5);
+  background: var(--zhin-c5-bg);
+}
+
+.vp-doc .custom-block.details {
+  border-color: var(--zhin-c6);
+  background: var(--zhin-c6-bg);
 }
 
 /* 图片与 mermaid */
@@ -313,11 +364,11 @@ button {
 }
 
 .VPSidebarItem.is-active > .item {
-  background: rgba(47, 158, 110, 0.10);
+  background: linear-gradient(90deg, var(--zhin-c1-bg), var(--zhin-c6-bg));
 }
 
 .dark .VPSidebarItem.is-active > .item {
-  background: rgba(76, 195, 138, 0.14);
+  background: linear-gradient(90deg, var(--zhin-c1-bg), var(--zhin-c2-bg));
 }
 
 .VPSidebarItem.is-active > .item > .text {

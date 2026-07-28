@@ -70,4 +70,23 @@ withDefaults(defineProps<{ title?: string }>(), { title: 'zsh' })
 .zhin-terminal code :deep(span) {
   color: #6f9a83;
 }
+
+/* 行尾光标闪烁（最后一行末尾） */
+.zhin-terminal code::after {
+  content: "▌";
+  margin-left: 2px;
+  color: var(--vp-c-brand-light);
+  animation: zhin-caret-blink 1.1s steps(1) infinite;
+}
+
+@keyframes zhin-caret-blink {
+  0%, 55% { opacity: 1; }
+  56%, 100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zhin-terminal code::after {
+    animation: none !important;
+  }
+}
 </style>
