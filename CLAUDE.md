@@ -84,11 +84,43 @@ packages/toolkit/{create-zhin,satori}         # 脚手架与渲染库
 
 `Message.$reply` / `Adapter.sendMessage` → `renderSendMessage` → root plugin `before.sendMessage` → platform `Endpoint`. No parallel `Plugin#sendMessage` bypass.
 
-### Plugin system
+### Plugin system (Plugin Runtime — current)
 
-Uses **AsyncLocalStorage** for context management. `usePlugin()` must be called at module top-level (not inside async functions). Plugins auto-mount on `start()`, unmount on `stop()`.
+`zhin runtime start` is the only start path. Plugins are **packages**: `package.json#zhin` declares the manifest (`entry`, `engine`, `runtime`, `features`, `plugins`), and `plugin.ts` must **default-export a `definePlugin()` definition** — `PluginScopeAssembler` throws `does not default-export a Plugin definition` otherwise.
 
-Context/DI: `provide()` registers, `inject()` / `useContext()` consumes. Return a cleanup function from `useContext` callback for lifecycle management.
+```ts
+// plugin.ts — thin wiring only
+import { definePlugin } from '@zhin.js/plugin-runtime';
+
+export default definePlugin({
+  name: 'my-plugin',                      // /^[a-z][a-z0-9-]*$/
+  metadata: { displayName: 'My Plugin' },
+  setup(context) {
+    // context.plugin / config / resources (Scope) / lifecycle / handoff
+    context.resources.provide(someToken, value);
+    return () => cleanup();               // or context.lifecycle.add(...)
+  },
+});
+```
+
+Capabilities are **discovered from convention directories**, not registered imperatively — one per file, default-exported:
+
+| Directory | Authoring API |
+|---|---|
+| `commands/**/*.ts` | `defineCommand()` (`@zhin.js/command`) — path is the route; `[name:string=default].ts` for params |
+| `middlewares/*.ts` | `defineMiddleware()` (`@zhin.js/middleware`) |
+| `components/*.tsx` | `defineComponent()` |
+| `tools/*.ts` | `defineAgentTool()` (`@zhin.js/tool`) |
+| `pages/*.tsx` | `definePage()` (`$nav.tsx` / `$footer.tsx` for chrome) |
+| `skills/<name>/SKILL.md`, `agents/<name>.agent.md` | markdown + frontmatter |
+
+DI is **Scope + Token** based (`context.resources`), generation-scoped rather than a global registry. See `.github/skills/migrate-zhin-plugin-runtime/references/migration-map.md` for the full old→new mapping.
+
+### Legacy `usePlugin()` plugin system (vestigial)
+
+The older `Plugin`/`PluginBase` classes (`packages/im/{kernel,core}/src/plugin.ts`) use **AsyncLocalStorage**: `Plugin.create()` evaluates the module inside `pluginStorage.run()`, which is what makes top-level `usePlugin()` work. `provide()` registers, `inject()` / `useContext()` consumes.
+
+This path is reachable only via `bootstrapNode` (`zhin.js/node`) and is **not wired to any CLI command**. `@zhin.js/runtime` has no bridge to `pluginStorage`, so a top-level `usePlugin()` in a `plugin.ts` will **not** work under `zhin runtime start`. Do not author new plugins this way.
 
 ### Build output
 
@@ -195,8 +227,8 @@ These rules are non-negotiable — violating them will break the project:
 
 1. **Never bypass the send chain** — All outbound messages must flow through `Message.$reply` or `Adapter.sendMessage` → `renderSendMessage` → `before.sendMessage` → platform Endpoint.
 2. **Respect the dependency direction** — `basic → kernel → ai → core → agent → zhin`. Lower layers must never import from higher layers. Exception: `basic/cli` is the Plugin Runtime composition root (`zhin runtime start` assembles IM/Agent/Console hosts) and may import `packages/im` layers; this exception is scoped to `basic/cli` only.
-3. **`usePlugin()` at module top-level only** — Never inside async functions, callbacks, or lazy init paths (AsyncLocalStorage context will be lost).
-4. **`getPlugin()` at plugin init only** — Capture `plugin`/`root` when registering middleware, commands, tools, and events; never call `getPlugin()` inside those runtime callbacks (common production failure mode).
+3. **`plugin.ts` must default-export `definePlugin()`** — The Plugin Runtime loader requires it; capabilities belong in convention directories (`commands/`, `middlewares/`, `tools/`, …), not in imperative top-level registration.
+4. **Legacy `usePlugin()` / `getPlugin()` rules still bind legacy code** — Where the `zhin.js/node` path is still used: `usePlugin()` at module top-level only (never inside async functions or lazy init — AsyncLocalStorage context is lost), and `getPlugin()` at plugin init only (capture `plugin`/`root` when registering; never call it inside runtime callbacks). Enforced by `check:use-plugin-top-level` / `check:get-plugin-runtime`.
 5. **Use `.js` extensions in imports** — TypeScript local imports require `.js` suffix (`import { x } from './y.js'`).
 6. **Build order matters** — When building incrementally, follow: logger/schema/database → kernel → ai → core → agent → zhin.
 7. **No git submodules** — This is a pnpm workspace monorepo; all packages live under `basic/`, `packages/`, `plugins/`, or `examples/`.

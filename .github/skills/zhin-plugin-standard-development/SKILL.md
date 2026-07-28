@@ -9,6 +9,23 @@ user-invocable: true
 
 把 Zhin.js 插件需求转成符合仓库约定的可运行实现，避免常见的插件结构混乱、生命周期不稳、Context 使用错误和命令设计失衡。
 
+> **⚠️ 当前架构以 Plugin Runtime 为准（本文正文尚未完全迁移）**
+>
+> `zhin runtime start` 是唯一启动路径。插件即 package：`package.json#zhin` 声明 manifest，
+> `plugin.ts` **必须 default export `definePlugin()`**，否则装配阶段直接抛
+> `does not default-export a Plugin definition`。
+>
+> 能力**按目录发现**（一个文件一个能力，default export），不再命令式注册：
+> `commands/**/*.ts`（`defineCommand`）、`middlewares/*.ts`（`defineMiddleware`）、
+> `components/*.tsx`（`defineComponent`）、`tools/*.ts`（`defineAgentTool`）、
+> `pages/*.tsx`（`definePage`）、`agent/skills/*.md`、`agents/*.agent.md`。
+> 依赖注入使用 Scope + Token（`context.resources`），生命周期用 `context.lifecycle`。
+>
+> 下面**正文与部分表格仍在描述旧的 `usePlugin()` / `addCommand()` 写法**，那套 API 只在
+> `zhin.js/node`（`bootstrapNode`）下有效，且未接任何 CLI 命令；在 `zhin runtime start`
+> 下不工作。以 **assets/ 骨架**（已迁移）与
+> [迁移映射](../migrate-zhin-plugin-runtime/references/migration-map.md) 为准。
+
 配套资产按需加载：
 
 - [插件能力地图](./references/plugin-capabilities.md)
@@ -50,17 +67,17 @@ user-invocable: true
 
 根据用户目标决定实现重点：
 
-| 类型 | 重点 | 常见入口 |
+| 类型 | 重点 | 入口（能力目录，default export） |
 |------|------|----------|
-| 命令型插件 | `MessageCommand`、参数模板、权限、返回内容 | `src/index.ts` 或 `src/commands/` |
-| 中间件型插件 | `addMiddleware()`、消息过滤、前后置处理 | `src/index.ts` 或 `src/middlewares/` |
-| 事件型插件 | `plugin.on(...)`、入站监听、发送前钩子 | `src/index.ts` 或 `src/events/` |
-| 定时型插件 | `addCron()`、`Cron`、周期任务 | `src/index.ts` 或 `src/crons/` |
-| 组件型插件 | `defineComponent()`、`addComponent()` | `src/index.tsx` 或 `src/components/` |
-| AI 工具型插件 | `plugin.addTool()`、`ZhinTool` | `src/index.ts` 或 `src/tools/` |
-| 服务型插件 | `provide()`、`useContext()`、资源清理、依赖注入 | `src/index.ts` 或 `src/services/` |
-| 数据型插件 | 模型、持久化、初始化时机 | `database` Context 相关模块 |
-| Web 集成插件 | `router`、`web.addEntry()`、客户端页面 | `src/index.ts` 与 `client/` |
+| 命令型插件 | `defineCommand()`、文件路径即路由、`[name:string=default].ts` 传参 | `commands/**/*.ts` |
+| 中间件型插件 | `defineMiddleware()`、`target: 'inbound'`、消息过滤 | `middlewares/*.ts` |
+| 事件型插件 | 入站用 `target: 'inbound'`；发送前改写用 `target: 'outbound'` | `middlewares/*.ts` |
+| 定时型插件 | `scheduleHostToken.register()`（登记 disposer） | `plugin.ts` setup 或 `agent/schedules/*.ts` |
+| 组件型插件 | `defineComponent()`、文件名即组件名 | `components/*.tsx` |
+| AI 工具型插件 | `defineAgentTool()`、`inputSchema` 与入参一致 | `tools/*.ts` 或 `agent/tools/*.ts` |
+| 服务型插件 | `context.resources.provide(token, value)`、`context.lifecycle` | `plugin.ts` setup |
+| 数据型插件 | `databaseHostToken`：`start()` 前 `define()` 表 | `plugin.ts` setup |
+| Web 集成插件 | `definePage()`、`$nav.tsx` / `$footer.tsx` | `pages/*.tsx` |
 
 如果一个插件同时包含多种类型，优先梳理主职责，再决定是否拆分子模块。
 
@@ -75,15 +92,18 @@ user-invocable: true
 
 实现前先判断需要哪些上下文和依赖：
 
-- 需要配置：优先使用 `declareConfig()`，必要时读取 `config` Context
-- 需要数据库：使用 `useContext('database', ...)`
-- 需要 HTTP：使用 `useContext('router', ...)`
-- 需要 console Web 集成：使用 `useContext('web', ...)`
-- 需要定时任务：使用 `addCron()`，并确认 `cron` 服务启用
-- 需要组件：使用 `defineComponent()` / `addComponent()`，并确认 `component` 服务启用
-- 需要事件监听：使用 `plugin.on('message.receive')`、`plugin.on('before.sendMessage')` 等合适事件点
-- 需要 AI 工具：使用 `plugin.addTool()` 或 `plugin.addToolOnly()`
-- 需要其他插件服务：通过 `inject()` 或 `useContext()` 明确依赖
+Host 资源（database / schedule / outbound / agentTools 等）都是**可选**的：
+一律先 `context.resources.has(token)` 再 `use(token)`，否则精简安装下会装配失败。
+
+- 需要配置：字段写进 `schema.json`，在 setup 里 `context.config.get()` 读取
+- 需要数据库：`databaseHostToken`，`start()` 之前 `db.define(...)` 建表
+- 需要定时任务：`scheduleHostToken.register({ id, cron, execute })`，并把 disposer 交给 `context.lifecycle`
+- 需要主动推送：`outboundHostToken.send(...)`（不要绕过发送链路）
+- 需要组件：`components/*.tsx` + `defineComponent()`
+- 需要事件监听 / 发送前改写：`middlewares/*.ts`，选 `target: 'inbound' | 'outbound'`
+- 需要 AI 工具：`tools/*.ts` + `defineAgentTool()`；AI 可选时用 `agentToolsHostToken` 守卫并懒加载
+- 需要其他插件的服务：用对方导出的 Token，必要时写进 `definePlugin({ requires: [...] })`
+- 所有清理：`context.lifecycle.add(dispose)` 或从 `setup()` 返回 disposer
 
 如果依赖不是插件启动时必需，不要在模块顶层直接强行读取未就绪 Context。
 
