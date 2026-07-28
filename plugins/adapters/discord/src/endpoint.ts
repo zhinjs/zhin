@@ -24,7 +24,9 @@ import {
 } from './gateway.js';
 import {
   formatButtonContent,
+  formatButtonSegments,
   formatInboundContent,
+  formatInboundSegments,
   formatOutboundBody,
   senderDisplayName,
   type DiscordButtonInbound,
@@ -140,6 +142,7 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
       adapter: this.#options.id,
       target: msg.channelId,
       content: formatInboundContent(msg),
+      segments: formatInboundSegments(msg),
       sender: senderDisplayName(msg),
       id: msg.id,
       metadata: Object.freeze({
@@ -167,6 +170,7 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
       adapter: this.#options.id,
       target: interaction.channelId,
       content: formatButtonContent(interaction),
+      segments: formatButtonSegments(interaction),
       sender: interaction.userName,
       id: interaction.id,
       metadata: Object.freeze({
@@ -446,6 +450,7 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
       adapter: this.#options.id,
       target: msg.channelId,
       content: formatInboundContent(msg),
+      segments: formatInboundSegments(msg),
       sender: senderDisplayName(msg),
       id: msg.id,
       metadata: Object.freeze({

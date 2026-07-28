@@ -10,7 +10,9 @@ import { safeTokenEqual } from '../src/webhook.js';
 import {
   buildWebhookUrl,
   formatCallbackContent,
+  formatCallbackSegments,
   formatInboundContent,
+  formatInboundSegments,
   formatOutboundActions,
   resolveTelegramConfig,
   type TelegramMessage,
@@ -134,6 +136,79 @@ describe('telegram protocol helpers', () => {
       from: { id: 1, first_name: 'A' },
       data: 'btn:1',
     })).toBe('[action: btn:1]');
+  });
+
+  it('maps inbound attachments to canonical segments with file_id MediaRef (kind=file)', () => {
+    expect(formatInboundSegments(textMessage())).toEqual([
+      { type: 'text', data: { text: 'hello' } },
+    ]);
+    expect(formatInboundSegments(textMessage({
+      text: undefined,
+      photo: [{ file_id: 'p-small' }, { file_id: 'p-large', width: 800, height: 600 }],
+    }))).toEqual([
+      { type: 'image', data: { media: { kind: 'file', value: 'p-large' } } },
+    ]);
+    expect(formatInboundSegments(textMessage({
+      text: undefined,
+      caption: 'look',
+      video: { file_id: 'v1' },
+    }))).toEqual([
+      { type: 'text', data: { text: 'look' } },
+      { type: 'video', data: { media: { kind: 'file', value: 'v1' } } },
+    ]);
+    expect(formatInboundSegments(textMessage({
+      text: undefined,
+      audio: { file_id: 'a1', title: 'song' },
+    }))).toEqual([
+      { type: 'audio', data: { media: { kind: 'file', value: 'a1' }, name: 'song' } },
+    ]);
+    expect(formatInboundSegments(textMessage({
+      text: undefined,
+      voice: { file_id: 'vo1' },
+    }))).toEqual([
+      { type: 'voice', data: { media: { kind: 'file', value: 'vo1' } } },
+    ]);
+    expect(formatInboundSegments(textMessage({
+      text: undefined,
+      document: { file_id: 'd1', file_name: 'a.pdf', mime_type: 'application/pdf' },
+    }))).toEqual([
+      {
+        type: 'file',
+        data: {
+          media: { kind: 'file', value: 'd1', mime_type: 'application/pdf' },
+          name: 'a.pdf',
+        },
+      },
+    ]);
+    expect(formatInboundSegments(textMessage({
+      text: undefined,
+      sticker: { file_id: 's1', emoji: '😀' },
+    }))).toEqual([
+      { type: 'image', data: { media: { kind: 'file', value: 's1' }, alt: '😀' } },
+    ]);
+  });
+
+  it('maps reply_to_message and callback_query payload to reply/action segments', () => {
+    expect(formatInboundSegments(textMessage({
+      reply_to_message: textMessage({ message_id: 41 }),
+    }))).toEqual([
+      { type: 'reply', data: { message_id: '41' } },
+      { type: 'text', data: { text: 'hello' } },
+    ]);
+    expect(formatCallbackSegments({
+      id: 'cq1',
+      from: { id: 1, first_name: 'A' },
+      data: 'btn:1',
+      message: textMessage({ message_id: 40 }),
+    })).toEqual([
+      { type: 'action', data: { id: 'cq1', payload: 'btn:1', sourceMessageId: '40' } },
+    ]);
+    expect(formatCallbackSegments({
+      id: 'cq2',
+      from: { id: 1, first_name: 'A' },
+    })).toEqual([
+      { type: 'action', data: { id: 'cq2', payload: '' } },
+    ]);
   });
 
   it('formats outbound string and segment payloads', () => {

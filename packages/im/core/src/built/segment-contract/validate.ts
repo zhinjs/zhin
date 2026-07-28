@@ -7,6 +7,7 @@ const mediaKindSchema = Schema.union([
   Schema.const('url'),
   Schema.const('path'),
   Schema.const('base64'),
+  Schema.const('file'),
 ]);
 export const mediaRefSchema = Schema.object({
   kind: mediaKindSchema.required() as unknown as Schema,

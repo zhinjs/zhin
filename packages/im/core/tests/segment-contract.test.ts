@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   assertCanonicalSegments,
   isCanonicalSegment,
+  isMediaRef,
+  mediaRefToLegacyFields,
   segmentsForImDelivery,
+  collectSegmentMedia,
   textSegmentSchema,
   mentionSegmentSchema,
 } from '../src/built/segment-contract/index.js';
@@ -121,5 +124,51 @@ describe('segmentsForImDelivery', () => {
     for (const seg of cases) {
       expect(segmentsForImDelivery([seg])).toEqual([seg]);
     }
+  });
+});
+
+describe('collectSegmentMedia（入站媒体提取）', () => {
+  it('returns empty for undefined / empty / text-only segments', () => {
+    expect(collectSegmentMedia(undefined)).toEqual([]);
+    expect(collectSegmentMedia([])).toEqual([]);
+    expect(collectSegmentMedia([{ type: 'text', data: { text: 'hi' } }])).toEqual([]);
+  });
+
+  it('collects MediaRef from image / audio / video / file segments', () => {
+    const media = collectSegmentMedia([
+      { type: 'text', data: { text: '看图' } },
+      { type: 'image', data: { media: { kind: 'url', value: 'https://cdn.example/a.jpg', mime_type: 'image/jpeg' } } },
+      { type: 'audio', data: { url: 'https://cdn.example/a.mp3' } },
+      { type: 'video', data: { file: '/tmp/a.mp4' } },
+      { type: 'file', data: { base64: 'QUJD' } },
+      { type: 'mention', data: { target: 'all' } },
+    ]);
+    expect(media).toEqual([
+      { type: 'image', media: { kind: 'url', value: 'https://cdn.example/a.jpg', mime_type: 'image/jpeg' } },
+      { type: 'audio', media: { kind: 'url', value: 'https://cdn.example/a.mp3' } },
+      { type: 'video', media: { kind: 'path', value: '/tmp/a.mp4' } },
+      { type: 'file', media: { kind: 'base64', value: 'QUJD' } },
+    ]);
+  });
+
+  it('skips media segments without a resolvable MediaRef', () => {
+    expect(collectSegmentMedia([
+      { type: 'image', data: {} },
+      { type: 'image', data: { alt: 'nothing' } },
+    ])).toEqual([]);
+  });
+
+  it('collects platform file references (kind=file) from canonical media and legacy file_id', () => {
+    const media = collectSegmentMedia([
+      { type: 'image', data: { media: { kind: 'file', value: 'tg-file-id-1' } } },
+      { type: 'file', data: { file_id: 'milky-file-id-2', mime_type: 'application/pdf' } },
+    ]);
+    expect(media).toEqual([
+      { type: 'image', media: { kind: 'file', value: 'tg-file-id-1' } },
+      { type: 'file', media: { kind: 'file', value: 'milky-file-id-2', mime_type: 'application/pdf' } },
+    ]);
+    expect(mediaRefToLegacyFields({ kind: 'file', value: 'tg-file-id-1' }))
+      .toEqual({ file: 'tg-file-id-1', url: 'tg-file-id-1' });
+    expect(isMediaRef({ kind: 'file', value: 'x' })).toBe(true);
   });
 });

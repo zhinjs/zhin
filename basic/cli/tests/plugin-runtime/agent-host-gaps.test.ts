@@ -30,6 +30,7 @@ function makeMessage(input: {
   target?: string;
   sender?: string;
   metadata?: Record<string, unknown>;
+  segments?: ConstructorParameters<typeof Message>[8];
 }): Message {
   return new Message(
     adapter,
@@ -40,6 +41,7 @@ function makeMessage(input: {
     'm1',
     input.sender ?? 'user-1',
     Object.freeze(input.metadata ?? {}),
+    input.segments,
   );
 }
 
@@ -283,6 +285,55 @@ describe('缺口 3：masters / trusted 角色解析', () => {
     expect(comm.$sender.isMaster).toBe(true);
     expect(comm.$sender.isTrusted).toBe(false);
     expect((comm as { extra?: Record<string, unknown> }).extra?.endpointMaster).toBe('user-1');
+  });
+});
+
+describe('入站段契约：bridgeRuntimeMessage 透传 segments 与媒体引用', () => {
+  const extraOf = (comm: unknown) =>
+    (comm as { extra?: Record<string, unknown> }).extra ?? {};
+
+  it('image/audio/video/file 段的 MediaRef 写入 extra.media，segments 原样挂载', () => {
+    const segments = [
+      { type: 'text', data: { text: '看这个' } },
+      { type: 'image', data: { media: { kind: 'url', value: 'https://cdn.example/a.jpg' } } },
+      { type: 'audio', data: { url: 'https://cdn.example/a.mp3' } },
+      { type: 'file', data: { file: '/tmp/a.zip' } },
+    ] as const;
+    const message = makeMessage({
+      content: '看这个[image][audio][file]',
+      segments,
+    });
+    const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
+    const extra = extraOf(comm);
+    expect(extra.segments).toEqual(segments);
+    expect(extra.media).toEqual([
+      { type: 'image', media: { kind: 'url', value: 'https://cdn.example/a.jpg' } },
+      { type: 'audio', media: { kind: 'url', value: 'https://cdn.example/a.mp3' } },
+      { type: 'file', media: { kind: 'path', value: '/tmp/a.zip' } },
+    ]);
+  });
+
+  it('纯文本段消息不写 media / segments 键（零侵入旧路径）', () => {
+    const message = groupMessage('在吗');
+    const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
+    const extra = extraOf(comm);
+    expect('media' in extra).toBe(false);
+    expect('segments' in extra).toBe(false);
+    // metadata 原有字段不受影响
+    expect(extra.channelType).toBe('group');
+    expect(extra.runtimeAdapter).toBe(message.adapter);
+  });
+
+  it('仅有非媒体段的 segments 挂 segments 但不写 media', () => {
+    const segments = [
+      { type: 'text', data: { text: 'hi' } },
+      { type: 'mention', data: { target: '10001', name: 'bot' } },
+    ] as const;
+    const message = makeMessage({ content: 'hi @bot', segments });
+    const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
+    const extra = extraOf(comm);
+    expect(extra.segments).toEqual(segments);
+    expect('media' in extra).toBe(false);
   });
 });
 

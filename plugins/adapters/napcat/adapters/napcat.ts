@@ -26,6 +26,11 @@ export type { NapCatWsSocket, NapCatWsCreateOptions } from '../src/ws-types.js';
 
 export default defineAdapter<NapCatAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
+  // OneBot file 参数原生消费 url / base64:// 媒体；无卡片交互面，交互段降级纯文本。
+  segments: {
+    outboundMedia: ['url', 'base64'],
+    interactive: 'text',
+  },
   create(context) {
     const config = resolveNapCatConfig(context.config);
     const gateway = context.use(messageGatewayToken);

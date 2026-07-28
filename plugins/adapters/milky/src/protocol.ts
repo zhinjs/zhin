@@ -4,6 +4,8 @@
  * Spec: https://milky.ntqqrev.org/
  */
 
+import type { Segment } from '@zhin.js/core/runtime';
+
 /** Transitional legacy endpoint row (`endpoints[]` with `context: milky`). */
 export interface MilkyLegacyEndpointRow {
   readonly context?: string;
@@ -270,6 +272,124 @@ export function formatInboundContent(data: MilkyIncomingMessage): string {
     }
     return '';
   }).join('');
+}
+
+function firstNonEmptyString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+/**
+ * 入站消息段 → canonical Segment[]（与 formatInboundContent 纯文本视图同源双轨）。
+ * 媒体段（image/record/video）优先 temp_url（kind=url），缺 URL 时回退
+ * resource_id（kind=file，平台不透明引用，经协议端 get_resource 解析）；
+ * file 段只有 file_id（kind=file）。未识别段类型按宽松段透传，不丢信息。
+ */
+export function formatInboundSegments(data: MilkyIncomingMessage): Segment[] {
+  const out: Segment[] = [];
+  for (const seg of data.segments) {
+    const segData = seg.data ?? {};
+    switch (seg.type) {
+      case 'text': {
+        const text = String(segData.text ?? '');
+        if (text) out.push({ type: 'text', data: { text } });
+        break;
+      }
+      case 'mention':
+        out.push({
+          type: 'mention',
+          data: {
+            target: String(segData.user_id ?? ''),
+            ...(typeof segData.name === 'string' && segData.name
+              ? { name: segData.name }
+              : {}),
+          },
+        });
+        break;
+      case 'mention_all':
+        out.push({ type: 'mention', data: { target: 'all' } });
+        break;
+      case 'face': {
+        const id = firstNonEmptyString(segData.face_id, segData.id);
+        if (id) out.push({ type: 'face', data: { id } });
+        break;
+      }
+      case 'reply': {
+        const seq = Number(segData.message_seq);
+        if (Number.isFinite(seq)) {
+          // 与 formatInboundMessageId 同一复合格式，保证 reply 链可定位原消息
+          out.push({
+            type: 'reply',
+            data: { message_id: `${data.message_scene}:${data.peer_id}:${seq}` },
+          });
+        }
+        break;
+      }
+      case 'image':
+      case 'record':
+      case 'audio':
+      case 'video': {
+        const url = firstNonEmptyString(segData.temp_url, segData.uri, segData.url);
+        const resourceId = firstNonEmptyString(segData.resource_id);
+        if (!url && !resourceId) break;
+        const type = seg.type === 'image'
+          ? 'image'
+          : seg.type === 'video'
+            ? 'video'
+            : 'audio';
+        out.push({
+          type,
+          data: {
+            media: url
+              ? { kind: 'url', value: url }
+              : { kind: 'file', value: resourceId! },
+            ...(typeof segData.summary === 'string' && segData.summary
+              ? { alt: segData.summary }
+              : {}),
+          },
+        });
+        break;
+      }
+      case 'file': {
+        const fileId = firstNonEmptyString(segData.file_id);
+        if (!fileId) break;
+        out.push({
+          type: 'file',
+          data: {
+            media: { kind: 'file', value: fileId },
+            ...(typeof segData.file_name === 'string' && segData.file_name
+              ? { name: segData.file_name }
+              : {}),
+            ...(typeof segData.file_size === 'number'
+              ? { size: segData.file_size }
+              : {}),
+          },
+        });
+        break;
+      }
+      case 'forward': {
+        const forwardId = firstNonEmptyString(segData.forward_id);
+        if (forwardId) {
+          out.push({
+            type: 'forward',
+            data: {
+              forward_id: forwardId,
+              ...(typeof segData.title === 'string' && segData.title
+                ? { title: segData.title }
+                : {}),
+            },
+          });
+        }
+        break;
+      }
+      default:
+        // 未识别段（market_face / light_app / xml 等）按宽松 canonical 段透传
+        out.push({ type: seg.type, data: segData });
+    }
+  }
+  return out;
 }
 
 /** First audio URI from inbound segments (for Agent Host STT preprocess). */

@@ -150,6 +150,13 @@ describe('lark protocol helpers', () => {
       msg_type: 'image',
       content: JSON.stringify({ image_key: 'img_k' }),
     });
+    // endpoint 上传物化后写入 image_key
+    expect(formatOutboundBody([
+      { type: 'image', data: { image_key: 'img_v3_up' } },
+    ])).toEqual({
+      msg_type: 'image',
+      content: JSON.stringify({ image_key: 'img_v3_up' }),
+    });
   });
 });
 
@@ -417,6 +424,139 @@ describe('lark plugin runtime adapter', () => {
       expect.stringContaining('/im/v1/messages'),
       expect.objectContaining({ method: 'POST' }),
     );
+    await endpoint.stop();
+  });
+
+  it('send image 段经 /im/v1/images 物化为 image_key', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes('/auth/v3/tenant_access_token/internal')) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => '',
+          json: async () => ({ code: 0, tenant_access_token: 'tok', expire: 7200 }),
+        };
+      }
+      if (String(url).includes('/im/v1/images')) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => '',
+          json: async () => ({ code: 0, data: { image_key: 'img_v3_up' } }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        text: async () => '',
+        json: async () => ({ code: 0, data: { message_id: 'om_out' } }),
+      };
+    });
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const endpoint = new LarkEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      http,
+      config: baseConfig,
+      fetch: fetchMock,
+    });
+    await endpoint.start();
+    await http.listen();
+    const id = await endpoint.send({
+      target: 'oc_group1',
+      payload: [
+        {
+          type: 'image',
+          data: {
+            media: {
+              kind: 'base64',
+              value: Buffer.from('png-bytes').toString('base64'),
+              mime_type: 'image/png',
+            },
+          },
+        },
+      ],
+    });
+    expect(id).toBe('om_out');
+    const uploadCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/im/v1/images'));
+    expect(uploadCall).toBeDefined();
+    expect(uploadCall![1]).toMatchObject({
+      method: 'POST',
+      headers: { Authorization: 'Bearer tok' },
+    });
+    expect(uploadCall![1]!.body).toBeInstanceOf(FormData);
+    const sendCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/im/v1/messages'));
+    const sendBody = JSON.parse(String(sendCall![1]!.body)) as Record<string, unknown>;
+    expect(sendBody).toMatchObject({
+      receive_id: 'oc_group1',
+      msg_type: 'image',
+      content: JSON.stringify({ image_key: 'img_v3_up' }),
+    });
+    await endpoint.stop();
+  });
+
+  it('图片上传失败降级为文本，不阻断发送', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes('/auth/v3/tenant_access_token/internal')) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => '',
+          json: async () => ({ code: 0, tenant_access_token: 'tok', expire: 7200 }),
+        };
+      }
+      if (String(url).includes('/im/v1/images')) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => '',
+          json: async () => ({ code: 230001, msg: 'upload denied' }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        text: async () => '',
+        json: async () => ({ code: 0, data: { message_id: 'om_out2' } }),
+      };
+    });
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const endpoint = new LarkEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      http,
+      config: baseConfig,
+      fetch: fetchMock,
+    });
+    await endpoint.start();
+    await http.listen();
+    const id = await endpoint.send({
+      target: 'oc_group1',
+      payload: [
+        {
+          type: 'image',
+          data: {
+            media: { kind: 'base64', value: 'QUJD', mime_type: 'image/png' },
+            alt: '架构图',
+          },
+        },
+      ],
+    });
+    expect(id).toBe('om_out2');
+    const sendCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/im/v1/messages'));
+    const sendBody = JSON.parse(String(sendCall![1]!.body)) as Record<string, unknown>;
+    expect(sendBody).toMatchObject({
+      msg_type: 'text',
+      content: JSON.stringify({ text: '架构图' }),
+    });
     await endpoint.stop();
   });
 

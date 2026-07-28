@@ -24,8 +24,8 @@ export const mediaRefJsonSchema: JsonSchemaObject = {
   properties: {
     kind: {
       type: 'string',
-      enum: ['url', 'path', 'base64'],
-      description: 'url=http(s) 链接；path=本地文件路径；base64=内联 base64 数据',
+      enum: ['url', 'path', 'base64', 'file'],
+      description: 'url=http(s) 链接；path=本地文件路径；base64=内联 base64 数据；file=平台不透明文件引用（如 Telegram file_id）',
     },
     value: { type: 'string', description: '媒体内容：URL / 文件路径 / 纯 base64' },
     mime_type: { type: 'string', description: '如 image/png、audio/mpeg' },

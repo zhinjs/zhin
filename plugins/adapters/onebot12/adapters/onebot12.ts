@@ -23,6 +23,11 @@ export type { OneBot12WsSocket, OneBot12WsCreateOptions } from '../src/ws-types.
 
 export default defineAdapter<OneBot12AdapterConfig>({
   capabilities: ['inbound', 'outbound'],
+  // 媒体段由 adapter 按扩展字段（url/data/path）自行物化；无卡片交互面，交互段降级纯文本。
+  segments: {
+    outboundMedia: ['url', 'base64'],
+    interactive: 'text',
+  },
   create(context) {
     const config = resolveOneBot12Config(context.config);
     const gateway = context.use(messageGatewayToken);

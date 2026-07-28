@@ -143,6 +143,34 @@ describe('onebot12 protocol helpers', () => {
       { type: 'image', data: { url: 'https://x/a.png' } },
     ]);
   });
+
+  it('maps canonical segments to OneBot 12 wire segments', () => {
+    expect(formatOutboundSegments([
+      { type: 'mention', data: { target: 'u1' } },
+      { type: 'mention', data: { target: 'all' } },
+      { type: 'reply', data: { message_id: 'm-1' } },
+    ])).toEqual([
+      { type: 'mention', data: { user_id: 'u1' } },
+      { type: 'mention_all', data: {} },
+      { type: 'reply', data: { message_id: 'm-1' } },
+    ]);
+    // 已物化 file_id 的段（spec 正式形状）透传
+    expect(formatOutboundSegments([
+      { type: 'image', data: { file_id: 'fid-1' } },
+    ])).toEqual([
+      { type: 'image', data: { file_id: 'fid-1' } },
+    ]);
+    // canonical MediaRef → 扩展字段（url / data / path）
+    expect(formatOutboundSegments([
+      { type: 'image', data: { media: { kind: 'url', value: 'https://x/a.png' } } },
+      { type: 'image', data: { media: { kind: 'base64', value: 'base64://QUJD', mime_type: 'image/png' } } },
+      { type: 'video', data: { media: { kind: 'path', value: '/tmp/a.mp4' } } },
+    ])).toEqual([
+      { type: 'image', data: { url: 'https://x/a.png' } },
+      { type: 'image', data: { data: 'QUJD' } },
+      { type: 'video', data: { path: '/tmp/a.mp4' } },
+    ]);
+  });
 });
 
 describe('onebot12 plugin runtime adapter', () => {

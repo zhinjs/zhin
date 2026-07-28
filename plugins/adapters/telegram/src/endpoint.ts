@@ -12,7 +12,9 @@ import {
   botApiUrl,
   buildWebhookUrl,
   formatCallbackContent,
+  formatCallbackSegments,
   formatInboundContent,
+  formatInboundSegments,
   formatOutboundActions,
   resolveChannel,
   senderDisplayName,
@@ -226,6 +228,7 @@ export class TelegramEndpoint implements EndpointInstance {
       adapter: this.#options.id,
       target: channelId,
       content: formatInboundContent(msg),
+      segments: formatInboundSegments(msg),
       sender: senderDisplayName(msg.from),
       id: String(msg.message_id),
       metadata: Object.freeze({
@@ -304,6 +307,7 @@ export class TelegramEndpoint implements EndpointInstance {
       adapter: this.#options.id,
       target: channelId,
       content: formatCallbackContent(query),
+      segments: formatCallbackSegments(query),
       sender: senderDisplayName(query.from),
       id: query.id,
       metadata: Object.freeze({

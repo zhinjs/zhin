@@ -9,9 +9,13 @@ export interface SegmentBase {
   platform?: Record<string, unknown>;
 }
 
-/** 媒体引用占位（完整 schema 随 adapter 迁移补齐） */
+/**
+ * 媒体引用占位（完整 schema 随 adapter 迁移补齐）。
+ * kind=file：平台侧不透明文件引用（如 Telegram file_id、Milky resource_id），
+ * 非 URL/本地路径，消费方需经平台 API 解析。
+ */
 export interface MediaRef {
-  kind: 'url' | 'path' | 'base64';
+  kind: 'url' | 'path' | 'base64' | 'file';
   value: string;
   mime_type?: string;
 }

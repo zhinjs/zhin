@@ -294,7 +294,8 @@ export function formatOutboundBody(payload: unknown): LarkSendBody {
           media = {
             msg_type: 'image',
             content: JSON.stringify({
-              image_key: data.file_key ?? data.key ?? data.url,
+              // image_key 由 endpoint 上传物化写入；file_key/key/url 为旧调用方兼容入口。
+              image_key: data.image_key ?? data.file_key ?? data.key ?? data.url,
             }),
           };
         }

@@ -8,6 +8,12 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { registerWecomAgentEndpoint } from './wecom-agent-deps.js';
 import {
+  buildMediaUploadForm,
+  readOutboundImageMedia,
+  resolveMediaBinary,
+  type WecomMediaUploadResult,
+} from './media-upload.js';
+import {
   buildSendRequestBody,
   formatInboundContent,
   formatOutboundBody,
@@ -26,7 +32,7 @@ export type WecomFetch = (
   init?: {
     readonly method?: string;
     readonly headers?: Record<string, string>;
-    readonly body?: string;
+    readonly body?: string | FormData;
   },
 ) => Promise<{
   readonly ok: boolean;
@@ -109,7 +115,8 @@ export class WecomEndpoint implements EndpointInstance {
   }
 
   async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
-    const content = formatOutboundBody(payload);
+    const materialized = await this.#materializeOutboundMedia(payload);
+    const content = formatOutboundBody(materialized);
     const body = buildSendRequestBody(
       target,
       content,
@@ -125,6 +132,46 @@ export class WecomEndpoint implements EndpointInstance {
     }
     logger.debug(formatCompact({ op: 'send', endpoint: this.#options.config.name, to: target }));
     return (data.msgid as string) || `${Date.now()}`;
+  }
+
+  /**
+   * message/send 的 image 段只接受 media_id：canonical MediaRef（base64/本地路径/URL）
+   * 先经 /cgi-bin/media/upload 物化；上传失败降级为文本（alt 优先），不阻断发送。
+   */
+  async #materializeOutboundMedia(payload: unknown): Promise<unknown> {
+    if (!Array.isArray(payload)) return payload;
+    return Promise.all(payload.map(async (item) => {
+      if (typeof item === 'string' || !item || typeof item !== 'object') return item;
+      const seg = item as { type?: unknown; data?: Record<string, unknown> };
+      if (seg.type !== 'image') return item;
+      const data = seg.data ?? {};
+      const media = readOutboundImageMedia(data);
+      if (!media) return item;
+      try {
+        const mediaId = await this.#uploadMedia('image', media);
+        return { type: 'image', data: { media_id: mediaId } };
+      } catch (error) {
+        logger.warn(formatCompact({
+          op: 'wecom_media_upload_failed',
+          endpoint: this.#options.config.name,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+        const alt = typeof data.alt === 'string' && data.alt ? data.alt : '[image]';
+        return { type: 'text', data: { text: alt } };
+      }
+    }));
+  }
+
+  /** POST /cgi-bin/media/upload（临时素材，3 天有效），返回 media_id。 */
+  async #uploadMedia(type: 'image', media: Parameters<typeof resolveMediaBinary>[0]): Promise<string> {
+    await this.#ensureAccessToken();
+    const binary = await resolveMediaBinary(media);
+    const form = buildMediaUploadForm(binary);
+    const url = `${this.#options.config.apiBaseUrl}/cgi-bin/media/upload?access_token=${this.#accessToken.access_token}&type=${type}`;
+    const response = await this.#fetch(url, { method: 'POST', body: form });
+    const data = await response.json() as WecomMediaUploadResult;
+    if (data.errcode === 0 && data.media_id) return data.media_id;
+    throw new Error(`WeCom media upload failed: ${data.errmsg ?? 'unknown'} (${data.errcode ?? '?'})`);
   }
 
   /** Test / internal: admit a parsed message when open (non-webhook path). */

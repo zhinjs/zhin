@@ -455,6 +455,39 @@ describe('IM Runtime', () => {
     await fixture.adapters.stop();
     await fixture.store.close();
   });
+
+  it('passes inbound segments through to the Message (frozen, optional)', async () => {
+    const sent: unknown[] = [];
+    let captured: Message | undefined;
+    const fixture = await createFixture([], sent, (message) => { captured = message; });
+    const segments = [
+      { type: 'text', data: { text: '看图' } },
+      { type: 'image', data: { media: { kind: 'url', value: 'https://cdn.example/a.jpg' } } },
+    ] as const;
+
+    await fixture.im.receive({
+      adapter: fixture.adapter.id,
+      target: 'room-1',
+      content: '看图[image]',
+      sender: 'alice',
+      segments,
+    });
+    expect(captured?.segments).toEqual(segments);
+    expect(Object.isFrozen(captured?.segments)).toBe(true);
+    // 段数组是独立拷贝，调用方后续 mutate 不影响 Message
+    expect(captured?.segments).not.toBe(segments);
+
+    await fixture.im.receive({
+      adapter: fixture.adapter.id,
+      target: 'room-2',
+      content: 'plain text only',
+    });
+    expect(captured?.segments).toBeUndefined();
+    expect(captured?.content).toBe('plain text only');
+
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
 });
 
 async function createFixture(

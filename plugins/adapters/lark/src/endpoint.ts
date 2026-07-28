@@ -10,6 +10,11 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { registerLarkAgentEndpoint } from './lark-agent-deps.js';
 import {
+  buildImageUploadForm,
+  readOutboundImageMedia,
+  resolveMediaBinary,
+} from './media-upload.js';
+import {
   formatInboundContent,
   formatOutboundBody,
   generateMessageId,
@@ -147,7 +152,8 @@ export class LarkEndpoint implements EndpointInstance {
   }
 
   async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
-    const content = formatOutboundBody(payload);
+    const materialized = await this.#materializeOutboundMedia(payload);
+    const content = formatOutboundBody(materialized);
     const data = await this.#request('/im/v1/messages', {
       method: 'POST',
       params: { receive_id_type: 'chat_id' },
@@ -168,6 +174,52 @@ export class LarkEndpoint implements EndpointInstance {
       id: messageId,
     }));
     return messageId;
+  }
+
+  /**
+   * im/v1 消息 image 段只接受 image_key：canonical MediaRef（base64/本地路径/URL）
+   * 先经 /im/v1/images 物化；上传失败降级为文本（alt 优先），不阻断发送。
+   */
+  async #materializeOutboundMedia(payload: unknown): Promise<unknown> {
+    if (!Array.isArray(payload)) return payload;
+    return Promise.all(payload.map(async (item) => {
+      if (typeof item === 'string' || !item || typeof item !== 'object') return item;
+      const seg = item as { type?: unknown; data?: Record<string, unknown> };
+      if (seg.type !== 'image') return item;
+      const data = seg.data ?? {};
+      const media = readOutboundImageMedia(data);
+      if (!media) return item;
+      const imageKey = await this.uploadImage(media);
+      if (!imageKey) {
+        const alt = typeof data.alt === 'string' && data.alt ? data.alt : '[image]';
+        return { type: 'text', data: { text: alt } };
+      }
+      return { type: 'image', data: { image_key: imageKey } };
+    }));
+  }
+
+  /** POST /im/v1/images（image_type=message），返回 image_key；失败返回 null。 */
+  async uploadImage(media: Parameters<typeof resolveMediaBinary>[0]): Promise<string | null> {
+    try {
+      await this.#ensureAccessToken();
+      const binary = await resolveMediaBinary(media);
+      const form = buildImageUploadForm(binary);
+      const url = `${this.#options.config.apiBaseUrl}/im/v1/images`;
+      const response = await this.#fetch(url, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${this.#accessToken.token}` },
+        body: form,
+        signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
+      });
+      const data = await response.json() as LarkApiResponse;
+      if (data.code === 0) {
+        return (data.data?.image_key as string) || null;
+      }
+      throw new Error(`Image upload failed: ${data.msg}`);
+    } catch (error) {
+      logger.error('Failed to upload image:', error);
+      return null;
+    }
   }
 
   /** Test / internal: admit a parsed message when open (non-webhook path). */

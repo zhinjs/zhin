@@ -625,12 +625,17 @@ export class IcqqIpcEndpoint implements EndpointInstance {
   /** Test / internal: admit when open. */
   admit(msg: IcqqInboundMessage): void {
     if (!this.#open) return;
-    // 新 Runtime Message.content 为纯文本：@ 本机（uin = name）只能经 metadata 传递
-    const mentioned = isIcqqBotMentioned({ uin: this.name, rawMessage: msg.content });
+    // 新 Runtime Message.content 为纯文本：@ 本机（uin = name）经结构化段 / metadata 传递
+    const mentioned = isIcqqBotMentioned({
+      uin: this.name,
+      content: msg.segments,
+      rawMessage: msg.content,
+    });
     void this.#options.gateway.receive({
       adapter: this.#options.id,
       target: msg.target,
       content: msg.content,
+      ...(msg.segments ? { segments: msg.segments } : {}),
       sender: msg.sender,
       id: msg.id,
       metadata: Object.freeze({
@@ -696,6 +701,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
         channelParentGroupId: normalized.channelParentGroupId,
       }),
       content: formatInboundContent(normalized.rawMessage),
+      segments: normalized.content,
       sender: normalized.userId,
       channelType: normalized.channelType,
       metadata: buildIcqqQuoteMetadata(data, {
@@ -722,6 +728,7 @@ export class IcqqIpcEndpoint implements EndpointInstance {
         guildId: normalized.guildId,
       }),
       content: formatInboundContent(normalized.rawMessage),
+      segments: normalized.content,
       sender: normalized.userId,
       channelType: 'channel',
       metadata: {

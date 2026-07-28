@@ -17,6 +17,12 @@ export type { WecomEndpointOptions, WecomFetch } from '../src/endpoint.js';
 
 export default defineAdapter<WecomAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
+  // image 段经 /cgi-bin/media/upload 物化为 media_id（url 下载后上传）；
+  // 无卡片交互面，交互段降级纯文本。
+  segments: {
+    outboundMedia: ['url', 'upload'],
+    interactive: 'text',
+  },
   create(context) {
     const config = resolveWecomConfig(context.config);
     // 注册到插件运行时状态（wecom endpoint list 的"运行中"数据源）

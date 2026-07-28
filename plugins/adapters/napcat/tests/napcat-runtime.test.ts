@@ -162,6 +162,67 @@ describe('napcat protocol helpers', () => {
       { type: 'image', data: { file: 'https://x/a.png' } },
     ]);
   });
+
+  it('maps canonical segments to OneBot wire segments', () => {
+    expect(formatOutboundSegments([
+      { type: 'text', data: { text: 'hi' } },
+      { type: 'mention', data: { target: '10001' } },
+      { type: 'reply', data: { message_id: '42' } },
+      { type: 'face', data: { id: 14, name: '微笑' } },
+    ])).toEqual([
+      { type: 'text', data: { text: 'hi' } },
+      { type: 'at', data: { qq: '10001' } },
+      { type: 'reply', data: { id: '42' } },
+      { type: 'face', data: { id: 14 } },
+    ]);
+  });
+
+  it('maps canonical MediaRef to OneBot file field', () => {
+    expect(formatOutboundSegments([
+      { type: 'image', data: { media: { kind: 'url', value: 'https://x/a.png' } } },
+    ])).toEqual([
+      { type: 'image', data: { file: 'https://x/a.png' } },
+    ]);
+    // html→image 渲染产物（media + legacy base64 双写）→ base64:// file
+    expect(formatOutboundSegments([
+      {
+        type: 'image',
+        data: {
+          media: { kind: 'base64', value: 'QUJD', mime_type: 'image/png' },
+          base64: 'QUJD',
+          name: 'card.png',
+        },
+      },
+    ])).toEqual([
+      { type: 'image', data: { name: 'card.png', file: 'base64://QUJD' } },
+    ]);
+    expect(formatOutboundSegments([
+      { type: 'image', data: { media: { kind: 'path', value: '/tmp/a.png' } } },
+    ])).toEqual([
+      { type: 'image', data: { file: 'file:///tmp/a.png' } },
+    ]);
+    // canonical audio → OneBot record
+    expect(formatOutboundSegments([
+      { type: 'audio', data: { media: { kind: 'url', value: 'https://x/a.mp3' } } },
+    ])).toEqual([
+      { type: 'record', data: { file: 'https://x/a.mp3' } },
+    ]);
+    expect(formatOutboundSegments([
+      { type: 'video', data: { media: { kind: 'url', value: 'https://x/a.mp4' } } },
+    ])).toEqual([
+      { type: 'video', data: { file: 'https://x/a.mp4' } },
+    ]);
+  });
+
+  it('keeps platform extension segments untouched', () => {
+    expect(formatOutboundSegments([
+      { type: 'poke', data: { qq: '10001' } },
+      { type: 'at', data: { qq: 'all' } },
+    ])).toEqual([
+      { type: 'poke', data: { qq: '10001' } },
+      { type: 'at', data: { qq: 'all' } },
+    ]);
+  });
 });
 
 describe('napcat plugin runtime adapter', () => {

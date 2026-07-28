@@ -9,6 +9,7 @@ export {
   getChannelId,
   isMessageEvent,
   isOneBot11BotMentioned,
+  mediaRefToOneBotFile,
   parseSendTarget,
   resolveOneBot11Config,
   senderDisplayName,

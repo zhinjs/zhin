@@ -1,4 +1,4 @@
-import type { MediaRef } from './types.js';
+import type { MediaRef, Segment } from './types.js';
 import { isMediaRef } from './validate.js';
 
 export { isMediaRef };
@@ -8,6 +8,14 @@ export function mediaRefFromLegacyData(data: Record<string, unknown>): MediaRef 
   }
 
   const mimeType = typeof data.mime_type === 'string' ? data.mime_type : undefined;
+
+  // 平台不透明文件引用（Telegram file_id / Milky resource_id 等）
+  const fileRef = typeof data.file_id === 'string' && data.file_id.trim()
+    ? data.file_id.trim()
+    : undefined;
+  if (fileRef) {
+    return { kind: 'file', value: fileRef, ...(mimeType ? { mime_type: mimeType } : {}) };
+  }
 
   const base64 =
     typeof data.base64 === 'string' && data.base64.trim()
@@ -39,6 +47,33 @@ export function mediaRefFromLegacyData(data: Record<string, unknown>): MediaRef 
 export function mediaRefToLegacyFields(media: MediaRef): { url?: string; file?: string } {
   if (media.kind === 'url') return { url: media.value, file: media.value };
   if (media.kind === 'path') return { file: media.value, url: media.value };
+  if (media.kind === 'file') return { file: media.value, url: media.value };
   const encoded = media.value.startsWith('base64://') ? media.value : `base64://${media.value}`;
   return { file: encoded, url: encoded };
+}
+
+/** 入站段携带媒体引用的段类型（纯文本视图无法承载的信息）。 */
+const MEDIA_SEGMENT_TYPES = new Set(['image', 'audio', 'video', 'file']);
+
+export interface SegmentMediaRef {
+  readonly type: string;
+  readonly media: MediaRef;
+}
+
+/**
+ * 从入站 canonical 段收集媒体引用（image / audio / video / file）。
+ * 兼容 canonical `data.media` 与旧轨 url/file/base64 字段；
+ * 无媒体段时返回空数组（调用方无需特判 undefined）。
+ */
+export function collectSegmentMedia(segments: readonly Segment[] | undefined): SegmentMediaRef[] {
+  if (!segments?.length) return [];
+  const out: SegmentMediaRef[] = [];
+  for (const segment of segments) {
+    if (!segment || typeof segment.type !== 'string' || !MEDIA_SEGMENT_TYPES.has(segment.type)) {
+      continue;
+    }
+    const media = mediaRefFromLegacyData(segment.data ?? {});
+    if (media) out.push({ type: segment.type, media });
+  }
+  return out;
 }

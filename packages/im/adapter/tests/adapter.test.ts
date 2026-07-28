@@ -17,6 +17,7 @@ import adapterFeature, {
   isAdapterIndex,
   parseAdapterDefinition,
   resolveEndpointManagement,
+  type AdapterSegmentPolicy,
 } from '../src/index.js';
 
 describe('Adapter Feature', () => {
@@ -399,6 +400,56 @@ describe('Adapter Feature', () => {
     expect(index.resolve('icqq~8596238', '1234567')).toBeUndefined();
     expect(index.resolve('missing~8596238', '8596238')).toBeUndefined();
     expect(index.instance('icqq~8596238', '8596238')).toMatchObject({ name: '8596238' });
+  });
+});
+
+describe('defineAdapter segments policy', () => {
+  const create = () => ({});
+
+  it('defaults segments to undefined（未声明 = 未迁移，宽松）', () => {
+    const definition = defineAdapter({ capabilities: ['outbound'], create });
+    expect(definition.segments).toBeUndefined();
+    expect(parseAdapterDefinition(definition).segments).toBeUndefined();
+  });
+
+  it('accepts outboundMedia / interactive declarations, deduped and frozen', () => {
+    const definition = defineAdapter({
+      capabilities: ['outbound'],
+      segments: { outboundMedia: ['url', 'base64', 'url'], interactive: 'text' },
+      create,
+    });
+    expect(definition.segments).toEqual({
+      outboundMedia: ['url', 'base64'],
+      interactive: 'text',
+    });
+    expect(Object.isFrozen(definition.segments)).toBe(true);
+    expect(Object.isFrozen(definition.segments?.outboundMedia)).toBe(true);
+    expect(parseAdapterDefinition(definition)).toBe(definition);
+  });
+
+  it('rejects invalid segments shapes', () => {
+    const defineWithSegments = (segments: unknown) => () => defineAdapter({
+      capabilities: ['outbound'],
+      segments: segments as AdapterSegmentPolicy,
+      create,
+    });
+    expect(defineWithSegments('native')).toThrow('segments');
+    expect(defineWithSegments({ outboundMedia: [] })).toThrow('outboundMedia');
+    expect(defineWithSegments({ outboundMedia: 'base64' })).toThrow('outboundMedia');
+    expect(defineWithSegments({ outboundMedia: ['ftp'] })).toThrow('outboundMedia');
+    expect(defineWithSegments({ interactive: 'button' })).toThrow('interactive');
+  });
+
+  it('parseAdapterDefinition rejects invalid segments on hand-built definitions', () => {
+    const definition = defineAdapter({ capabilities: ['outbound'], create });
+    expect(() => parseAdapterDefinition({
+      ...definition,
+      segments: { outboundMedia: ['url', 'cdn'] },
+    })).toThrow('outboundMedia');
+    expect(() => parseAdapterDefinition({
+      ...definition,
+      segments: { interactive: 'fancy' },
+    })).toThrow('interactive');
   });
 });
 

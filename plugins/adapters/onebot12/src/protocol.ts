@@ -3,6 +3,7 @@
  * Canonicalization is owned by gateway/core before endpoint.send.
  * Spec: https://12.onebot.dev/
  */
+import { isMediaRef, mediaRefFromLegacyData, type MediaRef } from '@zhin.js/core';
 
 /** Transitional legacy endpoint row (`endpoints[]` with `context: onebot12`). */
 export interface OneBot12LegacyEndpointRow {
@@ -273,9 +274,80 @@ export function isBotMentioned(ev: OneBot12Event): boolean {
   );
 }
 
+/** OneBot 12 携带媒体的段类型。 */
+const ONEBOT12_MEDIA_TYPES = new Set(['image', 'voice', 'audio', 'video', 'file']);
+
+/** 媒体段 data 里的 canonical-only / legacy 媒体字段，归一后不重复进 wire。 */
+const MEDIA_DATA_SKIP_KEYS = new Set([
+  'media', 'alt', 'mime_type', 'url', 'file', 'base64', 'data', 'path',
+]);
+
+/**
+ * canonical MediaRef → OneBot 12 媒体字段。
+ * spec 正式投递形状是 `file_id`（先 upload_file 物化，后续波次再接）；
+ * 这里按常见扩展字段输出：url → `url`、base64 → `data`、本地路径 → `path`。
+ */
+export function mediaRefToOneBot12Fields(media: MediaRef): Record<string, unknown> {
+  if (media.kind === 'base64') {
+    const value = media.value.startsWith('base64://')
+      ? media.value.slice('base64://'.length)
+      : media.value;
+    return { data: value };
+  }
+  if (media.kind === 'path') {
+    return { path: media.value.startsWith('file://') ? media.value.slice('file://'.length) : media.value };
+  }
+  return { url: media.value };
+}
+
+function oneBot12MediaSegment(
+  type: string,
+  data: Record<string, unknown>,
+): OneBot12Segment {
+  // 已物化为 file_id 的段是 spec 正式形状，原样透传。
+  if (typeof data.file_id === 'string' && data.file_id) return { type, data };
+  const media = isMediaRef(data.media) ? data.media : mediaRefFromLegacyData(data);
+  if (!media) return { type, data };
+  const extra: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (!MEDIA_DATA_SKIP_KEYS.has(key)) extra[key] = value;
+  }
+  return { type, data: { ...extra, ...mediaRefToOneBot12Fields(media) } };
+}
+
+/**
+ * canonical Segment → OneBot 12 数组段：
+ * - mention → mention（`user_id: target`，`target: 'all'` → mention_all）；
+ * - reply（`message_id`）→ reply（`message_id`）；
+ * - image / voice / audio / video / file 的 MediaRef → url/data/path 扩展字段；
+ * - 其余（已是 wire 形状的段、平台扩展段）原样透传。
+ */
+function canonicalToOneBotSegment(segment: OneBot12WireSegment): OneBot12Segment {
+  const data = segment.data ?? {};
+  switch (segment.type) {
+    case 'mention': {
+      const target = data.target ?? data.user_id ?? data.id;
+      if (target == null) return { type: segment.type, data };
+      if (String(target) === 'all') return { type: 'mention_all', data: {} };
+      return { type: 'mention', data: { user_id: String(target) } };
+    }
+    case 'reply': {
+      const messageId = data.message_id ?? data.id;
+      if (messageId == null) return { type: segment.type, data };
+      return { type: 'reply', data: { message_id: String(messageId) } };
+    }
+    default:
+      if (ONEBOT12_MEDIA_TYPES.has(segment.type)) {
+        return oneBot12MediaSegment(segment.type, data);
+      }
+      return { type: segment.type, data };
+  }
+}
+
 /**
  * Wire-encode an already-rendered outbound payload into OneBot 12 message segments.
- * Segment canonicalization is intentionally not done here.
+ * 入参假定已经 core `normalizeOutboundPayload` 归一为 canonical Segment[]；
+ * 旧 wire 形状（mention / 裸 `{url,file,base64}`）保持兼容透传。
  */
 export function formatOutboundSegments(payload: unknown): OneBot12Segment[] {
   if (typeof payload === 'string') {
@@ -303,7 +375,7 @@ export function formatOutboundSegments(payload: unknown): OneBot12Segment[] {
       segs.push({ type: 'text', data: { text: item } });
       continue;
     }
-    segs.push({ type: item.type, data: item.data ?? {} });
+    segs.push(canonicalToOneBotSegment(item));
   }
   return segs.length ? segs : [{ type: 'text', data: { text: '' } }];
 }

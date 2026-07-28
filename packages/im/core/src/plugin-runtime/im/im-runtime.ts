@@ -30,7 +30,7 @@ import {
 } from './contracts.js';
 import { defaultCommandPrefixResolver, MessageDispatcher } from './message-dispatcher.js';
 import { OutboundRenderer } from './outbound-renderer.js';
-import { normalizeOutboundPayload } from './outbound-segments.js';
+import { normalizeOutboundPayload, resolveOutboundMediaPolicy } from './outbound-segments.js';
 
 export const messageGatewayToken = createToken<MessageGateway>('zhin.im.message-gateway');
 
@@ -149,6 +149,7 @@ export class ImRuntime implements MessageGateway {
         input.id,
         input.sender,
         Object.freeze({ ...input.metadata }),
+        input.segments ? Object.freeze([...input.segments]) : undefined,
       );
       let result: MessageDispatchResult = Object.freeze({ matched: false });
       await runMiddleware(
@@ -381,11 +382,13 @@ export class ImRuntime implements MessageGateway {
 
   async #sendWithSnapshot(request: SendRequest, snapshot: RuntimeSnapshot): Promise<unknown> {
     const rendered = await this.#renderer.render(request.content, request.requester, snapshot);
-    // 单段对象 / html 段在此归一为适配器可消费的 wire 段数组；
+    // 单段对象 / html 段在此归一为适配器可消费的 canonical 段数组（含媒体能力协商）；
     // sandbox 适配器（控制台 UI）直接消费 html 段，跳过规范化。
     const payload = isDirectHtmlConsumer(snapshot, request.adapter)
       ? rendered
-      : await normalizeOutboundPayload(rendered, resolveHtmlRenderer(snapshot));
+      : await normalizeOutboundPayload(rendered, resolveHtmlRenderer(snapshot), {
+        mediaPolicy: resolveOutboundMediaPolicy(request.adapter, snapshot),
+      });
     const envelope = createOutboundEnvelope({
       adapter: request.adapter,
       target: request.target,

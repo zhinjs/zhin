@@ -1,4 +1,9 @@
 import type { CapabilityId, PluginId } from '@zhin.js/plugin-runtime';
+import type { MediaRef, Segment } from '../../built/segment-contract/types.js';
+
+// 入站段统一使用 canonical Segment SSOT（built/segment-contract）；
+// 经 plugin-runtime/im/index.ts re-export，供 runtime 消费者直接引用。
+export type { MediaRef, Segment };
 
 const componentCallBrand = 'zhin.component-call/1' as const;
 const rawContentBrand = 'zhin.raw-content/1' as const;
@@ -44,7 +49,18 @@ export function isRawContent(value: SendContent): value is RawContent {
 export interface IncomingMessage {
   readonly adapter: CapabilityId;
   readonly target: string;
+  /**
+   * 纯文本视图：与 `segments` 同源（adapter 从同一份入站载荷派生二者）。
+   * 命令匹配、触发判定、Console 预览只读此字段，无需感知段。
+   */
   readonly content: string;
+  /**
+   * 结构化段视图（canonical Segment SSOT，见 built/segment-contract）。
+   * 与 `content` 同源：segments 承载纯文本无法表达的媒体（image/audio/video/file
+   * 的 MediaRef）、mention、reply 等信息。旧 adapter 未迁移时可缺省，
+   * 读取方必须容忍 undefined。
+   */
+  readonly segments?: readonly Segment[];
   readonly id?: string;
   readonly sender?: string;
   readonly metadata?: Readonly<Record<string, unknown>>;
@@ -97,6 +113,11 @@ export class Message {
     readonly id?: string,
     readonly sender?: string,
     readonly metadata: Readonly<Record<string, unknown>> = Object.freeze({}),
+    /**
+     * 结构化段视图（与 `content` 纯文本视图同源，见 IncomingMessage.segments）。
+     * middleware / CommandIndex / dispatcher 不读此字段，零改动兼容。
+     */
+    readonly segments?: readonly Segment[],
   ) {
     this.$reply = (content) => reply(content);
     this.$replyFrom = (requester, content) => reply(content, requester);

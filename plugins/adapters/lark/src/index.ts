@@ -43,6 +43,13 @@ export {
 } from './endpoint.js';
 
 export {
+  buildImageUploadForm,
+  readOutboundImageMedia,
+  resolveMediaBinary,
+  type MediaBinary,
+} from './media-upload.js';
+
+export {
   registerLarkWebhookRoutes,
   handleLarkWebhookRequest,
   type LarkWebhookHandler,

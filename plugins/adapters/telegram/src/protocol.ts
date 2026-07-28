@@ -4,6 +4,7 @@
  */
 
 import type { IncomingMessage } from 'node:http';
+import type { Segment } from '@zhin.js/core/runtime';
 
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface TelegramAdapterConfig {
@@ -353,6 +354,90 @@ export function formatInboundContent(msg: TelegramMessage): string {
 
 export function formatCallbackContent(query: TelegramCallbackQuery): string {
   return query.data ? `[action: ${query.data}]` : '[action]';
+}
+
+/**
+ * 入站消息 → canonical Segment[]（与 formatInboundContent 纯文本视图同源双轨）。
+ * Telegram 附件只有不透明 file_id（需 getFile 二次解析，非 URL），
+ * 统一进 MediaRef kind=file；photo 取数组末尾（最大尺寸）。
+ */
+export function formatInboundSegments(msg: TelegramMessage): Segment[] {
+  const out: Segment[] = [];
+  if (msg.reply_to_message) {
+    out.push({
+      type: 'reply',
+      data: { message_id: String(msg.reply_to_message.message_id) },
+    });
+  }
+  const text = msg.text ?? msg.caption;
+  if (text) out.push({ type: 'text', data: { text } });
+  if (msg.photo?.length) {
+    const largest = msg.photo[msg.photo.length - 1]!;
+    out.push({
+      type: 'image',
+      data: { media: { kind: 'file', value: largest.file_id } },
+    });
+  }
+  if (msg.video) {
+    out.push({
+      type: 'video',
+      data: { media: { kind: 'file', value: msg.video.file_id } },
+    });
+  }
+  if (msg.audio) {
+    out.push({
+      type: 'audio',
+      data: {
+        media: { kind: 'file', value: msg.audio.file_id },
+        ...(msg.audio.title ? { name: msg.audio.title } : {}),
+      },
+    });
+  }
+  if (msg.voice) {
+    out.push({
+      type: 'voice',
+      data: { media: { kind: 'file', value: msg.voice.file_id } },
+    });
+  }
+  if (msg.document) {
+    out.push({
+      type: 'file',
+      data: {
+        media: {
+          kind: 'file',
+          value: msg.document.file_id,
+          ...(msg.document.mime_type ? { mime_type: msg.document.mime_type } : {}),
+        },
+        ...(msg.document.file_name ? { name: msg.document.file_name } : {}),
+      },
+    });
+  }
+  if (msg.sticker) {
+    out.push({
+      type: 'image',
+      data: {
+        media: { kind: 'file', value: msg.sticker.file_id },
+        ...(msg.sticker.emoji ? { alt: msg.sticker.emoji } : {}),
+      },
+    });
+  }
+  return out;
+}
+
+/**
+ * callback_query → action 段（Wave 1 C interactive 约定：
+ * {type:'action', data:{id, payload, sourceMessageId?}}），
+ * 与 formatCallbackContent / metadata.payload 同源。
+ */
+export function formatCallbackSegments(query: TelegramCallbackQuery): Segment[] {
+  return [{
+    type: 'action',
+    data: {
+      id: query.id,
+      payload: query.data ?? '',
+      ...(query.message ? { sourceMessageId: String(query.message.message_id) } : {}),
+    },
+  }];
 }
 
 /**

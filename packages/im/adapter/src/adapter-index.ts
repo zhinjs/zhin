@@ -10,6 +10,7 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 import type {
   AdapterCapability,
   AdapterDefinition,
+  AdapterSegmentPolicy,
   EndpointInstance,
   EndpointSendRequest,
 } from './definition.js';
@@ -41,6 +42,7 @@ export type AdapterEndpointPhase =
 
 interface AdapterRecord extends AdapterDescriptor {
   readonly endpoint: EndpointInstance;
+  readonly segments?: AdapterSegmentPolicy;
   readonly unconfigured: boolean;
   started: boolean;
   open: boolean;
@@ -96,6 +98,7 @@ export class AdapterIndex {
             source: slot.source,
             capabilities: slot.definition.capabilities,
             endpoint: endpoint.instance,
+            ...(slot.definition.segments ? { segments: slot.definition.segments } : {}),
             unconfigured: endpoint.unconfigured,
             started: false,
             open: false,
@@ -127,7 +130,8 @@ export class AdapterIndex {
   list(): readonly AdapterDescriptor[] {
     return this.#order.map(({ endpoint: _endpoint, unconfigured: _unconfigured,
       started: _started, open: _open, stopped: _stopped, failed: _failed,
-      startAttempted: _startAttempted, ...descriptor }) => Object.freeze(descriptor));
+      startAttempted: _startAttempted, segments: _segments,
+      ...descriptor }) => Object.freeze(descriptor));
   }
 
   /** Endpoint rows for Console `endpoint.list` / `endpoint.info`. */
@@ -173,6 +177,14 @@ export class AdapterIndex {
     const record = this.#records.get(id);
     if (!record) throw new Error(`Unknown Adapter Endpoint: ${id}`);
     return record.owner;
+  }
+
+  /**
+   * Endpoint 的消息段能力声明（出站协商降级依据）；
+   * 未声明或未知 id 返回 undefined（调用方按历史行为处理）。
+   */
+  segmentPolicy(id: CapabilityId): AdapterSegmentPolicy | undefined {
+    return this.#records.get(id)?.segments;
   }
 
   async start(): Promise<void> {

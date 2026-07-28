@@ -8,6 +8,7 @@ export {
   getChannelId,
   isBotMentioned,
   isMessageEvent,
+  mediaRefToOneBot12Fields,
   parseSendTarget,
   resolveOneBot12Config,
   senderNickname,

@@ -38,6 +38,14 @@ export {
 } from './endpoint.js';
 
 export {
+  buildMediaUploadForm,
+  readOutboundImageMedia,
+  resolveMediaBinary,
+  type MediaBinary,
+  type WeChatMediaUploadResult,
+} from './media-upload.js';
+
+export {
   registerWeChatMpWebhookRoutes,
   handleWeChatMpVerification,
   handleWeChatMpMessage,

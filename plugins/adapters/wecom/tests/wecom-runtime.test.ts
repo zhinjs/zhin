@@ -169,6 +169,13 @@ describe('wecom protocol helpers', () => {
       msgtype: 'markdown',
       data: { content: '# title' },
     });
+    // endpoint 上传物化后写入 media_id；旧调用方 file/url 直传保持兼容
+    expect(formatOutboundBody([
+      { type: 'image', data: { media_id: 'MID_1' } },
+    ])).toEqual({ msgtype: 'image', data: { media_id: 'MID_1' } });
+    expect(formatOutboundBody([
+      { type: 'image', data: { file: 'MID_LEGACY' } },
+    ])).toEqual({ msgtype: 'image', data: { media_id: 'MID_LEGACY' } });
   });
 });
 
@@ -326,6 +333,136 @@ describe('wecom plugin runtime adapter', () => {
       expect.stringContaining('/cgi-bin/message/send'),
       expect.objectContaining({ method: 'POST' }),
     );
+    await endpoint.stop();
+  });
+
+  it('send image 段经 media/upload 物化为 media_id', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes('/gettoken')) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => '',
+          json: async () => ({ errcode: 0, access_token: 'tok', expires_in: 7200 }),
+        };
+      }
+      if (String(url).includes('/cgi-bin/media/upload')) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => '',
+          json: async () => ({ errcode: 0, type: 'image', media_id: 'MID_9', created_at: '1' }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        text: async () => '',
+        json: async () => ({ errcode: 0, msgid: 'out-9' }),
+      };
+    });
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const endpoint = new WecomEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'wecom'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      http,
+      config: baseConfig,
+      fetch: fetchMock,
+    });
+    await endpoint.start();
+    await http.listen();
+    const id = await endpoint.send({
+      target: 'user001',
+      payload: [
+        {
+          type: 'image',
+          data: {
+            media: {
+              kind: 'base64',
+              value: Buffer.from('png-bytes').toString('base64'),
+              mime_type: 'image/png',
+            },
+          },
+        },
+      ],
+    });
+    expect(id).toBe('out-9');
+    const uploadCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/media/upload'));
+    expect(uploadCall).toBeDefined();
+    expect(String(uploadCall![0])).toContain('type=image');
+    expect(uploadCall![1]!.body).toBeInstanceOf(FormData);
+    const sendCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/message/send'));
+    const sendBody = JSON.parse(String(sendCall![1]!.body)) as Record<string, unknown>;
+    expect(sendBody).toMatchObject({
+      msgtype: 'image',
+      touser: 'user001',
+      image: { media_id: 'MID_9' },
+    });
+    await endpoint.stop();
+  });
+
+  it('图片上传失败降级为文本，不阻断发送', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes('/gettoken')) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => '',
+          json: async () => ({ errcode: 0, access_token: 'tok', expires_in: 7200 }),
+        };
+      }
+      if (String(url).includes('/cgi-bin/media/upload')) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => '',
+          json: async () => ({ errcode: 40013, errmsg: 'invalid corpid' }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        text: async () => '',
+        json: async () => ({ errcode: 0, msgid: 'out-10' }),
+      };
+    });
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const endpoint = new WecomEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'wecom'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      http,
+      config: baseConfig,
+      fetch: fetchMock,
+    });
+    await endpoint.start();
+    await http.listen();
+    const id = await endpoint.send({
+      target: 'user001',
+      payload: [
+        {
+          type: 'image',
+          data: {
+            media: { kind: 'base64', value: 'QUJD', mime_type: 'image/png' },
+            alt: '报表图',
+          },
+        },
+      ],
+    });
+    expect(id).toBe('out-10');
+    const sendCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/message/send'));
+    const sendBody = JSON.parse(String(sendCall![1]!.body)) as Record<string, unknown>;
+    expect(sendBody).toMatchObject({
+      msgtype: 'text',
+      text: { content: '报表图' },
+    });
     await endpoint.stop();
   });
 

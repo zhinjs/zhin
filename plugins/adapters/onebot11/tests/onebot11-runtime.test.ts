@@ -157,6 +157,29 @@ describe('onebot11 protocol helpers', () => {
     ]);
   });
 
+  it('maps canonical segments to OneBot wire segments', () => {
+    expect(formatOutboundSegments([
+      { type: 'mention', data: { target: '10001' } },
+      { type: 'reply', data: { message_id: '42' } },
+      { type: 'face', data: { id: 14, name: '微笑' } },
+    ])).toEqual([
+      { type: 'at', data: { qq: '10001' } },
+      { type: 'reply', data: { id: '42' } },
+      { type: 'face', data: { id: 14 } },
+    ]);
+    expect(formatOutboundSegments([
+      { type: 'image', data: { media: { kind: 'base64', value: 'QUJD', mime_type: 'image/png' } } },
+      { type: 'image', data: { media: { kind: 'path', value: '/tmp/a.png' } } },
+      { type: 'audio', data: { media: { kind: 'url', value: 'https://x/a.mp3' } } },
+      { type: 'video', data: { media: { kind: 'url', value: 'https://x/a.mp4' } } },
+    ])).toEqual([
+      { type: 'image', data: { file: 'base64://QUJD' } },
+      { type: 'image', data: { file: 'file:///tmp/a.png' } },
+      { type: 'record', data: { file: 'https://x/a.mp3' } },
+      { type: 'video', data: { file: 'https://x/a.mp4' } },
+    ]);
+  });
+
   it('resolves sender as user id and nickname separately', () => {
     const ev: OneBot11Event = {
       post_type: 'message',

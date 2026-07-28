@@ -18,6 +18,12 @@ import {
   type WeChatMessage,
 } from './protocol.js';
 import {
+  buildMediaUploadForm,
+  readOutboundImageMedia,
+  resolveMediaBinary,
+  type WeChatMediaUploadResult,
+} from './media-upload.js';
+import {
   getPassiveReplyCapture,
   recordPassiveReplyText,
 } from './passive-reply.js';
@@ -191,7 +197,8 @@ export class WeChatMpEndpoint implements EndpointInstance {
     if (!this.#accessToken || Date.now() >= this.#tokenExpireTime) {
       await this.#refreshAccessToken();
     }
-    const messageData = formatCustomerServiceBody(target, payload);
+    const materialized = await this.#materializeOutboundMedia(payload);
+    const messageData = formatCustomerServiceBody(target, materialized);
     let result = await this.#postCustomerService(messageData);
     if (result.errcode && TOKEN_INVALID_ERRCODES.has(Number(result.errcode))) {
       // 对端提前作废 token（多端共用等）：刷新后重试一次。
@@ -207,6 +214,45 @@ export class WeChatMpEndpoint implements EndpointInstance {
     }
     logger.debug(formatCompact({ op: 'wechat_mp_send', target, messageId: result.msgid }));
     return result.msgid?.toString() || `cs_${Date.now()}`;
+  }
+
+  /**
+   * 客服消息 image 段只接受 media_id：canonical MediaRef（base64/本地路径/URL）
+   * 先经 /cgi-bin/media/upload 物化；上传失败降级为文本（alt 优先），不阻断发送。
+   */
+  async #materializeOutboundMedia(payload: unknown): Promise<unknown> {
+    if (!Array.isArray(payload)) return payload;
+    return Promise.all(payload.map(async (item) => {
+      if (typeof item === 'string' || !item || typeof item !== 'object') return item;
+      const seg = item as { type?: unknown; data?: Record<string, unknown> };
+      if (seg.type !== 'image') return item;
+      const data = seg.data ?? {};
+      const media = readOutboundImageMedia(data);
+      if (!media) return item;
+      try {
+        const mediaId = await this.#uploadMedia('image', media);
+        return { type: 'image', data: { mediaId } };
+      } catch (error) {
+        logger.warn(formatCompact({
+          op: 'wechat_mp_media_upload_failed',
+          endpoint: this.#options.config.name,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+        const alt = typeof data.alt === 'string' && data.alt ? data.alt : '[image]';
+        return { type: 'text', data: { text: alt } };
+      }
+    }));
+  }
+
+  /** POST /cgi-bin/media/upload（临时素材，3 天有效），返回 media_id。 */
+  async #uploadMedia(type: 'image', media: Parameters<typeof resolveMediaBinary>[0]): Promise<string> {
+    const binary = await resolveMediaBinary(media);
+    const form = buildMediaUploadForm(binary);
+    const url = `https://api.weixin.qq.com/cgi-bin/media/upload?access_token=${this.#accessToken}&type=${type}`;
+    const response = await this.#fetch(url, { method: 'POST', body: form });
+    const data = response.data as WeChatMediaUploadResult;
+    if (data.media_id) return data.media_id;
+    throw new Error(`WeChat media upload failed: ${data.errcode ?? 'unknown'} ${data.errmsg ?? ''}`.trim());
   }
 
   async #postCustomerService(messageData: unknown): Promise<WeChatAPIResponse> {

@@ -16,6 +16,7 @@ import {
   extractInboundAudioUrl,
   formatInboundContent,
   formatInboundMessageId,
+  formatInboundSegments,
   formatInboundTarget,
   formatOutboundMessageId,
   formatOutboundSegments,
@@ -214,6 +215,7 @@ export class MilkyWssEndpoint implements EndpointInstance {
   #admitMessage(data: MilkyIncomingMessage, event: MilkyEvent): void {
     const target = formatInboundTarget(data);
     const content = formatInboundContent(data);
+    const segments = formatInboundSegments(data);
     const audioUrl = extractInboundAudioUrl(data);
     const nickname = senderNickname(data);
     const mentioned = isMentioned(data, event.self_id);
@@ -221,6 +223,7 @@ export class MilkyWssEndpoint implements EndpointInstance {
       adapter: this.#options.id,
       target,
       content,
+      segments,
       sender: String(data.sender_id),
       id: formatInboundMessageId(data),
       metadata: Object.freeze({

@@ -16,6 +16,10 @@ export type { LarkEndpointOptions, LarkFetch } from '../src/endpoint.js';
 
 export default defineAdapter<LarkAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
+  // image 段经 /im/v1/images 物化为 image_key（url 下载后上传）。
+  segments: {
+    outboundMedia: ['url', 'upload'],
+  },
   create(context) {
     const config = resolveLarkConfig(context.config);
     // 注册到插件运行时状态（lark endpoint list 的"运行中"数据源）

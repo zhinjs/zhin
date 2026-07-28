@@ -162,7 +162,7 @@ const checks = [
   {
     name: 'Rich Segment Adapters',
     command: 'pnpm check:rich-segments',
-    description: '各 adapter 声明 outboundRichSegmentPolicy 与契约测试',
+    description: '各 adapter 在 adapters/*.ts 声明 segments.outboundMedia（或豁免）',
   },
   {
     name: 'AI Outbound Adapters',
@@ -172,12 +172,12 @@ const checks = [
   {
     name: 'Interactive Segments',
     command: 'pnpm check:interactive-segments',
-    description: '各 adapter 声明 interactivePolicy 与契约测试',
+    description: '各 adapter 在 adapters/*.ts 声明 segments.interactive（或豁免）',
   },
   {
     name: 'Segment Adapters',
     command: 'pnpm check:segments',
-    description: '各 adapter segment-mapper 契约（sandbox 必须达标）',
+    description: '各 adapter 在 adapters/*.ts 声明 defineAdapter segments（或豁免）',
   },
   {
     name: 'Provider Gateway',

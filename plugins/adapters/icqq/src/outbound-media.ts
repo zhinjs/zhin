@@ -47,8 +47,9 @@ export function resolveIcqqOutboundMediaMode(
 }
 
 /**
- * file 模式：将 segment.data.base64 物化为本机路径。
- * base64 模式：不改动（由 toCqString 生成 base64://，供异机守护进程读取）。
+ * file 模式：将 segment.data.base64（legacy）或 canonical MediaRef
+ * （`data.media`，kind=base64）物化为本机路径，并把 media 改写为 path 引用。
+ * base64 模式：不改动（由 toCqString/formatOutboundBody 生成 base64://，供异机守护进程读取）。
  */
 export function materializeOutboundBase64(
   content: SendContent,
@@ -61,10 +62,22 @@ export function materializeOutboundBase64(
     if (typeof seg === "string") return seg;
     const { type, data } = seg as MessageSegment;
     const d = data as Record<string, unknown>;
-    const b64 = d.base64 ?? d.data;
-    if (typeof b64 !== "string" || !b64) return seg;
+    const media = d.media as
+      | { kind?: unknown; value?: unknown; mime_type?: unknown }
+      | undefined;
+    const mediaBase64 =
+      media && media.kind === "base64" && typeof media.value === "string" && media.value
+        ? media.value.replace(/^base64:\/\//, "")
+        : undefined;
+    const legacyBase64 = d.base64 ?? d.data;
+    const b64 =
+      mediaBase64 ??
+      (typeof legacyBase64 === "string" && legacyBase64 ? legacyBase64 : undefined);
+    if (!b64) return seg;
 
-    const mime = String(d.mime ?? d.mimeType ?? "");
+    const mime = String(
+      d.mime ?? d.mimeType ?? (typeof media?.mime_type === "string" ? media.mime_type : "") ?? "",
+    );
     if (type === "image" || type === "record" || type === "audio" || type === "video") {
       const filePath = spoolBase64ToFile(
         b64,
@@ -75,6 +88,11 @@ export function materializeOutboundBase64(
         type,
         data: {
           ...d,
+          media: {
+            kind: "path",
+            value: filePath,
+            ...(mime ? { mime_type: mime } : {}),
+          },
           file: filePath,
           url: filePath,
         },

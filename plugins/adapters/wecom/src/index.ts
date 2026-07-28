@@ -45,6 +45,14 @@ export {
 } from './endpoint.js';
 
 export {
+  buildMediaUploadForm,
+  readOutboundImageMedia,
+  resolveMediaBinary,
+  type MediaBinary,
+  type WecomMediaUploadResult,
+} from './media-upload.js';
+
+export {
   registerWecomWebhookRoutes,
   handleWecomVerificationRequest,
   handleWecomWebhookRequest,

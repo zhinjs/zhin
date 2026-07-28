@@ -5,6 +5,7 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   createSyntheticMessage,
   resolveSceneFieldsFromMessage,
+  collectSegmentMedia,
   type AITriggerConfig,
   type Tool,
 } from '@zhin.js/core';
@@ -881,6 +882,10 @@ export function bridgeRuntimeMessage(
   );
   const senderId = message.sender ?? 'anon';
   const quoteId = message.metadata?.quote_id;
+  // 入站结构化段：纯文本视图（matched.content）会丢弃媒体，这里把 canonical
+  // segments 与提取出的媒体引用（image/audio/video/file 的 MediaRef）挂到
+  // synthetic message 的 extra，AI turn 与工具经 resolveContextKey 可读。
+  const segmentMedia = collectSegmentMedia(message.segments);
   return createSyntheticMessage({
     adapter: localName,
     endpoint: endpointId,
@@ -902,6 +907,8 @@ export function bridgeRuntimeMessage(
     },
     extra: {
       ...message.metadata,
+      ...(message.segments?.length ? { segments: message.segments } : {}),
+      ...(segmentMedia.length > 0 ? { media: segmentMedia } : {}),
       runtimeAdapter: message.adapter,
       runtimeTarget: message.target,
       ...(endpointMaster ? { endpointMaster } : {}),

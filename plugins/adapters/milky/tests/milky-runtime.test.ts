@@ -18,12 +18,14 @@ import {
   buildSendAction,
   extractInboundAudioUrl,
   formatInboundContent,
+  formatInboundSegments,
   formatInboundTarget,
   formatOutboundSegments,
   parseMessageReceiveData,
   parseSendTarget,
   resolveMilkyConfig,
   type MilkyEvent,
+  type MilkyIncomingMessage,
   type MilkyWsConfig,
 } from '../src/protocol.js';
 
@@ -130,6 +132,74 @@ describe('milky protocol helpers', () => {
     const data = parseMessageReceiveData(event)!;
     expect(formatInboundTarget(data)).toBe('group:100');
     expect(formatInboundContent(data)).toBe('hello');
+  });
+
+  function incomingMessage(segments: MilkyIncomingMessage['segments']): MilkyIncomingMessage {
+    return {
+      message_scene: 'group',
+      peer_id: 100,
+      message_seq: 9,
+      sender_id: 42,
+      time: 1,
+      segments,
+    };
+  }
+
+  it('maps media/mention/reply/face inbound segments to canonical Segment[]', () => {
+    const segments = formatInboundSegments(incomingMessage([
+      { type: 'reply', data: { message_seq: 7 } },
+      { type: 'mention', data: { user_id: 10001, name: 'bot' } },
+      { type: 'mention_all', data: {} },
+      { type: 'text', data: { text: 'hi' } },
+      { type: 'face', data: { face_id: '14' } },
+      {
+        type: 'image',
+        data: { resource_id: 'img-r1', temp_url: 'https://cdn.example/a.jpg', summary: '[图片]' },
+      },
+      { type: 'record', data: { resource_id: 'rec-r1', temp_url: 'https://cdn.example/a.silk' } },
+      { type: 'video', data: { resource_id: 'vid-r1', temp_url: 'https://cdn.example/a.mp4' } },
+      { type: 'file', data: { file_id: 'fid-1', file_name: 'a.pdf', file_size: 1024 } },
+    ]));
+    expect(segments).toEqual([
+      { type: 'reply', data: { message_id: 'group:100:7' } },
+      { type: 'mention', data: { target: '10001', name: 'bot' } },
+      { type: 'mention', data: { target: 'all' } },
+      { type: 'text', data: { text: 'hi' } },
+      { type: 'face', data: { id: '14' } },
+      {
+        type: 'image',
+        data: { media: { kind: 'url', value: 'https://cdn.example/a.jpg' }, alt: '[图片]' },
+      },
+      { type: 'audio', data: { media: { kind: 'url', value: 'https://cdn.example/a.silk' } } },
+      { type: 'video', data: { media: { kind: 'url', value: 'https://cdn.example/a.mp4' } } },
+      {
+        type: 'file',
+        data: { media: { kind: 'file', value: 'fid-1' }, name: 'a.pdf', size: 1024 },
+      },
+    ]);
+  });
+
+  it('falls back to resource_id (kind=file) when media temp_url is absent', () => {
+    const segments = formatInboundSegments(incomingMessage([
+      { type: 'image', data: { resource_id: 'img-r2' } },
+    ]));
+    expect(segments).toEqual([
+      { type: 'image', data: { media: { kind: 'file', value: 'img-r2' } } },
+    ]);
+  });
+
+  it('keeps text-only messages unchanged and passes through unknown segment types', () => {
+    const segments = formatInboundSegments(incomingMessage([
+      { type: 'text', data: { text: 'hello' } },
+      { type: 'light_app', data: { app_name: 'app', json_payload: '{}' } },
+    ]));
+    expect(segments).toEqual([
+      { type: 'text', data: { text: 'hello' } },
+      { type: 'light_app', data: { app_name: 'app', json_payload: '{}' } },
+    ]);
+    // 纯文本视图不受影响
+    expect(formatInboundContent(incomingMessage([{ type: 'text', data: { text: 'hello' } }])))
+      .toBe('hello');
   });
 
   it('parses send targets', () => {
@@ -486,6 +556,10 @@ describe('milky plugin runtime adapter', () => {
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive.mock.calls[0]?.[0]).toMatchObject({
       content: 'hi[audio:https://cdn.example/a.silk]',
+      segments: [
+        { type: 'text', data: { text: 'hi' } },
+        { type: 'audio', data: { media: { kind: 'url', value: 'https://cdn.example/a.silk' } } },
+      ],
       metadata: expect.objectContaining({ audio_url: 'https://cdn.example/a.silk' }),
     });
     await endpoint.stop();

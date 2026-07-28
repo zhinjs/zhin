@@ -7,6 +7,7 @@ export {
   formatOutboundSegments,
   getChannelId,
   isMessageEvent,
+  mediaRefToOneBotFile,
   parseSendTarget,
   resolveNapCatConfig,
   senderNickname,

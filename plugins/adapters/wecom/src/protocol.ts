@@ -292,7 +292,8 @@ export function formatOutboundBody(payload: unknown): WecomSendBody {
         if (!hasMedia) {
           hasMedia = true;
           mediaType = 'image';
-          mediaData = { media_id: data.file || data.url };
+          // media_id 由 endpoint 上传物化写入；file/url 为旧调用方直传 media_id 的兼容入口。
+          mediaData = { media_id: data.media_id ?? data.mediaId ?? data.file ?? data.url };
         }
         break;
       case 'markdown':

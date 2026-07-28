@@ -14,7 +14,9 @@ import {
 } from '../src/endpoint.js';
 import {
   formatButtonContent,
+  formatButtonSegments,
   formatInboundContent,
+  formatInboundSegments,
   formatOutboundBody,
   resolveDiscordConfig,
   verifyDiscordInteractionSignature,
@@ -234,6 +236,61 @@ describe('discord protocol helpers', () => {
       userId: 'u1',
       userName: 'alice',
     })).toBe('[action: btn:1]');
+  });
+
+  it('maps attachments to canonical media segments (url MediaRef)', () => {
+    // 无附件消息：仅文本段，行为不变
+    expect(formatInboundSegments(textMessage())).toEqual([
+      { type: 'text', data: { text: 'hello' } },
+    ]);
+    expect(formatInboundSegments(textMessage({
+      content: '',
+      replyToId: 'msg-0',
+      attachments: [
+        { contentType: 'image/png', name: 'a.png', url: 'https://cdn.discord/a.png' },
+        { contentType: 'application/pdf', name: 'b.pdf', url: 'https://cdn.discord/b.pdf' },
+        { contentType: 'video/mp4', url: 'https://cdn.discord/c.mp4' },
+      ],
+    }))).toEqual([
+      { type: 'reply', data: { message_id: 'msg-0' } },
+      {
+        type: 'image',
+        data: {
+          media: { kind: 'url', value: 'https://cdn.discord/a.png', mime_type: 'image/png' },
+          alt: 'a.png',
+        },
+      },
+      {
+        type: 'file',
+        data: {
+          media: { kind: 'url', value: 'https://cdn.discord/b.pdf', mime_type: 'application/pdf' },
+          name: 'b.pdf',
+        },
+      },
+      {
+        type: 'video',
+        data: { media: { kind: 'url', value: 'https://cdn.discord/c.mp4', mime_type: 'video/mp4' } },
+      },
+    ]);
+    // 无 url 附件跳过，不产空媒体段
+    expect(formatInboundSegments(textMessage({
+      content: '',
+      attachments: [{ contentType: 'image/png', name: 'no-url.png' }],
+    }))).toEqual([]);
+  });
+
+  it('maps button custom_id to action segment', () => {
+    expect(formatButtonSegments({
+      id: 'i1',
+      customId: 'btn:1',
+      channelId: 'c1',
+      channelKind: 'channel',
+      userId: 'u1',
+      userName: 'alice',
+      sourceMessageId: 'msg-9',
+    })).toEqual([
+      { type: 'action', data: { id: 'i1', payload: 'btn:1', sourceMessageId: 'msg-9' } },
+    ]);
   });
 
   it('formats outbound string and segment payloads', () => {

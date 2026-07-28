@@ -32,7 +32,14 @@ export {
   STRICT_OUTBOUND_SEGMENT_TYPES,
 } from './json-schema.js';
 export { segmentsForImDelivery } from './delivery.js';
-export { isMediaRef, mediaRefFromLegacyData, mediaRefToLegacyFields } from './media.js';
+export {
+  isMediaRef,
+  mediaRefFromLegacyData,
+  mediaRefToLegacyFields,
+  collectSegmentMedia,
+  type SegmentMediaRef,
+} from './media.js';
 export { createImageSegment } from './image.js';
 export { formatSegmentPreview } from './preview.js';
+export { segmentsToPlainText } from './text.js';
 export { readMentionTarget, readMentionName, readMentionSegmentTarget } from './mention.js';

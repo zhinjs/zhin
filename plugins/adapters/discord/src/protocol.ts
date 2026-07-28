@@ -4,6 +4,7 @@
  */
 
 import { createPublicKey, verify as cryptoVerify } from 'node:crypto';
+import type { Segment } from '@zhin.js/core/runtime';
 
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface DiscordAdapterConfig {
@@ -225,6 +226,65 @@ export function formatInboundContent(msg: DiscordInboundMessage): string {
 
 export function formatButtonContent(interaction: DiscordButtonInbound): string {
   return `[action: ${interaction.customId}]`;
+}
+
+function attachmentMediaKind(contentType: string | undefined): 'image' | 'audio' | 'video' | 'file' {
+  if (contentType?.startsWith('image/')) return 'image';
+  if (contentType?.startsWith('audio/')) return 'audio';
+  if (contentType?.startsWith('video/')) return 'video';
+  return 'file';
+}
+
+/**
+ * 入站消息 → canonical Segment[]（与 formatInboundContent 纯文本视图同源双轨）。
+ * 附件 url 是 Discord CDN 真实 http(s) 地址，MediaRef kind=url；
+ * embeds / stickers 仅留在纯文本视图，不进段（最小侵入）。
+ */
+export function formatInboundSegments(msg: DiscordInboundMessage): Segment[] {
+  const out: Segment[] = [];
+  if (msg.replyToId) {
+    out.push({ type: 'reply', data: { message_id: msg.replyToId } });
+  }
+  const text = msg.content?.trim();
+  if (text) out.push({ type: 'text', data: { text } });
+  for (const attachment of msg.attachments ?? []) {
+    if (!attachment.url) continue;
+    const kind = attachmentMediaKind(attachment.contentType);
+    out.push({
+      type: kind,
+      data: {
+        media: {
+          kind: 'url',
+          value: attachment.url,
+          ...(attachment.contentType ? { mime_type: attachment.contentType } : {}),
+        },
+        ...(attachment.name
+          ? kind === 'image'
+            ? { alt: attachment.name }
+            : { name: attachment.name }
+          : {}),
+      },
+    });
+  }
+  return out;
+}
+
+/**
+ * button interaction → action 段（Wave 1 C interactive 约定：
+ * {type:'action', data:{id, payload, sourceMessageId?}}），
+ * 与 formatButtonContent / metadata.payload 同源。
+ */
+export function formatButtonSegments(interaction: DiscordButtonInbound): Segment[] {
+  return [{
+    type: 'action',
+    data: {
+      id: interaction.id,
+      payload: interaction.customId,
+      ...(interaction.sourceMessageId
+        ? { sourceMessageId: interaction.sourceMessageId }
+        : {}),
+    },
+  }];
 }
 
 /**

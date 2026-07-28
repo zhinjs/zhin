@@ -20,6 +20,11 @@ export type { OneBot11WsSocket, OneBot11WsCreateOptions } from '../src/ws-types.
 
 export default defineAdapter<OneBot11AdapterConfig>({
   capabilities: ['inbound', 'outbound'],
+  // OneBot file 参数原生消费 url / base64:// 媒体；无卡片交互面，交互段降级纯文本。
+  segments: {
+    outboundMedia: ['url', 'base64'],
+    interactive: 'text',
+  },
   create(context) {
     const config = resolveOneBot11Config(context.config);
     const gateway = context.use(messageGatewayToken);

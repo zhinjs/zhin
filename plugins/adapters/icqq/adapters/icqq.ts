@@ -29,6 +29,13 @@ const logger = getLogger('icqq');
 
 export default defineAdapter<IcqqAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
+  // 统一消息元素通道（UNI-Channel）：端点可消费 base64 / url / upload 媒体
+  // （path 由出站物化按 file/base64 模式转换，非声明消费形态）；
+  // 卡片/按钮等富交互段无原生承载，降级纯文本。
+  segments: {
+    outboundMedia: ['base64', 'url', 'upload'],
+    interactive: 'text',
+  },
   create(context) {
     // Client-library / IPC daemon path — no httpHostToken.
     // Console loginAssist + host-router routes deferred.
