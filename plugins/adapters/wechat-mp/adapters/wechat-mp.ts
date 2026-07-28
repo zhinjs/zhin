@@ -9,6 +9,7 @@ import {
   resolveWeChatMpConfig,
   type WeChatMpAdapterConfig,
 } from '../src/protocol.js';
+import { wechatMpRuntimeStateToken } from '../src/wechat-mp-runtime-state.js';
 
 export { WeChatMpEndpoint } from '../src/endpoint.js';
 export type { WeChatMpEndpointOptions, WeChatMpFetch } from '../src/endpoint.js';
@@ -16,11 +17,17 @@ export type { WeChatMpEndpointOptions, WeChatMpFetch } from '../src/endpoint.js'
 export default defineAdapter<WeChatMpAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
   create(context) {
+    const config = resolveWeChatMpConfig(context.config);
+    // 注册到插件运行时状态（wechat-mp endpoint list 的"运行中"数据源）
+    context.use(wechatMpRuntimeStateToken).endpoints.set(config.name, {
+      name: config.name,
+      mode: 'webhook',
+    });
     return new WeChatMpEndpoint({
       id: context.id,
       gateway: context.use(messageGatewayToken),
       http: context.use(httpHostToken),
-      config: resolveWeChatMpConfig(context.config),
+      config,
     });
   },
 });

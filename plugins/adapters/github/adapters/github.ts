@@ -10,6 +10,7 @@ import {
   type DatabaseHost,
 } from '@zhin.js/plugin-runtime';
 import { GithubEndpoint } from '../src/endpoint.js';
+import { githubRuntimeStateToken } from '../src/github-runtime-state.js';
 import {
   resolveGithubConfig,
   type GithubAdapterConfig,
@@ -31,6 +32,11 @@ export default defineAdapter<GithubAdapterConfig>({
   create(context) {
     const config = resolveGithubConfig(context.config);
     const database = optionalDatabase(context);
+    // 注册到插件运行时状态（github endpoint list 的"运行中"数据源）
+    context.use(githubRuntimeStateToken).endpoints.set(config.name, {
+      name: config.name,
+      mode: config.webhookSecret ? 'webhook' : 'api',
+    });
     if (config.webhookSecret) {
       return new GithubEndpoint({
         id: context.id,

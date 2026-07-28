@@ -1648,6 +1648,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/command':
+        specifier: workspace:*
+        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -1685,6 +1688,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/command':
+        specifier: workspace:*
+        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -1771,6 +1777,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/command':
+        specifier: workspace:*
+        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -1808,6 +1817,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/command':
+        specifier: workspace:*
+        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -1842,6 +1854,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/command':
+        specifier: workspace:*
+        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -1882,6 +1897,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/command':
+        specifier: workspace:*
+        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -1919,6 +1937,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/command':
+        specifier: workspace:*
+        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -2232,6 +2253,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/command':
+        specifier: workspace:*
+        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -2355,6 +2379,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/command':
+        specifier: workspace:*
+        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -2395,6 +2422,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/command':
+        specifier: workspace:*
+        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -2432,6 +2462,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/command':
+        specifier: workspace:*
+        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core

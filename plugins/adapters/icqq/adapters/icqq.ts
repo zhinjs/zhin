@@ -12,6 +12,7 @@ import {
   type Token,
 } from '@zhin.js/plugin-runtime';
 import { IcqqIpcEndpoint, type IcqqInboxHooks } from '../src/endpoint.js';
+import { icqqRuntimeStateToken } from '../src/icqq-runtime-state.js';
 import {
   resolveIcqqConfig,
   type IcqqAdapterConfig,
@@ -31,11 +32,17 @@ export default defineAdapter<IcqqAdapterConfig>({
   create(context) {
     // Client-library / IPC daemon path — no httpHostToken.
     // Console loginAssist + host-router routes deferred.
+    const config = resolveIcqqConfig(context.config);
+    // 注册到插件运行时状态（icqq endpoint list 的"运行中"数据源）
+    context.use(icqqRuntimeStateToken).endpoints.set(config.name, {
+      name: config.name,
+      mode: config.rpc ? 'rpc' : 'ipc',
+    });
     const inbox = resolveInboxHooks(context);
     return new IcqqIpcEndpoint({
       id: context.id,
       gateway: context.use(messageGatewayToken),
-      config: resolveIcqqConfig(context.config),
+      config,
       ...(inbox ? { inbox } : {}),
     });
   },

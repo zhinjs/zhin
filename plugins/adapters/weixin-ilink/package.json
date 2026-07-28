@@ -34,6 +34,7 @@
   },
   "files": [
     "adapters",
+    "commands",
     "plugin.ts",
     "schema.json",
     "src",
@@ -54,6 +55,7 @@
   },
   "dependencies": {
     "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/command": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*"
@@ -87,6 +89,10 @@
     "features": [
       {
         "package": "@zhin.js/adapter",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/command",
         "api": "^1.0.0"
       }
     ],

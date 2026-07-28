@@ -8,6 +8,7 @@ import {
   resolveWeixinIlinkConfig,
   type WeixinIlinkAdapterConfig,
 } from '../src/protocol.js';
+import { weixinIlinkRuntimeStateToken } from '../src/weixin-ilink-runtime-state.js';
 
 export { WeixinIlinkEndpoint } from '../src/endpoint.js';
 export type {
@@ -21,10 +22,16 @@ export type {
 export default defineAdapter<WeixinIlinkAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
   create(context) {
+    const config = resolveWeixinIlinkConfig(context.config);
+    // 注册到插件运行时状态（weixin-ilink endpoint list 的"运行中"数据源）
+    context.use(weixinIlinkRuntimeStateToken).endpoints.set(config.name, {
+      name: config.name,
+      mode: config.connection,
+    });
     return new WeixinIlinkEndpoint({
       id: context.id,
       gateway: context.use(messageGatewayToken),
-      config: resolveWeixinIlinkConfig(context.config),
+      config,
     });
   },
 });

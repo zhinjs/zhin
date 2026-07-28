@@ -1,4 +1,6 @@
+import { createEndpointRuntimeState } from '@zhin.js/adapter';
 import { definePlugin } from '@zhin.js/plugin-runtime';
+import { icqqRuntimeStateToken } from './src/icqq-runtime-state.js';
 
 // Module-level guard: multiple icqq instances (icqq, icqq-2, …) share this
 // module, but the prompt contributor is per-platform — register it once.
@@ -9,7 +11,9 @@ export default definePlugin({
   metadata: {
     displayName: 'ICQQ Adapter',
   },
-  setup() {
+  setup(context) {
+    // 运行中 endpoint 注册表（icqq endpoint list 的"运行中"数据源）
+    context.resources.provide(icqqRuntimeStateToken, createEndpointRuntimeState());
     // Agent prompt contributor (orchestrator/deferred-worker ICQQ guidance).
     // `zhin.js/agent` is an optional peer — skip silently on IM-only installs.
     if (promptContributorRegistered) return;

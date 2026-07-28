@@ -1,4 +1,6 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
+import { createEndpointRuntimeState } from '@zhin.js/adapter';
+import { kookRuntimeStateToken } from '../src/kook-runtime-state.js';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import { messageGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
@@ -314,6 +316,7 @@ describe('kook plugin runtime adapter', () => {
       use: (token: unknown) => {
         if (token === httpHostToken) return http;
         if (token === messageGatewayToken) return gateway;
+        if (token === kookRuntimeStateToken) return createEndpointRuntimeState();
         throw new Error(`unexpected token: ${String(token)}`);
       },
     } as never);

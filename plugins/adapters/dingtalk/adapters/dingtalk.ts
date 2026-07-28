@@ -9,6 +9,7 @@ import {
   resolveDingTalkConfig,
   type DingTalkAdapterConfig,
 } from '../src/protocol.js';
+import { dingtalkRuntimeStateToken } from '../src/dingtalk-runtime-state.js';
 
 export { DingTalkEndpoint } from '../src/endpoint.js';
 export type { DingTalkEndpointOptions, DingTalkFetch } from '../src/endpoint.js';
@@ -16,11 +17,17 @@ export type { DingTalkEndpointOptions, DingTalkFetch } from '../src/endpoint.js'
 export default defineAdapter<DingTalkAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
   create(context) {
+    const config = resolveDingTalkConfig(context.config);
+    // 注册到插件运行时状态（dingtalk endpoint list 的"运行中"数据源）
+    context.use(dingtalkRuntimeStateToken).endpoints.set(config.name, {
+      name: config.name,
+      mode: 'webhook',
+    });
     return new DingTalkEndpoint({
       id: context.id,
       gateway: context.use(messageGatewayToken),
       http: context.use(httpHostToken),
-      config: resolveDingTalkConfig(context.config),
+      config,
     });
   },
 });

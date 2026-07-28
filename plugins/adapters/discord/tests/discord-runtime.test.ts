@@ -1,4 +1,6 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
+import { createEndpointRuntimeState } from '@zhin.js/adapter';
+import { discordRuntimeStateToken } from '../src/discord-runtime-state.js';
 import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import { messageGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
@@ -427,6 +429,7 @@ describe('discord plugin runtime adapter', () => {
         if (token === messageGatewayToken) {
           return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
         }
+        if (token === discordRuntimeStateToken) return createEndpointRuntimeState();
         throw new Error(`unexpected token: ${String(token)}`);
       },
     } as never);
