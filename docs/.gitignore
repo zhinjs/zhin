@@ -6,3 +6,4 @@ dist/
 .vitepress/cache/
 .vitepress/dist/
 coverage/
+.vitepress/.temp/
