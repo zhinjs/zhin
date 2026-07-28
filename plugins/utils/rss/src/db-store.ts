@@ -6,6 +6,7 @@ export {
   type RssModel,
 } from './memory-store.js';
 
+import { createGenerationStore, type Dispose, type GenerationStoreContext } from '@zhin.js/plugin-runtime';
 import {
   createInMemoryRssDb,
   RSS_SEEN_TABLE,
@@ -14,11 +15,25 @@ import {
   type RssModel,
 } from './memory-store.js';
 
+const rssDbStore = createGenerationStore<RssMemoryDb>('rss/db');
+
 let _db: RssMemoryDb | null = null;
+let _memoryDb: RssMemoryDb | null = null;
+
+/**
+ * Generation-owned database binding used by Plugin Runtime setup().
+ * Auto-unregisters when the generation lifecycle disposes, so no stale
+ * reference to the previous generation's host survives a reload.
+ */
+export function provideRssDb(context: GenerationStoreContext, db: RssMemoryDb): Dispose {
+  return rssDbStore.provide(context, db);
+}
 
 export function ensureRssMemoryDb(): RssMemoryDb {
-  if (!_db) _db = createInMemoryRssDb();
-  return _db;
+  const provided = rssDbStore.tryUse() ?? _db;
+  if (provided) return provided;
+  if (!_memoryDb) _memoryDb = createInMemoryRssDb();
+  return _memoryDb;
 }
 
 export function getRssDb(): RssMemoryDb | null {
@@ -30,7 +45,9 @@ export function setRssDb(db: RssMemoryDb | null): void {
 }
 
 export function resetRssDb(): void {
+  rssDbStore.clear();
   _db = null;
+  _memoryDb = null;
 }
 
 export function getRssSubs(): RssModel | null {

@@ -1,7 +1,12 @@
 /**
  * SatoriEndpoint — WebSocket and webhook lifecycle, outbound, admit.
  */
-import type { EndpointInstance } from '@zhin.js/adapter';
+import {
+  createEndpointLifecycle,
+  type EndpointConnectHandle,
+  type EndpointInstance,
+  type EndpointLifecycle,
+} from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -48,26 +53,47 @@ export interface SatoriWsEndpointOptions {
 
 export class SatoriWsEndpoint implements EndpointInstance {
   readonly #options: SatoriWsEndpointOptions;
+  readonly #lifecycle: EndpointLifecycle;
   #ws: SatoriWsSocket | null = null;
   #login: SatoriLogin | undefined;
   #lastSn: number | undefined;
-  #reconnectTimer: NodeJS.Timeout | null = null;
-  #heartbeatTimer: NodeJS.Timeout | null = null;
-  /** 连续未收到 PONG 的心跳轮数；≥2 主动 close 触发重连。 */
-  #missedPongs = 0;
   #open = false;
-  #started = false;
-  #stopping = false;
 
   constructor(options: SatoriWsEndpointOptions) {
     this.#options = options;
+    const { config } = options;
+    this.#lifecycle = createEndpointLifecycle({
+      name: config.name,
+      reconnect: {
+        initialIntervalMs: 5_000,
+        // 固定间隔（multiplier 1、无抖动），对齐旧 5s 固定重连语义
+        multiplier: 1,
+        maxIntervalMs: 5_000,
+        jitterMs: 0,
+      },
+      heartbeat: {
+        intervalMs: config.heartbeat_interval,
+        // PONG 看门狗：连续 2 轮无回包，下一轮心跳由基座强关连接触发重连
+        watchdogMisses: 2,
+      },
+    });
   }
 
   async start(): Promise<void> {
-    if (this.#started) return;
-    this.#started = true;
-    this.#stopping = false;
-    await this.#connect();
+    try {
+      await this.#lifecycle.start((handle) => this.#connect(handle));
+    } catch (err) {
+      // start 失败清理现场（状态复位由基座保证）
+      if (this.#ws) {
+        try {
+          this.#ws.close();
+        } catch {
+          /* ignore */
+        }
+        this.#ws = null;
+      }
+      throw err;
+    }
   }
 
   open(): void {
@@ -80,22 +106,9 @@ export class SatoriWsEndpoint implements EndpointInstance {
 
   async stop(): Promise<void> {
     this.#open = false;
-    this.#stopping = true;
-    this.#clearReconnect();
-    this.#clearHeartbeat();
-    if (this.#ws) {
-      try {
-        this.#ws.close();
-      } catch {
-        /* ignore */
-      }
-      this.#ws = null;
-    }
-    this.#started = false;
-    logger.debug(formatCompact({
-      op: 'disconnect',
-      endpoint: this.#options.config.name,
-    }));
+    // 基座负责：清重连/心跳定时器、强关 ws、唤醒 stop-during-connect 竞态
+    await this.#lifecycle.stop();
+    this.#ws = null;
   }
 
   async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
@@ -161,7 +174,7 @@ export class SatoriWsEndpoint implements EndpointInstance {
     this.#login = login;
   }
 
-  async #connect(): Promise<void> {
+  async #connect(handle: EndpointConnectHandle): Promise<void> {
     const { config } = this.#options;
     const createWs = this.#options.createWebSocket ?? defaultCreateWebSocket;
     const headers: Record<string, string> = {};
@@ -171,6 +184,13 @@ export class SatoriWsEndpoint implements EndpointInstance {
       let settled = false;
       const ws = createWs(buildWsUrl(config.baseUrl, config.token), { headers });
       this.#ws = ws;
+      handle.onForceClose(() => {
+        try {
+          ws.close();
+        } catch {
+          /* already closed */
+        }
+      });
 
       ws.on('open', () => {
         logger.debug(formatCompact({ endpoint: config.name, mode: 'ws' }));
@@ -178,7 +198,7 @@ export class SatoriWsEndpoint implements EndpointInstance {
           token: config.token,
           sn: this.#lastSn,
         });
-        this.#startHeartbeat();
+        this.#lifecycle.startHeartbeat(() => this.#sendSignal(SatoriOpcode.PING));
         if (!settled) {
           settled = true;
           resolve();
@@ -204,26 +224,19 @@ export class SatoriWsEndpoint implements EndpointInstance {
       });
 
       ws.on('close', (code, reason) => {
-        this.#clearHeartbeat();
         const reasonStr = typeof reason === 'string'
           ? reason
           : Buffer.isBuffer(reason)
             ? reason.toString('utf8')
             : String(reason ?? '');
         const numericCode = typeof code === 'number' ? code : 0;
-        logger.warn(formatCompact({
-          op: 'disconnect',
-          endpoint: config.name,
-          code: numericCode,
-          error: reasonStr || 'closed',
-          reconnect_ms: this.#stopping ? undefined : 5000,
-        }));
         if (!settled) {
           settled = true;
           reject(new Error(`Satori WS closed: ${numericCode} ${reasonStr}`));
-          return;
         }
-        if (!this.#stopping) this.#scheduleReconnect();
+        // 断开日志与重连武装均由基座负责；仅曾 open 的连接才会武装重连，
+        // 初始连接失败由 start() 的拒绝路径复位。
+        handle.notifyClosed(`Satori WS closed: ${numericCode} ${reasonStr || 'closed'}`);
       });
 
       ws.on('error', (error) => {
@@ -243,7 +256,8 @@ export class SatoriWsEndpoint implements EndpointInstance {
 
   #handleSignal(signal: SatoriSignal): void {
     if (signal.op === SatoriOpcode.PONG) {
-      this.#missedPongs = 0;
+      // 喂狗：复位基座看门狗计数
+      this.#lifecycle.notifyHeartbeatAck();
       return;
     }
     if (signal.op === SatoriOpcode.READY && signal.body?.logins) {
@@ -263,60 +277,6 @@ export class SatoriWsEndpoint implements EndpointInstance {
   #sendSignal(op: number, body?: Record<string, unknown>): void {
     if (!this.#ws || this.#ws.readyState !== WS_OPEN) return;
     this.#ws.send(JSON.stringify({ op, body: body ?? {} }));
-  }
-
-  #startHeartbeat(): void {
-    this.#clearHeartbeat();
-    this.#missedPongs = 0;
-    const interval = this.#options.config.heartbeat_interval;
-    this.#heartbeatTimer = setInterval(() => {
-      // 上一轮 PING 没收到 PONG 就记一次 miss；连续两轮无回包说明
-      // 连接已假死（TCP 半开），主动 close 走重连而不是无限心跳。
-      if (this.#missedPongs >= 2) {
-        logger.warn(formatCompact({
-          op: 'heartbeat_timeout',
-          endpoint: this.#options.config.name,
-        }));
-        this.#clearHeartbeat();
-        try {
-          this.#ws?.close();
-        } catch {
-          /* already closed */
-        }
-        return;
-      }
-      this.#missedPongs += 1;
-      this.#sendSignal(SatoriOpcode.PING);
-    }, interval);
-  }
-
-  #scheduleReconnect(): void {
-    if (this.#reconnectTimer || this.#stopping) return;
-    this.#reconnectTimer = setTimeout(() => {
-      this.#reconnectTimer = null;
-      void this.#connect().catch((err) => {
-        logger.warn(formatCompact({
-          op: 'reconnect',
-          endpoint: this.#options.config.name,
-          ok: false,
-          error: err instanceof Error ? err.message : String(err),
-        }));
-      });
-    }, 5000);
-  }
-
-  #clearReconnect(): void {
-    if (this.#reconnectTimer) {
-      clearTimeout(this.#reconnectTimer);
-      this.#reconnectTimer = null;
-    }
-  }
-
-  #clearHeartbeat(): void {
-    if (this.#heartbeatTimer) {
-      clearInterval(this.#heartbeatTimer);
-      this.#heartbeatTimer = null;
-    }
   }
 
   #apiOptions(): SatoriApiOptions {

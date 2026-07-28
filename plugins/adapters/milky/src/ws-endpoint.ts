@@ -2,8 +2,12 @@
  * Milky WS client endpoint — outbound connect to Milky protocol server.
  */
 import WebSocket from 'ws';
-import { clearInterval, clearTimeout } from 'node:timers';
-import type { EndpointInstance } from '@zhin.js/adapter';
+import {
+  createEndpointLifecycle,
+  type EndpointConnectHandle,
+  type EndpointInstance,
+  type EndpointLifecycle,
+} from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
@@ -45,28 +49,33 @@ export interface MilkyWsEndpointOptions {
 export class MilkyWsEndpoint implements EndpointInstance {
   readonly #options: MilkyWsEndpointOptions;
   readonly #callApi: typeof callApi;
+  readonly #lifecycle: EndpointLifecycle;
   #ws?: MilkyWsSocket;
-  #reconnectTimer?: NodeJS.Timeout;
-  #heartbeatTimer?: NodeJS.Timeout;
   #open = false;
-  #started = false;
-  #stopping = false;
   #unregisterAgent?: () => void;
 
   constructor(options: MilkyWsEndpointOptions) {
     this.#options = options;
     this.#callApi = options.callApi ?? callApi;
+    this.#lifecycle = createEndpointLifecycle({
+      name: options.config.name,
+      // reconnect_interval 旧语义为固定间隔：multiplier 1 + 无 jitter + 不封顶
+      reconnect: {
+        initialIntervalMs: options.config.reconnect_interval,
+        multiplier: 1,
+        maxIntervalMs: Number.MAX_SAFE_INTEGER,
+        jitterMs: 0,
+      },
+    });
   }
 
   async start(): Promise<void> {
-    if (this.#started) return;
-    this.#started = true;
-    this.#stopping = false;
+    if (this.#lifecycle.started) return;
     this.#unregisterAgent = registerMilkyAgentEndpoint(this.#options.config.name, this);
     try {
-      await this.#connect();
+      await this.#lifecycle.start((handle) => this.#connect(handle));
     } catch (err) {
-      this.#started = false;
+      // start 失败复位由基座保证；agent 注册/反注册是适配器专有依赖，留在适配器侧
       this.#unregisterAgent?.();
       this.#unregisterAgent = undefined;
       throw err;
@@ -83,18 +92,9 @@ export class MilkyWsEndpoint implements EndpointInstance {
 
   async stop(): Promise<void> {
     this.#open = false;
-    this.#stopping = true;
-    this.#started = false;
+    await this.#lifecycle.stop();
     this.#unregisterAgent?.();
     this.#unregisterAgent = undefined;
-    if (this.#reconnectTimer) {
-      clearTimeout(this.#reconnectTimer);
-      this.#reconnectTimer = undefined;
-    }
-    if (this.#heartbeatTimer) {
-      clearInterval(this.#heartbeatTimer);
-      this.#heartbeatTimer = undefined;
-    }
     if (this.#ws) {
       try {
         this.#ws.close();
@@ -103,7 +103,6 @@ export class MilkyWsEndpoint implements EndpointInstance {
       }
       this.#ws = undefined;
     }
-    logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
   }
 
   async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
@@ -251,7 +250,7 @@ export class MilkyWsEndpoint implements EndpointInstance {
     });
   }
 
-  async #connect(): Promise<void> {
+  async #connect(handle: EndpointConnectHandle): Promise<void> {
     const { url, headers, safeUrl } = buildWsConnectOptions(this.#options.config);
     const create = this.#options.createWebSocket
       ?? ((connectUrl: string, options: MilkyWsCreateOptions) =>
@@ -259,14 +258,19 @@ export class MilkyWsEndpoint implements EndpointInstance {
 
     await new Promise<void>((resolve, reject) => {
       let settled = false;
-      let opened = false;
       const ws = create(url, { headers });
       this.#ws = ws;
+      handle.onForceClose(() => {
+        try {
+          ws.close();
+        } catch {
+          /* ignore */
+        }
+      });
 
       ws.on('open', () => {
         if (settled) return;
         settled = true;
-        opened = true;
         if (!this.#options.config.access_token) {
           logger.warn(formatCompact({
             endpoint: this.#options.config.name,
@@ -279,7 +283,16 @@ export class MilkyWsEndpoint implements EndpointInstance {
           mode: 'ws',
           url: safeUrl,
         }));
-        this.#startHeartbeat();
+        // stop-during-connect 竞态：已停止则不再武装心跳（基座 stop 已清理定时器）
+        if (this.#lifecycle.started) {
+          this.#lifecycle.startHeartbeat(() => {
+            try {
+              if (ws.readyState === WS_OPEN) ws.ping?.();
+            } catch {
+              /* ignore */
+            }
+          }, this.#options.config.heartbeat_interval);
+        }
         resolve();
       });
 
@@ -306,16 +319,12 @@ export class MilkyWsEndpoint implements EndpointInstance {
           error: `${reasonStr || 'closed'}${codeHint}`,
           reconnect_ms: this.#options.config.reconnect_interval,
         }));
-        if (this.#heartbeatTimer) {
-          clearInterval(this.#heartbeatTimer);
-          this.#heartbeatTimer = undefined;
-        }
+        // 基座语义：仅曾 open 的连接才武装重连；初始连接失败由 start() 的 catch 复位
+        handle.notifyClosed(new Error(`Milky WS 关闭: ${codeNum} ${reasonStr}`));
         if (!settled) {
           settled = true;
           reject(new Error(`Milky WS 关闭: ${codeNum} ${reasonStr}`));
         }
-        // 仅在曾成功 open 的连接上调度重连；初始连接失败由 start() 的 catch 复位。
-        if (opened) this.#scheduleReconnect();
       });
 
       ws.on('error', (err) => {
@@ -352,37 +361,5 @@ export class MilkyWsEndpoint implements EndpointInstance {
         error: error instanceof Error ? error.message : String(error),
       }));
     }
-  }
-
-  #startHeartbeat(): void {
-    if (this.#heartbeatTimer) {
-      clearInterval(this.#heartbeatTimer);
-    }
-    const interval = this.#options.config.heartbeat_interval;
-    if (interval <= 0) return;
-    this.#heartbeatTimer = setInterval(() => {
-      try {
-        if (this.#ws?.readyState === WS_OPEN) this.#ws.ping?.();
-      } catch {
-        /* ignore */
-      }
-    }, interval);
-  }
-
-  #scheduleReconnect(): void {
-    if (this.#stopping || !this.#started || this.#reconnectTimer) return;
-    const delay = this.#options.config.reconnect_interval;
-    this.#reconnectTimer = setTimeout(() => {
-      this.#reconnectTimer = undefined;
-      if (this.#stopping || !this.#started) return;
-      void this.#connect().catch((err) => {
-        logger.warn(formatCompact({
-          op: 'reconnect',
-          endpoint: this.#options.config.name,
-          ok: false,
-          error: err instanceof Error ? err.message : String(err),
-        }));
-      });
-    }, delay);
   }
 }

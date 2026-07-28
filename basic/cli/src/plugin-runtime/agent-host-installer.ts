@@ -1189,6 +1189,9 @@ function isToolCapability(tool: AgentToolLike | ToolCapability): tool is ToolCap
  * Bridge a plugin-registered tool (agentToolsHostToken) into the per-turn
  * catalog shape. zod-like inputSchemas are reused for argument validation,
  * mirroring the legacy authoring bridge (parseWithZodSchema).
+ * platforms / scopes / permissions / hidden ride on the registered tool so
+ * RegisteredToolSource applies the same Core canAccessTool gate as the
+ * ToolIndex path.
  */
 export function toRegisteredAgentTool(
   registration: AgentToolRegistration,
@@ -1205,7 +1208,10 @@ export function toRegisteredAgentTool(
     source: registration.source ?? 'plugin',
     ...(registration.keywords ? { keywords: [...registration.keywords] } : {}),
     ...(registration.tags ? { tags: [...registration.tags] } : {}),
+    ...(registration.platforms ? { platforms: [...registration.platforms] } : {}),
+    ...(registration.scopes ? { scopes: [...registration.scopes] } : {}),
     ...(registration.permissions ? { permissions: registration.permissions } : {}),
+    ...(registration.hidden !== undefined ? { hidden: registration.hidden } : {}),
     ...(registration.approval ? { approval: registration.approval } : {}),
     async execute(args) {
       const parsed = parseToolInputSchema<Record<string, unknown>>(

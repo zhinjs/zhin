@@ -8,7 +8,7 @@ import { fetchFeed, resolveRssConfig, type RssConfig } from './src/feed.js';
 import {
   ensureRssMemoryDb,
   getRssSubs,
-  setRssDb,
+  provideRssDb,
   RSS_SEEN_TABLE,
   RSS_SUBS_TABLE,
 } from './src/db-store.js';
@@ -52,9 +52,8 @@ export default definePlugin<RssConfig>({
     if (context.resources.has(databaseHostToken)) {
       const host = context.resources.use(databaseHostToken);
       defineRssTables(host);
-      setRssDb(host);
-      // 卸载时清掉模块级 _db，避免悬挂到上一代的 host
-      context.lifecycle.add(() => setRssDb(null));
+      // provide 自动挂 lifecycle：代际结束反注册，避免悬挂到上一代的 host
+      provideRssDb(context, host);
     } else {
       ensureRssMemoryDb();
     }

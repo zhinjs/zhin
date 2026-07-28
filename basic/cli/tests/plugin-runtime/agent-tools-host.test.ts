@@ -84,4 +84,36 @@ describe('toRegisteredAgentTool', () => {
 
     await expect(tool.execute({ text: 'hi' })).resolves.toEqual({ text: 'hi' });
   });
+
+  it('carries the ToolIndex access vocabulary onto the registered tool', () => {
+    const tool = toRegisteredAgentTool({
+      name: 'mod_kick',
+      description: 'Kick a member',
+      platforms: ['icqq'],
+      scopes: ['group'],
+      permissions: ['role(trusted)'],
+      hidden: true,
+      execute: () => 'ok',
+    });
+
+    expect(tool).toMatchObject({
+      platforms: ['icqq'],
+      scopes: ['group'],
+      permissions: ['role(trusted)'],
+      hidden: true,
+    });
+  });
+
+  it('omits access fields when the registration does not declare them', () => {
+    const tool = toRegisteredAgentTool({
+      name: 'echo',
+      description: 'echo',
+      execute: () => 'ok',
+    });
+
+    expect(tool).not.toHaveProperty('platforms');
+    expect(tool).not.toHaveProperty('scopes');
+    expect(tool).not.toHaveProperty('permissions');
+    expect(tool).not.toHaveProperty('hidden');
+  });
 });

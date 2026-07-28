@@ -8,6 +8,7 @@ export type {
   ToolSystemConfig,
   TurnContext,
   FilterContext,
+  RegisteredAgentTool,
 } from './contracts.js';
 
 export type { ResolvedToolsForTurn } from './deferred-resolution.js';

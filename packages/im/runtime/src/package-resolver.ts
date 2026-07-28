@@ -68,25 +68,25 @@ export class NodePackageResolver implements PackageResolver {
   }
 
   async resolve(request: string, from: ResolvedPackage): Promise<ResolvedPackage> {
-    // 本地路径（./plugins/foo）：monorepo 本地插件目录，相对声明包根解析，
-    // 跳过依赖声明检查（目录即声明，不入 node_modules）
-    if (request.startsWith('./')) {
-      const packageRoot = join(from.root, request);
-      if (await exists(join(packageRoot, 'package.json'))) {
-        return this.#readPackage(packageRoot, 'local');
-      }
-      throw new PackageResolutionError(`Cannot resolve ${request} from ${from.name}`, request);
-    }
-    const specification = declaredDependency(request, from.packageJson);
-    const workspace = this.#workspaceByName.get(request);
-    if (specification.startsWith('workspace:')) {
-      if (workspace) return workspace;
-      // Examples live outside the monorepo packages/plugins scan roots; pnpm still
-      // links workspace:* into node_modules, so fall through before failing.
-    } else if (workspace) {
-      return workspace;
-    }
+    // 解析管线（按序短路，任一步命中即返回）：
+    //
+    // 1. 本地路径（'./' 开头）：monorepo 本地插件目录，相对声明包根解析。
+    //    目录即声明——跳过依赖声明检查，也不入 node_modules。
+    if (request.startsWith('./')) return this.#resolveLocal(request, from);
 
+    // 2. 声明检查（仅包名引用），按声明位置分级：
+    //    - dependencies / optionalDependencies：硬要求，引用必须能在此声明；
+    //    - peerDependencies：宽松声明——允许未安装，解析失败由引用方 optional 容错；
+    //    - 三者皆无：拒绝（zhin manifest 引用必须可追溯到包依赖声明）。
+    const specification = declaredDependency(request, from.packageJson);
+
+    // 3. workspace byName：packages/* + plugins/* 顶层扫描结果优先命中。
+    //    'workspace:*' 未命中时继续走 node_modules——examples 等在扫描面之外，
+    //    但 pnpm 仍会把 workspace:* 链接进 node_modules。
+    const workspace = this.#workspaceByName.get(request);
+    if (workspace) return workspace;
+
+    // 4. node_modules 上溯：从声明包根逐级向上查找。
     let current = from.root;
     while (true) {
       const packageRoot = join(current, 'node_modules', ...request.split('/'));
@@ -103,6 +103,14 @@ export class NodePackageResolver implements PackageResolver {
         : `Cannot resolve ${request} from ${from.name}`,
       request,
     );
+  }
+
+  async #resolveLocal(request: string, from: ResolvedPackage): Promise<ResolvedPackage> {
+    const packageRoot = join(from.root, request);
+    if (await exists(join(packageRoot, 'package.json'))) {
+      return this.#readPackage(packageRoot, 'local');
+    }
+    throw new PackageResolutionError(`Cannot resolve ${request} from ${from.name}`, request);
   }
 
   async #readPackage(
@@ -130,8 +138,8 @@ function declaredDependency(request: string, pkg: PackageJson): string {
   const specification = (
     pkg.dependencies?.[request]
     ?? pkg.optionalDependencies?.[request]
-    // 可选 peer 同样是合法声明：
-    // 未安装时 resolve 会以 'Cannot resolve' 失败，由 reference.optional 容错
+    // peerDependencies 是宽松声明：允许未安装。未安装时 resolve 抛
+    // PackageResolutionError，由引用方的 optional 标记统一容错。
     ?? pkg.peerDependencies?.[request]
   );
   if (!specification) {

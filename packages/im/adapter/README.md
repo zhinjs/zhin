@@ -16,6 +16,15 @@ export default defineAdapter({
 本包只依赖 Kernel 与 Feature Kit，不包含具体平台 SDK。生产 manifest 指向
 `lib/provider.js`；开发时可通过 conditional export 读取源码。
 
+## Endpoint 生命周期基座（createEndpointLifecycle）
+
+WS/SSE 类端点的 start/stop/重连/心跳统一走 `createEndpointLifecycle`
+（`src/endpoint-lifecycle.ts`），不要手写 `#started`/`#scheduleReconnect` 状态机——
+napcat/milky/onebot11/onebot12/satori 已迁移（各自曾独立犯过同一个 start 失败竞态）。
+基座内置：start 失败复位不武装重连、仅曾 open 才按退避重连（指数+jitter 可配）、
+stop 主动断开不重连、心跳 PONG 看门狗、定时器集中清理、陈旧 socket 事件防叠套。
+迁移指引见该文件 JSDoc。
+
 ## Adapter ↔ Endpoint：固定 1 对多
 
 一个 adapter 插件实例固定对应一到多个 endpoint：

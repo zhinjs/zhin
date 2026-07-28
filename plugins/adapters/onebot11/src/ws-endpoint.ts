@@ -2,8 +2,12 @@
  * OneBot11 WS client endpoint — outbound connect to OneBot implementation.
  */
 import WebSocket from 'ws';
-import { clearInterval, clearTimeout, setTimeout } from 'node:timers';
-import type { EndpointInstance } from '@zhin.js/adapter';
+import {
+  createEndpointLifecycle,
+  type EndpointConnectHandle,
+  type EndpointInstance,
+  type EndpointLifecycle,
+} from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
@@ -24,7 +28,6 @@ import {
   callOneBot11WsAction,
   handleOneBot11WsMessage,
   rejectAllPending,
-  startOneBot11Heartbeat,
 } from './ws-transport.js';
 import {
   type OneBot11PendingAction,
@@ -46,34 +49,37 @@ export interface OneBot11WsEndpointOptions {
 
 export class OneBot11WsEndpoint implements EndpointInstance {
   readonly #options: OneBot11WsEndpointOptions;
+  readonly #lifecycle: EndpointLifecycle;
   #ws?: OneBot11WsSocket;
-  #reconnectTimer?: NodeJS.Timeout;
-  #heartbeatTimer?: NodeJS.Timeout;
   #requestId = { value: 0 };
   #pending = new Map<string, OneBot11PendingAction>();
   #open = false;
-  #started = false;
-  #stopping = false;
   #unregisterAgent?: () => void;
 
   constructor(options: OneBot11WsEndpointOptions) {
     this.#options = options;
+    const { config } = options;
+    this.#lifecycle = createEndpointLifecycle({
+      name: config.name,
+      reconnect: {
+        initialIntervalMs: config.reconnect_interval,
+        // 固定间隔（multiplier 1、无抖动），对齐旧 reconnect_interval 语义
+        multiplier: 1,
+        maxIntervalMs: config.reconnect_interval,
+        jitterMs: 0,
+      },
+      heartbeat: { intervalMs: config.heartbeat_interval },
+    });
   }
 
   async start(): Promise<void> {
-    if (this.#started) return;
-    this.#started = true;
-    this.#stopping = false;
+    if (this.#lifecycle.started) return;
+    // agent 注册/反注册是适配器专有依赖，留在适配器侧（见 endpoint-lifecycle 迁移指引）
     this.#unregisterAgent = registerOnebot11AgentEndpoint(this.#options.config.name, this);
     try {
-      await this.#connect();
+      await this.#lifecycle.start((handle) => this.#connect(handle));
     } catch (err) {
-      // start 失败必须清理现场，避免幽灵重连 / #started 残留 / agent 注册泄漏
-      this.#started = false;
-      if (this.#reconnectTimer) {
-        clearTimeout(this.#reconnectTimer);
-        this.#reconnectTimer = undefined;
-      }
+      // start 失败必须清理现场（状态复位由基座保证），避免 agent 注册泄漏
       if (this.#ws) {
         try {
           this.#ws.close();
@@ -98,28 +104,12 @@ export class OneBot11WsEndpoint implements EndpointInstance {
 
   async stop(): Promise<void> {
     this.#open = false;
-    this.#stopping = true;
-    this.#started = false;
+    // 基座负责：清重连/心跳定时器、强关 ws、唤醒 stop-during-connect 竞态
+    await this.#lifecycle.stop();
     this.#unregisterAgent?.();
     this.#unregisterAgent = undefined;
-    if (this.#reconnectTimer) {
-      clearTimeout(this.#reconnectTimer);
-      this.#reconnectTimer = undefined;
-    }
-    if (this.#heartbeatTimer) {
-      clearInterval(this.#heartbeatTimer);
-      this.#heartbeatTimer = undefined;
-    }
     rejectAllPending(this.#pending);
-    if (this.#ws) {
-      try {
-        this.#ws.close();
-      } catch {
-        /* ignore */
-      }
-      this.#ws = undefined;
-    }
-    logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
+    this.#ws = undefined;
   }
 
   async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
@@ -177,7 +167,7 @@ export class OneBot11WsEndpoint implements EndpointInstance {
     });
   }
 
-  async #connect(): Promise<void> {
+  async #connect(handle: EndpointConnectHandle): Promise<void> {
     const { url, headers, safeUrl } = buildWsConnectOptions(this.#options.config);
     const create = this.#options.createWebSocket
       ?? ((connectUrl: string, options: OneBot11WsCreateOptions) =>
@@ -185,14 +175,19 @@ export class OneBot11WsEndpoint implements EndpointInstance {
 
     await new Promise<void>((resolve, reject) => {
       let settled = false;
-      let opened = false;
       const ws = create(url, { headers });
       this.#ws = ws;
+      handle.onForceClose(() => {
+        try {
+          ws.close();
+        } catch {
+          /* ignore */
+        }
+      });
 
       ws.on('open', () => {
         if (settled) return;
         settled = true;
-        opened = true;
         if (!this.#options.config.access_token) {
           logger.warn(formatCompact({
             endpoint: this.#options.config.name,
@@ -205,13 +200,7 @@ export class OneBot11WsEndpoint implements EndpointInstance {
           mode: 'ws',
           url: safeUrl,
         }));
-        this.#heartbeatTimer = this.#stopping
-          ? this.#heartbeatTimer
-          : startOneBot11Heartbeat(
-            this.#ws,
-            this.#options.config.heartbeat_interval,
-            this.#heartbeatTimer,
-          );
+        this.#lifecycle.startHeartbeat(() => this.#ws?.ping?.());
         resolve();
       });
 
@@ -235,20 +224,13 @@ export class OneBot11WsEndpoint implements EndpointInstance {
           : codeNum === 1006
             ? ' [异常关闭]'
             : '';
-        logger.warn(formatCompact({
-          op: 'disconnect',
-          endpoint: this.#options.config.name,
-          code: codeNum,
-          error: `${reasonStr || 'closed'}${codeHint}`,
-          reconnect_ms: this.#options.config.reconnect_interval,
-        }));
         if (!settled) {
           settled = true;
           reject(new Error(`OneBot11 WS 关闭: ${codeNum} ${reasonStr}`));
         }
-        // 仅在曾成功 open 的连接上调度重连；初始连接失败由 start() 的 catch 清理，
-        // 避免在 #started 复位前武装重连定时器产生僵尸连接。
-        if (opened) this.#scheduleReconnect();
+        // 断开日志与重连武装均由基座负责；仅曾 open 的连接才会武装重连，
+        // 初始连接失败由 start() 的拒绝路径复位，不产生僵尸重连。
+        handle.notifyClosed(`OneBot11 WS 关闭: ${codeNum} ${reasonStr || 'closed'}${codeHint}`);
       });
 
       ws.on('error', (err) => {
@@ -265,22 +247,5 @@ export class OneBot11WsEndpoint implements EndpointInstance {
         }
       });
     });
-  }
-
-  #scheduleReconnect(): void {
-    if (this.#stopping || !this.#started || this.#reconnectTimer) return;
-    const delay = this.#options.config.reconnect_interval;
-    this.#reconnectTimer = setTimeout(() => {
-      this.#reconnectTimer = undefined;
-      if (this.#stopping || !this.#started) return;
-      void this.#connect().catch((err) => {
-        logger.warn(formatCompact({
-          op: 'reconnect',
-          endpoint: this.#options.config.name,
-          ok: false,
-          error: err instanceof Error ? err.message : String(err),
-        }));
-      });
-    }, delay);
   }
 }

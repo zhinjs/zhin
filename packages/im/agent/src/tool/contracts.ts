@@ -7,6 +7,21 @@
 
 import type { AgentTool } from '@zhin.js/ai';
 import type { Message } from '@zhin.js/core';
+import type { ToolScope } from '../orchestrator/types.js';
+
+/**
+ * Tool registered on `ZhinAgent.registerTool` (runtime agent tool directory).
+ * Extends the IM-agnostic {@link AgentTool} with the same per-message access
+ * vocabulary as `@zhin.js/tool` ToolIndex descriptors
+ * (platforms / scopes / permissions / hidden). `RegisteredToolSource`
+ * enforces it via Core `canAccessTool`, so both registration paths share
+ * one access predicate (see docs/advanced/agent-authoring.md).
+ */
+export interface RegisteredAgentTool extends AgentTool {
+  platforms?: string[];
+  scopes?: ToolScope[];
+  hidden?: boolean;
+}
 
 export interface TurnContext {
   message: Message;

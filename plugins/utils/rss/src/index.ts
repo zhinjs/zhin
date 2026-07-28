@@ -10,6 +10,7 @@ export {
   getRssDb,
   getRssSeen,
   getRssSubs,
+  provideRssDb,
   setRssDb,
   ensureRssMemoryDb,
   resetRssDb,

@@ -412,6 +412,23 @@ describe('satori webhook auth', () => {
 });
 
 describe('satori ws heartbeat', () => {
+  it('settles start() silently when stop() races the initial connect', async () => {
+    const endpoint = new SatoriWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      config: baseConfig,
+      createWebSocket: () => createMockSocket(), // 永不 open，模拟连接挂起
+    });
+
+    const startPromise = endpoint.start();
+    await endpoint.stop();
+    // stop-during-connect 视为主动停止：start() 静默 resolve，不拒绝、不武装重连
+    await expect(startPromise).resolves.toBeUndefined();
+  });
+
   it('closes the socket after two heartbeat rounds without PONG', async () => {
     vi.useFakeTimers();
     const socket = createMockSocket();

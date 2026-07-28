@@ -1,6 +1,7 @@
 export * from './capability.js';
 export * from './dispose.js';
 export * from './identity.js';
+export * from './generation-store.js';
 export * from './handoff.js';
 export * from './plugin.js';
 export * from './root-controller.js';

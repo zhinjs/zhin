@@ -3,6 +3,7 @@ import type { Tool, Message } from '../orchestrator/types.js';
 import type { SkillRegistry } from '../orchestrator/skill-registry.js';
 import type { ZhinAgentConfig } from '../config/zhin-agent-config.js';
 import type { UserProfileStore } from '../user-profile.js';
+import type { RegisteredAgentTool } from './contracts.js';
 import {
   createDefaultToolSources,
   defaultToolSystem,
@@ -16,7 +17,7 @@ export interface CollectRuntimeToolsOptions {
   externalTools: Tool[];
   config: Required<ZhinAgentConfig>;
   skillRegistry: SkillRegistry | null;
-  externalRegistered: Map<string, AgentTool>;
+  externalRegistered: Map<string, RegisteredAgentTool>;
   sessionId: string;
   userId: string;
   imTranscriptStore: ImTranscriptStore | MemoryImTranscriptStore;

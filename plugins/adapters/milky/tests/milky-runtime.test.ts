@@ -702,7 +702,7 @@ describe('milky sse lifecycle', () => {
     await endpoint.stop();
   });
 
-  it('rejects start when the stream is stopped during connect', async () => {
+  it('resolves start when the stream is stopped during connect (主动停止不算失败)', async () => {
     let resolveClosed!: () => void;
     const closed = new Promise<void>((resolve) => {
       resolveClosed = resolve;
@@ -723,8 +723,9 @@ describe('milky sse lifecycle', () => {
       }),
     });
 
-    const assertion = expect(endpoint.start()).rejects.toThrow('stopped during connect');
+    // 基座语义：stop-during-connect 静默 settle（主动停止），start 不再 reject
+    const startPromise = endpoint.start();
     await endpoint.stop();
-    await assertion;
+    await expect(startPromise).resolves.toBeUndefined();
   });
 });

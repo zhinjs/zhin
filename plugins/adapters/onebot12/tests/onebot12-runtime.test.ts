@@ -498,6 +498,20 @@ describe('onebot12 ws lifecycle', () => {
     expect(creates).toBe(1);
   });
 
+  it('settles start() silently when stop() races the initial connect', async () => {
+    const endpoint = new OneBot12WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createWebSocket: () => createMockWs(), // 永不 open，模拟连接挂起
+    });
+
+    const startPromise = endpoint.start();
+    await endpoint.stop();
+    // stop-during-connect 视为主动停止：start() 静默 resolve，不拒绝、不武装重连
+    await expect(startPromise).resolves.toBeUndefined();
+  });
+
   it('reconnects only after an established connection closes', async () => {
     const sockets: Array<ReturnType<typeof createMockWs>> = [];
     const endpoint = new OneBot12WsEndpoint({

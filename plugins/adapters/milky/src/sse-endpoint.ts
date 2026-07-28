@@ -1,7 +1,12 @@
 /**
  * Milky SSE client endpoint — GET text/event-stream on /event.
  */
-import type { EndpointInstance } from '@zhin.js/adapter';
+import {
+  createEndpointLifecycle,
+  type EndpointConnectHandle,
+  type EndpointInstance,
+  type EndpointLifecycle,
+} from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
@@ -47,28 +52,33 @@ export interface MilkySseEndpointOptions {
 export class MilkySseEndpoint implements EndpointInstance {
   readonly #options: MilkySseEndpointOptions;
   readonly #callApi: typeof callApi;
+  readonly #lifecycle: EndpointLifecycle;
   #stream?: SseClientHandle;
-  #reconnectTimer?: NodeJS.Timeout;
   #open = false;
-  #started = false;
-  #stopping = false;
   #unregisterAgent?: () => void;
 
   constructor(options: MilkySseEndpointOptions) {
     this.#options = options;
     this.#callApi = options.callApi ?? callApi;
+    this.#lifecycle = createEndpointLifecycle({
+      name: options.config.name,
+      // reconnect_interval 旧语义为固定间隔：multiplier 1 + 无 jitter + 不封顶
+      reconnect: {
+        initialIntervalMs: options.config.reconnect_interval,
+        multiplier: 1,
+        maxIntervalMs: Number.MAX_SAFE_INTEGER,
+        jitterMs: 0,
+      },
+    });
   }
 
   async start(): Promise<void> {
-    if (this.#started) return;
-    this.#started = true;
-    this.#stopping = false;
+    if (this.#lifecycle.started) return;
     this.#unregisterAgent = registerMilkyAgentEndpoint(this.#options.config.name, this);
     try {
-      await this.#connect();
+      await this.#lifecycle.start((handle) => this.#connect(handle));
     } catch (err) {
-      // 与 WS 对齐：start 失败复位状态并反注册，允许重试
-      this.#started = false;
+      // 与 WS 对齐：start 失败复位由基座保证；agent 反注册留在适配器侧，允许重试
       this.#unregisterAgent?.();
       this.#unregisterAgent = undefined;
       throw err;
@@ -85,17 +95,11 @@ export class MilkySseEndpoint implements EndpointInstance {
 
   async stop(): Promise<void> {
     this.#open = false;
-    this.#stopping = true;
-    this.#started = false;
+    await this.#lifecycle.stop();
     this.#unregisterAgent?.();
     this.#unregisterAgent = undefined;
-    if (this.#reconnectTimer) {
-      clearTimeout(this.#reconnectTimer);
-      this.#reconnectTimer = undefined;
-    }
     this.#stream?.close();
     this.#stream = undefined;
-    logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name, mode: 'sse' }));
   }
 
   async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
@@ -242,7 +246,7 @@ export class MilkySseEndpoint implements EndpointInstance {
     });
   }
 
-  async #connect(): Promise<void> {
+  async #connect(handle: EndpointConnectHandle): Promise<void> {
     const { url, headers, safeUrl } = buildSseConnectOptions(this.#options.config);
     const create = this.#options.createSseStream ?? ((opts) => openSseStream(opts));
 
@@ -276,25 +280,29 @@ export class MilkySseEndpoint implements EndpointInstance {
         },
       });
       this.#stream = stream;
-      void stream.closed.then(() => {
-        if (this.#stopping) {
-          if (!settled) {
-            settled = true;
-            reject(new Error('stopped during connect'));
-          }
-          return;
+      handle.onForceClose(() => {
+        try {
+          stream.close();
+        } catch {
+          /* ignore */
         }
-        logger.warn(formatCompact({
-          op: 'disconnect',
-          endpoint: this.#options.config.name,
-          mode: 'sse',
-          reconnect_ms: this.#options.config.reconnect_interval,
-        }));
+      });
+      void stream.closed.then(() => {
+        // stop-during-connect 竞态由基座静默 settle（主动停止不算失败），此处仅对运行期断开告警
+        if (this.#lifecycle.state !== 'stopped') {
+          logger.warn(formatCompact({
+            op: 'disconnect',
+            endpoint: this.#options.config.name,
+            mode: 'sse',
+            reconnect_ms: this.#options.config.reconnect_interval,
+          }));
+        }
+        // 基座语义：仅曾 open 的连接才武装重连；初始连接失败由 start() 的 catch 复位
+        handle.notifyClosed(new Error('Milky SSE closed'));
         if (!settled) {
           settled = true;
           reject(new Error('Milky SSE closed before open'));
         }
-        this.#scheduleReconnect();
       });
     });
   }
@@ -311,22 +319,5 @@ export class MilkySseEndpoint implements EndpointInstance {
         error: error instanceof Error ? error.message : String(error),
       }));
     }
-  }
-
-  #scheduleReconnect(): void {
-    if (this.#stopping || !this.#started || this.#reconnectTimer) return;
-    const delay = this.#options.config.reconnect_interval;
-    this.#reconnectTimer = setTimeout(() => {
-      this.#reconnectTimer = undefined;
-      void this.#connect().catch((err) => {
-        logger.warn(formatCompact({
-          op: 'reconnect',
-          endpoint: this.#options.config.name,
-          mode: 'sse',
-          ok: false,
-          error: err instanceof Error ? err.message : String(err),
-        }));
-      });
-    }, delay);
   }
 }

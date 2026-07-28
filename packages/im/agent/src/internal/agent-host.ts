@@ -18,6 +18,7 @@ import type { HttpApprovalAdapter } from '../session/http-approval-adapter.js';
 import type { EventSystem } from '../event/event-system.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import type { ToolCatalogItem } from '../tool-catalog/types.js';
+import type { RegisteredAgentTool } from '../tool/contracts.js';
 import type { DeferredWorkerResult, DeferredWorkerRunner } from '../deferred-worker-runner.js';
 import type {
   HostEventEmitter,
@@ -51,7 +52,7 @@ export interface ZhinAgentPrivate {
   readonly contextRepository: ContextRepository;
   readonly imTranscriptStore: ImTranscriptStore;
   readonly memory: ConversationMemory;
-  readonly externalTools: Map<string, AgentTool>;
+  readonly externalTools: Map<string, RegisteredAgentTool>;
   readonly userProfiles: UserProfileStore;
   readonly rateLimiter: RateLimiter;
   readonly subagentSystem: SubagentSystem | null;

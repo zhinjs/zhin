@@ -19,6 +19,8 @@ interface AuthoringToolLike {
   readonly inputSchema?: unknown;
   readonly keywords?: readonly string[];
   readonly tags?: readonly string[];
+  readonly platforms?: readonly string[];
+  readonly scopes?: readonly ('private' | 'group' | 'channel')[];
   readonly permissions?: readonly string[];
   readonly hidden?: boolean;
   execute(input: never, ctx?: unknown): unknown | Promise<unknown>;
@@ -43,6 +45,8 @@ export function registerLotteryAgentTools(host: AgentToolsHost): () => void {
     source: 'lottery',
     ...(tool.keywords ? { keywords: tool.keywords } : {}),
     ...(tool.tags ? { tags: tool.tags } : {}),
+    ...(tool.platforms ? { platforms: tool.platforms } : {}),
+    ...(tool.scopes ? { scopes: tool.scopes } : {}),
     ...(tool.permissions ? { permissions: tool.permissions } : {}),
     ...(tool.hidden !== undefined ? { hidden: tool.hidden } : {}),
     execute: (input) => tool.execute(input as never, { pluginName: 'lottery', runtimeName: name }),

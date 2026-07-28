@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ToolSystem, createDefaultToolSources } from '../../src/tool/tool-system.js';
-import { DedupeToolFilter, ExternalToolSource } from '../../src/tool/sources.js';
+import { DedupeToolFilter, ExternalToolSource, RegisteredToolSource } from '../../src/tool/sources.js';
+import type { RegisteredAgentTool } from '../../src/tool/contracts.js';
 import type { AgentTool } from '@zhin.js/ai';
 import { createSyntheticMessage } from '@zhin.js/core';
 import type { Tool } from '../../src/orchestrator/types.js';
@@ -92,5 +93,82 @@ describe('ToolSystem', () => {
 
     expect(source.collectTools({ ...base, message: trusted })).toHaveLength(1);
     expect(source.collectTools({ ...base, message: user })).toHaveLength(0);
+  });
+
+  describe('RegisteredToolSource', () => {
+    const base = {
+      content: '',
+      sessionId: 's1',
+      userId: 'u1',
+      config: {} as never,
+      skillRegistry: null,
+      externalTools: [],
+      imTranscriptStore: {} as never,
+      userProfiles: {} as never,
+    };
+    const trustedGroup = createSyntheticMessage({
+      adapter: 'qq',
+      endpoint: 'bot',
+      sender: { id: 'u1', isTrusted: true },
+      channel: { type: 'group', id: 'g1' },
+    });
+    const plainGroup = createSyntheticMessage({
+      adapter: 'qq',
+      endpoint: 'bot',
+      sender: { id: 'u2' },
+      channel: { type: 'group', id: 'g1' },
+    });
+
+    function sourceOf(...tools: RegisteredAgentTool[]): RegisteredToolSource {
+      return new RegisteredToolSource(new Map(tools.map((tool) => [tool.name, tool])));
+    }
+
+    function tool(partial: Partial<RegisteredAgentTool> & { name: string }): RegisteredAgentTool {
+      return {
+        description: 'd',
+        parameters: { type: 'object', properties: {} },
+        execute: async () => 'ok',
+        ...partial,
+      };
+    }
+
+    it('keeps unconstrained registered tools for every message', () => {
+      const source = sourceOf(tool({ name: 'echo' }));
+      expect(source.collectTools({ ...base, message: plainGroup })).toHaveLength(1);
+    });
+
+    it('drops hidden registered tools from the turn catalog', () => {
+      const source = sourceOf(tool({ name: 'secret', hidden: true }));
+      expect(source.collectTools({ ...base, message: trustedGroup })).toHaveLength(0);
+    });
+
+    it('applies the same canAccessTool permit semantics as external tools', () => {
+      const source = sourceOf(tool({ name: 'moderate', permissions: ['role(trusted)'] }));
+      expect(source.collectTools({ ...base, message: trustedGroup })).toHaveLength(1);
+      expect(source.collectTools({ ...base, message: plainGroup })).toHaveLength(0);
+    });
+
+    it('enforces platforms and scopes against the turn message', () => {
+      const source = sourceOf(
+        tool({ name: 'qq_only', platforms: ['qq'] }),
+        tool({ name: 'discord_only', platforms: ['discord'] }),
+        tool({ name: 'private_only', scopes: ['private'] }),
+      );
+      const names = source
+        .collectTools({ ...base, message: plainGroup })
+        .map((t) => t.name);
+      expect(names).toEqual(['qq_only']);
+    });
+
+    it('drops constrained tools when no message context is available', () => {
+      const source = sourceOf(
+        tool({ name: 'echo' }),
+        tool({ name: 'scoped', scopes: ['group'] }),
+      );
+      const names = source
+        .collectTools({ ...base, message: undefined as never })
+        .map((t) => t.name);
+      expect(names).toEqual(['echo']);
+    });
   });
 });

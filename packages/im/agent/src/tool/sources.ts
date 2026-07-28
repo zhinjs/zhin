@@ -12,7 +12,7 @@ import type { UserProfileStore } from '../user-profile.js';
 import { buildImTranscriptQuery } from '../session/session-io.js';
 import { sharedToolSelection } from '../orchestrator/tool-selection.js';
 import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from '../reserved-tools.js';
-import type { ToolFilter, ToolSource } from './contracts.js';
+import type { RegisteredAgentTool, ToolFilter, ToolSource } from './contracts.js';
 const logger = getLogger('ToolSystem');
 
 export interface CollectToolsContext {
@@ -23,7 +23,7 @@ export interface CollectToolsContext {
   config: Required<ZhinAgentConfig>;
   skillRegistry: SkillRegistry | null;
   externalTools: Tool[];
-  externalRegistered: Map<string, AgentTool>;
+  externalRegistered: Map<string, RegisteredAgentTool>;
   imTranscriptStore: ImTranscriptStore | MemoryImTranscriptStore;
   userProfiles: UserProfileStore;
   mcpTools?: AgentTool[];
@@ -63,10 +63,21 @@ export class RegisteredToolSource implements ToolSource {
   name = 'registered';
   priority = 150;
 
-  constructor(private readonly externalRegistered: Map<string, AgentTool>) {}
+  constructor(private readonly externalRegistered: Map<string, RegisteredAgentTool>) {}
 
-  collectTools(_context: CollectToolsContext): AgentTool[] {
-    return [...this.externalRegistered.values()];
+  /**
+   * Same per-message access predicate as {@link ExternalToolSource} — one
+   * `canAccessTool` for both registration paths; `hidden` tools stay
+   * executable by name but are never offered to the model.
+   */
+  collectTools(context: CollectToolsContext): AgentTool[] {
+    const tools: AgentTool[] = [];
+    for (const tool of this.externalRegistered.values()) {
+      if (tool.hidden) continue;
+      if (!canAccessTool(tool as unknown as CoreTool, context.message)) continue;
+      tools.push(tool);
+    }
+    return tools;
   }
 }
 

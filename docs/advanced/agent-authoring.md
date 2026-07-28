@@ -50,6 +50,19 @@ Zhin **故意保留两条技能发现路径**，便于渐进迁移：
 
 工作区路径（`cwd/skills/`、`~/.zhin/skills/`、`.agents/skills/`）与插件包 `skills/` 仍由 `discoverWorkspaceSkills` 支持，与 `agent/` 无关。
 
+## 工具目录：两条注册路径与统一准入（Plugin Runtime）
+
+Runtime 下插件 agent 工具进入 turn 的 deferred catalog 有**两条职责不同的路径**，刻意保留：
+
+| 路径 | 注册方式 | 语义 |
+|------|----------|------|
+| `tools/*.ts` + `defineAgentTool`（`@zhin.js/tool`） | 静态约定 → `ToolIndex` 投影 → `CapabilityIngress.read` 逐 turn 绑定 | 声明式、owner 作用域可见性，按 message 过滤（`hidden` + Core `canAccessTool`） |
+| `agentToolsHostToken.register`（`@zhin.js/plugin-runtime`） | `setup()` 里命令式注册 → `ZhinAgent.registerTool` | 动态注册、generation 生命周期，可按运行时条件决定注册与否 |
+
+**统一准入**：两条路径共用一套访问词汇（`platforms` / `scopes` / `permissions` / `hidden`），由 ToolSystem 的 ToolSource 层经 Core `canAccessTool()` 逐 message 判定（`ExternalToolSource` / `RegisteredToolSource` 同一 predicate），最终汇入同一个 deferred catalog。`CapabilityIngress` 的按 message 过滤语义不变（visibility 早筛 + turn 作用域 execute 绑定）。
+
+**名字冲突**：`ToolIndex` 同 owner+name 重复 → 抛错；`ZhinAgent.registerTool` 同名 → 覆盖并 warn；跨路径同名 → 逐 turn external 工具（路径①）先于 registered 工具收集，`DedupeToolFilter` 保留先收集者，即路径①遮蔽路径②同名工具。
+
 ## Adapter hybrid (platform tools + scene tools)
 
 Platform adapters split responsibilities:

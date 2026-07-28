@@ -32,6 +32,7 @@ import type { SkillSystem } from '../skill/skill-system.js';
 import type { AgentOrchestrator } from '../orchestrator/index.js';
 import type { AgentCore } from '../core/agent-core.js';
 import type { ToolSystem } from '../tool/tool-system.js';
+import type { RegisteredAgentTool } from '../tool/contracts.js';
 import type { ContextSystem } from '../context/context-system.js';
 import { type MemorySystem, createMemorySystemForHost } from '../memory/memory-system.js';
 import type { SessionSystem } from '../session/session-system.js';
@@ -123,7 +124,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   private contextRepository: ContextRepository;
   private imTranscriptStore: ImTranscriptStore;
   private memory: ConversationMemory;
-  private externalTools: Map<string, AgentTool> = new Map();
+  private externalTools: Map<string, RegisteredAgentTool> = new Map();
   private userProfiles: UserProfileStore;
   private rateLimiter: RateLimiter;
   private subagentSystem: SubagentSystem | null = null;
@@ -426,13 +427,16 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     return this.userProfiles;
   }
 
-  registerTool(tool: AgentTool): () => void {
+  registerTool(tool: RegisteredAgentTool): () => void {
+    if (this.externalTools.has(tool.name)) {
+      logger.warn(`registerTool: overwriting existing tool "${tool.name}" (source=${tool.source ?? '-'})`);
+    }
     this.externalTools.set(tool.name, tool);
     return () => { this.externalTools.delete(tool.name); };
   }
 
   /** Tools registered via registerTool (e.g. Runtime plugin agent tools) — for introspection. */
-  listRegisteredTools(): readonly AgentTool[] {
+  listRegisteredTools(): readonly RegisteredAgentTool[] {
     return [...this.externalTools.values()];
   }
 

@@ -192,22 +192,13 @@ export class ProjectGraphService {
     try {
       return await this.#resolver.resolve(reference.package, pkg);
     } catch (error) {
-      if (
-        featureCarrier
-        && error instanceof PackageResolutionError
-        && (
-          error.message.includes('does not declare it as a package dependency')
-          || error.message.startsWith('Cannot resolve')
-          || error.message.includes('is missing')
-        )
-      ) {
-        return this.#resolver.resolve(reference.package, featureCarrier);
-      }
-      if (
-        reference.optional
-        && error instanceof PackageResolutionError
-        && error.message.startsWith('Cannot resolve')
-      ) return undefined;
+      // 非解析类错误（损坏的 package.json 等）不回退、不容错，直接上抛。
+      if (!(error instanceof PackageResolutionError)) throw error;
+      // carrier 回退：继承自 @zhin.js/core 的 Feature 引用声明在 carrier 上，
+      // 从引用包解析失败（未声明 / 未安装 / workspace 链接缺失）时改从 carrier 解析。
+      if (featureCarrier) return resolveReference(this.#resolver, featureCarrier, reference);
+      // 无 carrier 时按统一规则处理：optional 引用容错，其余上抛。
+      if (reference.optional) return undefined;
       throw error;
     }
   }
@@ -264,11 +255,9 @@ async function resolveReference(
   try {
     return await resolver.resolve(reference.package, from);
   } catch (error) {
-    if (
-      reference.optional
-      && error instanceof PackageResolutionError
-      && error.message.startsWith('Cannot resolve')
-    ) return undefined;
+    // optional 引用对所有 PackageResolutionError 统一容错（未声明 / 未安装 /
+    // workspace 链接缺失）；非解析类错误（损坏的 package.json 等）继续上抛。
+    if (reference.optional && error instanceof PackageResolutionError) return undefined;
     throw error;
   }
 }
