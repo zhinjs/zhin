@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { createEndpointRuntimeState } from '@zhin.js/adapter';
+import { createEndpointRuntimeState, listEndpointManagementCapabilities } from '@zhin.js/adapter';
 import { kookRuntimeStateToken } from '../src/kook-runtime-state.js';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import { messageGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
@@ -102,6 +102,17 @@ function createMockClient(): KookClientTransport & {
       revoke: vi.fn(async () => true),
       setNickname: vi.fn(async () => true),
     })),
+    getGuildList: vi.fn(async () => [
+      { id: '9876543210987654321', name: 'Guild' },
+    ]),
+    getChannelList: vi.fn(async (guildId: string) => [
+      { id: 'chan-text', name: 'general', type: 1, is_category: false },
+      { id: 'chan-voice', name: 'Voice', type: 2, is_category: false },
+      { id: 'cat-1', name: 'Category', type: 1, is_category: true },
+    ]),
+    getGuildUserList: vi.fn(async (guildId: string) => [
+      { id: 'user-1', username: 'alice', nickname: 'Alice', online: true },
+    ]),
   };
 }
 
@@ -389,5 +400,69 @@ describe('kook plugin runtime adapter', () => {
 
     await endpoint.stop();
     expect(mock.init).toHaveBeenCalled();
+  });
+});
+
+
+describe('kook endpoint management', () => {
+  const GUILD_ID = '9876543210987654321';
+
+  function createManagementEndpoint(mock: KookClientTransport) {
+    return new KookWebsocketEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createClient: () => mock,
+    });
+  }
+
+  it('advertises only implemented management capabilities', async () => {
+    const endpoint = createManagementEndpoint(createMockClient());
+    await endpoint.start();
+    expect(listEndpointManagementCapabilities(endpoint)).toEqual([
+      'listGroups',
+      'listChannels',
+      'listGroupMembers',
+    ]);
+    await endpoint.stop();
+  });
+
+  it('lists guilds without losing snowflake precision', async () => {
+    const endpoint = createManagementEndpoint(createMockClient());
+    await endpoint.start();
+    // snowflake 超 Number.MAX_SAFE_INTEGER，保留原始字符串
+    await expect(endpoint.management.listGroups?.()).resolves.toEqual([
+      { group_id: GUILD_ID, name: 'Guild' },
+    ]);
+    await endpoint.stop();
+  });
+
+  it('lists only text channels with guild parent', async () => {
+    const endpoint = createManagementEndpoint(createMockClient());
+    await endpoint.start();
+    await expect(endpoint.management.listChannels?.()).resolves.toEqual([
+      {
+        id: 'chan-text',
+        name: 'general',
+        parent: { type: 'guild', id: GUILD_ID, name: 'Guild' },
+      },
+    ]);
+    await endpoint.stop();
+  });
+
+  it('lists guild members in platform shape', async () => {
+    const mock = createMockClient();
+    const endpoint = createManagementEndpoint(mock);
+    await endpoint.start();
+    await expect(endpoint.management.listGroupMembers?.(GUILD_ID)).resolves.toEqual([
+      { id: 'user-1', username: 'alice', nickname: 'Alice', online: true },
+    ]);
+    expect(mock.getGuildUserList).toHaveBeenCalledWith(GUILD_ID);
+    await endpoint.stop();
+  });
+
+  it('rejects management calls before the client connects', async () => {
+    const endpoint = createManagementEndpoint(createMockClient());
+    await expect(endpoint.management.listGroups?.()).rejects.toThrow('not connected');
   });
 });

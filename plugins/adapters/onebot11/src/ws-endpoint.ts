@@ -7,10 +7,12 @@ import {
   type EndpointConnectHandle,
   type EndpointInstance,
   type EndpointLifecycle,
+  type EndpointManagement,
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
+import { createOneBot11EndpointManagement } from './endpoint-management.js';
 import { registerOnebot11AgentEndpoint } from './onebot11-agent-deps.js';
 import {
   buildSendAction,
@@ -49,6 +51,7 @@ export interface OneBot11WsEndpointOptions {
 
 export class OneBot11WsEndpoint implements EndpointInstance {
   readonly #options: OneBot11WsEndpointOptions;
+  readonly management: EndpointManagement = createOneBot11EndpointManagement(this);
   readonly #lifecycle: EndpointLifecycle;
   #ws?: OneBot11WsSocket;
   #requestId = { value: 0 };

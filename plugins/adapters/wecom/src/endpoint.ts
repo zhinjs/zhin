@@ -43,6 +43,11 @@ export interface WecomEndpointOptions {
   readonly fetch?: WecomFetch;
 }
 
+/**
+ * 企业微信服务端 API 无 bot 群列表/群成员列表接口（客户群接口属「客户联系」
+ * 独立授权域，非 bot 社交面），好友/频道概念亦不存在；
+ * 因此本 endpoint 不暴露 EndpointManagement（Console 社交面 RPC 对该平台保持未接线）。
+ */
 export class WecomEndpoint implements EndpointInstance {
   readonly #options: WecomEndpointOptions;
   readonly #fetch: WecomFetch;

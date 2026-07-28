@@ -4,7 +4,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { EndpointInstance } from '@zhin.js/adapter';
+import type { EndpointFriend, EndpointInstance, EndpointManagement } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
@@ -19,6 +19,7 @@ import {
 import { resolveCredentials } from './login.js';
 import {
   getContextToken,
+  listContextTokenUserIds,
   restoreContextTokens,
   setContextToken,
   flushContextTokenPersist,
@@ -96,6 +97,7 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
   #mediaSweepTimer?: ReturnType<typeof setInterval>;
   #open = false;
   #started = false;
+  readonly management: EndpointManagement = createWeixinIlinkEndpointManagement(this);
 
   constructor(options: WeixinIlinkEndpointOptions) {
     this.#options = options;
@@ -108,6 +110,11 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
 
   get hasCredentials(): boolean {
     return Boolean(this.#creds?.botToken);
+  }
+
+  /** Live endpoint 名（context token 按 account 名分桶，management 推导对端用）。 */
+  get configName(): string {
+    return this.#options.config.name;
   }
 
   apiBaseUrl(): string {
@@ -516,4 +523,19 @@ export class WeixinIlinkEndpoint implements EndpointInstance {
       }
     }
   }
+}
+
+function createWeixinIlinkEndpointManagement(endpoint: WeixinIlinkEndpoint): EndpointManagement {
+  return Object.freeze<EndpointManagement>({
+    // 个人微信无群概念（listGroups/listGroupMembers 不接），也没有通讯录/资料接口。
+    // "好友"只能从会话推导：凡持有 context_token 的对端（来过消息，含重启后从磁盘恢复的）
+    // 即为可达私聊对端；昵称不可得，用 user_id 占位并在 remark 注明来源。
+    async listFriends(): Promise<readonly EndpointFriend[]> {
+      return listContextTokenUserIds(endpoint.configName).map((userId) => ({
+        user_id: userId,
+        nickname: userId,
+        remark: 'ilink: 从会话 context_token 推导，非通讯录',
+      }));
+    },
+  });
 }

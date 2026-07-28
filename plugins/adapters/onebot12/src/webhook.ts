@@ -2,11 +2,12 @@
  * OneBot12 HTTP webhook endpoint — POST inbound + api_url outbound.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { EndpointInstance } from '@zhin.js/adapter';
+import type { EndpointInstance, EndpointManagement } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
+import { createOneBot12EndpointManagement } from './endpoint-management.js';
 import {
   buildSendMessageParams,
   callOneBot12Action,
@@ -34,6 +35,7 @@ export interface OneBot12WebhookEndpointOptions {
 
 export class OneBot12WebhookEndpoint implements EndpointInstance {
   readonly #options: OneBot12WebhookEndpointOptions;
+  readonly management: EndpointManagement = createOneBot12EndpointManagement(this);
   readonly #callAction: typeof callOneBot12Action;
   #routeReleases: HttpRouteRegistration[] = [];
   #open = false;
@@ -81,18 +83,9 @@ export class OneBot12WebhookEndpoint implements EndpointInstance {
   }
 
   async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
-    const apiUrl = this.#options.config.api_url;
-    if (!apiUrl) {
-      throw new Error('OneBot12 connection:webhook requires api_url for outbound send');
-    }
     const message = formatOutboundSegments(payload);
     const params = buildSendMessageParams(target, message);
-    const resp = await this.#callAction(
-      { url: apiUrl, access_token: this.#options.config.access_token },
-      'send_message',
-      params,
-    );
-    const data = resp.data as { message_id?: string } | undefined;
+    const data = await this.callApi('send_message', params) as { message_id?: string } | undefined;
     const messageId = data?.message_id ?? '';
     logger.debug(formatCompact({
       op: 'onebot12_send',
@@ -101,6 +94,20 @@ export class OneBot12WebhookEndpoint implements EndpointInstance {
       messageId,
     }));
     return messageId;
+  }
+
+  /** Public API for management surface / callers；webhook 模式走 api_url。 */
+  async callApi(action: string, params: Record<string, unknown> = {}): Promise<unknown> {
+    const apiUrl = this.#options.config.api_url;
+    if (!apiUrl) {
+      throw new Error('OneBot12 connection:webhook requires api_url for outbound api');
+    }
+    const resp = await this.#callAction(
+      { url: apiUrl, access_token: this.#options.config.access_token },
+      action,
+      params,
+    );
+    return resp.data;
   }
 
   admit(ev: OneBot12Event): void {

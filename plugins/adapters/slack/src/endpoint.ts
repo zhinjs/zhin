@@ -3,7 +3,12 @@
  */
 import { SocketModeClient } from '@slack/socket-mode';
 import { WebClient } from '@slack/web-api';
-import type { EndpointInstance } from '@zhin.js/adapter';
+import type {
+  EndpointFriend,
+  EndpointGroup,
+  EndpointInstance,
+  EndpointManagement,
+} from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -57,9 +62,19 @@ export interface SlackWebClientLike extends SlackChatClient {
     rename(opts: { channel: string; name: string }): Promise<unknown>;
     members(opts: { channel: string }): Promise<{ members?: string[] }>;
     info(opts: { channel: string }): Promise<{ channel?: unknown }>;
+    list(opts?: {
+      types?: string;
+      limit?: number;
+      cursor?: string;
+      exclude_archived?: boolean;
+    }): Promise<{ channels?: unknown[]; response_metadata?: { next_cursor?: string } }>;
   };
   users: {
     info(opts: { user: string }): Promise<{ user?: unknown }>;
+    list(opts?: {
+      limit?: number;
+      cursor?: string;
+    }): Promise<{ members?: unknown[]; response_metadata?: { next_cursor?: string } }>;
   };
   reactions: {
     add(opts: { channel: string; timestamp: string; name: string }): Promise<unknown>;
@@ -97,6 +112,7 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
   #open = false;
   #started = false;
   #unregisterAgent?: () => void;
+  readonly management: EndpointManagement = createSlackEndpointManagement(this);
 
   constructor(options: SlackEndpointOptions) {
     this.#options = options;
@@ -439,4 +455,77 @@ function parseSendTarget(target: string): { channel: string; threadTs?: string }
     return { channel: parsed.channel, threadTs: parsed.ts };
   }
   return { channel: target };
+}
+
+/** Slack Web API 分页上限（每页 1000，cursor 翻页直到 next_cursor 为空）。 */
+const SLACK_LIST_PAGE_SIZE = 1000;
+
+function createSlackEndpointManagement(endpoint: SlackEndpoint): EndpointManagement {
+  const requireClient = (): SlackWebClientLike => {
+    const client = endpoint.client;
+    if (!client) throw new Error('Slack client not connected');
+    return client;
+  };
+  return Object.freeze<EndpointManagement>({
+    // Slack 无"群"概念：public channel 归一为 group（channel 语义由 listChannels 之外省略，
+    // Slack channel 本身就是会话载体，避免同一批数据在两个列表里重复）。
+    async listGroups(): Promise<readonly EndpointGroup[]> {
+      const client = requireClient();
+      const groups: EndpointGroup[] = [];
+      let cursor: string | undefined;
+      do {
+        const page = await client.conversations.list({
+          types: 'public_channel',
+          exclude_archived: true,
+          limit: SLACK_LIST_PAGE_SIZE,
+          ...(cursor ? { cursor } : {}),
+        });
+        for (const value of page.channels ?? []) {
+          const channel = asRecord(value);
+          const id = typeof channel.id === 'string' ? channel.id : '';
+          if (!id) continue;
+          groups.push({ group_id: id, name: String(channel.name ?? id) });
+        }
+        cursor = page.response_metadata?.next_cursor || undefined;
+      } while (cursor);
+      return groups;
+    },
+    // Slack 无"好友"概念：workspace 成员归一为 friend；nickname 取 real_name 回退 name。
+    async listFriends(): Promise<readonly EndpointFriend[]> {
+      const client = requireClient();
+      const friends: EndpointFriend[] = [];
+      let cursor: string | undefined;
+      do {
+        const page = await client.users.list({
+          limit: SLACK_LIST_PAGE_SIZE,
+          ...(cursor ? { cursor } : {}),
+        });
+        for (const value of page.members ?? []) {
+          const user = asRecord(value);
+          const id = typeof user.id === 'string' ? user.id : '';
+          if (!id || user.deleted === true) continue;
+          const profile = asRecord(user.profile);
+          friends.push({
+            user_id: id,
+            nickname: String(profile.real_name ?? user.real_name ?? user.name ?? id),
+            remark: '',
+          });
+        }
+        cursor = page.response_metadata?.next_cursor || undefined;
+      } while (cursor);
+      return friends;
+    },
+    // conversations.members 只回 user id 列表（平台形状），逐 user 拉 profile 成本由调用方决定。
+    async listGroupMembers(groupId: string): Promise<readonly string[]> {
+      const client = requireClient();
+      const result = await client.conversations.members({ channel: groupId });
+      return result.members ?? [];
+    },
+  });
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object'
+    ? value as Record<string, unknown>
+    : {};
 }

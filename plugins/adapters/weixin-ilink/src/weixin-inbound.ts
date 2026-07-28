@@ -137,6 +137,20 @@ export function getContextToken(accountId: string, userId: string): string | und
 }
 
 /**
+ * List all peer userIds that hold a context token for the given account
+ * (memory map, already merged with the disk-backed file on restore).
+ * Personal WeChat has no contact/profile API; this is the only peer catalog.
+ */
+export function listContextTokenUserIds(accountId: string): string[] {
+  const prefix = `${accountId}:`;
+  const ids: string[] = [];
+  for (const k of contextTokenStore.keys()) {
+    if (k.startsWith(prefix)) ids.push(k.slice(prefix.length));
+  }
+  return ids;
+}
+
+/**
  * Find all accountIds that have an active contextToken for the given userId.
  * Used to infer the sending bot account from the recipient address when
  * accountId is not explicitly provided (e.g. cron delivery).

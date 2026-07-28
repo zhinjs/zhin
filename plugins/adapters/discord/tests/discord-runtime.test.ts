@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { createEndpointRuntimeState } from '@zhin.js/adapter';
+import { createEndpointRuntimeState, listEndpointManagementCapabilities } from '@zhin.js/adapter';
 import { discordRuntimeStateToken } from '../src/discord-runtime-state.js';
 import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
@@ -502,5 +502,88 @@ describe('discord plugin runtime adapter', () => {
     } finally {
       warnSpy.mockRestore();
     }
+  });
+});
+
+
+describe('discord endpoint management', () => {
+  const GUILD_ID = '1234567890123456789';
+
+  function managementMock() {
+    const mock = createMockClient();
+    const textChannel = { id: 'chan-text', name: 'general', type: 0 };
+    const voiceChannel = { id: 'chan-voice', name: 'Voice', type: 2 };
+    const guild = {
+      id: GUILD_ID,
+      name: 'Guild',
+      channels: {
+        cache: { values: () => [textChannel, voiceChannel][Symbol.iterator]() },
+      },
+    };
+    mock.guilds.cache = { values: () => [guild][Symbol.iterator]() };
+    return mock;
+  }
+
+  function createManagementEndpoint(mock: DiscordClientTransport) {
+    return new DiscordGatewayEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createClient: () => mock,
+    });
+  }
+
+  it('advertises only implemented management capabilities', async () => {
+    const endpoint = createManagementEndpoint(managementMock());
+    await endpoint.start();
+    expect(listEndpointManagementCapabilities(endpoint)).toEqual([
+      'listGroups',
+      'listChannels',
+      'listGroupMembers',
+    ]);
+    await endpoint.stop();
+  });
+
+  it('lists guilds without losing snowflake precision', async () => {
+    const endpoint = createManagementEndpoint(managementMock());
+    await endpoint.start();
+    // snowflake 超 Number.MAX_SAFE_INTEGER，保留原始字符串
+    await expect(endpoint.management.listGroups?.()).resolves.toEqual([
+      { group_id: GUILD_ID, name: 'Guild' },
+    ]);
+    await endpoint.stop();
+  });
+
+  it('lists only guild text channels with guild parent', async () => {
+    const endpoint = createManagementEndpoint(managementMock());
+    await endpoint.start();
+    await expect(endpoint.management.listChannels?.()).resolves.toEqual([
+      {
+        id: 'chan-text',
+        name: 'general',
+        parent: { type: 'guild', id: GUILD_ID, name: 'Guild' },
+      },
+    ]);
+    await endpoint.stop();
+  });
+
+  it('lists guild members through the SDK', async () => {
+    const endpoint = createManagementEndpoint(managementMock());
+    await endpoint.start();
+    await expect(endpoint.management.listGroupMembers?.('guild-1')).resolves.toEqual([
+      {
+        id: 'user-1',
+        username: 'alice',
+        nickname: null,
+        roles: ['role-1'],
+        joined_at: new Date(0).toISOString(),
+      },
+    ]);
+    await endpoint.stop();
+  });
+
+  it('rejects management calls before the client connects', async () => {
+    const endpoint = createManagementEndpoint(managementMock());
+    await expect(endpoint.management.listGroups?.()).rejects.toThrow('not connected');
   });
 });

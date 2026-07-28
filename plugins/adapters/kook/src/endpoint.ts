@@ -2,7 +2,12 @@
  * KookEndpoint — lifecycle, outbound, admit, OpenAPI helpers for agent tools.
  */
 import { Client } from 'kook-client';
-import type { EndpointInstance } from '@zhin.js/adapter';
+import type {
+  EndpointChannel,
+  EndpointGroup,
+  EndpointInstance,
+  EndpointManagement,
+} from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -44,6 +49,7 @@ export class KookWebsocketEndpoint implements EndpointInstance {
   #open = false;
   #started = false;
   #unregisterAgent?: () => void;
+  readonly management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient());
 
   constructor(options: KookEndpointOptions) {
     this.#options = options;
@@ -202,6 +208,7 @@ export class KookWebhookEndpoint implements EndpointInstance {
   #open = false;
   #started = false;
   #unregisterAgent?: () => void;
+  readonly management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient());
 
   constructor(options: KookWebhookEndpointOptions) {
     this.#options = options;
@@ -358,4 +365,67 @@ export class KookWebhookEndpoint implements EndpointInstance {
     if (!this.#client) throw new Error('KOOK client not initialized');
     return this.#client;
   }
+}
+
+/**
+ * KOOK guild/channel/user id 是字符串形式的雪花号，超出
+ * Number.MAX_SAFE_INTEGER，Number() 会丢精度。Console 社交面只把 group_id
+ * 当 JSON 值透传、并以字符串回传给 listGroupMembers，因此保留原始字符串
+ * （仅按契约类型声明强转）是全链路最不丢信息的方案。
+ */
+function toGroupId(id: string): number {
+  return id as unknown as number;
+}
+
+/** KOOK 文字频道标记：HTTP API type=1（2=语音），kook-client 消息侧用 'GROUP'。 */
+function isKookTextChannelType(type: string | number | undefined): boolean {
+  return type === 1 || type === '1' || type === 'GROUP';
+}
+
+/**
+ * KOOK endpoint 的 EndpointManagement 语义端口（websocket / webhook 共用）。
+ * 数据走 kook-client 的 HTTP API 封装：/api/v3/guild/list、
+ * /api/v3/channel/list、/api/v3/guild/user-list（SDK 内部已做分页聚合）。
+ */
+export function createKookEndpointManagement(
+  requireClient: () => KookClientTransport,
+): EndpointManagement {
+  return Object.freeze<EndpointManagement>({
+    async listGroups(): Promise<readonly EndpointGroup[]> {
+      const guilds = await requireClient().getGuildList();
+      const groups: EndpointGroup[] = [];
+      for (const guild of guilds) {
+        if (guild?.id == null) continue;
+        groups.push({
+          group_id: toGroupId(String(guild.id)),
+          name: String(guild.name ?? guild.id),
+        });
+      }
+      return groups;
+    },
+    async listChannels(): Promise<readonly EndpointChannel[]> {
+      const client = requireClient();
+      const channels: EndpointChannel[] = [];
+      for (const guild of await client.getGuildList()) {
+        if (guild?.id == null) continue;
+        const guildId = String(guild.id);
+        const guildName = String(guild.name ?? guildId);
+        for (const channel of await client.getChannelList(guildId)) {
+          if (channel?.id == null) continue;
+          if (channel.is_category) continue;
+          if (!isKookTextChannelType(channel.type)) continue;
+          channels.push({
+            id: String(channel.id),
+            name: channel.name ? String(channel.name) : undefined,
+            parent: { type: 'guild', id: guildId, name: guildName },
+          });
+        }
+      }
+      return channels;
+    },
+    async listGroupMembers(groupId: string): Promise<readonly unknown[]> {
+      // 平台形状（User.Info[]）原样返回
+      return requireClient().getGuildUserList(groupId);
+    },
+  });
 }

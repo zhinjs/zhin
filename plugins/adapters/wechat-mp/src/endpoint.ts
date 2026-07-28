@@ -2,7 +2,7 @@
  * WeChatMpEndpoint — lifecycle, outbound, admit, access token refresh.
  */
 import axios from 'axios';
-import type { EndpointInstance } from '@zhin.js/adapter';
+import type { EndpointFriend, EndpointInstance, EndpointManagement } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -65,6 +65,7 @@ export class WeChatMpEndpoint implements EndpointInstance {
   static readonly #REPLY_CACHE_LIMIT = 1000;
   #open = false;
   #started = false;
+  readonly management: EndpointManagement = createWeChatMpEndpointManagement(this);
 
   constructor(options: WeChatMpEndpointOptions) {
     this.#options = options;
@@ -214,6 +215,41 @@ export class WeChatMpEndpoint implements EndpointInstance {
     return response.data as WeChatAPIResponse;
   }
 
+  /**
+   * 关注者列表（GET /cgi-bin/user/get，按 next_openid 分页，每页最多 10000）。
+   * 该接口只回 openid 不回昵称；昵称需逐个调 user/info（成本高且依赖用户授权），
+   * 这里 nickname 用 openid 占位，由 Console 侧自行理解。
+   */
+  async getFollowers(): Promise<readonly EndpointFriend[]> {
+    if (!this.#accessToken || Date.now() >= this.#tokenExpireTime) {
+      await this.#refreshAccessToken();
+    }
+    const friends: EndpointFriend[] = [];
+    let nextOpenid = '';
+    do {
+      const url = `https://api.weixin.qq.com/cgi-bin/user/get?access_token=${this.#accessToken}&next_openid=${encodeURIComponent(nextOpenid)}`;
+      const response = await this.#fetch(url);
+      const data = response.data as WeChatAPIResponse & {
+        count?: number;
+        data?: { openid?: string[] };
+        next_openid?: string;
+      };
+      if (data.errcode && data.errcode !== 0) {
+        throw new Error(`WeChat API error: ${data.errcode} - ${data.errmsg}`);
+      }
+      for (const openid of data.data?.openid ?? []) {
+        if (typeof openid === 'string' && openid) {
+          friends.push({ user_id: openid, nickname: openid, remark: '' });
+        }
+      }
+      const fetched = Number(data.count ?? 0);
+      nextOpenid = typeof data.next_openid === 'string' ? data.next_openid : '';
+      // 满页（10000）才可能有下一页；不足一页即到底，避免依赖 next_openid 回显语义。
+      if (fetched < 10_000) break;
+    } while (nextOpenid);
+    return friends;
+  }
+
   async #refreshAccessToken(): Promise<void> {
     const { appId, appSecret } = this.#options.config;
     const url = `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${appId}&secret=${appSecret}`;
@@ -241,4 +277,11 @@ export class WeChatMpEndpoint implements EndpointInstance {
       }
     }, 3_600_000);
   }
+}
+
+function createWeChatMpEndpointManagement(endpoint: WeChatMpEndpoint): EndpointManagement {
+  return Object.freeze<EndpointManagement>({
+    // 公众号无群/频道概念；关注者即"好友"（nickname 为 openid 占位，见 getFollowers）。
+    listFriends: () => endpoint.getFollowers(),
+  });
 }

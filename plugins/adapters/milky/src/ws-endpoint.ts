@@ -7,10 +7,12 @@ import {
   type EndpointConnectHandle,
   type EndpointInstance,
   type EndpointLifecycle,
+  type EndpointManagement,
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
+import { createMilkyEndpointManagement } from './endpoint-management.js';
 import { registerMilkyAgentEndpoint } from './milky-agent-deps.js';
 import {
   buildSendAction,
@@ -49,6 +51,7 @@ export interface MilkyWsEndpointOptions {
 export class MilkyWsEndpoint implements EndpointInstance {
   readonly #options: MilkyWsEndpointOptions;
   readonly #callApi: typeof callApi;
+  readonly management: EndpointManagement = createMilkyEndpointManagement(this);
   readonly #lifecycle: EndpointLifecycle;
   #ws?: MilkyWsSocket;
   #open = false;

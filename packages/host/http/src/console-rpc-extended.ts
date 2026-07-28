@@ -87,8 +87,8 @@ interface InboxModel {
 }
 
 interface EndpointManagementPort {
-  listFriends?(): Promise<readonly { user_id: number; nickname: string; remark: string }[]>;
-  listGroups?(): Promise<readonly { group_id: number; name: string }[]>;
+  listFriends?(): Promise<readonly { user_id: number | string; nickname: string; remark: string }[]>;
+  listGroups?(): Promise<readonly { group_id: number | string; name: string }[]>;
   listChannels?(): Promise<readonly {
     id: string;
     name?: string;

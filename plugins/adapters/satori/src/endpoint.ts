@@ -3,9 +3,12 @@
  */
 import {
   createEndpointLifecycle,
+  type EndpointChannel,
   type EndpointConnectHandle,
+  type EndpointGroup,
   type EndpointInstance,
   type EndpointLifecycle,
+  type EndpointManagement,
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
@@ -58,6 +61,9 @@ export class SatoriWsEndpoint implements EndpointInstance {
   #login: SatoriLogin | undefined;
   #lastSn: number | undefined;
   #open = false;
+  readonly management: EndpointManagement = createSatoriEndpointManagement(
+    (resource, method, params) => this.#api(resource, method, params),
+  );
 
   constructor(options: SatoriWsEndpointOptions) {
     this.#options = options;
@@ -312,6 +318,9 @@ export class SatoriWebhookEndpoint implements EndpointInstance {
   #routeReleases: HttpRouteRegistration[] = [];
   #open = false;
   #started = false;
+  readonly management: EndpointManagement = createSatoriEndpointManagement(
+    (resource, method, params) => this.#api(resource, method, params),
+  );
 
   constructor(options: SatoriWebhookEndpointOptions) {
     this.#options = options;
@@ -449,6 +458,100 @@ export class SatoriWebhookEndpoint implements EndpointInstance {
 function isPrivateChannelType(body: SatoriEventBody): boolean {
   const channel = body.channel ?? body.message?.channel;
   return channel?.type === 1;
+}
+
+/**
+ * Satori guild id 是平台相关字符串（多数平台为雪花号，超
+ * Number.MAX_SAFE_INTEGER）。Console 社交面只把 group_id 当 JSON 值透传、
+ * 并以字符串回传给 listGroupMembers，因此保留原始字符串（仅按契约类型
+ * 声明强转）是全链路最不丢信息的方案。
+ */
+function toGroupId(id: string): number {
+  return id as unknown as number;
+}
+
+export type SatoriManagementApi = (
+  resource: string,
+  method: string,
+  params: Record<string, unknown>,
+) => Promise<unknown>;
+
+interface SatoriListPage {
+  readonly data?: unknown[];
+  readonly next?: string;
+}
+
+/** Satori 分页列表（{data, next?}）聚合；兼容直接返回数组的实现。 */
+async function listSatoriPages(
+  api: SatoriManagementApi,
+  resource: string,
+  params: Record<string, unknown>,
+): Promise<unknown[]> {
+  const items: unknown[] = [];
+  let next: string | undefined;
+  do {
+    const page = await api(resource, 'list', next ? { ...params, next } : params);
+    if (Array.isArray(page)) {
+      items.push(...page);
+      break;
+    }
+    const typed = (page ?? {}) as SatoriListPage;
+    if (Array.isArray(typed.data)) items.push(...typed.data);
+    next = typeof typed.next === 'string' && typed.next ? typed.next : undefined;
+  } while (next);
+  return items;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object'
+    ? value as Record<string, unknown>
+    : {};
+}
+
+/**
+ * Satori endpoint 的 EndpointManagement 语义端口（ws / webhook 共用），
+ * 数据走协议 API：guild.list / channel.list / guild-member.list。
+ */
+export function createSatoriEndpointManagement(api: SatoriManagementApi): EndpointManagement {
+  return Object.freeze<EndpointManagement>({
+    async listGroups(): Promise<readonly EndpointGroup[]> {
+      const groups: EndpointGroup[] = [];
+      for (const value of await listSatoriPages(api, 'guild', {})) {
+        const guild = asRecord(value);
+        if (guild.id == null) continue;
+        groups.push({
+          group_id: toGroupId(String(guild.id)),
+          name: String(guild.name ?? guild.id),
+        });
+      }
+      return groups;
+    },
+    async listChannels(): Promise<readonly EndpointChannel[]> {
+      const channels: EndpointChannel[] = [];
+      for (const value of await listSatoriPages(api, 'guild', {})) {
+        const guild = asRecord(value);
+        if (guild.id == null) continue;
+        const guildId = String(guild.id);
+        const guildName = String(guild.name ?? guildId);
+        for (const channelValue of await listSatoriPages(api, 'channel', { guild_id: guildId })) {
+          const channel = asRecord(channelValue);
+          if (channel.id == null) continue;
+          // Channel.type: 0=TEXT 1=DIRECT 2=CATEGORY 3=VOICE；缺省按 TEXT 处理
+          if (channel.type != null && Number(channel.type) !== 0) continue;
+          channels.push({
+            id: String(channel.id),
+            name: channel.name != null ? String(channel.name) : undefined,
+            parent: { type: 'guild', id: guildId, name: guildName },
+          });
+        }
+      }
+      return channels;
+    },
+    async listGroupMembers(groupId: string): Promise<readonly unknown[]> {
+      // 平台形状（GuildMember[]）原样返回
+      return listSatoriPages(api, 'guild-member', { guild_id: groupId });
+    },
+  });
 }
 
 export type { CreateSatoriWebSocket, SatoriWsSocket } from './ws.js';

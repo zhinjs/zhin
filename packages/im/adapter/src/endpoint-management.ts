@@ -1,11 +1,13 @@
 export interface EndpointFriend {
-  readonly user_id: number;
+  /** 数字平台（QQ 系）用 number；Slack/LINE/微信系用 string。 */
+  readonly user_id: number | string;
   readonly nickname: string;
   readonly remark: string;
 }
 
 export interface EndpointGroup {
-  readonly group_id: number;
+  /** 数字平台（QQ 系）用 number；Slack/LINE/微信系用 string。 */
+  readonly group_id: number | string;
   readonly name: string;
 }
 

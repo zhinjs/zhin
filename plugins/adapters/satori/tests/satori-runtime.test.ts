@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { createEndpointRuntimeState } from '@zhin.js/adapter';
+import { createEndpointRuntimeState, listEndpointManagementCapabilities } from '@zhin.js/adapter';
 import { satoriRuntimeStateToken } from '../src/satori-runtime-state.js';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import { messageGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
@@ -472,5 +472,116 @@ describe('satori ws heartbeat', () => {
     expect(closeSpy).toHaveBeenCalledTimes(1);
 
     await endpoint.stop();
+  });
+});
+
+
+describe('satori endpoint management', () => {
+  function createManagementCallApi() {
+    return vi.fn(async (
+      _options: unknown,
+      resource: string,
+      method: string,
+      params: Record<string, unknown>,
+    ): Promise<unknown> => {
+      if (resource === 'guild' && method === 'list') {
+        if (params.next === 'p2') return { data: [{ id: 'guild-2' }] };
+        return { data: [{ id: '1234567890123456789', name: 'Guild' }], next: 'p2' };
+      }
+      if (resource === 'channel' && method === 'list') {
+        if (params.guild_id === 'guild-2') return { data: [] };
+        return {
+          data: [
+            { id: 'ch-text', name: 'general', type: 0 },
+            { id: 'ch-voice', name: 'Voice', type: 3 },
+            { id: 'ch-cat', name: 'Category', type: 2 },
+          ],
+        };
+      }
+      if (resource === 'guild-member' && method === 'list') {
+        return {
+          data: [
+            { user: { id: 'user-1', name: 'alice' }, nick: 'Alice', roles: ['role-1'] },
+          ],
+        };
+      }
+      throw new Error(`unexpected api call: ${resource}.${method}`);
+    });
+  }
+
+  function createManagementEndpoint(callApi: ReturnType<typeof createManagementCallApi>) {
+    return new SatoriWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      callApi,
+    });
+  }
+
+  it('advertises only implemented management capabilities', () => {
+    const endpoint = createManagementEndpoint(createManagementCallApi());
+    expect(listEndpointManagementCapabilities(endpoint)).toEqual([
+      'listGroups',
+      'listChannels',
+      'listGroupMembers',
+    ]);
+  });
+
+  it('lists guilds across pages without losing id precision', async () => {
+    const callApi = createManagementCallApi();
+    const endpoint = createManagementEndpoint(callApi);
+    // id 超 Number.MAX_SAFE_INTEGER，保留原始字符串
+    await expect(endpoint.management.listGroups?.()).resolves.toEqual([
+      { group_id: '1234567890123456789', name: 'Guild' },
+      { group_id: 'guild-2', name: 'guild-2' },
+    ]);
+    expect(callApi).toHaveBeenCalledWith(
+      expect.anything(), 'guild', 'list', { next: 'p2' },
+    );
+  });
+
+  it('lists only text channels with guild parent', async () => {
+    const endpoint = createManagementEndpoint(createManagementCallApi());
+    await expect(endpoint.management.listChannels?.()).resolves.toEqual([
+      {
+        id: 'ch-text',
+        name: 'general',
+        parent: { type: 'guild', id: '1234567890123456789', name: 'Guild' },
+      },
+    ]);
+  });
+
+  it('lists guild members in platform shape', async () => {
+    const callApi = createManagementCallApi();
+    const endpoint = createManagementEndpoint(callApi);
+    await expect(endpoint.management.listGroupMembers?.('guild-1')).resolves.toEqual([
+      { user: { id: 'user-1', name: 'alice' }, nick: 'Alice', roles: ['role-1'] },
+    ]);
+    expect(callApi).toHaveBeenCalledWith(
+      expect.anything(), 'guild-member', 'list', { guild_id: 'guild-1' },
+    );
+  });
+
+  it('exposes management on the webhook endpoint too', () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const endpoint = new SatoriWebhookEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      http,
+      config: resolveSatoriConfig({
+        connection: 'webhook',
+        name: 'hook',
+        baseUrl: 'http://127.0.0.1:5140',
+        path: '/satori/webhook',
+        token: 'secret',
+      }) as ReturnType<typeof resolveSatoriConfig> & { connection: 'webhook' },
+      callApi: createManagementCallApi(),
+    });
+    expect(listEndpointManagementCapabilities(endpoint)).toEqual([
+      'listGroups',
+      'listChannels',
+      'listGroupMembers',
+    ]);
   });
 });

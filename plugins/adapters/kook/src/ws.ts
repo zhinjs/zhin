@@ -43,7 +43,17 @@ export interface KookClientTransport {
     revoke(roleId: string): Promise<boolean>;
     setNickname(nickname: string): Promise<boolean>;
   };
-  getGuildUserList?(guildId: string, channelId?: string): Promise<unknown[]>;
+  /** GET /api/v3/guild/list（kook-client 内部分页聚合）。 */
+  getGuildList(): Promise<Array<{ id: string | number; name?: string }>>;
+  /** GET /api/v3/channel/list（type: 1=文字 2=语音；is_category 为分组）。 */
+  getChannelList(guildId: string): Promise<Array<{
+    id: string | number;
+    name?: string;
+    type?: string | number;
+    is_category?: boolean;
+  }>>;
+  /** GET /api/v3/guild/user-list。 */
+  getGuildUserList(guildId: string, channelId?: string): Promise<unknown[]>;
   self_id?: string | number;
 }
 

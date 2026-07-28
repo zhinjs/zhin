@@ -2,11 +2,12 @@
  * OneBot12 reverse WSS endpoint — accepts inbound WebSocket from OneBot implementation.
  */
 import { clearInterval } from 'node:timers';
-import type { EndpointInstance } from '@zhin.js/adapter';
+import type { EndpointInstance, EndpointManagement } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
+import { createOneBot12EndpointManagement } from './endpoint-management.js';
 import {
   buildSendMessageParams,
   formatInboundContent,
@@ -35,6 +36,7 @@ export interface OneBot12WssEndpointOptions {
 
 export class OneBot12WssEndpoint implements EndpointInstance {
   readonly #options: OneBot12WssEndpointOptions;
+  readonly management: EndpointManagement = createOneBot12EndpointManagement(this);
   #ws?: OneBot12WsSocket;
   #wsRelease?: () => void;
   #heartbeatTimer?: NodeJS.Timeout;
@@ -112,6 +114,11 @@ export class OneBot12WssEndpoint implements EndpointInstance {
     const params = buildSendMessageParams(target, message);
     const data = await this.#callAction('send_message', params) as { message_id?: string } | undefined;
     return data?.message_id ?? '';
+  }
+
+  /** Public API for management surface / callers. */
+  callApi(action: string, params: Record<string, unknown> = {}): Promise<unknown> {
+    return this.#callAction(action, params);
   }
 
   admit(ev: OneBot12Event): void {

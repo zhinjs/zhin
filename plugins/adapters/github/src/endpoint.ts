@@ -32,6 +32,10 @@ export interface GithubEndpointOptions {
   readonly createClient?: (config: ResolvedGithubConfig) => GhClient;
 }
 
+/**
+ * GitHub 是代码协作面（issue/PR），无好友/群/频道等 IM 社交概念，
+ * 不适用 EndpointManagement 语义端口；本 endpoint 不暴露该端口。
+ */
 export class GithubEndpoint implements EndpointInstance {
   readonly #options: GithubEndpointOptions;
   readonly gh: GhClient;

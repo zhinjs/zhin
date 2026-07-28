@@ -7,10 +7,12 @@ import {
   type EndpointConnectHandle,
   type EndpointInstance,
   type EndpointLifecycle,
+  type EndpointManagement,
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
+import { createNapCatEndpointManagement } from './endpoint-management.js';
 import { registerNapcatAgentEndpoint } from './napcat-agent-deps.js';
 import {
   InboundMessageDeduper,
@@ -56,6 +58,7 @@ export interface NapCatWsEndpointOptions {
 export class NapCatWsEndpoint implements EndpointInstance {
   readonly #options: NapCatWsEndpointOptions;
   readonly #inboundDeduper = new InboundMessageDeduper();
+  readonly management: EndpointManagement = createNapCatEndpointManagement(this);
   readonly #lifecycle: EndpointLifecycle;
   #ws?: NapCatWsSocket;
   #requestId = { value: 0 };

@@ -2,12 +2,13 @@
  * Milky webhook endpoint — httpHostToken POST inbound + baseUrl HTTP API outbound.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { EndpointInstance } from '@zhin.js/adapter';
+import type { EndpointInstance, EndpointManagement } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { readRequestBody, verifyMilkyAccessToken } from './milky-auth.js';
+import { createMilkyEndpointManagement } from './endpoint-management.js';
 import { registerMilkyAgentEndpoint } from './milky-agent-deps.js';
 import {
   buildSendAction,
@@ -40,6 +41,7 @@ export interface MilkyWebhookEndpointOptions {
 export class MilkyWebhookEndpoint implements EndpointInstance {
   readonly #options: MilkyWebhookEndpointOptions;
   readonly #callApi: typeof callApi;
+  readonly management: EndpointManagement = createMilkyEndpointManagement(this);
   #routeReleases: HttpRouteRegistration[] = [];
   #open = false;
   #started = false;

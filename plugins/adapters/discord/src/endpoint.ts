@@ -2,7 +2,12 @@
  * DiscordEndpoint — lifecycle, outbound, admit, gateway / interactions modes, agent tool surface.
  */
 import { ChannelType } from 'discord.js';
-import type { EndpointInstance } from '@zhin.js/adapter';
+import type {
+  EndpointChannel,
+  EndpointGroup,
+  EndpointInstance,
+  EndpointManagement,
+} from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -54,6 +59,10 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
   #open = false;
   #started = false;
   #unregisterAgent?: () => void;
+  readonly management: EndpointManagement = createDiscordEndpointManagement({
+    getClient: () => this.#requireClient(),
+    getMembers: (guildId) => this.getMembers(guildId),
+  });
 
   constructor(options: DiscordEndpointOptions) {
     this.#options = options;
@@ -454,4 +463,58 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
       }));
     });
   }
+}
+
+/**
+ * Discord snowflake 是 64 位整数的字符串形式，超出 Number.MAX_SAFE_INTEGER，
+ * Number() 转换会丢精度。Console 社交面只把 group_id 当 JSON 值透传、
+ * 并以字符串回传给 listGroupMembers，因此这里保留原始字符串（仅按契约
+ * 类型声明强转），是全链路最不丢信息的方案。
+ */
+function toGroupId(id: string): number {
+  return id as unknown as number;
+}
+
+/**
+ * DiscordGatewayEndpoint 的 EndpointManagement 语义端口（参照 qq 的工厂模式）。
+ * 数据源为 discord.js SDK 缓存：guilds.cache / guild.channels.cache / guild.members。
+ */
+export function createDiscordEndpointManagement(endpoint: {
+  getClient(): DiscordClientTransport;
+  getMembers(guildId: string): Promise<unknown[]>;
+}): EndpointManagement {
+  return Object.freeze<EndpointManagement>({
+    async listGroups(): Promise<readonly EndpointGroup[]> {
+      const groups: EndpointGroup[] = [];
+      for (const guild of endpoint.getClient().guilds.cache.values()) {
+        if (!guild?.id) continue;
+        groups.push({
+          group_id: toGroupId(String(guild.id)),
+          name: String(guild.name ?? guild.id),
+        });
+      }
+      return groups;
+    },
+    async listChannels(): Promise<readonly EndpointChannel[]> {
+      const channels: EndpointChannel[] = [];
+      for (const guild of endpoint.getClient().guilds.cache.values()) {
+        if (!guild?.id) continue;
+        const guildId = String(guild.id);
+        const guildName = String(guild.name ?? guildId);
+        for (const channel of guild.channels?.cache?.values() ?? []) {
+          if (!channel?.id) continue;
+          if (channel.type !== ChannelType.GuildText) continue;
+          channels.push({
+            id: String(channel.id),
+            name: channel.name ? String(channel.name) : undefined,
+            parent: { type: 'guild', id: guildId, name: guildName },
+          });
+        }
+      }
+      return channels;
+    },
+    async listGroupMembers(groupId: string): Promise<readonly unknown[]> {
+      return endpoint.getMembers(groupId);
+    },
+  });
 }

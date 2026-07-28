@@ -98,7 +98,13 @@ export interface DiscordClientTransport {
         unban(userId: string, reason?: string): Promise<unknown>;
       };
     }>;
-    cache: { values(): IterableIterator<{ id: string }> };
+    cache: { values(): IterableIterator<{
+      id: string;
+      name: string;
+      channels: {
+        cache: { values(): IterableIterator<{ id: string; name?: string; type: number }> };
+      };
+    }> };
   };
 }
 

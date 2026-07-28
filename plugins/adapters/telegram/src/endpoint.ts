@@ -70,6 +70,11 @@ interface TelegramApiErr {
   readonly error_code?: number;
 }
 
+/**
+ * Telegram Bot API 无列表类接口（无 getMyChats/getChatMembers），
+ * 仅 getChat/getChatMember 按已知 id 单查，不构成列表能力；
+ * 因此本 endpoint 不暴露 EndpointManagement（Console 社交面 RPC 对该平台保持未接线）。
+ */
 export class TelegramEndpoint implements EndpointInstance {
   readonly #options: TelegramEndpointOptions;
   readonly #fetch: TelegramFetch;

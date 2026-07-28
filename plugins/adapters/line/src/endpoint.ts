@@ -1,7 +1,7 @@
 /**
  * LineEndpoint — lifecycle, outbound, admit, OpenAPI helpers for agent tools.
  */
-import type { EndpointInstance } from '@zhin.js/adapter';
+import type { EndpointInstance, EndpointManagement } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -58,6 +58,7 @@ export class LineEndpoint implements EndpointInstance {
   #open = false;
   #started = false;
   #unregisterAgent?: () => void;
+  readonly management: EndpointManagement = createLineEndpointManagement(this);
 
   constructor(options: LineEndpointOptions) {
     this.#options = options;
@@ -222,4 +223,61 @@ export class LineEndpoint implements EndpointInstance {
     const result = await response.json() as LineApiResponse;
     return result.sentMessages?.[0]?.id || `push-${Date.now()}`;
   }
+
+  /**
+   * group/room 成员列表：Bot API 无群列表，只能按已知 groupId/roomId 拉成员。
+   * members/ids 分页（next continuation token）后逐个取 profile 归一 nickname；
+   * 单个 profile 失败（用户已退群等）时回退 userId 占位，不拖垮整批。
+   */
+  async getGroupMembers(groupId: string): Promise<LineGroupMember[]> {
+    const kind = groupId.startsWith('R') ? 'room' : 'group';
+    const memberIds: string[] = [];
+    let start: string | undefined;
+    do {
+      const query = start ? `?start=${encodeURIComponent(start)}` : '';
+      const data = await this.#get(
+        `${this.#options.config.apiBaseUrl}/v2/bot/${kind}/${encodeURIComponent(groupId)}/members/ids${query}`,
+      ) as { memberIds?: string[]; next?: string };
+      for (const id of data.memberIds ?? []) {
+        if (typeof id === 'string' && id) memberIds.push(id);
+      }
+      start = data.next || undefined;
+    } while (start);
+
+    return Promise.all(memberIds.map(async (userId) => {
+      try {
+        const profile = await this.#get(
+          `${this.#options.config.apiBaseUrl}/v2/bot/${kind}/${encodeURIComponent(groupId)}/member/${encodeURIComponent(userId)}`,
+        ) as { displayName?: string };
+        return { user_id: userId, nickname: String(profile.displayName ?? userId) };
+      } catch {
+        return { user_id: userId, nickname: userId };
+      }
+    }));
+  }
+
+  async #get(url: string): Promise<unknown> {
+    const response = await this.#fetch(url, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${this.#options.config.channelAccessToken}` },
+      signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`LINE API error ${response.status}: ${errorText}`);
+    }
+    return response.json();
+  }
+}
+
+export interface LineGroupMember {
+  readonly user_id: string;
+  readonly nickname: string;
+}
+
+function createLineEndpointManagement(endpoint: LineEndpoint): EndpointManagement {
+  return Object.freeze<EndpointManagement>({
+    // listGroups 不接：LINE Bot API 没有"我加入了哪些群"的接口，群 id 只能来自入站事件。
+    listGroupMembers: (groupId) => endpoint.getGroupMembers(groupId),
+  });
 }

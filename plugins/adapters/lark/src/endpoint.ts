@@ -3,7 +3,7 @@
  */
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
-import type { EndpointInstance } from '@zhin.js/adapter';
+import type { EndpointGroup, EndpointInstance, EndpointManagement } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -54,6 +54,32 @@ export interface LarkEndpointOptions {
 export class LarkEndpoint implements EndpointInstance {
   readonly #options: LarkEndpointOptions;
   readonly #fetch: LarkFetch;
+  /**
+   * Console 社交面语义端口。Lark OpenAPI 仅接读取类列表能力：
+   * - listGroups：GET /im/v1/chats（bot 所在群列表，分页归一为 {group_id: chat_id, name}）
+   * - listGroupMembers：GET /im/v1/chats/:chat_id/members（open_id 分页，返回平台原生成员形状）
+   * 不接的项：listFriends（Lark 无好友概念，contact API 为组织通讯录而非社交关系）、
+   * listChannels（无频道/guild 概念）、写操作（审批/踢人/禁言等本轮不在范围内）。
+   */
+  readonly management: EndpointManagement = Object.freeze<EndpointManagement>({
+    listGroups: async (): Promise<readonly EndpointGroup[]> => {
+      const items = await this.#listAllPages('/im/v1/chats');
+      const groups: EndpointGroup[] = [];
+      for (const item of items) {
+        const chatId = typeof item.chat_id === 'string' ? item.chat_id : '';
+        if (!chatId) continue;
+        groups.push({
+          group_id: chatId,
+          name: typeof item.name === 'string' && item.name ? item.name : chatId,
+        });
+      }
+      return groups;
+    },
+    listGroupMembers: (groupId) => this.#listAllPages(
+      `/im/v1/chats/${encodeURIComponent(groupId)}/members`,
+      { member_id_type: 'open_id' },
+    ),
+  });
   #routeReleases: HttpRouteRegistration[] = [];
   #accessToken: AccessToken = { token: '', expires_in: 0, timestamp: 0 };
   #refreshPromise: Promise<string> | null = null;
@@ -336,6 +362,40 @@ export class LarkEndpoint implements EndpointInstance {
       logger.error('Failed to remove chat managers:', error);
       return false;
     }
+  }
+
+  /** 拉取分页列表（items + has_more/page_token）；code!==0 时抛错交由 RPC 层透出。 */
+  async #listAllPages(
+    path: string,
+    params: Record<string, string | number> = {},
+  ): Promise<Record<string, unknown>[]> {
+    const items: Record<string, unknown>[] = [];
+    let pageToken = '';
+    do {
+      const data = await this.#request(path, {
+        method: 'GET',
+        params: {
+          ...params,
+          page_size: 100,
+          ...(pageToken ? { page_token: pageToken } : {}),
+        },
+      });
+      if (data.code !== 0) {
+        throw new Error(`Lark API ${path} failed: ${data.msg ?? 'unknown'} (${data.code})`);
+      }
+      const page = data.data ?? {};
+      if (Array.isArray(page.items)) {
+        for (const item of page.items) {
+          if (item !== null && typeof item === 'object') {
+            items.push(item as Record<string, unknown>);
+          }
+        }
+      }
+      pageToken = page.has_more === true && typeof page.page_token === 'string'
+        ? page.page_token
+        : '';
+    } while (pageToken);
+    return items;
   }
 
   async #request(

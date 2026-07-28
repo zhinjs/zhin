@@ -2,11 +2,12 @@
  * NapCat HTTP endpoint — POST inbound events + HTTP API outbound.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { EndpointInstance } from '@zhin.js/adapter';
+import type { EndpointInstance, EndpointManagement } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
+import { createNapCatEndpointManagement } from './endpoint-management.js';
 import { registerNapcatAgentEndpoint } from './napcat-agent-deps.js';
 import {
   InboundMessageDeduper,
@@ -43,6 +44,7 @@ export interface NapCatHttpEndpointOptions {
 export class NapCatHttpEndpoint implements EndpointInstance {
   readonly #options: NapCatHttpEndpointOptions;
   readonly #inboundDeduper = new InboundMessageDeduper();
+  readonly management: EndpointManagement = createNapCatEndpointManagement(this);
   readonly #callHttpAction: typeof callNapCatHttpAction;
   #routeReleases: HttpRouteRegistration[] = [];
   #open = false;

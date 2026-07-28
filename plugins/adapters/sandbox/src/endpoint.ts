@@ -84,6 +84,10 @@ export interface SandboxEndpointOptions {
   readonly defaults: ResolvedSandboxBot;
 }
 
+/**
+ * Sandbox 是本地开发/测试面，无平台社交图谱（好友/群/频道），
+ * 不适用 EndpointManagement 语义端口；本 endpoint 不暴露该端口。
+ */
 export class SandboxWsEndpoint implements EndpointInstance {
   readonly #options: SandboxEndpointOptions;
   readonly #connections = new Map<string, SandboxConnection>();

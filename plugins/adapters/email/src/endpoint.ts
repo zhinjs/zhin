@@ -34,6 +34,10 @@ export interface EmailEndpointOptions {
   readonly createImap?: (config: ResolvedEmailConfig['imap']) => EmailImapTransport;
 }
 
+/**
+ * Email（SMTP/IMAP）无好友/群/频道等社交图谱概念，
+ * 不适用 EndpointManagement 语义端口；本 endpoint 不暴露该端口。
+ */
 export class EmailEndpoint implements EndpointInstance {
   readonly #options: EmailEndpointOptions;
   #smtp: EmailSmtpTransport | null = null;

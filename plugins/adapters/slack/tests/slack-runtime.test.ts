@@ -66,9 +66,11 @@ function mockClient(handlers: Partial<SlackWebClientLike> = {}): SlackWebClientL
       rename: vi.fn(async () => ({})),
       members: vi.fn(async () => ({ members: ['U1'] })),
       info: vi.fn(async () => ({ channel: { id: 'C001' } })),
+      list: vi.fn(async () => ({ channels: [], response_metadata: { next_cursor: '' } })),
     },
     users: {
       info: vi.fn(async () => ({ user: { id: 'U001' } })),
+      list: vi.fn(async () => ({ members: [], response_metadata: { next_cursor: '' } })),
     },
     reactions: {
       add: vi.fn(async () => ({})),

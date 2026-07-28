@@ -8,10 +8,12 @@ import {
   type EndpointConnectHandle,
   type EndpointInstance,
   type EndpointLifecycle,
+  type EndpointManagement,
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
+import { createOneBot12EndpointManagement } from './endpoint-management.js';
 import {
   buildSendMessageParams,
   buildWsConnectOptions,
@@ -47,6 +49,7 @@ export interface OneBot12WsEndpointOptions {
 
 export class OneBot12WsEndpoint implements EndpointInstance {
   readonly #options: OneBot12WsEndpointOptions;
+  readonly management: EndpointManagement = createOneBot12EndpointManagement(this);
   readonly #lifecycle: EndpointLifecycle;
   #ws?: OneBot12WsSocket;
   #requestId = 0;
@@ -123,6 +126,11 @@ export class OneBot12WsEndpoint implements EndpointInstance {
       messageId,
     }));
     return messageId;
+  }
+
+  /** Public API for management surface / callers. */
+  callApi(action: string, params: Record<string, unknown> = {}): Promise<unknown> {
+    return this.#callAction(action, params);
   }
 
   /** Test / internal: admit a parsed event when the endpoint is open. */

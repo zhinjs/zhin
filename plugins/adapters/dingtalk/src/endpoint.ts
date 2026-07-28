@@ -49,6 +49,11 @@ export interface DingTalkEndpointOptions {
   readonly fetch?: DingTalkFetch;
 }
 
+/**
+ * 钉钉机器人（webhook/stream 模式）无常规群列表 API——机器人不持有
+ * 「我所在的群」枚举面，仅能收发消息；
+ * 因此本 endpoint 不暴露 EndpointManagement（Console 社交面 RPC 对该平台保持未接线）。
+ */
 export class DingTalkEndpoint implements EndpointInstance {
   readonly #options: DingTalkEndpointOptions;
   readonly #fetch: DingTalkFetch;

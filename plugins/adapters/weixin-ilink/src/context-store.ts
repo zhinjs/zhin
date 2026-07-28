@@ -1,6 +1,7 @@
 export {
   setContextToken,
   getContextToken,
+  listContextTokenUserIds,
   restoreContextTokens,
   clearContextTokensForAccount,
   flushContextTokenPersist,

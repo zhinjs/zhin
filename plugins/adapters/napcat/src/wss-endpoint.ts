@@ -2,11 +2,12 @@
  * NapCat reverse WSS endpoint — accepts inbound WebSocket from NapCat.
  */
 import { clearInterval } from 'node:timers';
-import type { EndpointInstance } from '@zhin.js/adapter';
+import type { EndpointInstance, EndpointManagement } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
+import { createNapCatEndpointManagement } from './endpoint-management.js';
 import { registerNapcatAgentEndpoint } from './napcat-agent-deps.js';
 import {
   InboundMessageDeduper,
@@ -50,6 +51,7 @@ export interface NapCatWssEndpointOptions {
 export class NapCatWssEndpoint implements EndpointInstance {
   readonly #options: NapCatWssEndpointOptions;
   readonly #inboundDeduper = new InboundMessageDeduper();
+  readonly management: EndpointManagement = createNapCatEndpointManagement(this);
   #ws?: NapCatWsSocket;
   #wsRelease?: () => void;
   #heartbeatTimer?: NodeJS.Timeout;
