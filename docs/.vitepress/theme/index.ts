@@ -10,13 +10,14 @@ import ZhinHero from './components/ZhinHero.vue'
 import ZhinTerminal from './components/ZhinTerminal.vue'
 import ZhinFeatureGrid from './components/ZhinFeatureGrid.vue'
 import ZhinDuo from './components/ZhinDuo.vue'
+import ZhinSidebarFoot from './components/ZhinSidebarFoot.vue'
 import './custom.css'
 
 export default {
   extends: DefaultTheme,
   Layout: () => {
     return h(DefaultTheme.Layout, null, {
-      // https://vitepress.dev/guide/extending-default-theme#layout-slots
+      'sidebar-nav-after': () => h(ZhinSidebarFoot),
     })
   },
   enhanceApp({ app, router, siteData }) {
@@ -30,6 +31,7 @@ export default {
     app.component('ZhinTerminal', ZhinTerminal)
     app.component('ZhinFeatureGrid', ZhinFeatureGrid)
     app.component('ZhinDuo', ZhinDuo)
+    app.component('ZhinSidebarFoot', ZhinSidebarFoot)
   }
 } satisfies Theme
 
