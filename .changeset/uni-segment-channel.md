@@ -1,16 +1,16 @@
 ---
-"@zhin.js/core": minor
-"@zhin.js/adapter": minor
-"@zhin.js/adapter-icqq": minor
-"@zhin.js/adapter-milky": minor
-"@zhin.js/adapter-telegram": minor
-"@zhin.js/adapter-discord": minor
-"@zhin.js/adapter-napcat": minor
-"@zhin.js/adapter-onebot11": minor
-"@zhin.js/adapter-onebot12": minor
-"@zhin.js/adapter-wechat-mp": minor
-"@zhin.js/adapter-wecom": minor
-"@zhin.js/adapter-lark": minor
+"@zhin.js/core": patch
+"@zhin.js/adapter": patch
+"@zhin.js/adapter-icqq": patch
+"@zhin.js/adapter-milky": patch
+"@zhin.js/adapter-telegram": patch
+"@zhin.js/adapter-discord": patch
+"@zhin.js/adapter-napcat": patch
+"@zhin.js/adapter-onebot11": patch
+"@zhin.js/adapter-onebot12": patch
+"@zhin.js/adapter-wechat-mp": patch
+"@zhin.js/adapter-wecom": patch
+"@zhin.js/adapter-lark": patch
 "@zhin.js/cli": patch
 ---
 
