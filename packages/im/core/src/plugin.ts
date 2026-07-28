@@ -539,30 +539,40 @@ export class Plugin extends PluginBase implements PluginLike {
    */
   override async reload(plugin: PluginBase = this): Promise<void> {
     const p = plugin as Plugin;
-    this.logger.info(formatCompact( { name: p.name, reload: true }));
-    const now = Date.now();
-    if (!p.parent) {
-      // 根插件重载 = 退出进程（由 CLI 重启）
-      return process.exit(51);
-    }
-
-    const entry = p.filePath;
-    const parent = p.parent as Plugin;
-    await p.stop();
-    let fresh: Plugin;
+    // A burst of file events for one logical save (or an overlapping edit
+    // while a reload is still in flight) must not start a second concurrent
+    // stop()+import() cycle for the same plugin.
+    if (p._reloading) return;
+    p._reloading = true;
     try {
-      fresh = await parent.import(entry, now) as Plugin;
-    } catch (err) {
-      this.logger.error(formatCompact({
-        name: p.name,
-        reload: false,
-        error: err instanceof Error ? err.message : String(err),
-        hint: 'full_restart',
-      }));
-      throw err;
+      this.logger.info(formatCompact( { name: p.name, reload: true }));
+      const now = Date.now();
+      if (!p.parent) {
+        // 根插件重载 = 退出进程（由 CLI 重启）
+        process.exit(51);
+        return;
+      }
+
+      const entry = p.filePath;
+      const parent = p.parent as Plugin;
+      await p.stop();
+      let fresh: Plugin;
+      try {
+        fresh = await parent.import(entry, now) as Plugin;
+      } catch (err) {
+        this.logger.error(formatCompact({
+          name: p.name,
+          reload: false,
+          error: err instanceof Error ? err.message : String(err),
+          hint: 'full_restart',
+        }));
+        throw err;
+      }
+      await fresh.broadcast('mounted');
+      this.logger.debug(formatCompact({ name: fresh.name, reload_ms: Date.now() - now }));
+    } finally {
+      p._reloading = false;
     }
-    await fresh.broadcast('mounted');
-    this.logger.debug(formatCompact({ name: fresh.name, reload_ms: Date.now() - now }));
   }
 
   /**

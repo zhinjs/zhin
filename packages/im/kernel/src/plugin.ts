@@ -57,8 +57,17 @@ export function getFileHash(filePath: string): string {
 }
 
 export function watchFile(filePath: string, callback: () => void): () => void {
+  // Watch the containing directory rather than the file itself: editors that
+  // save atomically (write a temp file, then rename over the target) replace
+  // the file's inode, which silently kills an fs.watch() held on the file
+  // path directly — hot-reload would go dead after the first such edit.
+  const dir = path.dirname(filePath);
+  const base = path.basename(filePath);
   try {
-    const watcher = fs.watch(filePath, callback);
+    const watcher = fs.watch(dir, (_event, changedName) => {
+      if (changedName && changedName.toString() !== base) return;
+      callback();
+    });
     watcher.on("error", () => {});
     return () => watcher.close();
   } catch {
@@ -102,6 +111,7 @@ export class PluginBase extends EventEmitter<PluginBaseLifecycle> implements Plu
 
   private _cachedName?: string;
   private _explicitName?: string;
+  protected _reloading = false;
 
   started = false;
   $contexts = new Map<string, BaseContext>();
@@ -349,11 +359,20 @@ export class PluginBase extends EventEmitter<PluginBaseLifecycle> implements Plu
   }
 
   async reload(plugin: PluginBase = this): Promise<void> {
-    this.logger.info(`Plugin "${plugin.name}" reloading...`);
-    const now = Date.now();
-    if (!plugin.parent) return process.exit(51);
-    await plugin.stop();
-    await plugin.parent.import(plugin.filePath, now);
+    // A burst of file events for one logical save (or an overlapping edit
+    // while a reload is still in flight) must not start a second concurrent
+    // stop()+import() cycle for the same plugin.
+    if (plugin._reloading) return;
+    plugin._reloading = true;
+    try {
+      this.logger.info(`Plugin "${plugin.name}" reloading...`);
+      const now = Date.now();
+      if (!plugin.parent) { process.exit(51); return; }
+      await plugin.stop();
+      await plugin.parent.import(plugin.filePath, now);
+    } finally {
+      plugin._reloading = false;
+    }
   }
 
   watch(callback: (p: PluginBase) => void | Promise<void>, recursive = false): void {

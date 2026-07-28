@@ -2,8 +2,10 @@
  * PluginBase tests
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import * as fs from 'fs'
+import * as os from 'os'
 import * as path from 'path'
-import { PluginBase } from '../src/plugin.js'
+import { PluginBase, watchFile } from '../src/plugin.js'
 import { Feature } from '../src/feature.js'
 
 describe('PluginBase', () => {
@@ -315,6 +317,59 @@ describe('PluginBase', () => {
       await plugin.start()
       await plugin.stop()
       expect(plugin.started).toBe(false)
+    })
+  })
+
+  describe('watchFile', () => {
+    it('survives an atomic-rename save (temp file + rename over target)', async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-watch-'))
+      const target = path.join(dir, 'plugin.ts')
+      fs.writeFileSync(target, 'v1')
+
+      let fireCount = 0
+      const unwatch = watchFile(target, () => { fireCount++ })
+
+      try {
+        // Many editors (Vim, several IDEs/formatters) save atomically: write
+        // a temp file, then rename it over the target. This replaces the
+        // target's inode, which would silently kill a raw fs.watch(file).
+        const tmp = path.join(dir, '.plugin.ts.tmp')
+        fs.writeFileSync(tmp, 'v2')
+        fs.renameSync(tmp, target)
+
+        await vi.waitFor(() => {
+          expect(fireCount).toBeGreaterThan(0)
+        }, { timeout: 2000, interval: 20 })
+      } finally {
+        unwatch()
+        fs.rmSync(dir, { recursive: true, force: true })
+      }
+    })
+
+    it('ignores changes to unrelated files in the same directory', async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-watch-'))
+      const target = path.join(dir, 'plugin.ts')
+      const sibling = path.join(dir, 'sibling.ts')
+      fs.writeFileSync(target, 'v1')
+
+      let fireCount = 0
+      const unwatch = watchFile(target, () => { fireCount++ })
+
+      try {
+        fs.writeFileSync(sibling, 'noise')
+        // Give the sibling-file event a chance to (incorrectly) arrive before
+        // confirming the real target edit still fires as expected.
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        expect(fireCount).toBe(0)
+
+        fs.writeFileSync(target, 'v2')
+        await vi.waitFor(() => {
+          expect(fireCount).toBeGreaterThan(0)
+        }, { timeout: 2000, interval: 20 })
+      } finally {
+        unwatch()
+        fs.rmSync(dir, { recursive: true, force: true })
+      }
     })
   })
 })
