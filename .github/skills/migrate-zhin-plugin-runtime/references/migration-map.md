@@ -1,18 +1,90 @@
 # 迁移映射
 
+## 能力
+
 | 旧写法 | 新 SSOT |
 |---|---|
 | `addCommand(new MessageCommand(...))` | `commands/**/*.ts` + `defineCommand()` |
 | `addMiddleware(fn)` | `middlewares/*.ts` + `defineMiddleware()` |
+| `plugin.on('message.*.receive')` | `middlewares/*.ts` + `target: 'inbound'` |
+| `plugin.on('before.sendMessage')` | `middlewares/*.ts` + `target: 'outbound'` |
 | `addComponent(fn)` | `components/*.ts(x)` + `defineComponent()` |
 | `addTool()` / Tool registry | `tools/*.ts` + `defineAgentTool()` |
-| Skill registry | `skills/<name>/SKILL.md` |
+| `addCron(new Cron(...))` | `plugin.ts` setup + `scheduleHostToken.register()`，或 `agent/schedules/*.ts` + `defineSchedule()` |
+| Skill registry | `agent/skills/<name>.md`（插件包**禁止**顶层 `skills/`，见 `check:no-package-skills`） |
 | Agent registry | `agents/<name>.agent.md` |
 | MCP registry | `mcp/*.ts` + MCP Feature definition |
 | Console entry route metadata | `pages/*.tsx` + `definePage()` |
 | 自定义 nav/footer 注册 | `pages/$nav.tsx` / `pages/$footer.tsx` |
 | 模块级 Plugin 注册 | `package.json#zhin` + `definePlugin()` entry |
 | 全局可变能力 registry | generation-scoped Feature projection |
+
+## 上下文与依赖
+
+| 旧写法 | 新 SSOT |
+|---|---|
+| `usePlugin()` / `getPlugin()` | `setup(context)` 的 `context`；能力里用执行上下文 |
+| `provide(ctx)` / `inject(name)` | `context.resources.provide(token, v)` / `use(token)` |
+| `useContext('database', cb)` | `databaseHostToken`（先 `has` 再 `use`） |
+| `useContext('router', cb)` | `httpHostToken` / Host 提供的 router 资源 |
+| `useContext('web', cb)` | `pages/*.tsx` + `definePage()` |
+| `declareConfig(name, Schema)` | `schema.json` 声明字段 + `context.config.get()` |
+| `plugin.onDispose(fn)` | `context.lifecycle.add(fn)` 或从 `setup()` 返回 disposer |
+| 模块级共享状态 | owner Resource（`createToken` + `provide`） |
+
+Host 资源（database / schedule / outbound / agentTools…）都是**可选**的：一律先
+`context.resources.has(token)` 再 `use(token)`，否则精简安装下装配会直接失败。
+
+## 一个完整对照
+
+```ts
+// 旧：入口里命令式注册 + 模块级共享状态
+import { MessageCommand, usePlugin } from 'zhin.js';
+
+const plugin = usePlugin();
+const hits = new Map<string, number>();
+
+plugin.addCommand(new MessageCommand('hit').action(async (message) => {
+  const n = (hits.get(message.$sender.id) ?? 0) + 1;
+  hits.set(message.$sender.id, n);
+  return `hit ${n}`;
+}));
+```
+
+```ts
+// 新 plugin.ts：只装配，状态成为 Resource
+import { createToken, definePlugin } from '@zhin.js/plugin-runtime';
+
+export const hitsToken = createToken<Map<string, number>>('demo.hits');
+
+export default definePlugin({
+  name: 'demo',
+  setup(context) {
+    const hits = new Map<string, number>();
+    context.resources.provide(hitsToken, hits);
+    return () => hits.clear();
+  },
+});
+```
+
+```ts
+// 新 commands/hit.ts：文件路径即路由
+import { defineCommand } from '@zhin.js/command';
+import { hitsToken } from '../plugin.js';
+
+export default defineCommand({
+  description: 'Count hits per user',
+  async execute(context) {
+    const hits = context.resources.use(hitsToken);
+    const n = (hits.get(context.input.sender.id) ?? 0) + 1;
+    hits.set(context.input.sender.id, n);
+    return `hit ${n}`;
+  },
+});
+```
+
+注意 `Message` 字段差异：新运行时用 `content` / `sender` / `target` / `metadata`，
+没有 `$raw` / `$channel` / `$sender`。
 
 ## Command 路由
 
@@ -43,4 +115,5 @@ gh pr <title:string=defaultTitle>
 - ComponentContext 或模板字符串空白可能被代码生成改变。
 - 同一能力由旧 registry 与新目录双写。
 
+逐条的处理办法（含改写示例）见 [人工诊断处理](./manual-diagnostics.md)。
 遇到这些情况时，先为旧行为补测试，再把依赖改成显式 config/resource/context，最后迁移能力。
