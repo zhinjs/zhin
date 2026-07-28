@@ -1,8 +1,8 @@
 # 插件模型
 
-Zhin.js 的插件就是**一个普通的 npm 包**，区别只在 `package.json` 里多了一个 `zhin` 字段。一个 Bot 应用 = 一棵插件树：Root Plugin（你的项目）在 `zhin.plugins` 里声明子插件，子插件还可以再声明自己的子插件。像乐高积木：每块独立成型，按 instanceKey 卡进指定位置。
+两个 QQ 账号接进同一个 Bot，或者把一个游戏插件拆出去单独发布——在 zhin.js 里这两件事用同一个机制解决：插件树。插件就是一个普通的 npm 包，区别只在 `package.json` 里多了一个 `zhin` 字段；Root Plugin（你的项目）在 `zhin.plugins` 里声明子插件，子插件还可以再声明自己的子插件。像乐高积木：每块独立成型，按 instanceKey 卡进指定位置。
 
-## `package.json` 的 `zhin` 字段全解
+## `package.json` 的 `zhin` 字段
 
 以 `examples/minimal-bot/package.json` 为例：
 
@@ -79,11 +79,7 @@ export default defineAdapter({
 
 ## instanceKey：插件在树上的名字
 
-同一个插件包可以挂多次（比如两个 QQ 账号用同一个适配器包的两个实例），区分它们靠 `instanceKey`：
-
-- 命名规则：`/^[a-z0-9][a-z0-9-]*$/`（小写字母数字加连字符）。
-- 它决定 PluginId：`root` 的孩子 `sandbox` 的 id 是 `root/sandbox`，再往下依次拼接。
-- 它决定配置命名空间：该实例的配置写在 `zhin.config.yml` 的 `plugins.<instanceKey>` 下（见 [配置即数据](./config-as-data.md)）。
+同一个插件包可以挂多次（比如两个 QQ 账号用同一个适配器包的两个实例），区分它们靠 `instanceKey`。命名规则是 `/^[a-z0-9][a-z0-9-]*$/`（小写字母数字加连字符）。它同时决定两件事：PluginId——`root` 的孩子 `sandbox` 的 id 是 `root/sandbox`，再往下依次拼接；以及配置命名空间——该实例的配置写在 `zhin.config.yml` 的 `plugins.<instanceKey>` 下（见 [配置即数据](./config-as-data.md)）。
 
 ```jsonc
 // Root package.json

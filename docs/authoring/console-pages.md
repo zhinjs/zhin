@@ -5,7 +5,7 @@ description: pages/ 约定、@zhin.js/page 与 @zhin.js/layout、客户端构建
 
 # Console 页面与布局
 
-插件可以向 Remote Console 贡献 React 页面。机制与命令、组件一致：**`pages/` 是约定目录**，由 `@zhin.js/page`（页面）与 `@zhin.js/layout`（布局）两个 Feature 发现，客户端构建管线把 TSX 编译成浏览器可加载的 ES 模块。
+插件不只能往群里发消息，还能向 Remote Console 贡献整个 React 页面——sandbox 适配器的 `/sandbox` 聊天页就是这么来的。机制与命令、组件一致：**`pages/` 是约定目录**，由 `@zhin.js/page`（页面）与 `@zhin.js/layout`（布局）两个 Feature 发现，客户端构建管线把 TSX 编译成浏览器可加载的 ES 模块。
 
 ## pages/ 约定（@zhin.js/page）
 
@@ -27,7 +27,7 @@ export default function SandboxPage() {
 }
 ```
 
-`meta` 字段（全部可选，`definePage` 会校验未知键并抛错）：
+`meta` 字段全部可选，`definePage` 会校验未知键并抛错：
 
 | 字段 | 默认 | 说明 |
 | --- | --- | --- |
@@ -52,12 +52,7 @@ export default function SandboxPage() {
 
 ## 布局（@zhin.js/layout）
 
-`pages/` 下两个保留文件名提供布局槽位：
-
-- `pages/$nav.tsx` → `nav` 槽（导航区）
-- `pages/$footer.tsx` → `footer` 槽（页脚区）
-
-布局文件默认导出 React 组件即可，不需要 `meta`。同一槽位同时存在 `.ts` 与 `.tsx` 时以 `.tsx` 为准。
+`pages/` 下有两个保留文件名提供布局槽位：`pages/$nav.tsx` 对应 `nav` 槽（导航区），`pages/$footer.tsx` 对应 `footer` 槽（页脚区）。布局文件默认导出 React 组件即可，不需要 `meta`；同一槽位同时存在 `.ts` 与 `.tsx` 时以 `.tsx` 为准。
 
 ## 客户端构建管线
 
@@ -74,12 +69,11 @@ flowchart LR
     G --> H
 ```
 
-要点：
+先看产物：每个页面打包为 `<owner>-<localName>-<contentHash>.js`，写入项目下 `.zhin/client/`，经 Host 路由 `GET /assets/client/*` 提供（`cache-control: immutable`，内容 hash 变了文件名就变）。`@zhin.js/console-contract` 在打包时内联为身份函数 stub，`meta` 由静态提取得到。
 
-- **产物**：每个页面打包为 `<owner>-<localName>-<contentHash>.js`，写入项目下 `.zhin/client/`，经 Host 路由 `GET /assets/client/*` 提供（`cache-control: immutable`，内容 hash 变了文件名就变）。`@zhin.js/console-contract` 在打包时内联为身份函数 stub，`meta` 由静态提取得到。
-- **`/esm` 代理**：浏览器不解析裸导入。`react`、`react-dom`、`react-dom/client`、`react/jsx-runtime(-dev)`、`react-router`、`react-router-dom` 这个白名单（`ALLOWED_ESM_CANONICAL`）内的导入被改写为 `/esm/<enc>.mjs`，由 Host 按需构建并代理，保证整个 Console 只有一份 React 实例；白名单外的 canonical 返回 403。
-- **Host 路由**（`basic/cli/src/plugin-runtime/console-host-installer.ts`）：`GET /console` 是页面索引；`GET /console/api/pages` 返回页面清单；`GET /*` catch-all 按路由匹配页面并返回页面 shell（内含 importmap 与模块挂载脚本），未命中 404、权限不足 403。
-- 页面模块在浏览器里以 `import(moduleUrl)` 加载，取默认导出挂载到 `#root`。
+再看裸导入问题。浏览器不解析 `import 'react'` 这类裸导入，因此白名单 `ALLOWED_ESM_CANONICAL`（`react`、`react-dom`、`react-dom/client`、`react/jsx-runtime(-dev)`、`react-router`、`react-router-dom`）内的导入被改写为 `/esm/<enc>.mjs`，由 Host 按需构建并代理，保证整个 Console 只有一份 React 实例；白名单外的 canonical 返回 403。
+
+Host 路由挂在 `basic/cli/src/plugin-runtime/console-host-installer.ts`：`GET /console` 是页面索引，`GET /console/api/pages` 返回页面清单，`GET /*` catch-all 按路由匹配页面并返回页面 shell（内含 importmap 与模块挂载脚本），未命中 404、权限不足 403。页面模块在浏览器里以 `import(moduleUrl)` 加载，取默认导出挂载到 `#root`。
 
 ## sandbox 适配器的 page 实例
 
@@ -100,8 +94,7 @@ sandbox 适配器（`plugins/adapters/sandbox`）是这套机制的标准消费�
 }
 ```
 
-- `@zhin.js/adapter` Feature 发现 `adapters/` 下的适配器（WebSocket `/sandbox` Endpoint）；
-- `@zhin.js/page` Feature 发现 `pages/index.tsx`，于是 Console 里出现 **`/sandbox` 聊天页**：`SandboxChat` 组件通过 WebSocket 连到 Host 的 `/sandbox`（base 与 token 见 `pages/sandboxTransport.ts`），收发消息走统一的 IM 链路——在页面里发消息等价于一个真实平台的入站消息，会经过中间件、命令匹配、AI 未命中处理。
+两个 Feature 各管一摊：`@zhin.js/adapter` 发现 `adapters/` 下的适配器（WebSocket `/sandbox` Endpoint）；`@zhin.js/page` 发现 `pages/index.tsx`，于是 Console 里出现 **`/sandbox` 聊天页**。`SandboxChat` 组件通过 WebSocket 连到 Host 的 `/sandbox`（base 与 token 见 `pages/sandboxTransport.ts`），收发消息走统一的 IM 链路——在页面里发消息等价于一个真实平台的入站消息，会经过中间件、命令匹配、AI 未命中处理。
 
 这让「无真实平台调试」成为默认开发路径：`pnpm dev`（examples/minimal-bot）起的 Sandbox + Console 即可验证命令、组件渲染与 Agent 行为。页面对出站 html 段是内嵌渲染（sandbox 适配器直接消费 html，不做图片/文本归一化，见[中间件与组件](./middleware-components.md)）。
 

@@ -4,10 +4,7 @@ title: Console
 
 # Console
 
-Zhin.js 自带 Web 控制台：CLI 启动（`zhin runtime start`，项目脚本的 `pnpm dev` / `pnpm start` 最终都走它）时**自动装配** Http Host 与 Console API，无需额外配置即可使用。UI 有两层：
-
-- **Remote Console**：托管在 <https://console.zhin.dev>，连接你的 Host 地址 + token；
-- **本地页面**：Host 直接服务插件页面（`/console` 索引 + 各页面路由）与 sandbox 聊天页。
+想看 bot 的运行状态、在线改一行配置、或者不接平台先聊两句，都不用登服务器——`zhin runtime start` 启动时就**自动装配**了 Http Host 与 Console API（项目脚本的 `pnpm dev` / `pnpm start` 最终都走它），零配置可用。UI 有两层：托管在 <https://console.zhin.dev> 的 Remote Console，填你的 Host 地址 + token 连接；以及 Host 直接服务的本地页面（`/console` 索引 + 各页面路由）和 sandbox 聊天页。
 
 ```mermaid
 flowchart LR
@@ -38,10 +35,7 @@ http:
   base: /api                 # API 前缀，默认 /api
 ```
 
-- **鉴权**：配置 token 后，`/api` 下的请求需带 `Authorization: Bearer <token>`（或 `?token=` 查询参数）；`/pub/*`、Console shell 与页面路由保持公开。token 比较走时序安全比较。
-- **CORS**：`corsOrigins` 与 Remote Console 源合并，跨域 UI 才能访问。
-- **端口占用软降级**：端口被占时 Http Host 记日志跳过，适配器与 Agent 照常启动（Console 不可用）。
-- **重启**：Console 触发 `system:restart` 时进程以 exit code 51 退出，由 CLI daemon 自动拉起。
+几个实际部署时会碰到的点。鉴权：配置 token 后，`/api` 下的请求需带 `Authorization: Bearer <token>`（或 `?token=` 查询参数）；`/pub/*`、Console shell 与页面路由保持公开，token 比较走时序安全比较。CORS：`corsOrigins` 会与 Remote Console 源合并，跨域 UI 才能访问。端口被占时是软降级——Http Host 记日志跳过，适配器与 Agent 照常启动，只是 Console 不可用。另外，Console 触发 `system:restart` 时进程以 exit code 51 退出，由 CLI daemon 自动拉起。
 
 ## 页面功能
 
@@ -65,7 +59,7 @@ http:
 
 ## /entries 插件页面机制
 
-插件可以向 Console 贡献自己的页面。机制：
+插件可以向 Console 贡献自己的页面。机制分三步：
 
 1. 插件声明 client 页面（pagemanager），构建产物由 Host 服务在 `/assets/client/*`；
 2. Host 的 ConsoleRuntime 汇总页面目录，`GET /entries` 返回 `{ entries, runtimeEnvHint }`——每条 entry 含 `id`、`title`、`route`、`module`（页面模块 URL）、`order`、`hash`；

@@ -4,7 +4,7 @@ title: 开发流程
 
 # 开发流程
 
-本页覆盖日常开发闭环：环境准备、构建与测试、harness 门禁、changeset 与发版、调试手段。
+改完代码到合进 main，中间有几道关卡：本地构建与测试、38 项 harness 门禁、changeset、CI 发版。本页按这个顺序讲一遍日常闭环。
 
 ## 环境准备
 
@@ -37,9 +37,9 @@ pnpm --filter @zhin.js/scaffold-wizard build   # 或 pnpm prepare:cli
 
 ## harness 门禁（pnpm check:all）
 
-`pnpm check:all` 运行 `scripts/check-all-harness.mjs`，串行执行 **38 项检查**（含 type-check、lint、单测），全部通过才算绿。CI 若另跑 coverage 作业，可设 `HARNESS_SKIP_TEST=1` 跳过其中的 `pnpm test`，避免双跑。
+提交前最值得跑一次的是 `pnpm check:all`：它运行 `scripts/check-all-harness.mjs`，串行执行 **38 项检查**（含 type-check、lint、单测），全部通过才算绿——CI 跑的就是同一套。CI 若另跑 coverage 作业，可设 `HARNESS_SKIP_TEST=1` 跳过其中的 `pnpm test`，避免双跑。
 
-按职责分组如下（括号内是单项命令，均可单独运行）：
+下面按职责分组列出（括号内是单项命令，均可单独运行）。
 
 **质量基线**
 

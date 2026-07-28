@@ -1,6 +1,6 @@
 # 示例速览
 
-仓库 `examples/` 下维护四个分层递进的官方示例，全部开箱可跑（仓库根先 `pnpm install`）：
+想学框架先从跑起来的东西入手。仓库 `examples/` 下维护四个分层递进的官方示例，全部开箱可跑（仓库根先 `pnpm install`）：
 
 | 示例 | 定位 | 启动 | 通道 |
 |------|------|------|------|
@@ -35,7 +35,7 @@ pnpm dev            # = pnpm --filter minimal-bot dev
 
 要求 Node ≥22.6（22.6–22.17 由 CLI 自动带 `--experimental-strip-types`，22.18+ 原生 TypeScript）。
 
-目录速览：
+目录结构：
 
 ```text
 minimal-bot/

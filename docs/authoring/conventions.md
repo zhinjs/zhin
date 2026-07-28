@@ -1,6 +1,6 @@
 # 约定目录
 
-插件包根目录下的一组**约定目录**会被 Feature 发现机制自动扫描：每个目录对应一个 Feature 包（feature provider），目录里的文件按命名规则映射为能力（capability），无需手动注册。发现流程：
+在插件包根目录下放一个 `commands/` 文件夹、往里丢一个 `.ts` 文件，命令就出现了——不用在任何地方注册。这组会被 Feature 发现机制自动扫描的目录就是**约定目录**：每个目录对应一个 Feature 包（feature provider），目录里的文件按命名规则映射为能力（capability）。发现流程：
 
 ```mermaid
 flowchart LR
@@ -12,12 +12,9 @@ flowchart LR
   F --> G[Index 投影<br/>CommandIndex / ToolIndex / …]
 ```
 
-- 能力的完整 id 形如 `owner\0feature\0localName`（`\0` 分隔），`localName` 由目录内的相对路径决定。
-- 同一 owner 下 `localName`（或同一文件来源）重复会抛 `DiscoveryConflictError`。
-- 目录不存在或没有匹配文件时该 Feature 静默跳过——插件可以只声明自己用到的目录。
-- `target: server` 的模块在 Node 侧加载执行；`target: client`（pages）经构建产物在浏览器加载。
+几个要点。能力的完整 id 形如 `owner\0feature\0localName`（`\0` 分隔），`localName` 由目录内的相对路径决定；同一 owner 下 `localName`（或同一文件来源）重复会抛 `DiscoveryConflictError`。目录不存在或没有匹配文件时该 Feature 静默跳过——插件只声明自己用到的目录就行。另外，`target: server` 的模块在 Node 侧加载执行，`target: client`（pages）则经构建产物在浏览器加载。
 
-## 目录全表
+## 目录一览
 
 | 目录 | 文件形态 | 递归 | target | Feature 包 | featureId | 默认导出 |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -33,9 +30,7 @@ flowchart LR
 
 ## 命名规则
 
-通用段规则（目录名、普通文件名去扩展名后）：必须匹配 `^[a-z0-9][a-z0-9-]*$`，即小写字母/数字开头、可含连字符。不匹配的文件被跳过。
-
-各目录的补充规则：
+通用段规则只有一条：目录名、普通文件名去扩展名后，必须匹配 `^[a-z0-9][a-z0-9-]*$`，即小写字母/数字开头、可含连字符。不匹配的文件被跳过。各目录的补充规则：
 
 | 目录 | localName 推导 | 示例 |
 | --- | --- | --- |
@@ -144,15 +139,6 @@ tools:
 
 `pages/*.tsx` 编译为浏览器产物，挂进 Remote Console；`examples/full-bot/pages/orchestration.tsx` 是现成例子。`$nav.tsx` / `$footer.tsx` 由 `@zhin.js/layout` 消费，注入导航与页脚。
 
-## 仓库实例速查
+## 仓库实例
 
-| 目录 | 实例 |
-| --- | --- |
-| commands | `plugins/utils/lottery/commands/`（含动态参数 `[game:string=].ts`） |
-| middlewares | `plugins/utils/group-suite/middlewares/`、`plugins/games/*/middlewares/` |
-| components | `plugins/utils/music/components/share-music.ts` |
-| adapters | `plugins/adapters/napcat/adapters/napcat.ts` |
-| tools | `plugins/utils/music/tools/`、`plugins/utils/group-suite/tools/` |
-| skills | `examples/full-bot/skills/memory-consolidate/` |
-| agents | `examples/multi-agent-room/agents/` |
-| pages | `examples/full-bot/pages/orchestration.tsx` |
+想找生产级参照时，直接翻这些目录：`commands` 看 `plugins/utils/lottery/commands/`（含动态参数 `[game:string=].ts`）；`middlewares` 看 `plugins/utils/group-suite/middlewares/` 和 `plugins/games/*/middlewares/`；`components` 看 `plugins/utils/music/components/share-music.ts`；`adapters` 看 `plugins/adapters/napcat/adapters/napcat.ts`；`tools` 看 `plugins/utils/music/tools/` 与 `plugins/utils/group-suite/tools/`；`skills` 看 `examples/full-bot/skills/memory-consolidate/`；`agents` 看 `examples/multi-agent-room/agents/`；`pages` 看 `examples/full-bot/pages/orchestration.tsx`。

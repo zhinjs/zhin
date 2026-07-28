@@ -1,6 +1,6 @@
-# definePlugin 能力全景
+# definePlugin
 
-`definePlugin` 是插件的声明入口，来自 `@zhin.js/plugin-runtime`。一个插件就是一份 `PluginDefinition`：名字、元数据、依赖声明，外加一个 `setup(context)` 装配函数。
+声明一个插件不需要继承基类，也不用往任何注册表里手工挂条目——默认导出 `definePlugin(...)`（来自 `@zhin.js/plugin-runtime`）的返回值就够了。这份返回值叫 `PluginDefinition`：名字、元数据、依赖声明，外加一个 `setup(context)` 装配函数。
 
 ```ts
 import { definePlugin } from '@zhin.js/plugin-runtime';
@@ -16,13 +16,11 @@ export default definePlugin<MyConfig>({
 });
 ```
 
-- `name` 必填，必须匹配 `^[a-z][a-z0-9-]*$`，否则 `definePlugin` 直接抛 `TypeError`。
-- 返回的 definition 被 `Object.freeze`，不可再改。
-- `setup` 可同步、可 async；返回值（可选）是一个 `Dispose`，在当前代（generation）结束时执行。
+几个硬约束先记住。`name` 必填，必须匹配 `^[a-z][a-z0-9-]*$`，否则 `definePlugin` 直接抛 `TypeError`；返回的 definition 被 `Object.freeze`，不可再改。`setup` 可同步、可 async，可选地返回一个 `Dispose`，在当前代（generation）结束时执行。
 
 > 从零起步的完整教程见 [编写第一个插件](../getting-started/first-plugin.md)；插件模型概念见 [插件模型](../concepts/plugin-model.md)。
 
-## setup context 五件
+## setup context 五个成员
 
 `setup` 收到的 `PluginSetupContext<TConfig>` 只有五个成员，全部只读：
 
@@ -34,8 +32,9 @@ export default definePlugin<MyConfig>({
 | `lifecycle` | `DisposeStack` | 代的回收栈：`lifecycle.add(dispose)` 登记的清理函数在代结束时按逆序执行 |
 | `handoff` | `GenerationHandoffRegistry` | 代际交接注册表：`handoff.add(participant)` 参与热重载事务（见下文「代际交接」） |
 
+看一段真实装配就清楚了（`examples/capabilities-bot/plugin.ts`，节选）：
+
 ```ts
-// examples/capabilities-bot/plugin.ts（节选）
 async setup(context) {
   const { instanceKey } = context.plugin;            // ① 实例视图
   const config = context.config.get();               // ② 配置视图
@@ -54,13 +53,7 @@ async setup(context) {
 
 ## metadata 与 requires
 
-`metadata` 三个字段服务于 Remote Console 的插件卡片（`/api/plugins`）：
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `displayName` | `string` | 展示名 |
-| `icon` | `string` | 图标名 |
-| `order` | `number` | 排序权重 |
+`metadata` 的三个字段全部服务于 Remote Console 的插件卡片（`/api/plugins`）：`displayName` 是展示名，`icon` 是图标名，`order` 是排序权重。都不影响运行时行为。
 
 `requires` 声明硬依赖的 Host token 数组，缺失即拒绝启动——与 `has()` + 降级的软依赖路径互为补充：
 
@@ -73,9 +66,9 @@ export default definePlugin({
 });
 ```
 
-## Host token 全表
+## Host token
 
-Host token 是 Host 提供给插件的能力句柄。`setup` 里通过 `context.resources` 解析；CLI Host 启动时自动装配，未装配的 token 用 `has()` 判空降级。前六个从 `@zhin.js/plugin-runtime` 导出，`httpHostToken` 从 `@zhin.js/host-http` 导出。
+Host token 是 Host 提供给插件的能力句柄，`setup` 里通过 `context.resources` 解析。CLI Host 启动时自动装配，未装配的 token 用 `has()` 判空降级。前六个从 `@zhin.js/plugin-runtime` 导出，`httpHostToken` 从 `@zhin.js/host-http` 导出。
 
 | token | token id | 提供条件 | 关键方法 |
 | --- | --- | --- | --- |
@@ -87,10 +80,10 @@ Host token 是 Host 提供给插件的能力句柄。`setup` 里通过 `context.
 | `runtimeEventPublisherToken` | `zhin.runtime.event-publisher` | Root 级，CLI console 装配 | `publish(type, data)` 向 Console SSE hub 广播事件（适配器用来推 `endpoint:request` / `endpoint:notice` 等） |
 | `httpHostToken` | `zhin.host.http` | HTTP Host 启用 | `route(method, path, handler, meta?)` 注册 HTTP 路由；`ws(path).onConnection(cb)` 注册 WS 端点；`listen()` / `close()` 由 Host 管理 |
 
-典型用法（软依赖 + 生命周期回收）：
+注意这两段典型用法的共同点：先 `has()` 守卫，再把返回的注销函数挂进 `lifecycle`——热重载时自动回收。
 
 ```ts
-// ④ 定时任务：dispose 挂 lifecycle，热重载安全回收
+// 定时任务：dispose 挂 lifecycle，热重载安全回收
 if (config.heartbeatCron && context.resources.has(scheduleHostToken)) {
   const schedule = context.resources.use(scheduleHostToken);
   context.lifecycle.add(schedule.register({
@@ -101,7 +94,7 @@ if (config.heartbeatCron && context.resources.has(scheduleHostToken)) {
   }));
 }
 
-// ⑤ Agent 工具：装了 Agent Host 才存在，未装静默跳过
+// Agent 工具：装了 Agent Host 才存在，未装静默跳过
 if (context.resources.has(agentToolsHostToken)) {
   const agentTools = context.resources.use(agentToolsHostToken);
   context.lifecycle.add(agentTools.register({

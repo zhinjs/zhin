@@ -5,7 +5,7 @@ description: defineMiddleware 的 inbound/outbound 执行序，defineComponent �
 
 # 中间件与组件
 
-两个相邻的能力：`defineMiddleware`（`@zhin.js/middleware`）拦截消息流，`defineComponent`（`@zhin.js/component`）把结构化 props 渲染成可发送的内容（通常是图片）。
+消息流上有两类相邻的扩展点：`defineMiddleware`（`@zhin.js/middleware`）拦截消息流，`defineComponent`（`@zhin.js/component`）把结构化 props 渲染成可发送的内容（通常是图片）。游戏插件把它们配在一起用——中间件归一输入，组件统一输出。
 
 ## defineMiddleware
 
@@ -38,8 +38,7 @@ export default defineMiddleware<Message>({
 | `target` | `'inbound'` | `inbound` / `outbound` | 拦截入站消息还是出站信封 |
 | `order` | `0` | 安全整数 | 同 phase 内的排序键 |
 
-- **inbound**：`context.input` 是 Runtime `Message`，可读 `content`、`sender`、`$reply(...)`。拦截时不调 `next()`，直接 `$reply` 后 return 即可（游戏插件的文本入口就是这个模式）。
-- **outbound**：`context.input` 是出站信封（`OutboundEnvelope`），`payload` 是即将发给平台的 wire 段，可做审计、改写、追加。
+两个 `target` 看到的 `context.input` 不同。inbound 下是 Runtime `Message`，可读 `content`、`sender`、`$reply(...)`——拦截时不调 `next()`，直接 `$reply` 后 return 即可（游戏插件的文本入口就是这个模式）。outbound 下是出站信封（`OutboundEnvelope`），`payload` 是即将发给平台的 wire 段，可做审计、改写、追加。
 
 ### 执行序
 
@@ -56,7 +55,7 @@ sequenceDiagram
     M2-->>M1: 完成
 ```
 
-约束：`next()` 最多调用一次，重复调用抛 `Middleware next() called more than once`；不调 `next()` 即中断链条（终点不执行）。`context` 还带有 `config` / `use(token)` / `owner` / `generation`，与其它能力上下文一致。
+两条约束：`next()` 最多调用一次，重复调用抛 `Middleware next() called more than once`；不调 `next()` 即中断链条，终点不执行。`context` 还带有 `config` / `use(token)` / `owner` / `generation`，与其它能力上下文一致。
 
 真实示例见 `plugins/games/rps/middlewares/rps-choice.ts`：识别游戏 payload 文本（`rps:<session>:<choice>`）或数字 fallback（「1 石头 2 布 3 剪刀」），命中则处理并 `$reply`，否则 `next()` 放行给后续中间件与命令派发。
 
@@ -105,9 +104,7 @@ import { component } from 'zhin.js/core/runtime';
 return component('status-card', { title: 'my-bot', lines: [{ label: 'RSS', value: '42MB' }] });
 ```
 
-- 组件按**调用者插件沿插件树向上**解析：子插件可以先用自己的同名组件覆盖，找不到再取父插件的。
-- 渲染是递归的：组件的 `render` 可以再返回 `component(...)`，深度上限 32。
-- `render(props, context)` 的 `context` 额外带 `requester`（调用方插件节点），以及常规的 `config` / `use` / `owner` / `generation`。
+组件按**调用者插件沿插件树向上**解析：子插件可以先用自己的同名组件覆盖，找不到再取父插件的。渲染是递归的——组件的 `render` 可以再返回 `component(...)`，深度上限 32。`render(props, context)` 的 `context` 额外带 `requester`（调用方插件节点），以及常规的 `config` / `use` / `owner` / `generation`。
 
 ### 渲染为图片（html-renderer）
 
@@ -123,19 +120,11 @@ flowchart TD
     F["sandbox 适配器"] -.->|直接消费 html 段<br/>跳过归一化| G[Console UI 内嵌渲染]
 ```
 
-要点：
-
-- 渲染 Host 是可选资源（`htmlRendererToken`，由 `@zhin.js/html-renderer` 提供）；**未安装时自动降级为文本**，组件代码不用改。
-- 默认宽度 540px、格式 PNG；`data.text` 可作为自定义降级文案，`data.fileName` 自定义图片文件名。
-- **sandbox 适配器直接消费 html 段**（Console UI 内嵌展示），不经过图片/文本归一化。
-- 降级是「尽力而为」：渲染抛错也会落到文本，不会阻塞发送。
+渲染 Host 是可选资源（`htmlRendererToken`，由 `@zhin.js/html-renderer` 提供），**未安装时自动降级为文本**，组件代码不用改。默认宽度 540px、格式 PNG；`data.text` 可作为自定义降级文案，`data.fileName` 自定义图片文件名。sandbox 适配器是个特例：它**直接消费 html 段**（Console UI 内嵌展示），不经过图片/文本归一化。整个降级是「尽力而为」——渲染抛错也会落到文本，不会阻塞发送。
 
 ## 游戏插件的双模式降级
 
-游戏插件（`plugins/games/*` + `@zhin.js/game-kit`）把「按钮键盘 + 文本数字」做成同一份内容的两种消费方式：
-
-1. **按钮模式**（支持键盘的平台）：`buildGridKeyboard` / `buildChoiceKeyboard` 产出 `keyboard` 段，按钮 payload 形如 `ttt:<sessionId>:<cell>`。
-2. **文本模式**（无按钮能力的平台）：同一条消息附 ASCII 棋盘和 `fallbackHint`（如「落子：回复数字 1-9（仅空格）」），`fallback.map` 把数字映射回 payload。
+游戏插件（`plugins/games/*` + `@zhin.js/game-kit`）把「按钮键盘 + 文本数字」做成同一份内容的两种消费方式。支持键盘的平台走按钮模式：`buildGridKeyboard` / `buildChoiceKeyboard` 产出 `keyboard` 段，按钮 payload 形如 `ttt:<sessionId>:<cell>`。没有按钮能力的平台走文本模式：同一条消息附 ASCII 棋盘和 `fallbackHint`（如「落子：回复数字 1-9（仅空格）」），`fallback.map` 把数字映射回 payload。
 
 ```ts
 // plugins/games/tic-tac-toe/src/board-view.ts（节选）
@@ -153,4 +142,4 @@ return buildGridKeyboard({
 });
 ```
 
-配套的 inbound 中间件把两条输入路径归一：直接 payload（按钮回调转文本）走 `parseGridPayload`；纯数字文本经 `buildGridFallbackMap` 反查为 payload，再走同一处理函数。中间件、组件降级因此是同一思想的两侧：**内容只写一遍，按平台能力选择呈现**。
+配套的 inbound 中间件把两条输入路径归一：直接 payload（按钮回调转文本）走 `parseGridPayload`；纯数字文本经 `buildGridFallbackMap` 反查为 payload，再走同一处理函数。到这里就能看出，中间件与组件降级是同一思想的两侧：**内容只写一遍，按平台能力选择呈现**。

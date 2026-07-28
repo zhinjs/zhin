@@ -5,7 +5,7 @@ description: tools/*.ts 约定与 setup 动态注册两条路径、canAccessTool
 
 # Agent 工具与技能
 
-Agent 工具是把插件能力暴露给 AI 模型的接口。注册有两条路径：**`tools/*.ts` 文件约定**（声明式，随插件树继承）与 **`setup()` 动态注册**（命令式，按代际挂载）。两条路径共用同一条准入谓词和同一份 deferred catalog。
+想让模型替用户搜一首歌、查一次乐透推荐？把这段逻辑写成一个文件丢进 `tools/`，下一个 Agent turn 模型就能按名调用它。注册有两条路径：**`tools/*.ts` 文件约定**（声明式，随插件树继承）与 **`setup()` 动态注册**（命令式，按代际挂载），两条路径共用同一条准入谓词和同一份 deferred catalog。
 
 ```mermaid
 flowchart LR
@@ -50,7 +50,7 @@ export default defineAgentTool<{ message: string }>({
 | `hidden` | 否 | 注册但不提供给模型（可按名调用） |
 | `execute(input, context)` | 是 | `context` 是能力上下文（`config` / `use(token)` / `owner` / `generation`） |
 
-工具名即文件名（对模型暴露的就是这个名字，注意跨插件唯一）；子插件可以看到并覆盖父插件的同名工具（沿插件树向上解析）。描述符上另有 `qualifiedName`（owner 路径段与文件名以 `__` 连接）用于消歧。
+工具名即文件名——对模型暴露的就是这个名字，注意跨插件唯一；子插件可以看到并覆盖父插件的同名工具（沿插件树向上解析）。描述符上另有 `qualifiedName`（owner 路径段与文件名以 `__` 连接）用于消歧。
 
 ## 路径二：setup 动态注册
 
@@ -105,21 +105,11 @@ host.register({
 | `permissions` | permit 列表，逐条校验（AND）；单条括号内逗号为 OR |
 | `hidden` | 不进入给模型的工具清单，但仍可按名执行 |
 
-permit 语法（`packages/im/core/src/built/permit-parse.ts`）：
-
-- 内建：`adapter(name)`、`group(id,...)`、`private(id,...)`、`channel(id,...)`、`user(id,...)`、`role(master|trusted|user)`；
-- 平台身份：`platform(adapter,perm)`（如群 owner/admin，由适配器 checker 判定）；
-- 无法识别的 permit 一律拒绝。
+permit 语法（`packages/im/core/src/built/permit-parse.ts`）分三类：内建的 `adapter(name)`、`group(id,...)`、`private(id,...)`、`channel(id,...)`、`user(id,...)`、`role(master|trusted|user)`；平台身份 `platform(adapter,perm)`（如群 owner/admin，由适配器 checker 判定）；无法识别的 permit 一律拒绝。
 
 ## deferred catalog 与 load_tool
 
-工具不进全量 prompt。每个 turn 先把通过准入的工具建成 **catalog**，默认只对模型暴露 `alwaysLoadedTools`；其余工具由三个 meta 工具按需发现与加载（`packages/im/agent/src/builtin/deferred-tool-meta.ts`）：
-
-| meta 工具 | 作用 |
-| --- | --- |
-| `discover` | 按 query 搜索工具/技能（可按 MCP server 过滤），返回名称 + 简介 |
-| `load_tool` | 按名把工具 schema 加载进会话，之后即可调用 |
-| `load_skill` | 加载技能完整指令，并解锁其关联工具 |
+工具不进全量 prompt。每个 turn 先把通过准入的工具建成 **catalog**，默认只对模型暴露 `alwaysLoadedTools`；其余工具由三个 meta 工具按需发现与加载（`packages/im/agent/src/builtin/deferred-tool-meta.ts`）：`discover` 按 query 搜索工具/技能（可按 MCP server 过滤），返回名称加简介；`load_tool` 按名把工具 schema 加载进会话，之后即可调用；`load_skill` 加载技能完整指令并解锁其关联工具。
 
 加载状态按会话持久化（`DeferredToolSessionSnapshot`），有上限逐出。配置键 `deferredTools`（`ZhinAgentConfig`）：
 
@@ -134,10 +124,9 @@ Anthropic SDK 通道会把未加载工具以 `deferLoading` 标记下发；其�
 
 ## skills 与 agents/*.agent.md
 
-技能与命名 Agent 也是文件约定，分别由 `@zhin.js/skill` 与 `@zhin.js/agent-feature` 两个 Feature 发现：
+技能与命名 Agent 也是文件约定，分别由 `@zhin.js/skill` 与 `@zhin.js/agent-feature` 两个 Feature 发现。
 
-- **技能**：`skills/<name>/SKILL.md`（每个子目录一个技能）。正文即给模型的指令；第一个 Markdown 标题行作为描述。`load_skill` 加载后解锁 `toolNames` 关联的工具。
-- **命名 Agent**：`agents/<name>.agent.md`（文件名必须小写 kebab，如 `agents/planner.agent.md`）。整份 Markdown 是该 Agent 的 instructions，首个标题行作为描述。真实示例见 `examples/test-bot/agents/planner.agent.md`。
+技能放在 `skills/<name>/SKILL.md`（每个子目录一个技能）：正文即给模型的指令，第一个 Markdown 标题行作为描述，`load_skill` 加载后解锁 `toolNames` 关联的工具。命名 Agent 是 `agents/<name>.agent.md`（文件名必须小写 kebab，如 `agents/planner.agent.md`）：整份 Markdown 是该 Agent 的 instructions，首个标题行作为描述。真实示例见 `examples/test-bot/agents/planner.agent.md`。
 
 ```markdown
 <!-- agents/planner.agent.md -->

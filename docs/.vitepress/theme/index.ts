@@ -6,6 +6,10 @@ import PluginSearch from './components/PluginSearch.vue'
 import PluginStats from './components/PluginStats.vue'
 import PluginMarket from './components/PluginMarket.vue'
 import Playground from './components/Playground.vue'
+import ZhinHero from './components/ZhinHero.vue'
+import ZhinTerminal from './components/ZhinTerminal.vue'
+import ZhinFeatureGrid from './components/ZhinFeatureGrid.vue'
+import ZhinDuo from './components/ZhinDuo.vue'
 import './custom.css'
 
 export default {
@@ -22,6 +26,10 @@ export default {
     app.component('PluginStats', PluginStats)
     app.component('PluginMarket', PluginMarket)
     app.component('Playground', Playground)
+    app.component('ZhinHero', ZhinHero)
+    app.component('ZhinTerminal', ZhinTerminal)
+    app.component('ZhinFeatureGrid', ZhinFeatureGrid)
+    app.component('ZhinDuo', ZhinDuo)
   }
 } satisfies Theme
 

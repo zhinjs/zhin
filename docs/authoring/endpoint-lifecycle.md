@@ -1,6 +1,6 @@
 # WS/SSE 端点生命周期
 
-长连接端点（WebSocket / SSE）需要同一份状态机：连接、断开、指数退避重连、心跳看门狗、主动停止。`@zhin.js/adapter` 的 `createEndpointLifecycle` 把这份状态机收敛为一个基座，napcat 等适配器都在用。**新写 WS/SSE 端点时直接用基座，不要再手写 `#started` / `#reconnectTimer` 旗标。**
+手写过长连接重连循环的人都踩过同样的坑：旧 socket 迟到的 close 事件误杀新连接、stop 与 connect 竞态抛出 unhandled rejection、退避计时器忘了清理。长连接端点（WebSocket / SSE）需要的其实是同一份状态机——连接、断开、指数退避重连、心跳看门狗、主动停止。`@zhin.js/adapter` 的 `createEndpointLifecycle` 把这份状态机收敛为一个基座，napcat 等适配器都在用。**新写 WS/SSE 端点时直接用基座，不要再手写 `#started` / `#reconnectTimer` 旗标。**
 
 ## 状态机
 
@@ -21,12 +21,9 @@ stateDiagram-v2
   stopped --> connecting: 再次 start()
 ```
 
-关键语义：
+先看最容易误解的一点：**初始连接失败 ≠ 断开重连**。`start()` 的 `connectFn` reject 时状态复位回 `idle` 且不武装重连，调用方拿到错误、可以重试；只有**曾 open** 的连接收到 `notifyClosed()` 才武装退避重连。其次是 stop-during-connect 竞态：`connectFn` await 期间调用 `stop()`，`start()` 静默 resolve（主动停止不算失败）。
 
-- **初始连接失败 ≠ 断开重连**。`start()` 的 `connectFn` reject 时状态复位回 `idle` 且不武装重连，调用方拿到错误、可以重试；只有**曾 open** 的连接收到 `notifyClosed()` 才武装退避重连。
-- **stop-during-connect 竞态**：`connectFn` await 期间调用 `stop()`，`start()` 静默 resolve（主动停止不算失败）。
-- `started` 为 `true` 当且仅当状态是 `connecting` / `open` / `reconnecting`。
-- 每次 connect 尝试递增内部 generation，**陈旧连接句柄的 `notifyClosed` / `onForceClose` 一律被忽略**——旧 socket 的迟到事件不会污染新连接。
+另外两个判断状态的细节：`started` 为 `true` 当且仅当状态是 `connecting` / `open` / `reconnecting`；每次 connect 尝试递增内部 generation，**陈旧连接句柄的 `notifyClosed` / `onForceClose` 一律被忽略**——旧 socket 的迟到事件不会污染新连接。
 
 ## 配置
 
@@ -49,9 +46,7 @@ const lifecycle = createEndpointLifecycle({
 });
 ```
 
-- `reconnect: false` 禁用自动重连：对端断开后直接进入 `closed`。
-- 实际延迟 = `min(initial × multiplier^attempt, max) + random(0, jitter)`；重连成功后 attempt 复位。首次断开记 WARN，后续重试静默为 DEBUG，避免刷屏。
-- 测试可注入 `random: () => 0` 获得确定退避序列。
+`reconnect: false` 禁用自动重连，对端断开后直接进入 `closed`。实际延迟 = `min(initial × multiplier^attempt, max) + random(0, jitter)`，重连成功后 attempt 复位；首次断开记 WARN，后续重试静默为 DEBUG，避免刷屏。测试可注入 `random: () => 0` 获得确定退避序列。
 
 ## start / stop / notifyClosed
 
@@ -100,13 +95,15 @@ async stop(): Promise<void> {
 
 ## 心跳与 PONG 看门狗
 
+心跳 API 只有三个：
+
 ```ts
 lifecycle.startHeartbeat(beat, intervalMs?);  // 启动心跳（重复调用先清旧 timer）
 lifecycle.stopHeartbeat();                    // 手动清心跳（close/stop/看门狗时基座自动调）
 lifecycle.notifyHeartbeatAck();               // 喂狗：收到任何回包时复位计数
 ```
 
-看门狗逻辑：开启 `watchdogMisses: N` 后，每轮心跳先累加 miss 计数；**连续 N 轮没有收到任何回包**（`notifyHeartbeatAck` 未被调用）时，基座主动调用 `onForceClose` 注册的强关函数——由底层 `close` 事件驱动 `notifyClosed` → 走正常退避重连。ws 的 `message` / `pong` 回调里都应喂狗。
+看门狗逻辑：开启 `watchdogMisses: N` 后，每轮心跳先累加 miss 计数；**连续 N 轮没有收到任何回包**（`notifyHeartbeatAck` 未被调用）时，基座主动调用 `onForceClose` 注册的强关函数——由底层 `close` 事件驱动 `notifyClosed`，走正常退避重连。ws 的 `message` / `pong` 回调里都应喂狗：
 
 ```ts
 ws.on('pong', () => this.#lifecycle.notifyHeartbeatAck());
@@ -170,12 +167,7 @@ export class NapCatWsEndpoint implements EndpointInstance {
 
 ## Adapter 1:N endpoints 与 per-endpoint config
 
-一个 Adapter 包声明一次（`adapters/napcat.ts` → `defineAdapter`），但可以在配置里展开为**多个 endpoint 实例**。规则（`packages/im/adapter/src/adapter-index.ts` 的 `expandEndpointConfigs`）：
-
-- 插件实例配置含非空 `endpoints: [{ name, ...覆盖项 }]` 时，**按数组逐项创建 endpoint**；基础配置 = 实例配置去掉 `endpoints` 键，逐项浅合并，`name` 强制写入。
-- `endpoints` 为空或缺省时，按实例配置创建单个 endpoint。
-- `name` 必须是非空字符串且不含 `~` / `\0`；重名项保留首个并告警。
-- 展开后的 endpoint id 为 `<capabilityId>~<name>`。
+一个 Adapter 包声明一次（`adapters/napcat.ts` → `defineAdapter`），但可以在配置里展开为**多个 endpoint 实例**。展开规则在 `packages/im/adapter/src/adapter-index.ts` 的 `expandEndpointConfigs`：插件实例配置含非空 `endpoints: [{ name, ...覆盖项 }]` 时，按数组逐项创建 endpoint，基础配置 = 实例配置去掉 `endpoints` 键，逐项浅合并，`name` 强制写入；`endpoints` 为空或缺省时按实例配置创建单个 endpoint。`name` 必须是非空字符串且不含 `~` / `\0`，重名项保留首个并告警。展开后的 endpoint id 为 `<capabilityId>~<name>`。
 
 ```yaml
 # examples/full-bot/zhin.config.yml（节选）

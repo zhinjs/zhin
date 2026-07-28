@@ -1,10 +1,10 @@
 # Generation 与生命周期
 
-Zhin.js 运行时的每一次启动、热重载、配置变更，都是一次 **generation 事务**：先在"影子"里把新一代完整构建出来，再做一次原子交接。任何时刻进程里都只有一个当前代，交接失败则旧代原样继续服务——不存在半新半旧的中间态。
+改完一个命令文件，不用重启进程，在途的消息也不会被拦腰掐断——因为运行时里启动、热重载、配置变更走的都是同一条路径：一次 **generation 事务**。先在"影子"里把新一代完整构建出来，再做一次原子交接。任何时刻进程里都只有一个当前代，交接失败则旧代原样继续服务——不存在半新半旧的中间态。
 
-## Generation 是什么
+## 快照：一代的世界状态
 
-一个 generation 就是一份不可变的 `RuntimeSnapshot`（`@zhin.js/plugin-runtime`）：
+每一代是一份不可变的 `RuntimeSnapshot`（`@zhin.js/plugin-runtime`）：
 
 ```ts
 interface RuntimeSnapshot {

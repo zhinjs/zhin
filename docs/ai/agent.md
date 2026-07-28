@@ -4,7 +4,7 @@ title: Agent 深入
 
 # Agent 深入
 
-本篇展开 [AI 总览](./index.md) 的运行时：`ZhinAgent` 的回合流程、deferred tools、子代理与编排、会话持久化与 compaction、Assistant profile 与调度任务。
+群里发一句 `ai: 查一下明天天气`，几秒后 bot 回了带数据的回答——中间发生了什么？本篇沿着这条路径展开 [AI 总览](./index.md) 的运行时：`ZhinAgent` 的回合流程、deferred tools、子代理与编排、会话持久化与 compaction、Assistant profile 与调度任务。
 
 ## ZhinAgent 回合
 
@@ -28,19 +28,13 @@ sequenceDiagram
     H-->>U: IM 回复（写入 im_transcripts）
 ```
 
-要点：
-
-- **统一 agentLoop**：ZhinAgent、子代理、后台 worker、`AIService.runAgent` 走同一条执行循环。
-- **入站队列**：同会话消息按 `ai.agent.inboundQueue` 排队（`groupMode: supersede | fifo`），避免并发回合互相覆盖。
-- **模型降级**：首选模型失败时按候选链 fallback 到同 provider 的其他可用模型。
-- **maxIterations**：默认 15（`DEFAULT_CONFIG.maxIterations`），可按 provider/model 经 model harness 覆盖（见下文）。
-- **超时**：触发侧单回合受 `ai.trigger.timeout` 约束（默认 60000ms）；Agent 回合整体默认 120000ms（`DEFAULT_CONFIG.timeout`），工具预执行另有 15000ms 上限（`preExecTimeout`）。
+几个值得记住的事实。ZhinAgent、子代理、后台 worker、`AIService.runAgent` 走的是**同一条 agentLoop**，行为可以一致地预期。同会话的消息按 `ai.agent.inboundQueue` 排队（`groupMode: supersede | fifo`），并发回合不会互相覆盖。首选模型失败时按候选链 fallback 到同 provider 的其他可用模型。`maxIterations` 默认 15（`DEFAULT_CONFIG.maxIterations`），可按 provider/model 经 model harness 覆盖（见下文）。超时有三层：触发侧单回合受 `ai.trigger.timeout` 约束（默认 60000ms），Agent 回合整体默认 120000ms（`DEFAULT_CONFIG.timeout`），工具预执行另有 15000ms 上限（`preExecTimeout`）。
 
 回合产出的工具池 = 插件注册工具 + `ai.mcpServers` 连接工具 + 内置工具 + deferred meta 工具 + `schedule_*` + `bash` + Host 扩展工具（如 `voice_stt` / `voice_tts`）。
 
 ## Deferred tools（discover / load_tool / load_skill）
 
-工具数量大时全量 schema 塞进 prompt 会挤占上下文。Zhin.js 采用**延迟加载**：回合只常驻少量元工具，模型按需检索、按名加载。
+工具数量大时，全量 schema 塞进 prompt 会挤占上下文。Zhin.js 的做法是**延迟加载**：回合只常驻少量元工具，模型按需检索、按名加载。
 
 常驻工具（`alwaysLoadedTools` 默认值）：`ask_user`、`spawn_task`、`discover`、`load_tool`、`load_skill`。
 
@@ -89,13 +83,7 @@ ai:
 | `context` | `fork`（注入父会话近期消息）/ `fresh`（空上下文） |
 | `tools` / `skills` | 声明子任务需要的工具与技能 |
 
-约束与行为：
-
-- 同一回合可发起多个 `spawn_task`，独立子任务建议并行；`tiered` 模式下只读工具与 spawn 并行、写/bash 顺序执行。
-- 子代理默认使用受限工具集（`read_file` / `write_file` / `edit_file` / `list_dir` / `glob` / `grep` / `web_search` / `web_fetch` / `bash` + deferred meta），不自动继承主会话全部工具；用 `ai.agent.subagentTools` 显式追加。
-- 主 Agent 可见的子代理类型受 `ai.agents.<name>.permission.task`（glob → allow/deny）约束。
-- 异步完成后结果**先交还主 Agent**（写入主会话并 auto-continue），用户可见回复由主 Agent 整理发出。
-- 子代理预设可用 `agents/<name>.agent.md`（YAML frontmatter + 说明）文件化声明，启动时自动发现注册。
+行为上有几条约束：同一回合可发起多个 `spawn_task`，独立子任务建议并行；`tiered` 模式下只读工具与 spawn 并行、写/bash 顺序执行。子代理默认使用受限工具集（`read_file` / `write_file` / `edit_file` / `list_dir` / `glob` / `grep` / `web_search` / `web_fetch` / `bash` + deferred meta），不自动继承主会话全部工具，要用 `ai.agent.subagentTools` 显式追加。主 Agent 可见的子代理类型受 `ai.agents.<name>.permission.task`（glob → allow/deny）约束。异步完成后结果**先交还主 Agent**（写入主会话并 auto-continue），用户可见回复由主 Agent 整理发出。另外，子代理预设可用 `agents/<name>.agent.md`（YAML frontmatter + 说明）文件化声明，启动时自动发现注册。
 
 ## 编排（Orchestration）
 
@@ -133,7 +121,7 @@ ai:
 
 设 `ai.sessions.useDatabase: false` 可强制内存模式。
 
-**会话树**：同一 IM 会话内可分叉（branch），IM 命令管理：
+同一 IM 会话内还可以分叉（branch）成会话树，用 IM 命令管理：
 
 | 命令 | 作用 |
 |------|------|
@@ -158,9 +146,7 @@ ai:
       minKeepCount: 2           # 至少保留的消息条数（默认 2）
 ```
 
-- 估算 token 超过 `contextWindow × 0.6` 触发压缩。
-- 两级策略：先做 micro-compact（裁剪冗余工具结果等），再由 LLM 生成 `[Previous conversation summary]` 摘要替换旧历史。
-- 连续自动压缩失败达到上限后停止自动压缩，避免反复消耗。
+估算 token 超过 `contextWindow × 0.6` 触发压缩。压缩分两级：先做 micro-compact（裁剪冗余工具结果等），再由 LLM 生成 `[Previous conversation summary]` 摘要替换旧历史。连续自动压缩失败达到上限后停止自动压缩，避免反复消耗。
 
 ## Model harness
 
@@ -177,7 +163,7 @@ ai:
         "openai:gpt-4o": { maxIterations: 9 }
 ```
 
-## 内置工具一览
+## 内置工具
 
 | 类别 | 工具 |
 |------|------|
@@ -207,7 +193,7 @@ assistant:
     notifyOnFailure: false
 ```
 
-**assistant.profile.yml** 声明人设与例行任务（routines），启动时同步为调度任务：
+`assistant.profile.yml` 声明人设与例行任务（routines），启动时同步为调度任务：
 
 ```yaml
 version: 1
@@ -226,7 +212,7 @@ routines:
     prompt: 生成今日早报。
 ```
 
-内置 routine：`heartbeat`（间隔执行）、`morningBrief`（默认 08:00）、`bedtimeCheck`（默认 22:00）、`weatherReport`，也可自定义键。中国大陆「工作日」场景用 `workday`（含调休），不要用 solar 的 `1-5`。
+内置 routine 有 `heartbeat`（间隔执行）、`morningBrief`（默认 08:00）、`bedtimeCheck`（默认 22:00）、`weatherReport`，也可自定义键。注意中国大陆「工作日」场景用 `workday`（含调休），不要用 solar 的 `1-5`。
 
 用户也可以在 IM 里让 Agent 用 `schedule_add` / `schedule_list` / `schedule_preview` 等工具直接管理任务；外部系统可经 `POST /api/assistant/events` 注入事件、`GET /api/assistant/jobs` 查询任务。
 

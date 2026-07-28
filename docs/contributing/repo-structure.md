@@ -4,11 +4,9 @@ title: 仓库结构
 
 # 仓库结构
 
-Zhin.js 是一个 pnpm workspace monorepo（pnpm 9，构建编排用 turbo）。本页说明顶层目录的分工、包之间的分层依赖方向，以及如何阅读仓库里的 `AGENTS.md`。
+第一次 clone 这个仓库，顶层二十多个目录容易劝退；其实它们是 pnpm workspace（pnpm 9，构建编排用 turbo）按职责切出来的几块，看完本页就知道改东西该往哪钻。工作区覆盖范围以根目录 `pnpm-workspace.yaml` 为准。
 
 ## 顶层目录
-
-workspace 覆盖范围以根目录 `pnpm-workspace.yaml` 为准：
 
 | 目录 | 内容 |
 | --- | --- |
@@ -31,7 +29,7 @@ workspace 覆盖范围以根目录 `pnpm-workspace.yaml` 为准：
 | `config/` | 仓库自用的 `zhin.config.yml` 参考配置 |
 | `data/` | 本地运行数据（数据库、媒体、记忆等，不入库） |
 
-每个 workspace 包都有独立的 `package.json`。Node 侧源码放 `src/`、构建产物放 `lib/`；浏览器侧源码放 `client/`、产物放 `dist/`。
+每个 workspace 包都有独立的 `package.json`。目录内部的惯例也统一：Node 侧源码放 `src/`、构建产物放 `lib/`；浏览器侧源码放 `client/`、产物放 `dist/`。
 
 ## 分层与依赖方向
 
@@ -48,20 +46,10 @@ flowchart LR
   hostHttp --> hostMcp["@zhin.js/mcp / @zhin.js/a2a"]
 ```
 
-要点：
-
-- `kernel` 与 `ai` 不含任何 IM 概念，可以独立使用。
-- 低层不得反向依赖高层，也不得让低层代码引入 IM 概念。
-- 唯一例外是 `basic/cli`：它是 Plugin Runtime 的 composition root（`zhin runtime start` 在这里装配 IM / Agent / Console Host），允许导入 `packages/im` 各层。
+记住三件事：`kernel` 与 `ai` 不含任何 IM 概念，可以独立拿出来用；低层不得反向依赖高层，也不得让低层代码引入 IM 概念；唯一例外是 `basic/cli`——它是 Plugin Runtime 的 composition root（`zhin runtime start` 在这里装配 IM / Agent / Console Host），允许导入 `packages/im` 各层。
 
 ## AGENTS.md 导读
 
-仓库根目录的 [`AGENTS.md`](https://github.com/zhinjs/zhin/blob/main/AGENTS.md) 是给 AI 编码代理和贡献者的最小入口，改代码前先读它。它包含：
+改代码前，先读仓库根目录的 [`AGENTS.md`](https://github.com/zhinjs/zhin/blob/main/AGENTS.md)——它是给 AI 编码代理和贡献者的最小入口。里面有项目概览与版本约束（Node `^20.19.0 || >=22.12.0`、pnpm 9、changesets 发布流）、常用命令（`pnpm dev` / `pnpm build` / `pnpm test` / `pnpm check:all`，详见[开发流程](./development.md)）、必须遵守的代码约定（`.js` 扩展名导入、`usePlugin()` 顶层调用、`getPlugin()` 禁用域、消息统一链路等，详见[代码约定](./conventions.md)），还有一份任务路由：按改动领域列出该看的包和文档（核心 → `packages/im/core`，AI 引擎 → `packages/im/ai`，编排 → `packages/im/agent`，适配器 → `plugins/adapters`……），外加最常改动的高价值文件清单（`plugin.ts`、`adapter.ts`、`dispatcher.ts` 等）。
 
-- **项目概览与版本约束**：Node `^20.19.0 || >=22.12.0`、pnpm 9、changesets 发布流。
-- **常用命令**：`pnpm dev` / `pnpm build` / `pnpm test` / `pnpm check:all` 等（详见[开发流程](./development.md)）。
-- **必须遵守的代码约定**：`.js` 扩展名导入、`usePlugin()` 顶层调用、`getPlugin()` 禁用域、消息统一链路等（详见[代码约定](./conventions.md)）。
-- **任务路由**：按改动领域列出应该看的包和文档（核心 → `packages/im/core`，AI 引擎 → `packages/im/ai`，编排 → `packages/im/agent`，适配器 → `plugins/adapters`……）。
-- **高价值路径**：最常改动的文件清单（`plugin.ts`、`adapter.ts`、`dispatcher.ts` 等）。
-
-部分子目录还有自己的 `AGENTS.md` 或 `CONTEXT.md`（如 `packages/im/plugin-runtime/CONTEXT.md` 描述 generation / Root lifecycle 的术语与约束），在某个包里工作时优先看离它最近的那一份。
+部分子目录还有自己的 `AGENTS.md` 或 `CONTEXT.md`（如 `packages/im/plugin-runtime/CONTEXT.md` 描述 generation / Root lifecycle 的术语与约束）。在某个包里工作时，优先看离它最近的那一份。

@@ -1,7 +1,7 @@
 # 编写第一个插件
 
-本页从空目录写一个可运行的插件 `ping-pong`：一个命令、一份配置 schema、一个 `definePlugin` 入口。
-所有 API 均来自官方示例 [capabilities-bot](https://github.com/zhinjs/zhin/tree/main/examples/capabilities-bot)，可直接运行。
+从空目录到一个能跑的插件，只要五个文件：一个命令、一份配置 schema、一个 `definePlugin` 入口，外加 `package.json` 里的 zhin 清单。
+下面写出的 `ping-pong` 插件，所有 API 均来自官方示例 [capabilities-bot](https://github.com/zhinjs/zhin/tree/main/examples/capabilities-bot)，可直接运行。
 
 最终目录结构：
 
@@ -194,4 +194,4 @@ flowchart TD
 ## 下一步
 
 - [示例速览](../examples/index.md)：capabilities-bot 演示数据库、定时任务、Agent 工具、主动出站等全部能力
-- 插件能力全景（Host Resources、lifecycle、handoff）见插件系统概念页
+- 更深一层的插件能力（Host Resources、lifecycle、handoff）见 [插件模型](../concepts/plugin-model.md)

@@ -4,7 +4,7 @@ title: 配置参考
 
 # 配置参考
 
-`zhin runtime start` 在项目根目录按以下顺序查找配置文件，找到即停；同时存在多个会直接报错：
+启动时 `zhin runtime start` 会在项目根目录找配置文件，按下面的顺序找到第一个就停；同时存在多个则直接报错，不会帮你猜：
 
 1. `config.yml`
 2. `config.yaml`
@@ -12,7 +12,7 @@ title: 配置参考
 4. `zhin.config.yml`
 5. `zhin.config.yaml`
 
-推荐统一使用 `zhin.config.yml`。本文以此为准。
+建议统一用 `zhin.config.yml`，本文的示例都以它为准。
 
 ## 加载与校验流程
 
@@ -26,8 +26,7 @@ flowchart LR
     D --> G[plugins.&lt;instanceKey&gt;<br/>→ 各子插件 ConfigView]
 ```
 
-- 配置文件经 JSON Schema 校验，**顶层只允许下文列出的键**，写错键名会在启动时报 `Invalid Plugin config in zhin.config.yml`。
-- `plugin` / `plugins` 之外的键（`http`、`database`、`ai`、`mcp`、`a2a`、`speech`、`htmlRenderer`、`assistant`、`collaboration`、`log_level`）由 CLI 的 Host 装配层消费，不会下发给插件。
+两份内容离开 mermaid 也值得记住：配置文件过 JSON Schema 校验，**顶层只允许下文列出的键**，键名写错会在启动时报 `Invalid Plugin config in zhin.config.yml`；`plugin` / `plugins` 之外的键（`http`、`database`、`ai`、`mcp`、`a2a`、`speech`、`htmlRenderer`、`assistant`、`collaboration`、`log_level`）由 CLI 的 Host 装配层消费，不会下发给插件。
 
 ## 环境变量展开
 
@@ -38,10 +37,9 @@ http:
   token: ${HTTP_TOKEN:-dev-token}   # 未设置 HTTP_TOKEN 时回退为 dev-token
 ```
 
-- 变量未设置且没有默认值时展开为空字符串。
-- 启动时按 `.env` → `.env.<环境>` 的顺序加载 dotenv 文件（环境名由 `--environment` 指定，默认 `development`），密钥一律走环境变量，不要硬编码进配置文件。
+变量没设置且没写默认值时会展开成空字符串——对 `apiKey` 这类字段来说，这正是后面 AI 章节的 soft-prune 触发条件。dotenv 文件按 `.env` → `.env.<环境>` 的顺序加载（环境名由 `--environment` 指定，默认 `development`）。密钥一律走环境变量，不要硬编码进配置文件。
 
-## 顶层键一览
+## 顶层键
 
 | 键 | 类型 | 说明 |
 | --- | --- | --- |

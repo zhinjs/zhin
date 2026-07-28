@@ -4,7 +4,7 @@ title: zhin runtime start 详解
 
 # zhin runtime start 详解
 
-`zhin runtime start` 是 zhin.js 应用的运行入口：它直接以 Node 原生 TypeScript 能力执行项目里的 `.ts` 插件源码，按需装配各 Host（HTTP / 数据库 / Console / Agent / MCP / A2A），并在开发模式下提供进程内热重载。
+改完一个命令文件，不用重启进程，下一条消息就走新逻辑——开发模式下这一切由 `zhin runtime start` 完成。它直接以 Node 原生 TypeScript 能力执行项目里的 `.ts` 插件源码，按需装配各 Host（HTTP / 数据库 / Console / Agent / MCP / A2A），并在开发模式下提供进程内热重载。
 
 ```bash
 zhin runtime start                          # 开发模式（默认，watch + HMR）
@@ -39,11 +39,7 @@ zhin runtime start --once                   # 启动一次后退出（CI / 脚�
 
 ## 原生 TypeScript（strip-types）
 
-运行时不经过编译步骤，插件源码（`plugin.ts` 等）由 Node 直接执行：
-
-- 最低要求 Node `>=22.6.0`，低于此版本直接报错。
-- Node `>=22.18` / `>=23.6`（strip-types 已免旗标）时，前台启动直接在当前进程内运行；`22.6`–`22.17` 区间 CLI 会以 `--experimental-strip-types` 重新拉起一个子进程执行，并抑制相关 ExperimentalWarning。
-- daemon 模式总是经过 supervisor → 子进程两层结构（见下文进程管理）。
+运行时不经过编译步骤，插件源码（`plugin.ts` 等）由 Node 直接执行。最低要求 Node `>=22.6.0`，低于此版本直接报错。Node `>=22.18` / `>=23.6`（strip-types 已免旗标）时，前台启动直接在当前进程内运行；落在 `22.6`–`22.17` 区间时，CLI 会以 `--experimental-strip-types` 重新拉起一个子进程执行，并抑制相关 ExperimentalWarning。daemon 模式则总是经过 supervisor → 子进程两层结构（见下文进程管理）。
 
 因为是「源码即运行时」，import 本地 TS 文件必须带 `.js` 扩展名（由运行时做 specifier 重映射），这也是仓库代码约定之一。
 
@@ -67,11 +63,7 @@ flowchart TD
     K -- 否 --> M[进入 watch / 常驻]
 ```
 
-要点：
-
-- Agent 栈是**按需加载**的：只有配置了 `ai` / `assistant` / `collaboration` 任一段，才会解析 `@zhin.js/agent`；纯 IM 项目不会载入 AI 依赖。
-- TTY 下启动成功输出一行摘要（插件数、HTTP 地址、在线/离线适配器）；非 TTY 或 `--once` 输出结构化 JSON（`{ started: true, ... }`），便于脚本消费。
-- 配置校验失败会报 `Invalid Plugin config in zhin.config.yml` 并列出全部问题。
+注意 Agent 栈是**按需加载**的：只有配置了 `ai` / `assistant` / `collaboration` 任一段，才会解析 `@zhin.js/agent`；纯 IM 项目不会载入 AI 依赖。启动成功后的输出也因环境而异——TTY 下是一行摘要（插件数、HTTP 地址、在线/离线适配器），非 TTY 或 `--once` 则输出结构化 JSON（`{ started: true, ... }`），便于脚本消费。配置校验失败会报 `Invalid Plugin config in zhin.config.yml` 并列出全部问题。
 
 ## HMR 语义
 
@@ -94,9 +86,7 @@ zhin runtime start -d --log-file ./bot.log
 zhin stop                              # 停止（读取 .zhin.pid）
 ```
 
-- supervisor 常驻并把自身 pid 写入 `<项目根>/.zhin.pid`，bot 进程的 stdout/stderr 追加到日志文件。
-- 崩溃（信号或非零退出）与退出码 `75` 都会触发重新拉起；`zhin stop` 或 `kill -TERM <pid>` 正常结束。
-- **风暴保护**：最多每分钟重启 10 次、每次间隔 3 秒；超出预算 supervisor 放弃并退出，避免崩溃循环刷爆平台连接。
+supervisor 常驻并把自身 pid 写入 `<项目根>/.zhin.pid`，bot 进程的 stdout/stderr 追加到日志文件。崩溃（信号或非零退出）与退出码 `75` 都会触发重新拉起；`zhin stop` 或 `kill -TERM <pid>` 正常结束。另有**风暴保护**：最多每分钟重启 10 次、每次间隔 3 秒，超出预算 supervisor 放弃并退出，避免崩溃循环刷爆平台连接。
 
 ### 退出码
 
@@ -127,4 +117,4 @@ zhin service install
 zhin runtime start --once --mode test
 ```
 
-相关命令与退出行为速查见 [CLI 参考](./index.md)；配置项见 [配置参考](../configuration/index.md)。
+相关命令与退出行为见 [CLI 参考](./index.md)；配置项见 [配置参考](../configuration/index.md)。

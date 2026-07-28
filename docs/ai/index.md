@@ -4,7 +4,7 @@ title: AI 能力总览
 
 # AI 能力总览
 
-Zhin.js 的 AI 是一个**可选安装层**：默认安装只含 IM 核心，配置 `ai:` 段并安装 `@zhin.js/agent` 后，CLI 启动时自动装配 Agent Host，把未命中命令的消息路由给 **ZhinAgent** 处理。
+默认安装的 zhin.js 只会收发消息，不会「回话」。想让它听懂 `#查一下明天天气`，得加装 AI 层：装几个包、在配置里写一段 `ai:`，启动时 CLI 就会自动装配 Agent Host，把未命中命令的消息路由给 **ZhinAgent** 处理。
 
 ```mermaid
 flowchart LR
@@ -63,7 +63,7 @@ ai:
 
 通用字段：`models`（显式模型白名单）、`contextWindow`、`imageGeneration`（文生图默认值）。
 
-**模型发现**：不写 `models` 时，启动后由 `ModelRegistry` 后台调用 `/v1/models` 自动填充可用模型列表（先恢复上次缓存，再异步刷新）；写了 `models` 则以 YAML 白名单为准。`agents.<name>.model` 只需出现在发现列表或白名单中，无需逐个手写。
+不写 `models` 时，启动后由 `ModelRegistry` 后台调用 `/v1/models` 自动填充可用模型列表（先恢复上次缓存，再异步刷新）；写了 `models` 则以 YAML 白名单为准。`agents.<name>.model` 只需出现在发现列表或白名单中，无需逐个手写。
 
 ## ai.agents
 
@@ -156,7 +156,7 @@ ai:
 
 ## 安全策略（ai.agent）
 
-`bash` 等执行类工具受 `ai.agent` 下的纵深防御约束：
+`bash` 这类执行类工具受 `ai.agent` 下的纵深防御约束：
 
 ```yaml
 ai:
@@ -167,10 +167,9 @@ ai:
     execApprovalMode: ask         # ask（默认）| allow | deny
 ```
 
-- `execPreset` 预设白名单：`readonly`（ls/cat/grep/find 等）→ `network`（加 curl/wget/ping 等）→ `development`（加 npm/node/git/python 等）。
-- 无论哪种模式，`sudo`、`eval`、`dd`、`export` 等危险命令一律拒绝；`rm -rf node_modules` 类操作硬阻断。
-- 检查链：危险黑名单 → 环境变量前缀剥离（`FOO=bar cmd` 按 `cmd` 匹配）→ wrapper 剥离（`timeout 10 cmd`）→ 复合命令拆分（`&&`/`|` 逐段检查）→ 非 full 模式拒绝换行 / `$(...)` / 反引号 → 只读命令自动放行。
-- `execApprovalMode: ask` 时越权命令触发 **Owner 审批**：master 在 IM 内 `/approve` 放行；`allow` 全部放行，`deny` 全部拒绝。
+`execPreset` 预设白名单逐档放宽：`readonly`（ls/cat/grep/find 等）→ `network`（加 curl/wget/ping 等）→ `development`（加 npm/node/git/python 等）。无论哪种模式，`sudo`、`eval`、`dd`、`export` 等危险命令一律拒绝，`rm -rf node_modules` 类操作硬阻断。
+
+完整的检查链是：危险黑名单 → 环境变量前缀剥离（`FOO=bar cmd` 按 `cmd` 匹配）→ wrapper 剥离（`timeout 10 cmd`）→ 复合命令拆分（`&&`/`|` 逐段检查）→ 非 full 模式拒绝换行 / `$(...)` / 反引号 → 只读命令自动放行。`execApprovalMode: ask` 时越权命令触发 **Owner 审批**，由 master 在 IM 内 `/approve` 放行；`allow` 全部放行，`deny` 全部拒绝。
 
 ## 下一步
 

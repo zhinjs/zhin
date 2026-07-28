@@ -113,12 +113,48 @@ export default withMermaid(defineConfig({
   themeConfig: {
     nav: [
       { text: '首页', link: '/' },
-      { text: '快速开始', link: '/getting-started/' },
-      { text: '核心概念', link: '/concepts/architecture' },
-      { text: '插件创作', link: '/authoring/define-plugin' },
-      { text: '适配器', link: '/adapters/' },
-      { text: '参考', link: '/configuration/' },
-      { text: '贡献指南', link: '/contributing/repo-structure' },
+      {
+        text: '使用文档',
+        activeMatch: '^/(getting-started|concepts|authoring|examples)/',
+        items: [
+          {
+            text: '入门',
+            items: [
+              { text: '快速开始', link: '/getting-started/' },
+              { text: '第一个插件', link: '/getting-started/first-plugin' },
+              { text: '示例项目', link: '/examples/' },
+            ],
+          },
+          {
+            text: '深入',
+            items: [
+              { text: '核心概念', link: '/concepts/architecture' },
+              { text: '插件创作', link: '/authoring/define-plugin' },
+            ],
+          },
+        ],
+      },
+      { text: '适配器', link: '/adapters/', activeMatch: '^/adapters/' },
+      {
+        text: '参考',
+        activeMatch: '^/(configuration|cli|console)/',
+        items: [
+          { text: '配置参考', link: '/configuration/' },
+          { text: 'CLI 命令', link: '/cli/' },
+          { text: 'zhin runtime start', link: '/cli/runtime' },
+          { text: 'Console', link: '/console/' },
+        ],
+      },
+      {
+        text: 'AI 模块',
+        activeMatch: '^/ai/',
+        items: [
+          { text: '总览', link: '/ai/' },
+          { text: 'Agent 深入', link: '/ai/agent' },
+          { text: '语音', link: '/ai/speech' },
+        ],
+      },
+      { text: '贡献指南', link: '/contributing/repo-structure', activeMatch: '^/contributing/' },
     ],
 
     sidebar: {

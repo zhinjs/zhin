@@ -4,7 +4,7 @@ title: 语音能力（Speech）
 
 # 语音能力（Speech）
 
-`@zhin.js/speech` 是可选包：在 `zhin.config.yml` 顶层写 `speech:` 段并安装该包后，CLI 启动时自动装配 Speech Host——语音消息入站自动转写（STT），并给 Agent 提供 `voice_stt` / `voice_tts` 两个工具。未安装该包时跳过（仅记 warn），不影响其他能力。
+群里发来一条语音，bot 听懂了内容，还能回一段合成语音——这条链路就是 `@zhin.js/speech` 提供的。它是可选包：在 `zhin.config.yml` 顶层写 `speech:` 段并安装该包后，CLI 启动时自动装配 Speech Host，语音消息入站自动转写（STT），并给 Agent 提供 `voice_stt` / `voice_tts` 两个工具。没装这个包就跳过（仅记 warn），不影响其他能力。
 
 ```bash
 pnpm add @zhin.js/speech

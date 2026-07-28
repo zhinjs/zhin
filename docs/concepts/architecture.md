@@ -1,6 +1,6 @@
 # 分层架构
 
-Zhin.js 是一个 pnpm workspace monorepo，包之间的依赖方向**单向向下**：上层可以依赖下层，下层永远不知道上层的存在。这条方向由 harness（`pnpm check:architecture`）强制检查，不是口头约定。
+`pnpm check:architecture` 会在 CI 里拦住一类错误：下层包 import 了上层包。这个 pnpm workspace monorepo 里，包之间的依赖方向**单向向下**——上层可以依赖下层，下层永远不知道上层的存在。这条方向由 harness 强制检查，不是口头约定。
 
 ## 分层总览
 
@@ -49,15 +49,13 @@ flowchart BT
     rt & core & host --> cli
 ```
 
-依赖关系的权威来源是各包的 `package.json`。几个关键事实：
+依赖关系的权威来源是各包的 `package.json`。读它之前，先记住几个关键事实。
 
-- `@zhin.js/plugin-runtime` 不依赖任何 workspace 包，是整个运行时的零依赖底座（generation、snapshot、dispose、token）。
-- `@zhin.js/feature-kit` 只依赖 `plugin-runtime`，提供 Feature provider 的注册、发现与投影机制。
-- Feature 层各包（adapter / command / component / middleware / tool / skill / …）只依赖 `feature-kit` + `plugin-runtime`，彼此不互相依赖。
-- `@zhin.js/core` 把 adapter / command / component / middleware 四个 Feature 和 kernel 组装成 IM 层（Plugin、Adapter、Endpoint、消息收发）。
-- `zhin.js` 对 workspace 包的 `dependencies` 只有 `@zhin.js/core`、`@zhin.js/logger`、`@zhin.js/plugin-runtime`；`@zhin.js/agent`、`@zhin.js/ai` 等是可选 peer 依赖——默认安装只含 IM 核心，AI 按需加装。
+底座是 `@zhin.js/plugin-runtime`：它不依赖任何 workspace 包，generation、snapshot、dispose、token 都从这里长出来。往上一层，`@zhin.js/feature-kit` 只依赖 `plugin-runtime`，提供 Feature provider 的注册、发现与投影机制。Feature 层各包（adapter / command / component / middleware / tool / skill / …）只依赖 `feature-kit` + `plugin-runtime`，彼此不互相依赖。
 
-## 各层一句话职责
+再往上，`@zhin.js/core` 把 adapter / command / component / middleware 四个 Feature 和 kernel 组装成 IM 层（Plugin、Adapter、Endpoint、消息收发）。门面包 `zhin.js` 对 workspace 包的 `dependencies` 只有 `@zhin.js/core`、`@zhin.js/logger`、`@zhin.js/plugin-runtime`；`@zhin.js/agent`、`@zhin.js/ai` 等是可选 peer 依赖——所以默认安装只含 IM 核心，AI 按需加装。
+
+## 各层职责
 
 | 层 | 包 | 职责 |
 |----|----|------|
@@ -113,6 +111,4 @@ flowchart BT
 
 ## 分层规则的推论
 
-- 写 Feature（新能力类型）时只依赖 `feature-kit` / `plugin-runtime`，不要 import `core`。
-- `kernel`、`ai` 不知道"群""私聊"这些 IM 概念；IM 概念只出现在 `core` 及以上。
-- Host（`packages/host/http`、`mcp`、`a2a`）在 `core` 之上、由 CLI 装配，插件不直接依赖 Host 进程。
+写 Feature（新能力类型）时只依赖 `feature-kit` / `plugin-runtime`，不要 import `core`。`kernel`、`ai` 不知道"群""私聊"这些 IM 概念；IM 概念只出现在 `core` 及以上。Host（`packages/host/http`、`mcp`、`a2a`）在 `core` 之上、由 CLI 装配，插件不直接依赖 Host 进程。

@@ -1,6 +1,6 @@
 # 消息流
 
-Zhin.js 的消息链路是一条单向管道：**入站**从平台 Endpoint 流向命令/AI，**出站**从插件代码流向平台 Endpoint。整条管道由 `ImRuntime`（`@zhin.js/core` 的 `MessageGateway` 实现）串起来，每个环节都从当前 generation 快照取数，天然热重载安全。
+用户在群里发一条 `/ping`，到 Bot 的回复落回平台，中间经过的每个环节都在一条单向管道上：**入站**从平台 Endpoint 流向命令/AI，**出站**从插件代码流向平台 Endpoint。整条管道由 `ImRuntime`（`@zhin.js/core` 的 `MessageGateway` 实现）串起来，每个环节都从当前 generation 快照取数，天然热重载安全。
 
 ## 入站：Adapter → 中间件 → 命令 → AI 兜底
 

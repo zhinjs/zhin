@@ -1,6 +1,6 @@
 # 配置即数据
 
-Zhin.js 的配置不是代码，是一份**被 schema 严格约束的数据文档**（`zhin.config.yml`）。每个包用 `schema.json` 声明自己的配置契约，运行时把整份文档对着由插件树组合出的有效 schema 做 Ajv strict 校验，然后按 owner 把配置投影给每个插件。配置变更走事务：要么整个生效，要么完全回滚。
+在 Console 上改一个端口，要么整个生效，要么完全回滚——磁盘上的 `zhin.config.yml` 永远不会停在写了一半的状态。能这样做，是因为 zhin.js 的配置不是代码，而是一份被 schema 严格约束的数据文档：每个包用 `schema.json` 声明自己的配置契约，运行时把整份文档对着由插件树组合出的有效 schema 做 Ajv strict 校验，然后按 owner 把配置投影给每个插件。配置变更走事务，没有中间态。
 
 ## 文档结构
 
@@ -56,13 +56,7 @@ plugins:
 }
 ```
 
-约束与行为：
-
-- 根必须是 object schema；没有 schema.json 时按空 object 处理。
-- 根上不允许纯组合式 schema（`anyOf`/`oneOf`/`allOf`/`$ref` 而无 `properties`）——它能通过校验但会让配置投影静默变空，因此被显式拒绝。
-- 校验用 Ajv 2020，`strict: true`、`allErrors: true`、`useDefaults: true`：schema 里的 `default` 会在校验时回填进文档。
-- 校验失败抛 `ConfigValidationError`，错误信息会指出具体路径和冒名的键（`additionalProperty: xxx`）或合法枚举值。
-- 子插件的 `instanceKey` 若与父插件自己 schema 的某个属性同名，抛 `ConfigSchemaCollisionError`。
+写 schema 时有几点约束要知道。根必须是 object schema；没有 schema.json 时按空 object 处理。根上不允许纯组合式 schema（`anyOf`/`oneOf`/`allOf`/`$ref` 而无 `properties`）——它能通过校验，但会让配置投影静默变空，因此被显式拒绝。校验用 Ajv 2020，`strict: true`、`allErrors: true`、`useDefaults: true`：schema 里的 `default` 会在校验时回填进文档。校验失败抛 `ConfigValidationError`，错误信息会指出具体路径和冒名的键（`additionalProperty: xxx`）或合法枚举值。另外，子插件的 `instanceKey` 若与父插件自己 schema 的某个属性同名，抛 `ConfigSchemaCollisionError`。
 
 ## ConfigView：按 owner 投影
 

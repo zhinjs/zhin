@@ -4,7 +4,7 @@ title: 代码约定
 
 # 代码约定
 
-这些约定大多有对应的 harness 门禁（见[开发流程](./development.md)），违反会直接红 CI。改动前先读根目录 `AGENTS.md`。
+这些约定不是风格偏好——大多有对应的 harness 门禁（见[开发流程](./development.md)），违反会直接红 CI。改动前先读根目录 `AGENTS.md`。
 
 ## TypeScript 与模块
 

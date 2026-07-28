@@ -4,21 +4,13 @@ title: CLI 参考
 
 # CLI 参考
 
-Zhin.js 的命令行工具由 `@zhin.js/cli` 提供，可执行文件为 `zhin`。新建项目用 `pnpm create zhin-app`（独立的 `create-zhin-app` 包，不在本页范围）。
+起服务、装插件、改配置、给跑着的 bot 发条消息——日常和 zhin.js 打交道，基本就是和 `zhin` 这一个命令打交道。它由 `@zhin.js/cli` 提供；从零新建项目则走 `pnpm create zhin-app`（独立的 `create-zhin-app` 包，不在本页范围）。
 
 ```bash
 zhin --help        # 查看全部命令
 ```
 
-## 命令总览
-
-| 分组 | 命令 |
-| --- | --- |
-| 运行 | `runtime`、`stop` |
-| 插件开发 | `new`、`build`、`pub`、`install` / `add`、`uninstall`、`search`、`info`、`packages` |
-| 配置与诊断 | `setup`、`onboard`、`config`、`doctor`、`migrate` |
-| 运行中实例 | `send`、`watch`、`schedule`、`agent` |
-| 系统服务 | `service` |
+命令大致分五组：运行的 `runtime` / `stop`；插件开发的 `new`、`build`、`pub`、`install` / `add`、`uninstall`、`search`、`info`、`packages`；配置与诊断的 `setup`、`onboard`、`config`、`doctor`、`migrate`；面向运行中实例的 `send`、`watch`、`schedule`、`agent`；以及系统服务 `service`。下面逐个展开。
 
 ## runtime：运行与管理项目
 
@@ -32,11 +24,7 @@ zhin runtime publish [--execute|--resume] [--tag latest]
 zhin runtime migrate [extract|cutover|status] [--check|--write]
 ```
 
-- `start` 是启动 bot 的入口，支持 dev 热重载、production、daemon 守护等模式，详解见 [zhin runtime start](./runtime.md)。
-- `init` / `create` 脚手架约定式 Plugin Runtime 项目与插件/能力包。
-- `inspect` 输出项目结构 JSON（插件清单、构建计划）。
-- `build` / `publish` 按项目图构建、发布；`publish` 默认只打印计划，`--execute` 才执行（支持中断后 `--resume`）。
-- `migrate` 生成并应用项目结构迁移计划：`--check` 只看计划，`--write` 原子写入，`status` 输出就绪报告。
+`start` 是启动 bot 的入口，支持 dev 热重载、production、daemon 守护等模式，详解见 [zhin runtime start](./runtime.md)。其余几个子命令各司其职：`init` / `create` 脚手架约定式 Plugin Runtime 项目与插件/能力包；`inspect` 输出项目结构 JSON（插件清单、构建计划）；`build` / `publish` 按项目图构建、发布，`publish` 默认只打印计划，`--execute` 才执行（支持中断后 `--resume`）；`migrate` 生成并应用项目结构迁移计划，`--check` 只看计划，`--write` 原子写入，`status` 输出就绪报告。
 
 项目里的惯例脚本（由脚手架生成）：
 
@@ -63,8 +51,7 @@ zhin stop
 zhin new [plugin-name] [--type normal|service|adapter] [--is-official] [--skip-install]
 ```
 
-- 在 `plugins/<name>/` 下生成约定式插件包模板；插件名须匹配 `/^[a-z][a-z0-9-]*$/`。
-- 不传参数时进入交互式问答（名称、类型）。
+在 `plugins/<name>/` 下生成约定式插件包模板，插件名须匹配 `/^[a-z][a-z0-9-]*$/`。不传参数时进入交互式问答（名称、类型）。
 
 ## build：构建插件
 
@@ -72,8 +59,7 @@ zhin new [plugin-name] [--type normal|service|adapter] [--is-official] [--skip-i
 zhin build [plugin] [--clean] [--production] [--analyze]
 ```
 
-- `plugin` 为相对 `plugins/` 的路径（如 `adapters/icqq`）；省略时在插件目录内构建当前包，或在 workspace 根批量构建 `plugins/*`。
-- 按目录自动编译 `src/`（tsc）与 `client/`（esbuild）；`--clean` 先清理 `lib/` 与 `dist/`；`--production`（默认开）压缩 client 产物。
+`plugin` 为相对 `plugins/` 的路径（如 `adapters/icqq`）；省略时在插件目录内构建当前包，或在 workspace 根批量构建 `plugins/*`。构建按目录自动编译 `src/`（tsc）与 `client/`（esbuild）；`--clean` 先清理 `lib/` 与 `dist/`；`--production`（默认开）压缩 client 产物。
 
 ## pub：发布插件
 
@@ -81,8 +67,7 @@ zhin build [plugin] [--clean] [--production] [--analyze]
 zhin pub [plugin-name] [--tag latest] [--access public] [--registry <url>] [--dry-run] [--skip-build]
 ```
 
-- 在含 `plugins/` 目录的项目根运行；不传名字时交互选择可发布的插件。
-- `--dry-run` 只走流程不实际发布。
+在含 `plugins/` 目录的项目根运行；不传名字时交互选择可发布的插件。`--dry-run` 只走流程不实际发布。
 
 ## install / add：安装插件
 
@@ -99,7 +84,7 @@ zhin add ...          # install 的别名
 | `--no-enable` | 只装依赖，不改配置 |
 | `--dry-run` | 打印将执行的安装与配置改动，不写入 |
 
-默认行为：pnpm 安装后自动把插件写入 `zhin.config.yml` 的 `plugins.<instanceKey>`，并挂进 `package.json` 的 `zhin.plugins` 清单。安装适配器后按提示运行 `zhin setup --adapters` 添加 Endpoint。
+默认行为是 pnpm 安装后自动把插件写入 `zhin.config.yml` 的 `plugins.<instanceKey>`，并挂进 `package.json` 的 `zhin.plugins` 清单。装完适配器后按提示运行 `zhin setup --adapters` 添加 Endpoint。
 
 ## uninstall：卸载
 
@@ -187,9 +172,7 @@ zhin migrate [--dry-run] [--no-install]
 zhin send <scene_id> [content...] [-s private|group|channel] [-a <adapter>] [-e <endpoint>]
 ```
 
-- 经 HTTP API 向 daemon 运行中的实例投递消息（需启用 HTTP 服务）。
-- `scene_id`：私聊为用户 ID，群聊为群号；不传 `content` 时从 stdin 读一行。
-- `-a` 默认 `process`；`-e` 指定 Endpoint ID，缺省用该适配器下第一个在线 Endpoint。
+经 HTTP API 向 daemon 运行中的实例投递消息（需启用 HTTP 服务）。`scene_id` 私聊为用户 ID、群聊为群号；不传 `content` 时从 stdin 读一行。`-a` 默认 `process`；`-e` 指定 Endpoint ID，缺省用该适配器下第一个在线 Endpoint。
 
 ## watch：监视运行实例
 
@@ -233,7 +216,7 @@ zhin service status [--user]
 
 安装开机自启 / 守护服务；`--user` 在 Linux 下使用用户级 systemd。`status` 仅 Linux/macOS。
 
-## 退出码速查
+## 退出码
 
 | 退出码 | 含义 |
 | --- | --- |

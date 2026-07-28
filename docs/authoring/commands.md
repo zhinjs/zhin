@@ -5,7 +5,7 @@ description: commands/ 文件路由、execute 上下文、返回值渲染、mast
 
 # 命令（defineCommand）
 
-命令由 `@zhin.js/command` Feature 提供。插件包根目录下的 `commands/` 是约定目录：每个 `.ts` / `.tsx` 文件默认导出 `defineCommand(...)`，**文件路径即命令名**，无需手工注册。
+在插件包根目录建一个 `commands/` 目录、往里放一个 `hello.ts`，用户就能在群里敲 `hello` 触发它——**文件路径即命令名**，改完文件热重载立即生效，不用重启进程。这条链路由 `@zhin.js/command` Feature 提供，无需手工注册。
 
 ```ts
 // commands/hello.ts
@@ -27,15 +27,11 @@ export default defineCommand({
 | `commands/endpoint/list.ts` | `qq` | `qq endpoint list` |
 | `commands/endpoint/add/[name:string=].ts` | `qq` | `qq endpoint add [name]` |
 
-规则：
+先看嵌套：`commands/` 递归扫描，嵌套目录直接映射为子命令段，目录与文件名必须是小写 kebab 风格（`/^[a-z0-9][a-z0-9-]*$/`）。
 
-- **嵌套目录 = 子命令段**。目录与文件名必须是小写 kebab 风格（`/^[a-z0-9][a-z0-9-]*$/`），`commands/` 递归扫描。
-- **动态参数段**：文件名写成 `[name:type=default].ts`（`.tsx` 亦可）。
-  - `type` 仅支持 `string` / `number` / `boolean`；`=default` 可省略。
-  - 无默认值即必填，帮助里显示 `<name>`；有默认值显示 `[name]`，省略该词时取默认值。
-  - 运行时按类型解析：`number` 必须是有限数值，`boolean` 只接受 `true` / `false`，解析失败视为「命令不匹配」。
-- **静态优先**：`list.ts` 永远赢过 `[name:string].ts`；动态路由之间，静态段多者（更具体）优先。
-- 同一路由形状重复注册会在启动时报错（`Duplicate runtime Command`）。
+动态参数段写在文件名里：`[name:type=default].ts`（`.tsx` 亦可）。`type` 仅支持 `string` / `number` / `boolean`，`=default` 可省略——无默认值即必填，帮助里显示 `<name>`；有默认值显示 `[name]`，省略该词时取默认值。运行时按类型解析：`number` 必须是有限数值，`boolean` 只接受 `true` / `false`，解析失败视为「命令不匹配」而不是报错。
+
+路由冲突有两条规则：**静态优先**——`list.ts` 永远赢过 `[name:string].ts`，动态路由之间静态段多者（更具体）优先；**同形拒绝**——同一路由形状重复注册会在启动时报错（`Duplicate runtime Command`）。
 
 真实示例（`plugins/adapters/qq/commands/endpoint/remove/[name:string].ts`）：
 
@@ -71,17 +67,11 @@ export default defineCommand({
 | `owner` | `PluginNodeSnapshot` | 命令所属插件节点 |
 | `generation` | `number` | 当前代际号 |
 
-`use(token)` 读的是插件 `setup()` 时 `resources.provide(...)` 注册的资源；缺失时抛错。上面的 QQ 命令用 `use(qqRuntimeStateToken)` 拿到适配器共享状态——这是命令与适配器协作的标准方式。
+`use(token)` 读的是插件 `setup()` 时 `resources.provide(...)` 注册的资源，缺失时抛错。上面的 QQ 命令用 `use(qqRuntimeStateToken)` 拿到适配器共享状态——这是命令与适配器协作的标准方式。
 
 ## 返回值与组件渲染
 
-`execute` 的返回值（或 `Promise` 解出的值）即回复内容，类型为 `SendContent`：
-
-- `string` —— 直接作为文本回复；
-- `component(name, props)` —— 调用[组件](./middleware-components.md#definecomponent)渲染（`zhin.js/core/runtime` 导出）；
-- `raw(payload)` —— 原样下线的 wire 段（如 `{ type: 'html', data: { html, width } }`）；
-- 以上三者的**数组** —— 多段消息；
-- `undefined` —— 不回复（命令自己已通过 `input.$reply(...)` 回复，或主动静默）。
+`execute` 的返回值（或 `Promise` 解出的值）即回复内容，类型为 `SendContent`。它可以是字符串（直接作为文本回复）、`component(name, props)`（调用[组件](./middleware-components.md#definecomponent)渲染，`zhin.js/core/runtime` 导出）、`raw(payload)`（原样下线的 wire 段，如 `{ type: 'html', data: { html, width } }`），也可以是这三者组成的**数组**表示多段消息。返回 `undefined` 则不回复——命令自己已通过 `input.$reply(...)` 回复，或主动静默。
 
 IM 入站的完整链路：
 
@@ -130,11 +120,7 @@ export function isQqEndpointOperator(config: unknown, input: unknown): boolean {
 }
 ```
 
-模式要点：
-
-- 用 `config`（插件配置）拿到声明的 `master` 名单，用 `input`（消息）拿到发送者 id，比对后返回拒绝文案——上面的 `QQ_ENDPOINT_FORBIDDEN`。
-- 未配置 `master` 时放行，首个扫码绑定者即成为 owner（绑定流程会把操作者写为新 endpoint 的 `master`）。
-- `input` 不一定是消息（可能是 Host 调用），取发送者前要做类型守卫；非消息来源时 `$reply` 降级为 no-op。
+这个模式的要点：用 `config`（插件配置）拿到声明的 `master` 名单，用 `input`（消息）拿到发送者 id，比对后返回拒绝文案——上面的 `QQ_ENDPOINT_FORBIDDEN`。未配置 `master` 时放行，首个扫码绑定者即成为 owner（绑定流程会把操作者写为新 endpoint 的 `master`）。注意 `input` 不一定是消息（可能是 Host 调用），取发送者前要做类型守卫；非消息来源时 `$reply` 降级为 no-op。
 
 ## commandPrefix 适配器配置
 
@@ -151,8 +137,6 @@ plugins:
 
 解析规则（`packages/im/core/src/plugin-runtime/im/message-dispatcher.ts`）：按消息所属适配器实例读 `commandPrefix`（默认 `''`）；实例声明了 `endpoints` 数组时，按消息的来源 endpoint 名找 entry，`entry.commandPrefix` 覆盖顶层。前缀剥离后再做命令匹配；不匹配前缀的消息落入未命中路径（如 AI 对话）。
 
-## 调试清单
+## 排错提示
 
-- `description` 会出现在命令清单里，建议都写。
-- 命令名冲突（同名静态命令或同形动态路由）在启动期抛错，尽早发现。
-- 返回 `Promise` 的命令可以做多轮交互（先 resolve 首条回复，后续用 `input.$reply` 追加），参考 `qq endpoint add` 的扫码绑定流程。
+`description` 会出现在命令清单里，建议都写。命令名冲突（同名静态命令或同形动态路由）在启动期抛错，改配置时启动一次就能尽早发现。返回 `Promise` 的命令可以做多轮交互——先 resolve 首条回复，后续用 `input.$reply` 追加，参考 `qq endpoint add` 的扫码绑定流程。
