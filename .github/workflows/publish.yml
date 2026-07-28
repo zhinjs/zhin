@@ -11,6 +11,10 @@ permissions:
   pull-requests: write
   id-token: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   CI: true
 
