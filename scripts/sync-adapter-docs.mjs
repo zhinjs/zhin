@@ -131,9 +131,9 @@ function buildIndexMarkdown() {
 
 适配器连接 IM / 聊天平台与 Zhin.js 核心。每个 \`@zhin.js/adapter-*\` 包有**独立文档页**，内容与包内 \`README.md\` 保持同步（\`pnpm sync:adapter-docs\`）。
 
-> 框架级概念（多平台同跑、群管工具自动注册等）见 [适配器概览](/essentials/adapters)。
+> 框架级概念（多平台同跑、消息流、端点生命周期）见 [核心概念](/concepts/architecture) 与 [端点生命周期](/authoring/endpoint-lifecycle)。
 >
-> **档位 SSOT**：[\`scripts/adapter-meta.mjs\`](https://github.com/zhinjs/zhin/blob/main/scripts/adapter-meta.mjs)（本页与 [能力分档](/essentials/capability-tiers) 同源）。升档条件见 [ADR 0015](/adr/0015-capability-tier-model)。
+> **档位 SSOT**：[\`scripts/adapter-meta.mjs\`](https://github.com/zhinjs/zhin/blob/main/scripts/adapter-meta.mjs)（与 docs/snippets/platform-tiers.md 同源）。
 
 ## 档位
 

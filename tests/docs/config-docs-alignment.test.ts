@@ -9,10 +9,10 @@ import { DEFAULT_CONFIG } from '../../packages/im/agent/src/config/index.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const configurationMd = fs.readFileSync(
-  path.join(repoRoot, 'docs/essentials/configuration.md'),
+  path.join(repoRoot, 'docs/configuration/index.md'),
   'utf8',
 );
-const aiMd = fs.readFileSync(path.join(repoRoot, 'docs/advanced/ai.md'), 'utf8');
+const aiMd = fs.readFileSync(path.join(repoRoot, 'docs/ai/agent.md'), 'utf8');
 const minimalConfig = fs.readFileSync(
   path.join(repoRoot, 'examples/minimal-bot/zhin.config.yml'),
   'utf8',

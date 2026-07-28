@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360" role="img" aria-label="Remote Console {U:">
+  <rect width="640" height="360" fill="#f6f7f9"/>
+  <rect x="120" y="40" width="400" height="280" rx="12" fill="#fff" stroke="#e5e7eb"/>
+  <text x="320" y="80" text-anchor="middle" font-family="system-ui,sans-serif" font-size="18" font-weight="600" fill="#111">Remote Console {U</text>
+  <text x="150" y="120" font-family="system-ui,sans-serif" font-size="13" fill="#374151">API Base</text>
+  <rect x="150" y="128" width="340" height="36" rx="6" fill="#f9fafb" stroke="#2563eb" stroke-width="2"/>
+  <text x="162" y="151" font-family="ui-monospace,monospace" font-size="13" fill="#111">http://127.0.0.1:8086</text>
+  <text x="150" y="190" font-family="system-ui,sans-serif" font-size="13" fill="#374151">Token</text>
+  <rect x="150" y="198" width="340" height="36" rx="6" fill="#f9fafb" stroke="#2563eb" stroke-width="2"/>
+  <text x="162" y="221" font-family="ui-monospace,monospace" font-size="13" fill="#6b7280">.env -„ HTTP_TOKEN</text>
+  <rect x="150" y="258" width="120" height="36" rx="8" fill="#2563eb"/>
+  <text x="210" y="281" text-anchor="middle" font-family="system-ui,sans-serif" font-size="14" font-weight="600" fill="#fff">{U</text>
+</svg>

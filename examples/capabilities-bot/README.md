@@ -29,5 +29,5 @@ pnpm dev        # zhin runtime start
 | metadata（Console 卡片） | `plugin.ts` `metadata` |
 | npm 包子插件 | `package.json` plugins → `@zhin.js/adapter-sandbox` |
 
-硬依赖门控（`requires: [databaseHostToken]`）见 `docs/essentials/plugins.md` 的 Host Resources 一节；
+硬依赖门控（`requires: [databaseHostToken]`）见 `docs/concepts/plugin-model.md` 的 Host Resources 一节；
 `./` 本地目录子插件见同文档「挂载子插件」。

@@ -146,8 +146,8 @@ Publish workflow (`publish.yml`): On push to `main`, auto-bumps versions via Cha
 ## Harness Engineering
 
 详细文档请参考：
-- [Harness Engineering 指南](docs/contributing/harness-engineering.md) — 项目级 harness engineering
-- [Agent Harness Engineering 指南](docs/advanced/agent-harness-engineering.md) — Agent 安全策略
+- [Harness Engineering 指南](docs/contributing/development.md) — 项目级 harness engineering
+- [Agent Harness Engineering 指南](docs/ai/agent.md) — Agent 安全策略
 
 ### 核心原则
 
@@ -181,12 +181,12 @@ Agent harness engineering 提供多层安全防护：执行策略（5 层防御�
 | Sandbox environment | `packages/im/agent/src/security/sandbox.ts` |
 | Prompt builder | `packages/im/agent/src/prompt/prompt-builder.ts` |
 | AI providers | `packages/im/ai/src/providers/` |
-| Architecture docs index | `docs/architecture/README.md` |
-| Architecture overview | `docs/architecture-overview.md` |
+| Architecture docs index | `docs/concepts/architecture.md` |
+| Architecture overview | `docs/concepts/architecture.md` |
 | Repo structure | `docs/contributing/repo-structure.md` |
-| Harness engineering | `docs/contributing/harness-engineering.md` |
-| Agent harness engineering | `docs/advanced/agent-harness-engineering.md` |
-| Plugin agent/ authoring | `docs/advanced/agent-authoring.md` |
+| Harness engineering | `docs/contributing/development.md` |
+| Agent harness engineering | `docs/ai/agent.md` |
+| Plugin agent/ authoring | `docs/authoring/agent-tools.md` |
 | Plugin/package instructions | `.github/instructions/zhin-plugin.instructions.md`, `zhin-packages.instructions.md` |
 
 ## Guardrails

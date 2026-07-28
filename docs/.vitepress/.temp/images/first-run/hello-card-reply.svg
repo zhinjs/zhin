@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360" role="img" aria-label="hello  card о:">
+  <rect width="640" height="360" fill="#f6f7f9"/>
+  <rect x="80" y="40" width="480" height="280" rx="12" fill="#fff" stroke="#e5e7eb"/>
+  <rect x="100" y="70" width="200" height="32" rx="16" fill="#2563eb"/>
+  <text x="120" y="91" font-family="ui-monospace,monospace" font-size="13" fill="#fff">hello</text>
+  <rect x="120" y="120" width="360" height="72" rx="10" fill="#f3f4f6"/>
+  <text x="136" y="142" font-family="system-ui,sans-serif" font-size="12" fill="#374151">Hello from minimal-bot.</text>
+  <text x="136" y="162" font-family="system-ui,sans-serif" font-size="12" fill="#374151">ее card х JSX ЖaG</text>
+  <text x="136" y="182" font-family="system-ui,sans-serif" font-size="12" fill="#374151">/( AInpx zhin setup --ai&</text>
+  <rect x="100" y="210" width="180" height="32" rx="16" fill="#2563eb"/>
+  <text x="120" y="231" font-family="ui-monospace,monospace" font-size="13" fill="#fff">card</text>
+  <rect x="120" y="260" width="280" height="48" rx="8" fill="#fff" stroke="#d1d5db"/>
+  <text x="136" y="290" font-family="system-ui,sans-serif" font-size="13" font-weight="600" fill="#111">minimal-bot З ЖaG</text>
+</svg>

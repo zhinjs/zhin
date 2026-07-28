@@ -1,0 +1,179 @@
+---
+title: AI 能力总览
+---
+
+# AI 能力总览
+
+Zhin.js 的 AI 是一个**可选安装层**：默认安装只含 IM 核心，配置 `ai:` 段并安装 `@zhin.js/agent` 后，CLI 启动时自动装配 Agent Host，把未命中命令的消息路由给 **ZhinAgent** 处理。
+
+```mermaid
+flowchart LR
+    M[IM 消息] --> T{ai.trigger 匹配}
+    T -- 未命中 --> C[命令分发 / 群聊旁听]
+    T -- 命中 --> A[ZhinAgent 回合]
+    B[ai.providers] --> A
+    S[ai.mcpServers / 插件工具] --> A
+    A --> R[IM 回复]
+```
+
+## 安装
+
+```bash
+pnpm add @zhin.js/agent zod ai
+pnpm add @ai-sdk/openai   # 按所用厂商安装对应的 provider SDK
+```
+
+provider SDK 是可选 peer 依赖，用到哪个 `sdk` 就装哪个包；缺失时运行时会报 `Missing peer dependency` 并提示安装命令。代码侧从 `zhin.js/agent`（或 `@zhin.js/agent`）导入 `ZhinAgent`、`AIService` 等。
+
+## 配置骨架
+
+全部配置位于 `zhin.config.yml` 的顶层 `ai:` 段，`${VAR}` 从环境变量展开：
+
+```yaml
+ai:
+  providers:        # 厂商连接（必填）
+    openrouter:
+      sdk: openai-compatible
+      baseUrl: ${OPENROUTER_BASE_URL}
+      apiKey: ${OPENROUTER_API_KEY}
+  agents:           # Agent 绑定（至少要有 zhin）
+    zhin:
+      provider: openrouter
+      model: openrouter/free
+  mcpServers: []    # MCP client 连接（可选）
+  agent: {}         # 执行安全与行为调参（可选）
+  trigger: {}       # 触发规则（可选）
+  access: {}        # 访问门控（可选）
+```
+
+启动时会对 `ai:` 做 **soft-prune**：凭据展开后为空的 provider 被剔除（仅记 debug 日志），绑定到被剔除 provider 的 agent 一并跳过；`zhin` 绑定缺失时 Agent Host 不装配，不影响 IM 启动。
+
+## ai.providers
+
+每个 provider 以别名命名，`sdk` 决定用哪个 AI SDK 适配器（闭表，ADR 0018）：
+
+| sdk | peer 依赖 | 关键配置 |
+|-----|-----------|----------|
+| `openai` | `@ai-sdk/openai` | `apiKey`，可选 `baseUrl` |
+| `openai-compatible` | `@ai-sdk/openai-compatible` | `baseUrl` + `apiKey`（`baseUrl` 自动补 `/v1`）；Cloudflare Workers AI 可用 `accountId` 代替 `baseUrl` |
+| `anthropic` | `@ai-sdk/anthropic` | `apiKey`，可选 `baseUrl`（自动补 `/v1`） |
+| `deepseek` | `@ai-sdk/deepseek` | `apiKey`，可选 `baseUrl` |
+| `google` | `@ai-sdk/google` | `apiKey`，可选 `baseUrl`（自动补 `/v1beta`） |
+| `ollama` | `@ai-sdk/openai-compatible`（内部走 OpenAI 兼容接口） | `host`（默认 `http://127.0.0.1:11434`，自动补 `/v1`），无需 `apiKey` |
+
+通用字段：`models`（显式模型白名单）、`contextWindow`、`imageGeneration`（文生图默认值）。
+
+**模型发现**：不写 `models` 时，启动后由 `ModelRegistry` 后台调用 `/v1/models` 自动填充可用模型列表（先恢复上次缓存，再异步刷新）；写了 `models` 则以 YAML 白名单为准。`agents.<name>.model` 只需出现在发现列表或白名单中，无需逐个手写。
+
+## ai.agents
+
+把 agent 名绑定到 `provider + model`：
+
+```yaml
+ai:
+  agents:
+    zhin:                       # 主 Agent，必须存在
+      provider: openrouter
+      model: openrouter/free
+      mcpServers: [icqq]        # 该 agent 挂载的 MCP server（按 name 引用）
+      nickname: 小智            # LLM 自称 + IM 协作展示名
+    planner:
+      provider: openrouter
+      model: openrouter/free
+      match:                    # 可选路由规则（可数组）
+        scene: group
+      permission:               # spawn_task 可见的子 agent 类型
+        task: { "researcher": allow, "*": deny }
+```
+
+| 字段 | 说明 |
+|------|------|
+| `provider` / `model` | 引用 `ai.providers` 的别名与模型 id（必填） |
+| `mcpServers` | 引用 `ai.mcpServers` 中的 `name` 列表 |
+| `nickname` | 协作场景展示昵称 |
+| `match` | 路由规则：`adapter` / `endpoint` / `scene` / `sceneId` / `hasMedia` / `contentContains` |
+| `permission.task` | glob → `allow` / `deny`，约束 `spawn_task` 可派的子 agent |
+
+## ai.mcpServers
+
+注册 MCP（Model Context Protocol）server，回合前懒连接；连接成功的 server 工具并入工具池。需安装 peer `@modelcontextprotocol/sdk`。
+
+```yaml
+ai:
+  mcpServers:
+    - name: icqq
+      transport: streamable-http      # stdio | streamable-http | sse
+      url: ${ICQQ_MCP_URL}
+      headers:
+        Authorization: Bearer ${ICQQ_MCP_TOKEN}
+    - name: filesystem
+      transport: stdio
+      command: npx
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/zhin-mcp-test"]
+```
+
+单个 server 连接失败只记 warn，不阻塞回合（下一回合会重试）。另设 `ai.memoryMcp: true` 可注册内置 `@modelcontextprotocol/server-memory` 知识图谱（默认关闭）。
+
+## 触发规则（ai.trigger）
+
+未命中任何命令的消息按固定顺序判定是否交给 AI：
+
+1. **忽略前缀**：命中 `ignorePrefixes`（默认 `/`、`!`、`！`）直接跳过，避免与命令冲突；
+2. **前缀触发**：命中 `prefixes`（默认 `#`、`AI:`、`ai:`）则取前缀后的文本（私聊、群聊均生效）；
+3. **@ 触发**：群/频道中 `respondToAt !== false` 且适配器标注了 `mentioned`（如 CQ 码、app_mention）；
+4. **私聊直达**：`respondToPrivate !== false` 时私聊全文直接进 AI；
+5. **关键词**：仅私聊，命中 `keywords` 任一子串。
+
+```yaml
+ai:
+  trigger:
+    prefixes: ["ai:"]
+    respondToAt: true        # 默认 true
+    respondToPrivate: true   # 默认 true
+    timeout: 60000           # 单回合超时（ms）
+    thinkingMessage: 思考中…  # 可选：进入 AI 前的占位回复
+    errorTemplate: "❌ AI 处理失败: {error}"
+    masters: ["10001"]       # trigger 级 master（参与 Owner 审批放行）
+    trusted: []              # trigger 级 trusted（弱于 master）
+```
+
+`peerMode`（`mention-only` / `off`）控制协作单元内 peer Bot 消息是否触发，默认 `mention-only`。
+
+## 访问门控（ai.access）
+
+控制 LLM 回复路径对哪些会话开放（平台 AIGC 合规等场景）：
+
+```yaml
+ai:
+  access:
+    mode: whitelist     # open（默认）| closed | whitelist
+    users: ["10001"]    # 白名单 sender.id
+    groups: ["123456"]  # 白名单 group/channel id
+    denyMessage: 当前会话未开放 AI 功能。
+```
+
+私聊拒绝时回复 `denyMessage`；群/频道拒绝为静默。
+
+## 安全策略（ai.agent）
+
+`bash` 等执行类工具受 `ai.agent` 下的纵深防御约束：
+
+```yaml
+ai:
+  agent:
+    execSecurity: allowlist       # deny | allowlist（默认）| full
+    execPreset: readonly          # readonly | network | development | custom
+    execAllowlist: [make]         # execPreset=custom 时的白名单
+    execApprovalMode: ask         # ask（默认）| allow | deny
+```
+
+- `execPreset` 预设白名单：`readonly`（ls/cat/grep/find 等）→ `network`（加 curl/wget/ping 等）→ `development`（加 npm/node/git/python 等）。
+- 无论哪种模式，`sudo`、`eval`、`dd`、`export` 等危险命令一律拒绝；`rm -rf node_modules` 类操作硬阻断。
+- 检查链：危险黑名单 → 环境变量前缀剥离（`FOO=bar cmd` 按 `cmd` 匹配）→ wrapper 剥离（`timeout 10 cmd`）→ 复合命令拆分（`&&`/`|` 逐段检查）→ 非 full 模式拒绝换行 / `$(...)` / 反引号 → 只读命令自动放行。
+- `execApprovalMode: ask` 时越权命令触发 **Owner 审批**：master 在 IM 内 `/approve` 放行；`allow` 全部放行，`deny` 全部拒绝。
+
+## 下一步
+
+- [Agent 深入](./agent.md)：ZhinAgent 回合、deferred tools、子代理、编排、会话与 compaction
+- [语音能力](./speech.md)：STT / TTS 与 `voice_stt` / `voice_tts` 工具
+- [Console](../console/index.md)：在 Web 控制台观察 agent 会话与编排运行

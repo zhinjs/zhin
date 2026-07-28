@@ -125,11 +125,6 @@ const checks = [
     description: '检查站点 Markdown 是否在侧栏或 allowlist',
   },
   {
-    name: 'ADR Manifest',
-    command: 'pnpm check:adr-manifest',
-    description: '检查 ADR README 与 VitePress 侧栏覆盖所有 ADR',
-  },
-  {
     name: 'README Exports',
     command: 'pnpm check:readme-exports',
     description: '检查 README import 与包导出一致',

@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { ADAPTER_META, tierDisplayName, slugsForTier } from './adapter-meta.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const capabilityPath = path.join(repoRoot, 'docs/essentials/capability-tiers.md');
+const capabilityPath = path.join(repoRoot, 'docs/snippets/platform-tiers.md');
 const snippetPath = path.join(repoRoot, 'docs/snippets/platform-tiers.md');
 const indexPath = path.join(repoRoot, 'docs/adapters/index.md');
 

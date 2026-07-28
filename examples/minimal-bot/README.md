@@ -40,7 +40,7 @@ no module-level registration side effects.
 
 The Agent and Tool examples are intentionally not mounted by Stable. Add `@zhin.js/agent`, Zod
 and the Agent/Tool Feature providers when enabling AI; the default IM installation stays small.
-See [agent authoring](../../docs/advanced/agent-authoring.md).
+See [agent authoring](../../docs/authoring/agent-tools.md).
 
 ## Validate
 

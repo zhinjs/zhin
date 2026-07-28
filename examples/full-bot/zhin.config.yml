@@ -20,7 +20,7 @@ a2a:
 
 ai:
   enabled: true
-  # --- 可选多模态（需 optional peer，见 docs/advanced/ai-content-chain.md）---
+  # --- 可选多模态（需 optional peer，见 docs/ai/index.md）---
   # multimodal:
   #   audio:
   #     strategy: transcribe   # 需 @zhin.js/speech

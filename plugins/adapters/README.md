@@ -1,6 +1,6 @@
 # 平台适配器
 
-本目录共 **20** 个 `@zhin.js/adapter-*` 包。对外 **Platform Stable** 列表以 [能力分档 — Platform Stable](../../docs/essentials/capability-tiers.md#platform-stable-适配器当前) 为准；其余为 **Advanced** 或 **Experimental**。
+本目录共 **20** 个 `@zhin.js/adapter-*` 包。对外 **Platform Stable** 列表以 [能力分档 — Platform Stable](../../docs/snippets/platform-tiers.md#platform-stable-适配器当前) 为准；其余为 **Advanced** 或 **Experimental**。
 
 | 适配器 | npm 包 | 档位 | 说明 |
 |--------|--------|------|------|

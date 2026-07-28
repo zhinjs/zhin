@@ -68,7 +68,7 @@ pnpm vitest run packages/agent/tests/advanced-acceptance.test.ts \
 - [x] **Home Assistant**（`assistant.home` REST + `home_*` 工具）：维护者实机 dogfood（2026-06-25，#483）
   - [x] profile `devices` 别名控实体（如客厅灯）
   - [x] IM 触发 + NotificationRouter 回执
-  - 清单：[assistant-home-setup.md](../../docs/advanced/assistant-home-setup.md)；life-assistant-bot ACCEPTANCE 同步勾选
+  - 清单：[assistant-home-setup.md](../../docs/ai/agent.md)；life-assistant-bot ACCEPTANCE 同步勾选
 
 ### Agent
 

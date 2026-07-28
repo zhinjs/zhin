@@ -1,217 +1,67 @@
-# 仓库结构与模块化约定
-
-本文约定本 monorepo 的目录职责、包命名与 `package.json` 写法。**新增或调整包时，请优先遵守「第 3 节 源码与构建产物」中的双轨约定。**
-
-## 1. 工作区（pnpm workspace 单仓库）
-
-本仓库采用 **pnpm workspace** 管理多个包目录；**不再使用 git submodule**。克隆后执行 `pnpm install` 即可。
-
-若你仍在使用带子模块元数据（`.gitmodules` + gitlink）的旧克隆，请按 [monorepo-no-submodules.md](./monorepo-no-submodules.md) 运行一次性导入脚本，将各路径改为普通目录。
-
-### 克隆
-
-```bash
-git clone https://github.com/zhinjs/zhin.git
-cd zhin
-pnpm install
-```
-
-### 目录与历史来源（参考）
-
-以下路径为 monorepo 内普通目录；历史上曾对应 `github.com/zhinjs/<repo>` 独立仓库，便于对照 issue/PR 或 cherry-pick：
-
-| 路径 | 曾用远程（参考） |
-|------|----------------|
-| `basic/cli` | `zhinjs/cli` |
-| `basic/database` | `zhinjs/database` |
-| `basic/logger` | `zhinjs/logger` |
-| `basic/schema` | `zhinjs/schema` |
-| `packages/im/kernel` | `zhinjs/kernel` |
-| `packages/im/ai` | `zhinjs/ai` |
-| `packages/im/agent` | `zhinjs/agent` |
-| `packages/console/client` | `zhinjs/client` |
-| `packages/toolkit/create-zhin` | `zhinjs/create-zhin` |
-| `packages/toolkit/scaffold-wizard` | （monorepo 内新建） |
-| `packages/toolkit/satori` | `zhinjs/satori` |
-| `plugins` | `zhinjs/plugins` |
-| `docs` | `zhinjs/docs` |
-
-**主仓库内常驻包**：`packages/im/*`、`packages/console/*`、`packages/toolkit/*`、`packages/host/*`、`examples/*`。
-
-### pnpm workspace
-
-根目录 `pnpm-workspace.yaml` 已声明：
-
-- `basic/*` — 基础能力（CLI、数据库、日志、schema 等）
-- `packages/im/*` — IM 主链：`kernel` → `ai` → `core` → `agent` → `zhin`
-  - **`zhin.js` 4.x**：主入口仅依赖 `core`；`@zhin.js/agent` 为 **optional peer**（安装分层见 [ADR 0019](../adr/0019-install-size-layering.md)）
-  - `ai`：通用 AI 引擎（`agent/`、`memory/`、`compaction/`）
-  - `agent`：IM Agent 编排（`orchestrator/`、`discovery/`、`security/`、`mcp-client/`、`defaults/`）
-- `packages/console/*` — 控制台：`protocol`、`contract`、`pagemanager`、`client`
-- `packages/toolkit/*` — 脚手架与独立工具库：`create-zhin`、`scaffold-wizard`、`satori`
-- `packages/host/*` — Host 运行时：`http`（host-http）、`mcp`、`a2a`（Console/HTTP Host 由 `basic/cli` 装配；原 `host-router`、`host-api` legacy 插件包已删除）
-- `plugins/adapters/*` — 平台适配器
-- `plugins/services/*` — **可选**服务类插件（内置 Host 栈见 `packages/host/`）
-- `plugins/features/*` — 特性类插件
-- `plugins/utils/*` — 工具类插件
-- `plugins/games/*` — 游戏类插件（可为空，仅保留说明时请放 `README.md`）
-- `examples/*`、`docs`
-
-**规则：** 凡应被 `pnpm install` / `workspace:*` 解析的包，**必须**在对应 glob 下提供独立的 `package.json`。不要提交「仅有空目录、无 `package.json`」的占位文件夹，以免误导协作者。
-
-## 2. 包命名（npm `name`）
-
-| 类型 | 约定 | 示例 |
-|------|------|------|
-| 主入口 | `zhin.js` | — |
-| 核心/共享库 | `@zhin.js/<短名>` | `@zhin.js/core`、`@zhin.js/kernel` |
-| 适配器 | `@zhin.js/adapter-<平台>` | `@zhin.js/adapter-icqq` |
-| 工具插件 | `@zhin.js/plugin-<名称>` | `@zhin.js/plugin-rss` |
-| 服务 | `@zhin.js/<服务名>` | `@zhin.js/host-http`、`@zhin.js/mcp` |
-
-目录名（文件夹）优先 **kebab-case**；与平台强相关的缩写（如 `icqq`、`qq`）可保持小写短名。
-
-## 3. 源码与构建产物（核心约定）
-
-本仓库对**每个包**采用统一语义（与运行环境对应）：
-
-| 运行环境 | 源码目录 | 构建输出目录 | `package.json` 入口习惯 |
-|----------|----------|----------------|-------------------------|
-| **Node.js 服务端** | **`src/`** | **`lib/`** | `main` / `types` / `import` → `./lib/index.js` 等 |
-| **浏览器客户端** | **`client/`** | **`dist/`** | 按实际导出配置（如仅静态资源可无 `main`，库包可指向 `./dist/index.js`） |
-
-**原则：**
-
-1. **不要混放**：服务端逻辑只在 `src/`；仅在浏览器执行的 UI、路由、DOM API 等在 `client/`。
-2. **`lib/` 与 `dist/` 并列**：同一包内可同时存在 `lib/`（Node）与 `dist/`（前端产物），二者职责不同。
-3. **工具链**：Node 侧常用 `tsc` / `tsup` → `lib/`；客户端常用 Vite / Rolldown → `dist/`（具体脚本以各包 `package.json` 为准）。
-4. **发布范围**：`files` 字段应包含实际发布的 `lib` 和/或 `dist`（以及 `client` 源码若需随包提供扩展入口，见下）。
-
-### 3.1 仅 Node 的包（无浏览器部分）
-
-```
-<包根>/
-  package.json
-  tsconfig.json  # 通常 outDir: lib, rootDir: src
-  src/
-  lib/           # 构建输出，gitignore
-  tests/
-```
-
-典型：`packages/im/core`、`@zhin.js/adapter-*` 服务端部分、`basic/database` 等。
-
-### 3.2 带浏览器扩展的适配器 / 插件
-
-- **Node 适配逻辑**：`src/` → `lib/`。
-- **控制台扩展 UI**：源码在包根 **`client/`**（如 `client/index.tsx`），由 **`zhin build`**（CLI esbuild）打包；产物落在**该包根目录下的 `dist/`**。
-
-`package.json` 的 `files` 中通常需包含 **`client`**（源码供开发/扩展加载）及构建生成的 **`dist`**（若对外分发预构建产物）。
-
-### 3.3 控制台架构（对齐 page-manager）
-
-控制台采用三层分包，与 [page-manager](https://github.com/lc-cn/page-manager) 架构对齐：
-
-| 包 | 源码 → 产物 | 职责 |
-|---|---|---|
-| `@zhin.js/console-protocol` | `src/` → tsc → `lib/` | 零依赖 Console wire SSOT：RPC 名称、payload 兼容、scope 策略 |
-| `@zhin.js/contract` | `src/` → tsc → `lib/` | Console / PageManager **契约**（`PluginRegisterHostApi`、`ConsoleEntry`、常量） |
-| `@zhin.js/pagemanager` | `src/node/` → tsc → `lib/` | PageManager、EntryStore、esbuild 管线（Host 运行时） |
-| `@zhin.js/client` | `client/` → tsc → `dist/` | Remote Console SDK：`app`、REST/SSE、`loadConsoleEntries` |
-| `@zhin.js/host-http` | `src/` → tsc → `lib/` | Host 传输：HTTP/WebSocket、Bearer、CORS（由 `basic/cli` 装配） |
-| **zhin-console**（独立仓库） | Farm / 未来 Vite | 全部 Console UI；依赖 npm 上的 `@zhin.js/client` 等 |
-
-**插件注册契约**：
-- 服务端：`useContext('web', pageManager => pageManager.addEntry({ id, development, production }))`
-- 浏览器：`export function register(api: PluginRegisterHostApi)`，使用 `api.React.createElement`、`api.addRoute`、`api.addTool`
-
-**共享依赖**：`/console/esm/*.mjs` 提供 canonical ESM（react、react-dom 等），esbuild 按需打包 + 缓存，无需 import map / farm-peer-shim。
-
-**构建顺序（Host）**：`console-protocol` (tsc) → `contract` (tsc) → `pagemanager` (tsc) → `client` (tsc) → `host-http` (tsc)（Console/管理面由 `basic/cli` 在运行时装配）。
-
-**类型导入**：适配器 `client/` 使用 `import type { PluginRegisterHostApi } from '@zhin.js/contract'`（类型勿从 Host 装配入口副作用 import；`PageManager` 类型可 `import type { PageManager } from '@zhin.js/pagemanager'`）。
-
-**约定**：Host 传输在 `packages/host/http/src/`；管理面 API 由 `basic/cli` 的 Console Host 装配（PageManager 在 `packages/console/pagemanager/`）；适配器控制台扩展仍在各适配器包根 `client/`（由 Host `/@dev` 打包）。**内置仪表盘等 UI** 仅在 **zhin-console** 仓库维护。
-
-### 3.4 `@zhin.js/client`（`packages/console/client`）
-
-- **`packages/console/client/`**：npm 包 **`@zhin.js/client`** 的根。
-- **`packages/console/client/client/`**：浏览器端源码（`app.ts` 单例、WebSocket 模块、mediaSrc 工具）。
-- **构建输出**：`dist/`（`main`/`types` 指向 `./dist/...`）。
-- **核心导出**：`app` 单例；WebSocket / REST+SSE hooks；`loadConsoleEntries`；`apiFetch` / `getApiBase`（Remote 用）。
-- **无 Redux**：状态管理由 `app` 单例 + `useSyncExternalStore` 替代。
-
-## 4. 文件命名（前端 / TS）
-
-建议新代码按下列执行；存量代码可渐进调整。
-
-| 类别 | 约定 |
-|------|------|
-| React 组件文件 | **PascalCase**，如 `MessageBody.tsx` |
-| 默认导出页面组件 | **PascalCase**，语义准确（如 `BotManagePage`，避免 `Mange` 等拼写错误） |
-| 页面/路由目录 | **kebab-case**，如 `bot-detail/index.tsx` |
-| 工具函数、非组件模块 | **camelCase**，如 `parseComposerContent.ts` |
-| 样式与配置 | **kebab-case**，如 `tailwind.config.js` |
-| Node 单文件模块 | **kebab-case** 或 **camelCase** 与所在包存量保持一致；新增宜 **kebab-case**（如 `adapter-process.ts`） |
-
-**测试与类型：** `*.test.ts` / `*.spec.ts` 与源码同目录或 `tests/` 均可，同一包内保持一种主风格即可。
-
-## 5. `package.json` 元数据
-
-- **`repository.directory`**：必须与包在仓库中的**真实路径**一致。
-- **`type`：** ESM 包使用 `"module"` 时，与构建产物一致即可。
-- **`exports`：** 子路径导出应指向**真实存在的构建产物**（`lib` 或 `dist`），避免文档与磁盘不一致。
-
-## 6. 与约定对照（仓库审计备忘）
-
-以下条目在引入新包或重构时用于自检；**不必一次性全部改掉**，但新增代码应对齐第 3 节。
-
-| 位置 | 状态 | 说明 |
-|------|------|------|
-| 多数 `plugins/*`、`packages/*`、`basic/*`（仅 Node） | ✅ | `src/` → `lib/`，与约定一致。 |
-| `@zhin.js/client` | ✅ | 浏览器源码在 `client/`，发布入口在 `dist/`。 |
-| 含 `client/` 的适配器 | ✅ | 扩展构建输出目标为包根 `dist/`（`zhin build`）。 |
-| `@zhin.js/host-http` | ✅ | `src/` → `lib/`；HTTP/WebSocket + 鉴权（无内置 SPA，管理面由 CLI 装配）。 |
-| `@zhin.js/satori`（`packages/toolkit/satori`） | ✅ | Node 库：`src/` → **`lib/`**（tsup），与全局约定一致。 |
-| `examples/*` | ℹ️ | 示例工程可能直接运行 `src`，不强制 `lib`/`dist`，不纳入插件包约定。 |
-
-## 7. 其他说明
-
-- 个别旧包若 `main` / `types` 仍写作 `lib/...` 而未带 `./`，建议统一为 `./lib/...`；若发现遗漏可随 PR 补上。
-- **`clean` 脚本** 应删除本包**实际**构建输出目录（例如 `@zhin.js/client` 仅产出 `dist/` 时不应再 `rimraf lib`）。
-
-## 8. 代码组织与可维护性
-
-- **分层：** `packages/im/kernel` → `ai` → `core` → `agent` → `zhin` 依赖方向保持单向；插件只通过公开 API 与 `zhin.js` / `@zhin.js/core` 交互，避免环形依赖。
-- **单文件体量：** 页面或路由文件若超过约 **400～500 行**，优先拆出子组件、`hooks/`、`utils/` 或 `types.ts`（控制台 `bot-detail`、`database` 等可按此渐进拆分）。
-- **副作用入口：** 插件 `src/index.ts` 宜保持「注册路由 / 命令 / 生命周期」为主；重逻辑抽到同目录 `*.service.ts` 或 `lib/` 子模块便于测试。
-- **日志：** 构建脚本、CLI 中避免长期保留无环境变量的 `console.log` 调试输出；必要进度信息可用 `console.error`（stderr）或受 `DEBUG=*` 控制。
-- **英文标识符：** 公共导出符号、类型名、路由 key 使用正确英文拼写，避免混入拼音缩写（除非领域通用如 `icqq`）。
-
-## 9. AI 能力文件约定
-
-插件 / 工作区可通过标准目录放置 AI 声明文件，框架自动扫描与热重载：
-
-| 目录 | 文件格式 | 用途 |
-|------|---------|------|
-| **插件 `agent/`** | `tools/*.ts`、`skills/*.md`、`schedules/*.ts` 等 | **推荐**：插件 AI 创作面（`defineTool` / `defineSkill`）；`discoverPluginAgentSurface` 启动扫描，路径即运行时名（`{plugin}_{slot}`） |
-| `tools/` | `*.tool.md`（扁平）或 `<name>/<name>.tool.md`（嵌套 + handler） | 工作区/遗留：文件化 AI Tool |
-| `skills/` | `<name>/SKILL.md` | 工作区/遗留：文件化 Skill（**插件包请用 `agent/skills/*.md`**） |
-| `agents/` | `*.agent.md`（扁平）或 `<name>/<name>.agent.md`（嵌套）或 `agents/<name>/agent.ts` | 文件化 / 代码化 Agent 预设 |
-| 包根 | `plugin.yml` | 插件元数据清单（`name`、`description`、`version`），通过 `plugin.manifest` 访问 |
-
-**发现优先级**（各 kind 独立，实现见 `packages/im/agent/src/discovery/`）：
-
-| kind | 顺序（先发现者优先） |
-|------|----------------------|
-| **插件 authoring** | 已加载插件包 `agent/`（`discoverPluginAgentSurface`）；生产读 `lib/agent/*.js`（见 [agent-authoring.md](../advanced/agent-authoring.md)） |
-| `tools` | `cwd/tools/` → `~/.zhin/tools/` → `data/tools/` → 插件包 `tools/`（`*.tool.md`） |
-| `skills` | `cwd/skills/` → `~/.zhin/skills/` → `.agents/skills/`（cwd 向上至 git 根）→ 插件包 `skills/`（遗留）→ `~/.zhin/packages/` / `.zhin/packages/` |
-| `agents` | `cwd/agents/` → `~/.zhin/agents/` → `data/agents/` → 插件包 `agents/` |
-
-> **`data/skills/` 已删除**（ADR 0010）；工作区请用 `skills/`、`.agents/skills/` 或 `zhin packages install`。带 `agent/` 的插件发布前须 `pnpm check:plugin-agent-publish`。
-
-程序化注册的同名 Tool 优先于文件化版本。
-
+---
+title: 仓库结构
 ---
 
-维护者更新本文时，请同步检查 `pnpm-workspace.yaml` 与 `docs/contributing.md` 中的链接。
+# 仓库结构
+
+Zhin.js 是一个 pnpm workspace monorepo（pnpm 9，构建编排用 turbo）。本页说明顶层目录的分工、包之间的分层依赖方向，以及如何阅读仓库里的 `AGENTS.md`。
+
+## 顶层目录
+
+workspace 覆盖范围以根目录 `pnpm-workspace.yaml` 为准：
+
+| 目录 | 内容 |
+| --- | --- |
+| `basic/` | 基础层：`cli`、`database`、`logger`、`schedule`、`schema`（日志、数据库、配置校验、命令行） |
+| `packages/im/` | IM 核心层：`adapter`、`agent`、`ai`、`command`、`component`、`config-yaml`、`core`、`feature-kit`、`isolate`、`kernel`、`mcp-feature`、`middleware`、`plugin-runtime`、`runtime`、`skill`、`tool`、`zhin` 等 |
+| `packages/console/` | Remote Console 支撑包（`client`、`contract`、`layout`、`page`、`pagemanager`、`plugin-contract`、`protocol`）。Host 只提供 API，UI 在独立仓库 [zhin-console](https://github.com/zhinjs/console)（console.zhin.dev） |
+| `packages/host/` | Host 运行时：`http`（`@zhin.js/host-http`）、`mcp`（MCP Server）、`a2a`（A2A Server） |
+| `packages/toolkit/` | `create-zhin`（`pnpm create zhin-app`）、`scaffold-wizard`（配置向导）、`satori`、`html-renderer`、`speech` |
+| `packages/game-kit/` | 游戏开发套件（供 `plugins/games/` 使用） |
+| `plugins/adapters/` | 平台适配器：sandbox、qq、icqq、napcat、onebot11/12、discord、telegram、slack、kook、dingtalk、lark、line、wecom、email、github、satori 等 |
+| `plugins/features/` | 功能插件（如 `process-monitor`） |
+| `plugins/games/` | 游戏插件（blackjack、guess-number、idiom-chain、rps、tic-tac-toe 等） |
+| `plugins/services/` | 服务插件（如 `activity-feedback`） |
+| `plugins/utils/` | 工具插件（rss、repeater、lottery、music、qrcode、short-url、code-runner 等） |
+| `examples/` | 参考实现，按复杂度分层：`minimal-bot`（Stable 黄金路径，仅 IM）→ `full-bot`（L4 全维度参考）→ `test-bot`（维护者厨房水槽，非用户模板） |
+| `deploy/` | 部署样例（如 `huggingface/`） |
+| `scripts/` | harness 门禁脚本与构建/发布辅助脚本（`check-*.mjs`、`run-*.mjs`、`sync-*.mjs`） |
+| `tests/` | 跨包契约测试、文档/配置对齐测试、快照（`contracts/`、`docs/`、`snapshots/`） |
+| `docs/` | 本站点（VitePress） |
+| `config/` | 仓库自用的 `zhin.config.yml` 参考配置 |
+| `data/` | 本地运行数据（数据库、媒体、记忆等，不入库） |
+
+每个 workspace 包都有独立的 `package.json`。Node 侧源码放 `src/`、构建产物放 `lib/`；浏览器侧源码放 `client/`、产物放 `dist/`。
+
+## 分层与依赖方向
+
+核心包之间的依赖方向是单向的，由 `pnpm check:architecture`（`scripts/check-architecture-layers.mjs`）强制检查：
+
+```mermaid
+flowchart LR
+  basic["basic/*<br/>logger · database · schema · cli"] --> kernel["@zhin.js/kernel<br/>插件系统 · 定时 · 错误体系"]
+  kernel --> ai["@zhin.js/ai<br/>Provider · agentLoop · 会话 · 记忆"]
+  ai --> core["@zhin.js/core<br/>Plugin · Adapter · Endpoint · 命令 · 中间件"]
+  core --> agent["@zhin.js/agent<br/>ZhinAgent · 编排 · 安全沙箱 · MCP client"]
+  agent --> zhin["zhin.js<br/>启动入口 · 配置解析 · 插件加载"]
+  zhin --> hostHttp["@zhin.js/host-http"]
+  hostHttp --> hostMcp["@zhin.js/mcp / @zhin.js/a2a"]
+```
+
+要点：
+
+- `kernel` 与 `ai` 不含任何 IM 概念，可以独立使用。
+- 低层不得反向依赖高层，也不得让低层代码引入 IM 概念。
+- 唯一例外是 `basic/cli`：它是 Plugin Runtime 的 composition root（`zhin runtime start` 在这里装配 IM / Agent / Console Host），允许导入 `packages/im` 各层。
+
+## AGENTS.md 导读
+
+仓库根目录的 [`AGENTS.md`](https://github.com/zhinjs/zhin/blob/main/AGENTS.md) 是给 AI 编码代理和贡献者的最小入口，改代码前先读它。它包含：
+
+- **项目概览与版本约束**：Node `^20.19.0 || >=22.12.0`、pnpm 9、changesets 发布流。
+- **常用命令**：`pnpm dev` / `pnpm build` / `pnpm test` / `pnpm check:all` 等（详见[开发流程](./development.md)）。
+- **必须遵守的代码约定**：`.js` 扩展名导入、`usePlugin()` 顶层调用、`getPlugin()` 禁用域、消息统一链路等（详见[代码约定](./conventions.md)）。
+- **任务路由**：按改动领域列出应该看的包和文档（核心 → `packages/im/core`，AI 引擎 → `packages/im/ai`，编排 → `packages/im/agent`，适配器 → `plugins/adapters`……）。
+- **高价值路径**：最常改动的文件清单（`plugin.ts`、`adapter.ts`、`dispatcher.ts` 等）。
+
+部分子目录还有自己的 `AGENTS.md` 或 `CONTEXT.md`（如 `packages/im/plugin-runtime/CONTEXT.md` 描述 generation / Root lifecycle 的术语与约束），在某个包里工作时优先看离它最近的那一份。

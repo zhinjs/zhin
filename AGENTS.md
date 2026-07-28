@@ -15,8 +15,8 @@
 
 按这个顺序建立心智模型：
 
-1. [docs/architecture/README.md](docs/architecture/README.md)
-2. [docs/architecture-overview.md](docs/architecture-overview.md)
+1. [docs/concepts/architecture.md](docs/concepts/architecture.md)
+2. [docs/concepts/plugin-model.md](docs/concepts/plugin-model.md)
 3. [docs/contributing/repo-structure.md](docs/contributing/repo-structure.md)
 4. [README.md](README.md)
 5. 与当前改动最近的包 README 或 docs 页面
@@ -65,7 +65,7 @@ basic → kernel → ai → core → agent → zhin（→ host/http → host/mcp
 
 - 默认安装仅 IM（<10MB）；AI 另装 `@zhin.js/agent` + `zod` + `ai` + 所选 `@ai-sdk/*`。
 - 用户向分档表 SSOT：[`docs/snippets/install-tiers.md`](docs/snippets/install-tiers.md)（根 README 的 Install tiers 表必须与之一致，`pnpm check:install-tiers-ssot` 门禁）。
-- 见 [ADR 0019](docs/adr/0019-install-size-layering.md)。Breaking（4.x）：`import from 'zhin.js'` 不再含 `ZhinAgent` / `AIService`；请 `import from 'zhin.js/agent'` 或 `zhin.js/ai`。
+- 安装分档（IM 核心 <10MB）见 [docs/snippets/install-tiers.md](docs/snippets/install-tiers.md)。Breaking（4.x）：`import from 'zhin.js'` 不再含 `ZhinAgent` / `AIService`；请 `import from 'zhin.js/agent'` 或 `zhin.js/ai`。
 - `pnpm check:install-size`：IM 核心 production `node_modules` ≤10MB。
 
 ### 项目脚手架
@@ -86,11 +86,11 @@ basic → kernel → ai → core → agent → zhin（→ host/http → host/mcp
 - `pnpm --filter <pkg> build|test`：只验证单个包。
 - `pnpm check:l4-ci`：PR 门禁 L4 确定性子集（编排/记忆/full-bot 契约）。
 - `pnpm check:l4`：L4 全维度验收（编排 + 语义记忆 + full-bot 契约 + MCP 鉴权 + adapter L4；实机 IM 项 `L4_SKIP_PLATFORM=1` 跳过）；nightly workflow 跑全量。
-- 暂无官方 Docker 镜像；自建容器见 [docs/getting-started/docker.md](docs/getting-started/docker.md)。
+- 暂无官方 Docker 镜像；自建容器参考 deploy/ 目录与 [docs/contributing/development.md](docs/contributing/development.md)。
 - `pnpm check:install-size`：zhin.js IM 核心 production `node_modules` ≤10MB（ADR 0019）。
 - `pnpm check:install-tiers-ssot`：根 `README` Install tiers 表与 `docs/snippets/install-tiers.md` 一致。
 - 改 **CLI** 或 **create-zhin-app** 前，若报找不到 `@zhin.js/scaffold-wizard`，先执行 `pnpm --filter @zhin.js/scaffold-wizard build`（或 `pnpm prepare:cli` / 全量 `pnpm build`）。该包产物在 `lib/`，未构建时 Node 无法解析。
-- **ADR 0010 Harness**：IM 会话命令见 [examples/test-bot/TOOLS.md](examples/test-bot/TOOLS.md)；`zhin packages` 见 [docs/adr/0010-pi-coding-agent-harness-alignment.md](docs/adr/0010-pi-coding-agent-harness-alignment.md)。
+- **Harness**：IM 会话命令见 [examples/test-bot/TOOLS.md](examples/test-bot/TOOLS.md)；`zhin packages` 见 [docs/cli/index.md](docs/cli/index.md)。
 
 优先做最小范围验证，不要默认跑全量构建。
 
@@ -100,7 +100,7 @@ basic → kernel → ai → core → agent → zhin（→ host/http → host/mcp
 - `usePlugin()` 应在模块顶层调用，不要放进异步函数、回调工厂或延迟执行路径（`pnpm check:use-plugin-top-level` 门禁）。
 - `getPlugin()` 只能在插件初始化/装配阶段调用；中间件、命令 action、工具 execute、Cron、事件回调等运行时路径严禁 `getPlugin()`，应在注册时捕获 plugin/root 闭包（`pnpm check:get-plugin-runtime` 门禁）。
 - 发送消息不能绕过统一链路：`Message.$reply` 或 `Adapter.sendMessage` → `renderSendMessage` → `before.sendMessage` → 平台 Endpoint（`pnpm check:harness-paths` 门禁）。
-- Endpoint 可按 `capabilities`（`inbound` / `outbound`）拆分 IO；跨平台出站用 `inject(adapter).sendMessage`，见 `docs/essentials/message-flow.md`。
+- Endpoint 可按 `capabilities`（`inbound` / `outbound`）拆分 IO；跨平台出站用 `inject(adapter).sendMessage`，见 [docs/concepts/message-flow.md](docs/concepts/message-flow.md)。
 - 保持依赖方向单向：basic → kernel → ai → core → agent → zhin；不要让低层依赖 IM 概念。例外仅限 `basic/cli`（见上）。
 - 新增模块级运行时状态优先用 `createGenerationStore`（`@zhin.js/plugin-runtime`）：provide 自动挂 lifecycle 反注册，禁止裸模块级单例悬挂（repeater/rss 事故的教训）；WS 类端点的 start/stop/重连/心跳统一走 `createEndpointLifecycle`（`@zhin.js/adapter`），不要手写状态机。
 - Node 侧源码放 `src/`，产物放 `lib/`；浏览器侧源码放 `client/`，产物放 `dist/`。
@@ -123,9 +123,9 @@ basic → kernel → ai → core → agent → zhin（→ host/http → host/mcp
 ## 任务路由
 
 - 框架核心、Plugin/Adapter/Dispatcher：看 packages/im/core。
-- AI 引擎、Session、Compaction、Provider、ModelRegistry、`getModel`：看 [packages/im/ai](packages/im/ai/README.md) 与 [docs/advanced/ai.md](docs/advanced/ai.md)。
+- AI 引擎、Session、Compaction、Provider、ModelRegistry、`getModel`：看 [packages/im/ai](packages/im/ai/README.md) 与 [docs/ai/index.md](docs/ai/index.md)。
 - AI 编排、工具发现、安全策略、MCP client：看 [packages/im/agent](packages/im/agent/README.md)。
-- **插件 AI 创作面**（`agent/tools`、`agent/skills`）：看 [docs/advanced/agent-authoring.md](docs/advanced/agent-authoring.md)。
+- **插件 AI 创作面**（`agent/tools`、`agent/skills`）：看 [docs/authoring/agent-tools.md](docs/authoring/agent-tools.md)。
 - 应用入口（IM 核心 + 可选 agent 子路径）：看 [packages/im/zhin](packages/im/zhin/README.md)（`im_transcripts` 落库需 `@zhin.js/agent`）。
 - Host 运行时（http / mcp / a2a）：看 packages/host。
 - 可选服务插件：看 plugins/services。
@@ -159,5 +159,5 @@ basic → kernel → ai → core → agent → zhin（→ host/http → host/mcp
 
 ## Issue 与流程约定
 
-- Issues 和 PRD 流程见 [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md)。
+- Issue 与发版流程见 [docs/contributing/development.md](docs/contributing/development.md)。
 - Triage 标签只使用 needs-triage、needs-info、ready-for-agent、ready-for-human、wontfix。

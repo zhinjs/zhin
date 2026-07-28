@@ -56,7 +56,6 @@
     "check:dependency-policy": "node scripts/check-dependency-policy.mjs",
     "check:api-surface": "node scripts/check-api-surface.mjs",
     "check:plugin-runtime-api": "node scripts/check-plugin-runtime-api.mjs",
-    "check:adr-manifest": "node scripts/check-adr-manifest.mjs",
     "check:doc-orphans": "node scripts/check-doc-orphans.mjs",
     "check:readme-exports": "node scripts/check-readme-exports.mjs",
     "check:console-contract": "node --test scripts/workspace-pack-closure.test.mjs && node scripts/check-console-contract.mjs",

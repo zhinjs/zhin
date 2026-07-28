@@ -27,7 +27,7 @@
   <a href="https://zhin.js.org">Documentation</a> ·
   <a href="https://demo.zhin.dev">Live Demo</a> ·
   <a href="https://console.zhin.dev">Remote Console</a> ·
-  <a href="./docs/contributing.md">Contributing</a>
+  <a href="./docs/contributing/development.md">Contributing</a>
 </p>
 
 ---
@@ -39,7 +39,7 @@ Zhin.js 为**在生产环境构建严肃 bot / agent 产品**的开发者和团�
 - **安全内置** — exec 白名单 / 文件策略 / 网络白名单 / 资源预算 / 审计日志五层防御 + 声明式策略表
 - **工程纪律即产品** — 50+ harness 门禁守护架构分层、消息发送链路、安装体积（IM 核心 `<10MB`）、依赖策略
 
-> **EN**: Built for developers and teams running serious bot/agent products in production. Composable layers (kernel works standalone as a plugin engine, `@zhin.js/ai` as an IM-free LLM engine), an agent-first runtime (orchestration, tools, MCP, memory & compaction, subagents), five-layer built-in security, and 50+ harness gates enforcing architecture, message paths, and install size. **Not** a Cursor/Claude Code-style coding agent. See [capability tiers](./docs/essentials/capability-tiers.md).
+> **EN**: Built for developers and teams running serious bot/agent products in production. Composable layers (kernel works standalone as a plugin engine, `@zhin.js/ai` as an IM-free LLM engine), an agent-first runtime (orchestration, tools, MCP, memory & compaction, subagents), five-layer built-in security, and 50+ harness gates enforcing architecture, message paths, and install size. **Not** a Cursor/Claude Code-style coding agent. See [capability tiers](./docs/snippets/platform-tiers.md).
 
 ```ts
 import { usePlugin, MessageCommand } from 'zhin.js'
@@ -71,7 +71,7 @@ pnpm dev
 
 然后打开 [Remote Console](https://console.zhin.dev)，填 Host `http://127.0.0.1:8086` 与 `.env` 中的 `HTTP_TOKEN`，在 Sandbox 发 `hello` / `card`。
 
-更多：[5 分钟首跑](./docs/getting-started/first-run.md) · `npx zhin setup` · `npx zhin doctor`
+更多：[5 分钟首跑](./docs/getting-started/index.md) · `npx zhin setup` · `npx zhin doctor`
 
 **要求**：Node.js `^20.19.0` 或 `>=22.12.0`，pnpm 9+
 
@@ -82,7 +82,7 @@ pnpm dev
 - **Remote Console** — Host 只提供 API；UI 在 [console.zhin.dev](https://console.zhin.dev)
 - **可选 AI** — `@zhin.js/agent`：对话、工具、MCP、安全 harness
 - **多通道** — QQ / Discord / Telegram / Slack / GitHub 等，见 [adapters](./plugins/adapters)
-- **文件化创作面** — `agent/tools`、`agent/skills`、workspace agents（见 [agent-authoring](./docs/advanced/agent-authoring.md)）
+- **文件化创作面** — `agent/tools`、`agent/skills`、workspace agents（见 [agent-authoring](./docs/authoring/agent-tools.md)）
 
 <details>
 <summary><strong>Stable / Advanced 能力分档</strong></summary>
@@ -111,9 +111,9 @@ pnpm dev
 | **Rich media** | `+ @zhin.js/html-renderer` | +~数 MB | 出站 `html` / `markdown` 转 PNG（未装则降级 text） |
 | **Speech** | `+ @zhin.js/speech` | +~数 MB | 入站 STT、出站 TTS、`segment.tts`（未装则 warn 降级） |
 
-Breaking（4.x）：`import from 'zhin.js'` 不再含 `ZhinAgent` / `AIService`；请 `import from 'zhin.js/agent'` 或 `zhin.js/ai`。详见 [ADR 0019](./docs/adr/0019-install-size-layering.md)。
+Breaking（4.x）：`import from 'zhin.js'` 不再含 `ZhinAgent` / `AIService`；请 `import from 'zhin.js/agent'` 或 `zhin.js/ai`。详见 [ADR 0019](./docs/snippets/install-tiers.md)。
 
-> **Windows**：见 [Windows 初始化指南](./docs/essentials/windows-setup.md)。
+> **Windows**：见 [Windows 初始化指南](./docs/getting-started/index.md)。
 
 ## Enable AI（optional）
 
@@ -139,7 +139,7 @@ ai:
     execApprovalMode: ask
 ```
 
-深入：[AI 模块](./docs/advanced/ai.md) · [Agent 安全](./docs/advanced/agent-harness-engineering.md) · [工具与技能](./docs/advanced/tools-skills.md)
+深入：[AI 模块](./docs/ai/index.md) · [Agent 安全](./docs/ai/agent.md) · [工具与技能](./docs/authoring/agent-tools.md)
 
 ## Adapters
 
@@ -152,7 +152,7 @@ ai:
 | KOOK / 钉钉 / 飞书 | `kook` / `dingtalk` / `lark` | GitHub | `@zhin.js/adapter-github` |
 | Email / 企微 / LINE | `email` / `wecom` / `line` | Satori / WeChat MP | `satori` / `wechat-mp` |
 
-完整说明：[适配器文档](./docs/essentials/adapters.md) · [`plugins/adapters`](./plugins/adapters)
+完整说明：[适配器文档](./docs/adapters/index.md) · [`plugins/adapters`](./plugins/adapters)
 
 ## Package Map
 
@@ -164,16 +164,16 @@ ai:
 | [`@zhin.js/agent`](./packages/im/agent) | Agent 编排与安全 |
 | [`@zhin.js/cli`](./basic/cli) · [`create-zhin-app`](./packages/toolkit/create-zhin) | CLI / 脚手架 |
 
-分层与依赖方向：[架构概览](./docs/architecture-overview.md) · [仓库结构](./docs/contributing/repo-structure.md)
+分层与依赖方向：[架构概览](./docs/concepts/architecture.md) · [仓库结构](./docs/contributing/repo-structure.md)
 
 ## Documentation
 
 | | |
 |--|--|
-| **入门** | [快速开始](./docs/getting-started/index.md) · [路线与边界](./docs/vision.md) · [稳定性承诺](./docs/stability.md) · [Docker](./docs/getting-started/docker.md) · [Windows](./docs/essentials/windows-setup.md) |
-| **基础** | [核心概念](./docs/essentials/index.md) · [配置](./docs/essentials/configuration.md) · [命令](./docs/essentials/commands.md) · [插件](./docs/essentials/plugins.md) |
-| **进阶** | [AI](./docs/advanced/ai.md) · [Agent 创作面](./docs/advanced/agent-authoring.md) · [消息流](./docs/essentials/message-flow.md) |
-| **开发** | [插件开发](./docs/guide/plugin-development.md) · [贡献](./docs/contributing.md) · [架构](./docs/architecture/README.md) |
+| **入门** | [快速开始](./docs/getting-started/index.md) · [路线与边界](./docs/index.md) · [稳定性承诺](./docs/concepts/generation-lifecycle.md) · [Docker](./docs/contributing/development.md) · [Windows](./docs/getting-started/index.md) |
+| **基础** | [核心概念](./docs/concepts/architecture.md) · [配置](./docs/configuration/index.md) · [命令](./docs/authoring/commands.md) · [插件](./docs/concepts/plugin-model.md) |
+| **进阶** | [AI](./docs/ai/index.md) · [Agent 创作面](./docs/authoring/agent-tools.md) · [消息流](./docs/concepts/message-flow.md) |
+| **开发** | [插件开发](./docs/authoring/define-plugin.md) · [贡献](./docs/contributing/development.md) · [架构](./docs/concepts/architecture.md) |
 
 站点：[zhin.js.org](https://zhin.js.org)
 
@@ -196,7 +196,7 @@ pnpm install && pnpm build
 cd examples/minimal-bot && pnpm dev
 ```
 
-见 [贡献指南](./docs/contributing.md)。根目录 `pnpm dev` 指向 Stable 黄金路径 `minimal-bot`；厨房水槽用 `pnpm dev:test`（`test-bot`），**非**用户模板。
+见 [贡献指南](./docs/contributing/development.md)。根目录 `pnpm dev` 指向 Stable 黄金路径 `minimal-bot`；厨房水槽用 `pnpm dev:test`（`test-bot`），**非**用户模板。
 
 <p align="center">
   <a href="https://github.com/zhinjs/zhin/graphs/contributors">

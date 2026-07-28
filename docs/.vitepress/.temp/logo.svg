@@ -1,0 +1,42 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- 背景圆形渐变 -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="letterGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffd89b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#19547b;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- 外圈圆形 -->
+  <circle cx="100" cy="100" r="95" fill="url(#bgGradient)" />
+  
+  <!-- 内圈白色圆 -->
+  <circle cx="100" cy="100" r="80" fill="white" opacity="0.1" />
+  
+  <!-- 字母 Z -->
+  <text x="100" y="130" 
+        font-family="Arial, sans-serif" 
+        font-size="100" 
+        font-weight="bold" 
+        fill="white" 
+        text-anchor="middle">Z</text>
+  
+  <!-- 装饰小圆点 -->
+  <circle cx="50" cy="50" r="8" fill="white" opacity="0.6">
+    <animate attributeName="opacity" values="0.6;1;0.6" dur="2s" repeatCount="indefinite" />
+  </circle>
+  <circle cx="150" cy="50" r="6" fill="white" opacity="0.5">
+    <animate attributeName="opacity" values="0.5;1;0.5" dur="2.5s" repeatCount="indefinite" />
+  </circle>
+  <circle cx="50" cy="150" r="6" fill="white" opacity="0.5">
+    <animate attributeName="opacity" values="0.5;1;0.5" dur="3s" repeatCount="indefinite" />
+  </circle>
+  <circle cx="150" cy="150" r="8" fill="white" opacity="0.6">
+    <animate attributeName="opacity" values="0.6;1;0.6" dur="2.2s" repeatCount="indefinite" />
+  </circle>
+</svg>
+
