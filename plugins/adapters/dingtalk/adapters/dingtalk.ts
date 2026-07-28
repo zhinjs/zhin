@@ -16,6 +16,11 @@ export type { DingTalkEndpointOptions, DingTalkFetch } from '../src/endpoint.js'
 
 export default defineAdapter<DingTalkAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
+  // 钉钉机器人媒体消息仅消费远程 URL；无按钮交互面，交互段降级纯文本。
+  segments: {
+    outboundMedia: ['url'],
+    interactive: 'text',
+  },
   create(context) {
     const config = resolveDingTalkConfig(context.config);
     // 注册到插件运行时状态（dingtalk endpoint list 的"运行中"数据源）

@@ -1,7 +1,10 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { getAllBuiltinFonts } from '@zhin.js/satori';
-import { createHtmlRenderer, serializeJsxToHtml } from '../src/index.js';
-import type { FontConfig } from '../src/index.js';
+import {
+  createHtmlRenderer,
+  serializeJsxToHtml,
+  type FontConfig,
+} from '../src/index.js';
 
 const EMOJI_SVG_RESPONSE = {
   ok: true,

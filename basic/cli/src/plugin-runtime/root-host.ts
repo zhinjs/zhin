@@ -22,6 +22,11 @@ export interface RootHostOptions {
   onRestartRequired?(plan: ProcessInvalidationPlan): void | Promise<void>;
   onError?(error: unknown): void | Promise<void>;
   onPlan?(plan: InvalidationPlan): void | Promise<void>;
+  onReload?(
+    plan: Extract<InvalidationPlan, { kind: 'generation' }>,
+    generation: number,
+    durationMs: number,
+  ): void | Promise<void>;
   /**
    * Generation commit 回调（包括初始 start 与后续 HMR/config patch）。
    * 用于 Console `hmr:reload` SSE 推送。
@@ -43,6 +48,7 @@ export class RootHost {
   readonly #onRestartRequired: NonNullable<RootHostOptions['onRestartRequired']>;
   readonly #onError: NonNullable<RootHostOptions['onError']>;
   readonly #onPlan?: RootHostOptions['onPlan'];
+  readonly #onReload?: RootHostOptions['onReload'];
   readonly #stopGenerationObservation: () => void;
   #stopHmr?: () => void;
   #started = false;
@@ -57,6 +63,7 @@ export class RootHost {
     this.#onRestartRequired = options.onRestartRequired ?? (() => undefined);
     this.#onError = options.onError ?? (() => undefined);
     this.#onPlan = options.onPlan;
+    this.#onReload = options.onReload;
     this.runtime = new RootRuntime({
       projectRoot: options.projectRoot,
       modules,
@@ -87,6 +94,8 @@ export class RootHost {
           onRestartRequired: this.#onRestartRequired,
           onError: this.#onError,
           onPlan: this.#onPlan,
+          onReload: (plan, durationMs) =>
+            this.#onReload?.(plan, this.runtime.snapshot.generation, durationMs),
         }).start();
       }
       return describeSnapshot(snapshot);

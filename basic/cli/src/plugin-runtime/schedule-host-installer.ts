@@ -20,10 +20,15 @@ export function createScheduleHost(): ScheduleHost & { stop(): void } {
       }));
     },
   });
-  const jobs = new Map<string, { cron: string; description?: string }>();
+  const jobs = new Map<string, {
+    cron: string;
+    description?: string;
+    registration: symbol;
+  }>();
 
   return {
     register(job: ScheduleJobRegistration): () => void {
+      const registration = Symbol(job.id);
       if (jobs.has(job.id)) {
         scheduler.cancel(job.id);
         jobs.delete(job.id);
@@ -39,9 +44,16 @@ export function createScheduleHost(): ScheduleHost & { stop(): void } {
           }));
         }
       }, job.id, { id: job.id });
-      jobs.set(job.id, { cron: job.cron, description: job.description });
+      jobs.set(job.id, {
+        cron: job.cron,
+        description: job.description,
+        registration,
+      });
       logger.debug(formatCompact({ op: 'schedule_register', id: job.id, cron: job.cron }));
       return () => {
+        // A newer generation may already have replaced this job under the same
+        // stable id. Its predecessor must not cancel the replacement on retire.
+        if (jobs.get(job.id)?.registration !== registration) return;
         scheduler.cancel(job.id);
         jobs.delete(job.id);
       };
@@ -72,6 +84,8 @@ export function installScheduleHost(host?: ScheduleHost & { stop(): void }): Roo
   return ({ resources, lifecycle }) => {
     const instance = host ?? createScheduleHost();
     resources.provide(scheduleHostToken, instance);
-    lifecycle.add(() => instance.stop());
+    // A supplied Host is process-owned and intentionally shared by overlapping
+    // generations. Only an instance created by this installer belongs to Scope.
+    if (!host) lifecycle.add(() => instance.stop());
   };
 }

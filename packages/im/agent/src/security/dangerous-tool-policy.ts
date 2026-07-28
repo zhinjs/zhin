@@ -1,4 +1,6 @@
-import { getHostRootPlugin, hasSenderRole, resolveSubjectRoles, senderRolesFromMessage, type Message, type Plugin } from '@zhin.js/core';
+import { getHostRootPlugin, getLogger, hasSenderRole, resolveSubjectRoles, senderRolesFromMessage, type Message, type Plugin } from '@zhin.js/core';
+
+const logger = getLogger('DangerousToolPolicy');
 import type { ZhinAgentConfig } from '../config/index.js';
 import { checkFileAccess, extractBashReadPaths } from './file-policy.js';
 import { resolveToolRequesterRole, type ToolRequesterRole } from './owner-approve-always-store.js';
@@ -115,10 +117,12 @@ function resolveRoleFromMessageFallback(commMessage: Message): ToolRequesterRole
 }
 
 function denyUnidentifiedTool(toolName: string): DangerousToolDecision {
+  // 内部细节（身份解析失败）只进 debug 日志，用户消息不暴露策略实现
+  logger.debug(`无法确认调用者身份，已拒绝工具「${toolName}」`);
   return {
     allowed: false,
     role: 'unknown',
-    reason: `无法确认调用者身份：工具「${toolName}」已拒绝。`,
+    reason: `权限不足：当前策略不允许执行「${toolName}」。`,
   };
 }
 
@@ -144,10 +148,11 @@ export function checkFileToolAccess(toolName: FileToolName, commMessage?: Messag
 
   if (role === 'trusted') {
     if (op === 'delete') {
+      logger.debug(`trusted 角色无删除权限，已拒绝工具「${toolName}」`);
       return {
         allowed: false,
         role,
-        reason: `trusted 无删除权限：工具「${toolName}」已拒绝。`,
+        reason: `权限不足：当前策略不允许执行「${toolName}」。`,
       };
     }
     return { allowed: true, role };
@@ -157,10 +162,11 @@ export function checkFileToolAccess(toolName: FileToolName, commMessage?: Messag
     return { allowed: true, role };
   }
 
+  logger.debug(`普通用户仅允许只读操作，已拒绝工具「${toolName}」`);
   return {
     allowed: false,
     role,
-    reason: `普通用户仅允许查询（读），无增删改权限：工具「${toolName}」已拒绝。`,
+    reason: `权限不足：当前策略不允许执行「${toolName}」。`,
   };
 }
 
@@ -243,19 +249,21 @@ export function checkDangerousToolAccess(toolName: 'write_file' | 'edit_file' | 
       if (isAllowlisted(allowlist, toolName)) {
         return { allowed: true, role };
       }
+      logger.debug(`工具「${toolName}」不在 execAllowlist，trusted 需 Master 确认后执行`);
       return {
         allowed: false,
         needsOwnerApproval: true,
         role,
-        reason: `工具「${toolName}」不在 execAllowlist，trusted 需 Master 确认后执行。`,
+        reason: `权限不足：执行「${toolName}」需要 Owner 确认。`,
       };
     }
 
     if (role === 'other') {
+      logger.debug(`工具「${toolName}」为危险操作，仅 master 可直接执行，已拒绝 other 角色`);
       return {
         allowed: false,
         role,
-        reason: `工具「${toolName}」为危险操作，仅 master 可直接执行；trusted 需 Master 审批。`,
+        reason: `权限不足：当前策略不允许执行「${toolName}」。`,
       };
     }
 

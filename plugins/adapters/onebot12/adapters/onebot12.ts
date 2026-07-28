@@ -23,9 +23,10 @@ export type { OneBot12WsSocket, OneBot12WsCreateOptions } from '../src/ws-types.
 
 export default defineAdapter<OneBot12AdapterConfig>({
   capabilities: ['inbound', 'outbound'],
-  // 媒体段由 adapter 按扩展字段（url/data/path）自行物化；无卡片交互面，交互段降级纯文本。
+  // 媒体段经 upload_file 物化为 file_id（spec 正式投递）；上传失败降级扩展字段透传。
+  // 无卡片交互面，交互段降级纯文本。
   segments: {
-    outboundMedia: ['url', 'base64'],
+    outboundMedia: ['url', 'path', 'base64', 'upload'],
     interactive: 'text',
   },
   create(context) {

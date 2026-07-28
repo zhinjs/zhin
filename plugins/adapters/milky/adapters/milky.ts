@@ -34,6 +34,11 @@ export type {
 
 export default defineAdapter<MilkyAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
+  // Milky 协议资源 uri 消费 http(s):// 与 base64:// 形式；无卡片交互面，交互段降级纯文本。
+  segments: {
+    outboundMedia: ['url', 'base64'],
+    interactive: 'text',
+  },
   create(context) {
     const config = resolveMilkyConfig(context.config);
     const gateway = context.use(messageGatewayToken);

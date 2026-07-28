@@ -15,6 +15,11 @@ export type { SandboxEndpointOptions } from '../src/endpoint.js';
 
 export default defineAdapter<SandboxAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
+  // Console UI 直接渲染 base64 内联媒体；交互段由 Console 原生承载。
+  segments: {
+    outboundMedia: ['base64'],
+    interactive: 'native',
+  },
   create(context) {
     return new SandboxWsEndpoint({
       id: context.id,

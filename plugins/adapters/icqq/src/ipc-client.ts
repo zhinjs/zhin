@@ -266,7 +266,7 @@ export class IpcClient {
     try {
       token = (await readFile(getTokenPath(uin), "utf-8")).trim();
     } catch {
-      throw new Error("无法读取认证 token，守护进程可能未运行");
+      throw new Error(`无法读取认证 token，守护进程可能未运行：请先执行 icqq login ${uin} 完成登录并启动守护进程`);
     }
 
     let rpcInfo: { host: string; port: number };
@@ -274,7 +274,7 @@ export class IpcClient {
       const raw = await readFile(getRpcPortPath(uin), "utf-8");
       rpcInfo = JSON.parse(raw);
     } catch {
-      throw new Error("RPC 未启用或守护进程未运行");
+      throw new Error(`RPC 未启用或守护进程未运行：请先执行 icqq login ${uin}，并确认守护进程已启用 RPC`);
     }
 
     return IpcClient.connectRpc({

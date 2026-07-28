@@ -15,8 +15,8 @@ pnpm --filter @zhin.js/game-kit build
 pnpm --filter @zhin.js/adapter-qq build
 
 cd examples/qq-games-bot
-# 从 test-bot 复制 QQ 凭据（endpoint 名称同为 zhin）
-cp ../test-bot/.env .env   # 或只复制 HTTP_TOKEN / QQ_APPID / QQ_SECRET
+# 维护者内部：可从 test-bot（维护者厨房水槽）复制 QQ 凭据（endpoint 名称同为 zhin）
+cp ../test-bot/.env .env   # 或只复制 HTTP_TOKEN / QQ_APPID / QQ_SECRET；其他用户请按 .env.example 自行填写
 
 pnpm install
 pnpm dev

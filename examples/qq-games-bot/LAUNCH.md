@@ -15,7 +15,7 @@
 
 ## 配置
 
-1. `.env` 从 `examples/test-bot/.env` 复制 `HTTP_TOKEN`、`QQ_APPID`、`QQ_SECRET`（与 test-bot 的 `zhin` 端点相同）
+1. `.env` 自行按 `.env.example` 填写；维护者也可从 `examples/test-bot/.env`（维护者厨房水槽）复制 `HTTP_TOKEN`、`QQ_APPID`、`QQ_SECRET`（与 test-bot 的 `zhin` 端点相同）
 2. 确认 `groupSuite.noticeAdapters` 含 `qq`（入群欢迎）
 3. 确认 `ai.enabled: false`（v1 无 AI）
 4. `typingIndicator.groupConfig.type: none`（避免 QQ 群主动消息权限错误）

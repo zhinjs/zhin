@@ -108,7 +108,7 @@ async function prepare(
   const { projections: _projections, ...base } = emptyState();
   const projected = await new FeatureProjector([provider]).project(generation, base);
   const disposers = new DisposeStack();
-  for (const dispose of projected.disposers) disposers.add(dispose);
+  for (const dispose of projected.disposers.values()) disposers.add(dispose);
   return {
     snapshot: projected.state,
     handoff: projected.handoff,

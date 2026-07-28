@@ -122,17 +122,13 @@ describe('segment gate scripts（adapters/*.ts 探测点）', () => {
     }
   });
 
-  it('豁免名单内的 adapter 声明后必须移出豁免（名单收敛）', () => {
-    // 'sandbox' 在三道门禁的 PENDING 豁免名单内；fixture 声明 segments 后应报错
-    const fixture = makeFixture({ sandbox: { entry: DECLARED_ENTRY } });
-    try {
-      for (const gate of ['segments', 'rich', 'interactive'] as const) {
-        const result = runGate(gate, fixture.root);
-        expect(result.status, `${gate} 应要求移出豁免`).toBe(1);
-        expect(result.stderr).toContain('豁免名单移除');
-      }
-    } finally {
-      fixture.cleanup();
+  it('三道门禁的 PENDING 豁免名单已收敛为空（Wave 2 完成）', () => {
+    // Wave 2 全量声明后豁免清零；新增 adapter 未迁移时才允许重新加入名单。
+    for (const gate of ['segments', 'rich', 'interactive'] as const) {
+      const source = fs.readFileSync(path.join(repoRoot, GATES[gate]), 'utf8');
+      const setBody = source.match(/PENDING = new Set\(\[([\s\S]*?)\]\)/u)?.[1] ?? '';
+      const names = [...setBody.matchAll(/'([^']+)'/gu)].map((m) => m[1]);
+      expect(names, `${gate} PENDING 应为空`).toEqual([]);
     }
   });
 

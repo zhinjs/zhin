@@ -39,6 +39,32 @@ export interface QqBotTransport {
 
 export type CreateQqBot = (config: ResolvedQqWebsocketConfig) => QqBotTransport;
 
+interface QqOfficialBotLifecycle {
+  stop(): Promise<unknown>;
+  readonly sessionManager: {
+    userClose: boolean;
+    readonly connectionManager?: { destroy(): void };
+    readonly authManager?: { destroy(): void };
+  };
+}
+
+/**
+ * qq-official-bot 1.2.x keeps a second `userClose` flag in Connection.
+ * Session.stop() does not update it, so a normal shutdown is treated as an
+ * unexpected disconnect and starts a reconnect loop. Destroy both managers at
+ * the SDK boundary until upstream exposes a complete public shutdown method.
+ */
+export async function stopQqOfficialBot(bot: QqOfficialBotLifecycle): Promise<void> {
+  const session = bot.sessionManager;
+  session.userClose = true;
+  session.connectionManager?.destroy();
+  try {
+    await bot.stop();
+  } finally {
+    session.authManager?.destroy();
+  }
+}
+
 export function bindQqBotInboundEvents(
   bot: QqBotTransport,
   admitRaw: (raw: unknown) => void,
@@ -143,7 +169,7 @@ export function defaultCreateBot(config: ResolvedQqWebsocketConfig): QqBotTransp
 
   return {
     start: () => bot.start().then(() => undefined),
-    stop: () => bot.stop().then(() => undefined),
+    stop: () => stopQqOfficialBot(bot as unknown as QqOfficialBotLifecycle),
     on: (event, listener) => {
       bot.on(event as never, listener as never);
     },

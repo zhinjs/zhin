@@ -21,6 +21,7 @@ import {
 import { formatOutbound, type QqOutboundMessage } from '../src/outbound.js';
 import { getQqAgentDeps, setQqAgentDeps } from '../src/qq-agent-deps.js';
 import { createQqRuntimeState, qqRuntimeStateToken } from '../src/qq-runtime-state.js';
+import { stopQqOfficialBot } from '../src/ws.js';
 
 const adapterFeature = featureId('zhin.adapter');
 
@@ -94,6 +95,30 @@ afterEach(() => {
 });
 
 describe('qq protocol helpers', () => {
+  it('destroys SDK managers before stopping to suppress reconnect', async () => {
+    const calls: string[] = [];
+    const sessionManager = {
+      userClose: false,
+      connectionManager: {
+        destroy: vi.fn(() => calls.push('connection.destroy')),
+      },
+      authManager: {
+        destroy: vi.fn(() => calls.push('auth.destroy')),
+      },
+    };
+    const bot = {
+      sessionManager,
+      stop: vi.fn(async () => {
+        calls.push('bot.stop');
+      }),
+    };
+
+    await stopQqOfficialBot(bot);
+
+    expect(sessionManager.userClose).toBe(true);
+    expect(calls).toEqual(['connection.destroy', 'bot.stop', 'auth.destroy']);
+  });
+
   it('resolves plugin config with websocket default', () => {
     const resolved = resolveQqConfig({ appid: 'a', secret: 's' });
     expect(resolved.mode).toBe('websocket');

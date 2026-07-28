@@ -21,6 +21,8 @@ import {
 } from "./built/rich-segments/index.js";
 import {
   DEFAULT_INTERACTIVE_POLICY,
+  collectKeyboardFallbackMaps,
+  keyboardFallbackStore,
   resolveInteractiveSegments,
   type InteractivePolicy,
 } from "./built/interactive-segments/index.js";
@@ -243,6 +245,14 @@ export abstract class Adapter<
           }),
         ),
       };
+      // 'text' 策略端点：keyboard 即将降级为编号文本，先把有效 fallback
+      // 映射写入中央存储（频道键与入站回跳解析一致），供数字回跳路由。
+      if (this.getInteractivePolicy() === 'text') {
+        const channelKey = `${this.name}-${options.endpoint}-${options.type}:${options.id}`;
+        for (const map of collectKeyboardFallbackMaps(options.content)) {
+          keyboardFallbackStore.remember(channelKey, map);
+        }
+      }
       options = {
         ...options,
         content: resolveInteractiveSegments(

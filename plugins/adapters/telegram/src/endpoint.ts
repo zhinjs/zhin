@@ -1,6 +1,7 @@
 /**
  * TelegramEndpoint — lifecycle, outbound, admit, Bot API helpers for agent tools.
  */
+import { readFile } from 'node:fs/promises';
 import type { EndpointInstance } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
@@ -15,13 +16,14 @@ import {
   formatCallbackSegments,
   formatInboundContent,
   formatInboundSegments,
-  formatOutboundActions,
+  formatOutboundPlan,
   resolveChannel,
   senderDisplayName,
   type ResolvedTelegramConfig,
   type TelegramCallbackQuery,
   type TelegramChatMember,
   type TelegramMessage,
+  type TelegramOutboundUpload,
   type TelegramUpdate,
 } from './protocol.js';
 import { registerTelegramAgentEndpoint } from './telegram-agent-deps.js';
@@ -43,7 +45,7 @@ export type TelegramFetch = (
   init?: {
     readonly method?: string;
     readonly headers?: Record<string, string>;
-    readonly body?: string;
+    readonly body?: string | FormData;
     readonly signal?: AbortSignal;
   },
 ) => Promise<{
@@ -198,13 +200,48 @@ export class TelegramEndpoint implements EndpointInstance {
   }
 
   async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
-    const actions = formatOutboundActions(target, payload);
+    const plan = formatOutboundPlan(target, payload);
     let lastId = '';
-    for (const action of actions) {
-      const result = await this.callApi<{ message_id?: number }>(action.method, action.params);
+    for (const action of plan.actions) {
+      const form = await this.#buildUploadForm(action.params, plan.uploads);
+      const result = form
+        ? await this.callApiForm<{ message_id?: number }>(action.method, form)
+        : await this.callApi<{ message_id?: number }>(action.method, action.params);
       if (result.message_id != null) lastId = String(result.message_id);
     }
     return lastId || `telegram-${Date.now()}`;
+  }
+
+  /**
+   * 含 `attach://` 占位的媒体参数 → multipart/form-data：
+   * 标量参数原样、对象参数 JSON 序列化、attach 占位替换为文件 part
+   * （base64 直接解码，本地路径读盘）。无上传时返回 undefined（走 JSON 调用）。
+   */
+  async #buildUploadForm(
+    params: Record<string, unknown>,
+    uploads: readonly TelegramOutboundUpload[],
+  ): Promise<FormData | undefined> {
+    const values = Object.values(params);
+    if (!values.some((v) => typeof v === 'string' && v.startsWith('attach://'))) return undefined;
+    const form = new FormData();
+    for (const [key, value] of Object.entries(params)) {
+      if (value == null) continue;
+      if (typeof value === 'string' && value.startsWith('attach://')) {
+        const upload = uploads.find((item) => `attach://${item.attachName}` === value);
+        if (!upload) throw new Error(`Telegram upload 未登记: ${value}`);
+        const data = upload.source.kind === 'base64'
+          ? Buffer.from(upload.source.data, 'base64')
+          : await readFile(upload.source.path);
+        form.append(
+          key,
+          new Blob([data], upload.mimeType ? { type: upload.mimeType } : undefined),
+          upload.filename,
+        );
+        continue;
+      }
+      form.append(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
+    }
+    return form;
   }
 
   /** Test / internal: admit a message when open. */
@@ -354,6 +391,28 @@ export class TelegramEndpoint implements EndpointInstance {
       body: JSON.stringify(params),
       signal,
     });
+    return this.#parseApiResponse<T>(method, response);
+  }
+
+  /** multipart/form-data 变体（attach:// 媒体上传；Content-Type 边界由 FormData 自带）。 */
+  async callApiForm<T = unknown>(
+    method: string,
+    form: FormData,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    const url = botApiUrl(this.#options.config, method);
+    const response = await this.#fetch(url, {
+      method: 'POST',
+      body: form,
+      signal,
+    });
+    return this.#parseApiResponse<T>(method, response);
+  }
+
+  async #parseApiResponse<T>(
+    method: string,
+    response: { readonly status: number; text(): Promise<string> },
+  ): Promise<T> {
     const text = await response.text();
     let body: TelegramApiOk<T> | TelegramApiErr;
     try {

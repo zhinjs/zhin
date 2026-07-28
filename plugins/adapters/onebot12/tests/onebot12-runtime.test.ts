@@ -14,8 +14,10 @@ import {
   formatInboundContent,
   formatInboundTarget,
   formatOutboundSegments,
+  mediaRefToOneBot12UploadParams,
   parseSendTarget,
   resolveOneBot12Config,
+  uploadOneBot12MediaSegments,
   type OneBot12Event,
   type OneBot12WsConfig,
 } from '../src/protocol.js';
@@ -170,6 +172,55 @@ describe('onebot12 protocol helpers', () => {
       { type: 'image', data: { data: 'QUJD' } },
       { type: 'video', data: { path: '/tmp/a.mp4' } },
     ]);
+  });
+
+  it('builds upload_file params from canonical MediaRef', () => {
+    expect(mediaRefToOneBot12UploadParams('image', {}, { kind: 'url', value: 'https://x/a.png' }))
+      .toEqual({ type: 'url', name: 'a.png', url: 'https://x/a.png' });
+    expect(mediaRefToOneBot12UploadParams(
+      'image',
+      { name: 'p.png' },
+      { kind: 'base64', value: 'base64://QUJD' },
+    )).toEqual({ type: 'data', name: 'p.png', data: 'QUJD' });
+    expect(mediaRefToOneBot12UploadParams('video', {}, { kind: 'path', value: 'file:///tmp/a.mp4' }))
+      .toEqual({ type: 'path', name: 'a.mp4', path: '/tmp/a.mp4' });
+    // kind=file 不可上传（走 file_id 复投），返回 undefined
+    expect(mediaRefToOneBot12UploadParams('file', {}, { kind: 'file', value: 'fid' }))
+      .toBeUndefined();
+  });
+
+  it('materializes media segments via upload_file, reuses file refs, degrades on failure', async () => {
+    const calls: Array<{ action: string; params: Record<string, unknown> }> = [];
+    const okUpload = async (action: string, params: Record<string, unknown>) => {
+      calls.push({ action, params });
+      return { file_id: 'fid-1' };
+    };
+    const out = await uploadOneBot12MediaSegments([
+      { type: 'text', data: { text: 'hi' } },
+      { type: 'image', data: { media: { kind: 'url', value: 'https://x/a.png' } } },
+      { type: 'image', data: { file_id: 'fid-old' } },
+      { type: 'file', data: { media: { kind: 'file', value: 'fid-re' }, name: 'a.bin' } },
+    ], okUpload);
+    expect(calls).toEqual([{
+      action: 'upload_file',
+      params: { type: 'url', name: 'a.png', url: 'https://x/a.png' },
+    }]);
+    expect(out).toEqual([
+      { type: 'text', data: { text: 'hi' } },
+      { type: 'image', data: { file_id: 'fid-1' } },
+      { type: 'image', data: { file_id: 'fid-old' } },
+      { type: 'file', data: { name: 'a.bin', file_id: 'fid-re' } },
+    ]);
+
+    // 上传失败 → 保留原段，由 formatOutboundSegments 走扩展字段降级
+    const onFail = vi.fn();
+    const original = [{ type: 'image', data: { media: { kind: 'base64', value: 'QUJD' } } }];
+    const degraded = await uploadOneBot12MediaSegments(original, async () => {
+      throw new Error('no upload');
+    }, onFail);
+    expect(degraded).toEqual(original);
+    expect(onFail).toHaveBeenCalledTimes(1);
+    expect(formatOutboundSegments(degraded)).toEqual([{ type: 'image', data: { data: 'QUJD' } }]);
   });
 });
 
@@ -366,6 +417,125 @@ describe('onebot12 plugin runtime adapter', () => {
     }));
 
     await expect(sendPromise).resolves.toBe('out-1');
+    await endpoint.stop();
+  });
+
+  it('uploads base64 media via upload_file then sends file_id segment', async () => {
+    const ws = createMockWs();
+    const endpoint = new OneBot12WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      config: baseConfig,
+      createWebSocket: () => {
+        queueMicrotask(() => ws.emitOpen());
+        return ws;
+      },
+    });
+    await endpoint.start();
+    endpoint.open();
+
+    const sendPromise = endpoint.send({
+      target: 'private:10001',
+      payload: [{
+        type: 'image',
+        data: { media: { kind: 'base64', value: 'QUJD', mime_type: 'image/png' }, name: 'a.png' },
+      }],
+    });
+
+    // 第一帧：upload_file（spec 物化）
+    await vi.waitFor(() => expect(ws.sent.length).toBe(1));
+    const uploadReq = JSON.parse(ws.sent[0]!) as {
+      action: string;
+      params: Record<string, unknown>;
+      echo: string;
+    };
+    expect(uploadReq.action).toBe('upload_file');
+    expect(uploadReq.params).toEqual({ type: 'data', name: 'a.png', data: 'QUJD' });
+    ws.emitMessage(JSON.stringify({
+      status: 'ok',
+      retcode: 0,
+      data: { file_id: 'fid-up-1' },
+      message: '',
+      echo: uploadReq.echo,
+    }));
+
+    // 第二帧：send_message，媒体段以 file_id 正式形状投递
+    await vi.waitFor(() => expect(ws.sent.length).toBe(2));
+    const sendReq = JSON.parse(ws.sent[1]!) as {
+      action: string;
+      params: { message?: unknown };
+      echo: string;
+    };
+    expect(sendReq.action).toBe('send_message');
+    expect(sendReq.params.message).toEqual([
+      { type: 'image', data: { name: 'a.png', file_id: 'fid-up-1' } },
+    ]);
+    ws.emitMessage(JSON.stringify({
+      status: 'ok',
+      retcode: 0,
+      data: { message_id: 'out-up-1' },
+      message: '',
+      echo: sendReq.echo,
+    }));
+
+    await expect(sendPromise).resolves.toBe('out-up-1');
+    await endpoint.stop();
+  });
+
+  it('degrades to extension fields when upload_file fails', async () => {
+    const ws = createMockWs();
+    const endpoint = new OneBot12WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      config: baseConfig,
+      createWebSocket: () => {
+        queueMicrotask(() => ws.emitOpen());
+        return ws;
+      },
+    });
+    await endpoint.start();
+    endpoint.open();
+
+    const sendPromise = endpoint.send({
+      target: 'private:10001',
+      payload: [{ type: 'image', data: { media: { kind: 'base64', value: 'QUJD' } } }],
+    });
+
+    await vi.waitFor(() => expect(ws.sent.length).toBe(1));
+    const uploadReq = JSON.parse(ws.sent[0]!) as { action: string; echo: string };
+    expect(uploadReq.action).toBe('upload_file');
+    ws.emitMessage(JSON.stringify({
+      status: 'failed',
+      retcode: 3404,
+      data: null,
+      message: 'unsupported',
+      echo: uploadReq.echo,
+    }));
+
+    // 降级：send_message 仍发出，媒体走扩展字段（base64 → data）
+    await vi.waitFor(() => expect(ws.sent.length).toBe(2));
+    const sendReq = JSON.parse(ws.sent[1]!) as {
+      action: string;
+      params: { message?: unknown };
+      echo: string;
+    };
+    expect(sendReq.action).toBe('send_message');
+    expect(sendReq.params.message).toEqual([{ type: 'image', data: { data: 'QUJD' } }]);
+    ws.emitMessage(JSON.stringify({
+      status: 'ok',
+      retcode: 0,
+      data: { message_id: 'out-deg-1' },
+      message: '',
+      echo: sendReq.echo,
+    }));
+
+    await expect(sendPromise).resolves.toBe('out-deg-1');
     await endpoint.stop();
   });
 

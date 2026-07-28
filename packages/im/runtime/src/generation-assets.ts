@@ -2,19 +2,24 @@ import {
   DisposeStack,
   SharedLifetime,
   type Dispose,
+  type FeatureId,
   type PluginId,
 } from '@zhin.js/plugin-runtime';
 
 export class GenerationAssets {
   readonly #scopeLifetimes: ReadonlyMap<PluginId, SharedLifetime>;
+  // Projection ownership is per Feature, so one command transaction can
+  // retire CommandIndex without releasing AdapterIndex and its endpoints.
+  readonly #projectionLifetimes: ReadonlyMap<FeatureId, SharedLifetime>;
   readonly #disposers = new DisposeStack();
 
   private constructor(
     scopeOrder: readonly PluginId[],
     scopeLifetimes: ReadonlyMap<PluginId, SharedLifetime>,
-    projectionDisposers: Iterable<Dispose>,
+    projectionLifetimes: ReadonlyMap<FeatureId, SharedLifetime>,
   ) {
     this.#scopeLifetimes = scopeLifetimes;
+    this.#projectionLifetimes = projectionLifetimes;
     assertScopeOrder(scopeOrder, scopeLifetimes);
     // Scope order is parent-first. DisposeStack unwinds projections first,
     // then Plugin leases children-first, so no child observes a closed parent.
@@ -24,38 +29,56 @@ export class GenerationAssets {
       const lease = lifetime.acquire();
       this.#disposers.add(() => lease.release());
     }
-    for (const dispose of projectionDisposers) this.#disposers.add(dispose);
+    for (const lifetime of projectionLifetimes.values()) {
+      const lease = lifetime.acquire();
+      this.#disposers.add(() => lease.release());
+    }
     this.#disposers.seal();
   }
 
   static create(
     scopeDisposers: Iterable<readonly [PluginId, Dispose]>,
-    projectionDisposers: Iterable<Dispose>,
+    projectionDisposers: ReadonlyMap<FeatureId, Dispose>,
   ): GenerationAssets {
     const lifetimes = new Map<PluginId, SharedLifetime>();
     for (const [owner, dispose] of scopeDisposers) {
       if (lifetimes.has(owner)) throw new Error(`Duplicate Plugin Scope: ${owner}`);
       lifetimes.set(owner, new SharedLifetime(dispose));
     }
+    const projectionLifetimes = new Map(
+      [...projectionDisposers].map(([feature, dispose]) => [
+        feature,
+        new SharedLifetime(dispose),
+      ]),
+    );
     return new GenerationAssets(
       [...lifetimes.keys()],
       lifetimes,
-      projectionDisposers,
+      projectionLifetimes,
     );
   }
 
-  fork(projectionDisposers: Iterable<Dispose>): GenerationAssets {
+  replaceProjections(
+    features: Iterable<FeatureId>,
+    projectionDisposers: ReadonlyMap<FeatureId, Dispose>,
+  ): GenerationAssets {
+    const lifetimes = new Map(this.#projectionLifetimes);
+    for (const feature of features) {
+      const dispose = projectionDisposers.get(feature);
+      if (dispose) lifetimes.set(feature, new SharedLifetime(dispose));
+      else lifetimes.delete(feature);
+    }
     return new GenerationAssets(
       [...this.#scopeLifetimes.keys()],
       this.#scopeLifetimes,
-      projectionDisposers,
+      lifetimes,
     );
   }
 
   replaceScopes(
     scopeOrder: readonly PluginId[],
     replacements: ReadonlyMap<PluginId, Dispose>,
-    projectionDisposers: Iterable<Dispose>,
+    projectionDisposers: ReadonlyMap<FeatureId, Dispose>,
   ): GenerationAssets {
     const owners = new Set(scopeOrder);
     for (const owner of replacements.keys()) {
@@ -70,7 +93,13 @@ export class GenerationAssets {
       if (!lifetime) throw new Error(`Cannot retain unknown Plugin Scope: ${owner}`);
       lifetimes.set(owner, lifetime);
     }
-    return new GenerationAssets(scopeOrder, lifetimes, projectionDisposers);
+    const projectionLifetimes = new Map(
+      [...projectionDisposers].map(([feature, dispose]) => [
+        feature,
+        new SharedLifetime(dispose),
+      ]),
+    );
+    return new GenerationAssets(scopeOrder, lifetimes, projectionLifetimes);
   }
 
   dispose(): Promise<void> {

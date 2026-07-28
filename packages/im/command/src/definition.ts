@@ -29,6 +29,10 @@ export interface CommandDefinition<TConfig = unknown, TResult = unknown, TInput 
   execute(context: CommandContext<TConfig, TInput>): TResult | Promise<TResult>;
 }
 
+/**
+ * 定义一个命令模块（`commands/` 约定目录下默认导出）。
+ * @public 用户侧创作面，承诺 semver（见 docs/contributing/public-api-surface.md）。
+ */
 export function defineCommand<TConfig = unknown, TResult = unknown, TInput = unknown>(
   definition: Omit<CommandDefinition<TConfig, TResult, TInput>, '$feature' | '$parameter'>,
 ): Readonly<CommandDefinition<TConfig, TResult, TInput>> {

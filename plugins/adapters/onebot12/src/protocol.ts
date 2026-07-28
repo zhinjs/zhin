@@ -283,9 +283,10 @@ const MEDIA_DATA_SKIP_KEYS = new Set([
 ]);
 
 /**
- * canonical MediaRef → OneBot 12 媒体字段。
- * spec 正式投递形状是 `file_id`（先 upload_file 物化，后续波次再接）；
- * 这里按常见扩展字段输出：url → `url`、base64 → `data`、本地路径 → `path`。
+ * canonical MediaRef → OneBot 12 媒体字段（扩展字段降级形状）。
+ * spec 正式投递形状是 `file_id`（先 upload_file 物化，见
+ * {@link uploadOneBot12MediaSegments}）；上传失败时按常见扩展字段
+ * 降级输出：url → `url`、base64 → `data`、本地路径 → `path`。
  */
 export function mediaRefToOneBot12Fields(media: MediaRef): Record<string, unknown> {
   if (media.kind === 'base64') {
@@ -300,6 +301,14 @@ export function mediaRefToOneBot12Fields(media: MediaRef): Record<string, unknow
   return { url: media.value };
 }
 
+function oneBot12MediaExtra(data: Record<string, unknown>): Record<string, unknown> {
+  const extra: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (!MEDIA_DATA_SKIP_KEYS.has(key)) extra[key] = value;
+  }
+  return extra;
+}
+
 function oneBot12MediaSegment(
   type: string,
   data: Record<string, unknown>,
@@ -308,11 +317,7 @@ function oneBot12MediaSegment(
   if (typeof data.file_id === 'string' && data.file_id) return { type, data };
   const media = isMediaRef(data.media) ? data.media : mediaRefFromLegacyData(data);
   if (!media) return { type, data };
-  const extra: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(data)) {
-    if (!MEDIA_DATA_SKIP_KEYS.has(key)) extra[key] = value;
-  }
-  return { type, data: { ...extra, ...mediaRefToOneBot12Fields(media) } };
+  return { type, data: { ...oneBot12MediaExtra(data), ...mediaRefToOneBot12Fields(media) } };
 }
 
 /**
@@ -378,6 +383,105 @@ export function formatOutboundSegments(payload: unknown): OneBot12Segment[] {
     segs.push(canonicalToOneBotSegment(item));
   }
   return segs.length ? segs : [{ type: 'text', data: { text: '' } }];
+}
+
+/** 端点动作调用签名（WS echo 请求 / webhook api_url HTTP）。 */
+export type OneBot12CallAction = (
+  action: string,
+  params: Record<string, unknown>,
+) => Promise<unknown>;
+
+/** upload_file 文件名：优先段 data.name/filename，URL/路径取 basename，再按 mime 给默认名。 */
+function oneBot12UploadName(
+  segmentType: string,
+  data: Record<string, unknown>,
+  media: MediaRef,
+): string {
+  const named = data.name ?? data.filename;
+  if (typeof named === 'string' && named) return named;
+  if (media.kind === 'url') {
+    try {
+      const base = new URL(media.value).pathname.split('/').filter(Boolean).pop();
+      if (base) return base;
+    } catch {
+      /* ignore */
+    }
+  }
+  if (media.kind === 'path') {
+    const base = media.value.split(/[\\/]/).filter(Boolean).pop();
+    if (base) return base;
+  }
+  const ext = media.mime_type?.split('/')[1]?.split(';')[0];
+  return `${segmentType}.${ext || 'bin'}`;
+}
+
+/** canonical MediaRef → OB12 `upload_file` 动作参数（spec: type url/path/data）。 */
+export function mediaRefToOneBot12UploadParams(
+  segmentType: string,
+  data: Record<string, unknown>,
+  media: MediaRef,
+): Record<string, unknown> | undefined {
+  const name = oneBot12UploadName(segmentType, data, media);
+  if (media.kind === 'url') return { type: 'url', name, url: media.value };
+  if (media.kind === 'path') {
+    const path = media.value.startsWith('file://') ? media.value.slice('file://'.length) : media.value;
+    return { type: 'path', name, path };
+  }
+  if (media.kind === 'base64') {
+    const value = media.value.startsWith('base64://')
+      ? media.value.slice('base64://'.length)
+      : media.value;
+    return { type: 'data', name, data: value };
+  }
+  return undefined;
+}
+
+async function uploadOneMediaSegment(
+  item: unknown,
+  callAction: OneBot12CallAction,
+  onUploadFailed?: (error: unknown) => void,
+): Promise<unknown> {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
+  const segment = item as OneBot12WireSegment;
+  if (typeof segment.type !== 'string' || !ONEBOT12_MEDIA_TYPES.has(segment.type)) return item;
+  const data = segment.data ?? {};
+  if (typeof data.file_id === 'string' && data.file_id) return item;
+  const media = isMediaRef(data.media) ? data.media : mediaRefFromLegacyData(data);
+  if (!media) return item;
+  // kind=file：平台不透明引用（OB12 file_id 复投），直接物化为 file_id。
+  if (media.kind === 'file') {
+    return { type: segment.type, data: { ...oneBot12MediaExtra(data), file_id: media.value } };
+  }
+  const params = mediaRefToOneBot12UploadParams(segment.type, data, media);
+  if (!params) return item;
+  try {
+    const result = await callAction('upload_file', params) as { file_id?: unknown } | undefined;
+    if (result && typeof result.file_id === 'string' && result.file_id) {
+      return { type: segment.type, data: { ...oneBot12MediaExtra(data), file_id: result.file_id } };
+    }
+    throw new Error('upload_file 响应缺少 file_id');
+  } catch (error) {
+    // 上传失败降级：保留原段，由 formatOutboundSegments 走扩展字段（url/data/path）
+    onUploadFailed?.(error);
+    return item;
+  }
+}
+
+/**
+ * 出站媒体段物化：image/voice/audio/video/file 段的 MediaRef（url/base64/path）
+ * 先经 `upload_file` 换 file_id（spec 正式投递形状），再交给
+ * {@link formatOutboundSegments} 编码；kind=file 的 MediaRef 直接按 file_id 复投。
+ * 上传失败保留原段（降级扩展字段透传）并回调 onUploadFailed。
+ */
+export async function uploadOneBot12MediaSegments(
+  payload: unknown,
+  callAction: OneBot12CallAction,
+  onUploadFailed?: (error: unknown) => void,
+): Promise<unknown> {
+  if (Array.isArray(payload)) {
+    return Promise.all(payload.map((item) => uploadOneMediaSegment(item, callAction, onUploadFailed)));
+  }
+  return uploadOneMediaSegment(payload, callAction, onUploadFailed);
 }
 
 export function buildSendMessageParams(

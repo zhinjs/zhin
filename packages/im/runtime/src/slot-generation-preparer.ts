@@ -41,7 +41,14 @@ export class SlotGenerationPreparer {
       for (const slot of replacements) capabilities.set(slot.id, slot);
     }
 
-    const projected = await new FeatureProjector(this.model.providers.values()).project(
+    // Capability-file HMR projects only the owning Features. The complete
+    // snapshot below is assembled by retaining every other projection.
+    const providers = [...selectedByFeature.keys()].map((feature) => {
+      const provider = this.model.providers.get(feature);
+      if (!provider) throw new Error(`Missing Feature provider for ${feature}`);
+      return provider;
+    });
+    const projected = await new FeatureProjector(providers).project(
       current.generation + 1,
       {
         root: current.root,
@@ -50,6 +57,7 @@ export class SlotGenerationPreparer {
         resources: current.resources,
         capabilities,
       },
+      current.projections,
     );
     try {
       const snapshot = createSnapshotView(current.generation + 1, projected.state);
@@ -58,7 +66,10 @@ export class SlotGenerationPreparer {
         snapshot,
         this.model.featureIdsByPackageRoot,
       );
-      const assets = this.model.assets.fork(projected.disposers);
+      const assets = this.model.assets.replaceProjections(
+        selectedByFeature.keys(),
+        projected.disposers,
+      );
       return {
         generation: {
           snapshot: projected.state,
@@ -69,7 +80,7 @@ export class SlotGenerationPreparer {
         model: { ...this.model, assets },
       };
     } catch (error) {
-      await disposeProjections(projected.disposers, error);
+      await disposeProjections(projected.disposers.values(), error);
       throw error;
     }
   }
@@ -91,7 +102,7 @@ function groupByFeature(
 }
 
 async function disposeProjections(
-  disposers: readonly Dispose[],
+  disposers: Iterable<Dispose>,
   prepareError: unknown,
 ): Promise<void> {
   const rollback = new DisposeStack();

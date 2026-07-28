@@ -1,6 +1,7 @@
 import type { Message } from '../../message.js';
 import type { MessageMiddleware } from '../../types.js';
-import { getActionFromMessage } from './action.js';
+import { getActionFromMessage, resolvePayloadFromText } from './action.js';
+import { keyboardFallbackStore } from './fallback-store.js';
 import type { InteractiveHandler, RegisteredInteractiveHandler } from './types.js';
 
 const handlers: RegisteredInteractiveHandler[] = [];
@@ -16,6 +17,21 @@ function findHandler(payload: string): InteractiveHandler | undefined {
     }
   }
   return match?.handler;
+}
+
+/** 旧轨频道键：与出站降级（Adapter.renderSendMessage）及 game-kit channelKey 一致。 */
+export function interactiveChannelKey(message: Message<any>): string {
+  return `${String(message.$adapter)}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
+}
+
+/**
+ * 文本回跳解析：中央 fallback map（裸数字）→ payload；
+ * 或 QQ 指令预填等直出 `prefix:session:id` payload。
+ */
+export function resolveInboundTextPayload(message: Message<any>): string | undefined {
+  const raw = message.$raw?.trim() ?? '';
+  if (!raw) return undefined;
+  return resolvePayloadFromText(raw, keyboardFallbackStore.mapFor(interactiveChannelKey(message)));
 }
 
 export function registerInteractiveHandler(
@@ -47,10 +63,11 @@ export function ensureInteractiveMiddleware(
   if (middlewareInstalled) return;
   middlewareInstalled = true;
   addMiddleware(async (message, next) => {
-    const action = getActionFromMessage(message);
-    if (!action) return next();
+    const payload = getActionFromMessage(message)?.payload
+      ?? resolveInboundTextPayload(message);
+    if (!payload) return next();
 
-    const handler = findHandler(action.payload);
+    const handler = findHandler(payload);
     if (!handler) return next();
 
     const handled = await handler(message);

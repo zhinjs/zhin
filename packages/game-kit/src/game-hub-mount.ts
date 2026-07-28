@@ -2,17 +2,14 @@ import {
   Message,
   MessageCommand,
   getActionFromMessage,
-  resolvePayloadFromText,
   type Plugin,
 } from '@zhin.js/core';
-import { buildChoiceFallbackMap, parseChoicePayload } from './choice-keyboard.js';
 import {
   formatHubEmptyMessage,
   buildBotHelpReply,
   buildHubHelpReply,
   HUB_PREFIX,
 } from './game-hub-menu.js';
-import { getLastHubMenu } from './game-hub-menu-context.js';
 import { handleHubChoice, openMainMenu, parseHubPayload } from './game-hub-flow.js';
 import { getRegisteredGames } from './game-hub-feature.js';
 import { mountGameRecordCommands } from './game-records.js';
@@ -111,37 +108,11 @@ export function mountGameHubUi(root: Plugin): (() => void)[] {
   disposers.push(mountGameRecordCommands(root));
   disposers.push(mountFirstAtHintMiddleware(root));
 
+  // interactive 回跳由框架中央执行（`registerInteractiveHandler` 安装的根
+  // 中间件）：action 段、数字 fallback（中央存储的菜单映射）与 QQ 指令预填
+  // 直出 payload 都路由到下面的 hub handler，不再自行解析文本。
   root.registerInteractiveHandler(`${HUB_PREFIX}:`, (message) =>
     handleHubInteractive(root, message),
-  );
-
-  disposers.push(
-    root.addMiddleware(async (message, next) => {
-      const action = getActionFromMessage(message);
-      if (action?.payload.startsWith(`${HUB_PREFIX}:`)) return next();
-
-      const raw = message.$raw?.trim() ?? '';
-
-      // QQ 指令预填等：payload 自包含 hub:scope:choice，不依赖 opener 的菜单缓存
-      const directPayload = resolvePayloadFromText(raw);
-      if (directPayload?.startsWith(`${HUB_PREFIX}:`)) {
-        const direct = parseChoicePayload(directPayload, HUB_PREFIX);
-        if (direct) {
-          await handleHubChoice(root, message, direct.sessionId, direct.choiceId);
-          return;
-        }
-      }
-
-      const last = getLastHubMenu(message);
-      if (!last) return next();
-
-      const map = buildChoiceFallbackMap(HUB_PREFIX, last.scopeId, last.choices);
-      const payload = resolvePayloadFromText(raw, map);
-      const parsed = payload ? parseChoicePayload(payload, HUB_PREFIX) : null;
-      if (!parsed || parsed.sessionId !== last.scopeId) return next();
-
-      await handleHubChoice(root, message, parsed.sessionId, parsed.choiceId);
-    }),
   );
 
   return disposers;

@@ -354,7 +354,16 @@ export async function connectDiscordGatewayClient(
     client.login(config.token).catch((error) => {
       if (!settled) {
         settled = true;
-        reject(error instanceof Error ? error : new Error(String(error)));
+        const raw = error instanceof Error ? error.message : String(error);
+        const tokenShapeHint = config.token.split('.').length === 3
+          ? ''
+          : '；当前 token 不是标准三段式 Bot Token 格式，请到 Discord Developer Portal → Bot → Reset Token 重新获取（勿用 Client Secret）';
+        reject(
+          new Error(
+            `Discord 连接失败：请检查 token 是否为 Bot Token 且未过期、Bot 是否已开启所需 Intents${tokenShapeHint}（原始错误：${raw}）`,
+            { cause: error instanceof Error ? error : undefined },
+          ),
+        );
       }
     });
   });

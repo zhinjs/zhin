@@ -1,6 +1,6 @@
 # test-bot（厨房水槽 · Plugin Runtime）
 
-> **这不是默认入门模板。** 新用户用 [`../minimal-bot`](../minimal-bot/)；L4 用 [`../full-bot`](../full-bot/)。
+> **本例是维护者厨房水槽**（多 Endpoint / Advanced 能力回归用），**不是默认入门模板，也非用户模板。** 新用户请从 [`../minimal-bot`](../minimal-bot/) 开始；L4 全维度参考用 [`../full-bot`](../full-bot/)。
 
 默认 `pnpm dev` = **Plugin Runtime**，平台配置对齐原 legacy 配置里**已经能跑**的那套（legacy `zhin dev/start` 路径与 `zhin.config.legacy.yml` 已移除）：
 

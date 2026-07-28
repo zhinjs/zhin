@@ -27,6 +27,11 @@ export type {
 
 export default defineAdapter<DiscordAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
+  // 媒体 url 直发或由 AttachmentBuilder 物化本地文件上传；message components 原生按钮承载交互段。
+  segments: {
+    outboundMedia: ['url', 'upload'],
+    interactive: 'native',
+  },
   create(context) {
     const config = resolveDiscordConfig(context.config);
     const gateway = context.use(messageGatewayToken);

@@ -414,8 +414,8 @@ done
 # GitHub Actions 示例
 - name: create zhin-app Endpoint Project
   run: |
-    npm create zhin-app test-bot -- --yes
-    cd test-bot
+    npm create zhin-app my-bot -- --yes
+    cd my-bot
     npm run build
     npm run test
 ```

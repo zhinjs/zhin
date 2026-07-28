@@ -26,6 +26,12 @@ export type {
 
 export default defineAdapter<QqAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
+  // 媒体 url 直发，base64/path 由 SDK formatMediaData 物化走 /files 上传；
+  // markdown/keyboard 原生按钮承载交互段。
+  segments: {
+    outboundMedia: ['url', 'upload'],
+    interactive: 'native',
+  },
   create(context) {
     const config = resolveQqConfig(context.config);
     const gateway = context.use(messageGatewayToken);

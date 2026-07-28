@@ -3,6 +3,7 @@ import {
   createSnapshotView,
   rootPluginId,
   type Dispose,
+  type FeatureId,
   type PluginId,
   type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
@@ -70,7 +71,7 @@ export class SubtreeGenerationPreparer {
     );
     plugins.removeSubtrees(roots);
 
-    const projectionDisposers: Dispose[] = [];
+    const projectionDisposers = new Map<FeatureId, Dispose>();
     try {
       for (const root of roots) {
         const node = nodes.get(root);
@@ -101,7 +102,9 @@ export class SubtreeGenerationPreparer {
           capabilities,
         },
       );
-      projectionDisposers.push(...projected.disposers);
+      for (const [feature, dispose] of projected.disposers) {
+        projectionDisposers.set(feature, dispose);
+      }
 
       const snapshot = createSnapshotView(current.generation + 1, projected.state);
       const ownership = SourceOwnershipIndex.fromGeneration(
@@ -137,7 +140,7 @@ export class SubtreeGenerationPreparer {
     } catch (error) {
       await rollback(
         plugins.createdScopeDisposers().map(([, dispose]) => dispose),
-        projectionDisposers,
+        [...projectionDisposers.values()],
         error,
       );
       throw error;

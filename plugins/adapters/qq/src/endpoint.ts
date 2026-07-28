@@ -84,7 +84,11 @@ export class QqWebsocketEndpoint implements EndpointInstance {
     } catch (error) {
       await this.stop();
       logger.error('Failed to connect QQ websocket:', error);
-      throw error;
+      const raw = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `QQ WebSocket 连接失败：请检查 appid/secret 是否配对、网关地址（gatewayUrl/accessTokenUrl）是否可达（原始错误：${raw}）`,
+        { cause: error },
+      );
     }
   }
 

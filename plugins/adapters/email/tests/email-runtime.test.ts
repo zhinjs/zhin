@@ -12,6 +12,7 @@ import {
 } from '../src/transport.js';
 import {
   formatInboundContent,
+  formatInboundSegments,
   formatOutboundMail,
   htmlToText,
   resolveEmailConfig,
@@ -173,6 +174,55 @@ describe('email protocol helpers', () => {
     expect(mail.attachments).toEqual([{ filename: 'a.png', path: '/tmp/a.png' }]);
   });
 
+  it('maps canonical media (url/path) to nodemailer attachments', () => {
+    const mail = formatOutboundMail([
+      { type: 'text', data: { text: 'see' } },
+      { type: 'image', data: { media: { kind: 'path', value: '/tmp/a.png' }, name: 'a.png' } },
+      { type: 'file', data: { media: { kind: 'url', value: 'https://x/b.pdf' }, name: 'b.pdf' } },
+    ], { from: 'bot@mock.com', to: 'user@example.com' });
+    expect(mail.attachments).toEqual([
+      { filename: 'a.png', path: '/tmp/a.png' },
+      { filename: 'b.pdf', path: 'https://x/b.pdf' },
+    ]);
+  });
+
+  it('maps saved inbound attachments to canonical segments (MediaRef kind=path)', () => {
+    const email = {
+      messageId: '<1@x>',
+      from: 'a@b.com',
+      to: ['bot@mock.com'],
+      subject: 'S',
+      text: 'body',
+      attachments: [],
+      date: new Date(0),
+      uid: 1,
+    };
+    expect(formatInboundSegments(email)).toEqual([
+      { type: 'text', data: { text: formatInboundContent(email) } },
+    ]);
+    expect(formatInboundSegments(email, [
+      { filename: 'a.png', path: '/dl/a.png', contentType: 'image/png' },
+      { filename: 'b.pdf', path: '/dl/b.pdf', contentType: 'application/pdf' },
+    ])).toEqual([
+      { type: 'text', data: { text: formatInboundContent(email) } },
+      {
+        type: 'image',
+        data: {
+          media: { kind: 'path', value: '/dl/a.png', mime_type: 'image/png' },
+          name: 'a.png',
+          alt: 'a.png',
+        },
+      },
+      {
+        type: 'file',
+        data: {
+          media: { kind: 'path', value: '/dl/b.pdf', mime_type: 'application/pdf' },
+          name: 'b.pdf',
+        },
+      },
+    ]);
+  });
+
   it('keeps htmlToText stable for common entities', () => {
     expect(htmlToText('a &amp; b<br>c')).toContain('a & b');
     expect(htmlToText('<style>.x{}</style>hello')).toBe('hello');
@@ -276,6 +326,71 @@ describe('email plugin runtime adapter', () => {
       // 超限附件被跳过，未落盘
       await expect(readFile(path.join(dir, 'a.txt'), 'utf8')).resolves.toBe('hello');
       await expect(readFile(path.join(dir, 'big.bin'), 'utf8')).rejects.toThrow();
+      await endpoint.stop();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('admits canonical segments: downloaded attachments as image/file (kind=path)', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'zhin-email-segments-'));
+    try {
+      const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+      const gateway: MessageGateway = { receive, send: vi.fn(async () => 'sent') };
+      const config = resolveEmailConfig({
+        name: 'test-endpoint',
+        smtp: {
+          host: 'smtp.mock',
+          port: 465,
+          secure: true,
+          auth: { user: 'bot@mock.com', pass: 'pass' },
+        },
+        imap: {
+          host: 'imap.mock',
+          port: 993,
+          tls: true,
+          user: 'bot@mock.com',
+          password: 'pass',
+        },
+        attachments: { enabled: true, downloadPath: dir },
+      });
+      const endpoint = new EmailEndpoint({
+        id: capabilityId(rootPluginId(), adapterFeature, 'email'),
+        gateway,
+        config,
+        createSmtp: () => createMockSmtp(),
+        createImap: () => createMockImap(),
+      });
+
+      await endpoint.start();
+      endpoint.open();
+      endpoint.admit({
+        messageId: '<seg@mock.com>',
+        from: 'sender@example.com',
+        to: ['bot@mock.com'],
+        subject: '图',
+        text: '看图',
+        attachments: [
+          { filename: 'pic.png', contentType: 'image/png', size: 3, content: Buffer.from('png') },
+        ] as unknown as import('mailparser').Attachment[],
+        date: new Date(1_700_000_000_000),
+        uid: 4,
+      });
+
+      await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+      expect(receive).toHaveBeenCalledWith(expect.objectContaining({
+        segments: [
+          { type: 'text', data: { text: expect.stringContaining('[image: pic.png]') } },
+          {
+            type: 'image',
+            data: {
+              media: { kind: 'path', value: path.join(dir, 'pic.png'), mime_type: 'image/png' },
+              name: 'pic.png',
+              alt: 'pic.png',
+            },
+          },
+        ],
+      }));
       await endpoint.stop();
     } finally {
       await rm(dir, { recursive: true, force: true });

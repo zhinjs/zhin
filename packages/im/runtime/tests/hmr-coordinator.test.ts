@@ -34,6 +34,10 @@ describe('HmrCoordinator', () => {
     });
     const modules = new FakeModules();
     const plans: GenerationInvalidationPlan[] = [];
+    const reloadEvents: Array<{
+      readonly plan: GenerationInvalidationPlan;
+      readonly durationMs: number;
+    }> = [];
     const coordinator = new HmrCoordinator({
       modules,
       ownership: () => ownership,
@@ -44,6 +48,7 @@ describe('HmrCoordinator', () => {
       },
       onRestartRequired() {},
       onError() {},
+      onReload(plan, durationMs) { reloadEvents.push({ plan, durationMs }); },
     });
 
     const firstEvent = coordinator.enqueue('/project/plugins/child/commands/first.ts');
@@ -51,6 +56,9 @@ describe('HmrCoordinator', () => {
     await Promise.all([firstEvent, secondEvent]);
 
     expect(plans).toHaveLength(1);
+    expect(reloadEvents).toHaveLength(1);
+    expect(reloadEvents[0]?.plan).toBe(plans[0]);
+    expect(reloadEvents[0]?.durationMs).toBeGreaterThanOrEqual(0);
     expect(plans[0]?.slots).toEqual([first, second]);
     expect(modules.invalidated).toEqual([
       '/project/plugins/child/commands/first.ts',
@@ -115,6 +123,7 @@ describe('HmrCoordinator', () => {
     });
     const restarts: ProcessInvalidationPlan[] = [];
     const errors: unknown[] = [];
+    const reloadEvents: GenerationInvalidationPlan[] = [];
     const coordinator = new HmrCoordinator({
       modules: new FakeModules(),
       ownership: () => ownership,
@@ -129,12 +138,14 @@ describe('HmrCoordinator', () => {
       },
       onRestartRequired(plan) { restarts.push(plan); },
       onError(error) { errors.push(error); },
+      onReload(plan) { reloadEvents.push(plan); },
     });
 
     await coordinator.enqueue(source);
 
     expect(restarts).toHaveLength(1);
     expect(errors).toEqual([]);
+    expect(reloadEvents).toEqual([]);
   });
 
   it('reports a failed reload and rejects every waiter in its batch', async () => {

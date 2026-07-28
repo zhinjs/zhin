@@ -1,11 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import {
   MAX_RESPAWNS_PER_MINUTE,
+  hasAgentConfiguration,
+  parseStartOptions,
   planRespawn,
   processRestartExitCode,
 } from '../../src/plugin-runtime/start-command.js';
 
 describe('native TypeScript relaunch respawn (exit 75)', () => {
+  it('parses the optional Remote Console launch flag', () => {
+    expect(parseStartOptions(['--open'])).toMatchObject({
+      open: true,
+      once: false,
+      noWatch: false,
+    });
+  });
+
+  it('does not load the optional Agent Host for explicitly disabled sections', () => {
+    expect(hasAgentConfiguration({ ai: { enabled: false } })).toBe(false);
+    expect(hasAgentConfiguration({ ai: { enabled: true } })).toBe(true);
+    expect(hasAgentConfiguration({ assistant: {} })).toBe(true);
+  });
+
   it('respawns on exit 75 in non-once mode and records the attempt', () => {
     const now = Date.now();
     const plan = planRespawn(processRestartExitCode, false, false, [], now);

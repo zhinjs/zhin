@@ -21,6 +21,11 @@ export type {
 
 export default defineAdapter<WeixinIlinkAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
+  // base64 / 远程 URL 落盘后走 CDN 上传（sendWeixinMediaFile）；微信无卡片交互面，交互段降级纯文本。
+  segments: {
+    outboundMedia: ['base64', 'url', 'upload'],
+    interactive: 'text',
+  },
   create(context) {
     const config = resolveWeixinIlinkConfig(context.config);
     // 注册到插件运行时状态（weixin-ilink endpoint list 的"运行中"数据源）

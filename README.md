@@ -7,10 +7,10 @@
 <h1 align="center">Zhin.js</h1>
 
 <p align="center">
-  <strong>为生产环境构建 agent 产品的 TypeScript 框架</strong><br />
-  <strong>The TypeScript framework for building production-grade agent products</strong><br />
-  分层可组合 · Agent-first · 安全内置 · 工程纪律由 harness 强制<br />
-  <sub>Composable layers · Agent-first runtime · Built-in security · Harness-enforced discipline</sub>
+  <strong>一套代码，跑遍所有聊天平台的 TypeScript bot 框架</strong><br />
+  <strong>One codebase. Every chat platform. TypeScript.</strong><br />
+  多通道 · 按需 AI · Remote Console<br />
+  <sub>Multi-channel · Opt-in AI · Remote Console</sub>
 </p>
 
 <p align="center">
@@ -32,14 +32,13 @@
 
 ---
 
-Zhin.js 为**在生产环境构建严肃 bot / agent 产品**的开发者和团队而生——多通道 IM 接入（私聊、群聊、记忆、定时、通知），**不是** Cursor / Claude Code 类 coding agent。四根支柱：
+Zhin.js 为**在聊天平台做严肃 bot / 助手产品**的开发者和团队而生（私聊、群聊、定时、通知、AI 对话），**不是** Cursor / Claude Code 类 coding agent。三个核心词：
 
-- **分层可组合** — `basic → kernel → ai → core → agent → zhin` 单向依赖由 harness 强制；`@zhin.js/kernel` 可脱离 IM 作纯插件内核，`@zhin.js/ai` 可独立作 LLM 引擎
-- **Agent-first** — 完整 agent runtime（编排、工具、MCP、记忆与压缩、子代理），不是"接 LLM SDK"的插件
-- **安全内置** — exec 白名单 / 文件策略 / 网络白名单 / 资源预算 / 审计日志五层防御 + 声明式策略表
-- **工程纪律即产品** — 50+ harness 门禁守护架构分层、消息发送链路、安装体积（IM 核心 `<10MB`）、依赖策略
+- **多通道** — 一套代码跑 20+ 平台（QQ / 微信 / Discord / Slack / 钉钉 / Telegram…），一个 bot 可同时挂多个账号、多个平台
+- **按需 AI** — 默认只是 <10MB 的 IM 框架；装上 `@zhin.js/agent` 就是完整 Agent（工具 / 记忆 / 编排 / MCP），装多少用多少
+- **Remote Console** — 浏览器里管 bot：发消息、改配置、看日志、管定时任务，全程不用碰代码
 
-> **EN**: Built for developers and teams running serious bot/agent products in production. Composable layers (kernel works standalone as a plugin engine, `@zhin.js/ai` as an IM-free LLM engine), an agent-first runtime (orchestration, tools, MCP, memory & compaction, subagents), five-layer built-in security, and 50+ harness gates enforcing architecture, message paths, and install size. **Not** a Cursor/Claude Code-style coding agent. See [capability tiers](./docs/snippets/platform-tiers.md).
+> **EN**: Built for developers and teams running serious bot/assistant products on chat platforms. One codebase for 20+ platforms (QQ, WeChat, Discord, Slack, Telegram…) with multi-account support; starts as a <10MB IM framework and grows into a full agent (tools, memory, orchestration, MCP) only when you install `@zhin.js/agent`; manage everything from a browser console. **Not** a Cursor/Claude Code-style coding agent. See [capability tiers](./docs/snippets/platform-tiers.md).
 
 ```ts
 import { usePlugin, MessageCommand } from 'zhin.js'
@@ -77,12 +76,12 @@ pnpm dev
 
 ## Features
 
-- **IM 优先** — Plugin / Adapter / Endpoint、命令、热重载；`pnpm add zhin.js` **&lt;10MB**
-- **插件化** — `usePlugin()` Hooks + AsyncLocalStorage 上下文
+- **IM 优先** — 命令、组件、热重载；`pnpm add zhin.js` **&lt;10MB**
+- **插件化** — 文件约定 + 声明式 API（`definePlugin` / `defineCommand` / `defineAdapter`）
 - **Remote Console** — Host 只提供 API；UI 在 [console.zhin.dev](https://console.zhin.dev)
-- **可选 AI** — `@zhin.js/agent`：对话、工具、MCP、安全 harness
-- **多通道** — QQ / Discord / Telegram / Slack / GitHub 等，见 [adapters](./plugins/adapters)
-- **文件化创作面** — `agent/tools`、`agent/skills`、workspace agents（见 [agent-authoring](./docs/authoring/agent-tools.md)）
+- **可选 AI** — `@zhin.js/agent`：对话、工具、MCP、安全策略
+- **多通道** — QQ / 微信 / Discord / Telegram / Slack / GitHub 等，见 [adapters](./plugins/adapters)
+- **文件化创作面** — `commands/`、`agent/tools`、`agent/skills`（见 [agent-authoring](./docs/authoring/agent-tools.md)）
 
 <details>
 <summary><strong>Stable / Advanced 能力分档</strong></summary>

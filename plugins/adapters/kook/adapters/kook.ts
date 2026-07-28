@@ -27,6 +27,11 @@ export type { CreateKookClient, KookClientTransport } from '../src/ws.js';
 
 export default defineAdapter<KookAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
+  // KOOK 图片消息消费远程 URL；无按钮交互面，交互段降级纯文本。
+  segments: {
+    outboundMedia: ['url'],
+    interactive: 'text',
+  },
   create(context) {
     const config = resolveKookConfig(context.config);
     const gateway = context.use(messageGatewayToken);

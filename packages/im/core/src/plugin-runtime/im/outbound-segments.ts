@@ -5,6 +5,16 @@ import type {
 } from '@zhin.js/plugin-runtime';
 import { htmlToFallbackText } from '../../built/html-to-text.js';
 import { toCanonicalSegments } from '../../built/generic-segment-mapper.js';
+import {
+  effectiveKeyboardFallbackMap,
+  renderKeyboardAsText,
+} from '../../built/interactive-segments/resolve.js';
+import {
+  DEFAULT_INTERACTIVE_POLICY,
+  isKeyboardSegment,
+  type InteractivePolicy,
+  type KeyboardSegmentData,
+} from '../../built/interactive-segments/types.js';
 import { isMediaRef, type Segment } from '../../built/segment-contract/index.js';
 
 /**
@@ -46,6 +56,7 @@ export interface OutboundSegmentsPolicy {
   readonly outboundMedia?:
     | OutboundMediaPolicy
     | readonly ('url' | 'path' | 'base64' | 'upload')[];
+  readonly interactive?: InteractivePolicy;
 }
 
 export interface NormalizeOutboundOptions {
@@ -58,8 +69,7 @@ const DEFAULT_CARD_FILENAME = 'card.png';
 const DEFAULT_MEDIA_POLICY: OutboundMediaPolicy = 'base64';
 
 /** 平台名 → 出站媒体策略（任务 C 声明式 policy 落地前的内置来源）。 */
-const OUTBOUND_MEDIA_POLICY_BY_ADAPTER: Record<string, OutboundMediaPolicy> = {
-  qq: 'base64',
+const OUTBOUND_MEDIA_POLICY_BY_ADAPTER: Record<string, OutboundMediaPolicy> = {  qq: 'base64',
   icqq: 'base64',
   slack: 'base64',
   'weixin-ilink': 'base64',
@@ -123,6 +133,61 @@ function readDeclaredMediaPolicy(definition: unknown): OutboundMediaPolicy | und
     if (declared.includes('url')) return 'url-or-text';
   }
   return undefined;
+}
+
+/**
+ * 平台名 → 出站 interactive 策略（adapter 未声明 `segments.interactive` 时
+ * 的内置来源）：telegram / discord 端点自行把 keyboard 编码为原生按钮；
+ * 其余平台默认 'text'（编号文本降级，对齐旧轨 DEFAULT_INTERACTIVE_POLICY）。
+ */
+const OUTBOUND_INTERACTIVE_POLICY_BY_ADAPTER: Record<string, InteractivePolicy> = {
+  telegram: 'native',
+  discord: 'native',
+};
+
+/**
+ * 解析端点的出站 interactive 策略：优先读 adapter definition 上声明的
+ * `segments.interactive`，否则按平台名查内置表，未知平台回退 'text'。
+ */
+export function resolveOutboundInteractivePolicy(
+  adapter: CapabilityId,
+  snapshot: RuntimeSnapshot,
+): InteractivePolicy {
+  const slot = snapshot.capabilities.get(adapter)
+    ?? snapshot.capabilities.get(baseSlotCapabilityId(adapter));
+  const declared = readDeclaredInteractivePolicy(slot?.definition);
+  if (declared) return declared;
+  const packageName = slot ? snapshot.tree.get(slot.owner)?.packageName : undefined;
+  const adapterType = adapterTypeName(packageName);
+  return (adapterType ? OUTBOUND_INTERACTIVE_POLICY_BY_ADAPTER[adapterType] : undefined)
+    ?? DEFAULT_INTERACTIVE_POLICY;
+}
+
+function readDeclaredInteractivePolicy(definition: unknown): InteractivePolicy | undefined {
+  if (!definition || typeof definition !== 'object') return undefined;
+  const segments = (definition as { segments?: unknown }).segments;
+  if (!segments || typeof segments !== 'object') return undefined;
+  const declared = (segments as OutboundSegmentsPolicy).interactive;
+  return declared === 'native' || declared === 'text' ? declared : undefined;
+}
+
+/**
+ * keyboard 段中央降级：'text' 端点把 keyboard 渲染为编号文本（复用旧轨
+ * `renderKeyboardAsText`），并把有效 fallback 映射经 `remember` 回调写入
+ * 中央存储（供入站数字回跳解析）；'native' 端点透传 keyboard。
+ */
+export function applyOutboundInteractivePolicy(
+  payload: unknown,
+  policy: InteractivePolicy,
+  remember?: (map: Record<string, string>) => void,
+): unknown {
+  if (policy !== 'text' || !Array.isArray(payload)) return payload;
+  return payload.map((item) => {
+    if (!isKeyboardSegment(item)) return item;
+    const data = item.data as KeyboardSegmentData;
+    remember?.(effectiveKeyboardFallbackMap(data));
+    return { type: 'text', data: { text: renderKeyboardAsText(data) } };
+  });
 }
 
 /** 多 endpoint 展开的 record id（`slot.id~entry`）→ slot id（entry 名禁含 `~`，见 adapter-index）。 */

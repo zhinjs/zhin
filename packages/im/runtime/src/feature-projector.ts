@@ -13,23 +13,28 @@ export type ProjectionState = Omit<SnapshotState, 'projections'>;
 
 export interface ProjectedFeatures {
   readonly state: SnapshotState;
-  readonly disposers: readonly Dispose[];
+  readonly disposers: ReadonlyMap<FeatureId, Dispose>;
   readonly handoff?: GenerationHandoff;
 }
 
-/** Builds every Feature projection against one coherent candidate snapshot. */
+/** Builds selected Feature projections against one coherent candidate snapshot. */
 export class FeatureProjector {
   constructor(private readonly providers: Iterable<FeatureProvider>) {}
 
-  async project(generation: number, base: ProjectionState): Promise<ProjectedFeatures> {
-    const projections = new Map<FeatureId, unknown>();
-    const disposers: Dispose[] = [];
+  async project(
+    generation: number,
+    base: ProjectionState,
+    retained: ReadonlyMap<FeatureId, unknown> = new Map(),
+  ): Promise<ProjectedFeatures> {
+    // Slot HMR seeds this map with the committed projections. Only providers
+    // passed to this projector replace their entry; every other Feature keeps
+    // its live instance and therefore keeps its external resources running.
+    const projections = new Map<FeatureId, unknown>(retained);
+    const disposers = new Map<FeatureId, Dispose>();
     const handoffs = new GenerationHandoffStack();
     const state: SnapshotState = { ...base, projections };
 
     try {
-      // A projection may capture its snapshot. Rebuilding every projection
-      // prevents unchanged Features from retaining an older generation.
       for (const provider of this.providers) {
         const slots = [...base.capabilities.values()].filter(
           (slot) => slot.feature === provider.id,
@@ -38,16 +43,16 @@ export class FeatureProjector {
           snapshot: createSnapshotView(generation, state),
         });
         projections.set(provider.id, projection.value);
-        if (projection.dispose) disposers.push(projection.dispose);
+        if (projection.dispose) disposers.set(provider.id, projection.dispose);
         if (projection.handoff) handoffs.add(projection.handoff);
       }
       return {
         state,
-        disposers: Object.freeze(disposers),
+        disposers,
         handoff: handoffs.seal(),
       };
     } catch (error) {
-      await rollback(disposers, error);
+      await rollback(disposers.values(), error);
       throw error;
     }
   }
@@ -63,7 +68,7 @@ export function composeGenerationHandoffs(
   return stack.seal();
 }
 
-async function rollback(disposers: readonly Dispose[], prepareError: unknown): Promise<void> {
+async function rollback(disposers: Iterable<Dispose>, prepareError: unknown): Promise<void> {
   const stack = new DisposeStack();
   for (const dispose of disposers) stack.add(dispose);
   try {

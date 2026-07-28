@@ -30,7 +30,20 @@ import {
 } from './contracts.js';
 import { defaultCommandPrefixResolver, MessageDispatcher } from './message-dispatcher.js';
 import { OutboundRenderer } from './outbound-renderer.js';
-import { normalizeOutboundPayload, resolveOutboundMediaPolicy } from './outbound-segments.js';
+import {
+  applyOutboundInteractivePolicy,
+  normalizeOutboundPayload,
+  resolveOutboundInteractivePolicy,
+  resolveOutboundMediaPolicy,
+} from './outbound-segments.js';
+import { keyboardFallbackStore } from '../../built/interactive-segments/fallback-store.js';
+import {
+  findRuntimeInteractiveHandler,
+  resolveRuntimeInteractivePayload,
+  runtimeInteractiveChannelKey,
+  type RegisteredRuntimeInteractiveHandler,
+  type RuntimeInteractiveHandler,
+} from './interactive.js';
 
 export const messageGatewayToken = createToken<MessageGateway>('zhin.im.message-gateway');
 
@@ -66,6 +79,7 @@ export class ImRuntime implements MessageGateway {
   readonly #dispatcher: MessageDispatcher;
   readonly #renderer: OutboundRenderer;
   readonly #messageListeners = new Set<(event: RuntimeMessageEvent) => void>();
+  readonly #interactiveHandlers: RegisteredRuntimeInteractiveHandler[] = [];
   #snapshots?: SnapshotStore;
   #unmatchedHandler?: (
     message: Message,
@@ -106,6 +120,19 @@ export class ImRuntime implements MessageGateway {
 
   install(resources: Scope): void {
     resources.provide(messageGatewayToken, this);
+  }
+
+  /**
+   * 注册 interactive action 回跳 handler（prefix 最长匹配；返回注销函数）。
+   * 在 Command dispatch 之前路由：action 段 / 数字回跳 / 指令预填 payload。
+   */
+  registerInteractiveHandler(prefix: string, handler: RuntimeInteractiveHandler): () => void {
+    const entry: RegisteredRuntimeInteractiveHandler = Object.freeze({ prefix, handler });
+    this.#interactiveHandlers.push(entry);
+    return () => {
+      const index = this.#interactiveHandlers.indexOf(entry);
+      if (index >= 0) this.#interactiveHandlers.splice(index, 1);
+    };
   }
 
   /**
@@ -156,7 +183,8 @@ export class ImRuntime implements MessageGateway {
         lease.value,
         message,
         async () => {
-          result = await this.#dispatcher.dispatch(message, lease.value);
+          result = await this.#dispatchInteractive(message, requester)
+            ?? await this.#dispatcher.dispatch(message, lease.value);
           if (!result.matched && this.#unmatchedHandler) {
             const handled = await this.#unmatchedHandler(message, lease.value, requester);
             if (handled) {
@@ -384,11 +412,21 @@ export class ImRuntime implements MessageGateway {
     const rendered = await this.#renderer.render(request.content, request.requester, snapshot);
     // 单段对象 / html 段在此归一为适配器可消费的 canonical 段数组（含媒体能力协商）；
     // sandbox 适配器（控制台 UI）直接消费 html 段，跳过规范化。
-    const payload = isDirectHtmlConsumer(snapshot, request.adapter)
+    let payload = isDirectHtmlConsumer(snapshot, request.adapter)
       ? rendered
       : await normalizeOutboundPayload(rendered, resolveHtmlRenderer(snapshot), {
         mediaPolicy: resolveOutboundMediaPolicy(request.adapter, snapshot),
       });
+    // interactive 中央执行：'text' 端点 keyboard → 编号文本，fallback 映射写
+    // 中央存储（入站数字回跳解析用）；'native' 端点透传 keyboard。
+    payload = applyOutboundInteractivePolicy(
+      payload,
+      resolveOutboundInteractivePolicy(request.adapter, snapshot),
+      (map) => keyboardFallbackStore.remember(
+        runtimeInteractiveChannelKey(String(request.adapter), request.target),
+        map,
+      ),
+    );
     const envelope = createOutboundEnvelope({
       adapter: request.adapter,
       target: request.target,
@@ -423,6 +461,25 @@ export class ImRuntime implements MessageGateway {
   #acquire() {
     if (!this.#snapshots) throw new Error('ImRuntime is not attached to a Root');
     return this.#snapshots.acquire();
+  }
+
+  /**
+   * interactive 回跳分发（Command dispatch 之前）：action 段 / 中央 fallback
+   * 数字回跳 / 指令预填 payload → prefix 最长匹配 handler。
+   */
+  async #dispatchInteractive(
+    message: Message,
+    requester: PluginId,
+  ): Promise<MessageDispatchResult | undefined> {
+    if (this.#interactiveHandlers.length === 0) return undefined;
+    const payload = resolveRuntimeInteractivePayload(message);
+    if (!payload) return undefined;
+    const handler = findRuntimeInteractiveHandler(this.#interactiveHandlers, payload);
+    if (!handler) return undefined;
+    const handled = await handler(message);
+    return handled
+      ? Object.freeze({ matched: true, command: 'interactive', owner: requester })
+      : undefined;
   }
 }
 

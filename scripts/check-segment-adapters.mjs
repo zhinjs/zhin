@@ -14,10 +14,8 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const adaptersDir = path.resolve(process.argv[2] ?? path.join(repoRoot, 'plugins/adapters'));
 
-/** 尚未声明 segments 的 adapter（Wave 2 迁移时声明并从此名单移除） */
+/** 尚未声明 segments 的 adapter（Wave 2 已收敛为空；新增 adapter 未迁移时加入） */
 const SEGMENTS_PENDING = new Set([
-  'dingtalk', 'discord', 'email', 'github', 'kook', 'line', 'milky', 'qq',
-  'sandbox', 'satori', 'slack', 'telegram', 'weixin-ilink',
 ]);
 
 const entries = fs.readdirSync(adaptersDir, { withFileTypes: true })

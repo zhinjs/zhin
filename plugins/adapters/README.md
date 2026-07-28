@@ -29,7 +29,7 @@
 
 - **Stable（Core）**：`pnpm check:stable` Core 批、minimal-bot；Sandbox 入站 + 核心 Agent 契约。
 - **Platform Stable**：包内 `integration.test.ts`（adapter-harness）；部分纳入 `pnpm check:stable` Platform 批。
-- **Advanced**：test-bot 厨房水槽中常用；实机与 LLM 见 [ACCEPTANCE Advanced](../../examples/test-bot/ACCEPTANCE.md)。
+- **Advanced**：test-bot（维护者厨房水槽，非用户模板）中常用；实机与 LLM 见 [ACCEPTANCE Advanced](../../examples/test-bot/ACCEPTANCE.md)。
 - **Experimental**：可用性因平台/部署差异大；无全量 CI 承诺。
 
 各适配器细节见包内 `README.md`（同步至 [zhin.js.org/adapters](https://zhin.js.org/adapters/)，运行 `pnpm sync:adapter-docs` 更新）。

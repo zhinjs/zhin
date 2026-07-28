@@ -28,7 +28,36 @@ function packSegments(out: (string | MessageElement)[]): SendContent {
   return out;
 }
 
-function renderKeyboardAsText(data: KeyboardSegmentData): string {
+/**
+ * keyboard 的有效 fallback 映射：显式 `fallback.map` 优先；否则按按钮顺序
+ * 自动编号（与 {@link renderKeyboardAsText} 的自动编号一致，含 disabled 按钮）。
+ */
+export function effectiveKeyboardFallbackMap(data: KeyboardSegmentData): Record<string, string> {
+  const map = data.fallback?.map ?? {};
+  if (Object.keys(map).length > 0) return { ...map };
+  const out: Record<string, string> = {};
+  data.rows.flat().forEach((btn, idx) => {
+    out[String(idx + 1)] = btn.payload;
+  });
+  return out;
+}
+
+/** 收集 content 中所有 keyboard 段的有效 fallback 映射（文本降级前调用）。 */
+export function collectKeyboardFallbackMaps(
+  content: SendContent | undefined,
+): Record<string, string>[] {
+  if (content == null) return [];
+  const maps: Record<string, string>[] = [];
+  for (const item of asArray(content)) {
+    if (typeof item === 'string') continue;
+    const data = asKeyboardData(item);
+    if (data) maps.push(effectiveKeyboardFallbackMap(data));
+  }
+  return maps;
+}
+
+/** keyboard 段 → 编号文本（'text' 策略端点的中央降级渲染）。 */
+export function renderKeyboardAsText(data: KeyboardSegmentData): string {
   const lines: string[] = [];
   const flat = data.rows.flat();
   if (data.fallback?.hint) {

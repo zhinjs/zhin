@@ -1,7 +1,9 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { access, mkdir, readFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
+import chalk from 'chalk';
+import open from 'open';
 import { YamlConfigDocument } from '@zhin.js/config-yaml';
 import { ImRuntime } from '@zhin.js/core/runtime';
 import { createConsoleEventHub } from '@zhin.js/host-http';
@@ -36,6 +38,7 @@ import {
 import { DISABLE_EXPERIMENTAL_WARNING_FLAG, suppressNodeExperimentalWarnings } from '../utils/node-warnings.js';
 
 export const processRestartExitCode = 75;
+const REMOTE_CONSOLE_URL = 'https://console.zhin.dev';
 
 /** Storm guard parity with the `zhin start` daemon: 10 restarts/minute, 3s delay. */
 export const MAX_RESPAWNS_PER_MINUTE = 10;
@@ -77,6 +80,10 @@ export interface StartCommandOptions {
   readonly args: readonly string[];
   writeOutput(value: string): void;
   writeError(value: string): void;
+}
+
+function readableCapabilityId(value: string): string {
+  return value.split('\0').join(':');
 }
 
 export async function runStartCommand(options: StartCommandOptions): Promise<void> {
@@ -182,6 +189,19 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
       process.exitCode = processRestartExitCode;
       await control.stop();
     },
+    onReload(plan, generation, durationMs) {
+      getLogger('runtime').info(formatCompact({
+        op: 'hmr_reload',
+        generation,
+        duration_ms: durationMs,
+        scope: plan.subtrees.length > 0 ? 'subtree' : 'capability',
+        changed: plan.changed.map((source) => relative(options.root, source)).join(','),
+        ...(plan.slots.length > 0
+          ? { capabilities: plan.slots.map(readableCapabilityId).join(',') }
+          : {}),
+        ...(plan.subtrees.length > 0 ? { subtrees: plan.subtrees.join(',') } : {}),
+      }));
+    },
     onError(error) {
       options.writeError(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
     },
@@ -194,11 +214,16 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
     try {
       await host.stop();
     } finally {
-      // DatabaseHost 跨世代共享，世代 dispose 不再 stop；进程退出时统一关闭。
+      // Process-owned Hosts survive generation retirement and close exactly
+      // once with the RootHost.
       try {
-        await databaseHost.stop();
+        scheduleHost.stop();
       } finally {
-        complete();
+        try {
+          await databaseHost.stop();
+        } finally {
+          complete();
+        }
       }
     }
   };
@@ -223,6 +248,8 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
       `zhin runtime started (plugins=${snapshot.plugins}, http=http://${httpAddress}, ` +
       `adapters online=[${online.join(', ')}] offline=[${offline.join(', ')}])`,
     );
+    printFirstRunGuidance(httpAddress, Boolean(httpConfig.token));
+    if (parsed.open || process.env.ZHIN_OPEN === '1') openBrowser(REMOTE_CONSOLE_URL);
   } else {
     options.writeOutput(`${JSON.stringify({ started: true, ...snapshot }, null, 2)}\n`);
   }
@@ -281,11 +308,12 @@ async function loadConfiguredAgentHost(
   return Object.freeze(configured);
 }
 
-function hasAgentConfiguration(document: RuntimeConfigDocument): boolean {
+export function hasAgentConfiguration(document: RuntimeConfigDocument): boolean {
   const value = document as Record<string, unknown>;
   return ['ai', 'assistant', 'collaboration'].some((key) => {
     const section = value[key];
-    return section != null && typeof section === 'object';
+    if (section == null || typeof section !== 'object' || Array.isArray(section)) return false;
+    return (section as { enabled?: unknown }).enabled !== false;
   });
 }
 
@@ -457,15 +485,17 @@ async function relaunchWithNativeTypeScript(parsed: StartOptions, root: string):
 interface StartOptions {
   readonly once: boolean;
   readonly noWatch: boolean;
+  readonly open: boolean;
   readonly environment: string;
   readonly mode: RuntimeMode;
   readonly daemon: boolean;
   readonly logFile?: string;
 }
 
-function parseStartOptions(args: readonly string[]): StartOptions {
+export function parseStartOptions(args: readonly string[]): StartOptions {
   let once = false;
   let noWatch = false;
+  let openConsole = false;
   let environment = 'development';
   let mode: RuntimeMode = 'development';
   let daemon = false;
@@ -475,6 +505,7 @@ function parseStartOptions(args: readonly string[]): StartOptions {
     if (argument === '--') continue;
     if (argument === '--once') once = true;
     else if (argument === '--no-watch') noWatch = true;
+    else if (argument === '--open') openConsole = true;
     else if (argument === '--daemon' || argument === '-d') daemon = true;
     else if (argument === '--log-file') {
       logFile = args[index + 1] ?? '';
@@ -498,7 +529,25 @@ function parseStartOptions(args: readonly string[]): StartOptions {
   if (!/^[a-z0-9][a-z0-9-]*$/u.test(environment)) {
     throw new Error(`Invalid environment name: ${environment || '<empty>'}`);
   }
-  return { once, noWatch, environment, mode, daemon, logFile };
+  return { once, noWatch, open: openConsole, environment, mode, daemon, logFile };
+}
+
+function printFirstRunGuidance(httpAddress: string, tokenConfigured: boolean): void {
+  const startup = getLogger('startup');
+  startup.info(
+    `${chalk.bold('Remote Console')}: ${REMOTE_CONSOLE_URL} `
+    + `${chalk.dim(`(runtime http://${httpAddress}${tokenConfigured ? ', token required' : ''})`)}`,
+  );
+}
+
+function openBrowser(url: string): void {
+  void open(url).catch((error) => {
+    getLogger('startup').warn(formatCompact({
+      op: 'open_remote_console_failed',
+      url,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  });
 }
 
 function parseMode(value: string | undefined): RuntimeMode {

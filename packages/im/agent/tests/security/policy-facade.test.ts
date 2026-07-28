@@ -182,7 +182,7 @@ describe('policy-facade', () => {
       expect(result.deniedBy).toBe('role-gate');
       expect(result.decisions.map((d) => d.policy)).toEqual(['role-gate']);
       expect(toolPolicyResultToMessage(result, 'edit_file')).toBe(
-        'Error: 普通用户仅允许查询（读），无增删改权限：工具「edit_file」已拒绝。',
+        'Error: 权限不足：当前策略不允许执行「edit_file」。',
       );
     });
 
@@ -196,7 +196,7 @@ describe('policy-facade', () => {
       expect(result.deniedBy).toBe('dangerous-tool-approval');
       expect(result.decisions.map((d) => d.policy)).toEqual(['role-gate', 'dangerous-tool-approval']);
       expect(toolPolicyResultToMessage(result, 'edit_file')).toBe(
-        'ZHIN_NEEDS_OWNER:\n工具「edit_file」不在 execAllowlist，trusted 需 Master 确认后执行。',
+        'ZHIN_NEEDS_OWNER:\n权限不足：执行「edit_file」需要 Owner 确认。',
       );
     });
 
@@ -280,7 +280,7 @@ describe('policy-facade', () => {
       const toolOut = String(
         await new EditFileBuiltinTool().run({ file_path: fp, old_string: 'before', new_string: 'after' }, ctx),
       );
-      expect(facadeMsg).toBe('ZHIN_NEEDS_OWNER:\n工具「edit_file」不在 execAllowlist，trusted 需 Master 确认后执行。');
+      expect(facadeMsg).toBe('ZHIN_NEEDS_OWNER:\n权限不足：执行「edit_file」需要 Owner 确认。');
       expect(toolOut).toBe(facadeMsg);
       expect(fs.readFileSync(fp, 'utf-8')).toBe('before');
     });
@@ -298,7 +298,7 @@ describe('policy-facade', () => {
       const toolOut = String(
         await new EditFileBuiltinTool().run({ file_path: fp, old_string: 'before', new_string: 'after' }, ctx),
       );
-      expect(facadeMsg).toBe('Error: 普通用户仅允许查询（读），无增删改权限：工具「edit_file」已拒绝。');
+      expect(facadeMsg).toBe('Error: 权限不足：当前策略不允许执行「edit_file」。');
       expect(toolOut).toBe(facadeMsg);
     });
 
@@ -435,7 +435,7 @@ describe('policy-facade', () => {
         'web_fetch',
       );
       const toolOut = String(await new WebFetchBuiltinTool().run({ url: 'http://example.com' }, ctx));
-      expect(facadeMsg).toBe('ZHIN_NEEDS_OWNER:\n工具「web_fetch」不在 execAllowlist，trusted 需 Master 确认后执行。');
+      expect(facadeMsg).toBe('ZHIN_NEEDS_OWNER:\n权限不足：执行「web_fetch」需要 Owner 确认。');
       expect(toolOut).toBe(facadeMsg);
     });
   });

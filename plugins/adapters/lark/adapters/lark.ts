@@ -16,9 +16,11 @@ export type { LarkEndpointOptions, LarkFetch } from '../src/endpoint.js';
 
 export default defineAdapter<LarkAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
-  // image 段经 /im/v1/images 物化为 image_key（url 下载后上传）。
+  // image 段经 /im/v1/images 物化为 image_key（url 下载后上传）；
+  // 卡片交互未接入出站通道，交互段降级纯文本。
   segments: {
     outboundMedia: ['url', 'upload'],
+    interactive: 'text',
   },
   create(context) {
     const config = resolveLarkConfig(context.config);

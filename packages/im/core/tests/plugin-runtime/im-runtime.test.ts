@@ -39,6 +39,7 @@ import {
   type RuntimeMessageEvent,
   type SendContent,
 } from '../../src/plugin-runtime/im/index.js';
+import { resetKeyboardFallbackStoreForTests } from '../../src/built/interactive-segments/index.js';
 
 describe('IM Runtime', () => {
   it('uses the matched child Command owner as the automatic reply requester', async () => {
@@ -456,8 +457,104 @@ describe('IM Runtime', () => {
     await fixture.store.close();
   });
 
-  it('passes inbound segments through to the Message (frozen, optional)', async () => {
+  it('interactive 中央执行：text 端点 keyboard 降级 + 数字/action 回跳路由', async () => {
     const sent: unknown[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      middleware: false,
+    });
+    resetKeyboardFallbackStoreForTests();
+    const handled: string[] = [];
+    fixture.im.registerInteractiveHandler('hub:', async (message) => {
+      handled.push(message.content);
+      return true;
+    });
+
+    await fixture.im.send({
+      adapter: fixture.adapter.id,
+      target: 'group:room-1',
+      requester: rootPluginId(),
+      content: raw([
+        { type: 'text', data: { text: '🎮 游戏大厅' } },
+        {
+          type: 'keyboard',
+          data: {
+            rows: [[
+              { id: 'g1', label: '井字棋', payload: 'hub:h1:g_ttt' },
+              { id: 'g2', label: '猜数字', payload: 'hub:h1:g_guess' },
+            ]],
+            fallback: {
+              hint: '回复数字进入对应游戏',
+              map: { '1': 'hub:h1:g_ttt', '2': 'hub:h1:g_guess' },
+            },
+          },
+        },
+      ]),
+    });
+
+    // 'text' 端点（默认策略）：keyboard 降级为编号文本
+    const outbound = sent.at(-1) as { payload: Array<{ type: string; data: { text?: string } }> };
+    expect(outbound.payload[1]?.type).toBe('text');
+    expect(outbound.payload[1]?.data.text).toContain('回复数字进入对应游戏');
+    expect(outbound.payload[1]?.data.text).toContain('1. 井字棋');
+    expect(outbound.payload[1]?.data.text).toContain('2. 猜数字');
+
+    // 数字回跳 → 中央 fallback map → handler
+    const digit = await fixture.im.receive({
+      adapter: fixture.adapter.id,
+      target: 'group:room-1',
+      content: '2',
+      sender: 'alice',
+    });
+    expect(digit).toMatchObject({ matched: true, command: 'interactive' });
+    expect(handled).toEqual(['2']);
+
+    // 平台 callback action 段 → handler
+    const action = await fixture.im.receive({
+      adapter: fixture.adapter.id,
+      target: 'group:room-1',
+      content: '[action: hub:h1:g_ttt]',
+      sender: 'bob',
+      segments: [{ type: 'action', data: { id: 'cb1', payload: 'hub:h1:g_ttt' } }],
+    });
+    expect(action).toMatchObject({ matched: true, command: 'interactive' });
+    expect(handled).toEqual(['2', '[action: hub:h1:g_ttt]']);
+
+    // 无匹配 payload 的普通消息不受影响
+    const miss = await fixture.im.receive({
+      adapter: fixture.adapter.id,
+      target: 'group:room-1',
+      content: 'ordinary message',
+    });
+    expect(miss.matched).toBe(false);
+
+    resetKeyboardFallbackStoreForTests();
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
+  it("interactive 中央执行：声明 'native' 的端点透传 keyboard", async () => {
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      middleware: false,
+      adapterSegments: { interactive: 'native' },
+    });
+    const keyboard = {
+      type: 'keyboard',
+      data: { rows: [[{ id: 'a', label: '甲', payload: 'x:s:a' }]] },
+    };
+    await fixture.im.send({
+      adapter: fixture.adapter.id,
+      target: 'room-1',
+      requester: rootPluginId(),
+      content: raw([keyboard]),
+    });
+    expect((sent.at(-1) as { payload: unknown[] }).payload).toEqual([keyboard]);
+
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
+  it('passes inbound segments through to the Message (frozen, optional)', async () => {    const sent: unknown[] = [];
     let captured: Message | undefined;
     const fixture = await createFixture([], sent, (message) => { captured = message; });
     const segments = [
@@ -496,7 +593,7 @@ async function createFixture(
   capture?: (message: Message) => void,
   commandGate?: Promise<void>,
   commandStarted?: () => void,
-  options?: { middleware?: boolean },
+  options?: { middleware?: boolean; adapterSegments?: { interactive: 'native' | 'text' } },
 ) {
   const root = rootPluginId();
   const adapter = createCapabilitySlot({
@@ -506,6 +603,7 @@ async function createFixture(
     source: '/adapters/memory.ts',
     definition: defineAdapter({
       capabilities: ['inbound', 'outbound'],
+      ...(options?.adapterSegments ? { segments: options.adapterSegments } : {}),
       create: () => ({
         start() { events.push('endpoint:start'); },
         open() { events.push('endpoint:open'); },

@@ -102,7 +102,7 @@ export class TopologyGenerationPreparer {
     ]);
     plugins.removeSubtrees(removalRoots);
 
-    const projectionDisposers: Dispose[] = [];
+    const projectionDisposers = new Map<FeatureId, Dispose>();
     try {
       for (const root of setupRoots) {
         const node = nextNodes.get(root);
@@ -129,7 +129,9 @@ export class TopologyGenerationPreparer {
           capabilities,
         },
       );
-      projectionDisposers.push(...projected.disposers);
+      for (const [feature, dispose] of projected.disposers) {
+        projectionDisposers.set(feature, dispose);
+      }
 
       const snapshot = createSnapshotView(current.generation + 1, projected.state);
       const ownership = SourceOwnershipIndex.fromGeneration(
@@ -165,7 +167,7 @@ export class TopologyGenerationPreparer {
     } catch (error) {
       await rollback(
         plugins.createdScopeDisposers().map(([, dispose]) => dispose),
-        projectionDisposers,
+        [...projectionDisposers.values()],
         error,
       );
       throw error;

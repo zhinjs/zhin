@@ -19,6 +19,8 @@ export interface HmrCoordinatorOptions {
   onRestartRequired(plan: ProcessInvalidationPlan): void | Promise<void>;
   onError(error: unknown): void | Promise<void>;
   onPlan?(plan: InvalidationPlan): void | Promise<void>;
+  /** Fires once after a generation transaction commits successfully. */
+  onReload?(plan: GenerationInvalidationPlan, durationMs: number): void | Promise<void>;
 }
 
 export class HmrCoordinator {
@@ -103,11 +105,16 @@ export class HmrCoordinator {
         }
         if (plan.kind === 'none') continue;
 
+        const startedAt = performance.now();
         for (const source of plan.changed) {
           await this.options.modules.invalidate?.(source);
         }
         const restart = await this.options.runtime.reload(plan);
         if (restart) await this.options.onRestartRequired(restart);
+        else {
+          const durationMs = Number((performance.now() - startedAt).toFixed(1));
+          await this.options.onReload?.(plan, durationMs);
+        }
       }
       this.#resolveWaiters();
     } catch (error) {

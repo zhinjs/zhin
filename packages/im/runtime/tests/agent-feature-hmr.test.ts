@@ -60,6 +60,7 @@ describe('Agent Feature slot HMR', () => {
       environment: { name: 'test', mode: 'test', platform: 'node' },
     });
     const first = await runtime.start();
+    const firstMcp = first.projections.get(mcpFeatureId);
 
     await expect(executeTool(first)).resolves.toBe('v1:value:1');
     expect(readSkill(first)).toBe('Research v1');
@@ -77,6 +78,7 @@ describe('Agent Feature slot HMR', () => {
 
     await expect(executeTool(second)).resolves.toBe('v2:value:2');
     expect(readAgent(second)).toBe('Planner v1');
+    expect(second.projections.get(mcpFeatureId)).toBe(firstMcp);
     expect(modules.loadCount(toolSource)).toBe(2);
     expect(modules.loadCount(mcpSource)).toBe(1);
     expect(setups).toBe(1);
@@ -86,15 +88,17 @@ describe('Agent Feature slot HMR', () => {
     const third = runtime.snapshot;
 
     expect(readAgent(third)).toBe('Planner v2');
-    await expect(executeTool(third)).resolves.toBe('v2:value:3');
+    await expect(executeTool(third)).resolves.toBe('v2:value:2');
+    expect(third.projections.get(toolFeatureId)).toBe(second.projections.get(toolFeatureId));
+    expect(third.projections.get(mcpFeatureId)).toBe(firstMcp);
     for (const provider of Object.values(providers)) {
       expect(modules.loadCount(provider)).toBe(1);
     }
     expect(setups).toBe(1);
 
     await runtime.stop();
-    expect(events.filter((event) => event === 'start')).toHaveLength(3);
-    expect(events.filter((event) => event === 'stop')).toHaveLength(3);
+    expect(events.filter((event) => event === 'start')).toHaveLength(1);
+    expect(events.filter((event) => event === 'stop')).toHaveLength(1);
   });
 });
 

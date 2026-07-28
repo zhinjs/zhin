@@ -494,7 +494,7 @@ class GenerationAssembler {
   readonly #catalog = new FeatureCatalog();
   readonly #rootsByFeature = new Map<FeatureId, CapabilityRoot[]>();
   readonly #featureIdsByPackageRoot = new Map<string, FeatureId>();
-  readonly #projectionDisposers: Dispose[] = [];
+  readonly #projectionDisposers = new Map<FeatureId, Dispose>();
   readonly #host: NodeDiscoveryHost;
   readonly #plugins: PluginScopeAssembler;
 
@@ -531,7 +531,9 @@ class GenerationAssembler {
       await this.#discover();
       const projected = await new FeatureProjector(this.#catalog.values())
         .project(this.generation, this.#projectionState());
-      this.#projectionDisposers.push(...projected.disposers);
+      for (const [feature, dispose] of projected.disposers) {
+        this.#projectionDisposers.set(feature, dispose);
+      }
       const state = projected.state;
       const snapshot = createSnapshotView(this.generation, state);
       const ownership = SourceOwnershipIndex.fromGeneration(
@@ -572,7 +574,7 @@ class GenerationAssembler {
     } catch (error) {
       await disposePreparedParts(
         this.#plugins.createdScopeDisposers().map(([, dispose]) => dispose),
-        this.#projectionDisposers,
+        [...this.#projectionDisposers.values()],
         error,
       );
       throw error;

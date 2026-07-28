@@ -66,7 +66,7 @@ export interface AdapterField {
   scope?: 'endpoint' | 'shared';
 }
 
-const ADAPTERS: AdapterDefinition[] = [
+export const ADAPTERS: AdapterDefinition[] = [
   {
     name: 'Sandbox (调试沙盒，默认)',
     value: 'sandbox',
@@ -650,4 +650,11 @@ export function getAdapterDependencies(result: AdapterSetupResult): Record<strin
   }
 
   return deps;
+}
+
+/**
+ * 按 npm 包名查找已知适配器定义（如 @zhin.js/adapter-telegram）
+ */
+export function findAdapterByPackage(packageName: string): AdapterDefinition | undefined {
+  return ADAPTERS.find(a => a.package === packageName || a.plugin === packageName);
 }

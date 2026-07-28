@@ -18,6 +18,7 @@ import {
   isMessageEvent,
   senderNickname,
   senderUserId,
+  uploadOneBot12MediaSegments,
   type OneBot12Event,
   type OneBot12WebhookConfig,
 } from './protocol.js';
@@ -83,7 +84,18 @@ export class OneBot12WebhookEndpoint implements EndpointInstance {
   }
 
   async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
-    const message = formatOutboundSegments(payload);
+    const materialized = await uploadOneBot12MediaSegments(
+      payload,
+      (action, params) => this.callApi(action, params),
+      (error) => {
+        logger.warn(formatCompact({
+          op: 'onebot12_upload_failed',
+          endpoint: this.#options.config.name,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+      },
+    );
+    const message = formatOutboundSegments(materialized);
     const params = buildSendMessageParams(target, message);
     const data = await this.callApi('send_message', params) as { message_id?: string } | undefined;
     const messageId = data?.message_id ?? '';

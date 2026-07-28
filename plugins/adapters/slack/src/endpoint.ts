@@ -423,7 +423,12 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
 
   async #startSocket(): Promise<void> {
     const { config } = this.#options;
-    if (!config.appToken) throw new Error('Socket Mode requires appToken');
+    if (!config.appToken) {
+      throw new Error('Slack Socket Mode 需要 appToken（xapp- 前缀的 App-Level Token）；注意 bot token 填 token 字段（xoxb- 前缀），两者不可混用');
+    }
+    if (!config.appToken.startsWith('xapp-')) {
+      throw new Error(`Slack appToken 格式不正确：Socket Mode 需要 xapp- 前缀的 App-Level Token（当前看起来是 ${config.appToken.slice(0, 5)}…，xoxb- 是 bot token，请填到 token 字段）`);
+    }
     this.#socket = this.#options.createSocket?.({
       appToken: config.appToken,
       clientPingTimeout: config.clientPingTimeout,

@@ -581,7 +581,7 @@ export async function* runAgentLoopTextTurnRun(
 
       const legacy = legacyByName.get(resolvedName);
       if (!legacy) {
-        return toolResultToAgentMessage(toolCall, `Unknown tool: ${resolvedName}`, true);
+        return toolResultToAgentMessage(toolCall, `工具「${resolvedName}」执行失败：工具不存在或所属插件未启用。`, true);
       }
 
       const httpSessionId = readHttpSessionId(contextForTools);
@@ -653,8 +653,9 @@ export async function* runAgentLoopTextTurnRun(
         return toolResultToAgentMessage(toolCall, finalText, false);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: message });
-        return toolResultToAgentMessage(toolCall, message, true);
+        const failure = `工具「${resolvedName}」执行失败：${message}`;
+        toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: failure });
+        return toolResultToAgentMessage(toolCall, failure, true);
       }
     },
     beforeToolCall: async ({ toolCall }: { toolCall: ParsedToolCall }) => {

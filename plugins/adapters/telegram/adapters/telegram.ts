@@ -16,6 +16,12 @@ export type { TelegramEndpointOptions, TelegramFetch } from '../src/endpoint.js'
 
 export default defineAdapter<TelegramAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
+  // 媒体 url / file_id 直发，base64 / 本地路径经 multipart attach:// 上传物化；
+  // inline keyboard 原生按钮承载交互段。
+  segments: {
+    outboundMedia: ['url', 'upload'],
+    interactive: 'native',
+  },
   create(context) {
     const config = resolveTelegramConfig(context.config);
     // 注册到插件运行时状态（telegram endpoint list 的"运行中"数据源）

@@ -164,6 +164,44 @@ async setup(context) {
 }
 ```
 
+## package.json `zhin` 字段
+
+插件包（以及 feature 包）用 `package.json` 顶层的 `zhin` 字段声明清单，取代旧的 `plugin.yml`。解析与强校验在 `@zhin.js/runtime`（`packages/im/runtime/src/manifest.ts`），非法清单直接抛 `ManifestValidationError`。
+
+```jsonc
+{
+  "zhin": {
+    "protocol": 1,                    // 必填，目前恒为 1
+    "type": "plugin",                 // 必填："plugin" | "feature"
+    "entry": "./plugin.ts",           // 必填：包相对路径，须 ./ 开头、不得 .. 逃逸
+    "engine": "^1.0.0",               // 可选：对 Runtime engine 版本的 semver 要求，不满足拒绝加载
+    "runtime": "trusted",             // 可选（仅 plugin）："trusted"（默认）| "isolated"
+    "platformFeatures": true,         // 可选（仅 plugin）：默认 true，Root 插件自动获得官方 Stable Features；设 false 退出
+    "features": [                     // 可选（仅 plugin）：依赖的 Feature 包清单，缺省 []
+      { "package": "@zhin.js/command", "api": "^1.0.0", "optional": false }
+    ],
+    "plugins": [                      // 可选（仅 plugin）：挂载的子插件实例清单，缺省 []
+      { "package": "@zhin.js/adapter-icqq", "instanceKey": "icqq" }
+    ]
+  }
+}
+```
+
+字段细则：
+
+| 字段 | 必填 | 含义 |
+| --- | --- | --- |
+| `protocol` | 是 | 清单协议版本，当前必须为 `1` |
+| `type` | 是 | `plugin`（可挂载子插件、可声明 features/runtime）或 `feature`（平台能力提供者） |
+| `entry` | 是 | 插件/功能入口文件，包相对路径，`./` 开头且不得含 `..` |
+| `engine` | 否 | semver range，对 Runtime 提供的 engine 版本做 `satisfies` 校验 |
+| `runtime` | 否（仅 plugin） | `isolated` 表示在隔离运行时中执行：仅限子插件（Root 不可用）、不得挂载 Host Feature，且需要 isolation adapter 支持 |
+| `platformFeatures` | 否（仅 plugin） | 默认 `true`：Root 插件即使不声明也会获得官方 Stable Features（`@zhin.js/adapter`、`command`、`component`） |
+| `features` | 否（仅 plugin） | 依赖的 Feature 包：`package` 支持 npm 包名或 `./` 相对路径（monorepo 本地）；`api` 是对该 Feature 声明的 `featureApi` 版本的 semver 要求；`optional` 标记缺失可降级 |
+| `plugins` | 否（仅 plugin） | 挂载子插件实例：`package` 同 `features` 的包名规则；`instanceKey` **必填**，匹配 `^[a-z0-9][a-z0-9-]*$`，是实例隔离与配置的键——同一包挂多个实例就靠不同 `instanceKey`，实例配置写在 app 的 `zhin.config.yml` 的 `plugins.<instanceKey>` 下 |
+
+feature 包（`type: "feature"`）的清单只有 `protocol` / `type` / `entry` / `engine` / `featureApi` 五个字段，其中 `featureApi`（可选）声明本 feature 实现的 API 版本，供消费方 `features[].api` 校验。
+
 ## 下一步
 
 - [约定目录](./conventions.md)：commands / middlewares / adapters 等目录如何被发现

@@ -20,6 +20,8 @@ const USE_DOC_PREFIXES = [
   '/ai/',
   '/console/',
   '/examples/',
+  '/paths/',
+  '/showcase/',
 ]
 
 const DEV_DOC_PREFIXES = ['/contributing/']
@@ -83,12 +85,25 @@ const useDocsSidebar: DefaultTheme.SidebarItem[] = [
   ]),
   { text: 'Console', link: '/console/' },
   { text: '示例项目', link: '/examples/' },
+  sidebarGroup('学习路径', [
+    { text: '路径总览', link: '/paths/' },
+    { text: 'IM Bot', link: '/paths/im-bot' },
+    { text: 'AI Agent', link: '/paths/ai-agent' },
+    { text: 'Console 管理', link: '/paths/console' },
+  ]),
+  sidebarGroup('真实案例', [
+    { text: '案例总览', link: '/showcase/' },
+    { text: '个人生活助手', link: '/showcase/personal-assistant' },
+    { text: '多平台社区 Bot', link: '/showcase/community-bot' },
+  ]),
 ]
 
 const devDocsSidebar: DefaultTheme.SidebarItem[] = [
   { text: '仓库结构', link: '/contributing/repo-structure' },
   { text: '开发流程与门禁', link: '/contributing/development' },
   { text: '代码约定', link: '/contributing/conventions' },
+  { text: 'Public API 面', link: '/contributing/public-api-surface' },
+  { text: 'Legacy 概念迁移', link: '/contributing/legacy-concepts' },
 ]
 
 function mapSidebar(
@@ -115,14 +130,16 @@ export default withMermaid(defineConfig({
       { text: '首页', link: '/' },
       {
         text: '使用文档',
-        activeMatch: '^/(getting-started|concepts|authoring|examples)/',
+        activeMatch: '^/(getting-started|concepts|authoring|examples|paths|showcase)/',
         items: [
           {
             text: '入门',
             items: [
               { text: '快速开始', link: '/getting-started/' },
               { text: '第一个插件', link: '/getting-started/first-plugin' },
+              { text: '学习路径', link: '/paths/' },
               { text: '示例项目', link: '/examples/' },
+              { text: '真实案例', link: '/showcase/' },
             ],
           },
           {

@@ -4,6 +4,7 @@
  */
 
 import type { IncomingMessage } from 'node:http';
+import { isMediaRef, mediaRefFromLegacyData } from '@zhin.js/core';
 import type { Segment } from '@zhin.js/core/runtime';
 
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
@@ -441,12 +442,51 @@ export function formatCallbackSegments(query: TelegramCallbackQuery): Segment[] 
 }
 
 /**
+ * 出站待上传媒体（base64 / 本地路径 MediaRef 物化为 multipart 附件）。
+ * params 里以 `attach://<attachName>` 占位，endpoint 发送时替换为文件 part。
+ */
+export interface TelegramOutboundUpload {
+  readonly attachName: string;
+  readonly filename: string;
+  readonly source:
+    | { readonly kind: 'base64'; readonly data: string }
+    | { readonly kind: 'path'; readonly path: string };
+  readonly mimeType?: string;
+}
+
+export interface TelegramOutboundPlan {
+  readonly actions: TelegramOutboundAction[];
+  readonly uploads: readonly TelegramOutboundUpload[];
+}
+
+/**
  * Wire-encode an already-rendered outbound payload into Telegram Bot API actions.
  * Segment canonicalization is intentionally not done here.
  */
 export function formatOutboundActions(
   target: string | number,
   payload: unknown,
+): TelegramOutboundAction[] {
+  return formatOutboundPlan(target, payload).actions;
+}
+
+/**
+ * formatOutboundActions 的上传感知变体：canonical MediaRef kind=base64/path
+ * 的媒体段产出 `attach://` 占位 + uploads 清单（endpoint 走 multipart 表单上传）；
+ * kind=url/file 与旧 wire 字段（file_id/url）保持字符串直发。
+ */
+export function formatOutboundPlan(
+  target: string | number,
+  payload: unknown,
+): TelegramOutboundPlan {
+  const uploads: TelegramOutboundUpload[] = [];
+  return { actions: buildOutboundActions(target, payload, uploads), uploads };
+}
+
+function buildOutboundActions(
+  target: string | number,
+  payload: unknown,
+  uploads: TelegramOutboundUpload[],
 ): TelegramOutboundAction[] {
   const chatId = typeof target === 'number' ? target : (/^-?\d+$/.test(target) ? Number(target) : target);
   if (typeof payload === 'string') {
@@ -480,11 +520,39 @@ export function formatOutboundActions(
     replyTo != null ? { reply_parameters: { message_id: replyTo } } : {}
   );
 
-  const mediaSource = (data: Record<string, unknown>): string | undefined => {
-    if (typeof data.file_id === 'string' && data.file_id) return data.file_id;
-    if (typeof data.url === 'string' && data.url) return data.url;
-    if (typeof data.file === 'string' && data.file) return data.file;
-    return undefined;
+  /**
+   * 媒体来源归一：canonical `data.media` 优先，旧 wire 字段
+   * `{file_id,url,file,base64}` 经 mediaRefFromLegacyData 兼容。
+   * url/file → 字符串直发；base64/path → attach:// 占位并登记上传。
+   */
+  const mediaSource = (data: Record<string, unknown>, defaultName: string): string | undefined => {
+    const media = isMediaRef(data.media) ? data.media : mediaRefFromLegacyData(data);
+    if (!media) return undefined;
+    if (media.kind === 'file' || media.kind === 'url') return media.value;
+    const named = data.name ?? data.filename;
+    let filename = typeof named === 'string' && named ? named : undefined;
+    if (!filename && media.kind === 'path') {
+      const raw = media.value.startsWith('file://') ? media.value.slice('file://'.length) : media.value;
+      filename = raw.split(/[\\/]/).filter(Boolean).pop();
+    }
+    const attachName = `attach${uploads.length}`;
+    uploads.push({
+      attachName,
+      filename: filename ?? defaultName,
+      source: media.kind === 'base64'
+        ? {
+          kind: 'base64',
+          data: media.value.startsWith('base64://')
+            ? media.value.slice('base64://'.length)
+            : media.value,
+        }
+        : {
+          kind: 'path',
+          path: media.value.startsWith('file://') ? media.value.slice('file://'.length) : media.value,
+        },
+      ...(media.mime_type ? { mimeType: media.mime_type } : {}),
+    });
+    return `attach://${attachName}`;
   };
 
   for (const item of items) {
@@ -522,7 +590,7 @@ export function formatOutboundActions(
         break;
       }
       case 'image': {
-        const photo = mediaSource(data);
+        const photo = mediaSource(data, 'image.png');
         if (photo) {
           actions.push({
             method: 'sendPhoto',
@@ -538,7 +606,7 @@ export function formatOutboundActions(
         break;
       }
       case 'video': {
-        const video = mediaSource(data);
+        const video = mediaSource(data, 'video.mp4');
         if (video) {
           actions.push({
             method: 'sendVideo',
@@ -554,7 +622,7 @@ export function formatOutboundActions(
         break;
       }
       case 'audio': {
-        const audio = mediaSource(data);
+        const audio = mediaSource(data, 'audio.mp3');
         if (audio) {
           actions.push({
             method: 'sendAudio',
@@ -570,7 +638,7 @@ export function formatOutboundActions(
         break;
       }
       case 'voice': {
-        const voice = mediaSource(data);
+        const voice = mediaSource(data, 'voice.ogg');
         if (voice) {
           actions.push({
             method: 'sendVoice',
@@ -586,7 +654,7 @@ export function formatOutboundActions(
         break;
       }
       case 'file': {
-        const document = mediaSource(data);
+        const document = mediaSource(data, 'file');
         if (document) {
           actions.push({
             method: 'sendDocument',
@@ -602,7 +670,7 @@ export function formatOutboundActions(
         break;
       }
       case 'sticker': {
-        const sticker = typeof data.file_id === 'string' ? data.file_id : mediaSource(data);
+        const sticker = typeof data.file_id === 'string' ? data.file_id : mediaSource(data, 'sticker.webp');
         if (sticker) {
           actions.push({
             method: 'sendSticker',

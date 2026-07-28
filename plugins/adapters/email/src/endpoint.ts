@@ -10,11 +10,13 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import {
   formatInboundContent,
+  formatInboundSegments,
   formatOutboundMail,
   parseEmailMessage,
   senderDisplayName,
   type EmailMessage,
   type ResolvedEmailConfig,
+  type SavedEmailAttachment,
 } from './protocol.js';
 import {
   defaultCreateImap,
@@ -149,6 +151,7 @@ export class EmailEndpoint implements EndpointInstance {
       adapter: this.#options.id,
       target: sender,
       content,
+      segments: formatInboundSegments(email, savedAttachments),
       sender: senderDisplayName(sender),
       id: email.messageId || undefined,
       metadata: Object.freeze({
@@ -165,16 +168,16 @@ export class EmailEndpoint implements EndpointInstance {
 
   /**
    * attachments.enabled 时把入站附件落盘（恢复旧 downloadAttachment 行为，
-   * 附加 maxFileSize / allowedTypes 过滤）；返回落盘结果供 admit metadata 使用。
+   * 附加 maxFileSize / allowedTypes 过滤）；返回落盘结果供 admit segments/metadata 使用。
    */
   async #downloadAttachments(
     email: EmailMessage,
-  ): Promise<Array<{ filename: string; path: string; contentType?: string; size?: number }>> {
+  ): Promise<SavedEmailAttachment[]> {
     const config = this.#options.config.attachments;
     if (!config?.enabled || email.attachments.length === 0) return [];
     await mkdir(config.downloadPath, { recursive: true });
     const downloadRoot = path.resolve(config.downloadPath);
-    const saved: Array<{ filename: string; path: string; contentType?: string; size?: number }> = [];
+    const saved: SavedEmailAttachment[] = [];
     for (const attachment of email.attachments) {
       // 防路径穿越：发件人可构造 ../../ 等文件名，basename + resolve 后必须落在 downloadPath 内
       const rawName = attachment.filename || `attachment_${Date.now()}`;

@@ -14,7 +14,7 @@ pnpm dev
 
 脚手架会生成 pnpm workspace 并进入交互向导（来自共享包 `@zhin.js/scaffold-wizard`）：选择适配器、数据库（SQLite / MySQL / PostgreSQL / MongoDB / Redis）、是否启用 AI（Provider、触发方式、安全默认值）等，自动生成 HTTP Token 与 `.env`。加 `-y` 跳过向导，走 IM 黄金路径。
 
-注意 Node 版本还有一条细则。Plugin Runtime 直接运行 TypeScript 源码，`zhin runtime start` 需要 Node **≥22.6**——Node 22.6–22.17 由 CLI 自动带 `--experimental-strip-types` 重启，Node 22.18+ 原生支持 TypeScript。**推荐 Node ≥22.18**，仓库内示例（如 full-bot / test-bot）也以此为准。
+注意 Node 版本还有一条细则。Plugin Runtime 直接运行 TypeScript 源码，`zhin runtime start` 需要 Node **≥22.6**——Node 22.6–22.17 由 CLI 自动带 `--experimental-strip-types` 重启，Node 22.18+ 原生支持 TypeScript。**推荐 Node ≥22.18**，仓库内示例（如 minimal-bot / full-bot）也以此为准。
 
 已有项目想增量配置适配器 / AI / 数据库，用的是同一套向导：
 

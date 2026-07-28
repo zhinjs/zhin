@@ -17,6 +17,7 @@ import {
   isMessageEvent,
   senderNickname,
   senderUserId,
+  uploadOneBot12MediaSegments,
   type OneBot12ActionRequest,
   type OneBot12ActionResponse,
   type OneBot12Event,
@@ -110,7 +111,18 @@ export class OneBot12WssEndpoint implements EndpointInstance {
   }
 
   async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
-    const message = formatOutboundSegments(payload);
+    const materialized = await uploadOneBot12MediaSegments(
+      payload,
+      (action, params) => this.callApi(action, params),
+      (error) => {
+        logger.warn(formatCompact({
+          op: 'onebot12_upload_failed',
+          endpoint: this.#options.config.name,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+      },
+    );
+    const message = formatOutboundSegments(materialized);
     const params = buildSendMessageParams(target, message);
     const data = await this.#callAction('send_message', params) as { message_id?: string } | undefined;
     return data?.message_id ?? '';

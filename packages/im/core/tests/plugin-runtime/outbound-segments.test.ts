@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { HtmlRendererHost, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import {
+  applyOutboundInteractivePolicy,
   normalizeOutboundPayload,
+  resolveOutboundInteractivePolicy,
   resolveOutboundMediaPolicy,
   type OutboundMediaPolicy,
 } from '../../src/plugin-runtime/im/outbound-segments.js';
@@ -344,5 +346,102 @@ describe('resolveOutboundMediaPolicy', () => {
     expect(resolveOutboundMediaPolicy('adapter:test~8596' as never, snapshot)).toBe('base64');
     // 无 ~ 的未知 id 不命中 slot，走内置表之外的回退
     expect(resolveOutboundMediaPolicy('adapter:missing' as never, snapshot)).toBe('base64');
+  });
+});
+
+
+describe('resolveOutboundInteractivePolicy', () => {
+  it('adapter definition 声明的 segments.interactive 优先', () => {
+    const snapshot = mockSnapshot({
+      packageName: '@zhin.js/adapter-telegram',
+      definition: { segments: { interactive: 'text' } },
+    });
+    expect(resolveOutboundInteractivePolicy('adapter:test' as never, snapshot)).toBe('text');
+  });
+
+  it('未声明时按平台名查内置表（telegram / discord 原生按钮）', () => {
+    for (const packageName of ['@zhin.js/adapter-telegram', '@zhin.js/adapter-discord']) {
+      const snapshot = mockSnapshot({ packageName });
+      expect(resolveOutboundInteractivePolicy('adapter:test' as never, snapshot)).toBe('native');
+    }
+  });
+
+  it('非法声明值忽略，未知平台回退 text（旧轨默认）', () => {
+    expect(resolveOutboundInteractivePolicy(
+      'adapter:test' as never,
+      mockSnapshot({
+        packageName: '@zhin.js/adapter-telegram',
+        definition: { segments: { interactive: 'fancy' } },
+      }),
+    )).toBe('native');
+    expect(resolveOutboundInteractivePolicy(
+      'adapter:test' as never,
+      mockSnapshot({ packageName: '@acme/adapter-unknown' }),
+    )).toBe('text');
+  });
+
+  it('多 endpoint 展开的 slot~entry id 回退到 slot 声明', () => {
+    const snapshot = mockSnapshot({
+      packageName: '@zhin.js/adapter-qq',
+      definition: { segments: { interactive: 'native' } },
+    });
+    expect(resolveOutboundInteractivePolicy('adapter:test~8596' as never, snapshot)).toBe('native');
+  });
+});
+
+describe('applyOutboundInteractivePolicy', () => {
+  const keyboard = {
+    type: 'keyboard',
+    data: {
+      rows: [[
+        { id: 'c0', label: '井字棋', payload: 'hub:h1:g_ttt' },
+        { id: 'c1', label: '猜数字', payload: 'hub:h1:g_guess' },
+      ]],
+      fallback: { hint: '回复数字进入对应游戏', map: { '1': 'hub:h1:g_ttt', '2': 'hub:h1:g_guess' } },
+    },
+  };
+
+  it("'text'：keyboard 降级为编号文本并交出 fallback map", () => {
+    const maps: Record<string, string>[] = [];
+    const payload = applyOutboundInteractivePolicy(
+      [{ type: 'text', data: { text: '🎮 游戏大厅' } }, keyboard],
+      'text',
+      (map) => maps.push(map),
+    ) as Array<{ type: string; data: { text?: string } }>;
+
+    expect(payload[0]).toEqual({ type: 'text', data: { text: '🎮 游戏大厅' } });
+    expect(payload[1]?.type).toBe('text');
+    expect(payload[1]?.data.text).toContain('回复数字进入对应游戏');
+    expect(payload[1]?.data.text).toContain('1. 井字棋');
+    expect(payload[1]?.data.text).toContain('2. 猜数字');
+    expect(maps).toEqual([{ '1': 'hub:h1:g_ttt', '2': 'hub:h1:g_guess' }]);
+  });
+
+  it("'text'：无显式 fallback 时按按钮顺序自动编号", () => {
+    const maps: Record<string, string>[] = [];
+    const payload = applyOutboundInteractivePolicy(
+      [{ type: 'keyboard', data: { rows: [[
+        { id: 'a', label: '甲', payload: 'x:s:a' },
+        { id: 'b', label: '乙', payload: 'x:s:b' },
+      ]] } }],
+      'text',
+      (map) => maps.push(map),
+    ) as Array<{ type: string; data: { text?: string } }>;
+
+    expect(payload[0]?.data.text).toContain('1. 甲');
+    expect(payload[0]?.data.text).toContain('2. 乙');
+    expect(maps).toEqual([{ '1': 'x:s:a', '2': 'x:s:b' }]);
+  });
+
+  it("'native'：keyboard 透传，不触发 remember", () => {
+    const remember = vi.fn();
+    const input = [keyboard];
+    expect(applyOutboundInteractivePolicy(input, 'native', remember)).toBe(input);
+    expect(remember).not.toHaveBeenCalled();
+  });
+
+  it('非数组 payload 原样透传', () => {
+    expect(applyOutboundInteractivePolicy('plain', 'text')).toBe('plain');
+    expect(applyOutboundInteractivePolicy(null, 'text')).toBeNull();
   });
 });

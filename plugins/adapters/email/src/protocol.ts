@@ -4,7 +4,8 @@
  */
 
 import type { Attachment } from 'mailparser';
-import { htmlToPlainTextWithBlockBreaks } from '@zhin.js/core';
+import { htmlToPlainTextWithBlockBreaks, isMediaRef, mediaRefFromLegacyData } from '@zhin.js/core';
+import type { Segment } from '@zhin.js/core/runtime';
 
 export interface SmtpConfig {
   readonly host: string;
@@ -185,6 +186,44 @@ export function formatInboundContent(email: EmailMessage): string {
   return text || '(Empty email)';
 }
 
+/** 已落盘的入站附件（attachments.enabled 下载结果）。 */
+export interface SavedEmailAttachment {
+  readonly filename: string;
+  readonly path: string;
+  readonly contentType?: string;
+  readonly size?: number;
+}
+
+/**
+ * 入站邮件 → canonical Segment[]（与 formatInboundContent 纯文本视图同源双轨）。
+ * 已落盘附件映射为 image/file 段，MediaRef kind=path 指向下载路径；
+ * 未下载的附件（disabled / 被过滤）只保留 content 里的占位文本。
+ */
+export function formatInboundSegments(
+  email: EmailMessage,
+  savedAttachments: readonly SavedEmailAttachment[] = [],
+): Segment[] {
+  const out: Segment[] = [];
+  const content = formatInboundContent(email);
+  if (content) out.push({ type: 'text', data: { text: content } });
+  for (const saved of savedAttachments) {
+    const type = saved.contentType?.startsWith('image/') ? 'image' : 'file';
+    out.push({
+      type,
+      data: {
+        media: {
+          kind: 'path',
+          value: saved.path,
+          ...(saved.contentType ? { mime_type: saved.contentType } : {}),
+        },
+        name: saved.filename,
+        ...(type === 'image' ? { alt: saved.filename } : {}),
+      },
+    });
+  }
+  return out;
+}
+
 export function senderDisplayName(from: string): string {
   const name = from.split('<')[0]?.trim();
   return name || from;
@@ -250,10 +289,15 @@ export function formatOutboundMail(
       }
       case 'image':
       case 'file': {
-        if (typeof data.url === 'string' && data.url) {
+        // canonical MediaRef 优先（kind url/path 均可作 nodemailer attachment.path），
+        // 旧 wire 字段 `{url,file,base64}` 经 mediaRefFromLegacyData 兼容。
+        const media = isMediaRef(data.media) ? data.media : mediaRefFromLegacyData(data);
+        if (media && (media.kind === 'url' || media.kind === 'path')) {
           attachments.push({
-            filename: String(data.filename || (item.type === 'image' ? 'image.png' : 'file')),
-            path: data.url,
+            filename: String(
+              data.filename || data.name || (item.type === 'image' ? 'image.png' : 'file'),
+            ),
+            path: media.value,
           });
         }
         break;

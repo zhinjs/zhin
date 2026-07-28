@@ -16,6 +16,12 @@ export type { SlackEndpointOptions, SlackSocketLike, SlackWebClientLike } from '
 
 export default defineAdapter<SlackAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
+  // 媒体由端点物化（url 拉取 / 本地读取）经 files.uploadV2 上传；
+  // Block Kit 原生按钮承载交互段。
+  segments: {
+    outboundMedia: ['url', 'upload'],
+    interactive: 'native',
+  },
   create(context) {
     const config = resolveSlackConfig(context.config);
     // 注册到插件运行时状态（slack endpoint list 的"运行中"数据源）

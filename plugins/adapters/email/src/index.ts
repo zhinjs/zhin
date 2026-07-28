@@ -1,6 +1,7 @@
 export {
   addressListText,
   formatInboundContent,
+  formatInboundSegments,
   formatOutboundMail,
   htmlToText,
   parseEmailMessage,
@@ -12,6 +13,7 @@ export {
   type EmailWireSegment,
   type ImapConfig,
   type ResolvedEmailConfig,
+  type SavedEmailAttachment,
   type SmtpConfig,
 } from './protocol.js';
 

@@ -1,8 +1,10 @@
 export type { InitOptions, DatabaseConfig } from './types.js';
 export { DATABASE_PACKAGES } from './types.js';
 
-export type { AdapterSetupResult, AdapterPluginInstance } from './adapter.js';
+export type { AdapterSetupResult, AdapterPluginInstance, AdapterDefinition } from './adapter.js';
 export {
+  ADAPTERS,
+  findAdapterByPackage,
   configureAdapters,
   buildFieldBasedInstanceConfig,
   generateAdapterEnvVars,

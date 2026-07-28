@@ -1,4 +1,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import * as path from 'node:path';
 import { createEndpointRuntimeState } from '@zhin.js/adapter';
 import { telegramRuntimeStateToken } from '../src/telegram-runtime-state.js';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
@@ -14,6 +17,7 @@ import {
   formatInboundContent,
   formatInboundSegments,
   formatOutboundActions,
+  formatOutboundPlan,
   resolveTelegramConfig,
   type TelegramMessage,
 } from '../src/protocol.js';
@@ -55,12 +59,18 @@ function textMessage(overrides: Partial<TelegramMessage> = {}): TelegramMessage 
 
 function mockApiFetch(handlers: Record<string, unknown> = {}): TelegramFetch & {
   calls: Array<{ method: string; body: Record<string, unknown> }>;
+  forms: Array<{ method: string; form: FormData }>;
 } {
   const calls: Array<{ method: string; body: Record<string, unknown> }> = [];
+  const forms: Array<{ method: string; form: FormData }> = [];
   const fetchFn: TelegramFetch = async (url, init) => {
     const method = url.split('/').pop() || '';
-    const body = init?.body ? JSON.parse(init.body) as Record<string, unknown> : {};
-    calls.push({ method, body });
+    if (init?.body instanceof FormData) {
+      forms.push({ method, form: init.body });
+    } else {
+      const body = init?.body ? JSON.parse(init.body) as Record<string, unknown> : {};
+      calls.push({ method, body });
+    }
     if (method === 'getUpdates') {
       // Hang until abort so start() does not spin.
       await new Promise<void>((resolve, reject) => {
@@ -88,7 +98,7 @@ function mockApiFetch(handlers: Record<string, unknown> = {}): TelegramFetch & {
       json: async () => ({ ok: true, result }),
     };
   };
-  return Object.assign(fetchFn, { calls });
+  return Object.assign(fetchFn, { calls, forms });
 }
 
 afterEach(async () => {
@@ -253,6 +263,48 @@ describe('telegram protocol helpers', () => {
       },
     });
   });
+
+  it('maps base64/path media to attach:// upload plan; url/file_id stay direct', () => {
+    const plan = formatOutboundPlan('1001', [
+      { type: 'text', data: { text: 'see' } },
+      {
+        type: 'image',
+        data: { media: { kind: 'base64', value: 'base64://QUJD', mime_type: 'image/png' }, name: 'a.png' },
+      },
+    ]);
+    expect(plan.actions).toEqual([{
+      method: 'sendPhoto',
+      params: { chat_id: 1001, photo: 'attach://attach0', caption: 'see' },
+    }]);
+    expect(plan.uploads).toEqual([{
+      attachName: 'attach0',
+      filename: 'a.png',
+      source: { kind: 'base64', data: 'QUJD' },
+      mimeType: 'image/png',
+    }]);
+
+    const pathPlan = formatOutboundPlan(1001, [
+      { type: 'image', data: { media: { kind: 'path', value: '/tmp/b.png' } } },
+    ]);
+    expect(pathPlan.actions[0]).toMatchObject({ params: { photo: 'attach://attach0' } });
+    expect(pathPlan.uploads[0]).toEqual({
+      attachName: 'attach0',
+      filename: 'b.png',
+      source: { kind: 'path', path: '/tmp/b.png' },
+    });
+
+    // url / file_id 保持字符串直发，不产生上传
+    const urlPlan = formatOutboundPlan(1, [
+      { type: 'image', data: { media: { kind: 'url', value: 'https://x/a.png' } } },
+    ]);
+    expect(urlPlan.uploads).toEqual([]);
+    expect(urlPlan.actions[0]).toMatchObject({ params: { photo: 'https://x/a.png' } });
+    const filePlan = formatOutboundPlan(1, [
+      { type: 'image', data: { media: { kind: 'file', value: 'fid-1' } } },
+    ]);
+    expect(filePlan.uploads).toEqual([]);
+    expect(filePlan.actions[0]).toMatchObject({ params: { photo: 'fid-1' } });
+  });
 });
 
 describe('telegram plugin runtime adapter', () => {
@@ -368,6 +420,81 @@ describe('telegram plugin runtime adapter', () => {
       && c.body.text === 'pong'
     ))).toBe(true);
     await endpoint.stop();
+  });
+
+  it('uploads base64 image via multipart sendPhoto', async () => {
+    const fetch = mockApiFetch({ sendPhoto: { message_id: 88 } });
+    const endpoint = new TelegramEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      config: baseConfig,
+      fetch,
+    });
+    await endpoint.start();
+    endpoint.open();
+    const messageId = await endpoint.send({
+      target: '1001',
+      payload: [
+        { type: 'text', data: { text: 'look' } },
+        {
+          type: 'image',
+          data: {
+            media: {
+              kind: 'base64',
+              value: Buffer.from('png-bytes').toString('base64'),
+              mime_type: 'image/png',
+            },
+            name: 'a.png',
+          },
+        },
+      ],
+    });
+    expect(messageId).toBe('88');
+    const formCall = fetch.forms.find((f) => f.method === 'sendPhoto');
+    expect(formCall).toBeDefined();
+    expect(formCall!.form.get('chat_id')).toBe('1001');
+    expect(formCall!.form.get('caption')).toBe('look');
+    const file = formCall!.form.get('photo') as File;
+    expect(file.name).toBe('a.png');
+    expect(file.type).toBe('image/png');
+    expect(Buffer.from(await file.arrayBuffer()).toString()).toBe('png-bytes');
+    await endpoint.stop();
+  });
+
+  it('uploads local-path image via multipart sendPhoto (reads from disk)', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'zhin-telegram-upload-'));
+    try {
+      const filePath = path.join(dir, 'local.png');
+      await writeFile(filePath, 'disk-bytes');
+      const fetch = mockApiFetch({ sendPhoto: { message_id: 89 } });
+      const endpoint = new TelegramEndpoint({
+        id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
+        gateway: {
+          receive: vi.fn(async () => Object.freeze({ matched: false })),
+          send: vi.fn(async () => 'sent'),
+        },
+        config: baseConfig,
+        fetch,
+      });
+      await endpoint.start();
+      endpoint.open();
+      const messageId = await endpoint.send({
+        target: '1001',
+        payload: [{ type: 'image', data: { media: { kind: 'path', value: filePath } } }],
+      });
+      expect(messageId).toBe('89');
+      const formCall = fetch.forms.find((f) => f.method === 'sendPhoto');
+      expect(formCall).toBeDefined();
+      const file = formCall!.form.get('photo') as File;
+      expect(file.name).toBe('local.png');
+      expect(Buffer.from(await file.arrayBuffer()).toString()).toBe('disk-bytes');
+      await endpoint.stop();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it('registers agent endpoint for tools', async () => {

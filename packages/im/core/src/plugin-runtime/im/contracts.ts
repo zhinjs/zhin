@@ -94,6 +94,15 @@ export interface OutboundEnvelope {
 export interface MessageGateway {
   receive(input: IncomingMessage): Promise<MessageDispatchResult>;
   send(request: SendRequest): Promise<unknown>;
+  /**
+   * 注册 interactive action 回跳 handler（prefix 最长匹配；返回注销函数）。
+   * 平台 callback 的 action 段、'text' 端点的数字回跳与指令预填直出
+   * payload 都会路由到这里。
+   */
+  registerInteractiveHandler(
+    prefix: string,
+    handler: (message: Message) => Promise<boolean> | boolean,
+  ): () => void;
 }
 
 export interface MessageDispatchResult {

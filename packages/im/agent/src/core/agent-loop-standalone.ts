@@ -157,9 +157,10 @@ export async function runAgentLoopStandaloneTurn(
       return toolResultToAgentMessage(toolCall, resultText, false);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      toolCalls.push({ tool: toolCall.name, args: toolCall.arguments, result: message });
-      callbacks?.onToolResult?.(toolCall.name, message);
-      return toolResultToAgentMessage(toolCall, message, true);
+      const failure = `工具「${toolCall.name}」执行失败：${message}`;
+      toolCalls.push({ tool: toolCall.name, args: toolCall.arguments, result: failure });
+      callbacks?.onToolResult?.(toolCall.name, failure);
+      return toolResultToAgentMessage(toolCall, failure, true);
     }
   };
 
