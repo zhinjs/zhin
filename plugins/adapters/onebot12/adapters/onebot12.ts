@@ -11,6 +11,7 @@ import {
   resolveOneBot12Config,
   type OneBot12AdapterConfig,
 } from '../src/protocol.js';
+import { onebot12RuntimeStateToken } from '../src/onebot12-runtime-state.js';
 
 export { OneBot12WebhookEndpoint } from '../src/webhook.js';
 export type { OneBot12WebhookEndpointOptions } from '../src/webhook.js';
@@ -25,6 +26,11 @@ export default defineAdapter<OneBot12AdapterConfig>({
   create(context) {
     const config = resolveOneBot12Config(context.config);
     const gateway = context.use(messageGatewayToken);
+    // 注册到插件运行时状态（onebot12 endpoint list 的"运行中"数据源）
+    context.use(onebot12RuntimeStateToken).endpoints.set(config.name, {
+      name: config.name,
+      mode: config.connection,
+    });
     if (config.connection === 'webhook') {
       return new OneBot12WebhookEndpoint({
         id: context.id,

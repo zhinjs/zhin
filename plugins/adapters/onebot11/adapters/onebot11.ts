@@ -10,6 +10,7 @@ import {
   resolveOneBot11Config,
   type OneBot11AdapterConfig,
 } from '../src/protocol.js';
+import { onebot11RuntimeStateToken } from '../src/onebot11-runtime-state.js';
 
 export { OneBot11WsEndpoint } from '../src/ws-endpoint.js';
 export type { OneBot11WsEndpointOptions } from '../src/ws-endpoint.js';
@@ -22,6 +23,11 @@ export default defineAdapter<OneBot11AdapterConfig>({
   create(context) {
     const config = resolveOneBot11Config(context.config);
     const gateway = context.use(messageGatewayToken);
+    // 注册到插件运行时状态（onebot11 endpoint list 的"运行中"数据源）
+    context.use(onebot11RuntimeStateToken).endpoints.set(config.name, {
+      name: config.name,
+      mode: config.connection,
+    });
     if (config.connection === 'wss') {
       return new OneBot11WssEndpoint({
         id: context.id,

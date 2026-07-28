@@ -1,4 +1,6 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
+import { createEndpointRuntimeState } from '@zhin.js/adapter';
+import { telegramRuntimeStateToken } from '../src/telegram-runtime-state.js';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import { messageGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
@@ -402,6 +404,7 @@ describe('telegram plugin runtime adapter', () => {
       use: (token: unknown) => {
         if (token === httpHostToken) return http;
         if (token === messageGatewayToken) return gateway;
+        if (token === telegramRuntimeStateToken) return createEndpointRuntimeState();
         throw new Error(`unexpected token: ${String(token)}`);
       },
     } as never);

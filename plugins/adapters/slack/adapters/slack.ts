@@ -9,6 +9,7 @@ import {
   resolveSlackConfig,
   type SlackAdapterConfig,
 } from '../src/protocol.js';
+import { slackRuntimeStateToken } from '../src/slack-runtime-state.js';
 
 export { SlackEndpoint } from '../src/endpoint.js';
 export type { SlackEndpointOptions, SlackSocketLike, SlackWebClientLike } from '../src/endpoint.js';
@@ -17,6 +18,11 @@ export default defineAdapter<SlackAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
   create(context) {
     const config = resolveSlackConfig(context.config);
+    // 注册到插件运行时状态（slack endpoint list 的"运行中"数据源）
+    context.use(slackRuntimeStateToken).endpoints.set(config.name, {
+      name: config.name,
+      mode: config.mode,
+    });
     if (config.mode === 'http') {
       return new SlackEndpoint({
         id: context.id,

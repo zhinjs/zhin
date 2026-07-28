@@ -1,16 +1,27 @@
 /**
  * `qq endpoint` 命令的业务逻辑（与命令定义文件分离，便于测试）。
+ * 通用部分（权限 / list / remove / 配置写回 / .env 持久化）已迁移到
+ * @zhin.js/adapter 的 createEndpointCommands 套件；本文件保留 QQ 特化的
+ * 扫码绑定 add 流程（经套件 bindFlow 钩子接入）与 cancel，并导出
+ * qqEndpointCommands 供 commands/endpoint/ 下的命令文件默认导出。
  */
+import {
+  createEndpointCommands,
+  endpointCommandForbidden,
+  extractEndpointCommandReply,
+  formatEndpointList,
+  isEndpointOperator,
+  removeEndpointByName,
+  type ConfiguredEndpointEntry,
+  type EndpointCommandReply,
+} from '@zhin.js/adapter';
+import { defineCommand } from '@zhin.js/command';
 import { startQqBindFlow } from './qq-bind-flow.js';
 import { persistQqCredentialsToEnv } from './qq-bind-persist.js';
-import {
-  addQqEndpointToConfig,
-  listQqEndpointEntries,
-  removeQqEndpointFromConfig,
-} from './qq-endpoint-config.js';
-import type { QqRuntimeState } from './qq-runtime-state.js';
+import { addQqEndpointToConfig, listQqEndpointEntries } from './qq-endpoint-config.js';
+import { qqRuntimeStateToken, type QqRuntimeState } from './qq-runtime-state.js';
 
-export type QqCommandReply = (text: string) => Promise<unknown>;
+export type QqCommandReply = EndpointCommandReply;
 
 /**
  * endpoint 管理命令的操作者校验：实例配置声明了 master（顶层或任一端点项）时
@@ -18,63 +29,32 @@ export type QqCommandReply = (text: string) => Promise<unknown>;
  * legacy applyBindOwnership 会把 operator 写为新端点的 master）。
  */
 export function isQqEndpointOperator(config: unknown, input: unknown): boolean {
-  const cfg = (config ?? {}) as { master?: unknown; endpoints?: unknown };
-  const masters = new Set<string>();
-  const collect = (value: unknown) => {
-    if (value === undefined || value === null) return;
-    const text = String(value).trim();
-    if (text) masters.add(text);
-  };
-  collect(cfg.master);
-  if (Array.isArray(cfg.endpoints)) {
-    for (const entry of cfg.endpoints) {
-      collect((entry as { master?: unknown } | null | undefined)?.master);
-    }
-  }
-  if (masters.size === 0) return true;
-  const sender = String((input as { sender?: unknown } | null | undefined)?.sender ?? '').trim();
-  return !!sender && masters.has(sender);
+  return isEndpointOperator(config, input);
 }
 
-export const QQ_ENDPOINT_FORBIDDEN = '仅 master 可执行 QQ endpoint 管理命令';
+export const QQ_ENDPOINT_FORBIDDEN = endpointCommandForbidden('QQ');
 
 /**
  * 从命令 input（Runtime Message）提取 $reply；非消息来源（如 Host API 调用）降级为 no-op。
  */
 export function extractQqCommandReply(input: unknown): QqCommandReply {
-  const reply = (input as { $reply?: unknown } | null | undefined)?.$reply;
-  if (typeof reply === 'function') {
-    return (text) => (reply as (content: string) => Promise<unknown>).call(input, text);
-  }
-  return async () => undefined;
+  return extractEndpointCommandReply(input);
 }
 
 /** `qq endpoint list`：运行中的 endpoints（本 generation adapter create 注册）+ 配置里的 endpoints */
 export function runQqEndpointList(state: QqRuntimeState, projectRoot?: string): string {
-  const running = [...state.endpoints.values()];
-  const configured = listQqEndpointEntries(projectRoot);
-  const lines: string[] = [];
-  lines.push('【运行中的 QQ endpoints】');
-  if (running.length === 0) {
-    lines.push('  （无）');
-  } else {
-    for (const endpoint of running) {
-      lines.push(`  - ${endpoint.name}（${endpoint.mode}）`);
-    }
-  }
-  lines.push('【配置中的 QQ endpoints】（zhin.config.yml → plugins.qq.endpoints）');
-  if (configured.length === 0) {
-    lines.push('  （无）');
-  } else {
-    for (const entry of configured) {
-      lines.push(`  - ${entry.name}（appid: ${entry.appid}）`);
-    }
-  }
-  if (state.bindFlow) {
-    lines.push('⚠️ 有进行中的扫码绑定，可用 qq endpoint cancel 取消');
-  }
-  return lines.join('\n');
+  return formatEndpointList(qqEndpointListSpec, {
+    running: state.endpoints.values(),
+    configured: listQqEndpointEntries(projectRoot),
+    footer: state.bindFlow ? '⚠️ 有进行中的扫码绑定，可用 qq endpoint cancel 取消' : undefined,
+  });
 }
+
+const qqEndpointListSpec = {
+  adapterKey: 'qq',
+  adapterDisplayName: 'QQ',
+  describeEntry: (entry: ConfiguredEndpointEntry) => `appid: ${String(entry.appid)}`,
+} as const;
 
 /**
  * `qq endpoint add [name]`：启动扫码绑定流程。
@@ -157,18 +137,24 @@ export function runQqEndpointRemove(
   name: string,
   projectRoot?: string,
 ): string {
-  const trimmed = name.trim();
-  if (!trimmed) return '用法：qq endpoint remove <name>';
-  try {
-    const { removed, filePath } = removeQqEndpointFromConfig(trimmed, projectRoot);
-    if (!removed) {
-      return `配置中不存在 qq endpoint「${trimmed}」（${filePath} → plugins.qq.endpoints）`;
-    }
-    return (
-      `已从 ${filePath} 的 plugins.qq.endpoints 移除「${trimmed}」。\n` +
-      '⚠️ 需重启 zhin 后生效（运行中的连接届时才会断开）；.env 中的凭据键未删除，可手动清理。'
-    );
-  } catch (error) {
-    return `移除失败：${error instanceof Error ? error.message : String(error)}`;
-  }
+  return removeEndpointByName(qqEndpointListSpec, name, projectRoot);
 }
+
+/**
+ * 通用套件生成的 QQ endpoint 命令（add 经 bindFlow 钩子走扫码绑定）。
+ * commands/endpoint/ 下的 list / add / remove 直接默认导出这三项；cancel 为 QQ 特化，单独定义。
+ */
+export const qqEndpointCommands = createEndpointCommands({
+  ...qqEndpointListSpec,
+  fields: [
+    { key: 'appid', required: true, env: true, description: 'QQ 机器人 appid' },
+    { key: 'secret', required: true, env: true, description: 'QQ 机器人 secret' },
+  ],
+  running: (use) => use(qqRuntimeStateToken).endpoints.values(),
+  listFooter: (use) => {
+    const state = use(qqRuntimeStateToken);
+    return state.bindFlow ? '⚠️ 有进行中的扫码绑定，可用 qq endpoint cancel 取消' : undefined;
+  },
+  addDescription: '手机 QQ 扫码绑定机器人，凭据写入 .env 并追加到 zhin.config.yml（重启生效）',
+  bindFlow: ({ name, reply, use }) => runQqEndpointAdd(use(qqRuntimeStateToken), name, reply),
+}, defineCommand);

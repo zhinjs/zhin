@@ -9,6 +9,7 @@ import {
   resolveTelegramConfig,
   type TelegramAdapterConfig,
 } from '../src/protocol.js';
+import { telegramRuntimeStateToken } from '../src/telegram-runtime-state.js';
 
 export { TelegramEndpoint } from '../src/endpoint.js';
 export type { TelegramEndpointOptions, TelegramFetch } from '../src/endpoint.js';
@@ -17,6 +18,11 @@ export default defineAdapter<TelegramAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
   create(context) {
     const config = resolveTelegramConfig(context.config);
+    // 注册到插件运行时状态（telegram endpoint list 的"运行中"数据源）
+    context.use(telegramRuntimeStateToken).endpoints.set(config.name, {
+      name: config.name,
+      mode: config.mode,
+    });
     return new TelegramEndpoint({
       id: context.id,
       gateway: context.use(messageGatewayToken),

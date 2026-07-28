@@ -1,4 +1,6 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
+import { createEndpointRuntimeState } from '@zhin.js/adapter';
+import { milkyRuntimeStateToken } from '../src/milky-runtime-state.js';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import { messageGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
@@ -408,6 +410,7 @@ describe('milky plugin runtime adapter', () => {
         if (token === messageGatewayToken) {
           return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
         }
+        if (token === milkyRuntimeStateToken) return createEndpointRuntimeState();
         throw new Error(`unexpected token: ${String(token)}`);
       },
     } as never);
@@ -431,6 +434,7 @@ describe('milky plugin runtime adapter', () => {
         if (token === messageGatewayToken) {
           return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
         }
+        if (token === milkyRuntimeStateToken) return createEndpointRuntimeState();
         throw new Error(`unexpected token: ${String(token)}`);
       },
     } as never);
@@ -496,6 +500,7 @@ describe('milky plugin runtime adapter', () => {
       },
       use: (token: unknown) => {
         if (token === messageGatewayToken) return gateway;
+        if (token === milkyRuntimeStateToken) return createEndpointRuntimeState();
         throw new Error(`unexpected token: ${String(token)}`);
       },
     } as never);

@@ -1,4 +1,6 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
+import { createEndpointRuntimeState } from '@zhin.js/adapter';
+import { onebot11RuntimeStateToken } from '../src/onebot11-runtime-state.js';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import { messageGatewayToken, type MessageGateway } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
@@ -478,6 +480,7 @@ describe('onebot11 plugin runtime adapter', () => {
         if (token === messageGatewayToken) {
           return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
         }
+        if (token === onebot11RuntimeStateToken) return createEndpointRuntimeState();
         throw new Error(`unexpected token: ${String(token)}`);
       },
     } as never);

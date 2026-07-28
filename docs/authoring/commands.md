@@ -33,24 +33,12 @@ export default defineCommand({
 
 路由冲突有两条规则：**静态优先**——`list.ts` 永远赢过 `[name:string].ts`，动态路由之间静态段多者（更具体）优先；**同形拒绝**——同一路由形状重复注册会在启动时报错（`Duplicate runtime Command`）。
 
-真实示例（`plugins/adapters/qq/commands/endpoint/remove/[name:string].ts`）：
+真实示例（`plugins/adapters/qq/commands/endpoint/remove/[name:string].ts`，命令定义由[endpoint 管理命令套件](#适配器-endpoint-管理命令套件)生成）：
 
 ```ts
-import { defineCommand } from '@zhin.js/command';
-import {
-  isQqEndpointOperator,
-  QQ_ENDPOINT_FORBIDDEN,
-  runQqEndpointRemove,
-} from '../../../src/qq-endpoint-commands.js';
-import { qqRuntimeStateToken } from '../../../src/qq-runtime-state.js';
+import { qqEndpointCommands } from '../../../src/qq-endpoint-commands.js';
 
-export default defineCommand({
-  description: '从 zhin.config.yml 的 plugins.qq.endpoints 移除指定 endpoint（重启生效）',
-  execute({ config, input, params, use }) {
-    if (!isQqEndpointOperator(config, input)) return QQ_ENDPOINT_FORBIDDEN;
-    return runQqEndpointRemove(use(qqRuntimeStateToken), String(params.name ?? ''));
-  },
-});
+export default qqEndpointCommands.remove;
 ```
 
 ## execute 上下文
@@ -107,10 +95,10 @@ plugins:
 
 `master` / `trusted` 名单由 Core 的角色解析读取（`resolveSenderRoles`，`packages/im/core/src/built/ai-trigger.ts`），`role(master)`、`role(trusted)` 这类 permit 以及 [Agent 工具](./agent-tools.md)的 `permissions` 都基于同一套角色。
 
-命令自身不内置权限声明，权限判断写在 `execute` 里。以 `qq endpoint` 管理命令为例（`plugins/adapters/qq/src/qq-endpoint-commands.ts`）：
+命令自身不内置权限声明，权限判断写在 `execute` 里。以 endpoint 管理命令的通用判定为例（`isEndpointOperator`，`packages/im/adapter/src/endpoint-commands.ts`）：
 
 ```ts
-export function isQqEndpointOperator(config: unknown, input: unknown): boolean {
+export function isEndpointOperator(config: unknown, input: unknown): boolean {
   const cfg = (config ?? {}) as { master?: unknown; endpoints?: unknown };
   const masters = new Set<string>();
   // 收集顶层 master 与各 endpoints[i].master …
@@ -120,7 +108,42 @@ export function isQqEndpointOperator(config: unknown, input: unknown): boolean {
 }
 ```
 
-这个模式的要点：用 `config`（插件配置）拿到声明的 `master` 名单，用 `input`（消息）拿到发送者 id，比对后返回拒绝文案——上面的 `QQ_ENDPOINT_FORBIDDEN`。未配置 `master` 时放行，首个扫码绑定者即成为 owner（绑定流程会把操作者写为新 endpoint 的 `master`）。注意 `input` 不一定是消息（可能是 Host 调用），取发送者前要做类型守卫；非消息来源时 `$reply` 降级为 no-op。
+这个模式的要点：用 `config`（插件配置）拿到声明的 `master` 名单，用 `input`（消息）拿到发送者 id，比对后返回拒绝文案（`仅 master 可执行 <Adapter> endpoint 管理命令`）。未配置 `master` 时放行，首个扫码绑定者即成为 owner（QQ 绑定流程会把操作者写为新 endpoint 的 `master`）。注意 `input` 不一定是消息（可能是 Host 调用），取发送者前要做类型守卫；非消息来源时 `$reply` 降级为 no-op。
+
+## 适配器 endpoint 管理命令套件
+
+`@zhin.js/adapter` 的 `createEndpointCommands(spec, defineCommand)` 为适配器生成 `<adapter> endpoint` 的 **list / add / remove** 三个命令，QQ、napcat、onebot11、onebot12、milky、slack、telegram 均已接入：
+
+- `<adapter> endpoint list`：运行中的 endpoints（adapter `create()` 注册的 runtime state）+ `zhin.config.yml` 里 `plugins.<adapterKey>.endpoints` 的配置清单。
+- `<adapter> endpoint add <name> <key=value...>`：手动录入字段。`env: true` 的凭据字段值写入 `.env`（键名派生为 `<ADAPTER>_<NAME>_<FIELD>` 大写，如 `TELEGRAM_BOT1_TOKEN`、`SLACK_BOT1_SIGNING_SECRET`），yaml 中保存 `${REF}` 引用；其余字段内联写入。yaml 用 Document 节点级操作，保留既有注释；重名拒绝；`add`/`remove` 都走上面的 master 门禁。
+- `<adapter> endpoint remove <name>`：从配置移除（重启生效，`.env` 键保留待手动清理）。
+- 特殊 add 流程（如 QQ 扫码绑定）经 `spec.bindFlow` 钩子接管 add 命令；QQ 因此多出第四个命令 `qq endpoint cancel`。
+
+接入一个适配器只需四步（以 telegram 为例）：
+
+```ts
+// 1. src/telegram-runtime-state.ts —— 运行中 endpoint 注册表 token
+export const telegramRuntimeStateToken = defineEndpointRuntimeStateToken('telegram');
+
+// 2. plugin.ts setup() —— provide 状态；adapters/telegram.ts create() 里登记
+context.resources.provide(telegramRuntimeStateToken, createEndpointRuntimeState());
+// create(): context.use(telegramRuntimeStateToken).endpoints.set(config.name, { name: config.name, mode: config.mode });
+
+// 3. src/telegram-endpoint-commands.ts —— 生成命令（defineCommand 由适配器侧注入，
+//    provider 包之间禁止互相 import）
+export const telegramEndpointCommands = createEndpointCommands({
+  adapterKey: 'telegram',          // = zhin.config.yml 的 plugins.<key>
+  adapterDisplayName: 'Telegram',
+  fields: [{ key: 'token', required: true, env: true, description: 'Telegram bot token' }],
+  running: (use) => use(telegramRuntimeStateToken).endpoints.values(),
+  describeEntry: (entry) => `token: ${String(entry.token)}`,
+}, defineCommand);
+
+// 4. commands/endpoint/{list.ts, add/[name:string].ts, remove/[name:string].ts}
+export default telegramEndpointCommands.list; // / .add / .remove
+```
+
+`fields` 与该适配器 `schema.json` 的 `endpoints.items.properties` 对齐；`add` 的 kv 参数走 `args`（最长前缀匹配后剩余的词），值含 `=` 时按首个 `=` 切分。
 
 ## commandPrefix 适配器配置
 

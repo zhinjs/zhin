@@ -14,6 +14,7 @@ import {
   resolveMilkyConfig,
   type MilkyAdapterConfig,
 } from '../src/protocol.js';
+import { milkyRuntimeStateToken } from '../src/milky-runtime-state.js';
 
 export {
   MilkySseEndpoint,
@@ -36,6 +37,11 @@ export default defineAdapter<MilkyAdapterConfig>({
   create(context) {
     const config = resolveMilkyConfig(context.config);
     const gateway = context.use(messageGatewayToken);
+    // 注册到插件运行时状态（milky endpoint list 的"运行中"数据源）
+    context.use(milkyRuntimeStateToken).endpoints.set(config.name, {
+      name: config.name,
+      mode: config.connection,
+    });
     if (config.connection === 'webhook') {
       return new MilkyWebhookEndpoint({
         id: context.id,

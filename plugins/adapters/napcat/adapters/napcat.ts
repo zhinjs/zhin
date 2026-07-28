@@ -8,6 +8,7 @@ import { NapCatHttpEndpoint } from '../src/http-endpoint.js';
 import { resolveNapCatConfig, type NapCatAdapterConfig } from '../src/protocol.js';
 import { NapCatWsEndpoint } from '../src/ws-endpoint.js';
 import { NapCatWssEndpoint } from '../src/wss-endpoint.js';
+import { napcatRuntimeStateToken } from '../src/napcat-runtime-state.js';
 
 export {
   NapCatHttpEndpoint,
@@ -28,6 +29,11 @@ export default defineAdapter<NapCatAdapterConfig>({
   create(context) {
     const config = resolveNapCatConfig(context.config);
     const gateway = context.use(messageGatewayToken);
+    // 注册到插件运行时状态（napcat endpoint list 的"运行中"数据源）
+    context.use(napcatRuntimeStateToken).endpoints.set(config.name, {
+      name: config.name,
+      mode: config.connection,
+    });
     if (config.connection === 'wss') {
       return new NapCatWssEndpoint({ id: context.id, gateway, http: context.use(httpHostToken), config });
     }

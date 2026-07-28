@@ -24,10 +24,12 @@
   "dependencies": {
     "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/logger": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*"
+    "@zhin.js/plugin-runtime": "workspace:*",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",
+    "@zhin.js/command": "workspace:*",
     "typescript": "^6.0.3"
   },
   "zhin": {
