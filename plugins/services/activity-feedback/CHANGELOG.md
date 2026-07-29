@@ -1,5 +1,28 @@
 # @zhin.js/service-activity-feedback
 
+## 2.0.1
+
+### Patch Changes
+
+- c730fd0: 移除 activity-feedback 遗留的 legacy host Plugin 路径（依赖旧 `@zhin.js/core` `Plugin` 类型的死代码）：
+
+  - 删除 `bindActivityFeedbackToAIEvents`、`mountActivityFeedbackService`、`createActivityFeedbackOrchestratorFromPlugin`（`src/ai-event-binder.ts`）——这些接收旧 `Plugin`/`Plugin.root`、走 ALS 版 `subscribeAIEvents`，无任何运行时消费者与测试覆盖。
+  - 删除 `createRootEndpointAccess`（`src/executor.ts`）——legacy root path 专用的 endpoint 访问器，随上述函数一并成为孤儿。
+  - 从桶文件 `src/index.ts` 移除对应 re-export。
+
+  运行时入口 `plugin.ts` 走的是 Plugin Runtime 路径（`activityFeedbackAiBus` + OutboundHost），不受影响；插件层不再有对旧 core `Plugin` 类型的依赖。
+
+- Updated dependencies [cdf64e7]
+- Updated dependencies [2d0a159]
+- Updated dependencies [5691aba]
+- Updated dependencies [078e3f7]
+- Updated dependencies [43485a9]
+- Updated dependencies [3e925d0]
+- Updated dependencies [fa66c4c]
+  - @zhin.js/agent@1.0.6
+  - @zhin.js/plugin-runtime@1.1.1
+  - zhin.js@5.0.1
+
 ## 2.0.0
 
 ### Patch Changes
