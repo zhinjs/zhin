@@ -18,7 +18,7 @@ import {
   DEFAULT_CREATE_BOT_HTTP_PORT,
 } from '@zhin.js/scaffold-wizard';
 import { createWorkspace } from './workspace.js';
-import { ensurePnpmInstalled, installDependencies } from './install.js';
+import { ensurePnpmInstalled, installDependencies, runPostInstallDoctor } from './install.js';
 import { applyStableYesDefaults } from './stable-yes-defaults.js';
 
 async function main() {
@@ -232,6 +232,10 @@ async function main() {
     
     console.log(chalk.blue('📦 正在安装依赖...'));
     await installDependencies(projectPath);
+    
+    console.log('');
+    // 安装后自检：复用项目内 CLI 的 zhin doctor（Node/pnpm/端口/Console 条件），失败不阻断
+    await runPostInstallDoctor(projectPath);
     
     console.log('');
     console.log(chalk.green('🎉 项目初始化完成！'));

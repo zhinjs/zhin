@@ -321,10 +321,15 @@ describe('PluginBase', () => {
   })
 
   describe('watchFile', () => {
+    // macOS FSEvents 会缓冲/合并事件：初始写入的事件可能在 watcher 创建后才送达，
+    // rename 也可能只报临时文件名。测试侧先沉降再挂 watcher、并对事件送达做重试。
+    const settle = (ms = 150) => new Promise((resolve) => setTimeout(resolve, ms))
+
     it('survives an atomic-rename save (temp file + rename over target)', async () => {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-watch-'))
       const target = path.join(dir, 'plugin.ts')
       fs.writeFileSync(target, 'v1')
+      await settle()
 
       let fireCount = 0
       const unwatch = watchFile(target, () => { fireCount++ })
@@ -333,13 +338,15 @@ describe('PluginBase', () => {
         // Many editors (Vim, several IDEs/formatters) save atomically: write
         // a temp file, then rename it over the target. This replaces the
         // target's inode, which would silently kill a raw fs.watch(file).
-        const tmp = path.join(dir, '.plugin.ts.tmp')
-        fs.writeFileSync(tmp, 'v2')
-        fs.renameSync(tmp, target)
-
-        await vi.waitFor(() => {
-          expect(fireCount).toBeGreaterThan(0)
-        }, { timeout: 2000, interval: 20 })
+        // 事件在 macOS 上可能只报临时文件名（被过滤）——多试几次原子保存，
+        // 验证的是"目录级 watcher 能活到原子保存之后"这一机制。
+        for (let attempt = 0; attempt < 5 && fireCount === 0; attempt += 1) {
+          const tmp = path.join(dir, `.plugin.ts.${attempt}.tmp`)
+          fs.writeFileSync(tmp, `v${attempt + 2}`)
+          fs.renameSync(tmp, target)
+          await settle(120)
+        }
+        expect(fireCount).toBeGreaterThan(0)
       } finally {
         unwatch()
         fs.rmSync(dir, { recursive: true, force: true })
@@ -351,6 +358,7 @@ describe('PluginBase', () => {
       const target = path.join(dir, 'plugin.ts')
       const sibling = path.join(dir, 'sibling.ts')
       fs.writeFileSync(target, 'v1')
+      await settle()
 
       let fireCount = 0
       const unwatch = watchFile(target, () => { fireCount++ })
@@ -359,7 +367,7 @@ describe('PluginBase', () => {
         fs.writeFileSync(sibling, 'noise')
         // Give the sibling-file event a chance to (incorrectly) arrive before
         // confirming the real target edit still fires as expected.
-        await new Promise((resolve) => setTimeout(resolve, 100))
+        await settle(120)
         expect(fireCount).toBe(0)
 
         fs.writeFileSync(target, 'v2')

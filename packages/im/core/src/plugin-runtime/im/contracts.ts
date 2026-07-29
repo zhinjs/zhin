@@ -1,4 +1,4 @@
-import type { CapabilityId, PluginId } from '@zhin.js/plugin-runtime';
+import type { CapabilityId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { MediaRef, Segment } from '../../built/segment-contract/types.js';
 
 // 入站段统一使用 canonical Segment SSOT（built/segment-contract）；
@@ -103,6 +103,18 @@ export interface MessageGateway {
     prefix: string,
     handler: (message: Message) => Promise<boolean> | boolean,
   ): () => void;
+  /**
+   * Command miss（或非前缀文本）后的回退处理：Host AI 对话、单文件 bot 用。
+   * 返回 true 表示已处理（回复已发送）；后注册者覆盖前者。
+   * `requester` 是消息所属 Adapter Endpoint 的 owner（用于 CapabilityIngress 继承）。
+   */
+  setUnmatchedHandler(
+    handler: (
+      message: Message,
+      snapshot: RuntimeSnapshot,
+      requester: PluginId,
+    ) => Promise<boolean>,
+  ): void;
 }
 
 export interface MessageDispatchResult {

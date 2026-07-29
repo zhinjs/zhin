@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import fs from 'fs-extra';
+import os from 'node:os';
+import path from 'node:path';
 import {
   ensureDatabaseForAI,
   ensureDatabaseForAdapters,
@@ -7,6 +10,7 @@ import {
   formatAIDependencyHint,
   diagnoseAIDependencies,
   findInstalledAiStackIncompatibilities,
+  findUnresolvedPackageInstalls,
   getRequiredAIDependenciesForConfig,
 } from '../src/project-deps.js';
 import { RECOMMENDED_AI_DEFAULTS } from '../src/ai.js';
@@ -138,5 +142,27 @@ describe('project-deps', () => {
     ensureDatabaseForAdapters(options);
 
     expect(options.database?.dialect).toBe('sqlite');
+  });
+
+  it('findUnresolvedPackageInstalls falls back to node_modules when exports hide ./package.json', async () => {
+    // zhin.js 的 exports map 未暴露 ./package.json，req.resolve 必炸
+    // （ERR_PACKAGE_PATH_NOT_EXPORTED），不能据此误报“已声明但未安装”。
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'zhin-project-deps-'));
+    try {
+      await fs.writeJson(path.join(dir, 'package.json'), { name: 'fixture', version: '0.0.0' });
+      const pkgDir = path.join(dir, 'node_modules', 'zhin.js');
+      await fs.ensureDir(path.join(pkgDir, 'lib'));
+      await fs.writeJson(path.join(pkgDir, 'package.json'), {
+        name: 'zhin.js',
+        version: '5.0.0',
+        exports: { '.': './lib/index.js' },
+      });
+      await fs.writeFile(path.join(pkgDir, 'lib', 'index.js'), 'export {};\n');
+
+      expect(findUnresolvedPackageInstalls(dir, ['zhin.js'])).toEqual([]);
+      expect(findUnresolvedPackageInstalls(dir, ['@zhin.js/agent'])).toEqual(['@zhin.js/agent']);
+    } finally {
+      await fs.remove(dir);
+    }
   });
 });

@@ -314,7 +314,11 @@ export function findUnresolvedPackageInstalls(cwd: string, packageNames: string[
     try {
       req.resolve(`${name}/package.json`);
     } catch {
-      missing.push(name);
+      // exports map 未暴露 ./package.json（ERR_PACKAGE_PATH_NOT_EXPORTED，如 zhin.js）
+      // 时 resolve 必炸，退到 node_modules 文件系统判断（pnpm 顶层 symlink 可直达）。
+      if (!fs.existsSync(path.join(cwd, 'node_modules', name, 'package.json'))) {
+        missing.push(name);
+      }
     }
   }
   return missing;

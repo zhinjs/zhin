@@ -1,0 +1,38 @@
+{
+  "name": "single-file-bot",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Zhin.js single-file bot: one bot.ts is the whole bot",
+  "type": "module",
+  "scripts": {
+    "dev": "zhin runtime start",
+    "start": "zhin runtime start --mode production --no-watch",
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@zhin.js/adapter-sandbox": "workspace:*",
+    "zhin.js": "workspace:*"
+  },
+  "devDependencies": {
+    "@zhin.js/cli": "workspace:*",
+    "@types/node": "^25.0.0",
+    "typescript": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./bot.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [],
+    "plugins": [
+      {
+        "package": "@zhin.js/adapter-sandbox",
+        "instanceKey": "sandbox"
+      }
+    ]
+  }
+}

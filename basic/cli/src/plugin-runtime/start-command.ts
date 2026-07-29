@@ -538,9 +538,22 @@ function printFirstRunGuidance(httpAddress: string, tokenConfigured: boolean): v
     `${chalk.bold('Remote Console')}: ${REMOTE_CONSOLE_URL} `
     + `${chalk.dim(`(runtime http://${httpAddress}${tokenConfigured ? ', token required' : ''})`)}`,
   );
+  // 醒目首跑指引：Console + Host + token 位置 + 第一条消息路径，一行一步。
+  process.stdout.write([
+    '',
+    chalk.bgGreen.black.bold(' 首跑下一步 '),
+    `${chalk.bold('1.')} 打开 ${chalk.cyan(REMOTE_CONSOLE_URL)}，Host 填 ${chalk.cyan(`http://${httpAddress}`)}`,
+    `${chalk.bold('2.')} Token 填项目根目录 ${chalk.cyan('.env')} 里的 ${chalk.cyan('HTTP_TOKEN')}${tokenConfigured ? '' : chalk.yellow('（当前未配置 http.token，Console 可直连，仅限本地）')}`,
+    `${chalk.bold('3.')} 进入 ${chalk.bold('Sandbox / 沙盒')} 页连接，发送 ${chalk.cyan('hello')} 或 ${chalk.cyan('/hello')}`,
+    chalk.dim(`   自动打开浏览器：zhin runtime start --open（或 ZHIN_OPEN=1）`),
+    '',
+  ].join('\n') + '\n');
 }
 
 function openBrowser(url: string): void {
+  // CI / 无显示环境直接跳过，不报错。
+  if (process.env.CI) return;
+  if (process.platform === 'linux' && !process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) return;
   void open(url).catch((error) => {
     getLogger('startup').warn(formatCompact({
       op: 'open_remote_console_failed',

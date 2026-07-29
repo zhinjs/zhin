@@ -46,3 +46,24 @@ export async function installDependencies(projectPath: string): Promise<void> {
     throw new Error(`pnpm install failed: ${errorMessage}`);
   }
 }
+
+/**
+ * 安装后自检：复用项目内刚装好的 @zhin.js/cli 的 `zhin doctor`
+ *（Node 版本 / pnpm / 配置 / Console 登录条件 / 端口占用，彩色 ✅/⚠️/❌ 输出）。
+ * 自检失败（含 doctor 检出 error 的退出码）不阻断创建流程。
+ */
+export async function runPostInstallDoctor(projectPath: string): Promise<void> {
+  console.log(chalk.blue('🩺 安装后自检（zhin doctor）...'));
+  console.log('');
+  try {
+    execSync('pnpm exec zhin doctor', {
+      cwd: projectPath,
+      stdio: 'inherit'
+    });
+  } catch {
+    console.log('');
+    console.log(chalk.yellow('⚠ 自检发现问题（见上方 ❌/⚠️），可按提示修复后重新运行:'));
+    console.log(chalk.cyan(`  cd ${path.basename(projectPath)}`));
+    console.log(chalk.cyan('  pnpm exec zhin doctor'));
+  }
+}

@@ -26,6 +26,7 @@ import {
 import { logger } from '../utils/logger.js';
 import { formatNodeRequirementMessage, isNodeVersionSupported } from '../utils/node-requirements.js';
 import { findConfigFile, readConfig } from '../utils/config-file.js';
+import { findMissingEndpointFields, loadPluginSchemaJson } from '../utils/adapter-endpoints-check.js';
 
 const execAsync = promisify(exec);
 const CONSOLE_URL = 'https://console.zhin.dev';
@@ -104,37 +105,54 @@ export const doctorCommand = new Command('doctor')
       name: 'Node.js 版本',
       status: nodeOk ? 'ok' : 'error',
       message: formatNodeRequirementMessage(nodeVersion),
-      fix: nodeOk ? undefined : '请升级 Node.js: https://nodejs.org',
+      fix: nodeOk ? undefined : '请升级 Node.js（^20.19.0 或 >=22.12.0）: https://nodejs.org 或 nvm install 22',
     });
 
-    // 2. 检查 pnpm
+    // 2. 检查 pnpm（可用性与版本，要求 >=9）
     try {
       const { stdout } = await execAsync('pnpm --version');
       const pnpmVersion = stdout.trim();
+      const pnpmMajor = parseInt(pnpmVersion.split('.')[0], 10);
+      const pnpmOk = Number.isFinite(pnpmMajor) && pnpmMajor >= 9;
       results.push({
         name: 'pnpm',
-        status: 'ok',
-        message: `v${pnpmVersion}`
+        status: pnpmOk ? 'ok' : 'error',
+        message: pnpmOk ? `v${pnpmVersion}` : `v${pnpmVersion}（需要 >=9）`,
+        fix: pnpmOk ? undefined : 'npm install -g pnpm@latest 或 corepack enable'
       });
     } catch {
       results.push({
         name: 'pnpm',
         status: 'error',
         message: '未安装',
-        fix: 'npm install -g pnpm'
+        fix: 'npm install -g pnpm（或 corepack enable && corepack prepare pnpm@latest --activate）'
       });
     }
 
-    // 3. 检查配置文件
+    // 3. 检查配置文件（存在且可解析；解析失败给出行号）
     let existingConfig = findConfigFile(cwd) ?? undefined;
     let loadedConfig: Record<string, unknown> | null = null;
-    
+    let configParseFailed = false;
+
     if (existingConfig) {
-      results.push({
-        name: '配置文件',
-        status: 'ok',
-        message: existingConfig
-      });
+      try {
+        await readConfig(path.join(cwd, existingConfig));
+        results.push({
+          name: '配置文件',
+          status: 'ok',
+          message: `${existingConfig} 可正常解析`
+        });
+      } catch (err) {
+        configParseFailed = true;
+        const line = extractConfigErrorLine(err);
+        const brief = (err instanceof Error ? err.message : String(err)).split('\n')[0];
+        results.push({
+          name: '配置文件',
+          status: 'error',
+          message: `${existingConfig} 解析失败${line ? `（第 ${line} 行）` : ''}: ${brief}`,
+          fix: `修复 ${existingConfig} 语法错误后重跑 zhin doctor`
+        });
+      }
     } else {
       results.push({
         name: '配置文件',
@@ -151,7 +169,7 @@ export const doctorCommand = new Command('doctor')
       }
     }
 
-    if (existingConfig) {
+    if (existingConfig && !configParseFailed) {
       const configPath = path.join(cwd, existingConfig);
       try {
         const loaded = loadProjectConfig(cwd, configPath);
@@ -223,7 +241,17 @@ export const doctorCommand = new Command('doctor')
       }
     }
 
-    // 4. 检查引导文件
+    // 4. 检查引导文件（SOUL/TOOLS/AGENTS 是 AI 人格与记忆文件，仅启用 AI 时检查，
+    // 避免 IM-only 首跑项目收到误导性警告）
+    let aiEnabledForBootstrap = false;
+    try {
+      const configForBootstrap: Record<string, unknown> | null = loadedConfig
+        ?? (existingConfig ? await readConfig(path.join(cwd, existingConfig)) as Record<string, unknown> : null);
+      aiEnabledForBootstrap = configForBootstrap ? isAiEnabledInConfig(configForBootstrap) : false;
+    } catch {
+      aiEnabledForBootstrap = false;
+    }
+    if (aiEnabledForBootstrap) {
     const bootstrapFiles = ['SOUL.md', 'TOOLS.md', 'AGENTS.md'];
     const missingBootstrap: string[] = [];
     
@@ -252,6 +280,7 @@ export const doctorCommand = new Command('doctor')
         await createMissingBootstrapFiles(cwd, missingBootstrap);
         logger.info(formatCompact( { cmd: 'doctor', op: 'create_bootstrap', files: missingBootstrap.join(', ') }));
       }
+    }
     }
 
     // 5. 检查 package.json
@@ -284,7 +313,7 @@ export const doctorCommand = new Command('doctor')
     }
 
     // 5b. 检查 Zhin 生态依赖（zhin.js / plugins / database）
-    if (existingConfig) {
+    if (existingConfig && !configParseFailed) {
       try {
         const config = loadedConfig ?? await readConfig(path.join(cwd, existingConfig));
         const pkgPath = path.join(cwd, 'package.json');
@@ -342,7 +371,7 @@ export const doctorCommand = new Command('doctor')
     }
 
     // 6. 检查 AI 依赖（zhin.js 4.x：配置启用 AI 时需单独安装 agent 栈）
-    if (existingConfig) {
+    if (existingConfig && !configParseFailed) {
       try {
         const config = loadedConfig ?? await readConfig(path.join(cwd, existingConfig));
         if (isAiEnabledInConfig(config)) {
@@ -446,6 +475,49 @@ export const doctorCommand = new Command('doctor')
       }
     }
 
+    // 6c. 适配器 endpoints 配置完整性（对照各适配器 schema.json 的 endpoints.items.required）
+    if (existingConfig && !configParseFailed) {
+      try {
+        const config = (loadedConfig ?? await readConfig(path.join(cwd, existingConfig))) as Record<string, unknown>;
+        const plugins = config.plugins;
+        const issues: string[] = [];
+        let checkedEndpoints = 0;
+        if (plugins && typeof plugins === 'object' && !Array.isArray(plugins)) {
+          for (const [key, confRaw] of Object.entries(plugins as Record<string, unknown>)) {
+            if (!confRaw || typeof confRaw !== 'object' || Array.isArray(confRaw)) continue;
+            const conf = confRaw as Record<string, unknown>;
+            if (!Array.isArray(conf.endpoints) || conf.endpoints.length === 0) continue;
+            const schema = loadPluginSchemaJson(cwd, key);
+            if (!schema) continue;
+            checkedEndpoints += conf.endpoints.length;
+            for (const issue of findMissingEndpointFields(schema, conf)) {
+              issues.push(`${key} endpoint「${issue.endpoint}」缺少 ${issue.missing.join(', ')}`);
+            }
+          }
+        }
+        if (issues.length > 0) {
+          results.push({
+            name: '适配器配置',
+            status: 'error',
+            message: issues.join('；'),
+            fix: `补全 ${existingConfig} 中对应 endpoints 字段（如 QQ 的 appid/secret）后重跑 zhin doctor`,
+          });
+        } else {
+          results.push({
+            name: '适配器配置',
+            status: 'ok',
+            message: checkedEndpoints > 0 ? `${checkedEndpoints} 个 endpoint 必填字段完整` : '未声明带 endpoints 的适配器',
+          });
+        }
+      } catch {
+        results.push({
+          name: '适配器配置',
+          status: 'warn',
+          message: '无法读取配置以检查适配器 endpoints',
+        });
+      }
+    }
+
     // 7. 检查 node_modules
     const nodeModulesPath = path.join(cwd, 'node_modules');
     if (fs.existsSync(nodeModulesPath)) {
@@ -483,7 +555,7 @@ export const doctorCommand = new Command('doctor')
           name: `端口 ${httpPort}`,
           status: 'warn',
           message: '已被占用',
-          fix: `lsof -ti:${httpPort} | xargs kill -9`
+          fix: `lsof -ti:${httpPort} | xargs kill -9，或在 zhin.config.yml 修改 http.port 换用其他端口`
         });
       } else {
         results.push({
@@ -541,6 +613,16 @@ export const doctorCommand = new Command('doctor')
       }
     }
 
+    // 10b. 检查 HTTP_TOKEN 是否设置（http.token / Console 登录鉴权依赖它）
+    const envContent = fs.existsSync(envFile) ? await fs.readFile(envFile, 'utf-8') : '';
+    const httpTokenSet = Boolean(process.env.HTTP_TOKEN) || /^\s*HTTP_TOKEN\s*=\s*\S+/m.test(envContent);
+    results.push({
+      name: 'HTTP_TOKEN',
+      status: httpTokenSet ? 'ok' : 'warn',
+      message: httpTokenSet ? '已设置' : '未设置（http.token 引用 ${HTTP_TOKEN} 时 Console/API 无法鉴权）',
+      fix: httpTokenSet ? undefined : '在 .env 添加 HTTP_TOKEN=<随机串>，或 export HTTP_TOKEN=<随机串>'
+    });
+
     // 打印结果
     console.log('');
     let hasErrors = false;
@@ -574,6 +656,15 @@ export const doctorCommand = new Command('doctor')
       console.log(chalk.green('✅ 所有检查通过！'));
     }
   });
+
+/** 从 YAML/JSON 解析错误中提取行号（yaml 的 YAMLParseError 带 linePos，其余从 message 正则兜底） */
+function extractConfigErrorLine(err: unknown): number | null {
+  const linePos = (err as { linePos?: Array<{ line: number }> } | null)?.linePos;
+  if (Array.isArray(linePos) && linePos[0]?.line) return linePos[0].line;
+  const message = err instanceof Error ? err.message : String(err);
+  const match = /line (\d+)/i.exec(message) ?? /at line (\d+)/i.exec(message);
+  return match ? parseInt(match[1], 10) : null;
+}
 
 export async function createDefaultConfig(cwd: string): Promise<void> {
   // 新 Plugin Runtime 形态：plugins 为 instanceKey → 配置 映射；
