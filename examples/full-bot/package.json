@@ -1,7 +1,7 @@
 {
   "name": "full-bot",
   "private": true,
-  "version": "0.0.11",
+  "version": "0.0.12",
   "description": "Zhin.js Plugin Runtime L4 reference (Sandbox + NapCat + KOOK + Agent)",
   "type": "module",
   "scripts": {
@@ -20,10 +20,10 @@
     "@zhin.js/client": "workspace:*",
     "@zhin.js/console-contract": "workspace:*",
     "@zhin.js/mcp": "workspace:*",
-    "@zhin.js/page": "1.0.2",
+    "@zhin.js/page": "1.0.3",
     "@zhin.js/satori": "workspace:*",
-    "@zhin.js/skill": "1.0.2",
-    "@zhin.js/tool": "1.0.2",
+    "@zhin.js/skill": "1.0.3",
+    "@zhin.js/tool": "1.0.3",
     "ai": "^7.0.2",
     "react": "^19.2.7",
     "zhin.js": "workspace:*",

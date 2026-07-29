@@ -1,5 +1,41 @@
 # Changelog
 
+## 5.0.1
+
+### Patch Changes
+
+- cdf64e7: 多方向审计修复批（8 面 30+ bug）：
+
+  - **安全**：钉钉 webhook 验签绕过修复（缺 timestamp/sign 一律 403 + ±1h 防重放）；exec-policy fail-closed（换行/`$(`/反引号拒绝、管道逐段过白名单、env dump 复合拆段）；wecom 验签改 timingSafeEqual；config:set 拒绝 `__proto__` 等魔术键、host 键优先防覆写。
+  - **P0 功能**：`zhin packages` scoped 包名解析为空导致 rm -rf 风险；命令数字参数解析失败炸断消息链路（dispatch 捕获 continue）；TaskQueue 监听器首个事件自摘除导致 assistant 队列挂死（+超时后完成不覆盖终态）；DatabaseHost 跨世代共享崩溃（define 幂等 + stop 改进程级）；rss 按不存在 id 列删除改业务键。
+  - **Runtime/HMR**：native watcher 过滤忽略目录（lib/.zhin 不再触发重载风暴）；host 段配置 patch（http.port 等）存在 installResources 时全量重建；capability 目录非 entry 支持文件升级进程重启；documentTransaction 失败回滚。
+  - **CLI 写侧**：config/setup 对 toml 静默假成功改统一 config-file（不支持格式报错）；doctor/onboard 默认配置改新形态 plugins 映射；schedule add 改 --prompt；migrate engines/中文模板误伤/覆盖前备份。
+  - **适配器生命周期**：napcat/milky start 失败竞态与僵尸连接、心跳 close 清理、stop-during-connect settle；slack webhook 二次 writeHead + messageChannelMap LRU。
+  - **Host/向导**：logs/stats 与 inbox 查询改 DB 侧 count/orderBy/limit 下推；save-yaml 写入前校验；zhipu/moonshot baseUrl 必填预填；.env 写入转义 + 幂等合并；setup 数据库密码不再明文落 config；60s fetch 超时与 JSON 守卫。
+
+- 9c997b2: 通用 endpoint 管理命令套件：`@zhin.js/adapter` 新增 `createEndpointCommands(spec, defineCommand)`——`<adapter> endpoint list / add <name> key=value... / remove <name>` 三件套，含 kv 解析、`.env` 凭据派生（`<ADAPTER>_<NAME>_<FIELD>`）、yaml 写回保留注释、master 权限门禁（通用 `isEndpointOperator`）、自定义 bindFlow 钩子。QQ 迁移至套件（行为与扫码绑定流程不变）；napcat / onebot11 / onebot12 / milky / slack / telegram 接入（字段对齐各自 schema，features 补 @zhin.js/command）。
+- 09d4f25: Console 社交读取面（management 语义端口）多平台落地：napcat/onebot11/onebot12/milky（好友+群+群成员，OneBot 标准动作）；discord/kook/satori（guild+频道+成员，分页聚合，id 保精度留字符串）；slack（workspace 成员+public channels+conversations.members）；line（群/room 成员分页+profile 回退）；wechat-mp（followers openid）；weixin-ilink（context_token 对端推导）；lark（chats+members 全分页）。`EndpointFriend.user_id`/`EndpointGroup.group_id` 放宽为 `number | string`（雪花 id 不丢精度）。telegram/wecom/dingtalk/github/email/sandbox 注明平台无列表面暂不接。
+- Updated dependencies [cdf64e7]
+- Updated dependencies [2d0a159]
+- Updated dependencies [5691aba]
+- Updated dependencies [078e3f7]
+- Updated dependencies [50497a5]
+- Updated dependencies [9c997b2]
+- Updated dependencies [09d4f25]
+- Updated dependencies [43485a9]
+- Updated dependencies [f0ec5ab]
+- Updated dependencies [3e925d0]
+- Updated dependencies [fa66c4c]
+- Updated dependencies [fa66c4c]
+- Updated dependencies [6cb6152]
+  - @zhin.js/command@1.0.3
+  - @zhin.js/agent@1.0.6
+  - @zhin.js/plugin-runtime@1.1.1
+  - @zhin.js/host-http@1.0.3
+  - zhin.js@5.0.1
+  - @zhin.js/adapter@1.1.1
+  - @zhin.js/core@1.4.1
+
 ## 5.0.0
 
 ### Patch Changes

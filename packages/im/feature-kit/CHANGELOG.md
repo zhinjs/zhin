@@ -1,5 +1,19 @@
 # @zhin.js/feature-kit
 
+## 1.0.3
+
+### Patch Changes
+
+- fa66c4c: Add transactional setup-time Feature registration through `PluginSetupContext.addFeature`, with
+  typed shortcuts for Adapter, Command, Component, Middleware, Agent, Skill, Tool, and MCP Features.
+  Setup definitions now share provider validation, projections, conflicts, ownership, and generation
+  lifecycle with convention-discovered capability files. Feature providers can declare their own
+  shortcut through `authoring.setupMethod`.
+- Updated dependencies [cdf64e7]
+- Updated dependencies [078e3f7]
+- Updated dependencies [fa66c4c]
+  - @zhin.js/plugin-runtime@1.1.1
+
 ## 1.0.2
 
 ### Patch Changes

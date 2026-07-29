@@ -1,5 +1,37 @@
 # @zhin.js/adapter-icqq
 
+## 7.0.1
+
+### Patch Changes
+
+- 74b035c: endpoint 管理命令扩展至 18/20 适配器：kook / discord / github（private_key 支持内联文件路径）/ icqq（bindFlow 登记式 add + `icqq login` 引导）/ dingtalk / lark / line / satori / wechat-mp / wecom / weixin-ilink 接入 `endpoint list/add/remove`（字段对齐各自 schema，凭据写 `.env`）。email（smtp/imap 嵌套对象）与 sandbox（无凭据）暂不接。
+- 6cb6152: 统一消息元素通道（UNI-Channel）落地：
+
+  - **入站契约**：`IncomingMessage.segments`（canonical Segment[]，与 content 纯文本视图同源双轨），Message 透传；AI 兜底链路经 `collectSegmentMedia` 把图片/语音/视频/文件 MediaRef 写入会话 extra——多模态输入不再丢失。
+  - **出站协商**：`normalizeOutboundPayload` 升级全量 canonical 归一（复用 generic-segment-mapper），html→image 按端点 `segments.outboundMedia` 声明降级（base64 直发 / url-or-text / passthrough 自行物化）；`MediaRef.kind` 新增 `'file'` 承载平台不透明引用（file_id/resource_id）。
+  - **能力声明**：`defineAdapter.segments` policy（outboundMedia / interactive），三道段门禁复活（探测点改 adapters/\*.ts，豁免名单渐进收敛）。
+  - **首批迁移**：icqq 全保真出入站（CQ ↔ canonical，quote→reply 段）；milky/telegram/discord 入站媒体段恢复（附件/贴纸/callback action）；napcat/onebot11/onebot12 出站 canonical→OneBot 数组段；wechat-mp/wecom `/cgi-bin/media/upload` 与 lark `/im/v1/images` 上传通路（base64/URL 图片不再静默丢图，失败降级文本）。
+
+- Updated dependencies [cdf64e7]
+- Updated dependencies [2d0a159]
+- Updated dependencies [5691aba]
+- Updated dependencies [078e3f7]
+- Updated dependencies [50497a5]
+- Updated dependencies [9c997b2]
+- Updated dependencies [09d4f25]
+- Updated dependencies [43485a9]
+- Updated dependencies [f0ec5ab]
+- Updated dependencies [3e925d0]
+- Updated dependencies [fa66c4c]
+- Updated dependencies [fa66c4c]
+- Updated dependencies [6cb6152]
+  - @zhin.js/command@1.0.3
+  - @zhin.js/agent@1.0.6
+  - @zhin.js/plugin-runtime@1.1.1
+  - zhin.js@5.0.1
+  - @zhin.js/adapter@1.1.1
+  - @zhin.js/core@1.4.1
+
 ## 7.0.0
 
 ### Patch Changes

@@ -1,5 +1,31 @@
 # @zhin.js/adapter-github
 
+## 4.0.1
+
+### Patch Changes
+
+- 74b035c: endpoint 管理命令扩展至 18/20 适配器：kook / discord / github（private_key 支持内联文件路径）/ icqq（bindFlow 登记式 add + `icqq login` 引导）/ dingtalk / lark / line / satori / wechat-mp / wecom / weixin-ilink 接入 `endpoint list/add/remove`（字段对齐各自 schema，凭据写 `.env`）。email（smtp/imap 嵌套对象）与 sandbox（无凭据）暂不接。
+- Updated dependencies [cdf64e7]
+- Updated dependencies [2d0a159]
+- Updated dependencies [5691aba]
+- Updated dependencies [078e3f7]
+- Updated dependencies [50497a5]
+- Updated dependencies [9c997b2]
+- Updated dependencies [09d4f25]
+- Updated dependencies [43485a9]
+- Updated dependencies [f0ec5ab]
+- Updated dependencies [3e925d0]
+- Updated dependencies [fa66c4c]
+- Updated dependencies [fa66c4c]
+- Updated dependencies [6cb6152]
+  - @zhin.js/command@1.0.3
+  - @zhin.js/agent@1.0.6
+  - @zhin.js/plugin-runtime@1.1.1
+  - @zhin.js/host-http@1.0.3
+  - zhin.js@5.0.1
+  - @zhin.js/adapter@1.1.1
+  - @zhin.js/core@1.4.1
+
 ## 4.0.0
 
 ### Patch Changes

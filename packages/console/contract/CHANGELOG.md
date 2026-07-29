@@ -1,5 +1,12 @@
 # @zhin.js/contract
 
+## 1.0.6
+
+### Patch Changes
+
+- Updated dependencies [5691aba]
+  - @zhin.js/ai@1.4.6
+
 ## 1.0.5
 
 ### Patch Changes

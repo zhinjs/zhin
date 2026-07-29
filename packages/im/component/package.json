@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/component",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Convention-based Component Feature for Zhin Plugin Runtime",
   "type": "module",
   "main": "./lib/index.js",
