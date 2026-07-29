@@ -1,5 +1,5 @@
 import { defineGameCommandAliasMiddleware, messageFromCommandInput } from '@zhin.js/game-kit';
-import { BJ_HELP, runBjCommandText } from '../src/bj-command.js';
+import { BJ_HELP, runBjCommand } from '../src/bj-command.js';
 import { resolveGameServices } from '../src/runtime-store.js';
 
 function normalizeBjAction(raw: string): string {
@@ -17,6 +17,6 @@ export default defineGameCommandAliasMiddleware({
     if (!normalized || normalized === 'help') return BJ_HELP;
     const services = resolveGameServices(context);
     const message = messageFromCommandInput(input);
-    return runBjCommandText(services, message, normalized);
+    return runBjCommand(services, message, normalized);
   },
 });

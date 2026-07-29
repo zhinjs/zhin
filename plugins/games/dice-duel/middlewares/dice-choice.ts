@@ -33,7 +33,7 @@ export default defineMiddleware<Message>({
       if (parsed) {
         const session = await services.getById(parsed.sessionId);
         if (session?.channel_key === ch) {
-          const reply = await handleChoice(null, services, message, parsed.sessionId, parsed.choiceId);
+          const reply = await handleChoice(services, message, parsed.sessionId, parsed.choiceId);
           if (reply) await context.input.$reply(reply);
           return;
         }
@@ -56,7 +56,7 @@ export default defineMiddleware<Message>({
       return;
     }
 
-    const reply = await handleChoice(null, services, message, session.id, 'roll');
+    const reply = await handleChoice(services, message, session.id, 'roll');
     if (reply) await context.input.$reply(reply);
   },
 });

@@ -1,6 +1,6 @@
 import { defineCommand } from '@zhin.js/command';
 import { messageFromCommandInput, normalizeDiceAction } from '@zhin.js/game-kit';
-import { DICE_HELP, runDiceCommandText } from '../../src/dice-command.js';
+import { DICE_HELP, runDiceCommand } from '../../src/dice-command.js';
 import { resolveGameServices } from '../../src/runtime-store.js';
 
 export default defineCommand({
@@ -10,6 +10,6 @@ export default defineCommand({
     if (!action || action === 'help') return DICE_HELP;
     const services = resolveGameServices({ use, owner });
     const message = messageFromCommandInput(input);
-    return runDiceCommandText(services, message, action);
+    return runDiceCommand(services, message, action);
   },
 });

@@ -4,7 +4,7 @@ import {
   messageFromCommandInput,
   normalizeDiceAction,
 } from '@zhin.js/game-kit';
-import { DICE_HELP, runDiceCommandText } from '../src/dice-command.js';
+import { DICE_HELP, runDiceCommand } from '../src/dice-command.js';
 import { resolveGameServices } from '../src/runtime-store.js';
 
 export default defineGameCommandAliasMiddleware({
@@ -16,6 +16,6 @@ export default defineGameCommandAliasMiddleware({
     if (!isDiceAction(normalized)) return null;
     const services = resolveGameServices(context);
     const message = messageFromCommandInput(input);
-    return runDiceCommandText(services, message, normalized);
+    return runDiceCommand(services, message, normalized);
   },
 });

@@ -1,5 +1,5 @@
-import type { Database, Message, Models, RelatedModel } from '@zhin.js/core';
-import { channelKey, generateSessionId } from '@zhin.js/game-kit';
+import type { Database, Models, RelatedModel } from '@zhin.js/core';
+import { channelKey, generateSessionId, type GameMessageLike } from '@zhin.js/game-kit';
 import { MAX, MAX_ATTEMPTS, MIN, newSecret } from './engine.js';
 import type { GuessSessionRow } from './models.js';
 
@@ -32,7 +32,7 @@ export class SessionService {
     return getModel(this.db).findOne({ id });
   }
 
-  async createSession(message: Message<any>): Promise<GuessSessionRow> {
+  async createSession(message: GameMessageLike): Promise<GuessSessionRow> {
     const now = Date.now();
     const row: GuessSessionRow = {
       id: generateSessionId(),
