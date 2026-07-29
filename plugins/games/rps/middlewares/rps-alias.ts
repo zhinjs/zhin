@@ -4,7 +4,7 @@ import {
   messageFromCommandInput,
   normalizeRpsAction,
 } from '@zhin.js/game-kit';
-import { RPS_HELP, runRpsCommandText } from '../src/rps-command.js';
+import { RPS_HELP, runRpsCommand } from '../src/rps-command.js';
 import { resolveGameServices } from '../src/runtime-store.js';
 
 export default defineGameCommandAliasMiddleware({
@@ -16,6 +16,6 @@ export default defineGameCommandAliasMiddleware({
     if (!isRpsAction(normalized)) return null;
     const services = resolveGameServices(context);
     const message = messageFromCommandInput(input);
-    return runRpsCommandText(services, message, normalized);
+    return runRpsCommand(services, message, normalized);
   },
 });

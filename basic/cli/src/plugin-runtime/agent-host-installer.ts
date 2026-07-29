@@ -72,6 +72,7 @@ import {
   findCellForInbound,
   getCollaborationSceneService,
   handleRuntimeOwnerApproveCommand,
+  handleRuntimeManagementCommand,
   type ProactiveOutboundService,
   type AssistantConfig,
   type ImTranscriptWriteInput,
@@ -423,17 +424,31 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         });
       };
 
-      if (!matched) {
-        // 群/频道旁听：未触发 AI 的共享会话消息写入会话背景（Passive Group Context）。
-        void recordPassiveGroupContext(zhinAgent, message, commMessage);
-        return false;
+      // 管理命令（原 MessageCommand /models /tree /reset…）— 在 AI trigger 前拦截
+      const managementReply = await handleRuntimeManagementCommand({
+        service,
+        zhinAgent,
+        commMessage,
+        content: message.content,
+        senderRoles,
+      });
+      if (managementReply != null) {
+        await replyAndRecord(managementReply);
+        logger.info(formatCompact({ op: 'agent_host_management', handled: true }));
+        return true;
       }
 
-      const approveReply = handleRuntimeOwnerApproveCommand(commMessage, matched.content);
+      const approveReply = handleRuntimeOwnerApproveCommand(commMessage, message.content);
       if (approveReply != null) {
         await replyAndRecord(approveReply);
         logger.info(formatCompact({ op: 'agent_host_approve', handled: true }));
         return true;
+      }
+
+      if (!matched) {
+        // 群/频道旁听：未触发 AI 的共享会话消息写入会话背景（Passive Group Context）。
+        void recordPassiveGroupContext(zhinAgent, message, commMessage);
+        return false;
       }
 
       if (isClearCommand(matched.content)) {

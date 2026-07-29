@@ -19,27 +19,24 @@ import { DisposeStack } from './dispose';           // ❌
 - 新增 workspace 包必须落在 `pnpm-workspace.yaml` 覆盖的目录内，并带独立 `package.json`。
 - `pnpm-workspace.yaml` 的 `overrides` 承担大量安全版本抬升（undici、hono、tar、js-yaml、nodemailer 等），不要随手删改；新增依赖注意 `pnpm check:dependency-policy` 的约束。
 
-## usePlugin() 必须在模块顶层
+## 新插件：Plugin Runtime（默认）
 
-`usePlugin()`（`@zhin.js/core`）依赖 AsyncLocalStorage 定位调用方文件，只能在**模块顶层**调用，不能放进异步函数、回调工厂或延迟执行路径。门禁 `pnpm check:use-plugin-top-level` 会扫描 `plugins/{adapters,features,utils,games}` 和 `examples/{minimal-bot,test-bot}`。
+唯一启动路径是 `zhin runtime start`。新插件：
 
-```ts
-import { usePlugin } from 'zhin.js';   // zhin.js 根导出 re-export @zhin.js/core
+- `plugin.ts` default-export `definePlugin()`（`@zhin.js/plugin-runtime` / `zhin.js/plugin-runtime`）
+- 能力放在约定目录（`commands/` → `defineCommand`，`tools/` → `defineAgentTool`，…），一个文件一个 default export
+- **不要**再写 `usePlugin()` / `getPlugin()` / `MessageCommand`
 
-const plugin = usePlugin();   // ✅ 模块顶层
-```
+见 [编写第一个插件](../getting-started/first-plugin.md)、[definePlugin](../authoring/define-plugin.md)。
 
-约定式插件（`definePlugin` / `defineCommand` / `defineAgentTool`，来自 `zhin.js/plugin-runtime` 等子路径）在声明式 API 内不需要手动调 `usePlugin()`。
+## Legacy：`usePlugin()` / `getPlugin()`（仅残留代码）
 
-## getPlugin() 的禁用域
+经典路径只在 `zhin.js/node`（`bootstrapNode`）下有效，**未接 CLI**。若维护仍调用这两套 API 的遗留模块：
 
-`getPlugin()`（`packages/im/core/src/plugin-context.ts`）从 AsyncLocalStorage 取当前插件实例，只允许在**初始化/装配阶段**调用：
+- `usePlugin()` 只能在**模块顶层**（门禁 `pnpm check:use-plugin-top-level`）
+- `getPlugin()` 只允许初始化/装配阶段；中间件、命令 action、工具 execute、Cron、事件回调内禁止（门禁 `pnpm check:get-plugin-runtime`）；运行时用注册时捕获的闭包
 
-- ✅ 允许：模块顶层、register/init 函数内、注册命令/中间件/工具**之前**。
-- ❌ 禁止：中间件、命令 `.action()`、工具 `.execute()`、Cron、事件回调、生命周期 `.on()` 等运行时路径。
-
-运行时回调应使用注册时捕获的 `plugin` / `root` 闭包引用。ALS 在跨 await、线程池、部分平台适配器回调中会丢失，运行时调用会抛 `getPlugin() must be called within a plugin context`。门禁：`pnpm check:get-plugin-runtime`。
-
+新功能应迁到 Runtime，而不是继续扩经典 API。迁移：`.github/skills/migrate-zhin-plugin-runtime`。
 ## 模块级状态：createGenerationStore
 
 插件热重载意味着同一份模块代码会被多个 generation 先后使用。裸的模块级 `let _x` 单例会让新一代读到上一代已释放的资源，或让旧代卸载时误清掉新代的值。统一用 `createGenerationStore<T>(name)`（`@zhin.js/plugin-runtime`）：

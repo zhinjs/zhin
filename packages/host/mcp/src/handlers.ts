@@ -13,7 +13,8 @@ const logger = plugin.logger;
 export { createPlugin } from "./plugin-template.js";
 
 /**
- * 生成命令代码
+ * 生成命令代码（Plugin Runtime：`commands/` + `defineCommand`）。
+ * `pattern` 仅作注释提示；文件路径才是路由 SSOT。
  */
 export function createCommandCode(args: {
   pattern: string;
@@ -21,31 +22,32 @@ export function createCommandCode(args: {
   hasPermission?: boolean;
 }): string {
   const { pattern, description, hasPermission = false } = args;
-  
-  let code = `import { addCommand, MessageCommand } from "zhin.js";
+  const slug = pattern
+    .trim()
+    .split(/\s+/)[0]
+    ?.replace(/[^a-zA-Z0-9_-]/g, '')
+    .toLowerCase() || 'command';
 
-addCommand(
-  new MessageCommand("${pattern}")
-    .description("${description}")`;
+  const permitNote = hasPermission
+    ? `
+  // 权限：在 zhin.config.yml endpoints[].master / trusted 配置，
+  // 或中间件里读 context.input?.sender / scene 做场景校验。`
+    : '';
 
-  if (hasPermission) {
-    code += `
-    .permit((message) => {
-      // 框架层：master/trusted；场景治理用 platform(adapter,scene_admin) + checker
-      return message.$sender.isMaster === true;
-    })`;
-  }
+  return `// 建议路径：commands/${slug}.ts（文件路径即命令路由；带参用 [name:string].ts）
+// 经典模板「${pattern}」请改写为路径参数，勿再使用 MessageCommand。
+import { defineCommand } from 'zhin.js/command';
 
-  code += `
-    .action(async (message, result) => {
-      // 命令处理逻辑
-      const args = result.params;
-      return "处理结果";
-    })
-);
+export default defineCommand({
+  description: ${JSON.stringify(description)},${permitNote}
+  execute({ params, args }) {
+    // 命令处理逻辑
+    void params;
+    void args;
+    return '处理结果';
+  },
+});
 `;
-
-  return code;
 }
 
 /**
@@ -137,155 +139,75 @@ export function listPlugins(): any {
 /**
  * 生成适配器代码
  */
+/**
+ * 生成适配器骨架（Plugin Runtime：`defineAdapter` + `plugin.ts`）。
+ * 完整 Endpoint IO 请对照 `plugins/adapters/sandbox`。
+ */
 export function createAdapterCode(args: {
   name: string;
   description: string;
   hasWebhook?: boolean;
 }): string {
   const { name, description, hasWebhook = false } = args;
-  const className = name
-    .split("-")
-    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-    .join("");
-  
-  let code = `/**
+  const webhookNote = hasWebhook
+    ? `
+// Webhook：在 Endpoint 的 open/start 里挂 httpHostToken.route(...)，
+// 不要再用 useContext('router') / registerAdapter 经典路径。`
+    : '';
+
+  return `/**
  * ${description}
+ * 建议：adapters/${name}.ts + 同包 plugin.ts（definePlugin）
  */
-import { Endpoint, Adapter, registerAdapter, Message, SendOptions, segment, usePlugin } from 'zhin.js';
-declare module "zhin.js" {
-  interface RegisteredAdapters {
-    "${name}": Adapter<${className}Endpoint>;
-  }
-}
+import { defineAdapter } from 'zhin.js/adapter';
 
-export interface ${className}Config extends Endpoint.Config {
-  context: "${name}";
-  name: string;
-  apiKey?: string;
-}
-
-export class ${className}Endpoint implements Endpoint< ${className}Config> {
-  $config: ${className}Config;
-  $connected: boolean = false;
-
-  constructor(config: ${className}Config) {
-    this.$config = config;
-  }
-
-  async $connect(): Promise<void> {
-    this.$connected = true;
-  }
-
-  async $disconnect(): Promise<void> {
-    this.$connected = false;
-  }
-
-  $formatMessage(raw: any): Message<any> {
-    return Message.from({
-      id: raw.id,
-      type: "private",
-      content: raw.text,
-      $sender: {
-        id: raw.userId,
-        name: raw.userName,
-      },
-      $reply: async (content) => {
-        return await this.$sendMessage({
-          context: this.$config.context,
-          endpoint: this.$config.name,
-          id: raw.userId,
-          type: "private",
-          content,
-        });
-      },
-    });
-  }
-
-  async $sendMessage(options: SendOptions): Promise<string> {
-    return "message-id";
-  }
-
-  async $recallMessage(id: string): Promise<void> {
-    // 实现消息撤回逻辑
-  }
-}
-
-`;
-
-  if (hasWebhook) {
-    code += `import { useContext } from "zhin.js";
-
-useContext("router", (router) => {
-  registerAdapter(
-    new Adapter("${name}", (config: ${className}Config) => {
-      const bot = new ${className}Endpoint(config);
-      
-      router.post("/webhook/${name}", async (ctx) => {
-        const raw = ctx.request.body;
-        const message = bot.$formatMessage(raw);
-        bot.emit?.("message", message);
-        ctx.body = { success: true };
-      });
-      
-      return bot;
-    })
-  );
+export default defineAdapter({
+  name: ${JSON.stringify(name)},
+  // 在此声明 Endpoint 工厂、capabilities（inbound/outbound）等
+  // 参考：plugins/adapters/sandbox/adapters/sandbox.ts
 });
+${webhookNote}
 `;
-  } else {
-    code += `registerAdapter(
-  new Adapter("${name}", (config: ${className}Config) => new ${className}Endpoint(config))
-);
-`;
-  }
-
-  return code;
 }
 
 /**
  * 生成数据库模型代码
+ */
+/**
+ * 生成数据库模型装配提示（Plugin Runtime：`databaseHostToken` + schema）。
  */
 export function createModelCode(args: {
   name: string;
   fields: Record<string, any>;
 }): string {
   const { name, fields } = args;
-  
+
   const fieldTypes: string[] = [];
   const fieldDefs: string[] = [];
-  
+
   for (const [key, value] of Object.entries(fields)) {
-    const typeDef = typeof value === "string" ? value : value.type;
-    fieldTypes.push(`    ${key}${value.nullable !== false ? "?" : ""}: ${getTypeScriptType(typeDef)};`);
+    const typeDef = typeof value === 'string' ? value : value.type;
+    fieldTypes.push(`    ${key}${value.nullable !== false ? '?' : ''}: ${getTypeScriptType(typeDef)};`);
     fieldDefs.push(`    ${key}: ${JSON.stringify(value)},`);
   }
 
-  return `import { usePlugin } from "zhin.js";
+  return `// 在 plugin.ts 的 setup 中装配（勿再 usePlugin / defineModel 经典路径）
+import { definePlugin } from 'zhin.js/plugin-runtime';
+import { databaseHostToken } from '@zhin.js/plugin-runtime'; // 以仓库实际导出为准
 
-// 声明模型类型
-declare module "zhin.js" {
-  interface Models {
-    ${name}: {
-${fieldTypes.join("\n")}
-    };
-  }
-}
-
-const plugin = usePlugin();
-const { defineModel, useContext } = plugin;
-
-// 定义模型结构
-defineModel("${name}", {
-${fieldDefs.join("\n")}
-});
-
-// 数据库就绪后使用模型
-useContext("database", async (db) => {
-  const model = db.models.get("${name}");
-  if (model) {
-    // 在这里使用模型
-    // 例如: const items = await model.select();
-  }
+export default definePlugin({
+  name: 'with-${name.toLowerCase()}',
+  setup(context) {
+    if (!context.resources.has(databaseHostToken)) return;
+    const db = context.resources.use(databaseHostToken);
+    // 行类型示意：
+    // interface ${name}Row {
+${fieldTypes.join('\n')}
+    // }
+    db.define?.('${name}', {
+${fieldDefs.join('\n')}
+    });
+  },
 });
 `;
 }
@@ -308,7 +230,7 @@ function getTypeScriptType(dbType: string): string {
 // ============================================================================
 
 /**
- * 生成中间件代码
+ * 生成中间件代码（Plugin Runtime：`middlewares/` + `defineMiddleware`）。
  */
 export function createMiddlewareCode(args: {
   name: string;
@@ -316,45 +238,45 @@ export function createMiddlewareCode(args: {
   hasFilter?: boolean;
 }): string {
   const { name, description, hasFilter = false } = args;
-
-  let code = `import { usePlugin } from "zhin.js";
-
-const { root, logger } = usePlugin();
-
-`;
+  const ident = name.replace(/[^a-zA-Z0-9_]/g, '_') || 'middleware';
 
   if (hasFilter) {
-    code += `root.addMiddleware(function ${name}(message, next) {
+    return `// 建议路径：middlewares/${ident}.ts
+import { defineMiddleware } from 'zhin.js/middleware';
+
+export default defineMiddleware({
+  target: 'inbound',
   // ${description}
-  if (message.type !== "group") {
+  async handle(context, next) {
+    const input = context.input;
+    if (input?.scene?.type !== 'group') {
+      return next();
+    }
+    // 在这里添加处理逻辑
     return next();
-  }
-
-  logger.info(\`[${name}] 处理消息: \${message.content}\`);
-
-  // 在这里添加处理逻辑
-
-  return next();
+  },
 });
 `;
-  } else {
-    code += `root.addMiddleware(function ${name}(message, next) {
+  }
+
+  return `// 建议路径：middlewares/${ident}.ts
+import { defineMiddleware } from 'zhin.js/middleware';
+
+export default defineMiddleware({
+  target: 'inbound',
   // ${description}
-  const start = Date.now();
-
-  return next().then(() => {
-    const cost = Date.now() - start;
-    logger.info(\`[${name}] 处理耗时: \${cost}ms\`);
-  });
+  async handle(_context, next) {
+    const start = Date.now();
+    await next();
+    // 处理耗时: Date.now() - start
+    void start;
+  },
 });
 `;
-  }
-
-  return code;
 }
 
 /**
- * 生成服务代码
+ * 生成服务代码（Plugin Runtime：`context.resources.provide` + Token）。
  */
 export function createServiceCode(args: {
   name: string;
@@ -363,68 +285,51 @@ export function createServiceCode(args: {
 }): string {
   const { name, description, hasDispose = true } = args;
   const className = name
-    .split("-")
+    .split('-')
     .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-    .join("");
+    .join('');
+  const tokenName = `${name.replace(/[^a-zA-Z0-9]/g, '')}Token`;
 
-  let code = `import { provide, useContext } from "zhin.js";
-
-declare module "zhin.js" {
-  namespace Plugin {
-    interface Contexts {
-      ${name}: ${className}Service;
-    }
-  }
-}
-
-class ${className}Service {
-  // ${description}
-
-  async initialize(): Promise<void> {
-    // 初始化逻辑
-  }
-`;
-
-  if (hasDispose) {
-    code += `
+  const disposeBlock = hasDispose
+    ? `
   async close(): Promise<void> {
     // 清理资源
   }
-`;
+`
+    : '';
+
+  const provideDispose = hasDispose
+    ? `,
+      () => { void service.close(); }`
+    : '';
+
+  return `// 在 plugin.ts setup 中装配（勿再用 provide / useContext 经典路径）
+import { createToken, definePlugin } from 'zhin.js/plugin-runtime';
+
+class ${className}Service {
+  // ${description}
+  async initialize(): Promise<void> {
+    // 初始化逻辑
   }
+${disposeBlock}}
 
-  code += `}
+export const ${tokenName} = createToken<${className}Service>(${JSON.stringify(name)});
 
-provide({
-  name: "${name}",
-  description: "${description}",
-  async mounted() {
+export default definePlugin({
+  name: ${JSON.stringify(name + '-service')},
+  async setup(context) {
     const service = new ${className}Service();
     await service.initialize();
-    return service;
-  },`;
-
-  if (hasDispose) {
-    code += `
-  async dispose(service) {
-    await service.close();
-  },`;
-  }
-
-  code += `
+    context.resources.provide(${tokenName}, service${provideDispose});
+  },
 });
 
-// 在其他插件中消费此服务:
-// useContext("${name}", (${name}Service) => {
-//   ${name}Service.doSomething();
-// });
+// 消费：context.resources.has(${tokenName}) && context.resources.use(${tokenName})
 `;
-
-  return code;
 }
 
 /**
- * 生成 ZhinTool 代码
+ * 生成 AI 工具代码（Plugin Runtime：`tools/` + `defineAgentTool`）。
  */
 export function createToolCode(args: {
   name: string;
@@ -432,29 +337,29 @@ export function createToolCode(args: {
   params: { name: string; type: string; description: string; required?: boolean }[];
 }): string {
   const { name, description, params } = args;
+  const properties = params
+    .map((p) => `    ${p.name}: { type: ${JSON.stringify(p.type)}, description: ${JSON.stringify(p.description)} },`)
+    .join('\n');
+  const required = params.filter((p) => p.required !== false).map((p) => p.name);
+  const destructure = params.map((p) => p.name).join(', ');
 
-  const paramLines = params
-    .map((p) => {
-      const req = p.required !== false ? "true" : "false";
-      return `    .param("${p.name}", "${p.type}", "${p.description}", ${req})`;
-    })
-    .join("\n");
+  return `// 建议路径：tools/${name}.ts（package.json#zhin.features 需含 tool Feature）
+import { defineAgentTool } from 'zhin.js/tool';
 
-  const destructureArgs = params.map((p) => p.name).join(", ");
-
-  return `import { usePlugin, ZhinTool } from "zhin.js";
-
-const { addTool } = usePlugin();
-
-addTool(
-  new ZhinTool("${name}")
-    .description("${description}")
-${paramLines}
-    .execute(async ({ ${destructureArgs} }) => {
-      // 工具执行逻辑
-      return \`结果: 请在此添加工具执行逻辑\`;
-    })
-);
+export default defineAgentTool({
+  description: ${JSON.stringify(description)},
+  inputSchema: {
+    type: 'object',
+    properties: {
+${properties}
+    },
+    required: ${JSON.stringify(required)},
+  },
+  async execute({ ${destructure} }) {
+    // 工具执行逻辑
+    return \`结果: 请在此添加工具执行逻辑\`;
+  },
+});
 `;
 }
 

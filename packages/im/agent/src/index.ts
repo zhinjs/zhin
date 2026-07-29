@@ -71,6 +71,13 @@ export {
   formatBashApproveList,
 } from './security/owner-approve-always-store.js';
 export {
+  handleRuntimeManagementCommand,
+} from './init/runtime-management-commands.js';
+export type {
+  RuntimeManagementDeps,
+  RuntimeManagementSenderRoles,
+} from './init/runtime-management-commands.js';
+export {
   buildRichSystemPrompt,
   buildLiteSystemPromptWithPlatform,
   buildContextHint,

@@ -24,7 +24,8 @@
 | 旧写法 | 新 SSOT |
 |---|---|
 | `usePlugin()` / `getPlugin()` | `setup(context)` 的 `context`；能力里用执行上下文 |
-| `provide(ctx)` / `inject(name)` | `context.resources.provide(token, v)` / `use(token)` |
+| `provide(ctx)`（在入口） | `setup` 内 `context.resources.provide(token, v)`（Scope） |
+| `inject(name)`（在能力里） | `execute` 内 `context.use(token)`（CapabilityContext，无 `.resources`） |
 | `useContext('database', cb)` | `databaseHostToken`（先 `has` 再 `use`） |
 | `useContext('router', cb)` | `httpHostToken` / Host 提供的 router 资源 |
 | `useContext('web', cb)` | `pages/*.tsx` + `definePage()` |
@@ -75,7 +76,7 @@ import { hitsToken } from '../plugin.js';
 export default defineCommand({
   description: 'Count hits per user',
   async execute(context) {
-    const hits = context.resources.use(hitsToken);
+    const hits = context.use(hitsToken);        // 能力上下文：直接 use，无 .resources
     const n = (hits.get(context.input.sender.id) ?? 0) + 1;
     hits.set(context.input.sender.id, n);
     return `hit ${n}`;

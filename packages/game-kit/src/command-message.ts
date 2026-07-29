@@ -9,7 +9,11 @@ export interface GameMessageLike {
   $adapter: string;
   $endpoint: string;
   $channel: { type: string; id: string };
-  $sender: { id: string; name: string };
+  // `name` is optional so this stays a structural supertype of the core
+  // Message shape (whose $sender.name is string | undefined). That lets the
+  // shared game-kit helpers accept both the runtime-bridged GameMessageLike
+  // and, during incremental migration, a legacy core Message.
+  $sender: { id: string; name?: string };
 }
 
 function isClassicMessage(input: unknown): input is GameMessageLike {

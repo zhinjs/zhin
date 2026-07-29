@@ -135,7 +135,7 @@ useContext('ai', async (ai) => {
 })
 ```
 
-`initAgentModule()` 由 `zhin.js/node` 的 `bootstrapNode` 在启动时调用，插件一般无需手动 init。
+`initAgentModule()` 由 Plugin Runtime / CLI Host 装配调用；`bootstrapNode`（`zhin.js/node`）已弃用。插件一般无需手动 init。
 
 ### 非 Zhin 宿主 / 单独集成
 

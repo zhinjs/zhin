@@ -79,11 +79,17 @@ import { storeToken } from '../plugin.js';
 export default defineCommand({
   description: 'Show current user profile',
   async execute(context) {
-    const store = context.resources.use(storeToken);   // 从上下文取，不 import 单例
+    const store = context.use(storeToken);   // 能力上下文直接 use，不 import 单例
     return store.describe(context.input.sender.id);
   },
 });
 ```
+
+> **两个 context 不是同一个东西**，别混用：
+> `setup(context)` 里 `context.resources` 是 Scope —— `provide` / `use` / `has` 都挂在它上面。
+> 能力的 `execute(context)` 拿到的是 CapabilityContext —— 直接 `context.use(token)` /
+> `context.config`，**没有** `context.resources`，写成 `context.resources.use(...)` 会在运行期
+> 报 `Cannot read properties of undefined`。
 
 ## 硬性规则
 

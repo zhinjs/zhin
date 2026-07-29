@@ -75,7 +75,8 @@ import { cacheToken } from '../plugin.js';
 export default defineCommand({
   description: 'Show current user profile',
   async execute(context) {
-    const cache = context.resources.use(cacheToken);
+    // 能力上下文用 context.use(token)；context.resources 只在 setup() 里存在
+    const cache = context.use(cacheToken);
     return cache.get(context.input.sender.id)?.nickname ?? 'unknown';
   },
 });

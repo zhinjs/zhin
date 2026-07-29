@@ -27,12 +27,12 @@
 **适用场景**: 创建和维护 Zhin.js 插件
 
 **专长领域**:
-- 插件架构设计和模块划分
-- 依赖注入实现（Context 系统）
-- 命令系统开发（MessageCommand）
-- 消息中间件编写（洋葱模型）
-- 数据库集成（defineModel、onDatabaseReady）
-- Web 界面开发（React + Vite）
+- 插件架构设计和模块划分（`definePlugin` + 约定目录）
+- 依赖注入（`context.resources` Scope + Token）
+- 命令系统（`defineCommand`，路径即路由）
+- 消息中间件（`defineMiddleware`）
+- 数据库集成（Host token + schema）
+- Web 界面（`definePage`）
 - 性能优化和错误处理
 
 **核心模板**:
@@ -149,38 +149,40 @@ interface Bot<C extends Endpoint.Config = Endpoint.Config, M = any> {
 
 ## ⚠️ 重要规范（所有 Agent 共同遵守）
 
-### 1. 导入路径规范
+### 1. Plugin Runtime（默认创作面）
+
+新代码只用 `definePlugin` + 约定目录。**禁止** `usePlugin` / `MessageCommand` / `bootstrapNode`。
+
 ```typescript
-// ✅ 正确 - 必须使用 .js 扩展名
-import { usePlugin, addCommand } from 'zhin.js'
+// ✅ plugin.ts
+import { definePlugin } from 'zhin.js/plugin-runtime'
+export default definePlugin({ name: 'my-plugin', setup() {} })
+
+// ✅ commands/hello/[name:string].ts
+import { defineCommand } from 'zhin.js/command'
+export default defineCommand({
+  execute({ params }) {
+    return `你好，${params.name}！`
+  },
+})
+```
+
+详见 `.github/instructions/zhin-plugin.instructions.md`。
+
+### 2. 导入路径规范
+```typescript
+// ✅ 正确 - 本地相对导入必须使用 .js 扩展名
+import { definePlugin } from 'zhin.js/plugin-runtime'
 import { myHelper } from './utils.js'
 
 // ❌ 错误
-import { usePlugin } from 'zhin'
 import { myHelper } from './utils'
-```
-
-### 2. 命令参数访问
-```typescript
-// ✅ 正确 - 使用 result.params
-addCommand(new MessageCommand('hello <name:text>')
-  .action(async (message, result) => {
-    const name = result.params.name
-    return `你好，${name}！`
-  })
-)
 ```
 
 ### 3. 类型扩展
 ```typescript
-// ✅ 正确
-declare module 'zhin.js' {
-  namespace Plugin {
-    interface Contexts {
-      myService: MyService
-    }
-  }
-}
+// ✅ Feature / Host 侧按各包文档做 module augmentation
+// 例如扩展 PluginSetupContext 快捷方法，或 Runtime Message 契约
 ```
 
 ### 4. 资源清理
