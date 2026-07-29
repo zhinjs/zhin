@@ -40,16 +40,82 @@ export interface CommandParameterDefinition {
   readonly defaultValue?: CommandParameterValue;
 }
 
-export interface CommandContext<TConfig = unknown, TInput = unknown>
-  extends CapabilityContext<TConfig> {
+/** 场景：群 / 私聊 / 频道等。 */
+export interface CommandScene {
+  readonly id: string;
+  readonly type: string;
+  readonly name?: string;
+}
+
+/**
+ * 发送者。
+ * `role` 为角色列表（如 `user` / `trusted` / `master`，以及平台侧 `owner` / `admin` 等）。
+ */
+export interface CommandSender {
+  readonly id: string;
+  readonly name?: string;
+  readonly role: readonly string[];
+}
+
+/**
+ * 命令侧入站消息契约。
+ *
+ * `@zhin.js/core/runtime` 的 `Message` 结构兼容本接口（duck typing）。
+ * 因架构分层（command 为 Feature 层，不能 import core），此处独立声明。
+ */
+export interface CommandMessage {
+  readonly adapter: string;
+  readonly target: string;
+  readonly content: string;
+  /** 发送者 id（扁平字段；结构化视图见 CommandContext.sender）。 */
+  readonly sender?: string;
+  readonly id?: string;
+  readonly metadata?: Readonly<Record<string, unknown>>;
+  /** 若上游已结构化，优先采用。 */
+  readonly scene?: CommandScene;
+  readonly $reply?: (content: unknown) => Promise<unknown>;
+  readonly $replyFrom?: (requester: string, content: unknown) => Promise<unknown>;
+}
+
+/**
+ * IM 入站快捷字段。
+ * 有 `CommandMessage` 来源时由 {@link resolveCommandSession} 填充；
+ * `CommandIndex.execute(name)` 等无消息路径下为 `undefined`。
+ */
+export interface CommandSession {
+  /**
+   * 适配器插件实例 id（CapabilityId 的 owner 段，如 `root/icqq`）。
+   * 与 `snapshot.config.get(adapter)` 对齐。
+   */
+  readonly adapter?: string;
+  /** Endpoint 名（`metadata.endpoint`）。 */
+  readonly endpoint?: string;
+  /** 场景对象（id / type / name）。 */
+  readonly scene?: CommandScene;
+  /** 发送者对象（id / name / role[]）。 */
+  readonly sender?: CommandSender;
+}
+
+export interface CommandContext<
+  TConfig = unknown,
+  TInput extends CommandMessage = CommandMessage,
+> extends CapabilityContext<TConfig>, CommandSession {
   readonly args: readonly string[];
   readonly params: Readonly<Record<string, CommandParameterValue>>;
   /** Structured arguments left after the command pattern was consumed. */
   readonly segments: readonly Readonly<CommandSegment>[];
-  readonly input: TInput;
+  /**
+   * 派发来源。IM 命中时为 Runtime `Message`（满足 {@link CommandMessage}）；
+   * Host / `CommandIndex.execute` 等无消息路径可能为 `undefined`。
+   */
+  readonly input?: TInput;
 }
 
-export interface CommandDefinition<TConfig = unknown, TResult = unknown, TInput = unknown> {
+export interface CommandDefinition<
+  TConfig = unknown,
+  TResult = unknown,
+  TInput extends CommandMessage = CommandMessage,
+> {
   readonly $feature: typeof commandBrand;
   readonly $parameter?: CommandParameterDefinition;
   readonly description?: string;
@@ -58,7 +124,7 @@ export interface CommandDefinition<TConfig = unknown, TResult = unknown, TInput 
 
 declare module '@zhin.js/plugin-runtime' {
   interface PluginSetupContext<TConfig> {
-    addCommand<TResult = unknown, TInput = unknown>(
+    addCommand<TResult = unknown, TInput extends CommandMessage = CommandMessage>(
       localName: string,
       definition: CommandDefinition<TConfig, TResult, TInput>,
     ): void;
@@ -69,7 +135,11 @@ declare module '@zhin.js/plugin-runtime' {
  * 定义一个命令模块（`commands/` 约定目录下默认导出）。
  * @public 用户侧创作面，承诺 semver（见 docs/contributing/public-api-surface.md）。
  */
-export function defineCommand<TConfig = unknown, TResult = unknown, TInput = unknown>(
+export function defineCommand<
+  TConfig = unknown,
+  TResult = unknown,
+  TInput extends CommandMessage = CommandMessage,
+>(
   definition: Omit<CommandDefinition<TConfig, TResult, TInput>, '$feature' | '$parameter'>,
 ): Readonly<CommandDefinition<TConfig, TResult, TInput>> {
   if (typeof definition.execute !== 'function') {
@@ -78,7 +148,11 @@ export function defineCommand<TConfig = unknown, TResult = unknown, TInput = unk
   return Object.freeze({ $feature: commandBrand, ...definition });
 }
 
-export function bindCommandParameter<TConfig, TResult, TInput>(
+export function bindCommandParameter<
+  TConfig,
+  TResult,
+  TInput extends CommandMessage,
+>(
   definition: CommandDefinition<TConfig, TResult, TInput>,
   parameter: CommandParameterDefinition | undefined,
 ): Readonly<CommandDefinition<TConfig, TResult, TInput>> {
@@ -106,13 +180,179 @@ export function createCommandContext(
   segments: readonly Readonly<CommandSegment>[] = Object.freeze([]),
 ): CommandContext {
   const context = createCapabilityContext(snapshot, ownerId);
+  const session = resolveCommandSession(input);
   return Object.freeze({
     ...context,
+    ...session,
     args: Object.freeze([...args]),
     params: Object.freeze({ ...params }),
     segments: freezeSegments(segments),
-    input,
+    ...(input !== undefined ? { input: input as CommandMessage } : {}),
   });
+}
+
+/**
+ * 从派发来源（通常是 Runtime `Message`）解析入站快捷字段。
+ * 不依赖 `@zhin.js/core`，按 {@link CommandMessage} 结构鸭式识别。
+ */
+export function resolveCommandSession(input: unknown): CommandSession {
+  if (!isCommandMessageLike(input)) return Object.freeze({});
+
+  const metadata = input.metadata && typeof input.metadata === 'object'
+    ? input.metadata as Readonly<Record<string, unknown>>
+    : undefined;
+
+  const adapter = input.adapter.split('\0')[0] || undefined;
+  const endpoint = typeof metadata?.endpoint === 'string' && metadata.endpoint
+    ? metadata.endpoint
+    : undefined;
+
+  const scene = resolveScene(input, metadata);
+  const sender = resolveSender(input, metadata);
+
+  return Object.freeze({
+    ...(adapter ? { adapter } : {}),
+    ...(endpoint !== undefined ? { endpoint } : {}),
+    ...(scene !== undefined ? { scene } : {}),
+    ...(sender !== undefined ? { sender } : {}),
+  });
+}
+
+function isCommandMessageLike(input: unknown): input is CommandMessage {
+  if (!input || typeof input !== 'object') return false;
+  const value = input as Partial<CommandMessage>;
+  return typeof value.adapter === 'string'
+    && typeof value.target === 'string'
+    && typeof value.content === 'string';
+}
+
+function resolveScene(
+  input: CommandMessage,
+  metadata: Readonly<Record<string, unknown>> | undefined,
+): CommandScene | undefined {
+  if (isCommandScene(input.scene)) {
+    return Object.freeze({
+      id: input.scene.id,
+      type: input.scene.type,
+      ...(input.scene.name !== undefined ? { name: input.scene.name } : {}),
+    });
+  }
+
+  const parsed = parseTarget(input.target);
+  const type = (typeof metadata?.channelType === 'string' && metadata.channelType)
+    || (typeof metadata?.type === 'string' && metadata.type)
+    || parsed?.type;
+  const id = (typeof metadata?.channelId === 'string' && metadata.channelId)
+    || parsed?.id;
+  if (!type || !id) return undefined;
+
+  const name = firstString(
+    metadata?.channelName,
+    metadata?.group_name,
+    metadata?.groupName,
+    metadata?.sceneName,
+  );
+
+  return Object.freeze({
+    id,
+    type,
+    ...(name !== undefined ? { name } : {}),
+  });
+}
+
+function resolveSender(
+  input: CommandMessage,
+  metadata: Readonly<Record<string, unknown>> | undefined,
+): CommandSender | undefined {
+  const structured = (input as { readonly from?: unknown }).from;
+  if (isCommandSender(structured)) {
+    return freezeSender(structured);
+  }
+  // 允许上游把 sender 直接做成对象（未来 Runtime Message 演进）
+  if (isCommandSender(input.sender)) {
+    return freezeSender(input.sender);
+  }
+
+  const id = typeof input.sender === 'string' && input.sender
+    ? input.sender
+    : firstString(metadata?.user_id, metadata?.userId);
+  if (!id) return undefined;
+
+  const name = firstString(metadata?.nickname, metadata?.senderName, metadata?.name);
+  const role = resolveRoles(metadata);
+
+  return Object.freeze({
+    id,
+    ...(name !== undefined ? { name } : {}),
+    role,
+  });
+}
+
+function resolveRoles(
+  metadata: Readonly<Record<string, unknown>> | undefined,
+): readonly string[] {
+  const roles: string[] = [];
+  const push = (value: unknown) => {
+    if (typeof value !== 'string') return;
+    const trimmed = value.trim();
+    if (trimmed && !roles.includes(trimmed)) roles.push(trimmed);
+  };
+
+  if (Array.isArray(metadata?.roles)) {
+    for (const item of metadata.roles) push(item);
+  }
+  push(metadata?.senderRole);
+  push(metadata?.role);
+  if (metadata?.isMaster === true) push('master');
+  if (metadata?.isTrusted === true) push('trusted');
+  if (roles.length === 0) roles.push('user');
+  return Object.freeze(roles);
+}
+
+function parseTarget(target: string): { readonly type: string; readonly id: string } | undefined {
+  const parts = target.split(':').filter(Boolean);
+  if (parts.length < 2) return undefined;
+  const kind = parts[0];
+  if (kind === 'channel' && parts.length >= 3) {
+    return { type: 'channel', id: parts[parts.length - 1]! };
+  }
+  if (kind === 'temp' && parts.length >= 3) {
+    return { type: 'private', id: parts[parts.length - 1]! };
+  }
+  return { type: kind!, id: parts.slice(1).join(':') };
+}
+
+function isCommandScene(value: unknown): value is CommandScene {
+  if (!value || typeof value !== 'object') return false;
+  const scene = value as Partial<CommandScene>;
+  return typeof scene.id === 'string'
+    && scene.id.length > 0
+    && typeof scene.type === 'string'
+    && scene.type.length > 0;
+}
+
+function isCommandSender(value: unknown): value is CommandSender {
+  if (!value || typeof value !== 'object') return false;
+  const sender = value as Partial<CommandSender>;
+  return typeof sender.id === 'string'
+    && sender.id.length > 0
+    && Array.isArray(sender.role)
+    && sender.role.every((item) => typeof item === 'string');
+}
+
+function freezeSender(sender: CommandSender): CommandSender {
+  return Object.freeze({
+    id: sender.id,
+    ...(sender.name !== undefined ? { name: sender.name } : {}),
+    role: Object.freeze([...sender.role]),
+  });
+}
+
+function firstString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value;
+  }
+  return undefined;
 }
 
 function freezeSegments(

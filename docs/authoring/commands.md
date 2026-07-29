@@ -81,10 +81,24 @@ export default qqEndpointCommands.remove;
 | `params` | `Record<string, CommandParameterValue>` | 动态参数段解析后的类型化值；结构化参数可为媒体对象 |
 | `segments` | `readonly CommandSegment[]` | 命令模式消费后剩余的结构化段；保留媒体、mention 等非文本信息 |
 | `config` | `Readonly<TConfig>` | 本插件的配置快照（来自 `zhin.config.yml`） |
-| `input` | `TInput` | 调用来源；IM 消息派发时是 Runtime `Message`（带 `$reply`），其它来源（如 Host 调用）可能为 `undefined` |
+| `input` | `TInput \| undefined` | 调用来源；IM 派发时为 Runtime `Message`（满足 `CommandMessage`），Host / `execute(name)` 可能缺省 |
+| `adapter` | `string \| undefined` | 适配器插件实例 id（如 `root/icqq`） |
+| `endpoint` | `string \| undefined` | Endpoint 名（`metadata.endpoint`） |
+| `scene` | `CommandScene \| undefined` | `{ id, type, name? }`；优先上游结构化字段，否则从 `target` / metadata 解析 |
+| `sender` | `CommandSender \| undefined` | `{ id, name?, role: string[] }`；`role` 含平台身份与框架角色 |
 | `use(token)` | `<T>(token: Token<T>) => T` | 取 Plugin Runtime 资源（见下） |
 | `owner` | `PluginNodeSnapshot` | 命令所属插件节点 |
 | `generation` | `number` | 当前代际号 |
+
+`TInput` 默认约束为 `CommandMessage`（命令侧消息契约）。因架构分层 `@zhin.js/command` 不能 import `@zhin.js/core`，故独立声明；Runtime `Message` 结构兼容。
+
+```ts
+export default defineCommand({
+  description: '谁在哪',
+  execute: ({ adapter, endpoint, scene, sender }) =>
+    `${sender?.name ?? sender?.id} @ ${scene?.type}:${scene?.id} via ${adapter}/${endpoint} roles=${sender?.role.join(',')}`,
+});
+```
 
 `use(token)` 读的是插件 `setup()` 时 `resources.provide(...)` 注册的资源，缺失时抛错。上面的 QQ 命令用 `use(qqRuntimeStateToken)` 拿到适配器共享状态——这是命令与适配器协作的标准方式。
 

@@ -32,7 +32,10 @@ commands/upload/[asset:image].ts             -> upload <asset>
 - `args`：匹配后剩余文本按空白切分的兼容视图。
 - `segments`：匹配后剩余的结构化段，媒体和 mention 不会丢失。
 - `config` / `use()` / `owner` / `generation`：owner-scoped Runtime 上下文。
-- `input`：派发来源；IM 中为 `Message`。
+- `input`：派发来源；IM 中为满足 `CommandMessage` 的 Runtime `Message`。
+- `adapter` / `endpoint`：适配器实例 id 与 endpoint 名。
+- `scene`：`{ id, type, name? }` 场景对象。
+- `sender`：`{ id, name?, role: string[] }` 发送者对象。
 
 单文件插件可在 `setup({ addCommand })` 中调用
 `addCommand('hello', defineCommand(...))`。它与目录发现共用 CommandIndex；拆成文件后

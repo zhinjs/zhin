@@ -59,6 +59,80 @@ describe('Command Feature', () => {
     await expect(index.execute('missing')).rejects.toThrow('Unknown Command');
   });
 
+  it('exposes adapter/endpoint/scene/sender objects on CommandContext from message input', async () => {
+    const owner = rootPluginId();
+    let seen: {
+      adapter?: string;
+      endpoint?: string;
+      scene?: { id: string; type: string; name?: string };
+      sender?: { id: string; name?: string; role: readonly string[] };
+    } | undefined;
+    const command = defineCommand({
+      execute: (context) => {
+        seen = {
+          adapter: context.adapter,
+          endpoint: context.endpoint,
+          scene: context.scene,
+          sender: context.sender,
+        };
+        return 'ok';
+      },
+    });
+    const slot = createCapabilitySlot({
+      owner,
+      feature: commandFeatureId,
+      localName: 'who',
+      source: '/commands/who.ts',
+      definition: command,
+    });
+    const snapshot = {
+      generation: 1,
+      root: owner,
+      tree: new Map([[owner, {
+        id: owner,
+        instanceKey: 'root',
+        packageName: '@test/root',
+        packageRoot: '/test',
+        children: [],
+      }]]),
+      config: new Map([[owner, {}]]),
+      resources: new Map([[owner, new Map()]]),
+      capabilities: new Map([[slot.id, slot]]),
+      projections: new Map(),
+    } satisfies RuntimeSnapshot;
+    const index = new CommandIndex([slot], snapshot);
+
+    await index.dispatch('who', {
+      adapter: 'root/icqq\0zhin.adapter/1\0icqq~1689919782',
+      target: 'group:12345',
+      content: 'who',
+      sender: '1659488338',
+      metadata: {
+        endpoint: '1689919782',
+        channelType: 'group',
+        channelName: '测试群',
+        nickname: '凉菜',
+        senderRole: 'admin',
+      },
+    });
+
+    expect(seen).toEqual({
+      adapter: 'root/icqq',
+      endpoint: '1689919782',
+      scene: { id: '12345', type: 'group', name: '测试群' },
+      sender: { id: '1659488338', name: '凉菜', role: ['admin'] },
+    });
+
+    seen = undefined;
+    await index.execute('who');
+    expect(seen).toEqual({
+      adapter: undefined,
+      endpoint: undefined,
+      scene: undefined,
+      sender: undefined,
+    });
+  });
+
   it('discovers nested files as hierarchical command words', async () => {
     const owner = rootPluginId();
     const source = '/project/commands/gh/issue/list.ts';
