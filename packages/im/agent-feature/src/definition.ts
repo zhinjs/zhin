@@ -9,6 +9,14 @@ export interface AgentDefinition {
   readonly instructions: string;
 }
 
+declare module '@zhin.js/plugin-runtime' {
+  // Type parameter name must match the base PluginSetupContext declaration (TS2428).
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface PluginSetupContext<TConfig> {
+    addAgent(localName: string, markdown: string): void;
+  }
+}
+
 export function parseAgentMarkdown(value: unknown, context: ValidationContext): AgentDefinition {
   if (typeof value !== 'string' || !value.trim()) {
     throw new TypeError(`Agent ${context.source} must contain Markdown instructions`);

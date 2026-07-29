@@ -12,6 +12,11 @@ import {
 } from '@zhin.js/plugin-runtime';
 ```
 
+`PluginSetupContext.addFeature(feature, localName, definition)` 是约定目录之外的内存
+Capability 写入口。它仍由上层 Runtime 交给对应 Feature provider 校验和投影；Feature
+通过 `authoring.setupMethod` 和 module augmentation 提供强类型 `addCommand`、
+`addComponent`、`addTool` 等别名。底座只保存通用注册记录，不理解 IM。
+
 ## 生命周期
 
 ```text

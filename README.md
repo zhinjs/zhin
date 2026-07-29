@@ -41,18 +41,24 @@ Zhin.js 为**在聊天平台做严肃 bot / 助手产品**的开发者和团队�
 > **EN**: Built for developers and teams running serious bot/assistant products on chat platforms. One codebase for 20+ platforms (QQ, WeChat, Discord, Slack, Telegram…) with multi-account support; starts as a <10MB IM framework and grows into a full agent (tools, memory, orchestration, MCP) only when you install `@zhin.js/agent`; manage everything from a browser console. **Not** a Cursor/Claude Code-style coding agent. See [capability tiers](./docs/snippets/platform-tiers.md).
 
 ```ts
-import { usePlugin, MessageCommand } from 'zhin.js'
+// bot.ts — 整个机器人可以就是这一份文件
+import { defineCommand } from 'zhin.js/command'
+import { definePlugin } from 'zhin.js/plugin-runtime'
 
-const { addCommand } = usePlugin()
-
-addCommand(
-  new MessageCommand('hello <name:word>')
-    .desc('打个招呼')
-    .action((_, result) => `Hello, ${result.params.name}!`)
-)
+export default definePlugin({
+  name: 'my-bot',
+  setup({ addCommand }) {
+    addCommand('hello', defineCommand({
+      description: '打招呼',
+      execute: () => 'Hello from Zhin!',
+    }))
+  },
+})
 ```
 
 ## Quick Start
+
+三步，不用写适配器样板：
 
 ```bash
 npm create zhin-app my-bot -y
@@ -60,19 +66,20 @@ cd my-bot
 pnpm dev
 ```
 
-`-y` 走 IM-only 黄金路径：Sandbox + Host API + Remote Console，无需云模型 Key。
+打开 [Remote Console](https://console.zhin.dev) → Host 填 `http://127.0.0.1:8086` → Sandbox 发 `/hello`。完事。
 
-| 路径 | 适合谁 |
-|------|--------|
-| [**demo.zhin.dev**](https://demo.zhin.dev) | 零安装体验 |
-| `npm create zhin-app -y` | 独立项目（推荐） |
-| [`examples/minimal-bot`](./examples/minimal-bot/) | 贡献者 / monorepo 调试 |
+`-y` 走 IM 黄金路径：Sandbox + Host + Console，**不需要任何模型 Key**。
 
-然后打开 [Remote Console](https://console.zhin.dev)，填 Host `http://127.0.0.1:8086` 与 `.env` 中的 `HTTP_TOKEN`，在 Sandbox 发 `hello` / `card`。
+| 路径 | 适合谁 | 要多久 |
+|------|--------|--------|
+| [**demo.zhin.dev**](https://demo.zhin.dev) | 零安装点一点 | 立刻 |
+| `npm create zhin-app -y` | 独立项目（推荐） | ~1 分钟 |
+| [`examples/single-file-bot`](./examples/single-file-bot/) | 看「一个 `bot.ts` 就是 bot」 | 克隆后 `pnpm --filter single-file-bot dev` |
+| [`examples/minimal-bot`](./examples/minimal-bot/) | 贡献者 / 约定目录样板 | 根目录 `pnpm dev` |
 
-更多：[5 分钟首跑](./docs/getting-started/index.md) · `npx zhin setup` · `npx zhin doctor`
+更多：[安装与启动](./docs/getting-started/index.md) · [示例速览](./docs/examples/index.md) · `npx zhin setup` · `npx zhin doctor`
 
-**要求**：Node.js `^20.19.0` 或 `>=22.12.0`，pnpm 9+
+**要求**：Node.js `^20.19.0` 或 `>=22.12.0`（跑 Plugin Runtime 示例推荐 **≥22.6**），pnpm 9+
 
 ## Features
 
@@ -195,7 +202,7 @@ pnpm install && pnpm build
 cd examples/minimal-bot && pnpm dev
 ```
 
-见 [贡献指南](./docs/contributing/development.md)。根目录 `pnpm dev` 指向 Stable 黄金路径 `minimal-bot`；厨房水槽用 `pnpm dev:test`（`test-bot`），**非**用户模板。
+见 [贡献指南](./docs/contributing/development.md)。根目录 `pnpm dev` 指向 Stable 约定目录样板 `minimal-bot`；想看「一个文件就是 bot」用 `pnpm --filter single-file-bot dev`。厨房水槽用 `pnpm dev:test`（`test-bot`），**非**用户模板。
 
 <p align="center">
   <a href="https://github.com/zhinjs/zhin/graphs/contributors">

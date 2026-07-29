@@ -17,6 +17,7 @@ import {
   type EndpointManagementCapability,
 } from '@zhin.js/adapter';
 import { MiddlewareIndex, isMiddlewareIndex, middlewareFeatureId } from '@zhin.js/middleware';
+import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
 import {
   Message,
   createOutboundEnvelope,
@@ -44,6 +45,8 @@ import {
   type RegisteredRuntimeInteractiveHandler,
   type RuntimeInteractiveHandler,
 } from './interactive.js';
+
+const logger = getLogger('im');
 
 export const messageGatewayToken = createToken<MessageGateway>('zhin.im.message-gateway');
 
@@ -159,6 +162,16 @@ export class ImRuntime implements MessageGateway {
     let active = true;
     try {
       const requester = requireAdapters(lease.value).owner(input.adapter);
+      logger.debug(formatCompact({
+        op: 'im_inbound_receive',
+        adapter: String(input.adapter).split('\0').pop() ?? String(input.adapter),
+        target: input.target,
+        sender: input.sender,
+        id: input.id,
+        preview: truncatePreview(input.content),
+        segments: input.segments?.length,
+        generation: lease.value.generation,
+      }));
       const message = new Message(
         input.adapter,
         input.target,
@@ -186,6 +199,11 @@ export class ImRuntime implements MessageGateway {
           result = await this.#dispatchInteractive(message, requester)
             ?? await this.#dispatcher.dispatch(message, lease.value);
           if (!result.matched && this.#unmatchedHandler) {
+            logger.debug(formatCompact({
+              op: 'im_inbound_unmatched_handler',
+              target: input.target,
+              id: input.id,
+            }));
             const handled = await this.#unmatchedHandler(message, lease.value, requester);
             if (handled) {
               result = Object.freeze({ matched: true, command: 'ai', owner: requester });
@@ -194,6 +212,14 @@ export class ImRuntime implements MessageGateway {
         },
         'inbound',
       );
+      logger.debug(formatCompact({
+        op: 'im_inbound_done',
+        target: input.target,
+        id: input.id,
+        matched: result.matched,
+        command: result.command,
+        owner: result.owner,
+      }));
       this.#emitMessage({
         direction: 'inbound',
         adapter: input.adapter,

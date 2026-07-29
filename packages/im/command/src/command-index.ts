@@ -1,3 +1,8 @@
+import {
+  SegmentMatcher,
+  TypeMatcherRegistry,
+  type MessageSegment,
+} from 'segment-matcher';
 import type {
   CapabilitySlot,
   PluginId,
@@ -9,6 +14,7 @@ import {
   type CommandParameterDefinition,
   type CommandParameterType,
   type CommandParameterValue,
+  type CommandSegment,
 } from './definition.js';
 
 export interface CommandParameterDescriptor extends CommandParameterDefinition {
@@ -33,30 +39,47 @@ interface CommandRecord extends CommandDescriptor {
   readonly slot: Readonly<CapabilitySlot<CommandDefinition>>;
   readonly segments: readonly string[];
   readonly parameter?: CommandParameterDefinition;
+  readonly matcher: SegmentMatcher;
 }
 
 interface CommandMatch {
   readonly command: CommandRecord;
   readonly params: Readonly<Record<string, CommandParameterValue>>;
+  readonly remaining: readonly Readonly<CommandSegment>[];
 }
+
+export type CommandMatchInput = string | readonly Readonly<CommandSegment>[];
+
+const segmentFields = {
+  text: 'text',
+  mention: 'target',
+  at: ['target', 'user_id', 'qq'],
+  face: 'id',
+  image: (segment: MessageSegment) =>
+    segment.data.media ?? segment.data.file ?? segment.data.url ?? segment.data.src,
+  reply: ['message_id', 'reply_id', 'id'],
+  forward: ['forward_id', 'res_id', 'message_id', 'id'],
+  dice: 'result',
+  rps: 'result',
+};
 
 export class CommandIndex {
   readonly $projection = 'zhin.command-index/1' as const;
   readonly #commands: readonly CommandRecord[];
-  readonly #staticCommands = new Map<string, CommandRecord>();
-  readonly #dynamicCommands = new Map<string, CommandRecord>();
 
   constructor(
     slots: readonly Readonly<CapabilitySlot<CommandDefinition>>[],
     private readonly snapshot: RuntimeSnapshot,
   ) {
     const commands: CommandRecord[] = [];
+    const staticCommands = new Map<string, CommandRecord>();
+    const dynamicCommands = new Map<string, CommandRecord>();
     for (const slot of slots) {
       const segments = runtimeSegments(slot.owner, slot.localName);
       const parameter = slot.definition.$parameter;
       assertParameterSegment(segments, parameter, slot.source);
       const name = displayName(segments, parameter);
-      const record = Object.freeze({
+      const record: CommandRecord = Object.freeze({
         name,
         description: slot.definition.description,
         source: slot.source,
@@ -67,19 +90,20 @@ export class CommandIndex {
         slot,
         segments: Object.freeze(segments),
         parameter,
+        matcher: new SegmentMatcher(matcherPattern(segments, parameter), segmentFields),
       });
       if (!parameter) {
         const key = segments.join(' ');
-        if (this.#staticCommands.has(key)) throw duplicateCommand(key);
-        this.#staticCommands.set(key, record);
+        if (staticCommands.has(key)) throw duplicateCommand(key);
+        staticCommands.set(key, record);
       } else {
         const shape = routeShape(segments);
-        if (this.#dynamicCommands.has(shape)) throw duplicateCommand(name);
-        this.#dynamicCommands.set(shape, record);
+        if (dynamicCommands.has(shape)) throw duplicateCommand(name);
+        dynamicCommands.set(shape, record);
       }
       commands.push(record);
     }
-    this.#commands = Object.freeze(commands);
+    this.#commands = Object.freeze(commands.sort(compareCommands));
   }
 
   list(): readonly CommandDescriptor[] {
@@ -88,7 +112,7 @@ export class CommandIndex {
 
   has(name: string): boolean {
     try {
-      return this.#match(name) !== undefined;
+      return this.#match(name, true) !== undefined;
     } catch (error) {
       if (error instanceof CommandParameterValueError) return false;
       throw error;
@@ -96,8 +120,11 @@ export class CommandIndex {
   }
 
   async execute(name: string, args: readonly string[] = []): Promise<unknown> {
-    const match = this.#match(name);
-    if (!match) throw new Error(`Unknown Command: ${name}`);
+    const match = this.#match(name, true);
+    if (!match) {
+      this.#diagnoseParameter(name);
+      throw new Error(`Unknown Command: ${name}`);
+    }
     return match.command.slot.definition.execute(
       createCommandContext(
         this.snapshot,
@@ -108,66 +135,70 @@ export class CommandIndex {
     );
   }
 
-  async dispatch(input: string, source: unknown = undefined): Promise<CommandDispatchResult> {
-    const words = splitCommand(input);
-    for (let consumed = words.length; consumed > 0; consumed -= 1) {
-      let match: CommandMatch | undefined;
-      try {
-        match = this.#match(words.slice(0, consumed).join(' '));
-      } catch (error) {
-        // A typed parameter rejecting the input means "no match", same as has().
-        if (error instanceof CommandParameterValueError) continue;
-        throw error;
-      }
-      if (!match) continue;
-      const args = words.slice(consumed);
-      const value = await match.command.slot.definition.execute(
-        createCommandContext(
-          this.snapshot,
-          match.command.slot.owner,
-          args,
-          match.params,
-          source,
-        ),
-      );
-      return Object.freeze({
-        matched: true,
-        command: match.command.name,
-        owner: match.command.slot.owner,
-        value,
-      });
-    }
-    return Object.freeze({ matched: false });
+  async dispatch(
+    input: CommandMatchInput,
+    source: unknown = undefined,
+  ): Promise<CommandDispatchResult> {
+    const match = this.#match(input, false);
+    if (!match) return Object.freeze({ matched: false });
+    const args = textArgs(match.remaining);
+    const value = await match.command.slot.definition.execute(
+      createCommandContext(
+        this.snapshot,
+        match.command.slot.owner,
+        args,
+        match.params,
+        source,
+        match.remaining,
+      ),
+    );
+    return Object.freeze({
+      matched: true,
+      command: match.command.name,
+      owner: match.command.slot.owner,
+      value,
+    });
   }
 
-  #match(name: string): CommandMatch | undefined {
-    const words = splitCommand(name);
-    if (words.length === 0) return undefined;
-    // A literal file such as list.ts always wins over [name:string].ts.
-    const staticCommand = this.#staticCommands.get(words.join(' '));
-    if (staticCommand) return { command: staticCommand, params: Object.freeze({}) };
+  #match(input: CommandMatchInput, exact: boolean): CommandMatch | undefined {
+    const segments = normalizeSegments(
+      typeof input === 'string'
+        ? input.trim()
+          ? [{ type: 'text', data: { text: input.trim() } }]
+          : []
+        : input,
+    );
+    if (segments.length === 0) return undefined;
 
-    // More specific routes (more static segments) win over generic ones.
-    const dynamicCommands = [...this.#dynamicCommands.values()]
-      .sort((a, b) => staticSegmentCount(b.segments) - staticSegmentCount(a.segments));
-    for (const command of dynamicCommands) {
-      const parameter = command.parameter as CommandParameterDefinition;
-      const optional = parameter.defaultValue !== undefined;
-      if (words.length !== command.segments.length &&
-        !(optional && words.length === command.segments.length - 1)) continue;
-      const parameterIndex = command.segments.findIndex((segment) => segment.startsWith('$'));
-      if (!command.segments.every((segment, index) =>
-        index === parameterIndex || segment === words[index])) continue;
-      const rawValue = words[parameterIndex];
-      const value = rawValue === undefined
-        ? parameter.defaultValue as CommandParameterValue
-        : parseRuntimeValue(parameter, rawValue);
+    for (const command of this.#commands) {
+      const result = command.matcher.match(asMatcherSegments(segments));
+      if (!result || !hasCommandBoundary(result.remaining)) continue;
+      const remaining = normalizeSegments(result.remaining);
+      if (exact && remaining.length > 0) continue;
       return {
         command,
-        params: Object.freeze({ [parameter.name]: value }),
+        params: Object.freeze({ ...result.params }) as Readonly<
+          Record<string, CommandParameterValue>
+        >,
+        remaining,
       };
     }
     return undefined;
+  }
+
+  #diagnoseParameter(name: string): void {
+    const words = splitCommand(name);
+    for (const command of this.#commands) {
+      const parameter = command.parameter;
+      if (!parameter) continue;
+      const parameterIndex = command.segments.findIndex((segment) => segment.startsWith('$'));
+      if (words.length !== command.segments.length) continue;
+      if (!command.segments.every((segment, index) =>
+        index === parameterIndex || segment === words[index])) continue;
+      const value = words[parameterIndex];
+      if (value === undefined || matchesParameter(parameter.type, value)) continue;
+      throw new CommandParameterValueError(parameter.name, parameter.type, value);
+    }
   }
 }
 
@@ -190,9 +221,9 @@ function assertParameterSegment(
 ): void {
   const dynamicSegments = segments.filter((segment) => segment.startsWith('$'));
   if (!parameter && dynamicSegments.length === 0) return;
-  if (parameter && dynamicSegments.length === 1 &&
-    dynamicSegments[0] === `$${parameter.name}` &&
-    segments.at(-1) === dynamicSegments[0]) return;
+  if (parameter && dynamicSegments.length === 1
+    && dynamicSegments[0] === `$${parameter.name}`
+    && segments.at(-1) === dynamicSegments[0]) return;
   throw new Error(`Broken dynamic Command identity for ${source}`);
 }
 
@@ -208,8 +239,36 @@ function displayName(
   }).join(' ');
 }
 
+function matcherPattern(
+  segments: readonly string[],
+  parameter: CommandParameterDefinition | undefined,
+): string {
+  return segments.map((segment) => {
+    if (!segment.startsWith('$')) return segment;
+    if (!parameter) throw new Error(`Missing Command parameter metadata: ${segment}`);
+    const type = matcherType(parameter.type);
+    return parameter.defaultValue === undefined
+      ? `<${parameter.name}:${type}>`
+      : `[${parameter.name}:${type}=${String(parameter.defaultValue)}]`;
+  }).join(' ');
+}
+
+function matcherType(type: CommandParameterType): string {
+  return type === 'string' ? 'word' : type;
+}
+
 function routeShape(segments: readonly string[]): string {
   return segments.map((segment) => segment.startsWith('$') ? '$' : segment).join(' ');
+}
+
+function compareCommands(left: CommandRecord, right: CommandRecord): number {
+  const leftDynamic = left.parameter ? 1 : 0;
+  const rightDynamic = right.parameter ? 1 : 0;
+  return leftDynamic - rightDynamic
+    || staticSegmentCount(right.segments) - staticSegmentCount(left.segments)
+    || right.segments.length - left.segments.length
+    || right.name.length - left.name.length
+    || left.name.localeCompare(right.name);
 }
 
 function staticSegmentCount(segments: readonly string[]): number {
@@ -221,24 +280,73 @@ function splitCommand(value: string): readonly string[] {
   return normalized ? normalized.split(/\s+/) : [];
 }
 
-function parseRuntimeValue(
-  parameter: CommandParameterDefinition,
-  value: string,
-): CommandParameterValue {
-  if (parameter.type === 'string') return value;
-  if (parameter.type === 'number') {
-    const number = Number(value);
-    if (value.trim().length > 0 && Number.isFinite(number)) return number;
-  } else if (value === 'true' || value === 'false') {
-    return value === 'true';
+function matchesParameter(type: CommandParameterType, value: string): boolean {
+  const matcher = TypeMatcherRegistry.getMatcher(matcherType(type));
+  return matcher ? matcher.match(value).success : false;
+}
+
+function asMatcherSegments(
+  segments: readonly Readonly<CommandSegment>[],
+): MessageSegment[] {
+  return segments.map((segment) => ({
+    type: typeof segment.type === 'string' ? segment.type : { name: segment.type.name },
+    data: { ...segment.data },
+  }));
+}
+
+function hasCommandBoundary(segments: readonly MessageSegment[]): boolean {
+  const first = segments[0];
+  if (!first || first.type !== 'text') return true;
+  const text = first.data.text;
+  return typeof text !== 'string' || text.length === 0 || /^\s/u.test(text);
+}
+
+function normalizeSegments(
+  input: readonly Readonly<CommandSegment>[],
+): readonly Readonly<CommandSegment>[] {
+  const segments = input.map((segment) => ({
+    type: typeof segment.type === 'string' ? segment.type : { name: segment.type.name },
+    data: { ...segment.data },
+  }));
+  trimBoundary(segments, 'start');
+  trimBoundary(segments, 'end');
+  return Object.freeze(segments.map((segment) => Object.freeze({
+    type: typeof segment.type === 'string'
+      ? segment.type
+      : Object.freeze({ name: segment.type.name }),
+    data: Object.freeze(segment.data),
+  })));
+}
+
+function trimBoundary(
+  segments: Array<{ type: string | { name: string }; data: Record<string, unknown> }>,
+  side: 'start' | 'end',
+): void {
+  while (segments.length > 0) {
+    const index = side === 'start' ? 0 : segments.length - 1;
+    const segment = segments[index];
+    if (!segment || segment.type !== 'text' || typeof segment.data.text !== 'string') return;
+    const text = side === 'start' ? segment.data.text.trimStart() : segment.data.text.trimEnd();
+    if (text) {
+      segment.data.text = text;
+      return;
+    }
+    segments.splice(index, 1);
   }
-  throw new CommandParameterValueError(parameter.name, parameter.type, value);
+}
+
+function textArgs(segments: readonly Readonly<CommandSegment>[]): readonly string[] {
+  return Object.freeze(segments.flatMap((segment) => {
+    if (segment.type !== 'text' || typeof segment.data.text !== 'string') return [];
+    return splitCommand(segment.data.text);
+  }));
 }
 
 function toDescriptor({
   slot: _slot,
   segments: _segments,
   parameter: _parameter,
+  matcher: _matcher,
   ...descriptor
 }: CommandRecord): CommandDescriptor {
   return descriptor;

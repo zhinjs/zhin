@@ -14,6 +14,9 @@ export default defineComponent({
 Node 运行时不执行 TSX；客户端构建 adapter 负责静态产物。Component execution context
 只读取当前 snapshot 的 Config 与 Resource，不维护模块级 registry。
 
+单文件插件可用 `setup({ addComponent })` 注册 `defineComponent(...)`；它与
+`components/` 目录发现共享 ComponentIndex 和 owner override 规则。
+
 验证：`pnpm --filter @zhin.js/component test && pnpm --filter @zhin.js/component build`。
 
 出站契约见 [目标架构](../../docs/target-architecture.md)。

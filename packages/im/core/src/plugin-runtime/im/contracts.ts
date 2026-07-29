@@ -51,7 +51,7 @@ export interface IncomingMessage {
   readonly target: string;
   /**
    * 纯文本视图：与 `segments` 同源（adapter 从同一份入站载荷派生二者）。
-   * 命令匹配、触发判定、Console 预览只读此字段，无需感知段。
+   * 触发判定与 Console 预览读取此字段；命令匹配在有 segments 时优先使用结构化视图。
    */
   readonly content: string;
   /**
@@ -136,7 +136,7 @@ export class Message {
     readonly metadata: Readonly<Record<string, unknown>> = Object.freeze({}),
     /**
      * 结构化段视图（与 `content` 纯文本视图同源，见 IncomingMessage.segments）。
-     * middleware / CommandIndex / dispatcher 不读此字段，零改动兼容。
+     * Command dispatcher 优先使用此字段，以支持 mention、image 等结构化参数。
      */
     readonly segments?: readonly Segment[],
   ) {

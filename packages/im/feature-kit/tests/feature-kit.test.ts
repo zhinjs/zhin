@@ -78,6 +78,17 @@ describe('Feature provider kit', () => {
     expect(() => catalog.add({ ...provider })).toThrow(FeatureConflictError);
   });
 
+  it('validates setup shortcut names', () => {
+    expect(() => defineFeatureProvider({
+      ...provider,
+      id: featureId('test.invalid-shortcut'),
+      authoring: {
+        ...provider.authoring,
+        setupMethod: 'command',
+      },
+    })).toThrow('Invalid Feature setup method: command');
+  });
+
   it('allows one package source to contribute to multiple Plugin instances', async () => {
     const root = rootPluginId();
     const slots = await new FeatureDiscovery(host).discover(provider, [

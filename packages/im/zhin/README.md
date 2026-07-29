@@ -52,16 +52,19 @@ manifest 动态装配。Feature definition 校验失败时不会提交候选 gen
 
 ## 快速开始
 
-### 创建项目
+三步（`-y` = IM 黄金路径，无需模型 Key）：
 
 ```bash
-npm create zhin-app my-bot
+npm create zhin-app my-bot -y
 cd my-bot
-pnpm install
-pnpm dev          # 开发模式（热重载）
+pnpm dev
 ```
 
-向导可选启用 AI（自动写入 agent 栈与 provider 依赖）。
+打开 [console.zhin.dev](https://console.zhin.dev) → Host `http://127.0.0.1:8086` → Sandbox 发 `/hello`。
+
+想看「一个 `bot.ts` 就是 bot」：仓库 [`examples/single-file-bot`](../../../examples/single-file-bot/)。完整安装与路径说明：[快速开始](https://zhin.js.org/getting-started/)。
+
+向导可选启用 AI（去掉 `-y`，自动写入 agent 栈与 provider 依赖）。
 
 ### 配置文件（IM 最小示例）
 

@@ -66,6 +66,7 @@ export class SourceOwnershipIndex {
       }
     });
     for (const slot of snapshot.capabilities.values()) {
+      if (slot.origin === 'setup') continue;
       index.add({
         source: slot.source,
         role: 'capability',

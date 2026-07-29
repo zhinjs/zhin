@@ -47,7 +47,22 @@ describe('IM Feature slot HMR', () => {
     let setups = 0;
     const endpoints = { creates: 0, starts: 0, opens: 0, closes: 0, stops: 0 };
     modules.set(pluginSource, {
-      default: definePlugin({ name: 'root', setup() { setups += 1; } }),
+      default: definePlugin({
+        name: 'root',
+        setup({ addCommand, addComponent, addMiddleware }) {
+          setups += 1;
+          addCommand('inline', defineCommand({ execute: () => 'inline:v1' }));
+          addComponent('inline', defineComponent({ render: () => 'inline-component' }));
+          addMiddleware('inline', defineMiddleware({
+            order: -1,
+            target: 'outbound',
+            async handle({ input }, next) {
+              if (Array.isArray(input)) input.push('inline:enter');
+              await next();
+            },
+          }));
+        },
+      }),
     });
     modules.set(adapterProvider, { default: adapterFeature });
     modules.set(commandProvider, { default: commandFeature });
@@ -65,6 +80,8 @@ describe('IM Feature slot HMR', () => {
     const first = await runtime.start();
 
     await expect(runPing(first)).resolves.toBe('ping:v1');
+    await expect(runCommand(first, 'inline')).resolves.toBe('inline:v1');
+    await expect(renderComponent(first, 'inline')).resolves.toBe('inline-component');
     await expect(renderStatus(first)).resolves.toBe('status:v1:1');
     await expect(runTrace(first)).resolves.toEqual(['v1:enter', 'terminal', 'v1:exit']);
     expect(endpoints).toEqual({ creates: 1, starts: 1, opens: 1, closes: 0, stops: 0 });
@@ -158,9 +175,13 @@ function traceMiddleware(version: string) {
 }
 
 function runPing(snapshot: RuntimeSnapshot): Promise<unknown> {
+  return runCommand(snapshot, 'ping');
+}
+
+function runCommand(snapshot: RuntimeSnapshot, name: string): Promise<unknown> {
   const index = snapshot.projections.get(commandFeatureId);
   if (!(index instanceof CommandIndex)) throw new Error('Missing Command projection');
-  return index.execute('ping');
+  return index.execute(name);
 }
 
 function statusComponent(version: string) {
@@ -178,9 +199,13 @@ async function runTrace(snapshot: RuntimeSnapshot): Promise<readonly string[]> {
 }
 
 function renderStatus(snapshot: RuntimeSnapshot): Promise<unknown> {
+  return renderComponent(snapshot, 'status');
+}
+
+function renderComponent(snapshot: RuntimeSnapshot, name: string): Promise<unknown> {
   const index = snapshot.projections.get(componentFeatureId);
   if (!(index instanceof ComponentIndex)) throw new Error('Missing Component projection');
-  return index.render(rootPluginId(), 'status', {});
+  return index.render(rootPluginId(), name, {});
 }
 
 class FakeModules implements ModuleRuntime {

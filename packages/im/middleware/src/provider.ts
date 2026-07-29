@@ -9,6 +9,7 @@ const middlewareFeature = defineFeatureProvider({
   protocol: 1,
   id: middlewareFeatureId,
   authoring: {
+    setupMethod: 'addMiddleware',
     conventions: [typeScriptModules({
       id: 'middlewares-ts',
       directory: 'middlewares',

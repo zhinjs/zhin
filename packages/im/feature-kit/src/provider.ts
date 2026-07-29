@@ -60,6 +60,8 @@ export interface SourceConvention {
 
 export interface FeatureAuthoring<TDefinition> {
   readonly conventions: readonly SourceConvention[];
+  /** Optional setup-context shortcut, for example `addCommand`. */
+  readonly setupMethod?: string;
   validate(value: unknown, context: ValidationContext): TDefinition;
 }
 
@@ -111,6 +113,12 @@ export function defineFeatureProvider<TDefinition, TProjection>(
       throw new TypeError(`Duplicate convention ${convention.id} in ${provider.id}`);
     }
     conventionIds.add(convention.id);
+  }
+  if (
+    provider.authoring.setupMethod !== undefined
+    && !/^add[A-Z][a-zA-Z0-9]*$/.test(provider.authoring.setupMethod)
+  ) {
+    throw new TypeError(`Invalid Feature setup method: ${provider.authoring.setupMethod}`);
   }
   return Object.freeze({
     ...provider,

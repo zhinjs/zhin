@@ -624,13 +624,33 @@ export class IcqqIpcEndpoint implements EndpointInstance {
 
   /** Test / internal: admit when open. */
   admit(msg: IcqqInboundMessage): void {
-    if (!this.#open) return;
+    if (!this.#open) {
+      logger.debug(formatCompact({
+        op: 'icqq_inbound_skip',
+        reason: 'endpoint_closed',
+        endpoint: this.name,
+        id: msg.id,
+        target: msg.target,
+      }));
+      return;
+    }
     // 新 Runtime Message.content 为纯文本：@ 本机（uin = name）经结构化段 / metadata 传递
     const mentioned = isIcqqBotMentioned({
       uin: this.name,
       content: msg.segments,
       rawMessage: msg.content,
     });
+    logger.debug(formatCompact({
+      op: 'icqq_inbound_admit',
+      endpoint: this.name,
+      id: msg.id,
+      target: msg.target,
+      sender: msg.sender,
+      channelType: msg.channelType,
+      mentioned: mentioned || undefined,
+      preview: msg.content.slice(0, 80),
+      segments: summarizeSegmentTypes(msg.segments),
+    }));
     void this.#options.gateway.receive({
       adapter: this.#options.id,
       target: msg.target,
@@ -689,10 +709,36 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     }
     if (!isIcqqMessagePostType(payload)) return;
     const data = payload as IcqqIpcMessageEvent;
-    if (shouldSkipSelfInboundMessage(data)) return;
+    if (shouldSkipSelfInboundMessage(data)) {
+      logger.debug(formatCompact({
+        op: 'icqq_inbound_skip',
+        reason: 'self',
+        endpoint: this.name,
+        user_id: data.user_id,
+        self_id: data.self_id,
+      }));
+      return;
+    }
     const normalized = normalizeIcqqInboundMessage(data);
-    if (!normalized) return;
-    if (!this.#inboundDeduper.shouldProcess(normalized.messageId)) return;
+    if (!normalized) {
+      logger.debug(formatCompact({
+        op: 'icqq_inbound_skip',
+        reason: 'normalize_failed',
+        endpoint: this.name,
+        message_id: data.message_id,
+        message_type: data.message_type ?? data.type,
+      }));
+      return;
+    }
+    if (!this.#inboundDeduper.shouldProcess(normalized.messageId)) {
+      logger.debug(formatCompact({
+        op: 'icqq_inbound_skip',
+        reason: 'dedupe',
+        endpoint: this.name,
+        id: normalized.messageId,
+      }));
+      return;
+    }
     this.admit({
       id: normalized.messageId,
       target: formatInboundTarget({
@@ -717,9 +763,24 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     const normalized = normalizeIcqqGuildInboundMessage(
       payload as Parameters<typeof normalizeIcqqGuildInboundMessage>[0],
     );
-    if (!normalized) return;
+    if (!normalized) {
+      logger.debug(formatCompact({
+        op: 'icqq_inbound_skip',
+        reason: 'guild_normalize_failed',
+        endpoint: this.name,
+      }));
+      return;
+    }
     this.#guildCatalog.upsertFromInbound(normalized.raw);
-    if (!this.#inboundDeduper.shouldProcess(`guild:${normalized.messageId}`)) return;
+    if (!this.#inboundDeduper.shouldProcess(`guild:${normalized.messageId}`)) {
+      logger.debug(formatCompact({
+        op: 'icqq_inbound_skip',
+        reason: 'dedupe',
+        endpoint: this.name,
+        id: `guild:${normalized.messageId}`,
+      }));
+      return;
+    }
     this.admit({
       id: normalized.messageId,
       target: formatInboundTarget({
@@ -839,6 +900,21 @@ function toNumericId(value: number | string, label: string): number {
     throw new TypeError(`icqq ${label} 必须是数字: ${String(value)}`);
   }
   return n;
+}
+
+function summarizeSegmentTypes(
+  segments: readonly { readonly type?: unknown }[] | undefined,
+): string | undefined {
+  if (!segments?.length) return undefined;
+  return segments
+    .map((segment) => {
+      if (typeof segment.type === 'string') return segment.type;
+      if (segment.type && typeof segment.type === 'object' && 'name' in segment.type) {
+        return String((segment.type as { name: unknown }).name);
+      }
+      return '?';
+    })
+    .join(',');
 }
 
 async function defaultCreateIpc(config: ResolvedIcqqConfig): Promise<IcqqIpcTransport> {

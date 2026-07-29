@@ -76,6 +76,7 @@ describe('Plugin subtree HMR', () => {
     const first = await runtime.start();
     const oldLease = runtime.controller.snapshots.acquire();
     await expect(commandIndex(first).execute('child status')).resolves.toBe('v1');
+    await expect(commandIndex(first).execute('child inline')).resolves.toBe('inline:v1');
     expect(handoffs).toEqual([
       'root:activate',
       'child-v1:activate',
@@ -96,6 +97,7 @@ describe('Plugin subtree HMR', () => {
 
     expect(second.generation).toBe(2);
     await expect(commandIndex(second).execute('child status')).resolves.toBe('v2');
+    await expect(commandIndex(second).execute('child inline')).resolves.toBe('inline:v2');
     await expect(commandIndex(second).execute('sibling status')).resolves.toBe('sibling');
     expect(setupCalls).toEqual({ root: 1, child: 2, sibling: 1 });
     expect(modules.loadCount(rootSource)).toBe(1);
@@ -140,8 +142,9 @@ describe('Plugin subtree HMR', () => {
         default: definePlugin({
           name: `child-${version}`,
           requires: [shared],
-          setup({ resources, handoff }) {
+          setup({ resources, handoff, addCommand }) {
             setupCalls.child += 1;
+            addCommand('inline', defineCommand({ execute: () => `inline:${version}` }));
             resources.provide(childValue, version, () => {
               disposed.push(`child-${version}`);
             });

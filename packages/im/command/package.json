@@ -23,7 +23,8 @@
   },
   "dependencies": {
     "@zhin.js/feature-kit": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*"
+    "@zhin.js/plugin-runtime": "workspace:*",
+    "segment-matcher": "^1.0.5"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",

@@ -9,6 +9,7 @@ const adapterFeature = defineFeatureProvider({
   protocol: 1,
   id: adapterFeatureId,
   authoring: {
+    setupMethod: 'addAdapter',
     conventions: [typeScriptModules({
       id: 'adapters-ts',
       directory: 'adapters',

@@ -1,44 +1,61 @@
 # single-file-bot
 
-整个机器人就是一个 `bot.ts`：不建 `commands/`、`components/` 等任何子目录。
+**一个 `bot.ts` 就是一个机器人。** 不建 `commands/`、`components/` 等任何子目录。
 
-## 运行
+```ts
+import { defineCommand } from 'zhin.js/command';
+import { definePlugin } from 'zhin.js/plugin-runtime';
 
-本仓库内（monorepo 根已 `pnpm install`）：
+export default definePlugin({
+  name: 'single-file-bot',
+  setup({ addCommand }) {
+    addCommand('hello', defineCommand({
+      description: '打招呼',
+      execute: () => 'Hello from single-file-bot!',
+    }));
+  },
+});
+```
+
+## 30 秒跑起来
+
+本仓库内（根目录已 `pnpm install`）：
 
 ```bash
 pnpm --filter single-file-bot dev
 ```
 
-独立使用（把这个目录拷出去）：
+独立拷贝本目录时：
 
 ```bash
 pnpm install
-npx zhin runtime start        # 或 pnpm dev
+pnpm dev          # = zhin runtime start
 ```
 
-启动后按终端里的首跑指引操作：打开 [Remote Console](https://console.zhin.dev)，
-Host 填 `http://127.0.0.1:8086`（本示例未配置 token，仅限本地），
-进入 **Sandbox / 沙盒** 页连接，发送 `/hello`（或 `hello`），即可收到回复。
+然后：
+
+1. 打开 [Remote Console](https://console.zhin.dev)
+2. Host 填 `http://127.0.0.1:8086`（本示例未配 `http.token`，仅限本机）
+3. 进入 **Sandbox / 沙盒**，发送 **`/hello`**
+
+应收到 `Hello from single-file-bot!` 一类回复。编辑 `bot.ts` 会热重载。
+
+> Sandbox 默认 `commandPrefix: '/'`，所以发 `/hello`。若自己把前缀改成空字符串，发 `hello` 即可。
 
 ## 它是怎么工作的
 
-- `package.json#zhin.entry` 指向 `./bot.ts`，`zhin runtime start` 加载它的
-  默认导出（`definePlugin`）。
-- `zhin.plugins` 清单挂了 `@zhin.js/adapter-sandbox`，Console 的 Sandbox 页
-  通过它收发消息。
-- 命令路由（`CommandIndex`）来自 `commands/` 约定目录；单文件没有这个目录，
-  所以 `bot.ts` 在 `setup()` 里通过 `messageGatewayToken` 注册了一个
-  **unmatched 回退**，把 `hello` 路由给文件内的 `defineCommand`。
+- `package.json#zhin.entry` → `./bot.ts`，`zhin runtime start` 加载默认导出的 `definePlugin`
+- `zhin.plugins` 挂 `@zhin.js/adapter-sandbox`（可选再挂真实平台，如 `@zhin.js/adapter-icqq`）
+- `setup()` 里 `addCommand('hello', …)` 与 `commands/` 目录发现进**同一个** `CommandIndex`（冲突检查、generation 事务一致）
 
 ## 什么时候该升级成目录布局
 
 单文件适合 demo / 一次性脚本。出现以下任一需求时，改用约定式布局
-（参考 [examples/minimal-bot](../minimal-bot/) 或 `npm create zhin-app` 模板）：
+（[minimal-bot](../minimal-bot/) 或 `npm create zhin-app`）：
 
-- 多个命令、子命令、带参数命令（`commands/hello.ts`、`commands/remind/[time:string].ts`）
-- 中间件（`middlewares/`）、卡片组件（`components/`）、AI 工具（`tools/`）
-- HMR 热重载粒度与命令帮助列表（Console 命令页只列约定目录发现的命令）
+- 能力变多，需要按文件分工
+- 带参数文件路由（如 `commands/remind/[time:string].ts`）
+- 希望改单个能力时只重建对应 Feature projection，而不是重载整个单文件插件
 
-最小目录要求：命令路由需要 `commands/` 目录（每个 `.ts` 默认导出
-`defineCommand`），其余能力目录按需添加。
+`setup()` 同样支持 `addComponent`、`addMiddleware`、`addAdapter`；自定义 Feature 用
+`addFeature(featureId, localName, definition)`。拆成目录后 definition 不用改，默认导出到对应约定文件即可。

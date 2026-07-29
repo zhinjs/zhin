@@ -76,6 +76,7 @@ describe('Manifest topology transaction', () => {
     expect(runtime.snapshot.tree.get(bId)?.children).toEqual([cInB]);
     expect(setup).toEqual({ root: 1, a: 1, b: 1, c: 1, broken: 0 });
     await expect(commandIndex(runtime.snapshot).execute('b c status')).resolves.toBe('root/b/c');
+    await expect(commandIndex(runtime.snapshot).execute('b c inline')).resolves.toBe('inline:c');
 
     await writePluginManifest(project, 'a', {});
     await writePluginManifest(project, 'b', {
@@ -106,6 +107,7 @@ describe('Manifest topology transaction', () => {
     expect(runtime.snapshot.tree.get(aId)?.children).toEqual([cInA]);
     expect(runtime.snapshot.tree.get(bId)?.children).toEqual([]);
     await expect(commandIndex(runtime.snapshot).execute('a c status')).resolves.toBe('root/a/c');
+    await expect(commandIndex(runtime.snapshot).execute('a c inline')).resolves.toBe('inline:c');
     await expect(commandIndex(beforeMove.value).execute('b c status')).resolves.toBe('root/b/c');
     expect(disposed).toEqual([]);
     beforeMove.release();
@@ -170,8 +172,11 @@ describe('Manifest topology transaction', () => {
       return {
         default: definePlugin({
           name,
-          setup({ lifecycle }) {
+          setup({ lifecycle, addCommand }) {
             setup[name] += 1;
+            if (name === 'c') {
+              addCommand('inline', defineCommand({ execute: () => `inline:${name}` }));
+            }
             lifecycle.add(() => { disposed.push(name); });
           },
         }),

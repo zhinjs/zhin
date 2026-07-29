@@ -42,6 +42,7 @@ export default defineFeatureProvider({
   protocol: 1,
   id: featureId('acme.task'),
   authoring: {
+    setupMethod: 'addTask',
     conventions: [taskFiles],
     validate: (value, context) => parseTask(value, context.source),
   },
@@ -52,6 +53,10 @@ export default defineFeatureProvider({
   },
 });
 ```
+
+`setupMethod` 可选，必须是 `addXxx`。声明后 Runtime 会把它安装到
+`PluginSetupContext`，并将调用转成同一条 validate → CapabilitySlot → project 管线；
+Feature 包应同时用 module augmentation 声明该方法的 TypeScript 类型。
 
 Provider 本身应是纯 definition。`project()` 只能建立 generation-scoped 派生物，不能写入模块级 registry；若 projection 持有资源，必须返回 `dispose`。
 

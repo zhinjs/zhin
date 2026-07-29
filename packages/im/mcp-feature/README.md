@@ -34,6 +34,9 @@ export default defineMcp({
 
 `create()` 在 projection prepare 中执行，只能构造 inert client；网络连接必须放在 `start()`。具体 stdio/HTTP transport 和 MCP SDK 由 Plugin Resource 或可选 adapter 提供，本包没有相关第三方依赖。
 
+单文件插件可用 `setup({ addMcp })` 注册 `defineMcp(...)`。它仍走相同的连接 handoff、
+owner 继承和 generation 回收。
+
 ## 生命周期
 
 ```text

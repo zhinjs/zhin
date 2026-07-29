@@ -17,6 +17,26 @@ export default defineCommand({
 });
 ```
 
+单文件 Bot 可以在插件入口注册同一个 definition：
+
+```ts
+import { definePlugin } from '@zhin.js/plugin-runtime';
+
+export default definePlugin({
+  name: 'my-bot',
+  setup({ addCommand }) {
+    addCommand('hello', defineCommand({
+      description: '打个招呼',
+      execute: () => 'Hello from one file.',
+    }));
+  },
+});
+```
+
+`addCommand` 与目录发现共用 `CommandIndex`、清单、冲突检测和 generation 生命周期。
+当命令变多时，把 definition 移到 `commands/hello.ts` 默认导出即可；目录模式还能把
+HMR 粒度缩小到单个命令文件。
+
 ## 文件路由
 
 命令名 = 插件在插件树中的路径段 + 文件相对路径段，用空格连接。Root 插件（应用自身）没有前缀。
@@ -29,7 +49,17 @@ export default defineCommand({
 
 先看嵌套：`commands/` 递归扫描，嵌套目录直接映射为子命令段，目录与文件名必须是小写 kebab 风格（`/^[a-z0-9][a-z0-9-]*$/`）。
 
-动态参数段写在文件名里：`[name:type=default].ts`（`.tsx` 亦可）。`type` 仅支持 `string` / `number` / `boolean`，`=default` 可省略——无默认值即必填，帮助里显示 `<name>`；有默认值显示 `[name]`，省略该词时取默认值。运行时按类型解析：`number` 必须是有限数值，`boolean` 只接受 `true` / `false`，解析失败视为「命令不匹配」而不是报错。
+动态参数段写在文件名里：`[name:type=default].ts`（`.tsx` 亦可），且必须是路径的最后一段。`=default` 可省略——无默认值即必填，帮助里显示 `<name>`；有默认值显示 `[name]`，省略该参数时取默认值。
+
+| 参数类别 | 支持的 type | 匹配结果 |
+| --- | --- | --- |
+| 文本 | `string` / `word` / `text` | 字符串；`text` 可消费连续文本 |
+| 数值 | `number` / `integer` / `float` | 有限数值；`integer` 要求整数，`float` 要求小数 |
+| 布尔 | `boolean` | `true` / `false` |
+| IM 段 | `mention` / `image` / `face` / `reply` / `forward` / `dice` / `rps` | canonical segment 对应字段 |
+
+结构化 IM 参数不支持文件名默认值。运行时由 `segment-matcher` 直接在 canonical segments
+上匹配，不会先把 image、mention 等降级成文本；类型不匹配在派发时视为「命令不匹配」。
 
 路由冲突有两条规则：**静态优先**——`list.ts` 永远赢过 `[name:string].ts`，动态路由之间静态段多者（更具体）优先；**同形拒绝**——同一路由形状重复注册会在启动时报错（`Duplicate runtime Command`）。
 
@@ -48,7 +78,8 @@ export default qqEndpointCommands.remove;
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `args` | `readonly string[]` | 命令名匹配之后剩余的词（按空白切分） |
-| `params` | `Record<string, string \| number \| boolean>` | 动态参数段解析后的类型化值 |
+| `params` | `Record<string, CommandParameterValue>` | 动态参数段解析后的类型化值；结构化参数可为媒体对象 |
+| `segments` | `readonly CommandSegment[]` | 命令模式消费后剩余的结构化段；保留媒体、mention 等非文本信息 |
 | `config` | `Readonly<TConfig>` | 本插件的配置快照（来自 `zhin.config.yml`） |
 | `input` | `TInput` | 调用来源；IM 消息派发时是 Runtime `Message`（带 `$reply`），其它来源（如 Host 调用）可能为 `undefined` |
 | `use(token)` | `<T>(token: Token<T>) => T` | 取 Plugin Runtime 资源（见下） |
@@ -68,7 +99,7 @@ flowchart LR
     A[适配器入站消息] --> B[inbound 中间件]
     B --> C{剥离 commandPrefix}
     C -->|不匹配| D[未命中处理 / AI]
-    C -->|匹配| E[CommandIndex.dispatch<br/>最长前缀匹配]
+    C -->|匹配| E[CommandIndex.dispatch<br/>segment-matcher 结构化匹配]
     E --> F[execute context]
     F -->|返回值| G["$replyFrom(owner, value)"]
     G --> H[OutboundRenderer<br/>component/raw 展开]
@@ -76,7 +107,28 @@ flowchart LR
     I --> J[平台 Endpoint 发送]
 ```
 
-派发时从整句消息里做**最长前缀匹配**：按词从长到短尝试匹配命令名，命中后剩余的词进入 `args`。因此 `qq endpoint remove mybot` 会命中 `qq endpoint remove`，`args` 为空、`params.name === 'mybot'`。
+派发时按确定性优先级尝试已编译的命令模式：静态命令先于动态命令，动态命令中更具体的
+路径优先。命中后，剩余文本按空白切分进入 `args`，完整富消息尾部保留在 `segments`。
+因此 `qq endpoint remove mybot` 会命中 `qq endpoint remove <name>`，`args` 为空、
+`params.name === 'mybot'`。
+
+结构化参数示例：
+
+```ts
+// commands/upload/[asset:image].ts
+import { defineCommand } from '@zhin.js/command';
+
+export default defineCommand({
+  execute: ({ params, args, segments }) => ({
+    uploaded: params.asset,
+    captionWords: args,
+    remainingSegments: segments,
+  }),
+});
+```
+
+当消息由文本 `upload `、image 段和 caption 文本组成时，`params.asset` 是 image 的
+`MediaRef`，caption 同时以 `args` 文本兼容视图和 `segments` 结构化视图提供。
 
 ## master / trusted 权限模式
 

@@ -1,6 +1,8 @@
 # 编写第一个插件
 
-从空目录到一个能跑的插件，只要五个文件：一个命令、一份配置 schema、一个 `definePlugin` 入口，外加 `package.json` 里的 zhin 清单。
+想先看「一个文件就够」？仓库 [single-file-bot](../examples/index.md#single-file-bot-一个-botts-就是机器人) 用 `setup({ addCommand })` 注册命令，没有 `commands/` 目录——跑通再回来拆文件。
+
+从空目录到一个能跑的**约定目录**插件，只要五个文件：一个命令、一份配置 schema、一个 `definePlugin` 入口，外加 `package.json` 里的 zhin 清单。
 下面写出的 `ping-pong` 插件，所有 API 均来自官方示例 [capabilities-bot](https://github.com/zhinjs/zhin/tree/main/examples/capabilities-bot)，可直接运行。
 
 最终目录结构：

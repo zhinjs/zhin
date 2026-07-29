@@ -9,6 +9,14 @@ export interface SkillDefinition {
   readonly instructions: string;
 }
 
+declare module '@zhin.js/plugin-runtime' {
+  // Type parameter name must match the base PluginSetupContext declaration (TS2428).
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface PluginSetupContext<TConfig> {
+    addSkill(localName: string, markdown: string): void;
+  }
+}
+
 export function parseSkillMarkdown(value: unknown, context: ValidationContext): SkillDefinition {
   if (typeof value !== 'string' || !value.trim()) {
     throw new TypeError(`Skill ${context.source} must contain Markdown instructions`);

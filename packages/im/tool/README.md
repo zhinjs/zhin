@@ -36,6 +36,9 @@ export default defineAgentTool<{ city: string }>({
 
 `inputSchema` 保持 provider-neutral，可以是 JSON Schema 或模型 adapter 能理解的其它只读描述。本包不引入 Zod，也不在 ToolIndex 重复实现 schema validator。
 
+单文件插件可用 `setup({ addTool })` 注册 `defineAgentTool(...)`。Tool Feature 必须已在
+插件 manifest 中挂载；注册结果与 `tools/` 目录进入同一 ToolIndex。
+
 ## Owner 解析
 
 `ToolIndex.execute(requester, name, input)` 从 requester 向 Root 查找最近 definition。child 可覆盖继承的 Root Tool；执行上下文的 config/resource 始终属于实际声明 owner，而不是 requester。

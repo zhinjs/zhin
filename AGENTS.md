@@ -56,10 +56,10 @@ basic → kernel → ai → core → agent → zhin（→ host/http → host/mcp
 
 ### 示例分层（跑哪个 example 取决于任务层级）
 
-- **Stable 黄金路径**：[examples/minimal-bot](examples/minimal-bot/)（仅 IM；根目录 `pnpm dev` 指向它）。**推荐首跑**。
+- **Stable 黄金路径**：[examples/minimal-bot](examples/minimal-bot/)（仅 IM；根目录 `pnpm dev` 指向它）。更短的入口：[examples/single-file-bot](examples/single-file-bot/)（一个 `bot.ts`）。**推荐首跑**。
 - **L4 参考**：[examples/full-bot](examples/full-bot/)（分维度 L4 DoD；`pnpm check:l4`）。
 - [examples/test-bot](examples/test-bot/)：维护者厨房水槽（多 Endpoint / Advanced 能力），**非默认模板**；根目录用 `pnpm dev:test` 进入。
-- 进阶路径：**Stable（minimal-bot，仅 IM）→ L4（full-bot，含 AI）→ 厨房水槽（test-bot）**。
+- 进阶路径：**单文件（single-file-bot）→ Stable（minimal-bot）→ L4（full-bot）→ 厨房水槽（test-bot）**。
 
 ### zhin.js 4.x 安装分档
 

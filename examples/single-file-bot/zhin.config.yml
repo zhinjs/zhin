@@ -5,12 +5,18 @@
 #   token: ${HTTP_TOKEN}
 #   corsOrigins:
 #     - "https://console.zhin.dev"
-
+log_level: info
 plugins:
   sandbox:
-    # 对齐 Stable 黄金路径：命令保留 / 前缀（/hello）；无前缀文本落入 unmatched 回退
+    # 对齐 Stable 黄金路径：命令保留 / 前缀（/hello）。
     commandPrefix: '/'
     endpoints:
       - context: sandbox
         name: sandbox-bot
         owner: sandbox-user
+  icqq:
+    commandPrefix: ''
+    master: "${ICQQ_MASTER:-1659488338}"
+    # 多账号：一个插件实例挂多个 endpoint（见 @zhin.js/adapter expandEndpointConfigs）
+    endpoints:
+      - name: "${ICQQ_ACCOUNT_2:-1689919782}"

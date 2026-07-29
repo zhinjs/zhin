@@ -122,6 +122,7 @@ describe('Command Feature', () => {
         value: 'alice:open,assigned',
       });
     await expect(index.dispatch('gh issue missing')).resolves.toEqual({ matched: false });
+    await expect(index.dispatch('gh issue listing')).resolves.toEqual({ matched: false });
   });
 
   it('compiles typed filename parameters and applies defaults', async () => {
@@ -243,6 +244,33 @@ describe('Command Feature', () => {
     }])).rejects.toThrow('default for count:number is invalid');
   });
 
+  it('discovers structured parameter files and rejects structured defaults', async () => {
+    const owner = rootPluginId();
+    const source = '/project/commands/upload/[asset:image].ts';
+    const command = defineCommand({ execute: ({ params }) => params.asset });
+    const host = new MemoryDiscoveryHost({
+      '/project/commands': [{ name: 'upload', kind: 'directory' }],
+      '/project/commands/upload': [{ name: '[asset:image].ts', kind: 'file' }],
+    }, new Map([[source, { default: command }]]));
+
+    const slots = await new FeatureDiscovery(host).discover(commandFeature, [{
+      owner,
+      packageRoot: '/project',
+    }]);
+    expect(slots[0]?.definition.$parameter).toEqual({
+      name: 'asset',
+      type: 'image',
+    });
+
+    const invalidHost = new MemoryDiscoveryHost({
+      '/project/commands': [{ name: '[asset:image=true].ts', kind: 'file' }],
+    }, new Map());
+    await expect(new FeatureDiscovery(invalidHost).discover(commandFeature, [{
+      owner,
+      packageRoot: '/project',
+    }])).rejects.toThrow('default for structured parameter asset:image is not supported');
+  });
+
   it('rejects command-word collisions across owner and directory namespaces', () => {
     const root = rootPluginId();
     const child = childPluginId(root, 'child');
@@ -345,6 +373,50 @@ describe('Command Feature', () => {
     await expect(index.execute('foo bar')).resolves.toBe('specific:fallback');
     await expect(index.execute('foo bar baz')).resolves.toBe('specific:baz');
     await expect(index.execute('foo other')).resolves.toBe('generic:other');
+  });
+
+  it('matches canonical structured parameters and preserves remaining segments', async () => {
+    const owner = rootPluginId();
+    const image = Object.freeze({
+      kind: 'url',
+      value: 'https://example.com/avatar.png',
+    });
+    const slot = createCapabilitySlot({
+      owner,
+      feature: commandFeatureId,
+      localName: 'upload/$asset',
+      source: '/commands/upload/[asset:image].ts',
+      definition: {
+        ...defineCommand({
+          execute: ({ params, args, segments }) => ({
+            asset: params.asset,
+            args,
+            segments,
+          }),
+        }),
+        $parameter: { name: 'asset', type: 'image' } as const,
+      },
+    });
+    const index = new CommandIndex([slot], snapshotFor(owner, [slot]));
+    const segments = [
+      { type: 'text', data: { text: 'upload ' } },
+      { type: 'image', data: { media: image } },
+      { type: 'text', data: { text: ' caption words ' } },
+      { type: 'mention', data: { target: '10001' } },
+    ] as const;
+
+    await expect(index.dispatch(segments)).resolves.toMatchObject({
+      matched: true,
+      command: 'upload <asset>',
+      value: {
+        asset: image,
+        args: ['caption', 'words'],
+        segments: [
+          { type: 'text', data: { text: 'caption words ' } },
+          { type: 'mention', data: { target: '10001' } },
+        ],
+      },
+    });
   });
 });
 

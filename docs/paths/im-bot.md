@@ -2,6 +2,8 @@
 
 目标：一个响应命令、能发通知的聊天机器人。不碰任何 AI 概念。
 
+想先确认「框架能不能跑」？仓库里的 [single-file-bot](../examples/index.md#single-file-bot-一个-botts-就是机器人) 一个 `bot.ts` 就能在 Console Sandbox 里回 `/hello`。
+
 ## 1. 创建项目（2 分钟）
 
 ```bash
@@ -10,9 +12,9 @@ cd my-bot
 pnpm dev
 ```
 
-`-y` 走 IM-only 黄金路径：Sandbox 适配器（本地调试）+ Remote Console，不需要任何云 Key。
+`-y` 走 IM-only 黄金路径：Sandbox 适配器（本地调试）+ Remote Console，**不需要任何云 Key**。
 看到启动日志后，打开 [console.zhin.dev](https://console.zhin.dev)，
-Host 填 `http://127.0.0.1:8086`，token 在 `.env` 的 `HTTP_TOKEN`。
+Host 填 `http://127.0.0.1:8086`，token 在 `.env` 的 `HTTP_TOKEN`。Sandbox 里发 **`/hello`** 应有回复。
 
 ## 2. 写第一个命令（5 分钟）
 

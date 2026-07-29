@@ -26,6 +26,11 @@ import type {
   RuntimeGenerationModel,
 } from './runtime-generation.js';
 import { SourceOwnershipIndex } from './source-ownership.js';
+import {
+  addCapabilitySlot,
+  featureSetupAliases,
+  mergeSetupCapabilities,
+} from './setup-capabilities.js';
 
 export class SubtreeTopologyChangedError extends Error {
   constructor(message: string) {
@@ -69,6 +74,7 @@ export class SubtreeGenerationPreparer {
       },
       this.isolation,
     );
+    plugins.installSetupFeatureAliases(featureSetupAliases(this.model.providers.values()));
     plugins.removeSubtrees(roots);
 
     const projectionDisposers = new Map<FeatureId, Dispose>();
@@ -83,13 +89,19 @@ export class SubtreeGenerationPreparer {
       for (const [id, slot] of capabilities) {
         if (roots.some((root) => isWithin(slot.owner, root))) capabilities.delete(id);
       }
+      mergeSetupCapabilities(
+        capabilities,
+        plugins.setupCapabilities(),
+        this.model.providers,
+        this.model.rootsByFeature,
+      );
       const discovery = new FeatureDiscovery(new NodeDiscoveryHost(this.modules));
       for (const provider of this.model.providers.values()) {
         const affectedRoots = (this.model.rootsByFeature.get(provider.id) ?? [])
           .filter((root) => roots.some((owner) => isWithin(root.owner, owner)));
         if (affectedRoots.length === 0) continue;
         const slots = await discovery.discover(provider, affectedRoots);
-        for (const slot of slots) capabilities.set(slot.id, slot);
+        for (const slot of slots) addCapabilitySlot(capabilities, slot);
       }
 
       const projected = await new FeatureProjector(this.model.providers.values()).project(

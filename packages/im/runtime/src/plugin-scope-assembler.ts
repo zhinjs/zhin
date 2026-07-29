@@ -3,15 +3,21 @@ import {
   DisposeStack,
   GenerationHandoffStack,
   Scope,
+  capabilityId,
+  featureId,
   rootPluginId,
+  type CapabilityId,
   type ConfigView,
   type Dispose,
+  type FeatureId,
   type GenerationHandoff,
   type GenerationHandoffRegistry,
   type PluginDefinition,
   type PluginId,
   type PluginInstanceView,
   type PluginNodeSnapshot,
+  type PluginSetupContext,
+  type SetupCapabilityRegistration,
   type TokenId,
 } from '@zhin.js/plugin-runtime';
 import { runtimeEnvironmentToken, type RuntimeEnvironment } from './environment.js';
@@ -57,9 +63,11 @@ export class PluginScopeAssembler {
   readonly tree: Map<PluginId, PluginNodeSnapshot>;
   readonly config: Map<PluginId, unknown>;
   readonly resources: Map<PluginId, ReadonlyMap<TokenId, unknown>>;
+  readonly #setupCapabilities = new Map<CapabilityId, SetupCapabilityRegistration>();
   readonly #created: PluginId[] = [];
   readonly #handoffs = new GenerationHandoffStack();
   readonly #envStores: EnvStoreFactory;
+  #setupFeatureAliases: ReadonlyMap<string, FeatureId> = new Map();
 
   constructor(
     private readonly modules: ModuleRuntime,
@@ -88,6 +96,10 @@ export class PluginScopeAssembler {
       this.config.delete(owner);
       this.resources.delete(owner);
     }
+  }
+
+  installSetupFeatureAliases(aliases: ReadonlyMap<string, FeatureId>): void {
+    this.#setupFeatureAliases = new Map(aliases);
   }
 
   async setupTree(node: PluginGraphNode): Promise<void> {
@@ -163,13 +175,40 @@ export class PluginScopeAssembler {
           throw new Error(`Missing resource ${token.id} for Plugin ${node.id}`);
         }
       }
-      const returned = await definition.setup?.({
+      const register = <TDefinition>(
+        feature: FeatureId | string,
+        localName: string,
+        capabilityDefinition: TDefinition,
+      ): void => {
+        const featureName = featureId(String(feature));
+        const id = capabilityId(node.id, featureName, localName);
+        if (this.#setupCapabilities.has(id)) {
+          throw new Error(`Duplicate setup Capability: ${id}`);
+        }
+        this.#setupCapabilities.set(id, Object.freeze({
+          id,
+          owner: node.id,
+          feature: featureName,
+          localName,
+          source: resolve(node.package.root, manifest.entry),
+          definition: capabilityDefinition,
+        }));
+      };
+      const setupContext: Record<string, unknown> = {
         plugin,
         config: view,
         resources: scope,
         lifecycle: scope.disposers,
         handoff: this.#handoffs,
-      });
+        addFeature: register,
+      };
+      for (const [method, feature] of this.#setupFeatureAliases) {
+        setupContext[method] = (name: string, value: unknown) =>
+          register(feature, name, value);
+      }
+      const returned = await definition.setup?.(
+        Object.freeze(setupContext) as unknown as PluginSetupContext,
+      );
       if (returned) scope.disposers.add(returned);
       metadata = definition.metadata;
     }
@@ -214,6 +253,10 @@ export class PluginScopeAssembler {
 
   generationHandoff(): GenerationHandoff | undefined {
     return this.#handoffs.seal();
+  }
+
+  setupCapabilities(): readonly Readonly<SetupCapabilityRegistration>[] {
+    return Object.freeze([...this.#setupCapabilities.values()]);
   }
 }
 

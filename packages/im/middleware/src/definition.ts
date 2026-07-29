@@ -19,6 +19,15 @@ export interface MiddlewareDefinition<TInput = unknown, TConfig = unknown> {
   handle(context: MiddlewareContext<TInput, TConfig>, next: MiddlewareNext): void | Promise<void>;
 }
 
+declare module '@zhin.js/plugin-runtime' {
+  interface PluginSetupContext<TConfig> {
+    addMiddleware<TInput = unknown>(
+      localName: string,
+      definition: MiddlewareDefinition<TInput, TConfig>,
+    ): void;
+  }
+}
+
 export function defineMiddleware<TInput = unknown, TConfig = unknown>(
   definition: Omit<
     MiddlewareDefinition<TInput, TConfig>,

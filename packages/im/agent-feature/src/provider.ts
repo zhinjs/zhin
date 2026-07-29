@@ -33,6 +33,7 @@ const agentFeature = defineFeatureProvider({
   protocol: 1,
   id: agentFeatureId,
   authoring: {
+    setupMethod: 'addAgent',
     conventions: [agentFiles],
     validate: parseAgentMarkdown,
   },

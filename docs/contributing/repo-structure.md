@@ -21,7 +21,7 @@ title: 仓库结构
 | `plugins/games/` | 游戏插件（blackjack、guess-number、idiom-chain、rps、tic-tac-toe 等） |
 | `plugins/services/` | 服务插件（如 `activity-feedback`） |
 | `plugins/utils/` | 工具插件（rss、repeater、lottery、music、qrcode、short-url、code-runner 等） |
-| `examples/` | 参考实现，按复杂度分层：`minimal-bot`（Stable 黄金路径，仅 IM）→ `full-bot`（L4 全维度参考）→ `test-bot`（维护者厨房水槽，非用户模板） |
+| `examples/` | 参考实现，按复杂度分层：`single-file-bot`（一个 `bot.ts`）→ `minimal-bot`（Stable 约定目录，仅 IM）→ `full-bot`（L4）→ `test-bot`（维护者厨房水槽，非用户模板） |
 | `deploy/` | 部署样例（如 `huggingface/`） |
 | `scripts/` | harness 门禁脚本与构建/发布辅助脚本（`check-*.mjs`、`run-*.mjs`、`sync-*.mjs`） |
 | `tests/` | 跨包契约测试、文档/配置对齐测试、快照（`contracts/`、`docs/`、`snapshots/`） |

@@ -16,6 +16,9 @@ export default defineAdapter({
 本包只依赖 Kernel 与 Feature Kit，不包含具体平台 SDK。生产 manifest 指向
 `lib/provider.js`；开发时可通过 conditional export 读取源码。
 
+单文件插件可用 `setup({ addAdapter })` 注册 `defineAdapter(...)`；Endpoint 仍由同一个
+AdapterIndex 和 generation handoff 管理。
+
 ## Endpoint 生命周期基座（createEndpointLifecycle）
 
 WS/SSE 类端点的 start/stop/重连/心跳统一走 `createEndpointLifecycle`

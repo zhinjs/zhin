@@ -16,6 +16,15 @@ export interface ComponentDefinition<
   render(props: TProps, context: ComponentContext<TConfig>): TResult | Promise<TResult>;
 }
 
+declare module '@zhin.js/plugin-runtime' {
+  interface PluginSetupContext<TConfig> {
+    addComponent<TProps = unknown, TResult = unknown>(
+      localName: string,
+      definition: ComponentDefinition<TProps, TResult, TConfig>,
+    ): void;
+  }
+}
+
 export function defineComponent<
   TProps = unknown,
   TResult = unknown,

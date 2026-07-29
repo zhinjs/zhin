@@ -6,8 +6,33 @@ import {
 
 const commandBrand = 'zhin.command/1' as const;
 
-export type CommandParameterType = 'string' | 'number' | 'boolean';
-export type CommandParameterValue = string | number | boolean;
+export type CommandParameterType =
+  | 'string'
+  | 'number'
+  | 'integer'
+  | 'float'
+  | 'boolean'
+  | 'word'
+  | 'text'
+  | 'mention'
+  | 'image'
+  | 'face'
+  | 'reply'
+  | 'forward'
+  | 'dice'
+  | 'rps';
+export type CommandParameterValue =
+  | string
+  | number
+  | boolean
+  | Readonly<Record<string, unknown>>
+  | null;
+
+/** Minimal structural contract shared with canonical IM segments. */
+export interface CommandSegment {
+  readonly type: string | { readonly name: string };
+  readonly data: Readonly<Record<string, unknown>>;
+}
 
 export interface CommandParameterDefinition {
   readonly name: string;
@@ -19,6 +44,8 @@ export interface CommandContext<TConfig = unknown, TInput = unknown>
   extends CapabilityContext<TConfig> {
   readonly args: readonly string[];
   readonly params: Readonly<Record<string, CommandParameterValue>>;
+  /** Structured arguments left after the command pattern was consumed. */
+  readonly segments: readonly Readonly<CommandSegment>[];
   readonly input: TInput;
 }
 
@@ -27,6 +54,15 @@ export interface CommandDefinition<TConfig = unknown, TResult = unknown, TInput 
   readonly $parameter?: CommandParameterDefinition;
   readonly description?: string;
   execute(context: CommandContext<TConfig, TInput>): TResult | Promise<TResult>;
+}
+
+declare module '@zhin.js/plugin-runtime' {
+  interface PluginSetupContext<TConfig> {
+    addCommand<TResult = unknown, TInput = unknown>(
+      localName: string,
+      definition: CommandDefinition<TConfig, TResult, TInput>,
+    ): void;
+  }
 }
 
 /**
@@ -67,12 +103,25 @@ export function createCommandContext(
   args: readonly string[],
   params: Readonly<Record<string, CommandParameterValue>> = Object.freeze({}),
   input: unknown = undefined,
+  segments: readonly Readonly<CommandSegment>[] = Object.freeze([]),
 ): CommandContext {
   const context = createCapabilityContext(snapshot, ownerId);
   return Object.freeze({
     ...context,
     args: Object.freeze([...args]),
     params: Object.freeze({ ...params }),
+    segments: freezeSegments(segments),
     input,
   });
+}
+
+function freezeSegments(
+  segments: readonly Readonly<CommandSegment>[],
+): readonly Readonly<CommandSegment>[] {
+  return Object.freeze(segments.map((segment) => Object.freeze({
+    type: typeof segment.type === 'string'
+      ? segment.type
+      : Object.freeze({ name: segment.type.name }),
+    data: Object.freeze({ ...segment.data }),
+  })));
 }

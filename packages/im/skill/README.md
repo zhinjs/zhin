@@ -22,6 +22,10 @@ Prefer primary sources. Record uncertainty and citations.
 
 Feature 不解析或重写 Markdown frontmatter；完整文本原样保存为 `instructions`。首个 Markdown heading 用作 description，没有 heading 时回退到目录名。模型 adapter 可以按自身能力解释 Markdown，但不能维护第二份 Skill metadata registry。
 
+单文件插件可用 `setup({ addSkill })` 直接注册 Markdown：
+`addSkill('research', '# Research\n\nPrefer primary sources.')`。内容仍经过同一个
+Markdown validator 并进入 SkillIndex。
+
 ## Projection
 
 `SkillIndex` 提供：

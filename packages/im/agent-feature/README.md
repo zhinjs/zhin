@@ -22,6 +22,10 @@ Break the request into verifiable steps. Prefer reversible actions.
 
 完整 Markdown 是 `instructions` SSOT。首个 heading 作为 description；没有 heading 时使用文件 identity。Feature 不绑定模型、system prompt 模板、tool policy 或 session store，这些属于 orchestrator adapter。
 
+单文件插件可用 `setup({ addAgent })` 注册 Markdown Agent，例如
+`addAgent('planner', '# Planner\n\nBreak work into verifiable steps.')`；目录模式和 setup
+模式共用 AgentIndex。
+
 ## Projection
 
 `AgentIndex.list()` 返回全树 qualified descriptors；`visible(owner)` 和 `get(owner, name)` 使用 nearest-owner inheritance。不同 Plugin owner 的同名 Agent 不通过扫描顺序覆盖。

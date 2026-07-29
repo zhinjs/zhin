@@ -354,12 +354,18 @@ export interface EndpointCommandsSpec {
  * 命令定义的最小结构（与 @zhin.js/command 的 CommandDefinition 结构兼容）。
  * provider 层不允许 import @zhin.js/command，故 defineCommand 由调用方注入，
  * 这里只描述结构；适配器侧传入 defineCommand 后 TCommand 即 Readonly<CommandDefinition>。
+ *
+ * `params` 值域须与 CommandParameterValue 对齐（含 null / 结构化对象），
+ * 否则注入的 defineCommand 会因 TS 逆变检查失败（TS2345）。
  */
 export interface EndpointCommandContext {
   readonly config: unknown;
   readonly input: unknown;
   readonly args: readonly string[];
-  readonly params: Readonly<Record<string, string | number | boolean>>;
+  readonly params: Readonly<Record<
+    string,
+    string | number | boolean | Readonly<Record<string, unknown>> | null
+  >>;
   readonly use: EndpointCommandUse;
 }
 

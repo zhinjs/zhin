@@ -68,7 +68,24 @@ interface ParsedCommandFile {
 }
 
 const dynamicCommandFilePattern =
-  /^\[([a-z][a-zA-Z0-9]*):(string|number|boolean)(?:=([^\]]*))?\]\.tsx?$/;
+  /^\[([a-z][a-zA-Z0-9]*):([a-z][a-z0-9-]*)(?:=([^\]]*))?\]\.tsx?$/;
+
+const commandParameterTypes = new Set<CommandParameterType>([
+  'string',
+  'number',
+  'integer',
+  'float',
+  'boolean',
+  'word',
+  'text',
+  'mention',
+  'image',
+  'face',
+  'reply',
+  'forward',
+  'dice',
+  'rps',
+]);
 
 function parseCommandFile(value: string): ParsedCommandFile | undefined {
   if (/^[a-z0-9][a-z0-9-]*\.tsx?$/.test(value)) {
@@ -76,10 +93,11 @@ function parseCommandFile(value: string): ParsedCommandFile | undefined {
   }
   const match = dynamicCommandFilePattern.exec(value);
   if (match) {
-    const [, name, type, rawDefault] = match as RegExpExecArray & {
-      readonly 1: string;
-      readonly 2: CommandParameterType;
-    };
+    const [, name, rawType, rawDefault] = match;
+    if (!name || !rawType || !commandParameterTypes.has(rawType as CommandParameterType)) {
+      throw new CommandPathSyntaxError(value, `unsupported parameter type: ${rawType ?? ''}`);
+    }
+    const type = rawType as CommandParameterType;
     // Metadata can change during HMR while $name keeps the Capability identity stable.
     const parameter = rawDefault === undefined
       ? { name, type }
@@ -98,12 +116,32 @@ function parseParameterValue(
   value: string,
   source: string,
 ): CommandParameterValue {
-  if (type === 'string') return value;
-  if (type === 'number') {
+  if (type === 'string' || type === 'word' || type === 'text') return value;
+  if (type === 'number' || type === 'integer' || type === 'float') {
     const number = Number(value);
-    if (value.trim().length > 0 && Number.isFinite(number)) return number;
-  } else if (value === 'true' || value === 'false') {
-    return value === 'true';
+    if (
+      value.trim().length > 0
+      && Number.isFinite(number)
+      && (type !== 'integer' || Number.isInteger(number))
+      && (type !== 'float' || value.includes('.'))
+    ) return number;
+    throw new CommandPathSyntaxError(
+      source,
+      `default for ${name}:${type} is invalid`,
+    );
+  }
+  if (type === 'boolean') {
+    if (value === 'true' || value === 'false') return value === 'true';
+    throw new CommandPathSyntaxError(
+      source,
+      `default for ${name}:${type} is invalid`,
+    );
+  }
+  if (isStructuredParameter(type)) {
+    throw new CommandPathSyntaxError(
+      source,
+      `default for structured parameter ${name}:${type} is not supported`,
+    );
   }
   throw new CommandPathSyntaxError(
     source,
@@ -111,8 +149,18 @@ function parseParameterValue(
   );
 }
 
+function isStructuredParameter(type: CommandParameterType): boolean {
+  return type === 'mention'
+    || type === 'image'
+    || type === 'face'
+    || type === 'reply'
+    || type === 'forward'
+    || type === 'dice'
+    || type === 'rps';
+}
+
 export class CommandPathSyntaxError extends TypeError {
-  constructor(file: string, detail = 'expected [name:string|number|boolean=default].ts(x)') {
+  constructor(file: string, detail = 'expected [name:type=default].ts(x)') {
     super(`Invalid Command path ${file}: ${detail}`);
     this.name = 'CommandPathSyntaxError';
   }
@@ -122,6 +170,7 @@ const commandFeature = defineFeatureProvider({
   protocol: 1,
   id: commandFeatureId,
   authoring: {
+    setupMethod: 'addCommand',
     conventions: [commandFiles],
     validate: parseCommandDefinition,
   },

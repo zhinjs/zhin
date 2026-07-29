@@ -9,6 +9,7 @@ const mcpFeature = defineFeatureProvider({
   protocol: 1,
   id: mcpFeatureId,
   authoring: {
+    setupMethod: 'addMcp',
     conventions: [typeScriptModules({
       id: 'mcp-ts',
       directory: 'mcp',

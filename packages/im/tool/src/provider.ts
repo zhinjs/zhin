@@ -9,6 +9,7 @@ const toolFeature = defineFeatureProvider({
   protocol: 1,
   id: toolFeatureId,
   authoring: {
+    setupMethod: 'addTool',
     conventions: [typeScriptModules({
       id: 'tools-ts',
       directory: 'tools',

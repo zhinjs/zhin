@@ -18,11 +18,11 @@ export default definePlugin<MyConfig>({
 
 几个硬约束先记住。`name` 必填，必须匹配 `^[a-z][a-z0-9-]*$`，否则 `definePlugin` 直接抛 `TypeError`；返回的 definition 被 `Object.freeze`，不可再改。`setup` 可同步、可 async，可选地返回一个 `Dispose`，在当前代（generation）结束时执行。
 
-> 从零起步的完整教程见 [编写第一个插件](../getting-started/first-plugin.md)；插件模型概念见 [插件模型](../concepts/plugin-model.md)。
+> 从零起步：最短看 [single-file-bot](../examples/index.md#single-file-bot-一个-botts-就是机器人)；约定目录教程见 [编写第一个插件](../getting-started/first-plugin.md)；概念见 [插件模型](../concepts/plugin-model.md)。
 
-## setup context 五个成员
+## setup context
 
-`setup` 收到的 `PluginSetupContext<TConfig>` 只有五个成员，全部只读：
+`setup` 收到的 `PluginSetupContext<TConfig>` 成员全部只读：
 
 | 成员 | 类型 | 作用 |
 | --- | --- | --- |
@@ -31,6 +31,40 @@ export default definePlugin<MyConfig>({
 | `resources` | `Scope` | 资源作用域：`has(token)` / `use(token)` 解析 Host token，`provide(token, value, dispose?)` 向子作用域发布资源 |
 | `lifecycle` | `DisposeStack` | 代的回收栈：`lifecycle.add(dispose)` 登记的清理函数在代结束时按逆序执行 |
 | `handoff` | `GenerationHandoffRegistry` | 代际交接注册表：`handoff.add(participant)` 参与热重载事务（见下文「代际交接」） |
+| `addFeature(feature, name, definition)` | 通用 Feature 注册入口 | 将内存 definition 注册为当前插件的 Capability；仍走 provider 校验、冲突检测和 generation transaction |
+
+导入 Stable Feature 的 authoring 包后，context 会通过类型扩展获得对应快捷方法：
+`addCommand`、`addComponent`、`addMiddleware`、`addAdapter`。可选 AI 能力同样提供
+`addAgent`、`addSkill`、`addTool`、`addMcp`。它们只是 `addFeature` 的强类型窄化，
+不会建立第二套注册表。
+
+```ts
+import { defineCommand } from '@zhin.js/command';
+import { defineComponent } from '@zhin.js/component';
+import { definePlugin } from '@zhin.js/plugin-runtime';
+
+export default definePlugin({
+  name: 'single-file-bot',
+  setup({ addCommand, addComponent }) {
+    addCommand('hello', defineCommand({
+      description: 'Say hello',
+      execute: () => 'Hello.',
+    }));
+    addComponent('status', defineComponent({
+      render: () => 'online',
+    }));
+  },
+});
+```
+
+快捷注册与 `commands/hello.ts`、`components/status.tsx` 的目录发现最终生成相同的
+`CapabilitySlot`。两者同名会在 prepare 阶段报 `Duplicate Capability Slot`；未挂载对应
+Feature 时也会拒绝启动。单文件入口修改会重建该插件 Scope，拆成约定目录后则可获得
+单能力文件级 HMR。
+
+自定义 Feature 可在 provider 的 `authoring.setupMethod` 声明自己的快捷方法名（必须是
+`addXxx` 形式），Runtime 会动态安装它；TypeScript 类型由该 Feature 对
+`PluginSetupContext` 做 module augmentation。Runtime 不维护 Feature 名称白名单。
 
 看一段真实装配就清楚了（`examples/capabilities-bot/plugin.ts`，节选）：
 

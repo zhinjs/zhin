@@ -21,6 +21,12 @@ export interface McpDefinition<TConfig = unknown> {
   create(context: CapabilityContext<TConfig>): McpClientInstance | Promise<McpClientInstance>;
 }
 
+declare module '@zhin.js/plugin-runtime' {
+  interface PluginSetupContext<TConfig> {
+    addMcp(localName: string, definition: McpDefinition<TConfig>): void;
+  }
+}
+
 export function defineMcp<TConfig = unknown>(
   definition: Omit<McpDefinition<TConfig>, '$feature'>,
 ): Readonly<McpDefinition<TConfig>> {

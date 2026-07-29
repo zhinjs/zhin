@@ -15,6 +15,9 @@ export default defineMiddleware({
 Middleware 不直接持有 Root 或运行时 registry；每次执行使用同一 generation snapshot，
 更新时由 Feature Slot 原子替换。
 
+单文件插件可用 `setup({ addMiddleware })` 注册 `defineMiddleware(...)`；它仍参与
+统一 phase/order/topology 排序和 generation 回滚。
+
 验证：`pnpm --filter @zhin.js/middleware test && pnpm --filter @zhin.js/middleware build`。
 
 生命周期与 HMR 说明见 [目标架构](../../docs/target-architecture.md)。

@@ -36,6 +36,7 @@ const skillFeature = defineFeatureProvider({
   protocol: 1,
   id: skillFeatureId,
   authoring: {
+    setupMethod: 'addSkill',
     conventions: [skillFiles],
     validate: parseSkillMarkdown,
   },

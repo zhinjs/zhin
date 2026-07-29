@@ -552,6 +552,9 @@ importers:
 
   examples/single-file-bot:
     dependencies:
+      '@zhin.js/adapter-icqq':
+        specifier: workspace:*
+        version: link:../../plugins/adapters/icqq
       '@zhin.js/adapter-sandbox':
         specifier: workspace:*
         version: link:../../plugins/adapters/sandbox
@@ -1221,6 +1224,9 @@ importers:
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../plugin-runtime
+      segment-matcher:
+        specifier: ^1.0.5
+        version: 1.0.5
     devDependencies:
       '@types/node':
         specifier: ^26.1.0

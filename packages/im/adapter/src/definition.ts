@@ -84,6 +84,15 @@ export interface AdapterDefinition<TConfig = unknown, TResult = unknown> {
   ): EndpointInstance<TResult> | Promise<EndpointInstance<TResult>>;
 }
 
+declare module '@zhin.js/plugin-runtime' {
+  interface PluginSetupContext<TConfig> {
+    addAdapter<TResult = unknown>(
+      localName: string,
+      definition: AdapterDefinition<TConfig, TResult>,
+    ): void;
+  }
+}
+
 export function defineAdapter<TConfig = unknown, TResult = unknown>(
   definition: Omit<AdapterDefinition<TConfig, TResult>, '$feature'>,
 ): Readonly<AdapterDefinition<TConfig, TResult>> {

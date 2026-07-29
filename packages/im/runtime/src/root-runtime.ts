@@ -77,6 +77,11 @@ import {
 import { SlotGenerationPreparer } from './slot-generation-preparer.js';
 import { SourceOwnershipIndex } from './source-ownership.js';
 import {
+  addCapabilitySlot,
+  featureSetupAliases,
+  mergeSetupCapabilities,
+} from './setup-capabilities.js';
+import {
   SubtreeGenerationPreparer,
   SubtreeTopologyChangedError,
 } from './subtree-generation-preparer.js';
@@ -527,6 +532,7 @@ class GenerationAssembler {
       // Prepare is deliberately ordered: providers define discovery, setup
       // creates owner scopes, then definitions can be projected against both.
       await this.#loadProviders(this.graph.root);
+      this.#plugins.installSetupFeatureAliases(featureSetupAliases(this.#catalog.values()));
       await this.#plugins.setupTree(this.graph.root);
       await this.#discover();
       const projected = await new FeatureProjector(this.#catalog.values())
@@ -610,11 +616,17 @@ class GenerationAssembler {
   }
 
   async #discover(): Promise<void> {
+    mergeSetupCapabilities(
+      this.#capabilities,
+      this.#plugins.setupCapabilities(),
+      new Map(this.#catalog.values().map((provider) => [provider.id, provider])),
+      this.#rootsByFeature,
+    );
     const discovery = new FeatureDiscovery(this.#host);
     for (const provider of this.#catalog.values()) {
       const roots = this.#rootsByFeature.get(provider.id) ?? [];
       const slots = await discovery.discover(provider, roots);
-      for (const slot of slots) this.#capabilities.set(slot.id, slot);
+      for (const slot of slots) addCapabilitySlot(this.#capabilities, slot);
     }
   }
 

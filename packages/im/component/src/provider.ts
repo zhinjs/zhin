@@ -9,6 +9,7 @@ const componentFeature = defineFeatureProvider({
   protocol: 1,
   id: componentFeatureId,
   authoring: {
+    setupMethod: 'addComponent',
     conventions: [typeScriptModules({
       id: 'components-tsx',
       directory: 'components',

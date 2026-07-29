@@ -163,6 +163,66 @@ describe('IM Runtime', () => {
       .resolves.toMatchObject({ matched: false });
   });
 
+  it('matches structured Command parameters after stripping commandPrefix', async () => {
+    const root = rootPluginId();
+    const media = Object.freeze({
+      kind: 'url' as const,
+      value: 'https://example.com/photo.png',
+    });
+    const command = createCapabilitySlot({
+      owner: root,
+      feature: commandFeatureId,
+      localName: 'upload/$asset',
+      source: '/commands/upload/[asset:image].ts',
+      definition: {
+        ...defineCommand({
+          execute: ({ params }) =>
+            (params.asset as typeof media).value,
+        }),
+        $parameter: { name: 'asset', type: 'image' } as const,
+      },
+    });
+    const state: SnapshotState = {
+      root,
+      tree: new Map([[root, {
+        id: root,
+        instanceKey: 'root',
+        packageName: '@test/root',
+        packageRoot: '/project',
+        children: [],
+      }]]),
+      config: new Map([[root, { commandPrefix: '/' }]]),
+      resources: new Map([[root, new Map()]]),
+      capabilities: new Map([[command.id, command]]),
+      projections: new Map(),
+    };
+    const base = createSnapshotView(1, state);
+    const snapshot = createSnapshotView(1, {
+      ...state,
+      projections: new Map([[commandFeatureId, new CommandIndex([command], base)]]),
+    });
+    const message = new Message(
+      capabilityId(root, adapterFeatureId, 'memory'),
+      'room',
+      '/upload',
+      1,
+      async () => undefined,
+      undefined,
+      undefined,
+      undefined,
+      Object.freeze([
+        { type: 'text', data: { text: '/upload ' } },
+        { type: 'image', data: { media } },
+      ]),
+    );
+
+    await expect(new MessageDispatcher().dispatch(message, snapshot)).resolves.toMatchObject({
+      matched: true,
+      command: 'upload <asset>',
+      value: media.value,
+    });
+  });
+
   it('runs command, component, outbound middleware and Endpoint send in one lease', async () => {
     const events: string[] = [];
     const sent: unknown[] = [];

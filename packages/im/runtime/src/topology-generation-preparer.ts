@@ -36,6 +36,11 @@ import type {
 } from './runtime-generation.js';
 import { SourceOwnershipIndex } from './source-ownership.js';
 import {
+  addCapabilitySlot,
+  featureSetupAliases,
+  mergeSetupCapabilities,
+} from './setup-capabilities.js';
+import {
   TopologyTransactionPlanner,
   collapseRoots,
   graphNodes,
@@ -92,6 +97,7 @@ export class TopologyGenerationPreparer {
       },
       this.isolation,
     );
+    plugins.installSetupFeatureAliases(featureSetupAliases(featureTopology.providers.values()));
     const setupRoots = collapseRoots([
       ...plan.addedPluginRoots,
       ...plan.replacedPluginRoots,
@@ -118,6 +124,12 @@ export class TopologyGenerationPreparer {
         plan,
         setupRoots,
         featureTopology,
+      );
+      mergeSetupCapabilities(
+        capabilities,
+        plugins.setupCapabilities(),
+        featureTopology.providers,
+        featureTopology.rootsByFeature,
       );
       const projected = await new FeatureProjector(featureTopology.providers.values()).project(
         current.generation + 1,
@@ -254,7 +266,7 @@ export class TopologyGenerationPreparer {
       const provider = topology.providers.get(feature);
       if (!provider) throw new Error(`Missing Feature provider for ${feature}`);
       for (const slot of await discovery.discover(provider, selected)) {
-        capabilities.set(slot.id, slot);
+        addCapabilitySlot(capabilities, slot);
       }
     }
     return capabilities;

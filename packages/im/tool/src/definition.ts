@@ -21,6 +21,15 @@ export interface AgentToolDefinition<
   execute(input: TInput, context: CapabilityContext<TConfig>): TResult | Promise<TResult>;
 }
 
+declare module '@zhin.js/plugin-runtime' {
+  interface PluginSetupContext<TConfig> {
+    addTool<TInput = unknown, TResult = unknown>(
+      localName: string,
+      definition: AgentToolDefinition<TInput, TResult, TConfig>,
+    ): void;
+  }
+}
+
 export function defineAgentTool<
   TInput = unknown,
   TResult = unknown,
