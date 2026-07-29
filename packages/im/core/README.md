@@ -18,65 +18,51 @@ Zhin.js **IM/多通道运行时**包：Plugin、Adapter、**Endpoint**、Message
 
 ## 核心概念
 
-### Plugin（插件）
+### Plugin（插件）— Plugin Runtime
 
-插件是 Zhin.js 的基本组织单位。每个插件拥有独立的生命周期和上下文，通过 `usePlugin()` Hook 访问框架能力。
-
-```typescript
-import { usePlugin, MessageCommand } from '@zhin.js/core'
-
-const { addCommand, addTool, addSchedule, onMounted, onDispose } = usePlugin()
-
-onMounted(() => console.log('插件已挂载'))
-onDispose(() => console.log('插件已卸载'))
-
-addCommand(
-  new MessageCommand('hello <name:word>')
-    .desc('打招呼')
-    .action((_, result) => `Hello, ${result.params.name}!`)
-)
-```
-
-插件名称默认从文件路径推导，也可以显式声明：
+唯一启动路径：`zhin runtime start`。`plugin.ts` 必须 default-export `definePlugin()`；能力按约定目录发现。
 
 ```typescript
-// 方式 1: 导出 pluginName 常量
-export const pluginName = 'my-awesome-plugin'
-
-// 方式 2: 使用 definePlugin 声明式 API
-import { definePlugin } from '@zhin.js/core'
+// plugin.ts
+import { definePlugin } from '@zhin.js/plugin-runtime'
 
 export default definePlugin({
-  name: 'my-awesome-plugin',
-  setup(plugin) {
-    // 在这里使用 plugin 注册命令、工具等
+  name: 'hello-bot',
+  metadata: { displayName: 'Hello Bot' },
+  setup(context) {
+    context.lifecycle.add(() => { /* cleanup */ })
   },
 })
-
-// 方式 3: 手动设置
-const plugin = usePlugin()
-plugin.setName('my-awesome-plugin')
 ```
+
+```typescript
+// commands/hello/[name:string].ts
+import { defineCommand } from '@zhin.js/command'
+
+export default defineCommand({
+  description: '打招呼',
+  execute({ params }) {
+    return `Hello, ${params.name}!`
+  },
+})
+```
+
+> **已弃用**：`usePlugin()` / `MessageCommand` / `Plugin.addCommand` 仅经典路径（`zhin.js/node`）残留，新代码勿用。见 [public-api-surface](../../docs/contributing/public-api-surface.md)。
+
+本包仍提供 IM 运行时契约（Message / Adapter / Endpoint）；创作面在 Feature 包与 `@zhin.js/plugin-runtime`。
 
 ### Feature（特性抽象）
 
-Feature 是 Zhin.js 的核心扩展机制。所有内置功能均继承自 `Feature` 抽象基类，提供统一的注册/注销、插件归属追踪、JSON 序列化和变更事件通知能力。
+约定式 Feature（Command / Middleware / Component / Adapter…）由独立包提供 definition + 约定发现；Core Runtime 消费 snapshot。
+
+经典 `CommandFeature` / `addCommand` 等仍挂在 `Plugin.prototype`，**已 deprecated**，仅兼容 Agent init / game-kit：
 
 ```
-Feature (抽象基类)
-├── CommandFeature    — 消息命令       addCommand()
-├── ToolFeature       — AI 可调用工具   addTool()
-├── SkillFeature      — 技能记录       Agent 从 SKILL.md 注入
-├── ScheduleFeature   — 调度任务       addSchedule()
-├── DatabaseFeature   — 数据模型       defineModel()
-├── ComponentFeature  — 消息组件       addComponent()
-├── ConfigFeature     — 插件配置       addConfig()
-└── PermissionFeature — 权限管理
+Feature (抽象基类) — legacy 注册表仍在
+├── CommandFeature    — MessageCommand（→ defineCommand）
+├── ToolFeature       — AI 工具（→ defineAgentTool）
+├── …
 ```
-
-每个 Feature 都会在 `Plugin.prototype` 上注入对应的扩展方法（如 `addCommand`、`addTool`），插件通过 `usePlugin()` 获取这些方法。
-
-Feature 支持变更事件监听，依赖方可实时响应 item 的增删：
 
 ```typescript
 const toolFeature = plugin.inject('tool')
@@ -229,7 +215,7 @@ export { CommandFeature, ToolFeature, SkillFeature, ScheduleFeature, DatabaseFea
 // 消息路由
 export { createMessageDispatcher } from './built/dispatcher.js'
 
-// 适配器与消息
+// 适配器与消息（MessageCommand 已 deprecated）
 export { Adapter, Message, MessageCommand, Endpoint, segment, ... } from './'
 
 // 富媒体出站段

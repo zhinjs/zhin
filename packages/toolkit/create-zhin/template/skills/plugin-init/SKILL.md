@@ -1,6 +1,6 @@
 ---
 name: plugin-init
-description: "初始化 Zhin.js 插件项目。Use when asked to create a new plugin, scaffold plugin structure, or set up a plugin project. 引导生成符合 Zhin 规范的目录结构、package.json、tsconfig、入口文件和 README。"
+description: "初始化 Zhin.js 插件项目。Use when asked to create a new plugin, scaffold plugin structure, or set up a plugin project. 引导生成符合 Plugin Runtime 规范的目录结构、package.json、plugin.ts、约定能力目录和 README。"
 keywords:
   - 创建插件
   - 新建插件
@@ -9,29 +9,32 @@ keywords:
   - 脚手架
   - plugin init
   - new plugin
+  - definePlugin
 tags:
   - development
   - plugin
   - scaffold
 ---
 
-# Zhin 插件初始化
+# Zhin 插件初始化（Plugin Runtime）
 
-引导创建一个符合 Zhin.js 规范的新插件，确保目录结构、命名、配置和入口代码全部合规。
+引导创建一个符合 **Plugin Runtime** 的新插件。唯一启动路径是 `zhin runtime start`；插件即 package，`plugin.ts` 必须 default-export `definePlugin()`。
+
+**禁止**再脚手架 `usePlugin()` / `MessageCommand` / `src/index.ts` 命令式注册——那套只在已废弃的 `zhin.js/node`（`bootstrapNode`）下有效，未接任何 CLI。
 
 ## 适用场景
 
-- 用户说"帮我创建一个插件"、"新建插件"、"初始化一个 xxx 插件"
+- 用户说「帮我创建一个插件」「新建插件」「初始化一个 xxx 插件」
 - 需要从零搭建插件包结构
 
 ## 优先路径（二选一）
 
 | 场景 | 命令 / 动作 | 输出 |
 |------|-------------|------|
-| 已有 Zhin 项目 | `zhin new <name>`（仓库根或项目根） | 官方 npm 包结构 + `skills/` |
-| 全新应用 | `pnpm create zhin-app` | 完整 bot 项目（含 `skills/` 目录） |
+| 已有 Zhin 项目 | `zhin new <name>`（仓库根或项目根） | 官方 npm 包结构 |
+| 全新应用 | `pnpm create zhin-app` | 完整 bot 项目 |
 
-仅当用户明确要求「手写目录」或 `zhin new` 不可用时，才走下方 7 步手工流程。
+仅当用户明确要求「手写目录」或 `zhin new` 不可用时，才走下方手工流程。
 
 ## 初始化流程
 
@@ -39,9 +42,9 @@ tags:
 
 向用户确认：
 
-1. **插件名称**：kebab-case，如 `my-plugin`、`group-manager`
+1. **插件名称**：kebab-case，如 `my-plugin`、`group-manager`（须匹配 `^[a-z][a-z0-9-]*$`）
 2. **插件类型**：普通插件 / 服务插件 / 适配器插件
-3. **核心功能**：命令、中间件、事件、定时任务、AI 工具、Web 页面
+3. **核心功能**：命令、中间件、组件、定时任务、AI 工具、控制台页
 4. **是否需要数据库**
 5. **是否需要控制台前端**
 
@@ -49,55 +52,39 @@ tags:
 
 **命名规范：**
 - npm 包名：社区插件 `zhin.js-{name}`，官方插件 `@zhin.js/{name}`
-- 目录位于 `plugins/{name}/`
+- 目录位于 `plugins/{name}/`（或项目内约定路径）
 
-**最小结构（单文件插件）：**
+**最小结构（约定目录插件）：**
 
 ```
 plugins/{name}/
-├── package.json
+├── package.json          # 含 "zhin" manifest
+├── schema.json           # 可选：插件配置
+├── plugin.ts             # definePlugin 入口（只做装配）
 ├── tsconfig.json
 ├── README.md
-├── CHANGELOG.md
-├── src/
-│   └── index.ts
+├── commands/             # defineCommand，路径即路由
+│   └── hello.ts
 ├── tests/
-│   └── index.test.ts
-└── skills/
+│   └── hello.test.ts
+└── skills/               # 可选：给 AI 用的 SKILL
     └── {name}/
         └── SKILL.md
 ```
 
-**模块化结构（多功能插件）：**
+**单文件入门**（不必先拆目录）：见仓库 `examples/single-file-bot/bot.ts`——在 `setup({ addCommand })` 里注册命令。
 
-```
-plugins/{name}/
-├── package.json
-├── tsconfig.json
-├── README.md
-├── CHANGELOG.md
-├── src/
-│   ├── index.ts          # 入口装配（只做注册，不堆业务）
-│   ├── commands/          # 命令处理
-│   ├── middlewares/        # 中间件
-│   ├── events/            # 事件监听
-│   ├── services/          # 业务服务 / Context 注册
-│   ├── models/            # 数据库模型
-│   └── crons/             # 定时任务
-├── client/                # 控制台前端（可选）
-│   ├── index.tsx
-│   ├── tsconfig.json
-│   └── pages/
-├── tests/
-│   ├── index.test.ts
-│   ├── commands.test.ts
-│   └── services.test.ts
-├── tools/                 # AI 工具声明（可选，*.tool.md）
-├── skills/
-│   └── {name}/
-│       └── SKILL.md
-└── lib/                   # 编译产物（gitignore）
-```
+**按需增加约定目录（一个文件一个能力，default export）：**
+
+| 目录 | API |
+|------|-----|
+| `commands/**/*.ts` | `defineCommand()` |
+| `middlewares/*.ts` | `defineMiddleware()` |
+| `components/*.tsx` | `defineComponent()` |
+| `tools/*.ts` | `defineAgentTool()` |
+| `pages/*.tsx` | `definePage()` |
+| `skills/<name>/SKILL.md` | Markdown Skill |
+| `agents/<name>.agent.md` | Markdown Agent |
 
 ### 第 3 步：生成 package.json
 
@@ -106,89 +93,71 @@ plugins/{name}/
   "name": "zhin.js-{name}",
   "version": "0.1.0",
   "type": "module",
-  "main": "./lib/index.js",
-  "types": "./lib/index.d.ts",
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "features": ["@zhin.js/command"]
+  },
   "exports": {
-    ".": {
-      "types": "./lib/index.d.ts",
-      "development": "./src/index.ts",
-      "import": "./lib/index.js"
-    },
-    "./package.json": "./package.json"
+    ".": "./plugin.ts"
   },
-  "files": ["src", "lib", "client", "dist", "skills", "tools", "README.md"],
-  "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "prepublishOnly": "pnpm build"
-  },
-  "keywords": ["zhin.js", "plugin", "{name}"],
+  "files": ["plugin.ts", "commands", "schema.json", "README.md"],
   "peerDependencies": {
+    "zhin.js": "*"
+  },
+  "devDependencies": {
     "zhin.js": "latest"
   }
 }
 ```
 
-### 第 4 步：生成入口文件
+按需在 `features` 增加 `@zhin.js/middleware`、`@zhin.js/component`、`@zhin.js/tool` 等。
 
-**入口 src/index.ts 只做装配，不堆业务：**
+### 第 4 步：生成入口 plugin.ts
+
+**只做装配与生命周期，不堆业务：**
 
 ```typescript
-import { usePlugin } from 'zhin.js'
+import { definePlugin } from 'zhin.js/plugin-runtime';
 
-const plugin = usePlugin()
-const { addCommand, useContext, logger, root } = plugin
-
-// 配置声明
-// const getConfig = plugin.declareConfig('my-plugin', Schema.object({...}))
-
-// 注册命令、中间件（root.addMiddleware）、事件等
-// import './commands/index.js'
-// import './services/index.js'
-
-logger.info('{Name} 插件已加载')
+export default definePlugin({
+  name: '{name}',
+  metadata: { displayName: '{Display Name}' },
+  setup(context) {
+    // 读配置：context.config.get()
+    // 挂资源：context.resources.provide(token, value)
+    // 清理：context.lifecycle.add(() => { ... })
+    // 命令/中间件放到约定目录，不要在此命令式注册（单文件 demo 可用 addCommand）
+  },
+});
 ```
 
 **关键约定：**
-- `usePlugin()` 只在模块顶层调用
+- `plugin.ts` **必须** default-export `definePlugin()`，否则装配抛 `does not default-export a Plugin definition`
+- 新代码**不要**调用 `usePlugin()` / `getPlugin()` / `MessageCommand`
 - TS 文件间互导使用 `.js` 扩展名
-- 从 `zhin.js` 统一导入 **IM 框架 API**（Plugin、命令、`ZhinTool` 注册）
-- 使用 `ctx.ai` / `ZhinAgent` 类型时从 `zhin.js/agent` 引入；项目 `package.json` 须含 `@zhin.js/agent`、`zod`、`ai` 与所选 `@ai-sdk/*`（`zhin doctor` 可诊断）
-- `useContext()` 回调返回清理函数
+- 本地导入 Feature 包：`zhin.js/command`、`zhin.js/plugin-runtime` 等（或 `@zhin.js/*`）
+- 使用 AI / Agent 时从 `zhin.js/agent` 引入；须安装 `@zhin.js/agent`、`zod`、`ai` 与所选 `@ai-sdk/*`
 
-### 第 5 步：生成 tsconfig.json
+### 第 5 步：生成首个命令
 
-**IM 消息组件**（命令回复、`<image>` 等）默认使用 `zhin.js` JSX：
+`commands/hello.ts`（文件路径即路由 `hello`）：
 
-```json
-{
-  "compilerOptions": {
-    "jsx": "react-jsx",
-    "jsxImportSource": "zhin.js"
-  }
-}
+```typescript
+import { defineCommand } from 'zhin.js/command';
+
+export default defineCommand({
+  description: '打招呼',
+  execute() {
+    return 'Hello!';
+  },
+});
 ```
 
-**Satori 出图卡片**（HTML 字符串 → `segment.html` / `htmlToSvg`）与 IM JSX **分离**：在卡片 `.tsx` 文件顶加注释，或单独目录配置 `jsxImportSource: "@zhin.js/satori"`：
+带参数用方括号文件名，例如 `commands/hello/[name:string=world].ts` → `hello <name:string=world>`，在 `execute` 里读 `params.name`。
 
-```tsx
-/** @jsxImportSource @zhin.js/satori */
-import { Card, CardHeader, wrapCardHtml } from '@zhin.js/satori'
-
-export function buildMyCard(): string {
-  const body = (
-    <Card>
-      <CardHeader title="标题" />
-    </Card>
-  )
-  return wrapCardHtml(body, '#d8dce3')
-}
-```
-
-完整 `tsconfig.json` 示例：
+### 第 6 步：生成 tsconfig.json
 
 ```json
 {
@@ -196,98 +165,39 @@ export function buildMyCard(): string {
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "outDir": "./lib",
-    "rootDir": "./src",
     "strict": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "esModuleInterop": true,
     "skipLibCheck": true,
     "jsx": "react-jsx",
     "jsxImportSource": "zhin.js"
   },
-  "include": ["src/**/*"],
-  "exclude": ["lib", "node_modules", "client", "tests"]
+  "include": ["plugin.ts", "commands/**/*", "middlewares/**/*", "components/**/*", "tools/**/*"],
+  "exclude": ["node_modules", "tests"]
 }
 ```
 
-依赖：`pnpm add @zhin.js/satori`（可选 `@zhin.js/html-renderer` 自动 HTML→PNG）。
+IM 消息组件用 `jsxImportSource: "zhin.js"`；Satori 出图卡片在文件顶加 `/** @jsxImportSource @zhin.js/satori */`。
 
-### 第 6 步：生成测试文件
+### 第 7 步：测试与 README
 
-在 `tests/index.test.ts` 中生成基础测试骨架：
+- 测试：对 `defineCommand` 的 `execute` 做纯函数测，或按仓库现有 Runtime 测试模式装配；**不要**再写 `new Plugin('/path')` 旧生命周期测。
+- README：说明命令怎么触发、依赖哪些 Feature、`zhin runtime start` 如何加载本包。
 
-```typescript
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { Plugin } from '@zhin.js/core'
+### 第 8 步：输出格式
 
-describe('{Name} Plugin', () => {
-  let plugin: Plugin
-  let root: Plugin
+```markdown
+## 已创建
+- 包名：`zhin.js-{name}`
+- 入口：`plugin.ts`（definePlugin）
+- 能力：`commands/...`（列出）
 
-  beforeEach(() => {
-    root = new Plugin('/test/root.ts')
-    plugin = new Plugin('/plugins/{name}/src/index.ts', root)
-  })
-
-  afterEach(async () => {
-    if (plugin?.started) await plugin.stop()
-  })
-
-  it('should create instance', () => {
-    expect(plugin).toBeInstanceOf(Plugin)
-  })
-
-  it('should start and stop', async () => {
-    await plugin.start()
-    expect(plugin.started).toBe(true)
-    await plugin.stop()
-    expect(plugin.started).toBe(false)
-  })
-})
+## 下一步
+- `zhin.config.yml` 挂上本插件
+- `zhin runtime start` / `pnpm dev`
+- Sandbox 发送命令原文验证
 ```
 
-### 第 7 步：生成 README.md
+## 文档
 
-包含：安装、配置、使用示例、命令列表、AI 工具列表、开发说明。
-
-## 失败与兜底
-
-| 触发条件 | 一线处理 | 仍失败 |
-|----------|----------|--------|
-| 包名与目录不一致 | 统一 kebab-case；官方 `@zhin.js/adapter-*` 社区 `zhin.js-*` | 查 `docs/contributing/repo-structure.md` |
-| `pnpm build` 失败 | 检查 `tsconfig` `rootDir/outDir`、导入 `.js` | 对照 `plugins/utils/repeater` 最小插件 |
-| 测试无法加载插件 | `Plugin` 路径指向 `src/index.ts`；`afterEach` 里 `stop()` | 见下方测试骨架 |
-| 用户未给插件名 | 列出 3 个候选名 + 功能摘要，🔴 暂停生成 | 等用户确认名称与类型 |
-
-## 🔴 CHECKPOINT · 生成前
-
-确认：插件名、类型（普通/服务/适配器）、是否需要 `client/` 与数据库，再写 `package.json`。
-
-## 不要做什么
-
-- 不要用 `zhin new` 能完成的流程手写重复脚手架（优先 `zhin new` / `create-zhin-app`）
-- 不要把业务逻辑写进 `src/index.ts` 装配层
-- 不要省略 `tests/` 与 `skills/{name}/SKILL.md`（发布与 Agent 发现需要）
-- 不要在入口里从 `@zhin.js/core` import（用 `zhin.js`）
-- 不要把适配器骨架当普通插件模板下发
-
-## 检查清单
-
-- [ ] 包名符合 `zhin.js-{name}` 或 `@zhin.js/{name}` 格式
-- [ ] `type: "module"` 已设置
-- [ ] `exports` 字段包含 development 条件导出
-- [ ] `files` 包含 `src`、`lib`、`skills`
-- [ ] `peerDependencies` 包含 `zhin.js`
-- [ ] 入口文件使用 `usePlugin()` 且在模块顶层
-- [ ] 测试文件存在且可运行
-- [ ] README 包含安装和使用说明
-
-## 延伸阅读
-
-| 文档 | 路径 |
-|------|------|
-| CLI 插件命令 | `basic/cli/README.md` |
-| 仓库插件规范 | `.github/instructions/zhin-plugin.instructions.md` |
-| 脚手架模板源 | `packages/toolkit/create-zhin/template/skills/` |
+- [编写第一个插件](https://zhin.js.org/getting-started/first-plugin)
+- [definePlugin](https://zhin.js.org/authoring/define-plugin)
+- 仓库：`docs/getting-started/first-plugin.md`、`examples/single-file-bot/`

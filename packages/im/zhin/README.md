@@ -22,7 +22,7 @@ AI / Agent 能力在 **`@zhin.js/agent`**（及 `@zhin.js/ai`），须显式安�
 | `zhin.js` | **仅** `@zhin.js/core` + `@zhin.js/logger` |
 | `zhin.js/agent` | `@zhin.js/agent` + 多 Agent 编排（`runPipeline` / `runParallel` / `route`） |
 | `zhin.js/ai` | `@zhin.js/ai` 引擎 API |
-| `zhin.js/node` | `bootstrapNode` 启动入口 |
+| `zhin.js/node` | ~~`bootstrapNode`~~（**deprecated**，未接 CLI；用 `zhin runtime start`） |
 | `zhin.js/runtime` | `@zhin.js/runtime` optional-peer facade；不进入默认 IM 闭包 |
 | `zhin.js/jsx*` | Satori JSX 运行时 |
 
@@ -103,61 +103,67 @@ ai:
 
 ## 编写插件
 
+唯一启动路径：`zhin runtime start`。`plugin.ts`（或单文件 `bot.ts`）必须 default-export `definePlugin()`；能力按约定目录发现。
+
 ```typescript
-import { usePlugin, MessageCommand, ZhinTool } from 'zhin.js'
+// plugin.ts — 装配入口
+import { definePlugin } from 'zhin.js/plugin-runtime';
 
-const { addCommand, addTool } = usePlugin()
-
-addCommand(
-  new MessageCommand('hello <name:word>')
-    .desc('打招呼')
-    .action((_, result) => `Hello, ${result.params.name}!`)
-)
-
-// AI 工具（须已安装 @zhin.js/agent 且 ai.enabled）
-addTool(
-  new ZhinTool('get_weather')
-    .desc('查询天气')
-    .param('city', { type: 'string', description: '城市名' }, true)
-    .execute(async ({ city }) => `${city}：晴，25°C`)
-)
+export default definePlugin({
+  name: 'hello-bot',
+  metadata: { displayName: 'Hello Bot' },
+  setup() {
+    // 命令放到 commands/；单文件 demo 可用 setup({ addCommand })
+  },
+});
 ```
 
-访问 `ctx.ai` / 编排 API 时从 **`zhin.js/agent`** 引入类型与 helper（或 `@zhin.js/agent`）。
+```typescript
+// commands/hello/[name:string].ts — 路径即路由
+import { defineCommand } from 'zhin.js/command';
 
-## 运行时挂载（`zhin.js/node`）
+export default defineCommand({
+  description: '打招呼',
+  execute({ params }) {
+    return `Hello, ${params.name}!`;
+  },
+});
+```
 
-`bootstrapNode` 在 IM 栈之上（**当已安装 `@zhin.js/agent`** 时）额外注册：
+```typescript
+// tools/get_weather.ts — 须已安装 @zhin.js/agent 且挂载 tool Feature
+import { defineAgentTool } from 'zhin.js/tool';
 
-| 能力 | 说明 |
-|------|------|
-| `registerChatMessageStore` | `message.receive` / `message.send` → `im_transcripts` |
-| `initAgentModule` | 挂载 `ctx.ai`、`ctx.agent`、DB 模型（`agent_*`） |
+export default defineAgentTool({
+  description: '查询天气',
+  inputSchema: {
+    type: 'object',
+    properties: { city: { type: 'string', description: '城市名' } },
+    required: ['city'],
+  },
+  async execute({ city }) {
+    return `${city}：晴，25°C`;
+  },
+});
+```
 
-详见 [AI 模块文档](https://zhin.js.org/advanced/ai) 与 [架构概览](../../../docs/architecture-overview.md)。
+最短示例：[examples/single-file-bot](../../../examples/single-file-bot/)。编排 API 从 **`zhin.js/agent`** 引入。
+
+## 已弃用：`zhin.js/node`
+
+`bootstrapNode` / `usePlugin()` / `MessageCommand` 属于经典插件路径，**未接任何 CLI**，仅兼容残留；新代码不要使用。迁移见 `.github/skills/migrate-zhin-plugin-runtime`。
 
 ## 核心概念
 
-- **Plugin** — 基本组织单位，通过 `usePlugin()` 访问框架 API
-- **Feature** — Command、Tool、Skill、Cron、Database 等统一抽象
+- **Plugin** — `definePlugin` + `package.json#zhin`；约定目录发现能力
+- **Feature** — Command、Tool、Skill、Middleware、Adapter 等可挂载提供者
 - **Adapter / Endpoint** — 多平台接入（QQ、Discord、Sandbox 等）
 - **MessageDispatcher** — 入站消息调度（命令 vs AI 触发）
 - **ZhinAgent** — `@zhin.js/agent` 提供的 IM 编排运行时（非主包默认导出）
 
 ## 多 Agent 编排
 
-安装 agent 栈后，从 **`zhin.js/agent`** 使用：
-
-```typescript
-import { useContext, runPipeline, runParallel, route } from 'zhin.js/agent'
-
-useContext('ai', async (ai) => {
-  const result = await runPipeline(ai, [
-    { prompt: '总结：\n\n{input}', systemPrompt: '三条 bullet。' },
-    { prompt: '翻译成英文：\n\n{input}', systemPrompt: '仅输出译文。' },
-  ], userMessage)
-})
-```
+安装 agent 栈后，从 **`zhin.js/agent`** 使用 `runPipeline` / `runParallel` / `route` 等（见 [AI 模块文档](https://zhin.js.org/advanced/ai)）。
 
 ## 常用命令
 

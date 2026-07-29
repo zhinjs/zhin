@@ -36,6 +36,9 @@ function registerStdinLoginAssist(plugin: Plugin): void {
 
 /**
  * Node / Bun Host 启动（与 legacy setup.ts 同序）；`registerSignalHandlers` 内调用 `plugin.start()`。
+ *
+ * @deprecated 经典 `usePlugin` 启动路径，**未接任何 CLI**。请使用 `zhin runtime start`
+ *（Plugin Runtime）。计划在后续 minor 删除；见 `docs/contributing/public-api-surface.md`。
  */
 export async function bootstrapNode(options: BootstrapOptions = {}): Promise<BootstrapNodeResult> {
   markBootstrapStart();

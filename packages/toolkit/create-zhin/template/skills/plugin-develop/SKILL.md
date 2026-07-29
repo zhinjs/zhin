@@ -1,6 +1,6 @@
 ---
 name: plugin-develop
-description: "Implement Zhin.js plugin features: commands, AI tools, cron jobs, middleware, and console pages. Use when asked to add a command, register a tool, wire cron, extend middleware, or build a console page entry. Triggers: 插件开发, add command, addTool, 加命令, 写插件功能."
+description: "Implement Zhin.js plugin features with Plugin Runtime: defineCommand, defineAgentTool, middleware, pages. Use when asked to add a command, register a tool, wire cron, extend middleware, or build a console page. Triggers: 插件开发, add command, 加命令, 写插件功能, defineCommand."
 keywords:
   - plugin
   - command
@@ -9,68 +9,111 @@ keywords:
   - console page
   - 插件开发
   - 加命令
+  - defineCommand
 tags:
   - zhin
   - plugin
   - development
 ---
 
-# Plugin Develop
+# Plugin Develop（Plugin Runtime）
 
-在已有 Zhin 插件包内实现功能增量（命令、工具、定时任务、中间件、控制台页），不重写整个插件结构。
+在已有 Zhin 插件包内实现功能增量。能力按**约定目录发现**，一个文件一个能力；不要再写 `MessageCommand` / `usePlugin()` / `addCommand(new …)`。
 
 ## 何时使用
 
 - 用户要在插件里「加一个命令 / 工具 / 定时任务 / 控制台页」
-- 插件骨架已存在（`plugin-init` 或 `zhin new` 已跑过）
-- 需要大改目录或拆模块 → 改用 `zhin-plugin-refactoring` 或仓库内 `zhin-plugin-standard-development`
+- 插件骨架已存在（`plugin-init` 或 `zhin new`）
+- 大改目录 → 用仓库内 `zhin-plugin-standard-development` 或迁移 skill
 
 ## 工作流
 
 ### 第 1 步：定位入口与范围
 
-1. 找到插件入口：`plugins/<name>/src/index.ts` 或项目内 `src/plugins/<name>/`
-2. 确认改动类型（只选一种主路径，其余作附带）：
-   - 命令 → `MessageCommand` + `addCommand`
-   - AI 工具 → `plugin.addTool()` / `addToolOnly()`
-   - 定时任务 → `addCron(new Cron(...))`
-   - 中间件 → `addMiddleware()`
-   - 控制台页 → `useContext('web', ...)` + `client/`
-3. 输入：用户需求、目标插件名、平台约束（如有）
-4. 输出：明确的文件清单（要改哪些 `src/` / `client/` 文件）
+1. 找到插件入口：`plugin.ts`（或单文件 bot 的 `bot.ts`）
+2. 确认改动类型（只选一种主路径）：
 
-### 第 2 步：选最小 API 实现
+| 能力 | 做法 | 目录 / 位置 |
+|------|------|-------------|
+| 聊天命令 | `defineCommand()` default export | `commands/**/*.ts`（路径即路由） |
+| AI 工具 | `defineAgentTool()` | `tools/*.ts` 或 `agent/tools/*.ts` |
+| 中间件 | `defineMiddleware()` | `middlewares/*.ts` |
+| 组件 | `defineComponent()` | `components/*.tsx` |
+| 定时任务 | `scheduleHostToken.register(...)` + `lifecycle` | `plugin.ts` setup |
+| 控制台页 | `definePage()` | `pages/*.tsx` |
+| 单文件 demo | `setup({ addCommand })` | 仅 `examples/single-file-bot` 风格 |
 
-| 能力 | API | 前置条件 |
-|------|-----|----------|
-| 聊天命令 | `addCommand(new MessageCommand('...').action(...))` | `command` 服务 |
-| AI 工具 | `plugin.addTool({ name, execute, ... })` | Agent 已启用 |
-| 定时任务 | `addCron(new Cron(expr, fn))` | `cron` 服务 |
-| 消息过滤 | `addMiddleware(fn)` | 无 |
-| HTTP 路由 | `context.use(httpHostToken)` + `http.route(...)` | `@zhin.js/host-http`（Host 由 CLI 自动装配） |
-| 控制台页 | `useContext('web', ...)` + `web.addEntry()` | Console Host 由 CLI 自动装配（`@zhin.js/pagemanager`） |
+3. 确认 `package.json#zhin.features` 已挂对应 Feature（如 `@zhin.js/command`）
+4. 输出：要新增/修改的文件清单
 
-- `usePlugin()` 仅在模块顶层调用
-- TS 本地导入使用 `.js` 扩展名
-- 平台差异放在 adapter 检查或 tool `description`，不要写进通用 SKILL 正文
+### 第 2 步：实现（禁止旧 API）
 
-### 第 3 步：装配与清理
+- **禁止**：`usePlugin`、`getPlugin`、`MessageCommand`、`plugin.addCommand`、`addCron(new Cron)`、`useContext('web')` 旧写法
+- **命令**：文件路径是路由 SSOT；参数用 `[name:type=default].ts`；`execute` 读 `params` / `args` / `input`
+- **出站**：走统一发送链（`$reply` / Adapter.sendMessage），禁止直调平台 Bot
+- 本地导入带 `.js` 扩展名
 
-- `useContext()` 注册监听器、定时器、路由时，回调**必须返回清理函数**
-- 业务逻辑放在 `commands/`、`services/`、`tools/`，入口只做装配
-- 出站消息必须走 `Message.$reply` / `Adapter.sendMessage` 链，禁止直调平台 Bot
+**命令示例** `commands/greet/[name:string].ts`：
 
-### 第 4 步：验证
+```typescript
+import { defineCommand } from 'zhin.js/command';
 
-```bash
-pnpm --filter <plugin-package> build
-pnpm --filter <plugin-package> test
-# 可选：在 examples/minimal-bot 或用户项目 pnpm dev + Sandbox 手测命令
+export default defineCommand({
+  description: '问候用户',
+  execute({ params }) {
+    return `你好，${params.name}！`;
+  },
+});
 ```
 
-报告：改了哪些文件、如何触发验证（命令文本 / 工具名 / 访问路径）。
+**工具示例** `tools/get_weather.ts`：
 
-### 第 5 步：输出格式（必须包含）
+```typescript
+import { defineAgentTool } from 'zhin.js/tool';
+
+export default defineAgentTool({
+  description: '查询天气',
+  inputSchema: {
+    type: 'object',
+    properties: { city: { type: 'string', description: '城市名' } },
+    required: ['city'],
+  },
+  async execute({ city }) {
+    return `${city}：晴，25°C`;
+  },
+});
+```
+
+**定时任务**（在 `plugin.ts` setup；完整骨架见仓库 skill `assets/cron-template.ts`）：
+
+```typescript
+import { definePlugin, scheduleHostToken } from 'zhin.js/plugin-runtime';
+
+export default definePlugin({
+  name: 'my-plugin',
+  setup(context) {
+    if (!context.resources.has(scheduleHostToken)) return;
+    const schedule = context.resources.use(scheduleHostToken);
+    context.lifecycle.add(
+      schedule.register({
+        id: 'my-plugin/hourly',
+        cron: '0 * * * *',
+        async execute() { /* ... */ },
+      }),
+    );
+  },
+});
+```
+
+### 第 3 步：验证
+
+```bash
+pnpm --filter <plugin-package> build   # 若包有 build
+pnpm --filter <plugin-package> test
+# 手测：zhin runtime start / pnpm dev + Sandbox 发命令原文
+```
+
+### 第 4 步：输出格式
 
 ```markdown
 ## 改动摘要
@@ -78,131 +121,18 @@ pnpm --filter <plugin-package> test
 - 类型：命令 | 工具 | cron | 中间件 | 控制台页
 
 ## 修改文件
-- `src/...` — 作用
+- `commands/...` — 作用
 
 ## 验证
-- 命令：`pnpm --filter <pkg> build && pnpm --filter <pkg> test`
-- 手测：Sandbox 发 `命令原文` / 工具名 `tool_name`
+- `pnpm --filter <pkg> test`
+- 手测：Sandbox 发 `命令原文` / 工具名
 
 ## 风险
 - （仅列与本次改动相关的未测项）
 ```
 
-## 代码片段（按需复制改）
+## 文档
 
-**命令**（`src/commands/greet.ts` 或入口）：
-
-```typescript
-import { MessageCommand } from 'zhin.js'
-
-plugin.addCommand(
-  new MessageCommand('greet <name:text>')
-    .desc('问候用户')
-    .action(async (_message, result) => `Hello, ${result.params.name}!`),
-)
-```
-
-**AI 工具**：
-
-```typescript
-plugin.addTool({
-  name: 'my_tool',
-  description: '一句话说明副作用与输入',
-  parameters: {
-    type: 'object',
-    properties: { q: { type: 'string', description: '查询词' } },
-    required: ['q'],
-  },
-  execute: async ({ q }) => { /* 返回 string 或可序列化对象 */ },
-})
-```
-
-**定时任务**（需 `cron` 服务）：
-
-```typescript
-import { Cron } from 'zhin.js'
-
-plugin.addCron(
-  new Cron('0 9 * * *', async () => {
-    plugin.logger.info('daily job')
-  }),
-)
-```
-
-**useContext 清理**：
-
-```typescript
-useContext('database', (db) => {
-  const timer = setInterval(() => {}, 60_000)
-  return () => clearInterval(timer)
-})
-```
-
-**Satori 卡片**（`src/cards/*.tsx`，文件顶 `/** @jsxImportSource @zhin.js/satori */`）：
-
-```tsx
-/** @jsxImportSource @zhin.js/satori */
-import { Card, CardHeader, StatChip, Row, wrapCardHtml, DEFAULT_CARD_THEME } from '@zhin.js/satori'
-
-export function buildWelcomeCard(name: string): string {
-  const body = (
-    <Card>
-      <CardHeader title={`你好，${name}`} />
-      <Row gap={10}>
-        <StatChip label="状态" value="OK" accent={DEFAULT_CARD_THEME.accentMem} />
-      </Row>
-    </Card>
-  )
-  return wrapCardHtml(body, DEFAULT_CARD_THEME.canvas)
-}
-```
-
-命令里出站（纯 HTML；装 `html-renderer` 可自动转 PNG）：
-
-```typescript
-import { segment } from 'zhin.js'
-import { buildWelcomeCard } from './cards/welcome-card.js'
-
-plugin.addCommand(
-  new MessageCommand('welcome-card <name:text>')
-    .action((_, result) =>
-      segment.html({ html: buildWelcomeCard(result.params.name), width: 540 }),
-    ),
-)
-```
-
-| JSX 用途 | `jsxImportSource` | 产出 |
-|----------|-------------------|------|
-| IM 消息 / 组件 | `zhin.js` | `MessageComponent` |
-| Satori 卡片 | `@zhin.js/satori`（文件顶注释） | HTML 字符串 |
-
-## 失败与兜底
-
-| 触发条件 | 一线处理 | 仍失败 |
-|----------|----------|--------|
-| `useContext` 回调不执行 | 确认依赖 Context 的插件已 `start()`；Host 能力（`httpHostToken` / `web`）由 CLI 自动装配，无需列入 `plugins` | 查启动日志里 Context `provided` 顺序 |
-| `addCron` 无效果 | 确认配置里启用了 `cron` 服务 | 在入口临时 `logger.info` 验证 Cron 是否注册 |
-| 命令不匹配 | 检查 `MessageCommand` 模板与 `result.params` 类型 | 用 `tests/commands.test.ts` 单独测 action |
-| `tsc` 报导入错误 | 互导路径加 `.js`；`exports.development` 指向 `src/` | 对照同仓库官方插件 `package.json` |
-| 控制台页 404 | 确认 Console Host 已装配（CLI 自动完成）且 `web.addEntry` 在 `web` Context 就绪后调用 | 查 `/entries` 是否列出该 entry |
-
-## 🔴 CHECKPOINT · 范围确认
-
-在改超过 3 个文件或涉及数据库/HTTP/控制台之前，向用户确认：功能列表、是否接受拆 `commands/` / `services/`、是否需配套测试。
-
-## 不要做什么
-
-- 不要在 `async` 函数或回调里调用 `usePlugin()`
-- 不要从 `@zhin.js/core` 直接 import 框架 API（用户项目用 `zhin.js`）
-- 不要把适配器协议、Endpoint 生命周期写进普通插件（交给 adapter 层）
-- 不要绕过发送链 `renderSendMessage → before.sendMessage → 平台发送`
-- 不要为「整洁」一次性拆出大量空目录；无复杂度时保持单文件
-
-## 延伸阅读
-
-| 文档 | 路径 |
-|------|------|
-| 工具与技能 | `docs/advanced/tools-skills.md` |
-| 插件规范 | `.github/instructions/zhin-plugin.instructions.md` |
-| Monorepo 深度开发 | `.github/skills/zhin-plugin-standard-development/SKILL.md` |
-| 最小可跑示例 | `examples/minimal-bot/` |
+- `docs/authoring/define-plugin.md`
+- `docs/getting-started/first-plugin.md`
+- `.github/instructions/zhin-plugin.instructions.md`

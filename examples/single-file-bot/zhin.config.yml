@@ -1,22 +1,8 @@
-# Root Plugin configuration. Child Plugin values live under plugins.<instanceKey>.
-# 未配置 http 段时使用默认值：http://127.0.0.1:8086、无 token（仅限本地开发）。
-# 需要 token 认证时添加：
-# http:
-#   token: ${HTTP_TOKEN}
-#   corsOrigins:
-#     - "https://console.zhin.dev"
+
 log_level: info
 plugins:
-  sandbox:
-    # 对齐 Stable 黄金路径：命令保留 / 前缀（/hello）。
-    commandPrefix: '/'
-    endpoints:
-      - context: sandbox
-        name: sandbox-bot
-        owner: sandbox-user
   icqq:
     commandPrefix: ''
     master: "${ICQQ_MASTER:-1659488338}"
-    # 多账号：一个插件实例挂多个 endpoint（见 @zhin.js/adapter expandEndpointConfigs）
     endpoints:
       - name: "${ICQQ_ACCOUNT_2:-1689919782}"

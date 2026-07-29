@@ -29,7 +29,7 @@ import type { RegisteredAdapter, AdapterMessage } from "../types.js";
  * CommandContext 扩展方法类型
  */
 export interface CommandContextExtensions {
-  /** 添加命令 */
+  /** @deprecated 使用 `defineCommand` + `commands/`；勿在新代码调用。 */
   addCommand<T extends RegisteredAdapter>(command: MessageCommand<T>): () => void;
 }
 
@@ -44,7 +44,10 @@ declare module "../plugin.js" {
 }
 
 /**
- * 命令服务 Feature
+ * 命令服务 Feature（经典 MessageCommand 注册表）。
+ *
+ * @deprecated 新命令走 `@zhin.js/command` 的 `defineCommand` + 约定目录发现。
+ * 本 Feature 仍服务 Agent / game-kit / legacy Plugin.addCommand。
  */
 export class CommandFeature extends Feature<MessageCommand<RegisteredAdapter>> {
   readonly name = 'command' as const;

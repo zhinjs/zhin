@@ -6,8 +6,11 @@ type ConstructFirstParam<T extends new (...args: any[]) => any> = T extends new 
 type ConstructSecondParam<T extends new (...args: any[]) => any> = T extends new (...args: [any, infer V, ...any[]]) => any ? V : never;
 
 /**
- * MessageCommand类：命令系统核心，基于segment-matcher实现。
- * 支持多平台命令注册、作用域限制、参数解析、异步处理等。
+ * MessageCommand类：经典命令系统（segment-matcher）。
+ *
+ * @deprecated 新插件请用 `defineCommand`（`zhin.js/command`）+ `commands/` 约定目录。
+ * 本类仍供 Agent init / game-kit hub / legacy `CommandFeature` 使用；计划随经典
+ * Plugin 路径一并退役。见 `docs/contributing/public-api-surface.md`。
  */
 export class MessageCommand<T extends RegisteredAdapter=RegisteredAdapter> extends SegmentMatcher{
     #callbacks:MessageCommand.Callback<T>[]=[];

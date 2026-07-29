@@ -31,10 +31,6 @@
     "features": [],
     "plugins": [
       {
-        "package": "@zhin.js/adapter-sandbox",
-        "instanceKey": "sandbox"
-      },
-      {
         "package": "@zhin.js/adapter-icqq",
         "instanceKey": "icqq"
       }

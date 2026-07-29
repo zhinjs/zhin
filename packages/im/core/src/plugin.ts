@@ -54,9 +54,11 @@ type ContextItem<L> = L extends keyof Plugin.Contexts ? Plugin.Contexts[L] : nev
 // ============================================================================
 
 /**
- * usePlugin - 获取或创建当前插件实例
- * 类似 React Hooks 的设计，根据调用文件自动创建插件树
- * 同一上下文中同一文件多次调用返回同一实例
+ * 获取当前插件实例（经典 AsyncLocalStorage 路径）。
+ * 同一上下文中同一文件多次调用返回同一实例。
+ *
+ * @deprecated 仅 `zhin.js/node`（`bootstrapNode`）可用；`zhin runtime start` 下不工作。
+ * 新插件请用 `definePlugin` + 约定目录。见 `docs/contributing/public-api-surface.md`。
  */
 export function usePlugin(): Plugin {
   // 必须传入 plugin.ts 的 import.meta.url：getCurrentFile 默认锚定在 plugin-context.ts，

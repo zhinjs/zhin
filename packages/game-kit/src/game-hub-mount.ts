@@ -27,6 +27,10 @@ async function resolveHelpCommands(root: Plugin, message: Message): Promise<Comm
 
 /**
  * 在 root 上挂载「游戏 / game」大厅命令，返回 dispose 列表。
+ *
+ * @deprecated 仅 classic `GameHubFeature` / `bootstrapNode` 路径。
+ * Plugin Runtime 请用 `@zhin.js/plugin-game-hub` 的 `commands/games/`（defineCommand）。
+ * 勿在新代码调用；随 classic Feature 退役。
  */
 export function mountGameHubUi(root: Plugin): (() => void)[] {
   const disposers: (() => void)[] = [];

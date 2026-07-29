@@ -360,7 +360,12 @@ export interface EndpointCommandsSpec {
  */
 export interface EndpointCommandContext {
   readonly config: unknown;
-  readonly input: unknown;
+  /**
+   * 与 `@zhin.js/command` 的 `CommandContext.input` 对齐：IM 命中时有值，
+   * Host / 无消息路径可为 `undefined`。须保持可选，否则注入 `defineCommand` 会因
+   * execute 参数逆变检查失败（TS2345）。
+   */
+  readonly input?: unknown;
   readonly args: readonly string[];
   readonly params: Readonly<Record<
     string,
