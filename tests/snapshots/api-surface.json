@@ -1,6 +1,7 @@
 {
   "zhin.js": [
     "export * from '@zhin.js/core';",
+    "export * from '@zhin.js/plugin-runtime';",
     "export{default as logger,formatCompact,formatCompactLog,formatCompactUsage,truncatePreview}from '@zhin.js/logger';"
   ],
   "zhin.js/agent": [
@@ -48,6 +49,7 @@
     "export type{ResolveAgentPromptOptions}from './agent-prompt/index.js';",
     "export type{RichSystemPromptContext,PromptSectionDebugInfo}from './prompt/system-prompt.js';",
     "export type{RunStatus,TaskStatus,ExecutorKind,OrchestrationRun,OrchestrationTask,RunEvent,RunSnapshot,AgentExecutionEvent,AgentExecutorInput,AgentExecutor,WorkflowStrategyInput,WorkflowTaskSpec,WorkflowStrategy,}from './orchestrator/orchestration-types.js';",
+    "export type{RuntimeManagementDeps,RuntimeManagementSenderRoles,}from './init/runtime-management-commands.js';",
     "export type{ScheduleManager}from './schedule-manager.js';",
     "export type{ServiceAgent,ServiceAgentResult,CreateServiceAgentOptions}from './service.js';",
     "export type{SessionTreeRuntimeHandle}from './session-tree-runtime-registry.js';",
@@ -139,6 +141,7 @@
     "export{getOrchestrationService,getOrchestrationKernel,initOrchestrationService,registerOrchestrationService,upgradeOrchestrationRepository,OrchestrationKernel,OrchestrationService,}from './orchestrator/orchestration-service.js';",
     "export{getRemoteAgentRegistry,initRemoteAgentRegistry,}from './orchestrator/remote-agent-registry.js';",
     "export{getRemoteTaskPoller,startRemoteTaskPoller,}from './orchestrator/remote-task-poller.js';",
+    "export{handleRuntimeManagementCommand,}from './init/runtime-management-commands.js';",
     "export{initAgentModule}from './init.js';",
     "export{introspectionRestBindings,introspectionRestEndpoints,introspectionRestCommands,introspectionRestMcp,introspectionRestTools,}from './init/introspection-rest.js';",
     "export{loadAssistantProfileFile,loadBootstrapWithProfile,syncProfileHeartbeatToStore,syncProfileCronRoutinesToStore,pruneStaleProfileCronJobs,mergeProfileDeviceAliases,validateAssistantProfile,resolveAssistantProfileConfig,ASSISTANT_PROFILE_VERSION,DEFAULT_PROFILE_FILENAME,PROFILE_HEARTBEAT_JOB_ID,PROFILE_MORNING_BRIEF_JOB_ID,PROFILE_BEDTIME_CHECK_JOB_ID,}from './assistant/index.js';",

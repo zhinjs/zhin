@@ -34,7 +34,10 @@ describe('guess-number sessions', () => {
 
   it('processGuess works for own session', async () => {
     await startGame(services, mockMessage('alice'));
-    const reply = await processGuess(services, mockMessage('alice'), 50);
+    const session = await services.getActiveForUser('sandbox-default-group:g1', 'alice');
+    expect(session).toBeTruthy();
+    const wrongGuess = session!.secret === 1 ? 100 : 1;
+    const reply = await processGuess(services, mockMessage('alice'), wrongGuess);
     expect(reply).toMatch(/大|小|机会/);
   });
 });
