@@ -4,7 +4,7 @@ import {
   messageFromCommandInput,
   normalizeAdvAction,
 } from '@zhin.js/game-kit';
-import { ADV_HELP, runAdvCommandText } from '../src/adv-command.js';
+import { ADV_HELP, runAdvCommand } from '../src/adv-command.js';
 import { resolveGameServices } from '../src/runtime-store.js';
 
 export default defineGameCommandAliasMiddleware({
@@ -16,6 +16,6 @@ export default defineGameCommandAliasMiddleware({
     if (!isAdvAction(normalized)) return null;
     const services = resolveGameServices(context);
     const message = messageFromCommandInput(input);
-    return runAdvCommandText(services, message, normalized);
+    return runAdvCommand(services, message, normalized);
   },
 });

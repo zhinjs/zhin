@@ -1,6 +1,6 @@
 import { defineCommand } from '@zhin.js/command';
 import { messageFromCommandInput, normalizeRiddleAction } from '@zhin.js/game-kit';
-import { RIDDLE_HELP, runRiddleCommandText } from '../../src/riddle-command.js';
+import { RIDDLE_HELP, runRiddleCommand } from '../../src/riddle-command.js';
 import { resolveGameServices } from '../../src/runtime-store.js';
 
 export default defineCommand({
@@ -10,6 +10,6 @@ export default defineCommand({
     if (!action || action === 'help') return RIDDLE_HELP;
     const services = resolveGameServices({ use, owner });
     const message = messageFromCommandInput(input);
-    return runRiddleCommandText(services, message, action);
+    return runRiddleCommand(services, message, action);
   },
 });

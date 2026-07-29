@@ -1,5 +1,5 @@
-import type { Database, Message, Models, RelatedModel } from '@zhin.js/core';
-import { channelKey, generateSessionId, boardMessageMatches } from '@zhin.js/game-kit';
+import type { Database, Models, RelatedModel } from '@zhin.js/core';
+import { channelKey, generateSessionId, boardMessageMatches, type GameMessageLike } from '@zhin.js/game-kit';
 import type { AdvModelName, AdvSessionRow } from './models.js';
 import { createProfileService, ProfileService } from './profile-service.js';
 
@@ -47,7 +47,7 @@ export class SessionService {
     return null;
   }
 
-  async createSession(message: Message<any>): Promise<AdvSessionRow> {
+  async createSession(message: GameMessageLike): Promise<AdvSessionRow> {
     const now = Date.now();
     const id = generateSessionId();
     const row: AdvSessionRow = {

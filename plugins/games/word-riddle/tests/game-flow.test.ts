@@ -14,9 +14,9 @@ describe('word-riddle game-flow (plugin=null)', () => {
 
   it('processAnswerText returns text when guessing wrong with null plugin', async () => {
     const message = smokeGameMessage();
-    await startGame(null, services, message as never, 'char');
+    await startGame(services, message as never, 'char');
 
-    const reply = await processAnswerText(null, services, message as never, '错误答案');
+    const reply = await processAnswerText(services, message as never, '错误答案');
 
     expect(reply).toBeTruthy();
     expect(typeof reply).toBe('string');
@@ -25,11 +25,11 @@ describe('word-riddle game-flow (plugin=null)', () => {
 
   it('格式不合规（字数不符）只提示不扣失误', async () => {
     const message = smokeGameMessage();
-    await startGame(null, services, message as never, 'char');
+    await startGame(services, message as never, 'char');
     const ch = channelKey(message as never);
     const before = (await services.getActiveForUser(ch, message.$sender.id))!;
 
-    const reply = await processAnswerText(null, services, message as never, '好的');
+    const reply = await processAnswerText(services, message as never, '好的');
 
     expect(reply).toMatch(/不算失误/);
     const after = (await services.getById(before.id))!;
@@ -39,13 +39,13 @@ describe('word-riddle game-flow (plugin=null)', () => {
 
   it('格式合规但答错仍计一次失误', async () => {
     const message = smokeGameMessage();
-    await startGame(null, services, message as never, 'char');
+    await startGame(services, message as never, 'char');
     const ch = channelKey(message as never);
     const before = (await services.getActiveForUser(ch, message.$sender.id))!;
     const entry = getRiddleById(currentRiddleId(before)!)!;
     const wrongChar = entry.answer === '龘' ? '错' : '龘';
 
-    const reply = await processAnswerText(null, services, message as never, wrongChar);
+    const reply = await processAnswerText(services, message as never, wrongChar);
 
     expect(reply).toMatch(/不对/);
     const after = (await services.getById(before.id))!;

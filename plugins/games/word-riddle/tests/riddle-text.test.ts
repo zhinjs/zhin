@@ -41,7 +41,7 @@ describe('word-riddle riddle-text middleware (text fallback)', () => {
     replies.length = 0;
     nextCalls = 0;
     services = mountRiddleMemoryServices();
-    await startGame(null, services, makeInput('') as never, 'char');
+    await startGame(services, makeInput('') as never, 'char');
     replies.length = 0;
   });
 

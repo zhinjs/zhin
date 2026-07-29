@@ -1,5 +1,4 @@
-import type { Adapter, Message, Plugin } from '@zhin.js/core';
-import { plainTextFromSendContent } from '@zhin.js/game-kit';
+import { plainTextFromSendContent, type GameMessageLike } from '@zhin.js/game-kit';
 import type { AdvProfileRow, AdvSessionRow } from './models.js';
 import { formatNewAchievements } from './profile-format.js';
 import { buildSceneInteractive } from './scene-view.js';
@@ -13,9 +12,8 @@ import {
 import type { GameServices } from './session-service.js';
 
 export async function sendOrEditScene(
-  plugin: Plugin | null,
   services: GameServices,
-  message: Message<any>,
+  message: GameMessageLike,
   session: AdvSessionRow,
   extraNarrative = '',
   profile?: AdvProfileRow,
@@ -26,36 +24,12 @@ export async function sendOrEditScene(
   if (!content) {
     return '场景数据异常，请 adv quit 后重新开始。';
   }
-  if (!plugin) return plainTextFromSendContent(content);
-
-  const adapter = plugin.root.inject(message.$adapter) as Adapter;
-
-  if (session.board_message_id) {
-    const msgId = await adapter.editMessage({
-      messageId: session.board_message_id,
-      context: String(message.$adapter),
-      endpoint: message.$endpoint,
-      id: message.$channel.id,
-      type: message.$channel.type,
-      content,
-    });
-    if (msgId !== session.board_message_id) {
-      await services.sessions.updateSession(session.id, { board_message_id: msgId });
-    }
-    return msgId;
-  }
-
-  const msgId = await message.$reply?.(content);
-  if (msgId) {
-    await services.sessions.updateSession(session.id, { board_message_id: msgId });
-  }
-  return msgId ?? '';
+  return plainTextFromSendContent(content);
 }
 
 export async function startAdventure(
-  plugin: Plugin | null,
   services: GameServices,
-  message: Message<any>,
+  message: GameMessageLike,
 ): Promise<string | undefined> {
   const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
   const active = await services.sessions.getActiveByChannel(ch);
@@ -74,14 +48,12 @@ export async function startAdventure(
     'start',
     [],
   );
-  const text = await sendOrEditScene(plugin, services, message, session);
-  return plugin ? undefined : text;
+  return sendOrEditScene(services, message, session);
 }
 
 export async function handleChoice(
-  plugin: Plugin | null,
   services: GameServices,
-  message: Message<any>,
+  message: GameMessageLike,
   sessionId: string,
   choiceId: string,
 ): Promise<string | null> {
@@ -116,9 +88,7 @@ export async function handleChoice(
     const updated = (await services.sessions.getById(session.id))!;
     await services.profiles.onRunStarted(updated.player_id, updated.player_name);
     await services.profiles.onStep(updated.player_id, updated.player_name, 'start', []);
-    const text = await sendOrEditScene(plugin, services, message, updated);
-    // text-only 模式（plugin===null）下 sendOrEditScene 的唯一输出就是返回文本
-    return plugin ? null : text;
+    return sendOrEditScene(services, message, updated);
   }
 
   // 服务端校验：选项必须当前可见（requires 门槛不能只靠视图层过滤，payload 可绕过）
@@ -171,24 +141,19 @@ export async function handleChoice(
 
   const updated = (await services.sessions.getById(session.id))!;
   const extra = formatNewAchievements(newAchievements);
-  const text = await sendOrEditScene(plugin, services, message, updated, extra);
-  // text-only 模式（plugin===null）下 sendOrEditScene 的唯一输出就是返回文本
-  return plugin ? null : text;
+  return sendOrEditScene(services, message, updated, extra);
 }
 
 export async function continueAdventure(
-  plugin: Plugin | null,
   services: GameServices,
-  message: Message<any>,
+  message: GameMessageLike,
 ): Promise<string> {
   const session = await services.sessions.getActiveForUser(
     `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`,
     message.$sender.id,
   );
   if (!session) return '你没有进行中的冒险，发送 adv start 开始。';
-  const text = await sendOrEditScene(plugin, services, message, session);
-  if (!plugin) return text;
-  return '已刷新当前场景。';
+  return sendOrEditScene(services, message, session);
 }
 
 export function sessionSummary(session: AdvSessionRow): string {

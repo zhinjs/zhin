@@ -4,7 +4,7 @@ import {
   messageFromCommandInput,
   normalizeChainAction,
 } from '@zhin.js/game-kit';
-import { CHAIN_HELP, runChainCommandText } from '../src/chain-command.js';
+import { CHAIN_HELP, runChainCommand } from '../src/chain-command.js';
 import { resolveGameServices } from '../src/runtime-store.js';
 
 export default defineGameCommandAliasMiddleware({
@@ -16,6 +16,6 @@ export default defineGameCommandAliasMiddleware({
     if (!isChainAction(normalized)) return null;
     const services = resolveGameServices(context);
     const message = messageFromCommandInput(input);
-    return runChainCommandText(services, message, normalized);
+    return runChainCommand(services, message, normalized);
   },
 });

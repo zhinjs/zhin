@@ -1,5 +1,5 @@
-import type { Database, Message, Models, RelatedModel } from '@zhin.js/core';
-import { channelKey, generateSessionId, boardMessageMatches } from '@zhin.js/game-kit';
+import type { Database, Models, RelatedModel } from '@zhin.js/core';
+import { channelKey, generateSessionId, boardMessageMatches , type GameMessageLike } from '@zhin.js/game-kit';
 import type { MatchMode } from './engine.js';
 import type { ChainSessionRow } from './models.js';
 
@@ -54,7 +54,7 @@ export class SessionService {
   }
 
   async createSession(
-    message: Message<any>,
+    message: GameMessageLike,
     starter: { text: string; nextChar: string; used: string[]; matchMode: MatchMode },
   ): Promise<ChainSessionRow> {
     const now = Date.now();

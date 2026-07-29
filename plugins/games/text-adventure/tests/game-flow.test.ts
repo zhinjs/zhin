@@ -18,7 +18,7 @@ function makeMessage(senderId = 'u1') {
 
 async function startAndGetSession(senderId = 'u1') {
   const message = makeMessage(senderId);
-  await startAdventure(null, services, message);
+  await startAdventure(services, message);
   const session = await services.sessions.getActiveForUser(
     'test-default-group:g1',
     senderId,
@@ -35,7 +35,7 @@ describe('text-adventure handleChoice', () => {
     const { message, session } = await startAndGetSession();
     await services.sessions.updateSession(session.id, { scene_id: 'garden' });
 
-    const reply = await handleChoice(null, services, message, session.id, 'open_iron_door');
+    const reply = await handleChoice(services, message, session.id, 'open_iron_door');
     expect(reply).toBe('该选项不可用。');
     const after = (await services.sessions.getById(session.id))!;
     expect(after.scene_id).toBe('garden');
@@ -48,7 +48,7 @@ describe('text-adventure handleChoice', () => {
       inventory: JSON.stringify(['key']),
     });
 
-    const reply = await handleChoice(null, services, message, session.id, 'open_iron_door');
+    const reply = await handleChoice(services, message, session.id, 'open_iron_door');
     expect(reply).not.toBe('该选项不可用。');
     const after = (await services.sessions.getById(session.id))!;
     expect(after.scene_id).toBe('library');
@@ -62,7 +62,7 @@ describe('text-adventure handleChoice', () => {
       ending_id: 'treasure',
     });
 
-    const reply = await handleChoice(null, services, message, session.id, 'restart');
+    const reply = await handleChoice(services, message, session.id, 'restart');
     expect(reply).not.toBe('冒险不存在或已结束。');
     const after = (await services.sessions.getById(session.id))!;
     expect(after.status).toBe('active');
@@ -79,7 +79,7 @@ describe('text-adventure handleChoice', () => {
       ending_id: 'treasure',
     });
 
-    const reply = await handleChoice(null, services, message, session.id, 'push_door');
+    const reply = await handleChoice(services, message, session.id, 'push_door');
     expect(reply).toBe('冒险不存在或已结束。');
   });
 });

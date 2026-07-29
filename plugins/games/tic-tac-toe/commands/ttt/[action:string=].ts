@@ -1,6 +1,6 @@
 import { defineCommand } from '@zhin.js/command';
 import { messageFromCommandInput, normalizeTttAction } from '@zhin.js/game-kit';
-import { TTT_HELP, runTttCommandText } from '../../src/ttt-command.js';
+import { TTT_HELP, runTttCommand } from '../../src/ttt-command.js';
 import { resolveGameServices } from '../../src/runtime-store.js';
 
 export default defineCommand({
@@ -10,6 +10,6 @@ export default defineCommand({
     if (!action || action === 'help') return TTT_HELP;
     const services = resolveGameServices({ use, owner });
     const message = messageFromCommandInput(input);
-    return runTttCommandText(services, message, action);
+    return runTttCommand(services, message, action);
   },
 });

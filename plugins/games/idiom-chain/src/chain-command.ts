@@ -1,5 +1,4 @@
-import type { Message, Plugin } from '@zhin.js/core';
-import { channelKey } from '@zhin.js/game-kit';
+import { channelKey, type GameMessageLike } from '@zhin.js/game-kit';
 import { continueGame, startGame } from './game-flow.js';
 import { idiomCount, modeLabel, promptLine, type MatchMode } from './engine.js';
 
@@ -19,11 +18,10 @@ export const CHAIN_HELP = [
 ].join('\n');
 
 export async function runChainCommand(
-  plugin: Plugin | null,
   services: SessionService,
-  message: Message<any>,
+  message: GameMessageLike,
   action: string,
-): Promise<string | undefined> {
+): Promise<string> {
   const ch = channelKey(message);
   const userId = message.$sender.id;
 
@@ -42,9 +40,9 @@ export async function runChainCommand(
     return lines.join('\n');
   }
 
-  if (action === 'start_pinyin') return startGame(plugin, services, message, 'pinyin');
-  if (action === 'start_char') return startGame(plugin, services, message, 'char');
-  if (action === 'continue') return continueGame(plugin, services, message);
+  if (action === 'start_pinyin') return (await startGame(services, message, 'pinyin')) ?? '';
+  if (action === 'start_char') return (await startGame(services, message, 'char')) ?? '';
+  if (action === 'continue') return continueGame(services, message);
 
   if (action === 'quit') {
     const row = await services.getActiveForUser(ch, userId);
@@ -54,13 +52,4 @@ export async function runChainCommand(
   }
 
   return `未知子命令：${action}\n\n${CHAIN_HELP}`;
-}
-
-/** Plugin Runtime / smoke: text-only, no Adapter.editMessage. */
-export async function runChainCommandText(
-  services: SessionService,
-  message: Message<any>,
-  action: string,
-): Promise<string> {
-  return (await runChainCommand(null, services, message, action)) ?? '';
 }

@@ -34,7 +34,7 @@ export default defineMiddleware<Message>({
       if (restart?.choiceId === 'restart') {
         const session = await services.session.getById(restart.sessionId);
         if (session?.channel_key === ch) {
-          const reply = await restartFromTerminal(null, services, message, restart.sessionId);
+          const reply = await restartFromTerminal(services, message, restart.sessionId);
           if (reply) await context.input.$reply(reply);
           return;
         }
@@ -43,7 +43,7 @@ export default defineMiddleware<Message>({
       if (move) {
         const session = await services.session.getById(move.sessionId);
         if (session?.channel_key === ch) {
-          const reply = await handleMove(null, services, message, move.sessionId, move.cell);
+          const reply = await handleMove(services, message, move.sessionId, move.cell);
           if (reply) await context.input.$reply(reply);
           return;
         }
@@ -65,7 +65,7 @@ export default defineMiddleware<Message>({
       await next();
       return;
     }
-    const reply = await handleMove(null, services, message, session.id, move.cell);
+    const reply = await handleMove(services, message, session.id, move.cell);
     if (reply) await context.input.$reply(reply);
   },
 });

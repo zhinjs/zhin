@@ -41,7 +41,7 @@ describe('idiom-chain chain-text middleware (text fallback)', () => {
     replies.length = 0;
     nextCalls = 0;
     services = mountChainMemoryServices();
-    await startGame(null, services, makeInput('') as never);
+    await startGame(services, makeInput('') as never);
     replies.length = 0;
   });
 

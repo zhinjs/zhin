@@ -1,5 +1,4 @@
-import type { Adapter, Message, Plugin } from '@zhin.js/core';
-import { plainTextFromSendContent } from '@zhin.js/game-kit';
+import { plainTextFromSendContent, type GameMessageLike } from '@zhin.js/game-kit';
 import {
   answersFor,
   checkAnswer,
@@ -17,39 +16,18 @@ import {
 } from './session-service.js';
 import { buildRiddleView, MAX_WRONG } from './view.js';
 
-export async function sendOrEditView(
-  plugin: Plugin | null,
-  services: SessionService,
-  message: Message<any>,
+/**
+ * Plugin Runtime: render the board as text. Interactive in-place board editing
+ * (the old Adapter.editMessage path) is not part of the runtime flow; commands
+ * and the text middleware return fresh text each turn.
+ */
+function renderView(
+  message: GameMessageLike,
   session: RiddleSessionRow,
   eventLines: string[] = [],
-): Promise<string | void> {
+): string {
   const content = buildRiddleView(session, eventLines, message.$channel.type);
-  if (typeof content === 'string') {
-    if (!plugin) return content;
-    await message.$reply?.(content);
-    return;
-  }
-  if (!plugin) return plainTextFromSendContent(content);
-
-  const adapter = plugin.root.inject(message.$adapter) as Adapter;
-  if (session.board_message_id) {
-    const msgId = await adapter.editMessage({
-      messageId: session.board_message_id,
-      context: String(message.$adapter),
-      endpoint: message.$endpoint,
-      id: message.$channel.id,
-      type: message.$channel.type,
-      content,
-    });
-    if (msgId !== session.board_message_id) {
-      await services.updateSession(session.id, { board_message_id: msgId });
-    }
-    return;
-  }
-
-  const msgId = await message.$reply?.(content);
-  if (msgId) await services.updateSession(session.id, { board_message_id: msgId });
+  return typeof content === 'string' ? content : plainTextFromSendContent(content);
 }
 
 async function advanceQuestion(
@@ -67,9 +45,8 @@ async function advanceQuestion(
 }
 
 export async function startGame(
-  plugin: Plugin | null,
   services: SessionService,
-  message: Message<any>,
+  message: GameMessageLike,
   mode: RiddleType,
 ): Promise<string | undefined> {
   const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
@@ -82,29 +59,24 @@ export async function startGame(
   }
 
   const session = await services.createSession(message, mode);
-  const text = await sendOrEditView(plugin, services, message, session);
-  return typeof text === 'string' ? text : undefined;
+  return renderView(message, session);
 }
 
 export async function continueGame(
-  plugin: Plugin | null,
   services: SessionService,
-  message: Message<any>,
+  message: GameMessageLike,
 ): Promise<string> {
   const session = await services.getActiveForUser(
     `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`,
     message.$sender.id,
   );
   if (!session) return '你没有进行中的猜谜，发送「猜谜 开始」。';
-  const text = await sendOrEditView(plugin, services, message, session);
-  if (typeof text === 'string') return text;
-  return '已刷新猜谜界面。';
+  return renderView(message, session);
 }
 
 export async function processAnswerText(
-  plugin: Plugin | null,
   services: SessionService,
-  message: Message<any>,
+  message: GameMessageLike,
   raw: string,
 ): Promise<string | null> {
   const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
@@ -132,31 +104,30 @@ export async function processAnswerText(
     });
     const after = await advanceQuestion(services, (await services.getById(session.id))!);
     const explain = entry.explanation ? `\n📖 ${entry.explanation}` : '';
-    return (await sendOrEditView(plugin, services, message, after, [
+    return renderView(message, after, [
       `✅ 正确！答案：**${entry.answer}**${explain}`,
       `+${10 + Math.min(streak, 5)} 分`,
-    ])) ?? null;
+    ]);
   }
 
   const wrong = session.wrong_count + 1;
   if (wrong >= MAX_WRONG) {
     await services.updateSession(session.id, { wrong_count: wrong, streak: 0 });
     const after = await advanceQuestion(services, (await services.getById(session.id))!);
-    return (await sendOrEditView(plugin, services, message, after, [
+    return renderView(message, after, [
       `❌ 本题答案：**${entry.answer}**`,
       '失误过多，自动下一题。',
-    ])) ?? null;
+    ]);
   }
 
   await services.updateSession(session.id, { wrong_count: wrong, streak: 0 });
   const updated = (await services.getById(session.id))!;
-  return (await sendOrEditView(plugin, services, message, updated, ['❌ 不对，再想想！'])) ?? null;
+  return renderView(message, updated, ['❌ 不对，再想想！']);
 }
 
 export async function handleChoice(
-  plugin: Plugin | null,
   services: SessionService,
-  message: Message<any>,
+  message: GameMessageLike,
   sessionId: string,
   choiceId: string,
 ): Promise<string | null> {
@@ -166,11 +137,11 @@ export async function handleChoice(
 
   if (choiceId === 'restart_char') {
     await services.updateSession(session.id, { status: 'aborted' });
-    return startGame(plugin, services, message, 'char') as unknown as string;
+    return (await startGame(services, message, 'char')) ?? null;
   }
   if (choiceId === 'restart_idiom') {
     await services.updateSession(session.id, { status: 'aborted' });
-    return startGame(plugin, services, message, 'idiom') as unknown as string;
+    return (await startGame(services, message, 'idiom')) ?? null;
   }
 
   if (session.status !== 'active') return '本轮已结束。';
@@ -183,18 +154,18 @@ export async function handleChoice(
     const hint = entry.hint ?? `答案共 ${entry.answer.length} 个字`;
     await services.updateSession(session.id, { hints_used: session.hints_used + 1, streak: 0 });
     const updated = (await services.getById(session.id))!;
-    return (await sendOrEditView(plugin, services, message, updated, [
+    return renderView(message, updated, [
       `💡 提示：${hint}`,
       '（连击清零）',
-    ])) ?? null;
+    ]);
   }
 
   if (choiceId === 'skip') {
     await services.updateSession(session.id, { streak: 0 });
     const after = await advanceQuestion(services, session);
-    return (await sendOrEditView(plugin, services, message, after, [
+    return renderView(message, after, [
       `⏭️ 跳过，答案：**${entry.answer}**`,
-    ])) ?? null;
+    ]);
   }
 
   if (choiceId === 'quit') {

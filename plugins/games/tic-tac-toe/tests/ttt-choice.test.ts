@@ -45,7 +45,7 @@ describe('tic-tac-toe ttt-choice middleware (digit fallback)', () => {
 
   it('裸数字按空格编号映射落子并回复', async () => {
     const input = makeInput('1');
-    await startBotGame(null, services, input as never);
+    await startBotGame(services, input as never);
     replies.length = 0;
 
     await middleware.handle(makeCtx(input), next);
@@ -63,7 +63,7 @@ describe('tic-tac-toe ttt-choice middleware (digit fallback)', () => {
 
   it('非法数字（无对应空格）放行给后续中间件', async () => {
     const input = makeInput('42');
-    await startBotGame(null, services, input as never);
+    await startBotGame(services, input as never);
     replies.length = 0;
 
     await middleware.handle(makeCtx(input), next);
@@ -74,7 +74,7 @@ describe('tic-tac-toe ttt-choice middleware (digit fallback)', () => {
 
   it('非数字文本放行给后续中间件', async () => {
     const input = makeInput('这盘我赢定了');
-    await startBotGame(null, services, input as never);
+    await startBotGame(services, input as never);
     replies.length = 0;
 
     await middleware.handle(makeCtx(input), next);

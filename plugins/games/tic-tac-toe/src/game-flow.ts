@@ -1,5 +1,4 @@
-import type { Adapter, Message, Plugin } from '@zhin.js/core';
-import { plainTextFromSendContent, recordGameOutcome } from '@zhin.js/game-kit';
+import { plainTextFromSendContent, recordGameOutcome, type GameMessageLike } from '@zhin.js/game-kit';
 import type { TttSessionRow } from './models.js';
 import { buildBoardInteractive } from './board-view.js';
 import {
@@ -32,15 +31,18 @@ export function isBotSession(session: TttSessionRow): boolean {
   return session.player_o === BOT_ID || session.player_x === BOT_ID;
 }
 
-export async function sendOrEditBoard(
-  plugin: Plugin | null,
-  services: SessionServices,
-  message: Message<any>,
+/**
+ * Plugin Runtime: render the board as text. Interactive in-place board editing
+ * (the old Adapter.editMessage path) is not part of the runtime flow; commands
+ * and the choice middleware return fresh text each turn.
+ */
+export function sendOrEditBoard(
+  message: GameMessageLike,
   session: TttSessionRow,
   statusLine: string,
   terminal = false,
   highlight?: number[],
-): Promise<string> {
+): string {
   const board = parseBoard(session.board);
   const content = buildBoardInteractive({
     sessionId: session.id,
@@ -53,36 +55,12 @@ export async function sendOrEditBoard(
     channelType: message.$channel.type,
   });
 
-  if (!plugin) return plainTextFromSendContent(content);
-
-  const adapter = plugin.root.inject(message.$adapter) as Adapter;
-
-  if (session.board_message_id) {
-    const msgId = await adapter.editMessage({
-      messageId: session.board_message_id,
-      context: String(message.$adapter),
-      endpoint: message.$endpoint,
-      id: message.$channel.id,
-      type: message.$channel.type,
-      content,
-    });
-    if (msgId !== session.board_message_id) {
-      await services.session.updateSession(session.id, { board_message_id: msgId });
-    }
-    return msgId;
-  }
-
-  const msgId = await message.$reply?.(content);
-  if (msgId) {
-    await services.session.updateSession(session.id, { board_message_id: msgId });
-  }
-  return msgId ?? '';
+  return plainTextFromSendContent(content);
 }
 
 export async function restartFromTerminal(
-  plugin: Plugin | null,
   services: SessionServices,
-  message: Message<any>,
+  message: GameMessageLike,
   sessionId: string,
 ): Promise<string | null> {
   const session = await services.session.getById(sessionId);
@@ -97,19 +75,17 @@ export async function restartFromTerminal(
   // PvP 局重开仍是 PvP（原班人马），不静默降级为人机
   if (!isBotSession(session)) {
     const board = await startPvpGame(
-      plugin,
       services,
       message,
       { id: session.player_x, displayName: session.player_x_name },
       { id: session.player_o, displayName: session.player_o_name },
     );
-    if (typeof board === 'string' && board.includes('已有')) return board;
-    return plugin ? null : (board ?? null);
+    if (board.includes('已有')) return board;
+    return board;
   }
-  const hint = await startBotGame(plugin, services, message);
+  const hint = await startBotGame(services, message);
   if (hint.includes('已有')) return hint;
-  // text-only 模式（plugin===null）下 startBotGame 的唯一输出就是返回文本
-  return plugin ? null : hint;
+  return hint;
 }
 
 function turnCell(session: TttSessionRow): Cell {
@@ -121,9 +97,8 @@ function playerIdForTurn(session: TttSessionRow): string {
 }
 
 export async function handleMove(
-  plugin: Plugin | null,
   services: SessionServices,
-  message: Message<any>,
+  message: GameMessageLike,
   sessionId: string,
   cell: number,
 ): Promise<string | null> {
@@ -179,7 +154,7 @@ export async function handleMove(
     const humanMsg = {
       ...message,
       $sender: { ...message.$sender, id: humanId, name: humanName },
-    } as Message<any>;
+    } as GameMessageLike;
     if (win) {
       const humanMark = playerMark(humanId, {
         playerX: updated.player_x,
@@ -194,29 +169,24 @@ export async function handleMove(
 
   if (win) {
     const status = formatWinHeadline(updated, win.winner);
-    const text = await sendOrEditBoard(plugin, services, message, updated, status, true, win.line);
-    // text-only 模式（plugin===null）下 sendOrEditBoard 的唯一输出就是返回文本
-    return plugin ? null : text;
+    return sendOrEditBoard(message, updated, status, true, win.line);
   }
   if (draw) {
-    const text = await sendOrEditBoard(plugin, services, message, updated, '平局。', true);
-    return plugin ? null : text;
+    return sendOrEditBoard(message, updated, '平局。', true);
   }
 
   // 人机：玩家落子后立刻由服务端代下，避免先发「轮到机器人」再发终盘（QQ 被动消息多耗一次）
   if (isBotSession(updated) && playerIdForTurn(updated) === BOT_ID) {
-    return runBotMove(plugin, services, message, updated);
+    return runBotMove(services, message, updated);
   }
 
   const status = formatTurnStatus(updated, moveCount);
-  const text = await sendOrEditBoard(plugin, services, message, updated, status, false);
-  return plugin ? null : text;
+  return sendOrEditBoard(message, updated, status, false);
 }
 
 async function runBotMove(
-  plugin: Plugin | null,
   services: SessionServices,
-  message: Message<any>,
+  message: GameMessageLike,
   session: TttSessionRow,
 ): Promise<string | null> {
   const board = parseBoard(session.board);
@@ -227,15 +197,14 @@ async function runBotMove(
   const fakeMessage = {
     ...message,
     $sender: { ...message.$sender, id: BOT_ID, name: '机器人' },
-  } as Message<any>;
+  } as GameMessageLike;
 
-  return handleMove(plugin, services, fakeMessage, session.id, cell);
+  return handleMove(services, fakeMessage, session.id, cell);
 }
 
 export async function startBotGame(
-  plugin: Plugin | null,
   services: SessionServices,
-  message: Message<any>,
+  message: GameMessageLike,
 ): Promise<string> {
   const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
   const active = await services.session.getActiveByChannel(ch);
@@ -251,20 +220,16 @@ export async function startBotGame(
   });
 
   const status = `${formatRosterLine(session)} · 你先手 (✕)`;
-  const boardText = await sendOrEditBoard(plugin, services, message, session, status, false);
-  if (!plugin) {
-    return `${boardText}\n\n开局成功！回复数字 1–9 落子。`;
-  }
-  return '开局成功！点击棋盘或回复数字落子。';
+  const boardText = sendOrEditBoard(message, session, status, false);
+  return `${boardText}\n\n开局成功！回复数字 1–9 落子。`;
 }
 
 export async function startPvpGame(
-  plugin: Plugin | null,
   services: SessionServices,
-  message: Message<any>,
+  message: GameMessageLike,
   playerX: TttPlayerRef,
   playerO: TttPlayerRef,
-): Promise<string | void> {
+): Promise<string> {
   const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
   const active = await services.session.getActiveByChannel(ch);
   if (active) return '当前频道已有进行中的对局。';
@@ -279,6 +244,5 @@ export async function startPvpGame(
   });
   const opener = formatPlayerWithMark(session.player_x, session.player_x_name, '✕');
   const status = `${formatRosterLine(session)} · 先手：${opener}`;
-  const boardText = await sendOrEditBoard(plugin, services, message, session, status, false);
-  if (!plugin) return boardText;
+  return sendOrEditBoard(message, session, status, false);
 }
