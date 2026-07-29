@@ -55,7 +55,11 @@ function resolveAdapterResult(options: InitOptions): AdapterSetupResult {
     instances: [{
       package: '@zhin.js/adapter-sandbox',
       instanceKey: 'sandbox',
-      config: { endpoints: [{ context: 'sandbox', name: 'sandbox-bot', owner: 'sandbox-user' }] },
+      // 对齐 examples/minimal-bot 的 Stable 黄金路径：命令保留 / 前缀（/hello）
+      config: {
+        commandPrefix: '/',
+        endpoints: [{ context: 'sandbox', name: 'sandbox-bot', owner: 'sandbox-user' }],
+      },
     }],
     envVars: {},
   };

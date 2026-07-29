@@ -1,0 +1,16 @@
+# Root Plugin configuration. Child Plugin values live under plugins.<instanceKey>.
+# 未配置 http 段时使用默认值：http://127.0.0.1:8086、无 token（仅限本地开发）。
+# 需要 token 认证时添加：
+# http:
+#   token: ${HTTP_TOKEN}
+#   corsOrigins:
+#     - "https://console.zhin.dev"
+
+plugins:
+  sandbox:
+    # 对齐 Stable 黄金路径：命令保留 / 前缀（/hello）；无前缀文本落入 unmatched 回退
+    commandPrefix: '/'
+    endpoints:
+      - context: sandbox
+        name: sandbox-bot
+        owner: sandbox-user

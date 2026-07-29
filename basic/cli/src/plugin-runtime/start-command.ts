@@ -544,7 +544,7 @@ function printFirstRunGuidance(httpAddress: string, tokenConfigured: boolean): v
     chalk.bgGreen.black.bold(' 首跑下一步 '),
     `${chalk.bold('1.')} 打开 ${chalk.cyan(REMOTE_CONSOLE_URL)}，Host 填 ${chalk.cyan(`http://${httpAddress}`)}`,
     `${chalk.bold('2.')} Token 填项目根目录 ${chalk.cyan('.env')} 里的 ${chalk.cyan('HTTP_TOKEN')}${tokenConfigured ? '' : chalk.yellow('（当前未配置 http.token，Console 可直连，仅限本地）')}`,
-    `${chalk.bold('3.')} 进入 ${chalk.bold('Sandbox / 沙盒')} 页连接，发送 ${chalk.cyan('hello')} 或 ${chalk.cyan('/hello')}`,
+    `${chalk.bold('3.')} 进入 ${chalk.bold('Sandbox / 沙盒')} 页连接，发送 ${chalk.cyan('/hello')}${chalk.dim('（实例未配 commandPrefix 时发 hello）')}`,
     chalk.dim(`   自动打开浏览器：zhin runtime start --open（或 ZHIN_OPEN=1）`),
     '',
   ].join('\n') + '\n');

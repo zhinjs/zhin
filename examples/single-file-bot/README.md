@@ -19,7 +19,7 @@ npx zhin runtime start        # 或 pnpm dev
 
 启动后按终端里的首跑指引操作：打开 [Remote Console](https://console.zhin.dev)，
 Host 填 `http://127.0.0.1:8086`（本示例未配置 token，仅限本地），
-进入 **Sandbox / 沙盒** 页连接，发送 `hello`（或 `/hello`），即可收到回复。
+进入 **Sandbox / 沙盒** 页连接，发送 `/hello`（或 `hello`），即可收到回复。
 
 ## 它是怎么工作的
 
