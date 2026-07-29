@@ -1,5 +1,5 @@
 ---
-"@zhin.js/core": minor
+"@zhin.js/core": patch
 "@zhin.js/cli": patch
 "create-zhin-app": patch
 ---

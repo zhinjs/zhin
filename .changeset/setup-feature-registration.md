@@ -1,10 +1,10 @@
 ---
-"@zhin.js/plugin-runtime": minor
-"@zhin.js/runtime": minor
+"@zhin.js/plugin-runtime": patch
+"@zhin.js/runtime": patch
 "@zhin.js/adapter": patch
 "@zhin.js/command": patch
 "@zhin.js/component": patch
-"@zhin.js/feature-kit": minor
+"@zhin.js/feature-kit": patch
 "@zhin.js/agent-feature": patch
 "@zhin.js/mcp-feature": patch
 "@zhin.js/middleware": patch
