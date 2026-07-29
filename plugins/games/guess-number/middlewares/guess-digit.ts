@@ -13,7 +13,7 @@ export default defineMiddleware<Message>({
       return;
     }
     const services = resolveGameServices(context);
-    const message = messageFromCommandInput(context.input) as never;
+    const message = messageFromCommandInput(context.input);
     const reply = await processGuess(services, message, Number(raw));
     if (reply) {
       await context.input.$reply(reply);

@@ -1,5 +1,4 @@
-import type { Message, Plugin } from '@zhin.js/core';
-import { channelKey } from '@zhin.js/game-kit';
+import { channelKey, type GameMessageLike } from '@zhin.js/game-kit';
 import { continueGame, startGame } from './game-flow.js';
 import type { SessionService } from './session-service.js';
 
@@ -12,11 +11,10 @@ export const DICE_HELP = [
 ].join('\n');
 
 export async function runDiceCommand(
-  plugin: Plugin | null,
   services: SessionService,
-  message: Message<any>,
+  message: GameMessageLike,
   action: string,
-): Promise<string | undefined> {
+): Promise<string> {
   const ch = channelKey(message);
   const userId = message.$sender.id;
 
@@ -31,8 +29,8 @@ export async function runDiceCommand(
     return lines.join('\n');
   }
 
-  if (action === 'start') return startGame(plugin, services, message);
-  if (action === 'continue') return continueGame(plugin, services, message);
+  if (action === 'start') return (await startGame(services, message)) ?? '';
+  if (action === 'continue') return continueGame(services, message);
 
   if (action === 'quit') {
     const row = await services.getActiveForUser(ch, userId);
@@ -42,13 +40,4 @@ export async function runDiceCommand(
   }
 
   return `未知子命令：${action}\n\n${DICE_HELP}`;
-}
-
-/** Plugin Runtime / smoke: text-only, no Adapter.editMessage. */
-export async function runDiceCommandText(
-  services: SessionService,
-  message: Message<any>,
-  action: string,
-): Promise<string> {
-  return (await runDiceCommand(null, services, message, action)) ?? '';
 }

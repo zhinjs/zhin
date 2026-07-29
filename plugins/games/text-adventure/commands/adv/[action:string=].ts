@@ -1,6 +1,6 @@
 import { defineCommand } from '@zhin.js/command';
 import { messageFromCommandInput, normalizeAdvAction } from '@zhin.js/game-kit';
-import { ADV_HELP, runAdvCommandText } from '../../src/adv-command.js';
+import { ADV_HELP, runAdvCommand } from '../../src/adv-command.js';
 import { resolveGameServices } from '../../src/runtime-store.js';
 
 export default defineCommand({
@@ -10,6 +10,6 @@ export default defineCommand({
     if (!action || action === 'help') return ADV_HELP;
     const services = resolveGameServices({ use, owner });
     const message = messageFromCommandInput(input);
-    return runAdvCommandText(services, message, action);
+    return runAdvCommand(services, message, action);
   },
 });

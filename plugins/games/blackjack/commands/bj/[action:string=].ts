@@ -1,6 +1,6 @@
 import { defineCommand } from '@zhin.js/command';
 import { messageFromCommandInput } from '@zhin.js/game-kit';
-import { BJ_HELP, runBjCommandText } from '../../src/bj-command.js';
+import { BJ_HELP, runBjCommand } from '../../src/bj-command.js';
 import { resolveGameServices } from '../../src/runtime-store.js';
 
 function normalizeBjAction(raw: string): string {
@@ -18,6 +18,6 @@ export default defineCommand({
     if (!action || action === 'help') return BJ_HELP;
     const services = resolveGameServices({ use, owner });
     const message = messageFromCommandInput(input);
-    return runBjCommandText(services, message, action);
+    return runBjCommand(services, message, action);
   },
 });

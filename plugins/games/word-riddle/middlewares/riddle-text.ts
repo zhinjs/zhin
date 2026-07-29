@@ -33,7 +33,7 @@ export default defineMiddleware<Message>({
       if (parsed) {
         const session = await services.getById(parsed.sessionId);
         if (session?.channel_key === ch) {
-          const reply = await handleChoice(null, services, message, parsed.sessionId, parsed.choiceId);
+          const reply = await handleChoice(services, message, parsed.sessionId, parsed.choiceId);
           if (reply) await context.input.$reply(reply);
           return;
         }
@@ -57,7 +57,7 @@ export default defineMiddleware<Message>({
       const payload = resolveGameTextPayload(raw, map);
       const parsed = payload ? parseChoicePayload(payload, RIDDLE_PREFIX) : null;
       if (parsed?.sessionId === session.id) {
-        const reply = await handleChoice(null, services, message, session.id, parsed.choiceId);
+        const reply = await handleChoice(services, message, session.id, parsed.choiceId);
         if (reply) await context.input.$reply(reply);
         return;
       }
@@ -65,7 +65,7 @@ export default defineMiddleware<Message>({
 
     // 仅把 1-8 个汉字的纯文本当谜底作答，其余放行
     if (/^[\u4e00-\u9fff]{1,8}$/.test(raw)) {
-      const reply = await processAnswerText(null, services, message, raw);
+      const reply = await processAnswerText(services, message, raw);
       if (reply) await context.input.$reply(reply);
       return;
     }

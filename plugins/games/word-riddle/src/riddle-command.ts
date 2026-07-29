@@ -1,5 +1,4 @@
-import type { Message, Plugin } from '@zhin.js/core';
-import { channelKey } from '@zhin.js/game-kit';
+import { channelKey, type GameMessageLike } from '@zhin.js/game-kit';
 import { continueGame, startGame } from './game-flow.js';
 import { riddleCount, type RiddleType } from './riddles-catalog.js';
 
@@ -29,11 +28,10 @@ function parseMode(action: string): RiddleType | null {
 }
 
 export async function runRiddleCommand(
-  plugin: Plugin | null,
   services: SessionService,
-  message: Message<any>,
+  message: GameMessageLike,
   action: string,
-): Promise<string | undefined> {
+): Promise<string> {
   const ch = channelKey(message);
   const userId = message.$sender.id;
 
@@ -49,10 +47,10 @@ export async function runRiddleCommand(
   }
 
   const mode = parseMode(action);
-  if (mode) return startGame(plugin, services, message, mode);
+  if (mode) return (await startGame(services, message, mode)) ?? '';
 
   if (action === 'continue' || action === '继续') {
-    return continueGame(plugin, services, message);
+    return continueGame(services, message);
   }
 
   if (action === 'quit' || action === '放弃') {
@@ -63,13 +61,4 @@ export async function runRiddleCommand(
   }
 
   return `未知子命令：${action}\n\n${RIDDLE_HELP}`;
-}
-
-/** Plugin Runtime / smoke: text-only, no Adapter.editMessage. */
-export async function runRiddleCommandText(
-  services: SessionService,
-  message: Message<any>,
-  action: string,
-): Promise<string> {
-  return (await runRiddleCommand(null, services, message, action)) ?? '';
 }

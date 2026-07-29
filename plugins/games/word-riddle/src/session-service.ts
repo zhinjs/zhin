@@ -1,5 +1,5 @@
-import type { Database, Message, Models, RelatedModel } from '@zhin.js/core';
-import { channelKey, generateSessionId, boardMessageMatches } from '@zhin.js/game-kit';
+import type { Database, Models, RelatedModel } from '@zhin.js/core';
+import { channelKey, generateSessionId, boardMessageMatches, type GameMessageLike } from '@zhin.js/game-kit';
 import { pickRoundQueue, type RiddleType } from './riddles-catalog.js';
 import type { RiddleSessionRow } from './models.js';
 
@@ -49,7 +49,7 @@ export class SessionService {
     return null;
   }
 
-  async createSession(message: Message<any>, mode: RiddleType): Promise<RiddleSessionRow> {
+  async createSession(message: GameMessageLike, mode: RiddleType): Promise<RiddleSessionRow> {
     const now = Date.now();
     const queue = pickRoundQueue(mode).map((r) => r.id);
     const row: RiddleSessionRow = {

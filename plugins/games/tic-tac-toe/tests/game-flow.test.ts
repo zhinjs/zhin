@@ -30,9 +30,8 @@ describe('tic-tac-toe game-flow', () => {
 
   it('startPvpGame 有频道占用守卫', async () => {
     const message = makeMessage('u1');
-    await startBotGame(null, services, message);
+    await startBotGame(services, message);
     const reply = await startPvpGame(
-      null,
       services,
       message,
       { id: 'u1', displayName: 'u1' },
@@ -46,16 +45,15 @@ describe('tic-tac-toe game-flow', () => {
 
   it('restartFromTerminal 拒绝进行中的对局', async () => {
     const message = makeMessage('u1');
-    await startBotGame(null, services, message);
+    await startBotGame(services, message);
     const active = (await services.session.getActiveByChannel(CH))!;
-    const reply = await restartFromTerminal(null, services, message, active.id);
+    const reply = await restartFromTerminal(services, message, active.id);
     expect(reply).toBe('对局尚未结束，无法重开。');
   });
 
   it('PvP 终局 restart 重开 PvP（不降级为人机）', async () => {
     const message = makeMessage('u1');
     await startPvpGame(
-      null,
       services,
       message,
       { id: 'u1', displayName: 'u1' },
@@ -64,7 +62,7 @@ describe('tic-tac-toe game-flow', () => {
     const old = (await services.session.getActiveByChannel(CH))!;
     await services.session.updateSession(old.id, { status: 'won', winner: 1 });
 
-    const reply = await restartFromTerminal(null, services, message, old.id);
+    const reply = await restartFromTerminal(services, message, old.id);
     expect(reply).not.toBe('对局尚未结束，无法重开。');
 
     const oldAfter = (await services.session.getById(old.id))!;
@@ -78,11 +76,11 @@ describe('tic-tac-toe game-flow', () => {
 
   it('人机终局 restart 仍重开人机', async () => {
     const message = makeMessage('u1');
-    await startBotGame(null, services, message);
+    await startBotGame(services, message);
     const old = (await services.session.getActiveByChannel(CH))!;
     await services.session.updateSession(old.id, { status: 'draw', winner: 0 });
 
-    await restartFromTerminal(null, services, message, old.id);
+    await restartFromTerminal(services, message, old.id);
 
     const active = (await services.session.getActiveByChannel(CH))!;
     expect(active.id).not.toBe(old.id);

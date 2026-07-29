@@ -1,11 +1,10 @@
-import type { Message } from '@zhin.js/core';
-import { recordGameOutcome } from '@zhin.js/game-kit';
+import { recordGameOutcome, type GameMessageLike } from '@zhin.js/game-kit';
 import { evaluateGuess, hintText, MAX, MIN } from './engine.js';
 import { formatStatus, type SessionService } from './session-service.js';
 
 export async function startGame(
   services: SessionService,
-  message: Message<any>,
+  message: GameMessageLike,
 ): Promise<string> {
   const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
   const mine = await services.getActiveForUser(ch, message.$sender.id);
@@ -18,7 +17,7 @@ export async function startGame(
 
 export async function processGuess(
   services: SessionService,
-  message: Message<any>,
+  message: GameMessageLike,
   value: number,
 ): Promise<string | null> {
   const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;

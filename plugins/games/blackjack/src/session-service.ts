@@ -1,5 +1,5 @@
-import type { Database, Message, Models, RelatedModel } from '@zhin.js/core';
-import { channelKey, generateSessionId } from '@zhin.js/game-kit';
+import type { Database, Models, RelatedModel } from '@zhin.js/core';
+import { channelKey, generateSessionId, type GameMessageLike } from '@zhin.js/game-kit';
 import type { BjSessionRow } from './models.js';
 import { freshDeck } from './engine.js';
 
@@ -15,7 +15,7 @@ function getModel(db: BjDatabase): RelatedModel<unknown, Models, 'bj_sessions'> 
 export class SessionService {
   constructor(private readonly db: BjDatabase) {}
 
-  async createSession(message: Message<any>): Promise<BjSessionRow> {
+  async createSession(message: GameMessageLike): Promise<BjSessionRow> {
     const deck = freshDeck();
     const playerCards = [deck.pop()!, deck.pop()!];
     const dealerCards = [deck.pop()!, deck.pop()!];

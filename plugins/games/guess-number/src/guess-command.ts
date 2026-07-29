@@ -1,5 +1,4 @@
-import type { Message, Plugin } from '@zhin.js/core';
-import { channelKey } from '@zhin.js/game-kit';
+import { channelKey, type GameMessageLike } from '@zhin.js/game-kit';
 import { startGame } from './game-flow.js';
 import { formatStatus, type SessionService } from './session-service.js';
 
@@ -14,7 +13,7 @@ export const GUESS_HELP = [
 
 export async function runGuessCommand(
   services: SessionService,
-  message: Message<any>,
+  message: GameMessageLike,
   action: string,
 ): Promise<string> {
   const ch = channelKey(message);

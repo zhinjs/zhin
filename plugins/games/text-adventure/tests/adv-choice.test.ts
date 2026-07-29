@@ -45,7 +45,7 @@ describe('text-adventure adv-choice middleware (text fallback)', () => {
 
   it('数字 1 映射为当前场景第一个选项并回复', async () => {
     const input = makeInput('1');
-    await startAdventure(null, services, input as never);
+    await startAdventure(services, input as never);
     replies.length = 0;
 
     await middleware.handle(makeCtx(input), next);
@@ -57,7 +57,7 @@ describe('text-adventure adv-choice middleware (text fallback)', () => {
 
   it('超出选项编号的数字放行给后续中间件', async () => {
     const input = makeInput('99');
-    await startAdventure(null, services, input as never);
+    await startAdventure(services, input as never);
     replies.length = 0;
 
     await middleware.handle(makeCtx(input), next);
@@ -68,7 +68,7 @@ describe('text-adventure adv-choice middleware (text fallback)', () => {
 
   it('无法映射的文本放行给后续中间件', async () => {
     const input = makeInput('随便说一句');
-    await startAdventure(null, services, input as never);
+    await startAdventure(services, input as never);
     replies.length = 0;
 
     await middleware.handle(makeCtx(input), next);

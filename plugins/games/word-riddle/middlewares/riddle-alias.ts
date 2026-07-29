@@ -4,7 +4,7 @@ import {
   messageFromCommandInput,
   normalizeRiddleAction,
 } from '@zhin.js/game-kit';
-import { RIDDLE_HELP, runRiddleCommandText } from '../src/riddle-command.js';
+import { RIDDLE_HELP, runRiddleCommand } from '../src/riddle-command.js';
 import { resolveGameServices } from '../src/runtime-store.js';
 
 export default defineGameCommandAliasMiddleware({
@@ -16,6 +16,6 @@ export default defineGameCommandAliasMiddleware({
     if (!isRiddleAction(normalized)) return null;
     const services = resolveGameServices(context);
     const message = messageFromCommandInput(input);
-    return runRiddleCommandText(services, message, normalized);
+    return runRiddleCommand(services, message, normalized);
   },
 });

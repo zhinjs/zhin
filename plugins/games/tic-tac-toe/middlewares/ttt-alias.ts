@@ -4,7 +4,7 @@ import {
   messageFromCommandInput,
   normalizeTttAction,
 } from '@zhin.js/game-kit';
-import { TTT_HELP, runTttCommandText } from '../src/ttt-command.js';
+import { TTT_HELP, runTttCommand } from '../src/ttt-command.js';
 import { resolveGameServices } from '../src/runtime-store.js';
 
 export default defineGameCommandAliasMiddleware({
@@ -16,6 +16,6 @@ export default defineGameCommandAliasMiddleware({
     if (!isTttAction(normalized)) return null;
     const services = resolveGameServices(context);
     const message = messageFromCommandInput(input);
-    return runTttCommandText(services, message, normalized);
+    return runTttCommand(services, message, normalized);
   },
 });

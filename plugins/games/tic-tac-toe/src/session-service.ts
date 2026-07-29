@@ -1,5 +1,5 @@
-import type { Database, Message, Models, RelatedModel } from '@zhin.js/core';
-import { channelKey, boardMessageMatches, generateCompactId } from '@zhin.js/game-kit';
+import type { Database, Models, RelatedModel } from '@zhin.js/core';
+import { channelKey, boardMessageMatches, generateCompactId , type GameMessageLike } from '@zhin.js/game-kit';
 import type { TttModelName, TttSessionRow } from './models.js';
 
 /** 井字棋服务使用的数据库实例（Models 经 models.ts 模块增强） */
@@ -129,7 +129,7 @@ export class SessionService {
   }
 
   async createSession(input: {
-    message: Message<any>;
+    message: GameMessageLike;
     playerX: string;
     playerO: string;
     playerXName?: string;

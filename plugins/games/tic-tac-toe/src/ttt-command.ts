@@ -1,5 +1,4 @@
-import type { Message, Plugin } from '@zhin.js/core';
-import { channelKey } from '@zhin.js/game-kit';
+import { channelKey, type GameMessageLike } from '@zhin.js/game-kit';
 import { formatPlayerWithMark, formatRosterLine } from './player-label.js';
 import { startBotGame, startPvpGame } from './game-flow.js';
 import type { SessionServices } from './session-service.js';
@@ -15,11 +14,10 @@ export const TTT_HELP = [
 ].join('\n');
 
 export async function runTttCommand(
-  plugin: Plugin | null,
   services: SessionServices,
-  message: Message<any>,
+  message: GameMessageLike,
   action: string,
-): Promise<string | undefined> {
+): Promise<string> {
   const ch = channelKey(message);
   const userId = message.$sender.id;
 
@@ -43,7 +41,7 @@ export async function runTttCommand(
     const pair = await services.queue.tryMatch(ch);
     if (pair) {
       const [px, po] = pair;
-      const board = await startPvpGame(plugin, services, message, px, po);
+      const board = await startPvpGame(services, message, px, po);
       const matchLine = `匹配成功！${formatPlayerWithMark(px.id, px.displayName, '✕')} vs ${formatPlayerWithMark(po.id, po.displayName, '○')}`;
       return board ? `${matchLine}\n\n${board}` : matchLine;
     }
@@ -56,7 +54,7 @@ export async function runTttCommand(
   }
 
   if (action === 'bot') {
-    return startBotGame(plugin, services, message);
+    return startBotGame(services, message);
   }
 
   if (action === 'quit') {
@@ -74,13 +72,4 @@ export async function runTttCommand(
   }
 
   return `未知子命令：${action}\n\n${TTT_HELP}`;
-}
-
-/** Plugin Runtime / smoke: text-only, no Adapter.editMessage. */
-export async function runTttCommandText(
-  services: SessionServices,
-  message: Message<any>,
-  action: string,
-): Promise<string> {
-  return (await runTttCommand(null, services, message, action)) ?? '';
 }
