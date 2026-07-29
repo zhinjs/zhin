@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { resolveWorkspacePackClosure } from './workspace-pack-closure.mjs';
+import {
+  resolveWorkspacePackClosure,
+  withWorkspaceTarballOverrides,
+} from './workspace-pack-closure.mjs';
 
 test('resolves the full unpublished workspace dependency closure', () => {
   const packages = [
@@ -42,5 +45,50 @@ test('resolves the full unpublished workspace dependency closure', () => {
   assert.ok(
     closure.findIndex(({ name }) => name === '@example/contract')
       < closure.findIndex(({ name }) => name === '@example/client'),
+  );
+});
+
+test('overrides the full workspace closure with packed tarballs', () => {
+  const manifest = {
+    name: '@example/console',
+    pnpm: {
+      onlyBuiltDependencies: ['esbuild'],
+      overrides: { external: '1.2.3' },
+    },
+  };
+  const closure = [
+    { name: '@example/contract' },
+    { name: '@example/client' },
+  ];
+  const packedPackages = new Map([
+    ['@example/contract', { tarball: '/tmp/example-contract.tgz' }],
+    ['@example/client', { tarball: '/tmp/example-client.tgz' }],
+  ]);
+
+  assert.deepEqual(
+    withWorkspaceTarballOverrides(manifest, closure, packedPackages),
+    {
+      ...manifest,
+      pnpm: {
+        onlyBuiltDependencies: ['esbuild'],
+        overrides: {
+          external: '1.2.3',
+          '@example/contract': 'file:/tmp/example-contract.tgz',
+          '@example/client': 'file:/tmp/example-client.tgz',
+        },
+      },
+    },
+  );
+  assert.deepEqual(manifest.pnpm.overrides, { external: '1.2.3' });
+});
+
+test('rejects an incomplete set of packed workspace artifacts', () => {
+  assert.throws(
+    () => withWorkspaceTarballOverrides(
+      {},
+      [{ name: '@example/client' }],
+      new Map(),
+    ),
+    /Packed workspace artifact is missing: @example\/client/u,
   );
 });

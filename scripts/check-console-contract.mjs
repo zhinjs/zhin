@@ -6,12 +6,21 @@
  * source or a manually replaced node_modules directory.
  */
 import { execFileSync } from 'node:child_process';
-import { cp, mkdtemp, mkdir, readFile, readdir, rm } from 'node:fs/promises';
+import {
+  cp,
+  mkdtemp,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   resolveWorkspacePackClosure,
+  withWorkspaceTarballOverrides,
   workspaceDependencyNames,
 } from './workspace-pack-closure.mjs';
 
@@ -121,6 +130,17 @@ try {
     }
   }
   pnpm(['install', '--frozen-lockfile'], consoleDir);
+  const consoleManifestPath = path.join(consoleDir, 'package.json');
+  const consoleManifest = JSON.parse(await readFile(consoleManifestPath, 'utf8'));
+  const installManifest = withWorkspaceTarballOverrides(
+    consoleManifest,
+    packClosure,
+    packedPackages,
+  );
+  await writeFile(
+    consoleManifestPath,
+    `${JSON.stringify(installManifest, null, 2)}\n`,
+  );
   pnpm([
     'add', '--save-prod', '--save-exact',
     ...packClosure.map(({ name }) => `file:${packedPackages.get(name).tarball}`),

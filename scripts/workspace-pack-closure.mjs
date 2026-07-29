@@ -56,3 +56,42 @@ export function workspaceDependencyNames(manifest, workspaceByName) {
   }
   return [...new Set(names)].sort();
 }
+
+/**
+ * Point every packed workspace package at its local tarball so unpublished
+ * transitive versions are resolved from the same publish candidate.
+ *
+ * @param {Record<string, unknown>} manifest
+ * @param {ReadonlyArray<{ name: string }>} packClosure
+ * @param {Map<string, { tarball: string }>} packedPackages
+ */
+export function withWorkspaceTarballOverrides(
+  manifest,
+  packClosure,
+  packedPackages,
+) {
+  const packedOverrides = {};
+  for (const { name } of packClosure) {
+    const packed = packedPackages.get(name);
+    if (!packed) throw new Error(`Packed workspace artifact is missing: ${name}`);
+    packedOverrides[name] = `file:${packed.tarball}`;
+  }
+
+  const pnpm = manifest.pnpm && typeof manifest.pnpm === 'object'
+    ? manifest.pnpm
+    : {};
+  const overrides = pnpm.overrides && typeof pnpm.overrides === 'object'
+    ? pnpm.overrides
+    : {};
+
+  return {
+    ...manifest,
+    pnpm: {
+      ...pnpm,
+      overrides: {
+        ...overrides,
+        ...packedOverrides,
+      },
+    },
+  };
+}
