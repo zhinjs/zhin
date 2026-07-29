@@ -1,6 +1,4 @@
-import type { Plugin } from 'zhin.js';
 import {
-  subscribeAIEvents,
   subscribeAIEventsOnTarget,
   activityFeedbackAiBus,
   isActivityFeedbackEnabled,
@@ -10,7 +8,6 @@ import { loadActivityFeedbackServiceConfig, type ActivityFeedbackServiceConfig }
 import {
   ActivityFeedbackExecutor,
   createNoopEndpointAccess,
-  createRootEndpointAccess,
   type ActivityFeedbackEndpointAccess,
 } from './executor.js';
 import { ActivityFeedbackOrchestrator } from './orchestrator.js';
@@ -88,14 +85,6 @@ export function createActivityFeedbackAIEventHandlers(
   };
 }
 
-/** Legacy host Plugin path (ALS-aware subscribeAIEvents). */
-export function bindActivityFeedbackToAIEvents(
-  root: Plugin['root'],
-  orchestrator: ActivityFeedbackOrchestrator,
-): () => void {
-  return subscribeAIEvents(root, createActivityFeedbackAIEventHandlers(orchestrator));
-}
-
 /**
  * Plugin Runtime path: subscribe on module-level `activityFeedbackAiBus`
  * (fed by ZhinAgentEventEmitter.emit). No usePlugin / Adapter inject.
@@ -107,17 +96,6 @@ export function bindActivityFeedbackToAIEventBus(
     activityFeedbackAiBus,
     createActivityFeedbackAIEventHandlers(orchestrator),
   );
-}
-
-export function mountActivityFeedbackService(
-  plugin: Plugin,
-  orchestrator: ActivityFeedbackOrchestrator,
-): void {
-  const dispose = bindActivityFeedbackToAIEvents(plugin.root, orchestrator);
-  plugin.onDispose(() => {
-    plugin.logger.debug('[ActivityFeedback] Disposing binder');
-    dispose();
-  });
 }
 
 export type ActivityFeedbackLogger = {
@@ -137,17 +115,6 @@ export function createActivityFeedbackOrchestrator(
   const policy = new ActivityFeedbackPolicy(loadActivityFeedbackServiceConfig(options.serviceConfig));
   const executor = new ActivityFeedbackExecutor(options.access);
   return new ActivityFeedbackOrchestrator(policy, executor, options.logger);
-}
-
-export function createActivityFeedbackOrchestratorFromPlugin(
-  plugin: Plugin,
-  serviceConfig: ActivityFeedbackServiceConfig,
-): ActivityFeedbackOrchestrator {
-  return createActivityFeedbackOrchestrator({
-    serviceConfig,
-    access: createRootEndpointAccess(plugin.root),
-    logger: plugin.logger,
-  });
 }
 
 /** Runtime: prefer OutboundHost-backed access; else noop until Host wires outbound. */

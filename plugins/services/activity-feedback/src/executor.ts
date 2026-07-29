@@ -10,19 +10,6 @@ export interface ActivityFeedbackEndpointAccess {
   ): { endpoint: EndpointWithActivityFeedback; adapter: Adapter } | undefined;
 }
 
-export function createRootEndpointAccess(root: {
-  injectAdapter(platform: string): Adapter | undefined;
-}): ActivityFeedbackEndpointAccess {
-  return {
-    resolve(platform, endpointId) {
-      const adapter = root.injectAdapter(platform);
-      const endpoint = adapter?.endpoints?.get(endpointId) as EndpointWithActivityFeedback | undefined;
-      if (!endpoint || !adapter) return undefined;
-      return { endpoint, adapter };
-    },
-  };
-}
-
 /** Slice-2: no Adapter inject — executor start/stop no-op when resolve returns undefined. */
 export function createNoopEndpointAccess(): ActivityFeedbackEndpointAccess {
   return {
