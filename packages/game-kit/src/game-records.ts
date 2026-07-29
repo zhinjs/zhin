@@ -2,12 +2,12 @@ import {
   MessageCommand,
   type Database,
   type DatabaseFeature,
-  type Message,
   type Models,
   type Plugin,
   type RelatedModel,
 } from '@zhin.js/core';
 import { channelKey } from './board-sender.js';
+import type { GameMessageLike } from './command-message.js';
 import { getRegisteredGame, getRegisteredGames } from './game-hub-feature.js';
 import { createHostGameDb, type HostGameDbSource } from './memory-db.js';
 import { generateCompactId } from './random.js';
@@ -131,7 +131,7 @@ function recordId(): string {
 
 /** 对局结束时写入战绩（database 未就绪时静默跳过） */
 export async function recordGameOutcome(
-  message: Message,
+  message: GameMessageLike,
   gameId: string,
   result: GameRecordResult,
   score = 0,

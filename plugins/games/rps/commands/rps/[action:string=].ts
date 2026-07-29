@@ -1,6 +1,6 @@
 import { defineCommand } from '@zhin.js/command';
 import { messageFromCommandInput, normalizeRpsAction } from '@zhin.js/game-kit';
-import { RPS_HELP, runRpsCommandText } from '../../src/rps-command.js';
+import { RPS_HELP, runRpsCommand } from '../../src/rps-command.js';
 import { resolveGameServices } from '../../src/runtime-store.js';
 
 export default defineCommand({
@@ -10,6 +10,6 @@ export default defineCommand({
     if (!action || action === 'help') return RPS_HELP;
     const services = resolveGameServices({ use, owner });
     const message = messageFromCommandInput(input);
-    return runRpsCommandText(services, message, action);
+    return runRpsCommand(services, message, action);
   },
 });

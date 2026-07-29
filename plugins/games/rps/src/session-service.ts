@@ -1,5 +1,5 @@
-import type { Database, Message, Models, RelatedModel } from '@zhin.js/core';
-import { channelKey, generateSessionId, boardMessageMatches } from '@zhin.js/game-kit';
+import type { Database, Models, RelatedModel } from '@zhin.js/core';
+import { channelKey, generateSessionId, boardMessageMatches, type GameMessageLike } from '@zhin.js/game-kit';
 import type { RpsSessionRow } from './models.js';
 
 export type RpsDatabase = Database<unknown, Models, string>;
@@ -37,7 +37,7 @@ export class SessionService {
     return null;
   }
 
-  async createSession(message: Message<any>): Promise<RpsSessionRow> {
+  async createSession(message: GameMessageLike): Promise<RpsSessionRow> {
     const now = Date.now();
     const row: RpsSessionRow = {
       id: generateSessionId(),
