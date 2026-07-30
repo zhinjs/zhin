@@ -1,7 +1,6 @@
 {
   "name": "@zhin.js/plugin-dungeon-expedition",
   "version": "1.0.0",
-  "private": true,
   "description": "Zhin.js multiplayer deterministic dungeon expedition",
   "type": "module",
   "main": "./lib/index.js",
