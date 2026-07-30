@@ -1,5 +1,11 @@
 # @zhin.js/scaffold-wizard
 
+## 0.2.2
+
+### Patch Changes
+
+- 2a86259: fix: cli 增加 ai 适配器可选项
+
 ## 0.2.1
 
 ### Patch Changes

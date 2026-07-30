@@ -1,5 +1,11 @@
 # test-bot
 
+## 0.1.119
+
+### Patch Changes
+
+- @zhin.js/cli@2.0.3
+
 ## 0.1.118
 
 ### Patch Changes
