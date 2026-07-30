@@ -1,5 +1,16 @@
 # zhin.js
 
+## 5.0.2
+
+### Patch Changes
+
+- Updated dependencies [d5cd4aa]
+  - @zhin.js/runtime@1.0.4
+  - @zhin.js/core@1.4.2
+  - @zhin.js/agent@1.0.7
+  - @zhin.js/html-renderer@2.0.2
+  - @zhin.js/speech@2.0.2
+
 ## 5.0.1
 
 ### Patch Changes

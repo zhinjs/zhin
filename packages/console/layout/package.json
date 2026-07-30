@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/layout",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Convention-based Console Layout capability Feature for Zhin.js plugins",
   "type": "module",
   "main": "./lib/index.js",

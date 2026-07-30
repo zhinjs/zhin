@@ -1,6 +1,6 @@
 {
   "name": "zhin.js",
-  "version": "5.0.1",
+  "version": "5.0.2",
   "description": "Zhin.js IM 核心（<10MB 安装预算）；AI 请另装 @zhin.js/agent",
   "type": "module",
   "main": "./lib/index.js",
@@ -95,11 +95,11 @@
     "chalk": "^5.6.0"
   },
   "peerDependencies": {
-    "@zhin.js/agent": "^1.0.6",
+    "@zhin.js/agent": "^1.0.7",
     "@zhin.js/ai": "^1.4.6",
     "@zhin.js/html-renderer": "workspace:^",
     "@zhin.js/speech": "workspace:^",
-    "@zhin.js/runtime": "^1.0.3"
+    "@zhin.js/runtime": "^1.0.4"
   },
   "peerDependenciesMeta": {
     "@zhin.js/agent": {

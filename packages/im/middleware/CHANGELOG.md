@@ -1,5 +1,12 @@
 # @zhin.js/middleware
 
+## 1.0.4
+
+### Patch Changes
+
+- Updated dependencies [d5cd4aa]
+  - @zhin.js/feature-kit@1.0.4
+
 ## 1.0.3
 
 ### Patch Changes
