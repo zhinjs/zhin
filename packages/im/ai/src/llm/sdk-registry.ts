@@ -131,7 +131,7 @@ export function createLanguageModel(
         headers,
         ...transport,
       });
-      return openai(modelId);
+      return openai.chat(modelId);
     }
     case 'anthropic': {
       const { createAnthropic } = loadPeer<typeof import('@ai-sdk/anthropic')>('@ai-sdk/anthropic');

@@ -27,7 +27,8 @@
   <a href="https://zhin.js.org">Documentation</a> ·
   <a href="https://demo.zhin.dev">Live Demo</a> ·
   <a href="https://console.zhin.dev">Remote Console</a> ·
-  <a href="./docs/contributing/development.md">Contributing</a>
+  <a href="./docs/contributing/development.md">Contributing</a> ·
+  <a href="./README.en.md">English</a>
 </p>
 
 ---
