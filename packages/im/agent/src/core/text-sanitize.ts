@@ -38,6 +38,30 @@ export interface SanitizeAssistantReplyOptions {
   cwd?: string;
 }
 
+/**
+ * 递归解开整段 JSON 字符串字面量（`"你好\\n"` / `"\\"…\\""`）。
+ * 弱模型在 JSON 出站提示下常把正文包成 string，而非 `{"text":…}` 对象。
+ */
+export function unwrapJsonStringLayers(raw: string, maxDepth = 8): string {
+  let current = raw;
+  for (let depth = 0; depth < maxDepth; depth++) {
+    const trimmed = current.trim();
+    if (trimmed.length < 2 || trimmed[0] !== '"') {
+      return depth === 0 ? raw : current;
+    }
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (typeof parsed !== 'string') {
+        return depth === 0 ? raw : current;
+      }
+      current = parsed;
+    } catch {
+      return depth === 0 ? raw : current;
+    }
+  }
+  return current;
+}
+
 function outboundText(text: string, cwd?: string): string {
   return relativizeCwdPaths(text, cwd);
 }
@@ -53,7 +77,7 @@ export function sanitizeAssistantReply(
   options: SanitizeAssistantReplyOptions = {},
 ): string {
   const cwd = options.cwd;
-  const stripped = stripHallucinatedToolCalls(stripThinkBlocks(raw));
+  const stripped = stripHallucinatedToolCalls(stripThinkBlocks(unwrapJsonStringLayers(raw)));
   const summary = options.toolSummary?.trim() ?? '';
 
   if (looksLikeInternalToolDump(stripped) && summary && !looksLikeRawToolMarkup(summary)) {

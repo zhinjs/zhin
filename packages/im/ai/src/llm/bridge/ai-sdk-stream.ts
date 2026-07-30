@@ -34,8 +34,12 @@ function buildStructuredOutputSpec(schema: Record<string, unknown> | undefined) 
   });
 }
 
-/** 读取 structured output；tool-call 中间步无对象产出时回退 undefined。 */
-async function readStructuredOutput(source: unknown): Promise<unknown> {
+/** 读取 structured output；仅在显式配置 outputSchema 时启用（AI SDK v7 无 schema 时 output 也可能是纯文本 string）。 */
+async function readStructuredOutput(
+  source: unknown,
+  enabled: boolean,
+): Promise<unknown> {
+  if (!enabled) return undefined;
   try {
     const output = (source as { output?: PromiseLike<unknown> | unknown } | undefined)?.output;
     if (output == null) return undefined;
@@ -43,6 +47,12 @@ async function readStructuredOutput(source: unknown): Promise<unknown> {
   } catch {
     return undefined;
   }
+}
+
+/** structured → assistant text；string 不再二次 JSON.stringify。 */
+function formatStructuredAsAssistantText(structured: unknown): string {
+  if (typeof structured === 'string') return structured;
+  return JSON.stringify(structured);
 }
 
 function mapFinishReason(
@@ -222,7 +232,7 @@ export function createAiSdkStreamFn(): StreamFn {
       const final = await result;
       options?.onResponse?.(final.response);
 
-      const structured = await readStructuredOutput(final);
+      const structured = await readStructuredOutput(final, Boolean(options?.outputSchema));
       const finalText = await final.text;
       const finalReasoning = await Promise.resolve(final.reasoningText).catch(() => '');
       const finishReason = await final.finishReason;
@@ -230,7 +240,7 @@ export function createAiSdkStreamFn(): StreamFn {
 
       const calls = [...toolCalls.values()];
       const resolvedText = structured !== undefined
-        ? JSON.stringify(structured)
+        ? formatStructuredAsAssistantText(structured)
         : (text || finalText);
       const resolvedThinking = thinking || finalReasoning || '';
       const assistant = buildAssistantMessage(
@@ -282,7 +292,7 @@ export async function generateTextViaAiSdk(
     output: buildStructuredOutputSpec(options?.outputSchema),
   });
 
-  const structured = await readStructuredOutput(result);
+  const structured = await readStructuredOutput(result, Boolean(options?.outputSchema));
   const toolCalls = result.toolCalls.map((call) => ({
     id: call.toolCallId,
     name: call.toolName,
@@ -291,7 +301,7 @@ export async function generateTextViaAiSdk(
 
   return buildAssistantMessage(
     model,
-    structured !== undefined ? JSON.stringify(structured) : result.text,
+    structured !== undefined ? formatStructuredAsAssistantText(structured) : result.text,
     result.reasoningText ?? '',
     toolCalls,
     mapFinishReason(result.finishReason, toolCalls.length > 0),

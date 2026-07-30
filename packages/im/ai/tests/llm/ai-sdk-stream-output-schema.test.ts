@@ -89,6 +89,29 @@ describe('createAiSdkStreamFn outputSchema', () => {
     expect(textBlock).toEqual({ type: 'text', text: 'plain text' });
   });
 
+  it('ignores result.output string when outputSchema is not set (AI SDK v7 fallback)', async () => {
+    vi.mocked(streamText).mockReturnValue(makeStreamResult(makeFinal({
+      text: '您好！\n',
+      output: '您好！\n',
+    })) as never);
+
+    const message = await runStream();
+
+    const textBlock = message.content.find((b) => b.type === 'text');
+    expect(textBlock).toEqual({ type: 'text', text: '您好！\n' });
+  });
+
+  it('does not JSON.stringify structured string output when outputSchema is set', async () => {
+    vi.mocked(streamText).mockReturnValue(makeStreamResult(makeFinal({
+      output: '你好\n世界',
+    })) as never);
+
+    const message = await runStream({ outputSchema: { type: 'string' } });
+
+    const textBlock = message.content.find((b) => b.type === 'text');
+    expect(textBlock).toEqual({ type: 'text', text: '你好\n世界' });
+  });
+
   it('falls back to plain text when structured output is unavailable (tool-call step)', async () => {
     vi.mocked(streamText).mockReturnValue(makeStreamResult(makeFinal({
       output: Promise.reject(new Error('NoObjectGenerated')),

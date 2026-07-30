@@ -13,7 +13,7 @@ import { resolveModelHarness } from '../config/model-harness-runtime.js';
 import { buildAgentPathSystemPrompt, buildChatPathSystemPrompt, describeAgentPathPromptSections } from '../prompt/assembly.js';
 import { logPromptComposition } from '../internal/prompt-trace.js';
 import { planToolRun } from '../tool/runtime.js';
-import { sanitizeAssistantReply } from './text-sanitize.js';
+import { sanitizeAssistantReply, unwrapJsonStringLayers } from './text-sanitize.js';
 import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-format.js';
 import { transformContextWithCompaction } from '../memory/compaction-runtime.js';
 import { logPhase, tokenUsageLogFields, logAgentLoopIterationEnd } from '../internal/phase-trace.js';
@@ -36,7 +36,17 @@ import {
 } from './turn-event-mapper.js';
 const logger = getLogger('ZhinAgent:AgentLoopTurn');
 
+/** 入库前解开模型误包的 JSON 字符串，避免下一轮历史继续叠转义。 */
+function normalizeAssistantMessageText(assistant: AssistantMessage): void {
+  for (const block of assistant.content) {
+    if (block.type === 'text' && block.text) {
+      block.text = unwrapJsonStringLayers(block.text);
+    }
+  }
+}
+
 function resolveAssistantReplyText(assistant: AssistantMessage): string {
+  normalizeAssistantMessageText(assistant);
   const text = assistantText(assistant);
   if (text.trim()) return text;
   if (assistant.errorMessage) {

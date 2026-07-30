@@ -5,7 +5,7 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 import { type AgentTool, type AIProvider, type ContentPart, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, createMemoryContextRepository, getLlmTransportModel, agentToolsToLlmTools, registerLlmApiFromProviders, sdkEntryFromProvider, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolResultTransform, type StreamOptions } from '@zhin.js/ai';
 import { runWithCommMessage, runWithDirectAgentExecution } from '../security/comm-message-context.js';
 import type { Message } from '../orchestrator/types.js';
-import { sanitizeAssistantReply } from '../core/text-sanitize.js';
+import { sanitizeAssistantReply, unwrapJsonStringLayers } from '../core/text-sanitize.js';
 import { type ToolCallRecord, formatToolCallsForUser } from '../core/tool-calls-user-format.js';
 import { buildVisionUserMessage, summarizeMultimodalParts } from '../turn/multimodal-message.js';
 import { DEFAULT_MULTIMODAL_CONFIG } from '../media/media-types.js';
@@ -192,6 +192,11 @@ export async function runAgentLoopStandaloneTurn(
     }
     if (event.type === 'message_end' && event.message.role === 'assistant') {
       const assistant = event.message as AssistantMessage;
+      for (const block of assistant.content) {
+        if (block.type === 'text' && block.text) {
+          block.text = unwrapJsonStringLayers(block.text);
+        }
+      }
       lastAssistantText = assistantText(assistant);
       if (!lastAssistantText.trim() && assistant.errorMessage) {
         lastAssistantText = `Something went wrong: ${assistant.errorMessage}. Please try again or rephrase your request.`;
