@@ -1,5 +1,5 @@
 ---
-"@zhin.js/game-kit": major
+"@zhin.js/game-kit": patch
 "@zhin.js/runtime": patch
 "@zhin.js/feature-kit": patch
 "@zhin.js/command": patch
