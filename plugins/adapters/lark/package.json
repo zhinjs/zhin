@@ -34,10 +34,12 @@
     "directory": "plugins/adapters/lark"
   },
   "scripts": {
-    "build": "tsc && node ../../../scripts/build-plugin-runtime-entries.mjs",
+    "build": "tsc",
     "clean": "rimraf lib",
     "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/adapters/lark/tests",
-    "prepublishOnly": "pnpm run build"
+    "prepublishOnly": "pnpm run build",
+    "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
+    "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
   },
   "dependencies": {
     "@zhin.js/adapter": "workspace:*",

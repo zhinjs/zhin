@@ -24,10 +24,12 @@
   ],
   "scripts": {
     "build:data": "node scripts/build-char-riddles.mjs",
-    "build": "pnpm run build:data && tsc && node -e \"import('node:fs/promises').then(fs=>fs.mkdir('lib/data',{recursive:true}).then(()=>fs.copyFile('src/data/char-riddles.json','lib/data/char-riddles.json')))\" && node ../../../scripts/build-plugin-runtime-entries.mjs",
+    "build": "pnpm run build:data && tsc && node -e \"import('node:fs/promises').then(fs=>fs.mkdir('lib/data',{recursive:true}).then(()=>fs.copyFile('src/data/char-riddles.json','lib/data/char-riddles.json')))\"",
     "clean": "rimraf lib",
     "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/games/word-riddle/tests",
-    "prepublishOnly": "pnpm run build"
+    "prepublishOnly": "pnpm run build",
+    "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
+    "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
   },
   "license": "MIT",
   "dependencies": {

@@ -82,10 +82,16 @@ function checkPlugin(pluginPath, pluginName) {
         issue: `Runtime entry is missing from files: ${runtimeEntry}`,
       });
     }
-    if (!packageJson.scripts?.build?.includes('build-plugin-runtime-entries.mjs')) {
+    if (!packageJson.scripts?.prepack?.includes('build-plugin-runtime-entries.mjs')) {
       violations.push({
         plugin: relativePath,
-        issue: 'Build script does not emit Plugin Runtime JavaScript entries',
+        issue: 'Prepack script does not emit Plugin Runtime JavaScript entries',
+      });
+    }
+    if (!packageJson.scripts?.postpack?.includes('build-plugin-runtime-entries.mjs --clean')) {
+      violations.push({
+        plugin: relativePath,
+        issue: 'Postpack script does not clean generated Plugin Runtime JavaScript entries',
       });
     }
   }

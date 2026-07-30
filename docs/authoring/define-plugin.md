@@ -244,7 +244,9 @@ feature 包（`type: "feature"`）的清单只有 `protocol` / `type` / `entry` 
 {
   "files": ["lib", "plugin.js", "commands", "middlewares"],
   "scripts": {
-    "build": "tsc && node ../../../scripts/build-plugin-runtime-entries.mjs"
+    "build": "tsc",
+    "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
+    "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
   },
   "zhin": {
     "protocol": 1,
@@ -254,7 +256,7 @@ feature 包（`type: "feature"`）的清单只有 `protocol` / `type` / `entry` 
 }
 ```
 
-仓库内官方插件统一使用 `build-plugin-runtime-entries.mjs`：它将 `plugin.ts` 和约定目录中的 TypeScript 编译成同目录 JavaScript，并把指向 `src/` 的相对导入改写到 `lib/`。Runtime 在 workspace 中仍优先选择同名 TypeScript 源码，以保留局部 HMR；从 `node_modules` 加载时优先选择 JavaScript，避免 Node 拒绝对依赖包执行类型剥离。
+仓库内官方插件统一在 `prepack` 使用 `build-plugin-runtime-entries.mjs`：它将 `plugin.ts` 和约定目录中的 TypeScript 编译成同目录 JavaScript，并把指向 `src/` 的相对导入改写到 `lib/`；tarball 创建后，`postpack --clean` 清除这些带生成标记的同目录产物。普通 `build` 不生成它们，因此 workspace 测试和 HMR 始终命中 TypeScript 源码；从 `node_modules` 加载时则优先选择发布包内的 JavaScript，避免 Node 拒绝对依赖包执行类型剥离。
 
 ## 下一步
 

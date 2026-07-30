@@ -169,8 +169,13 @@ async function isFile(file) {
 
 const invokedPath = process.argv[1] ? pathToFileURL(resolve(process.argv[1])).href : '';
 if (import.meta.url === invokedPath) {
-  const root = process.argv[2] ?? process.cwd();
+  const cleanOnly = process.argv.includes('--clean');
+  const root = process.argv.slice(2).find((argument) => argument !== '--clean') ?? process.cwd();
   await cleanPluginRuntimeEntries(root);
+  if (cleanOnly) {
+    process.stdout.write('Cleaned generated Plugin Runtime JS entries.\n');
+    process.exit(0);
+  }
   const outputs = await buildPluginRuntimeEntries(root);
   process.stdout.write(`Built ${outputs.length} Plugin Runtime JS entries.\n`);
 }
