@@ -77,11 +77,25 @@ const PROVIDERS = [
     keyPlaceholder: '...',
   },
   {
+    name: 'Google (Gemini)',
+    value: 'google',
+    defaultModel: 'gemini-2.5-flash',
+    hint: '需 Google AI API Key',
+    keyPlaceholder: 'AIza...',
+  },
+  {
     name: 'Ollama (本地部署)',
     value: 'ollama',
     defaultModel: 'qwen3:8b',
     hint: '本地运行，无需 API Key；先 ollama pull 模型',
     keyPlaceholder: '',
+  },
+  {
+    name: 'OpenAI 兼容接口 (vLLM / OneAPI / SiliconFlow 等)',
+    value: 'openai-compatible',
+    defaultModel: '',
+    hint: '任何兼容 OpenAI API 的服务，需填 baseUrl',
+    keyPlaceholder: 'sk-...',
   },
 ] as const;
 
@@ -96,6 +110,7 @@ export function providerSdkFor(name: string): string {
       return 'ollama';
     case 'deepseek':
       return 'deepseek';
+    case 'openai-compatible':
     case 'moonshot':
     case 'zhipu':
       return 'openai-compatible';
@@ -265,6 +280,7 @@ export async function configureAI(): Promise<AISetupConfig> {
     };
   } else {
     const defaultBaseUrl = PROVIDER_DEFAULT_BASE_URLS[provider];
+    const requireBaseUrl = providerSdkFor(provider) === 'openai-compatible';
     const cloudConfig = await inquirer.prompt([
       {
         type: 'input',
@@ -278,18 +294,27 @@ export async function configureAI(): Promise<AISetupConfig> {
       {
         type: 'input',
         name: 'model',
-        message: '模型名称:',
-        default: providerInfo.defaultModel,
+        message: provider === 'openai-compatible'
+          ? '模型名称（服务端实际部署的模型 ID）:'
+          : '模型名称:',
+        default: providerInfo.defaultModel || undefined,
+        validate: provider === 'openai-compatible'
+          ? (input: string) => (input.trim() ? true : '模型名称不能为空')
+          : undefined,
       },
       {
         type: 'input',
         name: 'baseUrl',
-        message: defaultBaseUrl
-          ? 'API 地址（该提供商 sdk 为 openai-compatible，baseUrl 必填）:'
+        message: requireBaseUrl
+          ? 'API 地址（openai-compatible 必填，如 https://api.example.com/v1）:'
           : '自定义 API 地址（留空使用官方默认）:',
         default: defaultBaseUrl ?? '',
-        validate: defaultBaseUrl
-          ? (input: string) => (input.trim() ? true : 'baseUrl 不能为空（openai-compatible 无默认地址）')
+        validate: requireBaseUrl
+          ? (input: string) => {
+              if (!input.trim()) return 'baseUrl 不能为空（openai-compatible SDK 必须指定 API 地址）';
+              if (!/^https?:\/\//.test(input.trim())) return '请输入 http:// 或 https:// 开头的地址';
+              return true;
+            }
           : undefined,
       }
     ]);

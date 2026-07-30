@@ -51,6 +51,7 @@ const PROVIDER_SDK_PACKAGES: Record<string, { pkg: string; version: string }> = 
   ollama: { pkg: '@ai-sdk/openai-compatible', version: AI_STACK_VERSIONS['@ai-sdk/openai-compatible'] },
   moonshot: { pkg: '@ai-sdk/openai-compatible', version: AI_STACK_VERSIONS['@ai-sdk/openai-compatible'] },
   zhipu: { pkg: '@ai-sdk/openai-compatible', version: AI_STACK_VERSIONS['@ai-sdk/openai-compatible'] },
+  'openai-compatible': { pkg: '@ai-sdk/openai-compatible', version: AI_STACK_VERSIONS['@ai-sdk/openai-compatible'] },
 };
 
 /** @ai-sdk/* 主版本 ≥ threshold 时需 ai@7 */
