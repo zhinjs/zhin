@@ -340,16 +340,16 @@ importers:
         specifier: workspace:*
         version: link:../../packages/host/mcp
       '@zhin.js/page':
-        specifier: 1.0.3
+        specifier: 1.0.4
         version: link:../../packages/console/page
       '@zhin.js/satori':
         specifier: workspace:*
         version: link:../../packages/toolkit/satori
       '@zhin.js/skill':
-        specifier: 1.0.3
+        specifier: 1.0.4
         version: link:../../packages/im/skill
       '@zhin.js/tool':
-        specifier: 1.0.3
+        specifier: 1.0.4
         version: link:../../packages/im/tool
       ai:
         specifier: ^7.0.2
@@ -470,16 +470,16 @@ importers:
   examples/plugin-runtime-migration-bot:
     dependencies:
       '@zhin.js/command':
-        specifier: 1.0.3
+        specifier: 1.0.4
         version: link:../../packages/im/command
       '@zhin.js/component':
-        specifier: 1.0.3
+        specifier: 1.0.4
         version: link:../../packages/im/component
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../packages/im/core
       '@zhin.js/middleware':
-        specifier: 1.0.3
+        specifier: 1.0.4
         version: link:../../packages/im/middleware
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
