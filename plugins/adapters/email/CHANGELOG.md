@@ -1,5 +1,20 @@
 # @zhin.js/adapter-email
 
+## 4.0.2
+
+### Patch Changes
+
+- d5cd4aa: Publish Plugin Runtime entry points and convention modules as JavaScript so
+  installed npm plugins load on Node without TypeScript stripping. Workspace
+  development continues to prefer TypeScript sources for local HMR.
+
+  Remove the unconsumed legacy game hub APIs from game-kit; game navigation and
+  records now use ordinary convention commands owned by the game hub plugin.
+
+  - zhin.js@5.0.2
+  - @zhin.js/adapter@1.1.2
+  - @zhin.js/core@1.4.2
+
 ## 4.0.1
 
 ### Patch Changes

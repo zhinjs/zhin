@@ -1,5 +1,13 @@
 # @zhin.js/mcp
 
+## 5.0.2
+
+### Patch Changes
+
+- zhin.js@5.0.2
+- @zhin.js/tool@1.0.4
+- @zhin.js/core@1.4.2
+
 ## 5.0.1
 
 ### Patch Changes

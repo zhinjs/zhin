@@ -1,5 +1,15 @@
 # @zhin.js/agent
 
+## 1.0.7
+
+### Patch Changes
+
+- @zhin.js/agent-feature@1.0.4
+- @zhin.js/mcp-feature@1.0.4
+- @zhin.js/skill@1.0.4
+- @zhin.js/tool@1.0.4
+- @zhin.js/core@1.4.2
+
 ## 1.0.6
 
 ### Patch Changes
