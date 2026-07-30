@@ -1,5 +1,15 @@
 # @zhin.js/core
 
+## 1.4.2
+
+### Patch Changes
+
+- Updated dependencies [d5cd4aa]
+  - @zhin.js/command@1.0.4
+  - @zhin.js/adapter@1.1.2
+  - @zhin.js/component@1.0.4
+  - @zhin.js/middleware@1.0.4
+
 ## 1.4.1
 
 ### Patch Changes
