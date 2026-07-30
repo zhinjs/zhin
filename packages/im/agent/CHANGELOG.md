@@ -1,5 +1,14 @@
 # @zhin.js/agent
 
+## 1.0.8
+
+### Patch Changes
+
+- f346346: fix: 未配置 outputSchema 时不再对 AI SDK `result.output` 做 JSON.stringify，避免 IM 回复出现整段双引号与字面量 `\n`（#590）；出站侧额外解开误包的 JSON 字符串层
+- Updated dependencies [f346346]
+  - @zhin.js/ai@1.4.7
+  - @zhin.js/core@1.4.2
+
 ## 1.0.7
 
 ### Patch Changes
