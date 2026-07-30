@@ -1,4 +1,4 @@
-import { basename, join, parse } from 'node:path';
+import { basename, join, parse, sep } from 'node:path';
 import { featureId } from '@zhin.js/plugin-runtime';
 import {
   defineFeatureProvider,
@@ -38,6 +38,22 @@ async function* discoverCommandDirectory(
 ): AsyncIterable<DiscoveredSource> {
   const entries = [...await context.host.list(directory)]
     .sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0);
+  const files = entries.flatMap((entry) => {
+    if (entry.kind !== 'file') return [];
+    const parsed = parseCommandFile(entry.name);
+    return parsed ? [{ entry, parsed }] : [];
+  });
+  const preferJavaScript = context.packageRoot
+    .split(sep)
+    .includes('node_modules');
+  const preferredFiles = new Map<string, string>();
+  for (const { entry, parsed } of files) {
+    const current = preferredFiles.get(parsed.localSegment);
+    if (!current || commandFilePriority(entry.name, preferJavaScript)
+      < commandFilePriority(current, preferJavaScript)) {
+      preferredFiles.set(parsed.localSegment, entry.name);
+    }
+  }
   for (const entry of entries) {
     if (entry.kind === 'directory' && isCommandSegment(entry.name)) {
       yield* discoverCommandDirectory(
@@ -50,6 +66,7 @@ async function* discoverCommandDirectory(
     if (entry.kind !== 'file') continue;
     const file = parseCommandFile(entry.name);
     if (!file) continue;
+    if (preferredFiles.get(file.localSegment) !== entry.name) continue;
     yield {
       localName: [...ancestors, file.localSegment].join('/'),
       source: join(directory, entry.name),
@@ -68,7 +85,7 @@ interface ParsedCommandFile {
 }
 
 const dynamicCommandFilePattern =
-  /^\[([a-z][a-zA-Z0-9]*):([a-z][a-z0-9-]*)(?:=([^\]]*))?\]\.tsx?$/;
+  /^\[([a-z][a-zA-Z0-9]*):([a-z][a-z0-9-]*)(?:=([^\]]*))?\]\.(?:tsx?|[cm]?js)$/;
 
 const commandParameterTypes = new Set<CommandParameterType>([
   'string',
@@ -88,7 +105,7 @@ const commandParameterTypes = new Set<CommandParameterType>([
 ]);
 
 function parseCommandFile(value: string): ParsedCommandFile | undefined {
-  if (/^[a-z0-9][a-z0-9-]*\.tsx?$/.test(value)) {
+  if (/^[a-z0-9][a-z0-9-]*\.(?:tsx?|[cm]?js)$/.test(value)) {
     return { localSegment: parse(value).name };
   }
   const match = dynamicCommandFilePattern.exec(value);
@@ -108,6 +125,15 @@ function parseCommandFile(value: string): ParsedCommandFile | undefined {
     throw new CommandPathSyntaxError(value);
   }
   return undefined;
+}
+
+function commandFilePriority(value: string, preferJavaScript: boolean): number {
+  const extension = value.slice(value.lastIndexOf('.') + 1);
+  const order = preferJavaScript
+    ? ['js', 'mjs', 'cjs', 'ts', 'tsx']
+    : ['ts', 'tsx', 'js', 'mjs', 'cjs'];
+  const priority = order.indexOf(extension);
+  return priority < 0 ? Number.MAX_SAFE_INTEGER : priority;
 }
 
 function parseParameterValue(

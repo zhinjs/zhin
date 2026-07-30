@@ -1,14 +1,18 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { channelKey, smokeGameMessage } from '@zhin.js/game-kit';
+import {
+  channelKey,
+  createMemoryGameServices,
+  plainTextFromSendContent,
+  smokeGameMessage,
+} from '@zhin.js/game-kit';
 import { handleChoice, processIdiomText, startGame } from '../src/game-flow.js';
-import { mountChainMemoryServices } from '../src/memory-db.js';
-import type { SessionService } from '../src/session-service.js';
+import { createServices, type SessionService } from '../src/session-service.js';
 
 describe('idiom-chain game-flow (plugin=null)', () => {
   let services: SessionService;
 
   beforeEach(() => {
-    services = mountChainMemoryServices();
+    services = createMemoryGameServices(['idiom_chain_sessions'], createServices);
   });
 
   it('processIdiomText returns text when guessing wrong with null plugin', async () => {
@@ -16,10 +20,11 @@ describe('idiom-chain game-flow (plugin=null)', () => {
     await startGame(services, message as never);
 
     const reply = await processIdiomText(services, message as never, '不是成语');
+    const text = plainTextFromSendContent(reply!);
 
     expect(reply).toBeTruthy();
-    expect(typeof reply).toBe('string');
-    expect(reply).toMatch(/四字成语|词库/);
+    expect(text).toMatch(/四字成语|词库/);
+    expect(Array.isArray(reply)).toBe(true);
   });
 
   it('格式不合规（非四字）只提示不扣失误', async () => {
@@ -60,7 +65,7 @@ describe('idiom-chain game-flow (plugin=null)', () => {
     const reply = await handleChoice(services, message as never, before.id, 'hint');
 
     expect(reply).toBeTruthy();
-    expect(String(reply)).toMatch(/你赢了/);
+    expect(plainTextFromSendContent(reply!)).toMatch(/你赢了/);
     const after = (await services.getById(before.id))!;
     expect(after.status).toBe('won');
     expect(after.player_score).toBe(prevScore + 1);

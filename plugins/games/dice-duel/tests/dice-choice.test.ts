@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import middleware from '../middlewares/dice-choice.ts';
-import { mountDiceMemoryServices } from '../src/memory-db.js';
-import type { SessionService } from '../src/session-service.js';
+import { createMemoryGameServices } from '@zhin.js/game-kit';
+import { createServices, type SessionService } from '../src/session-service.js';
 
 const replies: string[] = [];
 let nextCalls = 0;
@@ -39,7 +39,7 @@ describe('dice-duel dice-choice middleware (text fallback)', () => {
   beforeEach(() => {
     replies.length = 0;
     nextCalls = 0;
-    services = mountDiceMemoryServices();
+    services = createMemoryGameServices(['dice_sessions'], createServices);
   });
 
   it('数字 1 映射为掷骰并回复', async () => {

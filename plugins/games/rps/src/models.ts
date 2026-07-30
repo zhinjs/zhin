@@ -17,7 +17,6 @@ declare module '@zhin.js/core' {
       bot_wins: number;
       round: number;
       status: RpsSessionStatus;
-      board_message_id: string;
       updated_at: number;
       created_at: number;
     };
@@ -43,7 +42,6 @@ export function defineHostTables(
     bot_wins: { type: 'integer', default: 0 },
     round: { type: 'integer', default: 0 },
     status: { type: 'text', default: 'active' },
-    board_message_id: { type: 'text', default: '' },
     updated_at: { type: 'integer', default: 0 },
     created_at: { type: 'integer', default: 0 },
   });

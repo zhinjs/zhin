@@ -3,8 +3,13 @@ import { parseCommandDefinition } from '@zhin.js/command';
 import plugin from '../plugin.ts';
 import gameCommand from '../commands/riddle/[action:string=].ts';
 import { RIDDLE_HELP } from '../src/index.js';
-import { mountRiddleMemoryServices } from '../src/memory-db.js';
-let services: ReturnType<typeof mountRiddleMemoryServices>;
+import {
+  createMemoryGameServices,
+  plainTextFromSendContent,
+  type GameReply,
+} from '@zhin.js/game-kit';
+import { createServices } from '../src/session-service.js';
+let services: ReturnType<typeof createServices>;
 
 const emptyCtx = {
   owner: {} as never,
@@ -18,7 +23,7 @@ const emptyCtx = {
 
 describe('@zhin.js/plugin-word-riddle runtime (slice-2)', () => {
   beforeEach(() => {
-    services = mountRiddleMemoryServices();
+    services = createMemoryGameServices(['word_riddle_sessions'], createServices);
   });
 
   it('defines a valid Plugin Runtime entry', () => {
@@ -37,12 +42,13 @@ describe('@zhin.js/plugin-word-riddle runtime (slice-2)', () => {
     expect(String(result)).toBe(RIDDLE_HELP);
   });
 
-  it('start action works with in-memory db (text-only)', async () => {
+  it('start action returns riddle controls', async () => {
     const result = await gameCommand.execute({
       ...emptyCtx,
       params: { action: 'start' },
     });
-    expect(String(result)).not.toContain('尚未就绪');
-    expect(String(result).length).toBeGreaterThan(0);
+    expect(plainTextFromSendContent(result as GameReply).length).toBeGreaterThan(0);
+    expect((result as unknown[]).some((part) =>
+      (part as { type?: string }).type === 'keyboard')).toBe(true);
   });
 });

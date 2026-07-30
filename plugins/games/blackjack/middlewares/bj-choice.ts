@@ -67,6 +67,7 @@ export default defineMiddleware<Message>({
     const map = buildChoiceFallbackMap(BJ_PREFIX, session.id, [
       { id: 'hit', label: '要牌' },
       { id: 'stand', label: '停牌' },
+      { id: 'quit', label: '放弃' },
     ]);
     const payload = resolveGameTextPayload(raw, map);
     const parsed = payload ? parseChoicePayload(payload, BJ_PREFIX) : null;

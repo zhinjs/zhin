@@ -1,5 +1,9 @@
-import { channelKey, type GameMessageLike } from '@zhin.js/game-kit';
-import { continueGame, startGame } from './game-flow.js';
+import {
+  channelKey,
+  type GameMessageLike,
+  type GameReply,
+} from '@zhin.js/game-kit';
+import { continueGame, handleChoice, startGame } from './game-flow.js';
 import type { SessionService } from './session-service.js';
 
 export const RPS_HELP = [
@@ -14,7 +18,7 @@ export async function runRpsCommand(
   services: SessionService,
   message: GameMessageLike,
   action: string,
-): Promise<string> {
+): Promise<GameReply> {
   const ch = channelKey(message);
   const userId = message.$sender.id;
 
@@ -35,8 +39,7 @@ export async function runRpsCommand(
   if (action === 'quit') {
     const row = await services.getActiveForUser(ch, userId);
     if (!row) return '你没有进行中的猜拳。';
-    await services.updateSession(row.id, { status: 'aborted' });
-    return '已放弃猜拳对局。';
+    return (await handleChoice(services, message, row.id, 'quit')) ?? '';
   }
 
   return `未知子命令：${action}\n\n${RPS_HELP}`;

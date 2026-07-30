@@ -31,13 +31,17 @@ export function buildDiceView(
     lines.push('');
     if (session.status === 'won') lines.push('🏆 **你赢得比赛！**');
     else if (session.status === 'lost') lines.push('💀 **机器人赢得比赛。**');
+    else lines.push('🏳️ **本局已放弃。**');
   } else {
     lines.push('', lastRound ? '点击继续掷骰：' : '点击掷骰开始！');
   }
 
   const choices = terminal
     ? [{ id: 'restart', label: '🔄 再来一局', style: 'primary' as const, keepEnabledWhenTerminal: true }]
-    : [{ id: 'roll', label: '🎲 掷骰', style: 'primary' as const }];
+    : [
+        { id: 'roll', label: '🎲 掷骰', style: 'primary' as const },
+        { id: 'quit', label: '🏳️ 放弃', style: 'danger' as const },
+      ];
 
   return buildChoiceKeyboard({
     gamePrefix: DICE_PREFIX,
@@ -45,7 +49,7 @@ export function buildDiceView(
     narrative: lines.join('\n'),
     choices,
     terminal,
-    fallbackHint: '回复 1 掷骰',
+    fallbackHint: '回复 1 掷骰 · 2 放弃',
     interactionProfile: terminal ? 'terminal' : 'gameplay',
     channelType,
   });

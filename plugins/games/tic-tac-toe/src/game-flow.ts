@@ -1,4 +1,4 @@
-import { plainTextFromSendContent, recordGameOutcome, type GameMessageLike } from '@zhin.js/game-kit';
+import type { GameMessageLike, GameReply } from '@zhin.js/game-kit';
 import type { TttSessionRow } from './models.js';
 import { buildBoardInteractive } from './board-view.js';
 import {
@@ -31,18 +31,14 @@ export function isBotSession(session: TttSessionRow): boolean {
   return session.player_o === BOT_ID || session.player_x === BOT_ID;
 }
 
-/**
- * Plugin Runtime: render the board as text. Interactive in-place board editing
- * (the old Adapter.editMessage path) is not part of the runtime flow; commands
- * and the choice middleware return fresh text each turn.
- */
-export function sendOrEditBoard(
+/** Render the canonical board reply; delivery belongs to the Runtime Host. */
+export function renderBoard(
   message: GameMessageLike,
   session: TttSessionRow,
   statusLine: string,
   terminal = false,
   highlight?: number[],
-): string {
+): GameReply {
   const board = parseBoard(session.board);
   const content = buildBoardInteractive({
     sessionId: session.id,
@@ -55,14 +51,14 @@ export function sendOrEditBoard(
     channelType: message.$channel.type,
   });
 
-  return plainTextFromSendContent(content);
+  return content;
 }
 
 export async function restartFromTerminal(
   services: SessionServices,
   message: GameMessageLike,
   sessionId: string,
-): Promise<string | null> {
+): Promise<GameReply | null> {
   const session = await services.session.getById(sessionId);
   if (!session) return '对局不存在。';
   if (session.status === 'active') return '对局尚未结束，无法重开。';
@@ -80,11 +76,11 @@ export async function restartFromTerminal(
       { id: session.player_x, displayName: session.player_x_name },
       { id: session.player_o, displayName: session.player_o_name },
     );
-    if (board.includes('已有')) return board;
+    if (typeof board === 'string' && board.includes('已有')) return board;
     return board;
   }
   const hint = await startBotGame(services, message);
-  if (hint.includes('已有')) return hint;
+  if (typeof hint === 'string' && hint.includes('已有')) return hint;
   return hint;
 }
 
@@ -101,7 +97,7 @@ export async function handleMove(
   message: GameMessageLike,
   sessionId: string,
   cell: number,
-): Promise<string | null> {
+): Promise<GameReply | null> {
   const session = await services.session.getById(sessionId);
   if (!session || session.status !== 'active') {
     return '对局不存在或已结束。';
@@ -144,35 +140,12 @@ export async function handleMove(
 
   const updated = (await services.session.getById(session.id))!;
 
-  if (win || draw) {
-    const humanId = isBotSession(updated)
-      ? (updated.player_x === BOT_ID ? updated.player_o : updated.player_x)
-      : message.$sender.id;
-    const humanName = isBotSession(updated)
-      ? (updated.player_x === BOT_ID ? updated.player_o_name : updated.player_x_name)
-      : String(message.$sender.name ?? message.$sender.id);
-    const humanMsg = {
-      ...message,
-      $sender: { ...message.$sender, id: humanId, name: humanName },
-    } as GameMessageLike;
-    if (win) {
-      const humanMark = playerMark(humanId, {
-        playerX: updated.player_x,
-        playerO: updated.player_o,
-      });
-      const humanWon = humanMark === win.winner;
-      void recordGameOutcome(humanMsg, 'ttt', humanWon ? 'won' : 'lost', humanWon ? 20 : 0);
-    } else {
-      void recordGameOutcome(humanMsg, 'ttt', 'draw');
-    }
-  }
-
   if (win) {
     const status = formatWinHeadline(updated, win.winner);
-    return sendOrEditBoard(message, updated, status, true, win.line);
+    return renderBoard(message, updated, status, true, win.line);
   }
   if (draw) {
-    return sendOrEditBoard(message, updated, '平局。', true);
+    return renderBoard(message, updated, '平局。', true);
   }
 
   // 人机：玩家落子后立刻由服务端代下，避免先发「轮到机器人」再发终盘（QQ 被动消息多耗一次）
@@ -181,14 +154,14 @@ export async function handleMove(
   }
 
   const status = formatTurnStatus(updated, moveCount);
-  return sendOrEditBoard(message, updated, status, false);
+  return renderBoard(message, updated, status, false);
 }
 
 async function runBotMove(
   services: SessionServices,
   message: GameMessageLike,
   session: TttSessionRow,
-): Promise<string | null> {
+): Promise<GameReply | null> {
   const board = parseBoard(session.board);
   const aiMark = session.player_o === BOT_ID ? O : X;
   const cell = bestMove(board, aiMark);
@@ -205,7 +178,7 @@ async function runBotMove(
 export async function startBotGame(
   services: SessionServices,
   message: GameMessageLike,
-): Promise<string> {
+): Promise<GameReply> {
   const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
   const active = await services.session.getActiveByChannel(ch);
   if (active) return '当前频道已有进行中的对局。';
@@ -220,8 +193,9 @@ export async function startBotGame(
   });
 
   const status = `${formatRosterLine(session)} · 你先手 (✕)`;
-  const boardText = sendOrEditBoard(message, session, status, false);
-  return `${boardText}\n\n开局成功！回复数字 1–9 落子。`;
+  const board = renderBoard(message, session, status, false);
+  const success = '\n\n开局成功！点击空格或回复数字 1–9 落子。';
+  return Array.isArray(board) ? [...board, success] : [board, success];
 }
 
 export async function startPvpGame(
@@ -229,7 +203,7 @@ export async function startPvpGame(
   message: GameMessageLike,
   playerX: TttPlayerRef,
   playerO: TttPlayerRef,
-): Promise<string> {
+): Promise<GameReply> {
   const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
   const active = await services.session.getActiveByChannel(ch);
   if (active) return '当前频道已有进行中的对局。';
@@ -244,5 +218,5 @@ export async function startPvpGame(
   });
   const opener = formatPlayerWithMark(session.player_x, session.player_x_name, '✕');
   const status = `${formatRosterLine(session)} · 先手：${opener}`;
-  return sendOrEditBoard(message, session, status, false);
+  return renderBoard(message, session, status, false);
 }

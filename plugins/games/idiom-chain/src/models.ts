@@ -26,7 +26,6 @@ declare module '@zhin.js/core' {
       hints_used: number;
       turn: string;
       status: ChainSessionStatus;
-      board_message_id: string;
       updated_at: number;
       created_at: number;
     };
@@ -60,7 +59,6 @@ export function defineHostTables(
     hints_used: { type: 'integer', default: 0 },
     turn: { type: 'text', default: 'player' },
     status: { type: 'text', default: 'active' },
-    board_message_id: { type: 'text', default: '' },
     updated_at: { type: 'integer', default: 0 },
     created_at: { type: 'integer', default: 0 },
   });

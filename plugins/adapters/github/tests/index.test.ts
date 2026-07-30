@@ -13,7 +13,7 @@ describe('@zhin.js/adapter-github package', () => {
     const pkgPath = path.resolve(__dirname, '../package.json');
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
     expect(pkg.exports['.'].development).toBe('./src/index.ts');
-    expect(pkg.zhin?.entry).toBe('./plugin.ts');
+    expect(pkg.zhin?.entry).toBe('./plugin.js');
     expect(pkg.dependencies['@zhin.js/adapter']).toBe('workspace:*');
     expect(pkg.dependencies['@zhin.js/host-http']).toBe('workspace:*');
   });

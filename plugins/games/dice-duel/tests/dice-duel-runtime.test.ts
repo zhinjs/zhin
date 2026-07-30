@@ -3,8 +3,13 @@ import { parseCommandDefinition } from '@zhin.js/command';
 import plugin from '../plugin.ts';
 import gameCommand from '../commands/dice/[action:string=].ts';
 import { DICE_HELP } from '../src/index.js';
-import { mountDiceMemoryServices } from '../src/memory-db.js';
-let services: ReturnType<typeof mountDiceMemoryServices>;
+import {
+  createMemoryGameServices,
+  plainTextFromSendContent,
+  type GameReply,
+} from '@zhin.js/game-kit';
+import { createServices } from '../src/session-service.js';
+let services: ReturnType<typeof createServices>;
 
 const emptyCtx = {
   owner: {} as never,
@@ -18,7 +23,7 @@ const emptyCtx = {
 
 describe('@zhin.js/plugin-dice-duel runtime (slice-2)', () => {
   beforeEach(() => {
-    services = mountDiceMemoryServices();
+    services = createMemoryGameServices(['dice_sessions'], createServices);
   });
 
   it('defines a valid Plugin Runtime entry', () => {
@@ -42,7 +47,9 @@ describe('@zhin.js/plugin-dice-duel runtime (slice-2)', () => {
       ...emptyCtx,
       params: { action: 'start' },
     });
-    expect(String(result)).not.toContain('尚未就绪');
-    expect(String(result)).toContain('骰子');
+    const text = plainTextFromSendContent(result as GameReply);
+    expect(text).not.toContain('尚未就绪');
+    expect(text).toContain('骰子');
+    expect((result as unknown[])[1]).toMatchObject({ type: 'keyboard' });
   });
 });

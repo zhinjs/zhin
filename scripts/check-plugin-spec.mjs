@@ -66,6 +66,30 @@ function checkPlugin(pluginPath, pluginName) {
     });
   }
 
+  if (!packageJson.private && packageJson.zhin?.type === 'plugin') {
+    const runtimeEntry = packageJson.zhin.entry;
+    if (typeof runtimeEntry !== 'string' || !/\.[cm]?js$/u.test(runtimeEntry)) {
+      violations.push({
+        plugin: relativePath,
+        issue: 'Published Plugin Runtime entry must be compiled JavaScript',
+      });
+    }
+    const publishedFiles = Array.isArray(packageJson.files) ? packageJson.files : [];
+    if (typeof runtimeEntry === 'string'
+      && !publishedFiles.includes(runtimeEntry.replace(/^\.\//u, ''))) {
+      violations.push({
+        plugin: relativePath,
+        issue: `Runtime entry is missing from files: ${runtimeEntry}`,
+      });
+    }
+    if (!packageJson.scripts?.build?.includes('build-plugin-runtime-entries.mjs')) {
+      violations.push({
+        plugin: relativePath,
+        issue: 'Build script does not emit Plugin Runtime JavaScript entries',
+      });
+    }
+  }
+
   // 检查是否有 main 或 exports 字段
   if (!packageJson.main && !packageJson.exports) {
     violations.push({

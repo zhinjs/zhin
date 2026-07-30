@@ -5,8 +5,8 @@ import {
   startBotGame,
   startPvpGame,
 } from '../src/game-flow.js';
-import { mountTttMemoryServices } from '../src/memory-db.js';
-import type { SessionServices } from '../src/session-service.js';
+import { createMemoryGameServices } from '@zhin.js/game-kit';
+import { createServices, type SessionServices } from '../src/session-service.js';
 
 let services: SessionServices;
 
@@ -25,7 +25,7 @@ const CH = 'test-default-group:g1';
 
 describe('tic-tac-toe game-flow', () => {
   beforeEach(() => {
-    services = mountTttMemoryServices();
+    services = createMemoryGameServices(['ttt_sessions', 'ttt_queue', 'ttt_moves', 'ttt_spectators'], createServices);
   });
 
   it('startPvpGame 有频道占用守卫', async () => {

@@ -1,10 +1,17 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseCommandDefinition } from '@zhin.js/command';
+import { DisposeStack, outboundHostToken } from '@zhin.js/plugin-runtime';
 import plugin from '../plugin.ts';
 import gameCommand from '../commands/ttt/[action:string=].ts';
 import { TTT_HELP } from '../src/index.js';
-import { mountTttMemoryServices } from '../src/memory-db.js';
-let services: ReturnType<typeof mountTttMemoryServices>;
+import {
+  createMemoryGameServices,
+  plainTextFromSendContent,
+  type GameReply,
+} from '@zhin.js/game-kit';
+import { gameServicesToken } from '../src/runtime-store.js';
+import { createServices } from '../src/session-service.js';
+let services: ReturnType<typeof createServices>;
 
 const emptyCtx = {
   owner: {} as never,
@@ -18,7 +25,7 @@ const emptyCtx = {
 
 describe('@zhin.js/plugin-tic-tac-toe runtime (slice-2)', () => {
   beforeEach(() => {
-    services = mountTttMemoryServices();
+    services = createMemoryGameServices(['ttt_sessions', 'ttt_queue', 'ttt_moves', 'ttt_spectators'], createServices);
   });
 
   it('defines a valid Plugin Runtime entry', () => {
@@ -37,12 +44,71 @@ describe('@zhin.js/plugin-tic-tac-toe runtime (slice-2)', () => {
     expect(String(result)).toBe(TTT_HELP);
   });
 
-  it('bot action works with in-memory db (text-only)', async () => {
+  it('bot action returns an interactive board', async () => {
     const result = await gameCommand.execute({
       ...emptyCtx,
       params: { action: 'bot' },
     });
-    expect(String(result)).not.toContain('尚未就绪');
-    expect(String(result)).toMatch(/开局|先手|井字/);
+    expect(plainTextFromSendContent(result as GameReply)).toMatch(/开局|先手|井字/);
+    expect((result as unknown[]).some((part) =>
+      (part as { type?: string }).type === 'keyboard')).toBe(true);
+  });
+
+  it('pushes turn updates to subscribed spectators', async () => {
+    const lifecycle = new DisposeStack();
+    const send = vi.fn().mockResolvedValue('message-1');
+    let runtimeServices: ReturnType<typeof createServices> | undefined;
+    const resources = {
+      provide(token: unknown, value: unknown) {
+        if (token === gameServicesToken) {
+          runtimeServices = value as ReturnType<typeof createServices>;
+        }
+      },
+      has: (token: unknown) => token === outboundHostToken,
+      use: (token: unknown) => {
+        if (token === outboundHostToken) return { send };
+        throw new Error('missing resource');
+      },
+    };
+    await plugin.setup?.({
+      plugin: {
+        id: 'tic-tac-toe',
+        instanceKey: 'tic-tac-toe',
+        root: 'tic-tac-toe',
+        role: 'root',
+      },
+      config: { get: () => ({}) },
+      resources: resources as never,
+      lifecycle,
+      handoff: {} as never,
+    });
+    const message = {
+      $adapter: 'sandbox',
+      $endpoint: 'default',
+      $channel: { type: 'group', id: 'room' },
+      $sender: { id: 'alice', name: 'Alice' },
+    };
+    const session = await runtimeServices!.session.createSession({
+      message,
+      playerX: 'alice',
+      playerO: 'bob',
+      playerXName: 'Alice',
+      playerOName: 'Bob',
+      boardJson: JSON.stringify(Array.from({ length: 9 }, () => 0)),
+    });
+    await runtimeServices!.session.addSpectator(session.id, 'watcher');
+
+    await runtimeServices!.session.updateSession(session.id, {
+      turn: 2,
+      move_count: 1,
+    });
+
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({
+      adapter: 'sandbox',
+      endpointId: 'default',
+      channelType: 'private',
+      channelId: 'watcher',
+    }));
+    await lifecycle.dispose();
   });
 });

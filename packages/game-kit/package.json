@@ -27,6 +27,7 @@
   "dependencies": {
     "@zhin.js/core": "workspace:*",
     "@zhin.js/middleware": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/satori": "workspace:*"
   },
   "devDependencies": {

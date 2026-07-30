@@ -1,5 +1,4 @@
 import {
-  MessageCommand,
   type Database,
   type DatabaseFeature,
   type Models,
@@ -8,7 +7,6 @@ import {
 } from '@zhin.js/core';
 import { channelKey } from './board-sender.js';
 import type { GameMessageLike } from './command-message.js';
-import { getRegisteredGame, getRegisteredGames } from './game-hub-feature.js';
 import { createHostGameDb, type HostGameDbSource } from './memory-db.js';
 import { generateCompactId } from './random.js';
 
@@ -232,77 +230,6 @@ export async function getGameLeaderboard(
   return [...byUser.values()]
     .sort((a, b) => b.wins - a.wins || b.totalScore - a.totalScore)
     .slice(0, limit);
-}
-
-function gameTitle(gameId: string): string {
-  const g = getRegisteredGame(gameId);
-  return g ? `${g.icon} ${g.title}` : gameId;
-}
-
-function formatUserStats(stats: UserGameStats[]): string {
-  if (!stats.length) return '暂无战绩记录，快去 `/游戏` 开一局吧！';
-  const lines = stats.map((s) => {
-    const title = gameTitle(s.gameId);
-    return `• ${title}：${s.wins} 胜 ${s.losses} 负${s.draws ? ` ${s.draws} 平` : ''}（${s.games} 局，得分 ${s.totalScore}）`;
-  });
-  return ['📊 **你的战绩**', '', ...lines].join('\n');
-}
-
-function formatLeaderboard(gameId: string, entries: LeaderboardEntry[]): string {
-  const title = gameTitle(gameId);
-  if (!entries.length) {
-    return `${title} 在本群暂无排行，发送 \`/游戏\` 开始第一局！`;
-  }
-  const lines = entries.map((e, i) =>
-    `${i + 1}. ${e.userName} — ${e.wins} 胜 / ${e.games} 局（得分 ${e.totalScore}）`,
-  );
-  return [`🏆 **${title} 本群排行**`, '', ...lines].join('\n');
-}
-
-export function mountGameRecordCommands(root: Plugin): () => void {
-  const disposers: (() => void)[] = [];
-
-  disposers.push(
-    root.addCommand(
-      new MessageCommand('/战绩')
-        .desc('查看本人在本群的游戏战绩')
-        .action(async (message) => {
-          const stats = await getUserGameStats(message.$sender.id, channelKey(message));
-          return formatUserStats(stats);
-        }),
-    ),
-    root.addCommand(
-      new MessageCommand('/排行')
-        .desc('查看本群某游戏排行榜')
-        .action(async (message, ...args) => {
-          const query = args.join(' ').trim();
-          const games = getRegisteredGames();
-          if (!games.length) return '暂无已注册游戏。';
-          const firstGame = games[0];
-          if (!firstGame) return '暂无已注册游戏。';
-          let gameId = firstGame.id;
-          if (query) {
-            const hit = games.find(
-              (g) => g.id === query
-                || g.title.includes(query)
-                || g.commandPrefix.includes(query)
-                || g.aliases?.some((a) => a.includes(query)),
-            );
-            if (!hit) {
-              const names = games.map((g) => g.title).join('、');
-              return `未找到游戏「${query}」。可选：${names}`;
-            }
-            gameId = hit.id;
-          }
-          const board = await getGameLeaderboard(gameId, channelKey(message));
-          return formatLeaderboard(gameId, board);
-        }),
-    ),
-  );
-
-  return () => {
-    for (const d of disposers) d();
-  };
 }
 
 /** 测试专用 */

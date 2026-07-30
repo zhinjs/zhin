@@ -52,6 +52,8 @@
 }
 ```
 
+示例项目是私有 workspace，因此可以直接以 `plugin.ts` 为入口并获得源码 HMR。可发布的 npm 插件必须声明 `./plugin.js`，且将该文件和约定目录的 JavaScript 产物放入发布包；Runtime 在 `node_modules` 中不会把 TypeScript 入口当作发布产物执行。官方插件的构建由 `scripts/build-plugin-runtime-entries.mjs` 完成。
+
 ## Plugin 与 Feature
 
 - **Plugin** 是组装单元：它声明自己用哪些 Feature、挂哪些子插件，入口默认导出 `definePlugin({...})`（`@zhin.js/plugin-runtime`）。

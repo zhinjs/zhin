@@ -22,7 +22,6 @@ declare module '@zhin.js/core' {
       hints_used: number;
       wrong_count: number;
       status: RiddleSessionStatus;
-      board_message_id: string;
       updated_at: number;
       created_at: number;
     };
@@ -53,7 +52,6 @@ export function defineHostTables(
     hints_used: { type: 'integer', default: 0 },
     wrong_count: { type: 'integer', default: 0 },
     status: { type: 'text', default: 'active' },
-    board_message_id: { type: 'text', default: '' },
     updated_at: { type: 'integer', default: 0 },
     created_at: { type: 'integer', default: 0 },
   });

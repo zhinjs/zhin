@@ -5,9 +5,13 @@ import {
   getRuntimeGame,
   registerRuntimeGame,
   resetRuntimeGamesForTests,
+  resetGameRecordsForTests,
+  smokeGameMessage,
 } from '@zhin.js/game-kit';
 import plugin from '../plugin.ts';
 import gamesCommand from '../commands/games/[action:string=].ts';
+import statsCommand from '../commands/战绩.ts';
+import leaderboardCommand from '../commands/排行/[query:string=].ts';
 
 const emptyCtx = {
   owner: {} as never,
@@ -110,5 +114,103 @@ describe('@zhin.js/plugin-game-hub runtime', () => {
     disposeNext();
     expect(getRuntimeGame('guess')?.title).toBe('old');
     disposePrevious();
+  });
+});
+
+describe('/战绩 command', () => {
+  beforeEach(() => {
+    resetRuntimeGamesForTests();
+    resetGameRecordsForTests();
+  });
+
+  afterEach(() => {
+    resetRuntimeGamesForTests();
+    resetGameRecordsForTests();
+  });
+
+  it('brands as a valid command definition', () => {
+    expect(parseCommandDefinition(statsCommand)).toBe(statsCommand);
+  });
+
+  it('returns empty-state message when no records exist', async () => {
+    const text = await statsCommand.execute({
+      ...emptyCtx,
+      params: {},
+      input: smokeGameMessage() as never,
+    });
+    expect(String(text)).toContain('暂无战绩记录');
+  });
+});
+
+describe('/排行 command', () => {
+  beforeEach(() => {
+    resetRuntimeGamesForTests();
+    resetGameRecordsForTests();
+  });
+
+  afterEach(() => {
+    resetRuntimeGamesForTests();
+    resetGameRecordsForTests();
+  });
+
+  it('brands as a valid command definition', () => {
+    expect(parseCommandDefinition(leaderboardCommand)).toBe(leaderboardCommand);
+  });
+
+  it('returns no-games message when registry is empty', async () => {
+    const text = await leaderboardCommand.execute({
+      ...emptyCtx,
+      params: {},
+      input: smokeGameMessage() as never,
+    });
+    expect(String(text)).toContain('暂无已注册游戏');
+  });
+
+  it('returns empty leaderboard for a registered game with no records', async () => {
+    registerRuntimeGame({
+      id: 'guess',
+      title: '猜数字',
+      icon: '🔢',
+      description: '猜中数字',
+      commandPrefix: '/猜数',
+    });
+    const text = await leaderboardCommand.execute({
+      ...emptyCtx,
+      params: {},
+      input: smokeGameMessage() as never,
+    });
+    expect(String(text)).toContain('暂无排行');
+  });
+
+  it('resolves game by query string', async () => {
+    registerRuntimeGame({
+      id: 'guess',
+      title: '猜数字',
+      icon: '🔢',
+      description: '猜中数字',
+      commandPrefix: '/猜数',
+    });
+    const text = await leaderboardCommand.execute({
+      ...emptyCtx,
+      params: { query: '猜数字' },
+      input: smokeGameMessage() as never,
+    });
+    expect(String(text)).toContain('猜数字');
+  });
+
+  it('reports not-found for unknown game query', async () => {
+    registerRuntimeGame({
+      id: 'guess',
+      title: '猜数字',
+      icon: '🔢',
+      description: '猜中数字',
+      commandPrefix: '/猜数',
+    });
+    const text = await leaderboardCommand.execute({
+      ...emptyCtx,
+      params: { query: '扫雷' },
+      input: smokeGameMessage() as never,
+    });
+    expect(String(text)).toContain('未找到游戏「扫雷」');
   });
 });

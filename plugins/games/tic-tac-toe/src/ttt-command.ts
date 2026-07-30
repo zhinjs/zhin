@@ -1,4 +1,8 @@
-import { channelKey, type GameMessageLike } from '@zhin.js/game-kit';
+import {
+  channelKey,
+  type GameMessageLike,
+  type GameReply,
+} from '@zhin.js/game-kit';
 import { formatPlayerWithMark, formatRosterLine } from './player-label.js';
 import { startBotGame, startPvpGame } from './game-flow.js';
 import type { SessionServices } from './session-service.js';
@@ -17,7 +21,7 @@ export async function runTttCommand(
   services: SessionServices,
   message: GameMessageLike,
   action: string,
-): Promise<string> {
+): Promise<GameReply> {
   const ch = channelKey(message);
   const userId = message.$sender.id;
 
@@ -43,7 +47,11 @@ export async function runTttCommand(
       const [px, po] = pair;
       const board = await startPvpGame(services, message, px, po);
       const matchLine = `匹配成功！${formatPlayerWithMark(px.id, px.displayName, '✕')} vs ${formatPlayerWithMark(po.id, po.displayName, '○')}`;
-      return board ? `${matchLine}\n\n${board}` : matchLine;
+      return board
+        ? Array.isArray(board)
+          ? [matchLine, '\n\n', ...board]
+          : [matchLine, '\n\n', board]
+        : matchLine;
     }
     return `已加入排队（第 ${position} 位），凑满 2 人自动开局。`;
   }

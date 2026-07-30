@@ -3,8 +3,13 @@ import { parseCommandDefinition } from '@zhin.js/command';
 import plugin from '../plugin.ts';
 import gameCommand from '../commands/chain/[action:string=].ts';
 import { CHAIN_HELP } from '../src/index.js';
-import { mountChainMemoryServices } from '../src/memory-db.js';
-let services: ReturnType<typeof mountChainMemoryServices>;
+import {
+  createMemoryGameServices,
+  plainTextFromSendContent,
+  type GameReply,
+} from '@zhin.js/game-kit';
+import { createServices } from '../src/session-service.js';
+let services: ReturnType<typeof createServices>;
 
 const emptyCtx = {
   owner: {} as never,
@@ -18,7 +23,7 @@ const emptyCtx = {
 
 describe('@zhin.js/plugin-idiom-chain runtime (slice-2)', () => {
   beforeEach(() => {
-    services = mountChainMemoryServices();
+    services = createMemoryGameServices(['idiom_chain_sessions'], createServices);
   });
 
   it('defines a valid Plugin Runtime entry', () => {
@@ -42,7 +47,9 @@ describe('@zhin.js/plugin-idiom-chain runtime (slice-2)', () => {
       ...emptyCtx,
       params: { action: 'start' },
     });
-    expect(String(result)).not.toContain('尚未就绪');
-    expect(String(result)).toMatch(/接龙|成语|开局/);
+    const text = plainTextFromSendContent(result as GameReply);
+    expect(text).not.toContain('尚未就绪');
+    expect(text).toMatch(/接龙|成语|开局/);
+    expect((result as unknown[])[1]).toMatchObject({ type: 'keyboard' });
   });
 });

@@ -20,7 +20,6 @@ const baseSession = {
   turn: 2,
   status: 'active',
   winner: 0,
-  board_message_id: '',
   move_count: 1,
   updated_at: 0,
   created_at: 0,

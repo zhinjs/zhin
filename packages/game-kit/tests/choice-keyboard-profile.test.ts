@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { segment } from 'zhin.js';
 import { buildChoiceKeyboard } from '../src/choice-keyboard.js';
-import { HUB_PREFIX } from '../src/game-hub-menu.js';
 
 describe('buildChoiceKeyboard interactionProfile', () => {
   it('menu profile sets command mode on buttons', () => {
     const content = buildChoiceKeyboard({
-      gamePrefix: HUB_PREFIX,
+      gamePrefix: 'hub',
       sessionId: 'scope1',
       narrative: '大厅',
       choices: [{ id: 'g_ttt', label: '井字棋' }],
@@ -20,7 +18,7 @@ describe('buildChoiceKeyboard interactionProfile', () => {
 
   it('menu profile uses callback in group channels', () => {
     const content = buildChoiceKeyboard({
-      gamePrefix: HUB_PREFIX,
+      gamePrefix: 'hub',
       sessionId: 'scope1',
       narrative: '大厅',
       choices: [{ id: 'g_ttt', label: '井字棋' }],
@@ -41,12 +39,5 @@ describe('buildChoiceKeyboard interactionProfile', () => {
     });
     const kb = content[1] as { type: string; data: { rows: Array<Array<{ mode?: string }>> } };
     expect(kb.data.rows[0]?.[0]?.mode).toBe('callback');
-  });
-});
-
-describe('resolveGameTextPayload integration', () => {
-  it('accepts QQ-style prefill text for hub payload', async () => {
-    const { resolveGameTextPayload } = await import('../src/game-interactive.js');
-    expect(resolveGameTextPayload('@bot hub:scope1:g_ttt')).toBe('hub:scope1:g_ttt');
   });
 });

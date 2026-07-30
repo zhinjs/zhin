@@ -19,7 +19,6 @@ declare module '@zhin.js/core' {
       turn: number;
       status: TttSessionStatus;
       winner: number;
-      board_message_id: string;
       move_count: number;
       updated_at: number;
       created_at: number;
@@ -75,7 +74,6 @@ export function defineHostTables(
     turn: { type: 'integer', default: 1 },
     status: { type: 'text', default: 'active' },
     winner: { type: 'integer', default: 0 },
-    board_message_id: { type: 'text', default: '' },
     move_count: { type: 'integer', default: 0 },
     updated_at: { type: 'integer', default: 0 },
     created_at: { type: 'integer', default: 0 },

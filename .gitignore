@@ -147,3 +147,13 @@ apps/**/config.*
 docs/api/
 # Plugin Runtime 运行产物
 .zhin/
+
+# Publish-time Plugin Runtime JavaScript (generated beside convention sources)
+plugins/*/*/plugin.js
+plugins/*/*/adapters/**/*.js
+plugins/*/*/commands/**/*.js
+plugins/*/*/components/**/*.js
+plugins/*/*/mcp/**/*.js
+plugins/*/*/middlewares/**/*.js
+plugins/*/*/pages/**/*.js
+plugins/*/*/tools/**/*.js

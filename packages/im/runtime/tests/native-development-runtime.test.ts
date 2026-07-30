@@ -27,6 +27,21 @@ describe('NativeDevelopmentModuleRuntime', () => {
     await runtime.close();
   });
 
+  it('loads a published JavaScript entry from node_modules without TypeScript stripping', async () => {
+    const root = await fixture();
+    const packageRoot = join(root, 'node_modules/@test/plugin');
+    const source = join(packageRoot, 'plugin.js');
+    await mkdir(packageRoot, { recursive: true });
+    await writeFile(join(packageRoot, 'package.json'), '{"type":"module"}\n');
+    await writeFile(source, 'export default { installed: true };\n');
+    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
+
+    const loaded = await runtime.load<{ default: { installed: boolean } }>(source);
+
+    expect(loaded.default).toEqual({ installed: true });
+    await runtime.close();
+  });
+
   it('keeps direct capabilities local and escalates cached support modules', async () => {
     const root = await fixture();
     const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });

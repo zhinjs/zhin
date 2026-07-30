@@ -48,7 +48,10 @@ export default defineMiddleware<Message>({
       return;
     }
 
-    const map = buildChoiceFallbackMap(DICE_PREFIX, session.id, [{ id: 'roll', label: '掷骰' }]);
+    const map = buildChoiceFallbackMap(DICE_PREFIX, session.id, [
+      { id: 'roll', label: '掷骰' },
+      { id: 'quit', label: '放弃' },
+    ]);
     const payload = resolveGameTextPayload(raw, map);
     const parsed = payload ? parseChoicePayload(payload, DICE_PREFIX) : null;
     if (!parsed || parsed.sessionId !== session.id) {

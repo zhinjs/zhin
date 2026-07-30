@@ -1,6 +1,5 @@
 export { DICE_HELP } from './dice-command.js';
 export { gameServicesToken, resolveGameServices } from './runtime-store.js';
-export { createInMemoryDiceDb, mountDiceMemoryServices } from './memory-db.js';
 
 /**
  * 已由 plugin.ts 接线：commands/ 命令、middlewares/ 文本与选项中间件、

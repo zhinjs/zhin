@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import middleware from '../middlewares/bj-choice.ts';
-import { mountBjMemoryServices } from '../src/memory-db.js';
-import type { SessionService } from '../src/session-service.js';
+import { createMemoryGameServices } from '@zhin.js/game-kit';
+import { createServices, type SessionService } from '../src/session-service.js';
 
 const replies: string[] = [];
 let nextCalls = 0;
@@ -39,7 +39,7 @@ describe('blackjack bj-choice middleware (text fallback)', () => {
   beforeEach(() => {
     replies.length = 0;
     nextCalls = 0;
-    services = mountBjMemoryServices();
+    services = createMemoryGameServices(['bj_sessions'], createServices);
   });
 
   it('数字 1 映射为要牌并回复', async () => {

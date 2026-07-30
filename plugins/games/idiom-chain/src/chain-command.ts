@@ -1,4 +1,8 @@
-import { channelKey, type GameMessageLike } from '@zhin.js/game-kit';
+import {
+  channelKey,
+  type GameMessageLike,
+  type GameReply,
+} from '@zhin.js/game-kit';
 import { continueGame, startGame } from './game-flow.js';
 import { idiomCount, modeLabel, promptLine, type MatchMode } from './engine.js';
 
@@ -21,7 +25,7 @@ export async function runChainCommand(
   services: SessionService,
   message: GameMessageLike,
   action: string,
-): Promise<string> {
+): Promise<GameReply> {
   const ch = channelKey(message);
   const userId = message.$sender.id;
 

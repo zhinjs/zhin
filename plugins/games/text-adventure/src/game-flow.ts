@@ -1,4 +1,4 @@
-import { plainTextFromSendContent, type GameMessageLike } from '@zhin.js/game-kit';
+import type { GameMessageLike, GameReply } from '@zhin.js/game-kit';
 import type { AdvProfileRow, AdvSessionRow } from './models.js';
 import { formatNewAchievements } from './profile-format.js';
 import { buildSceneInteractive } from './scene-view.js';
@@ -17,20 +17,20 @@ export async function sendOrEditScene(
   session: AdvSessionRow,
   extraNarrative = '',
   profile?: AdvProfileRow,
-): Promise<string> {
+): Promise<GameReply> {
   const prof = profile
     ?? await services.profiles.getOrCreate(session.player_id, session.player_name);
   const content = buildSceneInteractive(session, extraNarrative, prof, message.$channel.type);
   if (!content) {
     return '场景数据异常，请 adv quit 后重新开始。';
   }
-  return plainTextFromSendContent(content);
+  return content;
 }
 
 export async function startAdventure(
   services: GameServices,
   message: GameMessageLike,
-): Promise<string | undefined> {
+): Promise<GameReply | undefined> {
   const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
   const active = await services.sessions.getActiveByChannel(ch);
   if (active) {
@@ -56,7 +56,7 @@ export async function handleChoice(
   message: GameMessageLike,
   sessionId: string,
   choiceId: string,
-): Promise<string | null> {
+): Promise<GameReply | null> {
   const session = await services.sessions.getById(sessionId);
   // 踏进 terminal 场景时 status 必为 completed，终局需放行「再玩一次」（restart）
   if (!session || (session.status !== 'active' && !(session.status === 'completed' && choiceId === 'restart'))) {
@@ -83,7 +83,6 @@ export async function handleChoice(
       ending_id: '',
       status: 'active',
       step_count: 0,
-      board_message_id: '',
     });
     const updated = (await services.sessions.getById(session.id))!;
     await services.profiles.onRunStarted(updated.player_id, updated.player_name);
@@ -147,7 +146,7 @@ export async function handleChoice(
 export async function continueAdventure(
   services: GameServices,
   message: GameMessageLike,
-): Promise<string> {
+): Promise<GameReply> {
   const session = await services.sessions.getActiveForUser(
     `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`,
     message.$sender.id,

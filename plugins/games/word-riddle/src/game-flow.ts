@@ -1,4 +1,4 @@
-import { plainTextFromSendContent, type GameMessageLike } from '@zhin.js/game-kit';
+import type { GameMessageLike, GameReply } from '@zhin.js/game-kit';
 import {
   answersFor,
   checkAnswer,
@@ -25,9 +25,8 @@ function renderView(
   message: GameMessageLike,
   session: RiddleSessionRow,
   eventLines: string[] = [],
-): string {
-  const content = buildRiddleView(session, eventLines, message.$channel.type);
-  return typeof content === 'string' ? content : plainTextFromSendContent(content);
+): GameReply {
+  return buildRiddleView(session, eventLines, message.$channel.type);
 }
 
 async function advanceQuestion(
@@ -48,7 +47,7 @@ export async function startGame(
   services: SessionService,
   message: GameMessageLike,
   mode: RiddleType,
-): Promise<string | undefined> {
+): Promise<GameReply | undefined> {
   const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
   const active = await services.getActiveByChannel(ch);
   if (active) {
@@ -65,7 +64,7 @@ export async function startGame(
 export async function continueGame(
   services: SessionService,
   message: GameMessageLike,
-): Promise<string> {
+): Promise<GameReply> {
   const session = await services.getActiveForUser(
     `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`,
     message.$sender.id,
@@ -78,7 +77,7 @@ export async function processAnswerText(
   services: SessionService,
   message: GameMessageLike,
   raw: string,
-): Promise<string | null> {
+): Promise<GameReply | null> {
   const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
   const session = await services.getActiveForUser(ch, message.$sender.id);
   if (!session || session.status !== 'active') return null;
@@ -130,7 +129,7 @@ export async function handleChoice(
   message: GameMessageLike,
   sessionId: string,
   choiceId: string,
-): Promise<string | null> {
+): Promise<GameReply | null> {
   const session = await services.getById(sessionId);
   if (!session) return '会话不存在。';
   if (session.player_id !== message.$sender.id) return '这是别人的猜谜。';

@@ -31,6 +31,7 @@ export function buildRpsView(
     lines.push('');
     if (session.status === 'won') lines.push('🏆 **你赢得比赛！**');
     else if (session.status === 'lost') lines.push('💀 **机器人赢得比赛。**');
+    else lines.push('🏳️ **本局已放弃。**');
   } else if (!lastRound) {
     lines.push('', '出拳吧！');
   } else {
@@ -39,11 +40,14 @@ export function buildRpsView(
 
   const choices = terminal
     ? [{ id: 'restart', label: '🔄 再来一局', style: 'primary' as const, keepEnabledWhenTerminal: true }]
-    : (['rock', 'paper', 'scissors'] as RpsMove[]).map((m) => ({
-        id: m,
-        label: MOVE_LABELS[m],
-        style: 'secondary' as const,
-      }));
+    : [
+        ...(['rock', 'paper', 'scissors'] as RpsMove[]).map((m) => ({
+          id: m,
+          label: MOVE_LABELS[m],
+          style: 'secondary' as const,
+        })),
+        { id: 'quit', label: '🏳️ 放弃', style: 'danger' as const },
+      ];
 
   return buildChoiceKeyboard({
     gamePrefix: RPS_PREFIX,
@@ -52,7 +56,7 @@ export function buildRpsView(
     choices,
     terminal,
     buttonsPerRow: 3,
-    fallbackHint: '回复数字出拳（1石头 2布 3剪刀）',
+    fallbackHint: '回复数字：1石头 2布 3剪刀 4放弃',
     interactionProfile: terminal ? 'terminal' : 'gameplay',
     channelType,
   });

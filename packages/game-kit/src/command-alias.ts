@@ -1,6 +1,8 @@
 import { defineMiddleware, type MiddlewareContext } from '@zhin.js/middleware';
 import type { Message } from '@zhin.js/core/runtime';
 
+type AliasReply = Parameters<Message['$reply']>[0];
+
 /**
  * 游戏 legacy 命令别名路由。
  *
@@ -20,7 +22,7 @@ export interface GameCommandAliasRoute {
     action: string,
     input: unknown,
     context: MiddlewareContext<Message>,
-  ): Promise<string | null | undefined>;
+  ): Promise<AliasReply | null | undefined>;
 }
 
 export function defineGameCommandAliasMiddleware(route: GameCommandAliasRoute) {

@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import middleware from '../middlewares/adv-choice.ts';
 import { startAdventure } from '../src/game-flow.js';
-import { mountAdvMemoryServices } from '../src/memory-db.js';
-import type { GameServices } from '../src/session-service.js';
+import { createMemoryGameServices } from '@zhin.js/game-kit';
+import { createServices, type GameServices } from '../src/session-service.js';
 
 const replies: string[] = [];
 let nextCalls = 0;
@@ -40,7 +40,7 @@ describe('text-adventure adv-choice middleware (text fallback)', () => {
   beforeEach(() => {
     replies.length = 0;
     nextCalls = 0;
-    services = mountAdvMemoryServices();
+    services = createMemoryGameServices(['adv_sessions', 'adv_profiles'], createServices);
   });
 
   it('数字 1 映射为当前场景第一个选项并回复', async () => {

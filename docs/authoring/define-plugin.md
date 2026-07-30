@@ -207,7 +207,7 @@ async setup(context) {
   "zhin": {
     "protocol": 1,                    // 必填，目前恒为 1
     "type": "plugin",                 // 必填："plugin" | "feature"
-    "entry": "./plugin.ts",           // 必填：包相对路径，须 ./ 开头、不得 .. 逃逸
+    "entry": "./plugin.js",           // 必填：发布包使用 JS；本地私有 Root 可直接使用 ./plugin.ts
     "engine": "^1.0.0",               // 可选：对 Runtime engine 版本的 semver 要求，不满足拒绝加载
     "runtime": "trusted",             // 可选（仅 plugin）："trusted"（默认）| "isolated"
     "platformFeatures": true,         // 可选（仅 plugin）：默认 true，Root 插件自动获得官方 Stable Features；设 false 退出
@@ -235,6 +235,26 @@ async setup(context) {
 | `plugins` | 否（仅 plugin） | 挂载子插件实例：`package` 同 `features` 的包名规则；`instanceKey` **必填**，匹配 `^[a-z0-9][a-z0-9-]*$`，是实例隔离与配置的键——同一包挂多个实例就靠不同 `instanceKey`，实例配置写在 app 的 `zhin.config.yml` 的 `plugins.<instanceKey>` 下 |
 
 feature 包（`type: "feature"`）的清单只有 `protocol` / `type` / `entry` / `engine` / `featureApi` 五个字段，其中 `featureApi`（可选）声明本 feature 实现的 API 版本，供消费方 `features[].api` 校验。
+
+### 开发源码与 npm 发布入口
+
+本地 Root Plugin 和 workspace 私有插件可以把 `zhin.entry` 写成 `./plugin.ts`，Node 原生 TypeScript 与 HMR 会直接加载源码。发布到 npm 的插件必须把入口声明为 `./plugin.js`，并在 `files` 中包含 `plugin.js`、约定目录下生成的 JavaScript 与 `lib`：
+
+```jsonc
+{
+  "files": ["lib", "plugin.js", "commands", "middlewares"],
+  "scripts": {
+    "build": "tsc && node ../../../scripts/build-plugin-runtime-entries.mjs"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.js"
+  }
+}
+```
+
+仓库内官方插件统一使用 `build-plugin-runtime-entries.mjs`：它将 `plugin.ts` 和约定目录中的 TypeScript 编译成同目录 JavaScript，并把指向 `src/` 的相对导入改写到 `lib/`。Runtime 在 workspace 中仍优先选择同名 TypeScript 源码，以保留局部 HMR；从 `node_modules` 加载时优先选择 JavaScript，避免 Node 拒绝对依赖包执行类型剥离。
 
 ## 下一步
 

@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import middleware from '../middlewares/chain-text.ts';
 import { startGame } from '../src/game-flow.js';
-import { mountChainMemoryServices } from '../src/memory-db.js';
-import type { SessionService } from '../src/session-service.js';
+import {
+  createMemoryGameServices,
+  plainTextFromSendContent,
+  type GameReply,
+} from '@zhin.js/game-kit';
+import { createServices, type SessionService } from '../src/session-service.js';
 
 const replies: string[] = [];
 let nextCalls = 0;
@@ -16,7 +20,7 @@ function makeInput(content: string, senderId = 'u1') {
     $sender: { id: senderId, name: senderId },
     content,
     $reply: async (reply: unknown) => {
-      replies.push(String(reply));
+      replies.push(plainTextFromSendContent(reply as GameReply));
       return 'mid-1';
     },
   };
@@ -40,7 +44,7 @@ describe('idiom-chain chain-text middleware (text fallback)', () => {
   beforeEach(async () => {
     replies.length = 0;
     nextCalls = 0;
-    services = mountChainMemoryServices();
+    services = createMemoryGameServices(['idiom_chain_sessions'], createServices);
     await startGame(services, makeInput('') as never);
     replies.length = 0;
   });

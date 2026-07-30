@@ -29,6 +29,45 @@ async function fixture(files: Record<string, unknown>): Promise<string> {
 }
 
 describe('NodePackageResolver 解析规则矩阵', () => {
+  it('workspace：manifest 声明 JS 时优先使用同名 TypeScript 源码', async () => {
+    const root = await fixture({
+      'package.json': {
+        name: '@test/root',
+        zhin: { ...pluginManifest, entry: './plugin.js' },
+      },
+      'plugin.ts': 'export default {}',
+      'plugin.js': 'export default "build"',
+    });
+    const resolver = await NodePackageResolver.create(root);
+
+    const resolved = await resolver.root(root);
+
+    expect(resolved.packageJson.zhin.entry).toBe('./plugin.ts');
+  });
+
+  it('node_modules：legacy TS manifest 优先回退到同名 JS 产物', async () => {
+    const root = await fixture({
+      'package.json': {
+        name: '@test/root',
+        dependencies: { '@test/plugin': '^1.0.0' },
+        zhin: pluginManifest,
+      },
+      'node_modules/@test/plugin/package.json': {
+        name: '@test/plugin',
+        zhin: pluginManifest,
+      },
+      'node_modules/@test/plugin/plugin.ts': 'export default "source"',
+      'node_modules/@test/plugin/plugin.js': 'export default "build"',
+    });
+    const resolver = await NodePackageResolver.create(root);
+    const from = await resolver.root(root);
+
+    const resolved = await resolver.resolve('@test/plugin', from);
+
+    expect(resolved.source).toBe('node_modules');
+    expect(resolved.packageJson.zhin.entry).toBe('./plugin.js');
+  });
+
   it('local：./ 路径相对声明包根解析，跳过依赖声明检查', async () => {
     // 注意：取扫描面（packages/*、plugins/* 顶层）之外的目录——扫描面内的包
     // 已被 workspace 登记并缓存，source 为 workspace（见 project-graph.test.ts）。

@@ -1,14 +1,12 @@
 /**
  * 第二轮审计修复的回归测试
  * - grid-keyboard：postChoices 编号从可落子格子数后续起，不覆盖格子映射
- * - game-onboarding：群聊首次 @ 提示真正发出
  * - game-session：boardMessageMatches 尾缀要求段边界
  * - memory-db：findAll/findOne 返回拷贝
  * - game-records：按 Host/插件作用域取库
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildGridKeyboard, type GridCell } from '../src/grid-keyboard.js';
-import { mountFirstAtHintMiddleware, resetOnboardingForTests } from '../src/game-onboarding.js';
 import { boardMessageMatches } from '../src/game-session.js';
 import { createInMemoryGameDb } from '../src/memory-db.js';
 import {
@@ -46,60 +44,6 @@ describe('audit fixes: grid fallback 编号', () => {
     // postChoices 从 6 开始，不覆盖格子
     expect(map['6']).toBe('ttt:s1:restart');
     expect(Object.keys(map)).toHaveLength(6);
-  });
-});
-
-describe('audit fixes: game-onboarding 首次 @ 提示', () => {
-  beforeEach(() => resetOnboardingForTests());
-
-  function createMiddleware() {
-    let mw: any;
-    const root = {
-      addMiddleware: vi.fn((fn: any) => {
-        mw = fn;
-        return () => {};
-      }),
-    };
-    mountFirstAtHintMiddleware(root as never);
-    return mw;
-  }
-
-  const groupMessage = () => ({
-    $adapter: 'process',
-    $endpoint: 'terminal',
-    $channel: { type: 'group', id: 'g1' },
-    $sender: { id: 'u1', name: 'User' },
-    $raw: '你好',
-    $content: [{ type: 'at', data: { user_id: 'bot1' } }],
-    $bot: { id: 'bot1' },
-    $reply: vi.fn(async () => 'mid'),
-  });
-
-  it('首次 @ 且非命令时应发出提示', async () => {
-    const mw = createMiddleware();
-    const message = groupMessage();
-    const next = vi.fn();
-    await mw(message, next);
-    expect(message.$reply).toHaveBeenCalledOnce();
-    expect(String(message.$reply.mock.calls[0][0])).toContain('游戏');
-    expect(next).toHaveBeenCalledOnce();
-  });
-
-  it('同频道 24h 内只提示一次', async () => {
-    const mw = createMiddleware();
-    const first = groupMessage();
-    await mw(first, vi.fn());
-    const second = groupMessage();
-    await mw(second, vi.fn());
-    expect(first.$reply).toHaveBeenCalledOnce();
-    expect(second.$reply).not.toHaveBeenCalled();
-  });
-
-  it('命令消息不触发提示', async () => {
-    const mw = createMiddleware();
-    const message = { ...groupMessage(), $raw: '/游戏' };
-    await mw(message, vi.fn());
-    expect(message.$reply).not.toHaveBeenCalled();
   });
 });
 

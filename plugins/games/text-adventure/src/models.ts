@@ -19,7 +19,6 @@ declare module '@zhin.js/core' {
       flags: string;
       ending_id: string;
       status: AdvSessionStatus;
-      board_message_id: string;
       step_count: number;
       updated_at: number;
       created_at: number;
@@ -64,7 +63,6 @@ export function defineHostTables(
     flags: { type: 'text', default: '{}' },
     ending_id: { type: 'text', default: '' },
     status: { type: 'text', default: 'active' },
-    board_message_id: { type: 'text', default: '' },
     step_count: { type: 'integer', default: 0 },
     updated_at: { type: 'integer', default: 0 },
     created_at: { type: 'integer', default: 0 },

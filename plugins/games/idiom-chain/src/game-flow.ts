@@ -1,4 +1,4 @@
-import { plainTextFromSendContent, type GameMessageLike } from '@zhin.js/game-kit';
+import type { GameMessageLike, GameReply } from '@zhin.js/game-kit';
 import {
   CHAIN_PREFIX,
   getGloss,
@@ -25,9 +25,9 @@ export async function sendOrEditView(
   message: GameMessageLike,
   session: ChainSessionRow,
   eventLines: string[] = [],
-): Promise<string> {
+): Promise<GameReply> {
   const content = buildChainView(session, eventLines, message.$channel.type);
-  return plainTextFromSendContent(content);
+  return content;
 }
 
 async function botTurn(
@@ -67,7 +67,7 @@ export async function startGame(
   services: SessionService,
   message: GameMessageLike,
   matchMode: MatchMode = 'pinyin',
-): Promise<string | undefined> {
+): Promise<GameReply | undefined> {
   const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
   const active = await services.getActiveByChannel(ch);
   if (active) {
@@ -88,32 +88,29 @@ export async function startGame(
   });
 
   const gloss = starter.gloss ?? getGloss(starter.text);
-  const text = await sendOrEditView(services, message, session, [
+  return sendOrEditView(services, message, session, [
     `🎬 ${modeLabel(matchMode)}开局！我先出：**${starter.text}**${gloss ? `（${gloss}）` : ''}`,
     promptLine(starter.text, matchMode),
   ]);
-  return typeof text === 'string' ? text : undefined;
 }
 
 export async function continueGame(
   services: SessionService,
   message: GameMessageLike,
-): Promise<string> {
+): Promise<GameReply> {
   const session = await services.getActiveForUser(
     `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`,
     message.$sender.id,
   );
   if (!session) return '你没有进行中的接龙，发送「接龙 开始」。';
-  const text = await sendOrEditView(services, message, session);
-  if (typeof text === 'string') return text;
-  return '已刷新接龙界面。';
+  return sendOrEditView(services, message, session);
 }
 
 export async function processIdiomText(
   services: SessionService,
   message: GameMessageLike,
   raw: string,
-): Promise<string | null> {
+): Promise<GameReply | null> {
   const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
   const session = await services.getActiveForUser(ch, message.$sender.id);
   if (!session || session.status !== 'active') return null;
@@ -176,7 +173,7 @@ export async function handleChoice(
   message: GameMessageLike,
   sessionId: string,
   choiceId: string,
-): Promise<string | null> {
+): Promise<GameReply | null> {
   const session = await services.getById(sessionId);
   if (!session) return '对局不存在。';
   if (session.player_id !== message.$sender.id) return '这是别人的接龙。';
@@ -195,7 +192,6 @@ export async function handleChoice(
       wrong_count: 0,
       turn: 'player',
       status: 'active',
-      board_message_id: '',
     });
     const updated = (await services.getById(session.id))!;
     const gloss = starter.gloss ?? getGloss(starter.text);

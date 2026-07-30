@@ -1,4 +1,4 @@
-import { plainTextFromSendContent, recordGameOutcome, type GameMessageLike } from '@zhin.js/game-kit';
+import type { GameMessageLike, GameReply } from '@zhin.js/game-kit';
 import {
   BJ_PREFIX,
   compareHands,
@@ -21,9 +21,8 @@ function renderView(
   message: GameMessageLike,
   terminal = false,
   revealDealer = false,
-): string {
-  const content = buildBjView(session, terminal, revealDealer, message.$channel.type);
-  return plainTextFromSendContent(content);
+): GameReply {
+  return buildBjView(session, terminal, revealDealer, message.$channel.type);
 }
 
 async function finishRound(
@@ -31,12 +30,9 @@ async function finishRound(
   message: GameMessageLike,
   session: BjSessionRow,
   status: BjSessionRow['status'],
-): Promise<string> {
+): Promise<GameReply> {
   await services.updateSession(session.id, { status });
   const updated = (await services.getById(session.id))!;
-  if (status === 'won') void recordGameOutcome(message, 'blackjack', 'won', 30);
-  else if (status === 'lost') void recordGameOutcome(message, 'blackjack', 'lost');
-  else if (status === 'draw') void recordGameOutcome(message, 'blackjack', 'draw');
   return renderView(updated, message, true, true);
 }
 
@@ -56,7 +52,7 @@ async function dealerPlay(
 export async function startGame(
   services: SessionService,
   message: GameMessageLike,
-): Promise<string | undefined> {
+): Promise<GameReply | undefined> {
   const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
   const active = await services.getActiveByChannel(ch);
   if (active) {
@@ -76,7 +72,7 @@ export async function startGame(
 export async function continueGame(
   services: SessionService,
   message: GameMessageLike,
-): Promise<string> {
+): Promise<GameReply> {
   const session = await services.getActiveForUser(
     `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`,
     message.$sender.id,
@@ -90,7 +86,7 @@ export async function handleChoice(
   message: GameMessageLike,
   sessionId: string,
   choiceId: string,
-): Promise<string | null> {
+): Promise<GameReply | null> {
   const session = await services.getById(sessionId);
   if (!session) return '对局不存在。';
   if (session.player_id !== message.$sender.id) return '这是别人的对局。';
@@ -101,6 +97,11 @@ export async function handleChoice(
   }
 
   if (session.status !== 'active') return '对局已结束，请点击再来一局。';
+
+  if (choiceId === 'quit') {
+    await services.updateSession(session.id, { status: 'aborted' });
+    return renderView((await services.getById(session.id))!, message, true, true);
+  }
 
   const deck = parseDeck(session.deck_json);
   let player = parseCards(session.player_cards_json);

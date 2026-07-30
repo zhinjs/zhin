@@ -16,7 +16,6 @@ declare module '@zhin.js/core' {
       deck_json: string;
       player_cards_json: string;
       dealer_cards_json: string;
-      board_message_id: string;
       status: BjSessionStatus;
       updated_at: number;
       created_at: number;
@@ -42,7 +41,6 @@ export function defineHostTables(
     deck_json: { type: 'text', default: '[]' },
     player_cards_json: { type: 'text', default: '[]' },
     dealer_cards_json: { type: 'text', default: '[]' },
-    board_message_id: { type: 'text', default: '' },
     status: { type: 'text', default: 'active' },
     updated_at: { type: 'integer', default: 0 },
     created_at: { type: 'integer', default: 0 },

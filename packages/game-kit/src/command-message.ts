@@ -4,6 +4,10 @@
  * Runtime Message: { adapter, target, sender?, metadata? }
  * Classic Message: { $adapter, $endpoint, $channel, $sender }
  */
+import type { SendContent } from '@zhin.js/core';
+
+/** A game returns semantic content; Runtime owns native rendering and text fallback. */
+export type GameReply = SendContent;
 
 export interface GameMessageLike {
   $adapter: string;

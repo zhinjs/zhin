@@ -19,7 +19,6 @@ declare module '@zhin.js/core' {
       last_player_roll: number;
       last_bot_roll: number;
       status: DiceSessionStatus;
-      board_message_id: string;
       updated_at: number;
       created_at: number;
     };
@@ -47,7 +46,6 @@ export function defineHostTables(
     last_player_roll: { type: 'integer', default: 0 },
     last_bot_roll: { type: 'integer', default: 0 },
     status: { type: 'text', default: 'active' },
-    board_message_id: { type: 'text', default: '' },
     updated_at: { type: 'integer', default: 0 },
     created_at: { type: 'integer', default: 0 },
   });

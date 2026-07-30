@@ -1,5 +1,11 @@
 import type { Database, Models, RelatedModel } from '@zhin.js/core';
-import { channelKey, generateSessionId, boardMessageMatches, type GameMessageLike } from '@zhin.js/game-kit';
+import {
+  BaseSessionService,
+  channelKey,
+  generateSessionId,
+  type GameMessageLike,
+  type GameSessionDatabase,
+} from '@zhin.js/game-kit';
 import type { AdvModelName, AdvSessionRow } from './models.js';
 import { createProfileService, ProfileService } from './profile-service.js';
 
@@ -17,34 +23,13 @@ export interface GameServices {
   profiles: ProfileService;
 }
 
-export class SessionService {
-  constructor(private readonly db: AdvDatabase) {}
-
-  async getActiveByChannel(channel: string): Promise<AdvSessionRow | null> {
-    const rows = await getModel(this.db, 'adv_sessions').findAll({
-      channel_key: channel,
-      status: 'active',
+export class SessionService extends BaseSessionService<AdvSessionRow> {
+  constructor(db: AdvDatabase) {
+    super(db as unknown as GameSessionDatabase<AdvSessionRow>, {
+      gameId: 'adv',
+      table: 'adv_sessions',
+      userFields: ['player_id'],
     });
-    return rows[0] ?? null;
-  }
-
-  async getActiveForUser(channel: string, userId: string): Promise<AdvSessionRow | null> {
-    const row = await this.getActiveByChannel(channel);
-    if (!row || row.player_id !== userId) return null;
-    return row;
-  }
-
-  async getById(id: string): Promise<AdvSessionRow | null> {
-    return getModel(this.db, 'adv_sessions').findOne({ id });
-  }
-
-  async getActiveByBoardMessageId(messageId: string): Promise<AdvSessionRow | null> {
-    if (!messageId) return null;
-    const rows = await getModel(this.db, 'adv_sessions').findAll({});
-    for (const row of rows) {
-      if (boardMessageMatches(row.board_message_id ?? '', messageId)) return row;
-    }
-    return null;
   }
 
   async createSession(message: GameMessageLike): Promise<AdvSessionRow> {
@@ -65,34 +50,11 @@ export class SessionService {
       flags: '{}',
       ending_id: '',
       status: 'active',
-      board_message_id: '',
       step_count: 0,
       updated_at: now,
       created_at: now,
     };
-    await getModel(this.db, 'adv_sessions').create(row);
-    return row;
-  }
-
-  async updateSession(id: string, patch: Partial<AdvSessionRow>): Promise<void> {
-    await getModel(this.db, 'adv_sessions').updateWhere(
-      { id },
-      { ...patch, updated_at: Date.now() },
-    );
-  }
-
-  async abortStale(idleMs: number): Promise<number> {
-    const cutoff = Date.now() - idleMs;
-    const sessions = getModel(this.db, 'adv_sessions');
-    const rows = await sessions.findAll({ status: 'active' });
-    let n = 0;
-    for (const row of rows) {
-      if (row.updated_at < cutoff) {
-        await sessions.updateWhere({ id: row.id }, { status: 'aborted', updated_at: Date.now() });
-        n++;
-      }
-    }
-    return n;
+    return this.createRow(row);
   }
 }
 
@@ -102,4 +64,3 @@ export function createServices(db: AdvDatabase): GameServices {
     profiles: createProfileService(db),
   };
 }
-

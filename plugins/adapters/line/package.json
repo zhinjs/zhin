@@ -32,7 +32,7 @@
     "directory": "plugins/adapters/line"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "clean": "rimraf lib",
     "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/adapters/line/tests",
     "prepublishOnly": "pnpm run build"
@@ -75,7 +75,7 @@
   "files": [
     "adapters",
     "commands",
-    "plugin.ts",
+    "plugin.js",
     "schema.json",
     "src",
     "lib",
@@ -93,7 +93,7 @@
   "zhin": {
     "protocol": 1,
     "type": "plugin",
-    "entry": "./plugin.ts",
+    "entry": "./plugin.js",
     "engine": "^1.0.0",
     "runtime": "trusted",
     "features": [

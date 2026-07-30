@@ -72,6 +72,18 @@ export function createInMemoryGameDb(tableNames: readonly string[]): InMemoryGam
   };
 }
 
+/**
+ * Typed boundary used by game tests and standalone embedders. The database
+ * implementation is deliberately structural so game packages keep their
+ * precise model types without each package recreating the same adapter.
+ */
+export function createMemoryGameServices<TDatabase, TServices>(
+  tableNames: readonly string[],
+  factory: (database: TDatabase) => TServices,
+): TServices {
+  return factory(createInMemoryGameDb(tableNames) as unknown as TDatabase);
+}
+
 /** Minimal DatabaseHost model surface (structural typing; no plugin-runtime dep). */
 export interface HostGameModelSource {
   select(): {

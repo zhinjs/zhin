@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import middleware from '../middlewares/chain-alias.ts';
 import { CHAIN_HELP } from '../src/chain-command.js';
-import { mountChainMemoryServices } from '../src/memory-db.js';
-import type { SessionService } from '../src/session-service.js';
+import { createMemoryGameServices } from '@zhin.js/game-kit';
+import { createServices, type SessionService } from '../src/session-service.js';
 
 const replies: string[] = [];
 let nextCalls = 0;
@@ -40,7 +40,7 @@ describe('idiom-chain chain-alias middleware', () => {
   beforeEach(() => {
     replies.length = 0;
     nextCalls = 0;
-    services = mountChainMemoryServices();
+    services = createMemoryGameServices(['idiom_chain_sessions'], createServices);
   });
 
   it('裸命令（无 action）回复帮助', async () => {

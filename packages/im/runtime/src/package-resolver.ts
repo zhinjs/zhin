@@ -1,5 +1,5 @@
 import { access, readFile, readdir, realpath } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, extname, join, relative, resolve } from 'node:path';
 import { parsePackageJson, type PackageJson } from './manifest.js';
 
 export interface ResolvedPackage {
@@ -122,7 +122,21 @@ export class NodePackageResolver implements PackageResolver {
     if (cached) return cached;
     const file = join(normalized, 'package.json');
     const content = await readFile(file, 'utf8');
-    const packageJson = parsePackageJson(JSON.parse(content) as unknown, file);
+    const parsedPackageJson = parsePackageJson(JSON.parse(content) as unknown, file);
+    const entry = await resolveRuntimeEntry(
+      normalized,
+      parsedPackageJson.zhin.entry,
+      source,
+    );
+    const packageJson = entry === parsedPackageJson.zhin.entry
+      ? parsedPackageJson
+      : Object.freeze({
+          ...parsedPackageJson,
+          zhin: Object.freeze({
+            ...parsedPackageJson.zhin,
+            entry,
+          }),
+        });
     const result = Object.freeze({
       name: packageJson.name,
       root: normalized,
@@ -132,6 +146,29 @@ export class NodePackageResolver implements PackageResolver {
     this.#cache.set(normalized, result);
     return result;
   }
+}
+
+async function resolveRuntimeEntry(
+  packageRoot: string,
+  declaredEntry: string,
+  source: ResolvedPackage['source'],
+): Promise<string> {
+  const declared = resolve(packageRoot, declaredEntry);
+  const extension = extname(declared);
+  const base = declared.slice(0, -extension.length);
+  const sourceCandidates = extension === '.js'
+    ? [`${base}.ts`, `${base}.tsx`]
+    : [declared];
+  const javascriptCandidates = extension === '.ts' || extension === '.tsx'
+    ? [`${base}.js`, join(packageRoot, 'lib', `${base.slice(packageRoot.length + 1)}.js`)]
+    : [declared];
+  const candidates = source === 'node_modules'
+    ? [...javascriptCandidates, ...sourceCandidates]
+    : [...sourceCandidates, ...javascriptCandidates];
+  for (const candidate of new Set(candidates)) {
+    if (await exists(candidate)) return `./${relative(packageRoot, candidate).replaceAll('\\', '/')}`;
+  }
+  return declaredEntry;
 }
 
 function declaredDependency(request: string, pkg: PackageJson): string {

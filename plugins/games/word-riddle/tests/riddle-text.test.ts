@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import middleware from '../middlewares/riddle-text.ts';
 import { startGame } from '../src/game-flow.js';
-import { mountRiddleMemoryServices } from '../src/memory-db.js';
-import type { SessionService } from '../src/session-service.js';
+import { createMemoryGameServices } from '@zhin.js/game-kit';
+import { createServices, type SessionService } from '../src/session-service.js';
 
 const replies: string[] = [];
 let nextCalls = 0;
@@ -40,7 +40,7 @@ describe('word-riddle riddle-text middleware (text fallback)', () => {
   beforeEach(async () => {
     replies.length = 0;
     nextCalls = 0;
-    services = mountRiddleMemoryServices();
+    services = createMemoryGameServices(['word_riddle_sessions'], createServices);
     await startGame(services, makeInput('') as never, 'char');
     replies.length = 0;
   });

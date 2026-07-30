@@ -14,7 +14,7 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "plugin.ts",
+    "plugin.js",
     "schema.json",
     "commands",
     "middlewares",
@@ -24,7 +24,7 @@
   ],
   "scripts": {
     "build:data": "node scripts/build-char-riddles.mjs",
-    "build": "pnpm run build:data && tsc && node -e \"import('node:fs/promises').then(fs=>fs.mkdir('lib/data',{recursive:true}).then(()=>fs.copyFile('src/data/char-riddles.json','lib/data/char-riddles.json')))\"",
+    "build": "pnpm run build:data && tsc && node -e \"import('node:fs/promises').then(fs=>fs.mkdir('lib/data',{recursive:true}).then(()=>fs.copyFile('src/data/char-riddles.json','lib/data/char-riddles.json')))\" && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "clean": "rimraf lib",
     "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/games/word-riddle/tests",
     "prepublishOnly": "pnpm run build"
@@ -57,7 +57,7 @@
   "zhin": {
     "protocol": 1,
     "type": "plugin",
-    "entry": "./plugin.ts",
+    "entry": "./plugin.js",
     "engine": "^1.0.0",
     "runtime": "trusted",
     "features": [

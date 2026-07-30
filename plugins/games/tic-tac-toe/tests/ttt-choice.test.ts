@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import middleware from '../middlewares/ttt-choice.ts';
 import { startBotGame } from '../src/game-flow.js';
-import { mountTttMemoryServices } from '../src/memory-db.js';
-import type { SessionServices } from '../src/session-service.js';
+import { createMemoryGameServices } from '@zhin.js/game-kit';
+import { createServices, type SessionServices } from '../src/session-service.js';
 
 const replies: string[] = [];
 let nextCalls = 0;
@@ -40,7 +40,7 @@ describe('tic-tac-toe ttt-choice middleware (digit fallback)', () => {
   beforeEach(() => {
     replies.length = 0;
     nextCalls = 0;
-    services = mountTttMemoryServices();
+    services = createMemoryGameServices(['ttt_sessions', 'ttt_queue', 'ttt_moves', 'ttt_spectators'], createServices);
   });
 
   it('裸数字按空格编号映射落子并回复', async () => {

@@ -1,6 +1,13 @@
 import type { Database, Models, RelatedModel } from '@zhin.js/core';
-import { channelKey, boardMessageMatches, generateCompactId , type GameMessageLike } from '@zhin.js/game-kit';
+import {
+  BaseSessionService,
+  channelKey,
+  generateCompactId,
+  type GameMessageLike,
+  type GameSessionDatabase,
+} from '@zhin.js/game-kit';
 import type { TttModelName, TttSessionRow } from './models.js';
+import { BOT_ID } from './player-label.js';
 
 /** 井字棋服务使用的数据库实例（Models 经 models.ts 模块增强） */
 export type TttDatabase = Database<unknown, Models, string>;
@@ -96,36 +103,41 @@ export function sessionId(): string {
   return generateCompactId('s');
 }
 
-export class SessionService {
-  constructor(private readonly db: TttDatabase) {}
-
-  async getActiveByChannel(channel: string): Promise<TttSessionRow | null> {
-    const rows = await getModel(this.db, 'ttt_sessions').findAll({
-      channel_key: channel,
-      status: 'active',
+export class SessionService extends BaseSessionService<TttSessionRow> {
+  constructor(private readonly db: TttDatabase) {
+    super(db as unknown as GameSessionDatabase<TttSessionRow>, {
+      gameId: 'ttt',
+      table: 'ttt_sessions',
+      userFields: ['player_x', 'player_o'],
+      projectOutcomes: (session) => {
+        if (session.status !== 'won' && session.status !== 'draw') return [];
+        return [
+          {
+            id: session.player_x,
+            name: session.player_x_name,
+            mark: 1,
+          },
+          {
+            id: session.player_o,
+            name: session.player_o_name,
+            mark: 2,
+          },
+        ]
+          .filter((player) => player.id !== BOT_ID)
+          .map((player) => ({
+            userId: player.id,
+            userName: player.name,
+            result: session.status === 'draw'
+              ? 'draw' as const
+              : session.winner === player.mark
+                ? 'won' as const
+                : 'lost' as const,
+            score: session.status === 'won' && session.winner === player.mark
+              ? 20
+              : undefined,
+          }));
+      },
     });
-    return rows[0] ?? null;
-  }
-
-  async getById(id: string): Promise<TttSessionRow | null> {
-    return getModel(this.db, 'ttt_sessions').findOne({ id });
-  }
-
-  async getActiveForUser(channel: string, userId: string): Promise<TttSessionRow | null> {
-    const row = await this.getActiveByChannel(channel);
-    if (!row) return null;
-    if (row.player_x === userId || row.player_o === userId) return row;
-    return null;
-  }
-
-  /** 根据棋盘消息 ID 查找进行中的局（QQ 等 action 带 sourceMessageId） */
-  async getActiveByBoardMessageId(messageId: string): Promise<TttSessionRow | null> {
-    if (!messageId) return null;
-    const rows = await getModel(this.db, 'ttt_sessions').findAll({});
-    for (const row of rows) {
-      if (boardMessageMatches(row.board_message_id ?? '', messageId)) return row;
-    }
-    return null;
   }
 
   async createSession(input: {
@@ -154,20 +166,11 @@ export class SessionService {
       turn: 1,
       status: 'active',
       winner: 0,
-      board_message_id: '',
       move_count: 0,
       updated_at: now,
       created_at: now,
     };
-    await getModel(this.db, 'ttt_sessions').create(row);
-    return row;
-  }
-
-  async updateSession(id: string, patch: Partial<TttSessionRow>): Promise<void> {
-    await getModel(this.db, 'ttt_sessions').updateWhere(
-      { id },
-      { ...patch, updated_at: Date.now() },
-    );
+    return this.createRow(row);
   }
 
   async recordMove(sessionId: string, playerId: string, cell: number, moveIndex: number): Promise<void> {
@@ -192,19 +195,6 @@ export class SessionService {
     return rows.map((r) => r.user_id);
   }
 
-  async abortStale(idleMs: number): Promise<number> {
-    const cutoff = Date.now() - idleMs;
-    const sessions = getModel(this.db, 'ttt_sessions');
-    const rows = await sessions.findAll({ status: 'active' });
-    let n = 0;
-    for (const row of rows) {
-      if (row.updated_at < cutoff) {
-        await sessions.updateWhere({ id: row.id }, { status: 'aborted', updated_at: Date.now() });
-        n++;
-      }
-    }
-    return n;
-  }
 }
 
 export type SessionServices = { queue: QueueService; session: SessionService };
@@ -212,4 +202,3 @@ export type SessionServices = { queue: QueueService; session: SessionService };
 export function createServices(db: TttDatabase): SessionServices {
   return { queue: new QueueService(db), session: new SessionService(db) };
 }
-

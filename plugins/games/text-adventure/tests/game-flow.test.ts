@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { handleChoice, startAdventure } from '../src/game-flow.js';
-import { mountAdvMemoryServices } from '../src/memory-db.js';
-import type { GameServices } from '../src/session-service.js';
+import { createMemoryGameServices } from '@zhin.js/game-kit';
+import { createServices, type GameServices } from '../src/session-service.js';
 
 let services: GameServices;
 
@@ -28,7 +28,7 @@ async function startAndGetSession(senderId = 'u1') {
 
 describe('text-adventure handleChoice', () => {
   beforeEach(() => {
-    services = mountAdvMemoryServices();
+    services = createMemoryGameServices(['adv_sessions', 'adv_profiles'], createServices);
   });
 
   it('requires 未满足时选项不可用（无 key 进不了 library）', async () => {

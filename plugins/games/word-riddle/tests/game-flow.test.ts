@@ -1,15 +1,19 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { channelKey, smokeGameMessage } from '@zhin.js/game-kit';
+import {
+  channelKey,
+  createMemoryGameServices,
+  plainTextFromSendContent,
+  smokeGameMessage,
+} from '@zhin.js/game-kit';
 import { processAnswerText, startGame } from '../src/game-flow.js';
 import { getRiddleById } from '../src/engine.js';
-import { mountRiddleMemoryServices } from '../src/memory-db.js';
-import { currentRiddleId, type SessionService } from '../src/session-service.js';
+import { createServices, currentRiddleId, type SessionService } from '../src/session-service.js';
 
 describe('word-riddle game-flow (plugin=null)', () => {
   let services: SessionService;
 
   beforeEach(() => {
-    services = mountRiddleMemoryServices();
+    services = createMemoryGameServices(['word_riddle_sessions'], createServices);
   });
 
   it('processAnswerText returns text when guessing wrong with null plugin', async () => {
@@ -47,7 +51,7 @@ describe('word-riddle game-flow (plugin=null)', () => {
 
     const reply = await processAnswerText(services, message as never, wrongChar);
 
-    expect(reply).toMatch(/不对/);
+    expect(plainTextFromSendContent(reply!)).toMatch(/不对/);
     const after = (await services.getById(before.id))!;
     expect(after.wrong_count).toBe(1);
   });

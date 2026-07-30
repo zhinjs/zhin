@@ -52,6 +52,7 @@ export default defineMiddleware<Message>({
       { id: 'rock', label: '石头' },
       { id: 'paper', label: '布' },
       { id: 'scissors', label: '剪刀' },
+      { id: 'quit', label: '放弃' },
     ]);
     const payload = resolveGameTextPayload(raw, map);
     const parsed = payload ? parseChoicePayload(payload, RPS_PREFIX) : null;

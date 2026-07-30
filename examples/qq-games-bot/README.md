@@ -1,6 +1,9 @@
 # qq-games-bot
 
-面向 **QQ 公域群** 的游戏机器人示例：游戏大厅 + 8 款游戏 + 签到统计，**默认关闭 AI**。
+面向 **QQ 公域群** 的游戏机器人示例：游戏大厅 + 9 款游戏 + 签到统计，**默认关闭 AI**。
+
+其中地牢远征支持 1-4 人组队、三层持久化冒险、并发保护和确定性恢复，
+用于长时间实机稳定性验证。
 
 `package.json#zhin.plugins` 声明 QQ Adapter、Group Suite、Game Hub 与全部游戏子插件；
 `zhin.config.yml` 只按 `plugins.<instanceKey>` 提供各自配置。运行入口统一为

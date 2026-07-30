@@ -175,6 +175,31 @@ describe('Command Feature', () => {
       .resolves.toBe('issues:open,closed');
   });
 
+  it('prefers compiled command files for installed npm packages', async () => {
+    const owner = rootPluginId();
+    const root = '/project/node_modules/@test/plugin';
+    const source = `${root}/commands/gh/[issue:number].js`;
+    const command = defineCommand({ execute: ({ params }) => params.issue });
+    const host = new MemoryDiscoveryHost({
+      [`${root}/commands`]: [{ name: 'gh', kind: 'directory' }],
+      [`${root}/commands/gh`]: [
+        { name: '[issue:number].js', kind: 'file' },
+        { name: '[issue:number].ts', kind: 'file' },
+      ],
+    }, new Map([[source, { default: command }]]));
+
+    const slots = await new FeatureDiscovery(host).discover(commandFeature, [{
+      owner,
+      packageRoot: root,
+    }]);
+
+    expect(slots).toHaveLength(1);
+    expect(slots[0]).toMatchObject({
+      localName: 'gh/$issue',
+      source,
+    });
+  });
+
   it('dispatches the longest command prefix with trailing args and source input', async () => {
     const owner = rootPluginId();
     const slot = createCapabilitySlot({

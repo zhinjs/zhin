@@ -59,6 +59,7 @@
     "@zhin.js/plugin-blackjack": "workspace:*",
     "@zhin.js/plugin-code-runner": "workspace:*",
     "@zhin.js/plugin-dice-duel": "workspace:*",
+    "@zhin.js/plugin-dungeon-expedition": "workspace:*",
     "@zhin.js/plugin-game-hub": "workspace:*",
     "@zhin.js/plugin-group-suite": "workspace:*",
     "@zhin.js/plugin-guess-number": "workspace:*",
@@ -164,6 +165,10 @@
       {
         "package": "@zhin.js/plugin-dice-duel",
         "instanceKey": "dice-duel"
+      },
+      {
+        "package": "@zhin.js/plugin-dungeon-expedition",
+        "instanceKey": "dungeon-expedition"
       },
       {
         "package": "@zhin.js/plugin-rps",

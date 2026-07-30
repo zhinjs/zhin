@@ -2,14 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseCommandDefinition } from '@zhin.js/command';
 import { DisposeStack, scheduleHostToken } from '@zhin.js/plugin-runtime';
 import {
+  createMemoryGameServices,
   getRuntimeGame,
+  plainTextFromSendContent,
   resetRuntimeGamesForTests,
+  type GameReply,
 } from '@zhin.js/game-kit';
 import plugin from '../plugin.ts';
 import gameCommand from '../commands/guess/[action:string=].ts';
 import { GUESS_HELP } from '../src/index.js';
-import { mountGuessMemoryServices } from '../src/memory-db.js';
-let services: ReturnType<typeof mountGuessMemoryServices>;
+import { createServices } from '../src/session-service.js';
+let services: ReturnType<typeof createServices>;
 
 const emptyCtx = {
   owner: {} as never,
@@ -40,7 +43,7 @@ function mockSetupContext(options?: { schedule?: boolean }) {
 describe('@zhin.js/plugin-guess-number runtime (slice-2)', () => {
   beforeEach(() => {
     resetRuntimeGamesForTests();
-    services = mountGuessMemoryServices();
+    services = createMemoryGameServices(['guess_sessions'], createServices);
   });
 
   afterEach(() => {
@@ -68,8 +71,10 @@ describe('@zhin.js/plugin-guess-number runtime (slice-2)', () => {
       ...emptyCtx,
       params: { action: 'start' },
     });
-    expect(String(result)).not.toContain('尚未就绪');
-    expect(String(result)).toContain('猜数字');
+    const text = plainTextFromSendContent(result as GameReply);
+    expect(text).not.toContain('尚未就绪');
+    expect(text).toContain('猜数字');
+    expect((result as unknown[])[1]).toMatchObject({ type: 'keyboard' });
   });
 
   it('setup registers hub metadata and stale-session cron when schedule host exists', async () => {

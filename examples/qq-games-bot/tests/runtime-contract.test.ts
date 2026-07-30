@@ -20,6 +20,7 @@ describe('qq-games-bot Plugin Runtime contract', () => {
         'rps',
         'guess-number',
         'dice-duel',
+        'dungeon-expedition',
         'idiom-chain',
         'word-riddle',
         'text-adventure',

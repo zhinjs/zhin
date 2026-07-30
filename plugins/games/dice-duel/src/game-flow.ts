@@ -1,4 +1,4 @@
-import { plainTextFromSendContent, recordGameOutcome, type GameMessageLike } from '@zhin.js/game-kit';
+import type { GameMessageLike, GameReply } from '@zhin.js/game-kit';
 import type { DiceSessionRow } from './models.js';
 import { compareRolls, DICE_PREFIX, rollD6, WIN_TARGET } from './engine.js';
 import type { SessionService } from './session-service.js';
@@ -13,14 +13,14 @@ function renderView(
   session: DiceSessionRow,
   message: GameMessageLike,
   lastRound?: { player: number; bot: number; result: 0 | 1 | 2 },
-): string {
-  return plainTextFromSendContent(buildDiceView(session, lastRound, message.$channel.type));
+): GameReply {
+  return buildDiceView(session, lastRound, message.$channel.type);
 }
 
 export async function startGame(
   services: SessionService,
   message: GameMessageLike,
-): Promise<string | undefined> {
+): Promise<GameReply | undefined> {
   const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
   const active = await services.getActiveByChannel(ch);
   if (active) {
@@ -36,7 +36,7 @@ export async function startGame(
 export async function continueGame(
   services: SessionService,
   message: GameMessageLike,
-): Promise<string> {
+): Promise<GameReply> {
   const session = await services.getActiveForUser(
     `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`,
     message.$sender.id,
@@ -50,7 +50,7 @@ export async function handleChoice(
   message: GameMessageLike,
   sessionId: string,
   choiceId: string,
-): Promise<string | null> {
+): Promise<GameReply | null> {
   const session = await services.getById(sessionId);
   if (!session) return '对局不存在。';
   if (session.player_id !== message.$sender.id) return '这是别人的对局。';
@@ -62,6 +62,10 @@ export async function handleChoice(
   if (choiceId === 'restart') {
     await services.updateSession(session.id, { status: 'aborted' });
     return (await startGame(services, message)) ?? null;
+  }
+  if (choiceId === 'quit') {
+    await services.updateSession(session.id, { status: 'aborted' });
+    return renderView((await services.getById(session.id))!, message);
   }
 
   if (choiceId !== 'roll') return '无效操作。';
@@ -89,8 +93,6 @@ export async function handleChoice(
   });
 
   const updated = (await services.getById(session.id))!;
-  if (status === 'won') void recordGameOutcome(message, 'dice', 'won', playerWins * 10);
-  else if (status === 'lost') void recordGameOutcome(message, 'dice', 'lost');
   return renderView(updated, message, { player, bot, result });
 }
 

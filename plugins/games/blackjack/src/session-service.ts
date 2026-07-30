@@ -1,19 +1,35 @@
-import type { Database, Models, RelatedModel } from '@zhin.js/core';
-import { channelKey, generateSessionId, type GameMessageLike } from '@zhin.js/game-kit';
+import type { Database, Models } from '@zhin.js/core';
+import {
+  BaseSessionService,
+  channelKey,
+  generateSessionId,
+  type GameMessageLike,
+  type GameSessionDatabase,
+} from '@zhin.js/game-kit';
 import type { BjSessionRow } from './models.js';
 import { freshDeck } from './engine.js';
 
 export type BjDatabase = Database<unknown, Models, string>;
 
-function getModel(db: BjDatabase): RelatedModel<unknown, Models, 'bj_sessions'> {
-  const model = db.models.get('bj_sessions');
-  if (!model) throw new Error('bj_sessions not registered');
-  return model as RelatedModel<unknown, Models, 'bj_sessions'>;
-}
-
-
-export class SessionService {
-  constructor(private readonly db: BjDatabase) {}
+export class SessionService extends BaseSessionService<BjSessionRow> {
+  constructor(db: BjDatabase) {
+    super(db as unknown as GameSessionDatabase<BjSessionRow>, {
+      gameId: 'blackjack',
+      table: 'bj_sessions',
+      userFields: ['player_id'],
+      projectOutcomes: (session) => [
+        ...(session.status === 'won' || session.status === 'lost'
+            || session.status === 'draw'
+          ? [{
+              userId: session.player_id,
+              userName: session.player_name,
+              result: session.status,
+              score: session.status === 'won' ? 30 : undefined,
+            }]
+          : []),
+      ],
+    });
+  }
 
   async createSession(message: GameMessageLike): Promise<BjSessionRow> {
     const deck = freshDeck();
@@ -32,71 +48,11 @@ export class SessionService {
       deck_json: JSON.stringify(deck),
       player_cards_json: JSON.stringify(playerCards),
       dealer_cards_json: JSON.stringify(dealerCards),
-      board_message_id: '',
       status: 'active',
       updated_at: now,
       created_at: now,
     };
-    await getModel(this.db).create(row);
-    return row;
-  }
-
-  async getById(id: string): Promise<BjSessionRow | null> {
-    return getModel(this.db).findOne({ id });
-  }
-
-  async getActiveForUser(channelKeyValue: string, userId: string): Promise<BjSessionRow | null> {
-    const rows = await getModel(this.db).findAll({
-      channel_key: channelKeyValue,
-      player_id: userId,
-      status: 'active',
-    });
-    return rows[0] ?? null;
-  }
-
-  /** 本频道本人最近一局（不按 status 过滤），供终局「回复 1 再来一局」restart 用。 */
-  async getLatestForUser(channelKeyValue: string, userId: string): Promise<BjSessionRow | null> {
-    const rows = await getModel(this.db).findAll({
-      channel_key: channelKeyValue,
-      player_id: userId,
-    });
-    if (rows.length === 0) return null;
-    // updated_at 可能同毫秒平局，此时取靠后的行（更接近最近创建的一局）
-    return rows.reduce((latest, row) => (row.updated_at >= latest.updated_at ? row : latest));
-  }
-
-  async getActiveByChannel(channelKeyValue: string): Promise<BjSessionRow | null> {
-    const rows = await getModel(this.db).findAll({
-      channel_key: channelKeyValue,
-      status: 'active',
-    });
-    return rows[0] ?? null;
-  }
-
-  async getActiveByBoardMessageId(messageId: string): Promise<BjSessionRow | null> {
-    const rows = await getModel(this.db).findAll({
-      board_message_id: messageId,
-      status: 'active',
-    });
-    return rows[0] ?? null;
-  }
-
-  async updateSession(id: string, patch: Partial<BjSessionRow>): Promise<void> {
-    await getModel(this.db).updateWhere({ id }, { ...patch, updated_at: Date.now() });
-  }
-
-  async abortStale(maxAgeMs: number): Promise<number> {
-    const cutoff = Date.now() - maxAgeMs;
-    const model = getModel(this.db);
-    const rows = await model.findAll({ status: 'active' });
-    let n = 0;
-    for (const row of rows) {
-      if (row.updated_at < cutoff) {
-        await model.updateWhere({ id: row.id }, { status: 'aborted', updated_at: Date.now() });
-        n++;
-      }
-    }
-    return n;
+    return this.createRow(row);
   }
 }
 

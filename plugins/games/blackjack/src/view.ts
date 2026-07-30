@@ -23,7 +23,8 @@ export function buildBjView(
   if (terminal) {
     if (session.status === 'won') lines.push('🎉 **你赢了！**');
     else if (session.status === 'lost') lines.push('💀 **你输了**');
-    else lines.push('🤝 **平局**');
+    else if (session.status === 'draw') lines.push('🤝 **平局**');
+    else lines.push('🏳️ **本局已放弃。**');
     lines.push('', '点击「再来一局」或发送 `/21点 开始`');
   } else {
     lines.push(`目标：尽量接近 ${TARGET} 且不超过。`);
@@ -34,6 +35,7 @@ export function buildBjView(
     : [
         { id: 'hit', label: '➕ 要牌', style: 'primary' as const },
         { id: 'stand', label: '✋ 停牌', style: 'secondary' as const },
+        { id: 'quit', label: '🏳️ 放弃', style: 'danger' as const },
       ];
 
   return buildChoiceKeyboard({
@@ -42,7 +44,7 @@ export function buildBjView(
     narrative: lines.join('\n'),
     choices,
     terminal,
-    fallbackHint: terminal ? '回复 1 再来一局' : '1 要牌 · 2 停牌',
+    fallbackHint: terminal ? '回复 1 再来一局' : '1 要牌 · 2 停牌 · 3 放弃',
     interactionProfile: terminal ? 'terminal' : 'gameplay',
     channelType,
   });

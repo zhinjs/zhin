@@ -14,16 +14,17 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "plugin.ts",
+    "plugin.js",
     "schema.json",
     "src",
     "lib",
     "README.md"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "clean": "rimraf lib",
-    "test": "vitest run --root ../../.. plugins/services/activity-feedback/tests"
+    "test": "vitest run --root ../../.. plugins/services/activity-feedback/tests",
+    "prepublishOnly": "pnpm run build"
   },
   "keywords": [
     "zhin",
@@ -66,7 +67,7 @@
   "zhin": {
     "protocol": 1,
     "type": "plugin",
-    "entry": "./plugin.ts",
+    "entry": "./plugin.js",
     "engine": "^1.0.0",
     "runtime": "trusted",
     "features": [],
