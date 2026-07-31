@@ -1,5 +1,13 @@
 # @zhin.js/plugin-rps
 
+## 1.0.6
+
+### Patch Changes
+
+- Updated dependencies [45b3256]
+  - @zhin.js/core@1.4.3
+  - @zhin.js/game-kit@2.0.3
+
 ## 1.0.5
 
 ### Patch Changes

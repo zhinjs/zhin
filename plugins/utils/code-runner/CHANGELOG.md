@@ -1,5 +1,11 @@
 # @zhin.js/plugin-code-runner
 
+## 3.0.8
+
+### Patch Changes
+
+- @zhin.js/agent@1.0.9
+
 ## 3.0.7
 
 ### Patch Changes

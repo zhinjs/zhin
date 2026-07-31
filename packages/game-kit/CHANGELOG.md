@@ -1,5 +1,14 @@
 # @zhin.js/game-shared
 
+## 2.0.3
+
+### Patch Changes
+
+- Updated dependencies [45b3256]
+  - @zhin.js/core@1.4.3
+  - zhin.js@5.0.3
+  - @zhin.js/html-renderer@2.0.3
+
 ## 2.0.2
 
 ### Patch Changes
