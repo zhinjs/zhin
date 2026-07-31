@@ -1,5 +1,12 @@
 # qq-games-bot
 
+## 0.1.9
+
+### Patch Changes
+
+- @zhin.js/adapter-qq@6.0.5
+- @zhin.js/plugin-group-suite@3.0.9
+
 ## 0.1.8
 
 ### Patch Changes
