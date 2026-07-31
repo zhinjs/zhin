@@ -16,9 +16,17 @@ interface YamlEndpointEntry {
   [key: string]: unknown;
 }
 
+interface PluginAdapterConfig {
+  master?: unknown;
+  trusted?: unknown;
+  endpoints?: YamlEndpointEntry[];
+  [key: string]: unknown;
+}
+
 interface PrimaryConfig {
   ai?: { trigger?: AITriggerConfig };
   endpoints?: YamlEndpointEntry[];
+  plugins?: Record<string, PluginAdapterConfig>;
 }
 
 function findEndpointEntryFromConfig(
@@ -26,11 +34,37 @@ function findEndpointEntryFromConfig(
   adapter: string,
   endpointId: string,
 ): YamlEndpointEntry | undefined {
-  const endpoints = config.endpoints;
-  if (!Array.isArray(endpoints)) return undefined;
-  return endpoints.find(
-    (b) => b.context === adapter && String(b.name) === endpointId,
-  );
+  // 1) top-level endpoints[] (legacy / flat format)
+  const topLevel = config.endpoints;
+  if (Array.isArray(topLevel)) {
+    const found = topLevel.find(
+      (b) => b.context === adapter && String(b.name) === endpointId,
+    );
+    if (found) return found;
+  }
+
+  // 2) plugins.<adapter> — adapter-level master/trusted + nested endpoints[]
+  const adapterConfig = config.plugins?.[adapter];
+  if (!adapterConfig) return undefined;
+
+  const nested = adapterConfig.endpoints;
+  const entry = Array.isArray(nested)
+    ? nested.find((b) => String(b.name) === endpointId)
+    : undefined;
+
+  // Merge adapter-level master/trusted onto the matched endpoint entry
+  // so that resolveSenderRoles sees them in one place
+  const merged: YamlEndpointEntry = {
+    context: adapter,
+    ...(entry ?? { name: endpointId }),
+  };
+  if (adapterConfig.master != null && merged.master == null) {
+    merged.master = adapterConfig.master;
+  }
+  if (adapterConfig.trusted != null && merged.trusted == null) {
+    merged.trusted = adapterConfig.trusted;
+  }
+  return merged;
 }
 
 function readTriggerConfig(plugin: Plugin): AITriggerConfig {

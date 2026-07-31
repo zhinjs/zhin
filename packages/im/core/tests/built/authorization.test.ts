@@ -11,7 +11,7 @@ function mockMessage(senderId: string, permissions: string[] = []) {
   } as any;
 }
 
-function mockPlugin(config: { ai?: { trigger?: { masters?: string[]; trusted?: string[] } }; endpoints?: Array<{ context: string; name: string; master?: number; trusted?: number[] }> }) {
+function mockPlugin(config: { ai?: { trigger?: { masters?: string[]; trusted?: string[] } }; endpoints?: Array<{ context: string; name: string; master?: number; trusted?: number[] }>; plugins?: Record<string, any> }) {
   return {
     root: {
       inject: (name: string) => {
@@ -34,6 +34,32 @@ describe('resolveSubjectRoles', () => {
     });
     const result = resolveSubjectRoles(plugin, mockMessage('1659488338'));
     expect(result.roles).toContain('master');
+  });
+
+  it('从 plugins.<adapter>.master 匹配 master', () => {
+    const plugin = mockPlugin({
+      plugins: {
+        icqq: {
+          master: 1659488338,
+          endpoints: [{ name: '8596238' }],
+        },
+      },
+    });
+    const result = resolveSubjectRoles(plugin, mockMessage('1659488338'));
+    expect(result.roles).toContain('master');
+  });
+
+  it('plugins.<adapter>.master 不影响非 master 用户', () => {
+    const plugin = mockPlugin({
+      plugins: {
+        icqq: {
+          master: 1659488338,
+          endpoints: [{ name: '8596238' }],
+        },
+      },
+    });
+    const result = resolveSubjectRoles(plugin, mockMessage('999999'));
+    expect(result.roles).not.toContain('master');
   });
 
   it('与 resolveSenderRoles 在相同输入下一致', () => {

@@ -137,6 +137,24 @@ export class ConfigComposer {
   }
 }
 
+const FRAMEWORK_ROLE_SCHEMA: Readonly<Record<string, JsonSchema>> = Object.freeze({
+  master: Object.freeze({
+    type: ['string', 'number'] as unknown,
+    description: 'Endpoint owner (framework-level master role)',
+  }),
+  trusted: Object.freeze({
+    type: 'array',
+    items: Object.freeze({ type: ['string', 'number'] as unknown }),
+    description: 'Trusted user ID list (framework-level trusted role)',
+  }),
+});
+
+function hasArrayEndpoints(props: Record<string, JsonSchema>): boolean {
+  const ep = props.endpoints;
+  if (!ep || typeof ep !== 'object') return false;
+  return (ep as Record<string, unknown>).type === 'array';
+}
+
 async function composeNode(
   node: PluginGraphNode,
   ownSchemas: Map<PluginId, JsonSchema>,
@@ -144,6 +162,17 @@ async function composeNode(
   const own = await readOwnSchema(node);
   ownSchemas.set(node.id, own);
   const properties = { ...schemaProperties(own) };
+
+  // Adapter plugins (schemas declaring array-typed `endpoints`) get
+  // framework-level `master` / `trusted` injected when not already declared.
+  if (hasArrayEndpoints(properties)) {
+    for (const [key, schema] of Object.entries(FRAMEWORK_ROLE_SCHEMA)) {
+      if (!Object.hasOwn(properties, key)) {
+        properties[key] = schema;
+      }
+    }
+  }
+
   for (const child of node.children) {
     if (Object.hasOwn(properties, child.instanceKey)) {
       throw new ConfigSchemaCollisionError(node.id, child.instanceKey);
