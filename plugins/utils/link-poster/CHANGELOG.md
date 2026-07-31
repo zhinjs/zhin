@@ -1,5 +1,13 @@
 # @zhin.js/plugin-link-poster
 
+## 3.0.7
+
+### Patch Changes
+
+- Updated dependencies [45b3256]
+  - @zhin.js/core@1.4.3
+  - @zhin.js/html-renderer@2.0.3
+
 ## 3.0.6
 
 ### Patch Changes

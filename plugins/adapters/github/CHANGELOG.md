@@ -1,5 +1,14 @@
 # @zhin.js/adapter-github
 
+## 4.0.4
+
+### Patch Changes
+
+- Updated dependencies [45b3256]
+  - @zhin.js/core@1.4.3
+  - @zhin.js/agent@1.0.9
+  - zhin.js@5.0.3
+
 ## 4.0.3
 
 ### Patch Changes
