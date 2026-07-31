@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useData } from 'vitepress'
 
-const { isDark } = useData()
+const { isDark, lang } = useData()
+const isEn = computed(() => lang.value === 'en-US')
 </script>
 
 <template>
@@ -13,7 +15,7 @@ const { isDark } = useData()
       zhinjs/zhin
     </a>
     <p class="zhin-side-foot__meta">
-      <a href="/contributing/development">发版与门禁</a>
+      <a :href="isEn ? '/en/contributing/development' : '/contributing/development'">{{ isEn ? 'Release & CI' : '发版与门禁' }}</a>
       <i></i>
       <a href="https://github.com/zhinjs/zhin/blob/main/AGENTS.md" target="_blank" rel="noreferrer">AGENTS.md</a>
     </p>

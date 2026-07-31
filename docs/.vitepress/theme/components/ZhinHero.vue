@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useData } from 'vitepress'
+
+const { lang } = useData()
+const isEn = computed(() => lang.value === 'en-US')
+
 withDefaults(defineProps<{
   eyebrow?: string
   title?: string
@@ -21,12 +27,12 @@ withDefaults(defineProps<{
         <h1 class="zhin-hero__title">{{ title }}</h1>
         <p class="zhin-hero__tagline"><slot>{{ tagline }}</slot></p>
         <div class="zhin-hero__actions">
-          <a class="zhin-btn zhin-btn--brand" href="/getting-started/">快速开始</a>
-          <a class="zhin-btn zhin-btn--ghost" href="/examples/">示例速览</a>
+          <a class="zhin-btn zhin-btn--brand" :href="isEn ? '/en/getting-started/' : '/getting-started/'">{{ isEn ? 'Quick Start' : '快速开始' }}</a>
+          <a class="zhin-btn zhin-btn--ghost" :href="isEn ? '/en/examples/' : '/examples/'">{{ isEn ? 'Examples' : '示例速览' }}</a>
           <a class="zhin-btn zhin-btn--ghost" href="https://github.com/zhinjs/zhin" target="_blank" rel="noreferrer">GitHub ↗</a>
         </div>
         <div class="zhin-hero__meta">
-          <span>IM 核心 &lt;10MB</span><i></i><span>Node ≥20.19</span><i></i><span>MIT</span>
+          <span>{{ isEn ? 'IM core <10MB' : 'IM 核心 <10MB' }}</span><i></i><span>Node ≥20.19</span><i></i><span>MIT</span>
         </div>
       </div>
       <div class="zhin-hero__logo">
