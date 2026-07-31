@@ -1,0 +1,144 @@
+# Convention Directories
+
+Place a `commands/` folder in your plugin package root, drop a `.ts` file in it, and the command appears -- no registration anywhere. These directories that are automatically scanned by the Feature discovery mechanism are called **convention directories**: each directory corresponds to a Feature package (feature provider), and files in the directory are mapped to capabilities according to naming rules. The discovery flow:
+
+```mermaid
+flowchart LR
+  A[Plugin package root] --> B[Feature provider<br/>scans convention directories]
+  B --> C{Naming rules match?}
+  C -->|Yes| D[Load module/text<br/>validate]
+  C -->|No| E[Skip]
+  D --> F[CapabilitySlot<br/>owner\0feature\0localName]
+  F --> G[Index projection<br/>CommandIndex / ToolIndex / ...]
+```
+
+A few key points. The full capability id takes the form `owner\0feature\0localName` (`\0`-separated), where `localName` is determined by the relative path within the directory; duplicate `localName`s (or the same file source) under the same owner throw `DiscoveryConflictError`. When a directory does not exist or has no matching files, that Feature is silently skipped -- plugins only need to declare the directories they use. Additionally, modules with `target: server` are loaded and executed on the Node side, while `target: client` (pages) are loaded in the browser via build artifacts.
+
+## Directory Overview
+
+| Directory | File format | Recursive | target | Feature package | featureId | Default export |
+| --- | --- | --- | --- | --- | --- | --- |
+| `commands/` | `.ts` / `.tsx`, supports dynamic parameter files | Yes (subdirectories form hierarchy) | server | `@zhin.js/command` | `zhin.command` | `defineCommand(...)` |
+| `middlewares/` | `.ts` | Yes | server | `@zhin.js/middleware` | `zhin.middleware` | `defineMiddleware(...)` |
+| `components/` | `.ts` / `.tsx` | Yes | server | `@zhin.js/component` | `zhin.component` | `defineComponent(...)` |
+| `adapters/` | `.ts` | Yes | server | `@zhin.js/adapter` | `zhin.adapter` | `defineAdapter(...)` |
+| `tools/` | `.ts` | No | server | `@zhin.js/tool` | `zhin.agent-tool` | `defineAgentTool(...)` |
+| `skills/` | Subdirectory + `SKILL.md` | One level | server | `@zhin.js/skill` | `zhin.skill` | Markdown text |
+| `agents/` | `*.agent.md` | No | server | `@zhin.js/agent-feature` | `zhin.agent` | Markdown text |
+| `mcp/` | `.ts` | No | server | `@zhin.js/mcp-feature` | `zhin.mcp` | `defineMcp(...)` |
+| `pages/` | `.ts` / `.tsx`, with `$nav` / `$footer` layout slots | No | client | `@zhin.js/page` / `@zhin.js/layout` | `zhin.page` / `zhin.layout` | Page constructs |
+
+## Naming Rules
+
+There is only one universal segment rule: after removing extensions, directory names and regular file names must match `^[a-z0-9][a-z0-9-]*$`, meaning lowercase letters/digits at the start, with hyphens allowed. Non-matching files are skipped. Supplementary rules per directory:
+
+| Directory | localName derivation | Example |
+| --- | --- | --- |
+| `commands/` | Subdirectories and file names joined with `/`; dynamic parameter files `[name:type=default].ts(x)` map to `$name` segments, `type` is one of `string\|number\|boolean`, `=default` is optional | `commands/lottery-today.ts` -> `lottery-today`; `commands/lottery/[game:string=].ts` -> `lottery/$game` |
+| `middlewares/` | Relative path without extension, joined with `/` | `middlewares/keyword-reply.ts` -> `keyword-reply` |
+| `components/` | Same as above | `components/share-music.ts` -> `share-music` |
+| `adapters/` | Same as above | `adapters/napcat.ts` -> `napcat` |
+| `tools/` | File name without extension (no subdirectory recursion) | `tools/music-search.ts` -> `music-search` |
+| `skills/` | Subdirectory name is the localName, directory must contain `SKILL.md` | `skills/memory-consolidate/SKILL.md` -> `memory-consolidate` |
+| `agents/` | File name with `.agent.md` suffix removed | `agents/planner.agent.md` -> `planner` |
+| `mcp/` | File name without extension (no recursion) | `mcp/my-server.ts` -> `my-server` |
+| `pages/` | File name without extension; `$nav.tsx` / `$footer.tsx` are layout slots (when both `.ts` and `.tsx` exist for the same slot, `.tsx` takes precedence) | `pages/orchestration.tsx` -> `orchestration`; `pages/$nav.tsx` -> `nav` |
+
+Malformed bracket syntax in command dynamic parameter files (such as unsupported types) throws `CommandPathSyntaxError`, with the message `expected [name:string|number|boolean=default].ts(x)`.
+
+## Minimal Form for Each Directory
+
+### commands/ -- `defineCommand`
+
+```ts
+// plugins/utils/lottery/commands/lottery-today.ts
+import { defineCommand } from '@zhin.js/command';
+
+export default defineCommand<LotteryConfig>({
+  description: 'Show today published recommendation report',
+  async execute({ owner, use }) {
+    const db = resolveLotteryRuntime({ owner, use })?.db ?? getLotteryDb();
+    if (!db) return '数据库未就绪';
+    // ...return a string to reply
+  },
+});
+```
+
+### middlewares/ -- `defineMiddleware`
+
+```ts
+// plugins/utils/group-suite/middlewares/keyword-reply.ts (excerpt)
+import { defineMiddleware } from '@zhin.js/middleware';
+
+export default defineMiddleware<Message, GroupSuiteConfig>({
+  target: 'inbound',
+  async handle(context, next) {
+    const config = resolveGroupSuiteConfig(context.config);
+    if (!config.keywordReply) {
+      await next();
+      return;
+    }
+    // ...reply on keyword match, otherwise await next() to pass through
+  },
+});
+```
+
+### adapters/ -- `defineAdapter`
+
+```ts
+// plugins/adapters/napcat/adapters/napcat.ts (excerpt)
+import { defineAdapter } from '@zhin.js/adapter';
+
+export default defineAdapter<NapCatAdapterConfig>({
+  capabilities: ['inbound', 'outbound'],
+  create(context) {
+    const config = resolveNapCatConfig(context.config);
+    const gateway = context.use(messageGatewayToken);
+    return new NapCatWsEndpoint({ id: context.id, gateway, config });
+  },
+});
+```
+
+`capabilities` must contain at least one of `inbound` / `outbound`; the lifecycle of the Endpoint returned by `create` is described in [WS/SSE Endpoint Lifecycle](./endpoint-lifecycle.md).
+
+### tools/ -- `defineAgentTool`
+
+```ts
+// plugins/utils/music/tools/music-search.ts (excerpt)
+import { defineAgentTool } from '@zhin.js/tool';
+
+export default defineAgentTool<{ keyword: string; source?: MusicSource; limit?: number }>({
+  description: 'Search for music and return a result list',
+  inputSchema: {
+    type: 'object',
+    properties: { keyword: { type: 'string', description: 'Search keyword' } },
+    required: ['keyword'],
+  },
+  approval: 'never',
+  execute: ({ keyword, source, limit }) => searchMusic(String(keyword), source, limit ?? 5),
+});
+```
+
+### skills/ and agents/ -- Markdown
+
+`skills/<name>/SKILL.md` has frontmatter (`name` / `description` / `tools` whitelist, etc.), such as `examples/full-bot/skills/memory-consolidate/SKILL.md`:
+
+```markdown
+---
+name: memory-consolidate
+description: At the end of a round or when master says "remember", write 1-3 retrievable facts to memory_entries
+tools:
+  - memory_upsert
+  - memory_search
+---
+```
+
+`agents/<name>.agent.md` is an Agent persona/instruction file, such as `examples/multi-agent-room/agents/planner.agent.md`.
+
+### pages/ -- Console Pages
+
+`pages/*.tsx` is compiled into browser artifacts and mounted in the Remote Console; `examples/full-bot/pages/orchestration.tsx` is a ready-made example. `$nav.tsx` / `$footer.tsx` are consumed by `@zhin.js/layout`, injecting navigation and footer.
+
+## Repository Examples
+
+When looking for production-grade references, browse these directories directly: `commands` -- see `plugins/utils/lottery/commands/` (including dynamic parameter `[game:string=].ts`); `middlewares` -- see `plugins/utils/group-suite/middlewares/` and `plugins/games/*/middlewares/`; `components` -- see `plugins/utils/music/components/share-music.ts`; `adapters` -- see `plugins/adapters/napcat/adapters/napcat.ts`; `tools` -- see `plugins/utils/music/tools/` and `plugins/utils/group-suite/tools/`; `skills` -- see `examples/full-bot/skills/memory-consolidate/`; `agents` -- see `examples/multi-agent-room/agents/`; `pages` -- see `examples/full-bot/pages/orchestration.tsx`.
