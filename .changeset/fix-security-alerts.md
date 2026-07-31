@@ -1,7 +1,7 @@
 ---
 "@zhin.js/cli": patch
 "@zhin.js/host-http": patch
-"@zhin.js/host-mcp": patch
+"@zhin.js/mcp": patch
 "@zhin.js/a2a": patch
 "@zhin.js/ai": patch
 "@zhin.js/scaffold-wizard": patch
