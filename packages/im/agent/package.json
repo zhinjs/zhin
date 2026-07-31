@@ -126,18 +126,18 @@
   },
   "dependencies": {
     "@a2a-js/sdk": "1.0.0-beta.0",
-    "@zhin.js/ai": "workspace:*",
     "@zhin.js/agent-feature": "workspace:*",
+    "@zhin.js/ai": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/kernel": "workspace:*",
+    "@zhin.js/logger": "workspace:*",
     "@zhin.js/mcp-feature": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/schedule": "workspace:*",
-    "@zhin.js/logger": "workspace:*",
     "@zhin.js/skill": "workspace:*",
     "@zhin.js/tool": "workspace:*",
     "he": "^1.2.0",
-    "js-yaml": "^5.2.1"
+    "js-yaml": "^5.2.2"
   },
   "peerDependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
@@ -149,11 +149,11 @@
     }
   },
   "devDependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@types/he": "^1.2.3",
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^26.1.0",
-    "rimraf": "^6.0.0",
+    "@types/node": "^26.1.2",
+    "rimraf": "^6.1.3",
     "typescript": "^6.0.3",
     "zod": "^4.4.3"
   },

@@ -46,7 +46,7 @@
     "@zhin.js/host-http": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
-    "discord.js": "^14.26.4"
+    "discord.js": "^14.27.0"
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:*",
@@ -68,7 +68,7 @@
     }
   },
   "devDependencies": {
-    "@types/node": "^26.1.0",
+    "@types/node": "^26.1.2",
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
     "typescript": "^6.0.3",

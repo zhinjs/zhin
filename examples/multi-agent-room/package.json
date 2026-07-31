@@ -14,12 +14,12 @@
     "@zhin.js/adapter-sandbox": "workspace:*",
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
-    "ai": "^6.0.116",
-    "zod": "^4.3.6"
+    "ai": "^6.0.238",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@zhin.js/cli": "workspace:*",
-    "tsx": "^4.22.4",
+    "tsx": "^4.23.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   },

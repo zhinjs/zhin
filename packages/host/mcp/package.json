@@ -49,7 +49,7 @@
     "clean": "rimraf lib"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
     "@zhin.js/tool": "workspace:*",
@@ -59,7 +59,7 @@
     "zhin.js": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^26.1.0",
+    "@types/node": "^26.1.2",
     "zhin.js": "workspace:*"
   },
   "files": [

@@ -54,10 +54,10 @@
     "@zhin.js/host-http": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
-    "ws": "^8.21.0"
+    "ws": "^8.21.1"
   },
   "devDependencies": {
-    "@types/node": "^26.1.0",
+    "@types/node": "^26.1.2",
     "@types/ws": "^8.18.1",
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
@@ -67,10 +67,10 @@
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/agent": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
     "zhin.js": "workspace:*",
-    "@zhin.js/agent": "workspace:*",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {

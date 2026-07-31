@@ -40,8 +40,8 @@
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
   },
   "dependencies": {
-    "@slack/socket-mode": "^2.0.3",
-    "@slack/web-api": "^7.17.0",
+    "@slack/socket-mode": "^2.0.7",
+    "@slack/web-api": "^7.19.0",
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/command": "workspace:*",
     "@zhin.js/core": "workspace:*",
@@ -70,7 +70,7 @@
     }
   },
   "devDependencies": {
-    "@types/node": "^26.1.0",
+    "@types/node": "^26.1.2",
     "@zhin.js/agent": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",

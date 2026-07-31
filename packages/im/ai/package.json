@@ -52,7 +52,7 @@
   },
   "dependencies": {
     "@zhin.js/logger": "workspace:*",
-    "undici": "^8.5.0"
+    "undici": "^8.9.0"
   },
   "peerDependencies": {
     "@ai-sdk/anthropic": "^4.0.9",
@@ -81,14 +81,14 @@
     }
   },
   "devDependencies": {
-    "@ai-sdk/anthropic": "^4.0.9",
-    "@ai-sdk/deepseek": "^3.0.5",
-    "@ai-sdk/google": "^4.0.9",
-    "@ai-sdk/openai": "^4.0.8",
-    "@ai-sdk/openai-compatible": "^3.0.5",
-    "@types/node": "^26.1.0",
+    "@ai-sdk/anthropic": "^4.0.25",
+    "@ai-sdk/deepseek": "^3.0.17",
+    "@ai-sdk/google": "^4.0.29",
+    "@ai-sdk/openai": "^4.0.25",
+    "@ai-sdk/openai-compatible": "^3.0.18",
+    "@types/node": "^26.1.2",
     "@zhin.js/database": "workspace:*",
-    "ai": "^7.0.2",
+    "ai": "^7.0.44",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
     "zod": "^4.4.3"

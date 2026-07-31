@@ -20,8 +20,8 @@
     "clean": "rimraf lib"
   },
   "devDependencies": {
-    "typescript": "^6.0.3",
-    "@types/node": "^26.1.0"
+    "@types/node": "^26.1.2",
+    "typescript": "^6.0.3"
   },
   "repository": {
     "type": "git",

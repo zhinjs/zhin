@@ -3,6 +3,12 @@ export type MediaKind = 'image' | 'video' | 'audio'
 
 const BASE64_PROTO = 'base64://'
 
+const SAFE_URL_SCHEMES = ['data:', 'blob:', 'http://', 'https://']
+
+function isSafeUrl(url: string): boolean {
+  return SAFE_URL_SCHEMES.some((scheme) => url.startsWith(scheme))
+}
+
 /**
  * 将消息段中的 url/file 等转为浏览器可用的媒体地址。
  *
@@ -21,12 +27,12 @@ export function resolveMediaSrc(
   const s = raw.trim()
   if (!s) return undefined
 
-  if (s.startsWith('data:') || s.startsWith('blob:') || s.startsWith('http://') || s.startsWith('https://')) {
+  if (isSafeUrl(s)) {
     return s
   }
 
   if (!s.startsWith(BASE64_PROTO)) {
-    return s
+    return isSafeUrl(s) ? s : undefined
   }
 
   const payload = s.slice(BASE64_PROTO.length).replace(/^\s+/, '')

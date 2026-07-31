@@ -58,7 +58,7 @@ describe('loginWithIlinkQr', () => {
       if (url.includes('get_bot_qrcode')) {
         return jsonResponse({ qrcode: 'qr-2', qrcode_img_content: 'https://qr.example/def' });
       }
-      if (url.startsWith('https://ilinkai.weixin.qq.com')) {
+      if (url.startsWith('https://ilinkai.weixin.qq.com/') || url === 'https://ilinkai.weixin.qq.com') {
         return jsonResponse({ status: 'scaned_but_redirect', redirect_host: 'redirect.weixin.qq.com' });
       }
       return jsonResponse({ status: 'confirmed', bot_token: 'tok-2' });
@@ -67,7 +67,7 @@ describe('loginWithIlinkQr', () => {
     const result = await loginWithIlinkQr({ fetchImpl, sleep: noSleep, onQrCode: () => {} });
     expect(result.botToken).toBe('tok-2');
     expect(result.baseUrl).toBe('https://redirect.weixin.qq.com');
-    expect(calls.some((url) => url.startsWith('https://redirect.weixin.qq.com'))).toBe(true);
+    expect(calls.some((u) => u.startsWith('https://redirect.weixin.qq.com/') || u === 'https://redirect.weixin.qq.com')).toBe(true);
   });
 
   it('throws expired reason when the QR code expires', async () => {

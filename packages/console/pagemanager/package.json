@@ -32,27 +32,27 @@
     "clean": "rimraf dist lib"
   },
   "dependencies": {
-    "@zhin.js/contract": "workspace:*",
+    "@koa/router": "^15.7.0",
     "@zhin.js/console-contract": "workspace:*",
+    "@zhin.js/contract": "workspace:*",
     "@zhin.js/layout": "workspace:*",
     "@zhin.js/page": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
-    "@koa/router": "^15.6.0",
     "esbuild": "^0.28.1",
     "koa": "^3.2.1",
     "koa-compose": "^4.1.0",
     "koa-static": "^5.0.0"
   },
   "devDependencies": {
-    "@zhin.js/feature-kit": "workspace:*",
-    "@zhin.js/runtime": "workspace:*",
     "@types/koa": "^3.0.3",
     "@types/koa-compose": "^3.2.9",
     "@types/koa-static": "^4.0.4",
-    "@types/koa__router": "^12.0.4",
-    "@types/node": "^26.1.0",
-    "rimraf": "^6.0.1",
-    "typescript": "^6.0.2"
+    "@types/koa__router": "^12.0.5",
+    "@types/node": "^26.1.2",
+    "@zhin.js/feature-kit": "workspace:*",
+    "@zhin.js/runtime": "workspace:*",
+    "rimraf": "^6.1.3",
+    "typescript": "^6.0.3"
   },
   "peerDependencies": {
     "typescript": ">=5.8.0 <7.0.0"

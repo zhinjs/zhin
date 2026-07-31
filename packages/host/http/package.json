@@ -25,10 +25,10 @@
     "@zhin.js/console-protocol": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
-    "ws": "^8.21.0"
+    "ws": "^8.21.1"
   },
   "devDependencies": {
-    "@types/node": "^26.1.0",
+    "@types/node": "^26.1.2",
     "@types/ws": "^8.18.1",
     "typescript": "^6.0.3"
   },

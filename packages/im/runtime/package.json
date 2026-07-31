@@ -28,7 +28,7 @@
     "semver": "7.8.5"
   },
   "devDependencies": {
-    "@types/node": "^26.1.0",
+    "@types/node": "^26.1.2",
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/agent-feature": "workspace:*",
     "@zhin.js/command": "workspace:*",

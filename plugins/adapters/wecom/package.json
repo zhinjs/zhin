@@ -70,12 +70,12 @@
     }
   },
   "devDependencies": {
-    "@types/node": "^26.1.0",
+    "@types/node": "^26.1.2",
     "@zhin.js/agent": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
-    "zod": "^4.4.3",
-    "zhin.js": "workspace:*"
+    "zhin.js": "workspace:*",
+    "zod": "^4.4.3"
   },
   "files": [
     "adapters",

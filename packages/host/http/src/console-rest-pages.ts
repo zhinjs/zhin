@@ -128,8 +128,9 @@ export function registerConsoleRestPages(
   const base = normalizeBase(options.apiBase ?? '/api');
   const fetchFn = options.fetchFn ?? fetch;
   const pluginRegistryUrl = options.pluginRegistryUrl ?? 'https://zhin.js.org/plugins.json';
-  const npmRegistryUrl = (options.npmRegistryUrl ?? 'https://registry.npmmirror.com')
-    .replace(/\/+$/u, '');
+  const npmRegistryUrl = trimTrailingSlashes(
+    options.npmRegistryUrl ?? 'https://registry.npmmirror.com',
+  );
   const disposers: Array<() => void> = [];
   const route: typeof host.route = (method, path, handler, meta) => {
     const dispose = host.route(method, path, handler, meta);
@@ -874,9 +875,15 @@ function decodePathParam(raw: string): string {
   }
 }
 
+function trimTrailingSlashes(s: string): string {
+  let i = s.length;
+  while (i > 0 && s[i - 1] === '/') i--;
+  return s.slice(0, i);
+}
+
 function normalizeBase(value: string): string {
   if (!value.startsWith('/')) return `/${value}`;
-  return value.replace(/\/+$/u, '') || '/api';
+  return trimTrailingSlashes(value) || '/api';
 }
 
 function writeJson(response: ServerResponse, status: number, body: unknown): void {

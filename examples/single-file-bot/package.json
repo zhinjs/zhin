@@ -10,14 +10,14 @@
     "build": "tsc --noEmit"
   },
   "dependencies": {
-    "@zhin.js/adapter-sandbox": "workspace:*",
     "@zhin.js/adapter-icqq": "workspace:*",
+    "@zhin.js/adapter-sandbox": "workspace:*",
     "zhin.js": "workspace:*"
   },
   "devDependencies": {
+    "@types/node": "^25.9.5",
     "@zhin.js/cli": "workspace:*",
-    "@types/node": "^25.0.0",
-    "typescript": "^6.0.0"
+    "typescript": "^6.0.3"
   },
   "engines": {
     "node": ">=22.6.0"

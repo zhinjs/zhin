@@ -81,7 +81,7 @@
     "@zhin.js/schema": "workspace:*",
     "qrcode": "^1.5.4",
     "segment-matcher": "^1.0.5",
-    "smol-toml": "^1.7.0",
+    "smol-toml": "^1.7.1",
     "yaml": "^2.9.0"
   },
   "peerDependencies": {
@@ -93,8 +93,8 @@
     }
   },
   "devDependencies": {
-    "@types/node": "^26.1.0",
-    "@types/qrcode": "^1.5.5",
+    "@types/node": "^26.1.2",
+    "@types/qrcode": "^1.5.6",
     "@zhin.js/ai": "workspace:*",
     "ajv": "8.18.0",
     "typescript": "^6.0.3"

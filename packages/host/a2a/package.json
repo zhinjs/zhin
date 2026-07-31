@@ -49,9 +49,9 @@
     "zhin.js": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^26.1.0",
+    "@types/node": "^26.1.2",
     "@zhin.js/agent": "workspace:*",
-    "rimraf": "^6.0.0",
+    "rimraf": "^6.1.3",
     "typescript": "^6.0.3",
     "zhin.js": "workspace:*"
   },

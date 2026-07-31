@@ -37,6 +37,6 @@
   "devDependencies": {
     "@zhin.js/cli": "workspace:*",
     "@zhin.js/runtime": "workspace:*",
-    "vitest": "^4.0.0"
+    "vitest": "^4.1.10"
   }
 }

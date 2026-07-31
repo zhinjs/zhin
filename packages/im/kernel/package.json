@@ -22,13 +22,13 @@
   },
   "dependencies": {
     "@zhin.js/logger": "workspace:*",
-    "@zhin.js/schema": "workspace:*",
     "@zhin.js/schedule": "workspace:*",
-    "yaml": "^2.9.0",
-    "smol-toml": "^1.7.0"
+    "@zhin.js/schema": "workspace:*",
+    "smol-toml": "^1.7.1",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
-    "@types/node": "^26.1.0",
+    "@types/node": "^26.1.2",
     "typescript": "^6.0.3"
   },
   "repository": {

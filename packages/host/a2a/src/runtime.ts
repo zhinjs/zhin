@@ -38,7 +38,7 @@ interface AgentStack {
 export function installRuntimeA2a(options: InstallRuntimeA2aOptions): () => void {
   if (options.config?.enabled === false) return () => undefined;
   const basePath = normalizePath(options.config?.path ?? '/a2a');
-  const publicBaseUrl = (options.config?.publicUrl ?? options.fallbackPublicUrl).replace(/\/+$/u, '');
+  const publicBaseUrl = trimTrailingSlashes(options.config?.publicUrl ?? options.fallbackPublicUrl);
   const token = options.config?.token ?? options.fallbackToken ?? '';
   if (options.production === true && !token) {
     throw new Error('A2A requires a2a.token or http.token in production');
@@ -137,7 +137,13 @@ function writeJson(response: import('node:http').ServerResponse, status: number,
   response.end(payload);
 }
 
+function trimTrailingSlashes(s: string): string {
+  let i = s.length;
+  while (i > 0 && s[i - 1] === '/') i--;
+  return s.slice(0, i);
+}
+
 function normalizePath(path: string): string {
   const leading = path.startsWith('/') ? path : `/${path}`;
-  return leading.replace(/\/+$/u, '') || '/a2a';
+  return trimTrailingSlashes(leading) || '/a2a';
 }

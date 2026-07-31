@@ -28,7 +28,7 @@
     "yaml": "^2.9.0"
   },
   "devDependencies": {
-    "@types/node": "^26.1.0",
+    "@types/node": "^26.1.2",
     "@zhin.js/command": "workspace:*",
     "typescript": "^6.0.3"
   },

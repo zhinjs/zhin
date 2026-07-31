@@ -10,12 +10,12 @@
     "test": "vitest run --root ../.. examples/plugin-runtime-migration-bot/tests"
   },
   "dependencies": {
-    "@zhin.js/command": "1.0.4",
-    "@zhin.js/component": "1.0.4",
+    "@zhin.js/command": "workspace:*",
+    "@zhin.js/component": "workspace:*",
     "@zhin.js/core": "workspace:*",
+    "@zhin.js/middleware": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/runtime": "workspace:*",
-    "@zhin.js/middleware": "1.0.4",
     "zhin.js": "workspace:*"
   },
   "devDependencies": {

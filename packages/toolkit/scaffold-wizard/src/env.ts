@@ -37,7 +37,7 @@ export function mergeEnvText(existing: string, extra: string): string {
   }
   const out = existing.split('\n');
   if (entries.length === 0) {
-    return existing.replace(/\s*$/, '') + (existing.trim() ? '\n' : '');
+    return existing.trimEnd() + (existing.trim() ? '\n' : '');
   }
   const byKey = new Map(entries.map((entry) => [entry.key, entry]));
   const consumed = new Set<string>();

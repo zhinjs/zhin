@@ -26,10 +26,16 @@ import type { ImageGenerateRequest, ImageGenerateResult } from './image-generati
 import { getLlmTransportModel } from './llm/api-registry.js';
 import { resolveProxyFetch } from './llm/proxy-fetch.js';
 
+function stripTrailingSlashes(s: string): string {
+  let i = s.length;
+  while (i > 0 && s[i - 1] === '/') i--;
+  return s.slice(0, i);
+}
+
 async function fetchOpenAiCompatibleModels(config: ProviderInstanceConfig): Promise<string[]> {
   let baseUrl = config.baseUrl?.trim();
   if (!baseUrl && config.host?.trim()) {
-    const host = config.host.replace(/\/+$/, '');
+    const host = stripTrailingSlashes(config.host);
     baseUrl = host.endsWith('/v1') ? host : `${host}/v1`;
   }
   if (!baseUrl && config.accountId) {
@@ -45,7 +51,7 @@ async function fetchOpenAiCompatibleModels(config: ProviderInstanceConfig): Prom
   }
 
   const proxyFetch = resolveProxyFetch();
-  const res = await (proxyFetch ?? fetch)(`${baseUrl.replace(/\/+$/, '')}/models`, { headers });
+  const res = await (proxyFetch ?? fetch)(`${stripTrailingSlashes(baseUrl)}/models`, { headers });
   if (!res.ok) return [];
   const json = await res.json() as { data?: Array<{ id?: string }> };
   return (json.data ?? []).map((m) => m.id).filter((id): id is string => !!id?.trim());

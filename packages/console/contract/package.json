@@ -24,9 +24,9 @@
     "@zhin.js/console-protocol": "workspace:*"
   },
   "devDependencies": {
-    "@types/react": "^19.2.17",
-    "rimraf": "^6.0.1",
-    "typescript": "^6.0.2"
+    "@types/react": "^19.2.18",
+    "rimraf": "^6.1.3",
+    "typescript": "^6.0.3"
   },
   "license": "MIT",
   "repository": {

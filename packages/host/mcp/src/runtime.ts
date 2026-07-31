@@ -233,9 +233,15 @@ function writeJson(
   response.end(payload);
 }
 
+function trimTrailingSlashes(s: string): string {
+  let i = s.length;
+  while (i > 0 && s[i - 1] === '/') i--;
+  return s.slice(0, i);
+}
+
 function normalizePath(path: string): string {
   const leading = path.startsWith('/') ? path : `/${path}`;
-  return leading.replace(/\/+$/u, '') || '/';
+  return trimTrailingSlashes(leading) || '/';
 }
 
 export type { HttpRouteRegistration };

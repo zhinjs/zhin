@@ -23,17 +23,17 @@
   },
   "dependencies": {
     "chalk": "^5.6.2",
-    "fs-extra": "^11.3.6",
+    "fs-extra": "^11.4.0",
     "inquirer": "^14.0.2",
     "qrcode": "^1.5.4",
-    "smol-toml": "^1.7.0",
+    "smol-toml": "^1.7.1",
     "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
     "@types/inquirer": "^9.0.10",
-    "@types/node": "^26.1.0",
-    "@types/qrcode": "^1.5.5",
+    "@types/node": "^26.1.2",
+    "@types/qrcode": "^1.5.6",
     "typescript": "^6.0.3"
   },
   "engines": {
