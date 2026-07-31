@@ -1,5 +1,17 @@
 # @zhin.js/cli
 
+## 2.0.5
+
+### Patch Changes
+
+- Updated dependencies [45b3256]
+  - @zhin.js/core@1.4.3
+  - @zhin.js/runtime@1.0.5
+  - @zhin.js/agent@1.0.9
+  - @zhin.js/speech@2.0.3
+  - @zhin.js/pagemanager@2.0.8
+  - @zhin.js/config-yaml@1.0.5
+
 ## 2.0.4
 
 ### Patch Changes

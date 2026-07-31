@@ -1,5 +1,12 @@
 # @zhin.js/speech
 
+## 2.0.3
+
+### Patch Changes
+
+- Updated dependencies [45b3256]
+  - @zhin.js/core@1.4.3
+
 ## 2.0.2
 
 ### Patch Changes
