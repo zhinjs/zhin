@@ -77,9 +77,10 @@ export interface QqInboundMessage {
   readonly guildId?: string;
   readonly rawMessage?: string;
   /**
-   * 入站是否 @ 当前机器人：统一按 mentions 判定（is_you 精确标识当前机器人，
-   * bot 兼容频道 AT 事件）。群 GROUP_MESSAGE_CREATE 的非 @ 消息不置位。
-   * 新 Runtime 纯文本 content 需经 metadata 传递。
+   * 入站是否 @ 当前机器人：统一按 mentions 判定。群场景只认 is_you（@ 另一个
+   * 机器人时 bot:true 但无 is_you，不误判）；bot 回退仅限频道 AT 事件。
+   * 群 GROUP_MESSAGE_CREATE 的非 @ 消息不置位。新 Runtime 纯文本 content 需经
+   * metadata 传递。
    */
   readonly mentioned?: boolean;
 }

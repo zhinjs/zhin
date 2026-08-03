@@ -132,8 +132,12 @@ export function normalizeQqMessage(raw: unknown): QqInboundMessage | null {
   const content = extractTextContent(msg.message) || msg.raw_message || '';
   const rawRoles = msg.member?.roles ?? msg.sender?.roles;
   const authorRoles = Array.isArray(rawRoles) ? rawRoles.map(String) : undefined;
+  // 统一按 mentions 判定 @：is_you 精确标识当前机器人（群载荷实测字段）。
+  // 群里 @ 另一个机器人时 mentions 带 bot:true 但无 is_you，不能误判为 @ 当前机器人，
+  // 故群场景只认 is_you；bot 回退仅限频道 AT_MESSAGE_CREATE（该事件仅 @ 当前
+  // 机器人时下发，其 mentions 无 is_you）。
   const mentioned = Array.isArray(msg.mentions)
-    && msg.mentions.some((m) => m?.is_you === true || (m?.bot === true && msg.message_type !== 'group'));
+    && msg.mentions.some((m) => m?.is_you === true || (m?.bot === true && channelKind !== 'group'));
 
   return {
     id: String(msg.message_id),

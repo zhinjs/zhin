@@ -164,6 +164,19 @@ describe('normalizeQqMessage mentioned detection (unified mentions check)', () =
     expect(result!.mentioned).toBeUndefined();
   });
 
+  it('群消息 @ 另一个机器人（bot:true 无 is_you）→ 不置 mentioned', () => {
+    const result = normalizeQqMessage({
+      message_id: '12b',
+      message_type: 'group',
+      group_openid: 'open-g-1',
+      author: { member_openid: 'open-u-1', username: 'Cc' },
+      raw_message: '@别的机器人 在吗',
+      mentions: [{ id: 'OTHER_BOT_OPENID', bot: true, member_openid: 'OTHER_BOT_OPENID' }],
+    });
+    expect(result!.channelKind).toBe('group');
+    expect(result!.mentioned).toBeUndefined();
+  });
+
   it('频道 AT 事件 mentions[].bot（无 is_you）→ mentioned（兼容回退）', () => {
     const result = normalizeQqMessage({
       message_id: '13',
