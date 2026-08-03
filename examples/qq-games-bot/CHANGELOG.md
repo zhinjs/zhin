@@ -1,5 +1,12 @@
 # qq-games-bot
 
+## 0.1.11
+
+### Patch Changes
+
+- Updated dependencies [7249733]
+  - @zhin.js/adapter-qq@6.0.7
+
 ## 0.1.10
 
 ### Patch Changes
