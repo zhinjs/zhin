@@ -94,8 +94,8 @@ export function normalizeQqMessage(raw: unknown): QqInboundMessage | null {
     sender?: { user_id?: string | number; user_name?: string; roles?: (string | number)[] };
     member?: { roles?: (string | number)[] };
     author?: { member_openid?: string; user_openid?: string; id?: string; username?: string };
-    /** AT_MESSAGE_CREATE 载荷：被 @ 的用户列表，bot=true 即机器人 */
-    mentions?: Array<{ id?: string | number; bot?: boolean }>;
+    /** AT 事件载荷：被 @ 的用户列表；is_you 标识当前机器人，bot 标识机器人账号 */
+    mentions?: Array<{ id?: string | number; bot?: boolean; is_you?: boolean; member_openid?: string; member_role?: string }>;
   };
   if (msg.message_id == null) return null;
 
@@ -132,9 +132,8 @@ export function normalizeQqMessage(raw: unknown): QqInboundMessage | null {
   const content = extractTextContent(msg.message) || msg.raw_message || '';
   const rawRoles = msg.member?.roles ?? msg.sender?.roles;
   const authorRoles = Array.isArray(rawRoles) ? rawRoles.map(String) : undefined;
-  // 群 GROUP_AT_MESSAGE_CREATE 仅 @ 机器人时下发；频道 AT 事件看 mentions[].bot
-  const mentioned = channelKind === 'group'
-    || (Array.isArray(msg.mentions) && msg.mentions.some((m) => m?.bot === true));
+  const mentioned = Array.isArray(msg.mentions)
+    && msg.mentions.some((m) => m?.is_you === true || (m?.bot === true && msg.message_type !== 'group'));
 
   return {
     id: String(msg.message_id),

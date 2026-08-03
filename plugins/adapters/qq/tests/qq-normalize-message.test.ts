@@ -115,3 +115,76 @@ describe('normalizeQqMessage channel kind detection', () => {
     expect(result!.channelId).toBe('g-fallback');
   });
 });
+
+describe('normalizeQqMessage mentioned detection (unified mentions check)', () => {
+  const BOT_MENTION = {
+    bot: true,
+    id: '17DCE6AF658774F3582FF7D516A0C084',
+    is_you: true,
+    member_openid: '17DCE6AF658774F3582FF7D516A0C084',
+    member_role: 'member',
+    scope: 'single',
+    username: 'zhin',
+  };
+
+  it('群消息 @ 当前机器人（is_you: true）→ mentioned', () => {
+    const result = normalizeQqMessage({
+      message_id: '10',
+      message_type: 'group',
+      group_openid: 'open-g-1',
+      author: { member_openid: 'open-u-1', username: 'Cc' },
+      raw_message: '你主人欺负我怎么办',
+      mentions: [BOT_MENTION],
+    });
+    expect(result!.channelKind).toBe('group');
+    expect(result!.mentioned).toBe(true);
+  });
+
+  it('群消息无 mentions（GROUP_MESSAGE_CREATE 非 @）→ 不置 mentioned', () => {
+    const result = normalizeQqMessage({
+      message_id: '11',
+      message_type: 'group',
+      group_openid: 'open-g-1',
+      author: { member_openid: 'open-u-1', username: 'Cc' },
+      raw_message: '随便聊聊',
+    });
+    expect(result!.channelKind).toBe('group');
+    expect(result!.mentioned).toBeUndefined();
+  });
+
+  it('群消息只 @ 了普通用户 → 不置 mentioned', () => {
+    const result = normalizeQqMessage({
+      message_id: '12',
+      message_type: 'group',
+      group_openid: 'open-g-1',
+      author: { member_openid: 'open-u-1', username: 'Cc' },
+      raw_message: '@某人 看一下',
+      mentions: [{ id: 'u-other', member_openid: 'open-u-other', member_role: 'member' }],
+    });
+    expect(result!.mentioned).toBeUndefined();
+  });
+
+  it('频道 AT 事件 mentions[].bot（无 is_you）→ mentioned（兼容回退）', () => {
+    const result = normalizeQqMessage({
+      message_id: '13',
+      message_type: 'guild',
+      channel_id: 'ch-1',
+      guild_id: 'guild-1',
+      author: { id: 'u-1', username: 'Bob' },
+      raw_message: '频道 @ 机器人',
+      mentions: [{ id: 'bot-1', bot: true }],
+    });
+    expect(result!.channelKind).toBe('channel');
+    expect(result!.mentioned).toBe(true);
+  });
+
+  it('私聊无 mentions → 不置 mentioned', () => {
+    const result = normalizeQqMessage({
+      message_id: '14',
+      author: { user_openid: 'open-u-9', username: 'Carol' },
+      message: 'private',
+    });
+    expect(result!.channelKind).toBe('private');
+    expect(result!.mentioned).toBeUndefined();
+  });
+});
