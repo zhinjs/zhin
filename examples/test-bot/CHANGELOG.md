@@ -1,5 +1,12 @@
 # test-bot
 
+## 0.1.124
+
+### Patch Changes
+
+- Updated dependencies [7249733]
+  - @zhin.js/adapter-qq@6.0.7
+
 ## 0.1.123
 
 ### Patch Changes
