@@ -1,5 +1,12 @@
 # @zhin.js/plugin-blackjack
 
+## 0.0.7
+
+### Patch Changes
+
+- Updated dependencies [d52f3c5]
+  - @zhin.js/game-kit@2.0.4
+
 ## 0.0.6
 
 ### Patch Changes

@@ -1,5 +1,33 @@
 # test-bot
 
+## 0.1.123
+
+### Patch Changes
+
+- Updated dependencies [d52f3c5]
+- Updated dependencies [9df22ff]
+  - @zhin.js/cli@2.0.7
+  - @zhin.js/adapter-qq@6.0.6
+  - @zhin.js/adapter-slack@5.0.6
+  - @zhin.js/adapter-onebot11@5.0.6
+  - @zhin.js/adapter-onebot12@4.0.5
+  - @zhin.js/adapter-napcat@5.0.6
+  - @zhin.js/adapter-discord@6.0.6
+  - @zhin.js/adapter-telegram@6.0.6
+  - @zhin.js/adapter-kook@6.0.6
+  - @zhin.js/adapter-lark@5.0.6
+  - @zhin.js/adapter-wecom@3.0.6
+  - @zhin.js/plugin-blackjack@0.0.7
+  - @zhin.js/plugin-dice-duel@1.0.7
+  - @zhin.js/plugin-dungeon-expedition@1.0.3
+  - @zhin.js/plugin-guess-number@1.0.7
+  - @zhin.js/plugin-game-hub@1.0.6
+  - @zhin.js/plugin-idiom-chain@1.0.7
+  - @zhin.js/plugin-rps@1.0.7
+  - @zhin.js/plugin-text-adventure@1.0.7
+  - @zhin.js/plugin-tic-tac-toe@1.0.7
+  - @zhin.js/plugin-word-riddle@1.0.7
+
 ## 0.1.122
 
 ### Patch Changes

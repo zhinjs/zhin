@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/game-kit",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "description": "Zhin.js 游戏插件通用工具包",
   "type": "module",
   "main": "./lib/index.js",
