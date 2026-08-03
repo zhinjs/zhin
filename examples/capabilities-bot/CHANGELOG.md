@@ -1,5 +1,12 @@
 # capabilities-bot
 
+## 0.1.5
+
+### Patch Changes
+
+- @zhin.js/adapter-sandbox@6.0.5
+- @zhin.js/agent@1.0.10
+
 ## 0.1.4
 
 ### Patch Changes

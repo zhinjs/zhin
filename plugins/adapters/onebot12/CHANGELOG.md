@@ -1,5 +1,14 @@
 # @zhin.js/adapter-onebot12
 
+## 4.0.4
+
+### Patch Changes
+
+- Updated dependencies [d8bf702]
+  - @zhin.js/host-http@1.0.4
+  - @zhin.js/core@1.4.3
+  - zhin.js@5.0.3
+
 ## 4.0.3
 
 ### Patch Changes

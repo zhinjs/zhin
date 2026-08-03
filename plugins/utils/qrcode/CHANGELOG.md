@@ -1,5 +1,12 @@
 # @zhin.js/plugin-qrcode
 
+## 3.0.9
+
+### Patch Changes
+
+- @zhin.js/agent@1.0.10
+- @zhin.js/core@1.4.3
+
 ## 3.0.8
 
 ### Patch Changes
