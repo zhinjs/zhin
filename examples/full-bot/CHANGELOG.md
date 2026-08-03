@@ -1,5 +1,13 @@
 # full-bot
 
+## 0.0.17
+
+### Patch Changes
+
+- Updated dependencies [d52f3c5]
+  - @zhin.js/adapter-napcat@5.0.6
+  - @zhin.js/adapter-kook@6.0.6
+
 ## 0.0.16
 
 ### Patch Changes

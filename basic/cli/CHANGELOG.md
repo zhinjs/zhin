@@ -1,5 +1,28 @@
 # @zhin.js/cli
 
+## 2.0.7
+
+### Patch Changes
+
+- d52f3c5: fix: QQ 适配器群聊误识别为私聊、game-kit 启动崩溃、全面补齐 recallMessage
+
+  - fix(cli): `resolveChannelType` 增加 `metadata.channelKind` 检查，修复 QQ/Discord/KOOK 群聊消息被误分类为私聊
+  - fix(game-kit): `createHostGameDb` 改用延迟代理模型，避免数据库启动前解析模型导致崩溃
+  - feat(qq): 实现 `recallMessage`，解析复合 messageId 路由到对应 SDK 撤回方法；`normalizeQqMessage` 增加 `message_type` 缺失时的回退检测
+  - feat(slack): 实现 `recallMessage`，利用已有 compound ref 和 `chat.delete` API
+  - feat(onebot11): 两个 endpoint 类实现 `recallMessage`（`delete_msg`）
+  - feat(onebot12): 两个 endpoint 类实现 `recallMessage`（`delete_message`）
+  - feat(napcat): 三个 endpoint 类实现 `recallMessage`（`delete_msg`）
+  - feat(discord): 两个 endpoint 类实现 `recallMessage`；`send()` 改为返回 `channelId:snowflake` 复合 ID
+  - feat(telegram): 实现 `recallMessage`（`deleteMessage`）；`send()` 改为返回 `chatId:messageId` 复合 ID
+  - feat(kook): 两个 endpoint 类实现 `recallMessage`，利用 kook-client `recallMsg` API
+  - feat(lark): 实现 `recallMessage`（`DELETE /im/v1/messages/{id}`）
+  - feat(wecom): 实现 `recallMessage`（`POST /cgi-bin/message/recall`）
+
+- 9df22ff: fix(cli): `bridgeRuntimeMessage` 的 `$sender.id` 优先取 `metadata.userId`，修复 QQ/KOOK/Discord 私聊会话以昵称为 key 的问题
+
+  QQ/KOOK/Discord 适配器入站 `sender` 传显示名、稳定平台 ID 经 `metadata.userId` 传递；此前 `$sender.id` 直接用显示名，导致私聊 sceneId 与记忆作用域随昵称变化而丢失历史。未提供 `metadata.userId` 的适配器（OneBot/ICQQ/Milky 等 sender 本身即平台 ID）行为不变。注意：升级后 QQ/KOOK/Discord 私聊会按稳定 ID 新建会话，旧昵称会话不再命中。
+
 ## 2.0.6
 
 ### Patch Changes

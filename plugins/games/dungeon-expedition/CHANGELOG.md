@@ -1,5 +1,12 @@
 # @zhin.js/plugin-dungeon-expedition
 
+## 1.0.3
+
+### Patch Changes
+
+- Updated dependencies [d52f3c5]
+  - @zhin.js/game-kit@2.0.4
+
 ## 1.0.2
 
 ### Patch Changes
