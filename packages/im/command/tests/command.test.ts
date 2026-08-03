@@ -19,6 +19,51 @@ import {
   type DiscoveryHost,
 } from '@zhin.js/feature-kit';
 
+type TestPluginId = ReturnType<typeof rootPluginId>;
+
+function slotFor(owner: TestPluginId, localName: string, result = 'ok') {
+  return createCapabilitySlot({
+    owner,
+    feature: commandFeatureId,
+    localName,
+    source: `/commands/${localName}.ts`,
+    definition: defineCommand({ execute: () => result }),
+  });
+}
+
+/** 含 root + 指定 owner 节点的完整快照（dispatch 时 createCapabilityContext 需要 tree 节点）。 */
+function snapshotWithOwners(
+  owners: readonly TestPluginId[],
+  slots: readonly ReturnType<typeof slotFor>[],
+): RuntimeSnapshot {
+  const root = rootPluginId();
+  return {
+    generation: 1,
+    root,
+    tree: new Map([
+      [root, {
+        id: root,
+        instanceKey: 'root',
+        packageName: '@test/root',
+        packageRoot: '/project',
+        children: [],
+      }],
+      ...owners.filter((owner) => owner !== root).map((owner) => [owner, {
+        id: owner,
+        instanceKey: String(owner).split('/').pop()!,
+        packageName: `@test/${String(owner).split('/').pop()}`,
+        packageRoot: `/project/plugins/${String(owner).split('/').pop()}`,
+        parent: root,
+        children: [],
+      }] as const),
+    ]),
+    config: new Map([[root, {}], ...owners.map((owner) => [owner, {}] as const)]),
+    resources: new Map([[root, new Map()], ...owners.map((owner) => [owner, new Map()] as const)]),
+    capabilities: new Map(slots.map((slot) => [slot.id, slot])),
+    projections: new Map(),
+  };
+}
+
 describe('Command Feature', () => {
   it('brands definitions without module-level registration', () => {
     const command = defineCommand({ execute: ({ args }) => args.join(' ') });
@@ -370,37 +415,37 @@ describe('Command Feature', () => {
     }])).rejects.toThrow('default for structured parameter asset:image is not supported');
   });
 
-  it('rejects command-word collisions across owner and directory namespaces', () => {
+  it('isolates owner dot-prefix namespace from root directory namespace', async () => {
     const root = rootPluginId();
     const child = childPluginId(root, 'child');
-    const definition = defineCommand({ execute() {} });
     const rootSlot = createCapabilitySlot({
       owner: root,
       feature: commandFeatureId,
       localName: 'child/status',
       source: '/commands/child/status.ts',
-      definition,
+      definition: defineCommand({ execute: () => 'root' }),
     });
     const childSlot = createCapabilitySlot({
       owner: child,
       feature: commandFeatureId,
       localName: 'status',
       source: '/plugins/child/commands/status.ts',
-      definition,
+      definition: defineCommand({ execute: () => 'child' }),
     });
-    const snapshot = {
-      generation: 1,
-      root,
-      tree: new Map(),
-      config: new Map(),
-      resources: new Map(),
-      capabilities: new Map(),
-      projections: new Map(),
-    } satisfies RuntimeSnapshot;
+    const snapshot = snapshotWithOwners([child], [rootSlot, childSlot]);
 
-    expect(() => new CommandIndex([rootSlot, childSlot], snapshot)).toThrow(
-      'Duplicate runtime Command: child status',
-    );
+    // 点号前缀下二者不再冲突：root 目录段 `child status` vs owner 前缀 `child.status`
+    const index = new CommandIndex([rootSlot, childSlot], snapshot);
+    await expect(index.dispatch('child status')).resolves.toMatchObject({
+      matched: true,
+      owner: root,
+      value: 'root',
+    });
+    await expect(index.dispatch('child.status')).resolves.toMatchObject({
+      matched: true,
+      owner: child,
+      value: 'child',
+    });
   });
 
   it('treats typed parameter rejection as no match during dispatch', async () => {
@@ -515,6 +560,57 @@ describe('Command Feature', () => {
           { type: 'mention', data: { target: '10001' } },
         ],
       },
+    });
+  });
+});
+
+describe('命令名点号前缀（插件树路径段 + 命令段）', () => {
+  const root = rootPluginId();
+  const qq = childPluginId(root, 'qq');
+  const nested = childPluginId(childPluginId(root, 'b'), 'a');
+
+  it('单级挂载：root/qq + endpoint/list → qq.endpoint list', async () => {
+    const slot = slotFor(qq, 'endpoint/list', 'listed');
+    const index = new CommandIndex([slot], snapshotWithOwners([qq], [slot]));
+
+    expect(index.list()[0]!.name).toBe('qq.endpoint list');
+    await expect(index.dispatch('qq.endpoint list')).resolves.toMatchObject({
+      matched: true,
+      command: 'qq.endpoint list',
+      owner: qq,
+      value: 'listed',
+    });
+    // 旧空格风格不再命中（breaking）
+    await expect(index.dispatch('qq endpoint list')).resolves.toEqual({ matched: false });
+  });
+
+  it('多级挂载：root/b/a + foo → b.a.foo', async () => {
+    const slot = slotFor(nested, 'foo', 'nested-ok');
+    const index = new CommandIndex([slot], snapshotWithOwners([nested], [slot]));
+
+    expect(index.list()[0]!.name).toBe('b.a.foo');
+    await expect(index.execute('b.a.foo')).resolves.toBe('nested-ok');
+    await expect(index.dispatch('b.a.foo')).resolves.toMatchObject({ matched: true });
+    await expect(index.dispatch('b a foo')).resolves.toEqual({ matched: false });
+  });
+
+  it('root 插件命令无前缀（不变）', async () => {
+    const slot = slotFor(root, 'foo');
+    const index = new CommandIndex([slot], snapshotWithOwners([], [slot]));
+
+    expect(index.list()[0]!.name).toBe('foo');
+    await expect(index.dispatch('foo')).resolves.toMatchObject({ matched: true });
+  });
+
+  it('点号前缀边界：b.foobar 不误命中 b.foo', async () => {
+    const b = childPluginId(root, 'b');
+    const slot = slotFor(b, 'foo');
+    const index = new CommandIndex([slot], snapshotWithOwners([b], [slot]));
+
+    await expect(index.dispatch('b.foobar')).resolves.toEqual({ matched: false });
+    await expect(index.dispatch('b.foo extra args')).resolves.toMatchObject({
+      matched: true,
+      command: 'b.foo',
     });
   });
 });

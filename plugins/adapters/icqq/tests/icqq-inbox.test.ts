@@ -220,7 +220,7 @@ describe('buildIcqqSystemRequestRow', () => {
   });
 });
 
-describe('icqq endpoint inbox wiring', () => {
+describe('icqq.endpoint inbox wiring', () => {
   it('records request events and publishes endpoint:request', async () => {
     const mock = createMockIpc();
     const hooks = createHooks();

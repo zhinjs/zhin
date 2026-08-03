@@ -97,7 +97,7 @@ describe('createMilkyEndpointManagement', () => {
   });
 });
 
-describe('milky endpoint management wiring', () => {
+describe('milky.endpoint management wiring', () => {
   it('ws/wss/sse/webhook 四种传输都暴露 management 语义端口', async () => {
     const wsConfig = resolveMilkyConfig({
       connection: 'ws',

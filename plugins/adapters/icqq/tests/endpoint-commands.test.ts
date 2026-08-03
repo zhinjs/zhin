@@ -43,7 +43,7 @@ function fakeContext(overrides: Record<string, unknown> = {}) {
   } as never;
 }
 
-describe('icqq endpoint command definitions', () => {
+describe('icqq.endpoint command definitions', () => {
   it('三个命令模块均为合法 defineCommand', () => {
     for (const definition of [listCommand, addCommand, removeCommand]) {
       expect(() => parseCommandDefinition(definition)).not.toThrow();
@@ -52,7 +52,7 @@ describe('icqq endpoint command definitions', () => {
 
   it('add 无 name 时回复用法与 icqq login 引导', () => {
     const text = addCommand.execute(fakeContext()) as string;
-    expect(text).toContain('用法：icqq endpoint add <uin>');
+    expect(text).toContain('用法：icqq.endpoint add <uin>');
     expect(text).toContain('icqq login');
   });
 

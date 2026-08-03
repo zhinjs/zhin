@@ -9,7 +9,7 @@ export default definePlugin({
     displayName: 'NapCat Adapter',
   },
   setup(context) {
-    // 运行中 endpoint 注册表（napcat endpoint list 的"运行中"数据源）
+    // 运行中 endpoint 注册表（napcat.endpoint list 的"运行中"数据源）
     context.resources.provide(napcatRuntimeStateToken, createEndpointRuntimeState());
     // 平台权限门禁：scene_admin / scene_owner 由 sender role 判定（见各 endpoint admit metadata）
     return registerDefaultScenePlatformPermitChecker('napcat');

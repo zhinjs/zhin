@@ -44,7 +44,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe('weixin-ilink endpoint management', () => {
+describe('weixin-ilink.endpoint management', () => {
   it('只暴露 listFriends（个人微信无群概念）', () => {
     const endpoint = makeEndpoint();
     expect(listEndpointManagementCapabilities(endpoint)).toEqual(['listFriends']);

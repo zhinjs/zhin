@@ -1,10 +1,10 @@
 /**
- * `github endpoint` 命令族：由 @zhin.js/adapter 的 createEndpointCommands 套件生成。
+ * `github.endpoint` 命令族：由 @zhin.js/adapter 的 createEndpointCommands 套件生成。
  * commands/endpoint/ 下的 list / add / remove 直接默认导出这三项。
  *
  * 字段说明：private_key 内容长且含换行，不适合 kv 直传——运行时（gh-client
  * resolvePrivateKey）本就支持 PEM 内容或文件路径，故 add 采用**内联路径**形式：
- * `github endpoint add mybot app_id=123456 private_key=./data/mybot.pem`。
+ * `github.endpoint add mybot app_id=123456 private_key=./data/mybot.pem`。
  */
 import { createEndpointCommands } from '@zhin.js/adapter';
 import { defineCommand } from '@zhin.js/command';

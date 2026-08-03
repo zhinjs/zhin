@@ -72,7 +72,7 @@ afterEach(() => {
   setIcqqAgentDeps(null);
 });
 
-describe('icqq endpoint 社交/群管（console RPC 面）', () => {
+describe('icqq.endpoint 社交/群管（console RPC 面）', () => {
   it('getFriendList 归一为 {user_id, nickname, remark}[]', async () => {
     const mock = createMockIpc();
     const endpoint = await startEndpoint(mock);

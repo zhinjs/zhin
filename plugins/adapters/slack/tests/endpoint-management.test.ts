@@ -73,7 +73,7 @@ async function startedEndpoint(client: SlackWebClientLike): Promise<SlackEndpoin
   return endpoint;
 }
 
-describe('slack endpoint management', () => {
+describe('slack.endpoint management', () => {
   it('只暴露已实现的能力（listFriends/listGroups/listGroupMembers）', async () => {
     const endpoint = await startedEndpoint(mockClient());
     expect(listEndpointManagementCapabilities(endpoint)).toEqual([

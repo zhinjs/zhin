@@ -35,7 +35,7 @@ export default defineAdapter<QqAdapterConfig>({
   create(context) {
     const config = resolveQqConfig(context.config);
     const gateway = context.use(messageGatewayToken);
-    // 注册到插件运行时状态（qq endpoint list 的"运行中"数据源）
+    // 注册到插件运行时状态（qq.endpoint list 的"运行中"数据源）
     const state = context.use(qqRuntimeStateToken);
     state.endpoints.set(config.name, {
       name: config.name,
@@ -53,7 +53,7 @@ export default defineAdapter<QqAdapterConfig>({
         gateway,
         config,
       });
-    // 运行状态表只增不减：stop 时同步摘除，避免 stop 后 endpoint list 仍显示运行中。
+    // 运行状态表只增不减：stop 时同步摘除，避免 stop 后 qq.endpoint list 仍显示运行中。
     const stopEndpoint = endpoint.stop.bind(endpoint);
     endpoint.stop = async () => {
       state.endpoints.delete(config.name);

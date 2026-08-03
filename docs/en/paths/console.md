@@ -34,7 +34,7 @@ On the "Plugins" page, they appear as **one card with a row of endpoints beneath
 Two ways to add accounts:
 
 - **Config file**: Add an item to the `plugins.<adapter>.endpoints` array, then restart
-- **Chat command** (some platforms): Send `qq endpoint add` in QQ Official chat,
+- **Chat command** (some platforms): Send `qq.endpoint add` in QQ Official chat,
   scan the QR code on your phone to bind (credentials are auto-written to `.env`, config auto-appended, restart to take effect)
 
 ## 4. Send & Receive Messages Live (10 minutes)

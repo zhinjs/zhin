@@ -8,7 +8,7 @@ export default definePlugin({
     displayName: 'WeChat Official Account Adapter',
   },
   setup(context) {
-    // 运行中 endpoint 注册表（wechat-mp endpoint list 的"运行中"数据源）
+    // 运行中 endpoint 注册表（wechat-mp.endpoint list 的"运行中"数据源）
     context.resources.provide(wechatMpRuntimeStateToken, createEndpointRuntimeState());
   },
 });

@@ -66,7 +66,7 @@ plugins:
 2. **Messages sent from the wrong account**: With multiple endpoints, routing is by name (uin / bot name). In Console,
    one plugin card shows every endpoint's online status -- confirm which one is selected before sending a message.
 3. **Credentials committed to git**: Credentials must always use `${ENV}` placeholders in `.env`; `zhin.config.yml`
-   is safe to commit. QR code/wizard flows (`qq endpoint add`, WeChat iLink QR scan) also auto-write to `.env`.
+   is safe to commit. QR code/wizard flows (`qq.endpoint add`, WeChat iLink QR scan) also auto-write to `.env`.
 
 ## Operations Tips
 

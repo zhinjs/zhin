@@ -66,7 +66,7 @@ plugins:
 2. **消息发错账号**：多 endpoint 时按名字（uin / bot 名）路由，Console 里
    一个插件卡片下能看到每个 endpoint 的在线状态，发消息先确认选的是哪个。
 3. **配置凭据进 git**：凭据一律 `${ENV}` 占位放 `.env`，`zhin.config.yml`
-   可以进库。扫码/向导类流程（`qq endpoint add`、微信 iLink 扫码）也会自动写 `.env`。
+   可以进库。扫码/向导类流程（`qq.endpoint add`、微信 iLink 扫码）也会自动写 `.env`。
 
 ## 运维经验
 

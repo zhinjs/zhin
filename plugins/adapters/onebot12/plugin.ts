@@ -8,7 +8,7 @@ export default definePlugin({
     displayName: 'OneBot 12 Adapter',
   },
   setup(context) {
-    // 运行中 endpoint 注册表（onebot12 endpoint list 的"运行中"数据源）
+    // 运行中 endpoint 注册表（onebot12.endpoint list 的"运行中"数据源）
     context.resources.provide(onebot12RuntimeStateToken, createEndpointRuntimeState());
   },
 });

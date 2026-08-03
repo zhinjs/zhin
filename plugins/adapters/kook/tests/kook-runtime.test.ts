@@ -404,7 +404,7 @@ describe('kook plugin runtime adapter', () => {
 });
 
 
-describe('kook endpoint management', () => {
+describe('kook.endpoint management', () => {
   const GUILD_ID = '9876543210987654321';
 
   function createManagementEndpoint(mock: KookClientTransport) {

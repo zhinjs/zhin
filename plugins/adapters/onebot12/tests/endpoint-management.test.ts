@@ -84,7 +84,7 @@ describe('createOneBot12EndpointManagement', () => {
   });
 });
 
-describe('onebot12 endpoint management wiring', () => {
+describe('onebot12.endpoint management wiring', () => {
   it('ws/wss 传输经公共 callApi 暴露 management', async () => {
     const wsConfig = resolveOneBot12Config({
       connection: 'ws',

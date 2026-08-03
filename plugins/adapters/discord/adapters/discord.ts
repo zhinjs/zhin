@@ -35,7 +35,7 @@ export default defineAdapter<DiscordAdapterConfig>({
   create(context) {
     const config = resolveDiscordConfig(context.config);
     const gateway = context.use(messageGatewayToken);
-    // 注册到插件运行时状态（discord endpoint list 的"运行中"数据源）
+    // 注册到插件运行时状态（discord.endpoint list 的"运行中"数据源）
     context.use(discordRuntimeStateToken).endpoints.set(config.name, {
       name: config.name,
       mode: config.connection,

@@ -1,5 +1,5 @@
 /**
- * `icqq endpoint` 命令族：由 @zhin.js/adapter 的 createEndpointCommands 套件生成。
+ * `icqq.endpoint` 命令族：由 @zhin.js/adapter 的 createEndpointCommands 套件生成。
  *
  * ICQQ 的凭据由外部守护进程（@icqqjs/cli）按账号持有（~/.icqq/<uin>/），
  * 其 IPC/RPC 协议是「按 uin 连接 + auth + 账号级 action」，没有 add-account /
@@ -19,7 +19,7 @@ export const icqqEndpointCommands = createEndpointCommands({
   addDescription: '登记 ICQQ endpoint（uin 需先经 icqq login 完成扫码登录；重启 zhin 生效）',
   bindFlow: ({ name }) => {
     if (!name) {
-      return '用法：icqq endpoint add <uin>（uin 为纯数字 QQ 号，且需先执行 icqq login <uin> 完成扫码登录）';
+      return '用法：icqq.endpoint add <uin>（uin 为纯数字 QQ 号，且需先执行 icqq login <uin> 完成扫码登录）';
     }
     if (!/^\d+$/.test(name)) {
       return 'icqq endpoint 名必须是纯数字 QQ 号（uin）';

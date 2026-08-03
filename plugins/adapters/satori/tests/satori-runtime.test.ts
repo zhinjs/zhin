@@ -476,7 +476,7 @@ describe('satori ws heartbeat', () => {
 });
 
 
-describe('satori endpoint management', () => {
+describe('satori.endpoint management', () => {
   function createManagementCallApi() {
     return vi.fn(async (
       _options: unknown,

@@ -1,5 +1,5 @@
 /**
- * `qq endpoint` 命令的业务逻辑（与命令定义文件分离，便于测试）。
+ * `qq.endpoint` 命令的业务逻辑（与命令定义文件分离，便于测试）。
  * 通用部分（权限 / list / remove / 配置写回 / .env 持久化）已迁移到
  * @zhin.js/adapter 的 createEndpointCommands 套件；本文件保留 QQ 特化的
  * 扫码绑定 add 流程（经套件 bindFlow 钩子接入）与 cancel，并导出
@@ -41,12 +41,12 @@ export function extractQqCommandReply(input: unknown): QqCommandReply {
   return extractEndpointCommandReply(input);
 }
 
-/** `qq endpoint list`：运行中的 endpoints（本 generation adapter create 注册）+ 配置里的 endpoints */
+/** `qq.endpoint list`：运行中的 endpoints（本 generation adapter create 注册）+ 配置里的 endpoints */
 export function runQqEndpointList(state: QqRuntimeState, projectRoot?: string): string {
   return formatEndpointList(qqEndpointListSpec, {
     running: state.endpoints.values(),
     configured: listQqEndpointEntries(projectRoot),
-    footer: state.bindFlow ? '⚠️ 有进行中的扫码绑定，可用 qq endpoint cancel 取消' : undefined,
+    footer: state.bindFlow ? '⚠️ 有进行中的扫码绑定，可用 qq.endpoint cancel 取消' : undefined,
   });
 }
 
@@ -57,7 +57,7 @@ const qqEndpointListSpec = {
 } as const;
 
 /**
- * `qq endpoint add [name]`：启动扫码绑定流程。
+ * `qq.endpoint add [name]`：启动扫码绑定流程。
  * 返回的 Promise 在二维码链接就绪（或前置失败）时 resolve 为首条回复；
  * 后续状态（已扫码 / 成功 / 失败 / 过期刷新）通过 reply 推回当前会话。
  */
@@ -68,7 +68,7 @@ export function runQqEndpointAdd(
   projectRoot?: string,
 ): Promise<string> {
   if (state.bindFlow) {
-    return Promise.resolve('已有进行中的 QQ 机器人绑定，请先发送 qq endpoint cancel 取消后再试');
+    return Promise.resolve('已有进行中的 QQ 机器人绑定，请先发送 qq.endpoint cancel 取消后再试');
   }
   const endpointName = name?.trim() || undefined;
   return new Promise<string>((resolve) => {
@@ -121,7 +121,7 @@ export function runQqEndpointAdd(
   });
 }
 
-/** `qq endpoint cancel`：中止进行中的绑定流程 */
+/** `qq.endpoint cancel`：中止进行中的绑定流程 */
 export function runQqEndpointCancel(state: QqRuntimeState): string {
   if (!state.bindFlow) {
     return '当前没有进行中的 QQ 绑定流程';
@@ -131,7 +131,7 @@ export function runQqEndpointCancel(state: QqRuntimeState): string {
   return '已取消进行中的 QQ 绑定流程';
 }
 
-/** `qq endpoint remove <name>`：从 zhin.config.yml 移除对应 endpoints 项 */
+/** `qq.endpoint remove <name>`：从 zhin.config.yml 移除对应 endpoints 项 */
 export function runQqEndpointRemove(
   _state: QqRuntimeState,
   name: string,
@@ -153,7 +153,7 @@ export const qqEndpointCommands = createEndpointCommands({
   running: (use) => use(qqRuntimeStateToken).endpoints.values(),
   listFooter: (use) => {
     const state = use(qqRuntimeStateToken);
-    return state.bindFlow ? '⚠️ 有进行中的扫码绑定，可用 qq endpoint cancel 取消' : undefined;
+    return state.bindFlow ? '⚠️ 有进行中的扫码绑定，可用 qq.endpoint cancel 取消' : undefined;
   },
   addDescription: '手机 QQ 扫码绑定机器人，凭据写入 .env 并追加到 zhin.config.yml（重启生效）',
   bindFlow: ({ name, reply, use }) => runQqEndpointAdd(use(qqRuntimeStateToken), name, reply),

@@ -24,7 +24,7 @@ export default defineAdapter<SlackAdapterConfig>({
   },
   create(context) {
     const config = resolveSlackConfig(context.config);
-    // 注册到插件运行时状态（slack endpoint list 的"运行中"数据源）
+    // 注册到插件运行时状态（slack.endpoint list 的"运行中"数据源）
     context.use(slackRuntimeStateToken).endpoints.set(config.name, {
       name: config.name,
       mode: config.mode,

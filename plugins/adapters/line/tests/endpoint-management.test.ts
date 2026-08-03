@@ -24,7 +24,7 @@ function jsonResponse(body: unknown, ok = true, status = 200) {
   return { ok, status, text: async () => JSON.stringify(body), json: async () => body };
 }
 
-describe('line endpoint management', () => {
+describe('line.endpoint management', () => {
   it('只暴露 listGroupMembers（Bot API 无群列表）', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     const endpoint = new LineEndpoint({

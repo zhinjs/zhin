@@ -12,7 +12,7 @@ export default definePlugin({
     displayName: 'ICQQ Adapter',
   },
   setup(context) {
-    // 运行中 endpoint 注册表（icqq endpoint list 的"运行中"数据源）
+    // 运行中 endpoint 注册表（icqq.endpoint list 的"运行中"数据源）
     context.resources.provide(icqqRuntimeStateToken, createEndpointRuntimeState());
     // Agent prompt contributor (orchestrator/deferred-worker ICQQ guidance).
     // `zhin.js/agent` is an optional peer — skip silently on IM-only installs.

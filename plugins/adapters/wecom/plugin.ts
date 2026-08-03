@@ -9,7 +9,7 @@ export default definePlugin({
     displayName: 'WeCom (企业微信) Adapter',
   },
   setup(context) {
-    // 运行中 endpoint 注册表（wecom endpoint list 的"运行中"数据源）
+    // 运行中 endpoint 注册表（wecom.endpoint list 的"运行中"数据源）
     context.resources.provide(wecomRuntimeStateToken, createEndpointRuntimeState());
     return registerWecomPlatformPermitChecker();
   },

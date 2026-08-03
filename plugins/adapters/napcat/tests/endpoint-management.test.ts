@@ -91,7 +91,7 @@ describe('createNapCatEndpointManagement', () => {
   });
 });
 
-describe('napcat endpoint management wiring', () => {
+describe('napcat.endpoint management wiring', () => {
   it('ws/wss/http 三种传输都暴露 management 语义端口', async () => {
     const wsConfig = resolveNapCatConfig({
       connection: 'ws',

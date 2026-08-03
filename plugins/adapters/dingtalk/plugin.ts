@@ -9,7 +9,7 @@ export default definePlugin({
     displayName: 'DingTalk (钉钉) Adapter',
   },
   setup(context) {
-    // 运行中 endpoint 注册表（dingtalk endpoint list 的"运行中"数据源）
+    // 运行中 endpoint 注册表（dingtalk.endpoint list 的"运行中"数据源）
     context.resources.provide(dingtalkRuntimeStateToken, createEndpointRuntimeState());
     return registerDingtalkPlatformPermitChecker();
   },

@@ -71,14 +71,14 @@ plugins:
 
 ## Endpoint 管理命令
 
-适配器自带 `qq endpoint` 命令组（聊天内直接使用，默认无前缀；受 `commandPrefix` 影响）：
+适配器自带 `qq.endpoint` 命令组（聊天内直接使用，默认无前缀；受 `commandPrefix` 影响）：
 
 | 命令 | 说明 |
 |------|------|
-| `qq endpoint add [name]` | 手机 QQ 扫码绑定：下发二维码链接 → 确认后凭据写入 `.env`（`QQ_<NAME>_APPID/SECRET`），并追加 `plugins.qq.endpoints`（重启生效） |
-| `qq endpoint cancel` | 取消进行中的扫码绑定（同时只允许一个流程） |
-| `qq endpoint list` | 列出运行中与配置中的 endpoints |
-| `qq endpoint remove <name>` | 从配置移除 endpoint（`.env` 键保留，可手动清理） |
+| `qq.endpoint add [name]` | 手机 QQ 扫码绑定：下发二维码链接 → 确认后凭据写入 `.env`（`QQ_<NAME>_APPID/SECRET`），并追加 `plugins.qq.endpoints`（重启生效） |
+| `qq.endpoint cancel` | 取消进行中的扫码绑定（同时只允许一个流程） |
+| `qq.endpoint list` | 列出运行中与配置中的 endpoints |
+| `qq.endpoint remove <name>` | 从配置移除 endpoint（`.env` 键保留，可手动清理） |
 
 add/cancel/remove 受 `master` 限制：实例配置声明了 `master`（顶层或 `endpoints[i]`）时仅
 master 可执行；未配置则放行（首个扫码绑定者即 owner）。二维码当前以链接文本下发

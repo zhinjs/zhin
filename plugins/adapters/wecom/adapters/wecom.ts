@@ -25,7 +25,7 @@ export default defineAdapter<WecomAdapterConfig>({
   },
   create(context) {
     const config = resolveWecomConfig(context.config);
-    // 注册到插件运行时状态（wecom endpoint list 的"运行中"数据源）
+    // 注册到插件运行时状态（wecom.endpoint list 的"运行中"数据源）
     context.use(wecomRuntimeStateToken).endpoints.set(config.name, {
       name: config.name,
       mode: 'webhook',

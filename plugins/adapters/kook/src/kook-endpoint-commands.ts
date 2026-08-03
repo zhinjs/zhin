@@ -1,5 +1,5 @@
 /**
- * `kook endpoint` 命令族：由 @zhin.js/adapter 的 createEndpointCommands 套件生成。
+ * `kook.endpoint` 命令族：由 @zhin.js/adapter 的 createEndpointCommands 套件生成。
  * commands/endpoint/ 下的 list / add / remove 直接默认导出这三项。
  */
 import { createEndpointCommands } from '@zhin.js/adapter';

@@ -9,7 +9,7 @@ export default definePlugin({
     displayName: 'Lark/Feishu (飞书) Adapter',
   },
   setup(context) {
-    // 运行中 endpoint 注册表（lark endpoint list 的"运行中"数据源）
+    // 运行中 endpoint 注册表（lark.endpoint list 的"运行中"数据源）
     context.resources.provide(larkRuntimeStateToken, createEndpointRuntimeState());
     return registerLarkPlatformPermitChecker();
   },

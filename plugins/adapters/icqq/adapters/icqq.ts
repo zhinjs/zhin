@@ -40,7 +40,7 @@ export default defineAdapter<IcqqAdapterConfig>({
     // Client-library / IPC daemon path — no httpHostToken.
     // Console loginAssist + host-router routes deferred.
     const config = resolveIcqqConfig(context.config);
-    // 注册到插件运行时状态（icqq endpoint list 的"运行中"数据源）
+    // 注册到插件运行时状态（icqq.endpoint list 的"运行中"数据源）
     context.use(icqqRuntimeStateToken).endpoints.set(config.name, {
       name: config.name,
       mode: config.rpc ? 'rpc' : 'ipc',

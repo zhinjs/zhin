@@ -9,7 +9,7 @@ export default definePlugin({
     displayName: 'Telegram Bot API Adapter',
   },
   setup(context) {
-    // 运行中 endpoint 注册表（telegram endpoint list 的"运行中"数据源）
+    // 运行中 endpoint 注册表（telegram.endpoint list 的"运行中"数据源）
     context.resources.provide(telegramRuntimeStateToken, createEndpointRuntimeState());
     // 平台权限门禁：chat_creator / chat_administrator / pin_messages 等（agent 工具 platformPermit）
     return registerTelegramPlatformPermitChecker();

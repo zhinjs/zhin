@@ -89,7 +89,7 @@ describe('createOneBot11EndpointManagement', () => {
   });
 });
 
-describe('onebot11 endpoint management wiring', () => {
+describe('onebot11.endpoint management wiring', () => {
   it('ws/wss 两种传输都暴露 management 语义端口', async () => {
     const wsConfig = resolveOneBot11Config({
       connection: 'ws',

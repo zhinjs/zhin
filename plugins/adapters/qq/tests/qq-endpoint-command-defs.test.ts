@@ -39,7 +39,7 @@ function fakeContext(state = createQqRuntimeState()) {
   } as never;
 }
 
-describe('qq endpoint command definitions', () => {
+describe('qq.endpoint command definitions', () => {
   it('四个命令模块均为合法 defineCommand', () => {
     for (const definition of [listCommand, addCommand, cancelCommand, removeCommand]) {
       expect(() => parseCommandDefinition(definition)).not.toThrow();

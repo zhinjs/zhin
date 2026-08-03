@@ -39,13 +39,14 @@ HMR granularity to individual command files.
 
 ## File Routing
 
-Command name = the plugin's path segments in the plugin tree + the file's relative path segments, joined by spaces. Root plugins (the application itself) have no prefix.
+Command name = plugin tree path segments (instanceKey, without root, joined by `.`) + `.` + the file's relative path segments (joined by spaces). Root plugins (the application itself) have no prefix.
 
 | File | Plugin | Command name |
 | --- | --- | --- |
 | `commands/hello.ts` | root | `hello` |
-| `commands/endpoint/list.ts` | `qq` | `qq endpoint list` |
-| `commands/endpoint/add/[name:string=].ts` | `qq` | `qq endpoint add [name]` |
+| `commands/endpoint/list.ts` | `qq` | `qq.endpoint list` |
+| `commands/endpoint/add/[name:string=].ts` | `qq` | `qq.endpoint add [name]` |
+| `commands/foo.ts` | `a` under `b` (`root/b/a`) | `b.a.foo` |
 
 First, nesting: `commands/` is scanned recursively, and nested directories map directly to subcommand segments. Directory and file names must be lowercase kebab-case (`/^[a-z0-9][a-z0-9-]*$/`).
 
@@ -123,7 +124,7 @@ flowchart LR
 
 During dispatch, compiled command patterns are tried in deterministic priority order: static commands before dynamic commands, and among dynamic commands,
 more specific paths take priority. After a match, remaining text is split by whitespace into `args`, and the full rich-message tail is preserved in `segments`.
-Therefore `qq endpoint remove mybot` matches `qq endpoint remove <name>`, `args` is empty, and
+Therefore `qq.endpoint remove mybot` matches `qq.endpoint remove <name>`, `args` is empty, and
 `params.name === 'mybot'`.
 
 Structured parameter example:
@@ -180,10 +181,10 @@ The key points of this pattern: use `config` (plugin configuration) to get the d
 
 `@zhin.js/adapter`'s `createEndpointCommands(spec, defineCommand)` generates **list / add / remove** commands for `<adapter> endpoint`. Except for email (smtp/imap nested objects, not expressible in kv) and sandbox (built-in debug adapter, no credentials), all platform adapters are integrated: qq, icqq, napcat, onebot11, onebot12, milky, satori, slack, telegram, discord, kook, lark, dingtalk, line, wecom, wechat-mp, weixin-ilink, github.
 
-- `<adapter> endpoint list`: running endpoints (runtime state registered by the adapter's `create()`) + the configuration list from `plugins.<adapterKey>.endpoints` in `zhin.config.yml`.
-- `<adapter> endpoint add <name> <key=value...>`: manual field entry. Credential field values with `env: true` are written to `.env` (key names derived as `<ADAPTER>_<NAME>_<FIELD>` in uppercase, e.g., `TELEGRAM_BOT1_TOKEN`, `SLACK_BOT1_SIGNING_SECRET`), with `${REF}` references saved in yaml; other fields are written inline. YAML uses Document-node-level operations to preserve existing comments; duplicate names are rejected; both `add`/`remove` go through the master gate described above.
-- `<adapter> endpoint remove <name>`: removes from configuration (takes effect on restart; `.env` keys are retained for manual cleanup).
-- Special add flows (such as QQ scan-code binding) are handled by the `spec.bindFlow` hook taking over the add command; QQ therefore has a fourth command `qq endpoint cancel`.
+- `<adapter>.endpoint list`: running endpoints (runtime state registered by the adapter's `create()`) + the configuration list from `plugins.<adapterKey>.endpoints` in `zhin.config.yml`.
+- `<adapter>.endpoint add <name> <key=value...>`: manual field entry. Credential field values with `env: true` are written to `.env` (key names derived as `<ADAPTER>_<NAME>_<FIELD>` in uppercase, e.g., `TELEGRAM_BOT1_TOKEN`, `SLACK_BOT1_SIGNING_SECRET`), with `${REF}` references saved in yaml; other fields are written inline. YAML uses Document-node-level operations to preserve existing comments; duplicate names are rejected; both `add`/`remove` go through the master gate described above.
+- `<adapter>.endpoint remove <name>`: removes from configuration (takes effect on restart; `.env` keys are retained for manual cleanup).
+- Special add flows (such as QQ scan-code binding) are handled by the `spec.bindFlow` hook taking over the add command; QQ therefore has a fourth command `qq.endpoint cancel`.
 
 Integrating an adapter requires only four steps (using telegram as an example):
 
@@ -218,7 +219,7 @@ By default there is no prefix: any text will be tried for command matching. Afte
 ```yaml
 plugins:
   qq:
-    commandPrefix: '/'     # Only "/qq endpoint list" triggers
+    commandPrefix: '/'     # Only "/qq.endpoint list" triggers
     endpoints:
       - name: main
         commandPrefix: ''  # endpoints[i] can override the top-level
@@ -228,4 +229,4 @@ Resolution rules (`packages/im/core/src/plugin-runtime/im/message-dispatcher.ts`
 
 ## Troubleshooting Tips
 
-`description` appears in command listings, so it's recommended to always include one. Command name conflicts (same-name static commands or same-shape dynamic routes) throw errors at startup; running a startup after configuration changes catches them early. Commands returning `Promise` can implement multi-round interactions -- resolve the first reply, then append subsequent ones with `input.$reply`; see the QQ `qq endpoint add` scan-code binding flow for reference.
+`description` appears in command listings, so it's recommended to always include one. Command name conflicts (same-name static commands or same-shape dynamic routes) throw errors at startup; running a startup after configuration changes catches them early. Commands returning `Promise` can implement multi-round interactions -- resolve the first reply, then append subsequent ones with `input.$reply`; see the QQ `qq.endpoint add` scan-code binding flow for reference.

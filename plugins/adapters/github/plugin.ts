@@ -28,7 +28,7 @@ export default definePlugin({
     displayName: 'GitHub Adapter',
   },
   setup(context) {
-    // 运行中 endpoint 注册表（github endpoint list 的"运行中"数据源）
+    // 运行中 endpoint 注册表（github.endpoint list 的"运行中"数据源）
     context.resources.provide(githubRuntimeStateToken, createEndpointRuntimeState());
     if (context.resources.has(databaseHostToken)) {
       const host = context.resources.use(databaseHostToken);

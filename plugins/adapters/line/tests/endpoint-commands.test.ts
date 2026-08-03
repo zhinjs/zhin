@@ -45,7 +45,7 @@ function fakeContext(overrides: Record<string, unknown> = {}) {
   } as never;
 }
 
-describe('line endpoint command definitions', () => {
+describe('line.endpoint command definitions', () => {
   it('三个命令模块均为合法 defineCommand', () => {
     for (const definition of [listCommand, addCommand, removeCommand]) {
       expect(() => parseCommandDefinition(definition)).not.toThrow();

@@ -207,11 +207,17 @@ export function isCommandIndex(value: unknown): value is CommandIndex {
     && (value as { readonly $projection?: unknown }).$projection === 'zhin.command-index/1';
 }
 
+/**
+ * 命令运行时名 = 插件树路径段（instanceKey，去掉 root）以 `.` 连接后，再与命令
+ * 文件路径首段以 `.` 连接；命令内部嵌套段仍为空格分隔。Root 插件无前缀。
+ * 例：`root/qq` + `endpoint/list` → `qq.endpoint list`；
+ * `root/b/a` + `foo` → `b.a.foo`；root + `foo` → `foo`。
+ */
 function runtimeSegments(owner: string, localName: string): string[] {
-  const ownerSegments = owner === 'root'
-    ? []
-    : owner.slice('root/'.length).split('/');
-  return [...ownerSegments, ...localName.split('/')];
+  const localSegments = localName.split('/');
+  if (owner === 'root') return localSegments;
+  const prefix = owner.slice('root/'.length).split('/').join('.');
+  return [`${prefix}.${localSegments[0]}`, ...localSegments.slice(1)];
 }
 
 function assertParameterSegment(

@@ -85,7 +85,7 @@ describe('IM Runtime', () => {
     const message = new Message(
       capabilityId(root, adapterFeatureId, 'memory'),
       'room',
-      '/child status',
+      '/child.status',
       1,
       async (_content, owner) => { requester = owner; },
     );
