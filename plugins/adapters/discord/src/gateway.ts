@@ -55,6 +55,7 @@ export interface DiscordClientTransport {
       send?(options: MessageCreateOptions): Promise<{ id: string }>;
       messages?: {
         fetch(id: string): Promise<{
+          delete(): Promise<unknown>;
           react(emoji: string): Promise<unknown>;
           reactions: {
             resolve(emoji: unknown): { users: { remove(userId: string): Promise<unknown> } } | null;

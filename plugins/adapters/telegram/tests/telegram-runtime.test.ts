@@ -413,7 +413,7 @@ describe('telegram plugin runtime adapter', () => {
     await endpoint.start();
     endpoint.open();
     const messageId = await endpoint.send({ target: '1001', payload: 'pong' });
-    expect(messageId).toBe('77');
+    expect(messageId).toBe('1001:77');
     expect(fetch.calls.some((c) => (
       c.method === 'sendMessage'
       && c.body.chat_id === 1001
@@ -452,7 +452,7 @@ describe('telegram plugin runtime adapter', () => {
         },
       ],
     });
-    expect(messageId).toBe('88');
+    expect(messageId).toBe('1001:88');
     const formCall = fetch.forms.find((f) => f.method === 'sendPhoto');
     expect(formCall).toBeDefined();
     expect(formCall!.form.get('chat_id')).toBe('1001');
@@ -485,7 +485,7 @@ describe('telegram plugin runtime adapter', () => {
         target: '1001',
         payload: [{ type: 'image', data: { media: { kind: 'path', value: filePath } } }],
       });
-      expect(messageId).toBe('89');
+      expect(messageId).toBe('1001:89');
       const formCall = fetch.forms.find((f) => f.method === 'sendPhoto');
       expect(formCall).toBeDefined();
       const file = formCall!.form.get('photo') as File;

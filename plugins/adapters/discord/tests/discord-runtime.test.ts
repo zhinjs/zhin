@@ -447,7 +447,7 @@ describe('discord plugin runtime adapter', () => {
     });
     await endpoint.start();
     const messageId = await endpoint.send({ target: 'chan-1', payload: 'pong' });
-    expect(messageId).toBe('sent-1');
+    expect(messageId).toBe('chan-1:sent-1');
     expect(mock.sent[0]).toMatchObject({
       channelId: 'chan-1',
     });

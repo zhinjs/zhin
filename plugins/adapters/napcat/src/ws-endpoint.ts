@@ -132,6 +132,11 @@ export class NapCatWsEndpoint implements EndpointInstance {
     return messageId;
   }
 
+  async recallMessage(messageId: string): Promise<void> {
+    if (!messageId) return;
+    await this.callApi('delete_msg', { message_id: Number(messageId) });
+  }
+
   callApi(action: string, params: Record<string, unknown> = {}): Promise<unknown> {
     return callNapCatWsAction(this.#ws, this.#pending, this.#requestId, action, params);
   }

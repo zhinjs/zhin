@@ -128,6 +128,11 @@ export class OneBot12WssEndpoint implements EndpointInstance {
     return data?.message_id ?? '';
   }
 
+  async recallMessage(messageId: string): Promise<void> {
+    if (!messageId) return;
+    await this.#callAction('delete_message', { message_id: messageId });
+  }
+
   /** Public API for management surface / callers. */
   callApi(action: string, params: Record<string, unknown> = {}): Promise<unknown> {
     return this.#callAction(action, params);

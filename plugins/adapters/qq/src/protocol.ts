@@ -219,6 +219,26 @@ export function formatOutboundText(payload: unknown): string {
     .join('');
 }
 
+/**
+ * Parse a compound messageId produced by `send()`: `kind-channelId:qqMsgId`.
+ */
+export function parseCompoundMessageId(messageId: string): {
+  kind: QqChannelKind;
+  channelId: string;
+  qqMsgId: string;
+} {
+  const hyphen = messageId.indexOf('-');
+  if (hyphen <= 0) throw new Error(`invalid QQ messageId format: ${messageId}`);
+  const kind = messageId.slice(0, hyphen);
+  if (kind !== 'private' && kind !== 'group' && kind !== 'channel' && kind !== 'direct') {
+    throw new Error(`invalid QQ messageId kind: ${kind}`);
+  }
+  const rest = messageId.slice(hyphen + 1);
+  const colon = rest.indexOf(':');
+  if (colon <= 0) throw new Error(`invalid QQ messageId format: ${messageId}`);
+  return { kind, channelId: rest.slice(0, colon), qqMsgId: rest.slice(colon + 1) };
+}
+
 /** 从 QQ API SendResult / 审核回包中解析出站消息 ID */
 export function resolveOutboundMessageId(result: unknown): string {
   if (!result || typeof result !== 'object') {

@@ -15,6 +15,7 @@ import { registerQqAgentEndpoint } from './qq-agent-deps.js';
 import {
   formatInboundContent,
   formatInboundTarget,
+  parseCompoundMessageId,
   parseSendTarget,
   resolveOutboundMessageId,
   senderDisplayName,
@@ -147,6 +148,31 @@ export class QqWebsocketEndpoint implements EndpointInstance {
       messageId,
     }));
     return messageId;
+  }
+
+  async recallMessage(messageId: string): Promise<void> {
+    const { kind, channelId, qqMsgId } = parseCompoundMessageId(messageId);
+    const bot = this.#requireBot();
+    switch (kind) {
+      case 'private':
+        await bot.recallPrivateMessage?.(channelId, qqMsgId);
+        break;
+      case 'group':
+        await bot.recallGroupMessage?.(channelId, qqMsgId);
+        break;
+      case 'channel':
+        await bot.recallGuildMessage?.(channelId, qqMsgId);
+        break;
+      case 'direct':
+        await bot.recallDirectMessage?.(channelId, qqMsgId);
+        break;
+    }
+    logger.debug(formatCompact({
+      op: 'qq_recall',
+      endpoint: this.#options.config.name,
+      kind,
+      messageId,
+    }));
   }
 
   /** Test / internal: admit a message when open. */
@@ -327,6 +353,31 @@ export class QqHttpEndpoint implements EndpointInstance {
         throw new Error(`unsupported QQ target kind: ${String((parsed as ParsedSendTarget).kind)}`);
     }
     return `${parsed.kind}-${parsed.id}:${resolveOutboundMessageId(result)}`;
+  }
+
+  async recallMessage(messageId: string): Promise<void> {
+    const { kind, channelId, qqMsgId } = parseCompoundMessageId(messageId);
+    const bot = this.#requireBot();
+    switch (kind) {
+      case 'private':
+        await bot.recallPrivateMessage?.(channelId, qqMsgId);
+        break;
+      case 'group':
+        await bot.recallGroupMessage?.(channelId, qqMsgId);
+        break;
+      case 'channel':
+        await bot.recallGuildMessage?.(channelId, qqMsgId);
+        break;
+      case 'direct':
+        await bot.recallDirectMessage?.(channelId, qqMsgId);
+        break;
+    }
+    logger.debug(formatCompact({
+      op: 'qq_recall',
+      endpoint: this.#options.config.name,
+      kind,
+      messageId,
+    }));
   }
 
   admit(msg: QqInboundMessage): void {

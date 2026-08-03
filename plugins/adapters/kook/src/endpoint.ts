@@ -148,6 +148,11 @@ export class KookWebsocketEndpoint implements EndpointInstance {
     });
   }
 
+  async recallMessage(messageId: string): Promise<void> {
+    if (!messageId) return;
+    await this.#requireClient().recallMsg?.(messageId);
+  }
+
   // ── Agent tool surface ──────────────────────────────────────────────
 
   async getRoleList(guildId: string) {
@@ -321,6 +326,11 @@ export class KookWebhookEndpoint implements EndpointInstance {
         error: err instanceof Error ? err.message : String(err),
       }));
     });
+  }
+
+  async recallMessage(messageId: string): Promise<void> {
+    if (!messageId) return;
+    await this.#requireClient().recallMsg?.(messageId);
   }
 
   checkAndRememberSn(sn: number): boolean {

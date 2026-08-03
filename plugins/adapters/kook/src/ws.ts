@@ -24,6 +24,7 @@ export interface KookClientTransport {
     userId: string,
     message: string,
   ): Promise<{ msg_id?: string | number }>;
+  recallMsg?(messageId: string): Promise<boolean>;
   pickGuild(guildId: string): {
     kick(userId: string): Promise<boolean>;
     getRoleList(): Promise<Array<{

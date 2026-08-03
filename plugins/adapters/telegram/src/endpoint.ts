@@ -209,7 +209,17 @@ export class TelegramEndpoint implements EndpointInstance {
         : await this.callApi<{ message_id?: number }>(action.method, action.params);
       if (result.message_id != null) lastId = String(result.message_id);
     }
-    return lastId || `telegram-${Date.now()}`;
+    if (!lastId) return `telegram-${Date.now()}`;
+    return `${target}:${lastId}`;
+  }
+
+  async recallMessage(messageId: string): Promise<void> {
+    if (!messageId || messageId.startsWith('telegram-')) return;
+    const colon = messageId.indexOf(':');
+    if (colon <= 0) return;
+    const chatId = messageId.slice(0, colon);
+    const msgId = messageId.slice(colon + 1);
+    await this.callApi('deleteMessage', { chat_id: chatId, message_id: Number(msgId) });
   }
 
   /**

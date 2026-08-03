@@ -17,6 +17,10 @@ export interface QqBotTransport {
   sendGroupMessage(groupId: string, message: QqOutboundMessage): Promise<unknown>;
   sendGuildMessage(channelId: string, message: QqOutboundMessage): Promise<unknown>;
   sendDirectMessage?(guildId: string, message: QqOutboundMessage): Promise<unknown>;
+  recallPrivateMessage?(userId: string, messageId: string): Promise<unknown>;
+  recallGroupMessage?(groupId: string, messageId: string): Promise<unknown>;
+  recallGuildMessage?(channelId: string, messageId: string): Promise<unknown>;
+  recallDirectMessage?(guildId: string, messageId: string): Promise<unknown>;
   getGuilds(): Promise<unknown[]>;
   getChannels(guildId: string): Promise<unknown[]>;
   getChannelInfo(channelId: string): Promise<unknown>;
@@ -97,12 +101,18 @@ export function normalizeQqMessage(raw: unknown): QqInboundMessage | null {
 
   let channelKind: QqChannelKind = 'private';
   let channelId = '';
-  if (msg.message_type === 'guild') {
+
+  const isGroup = msg.message_type === 'group'
+    || (msg.message_type == null && (msg.group_id != null || msg.group_openid != null));
+  const isGuild = msg.message_type === 'guild'
+    || (msg.message_type == null && !isGroup && msg.guild_id != null && msg.channel_id != null);
+
+  if (isGuild) {
     channelKind = msg.sub_type === 'direct' ? 'direct' : 'channel';
     channelId = channelKind === 'direct'
       ? String(msg.guild_id ?? '')
       : String(msg.channel_id ?? '');
-  } else if (msg.message_type === 'group') {
+  } else if (isGroup) {
     channelKind = 'group';
     channelId = String(msg.group_id ?? msg.group_openid ?? '');
   } else {
@@ -180,6 +190,10 @@ export function defaultCreateBot(config: ResolvedQqWebsocketConfig): QqBotTransp
     sendGroupMessage: (groupId, message) => bot.sendGroupMessage(groupId, message as Sendable),
     sendGuildMessage: (channelId, message) => bot.sendGuildMessage(channelId, message as Sendable),
     sendDirectMessage: (guildId, message) => bot.sendDirectMessage(guildId, message as Sendable),
+    recallPrivateMessage: (userId, messageId) => bot.recallPrivateMessage(userId, messageId),
+    recallGroupMessage: (groupId, messageId) => bot.recallGroupMessage(groupId, messageId),
+    recallGuildMessage: (channelId, messageId) => bot.recallGuildMessage(channelId, messageId),
+    recallDirectMessage: (guildId, messageId) => bot.recallDirectMessage(guildId, messageId),
     getGuilds: () => bot.guildService.getList(),
     getChannels: (guildId) => bot.channelService.getList(guildId),
     getChannelInfo: (channelId) => bot.channelService.getInfo(channelId),

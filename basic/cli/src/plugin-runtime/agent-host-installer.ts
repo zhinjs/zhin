@@ -1113,7 +1113,7 @@ function adapterLiveEndpointName(message: { metadata: Readonly<Record<string, un
 function resolveChannelType(
   metadata: Readonly<Record<string, unknown>>,
 ): 'private' | 'group' | 'channel' {
-  const raw = String(metadata.type ?? metadata.channelType ?? 'private');
+  const raw = String(metadata.type ?? metadata.channelType ?? metadata.channelKind ?? 'private');
   if (raw === 'group' || raw === 'channel' || raw === 'private') return raw;
   if (raw === 'direct' || raw === 'c2c') return 'private';
   if (raw === 'guild') return 'channel';

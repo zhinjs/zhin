@@ -139,9 +139,29 @@ export function createHostGameDb(
     models: {
       get: (name: string) => {
         if (!tableNames.includes(name)) return undefined;
-        const raw = host.models.get(name);
-        return raw ? wrapHostModel(raw) : undefined;
+        return createDeferredHostModel(host, name);
       },
     },
+  };
+}
+
+function createDeferredHostModel(
+  host: HostGameDbSource,
+  name: string,
+): InMemoryGameModel {
+  let cached: InMemoryGameModel | undefined;
+  const resolve = (): InMemoryGameModel => {
+    if (cached) return cached;
+    const raw = host.models.get(name);
+    if (!raw) throw new Error(`DatabaseHost model '${name}' not available (database may not have started)`);
+    cached = wrapHostModel(raw);
+    return cached;
+  };
+  return {
+    findAll: (q) => resolve().findAll(q),
+    findOne: (q) => resolve().findOne(q),
+    create: (row) => resolve().create(row),
+    updateWhere: (where, patch) => resolve().updateWhere(where, patch),
+    deleteWhere: (where) => resolve().deleteWhere(where),
   };
 }

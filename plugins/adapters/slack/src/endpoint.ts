@@ -330,6 +330,13 @@ export class SlackEndpoint implements EndpointInstance, SlackWebhookHandler {
     return channel ? { channel, ts: messageId } : null;
   }
 
+  async recallMessage(messageId: string): Promise<void> {
+    if (!this.#client) return;
+    const ref = this.resolveMessageRef(messageId);
+    if (!ref) return;
+    await this.#client.chat.delete({ channel: ref.channel, ts: ref.ts });
+  }
+
   async editMessage(channel: string, messageTs: string, content: unknown): Promise<void> {
     if (!this.#client) throw new Error('Slack client not connected');
     await editSlackContent(this.#client, channel, messageTs, content);

@@ -134,6 +134,14 @@ export class WecomEndpoint implements EndpointInstance {
     return (data.msgid as string) || `${Date.now()}`;
   }
 
+  async recallMessage(messageId: string): Promise<void> {
+    if (!messageId) return;
+    await this.#request('/cgi-bin/message/recall', {
+      method: 'POST',
+      body: { msgid: messageId },
+    });
+  }
+
   /**
    * message/send 的 image 段只接受 media_id：canonical MediaRef（base64/本地路径/URL）
    * 先经 /cgi-bin/media/upload 物化；上传失败降级为文本（alt 优先），不阻断发送。

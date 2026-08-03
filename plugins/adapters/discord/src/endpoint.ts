@@ -124,7 +124,8 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
 
   async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
     const body = formatOutboundBody(payload);
-    const messageId = await this.#sendBody(target, body);
+    const snowflake = await this.#sendBody(target, body);
+    const messageId = `${target}:${snowflake}`;
     logger.debug(formatCompact({
       op: 'discord_send',
       endpoint: this.#options.config.name,
@@ -132,6 +133,18 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
       messageId,
     }));
     return messageId;
+  }
+
+  async recallMessage(messageId: string): Promise<void> {
+    if (!messageId) return;
+    const colon = messageId.indexOf(':');
+    if (colon <= 0) return;
+    const channelId = messageId.slice(0, colon);
+    const snowflake = messageId.slice(colon + 1);
+    const channel = await this.#requireClient().channels.fetch(channelId);
+    if (!channel?.isTextBased() || !channel.messages) return;
+    const msg = await channel.messages.fetch(snowflake);
+    await msg.delete();
   }
 
   /** Test / internal: admit a message when open. */
@@ -441,7 +454,25 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
       throw new Error(`Discord send failed (${response.status}): ${text.slice(0, 200)}`);
     }
     const data = JSON.parse(text) as { id?: string };
-    return data.id ?? '';
+    const snowflake = data.id ?? '';
+    return snowflake ? `${target}:${snowflake}` : '';
+  }
+
+  async recallMessage(messageId: string): Promise<void> {
+    if (!messageId) return;
+    const colon = messageId.indexOf(':');
+    if (colon <= 0) return;
+    const channelId = messageId.slice(0, colon);
+    const snowflake = messageId.slice(colon + 1);
+    const response = await this.#fetch(`${DISCORD_API}/channels/${channelId}/messages/${snowflake}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bot ${this.#options.config.token}` },
+      signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
+    });
+    if (!response.ok && response.status !== 404) {
+      const text = await response.text();
+      throw new Error(`Discord recall failed (${response.status}): ${text.slice(0, 200)}`);
+    }
   }
 
   admit(msg: DiscordInboundMessage): void {

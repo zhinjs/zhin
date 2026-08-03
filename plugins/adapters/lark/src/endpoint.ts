@@ -176,6 +176,11 @@ export class LarkEndpoint implements EndpointInstance {
     return messageId;
   }
 
+  async recallMessage(messageId: string): Promise<void> {
+    if (!messageId || messageId.startsWith('outbound:')) return;
+    await this.#request(`/im/v1/messages/${messageId}`, { method: 'DELETE' });
+  }
+
   /**
    * im/v1 消息 image 段只接受 image_key：canonical MediaRef（base64/本地路径/URL）
    * 先经 /im/v1/images 物化；上传失败降级为文本（alt 优先），不阻断发送。
