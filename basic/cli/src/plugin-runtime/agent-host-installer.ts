@@ -895,7 +895,7 @@ export function bridgeRuntimeMessage(
     ?? message.metadata?.endpointId
     ?? localName,
   );
-  const senderId = message.sender ?? 'anon';
+  const senderId = resolveStableSenderId(message);
   const quoteId = message.metadata?.quote_id;
   // 入站结构化段：纯文本视图（matched.content）会丢弃媒体，这里把 canonical
   // segments 与提取出的媒体引用（image/audio/video/file 的 MediaRef）挂到
@@ -1118,6 +1118,18 @@ function resolveChannelType(
   if (raw === 'direct' || raw === 'c2c') return 'private';
   if (raw === 'guild') return 'channel';
   return 'private';
+}
+
+/**
+ * 稳定发送者 ID：QQ/KOOK/Discord 等适配器 `sender` 传显示名（昵称可变），稳定身份
+ * 经 `metadata.userId` 传递；未提供 `userId` 的适配器（OneBot/ICQQ/Milky 等 sender
+ * 本身即平台 ID）原样回退。`$sender.id` 是私聊 sceneId 与记忆作用域的 key，
+ * 必须稳定——否则用户改名即换会话、历史上下文丢失。
+ */
+function resolveStableSenderId(message: Message): string {
+  const metaId = message.metadata?.userId;
+  if (metaId != null && String(metaId).trim()) return String(metaId);
+  return message.sender ?? 'anon';
 }
 
 function isClearCommand(content: string): boolean {

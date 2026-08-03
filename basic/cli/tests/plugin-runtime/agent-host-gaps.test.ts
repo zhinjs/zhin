@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Message } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import type { AITriggerConfig } from '@zhin.js/core';
+import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import type { ImTranscriptWriteInput } from '@zhin.js/agent';
 import {
   bridgeRuntimeMessage,
@@ -285,6 +286,47 @@ describe('缺口 3：masters / trusted 角色解析', () => {
     expect(comm.$sender.isMaster).toBe(true);
     expect(comm.$sender.isTrusted).toBe(false);
     expect((comm as { extra?: Record<string, unknown> }).extra?.endpointMaster).toBe('user-1');
+  });
+});
+
+describe('稳定 senderId：metadata.userId 优先于显示名（QQ/KOOK/Discord）', () => {
+  it('sender 为昵称时 $sender.id 取 metadata.userId，私聊 sceneId 稳定', () => {
+    const message = makeMessage({
+      content: '你好',
+      sender: 'Cc',
+      target: 'private:OPENID_A',
+      metadata: { channelKind: 'private', endpoint: 'zhin', userId: 'OPENID_A' },
+    });
+    const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
+    expect(comm.$sender.id).toBe('OPENID_A');
+    // 显示名保留在 name，供 prompt 展示
+    expect(comm.$sender.name).toBe('Cc');
+    expect(resolveIMSessionIdFromMessage(comm)).toBe('icqq:zhin:private:OPENID_A');
+  });
+
+  it('昵称变化不影响私聊 session key（同一 userId）', () => {
+    const before = bridgeRuntimeMessage(makeMessage({
+      content: 'hi', sender: 'Cc', target: 'private:OPENID_A',
+      metadata: { channelKind: 'private', endpoint: 'zhin', userId: 'OPENID_A' },
+    }), undefined, { isMaster: false, isTrusted: false });
+    const after = bridgeRuntimeMessage(makeMessage({
+      content: 'hi', sender: 'Cc(新昵称)', target: 'private:OPENID_A',
+      metadata: { channelKind: 'private', endpoint: 'zhin', userId: 'OPENID_A' },
+    }), undefined, { isMaster: false, isTrusted: false });
+    expect(resolveIMSessionIdFromMessage(after)).toBe(resolveIMSessionIdFromMessage(before));
+  });
+
+  it('无 metadata.userId 时回退 message.sender（OneBot/ICQQ sender 本身即 ID）', () => {
+    const message = privateMessage('你好');
+    const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
+    expect(comm.$sender.id).toBe('user-1');
+    expect(resolveIMSessionIdFromMessage(comm)).toBe('icqq:10001:private:user-1');
+  });
+
+  it('metadata.userId 为空白字符串时同样回退 message.sender', () => {
+    const message = privateMessage('你好', { userId: '  ' });
+    const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
+    expect(comm.$sender.id).toBe('user-1');
   });
 });
 
