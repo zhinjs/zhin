@@ -28,11 +28,28 @@ export interface DeferredToolRuntime {
 
 const deferredRuntime = new WeakMap<Message, DeferredToolRuntime>();
 
+/** 异步上下文级 runtime：优先于 WeakMap——subagent / standalone loop 的隔离通道 */
+import { AsyncLocalStorage } from 'node:async_hooks';
+const deferredRuntimeAls = new AsyncLocalStorage<DeferredToolRuntime>();
+
+/**
+ * 在独立 deferred runtime 下执行：load_tool / discover 的 snapshot 变更只影响本上下文，
+ * 不会污染父会话（此前 subagent 的 load_tool 会写父会话 snapshot）。
+ */
+export function runWithDeferredToolRuntime<T>(
+  runtime: DeferredToolRuntime,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return deferredRuntimeAls.run(runtime, fn);
+}
+
 export function bindDeferredToolRuntime(message: Message, runtime: DeferredToolRuntime): void {
   deferredRuntime.set(message, runtime);
 }
 
 export function getDeferredToolRuntime(message?: Message): DeferredToolRuntime | undefined {
+  const scoped = deferredRuntimeAls.getStore();
+  if (scoped) return scoped;
   if (!message) return undefined;
   return deferredRuntime.get(message);
 }

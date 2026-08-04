@@ -2,13 +2,19 @@
  * Standalone agentLoop runner (subagent / deferred worker) — isolated memory context.
  */
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import { type AgentTool, type AIProvider, type Usage, type MediaContentBlock, agentLoop, agentContextFrom, assistantText, createUserMessage, createMemoryContextRepository, getLlmTransportModel, agentToolsToLlmTools, registerLlmApiFromProviders, sdkEntryFromProvider, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolResultTransform, type StreamOptions } from '@zhin.js/ai';
+import { type AgentTool, type AIProvider, type Usage, type MediaContentBlock, agentLoop, agentContextFrom, assistantText, createUserMessage, createMemoryContextRepository, getLlmTransportModel, agentToolsToLlmTools, registerLlmApiFromProviders, sdkEntryFromProvider, getLoadedToolNamesFromSnapshot, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolResultTransform, type StreamOptions } from '@zhin.js/ai';
 import { runWithCommMessage, runWithDirectAgentExecution } from '../security/comm-message-context.js';
 import type { Message } from '../orchestrator/types.js';
 import { sanitizeAssistantReply, unwrapJsonStringLayers } from '../core/text-sanitize.js';
 import { type ToolCallRecord, formatToolCallsForUser } from '../core/tool-calls-user-format.js';
 import type { AgentRunInput } from '../media/media-types.js';
 import { type PhaseTraceConfig, logAgentLoopIterationEnd } from '../internal/phase-trace.js';
+import {
+  getDeferredToolRuntime,
+  runWithDeferredToolRuntime,
+  TOOLS_MUTATED_MARKER,
+} from '../builtin/deferred-tool-meta.js';
+import { catalogToolByName } from '../tool-catalog/tool-catalog.js';
 const logger = getLogger('AgentLoopStandalone');
 
 function tokenUsageToLegacy(usage: TokenUsage): Usage {
@@ -127,7 +133,31 @@ export async function runAgentLoopStandaloneTurn(
   const promptMessages = buildUserMessages(userInput);
 
   const legacyByName = new Map(tools.map((t) => [t.name, t]));
-  const llmTools = agentToolsToLlmTools(tools);
+  let llmTools = agentToolsToLlmTools(tools);
+
+  // 子 agent 专属 deferred runtime：snapshot 从父会话克隆（看得见父已加载工具），
+  // 但 load_tool 的变更只活在本 loop（不写回父会话、不落库）。
+  const parentDeferred = getDeferredToolRuntime(commMessage);
+  const childDeferred = parentDeferred
+    ? {
+      ...parentDeferred,
+      snapshot: structuredClone(parentDeferred.snapshot),
+      persistSnapshot: async () => {},
+    }
+    : undefined;
+
+  /** load_tool 命中后把 catalog 里的完整工具并入可执行集并重建 schema 列表 */
+  const reloadDeferredTools = (): void => {
+    if (!childDeferred) return;
+    const byName = catalogToolByName(childDeferred.catalog);
+    for (const name of getLoadedToolNamesFromSnapshot(childDeferred.snapshot)) {
+      if (legacyByName.has(name)) continue;
+      const item = byName.get(name);
+      if (item) legacyByName.set(name, item.fullTool);
+    }
+    llmTools = agentToolsToLlmTools([...legacyByName.values()]);
+  };
+
   const toolCalls: ToolCallRecord[] = [];
   let iterations = 0;
   let lastAssistantText = '';
@@ -185,9 +215,28 @@ export async function runAgentLoopStandaloneTurn(
       return undefined;
     },
     executeTool: async (toolCall: ParsedToolCall) => runTool(toolCall),
+    // 延迟加载：load_tool 命中标记后重建工具集再补全一轮（与主 loop 同一机制）
+    ...(childDeferred
+      ? {
+        refreshTools: async () => {
+          reloadDeferredTools();
+          return llmTools;
+        },
+        shouldRecompleteAfterTool: (result: AgentMessage) =>
+          result.role === 'toolResult'
+          && Array.isArray(result.content)
+          && result.content.some(
+            (block) => block.type === 'text'
+              && typeof block.text === 'string'
+              && block.text.includes(TOOLS_MUTATED_MARKER),
+          ),
+        maxRecompletePerIteration: 1,
+      }
+      : {}),
   };
 
-  for await (const event of agentLoop(promptMessages, loopContext, loopConfig, signal)) {
+  const drive = async (): Promise<void> => {
+    for await (const event of agentLoop(promptMessages, loopContext, loopConfig, signal)) {
     if (event.type === 'turn_start') {
       iterations += 1;
     }
@@ -223,6 +272,14 @@ export async function runAgentLoopStandaloneTurn(
       const userBatch = event.userMessages ?? promptMessages;
       await repository.appendMessages(sessionId, [...userBatch, ...event.messages]);
     }
+    }
+  };
+
+  // 独立 deferred runtime 下驱动 loop：load_tool 变更不污染父会话
+  if (childDeferred) {
+    await runWithDeferredToolRuntime(childDeferred, drive);
+  } else {
+    await drive();
   }
 
   const content = sanitizeAssistantReply(lastAssistantText, {
