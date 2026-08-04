@@ -5,6 +5,7 @@ import type { Model } from './types/model.js';
 import type { LlmTool, ParsedToolCall } from './types/tool.js';
 import { isContextOverflowError } from '../compaction/agent-message-compaction.js';
 import { complete, type StreamOptions } from './api-registry.js';
+import { createIncrementalRepair } from './repair-agent-messages.js';
 import { validateToolCall } from './validate-tool-call.js';
 import { isTieredParallelTool } from './tiered-tool-buckets.js';
 export interface BeforeToolCallContext {
@@ -125,7 +126,10 @@ async function executeToolCallsInTurn(options: ExecuteToolCallsOptions): Promise
   const { toolCalls, tools, config, executeTool, signal, onResult, onEvent } = options;
   const mode = config.toolExecution ?? 'sequential';
 
-  const runOne = async (rawCall: ParsedToolCall): Promise<void> => {
+  const runOne = async (
+    rawCall: ParsedToolCall,
+    emitResult: (result: AgentMessage) => void = onResult,
+  ): Promise<void> => {
     if (signal?.aborted) return;
 
     let toolCall = rawCall;
@@ -136,7 +140,7 @@ async function executeToolCallsInTurn(options: ExecuteToolCallsOptions): Promise
         rawCall,
         error instanceof Error ? error.message : String(error),
       );
-      onResult(result);
+      emitResult(result);
       onEvent({ type: 'tool_execution_start', toolCallId: rawCall.id, toolCall: rawCall });
       onEvent({ type: 'tool_execution_end', toolCallId: rawCall.id, result });
       return;
@@ -146,7 +150,7 @@ async function executeToolCallsInTurn(options: ExecuteToolCallsOptions): Promise
       const gate = await config.beforeToolCall({ toolCall, tools }, signal);
       if (gate?.allowed === false) {
         const result = createErrorToolResult(toolCall, gate.reason ?? 'Tool call denied');
-        onResult(result);
+        emitResult(result);
         onEvent({ type: 'tool_execution_start', toolCallId: toolCall.id, toolCall });
         onEvent({ type: 'tool_execution_end', toolCallId: toolCall.id, result });
         return;
@@ -158,7 +162,7 @@ async function executeToolCallsInTurn(options: ExecuteToolCallsOptions): Promise
 
     onEvent({ type: 'tool_execution_start', toolCallId: toolCall.id, toolCall });
     const result = await executeTool(toolCall, tools, signal);
-    onResult(result);
+    emitResult(result);
     onEvent({ type: 'tool_execution_end', toolCallId: toolCall.id, result });
     if (config.afterToolCall) {
       await config.afterToolCall({ toolCall, result }, signal);
@@ -176,7 +180,14 @@ async function executeToolCallsInTurn(options: ExecuteToolCallsOptions): Promise
   }
 
   if (parallelCalls.length > 0) {
-    await Promise.all(parallelCalls.map((call) => runOne(call)));
+    // 并行执行、按调用序落列：toolResult 在消息流中的位置与 toolCall 一一对应，
+    // 不依赖各工具完成先后（Anthropic 类协议对块顺序敏感）。
+    const slots = new Array<AgentMessage | undefined>(parallelCalls.length);
+    await Promise.all(parallelCalls.map((call, index) =>
+      runOne(call, (result) => { slots[index] = result; })));
+    for (const result of slots) {
+      if (result) onResult(result);
+    }
   }
   for (const call of sequentialCalls) {
     await runOne(call);
@@ -197,8 +208,10 @@ export async function* agentLoop(
   const convertToLlm = config.convertToLlm ?? defaultConvertToLlm;
   const executeTool = config.executeTool ?? defaultExecuteTool;
   const emitted: AgentMessage[] = [];
+  // 修复不变量由 loop 持有：消息 append-only，按最后 user 边界增量修复；
+  // 历史被替换（transform/压缩）时重置检查点。
+  const repairer = createIncrementalRepair();
 
-  try {
   yield { type: 'agent_start' };
 
   for (let iteration = 0; iteration < maxIterations; iteration++) {
@@ -209,14 +222,16 @@ export async function* agentLoop(
     const transformed = config.transformContext
       ? await config.transformContext(messages, signal)
       : messages;
+    if (transformed !== messages) repairer.reset();
     messages.splice(0, messages.length, ...transformed);
 
     const buildLlmContext = async (): Promise<Context> => {
-      const llmMessages = await convertToLlm(messages);
+      const llmMessages = await convertToLlm(repairer.repair(messages));
       return {
         systemPrompt: initialContext.systemPrompt,
         messages: llmMessages,
         tools: tools.length > 0 ? tools : undefined,
+        preRepaired: true,
       };
     };
 
@@ -233,6 +248,7 @@ export async function* agentLoop(
         try {
           const compacted = await config.onContextOverflow(messages, signal);
           if (compacted?.length) {
+            repairer.reset();
             messages.splice(0, messages.length, ...compacted);
           }
           assistant = await complete(config.model, await buildLlmContext(), {
@@ -267,6 +283,7 @@ export async function* agentLoop(
 
     const toolCalls = extractToolCalls(assistant);
     const toolResults: AgentMessage[] = [];
+    // 每轮独立计数：maxRecompletePerIteration 语义为单轮上限
     let recompleteCount = 0;
 
     if (toolCalls.length === 0) {
@@ -274,14 +291,10 @@ export async function* agentLoop(
       break;
     }
 
-    const runCalls = config.toolExecution === 'sequential'
-      ? toolCalls
-      : toolCalls;
-
     const pendingEvents: AgentEvent[] = [];
     let recompletePending = false;
     await executeToolCallsInTurn({
-      toolCalls: runCalls,
+      toolCalls,
       tools,
       config,
       executeTool,
@@ -375,11 +388,8 @@ export async function* agentLoop(
     }
   }
 
-  yield { type: 'agent_end', messages: emitted, userMessages: promptBatch };
-  } finally {
-    emitted.length = 0;
-    messages.length = 0;
-  }
+  // 事件不可变：发出去的快照不回看本地数组（生成器恢复后本地仍会继续 push）
+  yield { type: 'agent_end', messages: [...emitted], userMessages: promptBatch };
 }
 
 export function agentContextFrom(context: Context): AgentContext {

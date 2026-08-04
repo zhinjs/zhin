@@ -96,9 +96,11 @@ function toolResultToAiMessage(message: ToolResultMessage): ModelMessage {
 export function agentMessagesToAiSdk(
   messages: AgentMessage[],
   mediaCapabilities: readonly ProviderMediaKind[] = DEFAULT_PROVIDER_MEDIA,
+  options?: { preRepaired?: boolean },
 ): ModelMessage[] {
   const out: ModelMessage[] = [];
-  for (const message of repairAgentMessagesForLlm(messages)) {
+  const source = options?.preRepaired ? messages : repairAgentMessagesForLlm(messages);
+  for (const message of source) {
     if (!isLlmAgentMessage(message)) continue;
     if (message.role === 'user') {
       out.push({ role: 'user', content: userBlocksToAiContent(message, mediaCapabilities) });
@@ -118,7 +120,9 @@ export function contextToAiSdkPrompt(
   system?: string;
   messages: ModelMessage[];
 } {
-  const messages = agentMessagesToAiSdk(context.messages, mediaCapabilities);
+  const messages = agentMessagesToAiSdk(context.messages, mediaCapabilities, {
+    preRepaired: context.preRepaired === true,
+  });
   const system = context.systemPrompt.trim() || undefined;
   return { system, messages };
 }

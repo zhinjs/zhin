@@ -89,9 +89,11 @@ function toolResultToOpenAiMessage(message: ToolResultMessage): ChatMessage {
 export function agentMessagesToOpenAi(
   messages: AgentMessage[],
   mediaCapabilities: readonly ProviderMediaKind[] = DEFAULT_PROVIDER_MEDIA,
+  options?: { preRepaired?: boolean },
 ): ChatMessage[] {
   const out: ChatMessage[] = [];
-  for (const message of repairAgentMessagesForLlm(messages)) {
+  const source = options?.preRepaired ? messages : repairAgentMessagesForLlm(messages);
+  for (const message of source) {
     if (!isLlmAgentMessage(message)) continue;
     if (message.role === 'user') {
       out.push({ role: 'user', content: userBlocksToOpenAiContent(message, mediaCapabilities) });
@@ -124,7 +126,9 @@ export function contextToChatCompletionRequest(
   if (context.systemPrompt.trim()) {
     messages.push({ role: 'system', content: context.systemPrompt });
   }
-  messages.push(...agentMessagesToOpenAi(context.messages));
+  messages.push(...agentMessagesToOpenAi(context.messages, DEFAULT_PROVIDER_MEDIA, {
+    preRepaired: context.preRepaired === true,
+  }));
   return {
     model: model.id,
     messages,

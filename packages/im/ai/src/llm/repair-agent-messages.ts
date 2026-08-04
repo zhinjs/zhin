@@ -95,3 +95,40 @@ export function repairAgentMessagesForLlm(messages: AgentMessage[]): AgentMessag
 
   return out;
 }
+
+/**
+ * 增量修复器：为 append-only 消息流的循环调用方（agentLoop）持有修复不变量。
+ * 修复边界取最后一个 user 消息——边界前的回合组已闭合，修复结果不随追加变化；
+ * 每次转换只重修边界后的活跃尾部。历史被整体替换（压缩/transform）时 reset()。
+ */
+export function createIncrementalRepair(): {
+  reset(): void;
+  repair(messages: AgentMessage[]): AgentMessage[];
+} {
+  let repairedPrefix: AgentMessage[] = [];
+  let prefixEnd = 0; // raw[0..prefixEnd) 已修复；prefixEnd 处为 user 消息或 0
+  return {
+    reset() {
+      repairedPrefix = [];
+      prefixEnd = 0;
+    },
+    repair(messages: AgentMessage[]): AgentMessage[] {
+      let boundary = -1;
+      for (let i = messages.length - 1; i >= 0; i -= 1) {
+        if (messages[i]?.role === 'user') {
+          boundary = i;
+          break;
+        }
+      }
+      const targetEnd = boundary >= 0 ? boundary : 0;
+      if (targetEnd < prefixEnd) this.reset();
+      if (targetEnd > prefixEnd) {
+        repairedPrefix = repairedPrefix.concat(
+          repairAgentMessagesForLlm(messages.slice(prefixEnd, targetEnd)),
+        );
+        prefixEnd = targetEnd;
+      }
+      return repairedPrefix.concat(repairAgentMessagesForLlm(messages.slice(prefixEnd)));
+    },
+  };
+}
