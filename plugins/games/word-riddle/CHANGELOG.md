@@ -1,5 +1,16 @@
 # @zhin.js/plugin-word-riddle
 
+## 1.0.8
+
+### Patch Changes
+
+- Updated dependencies [7c1e63a]
+- Updated dependencies [4fbff5d]
+- Updated dependencies [5b94d9c]
+  - @zhin.js/command@1.0.5
+  - @zhin.js/core@1.5.0
+  - @zhin.js/game-kit@3.0.0
+
 ## 1.0.7
 
 ### Patch Changes

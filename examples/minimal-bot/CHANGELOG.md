@@ -1,5 +1,11 @@
 # minimal-bot
 
+## 0.0.20
+
+### Patch Changes
+
+- zhin.js@6.0.0
+
 ## 0.0.19
 
 ### Patch Changes
