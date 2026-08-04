@@ -40,8 +40,15 @@ zhin runtime migrate status        # 输出 JSON；state 为 ready 时退出码 
    最常见的是 action 捕获了模块级变量 —— 把它提升为 owner Resource，能力文件再从执行上下文读。
 5. **装配**：`zhin runtime migrate cutover --write` 生成 `package.json#zhin` 与 `plugin.ts`，
    并补齐 `@zhin.js/plugin-runtime`、`@zhin.js/runtime` 以及按能力所需的
-   `@zhin.js/command|middleware|component` 依赖。
-   若 `package.json` 已有 `zhin` 字段，cutover 会拒绝执行，此时手写 manifest。
+   `@zhin.js/command|middleware|component` 依赖。启动脚本统一是
+   `zhin runtime start`，不要再写失效的 `zhin dev` / `zhin start` / `zhin build`。
+   - `package.json#private: true` 的本地 TS root 使用 `entry: "./plugin.ts"`，直接执行
+     `pnpm dev` 或 `zhin runtime start`。
+   - 非 private 的发布包使用 `entry: "./plugin.js"`；cutover 生成独立的
+     `tsconfig.zhin.json`、`zhin:build` 与 `prepack` / `prepublishOnly`，以便 `pnpm pack`
+     和 npm publish 前把 `plugin.ts`、约定目录和 `src/` 编译成可发布 JS。不要把
+     `plugin.ts` 作为发布 manifest 的入口。
+   已有合法 manifest 会被补齐到相应模式；其它 `zhin` 字段形态仍需人工处理。
 6. **迁移剩余配置**：`schema.json`（只声明本包字段）、Feature mounts、child plugin mounts。
 7. **删旧**：删掉旧注册代码、旧入口、compat 依赖。
 8. **验证**：构建 + 测试 + 行为验证（命令路由、消息发送、配置默认值、热更新）。
@@ -111,8 +118,33 @@ zhin runtime migrate status                  # state 必须是 ready（退出码
 rg -n "usePlugin\(|getPlugin\(|add(Command|Middleware|Component|Tool|Cron)\(|@zhin.js/next-" .
 pnpm --filter <plugin-package> build
 pnpm --filter <plugin-package> test
+pnpm check:plugin-runtime-migration-readiness
+pnpm check:plugin-runtime-migration-verify
+```
+
+公开插件还必须验证 tarball，而不是只验证源码类型检查：
+
+```bash
+pnpm --filter <plugin-package> run build
+pnpm --filter <plugin-package> pack
+# 解开 tarball，确认 package/plugin.js、package/plugin.d.ts 和已编译的能力目录存在
 ```
 
 `rg` 只允许命中文档与迁移测试。`ready` 意味着静态检查通过，**不等于行为等价** —— 平台相关
 行为（真实适配器收发、定时触发）要么实测，要么在交付说明里写清未验证项，不要用"编译通过"
 替代运行时验证。
+
+## 仓库门禁
+
+仓库内声明 `zhin.type: "plugin"` 的包会由 `check:plugin-runtime-migration-readiness` 做确定性检查。
+它只扫描当前 checkout，不读取 cwd 之外的用户项目；`tests/`、`test/`、`fixtures/`、`__fixtures__/`
+和带 `zhin-migration-gate: legacy-fixture` 标记的源码会被排除。因此迁移示例可以保留旧 API，
+但 native Plugin Runtime 的生产源码不能在函数体内调用 `usePlugin()` 或 `getPlugin()`。
+
+## 离线 Verify
+
+`pnpm check:plugin-runtime-migration-verify` 是 migration 的离线 E2E verify：先确认 cutover
+已经无变更，再用不触发 install 的 `pnpm run build` 验证构建。私有 development root 额外要求
+`scripts.dev` 与 `scripts.start` 都是 `zhin runtime start`；公开 publish package 会执行
+`pnpm pack`，解读 tarball 后确认 `package.json#zhin.entry`、
+`plugin.js`、`plugin.d.ts` 和每个已发现能力目录的 JS 产物一致。它不执行 install，也不会访问网络。

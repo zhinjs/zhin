@@ -1,5 +1,5 @@
 ---
-"@zhin.js/command": minor
+"@zhin.js/command": patch
 "@zhin.js/adapter": patch
 "@zhin.js/adapter-qq": patch
 "@zhin.js/adapter-icqq": patch

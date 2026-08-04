@@ -155,6 +155,16 @@ const checks = [
     description: '插件目录禁止在 middleware/action 等运行时回调内 getPlugin()',
   },
   {
+    name: 'Plugin Runtime Migration Readiness',
+    command: 'pnpm check:plugin-runtime-migration-readiness',
+    description: '已迁移插件必须保持 native manifest，且函数体不得调用 legacy usePlugin/getPlugin',
+  },
+  {
+    name: 'Plugin Runtime Migration Verify',
+    command: 'pnpm check:plugin-runtime-migration-verify',
+    description: '离线 E2E：cutover 后构建，公开包 tarball 含 JS entry 与 manifest 契约',
+  },
+  {
     name: 'Install Size (IM core)',
     command: 'pnpm check:install-size',
     description: 'zhin.js production node_modules ≤10MB（ADR 0019）',

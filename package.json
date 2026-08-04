@@ -75,6 +75,8 @@
     "check:a2a-mesh": "node scripts/check-a2a-mesh.mjs",
     "check:use-plugin-top-level": "node scripts/check-use-plugin-top-level.mjs",
     "check:get-plugin-runtime": "node scripts/check-get-plugin-runtime.mjs",
+    "check:plugin-runtime-migration-readiness": "node scripts/check-plugin-runtime-migration-readiness.mjs",
+    "check:plugin-runtime-migration-verify": "pnpm exec vitest run basic/cli/tests/plugin-runtime/migration-verify.test.ts",
     "check:all": "node scripts/check-all-harness.mjs",
     "type-check": "tsc --noEmit -p tsconfig.typecheck.json",
     "link": "pnpm --filter @zhin.js/cli exec npm link",

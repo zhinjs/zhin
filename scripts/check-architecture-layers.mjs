@@ -34,12 +34,14 @@ const repoRoot = path.resolve(__dirname, '..');
 // plugin-runtime（契约/宿主 token，零 zhin 依赖）→ feature-kit（feature provider 基座）
 // → 8 个 provider 包（adapter/command/component/middleware/tool/skill/agent-feature/mcp-feature）
 // → runtime（RootHost 装配）→ isolate / config-yaml（依赖 runtime，仅契约）。
-// packages/host/http 是 HTTP Host 实现，仅依赖 basic + plugin-runtime。
+// packages/host/http-contract 是协议 Host 的最小端口（路由 + body），零业务依赖。
+// packages/host/http 是具体 HTTP / WebSocket Host，仅依赖 basic + plugin-runtime。
 const providerLayerAllowed = ['basic', 'packages/im/plugin-runtime', 'packages/im/feature-kit'];
 const layers = {
   // Console wire SSOT must remain zero-dependency so browsers, both Hosts and
   // external Console builds can share it without pulling runtime packages.
   'packages/console/protocol': { level: 0, allowedImports: [] },
+  'packages/host/http-contract': { level: 0, allowedImports: [] },
   'basic/cli': { level: 0, allowedImports: ['basic', 'packages/im', 'packages/host', 'packages/console'] },
   'basic': { level: 0, allowedImports: ['basic'] },
   'packages/im/plugin-runtime': { level: 1, allowedImports: ['basic'] },
@@ -55,14 +57,17 @@ const layers = {
   'packages/im/runtime': { level: 1, allowedImports: [...providerLayerAllowed, 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware', 'packages/im/tool', 'packages/im/skill', 'packages/im/agent-feature', 'packages/im/mcp-feature'] },
   'packages/im/isolate': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/im/runtime'] },
   'packages/im/config-yaml': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/im/runtime'] },
-  'packages/host/http': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/console/protocol'] },
+  'packages/host/http': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/console/protocol', 'packages/host/http-contract'] },
   'packages/im/kernel': { level: 1, allowedImports: ['basic'] },
   'packages/im/ai': { level: 2, allowedImports: ['basic', 'packages/im/kernel'] },
   'packages/im/core': { level: 3, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/plugin-runtime', 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware'] },
   'packages/im/agent': { level: 4, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/plugin-runtime', 'packages/im/agent-feature', 'packages/im/mcp-feature', 'packages/im/skill', 'packages/im/tool'] },
   // define-plugin.ts 是 @zhin.js/plugin-runtime 的门面 re-export（zhin.js/plugin-runtime 子路径），允许。
   'packages/im/zhin': { level: 5, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent', 'packages/im/runtime', 'packages/im/plugin-runtime'] },
-  'packages/host/mcp': { level: 7, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core'] },
+  // Protocol Hosts consume only the narrow HTTP route contract; they must not
+  // depend on the concrete HTTP Host implementation.
+  'packages/host/mcp': { level: 7, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/host/http-contract'] },
+  'packages/host/a2a': { level: 7, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/host/http-contract'] },
   'packages/console/contract': { level: 10, allowedImports: ['basic', 'packages/im/ai', 'packages/console/protocol'] },
   'packages/console/pagemanager': { level: 11, allowedImports: ['basic', 'packages/console/contract', 'packages/im/plugin-runtime', 'packages/im/feature-kit', 'packages/im/runtime'] },
   'packages/console/client': { level: 12, allowedImports: ['basic', 'packages/console/protocol', 'packages/console/contract'] },
@@ -83,7 +88,9 @@ const packageNameToPath = {
   '@zhin.js/agent': 'packages/im/agent',
   'zhin.js': 'packages/im/zhin',
   '@zhin.js/host-http': 'packages/host/http',
+  '@zhin.js/host-http-contract': 'packages/host/http-contract',
   '@zhin.js/mcp': 'packages/host/mcp',
+  '@zhin.js/a2a': 'packages/host/a2a',
   '@zhin.js/plugin-runtime': 'packages/im/plugin-runtime',
   '@zhin.js/feature-kit': 'packages/im/feature-kit',
   '@zhin.js/adapter': 'packages/im/adapter',
@@ -324,18 +331,31 @@ for (const layerPath of layerPathsBySpecificity) {
 }
 
 // Import scanning cannot see a manifest dependency before source starts using
-// it. The Console wire protocol must remain safe for browsers and both Hosts.
-const consoleProtocolManifest = JSON.parse(fs.readFileSync(
-  path.join(repoRoot, 'packages/console/protocol/package.json'),
-  'utf8',
-));
-for (const section of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
-  for (const dependency of Object.keys(consoleProtocolManifest[section] ?? {})) {
-    violations.push({
-      file: 'packages/console/protocol/package.json',
-      import: dependency,
-      reason: `@zhin.js/console-protocol must remain zero-runtime-dependency (${section})`,
-    });
+// it. These wire contracts must remain safe for their independent consumers.
+const zeroRuntimeDependencyContracts = [
+  {
+    directory: 'packages/console/protocol',
+    packageName: '@zhin.js/console-protocol',
+  },
+  {
+    directory: 'packages/host/http-contract',
+    packageName: '@zhin.js/host-http-contract',
+  },
+];
+for (const contract of zeroRuntimeDependencyContracts) {
+  const manifestPath = `${contract.directory}/package.json`;
+  const manifest = JSON.parse(fs.readFileSync(
+    path.join(repoRoot, manifestPath),
+    'utf8',
+  ));
+  for (const section of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
+    for (const dependency of Object.keys(manifest[section] ?? {})) {
+      violations.push({
+        file: manifestPath,
+        import: dependency,
+        reason: `${contract.packageName} must remain zero-runtime-dependency (${section})`,
+      });
+    }
   }
 }
 
