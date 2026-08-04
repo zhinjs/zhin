@@ -1,5 +1,16 @@
 # capabilities-bot
 
+## 0.1.6
+
+### Patch Changes
+
+- Updated dependencies [7c1e63a]
+- Updated dependencies [4fbff5d]
+- Updated dependencies [5b94d9c]
+  - @zhin.js/command@1.0.5
+  - @zhin.js/agent@1.1.0
+  - @zhin.js/adapter-sandbox@7.0.0
+
 ## 0.1.5
 
 ### Patch Changes
