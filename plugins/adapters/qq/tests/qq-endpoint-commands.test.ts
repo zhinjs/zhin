@@ -237,4 +237,13 @@ describe('runQqEndpointList', () => {
 
     expect(text).toContain('（无）');
   });
+
+  it('有进行中绑定时 footer 提示 qq.endpoint cancel', () => {
+    const state = createQqRuntimeState();
+    state.bindFlow = { name: 'a', stop: vi.fn() };
+
+    const text = runQqEndpointList(state, root);
+
+    expect(text).toContain('qq.endpoint cancel');
+  });
 });

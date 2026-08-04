@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseCommandDefinition } from '@zhin.js/command';
 import listCommand from '../commands/endpoint/list.js';
 import addCommand from '../commands/endpoint/add/[name:string=].js';
@@ -53,6 +53,15 @@ describe('qq.endpoint command definitions', () => {
     const text = listCommand.execute(fakeContext(state)) as string;
 
     expect(text).toContain('bot-1');
+  });
+
+  it('list execute 在有进行中绑定时提示 qq.endpoint cancel', () => {
+    const state = createQqRuntimeState();
+    state.bindFlow = { name: 'a', stop: vi.fn() };
+
+    const text = listCommand.execute(fakeContext(state)) as string;
+
+    expect(text).toContain('qq.endpoint cancel');
   });
 
   it('cancel execute 在无流程时提示', () => {
