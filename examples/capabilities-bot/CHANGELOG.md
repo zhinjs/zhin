@@ -1,5 +1,12 @@
 # capabilities-bot
 
+## 0.1.8
+
+### Patch Changes
+
+- Updated dependencies [696ab1b]
+  - @zhin.js/agent@1.1.2
+
 ## 0.1.7
 
 ### Patch Changes

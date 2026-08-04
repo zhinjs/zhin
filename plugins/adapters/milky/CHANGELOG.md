@@ -1,5 +1,13 @@
 # @zhin.js/adapter-milky
 
+## 6.0.2
+
+### Patch Changes
+
+- Updated dependencies [696ab1b]
+  - @zhin.js/agent@1.1.2
+  - zhin.js@6.0.1
+
 ## 6.0.1
 
 ### Patch Changes
