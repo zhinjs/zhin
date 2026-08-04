@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-short-url",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "description": "URL shortener plugin for Zhin.js — shorten & expand URLs (Plugin Runtime)",
   "type": "module",
   "main": "./lib/index.js",

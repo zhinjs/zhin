@@ -1,5 +1,17 @@
 # @zhin.js/agent
 
+## 1.1.1
+
+### Patch Changes
+
+- Updated dependencies [c8f4d45]
+  - @zhin.js/plugin-runtime@1.1.2
+  - @zhin.js/agent-feature@1.0.5
+  - @zhin.js/core@1.5.1
+  - @zhin.js/mcp-feature@1.0.5
+  - @zhin.js/skill@1.0.5
+  - @zhin.js/tool@1.0.5
+
 ## 1.1.0
 
 ### Minor Changes

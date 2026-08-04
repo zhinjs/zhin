@@ -1,5 +1,16 @@
 # @zhin.js/core
 
+## 1.5.1
+
+### Patch Changes
+
+- Updated dependencies [c8f4d45]
+  - @zhin.js/plugin-runtime@1.1.2
+  - @zhin.js/adapter@1.1.4
+  - @zhin.js/command@1.0.6
+  - @zhin.js/component@1.0.5
+  - @zhin.js/middleware@1.0.5
+
 ## 1.5.0
 
 ### Minor Changes
