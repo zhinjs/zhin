@@ -62,6 +62,12 @@
       "@zhin.js/adapter": [
         "./packages/im/adapter/src/index.ts"
       ],
+      "@zhin.js/im-contract": [
+        "./packages/im/im-contract/src/index.ts"
+      ],
+      "@zhin.js/host-http-contract": [
+        "./packages/host/http-contract/src/index.ts"
+      ],
       "@zhin.js/agent-feature": [
         "./packages/im/agent-feature/src/index.ts"
       ],
