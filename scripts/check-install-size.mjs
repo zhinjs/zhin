@@ -24,6 +24,7 @@ const IM_STACK = [
   { dir: 'basic/schedule', name: '@zhin.js/schedule' },
   { dir: 'packages/im/plugin-runtime', name: '@zhin.js/plugin-runtime' },
   { dir: 'packages/im/feature-kit', name: '@zhin.js/feature-kit' },
+  { dir: 'packages/im/im-contract', name: '@zhin.js/im-contract' },
   { dir: 'packages/im/adapter', name: '@zhin.js/adapter' },
   { dir: 'packages/im/command', name: '@zhin.js/command' },
   { dir: 'packages/im/component', name: '@zhin.js/component' },

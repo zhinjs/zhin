@@ -32,6 +32,7 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
   { text: '快速开始', link: '/getting-started/' },
   { text: '第一个插件', link: '/getting-started/first-plugin' },
   sidebarGroup('核心概念', [
+    { text: '目标架构（SSOT）', link: '/target-architecture' },
     { text: '分层架构', link: '/concepts/architecture' },
     { text: '插件模型', link: '/concepts/plugin-model' },
     { text: '配置即数据', link: '/concepts/config-as-data' },
