@@ -228,11 +228,59 @@ describe('milky protocol helpers', () => {
     expect(formatOutboundSegments('pong')).toEqual([{ type: 'text', data: { text: 'pong' } }]);
     expect(formatOutboundSegments([
       { type: 'text', data: { text: 'see' } },
-      { type: 'image', data: { url: 'https://x/a.png' } },
+      { type: 'image', data: { media: { kind: 'url', value: 'https://x/a.png' } } },
     ])).toEqual([
       { type: 'text', data: { text: 'see' } },
       { type: 'image', data: { uri: 'https://x/a.png' } },
     ]);
+  });
+
+  it('sends base64 media segments directly as base64:// uri', () => {
+    expect(formatOutboundSegments([
+      { type: 'image', data: { media: { kind: 'base64', value: 'aGk=', mime_type: 'image/png' } } },
+    ])).toEqual([
+      { type: 'image', data: { uri: 'base64://aGk=' } },
+    ]);
+    // 已带 base64:// 前缀的值原样透传
+    expect(formatOutboundSegments([
+      { type: 'image', data: { media: { kind: 'base64', value: 'base64://aGk=' } } },
+    ])).toEqual([
+      { type: 'image', data: { uri: 'base64://aGk=' } },
+    ]);
+  });
+
+  it('maps canonical audio/video media segments to milky wire segments', () => {
+    expect(formatOutboundSegments([
+      { type: 'audio', data: { media: { kind: 'url', value: 'https://x/a.silk' } } },
+      {
+        type: 'video',
+        data: {
+          media: { kind: 'url', value: 'https://x/a.mp4' },
+          thumb_uri: 'https://x/a.jpg',
+        },
+      },
+    ])).toEqual([
+      { type: 'record', data: { uri: 'https://x/a.silk' } },
+      { type: 'video', data: { uri: 'https://x/a.mp4', thumb_uri: 'https://x/a.jpg' } },
+    ]);
+  });
+
+  it('drops undeliverable media segments with a warn', () => {
+    // 无 canonical media 引用：丢弃
+    expect(formatOutboundSegments([
+      { type: 'text', data: { text: 'hi' } },
+      { type: 'image', data: {} },
+    ])).toEqual([{ type: 'text', data: { text: 'hi' } }]);
+    // kind=path / file：Milky 资源 uri 不支持，丢弃
+    expect(formatOutboundSegments([
+      { type: 'image', data: { media: { kind: 'path', value: '/tmp/a.png' } } },
+      { type: 'video', data: { media: { kind: 'file', value: 'res-1' } } },
+      { type: 'text', data: { text: 'end' } },
+    ])).toEqual([{ type: 'text', data: { text: 'end' } }]);
+    // file 段：Milky 消息 API 无对应 wire 段，丢弃
+    expect(formatOutboundSegments([
+      { type: 'file', data: { media: { kind: 'file', value: 'fid-1' }, name: 'a.pdf' } },
+    ])).toEqual([{ type: 'text', data: { text: '' } }]);
   });
 });
 

@@ -4,7 +4,16 @@
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
+import { isMediaRef, type MediaRef } from '@zhin.js/core';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import { mrkdwnToMarkdown } from './mrkdwn-to-markdown.js';
+
+const logger = getLogger('slack');
+
+/** 无 canonical MediaRef 或不可投递时留痕（对齐 QQ `*_outbound_media_dropped` 风格）。 */
+function dropOutboundMedia(type: string, reason: string): void {
+  logger.warn(formatCompact({ op: 'slack_outbound_media_dropped', type, reason }));
+}
 
 const SLACK_SIG_VERSION = 'v0';
 const MAX_TIMESTAMP_DRIFT_SECONDS = 300;
@@ -266,29 +275,38 @@ export function formatOutboundWire(payload: unknown): {
           text += `<${String(data.url ?? '')}>`;
         }
         break;
-      case 'image':
-        if (typeof data.url === 'string' && data.url) {
-          attachments.push({
-            image_url: data.url,
-            title: String(data.name ?? data.title ?? ''),
-          });
-        } else if (data.media && typeof data.media === 'object') {
-          files.push(resolveMediaToFile(data.media as { kind: string; value: string }, String(data.alt ?? 'image')));
+      case 'image': {
+        // canonical MediaRef 唯一来源；kind=url 走 attachment 直发，其余物化后 files.uploadV2 上传
+        const media = data.media;
+        if (!isMediaRef(media)) {
+          dropOutboundMedia(item.type, 'missing_media_ref');
+          break;
         }
+        if (media.kind === 'url') {
+          attachments.push({
+            image_url: media.value,
+            title: String(data.alt ?? data.title ?? media.file_name ?? ''),
+          });
+          break;
+        }
+        const imageFile = resolveMediaToFile(media, String(data.alt ?? media.file_name ?? 'image'));
+        if (imageFile) files.push(imageFile);
+        else dropOutboundMedia(item.type, 'unsupported_media_kind');
         break;
+      }
       case 'audio':
       case 'video':
-      case 'file':
-        if (data.media && typeof data.media === 'object') {
-          files.push(resolveMediaToFile(data.media as { kind: string; value: string }, String(data.name ?? item.type)));
-        } else if (data.file || data.url) {
-          files.push({
-            path: typeof data.file === 'string' ? data.file : undefined,
-            url: typeof data.url === 'string' ? data.url : undefined,
-            name: String(data.name ?? item.type),
-          });
+      case 'file': {
+        const media = data.media;
+        if (!isMediaRef(media)) {
+          dropOutboundMedia(item.type, 'missing_media_ref');
+          break;
         }
+        const mediaFile = resolveMediaToFile(media, String(data.name ?? media.file_name ?? item.type));
+        if (mediaFile) files.push(mediaFile);
+        else dropOutboundMedia(item.type, 'unsupported_media_kind');
         break;
+      }
       case 'keyboard':
         blocks.push(...keyboardToBlockKitBlocks(data));
         break;
@@ -321,14 +339,30 @@ export function keyboardToBlockKitBlocks(data: Record<string, unknown>): Record<
   return blocks;
 }
 
+/**
+ * MediaRef → 待上传文件描述：
+ * - kind=url → 记录 URL，由 files.uploadV2 前拉取物化；
+ * - kind=base64 → 解码为 buffer 直传；
+ * - kind=path → 记录本地路径，上传前读盘；
+ * - kind=file → Slack 无平台不透明文件引用可直发，返回 undefined 由调用方丢弃留痕。
+ */
 function resolveMediaToFile(
-  media: { kind: string; value: string },
+  media: MediaRef,
   name: string,
-): { buffer?: Buffer; url?: string; name: string } {
-  if (media.kind === 'base64') {
-    return { buffer: Buffer.from(media.value, 'base64'), name };
+): { buffer?: Buffer; url?: string; path?: string; name: string } | undefined {
+  switch (media.kind) {
+    case 'base64':
+      return {
+        buffer: Buffer.from(media.value.replace(/^base64:\/\//, ''), 'base64'),
+        name,
+      };
+    case 'url':
+      return { url: media.value, name };
+    case 'path':
+      return { path: media.value, name };
+    default:
+      return undefined;
   }
-  return { url: media.value, name };
 }
 
 export function verifySlackSignature(

@@ -3,7 +3,10 @@
  * No legacy Adapter/Endpoint / segment-mapper.
  * Canonicalization is owned by gateway/core before endpoint.send.
  */
-import { isMediaRef, mediaRefFromLegacyData, type MediaRef } from '@zhin.js/core';
+import { isMediaRef, type MediaRef } from '@zhin.js/core';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+
+const logger = getLogger('napcat');
 
 /** Transitional legacy endpoint row (`endpoints[]` with `context: napcat`). */
 export interface NapCatLegacyEndpointRow {
@@ -256,7 +259,7 @@ export function senderNickname(ev: NapCatEvent): string | undefined {
 
 /**
  * canonical MediaRef → OneBot `file` 参数：url 直传、base64 → `base64://`、
- * 本地路径 → `file://`（路径在 OneBot 实现侧解析）。
+ * 本地路径 → `file://`（路径在 OneBot 实现侧解析）、kind=file 不透明引用原样透传。
  */
 export function mediaRefToOneBotFile(media: MediaRef): string {
   if (media.kind === 'base64') {
@@ -271,28 +274,39 @@ export function mediaRefToOneBotFile(media: MediaRef): string {
 /** 媒体段 data 里的 canonical-only 字段，不进 OneBot wire。 */
 const MEDIA_DATA_SKIP_KEYS = new Set(['media', 'alt', 'url', 'base64', 'file', 'mime_type']);
 
+/**
+ * 媒体段 → OneBot wire：媒体来源唯一认 canonical `data.media`（MediaRef-only，
+ * 无 legacy 字段回读）。缺失或形状非法时 warn + 丢弃（返回 null）。
+ */
 function oneBotMediaSegment(
   type: 'image' | 'record' | 'video',
   data: Record<string, unknown>,
-): MessageSegment {
-  const media = isMediaRef(data.media) ? data.media : mediaRefFromLegacyData(data);
-  if (!media) return { type, data };
+): MessageSegment | null {
+  if (!isMediaRef(data.media)) {
+    logger.warn(formatCompact({
+      op: 'napcat_outbound_media_dropped',
+      type,
+      reason: 'missing_media_ref',
+    }));
+    return null;
+  }
   const extra: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(data)) {
     if (!MEDIA_DATA_SKIP_KEYS.has(key)) extra[key] = value;
   }
-  return { type, data: { ...extra, file: mediaRefToOneBotFile(media) } };
+  return { type, data: { ...extra, file: mediaRefToOneBotFile(data.media) } };
 }
 
 /**
  * canonical Segment → OneBot 11 数组段：
  * - mention → at（`qq: target`）；
  * - reply（`message_id`）→ reply（`id`）；
- * - image / audio→record / video 的 MediaRef → `file`（url / base64:// / file://）；
+ * - image / audio→record / video 的 MediaRef → `file`（url / base64:// / file://），
+ *   无 canonical `data.media` 的媒体段丢弃（返回 null）；
  * - face 取 `id`；
  * - 其余（NapCat 扩展段、已是 wire 形状的段）原样透传。
  */
-function canonicalToOneBotSegment(segment: NapCatWireSegment): MessageSegment {
+function canonicalToOneBotSegment(segment: NapCatWireSegment): MessageSegment | null {
   const data = segment.data ?? {};
   switch (segment.type) {
     case 'mention': {
@@ -323,7 +337,8 @@ function canonicalToOneBotSegment(segment: NapCatWireSegment): MessageSegment {
 /**
  * Wire-encode an already-rendered outbound payload into OneBot message segments.
  * 入参假定已经 core `normalizeOutboundPayload` 归一为 canonical Segment[]；
- * 旧 wire 形状（at / 裸 `{file,url,base64}`）保持兼容透传。
+ * 媒体段（image/audio/video）仅认 canonical `data.media`，缺失则 warn + 丢弃；
+ * 非媒体的 wire 段（at 等）原样透传。
  */
 export function formatOutboundSegments(payload: unknown): MessageSegment[] {
   if (typeof payload === 'string') {
@@ -351,7 +366,8 @@ export function formatOutboundSegments(payload: unknown): MessageSegment[] {
       segs.push({ type: 'text', data: { text: item } });
       continue;
     }
-    segs.push(canonicalToOneBotSegment(item));
+    const seg = canonicalToOneBotSegment(item);
+    if (seg) segs.push(seg);
   }
   return segs.length ? segs : [{ type: 'text', data: { text: '' } }];
 }

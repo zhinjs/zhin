@@ -25,6 +25,42 @@ Tool/MCP 执行 handle 只在 turn lease 内有效，防止访问已 retire 的 
 当前 `src/ingress/` 是旧 Feature registry 到 `AgentOrchestrator` 的兼容桥；迁移期间允许
 旧入口读取新投影，但 RuntimeSnapshot 是唯一权威，禁止双写两套 registry。
 
+## Turn Isolation
+
+`ZhinAgent.configure()` is for long-lived runtime wiring only. Do not change
+`activeBinding` or `bootstrapContext` immediately before a message is handled:
+those values are mutable process state and concurrent conversations would race.
+Use `processTurn()` and its immutable `configuration` instead:
+
+```ts
+await agent.processTurn({
+  content: 'Summarize this thread',
+  message,
+  tools,
+  activityFeedbackEligible: true,
+  configuration: {
+    activeBinding: binding,
+    bootstrapContext,
+  },
+});
+```
+
+The configuration is carried in `AsyncLocalStorage` for the entire turn. A
+generation disposal still aborts its active turns, while unrelated concurrent
+conversations keep their own model binding and prompt context.
+
+### Turn Cancellation
+
+`processTurn()` also accepts an `AbortSignal`. It is propagated through group
+FIFO queueing, `PromptController`, provider streaming, and tool execution. A
+cancelled queued message is removed before execution; a running turn receives
+the same signal and cannot publish a late reply. `ai.trigger.timeout` uses this
+path, rather than racing a Promise and leaving work running in the background.
+
+`TurnSupersededError` means a newer message replaced the same-session turn.
+`TurnCancelledError` means an explicit caller cancellation. Hosts should not
+turn either condition into an ordinary assistant reply.
+
 Composition root 挂载进程级调度或 Assistant 入口时，应使用
 `registerScheduleManager()` / `registerAssistantRuntime()` 并把返回的 disposer 交给当前
 generation lifecycle。旧式 `set*` API 仅供非 HMR 的 legacy bootstrap 使用；它不表达

@@ -41,7 +41,7 @@
   "dependencies": {
     "@a2a-js/sdk": "1.0.0-beta.0",
     "@zhin.js/core": "workspace:*",
-    "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/host-http-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*"
   },
   "peerDependencies": {
@@ -51,6 +51,7 @@
   "devDependencies": {
     "@types/node": "^26.1.2",
     "@zhin.js/agent": "workspace:*",
+    "@zhin.js/host-http": "workspace:*",
     "rimraf": "^6.1.3",
     "typescript": "^6.0.3",
     "zhin.js": "workspace:*"

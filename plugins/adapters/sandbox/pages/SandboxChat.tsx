@@ -212,9 +212,9 @@ export default function Sandbox() {
             }
             if (match[1]) segments.push({ type: 'mention', data: { target: match[1], name: match[1] } })
             else if (match[2]) segments.push({ type: 'face', data: { id: parseInt(match[2], 10) } })
-            else if (match[3]) segments.push({ type: 'image', data: { url: match[3] } })
-            else if (match[4]) segments.push({ type: 'video', data: { url: match[4] } })
-            else if (match[5]) segments.push({ type: 'audio', data: { url: match[5] } })
+            else if (match[3]) segments.push({ type: 'image', data: { media: { kind: 'url', value: match[3] } } })
+            else if (match[4]) segments.push({ type: 'video', data: { media: { kind: 'url', value: match[4] } } })
+            else if (match[5]) segments.push({ type: 'audio', data: { media: { kind: 'url', value: match[5] } } })
             lastIndex = regex.lastIndex
         }
         if (lastIndex < text.length) {

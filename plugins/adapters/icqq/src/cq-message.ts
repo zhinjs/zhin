@@ -1,10 +1,56 @@
 /**
  * CQ 码与 MessageSegment 互转。
  * 出站：@icqqjs/cli 要求 message 为非空字符串；引用段编码为 [reply:id]（需 cli parse-message 支持 reply，见 scripts/patch-icqq-cli-reply.mjs）。
+ * 媒体段双向均为 canonical MediaRef（`data.media`），无 legacy url/file/base64 字段。
  */
+import { isMediaRef, type MediaRef } from "@zhin.js/core";
+import { formatCompact, getLogger } from "@zhin.js/logger";
 import { MessageSegment, segment, SendContent } from "zhin.js";
 
+const logger = getLogger("icqq");
+
 const MAX_CQ_PARSE_LEN = 256_000;
+
+/**
+ * CQ 媒体参数 / 入站元素媒体值 → canonical MediaRef：
+ * `base64://` → base64；http(s) → url；本机路径 → path；其余视为平台不透明引用（file）。
+ */
+export function icqqMediaRefFromString(value: string): MediaRef {
+  if (value.startsWith("base64://")) {
+    return { kind: "base64", value: value.slice("base64://".length) };
+  }
+  if (value.startsWith("http://") || value.startsWith("https://")) {
+    return { kind: "url", value };
+  }
+  if (value.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(value)) {
+    return { kind: "path", value };
+  }
+  return { kind: "file", value };
+}
+
+/**
+ * canonical MediaRef（`data.media`，唯一媒体来源）→ CQ 媒体参数：
+ * base64 → `base64://` 前缀（守护进程解码）；url/path/file 原样直出。
+ * 无 canonical 媒体引用时 warn 并返回 undefined（调用方丢弃该段）。
+ */
+export function resolveCqMediaArg(
+  type: string,
+  data: Record<string, unknown> | undefined,
+): string | undefined {
+  const media = data?.media;
+  if (!isMediaRef(media)) {
+    logger.warn(formatCompact({
+      op: "icqq_outbound_media_dropped",
+      type,
+      reason: "missing_media_ref",
+    }));
+    return undefined;
+  }
+  if (media.kind === "base64") {
+    return media.value.startsWith("base64://") ? media.value : `base64://${media.value}`;
+  }
+  return media.value;
+}
 
 function pushCqSegment(segments: MessageSegment[], type: string, arg: string): void {
   switch (type) {
@@ -12,7 +58,7 @@ function pushCqSegment(segments: MessageSegment[], type: string, arg: string): v
       segments.push({ type: "face", data: { id: Number(arg) } });
       break;
     case "image":
-      segments.push({ type: "image", data: { url: arg, file: arg } });
+      segments.push({ type: "image", data: { media: icqqMediaRefFromString(arg) } });
       break;
     case "at":
       if (arg === "all") {
@@ -29,10 +75,10 @@ function pushCqSegment(segments: MessageSegment[], type: string, arg: string): v
       break;
     case "record":
     case "audio":
-      segments.push({ type: "record", data: { file: arg } });
+      segments.push({ type: "record", data: { media: icqqMediaRefFromString(arg) } });
       break;
     case "video":
-      segments.push({ type: "video", data: { file: arg } });
+      segments.push({ type: "video", data: { media: icqqMediaRefFromString(arg) } });
       break;
     case "reply":
       segments.push({ type: "reply", data: { message_id: arg } });
@@ -98,19 +144,8 @@ export function toCqString(content: SendContent): string {
         case "face":
           return `[face:${data.id}]`;
         case "image": {
-          const media = data.media as { kind?: string; value?: string } | undefined;
-          if (media?.value) {
-            if (media.kind === "base64") return `[image:base64://${media.value}]`;
-            return `[image:${media.value}]`;
-          }
-          const b64 =
-            typeof data.base64 === "string"
-              ? data.base64
-              : typeof data.data === "string"
-                ? data.data
-                : undefined;
-          if (b64) return `[image:base64://${b64}]`;
-          return `[image:${data.file || data.url || data.src}]`;
+          const arg = resolveCqMediaArg("image", data);
+          return arg ? `[image:${arg}]` : "";
         }
         case "at":
         case "mention": {
@@ -123,19 +158,12 @@ export function toCqString(content: SendContent): string {
           return "[rps]";
         case "record":
         case "audio": {
-          const b64 =
-            typeof data.base64 === "string"
-              ? data.base64
-              : typeof data.data === "string"
-                ? data.data
-                : undefined;
-          if (b64) return `[record:base64://${b64}]`;
-          return `[record:${data.file || data.url}]`;
+          const arg = resolveCqMediaArg("record", data);
+          return arg ? `[record:${arg}]` : "";
         }
         case "video": {
-          const b64 = typeof data.base64 === "string" ? data.base64 : undefined;
-          if (b64) return `[video:base64://${b64}]`;
-          return `[video:${data.file || data.url}]`;
+          const arg = resolveCqMediaArg("video", data);
+          return arg ? `[video:${arg}]` : "";
         }
         case "reply":
           return `[reply:${data.message_id ?? data.id}]`;

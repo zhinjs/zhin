@@ -1,6 +1,7 @@
 export {
   bindSandboxWsSocket,
   formatSandboxOutbound,
+  normalizeSandboxOutboundSegments,
   parseSandboxWsPayload,
   resolveSandboxEndpoint,
   whenWsOpen,

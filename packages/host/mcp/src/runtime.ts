@@ -1,7 +1,11 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
+import {
+  type HttpRouteHost,
+  type HttpRouteRegistration,
+} from '@zhin.js/host-http-contract';
+import { HttpBodyError, readJsonBody } from '@zhin.js/host-http-contract';
 import type { ToolApproval } from '@zhin.js/tool';
 import { z } from 'zod';
 import { mcpAuthRequired, verifyMcpBearer } from './mesh-auth.js';
@@ -30,7 +34,7 @@ export interface RuntimeMcpToolProvider {
 }
 
 export interface InstallRuntimeMcpOptions {
-  readonly http: HttpHost;
+  readonly http: HttpRouteHost;
   readonly config: RuntimeMcpConfig;
   readonly fallbackToken?: string;
   readonly production?: boolean;
@@ -64,8 +68,10 @@ export async function handleRuntimeMcpRequest(
   let body: unknown;
   try {
     body = await readJsonBody(request);
-  } catch {
-    writeJson(response, 400, {
+  } catch (error) {
+    // JSON-RPC keeps a protocol error envelope while the HTTP status preserves
+    // the transport-level distinction between malformed and oversized input.
+    writeJson(response, error instanceof HttpBodyError ? error.statusCode : 400, {
       jsonrpc: '2.0',
       error: { code: -32700, message: 'Parse error' },
       id: null,
@@ -201,15 +207,6 @@ function jsonSchemaPropertyToZod(property: JsonSchemaProperty): z.ZodType {
       value = z.unknown();
   }
   return property.description ? value.describe(property.description) : value;
-}
-
-async function readJsonBody(request: IncomingMessage): Promise<unknown> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of request) {
-    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
-  }
-  const raw = Buffer.concat(chunks).toString('utf8');
-  return raw.trim() ? JSON.parse(raw) : undefined;
 }
 
 function requestId(body: unknown): unknown {

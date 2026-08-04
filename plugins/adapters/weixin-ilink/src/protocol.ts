@@ -4,6 +4,7 @@
  */
 
 import { pickCredential } from '@zhin.js/adapter';
+import { isMediaRef } from '@zhin.js/core';
 import { bodyFromItemList, isMediaItem } from './weixin-inbound.js';
 import { DEFAULT_API_BASE_URL, DEFAULT_CDN_BASE_URL } from './ilink-meta.js';
 import type { WeixinMessage } from './ilink-types.js';
@@ -141,16 +142,11 @@ export function formatOutboundSegments(payload: unknown): WeixinWireSegment[] {
   return segs.length ? segs : [{ type: 'text', data: { text: '' } }];
 }
 
+/** 物化后的媒体段（data.media kind=path）→ 本地文件路径；其余返回 undefined。 */
 export function segmentLocalPath(seg: WeixinWireSegment): string | undefined {
-  const data = seg.data ?? {};
-  const candidates = [data.file, data.path, data.url].filter(
-    (value): value is string => typeof value === 'string' && Boolean(value),
-  );
-  const ref = candidates[0];
-  if (!ref || ref.startsWith('base64://') || /^data:/.test(ref) || /^https?:\/\//i.test(ref)) {
-    return undefined;
-  }
-  return ref.replace(/^file:\/\//, '');
+  const media = (seg.data ?? {}).media;
+  if (!isMediaRef(media) || media.kind !== 'path') return undefined;
+  return media.value;
 }
 
 export function sleep(ms: number, signal?: AbortSignal): Promise<void> {

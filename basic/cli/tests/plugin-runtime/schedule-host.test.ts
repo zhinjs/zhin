@@ -5,6 +5,7 @@ import {
   Scope,
   rootPluginId,
   scheduleHostToken,
+  scheduleRootHostToken,
 } from '@zhin.js/plugin-runtime';
 import type { RootResourceContext } from '@zhin.js/runtime';
 import {
@@ -67,7 +68,8 @@ describe('ScheduleHost', () => {
     const context = createInstallContext();
 
     installScheduleHost(host)(context);
-    expect(context.resources.use(scheduleHostToken)).toBe(host);
+    expect(context.resources.use(scheduleRootHostToken)).toBe(host);
+    expect(context.resources.use(scheduleHostToken)).toMatchObject({ owner: rootPluginId() });
     await context.lifecycle.dispose();
 
     const dispose = host.register({

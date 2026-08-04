@@ -7,6 +7,10 @@ import { createDecipheriv, timingSafeEqual } from 'node:crypto';
 import { inflateSync } from 'node:zlib';
 import type { IncomingMessage } from 'node:http';
 import { pickCredential } from '@zhin.js/adapter';
+import { isMediaRef } from '@zhin.js/core';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+
+const logger = getLogger('kook');
 
 export type LogLevel =
   | 'trace'
@@ -229,6 +233,33 @@ export function isKookBotMentioned(msg: KookInboundMessage, selfId?: string): bo
 }
 
 /**
+ * 解析 image/audio/video/file 段的投递 URL（canonical MediaRef 唯一来源）。
+ * KOOK KMarkdown 媒体只能消费远程 URL；base64 / path / file 引用无法经
+ * KMarkdown 投递，warn 后丢弃（返回 undefined）。
+ */
+function resolveOutboundMediaUrl(seg: KookWireSegment): string | undefined {
+  const media = (seg.data ?? {}).media;
+  if (!isMediaRef(media)) {
+    logger.warn(formatCompact({
+      op: 'kook_outbound_media_dropped',
+      type: seg.type,
+      reason: 'missing_media_ref',
+    }));
+    return undefined;
+  }
+  if (media.kind !== 'url') {
+    logger.warn(formatCompact({
+      op: 'kook_outbound_media_dropped',
+      type: seg.type,
+      reason: 'unsupported_media_kind',
+      kind: media.kind,
+    }));
+    return undefined;
+  }
+  return media.value;
+}
+
+/**
  * Wire-encode an already-rendered outbound payload into KOOK KMarkdown.
  * Segment canonicalization is intentionally not done here.
  */
@@ -260,18 +291,26 @@ export function formatOutboundKmarkdown(payload: unknown): string {
           const id = String(data.user_id ?? data.qq ?? data.id ?? '');
           return id === 'all' ? '(met)all(met)' : `(met)${id}(met)`;
         }
-        case 'image':
-          return `![${String(data.alt || '图片')}](${String(data.url || data.file || '')})`;
+        case 'image': {
+          const url = resolveOutboundMediaUrl(item);
+          return url ? `![${String(data.alt || '图片')}](${url})` : '';
+        }
         case 'face':
           return `(emj)${String(data.name || 'emoji')}(emj)[${String(data.id ?? '')}]`;
         case 'link':
           return `[${String(data.text || data.url || '')}](${String(data.url || '')})`;
-        case 'video':
-          return `[视频](${String(data.url || data.file || '')})`;
-        case 'audio':
-          return `[音频](${String(data.url || data.file || '')})`;
-        case 'file':
-          return `[文件: ${String(data.name || '未命名')}](${String(data.url || data.file || '')})`;
+        case 'video': {
+          const url = resolveOutboundMediaUrl(item);
+          return url ? `[视频](${url})` : '';
+        }
+        case 'audio': {
+          const url = resolveOutboundMediaUrl(item);
+          return url ? `[音频](${url})` : '';
+        }
+        case 'file': {
+          const url = resolveOutboundMediaUrl(item);
+          return url ? `[文件: ${String(data.name || '未命名')}](${url})` : '';
+        }
         case 'bold':
           return `**${String(data.text ?? '')}**`;
         case 'italic':

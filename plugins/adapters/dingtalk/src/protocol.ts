@@ -6,6 +6,11 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 
+import { isMediaRef } from '@zhin.js/core';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+
+const logger = getLogger('dingtalk');
+
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface DingTalkAdapterConfig {
   readonly name?: string;
@@ -223,7 +228,12 @@ export function verifySignature(
 
 /**
  * Wire-encode an already-rendered outbound payload into DingTalk robot body.
- * Segment canonicalization is intentionally not done here.
+ * Segment canonicalization is intentionally not done here: media segments carry
+ * the canonical `data.media` MediaRef and nothing else is consulted.
+ *
+ * 钉钉机器人媒体消息仅支持远程 URL（picture.picURL）：
+ * - image 段 kind=url → 直发 picture；
+ * - 其余 kind / audio / video / file 段无投递面，warn + 丢弃。
  */
 export function formatOutboundBody(payload: unknown): DingTalkSendBody {
   if (typeof payload === 'string') {
@@ -267,13 +277,32 @@ export function formatOutboundBody(payload: unknown): DingTalkSendBody {
         }
         break;
       }
-      case 'image':
-        if (!media) {
+      case 'image': {
+        if (media) break;
+        const ref = data.media;
+        if (isMediaRef(ref) && ref.kind === 'url') {
           media = {
             msgtype: 'picture',
-            picture: { picURL: String(data.url ?? data.file ?? '') },
+            picture: { picURL: ref.value },
           };
+          break;
         }
+        logger.warn(formatCompact({
+          op: 'dingtalk_outbound_media_dropped',
+          type: item.type,
+          reason: isMediaRef(ref) ? `unsupported_kind:${ref.kind}` : 'missing_media_ref',
+        }));
+        break;
+      }
+      case 'audio':
+      case 'video':
+      case 'file':
+        // 钉钉机器人无音频/视频/文件投递面，warn + 丢弃
+        logger.warn(formatCompact({
+          op: 'dingtalk_outbound_media_dropped',
+          type: item.type,
+          reason: 'undeliverable_msgtype',
+        }));
         break;
       case 'markdown':
         if (!media) {

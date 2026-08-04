@@ -76,6 +76,25 @@ describe('github protocol helpers', () => {
     ])).toBe('hi@alice');
   });
 
+  it('formats outbound media segments from canonical data.media only', () => {
+    expect(formatOutboundBody([
+      { type: 'image', data: { media: { kind: 'url', value: 'https://example.com/a.png' } } },
+    ])).toBe('![image](https://example.com/a.png)');
+    expect(formatOutboundBody([
+      { type: 'image', data: { media: { kind: 'url', value: 'https://example.com/a.png', file_name: 'a.png' }, alt: 'shot' } },
+    ])).toBe('![shot](https://example.com/a.png)');
+    expect(formatOutboundBody([
+      { type: 'file', data: { media: { kind: 'url', value: 'https://example.com/a.zip', file_name: 'a.zip' } } },
+    ])).toBe('[a.zip](https://example.com/a.zip)');
+    // 非 url kind（GitHub 评论无上传面）与缺失 media 的段一律丢弃
+    expect(formatOutboundBody([
+      { type: 'image', data: { media: { kind: 'base64', value: 'Zm9v' } } },
+    ])).toBe('');
+    expect(formatOutboundBody([
+      { type: 'image', data: { url: 'https://example.com/legacy.png' } },
+    ])).toBe('');
+  });
+
   it('shouldAutoReplyRepo matches case-insensitive', () => {
     expect(shouldAutoReplyRepo({ autoReplyRepos: ['Owner/Repo'] }, 'owner/repo')).toBe(true);
     expect(shouldAutoReplyRepo({ autoReplyRepos: ['other/x'] }, 'owner/repo')).toBe(false);

@@ -106,8 +106,10 @@ Host token 是 Host 提供给插件的能力句柄，`setup` 里通过 `context.
 
 | token | token id | 提供条件 | 关键方法 |
 | --- | --- | --- | --- |
-| `databaseHostToken` | `zhin.database.host` | 配置了 `database:` | `define(name, columns)` 注册表；`models.get(name)` 取模型（`select` / `insert` / `update` / `delete` / `count`）；`start()` 由 Host 在代激活时调用，插件不自己调 |
-| `scheduleHostToken` | `zhin.schedule.host` | 始终可用 | `register(job)` 注册 6 段 solar cron（`秒 分 时 日 月 周`），返回取消函数；`list()` 列出任务 |
+| `databaseHostToken` | `zhin.database.host` | 配置了 `database:` | `define(name, columns)` 注册插件私有逻辑表；Runtime 按 PluginId 映射物理表名，`models.get(name)` 只访问本插件表（`select` / `insert` / `update` / `delete` / `count`） |
+| `scheduleHostToken` | `zhin.schedule.host` | 始终可用 | `register(job)` 注册插件私有逻辑任务 ID 的 6 段 solar cron（`秒 分 时 日 月 周`），返回取消函数；`list()` 只列出本插件任务 |
+
+`databaseHostToken` 与 `scheduleHostToken` 不暴露进程级 `start` / `stop`、Console 管理端口或原始数据库。CLI 负责这些 root-only 生命周期；插件只使用逻辑表名和任务 ID，因此同名资源不会与 sibling/child 插件冲突。
 | `outboundHostToken` | `zhin.outbound.host` | 有可用 Adapter | `send(input)` 主动推送（返回平台消息 id 或 `null`）；可选 `addReaction` / `removeReaction` / `recall` |
 | `agentToolsHostToken` | `zhin.agent-tools.host` | 安装并启用 AI（Agent Host） | `register(tool)` 注册 Agent 工具，返回注销函数 |
 | `htmlRendererToken` | `zhin.html-renderer.host` | 安装了 `@zhin.js/html-renderer` | `render(html, { width, format, backgroundColor })` → PNG（Buffer）或 SVG（string）；未安装时必须降级为纯文本 |

@@ -1,10 +1,10 @@
-import { type AgentMessage, type ImageContent, createUserMessage } from '@zhin.js/ai';
+import { type AgentMessage, type MediaContentBlock, createUserMessage } from '@zhin.js/ai';
 export function normalizePromptMessages(
   input: string | AgentMessage | AgentMessage[],
-  images?: ImageContent[],
+  media?: MediaContentBlock[],
 ): AgentMessage[] {
   if (typeof input === 'string') {
-    return [createUserMessage(input, images)];
+    return [createUserMessage(input, media)];
   }
   return Array.isArray(input) ? input : [input];
 }

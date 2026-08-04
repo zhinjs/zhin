@@ -76,6 +76,8 @@ export interface QqInboundMessage {
   readonly timestamp: number;
   readonly guildId?: string;
   readonly rawMessage?: string;
+  /** canonical 入站段（text/mention/face/image/audio/video/file/reply），与 content 同源 */
+  readonly segments?: readonly import('@zhin.js/core').Segment[];
   /**
    * 入站是否 @ 当前机器人：统一按 mentions 判定。群场景只认 is_you（@ 另一个
    * 机器人时 bot:true 但无 is_you，不误判）；bot 回退仅限频道 AT 事件。

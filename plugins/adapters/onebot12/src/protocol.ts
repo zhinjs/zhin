@@ -3,7 +3,10 @@
  * Canonicalization is owned by gateway/core before endpoint.send.
  * Spec: https://12.onebot.dev/
  */
-import { isMediaRef, mediaRefFromLegacyData, type MediaRef } from '@zhin.js/core';
+import { isMediaRef, type MediaRef } from '@zhin.js/core';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+
+const logger = getLogger('onebot12');
 
 /** Transitional legacy endpoint row (`endpoints[]` with `context: onebot12`). */
 export interface OneBot12LegacyEndpointRow {
@@ -277,18 +280,20 @@ export function isBotMentioned(ev: OneBot12Event): boolean {
 /** OneBot 12 携带媒体的段类型。 */
 const ONEBOT12_MEDIA_TYPES = new Set(['image', 'voice', 'audio', 'video', 'file']);
 
-/** 媒体段 data 里的 canonical-only / legacy 媒体字段，归一后不重复进 wire。 */
-const MEDIA_DATA_SKIP_KEYS = new Set([
-  'media', 'alt', 'mime_type', 'url', 'file', 'base64', 'data', 'path',
-]);
+/** 媒体段 data 里的 canonical 字段，归一后不重复进 wire。 */
+const MEDIA_DATA_SKIP_KEYS = new Set(['media', 'alt', 'mime_type']);
 
 /**
  * canonical MediaRef → OneBot 12 媒体字段（扩展字段降级形状）。
  * spec 正式投递形状是 `file_id`（先 upload_file 物化，见
  * {@link uploadOneBot12MediaSegments}）；上传失败时按常见扩展字段
- * 降级输出：url → `url`、base64 → `data`、本地路径 → `path`。
+ * 降级输出：url → `url`、base64 → `data`、本地路径 → `path`；
+ * kind=file（平台不透明引用）直接按 `file_id` 复投。
  */
 export function mediaRefToOneBot12Fields(media: MediaRef): Record<string, unknown> {
+  if (media.kind === 'file') {
+    return { file_id: media.value };
+  }
   if (media.kind === 'base64') {
     const value = media.value.startsWith('base64://')
       ? media.value.slice('base64://'.length)
@@ -312,11 +317,19 @@ function oneBot12MediaExtra(data: Record<string, unknown>): Record<string, unkno
 function oneBot12MediaSegment(
   type: string,
   data: Record<string, unknown>,
-): OneBot12Segment {
+): OneBot12Segment | null {
   // 已物化为 file_id 的段是 spec 正式形状，原样透传。
   if (typeof data.file_id === 'string' && data.file_id) return { type, data };
-  const media = isMediaRef(data.media) ? data.media : mediaRefFromLegacyData(data);
-  if (!media) return { type, data };
+  // canonical MediaRef 唯一来源（中央 normalizeOutboundPayload 已保证 canonical）
+  const media = isMediaRef(data.media) ? data.media : undefined;
+  if (!media) {
+    logger.warn(formatCompact({
+      op: 'onebot12_outbound_media_dropped',
+      type,
+      reason: 'missing_media_ref',
+    }));
+    return null;
+  }
   return { type, data: { ...oneBot12MediaExtra(data), ...mediaRefToOneBot12Fields(media) } };
 }
 
@@ -324,10 +337,11 @@ function oneBot12MediaSegment(
  * canonical Segment → OneBot 12 数组段：
  * - mention → mention（`user_id: target`，`target: 'all'` → mention_all）；
  * - reply（`message_id`）→ reply（`message_id`）；
- * - image / voice / audio / video / file 的 MediaRef → url/data/path 扩展字段；
+ * - image / voice / audio / video / file 的 MediaRef → url/data/path/file_id 字段，
+ *   无 canonical MediaRef 的媒体段 warn 后丢弃（返回 null）；
  * - 其余（已是 wire 形状的段、平台扩展段）原样透传。
  */
-function canonicalToOneBotSegment(segment: OneBot12WireSegment): OneBot12Segment {
+function canonicalToOneBotSegment(segment: OneBot12WireSegment): OneBot12Segment | null {
   const data = segment.data ?? {};
   switch (segment.type) {
     case 'mention': {
@@ -352,7 +366,7 @@ function canonicalToOneBotSegment(segment: OneBot12WireSegment): OneBot12Segment
 /**
  * Wire-encode an already-rendered outbound payload into OneBot 12 message segments.
  * 入参假定已经 core `normalizeOutboundPayload` 归一为 canonical Segment[]；
- * 旧 wire 形状（mention / 裸 `{url,file,base64}`）保持兼容透传。
+ * 媒体段只认 `data.media`（canonical MediaRef），无 MediaRef 的媒体段 warn 后丢弃。
  */
 export function formatOutboundSegments(payload: unknown): OneBot12Segment[] {
   if (typeof payload === 'string') {
@@ -380,7 +394,8 @@ export function formatOutboundSegments(payload: unknown): OneBot12Segment[] {
       segs.push({ type: 'text', data: { text: item } });
       continue;
     }
-    segs.push(canonicalToOneBotSegment(item));
+    const seg = canonicalToOneBotSegment(item);
+    if (seg) segs.push(seg);
   }
   return segs.length ? segs : [{ type: 'text', data: { text: '' } }];
 }
@@ -446,7 +461,9 @@ async function uploadOneMediaSegment(
   if (typeof segment.type !== 'string' || !ONEBOT12_MEDIA_TYPES.has(segment.type)) return item;
   const data = segment.data ?? {};
   if (typeof data.file_id === 'string' && data.file_id) return item;
-  const media = isMediaRef(data.media) ? data.media : mediaRefFromLegacyData(data);
+  // canonical MediaRef 唯一来源；无 MediaRef 的段原样保留，由
+  // formatOutboundSegments warn 后丢弃。
+  const media = isMediaRef(data.media) ? data.media : undefined;
   if (!media) return item;
   // kind=file：平台不透明引用（OB12 file_id 复投），直接物化为 file_id。
   if (media.kind === 'file') {

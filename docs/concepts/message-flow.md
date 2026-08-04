@@ -69,12 +69,31 @@ flowchart LR
     S --> E["endpoint.send({target, payload, parent})"]
 ```
 
-- **SendContent 四种形态**（`packages/im/core/src/plugin-runtime/im/contracts.ts`）：字符串；`component(name, props)` 组件调用（经 `ComponentIndex` 递归渲染，深度上限 32）；`raw(payload)` 原样透传；以及三者的数组嵌套。
+- **SendContent 形态**（`packages/im/core/src/plugin-runtime/im/contracts.ts`）：字符串；canonical `Segment`（一等公民，见下文「多模态」）；`component(name, props)` 组件调用（经 `ComponentIndex` 递归渲染，深度上限 32）；`raw(payload)` 原样透传；以及它们的数组嵌套。
 - **Envelope** 携带 `adapter`、`target`、`requester`（发起方插件，用于组件权限与审计）、`generation`，并提供 `replace(payload)` 给出站中间件改写内容。
 - **出站中间件**与入站共用一套定义，`target: 'outbound'` 即拦截出站。
 - **最终一公里**在 `AdapterIndex.send`：endpoint 必须声明 `outbound` 能力、且处于 `started && !stopped`，否则抛错；通过后调用 `endpoint.send()` 落到平台。
 
 所有发送都应走这条统一管道（`$reply` / `$replyFrom` / `gateway.send`），不要在插件里直接持有平台 SDK 发消息——那会绕过渲染、中间件与事件广播。
+
+## 多模态：双向 Segment 一贯制
+
+全框架只有一种媒体表达——canonical `Segment` + `MediaRef`（`packages/im/core/src/built/segment-contract/types.ts`）：
+
+```ts
+interface MediaRef {
+  kind: 'url' | 'path' | 'base64' | 'file';  // file = 平台不透明引用（Telegram file_id 等）
+  value: string;
+  mime_type?: string;
+  file_name?: string;
+  size?: number;
+}
+// image / audio / video / file 段的 data 一律为 { media: MediaRef, alt?/duration?/name? }
+```
+
+**入站**：适配器把平台载荷归一为 `Segment[]` 随 `gateway.receive({ segments })` 上送 → Agent 的入站注入（`packages/im/agent/src/turn/inbound-media.ts`）把当前 turn 的媒体挂到 `UserMessage.media`（ai 层 Segment 同构的 `MediaContentBlock`，**不随 session 持久化**，历史中只存文本视图）。策略：`ai.multimodal`（`media/resolve-config.ts`）——图片 url 直挂 / path 物化 base64；音频默认 STT（`@zhin.js/speech` 可选，失败降级占位文本）；视频/文件默认占位文本。provider 边界的序列化器（`packages/im/ai/src/llm/convert/media-blocks.ts`）按能力表过滤：缺省 image-only，不支持的类型在边界降级为占位文本，框架内部永不出现任一厂商的 API 格式。
+
+**出站**：AI 回复 → `OutputElement[]` → canonical `Segment[]`（`publishOutboundElements`）→ `$reply`（Segment 是一等 `SendContent`）→ `normalizeOutboundPayload`（html→image/文本、keyboard、媒体协商）→ endpoint。媒体协商按 adapter definition 的 `segments.outboundMedia` 声明驱动（`'url' | 'path' | 'base64' | 'upload'`）：仅 `url-or-text` 端点会在中央把非 URL 媒体降级为文本；其余由 adapter 按平台最优路径自物化（URL 直发 / base64 直发 / 平台上传 / 读盘），无 `data.media` 的段会被 warn 丢弃——legacy `data.url/file/base64` 形状已不存在。
 
 ## Endpoint 1:N 展开
 

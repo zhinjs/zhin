@@ -1,10 +1,7 @@
-import type { MessageElement, MessageSegment, SendContent } from '../types.js';
+import type { MessageElement, MessageSegment } from '../types.js';
 import type { MediaRef, Segment } from './segment-contract/types.js';
 import {
-  createImageSegment,
   isMediaRef,
-  mediaRefFromLegacyData,
-  mediaRefToLegacyFields,
   readMentionTarget,
 } from './segment-contract/index.js';
 
@@ -29,37 +26,70 @@ function normalizeMention(seg: MessageSegment): Segment {
   };
 }
 
-function normalizeImage(seg: MessageSegment): Segment {
+const MEDIA_SEGMENT_TYPES = new Set(['image', 'audio', 'video', 'file']);
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+function legacyMediaRef(data: Record<string, unknown>): MediaRef | undefined {
+  if (isMediaRef(data.media)) return data.media;
+
+  const url = nonEmptyString(data.url) ?? nonEmptyString(data.href) ?? nonEmptyString(data.src);
+  const path = nonEmptyString(data.path) ?? nonEmptyString(data.file_path);
+  const base64 = nonEmptyString(data.base64);
+  const file = nonEmptyString(data.file) ?? nonEmptyString(data.file_id);
+  const value = url ?? path ?? base64 ?? file;
+  if (!value) return undefined;
+
+  const kind = url ? 'url'
+    : path ? 'path'
+      : base64 ? 'base64'
+        : /^(?:[a-z][a-z0-9+.-]*:)?\/\//iu.test(value) ? 'url'
+          : /^(?:\.{1,2}\/|\/|~\/)/u.test(value) ? 'path'
+            : 'file';
+  const mimeType = nonEmptyString(data.mime_type) ?? nonEmptyString(data.mimeType);
+  // Legacy top-level fileName names the rendered file segment. Keep source
+  // metadata reserved for an explicit media object instead of duplicating it.
+  const fileName = nonEmptyString(data.media_file_name);
+  const size = typeof data.size === 'number' && Number.isFinite(data.size) ? data.size : undefined;
+  return {
+    kind,
+    value,
+    ...(mimeType ? { mime_type: mimeType } : {}),
+    ...(fileName ? { file_name: fileName } : {}),
+    ...(size === undefined ? {} : { size }),
+  };
+}
+
+/**
+ * The sole ingress compatibility boundary for media. Adapters may emit their
+ * native `url`/`path`/`file` fields, but every consumer receives `data.media`.
+ */
+function normalizeMedia(seg: MessageSegment): Segment {
   const data = seg.data as Record<string, unknown>;
   const platform = readPlatform(seg);
-  if (isMediaRef(data.media)) {
-    return {
-      type: 'image',
-      data: {
-        media: data.media,
-        ...(typeof data.alt === 'string' ? { alt: data.alt } : {}),
-      },
-      ...(platform ? { platform } : {}),
-    };
-  }
-  const media = mediaRefFromLegacyData(data);
-  if (media) {
-    const mergedPlatform: Record<string, unknown> = { ...(platform ?? {}) };
-    for (const key of ['url', 'file', 'src', 'file_id'] as const) {
-      if (typeof data[key] === 'string' && data[key]) mergedPlatform[key] = data[key];
-    }
-    const platformKeys = Object.keys(mergedPlatform);
-    const legacyPlatform = platformKeys.length === 0
-      ? undefined
-      : platformKeys.length === 1 && mergedPlatform[platformKeys[0]!] === media.value
-        ? undefined
-        : mergedPlatform;
-    return createImageSegment(media, {
-      alt: typeof data.alt === 'string' ? data.alt : undefined,
-      platform: legacyPlatform,
-    });
-  }
-  return seg as Segment;
+  const media = legacyMediaRef(data);
+  if (!media) return seg as Segment;
+  const attributes = seg.type === 'image'
+    ? { ...(typeof data.alt === 'string' ? { alt: data.alt } : {}) }
+    : seg.type === 'audio'
+      ? { ...(typeof data.duration === 'number' ? { duration: data.duration } : {}) }
+      : seg.type === 'video'
+        ? {
+          ...(typeof data.duration === 'number' ? { duration: data.duration } : {}),
+          ...(typeof data.alt === 'string' ? { alt: data.alt } : {}),
+        }
+        : {
+          ...(nonEmptyString(data.name) ?? nonEmptyString(data.file_name) ?? nonEmptyString(data.fileName)
+            ? { name: nonEmptyString(data.name) ?? nonEmptyString(data.file_name) ?? nonEmptyString(data.fileName) }
+            : {}),
+        };
+  return {
+    type: seg.type,
+    data: { media, ...attributes },
+    ...(platform ? { platform } : {}),
+  };
 }
 
 function normalizeReply(seg: MessageSegment): Segment {
@@ -142,7 +172,7 @@ function normalizeMarkdown(seg: MessageSegment): Segment {
 
 function normalizeSegment(seg: MessageSegment): Segment {
   if (seg.type === 'at' || seg.type === 'mention') return normalizeMention(seg);
-  if (seg.type === 'image') return normalizeImage(seg);
+  if (MEDIA_SEGMENT_TYPES.has(seg.type)) return normalizeMedia(seg);
   if (seg.type === 'reply') return normalizeReply(seg);
   if (seg.type === 'forward') return normalizeForward(seg);
   if (seg.type === 'sticker' && isPlatformSticker(seg)) return seg as Segment;
@@ -159,81 +189,7 @@ function asMessageSegments(content: readonly unknown[]): MessageSegment[] {
   });
 }
 
-function asCanonicalSegments(content: SendContent): Segment[] {
-  if (typeof content === 'string') {
-    return [{ type: 'text', data: { text: content } }];
-  }
-  const items = Array.isArray(content) ? content : [content];
-  return items.map((item) => {
-    if (typeof item === 'string') return { type: 'text', data: { text: item } };
-    return item as Segment;
-  });
-}
-
-/** 通用 IM adapter：legacy wire → canonical Segment[] */
+/** wire 段数组 → canonical Segment[]（包括所有媒体的 `data.media` 归一）。 */
 export function toCanonicalSegments(content: readonly MessageElement[] | readonly unknown[]): Segment[] {
   return asMessageSegments(content).map((seg) => normalizeSegment(seg));
-}
-
-function mapCanonicalToWire(seg: Segment): MessageElement {
-  if (seg.type === 'image' && isRecord(seg.data) && seg.data.media) {
-    const media = seg.data.media as MediaRef;
-    const legacy = mediaRefToLegacyFields(media);
-    return {
-      type: 'image',
-      data: {
-        ...legacy,
-        media,
-        ...(typeof seg.data.alt === 'string' ? { alt: seg.data.alt } : {}),
-      },
-      ...(seg.platform ? { platform: seg.platform } : {}),
-    };
-  }
-  if (seg.type === 'mention') {
-    const data = seg.data as { target: string; name?: string };
-    return {
-      type: 'at',
-      data: {
-        id: data.target,
-        ...(data.name ? { name: data.name } : {}),
-      },
-      ...(seg.platform ? { platform: seg.platform } : {}),
-    };
-  }
-  if (seg.type === 'reply') {
-    const messageId = String((seg.data as { message_id: string }).message_id);
-    return {
-      type: 'reply',
-      data: { id: messageId, message_id: messageId },
-      ...(seg.platform ? { platform: seg.platform } : {}),
-    };
-  }
-  if (seg.type === 'forward') {
-    const data = seg.data as { forward_id: string; title?: string; messages?: unknown };
-    const resid = (seg.platform as { resid?: string } | undefined)?.resid ?? data.forward_id;
-    return {
-      type: 'forward',
-      data: {
-        id: data.forward_id,
-        resid,
-        ...(data.title ? { title: data.title } : {}),
-        ...(data.messages ? { messages: data.messages } : {}),
-      },
-      ...(seg.platform ? { platform: seg.platform } : {}),
-    };
-  }
-  if (seg.type === 'link') {
-    const data = seg.data as { url: string; text?: string };
-    return {
-      type: 'link',
-      data: { url: data.url, ...(data.text ? { text: data.text } : {}) },
-      ...(seg.platform ? { platform: seg.platform } : {}),
-    };
-  }
-  return seg as MessageElement;
-}
-
-/** canonical → wire（mention→at；image MediaRef→legacy 字段） */
-export function fromCanonicalSegments(content: SendContent): MessageElement[] {
-  return asCanonicalSegments(content).map((seg) => mapCanonicalToWire(seg));
 }

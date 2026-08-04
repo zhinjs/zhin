@@ -139,7 +139,7 @@ describe('onebot12 protocol helpers', () => {
     expect(formatOutboundSegments('pong')).toEqual([{ type: 'text', data: { text: 'pong' } }]);
     expect(formatOutboundSegments([
       { type: 'text', data: { text: 'see' } },
-      { type: 'image', data: { url: 'https://x/a.png' } },
+      { type: 'image', data: { media: { kind: 'url', value: 'https://x/a.png' } } },
     ])).toEqual([
       { type: 'text', data: { text: 'see' } },
       { type: 'image', data: { url: 'https://x/a.png' } },
@@ -172,6 +172,18 @@ describe('onebot12 protocol helpers', () => {
       { type: 'image', data: { data: 'QUJD' } },
       { type: 'video', data: { path: '/tmp/a.mp4' } },
     ]);
+  });
+
+  it('drops media segments without a canonical MediaRef', () => {
+    // 无 data.media 的媒体段不可投递：warn + 丢弃（legacy 形状不再回读）
+    expect(formatOutboundSegments([
+      { type: 'text', data: { text: 'hi' } },
+      { type: 'image', data: { url: 'https://x/a.png' } },
+    ])).toEqual([{ type: 'text', data: { text: 'hi' } }]);
+    // kind=file 的 MediaRef 直接按 file_id 复投
+    expect(formatOutboundSegments([
+      { type: 'file', data: { media: { kind: 'file', value: 'fid-9' }, name: 'a.bin' } },
+    ])).toEqual([{ type: 'file', data: { name: 'a.bin', file_id: 'fid-9' } }]);
   });
 
   it('builds upload_file params from canonical MediaRef', () => {

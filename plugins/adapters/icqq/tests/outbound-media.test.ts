@@ -26,10 +26,12 @@ describe("resolveIcqqOutboundMediaMode", () => {
 
 describe("materializeOutboundBase64", () => {
   it("base64 模式不落盘", () => {
-    const seg = { type: "image" as const, data: { base64: "YQ==" } };
+    const seg = {
+      type: "image" as const,
+      data: { media: { kind: "base64", value: "YQ==" } },
+    };
     const out = materializeOutboundBase64([seg], "base64");
-    expect((out[0] as typeof seg).data.base64).toBe("YQ==");
-    expect((out[0] as typeof seg).data.file).toBeUndefined();
+    expect(out[0]).toBe(seg);
   });
 
   it("file 模式把 canonical MediaRef base64 落盘并改写为 path 引用", () => {
@@ -42,16 +44,16 @@ describe("materializeOutboundBase64", () => {
     const media = data.media as { kind: string; value: string };
     expect(media.kind).toBe("path");
     expect(media.value).toContain("zhin-icqq-outbound");
-    expect(data.file).toBe(media.value);
+    // MediaRef-only：不再回写 legacy file/url 字段
+    expect(data.file).toBeUndefined();
+    expect(data.url).toBeUndefined();
     expect(fs.existsSync(media.value)).toBe(true);
     fs.rmSync(media.value, { force: true });
   });
 
-  it("file 模式保留 legacy base64 字段兼容", () => {
+  it("file 模式无 canonical MediaRef 的段不物化（原样保留，由 CQ 序列化丢弃）", () => {
     const seg = { type: "image" as const, data: { base64: "YQ==" } };
     const out = materializeOutboundBase64([seg], "file");
-    const data = (out[0] as typeof seg).data as Record<string, unknown>;
-    expect(typeof data.file).toBe("string");
-    fs.rmSync(String(data.file), { force: true });
+    expect(out[0]).toBe(seg);
   });
 });

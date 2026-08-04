@@ -19,6 +19,30 @@ export default defineAdapter({
 单文件插件可用 `setup({ addAdapter })` 注册 `defineAdapter(...)`；Endpoint 仍由同一个
 AdapterIndex 和 generation handoff 管理。
 
+## Transport Contract
+
+Adapter definitions declare `capabilities` for inbound/outbound admission and
+`operations` for optional actions such as `recall`, `edit`, `reaction`, and
+`typing`. Runtime callers should query the resulting `EndpointCapabilities`
+instead of probing optional endpoint methods. The zero-dependency types live in
+[`@zhin.js/im-contract`](../im-contract/README.md).
+
+New framework-facing outbound code should carry a structured `ConversationRef`.
+`EndpointSendRequest.target` remains temporarily for platform codecs that still
+need their legacy target string; it is not a general-purpose message identity.
+
+## Endpoint Control Port
+
+`EndpointInstance.control` owns actions addressed to an existing message:
+`recall`, `addReaction`, and `removeReaction`. IM Core consumes only this port;
+adapter-specific method names and compound message ids stay at the protocol
+boundary.
+
+New adapters should provide `control` directly and declare matching
+`operations`. During the 4.x migration, `resolveEndpointControl()` can adapt
+legacy `recallMessage` / `$recallMessage` / reaction methods, but that bridge
+exists only in this package and is not a public extension pattern.
+
 ## Endpoint 生命周期基座（createEndpointLifecycle）
 
 WS/SSE 类端点的 start/stop/重连/心跳统一走 `createEndpointLifecycle`

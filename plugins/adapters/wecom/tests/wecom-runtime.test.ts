@@ -169,13 +169,13 @@ describe('wecom protocol helpers', () => {
       msgtype: 'markdown',
       data: { content: '# title' },
     });
-    // endpoint 上传物化后写入 media_id；旧调用方 file/url 直传保持兼容
+    // media_id 由 endpoint 物化写入（内部 wire）；legacy file/url 字段不再被读取
     expect(formatOutboundBody([
       { type: 'image', data: { media_id: 'MID_1' } },
     ])).toEqual({ msgtype: 'image', data: { media_id: 'MID_1' } });
     expect(formatOutboundBody([
       { type: 'image', data: { file: 'MID_LEGACY' } },
-    ])).toEqual({ msgtype: 'image', data: { media_id: 'MID_LEGACY' } });
+    ])).toEqual({ msgtype: 'image', data: { media_id: undefined } });
   });
 });
 
@@ -401,6 +401,75 @@ describe('wecom plugin runtime adapter', () => {
       msgtype: 'image',
       touser: 'user001',
       image: { media_id: 'MID_9' },
+    });
+    await endpoint.stop();
+  });
+
+  it('send image 段 kind=file 直用为 media_id，不经 upload', async () => {
+    const fetchMock = mockFetchOk('out-11');
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const endpoint = new WecomEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'wecom'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      http,
+      config: baseConfig,
+      fetch: fetchMock,
+    });
+    await endpoint.start();
+    await http.listen();
+    const id = await endpoint.send({
+      target: 'user001',
+      payload: [
+        { type: 'image', data: { media: { kind: 'file', value: 'MID_DIRECT' } } },
+      ],
+    });
+    expect(id).toBe('out-11');
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/media/upload'))).toBe(false);
+    const sendCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/message/send'));
+    const sendBody = JSON.parse(String(sendCall![1]!.body)) as Record<string, unknown>;
+    expect(sendBody).toMatchObject({
+      msgtype: 'image',
+      touser: 'user001',
+      image: { media_id: 'MID_DIRECT' },
+    });
+    await endpoint.stop();
+  });
+
+  it('无 canonical media 的 image 段 warn 并丢弃，其余文本照常发送', async () => {
+    const fetchMock = mockFetchOk('out-12');
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const endpoint = new WecomEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'wecom'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      http,
+      config: baseConfig,
+      fetch: fetchMock,
+    });
+    await endpoint.start();
+    await http.listen();
+    const id = await endpoint.send({
+      target: 'user001',
+      payload: [
+        { type: 'image', data: { url: 'https://legacy.example/a.png' } },
+        { type: 'text', data: { text: 'hi' } },
+      ],
+    });
+    expect(id).toBe('out-12');
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/media/upload'))).toBe(false);
+    const sendCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/message/send'));
+    const sendBody = JSON.parse(String(sendCall![1]!.body)) as Record<string, unknown>;
+    expect(sendBody).toMatchObject({
+      msgtype: 'text',
+      touser: 'user001',
+      text: { content: 'hi' },
     });
     await endpoint.stop();
   });

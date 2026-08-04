@@ -5,6 +5,10 @@
 
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
+import { isMediaRef } from '@zhin.js/core';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+
+const logger = getLogger('lark');
 
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface LarkAdapterConfig {
@@ -291,23 +295,37 @@ export function formatOutboundBody(payload: unknown): LarkSendBody {
         break;
       case 'image':
         if (!media) {
-          media = {
-            msg_type: 'image',
-            content: JSON.stringify({
-              // image_key 由 endpoint 上传物化写入；file_key/key/url 为旧调用方兼容入口。
-              image_key: data.image_key ?? data.file_key ?? data.key ?? data.url,
-            }),
-          };
+          // image_key 唯一来源：canonical MediaRef kind=file（endpoint 上传物化产物或调用方既有平台引用）
+          const ref = data.media;
+          if (isMediaRef(ref) && ref.kind === 'file') {
+            media = {
+              msg_type: 'image',
+              content: JSON.stringify({ image_key: ref.value }),
+            };
+          } else {
+            logger.warn(formatCompact({
+              op: 'lark_outbound_media_dropped',
+              type: 'image',
+              reason: isMediaRef(ref) ? 'unmaterialized_media' : 'missing_media_ref',
+            }));
+          }
         }
         break;
       case 'file':
         if (!media) {
-          media = {
-            msg_type: 'file',
-            content: JSON.stringify({
-              file_key: data.file_key ?? data.key,
-            }),
-          };
+          const ref = data.media;
+          if (isMediaRef(ref) && ref.kind === 'file') {
+            media = {
+              msg_type: 'file',
+              content: JSON.stringify({ file_key: ref.value }),
+            };
+          } else {
+            logger.warn(formatCompact({
+              op: 'lark_outbound_media_dropped',
+              type: 'file',
+              reason: isMediaRef(ref) ? 'unmaterialized_media' : 'missing_media_ref',
+            }));
+          }
         }
         break;
       case 'card':

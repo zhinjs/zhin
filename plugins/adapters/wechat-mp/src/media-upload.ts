@@ -6,7 +6,7 @@
  */
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
-import { isMediaRef, mediaRefFromLegacyData, type MediaRef } from '@zhin.js/core';
+import { isMediaRef, type MediaRef } from '@zhin.js/core';
 
 export interface MediaBinary {
   readonly data: Buffer;
@@ -47,6 +47,10 @@ export async function resolveMediaBinary(
     const path = media.value.startsWith('file://') ? media.value.slice('file://'.length) : media.value;
     return { data: await readFile(path), mimeType, fileName: basename(path) };
   }
+  if (media.kind === 'file') {
+    // 平台不透明引用（media_id）：由调用方直接透传，不走上传。
+    throw new Error('MediaRef kind=file is a platform opaque reference; binary resolution not applicable');
+  }
   return { data: await download(media.value), mimeType, fileName: `image.${ext}` };
 }
 
@@ -67,12 +71,12 @@ export function buildMediaUploadForm(binary: MediaBinary): FormData {
 }
 
 /**
- * 出站 image 段的媒体引用：已有 media_id 的视为已物化；
- * 否则读 canonical `data.media`，兼容旧 wire `{url,file,base64}` 字段。
+ * 出站媒体段的媒体引用：已有 media_id 的视为已物化（返回 undefined 透传）；
+ * 否则只读 canonical `data.media`（MediaRef-only，无 legacy 字段回退）。
  */
-export function readOutboundImageMedia(data: Record<string, unknown>): MediaRef | undefined {
+export function readOutboundMedia(data: Record<string, unknown>): MediaRef | undefined {
   if (typeof data.mediaId === 'string' && data.mediaId) return undefined;
   if (typeof data.media_id === 'string' && data.media_id) return undefined;
   if (isMediaRef(data.media)) return data.media;
-  return mediaRefFromLegacyData(data);
+  return undefined;
 }

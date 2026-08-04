@@ -1,4 +1,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import WebSocket from 'ws';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import { createHttpHost } from '@zhin.js/host-http';
@@ -234,6 +237,82 @@ describe('sandbox plugin runtime adapter', () => {
     expect(JSON.parse(wire)).toEqual({
       type: 'message',
       content: [{ type: 'text', data: { text: 'hi' } }],
+      timestamp: 42,
+    });
+  });
+
+  it('sends canonical url media segments directly', () => {
+    const wire = formatSandboxOutbound([
+      { type: 'text', data: { text: '看图' } },
+      { type: 'image', data: { media: { kind: 'url', value: 'https://example.com/a.png' } } },
+    ]);
+    expect(JSON.parse(wire).content).toEqual([
+      { type: 'text', data: { text: '看图' } },
+      { type: 'image', data: { media: { kind: 'url', value: 'https://example.com/a.png' } } },
+    ]);
+  });
+
+  it('inlines canonical base64 media with a base64:// prefix', () => {
+    const wire = formatSandboxOutbound([
+      { type: 'image', data: { media: { kind: 'base64', value: 'aGk=', mime_type: 'image/png' } } },
+    ]);
+    expect(JSON.parse(wire).content).toEqual([
+      {
+        type: 'image',
+        data: {
+          media: { kind: 'base64', value: 'base64://image/png;base64,aGk=', mime_type: 'image/png' },
+        },
+      },
+    ]);
+  });
+
+  it('materializes canonical path media from disk into base64', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'zhin-sandbox-media-'));
+    try {
+      const file = join(dir, 'a.png');
+      writeFileSync(file, Buffer.from('hi'));
+      const wire = formatSandboxOutbound([
+        { type: 'image', data: { media: { kind: 'path', value: file, mime_type: 'image/png' } } },
+      ]);
+      expect(JSON.parse(wire).content).toEqual([
+        {
+          type: 'image',
+          data: {
+            media: { kind: 'base64', value: 'base64://image/png;base64,aGk=', mime_type: 'image/png' },
+          },
+        },
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('drops media segments without a canonical data.media ref', () => {
+    // legacy 形状（data.url / data.base64）不再可读，warn + 丢弃
+    const wire = formatSandboxOutbound([
+      { type: 'text', data: { text: 'hi' } },
+      { type: 'image', data: { url: 'https://example.com/a.png' } },
+      { type: 'video', data: { base64: 'aGk=' } },
+    ]);
+    expect(JSON.parse(wire).content).toEqual([
+      { type: 'text', data: { text: 'hi' } },
+    ]);
+  });
+
+  it('drops unsupported file-kind media and normalizes envelope content', () => {
+    const wire = formatSandboxOutbound({
+      type: 'message',
+      content: [
+        { type: 'file', data: { media: { kind: 'file', value: 'opaque-file-id' } } },
+        { type: 'audio', data: { media: { kind: 'url', value: 'https://example.com/a.mp3' } } },
+      ],
+      timestamp: 42,
+    });
+    expect(JSON.parse(wire)).toEqual({
+      type: 'message',
+      content: [
+        { type: 'audio', data: { media: { kind: 'url', value: 'https://example.com/a.mp3' } } },
+      ],
       timestamp: 42,
     });
   });

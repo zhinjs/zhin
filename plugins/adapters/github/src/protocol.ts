@@ -6,6 +6,10 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { pickCredential } from '@zhin.js/adapter';
+import { isMediaRef } from '@zhin.js/core';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+
+const logger = getLogger('github');
 import {
   buildChannelId,
   type GenericWebhookPayload,
@@ -209,13 +213,49 @@ export function formatOutboundBody(payload: unknown): string {
       case 'at':
         return `@${item.data?.name || item.data?.id || item.data?.target || ''}`;
       case 'image':
-        return item.data?.url ? `![image](${item.data.url})` : '[image]';
+      case 'audio':
+      case 'video':
+      case 'file':
+        return formatMediaSegment(item);
       case 'link':
         return `[${item.data?.text || item.data?.url || ''}](${item.data?.url || ''})`;
       default:
         return String(item.data?.text ?? `[${item.type}]`);
     }
   }).join('');
+}
+
+/**
+ * 媒体段 → GitHub markdown（canonical MediaRef 唯一来源）。
+ * GitHub 评论只能消费远程 URL（无上传面），kind=url 直发；
+ * base64 / path / file 不可投递，warn + 丢弃。
+ */
+function formatMediaSegment(seg: GithubWireSegment): string {
+  const media = seg.data?.media;
+  if (!isMediaRef(media)) {
+    logger.warn(formatCompact({
+      op: 'github_outbound_media_dropped',
+      type: seg.type,
+      reason: 'missing_media_ref',
+    }));
+    return '';
+  }
+  if (media.kind !== 'url') {
+    logger.warn(formatCompact({
+      op: 'github_outbound_media_dropped',
+      type: seg.type,
+      reason: `unsupported_kind:${media.kind}`,
+    }));
+    return '';
+  }
+  if (seg.type === 'image') {
+    const alt = typeof seg.data?.alt === 'string' && seg.data.alt
+      ? seg.data.alt
+      : media.file_name || 'image';
+    return `![${alt}](${media.value})`;
+  }
+  const label = media.file_name || seg.type;
+  return `[${label}](${media.value})`;
 }
 
 export function verifyWebhookSignature(

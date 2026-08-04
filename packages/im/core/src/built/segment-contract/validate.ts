@@ -13,6 +13,8 @@ export const mediaRefSchema = Schema.object({
   kind: mediaKindSchema.required() as unknown as Schema,
   value: Schema.string().required(),
   mime_type: Schema.string(),
+  file_name: Schema.string(),
+  size: Schema.number(),
 });
 
 export const textSegmentSchema = Schema.object({
@@ -35,6 +37,34 @@ export const imageSegmentSchema = Schema.object({
   data: Schema.object({
     media: mediaRefSchema.required(),
     alt: Schema.string(),
+  }).required(),
+  platform: platformSchema,
+});
+
+export const audioSegmentSchema = Schema.object({
+  type: Schema.const('audio'),
+  data: Schema.object({
+    media: mediaRefSchema.required(),
+    duration: Schema.number(),
+  }).required(),
+  platform: platformSchema,
+});
+
+export const videoSegmentSchema = Schema.object({
+  type: Schema.const('video'),
+  data: Schema.object({
+    media: mediaRefSchema.required(),
+    duration: Schema.number(),
+    alt: Schema.string(),
+  }).required(),
+  platform: platformSchema,
+});
+
+export const fileSegmentSchema = Schema.object({
+  type: Schema.const('file'),
+  data: Schema.object({
+    media: mediaRefSchema.required(),
+    name: Schema.string(),
   }).required(),
   platform: platformSchema,
 });
@@ -97,6 +127,28 @@ export const canonicalSegmentSchema = Schema.discriminatedUnion('type', {
     data: Schema.object({
       media: mediaRefSchema.required(),
       alt: Schema.string(),
+    }).required(),
+    platform: platformSchema,
+  },
+  audio: {
+    data: Schema.object({
+      media: mediaRefSchema.required(),
+      duration: Schema.number(),
+    }).required(),
+    platform: platformSchema,
+  },
+  video: {
+    data: Schema.object({
+      media: mediaRefSchema.required(),
+      duration: Schema.number(),
+      alt: Schema.string(),
+    }).required(),
+    platform: platformSchema,
+  },
+  file: {
+    data: Schema.object({
+      media: mediaRefSchema.required(),
+      name: Schema.string(),
     }).required(),
     platform: platformSchema,
   },

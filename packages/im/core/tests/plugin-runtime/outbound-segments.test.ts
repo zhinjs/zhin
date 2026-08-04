@@ -52,13 +52,12 @@ describe('normalizeOutboundPayload', () => {
     const payload = await normalizeOutboundPayload(
       { type: 'html', data: { html: '<b>hi</b>', width: 400, fileName: 'zt.png' } },
       mockRenderer(),
+      { mediaPolicy: 'base64' },
     );
     expect(payload).toEqual([{
       type: 'image',
       data: {
-        media: { kind: 'base64', value: base64, mime_type: 'image/png' },
-        base64,
-        name: 'zt.png',
+        media: { kind: 'base64', value: base64, mime_type: 'image/png', file_name: 'zt.png' },
       },
     }]);
   });
@@ -72,6 +71,7 @@ describe('normalizeOutboundPayload', () => {
         { type: 'html', data: { html: '<i>x</i>' } },
       ],
       mockRenderer(),
+      { mediaPolicy: 'base64' },
     );
     expect(payload).toEqual([
       { type: 'text', data: { text: 'plain' } },
@@ -79,9 +79,7 @@ describe('normalizeOutboundPayload', () => {
       {
         type: 'image',
         data: {
-          media: { kind: 'base64', value: base64, mime_type: 'image/png' },
-          base64,
-          name: 'card.png',
+          media: { kind: 'base64', value: base64, mime_type: 'image/png', file_name: 'card.png' },
         },
       },
     ]);
@@ -133,16 +131,26 @@ describe('normalizeOutboundPayload', () => {
 describe('normalizeOutboundPayload canonical 归一矩阵', () => {
   // url-or-text 会对 base64/path 媒体做文本降级，归一形状见「媒体协商降级」专项。
   const policies: Array<OutboundMediaPolicy | undefined> = [
-    undefined,
     'base64',
     'passthrough',
   ];
 
-  it.each(policies)('legacy wire 字段归一为 MediaRef（policy=%s）', async (mediaPolicy) => {
+  it('缺省 policy 为 url-or-text（未声明 adapter 的保守兜底）', async () => {
+    const payload = await normalizeOutboundPayload([
+      { type: 'image', data: { media: { kind: 'path', value: '/tmp/local.png' }, alt: '本地图' } },
+      { type: 'image', data: { media: { kind: 'url', value: 'https://cdn.example.com/a.png' } } },
+    ]);
+    expect(payload).toEqual([
+      { type: 'text', data: { text: '本地图' } },
+      { type: 'image', data: { media: { kind: 'url', value: 'https://cdn.example.com/a.png' } } },
+    ]);
+  });
+
+  it.each(policies)('canonical 媒体段原样归一（policy=%s）', async (mediaPolicy) => {
     const payload = await normalizeOutboundPayload(
       [
-        { type: 'image', data: { url: 'https://cdn.example.com/a.png' } },
-        { type: 'image', data: { file: '/tmp/local.png' } },
+        { type: 'image', data: { media: { kind: 'url', value: 'https://cdn.example.com/a.png' } } },
+        { type: 'image', data: { media: { kind: 'path', value: '/tmp/local.png' } } },
         { type: 'reply', data: { id: 'm-1' } },
         { type: 'at', data: { id: '42', name: 'Ada' } },
       ],
@@ -163,12 +171,33 @@ describe('normalizeOutboundPayload canonical 归一矩阵', () => {
     ]);
   });
 
+  it('legacy wire 媒体字段在核心边界归一为 canonical MediaRef', async () => {
+    const payload = await normalizeOutboundPayload(
+      [
+        { type: 'image', data: { url: 'https://cdn.example.com/a.png' } },
+        { type: 'image', data: { file: '/tmp/local.png' } },
+      ],
+      undefined,
+      { mediaPolicy: 'base64' },
+    );
+    expect(payload).toEqual([
+      {
+        type: 'image',
+        data: { media: { kind: 'url', value: 'https://cdn.example.com/a.png' } },
+      },
+      {
+        type: 'image',
+        data: { media: { kind: 'path', value: '/tmp/local.png' } },
+      },
+    ]);
+  });
+
   // 仅含 URL 媒体的输入在全部 policy 下归一形状一致（含 url-or-text）。
   const allPolicies: Array<OutboundMediaPolicy | undefined> = [...policies, 'url-or-text'];
 
   it.each(allPolicies)('单段对象同样归一（policy=%s）', async (mediaPolicy) => {
     const payload = await normalizeOutboundPayload(
-      { type: 'image', data: { url: 'https://cdn.example.com/a.png', alt: 'cover' } },
+      { type: 'image', data: { media: { kind: 'url', value: 'https://cdn.example.com/a.png' }, alt: 'cover' } },
       undefined,
       { mediaPolicy },
     );
@@ -195,7 +224,7 @@ describe('normalizeOutboundPayload canonical 归一矩阵', () => {
 describe('normalizeOutboundPayload 媒体协商降级', () => {
   it('url-or-text：base64 image 段降级为文本（alt 优先）', async () => {
     const payload = await normalizeOutboundPayload(
-      [{ type: 'image', data: { base64: 'QUJD', alt: '截图' } }],
+      [{ type: 'image', data: { media: { kind: 'base64', value: 'QUJD' }, alt: '截图' } }],
       undefined,
       { mediaPolicy: 'url-or-text' },
     );
@@ -204,7 +233,7 @@ describe('normalizeOutboundPayload 媒体协商降级', () => {
 
   it('url-or-text：base64 image 段无 alt 时降级为占位文本', async () => {
     const payload = await normalizeOutboundPayload(
-      [{ type: 'image', data: { base64: 'QUJD' } }],
+      [{ type: 'image', data: { media: { kind: 'base64', value: 'QUJD' } } }],
       undefined,
       { mediaPolicy: 'url-or-text' },
     );
@@ -214,8 +243,8 @@ describe('normalizeOutboundPayload 媒体协商降级', () => {
   it('url-or-text：本地路径 image 段同样降级，URL image 段保留', async () => {
     const payload = await normalizeOutboundPayload(
       [
-        { type: 'image', data: { file: '/tmp/local.png', alt: '本地图' } },
-        { type: 'image', data: { url: 'https://cdn.example.com/a.png' } },
+        { type: 'image', data: { media: { kind: 'path', value: '/tmp/local.png' }, alt: '本地图' } },
+        { type: 'image', data: { media: { kind: 'url', value: 'https://cdn.example.com/a.png' } } },
       ],
       undefined,
       { mediaPolicy: 'url-or-text' },
@@ -232,7 +261,7 @@ describe('normalizeOutboundPayload 媒体协商降级', () => {
   it('base64 / passthrough：base64 image 段原样直发', async () => {
     for (const mediaPolicy of ['base64', 'passthrough'] as const) {
       const payload = await normalizeOutboundPayload(
-        [{ type: 'image', data: { base64: 'QUJD' } }],
+        [{ type: 'image', data: { media: { kind: 'base64', value: 'QUJD' } } }],
         undefined,
         { mediaPolicy },
       );
@@ -265,66 +294,15 @@ describe('normalizeOutboundPayload 媒体协商降级', () => {
     expect(payload).toEqual([{
       type: 'image',
       data: {
-        media: { kind: 'base64', value: base64, mime_type: 'image/png' },
-        base64,
-        name: 'card.png',
+        media: { kind: 'base64', value: base64, mime_type: 'image/png', file_name: 'card.png' },
       },
     }]);
   });
 });
 
 describe('resolveOutboundMediaPolicy', () => {
-  it('adapter definition 声明的 segments.outboundMedia 优先', () => {
-    const snapshot = mockSnapshot({
-      packageName: '@zhin.js/adapter-telegram',
-      definition: { segments: { outboundMedia: 'passthrough' } },
-    });
-    expect(resolveOutboundMediaPolicy('adapter:test' as never, snapshot)).toBe('passthrough');
-  });
-
-  it('未声明时按平台名查内置表', () => {
-    const cases: Array<[string, OutboundMediaPolicy]> = [
-      ['@zhin.js/adapter-qq', 'base64'],
-      ['@zhin.js/adapter-icqq', 'base64'],
-      ['@zhin.js/adapter-slack', 'base64'],
-      ['@zhin.js/adapter-weixin-ilink', 'base64'],
-      ['@zhin.js/adapter-telegram', 'url-or-text'],
-      ['@zhin.js/adapter-line', 'url-or-text'],
-      ['@zhin.js/adapter-lark', 'url-or-text'],
-      ['@zhin.js/adapter-kook', 'url-or-text'],
-      ['@zhin.js/adapter-dingtalk', 'url-or-text'],
-      ['@zhin.js/adapter-wechat-mp', 'url-or-text'],
-      ['@zhin.js/adapter-wecom', 'url-or-text'],
-      ['@zhin.js/adapter-email', 'url-or-text'],
-      ['@zhin.js/adapter-github', 'url-or-text'],
-      ['@zhin.js/adapter-milky', 'url-or-text'],
-      ['@zhin.js/adapter-napcat', 'passthrough'],
-      ['@zhin.js/adapter-onebot11', 'passthrough'],
-      ['@zhin.js/adapter-onebot12', 'passthrough'],
-    ];
-    for (const [packageName, expected] of cases) {
-      const snapshot = mockSnapshot({ packageName });
-      expect(resolveOutboundMediaPolicy('adapter:test' as never, snapshot)).toBe(expected);
-    }
-  });
-
-  it('非法声明值忽略，回退内置表', () => {
-    const snapshot = mockSnapshot({
-      packageName: '@zhin.js/adapter-telegram',
-      definition: { segments: { outboundMedia: 'bogus' } },
-    });
-    expect(resolveOutboundMediaPolicy('adapter:test' as never, snapshot)).toBe('url-or-text');
-  });
-
-  it('未知平台回退 base64（历史行为）', () => {
-    const snapshot = mockSnapshot({ packageName: '@acme/adapter-unknown' });
-    expect(resolveOutboundMediaPolicy('adapter:test' as never, snapshot)).toBe('base64');
-  });
-
-  it('任务 C 契约：outboundMedia 来源形式数组映射投递策略并覆盖内置表', () => {
+  it('adapter definition 声明的 segments.outboundMedia 数组映射投递策略', () => {
     const withMedia = (outboundMedia: readonly string[]) => mockSnapshot({
-      // 内置表为 base64，声明必须覆盖
-      packageName: '@zhin.js/adapter-qq',
       definition: { segments: { outboundMedia } },
     });
     const resolve = (forms: readonly string[]) =>
@@ -333,19 +311,32 @@ describe('resolveOutboundMediaPolicy', () => {
     expect(resolve(['url', 'upload'])).toBe('passthrough');
     expect(resolve(['url', 'path'])).toBe('passthrough');
     expect(resolve(['url'])).toBe('url-or-text');
-    // 空数组 / 未知形式视为未声明，回退内置表
-    expect(resolve([])).toBe('base64');
-    expect(resolve(['ftp'])).toBe('base64');
+  });
+
+  it('未声明 / 非法声明一律回退 url-or-text（无内置表）', () => {
+    for (const definition of [
+      undefined,
+      {},
+      { segments: {} },
+      { segments: { outboundMedia: 'bogus' } },
+      { segments: { outboundMedia: [] } },
+      { segments: { outboundMedia: ['ftp'] } },
+    ]) {
+      const snapshot = mockSnapshot({ packageName: '@zhin.js/adapter-qq', definition });
+      expect(resolveOutboundMediaPolicy('adapter:test' as never, snapshot)).toBe('url-or-text');
+    }
+    // 未声明与平台名无关（内置表已删除）
+    const unknown = mockSnapshot({ packageName: '@acme/adapter-unknown' });
+    expect(resolveOutboundMediaPolicy('adapter:missing' as never, unknown)).toBe('url-or-text');
   });
 
   it('多 endpoint 展开的 slot~entry id 回退到 slot 声明', () => {
     const snapshot = mockSnapshot({
-      packageName: '@zhin.js/adapter-telegram',
       definition: { segments: { outboundMedia: ['base64'] } },
     });
     expect(resolveOutboundMediaPolicy('adapter:test~8596' as never, snapshot)).toBe('base64');
-    // 无 ~ 的未知 id 不命中 slot，走内置表之外的回退
-    expect(resolveOutboundMediaPolicy('adapter:missing' as never, snapshot)).toBe('base64');
+    // 无 ~ 的未知 id 不命中 slot，回退 url-or-text
+    expect(resolveOutboundMediaPolicy('adapter:missing' as never, snapshot)).toBe('url-or-text');
   });
 });
 

@@ -10,6 +10,12 @@ afterEach(async () => {
 });
 
 describe('Runtime MCP Host', () => {
+  it('keeps the package root inert and exposes the Runtime API', async () => {
+    const entry = await import('../src/index.js');
+
+    expect(entry.installRuntimeMcp).toBe(installRuntimeMcp);
+  });
+
   it('requires Bearer auth and executes snapshot-provided tools', async () => {
     const execute = vi.fn(async ({ value }: { value: string }) => `echo:${value}`);
     const tool: RuntimeMcpTool = {
@@ -49,6 +55,36 @@ describe('Runtime MCP Host', () => {
     });
     expect(body).toContain('requires approval');
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('uses the Host JSON parser limit and preserves JSON-RPC parse errors', async () => {
+    const { baseUrl } = await start([]);
+    const response = await fetch(baseUrl, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: 'Bearer test-token',
+      },
+      body: JSON.stringify({ payload: 'x'.repeat(1_048_576) }),
+    });
+
+    expect(response.status).toBe(413);
+    expect(await response.json()).toMatchObject({
+      jsonrpc: '2.0',
+      error: { code: -32700, message: 'Parse error' },
+      id: null,
+    });
+
+    const invalid = await fetch(baseUrl, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: 'Bearer test-token',
+      },
+      body: '{invalid',
+    });
+    expect(invalid.status).toBe(400);
+    expect(await invalid.json()).toMatchObject({ error: { code: -32700 } });
   });
 });
 

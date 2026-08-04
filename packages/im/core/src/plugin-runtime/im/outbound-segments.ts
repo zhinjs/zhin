@@ -39,67 +39,37 @@ export interface OutboundSegment {
 
 /**
  * 出站媒体能力策略（html→image 渲染产物与 base64/path 媒体段的投递方式）：
- * - `base64`：平台接受 base64 直发（qq / icqq / slack / weixin-ilink）；
+ * - `base64`：平台接受 base64 直发；
  * - `url-or-text`：平台仅接受 URL 媒体；本层无上传通道，base64/path → 文本降级；
- * - `passthrough`：adapter 自行物化媒体（napcat / onebot11 / onebot12），本层不动。
+ * - `passthrough`：adapter 自行物化媒体，本层不动。
  */
 export type OutboundMediaPolicy = 'base64' | 'url-or-text' | 'passthrough';
 
 /**
- * 任务 C `defineAdapter` segments policy 挂载形状（duck-typed 读取）。
- * 契约形状为 `outboundMedia: readonly ('url'|'path'|'base64'|'upload')[]`
- * （端点可消费的媒体来源形式，见 `@zhin.js/adapter` 的 AdapterSegmentPolicy）；
- * 兼容过渡期的单值策略字符串。Adapter 在 definition 上声明
- * `segments: { outboundMedia }` 即覆盖内置表。
+ * adapter definition 的 segments policy 声明（必选能力面）。
+ * `outboundMedia` 为端点可消费的媒体来源形式数组
+ * （'url' | 'path' | 'base64' | 'upload'），映射到投递策略：
+ * base64 可直发；无 base64 但端点可自行物化（upload/path）→ passthrough；
+ * 仅 url → 非 URL 媒体文本降级。未声明的 adapter 按 ['url'] 兜底。
  */
 export interface OutboundSegmentsPolicy {
-  readonly outboundMedia?:
-    | OutboundMediaPolicy
-    | readonly ('url' | 'path' | 'base64' | 'upload')[];
+  readonly outboundMedia: readonly ('url' | 'path' | 'base64' | 'upload')[];
   readonly interactive?: InteractivePolicy;
 }
 
 export interface NormalizeOutboundOptions {
-  /** 缺省 `base64`（保持历史行为：html→image base64 直发）。 */
+  /** 缺省 `url-or-text`（未声明 adapter 的保守兜底：仅 URL 媒体可达）。 */
   readonly mediaPolicy?: OutboundMediaPolicy;
 }
 
 const DEFAULT_CARD_WIDTH = 540;
 const DEFAULT_CARD_FILENAME = 'card.png';
-const DEFAULT_MEDIA_POLICY: OutboundMediaPolicy = 'base64';
-
-/** 平台名 → 出站媒体策略（任务 C 声明式 policy 落地前的内置来源）。 */
-const OUTBOUND_MEDIA_POLICY_BY_ADAPTER: Record<string, OutboundMediaPolicy> = {  qq: 'base64',
-  icqq: 'base64',
-  slack: 'base64',
-  'weixin-ilink': 'base64',
-  telegram: 'url-or-text',
-  line: 'url-or-text',
-  lark: 'url-or-text',
-  kook: 'url-or-text',
-  dingtalk: 'url-or-text',
-  'wechat-mp': 'url-or-text',
-  wecom: 'url-or-text',
-  email: 'url-or-text',
-  github: 'url-or-text',
-  milky: 'url-or-text',
-  napcat: 'passthrough',
-  onebot11: 'passthrough',
-  onebot12: 'passthrough',
-};
-
-export function isOutboundSegment(value: unknown): value is OutboundSegment {
-  return typeof value === 'object'
-    && value !== null
-    && !Array.isArray(value)
-    && typeof (value as { type?: unknown }).type === 'string';
-}
+const DEFAULT_MEDIA_POLICY: OutboundMediaPolicy = 'url-or-text';
 
 /**
- * 解析端点的出站媒体策略：优先读 adapter definition 上声明的
- * `segments.outboundMedia`（任务 C 挂载点；多 endpoint 展开的 `slot~entry`
- * id 回退到 slot id 查声明），否则按平台名查内置表，
- * 未知平台回退 `base64`（历史行为）。
+ * 解析端点的出站媒体策略：读 adapter definition 声明的 `segments.outboundMedia`
+ * （多 endpoint 展开的 `slot~entry` id 回退到 slot id 查声明）；
+ * 未声明回退 `url-or-text`（仅 URL 媒体可达，其余文本降级）。
  */
 export function resolveOutboundMediaPolicy(
   adapter: CapabilityId,
@@ -107,12 +77,7 @@ export function resolveOutboundMediaPolicy(
 ): OutboundMediaPolicy {
   const slot = snapshot.capabilities.get(adapter)
     ?? snapshot.capabilities.get(baseSlotCapabilityId(adapter));
-  const declared = readDeclaredMediaPolicy(slot?.definition);
-  if (declared) return declared;
-  const packageName = slot ? snapshot.tree.get(slot.owner)?.packageName : undefined;
-  const adapterType = adapterTypeName(packageName);
-  return (adapterType ? OUTBOUND_MEDIA_POLICY_BY_ADAPTER[adapterType] : undefined)
-    ?? DEFAULT_MEDIA_POLICY;
+  return readDeclaredMediaPolicy(slot?.definition) ?? DEFAULT_MEDIA_POLICY;
 }
 
 function readDeclaredMediaPolicy(definition: unknown): OutboundMediaPolicy | undefined {
@@ -120,19 +85,18 @@ function readDeclaredMediaPolicy(definition: unknown): OutboundMediaPolicy | und
   const segments = (definition as { segments?: unknown }).segments;
   if (!segments || typeof segments !== 'object') return undefined;
   const declared = (segments as OutboundSegmentsPolicy).outboundMedia;
-  // 过渡期单值策略字符串
-  if (declared === 'base64' || declared === 'url-or-text' || declared === 'passthrough') {
-    return declared;
-  }
-  // 任务 C 契约：媒体来源形式数组 → 投递策略。
-  // base64 可直发；无 base64 但端点可自行物化（upload/path）→ passthrough；
-  // 仅 url → 非 URL 媒体文本降级。
-  if (Array.isArray(declared)) {
-    if (declared.includes('base64')) return 'base64';
-    if (declared.includes('upload') || declared.includes('path')) return 'passthrough';
-    if (declared.includes('url')) return 'url-or-text';
-  }
+  if (!Array.isArray(declared)) return undefined;
+  if (declared.includes('base64')) return 'base64';
+  if (declared.includes('upload') || declared.includes('path')) return 'passthrough';
+  if (declared.includes('url')) return 'url-or-text';
   return undefined;
+}
+
+export function isOutboundSegment(value: unknown): value is OutboundSegment {
+  return typeof value === 'object'
+    && value !== null
+    && !Array.isArray(value)
+    && typeof (value as { type?: unknown }).type === 'string';
 }
 
 /**
@@ -270,11 +234,12 @@ async function renderHtmlSegment(
         return {
           type: 'image',
           data: {
-            // canonical MediaRef 为主，legacy `base64`/`name` 双写保持旧 adapter 可读
-            // （Wave 2 适配器迁移完成后移除 legacy 字段）。
-            media: { kind: 'base64', value: base64, mime_type: 'image/png' },
-            base64,
-            name: typeof data.fileName === 'string' ? data.fileName : DEFAULT_CARD_FILENAME,
+            media: {
+              kind: 'base64',
+              value: base64,
+              mime_type: 'image/png',
+              file_name: typeof data.fileName === 'string' ? data.fileName : DEFAULT_CARD_FILENAME,
+            },
           },
         };
       }
@@ -286,22 +251,27 @@ async function renderHtmlSegment(
 }
 
 /**
- * 媒体协商：仅 `url-or-text` 需要在本层动作——image 段的非 URL MediaRef
- * （base64 / 本地路径）无法投递，降级为文本（alt 优先）。
+ * 媒体协商：仅 `url-or-text` 需要在本层动作——媒体段的非 URL MediaRef
+ * （base64 / 本地路径）无法投递，降级为文本（alt / file_name 优先）。
  */
+const MEDIA_SEGMENT_TYPES = new Set(['image', 'audio', 'video', 'file']);
+
 function applyOutboundMediaPolicy(
   segments: Segment[],
   mediaPolicy: OutboundMediaPolicy,
 ): Segment[] {
   if (mediaPolicy !== 'url-or-text') return segments;
   return segments.map((segment) => {
-    if (segment.type !== 'image') return segment;
-    const media = (segment.data as { media?: unknown }).media;
+    if (!MEDIA_SEGMENT_TYPES.has(segment.type)) return segment;
+    const data = segment.data as { media?: unknown; alt?: unknown; name?: unknown };
+    const media = data.media;
     if (!isMediaRef(media) || media.kind === 'url') return segment;
-    const alt = typeof segment.data.alt === 'string' && segment.data.alt
-      ? segment.data.alt
-      : '[image]';
-    return { type: 'text', data: { text: alt } };
+    const label = typeof data.alt === 'string' && data.alt
+      ? data.alt
+      : typeof data.name === 'string' && data.name
+        ? data.name
+        : media.file_name ?? `[${segment.type}]`;
+    return { type: 'text', data: { text: label } };
   });
 }
 

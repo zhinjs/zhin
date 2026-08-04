@@ -9,7 +9,7 @@ import {
   type AgentTool,
   type AgentMessage,
   type ContentPart,
-  type ImageContent,
+  type MediaContentBlock,
   type Usage,
   type AgentEvent,
   type OutputElement,
@@ -73,12 +73,18 @@ import { createSubagentSystem } from '../subagent/subagent-system-init.js';
 import { processTextTurnStream } from '../turn/process-stream.js';
 import { followUpMessage, runPromptTurn, steerMessage } from '../turn/prompt-api.js';
 import {
+  getAgentTurnConfiguration,
+  runWithAgentTurnConfiguration,
+  type AgentTurnConfiguration,
+} from '../turn/agent-turn-context.js';
+import {
   appendActiveSkills,
   getTurnActiveSkills,
   initInboundTurnContext as bridgeInitInboundTurnContext,
   initScheduleTurnContext as bridgeInitScheduleTurnContext,
   runInTurnContext as bridgeRunInTurnContext,
   type TurnContextBridgeState,
+  type TurnContextRunOptions,
 } from '../turn/turn-context-bridge.js';
 import { emitSessionCompactEvent, emitSessionNewEvent } from '../event/session-events.js';
 import { applyZhinAgentConfigure, wireZhinAgentLlmApiLayer, type ConfigureZhinAgentTarget } from '../init/configure-zhin-agent.js';
@@ -105,6 +111,7 @@ export type {
 } from '../config/agent-interfaces.js';
 export type { ZhinAgentTurnMetrics, ZhinAgentTurnPath } from '../turn/turn-metrics.js';
 export { PromptAccessDeniedError } from '../turn/prompt-access.js';
+export type { AgentTurnConfiguration } from '../turn/agent-turn-context.js';
 export { formatAiHandlerCompleteLog, formatAiHandlerTurnTable, formatZhinAgentTurnUsage } from '../turn/turn-metrics.js';
 export * from '../prompt/prompt-builder.js';
 export * from '../prompt/templates.js';
@@ -112,10 +119,23 @@ export * from '../turn/task-continuation.js';
 
 const logger = getLogger('ZhinAgent');
 
+export interface AgentTurnRequest {
+  readonly content: string;
+  readonly message: Message;
+  readonly tools?: readonly Tool[];
+  readonly onChunk?: OnChunkCallback;
+  /** Cancels only this turn; the signal reaches queueing, model IO, and tools. */
+  readonly signal?: AbortSignal;
+  /** Enables IM activity feedback only for an actual inbound user message. */
+  readonly activityFeedbackEligible?: boolean;
+  /** Per-message routing state. Never call configure() for these values. */
+  readonly configuration?: AgentTurnConfiguration;
+}
+
 export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAgentDiagnostics, IAgentConfigurator {
   private provider: AIProvider;
   private providerResolver: ((alias: string) => AIProvider) | null = null;
-  private activeBinding: ResolvedAgentBinding | null = null;
+  private configuredActiveBinding: ResolvedAgentBinding | null = null;
   private config: Required<ZhinAgentConfig>;
   /** ideal 模块槽位；经 getter/setter 供 configure 与 asPrivate(host) 读写 */
   private readonly runtimeModules: ZhinAgentRuntimeModules;
@@ -128,7 +148,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   private userProfiles: UserProfileStore;
   private rateLimiter: RateLimiter;
   private subagentSystem: SubagentSystem | null = null;
-  private bootstrapContext: string = '';
+  private configuredBootstrapContext: string = '';
   private alwaysSkillsBaseline: string = '';
   private skillsSummaryXML: string = '';
   private modelRegistry: ModelRegistry | null = null;
@@ -159,6 +179,22 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   get orchestrator(): AgentOrchestrator | null { return this.runtimeModules.orchestrator; }
   set orchestrator(value: AgentOrchestrator | null) { this.runtimeModules.orchestrator = value; }
+
+  get activeBinding(): ResolvedAgentBinding | null {
+    return getAgentTurnConfiguration()?.activeBinding ?? this.configuredActiveBinding;
+  }
+
+  set activeBinding(value: ResolvedAgentBinding | null) {
+    this.configuredActiveBinding = value;
+  }
+
+  get bootstrapContext(): string {
+    return getAgentTurnConfiguration()?.bootstrapContext ?? this.configuredBootstrapContext;
+  }
+
+  set bootstrapContext(value: string) {
+    this.configuredBootstrapContext = value;
+  }
 
   get agentCore(): AgentCore | null { return this.runtimeModules.agentCore; }
   set agentCore(value: AgentCore | null) { this.runtimeModules.agentCore = value; }
@@ -402,8 +438,12 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     return getActiveTurnTracker();
   }
 
-  runInTurnContext<T>(turnId: string, fn: () => Promise<T>): Promise<T> {
-    return bridgeRunInTurnContext(this.turnContextState, this.config, turnId, fn);
+  runInTurnContext<T>(
+    turnId: string,
+    fn: () => Promise<T>,
+    options?: TurnContextRunOptions,
+  ): Promise<T> {
+    return bridgeRunInTurnContext(this.turnContextState, this.config, turnId, fn, options);
   }
 
   getSubagentSystem(): SubagentSystem | null {
@@ -523,7 +563,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   async prompt(
     input: string | AgentMessage | AgentMessage[],
     commMessage: Message,
-    options?: { images?: ImageContent[]; onChunk?: OnChunkCallback },
+    options?: { media?: MediaContentBlock[]; onChunk?: OnChunkCallback },
   ): Promise<OutputElement[]> {
     return runPromptTurn(asPrivate(this), input, commMessage, (id, fn) => this.runInTurnContext(id, fn), options);
   }
@@ -568,12 +608,37 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     externalTools: Tool[] = [],
     onChunk?: OnChunkCallback,
   ): Promise<OutputElement[]> {
-    return this.runInTurnContext(randomUUID(), () =>
-      runWithInboundQueue(commMessage, this.inboundQueueConfig, this.inboundTurnQueue, {
-        content,
-        run: (mergedContent) =>
-          processTextTurn(asPrivate(this), mergedContent, commMessage, externalTools, onChunk),
-      }),
+    return this.processTurn({
+      content,
+      message: commMessage,
+      tools: externalTools,
+      ...(onChunk ? { onChunk } : {}),
+    });
+  }
+
+  /**
+   * Executes one immutable, generation-owned Agent turn. This prevents two
+   * concurrent IM messages from overwriting activeBinding/bootstrapContext.
+   */
+  async processTurn(request: AgentTurnRequest): Promise<OutputElement[]> {
+    return runWithAgentTurnConfiguration(request.configuration ?? {}, () =>
+      this.runInTurnContext(randomUUID(), () =>
+        runWithInboundQueue(request.message, this.inboundQueueConfig, this.inboundTurnQueue, {
+          content: request.content,
+          signal: request.signal,
+          run: (mergedContent) => processTextTurn(
+            asPrivate(this),
+            mergedContent,
+            request.message,
+            [...(request.tools ?? [])],
+            request.onChunk,
+            { signal: request.signal },
+          ),
+        }),
+        request.activityFeedbackEligible === undefined
+          ? undefined
+          : { activityFeedbackEligible: request.activityFeedbackEligible },
+      ),
     );
   }
 

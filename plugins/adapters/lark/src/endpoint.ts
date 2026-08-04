@@ -183,7 +183,8 @@ export class LarkEndpoint implements EndpointInstance {
 
   /**
    * im/v1 消息 image 段只接受 image_key：canonical MediaRef（base64/本地路径/URL）
-   * 先经 /im/v1/images 物化；上传失败降级为文本（alt 优先），不阻断发送。
+   * 先经 /im/v1/images 物化，产物回写为 MediaRef kind=file（平台不透明引用）；
+   * 上传失败降级为文本（alt 优先），不阻断发送。
    */
   async #materializeOutboundMedia(payload: unknown): Promise<unknown> {
     if (!Array.isArray(payload)) return payload;
@@ -199,7 +200,10 @@ export class LarkEndpoint implements EndpointInstance {
         const alt = typeof data.alt === 'string' && data.alt ? data.alt : '[image]';
         return { type: 'text', data: { text: alt } };
       }
-      return { type: 'image', data: { image_key: imageKey } };
+      return {
+        type: 'image',
+        data: { media: { kind: 'file', value: imageKey } },
+      };
     }));
   }
 

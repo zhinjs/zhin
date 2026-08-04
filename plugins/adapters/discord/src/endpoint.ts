@@ -4,12 +4,19 @@
 import { ChannelType } from 'discord.js';
 import type {
   EndpointChannel,
+  EndpointControl,
   EndpointGroup,
   EndpointInstance,
   EndpointManagement,
+  EndpointSendRequest,
 } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
+import {
+  formatLegacyMessageReference,
+  nativeConversationId,
+  parseLegacyMessageReference,
+} from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { registerDiscordAgentEndpoint } from './discord-agent-deps.js';
@@ -64,6 +71,22 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
   readonly management: EndpointManagement = createDiscordEndpointManagement({
     getClient: () => this.#requireClient(),
     getMembers: (guildId) => this.getMembers(guildId),
+  });
+  readonly control: EndpointControl = Object.freeze({
+    recall: (messageId: string) => this.recallMessage(messageId),
+    addReaction: async (
+      messageId: string,
+      emoji: string,
+      hint?: { readonly sceneType?: string; readonly channelId?: string },
+    ) => {
+      const reference = parseLegacyMessageReference(messageId);
+      const channelId = hint?.channelId
+        ?? (reference ? nativeConversationId(reference.target) : undefined);
+      const nativeMessageId = reference?.messageId ?? messageId;
+      if (!channelId || !nativeMessageId) return null;
+      await this.addReaction(channelId, nativeMessageId, emoji);
+      return emoji;
+    },
   });
 
   constructor(options: DiscordEndpointOptions) {
@@ -122,10 +145,11 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
     logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
   }
 
-  async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
+  async send({ target, conversation, payload }: EndpointSendRequest): Promise<string> {
     const body = formatOutboundBody(payload);
-    const snowflake = await this.#sendBody(target, body);
-    const messageId = `${target}:${snowflake}`;
+    const channelId = nativeConversationId(target, conversation);
+    const snowflake = await this.#sendBody(channelId, body);
+    const messageId = formatLegacyMessageReference({ target, messageId: snowflake });
     logger.debug(formatCompact({
       op: 'discord_send',
       endpoint: this.#options.config.name,
@@ -137,10 +161,10 @@ export class DiscordGatewayEndpoint implements EndpointInstance {
 
   async recallMessage(messageId: string): Promise<void> {
     if (!messageId) return;
-    const colon = messageId.indexOf(':');
-    if (colon <= 0) return;
-    const channelId = messageId.slice(0, colon);
-    const snowflake = messageId.slice(colon + 1);
+    const reference = parseLegacyMessageReference(messageId);
+    if (!reference) return;
+    const channelId = nativeConversationId(reference.target);
+    const snowflake = reference.messageId;
     const channel = await this.#requireClient().channels.fetch(channelId);
     if (!channel?.isTextBased() || !channel.messages) return;
     const msg = await channel.messages.fetch(snowflake);
@@ -397,6 +421,9 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
   #routeReleases: HttpRouteRegistration[] = [];
   #open = false;
   #started = false;
+  readonly control: EndpointControl = Object.freeze({
+    recall: (messageId: string) => this.recallMessage(messageId),
+  });
 
   constructor(options: DiscordInteractionsEndpointOptions) {
     this.#options = options;
@@ -438,9 +465,10 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
     logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
   }
 
-  async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
+  async send({ target, conversation, payload }: EndpointSendRequest): Promise<string> {
     const body = formatOutboundBody(payload);
-    const response = await this.#fetch(`${DISCORD_API}/channels/${target}/messages`, {
+    const channelId = nativeConversationId(target, conversation);
+    const response = await this.#fetch(`${DISCORD_API}/channels/${channelId}/messages`, {
       method: 'POST',
       headers: {
         Authorization: `Bot ${this.#options.config.token}`,
@@ -455,15 +483,15 @@ export class DiscordInteractionsEndpoint implements EndpointInstance {
     }
     const data = JSON.parse(text) as { id?: string };
     const snowflake = data.id ?? '';
-    return snowflake ? `${target}:${snowflake}` : '';
+    return snowflake ? formatLegacyMessageReference({ target, messageId: snowflake }) : '';
   }
 
   async recallMessage(messageId: string): Promise<void> {
     if (!messageId) return;
-    const colon = messageId.indexOf(':');
-    if (colon <= 0) return;
-    const channelId = messageId.slice(0, colon);
-    const snowflake = messageId.slice(colon + 1);
+    const reference = parseLegacyMessageReference(messageId);
+    if (!reference) return;
+    const channelId = nativeConversationId(reference.target);
+    const snowflake = reference.messageId;
     const response = await this.#fetch(`${DISCORD_API}/channels/${channelId}/messages/${snowflake}`, {
       method: 'DELETE',
       headers: { Authorization: `Bot ${this.#options.config.token}` },

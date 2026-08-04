@@ -39,7 +39,7 @@ export {
 
 export {
   buildMediaUploadForm,
-  readOutboundImageMedia,
+  readOutboundMedia,
   resolveMediaBinary,
   type MediaBinary,
   type WeChatMediaUploadResult,

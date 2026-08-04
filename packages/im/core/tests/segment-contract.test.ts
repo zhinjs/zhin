@@ -3,12 +3,12 @@ import {
   assertCanonicalSegments,
   isCanonicalSegment,
   isMediaRef,
-  mediaRefToLegacyFields,
   segmentsForImDelivery,
   collectSegmentMedia,
   textSegmentSchema,
   mentionSegmentSchema,
 } from '../src/built/segment-contract/index.js';
+import { toCanonicalSegments } from '../src/built/generic-segment-mapper.js';
 
 describe('segment-contract schema', () => {
   it('accepts text segment', () => {
@@ -138,9 +138,9 @@ describe('collectSegmentMedia（入站媒体提取）', () => {
     const media = collectSegmentMedia([
       { type: 'text', data: { text: '看图' } },
       { type: 'image', data: { media: { kind: 'url', value: 'https://cdn.example/a.jpg', mime_type: 'image/jpeg' } } },
-      { type: 'audio', data: { url: 'https://cdn.example/a.mp3' } },
-      { type: 'video', data: { file: '/tmp/a.mp4' } },
-      { type: 'file', data: { base64: 'QUJD' } },
+      { type: 'audio', data: { media: { kind: 'url', value: 'https://cdn.example/a.mp3' } } },
+      { type: 'video', data: { media: { kind: 'path', value: '/tmp/a.mp4' } } },
+      { type: 'file', data: { media: { kind: 'base64', value: 'QUJD' } } },
       { type: 'mention', data: { target: 'all' } },
     ]);
     expect(media).toEqual([
@@ -158,17 +158,40 @@ describe('collectSegmentMedia（入站媒体提取）', () => {
     ])).toEqual([]);
   });
 
-  it('collects platform file references (kind=file) from canonical media and legacy file_id', () => {
+  it('collects platform file references (kind=file) from canonical media', () => {
     const media = collectSegmentMedia([
       { type: 'image', data: { media: { kind: 'file', value: 'tg-file-id-1' } } },
-      { type: 'file', data: { file_id: 'milky-file-id-2', mime_type: 'application/pdf' } },
+      { type: 'file', data: { media: { kind: 'file', value: 'milky-file-id-2', mime_type: 'application/pdf' } } },
     ]);
     expect(media).toEqual([
       { type: 'image', media: { kind: 'file', value: 'tg-file-id-1' } },
       { type: 'file', media: { kind: 'file', value: 'milky-file-id-2', mime_type: 'application/pdf' } },
     ]);
-    expect(mediaRefToLegacyFields({ kind: 'file', value: 'tg-file-id-1' }))
-      .toEqual({ file: 'tg-file-id-1', url: 'tg-file-id-1' });
     expect(isMediaRef({ kind: 'file', value: 'x' })).toBe(true);
+  });
+
+  it('collectSegmentMedia 只认 canonical data.media（legacy 形状不收集）', () => {
+    const media = collectSegmentMedia([
+      { type: 'image', data: { url: 'https://example.com/a.png' } },
+      { type: 'file', data: { file_id: 'legacy-file-id' } },
+    ]);
+    expect(media).toEqual([]);
+  });
+});
+
+describe('toCanonicalSegments（入站媒体兼容边界）', () => {
+  it('normalizes legacy media shapes once before consumers inspect them', () => {
+    expect(toCanonicalSegments([
+      { type: 'audio', data: { url: 'https://cdn.example/a.mp3' } },
+      { type: 'video', data: { path: '/tmp/a.mp4', duration: 12 } },
+      { type: 'file', data: { file: 'platform-file-id', fileName: 'report.pdf' } },
+    ])).toEqual([
+      { type: 'audio', data: { media: { kind: 'url', value: 'https://cdn.example/a.mp3' } } },
+      { type: 'video', data: { media: { kind: 'path', value: '/tmp/a.mp4' }, duration: 12 } },
+      {
+        type: 'file',
+        data: { media: { kind: 'file', value: 'platform-file-id' }, name: 'report.pdf' },
+      },
+    ]);
   });
 });

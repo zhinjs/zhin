@@ -124,6 +124,31 @@ describe('dingtalk protocol helpers', () => {
       markdown: { title: 't', text: '# title' },
     });
   });
+
+  it('sends canonical url media images as picture messages', () => {
+    expect(formatOutboundBody([
+      { type: 'image', data: { media: { kind: 'url', value: 'https://example.com/a.png' } } },
+    ])).toEqual({
+      msgtype: 'picture',
+      picture: { picURL: 'https://example.com/a.png' },
+    });
+  });
+
+  it('drops non-url media refs and legacy-shaped images with a warn', () => {
+    // base64/path/file kinds have no DingTalk robot delivery surface
+    expect(formatOutboundBody([
+      { type: 'text', data: { text: 'hi' } },
+      { type: 'image', data: { media: { kind: 'base64', value: 'aGk=', mime_type: 'image/png' } } },
+    ])).toEqual({ msgtype: 'text', text: { content: 'hi' } });
+    // legacy data.url is no longer read
+    expect(formatOutboundBody([
+      { type: 'image', data: { url: 'https://example.com/legacy.png' } },
+    ])).toEqual({ msgtype: 'text', text: { content: '' } });
+    // audio/video/file segments are dropped entirely
+    expect(formatOutboundBody([
+      { type: 'video', data: { media: { kind: 'url', value: 'https://example.com/a.mp4' } } },
+    ])).toEqual({ msgtype: 'text', text: { content: '' } });
+  });
 });
 
 describe('dingtalk plugin runtime adapter', () => {

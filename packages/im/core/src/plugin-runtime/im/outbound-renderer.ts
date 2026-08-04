@@ -7,6 +7,7 @@ import {
 import {
   isComponentCall,
   isRawContent,
+  isSegmentContent,
   type SendContent,
 } from './contracts.js';
 
@@ -33,6 +34,8 @@ export class OutboundRenderer {
       return Promise.all(content.map((item) => this.#render(item, requester, snapshot, depth)));
     }
     if (isRawContent(content)) return content.payload;
+    // canonical Segment 一等公民：原样透传，由下游 normalizeOutboundPayload 归一与协商
+    if (isSegmentContent(content)) return content;
     if (isComponentCall(content)) {
       const rendered = await requireComponents(snapshot).render<unknown, SendContent>(
         requester,

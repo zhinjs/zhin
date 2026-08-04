@@ -5,7 +5,7 @@
  */
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
-import { isMediaRef, mediaRefFromLegacyData, type MediaRef } from '@zhin.js/core';
+import { isMediaRef, type MediaRef } from '@zhin.js/core';
 
 export interface MediaBinary {
   readonly data: Buffer;
@@ -59,13 +59,11 @@ export function buildImageUploadForm(binary: MediaBinary): FormData {
 }
 
 /**
- * 出站 image 段的媒体引用：已有 image_key/file_key 的视为已物化；
- * 否则读 canonical `data.media`，兼容旧 wire `{url,file,base64}` 字段。
+ * 出站 image 段待上传的媒体引用（canonical `data.media` 唯一来源）：
+ * kind=file 为平台不透明引用（image_key/file_key），已物化无需再上传，返回 undefined。
  */
 export function readOutboundImageMedia(data: Record<string, unknown>): MediaRef | undefined {
-  if (typeof data.image_key === 'string' && data.image_key) return undefined;
-  if (typeof data.file_key === 'string' && data.file_key) return undefined;
-  if (typeof data.key === 'string' && data.key) return undefined;
-  if (isMediaRef(data.media)) return data.media;
-  return mediaRefFromLegacyData(data);
+  if (!isMediaRef(data.media)) return undefined;
+  if (data.media.kind === 'file') return undefined;
+  return data.media;
 }

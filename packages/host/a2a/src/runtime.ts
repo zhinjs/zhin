@@ -4,7 +4,7 @@ import {
   type A2ARequestHandler,
 } from '@a2a-js/sdk/server';
 import { AGENT_CARD_PATH, type AgentCard } from '@a2a-js/sdk';
-import type { HttpHost } from '@zhin.js/host-http';
+import type { HttpRouteHost } from '@zhin.js/host-http-contract';
 import type { AgentHostPort } from '@zhin.js/agent/runtime';
 import type { ZhinAgent } from '@zhin.js/agent';
 import type { AgentBindingRegistry } from '@zhin.js/agent/config';
@@ -21,7 +21,7 @@ export interface RuntimeA2aConfig {
 }
 
 export interface InstallRuntimeA2aOptions {
-  readonly http: HttpHost;
+  readonly http: HttpRouteHost;
   readonly agentHost: AgentHostPort;
   readonly config?: RuntimeA2aConfig;
   readonly fallbackToken?: string;

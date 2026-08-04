@@ -297,11 +297,29 @@ describe('discord protocol helpers', () => {
     expect(formatOutboundBody('pong')).toEqual({ content: 'pong' });
     expect(formatOutboundBody([
       { type: 'text', data: { text: 'see' } },
-      { type: 'image', data: { url: 'https://example.com/a.png', name: 'a.png' } },
+      { type: 'image', data: { media: { kind: 'url', value: 'https://example.com/a.png' }, name: 'a.png' } },
     ])).toEqual({
       content: 'see',
       files: [{ name: 'a.png', url: 'https://example.com/a.png' }],
     });
+  });
+
+  it('maps canonical MediaRef media to outbound files and drops unusable media with a warn', () => {
+    expect(formatOutboundBody([
+      { type: 'image', data: { media: { kind: 'base64', value: 'aGk=', file_name: 'hi.png' } } },
+      { type: 'file', data: { media: { kind: 'path', value: '/tmp/a.pdf' }, name: 'a.pdf' } },
+    ])).toEqual({
+      files: [
+        { name: 'hi.png', base64: 'aGk=' },
+        { name: 'a.pdf', file: '/tmp/a.pdf' },
+      ],
+    });
+    // 无 media / 平台不透明引用（Discord 无 file_id 概念）：warn + 丢弃
+    expect(formatOutboundBody([
+      { type: 'text', data: { text: 'hi' } },
+      { type: 'image', data: {} },
+      { type: 'image', data: { media: { kind: 'file', value: 'opaque-ref' } } },
+    ])).toEqual({ content: 'hi' });
   });
 
   it('formats keyboard outbound as components', () => {
@@ -451,6 +469,21 @@ describe('discord plugin runtime adapter', () => {
     expect(mock.sent[0]).toMatchObject({
       channelId: 'chan-1',
     });
+    await endpoint.stop();
+  });
+
+  it('uses the native channel id for a legacy-prefixed outbound target', async () => {
+    const mock = createMockClient();
+    const endpoint = new DiscordGatewayEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createClient: () => mock,
+    });
+    await endpoint.start();
+    await expect(endpoint.send({ target: 'group:chan-1', payload: 'pong' }))
+      .resolves.toBe('group:chan-1:sent-1');
+    expect(mock.sent[0]).toMatchObject({ channelId: 'chan-1' });
     await endpoint.stop();
   });
 

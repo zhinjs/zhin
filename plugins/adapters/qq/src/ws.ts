@@ -4,6 +4,7 @@
 import path from 'node:path';
 import { Bot, ReceiverMode, type Sendable } from 'qq-official-bot';
 import { getLevel, toLog4jsLevel } from '@zhin.js/logger';
+import type { MediaRef, Segment } from '@zhin.js/core';
 import type { QqOutboundMessage } from './outbound.js';
 import type { QqChannelKind, QqInboundMessage, ResolvedQqWebsocketConfig } from './protocol.js';
 
@@ -130,6 +131,7 @@ export function normalizeQqMessage(raw: unknown): QqInboundMessage | null {
     ?? '',
   );
   const content = extractTextContent(msg.message) || msg.raw_message || '';
+  const segments = extractCanonicalSegments(msg.message);
   const rawRoles = msg.member?.roles ?? msg.sender?.roles;
   const authorRoles = Array.isArray(rawRoles) ? rawRoles.map(String) : undefined;
   // 统一按 mentions 判定 @：is_you 精确标识当前机器人（群载荷实测字段）。
@@ -150,8 +152,82 @@ export function normalizeQqMessage(raw: unknown): QqInboundMessage | null {
     timestamp: Date.now(),
     guildId: msg.guild_id != null ? String(msg.guild_id) : undefined,
     rawMessage: msg.raw_message,
+    ...(segments.length > 0 ? { segments } : {}),
     ...(mentioned ? { mentioned: true } : {}),
   };
+}
+
+/**
+ * SDK 解析后的消息段（text/at/face/image/video/audio/file/reply）→ canonical Segment[]。
+ * 附件段的 url 已由 SDK 归一（补 https:// 前缀）；mime 无法从载荷得知时按类型给默认。
+ */
+function extractCanonicalSegments(message: unknown): Segment[] {
+  if (!Array.isArray(message)) return [];
+  const out: Segment[] = [];
+  for (const seg of message) {
+    if (!seg || typeof seg !== 'object') continue;
+    const item = seg as { type?: string; data?: Record<string, unknown> };
+    const type = item.type ?? '';
+    const data = item.data ?? {};
+    switch (type) {
+      case 'text': {
+        const text = String(data.text ?? '');
+        if (text) out.push({ type: 'text', data: { text } });
+        break;
+      }
+      case 'at': {
+        const target = String(data.user_id ?? data.id ?? '');
+        if (!target) break;
+        const name = typeof data.username === 'string' && data.username
+          ? data.username
+          : undefined;
+        out.push({ type: 'mention', data: name ? { target, name } : { target } });
+        break;
+      }
+      case 'face': {
+        const id = data.id;
+        if (id == null) break;
+        out.push({ type: 'face', data: { id: id as string | number } });
+        break;
+      }
+      case 'image':
+      case 'video':
+      case 'audio':
+      case 'file': {
+        const url = typeof data.url === 'string' ? data.url : '';
+        if (!url) break;
+        const media: MediaRef = {
+          kind: 'url',
+          value: url,
+          mime_type: defaultMimeForSegment(type),
+          ...(typeof data.name === 'string' && data.name ? { file_name: data.name } : {}),
+          ...(typeof data.size === 'number' ? { size: data.size } : {}),
+        };
+        if (type === 'image') out.push({ type: 'image', data: { media } });
+        else if (type === 'video') out.push({ type: 'video', data: { media } });
+        else if (type === 'audio') out.push({ type: 'audio', data: { media } });
+        else out.push({ type: 'file', data: { media, ...(media.file_name ? { name: media.file_name } : {}) } });
+        break;
+      }
+      case 'reply': {
+        const messageId = String(data.id ?? data.message_id ?? '');
+        if (messageId) out.push({ type: 'reply', data: { message_id: messageId } });
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  return out;
+}
+
+function defaultMimeForSegment(type: string): string | undefined {
+  switch (type) {
+    case 'image': return 'image/jpeg';
+    case 'video': return 'video/mp4';
+    case 'audio': return 'audio/mpeg';
+    default: return undefined;
+  }
 }
 
 function extractTextContent(message: unknown): string {

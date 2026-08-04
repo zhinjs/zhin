@@ -228,7 +228,7 @@ describe('telegram protocol helpers', () => {
     }]);
     expect(formatOutboundActions('1001', [
       { type: 'text', data: { text: 'see' } },
-      { type: 'image', data: { url: 'https://example.com/a.png' } },
+      { type: 'image', data: { media: { kind: 'url', value: 'https://example.com/a.png' } } },
     ])).toEqual([{
       method: 'sendPhoto',
       params: {
@@ -304,6 +304,28 @@ describe('telegram protocol helpers', () => {
     ]);
     expect(filePlan.uploads).toEqual([]);
     expect(filePlan.actions[0]).toMatchObject({ params: { photo: 'fid-1' } });
+  });
+
+  it('drops media segments without canonical data.media with a warn', async () => {
+    const { getLogger } = await import('@zhin.js/logger');
+    const warn = vi.spyOn(getLogger('telegram'), 'warn');
+    try {
+      const plan = formatOutboundPlan('1001', [
+        { type: 'text', data: { text: 'hi' } },
+        { type: 'image', data: {} },
+      ]);
+      // 无 MediaRef 的媒体段被丢弃；文本仍经 sendMessage 投递
+      expect(plan.actions).toEqual([{
+        method: 'sendMessage',
+        params: { chat_id: 1001, text: 'hi' },
+      }]);
+      expect(plan.uploads).toEqual([]);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('telegram_outbound_media_dropped'),
+      );
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 
@@ -418,6 +440,27 @@ describe('telegram plugin runtime adapter', () => {
       c.method === 'sendMessage'
       && c.body.chat_id === 1001
       && c.body.text === 'pong'
+    ))).toBe(true);
+    await endpoint.stop();
+  });
+
+  it('uses the native chat id for a legacy-prefixed outbound target', async () => {
+    const fetch = mockApiFetch({ sendMessage: { message_id: 78 } });
+    const endpoint = new TelegramEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      config: baseConfig,
+      fetch,
+    });
+    await endpoint.start();
+    endpoint.open();
+    await expect(endpoint.send({ target: 'group:-1001', payload: 'pong' }))
+      .resolves.toBe('group:-1001:78');
+    expect(fetch.calls.some((call) => (
+      call.method === 'sendMessage' && call.body.chat_id === -1001
     ))).toBe(true);
     await endpoint.stop();
   });

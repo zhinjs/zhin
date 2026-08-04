@@ -35,7 +35,7 @@ describe("parseCqMessage reply with slash", () => {
   });
 });
 
-describe("toCqString (legacy)", () => {
+describe("toCqString", () => {
   it("仍可用于 CQ 序列化", () => {
     expect(
       toCqString([
@@ -45,10 +45,25 @@ describe("toCqString (legacy)", () => {
     ).toBe("[reply:x/y]hi");
   });
 
-  it("image base64 编码为 base64://（异机 icqq 守护进程可解码）", () => {
+  it("image canonical base64 MediaRef 编码为 base64://（异机 icqq 守护进程可解码）", () => {
     expect(
-      toCqString([{ type: "image", data: { base64: "aGVsbG8=" } }]),
+      toCqString([
+        { type: "image", data: { media: { kind: "base64", value: "aGVsbG8=" } } },
+      ]),
     ).toBe("[image:base64://aGVsbG8=]");
+  });
+
+  it("image canonical url MediaRef 直发 URL", () => {
+    expect(
+      toCqString([
+        { type: "image", data: { media: { kind: "url", value: "https://x/a.jpg" } } },
+      ]),
+    ).toBe("[image:https://x/a.jpg]");
+  });
+
+  it("媒体段无 canonical MediaRef 时丢弃", () => {
+    expect(toCqString([{ type: "image", data: {} }])).toBe("");
+    expect(toCqString([{ type: "video", data: { file: "/legacy.mp4" } }])).toBe("");
   });
 
   it("canonical mention 编码为 [at:target]", () => {
@@ -58,5 +73,23 @@ describe("toCqString (legacy)", () => {
         { type: "text", data: { text: " hi" } },
       ]),
     ).toBe("[at:8596238] hi");
+  });
+});
+
+describe("parseCqMessage media", () => {
+  it("[image:url] 解析为 canonical MediaRef", () => {
+    const segs = parseCqMessage("[image:https://x/a.jpg]");
+    expect(segs[0]).toEqual({
+      type: "image",
+      data: { media: { kind: "url", value: "https://x/a.jpg" } },
+    });
+  });
+
+  it("[record:base64://...] 解析为 base64 MediaRef", () => {
+    const segs = parseCqMessage("[record:base64://QUJD]");
+    expect(segs[0]).toEqual({
+      type: "record",
+      data: { media: { kind: "base64", value: "QUJD" } },
+    });
   });
 });

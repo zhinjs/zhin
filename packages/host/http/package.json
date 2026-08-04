@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@zhin.js/console-protocol": "workspace:*",
+    "@zhin.js/host-http-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
     "ws": "^8.21.1"

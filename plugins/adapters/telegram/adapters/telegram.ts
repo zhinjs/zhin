@@ -16,6 +16,7 @@ export type { TelegramEndpointOptions, TelegramFetch } from '../src/endpoint.js'
 
 export default defineAdapter<TelegramAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
+  operations: ['recall'],
   // 媒体 url / file_id 直发，base64 / 本地路径经 multipart attach:// 上传物化；
   // inline keyboard 原生按钮承载交互段。
   segments: {

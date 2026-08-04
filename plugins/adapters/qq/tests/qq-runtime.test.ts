@@ -280,7 +280,7 @@ describe('qq plugin runtime adapter', () => {
     await endpoint.start();
     await endpoint.send({
       target: 'group:group-1',
-      payload: [{ type: 'image', data: { url: 'https://example.com/a.png' } }],
+      payload: [{ type: 'image', data: { media: { kind: 'url', value: 'https://example.com/a.png' } } }],
     });
     expect(mock.sent[0]).toEqual({
       kind: 'group',
@@ -303,16 +303,16 @@ describe('qq plugin runtime adapter', () => {
       target: 'private:user-1',
       payload: [
         { type: 'text', data: { text: '看图' } },
-        { type: 'image', data: { url: 'data:image/png;base64,aGk=' } },
+        { type: 'image', data: { media: { kind: 'base64', value: 'aGk=', mime_type: 'image/png' } } },
       ],
     });
     await endpoint.send({
       target: 'private:user-1',
-      payload: [{ type: 'image', data: { file: '/tmp/a.png' } }],
+      payload: [{ type: 'image', data: { media: { kind: 'path', value: '/tmp/a.png' } } }],
     });
     expect(mock.sent[0]?.message).toEqual([
       '看图',
-      { type: 'image', data: { file: 'data:image/png;base64,aGk=' } },
+      { type: 'image', data: { file: 'base64://aGk=' } },
     ]);
     expect(mock.sent[1]?.message).toEqual({
       type: 'image',

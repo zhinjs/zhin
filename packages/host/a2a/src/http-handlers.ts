@@ -11,11 +11,17 @@ import {
 } from '@a2a-js/sdk';
 import {
   JsonRpcTransportHandler,
+  InvalidAgentResponseError,
+  RequestMalformedError,
   ServerCallContext,
+  TaskNotFoundError,
   UnauthenticatedUser,
+  UnsupportedOperationError,
   validateVersion,
+  VersionNotSupportedError,
   type A2ARequestHandler,
 } from '@a2a-js/sdk/server';
+import { HttpBodyError, readJsonBody } from '@zhin.js/host-http-contract';
 import { RestTransportHandler } from './rest-transport-handler.js';
 
 const SSE_HEADERS: Record<string, string> = {
@@ -32,14 +38,8 @@ function formatSSEErrorEvent(data: unknown): string {
   return `event: error\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
-async function readJsonBody(req: IncomingMessage): Promise<unknown> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of req) {
-    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
-  }
-  const raw = Buffer.concat(chunks).toString('utf8');
-  if (!raw.trim()) return {};
-  return JSON.parse(raw) as unknown;
+async function readA2aJsonBody(req: IncomingMessage): Promise<unknown> {
+  return (await readJsonBody(req)) ?? {};
 }
 
 function buildServerContext(req: IncomingMessage): ServerCallContext {
@@ -101,7 +101,7 @@ export async function handleJsonRpc(
 
   const transport = new JsonRpcTransportHandler(requestHandler);
   try {
-    const body = preParsedBody !== undefined ? preParsedBody : await readJsonBody(req);
+    const body = preParsedBody !== undefined ? preParsedBody : await readA2aJsonBody(req);
     const context = buildServerContext(req);
     const agentCard = await requestHandler.getAgentCard();
     validateVersion(context.requestedVersion, agentCard, 'JSONRPC');
@@ -137,6 +137,14 @@ export async function handleJsonRpc(
 
     sendJson(res, 200, rpcResponseOrStream);
   } catch (err) {
+    if (err instanceof HttpBodyError) {
+      sendJson(res, err.statusCode, {
+        jsonrpc: '2.0',
+        id: null,
+        error: { code: -32700, message: 'Parse error' },
+      });
+      return;
+    }
     const errorResponse = {
       jsonrpc: '2.0',
       id: null,
@@ -168,14 +176,14 @@ export async function handleRest(
     }
 
     if (method === 'POST' && path === 'v1/message:send') {
-      const params = preParsedBody !== undefined ? preParsedBody : await readJsonBody(req);
+      const params = preParsedBody !== undefined ? preParsedBody : await readA2aJsonBody(req);
       const result = await transport.sendMessage(params as never, context);
       sendJson(res, 200, result, { 'Content-Type': A2A_CONTENT_TYPE });
       return;
     }
 
     if (method === 'POST' && path === 'v1/message:stream') {
-      const params = preParsedBody !== undefined ? preParsedBody : await readJsonBody(req);
+      const params = preParsedBody !== undefined ? preParsedBody : await readA2aJsonBody(req);
       const stream = await transport.sendMessageStream(params as never, context);
       for (const [key, value] of Object.entries(SSE_HEADERS)) {
         res.setHeader(key, value);
@@ -225,8 +233,26 @@ export async function handleRest(
 
     sendJson(res, 404, { error: 'Not found' });
   } catch (err) {
-    sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    sendJson(res, restErrorStatus(err), { error: err instanceof Error ? err.message : String(err) });
   }
+}
+
+/**
+ * HTTP+JSON has HTTP status semantics. Keep its transport errors distinct from
+ * request validation, missing tasks, and failures inside an agent executor.
+ */
+function restErrorStatus(error: unknown): number {
+  if (error instanceof HttpBodyError) return error.statusCode;
+  if (error instanceof TaskNotFoundError) return 404;
+  if (
+    error instanceof RequestMalformedError
+    || error instanceof UnsupportedOperationError
+    || error instanceof VersionNotSupportedError
+  ) {
+    return 400;
+  }
+  if (error instanceof InvalidAgentResponseError) return 500;
+  return 500;
 }
 
 export async function handleRestStreamError(

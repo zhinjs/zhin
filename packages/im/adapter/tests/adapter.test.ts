@@ -14,13 +14,34 @@ import adapterFeature, {
   AdapterIndex,
   adapterFeatureId,
   defineAdapter,
+  endpointCapabilitiesOf,
   isAdapterIndex,
   parseAdapterDefinition,
+  resolveEndpointControl,
   resolveEndpointManagement,
   type AdapterSegmentPolicy,
 } from '../src/index.js';
 
 describe('Adapter Feature', () => {
+  it('derives explicit endpoint operations from the adapter declaration', () => {
+    const definition = defineAdapter({
+      capabilities: ['inbound', 'outbound'],
+      operations: ['recall', 'typing'],
+      create: () => ({}),
+    });
+
+    expect(endpointCapabilitiesOf(definition)).toEqual({
+      inbound: true,
+      outbound: true,
+      operations: { recall: true, typing: true },
+    });
+    expect(() => defineAdapter({
+      capabilities: ['outbound'],
+      operations: ['send' as never],
+      create: () => ({}),
+    })).toThrow('operations');
+  });
+
   it('exposes endpoint management only through the explicit semantic port', async () => {
     const listFriends = async () => [{ user_id: 1, nickname: 'Ada', remark: '' }];
     const management = resolveEndpointManagement({ management: { listFriends } });
@@ -29,6 +50,21 @@ describe('Adapter Feature', () => {
       { user_id: 1, nickname: 'Ada', remark: '' },
     ]);
     expect(resolveEndpointManagement({ friends: new Map() })).toBeUndefined();
+  });
+
+  it('resolves message control through the semantic port before the legacy bridge', async () => {
+    const explicitRecall = async () => undefined;
+    const legacyRecall = async () => { throw new Error('legacy should not run'); };
+    const control = resolveEndpointControl({
+      control: { recall: explicitRecall },
+      recallMessage: legacyRecall,
+    });
+
+    expect(control?.recall).toBe(explicitRecall);
+    await expect(control?.recall?.('m1')).resolves.toBeUndefined();
+    await expect(resolveEndpointControl({
+      recallMessage: async (messageId: string) => { expect(messageId).toBe('m2'); },
+    })?.recall?.('m2')).resolves.toBeUndefined();
   });
 
   it('brands definitions and discovers nested TypeScript modules', async () => {

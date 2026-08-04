@@ -43,7 +43,8 @@ export function resetPreprocessInboundMediaForTests(): void {
   resetWarnOnceForTests('stt-fail');
 }
 
-async function transcribeAudioPayload(
+/** STT 转写单条音频载荷（deps.transcribe 优先，否则 @zhin.js/speech 可选管线）。 */
+export async function transcribeAudioPayload(
   payload: MediaBinaryPayload,
   deps?: PreprocessInboundMediaDeps,
 ): Promise<string | undefined> {

@@ -3,8 +3,8 @@ import {
   definePlugin,
   outboundHostToken,
   scheduleHostToken,
-  type DatabaseHost,
   type PluginMetadata,
+  type PluginDatabaseHost,
   type PluginSetupContext,
   type Token,
 } from '@zhin.js/plugin-runtime';
@@ -50,7 +50,8 @@ export interface DefineGamePluginOptions<
   readonly game: RuntimeRegisteredGame;
   readonly tables: readonly string[];
   readonly servicesToken: Token<TServices>;
-  readonly defineHostTables: (host: DatabaseHost) => void;
+  /** Receives the owning plugin's logical database namespace, never the raw process host. */
+  readonly defineHostTables: (host: PluginDatabaseHost) => void;
   readonly createServices: (database: InMemoryGameDb) => TServices;
   readonly session: (
     services: TServices,
@@ -92,7 +93,7 @@ export function defineGamePlugin<
         options.defineHostTables(host);
         database = createHostGameDb(host, options.tables);
         context.lifecycle.add(
-          initGameRecordHost(host as unknown as GameRecordDatabaseHost),
+          initGameRecordHost(host as GameRecordDatabaseHost),
         );
       } else {
         database = createInMemoryGameDb(options.tables);

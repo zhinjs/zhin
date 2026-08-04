@@ -8,6 +8,13 @@ export class InboundTurnExpiredError extends Error {
   }
 }
 
+export class InboundTurnCancelledError extends Error {
+  constructor(sessionKey: string, reason?: unknown) {
+    super(`Inbound turn cancelled in queue for session ${sessionKey}`, reason === undefined ? undefined : { cause: reason });
+    this.name = 'InboundTurnCancelledError';
+  }
+}
+
 interface QueuedInboundTurn<T> {
   sessionKey: string;
   senderId: string;
@@ -16,6 +23,9 @@ interface QueuedInboundTurn<T> {
   enqueuedAt: number;
   lastEnqueuedAt: number;
   coalesceEnabled: boolean;
+  signal?: AbortSignal;
+  started: boolean;
+  disposeAbortListener?: () => void;
   promise: Promise<T>;
   run: (mergedContent: string) => Promise<T>;
   resolve: (value: T) => void;
@@ -50,11 +60,17 @@ export class InboundTurnQueue {
     commMessage: Message;
     content?: string;
     coalesce?: boolean;
+    signal?: AbortSignal;
     run: (mergedContent: string) => Promise<T>;
   }): Promise<T> {
     const { sessionKey, commMessage, run } = options;
-    const coalesceEnabled = options.coalesce !== false;
+    // A cancellable caller owns an individual deadline, so it cannot safely
+    // share a coalesced promise with another inbound message.
+    const coalesceEnabled = options.coalesce !== false && options.signal === undefined;
     const content = options.content ?? '';
+    if (options.signal?.aborted) {
+      return Promise.reject(inboundAbortReason(sessionKey, options.signal.reason));
+    }
     const senderId = String(commMessage.$sender?.id ?? 'unknown');
     const now = Date.now();
     const queue = this.queues.get(sessionKey) ?? [];
@@ -90,11 +106,19 @@ export class InboundTurnQueue {
       enqueuedAt: now,
       lastEnqueuedAt: now,
       coalesceEnabled,
+      signal: options.signal,
+      started: false,
       promise,
       run,
       resolve,
       reject,
     };
+
+    if (options.signal) {
+      const abort = () => this.cancelQueuedEntry(entry as QueuedInboundTurn<unknown>);
+      options.signal.addEventListener('abort', abort, { once: true });
+      entry.disposeAbortListener = () => options.signal?.removeEventListener('abort', abort);
+    }
 
     queue.push(entry as QueuedInboundTurn<unknown>);
 
@@ -110,6 +134,7 @@ export class InboundTurnQueue {
   dispose(): void {
     for (const queue of this.queues.values()) {
       for (const entry of queue) {
+        entry.disposeAbortListener?.();
         this.activityEmitter.emitQueuedClear(entry.commMessage, entry.sessionKey);
         entry.reject(new Error('InboundTurnQueue disposed'));
       }
@@ -129,6 +154,7 @@ export class InboundTurnQueue {
     const now = Date.now();
     while (queue.length > 0 && this.isExpired(queue[0]!, now)) {
       const expired = queue.shift()!;
+      expired.disposeAbortListener?.();
       this.activityEmitter.emitQueuedClear(expired.commMessage, sessionKey);
       expired.reject(new InboundTurnExpiredError(sessionKey));
     }
@@ -156,6 +182,7 @@ export class InboundTurnQueue {
         }
 
         this.activityEmitter.emitQueuedClear(entry.commMessage, sessionKey);
+        entry.started = true;
 
         try {
           const merged = entry.textParts.filter(Boolean).join('\n');
@@ -163,6 +190,8 @@ export class InboundTurnQueue {
           entry.resolve(result);
         } catch (error) {
           entry.reject(error);
+        } finally {
+          entry.disposeAbortListener?.();
         }
       }
     };
@@ -175,4 +204,22 @@ export class InboundTurnQueue {
     this.inFlight.set(sessionKey, flight);
     await flight;
   }
+
+  private cancelQueuedEntry(entry: QueuedInboundTurn<unknown>): void {
+    if (entry.started) return;
+    const queue = this.queues.get(entry.sessionKey);
+    if (!queue) return;
+    const index = queue.indexOf(entry);
+    if (index === -1) return;
+    queue.splice(index, 1);
+    if (queue.length === 0) this.queues.delete(entry.sessionKey);
+    entry.disposeAbortListener?.();
+    this.activityEmitter.emitQueuedClear(entry.commMessage, entry.sessionKey);
+    entry.reject(inboundAbortReason(entry.sessionKey, entry.signal?.reason));
+  }
+}
+
+function inboundAbortReason(sessionKey: string, reason?: unknown): Error {
+  if (reason instanceof Error && reason.name !== 'AbortError') return reason;
+  return new InboundTurnCancelledError(sessionKey, reason);
 }

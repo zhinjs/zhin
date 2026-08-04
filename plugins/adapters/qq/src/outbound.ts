@@ -13,6 +13,7 @@
  * 不可映射的段一律降级为文本并 warn（保持既有 fallback 行为）。
  */
 import { formatCompact, getLogger } from '@zhin.js/logger';
+import { isMediaRef } from '@zhin.js/core';
 import type { QqWireSegment } from './protocol.js';
 
 const logger = getLogger('qq');
@@ -34,54 +35,45 @@ interface QqOutboundButtonSpec {
   readonly command?: { readonly enter?: boolean; readonly reply?: boolean };
 }
 
-function isRemoteUrl(value: string): boolean {
-  return /^https?:\/\//i.test(value);
-}
-
-function isInlineBase64(value: string): boolean {
-  return value.startsWith('base64://') || /^data:[^/]+\/[^;]+;base64,/i.test(value);
-}
-
 /**
- * 解析 image/audio/video/file 段的本地或内联 payload。
- * qq-official-bot 的 formatMediaData 对 data.url 直接当远程 URL；
- * base64:// / data:...;base64 / 本地路径须走 data.file 才会解析为 file_data。
+ * 解析 image/audio/video/file 段的投递源（canonical MediaRef 唯一来源）：
+ * - kind=url → data.url 直发；
+ * - kind=base64 / path / file → data.file，由 SDK formatMediaData 走媒体上传（v2 /files）。
  */
 export function resolveMediaFile(data: Record<string, unknown>): string | undefined {
-  const url = typeof data.url === 'string' ? data.url : undefined;
-  const file = typeof data.file === 'string' ? data.file : undefined;
-  const base64 = typeof data.base64 === 'string' ? data.base64 : undefined;
-
-  if (file && !isRemoteUrl(file)) return file;
-  if (url && isInlineBase64(url)) return url;
-  if (url && !isRemoteUrl(url) && (url.startsWith('file://') || url.startsWith('/'))) return url;
-  if (base64) return base64.startsWith('base64://') ? base64 : `base64://${base64}`;
-  return undefined;
+  const media = data.media;
+  if (!isMediaRef(media)) return undefined;
+  if (media.kind === 'url') return undefined;
+  if (media.kind === 'base64') {
+    return media.value.startsWith('base64://') ? media.value : `base64://${media.value}`;
+  }
+  return media.value;
 }
 
 function normalizeMediaSegment(seg: QqWireSegment): QqOutboundElem | null {
-  const data = { ...(seg.data ?? {}) };
-  const file = resolveMediaFile(data);
-  if (file) {
-    delete data.url;
-    delete data.base64;
-    data.file = file;
-    return { type: seg.type, data };
+  const media = (seg.data ?? {}).media;
+  if (!isMediaRef(media)) {
+    // 无 canonical 媒体引用：无法投递，降级留痕
+    logger.warn(formatCompact({
+      op: 'qq_outbound_media_dropped',
+      type: seg.type,
+      reason: 'missing_media_ref',
+    }));
+    return null;
   }
-  const url = typeof data.url === 'string' ? data.url
-    : typeof data.file === 'string' ? data.file
-      : undefined;
-  if (url && isRemoteUrl(url)) {
-    delete data.base64;
-    return { type: seg.type, data: { ...data, url } };
+  if (media.kind === 'url') {
+    return { type: seg.type, data: { url: media.value } };
   }
-  // 既无远程 URL 也无本地上传源：无法投递，降级留痕
-  logger.warn(formatCompact({
-    op: 'qq_outbound_media_dropped',
-    type: seg.type,
-    reason: 'missing_source',
-  }));
-  return null;
+  const file = resolveMediaFile(seg.data ?? {});
+  if (!file) {
+    logger.warn(formatCompact({
+      op: 'qq_outbound_media_dropped',
+      type: seg.type,
+      reason: 'missing_source',
+    }));
+    return null;
+  }
+  return { type: seg.type, data: { file } };
 }
 
 function normalizeMarkdownSegment(seg: QqWireSegment): QqOutboundElem | null {

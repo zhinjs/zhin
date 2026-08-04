@@ -201,3 +201,92 @@ describe('normalizeQqMessage mentioned detection (unified mentions check)', () =
     expect(result!.mentioned).toBeUndefined();
   });
 });
+
+describe('normalizeQqMessage canonical segments extraction', () => {
+  it('文本 + at + 图片附件 → canonical Segment[]', () => {
+    const result = normalizeQqMessage({
+      message_id: '20',
+      message_type: 'group',
+      group_openid: 'open-g-1',
+      author: { member_openid: 'open-u-1', username: 'Cc' },
+      raw_message: '看图',
+      message: [
+        { type: 'at', data: { user_id: 'BOT_ID', username: 'zhin' } },
+        { type: 'text', data: { text: '看图' } },
+        { type: 'image', data: { url: 'https://cdn.example/a.jpg', name: 'a.jpg', size: 1024 } },
+      ],
+      mentions: [{ id: 'BOT_ID', bot: true, is_you: true, member_openid: 'BOT_ID' }],
+    });
+    expect(result!.segments).toEqual([
+      { type: 'mention', data: { target: 'BOT_ID', name: 'zhin' } },
+      { type: 'text', data: { text: '看图' } },
+      {
+        type: 'image',
+        data: {
+          media: {
+            kind: 'url',
+            value: 'https://cdn.example/a.jpg',
+            mime_type: 'image/jpeg',
+            file_name: 'a.jpg',
+            size: 1024,
+          },
+        },
+      },
+    ]);
+    expect(result!.content).toBe('看图');
+  });
+
+  it('语音/视频/文件附件 → audio/video/file 段', () => {
+    const result = normalizeQqMessage({
+      message_id: '21',
+      message_type: 'group',
+      group_openid: 'open-g-1',
+      author: { member_openid: 'open-u-1' },
+      message: [
+        { type: 'audio', data: { url: 'https://cdn.example/a.amr' } },
+        { type: 'video', data: { url: 'https://cdn.example/v.mp4' } },
+        { type: 'file', data: { url: 'https://cdn.example/f.zip', name: 'f.zip' } },
+      ],
+    });
+    expect(result!.segments).toEqual([
+      { type: 'audio', data: { media: { kind: 'url', value: 'https://cdn.example/a.amr', mime_type: 'audio/mpeg' } } },
+      { type: 'video', data: { media: { kind: 'url', value: 'https://cdn.example/v.mp4', mime_type: 'video/mp4' } } },
+      {
+        type: 'file',
+        data: {
+          media: { kind: 'url', value: 'https://cdn.example/f.zip', file_name: 'f.zip' },
+          name: 'f.zip',
+        },
+      },
+    ]);
+  });
+
+  it('face / reply 段；纯文本消息不挂 segments 字段', () => {
+    const withFace = normalizeQqMessage({
+      message_id: '22',
+      author: { user_openid: 'open-u-1' },
+      message: [
+        { type: 'face', data: { id: 14 } },
+        { type: 'reply', data: { id: 'm-9' } },
+      ],
+    });
+    expect(withFace!.segments).toEqual([
+      { type: 'face', data: { id: 14 } },
+      { type: 'reply', data: { message_id: 'm-9' } },
+    ]);
+
+    const textOnly = normalizeQqMessage({
+      message_id: '23',
+      author: { user_openid: 'open-u-1' },
+      message: [{ type: 'text', data: { text: 'hi' } }],
+    });
+    expect(textOnly!.segments).toEqual([{ type: 'text', data: { text: 'hi' } }]);
+
+    const stringMessage = normalizeQqMessage({
+      message_id: '24',
+      author: { user_openid: 'open-u-1' },
+      message: 'plain',
+    });
+    expect(stringMessage!.segments).toBeUndefined();
+  });
+});

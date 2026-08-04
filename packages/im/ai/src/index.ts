@@ -57,10 +57,17 @@ export {
   inferModelReasoning,
   resolveTransportContextWindow,
   PROVIDER_GATEWAY_PRESETS,
+  DEFAULT_PROVIDER_MEDIA,
+  filterMediaBlocksForProvider,
+  mediaBlockPlaceholder,
+  mediaRefToInline,
+  isMediaBlockRef,
+  isMediaContentBlock,
 } from './llm/index.js';
 export type {
   PromptCacheRetention,
   ProviderGatewayPreset,
+  ProviderMediaKind,
 } from './llm/index.js';
 export type {
   Context,
@@ -73,7 +80,8 @@ export type {
   ToolResultMessage,
   CustomAgentMessage,
   ContentBlock,
-  ImageContent,
+  MediaContentBlock,
+  MediaBlockRef,
   LlmTool,
   ParsedToolCall,
   AgentEvent,

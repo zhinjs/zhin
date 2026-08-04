@@ -42,6 +42,20 @@ export function childPluginId(parent: PluginId, instanceKey: string): PluginId {
   return `${parent}/${instanceKey}` as PluginId;
 }
 
+/**
+ * Database-safe owner encoding used by process-wide plugin resources.
+ *
+ * Each path segment is length-prefixed and the final underscore is followed
+ * by a resource separator. A parent owner therefore cannot match a child
+ * owner merely because their PluginId has a common path prefix.
+ */
+export function pluginOwnerResourceKey(owner: PluginId): string {
+  return `${String(owner)
+    .split('/')
+    .map((segment) => `${segment.length}_${segment}`)
+    .join('_')}_`;
+}
+
 export function capabilityId(
   owner: PluginId,
   feature: FeatureId,

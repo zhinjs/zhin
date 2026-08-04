@@ -9,6 +9,7 @@ export { processTextTurnStream } from './process-stream.js';
 
 export {
   PromptController,
+  TurnCancelledError,
   TurnSupersededError,
 } from './prompt-controller.js';
 export type { PromptTurnHooks, PromptTurnRequest } from './prompt-controller.js';
@@ -34,6 +35,7 @@ export {
 
 export {
   InboundTurnQueue,
+  InboundTurnCancelledError,
   InboundTurnExpiredError,
 } from './inbound-turn-queue.js';
 export type { InboundQueueActivityEmitter } from './inbound-turn-queue.js';

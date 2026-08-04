@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
+  InboundTurnCancelledError,
   InboundTurnExpiredError,
   InboundTurnQueue,
   type InboundQueueActivityEmitter,
@@ -139,5 +140,40 @@ describe('InboundTurnQueue', () => {
     await expect(expired).rejects.toBeInstanceOf(InboundTurnExpiredError);
     expect(emitter.clears.some((e) => e.messageId === 'm2')).toBe(true);
     vi.useRealTimers();
+  });
+
+  it('removes a cancelled queued turn before it can execute', async () => {
+    const queue = new InboundTurnQueue(fifoConfig, emitter);
+    const sessionKey = 'sandbox:b1:group:g1';
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const ran: string[] = [];
+
+    void queue.schedule({
+      sessionKey,
+      commMessage: messageWithId({ scope: 'group', sceneId: 'g1', senderId: 'u1', messageId: 'm1' }),
+      run: async () => {
+        await firstGate;
+        return [];
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    const controller = new AbortController();
+    const cancelled = queue.schedule({
+      sessionKey,
+      commMessage: messageWithId({ scope: 'group', sceneId: 'g1', senderId: 'u2', messageId: 'm2' }),
+      signal: controller.signal,
+      run: async () => {
+        ran.push('cancelled turn');
+        return [];
+      },
+    });
+    controller.abort();
+    releaseFirst();
+
+    await expect(cancelled).rejects.toBeInstanceOf(InboundTurnCancelledError);
+    expect(ran).toEqual([]);
+    expect(emitter.clears.some((entry) => entry.messageId === 'm2')).toBe(true);
   });
 });

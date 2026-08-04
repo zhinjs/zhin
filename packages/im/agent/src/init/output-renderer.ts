@@ -1,12 +1,12 @@
 import type { OutputElement } from '@zhin.js/ai';
 import { publishOutboundElements } from '../media/media-publisher.js';
-import type { MessageElement } from '@zhin.js/core';
+import type { Segment } from '@zhin.js/core';
 
-/** OutputElement[] → MessageElement[]（Adapter 能力降级） */
+/** OutputElement[] → canonical Segment[]（Adapter 能力降级） */
 export async function elementsToMessageContent(
   elements: OutputElement[],
   platform?: string,
-): Promise<MessageElement[]> {
+): Promise<Segment[]> {
   return publishOutboundElements(elements, platform);
 }
 
@@ -44,4 +44,3 @@ export function renderOutput(elements: OutputElement[]): string {
   }
   return parts.join('\n') || '';
 }
-

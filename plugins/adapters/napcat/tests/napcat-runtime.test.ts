@@ -156,7 +156,7 @@ describe('napcat protocol helpers', () => {
     expect(formatOutboundSegments('pong')).toEqual([{ type: 'text', data: { text: 'pong' } }]);
     expect(formatOutboundSegments([
       { type: 'text', data: { text: 'see' } },
-      { type: 'image', data: { file: 'https://x/a.png' } },
+      { type: 'image', data: { media: { kind: 'url', value: 'https://x/a.png' } } },
     ])).toEqual([
       { type: 'text', data: { text: 'see' } },
       { type: 'image', data: { file: 'https://x/a.png' } },
@@ -183,13 +183,12 @@ describe('napcat protocol helpers', () => {
     ])).toEqual([
       { type: 'image', data: { file: 'https://x/a.png' } },
     ]);
-    // html→image 渲染产物（media + legacy base64 双写）→ base64:// file
+    // html→image 渲染产物（canonical base64 MediaRef）→ base64:// file
     expect(formatOutboundSegments([
       {
         type: 'image',
         data: {
           media: { kind: 'base64', value: 'QUJD', mime_type: 'image/png' },
-          base64: 'QUJD',
           name: 'card.png',
         },
       },
@@ -212,6 +211,19 @@ describe('napcat protocol helpers', () => {
     ])).toEqual([
       { type: 'video', data: { file: 'https://x/a.mp4' } },
     ]);
+  });
+
+  it('drops media segments without a canonical MediaRef with a warn', () => {
+    // legacy 形状（data.file / data.url / data.base64）不再回读，直接丢弃
+    expect(formatOutboundSegments([
+      { type: 'text', data: { text: 'hi' } },
+      { type: 'image', data: { file: 'https://x/a.png' } },
+      { type: 'image', data: { url: 'https://x/b.png' } },
+      { type: 'audio', data: { base64: 'QUJD' } },
+    ])).toEqual([{ type: 'text', data: { text: 'hi' } }]);
+    // 全部段被丢弃时回退空文本段
+    expect(formatOutboundSegments([{ type: 'image', data: {} }]))
+      .toEqual([{ type: 'text', data: { text: '' } }]);
   });
 
   it('keeps platform extension segments untouched', () => {

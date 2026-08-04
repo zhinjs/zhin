@@ -5,6 +5,10 @@
  */
 
 import { pickCredential } from '@zhin.js/adapter';
+import { isMediaRef } from '@zhin.js/core';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+
+const logger = getLogger('satori');
 
 /** Opcode：EVENT=0, PING=1, PONG=2, IDENTIFY=3, READY=4, META=5 */
 export const SatoriOpcode = {
@@ -261,6 +265,34 @@ export function parseMessageRef(id: string): { channelId: string; messageId: str
 }
 
 /**
+ * 解析媒体段（image/audio/video/file）的投递源，canonical MediaRef 为唯一来源：
+ * - kind=url → 直发 URL；
+ * - kind=base64 → 规范为 `base64://` 前缀内联（Satori img/file 元素消费内联数据）。
+ * 无 canonical 媒体引用或来源不可投递（path / file 本端点不物化）时 warn + 丢弃。
+ */
+function resolveMediaSrc(type: string, data: Record<string, unknown>): string | undefined {
+  const media = data.media;
+  if (!isMediaRef(media)) {
+    logger.warn(formatCompact({
+      op: 'satori_outbound_media_dropped',
+      type,
+      reason: 'missing_media_ref',
+    }));
+    return undefined;
+  }
+  if (media.kind === 'url') return media.value;
+  if (media.kind === 'base64') {
+    return media.value.startsWith('base64://') ? media.value : `base64://${media.value}`;
+  }
+  logger.warn(formatCompact({
+    op: 'satori_outbound_media_dropped',
+    type,
+    reason: `unsupported_media_kind:${media.kind}`,
+  }));
+  return undefined;
+}
+
+/**
  * Wire-encode an already-rendered outbound payload into Satori message content.
  * Segment canonicalization is intentionally not done here.
  */
@@ -294,11 +326,13 @@ export function formatSatoriOutbound(payload: unknown): string {
         parts.push(`@${String(data.name ?? data.id ?? data.target ?? '')}`);
         break;
       case 'image':
-        if (typeof data.url === 'string') parts.push(`[image:${data.url}]`);
+      case 'audio':
+      case 'video':
+      case 'file': {
+        const src = resolveMediaSrc(item.type, data);
+        if (src) parts.push(`[${item.type}:${src}]`);
         break;
-      case 'file':
-        if (typeof data.url === 'string') parts.push(`[file:${data.url}]`);
-        break;
+      }
       default:
         break;
     }

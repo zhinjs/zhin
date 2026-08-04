@@ -103,10 +103,10 @@ describe('weixin-ilink protocol helpers', () => {
     expect(formatOutboundSegments('pong')).toEqual([{ type: 'text', data: { text: 'pong' } }]);
     expect(formatOutboundSegments([
       { type: 'text', data: { text: 'see' } },
-      { type: 'image', data: { file: '/tmp/a.png' } },
+      { type: 'image', data: { media: { kind: 'path', value: '/tmp/a.png' } } },
     ])).toEqual([
       { type: 'text', data: { text: 'see' } },
-      { type: 'image', data: { file: '/tmp/a.png' } },
+      { type: 'image', data: { media: { kind: 'path', value: '/tmp/a.png' } } },
     ]);
   });
 });

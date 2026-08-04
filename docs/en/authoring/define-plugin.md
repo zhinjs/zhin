@@ -104,8 +104,10 @@ Host tokens are capability handles provided by the Host to plugins, resolved in 
 
 | token | token id | Availability condition | Key methods |
 | --- | --- | --- | --- |
-| `databaseHostToken` | `zhin.database.host` | `database:` configured | `define(name, columns)` registers a table; `models.get(name)` gets a model (`select` / `insert` / `update` / `delete` / `count`); `start()` is called by the Host at generation activation, plugins should not call it themselves |
-| `scheduleHostToken` | `zhin.schedule.host` | Always available | `register(job)` registers a 6-field solar cron (`second minute hour day month weekday`), returns a cancel function; `list()` lists tasks |
+| `databaseHostToken` | `zhin.database.host` | `database:` configured | `define(name, columns)` registers a plugin-private logical table; Runtime maps it to a physical name by PluginId, and `models.get(name)` can access only that plugin's tables (`select` / `insert` / `update` / `delete` / `count`) |
+| `scheduleHostToken` | `zhin.schedule.host` | Always available | `register(job)` registers a plugin-private logical job id with a 6-field solar cron (`second minute hour day month weekday`), returns a cancel function; `list()` returns only that plugin's jobs |
+
+`databaseHostToken` and `scheduleHostToken` do not expose process-wide `start` / `stop`, Console administration, or the raw database. The CLI owns those root-only lifecycles; plugins use logical table names and job ids, so equal names cannot collide with sibling or child plugins.
 | `outboundHostToken` | `zhin.outbound.host` | Has available Adapter | `send(input)` proactive push (returns platform message id or `null`); optional `addReaction` / `removeReaction` / `recall` |
 | `agentToolsHostToken` | `zhin.agent-tools.host` | AI installed and enabled (Agent Host) | `register(tool)` registers an Agent tool, returns an unregister function |
 | `htmlRendererToken` | `zhin.html-renderer.host` | `@zhin.js/html-renderer` installed | `render(html, { width, format, backgroundColor })` -> PNG (Buffer) or SVG (string); must degrade to plain text when not installed |

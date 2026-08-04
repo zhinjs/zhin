@@ -29,11 +29,12 @@ const logger = getLogger('icqq');
 
 export default defineAdapter<IcqqAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
-  // 统一消息元素通道（UNI-Channel）：端点可消费 base64 / url / upload 媒体
-  // （path 由出站物化按 file/base64 模式转换，非声明消费形态）；
+  operations: ['recall', 'reaction'],
+  // 统一消息元素通道（UNI-Channel）：端点可消费 base64（CQ base64:// 守护进程解码）
+  // / url（CQ 直发）/ path（同机守护进程读盘；file 模式出站物化产物）媒体；
   // 卡片/按钮等富交互段无原生承载，降级纯文本。
   segments: {
-    outboundMedia: ['base64', 'url', 'upload'],
+    outboundMedia: ['base64', 'url', 'path'],
     interactive: 'text',
   },
   create(context) {

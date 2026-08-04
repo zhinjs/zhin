@@ -84,7 +84,10 @@ describe('openai-bridge', () => {
 
   it('passes http image URLs through to OpenAI image_url parts', () => {
     const openAi = agentMessagesToOpenAi([
-      createUserMessage('see', [{ type: 'image', data: 'https://example.com/a.jpg', mimeType: 'image/jpeg' }]),
+      createUserMessage('see', [{
+        type: 'image',
+        data: { media: { kind: 'url', value: 'https://example.com/a.jpg', mime_type: 'image/jpeg' } },
+      }]),
     ]);
     expect(openAi[0]?.role).toBe('user');
     const content = openAi[0]?.content;

@@ -69,12 +69,31 @@ flowchart LR
     S --> E["endpoint.send({target, payload, parent})"]
 ```
 
-- **SendContent four forms** (`packages/im/core/src/plugin-runtime/im/contracts.ts`): string; `component(name, props)` component call (recursively rendered via `ComponentIndex`, depth limit 32); `raw(payload)` passthrough; and nested arrays of any of the three.
+- **SendContent forms** (`packages/im/core/src/plugin-runtime/im/contracts.ts`): string; canonical `Segment` (first-class citizen, see "Multimodal" below); `component(name, props)` component call (recursively rendered via `ComponentIndex`, depth limit 32); `raw(payload)` passthrough; and nested arrays of any of these.
 - **Envelope** carries `adapter`, `target`, `requester` (the originating plugin, used for component permissions and auditing), `generation`, and provides `replace(payload)` for outbound middleware to rewrite content.
 - **Outbound middleware** shares the same definition as inbound; `target: 'outbound'` intercepts outbound messages.
 - **The last mile** is in `AdapterIndex.send`: the endpoint must declare `outbound` capability and be in `started && !stopped` state, otherwise an error is thrown; once passed, `endpoint.send()` is called to deliver to the platform.
 
 All sending should go through this unified pipeline (`$reply` / `$replyFrom` / `gateway.send`). Do not directly hold platform SDKs in plugins to send messages -- that would bypass rendering, middleware, and event broadcasting.
+
+## Multimodal: bidirectional Segment uniformity
+
+The framework has exactly one media representation -- canonical `Segment` + `MediaRef` (`packages/im/core/src/built/segment-contract/types.ts`):
+
+```ts
+interface MediaRef {
+  kind: 'url' | 'path' | 'base64' | 'file';  // file = opaque platform ref (e.g. Telegram file_id)
+  value: string;
+  mime_type?: string;
+  file_name?: string;
+  size?: number;
+}
+// image / audio / video / file segment data is always { media: MediaRef, alt?/duration?/name? }
+```
+
+**Inbound**: adapters normalize platform payloads into `Segment[]` via `gateway.receive({ segments })` → the agent's inbound injection (`packages/im/agent/src/turn/inbound-media.ts`) attaches the current turn's media to `UserMessage.media` (the ai layer's Segment-isomorphic `MediaContentBlock`, **never persisted** -- history keeps only the text view). Policy via `ai.multimodal`: images pass through as URL or materialize from path to base64; audio defaults to STT (optional `@zhin.js/speech`, placeholder on failure); video/files default to placeholder text. The provider-edge serializer (`packages/im/ai/src/llm/convert/media-blocks.ts`) filters by a capability table (image-only by default, unsupported kinds degrade to placeholder text at the edge) -- no vendor API format ever appears inside the framework.
+
+**Outbound**: AI reply → `OutputElement[]` → canonical `Segment[]` (`publishOutboundElements`) → `$reply` (Segment is first-class `SendContent`) → `normalizeOutboundPayload` (html→image/text, keyboard, media negotiation) → endpoint. Negotiation is driven by the adapter definition's `segments.outboundMedia` declaration (`'url' | 'path' | 'base64' | 'upload'`): only `url-or-text` endpoints degrade non-URL media to text centrally; other adapters materialize along the platform-optimal path (URL pass-through / base64 / platform upload / disk read). Segments without `data.media` are dropped with a warning -- the legacy `data.url/file/base64` shapes no longer exist.
 
 ## Endpoint 1:N Expansion
 

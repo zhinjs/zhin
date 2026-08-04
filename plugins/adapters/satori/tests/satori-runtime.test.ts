@@ -129,6 +129,29 @@ describe('satori protocol helpers', () => {
       { type: 'mention', data: { name: 'Bot' } },
     ])).toBe('hi @Bot');
   });
+
+  it('formats outbound media segments from canonical data.media', () => {
+    expect(formatSatoriOutbound([
+      { type: 'image', data: { media: { kind: 'url', value: 'https://example.com/a.png' } } },
+    ])).toBe('[image:https://example.com/a.png]');
+    expect(formatSatoriOutbound([
+      { type: 'audio', data: { media: { kind: 'url', value: 'https://example.com/a.mp3' } } },
+      { type: 'file', data: { media: { kind: 'base64', value: 'aGk=', mime_type: 'text/plain' } } },
+    ])).toBe('[audio:https://example.com/a.mp3][file:base64://aGk=]');
+    // 已带 base64:// 前缀的值不重复加前缀
+    expect(formatSatoriOutbound([
+      { type: 'video', data: { media: { kind: 'base64', value: 'base64://aGk=' } } },
+    ])).toBe('[video:base64://aGk=]');
+  });
+
+  it('drops outbound media segments without a deliverable canonical media ref', () => {
+    expect(formatSatoriOutbound([
+      { type: 'text', data: { text: 'a' } },
+      { type: 'image', data: {} },
+      { type: 'video', data: { media: { kind: 'path', value: '/tmp/a.mp4' } } },
+      { type: 'file', data: { media: { kind: 'file', value: 'opaque-id' } } },
+    ])).toBe('a');
+  });
 });
 
 describe('satori plugin runtime adapter', () => {

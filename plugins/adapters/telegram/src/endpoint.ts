@@ -2,9 +2,14 @@
  * TelegramEndpoint — lifecycle, outbound, admit, Bot API helpers for agent tools.
  */
 import { readFile } from 'node:fs/promises';
-import type { EndpointInstance } from '@zhin.js/adapter';
+import type { EndpointControl, EndpointInstance, EndpointSendRequest } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
+import {
+  formatLegacyMessageReference,
+  nativeConversationId,
+  parseLegacyMessageReference,
+} from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import { runTelegramPollLoop } from './polling.js';
@@ -92,6 +97,9 @@ export class TelegramEndpoint implements EndpointInstance {
   #botUserId?: number;
   #botUsername?: string;
   readonly #chatMemberCache = new Map<string, ChatMemberPermit>();
+  readonly control: EndpointControl = Object.freeze({
+    recall: (messageId: string) => this.recallMessage(messageId),
+  });
 
   constructor(options: TelegramEndpointOptions) {
     this.#options = options;
@@ -199,8 +207,9 @@ export class TelegramEndpoint implements EndpointInstance {
     logger.debug(formatCompact({ op: 'disconnect', endpoint: this.#options.config.name }));
   }
 
-  async send({ target, payload }: { readonly target: string; readonly payload: unknown }): Promise<string> {
-    const plan = formatOutboundPlan(target, payload);
+  async send({ target, conversation, payload }: EndpointSendRequest): Promise<string> {
+    const chatId = nativeConversationId(target, conversation);
+    const plan = formatOutboundPlan(chatId, payload);
     let lastId = '';
     for (const action of plan.actions) {
       const form = await this.#buildUploadForm(action.params, plan.uploads);
@@ -210,15 +219,15 @@ export class TelegramEndpoint implements EndpointInstance {
       if (result.message_id != null) lastId = String(result.message_id);
     }
     if (!lastId) return `telegram-${Date.now()}`;
-    return `${target}:${lastId}`;
+    return formatLegacyMessageReference({ target, messageId: lastId });
   }
 
   async recallMessage(messageId: string): Promise<void> {
     if (!messageId || messageId.startsWith('telegram-')) return;
-    const colon = messageId.indexOf(':');
-    if (colon <= 0) return;
-    const chatId = messageId.slice(0, colon);
-    const msgId = messageId.slice(colon + 1);
+    const reference = parseLegacyMessageReference(messageId);
+    if (!reference) return;
+    const chatId = nativeConversationId(reference.target);
+    const msgId = reference.messageId;
     await this.callApi('deleteMessage', { chat_id: chatId, message_id: Number(msgId) });
   }
 
@@ -280,6 +289,9 @@ export class TelegramEndpoint implements EndpointInstance {
       id: String(msg.message_id),
       metadata: Object.freeze({
         endpoint: this.#options.config.name,
+        // Preserve Telegram's native value below, but publish the canonical
+        // scene kind so every Runtime consumer sees the same conversation type.
+        channelType: resolveTelegramChannelType(msg.chat.type),
         chatType: msg.chat.type,
         userId: msg.from?.id,
         date: msg.date,
@@ -508,4 +520,12 @@ export class TelegramEndpoint implements EndpointInstance {
       allows_multiple_answers: allowsMultipleAnswers,
     });
   }
+}
+
+function resolveTelegramChannelType(
+  chatType: TelegramMessage['chat']['type'],
+): 'private' | 'group' | 'channel' {
+  if (chatType === 'private') return 'private';
+  if (chatType === 'channel') return 'channel';
+  return 'group';
 }

@@ -4,8 +4,11 @@
  */
 
 import type { Attachment } from 'mailparser';
-import { htmlToPlainTextWithBlockBreaks, isMediaRef, mediaRefFromLegacyData } from '@zhin.js/core';
+import { htmlToPlainTextWithBlockBreaks, isMediaRef, type MediaRef } from '@zhin.js/core';
 import type { Segment } from '@zhin.js/core/runtime';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+
+const logger = getLogger('email');
 
 export interface SmtpConfig {
   readonly host: string;
@@ -230,6 +233,64 @@ export function senderDisplayName(from: string): string {
 }
 
 /**
+ * nodemailer 附件的最小形状：url/path 走 `path`（URL 由 nodemailer 拉流、
+ * 本地路径读盘），base64 走 `content` + `encoding: 'base64'` 直发。
+ */
+export type EmailOutboundAttachment =
+  | { filename: string; path: string }
+  | { filename: string; content: string; encoding: 'base64' };
+
+/**
+ * image/audio/video/file 段 → nodemailer 附件（canonical MediaRef 唯一来源）：
+ * - kind=url / path → attachment.path；
+ * - kind=base64 → attachment.content（data: URL 前缀剥离）；
+ * - kind=file（平台不透明引用）邮件无对应概念，丢弃留痕；
+ * - 缺 media 同样 warn + 丢弃。
+ */
+function mediaSegmentToAttachment(
+  type: string,
+  data: Record<string, unknown>,
+): EmailOutboundAttachment | null {
+  const media = data.media;
+  if (!isMediaRef(media)) {
+    logger.warn(formatCompact({
+      op: 'email_outbound_media_dropped',
+      type,
+      reason: 'missing_media_ref',
+    }));
+    return null;
+  }
+  if (media.kind === 'file') {
+    logger.warn(formatCompact({
+      op: 'email_outbound_media_dropped',
+      type,
+      reason: 'unsupported_kind',
+      kind: media.kind,
+    }));
+    return null;
+  }
+  const filename = attachmentFileName(type, data, media);
+  if (media.kind === 'base64') {
+    const value = media.value.startsWith('data:')
+      ? media.value.slice(media.value.indexOf(',') + 1)
+      : media.value;
+    return { filename, content: value, encoding: 'base64' };
+  }
+  return { filename, path: media.value };
+}
+
+function attachmentFileName(
+  type: string,
+  data: Record<string, unknown>,
+  media: MediaRef,
+): string {
+  if (media.file_name) return media.file_name;
+  if (typeof data.name === 'string' && data.name) return data.name;
+  if (typeof data.alt === 'string' && data.alt) return data.alt;
+  return type === 'image' ? 'image.png' : 'file';
+}
+
+/**
  * Wire-encode an already-rendered outbound payload into nodemailer options.
  * Segment canonicalization is intentionally not done here.
  */
@@ -242,7 +303,7 @@ export function formatOutboundMail(
   subject: string;
   text?: string;
   html?: string;
-  attachments?: Array<{ filename: string; path: string }>;
+  attachments?: EmailOutboundAttachment[];
 } {
   const mail = {
     from: options.from,
@@ -271,7 +332,7 @@ export function formatOutboundMail(
 
   const textParts: string[] = [];
   const htmlParts: string[] = [];
-  const attachments: Array<{ filename: string; path: string }> = [];
+  const attachments: EmailOutboundAttachment[] = [];
 
   for (const item of segments) {
     if (typeof item === 'string') {
@@ -288,18 +349,11 @@ export function formatOutboundMail(
         break;
       }
       case 'image':
+      case 'audio':
+      case 'video':
       case 'file': {
-        // canonical MediaRef 优先（kind url/path 均可作 nodemailer attachment.path），
-        // 旧 wire 字段 `{url,file,base64}` 经 mediaRefFromLegacyData 兼容。
-        const media = isMediaRef(data.media) ? data.media : mediaRefFromLegacyData(data);
-        if (media && (media.kind === 'url' || media.kind === 'path')) {
-          attachments.push({
-            filename: String(
-              data.filename || data.name || (item.type === 'image' ? 'image.png' : 'file'),
-            ),
-            path: media.value,
-          });
-        }
+        const attachment = mediaSegmentToAttachment(item.type, data);
+        if (attachment) attachments.push(attachment);
         break;
       }
       default:

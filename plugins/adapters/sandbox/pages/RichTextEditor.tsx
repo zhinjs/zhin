@@ -56,15 +56,15 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
                     } else if (el.classList.contains('editor-image')) {
                         const imageUrl = el.dataset.url
                         text += `[image:${imageUrl}]`
-                        segments.push({ type: 'image', data: { url: imageUrl } })
+                        segments.push({ type: 'image', data: { media: { kind: 'url', value: imageUrl } } })
                     } else if (el.classList.contains('editor-video')) {
                         const u = el.dataset.url || ''
                         text += `[video:${u}]`
-                        segments.push({ type: 'video', data: { url: u } })
+                        segments.push({ type: 'video', data: { media: { kind: 'url', value: u } } })
                     } else if (el.classList.contains('editor-audio')) {
                         const u = el.dataset.url || ''
                         text += `[audio:${u}]`
-                        segments.push({ type: 'audio', data: { url: u } })
+                        segments.push({ type: 'audio', data: { media: { kind: 'url', value: u } } })
                     } else if (el.classList.contains('editor-at')) {
                         const name = el.dataset.name
                         const id = el.dataset.id

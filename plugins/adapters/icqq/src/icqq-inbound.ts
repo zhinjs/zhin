@@ -2,7 +2,7 @@
  * icqq 守护进程 IPC 入站事件归一化（post_type / message_type / message 段）
  */
 import { Message, toCanonicalSegments, type MessageSegment, type QuotedMessagePayload } from "zhin.js";
-import { parseCqMessage } from "./cq-message.js";
+import { parseCqMessage, icqqMediaRefFromString } from "./cq-message.js";
 import { extractForwardResidFromJsonElement } from "./forward-msg.js";
 import type { GroupRole } from "./types.js";
 
@@ -341,15 +341,14 @@ export function icqqElementsToSegments(
       case "face":
         out.push({ type: "face", data: { id: Number(el.id) } });
         break;
-      case "image":
+      case "image": {
+        const value = String(el.url ?? el.file ?? "");
         out.push({
           type: "image",
-          data: {
-            url: String(el.url ?? el.file ?? ""),
-            file: String(el.file ?? el.url ?? ""),
-          },
+          data: { media: icqqMediaRefFromString(value) },
         });
         break;
+      }
       case "forward": {
         const forwardResid = String(
           el.id ?? el.resid ?? el.res_id ?? el.file ?? "",
@@ -410,18 +409,22 @@ export function icqqElementsToSegments(
         break;
       }
       case "record":
-      case "audio":
+      case "audio": {
+        const value = String(el.file ?? el.url ?? "");
         out.push({
           type: "record",
-          data: { file: String(el.file ?? el.url ?? "") },
+          data: { media: icqqMediaRefFromString(value) },
         });
         break;
-      case "video":
+      }
+      case "video": {
+        const value = String(el.file ?? el.url ?? "");
         out.push({
           type: "video",
-          data: { file: String(el.file ?? el.url ?? "") },
+          data: { media: icqqMediaRefFromString(value) },
         });
         break;
+      }
       default:
         if (el.text != null && el.text !== "") {
           out.push({ type: "text", data: { text: String(el.text) } });

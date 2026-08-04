@@ -3,7 +3,7 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { type OutputElement, renderToPlainText } from '@zhin.js/ai';
-import type { MessageElement } from '@zhin.js/core';
+import type { Segment } from '@zhin.js/core';
 import type { OutboundMediaCapabilities, MediaBinaryPayload, MediaKind } from './media-types.js';
 import { resolveOutboundCapabilities } from './media-capabilities.js';
 import { fetchUrlAsBase64 } from './media-normalize.js';
@@ -40,7 +40,11 @@ async function spoolBase64ToTempFile(
   return filePath;
 }
 
-async function readFileAsBase64(filePath: string, maxBytes: number): Promise<MediaBinaryPayload | null> {
+async function readFileAsBase64(
+  filePath: string,
+  maxBytes: number,
+  forcedKind?: MediaKind,
+): Promise<MediaBinaryPayload | null> {
   try {
     const stat = await fs.stat(filePath);
     if (stat.size > maxBytes) return null;
@@ -58,7 +62,12 @@ async function readFileAsBase64(filePath: string, maxBytes: number): Promise<Med
       kind = 'video';
       mime = 'video/mp4';
     }
-    return { kind, base64: buf.toString('base64'), mimeType: mime, fileName: path.basename(filePath) };
+    return {
+      kind: forcedKind ?? kind,
+      base64: buf.toString('base64'),
+      mimeType: mime,
+      fileName: path.basename(filePath),
+    };
   } catch {
     return null;
   }
@@ -105,17 +114,17 @@ async function elementToPayload(
   }
 
   if (el.type === 'file' && el.url) {
-    return readFileAsBase64(el.url, maxBytes);
+    return readFileAsBase64(el.url, maxBytes, 'file');
   }
 
   return null;
 }
 
-async function payloadToMessageElement(
+async function payloadToCanonicalSegment(
   payload: MediaBinaryPayload,
   caps: OutboundMediaCapabilities,
   platform?: string,
-): Promise<MessageElement | null> {
+): Promise<Segment | null> {
   const max = caps.maxAttachmentBytes ?? 26_214_400;
   if (!payload.base64 || payload.base64.length === 0) {
     if (payload.kind === 'image' && caps.image) {
@@ -142,14 +151,17 @@ async function payloadToMessageElement(
       if (filePath) {
         return {
           type: 'image',
-          data: { file: filePath, url: filePath, mime: payload.mimeType },
+          data: {
+            media: { kind: 'path', value: filePath, mime_type: payload.mimeType },
+            ...(payload.meta?.alt ? { alt: payload.meta.alt } : {}),
+          },
         };
       }
       return {
         type: 'image',
         data: {
-          base64: payload.base64,
-          mime: payload.mimeType,
+          media: { kind: 'base64', value: payload.base64, mime_type: payload.mimeType },
+          ...(payload.meta?.alt ? { alt: payload.meta.alt } : {}),
         },
       };
     case 'audio':
@@ -158,22 +170,16 @@ async function payloadToMessageElement(
       }
       if (filePath) {
         return {
-          type: 'record',
+          type: 'audio',
           data: {
-            file: filePath,
-            url: filePath,
-            format: payload.mimeType.includes('wav') ? 'wav' : 'mp3',
-            mime: payload.mimeType,
+            media: { kind: 'path', value: filePath, mime_type: payload.mimeType },
           },
         };
       }
       return {
-        type: 'record',
+        type: 'audio',
         data: {
-          base64: payload.base64,
-          data: payload.base64,
-          format: payload.mimeType.includes('wav') ? 'wav' : 'mp3',
-          mime: payload.mimeType,
+          media: { kind: 'base64', value: payload.base64, mime_type: payload.mimeType },
         },
       };
     case 'video':
@@ -183,14 +189,13 @@ async function payloadToMessageElement(
       if (filePath) {
         return {
           type: 'video',
-          data: { file: filePath, url: filePath, mime: payload.mimeType },
+          data: { media: { kind: 'path', value: filePath, mime_type: payload.mimeType } },
         };
       }
       return {
         type: 'video',
         data: {
-          base64: payload.base64,
-          mime: payload.mimeType,
+          media: { kind: 'base64', value: payload.base64, mime_type: payload.mimeType },
         },
       };
     case 'file':
@@ -201,19 +206,16 @@ async function payloadToMessageElement(
         return {
           type: 'file',
           data: {
-            file: filePath,
-            url: filePath,
+            media: { kind: 'path', value: filePath, mime_type: payload.mimeType },
             name: payload.fileName || 'file',
-            mime: payload.mimeType,
           },
         };
       }
       return {
         type: 'file',
         data: {
-          base64: payload.base64,
+          media: { kind: 'base64', value: payload.base64, mime_type: payload.mimeType },
           name: payload.fileName || 'file',
-          mime: payload.mimeType,
         },
       };
     default:
@@ -225,7 +227,7 @@ function elAudioFallback(payload: MediaBinaryPayload): string {
   return payload.meta?.alt ? `[语音: ${payload.meta.alt}]` : '[语音消息]';
 }
 
-function elementToTextSegment(el: OutputElement): MessageElement {
+function elementToTextSegment(el: OutputElement): Segment {
   if (el.type === 'text') {
     return { type: 'text', data: { text: el.content } };
   }
@@ -241,15 +243,15 @@ function elementToTextSegment(el: OutputElement): MessageElement {
 }
 
 /**
- * OutputElement[] → MessageElement[]（base64 契约，平台 adapter 决定如何发送）
+ * OutputElement[] → canonical Segment[]; platform codecs own their wire conversion.
  */
 export async function publishOutboundElements(
   elements: OutputElement[],
   platform?: string,
   capsOverride?: OutboundMediaCapabilities,
-): Promise<MessageElement[]> {
+): Promise<Segment[]> {
   const caps = capsOverride ?? resolveOutboundCapabilities(platform);
-  const segments: MessageElement[] = [];
+  const segments: Segment[] = [];
 
   for (const el of elements) {
     if (el.type === 'text' || el.type === 'card') {
@@ -263,7 +265,7 @@ export async function publishOutboundElements(
       segments.push(elementToTextSegment(el));
       continue;
     }
-    const seg = await payloadToMessageElement(payload, caps, platform);
+    const seg = await payloadToCanonicalSegment(payload, caps, platform);
     if (seg) segments.push(seg);
   }
 

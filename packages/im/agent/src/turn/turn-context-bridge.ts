@@ -7,6 +7,12 @@ export interface TurnContextBridgeState {
   alwaysSkillsBaseline: string;
 }
 
+/** Explicit turn state used by concurrency-safe entry points. */
+export interface TurnContextRunOptions {
+  readonly scheduleContext?: ScheduleTurnContext;
+  readonly activityFeedbackEligible?: boolean;
+}
+
 export function initScheduleTurnContext(state: TurnContextBridgeState, ctx: ScheduleTurnContext): void {
   state.pendingScheduleTurnContext = ctx;
   state.pendingActivityFeedbackEligible = false;
@@ -28,12 +34,14 @@ export function runInTurnContext<T>(
   config: Required<ZhinAgentConfig>,
   turnId: string,
   fn: () => Promise<T>,
+  options?: TurnContextRunOptions,
 ): Promise<T> {
   const tracker = new TurnTracker(config.subagentTurnWaitMs);
-  const scheduleContext = state.pendingScheduleTurnContext;
-  const activityFeedbackEligible = state.pendingActivityFeedbackEligible;
-  state.pendingScheduleTurnContext = undefined;
-  state.pendingActivityFeedbackEligible = undefined;
+  const scheduleContext = options?.scheduleContext ?? state.pendingScheduleTurnContext;
+  const activityFeedbackEligible = options?.activityFeedbackEligible
+    ?? state.pendingActivityFeedbackEligible;
+  if (options?.scheduleContext === undefined) state.pendingScheduleTurnContext = undefined;
+  if (options?.activityFeedbackEligible === undefined) state.pendingActivityFeedbackEligible = undefined;
   const init: Partial<Pick<import('../internal/turn-context.js').TurnContextStore, 'scheduleContext' | 'activityFeedbackEligible'>> = {};
   if (scheduleContext) init.scheduleContext = scheduleContext;
   if (activityFeedbackEligible) init.activityFeedbackEligible = true;

@@ -93,7 +93,7 @@ describe('line protocol helpers', () => {
     expect(formatOutboundMessages('pong')).toEqual([{ type: 'text', text: 'pong' }]);
     expect(formatOutboundMessages([
       { type: 'text', data: { text: 'hi' } },
-      { type: 'image', data: { url: 'https://example.com/a.png' } },
+      { type: 'image', data: { media: { kind: 'url', value: 'https://example.com/a.png' } } },
     ])).toEqual([
       { type: 'text', text: 'hi' },
       {
@@ -102,6 +102,14 @@ describe('line protocol helpers', () => {
         previewImageUrl: 'https://example.com/a.png',
       },
     ]);
+  });
+
+  it('drops media segments without a url MediaRef', () => {
+    expect(formatOutboundMessages([
+      { type: 'image', data: { media: { kind: 'base64', value: 'aGVsbG8=' } } },
+      { type: 'audio', data: { media: { kind: 'path', value: '/tmp/a.m4a' } } },
+      { type: 'image', data: {} },
+    ])).toEqual([]);
   });
 
   it('truncates outbound messages to LINE limit of 5', () => {

@@ -38,6 +38,7 @@ export async function runWithInboundQueue<T>(
   opts: {
     content?: string;
     coalesce?: boolean;
+    signal?: AbortSignal;
     run: (mergedContent: string) => Promise<T>;
   },
 ): Promise<T> {
@@ -50,6 +51,7 @@ export async function runWithInboundQueue<T>(
     commMessage,
     content: opts.content,
     coalesce: opts.coalesce,
+    signal: opts.signal,
     run: opts.run,
   });
 }

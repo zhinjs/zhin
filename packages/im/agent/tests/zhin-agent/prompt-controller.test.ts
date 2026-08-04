@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { createUserMessage } from '@zhin.js/ai';
-import { PromptController, TurnSupersededError } from '../../src/turn/prompt-controller.js';
+import {
+  PromptController,
+  TurnCancelledError,
+  TurnSupersededError,
+} from '../../src/turn/prompt-controller.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
 
 const commMessage = mockCommMessage({
@@ -82,6 +86,32 @@ describe('PromptController', () => {
     release();
     await expect(first).rejects.toBeInstanceOf(TurnSupersededError);
     expect(firstAborted).toEqual([true]);
+  });
+
+  it('propagates a caller cancellation to only its own turn', async () => {
+    const controller = new PromptController('one-at-a-time', 'one-at-a-time');
+    const abortController = new AbortController();
+    let observedSignal: AbortSignal | undefined;
+
+    const turn = controller.schedule({
+      sessionKey: 's1',
+      sessionId: 's1#1',
+      userMessages: [createUserMessage('cancel me')],
+      commMessage,
+      signal: abortController.signal,
+      execute: async (_initial, _hooks, signal) => {
+        observedSignal = signal;
+        await new Promise<void>((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        });
+        return makeResult('unreachable');
+      },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    abortController.abort(new TurnCancelledError('s1'));
+    await expect(turn).rejects.toBeInstanceOf(TurnCancelledError);
+    expect(observedSignal?.aborted).toBe(true);
   });
 
   it('steer requires active same-session turn', () => {

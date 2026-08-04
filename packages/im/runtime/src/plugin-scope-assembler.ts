@@ -4,8 +4,16 @@ import {
   GenerationHandoffStack,
   Scope,
   capabilityId,
+  createPluginDatabaseHost,
+  createPluginScheduleHost,
+  databaseHostToken,
+  databaseRootHostToken,
   featureId,
   rootPluginId,
+  scheduleHostToken,
+  scheduleRootHostToken,
+  unwrapPluginDatabaseHost,
+  unwrapPluginScheduleHost,
   type CapabilityId,
   type ConfigView,
   type Dispose,
@@ -124,6 +132,7 @@ export class PluginScopeAssembler {
         config,
       });
     }
+    if (node.parent) this.installOwnerScopedHosts(scope, node.id);
 
     const config = Object.freeze(this.configResolver(node) ?? {});
     const view: ConfigView<unknown> = { get: () => config };
@@ -257,6 +266,36 @@ export class PluginScopeAssembler {
 
   setupCapabilities(): readonly Readonly<SetupCapabilityRegistration>[] {
     return Object.freeze([...this.#setupCapabilities.values()]);
+  }
+
+  /**
+   * Root resources are process-owned. A Plugin Scope receives only a facade
+   * that translates logical table/job names to its owner namespace. The root
+   * owner deliberately keeps bare names for backward-compatible projects.
+   */
+  private installOwnerScopedHosts(scope: Scope, owner: PluginId): void {
+    const database = scope.has(databaseRootHostToken)
+      ? scope.use(databaseRootHostToken)
+      : scope.has(databaseHostToken)
+        ? unwrapPluginDatabaseHost(scope.use(databaseHostToken))
+        : undefined;
+    if (database) {
+      scope.provide(
+        databaseHostToken,
+        createPluginDatabaseHost(owner, database),
+      );
+    }
+    const schedule = scope.has(scheduleRootHostToken)
+      ? scope.use(scheduleRootHostToken)
+      : scope.has(scheduleHostToken)
+        ? unwrapPluginScheduleHost(scope.use(scheduleHostToken))
+        : undefined;
+    if (schedule) {
+      scope.provide(
+        scheduleHostToken,
+        createPluginScheduleHost(owner, schedule),
+      );
+    }
   }
 }
 

@@ -16,6 +16,8 @@ export interface PromptTurnRequest {
   userMessages: AgentMessage[];
   commMessage: Message;
   onChunk?: OnChunkCallback;
+  /** Cancels this turn without affecting other sessions or generations. */
+  signal?: AbortSignal;
   execute: (
     initialMessages: AgentMessage[],
     hooks: PromptTurnHooks,
@@ -31,6 +33,17 @@ export class TurnSupersededError extends Error {
   constructor(sessionKey: string) {
     super(`Turn superseded on session ${sessionKey}`);
     this.name = 'TurnSupersededError';
+    this.sessionKey = sessionKey;
+  }
+}
+
+/** A caller cancelled a turn explicitly (for example, an IM trigger timeout). */
+export class TurnCancelledError extends Error {
+  readonly sessionKey: string;
+
+  constructor(sessionKey: string, reason?: unknown) {
+    super(`Turn cancelled on session ${sessionKey}`, reason === undefined ? undefined : { cause: reason });
+    this.name = 'TurnCancelledError';
     this.sessionKey = sessionKey;
   }
 }
@@ -102,7 +115,7 @@ export class PromptController {
   abort(sessionKey?: string): void {
     for (const turn of this.activeTurns.values()) {
       if (sessionKey && turn.sessionKey !== sessionKey) continue;
-      turn.abortController.abort();
+      turn.abortController.abort(new TurnCancelledError(turn.sessionKey));
     }
   }
 
@@ -140,7 +153,10 @@ export class PromptController {
 
   /** 同 session 串行：新 turn 开始前 abort 仍在执行的旧 turn，避免过期回复污染群上下文。 */
   schedule(request: PromptTurnRequest): Promise<AgentLoopTurnResult> {
-    this.abort(request.sessionKey);
+    for (const turn of this.activeTurns.values()) {
+      if (turn.sessionKey !== request.sessionKey) continue;
+      turn.abortController.abort(new TurnSupersededError(request.sessionKey));
+    }
     return this.runTurn(request);
   }
 
@@ -183,6 +199,11 @@ export class PromptController {
     const turnId = randomUUID();
     const abortController = new AbortController();
     const signal = abortController.signal;
+    const abortFromCaller = () => {
+      abortController.abort(request.signal?.reason ?? new TurnCancelledError(request.sessionKey));
+    };
+    if (request.signal?.aborted) abortFromCaller();
+    else request.signal?.addEventListener('abort', abortFromCaller, { once: true });
     const queue = new SessionMessageQueue(this.steeringMode, this.followUpMode);
 
     const activeTurn: ActiveTurn = {
@@ -198,23 +219,33 @@ export class PromptController {
     let lastResult: AgentLoopTurnResult | null = null;
 
     try {
+      throwIfAborted(signal, request.sessionKey);
       await this.emitEvent({ type: 'agent_start' }, signal);
+      throwIfAborted(signal, request.sessionKey);
 
       const hooks: PromptTurnHooks = {
         getSteeringMessages: async () => queue.drainSteering(),
         getFollowUpMessages: async () => queue.drainFollowUp(),
       };
 
-      lastResult = await request.execute(request.userMessages, hooks, signal, turnId);
+      try {
+        lastResult = await request.execute(request.userMessages, hooks, signal, turnId);
+      } catch (error) {
+        throwIfAborted(signal, request.sessionKey);
+        throw error;
+      }
 
       while (queue.hasFollowUp() && !signal.aborted) {
         const batch = queue.drainFollowUp();
-        lastResult = await request.execute(batch, hooks, signal, turnId);
+        try {
+          lastResult = await request.execute(batch, hooks, signal, turnId);
+        } catch (error) {
+          throwIfAborted(signal, request.sessionKey);
+          throw error;
+        }
       }
 
-      if (signal.aborted) {
-        throw new TurnSupersededError(request.sessionKey);
-      }
+      throwIfAborted(signal, request.sessionKey);
 
       await this.emitEvent({ type: 'agent_end', messages: request.userMessages }, signal);
 
@@ -225,6 +256,7 @@ export class PromptController {
       this.lastResult = lastResult;
       return lastResult;
     } finally {
+      request.signal?.removeEventListener('abort', abortFromCaller);
       this.activeTurns.delete(turnId);
       this.demoteLatestTurn(request.sessionKey, turnId);
       this.notifyIdle();
@@ -242,4 +274,16 @@ export class PromptController {
     for (const resolve of waiters) resolve();
     this.lastResult = null;
   }
+}
+
+function throwIfAborted(signal: AbortSignal, sessionKey: string): void {
+  if (!signal.aborted) return;
+  throw turnAbortReason(sessionKey, signal.reason);
+}
+
+function turnAbortReason(sessionKey: string, reason?: unknown): Error {
+  // AbortController.abort() without a reason produces DOMException AbortError.
+  // Normalize it, but retain deliberate errors such as TriggerTimeoutError.
+  if (reason instanceof Error && reason.name !== 'AbortError') return reason;
+  return new TurnCancelledError(sessionKey, reason);
 }

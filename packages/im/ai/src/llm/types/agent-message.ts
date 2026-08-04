@@ -1,6 +1,6 @@
 import type {
   ContentBlock,
-  ImageContent,
+  MediaContentBlock,
   ToolResultContentBlock,
   UserContentBlock,
 } from './content-block.js';
@@ -13,6 +13,11 @@ export interface AgentMessageBase {
 export interface UserMessage extends AgentMessageBase {
   role: 'user';
   content: UserContentBlock[];
+  /**
+   * 当前 turn 的媒体块（canonical Segment 子集同构，agent 层透传）。
+   * 不随 session 历史持久化——持久化层写入前剥离该字段，历史中只留文本占位。
+   */
+  media?: MediaContentBlock[];
 }
 
 export interface AssistantMessage extends AgentMessageBase {
@@ -85,12 +90,14 @@ export function isLlmAgentMessage(message: AgentMessage): message is UserMessage
 
 export function createUserMessage(
   text: string,
-  images?: ImageContent[],
+  media?: MediaContentBlock[],
   timestamp = Date.now(),
 ): UserMessage {
   const content: UserContentBlock[] = [{ type: 'text', text }];
-  if (images?.length) {
-    content.push(...images);
-  }
-  return { role: 'user', content, timestamp };
+  return {
+    role: 'user',
+    content,
+    ...(media?.length ? { media } : {}),
+    timestamp,
+  };
 }

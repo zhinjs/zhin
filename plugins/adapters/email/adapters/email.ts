@@ -19,10 +19,12 @@ export type {
 
 export default defineAdapter<EmailAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
-  // image/file 段映射为邮件附件：canonical MediaRef kind=url/path 均可作
-  // nodemailer attachment.path（URL 由 nodemailer 拉流）；邮件无交互面，交互段降级纯文本。
+  // image/audio/video/file 段映射为邮件附件：canonical MediaRef kind=url/path
+  // 作 nodemailer attachment.path（URL 由 nodemailer 拉流、path 读盘），
+  // kind=base64 直发（content + encoding）；kind=file 无邮件对应概念，丢弃留痕。
+  // 邮件无交互面，交互段降级纯文本。
   segments: {
-    outboundMedia: ['url', 'path'],
+    outboundMedia: ['url', 'path', 'base64'],
     interactive: 'text',
   },
   create(context) {

@@ -183,6 +183,7 @@ export class QqWebsocketEndpoint implements EndpointInstance {
       adapter: this.#options.id,
       target,
       content: formatInboundContent(msg),
+      ...(msg.segments?.length ? { segments: msg.segments } : {}),
       sender: senderDisplayName(msg),
       id: msg.id,
       metadata: Object.freeze({
@@ -387,6 +388,7 @@ export class QqHttpEndpoint implements EndpointInstance {
       adapter: this.#options.id,
       target,
       content: formatInboundContent(msg),
+      ...(msg.segments?.length ? { segments: msg.segments } : {}),
       sender: senderDisplayName(msg),
       id: msg.id,
       metadata: Object.freeze({

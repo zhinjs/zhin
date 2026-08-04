@@ -11,6 +11,12 @@ import type {
 } from '../../types.js';
 import type { Context } from '../types/context.js';
 import { isLlmAgentMessage, EMPTY_TOKEN_USAGE, type AgentMessage, type AssistantMessage, type ToolResultMessage, type UserMessage } from '../types/agent-message.js';
+import {
+  DEFAULT_PROVIDER_MEDIA,
+  filterMediaBlocksForProvider,
+  mediaRefToInline,
+  type ProviderMediaKind,
+} from './media-blocks.js';
 
 import type { LlmTool } from '../types/tool.js';
 import type { Model } from '../types/model.js';
@@ -18,23 +24,23 @@ import type { Model } from '../types/model.js';
 import { repairAgentMessagesForLlm } from '../repair-agent-messages.js';
 
 function userBlocksToOpenAiContent(
-  blocks: UserMessage['content'],
+  message: UserMessage,
+  mediaCapabilities: readonly ProviderMediaKind[],
 ): string | ContentPart[] {
   const parts: ContentPart[] = [];
-  for (const block of blocks) {
+  for (const block of message.content) {
     if (block.type === 'text') {
       parts.push({ type: 'text', text: block.text });
-    } else if (block.type === 'image') {
-      let url: string;
-      if (block.data.startsWith('data:')) {
-        url = block.data;
-      } else if (block.data.startsWith('http://') || block.data.startsWith('https://')) {
-        url = block.data;
-      } else {
-        url = `data:${block.mimeType};base64,${block.data}`;
-      }
-      parts.push({ type: 'image_url', image_url: { url } });
     }
+  }
+  const { accepted, placeholders } = filterMediaBlocksForProvider(message.media, mediaCapabilities);
+  for (const block of accepted) {
+    if (block.type !== 'image') continue;
+    const inline = mediaRefToInline(block.data.media)!;
+    parts.push({ type: 'image_url', image_url: { url: inline.value } });
+  }
+  for (const text of placeholders) {
+    parts.push({ type: 'text', text });
   }
   if (parts.length === 1 && parts[0]?.type === 'text') {
     return parts[0].text;
@@ -80,12 +86,15 @@ function toolResultToOpenAiMessage(message: ToolResultMessage): ChatMessage {
   };
 }
 
-export function agentMessagesToOpenAi(messages: AgentMessage[]): ChatMessage[] {
+export function agentMessagesToOpenAi(
+  messages: AgentMessage[],
+  mediaCapabilities: readonly ProviderMediaKind[] = DEFAULT_PROVIDER_MEDIA,
+): ChatMessage[] {
   const out: ChatMessage[] = [];
   for (const message of repairAgentMessagesForLlm(messages)) {
     if (!isLlmAgentMessage(message)) continue;
     if (message.role === 'user') {
-      out.push({ role: 'user', content: userBlocksToOpenAiContent(message.content) });
+      out.push({ role: 'user', content: userBlocksToOpenAiContent(message, mediaCapabilities) });
     } else if (message.role === 'assistant') {
       out.push(assistantToOpenAiMessage(message));
     } else if (message.role === 'toolResult') {

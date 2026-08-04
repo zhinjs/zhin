@@ -27,6 +27,7 @@ export type {
 
 export default defineAdapter<DiscordAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
+  operations: ['recall'],
   // 媒体 url 直发或由 AttachmentBuilder 物化本地文件上传；message components 原生按钮承载交互段。
   segments: {
     outboundMedia: ['url', 'upload'],

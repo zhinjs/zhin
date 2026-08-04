@@ -384,9 +384,11 @@ export function formatCustomerServiceBody(
   if (segments.length === 0) {
     (messageData.text as { content: string }).content = payload == null
       ? ''
-      : typeof payload === 'object'
-        ? JSON.stringify(payload)
-        : String(payload);
+      : Array.isArray(payload)
+        ? ''
+        : typeof payload === 'object'
+          ? JSON.stringify(payload)
+          : String(payload);
     return messageData;
   }
 
@@ -412,6 +414,7 @@ export function formatCustomerServiceBody(
         }
         break;
       case 'voice':
+      case 'audio':
         if (!hasMedia && data.mediaId) {
           messageData.msgtype = 'voice';
           messageData.voice = { media_id: data.mediaId };

@@ -157,7 +157,7 @@ describe('sendSlackContent', () => {
     const client = mockWebClient();
     const logger = mockLogger();
     await sendSlackContent(client, [
-      { type: 'image', data: { url: 'https://example.com/cat.jpg', title: 'Cat' } },
+      { type: 'image', data: { media: { kind: 'url', value: 'https://example.com/cat.jpg' }, alt: 'Cat' } },
     ], { channel: 'C001' }, logger);
 
     expect(client.chat.postMessage).toHaveBeenCalledWith(
@@ -165,6 +165,74 @@ describe('sendSlackContent', () => {
         attachments: [{ image_url: 'https://example.com/cat.jpg', title: 'Cat' }],
       }),
     );
+  });
+
+  it('should upload base64 image media via files.uploadV2', async () => {
+    const client = mockWebClient();
+    const logger = mockLogger();
+    const base64 = Buffer.from('fake-image').toString('base64');
+    await sendSlackContent(client, [
+      { type: 'image', data: { media: { kind: 'base64', value: base64, file_name: 'cat.png' } } },
+    ], { channel: 'C001' }, logger);
+
+    expect(client.filesUploadV2).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel_id: 'C001',
+        filename: 'cat.png',
+      }),
+    );
+    const upload = client.filesUploadV2.mock.calls[0][0];
+    expect(Buffer.isBuffer(upload.file)).toBe(true);
+    expect(upload.file.toString()).toBe('fake-image');
+  });
+
+  it('should upload file media from local path', async () => {
+    const client = mockWebClient();
+    const logger = mockLogger();
+    const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = await mkdtemp(join(tmpdir(), 'slack-outbound-'));
+    const filePath = join(dir, 'report.txt');
+    await writeFile(filePath, 'report-body');
+    try {
+      await sendSlackContent(client, [
+        { type: 'file', data: { media: { kind: 'path', value: filePath, file_name: 'report.txt' } } },
+      ], { channel: 'C001' }, logger);
+
+      expect(client.filesUploadV2).toHaveBeenCalledWith(
+        expect.objectContaining({ channel_id: 'C001', filename: 'report.txt' }),
+      );
+      const upload = client.filesUploadV2.mock.calls[0][0];
+      expect(upload.file.toString()).toBe('report-body');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('should drop media segments without canonical MediaRef', async () => {
+    const client = mockWebClient();
+    const logger = mockLogger();
+    await sendSlackContent(client, [
+      { type: 'image', data: { url: 'https://example.com/cat.jpg', title: 'Cat' } },
+      { type: 'file', data: { file: '/tmp/a.txt', name: 'a.txt' } },
+    ], { channel: 'C001' }, logger);
+
+    expect(client.filesUploadV2).not.toHaveBeenCalled();
+    const call = client.chat.postMessage.mock.calls[0][0];
+    expect(call.attachments).toBeUndefined();
+  });
+
+  it('should drop kind=file media refs (no Slack equivalent)', async () => {
+    const client = mockWebClient();
+    const logger = mockLogger();
+    await sendSlackContent(client, [
+      { type: 'image', data: { media: { kind: 'file', value: 'F0123ABC' } } },
+    ], { channel: 'C001' }, logger);
+
+    expect(client.filesUploadV2).not.toHaveBeenCalled();
+    const call = client.chat.postMessage.mock.calls[0][0];
+    expect(call.attachments).toBeUndefined();
   });
 
   it('should handle link segments', async () => {

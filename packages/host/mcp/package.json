@@ -51,7 +51,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@zhin.js/core": "workspace:*",
-    "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/host-http-contract": "workspace:*",
     "@zhin.js/tool": "workspace:*",
     "zod": "^4.4.3"
   },
@@ -60,6 +60,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
+    "@zhin.js/host-http": "workspace:*",
     "zhin.js": "workspace:*"
   },
   "files": [

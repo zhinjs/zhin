@@ -536,6 +536,150 @@ describe('wechat-mp plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
+  it('image 段无 canonical MediaRef（legacy url 字段）时丢弃，不走上传', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const fetchFn = vi.fn(async (url: string) => {
+      if (String(url).includes('/token')) {
+        return { data: { access_token: 'tok', expires_in: 7200 } };
+      }
+      return { data: { errcode: 0, msgid: 45 } };
+    });
+    const endpoint = new WeChatMpEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'wechat-mp'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      http,
+      config: resolveWeChatMpConfig({
+        name: 'bot',
+        appId: 'wx',
+        appSecret: 'sec',
+        token: 'tok',
+        encrypt: false,
+        replyMode: 'customer_service',
+      }),
+      fetch: fetchFn,
+    });
+    await endpoint.start();
+    await http.listen();
+    endpoint.open();
+    const messageId = await endpoint.send({
+      target: 'oUser',
+      payload: [
+        { type: 'image', data: { url: 'https://example.com/a.png' } },
+      ],
+    });
+    expect(messageId).toBe('45');
+    const uploadCall = fetchFn.mock.calls.find(([url]) => String(url).includes('/media/upload'));
+    expect(uploadCall).toBeUndefined();
+    const sendCall = fetchFn.mock.calls.find(([url]) => String(url).includes('/message/custom/send'));
+    expect(sendCall![1]).toMatchObject({
+      body: { touser: 'oUser', msgtype: 'text', text: { content: '' } },
+    });
+    await endpoint.stop();
+  });
+
+  it('kind=file 的 MediaRef 视为既有 media_id 直传，不走上传', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const fetchFn = vi.fn(async (url: string) => {
+      if (String(url).includes('/token')) {
+        return { data: { access_token: 'tok', expires_in: 7200 } };
+      }
+      return { data: { errcode: 0, msgid: 46 } };
+    });
+    const endpoint = new WeChatMpEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'wechat-mp'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      http,
+      config: resolveWeChatMpConfig({
+        name: 'bot',
+        appId: 'wx',
+        appSecret: 'sec',
+        token: 'tok',
+        encrypt: false,
+        replyMode: 'customer_service',
+      }),
+      fetch: fetchFn,
+    });
+    await endpoint.start();
+    await http.listen();
+    endpoint.open();
+    const messageId = await endpoint.send({
+      target: 'oUser',
+      payload: [
+        { type: 'image', data: { media: { kind: 'file', value: 'MID_EXISTING' } } },
+      ],
+    });
+    expect(messageId).toBe('46');
+    const uploadCall = fetchFn.mock.calls.find(([url]) => String(url).includes('/media/upload'));
+    expect(uploadCall).toBeUndefined();
+    const sendCall = fetchFn.mock.calls.find(([url]) => String(url).includes('/message/custom/send'));
+    expect(sendCall![1]).toMatchObject({
+      body: { touser: 'oUser', msgtype: 'image', image: { media_id: 'MID_EXISTING' } },
+    });
+    await endpoint.stop();
+  });
+
+  it('audio 段经 media/upload 物化为 voice 客服消息', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const fetchFn = vi.fn(async (url: string) => {
+      if (String(url).includes('/token')) {
+        return { data: { access_token: 'tok', expires_in: 7200 } };
+      }
+      if (String(url).includes('/cgi-bin/media/upload')) {
+        return { data: { type: 'voice', media_id: 'MID_VOICE', created_at: 123 } };
+      }
+      return { data: { errcode: 0, msgid: 47 } };
+    });
+    const endpoint = new WeChatMpEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'wechat-mp'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      http,
+      config: resolveWeChatMpConfig({
+        name: 'bot',
+        appId: 'wx',
+        appSecret: 'sec',
+        token: 'tok',
+        encrypt: false,
+        replyMode: 'customer_service',
+      }),
+      fetch: fetchFn,
+    });
+    await endpoint.start();
+    await http.listen();
+    endpoint.open();
+    const messageId = await endpoint.send({
+      target: 'oUser',
+      payload: [
+        {
+          type: 'audio',
+          data: {
+            media: { kind: 'base64', value: 'QUJD', mime_type: 'image/png' },
+          },
+        },
+      ],
+    });
+    expect(messageId).toBe('47');
+    const uploadCall = fetchFn.mock.calls.find(([url]) => String(url).includes('/media/upload'));
+    expect(uploadCall).toBeDefined();
+    expect(String(uploadCall![0])).toContain('type=voice');
+    const sendCall = fetchFn.mock.calls.find(([url]) => String(url).includes('/message/custom/send'));
+    expect(sendCall![1]).toMatchObject({
+      body: { touser: 'oUser', msgtype: 'voice', voice: { media_id: 'MID_VOICE' } },
+    });
+    await endpoint.stop();
+  });
+
   it('同一 MsgId 重推直接回放首次回复，不二次 admit', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);

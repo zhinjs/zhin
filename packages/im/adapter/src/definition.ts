@@ -1,10 +1,19 @@
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import type { CapabilityContext } from '@zhin.js/feature-kit';
+import type {
+  ConversationRef,
+  EndpointCapabilities,
+  EndpointOperation,
+} from '@zhin.js/im-contract';
 import type { EndpointManagement } from './endpoint-management.js';
+import type { EndpointControl } from './endpoint-control.js';
 
 const adapterBrand = 'zhin.adapter/1' as const;
 
 export type AdapterCapability = 'inbound' | 'outbound';
+
+/** Operations beyond sending, declared by an Adapter definition. */
+export type AdapterOperation = Exclude<EndpointOperation, 'send'>;
 
 /** 端点可消费的出站媒体来源形式。 */
 export type AdapterOutboundMedia = 'url' | 'path' | 'base64' | 'upload';
@@ -13,6 +22,12 @@ export type AdapterOutboundMedia = 'url' | 'path' | 'base64' | 'upload';
 export type AdapterInteractiveMode = 'native' | 'text';
 
 export interface EndpointSendRequest {
+  /**
+   * Structured identity for new callers. The target remains until every
+   * platform adapter has migrated its native boundary codec.
+   */
+  readonly conversation?: ConversationRef;
+  /** @deprecated Use conversation for framework-facing code. */
   readonly target: string;
   readonly payload: unknown;
   readonly parent?: { readonly type?: string; readonly id?: string; readonly name?: string };
@@ -21,6 +36,8 @@ export interface EndpointSendRequest {
 export interface EndpointInstance<TResult = unknown> {
   /** Optional platform-neutral Console/Host management surface. */
   readonly management?: EndpointManagement;
+  /** Optional platform-neutral control surface for existing messages. */
+  readonly control?: EndpointControl;
   /** Allocates transport resources but must not admit inbound events yet. */
   start?(): void | Promise<void>;
   /** Opens admission after the candidate generation has committed. */
@@ -74,9 +91,17 @@ const OUTBOUND_MEDIA_FORMS: readonly AdapterOutboundMedia[] = [
   'url', 'path', 'base64', 'upload',
 ];
 
+const ADAPTER_OPERATIONS: readonly AdapterOperation[] = ['recall', 'edit', 'reaction', 'typing'];
+
 export interface AdapterDefinition<TConfig = unknown, TResult = unknown> {
   readonly $feature: typeof adapterBrand;
   readonly capabilities: readonly AdapterCapability[];
+  /**
+   * Explicit support for operations other than send. `send` is derived from
+   * `capabilities: ['outbound']`; a method existing on an endpoint is not a
+   * capability declaration.
+   */
+  readonly operations?: readonly AdapterOperation[];
   /** 可选：端点消息段能力声明（出站协商降级挂载点）。 */
   readonly segments?: AdapterSegmentPolicy;
   create(
@@ -107,12 +132,42 @@ export function defineAdapter<TConfig = unknown, TResult = unknown>(
     throw new TypeError('Adapter capabilities must contain inbound and/or outbound');
   }
   const segments = normalizeSegmentPolicy(definition.segments);
+  const operations = normalizeOperations(definition.operations);
   return Object.freeze({
     ...definition,
     $feature: adapterBrand,
     capabilities: Object.freeze(capabilities),
+    ...(operations ? { operations } : {}),
     ...(segments ? { segments } : {}),
   });
+}
+
+/** Converts the definition's compact authoring form into the public contract. */
+export function endpointCapabilitiesOf(
+  definition: Pick<AdapterDefinition, 'capabilities' | 'operations'>,
+): EndpointCapabilities {
+  const operations = definition.operations?.reduce<Partial<Record<AdapterOperation, true>>>(
+    (result, operation) => ({ ...result, [operation]: true }),
+    {},
+  );
+  return Object.freeze({
+    inbound: definition.capabilities.includes('inbound'),
+    outbound: definition.capabilities.includes('outbound'),
+    ...(operations && Object.keys(operations).length > 0 ? { operations: Object.freeze(operations) } : {}),
+  });
+}
+
+function normalizeOperations(
+  operations: readonly AdapterOperation[] | undefined,
+): readonly AdapterOperation[] | undefined {
+  if (operations === undefined) return undefined;
+  if (
+    !Array.isArray(operations)
+    || operations.some((operation) => !ADAPTER_OPERATIONS.includes(operation))
+  ) {
+    throw new TypeError('Adapter operations must be recall, edit, reaction and/or typing');
+  }
+  return Object.freeze([...new Set(operations)]);
 }
 
 function normalizeSegmentPolicy(
@@ -175,6 +230,7 @@ export function parseAdapterDefinition(value: unknown): AdapterDefinition {
   ) throw invalidAdapter();
   // defineAdapter 已校验过形状；外部手工构造的 definition 也在此兜底
   normalizeSegmentPolicy(definition.segments);
+  normalizeOperations(definition.operations);
   return definition as AdapterDefinition;
 }
 

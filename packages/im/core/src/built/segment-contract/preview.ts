@@ -4,7 +4,7 @@
  */
 import { htmlToFallbackText } from '../html-to-text.js';
 import { readMentionName, readMentionTarget } from './mention.js';
-import { mediaRefFromLegacyData } from './media.js';
+import { isMediaRef } from './validate.js';
 import type { SegmentBase } from './types.js';
 
 const PREVIEW_MAX = 80;
@@ -16,7 +16,7 @@ function clip(text: string, max = PREVIEW_MAX): string {
 }
 
 function previewMedia(data: Record<string, unknown>): string | undefined {
-  const media = mediaRefFromLegacyData(data);
+  const media = isMediaRef(data.media) ? data.media : undefined;
   if (!media) return undefined;
   if (media.kind === 'base64') {
     const mime = media.mime_type ?? 'data';

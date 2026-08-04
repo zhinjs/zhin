@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
+import { isMediaRef } from "@zhin.js/core";
 import type { MessageSegment, SendContent } from "zhin.js";
 import type { IcqqEndpointConfig } from "./types.js";
 
@@ -35,7 +36,7 @@ function spoolBase64ToFile(
 
 /**
  * 出站媒体模式：file=本机落盘后 CQ [image:path]（与 icqq 同机时可用）；
- * base64=保留 segment.base64，CQ 编码为 [image:base64://...] 经 IPC 交给守护进程解码（异机 RPC 默认）。
+ * base64=保留 MediaRef base64，CQ 编码为 [image:base64://...] 经 IPC 交给守护进程解码（异机 RPC 默认）。
  */
 export function resolveIcqqOutboundMediaMode(
   config: Pick<IcqqEndpointConfig, "rpc" | "outboundMedia">,
@@ -47,9 +48,10 @@ export function resolveIcqqOutboundMediaMode(
 }
 
 /**
- * file 模式：将 segment.data.base64（legacy）或 canonical MediaRef
- * （`data.media`，kind=base64）物化为本机路径，并把 media 改写为 path 引用。
- * base64 模式：不改动（由 toCqString/formatOutboundBody 生成 base64://，供异机守护进程读取）。
+ * file 模式：将 canonical MediaRef（`data.media`，kind=base64）物化为本机路径，
+ * 并把 media 改写为 path 引用（与 icqq 同机时守护进程直接读盘）。
+ * base64 模式：不改动（由 toCqString/formatOutboundBody 生成 base64://，供异机守护进程解码）。
+ * 无 canonical MediaRef 的段原样保留（不可投递，由下游 CQ 序列化 warn + 丢弃）。
  */
 export function materializeOutboundBase64(
   content: SendContent,
@@ -62,42 +64,30 @@ export function materializeOutboundBase64(
     if (typeof seg === "string") return seg;
     const { type, data } = seg as MessageSegment;
     const d = data as Record<string, unknown>;
-    const media = d.media as
-      | { kind?: unknown; value?: unknown; mime_type?: unknown }
-      | undefined;
-    const mediaBase64 =
-      media && media.kind === "base64" && typeof media.value === "string" && media.value
-        ? media.value.replace(/^base64:\/\//, "")
-        : undefined;
-    const legacyBase64 = d.base64 ?? d.data;
-    const b64 =
-      mediaBase64 ??
-      (typeof legacyBase64 === "string" && legacyBase64 ? legacyBase64 : undefined);
+    const media = d.media;
+    if (!isMediaRef(media) || media.kind !== "base64") return seg;
+    const b64 = media.value.replace(/^base64:\/\//, "");
     if (!b64) return seg;
-
-    const mime = String(
-      d.mime ?? d.mimeType ?? (typeof media?.mime_type === "string" ? media.mime_type : "") ?? "",
-    );
-    if (type === "image" || type === "record" || type === "audio" || type === "video") {
-      const filePath = spoolBase64ToFile(
-        b64,
-        mime || (type === "image" ? "image/jpeg" : type === "video" ? "video/mp4" : "audio/mpeg"),
-        type === "record" || type === "audio" ? "audio" : type,
-      );
-      return {
-        type,
-        data: {
-          ...d,
-          media: {
-            kind: "path",
-            value: filePath,
-            ...(mime ? { mime_type: mime } : {}),
-          },
-          file: filePath,
-          url: filePath,
-        },
-      } as MessageSegment;
+    if (type !== "image" && type !== "record" && type !== "audio" && type !== "video") {
+      return seg;
     }
-    return seg;
+
+    const mime = media.mime_type ?? "";
+    const filePath = spoolBase64ToFile(
+      b64,
+      mime || (type === "image" ? "image/jpeg" : type === "video" ? "video/mp4" : "audio/mpeg"),
+      type === "record" || type === "audio" ? "audio" : type,
+    );
+    return {
+      type,
+      data: {
+        ...d,
+        media: {
+          kind: "path",
+          value: filePath,
+          ...(mime ? { mime_type: mime } : {}),
+        },
+      },
+    } as MessageSegment;
   });
 }

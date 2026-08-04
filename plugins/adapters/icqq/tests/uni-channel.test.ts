@@ -125,7 +125,10 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
       type: 'image',
       data: { media: { kind: 'url', value: 'https://x/a.jpg' } },
     });
-    expect(record).toMatchObject({ type: 'record', data: { file: 'https://x/a.amr' } });
+    expect(record).toMatchObject({
+      type: 'record',
+      data: { media: { kind: 'url', value: 'https://x/a.amr' } },
+    });
     await endpoint.stop();
   });
 
@@ -274,9 +277,9 @@ describe('UNI-Channel 出站：canonical segments → CQ 串', () => {
 });
 
 describe('UNI-Channel defineAdapter segments policy', () => {
-  it('声明 base64/url/upload 媒体能力与 text 交互降级', () => {
+  it('声明 base64/url/path 媒体能力与 text 交互降级', () => {
     expect(defineIcqqAdapter.segments).toEqual({
-      outboundMedia: ['base64', 'url', 'upload'],
+      outboundMedia: ['base64', 'url', 'path'],
       interactive: 'text',
     });
   });

@@ -144,18 +144,32 @@ describe('lark protocol helpers', () => {
       msg_type: 'text',
       content: JSON.stringify({ text: 'hi<at user_id="ou_1">Bob</at>' }),
     });
+    // 平台不透明引用（image_key/file_key）以 canonical MediaRef kind=file 承载
     expect(formatOutboundBody([
-      { type: 'image', data: { file_key: 'img_k' } },
+      { type: 'image', data: { media: { kind: 'file', value: 'img_k' } } },
     ])).toEqual({
       msg_type: 'image',
       content: JSON.stringify({ image_key: 'img_k' }),
     });
-    // endpoint 上传物化后写入 image_key
+    // endpoint 上传物化后回写 MediaRef kind=file
     expect(formatOutboundBody([
-      { type: 'image', data: { image_key: 'img_v3_up' } },
+      { type: 'image', data: { media: { kind: 'file', value: 'img_v3_up' } } },
     ])).toEqual({
       msg_type: 'image',
       content: JSON.stringify({ image_key: 'img_v3_up' }),
+    });
+    expect(formatOutboundBody([
+      { type: 'file', data: { media: { kind: 'file', value: 'file_k' } } },
+    ])).toEqual({
+      msg_type: 'file',
+      content: JSON.stringify({ file_key: 'file_k' }),
+    });
+    // 无 canonical MediaRef 的媒体段 warn + 丢弃（legacy 字段不再读取）
+    expect(formatOutboundBody([
+      { type: 'image', data: { url: 'https://legacy.example/a.png' } },
+    ])).toEqual({
+      msg_type: 'text',
+      content: JSON.stringify({ text: '' }),
     });
   });
 });

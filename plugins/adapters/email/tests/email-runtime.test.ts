@@ -168,7 +168,7 @@ describe('email protocol helpers', () => {
   it('formats outbound segment payload with attachments', () => {
     const mail = formatOutboundMail([
       { type: 'text', data: { text: 'see image' } },
-      { type: 'image', data: { url: '/tmp/a.png', filename: 'a.png' } },
+      { type: 'image', data: { media: { kind: 'path', value: '/tmp/a.png', file_name: 'a.png' } } },
     ], { from: 'bot@mock.com', to: 'user@example.com' });
     expect(mail.text).toBe('see image');
     expect(mail.attachments).toEqual([{ filename: 'a.png', path: '/tmp/a.png' }]);
@@ -184,6 +184,27 @@ describe('email protocol helpers', () => {
       { filename: 'a.png', path: '/tmp/a.png' },
       { filename: 'b.pdf', path: 'https://x/b.pdf' },
     ]);
+  });
+
+  it('sends base64 media inline via nodemailer content + encoding', () => {
+    const mail = formatOutboundMail([
+      { type: 'image', data: { media: { kind: 'base64', value: 'aGVsbG8=', file_name: 'c.png' } } },
+      { type: 'image', data: { media: { kind: 'base64', value: 'data:image/png;base64,d29ybGQ=' }, alt: 'd.png' } },
+    ], { from: 'bot@mock.com', to: 'user@example.com' });
+    expect(mail.attachments).toEqual([
+      { filename: 'c.png', content: 'aGVsbG8=', encoding: 'base64' },
+      { filename: 'd.png', content: 'd29ybGQ=', encoding: 'base64' },
+    ]);
+  });
+
+  it('drops media segments without a deliverable MediaRef', () => {
+    const mail = formatOutboundMail([
+      { type: 'text', data: { text: 'body' } },
+      { type: 'image', data: { url: '/tmp/a.png' } },
+      { type: 'file', data: { media: { kind: 'file', value: 'opaque-id' } } },
+    ], { from: 'bot@mock.com', to: 'user@example.com' });
+    expect(mail.text).toBe('body');
+    expect(mail.attachments).toBeUndefined();
   });
 
   it('maps saved inbound attachments to canonical segments (MediaRef kind=path)', () => {

@@ -11,6 +11,12 @@ afterEach(async () => {
 });
 
 describe('Runtime A2A Host', () => {
+  it('keeps the package root inert and exposes the Runtime API', async () => {
+    const entry = await import('../src/index.js');
+
+    expect(entry.installRuntimeA2a).toBe(installRuntimeA2a);
+  });
+
   it('rejects an unauthenticated production endpoint', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
@@ -56,5 +62,60 @@ describe('Runtime A2A Host', () => {
     const card = await response.json() as { name: string; supportedInterfaces: Array<{ url: string }> };
     expect(card.name).toBe('zhin');
     expect(card.supportedInterfaces[0]?.url).toBe('https://bot.example.test/mesh/zhin/jsonrpc');
+  });
+
+  it('uses the Host JSON parser limit and maps REST failures to HTTP semantics', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const registry = new AgentBindingRegistry({
+      zhin: { provider: 'ollama', model: 'qwen3:8b' },
+    });
+    installRuntimeA2a({
+      http,
+      agentHost: {
+        service: { getBindingRegistry: () => registry },
+        agent: {},
+      } as unknown as AgentHostPort,
+      config: { path: '/mesh', token: 'mesh-token' },
+      fallbackPublicUrl: 'https://bot.example.test',
+    });
+    const { port } = await http.listen();
+    const endpoint = `http://127.0.0.1:${port}/mesh/zhin/rest`;
+    const headers = {
+      authorization: 'Bearer mesh-token',
+      'content-type': 'application/json',
+      'a2a-version': '1.0',
+    };
+
+    const tooLarge = await fetch(`${endpoint}/v1/message:send`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ payload: 'x'.repeat(1_048_576) }),
+    });
+    expect(tooLarge.status).toBe(413);
+    expect(await tooLarge.json()).toEqual({ error: 'Request body exceeds 1048576 bytes' });
+
+    const jsonRpcTooLarge = await fetch(`http://127.0.0.1:${port}/mesh/zhin/jsonrpc`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ payload: 'x'.repeat(1_048_576) }),
+    });
+    expect(jsonRpcTooLarge.status).toBe(413);
+    expect(await jsonRpcTooLarge.json()).toMatchObject({
+      jsonrpc: '2.0',
+      id: null,
+      error: { code: -32700, message: 'Parse error' },
+    });
+
+    const invalid = await fetch(`${endpoint}/v1/message:send`, {
+      method: 'POST',
+      headers,
+      body: '{invalid',
+    });
+    expect(invalid.status).toBe(400);
+    expect(await invalid.json()).toEqual({ error: 'Invalid JSON body' });
+
+    const missing = await fetch(`${endpoint}/v1/tasks/missing`, { headers });
+    expect(missing.status).toBe(404);
   });
 });

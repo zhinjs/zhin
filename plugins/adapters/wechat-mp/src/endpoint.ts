@@ -19,7 +19,7 @@ import {
 } from './protocol.js';
 import {
   buildMediaUploadForm,
-  readOutboundImageMedia,
+  readOutboundMedia,
   resolveMediaBinary,
   type WeChatMediaUploadResult,
 } from './media-upload.js';
@@ -33,6 +33,17 @@ const logger = getLogger('wechat-mp');
 
 /** token 失效类错误码：40001/40014 invalid access_token、42001 access_token expired。 */
 const TOKEN_INVALID_ERRCODES = new Set([40001, 40014, 42001]);
+
+/**
+ * canonical 媒体段类型 → 微信 /cgi-bin/media/upload 的 type。
+ * 客服消息无 file 投递面，file 段不可投递。
+ */
+const WECHAT_UPLOAD_TYPE: Readonly<Record<string, 'image' | 'voice' | 'video'>> = {
+  image: 'image',
+  audio: 'voice',
+  voice: 'voice',
+  video: 'video',
+};
 
 export type WeChatMpFetch = (
   url: string,
@@ -217,35 +228,69 @@ export class WeChatMpEndpoint implements EndpointInstance {
   }
 
   /**
-   * 客服消息 image 段只接受 media_id：canonical MediaRef（base64/本地路径/URL）
-   * 先经 /cgi-bin/media/upload 物化；上传失败降级为文本（alt 优先），不阻断发送。
+   * 客服消息媒体段只接受 media_id：canonical MediaRef 是唯一来源。
+   * - kind=file（平台不透明引用，即既有 media_id）→ 直接透传；
+   * - kind=base64 / path / url → 经 /cgi-bin/media/upload 物化；
+   * - 无 MediaRef / 类型不可投递（file 段）→ warn + 丢弃；
+   * - 上传失败降级为文本（alt 优先），不阻断发送。
    */
   async #materializeOutboundMedia(payload: unknown): Promise<unknown> {
     if (!Array.isArray(payload)) return payload;
-    return Promise.all(payload.map(async (item) => {
+    const materialized = await Promise.all(payload.map(async (item) => {
       if (typeof item === 'string' || !item || typeof item !== 'object') return item;
       const seg = item as { type?: unknown; data?: Record<string, unknown> };
-      if (seg.type !== 'image') return item;
+      if (typeof seg.type !== 'string') return item;
       const data = seg.data ?? {};
-      const media = readOutboundImageMedia(data);
-      if (!media) return item;
+      const uploadType = WECHAT_UPLOAD_TYPE[seg.type];
+      const isMediaSegment = uploadType != null || seg.type === 'file';
+      if (!isMediaSegment) return item;
+      const media = readOutboundMedia(data);
+      if (!media) {
+        // 已物化（mediaId/media_id）的段透传；其余无 canonical 媒体引用，丢弃留痕
+        if (typeof data.mediaId === 'string' && data.mediaId) return item;
+        if (typeof data.media_id === 'string' && data.media_id) return item;
+        logger.warn(formatCompact({
+          op: 'wechat_mp_outbound_media_dropped',
+          endpoint: this.#options.config.name,
+          type: seg.type,
+          reason: 'missing_media_ref',
+        }));
+        return null;
+      }
+      if (media.kind === 'file') {
+        // 平台不透明引用：value 即 media_id，直接透传不上传
+        return { type: seg.type, data: { mediaId: media.value } };
+      }
+      if (!uploadType) {
+        logger.warn(formatCompact({
+          op: 'wechat_mp_outbound_media_dropped',
+          endpoint: this.#options.config.name,
+          type: seg.type,
+          reason: 'unsupported_segment_type',
+        }));
+        return null;
+      }
       try {
-        const mediaId = await this.#uploadMedia('image', media);
-        return { type: 'image', data: { mediaId } };
+        const mediaId = await this.#uploadMedia(uploadType, media);
+        return { type: seg.type, data: { mediaId } };
       } catch (error) {
         logger.warn(formatCompact({
           op: 'wechat_mp_media_upload_failed',
           endpoint: this.#options.config.name,
           error: error instanceof Error ? error.message : String(error),
         }));
-        const alt = typeof data.alt === 'string' && data.alt ? data.alt : '[image]';
+        const alt = typeof data.alt === 'string' && data.alt ? data.alt : `[${seg.type}]`;
         return { type: 'text', data: { text: alt } };
       }
     }));
+    return materialized.filter((item) => item != null);
   }
 
   /** POST /cgi-bin/media/upload（临时素材，3 天有效），返回 media_id。 */
-  async #uploadMedia(type: 'image', media: Parameters<typeof resolveMediaBinary>[0]): Promise<string> {
+  async #uploadMedia(
+    type: 'image' | 'voice' | 'video',
+    media: Parameters<typeof resolveMediaBinary>[0],
+  ): Promise<string> {
     const binary = await resolveMediaBinary(media);
     const form = buildMediaUploadForm(binary);
     const url = `https://api.weixin.qq.com/cgi-bin/media/upload?access_token=${this.#accessToken}&type=${type}`;

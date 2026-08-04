@@ -110,10 +110,9 @@ export function userMessagePlainText(message: UserMessage): string {
 }
 
 function cloneUserMessageWithText(message: UserMessage, text: string): UserMessage {
-  const images = message.content.filter((b) => b.type === 'image');
   return createUserMessage(
     text,
-    images.length > 0 ? images : undefined,
+    message.media,
     message.timestamp,
   );
 }
@@ -223,12 +222,15 @@ export function normalizeUserMessageForStorage(
     quote: quoteSplit.quote,
   });
 
-  if (!extra && text === userMessagePlainText(user)) {
+  if (!extra && text === userMessagePlainText(user) && !user.media?.length) {
     return { message };
   }
 
+  const stored = cloneUserMessageWithText(user, text);
+  // 媒体块不持久化：payload 只留文本（媒体已在入站注入时消费，历史仅存文本视图）
+  const { media: _dropped, ...strippedMessage } = stored;
   return {
-    message: cloneUserMessageWithText(user, text),
+    message: strippedMessage as UserMessage,
     extra,
   };
 }

@@ -2,6 +2,10 @@ import { CalendarScheduler } from '@zhin.js/schedule';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   scheduleHostToken,
+  scheduleRootHostToken,
+  createPluginScheduleHost,
+  rootPluginId,
+  type PluginId,
   type ScheduleHost,
   type ScheduleJobRegistration,
 } from '@zhin.js/plugin-runtime';
@@ -23,6 +27,7 @@ export function createScheduleHost(): ScheduleHost & { stop(): void } {
   const jobs = new Map<string, {
     cron: string;
     description?: string;
+    owner?: PluginId;
     registration: symbol;
   }>();
 
@@ -47,6 +52,7 @@ export function createScheduleHost(): ScheduleHost & { stop(): void } {
       jobs.set(job.id, {
         cron: job.cron,
         description: job.description,
+        owner: job.owner,
         registration,
       });
       logger.debug(formatCompact({ op: 'schedule_register', id: job.id, cron: job.cron }));
@@ -65,11 +71,12 @@ export function createScheduleHost(): ScheduleHost & { stop(): void } {
           id,
           cron: meta.cron,
           description: meta.description,
+          owner: meta.owner,
           // console cron 页字段：expression/running/plugin/nextExecution
           expression: meta.cron,
           running: snap ? !snap.paused && !snap.cancelled : true,
           nextExecution: snap?.nextRunAt ? snap.nextRunAt.getTime() : undefined,
-          plugin: id.split('/')[0],
+          plugin: meta.owner ?? id.split('/')[0],
         });
       }));
     },
@@ -83,7 +90,8 @@ export function createScheduleHost(): ScheduleHost & { stop(): void } {
 export function installScheduleHost(host?: ScheduleHost & { stop(): void }): RootResourceInstaller {
   return ({ resources, lifecycle }) => {
     const instance = host ?? createScheduleHost();
-    resources.provide(scheduleHostToken, instance);
+    resources.provide(scheduleRootHostToken, instance);
+    resources.provide(scheduleHostToken, createPluginScheduleHost(rootPluginId(), instance));
     // A supplied Host is process-owned and intentionally shared by overlapping
     // generations. Only an instance created by this installer belongs to Scope.
     if (!host) lifecycle.add(() => instance.stop());

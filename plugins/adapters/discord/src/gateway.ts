@@ -198,12 +198,22 @@ export async function toMessageCreateOptions(body: DiscordOutboundBody): Promise
   if (body.files?.length) {
     const files: AttachmentBuilder[] = [];
     for (const file of body.files) {
-      if (file.file && await fileExists(file.file)) {
+      if (file.base64) {
+        files.push(new AttachmentBuilder(decodeBase64(file.base64), {
+          name: file.name || 'attachment',
+        }));
+      } else if (file.file && await fileExists(file.file)) {
         files.push(new AttachmentBuilder(createReadStream(file.file), {
           name: file.name || path.basename(file.file),
         }));
       } else if (file.url) {
         files.push(new AttachmentBuilder(file.url, { name: file.name || 'attachment' }));
+      } else {
+        logger.warn(formatCompact({
+          op: 'discord_outbound_media_dropped',
+          reason: 'missing_source',
+          name: file.name,
+        }));
       }
     }
     if (files.length) options.files = files;
@@ -265,6 +275,13 @@ async function fileExists(filePath: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** base64:// / data:*;base64, 前缀归一，Buffer.from 只接受纯 base64。 */
+function decodeBase64(value: string): Buffer {
+  const stripped = value.startsWith('base64://') ? value.slice('base64://'.length) : value;
+  const comma = stripped.startsWith('data:') ? stripped.indexOf(',') : -1;
+  return Buffer.from(comma >= 0 ? stripped.slice(comma + 1) : stripped, 'base64');
 }
 
 export interface DiscordGatewayConnectHandlers {

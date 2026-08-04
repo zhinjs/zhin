@@ -5,7 +5,7 @@
  * ZhinAgent 类实现所有接口；外部消费方按需使用具体接口而非完整类。
  */
 
-import type { AgentMessage, AgentEvent, ImageContent, OutputElement } from '@zhin.js/ai';
+import type { AgentMessage, AgentEvent, MediaContentBlock, OutputElement } from '@zhin.js/ai';
 import type { Message, Tool } from '../orchestrator/types.js';
 import type { SubagentSystem } from '../subagent/index.js';
 import type { ZhinAgentEventEmitter } from '../event/event-emitter.js';
@@ -34,7 +34,7 @@ export interface IAgentTurnProcessor {
   prompt(
     input: string | AgentMessage | AgentMessage[],
     commMessage: Message,
-    options?: { images?: ImageContent[]; onChunk?: OnChunkCallback },
+    options?: { media?: MediaContentBlock[]; onChunk?: OnChunkCallback },
   ): Promise<OutputElement[]>;
 
   steer(message: AgentMessage, commMessage: Message): void;

@@ -12,7 +12,9 @@ import {
   AdapterIndex,
   adapterFeatureId,
   isAdapterIndex,
+  resolveEndpointControl,
   resolveEndpointManagement,
+  type EndpointControl,
   type EndpointManagement,
   type EndpointManagementCapability,
 } from '@zhin.js/adapter';
@@ -350,21 +352,11 @@ export class ImRuntime implements MessageGateway {
     readonly sceneType?: string;
     readonly channelId?: string;
   }): Promise<string | null> {
-    const endpoint = this.#liveEndpoint(input.adapter, input.endpointId);
-    if (!endpoint) return null;
-    if (typeof endpoint.addReaction === 'function') {
-      return endpoint.addReaction(input.messageId, input.emoji, {
-        sceneType: input.sceneType,
-        channelId: input.channelId,
-      });
-    }
-    if (typeof endpoint.$addReaction === 'function') {
-      return endpoint.$addReaction(input.messageId, input.emoji, {
-        sceneType: input.sceneType,
-        channelId: input.channelId,
-      });
-    }
-    return null;
+    const control = this.#liveEndpointControl(input.adapter, input.endpointId);
+    return control?.addReaction?.(input.messageId, input.emoji, {
+      sceneType: input.sceneType,
+      channelId: input.channelId,
+    }) ?? null;
   }
 
   async removeEndpointReaction(input: {
@@ -373,15 +365,8 @@ export class ImRuntime implements MessageGateway {
     readonly messageId: string;
     readonly reactionId: string;
   }): Promise<void> {
-    const endpoint = this.#liveEndpoint(input.adapter, input.endpointId);
-    if (!endpoint) return;
-    if (typeof endpoint.removeReaction === 'function') {
-      await endpoint.removeReaction(input.messageId, input.reactionId);
-      return;
-    }
-    if (typeof endpoint.$removeReaction === 'function') {
-      await endpoint.$removeReaction(input.messageId, input.reactionId);
-    }
+    await this.#liveEndpointControl(input.adapter, input.endpointId)
+      ?.removeReaction?.(input.messageId, input.reactionId);
   }
 
   /** Activity-feedback autoRemove: recall a previously sent status message. */
@@ -390,29 +375,27 @@ export class ImRuntime implements MessageGateway {
     readonly endpointId: string;
     readonly messageId: string;
   }): Promise<void> {
-    const endpoint = this.#liveEndpoint(input.adapter, input.endpointId);
-    if (!endpoint) return;
-    if (typeof endpoint.recallMessage === 'function') {
-      await endpoint.recallMessage(input.messageId);
-      return;
-    }
-    if (typeof endpoint.$recallMessage === 'function') {
-      await endpoint.$recallMessage(input.messageId);
-    }
+    await this.#liveEndpointControl(input.adapter, input.endpointId)
+      ?.recall?.(input.messageId);
   }
 
-  #liveEndpoint(adapter: string, endpointId: string): ReactionCapableEndpoint | null {
+  #liveEndpoint(adapter: string, endpointId: string): unknown | null {
     try {
       const lease = this.#acquire();
       try {
         const endpoint = requireAdapters(lease.value).instance(adapter, endpointId);
-        return (endpoint as ReactionCapableEndpoint | undefined) ?? null;
+        return endpoint ?? null;
       } finally {
         lease.release();
       }
     } catch {
       return null;
     }
+  }
+
+  #liveEndpointControl(adapter: string, endpointId: string): EndpointControl | null {
+    const endpoint = this.#liveEndpoint(adapter, endpointId);
+    return resolveEndpointControl(endpoint) ?? null;
   }
 
   /**
@@ -532,24 +515,6 @@ function resolveHtmlRenderer(snapshot: RuntimeSnapshot): HtmlRendererHost | unde
 function isDirectHtmlConsumer(snapshot: RuntimeSnapshot, adapter: CapabilityId): boolean {
   const owner = snapshot.capabilities.get(adapter)?.owner;
   return adapterTypeName(snapshot.tree.get(owner as PluginId)?.packageName) === 'sandbox';
-}
-
-/** Duck-typed reaction / recall surface on Runtime EndpointInstance (icqq, …). */
-interface ReactionCapableEndpoint {
-  addReaction?(
-    messageId: string,
-    emoji: string,
-    hint?: { sceneType?: string; channelId?: string },
-  ): Promise<string | null>;
-  removeReaction?(messageId: string, reactionId: string): Promise<void>;
-  $addReaction?(
-    messageId: string,
-    emoji: string,
-    hint?: { sceneType?: string; channelId?: string },
-  ): Promise<string | null>;
-  $removeReaction?(messageId: string, reactionId: string): Promise<void>;
-  recallMessage?(messageId: string): Promise<void>;
-  $recallMessage?(messageId: string): Promise<void>;
 }
 
 /**

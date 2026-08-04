@@ -150,10 +150,24 @@ describe('onebot11 protocol helpers', () => {
     expect(formatOutboundSegments('pong')).toEqual([{ type: 'text', data: { text: 'pong' } }]);
     expect(formatOutboundSegments([
       { type: 'text', data: { text: 'see' } },
-      { type: 'image', data: { file: 'https://x/a.png' } },
+      { type: 'image', data: { media: { kind: 'url', value: 'https://x/a.png' } } },
     ])).toEqual([
       { type: 'text', data: { text: 'see' } },
       { type: 'image', data: { file: 'https://x/a.png' } },
+    ]);
+  });
+
+  it('drops media segments without canonical data.media', () => {
+    // legacy 形状（裸 file/url/base64）与无 media 的媒体段一律丢弃，不再兼容透传
+    expect(formatOutboundSegments([
+      { type: 'text', data: { text: 'see' } },
+      { type: 'image', data: { file: 'https://x/a.png' } },
+      { type: 'image', data: { url: 'https://x/b.png' } },
+      { type: 'audio', data: { base64: 'QUJD' } },
+      { type: 'video', data: {} },
+      { type: 'file', data: { media: { kind: 'url', value: 'https://x/a.zip' } } },
+    ])).toEqual([
+      { type: 'text', data: { text: 'see' } },
     ]);
   });
 
@@ -172,11 +186,13 @@ describe('onebot11 protocol helpers', () => {
       { type: 'image', data: { media: { kind: 'path', value: '/tmp/a.png' } } },
       { type: 'audio', data: { media: { kind: 'url', value: 'https://x/a.mp3' } } },
       { type: 'video', data: { media: { kind: 'url', value: 'https://x/a.mp4' } } },
+      { type: 'image', data: { media: { kind: 'file', value: 'opaque-file-id' } } },
     ])).toEqual([
       { type: 'image', data: { file: 'base64://QUJD' } },
       { type: 'image', data: { file: 'file:///tmp/a.png' } },
       { type: 'record', data: { file: 'https://x/a.mp3' } },
       { type: 'video', data: { file: 'https://x/a.mp4' } },
+      { type: 'image', data: { file: 'opaque-file-id' } },
     ]);
   });
 

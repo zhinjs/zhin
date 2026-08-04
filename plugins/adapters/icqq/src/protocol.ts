@@ -14,6 +14,7 @@
 
 import { pickCredential } from '@zhin.js/adapter';
 import type { MessageSegment } from "zhin.js";
+import { resolveCqMediaArg } from "./cq-message.js";
 
 /** CLI → Daemon 请求 */
 export type IpcRequest = {
@@ -427,17 +428,23 @@ export function formatOutboundBody(payload: unknown): string {
       case 'at':
       case 'mention':
         return `[at:${item.data?.qq ?? item.data?.id ?? item.data?.target ?? ''}]`;
-      case 'image':
-        return `[image:${mediaRefValue(item.data) || item.data?.file || item.data?.url || base64Media(item.data) || ''}]`;
+      case 'image': {
+        const arg = resolveCqMediaArg('image', item.data);
+        return arg ? `[image:${arg}]` : '';
+      }
       case 'face':
         return `[face:${item.data?.id ?? ''}]`;
       case 'reply':
         return `[reply:${item.data?.message_id ?? item.data?.id ?? ''}]`;
       case 'record':
-      case 'audio':
-        return `[record:${mediaRefValue(item.data) || item.data?.file || item.data?.url || base64Media(item.data) || ''}]`;
-      case 'video':
-        return `[video:${mediaRefValue(item.data) || item.data?.file || item.data?.url || base64Media(item.data) || ''}]`;
+      case 'audio': {
+        const arg = resolveCqMediaArg('record', item.data);
+        return arg ? `[record:${arg}]` : '';
+      }
+      case 'video': {
+        const arg = resolveCqMediaArg('video', item.data);
+        return arg ? `[video:${arg}]` : '';
+      }
       default:
         return String(item.data?.text ?? '');
     }
@@ -447,28 +454,6 @@ export function formatOutboundBody(payload: unknown): string {
 
 export function formatInboundContent(rawMessage: string): string {
   return rawMessage;
-}
-
-/** base64 媒体回退：CQ `base64://` 由守护进程解码（异机 RPC 场景）。 */
-function base64Media(data: Record<string, unknown> | undefined): string | undefined {
-  const b64 = data?.base64;
-  return typeof b64 === 'string' && b64 ? `base64://${b64}` : undefined;
-}
-
-/**
- * canonical MediaRef（`data.media`，见 built/segment-contract）→ CQ 媒体值：
- * base64 → `base64://` 前缀（守护进程解码）；url/path 直出。
- * file 模式下 materializeOutboundBase64 已把 base64 落盘并把 media 改写为 path 引用。
- */
-function mediaRefValue(data: Record<string, unknown> | undefined): string | undefined {
-  const media = data?.media;
-  if (!media || typeof media !== 'object' || Array.isArray(media)) return undefined;
-  const { kind, value } = media as { kind?: unknown; value?: unknown };
-  if (typeof value !== 'string' || !value) return undefined;
-  if (kind === 'base64') {
-    return value.startsWith('base64://') ? value : `base64://${value}`;
-  }
-  return value;
 }
 
 /** 段对象判定：`{ type: string, data? }`（非数组 payload 的防御入口）。 */

@@ -1,5 +1,11 @@
 /** Sandbox WebSocket wire protocol helpers (no legacy Adapter/Endpoint). */
 
+import { readFileSync } from 'node:fs';
+import { isMediaRef } from '@zhin.js/core';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+
+const logger = getLogger('sandbox');
+
 export type MessageType = 'private' | 'group' | 'guild' | 'direct' | 'channel';
 
 export interface MessageElement {
@@ -179,6 +185,100 @@ export type SandboxOutboundChannel = {
   readonly messageId?: string;
 };
 
+const MEDIA_SEGMENT_TYPES = new Set(['image', 'audio', 'video', 'file']);
+
+/**
+ * base64 内联值：Console UI 的 resolveMediaSrc 只识别 data: / base64://
+ * 前缀；裸 base64 补前缀（有 mime_type 时拼成可直转 data: URL 的形状）。
+ */
+function toInlineBase64Value(value: string, mimeType?: string): string {
+  const trimmed = value.trim();
+  if (trimmed.startsWith('base64://') || trimmed.startsWith('data:')) return trimmed;
+  return mimeType
+    ? `base64://${mimeType};base64,${trimmed}`
+    : `base64://${trimmed}`;
+}
+
+/**
+ * 出站媒体段归一（canonical MediaRef 唯一来源，不读 legacy url/file/base64/src）：
+ * - kind=url → 浏览器直连 URL，原样透传；
+ * - kind=base64 → 内联直发（补 base64:// 前缀供 Console UI 解析）；
+ * - kind=path → 读盘物化为 base64 内联（sandbox 无平台上传通道）；
+ * - kind=file → sandbox 无不透明引用通道，丢弃。
+ * 无 canonical `data.media` 的媒体段一律 warn + 丢弃。
+ */
+function normalizeMediaSegment(segment: MessageElement): MessageElement | null {
+  const data = segment.data ?? {};
+  const media = data.media;
+  if (!isMediaRef(media)) {
+    logger.warn(formatCompact({
+      op: 'sandbox_outbound_media_dropped',
+      type: segment.type,
+      reason: 'missing_media_ref',
+    }));
+    return null;
+  }
+  if (media.kind === 'url') return { type: segment.type, data };
+  if (media.kind === 'base64') {
+    return {
+      type: segment.type,
+      data: {
+        ...data,
+        media: { ...media, value: toInlineBase64Value(media.value, media.mime_type) },
+      },
+    };
+  }
+  if (media.kind === 'path') {
+    try {
+      const base64 = readFileSync(media.value).toString('base64');
+      return {
+        type: segment.type,
+        data: {
+          ...data,
+          media: {
+            ...media,
+            kind: 'base64',
+            value: toInlineBase64Value(base64, media.mime_type),
+          },
+        },
+      };
+    } catch (err) {
+      logger.warn(formatCompact({
+        op: 'sandbox_outbound_media_dropped',
+        type: segment.type,
+        reason: 'path_read_failed',
+        error: err instanceof Error ? err.message : String(err),
+      }));
+      return null;
+    }
+  }
+  logger.warn(formatCompact({
+    op: 'sandbox_outbound_media_dropped',
+    type: segment.type,
+    reason: 'unsupported_media_kind',
+  }));
+  return null;
+}
+
+/** 出站段数组归一：媒体段走 MediaRef-only 归一，其余段原样透传。 */
+export function normalizeSandboxOutboundSegments(segments: readonly unknown[]): unknown[] {
+  const out: unknown[] = [];
+  for (const item of segments) {
+    if (
+      item
+      && typeof item === 'object'
+      && !Array.isArray(item)
+      && MEDIA_SEGMENT_TYPES.has(String((item as MessageElement).type))
+    ) {
+      const normalized = normalizeMediaSegment(item as MessageElement);
+      if (normalized) out.push(normalized);
+      continue;
+    }
+    out.push(item);
+  }
+  return out;
+}
+
 /**
  * Wire-encode an already-rendered outbound payload.
  * Stamps `channel` so Console SandboxChat can filter by type+id (otherwise
@@ -205,7 +305,7 @@ export function formatSandboxOutbound(
   if (Array.isArray(payload)) {
     return JSON.stringify({
       ...stamp,
-      content: payload,
+      content: normalizeSandboxOutboundSegments(payload),
       timestamp: Date.now(),
     });
   }
@@ -225,6 +325,9 @@ export function formatSandboxOutbound(
     return JSON.stringify({
       ...stamp,
       ...envelope,
+      ...(Array.isArray(envelope.content)
+        ? { content: normalizeSandboxOutboundSegments(envelope.content) }
+        : {}),
       type: envelope.type ?? stamp.type,
       id: envelope.id ?? stamp.id,
       timestamp: typeof envelope.timestamp === 'number' ? envelope.timestamp : Date.now(),

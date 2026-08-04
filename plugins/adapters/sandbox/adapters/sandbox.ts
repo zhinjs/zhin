@@ -15,9 +15,10 @@ export type { SandboxEndpointOptions } from '../src/endpoint.js';
 
 export default defineAdapter<SandboxAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
-  // Console UI 直接渲染 base64 内联媒体；交互段由 Console 原生承载。
+  // Console UI 直连 URL 媒体、直接渲染 base64 内联媒体；path 由端点读盘
+  // 物化为 base64 内联（sandbox 无平台上传通道）。交互段由 Console 原生承载。
   segments: {
-    outboundMedia: ['base64'],
+    outboundMedia: ['url', 'base64', 'path'],
     interactive: 'native',
   },
   create(context) {

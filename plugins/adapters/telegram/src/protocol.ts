@@ -4,8 +4,11 @@
  */
 
 import type { IncomingMessage } from 'node:http';
-import { isMediaRef, mediaRefFromLegacyData } from '@zhin.js/core';
+import { isMediaRef } from '@zhin.js/core';
 import type { Segment } from '@zhin.js/core/runtime';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+
+const logger = getLogger('telegram');
 
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface TelegramAdapterConfig {
@@ -473,7 +476,7 @@ export function formatOutboundActions(
 /**
  * formatOutboundActions 的上传感知变体：canonical MediaRef kind=base64/path
  * 的媒体段产出 `attach://` 占位 + uploads 清单（endpoint 走 multipart 表单上传）；
- * kind=url/file 与旧 wire 字段（file_id/url）保持字符串直发。
+ * kind=url/file 保持字符串直发（file 即 Telegram file_id 不透明引用）。
  */
 export function formatOutboundPlan(
   target: string | number,
@@ -521,13 +524,21 @@ function buildOutboundActions(
   );
 
   /**
-   * 媒体来源归一：canonical `data.media` 优先，旧 wire 字段
-   * `{file_id,url,file,base64}` 经 mediaRefFromLegacyData 兼容。
-   * url/file → 字符串直发；base64/path → attach:// 占位并登记上传。
+   * 媒体来源归一：唯一来源是 canonical `data.media` MediaRef。
+   * kind=url/file → 字符串直发（file 即 Telegram file_id 不透明引用）；
+   * kind=base64/path → attach:// 占位并登记上传。
+   * 无 MediaRef 时 warn + 丢弃（返回 undefined）。
    */
-  const mediaSource = (data: Record<string, unknown>, defaultName: string): string | undefined => {
-    const media = isMediaRef(data.media) ? data.media : mediaRefFromLegacyData(data);
-    if (!media) return undefined;
+  const mediaSource = (segType: string, data: Record<string, unknown>, defaultName: string): string | undefined => {
+    const media = isMediaRef(data.media) ? data.media : undefined;
+    if (!media) {
+      logger.warn(formatCompact({
+        op: 'telegram_outbound_media_dropped',
+        type: segType,
+        reason: 'missing_media_ref',
+      }));
+      return undefined;
+    }
     if (media.kind === 'file' || media.kind === 'url') return media.value;
     const named = data.name ?? data.filename;
     let filename = typeof named === 'string' && named ? named : undefined;
@@ -590,7 +601,7 @@ function buildOutboundActions(
         break;
       }
       case 'image': {
-        const photo = mediaSource(data, 'image.png');
+        const photo = mediaSource('image', data, 'image.png');
         if (photo) {
           actions.push({
             method: 'sendPhoto',
@@ -606,7 +617,7 @@ function buildOutboundActions(
         break;
       }
       case 'video': {
-        const video = mediaSource(data, 'video.mp4');
+        const video = mediaSource('video', data, 'video.mp4');
         if (video) {
           actions.push({
             method: 'sendVideo',
@@ -622,7 +633,7 @@ function buildOutboundActions(
         break;
       }
       case 'audio': {
-        const audio = mediaSource(data, 'audio.mp3');
+        const audio = mediaSource('audio', data, 'audio.mp3');
         if (audio) {
           actions.push({
             method: 'sendAudio',
@@ -638,7 +649,7 @@ function buildOutboundActions(
         break;
       }
       case 'voice': {
-        const voice = mediaSource(data, 'voice.ogg');
+        const voice = mediaSource('voice', data, 'voice.ogg');
         if (voice) {
           actions.push({
             method: 'sendVoice',
@@ -654,7 +665,7 @@ function buildOutboundActions(
         break;
       }
       case 'file': {
-        const document = mediaSource(data, 'file');
+        const document = mediaSource('file', data, 'file');
         if (document) {
           actions.push({
             method: 'sendDocument',
@@ -670,7 +681,7 @@ function buildOutboundActions(
         break;
       }
       case 'sticker': {
-        const sticker = typeof data.file_id === 'string' ? data.file_id : mediaSource(data, 'sticker.webp');
+        const sticker = mediaSource('sticker', data, 'sticker.webp');
         if (sticker) {
           actions.push({
             method: 'sendSticker',

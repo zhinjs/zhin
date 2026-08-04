@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { resolveIMSessionIdFromMessage, type Plugin } from '@zhin.js/core';
-import type { AgentMessage, ImageContent, OutputElement, UserMessage } from '@zhin.js/ai';
+import type { AgentMessage, MediaContentBlock, OutputElement, UserMessage } from '@zhin.js/ai';
 import type { Message } from '../orchestrator/types.js';
 import { PromptAccessDeniedError } from './prompt-access.js';
 import { resolveToolRequesterRole } from '../security/owner-approve-always-store.js';
@@ -34,9 +34,9 @@ export async function runPromptTurn(
   input: string | AgentMessage | AgentMessage[],
   commMessage: Message,
   runInTurnContext: <T>(turnId: string, fn: () => Promise<T>) => Promise<T>,
-  options?: { images?: ImageContent[]; onChunk?: OnChunkCallback },
+  options?: { media?: MediaContentBlock[]; onChunk?: OnChunkCallback },
 ): Promise<OutputElement[]> {
-  const messages = normalizePromptMessages(input, options?.images);
+  const messages = normalizePromptMessages(input, options?.media);
   const text = messages
     .flatMap((message) => {
       if (message.role !== 'user') return [] as string[];

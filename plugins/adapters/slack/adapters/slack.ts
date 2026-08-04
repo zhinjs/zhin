@@ -16,10 +16,11 @@ export type { SlackEndpointOptions, SlackSocketLike, SlackWebClientLike } from '
 
 export default defineAdapter<SlackAdapterConfig>({
   capabilities: ['inbound', 'outbound'],
-  // 媒体由端点物化（url 拉取 / 本地读取）经 files.uploadV2 上传；
-  // Block Kit 原生按钮承载交互段。
+  // 媒体段（canonical MediaRef）：kind=url 直发（image 走 attachment image_url，
+  // 其余拉取后上传）；kind=base64 解码后经 files.uploadV2 上传；kind=path 读盘上传；
+  // kind=file 无 Slack 对应物，丢弃留痕。Block Kit 原生按钮承载交互段。
   segments: {
-    outboundMedia: ['url', 'upload'],
+    outboundMedia: ['url', 'upload', 'path'],
     interactive: 'native',
   },
   create(context) {

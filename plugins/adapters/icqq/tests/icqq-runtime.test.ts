@@ -107,8 +107,12 @@ describe('icqq protocol helpers', () => {
 
   it('treats a single segment object (non-array) as a one-element array', () => {
     expect(formatOutboundBody({ type: 'text', data: { text: 'hi' } })).toBe('hi');
-    expect(formatOutboundBody({ type: 'image', data: { base64: 'YQ==' } }))
-      .toBe('[image:base64://YQ==]');
+    expect(formatOutboundBody({
+      type: 'image',
+      data: { media: { kind: 'base64', value: 'YQ==' } },
+    })).toBe('[image:base64://YQ==]');
+    // 媒体段无 canonical MediaRef 时丢弃（warn + 空串）
+    expect(formatOutboundBody({ type: 'image', data: {} })).toBe('​');
     // 未知段类型不会退化为 '[object Object]'，而是按空文本段兜底
     expect(formatOutboundBody({ type: 'html', data: { html: '<b>x</b>' } }))
       .toBe('​');

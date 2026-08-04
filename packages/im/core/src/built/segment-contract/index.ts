@@ -5,6 +5,9 @@ export type {
   TextSegment,
   MentionSegment,
   ImageSegment,
+  AudioSegment,
+  VideoSegment,
+  FileSegment,
   ReplySegment,
   ForwardSegment,
   FaceSegment,
@@ -16,6 +19,9 @@ export {
   textSegmentSchema,
   mentionSegmentSchema,
   imageSegmentSchema,
+  audioSegmentSchema,
+  videoSegmentSchema,
+  fileSegmentSchema,
   replySegmentSchema,
   forwardSegmentSchema,
   faceSegmentSchema,
@@ -34,8 +40,6 @@ export {
 export { segmentsForImDelivery } from './delivery.js';
 export {
   isMediaRef,
-  mediaRefFromLegacyData,
-  mediaRefToLegacyFields,
   collectSegmentMedia,
   type SegmentMediaRef,
 } from './media.js';

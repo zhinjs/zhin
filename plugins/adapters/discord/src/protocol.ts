@@ -4,7 +4,11 @@
  */
 
 import { createPublicKey, verify as cryptoVerify } from 'node:crypto';
+import { isMediaRef } from '@zhin.js/core';
 import type { Segment } from '@zhin.js/core/runtime';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+
+const logger = getLogger('discord');
 
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface DiscordAdapterConfig {
@@ -131,6 +135,7 @@ export interface DiscordOutboundBody {
     name: string;
     url?: string;
     file?: string;
+    base64?: string;
   }>;
   readonly components?: ReadonlyArray<DiscordOutboundActionRow>;
 }
@@ -314,7 +319,7 @@ export function formatOutboundBody(payload: unknown): DiscordOutboundBody {
 
   let content = '';
   const embeds: Record<string, unknown>[] = [];
-  const files: Array<{ name: string; url?: string; file?: string }> = [];
+  const files: Array<{ name: string; url?: string; file?: string; base64?: string }> = [];
   let components: DiscordOutboundBody['components'];
 
   for (const item of segments) {
@@ -345,11 +350,32 @@ export function formatOutboundBody(payload: unknown): DiscordOutboundBody {
       case 'audio':
       case 'video':
       case 'file': {
-        const name = String(data.name || data.filename || item.type);
-        if (typeof data.file === 'string' && data.file) {
-          files.push({ name, file: data.file });
-        } else if (typeof data.url === 'string' && data.url) {
-          files.push({ name, url: data.url });
+        // canonical MediaRef 唯一媒体来源（中央 normalizeOutboundPayload 已保证形状）
+        const media = data.media;
+        if (!isMediaRef(media)) {
+          logger.warn(formatCompact({
+            op: 'discord_outbound_media_dropped',
+            type: item.type,
+            reason: 'missing_media_ref',
+          }));
+          break;
+        }
+        const name = media.file_name
+          ?? (typeof data.name === 'string' && data.name ? data.name : item.type);
+        if (media.kind === 'url') {
+          files.push({ name, url: media.value });
+        } else if (media.kind === 'base64') {
+          files.push({ name, base64: media.value });
+        } else if (media.kind === 'path') {
+          files.push({ name, file: media.value });
+        } else {
+          // kind=file：Discord 无平台不透明文件引用，无法投递
+          logger.warn(formatCompact({
+            op: 'discord_outbound_media_dropped',
+            type: item.type,
+            reason: 'unsupported_media_kind',
+            kind: media.kind,
+          }));
         }
         break;
       }

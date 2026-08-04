@@ -5,6 +5,10 @@
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
+import { isMediaRef } from '@zhin.js/core';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+
+const logger = getLogger('line');
 
 /** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
 export interface LineAdapterConfig {
@@ -273,6 +277,33 @@ function buildTextMessage(text: string): LineReplyMessage {
 }
 
 /**
+ * 解析 image/audio/video 段的投递源（canonical MediaRef 唯一来源）。
+ * LINE Messaging API 媒体消息仅消费远程 HTTPS URL（无上传通道），
+ * 因此只有 kind=url 可投递；base64 / path / file 一律 warn + 丢弃。
+ */
+function resolveMediaUrl(seg: LineWireSegment): string | undefined {
+  const media = (seg.data ?? {}).media;
+  if (!isMediaRef(media)) {
+    logger.warn(formatCompact({
+      op: 'line_outbound_media_dropped',
+      type: seg.type,
+      reason: 'missing_media_ref',
+    }));
+    return undefined;
+  }
+  if (media.kind !== 'url') {
+    logger.warn(formatCompact({
+      op: 'line_outbound_media_dropped',
+      type: seg.type,
+      reason: 'unsupported_media_kind',
+      kind: media.kind,
+    }));
+    return undefined;
+  }
+  return media.value;
+}
+
+/**
  * Wire-encode an already-rendered outbound payload into LINE Reply/Push messages.
  * Segment canonicalization is intentionally not done here.
  */
@@ -312,33 +343,39 @@ export function formatOutboundMessages(payload: unknown): LineReplyMessage[] {
           messages.push(buildTextMessage(`@${String(data.name || data.id)}`));
         }
         break;
-      case 'image':
-        if (typeof data.url === 'string' && data.url) {
+      case 'image': {
+        const url = resolveMediaUrl(item);
+        if (url) {
           messages.push({
             type: 'image',
-            originalContentUrl: data.url,
-            previewImageUrl: data.url,
+            originalContentUrl: url,
+            previewImageUrl: url,
           });
         }
         break;
-      case 'video':
-        if (typeof data.url === 'string' && data.url) {
+      }
+      case 'video': {
+        const url = resolveMediaUrl(item);
+        if (url) {
           messages.push({
             type: 'video',
-            originalContentUrl: data.url,
-            previewImageUrl: typeof data.previewUrl === 'string' ? data.previewUrl : data.url,
+            originalContentUrl: url,
+            previewImageUrl: typeof data.previewUrl === 'string' ? data.previewUrl : url,
           });
         }
         break;
-      case 'audio':
-        if (typeof data.url === 'string' && data.url) {
+      }
+      case 'audio': {
+        const url = resolveMediaUrl(item);
+        if (url) {
           messages.push({
             type: 'audio',
-            originalContentUrl: data.url,
+            originalContentUrl: url,
             duration: typeof data.duration === 'number' ? data.duration : 0,
           });
         }
         break;
+      }
       case 'location':
         messages.push({
           type: 'location',

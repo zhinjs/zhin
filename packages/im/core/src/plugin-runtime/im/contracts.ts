@@ -1,6 +1,5 @@
 import type { CapabilityId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { MediaRef, Segment } from '../../built/segment-contract/types.js';
-
 // 入站段统一使用 canonical Segment SSOT（built/segment-contract）；
 // 经 plugin-runtime/im/index.ts re-export，供 runtime 消费者直接引用。
 export type { MediaRef, Segment };
@@ -19,7 +18,11 @@ export interface RawContent<TPayload = unknown> {
   readonly payload: TPayload;
 }
 
-export type SendContent = string | ComponentCall | RawContent | readonly SendContent[];
+/**
+ * 出站内容：纯文本 / canonical Segment（一等公民，媒体与富文本的统一表达）/
+ * ComponentCall / RawContent，可任意嵌套数组。
+ */
+export type SendContent = string | Segment | ComponentCall | RawContent | readonly SendContent[];
 
 export function component<TProps>(name: string, props: TProps): ComponentCall<TProps> {
   if (!name.trim()) throw new TypeError('Component name cannot be empty');
@@ -44,6 +47,17 @@ export function isRawContent(value: SendContent): value is RawContent {
     && value !== null
     && '$content' in value
     && value.$content === rawContentBrand;
+}
+
+/** canonical Segment 一等公民判定（与 ComponentCall/RawContent 的 $content brand 互斥）。 */
+export function isSegmentContent(value: unknown): value is Segment {
+  return !Array.isArray(value)
+    && typeof value === 'object'
+    && value !== null
+    && !('$content' in value)
+    && typeof (value as { type?: unknown }).type === 'string'
+    && typeof (value as { data?: unknown }).data === 'object'
+    && (value as { data?: unknown }).data !== null;
 }
 
 export interface IncomingMessage {

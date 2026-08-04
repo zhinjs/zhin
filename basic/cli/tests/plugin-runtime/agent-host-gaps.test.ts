@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Message } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
-import type { AITriggerConfig } from '@zhin.js/core';
-import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
+import { resolveIMSessionIdFromMessage, type AITriggerConfig } from '@zhin.js/core';
 import type { ImTranscriptWriteInput } from '@zhin.js/agent';
 import {
   bridgeRuntimeMessage,
@@ -244,40 +243,79 @@ describe('缺口 3：ai.trigger timeout / errorTemplate', () => {
     // 等待迟到 settle，确保不产生 unhandledRejection / 二次 settle 异常
     await expect(slow).resolves.toBe('late');
   });
+
+  it('withTriggerTimeout：signal-aware turn 会在超时后收到取消信号', async () => {
+    let observedSignal: AbortSignal | undefined;
+    await expect(withTriggerTimeout(
+      (signal) => new Promise((_resolve, reject) => {
+        observedSignal = signal;
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      }),
+      20,
+    )).rejects.toThrow('AI 处理超时（20ms）');
+    expect(observedSignal?.aborted).toBe(true);
+  });
 });
 
 describe('缺口 3：masters / trusted 角色解析', () => {
   it('endpoint owner 命中 → master', () => {
-    const roles = resolveRuntimeSenderRoles(groupMessage('hi'), 'user-1', [], undefined);
+    const roles = resolveRuntimeSenderRoles(groupMessage('hi', { userId: 'user-1' }), 'user-1', [], undefined);
     expect(roles).toEqual({ isMaster: true, isTrusted: false });
   });
 
   it('trigger.masters 命中 → master（无 endpoint owner 时）', () => {
     const trigger: AITriggerConfig = { masters: ['user-1'] };
-    const roles = resolveRuntimeSenderRoles(groupMessage('hi'), undefined, [], trigger);
+    const roles = resolveRuntimeSenderRoles(groupMessage('hi', { userId: 'user-1' }), undefined, [], trigger);
     expect(roles).toEqual({ isMaster: true, isTrusted: false });
   });
 
   it('endpoint trusted 命中 → trusted', () => {
-    const roles = resolveRuntimeSenderRoles(groupMessage('hi'), undefined, ['user-1'], undefined);
+    const roles = resolveRuntimeSenderRoles(groupMessage('hi', { userId: 'user-1' }), undefined, ['user-1'], undefined);
     expect(roles).toEqual({ isMaster: false, isTrusted: true });
   });
 
   it('trigger.trusted 命中 → trusted', () => {
     const trigger: AITriggerConfig = { trusted: ['user-1'] };
-    const roles = resolveRuntimeSenderRoles(groupMessage('hi'), undefined, [], trigger);
+    const roles = resolveRuntimeSenderRoles(groupMessage('hi', { userId: 'user-1' }), undefined, [], trigger);
     expect(roles).toEqual({ isMaster: false, isTrusted: true });
   });
 
   it('master 优先于 trusted（对齐 legacy resolveSenderRoles）', () => {
     const trigger: AITriggerConfig = { masters: ['user-1'], trusted: ['user-1'] };
-    const roles = resolveRuntimeSenderRoles(groupMessage('hi'), undefined, ['user-1'], trigger);
+    const roles = resolveRuntimeSenderRoles(groupMessage('hi', { userId: 'user-1' }), undefined, ['user-1'], trigger);
     expect(roles).toEqual({ isMaster: true, isTrusted: false });
   });
 
   it('普通用户无角色', () => {
     const roles = resolveRuntimeSenderRoles(groupMessage('hi'), 'owner-x', ['trusted-y'], undefined);
     expect(roles).toEqual({ isMaster: false, isTrusted: false });
+  });
+
+  it('显示名伪装 master/trusted 时绝不授权', () => {
+    const message = groupMessage('hi', { userId: 'attacker-id' }, 'owner-x');
+    const roles = resolveRuntimeSenderRoles(message, 'owner-x', ['owner-x'], {
+      masters: ['owner-x'],
+      trusted: ['owner-x'],
+    });
+    expect(roles).toEqual({ isMaster: false, isTrusted: false });
+  });
+
+  it('缺少稳定身份字段时不使用显示名授权', () => {
+    const roles = resolveRuntimeSenderRoles(
+      groupMessage('hi', {}, 'owner-x'),
+      'owner-x',
+      ['owner-x'],
+      { masters: ['owner-x'], trusted: ['owner-x'] },
+    );
+    expect(roles).toEqual({ isMaster: false, isTrusted: false });
+  });
+
+  it.each([
+    ['user_id', 'legacy-user'],
+    ['senderId', 'runtime-user'],
+  ])('接受 metadata.%s 作为稳定授权身份', (key, id) => {
+    const roles = resolveRuntimeSenderRoles(groupMessage('hi', { [key]: id }), id, [], undefined);
+    expect(roles).toEqual({ isMaster: true, isTrusted: false });
   });
 
   it('bridgeRuntimeMessage 将角色快照写入 $sender.isMaster/isTrusted', () => {
@@ -327,6 +365,51 @@ describe('稳定 senderId：metadata.userId 优先于显示名（QQ/KOOK/Discord
     const message = privateMessage('你好', { userId: '  ' });
     const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
     expect(comm.$sender.id).toBe('user-1');
+  });
+
+  it.each([
+    ['userId', 'user-id'],
+    ['user_id', 'user-id'],
+    ['senderId', 'user-id'],
+  ] as const)('%s 都可作为稳定身份字段', (field, expectedId) => {
+    const message = makeMessage({
+      content: '你好',
+      sender: '可变昵称',
+      target: 'private:user-id',
+      metadata: { channelType: 'private', endpoint: '10001', [field]: expectedId },
+    });
+    const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
+    expect(comm.$sender.id).toBe(expectedId);
+  });
+});
+
+describe('Telegram chatType 场景映射', () => {
+  it.each([
+    ['private', 'private'],
+    ['group', 'group'],
+    ['supergroup', 'group'],
+    ['channel', 'channel'],
+  ] as const)('%s 映射为 %s synthetic channel', (chatType, expectedType) => {
+    const message = makeMessage({
+      content: '消息',
+      target: 'telegram-chat-1',
+      metadata: { chatType, endpoint: 'telegram-bot', userId: 'telegram-user-1' },
+    });
+    const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
+    expect(comm.$channel.type).toBe(expectedType);
+  });
+
+  it('supergroup 消息进入 Passive Group Context', async () => {
+    const agent = makeAgentStub();
+    const message = makeMessage({
+      content: 'Telegram 群聊消息',
+      sender: 'Alice',
+      target: '-100123',
+      metadata: { chatType: 'supergroup', endpoint: 'telegram-bot', userId: 'telegram-user-1' },
+    });
+    const comm = bridgeRuntimeMessage(message, undefined, { isMaster: false, isTrusted: false });
+    await recordPassiveGroupContext(agent, message, comm);
+    expect(agent.passive).toEqual([{ rawText: 'Telegram 群聊消息' }]);
   });
 });
 

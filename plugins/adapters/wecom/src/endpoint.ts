@@ -143,18 +143,31 @@ export class WecomEndpoint implements EndpointInstance {
   }
 
   /**
-   * message/send 的 image 段只接受 media_id：canonical MediaRef（base64/本地路径/URL）
-   * 先经 /cgi-bin/media/upload 物化；上传失败降级为文本（alt 优先），不阻断发送。
+   * message/send 的 image 段只接受 media_id：canonical MediaRef 按 kind 投递——
+   * file（平台不透明引用）直用为 media_id；base64/本地路径/URL 先经
+   * /cgi-bin/media/upload 物化；上传失败降级为文本（alt 优先），不阻断发送。
+   * 无 canonical MediaRef 的媒体段 warn + 丢弃。
    */
   async #materializeOutboundMedia(payload: unknown): Promise<unknown> {
     if (!Array.isArray(payload)) return payload;
-    return Promise.all(payload.map(async (item) => {
+    const items = await Promise.all(payload.map(async (item) => {
       if (typeof item === 'string' || !item || typeof item !== 'object') return item;
       const seg = item as { type?: unknown; data?: Record<string, unknown> };
       if (seg.type !== 'image') return item;
       const data = seg.data ?? {};
       const media = readOutboundImageMedia(data);
-      if (!media) return item;
+      if (!media) {
+        logger.warn(formatCompact({
+          op: 'wecom_outbound_media_dropped',
+          endpoint: this.#options.config.name,
+          type: 'image',
+          reason: 'missing_media_ref',
+        }));
+        return null;
+      }
+      if (media.kind === 'file') {
+        return { type: 'image', data: { media_id: media.value } };
+      }
       try {
         const mediaId = await this.#uploadMedia('image', media);
         return { type: 'image', data: { media_id: mediaId } };
@@ -168,6 +181,7 @@ export class WecomEndpoint implements EndpointInstance {
         return { type: 'text', data: { text: alt } };
       }
     }));
+    return items.filter((item) => item !== null);
   }
 
   /** POST /cgi-bin/media/upload（临时素材，3 天有效），返回 media_id。 */

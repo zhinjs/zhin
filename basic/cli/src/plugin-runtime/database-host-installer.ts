@@ -5,6 +5,9 @@ import { Registry } from '@zhin.js/database';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   databaseHostToken,
+  databaseRootHostToken,
+  createPluginDatabaseHost,
+  rootPluginId,
   type DatabaseHost,
   type DatabaseHostConsole,
   type DatabaseHostModel,
@@ -335,7 +338,10 @@ export async function resolveDatabaseConfig(
 export function installDatabaseHost(host: DatabaseHost): RootResourceInstaller {
   return ({ resources, handoff }) => {
     // Domain tables (e.g. github_oauth_users) are defined by owning plugins in setup().
-    resources.provide(databaseHostToken, host);
+    // Plugins receive a root-scoped facade through the historical token. The
+    // raw host remains available only to CLI composition through its root token.
+    resources.provide(databaseRootHostToken, host);
+    resources.provide(databaseHostToken, createPluginDatabaseHost(rootPluginId(), host));
     // Host 是进程级共享资源：不能随世代 dispose / 回滚 stop（旧世代仍在用）。
     // start 幂等，stop 由进程退出路径（start-command control.stop）统一触发。
     handoff.add({

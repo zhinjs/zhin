@@ -201,6 +201,31 @@ describe('kook protocol helpers', () => {
       { type: 'at', data: { id: 'u1' } },
     ])).toBe('hi (met)u1(met)');
   });
+
+  it('renders canonical url media segments as KMarkdown links', () => {
+    expect(formatOutboundKmarkdown([
+      { type: 'text', data: { text: '看图 ' } },
+      { type: 'image', data: { media: { kind: 'url', value: 'https://example.com/a.png' } } },
+    ])).toBe('看图 ![图片](https://example.com/a.png)');
+    expect(formatOutboundKmarkdown([
+      { type: 'video', data: { media: { kind: 'url', value: 'https://example.com/v.mp4' } } },
+      { type: 'audio', data: { media: { kind: 'url', value: 'https://example.com/a.mp3' } } },
+      { type: 'file', data: { name: 'report.pdf', media: { kind: 'url', value: 'https://example.com/f.pdf' } } },
+    ])).toBe('[视频](https://example.com/v.mp4)[音频](https://example.com/a.mp3)[文件: report.pdf](https://example.com/f.pdf)');
+  });
+
+  it('drops media segments without a deliverable url MediaRef', () => {
+    // base64 / path / file 引用无法经 KMarkdown 投递，warn 后丢弃
+    expect(formatOutboundKmarkdown([
+      { type: 'text', data: { text: 'hi' } },
+      { type: 'image', data: { media: { kind: 'base64', value: 'aGk=', mime_type: 'image/png' } } },
+    ])).toBe('hi');
+    expect(formatOutboundKmarkdown([
+      { type: 'image', data: { media: { kind: 'path', value: '/tmp/a.png' } } },
+    ])).toBe('');
+    // 无 canonical media 引用同样丢弃
+    expect(formatOutboundKmarkdown([{ type: 'image', data: {} }])).toBe('');
+  });
 });
 
 describe('kook plugin runtime adapter', () => {

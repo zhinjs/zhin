@@ -7,6 +7,10 @@ import { providerSupportsVision } from '../media/vision-capability.js';
 import { buildMultimodalVisionSystemPrompt } from '../prompt/assembly.js';
 import { TurnSupersededError } from './prompt-controller.js';
 import { buildVisionUserMessage, summarizeMultimodalParts } from './multimodal-message.js';
+import {
+  applyInboundMediaInjection,
+  resolveInboundMediaInjection,
+} from './inbound-media.js';
 import { EMPTY_USAGE } from './turn-metrics.js';
 import { logPhase } from '../internal/phase-trace.js';
 import { DEFAULT_MULTIMODAL_CONFIG } from '../media/media-types.js';
@@ -52,6 +56,8 @@ export interface ProcessTextTurnOptions {
   deferredAutoContinue?: boolean;
   /** Tap AgentCore.runText TurnEvent stream (processMessageStream) */
   onTurnEvent?: (event: TurnEvent) => void;
+  /** Per-turn cancellation from an ingress owner such as the IM trigger host. */
+  signal?: AbortSignal;
 }
 
 export async function processTextTurn(
@@ -139,6 +145,7 @@ export async function processTextTurn(
       names: resolvedTools.map(t => t.name).join(',') || '(none)',
     }));
 
+    const inboundMedia = await resolveInboundMediaInjection(commMessage);
     const turnCtx = await requireContextSystem(host).buildTextTurnContext({
       host,
       commMessage,
@@ -146,7 +153,9 @@ export async function processTextTurn(
       turnUser,
       deferredStats,
       prebuiltMessages: extras?.prebuiltMessages,
+      mode: inboundMedia.blocks.length > 0 ? 'vision' : undefined,
     });
+    turnCtx.userMessages = applyInboundMediaInjection(turnCtx.userMessages, inboundMedia);
     const {
       userMessages,
       personaEnhanced: personaForChat,
@@ -163,9 +172,10 @@ export async function processTextTurn(
         sessionKey,
         sessionId,
         userMessages,
-        commMessage,
-        onChunk,
-        execute: (initialMessages, hooks, signal, _turnId) => (host.agentCore ?? defaultAgentCore).runTextTurn({
+      commMessage,
+      onChunk,
+      signal: extras?.signal,
+      execute: (initialMessages, hooks, signal, _turnId) => (host.agentCore ?? defaultAgentCore).runTextTurn({
           host,
           sessionId,
           userMessageExtra: turnUser.userMessageExtra,

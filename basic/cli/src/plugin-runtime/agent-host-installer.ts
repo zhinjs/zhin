@@ -6,6 +6,7 @@ import {
   createSyntheticMessage,
   resolveSceneFieldsFromMessage,
   collectSegmentMedia,
+  toCanonicalSegments,
   type AITriggerConfig,
   type Tool,
 } from '@zhin.js/core';
@@ -20,7 +21,7 @@ import {
   type RootResourceInstaller,
   type RuntimeConfigDocument,
 } from '@zhin.js/runtime';
-import { databaseHostToken, agentToolsHostToken, type AgentToolRegistration, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { databaseRootHostToken, agentToolsHostToken, type AgentToolRegistration, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import {
   AIService,
   McpClientManager,
@@ -73,6 +74,7 @@ import {
   getCollaborationSceneService,
   handleRuntimeOwnerApproveCommand,
   handleRuntimeManagementCommand,
+  elementsToMessageContent,
   type ProactiveOutboundService,
   type AssistantConfig,
   type ImTranscriptWriteInput,
@@ -277,8 +279,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
 
     const useDatabase = aiConfig.sessions?.useDatabase !== false;
     let persistencePendingActivate = false;
-    if (useDatabase && resources.has(databaseHostToken)) {
-      const database = resources.use(databaseHostToken);
+    if (useDatabase && resources.has(databaseRootHostToken)) {
+      const database = resources.use(databaseRootHostToken);
       try {
         const tableCount = defineAiDatabaseModels((name, definition) => {
           database.define(name, definition);
@@ -409,17 +411,17 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         direction: 'inbound',
         body: message.content,
         messageId: message.id,
-        senderId: message.sender ?? '',
+        senderId: resolveStableSenderId(message),
         senderName: message.sender ?? '',
         senderRole: senderRoles.isMaster ? 'master' : senderRoles.isTrusted ? 'trusted' : 'user',
       });
 
       /** 回复并记录出站流水（assistant 角色，对齐 legacy message.send 收集）。 */
-      const replyAndRecord = async (content: string) => {
+      const replyAndRecord = async (content: SendContent, transcriptBody = sendContentToText(content)) => {
         await message.$reply(content);
         recordRuntimeTranscript(zhinAgent, commMessage, {
           direction: 'outbound',
-          body: content,
+          body: transcriptBody,
           senderRole: 'assistant',
         });
       };
@@ -475,11 +477,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         const capabilities = readCapabilities(ingress, snapshot, requester, commMessage);
         const routed = routeSpecialistAgent(inbound.text, capabilities);
         const binding = service.getBindingRegistry().requireZhinBinding();
-        zhinAgent.configure({
-          activeBinding: binding,
-          bootstrapContext: buildBootstrapContext(bootstrapText, capabilities, routed.agent),
-        });
-
         const collab = await applyRuntimeCollaborationInbound({
           message: commMessage,
           content: routed.userText,
@@ -522,13 +519,23 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           await replyAndRecord(trigger.thinkingMessage);
         }
 
-        zhinAgent.initInboundTurnContext();
         const elements = await withTriggerTimeout(
-          zhinAgent.process(routed.userText, commMessage, tools),
+          (signal) => zhinAgent.processTurn({
+            content: routed.userText,
+            message: commMessage,
+            tools,
+            signal,
+            activityFeedbackEligible: true,
+            configuration: {
+              activeBinding: binding,
+              bootstrapContext: buildBootstrapContext(bootstrapText, capabilities, routed.agent),
+            },
+          }),
           resolveTriggerTimeoutMs(trigger),
         );
-        const text = flattenOutputElements(elements).trim() || '(empty AI response)';
-        await replyAndRecord(text);
+        const transcriptBody = flattenOutputElements(elements).trim() || '(empty AI response)';
+        const content = await elementsToMessageContent(elements, effectiveAdapter || undefined);
+        await replyAndRecord(content.length > 0 ? content : transcriptBody, transcriptBody);
         logger.debug(formatCompact({
           op: 'agent_host_turn',
           turnMode: 'zhin_agent.process',
@@ -835,20 +842,19 @@ async function seedOrchestratorAgentPresets(
 function createRuntimeProactiveOutbound(im: ImRuntime): ProactiveOutboundService {
   return {
     async send(ctx, content) {
-      const text = sendContentToText(content);
       const result = await im.sendEndpointMessage({
         adapter: ctx.scene.platform,
         endpointId: ctx.scene.endpointId,
         channelType: ctx.scene.kind,
         channelId: ctx.scene.sceneId,
-        content: text,
+        content,
       });
       return result.messageId || 'ok';
     },
     async sendElements(ctx, elements) {
-      const text = flattenOutputElements(elements);
-      if (!text.trim()) return [];
-      const id = await this.send(ctx, text);
+      const content = await elementsToMessageContent(elements, ctx.scene.platform);
+      if (content.length === 0) return [];
+      const id = await this.send(ctx, content);
       return [id];
     },
   };
@@ -870,13 +876,15 @@ export function resolveRuntimeSenderRoles(
   endpointTrusted: readonly string[],
   trigger?: AITriggerConfig,
 ): RuntimeSenderRoles {
-  const senderId = String(message.sender ?? '');
+  // Authorization must never fall back to a mutable display name. Adapters
+  // that expose privileged Agent paths must supply a platform identity here.
+  const senderId = resolveAuthenticatedSenderId(message);
   const triggerMasters = (trigger?.masters ?? []).map(String);
   const triggerTrusted = (trigger?.trusted ?? []).map(String);
-  const isMaster = senderId !== ''
+  const isMaster = senderId != null
     && ((endpointMaster != null && senderId === String(endpointMaster))
       || triggerMasters.includes(senderId));
-  const isTrusted = !isMaster && senderId !== ''
+  const isTrusted = !isMaster && senderId != null
     && (triggerTrusted.includes(senderId) || endpointTrusted.map(String).includes(senderId));
   return { isMaster, isTrusted };
 }
@@ -900,7 +908,11 @@ export function bridgeRuntimeMessage(
   // 入站结构化段：纯文本视图（matched.content）会丢弃媒体，这里把 canonical
   // segments 与提取出的媒体引用（image/audio/video/file 的 MediaRef）挂到
   // synthetic message 的 extra，AI turn 与工具经 resolveContextKey 可读。
-  const segmentMedia = collectSegmentMedia(message.segments);
+  // Message.extra keeps the original adapter segments for extension code, while
+  // AI media extraction reads the canonical form from the single ingress mapper.
+  const segmentMedia = collectSegmentMedia(
+    message.segments ? toCanonicalSegments(message.segments) : undefined,
+  );
   return createSyntheticMessage({
     adapter: localName,
     endpoint: endpointId,
@@ -917,7 +929,8 @@ export function bridgeRuntimeMessage(
       id: channelId,
     },
     reply: async (content) => {
-      await message.$reply(sendContentToText(content) as SendContent);
+      // canonical Segment 是一等 SendContent：媒体段原样透传，不再压平为文本
+      await message.$reply(content as SendContent);
       return message.id ?? 'ok';
     },
     extra: {
@@ -1019,7 +1032,7 @@ export async function recordPassiveGroupContext(
   const rawText = message.content.trim();
   if (!rawText) return;
   // 机器人自身消息不旁听（对齐 legacy isBotSelfMessage）。
-  const senderId = String(message.sender ?? '');
+  const senderId = resolveStableSenderId(message);
   const endpointId = String(commMessage.$endpoint ?? '');
   if (senderId !== '' && endpointId !== '' && senderId === endpointId) return;
   try {
@@ -1061,16 +1074,38 @@ export function renderTriggerError(trigger: AITriggerConfig | undefined, detail:
   return template.replace('{error}', detail);
 }
 
+export class TriggerTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`AI 处理超时（${timeoutMs}ms）`);
+    this.name = 'TriggerTimeoutError';
+  }
+}
+
 /**
- * ai.trigger.timeout 包装：超时即 reject（不取消底层 generation）。
- * promise 立即挂 then/catch，超时后迟到的 settle 不会成为 unhandledRejection。
+ * Runs one ingress-owned turn with a cancellation signal. On timeout the
+ * signal reaches the inbound queue, PromptController, provider stream, and
+ * tool execution instead of merely hiding a late result.
  */
-export function withTriggerTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+export function withTriggerTimeout<T>(
+  run: (signal: AbortSignal) => Promise<T>,
+  timeoutMs: number,
+): Promise<T>;
+/** @deprecated Promise inputs cannot be cancelled; pass a signal-aware callback. */
+export function withTriggerTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T>;
+export function withTriggerTimeout<T>(
+  work: Promise<T> | ((signal: AbortSignal) => Promise<T>),
+  timeoutMs: number,
+): Promise<T> {
+  if (typeof work === 'function') {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(new TriggerTimeoutError(timeoutMs)), timeoutMs);
+    return work(controller.signal).finally(() => clearTimeout(timer));
+  }
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
-      reject(new Error(`AI 处理超时（${timeoutMs}ms）`));
+      reject(new TriggerTimeoutError(timeoutMs));
     }, timeoutMs);
-    promise.then(
+    work.then(
       (value) => {
         clearTimeout(timer);
         resolve(value);
@@ -1113,11 +1148,23 @@ function adapterLiveEndpointName(message: { metadata: Readonly<Record<string, un
 function resolveChannelType(
   metadata: Readonly<Record<string, unknown>>,
 ): 'private' | 'group' | 'channel' {
-  const raw = String(metadata.type ?? metadata.channelType ?? metadata.channelKind ?? 'private');
-  if (raw === 'group' || raw === 'channel' || raw === 'private') return raw;
-  if (raw === 'direct' || raw === 'c2c') return 'private';
-  if (raw === 'guild') return 'channel';
-  return 'private';
+  return resolveExplicitChannelType(metadata) ?? 'private';
+}
+
+/** Normalize adapter metadata without allowing an event `type` to hide scene metadata. */
+function resolveExplicitChannelType(
+  metadata: Readonly<Record<string, unknown>>,
+): 'private' | 'group' | 'channel' | undefined {
+  // Telegram supplies `chatType`; `type` is last because many adapters use it
+  // for an event kind instead of a conversation kind.
+  const candidates = [metadata.channelType, metadata.channelKind, metadata.chatType, metadata.type];
+  for (const candidate of candidates) {
+    const raw = String(candidate ?? '').trim().toLowerCase();
+    if (raw === 'private' || raw === 'direct' || raw === 'c2c') return 'private';
+    if (raw === 'group' || raw === 'supergroup') return 'group';
+    if (raw === 'channel' || raw === 'guild') return 'channel';
+  }
+  return undefined;
 }
 
 /**
@@ -1127,9 +1174,20 @@ function resolveChannelType(
  * 必须稳定——否则用户改名即换会话、历史上下文丢失。
  */
 function resolveStableSenderId(message: Message): string {
-  const metaId = message.metadata?.userId;
-  if (metaId != null && String(metaId).trim()) return String(metaId);
-  return message.sender ?? 'anon';
+  return resolveAuthenticatedSenderId(message) ?? message.sender ?? 'anon';
+}
+
+/**
+ * Stable actor identity for authorization. Unlike resolveStableSenderId(),
+ * this deliberately has no display-name fallback: names must never grant
+ * master/trusted access when an adapter omits its platform user ID.
+ */
+function resolveAuthenticatedSenderId(message: Message): string | undefined {
+  for (const key of ['userId', 'user_id', 'senderId'] as const) {
+    const value = message.metadata?.[key];
+    if (value != null && String(value).trim()) return String(value);
+  }
+  return undefined;
 }
 
 function isClearCommand(content: string): boolean {
@@ -1588,13 +1646,9 @@ function stripMentionMarkup(text: string): string {
 }
 
 function isPrivateRuntimeMessage(message: Message): boolean {
-  const channelType = String(
-    message.metadata?.type
-    ?? message.metadata?.channelType
-    ?? '',
-  );
-  if (channelType === 'private' || channelType === 'direct' || channelType === 'c2c') {
-    return true;
+  const channelType = resolveExplicitChannelType(message.metadata);
+  if (channelType != null) {
+    return channelType === 'private';
   }
   // Fallback: target often looks like `private:<id>` when metadata is sparse.
   const target = String(message.target ?? '');

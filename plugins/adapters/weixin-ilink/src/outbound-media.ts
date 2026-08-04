@@ -1,70 +1,43 @@
 /**
- * 微信 iLink 出站媒体：base64 / 远程 URL 须落盘后再走 CDN 上传。
+ * 微信 iLink 出站媒体物化：canonical MediaRef（`data.media`，MediaRef-only）→ 本地文件，
+ * 再由 sendWeixinMediaFile 走 CDN 上传。
+ * - kind=url    → 下载落盘后上传；
+ * - kind=base64 → 解码落盘后上传；
+ * - kind=path   → 本地文件直接上传；
+ * - kind=file   → 微信无不透明平台引用投递面，warn 丢弃。
+ * 无 media 或物化失败的媒体段 warn 丢弃（weixin_ilink_outbound_media_dropped）。
  */
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { isMediaRef, type MediaRef } from '@zhin.js/core';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import { downloadRemoteImageToTemp } from './upload.js';
 import { getExtensionFromMime } from './mime.js';
 import type { WeixinWireSegment } from './protocol.js';
+
+const logger = getLogger('weixin-ilink');
 
 const MEDIA_TYPES = new Set(['image', 'video', 'file', 'record', 'audio']);
 
 export type OutboundWireContent = string | WeixinWireSegment | ReadonlyArray<string | WeixinWireSegment>;
 
-function isRemoteUrl(value: string): boolean {
-  return /^https?:\/\//i.test(value);
+function dropMediaSegment(type: string, reason: string): null {
+  logger.warn(formatCompact({
+    op: 'weixin_ilink_outbound_media_dropped',
+    type,
+    reason,
+  }));
+  return null;
 }
 
-function isInlineMediaRef(value: string): boolean {
-  return value.startsWith('base64://') || /^data:[^/]+\/[^;]+;base64,/i.test(value);
-}
-
-function normalizeLocalPath(value: string): string {
-  return value.replace(/^file:\/\//, '');
-}
-
-export function segmentMediaRef(seg: WeixinWireSegment): string | undefined {
-  const data = seg.data as Record<string, unknown> | undefined;
-  if (!data) return undefined;
-  const candidates = [data.file, data.path, data.url].filter(
-    (v): v is string => typeof v === 'string' && Boolean(v),
-  );
-  return candidates[0];
-}
-
-function extractBase64Buffer(data: Record<string, unknown>): Buffer | undefined {
-  const url = typeof data.url === 'string' ? data.url : undefined;
-  const file = typeof data.file === 'string' ? data.file : undefined;
-  const base64 = typeof data.base64 === 'string' ? data.base64 : undefined;
-
-  if (url?.startsWith('base64://')) {
-    return Buffer.from(url.slice(9), 'base64');
-  }
-  if (url && /^data:[^/]+\/[^;]+;base64,/i.test(url)) {
-    return Buffer.from(url.replace(/^data:[^/]+\/[^;]+;base64,/, ''), 'base64');
-  }
-  if (file?.startsWith('base64://')) {
-    return Buffer.from(file.slice(9), 'base64');
-  }
-  if (base64) {
-    const raw = base64.startsWith('base64://') ? base64.slice(9) : base64;
-    return Buffer.from(raw, 'base64');
-  }
-  return undefined;
-}
-
-function resolveExt(seg: WeixinWireSegment, mime?: string): string {
-  const data = (seg.data ?? {}) as Record<string, unknown>;
-  const name = typeof data.name === 'string' ? data.name : undefined;
-  if (name) {
-    const ext = path.extname(name);
+function resolveExt(seg: WeixinWireSegment, media: MediaRef): string {
+  if (media.file_name) {
+    const ext = path.extname(media.file_name);
     if (ext) return ext;
   }
-  const mimeHint = mime
-    ?? (typeof data.mime === 'string' ? data.mime : typeof data.mimeType === 'string' ? data.mimeType : undefined);
-  if (mimeHint) {
-    return getExtensionFromMime(mimeHint) ?? '.bin';
+  if (media.mime_type) {
+    return getExtensionFromMime(media.mime_type) ?? '.bin';
   }
   if (seg.type === 'image') return '.png';
   if (seg.type === 'video') return '.mp4';
@@ -72,15 +45,16 @@ function resolveExt(seg: WeixinWireSegment, mime?: string): string {
   return '.bin';
 }
 
-function withLocalFile(seg: WeixinWireSegment, filePath: string): WeixinWireSegment {
-  const data = { ...(seg.data ?? {}), file: filePath } as Record<string, unknown>;
-  delete data.base64;
-  return { type: seg.type, data };
+function withLocalPath(seg: WeixinWireSegment, media: MediaRef, filePath: string): WeixinWireSegment {
+  return {
+    type: seg.type,
+    data: { ...(seg.data ?? {}), media: { ...media, kind: 'path', value: filePath } },
+  };
 }
 
-function writeOutboundBuffer(buffer: Buffer, outboundDir: string, seg: WeixinWireSegment): string {
+function writeOutboundBuffer(buffer: Buffer, outboundDir: string, seg: WeixinWireSegment, media: MediaRef): string {
   fs.mkdirSync(outboundDir, { recursive: true });
-  const ext = resolveExt(seg);
+  const ext = resolveExt(seg, media);
   const filePath = path.join(
     outboundDir,
     `out-${seg.type}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}${ext}`,
@@ -92,27 +66,45 @@ function writeOutboundBuffer(buffer: Buffer, outboundDir: string, seg: WeixinWir
 async function materializeSegment(
   seg: WeixinWireSegment,
   outboundDir: string,
-): Promise<WeixinWireSegment> {
+): Promise<WeixinWireSegment | null> {
   if (!MEDIA_TYPES.has(seg.type)) return seg;
 
-  const ref = segmentMediaRef(seg);
-  if (ref && !isInlineMediaRef(ref)) {
-    const local = normalizeLocalPath(ref);
-    if (isRemoteUrl(local)) {
-      const downloaded = await downloadRemoteImageToTemp(local, outboundDir);
-      return withLocalFile(seg, downloaded);
-    }
-    if (fs.existsSync(local)) {
-      return withLocalFile(seg, local);
-    }
+  const media = (seg.data ?? {}).media;
+  if (!isMediaRef(media)) {
+    return dropMediaSegment(seg.type, 'missing_media_ref');
   }
 
-  const buffer = extractBase64Buffer((seg.data ?? {}) as Record<string, unknown>);
-  if (buffer) {
-    return withLocalFile(seg, writeOutboundBuffer(buffer, outboundDir, seg));
+  switch (media.kind) {
+    case 'url': {
+      try {
+        const downloaded = await downloadRemoteImageToTemp(media.value, outboundDir);
+        return withLocalPath(seg, media, downloaded);
+      } catch (err) {
+        logger.warn(formatCompact({
+          op: 'weixin_ilink_outbound_media_dropped',
+          type: seg.type,
+          reason: 'download_failed',
+          error: err instanceof Error ? err.message : String(err),
+        }));
+        return null;
+      }
+    }
+    case 'base64':
+      return withLocalPath(
+        seg,
+        media,
+        writeOutboundBuffer(Buffer.from(media.value, 'base64'), outboundDir, seg, media),
+      );
+    case 'path': {
+      if (!fs.existsSync(media.value)) {
+        return dropMediaSegment(seg.type, 'missing_source');
+      }
+      return withLocalPath(seg, media, media.value);
+    }
+    case 'file':
+      // 平台不透明引用（如 Telegram file_id）：微信 iLink 无对应投递面
+      return dropMediaSegment(seg.type, 'unsupported_media_kind');
   }
-
-  return seg;
 }
 
 function asSegments(content: OutboundWireContent): WeixinWireSegment[] {
@@ -130,18 +122,20 @@ function asSegments(content: OutboundWireContent): WeixinWireSegment[] {
   });
 }
 
-/** 将 base64 / 远程图落盘，供 sendWeixinMediaFile 上传 */
+/** 将 canonical MediaRef 媒体段物化为本地文件（kind=path），供 sendWeixinMediaFile 上传 */
 export async function materializeOutboundMedia(
   content: OutboundWireContent,
   outboundDir: string,
 ): Promise<OutboundWireContent> {
   const segments = asSegments(content);
-  const out = await Promise.all(segments.map((seg) => materializeSegment(seg, outboundDir)));
+  const out = (await Promise.all(segments.map((seg) => materializeSegment(seg, outboundDir))))
+    .filter((seg): seg is WeixinWireSegment => seg !== null);
   if (typeof content === 'string') {
     return out[0]?.type === 'text' ? String((out[0].data as { text?: string })?.text ?? content) : content;
   }
   if (!Array.isArray(content)) {
-    return out[0] ?? content;
+    // 单个媒体段被丢弃时降级为空文本，避免未物化段漏到 endpoint
+    return out[0] ?? { type: 'text', data: { text: '' } };
   }
   return out;
 }

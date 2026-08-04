@@ -4,7 +4,11 @@
  * Spec: https://milky.ntqqrev.org/
  */
 
+import { isMediaRef } from '@zhin.js/core';
 import type { Segment } from '@zhin.js/core/runtime';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+
+const logger = getLogger('milky');
 
 /** Transitional legacy endpoint row (`endpoints[]` with `context: milky`). */
 export interface MilkyLegacyEndpointRow {
@@ -436,8 +440,51 @@ export function parseSendTarget(target: string): ParsedSendTarget {
 }
 
 /**
+ * 解析 image/audio/video 段的投递 uri（canonical MediaRef 唯一来源）：
+ * - kind=url → http(s):// 直发；
+ * - kind=base64 → base64:// 直发；
+ * - kind=path / file → Milky 资源 uri 仅消费 http(s):// 与 base64://，不支持，丢弃。
+ */
+function resolveMediaUri(data: Record<string, unknown>): string | undefined {
+  const media = data.media;
+  if (!isMediaRef(media)) return undefined;
+  if (media.kind === 'url') return media.value;
+  if (media.kind === 'base64') {
+    return media.value.startsWith('base64://') ? media.value : `base64://${media.value}`;
+  }
+  return undefined;
+}
+
+/** 媒体段 → Milky 资源段（image/record/video）；不可投递时 warn + 丢弃。 */
+function normalizeMediaSegment(seg: MilkyWireSegment): MilkyOutgoingSegment | null {
+  const data = seg.data ?? {};
+  const wireType = seg.type === 'image'
+    ? 'image'
+    : seg.type === 'video'
+      ? 'video'
+      : 'record';
+  const uri = resolveMediaUri(data);
+  if (!uri) {
+    const media = data.media;
+    logger.warn(formatCompact({
+      op: 'milky_outbound_media_dropped',
+      type: seg.type,
+      reason: isMediaRef(media) ? 'unsupported_media_kind' : 'missing_media_ref',
+      ...(isMediaRef(media) ? { kind: media.kind } : {}),
+    }));
+    return null;
+  }
+  return {
+    type: wireType,
+    data: wireType === 'video' ? { uri, thumb_uri: data.thumb_uri } : { uri },
+  };
+}
+
+/**
  * Wire-encode an already-rendered outbound payload into Milky outgoing segments.
  * Segment canonicalization is intentionally not done here.
+ * 媒体段（image/audio/record/video）只消费 canonical `data.media` MediaRef；
+ * file 段 Milky 消息 API 无对应 wire 段（文件走 upload_* API），warn + 丢弃。
  */
 export function formatOutboundSegments(payload: unknown): MilkyOutgoingSegment[] {
   if (typeof payload === 'string') {
@@ -500,25 +547,20 @@ export function formatOutboundSegments(payload: unknown): MilkyOutgoingSegment[]
         break;
       }
       case 'image':
-        out.push({
-          type: 'image',
-          data: { uri: String(data.url ?? data.uri ?? '') },
-        });
-        break;
       case 'record':
-        out.push({
-          type: 'record',
-          data: { uri: String(data.url ?? data.uri ?? '') },
-        });
+      case 'audio':
+      case 'video': {
+        const media = normalizeMediaSegment(item);
+        if (media) out.push(media);
         break;
-      case 'video':
-        out.push({
-          type: 'video',
-          data: {
-            uri: String(data.url ?? data.uri ?? ''),
-            thumb_uri: data.thumb_uri,
-          },
-        });
+      }
+      case 'file':
+        // Milky 消息 API 无 file 段（文件走 upload_private/group_file），无法投递
+        logger.warn(formatCompact({
+          op: 'milky_outbound_media_dropped',
+          type,
+          reason: 'unsupported_segment',
+        }));
         break;
       default:
         out.push({ type, data: data as Record<string, unknown> });

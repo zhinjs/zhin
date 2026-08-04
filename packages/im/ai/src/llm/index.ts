@@ -1,13 +1,21 @@
 export type {
   TextContentBlock,
-  ImageContentBlock,
+  MediaContentBlock,
+  MediaBlockRef,
   ThinkingContentBlock,
   ToolCallContentBlock,
   ContentBlock,
   UserContentBlock,
   ToolResultContentBlock,
-  ImageContent,
 } from './types/content-block.js';
+export { isMediaBlockRef, isMediaContentBlock } from './types/content-block.js';
+export {
+  DEFAULT_PROVIDER_MEDIA,
+  filterMediaBlocksForProvider,
+  mediaBlockPlaceholder,
+  mediaRefToInline,
+  type ProviderMediaKind,
+} from './convert/media-blocks.js';
 
 export type { TokenUsage } from './types/agent-message.js';
 export type {

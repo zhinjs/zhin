@@ -1,7 +1,7 @@
 /**
  * IcqqIpcEndpoint — lifecycle, outbound, IPC subscribe/admit for ICQQ daemon.
  */
-import type { EndpointInstance, EndpointManagement } from '@zhin.js/adapter';
+import type { EndpointControl, EndpointInstance, EndpointManagement } from '@zhin.js/adapter';
 import type { MessageGateway } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
@@ -106,6 +106,12 @@ export class IcqqIpcEndpoint implements EndpointInstance {
     muteGroupMember: (groupId, userId, duration) => this.muteMember(groupId, userId, duration),
     setGroupAdmin: (groupId, userId, enabled) => this.setModerator(groupId, userId, enabled),
     deleteFriend: (userId) => this.deleteFriend(userId),
+  });
+  readonly control: EndpointControl = Object.freeze({
+    recall: (messageId: string) => this.recallMessage(messageId),
+    addReaction: (messageId: string, emoji: string) => this.addReaction(messageId, emoji),
+    removeReaction: (messageId: string, reactionId: string) =>
+      this.removeReaction(messageId, reactionId),
   });
   #open = false;
   #started = false;
