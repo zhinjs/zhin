@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "zhin runtime start",
     "start": "zhin runtime start --mode production --no-watch",
+    "daemon": "zhin runtime start --daemon",
     "build": "tsc --noEmit",
     "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../.. examples/minimal-bot/tests"
   },

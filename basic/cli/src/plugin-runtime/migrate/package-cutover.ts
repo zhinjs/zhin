@@ -73,7 +73,7 @@ export class PackageCutover {
       await assertCompletedDependencies(root, value, existingManifest, capabilities);
     }
 
-    const dependencies = withRuntimeDependencies(value.dependencies, capabilities);
+    const dependencies = withRuntimeDependencies(value.dependencies, capabilities, !existingManifest);
     const devDependencies = withDevelopmentDependencies(value.devDependencies);
     const candidate = createCandidatePackage(value, {
       mode,
@@ -273,11 +273,15 @@ function renderPublishBuildConfig(): string {
 function withRuntimeDependencies(
   existing: Record<string, string> | undefined,
   capabilities: readonly CutoverCapability[],
+  scaffold: boolean,
 ): Record<string, string> {
   const dependencies = { ...existing };
+  setRequiredDependency(dependencies, 'zhin.js');
+  // 仅全新 cutover（尚无 zhin manifest）按约定目录补齐能力依赖；
+  // 已迁移项目尊重作者声明——Stable Features 可由 zhin.js 挂载，不强制逐项依赖。
+  if (!scaffold) return dependencies;
   setRequiredDependency(dependencies, '@zhin.js/plugin-runtime');
   setRequiredDependency(dependencies, '@zhin.js/runtime');
-  setRequiredDependency(dependencies, 'zhin.js');
   for (const capability of capabilities) setRequiredDependency(dependencies, capabilityProviders[capability]);
   return dependencies;
 }
@@ -313,10 +317,14 @@ function createCandidatePackage(
     entry: options.manifestEntry,
     engine: '^1.0.0',
     runtime: 'trusted',
-    features: options.capabilities.map((capability) => ({
-      package: capabilityProviders[capability],
-      api: '^1.0.0',
-    })),
+    // 已有 manifest 时尊重作者声明的 features（Stable Features 由 runtime 挂载，
+    // 无需重复声明）；仅全新 cutover 才按发现的约定目录生成声明。
+    features: Array.isArray(options.existingManifest?.features)
+      ? options.existingManifest.features
+      : options.capabilities.map((capability) => ({
+        package: capabilityProviders[capability],
+        api: '^1.0.0',
+      })),
     plugins: Array.isArray(options.existingManifest?.plugins) ? options.existingManifest.plugins : [],
   };
   const scripts = runtimeScripts(pkg.scripts, options.mode);
