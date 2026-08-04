@@ -1,5 +1,5 @@
 ---
-"@zhin.js/plugin-runtime": pa
+"@zhin.js/plugin-runtime": patch
 "@zhin.js/cli": patch
 ---
 
