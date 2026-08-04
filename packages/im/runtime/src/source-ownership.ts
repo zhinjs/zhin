@@ -1,5 +1,6 @@
 import { isAbsolute, relative, resolve } from 'node:path';
 import type { CapabilityId, FeatureId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import type { ModuleWatchRoot } from './module-runtime.js';
 import type { ProjectGraph, PluginGraphNode } from './project-graph.js';
 
 export type SourceRole = 'plugin' | 'schema' | 'manifest' | 'feature' | 'capability';
@@ -20,6 +21,7 @@ interface PackageOwner {
 export class SourceOwnershipIndex {
   readonly #records = new Map<string, SourceOwnershipRecord[]>();
   readonly #packages: PackageOwner[] = [];
+  readonly #watchRoots = new Map<string, ModuleWatchRoot>();
 
   static empty(): SourceOwnershipIndex {
     return new SourceOwnershipIndex();
@@ -31,6 +33,10 @@ export class SourceOwnershipIndex {
     featureIdsByPackageRoot: ReadonlyMap<string, FeatureId>,
   ): SourceOwnershipIndex {
     const index = new SourceOwnershipIndex();
+    for (const pkg of graph.packages.values()) {
+      if (pkg.source === 'node_modules') continue;
+      index.addWatchRoot({ root: pkg.root, source: pkg.source });
+    }
     visitPlugin(graph.root, (node) => {
       index.addPackageRoot(node.package.root, node.id);
       index.add({
@@ -110,6 +116,15 @@ export class SourceOwnershipIndex {
       owners.add(item.owner);
     }
     return Object.freeze([...owners]);
+  }
+
+  watchRoots(): readonly ModuleWatchRoot[] {
+    return Object.freeze([...this.#watchRoots.values()]);
+  }
+
+  addWatchRoot(root: ModuleWatchRoot): void {
+    const normalized = resolve(root.root);
+    this.#watchRoots.set(normalized, Object.freeze({ ...root, root: normalized }));
   }
 }
 

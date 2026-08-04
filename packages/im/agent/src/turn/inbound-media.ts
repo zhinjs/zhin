@@ -10,11 +10,12 @@
  * - video / file：占位文本（video 抽帧为既有配置面，不在此默认开启）。
  */
 import { type MediaContentBlock, type MediaBlockRef } from '@zhin.js/ai';
-import { collectSegmentMedia, type AgentTurnMessage, type Message } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   readLocalFileAsBase64,
 } from '../media/media-normalize.js';
+import { readInboundMediaRefs } from '../media/inbound-refs.js';
 import type { MediaBinaryPayload } from '../media/media-types.js';
 import { transcribeAudioPayload } from '../media/media-router.js';
 import {
@@ -58,20 +59,6 @@ function toBase64Block(
       ...(alt ? { alt } : {}),
     },
   };
-}
-
-/** 从 commMessage 提取入站媒体段（extra.media 优先，否则 extra.segments 收集）。 */
-function readInboundMediaRefs(commMessage: Message): readonly { type: string; media: MediaBlockRef }[] {
-  const extra = (commMessage as AgentTurnMessage).extra as
-    | { media?: unknown; segments?: unknown }
-    | undefined;
-  if (Array.isArray(extra?.media)) {
-    return extra.media as readonly { type: string; media: MediaBlockRef }[];
-  }
-  const segments = Array.isArray(extra?.segments)
-    ? (extra.segments as Parameters<typeof collectSegmentMedia>[0])
-    : undefined;
-  return collectSegmentMedia(segments);
 }
 
 export async function resolveInboundMediaInjection(

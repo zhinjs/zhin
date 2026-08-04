@@ -13,6 +13,7 @@ import {
   AdapterIndex,
   adapterFeatureId,
   defineAdapter,
+  type EndpointControl,
 } from '@zhin.js/adapter';
 import {
   CommandIndex,
@@ -283,6 +284,87 @@ describe('IM Runtime', () => {
     await fixture.store.close();
   });
 
+  it('passes structured conversations through Core and derives legacy targets for structured-only host sends', async () => {
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent);
+    const conversation = {
+      endpoint: { id: String(fixture.adapter.id), adapter: 'memory' },
+      kind: 'group' as const,
+      id: 'room-1',
+    };
+
+    await fixture.im.send({
+      adapter: fixture.adapter.id,
+      target: 'group:room-1',
+      conversation,
+      requester: rootPluginId(),
+      content: 'structured send',
+    });
+    expect(sent.at(-1)).toEqual(expect.objectContaining({
+      target: 'group:room-1',
+      conversation,
+    }));
+
+    await fixture.im.sendEndpointMessage({
+      adapter: 'memory',
+      endpointId: 'memory',
+      conversation,
+      content: 'host structured send',
+    });
+    expect(sent.at(-1)).toEqual(expect.objectContaining({
+      target: 'group:room-1',
+      conversation,
+    }));
+
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
+  it('accepts MessageRef and ConversationRef at Core control methods', async () => {
+    const calls: string[] = [];
+    const control: EndpointControl = {
+      recall: async (message) => { calls.push(`recall:${String(message)}`); },
+      edit: async (message, content) => {
+        calls.push(`edit:${String(message)}:${String(content)}`);
+        return 'edited';
+      },
+      addReaction: async (message, emoji) => {
+        calls.push(`reaction:${String(message)}:${emoji}`);
+        return emoji;
+      },
+      typing: async (conversation, active) => {
+        calls.push(`typing:${String(conversation)}:${String(active)}`);
+      },
+    };
+    const fixture = await createFixture([], [], undefined, undefined, undefined, { endpointControl: control });
+    const conversation = {
+      endpoint: { id: String(fixture.adapter.id), adapter: 'memory' },
+      kind: 'group' as const,
+      id: 'room-1',
+    };
+    const message = { conversation, id: 'message-1' };
+
+    await fixture.im.recallEndpointMessage({ adapter: 'memory', endpointId: 'memory', message });
+    await expect(fixture.im.editEndpointMessage({
+      adapter: 'memory', endpointId: 'memory', message, content: 'updated',
+    })).resolves.toBe('edited');
+    await expect(fixture.im.addEndpointReaction({
+      adapter: 'memory', endpointId: 'memory', message, emoji: '👍',
+    })).resolves.toBe('👍');
+    await fixture.im.setEndpointTyping({
+      adapter: 'memory', endpointId: 'memory', conversation, active: true,
+    });
+
+    expect(calls).toEqual([
+      'recall:group:room-1:message-1',
+      'edit:group:room-1:message-1:updated',
+      'reaction:group:room-1:message-1:👍',
+      'typing:group:room-1:true',
+    ]);
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
   it('getEndpoint returns the same adapter type as listEndpoints (not live name)', async () => {
     const root = rootPluginId();
     const adapter = createCapabilitySlot({
@@ -426,6 +508,117 @@ describe('IM Runtime', () => {
 
     await fixture.adapters.stop();
     await fixture.store.close();
+  });
+
+  it('returns a suppressed receipt and publishes no outbound event when middleware stops the chain', async () => {
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      outboundMiddleware: async () => undefined,
+    });
+    const events: RuntimeMessageEvent[] = [];
+    fixture.im.onMessage((event) => events.push(event));
+
+    await expect(fixture.im.send({
+      adapter: fixture.adapter.id,
+      target: 'room-1',
+      requester: rootPluginId(),
+      content: 'do not send',
+    })).resolves.toEqual({ status: 'suppressed' });
+    expect(sent).toEqual([]);
+    expect(events.filter((event) => event.direction === 'outbound')).toEqual([]);
+
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
+  it('normalizes middleware replacement before the endpoint and emits only after a sent receipt', async () => {
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      outboundMiddleware: async (input, next) => {
+        input.replace([{ type: 'image', data: { url: 'https://cdn.example/replaced.png' } }]);
+        await next();
+      },
+    });
+    const events: RuntimeMessageEvent[] = [];
+    fixture.im.onMessage((event) => events.push(event));
+
+    const receipt = await fixture.im.send({
+      adapter: fixture.adapter.id,
+      target: 'room-1',
+      requester: rootPluginId(),
+      content: 'initial payload',
+    });
+
+    expect(receipt).toEqual({ status: 'sent', legacyMessageId: 'sent-1' });
+    expect(sent).toContainEqual({
+      target: 'room-1',
+      payload: [{
+        type: 'image',
+        data: { media: { kind: 'url', value: 'https://cdn.example/replaced.png' } },
+      }],
+    });
+    expect(events.filter((event) => event.direction === 'outbound')).toEqual([
+      expect.objectContaining({ contentPreview: '[image]', messageId: 'sent-1' }),
+    ]);
+
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
+  it('rejects an invalid segment introduced by outbound middleware before endpoint delivery', async () => {
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      outboundMiddleware: async (input, next) => {
+        input.replace([{ type: 'text', data: {} }]);
+        await next();
+      },
+    });
+    const events: RuntimeMessageEvent[] = [];
+    fixture.im.onMessage((event) => events.push(event));
+
+    await expect(fixture.im.send({
+      adapter: fixture.adapter.id,
+      target: 'room-1',
+      requester: rootPluginId(),
+      content: 'initial payload',
+    })).resolves.toMatchObject({ status: 'rejected', failure: { code: 'outbound_payload_rejected' } });
+    expect(sent).toEqual([]);
+    expect(events.filter((event) => event.direction === 'outbound')).toEqual([]);
+
+    await fixture.adapters.stop();
+    await fixture.store.close();
+  });
+
+  it('returns failed and unsupported receipts without publishing outbound events', async () => {
+    const failed = await createFixture([], [], undefined, undefined, undefined, {
+      endpointSend: () => { throw new Error('transport closed'); },
+    });
+    const failedEvents: RuntimeMessageEvent[] = [];
+    failed.im.onMessage((event) => failedEvents.push(event));
+    await expect(failed.im.send({
+      adapter: failed.adapter.id,
+      target: 'room-1',
+      requester: rootPluginId(),
+      content: 'will fail',
+    })).resolves.toMatchObject({ status: 'failed', failure: { code: 'endpoint_send_failed' } });
+    expect(failedEvents.filter((event) => event.direction === 'outbound')).toEqual([]);
+    await failed.adapters.stop();
+    await failed.store.close();
+
+    const unsupported = await createFixture([], [], undefined, undefined, undefined, {
+      adapterCapabilities: ['inbound'],
+    });
+    const unsupportedEvents: RuntimeMessageEvent[] = [];
+    unsupported.im.onMessage((event) => unsupportedEvents.push(event));
+    await expect(unsupported.im.send({
+      adapter: unsupported.adapter.id,
+      target: 'room-1',
+      requester: rootPluginId(),
+      content: 'not supported',
+    })).resolves.toMatchObject({ status: 'unsupported', failure: { code: 'outbound_unsupported' } });
+    expect(unsupportedEvents.filter((event) => event.direction === 'outbound')).toEqual([]);
+    await unsupported.adapters.stop();
+    await unsupported.store.close();
   });
 
   it('truncates content previews to 200 chars and survives listener errors', async () => {
@@ -617,6 +810,12 @@ describe('IM Runtime', () => {
   it('passes inbound segments through to the Message (frozen, optional)', async () => {    const sent: unknown[] = [];
     let captured: Message | undefined;
     const fixture = await createFixture([], sent, (message) => { captured = message; });
+    const conversation = {
+      endpoint: { id: String(fixture.adapter.id), adapter: 'memory' },
+      kind: 'group' as const,
+      id: 'room-1',
+    };
+    const messageRef = { conversation, id: 'message-1' };
     const segments = [
       { type: 'text', data: { text: '看图' } },
       { type: 'image', data: { media: { kind: 'url', value: 'https://cdn.example/a.jpg' } } },
@@ -628,11 +827,16 @@ describe('IM Runtime', () => {
       content: '看图[image]',
       sender: 'alice',
       segments,
+      conversation,
+      message: messageRef,
     });
     expect(captured?.segments).toEqual(segments);
     expect(Object.isFrozen(captured?.segments)).toBe(true);
     // 段数组是独立拷贝，调用方后续 mutate 不影响 Message
     expect(captured?.segments).not.toBe(segments);
+    expect(captured?.conversation).toEqual(conversation);
+    expect(captured?.message).toEqual(messageRef);
+    expect(captured?.id).toBe('message-1');
 
     await fixture.im.receive({
       adapter: fixture.adapter.id,
@@ -653,7 +857,14 @@ async function createFixture(
   capture?: (message: Message) => void,
   commandGate?: Promise<void>,
   commandStarted?: () => void,
-  options?: { middleware?: boolean; adapterSegments?: { interactive: 'native' | 'text' } },
+  options?: {
+    middleware?: boolean;
+    adapterSegments?: { interactive?: 'native' | 'text'; outboundMedia?: readonly ('url' | 'path' | 'base64' | 'upload')[] };
+    adapterCapabilities?: readonly ('inbound' | 'outbound')[];
+    endpointSend?: (request: unknown) => unknown;
+    endpointControl?: EndpointControl;
+    outboundMiddleware?: (input: OutboundEnvelope, next: () => Promise<void>) => Promise<void> | void;
+  },
 ) {
   const root = rootPluginId();
   const adapter = createCapabilitySlot({
@@ -662,9 +873,10 @@ async function createFixture(
     localName: 'memory',
     source: '/adapters/memory.ts',
     definition: defineAdapter({
-      capabilities: ['inbound', 'outbound'],
+      capabilities: options?.adapterCapabilities ?? ['inbound', 'outbound'],
       ...(options?.adapterSegments ? { segments: options.adapterSegments } : {}),
       create: () => ({
+        ...(options?.endpointControl ? { control: options.endpointControl } : {}),
         start() { events.push('endpoint:start'); },
         open() { events.push('endpoint:open'); },
         close() { events.push('endpoint:close'); },
@@ -672,7 +884,7 @@ async function createFixture(
         send(request) {
           events.push('endpoint:send');
           sent.push(request);
-          return { id: 'sent-1' };
+          return options?.endpointSend?.(request) ?? { id: 'sent-1' };
         },
       }),
     }),
@@ -730,6 +942,7 @@ async function createFixture(
     definition: defineMiddleware<OutboundEnvelope>({
       target: 'outbound',
       async handle({ input }, next) {
+        if (options?.outboundMiddleware) return options.outboundMiddleware(input, next);
         events.push('outbound:enter');
         input.replace({ ...(input.payload as object), hooked: true });
         await next();

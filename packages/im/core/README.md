@@ -193,8 +193,8 @@ Core **不包含** ZhinAgent 实现。IM 侧的 AI 对话、工具收集、执�
 
 | 类别 | 示例导出 |
 |------|----------|
-| Provider | `OpenAIProvider`、`OllamaProvider`、`AnthropicProvider` 等 |
-| Agent 原语 | `Agent`、`createAgent`、`ModelRegistry` |
+| Provider | `AIProvider` 接口、`createSdkProviderAdapter`（AI SDK 传输） |
+| Agent 原语 | `ModelRegistry`、`agentLoop` |
 | 会话 / 上下文 | `ContextRepository`、`ImTranscriptStore`、`ContextManager`、`ConversationMemory` |
 | 压缩 / 限流 / 输出 | `compactSession`、`RateLimiter`、`parseOutput`、`CostTracker` |
 
@@ -233,7 +233,7 @@ export { htmlToFallbackText, coerceHtmlSegmentsToText, registerHtmlSegmentFallba
 
 // AI 原语（来自 @zhin.js/ai，非 ZhinAgent）
 export {
-  OpenAIProvider, OllamaProvider, Agent, createAgent, ModelRegistry,
+  AIProvider, createSdkProviderAdapter, ModelRegistry,
   ContextRepository, ContextManager, ConversationMemory, compactSession, ...
 } from '@zhin.js/ai'
 ```

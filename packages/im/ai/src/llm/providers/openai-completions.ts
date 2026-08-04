@@ -1,10 +1,13 @@
 /**
- * openai-completions ApiProvider — bridges legacy OpenAIProvider.chat (ADR 0009).
+ * openai-completions ApiProvider — bridges legacy AIProvider.chat (ADR 0009).
+ *
+ * 生产传输已全部走 ai-sdk（registerLlmApiFromProviders / getLlmTransportModel
+ * 恒产 api='ai-sdk' 的 Model）；本桥现存唯一用途是 agent 测试 mock
+ * （tests/helpers/mock-llm-api.ts 把 mock provider.chat 桥成 llm stream）。
  */
 
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { AIProvider } from '../../types.js';
-import { OpenAIProvider } from '../../providers/openai.js';
 import { formatRedactedJson } from '../redact-request-body.js';
 import {
   chatCompletionToAssistantMessage,
@@ -40,15 +43,7 @@ export function createOpenAiCompletionsStreamFn(
         tools: request.tools?.length ?? 0,
       }));
 
-      let response;
-      try {
-        response = await provider.chat(request);
-      } catch (err) {
-        if (provider instanceof OpenAIProvider) {
-          throw err;
-        }
-        throw err;
-      }
+      const response = await provider.chat(request);
 
       const assistant = chatCompletionToAssistantMessage(response, model);
       const text = assistant.content.find((b) => b.type === 'text');
@@ -58,28 +53,4 @@ export function createOpenAiCompletionsStreamFn(
       return assistant;
     });
   };
-}
-
-export const OPENAI_COMPAT_APIS = ['openai-completions'] as const;
-
-export function driverToModelApi(driver: string): string {
-  const d = driver.trim().toLowerCase();
-  switch (d) {
-    case 'openai':
-    case 'deepseek':
-    case 'moonshot':
-    case 'zhipu':
-      return 'openai-completions';
-    case 'anthropic':
-      return 'anthropic-messages';
-    case 'google':
-    case 'gemini':
-      return 'google-generative-ai';
-    case 'ollama':
-      return 'ollama-chat';
-    case 'cloudflare':
-      return 'cloudflare-workers-ai';
-    default:
-      return 'openai-completions';
-  }
 }

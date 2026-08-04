@@ -4,7 +4,8 @@
  */
 
 import { type Plugin, type AITriggerConfig, type AIAccessConfig, createSyntheticMessage, type Tool } from '@zhin.js/core';
-import { type AIProvider, type AIConfig, type ChatMessage, type ChatCompletionRequest, type ChatCompletionResponse, type ChatCompletionChunk, type AgentTool, type ContentPart, type Usage, type ImageGenerationDefaults, type ModelRegistry, type ContextConfig, registerLlmApiFromProviders } from '@zhin.js/ai';
+import { type AIProvider, type AIConfig, type ChatMessage, type ChatCompletionRequest, type ChatCompletionResponse, type ChatCompletionChunk, type AgentTool, type Usage, type ImageGenerationDefaults, type ModelRegistry, type ContextConfig, registerLlmApiFromProviders } from '@zhin.js/ai';
+import type { AgentRunInput } from './media/media-types.js';
 import { DEFAULT_CONFIG } from './config/index.js';
 import { normalizeTool } from './orchestrator/tool-selection.js';
 import { createWebSearchTool } from './builtin/web-search-tool.js';
@@ -27,7 +28,7 @@ import {
 } from './plugin-loop-hooks.js';
 /** AIService 程序化 Agent 句柄（agentLoop 隔离上下文，非 legacy `Agent` 类） */
 export interface ServiceAgent {
-  run(userInput: string | ContentPart[]): Promise<ServiceAgentResult>;
+  run(userInput: AgentRunInput): Promise<ServiceAgentResult>;
   dispose(): void;
 }
 
@@ -276,7 +277,7 @@ export class AIService {
   }
 
   async runAgent(
-    task: string | ContentPart[],
+    task: AgentRunInput,
     options: CreateServiceAgentOptions = {},
   ): Promise<ServiceAgentResult> {
     const agent = this.createAgent(options);

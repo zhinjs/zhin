@@ -51,6 +51,22 @@ export class EnvSchemaParseError extends Error {
   }
 }
 
+/**
+ * The PluginGraph owner path is the sole namespace for Plugin overlays.
+ * Package names and bare instance keys are deliberately not accepted as
+ * aliases: a layer for `root/a` can flow only to `root/a` and descendants.
+ */
+export function environmentOwnerPath(owner: PluginId): readonly PluginId[] {
+  const value = String(owner);
+  if (!/^root(?:\/[a-z0-9][a-z0-9-]*)*$/u.test(value)) {
+    throw new TypeError(`Invalid Plugin environment owner: ${owner}`);
+  }
+  const segments = value.split('/');
+  return Object.freeze(segments.map((_, index) => (
+    segments.slice(0, index + 1).join('/') as PluginId
+  )));
+}
+
 export function defineEnvSchema<T>(schema: EnvSchema<T>): Readonly<EnvSchema<T>> {
   const secretKeys = Object.freeze([...(schema.secretKeys ?? [])]);
   for (const key of secretKeys) assertEnvironmentKey(key);
@@ -73,9 +89,8 @@ export function defineEnvironmentLayers(
   );
   const plugins = Object.fromEntries(
     Object.entries(layers.plugins ?? {}).map(([owner, source]) => {
-      if (!/^root(?:\/[a-z0-9][a-z0-9-]*)*$/u.test(owner)) {
-        throw new TypeError(`Invalid Plugin environment overlay owner: ${owner}`);
-      }
+      try { environmentOwnerPath(owner as PluginId); }
+      catch { throw new TypeError(`Invalid Plugin environment overlay owner: ${owner}`); }
       return [owner, copySource(source, `Plugin ${owner}`)];
     }),
   );
@@ -108,7 +123,7 @@ export class EnvStoreFactory {
     const source: Record<string, string> = {};
     applyLayer(source, this.#layers.base);
     applyLayer(source, this.#layers.environments?.[this.#environment.name]);
-    for (const ancestor of pluginAncestors(owner)) {
+    for (const ancestor of environmentOwnerPath(owner)) {
       applyLayer(source, this.#layers.plugins?.[ancestor]);
     }
     return new OwnerEnvStore(owner, this.#environment, Object.freeze(source));
@@ -197,11 +212,6 @@ function applyLayer(
     if (value === undefined) delete target[key];
     else target[key] = value;
   }
-}
-
-function pluginAncestors(owner: PluginId): readonly string[] {
-  const segments = owner.split('/');
-  return Object.freeze(segments.map((_, index) => segments.slice(0, index + 1).join('/')));
 }
 
 function assertEnvironmentKey(key: string): void {

@@ -10,6 +10,7 @@ import {
   resolveRuntimeSenderRoles,
   resolveTriggerTimeoutMs,
   renderTriggerError,
+  createDeterministicApprovalPort,
   runtimeApprovalPolicy,
   withTriggerTimeout,
 } from '../../src/plugin-runtime/agent-host-installer.js';
@@ -18,10 +19,16 @@ import { createEndpointRoleResolver } from '../../src/plugin-runtime/start-comma
 const adapter = capabilityId(rootPluginId(), featureId('zhin.adapter'), 'icqq');
 
 describe('Plugin Runtime Tool policy bridge', () => {
-  it('keeps never explicit and treats on-risk/always as interactive approval', () => {
+  it('preserves never/on-risk/always for the Agent approval gate', () => {
     expect(runtimeApprovalPolicy('never')).toBe('never');
-    expect(runtimeApprovalPolicy('on-risk')).toBe('always');
+    expect(runtimeApprovalPolicy('on-risk')).toBe('on-risk');
     expect(runtimeApprovalPolicy('always')).toBe('always');
+  });
+
+  it('provides deterministic CLI approval ports with deny as the default', async () => {
+    const input = { requestId: 'r1', toolName: 'danger', question: 'continue?' };
+    await expect(createDeterministicApprovalPort().requestApproval(input)).resolves.toBe(false);
+    await expect(createDeterministicApprovalPort('approve').requestApproval(input)).resolves.toBe(true);
   });
 });
 

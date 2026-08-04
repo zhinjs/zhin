@@ -2,11 +2,19 @@ import { link, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/p
 import { dirname, join, resolve } from 'node:path';
 
 export type CutoverCapability = 'command' | 'component' | 'middleware';
+export type PackageCutoverMode = 'development' | 'publish';
 
 export interface PackageCutoverPlan {
   readonly root: string;
   readonly packageFile: string;
+  /** Source entry authored by the user. */
   readonly entryFile: string;
+  /** Entry consumed by the Plugin Runtime manifest. */
+  readonly manifestEntry: './plugin.ts' | './plugin.js';
+  readonly mode: PackageCutoverMode;
+  readonly buildConfigFile?: string;
+  readonly buildConfigContent?: string;
+  readonly buildConfigAlreadyPrepared: boolean;
   readonly capabilities: readonly CutoverCapability[];
   readonly dependencies: Readonly<Record<string, string>>;
   readonly originalPackage: string;
@@ -15,6 +23,9 @@ export interface PackageCutoverPlan {
   readonly entryAlreadyPrepared: boolean;
   readonly changed: boolean;
 }
+
+const LATEST = 'latest';
+const publishBuildConfig = 'tsconfig.zhin.json';
 
 const capabilityProviders: Readonly<Record<CutoverCapability, string>> = Object.freeze({
   command: '@zhin.js/command',
@@ -28,6 +39,17 @@ const capabilityDirectories: Readonly<Record<CutoverCapability, string>> = Objec
   middleware: 'middlewares',
 });
 
+const publishedFiles = Object.freeze([
+  'plugin.js',
+  'plugin.d.ts',
+  'commands',
+  'components',
+  'middlewares',
+  'src',
+  'schema.json',
+  'README.md',
+]);
+
 /** Builds a Plugin Runtime manifest without mutating legacy source. */
 export class PackageCutover {
   async plan(projectRoot: string): Promise<PackageCutoverPlan> {
@@ -36,59 +58,59 @@ export class PackageCutover {
     const entryFile = join(root, 'plugin.ts');
     const originalPackage = await readFile(packageFile, 'utf8');
     const value = parsePackage(packageFile, originalPackage);
+    const mode = cutoverMode(value);
+    const manifestEntry = mode === 'development' ? './plugin.ts' : './plugin.js';
     const entryContent = renderEntry(pluginName(value.name));
+    const capabilities = await discoverCapabilities(root);
+    const existingManifest = parseManifest(value.zhin, packageFile);
 
-    if (value.zhin !== undefined) {
-      if (isCompletedManifest(value.zhin)) {
-        const capabilities = await discoverCapabilities(root);
-        await assertCompletedDependencies(root, value, value.zhin, capabilities);
-        await assertExistingEntry(entryFile);
-        return freezePlan({
-          root, packageFile, entryFile, originalPackage, entryContent,
-          capabilities,
-          dependencies: Object.freeze({ ...value.dependencies }),
-          candidatePackage: originalPackage,
-          entryAlreadyPrepared: true,
-          changed: false,
-        });
-      }
+    if (existingManifest && !isPluginManifest(existingManifest)) {
       throw new Error(`${packageFile} already contains a zhin manifest; migrate it manually`);
     }
 
-    const capabilities = await discoverCapabilities(root);
-    const dependencies: Record<string, string> = {
-      ...value.dependencies,
-      '@zhin.js/plugin-runtime': '^0.0.0',
-      '@zhin.js/runtime': '^1.0.0',
-      'zhin.js': '^4.1.2',
-    };
-    for (const capability of capabilities) {
-      dependencies[capabilityProviders[capability]] = '^0.0.0';
+    if (existingManifest) {
+      await assertExistingEntry(entryFile);
+      await assertCompletedDependencies(root, value, existingManifest, capabilities);
     }
 
-    const candidate = {
-      ...value,
+    const dependencies = withRuntimeDependencies(value.dependencies, capabilities);
+    const devDependencies = withDevelopmentDependencies(value.devDependencies);
+    const candidate = createCandidatePackage(value, {
+      mode,
+      manifestEntry,
+      capabilities,
       dependencies,
-      zhin: {
-        protocol: 1,
-        type: 'plugin',
-        entry: './plugin.ts',
-        engine: '^1.0.0',
-        runtime: 'trusted',
-        features: capabilities.map((capability) => ({
-          package: capabilityProviders[capability],
-          api: '^1.0.0',
-        })),
-        plugins: [],
-      },
-    };
-    const entryAlreadyPrepared = await preparedEntry(entryFile, entryContent);
+      devDependencies,
+      existingManifest,
+    });
+    const candidatePackage = `${JSON.stringify(candidate, null, 2)}\n`;
+    const buildConfigFile = mode === 'publish' ? join(root, publishBuildConfig) : undefined;
+    const buildConfigContent = mode === 'publish' ? renderPublishBuildConfig() : undefined;
+    const entryAlreadyPrepared = existingManifest
+      ? true
+      : await preparedEntry(entryFile, entryContent);
+    const buildConfigAlreadyPrepared = buildConfigFile && buildConfigContent
+      ? await preparedFile(buildConfigFile, buildConfigContent)
+      : false;
+
     return freezePlan({
-      root, packageFile, entryFile, originalPackage, entryContent, capabilities,
+      root,
+      packageFile,
+      entryFile,
+      manifestEntry,
+      mode,
+      buildConfigFile,
+      buildConfigContent,
+      buildConfigAlreadyPrepared,
+      originalPackage,
+      entryContent,
+      capabilities,
       dependencies: Object.freeze({ ...dependencies }),
-      candidatePackage: `${JSON.stringify(candidate, null, 2)}\n`,
+      candidatePackage,
       entryAlreadyPrepared,
-      changed: true,
+      changed: candidatePackage !== originalPackage
+        || !entryAlreadyPrepared
+        || (mode === 'publish' && !buildConfigAlreadyPrepared),
     });
   }
 
@@ -101,8 +123,12 @@ export class PackageCutover {
 
     const nonce = `${process.pid}-${Date.now()}`;
     const entryTemporary = `${plan.entryFile}.zhin-cutover-${nonce}.tmp`;
+    const buildConfigTemporary = plan.buildConfigFile
+      ? `${plan.buildConfigFile}.zhin-cutover-${nonce}.tmp`
+      : undefined;
     const packageTemporary = `${plan.packageFile}.zhin-cutover-${nonce}.tmp`;
     let publishedEntry = false;
+    let publishedBuildConfig = false;
     try {
       if (!plan.entryAlreadyPrepared) {
         await mkdir(dirname(plan.entryFile), { recursive: true });
@@ -110,11 +136,23 @@ export class PackageCutover {
         await link(entryTemporary, plan.entryFile);
         publishedEntry = true;
         await rm(entryTemporary);
-      } else {
+      } else if (!plan.buildConfigFile) {
         await assertPreparedEntry(plan.entryFile, plan.entryContent);
       }
-      // package.json is the commit record. Publishing it last keeps a prepared
-      // entry inert and makes an interrupted transaction safe to retry.
+
+      if (plan.buildConfigFile && plan.buildConfigContent) {
+        if (!plan.buildConfigAlreadyPrepared) {
+          await writeFile(buildConfigTemporary!, plan.buildConfigContent, { flag: 'wx' });
+          await link(buildConfigTemporary!, plan.buildConfigFile);
+          publishedBuildConfig = true;
+          await rm(buildConfigTemporary!);
+        } else {
+          await assertPreparedFile(plan.buildConfigFile, plan.buildConfigContent);
+        }
+      }
+
+      // package.json is the commit record. Publishing it last keeps generated
+      // files inert and makes an interrupted transaction safe to retry.
       await writeFile(packageTemporary, plan.candidatePackage, { flag: 'wx' });
       if (await readFile(plan.packageFile, 'utf8') !== plan.originalPackage) {
         throw new Error('package.json changed during cutover');
@@ -123,8 +161,10 @@ export class PackageCutover {
     } catch (error) {
       await Promise.allSettled([
         rm(entryTemporary, { force: true }),
+        ...(buildConfigTemporary ? [rm(buildConfigTemporary, { force: true })] : []),
         rm(packageTemporary, { force: true }),
         ...(publishedEntry ? [rm(plan.entryFile, { force: true })] : []),
+        ...(publishedBuildConfig && plan.buildConfigFile ? [rm(plan.buildConfigFile, { force: true })] : []),
       ]);
       throw error;
     }
@@ -133,9 +173,19 @@ export class PackageCutover {
 
 interface MutablePackage {
   readonly name: string;
+  readonly private?: boolean;
   readonly dependencies?: Record<string, string>;
+  readonly devDependencies?: Record<string, string>;
+  readonly scripts?: Record<string, string>;
+  readonly files?: unknown;
   readonly zhin?: unknown;
   readonly [key: string]: unknown;
+}
+
+interface PluginManifest extends Record<string, unknown> {
+  readonly protocol: 1;
+  readonly type: 'plugin';
+  readonly entry: string;
 }
 
 function parsePackage(file: string, source: string): MutablePackage {
@@ -147,12 +197,30 @@ function parsePackage(file: string, source: string): MutablePackage {
   }
   const candidate = value as Partial<MutablePackage>;
   if (typeof candidate.name !== 'string') throw new Error(`${file} requires a package name`);
-  if (candidate.dependencies !== undefined
-    && (!candidate.dependencies || typeof candidate.dependencies !== 'object'
-      || Array.isArray(candidate.dependencies))) {
-    throw new Error(`${file} dependencies must be an object`);
+  assertDependencyObject(file, 'dependencies', candidate.dependencies);
+  assertDependencyObject(file, 'devDependencies', candidate.devDependencies);
+  if (candidate.scripts !== undefined
+    && (!candidate.scripts || typeof candidate.scripts !== 'object' || Array.isArray(candidate.scripts))) {
+    throw new Error(`${file} scripts must be an object`);
+  }
+  if (candidate.files !== undefined && !Array.isArray(candidate.files)) {
+    throw new Error(`${file} files must be an array when present`);
   }
   return candidate as MutablePackage;
+}
+
+function assertDependencyObject(
+  file: string,
+  key: 'dependencies' | 'devDependencies',
+  value: unknown,
+): void {
+  if (value !== undefined && (!value || typeof value !== 'object' || Array.isArray(value))) {
+    throw new Error(`${file} ${key} must be an object`);
+  }
+}
+
+function cutoverMode(pkg: MutablePackage): PackageCutoverMode {
+  return pkg.private === true ? 'development' : 'publish';
 }
 
 function pluginName(packageName: string): string {
@@ -175,12 +243,140 @@ function renderEntry(name: string): string {
   ].join('\n');
 }
 
+function renderPublishBuildConfig(): string {
+  return `${JSON.stringify({
+    compilerOptions: {
+      target: 'ES2022',
+      module: 'NodeNext',
+      moduleResolution: 'NodeNext',
+      declaration: true,
+      declarationMap: false,
+      sourceMap: false,
+      jsx: 'react-jsx',
+      jsxImportSource: 'zhin.js',
+      skipLibCheck: true,
+    },
+    include: [
+      'plugin.ts',
+      'commands/**/*.ts',
+      'commands/**/*.tsx',
+      'components/**/*.ts',
+      'components/**/*.tsx',
+      'middlewares/**/*.ts',
+      'middlewares/**/*.tsx',
+      'src/**/*.ts',
+      'src/**/*.tsx',
+    ],
+  }, null, 2)}\n`;
+}
+
+function withRuntimeDependencies(
+  existing: Record<string, string> | undefined,
+  capabilities: readonly CutoverCapability[],
+): Record<string, string> {
+  const dependencies = { ...existing };
+  setRequiredDependency(dependencies, '@zhin.js/plugin-runtime');
+  setRequiredDependency(dependencies, '@zhin.js/runtime');
+  setRequiredDependency(dependencies, 'zhin.js');
+  for (const capability of capabilities) setRequiredDependency(dependencies, capabilityProviders[capability]);
+  return dependencies;
+}
+
+function withDevelopmentDependencies(existing: Record<string, string> | undefined): Record<string, string> {
+  const dependencies = { ...existing };
+  setRequiredDependency(dependencies, '@zhin.js/cli');
+  setRequiredDependency(dependencies, 'typescript');
+  return dependencies;
+}
+
+function setRequiredDependency(dependencies: Record<string, string>, name: string): void {
+  if (dependencies[name] === undefined || dependencies[name] === '^0.0.0' || dependencies[name] === '0.0.0') {
+    dependencies[name] = LATEST;
+  }
+}
+
+function createCandidatePackage(
+  pkg: MutablePackage,
+  options: {
+    readonly mode: PackageCutoverMode;
+    readonly manifestEntry: './plugin.ts' | './plugin.js';
+    readonly capabilities: readonly CutoverCapability[];
+    readonly dependencies: Record<string, string>;
+    readonly devDependencies: Record<string, string>;
+    readonly existingManifest?: PluginManifest;
+  },
+): Record<string, unknown> {
+  const manifest = {
+    ...(options.existingManifest ?? {}),
+    protocol: 1,
+    type: 'plugin',
+    entry: options.manifestEntry,
+    engine: '^1.0.0',
+    runtime: 'trusted',
+    features: options.capabilities.map((capability) => ({
+      package: capabilityProviders[capability],
+      api: '^1.0.0',
+    })),
+    plugins: Array.isArray(options.existingManifest?.plugins) ? options.existingManifest.plugins : [],
+  };
+  const scripts = runtimeScripts(pkg.scripts, options.mode);
+  const candidate: Record<string, unknown> = {
+    ...pkg,
+    type: typeof pkg.type === 'string' ? pkg.type : 'module',
+    dependencies: options.dependencies,
+    devDependencies: options.devDependencies,
+    scripts,
+    zhin: manifest,
+  };
+  if (options.mode === 'publish') candidate.files = mergeFiles(pkg.files);
+  return candidate;
+}
+
+function runtimeScripts(
+  existing: Record<string, string> | undefined,
+  mode: PackageCutoverMode,
+): Record<string, string> {
+  const scripts = { ...existing };
+  replaceMissingOrLegacyScript(scripts, 'dev', 'zhin runtime start', ['zhin dev']);
+  replaceMissingOrLegacyScript(scripts, 'start', 'zhin runtime start', ['zhin start']);
+  replaceMissingOrLegacyScript(scripts, 'daemon', 'zhin runtime start --daemon', ['zhin start --daemon']);
+  replaceMissingOrLegacyScript(
+    scripts,
+    'build',
+    mode === 'publish' ? 'pnpm run zhin:build' : 'tsc --noEmit',
+    ['zhin build'],
+  );
+  if (mode === 'publish') {
+    scripts['zhin:build'] = 'tsc -p tsconfig.zhin.json';
+    scripts.prepack = appendScript(scripts.prepack, 'pnpm run zhin:build');
+    scripts.prepublishOnly = appendScript(scripts.prepublishOnly, 'pnpm run zhin:build');
+  }
+  return scripts;
+}
+
+function replaceMissingOrLegacyScript(
+  scripts: Record<string, string>,
+  name: string,
+  replacement: string,
+  legacy: readonly string[],
+): void {
+  if (scripts[name] === undefined || legacy.includes(scripts[name].trim())) scripts[name] = replacement;
+}
+
+function appendScript(existing: string | undefined, command: string): string {
+  if (!existing || existing.includes(command)) return existing || command;
+  return `${existing} && ${command}`;
+}
+
+function mergeFiles(current: unknown): string[] {
+  const existing = Array.isArray(current) ? current.filter((file): file is string => typeof file === 'string') : [];
+  return [...new Set([...existing, ...publishedFiles])];
+}
+
 async function discoverCapabilities(root: string): Promise<CutoverCapability[]> {
   const result: CutoverCapability[] = [];
   for (const capability of ['command', 'component', 'middleware'] as const) {
-    if (await directoryContainsSource(join(root, capabilityDirectories[capability]))) {
-      result.push(capability);
-    }
+    if (await directoryContainsSource(join(root, capabilityDirectories[capability]))) result.push(capability);
   }
   return result;
 }
@@ -196,12 +392,18 @@ async function directoryContainsSource(directory: string): Promise<boolean> {
   return false;
 }
 
+function parseManifest(value: unknown, packageFile: string): PluginManifest | undefined {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${packageFile} already contains a zhin manifest; migrate it manually`);
+  }
+  return value as PluginManifest;
+}
 
-function isCompletedManifest(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object'
-    && (value as Record<string, unknown>).protocol === 1
-    && (value as Record<string, unknown>).type === 'plugin'
-    && (value as Record<string, unknown>).entry === './plugin.ts';
+function isPluginManifest(value: PluginManifest): boolean {
+  return value.protocol === 1
+    && value.type === 'plugin'
+    && (value.entry === './plugin.ts' || value.entry === './plugin.js');
 }
 
 function capabilitiesFromManifest(manifest: Record<string, unknown>): CutoverCapability[] {
@@ -225,8 +427,6 @@ async function assertCompletedDependencies(
   if (declared.some((value) => !discovered.includes(value))) {
     throw new Error('Existing zhin manifest does not match discovered capability directories');
   }
-  // ADR 0053 platformFeatures 继承：依赖 zhin.js（facade）或 @zhin.js/core（carrier）时，
-  // command/component/middleware 可省略声明（Root 缺省继承四件套）
   const hasFacadeOrCarrier = typeof pkg.dependencies?.['zhin.js'] === 'string'
     || typeof pkg.dependencies?.['@zhin.js/core'] === 'string';
   if (!hasFacadeOrCarrier
@@ -249,6 +449,10 @@ async function assertCompletedDependencies(
 }
 
 async function preparedEntry(file: string, expected: string): Promise<boolean> {
+  return preparedFile(file, expected);
+}
+
+async function preparedFile(file: string, expected: string): Promise<boolean> {
   try {
     const actual = await readFile(file, 'utf8');
     if (actual !== expected) throw new Error(`${file} already exists with different content`);
@@ -263,6 +467,10 @@ async function assertPreparedEntry(file: string, expected: string): Promise<void
   if (!await preparedEntry(file, expected)) throw new Error(`${file} is missing`);
 }
 
+async function assertPreparedFile(file: string, expected: string): Promise<void> {
+  if (!await preparedFile(file, expected)) throw new Error(`${file} is missing`);
+}
+
 async function assertExistingEntry(file: string): Promise<void> {
   try {
     await readFile(file, 'utf8');
@@ -273,8 +481,13 @@ async function assertExistingEntry(file: string): Promise<void> {
 }
 
 function assertPlanPaths(plan: PackageCutoverPlan): void {
+  const publishesJavaScript = plan.mode === 'publish';
   if (plan.packageFile !== join(plan.root, 'package.json')
-    || plan.entryFile !== join(plan.root, 'plugin.ts')) {
+    || plan.entryFile !== join(plan.root, 'plugin.ts')
+    || plan.manifestEntry !== (publishesJavaScript ? './plugin.js' : './plugin.ts')
+    || (publishesJavaScript !== (plan.buildConfigFile !== undefined))
+    || (publishesJavaScript !== (plan.buildConfigContent !== undefined))
+    || (plan.buildConfigFile !== undefined && plan.buildConfigFile !== join(plan.root, publishBuildConfig))) {
     throw new Error('Invalid package cutover paths');
   }
 }

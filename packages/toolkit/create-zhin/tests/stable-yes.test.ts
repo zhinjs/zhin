@@ -74,6 +74,15 @@ describe('create-zhin -y Stable 默认值', () => {
     expect(pkg.dependencies['@modelcontextprotocol/sdk']).toBeUndefined();
     expect(pkg.dependencies.ai).toBeUndefined();
     expect(pkg.dependencies.zod).toBeUndefined();
+    expect(pkg.dependencies.vite).toBeUndefined();
+    expect(pkg.dependencies['@zhin.js/client']).toBeUndefined();
+    expect(pkg.dependencies['@zhin.js/pagemanager']).toBeUndefined();
+    expect(pkg.dependencies.esbuild).toBeUndefined();
+    expect(pkg.dependencies.react).toBeUndefined();
+    expect(pkg.zhin.features).toEqual([
+      { package: '@zhin.js/page', api: '^1.0.0' },
+      { package: '@zhin.js/layout', api: '^1.0.0' },
+    ]);
     expect(pkg.zhin.plugins).toEqual([
       { package: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox' },
     ]);

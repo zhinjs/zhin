@@ -160,7 +160,7 @@ _避免使用_：私有 `resolveTurnSessionKey`、snapshot 与 cell 双轨 key
        ↑ 仅类型与循环，无 Message / Plugin / Endpoint
 @zhin.js/agent       ZhinAgent 门面 + 8 理想模块（包内 src/*）+ Orchestration + Security
        ↑ 理解 IM，出站仍走 Message.$reply / Adapter.sendMessage（ADR 0004）
-zhin.js + plugins    createZhinAgent、register-ai-trigger、activity-feedback、adapter 绑定
+zhin.js + plugins    createZhinAgent、activity-feedback、adapter 绑定
 ```
 
 | 理想模块 | 包内路径 | 主要落层 | 与下层关系 |
@@ -174,7 +174,7 @@ zhin.js + plugins    createZhinAgent、register-ai-trigger、activity-feedback�
 | Subagent System | `src/subagent/` | agent | `SubagentSystem` spawn/cancel；`ResultSink` 对接 outbound |
 | Context System | `src/context/` | agent | prompt-assembly / turn-user-message builder 链 |
 | Orchestration（图内） | `src/orchestrator/` | agent | Kernel SSOT（ADR 0027）；不并入 Subagent |
-| IM 组合 | `src/init/`、`collaboration/` | agent | 阶段 4：`inbound-turn-pipeline` 编排；`inbound-turn-enrich` / `inbound-turn-route` / `inbound-turn-outbound-stage` / `inbound-turn-endpoint` |
+| IM 组合 | `src/init/`、`collaboration/` | agent | 协作入站：`collaboration-dispatch` / `inbound-spawn-task` / `inbound-peer-handback` / `collaboration-kernel-bridge` / `inbound-turn-endpoint` |
 
 ### 现状 → 理想模块映射
 

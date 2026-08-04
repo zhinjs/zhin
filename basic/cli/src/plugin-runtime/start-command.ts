@@ -3,6 +3,7 @@ import { openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { access, mkdir, readFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import chalk from 'chalk';
+import { parse as parseDotenv } from 'dotenv';
 import open from 'open';
 import { YamlConfigDocument } from '@zhin.js/config-yaml';
 import { ImRuntime } from '@zhin.js/core/runtime';
@@ -15,11 +16,11 @@ import {
   type ConfigDocumentPort,
   type RuntimeConfigDocument,
   type RuntimeMode,
+  type EnvironmentLayers,
   type RootResourceInstaller,
   ensureTypeScriptSpecifierRemap,
   expandEnvironmentValue,
 } from '@zhin.js/runtime';
-import { loadEnvFiles } from '../utils/env.js';
 import { createConsoleHostModules, installConsoleHttp } from './console-host-installer.js';
 import { installConsoleApi } from './console-api-installer.js';
 import { installHttpHost, resolveHttpConfig } from './http-host-installer.js';
@@ -92,7 +93,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   const parsed = parseStartOptions(options.args);
   if (await relaunchWithNativeTypeScript(parsed, options.root)) return;
   ensureTypeScriptSpecifierRemap();
-  loadEnvFiles(options.root, parsed.environment);
+  const environmentVariables = await loadRuntimeEnvironmentLayers(options.root, parsed.environment);
   const { config, file: configFile } = await loadProjectConfig(options.root);
   await applyRuntimeLogLevel(config);
   const httpConfig = await resolveHttpConfig(config);
@@ -133,9 +134,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
       mode: parsed.mode,
       platform: 'node',
     },
-    environmentVariables: {
-      base: processEnvSource(),
-    },
+    environmentVariables,
     installResources: async (context) => {
       im.install(context.resources);
       installHttpHost(httpConfig)(context);
@@ -354,6 +353,32 @@ function processEnvSource(): Readonly<Record<string, string | undefined>> {
     result[key] = value;
   }
   return Object.freeze(result);
+}
+
+/**
+ * Read project dotenv files into Runtime EnvironmentLayers without changing
+ * the CLI process. `.env.<environment>` deliberately overrides `.env`; the
+ * Runtime applies that overlay after inherited process variables.
+ */
+export async function loadRuntimeEnvironmentLayers(
+  root: string,
+  environment: string,
+): Promise<Readonly<EnvironmentLayers>> {
+  const overlay: Record<string, string> = {};
+  for (const name of ['.env', `.env.${environment}`]) {
+    try {
+      Object.assign(overlay, parseDotenv(await readFile(join(root, name), 'utf8')));
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') continue;
+      throw error;
+    }
+  }
+  return Object.freeze({
+    base: processEnvSource(),
+    environments: Object.freeze({
+      [environment]: Object.freeze(overlay),
+    }),
+  });
 }
 
 async function relaunchWithNativeTypeScript(parsed: StartOptions, root: string): Promise<boolean> {

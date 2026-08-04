@@ -7,7 +7,6 @@
  *   - register-db-models      — 数据库模型定义
  *   - register-ai-service     — AIService context
  *   - create-zhin-agent       — ZhinAgent 全局大脑 + 子系统
- *   - register-ai-trigger     — AI 触发处理器
  *   - register-db-upgrade     — 数据库存储升级（无竞态条件）
  *   - register-owner-approve-commands — Owner 私聊 approve（仅 bash shell 硬确认白名单）
  *   - register-builtin-tools  — 内置系统工具 + 工作区技能
@@ -22,7 +21,6 @@ import { registerCapabilityFeatures } from './init/register-capability-features.
 import { registerDbModels } from './init/register-db-models.js';
 import { registerAIService } from './init/register-ai-service.js';
 import { createZhinAgentContext } from './init/create-zhin-agent.js';
-import { registerAITrigger } from './init/register-ai-trigger.js';
 import { registerGroupSessionPassive } from './init/register-group-session-passive.js';
 import { registerDbUpgrade } from './init/register-db-upgrade.js';
 import { registerManagementTools } from './init/register-management-tools.js';
@@ -53,7 +51,6 @@ export function initAgentModule(): void {
   registerDbModels();
   registerAIService(refs);
   createZhinAgentContext(refs);
-  registerAITrigger(refs);
   registerGroupSessionPassive(refs);
   registerDbUpgrade(refs);
   registerManagementTools(refs);

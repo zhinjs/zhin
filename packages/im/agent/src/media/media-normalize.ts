@@ -1,26 +1,22 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { ContentPart } from '@zhin.js/ai';
+import type { MediaRef } from '@zhin.js/core';
+import type { ContentPart, MediaContentBlock } from '@zhin.js/ai';
 import type { MediaBinaryPayload, MediaKind } from './media-types.js';
 
-function guessMimeFromFormat(fmt: string): string {
-  if (fmt === 'wav') return 'audio/wav';
-  if (fmt === 'mp3') return 'audio/mpeg';
-  return 'application/octet-stream';
+function kindFromSegmentType(type: string): MediaKind | null {
+  if (type === 'image') return 'image';
+  if (type === 'audio' || type === 'record' || type === 'voice') return 'audio';
+  if (type === 'video') return 'video';
+  return null;
 }
 
-function kindFromContentPart(part: ContentPart): MediaKind | null {
-  switch (part.type) {
-    case 'image_url':
-      return 'image';
-    case 'audio':
-      return 'audio';
-    case 'video_url':
-      return 'video';
-    default:
-      return null;
-  }
+function kindFromMime(mime: string): MediaKind {
+  if (mime.startsWith('image/')) return 'image';
+  if (mime.startsWith('audio/')) return 'audio';
+  if (mime.startsWith('video/')) return 'video';
+  return 'file';
 }
 
 function parseDataUri(dataUri: string): { mime: string; base64: string } | null {
@@ -29,21 +25,9 @@ function parseDataUri(dataUri: string): { mime: string; base64: string } | null 
   return { mime: m[1], base64: m[2] };
 }
 
-function stripSurroundingQuotes(value: string): string {
-  const trimmed = value.trim();
-  if (
-    (trimmed.startsWith('"') && trimmed.endsWith('"'))
-    || (trimmed.startsWith("'") && trimmed.endsWith("'"))
-  ) {
-    return trimmed.slice(1, -1);
-  }
-  return trimmed;
-}
-
-function resolveLocalMediaPath(url: string): string | null {
-  const normalized = stripSurroundingQuotes(url);
-  if (!normalized || normalized.startsWith('data:')) return null;
-  if (normalized.startsWith('http://') || normalized.startsWith('https://')) return null;
+function resolveLocalMediaPath(value: string): string | null {
+  const normalized = value.trim().replace(/^(?:"|')|(?:"|')$/g, '');
+  if (!normalized || normalized.startsWith('data:') || /^https?:\/\//i.test(normalized)) return null;
   if (normalized.startsWith('file://')) {
     try {
       return fileURLToPath(normalized);
@@ -51,9 +35,7 @@ function resolveLocalMediaPath(url: string): string | null {
       return null;
     }
   }
-  return path.isAbsolute(normalized)
-    ? normalized
-    : path.resolve(process.cwd(), normalized);
+  return path.isAbsolute(normalized) ? normalized : path.resolve(process.cwd(), normalized);
 }
 
 function mimeFromExtension(filePath: string): { kind: MediaKind; mimeType: string } {
@@ -113,88 +95,109 @@ export async function fetchUrlAsBase64(url: string, maxBytes: number): Promise<M
 }
 
 /**
- * ContentPart[] → MediaBinaryPayload[]（优先已有 base64；URL 按需 fetch）
+ * canonical 媒体引用（SegmentMediaRef 形状）→ MediaBinaryPayload[]。
+ * base64 直取；path 读本地文件；url 按需 fetch；kind=file（平台不透明引用）跳过。
  */
-export async function normalizeContentPartsToPayloads(
-  parts: ContentPart[],
-  maxFileBytes: number,
+export async function normalizeMediaRefsToPayloads(
+  refs: readonly { type: string; media: MediaRef }[],
+  maxBytes: number,
 ): Promise<MediaBinaryPayload[]> {
   const out: MediaBinaryPayload[] = [];
 
+  for (const { type, media } of refs) {
+    if (!media || media.kind === 'file') continue;
+    if (typeof media.size === 'number' && media.size > maxBytes) continue;
+    const wantKind = kindFromSegmentType(type);
+    const fileName = media.file_name ? { fileName: media.file_name } : {};
+
+    if (media.kind === 'base64') {
+      const dataUri = parseDataUri(media.value);
+      const base64 = (dataUri?.base64 ?? media.value).replace(/^base64:\/\//, '');
+      const mimeType = dataUri?.mime ?? media.mime_type ?? 'application/octet-stream';
+      out.push({ kind: wantKind ?? kindFromMime(mimeType), base64, mimeType, ...fileName });
+      continue;
+    }
+
+    if (media.kind === 'path') {
+      const local = await readLocalFileAsBase64(media.value, maxBytes);
+      if (local) out.push({ ...local, kind: wantKind ?? local.kind, ...fileName });
+      continue;
+    }
+
+    const fetched = await fetchUrlAsBase64(media.value, maxBytes);
+    if (fetched) out.push({ ...fetched, kind: wantKind ?? fetched.kind, ...fileName });
+  }
+
+  return out;
+}
+
+/**
+ * Compatibility ingress for the former ContentPart-based multimodal surface.
+ * New IM ingress should use normalizeMediaRefsToPayloads instead.
+ */
+export async function normalizeContentPartsToPayloads(
+  parts: readonly ContentPart[],
+  maxBytes: number,
+): Promise<MediaBinaryPayload[]> {
+  const payloads: MediaBinaryPayload[] = [];
   for (const part of parts) {
-    if (part.type === 'face') continue;
-
-    const kind = kindFromContentPart(part);
-    if (!kind) continue;
-
     if (part.type === 'audio') {
-      const b64 = part.audio.data;
-      if (b64) {
-        out.push({
+      const base64 = typeof part.audio?.data === 'string' ? part.audio.data : '';
+      if (base64) {
+        const format = part.audio.format === 'wav' ? 'wav' : 'mp3';
+        payloads.push({
           kind: 'audio',
-          base64: b64,
-          mimeType: guessMimeFromFormat(part.audio.format),
-          meta: { format: part.audio.format },
+          base64: base64.replace(/^base64:\/\//, ''),
+          mimeType: format === 'wav' ? 'audio/wav' : 'audio/mpeg',
+          meta: { format },
         });
       }
       continue;
     }
 
-    if (part.type === 'image_url') {
-      const url = part.image_url.url;
-      const parsed = parseDataUri(url);
-      if (parsed) {
-        out.push({ kind: 'image', base64: parsed.base64, mimeType: parsed.mime });
-        continue;
-      }
-      const localPath = resolveLocalMediaPath(url);
-      if (localPath) {
-        const local = await readLocalFileAsBase64(localPath, maxFileBytes);
-        if (local) {
-          out.push({
-            ...local,
-            kind: 'image',
-            mimeType: local.mimeType.startsWith('image/') ? local.mimeType : 'image/jpeg',
-          });
-          continue;
-        }
-      }
-      const fetched = await fetchUrlAsBase64(url, maxFileBytes);
-      if (fetched) out.push(fetched);
+    const url = part.type === 'image_url'
+      ? part.image_url?.url
+      : part.type === 'video_url'
+        ? (part as { video_url?: { url?: unknown } }).video_url?.url
+        : undefined;
+    if (typeof url !== 'string' || !url.trim()) continue;
+
+    const parsed = parseDataUri(url);
+    const expectedKind: MediaKind = part.type === 'image_url' ? 'image' : 'video';
+    if (parsed) {
+      payloads.push({ kind: expectedKind, base64: parsed.base64, mimeType: parsed.mime });
       continue;
     }
 
-    if (part.type === 'video_url') {
-      const url = part.video_url.url;
-      const parsed = parseDataUri(url);
-      if (parsed) {
-        out.push({ kind: 'video', base64: parsed.base64, mimeType: parsed.mime });
-        continue;
-      }
-      const localPath = resolveLocalMediaPath(url);
-      if (localPath) {
-        const local = await readLocalFileAsBase64(localPath, maxFileBytes);
-        if (local) {
-          out.push({ ...local, kind: 'video' });
-          continue;
-        }
-      }
-      const fetched = await fetchUrlAsBase64(url, maxFileBytes);
-      if (fetched) out.push({ ...fetched, kind: 'video' });
+    const localPath = resolveLocalMediaPath(url);
+    if (localPath) {
+      const local = await readLocalFileAsBase64(localPath, maxBytes);
+      if (local) payloads.push({ ...local, kind: expectedKind });
+      continue;
     }
-  }
 
-  return out;
+    const fetched = await fetchUrlAsBase64(url, maxBytes);
+    if (fetched) payloads.push({ ...fetched, kind: expectedKind });
+  }
+  return payloads;
 }
 
 export function payloadToDataUri(payload: MediaBinaryPayload): string {
   return `data:${payload.mimeType};base64,${payload.base64}`;
 }
 
-export function payloadToVisionPart(payload: MediaBinaryPayload): ContentPart | null {
+/** 图片载荷 → canonical vision 媒体块（base64 ref，agentLoop UserMessage.media 用） */
+export function payloadToVisionPart(payload: MediaBinaryPayload): MediaContentBlock | null {
   if (payload.kind !== 'image') return null;
   return {
-    type: 'image_url',
-    image_url: { url: payloadToDataUri(payload), detail: 'auto' },
+    type: 'image',
+    data: {
+      media: {
+        kind: 'base64',
+        value: payload.base64,
+        mime_type: payload.mimeType,
+        ...(payload.fileName ? { file_name: payload.fileName } : {}),
+      },
+    },
   };
 }

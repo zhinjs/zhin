@@ -1,12 +1,13 @@
 import * as path from 'node:path';
-import { loadSpeechPipeline } from '@zhin.js/core';
-import type { AIProvider, ContentPart } from '@zhin.js/ai';
+import { loadSpeechPipeline, type SegmentMediaRef } from '@zhin.js/core';
+import type { AIProvider, ContentPart, MediaContentBlock } from '@zhin.js/ai';
 import {
   normalizeContentPartsToPayloads,
+  normalizeMediaRefsToPayloads,
   payloadToVisionPart,
 } from './media-normalize.js';
 import { spoolPayloadToFile } from './media-spool.js';
-import type { MediaBinaryPayload, MultimodalConfig } from './media-types.js';
+import type { AgentRunInput, AgentRunInputPart, MediaBinaryPayload, MultimodalConfig } from './media-types.js';
 import { resolveMultimodalConfig } from './resolve-config.js';
 import { providerSupportsVision } from './vision-capability.js';
 
@@ -31,7 +32,7 @@ function describePayload(payload: MediaBinaryPayload): string {
 
 export interface SubagentInboundTask {
   /** 传给 Agent.run 的首条 user content */
-  runInput: string | ContentPart[];
+  runInput: AgentRunInput;
   spooledPaths: string[];
   mediaPartCount: number;
   payloadCount: number;
@@ -40,18 +41,20 @@ export interface SubagentInboundTask {
 }
 
 /**
- * 入站 route 子 agent：落盘媒体并可选注入 vision parts（主路径 multimodal 在 spawnSync 前不会执行）
+ * 入站 route 子 agent：落盘媒体并可选注入 vision 媒体块（主路径 multimodal 在 spawnSync 前不会执行）
  */
 export async function buildSubagentInboundTask(
   aiContent: string,
-  mediaParts: ContentPart[],
+  mediaRefs: readonly SegmentMediaRef[] | readonly ContentPart[],
   opts?: { workspaceDir?: string; provider?: AIProvider; config?: MultimodalConfig },
 ): Promise<SubagentInboundTask> {
   const config = opts?.config ?? resolveMultimodalConfig();
-  const payloads = await normalizeContentPartsToPayloads(mediaParts, config.maxFileBytes);
+  const payloads = isSegmentMediaRefs(mediaRefs)
+    ? await normalizeMediaRefsToPayloads(mediaRefs, config.maxFileBytes)
+    : await normalizeContentPartsToPayloads(mediaRefs, config.maxFileBytes);
   const inboundRoot = path.join(opts?.workspaceDir || process.cwd(), config.inboundDir);
   const lines: string[] = [];
-  const visionParts: ContentPart[] = [];
+  const visionParts: MediaContentBlock[] = [];
   const spooledPaths: string[] = [];
   const useNativeVision = Boolean(
     opts?.provider
@@ -131,9 +134,9 @@ export async function buildSubagentInboundTask(
   }
 
   const textBlock = [aiContent, lines.join('\n')].filter(Boolean).join('\n\n');
-  let runInput: string | ContentPart[];
+  let runInput: AgentRunInput;
   if (useNativeVision && visionParts.length > 0) {
-    const parts: ContentPart[] = [];
+    const parts: AgentRunInputPart[] = [];
     if (textBlock.trim()) parts.push({ type: 'text', text: textBlock });
     parts.push(...visionParts);
     runInput = parts;
@@ -144,9 +147,15 @@ export async function buildSubagentInboundTask(
   return {
     runInput,
     spooledPaths,
-    mediaPartCount: mediaParts.length,
+    mediaPartCount: mediaRefs.length,
     payloadCount: payloads.length,
     visionPartCount: visionParts.length,
     useNativeVision: useNativeVision && visionParts.length > 0,
   };
+}
+
+function isSegmentMediaRefs(
+  input: readonly SegmentMediaRef[] | readonly ContentPart[],
+): input is readonly SegmentMediaRef[] {
+  return input.every((item) => typeof item === 'object' && item !== null && 'media' in item);
 }

@@ -15,6 +15,7 @@ import type { ContextSystem } from '../context/context-system.js';
 import type { MemorySystem } from '../memory/memory-system.js';
 import type { SessionSystem } from '../session/session-system.js';
 import type { HttpApprovalAdapter } from '../session/http-approval-adapter.js';
+import type { ApprovalPort } from '../session/session-interaction-port.js';
 import type { EventSystem } from '../event/event-system.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import type { ToolCatalogItem } from '../tool-catalog/types.js';
@@ -47,6 +48,8 @@ export interface ZhinAgentPrivate {
   readonly eventSystem: EventSystem | null;
   /** HTTP approval adapter — set when AgentSessionHostPort is wired (ADR 0041). */
   httpApprovalAdapter?: HttpApprovalAdapter;
+  /** Optional host-level fallback, for transports without an interactive approval surface. */
+  approvalPort?: ApprovalPort;
   readonly imSessionStore: IMSessionStore | MemoryIMSessionStore;
   readonly agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
   readonly contextRepository: ContextRepository;

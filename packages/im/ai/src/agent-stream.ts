@@ -8,6 +8,16 @@ export const ZHIN_SESSION_ID_HEADER = "x-zhin-session-id";
 
 export const AGENT_STREAM_MEDIA_TYPE = "application/x-ndjson; charset=utf-8";
 
+/** Version of the additive run envelope used for ordered turn events. */
+export const AGENT_RUN_EVENT_VERSION = 1 as const;
+
+export type AgentRunTerminal = "completed" | "failed" | "cancelled";
+
+export interface AgentRunIdentity {
+  readonly sessionId: string;
+  readonly turnId: string;
+}
+
 /** Stable session API prefix (not Eve `/eve/v1`). */
 export const ZHIN_AGENT_SESSION_API_PREFIX = "/zhin/v1";
 
@@ -19,6 +29,7 @@ export const AgentStreamEventType = {
   TURN_STARTED: "turn.started",
   TURN_COMPLETED: "turn.completed",
   TURN_FAILED: "turn.failed",
+  TURN_CANCELLED: "turn.cancelled",
   MESSAGE_RECEIVED: "message.received",
   MESSAGE_APPENDED: "message.appended",
   MESSAGE_COMPLETED: "message.completed",
@@ -44,6 +55,59 @@ export type AgentStreamEvent = {
   data?: Record<string, unknown>;
   timestamp?: number;
 };
+
+/** Input accepted by an {@link AgentRunJournal}. */
+export type AgentRunEventInput = AgentStreamEvent & {
+  readonly terminal?: AgentRunTerminal;
+};
+
+/**
+ * Versioned event emitted from a single turn. It remains structurally
+ * compatible with AgentStreamEvent, so existing consumers can ignore the
+ * additive envelope.
+ */
+export type AgentRunEvent = AgentStreamEvent & {
+  readonly version: typeof AGENT_RUN_EVENT_VERSION;
+  readonly run: AgentRunIdentity;
+  readonly sequence: number;
+  readonly terminal?: AgentRunTerminal;
+};
+
+/**
+ * In-memory ordered journal for one agent turn. The journal owns the run
+ * identity and sequence, and closes permanently after its first terminal.
+ */
+export class AgentRunJournal {
+  readonly run: AgentRunIdentity;
+  #events: AgentRunEvent[] = [];
+  #terminal: AgentRunEvent | undefined;
+
+  constructor(run: AgentRunIdentity) {
+    this.run = run;
+  }
+
+  append(event: AgentRunEventInput): AgentRunEvent | undefined {
+    if (this.#terminal) return undefined;
+    const appended: AgentRunEvent = {
+      ...event,
+      version: AGENT_RUN_EVENT_VERSION,
+      run: this.run,
+      sequence: this.#events.length + 1,
+      timestamp: event.timestamp ?? Date.now(),
+    };
+    this.#events.push(appended);
+    if (appended.terminal) this.#terminal = appended;
+    return appended;
+  }
+
+  replay(afterSequence = 0): readonly AgentRunEvent[] {
+    return this.#events.filter((event) => event.sequence > afterSequence);
+  }
+
+  get terminal(): AgentRunEvent | undefined {
+    return this.#terminal;
+  }
+}
 
 export type StartAgentSessionResponse = {
   ok: true;
@@ -94,6 +158,7 @@ export type AgentStreamReduceState = {
   lastEventType: string | null;
   waiting: boolean;
   failed: boolean;
+  cancelled: boolean;
   pendingInputs: AgentStreamPendingInput[];
   pendingAuthorizations: AgentStreamPendingAuthorization[];
 };
@@ -104,6 +169,7 @@ export function createAgentStreamReduceState(): AgentStreamReduceState {
     lastEventType: null,
     waiting: false,
     failed: false,
+    cancelled: false,
     pendingInputs: [],
     pendingAuthorizations: [],
   };
@@ -143,6 +209,10 @@ export function reduceAgentStreamEvent(
     case AgentStreamEventType.SESSION_FAILED:
     case AgentStreamEventType.TURN_FAILED:
       next.failed = true;
+      next.waiting = false;
+      break;
+    case AgentStreamEventType.TURN_CANCELLED:
+      next.cancelled = true;
       next.waiting = false;
       break;
     case AgentStreamEventType.INPUT_REQUESTED: {

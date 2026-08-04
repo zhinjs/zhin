@@ -20,15 +20,17 @@ describe('package cutover', () => {
     const plan = await cutover.plan(root);
 
     expect(plan.changed).toBe(true);
+    expect(plan.mode).toBe('development');
+    expect(plan.manifestEntry).toBe('./plugin.ts');
     expect(plan.capabilities).toEqual(['command', 'component', 'middleware']);
     expect(plan.dependencies).toMatchObject({
       existing: '^1.0.0',
-      '@zhin.js/plugin-runtime': '^0.0.0',
-      '@zhin.js/runtime': '^1.0.0',
-      'zhin.js': '^4.1.2',
-      '@zhin.js/command': '^0.0.0',
-      '@zhin.js/component': '^0.0.0',
-      '@zhin.js/middleware': '^0.0.0',
+      '@zhin.js/plugin-runtime': 'latest',
+      '@zhin.js/runtime': 'latest',
+      'zhin.js': 'latest',
+      '@zhin.js/command': 'latest',
+      '@zhin.js/component': 'latest',
+      '@zhin.js/middleware': 'latest',
     });
     await expect(readFile(plan.entryFile, 'utf8')).rejects.toThrow();
 
@@ -56,6 +58,85 @@ describe('package cutover', () => {
       '',
     ].join('\n'));
     await expect(cutover.plan(root)).resolves.toMatchObject({ changed: false });
+  });
+
+  it('emits a publishable JavaScript package golden manifest for a public plugin', async () => {
+    const root = await fixture({ private: false, scripts: { dev: 'zhin dev', build: 'zhin build' } });
+    await writeFile(join(root, 'commands/status.ts'), legacyCommandDefinition());
+    const plan = await new PackageCutover().plan(root);
+
+    expect({
+      mode: plan.mode,
+      manifestEntry: plan.manifestEntry,
+      buildConfig: plan.buildConfigFile && join(root, 'tsconfig.zhin.json') === plan.buildConfigFile,
+      package: JSON.parse(plan.candidatePackage),
+    }).toMatchInlineSnapshot(`
+      {
+        "buildConfig": true,
+        "manifestEntry": "./plugin.js",
+        "mode": "publish",
+        "package": {
+          "dependencies": {
+            "@zhin.js/command": "latest",
+            "@zhin.js/plugin-runtime": "latest",
+            "@zhin.js/runtime": "latest",
+            "existing": "^1.0.0",
+            "zhin.js": "latest",
+          },
+          "devDependencies": {
+            "@zhin.js/cli": "latest",
+            "typescript": "latest",
+          },
+          "files": [
+            "plugin.js",
+            "plugin.d.ts",
+            "commands",
+            "components",
+            "middlewares",
+            "src",
+            "schema.json",
+            "README.md",
+          ],
+          "name": "@test/fixture-plugin",
+          "private": false,
+          "scripts": {
+            "build": "pnpm run zhin:build",
+            "daemon": "zhin runtime start --daemon",
+            "dev": "zhin runtime start",
+            "prepack": "pnpm run zhin:build",
+            "prepublishOnly": "pnpm run zhin:build",
+            "start": "zhin runtime start",
+            "zhin:build": "tsc -p tsconfig.zhin.json",
+          },
+          "type": "module",
+          "version": "1.0.0",
+          "zhin": {
+            "engine": "^1.0.0",
+            "entry": "./plugin.js",
+            "features": [
+              {
+                "api": "^1.0.0",
+                "package": "@zhin.js/command",
+              },
+            ],
+            "plugins": [],
+            "protocol": 1,
+            "runtime": "trusted",
+            "type": "plugin",
+          },
+        },
+      }
+    `);
+    expect(plan.buildConfigContent).toContain('"module": "NodeNext"');
+
+    await new PackageCutover().apply(plan);
+    await expect(readFile(join(root, 'plugin.ts'), 'utf8')).resolves.toContain('definePlugin');
+    await expect(readFile(join(root, 'tsconfig.zhin.json'), 'utf8')).resolves.toContain('commands/**/*.ts');
+    await expect(new PackageCutover().plan(root)).resolves.toMatchObject({
+      changed: false,
+      mode: 'publish',
+      manifestEntry: './plugin.js',
+    });
   });
 
   it('rejects package changes after planning and rolls back its new entry', async () => {
@@ -120,6 +201,7 @@ async function fixture(extra: Record<string, unknown> = {}): Promise<string> {
     writeFile(join(root, 'package.json'), `${JSON.stringify({
       name: '@test/fixture-plugin',
       version: '1.0.0',
+      private: true,
       type: 'module',
       dependencies: { existing: '^1.0.0' },
       ...extra,

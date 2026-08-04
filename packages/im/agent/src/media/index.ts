@@ -11,3 +11,4 @@ export * from './deliver-subagent-result.js';
 export * from './subagent-user-delivery.js';
 export * from './vision-capability.js';
 export * from './subagent-inbound.js';
+export * from './inbound-refs.js';

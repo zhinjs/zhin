@@ -148,6 +148,31 @@ describe('HmrCoordinator', () => {
     expect(reloadEvents).toEqual([]);
   });
 
+  it('updates module watch roots only after a generation reload commits', async () => {
+    const source = '/project/commands/status.ts';
+    const initial = ownershipFor(source, '/project');
+    const committed = ownershipFor(source, '/workspace/plugins/sibling');
+    let ownership = initial;
+    const modules = new FakeModules();
+    const coordinator = new HmrCoordinator({
+      modules,
+      ownership: () => ownership,
+      runtime: {
+        async reload() {
+          ownership = committed;
+        },
+      },
+      onRestartRequired() {},
+      onError() {},
+    });
+
+    await coordinator.enqueue(source);
+
+    expect(modules.watchRootUpdates).toEqual([
+      [{ root: '/workspace/plugins/sibling', source: 'workspace' }],
+    ]);
+  });
+
   it('reports a failed reload and rejects every waiter in its batch', async () => {
     const ownership = new SourceOwnershipIndex();
     ownership.add({
@@ -179,6 +204,7 @@ describe('HmrCoordinator', () => {
 class FakeModules implements ModuleRuntime {
   readonly invalidated: string[] = [];
   readonly processSources = new Set<string>();
+  readonly watchRootUpdates: unknown[] = [];
 
   async load<T>(): Promise<T> {
     throw new Error('not used');
@@ -192,5 +218,22 @@ class FakeModules implements ModuleRuntime {
     return this.processSources.has(source);
   }
 
+  updateWatchRoots(roots: readonly { readonly root: string; readonly source: string }[]): void {
+    this.watchRootUpdates.push(roots);
+  }
+
   async close(): Promise<void> {}
+}
+
+function ownershipFor(source: string, watchRoot: string): SourceOwnershipIndex {
+  const ownership = new SourceOwnershipIndex();
+  ownership.add({
+    source,
+    role: 'capability',
+    owner: root,
+    capability: capabilityId(root, command, 'status'),
+    feature: command,
+  });
+  ownership.addWatchRoot({ root: watchRoot, source: 'workspace' });
+  return ownership;
 }

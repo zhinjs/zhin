@@ -1,5 +1,5 @@
 import { isSdkId } from '@zhin.js/ai';
-import { normalizeMatchRules } from '../routing/route-matcher.js';
+import { normalizeMatchRules } from '../routing/match-rules.js';
 import { DEFAULT_ZHIN_AGENT_NAME } from './types.js';
 import type { NormalizedAiRoutingConfig } from './normalize-ai-config.js';
 

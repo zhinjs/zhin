@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Plugin } from '@zhin.js/core';
-import { AgentStreamEventType } from '@zhin.js/ai/agent-stream';
+import { AgentRunJournal, AgentStreamEventType } from '@zhin.js/ai/agent-stream';
 import { createAgentStreamBus } from '../../src/event/agent-stream-bus.js';
 import { ImApprovalAdapter } from '../../src/session/im-approval-adapter.js';
 import { ToolApprovalOnceStore } from '../../src/tool/tool-approval-once-store.js';
@@ -64,5 +64,51 @@ describe('tool-approval-gate', () => {
         data: expect.objectContaining({ toolName: 'danger', approved: true }),
       }),
     ]);
+  });
+
+  it('fails closed for on-risk when no ApprovalPort is available', async () => {
+    const denied = await runToolApprovalGate({
+      toolName: 'danger',
+      args: {},
+      sessionId: 'sess-1',
+      commMessage: mockCommMessage(),
+      policy: 'on-risk',
+    });
+
+    expect(denied).toBe('Error: approval required but ApprovalPort unavailable');
+  });
+
+  it('records approved request and result in the ordered turn journal', async () => {
+    const journal = new AgentRunJournal({ sessionId: 'sess-1', turnId: 'turn-1' });
+    const events: unknown[] = [];
+    const bus = createAgentStreamBus();
+    bus.registerSink({ name: 'test', handle: (event) => { events.push(event); } });
+    const denied = await runToolApprovalGate({
+      toolName: 'danger',
+      args: { path: '/tmp' },
+      sessionId: 'sess-1',
+      commMessage: mockCommMessage(),
+      policy: 'on-risk',
+      port: { requestApproval: async () => true },
+      bus,
+      journal,
+    });
+
+    expect(denied).toBeNull();
+    expect(journal.replay()).toMatchObject([
+      {
+        type: AgentStreamEventType.INPUT_REQUESTED,
+        run: { sessionId: 'sess-1', turnId: 'turn-1' },
+        sequence: 1,
+        data: { kind: 'approval', toolName: 'danger' },
+      },
+      {
+        type: AgentStreamEventType.INPUT_COMPLETED,
+        run: { sessionId: 'sess-1', turnId: 'turn-1' },
+        sequence: 2,
+        data: { kind: 'approval', toolName: 'danger', approved: true },
+      },
+    ]);
+    expect(events).toMatchObject(journal.replay());
   });
 });

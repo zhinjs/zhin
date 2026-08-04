@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { definePage, normalizePageMetadata, pageRoute } from '../src/index.js';
+import {
+  definePage,
+  normalizePageMetadata,
+  pageRoute,
+  type ConsoleTopologyResponse,
+} from '../src/index.js';
 
 describe('Console contract', () => {
   it('normalizes author metadata without adding route authority', () => {
@@ -32,5 +37,27 @@ describe('Console contract', () => {
 
   it('rejects metadata that would otherwise be silently ignored', () => {
     expect(() => definePage({ route: '/custom' } as never)).toThrow('Unknown Page metadata: route');
+  });
+
+  it('keeps route layouts in the topology response contract', () => {
+    const response = {
+      generation: 7,
+      pages: [],
+      navigation: [],
+      route: '/a/p-status',
+      resolution: {
+        status: 'found',
+        page: {
+          id: 'page', owner: 'root/a', localName: 'status', source: '/a/pages/status.tsx',
+          module: '/assets/status.js', hash: 'status', route: '/a/p-status', title: 'Status',
+          order: 10, hideInNav: false, requiredPermissions: [], requiredRoles: [],
+        },
+        layouts: {
+          nav: { id: 'nav', owner: 'root/a', slot: 'nav', source: '/a/pages/$nav.tsx', module: '/assets/a-nav.js', hash: 'nav' },
+          footer: { id: 'footer', owner: 'root', slot: 'footer', source: '/pages/$footer.tsx', module: '/assets/footer.js', hash: 'footer' },
+        },
+      },
+    } satisfies ConsoleTopologyResponse;
+    expect(response.resolution?.status).toBe('found');
   });
 });

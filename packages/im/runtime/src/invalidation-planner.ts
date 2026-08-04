@@ -15,9 +15,18 @@ export interface NoInvalidationPlan {
 export interface GenerationInvalidationPlan {
   readonly kind: 'generation';
   readonly changed: readonly string[];
+  /** Manifest sources require a graph and process-boundary check before reload. */
+  readonly manifestSources: readonly string[];
   readonly slots: readonly CapabilityId[];
   readonly subtrees: readonly PluginId[];
+  /** Paths without ownership records; RootRuntime may claim them through a convention. */
+  readonly fallbacks: readonly FallbackInvalidation[];
   readonly reasons: readonly string[];
+}
+
+export interface FallbackInvalidation {
+  readonly source: string;
+  readonly owners: readonly PluginId[];
 }
 
 export interface ProcessInvalidationPlan {
@@ -56,10 +65,15 @@ export class InvalidationPlanner {
 
     const slots = new Map<CapabilityId, PluginId>();
     const subtrees = new Set<PluginId>();
+    const fallbacks: FallbackInvalidation[] = [];
+    const manifestSources = new Set<string>();
     const reasons = new Set<string>();
     const processReasons = new Set<string>();
 
     for (const source of changed) {
+      if (basename(source) === 'package.json') {
+        addManifestSource(manifestSources, reasons, source);
+      }
       const affected = unique(
         [source, ...(this.dependencies?.affectedSources(source) ?? [])].map((item) =>
           resolve(item),
@@ -72,6 +86,11 @@ export class InvalidationPlanner {
         for (const record of records) {
           if (requiresProcessRestart(record)) {
             processReasons.add(`Root ${record.role} source changed`);
+          } else if (record.role === 'manifest') {
+            // Manifest changes are handled by RootRuntime after it compares
+            // the current and inspected graphs. Do not turn them into a
+            // subtree reload here: that would hide concurrent Slot changes.
+            addManifestSource(manifestSources, reasons, record.source);
           } else {
             applyRecord(record, slots, subtrees, reasons);
           }
@@ -79,11 +98,13 @@ export class InvalidationPlanner {
       }
 
       // An untracked support module still belongs to the nearest mounted
-      // package. Without an owned importer, subtree replacement is safest.
+      // package. RootRuntime gets the first chance to claim it through a
+      // mounted Feature convention; unresolved paths retain this fallback.
       if (!matched) {
-        for (const owner of this.ownership.ownersForPath(source)) {
-          subtrees.add(owner);
-          reasons.add(`untracked support source changed in ${owner}`);
+        const owners = this.ownership.ownersForPath(source);
+        if (owners.length > 0) {
+          fallbacks.push(Object.freeze({ source, owners }));
+          reasons.add(`untracked source changed in ${owners.join(', ')}`);
         }
       }
     }
@@ -100,7 +121,12 @@ export class InvalidationPlanner {
     const retainedSlots = [...slots].flatMap(([capability, owner]) =>
       roots.some((root) => isWithin(owner, root)) ? [] : [capability],
     );
-    if (roots.length === 0 && retainedSlots.length === 0) {
+    if (
+      roots.length === 0
+      && retainedSlots.length === 0
+      && manifestSources.size === 0
+      && fallbacks.length === 0
+    ) {
       return Object.freeze({
         kind: 'none',
         changed,
@@ -110,11 +136,23 @@ export class InvalidationPlanner {
     return Object.freeze({
       kind: 'generation',
       changed,
+      manifestSources: Object.freeze([...manifestSources]),
       slots: Object.freeze(retainedSlots),
       subtrees: Object.freeze(roots),
+      fallbacks: Object.freeze(fallbacks),
       reasons: Object.freeze([...reasons]),
     });
   }
+}
+
+function addManifestSource(
+  manifestSources: Set<string>,
+  reasons: Set<string>,
+  source: string,
+): void {
+  const manifest = resolve(source);
+  manifestSources.add(manifest);
+  reasons.add(`Manifest source changed: ${manifest}`);
 }
 
 function requiresProcessRestart(record: SourceOwnershipRecord): boolean {

@@ -107,24 +107,24 @@ packages/im/agent/src/
   turn/          Turn pipeline、inbound 队列、auto-continue、metrics
   config/        ZhinAgent 配置 SSOT、model harness
   orchestrator/  Orchestration Kernel（ADR 0027 SSOT）
-  collaboration/ IM 入站/出站（阶段 4）
-    inbound-turn-pipeline.ts      enrich → peerPolicy → plan → route → outbound
-    inbound-turn-enrich.ts        媒体/引用/subagent 通知
-    inbound-turn-route.ts         Kernel 委派 / spawn / 本地 execute
-    inbound-turn-outbound-stage.ts  出站 batch + Kernel 投影
+  collaboration/ IM 入站/出站（peer 委派 / spawn / handback / 出站投影）
+    collaboration-dispatch.ts     dispatchPeerTask → Kernel dispatchTask
+    inbound-spawn-task.ts         spawn_task → Kernel dispatchTask + runTask
+    inbound-peer-handback.ts      peer handback → Kernel completeTask
+    collaboration-kernel-bridge.ts 出站完成 → Kernel 投影
     inbound-turn-endpoint.ts      @ ID / aiAccess
   zhin-agent/    ZhinAgent 门面类（单文件 index.ts）
   init/          create-zhin-agent、composeZhinAgentRuntime、configure/dispose 生命周期
 ```
 
-**阶段 4 — `collaboration/` 入站编排子模块**
+**`collaboration/` 入站协作子模块**（legacy `inbound-turn-pipeline` 组合层已删除）
 
 | 文件 | 职责 |
 |------|------|
-| `inbound-turn-pipeline.ts` | enrich → peerPolicy → buildTurnPlan → route → outbound 纯编排 |
-| `inbound-turn-enrich.ts` | 媒体/引用/subagent 通知 enrich |
-| `inbound-turn-route.ts` | Kernel 委派、spawn_task、本地 `executeInboundAgentTurn` |
-| `inbound-turn-outbound-stage.ts` | 出站 batch 解析、IM 发送、Kernel 投影 |
+| `collaboration-dispatch.ts` | `dispatchPeerTask` → Kernel 委派 |
+| `inbound-spawn-task.ts` | spawn_task → Kernel `dispatchTask` + `runTask` |
+| `inbound-peer-handback.ts` | peer handback → Kernel `completeTask` |
+| `collaboration-kernel-bridge.ts` | 出站完成投影 → Kernel `completeTask` |
 | `inbound-turn-endpoint.ts` | @ ID / aiAccess 解析 |
 
 **Agent Core**：`AgentCore.runText()` / `runVision()` 为 `AsyncGenerator<TurnEvent>` SSOT；`runTextTurn` 为 collector。组合层经 `composeZhinAgentRuntime` 注入 8 模块 + `createAgentCoreDepsForCompose`。
@@ -177,7 +177,6 @@ useContext('ai', async (ai) => {
 
 ```javascript
 import { initAgentModule, AIService } from '@zhin.js/agent'
-import { OllamaProvider } from '@zhin.js/core'
 
 initAgentModule()
 

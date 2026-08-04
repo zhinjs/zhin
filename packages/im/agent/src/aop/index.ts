@@ -10,12 +10,5 @@ export {
   resolveEndpointIdsForMember,
   isInboundFromPeerBot,
 } from '../collaboration/endpoint-identity.js';
-export {
-  createInboundTurnPipeline,
-} from '../collaboration/inbound-turn-pipeline.js';
-export type {
-  InboundTurnPipeline,
-  InboundTurnPipelineDeps,
-} from '../collaboration/inbound-turn-pipeline.js';
 export * from './pipeline/index.js';
 export * from './runtime/index.js';

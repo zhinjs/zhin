@@ -2,8 +2,12 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { definePlugin } from '@zhin.js/plugin-runtime';
-import commandFeature from '@zhin.js/command';
+import { definePlugin, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import commandFeature, {
+  CommandIndex,
+  commandFeatureId,
+  defineCommand,
+} from '@zhin.js/command';
 import {
   PackageCompatibilityError,
   RootProcessRestartExecutor,
@@ -74,6 +78,96 @@ describe('Root/process boundary', () => {
 
     expect(runtime.snapshot.generation).toBe(1);
     expect(restarts[0]?.reasons).toContain('package runtime ABI changed: @test/root');
+    await runtime.stop();
+  });
+
+  it('accepts an ABI-safe pure manifest edit without restarting the process', async () => {
+    const project = await createProject();
+    const modules = new FakeModules();
+    modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root' }) });
+    const runtime = new RootRuntime({
+      projectRoot: project,
+      modules,
+      environment: { name: 'test', mode: 'test', platform: 'node' },
+    });
+    const started = await runtime.start();
+    const restarts: ProcessInvalidationPlan[] = [];
+    const hmr = runtime.createHmrCoordinator({
+      onRestartRequired(plan) { restarts.push(plan); },
+      onError() {},
+    });
+
+    await writeRootManifest(project, { runtime: 'trusted', description: 'metadata only' });
+    await hmr.enqueue(join(project, 'package.json'));
+
+    expect(runtime.snapshot).toBe(started);
+    expect(restarts).toEqual([]);
+    await runtime.stop();
+  });
+
+  it('commits an ABI-safe manifest and Command change in one generation', async () => {
+    const project = await createCommandProject();
+    const modules = new FakeModules();
+    const commandSource = join(project, 'commands/status.ts');
+    modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root' }) });
+    modules.set(join(project, 'packages/command/index.ts'), { default: commandFeature });
+    modules.set(commandSource, { default: defineCommand({ execute: () => 'before' }) });
+    const runtime = new RootRuntime({
+      projectRoot: project,
+      modules,
+      environment: { name: 'test', mode: 'test', platform: 'node' },
+    });
+    await runtime.start();
+    const restarts: ProcessInvalidationPlan[] = [];
+    const hmr = runtime.createHmrCoordinator({
+      onRestartRequired(plan) { restarts.push(plan); },
+      onError() {},
+    });
+
+    modules.set(commandSource, { default: defineCommand({ execute: () => 'after' }) });
+    await writeFeatureRootManifest(project, '^1.0.0', { description: 'metadata only' });
+    await Promise.all([
+      hmr.enqueue(join(project, 'package.json')),
+      hmr.enqueue(commandSource),
+    ]);
+
+    expect(runtime.snapshot.generation).toBe(2);
+    await expect(commandIndex(runtime.snapshot).execute('status')).resolves.toBe('after');
+    expect(restarts).toEqual([]);
+    await runtime.stop();
+  });
+
+  it('escalates a mixed manifest and Command batch when the manifest changes ABI', async () => {
+    const project = await createCommandProject();
+    const modules = new FakeModules();
+    const commandSource = join(project, 'commands/status.ts');
+    modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root' }) });
+    modules.set(join(project, 'packages/command/index.ts'), { default: commandFeature });
+    modules.set(commandSource, { default: defineCommand({ execute: () => 'before' }) });
+    const runtime = new RootRuntime({
+      projectRoot: project,
+      modules,
+      environment: { name: 'test', mode: 'test', platform: 'node' },
+    });
+    await runtime.start();
+    const restarts: ProcessInvalidationPlan[] = [];
+    const hmr = runtime.createHmrCoordinator({
+      onRestartRequired(plan) { restarts.push(plan); },
+      onError() {},
+    });
+
+    modules.set(commandSource, { default: defineCommand({ execute: () => 'after' }) });
+    await writeFeatureRootManifest(project, '^1.0.0', { runtime: 'isolated' });
+    await Promise.all([
+      hmr.enqueue(join(project, 'package.json')),
+      hmr.enqueue(commandSource),
+    ]);
+
+    expect(runtime.snapshot.generation).toBe(1);
+    expect(restarts).toEqual([expect.objectContaining({
+      kind: 'process',
+      reasons: ['Plugin execution runtime changed: @test/root'],
+    })]);
     await runtime.stop();
   });
 
@@ -207,16 +301,33 @@ async function createProject(): Promise<string> {
   return realpath(root);
 }
 
+async function createCommandProject(): Promise<string> {
+  const root = await createProject();
+  await writeFeatureRootManifest(root, '^1.0.0');
+  await writeFeatureManifest(root, '1.0.0');
+  await touch(join(root, 'packages/command/index.ts'));
+  await touch(join(root, 'commands/status.ts'));
+  return root;
+}
+
+function commandIndex(snapshot: RuntimeSnapshot): CommandIndex {
+  const index = snapshot.projections.get(commandFeatureId);
+  if (!(index instanceof CommandIndex)) throw new Error('Missing Command projection');
+  return index;
+}
+
 async function writeRootManifest(
   root: string,
   options: {
     readonly runtime: 'trusted' | 'isolated';
     readonly exports?: unknown;
+    readonly description?: string;
   },
 ): Promise<void> {
   await writeJson(join(root, 'package.json'), {
     name: '@test/root',
     type: 'module',
+    description: options.description,
     exports: options.exports ?? './plugin.ts',
     zhin: {
       protocol: 1,
@@ -227,16 +338,24 @@ async function writeRootManifest(
   });
 }
 
-async function writeFeatureRootManifest(root: string, api: string): Promise<void> {
+async function writeFeatureRootManifest(
+  root: string,
+  api: string,
+  options: {
+    readonly runtime?: 'trusted' | 'isolated';
+    readonly description?: string;
+  } = {},
+): Promise<void> {
   await writeJson(join(root, 'package.json'), {
     name: '@test/root',
     type: 'module',
+    description: options.description,
     dependencies: { '@test/command': 'workspace:*' },
     zhin: {
       protocol: 1,
       type: 'plugin',
       entry: './plugin.ts',
-      runtime: 'trusted',
+      runtime: options.runtime ?? 'trusted',
       features: [{ package: '@test/command', api }],
     },
   });

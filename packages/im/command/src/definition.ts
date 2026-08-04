@@ -312,14 +312,17 @@ function resolveRoles(
 function parseTarget(target: string): { readonly type: string; readonly id: string } | undefined {
   const parts = target.split(':').filter(Boolean);
   if (parts.length < 2) return undefined;
-  const kind = parts[0];
+  const [kind, ...rest] = parts;
+  if (!kind) return undefined;
+  const lastPart = parts.at(-1);
+  if (!lastPart) return undefined;
   if (kind === 'channel' && parts.length >= 3) {
-    return { type: 'channel', id: parts[parts.length - 1]! };
+    return { type: 'channel', id: lastPart };
   }
   if (kind === 'temp' && parts.length >= 3) {
-    return { type: 'private', id: parts[parts.length - 1]! };
+    return { type: 'private', id: lastPart };
   }
-  return { type: kind!, id: parts.slice(1).join(':') };
+  return { type: kind, id: rest.join(':') };
 }
 
 function isCommandScene(value: unknown): value is CommandScene {

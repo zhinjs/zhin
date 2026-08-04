@@ -18,6 +18,7 @@ import {
   listEndpointManagementCapabilities,
   type EndpointManagementCapability,
 } from './endpoint-management.js';
+import { assertDeclaredEndpointOperations } from './endpoint-control.js';
 
 const logger = getLogger('Adapter');
 
@@ -503,6 +504,11 @@ async function createEndpointSoft(
   // they propagate to AdapterIndex.create's catch, which disposes the records
   // created so far instead of hiding the bug behind an unconfigured stub.
   assertEndpoint(endpoint, expansion?.id ?? slot.id);
+  assertDeclaredEndpointOperations(
+    endpoint,
+    slot.definition.operations,
+    String(expansion?.id ?? slot.id),
+  );
   return { instance: endpoint, unconfigured: false };
 }
 

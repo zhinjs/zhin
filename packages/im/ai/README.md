@@ -8,12 +8,13 @@
 
 ### Provider（LLM 提供者）
 
-统一的 LLM 提供者接口，内置多种主流模型支持：
+Provider 实例经 **`createSdkProviderAdapter`**（ADR 0018 AI SDK 传输）创建，统一暴露 `AIProvider` 接口（`chat` / `chatStream` / `listModels` / `generateImage`）：
 
 ```typescript
-import { OpenAIProvider, OllamaProvider, AnthropicProvider } from '@zhin.js/ai'
+import { createSdkProviderAdapter } from '@zhin.js/ai'
 
-const provider = new OpenAIProvider({
+const provider = createSdkProviderAdapter('main', {
+  sdk: 'openai',
   apiKey: 'sk-...',
   baseUrl: 'https://api.openai.com/v1',
   contextWindow: 128000,
@@ -27,25 +28,14 @@ const response = await provider.chat({
 })
 ```
 
-内置 Provider：
+支持的 `sdk` 见 `SDK_IDS`（openai / anthropic / deepseek / moonshot / zhipu / google / ollama / cloudflare / openai-compatible 等，ADR 0018）。
 
-| Provider | 说明 |
-|----------|------|
-| `OpenAIProvider` | OpenAI 及兼容 API；`generateImage()` GPT Image（默认 `gpt-image-2`） |
-| `DeepSeekProvider` | DeepSeek（继承 OpenAI） |
-| `MoonshotProvider` | Moonshot / Kimi（继承 OpenAI） |
-| `ZhipuProvider` | 智谱 GLM（继承 OpenAI）；`generateImage()` 文生图（默认 `cogview-3-flash`） |
-| `GoogleProvider` | Gemini Nano Banana 文生图（`generateContent` + IMAGE；默认 `gemini-2.5-flash-image`）；不支持 chat |
-| `CloudflareProvider` | Workers AI 聊天 + `generateImage()`（默认 `@cf/black-forest-labs/flux-1-schnell`） |
-| `AnthropicProvider` | Anthropic Claude |
-| `OllamaProvider` | Ollama 本地模型 |
-
-文生图（Provider 方法，由 `@zhin.js/agent` 的 `generate_image` 工具调用）：
+文生图（Provider 方法，由 `@zhin.js/agent` 的 `generate_image` 工具调用，duck-type `hasGenerateImage` 探测）：
 
 ```typescript
-import { ZhipuProvider, hasGenerateImage } from '@zhin.js/ai'
+import { createSdkProviderAdapter, hasGenerateImage } from '@zhin.js/ai'
 
-const zhipu = new ZhipuProvider({ apiKey: '...' })
+const zhipu = createSdkProviderAdapter('zhipu', { sdk: 'zhipu', apiKey: '...' })
 if (hasGenerateImage(zhipu)) {
   const { base64, mimeType, model } = await zhipu.generateImage({
     prompt: 'a cat on a windowsill',
@@ -293,7 +283,7 @@ const tools = cache.filter('天气查询', allTools, { maxTools: 10 })
 | `agentToolsToLlmTools` | Plugin/AgentTool → LlmTool 桥接（agentLoop transport） |
 | `registerLlmApiFromProviders` / `ModelRegistry` | ApiRegistry 注册 + `/v1/models` 发现与白名单 |
 | `ContextRepository` / `AgentSessionStore` / `ImTranscriptStore` | ADR 0009 持久化原语 |
-| `OpenAIProvider` / `AnthropicProvider` / `OllamaProvider` | LLM 提供者 |
+| `createSdkProviderAdapter` / `AIProvider` | LLM 提供者（AI SDK 传输，ADR 0018） |
 | `ContextManager` / `ConversationMemory` | 场景摘要 / 话题记忆（辅助） |
 | `compactSession` / `pruneHistoryForContext` / `microCompactMessages` | 上下文压缩库 API；IM 生产路径经 `@zhin.js/agent` 的 `transformContext`（ADR 0010） |
 | `CostTracker` | Token 用量与成本追踪 |

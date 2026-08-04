@@ -30,6 +30,11 @@ function ownership(): SourceOwnershipIndex {
     owner: root,
   });
   index.add({
+    source: '/project/package.json',
+    role: 'manifest',
+    owner: root,
+  });
+  index.add({
     source: '/project/plugins/child/commands/status.ts',
     role: 'capability',
     owner: child,
@@ -105,6 +110,20 @@ describe('InvalidationPlanner', () => {
     });
   });
 
+  it('keeps manifest and Capability changes in one generation plan', () => {
+    const plan = new InvalidationPlanner(ownership()).plan([
+      '/project/package.json',
+      '/project/plugins/child/commands/status.ts',
+    ]);
+
+    expect(plan).toMatchObject({
+      kind: 'generation',
+      manifestSources: ['/project/package.json'],
+      slots: [childCommand],
+      subtrees: [],
+    });
+  });
+
   it('requires a process restart for Root setup and schema changes', () => {
     const plan = new InvalidationPlanner(ownership()).plan([
       '/project/plugin.ts',
@@ -129,11 +148,18 @@ describe('InvalidationPlanner', () => {
     });
   });
 
-  it('falls back to the nearest package owner for an untracked source', () => {
+  it('defers an untracked source to the nearest package owner convention', () => {
     const plan = new InvalidationPlanner(ownership()).plan([
       join('/project/plugins/child', 'shared/unknown.ts'),
     ]);
-    expect(plan).toMatchObject({ kind: 'generation', subtrees: [child] });
+    expect(plan).toMatchObject({
+      kind: 'generation',
+      subtrees: [],
+      fallbacks: [{
+        source: '/project/plugins/child/shared/unknown.ts',
+        owners: [child],
+      }],
+    });
   });
 
   it('requires a process restart for workspace dependency state', () => {

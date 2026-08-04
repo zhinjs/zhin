@@ -43,11 +43,9 @@ export {
   MemoryCollaborationArtifactRepository,
   DatabaseCollaborationArtifactRepository,
 } from './collaboration-artifact-repository.js';
-export { createInboundTurnPipeline } from './inbound-turn-pipeline.js';
-export { routeInboundTurnExecution } from './inbound-turn-route.js';
-export { executeInboundOutboundStage } from './inbound-turn-outbound-stage.js';
-export { prepareInboundTurnEnrichment } from './inbound-turn-enrich.js';
 export { resolveEndpointConfig, resolveEndpointAtIds, resolveEndpointAiAccess } from './inbound-turn-endpoint.js';
+export { createInboundTurnPipeline } from './inbound-turn-compat.js';
+export type { InboundTurnPipeline, InboundTurnPipelineDeps } from './inbound-turn-compat.js';
 export { resolvePlannerEndpointId } from './collaboration-delegation.js';
 export {
   applyRuntimeCollaborationInbound,
@@ -56,7 +54,3 @@ export type {
   RuntimeCollaborationInboundInput,
   RuntimeCollaborationInboundResult,
 } from './runtime-inbound-gate.js';
-export type {
-  InboundTurnPipeline,
-  InboundTurnPipelineDeps,
-} from './inbound-turn-pipeline.js';

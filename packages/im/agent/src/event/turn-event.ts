@@ -19,6 +19,7 @@ export type TurnEvent =
   | ThinkingEvent
   | TurnEndEvent
   | TurnErrorEvent
+  | TurnCancelledEvent
   | SubagentStartEvent
   | SubagentProgressEvent
   | SubagentEndEvent
@@ -67,6 +68,19 @@ export interface TurnErrorEvent {
   type: 'error';
   error: Error;
   recoverable: boolean;
+}
+
+/** A turn stopped by timeout, replacement, explicit cancellation, or disposal. */
+export interface TurnCancelledEvent {
+  type: 'turn_cancelled';
+  reason: string;
+  code: 'cancelled' | 'superseded' | 'timeout' | 'disposed';
+}
+
+export type TurnTerminalEvent = TurnEndEvent | TurnErrorEvent | TurnCancelledEvent;
+
+export function isTurnTerminalEvent(event: TurnEvent): event is TurnTerminalEvent {
+  return event.type === 'turn_end' || event.type === 'error' || event.type === 'turn_cancelled';
 }
 
 export interface SubagentStartEvent {

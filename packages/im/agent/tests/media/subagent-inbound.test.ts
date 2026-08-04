@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { OpenAIProvider, type ContentPart } from '@zhin.js/ai';
+import type { AIProvider } from '@zhin.js/ai';
+import type { SegmentMediaRef } from '@zhin.js/core';
 import { buildSubagentInboundTask } from '../../src/media/subagent-inbound.js';
 import { DEFAULT_MULTIMODAL_CONFIG } from '../../src/media/media-types.js';
 
@@ -10,13 +11,13 @@ import * as path from 'node:path';
 describe('buildSubagentInboundTask', () => {
   it('应为图片落盘并写入 analyze_media 路径提示', async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-subagent-inbound-'));
-    const parts: ContentPart[] = [
+    const refs: SegmentMediaRef[] = [
       {
-        type: 'image_url',
-        image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' },
+        type: 'image',
+        media: { kind: 'base64', value: 'iVBORw0KGgo=', mime_type: 'image/png' },
       },
     ];
-    const inbound = await buildSubagentInboundTask('@{bot}', parts, {
+    const inbound = await buildSubagentInboundTask('@{bot}', refs, {
       workspaceDir: tmp,
       config: { ...DEFAULT_MULTIMODAL_CONFIG, inboundDir: 'inbound-test' },
     });
@@ -31,16 +32,36 @@ describe('buildSubagentInboundTask', () => {
   });
 
   it('vision provider 应注入 multimodal runInput', async () => {
-    const provider = new OpenAIProvider({ apiKey: 'test' });
-    const parts: ContentPart[] = [
+    const provider = {
+      name: 'mock-vision',
+      models: ['m'],
+      capabilities: { vision: true },
+      chat: async () => {
+        throw new Error('not used');
+      },
+    } as unknown as AIProvider;
+    const refs: SegmentMediaRef[] = [
       {
-        type: 'image_url',
-        image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' },
+        type: 'image',
+        media: { kind: 'base64', value: 'iVBORw0KGgo=', mime_type: 'image/png' },
       },
     ];
-    const inbound = await buildSubagentInboundTask('hi', parts, { provider });
+    const inbound = await buildSubagentInboundTask('hi', refs, { provider });
     expect(inbound.useNativeVision).toBe(true);
     expect(Array.isArray(inbound.runInput)).toBe(true);
     expect(inbound.visionPartCount).toBe(1);
+  });
+
+  it('兼容旧 ContentPart 入站并生成图片任务', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-subagent-legacy-media-'));
+    const inbound = await buildSubagentInboundTask('inspect this', [
+      { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } },
+    ], {
+      workspaceDir: tmp,
+      config: { ...DEFAULT_MULTIMODAL_CONFIG, inboundDir: 'inbound-test' },
+    });
+    expect(inbound.payloadCount).toBe(1);
+    expect(inbound.spooledPaths).toHaveLength(1);
+    expect(fs.existsSync(inbound.spooledPaths[0]!)).toBe(true);
   });
 });

@@ -332,6 +332,7 @@ export type {
 } from './session/http-session-persistence.js';
 export { HttpStepProjector } from './session/http-step-projector.js';
 export { HttpApprovalWaiter } from './session/http-approval-waiter.js';
+export type { ApprovalPort, ApprovalRequestInput } from './session/session-interaction-port.js';
 
 export {
   setOrchestrationRuntime,
@@ -424,6 +425,7 @@ export type { BootstrapFile, ContextFile } from './bootstrap.js';
 
 export {
   preprocessInboundMedia,
+  normalizeContentPartsToPayloads,
   publishOutboundElements,
   resolveMultimodalConfig,
   resolveOutboundCapabilities,

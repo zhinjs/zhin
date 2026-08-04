@@ -109,6 +109,43 @@ describe('NativeDevelopmentModuleRuntime', () => {
     }
   });
 
+  it('watches a sibling workspace child Plugin root after the graph commits', async () => {
+    const root = await fixture();
+    const sibling = await fixture();
+    const source = join(sibling, 'commands/status.ts');
+    await writeFile(join(sibling, 'package.json'), JSON.stringify({
+      name: '@test/sibling',
+      type: 'module',
+      zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts' },
+    }));
+    await writeFile(join(sibling, 'plugin.ts'), 'export default {};\n');
+    await writeFile(source, 'export default 0;\n');
+    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root });
+    runtime.updateWatchRoots([{ root: sibling, source: 'workspace' }]);
+    expect(runtime.requiresProcessRestart(source)).toBe(false);
+    expect(runtime.requiresProcessRestart(join(root, 'node_modules/@test/plugin/commands/status.ts')))
+      .toBe(true);
+
+    const observed = new Promise<string>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('watch timeout')), 15_000);
+      const dispose = runtime.watch((changed) => {
+        if (changed !== source) return;
+        clearTimeout(timeout);
+        dispose();
+        resolve(changed);
+      });
+    });
+    const writer = setInterval(() => {
+      void writeFile(source, `export default ${Date.now()};\n`).catch(() => {});
+    }, 200);
+    try {
+      await expect(observed).resolves.toBe(source);
+    } finally {
+      clearInterval(writer);
+      await runtime.close();
+    }
+  });
+
   it('ignores build output directories like the polling snapshot does', async () => {
     const root = await fixture();
     await mkdir(join(root, 'lib'), { recursive: true });

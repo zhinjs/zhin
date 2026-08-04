@@ -52,7 +52,8 @@ import {
   isPromptTraceEnabled,
   isPromptTraceVerbose,
 } from '../config/index.js';
-import { processTextTurn, processMultimodalTurn } from '../turn/turn-pipeline.js';
+import { processTextTurn } from '../turn/turn-pipeline.js';
+import { normalizeContentPartsToPayloads, payloadToVisionPart } from '../media/media-normalize.js';
 import { resolveContextTailMessageLimit } from '../context/context-tail-limit.js';
 import { archiveSessionByKey } from '../session/session-io.js';
 import { recordPassiveGroupMessage as recordPassiveGroupMessageInternal } from '../session/passive-group-session.js';
@@ -657,15 +658,29 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     });
   }
 
+  /** Compatibility entry: translate legacy ContentPart[] into canonical media blocks. */
   async processMultimodal(
     parts: ContentPart[],
     commMessage: Message,
     onChunk?: OnChunkCallback,
   ): Promise<OutputElement[]> {
+    const payloads = await normalizeContentPartsToPayloads(parts, 26_214_400);
+    const mediaBlocks = payloads.flatMap((payload) => {
+      const block = payloadToVisionPart(payload);
+      return block ? [block] : [];
+    });
+    const content = summarizeContentParts(parts);
     return this.runInTurnContext(randomUUID(), () =>
       runWithInboundQueue(commMessage, this.inboundQueueConfig, this.inboundTurnQueue, {
         coalesce: false,
-        run: () => processMultimodalTurn(asPrivate(this), parts, commMessage, onChunk),
+        run: () => processTextTurn(
+          asPrivate(this),
+          content,
+          commMessage,
+          [],
+          onChunk,
+          { mediaBlocks },
+        ),
       }),
     );
   }
@@ -685,4 +700,17 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     this.providerResolver = null;
     clearZhinAgentRuntimeModules(this.runtimeModules);
   }
+}
+
+function summarizeContentParts(parts: readonly ContentPart[]): string {
+  const text = parts
+    .filter((part): part is Extract<ContentPart, { type: 'text' }> => part.type === 'text')
+    .map((part) => part.text)
+    .join(' ')
+    .trim();
+  if (text) return text;
+  if (parts.some((part) => part.type === 'image_url')) return '[图片]';
+  if (parts.some((part) => part.type === 'audio')) return '[音频]';
+  if (parts.some((part) => part.type === 'video_url')) return '[视频]';
+  return '[多模态消息]';
 }

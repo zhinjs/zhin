@@ -74,6 +74,7 @@
     "@zhin.js/command": "workspace:*",
     "@zhin.js/component": "workspace:*",
     "@zhin.js/database": "workspace:*",
+    "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/kernel": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/middleware": "workspace:*",

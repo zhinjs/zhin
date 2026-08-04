@@ -149,7 +149,7 @@
     "export{loadMemoryLayers,buildMemoryPrompt,safeSessionKey,getMemoryRoot,checkMemoryWritePath,classifyMemoryWritePath,formatMemoryPathsHint,resolveMemoryPromptOptions,DEFAULT_MEMORY_BUDGETS,migrateLegacyMemoryFiles,}from './memory-layers.js';",
     "export{originFromMessage}from './builtin/spawn-task-tool.js';",
     "export{pluginToolToAgentTool,agentToolToLlmTool,agentToolsToLlmTools,}from './tool-bridge.js';",
-    "export{preprocessInboundMedia,publishOutboundElements,resolveMultimodalConfig,resolveOutboundCapabilities,INBOUND_MEDIA_PARTS_EXTRA_KEY,}from './media/index.js';",
+    "export{preprocessInboundMedia,normalizeContentPartsToPayloads,publishOutboundElements,resolveMultimodalConfig,resolveOutboundCapabilities,INBOUND_MEDIA_PARTS_EXTRA_KEY,}from './media/index.js';",
     "export{readSkillInstructions,LoadSkillBuiltinTool,createLoadSkillTool,LOAD_SKILL_PARAMETERS,type LoadSkillToolOptions,}from './builtin/load-skill-tool.js';",
     "export{registerAIHook,unregisterAIHook,triggerAIHook,createAIHookEvent as createLegacyAIHookEvent,clearAIHooks,getRegisteredAIHookKeys,}from './hooks.js';",
     "export{registerAgentPromptContributor,unregisterAgentPromptContributor,getAgentPromptContributor,clearAgentPromptContributors,resolveAgentPromptSections,resolveAgentPromptMarkdown,resolveDeferredToolsForPlatform,formatAgentPromptSectionsMarkdown,}from './agent-prompt/index.js';",

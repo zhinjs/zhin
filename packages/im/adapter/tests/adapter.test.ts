@@ -65,6 +65,90 @@ describe('Adapter Feature', () => {
     await expect(resolveEndpointControl({
       recallMessage: async (messageId: string) => { expect(messageId).toBe('m2'); },
     })?.recall?.('m2')).resolves.toBeUndefined();
+
+    let legacyMessage = '';
+    let legacyTarget = '';
+    const bridge = resolveEndpointControl({
+      recallMessage: async (messageId: string) => { legacyMessage = messageId; },
+      typing: async (target: string) => { legacyTarget = target; },
+    });
+    const conversation = {
+      endpoint: { id: 'memory~main', adapter: 'memory' },
+      kind: 'group' as const,
+      id: 'room-1',
+    };
+    await bridge?.recall?.({ conversation, id: 'message-1' });
+    await bridge?.typing?.(conversation, true);
+    expect(legacyMessage).toBe('group:room-1:message-1');
+    expect(legacyTarget).toBe('group:room-1');
+  });
+
+  it('requires declared operations to exist on an explicit control port', async () => {
+    const root = rootPluginId();
+    const invalid = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'invalid-control',
+      source: '/adapters/invalid-control.ts',
+      definition: defineAdapter({
+        capabilities: ['outbound'],
+        operations: ['edit', 'typing'],
+        create: () => ({ control: { recall: async () => undefined } }),
+      }),
+    });
+    await expect(AdapterIndex.create([invalid], snapshot([invalid])))
+      .rejects.toThrow('declares edit but control.edit is missing');
+
+    const valid = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'valid-control',
+      source: '/adapters/valid-control.ts',
+      definition: defineAdapter({
+        capabilities: ['outbound'],
+        operations: ['recall', 'edit', 'reaction', 'typing'],
+        create: () => ({
+          control: {
+            recall: async () => undefined,
+            edit: async () => 'edited',
+            addReaction: async () => 'reaction',
+            typing: async () => undefined,
+          },
+        }),
+      }),
+    });
+    const index = await AdapterIndex.create([valid], snapshot([valid]));
+    await index.stop();
+  });
+
+  it('forwards structured conversations alongside legacy targets', async () => {
+    const root = rootPluginId();
+    let received: unknown;
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: adapterFeatureId,
+      localName: 'memory',
+      source: '/adapters/memory.ts',
+      definition: defineAdapter({
+        capabilities: ['outbound'],
+        create: () => ({ send: async (request) => { received = request; } }),
+      }),
+    });
+    const index = await AdapterIndex.create([slot], snapshot([slot]));
+    await index.start();
+    index.open();
+    const conversation = {
+      endpoint: { id: String(slot.id), adapter: 'memory' },
+      kind: 'group' as const,
+      id: 'room-1',
+    };
+    await index.send(slot.id, {
+      target: 'group:room-1',
+      conversation,
+      payload: 'hello',
+    });
+    expect(received).toEqual({ target: 'group:room-1', conversation, payload: 'hello' });
+    await index.stop();
   });
 
   it('brands definitions and discovers nested TypeScript modules', async () => {

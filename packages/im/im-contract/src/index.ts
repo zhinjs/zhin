@@ -37,6 +37,11 @@ export interface MessageRef {
   readonly id: string;
 }
 
+/** A bridge input that accepts either a structured reference or legacy string. */
+export type ConversationTarget = ConversationRef | string;
+/** A bridge input that accepts either a structured reference or legacy string. */
+export type MessageTarget = MessageRef | string;
+
 export type EndpointOperation = 'send' | 'recall' | 'edit' | 'reaction' | 'typing';
 
 /**
@@ -61,7 +66,33 @@ export interface DeliveryFailure {
 export interface DeliveryReceipt {
   readonly status: DeliveryStatus;
   readonly message?: MessageRef;
+  /**
+   * Transitional identifier returned by an endpoint that has not yet adopted
+   * `MessageRef`. Framework code must not compose or parse this value.
+   */
+  readonly legacyMessageId?: string;
   readonly failure?: DeliveryFailure;
+}
+
+const deliveryStatuses = new Set<DeliveryStatus>([
+  'sent',
+  'suppressed',
+  'unsupported',
+  'rejected',
+  'failed',
+]);
+
+/** Runtime guard for endpoints that already return the structured contract. */
+export function isDeliveryReceipt(value: unknown): value is DeliveryReceipt {
+  if (!value || typeof value !== 'object') return false;
+  const receipt = value as Partial<DeliveryReceipt>;
+  if (typeof receipt.status !== 'string' || !deliveryStatuses.has(receipt.status as DeliveryStatus)) {
+    return false;
+  }
+  if (receipt.legacyMessageId !== undefined && typeof receipt.legacyMessageId !== 'string') {
+    return false;
+  }
+  return true;
 }
 
 export interface LegacyConversationTarget {
@@ -101,6 +132,11 @@ export function formatLegacyConversationTarget(target: LegacyConversationTarget)
   return `${target.kind}:${target.id}`;
 }
 
+/** Encodes a structured conversation only when crossing a legacy adapter boundary. */
+export function formatLegacyConversationRef(conversation: ConversationRef): string {
+  return formatLegacyConversationTarget(conversation);
+}
+
 /**
  * Returns the native platform conversation id from a structured reference or
  * a legacy `kind:id` target. Unknown target formats stay opaque.
@@ -128,6 +164,14 @@ export function parseLegacyMessageReference(reference: string): LegacyMessageRef
 /** Encodes a message only for a legacy adapter API that still returns strings. */
 export function formatLegacyMessageReference(reference: LegacyMessageReference): string {
   return `${reference.target}:${reference.messageId}`;
+}
+
+/** Encodes a structured message only when crossing a legacy adapter boundary. */
+export function formatLegacyMessageRef(message: MessageRef): string {
+  return formatLegacyMessageReference({
+    target: formatLegacyConversationRef(message.conversation),
+    messageId: message.id,
+  });
 }
 
 /**

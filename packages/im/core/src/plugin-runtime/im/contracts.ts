@@ -1,4 +1,5 @@
 import type { CapabilityId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import type { ConversationRef, DeliveryReceipt, MessageRef } from '@zhin.js/im-contract';
 import type { MediaRef, Segment } from '../../built/segment-contract/types.js';
 // 入站段统一使用 canonical Segment SSOT（built/segment-contract）；
 // 经 plugin-runtime/im/index.ts re-export，供 runtime 消费者直接引用。
@@ -62,6 +63,10 @@ export function isSegmentContent(value: unknown): value is Segment {
 
 export interface IncomingMessage {
   readonly adapter: CapabilityId;
+  /** Structured identity supplied by migrated adapters; target remains the bridge. */
+  readonly conversation?: ConversationRef;
+  /** Structured native message identity supplied by migrated adapters. */
+  readonly message?: MessageRef;
   readonly target: string;
   /**
    * 纯文本视图：与 `segments` 同源（adapter 从同一份入站载荷派生二者）。
@@ -82,6 +87,8 @@ export interface IncomingMessage {
 
 export interface SendRequest {
   readonly adapter: CapabilityId;
+  /** Structured destination supplied to Adapter endpoints in parallel with target. */
+  readonly conversation?: ConversationRef;
   readonly target: string;
   readonly requester: PluginId;
   readonly content: SendContent;
@@ -97,6 +104,7 @@ export interface ChannelParent {
 
 export interface OutboundEnvelope {
   readonly adapter: CapabilityId;
+  readonly conversation?: ConversationRef;
   readonly target: string;
   readonly requester: PluginId;
   readonly generation: number;
@@ -107,6 +115,10 @@ export interface OutboundEnvelope {
 
 export interface MessageGateway {
   receive(input: IncomingMessage): Promise<MessageDispatchResult>;
+  /**
+   * Compatibility surface for existing Adapter-facing gateway consumers.
+   * Runtime callers that need an outcome use DeliveryMessageGateway instead.
+   */
   send(request: SendRequest): Promise<unknown>;
   /**
    * 注册 interactive action 回跳 handler（prefix 最长匹配；返回注销函数）。
@@ -131,6 +143,11 @@ export interface MessageGateway {
   ): void;
 }
 
+/** Structured outbound gateway exposed by the Plugin Runtime. */
+export interface DeliveryMessageGateway extends MessageGateway {
+  send(request: SendRequest): Promise<DeliveryReceipt>;
+}
+
 export interface MessageDispatchResult {
   readonly matched: boolean;
   readonly command?: string;
@@ -144,6 +161,9 @@ export class Message {
     readonly target: string,
     readonly content: string,
     readonly generation: number,
+    // Compatibility at the construction boundary: legacy tests and embedders
+    // may still supply an untyped reply callback. ImRuntime always supplies a
+    // DeliveryReceipt-producing implementation.
     reply: (content: SendContent, requester?: PluginId) => Promise<unknown>,
     readonly id?: string,
     readonly sender?: string,
@@ -153,14 +173,18 @@ export class Message {
      * Command dispatcher 优先使用此字段，以支持 mention、image 等结构化参数。
      */
     readonly segments?: readonly Segment[],
+    /** Structured inbound conversation when supplied by a migrated adapter. */
+    readonly conversation?: ConversationRef,
+    /** Structured inbound message identity when supplied by a migrated adapter. */
+    readonly message?: MessageRef,
   ) {
-    this.$reply = (content) => reply(content);
-    this.$replyFrom = (requester, content) => reply(content, requester);
+    this.$reply = (content) => reply(content) as Promise<DeliveryReceipt>;
+    this.$replyFrom = (requester, content) => reply(content, requester) as Promise<DeliveryReceipt>;
     Object.freeze(this);
   }
 
-  readonly $reply: (content: SendContent) => Promise<unknown>;
-  readonly $replyFrom: (requester: PluginId, content: SendContent) => Promise<unknown>;
+  readonly $reply: (content: SendContent) => Promise<DeliveryReceipt>;
+  readonly $replyFrom: (requester: PluginId, content: SendContent) => Promise<DeliveryReceipt>;
 }
 
 export function createOutboundEnvelope(

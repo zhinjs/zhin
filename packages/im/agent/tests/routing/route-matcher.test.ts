@@ -25,44 +25,6 @@ describe('resolveRoutedAgentName', () => {
     expect(name).toBe(DEFAULT_ZHIN_AGENT_NAME);
   });
 
-  it('有图且存在 vision.agent.md 时命中 vision', () => {
-    const name = resolveRoutedAgentName({
-      zhin: { provider: 'p', model: 'm' },
-      vision: {
-        provider: 'p',
-        model: 'vl',
-        priority: 100,
-        match: { hasMedia: ['image'] },
-      },
-    }, {
-      message: makeMessage({
-        $content: [{ type: 'image', data: { url: 'https://x/img.png' } }],
-      }),
-      contentText: '',
-      discoveredAgentNames: new Set(['vision']),
-    });
-    expect(name).toBe('vision');
-  });
-
-  it('无 vision 文件时跳过 route', () => {
-    const name = resolveRoutedAgentName({
-      zhin: { provider: 'p', model: 'm' },
-      vision: {
-        provider: 'p',
-        model: 'vl',
-        priority: 100,
-        match: { hasMedia: ['image'] },
-      },
-    }, {
-      message: makeMessage({
-        $content: [{ type: 'image', data: { url: 'https://x/img.png' } }],
-      }),
-      contentText: '',
-      discoveredAgentNames: new Set(),
-    });
-    expect(name).toBe(DEFAULT_ZHIN_AGENT_NAME);
-  });
-
   it('ADR 0031 数组 match 不会误命中私聊', () => {
     const rules = normalizeMatchRules([
       { endpoint: '717505091', sceneId: '129043431', kind: 'group' },

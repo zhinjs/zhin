@@ -77,6 +77,8 @@ export async function createWorkspace(projectPath: string, projectName: string, 
   await fs.writeFile(path.join(projectPath, 'pnpm-workspace.yaml'),
 `packages:
   - '.'
+  - 'plugins/*'
+  - 'packages/*'
 `);
 
   // 根据数据库类型添加相应依赖
@@ -104,6 +106,14 @@ export async function createWorkspace(projectPath: string, projectName: string, 
   const cardDeps = {
     '@zhin.js/satori': ZHIN_STACK_VERSIONS['@zhin.js/satori'],
   };
+  // Page/Layout Features only discover client modules. Their compiler remains
+  // owned by the optional Console Host, so the IM project itself adds no
+  // browser compiler or UI runtime dependency.
+  const consoleFeatureDeps = {
+    '@zhin.js/console-contract': ZHIN_STACK_VERSIONS['@zhin.js/console-contract'],
+    '@zhin.js/layout': ZHIN_STACK_VERSIONS['@zhin.js/layout'],
+    '@zhin.js/page': ZHIN_STACK_VERSIONS['@zhin.js/page'],
+  };
 
   // package.json：zhin 清单是 Plugin Runtime 拓扑 SSOT（features + plugins）
   await fs.writeJson(path.join(projectPath, 'package.json'), {
@@ -129,6 +139,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       ...databaseDeps,
       ...aiDeps,
       ...cardDeps,
+      ...consoleFeatureDeps,
     },
     devDependencies: {
       '@zhin.js/cli': ZHIN_STACK_VERSIONS['@zhin.js/cli'],
@@ -148,6 +159,8 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       runtime: 'trusted',
       // Stable Features（adapter/command/component/middleware）由 @zhin.js/core 的 package.json#zhin.features 继承
       features: [
+        { package: '@zhin.js/page', api: '^1.0.0' },
+        { package: '@zhin.js/layout', api: '^1.0.0' },
         ...(aiEnabled ? [{ package: '@zhin.js/tool', api: '^1.0.0' }] : []),
       ],
       plugins: collectAdapterPluginManifest(adapters),
@@ -439,6 +452,16 @@ ${projectName}/
 │   └── card.ts            # /card -> component("status-card")
 ├── components/
 │   └── status-card.ts     # defineComponent()，Satori 卡片
+├── middlewares/           # 消息中间件（约定目录）
+├── pages/
+│   ├── index.tsx          # Console 页面（/）
+│   ├── $nav.tsx           # 最近插件导航布局
+│   └── $footer.tsx        # 最近插件页脚布局
+├── tools/                 # AI 工具（启用 AI 后自动发现）
+├── skills/                # SKILL.md 能力目录
+├── agents/                # *.agent.md Agent 目录
+├── plugins/               # 本地子插件 workspace（仅一级）
+├── packages/              # 贡献给 Zhin 的 Feature workspace
 ├── package.json           # zhin 清单（protocol 1 / features / plugins）
 ├── tsconfig.json
 └── pnpm-workspace.yaml
@@ -446,6 +469,7 @@ ${projectName}/
 
 \`package.json#zhin\` 是拓扑 SSOT：\`features\` 挂载的 Feature provider 会发现对应约定目录，
 \`zhin.plugins\` 清单声明挂载的子插件（适配器）实例，实例配置写在 \`${configFilename}\` 的 \`plugins.<instanceKey>\`。
+根项目默认声明 page/layout Feature；它们只提供发现与拓扑契约，浏览器构建器并不作为项目依赖安装。
 
 ## 🚀 快速开始
 
@@ -496,6 +520,12 @@ export default defineCommand({
 });
 \`\`\`
 
+### Console 页面与布局
+
+在 \`pages/\` 下新增页面：\`index.tsx\` 映射到插件路径，其他页面映射为 \`/p-<name>\`。
+\`$nav.tsx\` 与 \`$footer.tsx\` 分别覆盖当前插件及其子插件的最近导航、页脚布局。
+页面元数据必须用 \`@zhin.js/console-contract\` 的 \`definePage\` 声明；默认示例不依赖 React 或浏览器构建工具。
+
 ### 接入更多平台
 
 \`\`\`bash
@@ -528,9 +558,16 @@ MIT License
 async function createRuntimeProjectFiles(projectPath: string, projectName: string, options: InitOptions): Promise<void> {
   const aiEnabled = options.ai?.enabled === true;
 
-  await fs.ensureDir(path.join(projectPath, 'commands'));
-  await fs.ensureDir(path.join(projectPath, 'components'));
-  await fs.ensureDir(path.join(projectPath, 'data'));
+  await Promise.all([
+    fs.ensureDir(path.join(projectPath, 'commands')),
+    fs.ensureDir(path.join(projectPath, 'components')),
+    fs.ensureDir(path.join(projectPath, 'pages')),
+    fs.ensureDir(path.join(projectPath, 'skills')),
+    fs.ensureDir(path.join(projectPath, 'data')),
+    ...['agents', 'middlewares', 'tools', 'plugins', 'packages'].map(async (directory) => {
+      await fs.outputFile(path.join(projectPath, directory, '.gitkeep'), '');
+    }),
+  ]);
 
   // 创建 .env 文件（使用简单的变量名）
   const databaseEnvVars = options.database ? generateDatabaseEnvVars(options.database) : '';
@@ -573,8 +610,15 @@ HTTP_TOKEN=change-me
     "include": [
       "plugin.ts",
       "commands/**/*.ts",
+      "commands/**/*.tsx",
       "components/**/*.ts",
-      "tools/**/*.ts"
+      "components/**/*.tsx",
+      "middlewares/**/*.ts",
+      "middlewares/**/*.tsx",
+      "tools/**/*.ts",
+      "tools/**/*.tsx",
+      "pages/**/*.ts",
+      "pages/**/*.tsx"
     ],
     "exclude": [
       "node_modules"
@@ -600,6 +644,35 @@ export default definePlugin({
     "additionalProperties": false,
     "properties": {}
   }, { spaces: 2 });
+
+  // pages/ follows the Feature conventions. These components deliberately
+  // return text, keeping the initial IM project free of a browser UI runtime.
+  await fs.writeFile(path.join(projectPath, 'pages', 'index.tsx'),
+`import { definePage } from '@zhin.js/console-contract';
+
+export const meta = definePage({
+  title: '${projectName}',
+  order: 10,
+});
+
+export default function HomePage() {
+  return 'Zhin Console is ready. Add pages in pages/ to extend this plugin.';
+}
+`);
+  await fs.writeFile(path.join(projectPath, 'pages', '$nav.tsx'),
+`import type { NavSlotProps } from '@zhin.js/console-contract';
+
+export default function ProjectNavigation({ current }: NavSlotProps) {
+  return current ? \`Current page: \${current}\` : '${projectName}';
+}
+`);
+  await fs.writeFile(path.join(projectPath, 'pages', '$footer.tsx'),
+`import type { FooterSlotProps } from '@zhin.js/console-contract';
+
+export default function ProjectFooter({ owner }: FooterSlotProps) {
+  return \`Plugin: \${owner}\`;
+}
+`);
 
   // commands/hello.ts
   await fs.writeFile(path.join(projectPath, 'commands', 'hello.ts'),

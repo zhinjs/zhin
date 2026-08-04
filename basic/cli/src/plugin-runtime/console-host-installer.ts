@@ -68,6 +68,24 @@ export function installConsoleHttp(options: {
       const pages = await options.console.runView(publicAccess, (catalog) => catalog.pages());
       writeJson(response, 200, { pages });
     });
+    http.route('GET', '/console/api/topology', async (_request, response, url) => {
+      try {
+        const topology = await options.console.runView(publicAccess, (catalog) => {
+          const topology = catalog.topology();
+          const route = url.searchParams.get('route') ?? undefined;
+          return Object.freeze({
+            generation: topology.generation,
+            pages: topology.pages,
+            navigation: topology.navigation,
+            ...(route === undefined ? {} : { route, resolution: topology.resolve(route) }),
+          });
+        });
+        writeJson(response, 200, topology);
+      } catch {
+        response.writeHead(503);
+        response.end('ConsoleRuntime is not ready');
+      }
+    });
     http.route('GET', '/console', async (_request, response) => {
       const pages = await options.console.runView(publicAccess, (catalog) => catalog.pages());
       writeHtml(response, renderConsoleIndex(pages));
@@ -83,7 +101,8 @@ export function installConsoleHttp(options: {
         return;
       }
       try {
-        const match = await options.console.runView(publicAccess, (catalog) => catalog.match(url.pathname));
+        const topology = await options.console.runView(publicAccess, (catalog) => catalog.topology());
+        const match = topology.resolve(url.pathname);
         if (match.status === 'missing') {
           response.writeHead(404);
           response.end();

@@ -108,6 +108,29 @@ describe('migrate', () => {
     expect(pkg.dependencies['zhin.js']).toBe('latest');
   });
 
+  it('将失效的 zhin dev/start/build scripts 替换为 Plugin Runtime 入口', () => {
+    const pkgPath = path.join(tmp, 'package.json');
+    fs.writeFileSync(pkgPath, JSON.stringify({
+      name: 'demo',
+      dependencies: { 'zhin.js': '1.0.0' },
+      scripts: {
+        dev: 'zhin dev',
+        start: 'zhin start',
+        daemon: 'zhin start --daemon',
+        build: 'zhin build',
+      },
+    }, null, 2));
+
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    expect(pkg.scripts).toMatchObject({
+      dev: 'zhin runtime start',
+      start: 'zhin runtime start',
+      daemon: 'zhin runtime start --daemon',
+      build: 'tsc --noEmit',
+    });
+  });
+
   it('isOldChineseTemplate 需同时命中多个特异短语', () => {
     // 旧模板：命中 ≥2 个特异短语
     expect(isOldChineseTemplate('# Soul\n\n我是一个能力出众、行动导向的 AI 助手。\n')).toBe(true);

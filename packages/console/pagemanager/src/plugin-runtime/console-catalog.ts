@@ -1,5 +1,8 @@
 import type {
   AccessSnapshot,
+  ConsoleLayoutSlots,
+  ConsoleRouteResolution,
+  ConsoleTopology,
   LayoutManifest,
   LayoutSlot,
   NavNode,
@@ -56,6 +59,22 @@ export class ConsoleCatalog {
     return buildNavigation(this.#snapshot, this.pages());
   }
 
+  /**
+   * Return the complete Console view for this generation. Pages, navigation,
+   * and layout resolution all retain the same snapshot through the caller's
+   * ConsoleRuntime lease, including while a later generation is prepared.
+   */
+  topology(): Readonly<ConsoleTopology> {
+    this.#assertActive();
+    const pages = this.pages();
+    return Object.freeze({
+      generation: this.generation,
+      pages,
+      navigation: buildNavigation(this.#snapshot, pages),
+      resolve: (path: string) => this.#resolveTopology(path),
+    });
+  }
+
   layouts(owner: PluginId, slot: LayoutSlot): readonly Readonly<LayoutManifest>[] {
     this.#assertActive();
     if (!this.#snapshot.tree.has(owner)) throw new Error(`Unknown Layout owner: ${owner}`);
@@ -72,6 +91,25 @@ export class ConsoleCatalog {
       current = this.#snapshot.tree.get(current)?.parent;
     }
     return undefined;
+  }
+
+  #resolveTopology(path: string): Readonly<ConsoleRouteResolution> {
+    const match = this.match(path);
+    if (match.status !== 'found') return Object.freeze({ status: match.status });
+    return Object.freeze({
+      status: 'found',
+      page: match.page,
+      layouts: this.#nearestLayouts(match.page.owner as PluginId),
+    });
+  }
+
+  #nearestLayouts(owner: PluginId): Readonly<ConsoleLayoutSlots> {
+    const nav = this.#layouts?.resolve(owner, 'nav');
+    const footer = this.#layouts?.resolve(owner, 'footer');
+    return Object.freeze({
+      ...(nav ? { nav } : {}),
+      ...(footer ? { footer } : {}),
+    });
   }
 
   #assertActive(): void {

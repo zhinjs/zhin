@@ -7,7 +7,7 @@ import {
 import { extname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Dispose } from '@zhin.js/plugin-runtime';
-import type { ModuleRuntime } from './module-runtime.js';
+import type { ModuleRuntime, ModuleWatchRoot } from './module-runtime.js';
 
 export interface NativeDevelopmentModuleRuntimeOptions {
   readonly projectRoot: string;
@@ -34,11 +34,13 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
   readonly #watchEnabled: boolean;
   readonly #revisions = new Map<string, number>();
   readonly #watchers = new Set<PortableSourceWatcher>();
+  #watchRoots: readonly string[];
   #closed = false;
 
   constructor(options: NativeDevelopmentModuleRuntimeOptions) {
     this.#projectRoot = resolve(options.projectRoot);
     this.#watchEnabled = options.watch ?? true;
+    this.#watchRoots = normalizeWatchRoots([this.#projectRoot]);
   }
 
   async load<T = unknown>(source: string): Promise<T> {
@@ -60,8 +62,11 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
 
   requiresProcessRestart(source: string): boolean {
     const normalized = resolve(source);
-    if (!isWithin(this.#projectRoot, normalized)) return true;
-    const parts = relative(this.#projectRoot, normalized).split(sep);
+    const packageRoot = nearestWatchRoot(this.#watchRoots, normalized);
+    // Installed packages and external paths are intentionally not watched.
+    // The HMR coordinator turns this into a visible process restart reason.
+    if (!packageRoot || isNodeModulesSource(packageRoot, normalized)) return true;
+    const parts = relative(packageRoot, normalized).split(sep);
     const capability = parts.findIndex((part) => capabilityRoots.has(part));
     if (capability < 0) return isExecutableSource(normalized);
     const root = parts[capability];
@@ -75,10 +80,21 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     return ['.js', '.json', '.ts'].includes(extname(normalized));
   }
 
+  updateWatchRoots(roots: readonly ModuleWatchRoot[]): void {
+    this.#assertOpen();
+    const next = normalizeWatchRoots([
+      this.#projectRoot,
+      ...roots.map((root) => root.root),
+    ]);
+    if (sameRoots(this.#watchRoots, next)) return;
+    this.#watchRoots = next;
+    for (const watcher of this.#watchers) watcher.replaceRoots(next);
+  }
+
   watch(listener: (source: string) => void): Dispose {
     this.#assertOpen();
     if (!this.#watchEnabled) return () => undefined;
-    const watcher = new PortableSourceWatcher(this.#projectRoot, listener);
+    const watcher = new PortableSourceWatcher(this.#watchRoots, listener);
     this.#watchers.add(watcher);
     return () => {
       watcher.close();
@@ -120,45 +136,67 @@ export function assertNativeTypeScriptSupport(): void {
 }
 
 class PortableSourceWatcher {
-  #watcher?: FSWatcher;
+  #watchers = new Set<FSWatcher>();
   #pollTimer?: NodeJS.Timeout;
   #snapshot: ReadonlyMap<string, number>;
   #closed = false;
+  #roots: readonly string[];
 
   constructor(
-    private readonly root: string,
+    roots: readonly string[],
     private readonly listener: (source: string) => void,
   ) {
-    this.#snapshot = sourceSnapshot(root);
-    this.#startNativeWatcher();
+    this.#roots = normalizeWatchRoots(roots);
+    this.#snapshot = sourceSnapshot(this.#roots);
+    this.#startNativeWatchers();
+  }
+
+  replaceRoots(roots: readonly string[]): void {
+    if (this.#closed) return;
+    const next = normalizeWatchRoots(roots);
+    if (sameRoots(this.#roots, next)) return;
+    // The root set and polling snapshot change together. Native handles are
+    // replaced afterwards; stale handles are filtered by the committed set.
+    this.#roots = next;
+    this.#snapshot = sourceSnapshot(next);
+    if (!this.#pollTimer) this.#startNativeWatchers();
   }
 
   close(): void {
     if (this.#closed) return;
     this.#closed = true;
-    this.#watcher?.close();
+    this.#closeNativeWatchers();
     if (this.#pollTimer) clearInterval(this.#pollTimer);
   }
 
-  #startNativeWatcher(): void {
+  #startNativeWatchers(): void {
+    if (this.#closed || this.#pollTimer) return;
+    const next = new Set<FSWatcher>();
     try {
-      this.#watcher = watchDirectory(this.root, { recursive: true }, (_event, name) => {
-        if (!name) return;
-        const source = resolve(this.root, name.toString());
-        if (isWatchedSource(source) && !isIgnoredSource(this.root, source)) this.listener(source);
-      });
-      this.#watcher.on('error', () => this.#startPolling());
+      for (const root of this.#roots) {
+        const watcher = watchDirectory(root, { recursive: true }, (_event, name) => {
+          if (!name || !this.#roots.includes(root)) return;
+          const source = resolve(root, name.toString());
+          if (isWatchedSource(source) && !isIgnoredSource(root, source)) this.listener(source);
+        });
+        watcher.on('error', () => this.#startPolling());
+        next.add(watcher);
+      }
     } catch {
+      for (const watcher of next) watcher.close();
       this.#startPolling();
+      return;
     }
+    const previous = this.#watchers;
+    this.#watchers = next;
+    for (const watcher of previous) watcher.close();
   }
 
   #startPolling(): void {
     if (this.#closed || this.#pollTimer) return;
-    this.#watcher?.close();
-    this.#watcher = undefined;
+    this.#closeNativeWatchers();
     this.#pollTimer = setInterval(() => {
-      const next = sourceSnapshot(this.root);
+      const next = sourceSnapshot(this.#roots);
       const sources = new Set([...this.#snapshot.keys(), ...next.keys()]);
       for (const source of sources) {
         if (this.#snapshot.get(source) !== next.get(source)) this.listener(source);
@@ -166,9 +204,14 @@ class PortableSourceWatcher {
       this.#snapshot = next;
     }, 100);
   }
+
+  #closeNativeWatchers(): void {
+    for (const watcher of this.#watchers) watcher.close();
+    this.#watchers.clear();
+  }
 }
 
-function sourceSnapshot(root: string): ReadonlyMap<string, number> {
+function sourceSnapshot(roots: readonly string[]): ReadonlyMap<string, number> {
   const result = new Map<string, number>();
   const visit = (directory: string): void => {
     let entries;
@@ -185,7 +228,7 @@ function sourceSnapshot(root: string): ReadonlyMap<string, number> {
       }
     }
   };
-  visit(root);
+  for (const root of roots) visit(root);
   return result;
 }
 
@@ -224,4 +267,25 @@ function isExecutableSource(source: string): boolean {
 function isWithin(root: string, source: string): boolean {
   const child = relative(root, source);
   return child === '' || (!child.startsWith('..') && !isAbsolute(child));
+}
+
+function nearestWatchRoot(roots: readonly string[], source: string): string | undefined {
+  return roots.find((root) => isWithin(root, source));
+}
+
+function isNodeModulesSource(root: string, source: string): boolean {
+  return relative(root, source).split(sep).some((part) => part === 'node_modules');
+}
+
+function normalizeWatchRoots(roots: readonly string[]): readonly string[] {
+  const sorted = [...new Set(roots.map((root) => resolve(root)))].sort(
+    (left, right) => left.length - right.length,
+  );
+  return Object.freeze(sorted.filter((root, index) =>
+    !sorted.slice(0, index).some((parent) => isWithin(parent, root)),
+  ));
+}
+
+function sameRoots(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((root, index) => root === right[index]);
 }

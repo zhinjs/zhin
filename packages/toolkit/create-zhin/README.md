@@ -177,14 +177,18 @@ npm create zhin-app experimental-bot
 
 ```
 my-awesome-bot/
-├── src/                      # 应用源代码
-│   └── plugins/             # 本地插件目录
-│       └── example.ts       # 示例插件
-├── client/                   # 客户端页面
-│   └── index.tsx            # 示例页面
+├── plugin.ts                 # 根 Plugin Runtime 入口
+├── schema.json               # 根插件配置 JSON Schema
+├── commands/                 # 消息命令
+├── components/               # 消息组件
+├── middlewares/              # 消息中间件
+├── tools/                    # 可选 AI tools（默认空）
+├── skills/                   # SKILL.md 能力目录
+├── agents/                   # 可选 Agent 定义（默认空）
+├── pages/                    # Console page + $nav/$footer 布局
+├── plugins/                  # 仅一级的本地子插件 workspace
+├── packages/                 # 提供给 Zhin 的 Feature workspace
 ├── data/                     # 数据存储目录
-├── plugins/                  # 插件开发目录（独立包）
-│   └── .gitkeep
 ├── zhin.config.yml           # 配置文件（可选 YAML / JSON / TOML）
 ├── package.json             # 根 package.json（包含依赖和脚本）
 ├── tsconfig.json            # TypeScript 根配置
@@ -201,7 +205,8 @@ my-awesome-bot/
 ```yaml
 packages:
   - '.'              # 根目录即为主应用
-  - 'plugins/*'      # plugins 下的所有插件包
+  - 'plugins/*'      # plugins 下的一级子插件包
+  - 'packages/*'     # 本地 Feature 包
 ```
 
 **根 package.json 脚本:**

@@ -36,6 +36,11 @@ import type {
 } from './runtime-generation.js';
 import { SourceOwnershipIndex } from './source-ownership.js';
 import {
+  capabilityDeltaFromSlots,
+  capabilityDeltaIds,
+  type CapabilityDelta,
+} from './convention-capability-delta.js';
+import {
   addCapabilitySlot,
   featureSetupAliases,
   mergeSetupCapabilities,
@@ -56,6 +61,13 @@ interface FeatureTopology {
   readonly featureIdsByPackageRoot: ReadonlyMap<string, FeatureId>;
 }
 
+/** Runtime-local invalidation to commit alongside an ABI-safe manifest change. */
+export interface TopologyRuntimeDelta {
+  readonly slots: readonly CapabilityId[];
+  readonly subtrees: readonly PluginId[];
+  readonly capabilities?: CapabilityDelta;
+}
+
 /** Prepares manifest topology changes without rebuilding stable Plugin Scopes. */
 export class TopologyGenerationPreparer {
   constructor(
@@ -70,7 +82,10 @@ export class TopologyGenerationPreparer {
     private readonly isolation?: IsolatedPluginRuntimePort,
   ) {}
 
-  async prepare(current: RuntimeSnapshot): Promise<PreparedRuntimeGeneration | undefined> {
+  async prepare(
+    current: RuntimeSnapshot,
+    delta: TopologyRuntimeDelta = { slots: [], subtrees: [] },
+  ): Promise<PreparedRuntimeGeneration | undefined> {
     const planned = new TopologyTransactionPlanner().plan(this.model.graph, this.graph);
     const nextNodes = graphNodes(this.graph);
     const configReplacements = changedConfigRoots(current, nextNodes, this.configResolver);
@@ -79,7 +94,9 @@ export class TopologyGenerationPreparer {
       ...configReplacements,
     ]);
     const plan = withReplacements(planned, replacedPluginRoots);
-    if (!plan.changed) return undefined;
+    const subtreeRoots = collapseRoots(delta.subtrees);
+    const selected = delta.capabilities ?? capabilityDeltaFromSlots(current, delta.slots);
+    if (!plan.changed && subtreeRoots.length === 0 && selected.size === 0) return undefined;
 
     const featureTopology = await this.#loadFeatureTopology(plan);
     const plugins = new PluginScopeAssembler(
@@ -101,10 +118,12 @@ export class TopologyGenerationPreparer {
     const setupRoots = collapseRoots([
       ...plan.addedPluginRoots,
       ...plan.replacedPluginRoots,
+      ...subtreeRoots,
     ]);
     const removalRoots = collapseRoots([
       ...plan.removedPluginRoots,
       ...plan.replacedPluginRoots,
+      ...subtreeRoots,
     ]);
     plugins.removeSubtrees(removalRoots);
 
@@ -124,6 +143,7 @@ export class TopologyGenerationPreparer {
         plan,
         setupRoots,
         featureTopology,
+        selected,
       );
       mergeSetupCapabilities(
         capabilities,
@@ -227,6 +247,7 @@ export class TopologyGenerationPreparer {
     plan: TopologyTransactionPlan,
     setupRoots: readonly PluginId[],
     topology: FeatureTopology,
+    selected: CapabilityDelta,
   ): Promise<Map<CapabilityId, CapabilitySlot>> {
     const nextOwners = new Set(graphNodes(this.graph).keys());
     const mounted = mountedFeatures(topology);
@@ -252,9 +273,15 @@ export class TopologyGenerationPreparer {
     }
 
     const capabilities = new Map(current.capabilities);
+    const selectedIds = new Set(capabilityDeltaIds(selected));
     for (const [id, slot] of capabilities) {
       const key = ownerFeatureKey(slot.owner, slot.feature);
-      if (!nextOwners.has(slot.owner) || !mounted.has(key) || refresh.has(key)) {
+      if (
+        !nextOwners.has(slot.owner)
+        || !mounted.has(key)
+        || refresh.has(key)
+        || selectedIds.has(id)
+      ) {
         capabilities.delete(id);
       }
     }
@@ -266,6 +293,19 @@ export class TopologyGenerationPreparer {
       const provider = topology.providers.get(feature);
       if (!provider) throw new Error(`Missing Feature provider for ${feature}`);
       for (const slot of await discovery.discover(provider, selected)) {
+        addCapabilitySlot(capabilities, slot);
+      }
+    }
+
+    // A manifest batch can carry a direct capability change. Rediscover the
+    // requested Slots after topology refresh so both observations commit as
+    // one immutable generation instead of racing two reload transactions.
+    const selectedByFeature = selectedSlotsByFeature(current, selected, refresh);
+    for (const [feature, ids] of selectedByFeature) {
+      const provider = topology.providers.get(feature);
+      if (!provider) continue;
+      const roots = topology.rootsByFeature.get(feature) ?? [];
+      for (const slot of await discovery.discover(provider, roots, { capabilities: ids })) {
         addCapabilitySlot(capabilities, slot);
       }
     }
@@ -337,6 +377,24 @@ function featureMountsForReload(
 
 function ownerFeatureKey(owner: PluginId, feature: FeatureId): string {
   return `${owner}\0${feature}`;
+}
+
+function selectedSlotsByFeature(
+  current: RuntimeSnapshot,
+  selected: CapabilityDelta,
+  refreshed: ReadonlySet<string>,
+): ReadonlyMap<FeatureId, ReadonlySet<CapabilityId>> {
+  const result = new Map<FeatureId, Set<CapabilityId>>();
+  for (const [feature, selectedIds] of selected) {
+    for (const id of selectedIds) {
+      const slot = current.capabilities.get(id);
+      if (slot && refreshed.has(ownerFeatureKey(slot.owner, slot.feature))) continue;
+      const ids = result.get(feature) ?? new Set<CapabilityId>();
+      ids.add(id);
+      result.set(feature, ids);
+    }
+  }
+  return result;
 }
 
 function sameValues(left: readonly unknown[], right: readonly unknown[]): boolean {

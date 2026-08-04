@@ -3,14 +3,13 @@
  */
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import type { Tool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import type { Tool, Message, MediaRef, ToolParametersSchema, ToolResult } from '@zhin.js/core';
 import { runToolPolicies, toolPolicyResultToMessage } from '../security/policy-facade.js';
 import { expandHome, nodeErrToFileMessage } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
-import { normalizeContentPartsToPayloads } from '../media/media-normalize.js';
+import { normalizeMediaRefsToPayloads } from '../media/media-normalize.js';
 import { preprocessInboundMedia } from '../media/media-router.js';
 import { resolveMultimodalConfig } from '../media/resolve-config.js';
-import type { ContentPart } from '@zhin.js/ai';
 
 const MEDIA_EXT = new Set([
   '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg',
@@ -81,19 +80,20 @@ export class AnalyzeMediaBuiltinTool extends BuiltinBaseTool {
       }
 
       const ext = path.extname(fp).toLowerCase();
-      let part: ContentPart;
+      const base64 = buf.toString('base64');
+      const fileName = path.basename(fp);
+      let ref: { type: string; media: MediaRef };
       if (['.mp3', '.wav', '.ogg', '.m4a'].includes(ext)) {
-        part = { type: 'audio', audio: { data: buf.toString('base64'), format: ext === '.wav' ? 'wav' : 'mp3' } };
+        ref = { type: 'audio', media: { kind: 'base64', value: base64, mime_type: ext === '.wav' ? 'audio/wav' : 'audio/mpeg', file_name: fileName } };
       } else if (['.mp4', '.webm', '.mov', '.mkv'].includes(ext)) {
-        const mime = 'video/mp4';
-        part = { type: 'video_url', video_url: { url: `data:${mime};base64,${buf.toString('base64')}` } };
+        ref = { type: 'video', media: { kind: 'base64', value: base64, mime_type: 'video/mp4', file_name: fileName } };
       } else {
         const mime = ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
-        part = { type: 'image_url', image_url: { url: `data:${mime};base64,${buf.toString('base64')}` } };
+        ref = { type: 'image', media: { kind: 'base64', value: base64, mime_type: mime, file_name: fileName } };
       }
 
-      const payloads = await normalizeContentPartsToPayloads([part], mm.maxFileBytes);
-      const pre = await preprocessInboundMedia([part], mm);
+      const payloads = await normalizeMediaRefsToPayloads([ref], mm.maxFileBytes);
+      const pre = await preprocessInboundMedia(payloads, mm);
       const lines = [
         `File: ${fp}`,
         `Size: ${(stat.size / 1024).toFixed(1)} KB`,

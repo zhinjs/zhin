@@ -22,12 +22,19 @@ const ZHIN_PACKAGE_PREFIX = '@zhin.js/';
 const CORE_PACKAGE = 'zhin.js';
 
 const RECOMMENDED_SCRIPTS: Record<string, string> = {
-  dev: 'zhin dev',
-  start: 'zhin start',
-  daemon: 'zhin start --daemon',
+  dev: 'zhin runtime start',
+  start: 'zhin runtime start',
+  daemon: 'zhin runtime start --daemon',
   stop: 'zhin stop',
-  build: 'zhin build',
+  build: 'tsc --noEmit',
 };
+
+const LEGACY_SCRIPTS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  dev: ['zhin dev'],
+  start: ['zhin start'],
+  daemon: ['zhin start --daemon'],
+  build: ['zhin build'],
+});
 
 function isZhinProject(dir: string): boolean {
   const pkgPath = path.join(dir, 'package.json');
@@ -91,12 +98,15 @@ export function upgradePackageJson(pkgPath: string, options: { toLatest: boolean
     changed = true;
   }
 
-  // 补全推荐 scripts（缺失则添加）
+  // 替换已失效的启动入口，同时保留用户自定义 scripts。
   if (!pkg.scripts) pkg.scripts = {};
   for (const [name, cmd] of Object.entries(RECOMMENDED_SCRIPTS)) {
-    if (!pkg.scripts[name]) {
+    const current = pkg.scripts[name];
+    const isLegacy = typeof current === 'string'
+      && (LEGACY_SCRIPTS[name] ?? []).includes(current.trim());
+    if (!current || isLegacy) {
       if (options.dryRun) {
-        console.log(chalk.cyan(`  [dry-run] scripts.${name} = "${cmd}"`));
+        console.log(chalk.cyan(`  [dry-run] scripts.${name}: ${current ?? '(missing)'} → "${cmd}"`));
       } else {
         pkg.scripts[name] = cmd;
       }

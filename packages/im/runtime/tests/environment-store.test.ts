@@ -16,6 +16,7 @@ import {
   createEnvStore,
   defineEnvSchema,
   defineRuntimeEnvironment,
+  environmentOwnerPath,
   envStoreToken,
   expandEnvironmentValue,
   primaryConfigToken,
@@ -52,6 +53,37 @@ describe('EnvStore', () => {
     expect(child.get('ENDPOINT')).toBe('child');
     expect(child.get('SHARED')).toBe('root');
     expect(child.get('ROOT_ONLY')).toBe('visible-to-descendants');
+  });
+
+  it('uses PluginGraph owner paths for root/a/b inheritance and sibling isolation', () => {
+    const environment = { name: 'development', mode: 'development', platform: 'node' } as const;
+    const layers = {
+      base: { SHARED: 'base', SECRET: 'base-secret' },
+      environments: { development: { SHARED: 'environment' } },
+      plugins: {
+        root: { SHARED: 'root', ROOT_ONLY: 'root-value' },
+        'root/a': { SHARED: 'a', A_ONLY: 'a-value', SECRET: 'a-secret' },
+        'root/a/b': { SHARED: 'b', B_ONLY: 'b-value' },
+        'root/sibling': { SHARED: 'sibling', SIBLING_ONLY: 'sibling-value' },
+      },
+    };
+    const root = createEnvStore(rootPluginId(), environment, layers);
+    const a = createEnvStore('root/a' as PluginId, environment, layers);
+    const b = createEnvStore('root/a/b' as PluginId, environment, layers);
+    const sibling = createEnvStore('root/sibling' as PluginId, environment, layers);
+
+    expect(environmentOwnerPath('root/a/b' as PluginId)).toEqual(['root', 'root/a', 'root/a/b']);
+    expect(root.get('SHARED')).toBe('root');
+    expect(a.get('SHARED')).toBe('a');
+    expect(b.get('SHARED')).toBe('b');
+    expect(b.get('ROOT_ONLY')).toBe('root-value');
+    expect(b.get('A_ONLY')).toBe('a-value');
+    expect(sibling.get('SHARED')).toBe('sibling');
+    expect(sibling.get('A_ONLY')).toBeUndefined();
+    expect(sibling.get('B_ONLY')).toBeUndefined();
+    expect(b.redact({ token: 'Bearer a-secret' }, ['SECRET'])).toEqual({
+      token: 'Bearer [REDACTED]',
+    });
   });
 
   it('expands structured values without mutating config and rejects missing variables', () => {
@@ -183,6 +215,9 @@ describe('EnvStore', () => {
       { name: 'test', mode: 'test', platform: 'node' },
       { plugins: { '../outside': { TOKEN: 'value' } } },
     )).toThrow('Invalid Plugin environment overlay owner');
+    expect(() => environmentOwnerPath('root/a/../b' as PluginId)).toThrow(
+      'Invalid Plugin environment owner',
+    );
     expect(() => defineRuntimeEnvironment({
       name: 'staging', mode: 'staging', platform: 'node',
     } as never)).toThrow('Invalid runtime mode');

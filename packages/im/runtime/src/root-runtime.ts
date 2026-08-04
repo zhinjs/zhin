@@ -75,6 +75,14 @@ import {
   type ProcessRestartAdapter,
 } from './process-restart.js';
 import { SlotGenerationPreparer } from './slot-generation-preparer.js';
+import {
+  capabilityDeltaFromSlots,
+  capabilityDeltaIds,
+  ConventionCapabilityDeltaResolver,
+  filterCapabilityDelta,
+  mergeCapabilityDeltas,
+  type CapabilityDelta,
+} from './convention-capability-delta.js';
 import { SourceOwnershipIndex } from './source-ownership.js';
 import {
   addCapabilitySlot,
@@ -219,31 +227,35 @@ export class RootRuntime {
     const snapshot = await this.controller.reload(
       plan.subtrees[0] ?? plan.slots[0] ?? rootPluginId(),
       async (current) => {
-        if (this.#model && this.#isManifestTopologyPlan(plan)) {
+        const resolved = await this.#resolveCapabilityDelta(current, plan);
+        const effective = resolved.plan;
+        if (this.#model && effective.manifestSources.length > 0) {
           const inspected = await this.#inspectProject();
           restart = new RestartBoundaryPlanner().plan(
             this.#model.graph,
             inspected.graph,
-            plan.changed,
+            effective.changed,
           );
           if (restart) return undefined;
-          prepared = await new TopologyGenerationPreparer(
-            this.#modules,
-            this.#model,
-            inspected.graph,
-            inspected.configResolver,
-            inspected.primaryConfigDocument,
-            this.#environment,
-            this.#installResources,
-            this.#environmentLayers,
-            this.#isolation,
-          ).prepare(current);
-        } else if (plan.subtrees.length === 0 && plan.slots.length > 0 && this.#model) {
+          prepared = effective.subtrees.includes(rootPluginId())
+            ? await this.#prepareInspected(current, inspected)
+            : await new TopologyGenerationPreparer(
+              this.#modules,
+              this.#model,
+              inspected.graph,
+              inspected.configResolver,
+              inspected.primaryConfigDocument,
+              this.#environment,
+              this.#installResources,
+              this.#environmentLayers,
+              this.#isolation,
+            ).prepare(current, { ...effective, capabilities: resolved.capabilities });
+        } else if (effective.subtrees.length === 0 && resolved.capabilities.size > 0 && this.#model) {
           prepared = await new SlotGenerationPreparer(this.#modules, this.#model)
-            .prepare(current, plan.slots);
-        } else if (this.#model && this.#canPrepareSubtrees(plan)) {
+            .prepare(current, resolved.capabilities);
+        } else if (this.#model && this.#canPrepareSubtrees(effective)) {
           const inspected = await this.#inspectProject();
-          prepared = await this.#prepareSubtrees(current, inspected, plan.subtrees);
+          prepared = await this.#prepareSubtrees(current, inspected, effective.subtrees);
         } else {
           prepared = await this.#prepare(current);
         }
@@ -255,19 +267,39 @@ export class RootRuntime {
     return snapshot;
   }
 
-  #isManifestTopologyPlan(plan: GenerationInvalidationPlan): boolean {
-    let manifest = false;
-    for (const source of plan.changed) {
-      const records = this.#ownership.recordsFor(source);
-      if (records.some((record) => record.role === 'manifest')) manifest = true;
-      if (records.some((record) => record.role !== 'manifest')) return false;
-    }
-    return manifest;
-  }
-
   #accept(prepared: PreparedRuntimeGeneration): void {
     this.#ownership = prepared.ownership;
     this.#model = prepared.model;
+  }
+
+  async #resolveCapabilityDelta(
+    current: RuntimeSnapshot,
+    plan: GenerationInvalidationPlan,
+  ): Promise<{ readonly plan: GenerationInvalidationPlan; readonly capabilities: CapabilityDelta }> {
+    const known = capabilityDeltaFromSlots(current, plan.slots);
+    if (!this.#model || (plan.fallbacks.length === 0 && plan.slots.length === 0)) {
+      return { plan, capabilities: known };
+    }
+    const discovered = await new ConventionCapabilityDeltaResolver(
+      this.#modules,
+      this.#model,
+      current,
+    ).resolve(plan.fallbacks, plan.slots);
+    const subtrees = collapseInvalidationSubtrees([
+      ...plan.subtrees,
+      ...discovered.unresolved.flatMap((fallback) => fallback.owners),
+    ]);
+    const capabilities = filterCapabilityDelta(
+      mergeCapabilityDeltas(known, discovered.capabilities),
+      (owner) => !subtrees.some((root) => isWithinInvalidationRoot(owner, root)),
+    );
+    const effective = Object.freeze({
+      ...plan,
+      slots: capabilityDeltaIds(capabilities),
+      subtrees,
+      fallbacks: Object.freeze([]),
+    });
+    return { plan: effective, capabilities };
   }
 
   #canPrepareSubtrees(plan: GenerationInvalidationPlan): boolean {
@@ -441,6 +473,17 @@ export class RootRuntime {
       return this.#prepareInspected(current, inspected);
     }
   }
+}
+
+function collapseInvalidationSubtrees(values: readonly PluginId[]): readonly PluginId[] {
+  const sorted = [...new Set(values)].sort((left, right) => left.length - right.length);
+  return Object.freeze(sorted.filter((candidate, index) =>
+    !sorted.slice(0, index).some((root) => isWithinInvalidationRoot(candidate, root)),
+  ));
+}
+
+function isWithinInvalidationRoot(plugin: PluginId, root: PluginId): boolean {
+  return plugin === root || plugin.startsWith(`${root}/`);
 }
 
 function withConfigDocumentHandoff(

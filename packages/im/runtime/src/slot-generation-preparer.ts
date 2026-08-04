@@ -3,7 +3,6 @@ import {
   createSnapshotView,
   type CapabilityId,
   type Dispose,
-  type FeatureId,
   type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import { FeatureDiscovery } from '@zhin.js/feature-kit';
@@ -15,6 +14,10 @@ import type {
   RuntimeGenerationModel,
 } from './runtime-generation.js';
 import { SourceOwnershipIndex } from './source-ownership.js';
+import {
+  capabilityDeltaFromSlots,
+  type CapabilityDelta,
+} from './convention-capability-delta.js';
 
 export class SlotGenerationPreparer {
   constructor(
@@ -24,9 +27,11 @@ export class SlotGenerationPreparer {
 
   async prepare(
     current: RuntimeSnapshot,
-    selected: readonly CapabilityId[],
+    selected: readonly CapabilityId[] | CapabilityDelta,
   ): Promise<PreparedRuntimeGeneration> {
-    const selectedByFeature = groupByFeature(current, selected);
+    const selectedByFeature: CapabilityDelta = Array.isArray(selected)
+      ? capabilityDeltaFromSlots(current, selected as readonly CapabilityId[])
+      : selected as CapabilityDelta;
     const capabilities = new Map(current.capabilities);
     const discovery = new FeatureDiscovery(new NodeDiscoveryHost(this.modules));
     for (const [feature, ids] of selectedByFeature) {
@@ -84,21 +89,6 @@ export class SlotGenerationPreparer {
       throw error;
     }
   }
-}
-
-function groupByFeature(
-  current: RuntimeSnapshot,
-  selected: readonly CapabilityId[],
-): ReadonlyMap<FeatureId, ReadonlySet<CapabilityId>> {
-  const result = new Map<FeatureId, Set<CapabilityId>>();
-  for (const id of selected) {
-    const slot = current.capabilities.get(id);
-    if (!slot) throw new Error(`Cannot reload missing Capability Slot: ${id}`);
-    const ids = result.get(slot.feature) ?? new Set<CapabilityId>();
-    ids.add(id);
-    result.set(slot.feature, ids);
-  }
-  return result;
 }
 
 async function disposeProjections(

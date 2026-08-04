@@ -39,6 +39,7 @@ export class HmrCoordinator {
     if (!this.options.modules.watch) {
       throw new Error('ModuleRuntime does not provide a file watcher');
     }
+    this.#syncWatchRoots();
     this.#unwatch = this.options.modules.watch((source) => {
       void this.enqueue(source).catch(() => undefined);
     });
@@ -112,6 +113,10 @@ export class HmrCoordinator {
         const restart = await this.options.runtime.reload(plan);
         if (restart) await this.options.onRestartRequired(restart);
         else {
+          // reload resolves only after RootController has committed the new
+          // generation. Read ownership now so failed transactions never make
+          // newly discovered workspace packages observable to the watcher.
+          this.#syncWatchRoots();
           const durationMs = Number((performance.now() - startedAt).toFixed(1));
           await this.options.onReload?.(plan, durationMs);
         }
@@ -140,5 +145,9 @@ export class HmrCoordinator {
 
   #rejectWaiters(error: unknown): void {
     for (const waiter of this.#waiters.splice(0)) waiter.reject(error);
+  }
+
+  #syncWatchRoots(): void {
+    this.options.modules.updateWatchRoots?.(this.options.ownership().watchRoots());
   }
 }

@@ -21,7 +21,7 @@ import {
 import { ConsoleRuntime } from '../../src/plugin-runtime/index.js';
 
 describe('Console Runtime', () => {
-  it('keeps route guard, Navigation and Layout inheritance on one snapshot', async () => {
+  it('resolves pages, navigation, and nearest layouts from one snapshot', async () => {
     const store = new SnapshotStore(state());
     const runtime = new ConsoleRuntime();
     runtime.attach(store);
@@ -29,18 +29,72 @@ describe('Console Runtime', () => {
     await runtime.runView(
       { permissions: ['status:read'], roles: [] },
       (catalog) => {
-        expect(catalog.match('/a/p-status').status).toBe('found');
-        expect(catalog.match('/a/p-secret').status).toBe('forbidden');
-        expect(catalog.match('/missing').status).toBe('missing');
-        expect(catalog.navigation()).toMatchObject([
+        const topology = catalog.topology();
+        expect(topology.generation).toBe(0);
+        expect(topology.resolve('/a/p-status')).toMatchObject({
+          status: 'found',
+          layouts: { nav: { module: '/a-nav.js' }, footer: { module: '/a-footer.js' } },
+        });
+        expect(topology.resolve('/a/b/p-overview')).toMatchObject({
+          status: 'found',
+          layouts: { nav: { module: '/a-nav.js' }, footer: { module: '/a-footer.js' } },
+        });
+        expect(topology.resolve('/p-home')).toMatchObject({
+          status: 'found',
+          layouts: { nav: { module: '/root-nav.js' }, footer: { module: '/root-footer.js' } },
+        });
+        expect(topology.resolve('/a/p-secret')).toEqual({ status: 'forbidden' });
+        expect(topology.resolve('/missing')).toEqual({ status: 'missing' });
+        expect(topology.navigation).toMatchObject([
           { type: 'plugin', label: 'Admin', children: [{ label: 'Status' }] },
           { type: 'page', label: 'Home' },
         ]);
         expect(catalog.layouts(`${rootPluginId()}/a/b` as PluginId, 'nav')
           .map((layout) => layout.module)).toEqual(['/a-nav.js', '/root-nav.js']);
-        expect(catalog.fallback(`${rootPluginId()}/a/b` as PluginId)).toBe('/a/p-status');
+        expect(catalog.fallback(`${rootPluginId()}/a/b` as PluginId)).toBe('/a/b/p-overview');
       },
     );
+  });
+
+  it('does not mix page and layout catalogs across an HMR generation commit', async () => {
+    const store = new SnapshotStore(state('v1'));
+    const runtime = new ConsoleRuntime();
+    runtime.attach(store);
+    let continueOldView!: () => void;
+    let oldViewReady!: () => void;
+    const oldViewStarted = new Promise<void>((resolve) => { oldViewReady = resolve; });
+    const waitForCommit = new Promise<void>((resolve) => { continueOldView = resolve; });
+
+    const oldView = runtime.runView({ permissions: ['status:read'], roles: [] }, async (catalog) => {
+      const topology = catalog.topology();
+      oldViewReady();
+      await waitForCommit;
+      return {
+        generation: topology.generation,
+        resolution: topology.resolve('/a/b/p-overview'),
+      };
+    });
+    await oldViewStarted;
+    store.commit(0, { snapshot: state('v2'), dispose: () => undefined });
+    continueOldView();
+
+    await expect(oldView).resolves.toMatchObject({
+      generation: 0,
+      resolution: {
+        page: { module: '/overview-v1.js' },
+        layouts: { nav: { module: '/a-nav-v1.js' }, footer: { module: '/a-footer-v1.js' } },
+      },
+    });
+    await expect(runtime.runView({ permissions: ['status:read'], roles: [] }, (catalog) => {
+      const topology = catalog.topology();
+      return { generation: topology.generation, resolution: topology.resolve('/a/b/p-overview') };
+    })).resolves.toMatchObject({
+      generation: 1,
+      resolution: {
+        page: { module: '/overview-v2.js' },
+        layouts: { nav: { module: '/a-nav-v2.js' }, footer: { module: '/a-footer-v2.js' } },
+      },
+    });
   });
 
   it('expires a catalog after the view lease is released', async () => {
@@ -55,7 +109,7 @@ describe('Console Runtime', () => {
   });
 });
 
-function state(): SnapshotState {
+function state(revision = ''): SnapshotState {
   const root = rootPluginId();
   const a = `${root}/a` as PluginId;
   const b = `${a}/b` as PluginId;
@@ -74,13 +128,16 @@ function state(): SnapshotState {
     projections: new Map(),
   };
   const pageSlots = [
-    page(root, 'home', { title: 'Home', order: 20 }),
-    page(a, 'status', { title: 'Status', order: 10, requiredPermissions: ['status:read'] }),
-    page(a, 'secret', { title: 'Secret', order: 20, hideInNav: true, requiredRoles: ['admin'] }),
+    page(root, 'home', { title: 'Home', order: 20 }, revision),
+    page(a, 'status', { title: 'Status', order: 10, requiredPermissions: ['status:read'] }, revision),
+    page(a, 'secret', { title: 'Secret', order: 20, hideInNav: true, requiredRoles: ['admin'] }, revision),
+    page(b, 'overview', { title: 'Overview', hideInNav: true }, revision),
   ];
   const layoutSlots = [
-    layout(root, 'nav', '/root-nav.js'),
-    layout(a, 'nav', '/a-nav.js'),
+    layout(root, 'nav', moduleName('root-nav', revision)),
+    layout(root, 'footer', moduleName('root-footer', revision)),
+    layout(a, 'nav', moduleName('a-nav', revision)),
+    layout(a, 'footer', moduleName('a-footer', revision)),
   ];
   return {
     ...base,
@@ -114,6 +171,7 @@ function page(
   owner: PluginId,
   localName: string,
   metadata: Partial<PageDefinition>,
+  revision: string,
 ) {
   return createCapabilitySlot<PageDefinition>({
     owner,
@@ -126,11 +184,15 @@ function page(
       hideInNav: false,
       requiredPermissions: Object.freeze([]),
       requiredRoles: Object.freeze([]),
-      module: `/${localName}.js`,
-      hash: `hash-${localName}`,
+      module: moduleName(localName, revision),
+      hash: `hash-${localName}-${revision || 'current'}`,
       ...metadata,
     }),
   });
+}
+
+function moduleName(name: string, revision: string): string {
+  return `/${name}${revision ? `-${revision}` : ''}.js`;
 }
 
 function layout(owner: PluginId, slot: LayoutDefinition['slot'], module: string) {

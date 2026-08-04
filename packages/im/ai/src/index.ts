@@ -36,7 +36,6 @@ export {
   registerLlmApiFromProviders,
   resetLlmApiRegistryForTests,
   setLiveModelsResolver,
-  driverToModelApi,
   isSdkId,
   SDK_IDS,
   createSdkProviderAdapter,
@@ -131,26 +130,6 @@ export type {
 } from './types.js';
 
 // ── Providers ──
-export {
-  BaseProvider,
-  OpenAIProvider,
-  DeepSeekProvider,
-  MoonshotProvider,
-  ZhipuProvider,
-  AnthropicProvider,
-  OllamaProvider,
-  CloudflareProvider,
-  GoogleProvider,
-} from './providers/index.js';
-export type {
-  OpenAIConfig,
-  DeepSeekConfig,
-  AnthropicConfig,
-  OllamaConfig,
-  CloudflareConfig,
-  GoogleConfig,
-} from './providers/index.js';
-
 export {
   ZHIPU_DEFAULT_IMAGE_MODEL,
   CLOUDFLARE_DEFAULT_IMAGE_MODEL,

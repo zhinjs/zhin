@@ -1,8 +1,8 @@
 /**
- * Turn module — IM turn pipeline, scheduling, metrics, multimodal helpers.
+ * Turn module — IM turn pipeline, scheduling, metrics.
  */
 
-export { processTextTurn, processMultimodalTurn } from './turn-pipeline.js';
+export { processTextTurn } from './turn-pipeline.js';
 export type { ProcessTextTurnOptions } from './turn-pipeline.js';
 
 export { processTextTurnStream } from './process-stream.js';
@@ -27,11 +27,6 @@ export {
 export type { ZhinAgentTurnMetrics, ZhinAgentTurnPath } from './turn-metrics.js';
 
 export { TurnTracker } from './turn-tracker.js';
-
-export {
-  summarizeMultimodalParts,
-  buildVisionUserMessage,
-} from './multimodal-message.js';
 
 export {
   InboundTurnQueue,

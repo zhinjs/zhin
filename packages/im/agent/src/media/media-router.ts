@@ -1,11 +1,8 @@
 import { loadSpeechPipeline } from '@zhin.js/core';
-import type { ContentPart } from '@zhin.js/ai';
 import { createWarnOnce, resetWarnOnceForTests, CONTENT_CHAIN_STAGE, type ContentChainLogFields } from '@zhin.js/logger';
 import type { MediaBinaryPayload, MultimodalConfig, PreprocessInboundResult } from './media-types.js';
-import {
-  normalizeContentPartsToPayloads,
-  payloadToVisionPart,
-} from './media-normalize.js';
+import type { ContentPart, MediaContentBlock } from '@zhin.js/ai';
+import { normalizeContentPartsToPayloads, payloadToVisionPart } from './media-normalize.js';
 import { spoolPayloadToFile } from './media-spool.js';
 import * as path from 'node:path';
 function byteLengthFromBase64(b64: string): number {
@@ -66,17 +63,19 @@ export async function transcribeAudioPayload(
 }
 
 /**
- * 入站混合路由：base64 载荷 → 文本补充 + vision image parts
+ * 入站混合路由：base64 载荷 → 文本补充 + vision image 媒体块
  */
 export async function preprocessInboundMedia(
-  parts: ContentPart[],
+  input: readonly MediaBinaryPayload[] | readonly ContentPart[],
   config: MultimodalConfig,
   workspaceDir?: string,
   deps?: PreprocessInboundMediaDeps,
 ): Promise<PreprocessInboundResult> {
-  const payloads = await normalizeContentPartsToPayloads(parts, config.maxFileBytes);
+  const payloads = isMediaPayloadInput(input)
+    ? [...input]
+    : await normalizeContentPartsToPayloads(input, config.maxFileBytes);
   const lines: string[] = [];
-  const visionParts: ContentPart[] = [];
+  const visionParts: MediaContentBlock[] = [];
 
   const inboundRoot = path.join(workspaceDir || process.cwd(), config.inboundDir);
 
@@ -152,4 +151,15 @@ export async function preprocessInboundMedia(
     visionParts,
     payloads,
   };
+}
+
+function isMediaPayloadInput(
+  input: readonly MediaBinaryPayload[] | readonly ContentPart[],
+): input is readonly MediaBinaryPayload[] {
+  return input.every((item) => (
+    typeof item === 'object'
+    && item !== null
+    && 'base64' in item
+    && typeof (item as { base64?: unknown }).base64 === 'string'
+  ));
 }

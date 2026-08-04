@@ -1,7 +1,7 @@
 /**
  * Publish AgentStreamEvent via per-orchestrator bus.
  */
-import type { AgentStreamEvent } from '@zhin.js/ai/agent-stream';
+import { AgentRunJournal, type AgentStreamEvent } from '@zhin.js/ai/agent-stream';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import type { AgentStreamPublishContext } from './agent-stream-bus.js';
 import { mapTurnEventToAgentStreamEvents, type TurnToStreamContext } from './turn-to-agent-stream.js';
@@ -21,9 +21,10 @@ export function publishTurnStreamEvents(
   host: Pick<ZhinAgentPrivate, 'orchestrator'>,
   turnEvent: TurnEvent,
   ctx: TurnToStreamContext & AgentStreamPublishContext,
+  journal: AgentRunJournal,
 ): void {
   const { sessionId, turnId, httpSessionId, agentId } = ctx;
-  for (const streamEvent of mapTurnEventToAgentStreamEvents(turnEvent, { sessionId, turnId })) {
+  for (const streamEvent of mapTurnEventToAgentStreamEvents(turnEvent, { sessionId, turnId, journal })) {
     publishAgentStream(host, streamEvent, { sessionId, turnId, httpSessionId, agentId });
   }
 }

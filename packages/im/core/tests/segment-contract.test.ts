@@ -45,6 +45,30 @@ describe('segment-contract schema', () => {
     expect(isCanonicalSegment(seg)).toBe(true);
   });
 
+  it('strictly validates MediaRef for every built-in media segment', () => {
+    const valid = [
+      { type: 'audio', data: { media: { kind: 'url', value: 'https://cdn.example/a.mp3' } } },
+      { type: 'video', data: { media: { kind: 'path', value: '/tmp/a.mp4' } } },
+      { type: 'file', data: { media: { kind: 'file', value: 'platform-file-1' } } },
+    ];
+    for (const segment of valid) expect(isCanonicalSegment(segment)).toBe(true);
+
+    const invalid = [
+      { type: 'audio', data: { media: { kind: 'url' } } },
+      { type: 'video', data: { media: { kind: 'blob', value: 'video-1' } } },
+      { type: 'file', data: { media: { kind: 'base64', value: 42 } } },
+    ];
+    for (const segment of invalid) expect(isCanonicalSegment(segment)).toBe(false);
+  });
+
+  it('allows controlled extension types but rejects bare unknown types', () => {
+    expect(isCanonicalSegment({ type: 'keyboard', data: { rows: [] } })).toBe(true);
+    expect(isCanonicalSegment({ type: 'acme:poll', data: { options: [] } })).toBe(true);
+    expect(isCanonicalSegment({ type: 'acme:poll', data: {}, platform: { version: 1 } })).toBe(true);
+    expect(isCanonicalSegment({ type: 'poll', data: { options: [] } })).toBe(false);
+    expect(isCanonicalSegment({ type: 'acme:poll', data: [] })).toBe(false);
+  });
+
   it('accepts reply with message_id', () => {
     const seg = { type: 'reply', data: { message_id: '123' } };
     expect(isCanonicalSegment(seg)).toBe(true);

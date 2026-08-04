@@ -1,21 +1,16 @@
 /**
- * test-bot 协作入口契约（阶段 4；无真实 Endpoint）
+ * test-bot 协作配置契约（阶段 4；无真实 Endpoint）
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
-import { createInboundTurnPipeline } from '@zhin.js/agent';
 
 const botRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const configFixture = path.join(botRoot, 'fixtures/collaboration-contract.zhin.config.yml');
 const configText = fs.readFileSync(configFixture, 'utf8');
 
-describe('test-bot 协作入口契约', () => {
-  it('createInboundTurnPipeline 可从 @zhin.js/agent 解析', () => {
-    expect(typeof createInboundTurnPipeline).toBe('function');
-  });
-
+describe('test-bot 协作配置契约', () => {
   it('多 Agent 路由与 peerMode 已配置', () => {
     expect(configText).toMatch(/peerMode:\s*mention-only/);
     expect(configText).toMatch(/planner:/);

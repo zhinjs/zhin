@@ -18,15 +18,23 @@ import {
   type EndpointManagement,
   type EndpointManagementCapability,
 } from '@zhin.js/adapter';
+import {
+  formatLegacyConversationRef,
+  formatLegacyMessageRef,
+  isDeliveryReceipt,
+  type ConversationRef,
+  type DeliveryReceipt,
+  type MessageRef,
+} from '@zhin.js/im-contract';
 import { MiddlewareIndex, isMiddlewareIndex, middlewareFeatureId } from '@zhin.js/middleware';
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
 import {
   Message,
   createOutboundEnvelope,
   type ChannelParent,
+  type DeliveryMessageGateway,
   type IncomingMessage,
   type MessageDispatchResult,
-  type MessageGateway,
   type OutboundEnvelope,
   type SendContent,
   type SendRequest,
@@ -39,6 +47,7 @@ import {
   resolveOutboundInteractivePolicy,
   resolveOutboundMediaPolicy,
 } from './outbound-segments.js';
+import { assertCanonicalSegments } from '../../built/segment-contract/assert.js';
 import { keyboardFallbackStore } from '../../built/interactive-segments/fallback-store.js';
 import {
   findRuntimeInteractiveHandler,
@@ -50,7 +59,7 @@ import {
 
 const logger = getLogger('im');
 
-export const messageGatewayToken = createToken<MessageGateway>('zhin.im.message-gateway');
+export const messageGatewayToken = createToken<DeliveryMessageGateway>('zhin.im.message-gateway');
 
 /** Console 实时消息事件（SSE 推送源；content 仅为截断预览，不含完整原始段）。 */
 export interface RuntimeMessageEvent {
@@ -80,7 +89,7 @@ export interface ImRuntimeOptions {
   readonly renderer?: OutboundRenderer;
 }
 
-export class ImRuntime implements MessageGateway {
+export class ImRuntime implements DeliveryMessageGateway {
   readonly #dispatcher: MessageDispatcher;
   readonly #renderer: OutboundRenderer;
   readonly #messageListeners = new Set<(event: RuntimeMessageEvent) => void>();
@@ -183,15 +192,18 @@ export class ImRuntime implements MessageGateway {
           if (!active) throw new Error('Message reply scope has ended');
           return this.#sendWithSnapshot({
             adapter: input.adapter,
+            ...(input.conversation ? { conversation: input.conversation } : {}),
             target: input.target,
             requester: replyRequester,
             content,
           }, lease.value);
         },
-        input.id,
+        input.id ?? input.message?.id,
         input.sender,
         Object.freeze({ ...input.metadata }),
         input.segments ? Object.freeze([...input.segments]) : undefined,
+        input.conversation,
+        input.message,
       );
       let result: MessageDispatchResult = Object.freeze({ matched: false });
       await runMiddleware(
@@ -231,7 +243,9 @@ export class ImRuntime implements MessageGateway {
           ? { channelType: channelTypeOf(input.target) }
           : {}),
         contentPreview: previewText(input.content),
-        ...(input.id !== undefined ? { messageId: input.id } : {}),
+        ...(input.id ?? input.message?.id
+          ? { messageId: input.id ?? input.message?.id }
+          : {}),
         timestamp: Date.now(),
       });
       return result;
@@ -241,7 +255,7 @@ export class ImRuntime implements MessageGateway {
     }
   }
 
-  async send(request: SendRequest): Promise<unknown> {
+  async send(request: SendRequest): Promise<DeliveryReceipt> {
     const lease = this.#acquire();
     try {
       return await this.#sendWithSnapshot(request, lease.value);
@@ -318,8 +332,9 @@ export class ImRuntime implements MessageGateway {
   async sendEndpointMessage(input: {
     readonly adapter: string;
     readonly endpointId: string;
-    readonly channelId: string;
-    readonly channelType: string;
+    readonly conversation?: ConversationRef;
+    readonly channelId?: string;
+    readonly channelType?: string;
     readonly content: unknown;
     readonly parent?: ChannelParent;
   }): Promise<{ messageId: string }> {
@@ -328,16 +343,20 @@ export class ImRuntime implements MessageGateway {
       const index = requireAdapters(lease.value);
       const capabilityId = index.resolve(input.adapter, input.endpointId);
       if (!capabilityId) throw new Error('endpoint not found');
-      const target = composeSendTarget(input.channelType, input.channelId);
+      const target = input.conversation
+        ? formatLegacyConversationRef(input.conversation)
+        : composeSendTarget(input.channelType ?? '', input.channelId ?? '');
+      if (!target) throw new TypeError('conversation or channelId is required');
       const content = normalizeConsoleContent(input.content);
       const result = await this.#sendWithSnapshot({
         adapter: capabilityId,
+        ...(input.conversation ? { conversation: input.conversation } : {}),
         target,
         requester: index.owner(capabilityId),
         content,
         ...(input.parent ? { parent: input.parent } : {}),
       }, lease.value);
-      return { messageId: result == null ? '' : String(result) };
+      return { messageId: result.message?.id ?? result.legacyMessageId ?? '' };
     } finally {
       lease.release();
     }
@@ -347,13 +366,14 @@ export class ImRuntime implements MessageGateway {
   async addEndpointReaction(input: {
     readonly adapter: string;
     readonly endpointId: string;
-    readonly messageId: string;
+    readonly message?: MessageRef;
+    readonly messageId?: string;
     readonly emoji: string;
     readonly sceneType?: string;
     readonly channelId?: string;
   }): Promise<string | null> {
     const control = this.#liveEndpointControl(input.adapter, input.endpointId);
-    return control?.addReaction?.(input.messageId, input.emoji, {
+    return control?.addReaction?.(legacyMessageTarget(input.message, input.messageId), input.emoji, {
       sceneType: input.sceneType,
       channelId: input.channelId,
     }) ?? null;
@@ -362,21 +382,49 @@ export class ImRuntime implements MessageGateway {
   async removeEndpointReaction(input: {
     readonly adapter: string;
     readonly endpointId: string;
-    readonly messageId: string;
+    readonly message?: MessageRef;
+    readonly messageId?: string;
     readonly reactionId: string;
   }): Promise<void> {
     await this.#liveEndpointControl(input.adapter, input.endpointId)
-      ?.removeReaction?.(input.messageId, input.reactionId);
+      ?.removeReaction?.(legacyMessageTarget(input.message, input.messageId), input.reactionId);
   }
 
   /** Activity-feedback autoRemove: recall a previously sent status message. */
   async recallEndpointMessage(input: {
     readonly adapter: string;
     readonly endpointId: string;
-    readonly messageId: string;
+    readonly message?: MessageRef;
+    readonly messageId?: string;
   }): Promise<void> {
     await this.#liveEndpointControl(input.adapter, input.endpointId)
-      ?.recall?.(input.messageId);
+      ?.recall?.(legacyMessageTarget(input.message, input.messageId));
+  }
+
+  async editEndpointMessage(input: {
+    readonly adapter: string;
+    readonly endpointId: string;
+    readonly message?: MessageRef;
+    readonly messageId?: string;
+    readonly content: unknown;
+  }): Promise<string | null> {
+    return this.#liveEndpointControl(input.adapter, input.endpointId)
+      ?.edit?.(legacyMessageTarget(input.message, input.messageId), input.content) ?? null;
+  }
+
+  async setEndpointTyping(input: {
+    readonly adapter: string;
+    readonly endpointId: string;
+    readonly conversation?: ConversationRef;
+    readonly target?: string;
+    readonly active?: boolean;
+  }): Promise<void> {
+    const target = input.conversation
+      ? formatLegacyConversationRef(input.conversation)
+      : input.target;
+    if (!target) throw new TypeError('conversation or target is required');
+    await this.#liveEndpointControl(input.adapter, input.endpointId)
+      ?.typing?.(target, input.active);
   }
 
   #liveEndpoint(adapter: string, endpointId: string): unknown | null {
@@ -417,54 +465,81 @@ export class ImRuntime implements MessageGateway {
     return resolveEndpointManagement(endpoint) ?? Object.freeze({});
   }
 
-  async #sendWithSnapshot(request: SendRequest, snapshot: RuntimeSnapshot): Promise<unknown> {
-    const rendered = await this.#renderer.render(request.content, request.requester, snapshot);
-    // 单段对象 / html 段在此归一为适配器可消费的 canonical 段数组（含媒体能力协商）；
-    // sandbox 适配器（控制台 UI）直接消费 html 段，跳过规范化。
-    let payload = isDirectHtmlConsumer(snapshot, request.adapter)
-      ? rendered
-      : await normalizeOutboundPayload(rendered, resolveHtmlRenderer(snapshot), {
-        mediaPolicy: resolveOutboundMediaPolicy(request.adapter, snapshot),
-      });
-    // interactive 中央执行：'text' 端点 keyboard → 编号文本，fallback 映射写
-    // 中央存储（入站数字回跳解析用）；'native' 端点透传 keyboard。
-    payload = applyOutboundInteractivePolicy(
-      payload,
-      resolveOutboundInteractivePolicy(request.adapter, snapshot),
-      (map) => keyboardFallbackStore.remember(
-        runtimeInteractiveChannelKey(String(request.adapter), request.target),
-        map,
-      ),
-    );
+  async #sendWithSnapshot(
+    request: SendRequest,
+    snapshot: RuntimeSnapshot,
+  ): Promise<DeliveryReceipt> {
+    let initialPayload: unknown;
+    try {
+      const rendered = await this.#renderer.render(request.content, request.requester, snapshot);
+      initialPayload = await prepareOutboundPayload(rendered, request, snapshot);
+    } catch {
+      return rejectedReceipt('outbound_payload_rejected');
+    }
+
     const envelope = createOutboundEnvelope({
       adapter: request.adapter,
+      ...(request.conversation ? { conversation: request.conversation } : {}),
       target: request.target,
       requester: request.requester,
       generation: snapshot.generation,
       ...(request.parent ? { parent: request.parent } : {}),
-    }, payload);
-    let result: unknown;
-    await runMiddleware<OutboundEnvelope>(
-      snapshot,
-      envelope,
-      async () => {
-        result = await requireAdapters(snapshot).send(request.adapter, {
-          target: request.target,
-          payload: envelope.payload,
-          ...(request.parent ? { parent: request.parent } : {}),
-        });
-      },
-      'outbound',
-    );
-    this.#emitMessage({
-      direction: 'outbound',
-      adapter: request.adapter,
-      target: request.target,
-      requester: request.requester,
-      contentPreview: previewText(envelope.payload),
-      timestamp: Date.now(),
-    });
-    return result;
+    }, initialPayload);
+    let terminalEntered = false;
+    let receipt: DeliveryReceipt | undefined;
+
+    try {
+      await runMiddleware<OutboundEnvelope>(
+        snapshot,
+        envelope,
+        async () => {
+          terminalEntered = true;
+          let payload: unknown;
+          try {
+            // Middleware may replace a payload with legacy/wire segments. Normalize
+            // again at the transport boundary so it cannot bypass core policy.
+            payload = await prepareOutboundPayload(envelope.payload, request, snapshot, true);
+          } catch {
+            receipt = rejectedReceipt('outbound_payload_rejected');
+            return;
+          }
+
+          try {
+            const result = await requireAdapters(snapshot).send(request.adapter, {
+              target: request.target,
+              ...(request.conversation ? { conversation: request.conversation } : {}),
+              payload,
+              ...(request.parent ? { parent: request.parent } : {}),
+            });
+            receipt = receiptFromEndpointResult(result);
+          } catch (error) {
+            receipt = receiptFromEndpointError(error);
+          }
+
+          if (receipt?.status === 'sent') {
+            this.#emitMessage({
+              direction: 'outbound',
+              adapter: request.adapter,
+              target: request.target,
+              requester: request.requester,
+              contentPreview: previewText(payload),
+              ...(receipt.message?.id || receipt.legacyMessageId
+                ? { messageId: receipt.message?.id ?? receipt.legacyMessageId }
+                : {}),
+              timestamp: Date.now(),
+            });
+          }
+        },
+        'outbound',
+      );
+    } catch {
+      // If a middleware fails after the terminal, the endpoint has already
+      // produced its receipt (and, for a real send, its event). Keep that fact.
+      return receipt ?? failedReceipt('outbound_middleware_failed');
+    }
+
+    if (!terminalEntered) return suppressedReceipt();
+    return receipt ?? failedReceipt('outbound_delivery_incomplete');
   }
 
   #acquire() {
@@ -515,6 +590,94 @@ function resolveHtmlRenderer(snapshot: RuntimeSnapshot): HtmlRendererHost | unde
 function isDirectHtmlConsumer(snapshot: RuntimeSnapshot, adapter: CapabilityId): boolean {
   const owner = snapshot.capabilities.get(adapter)?.owner;
   return adapterTypeName(snapshot.tree.get(owner as PluginId)?.packageName) === 'sandbox';
+}
+
+function legacyMessageTarget(message?: MessageRef, messageId?: string): string {
+  if (message) return formatLegacyMessageRef(message);
+  if (messageId) return messageId;
+  throw new TypeError('message or messageId is required');
+}
+
+async function prepareOutboundPayload(
+  rendered: unknown,
+  request: SendRequest,
+  snapshot: RuntimeSnapshot,
+  finalizeInteractive = false,
+): Promise<unknown> {
+  const directHtml = isDirectHtmlConsumer(snapshot, request.adapter);
+  let payload = directHtml
+    ? rendered
+    : await normalizeOutboundPayload(rendered, resolveHtmlRenderer(snapshot), {
+      mediaPolicy: resolveOutboundMediaPolicy(request.adapter, snapshot),
+    });
+  if (finalizeInteractive) {
+    payload = applyOutboundInteractivePolicy(
+      payload,
+      resolveOutboundInteractivePolicy(request.adapter, snapshot),
+      (map) => keyboardFallbackStore.remember(
+        runtimeInteractiveChannelKey(String(request.adapter), request.target),
+        map,
+      ),
+    );
+  }
+  // Segment arrays crossing the adapter boundary are canonical after every
+  // middleware transform. Direct html consumers retain their explicit wire API.
+  if (!directHtml && Array.isArray(payload)) assertCanonicalSegments(payload);
+  return payload;
+}
+
+function receiptFromEndpointResult(result: unknown): DeliveryReceipt {
+  if (isDeliveryReceipt(result)) return result;
+  const legacyMessageId = legacyMessageIdOf(result);
+  return Object.freeze({
+    status: 'sent' as const,
+    ...(legacyMessageId ? { legacyMessageId } : {}),
+  });
+}
+
+function legacyMessageIdOf(result: unknown): string | undefined {
+  if (typeof result === 'string' || typeof result === 'number') return String(result);
+  if (!result || typeof result !== 'object') return undefined;
+  const id = (result as { id?: unknown }).id;
+  return typeof id === 'string' || typeof id === 'number' ? String(id) : undefined;
+}
+
+function receiptFromEndpointError(error: unknown): DeliveryReceipt {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/Unknown Adapter Endpoint|does not support outbound/u.test(message)) {
+    return unsupportedReceipt('outbound_unsupported');
+  }
+  if (/not active/u.test(message)) return failedReceipt('endpoint_inactive', true);
+  return failedReceipt('endpoint_send_failed', true);
+}
+
+function suppressedReceipt(): DeliveryReceipt {
+  return Object.freeze({ status: 'suppressed' as const });
+}
+
+function unsupportedReceipt(code: string): DeliveryReceipt {
+  return Object.freeze({
+    status: 'unsupported' as const,
+    failure: Object.freeze({ code, message: 'Outbound delivery is not supported.' }),
+  });
+}
+
+function rejectedReceipt(code: string): DeliveryReceipt {
+  return Object.freeze({
+    status: 'rejected' as const,
+    failure: Object.freeze({ code, message: 'Outbound payload was rejected.' }),
+  });
+}
+
+function failedReceipt(code: string, retryable = false): DeliveryReceipt {
+  return Object.freeze({
+    status: 'failed' as const,
+    failure: Object.freeze({
+      code,
+      message: 'Outbound delivery failed.',
+      ...(retryable ? { retryable: true } : {}),
+    }),
+  });
 }
 
 /**

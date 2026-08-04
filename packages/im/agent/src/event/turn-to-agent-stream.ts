@@ -1,12 +1,18 @@
 /**
  * Maps internal TurnEvent to Eve-aligned AgentStreamEvent (ADR 0039 P0).
  */
-import { AgentStreamEventType, type AgentStreamEvent } from '@zhin.js/ai/agent-stream';
+import {
+  AgentRunJournal,
+  AgentStreamEventType,
+  type AgentRunEventInput,
+  type AgentStreamEvent,
+} from '@zhin.js/ai/agent-stream';
 import type { TurnEvent } from './turn-event.js';
 
 export interface TurnToStreamContext {
   sessionId: string;
   turnId: string;
+  journal?: AgentRunJournal;
 }
 
 function textFromOutput(output: unknown): string {
@@ -27,6 +33,17 @@ export function mapTurnEventToAgentStreamEvents(
   event: TurnEvent,
   ctx: TurnToStreamContext,
 ): AgentStreamEvent[] {
+  const mapped = mapTurnEvent(event, ctx);
+  return ctx.journal ? mapped.flatMap((streamEvent) => {
+    const appended = ctx.journal!.append(streamEvent);
+    return appended ? [appended] : [];
+  }) : mapped;
+}
+
+function mapTurnEvent(
+  event: TurnEvent,
+  ctx: TurnToStreamContext,
+): AgentRunEventInput[] {
   const base = { timestamp: Date.now() };
 
   switch (event.type) {
@@ -87,23 +104,22 @@ export function mapTurnEventToAgentStreamEvents(
             usage: event.usage,
           },
         },
-        {
-          ...base,
-          type: AgentStreamEventType.TURN_COMPLETED,
-          data: { turnId: ctx.turnId, usage: event.usage },
-        },
+        terminalEvent('completed', AgentStreamEventType.TURN_COMPLETED, {
+          usage: event.usage,
+        }, ctx),
       ];
     }
     case 'error':
-      return [{
-        ...base,
-        type: AgentStreamEventType.TURN_FAILED,
-        data: {
-          code: 'TURN_ERROR',
-          message: event.error.message,
-          recoverable: event.recoverable,
-        },
-      }];
+      return [terminalEvent('failed', AgentStreamEventType.TURN_FAILED, {
+        code: 'TURN_ERROR',
+        message: event.error.message,
+        recoverable: event.recoverable,
+      }, ctx)];
+    case 'turn_cancelled':
+      return [terminalEvent('cancelled', AgentStreamEventType.TURN_CANCELLED, {
+        code: event.code,
+        reason: event.reason,
+      }, ctx)];
     case 'subagent_start':
       return [{
         ...base,
@@ -131,4 +147,18 @@ export function mapTurnEventToAgentStreamEvents(
     default:
       return [];
   }
+}
+
+function terminalEvent(
+  terminal: NonNullable<AgentRunEventInput['terminal']>,
+  type: AgentRunEventInput['type'],
+  data: Record<string, unknown>,
+  ctx: TurnToStreamContext,
+): AgentRunEventInput {
+  return {
+    type,
+    timestamp: Date.now(),
+    terminal,
+    data: { sessionId: ctx.sessionId, turnId: ctx.turnId, ...data },
+  };
 }

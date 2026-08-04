@@ -13,7 +13,7 @@
 | **OrchestrationRepository** | Run/Task/RunEvent 持久化 | 业务逻辑 |
 | **AgentExecutor** (`AgentExecutor` 接口) | 执行 Task；向 Kernel **上报** progress/result event | 直接写 Task 终态到 DB |
 | **AgentDispatcher** (`agent-dispatcher.ts`) | 内存投影、`syncTaskFromRecord`、依赖调度缓存 | 作为编排终态权威（`recordResult` 不得替代 Kernel） |
-| **IM 组合层** (`inbound-turn-pipeline.ts` 等) | peer 策略、handback、出站 batch；**委托** Kernel 写终态 | 绕过 Kernel 改 Task status |
+| **IM 组合层** (`collaboration/` 等) | peer 策略、handback、出站 batch；**委托** Kernel 写终态 | 绕过 Kernel 改 Task status |
 
 ## 对外 Port（组合层应使用的 Kernel API）
 
@@ -31,20 +31,19 @@ listRuns(sessionKey) → RunWithTasks[]
 repositoryHandle.getTask(taskId) → TaskRecord | null
 ```
 
-**IM 入站典型路径**（阶段 4 模块划分）
+**IM 入站典型路径**（协作入站模块；legacy `inbound-turn-pipeline` 组合层已删除）
 
 | 阶段 | 模块 | Kernel Port |
 |------|------|-------------|
-| 编排 wiring | `inbound-turn-pipeline.ts` | — |
-| 路由 | `inbound-turn-route.ts` | `dispatchPeerTask` → `dispatchTask`；`executeInboundSpawnTaskTurn` → `dispatchTask` + `runTask` |
+| Peer 委派 | `collaboration-dispatch.ts` (`dispatchPeerTask`) | `dispatchTask` |
 | Handback | `inbound-peer-handback.ts` | `completeTask` / `taskProgress` |
-| 本地 turn | `inbound-turn-execute.ts` → `ZhinAgent.process` | — |
-| 出站 | `inbound-turn-outbound-stage.ts` | `tryCompleteKernelImProjectionFromOutbound` → `completeTask` |
+| spawn_task 路由 | `inbound-spawn-task.ts` (`executeInboundSpawnTaskTurn`) | `dispatchTask` + `runTask` |
+| 出站完成投影 | `collaboration-kernel-bridge.ts` (`tryCompleteKernelImProjectionFromOutbound`) | `completeTask` |
 
-1. **Peer 委派**：`inbound-turn-route` → `dispatchPeerTask` → Kernel `dispatchTask` + `internal_room` / `scene_mention` executor  
+1. **Peer 委派**：`dispatchPeerTask` → Kernel `dispatchTask` + `internal_room` / `scene_mention` executor
 2. **Peer handback**：`tryHandlePeerInboundHandback` → Kernel `completeTask`（含 `#taskId` 解析）  
 3. **spawn_task 路由**：`executeInboundSpawnTaskTurn` → Kernel `dispatchTask` + `runTask`（`local` executor → **SubagentSystem**）  
-4. **出站完成投影**：`executeInboundOutboundStage` → `tryCompleteKernelImProjectionFromOutbound` → `completeTask` + 可选 handback @Planner  
+4. **出站完成投影**：`tryCompleteKernelImProjectionFromOutbound` → `completeTask` + 可选 handback @Planner
 
 ## AgentDispatcher Port（投影层）
 
@@ -78,11 +77,11 @@ Executor **只产出** `AgentExecutionEvent`（progress / result / error）；�
 
 - **SubagentSystem** / **ZhinAgent**：`local` executor 执行面；spawn_task 经 Kernel 任务 + SubagentSystem.spawn；**不**拥有 Run/Task 持久化  
 - **EventSystem**：Agent turn 域事件；**不**替代 Kernel `RunEvent`  
-- **IM 组合层**：`inbound-turn-pipeline` 仅 IM 策略编排；turn 执行委托 `inbound-turn-route` / `inbound-turn-execute` → `ZhinAgent.process`  
+- **IM 组合层**：`collaboration/` 仅 IM 策略编排；peer 委派 / spawn / handback 委托 Kernel 写终态
 
 ## 迁移检查清单
 
 - [x] 新 IM 路径是否通过 Kernel 创建/完成任务？（route / handback / spawn / outbound-stage）  
 - [x] 是否避免在 pipeline 内直接 `repository.updateTaskStatus`？（`check:orchestration-ssot` 扫描）  
 - [x] Dispatcher `recordResult` 是否仅用于非 Kernel 编排路径？  
-- [x] 出站是否仍走 `Message.$reply` / `Adapter.sendMessage`（ADR 0004）？（`inbound-turn-outbound-stage` → `replyOutbound` 闭包）  
+- [x] 出站是否仍走 `Message.$reply` / `Adapter.sendMessage`（ADR 0004）？

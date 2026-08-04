@@ -1,11 +1,23 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { createEnvStore, defineRuntimeEnvironment } from '@zhin.js/runtime';
+import { rootPluginId } from '@zhin.js/plugin-runtime';
 import {
   MAX_RESPAWNS_PER_MINUTE,
   hasAgentConfiguration,
   parseStartOptions,
   planRespawn,
   processRestartExitCode,
+  loadRuntimeEnvironmentLayers,
 } from '../../src/plugin-runtime/start-command.js';
+
+const temporary: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(temporary.splice(0).map((path) => rm(path, { recursive: true, force: true })));
+});
 
 describe('native TypeScript relaunch respawn (exit 75)', () => {
   it('parses the optional Remote Console launch flag', () => {
@@ -70,5 +82,27 @@ describe('native TypeScript relaunch respawn (exit 75)', () => {
     expect(planRespawn(1, false, false, [], now).respawn).toBe(false);
     expect(planRespawn(0, false, true, [], now).respawn).toBe(false);
     expect(planRespawn(1, true, true, [], now).respawn).toBe(false);
+  });
+
+  it('loads development dotenv files through Runtime layers without mutating process.env', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-runtime-environment-'));
+    temporary.push(root);
+    await writeFile(join(root, '.env'), 'ZHIN_LAYER_BASE=base\nZHIN_LAYER_SHARED=base\n');
+    await writeFile(join(root, '.env.development'), 'ZHIN_LAYER_SHARED=development\nZHIN_LAYER_DEV=dev\n');
+    const before = process.env.ZHIN_LAYER_SHARED;
+
+    const layers = await loadRuntimeEnvironmentLayers(root, 'development');
+    const store = createEnvStore(
+      rootPluginId(),
+      defineRuntimeEnvironment({ name: 'development', mode: 'development', platform: 'node' }),
+      layers,
+    );
+
+    expect(store.get('ZHIN_LAYER_BASE')).toBe('base');
+    expect(store.get('ZHIN_LAYER_SHARED')).toBe('development');
+    expect(store.get('ZHIN_LAYER_DEV')).toBe('dev');
+    expect(process.env.ZHIN_LAYER_SHARED).toBe(before);
+    expect(process.env.ZHIN_LAYER_BASE).toBeUndefined();
+    expect(process.env.ZHIN_LAYER_DEV).toBeUndefined();
   });
 });

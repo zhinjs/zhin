@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ZhinAgent } from '../src/zhin-agent/index.js';
-import { MemoryAgentSessionStore, BaseProvider, type AIProvider } from '@zhin.js/ai';
+import { MemoryAgentSessionStore, type AIProvider } from '@zhin.js/ai';
 import {
   getCompactionStateCount,
   clearCompactionStates,
@@ -117,32 +117,6 @@ describe('stability lifecycle (ADR 0014 P2-2)', () => {
       });
       expect(typeof stop).toBe('function');
       stop();
-    });
-  });
-
-  describe('BaseProvider dispose', () => {
-    class TestProvider extends BaseProvider {
-      name = 'test';
-      models = ['m'];
-      async chat() {
-        return {
-          id: '1',
-          object: 'chat.completion',
-          created: Date.now(),
-          model: 'm',
-          choices: [],
-        };
-      }
-      async *chatStream() {
-        yield* [];
-      }
-    }
-
-    it('dispose 后 abortControllers 为空', () => {
-      const p = new TestProvider();
-      expect(p.abortControllers.size).toBe(0);
-      p.dispose();
-      expect(p.abortControllers.size).toBe(0);
     });
   });
 });

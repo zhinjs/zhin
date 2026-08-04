@@ -117,8 +117,6 @@ export {
 
 export {
   createOpenAiCompletionsStreamFn,
-  driverToModelApi,
-  OPENAI_COMPAT_APIS,
 } from './providers/openai-completions.js';
 
 export {

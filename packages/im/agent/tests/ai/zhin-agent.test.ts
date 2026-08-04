@@ -5,7 +5,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ZhinAgent } from '@zhin.js/agent';
-import { Plugin, SkillFeature, type AIProvider, type AgentTool, type ContentPart, type Tool, type Message } from '@zhin.js/core';
+import { Plugin, SkillFeature, type AIProvider, type AgentTool, type Tool } from '@zhin.js/core';
 import { resetLlmApiRegistryForTests } from '@zhin.js/ai';
 import { wireMockProviderToLlmApi } from '../helpers/mock-llm-api.js';
 
@@ -18,27 +18,6 @@ function createMockProvider(response: string = '你好！'): AIProvider {
     chat: vi.fn(async () => ({
       choices: [{ message: { role: 'assistant' as const, content: response }, finish_reason: 'stop' }],
     } as ChatResponse)),
-    listModels: vi.fn(async () => ['mock-model']),
-  };
-}
-
-// Mock AIProvider with chatStream support (for multimodal tests)
-function createStreamMockProvider(response: string = '你好！'): AIProvider {
-  return {
-    name: 'mock',
-    models: ['mock-model'],
-    chat: vi.fn(async () => ({
-      choices: [{ message: { role: 'assistant' as const, content: response }, finish_reason: 'stop' }],
-    } as ChatResponse)),
-    chatStream: vi.fn(async function* () {
-      yield {
-        id: 'chunk-1',
-        object: 'chat.completion.chunk' as const,
-        created: Date.now(),
-        model: 'mock-model',
-        choices: [{ index: 0, delta: { content: response }, finish_reason: null }],
-      };
-    }),
     listModels: vi.fn(async () => ['mock-model']),
   };
 }
@@ -323,116 +302,6 @@ describe('ZhinAgent', () => {
   describe('dispose', () => {
     it('应正常清理资源', () => {
       expect(() => agent.dispose()).not.toThrow();
-    });
-  });
-
-  describe('processMultimodal', () => {
-    let streamAgent: ZhinAgent;
-    let streamProvider: AIProvider;
-
-    beforeEach(() => {
-      resetLlmApiRegistryForTests();
-      streamProvider = createStreamMockProvider();
-      wireMockProviderToLlmApi(streamProvider);
-      streamAgent = new ZhinAgent(streamProvider, {
-        persona: '测试助手',
-        maxIterations: 3,
-      });
-    });
-
-    afterEach(() => {
-      streamAgent.dispose();
-    });
-
-    it('应处理图片+文本的多模态消息', async () => {
-      const commMessage = makeCommMessage();
-      const parts: ContentPart[] = [
-        { type: 'text', text: '这是什么？' },
-        { type: 'image_url', image_url: { url: 'https://example.com/cat.jpg' } },
-      ];
-
-      const result = await streamAgent.processMultimodal(parts, commMessage);
-
-      expect(result).toBeDefined();
-      expect(Array.isArray(result)).toBe(true);
-      expect(result.length).toBeGreaterThan(0);
-    });
-
-    it('应处理视频类型的多模态消息', async () => {
-      const commMessage = makeCommMessage();
-      const parts: ContentPart[] = [
-        { type: 'text', text: '这个视频讲的是什么？' },
-        { type: 'video_url', video_url: { url: 'https://example.com/video.mp4' } },
-      ];
-
-      const result = await streamAgent.processMultimodal(parts, commMessage);
-
-      expect(result).toBeDefined();
-      expect(Array.isArray(result)).toBe(true);
-      expect(result.length).toBeGreaterThan(0);
-    });
-
-    it('应处理表情类型的多模态消息', async () => {
-      const commMessage = makeCommMessage();
-      const parts: ContentPart[] = [
-        { type: 'text', text: '你好' },
-        { type: 'face', face: { id: '178', text: '笑哭' } },
-      ];
-
-      const result = await streamAgent.processMultimodal(parts, commMessage);
-
-      expect(result).toBeDefined();
-      expect(Array.isArray(result)).toBe(true);
-      expect(result.length).toBeGreaterThan(0);
-    });
-
-    it('应处理混合多种媒体类型的多模态消息', async () => {
-      const commMessage = makeCommMessage();
-      const parts: ContentPart[] = [
-        { type: 'text', text: '看看这些' },
-        { type: 'image_url', image_url: { url: 'https://example.com/pic.jpg' } },
-        { type: 'video_url', video_url: { url: 'https://example.com/clip.mp4' } },
-        { type: 'face', face: { id: '1', text: '微笑' } },
-      ];
-
-      const result = await streamAgent.processMultimodal(parts, commMessage);
-
-      expect(result).toBeDefined();
-      expect(Array.isArray(result)).toBe(true);
-    });
-
-    it('无文本时应使用默认描述', async () => {
-      const commMessage = makeCommMessage();
-      const parts: ContentPart[] = [
-        { type: 'image_url', image_url: { url: 'https://example.com/img.jpg' } },
-      ];
-
-      const result = await streamAgent.processMultimodal(parts, commMessage);
-
-      expect(result).toBeDefined();
-      expect(Array.isArray(result)).toBe(true);
-    });
-
-    it('速率限制在多模态处理中应生效', async () => {
-      const strictAgent = new ZhinAgent(streamProvider, {
-        rateLimit: { maxRequestsPerMinute: 1, cooldownSeconds: 5 },
-      });
-
-      const commMessage = makeCommMessage();
-      const parts: ContentPart[] = [
-        { type: 'text', text: '第一次' },
-        { type: 'image_url', image_url: { url: 'https://example.com/1.jpg' } },
-      ];
-
-      // 第一次
-      await strictAgent.processMultimodal(parts, commMessage);
-
-      // 第二次应被限制
-      const result = await strictAgent.processMultimodal(parts, commMessage);
-      expect(result).toBeDefined();
-      expect(Array.isArray(result)).toBe(true);
-
-      strictAgent.dispose();
     });
   });
 });

@@ -12,7 +12,8 @@ import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 import { type Message, getLogger } from '@zhin.js/core';
 import { formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
-import { type AIProvider, type AgentTool, type Usage, userMessageToFilterText, type ContentPart, type ModelRegistry } from '@zhin.js/ai';
+import { type AIProvider, type AgentTool, type Usage, type ModelRegistry } from '@zhin.js/ai';
+import type { AgentRunInput, AgentRunInputPart } from '../media/media-types.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import {
   ensureMcpConnectionsForBinding,
@@ -55,6 +56,14 @@ import type { ZhinAgentEventEmitter } from '../event/event-emitter.js';
 
 const logger = getLogger('Subagent');
 
+/** runInput 部件数组的文本预览（仅拼接 text 部件）。 */
+function runInputPreviewText(parts: AgentRunInputPart[]): string {
+  return parts
+    .filter((p): p is { type: 'text'; text: string } => p.type === 'text' && Boolean(p.text?.trim()))
+    .map((p) => p.text)
+    .join('\n');
+}
+
 // ============================================================================
 // 类型
 // ============================================================================
@@ -81,8 +90,8 @@ export interface SpawnOptions {
   contextPreamble?: string;
   /** 任务上下文（可选） */
   context?: Record<string, unknown>;
-  /** 首条 user 消息（含 vision parts）；缺省则用 task 字符串 */
-  runInput?: string | ContentPart[];
+  /** 首条 user 消息（含 vision 媒体块）；缺省则用 task 字符串 */
+  runInput?: AgentRunInput;
   /** 用于向用户发送「任务【id】:执行通道 => label」进度提示 */
   notifyContext?: Message;
   /** 编排 Task ID（Kernel 持久化；Dispatcher 仅内存投影） */
@@ -437,7 +446,7 @@ export class SubagentRuntime {
       presetName?: string;
       /** 为 true 时 processing.finish 不停止 typing（由上层在最终回复前统一 stop） */
       keepTypingUntilUpstreamFinish?: boolean;
-      runInput?: string | ContentPart[];
+      runInput?: AgentRunInput;
       contextPreamble?: string;
       orchestrationTaskId?: string;
       agentMeta?: AgentMeta;
@@ -457,7 +466,7 @@ export class SubagentRuntime {
       agent: resolveSubagentAgentLabel(opts?.presetName),
       role,
       input: inputKind,
-      task_preview: truncatePreview(typeof agentUserInput === 'string' ? agentUserInput : userMessageToFilterText(agentUserInput), 120),
+      task_preview: truncatePreview(typeof agentUserInput === 'string' ? agentUserInput : runInputPreviewText(agentUserInput), 120),
     }));
     logger.debug(formatCompact( { task_id: taskId, label, role }));
 

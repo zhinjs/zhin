@@ -2,19 +2,22 @@
  * Per-tool approval gate — stacks with ExecPolicy (ADR 0039 P1).
  */
 import type { Message, Plugin } from '@zhin.js/core';
-import { AgentStreamEventType } from '@zhin.js/ai/agent-stream';
+import { AgentRunJournal, AgentStreamEventType, type AgentRunEventInput } from '@zhin.js/ai/agent-stream';
 import type { ToolApprovalPolicy } from '@zhin.js/ai/tool-policy';
 import type { AgentStreamBus, AgentStreamPublishContext } from '../event/agent-stream-bus.js';
-import type { SessionInteractionPort } from '../session/session-interaction-port.js';
+import { isApprovalPortAvailable, type ApprovalPort } from '../session/session-interaction-port.js';
 import type { ToolApprovalOnceStore } from './tool-approval-once-store.js';
 
+/** Plugin Runtime's `on-risk` policy is conservatively approval-required in P2. */
+export type ToolApprovalGatePolicy = ToolApprovalPolicy | 'on-risk';
+
 export async function resolveToolApprovalRequired(
-  policy: ToolApprovalPolicy | undefined,
+  policy: ToolApprovalGatePolicy | undefined,
   input: { toolName: string; args: Record<string, unknown>; sessionId: string },
   onceStore?: ToolApprovalOnceStore,
 ): Promise<boolean> {
   if (!policy || policy === 'never') return false;
-  if (policy === 'always') return true;
+  if (policy === 'always' || policy === 'on-risk') return true;
   if (policy === 'once') {
     if (!onceStore) return true;
     return !onceStore.has(input.sessionId, input.toolName);
@@ -27,12 +30,14 @@ export interface ToolApprovalGateOptions {
   args: Record<string, unknown>;
   sessionId: string;
   commMessage: Message;
-  policy?: ToolApprovalPolicy;
+  policy?: ToolApprovalGatePolicy;
   plugin?: Plugin;
   bus?: AgentStreamBus;
-  port?: SessionInteractionPort;
+  port?: ApprovalPort;
   onceStore?: ToolApprovalOnceStore;
   publishCtx?: AgentStreamPublishContext;
+  /** Stream-turn journal; request/result become ordered run events when present. */
+  journal?: AgentRunJournal;
 }
 
 /**
@@ -48,8 +53,8 @@ export async function runToolApprovalGate(
   }, options.onceStore);
   if (!required) return null;
 
-  if (!options.bus || !options.port) {
-    return 'Error: approval required but AgentStreamBus / SessionInteractionPort unavailable';
+  if (!isApprovalPortAvailable(options.port)) {
+    return 'Error: approval required but ApprovalPort unavailable';
   }
 
   const requestId = `approval_${options.toolName}_${Date.now()}`;
@@ -58,7 +63,7 @@ export async function runToolApprovalGate(
     ...options.publishCtx,
   };
 
-  await options.bus.publish({
+  await publishApprovalEvent(options, {
     type: AgentStreamEventType.INPUT_REQUESTED,
     data: {
       sessionId: options.sessionId,
@@ -70,7 +75,8 @@ export async function runToolApprovalGate(
   }, publishCtx);
 
   const question = `工具「${options.toolName}」需要确认后执行。是否继续？`;
-  let approved: boolean;
+  let approved = false;
+  let failure: string | undefined;
   try {
     approved = await options.port.requestApproval({
       requestId,
@@ -78,11 +84,10 @@ export async function runToolApprovalGate(
       question,
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return `Error: approval wait failed — ${msg}`;
+    failure = err instanceof Error ? err.message : String(err);
   }
 
-  await options.bus.publish({
+  await publishApprovalEvent(options, {
     type: AgentStreamEventType.INPUT_COMPLETED,
     data: {
       sessionId: options.sessionId,
@@ -90,8 +95,11 @@ export async function runToolApprovalGate(
       toolName: options.toolName,
       kind: 'approval',
       approved,
+      ...(failure ? { error: failure } : {}),
     },
   }, publishCtx);
+
+  if (failure) return `Error: approval wait failed — ${failure}`;
 
   if (!approved) {
     return `Error: tool "${options.toolName}" execution denied by user`;
@@ -101,4 +109,14 @@ export async function runToolApprovalGate(
     options.onceStore.add(options.sessionId, options.toolName);
   }
   return null;
+}
+
+async function publishApprovalEvent(
+  options: ToolApprovalGateOptions,
+  event: AgentRunEventInput,
+  ctx: AgentStreamPublishContext,
+): Promise<void> {
+  const journalled = options.journal?.append(event);
+  if (options.journal && !journalled) return;
+  if (options.bus) await options.bus.publish(journalled ?? event, ctx);
 }

@@ -79,6 +79,7 @@ import {
   type AssistantConfig,
   type ImTranscriptWriteInput,
   type PeerTriggerMode,
+  type ApprovalPort,
 } from '@zhin.js/agent';
 import {
   agentHostToken,
@@ -115,7 +116,7 @@ interface AgentToolLike {
   readonly scopes?: readonly ('private' | 'group' | 'channel')[];
   readonly permissions?: readonly string[];
   readonly hidden?: boolean;
-  readonly approval?: 'always' | 'once' | 'never';
+  readonly approval?: 'always' | 'once' | 'never' | 'on-risk';
 }
 
 interface McpServerEntry {
@@ -185,6 +186,8 @@ export interface InstallAgentHostOptions {
   readonly extraTools?: readonly AgentToolLike[];
   /** Optional inbound STT (Speech Host). */
   readonly transcribeUrl?: (audioUrl: string) => Promise<string | null>;
+  /** Optional host approval channel; absent channels fail closed for on-risk tools. */
+  readonly approvalPort?: ApprovalPort;
 }
 
 /**
@@ -242,7 +245,12 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     let collaborationReady = false;
     let orchService: OrchestrationService;
     try {
-      const created = createRuntimeZhinAgent(service, options.im, options.projectRoot);
+      const created = createRuntimeZhinAgent(
+        service,
+        options.im,
+        options.projectRoot,
+        options.approvalPort,
+      );
       zhinAgent = created.agent;
       seedPresets = created.seedPresets;
 
@@ -734,6 +742,7 @@ function createRuntimeZhinAgent(
   service: AIService,
   im: ImRuntime,
   projectRoot: string,
+  approvalPort?: ApprovalPort,
 ): { agent: ZhinAgent; seedPresets: () => Promise<number> } {
   const binding = service.getBindingRegistry().requireZhinBinding();
   const provider = service.getProvider(binding.providerAlias);
@@ -741,6 +750,7 @@ function createRuntimeZhinAgent(
     ...(service.getAgentConfig() ?? {}),
     chatModel: binding.model,
   });
+  asPrivate(agent).approvalPort = approvalPort;
   const composed = composeZhinAgentRuntime(agent, provider, createRuntimeProactiveOutbound(im));
   const orchestrator = new AgentOrchestrator();
   agent.configure({
@@ -1269,8 +1279,18 @@ function toTool(tool: AgentToolLike | ToolCapability): Tool {
 
 export function runtimeApprovalPolicy(
   approval: ToolCapability['approval'],
-): 'never' | 'always' {
-  return approval === 'never' ? 'never' : 'always';
+): 'never' | 'always' | 'on-risk' {
+  return approval;
+}
+
+/** A small non-interactive ApprovalPort suitable for CLI/service hosts and tests. */
+export function createDeterministicApprovalPort(
+  decision: 'approve' | 'deny' = 'deny',
+): ApprovalPort {
+  return {
+    available: true,
+    requestApproval: async () => decision === 'approve',
+  };
 }
 
 function isToolCapability(tool: AgentToolLike | ToolCapability): tool is ToolCapability {

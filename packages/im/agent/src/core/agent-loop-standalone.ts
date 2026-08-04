@@ -2,13 +2,12 @@
  * Standalone agentLoop runner (subagent / deferred worker) — isolated memory context.
  */
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import { type AgentTool, type AIProvider, type ContentPart, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, createMemoryContextRepository, getLlmTransportModel, agentToolsToLlmTools, registerLlmApiFromProviders, sdkEntryFromProvider, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolResultTransform, type StreamOptions } from '@zhin.js/ai';
+import { type AgentTool, type AIProvider, type Usage, type MediaContentBlock, agentLoop, agentContextFrom, assistantText, createUserMessage, createMemoryContextRepository, getLlmTransportModel, agentToolsToLlmTools, registerLlmApiFromProviders, sdkEntryFromProvider, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolResultTransform, type StreamOptions } from '@zhin.js/ai';
 import { runWithCommMessage, runWithDirectAgentExecution } from '../security/comm-message-context.js';
 import type { Message } from '../orchestrator/types.js';
 import { sanitizeAssistantReply, unwrapJsonStringLayers } from '../core/text-sanitize.js';
 import { type ToolCallRecord, formatToolCallsForUser } from '../core/tool-calls-user-format.js';
-import { buildVisionUserMessage, summarizeMultimodalParts } from '../turn/multimodal-message.js';
-import { DEFAULT_MULTIMODAL_CONFIG } from '../media/media-types.js';
+import type { AgentRunInput } from '../media/media-types.js';
 import { type PhaseTraceConfig, logAgentLoopIterationEnd } from '../internal/phase-trace.js';
 const logger = getLogger('AgentLoopStandalone');
 
@@ -41,18 +40,20 @@ function toolResultToAgentMessage(
   };
 }
 
-async function buildUserMessages(input: string | ContentPart[]): Promise<AgentMessage[]> {
+function buildUserMessages(input: AgentRunInput): AgentMessage[] {
   if (typeof input === 'string') {
     return [createUserMessage(input)];
   }
-  const text = summarizeMultimodalParts(input, true);
-  const user = await buildVisionUserMessage(
-    text,
-    input,
-    true,
-    DEFAULT_MULTIMODAL_CONFIG.maxFileBytes,
-  );
-  return [user];
+  const texts: string[] = [];
+  const media: MediaContentBlock[] = [];
+  for (const part of input) {
+    if (part.type === 'text') {
+      if (part.text.trim()) texts.push(part.text);
+    } else {
+      media.push(part);
+    }
+  }
+  return [createUserMessage(texts.join(' ') || '[多模态消息]', media.length > 0 ? media : undefined)];
 }
 
 function ensureLlmApi(provider: AIProvider, resolveProvider?: (alias: string) => AIProvider | undefined): void {
@@ -76,7 +77,7 @@ export interface AgentLoopStandaloneInput {
   model: string;
   systemPrompt: string;
   tools: AgentTool[];
-  userInput: string | ContentPart[];
+  userInput: AgentRunInput;
   maxIterations: number;
   commMessage: Message;
   transformToolResult?: ToolResultTransform;
@@ -123,7 +124,7 @@ export async function runAgentLoopStandaloneTurn(
   const { repository } = createMemoryContextRepository();
   const sessionId = `standalone:${Date.now()}`;
   const loaded = await repository.loadContext(sessionId);
-  const promptMessages = await buildUserMessages(userInput);
+  const promptMessages = buildUserMessages(userInput);
 
   const legacyByName = new Map(tools.map((t) => [t.name, t]));
   const llmTools = agentToolsToLlmTools(tools);

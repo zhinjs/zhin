@@ -7,8 +7,9 @@
 import type { AgentExecutor } from './orchestration-types.js';
 import type { OrchestrationKernel } from './orchestration-service.js';
 import type { AIServiceRefs } from '../init/shared-refs.js';
-import { extractMediaParts } from '../init/message-media.js';
+import { readInboundMediaRefs } from '../media/inbound-refs.js';
 import { buildSubagentInboundTask } from '../media/index.js';
+import type { AgentRunInput } from '../media/media-types.js';
 import { sendGroupPeerMention } from '../collaboration/im-mention-delegate.js';
 import { getAgentRuntimeRegistry } from '../collaboration/runtime-registry.js';
 import { getCollaborationSceneService } from '../collaboration/scene-service.js';
@@ -44,8 +45,8 @@ export function registerDefaultExecutors(
       const routeProvider = routeBinding && refs.aiService?.isReady()
         ? refs.aiService!.getProvider(routeBinding.providerAlias)
         : undefined;
-      const mediaParts = extractMediaParts(message);
-      const inbound = await buildSubagentInboundTask(aiContent, mediaParts, {
+      const mediaRefs = readInboundMediaRefs(message);
+      const inbound = await buildSubagentInboundTask(aiContent, mediaRefs, {
         workspaceDir: process.cwd(),
         provider: routeProvider,
       });
@@ -120,9 +121,9 @@ export function registerDefaultExecutors(
         ? refs.aiService!.getProvider(routeBinding.providerAlias)
         : undefined;
 
-      let runInput: string | import('@zhin.js/ai').ContentPart[] | undefined = delegateText;
-      const mediaParts = extractMediaParts(message);
-      const inbound = await buildSubagentInboundTask(delegateText, mediaParts, {
+      let runInput: AgentRunInput | undefined = delegateText;
+      const mediaRefs = readInboundMediaRefs(message);
+      const inbound = await buildSubagentInboundTask(delegateText, mediaRefs, {
         workspaceDir: process.cwd(),
         provider: routeProvider,
       });

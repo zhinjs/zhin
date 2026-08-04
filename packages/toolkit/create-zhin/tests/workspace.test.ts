@@ -64,6 +64,9 @@ describe('createWorkspace', () => {
     const helloCommand = await fs.readFile(path.join(projectPath, 'commands', 'hello.ts'), 'utf8')
     const cardCommand = await fs.readFile(path.join(projectPath, 'commands', 'card.ts'), 'utf8')
     const statusCard = await fs.readFile(path.join(projectPath, 'components', 'status-card.ts'), 'utf8')
+    const page = await fs.readFile(path.join(projectPath, 'pages', 'index.tsx'), 'utf8')
+    const navigation = await fs.readFile(path.join(projectPath, 'pages', '$nav.tsx'), 'utf8')
+    const footer = await fs.readFile(path.join(projectPath, 'pages', '$footer.tsx'), 'utf8')
     const schema = await fs.readJson(path.join(projectPath, 'schema.json'))
     const rootTsconfig = await fs.readJson(path.join(projectPath, 'tsconfig.json'))
 
@@ -75,6 +78,15 @@ describe('createWorkspace', () => {
     expect(pkg.dependencies['zhin.js']).toBe('latest')
     expect(pkg.dependencies['@zhin.js/adapter-sandbox']).toBe('latest')
     expect(pkg.dependencies['@zhin.js/satori']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/console-contract']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/page']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/layout']).toBe('latest')
+    expect(pkg.dependencies).not.toHaveProperty('@zhin.js/agent')
+    expect(pkg.dependencies).not.toHaveProperty('@zhin.js/client')
+    expect(pkg.dependencies).not.toHaveProperty('@zhin.js/pagemanager')
+    expect(pkg.dependencies).not.toHaveProperty('esbuild')
+    expect(pkg.dependencies).not.toHaveProperty('react')
+    expect(pkg.dependencies).not.toHaveProperty('vite')
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/plugin-runtime')
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/runtime')
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/command')
@@ -83,11 +95,14 @@ describe('createWorkspace', () => {
     expect(pkg.devDependencies['@zhin.js/cli']).toBe('latest')
     expect(pkg.engines.node).toBe('>=22.6.0')
 
-    // zhin 清单：Stable Features 随 zhin.js 默认挂载，骨架无需声明
+    // zhin 清单：Stable Features 随 zhin.js 默认挂载；Console Feature 显式声明
     expect(pkg.zhin.protocol).toBe(1)
     expect(pkg.zhin.type).toBe('plugin')
     expect(pkg.zhin.entry).toBe('./plugin.ts')
-    expect(pkg.zhin.features).toEqual([])
+    expect(pkg.zhin.features).toEqual([
+      { package: '@zhin.js/page', api: '^1.0.0' },
+      { package: '@zhin.js/layout', api: '^1.0.0' },
+    ])
     expect(pkg.zhin.plugins).toEqual([
       { package: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox' },
     ])
@@ -109,14 +124,44 @@ describe('createWorkspace', () => {
     expect(cardCommand).toContain("from 'zhin.js/core/runtime'")
     expect(statusCard).toContain("from 'zhin.js/component'")
     expect(statusCard).toContain("from '@zhin.js/satori'")
+    expect(page).toContain("from '@zhin.js/console-contract'")
+    expect(page).toContain('definePage(')
+    expect(navigation).toContain('NavSlotProps')
+    expect(footer).toContain('FooterSlotProps')
     expect(schema).toMatchObject({ type: 'object', properties: {} })
     expect(rootTsconfig.compilerOptions.noEmit).toBe(true)
     expect(rootTsconfig.include).toContain('plugin.ts')
     expect(rootTsconfig.include).toContain('commands/**/*.ts')
+    expect(rootTsconfig.include).toContain('pages/**/*.tsx')
     expect(await fs.pathExists(path.join(projectPath, '.env.example'))).toBe(true)
     expect(readme).toContain('zhin.config.yml')
     expect(readme).toContain('zhin runtime start')
     expect(readme).toContain('Remote Console')
+  })
+
+  it('creates the complete convention tree without enabling optional AI or browser tooling', async () => {
+    const projectPath = await makeProject({ ai: { enabled: false } })
+    const expected = [
+      'schema.json',
+      'commands/hello.ts',
+      'components/status-card.ts',
+      'middlewares/.gitkeep',
+      'tools/.gitkeep',
+      'skills/skill-creator/SKILL.md',
+      'agents/.gitkeep',
+      'pages/index.tsx',
+      'pages/$nav.tsx',
+      'pages/$footer.tsx',
+      'plugins/.gitkeep',
+      'packages/.gitkeep',
+    ]
+    for (const relativePath of expected) {
+      await expect(fs.pathExists(path.join(projectPath, relativePath))).resolves.toBe(true)
+    }
+
+    const workspace = await fs.readFile(path.join(projectPath, 'pnpm-workspace.yaml'), 'utf8')
+    expect(workspace).toContain("- 'plugins/*'")
+    expect(workspace).toContain("- 'packages/*'")
   })
 
   it('uses the real generated config filename for JSON projects', async () => {
@@ -161,7 +206,11 @@ describe('createWorkspace', () => {
     expect(pkg.dependencies['@zhin.js/tool']).toBe('latest')
     expect(pkg.dependencies.zod).toBe('latest')
     expect(pkg.dependencies.ai).toBe('latest')
-    expect(pkg.zhin.features).toEqual([{ package: '@zhin.js/tool', api: '^1.0.0' }])
+    expect(pkg.zhin.features).toEqual([
+      { package: '@zhin.js/page', api: '^1.0.0' },
+      { package: '@zhin.js/layout', api: '^1.0.0' },
+      { package: '@zhin.js/tool', api: '^1.0.0' },
+    ])
     expect(await fs.pathExists(path.join(projectPath, 'tools', 'echo.ts'))).toBe(true)
     expect(await fs.pathExists(path.join(projectPath, 'SOUL.md'))).toBe(true)
     const config = await fs.readFile(path.join(projectPath, 'zhin.config.yml'), 'utf8')

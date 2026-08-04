@@ -8,6 +8,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
+  AGENT_RUN_EVENT_VERSION,
+  AgentRunJournal,
   AgentStreamEventType,
   createAgentStreamReduceState,
   reduceAgentStreamEvent,
@@ -62,6 +64,18 @@ describe('reduceAgentStreamEvent waiting 复位', () => {
     const next = reduceAgentStreamEvent(waitingState(), { type: AgentStreamEventType.TURN_FAILED });
     expect(next.waiting).toBe(false);
     expect(next.failed).toBe(true);
+  });
+
+  it('TURN_CANCELLED 复位 waiting 且保留非失败终态', () => {
+    const next = reduceAgentStreamEvent(waitingState(), {
+      version: AGENT_RUN_EVENT_VERSION,
+      type: AgentStreamEventType.TURN_CANCELLED,
+      run: { sessionId: 's1', turnId: 't1' },
+      terminal: 'cancelled',
+    });
+    expect(next.waiting).toBe(false);
+    expect(next.cancelled).toBe(true);
+    expect(next.failed).toBe(false);
   });
 });
 
@@ -133,5 +147,27 @@ describe('iterateAgentStreamNdjson', () => {
       events.push(event);
     }
     expect(events).toHaveLength(1);
+  });
+});
+
+describe('AgentRunJournal', () => {
+  it('appends an ordered run envelope and replays from a sequence cursor', () => {
+    const journal = new AgentRunJournal({ sessionId: 's1', turnId: 't1' });
+    const first = journal.append({ type: AgentStreamEventType.TURN_STARTED });
+    const second = journal.append({ type: AgentStreamEventType.MESSAGE_APPENDED, data: { messageDelta: 'hi' } });
+
+    expect(first).toMatchObject({ version: AGENT_RUN_EVENT_VERSION, run: { sessionId: 's1', turnId: 't1' }, sequence: 1 });
+    expect(second).toMatchObject({ sequence: 2, type: AgentStreamEventType.MESSAGE_APPENDED });
+    expect(journal.replay(1)).toEqual([second]);
+  });
+
+  it('accepts only the first terminal and suppresses all late events', () => {
+    const journal = new AgentRunJournal({ sessionId: 's1', turnId: 't1' });
+    const terminal = journal.append({ type: AgentStreamEventType.TURN_CANCELLED, terminal: 'cancelled' });
+
+    expect(terminal).toMatchObject({ sequence: 1, terminal: 'cancelled' });
+    expect(journal.append({ type: AgentStreamEventType.TURN_COMPLETED, terminal: 'completed' })).toBeUndefined();
+    expect(journal.append({ type: AgentStreamEventType.MESSAGE_APPENDED })).toBeUndefined();
+    expect(journal.replay()).toEqual([terminal]);
   });
 });

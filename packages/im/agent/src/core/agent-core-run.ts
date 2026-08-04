@@ -6,6 +6,7 @@ import { aiOutboundJsonSchema, buildAiOutboundPromptHint, type Plugin } from '@z
 import type { AIService } from '../service.js';
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
 import { type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, getLlmTransportModel, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, getLoadedToolNamesFromSnapshot } from '@zhin.js/ai';
+import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { runWithCommMessage } from '../security/comm-message-context.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
 import { createOwnerOrchestratedToolResultTransform } from '../orchestrator/owner-confirm-orchestration.js';
@@ -139,6 +140,61 @@ export interface AgentLoopTurnInput {
   toolAliases?: Record<string, string>;
   /** Optional TurnEvent tap (processStream / diagnostics) */
   onTurnEvent?: (event: TurnEvent) => void;
+  /** Ordered public event journal for this stream turn. */
+  journal?: AgentRunJournal;
+}
+
+/** Optional second argument for tools that support cooperative cancellation. */
+export interface AgentToolExecutionContext {
+  readonly signal?: AbortSignal;
+  readonly sessionId: string;
+  readonly toolCallId: string;
+  readonly toolName: string;
+}
+
+type CancellableToolExecute<TResult = unknown> = (
+  args: Record<string, unknown>,
+  legacyContext?: Message,
+  executionContext?: AgentToolExecutionContext,
+) => TResult | Promise<TResult>;
+
+export async function executeCancellableTool<TResult>(
+  execute: CancellableToolExecute<TResult>,
+  args: Record<string, unknown>,
+  legacyContext: Message,
+  context: AgentToolExecutionContext,
+): Promise<TResult> {
+  throwIfToolExecutionAborted(context.signal);
+  const execution = Promise.resolve().then(() => execute(args, legacyContext, context));
+  const result = await raceToolExecutionAbort(execution, context.signal);
+  throwIfToolExecutionAborted(context.signal);
+  return result;
+}
+
+function throwIfToolExecutionAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  throw signal.reason instanceof Error ? signal.reason : new Error('Tool execution cancelled');
+}
+
+function raceToolExecutionAbort<TResult>(execution: Promise<TResult>, signal?: AbortSignal): Promise<TResult> {
+  if (!signal) return execution;
+  throwIfToolExecutionAborted(signal);
+  return new Promise<TResult>((resolve, reject) => {
+    const onAbort = () => reject(
+      signal.reason instanceof Error ? signal.reason : new Error('Tool execution cancelled'),
+    );
+    signal.addEventListener('abort', onAbort, { once: true });
+    void execution.then(
+      (result) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(result);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
 }
 
 export interface AgentLoopTurnResult {
@@ -607,9 +663,11 @@ export async function* runAgentLoopTextTurnRun(
           contextForTools,
           orchestrationPlugin,
           host.httpApprovalAdapter,
+          host.approvalPort,
         ),
         publishCtx: { sessionId, httpSessionId },
         onceStore: host.orchestrator?.approvalOnce,
+        journal: input.journal,
       });
       if (approvalDenied) {
         toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: approvalDenied });
@@ -617,9 +675,20 @@ export async function* runAgentLoopTextTurnRun(
       }
 
       const t0 = performance.now();
+      const executionSignal = toolSignal ?? signal;
       try {
         const raw = await runWithCommMessage(contextForTools, () =>
-          legacy.execute(effectiveArgs),
+          executeCancellableTool(
+            legacy.execute as CancellableToolExecute,
+            effectiveArgs,
+            contextForTools,
+            {
+              signal: executionSignal,
+              sessionId,
+              toolCallId: toolCall.id,
+              toolName: resolvedName,
+            },
+          ),
         );
         const durationMs = performance.now() - t0;
         const rawText = await applyToolToModelOutput(legacy, raw, effectiveArgs);
@@ -662,6 +731,7 @@ export async function* runAgentLoopTextTurnRun(
         }));
         return toolResultToAgentMessage(toolCall, finalText, false);
       } catch (err) {
+        throwIfToolExecutionAborted(executionSignal);
         const message = err instanceof Error ? err.message : String(err);
         const failure = `工具「${resolvedName}」执行失败：${message}`;
         toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: failure });

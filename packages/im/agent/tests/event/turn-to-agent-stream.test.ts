@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AgentStreamEventType } from '@zhin.js/ai/agent-stream';
+import { AGENT_RUN_EVENT_VERSION, AgentRunJournal, AgentStreamEventType } from '@zhin.js/ai/agent-stream';
 import { mapTurnEventToAgentStreamEvents } from '../../src/event/turn-to-agent-stream.js';
 
 describe('mapTurnEventToAgentStreamEvents', () => {
@@ -39,18 +39,42 @@ describe('mapTurnEventToAgentStreamEvents', () => {
   });
 
   it('maps turn_end to message.completed and turn.completed', () => {
+    const journal = new AgentRunJournal(ctx);
     const events = mapTurnEventToAgentStreamEvents(
       {
         type: 'turn_end',
         output: [{ type: 'text', content: 'done' }],
         usage: { promptTokens: 1, completionTokens: 2, totalTokens: 3 },
       },
-      ctx,
+      { ...ctx, journal },
     );
     expect(events.map((e) => e.type)).toEqual([
       AgentStreamEventType.MESSAGE_COMPLETED,
       AgentStreamEventType.TURN_COMPLETED,
     ]);
     expect(events[0]?.data?.message).toBe('done');
+    expect(events[1]).toMatchObject({
+      version: AGENT_RUN_EVENT_VERSION,
+      run: ctx,
+      sequence: 2,
+      terminal: 'completed',
+    });
+  });
+
+  it('maps turn_cancelled to a versioned cancelled terminal', () => {
+    const journal = new AgentRunJournal(ctx);
+    const events = mapTurnEventToAgentStreamEvents(
+      { type: 'turn_cancelled', code: 'timeout', reason: 'deadline elapsed' },
+      { ...ctx, journal },
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      version: AGENT_RUN_EVENT_VERSION,
+      type: AgentStreamEventType.TURN_CANCELLED,
+      run: ctx,
+      sequence: 1,
+      terminal: 'cancelled',
+      data: { code: 'timeout', reason: 'deadline elapsed' },
+    });
   });
 });
