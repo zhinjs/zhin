@@ -1,5 +1,13 @@
 # @zhin.js/adapter
 
+## 1.1.4
+
+### Patch Changes
+
+- Updated dependencies [c8f4d45]
+  - @zhin.js/plugin-runtime@1.1.2
+  - @zhin.js/feature-kit@1.0.5
+
 ## 1.1.3
 
 ### Patch Changes

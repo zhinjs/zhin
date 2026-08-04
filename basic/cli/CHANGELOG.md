@@ -1,5 +1,26 @@
 # @zhin.js/cli
 
+## 3.0.1
+
+### Patch Changes
+
+- c8f4d45: fix(plugin-runtime): 发布 database host 新导出（`createPluginDatabaseHost` / `databaseRootHostToken`）
+
+  cli@3.0.0 的 `database-host-installer` 依赖这些导出，但当前 npm 上的 plugin-runtime@1.1.1 tarball 发布于导出加入之前，导致消费端 `SyntaxError: ... does not provide an export named 'createPluginDatabaseHost'`。需先发 plugin-runtime，再发 cli 使其锁到新版本。
+
+- Updated dependencies [c8f4d45]
+  - @zhin.js/plugin-runtime@1.1.2
+  - @zhin.js/pagemanager@2.0.11
+  - @zhin.js/host-http@1.0.5
+  - @zhin.js/adapter@1.1.4
+  - @zhin.js/agent@1.1.1
+  - @zhin.js/command@1.0.6
+  - @zhin.js/component@1.0.5
+  - @zhin.js/config-yaml@1.0.6
+  - @zhin.js/core@1.5.1
+  - @zhin.js/runtime@1.0.6
+  - @zhin.js/speech@3.0.1
+
 ## 3.0.0
 
 ### Patch Changes

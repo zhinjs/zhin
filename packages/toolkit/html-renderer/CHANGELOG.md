@@ -1,5 +1,11 @@
 # @zhin.js/html-renderer
 
+## 3.0.1
+
+### Patch Changes
+
+- @zhin.js/core@1.5.1
+
 ## 3.0.0
 
 ### Patch Changes

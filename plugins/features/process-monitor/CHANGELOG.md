@@ -1,5 +1,14 @@
 # @zhin.js/process-monitor
 
+## 3.0.8
+
+### Patch Changes
+
+- Updated dependencies [c8f4d45]
+  - @zhin.js/plugin-runtime@1.1.2
+  - @zhin.js/command@1.0.6
+  - @zhin.js/tool@1.0.5
+
 ## 3.0.7
 
 ### Patch Changes
