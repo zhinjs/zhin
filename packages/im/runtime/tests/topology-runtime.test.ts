@@ -67,7 +67,7 @@ describe('Manifest topology transaction', () => {
     });
 
     expect(setup).toEqual({ root: 1, a: 1, b: 1, c: 0, broken: 0 });
-    await expect(commandIndex(runtime.snapshot).execute('a status')).resolves.toBe('root/a');
+    await expect(commandIndex(runtime.snapshot).execute('a.status')).resolves.toBe('root/a');
 
     await writePluginManifest(project, 'b', {
       plugins: [{ package: '@test/c', instanceKey: 'c' }],
@@ -75,8 +75,8 @@ describe('Manifest topology transaction', () => {
     await hmr.enqueue(source('plugins/b/package.json'));
     expect(runtime.snapshot.tree.get(bId)?.children).toEqual([cInB]);
     expect(setup).toEqual({ root: 1, a: 1, b: 1, c: 1, broken: 0 });
-    await expect(commandIndex(runtime.snapshot).execute('b c status')).resolves.toBe('root/b/c');
-    await expect(commandIndex(runtime.snapshot).execute('b c inline')).resolves.toBe('inline:c');
+    await expect(commandIndex(runtime.snapshot).execute('b.c.status')).resolves.toBe('root/b/c');
+    await expect(commandIndex(runtime.snapshot).execute('b.c.inline')).resolves.toBe('inline:c');
 
     await writePluginManifest(project, 'a', {});
     await writePluginManifest(project, 'b', {
@@ -88,8 +88,8 @@ describe('Manifest topology transaction', () => {
       hmr.enqueue(source('plugins/b/package.json')),
     ]);
     expect(setup).toEqual({ root: 1, a: 1, b: 1, c: 1, broken: 0 });
-    expect(commandIndex(runtime.snapshot).has('a status')).toBe(false);
-    await expect(commandIndex(runtime.snapshot).execute('b status')).resolves.toBe('root/b');
+    expect(commandIndex(runtime.snapshot).has('a.status')).toBe(false);
+    await expect(commandIndex(runtime.snapshot).execute('b.status')).resolves.toBe('root/b');
     expect(modules.loadCount(source('packages/command/index.ts'))).toBe(1);
 
     const beforeMove = runtime.controller.snapshots.acquire();
@@ -106,9 +106,9 @@ describe('Manifest topology transaction', () => {
     expect(setup).toEqual({ root: 1, a: 1, b: 1, c: 2, broken: 0 });
     expect(runtime.snapshot.tree.get(aId)?.children).toEqual([cInA]);
     expect(runtime.snapshot.tree.get(bId)?.children).toEqual([]);
-    await expect(commandIndex(runtime.snapshot).execute('a c status')).resolves.toBe('root/a/c');
-    await expect(commandIndex(runtime.snapshot).execute('a c inline')).resolves.toBe('inline:c');
-    await expect(commandIndex(beforeMove.value).execute('b c status')).resolves.toBe('root/b/c');
+    await expect(commandIndex(runtime.snapshot).execute('a.c.status')).resolves.toBe('root/a/c');
+    await expect(commandIndex(runtime.snapshot).execute('a.c.inline')).resolves.toBe('inline:c');
+    await expect(commandIndex(beforeMove.value).execute('b.c.status')).resolves.toBe('root/b/c');
     expect(disposed).toEqual([]);
     beforeMove.release();
     await waitForImmediate();
@@ -116,7 +116,7 @@ describe('Manifest topology transaction', () => {
 
     await writePluginManifest(project, 'a', {});
     await hmr.enqueue(source('plugins/a/package.json'));
-    expect(commandIndex(runtime.snapshot).has('a c status')).toBe(false);
+    expect(commandIndex(runtime.snapshot).has('a.c.status')).toBe(false);
     await waitForImmediate();
     expect(disposed).toEqual(['c', 'c']);
 
@@ -129,7 +129,7 @@ describe('Manifest topology transaction', () => {
       features: [{ package: '@test/command' }],
     });
     await hmr.enqueue(source('plugins/b/package.json'));
-    await expect(commandIndex(runtime.snapshot).execute('b status')).resolves.toBe('root/b');
+    await expect(commandIndex(runtime.snapshot).execute('b.status')).resolves.toBe('root/b');
     expect(modules.loadCount(source('packages/command/index.ts'))).toBe(2);
 
     const beforeNoop = runtime.snapshot;
@@ -146,7 +146,7 @@ describe('Manifest topology transaction', () => {
       zhin: { protocol: 1, type: 'feature', entry: './next.ts' },
     });
     await hmr.enqueue(source('packages/command/package.json'));
-    await expect(commandIndex(runtime.snapshot).execute('b status')).resolves.toBe('root/b');
+    await expect(commandIndex(runtime.snapshot).execute('b.status')).resolves.toBe('root/b');
     expect(modules.loadCount(source('packages/command/next.ts'))).toBe(1);
     expect(setup).toEqual({ root: 1, a: 1, b: 1, c: 2, broken: 0 });
 
