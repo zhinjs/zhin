@@ -2,12 +2,14 @@
 /**
  * ADR 0019 — production node_modules install size gate for zhin.js IM core (<10MB).
  * Packs workspace IM stack so the check reflects unpublished dependency graph (not registry stale core→ai).
+ * 打包清单由依赖图推导（scripts/lib/workspace-graph），新增 workspace 依赖无需手改本脚本。
  */
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { dependencyClosure } from './lib/workspace-graph.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -17,23 +19,8 @@ const packageManager = JSON.parse(
 
 const IM_BUDGET_BYTES = 10 * 1024 * 1024;
 
-/** bottom-up build order */
-const IM_STACK = [
-  { dir: 'basic/schema', name: '@zhin.js/schema' },
-  { dir: 'basic/logger', name: '@zhin.js/logger' },
-  { dir: 'basic/schedule', name: '@zhin.js/schedule' },
-  { dir: 'packages/im/plugin-runtime', name: '@zhin.js/plugin-runtime' },
-  { dir: 'packages/im/feature-kit', name: '@zhin.js/feature-kit' },
-  { dir: 'packages/im/im-contract', name: '@zhin.js/im-contract' },
-  { dir: 'packages/im/adapter', name: '@zhin.js/adapter' },
-  { dir: 'packages/im/command', name: '@zhin.js/command' },
-  { dir: 'packages/im/component', name: '@zhin.js/component' },
-  { dir: 'packages/im/middleware', name: '@zhin.js/middleware' },
-  { dir: 'packages/im/kernel', name: '@zhin.js/kernel' },
-  { dir: 'basic/database', name: '@zhin.js/database' },
-  { dir: 'packages/im/core', name: '@zhin.js/core' },
-  { dir: 'packages/im/zhin', name: 'zhin.js' },
-];
+/** zhin.js 的 workspace 依赖闭包（bottom-up 拓扑序，含自身） */
+const IM_STACK = dependencyClosure('zhin.js');
 
 function run(cmd, opts = {}) {
   execSync(cmd, { stdio: 'inherit', ...opts });
@@ -100,15 +87,9 @@ function formatMb(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-function rimrafLib(pkgDir) {
-  const lib = path.join(pkgDir, 'lib');
-  if (fs.existsSync(lib)) fs.rmSync(lib, { recursive: true, force: true });
-}
-
 function main() {
   console.log('Building IM stack packages…');
   for (const entry of IM_STACK) {
-    rimrafLib(path.join(repoRoot, entry.dir));
     run(`pnpm --filter ${entry.name} build`, { cwd: repoRoot, stdio: 'pipe' });
   }
 

@@ -4,103 +4,19 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { dependencyClosure, readWorkspaceGraph } from './lib/workspace-graph.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const packageManager = JSON.parse(
   fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'),
 ).packageManager;
 const budgetBytes = 5 * 1024 * 1024;
-const packages = [
-  { dir: 'packages/im/plugin-runtime', name: '@zhin.js/plugin-runtime', dependencies: [] },
-  {
-    dir: 'packages/console/plugin-contract',
-    name: '@zhin.js/console-contract',
-    dependencies: [],
-  },
-  {
-    dir: 'packages/im/feature-kit',
-    name: '@zhin.js/feature-kit',
-    dependencies: ['@zhin.js/plugin-runtime'],
-  },
-  {
-    dir: 'packages/im/adapter',
-    name: '@zhin.js/adapter',
-    dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
-  },
-  {
-    dir: 'packages/im/command',
-    name: '@zhin.js/command',
-    dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
-  },
-  {
-    dir: 'packages/im/component',
-    name: '@zhin.js/component',
-    dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
-  },
-  {
-    dir: 'packages/im/middleware',
-    name: '@zhin.js/middleware',
-    dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
-  },
-  {
-    dir: 'packages/im/agent-feature',
-    name: '@zhin.js/agent-feature',
-    dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
-  },
-  {
-    dir: 'packages/im/mcp-feature',
-    name: '@zhin.js/mcp-feature',
-    dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
-  },
-  {
-    dir: 'packages/im/skill',
-    name: '@zhin.js/skill',
-    dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
-  },
-  {
-    dir: 'packages/im/tool',
-    name: '@zhin.js/tool',
-    dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
-  },
-  {
-    dir: 'packages/console/page',
-    name: '@zhin.js/page',
-    dependencies: [
-      '@zhin.js/console-contract',
-      '@zhin.js/plugin-runtime',
-      '@zhin.js/feature-kit',
-    ],
-  },
-  {
-    dir: 'packages/console/layout',
-    name: '@zhin.js/layout',
-    dependencies: [
-      '@zhin.js/console-contract',
-      '@zhin.js/plugin-runtime',
-      '@zhin.js/feature-kit',
-    ],
-  },
-  {
-    dir: 'packages/im/runtime',
-    name: '@zhin.js/runtime',
-    dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/feature-kit'],
-  },
-  {
-    dir: 'packages/im/config-yaml',
-    name: '@zhin.js/config-yaml',
-    dependencies: ['@zhin.js/runtime'],
-  },
-  {
-    dir: 'packages/im/isolate',
-    name: '@zhin.js/isolate',
-    dependencies: ['@zhin.js/plugin-runtime', '@zhin.js/runtime'],
-  },
-];
 const targetName = process.argv[2] ?? '@zhin.js/plugin-runtime';
-const packagesByName = new Map(packages.map((item) => [item.name, item]));
-if (!packagesByName.has(targetName)) {
+const workspaceGraph = readWorkspaceGraph();
+if (!workspaceGraph.has(targetName)) {
   throw new Error(`Unknown Plugin Runtime install-size target: ${targetName}`);
 }
+// 打包清单由依赖图推导（scripts/lib/workspace-graph），新增 workspace 依赖无需手改本脚本
 const stack = dependencyClosure(targetName);
 const forbiddenPackages = /^(?:vite(?:@|_)|@vitejs|lightningcss(?:[-@_]|$))/u;
 
@@ -140,16 +56,6 @@ function largestEntries(directory, limit = 10) {
     .map((entry) => ({ name: entry.name, bytes: diskUsage(path.join(directory, entry.name)) }))
     .sort((left, right) => right.bytes - left.bytes)
     .slice(0, limit);
-}
-
-function dependencyClosure(name, visited = new Set(), result = []) {
-  if (visited.has(name)) return result;
-  const item = packagesByName.get(name);
-  if (!item) throw new Error(`Unknown Plugin Runtime package dependency: ${name}`);
-  visited.add(name);
-  for (const dependency of item.dependencies) dependencyClosure(dependency, visited, result);
-  result.push(item);
-  return result;
 }
 
 function main() {
