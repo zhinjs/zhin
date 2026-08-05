@@ -12,11 +12,19 @@ export interface DatabaseHostSelection {
 }
 
 /**
+ * select() 需要显式列名：'*' 在 SQL 方言里会被当成字面列名（no such column: "*"），
+ * 类型层直接拒绝；运行时另有可读报错兜底（见 Host 实现）。
+ */
+type SelectFields<Fields extends readonly string[]> = {
+  [K in keyof Fields]: Fields[K] extends '*' ? never : Fields[K];
+};
+
+/**
  * Minimal model surface shared by lottery / rss / group-suite memory stores
  * and the Host-backed `@zhin.js/database` adapter.
  */
 export interface DatabaseHostModel {
-  select(...fields: string[]): DatabaseHostSelection;
+  select<Fields extends string[]>(...fields: SelectFields<Fields>): DatabaseHostSelection;
   insert(row: Record<string, unknown>): Promise<unknown>;
   delete(): { where(query: Record<string, unknown>): Promise<unknown> };
   update(patch: Record<string, unknown>): {

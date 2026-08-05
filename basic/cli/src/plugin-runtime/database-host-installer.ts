@@ -64,6 +64,12 @@ type RawDatabase = {
 function wrapModel(model: RawModel, db?: RawDatabase, tableName?: string): DatabaseHostModel {
   return {
     select: (...fields) => {
+      if (fields.includes('*')) {
+        throw new TypeError(
+          'select() requires explicit column names; "*" is not supported '
+          + '(pass real column names, e.g. select("id", "title")), or use count() for counting.',
+        );
+      }
       const selection = (model.select as (...args: string[]) => unknown)(...fields) as {
         where(query: Record<string, unknown>): unknown;
         orderBy?(field: string, direction?: 'ASC' | 'DESC'): unknown;
