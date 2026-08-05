@@ -1,7 +1,7 @@
 ---
-"@zhin.js/command": minor
-"@zhin.js/adapter": minor
-"@zhin.js/cli": minor
+"@zhin.js/command": patch
+"@zhin.js/adapter": patch
+"@zhin.js/cli": patch
 "@zhin.js/mcp": patch
 ---
 

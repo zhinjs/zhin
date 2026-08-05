@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath,pathToFileURL } from 'node:url';
 
 // Suppress Node ExperimentalWarning (type-stripping / node:sqlite) before CLI load.
 if (!globalThis.__zhinExperimentalWarningsSuppressed) {
@@ -28,4 +28,4 @@ if (!existsSync(cliEntry)) {
   process.exit(1);
 }
 
-await import(cliEntry);
+await import(pathToFileURL(cliEntry).href);

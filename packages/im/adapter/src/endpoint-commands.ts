@@ -355,8 +355,9 @@ export interface EndpointCommandsSpec {
  * provider 层不允许 import @zhin.js/command，故 defineCommand 由调用方注入，
  * 这里只描述结构；适配器侧传入 defineCommand 后 TCommand 即 Readonly<CommandDefinition>。
  *
- * `params` 值域须与 CommandParameterValue 对齐（含 null / 结构化对象 / rest 段
- * 的 `readonly string[]`），否则注入的 defineCommand 会因 TS 逆变检查失败（TS2345）。
+ * `params` 值域须与 CommandParameterValue 对齐（含 null / 结构化对象 / rest 段的
+ * `ReadonlyArray<string | number | boolean>`），否则注入的 defineCommand 会因
+ * TS 逆变检查失败（TS2345）。
  */
 export interface EndpointCommandContext {
   readonly config: unknown;
@@ -369,7 +370,12 @@ export interface EndpointCommandContext {
   readonly args: readonly string[];
   readonly params: Readonly<Record<
     string,
-    string | number | boolean | Readonly<Record<string, unknown>> | null | readonly string[]
+    | string
+    | number
+    | boolean
+    | ReadonlyArray<string | number | boolean>
+    | Readonly<Record<string, unknown>>
+    | null
   >>;
   readonly use: EndpointCommandUse;
 }
@@ -382,7 +388,13 @@ export interface EndpointCommandDefinition {
     readonly type:
       | 'string' | 'number' | 'integer' | 'float' | 'boolean' | 'word' | 'text'
       | 'mention' | 'image' | 'face' | 'reply' | 'forward' | 'dice' | 'rps';
-    readonly default?: string | number | boolean | Readonly<Record<string, unknown>> | null;
+    readonly default?:
+      | string
+      | number
+      | boolean
+      | ReadonlyArray<string | number | boolean>
+      | Readonly<Record<string, unknown>>
+      | null;
     readonly description?: string;
   }>>;
   execute(context: EndpointCommandContext): unknown;

@@ -16,17 +16,19 @@ export function emitSessionNewEvent(
   }));
 }
 
+export interface SessionCompactInfo {
+  microSavedTokens: number;
+  autoSavedTokens: number;
+  totalTokensBefore: number;
+  totalTokensAfter: number;
+}
+
 export function emitSessionCompactEvent(
   emitter: ZhinAgentEventEmitter,
   sessionId: string,
   commMessage: Message,
   mode: 'text' | 'multimodal',
-  info: {
-    microSavedTokens: number;
-    autoSavedTokens: number;
-    totalTokensBefore: number;
-    totalTokensAfter: number;
-  },
+  info: SessionCompactInfo,
 ): void {
   emitter.emit('ai.session.compact', emitter.createPayload(sessionId, commMessage, mode, {
     path: 'agent',

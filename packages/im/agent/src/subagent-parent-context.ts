@@ -41,6 +41,18 @@ function messageToLine(message: AgentMessage): string | null {
   return null;
 }
 
+export async function buildParentContextSnapshot(
+  agentSessionStore: { findActive(key: string): Promise<{ session_id: string } | null> },
+  contextRepository: { loadContext(sessionId: string): Promise<{ messages: AgentMessage[] }> },
+  sessionKey: string,
+): Promise<string | undefined> {
+  const active = await agentSessionStore.findActive(sessionKey);
+  if (!active) return undefined;
+  const ctx = await contextRepository.loadContext(active.session_id);
+  const preamble = buildParentContextPreamble(ctx.messages);
+  return preamble || undefined;
+}
+
 export function buildParentContextPreamble(
   messages: AgentMessage[],
   options?: { maxChars?: number; maxMessages?: number },

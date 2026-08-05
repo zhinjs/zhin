@@ -12,20 +12,15 @@ import { persistSubagentResultToContext } from './persist-subagent-context.js';
 import { persistDeferredWorkerResultToContext } from './persist-deferred-context.js';
 import { processTextTurn } from './turn-pipeline.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
-import type { PromptController } from './prompt-controller.js';
-import type { ZhinAgentConfig } from '../config/index.js';
 
 const logger = getLogger('ZhinAgent');
 
-export interface AutoContinueHost {
-  config: Required<ZhinAgentConfig>;
-  promptController: PromptController;
-  getDeferredAutoContinueDepth(sessionKey: string): number;
-  setDeferredAutoContinueDepth(sessionKey: string, depth: number): void;
-  resetDeferredAutoContinueDepth(sessionKey: string): void;
-  getDeferredResultSender(): SubagentResultSender | null;
-  runInTurnContext<T>(turnId: string, fn: () => Promise<T>): Promise<T>;
-}
+export type AutoContinueHost = Pick<
+  ZhinAgentPrivate,
+  'config' | 'promptController' | 'getDeferredAutoContinueDepth'
+  | 'setDeferredAutoContinueDepth' | 'resetDeferredAutoContinueDepth'
+  | 'getDeferredResultSender' | 'runInTurnContext'
+>;
 
 type AutoContinueKind = 'deferred' | 'subagent';
 

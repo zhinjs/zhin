@@ -1,4 +1,5 @@
 import type { Message } from '@zhin.js/core';
+import { getLogger } from '@zhin.js/logger';
 import { resolveAgentTurnSessionKey } from '../collaboration/resolve-agent-session-key.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import { buildTurnUserMessages } from '../context/turn-user-message.js';
@@ -8,6 +9,8 @@ import { type SessionIODeps, beginTurnSession, resolveSessionIsNewBeforeCreate, 
 import { consumePassiveGroupContextForTurn } from './passive-group-session.js';
 import { CollaborationSessionStrategy } from './strategies.js';
 export type { SessionIODeps } from './session-io.js';
+
+const logger = getLogger('SessionSystem');
 
 export interface TurnSessionPrep {
   sessionKey: string;
@@ -20,9 +23,42 @@ export interface TurnSessionPrep {
 
 export class SessionSystem {
   private readonly strategies = new Map<string, SessionStrategy>();
+  private persistenceReady: Promise<void>;
+  private resolvePersistenceReady!: () => void;
+  private persistenceDone = false;
 
   constructor(private readonly _config: SessionSystemConfig = {}) {
     this.registerStrategy('collaboration', new CollaborationSessionStrategy());
+    this.persistenceReady = new Promise<void>((resolve) => {
+      this.resolvePersistenceReady = resolve;
+    });
+  }
+
+  async waitForPersistence(): Promise<void> {
+    if (this.persistenceDone) return;
+    const timeoutMs = process.env.NODE_ENV === 'test' ? 50 : 5_000;
+    await Promise.race([
+      this.persistenceReady,
+      new Promise<void>((resolve) => {
+        setTimeout(() => {
+          if (!this.persistenceDone) {
+            logger.warn('waitForPersistence: timeout, proceeding with in-memory session/history');
+            this.markPersistenceReady();
+          }
+          resolve();
+        }, timeoutMs);
+      }),
+    ]);
+  }
+
+  markPersistenceReady(): void {
+    if (this.persistenceDone) return;
+    this.persistenceDone = true;
+    this.resolvePersistenceReady?.();
+  }
+
+  isPersistenceReady(): boolean {
+    return this.persistenceDone;
   }
 
   registerStrategy(name: string, strategy: SessionStrategy): void {

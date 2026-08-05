@@ -187,6 +187,31 @@ export function payloadToDataUri(payload: MediaBinaryPayload): string {
 }
 
 /** 图片载荷 → canonical vision 媒体块（base64 ref，agentLoop UserMessage.media 用） */
+export async function prepareMultimodalBlocks(
+  parts: ContentPart[],
+  maxPayloadBytes: number = 26_214_400,
+): Promise<{ content: string; mediaBlocks: MediaContentBlock[] }> {
+  const payloads = await normalizeContentPartsToPayloads(parts, maxPayloadBytes);
+  const mediaBlocks = payloads.flatMap((payload) => {
+    const block = payloadToVisionPart(payload);
+    return block ? [block] : [];
+  });
+  return { content: summarizeContentParts(parts), mediaBlocks };
+}
+
+export function summarizeContentParts(parts: readonly ContentPart[]): string {
+  const text = parts
+    .filter((part): part is Extract<ContentPart, { type: 'text' }> => part.type === 'text')
+    .map((part) => part.text)
+    .join(' ')
+    .trim();
+  if (text) return text;
+  if (parts.some((part) => part.type === 'image_url')) return '[图片]';
+  if (parts.some((part) => part.type === 'audio')) return '[音频]';
+  if (parts.some((part) => part.type === 'video_url')) return '[视频]';
+  return '[多模态消息]';
+}
+
 export function payloadToVisionPart(payload: MediaBinaryPayload): MediaContentBlock | null {
   if (payload.kind !== 'image') return null;
   return {

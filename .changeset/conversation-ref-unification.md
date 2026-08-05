@@ -1,10 +1,10 @@
 ---
-"@zhin.js/core": minor
-"@zhin.js/adapter": minor
-"@zhin.js/im-contract": minor
-"@zhin.js/plugin-runtime": minor
-"@zhin.js/command": minor
-"@zhin.js/cli": minor
+"@zhin.js/core": patch
+"@zhin.js/adapter": patch
+"@zhin.js/im-contract": patch
+"@zhin.js/plugin-runtime": patch
+"@zhin.js/command": patch
+"@zhin.js/cli": patch
 "@zhin.js/host-http": patch
 "@zhin.js/game-kit": patch
 ---

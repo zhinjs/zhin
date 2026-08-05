@@ -42,7 +42,7 @@ import { TurnTracker } from '../turn/turn-tracker.js';
 import { ZhinAgentEventEmitter } from '../event/event-emitter.js';
 import { UserProfileStore } from '../user-profile.js';
 import { SubagentSystem, type SubagentOrigin, type SubagentResultSender, type SubagentCompletePayload } from '../subagent/index.js';
-import { buildParentContextPreamble } from '../subagent-parent-context.js';
+import { buildParentContextSnapshot } from '../subagent-parent-context.js';
 import {
   type ZhinAgentConfig,
   type OnChunkCallback,
@@ -53,7 +53,7 @@ import {
   isPromptTraceVerbose,
 } from '../config/index.js';
 import { processTextTurn } from '../turn/turn-pipeline.js';
-import { normalizeContentPartsToPayloads, payloadToVisionPart } from '../media/media-normalize.js';
+import { prepareMultimodalBlocks } from '../media/media-normalize.js';
 import { resolveContextTailMessageLimit } from '../context/context-tail-limit.js';
 import { archiveSessionByKey } from '../session/session-io.js';
 import { recordPassiveGroupMessage as recordPassiveGroupMessageInternal } from '../session/passive-group-session.js';
@@ -87,7 +87,7 @@ import {
   type TurnContextBridgeState,
   type TurnContextRunOptions,
 } from '../turn/turn-context-bridge.js';
-import { emitSessionCompactEvent, emitSessionNewEvent } from '../event/session-events.js';
+import { emitSessionCompactEvent, emitSessionNewEvent, type SessionCompactInfo } from '../event/session-events.js';
 import { applyZhinAgentConfigure, wireZhinAgentLlmApiLayer, type ConfigureZhinAgentTarget } from '../init/configure-zhin-agent.js';
 import { disposeZhinAgentResources, type DisposeZhinAgentTarget } from '../init/dispose-zhin-agent.js';
 import type { PhaseTraceConfig } from '../internal/phase-trace.js';
@@ -99,6 +99,7 @@ import type {
   IAgentConfigurator,
 } from '../config/agent-interfaces.js';
 import {
+  bindModuleProperties,
   clearZhinAgentRuntimeModules,
   createZhinAgentRuntimeModules,
   type ZhinAgentRuntimeModules,
@@ -154,9 +155,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   private alwaysSkillsBaseline: string = '';
   private skillsSummaryXML: string = '';
   private modelRegistry: ModelRegistry | null = null;
-  private phaseTraceEnabled: boolean;
-  private promptTraceEnabled: boolean;
-  private promptTraceVerbose: boolean;
   private readonly emitter = new ZhinAgentEventEmitter();
   private deferredCatalog: AgentTool[] = [];
   lastToolSearchDeferredStats?: string;
@@ -164,23 +162,21 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   private deferredResultSender: SubagentResultSender | null = null;
   private deferredAutoContinueDepthBySession = new Map<string, number>();
   private lastTurnMetrics: ZhinAgentTurnMetrics | null = null;
-  private memoryPersistenceReady: Promise<void>;
-  private resolveMemoryPersistenceReady!: () => void;
-  private memoryPersistenceDone = false;
   private readonly inboundQueueConfig: ResolvedInboundQueueConfig;
   private readonly inboundTurnQueue: InboundTurnQueue;
   private readonly turnContextState: TurnContextBridgeState = {
     alwaysSkillsBaseline: '',
   };
 
-  get skillRegistry(): SkillRegistry | null { return this.runtimeModules.skillRegistry; }
-  set skillRegistry(value: SkillRegistry | null) { this.runtimeModules.skillRegistry = value; }
-
-  get skillSystem(): SkillSystem | null { return this.runtimeModules.skillSystem; }
-  set skillSystem(value: SkillSystem | null) { this.runtimeModules.skillSystem = value; }
-
-  get orchestrator(): AgentOrchestrator | null { return this.runtimeModules.orchestrator; }
-  set orchestrator(value: AgentOrchestrator | null) { this.runtimeModules.orchestrator = value; }
+  declare skillRegistry: SkillRegistry | null;
+  declare skillSystem: SkillSystem | null;
+  declare orchestrator: AgentOrchestrator | null;
+  declare agentCore: AgentCore | null;
+  declare toolSystem: ToolSystem | null;
+  declare contextSystem: ContextSystem | null;
+  declare memorySystem: MemorySystem | null;
+  declare sessionSystem: SessionSystem | null;
+  declare eventSystem: EventSystem | null;
 
   get activeBinding(): ResolvedAgentBinding | null {
     return getAgentTurnConfiguration()?.activeBinding ?? this.configuredActiveBinding;
@@ -206,57 +202,18 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     this.configuredGlobalContext = value;
   }
 
-  get agentCore(): AgentCore | null { return this.runtimeModules.agentCore; }
-  set agentCore(value: AgentCore | null) { this.runtimeModules.agentCore = value; }
-
-  get toolSystem(): ToolSystem | null { return this.runtimeModules.toolSystem; }
-  set toolSystem(value: ToolSystem | null) { this.runtimeModules.toolSystem = value; }
-
-  get contextSystem(): ContextSystem | null { return this.runtimeModules.contextSystem; }
-  set contextSystem(value: ContextSystem | null) { this.runtimeModules.contextSystem = value; }
-
-  get memorySystem(): MemorySystem | null { return this.runtimeModules.memorySystem; }
-  set memorySystem(value: MemorySystem | null) { this.runtimeModules.memorySystem = value; }
-
-  get sessionSystem(): SessionSystem | null { return this.runtimeModules.sessionSystem; }
-  set sessionSystem(value: SessionSystem | null) { this.runtimeModules.sessionSystem = value; }
-
-  get eventSystem(): EventSystem | null { return this.runtimeModules.eventSystem; }
-  set eventSystem(value: EventSystem | null) { this.runtimeModules.eventSystem = value; }
-
   private get phaseConfig(): PhaseTraceConfig {
-    return { phaseTraceEnabled: this.phaseTraceEnabled, onPhaseTrace: this.config.onPhaseTrace };
+    return { phaseTraceEnabled: isPhaseTraceEnabled(this.config), onPhaseTrace: this.config.onPhaseTrace };
   }
 
   private get promptTraceConfig() {
-    return {
-      promptTraceEnabled: this.promptTraceEnabled,
-      promptTraceVerbose: this.promptTraceVerbose,
-    };
-  }
-
-  private get autoContinueHost() {
-    return {
-      config: this.config,
-      promptController: this.promptController,
-      getDeferredAutoContinueDepth: (k: string) => this.getDeferredAutoContinueDepth(k),
-      setDeferredAutoContinueDepth: (k: string, d: number) => this.deferredAutoContinueDepthBySession.set(k, d),
-      resetDeferredAutoContinueDepth: (k: string) => this.resetDeferredAutoContinueDepth(k),
-      getDeferredResultSender: () => this.getDeferredResultSender(),
-      runInTurnContext: <T>(turnId: string, fn: () => Promise<T>) => this.runInTurnContext(turnId, fn),
-    };
+    return { promptTraceEnabled: isPromptTraceEnabled(this.config), promptTraceVerbose: isPromptTraceVerbose(this.config) };
   }
 
   constructor(provider: AIProvider, config?: ZhinAgentConfig) {
     this.provider = provider;
     const merged = { ...DEFAULT_CONFIG, ...config } as Required<ZhinAgentConfig>;
     this.config = merged;
-    this.phaseTraceEnabled = isPhaseTraceEnabled(this.config);
-    this.promptTraceEnabled = isPromptTraceEnabled(this.config);
-    this.promptTraceVerbose = isPromptTraceVerbose(this.config);
-    this.memoryPersistenceReady = new Promise<void>((resolve) => {
-      this.resolveMemoryPersistenceReady = resolve;
-    });
     this.memory = new ConversationMemory({
       minTopicRounds: this.config.minTopicRounds,
       slidingWindowSize: this.config.slidingWindowSize,
@@ -281,6 +238,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     this.imTranscriptStore = new MemoryImTranscriptStore();
     this.turnContextState.alwaysSkillsBaseline = this.alwaysSkillsBaseline;
     this.runtimeModules = createZhinAgentRuntimeModules(asPrivate(this));
+    bindModuleProperties(this, this.runtimeModules);
     this.wireLlmApiLayer();
   }
 
@@ -290,11 +248,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   getTurnActiveSkills(): string {
     return getTurnActiveSkills(this.turnContextState);
-  }
-
-  /** @deprecated 使用 getTurnActiveSkills() */
-  get activeSkillsContext(): string {
-    return this.getTurnActiveSkills();
   }
 
   getAlwaysSkillsBaseline(): string {
@@ -338,26 +291,11 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   }
 
   async waitForMemoryPersistence(): Promise<void> {
-    if (this.memoryPersistenceDone) return;
-    const timeoutMs = process.env.NODE_ENV === 'test' ? 50 : 5_000;
-    await Promise.race([
-      this.memoryPersistenceReady,
-      new Promise<void>((resolve) => {
-        setTimeout(() => {
-          if (!this.memoryPersistenceDone) {
-            logger.warn('waitForMemoryPersistence: timeout, proceeding with in-memory session/history');
-            this.markMemoryPersistenceReady();
-          }
-          resolve();
-        }, timeoutMs);
-      }),
-    ]);
+    return this.requireSessionSystem().waitForPersistence();
   }
 
   markMemoryPersistenceReady(): void {
-    if (this.memoryPersistenceDone) return;
-    this.memoryPersistenceDone = true;
-    this.resolveMemoryPersistenceReady?.();
+    this.requireSessionSystem().markPersistenceReady();
   }
 
   sharePersistenceWith(target: ZhinAgent): void {
@@ -367,7 +305,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
       contextRepository: this.contextRepository,
       imTranscriptStore: this.imTranscriptStore,
     });
-    if (this.memoryPersistenceDone) {
+    if (this.requireSessionSystem().isPersistenceReady()) {
       target.markMemoryPersistenceReady();
     }
   }
@@ -420,28 +358,22 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     return this.deferredAutoContinueDepthBySession.get(sessionKey) ?? 0;
   }
 
+  setDeferredAutoContinueDepth(sessionKey: string, depth: number): void {
+    this.deferredAutoContinueDepthBySession.set(sessionKey, depth);
+  }
+
   resetDeferredAutoContinueDepth(sessionKey: string): void {
     this.deferredAutoContinueDepthBySession.delete(sessionKey);
   }
 
   async continueAfterDeferredWorker(
-    commMessage: Message,
-    taskId: string,
-    goal: string,
-    result: DeferredWorkerResult,
+    commMessage: Message, taskId: string, goal: string, result: DeferredWorkerResult,
   ): Promise<void> {
-    return continueAfterDeferredWorker(
-      this.autoContinueHost,
-      asPrivate(this),
-      commMessage,
-      taskId,
-      goal,
-      result,
-    );
+    return continueAfterDeferredWorker(asPrivate(this), asPrivate(this), commMessage, taskId, goal, result);
   }
 
   async continueAfterSubagent(payload: SubagentCompletePayload): Promise<void> {
-    return continueAfterSubagent(this.autoContinueHost, asPrivate(this), payload);
+    return continueAfterSubagent(asPrivate(this), asPrivate(this), payload);
   }
 
   getActiveTurnTracker(): TurnTracker | undefined {
@@ -462,11 +394,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   async buildParentContextSnapshotForSubagent(origin: SubagentOrigin): Promise<string | undefined> {
     const sessionKey = resolveIMSessionIdFromMessage(origin.message);
-    const active = await this.agentSessionStore.findActive(sessionKey);
-    if (!active) return undefined;
-    const ctx = await this.contextRepository.loadContext(active.session_id);
-    const preamble = buildParentContextPreamble(ctx.messages);
-    return preamble || undefined;
+    return buildParentContextSnapshot(this.agentSessionStore, this.contextRepository, sessionKey);
   }
 
   getEventEmitter(): ZhinAgentEventEmitter {
@@ -514,27 +442,11 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     this.lastTurnMetrics = tracker.lastMetrics;
   }
 
-  emitSessionNewEvent(
-    sessionId: string,
-    commMessage: Message,
-    mode: 'text' | 'multimodal',
-    content: string,
-    reply: string,
-  ): void {
+  emitSessionNewEvent(sessionId: string, commMessage: Message, mode: 'text' | 'multimodal', content: string, reply: string): void {
     emitSessionNewEvent(this.emitter, sessionId, commMessage, mode, content, reply);
   }
 
-  emitSessionCompactEvent(
-    sessionId: string,
-    commMessage: Message,
-    mode: 'text' | 'multimodal',
-    info: {
-      microSavedTokens: number;
-      autoSavedTokens: number;
-      totalTokensBefore: number;
-      totalTokensAfter: number;
-    },
-  ): void {
+  emitSessionCompactEvent(sessionId: string, commMessage: Message, mode: 'text' | 'multimodal', info: SessionCompactInfo): void {
     emitSessionCompactEvent(this.emitter, sessionId, commMessage, mode, info);
   }
 
@@ -578,10 +490,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     return runPromptTurn(asPrivate(this), input, commMessage, (id, fn) => this.runInTurnContext(id, fn), options);
   }
 
-  async appendPassiveGroupChatter(_commMessage: Message, _rawContent: string): Promise<void> {
-    return;
-  }
-
   async archiveSessionForCommMessage(commMessage: Message): Promise<boolean> {
     const sessionKey = resolveIMSessionIdFromMessage(commMessage);
     return archiveSessionByKey(
@@ -612,18 +520,8 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     return system;
   }
 
-  async process(
-    content: string,
-    commMessage: Message,
-    externalTools: Tool[] = [],
-    onChunk?: OnChunkCallback,
-  ): Promise<OutputElement[]> {
-    return this.processTurn({
-      content,
-      message: commMessage,
-      tools: externalTools,
-      ...(onChunk ? { onChunk } : {}),
-    });
+  async process(content: string, commMessage: Message, externalTools: Tool[] = [], onChunk?: OnChunkCallback): Promise<OutputElement[]> {
+    return this.processTurn({ content, message: commMessage, tools: externalTools, onChunk });
   }
 
   /**
@@ -652,44 +550,20 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     );
   }
 
-  async *processStream(
-    content: string,
-    commMessage: Message,
-    externalTools: Tool[] = [],
-  ): AsyncGenerator<TurnEvent, void, undefined> {
+  async *processStream(content: string, commMessage: Message, externalTools: Tool[] = []): AsyncGenerator<TurnEvent, void, undefined> {
     yield* processTextTurnStream(asPrivate(this), {
-      content,
-      commMessage,
-      externalTools,
-      inboundQueueConfig: this.inboundQueueConfig,
-      inboundTurnQueue: this.inboundTurnQueue,
+      content, commMessage, externalTools,
+      inboundQueueConfig: this.inboundQueueConfig, inboundTurnQueue: this.inboundTurnQueue,
       runInTurnContext: (id, fn) => this.runInTurnContext(id, fn),
     });
   }
 
-  /** Compatibility entry: translate legacy ContentPart[] into canonical media blocks. */
-  async processMultimodal(
-    parts: ContentPart[],
-    commMessage: Message,
-    onChunk?: OnChunkCallback,
-  ): Promise<OutputElement[]> {
-    const payloads = await normalizeContentPartsToPayloads(parts, 26_214_400);
-    const mediaBlocks = payloads.flatMap((payload) => {
-      const block = payloadToVisionPart(payload);
-      return block ? [block] : [];
-    });
-    const content = summarizeContentParts(parts);
+  async processMultimodal(parts: ContentPart[], commMessage: Message, onChunk?: OnChunkCallback): Promise<OutputElement[]> {
+    const { content, mediaBlocks } = await prepareMultimodalBlocks(parts);
     return this.runInTurnContext(randomUUID(), () =>
       runWithInboundQueue(commMessage, this.inboundQueueConfig, this.inboundTurnQueue, {
         coalesce: false,
-        run: () => processTextTurn(
-          asPrivate(this),
-          content,
-          commMessage,
-          [],
-          onChunk,
-          { mediaBlocks },
-        ),
+        run: () => processTextTurn(asPrivate(this), content, commMessage, [], onChunk, { mediaBlocks }),
       }),
     );
   }
@@ -709,17 +583,4 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     this.providerResolver = null;
     clearZhinAgentRuntimeModules(this.runtimeModules);
   }
-}
-
-function summarizeContentParts(parts: readonly ContentPart[]): string {
-  const text = parts
-    .filter((part): part is Extract<ContentPart, { type: 'text' }> => part.type === 'text')
-    .map((part) => part.text)
-    .join(' ')
-    .trim();
-  if (text) return text;
-  if (parts.some((part) => part.type === 'image_url')) return '[图片]';
-  if (parts.some((part) => part.type === 'audio')) return '[音频]';
-  if (parts.some((part) => part.type === 'video_url')) return '[视频]';
-  return '[多模态消息]';
 }

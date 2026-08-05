@@ -21,6 +21,7 @@ import type { ResolvedAgentBinding } from '../config/types.js';
 import type { ToolCatalogItem } from '../tool-catalog/types.js';
 import type { RegisteredAgentTool } from '../tool/contracts.js';
 import type { DeferredWorkerResult, DeferredWorkerRunner } from '../deferred-worker-runner.js';
+import type { SessionCompactInfo } from '../event/session-events.js';
 import type {
   HostEventEmitter,
   HostPhaseTraceConfig,
@@ -96,17 +97,7 @@ export interface ZhinAgentPrivate {
     content: string,
     reply: string,
   ): void;
-  emitSessionCompactEvent(
-    sessionId: string,
-    commMessage: Message,
-    mode: 'text' | 'multimodal',
-    info: {
-      microSavedTokens: number;
-      autoSavedTokens: number;
-      totalTokensBefore: number;
-      totalTokensAfter: number;
-    },
-  ): void;
+  emitSessionCompactEvent(sessionId: string, commMessage: Message, mode: 'text' | 'multimodal', info: SessionCompactInfo): void;
   buildDisciplinedPrompt(basePrompt: string): string;
   runDeferredWorker(
     goal: string,
@@ -115,6 +106,7 @@ export interface ZhinAgentPrivate {
     allTools: AgentTool[],
   ): Promise<string>;
   getDeferredAutoContinueDepth(sessionKey: string): number;
+  setDeferredAutoContinueDepth(sessionKey: string, depth: number): void;
   resetDeferredAutoContinueDepth(sessionKey: string): void;
   continueAfterDeferredWorker(
     commMessage: Message,

@@ -45,6 +45,7 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
     { text: '命令', link: '/authoring/commands' },
     { text: '中间件与组件', link: '/authoring/middleware-components' },
     { text: 'Agent 工具', link: '/authoring/agent-tools' },
+    { text: 'Host Token 总览', link: '/authoring/host-tokens' },
     { text: '端点生命周期', link: '/authoring/endpoint-lifecycle' },
     { text: '模块级状态', link: '/authoring/module-state' },
     { text: 'Console 页面', link: '/authoring/console-pages' },

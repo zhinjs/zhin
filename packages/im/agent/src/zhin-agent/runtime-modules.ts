@@ -37,6 +37,26 @@ export function createZhinAgentRuntimeModules(host: ZhinAgentPrivate): ZhinAgent
   };
 }
 
+const MODULE_KEYS: ReadonlyArray<keyof ZhinAgentRuntimeModules> = [
+  'skillRegistry', 'skillSystem', 'orchestrator', 'agentCore',
+  'toolSystem', 'contextSystem', 'memorySystem', 'sessionSystem', 'eventSystem',
+];
+
+type RuntimeModuleSlot = ZhinAgentRuntimeModules[keyof ZhinAgentRuntimeModules];
+
+export function bindModuleProperties(target: object, modules: ZhinAgentRuntimeModules): void {
+  // defineProperty 动态键无法保留 K→V 对应；写成 slot bag 才能赋值联合值。
+  const slots = modules as Record<keyof ZhinAgentRuntimeModules, RuntimeModuleSlot>;
+  for (const key of MODULE_KEYS) {
+    Object.defineProperty(target, key, {
+      get() { return slots[key]; },
+      set(value: RuntimeModuleSlot) { slots[key] = value; },
+      enumerable: true,
+      configurable: true,
+    });
+  }
+}
+
 export function clearZhinAgentRuntimeModules(modules: ZhinAgentRuntimeModules): void {
   modules.skillRegistry = null;
   modules.skillSystem = null;
