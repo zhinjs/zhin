@@ -2,6 +2,13 @@ import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
   description: '掷骰子',
+  params:{
+    faces: {
+      type: 'number',
+      description: '骰子面数',
+      default: 6,
+    },
+  },
   execute: ({ params }) => {
     const faces = Number(params.faces);
     if (!Number.isFinite(faces) || faces < 2) {
