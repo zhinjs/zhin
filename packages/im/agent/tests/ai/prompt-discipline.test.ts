@@ -50,7 +50,7 @@ describe('Prompt discipline block', () => {
     expect(prompt).toContain('# Orchestration');
     expect(prompt).toContain('Use available tools directly');
     expect(prompt).toContain('Use spawn_task for complex');
-    expect(prompt).not.toContain('# Style');
+    expect(prompt).toContain('# Style');
     expect(prompt).not.toContain('# Deferred Tools');
   });
 
@@ -68,7 +68,7 @@ describe('Prompt discipline block', () => {
   });
 
   it('§11 bootstrap 不含 AGENTS；toolSearch §8 为 catalog 非全文 XML', () => {
-    const xml = '<skills><skill available="true"><name>demo</name><desc>' + 'x'.repeat(200) + '</desc></skill></skills>';
+    const xml = '<available_skills><skill available="true"><name>demo</name><description>' + 'x'.repeat(200) + '</description></skill></available_skills>';
     const prompt = buildRichSystemPrompt({
       config: DEFAULT_CONFIG,
       skillRegistry: null,

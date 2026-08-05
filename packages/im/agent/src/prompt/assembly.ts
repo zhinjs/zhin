@@ -9,6 +9,7 @@ import {
   type PromptSectionDebugInfo,
 } from './system-prompt.js';
 import { resolveWorkspacePrompt } from './workspace-prompt.js';
+import { getGitStatusLine } from './git-context.js';
 import { buildPreExecFastPathPrompt } from '../tool/runtime.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import type { AgentMessage } from '@zhin.js/ai';
@@ -53,7 +54,11 @@ export async function describeAgentPathPromptSections(
     skillsSummaryXML: agent.skillsSummaryXML,
     activeSkillsContext: agent.getTurnActiveSkills(),
     bootstrapContext: agent.bootstrapContext,
+    globalContext: agent.globalContext,
     commMessage: options.commMessage,
+    gitStatus: agent.config.gitStatus
+      ? (await getGitStatusLine(process.cwd())) ?? undefined
+      : undefined,
     toolSearchDeferredStats: options.deferredStats,
     platformSections: platformMarkdown,
     orchestratorSdk: options.modelSdk,
@@ -86,17 +91,24 @@ export async function buildAgentPathSystemPrompt(
     sessionId,
   });
 
+  const gitStatus = agent.config.gitStatus
+    ? await getGitStatusLine(process.cwd())
+    : null;
+
   const promptCtx = {
     config: agent.config,
     skillRegistry: agent.skillRegistry,
     skillsSummaryXML: agent.skillsSummaryXML,
     activeSkillsContext: agent.getTurnActiveSkills(),
     bootstrapContext: agent.bootstrapContext,
+    globalContext: agent.globalContext,
     commMessage,
+    gitStatus: gitStatus ?? undefined,
     toolSearchDeferredStats: deferredStats,
     platformSections: platformMarkdown,
     orchestratorSdk: modelSdk,
     agentNickname: agent.activeBinding?.nickname,
+    modelId: agent.activeBinding?.model,
   };
   const richPrompt = buildRichSystemPrompt(promptCtx);
 

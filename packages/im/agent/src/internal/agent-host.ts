@@ -60,6 +60,7 @@ export interface ZhinAgentPrivate {
   readonly rateLimiter: RateLimiter;
   readonly subagentSystem: SubagentSystem | null;
   readonly bootstrapContext: string;
+  readonly globalContext: string;
   getTurnActiveSkills(): string;
   getAlwaysSkillsBaseline(): string;
   initScheduleTurnContext(ctx: HostScheduleTurnContext): void;

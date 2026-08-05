@@ -92,4 +92,10 @@ export interface ZhinAgentConfig {
   policyDenialStopAfter?: number;
   deferredAutoContinue?: boolean;
   deferredAutoContinueMaxDepth?: number;
+  /** §1 Runtime 注入单行 git 状态摘要（非 git 仓库自动跳过） */
+  gitStatus?: boolean;
+  /** 追加的上下文文件路径（支持 ~ 与相对路径；默认另加载 ~/.config/zhin/AGENTS.md 等全局路径） */
+  contextPaths?: string[];
+  /** 系统提示词总字符上限，超出按牺牲顺序截断可截断段（skills → globalContext → bootstrap） */
+  systemPromptMaxChars?: number;
 }

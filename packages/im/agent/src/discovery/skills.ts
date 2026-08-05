@@ -210,16 +210,16 @@ function escapeXml(s: string): string {
  */
 export function buildSkillsSummaryXML(skills: SkillMeta[]): string {
   if (skills.length === 0) return '';
-  const lines = ['<skills>'];
+  const lines = ['<available_skills>'];
   for (const s of skills) {
     const available = s.available !== false;
     const attrs = `available="${available}"`;
     const requires = (!available && s.requiresMissing?.length)
       ? ` requires="${escapeXml(s.requiresMissing.join(','))}"`
       : '';
-    lines.push(`  <skill ${attrs}${requires}><name>${escapeXml(s.name)}</name><desc>${escapeXml(s.description)}</desc></skill>`);
+    lines.push(`  <skill ${attrs}${requires}><name>${escapeXml(s.name)}</name><description>${escapeXml(s.description)}</description></skill>`);
   }
-  lines.push('</skills>');
+  lines.push('</available_skills>');
   return lines.join('\n');
 }
 

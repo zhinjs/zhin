@@ -15,7 +15,7 @@ import { discoverWorkspaceAgents, loadAgentInstructionsBody } from '../discovery
 import { registerPluginAgentSurfaces } from '../discovery/register-agent-surface.js';
 import { discoverWorkspaceTools, buildToolFromMeta } from '../discovery/tools.js';
 import { resolveSkillInstructionMaxChars, DEFAULT_CONFIG } from '../config/index.js';
-import { loadBootstrapFiles, buildContextFiles, buildStableBootstrapSection } from '../bootstrap.js';
+import { loadBootstrapFiles, buildContextFiles, buildStableBootstrapSection, loadContextFiles, buildGlobalContextSection, DEFAULT_GLOBAL_CONTEXT_PATHS } from '../bootstrap.js';
 import { loadBootstrapWithProfile, resolveAssistantConfig } from '../assistant/index.js';
 import { createAIHookEvent } from '../orchestrator/hook-registry.js';
 import { createScheduleTools } from '../schedule-manager.js';
@@ -333,6 +333,17 @@ export function registerBuiltinTools(refs: AIServiceRefs): void {
           const stableSection = buildStableBootstrapSection(bootstrapFiles);
           if (stableSection) {
             refs.zhinAgent.configure({ bootstrapContext: stableSection });
+          }
+
+          // Step 2b: 全局上下文文件（默认全局路径 + config.contextPaths）
+          const globalFiles = await loadContextFiles(
+            [...DEFAULT_GLOBAL_CONTEXT_PATHS, ...(fullCfg.contextPaths ?? [])],
+            { cwd: workspaceDir },
+          );
+          const globalSection = buildGlobalContextSection(globalFiles);
+          if (globalSection) {
+            refs.zhinAgent.configure({ globalContext: globalSection });
+            loadedFiles.push(...globalFiles.map(f => f.path));
           }
         }
       } catch (e: unknown) {

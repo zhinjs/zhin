@@ -65,4 +65,7 @@ export const DEFAULT_CONFIG = {
   deferredAutoContinue: false,
   deferredAutoContinueMaxDepth: 8,
   outputSchema: false,
+  gitStatus: true,
+  contextPaths: [],
+  systemPromptMaxChars: 100_000,
 } as unknown as Required<ZhinAgentConfig>;

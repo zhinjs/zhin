@@ -40,6 +40,7 @@ export interface ConfigureZhinAgentTarget {
   activeBinding: ResolvedAgentBinding | null;
   deferredResultSender: SubagentResultSender | null;
   bootstrapContext: string;
+  globalContext: string;
   alwaysSkillsBaseline: string;
   skillsSummaryXML: string;
   turnContextState: TurnContextBridgeState;
@@ -92,6 +93,10 @@ export function applyZhinAgentConfigure(
   if (deps.bootstrapContext !== undefined) {
     target.bootstrapContext = deps.bootstrapContext;
     logger.debug(`Bootstrap context set (${deps.bootstrapContext.length} chars)`);
+  }
+  if (deps.globalContext !== undefined) {
+    target.globalContext = deps.globalContext;
+    logger.debug(`Global context set (${deps.globalContext.length} chars)`);
   }
   if (deps.activeSkillsContext !== undefined) {
     target.alwaysSkillsBaseline = deps.activeSkillsContext || '';

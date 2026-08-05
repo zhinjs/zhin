@@ -41,6 +41,7 @@ export interface ZhinAgentDependencies {
   subagentSender: SubagentResultSender;
   deferredResultSender: SubagentResultSender;
   bootstrapContext: string;
+  globalContext: string;
   activeSkillsContext: string;
   skillsSummaryXML: string;
 }

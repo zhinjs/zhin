@@ -150,6 +150,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   private rateLimiter: RateLimiter;
   private subagentSystem: SubagentSystem | null = null;
   private configuredBootstrapContext: string = '';
+  private configuredGlobalContext: string = '';
   private alwaysSkillsBaseline: string = '';
   private skillsSummaryXML: string = '';
   private modelRegistry: ModelRegistry | null = null;
@@ -195,6 +196,14 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   set bootstrapContext(value: string) {
     this.configuredBootstrapContext = value;
+  }
+
+  get globalContext(): string {
+    return this.configuredGlobalContext;
+  }
+
+  set globalContext(value: string) {
+    this.configuredGlobalContext = value;
   }
 
   get agentCore(): AgentCore | null { return this.runtimeModules.agentCore; }

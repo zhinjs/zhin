@@ -15,6 +15,7 @@
  */
 
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { getLogger } from '@zhin.js/core';
 
@@ -216,6 +217,84 @@ export function buildStableContextFiles(
     (STABLE_BOOTSTRAP_FILENAMES as readonly string[]).includes(f.name),
   );
   return buildContextFiles(stable, options);
+}
+
+// ============================================================================
+// 全局上下文文件（默认路径 + config.contextPaths）
+// ============================================================================
+
+/** 默认全局上下文路径（不存在则跳过） */
+export const DEFAULT_GLOBAL_CONTEXT_PATHS = [
+  '~/.config/zhin/AGENTS.md',
+  '~/.config/zhin/ZHIN.md',
+] as const;
+
+/** 全局上下文单文件 / 总量上限（比项目 bootstrap 更紧，控制 token） */
+const GLOBAL_CONTEXT_MAX_CHARS = 8 * 1024;
+const GLOBAL_CONTEXT_TOTAL_MAX_CHARS = 16 * 1024;
+
+function expandContextPath(raw: string, cwd: string): string {
+  const expanded = raw.startsWith('~') ? path.join(os.homedir(), raw.slice(1)) : raw;
+  return path.isAbsolute(expanded) ? expanded : path.resolve(cwd, expanded);
+}
+
+/**
+ * 加载全局/追加上下文文件：`~` 展开、按解析路径去重、缺失跳过，单文件与总量裁剪。
+ */
+export async function loadContextFiles(
+  paths: readonly string[],
+  options?: {
+    cwd?: string;
+    maxChars?: number;
+    totalMaxChars?: number;
+  },
+): Promise<ContextFile[]> {
+  const cwd = options?.cwd || process.cwd();
+  const maxChars = options?.maxChars ?? GLOBAL_CONTEXT_MAX_CHARS;
+  const totalMaxChars = options?.totalMaxChars ?? GLOBAL_CONTEXT_TOTAL_MAX_CHARS;
+
+  const seen = new Set<string>();
+  const files: ContextFile[] = [];
+  let totalChars = 0;
+
+  for (const raw of paths) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    const filePath = expandContextPath(trimmed, cwd);
+    if (seen.has(filePath)) continue;
+    seen.add(filePath);
+
+    let content: string;
+    try {
+      content = (await readFileWithCache(filePath)).trim();
+    } catch {
+      continue; // 缺失/不可读：静默跳过
+    }
+    if (!content) continue;
+
+    if (content.length > maxChars) {
+      content = content.slice(0, maxChars) + '\n...(truncated)';
+      logger.warn(`Context file ${filePath} exceeds ${maxChars} chars, truncated`);
+    }
+    if (totalChars + content.length > totalMaxChars) {
+      logger.warn(`Context files total exceeds ${totalMaxChars} chars, skipping ${filePath}`);
+      break;
+    }
+
+    files.push({ path: filePath, content });
+    totalChars += content.length;
+  }
+
+  return files;
+}
+
+/** 构建全局上下文段：仅一个标题，多文件时每个文件前一行来源标记，无代码块包装 */
+export function buildGlobalContextSection(files: ContextFile[]): string {
+  if (files.length === 0) return '';
+  const body = files
+    .map(f => (files.length > 1 ? `(from ${f.path})\n${f.content}` : f.content))
+    .join('\n\n');
+  return `# User Context\n\n${body}`;
 }
 
 /** 构建可缓存 bootstrap 段（不含 AGENTS.md） */
