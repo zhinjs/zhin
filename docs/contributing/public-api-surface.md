@@ -32,7 +32,7 @@
 | 约定 | 稳定性 | 消费方 | 一句话 |
 |------|--------|--------|--------|
 | `plugin.ts` | `stable` | `@zhin.js/plugin-runtime` | 插件根入口，默认导出 `definePlugin(...)` |
-| `commands/` | `stable` | `@zhin.js/command` | 命令模块目录，支持 `[name:type]` 动态参数段 |
+| `commands/` | `stable` | `@zhin.js/command` | 命令模块目录，支持 `[name]` / `[[name]]` / `[...name]` 动态参数段 |
 | `adapters/` | `stable` | `@zhin.js/adapter` | 适配器模块目录 |
 | `middlewares/` | `stable` | `@zhin.js/middleware` | 中间件模块目录 |
 | `tools/` | `experimental` | `@zhin.js/tool` | Agent 工具目录（`defineAgentTool`） |

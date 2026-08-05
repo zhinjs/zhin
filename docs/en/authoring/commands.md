@@ -56,10 +56,14 @@ Dynamic parameter segments use Next.js-style file names to declare their shape a
 | --- | --- | --- | --- |
 | `[name].ts` | Required parameter | `<name>` | `params: { name: { type: 'string' } }` |
 | `[[name]].ts` | Optional parameter | `[name]` | `params: { name: { type: 'string', default: '' } }` |
-| `[...name].ts` | Catch-all (consumes all remaining words) | `<...name>` | `params: { name: { type: 'text' } }`; at runtime `params.name` is a `string[]` |
+| `[...name].ts` | Catch-all (consumes all remaining input) | `<...name>` | `params: { name: { type: 'text' } }`; at runtime `params.name` is an array |
 | `[[...name]].ts` | Optional catch-all | `[...name]` | Same as above; an empty array when not provided |
 
 Consistency is validated at startup: when a `default` is present the file name must use double brackets (`[[name]]`), and a parameter shape in the file name without a matching `params` declaration both throw `CommandPathSyntaxError`.
+
+**Child plugin constraint: the first command path segment must be static.** Child plugin commands are auto-prefixed by the plugin path (e.g. `remind.add`), and a dynamic parameter may only be the last segment (at most one) — so `commands/[note].ts` works in the root plugin but throws `Invalid Command path` at startup in a child plugin (no static segment to anchor to). In child plugins, always put dynamic parameters under a static directory: `commands/add/[note].ts` (command name `remind.add <note>`).
+
+The element granularity of a catch-all array depends on `params.<name>.type`: `text` collects per message segment (plain-text input arrives as a single element); `word` / `string` split on whitespace into words; `number` / `integer` / `float` / `boolean` split into words and convert each one — any word that fails conversion makes the whole command not match; structured types such as `mention` / `image` collect per message segment.
 
 | Parameter category | Supported types | Match result |
 | --- | --- | --- |

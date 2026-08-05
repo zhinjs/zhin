@@ -56,10 +56,14 @@ HMR 粒度缩小到单个命令文件。
 | --- | --- | --- | --- |
 | `[name].ts` | 必需参数 | `<name>` | `params: { name: { type: 'string' } }` |
 | `[[name]].ts` | 可选参数 | `[name]` | `params: { name: { type: 'string', default: '' } }` |
-| `[...name].ts` | 捕获所有（消费剩余全部词） | `<...name>` | `params: { name: { type: 'text' } }`，运行时 `params.name` 为 `string[]` |
+| `[...name].ts` | 捕获所有（消费剩余全部输入） | `<...name>` | `params: { name: { type: 'text' } }`，运行时 `params.name` 为数组 |
 | `[[...name]].ts` | 可选捕获所有 | `[...name]` | 同上，未提供时为空数组 |
 
 一致性在启动期校验：有 `default` 时文件名必须用双方括号（`[[name]]`），文件名声明了参数形态但 `params` 里缺对应声明，都会抛 `CommandPathSyntaxError`。
+
+**子插件约束：命令路径首段必须是静态段**。子插件的命令名由插件路径自动加前缀（如 `remind.add`），动态参数只能是路径的最后一段且至多一个——因此 `commands/[note].ts` 在 root 插件可用，在子插件会在启动期抛 `Invalid Command path`（首段没有静态段可依附）。子插件的动态参数一律放进静态目录：`commands/add/[note].ts`（命令名 `remind.add <note>`）。
+
+捕获所有的数组元素粒度由 `params.<name>.type` 决定：`text` 逐消息段收集（纯文本输入整体为一个元素）；`word` / `string` 按空白逐词切分；`number` / `integer` / `float` / `boolean` 逐词切分后逐个转换，任一词转换失败即视为命令不匹配；`mention` / `image` 等结构化类型逐消息段收集。
 
 | 参数类别 | 支持的 type | 匹配结果 |
 | --- | --- | --- |

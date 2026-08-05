@@ -645,6 +645,52 @@ describe('Command Feature', () => {
     ])).resolves.toMatchObject({ matched: true, value: ['a', 'b'] });
   });
 
+  it('splits word-typed catch-all [...slug] per word', async () => {
+    const owner = rootPluginId();
+    const source = '/project/commands/files/[...slug].ts';
+    const command = defineCommand({
+      params: { slug: { type: 'word' } },
+      execute: ({ params }) => params.slug,
+    });
+    const host = new MemoryDiscoveryHost({
+      '/project/commands': [{ name: 'files', kind: 'directory' }],
+      '/project/commands/files': [{ name: '[...slug].ts', kind: 'file' }],
+    }, new Map([[source, { default: command }]]));
+    const slots = await new FeatureDiscovery(host).discover(commandFeature, [{
+      owner,
+      packageRoot: '/project',
+    }]);
+
+    const index = new CommandIndex(slots, snapshotFor(owner, slots));
+    // word 类型逐词切分（与 text 的逐消息段相对）
+    await expect(index.execute('files a b c')).resolves.toEqual(['a', 'b', 'c']);
+    await expect(index.execute('files  a   b ')).resolves.toEqual(['a', 'b']);
+    expect(index.has('files')).toBe(false);
+  });
+
+  it('casts number-typed catch-all per word and rejects non-numeric input', async () => {
+    const owner = rootPluginId();
+    const source = '/project/commands/sum/[...nums].ts';
+    const command = defineCommand({
+      params: { nums: { type: 'number' } },
+      execute: ({ params }) => params.nums,
+    });
+    const host = new MemoryDiscoveryHost({
+      '/project/commands': [{ name: 'sum', kind: 'directory' }],
+      '/project/commands/sum': [{ name: '[...nums].ts', kind: 'file' }],
+    }, new Map([[source, { default: command }]]));
+    const slots = await new FeatureDiscovery(host).discover(commandFeature, [{
+      owner,
+      packageRoot: '/project',
+    }]);
+
+    const index = new CommandIndex(slots, snapshotFor(owner, slots));
+    await expect(index.execute('sum 1 2 3.5')).resolves.toEqual([1, 2, 3.5]);
+    // 任一词无法转换为 number 即整体不匹配
+    expect(index.has('sum 1 x')).toBe(false);
+    await expect(index.dispatch('sum 1 x')).resolves.toEqual({ matched: false });
+  });
+
   it('matches optional [[name]] without default as undefined when omitted', async () => {
     const owner = rootPluginId();
     const source = '/project/commands/gh/pr/[[title]].ts';

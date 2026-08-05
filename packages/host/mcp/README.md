@@ -97,13 +97,13 @@ AI: 好的！我会使用 create_plugin 工具为你创建插件...
 生成命令代码片段。
 
 **参数:**
-- `pattern` (必需): 命令模式，如 `hello <name:text>`
+- `pattern` (必需): 命令模式，如 `hello [name]`（Next.js 风格动态段，类型在 `params` 中声明）
 - `description` (必需): 命令描述
 - `hasPermission`: 是否需要权限检查
 
 **示例:**
 ```
-生成一个 greet <name:text> [age:number] 命令的代码
+生成一个 greet [name] 命令的代码，name 为 text 类型
 ```
 
 ### 3. create_component

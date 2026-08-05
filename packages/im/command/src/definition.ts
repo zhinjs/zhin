@@ -25,7 +25,7 @@ export type CommandParameterValue =
   | string
   | number
   | boolean
-  | readonly string[]
+  | ReadonlyArray<string | number | boolean>
   | Readonly<Record<string, unknown>>
   | null;
 

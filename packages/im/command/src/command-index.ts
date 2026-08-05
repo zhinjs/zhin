@@ -244,7 +244,15 @@ function assertParameterSegment(
   if (parameter && dynamicSegments.length === 1
     && dynamicSegments[0] === `$${parameter.name}`
     && segments.at(-1) === dynamicSegments[0]) return;
-  throw new Error(`Broken dynamic Command identity for ${source}`);
+  const dynamic = dynamicSegments[0] ?? (parameter ? `$${parameter.name}` : '$?');
+  throw new Error(
+    `Invalid Command path for ${source}: the dynamic segment "${dynamic}" must be the only dynamic `
+    + `segment and come after a static segment (child plugin commands are prefixed by the plugin `
+    + `path, so a dynamic first segment is never reachable). `
+    + (parameter
+      ? `Hint: move the file under a static directory, e.g. "commands/add/[${parameter.name}:${parameter.type}].ts".`
+      : 'Hint: put the file under a static directory, e.g. "commands/add/<file>.ts".'),
+  );
 }
 
 function isRequiredParameter(parameter: CommandParameterDefinition): boolean {
@@ -285,6 +293,53 @@ function matcherPattern(
 
 function matcherType(type: CommandParameterType): string {
   return type === 'string' ? 'word' : type;
+}
+
+/** rest 参数中按消息段收集（matcher 原生行为）的结构化类型。 */
+function isStructuredRestType(type: CommandParameterType): boolean {
+  return type === 'mention'
+    || type === 'image'
+    || type === 'face'
+    || type === 'reply'
+    || type === 'forward'
+    || type === 'dice'
+    || type === 'rps';
+}
+
+/**
+ * 捕获所有参数的取值粒度由类型决定：
+ * - `text` / 结构化类型：逐消息段（matcher 原生结果）；
+ * - `word` / `string`：逐词（空白切分）；
+ * - `number` / `integer` / `float` / `boolean`：逐词切分后逐个转换，任一失败返回 undefined（不匹配）。
+ */
+function coerceRestValues(
+  parameter: CommandParameterDefinition,
+  values: readonly unknown[],
+): readonly (string | number | boolean)[] | undefined {
+  const type = parameter.type;
+  if (type === 'text' || isStructuredRestType(type)) {
+    // 逐消息段，保持 matcher 原生提取值（text 为 string，结构化类型可能是 number 等）。
+    return values as readonly (string | number | boolean)[];
+  }
+  const words = values.flatMap((value) =>
+    typeof value === 'string' ? value.split(/\s+/u).filter(Boolean) : []);
+  if (type === 'string' || type === 'word') return words;
+  if (type === 'number' || type === 'integer' || type === 'float') {
+    const numbers: number[] = [];
+    for (const [index, word] of words.entries()) {
+      const number = Number(word);
+      if (!Number.isFinite(number)
+        || (type === 'integer' && !Number.isInteger(number))
+        || (type === 'float' && !word.includes('.'))) return undefined;
+      numbers[index] = number;
+    }
+    return numbers;
+  }
+  if (type === 'boolean') {
+    if (!words.every((word) => word === 'true' || word === 'false')) return undefined;
+    return words.map((word) => word === 'true');
+  }
+  return undefined;
 }
 
 function routeShape(segments: readonly string[]): string {
